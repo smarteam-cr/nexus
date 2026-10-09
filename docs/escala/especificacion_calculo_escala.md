@@ -1,8 +1,8 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.3.7
-escala: 8.7.0
-fecha: 2026-10-08
+version: 1.3.8
+escala: 8.8.0
+fecha: 2026-10-09
 ---
 
 # Especificación del cálculo de la Escala de Rendimiento
@@ -13,7 +13,7 @@ Precisa las reglas de la escala, `escala_rendimiento_smarteam.md`, donde ella no
 
 ## Identificadores y etiquetas
 
-Cada criterio de la matriz tiene un identificador con la forma dimensión, letra del nivel y número. La letra es D para Deficiente, I para Inicial, F para Funcional, E para Eficiente y O para Óptimo. Así, `1.7.F1` es el primer criterio de Funcional en Tracción del Deal. Sin número, `1.7.F` se refiere al nivel completo.
+Cada criterio de la matriz tiene un identificador con la forma dimensión, letra del nivel y número. La letra es D para Deficiente, I para Inicial, F para Funcional, E para Eficiente y O para Óptimo. Así, `1.7.F1` es el primer criterio de Funcional en Tracción del Negocio. Sin número, `1.7.F` se refiere al nivel completo.
 
 Junto al identificador va la forma de verificación: comprobable, declarado o evaluado. Si el criterio es de riesgo, lleva además la marca riesgo: no decide el nivel en que está, pero es requisito para pasar a Eficiente. Si describe un hábito, lleva la marca hábito: no se confirma el día que se entrega, solo después de que el equipo operó un tiempo. Y si solo aplica a ciertos perfiles de negocio, lleva la marca de ese perfil: venta con equipo, venta sin vendedor, cliente recurrente, recompra o relación continua. Un criterio lleva una sola marca de perfil. Los identificadores son para los sistemas y el equipo: ningún texto que ve el cliente —criterios, resultados, costos o mensajes— los cita.
 
@@ -132,6 +132,8 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación. Nexus corre las mismas antes de publicar una versión desde su pantalla.
 
 ## Historial de versiones
+
+**1.3.8 (2026-10-09).** El ejemplo de identificador nombra la dimensión 1.7 como la escala 8.8.0: «Tracción del Negocio». No cambia el cálculo. Vale desde la escala 8.8.0.
 
 **1.3.7 (2026-10-08).** El encabezado de esta especificación y el del manual dicen desde qué versión de la escala valen: una versión nueva de la escala ya no obliga a sacar una de ellos. No cambia el cálculo.
 

@@ -5737,3 +5737,30 @@ especificación y el manual sacan una versión nueva solo cuando cambian ellos.
   especificación publicada).
 - **El feedback de esa parte se ve al editarla** y el cambio se vincula al reporte (`EscalaCambio.feedbackId`). La
   bandeja de Feedback no se tocó: ese módulo lo estaba cambiando otra sesión.
+
+## La escala 8.8: una limpieza que no cambia qué se mide; lo demás, a la 9.0 (2026-10-09)
+
+**Contexto.** Elías aprobó las 13 recomendaciones de la revisión de la 8.7 y pidió aplicar los arreglos, sobre todo
+los graves, y los tres reportes de feedback del equipo (F-5, F-6, F-7). Para qué es la escala, en sus palabras: que
+un consultor ubique a una empresa y que a la empresa le haga sentido estar ahí; con eso, previsibilidad para el
+cliente, *land and expand* y servicio recurrente.
+
+- **En la 8.8 ningún identificador cambia.** Se precisa o se acota el texto (criterios, señales, preguntas, frases,
+  resultados, costos, palabras, condiciones «Si…», marcas de perfil que precisan lo que el criterio ya era). Agregar,
+  quitar, partir o mover un criterio, cambiar la marca «riesgo» o el cálculo va a la 9.0
+  (`docs/escala/pendiente-9-0.md`). *Por qué:* identificadores estables (prueba 5), y una medición hecha con la 8.7
+  se sigue comparando con una de la 8.8.
+- **Antes de la 9.0, la 8.8 se prueba con 5 a 8 clientes reales** (decisión 13). ⛔ Nunca Wherex: hizo churn y es el
+  cliente de prueba de Nexus.
+- **Regla de asignación para los casos nuevos** (en la escala misma): dónde vive la información y si los sistemas se
+  hablan → Tecnología; qué datos se registran, quién los corrige y los duplicados → Datos; la protección del cliente
+  contra la suplantación → Marca y confianza, con lo que toca a Servicio y a Tecnología. *Por qué:* los tres reportes
+  del equipo pusieron su caso en la dimensión equivocada; la regla evita que se repita.
+- **Cada feedback se mira en todos lados:** quien lo revisa decide dónde va y busca dónde más pasa lo mismo, en las
+  otras áreas y en las otras ediciones (manual 1.3.7). Lo que no cabe en una limpieza queda en el pendiente de la
+  9.0 con su propuesta.
+- **Las pruebas del repo no suponen una versión.** `publicar.test.ts` y `servidor.int.test.ts` arman la versión
+  siguiente con `versionSiguiente` y buscan el criterio por su identificador; `mapa.test.ts` mira que el mapa de
+  herramientas valga «desde» una versión no posterior. Publicar la 8.8 no rompe ninguna; la 9.0 tampoco va a romperlas.
+- **La 8.8 se publica con el script**, no con el botón de Nexus: cambiaron también el manual (1.3.7) y la
+  especificación (1.3.8, que nombra la dimensión 1.7 como «Tracción del Negocio»), y el botón publica solo la escala.

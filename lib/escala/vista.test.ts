@@ -93,11 +93,11 @@ describe("partirPorPalabras", () => {
     ]);
   });
 
-  it("en el archivo real, «pipeline reviews» se marca con su significado del glosario", () => {
+  it("en el archivo real, «pipeline review» se marca con su significado del glosario", () => {
     const terminos = terminosParaSubrayar(real);
-    const i3 = real.areas[0].dimensiones[0].niveles.find((n) => n.letra === "I")!.criterios.find((c) => /pipeline reviews/i.test(c.texto));
-    expect(i3, "hay un criterio de Inicial que habla de pipeline reviews").toBeTruthy();
-    const marcado = partirPorPalabras(i3!.texto, terminos).find((x) => x.palabra && /pipeline reviews/i.test(x.texto));
+    const i3 = real.areas[0].dimensiones[0].niveles.find((n) => n.letra === "I")!.criterios.find((c) => /pipeline review/i.test(c.texto));
+    expect(i3, "hay un criterio de Inicial que habla de la pipeline review").toBeTruthy();
+    const marcado = partirPorPalabras(i3!.texto, terminos).find((x) => x.palabra && /pipeline review/i.test(x.texto));
     expect(marcado?.palabra?.tipo).toBe("glosario");
   });
 

@@ -1,8 +1,8 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
-version: 1.3.6
+version: 1.3.7
 escala: 8.7.0
-fecha: 2026-10-01
+fecha: 2026-10-09
 ---
 
 # Manual de operación de la Escala de Rendimiento
@@ -11,10 +11,12 @@ Este manual dice cómo trabaja el equipo de Smarteam con la Escala de Rendimient
 
 ## Cómo cambia la escala
 
-La escala cambia con el uso, y lo mismo vale para la especificación y para las reglas de este manual. Cambia por dos vías: el feedback de su responsable, hoy Elías González, que la revisa en la sección «Escala» de Nexus, y los comentarios del equipo en esa misma sección, donde cada comentario queda anclado al criterio, al nivel o a la dimensión que comenta.
+La escala cambia con el uso, y lo mismo vale para la especificación y para las reglas de este manual. Cambia por dos vías: el criterio de su responsable, hoy Elías González, y el feedback del equipo, que se manda desde la sección «Escala» de Nexus y queda anclado al criterio, al nivel o a la dimensión que se estaba leyendo.
 
-- **El equipo comenta; el responsable decide.** Lo que no se entiende, lo que no calza con un cliente y las propuestas se comentan en Nexus. El responsable responde, descarta o pasa cada comentario a cambio pendiente.
-- **Cada cambio es una versión nueva:** se publica en Nexus y se anota en el historial del documento que cambia. Una versión publicada no se reescribe, y un comentario hecho sobre un texto que después cambió se sigue viendo junto al texto nuevo.
+- **El equipo manda feedback; un super admin decide.** Lo que no se entiende, lo que no calza con un cliente y las propuestas se mandan como feedback desde la escala misma. El feedback es privado: lo ve quien lo mandó y quien lo revisa. Un super admin lo responde, lo descarta o lo lleva a la hoja de ruta.
+- **Cada cambio se hace en el borrador de la versión siguiente.** El borrador vive en Nexus: un super admin lo abre desde la versión publicada, lo cambia sobre la escala misma o subiendo el documento editado, y cada cambio queda anotado con quién, cuándo, por qué y el feedback que lo originó. Nadie más lo ve hasta que se publica.
+- **Cada versión pasa las mismas pruebas antes de publicarse** y se anota en el historial del documento que cambia. Una versión publicada no se reescribe, y un feedback mandado sobre un texto que después cambió se sigue viendo junto al texto nuevo.
+- **La especificación y este manual dicen desde qué versión de la escala valen.** Sacan una versión nueva solo cuando cambian ellos.
 
 ## Las ediciones por industria
 
@@ -24,7 +26,7 @@ La escala tiene una matriz general y, en su Parte 5, ediciones por industria: la
 - **Cuándo se hace una edición.** Cuando hay clientes o prospectos de esa industria a quienes medir, y alguien que la va a usar con ellos. Una edición puede salir primero con Ventas, que es con lo que se abre la conversación con un prospecto, y sumar Marketing y Servicio después; mientras tanto, esas áreas se miden con la escala general. Las cuatro primeras salieron con las tres áreas antes de usarse con clientes: su responsable prefirió revisarlas completas y después probarlas con dos o tres.
 - **Qué puede cambiar una edición.** Lo que de verdad es de su industria: los nombres de las dimensiones de producción, las preguntas, los costos, las palabras de un criterio y los criterios que solo tienen sentido ahí. La base operativa se toca lo menos posible: si una edición empieza a reescribirla, se está volviendo otra escala.
 - **Cómo se mantiene.** Un cambio en la matriz obliga a cada edición a decidir: si la matriz suma un criterio en una dimensión que la edición ya adaptó, la edición lo reescribe, lo saca o lo deja como está, y la versión no se publica hasta que lo diga. Y si el texto general de un criterio cambia, lo que la edición decía con sus palabras se vuelve a mirar antes de publicar.
-- **Los comentarios.** Un comentario hecho leyendo una edición queda anclado a esa edición: guarda el texto que la persona leyó. El responsable decide, como con cualquier otro, si el cambio es de la edición o de la matriz.
+- **El feedback.** Un feedback mandado leyendo una edición queda anclado a esa edición: guarda el texto que la persona leyó. Quien lo revisa decide, como con cualquier otro, si el cambio es de la edición o de la matriz, y busca dónde más pasa lo mismo: en las otras áreas y en las otras ediciones.
 
 ## Quién aplica la escala y cuándo
 
@@ -53,7 +55,7 @@ Algunos criterios dicen cuáles otros requieren: lo que tiene que estar para que
 - **Al diagnosticar.** Si un criterio quedó como cumplido y lo que requiere no, se vuelve a mirar antes de cerrar: casi siempre uno de los dos está mal marcado. Si de verdad se cumple de otra forma, se deja así y se escribe por qué en la evidencia.
 - **Al proponer qué sigue.** Lo requerido se trabaja antes. Un criterio del que dependen varios —el documento del cliente ideal, la definición de lead calificado— suele ser el mejor primer paso dentro de la dimensión que toca, porque destraba a los demás.
 
-Cuando a un cliente le falta siempre lo mismo antes de poder avanzar en otra cosa y la escala no lo dice, es un requerido que falta: se comenta en Nexus, como cualquier otro cambio.
+Cuando a un cliente le falta siempre lo mismo antes de poder avanzar en otra cosa y la escala no lo dice, es un requerido que falta: se manda como feedback desde la escala, como cualquier otro cambio.
 
 ## El diagnóstico nunca evalúa al CSE
 
@@ -66,6 +68,8 @@ La escala mide madurez, no resultados, y eso es a propósito. Pero hace falta co
 Esa comprobación se hace con clientes, no con prospectos, y con datos que ya existen: el resultado que persigue cada cliente, que se registra en el handoff; el criterio de aceptación de cada caso de uso; y el nivel de cada remedición. Cada cierto tiempo se cruzan esas tres cosas para ver si los clientes que suben de nivel logran sus resultados, y el criterio que no acompaña ese avance se revisa. El momento más claro es cuando un departamento llega a su nivel objetivo: el cliente debería estar viendo el resultado que perseguía, y si no lo ve, se revisa el objetivo o el criterio. Junto con los ajustes del CSE, que señalan criterios mal escritos, es lo que mantiene la escala honesta.
 
 Lo que salga de ese cruce se anota en Cambios pendientes, y es la mejor evidencia para decidir qué cambia en la escala.
+
+**Antes del test, una prueba con clientes reales.** Antes de construir el test de diagnóstico se miden entre 5 y 8 clientes que el equipo conoce bien, con el diagnóstico y con el chequeo, y se compara dónde quedan con dónde el equipo cree que están. Si casi todos quedan en Inicial, la vara de Funcional se mantiene y el informe muestra el avance («cumple 27 de 30»); lo que se ajusta son las celdas desbalanceadas. Los que el equipo valide son los primeros casos de referencia.
 
 ## Reglas en espera
 
@@ -115,7 +119,7 @@ Una regla se activa cuando pasa su condición y, además, las tres condiciones q
 
 ## Cambios pendientes
 
-Aquí se anota lo que el responsable pasó a cambio pendiente y todavía no entró en una versión: la bandeja de comentarios de Nexus lo exporta con estas mismas columnas. Va con el caso concreto cuando lo hay —qué cliente, qué dimensión y qué pasó— y con la decisión que cambiaría.
+Aquí se anota lo que se aprobó y todavía no entró en una versión: lo que un super admin llevó a la hoja de ruta desde el feedback, con estas mismas columnas. Va con el caso concreto cuando lo hay —qué cliente, qué dimensión y qué pasó— y con la decisión que cambiaría.
 
 | Fecha | Qué cambiaría | Quién lo propone | Caso que lo originó | Qué decisión cambiaría |
 |:--|:--|:--|:--|:--|
@@ -123,6 +127,8 @@ Aquí se anota lo que el responsable pasó a cambio pendiente y todavía no entr
 Todavía no hay cambios pendientes.
 
 ## Historial de versiones
+
+**1.3.7 (2026-10-09).** Lo que el equipo dice de la escala se manda como feedback desde la escala misma y lo decide un super admin: el manual deja de hablar de los comentarios, que se retiraron. La escala se cambia en el borrador de la versión siguiente, en Nexus, donde cada cambio queda anotado con su porqué. La especificación y el manual dicen desde qué versión de la escala valen. En «Cómo se sabe que la escala funciona», la prueba con 5 a 8 clientes reales antes del test. Vale desde la escala 8.7.0.
 
 **1.3.6 (2026-10-01).** Acompaña a la escala 8.7.0. Sin otros cambios.
 

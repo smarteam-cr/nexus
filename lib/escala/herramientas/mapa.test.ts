@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { leerArchivoDeLaEscala } from "../documento/archivos";
+import { compararVersiones } from "../datos/reglas";
 import { parsearEscala } from "../documento/parsear";
 import { parsearMapaDeHerramientas } from "./parsear";
 import { criteriosDeLaEscala, problemasDelMapa } from "./validar";
@@ -16,8 +17,10 @@ describe("el mapa de herramientas del repo", () => {
     expect(problemasDelMapa(mapa, escala)).toEqual([]);
   });
 
-  it("se armó con la escala que está en el repo", () => {
-    expect(mapa.escala).toBe(escala.version);
+  it("vale para la escala que está en el repo: dice desde qué versión vale, y no es posterior", () => {
+    // Desde el 2026-10-08 los documentos que acompañan a la escala dicen DESDE qué versión valen.
+    expect(mapa.escala).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(compararVersiones(mapa.escala!, escala.version)).toBeLessThanOrEqual(0);
   });
 
   it("trae las tres herramientas del pedido, cada una con su color", () => {

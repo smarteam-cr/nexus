@@ -11,6 +11,7 @@ import { parsearEscala } from "@/lib/escala/documento/parsear";
 import { escalaDeLosDatos, generarMarkdown } from "./generar";
 import { importarEscala } from "./importar";
 import { revisarParaPublicar } from "./publicar";
+import { versionSiguiente } from "./reglas";
 
 const texto = leerArchivoDeLaEscala("escala").replace(/\r\n?/g, "\n");
 const anterior = parsearEscala(texto);
@@ -31,11 +32,16 @@ function revisar(version: string, cambio: (t: string) => string, extra: { public
   });
 }
 
-const reescribir = (t: string) => t.replace("no la improvisación de cada vendedor. `[1.7.F1", "no la improvisación de cada vendedor (en 14 días). `[1.7.F1");
+// Vale para cualquier versión del repo: la siguiente se arma desde la que está, y el criterio que se
+// reescribe se busca por su identificador, sin copiar su texto aquí.
+const siguiente = versionSiguiente(anterior.version);
+const lineaDe1_7_F1 = /^- .+\. `\[1\.7\.F1 .*$/m.exec(texto)![0];
+const conAgregado = (agregado: string) => (t: string) => t.replace(lineaDe1_7_F1, lineaDe1_7_F1.replace(/\. `\[1\.7\.F1 /, `${agregado}. \`[1.7.F1 `));
+const reescribir = conAgregado(" (en 14 días)");
 
 describe("revisar el borrador antes de publicarlo", () => {
   it("pasa las pruebas, con las del cálculo, y dice qué cambia", () => {
-    const r = revisar("8.8.0", reescribir, { edicionesRevisadas: true });
+    const r = revisar(siguiente, reescribir, { edicionesRevisadas: true });
     expect(r.pruebas.filter((p) => !p.ok)).toEqual([]);
     expect(r.pruebas.map((p) => p.nombre)).toContain("3 · Los ejemplos cuadran");
     expect(r.cambios).toEqual({ nuevos: [], retirados: [], cambiados: ["1.7.F1"], conOtrosRequeridos: [] });
@@ -43,23 +49,22 @@ describe("revisar el borrador antes de publicarlo", () => {
   });
 
   it("lo que una edición dice con sus palabras y quedó viejo frena hasta que se mira", () => {
-    const r = revisar("8.8.0", reescribir);
+    const r = revisar(siguiente, reescribir);
     expect(r.edicionesViejas.map((e) => e.ids)).toEqual(r.edicionesViejas.map(() => ["1.7.F1"]));
     expect(r.bloqueos).toHaveLength(1);
     expect(r.bloqueos[0]).toMatch(/ediciones que quedaron viejos/);
   });
 
   it("una versión ya publicada, o anterior a la última, no se publica", () => {
-    expect(revisar("8.8.0", (t) => t, { publicadas: ["8.7.0", "8.8.0"] }).bloqueos).toContain("La 8.8.0 ya está publicada: una versión publicada no cambia.");
-    expect(revisar("8.6.9", (t) => t).bloqueos).toEqual(
-      expect.arrayContaining(["La 8.6.9 no es posterior a la 8.7.0, que es la última publicada.", "No pasa la prueba «7 · Documentos alineados»."]),
+    expect(revisar(siguiente, (t) => t, { publicadas: [anterior.version, siguiente] }).bloqueos).toContain(`La ${siguiente} ya está publicada: una versión publicada no cambia.`);
+    // Anterior también a la versión desde la que valen la especificación y el manual: por eso no alinea.
+    expect(revisar("1.0.0", (t) => t).bloqueos).toEqual(
+      expect.arrayContaining([`La 1.0.0 no es posterior a la ${anterior.version}, que es la última publicada.`, "No pasa la prueba «7 · Documentos alineados»."]),
     );
   });
 
   it("una prueba que falla frena, con su nombre", () => {
-    const r = revisar("8.8.0", (t) => t.replace("no la improvisación de cada vendedor. `[1.7.F1", "no la improvisación de cada vendedor (ver 1.3). `[1.7.F1"), {
-      edicionesRevisadas: true,
-    });
+    const r = revisar(siguiente, conAgregado(" (ver 1.3)"), { edicionesRevisadas: true });
     expect(r.bloqueos).toEqual(["No pasa la prueba «4 · Sin identificadores a la vista»."]);
   });
 });

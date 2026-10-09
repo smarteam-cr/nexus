@@ -28,13 +28,22 @@ import {
   revisarElBorrador,
   verLaImportacion,
 } from "./servidor";
+import { versionSiguiente } from "./reglas";
 import { ErrorDelBorrador, guardarPublicada } from "./versiones";
 
 const ELIAS = "elias@test.local";
 const texto = leerArchivoDeLaEscala("escala").replace(/\r\n?/g, "\n");
-const CRITERIO = "no la improvisación de cada vendedor. `[1.7.F1";
+// Vale para cualquier versión del repo: la publicada es la del repo, el borrador es la siguiente, y
+// el criterio que se cambia se busca por su identificador, sin copiar su texto aquí.
+const PUBLICADA = /^version: (.+)$/m.exec(texto)![1].trim();
+const BORRADOR = versionSiguiente(PUBLICADA);
+const LINEA = /^- .+\. `\[1\.7\.F1 .*$/m.exec(texto)![0];
+const TEXTO_F1 = /^- (.+) `\[1\.7\.F1 /.exec(LINEA)![1];
+const conPlazo = (t: string) => t.replace(LINEA, LINEA.replace(TEXTO_F1, `${TEXTO_F1.slice(0, -1)} (en 14 días).`));
+/** La vista previa recorta el principio de un texto largo («… »): se compara cómo termina. */
+const terminaEn = (fin: string) => expect.stringMatching(new RegExp(`${fin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
 
-/** La 8.7.0 publicada, como hoy en producción: sus tres documentos y sus datos. */
+/** La versión del repo, publicada como en producción: sus tres documentos y sus datos. */
 async function publicada() {
   const en = new Date("2026-10-02T10:00:00Z");
   for (const [documento, archivo, t] of [
@@ -43,7 +52,7 @@ async function publicada() {
     ["manual", "manual_operacion_escala.md", leerArchivoDeLaEscala("manual")],
   ] as const) {
     const version = /^version: (.+)$/m.exec(t)![1].trim();
-    await prisma.escalaDocumento.create({ data: { documento, version, escalaVersion: "8.7.0", archivo, texto: t, huella: huellaDe(t), publicadaEn: en } });
+    await prisma.escalaDocumento.create({ data: { documento, version, escalaVersion: PUBLICADA, archivo, texto: t, huella: huellaDe(t), publicadaEn: en } });
   }
   await guardarPublicada(prisma, { datos: importarEscala(texto), por: null, en });
 }
@@ -51,12 +60,12 @@ async function publicada() {
 describe("el borrador de la escala, desde la pantalla", () => {
   it("se abre, se le sube un cambio, se revisa y se publica", async () => {
     await publicada();
-    expect(await estadoDelBorrador()).toMatchObject({ estado: "ok", borrador: null, publicada: "8.7.0", sugerida: "8.8.0" });
+    expect(await estadoDelBorrador()).toMatchObject({ estado: "ok", borrador: null, publicada: PUBLICADA, sugerida: BORRADOR });
 
-    await abrirBorrador("8.8.0", ELIAS);
+    await abrirBorrador(BORRADOR, ELIAS);
     const md = (await markdownDelBorrador())!;
-    expect(md.version).toBe("8.8.0");
-    const editado = md.texto.replace(CRITERIO, "no la improvisación de cada vendedor (en 14 días). `[1.7.F1");
+    expect(md.version).toBe(BORRADOR);
+    const editado = conPlazo(md.texto);
 
     // Primero se ve qué cambia; no se guarda nada.
     const vista = await verLaImportacion(editado, 0);
@@ -66,8 +75,8 @@ describe("el borrador de la escala, desde la pantalla", () => {
         donde: "Criterio 1.7.F1",
         accion: "cambiado",
         campo: "texto",
-        antes: expect.stringMatching(/cada vendedor\.$/),
-        despues: expect.stringMatching(/cada vendedor \(en 14 días\)\.$/),
+        antes: terminaEn(TEXTO_F1.slice(-20)),
+        despues: terminaEn(`${TEXTO_F1.slice(-20, -1)} (en 14 días).`),
       },
     ]);
     expect(await prisma.escalaCambio.count()).toBe(0);
@@ -76,7 +85,7 @@ describe("el borrador de la escala, desde la pantalla", () => {
     expect(await guardarLaImportacion({ texto: editado, revision: 0, nota: "caso de Wherex", por: ELIAS })).toEqual({ cambios: 1 });
     const estado = await estadoDelBorrador();
     if (estado.estado !== "ok" || !estado.borrador) throw new Error("sin borrador");
-    expect(estado.borrador).toMatchObject({ version: "8.8.0", basadaEn: "8.7.0", revision: 1, totalDeCambios: 1, actualizadaPorEmail: ELIAS });
+    expect(estado.borrador).toMatchObject({ version: BORRADOR, basadaEn: PUBLICADA, revision: 1, totalDeCambios: 1, actualizadaPorEmail: ELIAS });
     expect(estado.bitacora).toMatchObject([{ autorEmail: ELIAS, origen: "importacion", nota: "caso de Wherex", cambios: [{ ancla: "1.7.F1" }] }]);
 
     // Con la revisión vieja, frena: alguien ya lo cambió.
@@ -93,21 +102,21 @@ describe("el borrador de la escala, desde la pantalla", () => {
 
     const revisada = await revisarElBorrador(true);
     expect(revisada.bloqueos).toEqual([]);
-    expect(await publicarElBorrador({ revision: 1, edicionesRevisadas: true, por: ELIAS })).toEqual({ version: "8.8.0" });
+    expect(await publicarElBorrador({ revision: 1, edicionesRevisadas: true, por: ELIAS })).toEqual({ version: BORRADOR });
 
-    // Lo que leen las pantallas es la 8.8.0, generada desde los datos; el borrador quedó congelado.
+    // Lo que leen las pantallas es la versión nueva, generada desde los datos; el borrador quedó congelado.
     const vigente = await leerEscalaVigente();
-    expect(vigente.estado === "ok" && vigente.escala.version).toBe("8.8.0");
-    const doc = await prisma.escalaDocumento.findFirstOrThrow({ where: { documento: "escala", version: "8.8.0" } });
-    const congelada = await prisma.escalaVersion.findUniqueOrThrow({ where: { version: "8.8.0" } });
+    expect(vigente.estado === "ok" && vigente.escala.version).toBe(BORRADOR);
+    const doc = await prisma.escalaDocumento.findFirstOrThrow({ where: { documento: "escala", version: BORRADOR } });
+    const congelada = await prisma.escalaVersion.findUniqueOrThrow({ where: { version: BORRADOR } });
     expect(congelada).toMatchObject({ estado: "publicada", publicadaPorEmail: ELIAS, huella: doc.huella });
     expect(doc.texto).toBe(generarMarkdown(importarEscala(editado)));
-    expect(await estadoDelBorrador()).toMatchObject({ estado: "ok", borrador: null, publicada: "8.8.0", sugerida: "8.9.0" });
+    expect(await estadoDelBorrador()).toMatchObject({ estado: "ok", borrador: null, publicada: BORRADOR, sugerida: versionSiguiente(BORRADOR) });
   });
 
   it("el editor cambia un criterio vinculado a su reporte de feedback, y agrega otro sin reusar un retirado", async () => {
     await publicada();
-    await abrirBorrador("8.8.0", ELIAS);
+    await abrirBorrador(BORRADOR, ELIAS);
     const reporte = await prisma.feedbackReporte.create({
       data: { autorEmail: "ana@test.local", tipo: "mejora", cuerpo: "«A tiempo» no dice cuánto.", pantalla: "Escala", ruta: "/escala/ventas", escalaAncla: "1.7.F1", escalaArea: "1" },
     });
@@ -157,9 +166,9 @@ describe("el borrador de la escala, desde la pantalla", () => {
 
   it("una línea que no se entiende vuelve con su número, y nada se guarda", async () => {
     await publicada();
-    await abrirBorrador("8.8.0", ELIAS);
+    await abrirBorrador(BORRADOR, ELIAS);
     const md = (await markdownDelBorrador())!.texto;
-    const roto = md.replace(CRITERIO, "no la improvisación de cada vendedor. `[1.7.F1 evaluado");
+    const roto = md.replace(LINEA, LINEA.replace("`[1.7.F1 ", "`[1.7.F1 evaluado "));
     await expect(verLaImportacion(roto, 0)).rejects.toThrow(/^Línea \d+: /);
     expect(await prisma.escalaCambio.count()).toBe(0);
   });

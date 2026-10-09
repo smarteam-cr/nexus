@@ -45,7 +45,8 @@ describe("leerComoCambia", () => {
   it("el manual real dice cómo cambia la escala y quién decide", () => {
     const c = leerComoCambia(leerArchivoDeLaEscala("manual"));
     expect(c?.titulo).toBe("Cómo cambia la escala");
-    expect(c?.resumen).toMatch(/comentarios del equipo/);
+    // Desde el manual 1.3.7, lo que el equipo dice de la escala es feedback (los comentarios se retiraron).
+    expect(c?.resumen).toMatch(/feedback del equipo/);
     expect(c?.reglas.length).toBeGreaterThanOrEqual(2);
     expect(c?.reglas.some((r) => /decide/i.test(r))).toBe(true);
   });
