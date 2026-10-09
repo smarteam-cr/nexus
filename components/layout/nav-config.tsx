@@ -124,7 +124,7 @@ export function canSeeNavItem(item: Pick<NavItemConfig, "gate">, ctx: NavContext
 
 /**
  * Espeja el filtro del Sidebar: un hijo `costosOnly` solo lo ve un rol de Costos; uno con `vistas`, solo quien tiene una
- * de esas vistas de Finanzas; uno con `permiso`, solo quien lo tiene. Sin `vista` en el contexto no se filtra por vista
+ * de esas vistas de Finanzas (salvo Super Admin, que ve todo); uno con `permiso`, solo quien lo tiene. Sin `vista` en el contexto no se filtra por vista
  * (los flyouts que no son de Finanzas no la usan).
  */
 export function visibleNavChildren(
@@ -135,7 +135,8 @@ export function visibleNavChildren(
   return (item.children ?? []).filter(
     (c) =>
       (!c.costosOnly || ctx.isCostos) &&
-      (!c.vistas || !ctx.vista || c.vistas.includes(ctx.vista)) &&
+      // Super Admin ve TODO Finanzas en cualquier vista (Elías, 2026-10-08): la vista elige adónde entra, no qué ve.
+      (!c.vistas || !ctx.vista || ctx.isCostos || c.vistas.includes(ctx.vista)) &&
       (!c.permiso || ctx.isCostos || sections[c.permiso.section]?.[c.permiso.action] === true),
   );
 }

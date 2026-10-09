@@ -5264,6 +5264,10 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   ajusta el servicio (`ponerCuentas`, al final de los detectores de Odoo y de Mercury). Casos que lo pidieron: Alliance
   RH INV-46 (se le devolvió la plata: revertir el cobro y borrar o finalizar el servicio) y Teamnet INV-71/72 (son de la
   implementación; la web de US$1.000 es aparte: desestimar con ese motivo y marcar facturadas sus cuotas). Sin SQL.
+- **Un Super Admin ve todo Finanzas en el menú, en cualquier vista (Elías, 2026-10-08: «los super admins deberían
+  poder ver todo»).** La vista solo elige adónde entra «Finanzas» (Dirección → punto de equilibrio, Supervisión →
+  Supervisión); ya no le esconde áreas: en Dirección no aparecía la Planilla. Para quien registra el menú sigue
+  filtrado, por permisos. Revierte la decisión del 2026-10-03 de «Dirección: solo reportes».
 
 ## Procesos: un mapa de hoy y uno de después, en carriles (2026-10-05)
 

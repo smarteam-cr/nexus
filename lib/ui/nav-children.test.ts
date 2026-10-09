@@ -153,26 +153,15 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
     expect(hrefs).not.toContain("/finanzas/costos/planillas/calendario");
   });
 
-  it("quien supervisa: Mi área · Ingresos · Costos y gastos · Cuadre · Reportes, sin la entrada de quien registra", () => {
-    const bloques = panel("SUPERVISA", true);
-    expect(bloques.map((b) => b.section)).toEqual(["Mi área", "Ingresos", "Costos y gastos", "Cuadre", "Reportes"]);
-    expect(bloques[0].items.map((i) => i.href)).toEqual(["/finanzas/supervision", "/finanzas/cierre"]);
-    const hrefs = bloques.flatMap((b) => b.items.map((i) => i.href));
-    expect(hrefs).not.toContain("/finanzas/pendientes");
-    expect(hrefs).toContain("/finanzas/costos/planillas/calendario");
-    expect(hrefs).toContain("/finanzas/reportes");
-  });
-
-  it("dirección: solo Reportes — punto de equilibrio, caja neta, rentabilidad, tipo de cambio e integraciones", () => {
-    const bloques = panel("DIRECCION", true);
-    expect(bloques.map((b) => b.section)).toEqual(["Reportes"]);
-    expect(bloques[0].items.map((i) => i.href)).toEqual([
-      "/finanzas/equilibrio",
-      "/finanzas/caja-neta",
-      "/customer-success/rentabilidad",
-      "/finanzas/tipo-de-cambio",
-      "/finanzas/integraciones",
-    ]);
+  it("Super Admin ve TODO Finanzas, en las dos vistas (Elías, 2026-10-08: «los super admins deberían poder ver todo»)", () => {
+    // La vista elige adónde entra «Finanzas»; ya no esconde áreas del menú a un Super Admin.
+    const todos = (finanzas.children ?? []).map((c) => c.href);
+    for (const vista of ["SUPERVISA", "DIRECCION"] as const) {
+      expect(panel(vista, true).flatMap((b) => b.items.map((i) => i.href)), vista).toEqual(todos);
+    }
+    // Lo que antes escondía: la Planilla en Dirección, y Pendientes en Supervisión.
+    expect(panel("DIRECCION", true).flatMap((b) => b.items.map((i) => i.href))).toContain("/finanzas/costos/planillas/calendario");
+    expect(panel("SUPERVISA", true).flatMap((b) => b.items.map((i) => i.href))).toContain("/finanzas/pendientes");
   });
 
   it("todo hijo de Finanzas dice en qué vistas va (un hijo sin `vistas` aparecería en las tres)", () => {

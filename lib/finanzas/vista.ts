@@ -7,8 +7,9 @@
  *   · SUPERVISA — quien revisa, decide y cierra el mes (Alex). Entra a Supervisión.
  *   · DIRECCION — quien solo mira el resultado. Entra al Punto de equilibrio.
  *
- * ⚠ La vista decide el MENÚ y la ENTRADA, no los permisos: cada página y cada ruta siguen con su propia guarda. Un
- * SUPER_ADMIN en vista Dirección puede abrir cualquier página por su enlace; solo no la tiene en el menú.
+ * ⚠ La vista decide la ENTRADA (y, para quien registra, el menú), no los permisos: cada página y cada ruta siguen con su
+ * propia guarda. Desde el 2026-10-08 un SUPER_ADMIN ve TODO el menú de Finanzas en cualquier vista (Elías: «los super
+ * admins deberían poder ver todo»): antes Dirección se quedaba sin Planilla en el menú.
  *
  * PURO: sin Prisma ni Next. Lo leen el menú (cliente) y las páginas (servidor).
  */
@@ -22,7 +23,7 @@ export type VistaElegible = (typeof VISTAS_ELEGIBLES)[number];
 export const ETIQUETA_DE_VISTA: Record<VistaFinanzas, string> = {
   REGISTRA: "Registra",
   SUPERVISA: "Revisa y cierra el mes",
-  DIRECCION: "Dirección: solo reportes",
+  DIRECCION: "Dirección: entra a los reportes",
 };
 
 /**
