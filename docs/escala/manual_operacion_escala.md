@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
 version: 1.3.7
-escala: 8.7.0
+escala: 8.8.0
 fecha: 2026-10-09
 ---
 
@@ -22,7 +22,7 @@ La escala cambia con el uso, y lo mismo vale para la especificación y para las 
 
 La escala tiene una matriz general y, en su Parte 5, ediciones por industria: la misma escala dicha para una tienda, un banco, una universidad o una inmobiliaria. No son escalas aparte: comparten dimensiones, niveles, reglas, cálculo e identificadores.
 
-- **Con cuál se mide.** Cada unidad se mide con la edición de su industria, si existe, y con la escala general si no. Se decide al arrancar y se escribe en el diagnóstico. Si más adelante la unidad pasa a una edición, esa medición es una línea base nueva: no se compara contra la anterior.
+- **Con cuál se mide.** Cada unidad se mide con la edición de su industria si esa edición la cubre —lo dice su encabezado—, y con la escala general si no: una tienda solo física o una aseguradora se miden con la general. Se decide al arrancar y se escribe en el diagnóstico. Si más adelante la unidad pasa a una edición, esa medición es una línea base nueva: no se compara contra la anterior.
 - **Cuándo se hace una edición.** Cuando hay clientes o prospectos de esa industria a quienes medir, y alguien que la va a usar con ellos. Una edición puede salir primero con Ventas, que es con lo que se abre la conversación con un prospecto, y sumar Marketing y Servicio después; mientras tanto, esas áreas se miden con la escala general. Las cuatro primeras salieron con las tres áreas antes de usarse con clientes: su responsable prefirió revisarlas completas y después probarlas con dos o tres.
 - **Qué puede cambiar una edición.** Lo que de verdad es de su industria: los nombres de las dimensiones de producción, las preguntas, los costos, las palabras de un criterio y los criterios que solo tienen sentido ahí. La base operativa se toca lo menos posible: si una edición empieza a reescribirla, se está volviendo otra escala.
 - **Cómo se mantiene.** Un cambio en la matriz obliga a cada edición a decidir: si la matriz suma un criterio en una dimensión que la edición ya adaptó, la edición lo reescribe, lo saca o lo deja como está, y la versión no se publica hasta que lo diga. Y si el texto general de un criterio cambia, lo que la edición decía con sus palabras se vuelve a mirar antes de publicar.
@@ -69,7 +69,7 @@ Esa comprobación se hace con clientes, no con prospectos, y con datos que ya ex
 
 Lo que salga de ese cruce se anota en Cambios pendientes, y es la mejor evidencia para decidir qué cambia en la escala.
 
-**Antes del test, una prueba con clientes reales.** Antes de construir el test de diagnóstico se miden entre 5 y 8 clientes que el equipo conoce bien, con el diagnóstico y con el chequeo, y se compara dónde quedan con dónde el equipo cree que están. Si casi todos quedan en Inicial, la vara de Funcional se mantiene y el informe muestra el avance («cumple 27 de 30»); lo que se ajusta son las celdas desbalanceadas. Los que el equipo valide son los primeros casos de referencia.
+**Antes del test, una prueba con clientes reales.** Antes de construir el test de diagnóstico se miden entre 5 y 8 clientes que el equipo conoce bien —nunca Wherex, que es el cliente de prueba de Nexus—, con el diagnóstico y con el chequeo, y se compara dónde quedan con dónde el equipo cree que están. Si casi todos quedan en Inicial, la vara de Funcional se mantiene y el informe pasa a mostrar cuántos criterios de Funcional ya cumple el departamento («cumple 27 de 30»), algo que hoy la especificación no emite y que entra con la 9.0, junto con el balance de las celdas desbalanceadas. Los que el equipo valide son los primeros casos de referencia.
 
 ## Reglas en espera
 
@@ -124,11 +124,11 @@ Aquí se anota lo que se aprobó y todavía no entró en una versión: lo que un
 | Fecha | Qué cambiaría | Quién lo propone | Caso que lo originó | Qué decisión cambiaría |
 |:--|:--|:--|:--|:--|
 
-Todavía no hay cambios pendientes.
+Lo que quedó para la 9.0 —lo que sí cambia qué se mide, de la revisión de la 8.7 y del feedback F-5, F-6 y F-7, cada punto con su propuesta— está en `pendiente-9-0.md`. Aquí se anota lo que se apruebe desde ahora.
 
 ## Historial de versiones
 
-**1.3.7 (2026-10-09).** Lo que el equipo dice de la escala se manda como feedback desde la escala misma y lo decide un super admin: el manual deja de hablar de los comentarios, que se retiraron. La escala se cambia en el borrador de la versión siguiente, en Nexus, donde cada cambio queda anotado con su porqué. La especificación y el manual dicen desde qué versión de la escala valen. En «Cómo se sabe que la escala funciona», la prueba con 5 a 8 clientes reales antes del test. Vale desde la escala 8.7.0.
+**1.3.7 (2026-10-09).** Lo que el equipo dice de la escala se manda como feedback desde la escala misma y lo decide un super admin: el manual deja de hablar de los comentarios, que se retiraron. La escala se cambia en el borrador de la versión siguiente, en Nexus, donde cada cambio queda anotado con su porqué. La especificación y el manual dicen desde qué versión de la escala valen. En «Las ediciones por industria», una unidad se mide con la edición de su industria solo si esa edición la cubre. En «Cómo se sabe que la escala funciona», la prueba con 5 a 8 clientes reales antes del test. En «Cambios pendientes», lo que quedó para la 9.0. Vale desde la escala 8.8.0.
 
 **1.3.6 (2026-10-01).** Acompaña a la escala 8.7.0. Sin otros cambios.
 

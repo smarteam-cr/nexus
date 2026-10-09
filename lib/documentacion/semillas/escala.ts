@@ -76,7 +76,7 @@ const AREAS: { nombre: AreaDeLaEscala; slug: string; icono: string; numero: stri
 
 /** Los nombres propios de las cuatro dimensiones de producción, por área (x.5 a x.8). */
 const PRODUCCION: Record<AreaDeLaEscala, [string, string, string, string]> = {
-  Ventas: ["Propuesta y Coherencia", "Priorización de Leads", "Tracción del Deal", "Aprendizaje de Ganadas y Perdidas"],
+  Ventas: ["Propuesta y Coherencia", "Priorización de Leads", "Tracción del Negocio", "Aprendizaje de Ganadas y Perdidas"],
   Marketing: ["Marca y Presencia", "Segmentación", "Canales y Alcance", "Medición y Aprendizaje"],
   Servicio: ["Consistencia de Atención", "Priorización de Clientes", "Proactividad", "Escalabilidad del Servicio"],
 };
@@ -101,7 +101,7 @@ const POR_AREA: Record<AreaDeLaEscala, { aterrizar: string; ordenProduccion: str
     aterrizar:
       "Llevar Servicio a Funcional es sobre todo montar la arquitectura y enseñar a usarla: el pipeline de servicio, la categorización, la asignación y los reportes.",
     ordenProduccion:
-      "Los tipos de cliente se definen primero: sin ellos no hay niveles de atención, sin niveles no se sabe a quién adelantarse, y solo se escala lo que ya se hace bien.",
+      "Los tipos de cliente se definen primero: sin ellos no se sabe qué atención le toca a cada uno, sin eso no se sabe a quién adelantarse, y solo se escala lo que ya se hace bien.",
   },
 };
 
@@ -362,7 +362,7 @@ function paginaPrincipal(): BloqueGuardado[] {
     aviso(
       "info",
       ["La escala cambia con el uso. ", { negrita: true }],
-      "Si algo no se entiende o no calza con un cliente real, coméntalo ahí mismo, sobre el criterio, el nivel o la dimensión: «No se entiende», «No calza con un cliente» o «Propuesta». Es la materia prima de la versión siguiente; las decide Elías González.",
+      "Si algo no se entiende o no calza con un cliente real, mándalo como feedback ahí mismo, sobre el criterio, el nivel o la dimensión. Es la materia prima de la versión siguiente; cada feedback lo decide un super admin.",
     ),
     aviso(
       "advertencia",

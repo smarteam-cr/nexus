@@ -79,7 +79,7 @@ async function quienEscribe(prisma: PrismaClient): Promise<string | null> {
 }
 
 function enSeco(comando: string) {
-  console.log(`\nEN SECO: no se escribió nada. Para hacerlo:\n  $env:ALLOW_PROD_WRITE="1"; $env:SIN_RESPALDO="1"; npx tsx scripts/escala-datos.ts ${comando} --apply`);
+  console.log(`\nEN SECO: no se escribió nada. Para hacerlo:\n  $env:ALLOW_PROD_WRITE="1"; $env:SIN_RESPALDO="1"; npx tsx scripts/escala-datos.ts ${comando} --por ${argumento("--por") ?? "tu@smarteamcr.com"} --apply`);
 }
 
 function mostrarCambios(cambios: CambioDeLaEscala[], tope = 60) {

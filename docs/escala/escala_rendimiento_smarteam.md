@@ -92,19 +92,19 @@ Cada descripción resume cómo se ve el departamento en ese nivel: cómo está m
 
 **Marketing.** Tu marca no la defines tú, la define el mercado. La voz y los mensajes son inconsistentes, las herramientas están sueltas y sin conectar, y las campañas corren hasta agotar presupuesto sin que nadie mida qué dejaron. La demanda que llega es accidental.
 
-**Servicio.** El servicio se improvisa cliente por cliente. No hay metodología ni estandarización —cada agente responde con su propio criterio—, los datos están dispersos y todo depende de que la persona correcta esté disponible. La fuga de clientes te toma por sorpresa.
+**Servicio.** El servicio se improvisa cliente por cliente. No hay un proceso de atención ni un sistema donde queden los casos —cada agente responde con su propio criterio, desde su correo o su teléfono— y los datos están dispersos. La fuga de clientes te toma por sorpresa.
 
 ### Inicial
 
 **Ventas.** Tienes algo de estructura, pero la ejecución falla. Hay un CRM en funciones básicas que el equipo percibe como carga administrativa y llena a mano, la calificación sigue en la cabeza del vendedor y los negocios se sostienen sobre relaciones personales. El pipeline todavía no se ve con claridad.
 
-**Marketing.** Tienes logo y colores, pero sin estrategia detrás. Las herramientas se usan a medias y no se conectan entre sí, el contenido sale de forma reactiva y esporádica, y los resultados se miden tarde y a mano, sin que lo aprendido quede escrito. Los leads llegan de forma irregular y no sabes de dónde vienen.
+**Marketing.** Tienes logo y colores, pero sin estrategia detrás. Las herramientas se usan a medias y parte de lo que entra se pasa a mano, el contenido sale de forma reactiva y esporádica, y los resultados se miden tarde y a mano, sin que lo aprendido quede escrito. Los leads llegan de forma irregular y no siempre sabes de dónde vienen.
 
-**Servicio.** El conocimiento y la coordinación viven en una sola persona, y eso te deja con un punto único de fallo. Hay un sistema de casos, pero pocos lo usan; hay respuestas guardadas para los casos más frecuentes y procesos que nadie formalizó. La entrega es frágil.
+**Servicio.** El conocimiento y la coordinación viven en una sola persona, y eso te deja con un punto único de fallo. Hay un sistema de casos, pero pocos lo usan; cada agente tiene sus propias respuestas guardadas y hay procesos que nadie formalizó. La entrega es frágil.
 
 ### Funcional
 
-**Ventas.** Tu equipo comercial opera como una maquinaria base. Todo el equipo trabaja en el CRM, no en hojas aparte; los prospectos se gestionan siguiendo un pipeline documentado, los roles están por escrito y cada quien rinde cuentas en la pipeline review. Hacia afuera ya tienes un cliente ideal definido, coherencia básica en mensaje y propuesta, y ningún negocio se enfría sin que alguien reaccione. Sin pronóstico ni sofisticación todavía, pero con previsibilidad operativa.
+**Ventas.** Tu equipo comercial opera como una maquinaria base. Todo el equipo trabaja en el CRM, no en hojas aparte; los prospectos se gestionan siguiendo un pipeline documentado, los roles están por escrito y cada quien rinde cuentas en la revisión del pipeline. Hacia afuera ya tienes un cliente ideal definido, coherencia básica en mensaje y propuesta, y ningún negocio se enfría sin que alguien reaccione. Sin pronóstico ni sofisticación todavía, pero con previsibilidad operativa.
 
 **Marketing.** El área dejó de depender de héroes. Tienes marca, buyer personas y presencia digital documentadas, las herramientas que pagas se usan de verdad, y los canales que elegiste en tu plan salen con regularidad, coordinados bajo un mismo calendario. La información describe la operación con confianza, sin reconstruirla a mano: sabes de dónde viene cada lead y cuánto te cuesta en cada canal. La demanda ya se mide, aunque la optimización fina todavía no existe.
 
@@ -120,11 +120,11 @@ Cada descripción resume cómo se ve el departamento en ese nivel: cómo está m
 
 ### Óptimo
 
-**Ventas.** La IA hace el trabajo pesado y tu equipo valida donde importa. Agentes de IA califican leads y agendan reuniones, la IA analiza las conversaciones con los prospectos y propone correcciones al playbook, el pronóstico lo calcula un modelo, y la priorización se alimenta de lo que saben Servicio y Marketing de cada cliente. El vendedor dedica su tiempo a las conversaciones que deciden el negocio, no a la administración.
+**Ventas.** La IA hace el trabajo pesado y tu equipo valida donde importa. Si atiendes por WhatsApp o chat, agentes de IA califican ahí los leads y agendan reuniones; la IA analiza las llamadas con los prospectos y propone correcciones al playbook, el pronóstico lo calcula un modelo, y la priorización se alimenta de lo que saben Servicio y Marketing de cada cliente. El vendedor dedica su tiempo a las conversaciones que deciden el negocio, no a la administración.
 
-**Marketing.** La IA produce y ajusta; el equipo dirige. El contenido se genera y optimiza en ciclo continuo, la IA identifica micro-segmentos y adapta el mensaje al comportamiento de cada persona, los modelos reasignan presupuesto entre canales sobre la marcha, y los clientes que Servicio vuelve promotores traen clientes nuevos. El equipo define la estrategia y valida lo que sale.
+**Marketing.** La IA produce y ajusta; el equipo dirige. El contenido se genera y se ajusta de forma continua; la IA predice qué va a hacer cada persona, adapta el mensaje a su comportamiento y mueve el presupuesto entre canales dentro de los límites que fija el equipo; y los clientes que Servicio vuelve promotores traen clientes nuevos. El equipo define la estrategia y valida lo que sale.
 
-**Servicio.** Un agente de IA resuelve casos en todos los canales donde atiende el equipo y le pasa a una persona, con todo el contexto, los que no puede resolver. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y gestiona excepciones; donde el cliente vuelve, un modelo de salud anticipa el riesgo antes de que el cliente lo diga, y cada cliente se atiende sabiendo lo que se le prometió en la venta y recibe detalles pensados para deleitarlo. La cartera crece sin que crezca el equipo.
+**Servicio.** Un agente de IA resuelve casos en todos los canales donde atiende el equipo y le pasa a una persona, con todo el contexto, los que no puede resolver. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y gestiona excepciones; cada cliente se atiende sabiendo lo que se le prometió en la venta y recibe detalles pensados para deleitarlo y, donde el cliente vuelve, un modelo de salud anticipa el riesgo antes de que el cliente lo diga. La cartera crece sin que crezca el equipo.
 
 ## Cómo avanza un departamento: de la disciplina al sistema
 
@@ -230,7 +230,7 @@ Para que dos personas decidan igual, algunas palabras de los criterios tienen un
 
 ## Criterios requeridos
 
-Algunos criterios no se pueden cumplir sin otro. Enfocar el esfuerzo en los leads que encajan con el cliente ideal necesita que el cliente ideal esté escrito; rendir cuentas en la pipeline review necesita que la reunión ocurra. Cuando ese otro criterio está en otra dimensión, o en un nivel anterior de la misma, el criterio lo dice en su etiqueta: lo requiere.
+Algunos criterios no se pueden cumplir sin otro. Enfocar el esfuerzo en los leads que encajan con el cliente ideal necesita que el cliente ideal esté escrito; rendir cuentas en la revisión del pipeline necesita que la reunión ocurra. Cuando ese otro criterio está en otra dimensión, o en un nivel anterior de la misma, el criterio lo dice en su etiqueta: lo requiere.
 
 Es la forma de no pedir lo mismo dos veces. Cada cosa se pide en una sola dimensión, la que responde su pregunta, y quien depende de ella la requiere en vez de repetirla.
 
@@ -258,7 +258,7 @@ En la venta transaccional también hay pipeline y negocios: se crean solos, desd
 
 **La próxima compra.** Donde el cliente vuelve a comprar sin contrato, la próxima compra se trata como un negocio más, se venda con equipo o sin vendedor: si no llega cuando se esperaba, es un negocio que se enfrió, y reactivarlo es trabajo de Ventas. La renovación de un contrato, en cambio, es de Servicio.
 
-El perfil decide qué criterios aplican; la industria decide con qué edición se lee la escala. Una universidad y una inmobiliaria venden las dos con equipo, pero una habla de matrícula y la otra de reserva, y a cada una le importan cosas que a la otra no. Eso vive en las ediciones por industria, en la Parte 5: cada edición dice la escala con las palabras de su industria y le suma los criterios que solo tienen sentido ahí. La matriz de la Parte 3 es la escala general: con ella se mide a quien todavía no tiene una edición.
+El perfil decide qué criterios aplican; la industria decide con qué edición se lee la escala. Una universidad y una inmobiliaria venden las dos con equipo, pero una habla de matrícula y la otra de reserva, y a cada una le importan cosas que a la otra no. Eso vive en las ediciones por industria, en la Parte 5: cada edición dice la escala con las palabras de su industria y le suma los criterios que solo tienen sentido ahí. La matriz de la Parte 3 es la escala general: con ella se mide a quien todavía no tiene una edición y a quien la edición de su industria no cubre, como una tienda solo física o una aseguradora.
 
 **Qué unidad se diagnostica.** La unidad es el equipo que se atiende. En empresas grandes no se atiende a toda la empresa, sino a subequipos —la venta a empresas de una telco, una unidad de un grupo, una facultad—, y cada uno se diagnostica por separado, con su propio perfil. Lo mismo vale cuando dos ventas distintas las atienden equipos distintos: la tienda de una cadena y su venta a empresas o a proveedores son dos unidades; si las atiende el mismo equipo, es una sola, de venta mixta. Cuando se atiende a varios, se puede armar una vista que los junte.
 
@@ -338,7 +338,7 @@ Cada evidencia observada se asigna a una sola dimensión —la que responde su p
 
 - Los **artefactos de ejecución de venta** (playbook, criterios de etapa, cadencia, metodología) se asignan a **Procesos de Ventas (1.1)**. Lo que recibe el cliente —el mensaje y la propuesta, con su estructura— se mide en **Propuesta y Coherencia (1.5)**, y la definición de lead calificado, en **Priorización de Leads (1.6)**. Cada uno se cuenta una sola vez.
 - Que el equipo **trabaje en el sistema central** y no por fuera —el CRM en Ventas, el sistema de marketing, el de atención en Servicio— es una rutina, y se asigna a **Procesos** de cada área (**1.1, 2.1 o 3.1**), igual que vigilar que el proceso se cumpla; que las **conversaciones con los prospectos** queden en el sistema se asigna a **Tecnología (1.2)**.
-- **Mejorar el proceso con lo aprendido** se asigna a la dimensión de aprendizaje de cada área —**Aprendizaje de Ganadas y Perdidas (1.8)**, **Medición y Aprendizaje (2.8)** o **Escalabilidad del Servicio (3.8)**—: Procesos mide que el proceso exista y se siga, no cómo cambia. Lo único que Procesos de Ventas conserva, en Óptimo, es la disciplina de probar una técnica nueva en un piloto antes de sumarla al proceso. Los **tests** de Marketing —de creatividades y de audiencias— también son aprendizaje, y van en **2.8**; probar un canal nuevo es alcance, y sigue en **Canales y Alcance (2.7)**.
+- **Mejorar el proceso con lo aprendido** se asigna a la dimensión de aprendizaje de cada área —**Aprendizaje de Ganadas y Perdidas (1.8)**, **Medición y Aprendizaje (2.8)** o **Escalabilidad del Servicio (3.8)**—: Procesos mide que el proceso exista y se siga, no cómo cambia. Lo único que Procesos de Ventas conserva, en Óptimo, es la disciplina de probar una técnica nueva en un piloto antes de sumarla al proceso. Las **pruebas** de Marketing —de creatividades y de audiencias— también son aprendizaje, y van en **2.8**; probar un canal nuevo es alcance, y sigue en **Canales y Alcance (2.7)**.
 - La **IA como asistente del equipo** —redactar, resumir, preparar— se asigna a **Tecnología** de cada área (**1.2, 2.2 o 3.2**) y es Eficiente. En Funcional no es requisito: solo se pide que, si el equipo usa IA, esta trabaje con un contexto básico. Los **tableros en tiempo real** también son de **Tecnología**, en Eficiente: ver lo que pasa mientras pasa es una capacidad del sistema, no un nivel de autonomía.
 - El **pronóstico** se asigna a **Datos de Ventas (1.3)**, no a Procesos (1.1) ni a 1.5.
 - En la **frontera Marketing ↔ Ventas**, cada pieza se asigna por quién la ejecuta: la definición de a quién sirve el equipo comercial (el cliente ideal) en **1.5 (Ventas)**; la segmentación y personalización del mensaje de marketing en **2.6 (Marketing)**; marcar MQL (lo clasifica Marketing) en **2.6 (Marketing)**; aceptar SQL (criterio del lado de Ventas) en **1.6 (Ventas)**; poblar el campo de etapa del ciclo de vida, como higiene de dato, en **Datos** del área que lo captura (1.3 o 2.3); el pipeline de ventas, con sus etapas y sus criterios de avance, en **Procesos (1.1)**. La definición de lead calificado es una sola y vive en 1.6; los criterios de avance de cada etapa del pipeline son otra cosa, y siguen en 1.1.
@@ -351,7 +351,7 @@ Cada evidencia observada se asigna a una sola dimensión —la que responde su p
 - La **siguiente mejor acción** que propone la IA se asigna a **Priorización de Leads (1.6)**; Tecnología (1.2) cuenta los agentes, la predicción de cierre y las respuestas sugeridas, no esa recomendación.
 - Lo que la **IA decide enviar a cada persona** —qué, por qué canal y cuándo— se asigna a **Tecnología de Marketing (2.2)** en las campañas, a **Tracción del Negocio (1.7)** en los seguimientos de Ventas y a **Proactividad (3.7)** en los avisos a los clientes. Lo que la IA puede decidir sola se escribe en **Equipo y Gobierno** de cada área, y medirlo contra un grupo de control va en su dimensión de aprendizaje (**1.8, 2.8 o 3.8**).
 - La **predicción por persona** va donde se usa: en **Segmentación (2.6)** cuando es de marketing, en **Tecnología de Ventas (1.2)** cuando es la probabilidad de cerrar un negocio y en **Datos de Servicio (3.3)** cuando es el riesgo de que un cliente se vaya.
-- La **integración con ERP** u otros sistemas se asigna a **Tecnología** del área que la implementa; **Datos** solo declara el resultado (registros completos y trazables). Lo mismo vale para dónde vive la información: si no hay un sistema donde llevarla, o el que la tiene no se conecta con los demás, es de Tecnología; si el sistema existe y el equipo la lleva en hojas aparte, es de **Procesos**.
+- La **integración con ERP** u otros sistemas se asigna a **Tecnología** del área que la implementa; **Datos** solo declara el resultado (registros completos y trazables). Lo mismo vale para dónde vive la información: si no hay un sistema donde llevarla, o el que la tiene no se conecta con los demás, es de Tecnología; si el sistema existe y el equipo la lleva en hojas aparte, es de **Procesos**. Lo que eso provoca —que no haya un registro completo de los clientes, o que haya que armarlo a mano— sí lo describen las señales de Deficiente e Inicial de **Datos**; lo que lo arregla se cuenta en Tecnología o en Procesos.
 - La **calidad de los datos** —campos vacíos, duplicados y cómo se corrigen— se asigna a **Datos** de cada área (**1.3, 2.3 o 3.3**), no a Equipo y Gobierno: lo único que Equipo y Gobierno de Marketing pide de ella, en Óptimo, es que haya responsables de cuidarla (**2.4**).
 - La **orquestación entre áreas** (SLA, traspasos, rutinas conjuntas) se asigna a **Equipo y Gobierno** del área cuyo liderazgo sostiene la coordinación, y nunca es Funcional: su piso es Eficiente. El flujo automático que la habilita se asigna a Tecnología. Las dimensiones 1.7, 2.7 y 3.7 miden el alcance hacia el destinatario final, no la coordinación entre departamentos.
 - La **respuesta a un negocio que se enfría** —reconocerlo a tiempo, reactivarlo, y que el líder se entere e intervenga— se asigna a **Tracción del Negocio (1.7)**, y Equipo y Gobierno no la vuelve a contar. La cadencia general de contacto sigue en Procesos (1.1), y la notificación que el sistema le manda al vendedor, en Tecnología (1.2).
@@ -410,17 +410,17 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 
 - Hay etapas de palabra o en un borrador, pero cada vendedor las interpreta distinto. `[1.1.I1 · evaluado]`
 - Hay una cadencia de contacto sugerida, pero cada vendedor la cumple cuando puede o cuando se acuerda. `[1.1.I2 · evaluado]`
-- La pipeline review se hace cuando hay tiempo, sin una fecha fija ni un orden para revisar los negocios. `[1.1.I3 · declarado]`
+- La revisión del pipeline se hace cuando hay tiempo, sin una fecha fija ni un orden para repasar los negocios. `[1.1.I3 · declarado]`
 - Que un negocio quede bien registrado depende de la voluntad de cada vendedor, no de una rutina del equipo. `[1.1.I4 · comprobable]`
 
 **Funcional.** Todo el equipo sigue el mismo proceso escrito en el CRM, con etapas, una cadencia de contacto y una revisión fija de los negocios.
 
-*Resultado:* Si rota un vendedor, el siguiente sabe en qué va cada negocio, porque todo el equipo trabaja el mismo proceso en el CRM: los negocios avanzan con los mismos criterios, cada prospecto se contacta con la cadencia acordada y los negocios se revisan en cada pipeline review.
+*Resultado:* Si rota un vendedor, el siguiente sabe en qué va cada negocio, porque todo el equipo trabaja el mismo proceso en el CRM: los negocios avanzan con los mismos criterios, cada prospecto se contacta con la cadencia acordada y los negocios se repasan en cada revisión del pipeline.
 
 - Cualquier vendedor explica igual las etapas del pipeline y sus criterios de avance. `[1.1.F1 · evaluado]`
 - Cada proceso de venta o de prospección tiene su propio pipeline en el CRM, con los criterios para pasar de cada etapa a la siguiente. `[1.1.F2 · comprobable]`
 - Hay un proceso de venta escrito y una cadencia de contacto definida —cuántos intentos y en cuántos días—, y la cadencia se cumple con la mayoría de los leads nuevos. `[1.1.F4 · comprobable · hábito]`
-- La pipeline review se hace en una fecha fija, cada semana o cada quince días. `[1.1.F5 · declarado · hábito]`
+- La revisión del pipeline se hace en una fecha fija, cada semana o cada quince días. `[1.1.F5 · declarado · hábito]`
 - Cualquier vendedor trabaja en el CRM, no en hojas ni notas aparte: lo abre para ver qué le toca hacer, no solo para cargar lo que ya hizo. `[1.1.F6 · evaluado · hábito · venta con equipo]`
 
 **Eficiente.** El líder comprueba con datos que el proceso se cumple y, donde se vende con equipo, el equipo sigue una metodología y guías escritas.
@@ -428,7 +428,7 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 *Resultado:* El líder sabe dónde se desvía el proceso y lo corrige con datos, no de memoria; donde se vende con equipo, además, todos venden con un mismo método.
 
 - Hay metodología comercial formal en uso (SPIN, MEDDIC, BANT o equivalente). `[1.1.E1 · evaluado · hábito · venta con equipo]`
-- Existen playbooks de discovery, calificación y manejo de objeciones que el equipo usa. `[1.1.E2 · evaluado · hábito · venta con equipo]`
+- Existen playbooks de descubrimiento de necesidades, calificación y manejo de objeciones que el equipo usa. `[1.1.E2 · evaluado · hábito · venta con equipo]`
 - El líder comprueba con datos del sistema, no de memoria, que el proceso se cumple como está escrito. `[1.1.E3 · evaluado · hábito]`
 
 **Óptimo.** La IA vigila que el proceso se cumpla y avisa cuando alguien se sale; el líder decide qué se corrige.
@@ -447,10 +447,10 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 
 *Costo de quedarse:* Tu equipo pierde horas en tareas que el sistema podría hacer: los leads se enfrían mientras alguien decide a quién le tocan y, donde se vende sin vendedor, cada venta hay que pasarla a mano.
 
-**Deficiente.** No hay un CRM, o casi nadie lo usa: los leads y las ventas se anotan donde cada quien puede.
+**Deficiente.** No hay un CRM: los leads y las ventas se anotan donde cada quien puede.
 
 - Los leads viven en listas o agendas personales. `[1.2.D1 · evaluado]`
-- No hay un CRM en uso donde montar una automatización: los leads y las ventas se pasan por correo, por chat o de palabra, y nadie recibe avisos del sistema. `[1.2.D2 · comprobable]`
+- No hay un CRM donde montar una automatización: los leads y las ventas se pasan por correo, por chat o de palabra, y nadie recibe avisos del sistema. `[1.2.D2 · comprobable]`
 
 **Inicial.** Hay un CRM, pero todo se carga y se reparte a mano.
 
@@ -505,7 +505,7 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 
 - Los datos se completan a mano de vez en cuando, o cuando alguien se acuerda, y los vacíos vuelven a aparecer. `[1.3.I1 · comprobable]`
 - En los negocios que se crean hoy, el canal de donde vino cada uno se anota a mano, cuando alguien se acuerda, y en parte de ellos queda vacío. `[1.3.I2 · comprobable]`
-- Los negocios que se crean hoy se registran, pero a parte de ellos les falta la fecha de cierre, el monto o el responsable. `[1.3.I3 · comprobable]`
+- Los negocios que se crean hoy se registran, pero a algunos les falta la fecha de cierre, el monto o el responsable. `[1.3.I3 · comprobable]`
 
 **Funcional.** El reporte del pipeline sale del sistema, sin armarlo a mano, y se le puede creer.
 
@@ -535,7 +535,7 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 
 - Cada lead, contacto y negocio se asocia solo, al entrar, con lo que ya había de esa persona o empresa; la IA resuelve los dudosos y una persona valida solo las excepciones que el CRM le marca. `[1.3.O1 · comprobable]`
 - Un modelo de IA calcula el pronóstico con la historia de los negocios; se ve en el sistema y el líder lo revisa antes de comprometerlo. `[1.3.O2 · comprobable]`
-- La vista 360° está operativa: la ficha de cada cliente reúne lo comercial, la facturación, los casos de servicio y las conversaciones, y el equipo la usa para preparar sus contactos. `[1.3.O3 · comprobable]`
+- La vista 360° está operativa: la ficha de cada cliente reúne lo comercial, la facturación, los casos de servicio y las conversaciones. `[1.3.O3 · comprobable]`
 - Ventas se apoya en el almacén central de datos de la empresa para su pronóstico, cruzando lo comercial con la facturación y el servicio. `[1.3.O4 · comprobable]`
 - Los datos se mantienen al día sin depender de que alguien se acuerde de actualizarlos: se capturan y se corrigen solos, y las personas solo validan las excepciones que el CRM les marca. `[1.3.O5 · comprobable]`
 
@@ -557,13 +557,13 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 - El líder revisa algunos números en hojas de cálculo, cuando tiene tiempo. `[1.4.I1 · declarado]`
 - Los reportes de cómo opera el equipo se arman a mano. `[1.4.I2 · comprobable]`
 
-**Funcional.** Cada vendedor tiene un rol y una meta por escrito, el líder sigue un tablero cada semana y en la pipeline review cada quien rinde cuentas.
+**Funcional.** Cada vendedor tiene un rol y una meta por escrito, el líder sigue un tablero cada semana y en la revisión del pipeline cada quien rinde cuentas.
 
 *Resultado:* Cada vendedor sabe qué se espera de él, y el líder sabe cada semana quién va bien y quién necesita ayuda, antes de que termine el mes.
 
 - Cada persona del equipo tiene rol definido por escrito. `[1.4.F1 · declarado]`
 - El líder tiene un tablero con 4 a 6 métricas clave —valor del pipeline, negocios creados, tasa de cierre, volumen— y lo consulta al menos una vez por semana. `[1.4.F2 · evaluado · hábito · requiere 1.3.F4]`
-- En la pipeline review se rinde cuentas: cada quien responde por lo que se comprometió en la anterior. `[1.4.F3 · evaluado · hábito · requiere 1.1.F5]`
+- En la revisión del pipeline se rinde cuentas: cada quien responde por lo que se comprometió en la anterior. `[1.4.F3 · evaluado · hábito · requiere 1.1.F5]`
 - Cada vendedor —o cada canal, donde se compra sin vendedor— tiene una meta escrita, con un monto o una cantidad y un plazo, y su avance se reporta en una fecha fija, al menos una vez al mes. `[1.4.F4 · declarado · hábito]`
 - El líder ve en reportes automáticos qué tareas cumplió cada vendedor y cuáles tiene pendientes. `[1.4.F5 · comprobable · venta con equipo · requiere 1.1.F6]`
 
@@ -620,11 +620,11 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 - La propuesta de valor dice por escrito en qué se distingue de la competencia, y ese mensaje es el mismo en el sitio, en las presentaciones y en lo que dice el equipo. `[1.5.E2 · evaluado · hábito]`
 - Las propuestas solo prometen lo que el equipo puede entregar: el alcance se valida antes de enviarlas. `[1.5.E3 · evaluado · hábito · venta con equipo]`
 
-**Óptimo.** La IA escribe y revisa lo que se le dice a cada prospecto desde la propuesta de valor, y el equipo valida lo que se sale.
+**Óptimo.** La IA revisa contra la propuesta de valor todo lo que se le dice a cada prospecto, y el equipo valida lo que se sale.
 
-*Resultado:* El mensaje no se diluye aunque el equipo crezca o cambie: la IA escribe desde la propuesta de valor vigente, marca lo que se sale y el equipo solo valida eso.
+*Resultado:* El mensaje no se diluye aunque el equipo crezca o cambie: la IA revisa cada mensaje contra la propuesta de valor vigente, marca lo que se sale y el equipo solo valida eso.
 
-- Lo que la IA escribe o responde a los prospectos parte de la propuesta de valor vigente; lo que se sale de ella queda marcado en el sistema y el equipo lo valida. `[1.5.O1 · comprobable]`
+- La IA revisa en tiempo real, contra la propuesta de valor vigente, lo que se les dice a los prospectos, lo escriba ella o el equipo; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1 · comprobable]`
 
 #### 1.6 Priorización de Leads
 
@@ -662,7 +662,7 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 
 **Óptimo.** La IA decide qué lead atender y qué hacer con él, con todo lo que se sabe de cada uno, y el vendedor valida.
 
-*Resultado:* El vendedor sabe qué negocio atender, qué hacer y cuándo, con lo que saben Servicio y Marketing de cada cliente, incluido dónde hay riesgo o espacio para vender más.
+*Resultado:* El vendedor sabe a quién atender, qué hacer y cuándo, con lo que saben Servicio y Marketing de cada cliente, incluido dónde hay riesgo o espacio para vender más.
 
 - Agentes de IA analizan todo lo que se sabe de cada lead y deciden la siguiente mejor acción, que el vendedor ve en el CRM y valida antes de ejecutarla. `[1.6.O1 · comprobable · venta con equipo]`
 - La IA detecta en cada cuenta el riesgo de perderla y el potencial de venderle más, lo marca en el CRM y el vendedor decide qué hacer. `[1.6.O2 · comprobable · venta con equipo]`
@@ -697,9 +697,9 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 
 - Para cada etapa está definido cuánto tiempo sin avance vuelve estancado un negocio; los estancados se reconocen a tiempo y tienen un paso de reactivación acordado, no la improvisación de cada vendedor. `[1.7.F1 · evaluado · hábito]`
 - La reactivación usa al menos dos canales, por ejemplo correo y llamada. `[1.7.F2 · comprobable · hábito]`
-- El líder revisa los negocios estancados en cada pipeline review y acuerda qué hacer con cada uno, sin esperar al cierre del trimestre. `[1.7.F3 · evaluado · hábito · venta con equipo · requiere 1.1.F5]`
+- El líder repasa los negocios estancados en cada revisión del pipeline y acuerda qué hacer con cada uno, sin esperar al cierre del trimestre. `[1.7.F3 · evaluado · hábito · venta con equipo · requiere 1.1.F5]`
 - Hay material de venta estandarizado —presentaciones, casos de éxito, demos— que ayuda a cerrar las ventas. `[1.7.F4 · declarado · venta con equipo]`
-- Los clientes identificados que ya deberían haber vuelto a comprar, según el plazo de recompra que el proceso define para cada tipo de cliente, se reconocen a tiempo y reciben un recordatorio o un incentivo, sin esperar a que vuelvan solos. `[1.7.F5 · comprobable · hábito · recompra · requiere 1.2.F6]`
+- Los clientes identificados que ya deberían haber vuelto a comprar, según el plazo de recompra que define el proceso, se reconocen a tiempo y reciben un recordatorio o un incentivo, sin esperar a que vuelvan solos. `[1.7.F5 · comprobable · hábito · recompra · requiere 1.2.F6]`
 
 **Eficiente.** El seguimiento combina varios canales, el sistema le avisa al líder de lo que se traba y el lead que no está listo sigue en nutrición.
 
@@ -708,14 +708,14 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 - El seguimiento de los negocios que se enfrían combina al menos tres canales —por ejemplo, correo, llamada y el canal conversacional— en una secuencia definida. `[1.7.E1 · comprobable · requiere 1.2.E2]`
 - Los leads que todavía no están listos para comprar no se abandonan: pasan a nutrición —la de Marketing o una secuencia del propio equipo— y vuelven al vendedor cuando muestran interés. `[1.7.E2 · comprobable · venta con equipo · requiere 1.4.E3]`
 - El material de venta está en una biblioteca central, no en la computadora de cada vendedor. `[1.7.E3 · declarado · venta con equipo]`
-- Cuando un negocio lleva sin avanzar más tiempo del que su etapa permite, el líder recibe un aviso del sistema, sin esperar a la pipeline review. `[1.7.E4 · comprobable · venta con equipo · requiere 1.7.F1]`
+- Cuando un negocio lleva sin avanzar más tiempo del que su etapa permite, el líder recibe un aviso del sistema, sin esperar a la revisión del pipeline. `[1.7.E4 · comprobable · venta con equipo · requiere 1.7.F1]`
 
 **Óptimo.** La IA detecta qué negocios de más valor se traban y decide el canal y el momento de cada seguimiento; el equipo valida.
 
 *Resultado:* Los negocios de más valor reciben ayuda justo cuando la necesitan: la IA detecta cuándo se traban y propone a quién movilizar.
 
 - La IA detecta qué negocios de más valor se están trabando antes de que venza su plazo y propone a quién movilizar o qué contenido enviar; el líder valida, y todo queda en el CRM. `[1.7.O1 · comprobable]`
-- La IA decide el canal y el momento de cada seguimiento, persona por persona y según cómo responde, dentro de los límites que fijó el equipo; lo que decide queda registrado en el CRM. `[1.7.O2 · comprobable · requiere 1.7.E1]`
+- La IA decide el canal y el momento de cada seguimiento, persona por persona y según cómo responde, dentro de los límites que fijó el equipo; el equipo revisa los resultados, y lo que decide la IA queda registrado en el CRM. `[1.7.O2 · comprobable · requiere 1.7.E1]`
 
 #### 1.8 Aprendizaje de Ganadas y Perdidas
 
@@ -725,7 +725,7 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 
 *Costo de quedarse:* No sabes por qué pierdes negocios: cada quien tiene su explicación, y sin un registro no hay cómo ver qué se repite.
 
-**Deficiente.** Cuando se pierde un negocio, no queda nada registrado ni se habla de por qué.
+**Deficiente.** Cuando se pierde un negocio, no se anota la razón: cada vendedor da su propia versión, de memoria.
 
 - Cuando se pierde un negocio, no hay una razón en la que el equipo coincida: cada vendedor da su versión, de memoria. `[1.8.D1 · evaluado]`
 - Los negocios perdidos se cierran sin anotar la razón. `[1.8.D2 · evaluado]`
@@ -750,14 +750,14 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 - El proceso o playbook se refina con base en lo aprendido. `[1.8.E2 · declarado · hábito · requiere 1.1.F4]`
 - Hay capacitación comercial para el equipo con un calendario fijo, no solo cuando entra alguien nuevo. `[1.8.E3 · declarado · hábito · venta con equipo]`
 
-**Óptimo.** La IA analiza las conversaciones con los prospectos y propone correcciones al playbook; el líder decide cuáles se aplican.
+**Óptimo.** La IA analiza las llamadas con los prospectos y propone correcciones al playbook; el líder decide cuáles se aplican.
 
-*Resultado:* Cada vendedor recibe recomendaciones sobre sus propias conversaciones, el líder corrige el playbook con lo que encuentra la IA y la dirección ajusta la estrategia con esa evidencia.
+*Resultado:* Cada vendedor recibe recomendaciones sobre sus propias llamadas, el líder corrige el playbook con lo que encuentra la IA y la dirección ajusta la estrategia con esa evidencia.
 
 - La IA analiza las llamadas con los prospectos —también las de video— y le deja a cada vendedor recomendaciones que quedan registradas; el líder las revisa con él. `[1.8.O1 · comprobable · venta con equipo]`
 - La IA propone correcciones al playbook a partir de lo que encuentra en las llamadas, y el líder decide cuáles se aplican; en el sistema queda cada propuesta y lo que se decidió con ella. `[1.8.O2 · comprobable · venta con equipo · requiere 1.1.E2]`
 - La dirección ajusta la estrategia comercial con lo que muestran los datos de qué funciona. `[1.8.O3 · evaluado · hábito]`
-- Los seguimientos que decide la IA se miden contra un grupo de control: se sabe cuánto agregan. `[1.8.O4 · comprobable · requiere 1.7.O2]`
+- Los seguimientos que decide la IA se miden contra un grupo de control, y en el CRM se ve cuánto agregan; con eso el equipo revisa los límites que le fijó a la IA. `[1.8.O4 · comprobable · requiere 1.7.O2]`
 
 ---
 
@@ -795,8 +795,8 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 - Existe un proceso de campaña escrito —del brief a la ejecución y la publicación— que el equipo aplica de forma consistente. `[2.1.F2 · evaluado · hábito]`
 - Hay una reunión de resultados cada semana o cada quince días, y se sostiene. `[2.1.F3 · declarado · hábito]`
 - El líder puede explicar qué campañas corren y en qué etapa sin preguntarle al equipo. `[2.1.F4 · evaluado]`
-- Si una agencia ejecuta parte del trabajo, el equipo es dueño del calendario, del brief, de la aprobación y de los accesos, y las campañas no se detienen si cambia la agencia. `[2.1.F5 · declarado]`
-- Cualquier persona del equipo trabaja las campañas y los contactos en el sistema central, no en hojas aparte: las herramientas de cada canal, como las de pauta, se usan para lo suyo, no como un registro aparte, y el equipo abre el sistema como herramienta de trabajo, no por obligación. `[2.1.F6 · evaluado · hábito]`
+- Si una agencia ejecuta todo o parte del trabajo, el equipo es dueño del calendario, del brief, de la aprobación y de los accesos, y las campañas no se detienen si cambia la agencia. `[2.1.F5 · declarado]`
+- Cualquier persona del equipo trabaja las campañas y los contactos en el sistema central, no en hojas sueltas: las herramientas de cada canal, como las de pauta, se usan para lo suyo, no como un registro aparte, y el equipo abre el sistema como herramienta de trabajo, no por obligación. `[2.1.F6 · evaluado · hábito]`
 
 **Eficiente.** Cada pieza pasa por control de calidad y el líder vigila con datos que el proceso se cumpla.
 
@@ -830,7 +830,7 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 **Inicial.** Hay herramientas, pero se usan a medias: se pagan licencias o módulos que nadie usa y parte de lo que entra se pasa a mano.
 
 - Se pagan licencias o módulos que el equipo no usa. `[2.2.I1 · comprobable]`
-- Algunos puntos por donde llegan contactos —un formulario del sitio o el canal conversacional— no están conectados al sistema: lo que entra por ahí se pasa a mano o se pierde. `[2.2.I2 · comprobable]`
+- Algunos formularios del sitio no están conectados al sistema, o ninguno de los canales conversacionales por los que se atiende lo está: lo que entra por ahí se pasa a mano o se pierde. `[2.2.I2 · comprobable]`
 - Hay alguna automatización, pero quedó a medias: algunos formularios responden solos y otros no le avisan a nadie. `[2.2.I3 · comprobable]`
 
 **Funcional.** Las herramientas que se pagan se usan, lo que entra llega solo al sistema y recibe respuesta, y si el equipo usa IA, esta conoce la voz de marca y los buyer personas.
@@ -849,7 +849,7 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 
 - Hay secuencias de nutrición de varios pasos, con tiempos de espera y caminos distintos según quién es o lo que hace cada persona. `[2.2.E1 · comprobable]`
 - Si el canal conversacional, como WhatsApp, es parte del plan de canales, sus campañas están automatizadas, con segmentación y con caminos distintos según lo que hizo la persona: si leyó, hizo clic o respondió. `[2.2.E2 · comprobable · requiere 2.6.F1]`
-- El traspaso de leads a Ventas es automático: cuando un lead cumple los criterios de MQL, se asigna por varias condiciones y le llega al vendedor con su historial. `[2.2.E3 · comprobable · venta con equipo · requiere 2.6.F4]`
+- El traspaso de leads a Ventas es automático: cuando un lead cumple los criterios de MQL, le llega con su historial al vendedor que corresponde, sin que nadie lo pase a mano. `[2.2.E3 · comprobable · venta con equipo · requiere 2.6.F4]`
 - Si la empresa atiende por más de un canal conversacional, todos llegan a una sola bandeja. `[2.2.E4 · comprobable]`
 - Si la empresa usa landing pages en sus campañas, se crean en el CMS conectado al sistema central, no en herramientas sueltas. `[2.2.E5 · comprobable]`
 - El equipo usa la IA en su trabajo diario —para redactar piezas, resumir resultados o preparar una campaña—, y la IA trabaja con el contexto del área: los buyer personas, los segmentos y la voz de marca. `[2.2.E6 · evaluado · hábito · requiere 2.3.F6]`
@@ -878,7 +878,7 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 
 **Inicial.** Los datos están en el sistema, pero los reportes se arman a mano y la limpieza se hace cuando alguien se acuerda.
 
-- No hay una regla de cuándo se limpian los datos: se limpian a mano cuando alguien nota un problema, y los contactos repetidos y los campos vacíos llegan a los reportes. `[2.3.I1 · comprobable]`
+- No hay una regla de cuándo se limpian los datos: se corrigen a mano cuando alguien nota un problema, y a muchos contactos les faltan los datos que describen al cliente ideal. `[2.3.I1 · comprobable]`
 - Hay reportes, pero se arman a mano en una hoja cada vez, y a una parte de los leads le falta el origen. `[2.3.I2 · comprobable]`
 
 **Funcional.** Cada lead tiene su origen y su etapa, y los reportes salen del sistema sin armarlos a mano.
@@ -886,7 +886,7 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 *Resultado:* El líder sabe de dónde viene cada lead, con reportes que salen del sistema y no de una hoja de cálculo armada a mano.
 
 - Cada contacto creado desde la puesta en marcha del sistema —entre por un formulario, una conversación, un portal o una compra— tiene su etapa del ciclo de vida y su origen. `[2.3.F1 · comprobable]`
-- Las propiedades que describen al cliente ideal —en empresas, industria, empresa y rol; en personas, lo que define a cada segmento— se piden en los formularios por donde entran los leads, o donde se capturen sus datos, y están completas en la mayoría de los registros. `[2.3.F2 · comprobable · requiere 2.2.F3]`
+- Las propiedades que describen al cliente ideal —en empresas, la industria, el nombre de la empresa y el rol de la persona; en personas, lo que define a cada segmento— se piden en los formularios por donde entran los leads —o, si no hay formularios, donde se capturan sus datos— y están completas en la mayoría de los registros. `[2.3.F2 · comprobable · requiere 2.2.F3]`
 - Los duplicados están bajo control: se revisan y se unen al menos una vez por trimestre, a mano o de forma automática, y no distorsionan los reportes. `[2.3.F3 · comprobable · riesgo · hábito]`
 - Los reportes básicos —cuántos leads entran, de dónde vienen y cuántos se convierten— salen del sistema sin armarlos a mano. `[2.3.F5 · comprobable]`
 - El contexto que el área documentó —buyer personas, segmentos, voz de marca— se revisa y se actualiza al menos una vez por trimestre; no se deja envejecer. `[2.3.F6 · declarado · riesgo · hábito · requiere 2.5.F2, 2.5.F3, 2.6.F1]`
@@ -924,28 +924,28 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 - Qué hacer se decide sobre la marcha, sin metas ni números. `[2.4.D2 · evaluado]`
 - Nadie revisa los resultados de marketing: ni el equipo ni la dirección. `[2.4.D3 · declarado]`
 
-**Inicial.** Hay roles, pero no está escrito qué decide cada uno: lo del día a día espera a la dirección, y los resultados se revisan de vez en cuando, sin metas.
+**Inicial.** Hay roles, pero no están escritos: lo del día a día espera a la dirección, y los resultados se revisan de vez en cuando, sin metas.
 
-- No está escrito qué decide cada uno, así que hasta lo del día a día —qué publicar, qué pieza aprobar— espera a que lo resuelva la dirección general. `[2.4.I1 · evaluado]`
+- Los roles no están escritos, así que hasta lo del día a día —qué publicar, qué pieza aprobar— espera a que lo resuelva la dirección general. `[2.4.I1 · evaluado]`
 - Los resultados se revisan de vez en cuando, pero no hay metas contra las cuales compararlos ni acuerdos que se sigan. `[2.4.I2 · evaluado]`
 
 **Funcional.** Cada uno sabe qué le toca, hay metas, y las decisiones y la rendición de cuentas se hacen con números del sistema.
 
 *Resultado:* El equipo sabe qué se espera de cada uno, las decisiones se defienden con números y no con opiniones, y la dirección recibe cada mes cómo le fue a Marketing sin tener que pedirlo.
 
-- Cada persona del equipo tiene su rol por escrito: de qué se encarga, qué decide sola y qué aprueba el líder. `[2.4.F1 · declarado]`
+- Cada persona del equipo tiene rol definido por escrito. `[2.4.F1 · declarado]`
 - El líder tiene un tablero con 4 a 6 métricas clave —cuántos leads entran, de dónde vienen, cuántos se convierten y, donde hay vendedores, cuántos llegan a MQL— y lo consulta al menos una vez por semana. `[2.4.F2 · evaluado · hábito · requiere 2.3.F5]`
 - El equipo tiene metas mensuales o trimestrales, y en la reunión de resultados rinde cuentas por ellas. `[2.4.F3 · evaluado · hábito · requiere 2.1.F3]`
 - Las decisiones sobre qué hacer y en qué enfocarse citan datos del sistema, no opiniones. `[2.4.F4 · evaluado · hábito]`
-- Cualquier persona del equipo sabe hacer sin ayuda externa las tareas de todos los días en el sistema, como armar una lista, enviar un correo o sacar un reporte, también cuando una agencia ejecuta parte del trabajo. `[2.4.F5 · evaluado]`
+- Cualquier persona del equipo sabe hacer sin ayuda externa las tareas de todos los días en el sistema, como armar una lista, enviar un correo o sacar un reporte, también cuando una agencia ejecuta todo o parte del trabajo. `[2.4.F5 · evaluado]`
 - Si quien lidera marketing no es la dirección general, le envía a la dirección, cada mes, un reporte de cómo le fue a Marketing. `[2.4.F6 · declarado · hábito]`
 
-**Eficiente.** El liderazgo prepara a quien entra, acuerda reglas con Ventas y escucha al equipo.
+**Eficiente.** El liderazgo prepara a quien entra, escucha al equipo y, donde hay vendedores, acuerda reglas con Ventas y con Servicio.
 
-*Resultado:* Una persona nueva se integra rápido, y Marketing trabaja con reglas acordadas con Ventas y con Servicio en vez de discutir cada vez quién se hace cargo de un lead o de un cliente.
+*Resultado:* Una persona nueva se integra rápido y, donde hay vendedores, Marketing trabaja con reglas acordadas con Ventas y con Servicio en vez de discutir cada vez quién se hace cargo de un lead o de un cliente.
 
 - Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales; no se le entrena de memoria. `[2.4.E2 · declarado]`
-- El liderazgo coordina con Ventas —el traspaso de leads, los SLA y una reunión conjunta con fecha fija— y con Servicio. `[2.4.E3 · declarado · hábito · venta con equipo · requiere 2.6.F4]`
+- El liderazgo coordina con Ventas —el traspaso de leads, los SLA y una reunión conjunta con fecha fija— y con Servicio. `[2.4.E3 · declarado · hábito · venta con equipo · requiere 1.4.E3, 2.6.F4]`
 - El equipo da retroalimentación sobre el sistema y pide que evolucione. `[2.4.E4 · evaluado · hábito]`
 
 **Óptimo.** Hay responsables de validar la IA y de cuidar los datos, y lo que la IA puede decidir sola está por escrito.
@@ -953,7 +953,7 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 *Resultado:* Lo que la IA puede decidir sola está escrito y tiene responsables, y la dirección decide según lo que dejan con el tiempo los clientes que trae cada canal, frente a lo que cuesta traerlos.
 
 - Hay responsables de validar lo que produce la IA y de cuidar la calidad de los datos, y lo que la IA puede decidir sola está por escrito. `[2.4.O1 · declarado]`
-- El líder dedica su tiempo a la estrategia y a mejorar el sistema, no a ejecutar campañas ni a aprobar pieza por pieza. `[2.4.O2 · evaluado · hábito]`
+- El líder dedica su tiempo a la estrategia y a mejorar el sistema, no a ejecutar campañas. `[2.4.O2 · evaluado · hábito]`
 - Las decisiones se toman con lo que deja cada canal a lo largo del tiempo —el valor de vida de los clientes que trae— frente a lo que cuesta. `[2.4.O4 · evaluado · hábito]`
 
 ### Producción
@@ -1045,7 +1045,7 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 *Resultado:* Cada persona ve el contenido que le corresponde según lo que hizo antes, sin que nadie tenga que armar un segmento para ella.
 
 - La IA predice quién va a comprar y quién va a perder interés en los mensajes, y arma los segmentos con eso; el equipo revisa los segmentos antes de usarlos en una campaña, y en la ficha de cada persona se ve su predicción. `[2.6.O1 · comprobable]`
-- Hay personalización uno a uno: la IA cambia en tiempo real lo que ve cada persona en los mensajes, el sitio web o la app según lo que hizo antes, dentro de las reglas que fijó el equipo, y en el sistema se ve qué versión vio cada persona. `[2.6.O3 · comprobable · requiere 2.3.E4]`
+- Hay personalización uno a uno: la IA cambia en tiempo real lo que ve cada persona en los mensajes, el sitio web o la app según lo que hizo antes, dentro de las reglas que fijó el equipo; el equipo revisa los resultados, y en el sistema se ve qué versión vio cada persona. `[2.6.O3 · comprobable · requiere 2.3.E4]`
 
 #### 2.7 Canales y Alcance
 
@@ -1055,9 +1055,9 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 
 *Costo de quedarse:* Llegas al mercado a ratos, o no llegas, sin un plan que coordine tus canales, y no sabes cuánto te cuesta cada lead que traen.
 
-**Deficiente.** No hay canales activos ni un plan que diga por cuáles salir: la empresa no publica, no envía correos ni pauta.
+**Deficiente.** No hay canales activos ni un plan que diga por cuáles salir: la empresa no sale al mercado por ningún canal.
 
-- No hay canales activos: no se publica en redes ni se envían correos ni se pauta. `[2.7.D1 · comprobable]`
+- No hay canales activos: la empresa no sale al mercado por ningún canal —ni redes, ni correo, ni pauta, ni mensajes, ni eventos—. `[2.7.D1 · comprobable]`
 - No hay un plan que diga por qué canales sale la empresa. `[2.7.D2 · declarado]`
 
 **Inicial.** Hay canales activos, pero cada uno sale por su cuenta y cuando alguien tiene tiempo.
@@ -1072,7 +1072,7 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 
 - Si el correo es parte del plan de canales, sale con cadencia regular —al menos una vez por mes— y se sostiene. `[2.7.F1 · comprobable · hábito]`
 - Si las redes sociales son parte del plan de canales, al menos una se maneja con calendario y publica con la frecuencia que ese calendario fija. `[2.7.F2 · comprobable · hábito]`
-- Si la pauta pagada es parte del plan de canales, en el último trimestre corrió al menos una campaña con presupuesto definido (Google, Meta o el canal que corresponda al negocio). `[2.7.F3 · comprobable]`
+- Si la pauta pagada es parte del plan de canales, hay al menos una campaña corriendo con presupuesto definido (Google, Meta o el canal que corresponda al negocio). `[2.7.F3 · comprobable]`
 - Si el canal conversacional, como WhatsApp, es parte del plan de canales, se usa para salir con la frecuencia que fija el calendario, no solo para responder lo que entra. `[2.7.F4 · comprobable · hábito · requiere 2.2.F4, 2.3.F7]`
 - Los canales que la empresa eligió en su plan siguen el mismo calendario y la misma campaña: una promoción sale coordinada en todos ellos, no como esfuerzos sueltos. `[2.7.F5 · declarado · hábito · requiere 2.1.F1]`
 - En el sistema se ve cuánto costó cada lead —o cada venta, donde se compra sin vendedor— el último mes, al menos por canal. `[2.7.F6 · comprobable · requiere 2.3.F1]`
@@ -1089,7 +1089,7 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 
 **Óptimo.** La IA mueve el presupuesto entre canales dentro de los límites que fija el equipo, y se prueban canales nuevos de forma continua.
 
-*Resultado:* La inversión se reparte sola donde más retorna, dentro de los límites que fija el equipo, los clientes satisfechos traen clientes nuevos, y la empresa prueba canales nuevos sin esperar a ver qué hace la competencia.
+*Resultado:* La inversión se reparte sola donde más retorna, dentro de los límites que fija el equipo; los clientes satisfechos traen clientes nuevos, y la empresa prueba canales nuevos sin esperar a ver qué hace la competencia.
 
 - Se prueban canales nuevos —creadores de contenido, comunidades, formatos nuevos— en ciclos de dos meses o menos. `[2.7.O1 · declarado · hábito]`
 - La IA mueve el presupuesto entre canales sola, hacia donde más retorna y dentro de los límites que fijó el equipo; el líder revisa los resultados, y en el sistema queda cada cambio con su razón. `[2.7.O2 · comprobable · requiere 2.3.E2]`
@@ -1125,7 +1125,7 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 
 *Resultado:* El equipo sabe qué creatividades y audiencias funcionan porque lo probó, no porque lo intuye, y lo aprendido cambia cómo se arma la siguiente campaña.
 
-- Hay tests A/B regulares (al menos uno activo por mes). `[2.8.E1 · comprobable · hábito]`
+- Hay pruebas A/B regulares (al menos una activa por mes). `[2.8.E1 · comprobable · hábito]`
 - Hay un proceso escrito para comparar, con los resultados de campañas anteriores, qué creatividades y audiencias funcionan. `[2.8.E2 · declarado]`
 - El proceso de campaña y la planificación de las campañas siguientes se refinan con base en lo aprendido. `[2.8.E3 · declarado · hábito · requiere 2.1.F2, 2.8.F3]`
 
@@ -1168,7 +1168,7 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 *Resultado:* Todo el equipo atiende en el mismo sistema, cada cliente tiene a alguien que responde por él, y un caso se atiende igual sin importar qué agente lo tome.
 
 - El pipeline de servicio está configurado con sus etapas y cubre el flujo de atención, de la recepción al cierre. `[3.1.F1 · comprobable]`
-- Cada cliente tiene registrado quién responde por él —una persona o, si la cartera es tan grande que no se asigna por persona, un equipo— y recibe un contacto de seguimiento a tiempo —en los momentos que fija el proceso de atención—, aunque no haya abierto casos. `[3.1.F2 · comprobable · hábito]`
+- Cada cliente tiene registrado quién responde por él —una persona o, si la cartera es tan grande que no se asigna por persona, un equipo— y recibe un contacto de seguimiento a tiempo —en los momentos que fija el proceso de atención—, aunque no haya abierto casos; si responde un equipo, ese contacto puede ser un mensaje automático. `[3.1.F2 · comprobable · hábito]`
 - Hay reuniones de equipo de Servicio con cadencia fija (al menos quincenal) que se sostienen. `[3.1.F3 · declarado · hábito]`
 - Existe un proceso escrito para escalar las quejas graves y los casos que el agente no puede resolver: dice cuáles se escalan y a quién. `[3.1.F4 · declarado]`
 - Cualquier agente explica cómo se atiende un caso típico siguiendo el mismo flujo. `[3.1.F5 · evaluado]`
@@ -1204,9 +1204,9 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 - No hay un sistema central donde queden los casos. `[3.2.D1 · declarado]`
 - Los casos se manejan en celulares personales o correos individuales. `[3.2.D2 · evaluado]`
 
-**Inicial.** Hay un sistema de casos, pero alguien tiene que repartir a mano lo que entra.
+**Inicial.** Hay un sistema de casos, pero alguien tiene que repartir a mano lo que entra o, si se atiende por WhatsApp o chat, nada de eso llega a él.
 
-- Hay un sistema de casos, pero lo que entra se reparte a mano. `[3.2.I2 · comprobable]`
+- Hay un sistema de casos, pero lo que entra se reparte a mano, o el equipo atiende por WhatsApp o chat y ninguno de esos canales llega al sistema. `[3.2.I2 · comprobable]`
 
 **Funcional.** Los casos entran al sistema y se asignan solos con una regla simple; si el equipo atiende por WhatsApp o chat, ese canal está conectado, y si usa IA, trabaja con los datos de los clientes.
 
@@ -1280,7 +1280,7 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 - Un modelo predictivo de salud calcula para cada cliente su riesgo y si está logrando el resultado que persigue, a partir de su experiencia y de sus resultados; el puntaje se ve en su ficha y el responsable de cada cliente revisa a los que el modelo marca. `[3.3.O1 · comprobable · hábito · cliente recurrente]`
 - Servicio se apoya en el almacén central de datos de la empresa, con reglas claras de quién accede y cómo se mantiene, para anticipar el riesgo de cada cliente. `[3.3.O2 · comprobable]`
 - Modelos con IA predicen lo que viene —por ejemplo, cuántos casos van a entrar y de qué tipo— y proponen qué hacer; lo que predicen se ve en los tableros del área y el líder decide con eso. `[3.3.O3 · comprobable]`
-- Los datos se mantienen al día sin depender de que alguien se acuerde de actualizarlos: se capturan y se corrigen solos, y las personas solo validan las excepciones. `[3.3.O4 · comprobable]`
+- Los datos se mantienen al día sin depender de que alguien se acuerde de actualizarlos: se capturan y se corrigen solos, las personas solo validan las excepciones, y en el sistema queda qué se corrigió. `[3.3.O4 · comprobable]`
 
 #### 3.4 Equipo y Gobierno
 
@@ -1314,7 +1314,7 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 
 - En las reuniones del equipo se revisa el cumplimiento de los SLA de cada persona y se acuerda qué corregir. `[3.4.E1 · evaluado · hábito · requiere 3.1.F3, 3.3.E1]`
 - Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales; no se le entrena de memoria. `[3.4.E2 · declarado]`
-- El líder de Servicio acuerda con Ventas qué trae cada cliente nuevo —el resultado que persigue— y, si el cliente vuelve a comprar sin contrato, cómo le avisa Servicio a Ventas que se puede estar yendo. `[3.4.E4 · declarado · hábito]`
+- El líder de Servicio acuerda con Ventas qué trae cada cliente nuevo —el resultado que persigue— y el acuerdo se cumple: cada uno llega con ese resultado y, si el cliente vuelve a comprar sin contrato, Servicio le avisa a Ventas cuando se puede estar yendo. `[3.4.E4 · declarado · hábito]`
 
 **Óptimo.** Hay responsables de validar la IA y de cuidar el conocimiento y, donde la relación es continua, el servicio se mide por los ingresos que retiene y hace crecer.
 
@@ -1364,7 +1364,7 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 
 *Resultado:* La experiencia se siente igual de cuidada con una persona o con la IA.
 
-- Lo que la IA responde o escribe sola sigue la guía de tono y estilo de la marca; el equipo revisa una muestra de sus respuestas y la corrige cuando se sale, y cada respuesta queda en el sistema. `[3.5.O1 · evaluado · requiere 3.2.O1, 3.5.E3]`
+- Lo que la IA responde o escribe sola sigue la guía de tono y estilo de la marca; el equipo revisa una muestra de sus respuestas y corrige a la IA cuando se sale de la guía, y cada respuesta queda en el sistema. `[3.5.O1 · evaluado · requiere 3.2.O1, 3.5.E3]`
 
 #### 3.6 Priorización de Clientes
 
@@ -1384,7 +1384,7 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 
 **Funcional.** Cada caso tiene una prioridad que el equipo respeta, y cada tipo de cliente recibe la atención que le corresponde.
 
-*Resultado:* Lo urgente se atiende primero y los clientes más importantes reciben una atención acorde, sin que el agente tenga que reconstruir su historia.
+*Resultado:* Lo urgente se atiende primero y cada tipo de cliente recibe la atención que le corresponde, sin que el agente tenga que reconstruir su historia.
 
 - Cada caso tiene una prioridad asignada (urgente, alta, normal o baja) y los agentes la respetan. `[3.6.F1 · comprobable · hábito]`
 - Está escrito qué atención recibe cada tipo de cliente —por ejemplo, por qué canal y quién lo atiende—, y el equipo la aplica. `[3.6.F2 · evaluado · hábito · requiere 3.5.F4]`
@@ -1394,7 +1394,7 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 
 *Resultado:* La atención cambia según el momento en que está cada cliente y, donde el cliente vuelve, cada cliente clave tiene un dueño que lo conoce y el resto de la cartera no queda sola.
 
-- Hay un modelo de atención por segmento: cada cliente clave tiene un responsable dedicado —un CSM— que lo conoce, y el resto de la cartera recibe acompañamiento automatizado, de uno a muchos. `[3.6.E1 · comprobable · cliente recurrente · requiere 3.1.F2, 3.5.F4]`
+- Hay un modelo de atención por segmento: cada cliente clave tiene un responsable dedicado que lo conoce, y el resto de la cartera recibe acompañamiento automatizado, de uno a muchos. `[3.6.E1 · comprobable · cliente recurrente · requiere 3.1.F2, 3.5.F4]`
 - Los clientes se segmentan para acciones diferenciadas según el momento de su relación: donde el cliente vuelve, sanos, en riesgo o con potencial de crecer; donde compra una vez, por entregar, en garantía o listos para recomendar. `[3.6.E2 · comprobable · requiere 3.3.E5]`
 
 **Óptimo.** Cada cliente se atiende con todo su contexto, lo atienda una persona o la IA, incluso en el autoservicio.
@@ -1402,7 +1402,7 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 *Resultado:* Cada cliente recibe una atención a su medida en cualquier canal, incluso cuando se atiende solo, y nunca tiene que volver a explicar lo que ya habló con Ventas.
 
 - En el autoservicio, cada cliente ve lo que corresponde a su tipo, a lo que compró y a sus casos abiertos, sin que nadie lo arme a mano; el equipo define qué corresponde a cada tipo. `[3.6.O1 · comprobable · requiere 3.2.E2]`
-- La IA ajusta cada respuesta a la persona mientras la atiende —según su historia, su caso y lo que acaba de hacer—, dentro de los límites que fijó el equipo, y en el sistema queda qué se le respondió. `[3.6.O2 · comprobable]`
+- La IA ajusta cada respuesta a la persona mientras la atiende —según su historia, su caso y lo que acaba de hacer—, dentro de los límites que fijó el equipo; el equipo revisa una muestra de las respuestas, y en el sistema queda qué se le respondió. `[3.6.O2 · comprobable]`
 - Cada cliente se atiende con el contexto de cómo llegó —lo que se le prometió en la venta y el segmento del que viene—, que quien lo atiende, persona o IA, ve en su ficha sin volver a preguntarlo. `[3.6.O3 · comprobable · requiere 3.3.E3]`
 
 #### 3.7 Proactividad
@@ -1411,7 +1411,7 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 
 *Descripción:* Mide si el servicio se adelanta a los riesgos y necesidades del cliente, o solo reacciona cuando algo falla.
 
-*Costo de quedarse:* Te enteras de que un cliente está mal cuando el problema ya creció o cuando ya se fue, y sus fechas importantes —una entrega, un vencimiento, una renovación— te toman por sorpresa.
+*Costo de quedarse:* Te enteras de que un cliente está mal cuando el problema ya creció o cuando ya se fue, y las fechas críticas de tus clientes clave —el fin de una garantía, un vencimiento, una renovación— te toman por sorpresa.
 
 **Deficiente.** Nadie se adelanta: los problemas se atienden cuando el cliente reclama.
 
@@ -1427,7 +1427,7 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 *Resultado:* Los problemas que se repiten, las quejas y las fechas críticas de los clientes clave ya no toman al equipo por sorpresa: se actúa antes de que el problema crezca y, donde la relación es continua, cuando un cliente se va se sabe por qué.
 
 - Un cliente con casos repetidos por el mismo problema, una queja sin resolver o, si se piden calificaciones, una mala calificación se identifica, y alguien lo contacta antes de que el problema crezca. `[3.7.F1 · comprobable · hábito]`
-- Los clientes clave reciben contacto antes de sus fechas críticas —una entrega, el fin de una garantía, un vencimiento o, si la hay, una renovación—, no después. `[3.7.F2 · comprobable · hábito · requiere 3.5.F4]`
+- Los clientes clave reciben contacto antes de sus fechas críticas —el fin de una garantía, un vencimiento o, si la hay, una renovación—, no después. `[3.7.F2 · comprobable · hábito · requiere 3.5.F4]`
 - Cada cliente que se va deja registrada la razón de su salida. `[3.7.F3 · comprobable · relación continua]`
 
 **Eficiente.** Los riesgos se ven venir, ningún caso se pierde aunque lo resuelva otra área, y el cliente recibe lo que necesita saber antes de pedirlo.
@@ -1437,7 +1437,7 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 - Hay alertas tempranas, a partir del indicador de salud, de riesgo de fuga o de oportunidad de crecer. `[3.7.E1 · comprobable · relación continua · requiere 3.3.E5]`
 - Los clientes en riesgo reciben una acción de retención antes de decidir irse, y los que tienen potencial reciben una propuesta de expansión. `[3.7.E2 · comprobable · hábito · relación continua]`
 - Los clientes clave revisan con la empresa, al menos cada trimestre, el resultado que persiguen: qué se logró y qué sigue. `[3.7.E3 · declarado · hábito · relación continua · requiere 3.4.E4, 3.5.F4]`
-- Ningún caso del cliente se pierde entre áreas: si lo resuelve otra área —administración, cobros, entregas—, queda igual en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —una entrega, una garantía, un vencimiento— o, si se piden calificaciones, cuando un cliente califica mal. `[3.7.E4 · comprobable]`
+- Ningún caso del cliente se pierde entre áreas: si lo resuelve otra área —administración, cobros, entregas—, también queda en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —una entrega, una garantía, un vencimiento— o, si se piden calificaciones, cuando un cliente califica mal. `[3.7.E4 · comprobable]`
 - Cada cliente recibe, sin tener que pedirla, la información que necesita antes de los momentos clave de su relación —una entrega, un trámite, un vencimiento—, y sale de forma automática, no cuando alguien se acuerda. `[3.7.E5 · comprobable · requiere 3.1.E4]`
 
 **Óptimo.** Los problemas se resuelven antes de que el cliente los note, con acciones que la IA ajusta, y el cliente recibe detalles que lo deleitan.
@@ -1465,7 +1465,7 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 **Inicial.** Hay algunas respuestas publicadas o un chatbot de menú, pero lo que más preguntan los clientes todavía no tiene respuesta publicada.
 
 - Hay un chatbot de menú fijo, pero no responde las preguntas que más se repiten. `[3.8.I1 · comprobable]`
-- Las respuestas a lo que más se pregunta existen, pero repartidas en la cabeza de cada agente, en correos o en documentos sueltos. `[3.8.I2 · evaluado]`
+- Hay algunas respuestas publicadas, pero sueltas: no cubren lo que más preguntan los clientes, que se sigue respondiendo a mano. `[3.8.I2 · evaluado]`
 
 **Funcional.** Las preguntas más frecuentes de los clientes tienen respuesta publicada.
 
@@ -1487,9 +1487,9 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 *Resultado:* La cartera puede crecer sin que crezca el equipo: el conocimiento se genera a medida que aparecen preguntas nuevas, y la IA y el autoservicio absorben los picos.
 
 - La IA detecta las preguntas nuevas que llegan y redacta el artículo o la respuesta; el equipo lo revisa antes de publicarlo, y en la base de conocimiento se ve qué escribió la IA y quién lo aprobó. `[3.8.O1 · comprobable]`
-- Los picos de demanda los absorben la IA y el autoservicio: el equipo no crece cuando crece la cartera. `[3.8.O2 · evaluado]`
+- Los picos de demanda los absorben la IA y el autoservicio: el equipo no crece cuando crece la cartera, y el líder ve en los tableros del área qué parte de la demanda resolvieron la IA y el autoservicio y qué pasó a una persona. `[3.8.O2 · evaluado]`
 - La IA aplica lo que aprende de los casos a las respuestas guardadas, a la atención de cada tipo de cliente y a los avisos proactivos, y el líder valida cada cambio; en el sistema queda qué cambió y de dónde salió. `[3.8.O3 · comprobable]`
-- Los avisos que decide la IA se miden contra un grupo de control: se sabe cuánto agregan. `[3.8.O4 · comprobable · requiere 3.7.O3]`
+- Los avisos que decide la IA se miden contra un grupo de control, y en el sistema se ve cuánto agregan; con eso el equipo revisa los límites que le fijó a la IA. `[3.8.O4 · comprobable · requiere 3.7.O3]`
 
 ---
 
@@ -1556,7 +1556,7 @@ Cuando un criterio de riesgo no se cumple, se le muestra al cliente con estos me
 
 ## Glosario
 
-Términos que aparecen en la escala, la especificación o el manual, y que pueden no ser evidentes: los propios de la escala, los que en ella tienen un sentido preciso y los de uso común en la industria o en las herramientas. Cuando la escala dice en español algo que en las herramientas se dice en inglés, la entrada lo aclara.
+Términos que aparecen en la escala, la especificación o el manual, o que el equipo usa a diario aunque la escala ya los diga en español, y que pueden no ser evidentes: los propios de la escala, los que en ella tienen un sentido preciso y los de uso común en la industria o en las herramientas. Cuando la escala dice en español algo que en las herramientas se dice en inglés, la entrada lo aclara.
 
 | Término | Qué significa |
 |:--|:--|
@@ -1564,7 +1564,6 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Agente | En Servicio, la persona del equipo que atiende los casos. Un agente de IA es un programa que hace un trabajo solo —calificar un lead, responder un caso— y le pasa a una persona lo que no puede resolver. Los agentes de Nexus son los que ayudan al CSE a diagnosticar. |
 | Almacén central de datos | Base donde la empresa junta la información de todas sus herramientas para analizarla en conjunto. En inglés, data warehouse. |
 | Arquitectura de CRM | Cómo está armado el CRM por dentro: sus propiedades, pipelines, listas y formularios. |
-| Asset | Material de apoyo para vender: una presentación, un caso de éxito, una demo o un video. |
 | Atribución | Repartir el mérito de un lead o de una venta entre los canales y los contenidos que tocaron a esa persona, para saber cuánto deja cada uno. |
 | Autoservicio | Lo que el cliente resuelve solo, sin hablar con nadie: una respuesta publicada, un portal o una gestión en línea. |
 | Backlog | Trabajo pendiente acumulado, como los casos sin resolver. |
@@ -1575,6 +1574,7 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Calibración | Práctica en la que un CSE puntúa casos de referencia con respuesta conocida, para comprobar que diagnostica igual que los demás. Por ahora es una regla en espera, en el manual de operación. |
 | Canal conversacional | Canal donde el cliente conversa con la empresa en tiempo real o casi: la mensajería —en la región, sobre todo WhatsApp— o el chat del sitio. |
 | Caso | Cada pedido de ayuda de un cliente —una consulta, un problema, un reclamo o una solicitud— desde que entra hasta que se cierra. En inglés, ticket. |
+| Caso de éxito | Historia de un cliente que logró un resultado con lo que vende la empresa, contada para mostrársela a otros. |
 | Chatbot | Programa que responde conversaciones de forma automática, desde menús fijos hasta IA. |
 | Chequeo | Versión corta del diagnóstico, para prospectos: una o dos preguntas por dimensión, con las que se estima el nivel sin recorrer los criterios. Todo lo que muestra es estimado. |
 | Cliente clave | Cliente que la empresa decide cuidar de forma especial. Cada empresa define por escrito cuáles son, en su documento de tipos de cliente; la escala pide que esa definición exista y que se use. |
@@ -1588,37 +1588,38 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Escalar un caso | Pasarlo a alguien con más autoridad o conocimiento, porque quien lo atiende no puede resolverlo o porque está por vencer su plazo. No es lo mismo que la escalabilidad del servicio, que mide si se pueden atender más clientes sin que el equipo crezca al mismo ritmo. |
 | Etapa del ciclo de vida | Dónde está cada contacto en su relación con la empresa —suscriptor, lead, MQL, SQL, cliente—, guardado en un campo del sistema para que cada área sepa qué le toca. |
 | Ficha del cliente | El registro de cada cliente en el sistema, con lo que se sabe de él: quién es, qué compró o tiene contratado, sus casos y sus conversaciones. Es lo que mira quien lo atiende. |
-| Forecast | Pronóstico de cuánto se va a vender en un período. |
 | Fuga de clientes | Pérdida de clientes: los que dejan de comprar o cancelan. En inglés, churn. |
 | Grupo de control | Personas parecidas a las que no se les envía el mensaje, para medir cuánto agrega lo que sí se envió. |
-| Handoff | Traspaso de un contacto o cliente de un área a otra, por ejemplo de Marketing a Ventas. |
-| Health Score | Indicador de salud: puntaje de un cliente que anticipa si está en riesgo o tiene potencial de crecer. |
 | Hábito | Criterio que describe algo que el equipo repite. Puede estar cumplido, iniciado —la rutina existe pero todavía no tiene historia— o no cumplido. |
 | IA | Inteligencia artificial. En la escala importa quién hace el trabajo: en Eficiente, la IA asiste y una persona lo hace; en Óptimo, la IA lo hace y una persona valida. |
-| Journey | Recorrido que hace un cliente desde que conoce la empresa hasta que compra, y después. |
+| Indicador de salud | Puntaje de un cliente que anticipa si está en riesgo o tiene potencial de crecer. En inglés, health score. |
 | Landing page | Página creada para una campaña, con un objetivo concreto como captar datos. |
 | Lead | Persona o empresa que mostró interés y todavía no es cliente. |
 | Lead calificado | Lead que cumple los criterios escritos para que Ventas lo trabaje. Es lo mismo que un SQL. |
-| Lead scoring | Puntaje de leads: modelo que suma puntos a cada lead según sus datos y su comportamiento, para saber cuáles están más cerca de comprar. |
 | LTV | Valor de vida del cliente: cuánto ingreso deja durante toda la relación. |
-| Macros y snippets | Respuestas guardadas que un agente inserta con un clic en vez de redactarlas cada vez. |
+| Material de venta | Material de apoyo para vender: una presentación, un caso de éxito, una demo o un video. En inglés, asset. |
 | Meta tags | Etiquetas del sitio que les dicen a los buscadores de qué trata cada página. |
 | MQL | Lead que Marketing considera listo para pasar a Ventas, según los criterios que Marketing definió. Todavía no es un lead calificado: eso lo decide Ventas. |
 | Negocio | Cada venta posible en curso, desde que se abre hasta que se gana o se pierde; vive en el pipeline. También se le dice oportunidad; en inglés, deal. |
 | Nivel objetivo | El nivel hasta el que conviene llevar un departamento, acordado con el cliente según el resultado que persigue. Por defecto, Funcional. |
 | NPS | Encuesta que mide qué tan dispuesto está un cliente a recomendar a la empresa. |
-| Nutrición | Secuencia de mensajes que acompaña a un lead hasta que está listo para hablar con Ventas. En inglés, nurturing. |
+| Nutrición | Secuencia de mensajes que acompaña a un lead hasta que está listo para comprar o, donde hay vendedores, para hablar con Ventas. En inglés, nurturing. |
 | Onboarding | Proceso de arranque: el de un cliente nuevo, o el de una persona nueva en el equipo. |
 | Perfil de negocio | Cómo se cierra la venta de una unidad —con equipo, transaccional o mixta— y qué pasa después —relación única, recompra o relación continua—. Decide qué criterios aplican. |
 | Pipeline | Las etapas por las que pasa un negocio, desde el primer contacto hasta el cierre. |
-| Pipeline review | Reunión periódica donde el equipo revisa el estado de los negocios en curso. |
 | Playbook | Guía práctica que dice cómo actuar en una situación concreta, paso a paso. |
 | Por confirmar | Nivel del diagnóstico al que solo le faltan hábitos iniciados: cuenta como alcanzado, y en la siguiente remedición se confirma o baja. |
+| Pronóstico | Cálculo de cuánto se va a vender en un período. En inglés, forecast. |
+| Prueba A/B | Probar dos versiones de algo con públicos parecidos, para ver cuál funciona mejor. En inglés, test A/B. |
+| Puntaje de leads | Modelo que suma puntos a cada lead según sus datos y su comportamiento, para saber cuáles están más cerca de comprar. En inglés, lead scoring. |
 | QBR | Revisión trimestral con un cliente clave sobre sus resultados y los próximos pasos. |
 | Recompra | Que un cliente vuelva a comprar sin tener un contrato que lo obligue. |
+| Recorrido del cliente | Camino que hace un cliente desde que conoce la empresa hasta que compra, y después; antes de la compra se le dice recorrido de compra. En inglés, journey. |
 | Referido | Cliente nuevo que llega por la recomendación de otro cliente. |
 | Remarketing | Volver a mostrarle anuncios a quien ya tuvo contacto con la empresa. |
 | Remedición | Volver a diagnosticar un departamento para ver cuánto avanzó: la primera, entre 60 y 90 días después de entregar, y después de forma periódica. Se compara contra la línea base. |
+| Respuestas guardadas | Respuestas que un agente inserta con un clic en vez de redactarlas cada vez. En las herramientas, macros o snippets. |
+| Revisión del pipeline | Reunión periódica donde el equipo revisa el estado de los negocios en curso. En inglés, pipeline review. |
 | Round-robin | Asignación por turnos: uno a cada persona, en orden. |
 | Routing | Regla que decide a quién se asigna automáticamente un lead o un caso. |
 | Segmento | Grupo de contactos o de clientes que comparten algo que importa para hablarles distinto —qué necesitan, cómo deciden, qué compraron—, definido con criterios escritos. |
@@ -1627,14 +1628,14 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | SQL | Lead aceptado por Ventas como un negocio real que vale la pena trabajar. |
 | Stack | El conjunto de herramientas tecnológicas que usa el área. |
 | Tablero | Pantalla con los indicadores clave de un área, que se actualiza desde el sistema. En inglés, dashboard. |
-| Test A/B | Probar dos versiones de algo con públicos parecidos, para ver cuál funciona mejor. |
+| Traspaso | Paso de un contacto o de un cliente de un área a otra, por ejemplo de Marketing a Ventas. En inglés, handoff. |
 | Upsell | Venderle más, o una versión superior, a un cliente que ya compró. |
 | Vista 360° | Ver en un solo lugar toda la relación con un cliente: ventas, servicio, facturación e historial. |
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
 
-**8.8.0 (2026-10-09).** Limpieza de la revisión de la 8.7, para que el consultor ubique a cada empresa en un nivel que la empresa reconozca: no entra ni sale ningún criterio y ningún identificador cambia. Las 24 preguntas se reescriben para que pregunten lo que decide Funcional en su dimensión, con las palabras del cliente y para contestarse describiendo, no con sí o no. Las frases de Deficiente e Inicial y sus señales siguen una sola regla: Deficiente es que no existe; Inicial, que existe, pero a mano, sin regularidad o dependiendo de una persona. Ya no castigan que no se use IA ni niegan lo que recién pide Eficiente, y Deficiente e Inicial dicen cosas distintas; como no deciden el nivel ni el puntaje, conservan su identificador aunque cambie su redacción. Lo que no todas las empresas tienen abre con una condición: los canales que la empresa eligió en su plan, y no los cuatro; el canal conversacional, si se atiende por él; la agencia, que ya no cuenta en contra si el equipo es dueño del calendario, del brief, de la aprobación y de los accesos; y lo que no siempre existe —un ERP, un comité de compra, formularios en el sitio, más de un canal escrito, que Marketing le pase leads a Ventas o que entre alguien nuevo al equipo— cuenta solo donde existe. Las palabras que deciden tienen valor: el pronóstico confiable cae dentro de ±10 % en la mayoría de los meses, un negocio estancado es el que pasó el plazo que el proceso define para su etapa, «todo negocio» es desde la puesta en marcha y los duplicados se revisan cada trimestre. Óptimo dice qué hace la IA, quién valida y qué se ve en el sistema. Los resultados y los costos de quedarse prometen solo lo que entrega su nivel. La escala dice vendedor, negocio, caso, cliente ideal, tablero, nutrición, fuga y puntaje de leads, y Tracción del Deal pasa a llamarse Tracción del Negocio. Servicio deja de pedir en Funcional lo que ha pagado el cliente, que Ventas pide en Eficiente; los clientes clave los define cada empresa en su documento de tipos de cliente, y los criterios que los nombran lo requieren. Cambia a qué perfiles aplican seis criterios: la retención con propuesta de expansión (3.7.E1) y medir al equipo de Servicio por la retención (3.4.O3) pasan de cliente recurrente a relación continua; el acuerdo de Marketing con Ventas (2.4.E3) y dos señales de Ventas pasan a venta con equipo, y una señal de Tecnología de Ventas, a venta sin vendedor. La regla de asignación suma la próxima compra frente a la renovación, la calidad de los datos, dónde vive la información, la protección contra la suplantación y los avisos automáticos al cliente, y el glosario suma, entre otras, cliente clave, caso, ficha del cliente, autoservicio y CSE. Entra el feedback del equipo: los datos que viven en otro sistema sin conectar, la regla de quién mantiene los datos y la confianza del cliente en Banca. En las ediciones, la tienda solo física y las aseguradoras se miden con la escala general, e Inmobiliaria cubre también corredoras y alquileres, con lo de proyecto propio bajo condición; cada edición dice con sus palabras lo que cambió en la general. Cambia lo que se lee en todas las dimensiones, sin cambiar lo que se mide.
+**8.8.0 (2026-10-09).** Limpieza de la revisión de la 8.7, para que el consultor ubique a cada empresa en un nivel que la empresa reconozca: no entra ni sale ningún criterio y ningún identificador cambia. Las 24 preguntas se reescriben para que pregunten lo que decide Funcional en su dimensión, con las palabras del cliente y para contestarse describiendo, no con sí o no. Las frases de Deficiente e Inicial y sus señales siguen una sola regla, que ahora también dice Cómo se evalúa cada dimensión: Deficiente es que lo que pide Funcional no existe; Inicial, que existe a medias: sin regularidad, sin escribir, fuera del sistema o dependiendo de una persona. Ya no castigan que no se use IA ni niegan lo que recién pide Eficiente, y Deficiente e Inicial dicen cosas distintas; como esos dos niveles se asignan por el que mejor calza, leyendo la frase y sus señales en conjunto y no por cumplir cada señal, las señales conservan su identificador aunque cambie su redacción. Lo que no todas las empresas tienen abre con una condición: los canales que la empresa eligió en su plan, y no los cuatro; el canal conversacional, si se atiende por él; la agencia, que ya no cuenta en contra si el equipo es dueño del calendario, del brief, de la aprobación y de los accesos; y lo que no siempre existe —un ERP, un comité de compra, formularios en el sitio, más de un canal escrito, más de un agente, que se pidan calificaciones, un producto que se usa de forma continua, que Marketing le pase leads a Ventas o que entre alguien nuevo al equipo— cuenta solo donde existe. Las palabras que deciden tienen valor: el pronóstico confiable cae dentro de ±10 % en la mayoría de los meses, un negocio estancado es el que pasó el plazo que el proceso define para su etapa, «todo negocio» es desde la puesta en marcha y los duplicados se revisan cada trimestre. Óptimo dice qué hace la IA, quién valida y qué se ve en el sistema. Los resultados y los costos de quedarse prometen solo lo que entrega su nivel, y los mensajes de riesgo se reescriben para decir qué le pasa al cliente: reportes inflados, mensajes repetidos o un equipo que trabaja con información vieja. La escala dice vendedor, negocio, caso, cliente ideal, tablero, nutrición, fuga, pronóstico, puntaje de leads, indicador de salud, respuestas guardadas, material de venta, traspaso y revisión del pipeline, y Tracción del Deal pasa a llamarse Tracción del Negocio. Servicio deja de pedir en Funcional lo que ha pagado el cliente, que Ventas pide en Eficiente; los clientes clave los define cada empresa en su documento de tipos de cliente, y los criterios que los nombran lo requieren. Cambia a qué perfiles aplican seis criterios: las alertas tempranas de fuga o de oportunidad de crecer (3.7.E1) y medir al equipo de Servicio por la retención (3.4.O3) pasan de cliente recurrente a relación continua; el acuerdo de Marketing con Ventas (2.4.E3) y dos señales de Ventas pasan a venta con equipo, y una señal de Tecnología de Ventas, a venta sin vendedor. Catorce criterios pasan a ser hábito —se confirman en la remedición—, nueve cambian cómo se verifican y unos veinte suman lo que requieren. La regla de asignación suma la calidad de los datos, dónde vive la información, la protección contra la suplantación y los avisos automáticos al cliente. El glosario suma, entre otras, cliente clave, caso, caso de éxito, ficha del cliente, autoservicio y CSE; las entradas en inglés de lo que la escala ya dice en español —deal, ICP, churn, dashboard, nurturing, forecast, lead scoring, health score, macros, asset, journey, handoff, pipeline review y test A/B— pasan a la palabra en español, y la de rep sale. Entra el feedback del equipo: los datos que viven en otro sistema sin conectar, la regla de quién mantiene los datos y la confianza del cliente en Banca. Lo que el equipo dice de la escala se manda como feedback desde Nexus y lo decide un super admin, como dice Cómo leer este documento. En las ediciones, la tienda solo física y las aseguradoras se miden con la escala general, e Inmobiliaria cubre también corredoras y alquileres, con lo de proyecto propio bajo condición; cada edición dice con sus palabras lo que cambió en la general. Cambia cómo se lee cada dimensión, y lo que piden los niveles solo se precisa o se acota.
 
 **8.7.0 (2026-10-01).** Óptimo dice qué se ve cuando la IA decide sola, sin nombrar herramientas. En Marketing, la IA decide qué mensaje recibe cada persona, por qué canal y en qué momento, y predice quién va a comprar y quién se va a ir; la personalización uno a uno llega también a la app. En Ventas, el canal y el momento de cada seguimiento se ajustan solos según cómo responde cada persona. En las tres áreas, lo que la IA puede decidir sola queda por escrito, y lo que decide se mide contra un grupo de control. Entran siete criterios: en Ventas, quién valida lo que hace la IA (1.4.O3) y medir sus seguimientos contra un grupo de control (1.8.O4); en Marketing, que lo que alguien hizo antes de dejar sus datos quede en su ficha (2.3.E4), una sola ficha por persona que se arma al momento (2.3.O5), las notificaciones de la app como parte de las campañas, si hay app (2.7.E5), y el grupo de control de los mensajes (2.8.O3); y en Servicio, el de los avisos (3.8.O4). La regla de automatización dice que, cuando la IA decide sola, el equipo fija las metas y los límites en vez de aprobar cada envío; la de asignación dice dónde va lo que la IA decide enviar y la predicción por persona, y el glosario suma «Grupo de control». Las ediciones deciden los criterios nuevos: casi todos se leen igual; Educación dice el de gobierno con «admisiones», Ecommerce y retail mide sus recordatorios, y en Banca no aplica el de la app, que ya pide como canal en Funcional. Cambia lo que piden Eficiente y Óptimo.
 
@@ -1754,7 +1755,7 @@ Para quien vende productos al consumidor final en una tienda en línea, sola o j
 | Negocio | Pedido o carrito |
 | Lead | Visitante o interesado que todavía no compra; donde vende un equipo, se sigue diciendo lead |
 | Pipeline | El recorrido de la compra: carrito, pago y entrega |
-| Pipeline review | Revisión de ventas |
+| Revisión del pipeline | Revisión de ventas |
 | Propuesta | La ficha del producto y su oferta |
 | Razón de pérdida | El paso donde se abandonó la compra |
 | Caso | Caso de posventa: una consulta, un cambio o una devolución |
@@ -1785,6 +1786,7 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 **Deficiente.** Sin proceso. La tienda se maneja de memoria: nadie escribió cómo se publica, cómo se cambia un precio ni cuándo toca cada promoción.
 
 - No existe ningún documento de cómo se opera la tienda; cada quien resuelve a su criterio. `[1.1.D1]`
+- No hay una reunión para revisar las ventas de la tienda: se habla de ellas solo cuando algo se complica. `[1.1.D3]`
 - Si se va quien administra la tienda, nadie sabe cómo seguir operándola. `[1.1.D4]`
 - Las promociones se deciden sobre la marcha, sin calendario. `[1.1.D101 · declarado]`
 
@@ -1814,11 +1816,13 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 
 **Óptimo.** La IA vigila la operación de la tienda y avisa cuando algo se sale de lo normal; el líder decide qué se corrige.
 
+*Resultado:* Nadie tiene que vigilar a mano la operación de la tienda: la IA señala lo que se sale de lo normal, el líder decide qué se corrige y el equipo dedica su tiempo a probar mejoras en pilotos cortos.
+
 - La IA detecta lo que se sale de lo normal en la operación —un producto sin existencias, un precio distinto entre canales, un paso del pago que falla—, lo marca en el sistema y se lo señala al líder y a quien tiene que actuar; el líder decide qué se corrige. `[1.1.O1]`
 
 *No aplican:* `1.1.D2`, `1.1.I2`, `1.1.F4`.
 
-*Se leen igual:* `1.1.D3`, `1.1.F6`, `1.1.E1`, `1.1.E2`, `1.1.O2`, `1.1.O3`.
+*Se leen igual:* `1.1.F6`, `1.1.E1`, `1.1.E2`, `1.1.O2`, `1.1.O3`.
 
 #### 1.2 Tecnología y Automatización
 
@@ -1831,6 +1835,7 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 **Deficiente.** La tienda y la caja venden, pero sus datos no llegan a ningún sistema común.
 
 - Los datos de los compradores viven en la plataforma de la tienda, en la caja, en un sistema aparte o en hojas sueltas, y no llegan a un sistema común. `[1.2.D1]`
+- No hay un CRM donde montar una automatización: los pedidos y los datos de los compradores se pasan por correo, por chat o de palabra, y nadie recibe avisos del sistema. `[1.2.D2]`
 
 **Inicial.** La tienda está conectada a medias: parte de los datos se pasa a mano.
 
@@ -1852,15 +1857,15 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 - Hay secuencias de varios pasos para el carrito y para después de la compra, que cambian según lo que hace el comprador —si abrió, hizo clic o compró—; si la tienda atiende por un canal conversacional, las conversaciones se asignan por varias condiciones o por capacidad, con control de quién ve y responde cada una. `[1.2.E2]`
 - Si el inventario o la facturación se llevan en un sistema aparte —un ERP u otro—, la tienda está conectada con él. `[1.2.E3]`
 
-**Óptimo.** Agentes de IA atienden y venden en el canal conversacional y la tienda se ajusta con lo que aprende de cada compra; el equipo revisa lo que hacen y se queda con lo que ellos no resuelven.
+**Óptimo.** La IA calcula qué clientes están por comprar y la tienda se ajusta con lo que aprende de cada compra; si la tienda atiende por un canal conversacional, agentes de IA atienden y venden ahí, y el equipo revisa lo que hacen y se queda con lo que no resuelven.
 
-*Resultado:* La tienda vende a toda hora sin que el equipo tenga que estar: los agentes de IA responden y cierran las compras simples, y el sistema ajusta lo que muestra con lo que aprende.
+*Resultado:* La tienda ajusta lo que muestra con lo que aprende de cada compra y, si atiende por un canal conversacional, los agentes de IA responden y cierran las compras simples a cualquier hora, sin que el equipo tenga que estar.
 
 - La IA calcula la probabilidad de compra de cada cliente y propone respuestas según el contexto de cada conversación; las dos cosas se ven en el CRM y el equipo decide qué usar. `[1.2.O1]`
 - Si la tienda atiende por un canal conversacional, agentes de IA atienden ahí a cualquier hora: responden dudas de producto, ayudan a terminar la compra y le pasan a una persona, con el contexto, lo que no pueden resolver; el equipo revisa en el CRM lo que respondieron. `[1.2.O2]`
 - Las conclusiones que se calculan en el almacén central de datos vuelven a la tienda y al CRM: por ejemplo, el valor esperado de cada cliente decide qué oferta ve. `[1.2.O3]`
 
-*Se leen igual:* `1.2.D2`, `1.2.I1`, `1.2.I2`, `1.2.F2`, `1.2.F3`, `1.2.F4`, `1.2.F7`, `1.2.E1`, `1.2.E4`, `1.2.E5`.
+*Se leen igual:* `1.2.I1`, `1.2.I2`, `1.2.F2`, `1.2.F3`, `1.2.F4`, `1.2.F7`, `1.2.E1`, `1.2.E4`, `1.2.E5`.
 
 #### 1.3 Datos
 
@@ -1872,11 +1877,14 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 
 **Deficiente.** Los números de la tienda no cuadran: cada sistema dice una cosa y nadie sabe bien cuánto vende cada canal.
 
+- No hay una regla de qué datos del comprador se registran ni de quién los corrige: cada quien llena lo que le parece y nadie revisa lo que falta. `[1.3.D1]`
 - No se sabe cuánto vende cada canal; sacar un reporte confiable es imposible. `[1.3.D2]`
+- Las ventas que se cierran fuera de la plataforma —por chat, por teléfono o en una caja sin sistema— no quedan registradas con su monto y su fecha: no se sabe cuánto vendió la tienda en total ni cuándo. `[1.3.D4]`
 
 **Inicial.** Hay datos en el sistema, pero incompletos: el reporte de ventas hay que corregirlo a mano antes de usarlo.
 
 - En los pedidos que entran hoy, de dónde llegó el comprador queda registrado solo en una parte: en los demás se anota a mano, cuando alguien se acuerda, o queda vacío. `[1.3.I2]`
+- Los pedidos que entran hoy se registran, pero a algunos les falta la fecha, el monto o el canal. `[1.3.I3]`
 
 **Funcional.** El reporte de ventas sale del sistema, sin armarlo a mano, y se le puede creer.
 
@@ -1885,7 +1893,7 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 - Todo pedido registrado desde la puesta en marcha del recorrido actual de la compra tiene fecha, monto y canal. `[1.3.F1]`
 - Todo pedido registrado desde la puesta en marcha del recorrido actual de la compra dice de dónde llegó el comprador. `[1.3.F3]`
 - El reporte de ventas se genera del sistema sin reconstruir números, y refleja el estado actual, no un pronóstico. `[1.3.F4]`
-- La documentación de lo que vende la tienda —qué resuelve cada línea de productos y para quién es— no se deja envejecer. `[1.3.F7]`
+- La documentación de lo que vende la tienda —por ejemplo, qué resuelve cada línea de productos— no se deja envejecer. `[1.3.F7]`
 - Se sabe qué parte de las ventas, en línea y en caja, queda asociada a un cliente identificado, y ese número se revisa al menos una vez al mes. `[1.3.F8]`
 
 **Eficiente.** Aparece un pronóstico de ventas confiable, y los compradores dejan de ser anónimos.
@@ -1893,14 +1901,14 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 *Resultado:* La empresa puede comprometer un número de ventas y planear sus existencias con confianza, y sabe quiénes son sus compradores.
 
 - Hay un pronóstico de las ventas de la tienda que se actualiza cada semana o cada quince días, y en al menos cinco de los últimos seis meses lo vendido quedó dentro de ±10% del pronóstico. `[1.3.E1]`
-- La mayoría de las ventas quedan asociadas a un cliente identificado, no a un cliente genérico. `[1.3.E4]`
+- La mayoría de las ventas, en línea y en caja, quedan asociadas a un cliente identificado, no a un cliente genérico. `[1.3.E4]`
 - Cada cliente tiene calculado cuánto compra, cada cuánto y cuándo fue su última compra. `[1.3.E101 · comprobable]`
 
 **Óptimo.**
 
 - Cada visita, cliente y pedido se asocia solo, al entrar, con lo que ya había de esa persona; la IA resuelve los dudosos y una persona valida solo las excepciones que el sistema le marca. `[1.3.O1]`
 
-*Se leen igual:* `1.3.D1`, `1.3.D3`, `1.3.D4`, `1.3.I1`, `1.3.I3`, `1.3.F2`, `1.3.F5`, `1.3.F6`, `1.3.E2`, `1.3.E3`, `1.3.O2`, `1.3.O3`, `1.3.O4`, `1.3.O5`.
+*Se leen igual:* `1.3.D3`, `1.3.I1`, `1.3.F2`, `1.3.F5`, `1.3.F6`, `1.3.E2`, `1.3.E3`, `1.3.O2`, `1.3.O3`, `1.3.O4`, `1.3.O5`.
 
 #### 1.4 Equipo y Gobierno
 
@@ -1940,7 +1948,7 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 
 ¿Cómo ve el comprador cada producto —ficha, precio y condiciones— en los canales donde vendes?
 
-*Descripción:* Mide si el catálogo está completo y ordenado, y si precios, promociones y condiciones coinciden en todos los canales.
+*Descripción:* Mide si el cliente ideal de la tienda está escrito, si el catálogo está completo y ordenado, y si precios, promociones y condiciones coinciden en todos los canales.
 
 *Costo de quedarse:* El comprador ve un precio en la web y otro en la tienda, o una ficha sin foto ni descripción: duda, compara y se va con quien se lo muestra más claro.
 
@@ -1951,6 +1959,7 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 
 **Inicial.** El cliente ideal de la tienda está en la cabeza del líder, y las fichas y los precios todavía varían entre productos y entre canales.
 
+- El líder sabe quién es el cliente ideal de la tienda y hay un mensaje común, pero solo de palabra o en un borrador: cada quien los repite a su manera. `[1.5.I1]`
 - Las fichas de los productos más vendidos están completas; las del resto, a medias. `[1.5.I101 · comprobable]`
 
 **Funcional.** El cliente ideal de la tienda está escrito, el catálogo está completo y la oferta es la misma en todos los canales.
@@ -1972,9 +1981,9 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 
 *Resultado:* Se pueden sumar productos y canales sin que la oferta se desordene: la IA mantiene fichas, precios y mensajes iguales a la oferta vigente, marca lo que se sale y el equipo solo valida eso.
 
-- La IA revisa fichas, precios y mensajes en todos los canales y los mantiene iguales a la oferta vigente; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
+- La IA revisa en tiempo real fichas, precios y mensajes en todos los canales y los mantiene iguales a la oferta vigente; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
 
-*Se leen igual:* `1.5.D2`, `1.5.I1`, `1.5.I2`, `1.5.F2`, `1.5.F3`, `1.5.F4`, `1.5.F5`, `1.5.E2`, `1.5.E3`.
+*Se leen igual:* `1.5.D2`, `1.5.I2`, `1.5.F2`, `1.5.F3`, `1.5.F4`, `1.5.F5`, `1.5.E2`, `1.5.E3`.
 
 #### 1.6 Oferta por cliente
 
@@ -2038,7 +2047,7 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 - Todos los intentos de recuperar una compra se hacen por el mismo canal. `[1.7.I4]`
 - Los recordatorios son genéricos: el mismo mensaje para cualquier carrito y cualquier cliente. `[1.7.I101 · evaluado]`
 
-**Funcional.** Ningún carrito se abandona en silencio, y quien compró recibe una invitación a volver.
+**Funcional.** Ningún carrito se abandona en silencio, y cada cliente identificado recibe una invitación a volver.
 
 *Resultado:* Las compras que quedaron a medias se recuperan por más de un canal, y cada cliente identificado recibe una invitación a volver a comprar, sin depender de que alguien se acuerde.
 
@@ -2059,7 +2068,7 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 *Resultado:* Cada cliente recibe su recordatorio en el momento y por el canal en que más le sirve, sin que nadie lo programe.
 
 - La IA detecta dónde se traba una compra antes de que se abandone y responde en el momento —una ayuda, una oferta o el aviso a una persona— dentro de las reglas que fijó el equipo; lo que hace queda registrado en el sistema y el líder lo revisa. `[1.7.O1]`
-- La IA decide el canal y el momento de cada recordatorio, comprador por comprador y según cómo responde, dentro de los límites que fijó el equipo; lo que decide queda registrado en el sistema. `[1.7.O2]`
+- La IA decide el canal y el momento de cada recordatorio, comprador por comprador y según cómo responde, dentro de los límites que fijó el equipo; el equipo revisa los resultados, y lo que decide la IA queda registrado en el sistema. `[1.7.O2]`
 - La IA calcula cuándo le toca volver a comprar a cada cliente según su propio consumo y ajusta la oferta, dentro de los límites que fijó el equipo; el cálculo y la oferta se ven en la ficha del cliente y el equipo los revisa. `[1.7.O101 · comprobable · recompra]`
 
 *No aplican:* `1.7.D1`, `1.7.I1`, `1.7.I2`.
@@ -2076,9 +2085,12 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 
 **Deficiente.** Nadie mira dónde se cae la compra ni por qué se devuelve.
 
+- Cuando una compra se abandona o un pedido se cancela o se devuelve, no hay una razón en la que el equipo coincida: cada quien da su versión, de memoria. `[1.8.D1]`
 - Las razones por las que el comprador no termina o devuelve se pierden. `[1.8.D2]`
 
 **Inicial.** Se comenta de vez en cuando por qué no se vende, sin números.
+
+- El motivo de una cancelación o de una devolución se anota a veces y en texto libre, a criterio de cada quien, así que no se puede sumar. `[1.8.I1]`
 
 **Funcional.** Cada compra abandonada queda con el paso donde se cayó, cada cancelación o devolución con su razón, y el líder saca del sistema el reporte del trimestre.
 
@@ -2099,12 +2111,12 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 
 **Óptimo.** La IA detecta dónde y por qué se cae la compra y propone el cambio; el líder decide cuál se aplica.
 
-*Resultado:* La tienda mejora mientras vende: la IA señala dónde se cae la compra y qué cambio probar, el líder decide cuál se aplica y la dirección ajusta la estrategia con esa evidencia; donde vende un equipo, cada vendedor recibe además recomendaciones sobre sus propias conversaciones.
+*Resultado:* La tienda mejora mientras vende: la IA señala dónde se cae la compra y qué cambio probar, el líder decide cuál se aplica y la dirección ajusta la estrategia con esa evidencia; donde vende un equipo, cada vendedor recibe además recomendaciones sobre sus propias llamadas.
 
-- Los recordatorios que decide la IA se miden contra un grupo de control: se sabe cuánto agregan. `[1.8.O4]`
+- Los recordatorios que decide la IA se miden contra un grupo de control, y en el sistema se ve cuánto agregan; con eso el equipo revisa los límites que le fijó a la IA. `[1.8.O4]`
 - La IA detecta dónde y por qué se abandona la compra y propone el cambio o lo lanza como prueba; lo que propone queda en el sistema y el líder valida cada cambio. `[1.8.O101 · comprobable]`
 
-*Se leen igual:* `1.8.D1`, `1.8.I1`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`.
+*Se leen igual:* `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`.
 
 ### Área 2 — Marketing
 
@@ -2112,13 +2124,13 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 
 **Deficiente.** Lo que la gente piensa de tu tienda no lo decides tú. Cada pieza sale con otro tono y otra imagen, las herramientas no se hablan entre sí, y la pauta corre hasta que se acaba el presupuesto sin que nadie mida cuánto vendió. Los compradores que llegan, llegan por casualidad.
 
-**Inicial.** Tienes logo, colores y redes, pero ningún plan detrás. Pagas herramientas que se usan a medias y cada una por su lado, las promociones se anuncian cuando alguien se acuerda, y cuánto vendió cada campaña se sabe tarde y armando los números a mano, sin que lo aprendido quede escrito. Las ventas que trae el marketing suben y bajan, y no sabes de dónde viene cada comprador.
+**Inicial.** Tienes logo, colores y redes, pero ningún plan detrás. Pagas herramientas que se usan a medias y parte de lo que entra se pasa a mano, las promociones se anuncian cuando alguien se acuerda, y cuánto vendió cada campaña se sabe tarde y armando los números a mano, sin que lo aprendido quede escrito. Las ventas que trae el marketing suben y bajan, y no siempre sabes de dónde viene cada comprador.
 
 **Funcional.** Tu marketing ya no vive en la cabeza de una persona. Tienes por escrito tu marca y tus perfiles de comprador, las herramientas que pagas se usan de verdad, y los canales que elegiste en tu plan —correo, pauta, redes o WhatsApp— salen con regularidad, con cada promoción coordinada bajo un mismo calendario. Los reportes salen del sistema, sin armarlos a mano: sabes de dónde viene cada comprador y cuánto te cuesta cada venta en cada canal. Las ventas que trae el marketing ya se miden, aunque todavía no se afinan con pruebas.
 
 **Eficiente.** Probar y ajustar ya es rutina, y lo aprendido cambia cómo se arma la próxima temporada. Los datos de cada comprador se completan solos y sabes cuánto vendió cada canal y cada campaña, no solo cuál trajo el primer clic; los segmentos y el puntaje de cada suscriptor se arman solos, y las campañas se adaptan solas a cada segmento; la IA asiste a tu equipo en su trabajo diario, y la tienda aparece cuando alguien busca lo que vendes, también en los asistentes de IA. La pauta se mueve entre canales según lo que cuesta cada venta, y cada reseña, buena o mala, recibe respuesta.
 
-**Óptimo.** La IA produce y ajusta; tu equipo dirige. El contenido se genera y se afina en ciclo continuo, cada comprador recibe el mensaje que corresponde a lo que hizo antes, la pauta se reparte sola entre canales mientras la campaña corre, y los compradores contentos traen compradores nuevos. El equipo decide la estrategia y valida lo que sale.
+**Óptimo.** La IA produce y ajusta; tu equipo dirige. El contenido se genera y se ajusta de forma continua; cada comprador recibe el mensaje que corresponde a lo que hizo antes; la pauta se reparte sola entre canales mientras la campaña corre, dentro de los límites que fija el equipo; y los compradores contentos traen compradores nuevos. El equipo decide la estrategia y valida lo que sale.
 
 #### 2.1 Procesos y Rutinas
 
@@ -2166,7 +2178,7 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 **Inicial.**
 
 - La tienda paga licencias o módulos de sus herramientas de marketing —de correo, de mensajería o de anuncios— que el equipo no usa. `[2.2.I1]`
-- Algunos puntos por donde llegan contactos —la suscripción al boletín, la ventana de bienvenida o el canal conversacional— no están conectados al sistema: lo que entra por ahí se pasa a mano o se pierde. `[2.2.I2]`
+- Algunos puntos de la tienda donde se dejan datos —la suscripción al boletín o la ventana de bienvenida— no están conectados al sistema, o ninguno de los canales conversacionales por los que atiende la tienda lo está: lo que entra por ahí se pasa a mano o se pierde. `[2.2.I2]`
 - Hay alguna automatización, pero quedó a medias: unos puntos de captura de la tienda mandan la bienvenida o el cupón prometido, y otros no responden ni le avisan a nadie. `[2.2.I3]`
 
 **Funcional.** Las herramientas que paga la tienda se usan, lo que entra llega solo al sistema y recibe respuesta, y si hay anuncios de producto, el catálogo y las compras de la tienda los alimentan solos.
@@ -2174,7 +2186,7 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 *Resultado:* Todo lo que entra por la tienda en línea y, si se usa, por WhatsApp o el chat llega al sistema y recibe respuesta, no se paga por herramientas que nadie usa, y si la tienda pauta, sus anuncios de producto salen solos del catálogo y su pauta se mide por lo que vende.
 
 - Si la tienda en línea tiene puntos donde dejar datos —la suscripción al boletín, la ventana con un descuento de bienvenida, el aviso de disponibilidad—, están conectados al CRM: lo que una persona llena entra solo como contacto. `[2.2.F3]`
-- Si la tienda atiende por un canal conversacional —WhatsApp, el chat de la tienda o los mensajes de Instagram—, está conectado al sistema con una bandeja básica donde se atiende lo que entra, lo atienda Marketing o Ventas. `[2.2.F4]`
+- Si la tienda atiende por un canal conversacional —WhatsApp, el chat de la tienda o los mensajes de Instagram—, al menos uno está conectado al sistema con una bandeja básica donde se atiende lo que entra, lo atienda Marketing o Ventas. `[2.2.F4]`
 - Si la tienda en línea tiene puntos donde dejar datos, quien se suscribe o deja sus datos recibe una respuesta automática —la bienvenida o el cupón prometido—, y el sistema avisa a quien corresponde. `[2.2.F5]`
 - Si el equipo usa IA, esta tiene como contexto la voz de la tienda y sus perfiles de comprador. `[2.2.F9]`
 - Si la tienda hace anuncios de producto —en Google Shopping o con el catálogo de Meta—, se alimentan solos del catálogo de la tienda, sin cargas a mano. `[2.2.F101 · comprobable]`
@@ -2184,9 +2196,9 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 
 *Resultado:* Quien se suscribe recibe una bienvenida que avanza sola hasta que compra —o hasta que pasa a un vendedor, donde los hay— sin que nadie tenga que acordarse de escribirle; si la tienda atiende por WhatsApp o chat, las conversaciones que abre cada promoción no dependen de que alguien se acuerde de contestar y el líder ve en tiempo real cuáles esperan respuesta.
 
-- Hay secuencias de nutrición de varios pasos para quien se suscribió y todavía no compra, con tiempos de espera y caminos distintos según lo que hace cada persona: la bienvenida cambia según lo que abre y en qué hace clic. `[2.2.E1]`
+- Hay secuencias de nutrición de varios pasos para quien se suscribió y todavía no compra, con tiempos de espera y caminos distintos según quién es o lo que hace cada persona: por ejemplo, la bienvenida cambia según las categorías que le interesan o según lo que abre y en qué hace clic. `[2.2.E1]`
 - Si el canal conversacional, como WhatsApp, es parte del plan de canales, sus campañas —una promoción o un lanzamiento— están automatizadas, con segmentación y con caminos distintos según lo que hizo la persona: si leyó, hizo clic o respondió. `[2.2.E2]`
-- El traspaso de leads a los vendedores es automático: cuando un lead cumple los criterios de MQL, se asigna por varias condiciones —por ejemplo, la categoría que le interesa o su zona— y le llega al vendedor con su historial. `[2.2.E3]`
+- El traspaso de leads a los vendedores es automático: cuando un lead cumple los criterios de MQL, le llega con su historial al vendedor que corresponde, sin que nadie lo pase a mano. `[2.2.E3]`
 - Si la tienda atiende por más de un canal conversacional —por ejemplo WhatsApp, el chat de la tienda y los mensajes de Instagram—, todos llegan a una sola bandeja. `[2.2.E4]`
 - Si la tienda usa páginas de campaña —la de una promoción o la de una temporada—, se publican desde la misma plataforma de la tienda, conectada al sistema central, no desde herramientas sueltas. `[2.2.E5]`
 - El equipo usa la IA en su trabajo diario —para redactar correos y anuncios, adaptar una pieza a cada canal o resumir cómo le fue a una promoción—, y la IA trabaja con el contexto del área: los perfiles de comprador, los segmentos y la voz de la tienda. `[2.2.E6]`
@@ -2214,7 +2226,7 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 
 **Inicial.**
 
-- No hay una regla de cuándo se limpian los datos: se limpian a mano cuando alguien nota un problema, y los compradores repetidos —con otro correo o como invitados— y los campos vacíos llegan a los reportes. `[2.3.I1]`
+- No hay una regla de cuándo se limpian los datos: se corrigen a mano cuando alguien nota un problema, y a muchos compradores les faltan los datos que describen al cliente ideal de la tienda, como su zona o las categorías que les interesan. `[2.3.I1]`
 
 **Funcional.**
 
@@ -2257,7 +2269,7 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 
 **Inicial.**
 
-- No está escrito qué decide cada quien en el marketing de la tienda, así que hasta lo del día a día —subir un anuncio, cambiar una pieza— espera al dueño o a la gerencia. `[2.4.I1]`
+- Los roles del marketing de la tienda no están escritos, así que hasta lo del día a día —subir un anuncio, cambiar una pieza— espera al dueño o a la gerencia. `[2.4.I1]`
 
 **Funcional.**
 
@@ -2269,7 +2281,7 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 
 **Eficiente.**
 
-*Resultado:* Una persona nueva se integra rápido, y Marketing, Ventas y Servicio preparan juntos cada promoción en vez de enterarse cuando ya salió.
+*Resultado:* Una persona nueva se integra rápido y, donde hay vendedores, Marketing, Ventas y Servicio preparan juntos cada promoción en vez de enterarse cuando ya salió.
 
 - Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales —el catálogo, la marca y las herramientas de la tienda—; no se le entrena de memoria. `[2.4.E2]`
 - El liderazgo coordina con Ventas —el calendario de promociones, una reunión conjunta con fecha fija y, donde hay vendedores, el traspaso de leads y sus SLA— y con Servicio, por ejemplo para que sepa qué promoción viene. `[2.4.E3]`
@@ -2347,7 +2359,7 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 
 *Resultado:* Cada grupo de compradores recibe promociones y mensajes pensados para él, en vez de la misma pieza para toda la base.
 
-- Existen al menos 2 segmentos de compradores con criterios escritos que salen de los perfiles de comprador —qué categorías les interesan, cómo compran o qué los hace decidir—, no solo de dónde están. `[2.6.F1]`
+- Existen al menos 2 segmentos de compradores con criterios escritos según qué necesita o cómo decide cada grupo —qué categorías le interesan, cómo compra o qué lo hace decidir—, no solo según dónde está. `[2.6.F1]`
 - La mayoría de las campañas del último trimestre salieron con piezas distintas para cada segmento: otro producto, otra imagen u otro mensaje. `[2.6.F3]`
 
 **Eficiente.** Los segmentos y el puntaje de cada suscriptor se arman solos, y el mensaje de cada campaña se adapta solo a cada segmento.
@@ -2364,7 +2376,7 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 *Resultado:* Cada comprador recibe los mensajes y ve el contenido que le corresponde según lo que hizo antes, sin que nadie arme un segmento para él.
 
 - La IA predice quién va a comprar —por primera vez o de nuevo— y quién va a perder interés en los mensajes de la tienda, y arma los segmentos con eso; el equipo revisa los segmentos antes de usarlos en una campaña, y en la ficha de cada persona se ve su predicción. `[2.6.O1]`
-- Hay personalización uno a uno: la IA cambia en tiempo real lo que ve cada persona en los mensajes, en las páginas de campaña de la tienda en línea o en la app según lo que hizo antes, dentro de las reglas que fijó el equipo, y en el sistema se ve qué versión vio cada persona. `[2.6.O3]`
+- Hay personalización uno a uno: la IA cambia en tiempo real lo que ve cada persona en los mensajes, en las páginas de campaña de la tienda en línea o en la app según lo que hizo antes, dentro de las reglas que fijó el equipo; el equipo revisa los resultados, y en el sistema se ve qué versión vio cada persona. `[2.6.O3]`
 
 *Se leen igual:* `2.6.D2`, `2.6.I2`, `2.6.F4`.
 
@@ -2390,7 +2402,7 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 
 - Si el correo es parte del plan de canales, los envíos a la base de suscriptores y clientes salen al menos una vez por mes, y esa cadencia se sostiene. `[2.7.F1]`
 - Si las redes sociales son parte del plan de canales, al menos una —Instagram, TikTok o Facebook— se maneja con calendario y publica con la frecuencia que ese calendario fija. `[2.7.F2]`
-- Si la pauta pagada es parte del plan de canales, en el último trimestre corrió al menos una campaña con presupuesto definido: en Google, en Meta, en el marketplace donde vende la tienda o en el canal que le corresponda. `[2.7.F3]`
+- Si la pauta pagada es parte del plan de canales, hay al menos una campaña corriendo con presupuesto definido: en Google, en Meta, en el marketplace donde vende la tienda o en el canal que le corresponda. `[2.7.F3]`
 - Si WhatsApp u otro canal conversacional es parte del plan de canales, se usa para salir con la frecuencia que fija el calendario —lanzamientos, promociones, novedades—, no solo para responder lo que entra. `[2.7.F4]`
 - Los canales que la tienda eligió en su plan siguen el mismo calendario y la misma campaña: una promoción —el Black Friday, el Día de la Madre— sale coordinada en todos ellos, no como esfuerzos sueltos. `[2.7.F5]`
 - En el sistema se ve cuánto costó cada venta el último mes —o cada lead, donde vende un equipo—, al menos por canal. `[2.7.F6]`
@@ -2407,7 +2419,7 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 
 **Óptimo.**
 
-*Resultado:* La pauta se reparte sola donde más vende, dentro de los límites que fija el equipo, los compradores contentos traen compradores nuevos, y la tienda prueba canales nuevos sin esperar a ver qué hace su competencia.
+*Resultado:* La pauta se reparte sola donde más vende, dentro de los límites que fija el equipo; los compradores contentos traen compradores nuevos, y la tienda prueba canales nuevos sin esperar a ver qué hace su competencia.
 
 - Se prueban canales nuevos —una red que empieza a vender, un marketplace nuevo, comunidades o formatos nuevos— en ciclos de dos meses o menos. `[2.7.O1]`
 - La IA mueve sola la pauta entre canales mientras las campañas corren, hacia donde más retorno deja lo invertido y dentro de los límites que fijó el equipo; el líder revisa los resultados, y en el sistema queda cada cambio con su razón. `[2.7.O2]`
@@ -2460,15 +2472,15 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 
 Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa después del pago: desde el seguimiento del pedido y cada consulta, cambio o devolución, hasta que el comprador queda conforme con lo que compró. Mira cómo está montada por dentro y qué produce hacia el comprador.
 
-**Deficiente.** Tu posventa se improvisa pedido por pedido. Cada quien resuelve un cambio o una devolución a su manera, las consultas llegan por correo, WhatsApp y redes sin un lugar común, y todo depende de que la persona que sabe esté disponible. Te enteras de que un comprador quedó mal cuando ya lo contó en público.
+**Deficiente.** Tu posventa se improvisa pedido por pedido. Cada quien resuelve un cambio o una devolución a su manera, y las consultas llegan por correo, WhatsApp y redes sin un lugar común donde queden. Te enteras de que un comprador quedó mal cuando ya lo contó en público.
 
-**Inicial.** Una sola persona sabe cómo se resuelve cada caso, y si falta, la posventa se traba. Hay un sistema para los casos, pero parte del equipo sigue atendiendo desde su teléfono; hay respuestas guardadas para lo más frecuente y una forma de resolver los cambios que nadie escribió. La posventa es frágil.
+**Inicial.** Una sola persona sabe cómo se resuelve cada caso, y si falta, la posventa se traba. Hay un sistema para los casos, pero parte del equipo sigue atendiendo desde su teléfono; cada quien tiene sus propias respuestas guardadas y hay una forma de resolver los cambios que nadie escribió. La posventa es frágil.
 
 **Funcional.** Tu posventa es consistente y ya no depende de una persona. Sabes qué tipos de cliente atiendes y qué espera cada uno. Cada consulta, cambio o devolución sigue el mismo recorrido en un solo sistema, ligada a su pedido, con su tipo y su motivo y con la ficha del comprador a la vista, y se resuelve igual lo atienda quien lo atienda; cada comprador nuevo recibe un acompañamiento definido después de su primera compra. Cada caso tiene una prioridad que el equipo respeta —un pedido que no llegó va antes que una consulta de talla—, tienes respuestas guardadas para lo repetitivo y detectas a mano los atrasos antes de que el comprador reclame. Todavía no hay alertas automáticas, pero ya no esperas a que el comprador se queje.
 
 **Eficiente.** Tu posventa empieza a adelantarse al problema. Los plazos de atención se vigilan solos, el comprador puede iniciar un cambio sin escribirle a nadie y la IA asiste a tu equipo en su trabajo diario; mides tiempos de respuesta y satisfacción, y la posventa y la venta ven los mismos datos de cada comprador. Ningún caso se pierde entre la posventa, la bodega y el despacho, y quien tuvo un problema recibe algo para recuperarlo. Dejas de perder compradores por un mal momento que nadie vio.
 
-**Óptimo.** Un agente de IA resuelve casos de los compradores —dónde está un pedido, cómo hacer un cambio— y le pasa a una persona, con todo el contexto, los que no puede resolver. Las rutinas de la posventa corren solas mientras el equipo supervisa y gestiona las excepciones; la mayoría de los problemas con un pedido se resuelven antes de que el comprador los note, y cada comprador se atiende sabiendo qué le prometió la tienda y recibe detalles pensados para deleitarlo. Atender un pedido más casi no cuesta.
+**Óptimo.** Un agente de IA resuelve casos de los compradores —dónde está un pedido, cómo hacer un cambio— y le pasa a una persona, con todo el contexto, los que no puede resolver. Las rutinas de la posventa corren solas mientras el equipo supervisa y gestiona las excepciones; la mayoría de los problemas con un pedido que detecta el sistema se resuelven antes de que el comprador los note, y cada comprador se atiende sabiendo qué le prometió la tienda y recibe detalles pensados para deleitarlo. Atender un pedido más casi no cuesta.
 
 #### 3.1 Procesos y Rutinas
 
@@ -2493,7 +2505,7 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 *Resultado:* Todo el equipo atiende en el mismo sistema, cada comprador tiene a alguien que responde por él, y un cambio o una devolución sigue los mismos pasos sin importar quién lo tome.
 
 - El recorrido de los casos de posventa está configurado con sus etapas —por ejemplo, recibido, en revisión, esperando el producto devuelto y resuelto— y cubre la atención de la recepción al cierre. `[3.1.F1]`
-- Cada comprador tiene registrado quién responde por él —una persona o, si son tantos que no se asignan por persona, un equipo— y recibe un contacto de seguimiento a tiempo —en los momentos que fija el proceso de posventa—, aunque no haya abierto casos, como la confirmación de que su pedido llegó bien. `[3.1.F2]`
+- Cada comprador tiene registrado quién responde por él —una persona o, si son tantos que no se asignan por persona, un equipo— y recibe un contacto de seguimiento a tiempo —en los momentos que fija el proceso de posventa—, aunque no haya abierto casos, como la confirmación de que su pedido llegó bien; si responde un equipo, ese contacto puede ser un mensaje automático. `[3.1.F2]`
 - Existe un proceso escrito para escalar los reclamos graves —un pedido que no llegó, un producto dañado, un reclamo público— y los casos que quien atiende no puede resolver: dice cuáles se escalan y a quién. `[3.1.F4]`
 - Cualquiera del equipo explica igual cómo se atiende un cambio o una devolución, paso a paso. `[3.1.F5]`
 - Cualquiera del equipo atiende en el sistema central, no desde su teléfono ni desde la aplicación de cada red: es su herramienta de trabajo, no algo que se llena después de resolver por otro lado. `[3.1.F6]`
@@ -2524,9 +2536,9 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 
 - Los casos se atienden desde el celular o el correo personal de cada quien. `[3.2.D2]`
 
-**Inicial.** Hay un sistema para los casos, pero alguien tiene que repartir a mano lo que entra por la tienda, el correo o WhatsApp.
+**Inicial.** Hay un sistema para los casos, pero alguien tiene que repartir a mano lo que entra o, si la tienda atiende por WhatsApp, chat o redes, nada de eso llega a él.
 
-- Hay un sistema para los casos, pero cada consulta, cambio o devolución que entra se reparte a mano. `[3.2.I2]`
+- Hay un sistema para los casos, pero cada consulta, cambio o devolución que entra se reparte a mano, o la tienda atiende por WhatsApp, por el chat de la tienda o por los mensajes de las redes y ninguno de esos canales llega al sistema. `[3.2.I2]`
 
 **Funcional.**
 
@@ -2622,11 +2634,11 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 
 - En las reuniones del equipo se revisa el cumplimiento de los plazos de atención de cada persona y se acuerda qué corregir. `[3.4.E1]`
 - Cuando entra alguien nuevo a la posventa, hay un plan de inducción con sus pasos y materiales —la política de cambios, los casos frecuentes, el sistema—; no se le entrena de memoria. `[3.4.E2]`
-- El líder de la posventa acuerda con Ventas qué trae cada comprador nuevo —lo que espera de su compra, según la ficha del producto y la promoción con la que compró— y, si el comprador vuelve a comprar sin suscripción, cómo le avisa la posventa a Ventas que puede estar dejando de comprar. `[3.4.E4]`
+- El líder de la posventa acuerda con Ventas qué trae cada comprador nuevo —lo que espera de su compra, según la ficha del producto y la promoción con la que compró— y el acuerdo se cumple: cada uno llega con eso y, si el comprador vuelve a comprar sin suscripción, la posventa le avisa a Ventas cuando puede estar dejando de comprar. `[3.4.E4]`
 
-**Óptimo.** Hay responsables de validar la IA y de cuidar el conocimiento y, donde hay suscripción, la posventa se mide por los suscriptores que retiene y hace crecer.
+**Óptimo.** Hay responsables de validar la IA y de cuidar el conocimiento y, donde hay suscripción, la posventa se mide por los suscriptores que retiene y por cuánto crecen sus compras.
 
-*Resultado:* Lo que la IA puede hacer sola está decidido y alguien responde por ella, la posventa decide con lo que cuesta atender a cada tipo de cliente y, donde hay suscripción, se mide por los suscriptores que retiene y hace crecer, no solo por los casos que cierra.
+*Resultado:* Lo que la IA puede hacer sola está decidido y alguien responde por ella, la posventa decide con lo que cuesta atender a cada tipo de cliente y, donde hay suscripción, se mide por los suscriptores que retiene y por cuánto crecen sus compras, no solo por los casos que cierra.
 
 - El equipo de posventa se mide por cuántos suscriptores retiene y cuánto crecen sus compras, no solo por los casos que cierra. `[3.4.O3]`
 - El sistema calcula cuánto cuesta atender a cada tipo de cliente —sus consultas, sus cambios, sus devoluciones— frente a lo que deja, y el líder usa ese dato para decidir cómo atenderlo. `[3.4.O4]`
@@ -2697,7 +2709,7 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 *Resultado:* Cada comprador recibe una atención a su medida en cualquier canal, incluso cuando se atiende solo, y nunca tiene que volver a explicar qué compró ni qué le prometieron.
 
 - En el autoservicio, el portal y el chat le muestran a cada comprador lo que corresponde a su tipo de cliente, a sus pedidos y a sus casos abiertos, sin que nadie lo arme a mano; el equipo define qué corresponde a cada tipo. `[3.6.O1]`
-- La IA ajusta cada respuesta al comprador mientras lo atiende —según su historia, su caso y lo que está pasando con su pedido—, dentro de los límites que fijó el equipo, y en el sistema queda qué se le respondió. `[3.6.O2]`
+- La IA ajusta cada respuesta al comprador mientras lo atiende —según su historia, su caso y lo que está pasando con su pedido—, dentro de los límites que fijó el equipo; el equipo revisa una muestra de las respuestas, y en el sistema queda qué se le respondió. `[3.6.O2]`
 - Cada comprador se atiende con el contexto de su compra —lo que le prometieron la ficha del producto y la promoción con la que compró, y la campaña de la que viene—, que quien lo atiende, persona o IA, ve en la ficha del comprador sin volver a preguntarlo. `[3.6.O3]`
 
 *No aplican:* `3.6.E1`.
@@ -2724,7 +2736,7 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 *Resultado:* Los atrasos, los problemas que se repiten, los reclamos y las fechas críticas de los clientes clave ya no toman al equipo por sorpresa: el comprador se entera de un atraso antes de tener que reclamar, alguien actúa antes de que un problema crezca y, donde hay suscripción, se sabe por qué cancela cada cliente.
 
 - Un comprador con casos repetidos por el mismo problema, un reclamo sin resolver —también uno público, en las redes— o, si la tienda pide calificaciones, una mala calificación se identifica, y alguien lo contacta antes de que el problema crezca. `[3.7.F1]`
-- Los clientes clave reciben contacto antes de sus fechas críticas —una entrega, el fin de su garantía o, si tienen suscripción, su renovación—, no después. `[3.7.F2]`
+- Los clientes clave reciben contacto antes de sus fechas críticas —el fin de su garantía o, si tienen suscripción, su renovación—, no después. `[3.7.F2]`
 - Cada cliente que cancela su suscripción deja registrada la razón. `[3.7.F3]`
 - Los pedidos que se van a atrasar se detectan antes de la fecha prometida, y el comprador recibe un aviso con la nueva fecha antes de tener que reclamar. `[3.7.F101 · comprobable · hábito]`
 
@@ -2733,7 +2745,7 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 *Resultado:* Ningún caso del comprador se pierde entre la posventa, la bodega y el despacho, el comprador sabe lo que necesita antes de preguntarlo, quien tuvo un problema recibe algo para recuperarlo antes de irse con una mala impresión y, donde hay suscripción, quien está por cancelar recibe una razón para quedarse.
 
 - Hay alertas tempranas, a partir del indicador de salud, de un suscriptor que puede cancelar o que está listo para comprar más. `[3.7.E1]`
-- Ningún caso del comprador se pierde entre áreas: si lo resuelve otra área —la bodega, el despacho o administración—, queda igual en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —una entrega, el fin de un plazo de cambio, una garantía— o, si la tienda pide calificaciones, cuando un comprador califica mal. `[3.7.E4]`
+- Ningún caso del comprador se pierde entre áreas: si lo resuelve otra área —la bodega, el despacho o administración—, también queda en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —una entrega, el fin de un plazo de cambio, una garantía— o, si la tienda pide calificaciones, cuando un comprador califica mal. `[3.7.E4]`
 - Cada comprador recibe, sin tener que pedirla, la información que necesita antes de los momentos clave —lo que necesita para retirar o recibir su pedido, el fin de su plazo de cambio, el vencimiento de una garantía—, y sale de forma automática, no cuando alguien se acuerda. `[3.7.E5]`
 - Cada comprador con un pedido atrasado o que llegó mal recibe, sin tener que pedirla, una acción para recuperarlo: una disculpa, una compensación o una atención especial. `[3.7.E101 · comprobable · hábito]`
 - Los suscriptores que dan señales de cancelar —pausan, se saltan entregas, reclaman— reciben una acción para quedarse antes de decidir irse. `[3.7.E102 · comprobable · hábito · relación continua]`
@@ -2763,7 +2775,7 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 - El comprador no puede ver solo en qué va su pedido ni encontrar respuestas publicadas. `[3.8.D1]`
 - Hasta las preguntas que más se repiten —dónde está mi pedido, cuánto cuesta el envío, cómo pido un cambio— se responden a mano, una por una, cada vez que llegan. `[3.8.D2]`
 
-**Inicial.** Hay preguntas frecuentes sueltas, pero lo que más se consulta —dónde está mi pedido— todavía necesita a una persona.
+**Inicial.** Hay preguntas frecuentes sueltas o un chatbot de menú, pero lo que más se consulta —dónde está mi pedido— todavía necesita a una persona.
 
 **Funcional.** El comprador ve solo en qué va su pedido, y las preguntas más frecuentes tienen respuesta publicada.
 
@@ -2785,7 +2797,7 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 *Resultado:* Los pedidos pueden crecer sin que crezca el equipo: las respuestas se generan a medida que aparecen preguntas nuevas, y la IA y el autoservicio absorben la temporada alta.
 
 - La IA detecta las preguntas nuevas que llegan —por un producto recién lanzado o un cambio en los envíos— y redacta la respuesta; el equipo la revisa antes de publicarla, y en la base de conocimiento se ve qué escribió la IA y quién lo aprobó. `[3.8.O1]`
-- Los picos de demanda —la temporada alta, una promoción grande— los absorben la IA y el autoservicio: el equipo no crece cuando crecen los pedidos. `[3.8.O2]`
+- Los picos de demanda —la temporada alta, una promoción grande— los absorben la IA y el autoservicio: el equipo no crece cuando crecen los pedidos, y el líder ve en los tableros del área qué parte de los casos resolvieron la IA y el autoservicio y qué pasó a alguien del equipo. `[3.8.O2]`
 - La IA aplica lo que aprende de los casos a las respuestas guardadas, a la atención de cada tipo de cliente y a los avisos al comprador, y el líder valida cada cambio; en el sistema queda qué cambió y de dónde salió. `[3.8.O3]`
 
 *Se leen igual:* `3.8.I1`, `3.8.I2`, `3.8.O4`.
@@ -2808,7 +2820,7 @@ Para el área comercial de un banco, una cooperativa de ahorro y crédito o una 
 | Negocio ganado | Solicitud concretada: el crédito desembolsado, la tarjeta entregada o la cuenta abierta |
 | Lead | Prospecto: quien pidió información o empezó una solicitud, sea o no cliente de la entidad |
 | Pipeline | El recorrido de la solicitud: ingreso, análisis, aprobación y desembolso |
-| Pipeline review | Reunión de seguimiento de solicitudes |
+| Revisión del pipeline | Reunión de seguimiento de solicitudes |
 | Lead calificado | Prospecto precalificado: cumple las condiciones básicas del producto |
 | Vendedor | Ejecutivo de negocios |
 | Propuesta | La oferta del producto: monto, tasa, plazo y condiciones |
@@ -2830,7 +2842,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 **Eficiente.** La colocación deja de depender del empuje de cada ejecutivo. Mides en qué etapa se cae cada solicitud, la precalificación sale sola, les ofreces a los clientes que ya califican sin esperar a que pregunten y proyectas la colocación con confianza.
 
-**Óptimo.** La IA hace el trabajo pesado y tu equipo valida donde importa. Agentes de IA precalifican y agendan citas a toda hora, la IA calcula a quién ofrecerle qué producto y cuándo, y detecta la solicitud que se traba antes de que el cliente termine el trámite en otra entidad.
+**Óptimo.** La IA hace el trabajo pesado y tu equipo valida donde importa. Si atiendes por WhatsApp o chat, agentes de IA precalifican ahí a los prospectos y agendan citas a toda hora; la IA calcula a quién ofrecerle qué producto y cuándo, y detecta la solicitud que se traba antes de que el cliente termine el trámite en otra entidad.
 
 #### 1.1 Procesos y Rutinas
 
@@ -2853,7 +2865,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 *Resultado:* El líder sabe dónde se desvía el proceso y lo corrige con datos, no de memoria; donde la venta pasa por un ejecutivo, además, todo el equipo asesora con un mismo método.
 
 - Hay una metodología comercial formal en uso —SPIN, BANT o una de asesoría equivalente— que el ejecutivo sigue para conocer la necesidad del cliente antes de ofrecerle un producto. `[1.1.E1]`
-- Existen guías de indagación, precalificación y manejo de objeciones —tasa, requisitos, plazo— que el equipo usa. `[1.1.E2]`
+- Existen guías de descubrimiento de necesidades, precalificación y manejo de objeciones —tasa, requisitos, plazo— que el equipo usa. `[1.1.E2]`
 
 *Se leen igual:* `1.1.D1`, `1.1.D2`, `1.1.D3`, `1.1.D4`, `1.1.I1`, `1.1.I2`, `1.1.I3`, `1.1.I4`, `1.1.F4`, `1.1.F5`, `1.1.F6`, `1.1.E3`, `1.1.O1`, `1.1.O2`, `1.1.O3`.
 
@@ -2867,6 +2879,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 **Inicial.** Hay un CRM, pero las solicitudes se cargan y se reparten a mano, y el cliente tiene que llamar para saber en qué va la suya.
 
+- Lo que el cliente contrata solo —por la web, la app o el autoservicio— se pasa a mano al sistema, cuando alguien tiene tiempo. `[1.2.I2]`
 - El cliente tiene que llamar para saber en qué va su solicitud. `[1.2.I201 · evaluado]`
 
 **Funcional.** Lo básico pasa solo: las solicitudes se reparten por una regla, lo que el cliente hace en los canales digitales entra al sistema aunque lo deje a medias, y el cliente recibe un aviso en cada cambio de estado.
@@ -2895,7 +2908,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 *No aplican:* `1.2.F8`.
 
-*Se leen igual:* `1.2.D1`, `1.2.D2`, `1.2.I1`, `1.2.I2`, `1.2.F3`, `1.2.F4`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O3`.
+*Se leen igual:* `1.2.D1`, `1.2.D2`, `1.2.I1`, `1.2.F3`, `1.2.F4`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O3`.
 
 #### 1.3 Datos
 
@@ -2903,12 +2916,12 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 *Descripción:* Mide si los datos comerciales son confiables para decidir: solicitudes completas, su origen, la autorización del cliente y reportes que salen del sistema sin armarlos a mano.
 
-*Costo de quedarse:* Decides con números que no cuadran: el reporte de colocación se arma a mano cruzando el CRM con el sistema de crédito, y nadie sabe cuántas solicitudes hay de verdad en curso.
+*Costo de quedarse:* Decides con números que no cuadran: el reporte de solicitudes en curso se arma a mano, cambia según quién lo arma y nadie sabe cuántas hay de verdad ni por qué canal llegó cada una.
 
 **Deficiente.**
 
 - No hay un registro de los prospectos: cada vez que se necesita la lista de quiénes pidieron un producto, hay que armarla a mano con hojas de cálculo, la libreta de cada ejecutivo y lo que guarda cada sistema. `[1.3.D3]`
-- Las solicitudes que se concretan no quedan registradas con su producto, su monto y su fecha: no se sabe cuánto se colocó ni cuándo. `[1.3.D4]`
+- Las solicitudes que se concretan no quedan registradas en el área comercial con su producto, su monto y su fecha: lo que colocó cada ejecutivo, cada sucursal o cada canal se arma a mano con los reportes del core bancario. `[1.3.D4]`
 
 **Funcional.** El reporte de solicitudes en curso sale del sistema, sin armarlo a mano, y la autorización de cada cliente para consultar su historial está registrada.
 
@@ -2919,7 +2932,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 - El reporte de solicitudes en curso se genera del sistema sin reconstruir números, y refleja el estado actual, no una proyección. `[1.3.F4]`
 - La documentación sobre el cliente objetivo de cada producto no se deja envejecer. `[1.3.F5]`
 - La definición de prospecto precalificado no se deja envejecer. `[1.3.F6]`
-- La documentación de lo que ofrece la entidad —qué resuelve cada producto y para quién es— no se deja envejecer. `[1.3.F7]`
+- La documentación de lo que ofrece la entidad —por ejemplo, qué resuelve cada producto— no se deja envejecer. `[1.3.F7]`
 - Todo prospecto con el que se trabaja tiene registrada su autorización para consultar su historial crediticio, con su fecha. `[1.3.F201 · comprobable]`
 
 **Eficiente.** Aparece una proyección de colocación confiable, y la ficha del cliente reúne sus productos, sus solicitudes y sus conversaciones.
@@ -2935,11 +2948,11 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 #### 1.4 Equipo y Gobierno
 
-¿Cómo sabe el gerente, cada semana, qué sucursal y qué ejecutivo van bien y quién necesita ayuda?
+¿Cómo sabe el líder, cada semana, qué sucursal y qué ejecutivo van bien y quién necesita ayuda?
 
 *Descripción:* Mide si cada ejecutivo tiene un rol y una meta por escrito, si cada sucursal y cada canal digital tienen la suya, y si el líder sigue los números y pide cuentas con datos.
 
-*Costo de quedarse:* El gerente se entera al cierre del mes de que la meta no se cumplió: no vio antes qué sucursal o qué ejecutivo se quedó atrás, ni por qué.
+*Costo de quedarse:* El líder se entera al cierre del mes de que la meta no se cumplió: no vio antes qué sucursal o qué ejecutivo se quedó atrás, ni por qué.
 
 **Funcional.**
 
@@ -2995,9 +3008,9 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 - Las ofertas solo prometen lo que se puede aprobar: el monto, la tasa y el plazo que se ofrecen se validan contra la política de crédito vigente antes de decírselos al cliente. `[1.5.E3]`
 - Se mide cuántas ofertas terminan aprobadas con condiciones distintas de las ofrecidas, y se corrige el origen. `[1.5.E201 · comprobable · hábito]`
 
-**Óptimo.** La IA escribe y revisa lo que se le dice a cada prospecto desde la oferta vigente de cada producto, y el equipo valida lo que se sale.
+**Óptimo.** La IA revisa contra la oferta vigente de cada producto todo lo que se le dice a cada prospecto, y el equipo valida lo que se sale.
 
-- Lo que la IA escribe o responde a los prospectos parte de la oferta vigente de cada producto —su mensaje, su tasa, su plazo, sus costos y sus requisitos—; lo que se sale de ella queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
+- La IA revisa en tiempo real, contra la oferta vigente de cada producto —su mensaje, su tasa, su plazo, sus costos y sus requisitos—, lo que se les dice a los prospectos, lo escriba ella o el equipo; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
 
 *Se leen igual:* `1.5.D2`, `1.5.I1`, `1.5.I2`, `1.5.F3`, `1.5.E2`.
 
@@ -3073,7 +3086,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 *Resultado:* Las solicitudes con más posibilidades reciben ayuda justo cuando la necesitan: la IA detecta dónde se traba cada una y propone a quién movilizar.
 
 - La IA detecta cuáles de las solicitudes que más importan se están trabando antes de que venza el plazo de su etapa y propone qué hacer —un recordatorio al cliente, una alerta a la gerencia o un aviso al ejecutivo—; el líder valida, y todo queda en el CRM. `[1.7.O1]`
-- La IA decide el canal y el momento de cada seguimiento, cliente por cliente y según cómo responde, dentro de los límites que fijó la entidad; lo que decide queda registrado en el CRM. `[1.7.O2]`
+- La IA decide el canal y el momento de cada seguimiento, cliente por cliente y según cómo responde, dentro de los límites que fijó la entidad; el equipo revisa los resultados, y lo que decide la IA queda registrado en el CRM. `[1.7.O2]`
 
 *Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.D4`, `1.7.I1`, `1.7.I2`, `1.7.I3`, `1.7.I4`, `1.7.F3`, `1.7.F4`, `1.7.F5`, `1.7.E3`.
 
@@ -3105,7 +3118,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 - Al menos una vez por trimestre se revisan las solicitudes que se concretaron y las que no —rechazadas, desistidas y abandonadas— para encontrar lo que se repite. `[1.8.E1]`
 - Las razones de rechazo se revisan con el área de crédito, para ajustar a quién se le ofrece cada producto. `[1.8.E201 · declarado · hábito]`
 
-**Óptimo.** La IA analiza las conversaciones y encuentra en qué etapa y por qué se caen las solicitudes, y propone correcciones; el líder decide cuáles se aplican.
+**Óptimo.** La IA analiza las llamadas con los prospectos, encuentra en qué etapa y por qué se caen las solicitudes y propone correcciones; el líder decide cuáles se aplican.
 
 - La IA detecta en qué etapa y por qué se caen las solicitudes y propone el cambio, que se ve en el CRM; el líder decide si se aplica. `[1.8.O201 · comprobable]`
 
@@ -3117,13 +3130,13 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 **Deficiente.** Tu marca no la defines tú, la define el mercado. Cada producto se anuncia con su propia voz, las piezas salen sin pasar por cumplimiento normativo y tus clientes no tienen cómo distinguir un mensaje tuyo de un fraude que te imita. Las herramientas están sueltas y las campañas corren hasta agotar el presupuesto sin que nadie sepa cuántas solicitudes dejaron. Los prospectos llegan por casualidad.
 
-**Inicial.** Tienes marca y campañas por producto, pero sin estrategia detrás. Las herramientas se usan a medias y cada una por su lado, el contenido sale cuando se puede, cumplimiento normativo revisa a última hora y la campaña se atrasa, y los resultados se miden tarde y a mano, sin que lo aprendido quede escrito. No sabes de dónde vienen tus prospectos.
+**Inicial.** Tienes marca y campañas por producto, pero sin estrategia detrás. Las herramientas se usan a medias y parte de lo que entra se pasa a mano, el contenido sale cuando se puede, cumplimiento normativo revisa a última hora y la campaña se atrasa, y los resultados se miden tarde y a mano, sin que lo aprendido quede escrito. No siempre sabes de dónde vienen tus prospectos.
 
 **Funcional.** El área dejó de depender de héroes. Tienes marca, buyer personas y presencia digital documentadas, y las herramientas que pagas se usan de verdad. Cada pieza pasa por cumplimiento normativo y dice cuánto cuesta el producto, y tus clientes saben por dónde les escribes y qué nunca les vas a pedir. Tus campañas salen por segmento y con regularidad, coordinadas bajo un mismo calendario por los canales que elegiste en tu plan —también los propios, como la app o la sucursal— y solo a quien aceptó recibirlas. Sabes de dónde viene cada prospecto y cuánto te cuesta en cada canal. Todavía no optimizas fino, pero la demanda ya se mide.
 
 **Eficiente.** Probar y ajustar ya es rutina, y lo aprendido cambia cómo se arma la siguiente campaña. Los datos se completan solos y sabes qué aportó cada canal a cada producto colocado, y cuánto te cuesta colocar cada uno sumando la sucursal y lo digital; los segmentos y el puntaje de prospectos se arman solos, y la IA asiste al equipo en su trabajo diario. Cumplimiento normativo responde en un plazo que se mide, te encuentran también en los asistentes de IA, y el presupuesto se mueve entre canales según lo que cuesta cada prospecto o cada producto colocado.
 
-**Óptimo.** La IA produce y ajusta; el equipo dirige. El contenido se genera y se optimiza en ciclo continuo, la IA encuentra micro-segmentos y adapta el mensaje a lo que hace cada persona, los modelos mueven el presupuesto entre canales sobre la marcha, y los clientes que Servicio vuelve promotores traen clientes nuevos. El equipo define la estrategia y valida lo que sale.
+**Óptimo.** La IA produce y ajusta; el equipo dirige. El contenido se genera y se ajusta de forma continua; la IA predice qué va a hacer cada persona, adapta el mensaje a lo que hace y mueve el presupuesto entre canales dentro de los límites que fija el equipo; y los clientes que Servicio vuelve promotores traen clientes nuevos. El equipo define la estrategia y valida lo que sale.
 
 #### 2.1 Procesos y Rutinas
 
@@ -3173,7 +3186,7 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 *Resultado:* Los prospectos reciben su nutrición sin que nadie la mande a mano, hasta que están listos para contratar el producto —o para hablar con un ejecutivo, donde la venta pasa por uno—; la conversación con cada contacto no depende de que alguien se acuerde de escribirle y, si se atiende por WhatsApp o por el chat, el líder ve en tiempo real qué conversaciones esperan respuesta.
 
-- El traspaso de prospectos es automático: cuando un prospecto cumple los criterios para pasar a un ejecutivo, se asigna por varias condiciones —el producto, la zona o la sucursal— y le llega al ejecutivo o a la sucursal que le corresponde con su historial. `[2.2.E3]`
+- El traspaso de prospectos es automático: cuando un prospecto cumple los criterios para pasar a un ejecutivo, le llega con su historial al ejecutivo o a la sucursal que le corresponde, sin que nadie lo pase a mano. `[2.2.E3]`
 
 **Óptimo.**
 
@@ -3197,7 +3210,7 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 *Resultado:* El líder sabe de dónde viene cada prospecto, con reportes que salen del sistema y no de una hoja armada a mano.
 
 - Cada contacto creado desde la puesta en marcha del sistema —entre por un formulario, una conversación, la app o la contratación de un producto— tiene su etapa del ciclo de vida y su origen. `[2.3.F1]`
-- Las propiedades que describen al cliente objetivo de cada producto —en personas, ingreso, tipo de empleo o zona; en pymes, actividad, antigüedad o ventas— se piden en los formularios por donde entran los prospectos, o donde se capturen sus datos, como la app o la sucursal, y están completas en la mayoría de los registros. `[2.3.F2]`
+- Las propiedades que describen al cliente objetivo de cada producto —en personas, ingreso, tipo de empleo o zona; en pymes, actividad, antigüedad o ventas— se piden en los formularios por donde entran los prospectos, también los de la app y la sucursal, y están completas en la mayoría de los registros. `[2.3.F2]`
 - Los duplicados —la misma persona como cliente y como prospecto, o con dos correos— están bajo control: se revisan y se unen al menos una vez por trimestre, a mano o de forma automática, y no distorsionan los reportes. `[2.3.F3]`
 - Los reportes básicos —cuántos prospectos entran, de dónde vienen y cuántos llegan a una solicitud— salen del sistema sin armarlos a mano. `[2.3.F5]`
 - Cuando se pide un teléfono u otro dato de contacto, se pregunta si la persona acepta que le escriban por ese canal para ofrecerle productos, y su respuesta queda registrada. `[2.3.F7]`
@@ -3224,7 +3237,7 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 **Inicial.**
 
-- No está escrito qué decide cada uno, así que hasta lo del día a día —qué publicar, qué pieza aprobar— espera a que lo resuelva la gerencia general. `[2.4.I1]`
+- Los roles no están escritos, así que hasta lo del día a día —qué publicar, qué pieza aprobar— espera a que lo resuelva la gerencia general. `[2.4.I1]`
 
 **Funcional.**
 
@@ -3293,7 +3306,7 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 *Resultado:* Cada segmento recibe la campaña del producto que le sirve, nadie recibe la oferta de lo que ya tiene y, donde la venta pasa por un ejecutivo, este recibe prospectos que Marketing ya clasificó con criterios escritos.
 
-- Existen al menos 2 segmentos con criterios escritos que salen de los buyer personas —qué necesitan o cómo deciden—, no solo de dónde están: por ejemplo, el asalariado que busca su primera tarjeta o la pyme que necesita capital de trabajo. `[2.6.F1]`
+- Existen al menos 2 segmentos con criterios escritos según qué necesita o cómo decide cada grupo, no solo según dónde está: por ejemplo, el asalariado que busca su primera tarjeta o la pyme que necesita capital de trabajo. `[2.6.F1]`
 - Existen criterios escritos de qué es un suscriptor, un prospecto y un prospecto listo para pasar a un ejecutivo, y Marketing clasifica cada contacto según ellos, a mano o con una automatización simple sobre las propiedades que usan esos criterios. `[2.6.F4]`
 - Las campañas de un producto no le llegan a quien ya lo tiene, salvo que sean para él —un aumento de límite, un segundo crédito—: la lista se cruza con los productos de cada cliente antes de enviar. `[2.6.F201 · comprobable]`
 
@@ -3322,7 +3335,7 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 *Resultado:* La campaña de un producto sale coordinada por todos los canales del plan —también los propios, como la app o la sucursal— en vez de esfuerzos sueltos, solo a quien aceptó recibirla, y el líder ve cuánto le cuesta cada prospecto según el canal del que venga.
 
-- Si la pauta pagada es parte del plan de canales, en el último trimestre corrió al menos una campaña con presupuesto definido —de un producto o de la marca— en Google, Meta o el canal que corresponda a la entidad. `[2.7.F3]`
+- Si la pauta pagada es parte del plan de canales, hay al menos una campaña corriendo con presupuesto definido —de un producto o de la marca— en Google, Meta o el canal que corresponda a la entidad. `[2.7.F3]`
 - Los canales que la entidad eligió en su plan siguen el mismo calendario y la misma campaña: la de un producto sale coordinada en todos ellos, no como esfuerzos sueltos. `[2.7.F5]`
 - En el sistema se ve cuánto costó cada prospecto —o cada producto colocado, donde el cliente lo contrata solo en los canales digitales— el último mes, al menos por canal. `[2.7.F6]`
 - Las campañas solo le llegan a quien aceptó recibir ofertas por ese canal, y quien pide no recibir más deja de recibirlas. `[2.7.F201 · comprobable · requiere 2.3.F7]`
@@ -3338,7 +3351,7 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 **Óptimo.**
 
-*Resultado:* La inversión se reparte sola donde más retorna, dentro de los límites que fija el equipo, los clientes satisfechos traen clientes nuevos, y la entidad prueba canales nuevos sin esperar a ver qué hacen otras entidades.
+*Resultado:* La inversión se reparte sola donde más retorna, dentro de los límites que fija el equipo; los clientes satisfechos traen clientes nuevos, y la entidad prueba canales nuevos sin esperar a ver qué hacen otras entidades.
 
 *No aplican:* `2.7.E5`.
 
@@ -3362,15 +3375,15 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa después de que el cliente contrata un producto: cómo está montado por dentro y qué produce en reclamos resueltos, productos en uso y clientes que se quedan.
 
-**Deficiente.** El servicio se improvisa cliente por cliente. Cada sucursal y cada persona que atiende resuelve los reclamos a su manera, nadie sabe si se respondieron en el plazo que fija el regulador, y todo depende de que la persona correcta esté disponible. Te enteras de que un cliente se fue cuando ya cerró su cuenta.
+**Deficiente.** El servicio se improvisa cliente por cliente. Cada sucursal y cada persona que atiende resuelve los reclamos a su manera, no hay un sistema donde queden los casos y nadie sabe si se respondieron en el plazo que fija el regulador. Te enteras de que un cliente se fue cuando ya cerró su cuenta.
 
-**Inicial.** El conocimiento vive en una o dos personas que saben cómo se resuelve cada gestión, y eso te deja con un punto único de fallo. Hay un sistema de casos, pero parte del equipo sigue atendiendo por fuera, en su correo o su teléfono; hay respuestas guardadas para lo más frecuente y procesos que nadie escribió, y cada quien verifica a su manera quién es el cliente. La atención es frágil: para bloquear una tarjeta, el cliente tiene que esperar a que lo atiendan.
+**Inicial.** El conocimiento vive en una o dos personas que saben cómo se resuelve cada gestión, y eso te deja con un punto único de fallo. Hay un sistema de casos, pero parte del equipo sigue atendiendo por fuera, en su correo o su teléfono; cada agente tiene sus propias respuestas guardadas, hay procesos que nadie escribió y cada quien verifica a su manera quién es el cliente. La atención es frágil: para bloquear una tarjeta, el cliente tiene que esperar a que lo atiendan.
 
 **Funcional.** Tu atención es consistente y ya no depende de quién atienda. Sabes qué tipos de cliente atiendes —personas, pymes, banca preferente— y qué espera cada uno. Cada caso sigue un mismo recorrido en el sistema, con la ficha del cliente a la vista; cada reclamo lleva el plazo que fija el regulador y sabes cuántos se respondieron dentro de ese plazo, y nadie atiende una gestión sin verificar quién es el cliente. Un fraude va primero y, si emites tarjetas, el cliente bloquea la suya al instante. Todavía no hay alertas automáticas de quién se puede ir, pero donde la relación es continua el cliente ya recibe aviso antes de cada cobro y ayuda para activar lo que contrató, y quien pide cancelar recibe una razón para quedarse.
 
 **Eficiente.** El servicio empieza a adelantarse al problema. Cada tipo de caso tiene su plazo, con alertas y escalación automática; el cliente sigue sus casos y hace sus gestiones más comunes en la app, y la IA asiste a tu equipo en su trabajo diario. Mides tiempos y satisfacción, y la información del cliente se une con la del área comercial. Ves venir los problemas antes de que el cliente levante la mano, y ningún caso se pierde entre tarjetas, operaciones y Servicio. Donde el cliente sigue con la entidad, cada cliente tiene un indicador de salud y tus clientes de banca preferente y tus pymes más importantes, un responsable dedicado; donde la relación es continua, quien da señales de irse recibe una acción de retención antes de decidirlo.
 
-**Óptimo.** Un agente de IA resuelve casos en todos los canales donde atiende tu equipo y le pasa a una persona, con todo el contexto, los que no puede resolver. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y gestiona las excepciones; donde el cliente sigue con la entidad, un modelo anticipa qué cliente se puede ir antes de que lo diga, y cada cliente se atiende sabiendo lo que se le ofreció al contratar y recibe detalles pensados para él. La entidad suma clientes sin que crezca el equipo.
+**Óptimo.** Un agente de IA resuelve casos en todos los canales donde atiende tu equipo y le pasa a una persona, con todo el contexto, los que no puede resolver. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y gestiona las excepciones; cada cliente se atiende sabiendo lo que se le ofreció al contratar y recibe detalles pensados para él y, donde el cliente sigue con la entidad, un modelo anticipa qué cliente se puede ir antes de que lo diga. La entidad suma clientes sin que crezca el equipo.
 
 #### 3.1 Procesos y Rutinas
 
@@ -3393,7 +3406,7 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 *Resultado:* Todo el equipo atiende en el mismo sistema, cada cliente tiene a alguien que responde por él, cada reclamo lleva escrito el plazo que fija el regulador, y nadie atiende una gestión sin verificar antes quién es el cliente.
 
 - El recorrido de atención está configurado con sus etapas y cubre cada caso —reclamo, consulta o gestión—, de la recepción al cierre. `[3.1.F1]`
-- Cada cliente tiene registrado quién responde por él —una persona o, si la cartera es tan grande que no se asigna por persona, como en la banca masiva, un equipo— y recibe un contacto de seguimiento a tiempo —en los momentos que fija el proceso de atención—, aunque no haya abierto casos. `[3.1.F2]`
+- Cada cliente tiene registrado quién responde por él —una persona o, si la cartera es tan grande que no se asigna por persona, como en la banca masiva, un equipo— y recibe un contacto de seguimiento a tiempo —en los momentos que fija el proceso de atención—, aunque no haya abierto casos; si responde un equipo, ese contacto puede ser un mensaje automático. `[3.1.F2]`
 - Existe un proceso escrito para escalar los reclamos graves —un fraude, un cargo no reconocido— y los casos que quien atiende no puede resolver: dice cuáles se escalan y a quién. `[3.1.F4]`
 - Cada tipo de reclamo tiene escrito en el proceso el plazo de respuesta que fija el regulador. `[3.1.F201 · declarado]`
 - Antes de atender una gestión sobre un producto, se verifica la identidad del cliente con los pasos que define el proceso, en cualquier canal, y queda registrado en el caso. `[3.1.F202 · comprobable · hábito]`
@@ -3493,7 +3506,7 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 *Resultado:* El equipo responde por sus tiempos de atención, una persona nueva rinde rápido, cada cliente nuevo llega del área comercial con lo que busca con su producto, las áreas que resuelven parte de los casos cumplen lo acordado y, donde el cliente vuelve a contratar sin tener un producto vigente, el área comercial se entera cuando uno se puede estar yendo.
 
 - Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales —productos, procedimientos de seguridad y reclamos—; no se le entrena de memoria. `[3.4.E2]`
-- El líder de Servicio acuerda con el área comercial qué trae cada cliente nuevo —lo que busca con su producto— y, si el cliente vuelve a contratar sin tener un producto vigente, cómo le avisa Servicio al área comercial que se puede estar yendo. `[3.4.E4]`
+- El líder de Servicio acuerda con el área comercial qué trae cada cliente nuevo —lo que busca con su producto— y el acuerdo se cumple: cada uno llega con eso y, si el cliente vuelve a contratar sin tener un producto vigente, Servicio le avisa al área comercial cuando se puede estar yendo. `[3.4.E4]`
 - El acuerdo con las áreas que resuelven parte de los casos —tarjetas, fraude, operaciones— está escrito y se mide: qué reciben, en cuánto tiempo lo resuelven y por qué devuelven un caso. `[3.4.E201 · comprobable]`
 
 *Se leen igual:* `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.O1`, `3.4.O2`, `3.4.O3`, `3.4.O4`.
@@ -3526,7 +3539,7 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 
 **Funcional.**
 
-*Resultado:* Un fraude o un cargo no reconocido se atiende primero, los clientes más importantes reciben una atención acorde, y quien atiende no tiene que reconstruir su historia.
+*Resultado:* Un fraude o un cargo no reconocido se atiende primero, cada tipo de cliente recibe la atención que le corresponde, y quien atiende no tiene que reconstruir su historia.
 
 - Cada caso tiene una prioridad asignada —urgente, alta, normal o baja; un fraude o un cargo no reconocido, por ejemplo, es urgente— y los agentes la respetan. `[3.6.F1]`
 - Está escrito qué atención recibe cada tipo de cliente —por ejemplo, por qué canal y quién atiende a la banca preferente, a las pymes y a las personas—, y el equipo la aplica. `[3.6.F2]`
@@ -3573,7 +3586,7 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 
 - Hay alertas tempranas, a partir del indicador de salud, de que un cliente se puede ir o de que está listo para un producto más. `[3.7.E1]`
 - Los clientes clave revisan con la entidad, al menos cada trimestre, lo que buscan con sus productos: qué se logró y qué sigue. `[3.7.E3]`
-- Ningún caso del cliente se pierde entre áreas: si lo resuelve otra área —tarjetas, operaciones, cobranza—, queda igual en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —un vencimiento, un cobro, la renovación de una tarjeta— o, si se piden calificaciones, cuando un cliente califica mal. `[3.7.E4]`
+- Ningún caso del cliente se pierde entre áreas: si lo resuelve otra área —tarjetas, operaciones, cobranza—, también queda en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —un vencimiento, un cobro, la renovación de una tarjeta— o, si se piden calificaciones, cuando un cliente califica mal. `[3.7.E4]`
 - Cada cliente recibe, sin tener que pedirla, la información que necesita antes de los momentos clave de su relación —un cobro, el vencimiento de un certificado, la renovación de su tarjeta, un cambio en las condiciones de su producto—, y sale de forma automática, no cuando alguien se acuerda. `[3.7.E5]`
 - Los clientes que dan señales de irse —dejan de usar su tarjeta, bajan su saldo, reclaman más— reciben una acción de retención antes de decidir irse. `[3.7.E201 · comprobable · hábito · relación continua]`
 
@@ -3595,7 +3608,7 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 
 *Costo de quedarse:* Tu equipo responde a mano las mismas preguntas una y otra vez, y quien perdió su tarjeta tiene que esperar en la línea para bloquearla.
 
-**Inicial.** Hay algunas respuestas publicadas, pero lo que más preguntan los clientes todavía no tiene respuesta publicada, y para bloquear una tarjeta hay que esperar a una persona.
+**Inicial.** Hay algunas respuestas publicadas o un chatbot de menú, pero lo que más preguntan los clientes todavía no tiene respuesta publicada, y para bloquear una tarjeta hay que esperar a una persona.
 
 - Para bloquear una tarjeta, el cliente tiene que llamar y esperar a que lo atienda una persona. `[3.8.I201 · comprobable]`
 
@@ -3633,7 +3646,7 @@ Para el área de admisiones de una universidad, un instituto o un centro de form
 | Lead | Aspirante o interesado en un programa |
 | Prospecto | Aspirante o interesado en un programa |
 | Pipeline | El recorrido de la admisión: interés, solicitud, admisión y matrícula |
-| Pipeline review | Reunión de seguimiento de admisiones |
+| Revisión del pipeline | Reunión de seguimiento de admisiones |
 | Venta sin vendedor | Matrícula que el aspirante hace solo, en línea o por autoservicio |
 | Vendedor | Asesor de admisiones |
 | Propuesta | La oferta de admisión: programa, costo, beca y financiamiento |
@@ -3656,7 +3669,7 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 **Eficiente.** La matrícula deja de depender del empuje de la última semana. Mides en qué paso se cae cada aspirante y cuántos admitidos no se matriculan, un puntaje te dice a qué aspirante contactar primero y proyectas la matrícula del período con confianza.
 
-**Óptimo.** La IA hace el trabajo pesado y tu equipo valida donde importa. Agentes de IA responden y orientan a toda hora, la IA dice qué aspirante necesita qué y detecta a quien está por abandonar el proceso antes de que cierre la matrícula. El asesor dedica su tiempo a las conversaciones que deciden la matrícula, no a la administración.
+**Óptimo.** La IA hace el trabajo pesado y tu equipo valida donde importa. Si atiendes por WhatsApp o chat, agentes de IA responden y orientan ahí a toda hora; la IA dice qué aspirante necesita qué y detecta a quien está por abandonar el proceso antes de que cierre la matrícula. El asesor dedica su tiempo a las conversaciones que deciden la matrícula, no a la administración.
 
 #### 1.1 Procesos y Rutinas
 
@@ -3668,6 +3681,18 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 **Deficiente.** Sin proceso: cada asesor atiende a su manera y lo que sabe de cada aspirante vive en su cabeza o en su libreta.
 
+- No hay nada escrito sobre el proceso de admisión ni sus etapas: cada asesor usa su criterio. `[1.1.D1]`
+- Los interesados se reparten a ojo, o se los queda quien los ve primero: no hay una regla que diga a quién le toca cada uno. `[1.1.D2]`
+- No hay una reunión para revisar a los aspirantes en proceso: se habla de ellos solo cuando algo se complica. `[1.1.D3]`
+- Si se van dos personas clave, nadie sabe en qué quedó cada aspirante. `[1.1.D4]`
+
+**Inicial.** Hay etapas y algo de estructura, pero cada asesor las aplica a su manera y la revisión de los aspirantes no tiene fecha fija.
+
+- Hay etapas de palabra o en un borrador, pero cada asesor las interpreta distinto. `[1.1.I1]`
+- Hay una cadencia de contacto sugerida, pero cada asesor la cumple cuando puede o cuando se acuerda. `[1.1.I2]`
+- La reunión de seguimiento de admisiones se hace cuando hay tiempo, sin una fecha fija ni un orden para repasar a los aspirantes. `[1.1.I3]`
+- Que un aspirante quede bien registrado depende de la voluntad de cada asesor, no de una rutina del equipo. `[1.1.I4]`
+
 **Funcional.** Todo el equipo sigue el mismo proceso de admisión escrito en el CRM, con etapas, una cadencia de contacto, una revisión fija de los aspirantes y el calendario de cada período.
 
 *Resultado:* Si rota un asesor, el siguiente sabe en qué va cada aspirante, porque todo el equipo trabaja la admisión igual en el CRM: los aspirantes avanzan con los mismos criterios, cada interesado recibe seguimiento con la cadencia acordada, los aspirantes se revisan en cada reunión de seguimiento de admisiones y cada período arranca con sus fechas definidas.
@@ -3675,6 +3700,8 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 - Cualquier asesor explica igual las etapas de la admisión —interés, solicitud, admisión y matrícula— y qué tiene que cumplir un aspirante para avanzar. `[1.1.F1]`
 - Cada proceso de admisión —por ejemplo, el de pregrado, el de posgrado o el de educación continua— tiene su propio recorrido en el CRM, con lo que el aspirante tiene que cumplir para pasar de cada etapa a la siguiente, la admisión incluida. `[1.1.F2]`
 - Hay un proceso de admisión escrito y una cadencia de contacto definida —cuántos intentos y en cuántos días—, y la cadencia se cumple con la mayoría de los interesados nuevos. `[1.1.F4]`
+- La reunión de seguimiento de admisiones se hace en una fecha fija, cada semana o cada quince días. `[1.1.F5]`
+- Cualquier asesor trabaja en el CRM, no en hojas ni notas aparte: lo abre para ver qué le toca hacer, no solo para cargar lo que ya hizo. `[1.1.F6]`
 - Cada período de matrícula tiene su calendario escrito antes de empezar —apertura, fechas límite y cierre—, y el equipo trabaja con él. `[1.1.F301 · declarado · hábito]`
 
 **Eficiente.** El líder comprueba con datos que el proceso de admisión se cumple y, donde hay asesores de admisiones, todos siguen un método de asesoría y guías escritas.
@@ -3684,7 +3711,14 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 - Hay una metodología de asesoría formal en uso —una conocida, como SPIN o BANT, o una equivalente escrita por la institución— con la que el asesor indaga qué busca el aspirante y qué lo frena antes de recomendarle un programa. `[1.1.E1]`
 - Existen guías de indagación, de calificación —si el aspirante cumple los requisitos y quiere ingresar en el período— y de manejo de objeciones —costo, tiempo, modalidad— que el equipo usa. `[1.1.E2]`
 
-*Se leen igual:* `1.1.D1`, `1.1.D2`, `1.1.D3`, `1.1.D4`, `1.1.I1`, `1.1.I2`, `1.1.I3`, `1.1.I4`, `1.1.F5`, `1.1.F6`, `1.1.E3`, `1.1.O1`, `1.1.O2`, `1.1.O3`.
+**Óptimo.**
+
+*Resultado:* Nadie tiene que vigilar a mano que el proceso se cumpla: la IA señala a los aspirantes cuya admisión se desvía, el líder decide qué se corrige y el equipo dedica su tiempo a probar mejoras en pilotos cortos.
+
+- La IA detecta a los aspirantes cuya admisión se sale del proceso, los marca en el CRM y se los señala al líder y a quien corresponde; el líder decide qué se corrige. `[1.1.O1]`
+- La mayoría de las admisiones siguen el proceso como está escrito sin que nadie lo revise a mano, y el CRM lo muestra. `[1.1.O2]`
+
+*Se leen igual:* `1.1.E3`, `1.1.O3`.
 
 #### 1.2 Tecnología y Automatización
 
@@ -3694,12 +3728,25 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 *Costo de quedarse:* Tu equipo pierde horas en tareas que el sistema podría hacer: los interesados se enfrían mientras alguien decide a quién le tocan y, donde el aspirante hace su solicitud o su matrícula en línea, cada una hay que pasarla a mano.
 
+**Deficiente.** No hay un CRM: los interesados y las matrículas se anotan donde cada quien puede.
+
+- Los interesados viven en listas o agendas personales. `[1.2.D1]`
+- No hay un CRM donde montar una automatización: los interesados y las matrículas se pasan por correo, por chat o de palabra, y nadie recibe avisos del sistema. `[1.2.D2]`
+
+**Inicial.**
+
+- Hay un CRM, pero nada pasa solo: los interesados se reparten a mano y cada asesor tiene que acordarse de sus seguimientos. `[1.2.I1]`
+- Las matrículas que el aspirante hace solo —en línea o por autoservicio— se pasan a mano al sistema, cuando alguien tiene tiempo. `[1.2.I2]`
+
 **Funcional.** Lo básico pasa solo —los interesados se reparten por una regla, el sistema avisa qué toca y lo que el aspirante hace en línea entra solo— y, si se usa IA, trabaja con los datos de cada aspirante.
 
-*Resultado:* Ningún interesado se pierde por no saber a quién le toca y el asesor deja de depender de su memoria para dar seguimiento; la matrícula en línea entra sola al sistema, la solicitud a medias se guarda con los datos de contacto y el aspirante sabe en qué va su proceso sin tener que preguntar.
+*Resultado:* Ningún interesado se pierde por no saber a quién le toca, el asesor deja de depender de su memoria para dar seguimiento y el aspirante sabe en qué va su proceso sin tener que preguntar; donde el aspirante se matricula solo en línea, cada matrícula entra sola al sistema y la solicitud que deja a medias se guarda con sus datos de contacto.
 
 - Los interesados que entran llegan a una bandeja o cola y se asignan por una regla simple (por turnos, por programa o por sede). `[1.2.F2]`
+- Cuando hay algo que hacer —por ejemplo, un interesado nuevo asignado, una tarea que vence o un aspirante que respondió—, el sistema le avisa al asesor sin que el líder se lo recuerde. `[1.2.F3]`
+- Si el equipo atiende a los aspirantes por WhatsApp u otro canal conversacional, lo que cada asesor habla por ahí queda en el sistema, aunque responda desde su teléfono. `[1.2.F4]`
 - Las matrículas que el estudiante hace solo —en línea o por autoservicio— entran solas al sistema como admisiones, con su programa, su monto, su canal, su fecha y su estudiante. `[1.2.F6]`
+- Si el equipo usa IA, esta tiene como contexto lo básico de cada aspirante y estudiante: quién es, qué programa le interesa y en qué etapa está. `[1.2.F7]`
 - Si los cupos de un programa son limitados, el asesor puede ver cuántos quedan antes de ofrecerlo, en el CRM o en el sistema donde se llevan los cupos, sin preguntarle a otra persona. `[1.2.F8]`
 - Al aspirante le llegan de forma automática la confirmación de su solicitud y un aviso en cada paso: qué documento le falta, si fue admitido y cómo matricularse. `[1.2.F301 · comprobable]`
 - La solicitud que el aspirante deja a medias en línea queda guardada en el sistema, con sus datos de contacto. `[1.2.F302 · comprobable · venta sin vendedor]`
@@ -3709,7 +3756,10 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 *Resultado:* El asesor recupera el tiempo que se le iba en tareas repetitivas, y el líder ve en tiempo real en qué etapa se caen los aspirantes.
 
 - El detalle de costos, beca y financiamiento de cada aspirante se genera desde el sistema, no en hojas sueltas. `[1.2.E1]`
+- Hay secuencias de contacto de varios pasos que cambian según cómo responde el aspirante —si leyó, hizo clic o contestó—, y los interesados se asignan por varias condiciones o por capacidad; si el equipo atiende por un canal conversacional, las conversaciones también, con control de quién ve y responde cada una. `[1.2.E2]`
 - Si la institución lleva lo académico o los pagos en sistemas aparte del CRM, el CRM está conectado con ellos. `[1.2.E3]`
+- Hay tableros en tiempo real de la conversión por etapa y por asesor —o por canal, donde el aspirante se matricula solo— y, si el equipo atiende por un canal conversacional, de las conversaciones: cuánto tarda la primera respuesta y cuántas quedan sin seguimiento. `[1.2.E4]`
+- El equipo usa la IA en su trabajo diario —para redactar, resumir conversaciones o preparar una reunión—, y la IA trabaja con el contexto de los aspirantes y los estudiantes. `[1.2.E5]`
 - El aspirante entrega sus documentos y firma su matrícula de forma digital, sin tener que ir a la sede. `[1.2.E301 · comprobable]`
 
 **Óptimo.** La IA orienta, precalifica, agenda y calcula quién se va a matricular; el asesor valida y se queda con las conversaciones que deciden la matrícula.
@@ -3718,8 +3768,7 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 - La IA calcula la probabilidad de que cada aspirante se matricule y propone respuestas según el contexto de cada conversación; las dos cosas se ven en el CRM y el asesor decide qué usar. `[1.2.O1]`
 - Si el equipo atiende por un canal conversacional, agentes de IA orientan ahí a los interesados, los precalifican con la definición de aspirante calificado y agendan citas a cualquier hora; le pasan al asesor, con el contexto, a quien está listo, y el equipo revisa en el CRM lo que precalificaron. `[1.2.O2]`
-
-*Se leen igual:* `1.2.D1`, `1.2.D2`, `1.2.I1`, `1.2.I2`, `1.2.F3`, `1.2.F4`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O3`.
+- Las conclusiones que se calculan en el almacén central de datos vuelven al CRM: el asesor ve en la ficha, por ejemplo, cuánto suelen permanecer los estudiantes con el perfil de ese aspirante, sin salir de su herramienta. `[1.2.O3]`
 
 #### 1.3 Datos
 
@@ -3731,23 +3780,26 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 **Deficiente.**
 
+- No hay una regla de qué datos se registran ni de quién los corrige: cada asesor llena lo que le parece y nadie revisa lo que falta. `[1.3.D1]`
+- No se registra por qué canal llegó cada aspirante ni quién lo lleva: sacar un reporte confiable es imposible. `[1.3.D2]`
 - No hay un registro de quiénes son los aspirantes: cada vez que se necesita la lista, hay que armarla a mano con hojas de cálculo y lo que guarda cada sistema. `[1.3.D3]`
 - Las matrículas no quedan registradas con su programa, su monto y su fecha: no se sabe cuántos se matricularon en cada programa ni cuándo. `[1.3.D4]`
 
-**Inicial.**
+**Inicial.** Hay datos en el sistema, pero incompletos: el reporte de admisiones hay que corregirlo a mano antes de usarlo.
 
-- Los aspirantes que entran hoy se registran, pero a parte de ellos les falta el programa, el período de ingreso, el monto estimado o el asesor responsable. `[1.3.I3]`
+- En los aspirantes que entran hoy, el canal por el que llegó cada uno se anota a mano, cuando alguien se acuerda, y en parte de ellos queda vacío. `[1.3.I2]`
+- Los aspirantes que entran hoy se registran, pero a algunos les falta el programa, el período de ingreso, el monto estimado o la persona del equipo a cargo. `[1.3.I3]`
 
 **Funcional.** El reporte de admisiones sale del sistema, sin armarlo a mano, y se le puede creer.
 
 *Resultado:* El líder ve cuántos aspirantes hay en cada etapa y en cada programa cuando lo necesita, sin armar el reporte a mano, y sabe de dónde llegó cada uno.
 
-- Todo aspirante registrado desde la puesta en marcha del recorrido de admisión actual tiene programa, período de ingreso, monto estimado y asesor responsable. `[1.3.F1]`
+- Todo aspirante registrado desde la puesta en marcha del recorrido de admisión actual tiene programa, período de ingreso, monto estimado y una persona del equipo a cargo. `[1.3.F1]`
 - Todo aspirante registrado desde la puesta en marcha del recorrido de admisión actual dice por qué canal llegó: feria, colegio, campaña, web o referido. `[1.3.F3]`
 - El reporte de admisiones en curso se genera del sistema sin reconstruir números, y refleja el estado actual, no una proyección. `[1.3.F4]`
 - La documentación sobre el perfil de estudiante de cada programa no se deja envejecer. `[1.3.F5]`
 - La definición de aspirante calificado no se deja envejecer. `[1.3.F6]`
-- La documentación de lo que ofrece cada programa —qué formación da y a quién le sirve— no se deja envejecer. `[1.3.F7]`
+- La documentación de lo que ofrece cada programa —por ejemplo, qué formación da— no se deja envejecer. `[1.3.F7]`
 - Si el aspirante es menor de edad, queda registrado el permiso de su responsable para que lo contacten. `[1.3.F301 · comprobable]`
 
 **Eficiente.** Aparece una proyección confiable de la matrícula de cada programa, y la ficha del aspirante empieza a reunir lo que viene de los sistemas académico y de pagos que use la institución.
@@ -3757,15 +3809,18 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 - Hay una proyección de matrícula por programa que se actualiza cada semana o cada quince días, y en al menos cinco de los últimos seis meses la matrícula real quedó dentro de ±10% de lo proyectado. `[1.3.E1]`
 - La ficha de cada aspirante reúne lo de admisiones con su historial de conversaciones y, si la institución usa otros sistemas —lo académico, los pagos, la beca—, con lo que viene de ellos: la vista 360° empieza a tomar forma. `[1.3.E3]`
 
-**Óptimo.**
+**Óptimo.** Un modelo de IA calcula la proyección de matrícula y la vista 360° de cada aspirante se mantiene al día sin trabajo manual.
 
 *Resultado:* La proyección de matrícula se anticipa a lo que va a pasar, cruzando lo de admisiones con lo académico y lo financiero, y los datos están al día sin que nadie tenga que acordarse de actualizarlos.
 
+- Cada interesado, contacto y proceso de admisión se asocia solo, al entrar, con lo que ya había de esa persona o empresa; la IA resuelve los dudosos y una persona valida solo las excepciones que el CRM le marca. `[1.3.O1]`
+- Un modelo de IA calcula la proyección de matrícula con la historia de las admisiones; se ve en el sistema y el líder la revisa antes de comprometerla. `[1.3.O2]`
+- La vista 360° está operativa: la ficha de cada aspirante reúne lo de admisiones, los pagos, los casos de servicio y las conversaciones. `[1.3.O3]`
 - Admisiones se apoya en el almacén central de datos de la institución para su proyección, cruzando lo de admisiones con lo académico y lo financiero. `[1.3.O4]`
 
 *No aplican:* `1.3.F8`, `1.3.E4`.
 
-*Se leen igual:* `1.3.D1`, `1.3.D2`, `1.3.I1`, `1.3.I2`, `1.3.F2`, `1.3.E2`, `1.3.O1`, `1.3.O2`, `1.3.O3`, `1.3.O5`.
+*Se leen igual:* `1.3.I1`, `1.3.F2`, `1.3.E2`, `1.3.O5`.
 
 #### 1.4 Equipo y Gobierno
 
@@ -3775,18 +3830,26 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 *Costo de quedarse:* La dirección se entera de que un programa no abre cuando ya cerró la matrícula: no vio antes qué programa iba atrasado, ni por qué.
 
-**Funcional.**
+**Deficiente.**
+
+- Cada asesor trabaja sobre la marcha, sin un rol ni responsabilidades claras. `[1.4.D1]`
+
+**Funcional.** Cada asesor tiene un rol por escrito, cada programa y cada asesor tienen una meta escrita, el líder sigue un tablero cada semana y en la reunión de seguimiento de admisiones cada quien rinde cuentas.
 
 *Resultado:* Cada asesor sabe qué se espera de él, y el líder sabe cada semana qué programa va bien y cuál necesita ayuda, antes de que cierre la matrícula.
 
 - El líder tiene un tablero con 4 a 6 métricas clave —interesados, solicitudes, admitidos, matriculados, avance contra la meta de cada programa— y lo consulta al menos una vez por semana. `[1.4.F2]`
+- En la reunión de seguimiento de admisiones se rinde cuentas: cada quien responde por lo que se comprometió en la anterior. `[1.4.F3]`
 - Cada programa y cada asesor —y el canal en línea, donde el aspirante se matricula solo— tienen una meta de matrícula escrita, con una cantidad o un monto y un plazo, y su avance se reporta en una fecha fija, al menos una vez al mes. `[1.4.F4]`
+- El líder ve en reportes automáticos qué tareas cumplió cada asesor y cuáles tiene pendientes. `[1.4.F5]`
 
 **Eficiente.** El líder prepara a quien entra, escucha al equipo y acuerda plazos con las áreas académica y financiera y, si Marketing pasa interesados, las reglas del traspaso.
 
 *Resultado:* Un asesor nuevo produce más rápido, las respuestas de lo académico y de lo financiero llegan en el plazo acordado, lo que el equipo ve que no funciona llega a quien puede cambiarlo y, si Marketing pasa interesados, el traspaso tiene reglas que se cumplen.
 
 - Cuando entra un asesor nuevo, hay un plan de inducción con sus pasos y materiales —programas, costos, becas y sistemas—; no se le entrena de memoria. `[1.4.E2]`
+- Si Marketing le pasa interesados a Admisiones, el SLA de traspaso está escrito y se sigue en el sistema: en cuánto tiempo se responde, qué calidad se espera del interesado y por qué se puede rechazar. `[1.4.E3]`
+- Lo que el equipo señala que no funciona —del proceso, del CRM o del material de admisión— se anota, se revisa y se le responde a quien lo dijo. `[1.4.E4]`
 - El acuerdo con las áreas académica y financiera está escrito y se mide: en cuánto tiempo se resuelve una admisión, una convalidación o una beca. `[1.4.E301 · comprobable]`
 
 **Óptimo.** La dirección decide con números de fondo, el líder y el equipo eligen cada trimestre qué probar en admisiones, y está por escrito quién valida lo que hace la IA y qué puede decidir sola.
@@ -3797,7 +3860,7 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 - Al menos una vez por trimestre, el líder y el equipo se reúnen a decidir qué probar en admisiones y revisan cómo les fue con lo que probaron antes. `[1.4.O2]`
 - Hay responsables de validar lo que hace la IA en admisiones, y lo que puede decidir sola está por escrito. `[1.4.O3]`
 
-*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`.
+*Se leen igual:* `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`.
 
 #### 1.5 Oferta académica
 
@@ -3810,10 +3873,14 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 **Deficiente.** Nadie puede decir para quién es cada programa, y cada asesor explica los costos y las becas de memoria, a su manera.
 
 - Nadie puede decir con claridad para quién es cada programa, y la información que recibe el aspirante cambia según quién lo atienda o por dónde pregunte. `[1.5.D1]`
+- No hay un formato para la oferta de admisión: cada asesor arma la suya desde cero, y su calidad depende de quién le toque al aspirante. `[1.5.D2]`
 
 **Inicial.** El perfil de estudiante de cada programa vive en la cabeza del líder, y hay fichas de algunos programas que no todos usan: la información todavía varía entre asesores y entre canales.
 
-**Funcional.** El perfil de estudiante de cada programa está escrito, y su información se dice igual en todos los canales.
+- El líder sabe para quién es cada programa y hay un mensaje común, pero solo de palabra o en un borrador: cada asesor los repite a su manera. `[1.5.I1]`
+- Hay una plantilla para la oferta de admisión, pero cada asesor la cambia o la usa a su manera. `[1.5.I2]`
+
+**Funcional.** El perfil de estudiante de cada programa está escrito, y la información y la oferta de admisión son las mismas con cualquier asesor y en cualquier canal.
 
 *Resultado:* Dos aspirantes parecidos reciben la misma información del programa —plan de estudios, costos, becas, fechas y requisitos— sin importar qué asesor los atienda ni por qué canal lleguen.
 
@@ -3831,11 +3898,11 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 - Las ofertas solo prometen lo que el programa entrega: lo que se dice de convalidaciones, horarios, modalidad y salida laboral se valida antes de decirlo. `[1.5.E3]`
 - Se les pregunta a los estudiantes nuevos si lo que encontraron es lo que se les ofreció, y lo que no coincide se corrige en la ficha o en lo que dice el asesor. `[1.5.E301 · comprobable · hábito]`
 
-**Óptimo.** La IA escribe y revisa lo que se le dice a cada aspirante desde la información vigente de cada programa, y el equipo valida lo que se sale.
+**Óptimo.** La IA revisa contra la información vigente de cada programa todo lo que se le dice a cada aspirante, y el equipo valida lo que se sale.
 
-- Lo que la IA escribe o responde a los aspirantes parte de la propuesta de valor y de la información vigente de cada programa; lo que se sale de ellas queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
+- La IA revisa en tiempo real, contra la propuesta de valor y la información vigente de cada programa, lo que se les dice a los aspirantes, lo escriba ella o el equipo; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
 
-*Se leen igual:* `1.5.D2`, `1.5.I1`, `1.5.I2`, `1.5.E2`.
+*Se leen igual:* `1.5.E2`.
 
 #### 1.6 Priorización de aspirantes
 
@@ -3847,7 +3914,13 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 **Deficiente.** Se atiende a los interesados por orden de llegada, sin distinguir quién quiere ingresar este período.
 
+- No hay criterios para distinguir a un aspirante con posibilidades de uno sin ellas: se pierde tiempo en interesados que nunca se van a matricular. `[1.6.D1]`
 - Se atiende igual a quien pidió información hace un año que a quien quiere ingresar este período. `[1.6.D301 · evaluado]`
+
+**Inicial.** Cada asesor elige a ojo a qué aspirantes dedicarse, según su experiencia o una lista que nadie actualiza.
+
+- Los aspirantes se separan en alguna lista o con una etiqueta, pero cada asesor lo hace con su propio criterio. `[1.6.I1]`
+- El líder sabe para quién es cada programa, pero el CRM no tiene los campos para separar a los aspirantes que encajan. `[1.6.I2]`
 
 **Funcional.** Los aspirantes se separan por los rasgos del perfil de estudiante de cada programa y hay una definición escrita de aspirante calificado que el equipo aplica.
 
@@ -3870,9 +3943,11 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 *Resultado:* El asesor sabe a qué aspirante atender, qué hacer y cuándo, con lo que saben Servicio y Marketing de cada uno.
 
-- Si en la decisión participan varias personas —el aspirante y su familia o su empresa—, la IA adapta en tiempo real el mensaje a cada una, el asesor valida lo que se envía, y en el CRM queda qué recibió cada persona. `[1.6.O3]`
+- Agentes de IA analizan todo lo que se sabe de cada aspirante y deciden la siguiente mejor acción, que el asesor ve en el CRM y valida antes de ejecutarla. `[1.6.O1]`
+- Si en la decisión participan varias personas —el aspirante y su familia o su empresa—, la IA adapta en tiempo real el mensaje a cada una, dentro de los límites que fijó el equipo; el asesor revisa lo que se envió, y en el CRM queda qué recibió cada persona. `[1.6.O3]`
+- La priorización usa señales de Servicio y de Marketing —qué estudiantes siguen con otro programa, recomiendan la institución o dejan sus estudios— para decidir qué perfiles perseguir. `[1.6.O4]`
 
-*Se leen igual:* `1.6.D1`, `1.6.I1`, `1.6.I2`, `1.6.O1`, `1.6.O2`, `1.6.O4`.
+*Se leen igual:* `1.6.O2`.
 
 #### 1.7 Avance de la admisión
 
@@ -3884,21 +3959,28 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 **Deficiente.** Los aspirantes se enfrían sin que nadie lo note, y el asesor no tiene apoyo del líder ni material para ayudarlos a decidir.
 
+- El líder no se involucra con los aspirantes que se traban: cada asesor se las arregla solo. `[1.7.D1]`
+- Nadie se da cuenta de que un aspirante dejó de avanzar hasta que ya se perdió. `[1.7.D2]`
+- Los aspirantes no quedan registrados con su etapa y su última actividad, así que no hay cómo ver cuáles se detuvieron. `[1.7.D3]`
 - No hay material de admisión —plan de estudios, testimonios, simulador de costos— para mostrarle al aspirante y apoyar su decisión. `[1.7.D4]`
 - Las solicitudes que el aspirante deja a medias en línea no las retoma nadie. `[1.7.D301 · comprobable · venta sin vendedor]`
 
 **Inicial.** Hay seguimiento, pero depende de que cada asesor se acuerde.
 
+- Cuando un aspirante se detiene, cada asesor decide si insiste y cómo: no hay un paso acordado. `[1.7.I1]`
+- El líder solo interviene cuando el asesor le pide ayuda o cuando el aspirante ya está casi perdido. `[1.7.I2]`
 - Cada asesor tiene su propio material de admisión y lo arma a su manera. `[1.7.I3]`
+- Todos los intentos de hacer avanzar a un aspirante se hacen por el mismo canal. `[1.7.I4]`
 
 **Funcional.** Ningún aspirante se enfría en silencio: se detecta a tiempo, hay un paso acordado para retomarlo y ningún admitido se queda sin matricular sin que alguien reaccione.
 
 *Resultado:* Los aspirantes que dejan de avanzar se detectan a tiempo y se retoman por más de un canal; donde hay asesores de admisiones, con material de admisión común y con el líder actuando mientras todavía hay cupo y fecha. Quien ya fue admitido recibe acompañamiento hasta que se matricula y, donde el estudiante vuelve a matricularse curso por curso, sin seguir un programa, la inscripción al siguiente curso tampoco se deja al azar.
 
 - Para cada etapa de la admisión está definido cuánto tiempo sin avance vuelve detenido a un aspirante —sin respuesta, sin documentos o sin pago—; los detenidos se reconocen a tiempo y tienen un paso acordado para retomarlos, no la improvisación de cada asesor. `[1.7.F1]`
-- El seguimiento usa al menos dos canales, por ejemplo llamada y el canal conversacional, como WhatsApp. `[1.7.F2]`
+- Para retomar a los aspirantes detenidos se usan al menos dos canales, por ejemplo correo y llamada. `[1.7.F2]`
+- El líder repasa a los aspirantes detenidos en cada reunión de seguimiento de admisiones y acuerda qué hacer con cada uno, sin esperar al cierre de la matrícula. `[1.7.F3]`
 - Hay material de admisión estandarizado —plan de estudios, testimonios, simulador de costos— que ayuda al aspirante a decidir su matrícula. `[1.7.F4]`
-- Los estudiantes que ya deberían haberse inscrito en un curso siguiente, según el plazo que el proceso define para cada programa, se reconocen a tiempo y reciben un recordatorio o un incentivo, sin esperar a que vuelvan solos. `[1.7.F5]`
+- Los estudiantes que ya deberían haberse inscrito en un curso siguiente, según el plazo que define el proceso, se reconocen a tiempo y reciben un recordatorio o un incentivo, sin esperar a que vuelvan solos. `[1.7.F5]`
 - Todo aspirante admitido que no se ha matriculado recibe seguimiento hasta que se matricula o dice que no. `[1.7.F301 · comprobable · hábito]`
 - Las solicitudes que el aspirante deja a medias en línea reciben un recordatorio o una llamada dentro del plazo acordado. `[1.7.F302 · comprobable · hábito · venta sin vendedor · requiere 1.2.F302]`
 
@@ -3906,6 +3988,7 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 *Resultado:* Ningún aspirante espera a la reunión para recibir ayuda, quien no ingresó este período vuelve a recibir la invitación para el siguiente, y se sabe cuántos de los que se enfrían se recuperan.
 
+- El seguimiento de los aspirantes que se enfrían combina al menos tres canales —por ejemplo, correo, llamada y el canal conversacional— en una secuencia definida. `[1.7.E1]`
 - Los aspirantes que no ingresan este período no se abandonan: pasan a nutrición —la de Marketing o una secuencia del propio equipo— y vuelven al asesor cuando se acerca el siguiente o muestran interés. `[1.7.E2]`
 - El material de admisión está en una biblioteca central, no en la computadora de cada asesor. `[1.7.E3]`
 - Cuando un aspirante lleva sin avanzar más tiempo del que su etapa permite, el líder recibe un aviso del sistema, sin esperar a la reunión de seguimiento. `[1.7.E4]`
@@ -3916,9 +3999,7 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 *Resultado:* Los aspirantes con más posibilidades reciben ayuda justo cuando la necesitan: la IA detecta cuándo alguien deja de avanzar y propone a quién movilizar.
 
 - La IA detecta qué aspirantes con más posibilidades están por abandonar el proceso antes de que venza su plazo y propone a quién movilizar o qué mensaje enviar; el líder valida, y todo queda en el CRM. `[1.7.O1]`
-- La IA decide el canal y el momento de cada seguimiento, aspirante por aspirante y según cómo responde, dentro de los límites que fijó el equipo; lo que decide queda registrado en el CRM. `[1.7.O2]`
-
-*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I1`, `1.7.I2`, `1.7.I4`, `1.7.F3`, `1.7.E1`.
+- La IA decide el canal y el momento de cada seguimiento, aspirante por aspirante y según cómo responde, dentro de los límites que fijó el equipo; el equipo revisa los resultados, y lo que decide la IA queda registrado en el CRM. `[1.7.O2]`
 
 #### 1.8 Matrículas ganadas y perdidas
 
@@ -3928,9 +4009,14 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 *Costo de quedarse:* No sabes por qué pierdes aspirantes: cada asesor tiene su explicación —el costo, el horario, una respuesta que tardó—, y sin un registro no hay cómo ver qué se repite.
 
-**Deficiente.** Nadie mira por qué un aspirante no se matricula.
+**Deficiente.** Cuando un aspirante no se matricula, no se anota la razón: cada asesor da su propia versión, de memoria.
+
+- Cuando un aspirante no se matricula, no hay una razón en la que el equipo coincida: cada asesor da su versión, de memoria. `[1.8.D1]`
+- Los procesos de admisión que terminan sin matrícula se cierran sin anotar la razón. `[1.8.D2]`
 
 **Inicial.** De vez en cuando se comenta por qué alguien no se matriculó, y la razón se anota a veces, a criterio de cada asesor.
+
+- La razón por la que un aspirante no se matriculó se anota a veces y en texto libre, a criterio de cada asesor, así que no se puede sumar. `[1.8.I1]`
 
 **Funcional.** Cada aspirante que no se matricula queda con su razón, elegida de una lista fija, y con la institución que eligió si se fue a otra; también queda por qué no empezó clases quien se matriculó, y el líder saca del sistema el reporte del período.
 
@@ -3950,12 +4036,16 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 - Hay capacitación para el equipo de admisiones con un calendario fijo, no solo cuando entra alguien nuevo. `[1.8.E3]`
 - También se registra por qué se matricularon los que sí: qué pesó en su decisión. `[1.8.E301 · comprobable]`
 
-**Óptimo.** La IA analiza las conversaciones con los aspirantes y en qué paso se caen, y propone cambios al proceso; el líder decide cuáles se aplican.
+**Óptimo.** La IA analiza las llamadas con los aspirantes, encuentra en qué paso se caen y propone cambios al proceso; el líder decide cuáles se aplican.
 
-- La dirección ajusta la estrategia de admisiones con lo que muestran los datos de qué funciona, y cada cambio dice en qué dato se apoya. `[1.8.O3]`
+*Resultado:* Cada asesor recibe recomendaciones sobre sus propias llamadas, el líder corrige las guías de asesoría con lo que encuentra la IA y la dirección ajusta la estrategia con esa evidencia.
+
+- La IA analiza las llamadas con los aspirantes —también las de video— y le deja a cada asesor recomendaciones que quedan registradas; el líder las revisa con él. `[1.8.O1]`
+- La IA propone correcciones a las guías de asesoría a partir de lo que encuentra en las llamadas, y el líder decide cuáles se aplican; en el sistema queda cada propuesta y lo que se decidió con ella. `[1.8.O2]`
+- La dirección ajusta la estrategia de admisiones con lo que muestran los datos de qué funciona. `[1.8.O3]`
 - La IA detecta en qué paso y por qué se caen los aspirantes y propone qué cambiar; lo que propone se ve en el CRM y el líder decide qué se aplica. `[1.8.O301 · comprobable]`
 
-*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.E2`, `1.8.O1`, `1.8.O2`, `1.8.O4`.
+*Se leen igual:* `1.8.E2`, `1.8.O4`.
 
 ### Área 2 — Marketing
 
@@ -3963,13 +4053,13 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 **Deficiente.** Tu institución no controla su marca: la define lo que se comenta de ella. Cada facultad y cada programa se comunican a su manera, las herramientas están sueltas y sin conectar, y las campañas de admisión corren hasta agotar el presupuesto sin que nadie mida qué dejaron. Los interesados llegan por casualidad.
 
-**Inicial.** Tienes logo, colores y plantillas, pero sin estrategia detrás. Las herramientas se usan a medias y no se conectan entre sí; el contenido sale de forma reactiva, cuando se acerca la matrícula, y los resultados se miden tarde y a mano, sin que lo aprendido quede escrito para el período siguiente. Los interesados llegan de forma irregular y no sabes de dónde vienen.
+**Inicial.** Tienes logo, colores y plantillas, pero sin estrategia detrás. Las herramientas se usan a medias y parte de lo que entra se pasa a mano; el contenido sale de forma reactiva, cuando se acerca la matrícula, y los resultados se miden tarde y a mano, sin que lo aprendido quede escrito para el período siguiente. Los interesados llegan de forma irregular y no siempre sabes de dónde vienen.
 
-**Funcional.** El área dejó de depender de héroes. Tienes documentados la marca, los perfiles de tus aspirantes y tu presencia digital; las herramientas que pagas se usan de verdad, y la campaña de cada período arranca antes de que abran las solicitudes y sale con regularidad por los canales que elegiste en tu plan, coordinada bajo un mismo calendario. Los números salen del sistema sin armarlos a mano: sabes de dónde viene cada interesado y cuánto te cuesta en cada canal. Ya mides cuántos interesados trae cada campaña, aunque la optimización fina todavía no existe.
+**Funcional.** El área dejó de depender de héroes. Tienes documentados la marca, los buyer personas y tu presencia digital; las herramientas que pagas se usan de verdad, y la campaña de cada período arranca antes de que abran las solicitudes y sale con regularidad por los canales que elegiste en tu plan, coordinada bajo un mismo calendario. Los números salen del sistema sin armarlos a mano: sabes de dónde viene cada interesado y cuánto te cuesta en cada canal. Ya mides cuántos interesados trae cada campaña, aunque la optimización fina todavía no existe.
 
 **Eficiente.** Probar y ajustar ya es rutina, y lo aprendido cambia cómo se arma la campaña del siguiente período. Los datos de cada interesado se completan solos y se sabe qué aportó cada canal a cada matrícula; los segmentos y el puntaje de los interesados se arman solos; la IA asiste al equipo en su trabajo diario; y cuando alguien busca qué estudiar, tu institución aparece tanto en buscadores como en asistentes de IA. El presupuesto se mueve entre canales según lo que cuesta cada interesado y cada matrícula.
 
-**Óptimo.** La IA produce y ajusta; tu equipo dirige. El contenido de cada programa se genera y se optimiza en ciclo continuo, la IA identifica micro-segmentos y adapta el mensaje a lo que hace cada interesado, los modelos mueven el presupuesto entre canales sobre la marcha, y los estudiantes y egresados que Servicio vuelve promotores traen aspirantes nuevos. El equipo define la estrategia y valida lo que sale.
+**Óptimo.** La IA produce y ajusta; tu equipo dirige. El contenido de cada programa se genera y se ajusta de forma continua; la IA predice qué va a hacer cada interesado, adapta el mensaje a lo que hace y mueve el presupuesto entre canales dentro de los límites que fija el equipo; y los estudiantes y egresados que Servicio vuelve promotores traen aspirantes nuevos. El equipo define la estrategia y valida lo que sale.
 
 #### 2.1 Procesos y Rutinas
 
@@ -3982,10 +4072,11 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 **Deficiente.** Cada quien arma las campañas a su criterio; no hay calendario ni reuniones.
 
 - No existe un calendario de campañas: las de cada período se improvisan cuando se acerca la matrícula. `[2.1.D1]`
+- Una agencia arma y publica las campañas, y nadie en la institución decide qué sale ni lo revisa. `[2.1.D3]`
 
 **Inicial.**
 
-- Hay un calendario de campañas, pero se llena cuando se puede, y los briefs de cada período se piden de palabra. `[2.1.I1]`
+- Hay un calendario de campañas, pero se llena cuando se puede y se cumple a medias. `[2.1.I1]`
 
 **Funcional.** La campaña de cada período sale de un calendario y un proceso que el equipo sigue, arranca antes de que abran las solicitudes y no depende de una persona.
 
@@ -3994,7 +4085,7 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 - Existe un calendario de campañas y contenidos visible para el equipo, con horizonte de al menos un trimestre. `[2.1.F1]`
 - La campaña de cada período se planea desde las fechas de admisión: arranca antes de que abran las solicitudes y sigue hasta que cierra la matrícula. `[2.1.F301 · declarado · hábito]`
 
-*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I2`, `2.1.I3`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F5`, `2.1.F6`, `2.1.E2`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
+*Se leen igual:* `2.1.D2`, `2.1.I2`, `2.1.I3`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F5`, `2.1.F6`, `2.1.E2`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
 
 #### 2.2 Tecnología y Automatización
 
@@ -4003,6 +4094,10 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 *Descripción:* Mide si las herramientas que paga la institución se usan, si cada interesado —del sitio, de una feria o de una conversación— llega solo al sistema y cuánto trabajo repetitivo de las campañas hacen las automatizaciones y la IA.
 
 *Costo de quedarse:* Los interesados que dejan sus datos en tu sitio, en una feria o por mensajes esperan días a que alguien los cargue y les conteste, o se pierden, y si pagas herramientas, parte de lo que pagas no se usa.
+
+**Deficiente.**
+
+- No hay un sistema donde registrar a los interesados: se llevan en hojas de cálculo o en el correo. `[2.2.D1]`
 
 **Inicial.**
 
@@ -4013,14 +4108,18 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 *Resultado:* Todo interesado que llega por el sitio, por una feria o una charla y, si se usa, por WhatsApp o el chat, entra al sistema y recibe respuesta, y la institución no paga por herramientas que nadie usa.
 
 - Si el sitio tiene formularios para dejar datos —los de cada programa o los de las páginas de campaña—, están conectados al CRM: lo que una persona llena entra solo como contacto. `[2.2.F3]`
+- Si la institución atiende por un canal conversacional —WhatsApp o el chat del sitio—, al menos uno está conectado al sistema con una bandeja básica donde se atiende lo que entra, lo atienda Marketing o Admisiones. `[2.2.F4]`
 - Si la institución capta en ferias, charlas en colegios o visitas al campus, quien se registra ahí entra solo al sistema —por un formulario o un código QR—, no en listas que alguien digita después. `[2.2.F301 · comprobable]`
 
 **Eficiente.**
 
 *Resultado:* Los interesados reciben su nutrición sin que nadie la envíe a mano, hasta que están listos para matricularse —o para hablar con un asesor de admisiones, donde los hay—; la conversación con cada uno no depende de que alguien se acuerde de escribirle y, si la institución atiende por WhatsApp o chat, el líder ve en tiempo real qué conversaciones esperan respuesta.
 
-- Hay secuencias de nutrición de varios pasos, con tiempos de espera y caminos distintos según lo que hace cada interesado: por ejemplo, si pidió información de un programa o se inscribió a una visita. `[2.2.E1]`
-- El traspaso de interesados a Admisiones es automático: cuando un interesado cumple los criterios de MQL, se asigna por varias condiciones —como el programa, la sede o la modalidad— y le llega al asesor de admisiones con su historial. `[2.2.E3]`
+- Hay secuencias de nutrición de varios pasos, con tiempos de espera y caminos distintos según quién es o lo que hace cada interesado: por ejemplo, según el programa que le interesa o si se inscribió a una visita. `[2.2.E1]`
+- El traspaso de interesados a Admisiones es automático: cuando un interesado cumple los criterios de MQL, le llega con su historial al asesor de admisiones que corresponde, sin que nadie lo pase a mano. `[2.2.E3]`
+- Si la institución atiende por más de un canal conversacional, todos llegan a una sola bandeja. `[2.2.E4]`
+- Si la institución usa landing pages en sus campañas, se crean en el CMS conectado al sistema central, no en herramientas sueltas. `[2.2.E5]`
+- Si la institución atiende por un canal conversacional, hay un tablero en tiempo real de las conversaciones que generan las campañas: cuánto tarda la primera respuesta y cuántas quedan sin respuesta. `[2.2.E7]`
 
 **Óptimo.** La IA decide el recorrido de cada interesado y, si la institución atiende por WhatsApp o chat, conversa con él; el equipo fija los límites y revisa los resultados.
 
@@ -4029,7 +4128,7 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 - Si la institución atiende por un canal conversacional, agentes de IA responden lo que generan las campañas y siguen la conversación con quien todavía no está listo para matricularse —o para hablar con un asesor de admisiones, donde los hay—; lo que no pueden resolver pasa a una persona del equipo con la conversación completa, y en el sistema queda cada conversación que atendió la IA. `[2.2.O2]`
 - Lo que se calcula en el almacén central de datos vuelve a las herramientas de marketing sin que nadie lo cargue y se ve en la ficha de cada interesado: la segmentación usa, por ejemplo, cuánto permanece cada perfil de estudiante, calculado con lo académico y lo financiero. `[2.2.O3]`
 
-*Se leen igual:* `2.2.D1`, `2.2.D2`, `2.2.D3`, `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F4`, `2.2.F5`, `2.2.F9`, `2.2.E2`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`.
+*Se leen igual:* `2.2.D2`, `2.2.D3`, `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F5`, `2.2.F9`, `2.2.E2`, `2.2.E6`, `2.2.O1`.
 
 #### 2.3 Datos
 
@@ -4039,15 +4138,25 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 *Costo de quedarse:* No sabes de dónde viene cada interesado ni cuántos terminan matriculándose: cada reporte del período hay que rehacerlo o revisarlo a mano antes de creerle.
 
-**Funcional.**
+**Deficiente.** No se sabe de dónde viene cada interesado, y cada número hay que armarlo desde cero.
+
+- No se registra de dónde llegó cada interesado: nadie sabe si vino por el sitio, una feria o una recomendación. `[2.3.D1]`
+
+**Inicial.**
+
+- No hay una regla de cuándo se limpian los datos: se corrigen a mano cuando alguien nota un problema, y a muchos contactos les faltan los datos que describen el perfil de estudiante de cada programa. `[2.3.I1]`
+- Hay reportes, pero se arman a mano en una hoja cada vez, y a una parte de los interesados le falta el origen. `[2.3.I2]`
+
+**Funcional.** Cada interesado tiene su origen y su etapa, y los reportes salen del sistema sin armarlos a mano.
 
 *Resultado:* El líder sabe de dónde viene cada interesado —la feria, el colegio, la campaña o la web—, con reportes que salen del sistema y no de una hoja de cálculo armada a mano.
 
 - Cada contacto creado desde la puesta en marcha del sistema —entre por un formulario, una conversación, una feria, una charla en un colegio o una solicitud en línea— tiene su etapa del ciclo de vida y su origen. `[2.3.F1]`
-- Las propiedades que describen el perfil de estudiante de cada programa —programa de interés, nivel de estudios, colegio o empresa de donde viene y modalidad que busca— se piden en los formularios por donde entran los interesados, o donde se capturen sus datos, como una feria, y están completas en la mayoría de los registros. `[2.3.F2]`
+- Las propiedades que describen el perfil de estudiante de cada programa —programa de interés, nivel de estudios, colegio o empresa de donde viene y modalidad que busca— se piden en los formularios por donde entran los interesados —o, si no hay formularios, donde se capturan sus datos, como una feria— y están completas en la mayoría de los registros. `[2.3.F2]`
 - Los duplicados —el mismo interesado que se registra en varias ferias o formularios— están bajo control: se revisan y se unen al menos una vez por trimestre, a mano o de forma automática, y no distorsionan los reportes. `[2.3.F3]`
+- Los reportes básicos —cuántos interesados entran, de dónde vienen y cuántos llegan a la solicitud o a la matrícula— salen del sistema sin armarlos a mano. `[2.3.F5]`
 
-**Eficiente.**
+**Eficiente.** Los datos se completan solos, los duplicados se unen solos y se sabe qué aportó cada canal a cada matrícula.
 
 *Resultado:* Marketing puede demostrar qué canal y qué contenido contribuyeron a cada matrícula, no solo cuál trajo el primer clic.
 
@@ -4059,7 +4168,7 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 - Marketing se apoya en el almacén central de datos de la institución, donde se junta la información de todos sus sistemas —admisiones, lo académico y los pagos—, y sus reportes de atribución salen de esa vista completa. `[2.3.O1]`
 
-*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F5`, `2.3.F6`, `2.3.F7`, `2.3.E1`, `2.3.E3`, `2.3.E4`, `2.3.O3`, `2.3.O4`, `2.3.O5`.
+*Se leen igual:* `2.3.D2`, `2.3.F6`, `2.3.F7`, `2.3.E1`, `2.3.E3`, `2.3.E4`, `2.3.O3`, `2.3.O4`, `2.3.O5`.
 
 #### 2.4 Equipo y Gobierno
 
@@ -4071,7 +4180,7 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 **Inicial.**
 
-- No está escrito qué decide cada uno, así que hasta lo del día a día —qué publicar, qué pieza aprobar— espera a que lo resuelva la rectoría o la dirección general. `[2.4.I1]`
+- Los roles no están escritos, así que hasta lo del día a día —qué publicar, qué pieza aprobar— espera a que lo resuelva la rectoría o la dirección general. `[2.4.I1]`
 
 **Funcional.**
 
@@ -4079,14 +4188,16 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 - El equipo tiene metas mensuales o trimestrales —interesados y solicitudes por programa—, y en la reunión de resultados rinde cuentas por ellas. `[2.4.F3]`
 - Las decisiones sobre qué programas empujar y en qué enfocar cada campaña citan datos del sistema, no opiniones. `[2.4.F4]`
 
-**Eficiente.** El liderazgo prepara a quien entra, acuerda reglas con Admisiones y escucha al equipo.
+**Eficiente.** El liderazgo prepara a quien entra, escucha al equipo y, donde hay asesores de admisiones, acuerda reglas con Admisiones y con Servicio.
 
-*Resultado:* Una persona nueva se integra rápido, y Marketing trabaja con reglas acordadas con Admisiones y con Servicio en vez de discutir cada vez quién se hace cargo de un aspirante o de un estudiante.
+*Resultado:* Una persona nueva se integra rápido y, donde hay asesores de admisiones, Marketing trabaja con reglas acordadas con Admisiones y con Servicio en vez de discutir cada vez quién se hace cargo de un aspirante o de un estudiante.
 
 - Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales —la marca, los programas y las herramientas—; no se le entrena de memoria. `[2.4.E2]`
 - El liderazgo coordina con Admisiones —el traspaso de interesados, los SLA y una reunión conjunta con fecha fija— y con Servicio. `[2.4.E3]`
 
 **Óptimo.**
+
+*Resultado:* Lo que la IA puede decidir sola está escrito y tiene responsables, y la dirección decide según lo que dejan con el tiempo los estudiantes que trae cada canal, frente a lo que cuesta traerlos.
 
 - Las decisiones se toman con lo que deja cada canal a lo largo del tiempo —lo que pagan en toda su carrera los estudiantes que trae— frente a lo que cuesta. `[2.4.O4]`
 
@@ -4102,6 +4213,7 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 **Deficiente.** Cada facultad y cada programa se comunican a su manera: no hay una voz de la institución y los mensajes cambian de una pieza a otra.
 
+- No está escrito a quién le habla la institución: no hay buyer personas. `[2.5.D2]`
 - Cada facultad o programa se comunica con su propia marca y su propio estilo. `[2.5.D301 · evaluado]`
 
 **Inicial.**
@@ -4116,9 +4228,9 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 - Hay 2 o 3 buyer personas escritos —por ejemplo, el joven que sale del colegio, el adulto que estudia mientras trabaja y la familia que decide o paga—, cada uno con su recorrido básico de la primera búsqueda a la matrícula, etapa por etapa. `[2.5.F3]`
 - Se publica contenido propio al menos una vez por mes, con cadencia previsible: en el blog o en el formato que use la institución, como videos de sus programas, historias de estudiantes o guías para elegir carrera. `[2.5.F5]`
 
-**Eficiente.** La presencia se afina por programa y por perfil de aspirante, se prepara para buscadores y asistentes de IA, y las pruebas de la reputación de la institución están a la vista.
+**Eficiente.** La presencia se afina por programa y por tipo de aspirante, se prepara para buscadores y asistentes de IA, y las pruebas de la reputación de la institución están a la vista.
 
-*Resultado:* La institución aparece cuando los aspirantes y sus familias buscan qué y dónde estudiar, tanto en buscadores como en asistentes de IA, con contenido pensado para cada programa y cada perfil que importan; cada reseña de sus estudiantes, buena o mala, recibe respuesta, y las pruebas de su reputación —acreditaciones, rankings y lo que logran sus egresados— están a la vista.
+*Resultado:* La institución aparece cuando los aspirantes y sus familias buscan qué y dónde estudiar, tanto en buscadores como en asistentes de IA, con contenido pensado para cada programa y cada tipo de aspirante que importan; cada reseña de sus estudiantes, buena o mala, recibe respuesta, y las pruebas de su reputación —acreditaciones, rankings y lo que logran sus egresados— están a la vista.
 
 - Los buyer personas están detallados para cada segmento de alto valor: por ejemplo, un posgrado o una carrera que la institución quiere hacer crecer. `[2.5.E1]`
 - Si el contenido propio se publica en el sitio, está organizado por temas —por ejemplo, un área de estudio o una carrera—: una página central por tema y contenido de apoyo que la refuerza. `[2.5.E2]`
@@ -4128,11 +4240,11 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 **Óptimo.**
 
-*Resultado:* La presencia se mantiene vigente sin que el equipo escriba cada pieza: la IA produce y ajusta el contenido para cada programa, cada perfil de aspirante y cada forma de buscar, y el equipo lo aprueba.
+*Resultado:* La presencia se mantiene vigente sin que el equipo escriba cada pieza: la IA produce y ajusta el contenido para cada programa, cada tipo de aspirante y cada forma de buscar, y el equipo lo aprueba.
 
 - Hay buyer personas para grupos muy chicos de aspirantes —o, cuando la institución forma al personal de empresas, para cada empresa importante—, no solo para los segmentos grandes. `[2.5.O1]`
 
-*Se leen igual:* `2.5.D1`, `2.5.D2`, `2.5.D3`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F4`, `2.5.E3`, `2.5.O2`.
+*Se leen igual:* `2.5.D1`, `2.5.D3`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F4`, `2.5.E3`, `2.5.O2`.
 
 #### 2.6 Segmentación
 
@@ -4150,18 +4262,23 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 *Resultado:* Cada programa y cada perfil reciben un mensaje pensado para ellos, la familia que participa en la decisión recibe lo que necesita saber y, donde hay asesores de admisiones, Admisiones recibe interesados que Marketing ya clasificó con criterios escritos.
 
-- Existen al menos 2 segmentos con criterios escritos que salen de los buyer personas —qué nivel o programa buscan, en qué modalidad o quién decide con ellos—, no solo de dónde viven. `[2.6.F1]`
+- Existen al menos 2 segmentos con criterios escritos según qué busca o cómo decide cada grupo —por ejemplo, qué nivel o programa, en qué modalidad o quién decide con el aspirante—, no solo según dónde está. `[2.6.F1]`
 - Existen criterios escritos de qué es un suscriptor, un interesado y un MQL, y Marketing clasifica cada contacto según ellos, a mano o con una automatización simple sobre las propiedades que usan esos criterios, como el programa de interés o el nivel de estudios. `[2.6.F4]`
 - Si la familia participa en la decisión —porque decide, acompaña o paga—, las campañas también le hablan a ella, con piezas propias y distintas de las del aspirante. `[2.6.F301 · comprobable · hábito]`
 
-**Eficiente.**
+**Eficiente.** Los segmentos y el puntaje de interesados se arman solos, y el mensaje se adapta solo a cada segmento.
 
 *Resultado:* El mensaje se adapta solo a quién lo recibe y en qué etapa está, y los interesados con más probabilidad de matricularse se distinguen del resto: donde hay asesores de admisiones, Admisiones los recibe primero.
 
+- Hay secuencias distintas por segmento o por etapa del recorrido del aspirante. `[2.6.E1]`
 - Hay un puntaje de interesados por reglas: un modelo que suma puntos por varios datos de cada persona, como el programa que le interesa, lo que hizo o si asistió a un evento, y la clasifica al pasar un umbral —como MQL, donde hay asesores de admisiones—, y ese puntaje dispara las secuencias de nutrición. No es la clasificación de Funcional, que responde al valor de una propiedad, sin modelo de puntaje detrás. `[2.6.E3]`
 - La segmentación usa datos de comportamiento —qué abrió, qué páginas de programas visitó, a qué evento fue—, no solo lo que la persona declaró. `[2.6.E4]`
 
-*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.F3`, `2.6.E1`, `2.6.E2`, `2.6.O1`, `2.6.O3`.
+**Óptimo.**
+
+- La IA predice quién se va a matricular y quién va a perder interés en los mensajes, y arma los segmentos con eso; el equipo revisa los segmentos antes de usarlos en una campaña, y en la ficha de cada persona se ve su predicción. `[2.6.O1]`
+
+*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.F3`, `2.6.E2`, `2.6.O3`.
 
 #### 2.7 Canales y captación
 
@@ -4171,15 +4288,21 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 *Costo de quedarse:* Llegas a los aspirantes a ratos, o no llegas, sin un plan que coordine tus canales —la pauta, las ferias o los colegios—, y no sabes cuánto te cuesta cada interesado que traen.
 
+**Deficiente.** No hay canales activos ni un plan que diga por cuáles salir: la institución no sale a buscar aspirantes por ningún canal.
+
+- No hay canales activos: la institución no sale a buscar aspirantes por ningún canal —ni redes, ni correo, ni pauta, ni mensajes, ni eventos—. `[2.7.D1]`
+- No hay un plan que diga por qué canales sale la institución. `[2.7.D2]`
+
 **Inicial.**
 
+- Los canales por donde más sale la institución publican sin ritmo fijo: cuando alguien se acuerda o le queda un rato. `[2.7.I1]`
 - Cada canal va por su cuenta —las ferias por un lado, la pauta por otro—: no hay calendario común ni campaña que los atraviese. `[2.7.I3]`
 
-**Funcional.**
+**Funcional.** Los canales que la institución eligió salen con regularidad y bajo un mismo plan.
 
 *Resultado:* La campaña de cada período sale coordinada por todos los canales del plan en vez de esfuerzos sueltos, y el líder ve cuánto le cuesta cada interesado según el canal del que venga.
 
-- Si la pauta pagada es parte del plan de canales, en el último trimestre corrió al menos una campaña con presupuesto definido (Google, Meta o el canal que usen sus aspirantes). `[2.7.F3]`
+- Si la pauta pagada es parte del plan de canales, hay al menos una campaña corriendo con presupuesto definido (Google, Meta o el canal que usen sus aspirantes). `[2.7.F3]`
 - Los canales que la institución eligió en su plan siguen el mismo calendario y la misma campaña: la de admisión de cada período sale coordinada en todos ellos, no como esfuerzos sueltos. `[2.7.F5]`
 - En el sistema se ve cuánto costó cada interesado —o cada matrícula, donde el estudiante se matricula solo en línea— el último mes, al menos por canal. `[2.7.F6]`
 
@@ -4189,16 +4312,17 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 - Los canales —también el conversacional, si se usa— comparten datos y se alimentan entre sí: uno continúa lo que empezó otro —quien fue a una feria ve después la pauta de su programa—, hay remarketing activo y las audiencias se construyen desde el CRM. `[2.7.E1]`
 - Si las ferias, las charlas en colegios, las visitas al campus, los días de puertas abiertas o los webinars son parte del plan de canales, se hacen como un canal recurrente, con fechas en el calendario. `[2.7.E2]`
+- El presupuesto entre canales se revisa al menos una vez por mes y se mueve según lo que cuesta cada interesado o cada matrícula en cada canal. `[2.7.E3]`
 - Hay un programa de embajadores activo: estudiantes y egresados saben cómo recomendar la institución, y cada aspirante referido queda registrado con quién lo trajo. `[2.7.E4]`
 - En el sistema se ve cuánto costó cada matrícula del último período en cada canal —pauta, ferias, colegios, referidos—, no solo cada interesado. `[2.7.E301 · comprobable · requiere 1.3.F3]`
 
 **Óptimo.**
 
-*Resultado:* La inversión se reparte sola donde más matrículas deja, dentro de los límites que fija el equipo, los estudiantes y egresados satisfechos traen aspirantes nuevos, y la institución prueba canales nuevos sin esperar a ver qué hacen las demás.
+*Resultado:* La inversión se reparte sola donde más matrículas deja, dentro de los límites que fija el equipo; los estudiantes y egresados satisfechos traen aspirantes nuevos, y la institución prueba canales nuevos sin esperar a ver qué hacen las demás.
 
 - Los estudiantes y egresados que Servicio identifica como promotores se vuelven embajadores y testimonios de la institución sin pedirlos a mano: el sistema los invita solo, el equipo elige qué testimonios se publican, y en el sistema se ve qué aspirantes trajo cada uno. `[2.7.O4]`
 
-*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.E3`, `2.7.E5`, `2.7.O1`, `2.7.O2`.
+*Se leen igual:* `2.7.I2`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.E5`, `2.7.O1`, `2.7.O2`.
 
 #### 2.8 Medición y Aprendizaje
 
@@ -4237,15 +4361,15 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que pasa después de la matrícula: desde los trámites y las consultas de cada período hasta que el estudiante termina lo que vino a estudiar. Mira cómo está montada por dentro y qué produce en atención, permanencia y rematrícula.
 
-**Deficiente.** La atención se improvisa estudiante por estudiante. No hay un proceso ni respuestas comunes —cada persona responde con su propio criterio—, los datos del estudiante están repartidos entre oficinas y todo depende de que la persona correcta esté disponible. La deserción te toma por sorpresa.
+**Deficiente.** La atención se improvisa estudiante por estudiante. No hay un proceso, ni respuestas comunes, ni un sistema donde queden los casos —cada persona responde con su propio criterio— y los datos del estudiante están repartidos entre oficinas. La deserción te toma por sorpresa.
 
-**Inicial.** El conocimiento y la coordinación viven en una sola persona, y eso te deja con un punto único de fallo. Hay un sistema para los casos de los estudiantes, pero pocos lo usan; hay respuestas guardadas para los trámites más frecuentes y procesos que nadie formalizó. La atención es frágil.
+**Inicial.** El conocimiento y la coordinación viven en una sola persona, y eso te deja con un punto único de fallo. Hay un sistema para los casos de los estudiantes, pero pocos lo usan; cada persona u oficina tiene sus propias respuestas guardadas para los trámites más frecuentes y hay procesos que nadie formalizó. La atención es frágil.
 
 **Funcional.** Tu atención al estudiante es consistente y ya no depende de una persona. Sabes qué tipos de estudiante atiendes y qué espera cada uno. Cada caso sigue un recorrido configurado, cada período arranca con su calendario de trámites, el equipo atiende en el sistema central con la ficha del estudiante a la vista, los casos están clasificados y cada estudiante nuevo arranca con una inducción definida. Cada caso tiene una prioridad que el equipo respeta, tienes respuestas guardadas para lo repetitivo y detectas a mano al estudiante en riesgo de dejar antes de que se vaya. Todavía no hay alertas automáticas, pero ya no esperas a que el estudiante deje de venir.
 
 **Eficiente.** La atención empieza a adelantarse al problema. Tienes plazos de respuesta, escalación automática y trámites en línea, y la IA asiste a tu equipo en su trabajo diario; mides tiempos de respuesta y satisfacción, y los datos del estudiante se unifican con los de Admisiones. Ves venir los riesgos antes de que el estudiante levante la mano, y ningún caso se pierde entre oficinas. Donde el estudiante vuelve, cada uno tiene un indicador de cómo va y los de los grupos clave, un consejero que los conoce; donde el estudiante sigue un programa período tras período, los que están en riesgo de dejar reciben una acción de permanencia antes de decidir irse.
 
-**Óptimo.** Un agente de IA resuelve los casos de los estudiantes y le pasa a una persona, con todo el contexto, los que no puede resolver. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y atiende las excepciones; donde el estudiante vuelve, un modelo anticipa quién puede dejar sus estudios antes de que lo diga, y cada estudiante se atiende sabiendo lo que se le prometió en su admisión y recibe detalles pensados para deleitarlo. La matrícula crece sin que crezca el equipo de atención.
+**Óptimo.** Un agente de IA resuelve los casos de los estudiantes y le pasa a una persona, con todo el contexto, los que no puede resolver. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y atiende las excepciones; cada estudiante se atiende sabiendo lo que se le prometió en su admisión y recibe detalles pensados para deleitarlo y, donde el estudiante vuelve, un modelo anticipa quién puede dejar sus estudios antes de que lo diga. La matrícula crece sin que crezca el equipo de atención.
 
 #### 3.1 Procesos y Rutinas
 
@@ -4255,7 +4379,7 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 
 *Costo de quedarse:* La atención depende de quién sabe: si esa persona falta en plena rematrícula, las filas crecen y cada ventanilla da una respuesta distinta.
 
-**Deficiente.**
+**Deficiente.** No hay un proceso de atención: cada persona que atiende resuelve los casos a su manera.
 
 - Cada persona que atiende maneja los trámites y las consultas a su manera. `[3.1.D1]`
 - El equipo de atención no tiene reuniones ni rutinas de trabajo: cada persona y cada oficina se organiza por su cuenta. `[3.1.D2]`
@@ -4270,7 +4394,7 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 *Resultado:* Todo el equipo atiende en el mismo sistema, cada estudiante tiene a alguien que responde por él, cada período arranca con sus picos de trabajo previstos, y un caso se atiende igual sin importar quién lo tome.
 
 - Los casos de los estudiantes siguen un recorrido configurado en el sistema, con sus etapas, de la recepción al cierre. `[3.1.F1]`
-- Cada estudiante tiene registrado quién responde por él —una persona o, si son tantos que no se pueden asignar por persona, un equipo— y recibe un contacto de seguimiento a tiempo —en los momentos que fija el proceso de atención—, aunque no haya abierto casos. `[3.1.F2]`
+- Cada estudiante tiene registrado quién responde por él —una persona o, si son tantos que no se pueden asignar por persona, un equipo— y recibe un contacto de seguimiento a tiempo —en los momentos que fija el proceso de atención—, aunque no haya abierto casos; si responde un equipo, ese contacto puede ser un mensaje automático. `[3.1.F2]`
 - Existe un proceso escrito para escalar las quejas graves —como un cobro que el estudiante no reconoce o una nota en disputa— y los casos que quien atiende no puede resolver: dice cuáles se escalan y a quién. `[3.1.F4]`
 - Cualquier persona del equipo explica cómo se atiende un trámite típico —una constancia, un cambio de horario— siguiendo el mismo flujo. `[3.1.F5]`
 - Cualquier persona del equipo atiende en el sistema central, no por fuera: es su herramienta de trabajo, no algo que se llena después de resolver por correo o en ventanilla. `[3.1.F6]`
@@ -4309,7 +4433,7 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 *Resultado:* Los plazos se vigilan solos y los casos que están por vencer suben solos a quien los tiene que resolver; el estudiante puede ver y abrir sus casos y hacer en línea sus trámites de siempre sin esperar a nadie, y el líder ve en tiempo real cuánto hay abierto y qué quedó sin atender.
 
 - Hay automatización de SLA —alertas antes del vencimiento y escalación automática, con reglas de cuándo se escala y a quién— y, si el equipo tiene más de una persona que atiende, las conversaciones y los casos se enrutan por varias condiciones, como el tema, la sede o el programa del estudiante. `[3.2.E1]`
-- Hay un portal de autoservicio donde el estudiante ve y abre sus casos, y base de conocimiento interna y pública. `[3.2.E2]`
+- Hay un portal de autoservicio donde el estudiante ve y abre sus casos, y una base de conocimiento interna y pública. `[3.2.E2]`
 - El equipo usa la IA en su trabajo diario —para redactar respuestas, resumir casos o buscar en la base de conocimiento—, y la IA trabaja con el contexto del área: los tipos de estudiante, la atención que recibe cada uno y las respuestas a las preguntas frecuentes. `[3.2.E4]`
 - Los trámites más frecuentes —constancias, rematrícula, pagos y cambios de horario— se hacen en línea de principio a fin, sin ir a una ventanilla. `[3.2.E301 · comprobable]`
 
@@ -4329,11 +4453,12 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 
 *Costo de quedarse:* Cada vez que el estudiante pregunta, tiene que volver a explicar quién es, en qué va su trámite y qué le dijeron en la otra oficina.
 
-**Deficiente.**
+**Deficiente.** Los datos de los estudiantes y sus casos están dispersos, sin un lugar común.
 
+- La información de los estudiantes y sus casos está repartida entre correos, chats, hojas o sistemas que no se conectan, y no hay un lugar donde se vea junta. `[3.3.D1]`
 - No se puede reconstruir qué le pasó a un estudiante con sus trámites: lo que pidió y lo que se le respondió no queda registrado en ningún lado. `[3.3.D2]`
 
-**Inicial.**
+**Inicial.** Los casos están en un sistema, pero la ficha del estudiante está incompleta y los números de casos se arman a mano.
 
 - Los casos están en un solo sistema, pero la ficha del estudiante sale incompleta: su programa y en qué período va hay que buscarlos en el sistema académico. `[3.3.I1]`
 
@@ -4363,7 +4488,7 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 - Un modelo predictivo de salud calcula para cada estudiante su riesgo de dejar y si va logrando lo que vino a estudiar, a partir de su experiencia y de su avance; el puntaje se ve en su ficha y quien responde por cada estudiante revisa a los que el modelo marca. `[3.3.O1]`
 - Servicio se apoya en el almacén central de datos de la institución —donde se juntan lo académico, los pagos y la atención—, con reglas claras de quién accede y cómo se mantiene, para anticipar el riesgo de cada estudiante. `[3.3.O2]`
 
-*Se leen igual:* `3.3.D1`, `3.3.I2`, `3.3.F5`, `3.3.E1`, `3.3.O3`, `3.3.O4`.
+*Se leen igual:* `3.3.I2`, `3.3.F5`, `3.3.E1`, `3.3.O3`, `3.3.O4`.
 
 #### 3.4 Equipo y Gobierno
 
@@ -4388,8 +4513,8 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 *Resultado:* El equipo responde por sus tiempos de atención, una persona nueva rinde rápido, las áreas académica y financiera resuelven en el plazo acordado, cada estudiante nuevo llega de Admisiones con lo que vino a buscar y, donde el estudiante vuelve a matricularse curso por curso, sin seguir un programa, Admisiones se entera cuando uno se puede estar yendo.
 
 - Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales —trámites, reglamentos y sistemas—; no se le entrena de memoria. `[3.4.E2]`
-- El líder de Servicio acuerda con Admisiones qué trae cada estudiante nuevo —lo que vino a buscar— y, si el estudiante vuelve a matricularse curso por curso, sin seguir un programa, cómo le avisa Servicio a Admisiones que se puede estar yendo. `[3.4.E4]`
-- El acuerdo con las áreas académica y financiera está escrito y es trazable: en cuánto tiempo resuelven lo que les pasa Servicio, como una revisión de nota, un cambio de carrera o un arreglo de pago. `[3.4.E301 · comprobable]`
+- El líder de Servicio acuerda con Admisiones qué trae cada estudiante nuevo —lo que vino a buscar— y el acuerdo se cumple: cada uno llega con eso y, si el estudiante vuelve a matricularse curso por curso, sin seguir un programa, Servicio le avisa a Admisiones cuando se puede estar yendo. `[3.4.E4]`
+- El acuerdo con las áreas académica y financiera está escrito y se mide: en cuánto tiempo resuelven lo que les pasa Servicio, como una revisión de nota, un cambio de carrera o un arreglo de pago. `[3.4.E301 · comprobable]`
 
 **Óptimo.** Hay responsables de validar la IA y de cuidar el conocimiento y, donde la relación es continua, el servicio se mide por los estudiantes que permanecen y siguen estudiando con la institución.
 
@@ -4410,7 +4535,9 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 
 **Deficiente.** No hay respuestas guardadas ni criterios comunes: cada persona que atiende responde a su manera.
 
-**Inicial.**
+- No hay respuestas guardadas: cada persona que atiende escribe cada respuesta desde cero, a su manera. `[3.5.D1]`
+
+**Inicial.** Hay algunas respuestas guardadas, pero cada persona u oficina tiene las suyas.
 
 - Hay algunas respuestas guardadas para los trámites frecuentes, pero cada persona u oficina tiene las suyas: no están al alcance de todo el equipo. `[3.5.I1]`
 
@@ -4427,9 +4554,10 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 
 *Resultado:* El estudiante reconoce la misma voz de la institución en cada respuesta, lo atienda quien lo atienda.
 
+- Quienes atienden usan en su día a día las respuestas guardadas para los casos frecuentes, no solo las tienen cargadas. `[3.5.E1]`
 - El tono y la voz de la institución se aplican a las respuestas, no cada persona con su estilo. `[3.5.E2]`
 
-*Se leen igual:* `3.5.D1`, `3.5.E1`, `3.5.E3`, `3.5.O1`.
+*Se leen igual:* `3.5.E3`, `3.5.O1`.
 
 #### 3.6 Priorización de estudiantes
 
@@ -4443,11 +4571,11 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 
 - Los casos se atienden por orden de llegada o como prefiere quien atiende, sin mirar su urgencia ni quién es el estudiante. `[3.6.D1]`
 
-**Inicial.**
+**Inicial.** Se prioriza a ojo: lo que parece urgente o el estudiante que más insiste.
 
 - Se intenta atender primero lo urgente, pero los casos no tienen una prioridad asignada: cada persona decide a ojo, o se adelanta el estudiante que más insiste. `[3.6.I1]`
 
-**Funcional.**
+**Funcional.** Cada caso tiene una prioridad que el equipo respeta, y cada tipo de estudiante recibe la atención que le corresponde.
 
 *Resultado:* Lo urgente se atiende primero y cada tipo de estudiante recibe la atención que le corresponde, sin que quien atiende tenga que reconstruir su historia.
 
@@ -4466,9 +4594,10 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 
 *Resultado:* Cada estudiante recibe una atención a su medida en cualquier canal, incluso cuando hace sus trámites solo, y nunca tiene que volver a explicar lo que ya habló con Admisiones.
 
+- En el autoservicio, cada estudiante ve lo que corresponde a su tipo, a su programa y a sus casos abiertos, sin que nadie lo arme a mano; el equipo define qué corresponde a cada tipo. `[3.6.O1]`
 - Cada estudiante se atiende con el contexto de cómo llegó —lo que se le prometió en su admisión y el perfil con que entró—, que quien lo atiende, persona o IA, ve en su ficha sin volver a preguntarlo. `[3.6.O3]`
 
-*Se leen igual:* `3.6.O1`, `3.6.O2`.
+*Se leen igual:* `3.6.O2`.
 
 #### 3.7 Permanencia
 
@@ -4478,12 +4607,14 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 
 *Costo de quedarse:* Te enteras de que un estudiante está mal cuando el problema ya creció o cuando ya dejó de venir, y sus fechas importantes —un pago, la renovación de su beca, la rematrícula— te toman por sorpresa.
 
-**Deficiente.**
+**Deficiente.** Nadie se adelanta: los problemas se atienden cuando el estudiante reclama.
 
+- Aunque un estudiante acumule casos repetidos o una queja sin resolver, nadie lo contacta: los problemas se atienden cuando estallan. `[3.7.D1]`
 - Nadie contacta al estudiante por iniciativa propia: se espera a que él se acerque a una ventanilla o escriba. `[3.7.D2]`
 
 **Inicial.** A veces alguien llama a un estudiante con problemas, pero depende de quién lo note, y donde los estudiantes siguen un programa, cuántos dejaron se sabe recién al cerrar la rematrícula.
 
+- Cuando un estudiante tiene problemas repetidos, a veces alguien lo contacta, pero depende de que lo note. `[3.7.I1]`
 - Cuántos estudiantes dejaron se sabe recién cuando cierra la rematrícula, no antes. `[3.7.I301 · comprobable · relación continua]`
 
 **Funcional.** Los problemas que se repiten, las quejas y las señales de que un estudiante puede dejar se detectan, aunque sea a mano, y los estudiantes de los grupos clave reciben contacto antes de sus fechas críticas.
@@ -4502,7 +4633,7 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 - Hay alertas tempranas, a partir del indicador de salud, de riesgo de deserción o de la oportunidad de que el estudiante siga con otro programa. `[3.7.E1]`
 - Los estudiantes en riesgo reciben una acción de permanencia —una tutoría, un arreglo de pago, un cambio de horario— antes de decidir dejar, y los que pueden seguir estudiando reciben la propuesta de un siguiente programa. `[3.7.E2]`
 - Los estudiantes de los grupos clave revisan con la institución, al menos cada trimestre, la meta que persiguen —por ejemplo, terminar en el plazo de su programa o mantener su beca—: qué se logró y qué sigue. `[3.7.E3]`
-- Ningún caso del estudiante se pierde entre oficinas: si lo resuelve otra área —registro, cobros, la dirección de su carrera—, queda igual en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —la rematrícula, un pago, un examen— o, si se piden calificaciones, cuando un estudiante califica mal la atención. `[3.7.E4]`
+- Ningún caso del estudiante se pierde entre oficinas: si lo resuelve otra área —registro, cobros, la dirección de su carrera—, también queda en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —la rematrícula, un pago, un examen— o, si se piden calificaciones, cuando un estudiante califica mal la atención. `[3.7.E4]`
 - Cada estudiante recibe, sin tener que pedirla, la información que necesita antes de los momentos clave de su período —la rematrícula, los pagos, los exámenes, la graduación—, y sale de forma automática, no cuando alguien se acuerda. `[3.7.E5]`
 
 **Óptimo.** Los problemas se resuelven antes de que el estudiante los note, con acciones que la IA ajusta, y el estudiante recibe detalles que lo hacen sentirse parte de la institución.
@@ -4514,8 +4645,6 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 - La IA decide qué acción proactiva recibe cada estudiante —qué, cuándo y por qué canal— según su historia y sus señales, como sus notas o su asistencia, dentro de los límites que fijó el equipo, que revisa los resultados; en el sistema queda qué decidió para cada estudiante. `[3.7.O3]`
 - Los estudiantes reciben, sin pedirlos, detalles pensados para deleitarlos —un reconocimiento por su avance, beneficios o experiencias en el campus—, elegidos según la historia de cada estudiante y el momento de su paso por la institución, y en el sistema queda qué recibió cada uno. `[3.7.O4]`
 
-*Se leen igual:* `3.7.D1`, `3.7.I1`.
-
 #### 3.8 Autoservicio y aprendizaje
 
 ¿Qué pasa con las preguntas que tus estudiantes hacen una y otra vez, en cada rematrícula?
@@ -4526,13 +4655,18 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 
 **Deficiente.** Las preguntas de siempre —cómo rematricularse, cómo pedir una constancia— se responden a mano, una por una: no hay nada publicado.
 
+- No hay ninguna respuesta publicada que el estudiante pueda consultar por su cuenta. `[3.8.D1]`
 - Hasta las preguntas que más se repiten en cada rematrícula se responden a mano, una por una, cada vez que llegan. `[3.8.D2]`
 
-**Funcional.**
+**Inicial.** Hay algunas respuestas publicadas o un chatbot de menú, pero lo que más preguntan los estudiantes todavía no tiene respuesta publicada.
+
+- Hay algunas respuestas publicadas, pero sueltas: no cubren lo que más preguntan los estudiantes, que se sigue respondiendo a mano. `[3.8.I2]`
+
+**Funcional.** Las preguntas más frecuentes de los estudiantes tienen respuesta publicada.
 
 *Resultado:* El estudiante puede consultar por su cuenta la respuesta a las preguntas de cada período, y quien atiende lo remite a ella en vez de volver a escribirla.
 
-- Las diez preguntas que más hicieron los estudiantes en el último trimestre —o todas, si son menos—, por ejemplo cómo rematricularse, cómo pedir una constancia o cómo pagar, tienen una respuesta publicada que pueden consultar por su cuenta. `[3.8.F1]`
+- Las diez preguntas que más hicieron los estudiantes en el último trimestre —o todas, si son menos—, por ejemplo cómo rematricularse, cómo pedir una constancia o cómo pagar, tienen una respuesta publicada que el estudiante puede consultar por su cuenta. `[3.8.F1]`
 
 **Eficiente.** Se documenta lo que se aprende, el autoservicio empieza a liberar al equipo y cada período se prepara con lo que dejó el anterior.
 
@@ -4546,14 +4680,14 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 
 *Resultado:* La matrícula puede crecer sin que crezca el equipo de atención: el conocimiento se genera a medida que aparecen preguntas nuevas, y la IA y el autoservicio absorben los picos de cada período.
 
-- Los picos de cada período —la rematrícula, el inicio de clases, los exámenes— los absorben la IA y el autoservicio: el equipo de atención no crece cuando crece la matrícula. `[3.8.O2]`
+- Los picos de cada período —la rematrícula, el inicio de clases, los exámenes— los absorben la IA y el autoservicio: el equipo de atención no crece cuando crece la matrícula, y el líder ve en los tableros del área qué parte de los casos resolvieron la IA y el autoservicio y qué pasó a una persona. `[3.8.O2]`
 - La IA aplica lo que aprende de los casos a las respuestas guardadas, a la atención de cada tipo de estudiante y a los avisos que se adelantan a lo que necesita cada uno, y el líder valida cada cambio; en el sistema queda qué cambió y de dónde salió. `[3.8.O3]`
 
-*Se leen igual:* `3.8.D1`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.O1`, `3.8.O4`.
+*Se leen igual:* `3.8.I1`, `3.8.F2`, `3.8.E1`, `3.8.O1`, `3.8.O4`.
 
 ## Edición — Inmobiliaria
 
-Para el equipo comercial de una desarrolladora que vende las unidades de sus proyectos —casas, apartamentos o lotes—, de una corredora que vende inmuebles de terceros o de una administradora de alquileres: un asesor trabaja cada oportunidad, de la primera consulta a la visita, la reserva y la firma. Lo que solo existe en un proyecto propio —la obra, la preventa, la lista de precios de cada proyecto— cuenta solo si la empresa vende proyectos propios. Donde la empresa vende o alquila inmuebles de terceros, «cada proyecto» se lee como cada tipo de inmueble que comercializa.
+Para el equipo comercial de una desarrolladora que vende las unidades de sus proyectos —casas, apartamentos o lotes—, de una corredora que vende inmuebles de terceros o de una administradora de alquileres: un asesor trabaja cada negocio, de la primera consulta a la visita, la reserva y la firma. Lo que solo existe en un proyecto propio —la obra, la preventa, la lista de precios de cada proyecto— cuenta solo si la empresa vende proyectos propios. Donde la empresa vende o alquila inmuebles de terceros, «proyecto» se lee como el inmueble o el tipo de inmueble que comercializa, pero «cada proyecto» se lee siempre como cada tipo de inmueble, y «por proyecto», como por tipo de inmueble. Donde la empresa alquila, «comprador» se lee como inquilino, «comprar» y «vender» como alquilar, y «promesa y firma» como la firma del contrato; lo que toca a la escritura no aplica.
 
 *Clave:* inmobiliaria
 
@@ -4566,10 +4700,10 @@ Para el equipo comercial de una desarrolladora que vende las unidades de sus pro
 | En la escala general | En esta edición |
 |:--|:--|
 | Prospecto | Interesado en una unidad o en un proyecto |
-| Negocio | Oportunidad de venta de una unidad |
+| Negocio | Negocio: la venta o el alquiler de una unidad, de la primera consulta a la firma |
 | Lead | Interesado en una unidad o en un proyecto |
 | Pipeline | El recorrido de la venta: consulta, visita, reserva, promesa y firma |
-| Pipeline review | Reunión de seguimiento de ventas |
+| Revisión del pipeline | Reunión de seguimiento de ventas |
 | Material de venta | Brochure, planos, fotos y recorrido virtual de la unidad o del proyecto |
 | Vendedor | Asesor inmobiliario |
 | Propuesta | La propuesta de una unidad: precio, forma de pago y condiciones |
@@ -4588,26 +4722,26 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 
 **Inicial.** Tienes un CRM y un proceso a medias. Los interesados se registran cuando el asesor se acuerda, cada quien cotiza a su manera y las reservas se llevan aparte.
 
-**Funcional.** Tu equipo comercial opera como una maquinaria base. Cada interesado entra al mismo recorrido, todos venden con la misma lista de precios y la misma disponibilidad, y ninguna oportunidad se enfría después de la visita sin que alguien reaccione.
+**Funcional.** Tu equipo comercial opera como una maquinaria base. Cada interesado entra al mismo recorrido, todos venden con la misma lista de precios y la misma disponibilidad, y ningún negocio se enfría después de la visita sin que alguien reaccione.
 
 **Eficiente.** La venta deja de depender del empuje de cada asesor. Mides cuántas consultas llegan a visita y cuántas visitas a reserva, compruebas la capacidad de pago antes de reservar, acompañas cada reserva hasta la firma y proyectas las ventas con confianza.
 
-**Óptimo.** La IA hace el trabajo pesado y tu equipo valida donde importa. Agentes de IA responden, precalifican y agendan visitas a toda hora, los modelos dicen qué interesado está listo y qué unidad ofrecerle, y el sistema detecta la reserva que se va a caer antes de que pase.
+**Óptimo.** La IA hace el trabajo pesado y tu equipo valida donde importa. Si atiendes por WhatsApp o chat, agentes de IA responden ahí, precalifican y agendan visitas a toda hora; los modelos dicen qué interesado está listo y qué unidad ofrecerle, y el sistema detecta la reserva que se va a caer antes de que pase.
 
 #### 1.1 Procesos y Rutinas
 
-¿Qué tan parecido trabajan tus asesores cada oportunidad, desde la primera consulta hasta la firma?
+¿Qué tan parecido trabajan tus asesores cada negocio, desde la primera consulta hasta la firma?
 
 *Descripción:* Mide si la venta sigue un proceso escrito, de la consulta a la firma, que no depende de cada asesor.
 
 *Costo de quedarse:* Si se va un asesor, se lleva a sus interesados en el teléfono: nadie sabe quién ya visitó, a quién se le cotizó ni qué reserva estaba por firmarse.
 
-**Funcional.** Todo el equipo sigue el mismo recorrido escrito en el CRM, de la consulta a la firma, con una cadencia de contacto, un proceso de reserva escrito y una revisión fija de las oportunidades.
+**Funcional.** Todo el equipo sigue el mismo recorrido escrito en el CRM, de la consulta a la firma, con una cadencia de contacto, un proceso de reserva escrito y una revisión fija de los negocios.
 
-*Resultado:* Si rota un asesor, el siguiente sabe en qué va cada cliente, porque todo el equipo trabaja la venta igual en el CRM: las oportunidades avanzan con los mismos criterios, cada visita deja su siguiente paso, la reserva se hace siempre de la misma forma, cada interesado se contacta con la cadencia acordada y las oportunidades se revisan en cada reunión de seguimiento.
+*Resultado:* Si rota un asesor, el siguiente sabe en qué va cada cliente, porque todo el equipo trabaja la venta igual en el CRM: los negocios avanzan con los mismos criterios, cada visita deja su siguiente paso, la reserva se hace siempre de la misma forma, cada interesado se contacta con la cadencia acordada y los negocios se revisan en cada reunión de seguimiento.
 
 - Cualquier asesor explica igual las etapas de la venta —consulta, visita, reserva, promesa y firma— y qué tiene que cumplirse para avanzar. `[1.1.F1]`
-- Cada proyecto o tipo de venta tiene su propio recorrido en el CRM, con lo que la oportunidad tiene que cumplir para pasar de cada etapa a la siguiente, hasta la reserva y la firma. `[1.1.F2]`
+- Cada proyecto o tipo de venta tiene su propio recorrido en el CRM, con lo que el negocio tiene que cumplir para pasar de cada etapa a la siguiente, hasta la reserva y la firma. `[1.1.F2]`
 - Toda visita queda registrada con su resultado y su siguiente paso acordado. `[1.1.F401 · comprobable · hábito]`
 - El proceso de reserva está escrito: qué se firma, qué se paga, cuánto dura y qué pasa si se vence. `[1.1.F402 · declarado]`
 
@@ -4636,36 +4770,36 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 
 **Eficiente.** Las cotizaciones salen del sistema, la reserva y la promesa —o el contrato, en un alquiler— se firman de forma digital, el CRM se conecta con los otros sistemas que use la empresa y el equipo usa la IA en su trabajo diario.
 
-*Resultado:* El asesor recupera el tiempo que se le iba en tareas repetitivas, y el líder ve en tiempo real en qué etapa se caen las oportunidades.
+*Resultado:* El asesor recupera el tiempo que se le iba en tareas repetitivas, y el líder ve en tiempo real en qué etapa se caen los negocios.
 
 - Las cotizaciones se generan desde el sistema, con el precio, la forma de pago y la disponibilidad vigentes, no como documentos sueltos. `[1.2.E1]`
 - Si la empresa lleva el inventario de unidades, los cobros o el resto de su operación en otro sistema —un ERP o uno propio—, el CRM está conectado con él. `[1.2.E3]`
 - La reserva y la promesa —o el contrato, en un alquiler— se firman de forma digital, y los documentos del cliente quedan en el sistema. `[1.2.E401 · comprobable]`
 
-**Óptimo.** La IA responde, precalifica, agenda visitas y calcula qué oportunidades van a cerrar; el asesor valida y se queda con las conversaciones que deciden la venta.
+**Óptimo.** La IA responde, precalifica, agenda visitas y calcula qué negocios van a cerrar; el asesor valida y se queda con las conversaciones que deciden la venta.
 
-*Resultado:* El asesor dedica su tiempo a las conversaciones que deciden la venta: los agentes de IA responden, precalifican y agendan visitas, y él trabaja con la predicción de qué oportunidades van a cerrar y con respuestas sugeridas para cada conversación.
+*Resultado:* El asesor dedica su tiempo a las conversaciones que deciden la venta: los agentes de IA responden, precalifican y agendan visitas, y él trabaja con la predicción de qué negocios van a cerrar y con respuestas sugeridas para cada conversación.
 
-- La IA calcula la probabilidad de cierre de cada oportunidad y propone respuestas según el contexto de cada conversación con el interesado; las dos cosas se ven en el CRM y el asesor decide qué usar. `[1.2.O1]`
+- La IA calcula la probabilidad de cierre de cada negocio y propone respuestas según el contexto de cada conversación con el interesado; las dos cosas se ven en el CRM y el asesor decide qué usar. `[1.2.O1]`
 - Si el equipo atiende por un canal conversacional, agentes de IA responden ahí, precalifican a los interesados con la definición de interesado calificado y agendan visitas a cualquier hora; le pasan al asesor, con el contexto, a quien está listo, y el equipo revisa en el CRM lo que precalificaron. `[1.2.O2]`
 
 *Se leen igual:* `1.2.D1`, `1.2.D2`, `1.2.I1`, `1.2.I2`, `1.2.F3`, `1.2.F4`, `1.2.F6`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O3`.
 
 #### 1.3 Datos
 
-¿Qué tienes que hacer con el reporte de tus oportunidades y reservas antes de usarlo para decidir?
+¿Qué tienes que hacer con el reporte de tus negocios y reservas antes de usarlo para decidir?
 
-*Descripción:* Mide si los datos de ventas son confiables para decidir: oportunidades completas, el origen de cada una, el inventario al día y reportes que salen del sistema sin armarlos a mano.
+*Descripción:* Mide si los datos de ventas son confiables para decidir: negocios completos, el origen de cada uno, el inventario al día y reportes que salen del sistema sin armarlos a mano.
 
 *Costo de quedarse:* Decides con números que no cuadran: el reporte de ventas se arma a mano cruzando el CRM con la hoja de inventario, y no sabes qué portal te trae compradores y cuál solo consultas.
 
-**Funcional.** El reporte de oportunidades y reservas sale del sistema, sin armarlo a mano, y el estado de cada unidad está al día: a los dos se les puede creer.
+**Funcional.** El reporte de negocios y reservas sale del sistema, sin armarlo a mano, y el estado de cada unidad está al día: a los dos se les puede creer.
 
-*Resultado:* El líder ve el estado real de las oportunidades y de cada unidad cuando lo necesita, sin armar el reporte a mano, y sabe de dónde llegó cada interesado.
+*Resultado:* El líder ve el estado real de los negocios y de cada unidad cuando lo necesita, sin armar el reporte a mano, y sabe de dónde llegó cada interesado.
 
-- Toda oportunidad creada desde la puesta en marcha del recorrido actual tiene la unidad o el tipo de unidad de interés, el monto, la fecha esperada de cierre y el asesor responsable. `[1.3.F1]`
-- Toda oportunidad creada desde la puesta en marcha del recorrido actual dice por dónde llegó el interesado: portal, web, redes, valla, referido o sala de ventas. `[1.3.F3]`
-- El reporte de oportunidades y de reservas se genera del sistema sin reconstruir números, y refleja el estado actual, no un pronóstico. `[1.3.F4]`
+- Todo negocio creado desde la puesta en marcha del recorrido actual tiene la unidad o el tipo de unidad de interés, el monto, la fecha esperada de cierre y el asesor responsable. `[1.3.F1]`
+- Todo negocio creado desde la puesta en marcha del recorrido actual dice por dónde llegó el interesado: portal, web, redes, valla, referido o sala de ventas. `[1.3.F3]`
+- El reporte de negocios y de reservas se genera del sistema sin reconstruir números, y refleja el estado actual, no un pronóstico. `[1.3.F4]`
 - La documentación sobre el comprador objetivo de cada proyecto no se deja envejecer. `[1.3.F5]`
 - La definición de interesado calificado no se deja envejecer. `[1.3.F6]`
 - La documentación de lo que se ofrece —qué tiene cada proyecto o cada unidad y para quién es— no se deja envejecer. `[1.3.F7]`
@@ -4683,13 +4817,13 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 
 #### 1.4 Equipo y Gobierno
 
-¿Cómo sabe el gerente, cada semana, qué asesores van bien y cuáles necesitan ayuda?
+¿Cómo sabe el líder, cada semana, qué asesores van bien y cuáles necesitan ayuda?
 
-*Descripción:* Mide si cada asesor tiene un rol y una meta por escrito, y si el gerente sigue los números de la venta y pide cuentas con datos.
+*Descripción:* Mide si cada asesor tiene un rol y una meta por escrito, y si el líder sigue los números de la venta y pide cuentas con datos.
 
-*Costo de quedarse:* El gerente se entera al cierre del mes de que el proyecto no vendió lo esperado: no vio antes qué asesor se quedó atrás ni en qué etapa se cayeron las oportunidades.
+*Costo de quedarse:* El líder se entera al cierre del mes de que el proyecto no vendió lo esperado: no vio antes qué asesor se quedó atrás ni en qué etapa se cayeron los negocios.
 
-**Funcional.** Cada asesor tiene un rol y una meta por escrito, está claro a quién le corresponde cada cliente, el gerente sigue un tablero cada semana y en la reunión de seguimiento cada quien rinde cuentas.
+**Funcional.** Cada asesor tiene un rol y una meta por escrito, está claro a quién le corresponde cada cliente, el líder sigue un tablero cada semana y en la reunión de seguimiento cada quien rinde cuentas.
 
 *Resultado:* Cada asesor sabe qué se espera de él y a quién le corresponde cada cliente, y el líder sabe cada semana qué asesor y qué proyecto van bien y quién necesita ayuda, antes de que termine el mes.
 
@@ -4742,9 +4876,9 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 - Las propuestas solo prometen lo que se va a entregar: lo que se dice de acabados, áreas comunes y fechas de entrega se valida antes de decirlo. `[1.5.E3]`
 - Los cambios de precio —y, si la empresa vende proyectos propios, los de avance de obra— les llegan el mismo día a todos los asesores y a todos los canales. `[1.5.E401 · comprobable · hábito]`
 
-**Óptimo.** La IA escribe y revisa lo que se le dice a cada interesado desde la información, los precios y la propuesta vigentes, y el equipo valida lo que se sale.
+**Óptimo.** La IA revisa contra la información, los precios y la propuesta vigentes todo lo que se le dice a cada interesado, y el equipo valida lo que se sale.
 
-- Lo que la IA escribe o responde a los interesados parte de la información, los precios y la propuesta vigentes; lo que se sale de ellos queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
+- La IA revisa en tiempo real, contra la información, los precios y la propuesta vigentes, lo que se les dice a los interesados, lo escriba ella o el equipo; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
 
 *Se leen igual:* `1.5.D1`, `1.5.D2`, `1.5.I1`, `1.5.I2`, `1.5.F3`, `1.5.F5`, `1.5.E2`.
 
@@ -4773,53 +4907,55 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 
 *Resultado:* Cada asesor sabe cada mañana a quién contactar primero, y las reservas que se firman son de quien sí puede terminar la compra.
 
-- Hay un puntaje de interesados por reglas activo: un modelo que suma puntos por varios atributos —presupuesto, forma de pago, interacción, plazo de compra—, no una regla sobre una propiedad. `[1.6.E1]`
+- Hay un puntaje de interesados por reglas activo: un modelo que suma puntos por varios atributos —presupuesto, forma de pago, interacción, plazo de compra—, no una regla sobre un solo campo del CRM. `[1.6.E1]`
 - Los segmentos de compradores prioritarios —inversionistas, primera vivienda, compradores del exterior— están en una lista escrita. `[1.6.E2]`
 - La capacidad de pago del interesado se comprueba antes de reservar: carta de preaprobación, comprobante de fondos o plan de pagos aceptado. `[1.6.E401 · comprobable · venta con equipo]`
 
 **Óptimo.**
 
-- Si en la decisión de compra participan varias personas —la pareja, la familia o los socios de una inversión—, la IA adapta en tiempo real el mensaje a cada una, el asesor valida lo que se envía, y en el CRM queda qué recibió cada persona. `[1.6.O3]`
+- La IA detecta en cada cliente el riesgo de perderlo y el potencial de venderle más, como otra unidad, lo marca en el CRM y el asesor decide qué hacer. `[1.6.O2]`
+- Si en la decisión de compra participan varias personas —la pareja, la familia o los socios de una inversión—, la IA adapta en tiempo real el mensaje a cada una, dentro de los límites que fijó el equipo; el asesor revisa lo que se envió, y en el CRM queda qué recibió cada persona. `[1.6.O3]`
 
-*Se leen igual:* `1.6.D1`, `1.6.I1`, `1.6.I2`, `1.6.E3`, `1.6.O1`, `1.6.O2`, `1.6.O4`.
+*Se leen igual:* `1.6.D1`, `1.6.I1`, `1.6.I2`, `1.6.E3`, `1.6.O1`, `1.6.O4`.
 
 #### 1.7 Seguimiento de visitas y reservas
 
 ¿Qué pasa con quien visitó y no volvió a contestar, o con la reserva que no avanza hacia la firma?
 
-*Descripción:* Mide si alguien detecta cuando una oportunidad o una reserva deja de avanzar y si hay un paso acordado para retomarla a tiempo; donde el comprador vuelve a comprar, como el inversionista que suma unidades, también si se le busca cuando su próxima compra se atrasa.
+*Descripción:* Mide si alguien detecta cuando un negocio o una reserva deja de avanzar y si hay un paso acordado para retomarlos a tiempo; donde el comprador vuelve a comprar, como el inversionista que suma unidades, también si se le busca cuando su próxima compra se atrasa.
 
 *Costo de quedarse:* Los clientes se enfrían después de la visita y las reservas se vencen sin que nadie llame: la unidad queda bloqueada semanas y la venta se cae cuando ya la dabas por hecha.
 
 **Deficiente.** El asesor está solo con sus clientes, y después de la visita nadie da seguimiento.
 
+- No hay material de venta —brochure, planos, fotos o recorrido virtual— para mostrarles a los interesados. `[1.7.D4]`
 - Las reservas se vencen sin que nadie se dé cuenta. `[1.7.D401 · comprobable]`
 
-**Funcional.** Ninguna oportunidad se enfría en silencio después de la visita y ninguna reserva se vence sin aviso: se detectan a tiempo y hay un paso acordado para retomarlas.
+**Funcional.** Ningún negocio se enfría en silencio después de la visita y ninguna reserva se vence sin aviso: se detectan a tiempo y hay un paso acordado para retomarlos.
 
-*Resultado:* Las oportunidades que se traban se detectan a tiempo y se retoman por más de un canal; donde se vende con equipo, con material de venta común y con el líder actuando mientras todavía hay margen. Cada reserva tiene fecha, responsable y siguiente paso hasta la firma, y donde el comprador vuelve a comprar sin contrato, como el inversionista que suma unidades, la próxima compra tampoco se deja al azar.
+*Resultado:* Los negocios que se traban se detectan a tiempo y se retoman por más de un canal; donde se vende con equipo, con material de venta común y con el líder actuando mientras todavía hay margen. Cada reserva tiene fecha, responsable y siguiente paso hasta la firma, y donde el comprador vuelve a comprar sin contrato, como el inversionista que suma unidades, la próxima compra tampoco se deja al azar.
 
-- Para cada etapa está definido cuánto tiempo sin avance vuelve estancada una oportunidad —por ejemplo, después de una visita o de una cotización—; las estancadas se reconocen a tiempo y tienen un paso de reactivación acordado, no la improvisación de cada asesor. `[1.7.F1]`
+- Para cada etapa está definido cuánto tiempo sin avance vuelve estancado un negocio —por ejemplo, después de una visita o de una cotización—; los estancados se reconocen a tiempo y tienen un paso de reactivación acordado, no la improvisación de cada asesor. `[1.7.F1]`
 - Hay material de venta estandarizado —brochure, planos, recorrido virtual y, si la empresa vende proyectos propios, avance de obra— que ayuda a cerrar la venta. `[1.7.F4]`
 - Toda visita recibe seguimiento dentro del plazo acordado. `[1.7.F401 · comprobable · hábito · requiere 1.1.F401]`
 - Toda reserva tiene fecha de vencimiento y un responsable, y antes de que venza se contacta al cliente. `[1.7.F402 · comprobable · hábito · requiere 1.1.F402]`
 
 **Eficiente.** El seguimiento es multicanal, el sistema le avisa al líder de lo que se traba y quien todavía no está listo sigue en nutrición.
 
-*Resultado:* Ninguna oportunidad espera a la reunión para recibir ayuda, quien todavía no está listo para comprar sigue en nutrición hasta que muestra interés o aparece una unidad para él, el cliente que ya reservó sabe cómo va su trámite, y se sabe cuánto de lo que se traba se recupera.
+*Resultado:* Ningún negocio espera a la reunión para recibir ayuda, quien todavía no está listo para comprar sigue en nutrición hasta que muestra interés o aparece una unidad para él, el cliente que ya reservó sabe cómo va su trámite, y se sabe cuánto de lo que se traba se recupera.
 
 - Los interesados que todavía no están listos para comprar no se abandonan: pasan a nutrición —la de Marketing o una secuencia del propio equipo— y vuelven a un asesor cuando muestran interés o aparece una unidad que encaja con lo que buscan. `[1.7.E2]`
-- Cuando una oportunidad o una reserva lleva sin avanzar más tiempo del que su etapa permite, el líder recibe un aviso del sistema, sin esperar a la reunión de seguimiento. `[1.7.E4]`
-- Se mide cuántas oportunidades estancadas y cuántas reservas en riesgo se recuperan. `[1.7.E401 · comprobable]`
+- Cuando un negocio o una reserva lleva sin avanzar más tiempo del que su etapa permite, el líder recibe un aviso del sistema, sin esperar a la reunión de seguimiento. `[1.7.E4]`
+- Se mide cuántos negocios estancados y cuántas reservas en riesgo se recuperan. `[1.7.E401 · comprobable]`
 - Entre la reserva y la firma, el cliente recibe avances de su trámite —y, si la empresa vende proyectos propios, de la obra— sin tener que pedirlos. `[1.7.E402 · comprobable · hábito]`
 
-**Óptimo.** La IA detecta la oportunidad o la reserva que se va a caer y decide el canal y el momento de cada seguimiento; el equipo valida.
+**Óptimo.** La IA detecta el negocio o la reserva que se va a caer y decide el canal y el momento de cada seguimiento; el equipo valida.
 
-*Resultado:* Las oportunidades y las reservas que más importan reciben ayuda justo cuando la necesitan: la IA detecta cuándo se traban y propone a quién movilizar.
+*Resultado:* Los negocios y las reservas que más importan reciben ayuda justo cuando la necesitan: la IA detecta cuándo se traban y propone a quién movilizar.
 
-- La IA detecta qué oportunidades y qué reservas de más valor se están trabando antes de que venza su plazo y propone a quién movilizar —el asesor o la gerencia— o qué contenido enviar; el líder valida, y todo queda en el CRM. `[1.7.O1]`
+- La IA detecta qué negocios y qué reservas de más valor se están trabando antes de que venza su plazo y propone a quién movilizar —el asesor o la gerencia— o qué contenido enviar; el líder valida, y todo queda en el CRM. `[1.7.O1]`
 
-*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.D4`, `1.7.I1`, `1.7.I2`, `1.7.I3`, `1.7.I4`, `1.7.F2`, `1.7.F3`, `1.7.F5`, `1.7.E1`, `1.7.E3`, `1.7.O2`.
+*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I1`, `1.7.I2`, `1.7.I3`, `1.7.I4`, `1.7.F2`, `1.7.F3`, `1.7.F5`, `1.7.E1`, `1.7.E3`, `1.7.O2`.
 
 #### 1.8 Ventas, pérdidas y desistimientos
 
@@ -4829,18 +4965,18 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 
 *Costo de quedarse:* No sabes por qué pierdes ventas ni por qué se caen las reservas —el precio, el crédito que no salió, la fecha de entrega—: cada asesor tiene su explicación, y sin un registro no hay cómo ver qué se repite.
 
-**Funcional.** Cada oportunidad perdida y cada reserva caída quedan con su razón, elegida de una lista fija, y el líder saca del sistema el reporte del trimestre.
+**Funcional.** Cada negocio perdido y cada reserva caída quedan con su razón, elegida de una lista fija, y el líder saca del sistema el reporte del trimestre.
 
 *Resultado:* El líder sabe por qué no compran los interesados y por qué se caen las reservas, con datos del trimestre y no con impresiones.
 
-- Toda oportunidad creada desde la puesta en marcha del recorrido actual que se dio por perdida tiene registrada su razón. `[1.8.F1]`
-- Cada reserva que se desiste o se vence deja registrada su razón: el crédito no salió, cambió de opinión o encontró otro proyecto. `[1.8.F401 · comprobable]`
+- Todo negocio creado desde la puesta en marcha del recorrido actual que se dio por perdido tiene registrada su razón. `[1.8.F1]`
+- Cada reserva que se cae, porque el cliente desiste o porque se vence, deja registrada su razón: el crédito no salió, cambió de opinión o encontró otro proyecto. `[1.8.F401 · comprobable]`
 
 **Eficiente.** Cada trimestre se revisan las ventas cerradas, las perdidas y las reservas caídas, lo aprendido cambia el proceso y el equipo se capacita con un calendario fijo.
 
 *Resultado:* Los errores que más se repiten se corrigen y lo que hace vender se vuelve parte del proceso: lo que muestra la revisión de cada trimestre de las ventas cerradas, las perdidas y las reservas caídas cambia el proceso y la capacitación del equipo, y se sabe contra qué proyectos se pierde.
 
-- Al menos una vez por trimestre se revisan las ventas cerradas, las oportunidades perdidas y las reservas caídas para encontrar lo que se repite. `[1.8.E1]`
+- Al menos una vez por trimestre se revisan las ventas cerradas, los negocios perdidos y las reservas caídas para encontrar lo que se repite. `[1.8.E1]`
 - Cuando el cliente compró en otro proyecto, queda registrado en cuál y por qué. `[1.8.E401 · comprobable]`
 
 *Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`, `1.8.O4`.
@@ -4851,13 +4987,13 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 **Deficiente.** Tus proyectos no los presentas tú: los presenta el mercado. Cada anuncio dice algo distinto, las herramientas están sueltas y sin conectar, y la pauta corre hasta agotar el presupuesto sin que nadie mida qué dejó. Los interesados llegan por accidente.
 
-**Inicial.** Cada proyecto tiene su logo y su brochure, pero no hay una estrategia detrás. Pagas portales y herramientas que usas a medias, publicas cuando hay algo que mostrar, y los resultados de cada lanzamiento se miden tarde y a mano, sin que lo aprendido quede escrito. Llegan consultas, pero no sabes de dónde vienen.
+**Inicial.** Cada proyecto tiene su logo y su brochure, pero no hay una estrategia detrás. Pagas portales y herramientas que usas a medias, publicas cuando hay algo que mostrar, y los resultados de cada lanzamiento se miden tarde y a mano, sin que lo aprendido quede escrito. Llegan consultas, pero no siempre sabes de dónde vienen.
 
 **Funcional.** Tu marketing dejó de depender de una persona. La marca y los perfiles de comprador están escritos, cada proyecto propio tiene su plan y su página, y los canales que elegiste en tu plan —portales, pauta, redes, correo o WhatsApp— salen con regularidad, coordinados bajo un mismo calendario, y anuncian solo lo que está disponible. Los datos describen la operación sin reconstruirlos a mano: sabes de dónde llega cada interesado y cuánto te cuesta en cada canal. La demanda de cada proyecto ya se mide, aunque la optimización fina todavía no existe.
 
 **Eficiente.** Probar y ajustar ya es rutina, y lo que aprendes de un lanzamiento cambia cómo armas el siguiente. Sabes qué aportó cada canal a cada venta y cuánto te cuesta cada visita y cada reserva en cada canal y en cada proyecto, el mensaje se adapta solo a cada tipo de comprador, la IA asiste a tu equipo en su trabajo diario y tus proyectos aparecen cuando alguien busca vivienda, en buscadores y en asistentes de IA. La pauta se mueve entre canales según lo que cuesta cada interesado o cada venta, y quienes ya compraron recomiendan con un programa de referidos.
 
-**Óptimo.** La IA produce y ajusta; tu equipo dirige. El contenido de cada proyecto se genera y se optimiza en ciclo continuo, la IA adapta el mensaje a lo que hizo cada interesado, los modelos mueven la pauta entre canales sobre la marcha, y los compradores satisfechos que identifica Servicio traen compradores nuevos. El equipo define la estrategia y valida lo que sale.
+**Óptimo.** La IA produce y ajusta; tu equipo dirige. El contenido de cada proyecto se genera y se ajusta de forma continua; la IA adapta el mensaje a lo que hizo cada interesado y mueve la pauta entre canales dentro de los límites que fija el equipo; y los compradores satisfechos que identifica Servicio traen compradores nuevos. El equipo define la estrategia y valida lo que sale.
 
 #### 2.1 Procesos y Rutinas
 
@@ -4865,7 +5001,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 *Descripción:* Mide si la promoción de cada proyecto sale de un plan y un calendario compartidos, sin depender de nadie.
 
-*Costo de quedarse:* Cada lanzamiento depende de quien lo arma: si esa persona se va, la preventa del próximo proyecto sale tarde o sin plan.
+*Costo de quedarse:* Cada lanzamiento depende de quien lo arma: si esa persona se va, la próxima campaña —la preventa de un proyecto propio o la promoción de los inmuebles que comercializas— sale tarde o sin plan.
 
 **Deficiente.**
 
@@ -4876,7 +5012,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 *Resultado:* Todo el equipo trabaja en el mismo sistema, y la promoción de cada proyecto sigue saliendo aunque cambie una persona: el plan de cada lanzamiento y el calendario no viven en la cabeza de nadie, y el líder sabe en qué va cada campaña sin tener que preguntar.
 
 - El líder puede explicar qué campañas corren para cada proyecto y en qué etapa van, sin preguntarle al equipo. `[2.1.F4]`
-- Si una agencia —o quien produce los renders y los videos— ejecuta parte del trabajo, el equipo es dueño del calendario, del brief, de la aprobación y de los accesos, y las campañas no se detienen si cambia ese proveedor. `[2.1.F5]`
+- Si una agencia —o quien produce los renders y los videos— ejecuta todo o parte del trabajo, el equipo es dueño del calendario, del brief, de la aprobación y de los accesos, y las campañas no se detienen si cambia ese proveedor. `[2.1.F5]`
 - Si la empresa vende proyectos propios, cada proyecto tiene su plan de marketing escrito para cada etapa de la venta —preventa, lanzamiento, venta durante la obra y últimas unidades—, con sus campañas y sus fechas. `[2.1.F401 · declarado]`
 
 **Eficiente.**
@@ -4909,8 +5045,8 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 *Resultado:* Los interesados reciben su nutrición sin que nadie la mande a mano, hasta que están listos para hablar con un asesor; la conversación con cada uno no depende de que alguien se acuerde de escribirle y, si se atiende por WhatsApp o chat, el líder ve en tiempo real qué conversaciones esperan respuesta.
 
-- Hay secuencias de nutrición de varios pasos, con tiempos de espera y caminos distintos según lo que hace cada interesado, que lo acompañan mientras decide. `[2.2.E1]`
-- El traspaso de interesados a los asesores es automático: cuando un interesado cumple los criterios para pasar a un asesor, se asigna por varias condiciones —como el proyecto o la zona— y le llega al asesor con su historial. `[2.2.E3]`
+- Hay secuencias de nutrición de varios pasos, con tiempos de espera y caminos distintos según quién es o lo que hace cada interesado, que lo acompañan mientras decide. `[2.2.E1]`
+- El traspaso de interesados a los asesores es automático: cuando un interesado cumple los criterios para pasar a un asesor, le llega con su historial al asesor que corresponde, sin que nadie lo pase a mano. `[2.2.E3]`
 
 **Óptimo.**
 
@@ -4932,7 +5068,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 *Resultado:* El líder sabe de dónde llega cada interesado —un portal, la pauta, las redes, una feria o un referido—, con reportes que salen del sistema y no de una hoja de cálculo armada a mano.
 
 - Cada interesado registrado desde la puesta en marcha del sistema —entre por un formulario, WhatsApp, un portal, una feria o la sala de ventas— tiene su etapa del ciclo de vida y su origen. `[2.3.F1]`
-- Los datos que describen a cada tipo de comprador —como si compra para vivir o para invertir, o la zona que busca— se piden en los formularios por donde entran los interesados, o donde se capturen sus datos, como la sala de ventas o una feria, y están completos en la mayoría de los registros. `[2.3.F2]`
+- Los datos que describen a cada tipo de comprador —como si compra para vivir o para invertir, o la zona que busca— se piden en los formularios por donde entran los interesados —o, si no hay formularios, donde se capturan sus datos, como la sala de ventas o una feria— y están completos en la mayoría de los registros. `[2.3.F2]`
 - Los reportes básicos —cuántos interesados entran por proyecto, de dónde vienen y cuántos llegan a una visita— salen del sistema sin armarlos a mano. `[2.3.F5]`
 - Cuando se pide un teléfono u otro dato de contacto —en un formulario o en una feria—, se pregunta si la persona acepta que le escriban por ese canal, y su respuesta queda registrada. `[2.3.F7]`
 
@@ -4954,7 +5090,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 **Inicial.**
 
-- No está escrito qué decide cada uno, así que hasta lo del día a día —qué anuncio publicar, qué render aprobar— espera a que lo resuelva el gerente general. `[2.4.I1]`
+- Los roles no están escritos, así que hasta lo del día a día —qué anuncio publicar, qué render aprobar— espera a que lo resuelva el gerente general. `[2.4.I1]`
 
 **Funcional.**
 
@@ -4965,7 +5101,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 **Eficiente.**
 
-*Resultado:* Una persona nueva se integra rápido, y Marketing trabaja con reglas acordadas con Ventas y con Servicio en vez de discutir cada vez quién se hace cargo de un interesado o de un comprador.
+*Resultado:* Una persona nueva se integra rápido y, donde hay asesores, Marketing trabaja con reglas acordadas con Ventas y con Servicio en vez de discutir cada vez quién se hace cargo de un interesado o de un comprador.
 
 - Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales —los proyectos, la marca y las herramientas—; no se le entrena de memoria. `[2.4.E2]`
 - El liderazgo coordina con Ventas —el traspaso de interesados a los asesores, los tiempos de respuesta acordados y una reunión conjunta con fecha fija— y con Servicio. `[2.4.E3]`
@@ -5023,7 +5159,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 *Resultado:* Cada tipo de comprador recibe un mensaje pensado para él, y los asesores reciben interesados que Marketing ya clasificó con criterios escritos.
 
-- Existen al menos 2 segmentos con criterios escritos que salen de los perfiles de comprador —qué buscan o cómo deciden—, no solo de dónde están: por ejemplo, quien compra para vivir y quien compra para invertir, o quien paga con crédito y quien paga de contado. `[2.6.F1]`
+- Existen al menos 2 segmentos con criterios escritos según qué busca o cómo decide cada grupo de compradores, no solo según dónde está: por ejemplo, quien compra para vivir y quien compra para invertir, o quien paga con crédito y quien paga de contado. `[2.6.F1]`
 - La mayoría de las campañas del último trimestre tienen piezas distintas para cada segmento: no le hablan igual a la familia que busca su primera vivienda que al inversionista. `[2.6.F3]`
 - Existen criterios escritos de qué es un suscriptor, un interesado y uno listo para pasar a un asesor —por ejemplo, porque pidió precios o una visita—, y Marketing clasifica cada contacto según ellos, a mano o con una automatización simple sobre los campos que usan esos criterios. `[2.6.F4]`
 
@@ -5032,15 +5168,16 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 *Resultado:* El mensaje se adapta solo a quién lo recibe y a la etapa de su búsqueda, y los asesores reciben primero a los interesados con más probabilidad de comprar.
 
 - Hay secuencias distintas por segmento o por etapa del recorrido de compra: no recibe lo mismo quien recién mira proyectos que quien ya visitó uno. `[2.6.E1]`
+- Hay un puntaje de interesados por reglas: un modelo que suma puntos por varios datos de cada interesado, como su perfil o lo que hizo, y lo clasifica al pasar un umbral —por ejemplo, como listo para pasar a un asesor—, y ese puntaje dispara las secuencias de nutrición. No es la clasificación de Funcional, que responde al valor de un campo, sin modelo de puntaje detrás. `[2.6.E3]`
 - La segmentación usa datos de comportamiento —qué proyecto miró, qué recorrido virtual vio, qué correo abrió—, no solo lo que la persona declaró. `[2.6.E4]`
 
 **Óptimo.**
 
 *Resultado:* Cada interesado ve los proyectos y las unidades que le corresponden según lo que hizo antes, sin que nadie tenga que armar un segmento para él.
 
-- Hay personalización uno a uno: la IA cambia en tiempo real lo que ve cada interesado en los mensajes, el sitio o la app según lo que hizo antes —como los proyectos y las unidades que miró—, dentro de las reglas que fijó el equipo, y en el sistema se ve qué versión vio cada interesado. `[2.6.O3]`
+- Hay personalización uno a uno: la IA cambia en tiempo real lo que ve cada interesado en los mensajes, el sitio o la app según lo que hizo antes —como los proyectos y las unidades que miró—, dentro de las reglas que fijó el equipo; el equipo revisa los resultados, y en el sistema se ve qué versión vio cada interesado. `[2.6.O3]`
 
-*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.I2`, `2.6.E2`, `2.6.E3`, `2.6.O1`.
+*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.I2`, `2.6.E2`, `2.6.O1`.
 
 #### 2.7 Canales y Alcance
 
@@ -5054,7 +5191,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 *Resultado:* Una campaña sale coordinada por todos los canales del plan en vez de esfuerzos sueltos, lo que se anuncia está disponible, y el líder ve cuánto le cuesta cada interesado según el canal del que venga.
 
-- Si la pauta pagada es parte del plan de canales, en el último trimestre corrió al menos una campaña con presupuesto definido: en buscadores, en redes o en los portales inmobiliarios. `[2.7.F3]`
+- Si la pauta pagada es parte del plan de canales, hay al menos una campaña corriendo con presupuesto definido: en buscadores, en redes o en los portales inmobiliarios. `[2.7.F3]`
 - Si el canal conversacional, como WhatsApp, es parte del plan de canales, se usa para salir con la frecuencia que fija el calendario —el lanzamiento de un proyecto, una feria, una promoción—, no solo para responder lo que entra. `[2.7.F4]`
 - Los canales que la inmobiliaria eligió en su plan —portales, pauta, redes, correo o WhatsApp— siguen el mismo calendario y la misma campaña: cada lanzamiento o promoción sale coordinado en todos ellos, no como esfuerzos sueltos. `[2.7.F5]`
 - En el sistema se ve cuánto costó cada interesado —o cada venta, donde se compra sin asesor— el último mes, al menos por canal, como cada portal, la pauta o las redes. `[2.7.F6]`
@@ -5072,7 +5209,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 **Óptimo.**
 
-*Resultado:* La inversión se reparte sola donde más reservas trae, dentro de los límites que fija el equipo, los compradores satisfechos traen compradores nuevos, y la empresa prueba canales nuevos sin esperar a ver qué hace la competencia.
+*Resultado:* La inversión se reparte sola donde más reservas trae, dentro de los límites que fija el equipo; los compradores satisfechos traen compradores nuevos, y la empresa prueba canales nuevos sin esperar a ver qué hace la competencia.
 
 - Los compradores que Servicio identifica como promotores se vuelven un canal de referidos y de testimonios sin pedirlos a mano: el sistema los invita solo, el equipo elige qué testimonios se publican, y en el sistema se ve quién trajo a quién. `[2.7.O4]`
 
@@ -5097,7 +5234,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 *Resultado:* El equipo sabe qué renders, mensajes y audiencias funcionan porque lo probó, no porque lo intuye, y lo aprendido cambia cómo se arma el lanzamiento siguiente.
 
-- Hay tests A/B regulares (al menos uno activo por mes): por ejemplo, dos renders o dos mensajes para el mismo proyecto. `[2.8.E1]`
+- Hay pruebas A/B regulares (al menos una activa por mes): por ejemplo, dos renders o dos mensajes para el mismo proyecto. `[2.8.E1]`
 - El proceso de campaña y la planificación de las campañas siguientes —también el lanzamiento del próximo proyecto— se refinan con base en lo aprendido. `[2.8.E3]`
 
 *Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.E2`, `2.8.O2`, `2.8.O3`.
@@ -5106,13 +5243,13 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 Mide el rendimiento de la posventa de la inmobiliaria, que acompaña al comprador de la firma a la entrega de su unidad y, si la empresa vende proyectos propios, durante la garantía: cómo está montada por dentro y qué produce en entregas sin pendientes, reclamos resueltos y compradores que recomiendan.
 
-**Deficiente.** La posventa se improvisa comprador por comprador. No hay un proceso —cada quien responde a su criterio—, los reclamos llegan al teléfono de quien vendió y todo depende de que la persona correcta esté disponible. Los reclamos en redes te toman por sorpresa.
+**Deficiente.** La posventa se improvisa comprador por comprador. No hay un proceso ni un sistema donde queden los casos —cada quien responde a su criterio— y los reclamos llegan al teléfono de quien vendió. Los reclamos en redes te toman por sorpresa.
 
-**Inicial.** Lo que pasa con cada comprador lo sabe una sola persona, y eso te deja con un punto único de fallo. Hay un sistema para registrar los casos, pero pocos lo usan; hay algunas respuestas guardadas para lo más frecuente y una forma de entregar que nadie escribió. La entrega es frágil.
+**Inicial.** Lo que pasa con cada comprador lo sabe una sola persona, y eso te deja con un punto único de fallo. Hay un sistema para registrar los casos, pero pocos lo usan; cada persona de la posventa tiene sus propias respuestas guardadas y hay una forma de entregar que nadie escribió. La entrega es frágil.
 
 **Funcional.** Tu posventa es consistente y ya no depende de una persona. Sabes qué tipos de comprador atiendes y qué espera cada uno. Cada caso —una consulta, un trámite o un reclamo de obra— entra al mismo sistema y sigue las mismas etapas, el equipo atiende con la ficha del comprador a la vista, los casos están categorizados y la entrega sigue un proceso escrito. Atiendes primero lo urgente, tienes respuestas guardadas para lo repetitivo, detectas a mano los problemas evidentes antes de que estallen y, si vendes proyectos propios, avisas cada cambio en la fecha de entrega antes de que se cumpla la anterior. Todavía no hay alertas automáticas, pero ya no esperas a que el comprador reclame.
 
-**Eficiente.** La posventa empieza a adelantarse al problema. Tienes plazos por tipo de caso que se vigilan solos, un portal donde el comprador ve y abre sus casos, y la IA asiste a tu equipo en su trabajo diario; mides tiempos de respuesta y satisfacción, y la información del comprador se une con la de Ventas. Cada comprador sabe cómo va su compra sin tener que preguntar, ningún caso se pierde entre la obra, legal y cobros, y, donde hay condominio, el paso a su administración está acordado. La entrega deja de ser una sorpresa.
+**Eficiente.** La posventa empieza a adelantarse al problema. Tienes plazos por tipo de caso que se vigilan solos, un portal donde el comprador ve y abre sus casos, y la IA asiste a tu equipo en su trabajo diario; mides tiempos de respuesta y satisfacción, y la información del comprador se une con la de Ventas. Cada comprador sabe cómo va su compra sin tener que preguntar, ningún caso se pierde entre la obra, legal y cobros, y, donde un proyecto propio queda en condominio, el paso a su administración está acordado. La entrega deja de ser una sorpresa.
 
 **Óptimo.** Un agente de IA resuelve los casos de los compradores a toda hora, en todos los canales donde atiende la posventa, y le pasa a una persona, con todo el contexto, los que no puede resolver. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y atiende las excepciones; la mayoría de los problemas que detecta el sistema —de la entrega, de la garantía o de un trámite— se resuelven antes de que el comprador los note, y cada comprador se atiende sabiendo lo que se le prometió en la venta y recibe detalles pensados para él. Atiendes a más compradores sin que crezca el equipo de posventa.
 
@@ -5136,8 +5273,8 @@ Mide el rendimiento de la posventa de la inmobiliaria, que acompaña al comprado
 
 *Resultado:* Todo el equipo atiende en el mismo sistema, cada comprador tiene a alguien que responde por él, y un reclamo se atiende igual sin importar quién lo tome.
 
-- El pipeline de servicio está configurado con sus etapas y cubre la atención de cada caso —una consulta, un trámite o un reclamo de obra—, de la recepción al cierre. `[3.1.F1]`
-- Cada comprador tiene registrado quién responde por él —una persona o, si son tantos que no se asignan por persona, un equipo— y recibe un contacto de seguimiento a tiempo —en los momentos que fija el proceso de posventa, por ejemplo, mientras espera su unidad o después de recibirla—, aunque no haya abierto casos. `[3.1.F2]`
+- El recorrido de los casos de posventa está configurado en el sistema con sus etapas y cubre la atención de cada caso —una consulta, un trámite o un reclamo de obra—, de la recepción al cierre. `[3.1.F1]`
+- Cada comprador tiene registrado quién responde por él —una persona o, si son tantos que no se asignan por persona, un equipo— y recibe un contacto de seguimiento a tiempo —en los momentos que fija el proceso de posventa, por ejemplo, mientras espera su unidad o después de recibirla—, aunque no haya abierto casos; si responde un equipo, ese contacto puede ser un mensaje automático. `[3.1.F2]`
 - Hay reuniones del equipo de posventa con cadencia fija (al menos quincenal) que se sostienen. `[3.1.F3]`
 - Existe un proceso escrito para escalar los reclamos graves y los casos que quien atiende no puede resolver —por ejemplo, una filtración o un defecto que impide habitar la unidad—: dice cuáles se escalan y a quién. `[3.1.F4]`
 - Cualquier persona de la posventa explica cómo se atiende un caso típico —un reclamo de obra, una consulta sobre la escritura— siguiendo el mismo flujo. `[3.1.F5]`
@@ -5204,7 +5341,7 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 
 - Cualquier persona de la posventa ve el historial de casos de un comprador en menos de 10 segundos. `[3.3.F1]`
 - La ficha del comprador muestra la unidad que compró y su valor, no solo sus casos. `[3.3.F2]`
-- Las propiedades clave del comprador —qué unidad compró y cuándo firmó— están pobladas en la mayoría de los registros. `[3.3.F3]`
+- Los datos clave del comprador —qué unidad compró y cuándo firmó— están completos en la mayoría de los registros. `[3.3.F3]`
 - Cada caso tiene su tipo y su motivo, elegidos de una lista definida: por ejemplo, un reclamo de obra por humedad, por acabados o por instalaciones. `[3.3.F4]`
 
 **Eficiente.**
@@ -5239,13 +5376,13 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 
 - El líder tiene un tablero con 4 a 6 métricas clave —casos abiertos, reclamos por proyecto, pendientes de entrega, casos por tipo— y lo consulta al menos una vez por semana. `[3.4.F2]`
 
-**Eficiente.** El equipo rinde cuentas por los plazos de atención, el líder prepara a quien entra, acuerda con Ventas qué trae cada comprador y, si el proyecto queda en condominio, el traspaso a su administración está acordado por escrito.
+**Eficiente.** El equipo rinde cuentas por los plazos de atención, el líder prepara a quien entra, acuerda con Ventas qué trae cada comprador y, si un proyecto propio queda en condominio, el traspaso a su administración está acordado por escrito.
 
-*Resultado:* El equipo responde por sus tiempos de atención, una persona nueva rinde rápido, cada comprador llega de Ventas con lo que se le prometió y, donde hay condominio, el paso a su administración no deja al propietario sin saber a quién acudir.
+*Resultado:* El equipo responde por sus tiempos de atención, una persona nueva rinde rápido, cada comprador llega de Ventas con lo que se le prometió y, donde un proyecto propio queda en condominio, el paso a su administración no deja al propietario sin saber a quién acudir.
 
 - Cuando entra alguien nuevo a la posventa, hay un plan de inducción con sus pasos y materiales —los proyectos, las garantías y los sistemas—; no se le entrena de memoria. `[3.4.E2]`
-- El líder de la posventa acuerda con Ventas qué trae cada comprador —lo que busca y lo que se le prometió al vender— y, si los compradores vuelven a comprar otra unidad, cómo le avisa la posventa a Ventas que uno se puede estar yendo. `[3.4.E4]`
-- Si el proyecto queda en condominio, el traspaso a su administración está acordado por escrito: qué se entrega, cuándo y a quién acude el propietario desde ese día para cada cosa. `[3.4.E401 · declarado]`
+- El líder de la posventa acuerda con Ventas qué trae cada comprador —lo que busca y lo que se le prometió al vender— y el acuerdo se cumple: cada uno llega a la posventa con eso y, si los compradores vuelven a comprar otra unidad, la posventa le avisa a Ventas cuando uno se puede estar yendo. `[3.4.E4]`
+- Si la empresa vende proyectos propios y el proyecto queda en condominio, el traspaso a su administración está acordado por escrito: qué se entrega, cuándo y a quién acude el propietario desde ese día para cada cosa. `[3.4.E401 · declarado]`
 
 **Óptimo.** Hay responsables de validar la IA y de cuidar el conocimiento, y la posventa se mide por cómo reciben su unidad los compradores.
 
@@ -5335,16 +5472,16 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 *Resultado:* Los reclamos que se repiten, las quejas, las fechas críticas de los compradores clave y, si la empresa vende proyectos propios, los cambios en la fecha de entrega ya no toman al equipo por sorpresa: se actúa antes de que el problema crezca.
 
 - Un comprador con reclamos repetidos por el mismo problema, una queja sin resolver o, si se piden calificaciones, una mala calificación se identifica, y alguien lo contacta antes de que el problema crezca. `[3.7.F1]`
-- Los compradores clave —por ejemplo, quien compró varias unidades— reciben contacto antes de sus fechas críticas —la escritura, la entrega, el fin de una garantía o, si la hay, una renovación—, no después. `[3.7.F2]`
+- Los compradores clave —por ejemplo, quien compró varias unidades— reciben contacto antes de sus fechas críticas —la escritura, el fin de una garantía o, si la hay, una renovación—, no después. `[3.7.F2]`
 - Si la empresa vende proyectos propios, cada comprador afectado por un cambio en la fecha de entrega recibe el aviso de la empresa —con la fecha nueva y la razón— antes de que se cumpla la fecha anterior. `[3.7.F401 · comprobable · hábito]`
 
 **Eficiente.** Los problemas se ven venir, ningún caso del comprador se pierde aunque lo resuelva otra área —la obra, legal o cobros—, y el comprador recibe lo que necesita saber antes de pedirlo.
 
 *Resultado:* Los casos del comprador no se pierden entre la posventa, la obra, legal y cobros, cada comprador sabe cómo va su unidad antes de preguntarlo y los problemas se atienden antes de que crezcan; donde la relación es continua, la empresa retiene clientes que antes se perdían sin aviso.
 
-- Ningún caso del comprador se pierde entre áreas: si lo resuelve otra área —la obra, legal, cobros—, queda igual en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —una entrega, el fin de una garantía, una escritura— o, si se piden calificaciones, cuando un comprador califica mal. `[3.7.E4]`
+- Ningún caso del comprador se pierde entre áreas: si lo resuelve otra área —la obra, legal, cobros—, también queda en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —una entrega, el fin de una garantía, una escritura— o, si se piden calificaciones, cuando un comprador califica mal. `[3.7.E4]`
 - Cada comprador recibe, sin tener que pedirla, la información que necesita antes de los momentos clave —la escritura, la inspección previa, la entrega—, y sale de forma automática, no cuando alguien se acuerda. `[3.7.E5]`
-- Si la unidad se vende antes de terminarse, de la firma a la entrega cada comprador recibe en una cadencia fija cómo va la obra de su proyecto y la fecha de entrega vigente, sin tener que pedirlo. `[3.7.E401 · comprobable · hábito]`
+- Si la empresa vende proyectos propios y la unidad se vende antes de terminarse, de la firma a la entrega cada comprador recibe en una cadencia fija cómo va la obra de su proyecto y la fecha de entrega vigente, sin tener que pedirlo. `[3.7.E401 · comprobable · hábito]`
 
 **Óptimo.**
 

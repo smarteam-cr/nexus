@@ -5745,11 +5745,29 @@ los graves, y los tres reportes de feedback del equipo (F-5, F-6, F-7). Para qu�
 un consultor ubique a una empresa y que a la empresa le haga sentido estar ahí; con eso, previsibilidad para el
 cliente, *land and expand* y servicio recurrente.
 
+- **Las 13 decisiones de Elías (2026-10-09)**, que `pendiente-9-0.md` cita por número: (1) Marketing pide en Funcional
+  los canales que la empresa eligió en su plan, no los cuatro. (2) WhatsApp o chat cuentan solo si el equipo atiende
+  por ahí. (3) Un marketing con agencia, o de una sola persona, puede ser Funcional si el equipo es dueño del
+  calendario, del brief, de la aprobación y de los accesos. (4) Misma vara en las tres áreas: metas en Funcional; lo
+  que ha pagado el cliente y el reporte a la dirección en Eficiente; licencias sin uso en las tres (en la 8.8 solo se
+  acota; sumar es 9.0). (5) La recompra sin contrato es de Ventas; retener con contrato, de Servicio; ofrecer el
+  siguiente producto, de Ventas con la señal de Servicio. (6) Lo que comparten Ventas y Marketing se cuenta una vez
+  (9.0). (7) Cliente clave: cada empresa lo define por escrito. (8) Pronóstico confiable = ±10 % en la mayoría de los
+  meses del último semestre; estancado = el plazo que el proceso define para cada etapa; «todo negocio» = desde la
+  puesta en marcha. (9) IA que sugiere = Eficiente; Óptimo = la IA ejecuta y una persona valida, y cada Óptimo dice
+  qué hace la IA, quién valida y qué se ve en el sistema. (10) Permiso de contacto: riesgo en las tres áreas, impide
+  Funcional solo donde la ley lo exige (9.0). (11) Palabras: vendedor, negocio, caso, cliente ideal, tablero,
+  nutrición, fuga, «Tracción del Negocio»; en inglés solo lead, pipeline, CRM, MQL, SQL, playbook y SLA. (12) La
+  tienda solo física y las aseguradoras se miden con la escala general; Inmobiliaria cubre corredoras y alquileres,
+  con lo de proyecto propio bajo condición. (13) La vara de Funcional se mantiene; antes del test, probar con 5 a 8
+  clientes reales.
 - **En la 8.8 ningún identificador cambia.** Se precisa o se acota el texto (criterios, señales, preguntas, frases,
   resultados, costos, palabras, condiciones «Si…», marcas de perfil que precisan lo que el criterio ya era). Agregar,
   quitar, partir o mover un criterio, cambiar la marca «riesgo» o el cálculo va a la 9.0
   (`docs/escala/pendiente-9-0.md`). *Por qué:* identificadores estables (prueba 5), y una medición hecha con la 8.7
-  se sigue comparando con una de la 8.8.
+  se sigue comparando con una de la 8.8. Las señales de Deficiente e Inicial cambian de redacción y conservan su
+  número: esos dos niveles se asignan por el que mejor describe a la empresa, leyendo el nivel entero, no contando
+  señales (especificación, «Nivel de una dimensión»).
 - **Antes de la 9.0, la 8.8 se prueba con 5 a 8 clientes reales** (decisión 13). ⛔ Nunca Wherex: hizo churn y es el
   cliente de prueba de Nexus.
 - **Regla de asignación para los casos nuevos** (en la escala misma): dónde vive la información y si los sistemas se
@@ -5762,5 +5780,18 @@ cliente, *land and expand* y servicio recurrente.
 - **Las pruebas del repo no suponen una versión.** `publicar.test.ts` y `servidor.int.test.ts` arman la versión
   siguiente con `versionSiguiente` y buscan el criterio por su identificador; `mapa.test.ts` mira que el mapa de
   herramientas valga «desde» una versión no posterior. Publicar la 8.8 no rompe ninguna; la 9.0 tampoco va a romperlas.
-- **La 8.8 se publica con el script**, no con el botón de Nexus: cambiaron también el manual (1.3.7) y la
-  especificación (1.3.8, que nombra la dimensión 1.7 como «Tracción del Negocio»), y el botón publica solo la escala.
+- **La 8.8 se publica con el script**, no con el botón de Nexus: cambiaron también el manual (1.3.7), la
+  especificación (1.3.8) y el mapa de herramientas (1.0.1), y el botón publica solo la escala. En la PC de Elías, en
+  orden: `importar docs/escala/escala_rendimiento_smarteam.md --por egonzalez@smarteamcr.com --nota "…" --apply`;
+  `escala-datos.ts estado` tiene que decir «revisión 1» y los cambios en la bitácora; `publicar-escala.ts
+  --ediciones-revisadas --por egonzalez@smarteamcr.com` en seco; y el mismo con `--apply`. `--ediciones-revisadas`
+  firma que se miraron los textos de las ediciones que el script marca como «viejos» (170 en la 8.8: siguen diciendo
+  lo mismo). Desde la doble comprobación, `publicar-escala.ts` frena si el borrador no tiene ningún cambio (sería la
+  8.7 con otro número, y una versión publicada no se corrige), si el archivo del repo dice esa versión con otro
+  texto, o si falta un autor del equipo.
+- **Doble comprobación antes de publicar (2026-10-09, pedida por Elías).** 12 revisores, cada hallazgo intentado
+  refutar por un verificador: 199 hallazgos, 171 confirmados. Lo más importante: los criterios que la 8.8 había
+  ampliado o a los que les había subido la vara volvieron a la 8.7 precisada (2.4.F1, al rol por escrito; 2.7.F3, a
+  la campaña corriendo; 1.7.F5, sin el plazo por tipo de cliente; 1.3.O3, sin pedir que se use la ficha; 3.7.F2,
+  sin las entregas), y lo que querían pedir quedó en la 9.0. Se aplicaron 354 reemplazos de línea; una segunda
+  revisión miró cada uno y corrigió 10 detalles más (entre ellos, 1.5.O1 recupera «en tiempo real», como en la 8.7).

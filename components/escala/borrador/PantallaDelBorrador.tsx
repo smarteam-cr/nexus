@@ -429,7 +429,7 @@ function ConBorrador({ borrador, bitacora, hrefDelEditor }: { borrador: ResumenD
         onConfirm={publicar}
         loading={ocupado === "publicar"}
         title={`¿Publicar la ${borrador.version}?`}
-        description="Pasa a ser la escala que ve todo el equipo y la que se descarga, y queda congelada: lo que cambie después va en un borrador nuevo."
+        description="Pasa a ser la escala que ve todo el equipo y la que se descarga, y queda congelada: lo que cambie después va en un borrador nuevo. Publica solo la escala: si esta versión trae un manual o una especificación nuevos, publícala con el script."
         confirmLabel={`Publicar la ${borrador.version}`}
       />
       <ConfirmDialog

@@ -24,6 +24,7 @@ import {
   relacionadosCon,
   requeridosDelArea,
   terminosParaSubrayar,
+  type TerminoSubrayado,
   VISTAS,
   vistaDesdeUrl,
 } from "./vista";
@@ -87,17 +88,33 @@ describe("partirPorPalabras", () => {
     ]);
   });
 
+  it("un término de varias palabras toma el plural palabra por palabra, también con tilde", () => {
+    const terminos: TerminoSubrayado[] = [
+      { termino: "Caso", significado: "Un pedido de ayuda.", tipo: "glosario" },
+      { termino: "Caso de éxito", significado: "Historia de un cliente.", tipo: "glosario" },
+      { termino: "Revisión del pipeline", significado: "La reunión fija.", tipo: "glosario" },
+      { termino: "Negocio ganado", significado: "El que se cerró.", tipo: "glosario" },
+    ];
+    const t = partirPorPalabras("Los casos de éxito salen de los negocios ganados y se ven en las revisiones del pipeline; un caso no.", terminos);
+    expect(t.filter((x) => x.palabra).map((x) => `${x.texto} → ${x.palabra!.termino}`)).toEqual([
+      "casos de éxito → Caso de éxito",
+      "negocios ganados → Negocio ganado",
+      "revisiones del pipeline → Revisión del pipeline",
+      "caso → Caso",
+    ]);
+  });
+
   it("las de valor fijo no toman plural: «la mayorías» no es «la mayoría»", () => {
     expect(partirPorPalabras("En la mayorías.", [{ termino: "La mayoría", significado: "al menos 80%", tipo: "valor" }])).toEqual([
       { texto: "En la mayorías.", palabra: null },
     ]);
   });
 
-  it("en el archivo real, «pipeline review» se marca con su significado del glosario", () => {
+  it("en el archivo real, «revisión del pipeline» se marca con su significado del glosario", () => {
     const terminos = terminosParaSubrayar(real);
-    const i3 = real.areas[0].dimensiones[0].niveles.find((n) => n.letra === "I")!.criterios.find((c) => /pipeline review/i.test(c.texto));
-    expect(i3, "hay un criterio de Inicial que habla de la pipeline review").toBeTruthy();
-    const marcado = partirPorPalabras(i3!.texto, terminos).find((x) => x.palabra && /pipeline review/i.test(x.texto));
+    const i3 = real.areas[0].dimensiones[0].niveles.find((n) => n.letra === "I")!.criterios.find((c) => /revisión del pipeline/i.test(c.texto));
+    expect(i3, "hay un criterio de Inicial que habla de la revisión del pipeline").toBeTruthy();
+    const marcado = partirPorPalabras(i3!.texto, terminos).find((x) => x.palabra && /revisión del pipeline/i.test(x.texto));
     expect(marcado?.palabra?.tipo).toBe("glosario");
   });
 

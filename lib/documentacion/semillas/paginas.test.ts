@@ -315,9 +315,9 @@ describe("«Escala de rendimiento»", () => {
     }
   });
 
-  it("explica cómo se usa en Nexus, incluido comentar la escala", () => {
+  it("explica cómo se usa en Nexus, incluido mandar feedback sobre la escala", () => {
     expect(texto).toContain("Cómo se usa en Nexus");
-    expect(texto).toMatch(/coméntalo ahí mismo/);
+    expect(texto).toMatch(/mándalo como feedback ahí mismo/);
   });
 });
 

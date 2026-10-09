@@ -32,13 +32,18 @@
  *
  * Uso (PowerShell):
  *   npx tsx scripts/publicar-escala.ts                                         (en seco)
- *   $env:ALLOW_PROD_WRITE="1"; $env:SIN_RESPALDO="1"; npx tsx scripts/publicar-escala.ts --apply
+ *   $env:ALLOW_PROD_WRITE="1"; $env:SIN_RESPALDO="1"; npx tsx scripts/publicar-escala.ts --por tu@smarteamcr.com --apply
+ *
+ * Con un borrador abierto, frena antes de probar nada si el borrador no tiene ningún cambio (sería la
+ * versión anterior con otro número: falta el `importar --apply`) o si el archivo del repo dice esa
+ * misma versión con otro texto (falta importarlo; `--usar-borrador` si manda el borrador).
  *
  * `SIN_RESPALDO=1` porque la tabla es de solo inserción (no hay nada que pisar) y esta PC no tiene
  * `pg_dump`; con `pg_dump` en el PATH se puede omitir y el guard respalda antes de escribir.
  *
  * Opciones: `--sin-python` (no corre pruebas_escala.py: solo si de verdad no hay Python),
- *           `--por correo@smarteamcr.com` (quién publica; por defecto, el correo de git),
+ *           `--por correo@smarteamcr.com` (quién publica, del equipo; por defecto, el correo de git),
+ *           `--usar-borrador` (el archivo del repo dice la versión del borrador con otro texto, y manda el borrador),
  *           `--ediciones-revisadas` (una edición dice con sus palabras algo cuyo texto general
  *           cambió en esta versión y el suyo no: se miró y sigue diciendo lo mismo).
  */
@@ -138,6 +143,22 @@ async function main() {
     textos.escala = generarMarkdown(borrador.datos);
     const anotados = await prisma.escalaCambio.count({ where: { versionId: borrador.id } });
     console.log(`La escala sale del BORRADOR ${borrador.version} (revisión ${borrador.revision}, ${anotados} cambio(s) en su bitácora). El archivo del repo no se usa.`);
+    // Un borrador sin cambios es la versión anterior con otro número: publicarlo la congelaría así, y una
+    // versión publicada no se corrige. Pasa si se publica antes de que el `importar --apply` haya guardado.
+    if (anotados === 0) {
+      console.error(`⛔ El borrador ${borrador.version} no tiene ningún cambio en su bitácora: publicarlo sería publicar la ${borrador.basadaEn ?? "anterior"} con otro número.`);
+      console.error("   Primero sube el .md: npx tsx scripts/escala-datos.ts importar <archivo.md> --por tu@smarteamcr.com --apply");
+      await close();
+      process.exit(1);
+    }
+    // El archivo del repo dice ESTA versión con otro texto: falta importarlo, o el borrador cambió después.
+    // Publicar así deja afuera lo del archivo, y `exportar --al-repo` lo pisaría.
+    if (delRepo !== textos.escala && leerEncabezado(delRepo).version === borrador.version && !process.argv.includes("--usar-borrador")) {
+      console.error(`⛔ El archivo del repo dice la ${borrador.version} con otro texto que el borrador.`);
+      console.error("   Si manda el archivo: impórtalo (scripts/escala-datos.ts importar). Si manda el borrador: publica con --usar-borrador. No corras exportar --al-repo antes de decidirlo.");
+      await close();
+      process.exit(1);
+    }
     if (delRepo !== textos.escala) console.log("  El archivo del repo dice otra cosa: después de publicar, `npx tsx scripts/escala-datos.ts exportar --al-repo` lo deja igual.");
   } else {
     try {
@@ -381,18 +402,23 @@ async function main() {
       return;
     }
     if (!APPLY) {
+      const opciones = [EDICIONES_REVISADAS && "--ediciones-revisadas", process.argv.includes("--usar-borrador") && "--usar-borrador", `--por ${argumento("--por") ?? "tu@smarteamcr.com"}`];
       console.log("\nEN SECO: no se escribió nada. Para publicar:");
-      console.log('  $env:ALLOW_PROD_WRITE="1"; $env:SIN_RESPALDO="1"; npx tsx scripts/publicar-escala.ts --apply');
+      console.log(`  $env:ALLOW_PROD_WRITE="1"; $env:SIN_RESPALDO="1"; npx tsx scripts/publicar-escala.ts ${opciones.filter(Boolean).join(" ")} --apply`);
       return;
     }
 
-    // Quién publica: un correo del EQUIPO (el de git puede ser otro: se descarta si no está en Nexus).
+    // Quién publica: un correo del EQUIPO (el de git puede ser otro, y entonces hace falta --por).
     const candidato = argumento("--por") ?? correoDeGit();
     const miembro = candidato
       ? await prisma.teamMember.findFirst({ where: { email: { equals: candidato, mode: "insensitive" } }, select: { email: true } })
       : null;
     const por = miembro?.email ?? null;
-    if (candidato && !por) console.log(`(«${candidato}» no es del equipo en Nexus: queda sin autor. Usa --por tu@smarteamcr.com.)`);
+    // Como en la bitácora del borrador: lo publicado lleva quién lo publicó.
+    if (!por) {
+      console.error(`⛔ Lo publicado lleva quién lo publicó${candidato ? `, y «${candidato}» no es del equipo en Nexus` : ""}: usa --por tu@smarteamcr.com.`);
+      process.exit(1);
+    }
     // Todo o nada: los documentos y la versión como datos, en una transacción.
     const en = new Date();
     await prisma.$transaction(

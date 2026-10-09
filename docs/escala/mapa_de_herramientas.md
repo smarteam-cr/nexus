@@ -1,8 +1,8 @@
 ---
 documento: Escala de Rendimiento Smarteam — Mapa de herramientas
-version: 1.0.0
-escala: 8.7.0
-fecha: 2026-10-01
+version: 1.0.1
+escala: 8.8.0
+fecha: 2026-10-09
 estado: Borrador: lo revisa su responsable antes de usarlo con clientes
 ---
 
@@ -133,7 +133,7 @@ Dónde ayuda cada herramienta en la Escala de Rendimiento, criterio por criterio
 - `1.1.F401` CRM: cada visita como reunión con su resultado y la tarea del siguiente paso.
 - `1.1.E2` Sales Hub Pro: playbooks de discovery y objeciones abiertos dentro del registro.
 - `1.1.E3` Sales Hub Pro: informes de actividad y de negocios que se salen del proceso.
-- `1.1.O1` Sales Hub Pro: flujos que avisan al rep y al líder cuando un negocio se desvía.
+- `1.1.O1` Sales Hub Pro: flujos que avisan al vendedor y al líder cuando un negocio se desvía.
 - `1.1.O2` Sales Hub Pro: reglas de pipeline que impiden saltar etapas o avanzar sin datos.
 - `1.2.F2` Sales Hub Pro: rotación de leads por turnos, territorio o fuente con flujos.
 - `1.2.F3` Sales Hub: tareas automáticas al cambiar de etapa, con recordatorio al responsable.
@@ -275,7 +275,7 @@ Dónde ayuda cada herramienta en la Escala de Rendimiento, criterio por criterio
 - `2.6.F301` CRM: el familiar como contacto asociado al aspirante, con sus propias listas.
 - `2.6.E1` Marketing Hub Pro: flujos que se separan por segmento o por etapa.
 - `2.6.E2` Marketing Hub Pro: contenido inteligente que cambia la pieza según la lista.
-- `2.6.E3` Marketing Hub Pro: lead scoring por reglas que dispara los flujos de nurturing.
+- `2.6.E3` Marketing Hub Pro: puntaje de leads por reglas que dispara los flujos de nutrición.
 - `2.6.E4` Marketing Hub: listas por correos abiertos y páginas visitadas; compras si se integran.
 - `2.7.F1` Marketing Hub: correo masivo programado con su historial de envíos a la vista.
 - `2.7.F2` Marketing Hub Pro: publicaciones en redes programadas desde un mismo calendario.
@@ -389,7 +389,7 @@ Dónde ayuda cada herramienta en la Escala de Rendimiento, criterio por criterio
 - `1.1.F402` Implementación de CRM: la reserva se escribe y se monta como etapa con sus reglas.
 - `1.1.E2` Implementación de CRM: playbooks escritos con el equipo y cargados en el CRM.
 - `1.1.E3` Implementación de CRM: tablero de adherencia al proceso que el líder revisa.
-- `1.1.O1` Implementación de CRM: alertas de desviación configuradas para el rep y el líder.
+- `1.1.O1` Implementación de CRM: alertas de desviación configuradas para el vendedor y el líder.
 - `1.1.O2` SmartLoop: mide la adherencia cada mes y sostiene la adopción en el tiempo.
 - `1.1.O3` SmartLoop: cada vuelta prueba una técnica nueva con su métrica antes de sumarla.
 - `1.2.F2` Implementación de CRM: bandeja y reglas de asignación configuradas sobre el proceso real.
@@ -523,7 +523,7 @@ Dónde ayuda cada herramienta en la Escala de Rendimiento, criterio por criterio
 - `2.2.F101` Integraciones y automatización: el catálogo de la tienda alimenta los anuncios sin cargas manuales.
 - `2.2.F102` Integraciones y automatización: las compras de la tienda vuelven solas a Google y Meta.
 - `2.2.F301` Implementación de CRM: formulario de feria con código QR y su origen ya marcado.
-- `2.2.E1` Implementación de CRM: los recorridos de nurturing se diseñan con sus ramas y esperas.
+- `2.2.E1` Implementación de CRM: los recorridos de nutrición se diseñan con sus ramas y esperas.
 - `2.2.E2` CDP y activación: campañas de WhatsApp segmentadas y con ramas, funcionando en producción.
 - `2.2.E3` RevOps y alineación: traspaso a Ventas definido con su SLA y automatizado.
 - `2.2.E5` Desarrollo de sitio web: landing pages construidas en el CMS integrado al CRM.
@@ -629,7 +629,7 @@ Dónde ayuda cada herramienta en la Escala de Rendimiento, criterio por criterio
 - `3.4.F2` Implementación de CRM: se arma el tablero del líder con sus métricas clave.
 - `3.4.E1` SmartLoop: instala la revisión del SLA de cada agente y la sostiene.
 - `3.4.E2` Implementación de CRM: los módulos de capacitación quedan como material para quien entra.
-- `3.4.E4` RevOps y alineación: se acuerdan los traspasos y las alertas de churn con Ventas.
+- `3.4.E4` RevOps y alineación: se acuerda con Ventas qué trae cada cliente nuevo y cómo avisa Servicio cuando un cliente que recompra se puede estar yendo.
 - `3.4.E201` Implementación de CRM: cada traspaso a otra área queda medido en el ticket.
 - `3.4.E301` Implementación de CRM: lo que pasa a lo académico o lo financiero queda medido.
 - `3.4.O1` Implementación de CRM: queda escrito qué resuelve la IA y cuándo deriva.
@@ -684,5 +684,7 @@ Dónde ayuda cada herramienta en la Escala de Rendimiento, criterio por criterio
 - `3.8.O4` SmartLoop: cada vuelta mide el aporte de los avisos contra un grupo de control.
 
 ## Historial de versiones
+
+**1.0.1 (2026-10-09).** Con la escala 8.8.0: lo que se ve junto a cada criterio usa sus palabras («vendedor», «puntaje de leads», «nutrición», la fuga de un cliente que recompra). Ningún criterio cambia de herramienta.
 
 **1.0.0 (2026-10-01).** Primera versión, con la escala 8.7.0: Insider One, HubSpot y Smarteam, en las tres áreas y en lo propio de las cuatro ediciones. Es un borrador para revisar.

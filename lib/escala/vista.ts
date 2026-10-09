@@ -324,27 +324,40 @@ export function terminosParaSubrayar(
 
 export type Trozo = { texto: string; palabra: TerminoSubrayado | null };
 
+/** Palabras que no cambian en plural dentro de un término del glosario («caso DE éxito»). */
+const SIN_PLURAL = new Set(["a", "al", "con", "de", "del", "el", "en", "la", "las", "lo", "los", "para", "por", "y"]);
+
+/** «revisión» → «revisiones», «caso» → «casos», «lead» → «leads», «luz» → «luces». */
+function plural(palabra: string): string[] {
+  const p = palabra.toLowerCase();
+  if (/[aeiouáéó]$/.test(p)) return [`${palabra}s`];
+  const tilde = /([áéíóú])([ns])$/.exec(p);
+  if (tilde) return [`${palabra.slice(0, -2)}${"aeiou"["áéíóú".indexOf(tilde[1])]}${palabra.slice(-1)}es`];
+  if (p.endsWith("z")) return [`${palabra.slice(0, -1)}ces`];
+  // En inglés («lead» → «leads») y en español («canal» → «canales»): valen las dos.
+  return [`${palabra}s`, `${palabra}es`];
+}
+
 /**
  * Parte un texto en trozos, marcando las palabras con valor fijo («la mayoría», «a tiempo»…) y los
  * términos del glosario para mostrarlos con su significado. Sin distinguir mayúsculas, solo palabras
- * enteras, la más larga primero («pipeline review» antes que «pipeline») y, las del glosario, también
- * en plural («pipeline reviews», «deals»).
+ * enteras, la más larga primero («revisión del pipeline» antes que «pipeline») y, las del glosario,
+ * también en plural, palabra por palabra («revisiones del pipeline», «casos de éxito», «leads»).
  */
 export function partirPorPalabras(texto: string, palabras: TerminoSubrayado[]): Trozo[] {
   if (!palabras.length || !texto) return [{ texto, palabra: null }];
   const escapar = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const orden = [...palabras].sort((a, b) => b.termino.length - a.termino.length);
-  const alternativa = (p: TerminoSubrayado) => escapar(p.termino) + (p.tipo === "glosario" ? "(?:es|s)?" : "");
+  const alternativa = (p: TerminoSubrayado) =>
+    p.tipo === "glosario"
+      ? p.termino
+          .split(" ")
+          .map((w) => (SIN_PLURAL.has(w.toLowerCase()) ? escapar(w) : `(?:${[w, ...plural(w)].map(escapar).join("|")})`))
+          .join(" ")
+      : escapar(p.termino);
   const patron = new RegExp(`(?<![\\p{L}\\p{N}])(${orden.map(alternativa).join("|")})(?![\\p{L}\\p{N}])`, "giu");
-  const cual = (hallado: string) => {
-    const h = hallado.toLowerCase();
-    return (
-      orden.find((p) => {
-        const t = p.termino.toLowerCase();
-        return h === t || (p.tipo === "glosario" && (h === `${t}s` || h === `${t}es`));
-      }) ?? null
-    );
-  };
+  const exactos = orden.map((p) => ({ p, re: new RegExp(`^(?:${alternativa(p)})$`, "iu") }));
+  const cual = (hallado: string) => exactos.find((x) => x.re.test(hallado))?.p ?? null;
   const out: Trozo[] = [];
   let desde = 0;
   for (const m of texto.matchAll(patron)) {
