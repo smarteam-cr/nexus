@@ -6,6 +6,13 @@
  * sala, salvo override explícito del CSE (BusinessCaseSession.included). Así las
  * sesiones relevantes quedan PRE-SELECCIONADAS sin que el CSE las busque a mano.
  *
+ * ⚠ SALVO LAS QUE YA SON DE UN PROYECTO (2026-10-08, F-4 de Feedback). La regla no tenía ni
+ * ventana ni proyecto, y en un cliente con historia arrastraba TODO: RC Inmobiliaria abría una
+ * propuesta nueva con 23 reuniones desde 2023, las de los proyectos en curso incluidas, y Ventas
+ * tenía que sacarlas de a una para quedarse con la última. Una reunión atada a un proyecto
+ * (`SessionProject`) ya es la venta o la entrega de ESE proyecto: no alimenta sola una propuesta
+ * nueva. Sigue en «Buscar», marcada `enProyecto`, por si sí hace falta.
+ *
  * Fuente de sesiones del prospecto: `resolvedClientId` (índice) + suplemento por
  * dominio (raw, sin ventana de fecha). Lo usan el panel (/session-candidates) y la
  * generación (/generate) para no duplicar el criterio. Solo lectura.
@@ -28,6 +35,8 @@ export type BcSessionMeta = {
   participants: string[];
   applies: boolean;        // ¿hay alguien de Ventas en la sala? (regla de auto-feed)
   hasTranscript: boolean;
+  /** Ya es de un proyecto: no entra sola (ver el encabezado). */
+  enProyecto: boolean;
 };
 
 type Row = { id: string; title: string; date: Date; participants: string[]; organizerEmail: string | null };
@@ -120,13 +129,21 @@ export async function loadBcFeeding(businessCaseId: string): Promise<BcFeedingRe
     ? await prisma.firefliesSession.findMany({ where: { id: { in: all.map((s) => s.id) } }, select: { id: true, transcript: true } })
     : [];
   const hasT = new Map(tRows.map((r) => [r.id, !!r.transcript?.trim()]));
+  const deProyecto = all.length
+    ? new Set(
+        (await prisma.sessionProject.findMany({ where: { sessionId: { in: all.map((s) => s.id) } }, select: { sessionId: true } })).map(
+          (r) => r.sessionId,
+        ),
+      )
+    : new Set<string>();
 
-  // Alimenta: override=true → sí; override=false → no; sin override → la regla (Ventas en la sala).
+  // Alimenta: override=true → sí; override=false → no; sin override → la regla (Ventas en la sala
+  // y todavía no es de ningún proyecto).
   const feeds = (s: Row): boolean => {
     const o = override.get(s.id);
     if (o === true) return true;
     if (o === false) return false;
-    return hasVentas(s.participants, s.organizerEmail);
+    return hasVentas(s.participants, s.organizerEmail) && !deProyecto.has(s.id);
   };
 
   const meta = (s: Row): BcSessionMeta => ({
@@ -136,6 +153,7 @@ export async function loadBcFeeding(businessCaseId: string): Promise<BcFeedingRe
     participants: s.participants,
     applies: hasVentas(s.participants, s.organizerEmail),
     hasTranscript: hasT.get(s.id) ?? false,
+    enProyecto: deProyecto.has(s.id),
   });
   const byDateDesc = (a: { date: Date }, b: { date: Date }) => b.date.getTime() - a.date.getTime();
 

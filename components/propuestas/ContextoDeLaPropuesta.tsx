@@ -17,6 +17,7 @@
  *   · Casos de uso con precio fijo: entran con su precio exacto; el agente no los escribe.
  * Las cuentas dicen lo que ALIMENTA: una fuente excluida sigue a la vista, pero no cuenta.
  */
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
@@ -26,8 +27,9 @@ import { ContextColumn, ContextColumnList, ContextRow, CTX_ICONS } from "@/compo
 import { FilaDeAlrededor } from "@/components/clients/FilaDeAlrededor";
 import { fechaDeVentas } from "@/lib/business-cases/estado-de-la-propuesta";
 import ColumnaPreventa, { type PreventaDeLaPropuesta } from "./ColumnaPreventa";
+import AccionesDeReuniones from "./AccionesDeReuniones";
 
-type SessionMeta = { sessionId: string; title: string; date: string; participants: string[]; applies: boolean; hasTranscript: boolean };
+type SessionMeta = { sessionId: string; title: string; date: string; participants: string[]; applies: boolean; hasTranscript: boolean; enProyecto?: boolean };
 type Transcript = {
   id: string;
   source: string;
@@ -453,6 +455,18 @@ export default function ContextoDeLaPropuesta({
             </ContextColumn>
 
             <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={included.length}>
+              {/* Quitar todas de una vez, o vaciar y buscar la que sirve (F-4 de Feedback, 2026-10-08). */}
+              {puedeEditar && (
+                <AccionesDeReuniones
+                  bcId={bcId}
+                  incluidas={included.map((s) => s.sessionId)}
+                  onCambio={async () => {
+                    await loadSessions();
+                    onAfterChange?.();
+                  }}
+                  onBuscar={() => setShowSearch(true)}
+                />
+              )}
               <ContextColumnList loading={loadingSessions} empty="Sin reuniones elegidas. Agrégalas con «Buscar más sesiones».">
                 {included.map((s) => (
                   <ContextRow
@@ -614,9 +628,9 @@ export default function ContextoDeLaPropuesta({
             <p className="rounded-lg border border-dashed border-line bg-surface-muted px-3 py-2.5 text-xs leading-[18px] text-fg-muted">
               Todavía no hay ninguno en el catálogo para este tipo de propuesta. Cuando haya, se marcan acá (y los que eligió la preventa
               llegan marcados).{" "}
-              <a href="/sales/use-cases" className="font-semibold text-brand hover:text-brand-dark">
+              <Link href="/sales/use-cases" className="font-semibold text-brand hover:text-brand-dark">
                 Ir a Casos de uso
-              </a>
+              </Link>
             </p>
           ) : (
             <ul className="space-y-1.5">
@@ -694,6 +708,11 @@ export default function ContextoDeLaPropuesta({
                     {c.applies && (
                       <span className="flex-shrink-0 rounded-full border border-success-line bg-success-surface px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-success-ink">
                         Ventas
+                      </span>
+                    )}
+                    {c.enProyecto && (
+                      <span title="Ya es de un proyecto: no entra sola a una propuesta nueva" className="flex-shrink-0 rounded-full border border-line bg-surface-muted px-1.5 py-0.5 text-[9px] font-medium text-fg-muted">
+                        de un proyecto
                       </span>
                     )}
                     {!c.hasTranscript && (
