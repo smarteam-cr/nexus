@@ -120,8 +120,10 @@ describe("está cableado, y con los frenos puestos", () => {
        puertas (handoff y cronograma). La guarda sigue al código y exige que las dos lo usen. */
     expect(leer("lib/sessions/agregar-sesion.ts")).toContain("adoptarSesionSinDuenio(");
     for (const ruta of PUERTAS_DE_AGREGAR) {
-      expect(leer(ruta), `${ruta} vincula por su cuenta, sin la puerta única`).toContain(
-        "prepararVinculoManual(",
+      /* 2026-10-09: las puertas aceptan varias reuniones de una vez y pasan por la versión en lote de la
+         MISMA puerta (`prepararVinculosManuales`, que decide cada una con lo mismo que la de una sola). */
+      expect(leer(ruta), `${ruta} vincula por su cuenta, sin la puerta única`).toMatch(
+        /prepararVinculoManual\(|prepararVinculosManuales\(/,
       );
     }
   });

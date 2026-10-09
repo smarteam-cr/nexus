@@ -27,7 +27,8 @@ import { ContextColumn, ContextColumnList, ContextRow, CTX_ICONS } from "@/compo
 import { FilaDeAlrededor } from "@/components/clients/FilaDeAlrededor";
 import { fechaDeVentas } from "@/lib/business-cases/estado-de-la-propuesta";
 import ColumnaPreventa, { type PreventaDeLaPropuesta } from "./ColumnaPreventa";
-import { useAccionesDeReuniones } from "./AccionesDeReuniones";
+import ListaDeReuniones from "@/components/contexto/ListaDeReuniones";
+import { estadoDeLaReunion, fechaDeReunion } from "@/lib/contexto/lista-de-reuniones";
 
 type SessionMeta = { sessionId: string; title: string; date: string; participants: string[]; applies: boolean; hasTranscript: boolean; enProyecto?: boolean };
 type Transcript = {
@@ -245,16 +246,28 @@ export default function ContextoDeLaPropuesta({
     [bcId, toast, loadTags],
   );
 
-  // Quitar reuniones de a muchas y deshacerlo con Ctrl+Z (F-4). La X de cada fila pasa por acá también.
-  const acciones = useAccionesDeReuniones({
-    bcId,
-    incluidas: included,
-    onCambio: async () => {
-      await loadSessions();
-      onAfterChange?.();
+  /* Quitar o devolver reuniones, de a una o de a muchas, en UNA transacción (F-4). Lo usa la lista de
+     reuniones de todo «Contexto adicional» para la X, «Quitar las N», «Vaciar y buscar» y deshacer. */
+  const escribirReuniones = useCallback(
+    async (sessionIds: string[], included: boolean): Promise<boolean> => {
+      try {
+        await fetchJson(`/api/business-cases/${bcId}/sessions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionIds, included }),
+        });
+        await loadSessions();
+        onAfterChange?.();
+        return true;
+      } catch (e) {
+        toast.error(e instanceof ApiError ? e.message : "No se pudieron cambiar las reuniones.");
+        // Si la lista quedó vieja (otra persona cambió algo), releerla evita que cada intento falle igual.
+        await loadSessions();
+        return false;
+      }
     },
-    onBuscar: () => setShowSearch(true),
-  });
+    [bcId, loadSessions, onAfterChange, toast],
+  );
 
   const toggleSession = async (sessionId: string, include: boolean) => {
     setBusyId(sessionId);
@@ -466,27 +479,28 @@ export default function ContextoDeLaPropuesta({
             </ContextColumn>
 
             <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={included.length}>
-              {/* Quitar varias o todas, y deshacerlo con Ctrl+Z (F-4 de Feedback, 2026-10-08). */}
-              {puedeEditar && acciones.barra}
-              <ContextColumnList loading={loadingSessions} empty="Sin reuniones elegidas. Agrégalas con «Buscar más sesiones».">
-                {included.map((s) => (
-                  <ContextRow
-                    key={s.sessionId}
-                    icon={CTX_ICONS.meet}
-                    meta={fechaDeVentas(s.date)}
-                    title={s.title || "Sin título"}
-                    badge={s.hasTranscript ? { label: "Incluida", tone: "green" } : { label: "Sin transcripción", tone: "amber" }}
-                    seleccion={puedeEditar ? acciones.seleccionDe(s.sessionId, s.title || "Sin título") : undefined}
-                    onRemove={puedeEditar && !acciones.trabajando ? () => void acciones.quitar([s.sessionId]) : undefined}
-                    removeTitle="Sacar de esta propuesta"
-                  />
-                ))}
-              </ContextColumnList>
+              <div className="flex flex-1 flex-col gap-2">
+              {/* La lista de reuniones de todo «Contexto adicional»: elegir varias, quitar, deshacer con Ctrl+Z. */}
+              <ListaDeReuniones
+                reuniones={included.map((s) => ({
+                  id: s.sessionId,
+                  titulo: s.title || "Sin título",
+                  datos: fechaDeReunion(s.date),
+                  estado: estadoDeLaReunion({ sinTranscripcion: !s.hasTranscript }),
+                }))}
+                puedeEditar={puedeEditar}
+                escribir={escribirReuniones}
+                onBuscar={() => setShowSearch(true)}
+                vacio="Sin reuniones elegidas. Agrégalas con «Buscar más sesiones»."
+                etiquetaQuitar={(titulo) => `Quitar «${titulo}» de esta propuesta`}
+                tituloQuitar="Sacar de esta propuesta"
+                cargando={loadingSessions}
+              />
               {puedeEditar && (
                 <button
                   type="button"
                   onClick={() => setShowSearch(true)}
-                  className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line px-2 py-1.5 text-[11px] font-medium text-brand transition-colors hover:text-brand-dark"
+                  className="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line px-2 py-1.5 text-[11px] font-medium text-brand transition-colors hover:text-brand-dark"
                 >
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
@@ -494,6 +508,7 @@ export default function ContextoDeLaPropuesta({
                   Buscar más sesiones
                 </button>
               )}
+              </div>
             </ContextColumn>
 
             <ContextColumn icon={CTX_ICONS.note} color="#7c6df2" title="Fuentes manuales" count={transcripts.length}>

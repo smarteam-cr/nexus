@@ -183,7 +183,14 @@ export default function BusinessCaseWorkspace({
   );
 
   // poll:false → la generación del BC se sigue aparte (abajo); sin polling del canvas (evita parpadeo).
-  const hook = useCanvasSections(`/api/business-cases/${bcId}`, canvasId, () => setDirty(true), { poll: false });
+  /* El paso «Propuesta» es el ancla del deshacer del documento: con el paso oculto (Contexto o
+     Compartir), Ctrl+Z no deshace una edición que no se ve — y la lista de reuniones de Contexto no le
+     cede la tecla por algo de otra pantalla. */
+  const pasoPropuestaRef = useRef<HTMLDivElement>(null);
+  const hook = useCanvasSections(`/api/business-cases/${bcId}`, canvasId, () => setDirty(true), {
+    poll: false,
+    anclaDeDeshacer: pasoPropuestaRef,
+  });
   /* ⭐ El chat aplica por los MISMOS verbos que la edición a mano. Las defs salen por PLANTILLA: una
      def ausente hace que el ejecutor rechace campos que sí existen. */
   useEjecutarOperacionesDelChat(hook, defsForCanvas(templateId, hook.sections), CAPACIDADES_POR_PIEZA[PIEZA_PROPUESTA_COMERCIAL]);
@@ -581,7 +588,7 @@ export default function BusinessCaseWorkspace({
       </div>
 
       {/* ── 2 · Propuesta ────────────────────────────────────────────────────────────── */}
-      <div hidden={paso !== "propuesta"} className="min-w-0 flex-1 bg-surface-muted px-6 pb-10 pt-6">
+      <div ref={pasoPropuestaRef} hidden={paso !== "propuesta"} className="min-w-0 flex-1 bg-surface-muted px-6 pb-10 pt-6">
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">

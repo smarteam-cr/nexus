@@ -1547,7 +1547,7 @@ function FlowchartInner({
   const selectedCount = nodes.filter((n) => n.selected && !n.id.startsWith("__")).length;
 
   const flowContent = (
-    <div ref={raizRef} className="relative w-full h-full">
+    <div ref={raizRef} data-deshacer-propio className="relative w-full h-full">
       {/* Resaltado de selección — UNA sola regla cubre los ~18 tipos de nodo (cajas, texto,
           notas) sin tocar cada componente; React Flow ya agrega la clase `selected` al
           wrapper de cada nodo. El borde/radio queda algo "rectangular" en formas tipo

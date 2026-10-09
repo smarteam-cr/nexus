@@ -20,21 +20,16 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import {
-  ContextColumn,
-  ContextColumnList,
-  ContextRow,
-  CTX_ICONS,
-} from "@/components/clients/context-column";
+import { ContextColumn, CTX_ICONS } from "@/components/clients/context-column";
 import ContextoAdicional from "@/components/contexto/ContextoAdicional";
+import ListaDeReuniones from "@/components/contexto/ListaDeReuniones";
+import { datosConOrigen, estadoDeLectura } from "@/lib/contexto/lista-de-reuniones";
 import InstruccionesAdicionales from "@/components/contexto/InstruccionesAdicionales";
-import { diaConAnio } from "@/lib/exploraciones/fechas";
 import {
   claveDeInstrucciones,
   MAX_NOTA_DE_SESION,
   type PiezaConInstrucciones,
 } from "@/lib/exploraciones/notas-de-sesion";
-import { useToast } from "@/components/ui";
 import BuscarReunionesDeLaPreventa from "./BuscarReunionesDeLaPreventa";
 import SumarAMano from "./SumarAMano";
 import { useLienzo } from "./contexto";
@@ -67,25 +62,15 @@ const QUIEN_LAS_LEE: Record<PiezaConInstrucciones, string> = {
 export default function ContextoDeLaPreventa({ pieza }: { pieza: PiezaConInstrucciones | null }) {
   const { exp, reuniones, documentos, puedeEditar, cambiar, recargar } =
     useLienzo();
-  const toast = useToast();
   const [buscando, setBuscando] = useState(false);
   const elegidas = new Set(exp.estado.contenido.reunionesElegidas);
-  const quitar = async (sessionId: string) => {
-    try {
-      const res = await fetch(`/api/sales/exploraciones/${exp.id}/reuniones`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, elegida: false }),
-      });
-      if (!res.ok) {
-        const d = (await res.json().catch(() => ({}))) as { error?: string };
-        toast.error(d.error ?? "No se pudo quitar la reunión.");
-        return;
-      }
-      await recargar();
-    } catch {
-      toast.error("No se pudo quitar la reunión: revisa la conexión.");
-    }
+  /* Quitar o devolver reuniones sumadas con el buscador, de a una o de a muchas: UN cambio del lienzo
+     (con su versión, y su aviso si falla) y después se relee la lista. Devolver vuelve a elegir lo que
+     ya estaba elegido, así que no hace falta volver a pasar por el buscador. */
+  const escribirReuniones = async (ids: string[], incluir: boolean): Promise<boolean> => {
+    const ok = await cambiar(ids.map((sessionId) => ({ op: "reunionElegida" as const, sessionId, elegida: incluir })));
+    if (ok) await recargar();
+    return ok;
   };
   const sumarAlAbrir = useSearchParams().get("sumar") === "1";
   const [abierto, setAbierto] = useState(sumarAlAbrir);
@@ -142,34 +127,27 @@ export default function ContextoDeLaPreventa({ pieza }: { pieza: PiezaConInstruc
             count={deCalendario.length}
           >
             <div className="flex flex-1 flex-col gap-2">
-              <ContextColumnList empty="Todavía no hay reuniones con la empresa en Meet ni en HubSpot.">
-                {deCalendario.map((r) => (
-                  <ContextRow
-                    key={`${r.origen}:${r.id}`}
-                    icon={
-                      r.origen === "hubspot"
-                        ? CTX_ICONS.hubspot
-                        : CTX_ICONS.meet
-                    }
-                    meta={`${DE_DONDE[r.origen]} · ${diaConAnio(r.fecha)}`}
-                    title={r.titulo}
-                    badge={
-                      r.leida
-                        ? { label: "Leída", tone: "green" }
-                        : { label: "Sin leer", tone: "amber" }
-                    }
-                    {...(puedeEditar &&
-                    r.origen === "meet" &&
-                    elegidas.has(r.id)
-                      ? {
-                          onRemove: () => void quitar(r.id),
-                          removeTitle:
-                            "La sumaste con el buscador: quitarla la saca de esta preventa (sigue siendo de la empresa).",
-                        }
-                      : {})}
-                  />
-                ))}
-              </ContextColumnList>
+              {/* La lista de reuniones de todo «Contexto adicional» (2026-10-09). Acá solo se quitan las que
+                  se sumaron con el buscador: las que encontró el agente son de la empresa y no llevan
+                  casilla (dejan el hueco, para que los títulos queden alineados). «Elegir todas» aparece
+                  con 2 o más que se puedan quitar, y elige solo esas. El origen va en la línea de datos. */}
+              <ListaDeReuniones
+                reuniones={deCalendario.map((r) => ({
+                  // Las de HubSpot llevan su origen en la clave: otro sistema, otra serie de ids.
+                  id: r.origen === "meet" ? r.id : `${r.origen}:${r.id}`,
+                  titulo: r.titulo,
+                  datos: datosConOrigen(DE_DONDE[r.origen], r.fecha),
+                  estado: estadoDeLectura(r.leida),
+                  quitable: r.origen === "meet" && elegidas.has(r.id),
+                }))}
+                puedeEditar={puedeEditar}
+                escribir={escribirReuniones}
+                onBuscar={() => setBuscando(true)}
+                minimoParaElegir={2}
+                vacio="Todavía no hay reuniones con la empresa en Meet ni en HubSpot."
+                etiquetaQuitar={(titulo) => `Quitar «${titulo}» de esta preventa`}
+                tituloQuitar="La sumaste con el buscador: quitarla la saca de esta preventa (sigue siendo de la empresa)."
+              />
               {puedeEditar && (
                 <button
                   type="button"

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardContextoDelDocumento } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { prepararVinculoManual } from "@/lib/sessions/agregar-sesion";
+import { leerCuerpoDeVinculos, prepararVinculosManuales } from "@/lib/sessions/agregar-sesion";
 import { documentoConContexto } from "@/lib/contexto/documento";
 import { COLUMNA_DEL_DESTINO } from "@/lib/sessions/destinos-de-contexto";
 
@@ -16,6 +16,9 @@ import { COLUMNA_DEL_DESTINO } from "@/lib/sessions/destinos-de-contexto";
  *                                 que el handoff y el cronograma: rechazo cross-cliente y adopción).
  *   { sessionId, feeds: false } → la X: sale del diagnóstico. NO la desvincula del proyecto ni la saca
  *                                 del handoff, del cronograma, de la Entrega ni de las minutas.
+ *   { sessionIds: [...], feeds } → lo mismo para varias, en UNA transacción (2026-10-09: «Quitar
+ *                                 las N» y deshacer). Si una no pasa las validaciones, no se
+ *                                 escribe ninguna y el error dice cuál.
  *
  * `false` y no `null` en la X, al revés que el cronograma: acá `null` es «sugerida», o sea que volver
  * a null la devolvería al documento. Tampoco lockea el vínculo (session-project-locks.ts).
@@ -32,22 +35,24 @@ export async function POST(
   const guard = await guardContextoDelDocumento(projectId, doc.seccion);
   if (guard instanceof NextResponse) return guard;
 
-  let body: { sessionId?: unknown; feeds?: unknown };
+  let raw: unknown;
   try {
-    body = await req.json();
+    raw = await req.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
-  const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
-  if (!sessionId || typeof body.feeds !== "boolean") {
-    return NextResponse.json({ error: "sessionId y feeds (boolean) requeridos" }, { status: 400 });
-  }
+  // Una reunión ({ sessionId, feeds }) o varias ({ sessionIds, feeds }: «Quitar las N», deshacer).
+  const cuerpo = leerCuerpoDeVinculos(raw);
+  if (!cuerpo.ok) return NextResponse.json({ error: cuerpo.error }, { status: 400 });
+  const { ids, feeds, sugeridas } = cuerpo;
 
-  const prep = await prepararVinculoManual({
-    sessionId,
+  /* La puerta única de agregar, en su versión en lote. Con varias, se validan TODAS antes de escribir: si una no pasa, no se escribe ninguna y el
+     error dice cuál. */
+  const prep = await prepararVinculosManuales({
+    sessionIds: ids,
     projectId,
     clientId: guard.clientId,
-    quiereIncluir: body.feeds,
+    quiereIncluir: feeds,
     actorEmail: guard.teamMember.email ?? null,
   });
   if (!prep.ok) return NextResponse.json({ error: prep.error }, { status: prep.status });
@@ -55,21 +60,36 @@ export async function POST(
   // La columna de ESTE documento (COLUMNA_DEL_DESTINO): cada uno guarda su afinado por separado.
   const columna = COLUMNA_DEL_DESTINO[doc.destino];
 
-  if (!body.feeds) {
+  if (!feeds) {
     // `updateMany` por si el clasificador borró el vínculo entre medio: sacar lo que ya no está no es error.
-    await prisma.sessionProject.updateMany({
-      where: { sessionId, projectId },
-      data: { [columna]: false },
-    });
+    await prisma.$transaction(
+      ids.map((sessionId) =>
+        prisma.sessionProject.updateMany({
+          where: { sessionId, projectId },
+          data: { [columna]: false },
+        }),
+      ),
+    );
     return NextResponse.json({ ok: true });
   }
 
-  await prisma.sessionProject.upsert({
-    where: { sessionId_projectId: { sessionId, projectId } },
-    create: { sessionId, projectId, source: "manual", [columna]: true },
-    /* Solo el afinado de ESTE documento: los demás no se tocan. Agregarla resucita un tombstone
-       (`included=false`) — sin eso quedaría agregada y sin alimentar nada. */
-    update: { [columna]: true, included: true },
-  });
+  await prisma.$transaction(
+    ids.map((sessionId) =>
+      /* Deshacer la X de una sugerida (reunión con el cliente que nadie tocó): vuelve el afinado vacío,
+         como estaba, y no «agregada a mano». */
+      sugeridas.has(sessionId)
+        ? prisma.sessionProject.updateMany({
+            where: { sessionId, projectId },
+            data: { [columna]: null, included: true },
+          })
+        : prisma.sessionProject.upsert({
+            where: { sessionId_projectId: { sessionId, projectId } },
+            create: { sessionId, projectId, source: "manual", [columna]: true },
+            /* Solo el afinado de ESTE documento: los demás no se tocan. Agregarla resucita un tombstone
+               (`included=false`) — sin eso quedaría agregada y sin alimentar nada. */
+            update: { [columna]: true, included: true },
+          })
+    ),
+  );
   return NextResponse.json({ ok: true });
 }

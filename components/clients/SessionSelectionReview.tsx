@@ -15,7 +15,7 @@
  * Componente COMPARTIDO (ProjectContextSection en columnMode + stepper). Reusa el override
  * por sesión vía POST /api/projects/[projectId]/handoff-sessions.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -33,7 +33,8 @@ import {
   type InformeDelMaterial,
   type InsigniaDelMaterial,
 } from "@/lib/contexto/material-cronograma";
-import { ContextColumnList, ContextRow, CTX_ICONS } from "./context-column";
+import ListaDeReuniones from "@/components/contexto/ListaDeReuniones";
+import { estadoDeLaReunion, estadoDesdeInsignia, fechaDeReunion } from "@/lib/contexto/lista-de-reuniones";
 
 interface FeedingSession {
   sessionId: string;
@@ -339,6 +340,56 @@ export default function SessionSelectionReview({
     [urlPuerta, reload, onChange, toast],
   );
 
+  /* Quitar o devolver varias de una vez (la lista de reuniones de todo «Contexto adicional»: la X,
+     «Quitar las N», «Vaciar y buscar», «Volver a incluir» y deshacer). La misma puerta, en su forma
+     de lista: una sola transacción, y si una no pasa no se escribe ninguna y el error dice cuál.
+     `sugeridas` (solo deshacer): las que vuelven a «sugerida» y no a «agregada a mano». */
+  const postReuniones = useCallback(
+    async (cuerpo: { sessionIds: string[]; feeds: boolean; sugeridas?: string[] }): Promise<boolean> => {
+      try {
+        const r = await fetch(urlPuerta, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cuerpo),
+        });
+        if (!r.ok) {
+          const d = (await r.json().catch(() => null)) as { error?: string } | null;
+          toast.error(d?.error ?? "No se pudieron cambiar las reuniones.");
+        }
+        /* Se relee igual cuando la puerta rechaza: suele ser porque la lista quedó vieja («ya no es de
+           este proyecto: se actualizó la lista»), y sin releer cada intento fallaba igual. */
+        await reload();
+        onChange?.();
+        return r.ok;
+      } catch {
+        toast.error("No se pudieron cambiar las reuniones: revisa la conexión.");
+        return false;
+      }
+    },
+    [urlPuerta, reload, onChange, toast],
+  );
+  const escribirReuniones = useCallback(
+    (sessionIds: string[], feeds: boolean) => postReuniones({ sessionIds, feeds }),
+    [postReuniones],
+  );
+  /* Deshacer deja cada reunión como estaba antes de la X: «agregada a mano» si lo estaba, y si no,
+     «sugerida» (el afinado vacío). Sin esto, deshacer la dejaba forzada y con candado. Se recuerda
+     cómo estaba cada una mientras alimentaba: al deshacer ya está entre las excluidas. El cronograma
+     no tiene «sugerida» (solo alimenta la elegida): ahí devolver es elegirla. */
+  const forzadas = useRef(new Map<string, boolean>());
+  useEffect(() => {
+    for (const s of data.feeding) forzadas.current.set(s.sessionId, s.forced);
+  }, [data.feeding]);
+  const restaurarReuniones = useCallback(
+    (sessionIds: string[]) =>
+      postReuniones({
+        sessionIds,
+        feeds: true,
+        ...(esCronograma ? {} : { sugeridas: sessionIds.filter((id) => forzadas.current.get(id) === false) }),
+      }),
+    [postReuniones, esCronograma],
+  );
+
   useEffect(() => {
     if (!loading && !errorDeCarga) {
       onCount?.(data.feeding.length);
@@ -555,6 +606,11 @@ export default function SessionSelectionReview({
   const meetMeta = (date: string, alsoIn?: string[], futura?: boolean, lectura?: string) =>
     `Reunión · ${fmtDate(date)}${futura ? " · todavía no ocurrió" : ""}${lectura ? ` · ${lectura}` : ""}${alsoIn && alsoIn.length ? ` · también en ${alsoIn.join(", ")}` : ""}`;
 
+  /* La línea de datos de la columna: la fecha y, si está en otros proyectos, cuáles. Sin «Reunión ·»
+     ni ícono por fila: el de Meet ya está en el título de la columna. */
+  const datosDeLaReunion = (date: string, alsoIn?: string[]) =>
+    `${fechaDeReunion(date)}${alsoIn && alsoIn.length ? ` · también en ${alsoIn.join(", ")}` : ""}`;
+
   // Modo columna (Contexto): incluidas + excluidas con toggle, "buscar más" + el modal.
   if (columnMode) {
     /* Cuántas de las que ALIMENTAN el handoff ocurrieron y no dejaron nada. Se deriva de la
@@ -587,9 +643,31 @@ export default function SessionSelectionReview({
             hueco — si tienes las notas, pégalas en <em>Fuentes manuales</em>.
           </p>
         )}
-        <ContextColumnList
-          loading={loading}
-          empty={
+        {/* La lista de reuniones de todo «Contexto adicional» (2026-10-09): una tarjeta, casillas para
+            elegir varias, la X al pasar el mouse, deshacer con Ctrl+Z y las excluidas plegadas. Los
+            estados van como punto + texto en la línea de datos; el de la insignia del material del
+            cronograma lleva su detalle («la IA lee 3 200 de 7 100 caracteres») en el `title`. */}
+        <ListaDeReuniones
+          reuniones={feeding.map((s) => {
+            const insignia = insignias.get(s.sessionId);
+            return {
+              id: s.sessionId,
+              titulo: s.title || "Sin título",
+              datos: datosDeLaReunion(s.date, s.alsoIn),
+              estado: estadoDeLaReunion({ futura: s.futura, sinTranscripcion: s.sinContenido }) ?? estadoDesdeInsignia(insignia),
+              title: insignia?.detalle,
+            };
+          })}
+          excluidas={excluded.map((s) => ({
+            id: s.sessionId,
+            titulo: s.title || "Sin título",
+            datos: datosDeLaReunion(s.date, s.alsoIn),
+          }))}
+          puedeEditar={!readOnly}
+          escribir={escribirReuniones}
+          restaurar={restaurarReuniones}
+          onBuscar={() => setShowModal(true)}
+          vacio={
             errorDeCarga
               ? `No se pudo cargar la lista de reuniones ${delDocumento}: recarga la página. Lo que elegiste sigue elegido.`
               : esCronograma
@@ -598,44 +676,14 @@ export default function SessionSelectionReview({
                   ? "Todavía no hay reuniones con el cliente en este proyecto. Agrégalas con “Buscar más sesiones”."
                   : `Ninguna sesión alimenta ${esteDocumento}. Agrégala con “Buscar más sesiones”.`
           }
-        >
-          {feeding.map((s) => (
-            <ContextRow
-              key={s.sessionId}
-              icon={CTX_ICONS.meet}
-              meta={meetMeta(s.date, s.alsoIn, s.futura, insignias.get(s.sessionId)?.detalle)}
-              title={s.title || "Sin título"}
-              badge={
-                s.futura
-                  ? { label: "Aún no ocurrió", tone: "amber" }
-                  : s.sinContenido
-                    ? { label: "Sin transcripción", tone: "amber" }
-                    : (insignias.get(s.sessionId) ?? { label: esCronograma ? "Elegida" : "Incluida", tone: "green" })
-              }
-              onRemove={!readOnly ? () => setFeeds(s.sessionId, false) : undefined}
-              removeTitle={
-                esCronograma
-                  ? "Sacar del cronograma (sigue siendo reunión del proyecto)"
-                  : `Excluir ${delDocumento} (no la desvincula del proyecto)`
-              }
-            />
-          ))}
-          {excluded.map((s) => (
-            <ContextRow
-              key={s.sessionId}
-              icon={CTX_ICONS.meet}
-              meta={meetMeta(s.date, s.alsoIn)}
-              title={s.title || "Sin título"}
-              badge={{ label: "Excluida", tone: "muted" }}
-              dim
-              action={
-                !readOnly
-                  ? { label: "Incluir", onClick: () => setFeeds(s.sessionId, true), disabled: busyId === s.sessionId }
-                  : undefined
-              }
-            />
-          ))}
-        </ContextColumnList>
+          etiquetaQuitar={(titulo) => (esCronograma ? `Sacar «${titulo}» del cronograma` : `Excluir «${titulo}» ${delDocumento}`)}
+          tituloQuitar={
+            esCronograma
+              ? "Sacar del cronograma (sigue siendo reunión del proyecto)"
+              : `Excluir ${delDocumento} (no la desvincula del proyecto)`
+          }
+          cargando={loading}
+        />
         {!readOnly && (
           <button
             onClick={() => setShowModal(true)}
@@ -680,7 +728,7 @@ export default function SessionSelectionReview({
               </svg>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-fg truncate">{s.title || "Sin título"}</p>
-                {/* ⚠ MISMO `meetMeta` que la columna: incluye el «aún no ocurrió». Sin eso, una
+                {/* ⚠ `meetMeta` incluye el «aún no ocurrió» (la columna lo dice con su punto ámbar). Sin eso, una
                     sesión con fecha futura se lista acá como si ya hubiera pasado — y ésta es
                     justo la pantalla que aparece después de crear o traer un proyecto, o sea el
                     momento en que alguien decide con qué se arma el documento. */}

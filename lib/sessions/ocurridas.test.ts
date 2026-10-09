@@ -200,6 +200,10 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   "lib/google/meet-enrichment.ts": { clase: "plomeria", motivo: "Lectura del documento de Meet. Ya filtra `date < now - 1h` (Tanda R)." },
   "lib/sessions/reclassify.ts": { clase: "plomeria", motivo: "Re-atribuye dueño. La fecha no cambia de quién es una reunión." },
   "lib/sessions/resolve-client.ts": { clase: "plomeria", motivo: "La cascada de dueño, sobre el corpus entero a propósito." },
+  "app/api/business-cases/[id]/sessions/route.ts": {
+    clase: "plomeria",
+    motivo: "Quitar o devolver reuniones al contexto de una propuesta: solo lee el DUEÑO de los ids elegidos para no mezclar clientes (INV1). No le describe nada a un modelo.",
+  },
   "lib/sessions/classify-session-project.ts": { clase: "plomeria", motivo: "Vínculos existentes de UNA sesión (candados y tombstones)." },
   "app/(shell)/sessions/[id]/page.tsx": { clase: "plomeria", motivo: "Los proyectos de una sesión puntual." },
   "app/api/sessions/[id]/projects/route.ts": { clase: "plomeria", motivo: "Ídem, por API." },

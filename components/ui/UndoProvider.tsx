@@ -113,6 +113,12 @@ interface UndoApi {
    * (lo que el chat aplica a un documento), no para envolver una sesión de edición.
    */
   agruparDeshacer: <T>(label: string, fn: () => Promise<T>) => Promise<T>;
+  /**
+   * Cuándo (`Date.now()`) se registró la entrada que Ctrl+Z deshace AHORA —la más reciente cuya
+   * pantalla se ve—, o 0 si no hay ninguna. Solo lee. La usa quien tiene un deshacer propio en la misma
+   * pantalla (la lista de reuniones de «Contexto adicional») para no ganarle a algo hecho después.
+   */
+  ultimaVisible: () => number;
 }
 
 const UndoContext = createContext<UndoApi | null>(null);
@@ -321,6 +327,11 @@ export function UndoProvider({ children }: { children: ReactNode }) {
     [entradaVisible, sacarYDeshacer],
   );
 
+  const ultimaVisible = useCallback((): number => {
+    const idx = elegirEntradaParaDeshacer(stackRef.current, entradaVisible);
+    return idx < 0 ? 0 : stackRef.current[idx].ts;
+  }, [entradaVisible]);
+
   /* Atajo global Ctrl/Cmd+Z. Escucha en `window` A PROPÓSITO: los manejadores locales (el diagrama)
      escuchan en `document`, que en el burbujeo pasa antes, así que acá ya se sabe si alguien la
      atendió. No pisa el deshacer nativo del texto, y deshace la entrada más reciente cuya pantalla se
@@ -338,8 +349,8 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   }, [entradaVisible, sacarYDeshacer]);
 
   const api = useMemo<UndoApi>(
-    () => ({ pushUndo, clearScope, registerScope, agruparDeshacer }),
-    [pushUndo, clearScope, registerScope, agruparDeshacer],
+    () => ({ pushUndo, clearScope, registerScope, agruparDeshacer, ultimaVisible }),
+    [pushUndo, clearScope, registerScope, agruparDeshacer, ultimaVisible],
   );
 
   return (

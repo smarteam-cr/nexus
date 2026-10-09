@@ -5665,6 +5665,14 @@ había un solo bloque para todas sus piezas.
 - **La exploración**: al preparar las sesiones, la guía lee además las reuniones y las notas de su bloque; al
   leer, la reunión sale del mismo bloque (las del cliente que nadie sacó, más las agregadas). Antes leía
   cualquier reunión del proyecto, también las internas.
+- **Una sola lista de reuniones para todo «Contexto adicional»** (2026-10-09, diseño «Contexto adicional ·
+  Reuniones»): la propuesta, el handoff, el cronograma, los documentos del proyecto y la preventa usan la misma
+  (`components/contexto/ListaDeReuniones`): casillas con «Elegir todas», «Quitar las N», X por fila y «Deshacer»
+  (Ctrl+Z) paso a paso; el estado va como punto y texto (`lib/contexto/lista-de-reuniones.ts`). Antes cada
+  pantalla tenía su versión y ya decían cosas distintas sobre lo mismo. Las puertas de los proyectos aceptan
+  varias reuniones en UNA transacción: si una no pasa, no se escribe ninguna y el error dice cuál. *Las excluidas
+  quedan plegadas* («Excluidas (N)», cerrado): lo que lee el agente es la lista de arriba, y a la vista
+  competían con ella; se abren para devolver una con «Volver a incluir».
 
 ## La escala vive como datos; el `.md` se genera (2026-10-08)
 

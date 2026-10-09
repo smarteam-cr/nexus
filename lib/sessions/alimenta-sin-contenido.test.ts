@@ -64,10 +64,12 @@ describe("⭐ el chequeo de contenido alcanza a las que YA alimentan", () => {
 describe("⭐ la fila lo dice, y el aviso propone qué hacer", () => {
   it("una que alimenta sin contenido NO se pinta como «Incluida»", () => {
     /* La rama de `sinContenido` va ANTES del verde. Si alguien la saca, la fila vuelve a decir
-       que todo está bien sobre un hueco. */
+       que todo está bien sobre un hueco. Desde el 2026-10-09 la fila es la lista de reuniones de
+       todo «Contexto adicional»: el «● Sin transcripción» (punto ámbar) sale de `estadoDeLaReunion`
+       y solo si no aplica cae al estado de la insignia (lib/contexto/lista-de-reuniones.ts). */
     const src = leer(PANEL);
     expect(src, "volvió el verde incondicional en las filas que alimentan").toContain(
-      's.sinContenido\n                    ? { label: "Sin transcripción", tone: "amber" }',
+      "estadoDeLaReunion({ futura: s.futura, sinTranscripcion: s.sinContenido }) ?? estadoDesdeInsignia(",
     );
   });
 
