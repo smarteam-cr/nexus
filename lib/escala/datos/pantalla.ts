@@ -52,6 +52,18 @@ export type EstadoDelBorrador =
       bitacora: TandaDeLaBitacora[];
     };
 
+/** Un reporte de feedback mandado sobre algo de la escala, para verlo al editarlo. */
+export interface ReporteDelAncla {
+  id: string;
+  numero: number;
+  tipo: string;
+  estado: string;
+  cuerpo: string;
+  autorEmail: string;
+  /** ISO. */
+  creadoEn: string;
+}
+
 /** Las ediciones de unos datos: su clave → su nombre, para decir las anclas en palabras. */
 export function nombresDeLasEdiciones(datos: EscalaDatos): Map<string, string> {
   return new Map(datos.partes.flatMap((p) => (p.tipo === "ediciones" ? p.ediciones.map((e) => [e.clave, e.nombre] as const) : [])));

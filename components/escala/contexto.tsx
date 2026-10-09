@@ -17,6 +17,11 @@ export interface ContextoDeLaEscala {
   /** Por ancla (`1.7.F1`), del área que se mira. Vacío para quien no revisa. */
   conteos: ConteosPorClave;
   darFeedback: (ancla: string) => void;
+  /**
+   * Cómo se dice lo que hace tocar algo: «Dar feedback sobre» en la escala publicada, «Editar» en el
+   * borrador (/escala/borrador/[área]), donde tocar un criterio, nivel o dimensión abre el editor.
+   */
+  sobre: string;
 }
 
 const Contexto = createContext<ContextoDeLaEscala | null>(null);

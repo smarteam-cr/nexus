@@ -189,6 +189,7 @@ export default function VistaDeLaEscala({
   hrefDeArea = (slug) => `/escala/${slug}`,
   hrefDeLaBandeja = "/feedback?origen=escala",
   borrador = null,
+  editor = null,
 }: {
   datos: DatosDeLaVista;
   /** Los reportes de feedback por ancla (del área) y por área: solo para quien revisa; vacíos para los demás. */
@@ -208,6 +209,11 @@ export default function VistaDeLaEscala({
    * si hay uno abierto. null para los demás.
    */
   borrador?: { version: string | null } | null;
+  /**
+   * El borrador en modo EDITOR (/escala/borrador/[área]): tocar un criterio, un nivel o una dimensión
+   * llama a `alTocar` en vez de abrir el panel de Feedback, y la cabecera es la del borrador.
+   */
+  editor?: { version: string; alTocar: (ancla: string) => void; hrefDeVuelta: string } | null;
 }) {
   const router = useRouter();
   const { area } = datos;
@@ -253,6 +259,7 @@ export default function VistaDeLaEscala({
   const darFeedback = useCallback(
     (a: string) => {
       setAncla(a);
+      if (editor) return editor.alTocar(a);
       const r = resolverAncla({ areas: [datos.area], niveles: datos.niveles }, a);
       if (!r || !abrirElPanel) return;
       abrirElPanel({
@@ -267,9 +274,10 @@ export default function VistaDeLaEscala({
         },
       });
     },
-    [abrirElPanel, datos.area, datos.niveles, datos.edicion, perfil.cierre, perfil.despues],
+    [abrirElPanel, datos.area, datos.niveles, datos.edicion, perfil.cierre, perfil.despues, editor],
   );
-  const contexto = useMemo(() => ({ esRevisor, conteos, darFeedback }), [esRevisor, conteos, darFeedback]);
+  const sobre = editor ? "Editar" : "Dar feedback sobre";
+  const contexto = useMemo(() => ({ esRevisor, conteos, darFeedback, sobre }), [esRevisor, conteos, darFeedback, sobre]);
 
   // Quien revisa ve los contadores: al mandar un feedback, se vuelven a pedir.
   useEffect(() => {
@@ -347,11 +355,24 @@ export default function VistaDeLaEscala({
     <ProveedorDeLaEscala value={contexto}>
       <ProveedorDeHerramientas value={prendidas}>
       <div className="space-y-6">
-        <PageHeader recorrido="escala"
-          title="Escala de Rendimiento"
+        <PageHeader recorrido={editor ? undefined : "escala"}
+          title={editor ? `Borrador ${editor.version}` : "Escala de Rendimiento"}
+          crumbs={editor ? [{ label: "Escala de Rendimiento", href: "/escala" }, { label: "Borrador", href: editor.hrefDeVuelta }, { label: "Editar" }] : undefined}
           badges={chipsDeLaVersion}
-          description="Recórrela por área, dimensión y nivel. Si algo no se entiende o no calza con un cliente real, mándalo como feedback desde ahí mismo."
+          description={
+            editor
+              ? "Toca un criterio, un nivel o una dimensión para cambiarlo. Cada cambio queda anotado en el borrador, y nadie lo ve hasta que se publica."
+              : "Recórrela por área, dimensión y nivel. Si algo no se entiende o no calza con un cliente real, mándalo como feedback desde ahí mismo."
+          }
           action={
+            editor ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Leyenda datos={datos} />
+                <Link href={editor.hrefDeVuelta} className={BOTON_CLARO}>
+                  Volver al borrador
+                </Link>
+              </div>
+            ) : (
             <div className="flex flex-wrap items-center gap-2">
               <div data-recorrido="escala.leyenda">
               <Leyenda datos={datos} />
@@ -416,6 +437,7 @@ export default function VistaDeLaEscala({
                 }))}
               />
             </div>
+            )
           }
         />
 

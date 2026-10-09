@@ -16,7 +16,18 @@ import { leerEscalaVigente } from "@/lib/escala/documento/vigente";
 import { huellaDe } from "@/lib/escala/documento/huella";
 import { generarMarkdown } from "./generar";
 import { importarEscala } from "./importar";
-import { abrirBorrador, estadoDelBorrador, guardarLaImportacion, markdownDelBorrador, publicarElBorrador, revisarElBorrador, verLaImportacion } from "./servidor";
+import {
+  abrirBorrador,
+  editarElBorrador,
+  escalaDelBorrador,
+  estadoDelBorrador,
+  guardarLaImportacion,
+  markdownDelBorrador,
+  publicarElBorrador,
+  reportesDelAncla,
+  revisarElBorrador,
+  verLaImportacion,
+} from "./servidor";
 import { ErrorDelBorrador, guardarPublicada } from "./versiones";
 
 const ELIAS = "elias@test.local";
@@ -92,6 +103,56 @@ describe("el borrador de la escala, desde la pantalla", () => {
     expect(congelada).toMatchObject({ estado: "publicada", publicadaPorEmail: ELIAS, huella: doc.huella });
     expect(doc.texto).toBe(generarMarkdown(importarEscala(editado)));
     expect(await estadoDelBorrador()).toMatchObject({ estado: "ok", borrador: null, publicada: "8.8.0", sugerida: "8.9.0" });
+  });
+
+  it("el editor cambia un criterio vinculado a su reporte de feedback, y agrega otro sin reusar un retirado", async () => {
+    await publicada();
+    await abrirBorrador("8.8.0", ELIAS);
+    const reporte = await prisma.feedbackReporte.create({
+      data: { autorEmail: "ana@test.local", tipo: "mejora", cuerpo: "«A tiempo» no dice cuánto.", pantalla: "Escala", ruta: "/escala/ventas", escalaAncla: "1.7.F1", escalaArea: "1" },
+    });
+    expect((await reportesDelAncla("1.7.F1")).map((r) => r.numero)).toEqual([reporte.numero]);
+    expect(await reportesDelAncla("1.7.F2")).toEqual([]);
+
+    const vista = (await escalaDelBorrador())!;
+    const f1 = vista.escala.areas[0].dimensiones.find((d) => d.id === "1.7")!.niveles.find((n) => n.letra === "F")!.criterios.find((c) => c.id === "1.7.F1")!;
+    const campos = { verificacion: f1.verificacion, riesgo: f1.riesgo, habito: f1.habito, perfil: f1.perfil, requiere: f1.requiere ?? [] };
+    const r = await editarElBorrador({
+      revision: 0,
+      cambio: { tipo: "criterio", id: "1.7.F1", texto: `${f1.texto.slice(0, -1)} (en 14 días).`, ...campos },
+      nota: "Plazo concreto",
+      feedbackId: reporte.id,
+      por: ELIAS,
+    });
+    expect(r).toEqual({ revision: 1, cambios: 1, id: "1.7.F1" });
+    expect(await prisma.escalaCambio.findMany({ select: { ancla: true, origen: true, feedbackId: true, nota: true } })).toEqual([
+      { ancla: "1.7.F1", origen: "editor", feedbackId: reporte.id, nota: "Plazo concreto" },
+    ]);
+    // La pantalla del editor lee el borrador nuevo (por su huella).
+    const despues = (await escalaDelBorrador())!;
+    expect(despues.revision).toBe(1);
+    expect(despues.escala.areas[0].dimensiones.find((d) => d.id === "1.7")!.niveles.find((n) => n.letra === "F")!.criterios[0].texto).toMatch(/\(en 14 días\)\.$/);
+
+    // Un criterio nuevo en 1.2.F: el 1.2.F1 está retirado en la especificación, así que no lo toma.
+    const nuevo = await editarElBorrador({
+      revision: 1,
+      cambio: { tipo: "nuevo-criterio", nivel: "1.2.F", texto: "Cada negocio tiene su siguiente paso con fecha.", verificacion: "comprobable", riesgo: false, habito: false, perfil: null, requiere: [] },
+      nota: null,
+      feedbackId: null,
+      por: ELIAS,
+    });
+    expect(nuevo.id).not.toBe("1.2.F1");
+    expect(nuevo.id).toMatch(/^1\.2\.F\d+$/);
+
+    // Cada guardado es una tanda de la bitácora; con la revisión vieja, frena.
+    const estado = await estadoDelBorrador();
+    expect(estado.estado === "ok" && estado.bitacora.map((t) => [t.origen, t.cambios.map((c) => c.ancla)])).toEqual([
+      ["editor", [nuevo.id]],
+      ["editor", ["1.7.F1"]],
+    ]);
+    await expect(editarElBorrador({ revision: 1, cambio: { tipo: "nivel", id: "1.7.F", frase: "Otra.", resultado: null }, nota: null, feedbackId: null, por: ELIAS })).rejects.toThrow(
+      ErrorDelBorrador,
+    );
   });
 
   it("una línea que no se entiende vuelve con su número, y nada se guarda", async () => {

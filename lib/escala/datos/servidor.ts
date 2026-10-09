@@ -11,9 +11,12 @@ import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { documentoPorClave } from "@/lib/escala/documento/documentos";
 import { huellaDe } from "@/lib/escala/documento/huella";
+import { leerRetirados } from "@/lib/escala/documento/parsear";
+import type { Escala } from "@/lib/escala/documento/tipos";
 import { leerDocumentoPublicado, leerEscalaVigente } from "@/lib/escala/documento/vigente";
 import { leerMapaDeHerramientasVigente } from "@/lib/escala/herramientas/vigente";
-import { resumenDeCambios, type CambioDeLaEscala } from "./diferencias";
+import { cambiosEntre, resumenDeCambios, type CambioDeLaEscala } from "./diferencias";
+import { aplicarCambioDelEditor, type CambioDelEditor } from "./editar";
 import { escalaDeLosDatos, generarMarkdown } from "./generar";
 import { revisarParaPublicar, type RevisionDelBorrador } from "./publicar";
 import {
@@ -21,6 +24,7 @@ import {
   paraMostrar,
   type CambioParaMostrar,
   type EstadoDelBorrador,
+  type ReporteDelAncla,
   type ResumenDelBorrador,
   type TandaDeLaBitacora,
 } from "./pantalla";
@@ -90,7 +94,9 @@ export async function estadoDelBorrador(): Promise<EstadoDelBorrador> {
     const tandas: TandaDeLaBitacora[] = [];
     let actual: { clave: string; tanda: TandaDeLaBitacora } | null = null;
     for (const f of filas) {
-      const clave = f.lote ?? f.id;
+      // Lo que se guardó junto (una subida, o un guardado del editor) va en una sola tanda: la subida
+      // lleva su lote; los de un guardado del editor comparten el instante y la persona.
+      const clave = f.lote ?? `${f.createdAt.toISOString()}|${f.autorEmail}`;
       if (!actual || actual.clave !== clave) {
         if (tandas.length >= TANDAS_A_LA_VISTA) break;
         actual = { clave, tanda: { cuando: f.createdAt.toISOString(), autorEmail: f.autorEmail, origen: f.origen, nota: f.nota, cambios: [] } };
@@ -210,4 +216,70 @@ export async function publicarElBorrador(args: { revision: number; edicionesRevi
     throw e;
   }
   return { version: b.version };
+}
+
+// ── El editor ─────────────────────────────────────────────────────────────────
+
+/** La escala del borrador, leída una vez por huella (como la publicada en `vigente.ts`). */
+const leidas = new Map<string, Escala>();
+
+export interface EscalaDelBorrador {
+  escala: Escala;
+  version: string;
+  revision: number;
+  actualizadaEn: Date;
+}
+
+/** El borrador como lo leen las pantallas de la escala, para verlo y editarlo. null si no hay borrador. */
+export async function escalaDelBorrador(): Promise<EscalaDelBorrador | null> {
+  if (!modeloDisponible(prisma.escalaVersion)) return null;
+  const b = await prisma.escalaVersion.findFirst({ where: { estado: "borrador" }, select: { huella: true, version: true, revision: true, actualizadaEn: true } });
+  if (!b) return null;
+  let escala = leidas.get(b.huella);
+  if (!escala) {
+    const conDatos = await leerBorrador(prisma);
+    if (!conDatos) return null;
+    escala = escalaDeLosDatos(conDatos.datos);
+    leidas.set(b.huella, escala);
+  }
+  return { escala, version: b.version, revision: b.revision, actualizadaEn: b.actualizadaEn };
+}
+
+/**
+ * Guarda un cambio del editor en el borrador y lo anota en la bitácora (con el reporte de feedback que
+ * lo originó, si lo hay). Frena si el borrador cambió desde que se leyó.
+ */
+export async function editarElBorrador(args: {
+  revision: number;
+  cambio: CambioDelEditor;
+  nota: string | null;
+  feedbackId: string | null;
+  por: string;
+}): Promise<{ revision: number; cambios: number; id: string }> {
+  const b = await borradorEnLaRevision(args.revision);
+  // Un criterio nuevo no reusa un identificador retirado: la lista está en la especificación publicada.
+  const especificacion = args.cambio.tipo === "nuevo-criterio" ? await leerDocumentoPublicado("especificacion") : null;
+  const { datos, id } = aplicarCambioDelEditor(b.datos, args.cambio, { retirados: especificacion ? leerRetirados(especificacion.texto) : [] });
+  const cambios = cambiosEntre(b.datos, datos);
+  if (!cambios.length) return { revision: b.revision, cambios: 0, id };
+  if (args.feedbackId && !(await prisma.feedbackReporte.findUnique({ where: { id: args.feedbackId }, select: { id: true } }))) {
+    throw new ErrorDelBorrador("Ese reporte de feedback ya no existe.");
+  }
+  const r = await guardarEnElBorrador(prisma, { borrador: b, datos, cambios, origen: "editor", por: args.por, nota: args.nota, feedbackId: args.feedbackId });
+  return { revision: r.revision, cambios: cambios.length, id };
+}
+
+/**
+ * Los reportes de feedback mandados sobre algo de la escala (`1.7.F1`, `1.7.F`, `1.7`), los más
+ * recientes primero. El feedback es privado: esto lo ve solo quien edita la escala (super admin, que es
+ * también quien lo revisa).
+ */
+export async function reportesDelAncla(ancla: string): Promise<ReporteDelAncla[]> {
+  const filas = await prisma.feedbackReporte.findMany({
+    where: { escalaAncla: ancla },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    select: { id: true, numero: true, tipo: true, estado: true, cuerpo: true, autorEmail: true, createdAt: true },
+  });
+  return filas.map(({ createdAt, ...f }) => ({ ...f, creadoEn: createdAt.toISOString() }));
 }

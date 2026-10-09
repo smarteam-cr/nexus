@@ -47,7 +47,7 @@ mediciones necesitan consultar criterios con SQL, el catálogo por versión se d
 | ✅ | **La escala como datos** — las tablas, el formato de los datos, importar y generar con la prueba de ida y vuelta, y la 8.7.0 publicada pasada a datos. Nadie nota el cambio. |
 | ✅ | **Publicar desde los datos** — el borrador, importar cambios en bloque con bitácora, exportar el `.md` y publicar (con las mismas pruebas de hoy) congelando la versión. El `.md` del repo pasa a ser una exportación. |
 | ✅ | **El borrador en Nexus** — `/escala/borrador`, para los super admin: abrir el borrador, bajar su `.md`, subirlo con cambios (antes de guardar se ve qué cambia, criterio por criterio), la bitácora y «Revisar y publicar» con las mismas pruebas del script, sin Python. |
-| ⬜ | **El editor** — cambiar un criterio, una frase de nivel, una pregunta o lo que dice una edición desde la pantalla; cada cambio a la bitácora; un reporte de feedback abre su criterio en el borrador. |
+| ✅ | **El editor** — `/escala/borrador/[área]`, con las mismas vistas de la escala: tocar un criterio, un nivel o una dimensión lo edita (texto, cómo se verifica, marcas, requeridos, frase, resultado, pregunta, costo) o le agrega un criterio con el número que sigue. Al editar se ve el feedback de esa parte y el cambio se vincula al reporte que lo originó. |
 | ⬜ | **Teoría y manual a Documentación** — la Parte 1 y la parte de uso de la Parte 2 salen de la escala; la medición queda en la especificación. |
 | ⬜ | **El banco de preguntas** — el botón «Test» en la escala: preguntas por dimensión, con sus opciones y el nivel de cada una, filtrables por área, dimensión y dónde se preguntan. Lo leen el cuestionario y las exploraciones. |
 | ⬜ | **La mejora grande** — las 13 decisiones y los arreglos de la revisión de la 8.7, ya sobre los datos. |
@@ -73,4 +73,8 @@ mediciones necesitan consultar criterios con SQL, el catálogo por versión se d
 
 ## Lo que sigue pendiente
 
+- **Lo que dice una edición** (sus reescritos, sus criterios propios, lo que no aplica) y **retirar un
+  criterio** se cambian, por ahora, con el `.md`: retirar pide anotarlo en la especificación.
+- **Desde la bandeja de Feedback, abrir el criterio en el borrador** (hoy se hace al revés: el editor
+  muestra el feedback de lo que se edita y lo vincula).
 - **El mapa de herramientas** sigue como documento aparte; pasarlo a datos es otra tanda.

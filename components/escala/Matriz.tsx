@@ -125,7 +125,7 @@ function FilaDeDimension({
   relacion: Relacion;
   onLeerDimension: (dimension: string) => void;
 }) {
-  const { conteos, darFeedback } = useEscala();
+  const { conteos, darFeedback, sobre } = useEscala();
   const aplicaAca = dimensionAplica(d, perfil);
   return (
     <div className={cn("grid border-b border-line", COLUMNAS)}>
@@ -133,7 +133,7 @@ function FilaDeDimension({
         <button
           type="button"
           onClick={() => darFeedback(d.id)}
-          title="Dar feedback sobre la dimensión"
+          title={`${sobre} la dimensión`}
           className={cn(
             "-mx-1.5 -my-1 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-surface-hover",
             anclaAbierta === d.id && "bg-info-surface",
@@ -198,7 +198,7 @@ function CeldaDeNivel({
   anclaAbierta: string | null;
   relacion: Relacion;
 }) {
-  const { conteos, darFeedback } = useEscala();
+  const { conteos, darFeedback, sobre } = useEscala();
   const { atenuado } = useHerramientas();
   const visibles = n.criterios.filter((c) => aplica(c, perfil));
   const ocultos = n.criterios.length - visibles.length;
@@ -208,7 +208,7 @@ function CeldaDeNivel({
       <button
         type="button"
         onClick={() => darFeedback(n.id)}
-        title="Dar feedback sobre el nivel"
+        title={`${sobre} el nivel`}
         className={cn(
           "-mx-1 rounded-lg px-1 py-0.5 text-left text-[13px] font-semibold leading-snug text-fg transition-colors hover:bg-surface-hover",
           anclaAbierta === n.id && "bg-info-surface",

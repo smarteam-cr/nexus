@@ -5707,3 +5707,20 @@ especificación y el manual sacan una versión nueva solo cuando cambian ellos.
   qué versión valen (no posterior a la que se publica). Especificación 1.3.7; el manual no cambia.
 - **La fecha de la bitácora se escribe a mano en hora de Costa Rica** (`fechaYHora`): con `toLocaleString`, el
   servidor y el navegador la escribían distinto («p. m.» con otro espacio) y React no hidrataba la pantalla.
+
+## El editor de la escala: se edita sobre la escala misma (2026-10-08)
+
+**Contexto.** Etapa «El editor» del plan de la escala como datos: cambiar el borrador sin bajar ni subir el `.md`.
+
+- **Las mismas vistas, otro verbo.** `/escala/borrador/[área]` usa `VistaDeLaEscala` con `editor`: tocar un
+  criterio, un nivel o una dimensión abre el panel de edición en vez del de Feedback (el contexto dice «Editar» donde
+  decía «Dar feedback sobre»). No hay una segunda pantalla de la escala que mantener.
+- **Se edita la escala general.** Lo que dice una edición y retirar un criterio siguen con el `.md`: retirar pide
+  anotar el identificador en la especificación, y una edición tiene sus reglas de cobertura (prueba 8).
+- **La misma garantía que el importador** (`aplicarCambioDelEditor`): los datos nuevos generan un `.md` que se vuelve a
+  leer igual y que el lector entiende; un texto que cambiaría cómo se lee la escala no entra. Se compara por
+  contenido y no por el texto del JSON: Postgres (JSONB) devuelve las claves en otro orden.
+- **Un criterio nuevo toma el número que sigue** de su nivel, sin repetir uno en uso ni uno retirado (la lista de la
+  especificación publicada).
+- **El feedback de esa parte se ve al editarla** y el cambio se vincula al reporte (`EscalaCambio.feedbackId`). La
+  bandeja de Feedback no se tocó: ese módulo lo estaba cambiando otra sesión.

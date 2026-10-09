@@ -1311,7 +1311,7 @@ function DetalleDelMapa({
   onLeerDimension: (dim: string) => void;
   onVerEnLaMatriz: () => void;
 }) {
-  const { conteos, darFeedback, esRevisor } = useEscala();
+  const { conteos, darFeedback, esRevisor, sobre } = useEscala();
   const { area, niveles } = datos;
   const dims = area.dimensiones;
   const nombreNivel = (l: Letra) => niveles.find((x) => x.letra === l)!.nombre;
@@ -1434,7 +1434,7 @@ function DetalleDelMapa({
           ))}
         </ol>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <BotonComentar conteo={conteoDe(conteos, d.id)} onClick={() => darFeedback(d.id)} etiqueta="Dar feedback sobre la dimensión" />
+          <BotonComentar conteo={conteoDe(conteos, d.id)} onClick={() => darFeedback(d.id)} etiqueta={`${sobre} la dimensión`} />
           <button type="button" onClick={() => onLeerDimension(d.id)} className={BOTON_CLARO}>
             Leer la dimensión
           </button>
@@ -1488,7 +1488,7 @@ function DetalleDeCelda({
   onVerEnLaMatriz: () => void;
   caja: string;
 }) {
-  const { conteos, darFeedback } = useEscala();
+  const { conteos, darFeedback, sobre } = useEscala();
   const { atenuado } = useHerramientas();
   const nombre = datos.niveles.find((x) => x.letra === nv.letra)!.nombre;
   const visibles = nv.criterios.filter((c) => aplica(c, perfil));
@@ -1532,7 +1532,7 @@ function DetalleDeCelda({
                   className="mt-2"
                 />
               </div>
-              <BotonComentar conteo={conteoDe(conteos, c.id)} onClick={() => darFeedback(c.id)} etiqueta={`Dar feedback sobre ${c.id}`} />
+              <BotonComentar conteo={conteoDe(conteos, c.id)} onClick={() => darFeedback(c.id)} etiqueta={`${sobre} ${c.id}`} />
             </li>
           ))}
         </ul>
@@ -1544,7 +1544,7 @@ function DetalleDeCelda({
       )}
       <NoAplicanEnLaEdicion nivel={nv} className="mt-2 block text-xs" />
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <BotonComentar conteo={conteoDe(conteos, nv.id)} onClick={() => darFeedback(nv.id)} etiqueta={`Dar feedback sobre el nivel ${nombre}`} />
+        <BotonComentar conteo={conteoDe(conteos, nv.id)} onClick={() => darFeedback(nv.id)} etiqueta={`${sobre} el nivel ${nombre}`} />
         <button type="button" onClick={() => onLeerDimension(d.id)} className={BOTON_CLARO}>
           Leer la dimensión
         </button>

@@ -237,7 +237,7 @@ function PanelParaPublicar({ revision, edicionesRevisadas, onRevisadas, onPublic
 
 // ── Con borrador ──────────────────────────────────────────────────────────────
 
-function ConBorrador({ borrador, bitacora }: { borrador: ResumenDelBorrador; bitacora: TandaDeLaBitacora[] }) {
+function ConBorrador({ borrador, bitacora, hrefDelEditor }: { borrador: ResumenDelBorrador; bitacora: TandaDeLaBitacora[]; hrefDelEditor: string | null }) {
   const router = useRouter();
   const archivo = useRef<HTMLInputElement>(null);
   const [ocupado, setOcupado] = useState<null | "subir" | "guardar" | "revisar" | "publicar" | "descartar">(null);
@@ -331,9 +331,15 @@ function ConBorrador({ borrador, bitacora }: { borrador: ResumenDelBorrador; bit
           </span>
         </div>
         <p className="text-sm leading-relaxed text-fg-secondary">
-          Para cambiar la escala: baja el .md, edítalo y súbelo. Antes de guardar ves qué cambió, criterio por criterio.
+          Para cambiar la escala: edítala sobre la escala misma (tocas un criterio, un nivel o una dimensión), o baja el .md, edítalo y súbelo; antes de
+          guardar ves qué cambió, criterio por criterio.
         </p>
         <div className="flex flex-wrap gap-2">
+          {hrefDelEditor && (
+            <Link href={hrefDelEditor} className={buttonVariants({ variant: "ghost" })}>
+              Editar sobre la escala
+            </Link>
+          )}
           {/* Una descarga, no una página: la misma forma que «Descargar .md» de la escala. */}
           <Button
             onClick={() => {
@@ -442,7 +448,7 @@ function ConBorrador({ borrador, bitacora }: { borrador: ResumenDelBorrador; bit
 
 // ── La pantalla ───────────────────────────────────────────────────────────────
 
-export default function PantallaDelBorrador({ estado }: { estado: EstadoDelBorrador }) {
+export default function PantallaDelBorrador({ estado, hrefDelEditor = null }: { estado: EstadoDelBorrador; hrefDelEditor?: string | null }) {
   const borrador = estado.estado === "ok" ? estado.borrador : null;
   return (
     <div className="flex flex-col gap-6">
@@ -462,7 +468,7 @@ export default function PantallaDelBorrador({ estado }: { estado: EstadoDelBorra
           Corre el SQL scripts/sql/2026-10-08-escala-como-datos.sql y reinicia.
         </Alert>
       ) : borrador ? (
-        <ConBorrador borrador={borrador} bitacora={estado.bitacora} />
+        <ConBorrador borrador={borrador} bitacora={estado.bitacora} hrefDelEditor={hrefDelEditor} />
       ) : (
         <AbrirBorrador publicada={estado.publicada} sugerida={estado.sugerida} />
       )}
