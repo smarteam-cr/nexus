@@ -5208,7 +5208,8 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   Pendientes y Para ti dicen: «El proyecto está pausado. Consulta con Customer Success y el líder antes de facturar.»
   No frena nada. Pausado = `hubspotStatus` on_hold (la única que se usa hoy), salud fijada en PAUSADO o `status`
   paused; un servicio de cobranza en PAUSADO no cuenta (es de Finanzas, no del proyecto). La cuota toma el proyecto de
-  su servicio; sin proyecto, cualquier pausado del cliente (puede avisar de más: preguntar es barato). Se calcula al
+  su servicio; sin proyecto, el cliente: solo si tiene uno pausado y NINGUNO en marcha (2026-10-08: «cualquier pausado
+  del cliente» avisó en Bluesat por su Service Hub en pausa mientras la implementación de SignNow seguía). Se calcula al
   leer, nunca en `AlertaCobro.mensaje`, que se conserva entre corridas (`lib/cobranza/proyecto-pausado.ts`).
 - **Dinia ve y edita comisiones de vendedor y ve el aguinaldo (Elías, 2026-10-06: «que Dinia también vea salarios»).**
   Cambia la regla del rediseño («Dinia no ve salarios», docs/finanzas-rediseno-plan.md): el aguinaldo de cada persona es

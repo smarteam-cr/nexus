@@ -14,8 +14,11 @@
  *
  * ── DE QUÉ PROYECTO ES UNA CUOTA ──────────────────────────────────────────────────
  * El del servicio (`ServicioContratado.projectId`) cuando lo tiene: ese manda, pausado o no. Muchos servicios no tienen
- * proyecto (los que vinieron del libro de Alex o se crearon a mano); para esos, cualquier proyecto pausado del cliente.
- * Ahí puede avisar de más si el cliente tiene otro proyecto que sí sigue: preguntar antes de facturar es barato.
+ * proyecto (los que vinieron del libro de Alex o se crearon a mano); para esos, el cliente: avisa solo si tiene un
+ * proyecto pausado y NINGUNO en marcha.
+ * ⚠ 2026-10-08: la primera regla («cualquier pausado del cliente») avisó en Bluesat por «BLUESAT - SERVICE HUB» (en
+ * pausa en HubSpot) mientras la implementación de SignNow, a semana y media de terminar, seguía en marcha (Alex
+ * Vanegas). Un aviso que se equivoca enseña a ignorarlo.
  *
  * Se calcula al LEER (la cola, las alertas, el cronograma) y no se guarda en la alerta: `AlertaCobro.mensaje` se
  * conserva entre corridas y el aviso quedaría pegado cuando el proyecto se reanude.
@@ -53,15 +56,21 @@ export function estaPausado(p: Pick<ProyectoParaPausa, "status" | "hubspotStatus
 
 const aDTO = (p: ProyectoParaPausa): ProyectoPausadoDTO => ({ projectId: p.id, nombre: p.name, cse: p.hubspotOwnerName });
 
+/** En marcha: activo y sin ninguna marca de pausa. */
+export const enMarcha = (p: Pick<ProyectoParaPausa, "status" | "hubspotStatus" | "healthStatusOverride">): boolean =>
+  p.status === "active" && !estaPausado(p);
+
 /**
  * El proyecto pausado de una cuota, o null. `delServicio`: el proyecto del servicio (null si no tiene);
- * `pausadosDelCliente`: los proyectos pausados de su cliente, para los servicios sin proyecto.
+ * `delCliente`: los proyectos del cliente (pausados o activos), para los servicios sin proyecto. Con uno en marcha, no
+ * avisa: la cuota puede ser de ese.
  */
 export function proyectoPausadoDe(
   delServicio: ProyectoParaPausa | null,
-  pausadosDelCliente: ReadonlyArray<ProyectoParaPausa>,
+  delCliente: ReadonlyArray<ProyectoParaPausa>,
 ): ProyectoPausadoDTO | null {
   if (delServicio) return estaPausado(delServicio) ? aDTO(delServicio) : null;
-  const pausado = pausadosDelCliente.find(estaPausado);
+  if (delCliente.some(enMarcha)) return null;
+  const pausado = delCliente.find(estaPausado);
   return pausado ? aDTO(pausado) : null;
 }

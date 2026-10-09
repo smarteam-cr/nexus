@@ -49,6 +49,16 @@ describe("de qué proyecto es la cuota", () => {
     expect(proyectoPausadoDe(null, [pausadoDelCliente])?.nombre).toBe("Intercert - MHP");
     expect(proyectoPausadoDe(null, [])).toBeNull();
   });
+
+  it("EL CASO BLUESAT (2026-10-08): sin proyecto en el servicio y con otro proyecto en marcha, no avisa", () => {
+    // «BLUESAT - SERVICE HUB» en pausa en HubSpot, pero la implementación de SignNow sigue (a semana y media de
+    // terminar): las cuotas del Welcome kit y de SignNow no son del proyecto pausado.
+    const serviceHub = proyecto({ id: "sh", name: "BLUESAT - SERVICE HUB", hubspotStatus: "on_hold" });
+    const signNow = proyecto({ id: "sn", name: "Integración con SignNow | BLUESAT", hubspotStatus: null });
+    expect(proyectoPausadoDe(null, [serviceHub, signNow])).toBeNull();
+    // Un proyecto terminado no cuenta como «en marcha».
+    expect(proyectoPausadoDe(null, [serviceHub, { ...signNow, status: "inactive" }])?.nombre).toBe("BLUESAT - SERVICE HUB");
+  });
 });
 
 describe("la tarea «Facturar» de Pendientes y Para ti dice cuántas son de un proyecto pausado", () => {

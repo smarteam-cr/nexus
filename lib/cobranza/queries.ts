@@ -973,14 +973,15 @@ const PROYECTO_PARA_PAUSA_SELECT = {
 } as const;
 
 /**
- * Los proyectos PAUSADOS de cada cliente, para las cuotas cuyo servicio no tiene proyecto. Sin el contenedor
- * «Información del cliente», que no es un proyecto. Una sola consulta para toda la lista.
+ * Los proyectos de cada cliente que deciden el aviso de pausa de las cuotas sin proyecto: los pausados y los activos
+ * (con uno en marcha, no se avisa: `proyectoPausadoDe`). Sin el contenedor «Información del cliente», que no es un
+ * proyecto. Una sola consulta para toda la lista.
  */
 export async function cargarPausadosPorCliente(clientIds: ReadonlyArray<string>): Promise<Map<string, ProyectoParaPausa[]>> {
   const ids = [...new Set(clientIds)];
   if (ids.length === 0) return new Map();
   const filas = await prisma.project.findMany({
-    where: { AND: [{ clientId: { in: ids } }, NO_ES_CONTENEDOR_WHERE, PROYECTO_PAUSADO_WHERE] },
+    where: { AND: [{ clientId: { in: ids } }, NO_ES_CONTENEDOR_WHERE, { OR: [...PROYECTO_PAUSADO_WHERE.OR, { status: "active" }] }] },
     select: { ...PROYECTO_PARA_PAUSA_SELECT, clientId: true },
     orderBy: { name: "asc" },
   });
