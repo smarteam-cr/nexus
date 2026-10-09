@@ -11,7 +11,7 @@
  */
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Drawer, Field, Input, Select, Textarea } from "@/components/ui";
+import { Alert, Button, Drawer, Field, Input, Textarea } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { ReporteDelAncla } from "@/lib/escala/datos/pantalla";
 import { fechaYHora } from "@/lib/escala/datos/reglas";
@@ -22,7 +22,33 @@ import { Segmentado } from "../piezas";
 
 type PropsDeLaVista = React.ComponentProps<typeof VistaDeLaEscala>;
 
-const MARCAS: MarcaDePerfil[] = ["venta con equipo", "venta sin vendedor", "cliente recurrente", "recompra", "relación continua"];
+/**
+ * La marca de perfil, dicha como las dos preguntas del perfil de negocio. Cada marca limita el criterio
+ * por UNA de las dos (la etiqueta admite una sola): cómo se cierra la venta, o qué pasa después. Lo que
+ * dice cada opción es la regla de `aplica` (lib/escala/documento/perfil.ts): si cambia la regla, cambia esto.
+ */
+type MarcaDeCierre = "todas" | "venta con equipo" | "venta sin vendedor";
+type MarcaDeDespues = "todas" | "cliente recurrente" | "recompra" | "relación continua";
+const DEL_CIERRE: { clave: MarcaDeCierre; etiqueta: string }[] = [
+  { clave: "todas", etiqueta: "Todas" },
+  { clave: "venta con equipo", etiqueta: "Con equipo" },
+  { clave: "venta sin vendedor", etiqueta: "Sin vendedor" },
+];
+const DEL_DESPUES: { clave: MarcaDeDespues; etiqueta: string }[] = [
+  { clave: "todas", etiqueta: "Todas" },
+  { clave: "cliente recurrente", etiqueta: "Recurrente" },
+  { clave: "recompra", etiqueta: "Recompra" },
+  { clave: "relación continua", etiqueta: "Contrato" },
+];
+const EFECTO_DE_LA_MARCA: Record<MarcaDePerfil | "ninguna", string> = {
+  ninguna: "Vale para todos los perfiles.",
+  "venta con equipo": "Vale para la venta con equipo y la mixta; se esconde en la transaccional.",
+  "venta sin vendedor": "Vale para la venta transaccional y la mixta; se esconde en la venta con equipo.",
+  "cliente recurrente": "Vale cuando el cliente vuelve (recompra o contrato); se esconde en la relación única.",
+  recompra: "Vale solo cuando el cliente vuelve a comprar sin contrato.",
+  "relación continua": "Vale solo cuando hay contrato (relación continua).",
+};
+const ES_DEL_CIERRE = (m: MarcaDePerfil | null): m is "venta con equipo" | "venta sin vendedor" => m === "venta con equipo" || m === "venta sin vendedor";
 const ETIQUETA_DE_VERIFICACION: Record<Verificacion, string> = { comprobable: "Comprobable", declarado: "Declarado", evaluado: "Evaluado" };
 
 type Pedido<T> = { ok: true; datos: T } | { ok: false; error: string };
@@ -108,15 +134,23 @@ function FormularioDelCriterio({ valor, onCambio }: { valor: CamposDelCriterio; 
           Es un hábito
         </label>
       </div>
-      <Field label="A qué perfil aplica" hint="Sin marca, aplica a todos.">
-        <Select value={valor.perfil ?? ""} onChange={(e) => poner({ perfil: (e.target.value || null) as MarcaDePerfil | null })}>
-          <option value="">A todos</option>
-          {MARCAS.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </Select>
+      <Field label="A qué perfil aplica" hint={`${EFECTO_DE_LA_MARCA[valor.perfil ?? "ninguna"]} Un criterio se limita por una sola de las dos preguntas.`}>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs text-fg-muted">Cómo se cierra la venta</span>
+          <Segmentado
+            etiqueta="Cómo se cierra la venta"
+            opciones={DEL_CIERRE}
+            valor={ES_DEL_CIERRE(valor.perfil) ? valor.perfil : "todas"}
+            onCambio={(m) => poner({ perfil: m === "todas" ? (ES_DEL_CIERRE(valor.perfil) ? null : valor.perfil) : m })}
+          />
+          <span className="text-xs text-fg-muted">Qué pasa después de la venta</span>
+          <Segmentado
+            etiqueta="Qué pasa después de la venta"
+            opciones={DEL_DESPUES}
+            valor={valor.perfil && !ES_DEL_CIERRE(valor.perfil) ? valor.perfil : "todas"}
+            onCambio={(m) => poner({ perfil: m === "todas" ? (ES_DEL_CIERRE(valor.perfil) ? valor.perfil : null) : m })}
+          />
+        </div>
       </Field>
       <Field label="Requiere" hint="Los criterios que necesita para poder cumplirse, separados por coma (1.5.F1, 1.6.F2).">
         <Input value={valor.requiere} onChange={(e) => poner({ requiere: e.target.value })} />
