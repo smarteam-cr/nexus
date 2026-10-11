@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Client as HubspotClient } from "@hubspot/api-client";
 import type { Prisma } from "@prisma/client";
 import { describirDestino, resolverApply } from "./lib/guard";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { prisma } from "@/lib/db/prisma";
 import { refreshAccessToken } from "@/lib/hubspot/client";
 import { detectarFusion, type VeredictoDeFusion } from "@/lib/hubspot/empresa-fusionada";
@@ -230,10 +231,39 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
     return { applied: false };
   }
 
+  /* ⛔ «Información del cliente» es UNA por empresa (el proyecto contenedor, SENTINEL_SERVICE_TYPE): si las dos fichas
+     tienen, la que sigue quedaría con dos y ensureClientInfoProject elige con un findFirst sin orden, así que podría abrir
+     el vacío (2026-10-11, CAV). Se queda la de la ficha que sigue: la de la absorbida se borra si está vacía (sin bloques
+     ni documentos) y, si tiene algo, decide una persona. */
+  const contenedores = await prisma.project.findMany({
+    where: { clientId: { in: [canon.ficha.id, dup.ficha.id] }, serviceType: SENTINEL_SERVICE_TYPE },
+    select: { id: true, clientId: true },
+  });
+  const contenedorDeLaAbsorbida = contenedores.find((c) => c.clientId === dup.ficha.id) ?? null;
+  const hayContenedorQueSigue = contenedores.some((c) => c.clientId === canon.ficha.id);
+  let contenedorABorrar: string | null = null;
+  if (contenedorDeLaAbsorbida && hayContenedorQueSigue) {
+    const [bloques, documentos] = await Promise.all([
+      prisma.canvasBlock.count({ where: { section: { canvas: { projectId: contenedorDeLaAbsorbida.id } } } }),
+      prisma.clientDocument.count({ where: { projectId: contenedorDeLaAbsorbida.id } }),
+    ]);
+    if (bloques > 0 || documentos > 0) {
+      console.log(
+        `  ⛔ NO SE TOCA: las dos tienen «Información del cliente» y la de la absorbida tiene contenido (${bloques} bloques, ` +
+          `${documentos} documentos). Pasa a mano lo que haga falta y vuelve.`,
+      );
+      return { applied: false };
+    }
+    contenedorABorrar = contenedorDeLaAbsorbida.id;
+    console.log(`  «Información del cliente»: la de la absorbida está vacía y se borra; queda la de la ficha que sigue.`);
+  }
+
   /* ── Lo que se muda ──────────────────────────────────────────────────────────── */
   const mueven: Record<string, string[]> = {};
   for (const [modelo, columna] of seMudanAqui) {
-    const filas = await delegado(prisma, modelo).findMany({ where: { [columna]: dup.ficha.id }, select: { id: true } });
+    const filas = (await delegado(prisma, modelo).findMany({ where: { [columna]: dup.ficha.id }, select: { id: true } })).filter(
+      (f) => !(modelo === "project" && f.id === contenedorABorrar),
+    );
     if (filas.length) mueven[`${modelo}.${columna}`] = filas.map((f) => f.id);
   }
   /* ⛔ Una sola exploración VIVA por empresa (índice único parcial): si las dos tienen, decide una persona. */
@@ -406,6 +436,8 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
   await prisma.$transaction(
     async (tx) => {
       const a = { canon: canon.ficha.id, dup: dup.ficha.id };
+      // Antes de mudar los proyectos: el contenedor vacío de la absorbida no pasa (ver arriba). Se lleva su canvas vacío.
+      if (contenedorABorrar) await tx.project.delete({ where: { id: contenedorABorrar } });
       for (const [modelo, columna] of seMudanAqui) {
         await delegado(tx, modelo).updateMany({ where: { [columna]: a.dup }, data: { [columna]: a.canon } });
       }
