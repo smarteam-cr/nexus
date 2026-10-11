@@ -226,13 +226,14 @@ export default function CuestionarioPanel({ projectId, onCambio }: { projectId: 
           {sinPersona.length > 0 && (
             <section className="rounded-2xl border border-warn-line bg-warn-surface p-4">
               <p className="text-xs text-warn-ink">
-                {sinPersona.length === 1 ? "Hay un cuestionario sin persona" : `Hay ${sinPersona.length} cuestionarios sin persona`}: no se
-                le muestran a nadie hasta que se los asignes.
+                {sinPersona.length === 1
+                  ? "Este cuestionario todavía no tiene a quién mandárselo, así que nadie del cliente lo ve. Ábrelo y elige en «De» la persona que lo va a contestar."
+                  : `Estos ${sinPersona.length} cuestionarios todavía no tienen a quién mandárselos, así que nadie del cliente los ve. Abre cada uno y elige en «De» la persona que lo va a contestar.`}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {sinPersona.map((c) => (
                   <button key={c.id} className={BTN} onClick={() => setAbierto(c.id)}>
-                    {c.titulo}
+                    {c.titulo} · elegir quién lo contesta
                   </button>
                 ))}
               </div>
