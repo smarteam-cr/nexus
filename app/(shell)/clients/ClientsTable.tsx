@@ -182,7 +182,12 @@ export const consultarIndice = cache(async (
      * owner de CUALQUIER proyecto: kölbi mostraba "Breiner Salas Salas +1" — el
      * desarrollador de su integración de Desarrollo, antepuesto al CSE real de la cuenta.
      */
-    const proyectosDeCS = c.projects.filter(esProyectoDePipelineCS);
+    /* Primero los ACTIVOS (2026-10-11): el espejo no actualiza el encargado de un proyecto cerrado, así que uno
+       cerrado conserva a quien lo llevaba entonces. En CAV mostraba a Lorena (de baja) después de pasar la cuenta a
+       Caroline. Solo si el cliente no tiene ninguno activo se muestra quién llevaba los cerrados. */
+    const deCS = c.projects.filter(esProyectoDePipelineCS);
+    const activosDeCS = deCS.filter((p) => p.status === "active");
+    const proyectosDeCS = activosDeCS.length > 0 ? activosDeCS : deCS;
     const cseNames = [
       ...new Set(
         proyectosDeCS

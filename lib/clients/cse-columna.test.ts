@@ -43,8 +43,12 @@ describe("⭐ la columna CSE de /clients no mezcla pipelines", () => {
     /* La edición que la pone en rojo: volver `const proyectosDeCS = c.projects;` (sin `.filter`),
        o mapear `cseNames` directo desde `c.projects` otra vez. `tsc` NO cazaría ese cambio —
        sigue siendo TypeScript válido, solo cambia el comportamiento en producción. */
-    const i = FUENTE.indexOf("const proyectosDeCS = c.projects.filter(esProyectoDePipelineCS);");
-    expect(i, "desapareció el filtro por pipeline antes de armar los arrays").toBeGreaterThan(-1);
+    /* 2026-10-11: el filtro por pipeline pasó a `deCS`, y `proyectosDeCS` se queda con los ACTIVOS de esa lista (o con
+       todos, si el cliente no tiene ninguno activo). Un proyecto cerrado guarda a quien lo llevaba entonces. */
+    const f = FUENTE.indexOf("const deCS = c.projects.filter(esProyectoDePipelineCS);");
+    expect(f, "desapareció el filtro por pipeline antes de armar los arrays").toBeGreaterThan(-1);
+    const i = FUENTE.indexOf("const proyectosDeCS = activosDeCS.length > 0 ? activosDeCS : deCS;", f);
+    expect(i, "proyectosDeCS tiene que salir de la lista ya filtrada por pipeline, primero los activos").toBeGreaterThan(-1);
     const bloque = FUENTE.slice(i, FUENTE.indexOf("const cseEmails = [", i) + 400);
     expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(200);
     /* ⚠ NO se busca ".map((p) => p.hubspotOwnerName)" como string contiguo: el formato real

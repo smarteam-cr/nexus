@@ -80,14 +80,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
    * Sin esto, el loop de abajo intentaría un PATCH contra un id vacío.
    */
   const proyectos = await prisma.project.findMany({
-    where: { clientId, hubspotServiceId: { not: null }, ...PROYECTO_DE_PIPELINE_CS_WHERE },
+    // Solo los activos (2026-10-11): un proyecto cerrado guarda quién lo llevaba entonces, y el espejo no lo relee.
+    where: { clientId, status: "active", hubspotServiceId: { not: null }, ...PROYECTO_DE_PIPELINE_CS_WHERE },
     select: { id: true, name: true, hubspotServiceId: true },
   });
   if (proyectos.length === 0) {
     return NextResponse.json(
       {
         error:
-          "Este cliente no tiene ningún proyecto de Implementación de HubSpot sincronizado, " +
+          "Este cliente no tiene ningún proyecto activo de Implementación de HubSpot sincronizado, " +
           "así que no hay dónde escribir el encargado.",
       },
       { status: 409 },
