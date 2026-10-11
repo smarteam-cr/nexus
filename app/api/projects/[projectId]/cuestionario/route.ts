@@ -9,6 +9,9 @@
  * cliente o handoff en cualquier cliente); crear personas y publicar pide además que el proyecto
  * admita publicación externa — un proyecto interno no le manda nada a nadie.
  *
+ * Crear una persona con correo busca su contacto en HubSpot (solo lee) para traer su cargo; si no
+ * lo trae, la respuesta lleva `aviso` y el CSE lo escribe con `editar_persona` (solo `cargo`).
+ *
  * La lógica vive en lib/cuestionario/servicio.ts (y escala.ts); acá solo se autentica y se despacha.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -115,10 +118,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
   }
 
   const email = guard.user.email ?? null;
+  // Una línea para la pantalla (p. ej. «HubSpot no tiene el cargo…»); null si no hay nada que decir.
+  let aviso: string | null = null;
   try {
     switch (a.accion) {
       case "crear_persona":
-        await crearPersona(projectId, a);
+        ({ aviso } = await crearPersona(projectId, a));
         break;
       case "editar_persona":
         await editarPersona(projectId, a.personaId, a);
@@ -165,7 +170,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
         await reabrirPestana(projectId, a.pestanaId, email, a.motivo);
         break;
     }
-    return NextResponse.json(await respuesta(projectId));
+    return NextResponse.json({ ...(await respuesta(projectId)), aviso });
   } catch (e) {
     if (e instanceof ErrorDeCuestionario) return NextResponse.json({ error: e.message }, { status: e.status });
     throw e;

@@ -16,8 +16,10 @@ import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { sanitizeTags } from "@/lib/tags/catalog";
+import { buscarContactoPorCorreo } from "@/lib/hubspot/contacto-por-correo";
 import { avanceDePestana, type Avance } from "./avance";
 import { aplicarOperaciones, type EstadoDePestana, type OperacionCuestionario } from "./operaciones";
+import { armarPersona, errorSinNombre, hayQueBuscarEnHubspot } from "./persona";
 import { pestanasDeEstrategia, porQueNoEntraEnEstrategia } from "./estrategia";
 import { pestanasDePlantilla, pestanasParaTags } from "./plantilla";
 // Solo la constante: el módulo del prellenado importa el SDK y esto lo lee cada GET.
@@ -350,25 +352,34 @@ function limpio(v: unknown, max: number): string {
   return typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
 
+/**
+ * Agrega una persona del cliente. El cargo lo pone el equipo (decisión de Elías, 2026-10-11): con
+ * correo, Nexus busca el contacto en HubSpot y completa el cargo y, si falta, el nombre. Lo escrito
+ * manda. Si HubSpot no lo tiene o falla, se agrega igual, sin cargo, y `aviso` lo dice.
+ */
 export async function crearPersona(
   projectId: string,
   datos: { nombre?: unknown; cargo?: unknown; email?: unknown },
-): Promise<string> {
-  const nombre = limpio(datos.nombre, 120);
-  if (!nombre) throw new ErrorDeCuestionario("La persona necesita un nombre.");
+): Promise<{ id: string; aviso: string | null }> {
+  if (!limpio(datos.nombre, 120) && !limpio(datos.email, 200)) {
+    throw new ErrorDeCuestionario("La persona necesita un nombre o un correo.");
+  }
   const activas = await prisma.cuestionarioResponsable.count({ where: { projectId, revokedAt: null } });
   if (activas >= 25) throw new ErrorDeCuestionario("Ya hay 25 personas con enlace activo.");
+  const busqueda = hayQueBuscarEnHubspot(datos) ? await buscarContactoPorCorreo(limpio(datos.email, 200)) : null;
+  const persona = armarPersona(datos, busqueda);
+  if (!persona) throw new ErrorDeCuestionario(errorSinNombre(busqueda));
   const r = await prisma.cuestionarioResponsable.create({
     data: {
       projectId,
-      nombre,
-      cargo: limpio(datos.cargo, 120) || null,
-      email: limpio(datos.email, 200) || null,
+      nombre: persona.nombre,
+      cargo: persona.cargo,
+      email: persona.email,
       accessToken: randomBytes(32).toString("hex"),
     },
     select: { id: true },
   });
-  return r.id;
+  return { id: r.id, aviso: persona.aviso };
 }
 
 export async function editarPersona(

@@ -7735,6 +7735,13 @@ sin SQL):
 - **«Comparar» la pone lado a lado**, como el táctico (`comparar.ts`): dos personas que dicen desafíos o prioridades
   distintos es donde un desacuerdo más importa.
 
+**El cargo de cada persona lo establece el equipo, no la persona del cliente** (decisión de Elías): al agregarla con
+correo, Nexus busca el contacto en HubSpot (`lib/hubspot/contacto-por-correo.ts`, solo lee) y trae su cargo
+(`jobtitle`) y, si no se escribió, su nombre; lo escrito manda (`lib/cuestionario/persona.ts`). Si HubSpot no lo tiene,
+no lo encuentra o falla, la persona se agrega igual, sin cargo, y la pantalla lo dice en una línea; el CSE lo escribe o
+lo cambia en su fila («Agregar cargo» / «Editar cargo», acción `editar_persona`). Nada se escribe en HubSpot y nada se
+le pregunta a la persona del cliente.
+
 **El artefacto: el riel, el panel y «Qué sigue»** (lo que cambia en la ficha del cliente):
 
 - **Es una pieza del registro que no vive en un canvas** (`questionnaires`, «Cuestionarios»,

@@ -138,8 +138,9 @@ export default function CuestionarioPanel({ projectId, onCambio }: { projectId: 
     return () => clearInterval(t);
   }, [prellenando, cargar]);
 
-  const accion = useCallback(
-    async (body: Record<string, unknown>, ok?: string): Promise<boolean> => {
+  /** Manda una acción; devuelve lo que contestó el servidor, o null si falló (ya avisado). */
+  const enviar = useCallback(
+    async (body: Record<string, unknown>, ok?: string): Promise<{ aviso: string | null } | null> => {
       setOcupado(true);
       try {
         const res = await fetch(`/api/projects/${projectId}/cuestionario`, {
@@ -150,17 +151,22 @@ export default function CuestionarioPanel({ projectId, onCambio }: { projectId: 
         const data = await res.json().catch(() => null);
         if (!res.ok) {
           toast.error(data?.error ?? "No se pudo guardar el cambio.");
-          return false;
+          return null;
         }
-        setEstado((prev) => ({ ...(prev as Estado), ...data }));
+        const { aviso, ...resto } = data ?? {};
+        setEstado((prev) => ({ ...(prev as Estado), ...resto }));
         if (ok) toast.success(ok);
         if (typeof body.accion === "string" && CAMBIAN_EL_ESTADO.has(body.accion)) onCambio?.();
-        return true;
+        return { aviso: typeof aviso === "string" ? aviso : null };
       } finally {
         setOcupado(false);
       }
     },
     [projectId, toast, onCambio],
+  );
+  const accion = useCallback(
+    async (body: Record<string, unknown>, ok?: string): Promise<boolean> => (await enviar(body, ok)) != null,
+    [enviar],
   );
 
   const cuestionario = useMemo(
@@ -222,6 +228,7 @@ export default function CuestionarioPanel({ projectId, onCambio }: { projectId: 
             publicable={publicable}
             onAbrir={setAbierto}
             onAccion={accion}
+            onAgregar={(body) => enviar(body, "Persona agregada.")}
           />
           {sinPersona.length > 0 && (
             <section className="rounded-2xl border border-warn-line bg-warn-surface p-4">
@@ -284,6 +291,7 @@ function Personas({
   publicable,
   onAbrir,
   onAccion,
+  onAgregar,
 }: {
   personas: PersonaVista[];
   cuestionarios: CuestionarioVista[];
@@ -292,11 +300,33 @@ function Personas({
   publicable: boolean;
   onAbrir: (id: string) => void;
   onAccion: (b: Record<string, unknown>, ok?: string) => Promise<boolean>;
+  onAgregar: (b: Record<string, unknown>) => Promise<{ aviso: string | null } | null>;
 }) {
   const toast = useToast();
   const [nombre, setNombre] = useState("");
   const [cargo, setCargo] = useState("");
   const [email, setEmail] = useState("");
+  // Lo que dijo el servidor al agregar (p. ej. que HubSpot no tenía el cargo). Se va al agregar otra.
+  const [aviso, setAviso] = useState<string | null>(null);
+  // El cargo lo establece el equipo: la persona cuyo cargo se está escribiendo en su fila, y el texto.
+  const [editandoCargo, setEditandoCargo] = useState<string | null>(null);
+  const [cargoEnEdicion, setCargoEnEdicion] = useState("");
+
+  const guardarCargo = async (p: PersonaVista) => {
+    const nuevo = cargoEnEdicion.replace(/\s+/g, " ").trim();
+    if (nuevo === (p.cargo ?? "")) {
+      setEditandoCargo(null);
+      return;
+    }
+    const ok = await onAccion(
+      { accion: "editar_persona", personaId: p.id, cargo: nuevo || null },
+      nuevo ? `Cargo de ${p.nombre} guardado.` : `Cargo de ${p.nombre} borrado.`,
+    );
+    if (ok) {
+      setEditandoCargo(null);
+      setAviso(null);
+    }
+  };
   const activas = personas.filter((p) => !p.revocado);
 
   const copiar = async (p: PersonaVista) => {
@@ -326,10 +356,51 @@ function Personas({
               <li key={p.id} className="space-y-2 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-fg">
-                      {p.nombre}
-                      {p.cargo && <span className="font-normal text-fg-muted"> · {p.cargo}</span>}
-                    </div>
+                    {editandoCargo === p.id ? (
+                      <form
+                        className="flex flex-wrap items-center gap-2"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          void guardarCargo(p);
+                        }}
+                      >
+                        <span className="text-sm font-medium text-fg">{p.nombre}</span>
+                        <input
+                          className={`${INPUT} sm:w-56`}
+                          placeholder="Cargo"
+                          aria-label={`Cargo de ${p.nombre}`}
+                          maxLength={120}
+                          autoFocus
+                          value={cargoEnEdicion}
+                          onChange={(e) => setCargoEnEdicion(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") setEditandoCargo(null);
+                          }}
+                        />
+                        <button className={BTN} disabled={ocupado} type="submit">
+                          Guardar
+                        </button>
+                        <button className={BTN} disabled={ocupado} type="button" onClick={() => setEditandoCargo(null)}>
+                          Cancelar
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="text-sm font-medium text-fg">
+                        {p.nombre}
+                        {p.cargo && <span className="font-normal text-fg-muted"> · {p.cargo}</span>}{" "}
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-brand hover:underline disabled:opacity-50"
+                          disabled={ocupado}
+                          onClick={() => {
+                            setEditandoCargo(p.id);
+                            setCargoEnEdicion(p.cargo ?? "");
+                          }}
+                        >
+                          {p.cargo ? "Editar cargo" : "Agregar cargo"}
+                        </button>
+                      </div>
+                    )}
                     <div className="text-[11px] text-fg-muted">{p.ultimoUsoAt ? `Entró ${fecha(p.ultimoUsoAt)}` : "Todavía no entró"}</div>
                   </div>
                   <div className="flex gap-2">
@@ -386,22 +457,28 @@ function Personas({
         className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]"
         onSubmit={async (e) => {
           e.preventDefault();
-          if (!nombre.trim()) return;
-          const ok = await onAccion({ accion: "crear_persona", nombre, cargo: cargo || null, email: email || null }, "Persona agregada.");
-          if (ok) {
+          if (!nombre.trim() && !email.trim()) return;
+          setAviso(null);
+          const r = await onAgregar({ accion: "crear_persona", nombre, cargo: cargo || null, email: email || null });
+          if (r) {
             setNombre("");
             setCargo("");
             setEmail("");
+            setAviso(r.aviso);
           }
         }}
       >
         <input className={INPUT} placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} />
         <input className={INPUT} placeholder="Cargo (opcional)" value={cargo} onChange={(e) => setCargo(e.target.value)} />
         <input className={INPUT} placeholder="Correo (opcional)" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <button className={BTN_PRIMARIO} disabled={ocupado || !nombre.trim() || !publicable} type="submit">
+        <button className={BTN_PRIMARIO} disabled={ocupado || (!nombre.trim() && !email.trim()) || !publicable} type="submit">
           Agregar persona
         </button>
       </form>
+      <p className="mt-1.5 text-[11px] text-fg-muted">
+        Con el correo, Nexus trae de HubSpot su cargo y, si no escribes el nombre, también su nombre.
+      </p>
+      {aviso && <p className="mt-1 text-xs text-warn-ink">{aviso}</p>}
     </section>
   );
 }
