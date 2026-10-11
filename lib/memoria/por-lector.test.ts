@@ -108,6 +108,7 @@ const PIDE: Record<Exclude<LectorDeMemoria, "pase-de-cuenta" | "lo-que-sabe-la-i
   "exploracion-del-proyecto": { cuenta: true, proyecto: false },
   preventa: { cuenta: true, proyecto: false },
   correo: { cuenta: true, proyecto: false },
+  cuestionario: { cuenta: true, proyecto: false },
   vigia: { cuenta: true, proyecto: true },
 };
 

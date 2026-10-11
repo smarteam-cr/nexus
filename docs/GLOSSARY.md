@@ -258,10 +258,22 @@
   Exploración de un proyecto es el MISMO lienzo de la preventa —sesiones en el riel, cada una con
   Preparación, En vivo y Análisis— con las preguntas de Customer Success: la **estrategia** del cliente
   (retos, resultados que persigue y obstáculos) y la escala. Lo que se confirma de la estrategia va como
-  sugerencia a **Información del cliente**. Debajo de las sesiones, **Cuestionarios** (lo que contesta cada
-  persona del cliente) e «Informe anterior». Desde la etapa A de la memoria de la cuenta abre en su **página de
+  sugerencia a **Información del cliente**. Debajo de las sesiones, «Informe anterior» (los **Cuestionarios**
+  colgaban también de ahí hasta el 2026-10-11, cuando pasaron a ser un artefacto propio). Desde la etapa A de la memoria de la cuenta abre en su **página de
   inicio**, y solo cuentan las reuniones que son de una sesión: lo demás del proyecto le llega por la memoria. Ver
   DECISIONS «La exploración del proyecto es la de la preventa» y «La exploración son sus sesiones».
+- **Cuestionarios** (artefacto del proyecto, entre el Kickoff y la Exploración desde el 2026-10-11, `lib/cuestionario`;
+  antes «cuestionario previo», dentro de Exploración): lo que contesta cada persona del cliente por su enlace, sin
+  contraseña. Recomendado, nunca requerido: no frena ninguna etapa. Tres tipos: el **táctico** (por hubs y etapas del
+  proceso), el de la **escala** (una pregunta por dimensión) y el de **estrategia** (el desafío central, los
+  resultados que necesitan, los obstáculos, qué pasa si no lo resuelven, cómo miden el éxito y las prioridades del
+  año). Nexus prellena lo que ya sabe; lo prellenado que la persona no **confirma** sigue siendo una suposición, no un
+  dato del cliente. Lo que confirma en el de estrategia alimenta la exploración del proyecto, el diagnóstico y, como
+  propuesta con origen «Cuestionario», los retos estratégicos de Información del cliente (el desafío, los obstáculos y
+  las prioridades; los resultados que necesitan no van a la ficha). En el riel de la ficha es la pieza
+  `questionnaires`, que no vive en un canvas: aparece con la Exploración o con algún cuestionario, en cualquier ciclo, y
+  dice cómo van («sin enviar», «enviado» o «respondido N de M»); el «Qué sigue» del proyecto la recomienda solo en el
+  Handoff y en la Exploración, hasta que se publica uno o alguien dice «Ahora no». Ver DECISIONS «Cuestionarios es un artefacto propio, entre Kickoff y Exploración».
 - **Exploración — Sesiones y Cuestionarios** (del 2026-10-05 al 2026-10-07, `lib/guia-exploracion`): la
   versión anterior, con una pestaña por sesión. Sus datos se migran con `scripts/migrar-guia-de-exploracion.ts`.
 - **Exploración** (canvas "Exploración", `agent-exploracion-canvas`, hasta el 2026-10-02): guía **INTERNA** por

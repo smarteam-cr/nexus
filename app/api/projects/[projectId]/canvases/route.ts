@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { piezaDesactualizadaPorHandoff } from "@/lib/pieces/piece-staleness";
 import { ultimoCambioDelHandoff } from "@/lib/handoff/congelado-server";
 import { conteoDeNovedadesDelProyecto } from "@/lib/seguimiento/novedades-server";
+import { cargarEstadoDeCuestionarios } from "@/lib/pieces/estado-de-cuestionarios-server";
+import { slugForCanvas } from "@/lib/pieces/registry";
 
 // GET: list canvases for a project (default first, then by createdAt)
 export async function GET(
@@ -57,15 +59,26 @@ export async function GET(
   /* Las novedades de las reuniones por pieza (memoria de la cuenta, etapa 6): el número del riel. La MISMA función que
      la siembra de la ficha (app/(shell)/clients/[id]/page.tsx), para que el primer pintado y el refetch den lo mismo.
      Vacío con SEGUIMIENTO_HECHOS apagada o sin el SQL. */
-  const [handoffCambioAt, novedades] = await Promise.all([
+  /* Los Cuestionarios (2026-10-11) no viven en un canvas: su fila del riel sale de sus propias tablas.
+     El «Ahora no» de su sugerencia está en las secciones del Kickoff, que ya vienen en esta lista. */
+  const kickoff = canvases.find((c) => slugForCanvas(c) === "kickoff");
+  const [handoffCambioAt, novedades, estadoCuestionarios, puedeEditarCuestionarios] = await Promise.all([
     ultimoCambioDelHandoff(projectId),
     conteoDeNovedadesDelProyecto(
       projectId,
       canvases.filter((c) => c.slug && conContenido.has(c.id)).map((c) => c.slug!),
     ),
+    cargarEstadoDeCuestionarios(projectId, kickoff?.sections ?? null),
+    /* Si quien mira puede escribir los cuestionarios (el mismo gate del PATCH de «Ahora no»): sin eso, la
+       ficha no ofrece un botón que respondería 403. */
+    guardHandoffAccess(guard.clientId)
+      .then((r) => !(r instanceof NextResponse))
+      .catch(() => false),
   ]);
+  const cuestionarios = estadoCuestionarios ? { ...estadoCuestionarios, puedeEditar: puedeEditarCuestionarios } : null;
 
   return NextResponse.json({
+    cuestionarios,
     canvases: canvases.map((c) => ({
       ...c,
       hasContent: conContenido.has(c.id),

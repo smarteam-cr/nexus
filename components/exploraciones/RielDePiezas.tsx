@@ -108,7 +108,7 @@ function FilaDeCuenta({ etiqueta, activa, onClick, extra }: { etiqueta: string; 
   );
 }
 
-/** Una fila más debajo de las sesiones (en un proyecto: «Cuestionarios», «Informe anterior»). */
+/** Una fila más debajo de las sesiones (en un proyecto: «Informe anterior»). */
 export interface FilaExtraDelRiel {
   clave: string;
   etiqueta: string;

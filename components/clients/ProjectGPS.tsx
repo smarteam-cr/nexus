@@ -612,9 +612,10 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
               data.brief === null ? { motivo: null } : data.brief?.vencido ? { motivo: data.brief.motivoDeVencimiento } : null,
             proximaReunion: proximaDeCualquierFrente,
             etapaSugerida: data.etapaHubspot?.sugerencia ? { hasta: data.etapaHubspot.sugerencia.hasta } : null,
+            cuestionarios: resumenCtx.cuestionarios ?? null,
           })
         : null,
-    [data, resumenCtx.piezas, sinRevisar, proximaDeCualquierFrente],
+    [data, resumenCtx.piezas, resumenCtx.cuestionarios, sinRevisar, proximaDeCualquierFrente],
   );
   useEffect(() => {
     onQueSigue(queSigue);
@@ -820,6 +821,15 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     if (a.tipo === "etapa") return <BotonAzul onClick={() => setEncuestaAbierta(true)}>Responder la pregunta</BotonAzul>;
     if (a.tipo === "novedades") {
       return <BotonAzul onClick={() => (resumenCtx.abrirNovedades ?? resumenCtx.abrirPieza)(a.slug)}>Revisar las novedades de «{a.etiqueta}» →</BotonAzul>;
+    }
+    if (a.tipo === "cuestionarios") {
+      // Recomendado: se abre la pieza o se deja para después. «Ahora no» no vuelve a sugerirlo.
+      return (
+        <div className="flex flex-wrap items-center gap-3">
+          <BotonAzul onClick={() => resumenCtx.abrirPieza(a.slug)}>Abrir «{a.etiqueta}» →</BotonAzul>
+          {resumenCtx.descartarCuestionarios && <BotonEnlace onClick={resumenCtx.descartarCuestionarios}>Ahora no</BotonEnlace>}
+        </div>
+      );
     }
     return undefined;
   })();

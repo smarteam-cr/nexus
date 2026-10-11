@@ -144,6 +144,8 @@ describe("candado: toda pieza del desplegable se puede activar", () => {
     // antes de declararla. El handoff queda afuera: no se activa desde el desplegable.
     for (const slug of piecesInFlowOrder("full")) {
       if (slug === "handoff") continue;
+      // Las piezas sin canvas (los Cuestionarios, 2026-10-11) no se activan: el desplegable no ofrece `+`.
+      if (pieceBySlug(slug)?.hasCanvas === false) continue;
       const def = canvasDefForSlug(slug);
       expect(
         def,
@@ -160,7 +162,7 @@ describe("candado: toda pieza del desplegable se puede activar", () => {
 
   it("cada definición declara el slug de su pieza", () => {
     for (const slug of piecesInFlowOrder("full")) {
-      if (slug === "handoff") continue;
+      if (slug === "handoff" || pieceBySlug(slug)?.hasCanvas === false) continue;
       expect(canvasDefForSlug(slug)!.slug).toBe(slug);
     }
   });

@@ -2,7 +2,7 @@
  * GET/POST /api/projects/[projectId]/cuestionario — los cuestionarios del proyecto, del lado del CSE.
  *
  * Desde el 2026-10-02: varias PERSONAS del cliente (un enlace cada una) y varios CUESTIONARIOS, cada
- * uno de una persona y de un tipo («tactico» | «escala»).
+ * uno de una persona y de un tipo («tactico» | «escala» | «estrategia», desde el 2026-10-11).
  *
  * GET: lectura (cualquiera con acceso al proyecto). Los adjuntos traen un enlace firmado de 1 h.
  * POST: una ACCIÓN por request, validada con zod. Editar pide lo mismo que el cronograma (dueño del
@@ -23,6 +23,7 @@ import {
   asignarPersona,
   cerrar,
   crearPersona,
+  crearEstrategia,
   crearTactico,
   editarEstructura,
   editarPersona,
@@ -74,7 +75,7 @@ const Accion = z.discriminatedUnion("accion", [
   z.strictObject({ accion: z.literal("crear_persona"), ...datosPersona }),
   z.strictObject({ accion: z.literal("editar_persona"), personaId: id, ...datosPersona }),
   z.strictObject({ accion: z.literal("revocar_persona"), personaId: id }),
-  z.strictObject({ accion: z.literal("crear_cuestionario"), tipo: z.enum(["tactico", "escala"]), personaId: id }),
+  z.strictObject({ accion: z.literal("crear_cuestionario"), tipo: z.enum(["tactico", "escala", "estrategia"]), personaId: id }),
   z.strictObject({ accion: z.literal("asignar_persona"), cuestionarioId: id, personaId: id.nullable() }),
   z.strictObject({ accion: z.literal("operaciones"), cuestionarioId: id, ops: z.array(z.unknown()).min(1).max(50) }),
   z.strictObject({ accion: z.literal("publicar"), cuestionarioId: id, publicado: z.boolean() }),
@@ -126,9 +127,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
         await revocarPersona(projectId, a.personaId);
         break;
       case "crear_cuestionario": {
-        if (a.tipo === "tactico") {
-          const cuestionarioId = await crearTactico(projectId, a.personaId, guard.teamMember?.id ?? null);
-          // Recién armado: Nexus contesta de una lo que ya sabe del handoff y el kickoff.
+        if (a.tipo === "tactico" || a.tipo === "estrategia") {
+          const crear = a.tipo === "tactico" ? crearTactico : crearEstrategia;
+          const cuestionarioId = await crear(projectId, a.personaId, guard.teamMember?.id ?? null);
+          // Recién armado: Nexus contesta de una lo que ya sabe (el handoff, el kickoff y, en estrategia, la ficha).
           await arrancarPrellenado(cuestionarioId);
         } else {
           await crearEscala(projectId, a.personaId, guard.teamMember?.id ?? null);
@@ -156,7 +158,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
       case "prellenar": {
         const c = await prisma.cuestionario.findFirst({ where: { id: a.cuestionarioId, projectId }, select: { id: true, tipo: true } });
         if (!c) return NextResponse.json({ error: "Ese cuestionario no es de este proyecto." }, { status: 404 });
-        if (c.tipo === "tactico") await arrancarPrellenado(c.id);
+        if (c.tipo === "tactico" || c.tipo === "estrategia") await arrancarPrellenado(c.id);
         break;
       }
       case "reabrir_pestana":

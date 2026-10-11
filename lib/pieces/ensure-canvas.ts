@@ -63,6 +63,11 @@ export async function ensurePieceCanvas(projectId: string, slug: string): Promis
       `"${pieza.label}" no es una pieza del proyecto: no se activa desde acá.`,
     );
   }
+  if (!pieza.hasCanvas) {
+    throw new PieceNotActivatableError(
+      `"${pieza.label}" no vive en un canvas: no se activa desde acá, está siempre que el proyecto la tenga.`,
+    );
+  }
   const def = canvasDefForSlug(slug);
   if (!def) {
     throw new PieceNotActivatableError(

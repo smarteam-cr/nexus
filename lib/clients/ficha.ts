@@ -695,7 +695,7 @@ export function fichaTieneContenido(valores: ValoresDeFicha): boolean {
 // ── De dónde salió cada campo (memoria de la cuenta, etapa 3) ───────────────────────────────
 
 /** Los `origen` que escriben las puertas de la propuesta (lib/clients/ficha-propuesta.ts y ficha-desde-hubspot-server.ts). */
-export const ORIGENES_DE_LA_FICHA = ["Handoff", "Sesiones", "Exploración", "Preventa", "Actualizar con IA", "HubSpot"] as const;
+export const ORIGENES_DE_LA_FICHA = ["Handoff", "Sesiones", "Exploración", "Preventa", "Actualizar con IA", "HubSpot", "Cuestionario"] as const;
 /** Un campo propuesto del que no se sabe quién lo propuso (una propuesta de antes, con fuentes que no se reconocen). */
 export const ORIGEN_DESCONOCIDO = "desconocido";
 /** Un campo confirmado que el CSE escribió (o cambió) a mano. */
@@ -716,6 +716,8 @@ export function origenDeLaFuente(fuente: string): string | null {
   if (f.startsWith("Preventa ·")) return "Preventa";
   if (f.startsWith("Encuesta de «")) return "Actualizar con IA";
   if (f.startsWith("Lo que dice HubSpot")) return "HubSpot";
+  // El cuestionario de estrategia, al enviarlo (lib/cuestionario/estrategia.ts › `fuenteDelCuestionario`).
+  if (f.startsWith("Cuestionario ·")) return "Cuestionario";
   return null;
 }
 

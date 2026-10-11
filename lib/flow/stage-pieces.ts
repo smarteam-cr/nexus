@@ -71,7 +71,10 @@ export const STAGE_FLOW: StageFlow[] = [
   },
   {
     stage: "EXPLORACION",
-    pieces: ["exploration"],
+    /* `questionnaires` (2026-10-11) va ANTES de la exploración: se manda después del kickoff y las
+       respuestas llegan a las sesiones. Es RECOMENDADA: la primaria sigue siendo la exploración y el
+       gate (ENTENDIMIENTO_CERRADO) es el mismo — el motor no la mira (hay una guarda que lo vigila). */
+    pieces: ["questionnaires", "exploration"],
     primary: "exploration",
     gate: "ENTENDIMIENTO_CERRADO",
     cycles: ["full"],

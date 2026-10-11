@@ -460,7 +460,8 @@ describe("«Customer Success»", () => {
 
   it("«Nexus para un CSE» recorre la cuenta de punta a punta y dice qué llega al cliente", () => {
     const texto = textoDeBloques(hija("nexus-para-un-cse").bloques);
-    for (const pieza of ["Kickoff", "Cuestionario previo", "Diagnóstico", "Cronograma", "Entrega", "Subir al cliente", "CSL Encargado"]) {
+    // «Cuestionarios» es su propia pieza desde el 2026-10-11 (antes, el «Cuestionario previo» de la Exploración).
+    for (const pieza of ["Kickoff", "Cuestionarios", "Diagnóstico", "Cronograma", "Entrega", "Subir al cliente", "CSL Encargado"]) {
       expect(texto, pieza).toContain(pieza);
     }
   });

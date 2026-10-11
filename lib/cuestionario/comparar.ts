@@ -5,9 +5,11 @@
  *
  *   · Escala: la contradicción es automática — dos personas ubican la misma dimensión en niveles
  *     distintos. A dos o más niveles de distancia «se contradicen»; a uno, «difieren».
- *   · Táctico: las respuestas son texto libre y «distinto» no quiere decir «contradictorio». Se ponen
- *     lado a lado (cada pregunta que contestó más de una persona) y la contradicción la señala el
- *     agente de la guía de exploración, citando las dos, para que el CSE la confirme.
+ *   · Táctico y estrategia: las respuestas son texto libre y «distinto» no quiere decir «contradictorio».
+ *     Se ponen lado a lado (cada pregunta que contestó más de una persona) y la contradicción la señala
+ *     el agente de la guía de exploración, citando las dos, para que el CSE la confirme. La estrategia
+ *     entra desde el 2026-10-11: dos personas que dicen desafíos o prioridades distintos es justo donde
+ *     un desacuerdo más importa. El campo sigue llamándose `tactico` (lo leen la pantalla y las pruebas).
  *
  * Módulo PURO (sin Prisma): recibe la vista del servicio y, para la escala, los resultados ya calculados.
  */
@@ -146,9 +148,9 @@ export function compararCuestionarios(
       }
     : null;
 
-  // ── Táctico: cada pregunta que contestó más de una persona, lado a lado ──
+  // ── Táctico y estrategia: cada pregunta que contestó más de una persona, lado a lado ──
   const porPregunta = new Map<string, PreguntaComparada>();
-  for (const c of v.cuestionarios.filter((x) => x.tipo === "tactico" && x.publicadoAt)) {
+  for (const c of v.cuestionarios.filter((x) => (x.tipo === "tactico" || x.tipo === "estrategia") && x.publicadoAt)) {
     for (const p of c.pestanas) {
       for (const q of p.preguntas) {
         const r = p.respuestas[q.id];

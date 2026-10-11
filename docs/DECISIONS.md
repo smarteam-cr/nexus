@@ -6020,8 +6020,9 @@ o proyecto) queden en Información del cliente › Documentos, a nivel de empres
 - **SUPERSEDED 2026-10-09 (memoria de la cuenta, etapa A):** la exploración abre en su página de inicio, con sus
   sesiones, las fuentes manuales y las instrucciones adentro, sin lista de reuniones y sin el «Contexto adicional» de
   la preventa arriba. Ver «La exploración son sus sesiones».
-  **En la ficha**: las sesiones cuelgan de la fila «Exploración» del riel (con «Cuestionarios» e «Informe
-  anterior»), el panel de la derecha es el de la preventa con la estrategia, y arriba va el «Contexto
+  **En la ficha**: las sesiones cuelgan de la fila «Exploración» del riel (con «Informe anterior»; los
+  cuestionarios colgaban también de ahí hasta el 2026-10-11, cuando pasaron a ser un artefacto propio: ver
+  «Cuestionarios es un artefacto propio, entre Kickoff y Exploración»), el panel de la derecha es el de la preventa con la estrategia, y arriba va el «Contexto
   adicional» de la preventa. Lo que se confirma de la estrategia va como sugerencia a Información del
   cliente. Diagnóstico y Planificación leen lo confirmado (sin la libreta del CSE).
 - **La guía vieja** (`GuiaDeExploracion`) se migra con `scripts/migrar-guia-de-exploracion.ts` (en seco
@@ -7689,3 +7690,91 @@ arrancara vacío, saldría sin reuniones cada vez que alguien se olvida de elegi
   Servica) en las 5 exploraciones vivas que aplican.
 - **Cuándo se corre**: una sola ventana, justo después de los SQL y antes del deploy, antes de que alguien regenere un
   documento (RUNBOOK › «Migrar las reuniones de los documentos»).
+
+## Cuestionarios es un artefacto propio, entre Kickoff y Exploración (2026-10-11)
+
+> Decisión de Elías: los cuestionarios que contesta el cliente (antes «Cuestionarios», debajo de las sesiones de
+> Exploración, también llamado «cuestionario previo») pasan a ser un artefacto propio, después del Kickoff y antes de
+> Exploración. Es recomendado, no requerido: no frena ninguna etapa. Lleva tres tipos: el táctico, el de la escala y
+> uno nuevo de estrategia. «Informe anterior» se queda en Exploración.
+
+**El cuestionario de estrategia** (`lib/cuestionario/estrategia.ts`, tipo `estrategia`; `Cuestionario.tipo` es texto:
+sin SQL):
+
+- **Siete preguntas, una pestaña**: el desafío central, los resultados que necesitan (en cifras y para cuándo), lo que
+  les impide llegar, lo que ya intentaron (opcional), qué pasa si no lo resuelven, cómo miden hoy el éxito y las tres
+  prioridades del año. El tope es 8 (lo vigila `estrategia.test.ts`). Los ids son estables (`est-*`): la respuesta se
+  guarda por id y la ficha lee por id. A qué tarjeta apunta cada pregunta va en `ref`, que el cliente no ve.
+- **Va al cliente como los otros**: uno por persona, por su enlace, con publicar y cerrar. El CSE lo arma desde el
+  mismo selector («+ Estrategia») y puede editar sus preguntas, como el táctico. No depende de los hubs.
+- **Se prellena con la misma mecánica que el táctico** (`prellenar.ts`): el handoff con la allowlist del kickoff, el
+  kickoff y, solo en estrategia, lo que Nexus ya sabe de la cuenta por la memoria (lector `cuestionario`, alcance
+  CLIENTE: la ficha confirmada, sin lo interno ni la postura de las personas; declarado en
+  `lib/memoria/consumidores.ts`). Mismas reglas de frontera: lo lee la persona sin que nadie lo revise, así que nada
+  interno, nada de precios ni de lo que se habló sin el cliente.
+- **⛔ Lo prellenado que nadie confirmó es una suposición, no un dato del cliente.** En el bloque que leen los agentes
+  (`contexto.ts`, la fuente Q0 de la exploración del proyecto, que cuenta como «lo dijo el cliente») no va como
+  respuesta: va a lo pendiente, dicho así. Lo que cargó el CSE va rotulado «no lo escribió la persona». *Por qué solo
+  en estrategia:* el táctico ya lo rotula «SIN confirmar» y cambiarlo movería lo que leen hoy la planificación y el
+  diagnóstico; en estrategia la respuesta es justo lo que la exploración toma como voz del cliente.
+- **Lo que el cliente confirma alimenta tres lugares**:
+  · la exploración del proyecto: el bloque de estrategia va PRIMERO en Q0, con cada respuesta rotulada con su tarjeta
+    (Retos, Resultados que persigue, Obstáculos), para que el agente las proponga como lo que dijo el cliente;
+  · el diagnóstico: el mismo bloque, que dice que es la voz del cliente para el desafío central y los objetivos;
+  · la ficha, como PROPUESTA, al ENVIAR la pestaña (`externo.ts` › `estrategiaALaFicha`, sin IA, puerta 7 de
+    `ficha-propuesta.ts`): solo «Retos estratégicos» (el desafío, «Obstáculo:», «Prioridad del año:»), con la fuente
+    «Cuestionario · Estrategia · <persona>» y el origen «Cuestionario» (`ORIGENES_DE_LA_FICHA`; «Lo que sabe la IA» lo
+    nombra «del cuestionario de estrategia»). Suma a lo que la ficha ya dice sin repetir. Los RESULTADOS que necesitan
+    no van a la ficha de ninguna forma: ni como «Resultados que persigue» (la ficha no lo acepta desde afuera: sale de
+    los resultados confirmados de cada proyecto) ni escondidos en los retos con otro rótulo (`A_LOS_RETOS` no tiene
+    `est-resultados`, y una prueba lo vigila); quedan en la exploración y el diagnóstico. Lo prellenado sin confirmar
+    no va. Si la ficha falla, el envío del cliente igual se guarda.
+- **Su estructura**: se editan sus preguntas, pero no se le agregan pestañas. El bloque que leen los agentes toma todas
+  sus pestañas como estrategia del cliente, y una pestaña de la plantilla táctica mezclaría lo táctico ahí (y perdería
+  las etapas en silencio). `editarEstructura` responde 409 (`porQueNoEntraEnEstrategia`).
+- **«Comparar» la pone lado a lado**, como el táctico (`comparar.ts`): dos personas que dicen desafíos o prioridades
+  distintos es donde un desacuerdo más importa.
+
+**El artefacto: el riel, el panel y «Qué sigue»** (lo que cambia en la ficha del cliente):
+
+- **Es una pieza del registro que no vive en un canvas** (`questionnaires`, «Cuestionarios»,
+  `lib/pieces/registry.ts`). Su contenido está en sus propias tablas (`Cuestionario` y sus pestañas), no en un
+  `ProjectCanvas`, así que el registro ganó el campo `hasCanvas`. Con `false`, la pieza no se activa ni se apaga desde
+  el riel (`ensurePieceCanvas` la rechaza), `resolvePieceStates` no la ofrece, el checklist del widget no la cuenta, no
+  se imprime (exenta en `lib/print/camino-generico.test.ts`) y no tiene chat ni versiones. *Por qué un campo y no un
+  canvas vacío:* sería una fila por proyecto que nadie escribe, y el punto del riel mediría esa fila y no los
+  cuestionarios. Sin SQL.
+- **Va en la etapa EXPLORACION, antes de la exploración** (`STAGE_FLOW`: `["questionnaires", "exploration"]`, y lo
+  mismo en `ORDEN_DE_PRESENTACION`). La primaria sigue siendo la exploración: el gate `ENTENDIMIENTO_CERRADO` no cambia
+  y `lib/lifecycle/stage-engine.ts` no se tocó. Las preventas no la tienen.
+- **Aparece en el riel cuando el proyecto tiene la Exploración**, o ya tiene algún cuestionario, en cualquier ciclo: las
+  mismas condiciones en que se veía cuando colgaba de la fila «Exploración». ⚠ No mira el ciclo: el riel arma sus filas
+  con el orden del ciclo completo y la Exploración nace con casi todos los proyectos (`createdWithProject`), así que un
+  recurrente o un Web la ven igual que antes. No tiene «Activar»: si no corresponde, no se lista, y una dirección con
+  `?canvas=questionnaires` en un proyecto donde no corresponde vuelve al Resumen (se decide con el estado ya leído).
+- **Su fila dice cómo van, siempre escrito** (`lib/pieces/estado-de-cuestionarios.ts`): «sin enviar» (ninguno
+  publicado), «enviado» (publicados, nadie respondió) o «respondido N de M» (M son los publicados; respondido = cerrado
+  por el CSE o con todas sus pestañas enviadas). El punto se pone verde con el primero publicado. Lo trae el listado de
+  canvases (`/api/projects/[id]/canvases`, campo `cuestionarios`): el primer pintado no lo tiene y llega con el refetch,
+  que se repite al entrar y al salir de la pieza, y cuando `CuestionarioPanel` avisa con `onCambio` que publicó, ocultó,
+  cerró, reabrió, borró o reasignó uno (así la fila y el «Qué sigue» se ponen al día sin salir de la pieza).
+- **Al abrirla, el centro monta `CuestionarioPanel`** (el mismo de antes, sin cambios) y el panel de la derecha, el
+  «Qué sigue» del proyecto. La dirección es `?canvas=questionnaires`: `vistaDeLaUrl` resuelve el slug de una pieza sin
+  canvas a `{ tipo: "pieza" }` sin esperar a la lista. Sin «Exportar PDF» ni «Acceso del cliente»: cada persona tiene su
+  enlace. «Informe anterior» sigue colgando de la Exploración.
+- **«Qué sigue» la recomienda SOLO en el Handoff y en la Exploración** (se mandan después del kickoff y antes de la
+  exploración), con el kickoff generado y al día (sin «desactualizado» ni novedades: el prellenado lo lee, y no se
+  invita a mandarle al cliente respuestas sacadas de un kickoff viejo) y ningún cuestionario publicado: «Manda los
+  cuestionarios al cliente…», con «Abrir «Cuestionarios»» y «Ahora no» (`lib/clients/que-sigue-del-proyecto.ts`). Ahí va
+  después del aviso de «desactualizado» y de las novedades del documento de la etapa, y antes de «genera
+  «Exploración»». En las demás etapas, y sin etapa reconocida, no sale: casi todos los proyectos que ya existen tienen
+  kickoff y ningún cuestionario, y pedírselo a uno en Adopción le ganaba al resumen y a la próxima reunión. Se va sola
+  al publicar uno o con «Ahora no». «Ahora no» solo se le muestra a quien puede escribir los cuestionarios (el listado
+  de canvases trae `puedeEditar`): a los demás el PATCH les respondería 403.
+- **El «Ahora no» se guarda en el canvas del Kickoff**, como entry reservada `__cuestionarios` del Json
+  `ProjectCanvas.sections`, con quién y cuándo (el mismo contrato que el `__doc` de las instrucciones: el doble guion
+  bajo dice «no soy una sección»). Lo escribe `PATCH /api/projects/[id]/cuestionarios-sugerencia`, con el gate de
+  escribir cuestionarios (`guardProjectHandoffAccess`), tocando solo esa entry. Sin SQL. *Por qué el Kickoff:* toda
+  pieza de proyecto con canvas ya acepta entries reservadas y la sugerencia nace de que el kickoff esté generado.
+- **El recorrido** pasa a ser propio («Cuestionarios», `ficha-cuestionarios`); el de la exploración subió a la versión 6
+  y ya no los nombra.

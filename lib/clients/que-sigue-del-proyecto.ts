@@ -16,6 +16,13 @@
  * Etapa 6 de la memoria de la cuenta (2026-10-10): justo después del documento de la etapa desactualizado van sus
  * NOVEDADES (lo que las reuniones recientes le cambian; lib/seguimiento/novedades.ts). El número viaja en la pieza, el
  * mismo que muestra el riel: así los dos lugares no pueden decir cosas distintas.
+ *
+ * Desde el 2026-10-11, «Manda los cuestionarios al cliente» (RECOMENDADO, nunca bloquea): solo en el
+ * Handoff y en la Exploración —van después del kickoff y antes de la exploración—, con el kickoff generado
+ * y al día (sin novedades: el prellenado lo lee) y ningún cuestionario publicado. Ahí va después de
+ * «desactualizado» y de las novedades del documento de la etapa, y antes de «genera «Exploración»». En
+ * las demás etapas (y sin etapa reconocida) no sale: un proyecto avanzado no tiene por qué mandarlos.
+ * Se va solo al publicar uno o con «Ahora no».
  */
 import type { ProjectLifecycleStage } from "@prisma/client";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
@@ -38,7 +45,9 @@ export type AccionDeQueSigue =
   | { tipo: "resumen" }
   | { tipo: "agendar" }
   | { tipo: "etapa" }
-  | { tipo: "novedades"; slug: string; etiqueta: string; n: number };
+  | { tipo: "novedades"; slug: string; etiqueta: string; n: number }
+  /** Mandar los cuestionarios (recomendado): «Abrir «Cuestionarios»» y «Ahora no». */
+  | { tipo: "cuestionarios"; slug: string; etiqueta: string };
 
 export interface QueSigueDelProyecto {
   texto: string;
@@ -107,6 +116,11 @@ export function queSigueDelProyecto(i: {
   proximaReunion: string | null;
   /** Una reunión muestra que el proyecto ya pasó a otra etapa y nadie respondió (lib/projects/etapa-sugerida.ts). */
   etapaSugerida?: { hasta: string } | null;
+  /**
+   * Los Cuestionarios del proyecto (lib/pieces/estado-de-cuestionarios.ts). null = el proyecto no tiene la
+   * pieza a la vista en el riel (sin Exploración) o todavía no llegó su estado: no se sugiere nada.
+   */
+  cuestionarios?: { publicados: number; descartada: boolean } | null;
 }): QueSigueDelProyecto {
   if (i.sesionesSinRevisar > 0) {
     const n = i.sesionesSinRevisar;
@@ -125,27 +139,55 @@ export function queSigueDelProyecto(i: {
 
   const stage = etapaDeNexus(i.etapa);
   const flujo = stage ? flowForStage(stage) : null;
+
+  /* Los cuestionarios (recomendados): SOLO en el Handoff y en la Exploración (se mandan después del
+     kickoff y llegan a las sesiones), con el kickoff generado y al día —el prellenado lo lee: no se invita
+     a mandar respuestas sacadas de un kickoff viejo— y ninguno en manos del cliente, hasta que se publica
+     uno o alguien dice «Ahora no». En las demás etapas no salen. */
+  const kickoff = i.piezas.find((p) => p.slug === "kickoff");
+  const piezaCuestionarios = i.piezas.find((p) => p.slug === "questionnaires");
+  const sugerirCuestionarios: QueSigueDelProyecto | null =
+    (stage === "HAND_OFF" || stage === "EXPLORACION") &&
+    kickoff?.estado === "generada" &&
+    !kickoff.stale &&
+    !(kickoff.novedades ?? 0) &&
+    piezaCuestionarios &&
+    i.cuestionarios &&
+    i.cuestionarios.publicados === 0 &&
+    !i.cuestionarios.descartada
+      ? {
+          texto:
+            "Manda los cuestionarios al cliente: lo que responda llega a la exploración y al diagnóstico. Es recomendado, no frena nada.",
+          accion: { tipo: "cuestionarios", slug: piezaCuestionarios.slug, etiqueta: piezaCuestionarios.etiqueta },
+        }
+      : null;
+
   if (stage && flujo?.primary) {
     const pieza = i.piezas.find((p) => p.slug === flujo.primary);
-    if (pieza && pieza.estado !== "generada") {
-      return {
-        texto: `El proyecto está en ${STAGE_LABEL_ES[stage]}: ${pieza.estado === "por_activar" ? "activa" : "genera"} «${pieza.etiqueta}» para trabajar la etapa con el cliente.`,
-        accion: { tipo: "pieza", slug: pieza.slug, etiqueta: pieza.etiqueta },
-      };
-    }
-    if (pieza?.stale) {
+    const generada = pieza?.estado === "generada";
+    const generarla = (p: PiezaParaQueSigue): QueSigueDelProyecto => ({
+      texto: `El proyecto está en ${STAGE_LABEL_ES[stage]}: ${p.estado === "por_activar" ? "activa" : "genera"} «${p.etiqueta}» para trabajar la etapa con el cliente.`,
+      accion: { tipo: "pieza", slug: p.slug, etiqueta: p.etiqueta },
+    });
+    /* Sin la sugerencia de los cuestionarios, «genera» va primero, como siempre. Con ella (solo en el Handoff y en
+       la Exploración), primero lo que avisa del documento de la etapa ya escrito, después los cuestionarios y
+       después «genera «Exploración»»: van antes de la exploración. */
+    if (pieza && !generada && !sugerirCuestionarios) return generarla(pieza);
+    if (pieza && generada && pieza.stale) {
       return {
         texto: `«${pieza.etiqueta}» quedó desactualizado: el handoff cambió después de escribirlo. Regenéralo antes de mostrarlo.`,
         accion: { tipo: "pieza", slug: pieza.slug, etiqueta: pieza.etiqueta },
       };
     }
     const n = pieza?.novedades ?? 0;
-    if (pieza && n > 0) {
+    if (pieza && generada && n > 0) {
       return {
         texto: `«${pieza.etiqueta}» tiene ${n === 1 ? "1 novedad de una reunión reciente" : `${n} novedades de reuniones recientes`}: revísalas antes de mostrar el documento.`,
         accion: { tipo: "novedades", slug: pieza.slug, etiqueta: pieza.etiqueta, n },
       };
     }
+    if (sugerirCuestionarios) return sugerirCuestionarios;
+    if (pieza && !generada) return generarla(pieza);
   }
 
   if (i.resumenPendiente) {

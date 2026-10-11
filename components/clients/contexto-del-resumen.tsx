@@ -36,6 +36,13 @@ export interface ContextoDelResumen {
   abrirPieza: (slug: string) => void;
   /** Etapa 6: abre la pieza con su franja de novedades desplegada (el «Qué sigue» de las novedades). */
   abrirNovedades?: (slug: string) => void;
+  /**
+   * Los Cuestionarios (2026-10-11), para el «Qué sigue» recomendado: cuántos publicados y si alguien dijo
+   * «Ahora no». null = la pieza no está a la vista en el riel, o su estado todavía no llegó.
+   */
+  cuestionarios?: { publicados: number; descartada: boolean } | null;
+  /** «Ahora no» de «Manda los cuestionarios al cliente». */
+  descartarCuestionarios?: () => void;
   aLaVista: boolean;
   /** ¿Se está mirando el proyecto? Falso mientras se mira algo de la cuenta: el documento del
    *  handoff se desmonta, como fuera del Resumen (sus entradas de deshacer no quedan vivas). */

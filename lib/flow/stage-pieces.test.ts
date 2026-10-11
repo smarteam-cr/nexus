@@ -134,6 +134,8 @@ describe("el orden narrativo de la médula", () => {
     expect(piecesInFlowOrder("full")).toEqual([
       "handoff",
       "kickoff",
+      // 2026-10-11: los Cuestionarios, recomendados, entre el kickoff y la exploración.
+      "questionnaires",
       "exploration",
       "diagnosis",
       "timeline",

@@ -80,6 +80,19 @@ export interface PieceDefinition {
   ownRenderer: boolean;
   /** El cliente puede verla publicada (vista externa por token). */
   clientFacing: boolean;
+  /**
+   * La pieza vive en un `ProjectCanvas` (su contenido son secciones y bloques, o el timeline).
+   *
+   * `false` = su contenido vive en sus PROPIAS tablas y no tiene fila en `ProjectCanvas`: hoy solo
+   * los Cuestionarios (2026-10-11). Una pieza así no se activa ni se apaga desde el riel
+   * (`ensurePieceCanvas` la rechaza), `resolvePieceStates` no la ofrece, el checklist del widget no
+   * la cuenta, no se imprime ni tiene chat. El riel la arma aparte, con su propio estado
+   * (`buildPieceRows` con `sinCanvas`), y la URL la abre por su slug (`vistaDeLaUrl`).
+   *
+   * ⚠ Nunca se le crea un canvas vacío «para que entre en el molde»: sería una fila por proyecto que
+   * nadie escribe, y el punto del riel mediría esa fila y no lo que la pieza tiene de verdad.
+   */
+  hasCanvas: boolean;
 }
 
 /**
@@ -102,6 +115,7 @@ export const PIECES: PieceDefinition[] = [
     enabledByTags: [],
     ownRenderer: true, // ProjectHandoffSection (sección propia arriba del panel)
     clientFacing: false,
+    hasCanvas: true,
   },
   {
     slug: "kickoff",
@@ -126,6 +140,29 @@ export const PIECES: PieceDefinition[] = [
     enabledByTags: [],
     ownRenderer: true, // KickoffWorkspace (motor de landings)
     clientFacing: true,
+    hasCanvas: true,
+  },
+  {
+    slug: "questionnaires",
+    label: "Cuestionarios",
+    // Pieza NUEVA (2026-10-11): nunca vivió en ProjectCanvas.name. No agregar nombres acá.
+    legacyNames: [],
+    scope: "project",
+    // Lo que contesta el cliente (el táctico, el de la escala y el de estrategia). El prellenado lo
+    // hace una corrida propia del módulo (lib/cuestionario), no un agente de la tabla Agent.
+    agentGroup: null,
+    permissionSection: null,
+    createdWithProject: false,
+    isDefaultCanvas: false,
+    // RECOMENDADA, no requerida (Elías, 2026-10-11): no frena ninguna etapa. Aparece en el riel
+    // cuando el proyecto tiene la Exploración (o ya tiene cuestionarios) — las mismas condiciones
+    // en que se veía cuando colgaba de la fila «Exploración».
+    optional: true,
+    enabledByTags: [],
+    ownRenderer: true, // CuestionarioPanel
+    clientFacing: true, // cada persona del cliente lo abre con su enlace
+    // Vive en sus tablas (Cuestionario, CuestionarioPestana…), no en un canvas.
+    hasCanvas: false,
   },
   {
     slug: "timeline",
@@ -141,6 +178,7 @@ export const PIECES: PieceDefinition[] = [
     // El contenido NO vive en bloques sino en ProjectTimeline → renderer propio.
     ownRenderer: true,
     clientFacing: true,
+    hasCanvas: true,
   },
   {
     slug: "exploration",
@@ -155,6 +193,7 @@ export const PIECES: PieceDefinition[] = [
     enabledByTags: [],
     ownRenderer: true, // ExploracionWorkspace (motor de landings)
     clientFacing: false, // documento INTERNO de descubrimiento
+    hasCanvas: true,
   },
   {
     slug: "diagnosis",
@@ -176,6 +215,7 @@ export const PIECES: PieceDefinition[] = [
     // Es un informe DE CARA AL CLIENTE (se presenta en sesión / PDF y, desde el 2026-10-02,
     // se comparte por enlace: publish-diagnostico).
     clientFacing: true,
+    hasCanvas: true,
   },
   {
     slug: "planning",
@@ -196,6 +236,7 @@ export const PIECES: PieceDefinition[] = [
     // 2026-10-02 — DE CARA AL CLIENTE: se comparte por enlace (publish-planificacion). Con esto
     // el censo de lib/canvas/handoff-al-cliente.test.ts exige allowlist en cada lectura del handoff.
     clientFacing: true,
+    hasCanvas: true,
   },
   {
     slug: "tech-requirements",
@@ -218,6 +259,7 @@ export const PIECES: PieceDefinition[] = [
     enabledByTags: ["custom_dev", "insider_one"],
     ownRenderer: true, // DesarrolloWorkspace
     clientFacing: true, // vista del dev externo
+    hasCanvas: true,
   },
   {
     slug: "implementation",
@@ -239,6 +281,7 @@ export const PIECES: PieceDefinition[] = [
     enabledByTags: [],
     ownRenderer: true, // ImplementacionWorkspace (motor de landings)
     clientFacing: false, // es la guía de trabajo del CSE, no un entregable
+    hasCanvas: true,
   },
   {
     slug: "delivery",
@@ -259,6 +302,7 @@ export const PIECES: PieceDefinition[] = [
     enabledByTags: [],
     ownRenderer: true, // EntregaWorkspace (motor de landings)
     clientFacing: true, // se comparte al cliente, como el kickoff
+    hasCanvas: true,
   },
   {
     slug: "client-info",
@@ -275,6 +319,7 @@ export const PIECES: PieceDefinition[] = [
     enabledByTags: [],
     ownRenderer: true,
     clientFacing: false,
+    hasCanvas: true,
   },
   {
     slug: "business-case",
@@ -292,6 +337,7 @@ export const PIECES: PieceDefinition[] = [
     enabledByTags: [],
     ownRenderer: true, // motor de landings
     clientFacing: true,
+    hasCanvas: true,
   },
 ];
 

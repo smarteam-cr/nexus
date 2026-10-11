@@ -29,7 +29,8 @@ import { a, pagina } from "./enlaces";
 const PALABRAS: [string, string][] = [
   ["Handoff o traspaso", "Lo que Ventas le entrega a Customer Success: qué se vendió, a quién y para qué. En Nexus es «Información de la venta»."],
   ["Kickoff o arranque", "La primera reunión con el cliente y el documento que la acompaña: equipo, canales, horarios y cómo vamos a trabajar."],
-  ["Exploración", "Entender cómo trabaja hoy el cliente, con un cuestionario previo y sesiones. Es lo que alimenta el diagnóstico."],
+  ["Cuestionarios", "Lo que contesta el cliente antes de las sesiones: el táctico, el de la escala y el de estrategia. Cada persona con su enlace."],
+  ["Exploración", "Entender cómo trabaja hoy el cliente, con sesiones y lo que contestó en los cuestionarios. Es lo que alimenta el diagnóstico."],
   ["Diagnóstico", "Dónde está el cliente y qué le falta, con evidencia. Usa la Escala de rendimiento."],
   ["Cronograma", "El plan del proyecto, con fases, tareas y fechas. Lo propone la IA y lo decides tú."],
   ["Adopción", "Que el equipo del cliente use de verdad lo que se implementó. Configurado no es adoptado."],

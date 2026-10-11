@@ -40,15 +40,16 @@ export interface Pregunta {
 export const OPCION_NO_SE = "no-se";
 
 /** Los tipos de cuestionario. Sumar uno = una entrada acá y su armador. */
-export type TipoDeCuestionario = "tactico" | "escala";
+export type TipoDeCuestionario = "tactico" | "escala" | "estrategia";
 
 export const TITULO_DEL_TIPO: Record<TipoDeCuestionario, string> = {
   tactico: "Cuestionario táctico",
   escala: "Escala de rendimiento",
+  estrategia: "Estrategia",
 };
 
 export function esTipoDeCuestionario(v: unknown): v is TipoDeCuestionario {
-  return v === "tactico" || v === "escala";
+  return v === "tactico" || v === "escala" || v === "estrategia";
 }
 
 /**

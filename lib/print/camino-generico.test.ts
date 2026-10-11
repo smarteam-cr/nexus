@@ -51,6 +51,8 @@ const EXENTAS: Record<string, string> = {
   // Imprime por su propio tipo del registro (`business-case`), pero con el id del BusinessCase
   // y no el del proyecto — por eso `printDocForPiece` no la resuelve.
   "business-case": "tiene documento propio, indexado por businessCaseId y no por pieceSlug",
+  // No vive en un canvas (`hasCanvas: false`): no tiene PDF y el panel no pinta el botón de exportar.
+  questionnaires: "no vive en un canvas; el botón de PDF no se pinta en los Cuestionarios",
 };
 
 describe("ninguna pieza cae al camino genérico sin contenido que imprimir", () => {

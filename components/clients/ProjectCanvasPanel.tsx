@@ -16,6 +16,8 @@ import DiagnosticoWorkspace from "@/components/canvas/DiagnosticoWorkspace";
 import PlanificacionWorkspace from "@/components/canvas/PlanificacionWorkspace";
 import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
 import EntregaWorkspace from "@/components/canvas/EntregaWorkspace";
+import CuestionarioPanel from "@/components/cuestionario/CuestionarioPanel";
+import { PIEZA_CUESTIONARIOS, type EstadoDeCuestionarios } from "@/lib/pieces/estado-de-cuestionarios";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CanvasBoundary from "./CanvasBoundary";
@@ -29,7 +31,7 @@ import DocumentoContextSection from "@/components/canvas/DocumentoContextSection
 import { documentoConContexto } from "@/lib/contexto/documento";
 import { ProveedorDelResumen, type AvisoDePieza, type ContextoDelResumen } from "./contexto-del-resumen";
 import type { PiezaParaQueSigue, QueSigueDelProyecto } from "@/lib/clients/que-sigue-del-proyecto";
-import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO, BotonAzul, BotonBlanco } from "@/components/ui/sistema";
+import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO, BotonAzul, BotonBlanco, BotonEnlace, QueSigue } from "@/components/ui/sistema";
 import VersionesDelDocumento from "@/components/canvas/VersionesDelDocumento";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas, pieceBySlug, pieceLabel, PIECES } from "@/lib/pieces/registry";
@@ -216,6 +218,19 @@ export default function ProjectCanvasPanel({
   const [enResumen, setEnResumen] = useState(
     () => vistaDeLaUrl(seeded ?? [], urlDeOtroProyecto ? null : canvasFromUrl, seeded !== null).tipo === "resumen",
   );
+  /* ── LA PIEZA SIN CANVAS QUE SE MIRA (2026-10-11) ─────────────────────────────────
+     Los Cuestionarios son una pieza del riel que no vive en un ProjectCanvas (`hasCanvas: false` en el
+     registro): no hay `activeCanvasId` que la represente. Mientras se mira, esto tiene su slug, la URL dice
+     `?canvas=questionnaires` y `activeSlug` es ese slug — así el título, el «¿Qué es esto?» y el gate de
+     cada cosa del documento salen solos. Sale de la URL igual que el Resumen. */
+  const [piezaSinCanvas, setPiezaSinCanvas] = useState<string | null>(() => {
+    const v = vistaDeLaUrl(seeded ?? [], urlDeOtroProyecto ? null : canvasFromUrl, seeded !== null);
+    return v.tipo === "pieza" ? v.slug : null;
+  });
+  /** El estado de los Cuestionarios (llega con el listado de canvases; null hasta entonces o si falló). */
+  const [estadoCuestionarios, setEstadoCuestionarios] = useState<EstadoDeCuestionarios | null>(null);
+  /** Ya volvió un listado con el estado de los Cuestionarios: recién ahí se sabe si la pieza corresponde. */
+  const [cuestionariosLeidos, setCuestionariosLeidos] = useState(false);
   /* Slot en el header para los CTAs de un canvas que necesita ESTADO PROPIO para decidir
      qué botón mostrar. El canvas los renderiza acá por portal y quedan junto al nombre, en
      el mismo lugar que el `CanvasAgentButton` que este panel monta para los demás.
@@ -249,9 +264,17 @@ export default function ProjectCanvasPanel({
    * Los dos que NO se apagan con un slug vacío —la grilla genérica y el botón de PDF— llevan
    * el gate escrito a mano, porque para ellos "sin slug" significa otra cosa.
    */
-  const activeSlug = visible && !enResumen && activeCanvas ? slugForCanvas(activeCanvas) : null;
+  const activeSlug = visible && !enResumen ? (piezaSinCanvas ?? (activeCanvas ? slugForCanvas(activeCanvas) : null)) : null;
+  /* Los Cuestionarios están en el riel con las mismas condiciones en que se veían cuando colgaban de la
+     fila «Exploración»: con la Exploración en el proyecto (o con algún cuestionario ya armado). No se
+     activan: si no corresponden, no se listan. */
+  const conCuestionarios = canvases.some((c) => slugForCanvas(c) === "exploration") || (estadoCuestionarios?.total ?? 0) > 0;
+  const estadoDeLaFilaDeCuestionarios = conCuestionarios ? (estadoCuestionarios?.enviado ? "generada" : "vacia") : undefined;
   // Las filas del riel salen del FLUJO (lib/flow), no de la lista de canvases.
-  const pieceRows = useMemo(() => buildPieceRows(canvases), [canvases]);
+  const pieceRows = useMemo(
+    () => buildPieceRows(canvases, { sinCanvas: { [PIEZA_CUESTIONARIOS]: estadoDeLaFilaDeCuestionarios } }),
+    [canvases, estadoDeLaFilaDeCuestionarios],
+  );
   // Qué piezas ya tienen algo escrito — lo mira `pieceReadiness` para avisar cuando a una
   // pieza le faltan sus pasos previos.
   const piezasConContenido = pieceRows.filter((r) => r.state === "generada").map((r) => r.slug);
@@ -273,8 +296,9 @@ export default function ProjectCanvasPanel({
     /* ⚠ El bail-out temprano mira TAMBIÉN de dónde se viene: volver al mismo documento
        desde el resumen es un cambio de vista aunque el id no cambie, y con el `return`
        viejo el click no hacía nada. */
-    if (canvasId === activeCanvasId && !enResumen) return;
+    if (canvasId === activeCanvasId && !enResumen && !piezaSinCanvas) return;
     setEnResumen(false);
+    setPiezaSinCanvas(null);
     setActiveCanvasId(canvasId);
     const url = new URL(window.location.href);
     /* SIEMPRE se escribe el `?canvas=`, incluso para el canvas por defecto: la URL sin el
@@ -282,12 +306,23 @@ export default function ProjectCanvasPanel({
        a una dirección que abre el resumen. */
     url.searchParams.set("canvas", canvasId);
     router.replace(url.pathname + url.search, { scroll: false });
-  }, [router, activeCanvasId, cronogramaOcupado, enResumen]);
+  }, [router, activeCanvasId, cronogramaOcupado, enResumen, piezaSinCanvas]);
+
+  /** Abrir una pieza que no vive en un canvas (los Cuestionarios): la URL la nombra por su slug. */
+  const abrirPiezaSinCanvas = useCallback((slug: string) => {
+    if (cronogramaOcupado) return;
+    setEnResumen(false);
+    setPiezaSinCanvas(slug);
+    const url = new URL(window.location.href);
+    url.searchParams.set("canvas", slug);
+    router.replace(url.pathname + url.search, { scroll: false });
+  }, [router, cronogramaOcupado]);
 
   /** Volver al resumen: la URL pierde el `?canvas=`, que es exactamente lo que lo define. */
   const irAlResumen = useCallback(() => {
     if (cronogramaOcupado) return;
     setEnResumen(true);
+    setPiezaSinCanvas(null);
     const url = new URL(window.location.href);
     url.searchParams.delete("canvas");
     router.replace(url.pathname + url.search, { scroll: false });
@@ -324,6 +359,8 @@ export default function ProjectCanvasPanel({
       .then((d) => {
         const list: CanvasMeta[] = d.canvases ?? [];
         setCanvases(list);
+        setEstadoCuestionarios((d.cuestionarios as EstadoDeCuestionarios | null | undefined) ?? null);
+        setCuestionariosLeidos(true);
         setActiveCanvasId((prev) => {
           // Selección vigente que sigue existiendo → se mantiene.
           if (prev && list.some((c) => c.id === prev)) return prev;
@@ -430,6 +467,27 @@ export default function ProjectCanvasPanel({
     void refetchCanvases();
   }, [refetchCanvases, canvasRefreshSignal]);
 
+  /* Al entrar o salir de los Cuestionarios se relee el listado: es lo que trae su estado («enviado»,
+     «respondido 1 de 2»). Publicar, ocultar o cerrar uno pasa adentro de CuestionarioPanel, que avisa con
+     `onCambio` (abajo): la fila del riel y el «Qué sigue» se ponen al día sin salir de la pieza. */
+  const piezaSinCanvasPrevia = useRef(piezaSinCanvas);
+  useEffect(() => {
+    if (piezaSinCanvasPrevia.current === piezaSinCanvas) return;
+    piezaSinCanvasPrevia.current = piezaSinCanvas;
+    void refetchCanvases();
+  }, [piezaSinCanvas, refetchCanvases]);
+  const cuestionariosCambiaron = useCallback(() => {
+    void refetchCanvases();
+  }, [refetchCanvases]);
+
+  /* Una dirección con `?canvas=questionnaires` en un proyecto donde la pieza no corresponde (sin Exploración y sin
+     ningún cuestionario: Desarrollo, Web) vuelve al Resumen, como un documento que no existe. Se decide recién con el
+     estado de los Cuestionarios en la mano: antes, un proyecto con cuestionarios pero sin Exploración se iría solo. */
+  useEffect(() => {
+    if (piezaSinCanvas !== PIEZA_CUESTIONARIOS || !listLoaded || !cuestionariosLeidos || conCuestionarios) return;
+    irAlResumen();
+  }, [piezaSinCanvas, listLoaded, cuestionariosLeidos, conCuestionarios, irAlResumen]);
+
   /* El esqueleto se apaga cuando VOLVIÓ la consulta de la lista, no cuando la lista trae
      algo: un proyecto sin piezas es un estado válido y antes se quedaba cargando para
      siempre. Acá colgaba también el fetch de los «cards» del Resumen viejo, retirado el
@@ -451,12 +509,13 @@ export default function ProjectCanvasPanel({
     if (cronogramaOcupado || urlDeOtroProyecto) return;
     const vista = vistaDeLaUrl(canvasesRef.current, canvasFromUrl, listLoaded);
     if (vista.tipo === "esperar") return;
+    setPiezaSinCanvas(vista.tipo === "pieza" ? vista.slug : null);
     if (vista.tipo === "resumen") {
       setEnResumen(true);
       return;
     }
     setEnResumen(false);
-    setActiveCanvasId(vista.canvasId);
+    if (vista.tipo === "documento") setActiveCanvasId(vista.canvasId);
   }, [canvasFromUrl, listLoaded, cronogramaOcupado, urlDeOtroProyecto]);
 
   /* ── LO QUE EL RESUMEN Y EL PANEL SE CUENTAN (rediseño del 2026-10-04) ─────────────
@@ -479,13 +538,44 @@ export default function ProjectCanvasPanel({
   );
   const abrirPieza = useCallback(
     (slug: string) => {
+      // Los Cuestionarios no tienen canvas: se abren por su slug (y nunca se «activan»).
+      if (slug === PIEZA_CUESTIONARIOS) {
+        if (visible) abrirPiezaSinCanvas(slug);
+        else onAbrirDesdeOculto?.(slug);
+        return;
+      }
       const row = pieceRows.find((r) => r.slug === slug);
       if (!row) return;
       if (row.canvasId) switchCanvas(row.canvasId);
       else void activarPieza(slug);
     },
-    [pieceRows, switchCanvas, activarPieza],
+    [pieceRows, switchCanvas, activarPieza, visible, abrirPiezaSinCanvas, onAbrirDesdeOculto],
   );
+  /** Para el «Qué sigue» recomendado de los Cuestionarios. null = la pieza no está o su estado no llegó. */
+  const cuestionariosParaQueSigue = useMemo(
+    () =>
+      conCuestionarios && estadoCuestionarios
+        ? { publicados: estadoCuestionarios.publicados, descartada: estadoCuestionarios.sugerenciaDescartada }
+        : null,
+    [conCuestionarios, estadoCuestionarios],
+  );
+  /** «Ahora no» solo a quien puede escribir los cuestionarios: a los demás el PATCH les respondería 403. */
+  const puedeDescartarCuestionarios = estadoCuestionarios?.puedeEditar === true;
+  /** «Ahora no» de «Manda los cuestionarios al cliente»: se guarda en el canvas del Kickoff, sin SQL. */
+  const descartarCuestionarios = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/cuestionarios-sugerencia`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ descartada: true }),
+      });
+      if (!res.ok) throw new Error();
+      setEstadoCuestionarios((e) => (e ? { ...e, sugerenciaDescartada: true } : e));
+      toast.info("Listo: no te lo vuelvo a sugerir. Los cuestionarios siguen en el riel.");
+    } catch {
+      toast.error("No se pudo guardar. Prueba de nuevo.");
+    }
+  }, [projectId, toast]);
   /** Abre la pieza con su franja de novedades desplegada (el «Qué sigue» de las novedades). */
   const abrirNovedades = useCallback(
     (slug: string) => {
@@ -501,18 +591,28 @@ export default function ProjectCanvasPanel({
       piezas: piezasParaQueSigue,
       abrirPieza,
       abrirNovedades,
+      cuestionarios: cuestionariosParaQueSigue,
+      descartarCuestionarios: puedeDescartarCuestionarios ? () => void descartarCuestionarios() : undefined,
       aLaVista: visible && enResumen,
       proyectoVisible: visible,
       onEtapa: setEtapaMeta,
       onQueSigue,
       onAvisosDePiezas,
     }),
-    [enResumen, slotDelPanel, queSigueOcupado, piezasParaQueSigue, abrirPieza, abrirNovedades, visible, onQueSigue, onAvisosDePiezas],
+    [enResumen, slotDelPanel, queSigueOcupado, piezasParaQueSigue, abrirPieza, abrirNovedades, cuestionariosParaQueSigue, descartarCuestionarios, puedeDescartarCuestionarios, visible, onQueSigue, onAvisosDePiezas],
   );
 
   // El recorrido de la pieza abierta (el cronograma o la exploración): el botón «Recorrido» de la
   // cabecera ofrece ese en vez del de la ficha. Va antes del retorno temprano: es un hook.
-  usePantallaDelRecorrido(activeSlug === "timeline" ? "ficha-cronograma" : activeSlug === "exploration" ? "ficha-exploracion" : null);
+  usePantallaDelRecorrido(
+    activeSlug === "timeline"
+      ? "ficha-cronograma"
+      : activeSlug === "exploration"
+        ? "ficha-exploracion"
+        : activeSlug === PIEZA_CUESTIONARIOS
+          ? "ficha-cuestionarios"
+          : null,
+  );
 
   // La MISMA pieza que pinta app/(shell)/clients/[id]/loading.tsx: el RSC y este gate
   // client-side se ven uno tras otro, así que tienen que hablar el mismo vocabulario.
@@ -520,7 +620,7 @@ export default function ProjectCanvasPanel({
 
   /* El documento que se mira, con su estado en el flujo: decide el aviso del título y si el botón
      del agente va en la fila del título o en el «Qué sigue» del panel. */
-  const filaActiva = !enResumen && activeCanvasId ? (pieceRows.find((r) => r.canvasId === activeCanvasId) ?? null) : null;
+  const filaActiva = !enResumen && !piezaSinCanvas && activeCanvasId ? (pieceRows.find((r) => r.canvasId === activeCanvasId) ?? null) : null;
   const readinessActiva = filaActiva
     ? pieceReadiness(filaActiva.slug, { tags: tags ?? [], piezasConContenido, hubspotPipelineId: hubspotPipelineId ?? null })
     : null;
@@ -558,6 +658,13 @@ export default function ProjectCanvasPanel({
             <BotonAzul onClick={() => abrirPieza((queSigueProyecto.accion as { slug: string }).slug)}>
               Abrir «{queSigueProyecto.accion.etiqueta}» →
             </BotonAzul>
+          ) : queSigueProyecto.accion?.tipo === "cuestionarios" ? (
+            <div className="flex flex-wrap items-center gap-3">
+              {activeSlug !== PIEZA_CUESTIONARIOS && (
+                <BotonAzul onClick={() => abrirPieza(PIEZA_CUESTIONARIOS)}>Abrir «{queSigueProyecto.accion.etiqueta}» →</BotonAzul>
+              )}
+              {puedeDescartarCuestionarios && <BotonEnlace onClick={() => void descartarCuestionarios()}>Ahora no</BotonEnlace>}
+            </div>
           ) : queSigueProyecto.accion?.tipo === "novedades" ? (
             <BotonAzul onClick={() => abrirNovedades((queSigueProyecto.accion as { slug: string }).slug)}>
               Revisar las novedades de «{queSigueProyecto.accion.etiqueta}»
@@ -614,11 +721,25 @@ export default function ProjectCanvasPanel({
                 hubspotPipelineId: hubspotPipelineId ?? null,
               });
               const avisoDelResumen = avisosDePiezas[row.slug];
+              // Los Cuestionarios no tienen canvas: su fila dice cómo van, siempre escrito.
+              if (row.slug === PIEZA_CUESTIONARIOS) {
+                return {
+                  slug: row.slug,
+                  etiqueta: row.label,
+                  estado: row.state === "generada" ? "generada" : "pendiente",
+                  activa: visible && !enResumen && piezaSinCanvas === row.slug,
+                  aviso: {
+                    corto: estadoCuestionarios?.corto ?? "",
+                    largo: estadoCuestionarios?.largo ?? "Lo que contesta el cliente: el táctico, el de la escala y el de estrategia.",
+                    tono: "neutro",
+                  },
+                };
+              }
               return {
                 slug: row.slug,
                 etiqueta: row.label,
                 estado: row.state === "generada" ? "generada" : row.state === "vacia" ? "pendiente" : "por_activar",
-                activa: visible && !enResumen && row.canvasId !== null && row.canvasId === activeCanvasId,
+                activa: visible && !enResumen && !piezaSinCanvas && row.canvasId !== null && row.canvasId === activeCanvasId,
                 /* El aviso COMPRIMIDO ("Sin tag X" / "Antes: Y"); la frase completa va en el title.
                    Si no, el de «el handoff corrió después»: el encadenado ya NO reescribe solo
                    (borraba ediciones a mano) y sin este renglón el CSE creía que estaba al día.
@@ -640,6 +761,11 @@ export default function ProjectCanvasPanel({
             onElegir={(slug) => {
               if (cronogramaOcupado) {
                 toast.info("Espera a que la IA termine en el cronograma para cambiar de pieza.");
+                return;
+              }
+              if (slug === PIEZA_CUESTIONARIOS) {
+                if (visible) abrirPiezaSinCanvas(slug);
+                else onAbrirDesdeOculto?.(slug);
                 return;
               }
               const row = pieceRows.find((r) => r.slug === slug);
@@ -666,11 +792,11 @@ export default function ProjectCanvasPanel({
               <h2 className="text-[22px] font-bold leading-tight text-fg">{nombreDelProyecto ?? "Resumen del proyecto"}</h2>
               <p className="mt-1 text-[13px] text-fg-muted">Cómo va el proyecto y qué se vendió.</p>
             </>
-          ) : activeCanvas ? (
+          ) : activeCanvas || piezaSinCanvas ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-[22px] font-bold leading-tight text-fg">
-                  {activeSlug ? pieceLabel(activeSlug) : activeCanvas.name}
+                  {activeSlug ? pieceLabel(activeSlug) : activeCanvas?.name}
                 </h2>
                 {/* La exploración es una herramienta de trabajo del equipo, no un documento (2026-10-05). */}
                 {activeSlug === "exploration" && (
@@ -762,7 +888,7 @@ export default function ProjectCanvasPanel({
           {/* Export PDF. Qué camino toma lo decide el REGISTRO de impresión leyendo la pieza del
               canvas activo. El resumen no se imprime: no es un documento, es la foto de cómo va el
               proyecto — y sus dos piezas (el brief y el handoff) tienen su propio PDF. */}
-          {!enResumen && activeSlug !== "exploration" && (
+          {!enResumen && !piezaSinCanvas && activeSlug !== "exploration" && (
             <PrintDocButton
               projectId={projectId}
               activeSlug={activeSlug ?? null}
@@ -772,13 +898,14 @@ export default function ProjectCanvasPanel({
           {/* Acceso del cliente externo (token + contraseña) — PROJECT-LEVEL: las mismas
               credenciales destraban todas las superficies externas (kickoff, cronograma), por eso
               vive acá y no en un canvas. */}
-          {activeSlug !== "exploration" && <ExternalAccessButton projectId={projectId} />}
+          {/* Los cuestionarios tienen su propio enlace por persona: el acceso del proyecto no va ahí. */}
+          {activeSlug !== "exploration" && !piezaSinCanvas && <ExternalAccessButton projectId={projectId} />}
         </div>
       </div>
 
       {/* El panel de la derecha mientras se mira un documento: su «Qué sigue», de dónde salió y el
           índice de secciones. */}
-      {slotDelPanel && !enResumen && activeCanvas && activeCanvasId && activeSlug !== "exploration" &&
+      {slotDelPanel && !enResumen && !piezaSinCanvas && activeCanvas && activeCanvasId && activeSlug !== "exploration" &&
         createPortal(
           <PanelDelDocumento
             key={activeCanvasId}
@@ -946,6 +1073,19 @@ export default function ProjectCanvasPanel({
         </CanvasBoundary>
       )}
 
+      {/* Cuestionarios (2026-10-11): lo que contesta el cliente —el táctico, el de la escala y el de
+          estrategia—, entre el Kickoff y la Exploración. No vive en un canvas ni en el motor de landings:
+          es una herramienta de trabajo, va fuera del marco. A la derecha, el «Qué sigue» del proyecto. */}
+      {activeSlug === "questionnaires" && conCuestionarios && (
+        <CanvasBoundary label="los cuestionarios">
+          <div data-recorrido="cuestionarios.panel">
+            <CuestionarioPanel projectId={projectId} onCambio={cuestionariosCambiaron} />
+          </div>
+        </CanvasBoundary>
+      )}
+      {activeSlug === "questionnaires" && conCuestionarios && slotDelPanel && !queSigueOcupado && queSigueParaElDocumento &&
+        createPortal(<QueSigue accion={queSigueParaElDocumento.accion}>{queSigueParaElDocumento.texto}</QueSigue>, slotDelPanel)}
+
       {/* Cronograma: Gantt + editor del ProjectTimeline (fases/tareas/semanas).
           Fuente única — el Kickoff lo refleja read-only. clientId habilita el
           disparo del agente de detalle (POST /api/clients/[clientId]/analyze). */}
@@ -978,7 +1118,7 @@ export default function ProjectCanvasPanel({
           quedaba en esqueleto para siempre (el loading colgaba de que la lista trajera
           algo). Ahora es un estado con nombre — y a partir del interruptor de piezas
           puede darse a propósito, no solo por un error. */}
-      {!enResumen && canvases.length === 0 && (
+      {!enResumen && !piezaSinCanvas && canvases.length === 0 && (
         <div className="rounded-xl border border-dashed border-line px-6 py-10 text-center">
           <p className="text-sm font-medium text-fg">Este proyecto no tiene piezas activas.</p>
           <p className="mt-1 text-sm text-fg-muted">

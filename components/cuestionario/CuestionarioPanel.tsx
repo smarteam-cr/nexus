@@ -3,16 +3,21 @@
 /**
  * components/cuestionario/CuestionarioPanel.tsx — los cuestionarios previos, del lado del CSE.
  *
- * Vive dentro de Exploración. Desde el 2026-10-02 (pedido de Elías) se organiza por PERSONA:
+ * Es la pieza «Cuestionarios» de la ficha, entre el Kickoff y la Exploración (2026-10-11). Desde el 2026-10-02
+ * (pedido de Elías) se organiza por PERSONA:
  *   1. Las personas del cliente, cada una con UN enlace que le muestra todos sus cuestionarios.
  *   2. Cada persona puede tener un cuestionario de cada tipo: el TÁCTICO (métricas y operación, por
- *      hubs, editable) y el de la ESCALA (sale de la escala publicada; no se edita a mano).
+ *      hubs, editable), el de ESTRATEGIA (desafío central, resultados, obstáculos; 2026-10-11, editable) y el
+ *      de la ESCALA (sale de la escala publicada; no se edita a mano).
  *   3. «Comparar»: quién respondió qué, dónde se contradicen dos personas y qué está enviado frente a
  *      lo que solo está en borrador (components/cuestionario/CuestionarioComparar.tsx).
  *
  * Toda edición de estructura viaja como OPERACIÓN (lib/cuestionario/operaciones.ts): las reglas (las
  * 7 preguntas de etapa no se tocan, una pestaña enviada no se edita) valen igual para cualquiera que
  * edite. El cuestionario NUNCA es obligatorio para avanzar el proyecto.
+ *
+ * `onCambio` (opcional) avisa cuando cambia lo que dice la fila del riel y el «Qué sigue» (publicar, ocultar, cerrar,
+ * reabrir, borrar o reasignar): quien lo monta vuelve a pedir el estado sin esperar a salir de la pieza.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -101,7 +106,10 @@ function RespuestaVista({ q, r }: { q?: Pregunta; r: Respuesta | undefined }) {
   );
 }
 
-export default function CuestionarioPanel({ projectId }: { projectId: string }) {
+/** Las acciones que cambian cuántos hay publicados o respondidos: lo que mide la fila del riel. */
+const CAMBIAN_EL_ESTADO = new Set(["publicar", "cerrar", "reabrir_pestana", "eliminar_cuestionario", "asignar_persona", "revocar_persona"]);
+
+export default function CuestionarioPanel({ projectId, onCambio }: { projectId: string; onCambio?: () => void }) {
   const toast = useToast();
   const [estado, setEstado] = useState<Estado | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -146,12 +154,13 @@ export default function CuestionarioPanel({ projectId }: { projectId: string }) 
         }
         setEstado((prev) => ({ ...(prev as Estado), ...data }));
         if (ok) toast.success(ok);
+        if (typeof body.accion === "string" && CAMBIAN_EL_ESTADO.has(body.accion)) onCambio?.();
         return true;
       } finally {
         setOcupado(false);
       }
     },
-    [projectId, toast],
+    [projectId, toast, onCambio],
   );
 
   const cuestionario = useMemo(
@@ -311,7 +320,7 @@ function Personas({
           {activas.map((p) => {
             const suyos = cuestionarios.filter((c) => c.personaId === p.id);
             const publicados = suyos.filter((c) => c.publicadoAt);
-            const faltan = (["tactico", "escala"] as TipoDeCuestionario[]).filter((t) => !suyos.some((c) => c.tipo === t));
+            const faltan = (["tactico", "estrategia", "escala"] as TipoDeCuestionario[]).filter((t) => !suyos.some((c) => c.tipo === t));
             return (
               <li key={p.id} className="space-y-2 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -455,7 +464,7 @@ function CopiarEnlace({
             </p>
             <p className="mt-1 text-xs text-fg-secondary">
               {bloqueo === "sin-cuestionarios"
-                ? "Ármale un cuestionario táctico o de escala: sin ninguno, el enlace no tendría nada que mostrar."
+                ? "Ármale un cuestionario: sin ninguno, el enlace no tendría nada que mostrar."
                 : `Mientras ninguno de sus cuestionarios esté publicado, el enlace de ${p.nombre} no abre nada. Abre el cuestionario y aprieta «Publicar».`}
             </p>
           </div>,
@@ -486,7 +495,7 @@ function DetalleDelCuestionario({
 }) {
   const [activa, setActiva] = useState<string | null>(null);
   const pestana = c.pestanas.find((p) => p.key === activa) ?? c.pestanas[0] ?? null;
-  const editable = c.tipo === "tactico";
+  const editable = c.tipo === "tactico" || c.tipo === "estrategia";
   const persona = personas.find((p) => p.id === c.personaId) ?? null;
   const ops = (lista: OperacionCuestionario[], ok?: string) => onAccion({ accion: "operaciones", cuestionarioId: c.id, ops: lista }, ok);
   const total = c.pestanas.reduce((n, p) => n + p.avance.total, 0);
@@ -586,7 +595,14 @@ function DetalleDelCuestionario({
         </div>
       </div>
 
-      {c.tipo === "tactico" && <Prellenado c={c} ocupado={ocupado} onAccion={onAccion} />}
+      {c.tipo === "estrategia" && (
+        <p className="rounded-xl border border-line bg-surface-muted px-3 py-2 text-xs text-fg-secondary">
+          Le pregunta por el desafío central del negocio, los resultados que necesita, lo que le impide llegar y sus
+          prioridades del año. Lo que la persona escribe o confirma alimenta la exploración, el diagnóstico y la información
+          del cliente (como propuesta). Lo prellenado que no confirma sigue siendo una suposición.
+        </p>
+      )}
+      {(c.tipo === "tactico" || c.tipo === "estrategia") && <Prellenado c={c} ocupado={ocupado} onAccion={onAccion} />}
       {c.tipo === "escala" && (
         <p className="rounded-xl border border-line bg-surface-muted px-3 py-2 text-xs text-fg-secondary">
           Sale de la escala publicada: una pregunta por dimensión de las áreas contratadas, con una opción por nivel y «No lo sé».
@@ -622,7 +638,7 @@ function DetalleDelCuestionario({
               </button>
             );
           })}
-          {editable && <AgregarPestana disponibles={c.disponibles} ocupado={ocupado || !!c.cerradoAt} onOps={ops} />}
+          {c.tipo === "tactico" && <AgregarPestana disponibles={c.disponibles} ocupado={ocupado || !!c.cerradoAt} onOps={ops} />}
         </nav>
 
         {pestana && (
@@ -664,11 +680,12 @@ function Prellenado({
     0,
   );
   if (c.cerradoAt) return null;
+  const fuentes = c.tipo === "estrategia" ? "el handoff, el kickoff y la información del cliente" : "el handoff y el kickoff";
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-muted px-3 py-2">
       <div className="text-xs text-fg-secondary">
         {c.prellenado.enCurso ? (
-          <span>✨ Nexus está leyendo el handoff y el kickoff para contestar lo que ya sabemos…</span>
+          <span>✨ Nexus está leyendo {fuentes} para contestar lo que ya sabemos…</span>
         ) : c.prellenado.error ? (
           <span className="text-danger-ink">No se pudo prellenar: {c.prellenado.error}</span>
         ) : prellenadas > 0 ? (
@@ -677,9 +694,9 @@ function Prellenado({
             {c.publicadoAt ? ` · ${sinConfirmar} sin confirmar por la persona` : ". La persona las verá para confirmar o corregir."}
           </span>
         ) : c.prellenado.at ? (
-          <span>✨ El handoff y el kickoff no contestaban ninguna pregunta pendiente.</span>
+          <span>✨ Lo que dicen {fuentes} no contestaba ninguna pregunta pendiente.</span>
         ) : (
-          <span>✨ Nexus puede contestar de antemano lo que ya dice el handoff y el kickoff; la persona solo confirma.</span>
+          <span>✨ Nexus puede contestar de antemano lo que ya dicen {fuentes}; la persona solo confirma.</span>
         )}
       </div>
       <button

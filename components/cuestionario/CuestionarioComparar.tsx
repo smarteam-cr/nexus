@@ -126,7 +126,7 @@ export default function CuestionarioComparar({
       )}
 
       <section className="rounded-2xl border border-line bg-surface p-4">
-        <h4 className="text-sm font-semibold text-fg">Cuestionario táctico, lado a lado</h4>
+        <h4 className="text-sm font-semibold text-fg">Táctico y estrategia, lado a lado</h4>
         <p className="mt-0.5 text-xs text-fg-muted">
           Las preguntas que contestó más de una persona. Son respuestas libres: si dicen cosas distintas, lo señala la guía de
           exploración con las dos citas para que lo confirmes.

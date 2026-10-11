@@ -24,6 +24,7 @@ export type LectorDeMemoria =
   | "exploracion-del-proyecto"
   | "preventa"
   | "correo"
+  | "cuestionario"
   | "pase-de-cuenta"
   | "lo-que-sabe-la-ia"
   | "vigia";
@@ -181,6 +182,17 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     sinPartes: ["procesos", "historia"],
     archivos: ["lib/exploraciones/correo-de-seguimiento-server.ts"],
     motivo: "El correo de seguimiento de una reunión, para no repreguntar lo que ya se sabe.",
+  },
+  cuestionario: {
+    pieza: null,
+    // Lo lee la persona del cliente en su enlace, sin que nadie lo revise: recortado.
+    alcance: "cliente",
+    excluirOrigenes: ["Cuestionario"],
+    // Solo la ficha confirmada: la estrategia del negocio. Ni los procesos ni la historia de otros proyectos.
+    sinPartes: ["procesos", "historia", "fueraDeAlcance", "auditoria", "preventa", "hechos"],
+    archivos: ["lib/cuestionario/prellenar.ts"],
+    motivo:
+      "El prellenado del cuestionario de estrategia (2026-10-11): lo que ya se sabe de la estrategia de la cuenta, para no preguntárselo otra vez al cliente.",
   },
   "pase-de-cuenta": {
     pieza: null,

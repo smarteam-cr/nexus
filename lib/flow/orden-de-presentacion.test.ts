@@ -41,6 +41,7 @@ describe("el orden que pidió negocio", () => {
       "handoff",
       "timeline",
       "kickoff",
+      "questionnaires",
       "exploration",
       "diagnosis",
       "planning",

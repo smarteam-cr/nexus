@@ -122,7 +122,7 @@ const LECTORES: Lector[] = [
   },
   {
     archivo: "lib/cuestionario/prellenar.ts",
-    pieza: null, // el cuestionario previo vive dentro de Exploración, no es una pieza propia
+    pieza: "questionnaires", // los Cuestionarios son su propia pieza desde el 2026-10-11 (antes, dentro de Exploración)
     exposicion: "directo",
     porque:
       "prellena el cuestionario previo: el cliente ve cada respuesta como «esto es lo que " +

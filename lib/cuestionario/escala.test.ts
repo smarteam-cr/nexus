@@ -177,6 +177,25 @@ describe("vista comparada", () => {
     expect(r.escala!.dimensiones[0].desacuerdo).toBeNull();
   });
 
+  it("⭐ la estrategia también se pone lado a lado (2026-10-11)", () => {
+    const est = (valor: string) => ({
+      ...pestana("oF"),
+      key: "estrategia",
+      titulo: "Estrategia del negocio",
+      tipo: "normal" as const,
+      preguntas: [{ id: "est-desafio", categoria: "El desafío central", texto: "¿Cuál es el desafío?", momento: "previo" as const, ref: "retos" }],
+      respuestas: { "est-desafio": { valor, origen: "cliente" as const, actualizadoAt: AHORA } },
+    });
+    const r = compararCuestionarios(
+      vistaDe([
+        { tipo: "estrategia", personaId: "p1", pestanas: [est("Crecer en ventas")] },
+        { tipo: "estrategia", personaId: "p2", pestanas: [est("Bajar costos")] },
+      ]),
+    );
+    expect(r.tactico).toHaveLength(1);
+    expect(r.tactico[0].respuestas.map((x) => x.texto)).toEqual(["Crecer en ventas", "Bajar costos"]);
+  });
+
   it("dice quién respondió qué, y enviado frente a borrador", () => {
     const r = compararCuestionarios(vistaDe([{ personaId: "p1", pestanas: [pestana("oF")] }]));
     expect(r.estado[0]).toMatchObject({ persona: "Ana", seccionesEnviadas: 1, secciones: 1 });

@@ -18,8 +18,14 @@ import "server-only";
  *   · Lo pendiente o marcado «en sesión»: son las preguntas que el plan de sesiones tiene que cubrir.
  *
  * Un cuestionario sin publicar no entra en absoluto: es el trabajo del CSE, no algo que el cliente vio.
+ *
+ * El de ESTRATEGIA (2026-10-11) va en su propio bloque, PRIMERO, con a qué tarjeta apunta cada respuesta
+ * (lib/cuestionario/estrategia.ts › `bloqueDeEstrategia`). Ahí lo prellenado sin confirmar NO va como respuesta: va a lo
+ * pendiente. Este texto es la fuente Q0 de la exploración del proyecto, que cuenta como «lo dijo el cliente», y una
+ * suposición de Nexus no puede entrar por ahí con cara de dato.
  */
 import { prisma } from "@/lib/db/prisma";
+import { ENCABEZADO_DE_ESTRATEGIA, bloqueDeEstrategia, type EstrategiaDeUnaPersona } from "./estrategia";
 import { PREGUNTAS_DE_ETAPA } from "./plantilla";
 import {
   OPCION_NO_SE,
@@ -58,6 +64,26 @@ function linea(q: Pick<Pregunta, "texto" | "opciones">, r: Respuesta | undefined
   return `- ${q.texto}\n  → ${valorLegible(q, r)}${origen}${r.enSesion ? " [quiere ampliarlo en sesión]" : ""}`;
 }
 
+/** Lo que acompaña a una pestaña además de sus preguntas: el contexto adicional, las correcciones y los adjuntos. */
+function extrasDe(p: {
+  contextoAdicional: string | null;
+  cambios: Array<{ mensaje: string | null; createdAt: Date }>;
+  adjuntos: Array<{ title: string; descripcion: string | null; content: string | null }>;
+}): string[] {
+  const lineas: string[] = [];
+  if (p.contextoAdicional?.trim()) lineas.push(`\nContexto adicional:\n${p.contextoAdicional.trim()}`);
+  for (const cambio of p.cambios) {
+    if (cambio.mensaje) {
+      lineas.push(`\n⚠ Corrección pedida después de enviar (${cambio.createdAt.toISOString().slice(0, 10)}): ${cambio.mensaje}`);
+    }
+  }
+  for (const d of p.adjuntos) {
+    const extracto = d.content?.trim() ? `\n  Extracto: ${d.content.trim().slice(0, EXTRACTO_DOC)}` : "";
+    lineas.push(`\nDocumento adjunto «${d.title}» — qué es, según la persona: ${d.descripcion ?? "(sin descripción)"}${extracto}`);
+  }
+  return lineas;
+}
+
 export async function loadCuestionarioContext(projectId: string): Promise<string> {
   const cuestionarios = await prisma.cuestionario.findMany({
     where: { projectId, publicadoAt: { not: null } },
@@ -77,6 +103,7 @@ export async function loadCuestionarioContext(projectId: string): Promise<string
 
   const bloques: string[] = [];
   const pendientes: string[] = [];
+  const estrategia: EstrategiaDeUnaPersona[] = [];
 
   for (const c of cuestionarios) {
     const tipo = esTipoDeCuestionario(c.tipo) ? c.tipo : "tactico";
@@ -87,6 +114,11 @@ export async function loadCuestionarioContext(projectId: string): Promise<string
       const respuestas = leerRespuestas(p.respuestas);
       const etapas = p.tipo === "etapas" ? leerEtapas(p.etapas) : [];
       const lineas: string[] = [];
+
+      if (tipo === "estrategia") {
+        estrategia.push({ quien, enviada: p.enviadaAt != null, preguntas, respuestas, extras: extrasDe(p) });
+        continue;
+      }
 
       for (const q of preguntas) {
         const l = linea(q, respuestas[q.id]);
@@ -105,16 +137,7 @@ export async function loadCuestionarioContext(projectId: string): Promise<string
         pendientes.push(`[${quien} · ${p.titulo}] Todavía no describió ninguna etapa del proceso.`);
       }
 
-      if (p.contextoAdicional?.trim()) lineas.push(`\nContexto adicional:\n${p.contextoAdicional.trim()}`);
-      for (const cambio of p.cambios) {
-        if (cambio.mensaje) {
-          lineas.push(`\n⚠ Corrección pedida después de enviar (${cambio.createdAt.toISOString().slice(0, 10)}): ${cambio.mensaje}`);
-        }
-      }
-      for (const d of p.adjuntos) {
-        const extracto = d.content?.trim() ? `\n  Extracto: ${d.content.trim().slice(0, EXTRACTO_DOC)}` : "";
-        lineas.push(`\nDocumento adjunto «${d.title}» — qué es, según la persona: ${d.descripcion ?? "(sin descripción)"}${extracto}`);
-      }
+      lineas.push(...extrasDe(p));
 
       if (lineas.length === 0) continue;
       const estado = p.enviadaAt ? "ENVIADA" : "en borrador";
@@ -122,11 +145,17 @@ export async function loadCuestionarioContext(projectId: string): Promise<string
     }
   }
 
-  if (bloques.length === 0 && pendientes.length === 0) return "";
+  const deEstrategia = bloqueDeEstrategia(estrategia);
+  pendientes.push(...deEstrategia.pendientes);
+  if (bloques.length === 0 && pendientes.length === 0 && deEstrategia.bloques.length === 0) return "";
 
-  let out =
-    "=== CUESTIONARIOS PREVIOS — lo que cada persona del cliente contestó por escrito antes de las sesiones ===\n" +
-    (bloques.length ? bloques.join("\n\n") : "(Todavía nadie contestó nada.)");
+  let out = deEstrategia.bloques.length ? `${ENCABEZADO_DE_ESTRATEGIA}\n${deEstrategia.bloques.join("\n\n")}` : "";
+  if (bloques.length || !deEstrategia.bloques.length) {
+    out +=
+      (out ? "\n\n" : "") +
+      "=== CUESTIONARIOS PREVIOS — lo que cada persona del cliente contestó por escrito antes de las sesiones ===\n" +
+      (bloques.length ? bloques.join("\n\n") : "(Todavía nadie contestó nada.)");
+  }
   if (pendientes.length) {
     out += `\n\n=== PREGUNTAS SIN RESPUESTA ESCRITA — cubrirlas en las sesiones ===\n${pendientes.map((x) => `- ${x}`).join("\n")}`;
   }

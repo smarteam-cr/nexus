@@ -225,7 +225,9 @@ export const FICHA_EXPLORACION: Recorrido = {
   // Análisis), con la estrategia del cliente (retos, resultados, obstáculos) en vez de la venta.
   // v5 (2026-10-09): abre en su página de inicio (las sesiones, cada una con su reunión; «+ Agregar
   // sesión»): el «Contexto adicional» de la exploración se retiró.
-  version: 5,
+  // v6 (2026-10-11): los cuestionarios salieron de la exploración: son su propia pieza, con su recorrido
+  // (FICHA_CUESTIONARIOS).
+  version: 6,
   titulo: "Exploración del proyecto",
   descripcion: "Las sesiones, la guía de cada una y adónde va lo que averiguas",
   rotulo: "Recorrido · Exploración",
@@ -250,7 +252,7 @@ export const FICHA_EXPLORACION: Recorrido = {
     {
       ancla: "preventa.sesiones",
       titulo: "También en el riel",
-      texto: "Cuelgan de «Exploración»: la próxima dice cuándo. Debajo, los cuestionarios y el informe anterior. Toca «Exploración» para volver al inicio.",
+      texto: "Cuelgan de «Exploración»: la próxima dice cuándo. Debajo, el informe anterior si el proyecto lo tenía. Toca «Exploración» para volver al inicio.",
       lado: "right-start",
     },
     {
@@ -277,6 +279,48 @@ export const FICHA_EXPLORACION: Recorrido = {
       ancla: "preventa.panel.marco",
       titulo: "La estrategia del cliente",
       texto: "Verde lo confirmado, azul lo que sugirió el agente. Lo que confirmas va como sugerencia a Información del cliente.",
+      lado: "left-start",
+    },
+  ],
+};
+
+/**
+ * La pieza Cuestionarios (2026-10-11): lo que contesta el cliente, entre el Kickoff y la Exploración.
+ * Hasta ese día era un paso del recorrido de la exploración, porque colgaba de su fila en el riel.
+ */
+export const FICHA_CUESTIONARIOS: Recorrido = {
+  id: "ficha-cuestionarios",
+  version: 1,
+  titulo: "Cuestionarios",
+  descripcion: "Qué le mandas al cliente, a quién y adónde va lo que responde",
+  rotulo: "Recorrido · Cuestionarios",
+  invitacion: {
+    titulo: "¿Te muestro cómo se mandan los cuestionarios?",
+    texto: "Qué le mandas al cliente, a quién y adónde va lo que responde. Menos de un minuto.",
+  },
+  ruta: RUTA_DE_LA_FICHA,
+  porPantalla: true,
+  ejemplo: EJEMPLO_DE_FICHA,
+  irA: { href: "/clients", aviso: "Abre un cliente y entra a sus «Cuestionarios» desde el riel: el recorrido arranca solo." },
+  grupo: "clientes",
+  roles: "todos",
+  pasos: [
+    {
+      ancla: "ficha.cuestionarios",
+      titulo: "Su propia pieza",
+      texto: "Va después del kickoff y antes de la exploración. A la derecha, cómo van: sin enviar, enviado o cuántos respondieron.",
+      lado: "right-start",
+    },
+    {
+      ancla: "cuestionarios.panel",
+      titulo: "Tres cuestionarios",
+      texto: "El táctico, el de la escala y el de estrategia. Cada uno va a una persona del cliente, con su enlace. Lo que confirma llega a la exploración y al diagnóstico.",
+      lado: "top-start",
+    },
+    {
+      ancla: "que-sigue",
+      titulo: "Recomendado, no obligatorio",
+      texto: "Si todavía no mandaste ninguno, «Qué sigue» te lo recuerda. No frena ninguna etapa, y «Ahora no» lo deja para después.",
       lado: "left-start",
     },
   ],

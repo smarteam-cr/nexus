@@ -97,6 +97,12 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
     cuando:
       "Se arma en la planificación y se mantiene vivo durante todo el proyecto. Es el documento que más veces vas a abrir.",
   },
+  questionnaires: {
+    paraQue:
+      "Lo que contesta el cliente antes de las sesiones: el cuestionario táctico (métricas y operación, por Hub), el de la escala de rendimiento y el de estrategia (su desafío central, los resultados que necesita y qué se lo impide). Cada uno va a una persona del cliente, con su propio enlace.",
+    cuando:
+      "Después del kickoff y antes de la exploración. Es recomendado, no obligatorio: no frena ninguna etapa. Lo que el cliente confirma llega a la exploración, al diagnóstico y a Información del cliente.",
+  },
   exploration: {
     paraQue:
       "La guía para descubrir el negocio del cliente. Separa lo que ya nos dijo —y por lo tanto no hay que repreguntar— de lo que estamos dando por supuesto sin haberlo confirmado. De ahí salen las preguntas de las próximas reuniones.",
@@ -150,6 +156,7 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
  */
 export const SIN_SECCIONES: Record<string, string> = {
   timeline: "Su contenido son fases y tareas en una línea de tiempo, no secciones de texto.",
+  questionnaires: "Cada cuestionario tiene sus pestañas y sus preguntas, y se arma para una persona del cliente.",
   "client-info": "Se arma con los bloques que los agentes van sumando reunión tras reunión.",
   "business-case": "Sus secciones dependen del tipo de propuesta que elija Ventas al crearla.",
 };

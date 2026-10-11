@@ -225,11 +225,13 @@ export function PiezasDelRiel({
             // Con «Exploración» ya abierta, el clic vuelve a su página de inicio (lo escucha LienzoDeExploracion).
             onClick={() => (f.slug === "exploration" && f.activa ? window.dispatchEvent(new Event("exploracion:inicio")) : onElegir(f.slug))}
             aria-current={f.activa ? "page" : undefined}
-            data-recorrido={f.propuesta ? "ficha.propuesta" : undefined}
+            data-recorrido={f.propuesta ? "ficha.propuesta" : f.slug === "questionnaires" ? "ficha.cuestionarios" : undefined}
             title={
               !f.propuesta && (f.novedades ?? 0) > 0
                 ? `${f.novedades === 1 ? "1 novedad de una reunión" : `${f.novedades} novedades de reuniones`} para revisar${f.aviso?.largo ? `. ${f.aviso.largo}` : ""}`
                 : (f.aviso?.largo ?? (f.estado === "generada" ? "Generada" : "Todavía sin contenido: entra y genérala"))
+              /* Los Cuestionarios (2026-10-11) traen siempre su aviso («sin enviar», «enviado», «respondido 1 de 2»):
+                 no se generan, se mandan. */
             }
             className={clase(f.activa)}
           >

@@ -13,7 +13,7 @@
  *
  * Módulo client-safe: lo usa el panel (components/clients/ProjectCanvasPanel.tsx).
  */
-import { slugForCanvas } from "@/lib/pieces/registry";
+import { pieceBySlug, slugForCanvas } from "@/lib/pieces/registry";
 
 export interface DocumentoDeLaLista {
   id: string;
@@ -30,6 +30,11 @@ export function buscarDocumento<T extends DocumentoDeLaLista>(lista: readonly T[
 export type VistaDeLaUrl =
   | { tipo: "resumen" }
   | { tipo: "documento"; canvasId: string }
+  /**
+   * Una pieza que NO vive en un canvas (`hasCanvas: false`; hoy `questionnaires`, 2026-10-11): la URL
+   * la nombra por su slug (`?canvas=questionnaires`) y no hay fila que buscar. No espera a la lista.
+   */
+  | { tipo: "pieza"; slug: string }
   /** Hay parámetro pero la lista de documentos todavía no llegó: no se decide nada. */
   | { tipo: "esperar" };
 
@@ -39,6 +44,7 @@ export function vistaDeLaUrl(
   listaCargada: boolean,
 ): VistaDeLaUrl {
   if (!pedido) return { tipo: "resumen" };
+  if (pieceBySlug(pedido)?.hasCanvas === false) return { tipo: "pieza", slug: pedido };
   const doc = buscarDocumento(lista, pedido);
   if (doc) return { tipo: "documento", canvasId: doc.id };
   return listaCargada ? { tipo: "resumen" } : { tipo: "esperar" };

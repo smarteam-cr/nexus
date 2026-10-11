@@ -93,7 +93,8 @@ export function resolvePieceStates(input: {
 
   const tags = new Set(input.tags);
 
-  return PIECES.filter((p) => p.scope === "project").map((p: PieceDefinition): PieceStatus => {
+  // Sin las piezas que no viven en un canvas (los Cuestionarios): no se encienden ni se apagan.
+  return PIECES.filter((p) => p.scope === "project" && p.hasCanvas).map((p: PieceDefinition): PieceStatus => {
     const canvas = porSlug.get(p.slug) ?? null;
     const proposedByTags = p.enabledByTags.filter((t) => tags.has(t));
 

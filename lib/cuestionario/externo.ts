@@ -20,7 +20,9 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { nombreVisibleDelProyecto } from "@/lib/external/nombre-visible";
+import { proponerALaFichaSinIA } from "@/lib/clients/ficha-propuesta";
 import { fundirGuardado, type GuardadoDelCliente } from "./avance";
+import { ORIGEN_DEL_CUESTIONARIO, propuestaDeEstrategiaParaLaFicha } from "./estrategia";
 import {
   TITULO_DEL_TIPO,
   esTipoDeCuestionario,
@@ -266,8 +268,31 @@ export async function enviarPestana(
         tipo: "ENVIO",
       },
     });
+    await estrategiaALaFicha(r);
   }
   return { ok: true, enviadaAt: (r.fila.enviadaAt ?? ahora).toISOString() };
+}
+
+/**
+ * Al ENVIAR la pestaña de estrategia, lo que la persona escribió o confirmó del desafío, los resultados, los obstáculos y
+ * las prioridades va a «Información del cliente» como PROPUESTA, con origen «Cuestionario» (2026-10-11). Solo los retos
+ * estratégicos: «Resultados que persigue» la ficha no lo acepta desde afuera. Lo prellenado sin confirmar no va. Nunca
+ * tumba el envío: una ficha que no se actualiza no puede dejar al cliente sin poder mandar lo suyo.
+ */
+async function estrategiaALaFicha(r: Extract<Editable, { res: unknown }>): Promise<void> {
+  const c = r.res.vista.cuestionarios.find((x) => x.pestanas.some((p) => p.id === r.fila.id));
+  if (c?.tipo !== "estrategia") return;
+  try {
+    const respuestas = leerRespuestas(r.fila.respuestas);
+    const quien = r.res.vista.persona.nombre;
+    await proponerALaFichaSinIA({
+      clientId: r.res.clientId,
+      origen: ORIGEN_DEL_CUESTIONARIO,
+      armar: (ficha) => propuestaDeEstrategiaParaLaFicha(ficha, respuestas, quien),
+    });
+  } catch (e) {
+    console.error("[cuestionario] la estrategia no llegó a la ficha:", e instanceof Error ? e.message : e);
+  }
 }
 
 /** Después de enviar, el cliente no edita: dice qué quiere cambiar y queda registrado. */

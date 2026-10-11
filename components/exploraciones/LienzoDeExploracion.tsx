@@ -15,8 +15,8 @@
  * ── EN UN PROYECTO (2026-10-07) ─────────────────────────────────────────────
  * Con `proyecto`, el mismo lienzo es la pieza Exploración de la ficha del cliente: la exploración de
  * Customer Success (lib/exploraciones/marco.ts). Sin riel ni panel propios: las sesiones se pintan por
- * portal debajo de la fila «Exploración» del riel de la ficha (con «Cuestionarios» e «Informe anterior»)
- * y el panel de la derecha, en el de la ficha. Al centro, la página de inicio o la sesión elegida.
+ * portal debajo de la fila «Exploración» del riel de la ficha (con «Informe anterior»; los cuestionarios
+ * son su propia pieza desde el 2026-10-11) y el panel de la derecha, en el de la ficha. Al centro, la página de inicio o la sesión elegida.
  *
  * ── LA PÁGINA DE INICIO (etapa A, 2026-10-09) ──────────────────────────────
  * Exploración abre en su página de inicio (InicioDeLaExploracion): la próxima sesión, las sesiones con
@@ -110,13 +110,11 @@ export interface EnElProyecto {
   slotDelPanel: HTMLElement | null;
   /** Debajo de la fila «Exploración» del riel de la ficha (null si no está a la vista). */
   slotDeSesiones: HTMLElement | null;
-  /** Lo que se manda a cada persona del cliente. */
-  cuestionarios: ReactNode;
   /** El informe viejo en solo lectura; null si el proyecto no lo tenía. */
   informeAnterior: ReactNode | null;
 }
 
-type VistaDelProyecto = "sesiones" | "cuestionarios" | "informe";
+type VistaDelProyecto = "sesiones" | "informe";
 
 export default function LienzoDeExploracion({
   inicial,
@@ -492,7 +490,6 @@ export default function LienzoDeExploracion({
 
   if (proyecto) {
     const extras = [
-      { clave: "cuestionarios", etiqueta: "Cuestionarios", activa: vista === "cuestionarios", onClick: () => setVista("cuestionarios") },
       ...(proyecto.informeAnterior ? [{ clave: "informe", etiqueta: "Informe anterior", activa: vista === "informe", onClick: () => setVista("informe") }] : []),
     ];
     return (
@@ -514,7 +511,6 @@ export default function LienzoDeExploracion({
           <div hidden={vista !== "sesiones"}>
             <PasoExploracion />
           </div>
-          <div hidden={vista !== "cuestionarios"}>{proyecto.cuestionarios}</div>
           {vista === "informe" && proyecto.informeAnterior}
         </div>
         {cajones}

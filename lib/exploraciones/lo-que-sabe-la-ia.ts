@@ -25,6 +25,7 @@ const DE_DONDE: Record<string, string> = {
   Exploración: "de la exploración",
   "Actualizar con IA": "de «Actualizar con IA»",
   HubSpot: "de HubSpot",
+  Cuestionario: "del cuestionario de estrategia",
 };
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;

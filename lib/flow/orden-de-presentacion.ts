@@ -39,6 +39,8 @@ export const ORDEN_DE_PRESENTACION: readonly string[] = [
   "handoff",
   "timeline",
   "kickoff",
+  // `questionnaires` (2026-10-11): después del kickoff, antes de la exploración.
+  "questionnaires",
   "exploration",
   "diagnosis",
   "planning",

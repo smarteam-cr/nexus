@@ -7,13 +7,13 @@
  *
  * Pide la exploración del proyecto (`/api/projects/[projectId]/exploracion`); si todavía no hay y quien
  * mira puede trabajarla, la abre (con lo que dejó la preventa). Después monta `LienzoDeExploracion` en
- * modo proyecto: las sesiones cuelgan de la fila «Exploración» del riel de la ficha (con «Cuestionarios»
- * e «Informe anterior») y el panel de la derecha es el de la ficha.
+ * modo proyecto: las sesiones cuelgan de la fila «Exploración» del riel de la ficha (con «Informe
+ * anterior») y el panel de la derecha es el de la ficha. Los cuestionarios salieron de acá el 2026-10-11:
+ * son su propia pieza, entre el Kickoff y la Exploración (ProjectCanvasPanel monta CuestionarioPanel).
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { Alert } from "@/components/ui";
 import { SkeletonPanel } from "@/components/ui/Skeleton";
-import CuestionarioPanel from "@/components/cuestionario/CuestionarioPanel";
 import type { EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
 import LienzoDeExploracion from "./LienzoDeExploracion";
@@ -91,7 +91,6 @@ export default function ExploracionDelProyecto({
       proyecto={{
         slotDelPanel,
         slotDeSesiones,
-        cuestionarios: <CuestionarioPanel projectId={projectId} />,
         informeAnterior,
       }}
     />

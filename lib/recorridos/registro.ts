@@ -10,7 +10,7 @@
  * Diseño: el tablero «Recorridos · diseño» (Claude Design, sistema «Nexus · interfaz interna»).
  */
 import type { Recorrido } from "./tipos";
-import { CLIENTES_LISTADO, FICHA_CRONOGRAMA, FICHA_DEL_CLIENTE, FICHA_EXPLORACION, FICHA_INFORMACION } from "./contenido/clientes";
+import { CLIENTES_LISTADO, FICHA_CRONOGRAMA, FICHA_CUESTIONARIOS, FICHA_DEL_CLIENTE, FICHA_EXPLORACION, FICHA_INFORMACION } from "./contenido/clientes";
 import { EXITO_CUENTA, EXITO_LISTADO } from "./contenido/exito";
 import { ESCALA } from "./contenido/escala";
 import { FEEDBACK } from "./contenido/feedback";
@@ -54,6 +54,7 @@ export const RECORRIDOS: readonly Recorrido[] = [
   CLIENTES_LISTADO,
   FICHA_DEL_CLIENTE,
   FICHA_CRONOGRAMA,
+  FICHA_CUESTIONARIOS,
   FICHA_EXPLORACION,
   FICHA_INFORMACION,
   EXITO_LISTADO,

@@ -37,6 +37,13 @@ export interface OpcionesDeFilas {
    * suelto no tiene estado "pendiente": nadie lo espera.
    */
   incluirCustom?: boolean;
+  /**
+   * El estado de las piezas que NO viven en un canvas (`hasCanvas: false` en el registro; hoy los
+   * `questionnaires`). Su fila no sale de la lista de canvases: la arma quien sabe dónde viven. Una
+   * pieza así que no está en este mapa NO se lista — sin el dato, una fila «por activar» ofrecería
+   * algo que no se activa. Por eso el widget (que no lo pasa) no la cuenta.
+   */
+  sinCanvas?: Partial<Record<string, RowState>>;
 }
 
 export type RowState =
@@ -99,13 +106,15 @@ export function buildPieceRows(
 
   const delFlujo: PieceRow[] = piezasParaMostrar()
     .filter((slug) => opts.incluirHandoff || !FUERA_DEL_DESPLEGABLE.has(slug))
+    .filter((slug) => pieceBySlug(slug)?.hasCanvas !== false || opts.sinCanvas?.[slug] !== undefined)
     .map((slug) => {
       const pieza = pieceBySlug(slug);
       const canvas = porSlug.get(slug) ?? null;
+      const estadoSinCanvas = pieza?.hasCanvas === false ? opts.sinCanvas?.[slug] : undefined;
       return {
         slug,
         label: pieza?.label ?? slug,
-        state: !canvas ? "por_activar" : canvas.hasContent ? "generada" : "vacia",
+        state: estadoSinCanvas ?? (!canvas ? "por_activar" : canvas.hasContent ? "generada" : "vacia"),
         canvasId: canvas?.id ?? null,
         agent: CANVAS_PRIMARY_AGENT[slug] ?? null,
         optional: pieza?.optional ?? false,

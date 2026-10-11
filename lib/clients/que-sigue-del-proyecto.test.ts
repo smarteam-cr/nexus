@@ -97,6 +97,67 @@ describe("qué sigue", () => {
     expect(queSigueDelProyecto({ ...sinPieza, resumenPendiente: { motivo: "Hubo una reunión nueva." } }).accion).toEqual({ tipo: "resumen" });
     expect(queSigueDelProyecto({ ...sinPieza, proximaReunion: null }).accion).toEqual({ tipo: "agendar" });
   });
+  describe("⭐ los cuestionarios (2026-10-11): recomendados, nunca bloquean", () => {
+    const conCuestionarios: PiezaParaQueSigue[] = [
+      ...piezas,
+      { slug: "questionnaires", etiqueta: "Cuestionarios", estado: "vacia", stale: false },
+    ];
+    const accion = { tipo: "cuestionarios", slug: "questionnaires", etiqueta: "Cuestionarios" };
+    const conDatos = { ...base, piezas: conCuestionarios, cuestionarios: { publicados: 0, descartada: false } };
+
+    it("con el kickoff generado y ninguno publicado, los sugiere en el arranque y en la exploración", () => {
+      const q = queSigueDelProyecto({ ...conDatos, etapa: etapa("x", "Handoff") });
+      expect(q.accion).toEqual(accion);
+      expect(q.texto).toContain("Manda los cuestionarios al cliente");
+      expect(q.texto).toContain("no frena nada");
+      // En la exploración van ANTES del documento de la etapa: se mandan después del kickoff.
+      expect(queSigueDelProyecto({ ...conDatos, etapa: etapa("x", "Exploración") }).accion).toEqual(accion);
+    });
+    it("en las demás etapas (y sin etapa reconocida) no salen: un proyecto avanzado sigue con lo suyo", () => {
+      expect(queSigueDelProyecto({ ...conDatos, etapa: etapa("x", "Diagnóstico") }).accion).toEqual({
+        tipo: "pieza",
+        slug: "diagnosis",
+        etiqueta: "Diagnóstico",
+      });
+      const diagnosticoListo = conCuestionarios.map((p) => (p.slug === "diagnosis" ? { ...p, estado: "generada" as const } : p));
+      expect(queSigueDelProyecto({ ...conDatos, piezas: diagnosticoListo, etapa: etapa("x", "Diagnóstico") }).accion).toBeNull();
+      for (const e of [etapa("x", "Adopción"), etapa("x", "Implementación"), etapa("x", "Continuidad"), etapa("x", "Bloqueado"), null]) {
+        expect(queSigueDelProyecto({ ...conDatos, etapa: e }).accion).toBeNull();
+        expect(queSigueDelProyecto({ ...conDatos, etapa: e, resumenPendiente: { motivo: null } }).accion).toEqual({ tipo: "resumen" });
+        expect(queSigueDelProyecto({ ...conDatos, etapa: e, proximaReunion: null }).accion).toEqual({ tipo: "agendar" });
+      }
+    });
+    it("el kickoff desactualizado o con novedades gana, y mientras tanto no se sugieren (el prellenado lo lee)", () => {
+      const kickoffViejo = conCuestionarios.map((p) => (p.slug === "kickoff" ? { ...p, stale: true } : p));
+      const enHandoff = queSigueDelProyecto({ ...conDatos, piezas: kickoffViejo, etapa: etapa("x", "Handoff") });
+      expect(enHandoff.texto).toContain("quedó desactualizado");
+      expect(enHandoff.accion).toEqual({ tipo: "pieza", slug: "kickoff", etiqueta: "Kickoff" });
+      const kickoffConNovedades = conCuestionarios.map((p) => (p.slug === "kickoff" ? { ...p, novedades: 2 } : p));
+      expect(queSigueDelProyecto({ ...conDatos, piezas: kickoffConNovedades, etapa: etapa("x", "Handoff") }).accion).toEqual({
+        tipo: "novedades",
+        slug: "kickoff",
+        etiqueta: "Kickoff",
+        n: 2,
+      });
+      expect(queSigueDelProyecto({ ...conDatos, piezas: kickoffViejo, etapa: etapa("x", "Exploración") }).accion).not.toEqual(accion);
+    });
+    it("en la exploración, el documento ya escrito y desactualizado gana; sin escribir, van antes de generarlo", () => {
+      const exploracionVieja = [...conCuestionarios, { slug: "exploration", etiqueta: "Exploración", estado: "generada" as const, stale: true }];
+      expect(queSigueDelProyecto({ ...conDatos, piezas: exploracionVieja, etapa: etapa("x", "Exploración") }).texto).toContain("quedó desactualizado");
+      const exploracionVacia = [...conCuestionarios, { slug: "exploration", etiqueta: "Exploración", estado: "vacia" as const, stale: false }];
+      expect(queSigueDelProyecto({ ...conDatos, piezas: exploracionVacia, etapa: etapa("x", "Exploración") }).accion).toEqual(accion);
+    });
+
+    it("se van al publicar uno, con «Ahora no», sin kickoff o sin la pieza a la vista", () => {
+      const e = etapa("x", "Handoff");
+      expect(queSigueDelProyecto({ ...conDatos, etapa: e, cuestionarios: { publicados: 1, descartada: false } }).accion).not.toEqual(accion);
+      expect(queSigueDelProyecto({ ...conDatos, etapa: e, cuestionarios: { publicados: 0, descartada: true } }).accion).not.toEqual(accion);
+      expect(queSigueDelProyecto({ ...conDatos, etapa: e, cuestionarios: null }).accion).not.toEqual(accion);
+      const sinKickoff = conCuestionarios.map((p) => (p.slug === "kickoff" ? { ...p, estado: "vacia" as const } : p));
+      expect(queSigueDelProyecto({ ...conDatos, etapa: e, piezas: sinKickoff }).accion).not.toEqual(accion);
+      expect(queSigueDelProyecto({ ...conDatos, etapa: e, piezas }).accion).not.toEqual(accion);
+    });
+  });
   it("sin nada pendiente, dice que está al día y no ofrece acción", () => {
     expect(queSigueDelProyecto({ ...base, etapa: etapa("x", "Adopción") })).toEqual({
       texto: "El proyecto está al día: no hay nada esperando tu decisión.",

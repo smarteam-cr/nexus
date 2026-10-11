@@ -5,7 +5,7 @@ import "server-only";
  *
  * ── DESDE EL 2026-10-02: POR PERSONA Y POR TIPO ──────────────────────────────
  * Un proyecto tiene VARIAS personas del cliente (cada una con UN enlace) y VARIOS cuestionarios;
- * cada cuestionario es de UNA persona y de un tipo («tactico» o «escala»). Lo que contesta una
+ * cada cuestionario es de UNA persona y de un tipo («tactico», «escala» o, desde el 2026-10-11, «estrategia»). Lo que contesta una
  * persona es solo suyo: lo prellenado lo confirma cada una en su copia, y del lado nuestro se
  * compara (lib/cuestionario/comparar.ts).
  *
@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { sanitizeTags } from "@/lib/tags/catalog";
 import { avanceDePestana, type Avance } from "./avance";
 import { aplicarOperaciones, type EstadoDePestana, type OperacionCuestionario } from "./operaciones";
+import { pestanasDeEstrategia, porQueNoEntraEnEstrategia } from "./estrategia";
 import { pestanasDePlantilla, pestanasParaTags } from "./plantilla";
 // Solo la constante: el módulo del prellenado importa el SDK y esto lo lee cada GET.
 import { PRELLENADO_VENCE_MS } from "./prellenado-estado";
@@ -236,18 +237,36 @@ async function exigirPersona(projectId: string, personaId: string, activa = true
  * Una persona tiene a lo sumo UNO de cada tipo: si ya lo tiene, se devuelve ese.
  */
 export async function crearTactico(projectId: string, personaId: string | null, creadoPor: string | null): Promise<string> {
+  return crearConPestanas(projectId, personaId, creadoPor, "tactico", (tags) => pestanasParaTags(tags));
+}
+
+/**
+ * Crea un cuestionario de ESTRATEGIA para una persona (2026-10-11): una pestaña con las preguntas fijas de
+ * lib/cuestionario/estrategia.ts. No depende de los hubs: la estrategia del negocio es la misma con cualquier alcance.
+ */
+export async function crearEstrategia(projectId: string, personaId: string | null, creadoPor: string | null): Promise<string> {
+  return crearConPestanas(projectId, personaId, creadoPor, "estrategia", () => pestanasDeEstrategia());
+}
+
+async function crearConPestanas(
+  projectId: string,
+  personaId: string | null,
+  creadoPor: string | null,
+  tipo: "tactico" | "estrategia",
+  armar: (tags: string[]) => ReturnType<typeof pestanasParaTags>,
+): Promise<string> {
   if (personaId) {
     await exigirPersona(projectId, personaId);
-    const ya = await prisma.cuestionario.findFirst({ where: { projectId, personaId, tipo: "tactico" }, select: { id: true } });
+    const ya = await prisma.cuestionario.findFirst({ where: { projectId, personaId, tipo }, select: { id: true } });
     if (ya) return ya.id;
   }
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { tags: true } });
   if (!project) throw new ErrorDeCuestionario("Proyecto no existe", 404);
-  const pestanas = pestanasParaTags(sanitizeTags(project.tags));
+  const pestanas = armar(sanitizeTags(project.tags));
   const c = await prisma.cuestionario.create({
     data: {
       projectId,
-      tipo: "tactico",
+      tipo,
       personaId,
       createdById: creadoPor,
       pestanas: {
@@ -287,7 +306,7 @@ function estadoDe(c: CuestionarioCompleto): EstadoDePestana[] {
 }
 
 /**
- * Aplica operaciones de estructura a UN cuestionario táctico. Todas o ninguna: si una falla, no se
+ * Aplica operaciones de estructura a UN cuestionario táctico o de estrategia. Todas o ninguna: si una falla, no se
  * escribe nada y el error dice cuál y por qué. El de escala no se edita a mano: sale de la escala.
  */
 export async function editarEstructura(projectId: string, cuestionarioId: string, ops: OperacionCuestionario[]): Promise<void> {
@@ -296,6 +315,10 @@ export async function editarEstructura(projectId: string, cuestionarioId: string
     throw new ErrorDeCuestionario("El cuestionario de escala sale de la escala: no se edita a mano.", 409);
   }
   if (c.cerradoAt) throw new ErrorDeCuestionario("El cuestionario está cerrado. Reábrelo para cambiarlo.", 409);
+  if (c.tipo === "estrategia") {
+    const porQue = porQueNoEntraEnEstrategia(ops);
+    if (porQue) throw new ErrorDeCuestionario(porQue, 409);
+  }
 
   const res = aplicarOperaciones(estadoDe(c), ops);
   if (!res.ok) throw new ErrorDeCuestionario(res.error, 409);
@@ -384,7 +407,10 @@ export async function asignarPersona(projectId: string, cuestionarioId: string, 
       where: { projectId, personaId, tipo: c.tipo, id: { not: c.id } },
       select: { id: true },
     });
-    if (otro) throw new ErrorDeCuestionario(`Esa persona ya tiene un cuestionario ${TITULO_DEL_TIPO[c.tipo as TipoDeCuestionario]?.toLowerCase() ?? ""}.`, 409);
+    if (otro) {
+      const titulo = esTipoDeCuestionario(c.tipo) ? TITULO_DEL_TIPO[c.tipo] : "de este tipo";
+      throw new ErrorDeCuestionario(`Esa persona ya tiene uno de este tipo («${titulo}»).`, 409);
+    }
   }
   await prisma.cuestionario.update({ where: { id: c.id }, data: { personaId } });
 }

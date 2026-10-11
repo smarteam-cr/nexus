@@ -64,7 +64,10 @@ export function construirNexusParaCse(): PaginaSembrada {
         "Haces la reunión de arranque, grabada y con el título «Kick Off | Nombre del cliente», y mueves la etapa del proyecto en HubSpot.",
       ),
       numerado(
-        "Exploras. En Exploración, el «Cuestionario previo» arma una pestaña por hub: prellénalo con lo que ya sabemos, asigna cada pestaña a la persona del cliente que la contesta y publícalo; cada una recibe su propio enlace. Con las respuestas y las sesiones, la IA arma el informe de exploración.",
+        "Mandas los cuestionarios. En «Cuestionarios», después del Kickoff, armas el táctico (una pestaña por hub), el de la escala o el de estrategia: prellénalos con lo que ya sabemos, asigna cada uno a la persona del cliente que lo contesta y publícalo; cada persona recibe su propio enlace. Es recomendado: no frena ninguna etapa.",
+      ),
+      numerado(
+        "Exploras. En Exploración preparas y haces las sesiones. Con lo que contestó el cliente y lo que se habló, la IA te sugiere qué confirmar de su estrategia y de la escala.",
       ),
       numerado(
         "Diagnosticas. Activa el Diagnóstico cuando termines de explorar: la IA lo arma con lo que se habló y tú lo revisas. Los niveles se ubican con la Escala de rendimiento. Se presenta en una sesión o en PDF.",
@@ -90,7 +93,8 @@ export function construirNexusParaCse(): PaginaSembrada {
         ["Documento", "Cuándo", "La IA escribe", "Tú escribes o decides", "¿Lo ve el cliente?"],
         ["Información de la venta", "Al recibir la cuenta", "— (lo escribe Ventas)", "Lo lees y completas su contexto", "No"],
         ["Kickoff", "Arranque", "El texto", "Equipo, canales, horarios y cierre", "Sí, al subirlo"],
-        ["Exploración", "Después del arranque", "El informe de exploración", "El cuestionario y a quién se lo mandas", "Solo el cuestionario"],
+        ["Cuestionarios", "Después del arranque (recomendado)", "El prellenado", "Qué se pregunta y a quién se lo mandas", "Sí, cada persona con su enlace"],
+        ["Exploración", "Después de los cuestionarios", "Lo que sugiere de cada sesión", "Las sesiones y qué confirmas", "No"],
         ["Diagnóstico", "Al terminar de explorar", "El borrador", "La revisión y los niveles", "En sesión o PDF"],
         ["Planificación", "Antes de configurar", "El plan", "Los ajustes con el cliente", "Lo aprueba el cliente"],
         ["Cronograma", "Siempre", "La propuesta de fases y tareas", "Qué se aplica, fechas y responsables", "Sí, al subirlo"],
@@ -111,7 +115,7 @@ export function construirNexusParaCse(): PaginaSembrada {
       vinneta("Cada documento se publica aparte, con «Subir al cliente». Hasta entonces no ve nada, ni los borradores."),
       vinneta("Del cronograma ve la foto que subiste, no lo que estás cambiando."),
       vinneta("«Revocar acceso» corta el enlace; «Regenerar» crea uno nuevo con otra contraseña."),
-      vinneta("El cuestionario de la exploración es la excepción: cada persona tiene su enlace, sin contraseña."),
+      vinneta("Los cuestionarios son la excepción: cada persona tiene su enlace, sin contraseña."),
 
       titulo(2, "Las reuniones"),
       vinneta(

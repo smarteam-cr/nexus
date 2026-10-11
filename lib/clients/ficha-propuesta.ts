@@ -17,6 +17,8 @@ import "server-only";
  *      cliente, lo manda acá (2026-10-05).
  *   6. Lo de la PREVENTA, sin IA (2026-10-10, lib/exploraciones/a-la-ficha.ts): lo que propone al preparar y lo que se
  *      confirma en el lienzo, con origen «Preventa» (la puerta 5 es lo que cambia en HubSpot, ficha-desde-hubspot).
+ *   7. Lo que el cliente escribe o confirma en el cuestionario de ESTRATEGIA, sin IA, al enviarlo (2026-10-11,
+ *      lib/cuestionario/estrategia.ts): solo los retos estratégicos, con origen «Cuestionario».
  *
  * Todo cae en `ficha.propuesta` y ACUMULA (fusionarPropuesta). Nada toca lo confirmado ni HubSpot:
  * eso solo pasa cuando el CSE aprieta «Confirmar» (app/api/clients/[id]/ficha).

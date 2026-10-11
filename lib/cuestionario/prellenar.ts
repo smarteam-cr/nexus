@@ -14,6 +14,11 @@ import "server-only";
  *   · Ante la duda, no contesta. Una suposición prellenada que el cliente confirma por apuro es
  *     peor que una pregunta vacía.
  *
+ * El de ESTRATEGIA (2026-10-11) usa esta misma mecánica y las mismas reglas, con su propio pedido: además del handoff
+ * (la misma allowlist del kickoff) y el kickoff, lee lo que Nexus ya sabe de la cuenta por la memoria (lib/memoria,
+ * lector «cuestionario», alcance CLIENTE: la ficha confirmada, sin lo interno ni la postura de las personas). Lo
+ * prellenado sigue siendo una suposición hasta que la persona lo confirma (lib/cuestionario/estrategia.ts).
+ *
  * Corre FUERA del request (tarda lo que tarda una llamada a Claude): el POST lo arranca y la
  * pantalla sigue el estado por `prellenandoDesde` / `prellenadoAt` / `prellenadoError`.
  */
@@ -23,6 +28,7 @@ import { getAnthropic } from "@/lib/anthropic";
 import { KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
 import { loadCanvasContext, loadHandoffContext } from "@/lib/canvas/load-canvas-context";
 import { prisma } from "@/lib/db/prisma";
+import { memoriaDeLaCuenta } from "@/lib/memoria";
 import { PRELLENADO_VENCE_MS } from "./prellenado-estado";
 import { estaContestada, leerPreguntas, leerRespuestas, type Respuestas } from "./tipos";
 
@@ -65,6 +71,15 @@ Reglas estrictas:
 - Nunca incluyas información interna de Smarteam (precios, márgenes, opiniones del equipo, riesgos comerciales).
 - Mejor pocas respuestas seguras que muchas dudosas.`;
 
+const SYSTEM_ESTRATEGIA = `Eres el asistente de Smarteam, una consultora que implementa HubSpot. Le mandamos al cliente un cuestionario sobre la ESTRATEGIA de su negocio: su desafío central, los resultados que necesita, lo que le impide llegar, qué pasa si no lo resuelve, cómo mide el éxito y sus prioridades del año. Tu tarea: dejar prellenadas las preguntas que YA están contestadas en lo que el cliente nos dijo antes (handoff de ventas, kickoff y lo confirmado de su ficha), para que no tenga que repetirlo. El cliente verá cada respuesta como «Esto es lo que entendimos» y la confirmará o corregirá.
+
+Reglas estrictas:
+- Contesta SOLO lo que las fuentes dicen de forma explícita. Si hay que deducir, suponer o completar, NO contestes esa pregunta. Nunca inventes una cifra ni una fecha.
+- Respuestas cortas (una o dos frases), concretas, con los números y nombres tal como aparecen.
+- Escribe en español neutro, como lo diría el cliente («Queremos crecer…», «Nos frena…»).
+- Nunca incluyas información interna de Smarteam (precios, montos del proyecto, márgenes, opiniones del equipo, riesgos comerciales, lo que se habló sin el cliente).
+- Mejor pocas respuestas seguras que muchas dudosas.`;
+
 interface PreguntaAbierta {
   pestanaId: string;
   id: string;
@@ -96,7 +111,8 @@ export async function prellenarCuestionario(cuestionarioId: string): Promise<{ p
   }
   if (abiertas.length === 0) return { prellenadas: 0 };
 
-  const [handoff, kickoff, project] = await Promise.all([
+  const estrategia = c.tipo === "estrategia";
+  const [handoff, kickoff, project, cuenta] = await Promise.all([
     // ⛔ Allowlist del KICKOFF, no el handoff entero: lo prellenado lo lee el CLIENTE sin que nadie
     // lo revise en el medio (lib/canvas/handoff-al-cliente.test.ts). Riesgos, acuerdos comerciales y
     // por qué nos eligieron no pueden llegar a su pantalla ni como «esto es lo que entendimos».
@@ -106,14 +122,23 @@ export async function prellenarCuestionario(cuestionarioId: string): Promise<{ p
       where: { id: projectId },
       select: { name: true, client: { select: { name: true, industry: true } } },
     }),
+    /* Solo el de estrategia: lo que Nexus ya sabe de la cuenta, con el alcance del CLIENTE (lo lee la persona sin que
+       nadie lo revise). Declarado en lib/memoria/consumidores.ts › cuestionario. */
+    estrategia
+      ? prisma.project
+          .findUnique({ where: { id: projectId }, select: { clientId: true } })
+          .then((p) => (p ? memoriaDeLaCuenta(p.clientId, { lector: "cuestionario", projectId }) : null))
+          .then((m) => m?.texto ?? "")
+          .catch(() => "")
+      : Promise.resolve(""),
   ]);
-  if (!handoff && !kickoff) throw new Error("No hay handoff ni kickoff de dónde sacar respuestas.");
+  if (!handoff && !kickoff && !cuenta) throw new Error("No hay handoff, kickoff ni ficha de dónde sacar respuestas.");
 
   const lista = abiertas.map((q) => `- [${q.id}] (${q.pestanaTitulo}) ${q.texto}`).join("\n");
   const respuesta = await getAnthropic().messages.create({
     model: MODELO_PRELLENADO,
     max_tokens: 4000,
-    system: SYSTEM,
+    system: estrategia ? SYSTEM_ESTRATEGIA : SYSTEM,
     tools: [TOOL],
     tool_choice: { type: "tool", name: TOOL.name },
     messages: [
@@ -123,7 +148,8 @@ export async function prellenarCuestionario(cuestionarioId: string): Promise<{ p
           `Cliente: ${project?.client.name ?? "—"} · Industria: ${project?.client.industry ?? "—"} · Proyecto: ${project?.name ?? "—"}\n\n` +
           `=== PREGUNTAS SIN RESPUESTA ===\n${lista}\n\n` +
           `=== HANDOFF DE VENTAS ===\n${handoff || "(sin handoff)"}\n\n` +
-          `=== KICKOFF ===\n${kickoff || "(sin kickoff)"}`,
+          `=== KICKOFF ===\n${kickoff || "(sin kickoff)"}` +
+          (estrategia ? `\n\n=== LO QUE YA SABEMOS DE LA CUENTA (confirmado) ===\n${cuenta || "(nada confirmado todavía)"}` : ""),
       },
     ],
   });
