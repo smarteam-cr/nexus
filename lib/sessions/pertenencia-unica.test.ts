@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { belongsToClient, whereBelongsToClient } from "./project-sources";
+import { belongsToClient, duenoDeLaSesion, whereBelongsToClient } from "./project-sources";
 
 /**
  * lib/sessions/pertenencia-unica.test.ts — «¿DE QUIÉN ES ESTA SESIÓN?» SE PREGUNTA DE UNA SOLA FORMA.
@@ -26,10 +26,10 @@ const CONSUMIDORES = [
   "app/api/projects/[projectId]/gps/route.ts",
   "app/api/projects/[projectId]/project-sessions/route.ts",
   "app/api/projects/[projectId]/session-candidates/route.ts",
-  "app/api/sessions/analyze/route.ts",
   "lib/cs/load-account.ts",
   "lib/cs/cartera.ts",
   "lib/cs/watchdog-cuenta.ts",
+  "lib/cs/watchdog-context.ts",
   "lib/hubspot/cs-signals.ts",
   "lib/projects/analyze-participants.ts",
   "lib/sessions/reclassify.ts",
@@ -62,6 +62,26 @@ describe("las dos caras de la regla dicen lo mismo", () => {
     expect(whereBelongsToClient(C)).toEqual({
       OR: [{ resolvedClientId: C }, { manualClientId: C }],
     });
+  });
+});
+
+describe("duenoDeLaSesion: EL dueño, cuando hace falta uno solo", () => {
+  /* Es la precedencia que ya usaban INV42 y Tareas, escrita una vez en el chokepoint. La usan el
+     post-proceso (que dejó de volver a categorizar) y el análisis de ventas. */
+  it("resolvedClientId gana", () => {
+    expect(duenoDeLaSesion({ resolvedClientId: "a", manualClientId: "b" })).toBe("a");
+  });
+
+  it("sin resolución, cuenta el manual", () => {
+    expect(duenoDeLaSesion({ resolvedClientId: null, manualClientId: "b" })).toBe("b");
+  });
+
+  it("sin ninguno → null (la reunión no es de nadie)", () => {
+    expect(duenoDeLaSesion({ resolvedClientId: null, manualClientId: null })).toBeNull();
+  });
+
+  it("un manual colgado (cliente borrado) no le gana a una resolución viva", () => {
+    expect(duenoDeLaSesion({ resolvedClientId: "vivo", manualClientId: "cliente-borrado" })).toBe("vivo");
   });
 });
 

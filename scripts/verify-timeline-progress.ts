@@ -9,6 +9,7 @@
  *   npx tsx scripts/verify-timeline-progress.ts <projectId>
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { regenerateTimelineProgress } from "@/lib/timeline/regenerate-progress";

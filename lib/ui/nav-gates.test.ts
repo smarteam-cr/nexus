@@ -40,7 +40,7 @@ const visibles = (c: NavContext) =>
 const UNIVERSALES = ["para-ti", "clients", "marketing", "sessions", "knowledge", "documentacion", "escala"];
 
 describe("gates del sidebar congelados (espejo de los booleanos pre-migración)", () => {
-  it("SUPER_ADMIN ve los 16 ítems", () => {
+  it("SUPER_ADMIN ve los 17 ítems", () => {
     const c = ctx(true, {
       clientes: { viewAll: true },
       customerSuccess: { read: true },
@@ -52,6 +52,8 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
     });
     expect(visibles(c)).toEqual([
       "para-ti",
+      // Tareas internas (2026-10-09): en el piloto, dirección, Marketing y quien ya tenga algo en Tareas.
+      "tareas",
       "clients",
       "marketing",
       "customer-success",
@@ -95,6 +97,8 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "clients",
       "marketing",
       "customer-success",
+      // Tu carga (2026-10-07): la CSL lleva cuentas.
+      "tu-carga",
       "sales",
       "audits",
       "sessions",
@@ -132,11 +136,33 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "clients",
       "marketing",
       "customer-success",
+      "tu-carga",
       "sessions",
       "knowledge",
       "documentacion",
       "escala",
     ]);
+  });
+
+  it("⭐ Tu carga es de quien lleva cuentas (CSE y CSL), por ROL y sin el pase de dirección", () => {
+    /* 2026-10-07 (decisión de Elías): la carga propia es una pestaña de Rentabilidad, que es de dirección. El CSE y la
+       CSL llegan por este ítem; dirección la ve como pestaña y en el menú sería un ítem de más. Ningún permiso la abre. */
+    expect(visibles(ctx(false, {}, false, "CSE"))).toEqual(["para-ti", "clients", "marketing", "tu-carga", "sessions", "knowledge", "documentacion", "escala"]);
+    expect(visibles(ctx(false, {}, false, "CSL"))).toContain("tu-carga");
+    expect(visibles(ctx(true, {}, false, "SUPER_ADMIN"))).not.toContain("tu-carga");
+    for (const rol of ["VENTAS", "DEV", "MARKETING", "ADMIN", null]) {
+      expect(visibles(ctx(false, { clientes: { viewAll: true }, ventas: { read: true } }, false, rol)), `${rol} ve Tu carga`).not.toContain("tu-carga");
+    }
+  });
+
+  it("⭐ Tareas, en el piloto: dirección, Marketing y quien ya tenga algo en Tareas (un HECHO de datos)", () => {
+    /* 2026-10-09 (docs/tareas-plan.md §9.4): el gate no es un permiso. Marketing y quien tiene una tarea, una propuesta o
+       un espacio lo ven (`enTareas`, lo calcula AppShell); el resto, todavía no. Desde la fase 2, para todo el equipo. */
+    expect(visibles(ctx(true, {}, false, "SUPER_ADMIN"))).toContain("tareas");
+    expect(visibles({ ...ctx(false, {}, false, "MARKETING"), enTareas: true })).toContain("tareas");
+    for (const rol of ["CSE", "CSL", "VENTAS", "DEV", "MARKETING", "ADMIN", null]) {
+      expect(visibles(ctx(false, { clientes: { viewAll: true } }, false, rol)), `${rol} ve Tareas sin estar en el piloto`).not.toContain("tareas");
+    }
   });
 
   it("cobranza.read habilita Finanzas (perfil ADMIN) y nada más", () => {

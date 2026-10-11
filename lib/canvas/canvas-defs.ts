@@ -522,6 +522,8 @@ export const ENTREGA_CANVAS: CanvasDefinition = {
   order: 6,
   sections: [
     { key: "portada",      label: "Portada" },
+    // El desafío del Diagnóstico y cómo quedó (2026-10-07).
+    { key: "desafio_resuelto", label: "El desafío que resolvimos" },
     { key: "resumen",      label: "El antes y el después" },
     { key: "alcance",      label: "Qué quedó implementado" },
     { key: "logros",       label: "Objetivos alcanzados" },

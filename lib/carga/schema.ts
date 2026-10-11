@@ -6,6 +6,7 @@
  * rompe nada.
  */
 import { z } from "zod";
+import { CLAVES_DE_FAMILIA } from "@/lib/tiempos/familias";
 import { PESOS, TIPOS_DE_FASE, TIPOS_DE_TRATO } from "./config";
 
 const n = (min: number, max: number) => z.number().finite().min(min).max(max);
@@ -26,8 +27,14 @@ export const configCargaSchema = z
     semanasSenal: z.number().int().min(1).max(12),
     traspaso: n(0, 2),
     semanasParaContratar: z.number().int().min(0).max(52),
+    metaRecurrentes: z
+      .object({ min: z.number().int().min(0).max(50), max: z.number().int().min(0).max(50) })
+      .refine((m) => m.min <= m.max, { message: "Las recurrentes por CSE: «desde» no puede pasar a «hasta»." })
+      .default({ min: 6, max: 7 }),
     horasPorTrato: porClave(TIPOS_DE_TRATO, n(0, 40)),
     personas: z.record(z.string().email(), capacidad.partial()),
+    horasPorFamilia: z.partialRecord(z.enum(CLAVES_DE_FAMILIA), n(0, 80)).default({}),
+    descartes: z.record(z.string().min(1).max(80), z.number().finite()).default({}),
   })
   .refine((c) => c.semaforo.llena < c.semaforo.sobrecarga, { message: "«Llena» tiene que empezar antes que «Sobrecarga».", path: ["semaforo"] });
 

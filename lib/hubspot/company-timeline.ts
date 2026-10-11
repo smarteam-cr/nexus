@@ -28,6 +28,8 @@
  */
 import type { Client } from "@hubspot/api-client";
 import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
+import { grabacionesDeReuniones } from "./grabaciones-de-reuniones";
+import { textoDeLaReunion } from "./transcripcion-de-reunion";
 import { esNotaDeLaFicha } from "@/lib/clients/ficha";
 
 type V1Engagement = {
@@ -66,7 +68,7 @@ function engagementText(type: string, m: Record<string, unknown>): { title: stri
     const body = [get("callSummary"), get("body")].map(stripHtml).filter(Boolean).join("\n");
     return { title: stripHtml(get("title")), body };
   }
-  if (type === "MEETING") return { title: stripHtml(get("title")), body: stripHtml(get("body")) };
+  if (type === "MEETING") return { title: stripHtml(get("title")), body: [get("body"), get("internalMeetingNotes")].map(stripHtml).filter(Boolean).join("\n") };
   return { title: "", body: "" };
 }
 
@@ -105,9 +107,14 @@ async function fetchEngagements(hsClient: Client, companyId: string): Promise<{ 
   return { status: 200, results: data.results ?? [] };
 }
 
+/** De cuántas reuniones se pide la grabación de HubSpot (su resumen de IA): las más recientes. */
+const REUNIONES_CON_GRABACION = 15;
+
 /** Todos los ítems útiles del timeline (sin ventana ni cap), más reciente primero.
- *  ⛔ Ante un fallo que no sea «sin permiso» LANZA `FalloAlLeerElRegistro` (ver la cabecera). */
-async function fetchAllTimelineItems(hsClient: Client, companyId: string): Promise<TimelineItem[]> {
+ *  ⛔ Ante un fallo que no sea «sin permiso» LANZA `FalloAlLeerElRegistro` (ver la cabecera).
+ *  `grabaciones`: las reuniones traen además el resumen de IA de su grabación (grabaciones-de-reuniones.ts),
+ *  que la v1 no trae; sin él, una reunión grabada con HubSpot llegaba con la invitación o no llegaba. */
+async function fetchAllTimelineItems(hsClient: Client, companyId: string, grabaciones = true): Promise<TimelineItem[]> {
   let raw: V1Engagement[] = [];
   try {
     let r = await fetchEngagements(hsClient, companyId);
@@ -127,11 +134,23 @@ async function fetchAllTimelineItems(hsClient: Client, companyId: string): Promi
     throw new FalloAlLeerElRegistro(null, e instanceof Error ? e.message : String(e));
   }
 
+  const reuniones = raw
+    .filter((e) => e.engagement?.type === "MEETING" && e.engagement.id != null)
+    .sort((a, b) => (b.engagement?.timestamp ?? 0) - (a.engagement?.timestamp ?? 0))
+    .slice(0, REUNIONES_CON_GRABACION)
+    .map((e) => String(e.engagement!.id));
+  const grabadas = grabaciones && reuniones.length
+    ? await grabacionesDeReuniones(reuniones, { transcripciones: 0, cliente: hsClient }).catch(() => new Map<string, { resumen: string | null }>())
+    : new Map<string, { resumen: string | null }>();
+
   return raw
     .filter((e) => WANT.has(e.engagement?.type ?? ""))
     .map((e): TimelineItem | null => {
       const type = (e.engagement?.type ?? "") as TimelineItem["type"];
-      const { title, body } = engagementText(type, e.metadata ?? {});
+      const texto = engagementText(type, e.metadata ?? {});
+      const resumen = type === "MEETING" ? grabadas.get(String(e.engagement?.id ?? ""))?.resumen : null;
+      const { title } = texto;
+      const body = resumen ? textoDeLaReunion({ resumen, resto: texto.body }) : texto.body;
       if (!body) return null;
       /* La nota que deja Nexus al confirmar la ficha del cliente lleva campos internos (apertura,
          su porqué, motivación de compra). Este timeline alimenta la propuesta que abre el cliente:
@@ -151,9 +170,9 @@ async function fetchAllTimelineItems(hsClient: Client, companyId: string): Promi
 export async function fetchCompanyTimelineItems(
   hsClient: Client,
   companyId: string,
-  opts?: { since?: Date },
+  opts?: { since?: Date; grabaciones?: boolean },
 ): Promise<TimelineItem[]> {
-  const all = await fetchAllTimelineItems(hsClient, companyId);
+  const all = await fetchAllTimelineItems(hsClient, companyId, opts?.grabaciones ?? true);
   return all
     // Ventana temporal opcional (ej. "era del proyecto"): filtrar ANTES del cap de 25,
     // así el cap se llena con ítems de la era y no con historial viejo de la company.

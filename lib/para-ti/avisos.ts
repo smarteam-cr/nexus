@@ -25,6 +25,23 @@ export const TIPOS_DE_AVISO = {
   "feedback.nuevo": { bueno: false },
   "feedback.respuesta": { bueno: false, mensaje: true },
   "feedback.estado": { bueno: false },
+  "alcance.confirmado": { bueno: false },
+  "diagnostico.listo": { bueno: true },
+  "adopcion.revisar": { bueno: false },
+  // Tareas internas (docs/tareas-plan.md §8): un aviso por lectura o por pedido, nunca uno por tarea.
+  "tareas.sugerencias": { bueno: false },
+  "tareas.pedido": { bueno: false },
+  "tareas.respuesta": { bueno: false },
+  "tareas.asignada": { bueno: false },
+  "tareas.cerrada": { bueno: false },
+  "tareas.arrastre": { bueno: false },
+  "tareas.agregada": { bueno: false },
+  "tareas.dependencia": { bueno: true },
+  "tareas.comentario": { bueno: false, mensaje: true },
+  "tareas.mencionada": { bueno: false },
+  "tareas.bloque": { bueno: false },
+  "tareas.proyecto": { bueno: false },
+  "tareas.espacio": { bueno: false },
 } as const satisfies Record<string, { bueno: boolean; mensaje?: boolean }>;
 
 export type TipoDeAviso = keyof typeof TIPOS_DE_AVISO;

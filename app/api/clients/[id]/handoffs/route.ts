@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { canvasOf } from "@/lib/pieces/canvas-query";
+import { SIN_BUSCAR_LO_NUEVO } from "@/lib/agents/historial-corridas";
 
 /**
  * GET /api/clients/[id]/handoffs
@@ -40,7 +41,9 @@ export async function GET(
   });
 
   // ── Sesiones de ventas con las que se armó cada handoff (item de validación) ──
-  // Tomamos el último run del agente Handoff por proyecto que tenga sourceSessionIds.
+  // Tomamos el último run del agente Handoff por proyecto que tenga sourceSessionIds. «Buscar lo nuevo» no cuenta:
+  // escribe en `sourceSessionIds` las reuniones posteriores al congelado, y de ahí no salió lo vendido (el mismo
+  // filtro que el historial y el «último handoff», lib/agents/historial-corridas.ts › whereCorridasDeDocumento).
   const projectIds = rows.map((h) => h.projectId);
   const runs = projectIds.length
     ? await prisma.agentRun.findMany({
@@ -48,6 +51,7 @@ export async function GET(
           projectId: { in: projectIds },
           agent: { agentGroup: "handoff" },
           sourceSessionIds: { isEmpty: false },
+          ...SIN_BUSCAR_LO_NUEVO,
         },
         orderBy: { createdAt: "desc" },
         select: { projectId: true, sourceSessionIds: true },

@@ -88,7 +88,13 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     motivo: "El agente de avance. Ya cortaba desde su primer día; es el precedente que este archivo generaliza.",
   },
   "lib/cs/load-account.ts": { clase: "contexto", motivo: "El resumen de cuenta de CS. Ya cortaba." },
-  "lib/projects/project-brief.ts": { clase: "contexto", motivo: "El resumen por proyecto. Ya cortaba (su const se llama `ocurridas`)." },
+  "lib/projects/project-brief.ts": {
+    clase: "contexto",
+    indirecto: true,
+    motivo:
+      "El resumen por proyecto. Desde la Etapa 0 de la memoria (2026-10-09) lee por getProjectMemberSessions " +
+      "(included + belongsToClient + piso) y corta con soloOcurridas; solo cuenta en la base las que ya eligió.",
+  },
   "lib/cs/watchdog-context.ts": { clase: "contexto", motivo: "El vigilante. Ya cortaba, citando las fechas corruptas 2037+." },
   "lib/cs/watchdog-cuenta.ts": {
     clase: "contexto",
@@ -112,6 +118,13 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "contexto",
     motivo: "Una sesión titulada kickoff saca al proyecto de HAND_OFF. Agendada para el jueves, lo sacaba hoy.",
   },
+  "lib/handoff/congelado-server.ts": {
+    clase: "contexto",
+    indirecto: true,
+    motivo:
+      "«Buscar lo nuevo» sobre un handoff congelado (etapa 3b): las reuniones posteriores al congelado van a la IA. " +
+      "Lee por computeHandoffFeeding (el chokepoint de la membresía, que NO corta) y corta acá con soloOcurridas.",
+  },
   "lib/timeline/delivery-sessions.ts": {
     clase: "contexto",
     indirecto: true,
@@ -119,15 +132,6 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "«El real ejecutado» del Gantt y de la Entrega. Lee por getProjectHandoffSessions (membresía, que NO corta " +
       "a propósito), así que el corte le toca a él: la fase en curso tiene su ventana abierta hacia adelante.",
   },
-  "app/api/clients/[id]/canvas/refresh/route.ts": {
-    clase: "contexto",
-    motivo: "Sesiones recientes al prompt. `enrichedAt` no implica que ocurrió: el sellado viejo marcaba antes de tiempo.",
-  },
-  "app/api/projects/[projectId]/process-session/route.ts": {
-    clase: "contexto",
-    motivo: "Toma 50 y manda 5 a Claude. Las agendadas se llevaban las plazas trayendo nada.",
-  },
-  "app/api/sessions/analyze/route.ts": { clase: "contexto", motivo: "El hub de análisis. Ya cortaba (`date: { lt: new Date() }`)." },
   "lib/invariantes/sesiones.ts": {
     clase: "contexto",
     motivo: "INV21 (B-07): cuenta las sesiones del cliente para AFIRMAR que un proyecto quedó sin reuniones. Corta por `date: { lte: ahora }` — una reunión agendada no es una reunión que hubo.",
@@ -140,10 +144,6 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "contexto",
     motivo: "Lee ids que el vendedor eligió, y solo su `transcript`. Una futura aporta null, no ruido.",
   },
-  "app/api/integrations/summarize/route.ts": {
-    clase: "contexto",
-    motivo: "Resume lo que tiene transcripción y no tiene resumen. Una futura no entra por construcción.",
-  },
   "lib/contexto/cargar.ts": {
     clase: "contexto",
     motivo:
@@ -151,6 +151,19 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "transcript de las reuniones que el CSE eligió, para el detalle, el revisor de fases y el chat. Ya las filtra " +
       "con soloOcurridas y la consulta vuelve a cortar por fecha: una agendada que el CSE eligió sale en el " +
       "informe de la pantalla («Aún no ocurrió»), nunca en el prompt.",
+  },
+  "lib/contexto/material-del-documento.ts": {
+    clase: "contexto",
+    motivo:
+      "Las reuniones ELEGIDAS de un documento del proyecto (etapa 7), enteras: la minuta y la transcripción cortada en " +
+      "SQL. Ya las filtra con soloOcurridas, la consulta de la minuta vuelve a cortar por fecha y la de la transcripción " +
+      "(y la que dice cuáles tienen algo que leer) solo recibe los ids que pasaron ese corte.",
+  },
+  "lib/memoria/cargar.ts": {
+    clase: "contexto",
+    motivo:
+      "La memoria del proyecto (etapa 3, 2026-10-09): lo que dejó cada reunión (resumen y minuta, nunca la transcripción) " +
+      "va a los agentes. Los ids salen de getProjectMemberSessions + soloOcurridas y la consulta vuelve a cortar por fecha.",
   },
 
   // ── agenda: NO cortan, y es la decisión correcta ─────────────────────────────
@@ -167,6 +180,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   "app/api/projects/[projectId]/session-candidates/sin-duenio/route.ts": {
     clase: "agenda",
     motivo: "El buscador del mismo modal, sobre las sin dueño: una persona elige. Ya deja afuera las futuras, como el resto de las candidatas.",
+  },
+  "lib/sessions/reuniones-para-tareas.ts": {
+    clase: "contexto",
+    motivo:
+      "Tareas internas: las notas de una reunión llegan a Haiku para proponer tareas. Solo las que ya ocurrieron " +
+      "(techo de fecha); `salasDeReuniones` solo hidrata ids que ya están en tareas, para mostrar o esconder la cita.",
   },
   "lib/sessions/calendario-de-quien-busca.ts": {
     clase: "agenda",
@@ -196,16 +215,34 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   },
 
   // ── plomería ─────────────────────────────────────────────────────────────────
+  "lib/cs/watchdog.ts": {
+    clase: "plomeria",
+    motivo: "Verifica que la frase de una queja esté tal cual en la reunión que cita el agente (por id y por el chokepoint). No le describe reuniones al modelo.",
+  },
   "lib/google/meet-sync.ts": { clase: "plomeria", motivo: "Ingest desde Google. Su propio techo (`timeMax`) es lo que acota qué entra." },
   "lib/google/meet-enrichment.ts": { clase: "plomeria", motivo: "Lectura del documento de Meet. Ya filtra `date < now - 1h` (Tanda R)." },
   "lib/sessions/reclassify.ts": { clase: "plomeria", motivo: "Re-atribuye dueño. La fecha no cambia de quién es una reunión." },
   "lib/sessions/resolve-client.ts": { clase: "plomeria", motivo: "La cascada de dueño, sobre el corpus entero a propósito." },
+  "lib/sessions/vincular-al-llegar.ts": {
+    clase: "plomeria",
+    motivo: "Memoria de la cuenta, etapa 2: vincula a su proyecto las reuniones con solo notas (el clasificador). Ya corta por `date: { lte: ahora - 1h }`.",
+  },
+  "lib/invariantes/lecturas.ts": {
+    clase: "plomeria",
+    motivo: "INV44: mira si las reuniones recientes de clientes y prospectos tienen su lectura. Corta por `date: { lte: ahora }`; no afirma nada sobre el contenido.",
+  },
   "app/api/business-cases/[id]/sessions/route.ts": {
     clase: "plomeria",
     motivo: "Quitar o devolver reuniones al contexto de una propuesta: solo lee el DUEÑO de los ids elegidos para no mezclar clientes (INV1). No le describe nada a un modelo.",
   },
   "lib/sessions/classify-session-project.ts": { clase: "plomeria", motivo: "Vínculos existentes de UNA sesión (candados y tombstones)." },
   "app/(shell)/sessions/[id]/page.tsx": { clase: "plomeria", motivo: "Los proyectos de una sesión puntual." },
+  "lib/sessions/reuniones-para-seguimiento.ts": {
+    clase: "plomeria",
+    motivo:
+      "«Lo que dejó esta reunión» (2026-10-09): el dueño y los proyectos de UNA reunión, y las reuniones recientes de tus " +
+      "proyectos para «Para ti». Lo lee una persona, no un modelo; solo mira reuniones que ya ocurrieron (una agendada no dejó nada).",
+  },
   "app/api/sessions/[id]/projects/route.ts": { clase: "plomeria", motivo: "Ídem, por API." },
   "app/api/clients/[id]/handoffs/route.ts": { clase: "plomeria", motivo: "Listado de handoffs; toca sesiones solo de refilón." },
   "app/api/projects/[projectId]/handoff/route.ts": { clase: "plomeria", motivo: "Hidrata los `sourceSessionIds` de una corrida ya hecha." },
@@ -236,6 +273,22 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "Lee enteras las reuniones del cliente con transcripción para sacar hechos con cita. Los ids salen de " +
       "getClientSessions (solo las ocurridas) y la consulta de la transcripción vuelve a cortar por fecha.",
   },
+  // Hechos de una reunión (memoria de la cuenta, etapas 5 y 6): la reunión entera va a la lectura de hechos.
+  // La migración de las reuniones de los documentos (2026-10-10) y la sugerencia «Reunión con el cliente en este proyecto».
+  "lib/contexto/migracion-de-reuniones.ts": {
+    clase: "contexto",
+    indirecto: true,
+    motivo:
+      "La regla vieja de los seis documentos: qué reuniones leía cada uno antes de la etapa 7. La usan " +
+      "scripts/migrar-reuniones-de-los-documentos.ts (elige las 6 más recientes, que después van al prompt) y las sugerencias " +
+      "del panel. Recibe la membresía del chokepoint (getProjectMemberSessions, que NO corta) y corta acá con yaOcurrio.",
+  },
+  "lib/sessions/reunion-para-hechos.ts": {
+    clase: "contexto",
+    motivo:
+      "La transcripción y las notas de UNA reunión van a la lectura de hechos (las citas se verifican contra ellas). " +
+      "La pertenencia la decide getClientSessions (solo las ocurridas) y la consulta del texto vuelve a cortar por fecha.",
+  },
 };
 
 /**
@@ -247,27 +300,33 @@ const INDIRECTOS_QUE_CORTAN: Array<{ archivo: string; llama: string }> = [
   { archivo: "lib/timeline/delivery-sessions.ts", llama: "soloOcurridas(" },
   // El planificador del presupuesto del handoff: puro, recibe `ahoraMs` y filtra antes de repartir.
   { archivo: "lib/handoff/session-budget.ts", llama: "soloOcurridas(" },
+  // El resumen por proyecto (Etapa 0 de la memoria): lee por getProjectMemberSessions y corta acá.
+  { archivo: "lib/projects/project-brief.ts", llama: "soloOcurridas(" },
+  // «Buscar lo nuevo» (etapa 3b): lo posterior al congelado, por computeHandoffFeeding, corta acá.
+  { archivo: "lib/handoff/congelado-server.ts", llama: "soloOcurridas(" },
+  // La regla vieja de los documentos (migración del 2026-10-10 y la sugerencia de la regla vieja): pura, corta con yaOcurrio.
+  { archivo: "lib/contexto/migracion-de-reuniones.ts", llama: "yaOcurrio(" },
 ];
 
 /** Los que declaran `contexto` Y cortan por fecha (los otros cortan por transcripción). */
 const CORTAN_POR_FECHA = [
   "lib/sessions/project-sources.ts",
+  "lib/sessions/reuniones-para-tareas.ts",
   "lib/sessions/project-sessions.ts",
   "lib/cs/load-account.ts",
-  "lib/projects/project-brief.ts",
   "lib/cs/watchdog-context.ts",
   "lib/cs/watchdog-cuenta.ts",
   "lib/cs/cartera.ts",
   "lib/carga/queries.ts",
   "lib/projects/analyze-participants.ts",
   "lib/lifecycle/load.ts",
-  "app/api/clients/[id]/canvas/refresh/route.ts",
-  "app/api/projects/[projectId]/process-session/route.ts",
-  "app/api/sessions/analyze/route.ts",
   "lib/contexto/cargar.ts",
+  "lib/contexto/material-del-documento.ts",
+  "lib/memoria/cargar.ts",
   "lib/timeline/fuentes-de-la-explicacion.ts",
   "lib/exploraciones/fuentes.ts",
   "lib/procesos/agente.ts",
+  "lib/sessions/reunion-para-hechos.ts",
 ];
 
 const RAIZ = join(__dirname, "..", "..");

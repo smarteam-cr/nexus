@@ -1,6 +1,10 @@
 import { requireAccessToClient } from "@/lib/auth/access";
 import { UnauthorizedError, ForbiddenError, requireInternalUser } from "@/lib/auth/supabase";
 import { esLiderDeCs } from "@/lib/cs/acceso";
+import { leerAjustes } from "@/lib/cs/ajustes-de-salud-server";
+import { hoyEnCostaRica } from "@/lib/cs/cartera";
+import { NOMBRE_DE_LA_SALUD, quienCorrigio } from "@/lib/cs/cartera-reglas";
+import { fmtDia } from "@/lib/cs/formato";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import Link from "next/link";
@@ -111,6 +115,14 @@ export default async function ClientLayout({
   const ctx = await requireInternalUser().catch(() => null);
   const canSeeCs = !!ctx && esLiderDeCs(ctx.role);
 
+  /* Lo que la CSL le hizo al color de la cuenta en Éxito del cliente (2026-10-09): «en espera del cliente» y la
+     corrección del color. Lo ve todo quien abre la ficha —también el CSE, que no entra a Éxito del cliente—: la
+     corrección se VE, no se hace acá. La vigencia por fecha es la de la regla; si Nexus vio algo rojo nuevo, eso lo
+     dice Éxito del cliente (calcularlo acá costaría armar la cuenta entera en cada navegación de la ficha). */
+  const ajustes = (await leerAjustes([id]).catch(() => null))?.porCliente.get(id) ?? null;
+  const hoy = hoyEnCostaRica();
+  const correccionVigente = ajustes?.correccion && ajustes.correccion.vence >= hoy ? ajustes.correccion : null;
+
   // Dominio del cliente (para filtrar sesiones de Fireflies)
   const clientDomain = (() => {
     const raw = client.company?.trim();
@@ -152,6 +164,22 @@ export default async function ClientLayout({
                 <span className="text-xs text-fg-muted">·</span>
                 <span className="truncate text-xs text-fg-muted">{displayCompany}</span>
               </>
+            )}
+            {ajustes?.espera && (
+              <span
+                title={`${ajustes.espera.nota} · lo marcó ${quienCorrigio(ajustes.espera)} en Éxito del cliente`}
+                className="flex-shrink-0 cursor-help rounded border border-line bg-surface-hover px-1.5 py-0.5 text-2xs font-medium text-fg-secondary"
+              >
+                ⏸ En espera del cliente
+              </span>
+            )}
+            {correccionVigente && (
+              <span
+                title={`«${correccionVigente.nota}» · corregido por ${quienCorrigio(correccionVigente)} en Éxito del cliente, hasta el ${fmtDia(correccionVigente.vence, hoy)}`}
+                className="flex-shrink-0 cursor-help rounded border border-line bg-surface px-1.5 py-0.5 text-2xs font-medium text-fg-secondary"
+              >
+                Color: {NOMBRE_DE_LA_SALUD[correccionVigente.salud].toLowerCase()} (lo corrigió {quienCorrigio(correccionVigente)})
+              </span>
             )}
             {client.hubspotAccount ? (
               <ChipHubspot conectado title={client.hubspotAccount.hubName ?? "HubSpot conectado"} />

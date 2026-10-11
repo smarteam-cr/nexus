@@ -13,6 +13,7 @@
 import { test, expect } from "vitest";
 import {
   classifyHandoffSession,
+  linkFeedsAvance,
   linkFeedsHandoff,
   HANDOFF_MIN_SECONDARY_CONFIDENCE,
 } from "./session-relevance";
@@ -72,4 +73,28 @@ test("classifyHandoffSession — título neutro: decide Ventas en la sala (parti
   expect(classifyHandoffSession("Casos RCI", ["MSalas@smarteamcr.com"], null, SALES).include).toBe(true);
   expect(classifyHandoffSession("Casos RCI", [], "msalas@smarteamcr.com", SALES).include).toBe(true);
   expect(classifyHandoffSession("Casos RCI", ["cliente@rc.com"], null, SALES).include).toBe(false);
+});
+
+/* ── linkFeedsAvance: la política del AVANCE del cronograma (memoria de la cuenta, etapa 6) ── */
+
+test("linkFeedsAvance — primario incluido alimenta; secundario con confianza ≥ 0,4 también", () => {
+  expect(linkFeedsAvance({ included: true, isPrimary: true, confidence: null })).toBe(true);
+  expect(linkFeedsAvance({ included: true, isPrimary: false, confidence: 0.5 })).toBe(true);
+  expect(linkFeedsAvance({ included: true, isPrimary: false, confidence: HANDOFF_MIN_SECONDARY_CONFIDENCE })).toBe(true);
+});
+
+test("linkFeedsAvance — secundario sin confianza o por debajo del piso, y excluido, NO alimentan", () => {
+  expect(linkFeedsAvance({ included: true, isPrimary: false, confidence: null })).toBe(false);
+  expect(linkFeedsAvance({ included: true, isPrimary: false, confidence: 0.3 })).toBe(false);
+  expect(linkFeedsAvance({ included: false, isPrimary: true, confidence: 1 })).toBe(false);
+});
+
+test("linkFeedsAvance — ⛔ NO depende de la relevancia de venta: una reunión de implementación sin Ventas alimenta", () => {
+  // Para el handoff, la misma reunión (primaria, sin título de handoff ni Ventas en la sala) NO alimenta.
+  const sinVentas = classifyHandoffSession("Configuración de pipelines", ["cliente@acme.com"], null, SALES);
+  expect(sinVentas.include).toBe(false);
+  expect(linkFeedsHandoff({ isPrimary: true, confidence: null, handoffOverride: null }, sinVentas.include)).toBe(false);
+  expect(linkFeedsAvance({ included: true, isPrimary: true, confidence: null })).toBe(true);
+  // Ni el override del handoff lo mueve: es otra política.
+  expect(linkFeedsAvance.length).toBe(1);
 });

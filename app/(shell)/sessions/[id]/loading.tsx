@@ -4,7 +4,7 @@
  * Antes esta pantalla quedaba en blanco 1-2s mientras el server cargaba la
  * sesión + transcript + minuta + acciones + categorización. F1.2.
  */
-import { Skeleton, SkeletonText } from "@/components/ui";
+import { Skeleton, SkeletonPanel, SkeletonText } from "@/components/ui";
 
 export default function SessionDetailLoading() {
   return (
@@ -16,6 +16,13 @@ export default function SessionDetailLoading() {
           <Skeleton className="h-7 w-2/3" delay={60} />
           <Skeleton className="h-3 w-40" delay={120} />
         </div>
+
+        {/* «Lo que dejó esta reunión» o «Leer esta reunión»: solo una franja. Muchas reuniones no tienen ninguna de las
+            dos (sin dueño, internas, de un aliado, ya revisadas), y reservar el panel entero hacía saltar el contenido
+            hacia arriba al cargar. */}
+        <SkeletonPanel minH="min-h-[44px]" bodyClassName="px-3.5 py-2.5">
+          <Skeleton className="h-4 w-56" />
+        </SkeletonPanel>
 
         {/* Tabs */}
         <div className="flex items-center gap-4 border-b border-line pb-2">

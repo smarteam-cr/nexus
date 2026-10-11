@@ -9,10 +9,10 @@
  */
 import type { ConfigCarga } from "./config";
 import { etiquetaDelLunes, sumarSemanas } from "./semana";
-import type { CargaDePersona } from "./utilizacion";
+import type { CargaDePersona, CargaDelEquipo } from "./utilizacion";
 
 export type TonoDeSenal = "alto" | "atencion" | "espacio";
-export type DestinoDeSenal = { tipo: "persona"; id: string } | { tipo: "supuestos" } | { tipo: "cartera" };
+export type DestinoDeSenal = { tipo: "persona"; id: string } | { tipo: "supuestos" } | { tipo: "cartera" } | { tipo: "ninguno" };
 
 export interface Senal {
   clave: string;
@@ -55,6 +55,7 @@ export function senalesParaLaUnoAUno(
   sinCse: { horas: number; cuentas: number },
   config: ConfigCarga,
   lunesActual: string,
+  equipo?: CargaDelEquipo,
 ): Senal[] {
   const out: Senal[] = [];
   const cse = personas.filter((p) => !p.esCsl && p.semanasEnElEquipo > 0);
@@ -124,6 +125,34 @@ export function senalesParaLaUnoAUno(
       accion: "Ajustar su capacidad",
       destino: { tipo: "supuestos" },
     });
+  }
+
+  // 5 · Contratar, en horas. La propuesta con el pipeline y la decisión las ve dirección en Rentabilidad.
+  if (equipo && equipo.semanas.length > 0) {
+    const proyectada = equipo.proyeccion.length ? r0(equipo.proyeccion.reduce((a, s) => a + s.utilizacion, 0) / equipo.proyeccion.length) : equipo.utilizacion;
+    const sobre = config.semaforo.sobrecarga;
+    const enDireccion = "La proyección con el pipeline y la decisión las ve dirección en Rentabilidad.";
+    if (equipo.utilizacion > sobre && proyectada > sobre) {
+      out.push({
+        clave: "contratar",
+        tono: "alto",
+        estado: "Equipo",
+        titulo: "Contratar: conviene mirarlo",
+        texto: `El equipo está al ${equipo.utilizacion} % y las próximas ${equipo.proyeccion.length} semanas siguen arriba del ${sobre} % (${proyectada} %). Contratar y formar a un CSE toma unas ${config.semanasParaContratar} semanas. ${enDireccion}`,
+        accion: "",
+        destino: { tipo: "ninguno" },
+      });
+    } else {
+      out.push({
+        clave: "contratar",
+        tono: equipo.utilizacion >= config.semaforo.llena ? "atencion" : "espacio",
+        estado: "Equipo",
+        titulo: "Contratar: hoy no hace falta",
+        texto: `El equipo está al ${equipo.utilizacion} %${proyectada !== equipo.utilizacion ? ` y va al ${proyectada} %` : ""}: alcanza repartiendo. ${enDireccion}`,
+        accion: "",
+        destino: { tipo: "ninguno" },
+      });
+    }
   }
   return out;
 }

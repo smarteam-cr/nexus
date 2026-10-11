@@ -123,3 +123,79 @@ export function QueSigue({ children, accion }: { children: ReactNode; accion?: R
     </section>
   );
 }
+
+/**
+ * Una sugerencia de la IA, en una fila azul: la chispa, lo que propone, de dónde sale en una línea y sus acciones a la
+ * derecha (normalmente «Descartar» en texto y «Usar» en azul chico). Es presentacional: quien la usa decide qué hacen
+ * los botones. Nació en la preventa (components/exploraciones/Propuestas.tsx) y se mudó acá el 2026-10-09, cuando la
+ * necesitaron también las propuestas de Tareas internas.
+ */
+export function FilaSugerida({
+  children,
+  encima,
+  origen,
+  debajo,
+  acciones,
+  dataRecorrido,
+}: {
+  /** Lo que propone (14 px). */
+  children: ReactNode;
+  /** Un rótulo azul chico arriba («Dentro de Campaña de SAP»). */
+  encima?: ReactNode;
+  /** De dónde sale, en una línea gris. */
+  origen?: ReactNode;
+  /** Lo que se despliega debajo (la cita entera, las opciones de «Cambiar»). */
+  debajo?: ReactNode;
+  acciones?: ReactNode;
+  dataRecorrido?: string;
+}) {
+  return (
+    <li data-recorrido={dataRecorrido} className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface py-2.5 pl-3 pr-2.5">
+      <IconoDeSugerencia className="mt-[3px] h-[15px] w-[15px] flex-shrink-0 text-brand" />
+      <div className="min-w-0 flex-1">
+        {encima && <p className="text-2xs font-semibold text-brand">{encima}</p>}
+        <div className="text-sm leading-[1.45] text-fg">{children}</div>
+        {origen && <div className="mt-0.5 flex min-w-0 items-baseline gap-1 text-xs text-fg-muted">{origen}</div>}
+        {debajo}
+      </div>
+      {acciones && <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-1">{acciones}</div>}
+    </li>
+  );
+}
+
+/** El botón «Usar» de una fila sugerida: el azul chico (la única excepción a «un solo azul por pantalla»). */
+export function BotonUsar({ children = "Usar", onClick, disabled, title }: Omit<PropsDeBoton, "children"> & { children?: ReactNode }) {
+  return (
+    <BotonAzul className="px-[11px] py-[5px]" onClick={onClick} disabled={disabled} title={title}>
+      {children}
+    </BotonAzul>
+  );
+}
+
+/**
+ * Pasos numerados en una fila (o en columna en pantallas angostas): el círculo con el número, el título y una línea.
+ * Lo usan «Cómo funciona» de Feedback › Encuestas y el inicio de Tareas internas.
+ */
+export function PasosNumerados({
+  pasos,
+  columnas = 3,
+}: {
+  pasos: readonly { titulo: ReactNode; texto?: ReactNode; extra?: ReactNode }[];
+  columnas?: 2 | 3 | 4;
+}) {
+  const grilla = columnas === 4 ? "md:grid-cols-2 xl:grid-cols-4" : columnas === 2 ? "md:grid-cols-2" : "md:grid-cols-3";
+  return (
+    <ol className={cn("grid gap-4", grilla)}>
+      {pasos.map((p, i) => (
+        <li key={i} className="flex flex-col gap-2.5">
+          <span className="flex items-center gap-2.5">
+            <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-line text-xs font-semibold text-fg-secondary">{i + 1}</span>
+            <span className="text-[15px] font-semibold text-fg">{p.titulo}</span>
+          </span>
+          {p.texto && <span className="text-[13px] text-fg-secondary">{p.texto}</span>}
+          {p.extra}
+        </li>
+      ))}
+    </ol>
+  );
+}

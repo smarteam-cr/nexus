@@ -34,6 +34,17 @@ export const PIEZA_PROPUESTA_COMERCIAL = "business-case";
 export const PIEZA_ROL = "role";
 
 /**
+ * ⭐ El chat de TAREAS (lib/tareas/chat, 2026-10-09). Conversa sobre las tareas de UNA persona, no
+ * sobre un documento: su hilo cuelga de ella (`Dueno` personal) y va por su propia ruta,
+ * `/api/tareas/asistente`, con su propio turno.
+ *
+ * ⛔ FUERA de `PIEZAS_CON_CHAT`, a propósito: no es un canvas (aparecería en el desplegable de un
+ * proyecto) y el handler genérico la RECHAZA, así una ruta de proyecto no puede abrir un hilo de
+ * tareas ni correrlo por el carril del documento.
+ */
+export const PIEZA_TAREAS = "tareas";
+
+/**
  * ⭐ EXPLORACIÓN CONVERSA, PERO NO ENTRA A `DOC`. Las dos compuertas se separaron el 2026-08-22.
  *
  * ── POR QUÉ ESTABA AFUERA, Y POR QUÉ YA NO ──────────────────────────────────────────────────

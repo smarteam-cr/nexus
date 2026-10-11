@@ -185,7 +185,7 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  canvas           Json? // Client Canvas — conocimiento a nivel empresa
+  canvas           Json? // Client Canvas — DEPRECATED — su lugar lo tomó `ficha`. Ningún agente lo lee desde la Etapa 0 de la memoria (2026-10-09); queda la ruta /api/clients/[id]/canvas (GET y PUT, sin pantalla), que se retira antes del DROP. Eliminar después de 2026-12-31
   canvasConfidence Json? // { section: "confirmed" | "inferred" } per section
   // LA ficha del cliente (lib/clients/ficha.ts): una sola por empresa, la leen los agentes y al
   // confirmarla el CSE se escribe en la empresa de HubSpot (propiedades + nota). Reemplaza a
@@ -212,6 +212,8 @@ model Client {
   csAlerts               CsAlert[] // Éxito del cliente: alertas del watchdog
   csSignals              ClientCsSignals? // Éxito del cliente: snapshot de señales HubSpot
   partnerSnapshot        ClientPartnerSnapshot? // CS360: snapshot del objeto Partner Clients de HubSpot
+  clasificacion          ClasificacionDeCuenta? // Éxito del cliente: relación, potencial y momento confirmados por la CSL
+  correccionesDeSalud    CorreccionDeSalud[] // Éxito del cliente: el color corregido a mano y el «en espera del cliente»
   accountBrief           CsAccountBrief? // CS360: resumen ejecutivo citado (agente)
   cuentaFinanciera       CuentaFinanciera? // Cobranza: perfil de cobro 1:1 (ver sección Cobranza)
   ingresosVariables      IngresoVariable[]       @relation("IngresosVariablesDeCliente") // Finanzas: entradas fuera del ciclo
@@ -222,6 +224,10 @@ model Client {
   escalaComentarios      EscalaComentario[] // Escala: comentarios «no calza con este cliente» (SET NULL)
   exploracionesDeVenta   ExploracionDeVenta[] // Ventas: el lienzo de la exploración (una VIVA por empresa)
   preguntasDeTiempo      PreguntaDeTiempo[] // Tiempos: «¿cuánto te tomó?» de su trabajo (SET NULL)
+  tareas                 Tarea[]                 @relation("TareasDelCliente") // Tareas internas: para quién (SET NULL)
+  proyectosDeTareas      ProyectoDeTareas[]      @relation("ProyectosDeTareasDelCliente")
+  vinculosDeTareas       TareaVinculo[]          @relation("VinculosDeTareasDelCliente")
+  hechosDeReuniones      HechoDeReunion[]        @relation("HechosDelCliente") // memoria de la cuenta: los hechos de sus reuniones (CASCADE)
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
 }
@@ -335,6 +341,10 @@ model Project {
   // Publish del DIAGNÓSTICO y de la PLANIFICACIÓN al cliente (2026-10-02): mismo mecanismo que la
   // Entrega (snapshot congelado al publicar, el chokepoint exige NO-null en cada lectura).
   diagnosticoPublishedAt   DateTime?
+  // Cuándo se le presenta el diagnóstico al cliente (2026-10-07): la fecha que fijó una persona, la que
+  // propuso Nexus desde una reunión, si ya está listo y el aviso al vendedor. Json con versión:
+  // lib/canvas/presentacion-del-diagnostico.ts.
+  diagnosticoPresentacion  Json?
   planificacionPublishedAt DateTime?
 
   // #3 — visibilidad de secciones/procesos en el kickoff del cliente, por proyecto.
@@ -515,12 +525,17 @@ model Project {
   handoffSources      HandoffSource[]
   timelineSources     TimelineSource[]
   notasDeContexto     NotaDeContexto[]
+  exploraciones          ExploracionDeVenta[] // la exploración de Customer Success (el lienzo de la preventa)
   timelineEvents      TimelineEvent[] // Éxito del cliente: eventos crudos del cronograma
   csAlerts            CsAlert[] // Éxito del cliente: alertas del watchdog
   serviciosCobranza   ServicioContratado[] // Cobranza: servicios facturables ligados a este proyecto
   stageGates          ProjectStageGate[] // Ciclo de vida: validaciones de salida cumplidas
   devEstimates        DevEstimate[] // Desarrollo: estimaciones de esfuerzo del equipo técnico
   preguntasDeTiempo   PreguntaDeTiempo[] // Tiempos: «¿cuánto te tomó?» de sus tareas y documentos (SET NULL)
+  tareas                 Tarea[]                     @relation("TareasDelProyecto") // Tareas internas: el proyecto de HubSpot al que sirven (SET NULL)
+  proyectosDeTareas      ProyectoDeTareas[]          @relation("ProyectosDeTareasDelProyecto")
+  vinculosDeTareas       TareaVinculo[]              @relation("VinculosDeTareasDelProyecto")
+  hechosDeReuniones      HechoDeReunion[]            @relation("HechosDelProyecto") // memoria de la cuenta: los hechos de sus reuniones (SET NULL)
 }
 
 // ── Desarrollo (requerimiento técnico) ────────────────────────────────────────
@@ -1274,6 +1289,9 @@ model CanvasBlock {
 }
 
 // Notas/contenido guardadas por etapa y paso dentro del workspace de un cliente
+// DEPRECATED — 0 filas; ningún agente la lee desde la Etapa 0 de la memoria (2026-10-09). Todavía la lee
+// lib/clients/last-interaction.ts (stageNote.groupBy, la última interacción): sacar ese lector antes del DROP.
+// Eliminar después de 2026-12-31
 model StageNote {
   id        String   @id @default(cuid())
   clientId  String
@@ -1310,6 +1328,11 @@ model ClientDocument {
   // `descripcion` viaja con el texto al contexto de los agentes: sin ella, el agente lee un PDF
   // sin saber si es el organigrama o una cotización vieja.
   descripcion           String?              @db.Text
+  /// Desde qué «Contexto adicional» se subió (2026-10-07): `preventa` · `propuesta` · `handoff` ·
+  /// `cronograma` · la pieza de un documento (`diagnosis`…) · `exploracion`. null = subido en
+  /// Documentos. Con origen, el texto ya entra por esa pieza: el contexto general de los agentes no lo
+  /// vuelve a leer (lib/documents/origen-del-adjunto.ts). SQL: 2026-10-07-exploracion-del-proyecto.sql.
+  origen                String?
   cuestionarioPestanaId String?
   cuestionarioPestana   CuestionarioPestana? @relation(fields: [cuestionarioPestanaId], references: [id], onDelete: SetNull)
 
@@ -1318,6 +1341,9 @@ model ClientDocument {
 }
 
 // Cards de contexto del cliente (sección editable sobre la relación comercial, dolor, etc.)
+// Desde la Etapa 0 de la memoria (2026-10-09) salió del mensaje del handoff y de todo agente no encadenado; los
+// agentes encadenados por paso (`associatedStep`) TODAVÍA leen las del paso anterior y las HUMAN del cliente
+// (app/api/clients/[id]/analyze/route.ts). La usan además pantallas legacy (deuda #24)
 model ClientContextCard {
   id         String     @id @default(cuid())
   clientId   String
@@ -1500,6 +1526,8 @@ model AgentRun {
   generatedTimelines       ProjectTimeline[]
   detailGeneratedTimelines ProjectTimeline[]   @relation("TimelineDetailGenerator")
   csAlerts                 CsAlert[] // Éxito del cliente: alertas emitidas por esta corrida
+  lecturasDeTareas         LecturaDeReunion[]  @relation("LecturasDeTareasDelAgente") // Tareas internas: la lectura de una reunión
+  hechos                   HechoDeReunion[]    @relation("HechosDelAgente") // memoria de la cuenta: los hechos de la lectura (SET NULL)
 
   @@index([status])
   @@index([clientId, agentSlug, createdAt])
@@ -1634,6 +1662,7 @@ model BusinessCase {
 
   /// El asistente que conversa: un hilo por documento y por persona.
   hilosDeChat HiloDeChat[]
+  vinculosDeTareas TareaVinculo[] @relation("VinculosDeTareasDeLaPropuesta") // Tareas internas (CASCADE)
 
   @@index([clientId])
   @@index([exploracionId])
@@ -1649,6 +1678,14 @@ model ExploracionDeVenta {
   id       String @id @default(cuid())
   clientId String
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// La exploración de un PROYECTO (2026-10-07): el mismo lienzo y la misma guía que la preventa, con
+  /// las preguntas de Customer Success. null = una preventa. Una VIVA por proyecto (índice parcial en el
+  /// SQL); toda lectura de Ventas filtra `projectId: null` (`DE_LA_PREVENTA`, lib/exploraciones/marco.ts).
+  /// nullable porque la preventa no tiene proyecto. SQL: 2026-10-07-exploracion-del-proyecto.sql.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// Qué se explora: `venta` (la arquitectura de la venta) · `cs` (la estrategia del cliente).
+  marco     String   @default("venta")
 
   /// Edición por industria de la escala (`ecommerce-retail`…); null = la escala general.
   edicion       String?
@@ -1679,8 +1716,10 @@ model ExploracionDeVenta {
   propuestas BusinessCase[]
   /// Las sesiones y los documentos que el vendedor sumó a mano.
   documentos ExploracionDocumento[]
+  vinculosDeTareas TareaVinculo[]         @relation("VinculosDeTareasDeLaPreventa") // Tareas internas (CASCADE)
 
   @@index([clientId])
+  @@index([projectId])
   @@index([updatedAt])
 }
 
@@ -1945,6 +1984,9 @@ model TeamMember {
   cuotasComisionVendedor  CuotaComisionVendedor[] @relation("CuotasDeComisionVendedor") // ⚠ remuneración (2026-10-06)
   ventasAtribuidas        AtribucionVenta[]       @relation("VentasAtribuidas")
   aguinaldosPagados       AguinaldoPago[]         @relation("AguinaldosDePersona")
+  // Lo vendido y las metas comerciales de la persona (2026-10-08): dato general, no remuneración.
+  ventasGanadas           VentaGanada[]           @relation("VentasDelVendedor")
+  metasComerciales        MetaComercial[]         @relation("MetasDelVendedor")
 }
 
 // ─── Aviso ────────────────────────────────────────────────────────────────────
@@ -2206,6 +2248,11 @@ model FirefliesSession {
   actionItems ActionItem[]
   pedidosFueraDeAlcance PedidoFueraDeAlcance[]
   projects    SessionProject[]
+  tareas                Tarea[]                @relation("TareasDeLaReunion") // Tareas internas: se leen SOLO por el chokepoint (SET NULL)
+  proyectosDeTareas     ProyectoDeTareas[]     @relation("ProyectosDeTareasDeLaReunion")
+  eventosDeTareas       TareaEvento[]          @relation("EventosDeTareasDeLaReunion")
+  lecturaDeTareas       LecturaDeReunion?      @relation("LecturaDeLaReunion")
+  hechos                HechoDeReunion[]       @relation("HechosDeLaReunion") // memoria de la cuenta: se leen SOLO por lib/seguimiento (CASCADE)
 
   // Índices para los queries principales:
   //   /sessions: findMany({ where: { date: { lt: now } }, orderBy: { date: desc } })
@@ -2229,6 +2276,8 @@ enum MinuteStatus {
   EDITED // CSE la editó manualmente (también implica aceptada)
 }
 
+// DEPRECATED — sin escritores desde 2026-10-10 (memoria de la cuenta, etapa 2: los pendientes son tareas); eliminar
+// después del 2027-04-01 o cuando ningún lector quede (ARCHITECTURE §2.9). Sin DROP: lo histórico se queda.
 enum ActionStatus {
   PENDING
   IN_PROGRESS
@@ -2260,6 +2309,10 @@ model SessionMinute {
   @@index([status])
 }
 
+// DEPRECATED — sin escritores desde 2026-10-10 (memoria de la cuenta, etapa 2; DECISIONS «La lectura de cada reunión
+// es durable…»): los compromisos de una reunión son propuestas de Tarea y los pendientes del proyecto se leen de Tareas.
+// Solo lo escribe la copia congelada lib/sessions/post-process-viejo.ts (el retroceso de SEGUIMIENTO_REUNIONES_ENABLED=0).
+// Eliminar después del 2027-04-01 o cuando ningún lector quede (ARCHITECTURE §2.9). Sin DROP y sin borrar filas.
 model ActionItem {
   id   String @id @default(cuid())
   text String @db.Text
@@ -2318,12 +2371,19 @@ model PedidoFueraDeAlcance {
   huella       String
   pedido       String            @db.Text
   quienLoPidio String?
-  // PEDIDO (lo detectó Nexus) | COTIZADO | APROBADO | DESCARTADO | INCLUIDO (ya estaba en lo vendido)
+  // PEDIDO (por revisar: lo detectó Nexus) | CONFIRMADO (el CSE confirmó que está fuera de lo vendido)
+  // | COTIZADO | APROBADO | RECHAZADO (el cliente no la tomó) | DESCARTADO | INCLUIDO (ya estaba en lo
+  // vendido). Las reglas: lib/sessions/solicitudes-fuera-de-alcance.ts.
   estado       String            @default("PEDIDO")
   monto        String?
   cita         String?           @db.Text
   decididoPor  String?
   decididoAt   DateTime?
+  // El seguimiento (2026-10-07): la nota del CSE, cada cambio con quién y cuándo, y quién la sumó a
+  // mano (null = la detectó la lectura de una reunión).
+  nota         String?           @db.Text
+  historial    Json?
+  creadoPor    String?
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
@@ -2392,7 +2452,14 @@ model SessionProject {
   implementationOverride Boolean?
   // Lo mismo para el KICKOFF, la EXPLORACIÓN, INTEGRACIONES y la ENTREGA (2026-10-07, «el contexto
   // adicional es de cada artefacto»). SQL: scripts/sql/2026-10-07-contexto-de-cada-documento.sql.
+  // ⚠ Desde la etapa 7 de la memoria de la cuenta (2026-10-10) los seis documentos (diagnóstico,
+  // planificación, ejecución, kickoff, integraciones y entrega) leen SOLO las elegidas: true = la
+  // eligió una persona («Usar»); false = la descartó; null = nadie la eligió y no entra. Ya no
+  // arrancan sugeridos (lib/sessions/destinos-de-contexto.ts).
   kickoffOverride          Boolean?
+  // DEPRECATED — eliminar después de correr scripts/migrar-guia-de-exploracion.ts y retirar
+  // lib/guia-exploracion. La exploración son sus sesiones (etapa A, 2026-10-09) y ya no lee esta
+  // columna; sigue declarada y sin DROP (DECISIONS «La exploración son sus sesiones»).
   explorationOverride      Boolean?
   techRequirementsOverride Boolean?
   deliveryOverride         Boolean?
@@ -2436,6 +2503,8 @@ model ProjectParticipantSnapshot {
 
 // ─── Canvas Suggestions (aprobación de cambios al Client Canvas) ─────────────
 
+// DEPRECATED — nadie crea ni lee sugerencias desde la Etapa 0 de la memoria (2026-10-09); solo la fusión de
+// empresas mueve las filas viejas. Eliminar después de 2026-12-31
 model CanvasSuggestion {
   id             String   @id @default(cuid())
   clientId       String
@@ -2805,6 +2874,8 @@ enum CsAlertCategory {
   PROJECT_BLOCKED // proyecto bloqueado/atrasado según HubSpot (hs_status + motivo)
   // Ciclo de vida:
   STAGE_STALLED // etapa temprana estancada (kickoff sin publicar / cronograma sin consensuar / entendimiento sin cerrar)
+  // Éxito del cliente, 2026-10-09 (ADD VALUE, al final):
+  QUEJA // el cliente se quejó en una reunión o un correo; con la frase literal verificada pinta el color
 }
 
 enum CsAlertStatus {
@@ -2873,6 +2944,8 @@ model CsAlert {
   seenByEmail     String?
   resolvedAt      DateTime?
   resolvedByEmail String?
+  /// Qué se hizo, en una línea (opcional). La escribe quien la resuelve o descarta, o «sistema».
+  resolutionNote  String?       @db.Text
 
   agentRunId String?
   agentRun   AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
@@ -3056,6 +3129,64 @@ model ConfigCarga {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// Cómo clasifica la CSL cada cuenta de la cartera (2026-10-07): tipo de relación, potencial y momento. Guarda solo lo
+// CONFIRMADO (quién y cuándo) y lo DESCARTADO; la propuesta de Nexus se calcula al leer (lib/cs/clasificacion.ts). Los
+// valores son texto y no enum: sumar uno no pide ALTER TYPE. El CSE responsable no va acá: es el de HubSpot.
+// SQL: scripts/sql/2026-10-07-clasificacion-de-cuenta.sql (RLS + deny).
+model ClasificacionDeCuenta {
+  clientId     String    @id
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  relacion     String?
+  relacionPor  String?
+  relacionEn   DateTime?
+  potencial    String?
+  potencialPor String?
+  potencialEn  DateTime?
+  momento      String?
+  momentoPor   String?
+  momentoEn    DateTime?
+  /// Lo descartado, por dato: { relacion: { valor, huella } }. No se vuelve a proponer hasta que cambie la huella.
+  descartes    Json      @default("{}")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+/// Las correcciones del color de una cuenta y el «en espera del cliente» (Éxito del cliente, 2026-10-09).
+/// Append-only: el estado sale del último evento de cada clase (lib/cs/ajustes-de-salud.ts).
+model CorreccionDeSalud {
+  id             String   @id @default(cuid())
+  clientId       String
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// corregir · quitar-correccion · en-espera · quitar-espera · descartar-espera
+  tipo           String
+  /// El color que puso la persona (solo «corregir»).
+  salud          String?
+  /// La razón de la corrección o qué se espera del cliente.
+  nota           String?  @db.Text
+  /// Lo que decía Nexus al corregir: el color y sus razones rojas (una roja nueva deja sin efecto la corrección).
+  saludDeNexus   String?
+  razonesDeNexus String[] @default([])
+  /// Los hechos de la propuesta de «en espera» descartada (no se vuelve a proponer hasta que cambien).
+  huella         String?
+  porEmail       String
+  porNombre      String?
+  createdAt      DateTime @default(now())
+
+  @@index([clientId, createdAt])
+}
+
+/// Una vista guardada de la pestaña «Cartera» de Éxito del cliente: un nombre y sus filtros (2026-10-09).
+/// Compartida entre la CSL y dirección; solo quien la creó la borra.
+model VistaDeCartera {
+  id              String   @id @default(cuid())
+  nombre          String
+  filtros         Json     @default("{}")
+  creadaPorEmail  String
+  creadaPorNombre String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model CsSettings {
@@ -4636,6 +4767,15 @@ model VentaGanada {
   /// La empresa de HubSpot asociada al trato, aunque no resuelva a ningún cliente.
   hubspotCompanyId String?
 
+  /// Quién vendió: el dueño del trato en HubSpot (`hubspot_owner_id`), guardado aunque no sea
+  /// nadie de Nexus. Es lo que permite medir lo vendido por persona (2026-10-08).
+  hubspotOwnerId String?
+  // nullable porque el dueño puede no estar en Nexus (o el trato no tener dueño). Se resuelve
+  // por el correo del dueño, también para quien ya se fue del equipo. SetNull: borrar a la
+  // persona no borra la venta.
+  vendedorId     String?
+  vendedor       TeamMember? @relation("VentasDelVendedor", fields: [vendedorId], references: [id], onDelete: SetNull)
+
   /// El nombre huele a prueba ("Negocio para prueba (Nexus)"). La regex MARCA; una
   /// persona decide. Son dos campos y no uno a propósito: sospechar no es excluir.
   sospechaPrueba Boolean @default(false)
@@ -4651,6 +4791,46 @@ model VentaGanada {
   @@index([fechaCierre])
   @@index([clientId])
   @@index([estado, fechaCierre])
+  @@index([vendedorId])
+}
+
+// ─── MetaComercial ──────────────────────────────────────────────────────────────
+/// Una meta comercial de HubSpot (un «goal target»): cuánto tiene que vender una persona en un tramo
+/// de tiempo y cuánto lleva según HubSpot. Espejo de SOLO LECTURA (lib/ventas/metas-sync.ts), para que
+/// cualquier parte de Nexus lea las metas sin preguntarle a HubSpot. Una meta anual con cadencia
+/// trimestral son cuatro filas: el total de la persona se suma al leer (lib/ventas/metas.ts).
+/// SQL: scripts/sql/2026-10-08-metas-y-vendedor.sql (RLS + deny).
+model MetaComercial {
+  id                  String      @id @default(cuid())
+  hubspotGoalTargetId String      @unique
+  /// `hs_group_correlation_uuid`: la meta a la que pertenece este tramo.
+  hubspotGoalId       String?
+  /// `hs_goal_name`, tal cual («OFICIAL | META 2026 - SMARTEAM»).
+  nombre              String
+  /// `hs_goal_type`: cuota de ventas, llamadas, etc. Texto: HubSpot suma tipos sin avisar.
+  tipo                String?
+  hubspotOwnerId      String?
+  hubspotUserId       String?
+  // nullable porque una meta puede ser de un equipo o de alguien que no está en Nexus. SetNull:
+  // borrar a la persona no borra la meta.
+  teamMemberId        String?
+  teamMember          TeamMember? @relation("MetasDelVendedor", fields: [teamMemberId], references: [id], onDelete: SetNull)
+  desde               DateTime
+  hasta               DateTime
+  monto               Decimal     @db.Decimal(14, 2)
+  /// `hs_kpi_value`: lo que HubSpot dice que lleva. null = HubSpot no lo calculó.
+  avance              Decimal?    @db.Decimal(14, 2)
+  moneda              String      @default("USD")
+  /// `hs_status`: pending · in_progress · achieved · exceeded · missed. Texto, no enum.
+  estado              String?
+  /// false = HubSpot dejó de devolverla (se borró o se archivó). La fila nunca se borra.
+  vigente             Boolean     @default(true)
+  sincronizadoEn      DateTime
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@index([teamMemberId])
+  @@index([desde])
 }
 
 // ─── VentaGanadaCambio ──────────────────────────────────────────────────────────
@@ -6067,4 +6247,582 @@ model PreguntaDeTiempo {
   @@index([personaEmail, estado])
   @@index([encuestaId, ocurrioAt])
   @@index([taskId])
+}
+
+// ─── Tareas internas ─────────────────────────────────────────────────────────
+// docs/tareas-plan.md. Lo que se acuerda en una reunión termina en la semana y en la agenda de cada persona, dentro de
+// espacios y proyectos, con el cliente a la vista. ⛔ Nunca llega al cliente ni al cronograma (lib/tareas/guardas.test.ts).
+// Personas por CORREO y sin FK, como Aviso. Estados y tipos como texto, con su catálogo en lib/tareas/estados.ts.
+// Las 13 tablas entran juntas con scripts/sql/2026-10-09-tareas.sql. Las escribe SOLO lib/tareas/mutaciones.ts.
+
+/// Dónde vive el trabajo: el espacio de un equipo (miembros por área) o uno libre que crea cualquiera.
+model EspacioDeTareas {
+  id             String    @id @default(cuid())
+  /// equipo | libre
+  tipo           String
+  /// Solo «equipo»: la clave de lib/tareas/equipos.ts. En Postgres los NULL no chocan.
+  equipo         String?   @unique
+  /// «Marketing» · «Evento SmartAgro 2026»
+  nombre         String
+  icono          String?
+  /// miembros | todos (solo cuenta en uno libre)
+  visibilidad    String    @default("miembros")
+  /// "sistema" en los de equipo: los crea asegurarEspacio() al primer uso
+  creadoPorEmail String
+  version        Int       @default(0)
+  archivadoAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  miembros   MiembroDeEspacio[]
+  proyectos  ProyectoDeTareas[]
+  plantillas PlantillaDeTareas[]
+}
+
+/// Quién está en un espacio LIBRE. Los de equipo no tienen filas: sus miembros salen del área.
+model MiembroDeEspacio {
+  espacioId        String
+  espacio          EspacioDeTareas @relation(fields: [espacioId], references: [id], onDelete: Cascade)
+  email            String
+  /// admin | miembro
+  rol              String          @default("miembro")
+  agregadoPorEmail String
+  createdAt        DateTime        @default(now())
+
+  @@id([espacioId, email])
+  @@index([email])
+}
+
+/// Un proyecto de tareas internas («Campaña de SAP»). NO es un Project de HubSpot: a lo sumo lo referencia.
+model ProyectoDeTareas {
+  id               String          @id @default(cuid())
+  espacioId        String
+  espacio          EspacioDeTareas @relation(fields: [espacioId], references: [id], onDelete: Restrict)
+  nombre           String
+  /// El nombre normalizado: un proyecto propuesto no se vuelve a proponer
+  huella           String
+  descripcion      String?         @db.Text
+  /// propuesta | activo | en_pausa | terminado | descartado
+  estado           String          @default("activo")
+  // nullable porque un proyecto propuesto todavía no tiene dueño
+  responsableEmail String?
+  /// El ancla de los «día hábil N» de un plan
+  iniciaEl         DateTime?       @db.Date
+  venceEl          DateTime?       @db.Date
+  // nullable: para quién. Sus tareas lo heredan
+  clientId         String?
+  client           Client?         @relation("ProyectosDeTareasDelCliente", fields: [clientId], references: [id], onDelete: SetNull)
+  // nullable, NO único: el proyecto de HubSpot al que sirve. Invariante: project.clientId == clientId
+  projectId        String?
+  project          Project?        @relation("ProyectosDeTareasDelProyecto", fields: [projectId], references: [id], onDelete: SetNull)
+  /// El orden de las secciones de su tablero. Agrupan, no son estados
+  secciones        String[]        @default([])
+  etiquetas        String[]        @default([])
+
+  /// mano | reunion | chat | plantilla
+  origen         String
+  // nullable porque null = lo propuso Nexus desde una reunión
+  creadoPorEmail String?
+  // nullable: la lectura que lo sugirió
+  lecturaId      String?
+  lectura        LecturaDeReunion?  @relation(fields: [lecturaId], references: [id], onDelete: SetNull)
+  // nullable: la reunión de origen. Se lee SOLO por el chokepoint
+  sessionId      String?
+  session        FirefliesSession?  @relation("ProyectosDeTareasDeLaReunion", fields: [sessionId], references: [id], onDelete: SetNull)
+  /// Las líneas literales que lo respaldan. Se ven con la regla de lib/tareas/serializar.ts
+  cita           String?            @db.Text
+  // nullable: de qué plantilla salió
+  plantillaId    String?
+  plantilla      PlantillaDeTareas? @relation("ProyectosDeLaPlantilla", fields: [plantillaId], references: [id], onDelete: SetNull)
+  /// «g:<lecturaId>:<grupo>» o «c:<turnoId>:<i>»: volver a leer o a aplicar no duplica
+  origenId       String?            @unique
+
+  /// Solo si nació propuesta: tal_cual | con_cambios | rechazada | misma | vencida
+  decision         String?
+  decididaPorEmail String?
+  decididaAt       DateTime?
+  motivo           String?
+
+  version     Int       @default(0)
+  archivadoAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tareas           Tarea[]
+  vinculos         TareaVinculo[]
+  eventos          TareaEvento[]
+  resultados       ResultadoDeSemana[]
+  plantillasHechas PlantillaDeTareas[] @relation("PlantillasDelProyecto")
+
+  @@index([espacioId, estado])
+  @@index([responsableEmail, estado])
+  @@index([clientId])
+  @@index([projectId])
+  @@index([lecturaId])
+  @@index([sessionId])
+  @@index([plantillaId])
+}
+
+/// Un plan que se repite («Onboarding en 30 días»): tareas con días hábiles relativos. Usarlo no gasta IA.
+model PlantillaDeTareas {
+  id              String            @id @default(cuid())
+  nombre          String
+  descripcion     String?           @db.Text
+  // nullable: el espacio del proyecto de origen; null = de toda la casa (solo lo pone un líder o un admin)
+  espacioId       String?
+  espacio         EspacioDeTareas?  @relation(fields: [espacioId], references: [id], onDelete: SetNull)
+  /// Días hábiles
+  duracionDias    Int
+  /// v1, validado con Zod: [{ref, titulo, dia, minutos?, prioridad?, seccion?, para, despuesDe?, etiquetas?}], tope 40
+  tareas          Json
+  // nullable: el proyecto del que salió
+  desdeProyectoId String?
+  desdeProyecto   ProyectoDeTareas? @relation("PlantillasDelProyecto", fields: [desdeProyectoId], references: [id], onDelete: SetNull)
+  creadaPorEmail  String
+  version         Int               @default(0)
+  archivadaAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  proyectos ProyectoDeTareas[] @relation("ProyectosDeLaPlantilla")
+
+  @@index([espacioId, archivadaAt])
+  @@index([desdeProyectoId])
+}
+
+/// Tarea interna: desde que alguien (o Nexus) la propone hasta que se cierra. Nunca llega al cliente ni al cronograma.
+model Tarea {
+  id        String   @id @default(cuid())
+  /// «T-128», como F-128 en Feedback
+  numero    Int      @unique @default(autoincrement())
+  titulo    String
+  /// Hash del texto normalizado ENTERO: solo iguala textos idénticos
+  huella    String
+  notas     String?  @db.Text
+  /// Lo escribe Nexus al GENERAR la tarea (reunión, conversación, chat): para qué, para quién y qué se espera. No se
+  /// edita (lo de la persona va en notas). El de una reunión se ve con la regla de la cita (lib/tareas/serializar.ts)
+  contexto  String?  @db.Text
+  /// [{texto, hecho}]: pasos de la misma persona (no son tareas)
+  pasos     Json?
+  etiquetas String[] @default([])
+  /// propuesta | pendiente | en_curso | hecha | no_se_hara | rechazada | fusionada | vencida
+  estado    String   @default("pendiente")
+  /// alta | media | baja
+  prioridad String   @default("media")
+  /// puesto | apoyo
+  tipo      String   @default("puesto")
+  /// «Solo para mí»: en el sprint cuenta como horas, sin título
+  privada   Boolean  @default(false)
+  /// La sección de su proyecto en el tablero. Agrupa, no es estado
+  seccion   String?
+  /// Orden a mano en una columna del tablero; null = por prioridad
+  orden     Float?
+
+  /// El sprint: el equipo de CASA del responsable; sin responsable, el de la lectura («Por asignar»)
+  equipo           String?
+  // nullable porque null = «Por asignar» del equipo, o «Sin responsable» del proyecto
+  responsableEmail String?
+  /// Lunes en hora CR, siempre por semanaDestino(); null = sin semana (más adelante, por asignar, pendiente del proyecto)
+  semana           DateTime? @db.Date
+  venceEl          DateTime? @db.Date
+  /// null = sin estimar: nunca se cuenta como 60
+  minutosEstimados Int?
+  /// Se escribe SOLO al pasar a hecha
+  completadaAt     DateTime?
+
+  // nullable: sin proyecto vive en el espacio de su equipo
+  proyectoId String?
+  proyecto   ProyectoDeTareas? @relation(fields: [proyectoId], references: [id], onDelete: Restrict)
+  // nullable: para quién. Denormalizado para filtrar y mudar
+  clientId   String?
+  client     Client?           @relation("TareasDelCliente", fields: [clientId], references: [id], onDelete: SetNull)
+  // nullable: el proyecto de HubSpot. Invariante: project.clientId == clientId
+  projectId  String?
+  project    Project?          @relation("TareasDelProyecto", fields: [projectId], references: [id], onDelete: SetNull)
+
+  /// mano | pedido | reunion | notas | chat | plantilla (no cambia: es la métrica «cómo entran»)
+  origen          String
+  // nullable porque null = la propuso Nexus
+  creadaPorEmail  String?
+  /// Quien la pidió o sugirió; en lo de otro equipo que sale de una reunión, quien leyó la reunión
+  pedidaPorEmail  String?
+  /// El equipo que la pidió, si no es el suyo
+  pedidaPorEquipo String?
+  /// Fuente externa o la reunión («Sprint planning de marketing»)
+  pedidaPorTexto  String?
+  // nullable: solo si salió de una lectura
+  lecturaId       String?
+  lectura         LecturaDeReunion? @relation(fields: [lecturaId], references: [id], onDelete: SetNull)
+  // nullable: la reunión de origen. Se lee SOLO por el chokepoint
+  sessionId       String?
+  session         FirefliesSession? @relation("TareasDeLaReunion", fields: [sessionId], references: [id], onDelete: SetNull)
+  /// Copia del título de la reunión, SIN enmascarar: lo enmascara serializar.ts al leer
+  origenTitulo    String?
+  /// La línea literal de la reunión. Se ve con la regla de serializar.ts
+  cita            String?           @db.Text
+  /// «l:<lectura>:<huella de la línea>» · «c:<turno>:<i>» · «p:<proyecto>:<ref>»: repetir no duplica
+  origenId        String?           @unique
+  // nullable: en una propuesta, la que Nexus cree que es; en una fusionada, en la que quedó
+  mismaQueId      String?
+  mismaQue        Tarea?            @relation("TareaMismaQue", fields: [mismaQueId], references: [id], onDelete: SetNull)
+
+  /// Solo propuestas: tal_cual | con_cambios | mas_adelante | rechazada | misma | retirada | vencida
+  decision         String?
+  /// correo | "sistema"
+  decididaPorEmail String?
+  decididaAt       DateTime?
+  motivo           String?
+
+  /// sin_agendar | agendada | ya_no_esta
+  agendaEstado       String    @default("sin_agendar")
+  /// El inicio del primer bloque
+  agendaInicio       DateTime?
+  /// [{calendario, eventoId, inicio, fin}]: calendario = correo de la dueña del bloque
+  agendaBloques      Json?
+  agendadaAt         DateTime?
+  agendaVerificadaAt DateTime?
+
+  /// PATCH con otra versión → 409
+  version     Int       @default(0)
+  /// Nada se borra
+  archivadaAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  igualesAEsta Tarea[]             @relation("TareaMismaQue")
+  bloqueaA     TareaRelacion[]     @relation("RelacionDesde")
+  bloqueadaPor TareaRelacion[]     @relation("RelacionHacia")
+  comentarios  TareaComentario[]
+  vinculos     TareaVinculo[]
+  eventos      TareaEvento[]
+  resultados   ResultadoDeSemana[]
+
+  @@index([responsableEmail, estado])
+  @@index([equipo, semana, estado])
+  @@index([proyectoId, estado])
+  @@index([clientId, completadaAt])
+  @@index([projectId])
+  @@index([pedidaPorEmail, estado])
+  @@index([creadaPorEmail])
+  @@index([sessionId])
+  @@index([mismaQueId])
+  @@index([lecturaId])
+  @@index([huella])
+}
+
+/// Relación entre dos tareas: bloquea (desde bloquea a hacia; sin ciclos) o relacionada. Pivote N:N.
+model TareaRelacion {
+  desdeId        String
+  desde          Tarea    @relation("RelacionDesde", fields: [desdeId], references: [id], onDelete: Cascade)
+  haciaId        String
+  hacia          Tarea    @relation("RelacionHacia", fields: [haciaId], references: [id], onDelete: Cascade)
+  /// bloquea | relacionada (par ordenado desdeId < haciaId)
+  tipo           String
+  creadaPorEmail String
+  createdAt      DateTime @default(now())
+
+  @@id([desdeId, haciaId, tipo])
+  @@index([haciaId])
+}
+
+/// Un comentario en una tarea. Lo ve quien ve la tarea. No se borra: se archiva.
+model TareaComentario {
+  id          String    @id @default(cuid())
+  tareaId     String
+  tarea       Tarea     @relation(fields: [tareaId], references: [id], onDelete: Restrict)
+  autorEmail  String
+  /// Tope 4.000 caracteres
+  cuerpo      String    @db.Text
+  editadoAt   DateTime?
+  archivadoAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([tareaId, createdAt])
+}
+
+/// Un registro vinculado a una tarea o a un proyecto: algo de HubSpot, una propuesta comercial o una preventa. No sincroniza.
+model TareaVinculo {
+  id                      String              @id @default(cuid())
+  // dueño: exactamente uno de tareaId y proyectoId
+  tareaId                 String?
+  tarea                   Tarea?              @relation(fields: [tareaId], references: [id], onDelete: Cascade)
+  proyectoId              String?
+  proyecto                ProyectoDeTareas?   @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  /// El portal SIEMPRE explícito (lib/hubspot/urls.ts)
+  hubspotPortalId         String?
+  /// 0-1 contacto · 0-2 empresa · 0-3 negocio · 0-5 ticket · 0-970 proyecto · 2-… propio
+  hubspotObjeto           String?
+  externalHubspotRecordId String?
+  // nullable: propuesta comercial
+  businessCaseId          String?
+  businessCase            BusinessCase?       @relation("VinculosDeTareasDeLaPropuesta", fields: [businessCaseId], references: [id], onDelete: Cascade)
+  // nullable: preventa, solo DE_LA_PREVENTA
+  exploracionId           String?
+  exploracion             ExploracionDeVenta? @relation("VinculosDeTareasDeLaPreventa", fields: [exploracionId], references: [id], onDelete: Cascade)
+  /// FOTO del nombre al vincular; sin correo ni teléfono
+  etiqueta                String
+  /// FOTO: tipo y etapa, sin montos
+  detalle                 String?
+  /// cliente | ninguno | ambiguo | pendiente: solo «cliente» se muestra fuera de quien ve toda la cartera
+  empresaResuelta         String              @default("pendiente")
+  // nullable: la empresa del registro, resuelta al vincular
+  clientId                String?
+  client                  Client?             @relation("VinculosDeTareasDelCliente", fields: [clientId], references: [id], onDelete: SetNull)
+  // nullable: si es un 0-970 espejado en Nexus
+  projectId               String?
+  project                 Project?            @relation("VinculosDeTareasDelProyecto", fields: [projectId], references: [id], onDelete: SetNull)
+  fotoAt                  DateTime            @default(now())
+  /// HubSpot respondió 404 al refrescar
+  ausenteAt               DateTime?
+  creadoPorEmail          String
+  createdAt               DateTime            @default(now())
+
+  @@index([tareaId])
+  @@index([proyectoId])
+  @@index([hubspotObjeto, externalHubspotRecordId])
+  @@index([clientId])
+  @@index([projectId])
+  @@index([businessCaseId])
+  @@index([exploracionId])
+}
+
+/// Bitácora de solo agregar de una tarea o de un proyecto. La escribe SOLO lib/tareas/mutaciones.ts, en la misma transacción.
+model TareaEvento {
+  id         String            @id @default(cuid())
+  // exactamente uno de tareaId y proyectoId
+  tareaId    String?
+  tarea      Tarea?            @relation(fields: [tareaId], references: [id], onDelete: Restrict)
+  proyectoId String?
+  proyecto   ProyectoDeTareas? @relation(fields: [proyectoId], references: [id], onDelete: Restrict)
+  /// propuesta | creada | editada | asignada | no_es_mia | estado | semana | decidida | mencionada | proyecto | dependencia | vinculo | agenda | sugerido_cierre | revisada | cierre_corregido
+  tipo       String
+  /// correo | "sistema" | "agente"
+  porEmail   String
+  // nullable: la reunión de una mención o de una sugerencia de cierre
+  sessionId  String?
+  session    FirefliesSession? @relation("EventosDeTareasDeLaReunion", fields: [sessionId], references: [id], onDelete: SetNull)
+  /// La línea de esa reunión: columna propia, NUNCA dentro de datos
+  cita       String?           @db.Text
+  /// { campo, desde, hacia, nombreDicho?, linea? }: sin citas ni texto de reuniones
+  datos      Json
+  createdAt  DateTime          @default(now())
+
+  @@index([tareaId, createdAt])
+  @@index([proyectoId, createdAt])
+  @@index([porEmail])
+  @@index([sessionId])
+}
+
+/// Qué pasó con una tarea en una semana: la revisión, el contador de pases y las métricas. La escribe SOLO anotarResultado().
+model ResultadoDeSemana {
+  tareaId           String
+  tarea             Tarea             @relation(fields: [tareaId], references: [id], onDelete: Restrict)
+  semana            DateTime          @db.Date
+  /// foto: el sprint de esa semana
+  equipo            String?
+  /// foto
+  responsableEmail  String?
+  /// foto: el id del cliente como texto, SIN FK a propósito: si el cliente se borra, el pasado no cambia
+  fotoCliente       String?
+  fotoClienteNombre String?
+  /// foto: cliente | prospecto | aliado | interno | sin_clasificar
+  fotoAmbito        String
+  /// «Interno · SmartAgro»
+  fotoAmbitoNombre  String?
+  // nullable: foto del proyecto de tareas
+  proyectoId        String?
+  proyecto          ProyectoDeTareas? @relation(fields: [proyectoId], references: [id], onDelete: Restrict)
+  /// foto: un «sigue» con venceEl posterior al viernes de esa semana no cuenta como pase
+  venceEl           DateTime?         @db.Date
+  /// hecha | pasa | mas_adelante | no_se_hara
+  resultado         String
+  /// correo | "sistema"
+  decididoPor       String
+  decididoAt        DateTime          @default(now())
+  /// foto
+  minutosEstimados  Int?
+
+  @@id([tareaId, semana])
+  @@index([equipo, semana])
+  @@index([responsableEmail, semana])
+  @@index([fotoCliente, semana])
+  @@index([proyectoId, semana])
+}
+
+/// La revisión de la semana de UNA persona. La escribe ella, su líder o el sistema.
+model CierreDeSemana {
+  id           String   @id @default(cuid())
+  personaEmail String
+  semana       DateTime @db.Date
+  /// la misma persona | su líder | "sistema"
+  cerradaPor   String
+  cerradaAt    DateTime @default(now())
+
+  @@unique([personaEmail, semana])
+  @@index([semana])
+}
+
+/// Cada reunión (o texto pegado) se lee UNA vez para tareas.
+model LecturaDeReunion {
+  id              String            @id @default(cuid())
+  // nullable porque en la fase 2 se pueden pegar notas
+  sessionId       String?           @unique
+  session         FirefliesSession? @relation("LecturaDeLaReunion", fields: [sessionId], references: [id], onDelete: Cascade)
+  /// Solo sin sessionId: notas pegadas o un documento subido (fase 2)
+  texto           String?           @db.Text
+  /// Huella del transcript normalizado, o del resumen; null con menos de 200 caracteres
+  huellaTexto     String?
+  // nullable: la lectura gemela que sí se leyó
+  copiaDeId       String?
+  copiaDe         LecturaDeReunion? @relation("LecturaCopia", fields: [copiaDeId], references: [id], onDelete: SetNull)
+  // nullable: la fuente que la disparó, desde 1C
+  fuenteId        String?
+  fuente          FuenteDeTareas?   @relation(fields: [fuenteId], references: [id], onDelete: SetNull)
+  /// El de la lectura: recibe «Por asignar» y figura como «pedida por» en lo de otros equipos
+  equipo          String
+  /// planning | cierre | ambos
+  rol             String
+  /// A dónde van las propuestas
+  semana          DateTime          @db.Date
+  /// Solo en cierre o ambos
+  semanaQueCierra DateTime?         @db.Date
+  /// en_espera | leyendo | lista | sin_texto | copia | error | sin_ia
+  estado          String            @default("leyendo")
+  procesarDesde   DateTime?
+  intentos        Int               @default(0)
+  /// Más de 10 min leyendo = colgada
+  leyendoDesde    DateTime?
+  /// codigo | haiku | transcript | sin_ia
+  modo            String?
+  /// false en lo retroactivo de más de 7 días, salvo «Avisar igual»
+  avisar          Boolean           @default(true)
+  // nullable: null = automática
+  pedidaPorEmail  String?
+  // nullable: la corrida del modelo, si hizo falta
+  agentRunId      String?
+  agentRun        AgentRun?         @relation("LecturasDeTareasDelAgente", fields: [agentRunId], references: [id], onDelete: SetNull)
+  /// { lineas, propuestas, proyectos, preguntas, omitidas }: sale SOLO por serializar.ts
+  resumen         Json?
+  error           String?           @db.Text
+  leidaAt         DateTime?
+  // ── La lectura de SEGUIMIENTO de la misma reunión (memoria de la cuenta, etapa 2) ──
+  // Una fila, una pasada, dos salidas: `estado` es la salida de Tareas; estas 5 columnas, la del seguimiento
+  // (lib/lecturas/cola.ts las escribe; SQL scripts/sql/2026-10-10-lectura-de-seguimiento.sql).
+  /// en_espera | leyendo | lista | sin_texto | copia | error | omitida; null = el seguimiento no la leyó
+  seguimientoEstado   String?
+  /// en_espera: desde cuándo se puede tomar; leyendo: desde cuándo se lee
+  seguimientoDesde    DateTime?
+  seguimientoIntentos Int       @default(0)
+  seguimientoLeidaAt  DateTime?
+  seguimientoError    String?   @db.Text
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  copias    LecturaDeReunion[] @relation("LecturaCopia")
+  tareas    Tarea[]
+  proyectos ProyectoDeTareas[]
+  hechos    HechoDeReunion[]   @relation("HechosDeLaLectura") // memoria de la cuenta, etapa 6 (SET NULL)
+
+  @@index([estado, procesarDesde])
+  @@index([seguimientoEstado, seguimientoDesde])
+  @@index([huellaTexto])
+  @@index([pedidaPorEmail, createdAt])
+  @@index([copiaDeId])
+  @@index([fuenteId])
+  @@index([agentRunId])
+}
+
+// Un HECHO que dejó una reunión (memoria de la cuenta, etapa 6; DECISIONS «Hechos, enrutador y novedades»): una frase
+// con su cita literal verificada, de la cuenta o de un proyecto vinculado, con su tipo y su estado. Lo escribe SOLO
+// lib/seguimiento/hechos-server.ts; el enrutador (lib/seguimiento/enrutador.ts) decide a dónde va. Tipos y estados como
+// TEXT con CHECK (scripts/sql/2026-10-10-hechos-de-reunion.sql; los valores, lib/seguimiento/hechos/tipos.ts y
+// estado.ts). ⛔ Nunca cruza a nada que vea el cliente (lib/seguimiento/hechos-internos.test.ts). INV45: todo hecho es
+// del cliente de su reunión.
+model HechoDeReunion {
+  id               String            @id @default(cuid())
+  // nullable porque un hecho puede salir de un texto sumado a mano, sin reunión: entonces lo ata `lecturaId` (CHECK)
+  sessionId        String?
+  session          FirefliesSession? @relation("HechosDeLaReunion", fields: [sessionId], references: [id], onDelete: Cascade)
+  // nullable: la fila de la cola (LecturaDeReunion); se puede rehacer o borrar sin perder lo aprendido
+  lecturaId        String?
+  lectura          LecturaDeReunion? @relation("HechosDeLaLectura", fields: [lecturaId], references: [id], onDelete: SetNull)
+  // nullable: la corrida «seguimiento-hechos» que lo escribió; borrarla no borra el hecho
+  agentRunId       String?
+  agentRun         AgentRun?         @relation("HechosDelAgente", fields: [agentRunId], references: [id], onDelete: SetNull)
+  /// El dueño de la reunión al leerla (`resolvedClientId`, el manual solo si no hay). INV45 lo vigila.
+  clientId         String
+  client           Client            @relation("HechosDelCliente", fields: [clientId], references: [id], onDelete: Cascade)
+  // nullable: null = de la cuenta; si no, un proyecto vinculado a la reunión (incluido) del mismo cliente
+  projectId        String?
+  project          Project?          @relation("HechosDelProyecto", fields: [projectId], references: [id], onDelete: SetNull)
+  /// cuenta | persona | acuerdo | resultado | proceso_hoy | queja | riesgo | senal_cronograma | senal_etapa
+  tipo             String
+  /// Solo en un acuerdo: pipeline | propiedades | integracion | automatizacion | conversaciones | proceso_despues | alcance
+  tema             String?
+  frase            String            @db.Text
+  /// La frase de la reunión, tal cual (verificada contra lo que se leyó). Puede traer lo dicho puertas adentro: interna.
+  cita             String            @db.Text
+  /// transcripcion | notas | texto
+  citaFuente       String
+  /// cliente | smarteam; null = no se sabe (una cita de las notas)
+  quien            String?
+  /// baja | media | alta (solo en una queja o un riesgo)
+  gravedad         String?
+  /// El tipo, el tema y las palabras con contenido: el mismo hecho dicho en dos reuniones tiene la misma
+  huella           String
+  // nullable: el mismo hecho dicho antes y todavía pendiente; este no se vuelve a mandar a ningún lado
+  mismoQueId       String?
+  mismoQue         HechoDeReunion?   @relation("HechoRepetido", fields: [mismoQueId], references: [id], onDelete: SetNull)
+  // nullable: el acuerdo viejo que este reemplaza; reemplazar lo confirma una persona (acuerdos vigentes)
+  reemplazaAId     String?
+  reemplazaA       HechoDeReunion?   @relation("HechoReemplazado", fields: [reemplazaAId], references: [id], onDelete: SetNull)
+  /// [{ clave, estado: pendiente | usado | desestimado | delegado, ref?, decididoPorEmail?, decididoAt?, nota? }]
+  destinos         Json              @default("[]")
+  /// pendiente | usado | desestimado (el general; «vencido» se calcula a los 30 días)
+  estado           String            @default("pendiente")
+  decididoPorEmail String?
+  decididoAt       DateTime?
+  nota             String?           @db.Text
+  fechaDeLaReunion DateTime
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  repetidos      HechoDeReunion[] @relation("HechoRepetido")
+  reemplazadoPor HechoDeReunion[] @relation("HechoReemplazado")
+
+  @@index([clientId, estado, createdAt])
+  @@index([projectId, estado])
+  @@index([sessionId])
+  @@index([lecturaId])
+  @@index([agentRunId])
+  @@index([clientId, huella])
+  @@index([mismoQueId])
+  @@index([reemplazaAId])
+}
+
+/// Una reunión recurrente que Nexus lee cada semana (desde 1C). Sin filas, nada se lee solo.
+model FuenteDeTareas {
+  id            String   @id @default(cuid())
+  /// null = fuente personal («súmala para mí»)
+  equipo        String?
+  /// El job lee COMO esta persona
+  duenoEmail    String
+  /// Base del googleEventId (antes del «_»)
+  serie         String
+  /// Título normalizado: respaldo si la serie cambia o se duplica
+  titulo        String
+  /// planning | cierre | ambos
+  rol           String
+  /// 1 = lunes: el job solo consulta en su ventana
+  diaSemana     Int?
+  /// «10:30», hora CR
+  finHora       String?
+  /// false = pausada
+  activa        Boolean  @default(true)
+  pausadaMotivo String?
+  createdAt     DateTime @default(now())
+
+  lecturas LecturaDeReunion[]
+
+  @@index([serie])
 }

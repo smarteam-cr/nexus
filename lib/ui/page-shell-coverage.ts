@@ -22,6 +22,12 @@ export type ShellDecl =
 export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   // ── Índices con constante (el estándar) ─────────────────────────────────────
   "para-ti": { shell: "SHELL_DEFAULT" },
+  tareas: { shell: "SHELL_DEFAULT" },
+  "tareas/equipo": { shell: "SHELL_DEFAULT" },
+  "tareas/delegadas": { shell: "SHELL_DEFAULT" },
+  "tareas/por-cliente": { shell: "SHELL_DEFAULT" },
+  "tareas/proyectos/[id]": { shell: "SHELL_DEFAULT" },
+  "tareas/espacios/[id]": { shell: "SHELL_DEFAULT" },
   audits: { shell: "SHELL_DEFAULT" },
   "business-cases": { shell: "SHELL_DEFAULT" },
   clients: { shell: "SHELL_DEFAULT" },
@@ -33,6 +39,8 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "customer-success/carga/supuestos": { shell: "SHELL_DEFAULT" },
   "customer-success/carga/datos": { shell: "SHELL_DEFAULT" },
   "customer-success/rentabilidad": { shell: "SHELL_DEFAULT" },
+  "customer-success/rentabilidad/cuenta/[clientId]": { shell: "SHELL_DEFAULT" },
+  "tu-carga": { shell: "SHELL_DEFAULT" },
   "finanzas/pendientes": { shell: "SHELL_DEFAULT" },
   "finanzas/conciliacion": { shell: "SHELL_DEFAULT" },
   "finanzas/integraciones": { shell: "SHELL_DEFAULT" },
@@ -44,6 +52,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "finanzas/tarjetas": { shell: "SHELL_DEFAULT" },
   "finanzas/caja-neta": { shell: "SHELL_DEFAULT" },
   "finanzas/tipo-de-cambio": { shell: "SHELL_DEFAULT" },
+  "finanzas/modelo-de-comisiones": { shell: "SHELL_DEFAULT" },
   "finanzas/equilibrio": { shell: "SHELL_DEFAULT" },
   "finanzas/costos": { shell: "SHELL_DEFAULT" },
   "finanzas/costos/herramientas": { shell: "SHELL_DEFAULT" },
@@ -65,7 +74,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   escala: { shell: "SHELL_DEFAULT" },
   "escala/[area]": { shell: "SHELL_DEFAULT" },
   "escala/borrador": { shell: "SHELL_DEFAULT" },
-  "escala/borrador": { shell: "SHELL_DEFAULT" },
+  "escala/borrador/[area]": { shell: "SHELL_DEFAULT" },
   "escala/comentarios": { custom: "redirect a /feedback: los comentarios de la escala se deciden ahí (2026-10-05)" },
   feedback: { shell: "SHELL_DEFAULT" },
 

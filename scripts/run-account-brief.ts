@@ -7,6 +7,7 @@
  *     contexto serializado + fuentes (sin llamar a Claude)
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { prisma } from "../lib/db/prisma";
 import { buildAccountBriefContext, runAccountBrief } from "../lib/cs/account-brief";
 

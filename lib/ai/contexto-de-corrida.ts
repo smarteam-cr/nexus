@@ -33,6 +33,12 @@ export interface ContextoDeCorrida {
   triggeredByEmail?: string | null;
   /** Etiqueta libre del sitio que llama, para los caminos sin agente ni corrida. */
   origen?: string | null;
+  /**
+   * La reunión cuya lectura disparó la llamada (memoria de la cuenta, etapa 2). La pone `conLaReunion` UNA vez, arriba
+   * de toda la lectura, y cada sitio de adentro sigue poniendo su `origen`: el medidor guarda los dos juntos
+   * (`origenDeLaFila`). Así se suma lo que cuesta cada reunión sin una columna nueva en `LlmCall`.
+   */
+  reunionId?: string | null;
 }
 
 const almacen = new AsyncLocalStorage<ContextoDeCorrida>();
@@ -47,6 +53,42 @@ const almacen = new AsyncLocalStorage<ContextoDeCorrida>();
 export function conContextoDeIA<T>(ctx: ContextoDeCorrida, fn: () => T): T {
   const previo = almacen.getStore();
   return almacen.run({ ...previo, ...ctx }, fn);
+}
+
+/**
+ * Corre `fn` atribuido a la reunión `sessionId`: toda llamada a Claude de adentro (la lectura, el clasificador, el
+ * avance, la ficha, la etapa, la preventa…) queda en `LlmCall` con `origen = "reunion:<sessionId> › <sitio>"`.
+ * ⚠ Hay que envolver también lo que corre DESPUÉS en segundo plano: el contexto viaja por la cadena de await que nace
+ * adentro, no por una función que alguien llame afuera.
+ */
+export function conLaReunion<T>(sessionId: string, fn: () => T): T {
+  return almacen.run({ ...almacen.getStore(), reunionId: sessionId }, fn);
+}
+
+/** El prefijo que lleva el `origen` de toda llamada que disparó la lectura de una reunión. */
+export const PREFIJO_DE_LA_REUNION = "reunion:";
+/** El separador entre la reunión y el sitio que llamó (el mismo que ya usa el avance: «sessions/post-process › avance»). */
+export const SEPARADOR_DEL_ORIGEN = " › ";
+
+/**
+ * El `origen` que se guarda en `LlmCall`: el del sitio, o `reunion:<sessionId> › <sitio>` si la llamada la disparó la
+ * lectura de una reunión (`reunion:<sessionId>` solo, si el sitio no dijo nada). Para sumar por reunión:
+ * `split_part(origen, ' ', 1)` en SQL, o `reunionDelOrigen` acá.
+ */
+export function origenDeLaFila(ctx: ContextoDeCorrida | undefined): string | null {
+  const sitio = ctx?.origen ?? null;
+  if (!ctx?.reunionId) return sitio;
+  const reunion = `${PREFIJO_DE_LA_REUNION}${ctx.reunionId}`;
+  return sitio ? `${reunion}${SEPARADOR_DEL_ORIGEN}${sitio}` : reunion;
+}
+
+/** La reunión de un `origen` guardado, o null si la llamada no la disparó la lectura de una reunión. */
+export function reunionDelOrigen(origen: string | null | undefined): string | null {
+  if (!origen || !origen.startsWith(PREFIJO_DE_LA_REUNION)) return null;
+  const resto = origen.slice(PREFIJO_DE_LA_REUNION.length);
+  const fin = resto.indexOf(" ");
+  const id = fin === -1 ? resto : resto.slice(0, fin);
+  return id || null;
 }
 
 /** El contexto vigente, o `undefined` si nadie envolvió. Nunca lanza. */

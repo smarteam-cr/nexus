@@ -73,6 +73,14 @@ describe("las variantes del botón no pueden volver al lado del cliente", () => 
  * coló el defecto— y falla si alguno de esos nombres se INVOCA.
  */
 describe("ningún Server Component usa un valor del lado del cliente", () => {
+  /* Memos del escaneo (2026-10-10). El mismo barril (`@/components/ui`) lo importan cientos de
+     componentes de servidor y sin memo se volvía a resolver y a leer entero en cada import: solo
+     tardaba ~2,5 s y, con la suite completa corriendo junto a tsc y eslint, pasaba los 5 s de vitest.
+     Los memos no cambian lo que se mira: la profundidad va en la clave de `exportsDeCliente` (a
+     profundidad 3 se corta), así cada respuesta es la misma que sin memo. */
+  const memoModulos = new Map<string, string | null>();
+  const memoExports = new Map<string, Set<string>>();
+
   function resolverModulo(desde: string, spec: string): string | null {
     const base = spec.startsWith("@/")
       ? join(RAIZ, spec.slice(2))
@@ -80,18 +88,34 @@ describe("ningún Server Component usa un valor del lado del cliente", () => {
         ? join(desde, "..", spec)
         : null;
     if (!base) return null; // paquete de node_modules: no es asunto nuestro
+    const visto = memoModulos.get(base);
+    if (visto !== undefined) return visto;
+    let hallado: string | null = null;
     for (const cand of [`${base}.tsx`, `${base}.ts`, join(base, "index.tsx"), join(base, "index.ts")]) {
       try {
-        if (statSync(cand).isFile()) return cand;
+        if (statSync(cand).isFile()) {
+          hallado = cand;
+          break;
+        }
       } catch {
         /* no existe: seguir probando */
       }
     }
-    return null;
+    memoModulos.set(base, hallado);
+    return hallado;
   }
 
-  /** Los nombres que un módulo entrega y que nacen en un archivo "use client". */
+  /** Los nombres que un módulo entrega y que nacen en un archivo "use client". Solo se leen. */
   function exportsDeCliente(archivo: string, profundidad = 0): Set<string> {
+    const clave = `${archivo}|${profundidad}`;
+    const visto = memoExports.get(clave);
+    if (visto) return visto;
+    const calculado = calcularExportsDeCliente(archivo, profundidad);
+    memoExports.set(clave, calculado);
+    return calculado;
+  }
+
+  function calcularExportsDeCliente(archivo: string, profundidad: number): Set<string> {
     const out = new Set<string>();
     if (profundidad > 2) return out;
     let src: string;

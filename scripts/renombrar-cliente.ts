@@ -26,6 +26,7 @@
  *   ALLOW_PROD_WRITE=1 npx tsx scripts/renombrar-cliente.ts --cliente "…" --nombre "…" --apply
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { categorizeSession, buildInternalDomainsSet, computeAmbiguousNameTokens } from "@/lib/sessions/categorize";

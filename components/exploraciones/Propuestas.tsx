@@ -10,7 +10,8 @@
  * está confirmado al lado. Lo descartado no vuelve (queda su lápida).
  */
 import { useState } from "react";
-import { BotonAzul, BotonTexto, IconoDeSugerencia } from "./FranjaDeSugerencias";
+import { BotonTexto } from "./FranjaDeSugerencias";
+import { BotonUsar, FilaSugerida as FilaSugeridaDelSistema } from "@/components/ui/sistema";
 import {
   ETIQUETA_DE_LA_OBJECION,
   ETIQUETA_DEL_CANAL,
@@ -164,20 +165,19 @@ export function DeDondeSale({ item }: { item: ItemPropuesto }) {
   );
 }
 
-/** Una sugerencia: una fila azul con su texto, su origen en una línea, «Descartar» y «Usar». */
+/** Una sugerencia: una fila azul con su texto, su origen en una línea, «Descartar» y «Usar» (la forma vive en el sistema). */
 export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; texto?: React.ReactNode; destino?: string }) {
   const { escala, nombreDeNivel, cambiar, puedeEditar, guardando } = useLienzo();
   const [abierta, setAbierta] = useState(false);
   const origen = origenEnUnaLinea(item);
   const hayMas = !!item.razon || item.fuentes.length > 1 || (origen.cita?.length ?? 0) > 70;
   return (
-    <li data-recorrido="preventa.sugerencia" className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface py-2.5 pl-3 pr-2.5">
-      <IconoDeSugerencia className="mt-[3px] h-[15px] w-[15px] flex-shrink-0 text-brand" />
-      <div className="min-w-0 flex-1">
-        {destino && <p className="text-2xs font-semibold text-brand">{destino}</p>}
-        <p className="text-sm leading-[1.45] text-fg">{texto ?? describirPropuesta(item, escala, nombreDeNivel)}</p>
-        {(origen.etiqueta || hayMas) && (
-          <p className="mt-0.5 flex min-w-0 items-baseline gap-1 text-xs text-fg-muted">
+    <FilaSugeridaDelSistema
+      dataRecorrido="preventa.sugerencia"
+      encima={destino}
+      origen={
+        origen.etiqueta || hayMas ? (
+          <>
             <span className="min-w-0 truncate">
               {origen.etiqueta}
               {origen.cita && <span className="italic"> · «{origen.cita}»</span>}
@@ -187,25 +187,26 @@ export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; te
                 {abierta ? "ocultar" : "ver de dónde sale"}
               </button>
             )}
-          </p>
-        )}
-        {abierta && <DeDondeSale item={item} />}
-      </div>
-      {puedeEditar && (
-        <div className="flex flex-shrink-0 items-center gap-1">
-          <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
-            Descartar
-          </BotonTexto>
-          <BotonAzul
-            className="px-[11px] py-[5px]"
-            disabled={guardando}
-            onClick={() => void cambiar([{ op: "usar", itemId: item.id, valor: item.valor }], { refrescar: item.destino.tipo === "edicion" || item.destino.tipo === "perfil" })}
-          >
-            Usar
-          </BotonAzul>
-        </div>
-      )}
-    </li>
+          </>
+        ) : undefined
+      }
+      debajo={abierta ? <DeDondeSale item={item} /> : undefined}
+      acciones={
+        puedeEditar ? (
+          <>
+            <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
+              Descartar
+            </BotonTexto>
+            <BotonUsar
+              disabled={guardando}
+              onClick={() => void cambiar([{ op: "usar", itemId: item.id, valor: item.valor }], { refrescar: item.destino.tipo === "edicion" || item.destino.tipo === "perfil" })}
+            />
+          </>
+        ) : undefined
+      }
+    >
+      {texto ?? describirPropuesta(item, escala, nombreDeNivel)}
+    </FilaSugeridaDelSistema>
   );
 }
 

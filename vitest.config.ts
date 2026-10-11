@@ -5,7 +5,9 @@
  *   integration: **·*.int.test.ts — contra la DB de TEST (Postgres Docker
  *                local / service container en CI; NUNCA prod). Cargan .env.test
  *                vía test/setup.integration.ts, serial (fileParallelism off)
- *                porque comparten la DB (truncate+seed por test).
+ *                porque comparten la DB (truncate+seed por test). Antes de
+ *                todo, test/global-setup.integration.ts la pone al día con los
+ *                scripts/sql posteriores al baseline.
  *
  * El alias @/ se resuelve desde tsconfig.json vía resolve.tsconfigPaths
  * (soporte nativo de Vite — cero duplicación de paths).
@@ -32,6 +34,9 @@ export default defineConfig({
           environment: "node",
           include: ["lib/**/*.int.test.ts", "app/**/*.int.test.ts", "test/**/*.int.test.ts"],
           setupFiles: ["./test/setup.integration.ts"],
+          // Antes de todo: aplica a nexus_test los scripts/sql posteriores al baseline (una base atrasada
+          // hace fallar los tests con «la columna X no existe», que parece un bug del código).
+          globalSetup: ["./test/global-setup.integration.ts"],
           fileParallelism: false,
         },
       },

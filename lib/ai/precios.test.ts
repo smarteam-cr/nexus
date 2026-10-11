@@ -141,12 +141,15 @@ describe("Sonnet 5 y Sonnet 4.5 tienen tarifa (C-01)", () => {
   });
 });
 
-describe("los cuatro caminos que más gastaban sin dueño salen atribuidos (C-01)", () => {
+describe("los caminos que gastaban sin dueño salen atribuidos (C-01 y Etapa 0 de la memoria)", () => {
   /**
    * Hasta el 2026-09-04 solo el runner de /analyze envolvía sus llamadas con `conContextoDeIA`: el
    * post-proceso de sesiones, el clasificador, el vigilante y el agente de canvas emitían filas de
    * LlmCall con agente, cliente y humano en null — y sin humano no se puede saber contra qué
    * presupuesto cobrar. Cada uno declara ahora `triggeredByEmail` a propósito (null = automático).
+   * ACTUALIZADA (2026-10-09, Memoria de la cuenta · Etapa 0): el agente de canvas se retiró (se
+   * borró update-agent.ts), y entran el avance del cronograma —el hueco que gastaba sin nombre— y
+   * el análisis de ventas de /sales.
    */
   const RAIZ = process.cwd();
   const sinComentarios = (src: string) =>
@@ -155,7 +158,8 @@ describe("los cuatro caminos que más gastaban sin dueño salen atribuidos (C-01
     "lib/sessions/post-process.ts",
     "lib/sessions/classify-session-project.ts",
     "lib/cs/watchdog.ts",
-    "lib/canvas/update-agent.ts",
+    "lib/timeline/regenerate-progress.ts",
+    "app/api/sales/analyze/route.ts",
   ];
 
   it("cada llamada a Claude de esos archivos está adentro de conContextoDeIA, con triggeredByEmail explícito", () => {

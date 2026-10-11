@@ -4,14 +4,14 @@
  * Pide `ventas.write`.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardPermission } from "@/lib/auth/api-guards";
+import { guardDeLaExploracion } from "@/lib/exploraciones/guardia";
 import { borrarDocumento } from "@/lib/exploraciones/documentos";
 
 type Ctx = { params: Promise<{ id: string; documentoId: string }> };
 
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const { id, documentoId } = await params;
-  const guard = await guardPermission("preventa", "write");
+  const guard = await guardDeLaExploracion(id, "write");
   if (guard instanceof NextResponse) return guard;
   const ok = await borrarDocumento(id, documentoId);
   if (!ok) return NextResponse.json({ error: "Ese documento ya no está." }, { status: 404 });

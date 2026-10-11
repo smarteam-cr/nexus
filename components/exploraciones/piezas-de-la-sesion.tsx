@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { CASILLAS_DEL_RESUMEN, definicionDe, type ClaveDeCasilla } from "@/lib/exploraciones/casillas";
+import { definicionEnElMarco, esTarjeta, MARCO_DE_VENTA, type Marco } from "@/lib/exploraciones/marco";
 import type { Operacion } from "@/lib/exploraciones/contenido";
 import { aFecha, conEspaciosComunes, diaCorto, hoyEnCostaRica } from "@/lib/exploraciones/fechas";
 import {
@@ -28,7 +28,6 @@ import {
 import type { EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
 import { NivelChip } from "./QueVaPrimero";
-import { LETRA_DEL_MARCO } from "./Resumen";
 import { nuevoIdDeSesion, useSesiones } from "./useSesiones";
 
 /** «jueves 8 oct»: el día de la semana, como en el tablero. */
@@ -78,9 +77,9 @@ export function Tarjeta({
   );
 }
 
-/** El nombre de lo que pregunta una pregunta: la tarjeta del marco o la dimensión. */
-export function nombreDelPara(para: string, escala: EscalaDelLienzo): string {
-  if ((CASILLAS_DEL_RESUMEN as readonly string[]).includes(para)) return definicionDe(para as ClaveDeCasilla).etiqueta;
+/** El nombre de lo que pregunta una pregunta: la tarjeta del marco (con su nombre en ese marco) o la dimensión. */
+export function nombreDelPara(para: string, escala: EscalaDelLienzo, marco: Marco = MARCO_DE_VENTA): string {
+  if (esTarjeta(para)) return definicionEnElMarco(para, marco).etiqueta;
   return escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === para)?.nombre ?? para;
 }
 
@@ -89,17 +88,17 @@ export function nombreDelPara(para: string, escala: EscalaDelLienzo): string {
  * para ella) sobre lo que falta HOY; una que ya pasó, la que se guardó para ella, tal como se armó.
  */
 export function useGuiaDeLaSesion(pestana: PestanaDeSesion, esLaProxima: boolean) {
-  const { exp, escala, mapa } = useLienzo();
+  const { exp, escala, mapa, marco } = useLienzo();
   const { todas } = useSesiones();
   const e = exp.estado;
   const guardada = pestana.sesion ? (e.propuesta.guias[pestana.sesion.id] ?? null) : null;
   const guia = guardada ?? (esLaProxima ? e.propuesta.guia : null);
-  const foco = focoDeLaGuia(e.contenido.casillas, escala, e.areas, mapa.posiciones, e.contenido.aExplorar);
+  const foco = focoDeLaGuia(e.contenido.casillas, escala, e.areas, mapa.posiciones, e.contenido.aExplorar, marco);
   const procedencias = procedenciasDeLaSesion(pestana, todas);
   const preguntas: PreguntaParaMostrar[] = esLaProxima
-    ? preguntasParaMostrar(guia, foco.huecos, foco.enfoque, escala, procedencias)
+    ? preguntasParaMostrar(guia, foco.huecos, foco.enfoque, escala, procedencias, marco)
     : guia
-      ? preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, procedencias)
+      ? preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, procedencias, marco)
       : [];
   return { guia, foco, procedencias, preguntas, enOrden: ordenDeLaConversacion(preguntas) };
 }
@@ -111,6 +110,7 @@ export function useGuiaDeLaSesion(pestana: PestanaDeSesion, esLaProxima: boolean
  * no se entendía).
  */
 export function EtiquetaDePregunta({ p }: { p: PreguntaParaMostrar }) {
+  const { marco } = useLienzo();
   const lado = ladoDeLaPregunta(p);
   const para = p.apunta?.para ?? p.para;
   const base = "flex h-[26px] min-w-[26px] flex-none items-center justify-center rounded-[7px] px-1 text-[11px] font-bold";
@@ -123,7 +123,15 @@ export function EtiquetaDePregunta({ p }: { p: PreguntaParaMostrar }) {
       </span>
     );
   }
-  const letra = lado === "dimension" ? para : (LETRA_DEL_MARCO[para as keyof typeof LETRA_DEL_MARCO]?.letra ?? para.charAt(0).toUpperCase());
+  // Lo vendido (solo en un proyecto): una «V» neutra, para no confundirse con el marco ni con la escala.
+  if (lado === "vendido") {
+    return (
+      <span className={cn(base, "bg-surface-hover text-fg")} title="Lo vendido" aria-hidden="true">
+        V
+      </span>
+    );
+  }
+  const letra = lado === "dimension" ? para : (marco.letras[para]?.letra ?? para.charAt(0).toUpperCase());
   return (
     <span className={cn(base, lado === "dimension" ? "bg-warn-surface text-warn-ink" : "bg-info-surface text-brand")} aria-hidden="true">
       {letra}
@@ -143,7 +151,7 @@ export function ChipDeProcedencia({ procedencia }: { procedencia: Procedencia })
  * ● Deficiente hipótesis». `corta` quita el «Arquitectura · / Escala ·» (la vista por sección ya lo dice).
  */
 export function DeQueEs({ p, corta = false, conProcedencia = true }: { p: PreguntaParaMostrar; corta?: boolean; conProcedencia?: boolean }) {
-  const { escala, mapa, exp } = useLienzo();
+  const { escala, mapa, exp, marco } = useLienzo();
   const variasAreas = exp.estado.areas.length > 1;
   const lado = ladoDeLaPregunta(p);
   const para = p.apunta?.para ?? p.para;
@@ -151,7 +159,7 @@ export function DeQueEs({ p, corta = false, conProcedencia = true }: { p: Pregun
   if (lado === "dimension") {
     const area = escala.areas.find((a) => a.dimensiones.some((d) => d.id === para));
     const pos = mapa.posiciones[para];
-    const nombre = [corta ? null : "Escala", variasAreas ? area?.nombre : null, nombreDelPara(para, escala)].filter(Boolean).join(" · ");
+    const nombre = [corta ? null : "Escala", variasAreas ? area?.nombre : null, nombreDelPara(para, escala, marco)].filter(Boolean).join(" · ");
     que = (
       <>
         <span className="text-xs text-fg-muted">
@@ -164,9 +172,11 @@ export function DeQueEs({ p, corta = false, conProcedencia = true }: { p: Pregun
   } else if (lado === "tarjeta") {
     que = (
       <span className="text-xs text-fg-muted">
-        {[corta ? null : "Arquitectura", nombreDelPara(para, escala), para === "presupuesto" ? "al final: primero la meta, después la plata" : null].filter(Boolean).join(" · ")}
+        {[corta ? null : marco.clave === "cs" ? "Estrategia" : "Arquitectura", nombreDelPara(para, escala, marco), para === "presupuesto" ? "al final: primero la meta, después la plata" : null].filter(Boolean).join(" · ")}
       </span>
     );
+  } else if (lado === "vendido") {
+    que = <span className="text-xs text-fg-muted">{[corta ? null : "Lo vendido", p.tema].filter(Boolean).join(" · ")}</span>;
   } else {
     que = null;
   }

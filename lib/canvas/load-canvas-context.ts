@@ -21,6 +21,7 @@ import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 import { textoDeLaGuia } from "@/lib/guia-exploracion/contexto";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
+import { esSugerenciaPendiente } from "@/lib/handoff/congelado";
 import { esCerrada } from "@/lib/timeline/particularidad-state";
 import { renderCronogramaParaAgentes } from "@/lib/contexto/cronograma-para-agentes";
 
@@ -381,6 +382,11 @@ export async function loadCanvasContext(
   // Exploración: desde el 2026-10-02 la fuente es la GUÍA DE EXPLORACIÓN (lib/guia-exploracion). El
   // informe viejo solo se lee si el proyecto todavía no tiene guía con contenido.
   if (canvasSlug === "exploration") {
+    // La exploración nueva (el lienzo de la preventa, 2026-10-07) primero; la guía vieja, si no hay nada.
+    // Import dinámico: el módulo es solo del servidor y este archivo lo cargan también las pruebas.
+    const { textoDeLaExploracionDelProyecto } = await import("@/lib/exploraciones/del-proyecto");
+    const nueva = await textoDeLaExploracionDelProyecto(projectId).catch(() => "");
+    if (nueva) return nueva;
     const guia = await textoDeLaGuia(projectId);
     if (guia) return guia;
   }
@@ -409,9 +415,12 @@ export async function loadCanvasContext(
   for (const s of sections) {
     if (allow && !allow.has(s.key)) continue;
     if (ocultas.has(s.key)) continue;
-    const blocks = opts.onlyConfirmed
-      ? s.blocks.filter((b) => b.status === "CONFIRMED")
-      : s.blocks;
+    /* Las sugerencias que la IA dejó sobre un handoff CONGELADO y nadie revisó todavía no son lo vendido: no
+       llegan a ningún agente (kickoff, diagnóstico, entrega…), ni con `onlyConfirmed: false` (etapa 3b,
+       lib/handoff/congelado.ts). Usada, una sugerencia es contenido como cualquier otro. */
+    const blocks = (opts.onlyConfirmed ? s.blocks.filter((b) => b.status === "CONFIRMED") : s.blocks).filter(
+      (b) => canvasSlug !== "handoff" || !esSugerenciaPendiente(b),
+    );
     const texts = blocks.map(blockToText).map((t) => t.trim()).filter(Boolean);
     if (texts.length === 0) continue;
     parts.push(`[Sección: ${s.label}]\n${texts.join("\n\n")}`);

@@ -4,13 +4,12 @@ import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 
 // Secciones predefinidas del canvas "Información del cliente".
 // (Ex "canvas de estrategia" — quitamos handoff_ventas y perfil_cliente.)
-// El concepto del canvas se redujo a 3 secciones manuales más Docs y Sesiones
-// que viven como sub-tabs separados en la UI.
+// stakeholders/retos_estrategicos/oportunidades se retiraron (2026-10-09, Memoria de la cuenta ·
+// Etapa 0): esa información vive en la ficha del cliente (Client.ficha) y nadie leía estas
+// secciones. Las filas existentes quedan, no se borran. La MISMA lista vive en
+// lib/canvas/sync-procesos-blocks.ts: cambian juntas.
 const CLIENT_INFO_SECTIONS = [
-  { key: "stakeholders",       label: "Stakeholders" },
-  { key: "retos_estrategicos", label: "Retos Estratégicos" },
-  { key: "oportunidades",      label: "Oportunidades" },
-  { key: "procesos",           label: "Procesos" }, // migrado del ex-canvas Resumen
+  { key: "procesos", label: "Procesos" }, // migrado del ex-canvas Resumen
 ];
 
 // El sentinel se MUDÓ a lib/projects/kind.ts, que es puro y client-safe. Vivía acá, en un

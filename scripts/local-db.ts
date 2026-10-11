@@ -32,7 +32,7 @@
  * El guard anti-prod NO exige ALLOW_PROD_WRITE acá: localhost no es prod (a propósito).
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
 import "dotenv/config";
@@ -40,6 +40,7 @@ import type { Prisma } from "@prisma/client";
 import { assertLocalWriteOnly, describirDestino, esHostProduccion } from "./lib/guard";
 import { createScriptDbFor } from "./lib/db";
 import { copiarRosterInterno } from "./lib/roster";
+import { aplicarSqlPosteriores } from "./lib/sql-posteriores";
 
 const RAIZ = process.cwd();
 const PUERTO = 5433;
@@ -140,35 +141,21 @@ async function aplicarSql(db: string, rutaRelativa: string): Promise<void> {
  * roto sin que nadie lo notara porque los tests de integración se corren poco.
  *
  * Acá se aplican, después del baseline, los `.sql` cuyo nombre empieza con una fecha POSTERIOR
- * a la del baseline. Se corren en orden y deben ser IDEMPOTENTES (`IF NOT EXISTS`, `ADD VALUE
- * IF NOT EXISTS`, etc.), porque el mismo archivo puede reaplicarse en cada bootstrap.
+ * a la del baseline (`scripts/lib/sql-posteriores.ts`, la MISMA regla que usa el setup global
+ * de los tests de integración, que desde el 2026-10-10 los aplica solo a nexus_test antes de
+ * cada `npm run test:int`). Deben ser IDEMPOTENTES (`IF NOT EXISTS`, `ADD VALUE IF NOT EXISTS`,
+ * etc.), porque el mismo archivo puede reaplicarse en cada bootstrap.
  * ⚠ Si uno falla, esto ABORTA en vez de seguir: una base local a medio migrar produce fallos
  * que parecen bugs del código, que es exactamente el rato perdido que esto viene a evitar.
  * El arreglo es hacer idempotente el `.sql`, no saltearlo.
  *
- * Solo toca bases LOCALES (`aplicarSql` va contra `urlDe(db)`, y `up()` levanta el Postgres
- * embebido en localhost:5433). Producción sigue siendo a mano, con ALLOW_PROD_WRITE.
+ * Solo toca bases LOCALES (el helper lanza contra cualquier host que no sea loopback, y `up()`
+ * levanta el Postgres embebido en localhost:5433). Producción sigue siendo a mano, con
+ * ALLOW_PROD_WRITE.
  */
-const FECHA_DEL_BASELINE = "2026-08-01";
-
 async function aplicarSqlPosterioresAlBaseline(db: string): Promise<string> {
-  const dir = join(RAIZ, "scripts/sql");
-  if (!existsSync(dir)) return "sin scripts/sql";
-  const pendientes = readdirSync(dir)
-    .filter((f) => f.endsWith(".sql") && /^\d{4}-\d{2}-\d{2}/.test(f) && f.slice(0, 10) > FECHA_DEL_BASELINE)
-    .sort();
-  for (const f of pendientes) {
-    try {
-      await aplicarSql(db, `scripts/sql/${f}`);
-    } catch (e) {
-      throw new Error(
-        `scripts/sql/${f} falló sobre ${db}: ${e instanceof Error ? e.message : e}\n` +
-          `El bootstrap lo reaplica en cada corrida, así que tiene que ser idempotente ` +
-          `(ADD COLUMN IF NOT EXISTS / ADD VALUE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS).`,
-      );
-    }
-  }
-  return pendientes.length > 0 ? pendientes.join(", ") : "ninguno pendiente";
+  const corridos = await aplicarSqlPosteriores(urlDe(db), RAIZ);
+  return corridos.length > 0 ? corridos.map((f) => f.replace(/^scripts\/sql\//, "")).join(", ") : "ninguno pendiente";
 }
 
 async function bootstrap(): Promise<void> {

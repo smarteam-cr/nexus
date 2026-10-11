@@ -132,6 +132,16 @@ export function describirCita(source: FuenteDeCita): CitaLegible {
     };
   }
 
+  if (source.kind === "solicitudes") {
+    return {
+      sala: null,
+      nombre: label || "Solicitudes fuera de alcance",
+      href: null,
+      cuando: fecha ? fmtDia(fecha) : null,
+      cuandoPrefijo: "actualizado",
+    };
+  }
+
   if (source.kind === "handoff") {
     return {
       sala: null,

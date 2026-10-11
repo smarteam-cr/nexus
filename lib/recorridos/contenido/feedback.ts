@@ -66,7 +66,7 @@ const PASOS: readonly { pestana: Pestana; paso: PasoSinAccion; tambien?: AccionD
     paso: {
       ancla: "feedback.bandeja.lista",
       titulo: "Los reportes, como un correo",
-      texto: "Lo más nuevo arriba; el punto azul es lo que todavía no abriste. Al decidir, el reporte sale de esta lista.",
+      texto: "Lo más nuevo arriba; el punto azul es lo que no leíste. Tócalo para marcarlo como leído, o pasa el mouse por una fila para dejarla no leída. Al decidir, sale de esta lista.",
       lado: "right-start",
     },
   },

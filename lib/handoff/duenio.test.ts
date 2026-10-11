@@ -641,7 +641,7 @@ describe("candado: el zoom también filtra datos, no solo pide", () => {
       .filter((l) => !l.trimStart().startsWith("//") && !l.trimStart().startsWith("*"))
       .join("\n");
 
-  it("LA guarda: las TRES fuentes por-cliente se acotan al proyecto en el handoff", () => {
+  it("LA guarda: las fuentes por-cliente se acotan al proyecto en el handoff", () => {
     const s = src();
     const i = s.indexOf("const soloDeEsteProyecto");
     expect(i, "desapareció el filtro por proyecto del handoff").toBeGreaterThan(-1);
@@ -666,15 +666,22 @@ describe("candado: el zoom también filtra datos, no solo pide", () => {
       "el filtro cambió de gate: ya no se enciende para TODO handoff con proyecto",
     ).toBe('agent.agentGroup === "handoff" && bodyProjectId');
 
-    /* Y se aplica en las TRES queries, no en una. El tramo arranca en la primera de ellas y no
-       en la definición del filtro: entre medio está el destructuring del `Promise.allSettled`,
-       que hacía que el corte cayera antes de las queries y la guarda mirara 231 caracteres de
-       nada (cazado al romperla). */
-    const desde = s.indexOf("prisma.clientContextCard.findMany", i);
+    /* ⚠ REAPUNTADA (2026-10-09), con esta razón: clientContextCard y stageNote salieron del prompt
+       (DECISIONS › Memoria de la cuenta · Etapa 0: 0 StageNote y 0 cards en canvas en producción);
+       queda clientDocument con soloDeEsteProyecto por AND. El tramo arranca en esa query y no en la
+       definición del filtro: entre medio está el destructuring del `Promise.allSettled`, que hacía
+       que el corte cayera antes de las queries y la guarda mirara 231 caracteres de nada (cazado al
+       romperla). */
+    const desde = s.indexOf("prisma.clientDocument.findMany", i);
     expect(desde, "cambió el bloque de lecturas del cliente; revisar esta guarda").toBeGreaterThan(-1);
     const tramo = s.slice(desde, s.indexOf("bodyProjectId", desde));
     expect(tramo.length, "la guarda no está mirando nada").toBeGreaterThan(300);
-    for (const tabla of ["clientContextCard", "stageNote", "clientDocument"]) {
+    /* Y las dos tablas retiradas no vuelven a las lecturas del cliente por la puerta de atrás. */
+    const lecturas = s.slice(i, s.indexOf("const clientDocuments", i));
+    expect(lecturas.length, "cambió el bloque de lecturas del cliente; revisar esta guarda").toBeGreaterThan(300);
+    expect(lecturas, "volvió ClientContextCard al contexto del handoff").not.toContain("clientContextCard");
+    expect(s, "volvió StageNote al contexto del handoff").not.toContain("prisma.stageNote.findMany");
+    for (const tabla of ["clientDocument"]) {
       const q = tramo.indexOf(`prisma.${tabla}.findMany`);
       expect(q, `cambió la query de ${tabla}; revisar esta guarda`).toBeGreaterThan(-1);
       expect(

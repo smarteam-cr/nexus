@@ -9,6 +9,9 @@
  * que el CSE entrara a ver sus cuentas. El motivo del cambio: el índice pasó a mostrar la cartera
  * entera en dinero (MRR gestionado, comisión, puntos de partner) y eso no es de cada CSE.
  *
+ * Una sola excepción (2026-10-07, decisión de Elías): el CSE de la cuenta entra a la pestaña Adopción, adonde
+ * lo llevan los recordatorios de revisar la adopción. Solo esa pestaña y sin montos (lib/cs/adopcion-del-cse.ts).
+ *
  * ⚠ La lista la leen TRES lugares y tienen que decir lo mismo: las páginas, los endpoints de
  * `app/api/cs/*` que leen o escriben por cuenta, y el menú. Lo vigila
  * `lib/auth/customer-success-propio.test.ts`.

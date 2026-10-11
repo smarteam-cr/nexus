@@ -4,10 +4,11 @@
  * components/clients/FilaDeAlrededor.tsx — una fila plegable de «Alrededor del handoff» (rediseño de
  * la ficha, 2026-10-04, sistema «Nexus · interfaz interna»).
  *
- * Contexto del handoff, Resultados que persigue el cliente, Pedidos fuera de alcance y Exclusiones
- * tenían cada uno su propia cabecera —tamaños, flechas y contadores distintos— dentro de la misma
- * tarjeta. Ahora las cuatro se leen igual: el título, una línea de qué es, a la derecha lo que pide
- * atención (en ámbar) o solo la cuenta (en gris), y la flecha.
+ * Resultados que persigue el cliente, Pedidos fuera de alcance y Exclusiones tenían cada uno su
+ * propia cabecera —tamaños, flechas y contadores distintos— dentro de la misma tarjeta. Ahora se leen
+ * igual: el título, una línea de qué es, a la derecha lo que pide atención (en ámbar) o solo la
+ * cuenta (en gris), y la flecha. El «Contexto del handoff» usa la misma forma, pero desde el
+ * 2026-10-07 vive adentro de la tarjeta del handoff.
  *
  * El cuerpo se OCULTA, no se desmonta: los contadores, los borradores y lo que cada sección ya
  * cargó sobreviven al pliegue.

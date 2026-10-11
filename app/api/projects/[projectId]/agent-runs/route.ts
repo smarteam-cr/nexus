@@ -20,6 +20,7 @@ import {
   whereCorridasDeDocumento,
   resumenDeCorrida,
   LIMITE_HISTORIAL,
+  SIN_BUSCAR_LO_NUEVO,
 } from "@/lib/agents/historial-corridas";
 
 export const GET = withProjectAccess(async (req: NextRequest, ctx) => {
@@ -53,11 +54,15 @@ export const GET = withProjectAccess(async (req: NextRequest, ctx) => {
     }),
     prisma.agentRun.count({ where }),
     /* Qué corrida está VIGENTE en el documento: los bloques ya guardan `agentRunId`, así que
-       no hace falta ninguna columna nueva ni despertar la letra muerta de Handoff. */
+       no hace falta ninguna columna nueva ni despertar la letra muerta de Handoff.
+       ⚠ Sin los bloques de «Buscar lo nuevo» (etapa 3b): las sugerencias nacen AGENT, son las más nuevas y llevan la
+       corrida de la búsqueda, que no está en la lista. Sin el filtro, ninguna fila salía «vigente», también después
+       de usar la sugerencia. */
     prisma.canvasBlock.findFirst({
       where: {
         source: "AGENT",
         agentRunId: { not: null },
+        agentRun: { is: SIN_BUSCAR_LO_NUEVO },
         section: { canvas: canvasOfNested(slug, { projectId }) },
       },
       orderBy: { createdAt: "desc" },

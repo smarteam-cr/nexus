@@ -53,7 +53,7 @@ import { cabosParaElChat, revisarHilo, seccionesDelHilo } from "@/lib/canvas/rev
 import { EXPLORACION_DEF_BY_KEY } from "@/components/landing/configs/exploracion.defs";
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
-import type { Dueno } from "./hilo";
+import type { DuenoDeDocumento } from "./hilo";
 import { PIEZA_ROL } from "@/lib/asistente/piezas";
 import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
 import { customDef } from "@/lib/landing/catalogo-de-secciones";
@@ -774,7 +774,7 @@ function lineasDelHilo(
 }
 
 export async function contextoDeDocumento(
-  dueno: Dueno,
+  dueno: DuenoDeDocumento,
   pieza: string,
 ): Promise<ContextoDelAsistente> {
   /**

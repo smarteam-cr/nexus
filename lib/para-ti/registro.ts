@@ -10,15 +10,18 @@ import type { Fuente } from "./fuente";
 import {
   ALTA_A_MEDIO_HACER,
   PEDIDOS_FUERA_DE_ALCANCE,
-  PENDIENTES_DE_REUNIONES,
+  PRESENTACION_DEL_DIAGNOSTICO,
   PROPUESTA_DE_CRONOGRAMA,
   REUNIONES_SIN_REVISAR,
 } from "./fuentes/proyectos";
 import { PREVENTAS } from "./fuentes/preventa";
 import { ETAPA_SUGERIDA } from "./fuentes/etapa";
+import { LO_QUE_DEJARON_TUS_REUNIONES } from "./fuentes/reuniones";
 import { TIEMPOS_SIN_ANOTAR } from "./fuentes/tiempos";
+import { TAREAS } from "./fuentes/tareas";
 import { FINANZAS_DEVUELTO, FINANZAS_REGISTRAR, FINANZAS_SUPERVISAR } from "./fuentes/finanzas";
 import { CRONOGRAMAS_TRABADOS, SIN_ENCARGADO, VIGIA } from "./fuentes/cs";
+import { CORRECCION_QUE_CADUCO, RELACION_CON_HUBSPOT, RELACIONES_DE_LA_CARTERA } from "./fuentes/cartera-de-la-csl";
 import {
   COMENTARIOS_DE_LA_DOCUMENTACION,
   COMENTARIOS_DE_LA_ESCALA,
@@ -32,14 +35,19 @@ export const FUENTES: readonly Fuente[] = [
   PROPUESTA_DE_CRONOGRAMA,
   ETAPA_SUGERIDA,
   REUNIONES_SIN_REVISAR,
+  LO_QUE_DEJARON_TUS_REUNIONES,
   ALTA_A_MEDIO_HACER,
-  PENDIENTES_DE_REUNIONES,
   PEDIDOS_FUERA_DE_ALCANCE,
+  PRESENTACION_DEL_DIAGNOSTICO,
   PREVENTAS,
   FINANZAS_DEVUELTO,
   TIEMPOS_SIN_ANOTAR,
+  TAREAS,
+  RELACION_CON_HUBSPOT,
+  CORRECCION_QUE_CADUCO,
   // Por frente: lo que es tuyo porque lo llevas.
   VIGIA,
+  RELACIONES_DE_LA_CARTERA,
   CRONOGRAMAS_TRABADOS,
   SIN_ENCARGADO,
   PEDIDOS_PARA_VENTAS,

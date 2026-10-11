@@ -101,6 +101,24 @@ function gastoConocido(clase: ClaseDeGasto, ahora: Date): number | null {
 }
 
 /**
+ * ¿Queda presupuesto AUTOMÁTICO hoy? Para un job que arranca una tanda de llamadas (la lectura de cada reunión,
+ * memoria de la cuenta, etapa 2) y prefiere no arrancarla a cortarla a la mitad.
+ *
+ * A diferencia de `revisarPresupuestoAntesDeLlamar`, ESPERA el refresco si la caché está vieja (un job no tiene apuro)
+ * y mira si se excedió aunque el bloqueo esté apagado: el job se salta la tanda igual. ⭐ Lo que no se sabe no frena: si
+ * el gasto no se pudo leer, devuelve true (la misma regla del resto de este archivo).
+ */
+export async function quedaPresupuestoAutomatico(ahora: Date = new Date()): Promise<boolean> {
+  const dia = inicioDelDiaCr(ahora).toISOString().slice(0, 10);
+  const vigente = cache && cache.dia === dia && ahora.getTime() - cache.leidoEn < FRESCURA_MS;
+  if (!vigente) {
+    refrescarSiHaceFalta(ahora);
+    if (refrescando) await refrescando;
+  }
+  return !evaluarPresupuesto("automatico", gastoConocido("automatico", ahora), limitesDelEntorno()).excedido;
+}
+
+/**
  * Revisa el presupuesto de la llamada que está por salir. Nunca espera: lee la caché y dispara el
  * refresco de fondo.
  *

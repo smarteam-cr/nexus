@@ -88,6 +88,14 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
       return igual(ca.notas[op.paso], cb.notas[op.paso]);
     case "sesiones":
       return igual(ca.sesiones, cb.sesiones);
+    case "agregarSesion":
+    case "quitarSesiones":
+    case "fuera":
+      // Agregan, quitan o sacan una por una (la repetida no se agrega dos veces): no pisan lo que hizo otro.
+      return true;
+    case "evento":
+      // Mueve la fecha del evento de UNA sesión: si su evento cambió entretanto, se recarga.
+      return igual(ca.sesiones.find((s) => s.id === op.sesionId)?.evento, cb.sesiones.find((s) => s.id === op.sesionId)?.evento);
     case "medicion":
       return Object.keys(op.medicion).every((k) => igual(ca.medicion[k as keyof typeof ca.medicion], cb.medicion[k as keyof typeof cb.medicion]));
     case "casoDeUso":
@@ -104,9 +112,9 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
       return usoSeguro(op.itemId, antes, ahora);
     case "usarVarias":
       return op.items.every((x) => usoSeguro(x.itemId, antes, ahora));
-    case "reunionElegida":
-      // Sumar o quitar una no depende de lo demás: la lista se arma en el servidor con lo de ahora.
-      return true;
+    case "correo":
+      // Se reintenta solo sobre el MISMO correo: si entretanto se volvió a armar, el cambio era sobre otro.
+      return antes.propuesta.correos[op.clave]?.corridaId === ahora.propuesta.correos[op.clave]?.corridaId;
     case "sinPortal":
     case "descartar":
     case "alertaTecnicaVista":

@@ -195,3 +195,27 @@ describe("⭐ el recorrido del cliente y el plan llegan al contexto", () => {
     expect(seed, "el prompt no aclara que la narrativa va sin citas").toContain("sin citas");
   });
 });
+
+/**
+ * ⭐ LO QUE YA SE LEYÓ (memoria de la cuenta, etapa 3, 2026-10-10)
+ *
+ * El resumen se armaba releyendo la transcripción de las 12 últimas reuniones. Ahora lee lo que dejó cada una (la
+ * minuta y las notas, con UNA consulta) y suma lo que Nexus ya sabe de la cuenta como una fuente citable. La regresión
+ * plausible es volver a `fetchTranscriptContent` «porque trae más», que vuelve a pagar las relecturas.
+ */
+describe("⭐ el resumen lee minutas y la memoria, no transcripciones", () => {
+  const src = () => sinComentarios(RUNNER);
+
+  it("las reuniones salen del chokepoint y su contenido de resumenDeReunion, nunca de la transcripción", () => {
+    expect(src()).toContain("getProjectMemberSessions(projectId)");
+    expect(src()).toContain("soloOcurridas(");
+    expect(src()).toContain("resumenDeReunion(");
+    expect(src()).not.toContain("fetchTranscriptContent");
+    expect(src(), "«sin registro» volvió a contar la transcripción").not.toMatch(/transcript:\s*null/);
+  });
+
+  it("suma la memoria de la cuenta con SU lector (interno, sin la historia ni lo fuera de alcance que ya lee)", () => {
+    expect(src()).toContain('memoriaDeLaCuenta(p.clientId, { lector: "resumen-del-proyecto", projectId })');
+    expect(src()).toMatch(/memoriaDeLaCuenta:\s*memoriaDeLaCuentaTexto\.trim\(\)\s*\|\|\s*null/);
+  });
+});

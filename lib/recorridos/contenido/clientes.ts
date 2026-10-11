@@ -5,7 +5,7 @@
  * pieza abierta (el Resumen del proyecto) y los de las piezas son `porPantalla` (los declara la
  * pieza abierta con `usePantallaDelRecorrido`).
  */
-import type { Recorrido } from "../tipos";
+import type { AccionDelRecorrido, Recorrido } from "../tipos";
 
 const RUTA_DE_LA_FICHA = /^\/clients\/[^/]+\/?$/;
 const EJEMPLO_DE_FICHA = "/clients/cmtum4orn00bd07lg0if1q51q";
@@ -13,7 +13,9 @@ const EJEMPLO_DE_FICHA = "/clients/cmtum4orn00bd07lg0if1q51q";
 /** La ficha del cliente (rediseño del 2026-10-04): riel, etapa, resumen y «Qué sigue». */
 export const FICHA_DEL_CLIENTE: Recorrido = {
   id: "ficha-cliente",
-  version: 2,
+  // 3 (2026-10-10): los pendientes del proyecto son tareas (memoria de la cuenta, etapa 2).
+  // 4 (2026-10-10): las novedades de las reuniones en el riel y arriba de cada documento (etapa 6).
+  version: 4,
   titulo: "Ficha del cliente",
   descripcion: "Los proyectos y sus piezas, la etapa y lo que te toca",
   rotulo: "Recorrido · Ficha del cliente",
@@ -40,6 +42,12 @@ export const FICHA_DEL_CLIENTE: Recorrido = {
       lado: "right",
     },
     {
+      ancla: "ficha.novedades",
+      titulo: "Lo que una reunión cambia en un documento",
+      texto: "El número con la chispa dice cuántas novedades dejaron las reuniones. Arriba del documento las ves: cámbialo con el chat, márcala lista o «No aplica».",
+      lado: "right",
+    },
+    {
       ancla: "ficha.etapa",
       titulo: "En qué etapa va el proyecto",
       texto: "Sale de HubSpot. «Cambiar etapa» la escribe allá. Si una reunión muestra que avanzó, Nexus te lo sugiere y nada se mueve hasta que respondas.",
@@ -50,6 +58,12 @@ export const FICHA_DEL_CLIENTE: Recorrido = {
       titulo: "El resumen lo escribe la IA",
       texto: "Se arma con las reuniones, el handoff y HubSpot, y cada hallazgo dice de dónde salió. Si algo cambió, «Regenerar».",
       lado: "right-start",
+    },
+    {
+      ancla: "ficha.pendientes",
+      titulo: "Los pendientes ahora son tareas",
+      texto: "Los ves acá y los decides en Mis tareas. Lo que se acordó en una reunión llega como propuesta: nada entra solo.",
+      lado: "left-start",
     },
     {
       ancla: "que-sigue",
@@ -197,19 +211,27 @@ export const FICHA_CRONOGRAMA: Recorrido = {
   ],
 };
 
-/** La pieza Exploración de la ficha: las sesiones y los cuestionarios. */
+/** La página de inicio de la exploración y la próxima sesión (las escucha LienzoDeExploracion). */
+const INICIO: readonly AccionDelRecorrido[] = [{ evento: "preventa.sesion", valor: "inicio" }];
+const PROXIMA: readonly AccionDelRecorrido[] = [{ evento: "preventa.sesion", valor: "proxima" }];
+
+/** La pieza Exploración de la ficha: el lienzo de la preventa con las preguntas de Customer Success. */
 export const FICHA_EXPLORACION: Recorrido = {
   id: "ficha-exploracion",
   // v2 (2026-10-05): la guía se retiró. La exploración son Sesiones y Cuestionarios, y lo que se
   // averigua va como sugerencia a Información del cliente.
   // v3 (2026-10-05): una pestaña por sesión, como en la preventa.
-  version: 3,
+  // v4 (2026-10-07): el MISMO lienzo de la preventa (sesiones en el riel, Preparación / En vivo /
+  // Análisis), con la estrategia del cliente (retos, resultados, obstáculos) en vez de la venta.
+  // v5 (2026-10-09): abre en su página de inicio (las sesiones, cada una con su reunión; «+ Agregar
+  // sesión»): el «Contexto adicional» de la exploración se retiró.
+  version: 5,
   titulo: "Exploración del proyecto",
-  descripcion: "Las sesiones, los cuestionarios y adónde va lo que averiguas",
+  descripcion: "Las sesiones, la guía de cada una y adónde va lo que averiguas",
   rotulo: "Recorrido · Exploración",
   invitacion: {
     titulo: "¿Te muestro cómo se usa la exploración?",
-    texto: "Las sesiones, los cuestionarios y adónde va lo que averiguas. Menos de un minuto.",
+    texto: "Las sesiones, la guía de cada una y adónde va lo que averiguas. Menos de un minuto.",
   },
   ruta: RUTA_DE_LA_FICHA,
   porPantalla: true,
@@ -219,39 +241,42 @@ export const FICHA_EXPLORACION: Recorrido = {
   roles: "todos",
   pasos: [
     {
-      ancla: "exploracion.vistas",
-      titulo: "Una pestaña por sesión",
-      texto: "Cada sesión dice qué preguntar y con quién; las que propone el agente van en azul. Al final, «+ Sesión» y los cuestionarios.",
-      lado: "bottom-start",
+      ancla: "preventa.inicio",
+      titulo: "Tus sesiones",
+      texto: "Cada sesión con su reunión y en qué está. Agrega una agendada, una que ya pasó o una sin reunión: nada entra solo.",
+      lado: "top",
+      accion: INICIO,
     },
     {
-      ancla: "exploracion.propuestas",
-      titulo: "Lo que sugiere el agente",
-      texto: "Preguntas que una reunión ya respondió, contradicciones y sesiones nuevas. Cada una dice de dónde salió: «Usar» o «Descartar».",
-      lado: "bottom-start",
+      ancla: "preventa.sesiones",
+      titulo: "También en el riel",
+      texto: "Cuelgan de «Exploración»: la próxima dice cuándo. Debajo, los cuestionarios y el informe anterior. Toca «Exploración» para volver al inicio.",
+      lado: "right-start",
     },
     {
-      ancla: "exploracion.sesion",
-      titulo: "La sesión abierta",
-      texto: "Marca lo que ya preguntaste y anota lo que averiguaste: va como sugerencia a Información del cliente.",
+      ancla: "preventa.sesion.momento",
+      titulo: "Preparación, En vivo y Análisis",
+      texto: "Antes, la guía; durante, marcas lo preguntado y anotas; después, el agente lee la reunión y te dice qué salió.",
+      lado: "bottom-start",
+      accion: PROXIMA,
+    },
+    {
+      ancla: "preventa.sesion.preguntas",
+      accion: [...PROXIMA, { evento: "preventa.momento", valor: "antes" }],
+      titulo: "La guía",
+      texto: "Pregunta por la estrategia del cliente —sus retos, los resultados que persigue y qué se lo impide— y por la escala.",
       lado: "top-start",
     },
     {
       ancla: "que-sigue",
       titulo: "Lo próximo que te toca",
-      texto: "Preparar las sesiones, leer la última reunión o revisar lo que sugirió el agente. Un solo botón azul.",
+      texto: "Leer una sesión, revisar lo que sugirió el agente o hacer la próxima sesión. Un solo botón azul.",
       lado: "left-start",
     },
     {
-      ancla: "exploracion.ficha",
-      titulo: "Lo que ya sabemos",
-      texto: "Sale de Información del cliente: no lo vuelvas a preguntar. Ahí esperan también las sugerencias que dejaron las sesiones.",
-      lado: "left-start",
-    },
-    {
-      ancla: "exploracion.agente",
-      titulo: "El agente",
-      texto: "Vuelve a proponer cuando cambie algo, o lee la última reunión para marcar lo que ya quedó respondido.",
+      ancla: "preventa.panel.marco",
+      titulo: "La estrategia del cliente",
+      texto: "Verde lo confirmado, azul lo que sugirió el agente. Lo que confirmas va como sugerencia a Información del cliente.",
       lado: "left-start",
     },
   ],

@@ -17,7 +17,7 @@ import {
   INVARIANTES_SOLO_BASE,
   correrInvariantesSoloBase,
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
-  INV31, INV32, INV33, INV34, INV35, INV36, INV37,
+  INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46,
   type Invariante,
 } from "./index";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
@@ -554,14 +554,221 @@ const soloCodigo = (src: string) =>
   src.replace(/\/\*[\s\S]*?\*\//g, "").split(/\r?\n/).filter((l) => !l.trimStart().startsWith("//")).join("\n");
 const soloCodigoDe = (rel: string) => soloCodigo(fs.readFileSync(path.join(RAIZ, rel), "utf8"));
 
+describe("tareas: INV38–INV43 (2026-10-09)", () => {
+  it("INV38 · una tarea con un cliente distinto al de su proyecto de HubSpot o de tareas viola", async () => {
+    const bien = { numero: 1, clientId: "c1", projectId: "p1", project: { clientId: "c1", name: "Onboarding" }, proyecto: { clientId: "c1", projectId: "p1", nombre: "Campaña" } };
+    const mal = { numero: 2, clientId: "c2", projectId: "p1", project: { clientId: "c1", name: "Onboarding" }, proyecto: null };
+    expect((await INV38.correr(baseFalsa({ tarea: [bien], proyectoDeTareas: [] }), AHORA)).ok).toBe(true);
+    const r = await INV38.correr(baseFalsa({ tarea: [bien, mal], proyectoDeTareas: [{ nombre: "SAP", clientId: "c1", project: { clientId: "c9", name: "Otro" } }] }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("T-2");
+    expect(r.lineas[0]).toContain("Proyecto «SAP»");
+  });
+
+  it("INV39 · una tarea en el contenedor «Información del cliente» viola", async () => {
+    expect((await INV39.correr(baseFalsa({ tarea: 0, proyectoDeTareas: 0 }), AHORA)).ok).toBe(true);
+    expect((await INV39.correr(baseFalsa({ tarea: 1, proyectoDeTareas: 0 }), AHORA)).ok).toBe(false);
+  });
+
+  it("INV40 · una tarea abierta en una semana que su responsable ya revisó viola; la de otra persona no", async () => {
+    const semana = new Date("2026-10-05T00:00:00Z");
+    const cierres = [{ personaEmail: "lidia@x.com", semana }];
+    const ok = await INV40.correr(baseFalsa({ tarea: [{ numero: 3, responsableEmail: "ale@x.com", semana }], cierreDeSemana: cierres }), AHORA);
+    expect(ok.ok).toBe(true);
+    const r = await INV40.correr(baseFalsa({ tarea: [{ numero: 4, responsableEmail: "lidia@x.com", semana }], cierreDeSemana: cierres }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("T-4 de lidia@x.com, semana del 2026-10-05");
+  });
+
+  it("INV41 · una fusión entre clientes distintos viola; sin cliente de un lado, o de ninguno, no", async () => {
+    expect((await INV41.correr(baseFalsa({ tarea: [{ numero: 5, clientId: null, mismaQue: { numero: 1, clientId: null } }] }), AHORA)).ok).toBe(true);
+    expect((await INV41.correr(baseFalsa({ tarea: [{ numero: 3, clientId: null, mismaQue: { numero: 1, clientId: "c1" } }, { numero: 4, clientId: "c1", mismaQue: { numero: 2, clientId: null } }] }), AHORA)).ok).toBe(true);
+    expect((await INV41.correr(baseFalsa({ tarea: [{ numero: 6, clientId: "c1", mismaQue: { numero: 1, clientId: "c2" } }] }), AHORA)).ok).toBe(false);
+  });
+
+  it("INV42 · la cita de una reunión de OTRO cliente viola; una reunión interna o del mismo cliente no", async () => {
+    const deWherex = { numero: 7, clientId: "honda", session: { title: "Kickoff Wherex", resolvedClientId: "wherex", manualClientId: null } };
+    const interna = { numero: 8, clientId: "honda", session: { title: "Sprint planning", resolvedClientId: "smarteam", manualClientId: null } };
+    // La precedencia del chokepoint: resolvedClientId; el manual solo cuando no hay.
+    const propia = { numero: 9, clientId: "honda", session: { title: "Semanal Honda", resolvedClientId: null, manualClientId: "honda" } };
+    expect((await INV42.correr(baseFalsa({ tarea: [interna, propia], client: [{ id: "smarteam" }] }), AHORA)).ok).toBe(true);
+    const r = await INV42.correr(baseFalsa({ tarea: [deWherex, interna], client: [{ id: "smarteam" }] }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("T-7");
+  });
+
+  it("INV43 · una tarea abierta en un sprint sin personas activas viola; el sprint personal de alguien activo no", async () => {
+    const miembros = [{ email: "lidia@x.com", area: "Marketing" }];
+    const ok = await INV43.correr(baseFalsa({ teamMember: miembros, tarea: [{ numero: 1, equipo: "marketing" }, { numero: 2, equipo: "persona:lidia@x.com" }] }), AHORA);
+    expect(ok.ok).toBe(true);
+    const r = await INV43.correr(baseFalsa({ teamMember: miembros, tarea: [{ numero: 3, equipo: "ventas" }, { numero: 4, equipo: "persona:ido@x.com" }] }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("2 tarea(s)");
+  });
+});
+
+describe("la lectura de cada reunión: INV44 (memoria de la cuenta, etapa 2)", () => {
+  const TEXTO = "Ana: les mando la base el miércoles. ".repeat(10);
+  /** Una reunión de hace 3 días, enriquecida hace 2, con transcripción y del cliente c1. */
+  const reunion = (c: Record<string, unknown> = {}) => ({ id: "s1", title: "Semanal Acme", date: hace(3), enrichedAt: hace(2), resolvedClientId: "c1", manualClientId: null, transcript: TEXTO, ...c });
+  const clientes = [{ id: "c1", kind: "CLIENTE" }, { id: "p1", kind: "PROSPECTO" }, { id: "a1", kind: "ALIADO" }];
+
+  it("viola: una reunión fresca de un cliente, con transcripción, sin lectura ni minuta", async () => {
+    const llamadas: Llamada[] = [];
+    const r = await INV44.correr(baseFalsa({ firefliesSession: [reunion()], client: clientes, sessionMinute: [], lecturaDeReunion: [] }, llamadas), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("«Semanal Acme» (s1)");
+    // La forma de la consulta es la mitad del invariante: 14 días, enriquecida hace 24 h o más, con transcripción y con dueño.
+    const w = where(llamadas, "firefliesSession");
+    expect(w).toMatchObject({ transcript: { not: null } });
+    expect(w.OR).toEqual([{ resolvedClientId: { not: null } }, { manualClientId: { not: null } }]);
+  });
+
+  it("cumple con la minuta (la transición y la bandera apagada)", async () => {
+    const r = await INV44.correr(baseFalsa({ firefliesSession: [reunion()], client: clientes, sessionMinute: [{ sessionId: "s1" }], lecturaDeReunion: [] }), AHORA);
+    expect(r.ok).toBe(true);
+  });
+
+  it("cumple con una lectura en error (falló tres veces: se ve en el job, no acá) y con una lista", async () => {
+    for (const seguimientoEstado of ["error", "lista", "sin_texto", "copia"]) {
+      const r = await INV44.correr(baseFalsa({ firefliesSession: [reunion()], client: clientes, sessionMinute: [], lecturaDeReunion: [{ sessionId: "s1", seguimientoEstado }] }), AHORA);
+      expect(r.ok, seguimientoEstado).toBe(true);
+    }
+    // En la cola todavía no cuenta: a las 24 h tendría que haber terminado.
+    const enCola = await INV44.correr(baseFalsa({ firefliesSession: [reunion()], client: clientes, sessionMinute: [], lecturaDeReunion: [{ sessionId: "s1", seguimientoEstado: "en_espera" }] }), AHORA);
+    expect(enCola.ok).toBe(false);
+  });
+
+  it("un prospecto cuenta; un aliado, una reunión de hace 15 días, una enriquecida hace menos de 24 h o sin transcripción de verdad, no", async () => {
+    const prospecto = await INV44.correr(baseFalsa({ firefliesSession: [reunion({ resolvedClientId: "p1" })], client: clientes, sessionMinute: [], lecturaDeReunion: [] }), AHORA);
+    expect(prospecto.ok).toBe(false);
+    for (const [motivo, fila] of [
+      ["aliado", reunion({ resolvedClientId: "a1" })],
+      ["15 días", reunion({ date: hace(15) })],
+      ["recién enriquecida", reunion({ enrichedAt: hace(0.5) })],
+      ["transcripción corta", reunion({ transcript: "hola" })],
+    ] as const) {
+      const r = await INV44.correr(baseFalsa({ firefliesSession: [fila], client: clientes, sessionMinute: [], lecturaDeReunion: [] }), AHORA);
+      expect(r.ok, motivo).toBe(true);
+    }
+  });
+
+  it("una reunión de puertas adentro (solo estuvo el equipo) no se espera, aunque su dueño sea un cliente", async () => {
+    const categorias = [{ domains: ["smarteamcr.com"], kind: "internal" }];
+    const interna = reunion({ participants: ["marco@smarteamcr.com", "lidia@smarteamcr.com"], organizerEmail: "marco@smarteamcr.com" });
+    const r = await INV44.correr(baseFalsa({ firefliesSession: [interna], sessionCategory: categorias, client: clientes, sessionMinute: [], lecturaDeReunion: [] }), AHORA);
+    expect(r.ok).toBe(true);
+    const conElCliente = reunion({ participants: ["marco@smarteamcr.com", "ana@acme.com"] });
+    expect((await INV44.correr(baseFalsa({ firefliesSession: [conElCliente], sessionCategory: categorias, client: clientes, sessionMinute: [], lecturaDeReunion: [] }), AHORA)).ok).toBe(false);
+  });
+
+  it("el remedio nombra lo que existe: «Leer esta reunión» en su página y el script de la cola", async () => {
+    const r = await INV44.correr(baseFalsa({ firefliesSession: [reunion()], client: clientes, sessionMinute: [], lecturaDeReunion: [] }), AHORA);
+    expect(r.lineas[0]).toContain("«Leer esta reunión»");
+    expect(r.lineas[0]).toContain("scripts/encolar-lecturas-pendientes.ts");
+    expect(fs.existsSync(path.join(RAIZ, "scripts/encolar-lecturas-pendientes.ts"))).toBe(true);
+    expect(r.lineas[0]).not.toContain("«Generar minuta»");
+  });
+
+  it("INV46 · un pedido fuera de alcance de una reunión de OTRO cliente viola; uno descartado, del mismo cliente o de una reunión interna, no", async () => {
+    const deWherex = { id: "pf1", clientId: "honda", pedido: "Integrar DocuSign", estado: "PEDIDO", session: { title: "Kickoff Wherex", resolvedClientId: "wherex", manualClientId: null } };
+    const descartado = { ...deWherex, id: "pf2", estado: "DESCARTADO" };
+    const propio = { id: "pf3", clientId: "honda", pedido: "App móvil", estado: "CONFIRMADO", session: { title: "Semanal Honda", resolvedClientId: null, manualClientId: "honda" } };
+    const interna = { id: "pf4", clientId: "honda", pedido: "Otro", estado: "PEDIDO", session: { title: "Sprint", resolvedClientId: "smarteam", manualClientId: null } };
+    expect((await INV46.correr(baseFalsa({ pedidoFueraDeAlcance: [descartado, propio, interna], client: [{ id: "smarteam" }] }), AHORA)).ok).toBe(true);
+    const r = await INV46.correr(baseFalsa({ pedidoFueraDeAlcance: [deWherex, propio], client: [{ id: "smarteam" }] }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("pf1");
+  });
+
+  it("sin las columnas de la cola (falta el SQL) mira solo la minuta, y lo dice", async () => {
+    const base = baseFalsa({ firefliesSession: [reunion()], client: clientes, sessionMinute: [{ sessionId: "s1" }] });
+    const sinColumnas = new Proxy(base, {
+      get: (t, m) =>
+        m === "lecturaDeReunion"
+          ? { findMany: async () => Promise.reject(Object.assign(new Error("The column `seguimientoEstado` does not exist in the current database."), { code: "P2022" })) }
+          : (t as unknown as Record<string | symbol, unknown>)[m],
+    }) as PrismaClient;
+    const r = await INV44.correr(sinColumnas, AHORA);
+    expect(r.ok).toBe(true);
+    expect(r.lineas[0]).toContain("se mira solo la minuta");
+  });
+});
+
+describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
+  const sesion = (dueno: string | null, manual: string | null = null) => ({ title: "Seguimiento", resolvedClientId: dueno, manualClientId: manual });
+  const hecho = (o: Partial<Record<string, unknown>> = {}) => ({
+    id: "h1",
+    clientId: "c1",
+    projectId: null,
+    sessionId: "s1",
+    estado: "pendiente",
+    frase: "El cliente sigue sus cotizaciones en Excel",
+    client: { kind: "CLIENTE" },
+    project: null,
+    session: sesion("c1"),
+    ...o,
+  });
+
+  it("un hecho del cliente de su reunión (o del manual, si no hay resolución) cumple", async () => {
+    expect((await INV45.correr(baseFalsa({ hechoDeReunion: [hecho(), hecho({ id: "h2", session: sesion(null, "c1") })] }), AHORA)).ok).toBe(true);
+  });
+
+  it("⛔ un hecho de una reunión de OTRO cliente viola (la precedencia del chokepoint: resolvedClientId gana)", async () => {
+    const r = await INV45.correr(baseFalsa({ hechoDeReunion: [hecho({ session: sesion("c2", "c1") })] }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas.join("\n")).toContain("que es de otro cliente");
+  });
+
+  it("⛔ un hecho de un proyecto de otro cliente viola; uno de una reunión que alguien desvinculó del proyecto no (es del mismo cliente: los lectores ya no la ven)", async () => {
+    const delProyecto = hecho({ projectId: "p1", project: { clientId: "c1" } });
+    expect((await INV45.correr(baseFalsa({ hechoDeReunion: [delProyecto] }), AHORA)).ok).toBe(true);
+    const ajeno = await INV45.correr(baseFalsa({ hechoDeReunion: [hecho({ projectId: "p9", project: { clientId: "c2" } })] }), AHORA);
+    expect(ajeno.ok).toBe(false);
+    expect(ajeno.lineas.join("\n")).toContain("de un proyecto de otro cliente");
+  });
+
+  it("⛔ un hecho de una empresa de Smarteam o de un aliado viola", async () => {
+    expect((await INV45.correr(baseFalsa({ hechoDeReunion: [hecho({ client: { kind: "INTERNO" } })] }), AHORA)).ok).toBe(false);
+    expect((await INV45.correr(baseFalsa({ hechoDeReunion: [hecho({ client: { kind: "ALIADO" } })] }), AHORA)).ok).toBe(false);
+  });
+
+  it("solo cuenta lo vivo: un desestimado (se retiró al cambiar de dueño) o un usado (ya lo decidió una persona) no; la consulta los deja afuera", async () => {
+    const llamadas: Llamada[] = [];
+    const r = await INV45.correr(
+      baseFalsa({ hechoDeReunion: [hecho({ estado: "desestimado", session: sesion("c2") }), hecho({ id: "h2", estado: "usado", session: sesion("c2") })] }, llamadas),
+      AHORA,
+    );
+    expect(r.ok).toBe(true);
+    expect(where(llamadas, "hechoDeReunion")).toEqual({ estado: "pendiente" });
+  });
+
+  it("el remedio dice lo que se puede hacer de verdad: corregir el dueño, o el script que retira los hechos", async () => {
+    const r = await INV45.correr(baseFalsa({ hechoDeReunion: [hecho({ session: sesion("c2") })] }), AHORA);
+    expect(r.lineas.join("\n")).toContain("scripts/hechos-fuera-de-su-cliente.ts");
+  });
+
+  it("sin la tabla: «no aplica todavía»", async () => {
+    const sinTabla = new Proxy({}, { get: () => ({ findMany: async () => { throw Object.assign(new Error("The table `public.HechoDeReunion` does not exist in the current database."), { code: "P2021" }); } }) }) as unknown as PrismaClient;
+    const r = await INV45.correr(sinTabla, AHORA);
+    expect(r.ok).toBe(true);
+    expect(r.lineas[0]).toContain("no aplica todavía");
+  });
+});
+
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 26 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 35 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
       "1", "3", "5", "8", "8c", "10", "11", "14", "18", "20", "21", "22", "23", "24", "25", "26", "27", "28", "30", "31", "32",
       "33", "34", "35", "36", "37",
+      // 38–43: Tareas internas (2026-10-09).
+      "38", "39", "40", "41", "42", "43",
+      // 44: la lectura de cada reunión (memoria de la cuenta, etapa 2); 45, los hechos de las reuniones (etapa 6); 46,
+      // los pedidos fuera de alcance de una reunión de otro cliente (el gemelo de INV42).
+      "44", "45", "46",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -609,7 +816,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("26 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("35 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;

@@ -39,6 +39,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import { leerDuenos } from "@/lib/hubspot/duenos";
 import { huelaAPrueba } from "./clasificar-huecos";
 import { ETAPAS_GANADAS, ETAPAS_PERDIDAS, labelDePipeline } from "./pipelines";
 
@@ -57,6 +58,8 @@ const PROPIEDADES = [
   "pipeline",
   "dealstage",
   "hs_date_entered_closedwon",
+  // Quién vendió (2026-10-08): lo vendido por persona, para las metas y las comisiones.
+  "hubspot_owner_id",
 ];
 
 export interface SyncVentasResult {
@@ -250,6 +253,24 @@ export async function syncVentasGanadas(opciones: {
       return { id: null, via: null, comp: comp ?? null };
     };
 
+    // ── 3b. Quién vendió: el dueño del trato, traducido a la persona de Nexus por su correo ──
+    // También quien ya se fue del equipo: la venta sigue siendo suya. Si no se pueden leer los
+    // dueños, la venta se guarda igual, sin vendedor, y se dice.
+    let vendedorDe: (ownerId: string | null) => string | null = () => null;
+    let duenosLeidos = false;
+    try {
+      const { porOwner } = await leerDuenos(hs);
+      const equipo = await prisma.teamMember.findMany({ select: { id: true, email: true } });
+      const porCorreo = new Map(equipo.map((m) => [m.email.trim().toLowerCase(), m.id]));
+      vendedorDe = (ownerId) => {
+        const email = ownerId ? porOwner.get(ownerId)?.email : null;
+        return email ? (porCorreo.get(email) ?? null) : null;
+      };
+      duenosLeidos = true;
+    } catch (e) {
+      res.errores.push(`dueños de HubSpot: ${e instanceof Error ? e.message : String(e)} — las ventas quedan sin vendedor.`);
+    }
+
     /** Ids ya dados de alta en esta corrida — vale también en seco. */
     const dadasDeAlta = new Set<string>();
 
@@ -257,7 +278,7 @@ export async function syncVentasGanadas(opciones: {
     // Las CONOCIDAS del rango: solo para la guarda y para saber cuáles dejaron de venir.
     const conocidas = await prisma.ventaGanada.findMany({
       where: { fechaCierre: { gte: new Date(`${opciones.desde}T00:00:00.000Z`), lte: new Date(`${opciones.hasta}T00:00:00.000Z`) } },
-      select: { id: true, hubspotDealId: true, nombre: true, monto: true, fechaCierre: true, estado: true, clientId: true },
+      select: { id: true, hubspotDealId: true, nombre: true, monto: true, fechaCierre: true, estado: true, clientId: true, hubspotOwnerId: true, vendedorId: true },
     });
     // ⚠ Y las que ya existen de los tratos que ACABAN de llegar, sin filtrar por fecha.
     // Sin esto, un trato al que le editaron la fecha de cierre y cruzó de año no se
@@ -266,7 +287,7 @@ export async function syncVentasGanadas(opciones: {
     // midió que a cuatro tratos de 2026 les movieron el cierre mientras estaban abiertos.
     const yaExistentes = await prisma.ventaGanada.findMany({
       where: { hubspotDealId: { in: crudos.map((d) => d.id) } },
-      select: { id: true, hubspotDealId: true, nombre: true, monto: true, fechaCierre: true, estado: true, clientId: true },
+      select: { id: true, hubspotDealId: true, nombre: true, monto: true, fechaCierre: true, estado: true, clientId: true, hubspotOwnerId: true, vendedorId: true },
     });
     const parcial = conocidas.length > 0 && crudos.length < conocidas.length * 0.5;
     if (parcial) {
@@ -312,6 +333,9 @@ export async function syncVentasGanadas(opciones: {
         clientId: cli.id,
         clienteVia: cli.via,
         hubspotCompanyId: cli.comp,
+        hubspotOwnerId: (d.p.hubspot_owner_id ?? "").trim() || null,
+        // Sin la tabla de dueños no se toca el vendedor que ya tenía (undefined = no se escribe).
+        vendedorId: duenosLeidos ? vendedorDe((d.p.hubspot_owner_id ?? "").trim() || null) : undefined,
         sospechaPrueba: huelaAPrueba(nombre),
         sincronizadoEn: now,
       };
@@ -337,6 +361,8 @@ export async function syncVentasGanadas(opciones: {
             fechaCierre: datos.fechaCierre,
             estado: "GANADA",
             clientId: cli.id,
+            hubspotOwnerId: datos.hubspotOwnerId,
+            vendedorId: datos.vendedorId ?? null,
           });
           await prisma.ventaGanadaCambio.create({
             data: { ventaId: creada.id, hubspotDealId: d.id, nombre, tipo: "ALTA", nuevo: String(monto ?? "(sin monto)") },
@@ -364,6 +390,15 @@ export async function syncVentasGanadas(opciones: {
         deltas.push({ tipo: "CLIENTE", anterior: previa.clientId ?? "(ninguno)", nuevo: cli.id ?? "(ninguno)" });
       }
 
+      // El vendedor no va a la bitácora (es de quién es la venta, no cuánto vale), pero sí se
+      // actualiza: la primera corrida después de sumarlo lo completa en todas las del año.
+      const cambiaVendedor =
+        (previa.hubspotOwnerId ?? null) !== datos.hubspotOwnerId || (duenosLeidos && (previa.vendedorId ?? null) !== datos.vendedorId);
+      if (deltas.length === 0 && cambiaVendedor) {
+        res.actualizadas++;
+        if (!opciones.dryRun) await prisma.ventaGanada.update({ where: { id: previa.id }, data: datos });
+        continue;
+      }
       if (deltas.length === 0) {
         res.sinCambio++;
         if (!opciones.dryRun) sinCambio.push(previa.id);

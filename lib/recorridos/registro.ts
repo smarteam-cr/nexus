@@ -15,6 +15,7 @@ import { EXITO_CUENTA, EXITO_LISTADO } from "./contenido/exito";
 import { ESCALA } from "./contenido/escala";
 import { FEEDBACK } from "./contenido/feedback";
 import { PREVENTA, PREVENTA_LISTADO } from "./contenido/preventa";
+import { TAREAS, TAREAS_EQUIPO } from "./contenido/tareas";
 import {
   FINANZAS_AGUINALDO,
   FINANZAS_CAJA_NETA,
@@ -46,6 +47,9 @@ export const INVITAR_LA_PRIMERA_VEZ = true;
 
 /** En el orden en que aparecen en «Tus recorridos» (dentro de cada grupo). */
 export const RECORRIDOS: readonly Recorrido[] = [
+  // Empieza aquí
+  TAREAS,
+  TAREAS_EQUIPO,
   // Clientes
   CLIENTES_LISTADO,
   FICHA_DEL_CLIENTE,

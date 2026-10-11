@@ -41,6 +41,7 @@
  *   ALLOW_PROD_WRITE=1 npx tsx --env-file=.env scripts/sanar-vinculos-de-alta.ts --apply
  *   ... --apply --proyecto <id>     (uno solo, para probar)
  */
+import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { reclassifyClientSessions } from "@/lib/sessions/reclassify";
 import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";

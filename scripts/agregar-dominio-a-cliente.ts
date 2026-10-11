@@ -21,6 +21,7 @@
  *   ALLOW_PROD_WRITE=1 npx tsx scripts/agregar-dominio-a-cliente.ts --client TEC --dominio itcr.ac.cr --apply
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import {

@@ -27,6 +27,7 @@
  *   Flags: --client <id|nombre> (acota a un cliente) · --sin-saneo (solo gates)
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import type { ProjectStageGateKey, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";

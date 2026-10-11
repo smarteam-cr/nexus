@@ -36,6 +36,7 @@ import {
 import { ocultarSeccionesRetiradas } from "@/lib/canvas/retirar-secciones";
 import { tagLabels } from "@/lib/tags/catalog";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { memoriaDelDocumento } from "@/lib/memoria";
 
 /** Asegura el canvas "Implementación" + reconcilia. Idempotente. */
 export async function ensureImplementacionCanvas(projectId: string): Promise<string> {
@@ -81,8 +82,17 @@ export async function runImplementacionGeneration(opts: {
     project?.clientId ? loadPortalLifecycleContext(project.clientId) : Promise.resolve(""),
   ]);
 
-  // El «Contexto» de este documento (lib/contexto/material-del-documento.ts): sus reuniones y notas.
+  /* El «Contexto adicional» de este documento (lib/contexto/material-del-documento.ts): las reuniones que eligió el
+     equipo, enteras (etapa 7: sin elegidas no entra ninguna y `avisoSinReuniones` lo dice), y sus notas. */
   const material = await cargarMaterialDelDocumento(projectId, documentoConContexto("implementation")!);
+  /* La memoria de la cuenta y del proyecto (lib/memoria, etapa 3), con el alcance INTERNO (la guía es del CSE): la
+     ficha con lo propuesto, la historia, lo fuera de alcance, la auditoría del portal, la preventa, los compromisos
+     abiertos y lo que dejaron las reuniones que su material no lee. Los procesos no: ya los lee enteros. */
+  const memoria = await memoriaDelDocumento(projectId, {
+    lector: "implementation",
+    clientId: project?.clientId ?? null,
+    yaLeidas: material.sesionesUsadas,
+  });
 
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
   const hubs = tagLabels(project?.tags ?? []);
@@ -107,9 +117,14 @@ export async function runImplementacionGeneration(opts: {
     procesosCtx ? `\n=== PROCESOS REALES DEL CLIENTE ===\n${procesosCtx}` : "",
     portalCtx ? `\n=== EL PORTAL HOY ===\n${portalCtx}` : "",
     material.reuniones
-      ? `\n=== LAS SESIONES DEL CONTEXTO DE LA EJECUCIÓN (las reuniones del proyecto con el cliente, curadas por el equipo; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente) ===\n${material.reuniones}`
-      : "",
+      ? `\n=== LAS REUNIONES ELEGIDAS POR EL EQUIPO PARA LA EJECUCIÓN (con su minuta y lo que se dijo, salvo las marcadas «en resumen»; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente) ===\n${material.reuniones}`
+      : material.avisoSinReuniones
+        ? `\n${material.avisoSinReuniones}`
+        : "",
     material.notas ? `\n=== NOTAS DEL EQUIPO PARA LA EJECUCIÓN ===\n${material.notas}` : "",
+    memoria.texto ? `\n${memoria.texto}` : "",
+    // La regla de puertas adentro otra vez: el bloque de reuniones puede ser largo.
+    material.cierreDeFrontera ? `\n${material.cierreDeFrontera}` : "",
     "",
     breeze.count > 0
       ? `=== SPEC DE BREEZE (qué puede y qué no puede crear) ===\n${breeze.text}`

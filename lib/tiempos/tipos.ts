@@ -47,9 +47,42 @@ export interface FilaDeDocumento {
   mediana: number | null;
 }
 
+/** Una tarea clave en Feedback › Encuestas: cuántas hay en los cronogramas y qué dijo el equipo. */
+export interface FilaDeFamilia {
+  clave: string;
+  nombre: string;
+  seReconocePor: string;
+  /** Tareas de Smarteam o compartidas en los cronogramas (sin las sesiones). */
+  tareas: number;
+  hechas: number;
+  proyectos: number;
+  /** Lo que dijo el equipo en la encuesta de arranque. La mediana, desde MINIMO_DEL_ARRANQUE respuestas. */
+  arranque: { respuestas: number; mediana: number | null; noLaHacen: number };
+  /** Lo que se respondió al terminarlas. La mediana, desde MINIMO_PARA_MEDIANA respuestas. */
+  alTerminar: { respuestas: number; mediana: number | null };
+  /** Las horas propias que usa hoy la carga, o null: cuenta como su tipo de fase. */
+  supuestoHoras: number | null;
+}
+
+/** Cómo va la encuesta de arranque. Nunca dice quién contestó qué. */
+export interface EstadoDelArranque {
+  mandadaEl: string | null;
+  /** A quién le llega, en una línea («CSE y CSL»). */
+  aQuien: string;
+  personas: number;
+  /** Contestaron todas sus preguntas (con una hora o «No la hago»). */
+  completas: number;
+  aMedias: number;
+  sinEmpezar: number;
+  /** Las que vencieron sin contestar. */
+  vencidas: number;
+}
+
 export interface DatosDeTiempos {
   periodo: PeriodoDeTiempos;
   encuestas: FilaDeEncuesta[];
+  arranque: EstadoDelArranque;
+  familias: FilaDeFamilia[];
   calibracion: CalibracionDeTipo[];
   documentos: FilaDeDocumento[];
   respuestasDeTareas: number;

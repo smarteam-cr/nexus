@@ -13,8 +13,11 @@ import { toSummaryLifecycle } from "@/lib/portfolio/load";
 import { getProjectLifecycle, type ProjectLifecycle } from "@/lib/lifecycle";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import { computePhaseRanges, addWeeks, projectedEnd } from "@/lib/timeline/weeks";
-import { bloquesDeLaCuenta } from "./watchdog-cuenta";
+import { bloquesDeLaCuenta, type CorreoLeido } from "./watchdog-cuenta";
 import { TOPE_TRANSCRIPCION_PROYECTO, extractosDelBloque } from "./transcripcion-del-vigia";
+import { whereBelongsToClient } from "@/lib/sessions/project-sources";
+import { lineaParaElVigia, pendientesVencidosParaElVigia } from "@/lib/tareas/para-agentes";
+import { riesgosParaElVigia } from "@/lib/seguimiento/hechos-server";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -33,6 +36,10 @@ export interface WatchdogContext {
    * su bloque de etapa sin que nada fallara.
    */
   lifecycle: ProjectLifecycle | null;
+  /** Los correos del cliente que leyó el vigía, por id: con ellos se verifica la frase de una queja. */
+  correos: Map<string, CorreoLeido>;
+  /** true = HubSpot deja leer los correos; false = falta el permiso; null = no se sabe (sin empresa, sin correos). */
+  correosConPermiso: boolean | null;
 }
 
 function fmtDate(d: Date | null | undefined): string {
@@ -62,7 +69,11 @@ function serializeEvents(events: TimelineEvent[]): string {
 function serializeAlerts(alerts: CsAlert[]): string {
   if (alerts.length === 0) return "(ninguna)";
   return alerts
-    .map((a) => `- [${a.status}] ${a.category}/${a.severity} "${a.title}" (fingerprint base del dedupeKey: ${a.dedupeKey})`)
+    .map(
+      (a) =>
+        `- [${a.status}] ${a.category}/${a.severity} "${a.title}" (fingerprint base del dedupeKey: ${a.dedupeKey})` +
+        (a.resolutionNote ? ` · al cerrarla anotaron: «${a.resolutionNote}»` : ""),
+    )
     .join("\n");
 }
 
@@ -191,8 +202,14 @@ export async function buildWatchdogContext(
   // Sesiones REALES recientes del proyecto (fechas pasadas — hay sesiones con
   // fecha corrupta 2037+, anomalía conocida del sync).
   const recentSessions = await prisma.sessionProject.findMany({
-    // included: las sesiones excluidas por humano no alimentan el contexto del watchdog
-    where: { projectId, included: true, session: { date: { lte: now } } },
+    // included: las sesiones excluidas por humano no alimentan el contexto del watchdog.
+    // whereBelongsToClient (2026-10-09, Memoria de la cuenta · Etapa 0): un vínculo viejo a una
+    // reunión de OTRO cliente no entra al prompt del vigía (invariante 1).
+    where: {
+      projectId,
+      included: true,
+      session: { date: { lte: now }, ...whereBelongsToClient(project.clientId) },
+    },
     orderBy: { session: { date: "desc" } },
     take: 5,
     select: {
@@ -240,16 +257,26 @@ export async function buildWatchdogContext(
         .join("\n")
     : "(sin sesiones registradas)";
 
-  // ActionItems vencidos y abiertos del proyecto.
-  const overdueActions = await prisma.actionItem.findMany({
-    where: { projectId, status: "PENDING", dueDate: { lt: now } },
-    orderBy: { dueDate: "asc" },
-    take: 10,
-    select: { text: true, dueDate: true },
-  });
-  const actionsBlock = overdueActions.length
-    ? overdueActions.map((a) => `- [venció ${fmtDate(a.dueDate)}] ${a.text.slice(0, 160)}`).join("\n")
-    : "(sin acciones vencidas)";
+  /* Los RIESGOS que dejó la lectura de las reuniones (memoria de la cuenta, etapa 6): la lectura no levanta una alerta
+     por un riesgo, ni por una queja que no se comprobó que dijo el cliente; se los pasa al vigía como evidencia
+     (DECISIONS «Un solo sistema de alertas, con tres detectores»). De este proyecto y de la cuenta, de 30 días, sin
+     desestimar, cada uno con su cita literal, su reunión y quién lo dijo. Sin la tabla de los hechos o con la lectura de
+     hechos apagada, la lista viene vacía y la sección no va: el pedido del vigía queda como sin la etapa 6. */
+  const riesgos = await riesgosParaElVigia(project.clientId, projectId, now).catch(() => []);
+  const quienLoDijo = (q: "cliente" | "smarteam" | null) =>
+    q === "cliente" ? "lo dijo el cliente" : q === "smarteam" ? "lo dijo alguien de Smarteam" : "no se sabe quién lo dijo";
+  const riesgosBlock = riesgos
+    .map(
+      (r) =>
+        `- [${r.fecha}] ${r.deLaCuenta ? "(de la cuenta) " : ""}${r.tipo === "queja" ? "(queja) " : ""}${r.frase}${r.gravedad ? ` · gravedad ${r.gravedad}` : ""} · ${quienLoDijo(r.quien)}\n  cita: «${r.cita.slice(0, 300)}»${r.sessionId ? ` · sessionId=${r.sessionId}` : ""}`,
+    )
+    .join("\n");
+
+  /* Los compromisos vencidos del proyecto, de Tareas (memoria de la cuenta, etapa 2: `ActionItem` se retiró). Por la
+     ÚNICA puerta de los agentes (lib/tareas/para-agentes.ts): título, para cuándo, estado y lado. Nada privado, ni el
+     texto de la reunión, el contexto o las notas: esta alerta la leen otras personas. */
+  const vencidos = await pendientesVencidosParaElVigia(projectId, now);
+  const actionsBlock = vencidos.length ? vencidos.map(lineaParaElVigia).join("\n") : "(sin compromisos vencidos)";
 
   // ── Señales HubSpot del cliente (snapshot cacheado) ─────────────────────────
   const signals = await prisma.clientCsSignals.findUnique({
@@ -290,7 +317,9 @@ export async function buildWatchdogContext(
       clientId: project.clientId,
       OR: [
         { status: { in: ["OPEN", "SEEN"] } },
-        { status: { in: ["RESOLVED", "DISMISSED"] }, updatedAt: { gte: new Date(now.getTime() - 7 * DAY_MS) } },
+        // 30 días: una cerrada solo vuelve con una señal nueva (lib/cs/alertas-reglas.ts), y la nota
+        // de quien la cerró le dice al agente qué ya se hizo.
+        { status: { in: ["RESOLVED", "DISMISSED"] }, updatedAt: { gte: new Date(now.getTime() - 30 * DAY_MS) } },
       ],
     },
     orderBy: { lastDetectedAt: "desc" },
@@ -420,12 +449,13 @@ export async function buildWatchdogContext(
   /* La CUENTA, además del proyecto (2026-10-04): handoff, facturación, más de Partner, el registro
      de la empresa en HubSpot y sus contactos, y las reuniones de la cuenta (con el cliente e
      internas). Cierra con la guía de cruces. Nunca tira: un bloque que falla se omite. */
-  const cuentaBlock = await bloquesDeLaCuenta({
+  const cuenta = await bloquesDeLaCuenta({
     projectId,
     clientId: project.clientId,
     sesionesYaListadas: new Set(recentSessions.map((sp) => sp.session.id)),
     ahora: now,
-  }).catch(() => "");
+  }).catch(() => ({ texto: "", correos: new Map<string, CorreoLeido>(), correosConPermiso: null }));
+  const cuentaBlock = cuenta.texto;
 
   const serialized = [
     `PROYECTO: ${project.name} (projectId=${project.id})`,
@@ -463,7 +493,14 @@ export async function buildWatchdogContext(
     "=== SESIONES REALES RECIENTES + MINUTAS (¿explican los cambios? ¿traen riesgos?) ===",
     sessionsBlock,
     "",
-    "=== ACCIONES VENCIDAS ===",
+    ...(riesgos.length
+      ? [
+          "=== RIESGOS DE REUNIONES RECIENTES SIN ALERTA (los encontró la lectura de cada reunión; juzga tú si alguno amerita una alerta, y cita su sessionId. Una QUEJA solo si lo dijo el cliente: lo que dijo alguien de Smarteam es contexto, no una queja del cliente) ===",
+          riesgosBlock,
+          "",
+        ]
+      : []),
+    "=== COMPROMISOS VENCIDOS (TAREAS) ===",
     actionsBlock,
     "",
     "=== SEÑALES DE HUBSPOT DEL CLIENTE ===",
@@ -471,11 +508,11 @@ export async function buildWatchdogContext(
     "",
     cuentaBlock || null,
     cuentaBlock ? "" : null,
-    "=== ALERTAS YA EXISTENTES (NO las repitas; DISMISSED reciente = a la líder no le interesó) ===",
+    "=== ALERTAS YA EXISTENTES (NO las repitas; RESOLVED = ya se atendió y DISMISSED = a la líder no le interesó: no las vuelvas a levantar salvo que haya algo NUEVO o más grave, y dilo) ===",
     serializeAlerts(existingAlerts),
   ]
     .filter((x) => x !== null)
     .join("\n");
 
-  return { clientId: project.clientId, projectId, serialized, summary, lifecycle };
+  return { clientId: project.clientId, projectId, serialized, summary, lifecycle, correos: cuenta.correos, correosConPermiso: cuenta.correosConPermiso };
 }

@@ -18,13 +18,279 @@
  * - HubSpot: si las dos empresas terminaron fusionadas en la MISMA, la ficha apunta a esa. Si son dos empresas vivas
  *   distintas, se queda con la suya y la otra se reporta desligada. Lo que HubSpot no pudo decir no se adivina.
  * - Uno a uno (señales de CS, snapshot de CS360, brief, cuenta de HubSpot): si solo la absorbida lo tiene, se muda; si
- *   lo tienen las dos, queda el de la que sigue (son copias que el sync vuelve a armar).
+ *   lo tienen las dos, queda el de la que sigue (son copias que el sync vuelve a armar). La clasificación de la cartera
+ *   la confirmó una persona: si las dos tienen, la que sigue toma de la otra lo que no tiene confirmado.
+ * - Lo que tiene un único compuesto con la ficha (notas de etapa, asignaciones, solicitudes fuera de alcance,
+ *   licencias): se muda lo que no choca; lo que choca se queda el de la que sigue, salvo donde hay una decisión
+ *   humana (`resolverChoques`): queda la solicitud que alguien decidió (y si las dos lo están, no se fusiona), y la
+ *   licencia de la que sigue toma de la otra lo que le falta.
  * - La cuenta de cobro: si solo la absorbida tiene, se muda entera; si las dos, la que sigue recibe sus servicios,
- *   cobros, alertas, bitácora, facturas soltadas, clientes de Odoo y facturas de Odoo, y de sus datos toma lo que le
+ *   cobros, alertas, bitácora, facturas soltadas, clientes de Odoo y de Mercury y facturas de Odoo, y de sus datos toma lo que le
  *   falta. ⛔ Lo que difiere (moneda, vía, términos, clasificación) no se elige en silencio: se reporta, y queda el de
  *   la que sigue.
+ *
+ * ── TODA TABLA QUE APUNTA A LA FICHA ESTÁ DECLARADA ACÁ (2026-10-09) ─────────────
+ * Al borrar la ficha absorbida, Postgres borra en cascada (o deja sin cliente) todo lo que todavía le apunta. Hasta
+ * este día el script no mudaba las solicitudes fuera de alcance, las licencias, la clasificación de la cartera, las
+ * correcciones del color, las preguntas de tiempo ni los clientes de Mercury de la cuenta: se perdían en silencio. Por
+ * eso cada relación hacia `Client` (y hacia la cuenta de cobro) va en UNA de las listas de abajo, y
+ * lib/clients/fusion-cubre-el-esquema.test.ts lee prisma/schema.prisma y se pone rojo si una tabla nueva no está.
  */
 import type { VeredictoDeFusion } from "@/lib/hubspot/empresa-fusionada";
+import type { DatoDeClasificacion } from "@/lib/cs/clasificacion";
+
+/* ── Qué pasa con cada tabla que apunta a la ficha ──────────────────────────────────
+   Los nombres son los de los delegados de Prisma (camelCase). Una tabla va en UNA sola lista. */
+
+/** Se mudan cambiando UNA columna: [modelo de Prisma, columna que apunta a la ficha]. Sin únicos que choquen. */
+export const SE_MUDAN = [
+  ["project", "clientId"],
+  ["handoff", "clientId"],
+  ["clientDocument", "clientId"],
+  ["clientContextCard", "clientId"],
+  ["knowledge", "clientId"],
+  ["audit", "clientId"],
+  ["agentRun", "clientId"],
+  ["businessCase", "clientId"],
+  ["exploracionDeVenta", "clientId"],
+  ["appUser", "clientId"],
+  ["actionItem", "clientId"],
+  ["canvasSuggestion", "clientId"],
+  ["csAlert", "clientId"],
+  ["ingresoVariable", "clientId"],
+  ["comisionPartner", "clientId"],
+  ["reglaComisionVendedor", "clientId"],
+  ["ventaGanada", "clientId"],
+  ["importacionFila", "aplicadoClientId"],
+  ["escalaComentario", "clienteId"],
+  /* Tareas internas (2026-10-09): `onDelete: SetNull`, así que sin mudarlas perderían el cliente en silencio. */
+  ["tarea", "clientId"],
+  ["proyectoDeTareas", "clientId"],
+  ["tareaVinculo", "clientId"],
+  /* El color corregido a mano y el «en espera del cliente» (2026-10-09). Es una bitácora: se muda entera, y el estado
+     sigue siendo el último evento de cada clase. */
+  ["correccionDeSalud", "clientId"],
+  /* «¿Cuánto te tomó?» (2026-10-09): `onDelete: SetNull`; sin mudarla, la respuesta queda sin cliente. */
+  ["preguntaDeTiempo", "clientId"],
+  /* Los hechos de las reuniones (memoria de la cuenta, etapa 6): `onDelete: Cascade`, así que sin mudarlos se BORRARÍAN
+     con la ficha absorbida. Se mudan enteros: las reuniones también pasan a la que sigue (más abajo), así que INV45
+     (todo hecho es del cliente de su reunión) sigue en verde. Sin único con la ficha: dos hechos iguales de las dos
+     fichas conviven (la huella no es única). */
+  ["hechoDeReunion", "clientId"],
+  /* Sin relación en el esquema: la base no las cascadea ni las protege (lib/db/punteros-al-borrar.test.ts). */
+  ["firefliesSession", "resolvedClientId"],
+  ["firefliesSession", "manualClientId"],
+  ["timelineEvent", "clientId"],
+  ["llmCall", "clientId"],
+  ["partnerUsageSnapshot", "clientId"],
+] as const;
+
+/**
+ * Tienen un único compuesto con `clientId` (`@@unique([clientId, ...clave])`): lo que no choca se muda; lo que choca
+ * con una fila de la que sigue se queda el de la que sigue, y el de la absorbida va entero al respaldo «antes».
+ */
+export const SIN_CHOCAR = [
+  { modelo: "stageNote", clave: ["stage", "step"], etiqueta: "notas de etapa" },
+  { modelo: "clientAssignment", clave: ["teamMemberId", "targetRole"], etiqueta: "asignaciones" },
+  { modelo: "pedidoFueraDeAlcance", clave: ["huella"], etiqueta: "solicitudes fuera de alcance" },
+  { modelo: "licenciaCliente", clave: ["hub"], etiqueta: "licencias" },
+] as const;
+
+/**
+ * Una por ficha (`clientId` es `@unique` o `@id`): se muda si la que sigue no la tiene. Si las dos tienen, queda la de
+ * la que sigue (las copias las vuelve a armar el sync) y la otra va entera al respaldo «antes». La clasificación de la
+ * cartera NO es una copia: la confirmó una persona, así que la que sigue toma de la otra lo que no tiene confirmado
+ * (`plegarClasificacion`).
+ */
+export const UNO_A_UNO = ["hubspotAccount", "clientCsSignals", "clientPartnerSnapshot", "csAccountBrief", "clasificacionDeCuenta"] as const;
+
+/** Lo que cuelga de la cuenta de cobro (por `cuentaId`): se muda a la cuenta de la que sigue cuando las dos tienen. */
+export const DE_LA_CUENTA = [
+  "servicioContratado",
+  "cobro",
+  "alertaCobro",
+  "bitacoraCobro",
+  "facturaLiberada",
+  "facturaOdoo",
+  "odooPartnerVinculo",
+  /* La copia de Mercury (2026-10-02): `onDelete: SetNull`; sin mudarla, el cliente de Mercury quedaba desvinculado. */
+  "clienteMercury",
+] as const;
+
+/** Las relaciones con una regla propia en el script, que no cabe en las listas de arriba. */
+export const CON_REGLA_PROPIA: Readonly<Record<string, string>> = {
+  "cuentaFinanciera.clientId":
+    "la cuenta de cobro: si solo la absorbida tiene, se muda entera; si las dos, la de la que sigue recibe lo de DE_LA_CUENTA y toma lo que le falta (plegarCuenta)",
+};
+
+/**
+ * Se borran con la ficha absorbida (o quedan sin cliente) A PROPÓSITO, cada una con su motivo. Clave «modelo.columna».
+ * Hoy no hay ninguna: todo lo que apunta a la ficha es memoria de la empresa.
+ */
+export const SE_BORRAN_A_PROPOSITO: Readonly<Record<string, string>> = {};
+
+/** Punteros sin relación que siguen apuntando al id de la absorbida A PROPÓSITO, cada uno con su motivo. */
+export const SE_QUEDAN_A_PROPOSITO: Readonly<Record<string, string>> = {
+  "resultadoDeSemana.fotoCliente":
+    "es la FOTO de cada semana de Tareas: el pasado no cambia (sin FK a propósito), y solo anotarResultado() escribe esa tabla. ⚠ Lo hecho de la absorbida no aparece en «Tareas internas por cliente» de la que sigue: el script lo cuenta y lo avisa",
+};
+
+/** El nombre de la tabla de un delegado: `stageNote` → `StageNote`. */
+export const tablaDe = (modelo: string) => modelo.charAt(0).toUpperCase() + modelo.slice(1);
+
+/** Las tablas que puede escribir una fusión: el guard las respalda con pg_dump antes de empezar. */
+export const TABLAS_DE_LA_FUSION: readonly string[] = [
+  ...new Set([
+    "Client",
+    "CuentaFinanciera",
+    ...SE_MUDAN.map(([m]) => tablaDe(m)),
+    ...SIN_CHOCAR.map((s) => tablaDe(s.modelo)),
+    ...UNO_A_UNO.map(tablaDe),
+    ...DE_LA_CUENTA.map(tablaDe),
+  ]),
+];
+
+/* ── Lo que choca con un único ──────────────────────────────────────────────────── */
+
+/**
+ * Reparte las filas de la absorbida de una tabla de SIN_CHOCAR: pasan las que no chocan con una de la que sigue por su
+ * clave; las que chocan se quedan afuera (queda la de la que sigue). Un nulo en la clave cuenta como un valor más, igual
+ * que hasta hoy: dos asignaciones al mismo rol sin persona son la misma, aunque Postgres las deje convivir.
+ */
+export function repartirSinChocar<T extends Readonly<Record<string, unknown>>>(
+  deLaAbsorbida: readonly T[],
+  deLaQueSigue: readonly Readonly<Record<string, unknown>>[],
+  clave: readonly string[],
+): { pasan: T[]; chocan: T[] } {
+  const llave = (f: Readonly<Record<string, unknown>>) => JSON.stringify(clave.map((k) => f[k] ?? null));
+  const tiene = new Set(deLaQueSigue.map(llave));
+  const pasan: T[] = [];
+  const chocan: T[] = [];
+  for (const f of deLaAbsorbida) (tiene.has(llave(f)) ? chocan : pasan).push(f);
+  return { pasan, chocan };
+}
+
+/**
+ * Qué pasa con una fila de la absorbida que choca con una de la que sigue. `borrar-absorbida`: queda la de la que
+ * sigue (lo de siempre). `reemplazar`: queda la de la absorbida (se borra la de la que sigue y la otra se muda).
+ * `plegar`: la de la que sigue toma de la otra lo que le falta (`cambios`) y la otra se borra. `frenar`: no se
+ * fusiona hasta que una persona decida.
+ */
+export type AccionDeChoque = "borrar-absorbida" | "reemplazar" | "plegar" | "frenar";
+
+export interface ChoqueResuelto<T> {
+  absorbida: T;
+  sigue: Readonly<Record<string, unknown>>;
+  accion: AccionDeChoque;
+  /** En `plegar`: lo que se escribe en la fila de la que sigue. */
+  cambios?: Record<string, unknown>;
+  /** En `frenar` (y en `plegar` cuando hay datos distintos): por qué, para el reporte. */
+  motivo?: string;
+}
+
+/** ¿Una persona ya decidió esta solicitud fuera de alcance? (la confirmó, la cotizó, la descartó…). */
+const solicitudDecidida = (f: Readonly<Record<string, unknown>>) => f.decididoAt != null || (typeof f.estado === "string" && f.estado !== "PEDIDO");
+
+/** Los campos de una licencia que la de la que sigue toma de la otra si le faltan. */
+const DE_LA_LICENCIA_SI_FALTAN = ["plan", "fechaCompra", "fechaRenovacion", "montoMensual", "moneda"] as const;
+
+const mismoValor = (a: unknown, b: unknown) =>
+  a instanceof Date && b instanceof Date ? a.getTime() === b.getTime() : JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/**
+ * Resuelve los choques de las tablas de SIN_CHOCAR donde una fila lleva una decisión humana. Antes, lo que chocaba
+ * se BORRABA aunque la fila de la absorbida tuviera la decisión (una solicitud confirmada y cotizada) y la de la
+ * que sigue estuviera sin decidir: la decisión quedaba solo en el respaldo.
+ *   · Solicitudes fuera de alcance: queda la decidida; si las dos lo están, se frena (la elige una persona).
+ *   · Licencias: la de la que sigue toma de la otra lo que le falta (y junta las notas); un dato distinto en las dos
+ *     queda el de la que sigue y se avisa.
+ *   · Lo demás (notas de etapa, asignaciones): queda la de la que sigue, como siempre.
+ */
+export function resolverChoques<T extends Readonly<Record<string, unknown>>>(
+  modelo: string,
+  chocan: readonly T[],
+  deLaQueSigue: readonly Readonly<Record<string, unknown>>[],
+  clave: readonly string[],
+): ChoqueResuelto<T>[] {
+  const llave = (f: Readonly<Record<string, unknown>>) => JSON.stringify(clave.map((k) => f[k] ?? null));
+  const porLlave = new Map(deLaQueSigue.map((f) => [llave(f), f]));
+  return chocan.flatMap((absorbida): ChoqueResuelto<T>[] => {
+    const sigue = porLlave.get(llave(absorbida));
+    if (!sigue) return [];
+    if (modelo === "pedidoFueraDeAlcance") {
+      const a = solicitudDecidida(absorbida);
+      const s = solicitudDecidida(sigue);
+      if (a && s) {
+        return [{ absorbida, sigue, accion: "frenar" as const, motivo: `la solicitud «${String(absorbida.pedido ?? absorbida.huella ?? "")}» está decidida en las dos fichas` }];
+      }
+      return [{ absorbida, sigue, accion: a ? ("reemplazar" as const) : ("borrar-absorbida" as const) }];
+    }
+    if (modelo === "licenciaCliente") {
+      const cambios: Record<string, unknown> = {};
+      const difieren: string[] = [];
+      for (const campo of DE_LA_LICENCIA_SI_FALTAN) {
+        if (vacio(sigue[campo]) && !vacio(absorbida[campo])) cambios[campo] = absorbida[campo];
+        else if (!vacio(sigue[campo]) && !vacio(absorbida[campo]) && !mismoValor(sigue[campo], absorbida[campo])) difieren.push(campo);
+      }
+      const notaA = typeof absorbida.nota === "string" ? absorbida.nota.trim() : "";
+      const notaS = typeof sigue.nota === "string" ? sigue.nota.trim() : "";
+      if (notaA && notaA !== notaS) cambios.nota = notaS ? `${notaS}\n\n${notaA}` : notaA;
+      return [
+        {
+          absorbida,
+          sigue,
+          accion: "plegar" as const,
+          cambios,
+          ...(difieren.length ? { motivo: `licencia ${String(absorbida.hub)}: queda lo de la que sigue en ${difieren.join(", ")}` } : {}),
+        },
+      ];
+    }
+    return [{ absorbida, sigue, accion: "borrar-absorbida" as const }];
+  });
+}
+
+/* ── La clasificación de la cartera ─────────────────────────────────────────────── */
+
+/** Los datos que confirma la CSL (lib/cs/clasificacion.ts). Cada uno guarda su valor, quién y cuándo. */
+export const DATOS_DE_LA_CLASIFICACION = ["relacion", "potencial", "momento"] as const satisfies readonly DatoDeClasificacion[];
+
+export interface PliegueDeClasificacion {
+  /** Lo que se escribe en la clasificación de la que sigue. */
+  cambios: Record<string, unknown>;
+  /** Los datos que tomó de la otra. */
+  tomados: DatoDeClasificacion[];
+}
+
+/**
+ * Las dos fichas tienen clasificación: la que sigue conserva lo que confirmó y toma de la otra lo que no tiene, con su
+ * autor y su fecha. Lo que tomó deja de estar descartado (confirmar un dato borra su descarte, como en la pantalla). Lo
+ * demás de los descartes queda como estaba en la que sigue.
+ */
+export function plegarClasificacion(
+  sigue: Readonly<Record<string, unknown>>,
+  absorbida: Readonly<Record<string, unknown>>,
+): PliegueDeClasificacion {
+  const cambios: Record<string, unknown> = {};
+  const tomados: DatoDeClasificacion[] = [];
+  const descartes =
+    sigue.descartes && typeof sigue.descartes === "object" && !Array.isArray(sigue.descartes)
+      ? { ...(sigue.descartes as Record<string, unknown>) }
+      : null;
+  let tocoDescartes = false;
+  for (const dato of DATOS_DE_LA_CLASIFICACION) {
+    if (!vacio(sigue[dato]) || vacio(absorbida[dato])) continue;
+    cambios[dato] = absorbida[dato];
+    cambios[`${dato}Por`] = absorbida[`${dato}Por`] ?? null;
+    cambios[`${dato}En`] = absorbida[`${dato}En`] ?? null;
+    tomados.push(dato);
+    if (descartes && dato in descartes) {
+      delete descartes[dato];
+      tocoDescartes = true;
+    }
+  }
+  if (tocoDescartes) cambios.descartes = descartes;
+  return { cambios, tomados };
+}
 
 const vacio = (v: unknown): boolean =>
   v === null || v === undefined || (typeof v === "string" && v.trim() === "") || (Array.isArray(v) && v.length === 0);
@@ -258,6 +524,8 @@ export interface LoQueSeMudo {
   facturasSoltadas: number;
   clientesDeOdoo: number;
   facturasDeOdoo: number;
+  /** Los clientes de la copia de Mercury vinculados a la cuenta (2026-10-09). */
+  clientesDeMercury?: number;
 }
 
 export function textoDeFusionDeCuenta(firma: string, nombreAbsorbida: string, m: LoQueSeMudo, diferencias: readonly string[]): string {
@@ -265,6 +533,7 @@ export function textoDeFusionDeCuenta(firma: string, nombreAbsorbida: string, m:
     `${m.servicios} servicio(s)`,
     `${m.cobros} cobro(s)`,
     m.clientesDeOdoo ? `${m.clientesDeOdoo} cliente(s) de Odoo con ${m.facturasDeOdoo} documento(s)` : null,
+    m.clientesDeMercury ? `${m.clientesDeMercury} cliente(s) de Mercury` : null,
     m.alertas ? `${m.alertas} alerta(s)` : null,
     m.facturasSoltadas ? `${m.facturasSoltadas} factura(s) soltada(s)` : null,
     m.bitacora ? `${m.bitacora} línea(s) de bitácora` : null,

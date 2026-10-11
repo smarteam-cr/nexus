@@ -20,6 +20,7 @@
  */
 
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { syncGoogleMeetSessions } from "../lib/google/meet-sync";
 
 async function main() {

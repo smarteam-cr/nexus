@@ -30,6 +30,17 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   viejo (no entra por HMR) o la columna no se aplicó a PROD a mano. *Guarda:* tras aplicar el `.sql`
   correr `npx prisma generate` y reiniciar el dev server (flujo completo: ARCHITECTURE Parte 0 ·
   cap. D); INV7 de `check:invariants` detecta la columna sin aplicar.
+- **Un módulo nuevo revienta con P2021 en el `dev:prod` (3004) en vez de decir «falta el SQL».** *Causa:* el
+  aviso miraba solo `modeloDisponible` (que el CLIENTE conozca el modelo); en el 3004 el cliente está regenerado y la
+  base de producción todavía no tiene las tablas. Pasó con Tareas el 2026-10-09. *Guarda:* mirar las dos puntas — el
+  cliente Y la base (`tareasDisponible()` consulta el catálogo con `to_regclass`, guardado) — y atrapar
+  `esquemaDesactualizado(e)` en la carga de la página y en el traductor de errores de las rutas.
+- **Un test de integración falla con «la columna X no existe» y el código está bien.** *Causa:* `nexus_test` quedó
+  atrás de `scripts/sql/` (pasó el 2026-10-10 con `LecturaDeReunion.seguimientoIntentos`: siete tests de Tareas en
+  rojo). Y el bootstrap no la ponía al día: un `.sql` que no se podía correr dos veces
+  (`2026-08-17-cortes-aguinaldo-atribucion.sql`) lo frenaba desde agosto en toda base que ya existía. *Guarda:*
+  `test/global-setup.integration.ts` aplica los `.sql` posteriores al baseline antes de cada `npm run test:int`, y
+  si uno falla al reaplicarse lo dice con su nombre: se arregla el `.sql`, no se saltea.
 - **CSS/estilos rotos tras `git pull`.** *Causa:* caché de Turbopack stale. *Guarda:* `rm -rf .next`
   + reiniciar (un restart solo no alcanza).
 - **El preview del navegador no está logueado** → middleware redirige al login. *Guarda:* el E2E de
@@ -89,3 +100,4 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   posicional que evitaba duplicados — cuanto más se parecían los nombres, peor el resultado. *Guarda:*
   si una funcionalidad nueva obliga a reordenar o apagar una guarda existente para poder probarse, es
   señal de que no tiene un lugar real, no de que falta ajustar el orden.
+- **Un script de consola muere al cargar con «Cannot find module 'server-only'».** *Causa:* `server-only` lo resuelve Next, no es un paquete; un script (`npx tsx scripts/...`) que llega de rebote a un módulo con `import "server-only"` no arranca, y tsc no lo ve. Pasó el 2026-10-10: `lib/lecturas/cola.ts` lo sumó y 24 scripts (check-invariants entre ellos) dejaron de arrancar. *Guarda:* `import "./lib/permitir-server-only";` después de `dotenv/config`, y `lib/db/scripts-server-only.test.ts`, que recorre los imports de cada script y falla si llega a `server-only` sin el shim.

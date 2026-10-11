@@ -121,3 +121,7 @@ export type { PanelLateralProps } from "./PanelLateral";
 
 export { ToastProvider, useToast } from "./Toast";
 export type { ToastApi, ToastOptions, ToastAction, ToastType } from "./Toast";
+export { AgendaDeLaSemana } from "./AgendaDeLaSemana";
+export type { AgendaDeLaSemanaProps, BloqueDeLaAgenda } from "./AgendaDeLaSemana";
+export { Tablero } from "./Tablero";
+export type { TableroProps, ColumnaDelTablero } from "./Tablero";

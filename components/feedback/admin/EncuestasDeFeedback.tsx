@@ -81,7 +81,7 @@ export default function EncuestasDeFeedback({
   const grupos = useMemo(() => agruparPedidos(datos.pedidos), [datos.pedidos]);
   const hayPreguntas = grupos.abiertas.length + grupos.cerradas.length > 0;
   const queSigue = queSigueDeEncuestas(grupos, datos.equipo, respuestasSinRevisar(datos.pedidos));
-  const activas = tiempos ? tiempos.encuestas.filter((e) => e.activa).length : 0;
+  const activas = tiempos ? tiempos.encuestas.filter((e) => e.activa && e.momento !== "ARRANQUE").length : 0;
 
   /** La clase abierta va en la dirección sin volver a pedir la página: los datos de las dos ya están. */
   const cambiarClase = useCallback((c: ClaseDeEncuesta) => {

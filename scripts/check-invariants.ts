@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { $Enums } from "@prisma/client";
@@ -12,7 +13,7 @@ import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { escribeSqlCrudo } from "@/lib/db/escritura-sql-cruda";
 import {
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
-  INV31, INV32, INV33, INV34, INV35, INV36, INV37,
+  INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46,
   type Invariante,
 } from "@/lib/invariantes";
 
@@ -752,6 +753,27 @@ async function main(): Promise<number> {
 
   // ── Inv 37 → lib/invariantes/sesiones.ts (2026-10-02: dos clientes con el mismo dominio se reparten mal las reuniones) ──
   violations += await reportar(INV37, prisma);
+
+  // ── Inv 38–43 → lib/invariantes/tareas.ts (2026-10-09: Tareas internas — cliente del proyecto, contenedor, semana
+  //    revisada, fusiones, la cita de una reunión de otro cliente y sprints sin personas) ──
+  violations += await reportar(INV38, prisma);
+  violations += await reportar(INV39, prisma);
+  violations += await reportar(INV40, prisma);
+  violations += await reportar(INV41, prisma);
+  violations += await reportar(INV42, prisma);
+  violations += await reportar(INV43, prisma);
+
+  // ── Inv 44 → lib/invariantes/lecturas.ts (2026-10-10: memoria de la cuenta, etapa 2 — cada reunión reciente de un
+  //    cliente o un prospecto tiene su lectura de seguimiento o su minuta) ──
+  violations += await reportar(INV44, prisma);
+
+  // ── Inv 45 → lib/invariantes/hechos.ts (2026-10-10: memoria de la cuenta, etapa 6 — todo hecho es del cliente de su
+  //    reunión; sin la tabla, «no aplica todavía») ──
+  violations += await reportar(INV45, prisma);
+
+  // ── Inv 46 → lib/invariantes/lecturas.ts (2026-10-10: ningún pedido fuera de alcance de una reunión de otro cliente;
+  //    el gemelo de INV42) ──
+  violations += await reportar(INV46, prisma);
 
   return violations;
 }

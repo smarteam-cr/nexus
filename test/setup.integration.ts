@@ -12,7 +12,8 @@
  *      RESTART IDENTITY CASCADE → cada test arranca con la base VACÍA y siembra lo suyo.
  *      Por eso `fileParallelism: false`: los archivos comparten la base.
  *
- * La base la provee `npm run db:local` (bootstrap crea `nexus_test` con el schema completo).
+ * La base la provee `npm run db:local` (bootstrap crea `nexus_test` con el schema completo), y
+ * `test/global-setup.integration.ts` la pone al día con los `scripts/sql/` nuevos antes de cada corrida.
  * Si no está levantada, el primer connect falla con ECONNREFUSED y el mensaje de abajo.
  */
 import { config } from "dotenv";

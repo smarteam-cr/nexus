@@ -1,5 +1,7 @@
 /**
- * POST /api/sales/exploraciones/[id]/agente   body: { modo: "preparar" | "leer" | "casos", sesionId? }
+ * POST /api/sales/exploraciones/[id]/agente   body: { modo: "preparar" | "leer" | "casos", sesionId?, hubspotId? }
+ *   `hubspotId` (con «leer»): vuelve a leer ENTERA una reunión de HubSpot que el agente ya leyó (su
+ *   grabación, el resumen de IA de HubSpot, puede no haber estado cuando la leyó).
  *   Lanza el agente de la exploración en segundo plano (lib/exploraciones/agente.ts). 202 con la
  *   corrida. Si ya hay una viva, devuelve esa: dos corridas a la vez se pisarían lo leído.
  *   Pide `ventas.write` (gasta IA).
@@ -11,7 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
-import { guardPermission } from "@/lib/auth/api-guards";
+import { guardDeLaExploracion } from "@/lib/exploraciones/guardia";
 import { parseRunError } from "@/lib/agents/run-error";
 import { estaColgada, MOTIVO_COLGADA } from "@/lib/agents/run-colgada";
 import { lanzarCorrida, ultimaCorrida } from "@/lib/exploraciones/agente";
@@ -23,12 +25,14 @@ type Ctx = { params: Promise<{ id: string }> };
 
 const Cuerpo = z.object({
   modo: z.enum(MODOS_DE_LA_CORRIDA),
-  sesionId: z.string().min(1).max(60).optional(),
+  // El id de la reunión: hasta 200 (los de una instancia de una serie de Meet llegan a ~190, etapa A).
+  sesionId: z.string().min(1).max(200).optional(),
+  hubspotId: z.string().regex(/^\d{1,30}$/).optional(),
 });
 
 export async function POST(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const guard = await guardPermission("preventa", "write");
+  const guard = await guardDeLaExploracion(id, "write");
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;
@@ -40,7 +44,13 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const cuerpo = Cuerpo.safeParse(raw);
   if (!cuerpo.success) return cuerpoInvalido(cuerpo.error);
 
-  const r = await lanzarCorrida(id, cuerpo.data.modo, { triggeredByEmail: guard.user.email ?? null, sesionId: cuerpo.data.sesionId ?? null });
+  const { modo, sesionId, hubspotId } = cuerpo.data;
+  const r = await lanzarCorrida(id, modo, {
+    triggeredByEmail: guard.email,
+    sesionId: sesionId ?? null,
+    // Una reunión de HubSpot ya leída se vuelve a leer entera: propone y reemplaza lo que dijo de ella.
+    ...(modo === "leer" && hubspotId ? { releer: { sesiones: [], hubspot: [hubspotId], documentos: [] }, completa: true } : {}),
+  });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
   return NextResponse.json({ runId: r.runId, yaCorria: r.yaCorria }, { status: 202 });
 }
@@ -92,7 +102,7 @@ function comoLaVeLaPantalla(r: FilaDeLaCorrida): CorridaEnCurso {
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const guard = await guardPermission("preventa", "read");
+  const guard = await guardDeLaExploracion(id, "read");
   if (guard instanceof NextResponse) return guard;
 
   const lectura = await leerExploracion(id);

@@ -10,6 +10,9 @@
  * ── LO QUE SE MIDIÓ ANTES DE ESCRIBIRLA (copia del 10 jul, 157 registros) ─────────────────────
  *  · El uso (`hs_unified_usage_score`) y casi todo lo de producto solo viene en las cuentas que
  *    Smarteam GESTIONA (55 con puntaje). En las demás, vacío: eso es «sin dato», nunca cero.
+ *    Medido de nuevo el 7 oct (168 registros): 48 de 48 gestionadas traen uso y 0 de 119 sin
+ *    gestionar. Cuando HubSpot termina la relación gestionada (`hs_managed_relationship_end_date`),
+ *    el uso deja de llegar: 18 cuentas con puntaje en julio lo perdieron así, Cicadex entre ellas.
  *  · La tendencia de 4 semanas viene como fracción (−0,18 … 0,01). Se muestra como porcentaje.
  *  · `hs_renewal_mrr` suma más que el MRR total de la cartera (161 mil contra 111 mil): no se
  *    entiende qué mide y NO se usa. Lo que renueva se arma con el monto de cada hub.
@@ -123,8 +126,18 @@ export interface LecturaDePartner {
   cancelacion: { hubs: string[]; fecha: string | null } | null;
   /** AAAA-MM-DD estimada por HubSpot: sin actividad de Smarteam en 60 días se pierde. */
   relacionGestionadaVence: string | null;
+  /**
+   * AAAA-MM-DD en que HubSpot terminó la relación gestionada (`hs_managed_relationship_end_date`).
+   * Solo con la cuenta sin gestionar: desde ese día HubSpot no comparte su uso. Ver `relacionTerminada`.
+   */
+  relacionGestionadaTermino: string | null;
   /** ISO: la última vez que alguien de Smarteam hizo algo en el portal (según HubSpot). */
   ultimaActividadDeSmarteam: string | null;
+  /**
+   * Quién fue (nombre o correo). HubSpot da el id de usuario; lo traduce la copia de Partner y lo deja en
+   * `nexus_ultimo_activo` (lib/cs/partner-sync.ts). null si no se pudo.
+   */
+  ultimoQueTrabajo: string | null;
   /** Cuántos partners gestionan la cuenta. 2 = la comparte con otro (los puntos se dividen). */
   partnersQueGestionan: number | null;
   senales: SenalDeIngresos[];
@@ -305,7 +318,9 @@ export function leerPartner(properties: unknown): LecturaDePartner | null {
     proximaRenovacion: dia(p, "hs_next_renewal_date"),
     cancelacion: cancelacionHubs.length > 0 || fechaCancelacion ? { hubs: cancelacionHubs, fecha: fechaCancelacion } : null,
     relacionGestionadaVence: dia(p, "hs_managed_relationship_estimated_expiration_date"),
+    relacionGestionadaTermino: booleano(p, "hs_is_managed") === true ? null : dia(p, "hs_managed_relationship_end_date"),
     ultimaActividadDeSmarteam: instante(p, "hs_last_active_partner_employee_active_at"),
+    ultimoQueTrabajo: texto(p, "nexus_ultimo_activo"),
     partnersQueGestionan: numero(p, "hs_number_of_managing_partners"),
     senales,
     senalExplicacion: textoPlano(texto(p, "hs_revenue_signal_explanation")),
@@ -356,6 +371,18 @@ export function usoCayendo(l: Pick<LecturaDePartner, "tendencia">): boolean {
 
 export function usoBajo(l: Pick<LecturaDePartner, "uso">): boolean {
   return l.uso !== null && l.uso < UMBRALES.usoBajo;
+}
+
+/**
+ * AAAA-MM-DD en que terminó la relación gestionada, si ya terminó (hasta `hoy` inclusive). null si la
+ * cuenta sigue gestionada, nunca lo estuvo o HubSpot no da la fecha.
+ */
+export function relacionTerminada(
+  l: Pick<LecturaDePartner, "gestionada" | "relacionGestionadaTermino">,
+  hoy: string,
+): string | null {
+  const t = l.relacionGestionadaTermino;
+  return !l.gestionada && t && t <= hoy.slice(0, 10) ? t : null;
 }
 
 /** Las licencias de todos los tipos sumadas (principales + por hub). */

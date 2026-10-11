@@ -15,10 +15,13 @@
  * de la columna NO son de acá: son de todas las columnas (EnlaceDeContexto, ContextColumn).
  *
  * Lo propio de cada lugar entra por props: las reuniones ya resueltas (título, línea de datos, estado),
- * cuáles se pueden quitar y la función que escribe. Los textos que dependen de la cuenta y los estados
- * como «punto + texto» salen de lib/contexto/lista-de-reuniones.ts.
+ * cuáles se pueden quitar y la función que escribe. Desde la etapa A (2026-10-09) también lista las
+ * sesiones de la página de inicio de la exploración: el número delante, el estado y sus acciones a la
+ * derecha, y sus propios textos (props opcionales, al final; sin ellas la lista es la de siempre).
+ * Los textos que dependen de la cuenta y los estados como «punto + texto» salen de
+ * lib/contexto/lista-de-reuniones.ts.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import {
   barraDeEleccion,
@@ -38,6 +41,8 @@ export interface ReunionDeLaLista {
   quitable?: boolean;
   /** El `title` de la fila (un detalle que no entra en la línea). */
   title?: string;
+  /** Una insignia junto al título (en la exploración, «Próxima»). */
+  insignia?: ReactNode;
 }
 
 const PUNTO: Record<EstadoDeReunion["tono"], string> = {
@@ -144,6 +149,14 @@ export default function ListaDeReuniones({
   tituloQuitar = "Quitar",
   minimoParaElegir = 1,
   cargando = false,
+  antes,
+  acciones,
+  textoQuitar: textoQuitarPropio,
+  textoDeshacer: textoDeshacerPropio,
+  rotuloExcluidas = (n) => `Excluidas (${n})`,
+  explicacionExcluidas,
+  accionExcluida = "Volver a incluir",
+  sinTope = false,
 }: {
   reuniones: ReunionDeLaLista[];
   /** Las que se sacaron a mano y siguen a la vista (los proyectos): van plegadas, con «Volver a incluir». */
@@ -163,6 +176,26 @@ export default function ListaDeReuniones({
   /** Cuántas quitables hacen falta para mostrar «Elegir todas» (la preventa pide 2). */
   minimoParaElegir?: number;
   cargando?: boolean;
+  /*
+   * Lo que sigue lo usa la página de inicio de la exploración (etapa A, 2026-10-09): la lista de sus
+   * sesiones es esta misma lista. Todo es opcional: quien no lo pasa se ve igual que antes.
+   */
+  /** Antes del título de cada fila (el número de la sesión). */
+  antes?: (r: ReunionDeLaLista) => ReactNode;
+  /** A la derecha de cada fila, antes de la X (el estado, «Leerla», «Abrir»). */
+  acciones?: (r: ReunionDeLaLista) => ReactNode;
+  /** El botón de la fila de arriba con algo elegido («Sacar las 2 de la exploración»). */
+  textoQuitar?: (n: number) => string;
+  /** La franja de deshacer («Sacaste 1 sesión de la exploración.»). */
+  textoDeshacer?: (n: number) => string;
+  /** El botón que pliega las excluidas («Fuera de la exploración (1)»). */
+  rotuloExcluidas?: (n: number) => string;
+  /** Una línea arriba de las excluidas, con ellas abiertas. */
+  explicacionExcluidas?: string;
+  /** Lo que hace cada excluida («Agregar como sesión» en vez de «Volver a incluir»). */
+  accionExcluida?: string;
+  /** Sin el alto máximo: la lista entera a la vista (la exploración tiene hasta 20 sesiones). */
+  sinTope?: boolean;
 }) {
   const quitables = puedeEditar ? reuniones.filter((r) => r.quitable !== false).map((r) => r.id) : [];
   const e = useEleccionDeReuniones({ ids: quitables, escribir, restaurar });
@@ -228,7 +261,7 @@ export default function ListaDeReuniones({
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
-                {textoDeQuitar(n)}
+                {(textoQuitarPropio ?? textoDeQuitar)(n)}
               </button>
             </div>
           ) : (
@@ -249,7 +282,7 @@ export default function ListaDeReuniones({
       {/* ── La franja de deshacer ── */}
       {puedeEditar && e.ultimo && (
         <div className="flex h-9 items-center justify-between gap-2 rounded-lg border border-line bg-surface pl-3 pr-1.5">
-          <span className="text-xs text-fg-secondary">{textoDeDeshacer(e.ultimo.length)}</span>
+          <span className="text-xs text-fg-secondary">{(textoDeshacerPropio ?? textoDeDeshacer)(e.ultimo.length)}</span>
           <button
             type="button"
             onClick={() => void e.deshacer()}
@@ -266,17 +299,25 @@ export default function ListaDeReuniones({
       {reuniones.length === 0 ? (
         <div className="rounded-lg border border-dashed border-line px-4 py-5 text-center text-xs leading-[18px] text-fg-muted">{vacio}</div>
       ) : (
-        <div className="max-h-64 overflow-y-auto rounded-lg border border-line bg-surface">
+        <div className={cn("rounded-lg border border-line bg-surface", !sinTope && "max-h-64 overflow-y-auto")}>
           {reuniones.map((r, i) => {
             const quitable = puedeEditar && r.quitable !== false;
             const conCasilla = hayCasillas && quitable;
             const elegida = conCasilla && e.esElegida(r.id);
             const texto = (
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="truncate text-[13px] font-medium leading-5 text-fg">{r.titulo}</span>
+                {r.insignia ? (
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-[13px] font-medium leading-5 text-fg">{r.titulo}</span>
+                    {r.insignia}
+                  </span>
+                ) : (
+                  <span className="truncate text-[13px] font-medium leading-5 text-fg">{r.titulo}</span>
+                )}
                 <LineaDeDatos datos={r.datos} estado={r.estado} />
               </span>
             );
+            const delante = antes?.(r);
             return (
               <div
                 key={r.id}
@@ -290,15 +331,19 @@ export default function ListaDeReuniones({
                 {conCasilla ? (
                   <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 py-[9px] pl-2.5">
                     <Casilla marcada={elegida} onCambiar={() => e.alternar(r.id)} etiqueta={`Elegir «${r.titulo}»`} className="mt-0.5" />
+                    {delante}
                     {texto}
                   </label>
                 ) : (
                   <div className="flex min-w-0 flex-1 items-start gap-2.5 py-[9px] pl-2.5">
                     {/* Sin casilla, el hueco de 16 px deja los títulos alineados con los que sí la tienen. */}
                     {hayCasillas && <span aria-hidden className="mt-0.5 h-4 w-4 flex-shrink-0" />}
+                    {delante}
                     {texto}
                   </div>
                 )}
+                {/* Fuera de la etiqueta de la casilla: un botón adentro de un <label> no es HTML válido. */}
+                {acciones && <div className="flex flex-shrink-0 items-center gap-2.5 pl-2">{acciones(r)}</div>}
                 {quitable && (
                   <button
                     type="button"
@@ -340,10 +385,11 @@ export default function ListaDeReuniones({
             >
               <path d="M9 6l6 6-6 6" />
             </svg>
-            {`Excluidas (${excluidas.length})`}
+            {rotuloExcluidas(excluidas.length)}
           </button>
+          {verExcluidas && explicacionExcluidas && <p className="text-xs leading-[18px] text-fg-muted">{explicacionExcluidas}</p>}
           {verExcluidas && (
-            <div className="max-h-64 overflow-y-auto rounded-lg border border-line bg-surface">
+            <div className={cn("rounded-lg border border-line bg-surface", !sinTope && "max-h-64 overflow-y-auto")}>
               {excluidas.map((r, i) => (
                 <div key={r.id} title={r.title} className={cn("flex items-center gap-2 py-[9px] pl-2.5 pr-2", i > 0 && "border-t border-line")}>
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5 opacity-60">
@@ -357,7 +403,7 @@ export default function ListaDeReuniones({
                       disabled={volviendo !== null || e.trabajando}
                       className="flex-shrink-0 text-xs font-semibold text-brand hover:underline disabled:opacity-50"
                     >
-                      Volver a incluir
+                      {accionExcluida}
                     </button>
                   )}
                 </div>

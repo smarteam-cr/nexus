@@ -13,7 +13,7 @@
  * Si la última sesión tiene transcript pero aún no tiene minuta, se dispara
  * el auto-trigger del post-process y se muestra un loader animado.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { IconCheck } from "@/components/ui";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
@@ -94,6 +94,10 @@ export default function MinuteDialog({
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  /** Las reuniones que ya se pidió leer al abrir: una sola vez por reunión (antes se volvía a pedir cada 60 s). */
+  const pedidas = useRef(new Set<string>());
+  /** Por qué no hay minuta cuando la lectura dijo que no la deja (una reunión interna, de un aliado, sin texto…). */
+  const [motivoSinMinuta, setMotivoSinMinuta] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -123,20 +127,34 @@ export default function MinuteDialog({
     return () => document.removeEventListener("keydown", onKey);
   }, [historyOpen, onClose]);
 
-  // Auto-trigger del post-process si no hay minuta pero sí hay transcript
+  // Auto-trigger del post-process si no hay minuta pero sí hay transcript (una vez por reunión)
   useEffect(() => {
     if (tab !== "minute" || !data) return;
     if (data.lastMinute) return;
     if (!data.latestSessionWithoutMinute) return;
     if (generating) return;
+    if (pedidas.current.has(data.latestSessionWithoutMinute.id)) return;
     autoGenerate(data.latestSessionWithoutMinute.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, data, generating]);
 
   async function autoGenerate(sessionId: string) {
+    pedidas.current.add(sessionId);
     setGenerating(true);
+    setMotivoSinMinuta(null);
     try {
-      await fetch(`/api/sessions/${sessionId}/post-process`, { method: "POST" });
+      const res = await fetch(`/api/sessions/${sessionId}/post-process`, { method: "POST" });
+      const r = (await res.json().catch(() => ({}))) as { status?: string; reason?: string; error?: string };
+      // La lectura no deja minuta (una reunión interna o de un aliado, sin texto, o ya se está leyendo): se dice por
+      // qué en vez de esperar un minuto mirando un loader.
+      if (r.status === "omitida" || r.status === "sin_texto") {
+        setMotivoSinMinuta(r.reason ?? "Nexus no deja minuta de esta reunión.");
+        return;
+      }
+      if (!res.ok && res.status !== 409) {
+        toast.error(r.reason ?? r.error ?? "No se pudo generar la minuta.");
+        return;
+      }
       const startedAt = Date.now();
       while (Date.now() - startedAt < 60000) {
         await new Promise((r) => setTimeout(r, 3000));
@@ -214,7 +232,7 @@ export default function MinuteDialog({
             ) : !data ? (
               <p className="text-sm text-gray-500">Error al cargar datos del proyecto.</p>
             ) : tab === "minute" ? (
-              <MinuteContent data={data} generating={generating} onReload={reload} />
+              <MinuteContent data={data} generating={generating} onReload={reload} motivoSinMinuta={motivoSinMinuta} />
             ) : tab === "sessions" ? (
               // Curación de la membresía de contexto (qué sesiones alimentan el proyecto)
               <ProjectSessionsReview projectId={projectId} onChange={reload} />
@@ -272,11 +290,15 @@ function MinuteContent({
   data,
   generating,
   onReload,
+  motivoSinMinuta,
 }: {
   data: MeetingsData;
   generating: boolean;
   onReload: () => void;
+  /** Por qué la lectura no dejó minuta de la última reunión (lo dice la lectura). */
+  motivoSinMinuta?: string | null;
 }) {
+  const toast = useToast();
   const [stepIdx, setStepIdx] = useState(0);
   const steps = [
     "Analizando transcript...",
@@ -314,6 +336,7 @@ function MinuteContent({
             Hay una sesión con transcript pendiente de procesar:{" "}
             <strong>{data.latestSessionWithoutMinute.title}</strong>
           </p>
+          {motivoSinMinuta && <p className="text-xs text-fg-muted">{motivoSinMinuta}</p>}
           <button
             onClick={onReload}
             className="text-xs font-semibold text-brand hover:text-brand/80"
@@ -435,11 +458,15 @@ function MinuteContent({
         <div className="flex items-center gap-2 pt-3 border-t border-gray-800">
           <button
             onClick={async () => {
-              await fetch(`/api/sessions/${lm.sessionId}/minute`, {
+              const res = await fetch(`/api/sessions/${lm.sessionId}/minute`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ status: "REVIEWED" }),
-              });
+              }).catch(() => null);
+              if (!res?.ok) {
+                const r = (await res?.json().catch(() => ({}))) as { error?: string } | undefined;
+                toast.error(r?.error ?? "No se pudo aceptar la minuta.");
+              }
               onReload();
             }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand text-white hover:bg-brand-dark transition-colors"
@@ -449,11 +476,15 @@ function MinuteContent({
           </button>
           <button
             onClick={async () => {
-              await fetch(`/api/sessions/${lm.sessionId}/post-process`, {
+              const res = await fetch(`/api/sessions/${lm.sessionId}/post-process`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ force: true }),
-              });
+              }).catch(() => null);
+              if (!res?.ok) {
+                const r = (await res?.json().catch(() => ({}))) as { reason?: string; error?: string } | undefined;
+                toast.error(r?.reason ?? r?.error ?? "No se pudo regenerar la minuta.");
+              }
               onReload();
             }}
             className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-700 text-gray-300 hover:bg-gray-800"

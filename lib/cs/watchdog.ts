@@ -34,7 +34,15 @@ import { crDateParts, WEEKDAYS_MON_FRI } from "@/lib/jobs/time";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { PROYECTO_DE_CARTERA_WHERE, proyectoDeCarteraWhere } from "@/lib/projects/scope";
 import { leerPartner } from "./lectura-partner";
+import { juntarEvidencia, mismaCitaVerificada, queHacerConLaRedeteccion } from "./alertas-reglas";
 import { hayDeudaDelCliente, resumirFacturacion } from "./facturacion-de-la-cuenta";
+import { CATEGORIAS_QUE_PINTAN, citaEnElTexto, citaPedida, hablanteDeLaCita } from "./cita-de-alerta";
+import type { CorreoLeido } from "./watchdog-cuenta";
+import { whereBelongsToClient } from "@/lib/sessions/project-sources";
+import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
+import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
+import { riesgosRecientes } from "@/lib/seguimiento/hechos-server";
+import { hablanteDelEquipo } from "@/lib/seguimiento/hechos/salida";
 
 const AGENT_ID = "agent-cs-watchdog";
 const AGENT_SLUG = "cs-watchdog";
@@ -68,6 +76,8 @@ const CATEGORIES = new Set<string>([
   "ADOPTION_RISK", "LICENSE_UNUSED", "PROJECT_BLOCKED",
   // Ciclo de vida:
   "STAGE_STALLED",
+  // Éxito del cliente, 2026-10-09: con la frase verificada pinta el color de la cuenta.
+  "QUEJA",
 ]);
 const LOW_UUS_THRESHOLD = 35; // score de uso bajo (0-100) — candidato si además renueva pronto
 
@@ -76,7 +86,7 @@ const LOW_UUS_THRESHOLD = 35; // score de uso bajo (0-100) — candidato si adem
 // no genere 3 alertas idénticas.
 const ACCOUNT_CATEGORIES = new Set<string>([
   "ADOPTION_RISK", "LICENSE_UNUSED", "RENEWAL_RISK", "CHURN_RISK",
-  "ENGAGEMENT_COLD", "SUPPORT_TICKETS", "EXPANSION_OPPORTUNITY",
+  "ENGAGEMENT_COLD", "SUPPORT_TICKETS", "EXPANSION_OPPORTUNITY", "QUEJA",
 ]);
 const SEVERITIES = ["LOW", "MEDIUM", "HIGH"] as const;
 const sevRank = (s: string) => SEVERITIES.indexOf(s as (typeof SEVERITIES)[number]);
@@ -137,6 +147,66 @@ function parseAlerts(rawText: string): ParsedAlert[] {
     });
   }
   return out.slice(0, 6); // techo duro por si el agente desobedece el máx del prompt
+}
+
+/**
+ * La frase del cliente de una queja o un retraso, buscada tal cual en la reunión o el correo que cita el agente
+ * (2026-10-09, lib/cs/cita-de-alerta.ts). Verificada, queda en `evidence.cita` con `verificada: true` y pinta el
+ * color de la cuenta; si no aparece, o la reunión es de puertas adentro (no es el cliente quien habla), queda en
+ * `evidence.citaSinVerificar` y la alerta se ve igual, sin pintar.
+ *
+ * La reunión se busca por el chokepoint de pertenencia (`whereBelongsToClient`): una reunión de otro cliente no
+ * verifica nada, aunque el agente la cite. Una QUEJA cuya frase está en el turno de alguien de Smarteam (nombre y
+ * apellido de alguien del equipo) tampoco: lo que dice el equipo no es una queja del cliente, aunque le llegue al vigía
+ * como riesgo de la lectura (memoria de la cuenta, etapa 6).
+ */
+async function verificarCitas(
+  alerts: ParsedAlert[],
+  i: { clientId: string; correos: ReadonlyMap<string, CorreoLeido> },
+): Promise<ParsedAlert[]> {
+  const conCita = alerts.filter((a) => CATEGORIAS_QUE_PINTAN.has(a.category) && citaPedida(a.evidence));
+  if (conCita.length === 0) return alerts;
+  const ids = [...new Set(conCita.map((a) => citaPedida(a.evidence)!.sessionId).filter((x): x is string => !!x))];
+  const conQuejaDeReunion = conCita.some((a) => a.category === "QUEJA" && !!citaPedida(a.evidence)?.sessionId);
+  const [sesiones, categorias, equipo] = await Promise.all([
+    ids.length
+      ? prisma.firefliesSession.findMany({
+          where: { AND: [whereBelongsToClient(i.clientId), { id: { in: ids } }] },
+          select: { id: true, title: true, date: true, transcript: true, participants: true, organizerEmail: true, minute: { select: { summary: true } } },
+        })
+      : Promise.resolve([]),
+    prisma.sessionCategory.findMany({ select: { domains: true, kind: true } }),
+    conQuejaDeReunion ? prisma.teamMember.findMany({ select: { name: true } }).then((t) => t.map((x) => x.name).filter((n): n is string => !!n?.trim())) : Promise.resolve([] as string[]),
+  ]);
+  const propios = buildInternalDomainsSet(categorias);
+  const porId = new Map(sesiones.map((s) => [s.id, s]));
+  return alerts.map((a) => {
+    const pedida = CATEGORIAS_QUE_PINTAN.has(a.category) ? citaPedida(a.evidence) : null;
+    if (!pedida) return a;
+    const { cita: _pedida, ...resto } = a.evidence as Record<string, unknown> & { cita?: unknown };
+    void _pedida;
+    let verificada: Record<string, unknown> | null = null;
+    if (pedida.correoId) {
+      const c = i.correos.get(pedida.correoId);
+      if (c && citaEnElTexto(pedida.texto, `${c.asunto}
+${c.texto}`)) {
+        verificada = { texto: pedida.texto, fuente: "correo", id: pedida.correoId, fecha: c.fecha, titulo: c.asunto || null };
+      }
+    } else if (pedida.sessionId) {
+      const s = porId.get(pedida.sessionId);
+      const interna = s ? esReunionDePuertasAdentro({ participants: s.participants, organizerEmail: s.organizerEmail }, propios) : true;
+      if (s && !interna) {
+        const fuente = citaEnElTexto(pedida.texto, s.transcript) ? "reunion" : citaEnElTexto(pedida.texto, s.minute?.summary) ? "minuta" : null;
+        const hablante = fuente === "reunion" && a.category === "QUEJA" ? hablanteDeLaCita(pedida.texto, s.transcript) : null;
+        const laDijoSmarteam = !!hablante && hablanteDelEquipo(hablante, equipo) === true;
+        if (fuente && !laDijoSmarteam) verificada = { texto: pedida.texto, fuente, id: s.id, fecha: s.date.toISOString().slice(0, 10), titulo: s.title };
+      }
+    }
+    return {
+      ...a,
+      evidence: verificada ? { ...resto, cita: { ...verificada, verificada: true } } : { ...resto, citaSinVerificar: pedida.texto },
+    };
+  });
 }
 
 /** Por qué vía se disparó una corrida (informativo: va en el stepLabel). */
@@ -294,7 +364,7 @@ async function runForProjectInner(
       .map((b) => (b.type === "text" ? (b as { text: string }).text : ""))
       .join("")
       .trim();
-    const alerts = parseAlerts(rawText);
+    const alerts = await verificarCitas(parseAlerts(rawText), { clientId: project.clientId, correos: ctx.correos });
 
     // ── Dedup + persistencia (el runner es el único escritor de CsAlert) ──────
     const now = new Date();
@@ -311,7 +381,8 @@ async function runForProjectInner(
         where: { dedupeKey },
         orderBy: { lastDetectedAt: "desc" },
       });
-      if (existing && (existing.status === "OPEN" || existing.status === "SEEN")) {
+      const queHacer = queHacerConLaRedeteccion(existing, { severity: a.severity, evidence: a.evidence });
+      if (existing && queHacer === "actualizar") {
         // Re-detección del mismo hecho → actualizar, no duplicar. La severidad
         // solo ESCALA (nunca baja sola); razón/acción se refrescan a lo último.
         await prisma.csAlert.update({
@@ -329,14 +400,40 @@ async function runForProjectInner(
         merged++;
         continue;
       }
-      if (
-        existing &&
-        (existing.status === "RESOLVED" || existing.status === "DISMISSED") &&
-        existing.updatedAt.getTime() > now.getTime() - 7 * DAY_MS
-      ) {
-        // La líder lo resolvió/descartó hace poco → no insistir.
+      if (queHacer === "suprimir") {
+        // Cerrada por la líder y sin señal nueva (ni más grave ni evidencia nueva) → no vuelve.
+        // Antes volvía sola a los 7 días aunque nada hubiera cambiado (lib/cs/alertas-reglas.ts).
         suppressed++;
         continue;
+      }
+      // Una alerta por cita (memoria de la cuenta, etapa 6): si la lectura de la reunión ya levantó la MISMA queja (la
+      // misma frase de la misma reunión, `mismaCitaVerificada`) y sigue abierta, se actualiza esa en vez de duplicarla
+      // con otra llave. SOLO la queja: es la única que levantan los dos detectores, y es de la cuenta. Un retraso es de
+      // su proyecto: el de otro proyecto que cita la misma reunión es otra alerta.
+      if (a.category === "QUEJA") {
+        const gemelas = await prisma.csAlert.findMany({
+          where: { clientId: project.clientId, category: a.category, status: { in: ["OPEN", "SEEN"] } },
+          orderBy: { lastDetectedAt: "desc" },
+          take: 50,
+          select: { id: true, clientId: true, category: true, evidence: true, severity: true },
+        });
+        const gemela = gemelas.find((g) => mismaCitaVerificada(g, { clientId: project.clientId, category: a.category, evidence: a.evidence }));
+        if (gemela) {
+          await prisma.csAlert.update({
+            where: { id: gemela.id },
+            data: {
+              occurrences: { increment: 1 },
+              lastDetectedAt: now,
+              reason: a.reason,
+              suggestedAction: a.suggestedAction,
+              severity: sevRank(a.severity) > sevRank(gemela.severity) ? a.severity : gemela.severity,
+              evidence: juntarEvidencia(gemela.evidence, a.evidence) as Prisma.InputJsonValue,
+              agentRunId: run.id,
+            },
+          });
+          merged++;
+          continue;
+        }
       }
       await prisma.csAlert.create({
         data: {
@@ -362,7 +459,7 @@ async function runForProjectInner(
     });
     await prisma.agentRun.update({
       where: { id: run.id },
-      data: { status: "DONE", output: JSON.stringify({ alerts, created, merged, suppressed }) },
+      data: { status: "DONE", output: JSON.stringify({ alerts, created, merged, suppressed, correosConPermiso: ctx.correosConPermiso }) },
     });
     console.log(
       `[cs-watchdog] ✓ project ${projectId} (${trigger}): ${events.length} eventos → ${created} alertas nuevas, ${merged} actualizadas, ${suppressed} suprimidas (run ${run.id})`,
@@ -581,6 +678,24 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
   });
   const triagedToday = new Set(ranToday.map((r) => r.projectId as string));
 
+  /* Los riesgos que dejó la lectura de las reuniones (memoria de la cuenta, etapa 6) DESPUÉS de la última corrida del
+     vigía para ese proyecto: la lectura no levanta una alerta por un riesgo, se lo pasa al vigía. Uno de la cuenta
+     (sin proyecto) cuenta para todos los proyectos del cliente. Sin la tabla de los hechos, la lista viene vacía. */
+  const riesgos = await riesgosRecientes(new Date(now.getTime() - 7 * DAY_MS)).catch(() => []);
+  const ultimaCorrida = new Map<string, number>();
+  if (riesgos.length) {
+    const corridas = await prisma.agentRun.groupBy({
+      by: ["projectId"],
+      where: { agentSlug: AGENT_SLUG, status: "DONE", projectId: { in: rows.map((r) => r.projectId) } },
+      _max: { createdAt: true },
+    });
+    for (const c of corridas) if (c.projectId && c._max.createdAt) ultimaCorrida.set(c.projectId, c._max.createdAt.getTime());
+  }
+  const riesgoDeReunion = (projectId: string, clientId: string) =>
+    riesgos.some(
+      (r) => r.clientId === clientId && (r.projectId === null || r.projectId === projectId) && r.createdAt.getTime() > (ultimaCorrida.get(projectId) ?? 0),
+    );
+
   const candidates: string[] = [];
   for (const row of rows) {
     if (row.status !== "active") continue;
@@ -641,8 +756,11 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
       scheduleRisk || earlyStageRisk || s.scope.exceeded ||
       (coldDays !== null && coldDays > COLD_DAYS_THRESHOLD) ||
       (sig?.openTicketCount ?? 0) > 0 || renewalSoon || partnerRisk;
+    // Un riesgo nuevo de la lectura de una reunión ya es novedad (posterior a la última corrida del vigía para ese
+    // proyecto): entra como los eventos pendientes, aunque el proyecto tenga una alerta abierta.
     const hasNews =
       withEvents.has(row.projectId) ||
+      riesgoDeReunion(row.projectId, row.clientId) ||
       (hasRisk && !alerted.has(row.projectId) && !triagedToday.has(row.projectId));
     if (hasNews) candidates.push(row.projectId);
   }

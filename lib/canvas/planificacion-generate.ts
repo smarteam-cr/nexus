@@ -18,6 +18,11 @@
  *      lo que el portal usa hoy, no de un template.
  *   7. La MODALIDAD DE ADOPCIÓN (confirmada, o sugerida por los umbrales de tamaño):
  *      gobierna si el plan de despliegue por olas se escribe o queda vacío.
+ *   8. Las reuniones ELEGIDAS por el equipo en su «Contexto adicional», leídas enteras (etapa 7: sin
+ *      elegidas no entra ninguna, y la línea lo dice), y sus notas.
+ *   9. La MEMORIA de la cuenta y del proyecto (lib/memoria, alcance del cliente): lo que dejaron las
+ *      demás reuniones, la historia, las desviaciones que el cliente ve y los resultados confirmados.
+ *      Sin la ficha ni los procesos: ya los lee arriba.
  *
  * NO escribe el esqueleto del cronograma: esa herencia murió con el short-circuit (el
  * prompt ya tenía la regla "sin fechas"; ahora el código la acompaña).
@@ -28,6 +33,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
 import { documentoConContexto } from "@/lib/contexto/documento";
+import { fronteraDeLaPieza } from "@/lib/contexto/frontera-de-los-documentos";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
 import { fichaParaPrompt, leerFicha } from "@/lib/clients/ficha";
@@ -49,6 +55,7 @@ import { suggestAdoptionMode } from "@/lib/lifecycle/stage-engine";
 import { tagLabels } from "@/lib/tags/catalog";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { fusionarFilas, type FilaPropiedad } from "@/lib/planificacion/propiedades";
+import { memoriaDelDocumento } from "@/lib/memoria";
 
 /** Asegura el canvas "Planificación" del proyecto + reconcilia. Idempotente. */
 export async function ensurePlanificacionCanvas(projectId: string): Promise<string> {
@@ -130,12 +137,22 @@ export async function runPlanificacionGeneration(opts: {
     adoptionBlock(projectId, project?.clientId ?? null),
   ]);
 
-  // El «Contexto» de este documento (lib/contexto/material-del-documento.ts): sus reuniones y notas.
+  /* El «Contexto adicional» de este documento (lib/contexto/material-del-documento.ts): las reuniones que eligió el
+     equipo, enteras (etapa 7: sin elegidas no entra ninguna y `avisoSinReuniones` lo dice), y sus notas. */
   const material = await cargarMaterialDelDocumento(projectId, documentoConContexto("planning")!);
 
   // La ficha del cliente CONFIRMADA (2026-10-05): lo que la exploración averigua del cliente ya no
   // viaja en las sesiones, va a la ficha. ⛔ Sin los campos internos: el plan lo ve el cliente.
   const fichaCtx = fichaParaPrompt(leerFicha(project?.client?.ficha), { paraDocumentoDelCliente: true });
+  /* La memoria de la cuenta y del proyecto (lib/memoria), con el alcance del CLIENTE: el plan lo ve el cliente. Suma
+     lo que dejaron las reuniones que su material NO lee (`yaLeidas`: solo acuerdos y decisiones de minutas revisadas),
+     la historia, las desviaciones que el cliente ve y los resultados confirmados. Desde la etapa 7 lleva el peso cuando
+     nadie eligió reuniones. */
+  const memoria = await memoriaDelDocumento(projectId, {
+    lector: "planning",
+    clientId: project?.clientId ?? null,
+    yaLeidas: material.sesionesUsadas,
+  });
 
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
   const hubs = tagLabels(project?.tags ?? []);
@@ -156,7 +173,8 @@ export async function runPlanificacionGeneration(opts: {
     "=== HANDOFF DEL PROYECTO (completo — documento interno) ===",
     handoffCtx || "(Sin handoff generado.)",
     fichaCtx ? `\n${fichaCtx}` : "",
-    exploracionCtx ?`\n=== EXPLORACIÓN (lo confirmado y lo supuesto) ===\n${exploracionCtx}` : "",
+    // La frontera también acá: la exploración trae lo que salió de cada sesión y citas de lo que se dijo.
+    exploracionCtx ? `\n=== EXPLORACIÓN (lo confirmado y lo supuesto) ===\n${fronteraDeLaPieza("planning")}\n${exploracionCtx}` : "",
     procesosCtx
       ? `\n=== MAPAS DE PROCESOS DEL CLIENTE (qué procesos existen; ⚠ = fricción. Una fuente más: lo que ninguna reunión menciona es, a lo sumo, un supuesto) ===\n${procesosCtx}`
       : "",
@@ -165,9 +183,14 @@ export async function runPlanificacionGeneration(opts: {
     portalCtx ? `\n=== EL PORTAL HOY ===\n${portalCtx}` : "",
     timelineCtx ? `\n${timelineCtx}` : "",
     material.reuniones
-      ? `\n=== LAS SESIONES DEL CONTEXTO DE LA PLANIFICACIÓN (las reuniones del proyecto con el cliente, curadas por el equipo; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente) ===\n${material.reuniones}`
-      : "",
+      ? `\n=== LAS REUNIONES ELEGIDAS POR EL EQUIPO PARA LA PLANIFICACIÓN (con su minuta y lo que se dijo, salvo las marcadas «en resumen»; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente) ===\n${material.reuniones}`
+      : material.avisoSinReuniones
+        ? `\n${material.avisoSinReuniones}`
+        : "",
     material.notas ? `\n=== NOTAS DEL EQUIPO PARA LA PLANIFICACIÓN ===\n${material.notas}` : "",
+    memoria.texto ? `\n${memoria.texto}` : "",
+    // La regla otra vez, justo antes de la instrucción: el bloque de reuniones puede ser largo.
+    material.cierreDeFrontera ? `\n${material.cierreDeFrontera}` : "",
     "",
     "Escribe la planificación siguiendo tus instrucciones: las acciones del diagnóstico bajadas a lo que va a quedar configurado en HubSpot, respetando su política rectora — cómo van a funcionar los procesos (solo lo que se hará), etapas del ciclo de vida, arquitectura, propiedades por objeto, pipelines, automatizaciones y conversaciones, cada cosa con su origen —, rutinas por rol, y el despliegue por olas SOLO si la modalidad es por pilotos. SIN fechas.",
   ]

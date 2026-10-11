@@ -9,6 +9,7 @@
  *   npx tsx scripts/run-cs-watchdog.ts --alerts         → lista las CsAlert vigentes
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { prisma } from "../lib/db/prisma";
 
 async function main() {

@@ -674,8 +674,11 @@ describe("un acuerdo de doce líneas se sigue pudiendo leer entero", () => {
        cita la línea que falló). Lo que se pide es lo mismo: se manda lo marcado, no el acuerdo entero. Su
        conducta la corre textos-del-acuerdo.test.ts. */
     expect(PANEL).toContain("const mandado = loQueSeManda(acuerdo, descartadas);");
-    expect(PANEL).toContain("await onAplicar(mandado);");
-    expect(PANEL, "el botón dejó de pasar lo desmarcado").toContain("}, desmarcadas[t.id])");
+    /* ⚠ ACTUALIZADA en 1B (chat de tareas), con esta razón: `onAplicar` recibe además el turno y lo desmarcado
+       (índices de la lista ENTERA), que el chat de tareas manda al servidor para que lea el acuerdo del hilo. Lo
+       que se pide es lo mismo: se aplica lo mandado, y el botón pasa lo desmarcado. */
+    expect(PANEL).toContain("await onAplicar(mandado, de);");
+    expect(PANEL, "el botón dejó de pasar lo desmarcado").toContain("}, desmarcadas[t.id], t.id)");
     expect(PANEL, "el botón deja aplicar con cero operaciones marcadas").toContain(
       "sinNadaQueAplicar",
     );
@@ -1145,7 +1148,9 @@ describe("⭐ E3 P5: el cajón con una propuesta abierta", () => {
        hizo algo distinto». La edición que la pone en rojo: no leer las notas del resultado, no pasarlas al
        desenlace, o volver a juntarlas con los avisos en el detalle. */
     // Revisión de E3 (#19): se aplica lo mandado (`mandado`: lo marcado con sus líneas).
-    expect(PANEL).toContain("const { fallo, avisos, destino: destinoDelResultado, notas } = await onAplicar(mandado);");
+    /* ⚠ ACTUALIZADA en 1B, con esta razón: el resultado trae además el hilo y las acciones del carril que aplica en
+       el servidor (el chat de tareas). Las notas siguen viajando igual. */
+    expect(PANEL).toContain("const { fallo, avisos, destino: destinoDelResultado, notas, hilo, acciones } = await onAplicar(mandado, de);");
     expect(PANEL).toContain("...(notas?.length ? { notas } : {})");
     const i = PANEL.indexOf("const quedoEscrito = await anotarDesenlace(");
     expect(i, "el desenlace del éxito cambió de forma").toBeGreaterThan(-1);
@@ -1260,5 +1265,24 @@ describe("E4 · un acuerdo viejo del chat (sin operaciones) no tiene carril", ()
     expect(atender).toContain("{ fallo: ACUERDO_DE_OTRA_VERSION, avisos: [] }");
     expect(atender, "volvió el carril de la instrucción").not.toContain("instruccion");
     expect(CANVAS, "volvió el pedido de «Pedir cambio con IA»").not.toContain("submitAssist");
+  });
+});
+
+describe("1B · el chat de tareas aplica en el servidor", () => {
+  it("⛔ con el hilo del servidor, el cajón NO escribe el desenlace (ni el del éxito ni el del fallo)", () => {
+    /* El servidor escribe el desenlace en la misma transacción que aplica. Un segundo desenlace desde el navegador
+       apagaría (o reviviría) un acuerdo sin aplicarlo. La edición que la pone en rojo: mover la rama del hilo
+       después del `if (fallo)`, o dejar que siga hasta `anotarDesenlace`. */
+    const i = PANEL.indexOf("if (hilo) {");
+    expect(i, "se perdió la rama del carril que aplica en el servidor").toBeGreaterThan(PANEL.indexOf("await onAplicar(mandado, de);"));
+    expect(i).toBeLessThan(PANEL.indexOf("if (fallo) {", i - 1) === -1 ? Infinity : PANEL.indexOf("if (fallo) {"));
+    const rama = PANEL.slice(i, PANEL.indexOf("}", PANEL.indexOf("return;", i)));
+    expect(rama).toContain("return;");
+    expect(rama).not.toContain("anotarDesenlace");
+  });
+
+  it("los rótulos del carril: «Aplicar a tus tareas», nunca «al tus tareas»", () => {
+    expect(PANEL).toContain("const alDestino = rotulos?.alDestino ?? `al ${nombreDeLaPieza}`;");
+    expect(PANEL).not.toContain("Aplicar al ${nombreDeLaPieza}");
   });
 });

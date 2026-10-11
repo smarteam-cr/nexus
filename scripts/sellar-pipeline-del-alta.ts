@@ -32,6 +32,7 @@
  *   …--apply --project <id>                                        # una sola fila
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { resolvePipeline } from "@/lib/projects/kind";

@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
         hubspotCompanyId: true,
         kind: true,
         ...(modeloDisponible(prisma.exploracionDeVenta)
-          ? { exploracionesDeVenta: { where: { archivadaEn: null }, select: { id: true }, take: 1 } }
+          ? { exploracionesDeVenta: { where: { archivadaEn: null, projectId: null }, select: { id: true }, take: 1 } }
           : {}),
       },
     });

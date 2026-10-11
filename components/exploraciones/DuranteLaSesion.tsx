@@ -25,7 +25,7 @@ import { useLienzo } from "./contexto";
 import { EstadoDelGuardado, EtiquetaDePregunta, Rotulo, useEditarLaSesion, useGuiaDeLaSesion, useNotaQueSeGuarda } from "./piezas-de-la-sesion";
 import Segmentos from "./Segmentos";
 
-type Filtro = "todas" | "marco" | "escala";
+type Filtro = "todas" | "marco" | "escala" | "vendido";
 
 const CAMPO = "w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-[13px] text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none disabled:opacity-60";
 
@@ -123,7 +123,7 @@ function NotasLibres({ pestana }: { pestana: PestanaDeSesion }) {
 }
 
 export default function DuranteLaSesion({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
-  const { exp } = useLienzo();
+  const { exp, marco } = useLienzo();
   const { guia, enOrden } = useGuiaDeLaSesion(pestana, esLaProxima);
   const editar = useEditarLaSesion(pestana, "durante");
   const [filtro, setFiltro] = useState<Filtro>("todas");
@@ -133,7 +133,8 @@ export default function DuranteLaSesion({ pestana, esLaProxima }: { pestana: Pes
   const notas = exp.estado.contenido.notas;
   const delMarco = enOrden.filter((p) => ladoDeLaPregunta(p) === "tarjeta");
   const deLaEscala = enOrden.filter((p) => ladoDeLaPregunta(p) === "dimension");
-  const visibles = filtro === "marco" ? delMarco : filtro === "escala" ? deLaEscala : enOrden;
+  const deLoVendido = enOrden.filter((p) => ladoDeLaPregunta(p) === "vendido");
+  const visibles = filtro === "marco" ? delMarco : filtro === "escala" ? deLaEscala : filtro === "vendido" ? deLoVendido : enOrden;
   const ahora = elegida && visibles.some((p) => p.para === elegida) ? elegida : (visibles.find((p) => !hechas.has(p.para))?.para ?? null);
   const objetivo = s?.objetivo ?? guia?.objetivo ?? null;
 
@@ -142,7 +143,7 @@ export default function DuranteLaSesion({ pestana, esLaProxima }: { pestana: Pes
       const actual = new Set(x.hechas ?? []);
       if (actual.has(para)) actual.delete(para);
       else actual.add(para);
-      return { ...x, hechas: [...actual].slice(0, 20) };
+      return { ...x, hechas: [...actual].slice(0, 30) };
     });
 
   return (
@@ -168,8 +169,9 @@ export default function DuranteLaSesion({ pestana, esLaProxima }: { pestana: Pes
             etiqueta="Filtrar las preguntas"
             opciones={[
               { clave: "todas", nombre: "Todas", cuenta: enOrden.length },
-              { clave: "marco", nombre: "Arquitectura de la venta", cuenta: delMarco.length },
+              { clave: "marco", nombre: marco.nombre, cuenta: delMarco.length },
               { clave: "escala", nombre: "Escala de rendimiento", cuenta: deLaEscala.length },
+              ...(deLoVendido.length ? [{ clave: "vendido" as const, nombre: "Lo vendido", cuenta: deLoVendido.length }] : []),
             ]}
             valor={filtro}
             onCambiar={setFiltro}

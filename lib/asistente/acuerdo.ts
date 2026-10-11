@@ -77,6 +77,13 @@ export interface CambioAcordado {
    */
   dependencias?: number[][];
   /**
+   * ⭐ QUÉ CLASE DE CAMBIO ES CADA OPERACIÓN — por índice dentro de `operaciones`. Solo el chat de
+   * tareas lo escribe (`rotulosDeOperaciones`, lib/tareas/chat/lineas.ts): con él, el botón dice lo
+   * que hace sobre lo que quedó marcado («Crear 6 tareas», «Mandarle la sugerencia a Marco Salas»).
+   * Los nombres no están en la operación ya normalizada (lleva correos), así que viajan acá.
+   */
+  rotulos?: string[];
+  /**
    * E3 P5: PARA QUÉ PROPUESTA DEL CRONOGRAMA SE ACORDÓ — su token (`pendingProposalRunId`), o null:
    * sin propuesta abierta, lo acordado es para el cronograma de hoy. Si falta, cuenta como null.
    *
@@ -107,6 +114,21 @@ export const MARCA_DE_ACUERDO = "<<<ACUERDO>>>";
 
 export function marcaDeAcuerdo(a: CambioAcordado): string {
   return `${MARCA_DE_ACUERDO}${JSON.stringify(a)}`;
+}
+
+/** Una lista de índices por operación, todos enteros dentro de rango. */
+function dependenciasValidas(d: unknown, n: number): d is number[][] {
+  return (
+    n > 0 &&
+    Array.isArray(d) &&
+    d.length === n &&
+    d.every((xs) => Array.isArray(xs) && xs.every((x) => Number.isInteger(x) && x >= 0 && x < n))
+  );
+}
+
+/** Un texto por operación. */
+function textosUnoPorOperacion(t: unknown, n: number): t is string[] {
+  return n > 0 && Array.isArray(t) && t.length === n && t.every((x) => typeof x === "string");
 }
 
 /** Separa el texto visible del acuerdo embebido. PURO — es lo que lee el panel al recargar. */
@@ -172,6 +194,12 @@ export function leerAcuerdo(contenido: string): { texto: string; acuerdo: Cambio
           ...(crudo.lineas?.length && (!ops?.length || crudo.lineas.length === ops.length)
             ? { lineas: crudo.lineas }
             : {}),
+          /* ⛔ Las dependencias y los rótulos, con la MISMA red que las líneas: uno por operación, o
+             nada. Hasta el 2026-10-09 este lector descartaba las dependencias que el turno escribía:
+             la cajita caía a la cascada del cronograma, que sobre un documento (o una tarea) da cero,
+             y desmarcar lo que crea algo dejaba vivo lo que lo llena. */
+          ...(dependenciasValidas(crudo.dependencias, ops?.length ?? 0) ? { dependencias: crudo.dependencias } : {}),
+          ...(textosUnoPorOperacion(crudo.rotulos, ops?.length ?? 0) ? { rotulos: crudo.rotulos } : {}),
           ...(crudo.enEspera ? { enEspera: true } : {}),
           ...(crudo.arrastradas?.length ? { arrastradas: crudo.arrastradas } : {}),
           ...(crudo.descartadas?.length ? { descartadas: crudo.descartadas } : {}),

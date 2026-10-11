@@ -65,6 +65,23 @@ describe("estado de la cuenta", () => {
     expect(uso.porque).toBe("La cuenta no está vinculada a HubSpot Partner.");
   });
 
+  it("⭐ sin puntaje porque terminó la relación gestionada: lo dice, con el último puntaje (Cicadex, 2026-10-07)", () => {
+    const c = cuenta({
+      partner: leerPartner({ hs_is_active: "true", hs_is_managed: "false", hs_managed_relationship_end_date: "2026-09-05T00:00:00Z" }),
+      usoAnterior: { uso: 47, fecha: "2026-07-10" },
+    });
+    expect(estadoDeLaCuenta(c, HOY)[1]).toMatchObject({
+      color: "ambar",
+      palabra: "Sin puntaje",
+      porque: "La relación gestionada terminó el 5 sep: desde entonces HubSpot no comparte el uso. El último puntaje fue 47, el 10 jul.",
+    });
+    // Nunca gestionada: lo de siempre, en gris (no se perdió nada).
+    const nunca = cuenta({ partner: leerPartner({ hs_is_active: "true", hs_is_managed: "false" }), usoAnterior: null });
+    expect(estadoDeLaCuenta(nunca, HOY)[1]).toMatchObject({ color: "gris", porque: "HubSpot solo da el uso de las cuentas que gestiona Smarteam." });
+    // La pestaña Adopción dice lo mismo que el estado.
+    expect(leer("components/cs/account/pestanas/PestanaAdopcion.tsx")).toContain("porQueNoHayUso(data.cuenta, data.hoy)");
+  });
+
   it("una cancelación registrada manda sobre la fecha", () => {
     const c = cuenta({ partner: leerPartner({ hs_cancellation_products: "SERVICE", hs_next_cancellation_date: "2026-12-31" }) });
     expect(estadoDeLaCuenta(c, HOY)[3]).toMatchObject({ color: "rojo", palabra: "Cancelación registrada" });
@@ -142,7 +159,7 @@ describe("⭐ la cuenta de respaldo de la ficha lleva sus alertas", () => {
     const src = leer("lib/cs/load-account.ts");
     expect(src).toContain("alertas: alerts.map(alertaDeLaCuenta)");
     expect(src).not.toMatch(/alertas:\s*\[\]/);
-    expect(leer("lib/cs/cartera.ts"), "el índice tiene que leerlas con la misma regla").toContain(".map(alertaDeLaCuenta)");
+    expect(leer("lib/cs/cartera.ts"), "el índice tiene que leerlas con la misma regla").toContain("...alertaDeLaCuenta(a)");
   });
 
   it("⭐ y la ficha las deja RESOLVER aunque el cliente no esté en la cartera (D13, 2026-10-05)", () => {
@@ -151,9 +168,11 @@ describe("⭐ la cuenta de respaldo de la ficha lleva sus alertas", () => {
        cliente sea de la cartera, la alerta de un cliente sin proyecto activo quedaría a la vista y
        sin forma de cerrarla. La edición que lo pone en rojo: filtrar la ruta por la cartera. */
     const panel = leer("components/cs/account/PanelDeLaCuenta.tsx");
-    expect(panel).toContain("const alertas = data.cuenta.alertas;");
-    expect(panel).toContain("fetchJson(`/api/cs/alerts/${id}`");
-    expect(panel).toMatch(/cerrar\(a\.id, "RESOLVED"\)/);
+    expect(panel).toContain("data.cuenta.alertas.filter(");
+    expect(panel).toContain("<AlertaParaCerrar");
+    const pieza = leer("components/cs/AlertaParaCerrar.tsx");
+    expect(pieza).toContain("fetchJson(`/api/cs/alerts/${id}`");
+    expect(pieza).toMatch(/setCerrando\("RESOLVED"\)/);
     const ruta = leer("app/api/cs/alerts/[alertId]/route.ts").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
     expect(ruta, "la ruta que cierra alertas volvió a mirar la cartera").not.toMatch(/cartera|PROYECTO_DE_|proyectoDe[A-Z]\w*Where|loadPortfolio/);
   });

@@ -8,7 +8,7 @@
  * Pide `ventas.read`. Solo lee HubSpot.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardPermission } from "@/lib/auth/api-guards";
+import { guardDeLaExploracion } from "@/lib/exploraciones/guardia";
 import { leerContactos, leerEmpresa } from "@/lib/exploraciones/hubspot";
 import { leerLoLeido } from "@/lib/exploraciones/lo-leido";
 import { contactoPrincipal, type ContactoConRastro } from "@/lib/exploraciones/senales";
@@ -18,7 +18,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const guard = await guardPermission("preventa", "read");
+  const guard = await guardDeLaExploracion(id, "read");
   if (guard instanceof NextResponse) return guard;
 
   const lectura = await leerExploracion(id);

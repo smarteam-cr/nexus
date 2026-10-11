@@ -6,12 +6,15 @@ import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { iniciarMapeo } from "@/lib/procesos/agente";
 import { tieneContenidoDeProceso } from "@/lib/procesos/mapa";
 import { leerProcesosDelCliente } from "@/lib/procesos/servidor";
+import { reunionesNuevasParaProcesos } from "@/lib/procesos/novedades";
 
 /**
  * /api/clients/[id]/procesos — los mapas de procesos del cliente (lib/procesos).
  *
  * GET  → los mapas nuevos (hoy y después), el índice del agente, los mapas del formato anterior que
- *        siguen en pie y la última corrida del mapeo (la pantalla la consulta mientras corre).
+ *        siguen en pie, la última corrida del mapeo (la pantalla la consulta mientras corre) y cuántas
+ *        reuniones nuevas describen cómo trabaja hoy el cliente (`reunionesNuevas`: el aviso «Volver a
+ *        mapear»; 0 con los hechos apagados, lib/procesos/novedades.ts).
  * POST → arranca el mapeo en segundo plano y devuelve la corrida (202). Pide la celda de procesos:
  *        `generate` la primera vez, `regenerate` si el cliente ya tiene procesos.
  */
@@ -21,7 +24,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
   const guard = await guardAccessToClient(id);
   if (guard instanceof NextResponse) return guard;
-  return NextResponse.json(await leerProcesosDelCliente(id));
+  const [procesos, reunionesNuevas] = await Promise.all([leerProcesosDelCliente(id), reunionesNuevasParaProcesos(id)]);
+  return NextResponse.json({ ...procesos, reunionesNuevas });
 }
 
 export async function POST(_req: NextRequest, { params }: Params) {

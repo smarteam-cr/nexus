@@ -112,3 +112,23 @@ describe("⭐ un acuerdo que NO se pudo aplicar sigue VIVO", () => {
     expect(estadosDeAcuerdo(turnos)[0]).toBe("aplicado");
   });
 });
+
+describe("las dependencias y los rótulos sobreviven a la ida y vuelta (2026-10-09)", () => {
+  /* Hasta ese día `leerAcuerdo` los descartaba: la cajita caía a la cascada del cronograma, que
+     sobre un documento o una tarea da cero dependencias. */
+  const ops = [{ op: "proyecto.crear" }, { op: "tarea.crear" }, { op: "tarea.crear" }];
+  const base = { resumen: "Armo el plan", operaciones: ops, lineas: ["a", "b", "c"] };
+
+  it("se conservan cuando hay uno por operación", () => {
+    const a = leerAcuerdo(`Va.\n\n${marcaDeAcuerdo({ ...base, dependencias: [[], [0], [0, 1]], rotulos: ["proyecto", "crear", "crear"] })}`).acuerdo;
+    expect(a?.dependencias).toEqual([[], [0], [0, 1]]);
+    expect(a?.rotulos).toEqual(["proyecto", "crear", "crear"]);
+  });
+
+  it("se descartan si no calzan con las operaciones o apuntan fuera de rango", () => {
+    for (const dependencias of [[[], [0]], [[], [0], [3]], [[], [0], [0.5]]]) {
+      expect(leerAcuerdo(`x\n\n${marcaDeAcuerdo({ ...base, dependencias })}`).acuerdo?.dependencias).toBeUndefined();
+    }
+    expect(leerAcuerdo(`x\n\n${marcaDeAcuerdo({ ...base, rotulos: ["a"] })}`).acuerdo?.rotulos).toBeUndefined();
+  });
+});

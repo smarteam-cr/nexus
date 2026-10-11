@@ -3,23 +3,27 @@ import {
   CONFIG_POR_DEFECTO,
   DIAS_PARA_RESPONDER,
   META_PARA_CALIBRAR,
-  SUPUESTO_MINUTOS,
   aplicaAPersona,
   aplicaATarea,
   calibracionPorTipo,
   caben,
   cuandoFue,
   cuantil,
+  elegirDeUnaMarca,
   elegirDelLote,
+  familiaDeLaClave,
+  claveDeArranque,
+  claveReasignada,
   inicioDelDiaCR,
   estadoVisible,
   formatoMinutos,
   huella,
   leerConfig,
   marcadaDemasiadoTarde,
-  minutosDeLaCarga,
+  minutosDelEstimado,
   tasaDeRespuesta,
-  textoDeEstimacion,
+  textoDelEstimado,
+  textoDelEstimadoGuardado,
   tipoDeFase,
   tocaPorMuestreo,
   venceEn,
@@ -60,7 +64,12 @@ describe("leerConfig — tolerante", () => {
   it("devuelve una copia: tocarla no cambia el valor por defecto", () => {
     const c = leerConfig(null, "TAREA_HECHA");
     c.opciones.push({ texto: "Otro", minutos: 5 });
-    expect(CONFIG_POR_DEFECTO.TAREA_HECHA.opciones).toHaveLength(6);
+    expect(CONFIG_POR_DEFECTO.TAREA_HECHA.opciones).toHaveLength(7);
+  });
+
+  it("las tareas suman «Más de un día»: una integración suele pasarlo", () => {
+    expect(CONFIG_POR_DEFECTO.TAREA_HECHA.opciones.at(-1)).toEqual({ texto: "Más de un día", minutos: 960 });
+    expect(leerConfig(null, "ARRANQUE").opciones.map((o) => o.texto)).toEqual(["1 h", "2 h", "Medio día", "Un día", "Más de un día"]);
   });
 });
 
@@ -144,6 +153,31 @@ describe("muestreo y tope", () => {
     expect(elegirDelLote(c, lote, {}, 2)).toHaveLength(1);
     expect(elegirDelLote(c, lote, {}, 3)).toHaveLength(0);
   });
+
+  it("las tareas clave van primero (una por familia) y no pasan por el muestreo", () => {
+    const c = tareas();
+    c.muestreo = { modo: "uno_de", cadaN: 1000 };
+    const k = Array.from({ length: 50 }, (_, i) => `tarea:k${i}`).find((x) => huella(x) % 1000 !== 0)!;
+    expect(tocaPorMuestreo(c, k, 0)).toBe(false);
+    expect(tocaPorMuestreo(c, k, 0, true)).toBe(true);
+    const lote = [
+      { clave: "tarea:a", tipo: "CONFIGURACION" as const, familia: null },
+      { clave: "tarea:b", tipo: "CONFIGURACION" as const, familia: "pipeline" },
+      { clave: "tarea:c", tipo: "CONFIGURACION" as const, familia: "pipeline" },
+      { clave: "tarea:d", tipo: "ADOPCION" as const, familia: "integracion" },
+    ];
+    expect(elegirDelLote(c, lote, {}, 0).map((t) => t.clave)).toEqual(["tarea:b", "tarea:d"]);
+    expect(elegirDelLote(c, lote, {}, 2).map((t) => t.clave)).toEqual(["tarea:b"]);
+    expect(elegirDeUnaMarca(c, lote, {}, 0).map((t) => t.clave)).toEqual(["tarea:b"]);
+    expect(elegirDeUnaMarca(c, lote, {}, 3)).toEqual([]);
+  });
+
+  it("las claves del arranque y de una pregunta que pasa a otra persona", () => {
+    expect(claveDeArranque("pipeline", "Ana@X.com")).toBe("arranque:pipeline:ana@x.com");
+    expect(familiaDeLaClave("arranque:pipeline:ana@x.com")).toBe("pipeline");
+    expect(familiaDeLaClave("tarea:123")).toBeNull();
+    expect(claveReasignada("tarea:123", "Luis@X.com")).toBe("tarea:123:luis@x.com");
+  });
 });
 
 describe("estados", () => {
@@ -211,24 +245,31 @@ describe("cómo se leen las respuestas", () => {
     expect(cuantil([30, 60, 90, 120], 0.5)).toBe(75);
   });
 
-  it("sin 5 respuestas no hay mediana; con 20, el tipo calibra y la carga usa la mediana", () => {
-    const pocas = Array.from({ length: 4 }, () => ({ tipo: "PLANIFICACION", minutos: 60 }));
-    const muchas = Array.from({ length: 20 }, (_, i) => ({ tipo: "CONFIGURACION", minutos: i < 10 ? 60 : 120 }));
-    const cal = calibracionPorTipo([...pocas, ...muchas, { tipo: null, minutos: 30 }]);
+  const SUPUESTOS = { CONFIGURACION: 120, PLANIFICACION: 90, EXPLORACION: 60, ADOPCION: 60, SEGUIMIENTO: 30, SIN: 90 };
+
+  it("sin 5 respuestas no hay mediana; con 20 el tipo calibra (y se compara con lo que suponía la carga)", () => {
+    const pocas = Array.from({ length: 4 }, () => ({ tipo: "PLANIFICACION", minutos: 60, estimado: 90 }));
+    const muchas = Array.from({ length: 20 }, (_, i) => ({ tipo: "CONFIGURACION", minutos: i < 10 ? 60 : 120, estimado: 240 }));
+    const cal = calibracionPorTipo([...pocas, ...muchas, { tipo: null, minutos: 30 }], SUPUESTOS);
     const plan = cal.find((c) => c.tipo === "PLANIFICACION")!;
     const conf = cal.find((c) => c.tipo === "CONFIGURACION")!;
     const sin = cal.find((c) => c.tipo === "SIN")!;
-    expect(plan).toMatchObject({ respuestas: 4, mediana: null, calibra: false });
-    expect(minutosDeLaCarga(plan)).toBe(SUPUESTO_MINUTOS.PLANIFICACION);
-    expect(conf).toMatchObject({ respuestas: 20, mediana: 90, calibra: true });
-    expect(minutosDeLaCarga(conf)).toBe(90);
+    expect(plan).toMatchObject({ respuestas: 4, mediana: null, estimadoMediana: null, calibra: false, supuesto: 90 });
+    expect(conf).toMatchObject({ respuestas: 20, mediana: 90, estimadoMediana: 240, calibra: true, supuesto: 120 });
     expect(sin.respuestas).toBe(1);
     expect(cal).toHaveLength(6);
   });
 
-  it("la estimación se dice distinto si ya viene de respuestas", () => {
-    expect(textoDeEstimacion("CONFIGURACION", 120, false)).toBe("La carga supone 2 h para una tarea de Configuración.");
-    expect(textoDeEstimacion("CONFIGURACION", 90, true)).toContain("según lo que anotó el equipo");
-    expect(textoDeEstimacion(null, 60, false)).toBeNull();
+  it("lo que suponía la carga dice cómo lo calculó: horas, parte y factor", () => {
+    const base = { base: 2, de: "tipo" as const, nombre: "Configuración", parte: 1, factor: 2.15 };
+    expect(minutosDelEstimado(base)).toBe(258);
+    expect(textoDelEstimado(base)).toBe("La carga suponía 4 h 18: 2 h de una tarea de Configuración × factor 2,15 de la cuenta.");
+    expect(textoDelEstimado({ ...base, factor: 1 })).toBe("La carga suponía 2 h para una tarea de Configuración.");
+    expect(textoDelEstimado({ ...base, parte: 0.5, factor: 1 })).toBe("La carga suponía 1 h: 2 h de una tarea de Configuración × 0,5 (compartida).");
+    expect(textoDelEstimado({ ...base, de: "familia", nombre: "Integración", base: 8, factor: 1 })).toBe("La carga suponía 8 h para «Integración».");
+    expect(textoDelEstimado({ ...base, parte: 0 })).toBeNull();
+    expect(textoDelEstimado(null)).toBeNull();
+    expect(textoDelEstimadoGuardado(90)).toBe("La carga suponía 1 h 30 para esta tarea, con el factor de su cuenta.");
+    expect(textoDelEstimadoGuardado(null)).toBeNull();
   });
 });

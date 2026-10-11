@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { prisma } from "@/lib/db/prisma";
-import { cambiarTema, crearPedidos, crearReporte, decidir, marcarLeido, responder, subirLoListo } from "./mutations";
+import { cambiarLectura, cambiarTema, crearPedidos, crearReporte, decidir, marcarLeido, responder, subirLoListo } from "./mutations";
 import { promptDeTema } from "./prompt";
 import { cuentasDeLasPestanas, datosDeBandeja, datosDeEncuestas, misReportes, reportesDelTema, reporteParaVer, temaParaElPrompt, temasDeLaHoja } from "./queries";
 
@@ -158,6 +158,31 @@ describe("el ciclo de un reporte", () => {
     await new Promise((listo) => setTimeout(listo, 5));
     await responder(r.id, { email: AUTOR.email, esRevisor: false }, "Gracias");
     expect(await cuentasDeLasPestanas()).toEqual({ bandeja: 1, hoja: 0 });
+  });
+
+  it("marcar no leído vuelve a dejarlo pendiente en la Bandeja, y la respuesta de la persona vuelve a contar", async () => {
+    const r = await crearReporte({ tipo: "mejora", cuerpo: "Ver la última reunión en la lista", meFrena: false, pantalla: "Clientes", ruta: "/clients" }, AUTOR);
+    const enLaBandeja = async () => (await datosDeBandeja()).reportes.find((x) => x.id === r.id)!;
+    expect((await enLaBandeja()).noLeido).toBe(true);
+
+    await marcarLeido(r.id, "revisor"); // abrirlo
+    expect((await enLaBandeja()).noLeido).toBe(false);
+    await cambiarLectura(r.id, false);
+    expect((await enLaBandeja()).noLeido).toBe(true);
+
+    // Cerrado y con la última palabra de la persona: leído sale de «Te respondieron»; no leído vuelve.
+    await decidir(r.id, { accion: "responder", respuesta: "Anotado." }, REVISOR);
+    await new Promise((listo) => setTimeout(listo, 5));
+    await responder(r.id, { email: AUTOR.email, esRevisor: false }, "¿Y la próxima también?");
+    expect(await enLaBandeja()).toMatchObject({ noLeido: true, respondio: true });
+    await cambiarLectura(r.id, true);
+    expect(await enLaBandeja()).toMatchObject({ noLeido: false, respondio: false });
+    expect(await cuentasDeLasPestanas()).toEqual({ bandeja: 0, hoja: 0 });
+    await cambiarLectura(r.id, false);
+    expect(await enLaBandeja()).toMatchObject({ noLeido: true, respondio: true });
+    expect(await cuentasDeLasPestanas()).toEqual({ bandeja: 1, hoja: 0 });
+
+    await expect(cambiarLectura("no-existe", false)).rejects.toMatchObject({ status: 404 });
   });
 
   it("un reporte lo abren solo quien lo escribió y quien revisa", async () => {

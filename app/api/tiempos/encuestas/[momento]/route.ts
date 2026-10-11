@@ -21,6 +21,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ mo
     return NextResponse.json({ error: "Ese momento no existe." }, { status: 404 });
   }
   const momento = crudo as Momento;
+  if (definicionDe(momento).manual) {
+    return NextResponse.json({ error: "La encuesta de arranque no se prende ni se pausa: se manda con su botón." }, { status: 409 });
+  }
 
   let raw: unknown;
   try {

@@ -31,6 +31,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { coincideBusqueda } from "@/lib/ui/text-search";
 import { usePanelFlotante } from "./usePanelFlotante";
+import { IconoDeSugerencia } from "./sistema";
 
 export interface OpcionDeCelda {
   /** Lo que se manda al confirmar. Único dentro de la lista. */
@@ -55,6 +56,12 @@ export interface CeldaSelectProps {
   /** Desde cuántas opciones aparece el buscador. Por debajo estorba más de lo que ayuda. */
   minimoParaBuscar?: number;
   placeholderBusqueda?: string;
+  /**
+   * Lo que propone Nexus cuando no hay nada seleccionado (2026-10-07, la clasificación de la cartera): la celda
+   * lo muestra en azul con la chispa, en vez de `vacio`, y en la lista lo marca «· lo propone Nexus». Elegirlo
+   * lo confirma. Con algo seleccionado no se usa: lo elegido manda.
+   */
+  sugerencia?: string;
 }
 
 export function CeldaSelect({
@@ -66,6 +73,7 @@ export function CeldaSelect({
   etiqueta,
   minimoParaBuscar = 8,
   placeholderBusqueda = "Buscar…",
+  sugerencia,
 }: CeldaSelectProps) {
   const [guardando, setGuardando] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +115,14 @@ export function CeldaSelect({
     );
   }, [opciones, busqueda]);
 
+  const propuesta = seleccion.length === 0 && sugerencia ? (opciones.find((o) => o.value === sugerencia) ?? null) : null;
+  const etiquetaPropuesta = propuesta && (
+    <span className="inline-flex max-w-full items-center gap-1 text-brand">
+      <IconoDeSugerencia className="h-3 w-3 flex-shrink-0" />
+      <span className="truncate">{propuesta.label}</span>
+    </span>
+  );
+
   const etiquetaActual =
     seleccion.length === 0 ? null : (
       <>
@@ -120,6 +136,8 @@ export function CeldaSelect({
   if (!puedeEditar || opciones.length === 0) {
     return etiquetaActual ? (
       <span className="text-fg-secondary truncate block">{etiquetaActual}</span>
+    ) : etiquetaPropuesta ? (
+      <span className="block truncate">{etiquetaPropuesta}</span>
     ) : (
       <span className="text-fg-muted">{vacio}</span>
     );
@@ -158,7 +176,7 @@ export function CeldaSelect({
           {guardando ? (
             <span className="text-fg-muted">Guardando…</span>
           ) : (
-            (etiquetaActual ?? <span className="text-fg-muted">{vacio}</span>)
+            (etiquetaActual ?? etiquetaPropuesta ?? <span className="text-fg-muted">{vacio}</span>)
           )}
         </span>
         {/* La flechita: lo único que delata que la celda se puede tocar. */}
@@ -204,6 +222,7 @@ export function CeldaSelect({
             ) : (
               filtradas.map((o) => {
                 const esActual = seleccion.includes(o.value);
+                const esPropuesta = propuesta?.value === o.value;
                 return (
                   <button
                     key={o.value}
@@ -220,6 +239,7 @@ export function CeldaSelect({
                     <span className="block truncate">
                       {o.label}
                       {esActual && <span className="text-fg-muted"> · actual</span>}
+                      {esPropuesta && <span className="text-brand"> · lo propone Nexus</span>}
                     </span>
                     {o.hint && <span className="block truncate text-xs text-fg-muted">{o.hint}</span>}
                   </button>

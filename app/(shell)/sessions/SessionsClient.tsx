@@ -14,7 +14,6 @@ import {
 } from "@/lib/sessions/indice-de-grupos";
 import type { FilaDeCoberturaPorCse } from "@/lib/sessions/cobertura-por-cse";
 import type { HubspotCompanyLite } from "@/lib/hubspot/companies";
-import AnalysisPanel from "./AnalysisPanel";
 import { IconCheck, Alert } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson } from "@/lib/api/fetch-json";
@@ -83,11 +82,6 @@ interface CategoryLite {
   color: string | null;
 }
 
-interface TeamMemberLite {
-  email: string;
-  role: string | null;
-}
-
 interface Props {
   /** C-19: SOLO las filas del grupo elegido (o ninguna). El resto es índice. */
   sessions: Session[];
@@ -98,7 +92,6 @@ interface Props {
   clients: Client[];
   categories: CategoryLite[];
   hubspotCompanies: HubspotCompanyLite[];
-  teamMembers: TeamMemberLite[];
   /** Cobertura de transcripciones de los últimos 3 meses, ya partida y contada server-side. */
   cobertura: Cobertura;
 }
@@ -122,9 +115,6 @@ export interface Cobertura {
 
 // Identificador compuesto del grupo seleccionado en la sidebar
 type SelectedGroupKey = GrupoElegido;
-
-// Modo del panel derecho — sessions (default) o analysis (Fase 9)
-type ViewMode = "sessions" | "analysis";
 
 /** Identidad estable para «este grupo no tiene filas (todavía)»: los memos que dependen de la lista no se recalculan por nada. */
 const SIN_FILAS: Session[] = [];
@@ -960,6 +950,8 @@ function SessionDetail({
   const [tab, setTab] = useState<"resumen" | "transcript">("resumen");
   const [transcript, setTranscript] = useState<string | null>(null);
   const [transcriptLoading, setTranscriptLoading] = useState(true);
+  // Desde la memoria de la cuenta (2026-10-10), abrir una reunión pide acceso a su cliente: sin acceso, 404.
+  const [sinAcceso, setSinAcceso] = useState(false);
   const [reEnriching, setReEnriching] = useState(false);
   const [reEnrichMsg, setReEnrichMsg] = useState<string | null>(null);
   const [generatingSummary, setGeneratingSummary] = useState(false);
@@ -974,6 +966,7 @@ function SessionDetail({
   useEffect(() => {
     setTranscript(null);
     setLiveSummary(null);
+    setSinAcceso(false);
     setTab("resumen");
 
     if (!session.hasTranscript && !session.hasSummary) {
@@ -987,9 +980,18 @@ function SessionDetail({
     setSummaryLoading(true);
 
     fetch(`/api/sessions/${session.id}`)
-      .then((r) => r.json())
-      .then(async (data: { transcript?: string | null; summary?: SessionSummary | null }) => {
+      .then((r) => {
+        if (r.status === 403 || r.status === 404) return null;
+        return r.json();
+      })
+      .then(async (data: { transcript?: string | null; summary?: SessionSummary | null } | null) => {
         if (cancelled) return;
+        if (data === null) {
+          setSinAcceso(true);
+          setTranscriptLoading(false);
+          setSummaryLoading(false);
+          return;
+        }
         const tx = data.transcript ?? null;
         setTranscript(tx);
         setTranscriptLoading(false);
@@ -1148,6 +1150,11 @@ function SessionDetail({
             </span>
           </TabButton>
         </div>
+        {sinAcceso && (
+          <div className="mx-7 mt-4 rounded-lg border border-line bg-surface-muted px-4 py-3 text-sm text-fg-secondary">
+            No tienes acceso al cliente de esta reunión. Si la necesitas, pídele acceso a la CSL o a dirección.
+          </div>
+        )}
       </div>
 
       {/* ── Contenido ───────────────────────────────────────────────────────── */}
@@ -1321,7 +1328,7 @@ function SessionDetail({
             <div className="flex items-center justify-end mb-5">
               <button
                 onClick={handleReEnrich}
-                disabled={reEnriching || transcriptLoading}
+                disabled={reEnriching || transcriptLoading || sinAcceso}
                 className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-400 disabled:opacity-40 transition-colors"
               >
                 <svg className={`w-3.5 h-3.5 ${reEnriching ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1588,7 +1595,6 @@ export default function SessionsClient({
   clients,
   categories,
   hubspotCompanies,
-  teamMembers,
   cobertura,
 }: Props) {
   /* C-20 (2026-09-04): las filas viven en una CACHÉ por grupo. El servidor manda las del grupo
@@ -1639,17 +1645,10 @@ export default function SessionsClient({
     return initialSessions.find((x) => x.id === sParam) ?? null;
   });
 
-  // ── Hub de análisis (Fase 9) ─────────────────────────────────────────────
-  // viewMode: 'sessions' (default) o 'analysis' — qué muestra el panel derecho
-  // currentAnalysisRunId: id del AgentRun abierto (sincronizado con AnalysisPanel)
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const v = searchParams.get("view");
-    return v === "analysis" ? "analysis" : "sessions";
-  });
-
-  const [currentAnalysisRunId, setCurrentAnalysisRunId] = useState<string | null>(() => {
-    return searchParams.get("analysis");
-  });
+  /* El «hub de análisis» (Fase 9: la pestaña «Análisis», `?view=analysis` y `?analysis=runId`) se
+     retiró el 2026-10-09 (Memoria de la cuenta · Etapa 0): 4 corridas en total, la última el 18-jun, y
+     sin guarda de cliente. Un enlace viejo con esos parámetros abre la vista de sesiones: la URL se
+     reescribe sin ellos. */
 
   // ── Búsqueda en sidebar (Fase 6) ─────────────────────────────────────────
   const [query, setQuery] = useState("");
@@ -1675,8 +1674,6 @@ export default function SessionsClient({
   // Params:
   //   ?g=client:xxx           — grupo seleccionado (Fase 8)
   //   ?s=sessionId            — sesión abierta en el panel derecho (Fase 8)
-  //   ?view=analysis          — tab "Análisis" activo (Fase 9)
-  //   ?analysis=runId         — AgentRun abierto en AnalysisPanel (Fase 9)
   /* C-20: las filas del grupo elegido salen de la caché; si no están, se piden a la ruta. */
   const claveSeleccionada = claveDe(selectedGroup);
   const sessions = (claveSeleccionada && grupos[claveSeleccionada]) || SIN_FILAS;
@@ -1711,8 +1708,6 @@ export default function SessionsClient({
     const gParam = grupoAParam(selectedGroup);
     if (gParam) params.set("g", gParam);
     if (selectedSession) params.set("s", selectedSession.id);
-    if (viewMode === "analysis") params.set("view", "analysis");
-    if (currentAnalysisRunId) params.set("analysis", currentAnalysisRunId);
     const qs = params.toString();
     const next = qs ? `${pathname}?${qs}` : pathname;
     // Solo navegar si la URL realmente cambia (evita loops y noise)
@@ -1721,7 +1716,7 @@ export default function SessionsClient({
       window.history.replaceState(null, "", next);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGroup, selectedSession, viewMode, currentAnalysisRunId]);
+  }, [selectedGroup, selectedSession]);
 
   // Query normalizada (lowercase + sin acentos), trim
   const normalizedQuery = useMemo(() => normalize(query).trim(), [query]);
@@ -1765,12 +1760,6 @@ export default function SessionsClient({
     [sidebarSessions, textoGrupo],
   );
 
-  // Cliente seleccionado (solo si el grupo es de tipo client)
-  const selectedClient = useMemo(() => {
-    if (selectedGroup?.kind !== "client") return null;
-    return clients.find((c) => c.id === selectedGroup.id) ?? null;
-  }, [selectedGroup, clients]);
-
   // Label del grupo activo para el header
   const selectedGroupLabel = useMemo(() => {
     if (!selectedGroup) return "";
@@ -1787,25 +1776,17 @@ export default function SessionsClient({
   }, [selectedGroup, clients, hubspotCompanies, categories]);
 
   function handleGroupClick(kind: SessionGroup["kind"], id: string) {
-    // Al cambiar de grupo, reseteamos run abierto (es de otro client) y
-    // volvemos a tab "sessions" por defecto.
     setSelectedGroup({ kind, id });
     setSelectedSession(null);
-    setCurrentAnalysisRunId(null);
-    setViewMode("sessions");
   }
 
   function handleBack() {
     setSelectedGroup(null);
     setSelectedSession(null);
-    setCurrentAnalysisRunId(null);
-    setViewMode("sessions");
   }
 
-  /** Click en una sesión: forzamos viewMode='sessions' para que se vea el detalle. */
   function handleSessionClick(s: Session) {
     setSelectedSession(s);
-    setViewMode("sessions");
   }
 
   function handleClientChanged(sessionId: string, clientId: string | null) {
@@ -2005,13 +1986,13 @@ export default function SessionsClient({
                           <p className="text-xs font-semibold text-gray-600 uppercase tracking-widest">
                             Categorías
                           </p>
-                          <a
+                          <Link
                             href="/sessions/categories"
                             className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors"
                             title="Administrar categorías de dominios"
                           >
                             Administrar
-                          </a>
+                          </Link>
                         </div>
                         {categoriasRestantes.length === 0 ? (
                           <p className="px-4 py-2 text-xs text-gray-700 italic">
@@ -2159,67 +2140,9 @@ export default function SessionsClient({
 
         <AvisoDeCobertura cobertura={cobertura} />
 
-        {/* ── Tabs Sesiones / Análisis (visibles cuando hay grupo seleccionado) ── */}
-        {selectedGroup !== null && (
-          <div className="flex-shrink-0 border-b border-gray-800 px-5 flex items-center gap-1">
-            <PanelTab
-              active={viewMode === "sessions"}
-              onClick={() => setViewMode("sessions")}
-            >
-              <span className="flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14-7H5a2 2 0 00-2 2v14l4-4h12a2 2 0 002-2V6a2 2 0 00-2-2z" />
-                </svg>
-                Sesiones
-              </span>
-            </PanelTab>
-            <PanelTab
-              active={viewMode === "analysis"}
-              onClick={() => setViewMode("analysis")}
-            >
-              <span className="flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Análisis
-                {selectedGroup.kind !== "client" && (
-                  <span className="text-[9px] text-gray-700 normal-case font-normal">
-                    (solo Clients)
-                  </span>
-                )}
-              </span>
-            </PanelTab>
-          </div>
-        )}
-
-        {/* ── Contenido del panel según viewMode ──────────────────────────────── */}
+        {/* ── Contenido del panel ──────────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col min-h-0">
-          {viewMode === "analysis" && selectedGroup !== null ? (
-            selectedGroup.kind === "client" && selectedClient ? (
-              <AnalysisPanel
-                key={selectedClient.id}
-                clientId={selectedClient.id}
-                clientName={selectedClient.name}
-                clientSessions={sidebarSessions.map((s) => ({
-                  id: s.id,
-                  title: s.title,
-                  date: s.date,
-                  participants: s.participants,
-                  hasTranscript: s.hasTranscript,
-                  hasSummary: s.hasSummary,
-                }))}
-                teamMembers={teamMembers}
-                initialRunId={currentAnalysisRunId}
-                onRunChange={setCurrentAnalysisRunId}
-              />
-            ) : (
-              <NonClientAnalysisPlaceholder
-                kind={selectedGroup.kind}
-                hubspotCompanyId={selectedGroup.kind === "hubspotCompany" ? selectedGroup.id : null}
-                nombre={selectedGroupLabel}
-              />
-            )
-          ) : selectedSession ? (
+          {selectedSession ? (
             <SessionDetail
               session={selectedSession}
               clients={clients}
@@ -2243,17 +2166,10 @@ export default function SessionsClient({
                 }
               </p>
 
-              {/* CTA: invitar a usar el tab Análisis (solo para Clients) */}
-              {selectedGroup !== null && selectedGroup.kind === "client" && (
-                <button
-                  onClick={() => setViewMode("analysis")}
-                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-brand/30 bg-brand/10 hover:bg-brand/20 text-xs text-brand-light font-medium transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Analizar este cliente con IA
-                </button>
+              {/* C-18: una empresa de HubSpot que no es cliente de Nexus se trae desde Clientes, con la
+                  empresa preseleccionada (vivía en el placeholder de la pestaña «Análisis», retirada). */}
+              {selectedGroup !== null && selectedGroup.kind === "hubspotCompany" && (
+                <EnlaceTraerDeHubspot hubspotCompanyId={selectedGroup.id} nombre={selectedGroupLabel} />
               )}
             </div>
           )}
@@ -2263,74 +2179,26 @@ export default function SessionsClient({
   );
 }
 
-// ── Tab para el panel derecho (Sesiones / Análisis) ─────────────────────────
+// ── Traer una empresa de HubSpot a Clientes (C-18) ───────────────────────────
 
-function PanelTab({ active, onClick, children }: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-        active
-          ? "border-brand text-white"
-          : "border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-800"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-// ── Placeholder cuando el grupo no es Client (no se puede analizar) ──────────
-
-function NonClientAnalysisPlaceholder({ kind, hubspotCompanyId, nombre }: {
-  kind: SessionGroup["kind"];
-  /** Solo para `hubspotCompany`: el id de la empresa en HubSpot, para llegar a Clientes con ella preseleccionada. */
-  hubspotCompanyId: string | null;
+function EnlaceTraerDeHubspot({ hubspotCompanyId, nombre }: {
+  /** El id de la empresa en HubSpot, para llegar a Clientes con ella preseleccionada. */
+  hubspotCompanyId: string;
   nombre: string;
 }) {
-  const labels: Record<string, string> = {
-    hubspotCompany: "empresa de HubSpot",
-    category:       "categoría",
-    orphan:         "grupo sin clasificar",
-  };
-  const label = labels[kind] ?? "grupo";
+  /* C-18 (2026-09-04): acá hubo meses un botón deshabilitado «Promover a Client · próximamente».
+     Un control que no hace nada es peor que ninguno; el camino real ya existe (Clientes →
+     «Traer de HubSpot»), así que el enlace lleva ahí con la empresa preseleccionada. */
   return (
-    <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 p-6 max-w-md mx-auto">
-      <div className="w-12 h-12 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center">
-        <svg className="w-6 h-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-        </svg>
-      </div>
-      <div className="space-y-1.5">
-        <p className="text-sm font-medium text-white">
-          Esta {label} no es Client de Nexus
-        </p>
-        <p className="text-xs text-gray-500 leading-relaxed">
-          {hubspotCompanyId
-            ? "El hub de análisis solo opera sobre Clients de Nexus. Traé la empresa desde Clientes: si en HubSpot tiene un proyecto, el botón «Traer de HubSpot» la ofrece con esta preseleccionada."
-            : "El hub de análisis solo opera sobre Clients de Nexus. Estas sesiones se asignan a un cliente una por una, desde la propia sesión."}
-        </p>
-      </div>
-      {/* C-18 (2026-09-04): acá hubo meses un botón deshabilitado «Promover a Client · próximamente».
-          Un control que no hace nada es peor que ninguno; el camino real ya existe (Clientes →
-          «Traer de HubSpot»), así que el enlace lleva ahí con la empresa preseleccionada. Para
-          categorías y grupos sin clasificar no hay nada que traer: no se pinta ningún botón. */}
-      {hubspotCompanyId && (
-        <Link
-          href={`/clients?traer=${encodeURIComponent(hubspotCompanyId)}&empresa=${encodeURIComponent(nombre)}`}
-          className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-line bg-surface text-xs text-fg-secondary hover:text-fg hover:bg-surface-hover"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Traer «{nombre}» de HubSpot
-        </Link>
-      )}
-    </div>
+    <Link
+      href={`/clients?traer=${encodeURIComponent(hubspotCompanyId)}&empresa=${encodeURIComponent(nombre)}`}
+      className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-line bg-surface text-xs text-fg-secondary hover:text-fg hover:bg-surface-hover"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+      </svg>
+      Traer «{nombre}» de HubSpot
+    </Link>
   );
 }
 

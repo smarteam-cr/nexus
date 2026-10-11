@@ -8,19 +8,39 @@ import {
   PREFIJO_PROPIEDAD,
   camposPropuestos,
   camposQueCambiaron,
+  camposDeLaReunion,
+  conDecisiones,
+  conHistoria,
   conservarLoEscrito,
+  conteoDeLaFicha,
   cuerpoDeLaNota,
+  decisionesAlConfirmar,
+  decisionesAlDescartar,
+  decisionesDeLaReunion,
+  etiquetaDeSesion,
+  fuenteEsDeLaReunion,
+  MAX_DECISIONES,
   escrituraEnHubspot,
   fusionarPropuesta,
+  fichaParaLaMemoria,
   fichaParaPrompt,
   fichaVacia,
+  historiaAlConfirmar,
   leerFicha,
+  MARCA_DE_LO_INTERNO,
+  ORIGEN_A_MANO,
+  ORIGEN_DESCONOCIDO,
+  origenesDelCampo,
   propiedadesParaHubspot,
+  propuestaConLoInterno,
+  propuestaExcluida,
   quitarDeLaPropuesta,
+  stakeholdersSinPostura,
   textoAHtml,
   validarValores,
   valorVigente,
   valoresVacios,
+  VERSION_DE_LA_FICHA,
   type FichaGuardada,
 } from "./ficha";
 
@@ -317,5 +337,373 @@ describe("conservarLoEscrito: «Actualizar con IA» no pisa lo que escribiste mi
     const v = valoresVacios();
     const base = { ...v, dolorPrincipal: "de la IA" };
     expect(conservarLoEscrito(v, v, base)).toBe(base);
+  });
+});
+
+describe("lo que se decidió de cada campo propuesto (lib/lo-propuesto)", () => {
+  const AHORA = "2026-10-09T18:00:00.000Z";
+  const conPropuesta = (): FichaGuardada => ({
+    ...fichaConfirmada({ dolorPrincipal: "viejo", retosEstrategicos: "crecer" }),
+    propuesta: {
+      valores: { dolorPrincipal: "nuevo", retosEstrategicos: "crecer en México", aQueSeDedica: "Vende acero" },
+      fuentes: ["Sesión «Seguimiento» del 9 oct 2026"],
+      fuentesPorCampo: {
+        dolorPrincipal: ["Sesión «Seguimiento» del 9 oct 2026"],
+        retosEstrategicos: ["Handoff de «Implementación»"],
+        aQueSeDedica: ["Sesión «Seguimiento» del 9 oct 2026"],
+      },
+      at: "2026-10-09T16:00:00.000Z",
+      origen: "Sesiones",
+    },
+  });
+
+  it("al confirmar: igual a lo propuesto = usado; igual a lo de antes = desestimado; otra cosa = usado con cambios", () => {
+    const antes = conPropuesta();
+    const confirmados = { ...antes.valores, dolorPrincipal: "nuevo", retosEstrategicos: "crecer", aQueSeDedica: "Vende acero y aluminio" };
+    const d = decisionesAlConfirmar(antes, confirmados, "Ana@Smarteamcr.com", AHORA);
+    const porClave = Object.fromEntries(d.map((x) => [x.clave, x.estado]));
+    expect(porClave).toEqual({ dolorPrincipal: "usado", retosEstrategicos: "desestimado", aQueSeDedica: "usado_con_cambios" });
+    expect(d[0].por).toBe("ana@smarteamcr.com");
+    expect(d.find((x) => x.clave === "dolorPrincipal")).toMatchObject({ valor: "nuevo", fuentes: ["Sesión «Seguimiento» del 9 oct 2026"], propuestaAt: "2026-10-09T16:00:00.000Z" });
+  });
+
+  it("descartar anota con el correo, solo lo que estaba propuesto", () => {
+    const d = decisionesAlDescartar(conPropuesta(), ["dolorPrincipal", "stakeholders"], "cse@x", AHORA);
+    expect(d).toHaveLength(1);
+    expect(d[0]).toMatchObject({ clave: "dolorPrincipal", estado: "desestimado", por: "cse@x", en: AHORA });
+  });
+
+  it("leerFicha conserva las decisiones (y descarta las que no se entienden)", () => {
+    const f = conDecisiones(conPropuesta(), decisionesAlDescartar(conPropuesta(), ["dolorPrincipal"], "cse@x", AHORA));
+    const leida = leerFicha(JSON.parse(JSON.stringify({ ...f, decisiones: [...f.decisiones!, { clave: "otra", estado: "usado", por: "x", en: AHORA }] })));
+    expect(leida.decisiones).toHaveLength(1);
+    expect(leida.decisiones![0]).toMatchObject({ clave: "dolorPrincipal", estado: "desestimado", por: "cse@x" });
+    // Sin decisiones guardadas, no aparece la clave.
+    expect("decisiones" in leerFicha(JSON.parse(JSON.stringify(fichaVacia())))).toBe(false);
+  });
+
+  it("el registro guarda los más nuevos, hasta el tope", () => {
+    const una = decisionesAlDescartar(conPropuesta(), ["dolorPrincipal"], "cse@x", AHORA)[0];
+    let f = fichaVacia();
+    for (let i = 0; i < MAX_DECISIONES + 5; i++) f = conDecisiones(f, [{ ...una, en: `n${i}` }]);
+    expect(f.decisiones).toHaveLength(MAX_DECISIONES);
+    expect(f.decisiones![MAX_DECISIONES - 1].en).toBe(`n${MAX_DECISIONES + 4}`);
+  });
+});
+
+describe("la reunión de la que salió un campo propuesto", () => {
+  const reunion = { title: "Seguimiento", date: "2026-10-09T15:00:00.000Z" };
+
+  it("la etiqueta se arma a mano, en el día de Costa Rica", () => {
+    expect(etiquetaDeSesion(reunion)).toBe("Sesión «Seguimiento» del 9 oct 2026");
+    // 05:00 UTC del 10 oct = 9 oct de noche en Costa Rica.
+    expect(etiquetaDeSesion({ title: null, date: "2026-10-10T05:00:00.000Z" })).toBe("Sesión «sin título» del 9 oct 2026");
+  });
+
+  it("encuentra la etiqueta en las formas de cada versión de Node", () => {
+    for (const fecha of ["9 oct 2026", "9 oct. 2026", "9 de oct. de 2026", "9 Oct 2026"]) {
+      expect(fuenteEsDeLaReunion(`Sesión «Seguimiento» del ${fecha}`, reunion), fecha).toBe(true);
+    }
+    expect(fuenteEsDeLaReunion("Sesión «Revisión» del 16 sept 2026", { title: "Revisión", date: "2026-09-16T15:00:00.000Z" })).toBe(true);
+  });
+
+  it("no confunde dos reuniones con títulos distintos el mismo día, ni la misma reunión otro día", () => {
+    expect(fuenteEsDeLaReunion("Sesión «Kickoff» del 9 oct 2026", reunion)).toBe(false);
+    expect(fuenteEsDeLaReunion("Sesión «Seguimiento» del 10 oct 2026", reunion)).toBe(false);
+    expect(fuenteEsDeLaReunion("Handoff de «Seguimiento»", reunion)).toBe(false);
+  });
+
+  it("camposDeLaReunion: los propuestos que salieron de esa reunión; decisionesDeLaReunion: lo ya decidido de ella", () => {
+    const f: FichaGuardada = {
+      ...fichaVacia(),
+      propuesta: {
+        valores: { dolorPrincipal: "nuevo", retosEstrategicos: "crecer" },
+        fuentes: [],
+        fuentesPorCampo: { dolorPrincipal: ["Sesión «Seguimiento» del 9 oct. 2026"], retosEstrategicos: ["Sesión «Kickoff» del 9 oct 2026"] },
+        at: "2026-10-09T16:00:00.000Z",
+        origen: "Sesiones",
+      },
+    };
+    expect(camposDeLaReunion(f, reunion)).toEqual(["dolorPrincipal"]);
+    const conDecision = conDecisiones(f, decisionesAlDescartar(f, ["dolorPrincipal"], "cse@x", "2026-10-09T18:00:00.000Z"));
+    expect(decisionesDeLaReunion(conDecision, reunion).map((d) => d.clave)).toEqual(["dolorPrincipal"]);
+  });
+});
+
+/* 2026-10-09 — memoria de la cuenta, etapa 3: de dónde salió cada campo. */
+describe("origenPorCampo: quién propuso cada campo", () => {
+  const confirmada = fichaConfirmada({ dolorPrincipal: "- pierde leads" });
+
+  it("fusionarPropuesta lo acumula por campo, como las fuentes", () => {
+    const a = fusionarPropuesta(confirmada, [{ clave: "retosEstrategicos", valor: "- crecer", fuentes: ["Sesión «A» del 1 oct 2026"] }], "Sesiones").ficha;
+    const b = fusionarPropuesta(
+      a,
+      [
+        { clave: "retosEstrategicos", valor: "- crecer\n- abrir Panamá", fuentes: ["Handoff de «Impl»"] },
+        { clave: "stakeholders", valor: "- Ana — CEO", fuentes: ["Handoff de «Impl»"] },
+      ],
+      "Handoff",
+    ).ficha;
+    expect(b.propuesta?.origenPorCampo).toEqual({ retosEstrategicos: ["Sesiones", "Handoff"], stakeholders: ["Handoff"] });
+    expect(origenesDelCampo(b, "retosEstrategicos")).toEqual(["Sesiones", "Handoff"]);
+  });
+
+  it("quitarDeLaPropuesta lo borra con el campo", () => {
+    const a = fusionarPropuesta(
+      confirmada,
+      [
+        { clave: "retosEstrategicos", valor: "- crecer", fuentes: ["S"] },
+        { clave: "stakeholders", valor: "- Ana", fuentes: ["S"] },
+      ],
+      "Sesiones",
+    ).ficha;
+    const f = quitarDeLaPropuesta(a, ["retosEstrategicos"]);
+    expect(f.propuesta?.origenPorCampo).toEqual({ stakeholders: ["Sesiones"] });
+  });
+
+  it("leerFicha lo lee con tolerancia (falta o trae basura)", () => {
+    const leida = leerFicha({
+      propuesta: { valores: { dolorPrincipal: "x" }, fuentesPorCampo: {}, origenPorCampo: { dolorPrincipal: ["Handoff", 3], otra: ["x"] } },
+    });
+    expect(leida.propuesta?.origenPorCampo).toEqual({ dolorPrincipal: ["Handoff"] });
+    expect("origenPorCampo" in (leerFicha({ propuesta: { valores: {} } }).propuesta ?? {})).toBe(false);
+    expect(leerFicha({ propuesta: { valores: {}, origenPorCampo: "basura" } }).propuesta?.origenPorCampo).toBeUndefined();
+  });
+
+  it("una propuesta de antes: el origen sale de las etiquetas de las fuentes, o del origen si no dice «Varias fuentes»", () => {
+    const vieja = (fuentes: string[], origen: string): FichaGuardada => ({
+      ...fichaVacia(),
+      propuesta: { valores: { dolorPrincipal: "x" }, fuentes, fuentesPorCampo: { dolorPrincipal: fuentes }, at: "", origen },
+    });
+    expect(origenesDelCampo(vieja(["Handoff de «Impl»"], "Varias fuentes"), "dolorPrincipal")).toEqual(["Handoff"]);
+    expect(origenesDelCampo(vieja(["Sesión «A» del 1 oct 2026", "Encuesta de «Impl»"], "Varias fuentes"), "dolorPrincipal")).toEqual([
+      "Sesiones",
+      "Actualizar con IA",
+    ]);
+    expect(origenesDelCampo(vieja(["Exploración · S1 · lo que averiguó el CSE"], "x"), "dolorPrincipal")).toEqual(["Exploración"]);
+    expect(origenesDelCampo(vieja(["Lo que dice HubSpot (lo cambiaron allá)"], "x"), "dolorPrincipal")).toEqual(["HubSpot"]);
+    // Una fuente que no se reconoce suma «desconocido»: para excluir, no saber cuenta como sí.
+    expect(origenesDelCampo(vieja(["Handoff de «Impl»", "Algo raro"], "Varias fuentes"), "dolorPrincipal")).toEqual(["Handoff", ORIGEN_DESCONOCIDO]);
+    expect(origenesDelCampo(vieja([], "Handoff"), "dolorPrincipal")).toEqual(["Handoff"]);
+    expect(origenesDelCampo(vieja([], "Varias fuentes"), "dolorPrincipal")).toEqual([ORIGEN_DESCONOCIDO]);
+    // Un campo que no está propuesto no tiene origen.
+    expect(origenesDelCampo(vieja([], "Handoff"), "stakeholders")).toEqual([]);
+  });
+
+  it("una propuesta de antes que suma una fuente nueva conserva lo que se deduce de ella", () => {
+    const vieja: FichaGuardada = {
+      ...fichaVacia(),
+      propuesta: { valores: { dolorPrincipal: "x" }, fuentes: ["Handoff de «Impl»"], fuentesPorCampo: { dolorPrincipal: ["Handoff de «Impl»"] }, at: "", origen: "Handoff" },
+    };
+    const r = fusionarPropuesta(vieja, [{ clave: "dolorPrincipal", valor: "x y más", fuentes: ["Sesión «A» del 1 oct 2026"] }], "Sesiones");
+    expect(r.ficha.propuesta?.origenPorCampo?.dolorPrincipal).toEqual(["Handoff", "Sesiones"]);
+  });
+
+  it("propuestaExcluida: lo propuesto por el lector, lo derivado de él y lo de origen desconocido", () => {
+    const f: FichaGuardada = {
+      ...fichaVacia(),
+      propuesta: {
+        valores: { dolorPrincipal: "a", retosEstrategicos: "b", aQueSeDedica: "c", stakeholders: "- d" },
+        fuentes: [],
+        fuentesPorCampo: { retosEstrategicos: ["Handoff de «Impl»"], aQueSeDedica: ["Sesión «A» del 1 oct 2026"], stakeholders: ["?"] },
+        origenPorCampo: { dolorPrincipal: ["Handoff"], retosEstrategicos: ["Actualizar con IA"], aQueSeDedica: ["Sesiones"], stakeholders: [ORIGEN_DESCONOCIDO] },
+        at: "",
+        origen: "Varias fuentes",
+      },
+    };
+    expect(propuestaExcluida(f, "dolorPrincipal", ["Handoff"])).toBe(true);
+    expect(propuestaExcluida(f, "retosEstrategicos", ["Handoff"]), "derivado: una fuente del handoff").toBe(true);
+    expect(propuestaExcluida(f, "stakeholders", ["Handoff"]), "desconocido").toBe(true);
+    expect(propuestaExcluida(f, "aQueSeDedica", ["Handoff"])).toBe(false);
+    // Sin exclusiones, nada queda afuera.
+    expect(propuestaExcluida(f, "stakeholders", [])).toBe(false);
+  });
+});
+
+describe("stakeholdersSinPostura: la postura se corta en código", () => {
+  it("de cada viñeta se quedan nombre, cargo y papel", () => {
+    expect(stakeholdersSinPostura("- **Ana** — directora — sponsor — escéptica\n* Luis – TI – usuario – a favor\n1. Marta - CFO - firma - indecisa")).toBe(
+      "- **Ana** — directora — sponsor\n- Luis — TI — usuario\n- Marta — CFO — firma",
+    );
+  });
+  it("lo que no es una viñeta no va (puede traer la postura en prosa)", () => {
+    expect(stakeholdersSinPostura("Ana es escéptica y no confía en consultoras.\n- Ana — Directora — Sponsor — sin dato")).toBe(
+      "- Ana — Directora — Sponsor",
+    );
+    expect(stakeholdersSinPostura("")).toBe("");
+  });
+  it("⛔ con menos de cuatro partes no se adivina cuál falta: solo el nombre", () => {
+    /* La ficha pedía omitir lo que falta, y «Ana — gerente — no confía en consultoras» (sin papel) o «Ana — muy
+       escéptica» quedaban enteras con el corte por posición. La edición que la pone en rojo: volver a `slice(0, 3)`. */
+    expect(stakeholdersSinPostura("- Ana — gerente — SECRETO no confía en consultoras")).toBe("- Ana");
+    expect(stakeholdersSinPostura("- Luis Pérez — SECRETO muy escéptico")).toBe("- Luis Pérez");
+    expect(stakeholdersSinPostura("- Marta, CFO, SECRETO indecisa")).toBe("- Marta");
+    expect(stakeholdersSinPostura("- Luis de la Torre")).toBe("- Luis de la Torre");
+  });
+  it("⛔ una viñeta que no empieza con un nombre no va, ni las sub-viñetas", () => {
+    expect(stakeholdersSinPostura("- Ana es muy escéptica, SECRETO")).toBe("");
+    expect(stakeholdersSinPostura("- Ana — Directora — Sponsor — sin dato\n  - Postura: SECRETO escéptica\n\t* SECRETO frena todo")).toBe(
+      "- Ana — Directora — Sponsor",
+    );
+  });
+});
+
+describe("fichaParaPrompt: el diagnóstico y la planificación, hasta que lean la memoria", () => {
+  it("⛔ para un documento del cliente, la postura se corta en código", () => {
+    const f = fichaConfirmada({ stakeholders: "- Ana — Directora — Sponsor — SECRETO escéptica\n- Luis — SECRETO no confía" });
+    const alCliente = fichaParaPrompt(f, { paraDocumentoDelCliente: true });
+    expect(alCliente).not.toMatch(/SECRETO/);
+    expect(alCliente).toContain("- Ana — Directora — Sponsor");
+    expect(alCliente).toContain("- Luis");
+    // Para un agente interno, entera.
+    expect(fichaParaPrompt(f, { paraDocumentoDelCliente: false })).toContain("SECRETO escéptica");
+  });
+});
+
+describe("lo interno de la preventa en un campo que ve el cliente (`internoPorCampo`)", () => {
+  it("la marca queda pegada al campo aunque otra puerta lo reescriba, y se va al descartarlo", () => {
+    const a = fusionarPropuesta(fichaVacia(), [{ clave: "stakeholders", valor: "- Ana — Gerente — Firma — sin dato", fuentes: ["Preventa · X"], interno: true }], "Preventa").ficha;
+    expect(a.propuesta?.internoPorCampo).toEqual({ stakeholders: true });
+    const b = fusionarPropuesta(a, [{ clave: "stakeholders", valor: "- Ana — Gerente — Firma — sin dato\n- Luis — TI — Usuario — sin dato", fuentes: ["Sesión «A» del 1 oct 2026"] }], "Sesiones").ficha;
+    expect(propuestaConLoInterno(b, "stakeholders")).toBe(true);
+    expect(propuestaConLoInterno(quitarDeLaPropuesta(b, ["stakeholders"]), "stakeholders")).toBe(false);
+    // Sobrevive a guardarse y leerse.
+    expect(leerFicha(JSON.parse(JSON.stringify(b))).propuesta?.internoPorCampo).toEqual({ stakeholders: true });
+  });
+
+  it("en una propuesta de antes, vale la marca de la fuente", () => {
+    const f = fusionarPropuesta(fichaVacia(), [{ clave: "aQueSeDedica", valor: "Distribuidora", fuentes: [`Preventa · Preparación · Radiografía (${MARCA_DE_LO_INTERNO})`] }], "Preventa").ficha;
+    expect(f.propuesta?.internoPorCampo).toBeUndefined();
+    expect(propuestaConLoInterno(f, "aQueSeDedica")).toBe(true);
+  });
+});
+
+describe("fichaParaLaMemoria: tres alcances", () => {
+  const ficha: FichaGuardada = {
+    ...fichaConfirmada({
+      aQueSeDedica: "Fundación universitaria",
+      stakeholders: "- Ana — directora — sponsor — POSTURA-SECRETA",
+      aperturaAsesoria: "baja",
+      motivacionCompra: "MOTIVACION-SECRETA",
+      oportunidadesFuturas: "OPORTUNIDAD-SECRETA",
+    }),
+    propuesta: {
+      valores: {
+        dolorPrincipal: "PROPUESTO-POR-SESION",
+        retosEstrategicos: "PROPUESTO-POR-HANDOFF",
+        herramientasActuales: "DERIVADO-DEL-HANDOFF",
+        porQueApertura: "PORQUE-SECRETO",
+      },
+      fuentes: [],
+      fuentesPorCampo: {
+        dolorPrincipal: ["Sesión «Kickoff» del 1 oct 2026"],
+        retosEstrategicos: ["Handoff de «Impl»"],
+        herramientasActuales: ["Handoff de «Impl»", "Encuesta de «Impl»"],
+        porQueApertura: ["Sesión «Kickoff» del 1 oct 2026"],
+      },
+      origenPorCampo: {
+        dolorPrincipal: ["Sesiones"],
+        retosEstrategicos: ["Handoff"],
+        herramientasActuales: ["Actualizar con IA"],
+        porQueApertura: ["Sesiones"],
+      },
+      at: "2026-10-01T12:00:00.000Z",
+      origen: "Varias fuentes",
+    },
+    historia: { aQueSeDedica: { por: "ana@smarteamcr.com", en: "2026-09-27T12:00:00.000Z", fuentes: ["Handoff de «Impl»"], origenes: ["Handoff"] } },
+  };
+
+  it("⛔ cliente: solo lo confirmado, sin campos internos, sin la postura y sin lo propuesto", () => {
+    const t = fichaParaLaMemoria(ficha, { alcance: "cliente" });
+    expect(t).toContain("Fundación universitaria");
+    expect(t).toContain("- Ana — directora — sponsor");
+    for (const s of ["POSTURA-SECRETA", "MOTIVACION-SECRETA", "OPORTUNIDAD-SECRETA", "PORQUE-SECRETO", "PROPUESTO-POR", "DERIVADO", "Baja", "ana@smarteamcr.com"]) {
+      expect(t, s).not.toContain(s);
+    }
+  });
+
+  it("⛔ sin-lo-interno (el handoff): lo propuesto con su fuente, sin campos internos, sin la postura y sin lo suyo", () => {
+    const t = fichaParaLaMemoria(ficha, { alcance: "sin-lo-interno", excluirOrigenes: ["Handoff"] });
+    expect(t).toContain("Propuesto, sin confirmar · de: Sesión «Kickoff» del 1 oct 2026:\nPROPUESTO-POR-SESION");
+    for (const s of ["PROPUESTO-POR-HANDOFF", "DERIVADO-DEL-HANDOFF", "POSTURA-SECRETA", "MOTIVACION-SECRETA", "OPORTUNIDAD-SECRETA", "PORQUE-SECRETO"]) {
+      expect(t, s).not.toContain(s);
+    }
+  });
+
+  it("interno: todo, lo interno marcado, con la historia de cada campo", () => {
+    const t = fichaParaLaMemoria(ficha, { alcance: "interno" });
+    expect(t).toContain("MOTIVACION-SECRETA");
+    expect(t).toContain("POSTURA-SECRETA");
+    expect(t).toContain("Apertura a la asesoría (INTERNO — nunca se cita al cliente)");
+    expect(t).toContain("Confirmado el 2026-09-27 por ana@smarteamcr.com · de: Handoff de «Impl»");
+    expect(t).toContain("PROPUESTO-POR-HANDOFF");
+  });
+
+  it("interno sin confirmar: lo propuesto también es memoria", () => {
+    const sin: FichaGuardada = { ...fichaVacia(), propuesta: { valores: { dolorPrincipal: "x" }, fuentes: [], fuentesPorCampo: {}, at: "", origen: "Sesiones" } };
+    expect(fichaParaLaMemoria(sin, { alcance: "interno" })).toContain("Propuesto, sin confirmar");
+    expect(fichaParaLaMemoria(sin, { alcance: "cliente" })).toBe("");
+    expect(fichaParaLaMemoria(fichaVacia(), { alcance: "interno" })).toBe("");
+  });
+});
+
+describe("la historia de lo confirmado: quién, cuándo y de qué fuente", () => {
+  const EN = "2026-10-09T18:00:00.000Z";
+  const antes: FichaGuardada = {
+    ...fichaConfirmada({ dolorPrincipal: "viejo", retosEstrategicos: "crecer" }),
+    propuesta: {
+      valores: { dolorPrincipal: "nuevo", aQueSeDedica: "Vende acero" },
+      fuentes: [],
+      fuentesPorCampo: { dolorPrincipal: ["Sesión «A» del 9 oct 2026"], aQueSeDedica: ["Handoff de «Impl»"] },
+      origenPorCampo: { dolorPrincipal: ["Sesiones"], aQueSeDedica: ["Handoff"] },
+      at: EN,
+      origen: "Varias fuentes",
+    },
+  };
+
+  it("igual a lo propuesto: sus fuentes; cambiado: + «Editado a mano»; sin propuesta: «Escrito a mano»; lo que no cambia, nada", () => {
+    const confirmados = { ...antes.valores, dolorPrincipal: "nuevo", aQueSeDedica: "Vende acero y aluminio", stakeholders: "- Ana" };
+    const h = historiaAlConfirmar(antes, confirmados, "Ana@Smarteamcr.com", EN);
+    expect(h.dolorPrincipal).toEqual({ por: "ana@smarteamcr.com", en: EN, fuentes: ["Sesión «A» del 9 oct 2026"], origenes: ["Sesiones"] });
+    expect(h.aQueSeDedica).toEqual({ por: "ana@smarteamcr.com", en: EN, fuentes: ["Handoff de «Impl»", "Editado a mano"], origenes: ["Handoff", ORIGEN_A_MANO] });
+    expect(h.stakeholders).toEqual({ por: "ana@smarteamcr.com", en: EN, fuentes: ["Escrito a mano"], origenes: [ORIGEN_A_MANO] });
+    expect(h.retosEstrategicos).toBeUndefined();
+  });
+
+  it("conHistoria la suma (lo nuevo de un campo reemplaza lo anterior) y leerFicha la conserva", () => {
+    const una = historiaAlConfirmar(antes, { ...antes.valores, dolorPrincipal: "nuevo" }, "a@x", EN);
+    const otra = historiaAlConfirmar(antes, { ...antes.valores, retosEstrategicos: "otro" }, "b@x", EN);
+    const f = conHistoria(conHistoria(antes, una), otra);
+    expect(Object.keys(f.historia ?? {}).sort()).toEqual(["dolorPrincipal", "retosEstrategicos"]);
+    expect(f.version).toBe(VERSION_DE_LA_FICHA);
+    const leida = leerFicha(
+      JSON.parse(JSON.stringify({ ...f, historia: { ...f.historia, otra: { por: "x", en: EN }, dolorPrincipal: { por: "", en: EN } } })),
+    );
+    expect(Object.keys(leida.historia ?? {})).toEqual(["retosEstrategicos"]);
+    expect("historia" in leerFicha(JSON.parse(JSON.stringify(fichaVacia())))).toBe(false);
+  });
+
+  it("la ruta que confirma la escribe", () => {
+    const ruta = fs.readFileSync(path.join(__dirname, "..", "..", "app", "api", "clients", "[id]", "ficha", "route.ts"), "utf8");
+    expect(ruta).toContain("historiaAlConfirmar(actual, v.valores, quien, ahoraIso)");
+    expect(ruta).toContain("conHistoria(");
+  });
+});
+
+describe("conteoDeLaFicha («Lo que la IA ya sabe»)", () => {
+  it("cuenta confirmados y propuestos, y los propuestos por quién los propuso", () => {
+    const f: FichaGuardada = {
+      ...fichaConfirmada({ aQueSeDedica: "x", aperturaAsesoria: "sin_evaluar", stakeholders: "- Ana" }),
+      propuesta: {
+        valores: { dolorPrincipal: "a", retosEstrategicos: "b", aQueSeDedica: "x" },
+        fuentes: [],
+        fuentesPorCampo: {},
+        origenPorCampo: { dolorPrincipal: ["Preventa"], retosEstrategicos: ["Preventa", "Sesiones"] },
+        at: "",
+        origen: "Varias fuentes",
+      },
+    };
+    // «sin_evaluar» no cuenta; lo propuesto igual a lo confirmado tampoco.
+    expect(conteoDeLaFicha(f)).toEqual({ confirmados: 2, propuestos: 2, propuestosPorOrigen: { Preventa: 2, Sesiones: 1 } });
   });
 });

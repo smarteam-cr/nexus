@@ -13,8 +13,84 @@
   client / hubspotCompany / category / orphan. Fuente canónica del matching sesión→cliente.
 - **`SessionProject`**: link sesión↔proyecto (`source`: agent | manual | legacy). `handoffOverride`
   fuerza incluir/excluir del handoff.
+- **Post-proceso** (la lectura de la reunión, `lib/sessions/post-process.ts`): lee cada reunión con un cliente o un
+  prospecto una vez, al llegar. El dueño sale de `resolvedClientId` (el manual, solo si no hay); sin dueño, no la lee.
+  Deja la minuta, los compromisos y los pedidos fuera de alcance. Desde la etapa 2 de la memoria de la cuenta es la
+  **lectura de seguimiento** y comparte la fila `LecturaDeReunion` con Tareas. Ver DECISIONS §La memoria de la cuenta.
+- **Lectura de seguimiento** (etapa 2; en el código, sin desplegar): la pasada única sobre cada reunión con un cliente o
+  un prospecto que no es de puertas adentro (el post-proceso, `lib/sessions/post-process.ts`), con su minuta, sus compromisos (propuestas de Tarea),
+  sus pedidos y, desde la etapa 6, sus hechos. La corre el job `seguimiento-reuniones` por la cola `lib/lecturas`, con
+  reintentos y presupuesto, y su estado vive en `LecturaDeReunion.seguimientoEstado`, en la misma fila que la lectura de
+  Tareas. `SEGUIMIENTO_REUNIONES_ENABLED=0` vuelve al post-proceso viejo. Una persona la pide YA con «Leer esta
+  reunión» (la página de una reunión sin minuta) o «Generar minuta».
+- **Lo que dejó esta reunión** (`lib/seguimiento`, etapa 1): la tarjeta de una reunión con un cliente o un prospecto que junta lo
+  que propuso Nexus al leerla: la minuta, los pedidos fuera de alcance, los campos de la ficha, la etapa, la fecha del
+  diagnóstico, tus tareas propuestas, las alertas que la citan (solo para quien lidera Customer Success) y, plegado y
+  solo para leer, lo demás que dejó la reunión en Tareas (desde la etapa 2; antes, los compromisos viejos). Desde la
+  etapa 6 (con `SEGUIMIENTO_HECHOS=1`) muestra también sus hechos, cada uno con a dónde fue; una novedad que puedes
+  decidir pide decisión y entra a «Usar todo». Está en la página de la reunión y, agrupada, en «Para ti». Pide
+  revisión 30 días.
+- **Lo propuesto** (ciclo de vida, `lib/lo-propuesto`, etapa 1): todo lo que Nexus deja para que una persona lo use o lo
+  descarte. Cuatro estados: pendiente, usado, desestimado y **vencido**. «Sin firma» marca lo que cambió de estado sin
+  una persona. Todo se puede desestimar, salvo la minuta, que se corrige. Es lo que mide «Uso de Nexus», tipo por tipo:
+  la minuta, los pedidos, los campos de la ficha, la etapa, la fecha del diagnóstico, las tareas propuestas, las alertas
+  y, desde el 2026-10-10, las novedades, los hechos para Procesos y las sugerencias sobre el handoff.
+- **vencido** (lo propuesto, desde la etapa 1; en Tareas ya existe): nadie lo decidió en su plazo (30 días; en Tareas, 14) o lo cerró el sistema. Se calcula al
+  leer y no se guarda, salvo en Tareas. No borra nada, y decidir después sigue valiendo. No es el «vencido» de Cobranza.
+- **Usar todo** (tarjeta «Lo que dejó esta reunión», etapa 1): revisa la minuta, confirma los pedidos fuera de alcance y usa tus
+  tareas propuestas de esa reunión (y, desde la etapa 6, da por usadas las novedades que puedes decidir, como un
+  «Listo»). Nunca toca la ficha, la etapa, la fecha del diagnóstico ni las alertas: tienen su propia puerta.
+- **Hecho de reunión** (`HechoDeReunion`, etapa 6): una frase con su cita literal verificada que dejó una reunión, con a
+  quién pertenece (la cuenta o un proyecto vinculado), su tipo (cuenta, persona, acuerdo, resultado, proceso de hoy,
+  queja, riesgo, señal de cronograma o señal de etapa) y su estado. Lo escribe la lectura de cada reunión; el código
+  decide a dónde va. Un compromiso no es un hecho: va a Tareas. El estado tiene dos niveles: uno por destino
+  (pendiente, usado, desestimado o delegado: su ciclo vive en el destino) y uno general (pendiente, usado, desestimado;
+  «vencido» a los 30 días, se calcula). Quién lo dijo se guarda solo si lo comprueba el turno de la transcripción. Una
+  reunión que cambia de dueño retira sus hechos vivos del cliente anterior (INV45 vigila que todo hecho vivo sea del
+  cliente de su reunión). Se escriben solo con `SEGUIMIENTO_HECHOS=1` (apagada por defecto) y su SQL.
+- **Enrutador** (`lib/seguimiento/enrutador.ts`, etapa 6): el código que, con el registro de destinos, decide a dónde va
+  cada hecho de una reunión (la ficha, una alerta de queja, el vigía, Procesos, el avance, la etapa o una novedad) y qué
+  hay que correr. El modelo clasifica; el enrutador rutea. Nunca manda nada al handoff.
+- **Novedad** (`lib/seguimiento/novedades.ts`, etapa 6): lo que un hecho pendiente le propone a un documento que ya tiene
+  contenido (Planificación › pipelines, Kickoff › alcance…), de una reunión que sigue vinculada al proyecto. No se
+  guarda: se calcula. Como mucho 5 por documento; vence a los 30 días. Se ve en el riel (la chispa con el número), en la franja «N novedades de reuniones» arriba del
+  documento, en «Qué sigue» y en la tarjeta de la reunión. Se usa con «Cambiar con el chat» (queda usada al aplicar el
+  acuerdo) o con «Listo», se suma la reunión al contexto, o se marca «No aplica». Solo con `SEGUIMIENTO_HECHOS=1`.
+- **Registro de destinos** (`lib/seguimiento/destinos.ts`, etapa 6): qué tipos de hecho le sirven a cada módulo y dónde los
+  muestra. Un test lo congela contra las secciones reales de cada documento. Sumar un módulo es sumar una entrada.
 - **Handoff**: documento de traspaso Ventas→CS, generado por agente desde las sesiones de venta del
   proyecto. Vive en `CanvasBlock`s del canvas "Handoff".
+- **Handoff congelado** (etapa 3b, `lib/handoff/congelado.ts`): la foto fija de lo vendido en un proyecto. Se congela con
+  «Congelar» (celda `handoff.congelar`: el CSE, la CSL, Ventas y dirección) o, solo, la primera vez que se aplica el
+  cronograma que propone; se guarda como un hito «congelado» del canvas con su foto protegida. Sigue editable a mano;
+  la IA ya no lo regenera: «Regenerar» pasa a «Buscar lo nuevo» (misma celda que «Congelar»). «Rehacer desde cero»
+  pide un motivo y la celda de regenerar, corre la generación de siempre y lo vuelve a congelar al terminar (hito
+  «rehecho»).
+- **Sugerencia sobre el handoff** (etapa 3b, `lib/handoff/sugerencias.ts`): un bloque en borrador que la IA deja sobre un
+  handoff congelado, con lo nuevo de las reuniones posteriores al congelado y una frase de la reunión copiada tal cual
+  (verificada). Se pide con «Buscar lo nuevo», solo suma y se usa o se descarta en el documento. Mientras nadie la usa
+  no llega a ningún agente, y lo descartado no se vuelve a proponer.
+- **Memoria de la cuenta** (`memoriaDeLaCuenta`, `lib/memoria`, etapa 3: la leen todos sus lectores, también el diagnóstico y la planificación, sin la ficha ni los procesos, que leen aparte, y desde el 2026-10-10 el vigía): lo que Nexus ya sabe de una empresa: la ficha (lo
+  confirmado y lo propuesto, con su fuente), los procesos, la historia de los proyectos y, solo en la versión interna,
+  lo fuera de alcance, lo aprendido en la preventa y la auditoría del portal confirmada. La arma un solo cargador en
+  tres alcances: para el cliente, sin lo interno (el handoff) e interno. Cada lector está declarado en
+  `lib/memoria/consumidores.ts`, con las partes que no recibe porque ya las tiene. En la preventa entra como la fuente
+  **A0** y en la exploración de un proyecto como **F0**: ninguna de las dos cuenta como lo que dijo el cliente. Nunca
+  lleva facturación, montos de Partner, rentabilidad ni salarios.
+- **Memoria del proyecto** (`memoriaDelProyecto`, etapa 3): lo que dejó cada reunión del proyecto (en la versión para el cliente, solo
+  los acuerdos y las decisiones de las reuniones con el cliente; en la interna, también los compromisos abiertos de
+  Tareas), las desviaciones y los resultados. Ningún agente vuelve a leer todas las reuniones.
+- **Lo que la IA ya sabe** (`queSabeLaIA`, `lib/memoria`): los conteos de la memoria que muestra la página de inicio de la exploración,
+  en tarjetas: datos de la ficha confirmados y propuestos (y por quién), y en un proyecto el handoff (si está congelado y
+  cómo), cuántas reuniones tienen minuta y si hubo preventa; en una preventa, el test. Nunca el contenido.
+- **Ficha del cliente** (`Client.ficha`): una por empresa. Lo confirmado lo escribe el CSE y viaja a HubSpot; lo
+  propuesto lo deja la IA (handoff, reuniones, exploración, HubSpot) o la preventa sin IA, desde el primer día (al
+  preparar y al confirmar una casilla, `lib/exploraciones/a-la-ficha.ts`), con la fuente y el origen de cada campo
+  (`origenPorCampo`). Desde la etapa 3 (formato 2), lo confirmado guarda por campo quién, cuándo y de qué fuente
+  (`historia`), y los descartes quedan en `decisiones`. Su versión para el cliente no lleva la postura de las personas ni
+  los campos internos. Cada persona va en una viñeta con cuatro partes (nombre — cargo — papel — postura, «sin dato» en
+  la que falta): con menos, al cliente solo le llega el nombre. Un campo propuesto que trae algo interno de la preventa
+  (`internoPorCampo`) no sale del alcance interno de la memoria hasta que el CSE lo confirma.
 - **Kickoff**: arranque del proyecto con el cliente (canvas "Kickoff"; tiene vista externa).
 - **Cronograma** (`ProjectTimeline`): plan del proyecto con fases/tareas/baselines/fechas reales/avances.
 - **Fecha límite** (`ProjectTimeline.fechaLimite`): el día en que el cliente necesita todo listo (vence una
@@ -26,6 +102,19 @@
 - **Tipo de fase** (`tipo` en la salida del handoff, `lib/timeline/acomodar-en-paralelo.ts`): arranque,
   diagnóstico, planificación, configuración, migración, desarrollo, capacitación, pruebas o cierre. Con él,
   el código pone los inicios (lo que va en paralelo); nunca alarga el plan que armó la IA.
+- **Fecha de presentación del diagnóstico** (`Project.diagnosticoPresentacion`): cuándo se le presenta el
+  diagnóstico al cliente. Nexus la pregunta al generarlo, la propone si una reunión la dice, y dos días antes pide
+  confirmar que está **listo**: ahí avisa al vendedor dueño de la empresa en HubSpot. Ver DECISIONS §Seis mejoras.
+- **Solicitud fuera de alcance** (`PedidoFueraDeAlcance`): algo que el cliente pidió en una reunión y no estaba en
+  lo vendido. La propone el agente, la confirma o la descarta el CSE, y se sigue en la cuenta («Fuera de alcance»):
+  confirmada, cotizada, aprobada, no la tomó. Al confirmarla, avisa al vendedor y a Customer Success. Hasta el deploy de
+  la etapa 2 de la memoria de la cuenta, en producción la lectura de una reunión la crea aunque no haya proyecto
+  (`projectId` vacío). En el código ya nace solo en una reunión de un cliente con proyecto principal, comparada contra
+  lo que se vendió en él: un prospecto no tiene.
+- **Lo vendido** (guía de exploración de un proyecto): el tercer bloque de preguntas, al lado de la estrategia y la
+  escala: una por pieza del alcance, sobre cómo la va a usar el cliente.
+- **Recordatorio de adopción**: el aviso de «Para ti» que pide revisar la adopción del cliente a los 30 días, la
+  semana antes de la entrega y cada mes en las cuentas recurrentes. Lleva a la pestaña Adopción de Éxito del cliente.
 - **Encuesta de la etapa** (`components/clients/EncuestaDeEtapa.tsx`): la única forma en que Nexus escribe la etapa
   de un proyecto en HubSpot. Una pregunta, «¿En qué etapa está el proyecto?», con una respuesta por etapa del tablero;
   la aprueba el CSE (o el CSL o dirección). Si una reunión muestra que el proyecto avanzó, queda una **etapa
@@ -38,20 +127,98 @@
   el campo `businessCaseId`, la ruta `/business-cases` y el slug de pieza `business-case`.
   Cambiar eso rompería links ya pegados y obligaría a migrar datos sin que nadie del equipo viera
   la diferencia. Ver DECISIONS §El renombre.
+- **Tareas internas** (`/tareas`, `lib/tareas`): el trabajo de cada equipo de Smarteam semana a semana. Nexus lee la
+  reunión del equipo (el planning del lunes, la retro del viernes) y propone las tareas; cada persona decide, las agenda
+  y el viernes revisa su semana. Ver DECISIONS §Tareas internas y `docs/tareas-plan.md`.
+- **Tarea** (`Tarea`, «T-12»): algo que hacer, con un responsable, una semana (el lunes, en hora de Costa Rica) o
+  ninguna (más adelante), y para quién es (su **ámbito**). Una **propuesta** es una tarea que todavía no se decidió
+  (la sugirió Nexus o la pidió otra persona); una **lápida** es una propuesta descartada, que no se vuelve a proponer
+  por 28 días; una **vencida** es una propuesta que nadie decidió en 14 días.
+- **Sprint** (`Tarea.equipo`): el equipo de casa del responsable, por su área (marketing, cs, ventas…). **Por
+  asignar**: las tareas de un sprint sin responsable. El **líder** del sprint es quien tiene `tareas.manage` en /team.
+- **Ámbito** (`lib/tareas/ambito.ts`): para quién es una tarea: cliente, prospecto, aliado, interno o **sin
+  clasificar**. Interno = una empresa de Smarteam o un proyecto marcado interno (SmartAgro).
+- **Proyecto de tareas** (`ProyectoDeTareas`): un grupo de tareas con responsable y fechas («Campaña de SAP»). NO es
+  un `Project` (eso es un servicio que se factura); puede servir a uno. Nexus lo **sugiere** cuando tres o más líneas
+  de una reunión hablan de lo mismo.
+- **Espacio** (`EspacioDeTareas`): donde viven los proyectos: el de cada equipo, o uno libre con sus miembros (1A.2).
+- **Revisa tu semana** (`components/tareas/RevisaTuSemana.tsx`): cada persona marca qué terminó («La terminé») y qué
+  sigue; lo que sigue pasa a la semana siguiente sin duplicarse, y después se agenda. **Semanas sin revisar**: las
+  semanas pasadas con tareas abiertas que la persona todavía no revisó; se revisan cuando sea, en orden.
+- **Tarea privada** («Solo para mí»): la ve solo su responsable; en la semana del equipo es una fila opaca que dice
+  cuánto pesa.
+- **Bloque de agenda**: el evento privado de Google Calendar que Nexus crea para UNA tarea, con el clic de su dueña.
+- **Asistente de tareas** (`lib/tareas/chat`, `components/tareas/AsistenteDeTareas.tsx`): el chat de Nexus sobre las
+  tareas de UNA persona, con un solo hilo que la sigue por todas las pantallas. Propone cambios (crear, sugerir,
+  mover, esperar, armar un plan) en una lista que se lee antes de aplicar; aplicar es todo o nada y nada se crea solo.
+- **Borrador de un plan**: el proyecto que arma el asistente con sus tareas («un onboarding de 30 días»). Queda en
+  `propuesta`, con las tareas adentro sin responsable ni semana; **Activar** las reparte (lo tuyo pendiente, lo de
+  otros como sugerencia) y nadie recibe nada antes.
+- **Contexto de una tarea** (`Tarea.contexto`): lo que escribe Nexus al generar una tarea (de una reunión, de la
+  conversación o del chat): para qué es, para quién y qué se espera. No se edita; lo de la persona va en «notas». El de
+  una reunión con cliente lo ve quien estuvo, y quien la hace o la pidió si ve al cliente.
+- **Lo que delegaste** (`/tareas/delegadas`): lo que le pediste o asignaste a otras personas o equipos, y cómo va
+  (atrasadas, sin decidir, en curso, pendientes y cerradas de 30 días, con el último movimiento).
+- **«¿Faltó algo?»** (nivel 2 de la lectura): leer la CONVERSACIÓN de una reunión ya leída, para los compromisos que
+  no quedaron en las notas. Sin «Próximos pasos», Nexus la lee solo. La cita de cada propuesta es lo que dijo la persona.
+- **Vínculo de una tarea** (`TareaVinculo`): un registro que acompaña a una tarea sin cambiar para quién es: de
+  HubSpot (contacto, empresa, negocio, ticket, proyecto u objeto propio, por el enlace de su ficha), una propuesta
+  comercial o una preventa. Es una foto: no sincroniza ni escribe en HubSpot. Ver DECISIONS §Tareas internas.
+- **Tarea de seguimiento**: la propuesta de Tarea para el CSE que nace de lo que prometió el cliente en una reunión
+  («Recordarle a Ana que envíe la base»), con la cita verificada y, si aplica, la marca «frena el plan». En un prospecto
+  va a quien lleva la preventa; sin preventa viva, no se propone. Vence a los 14 días, como toda propuesta de Tareas
+  (`lib/tareas/seguimiento.ts`).
+- **pendiente histórico** (`ActionItem`): los pendientes que dejaba el post-proceso. DEPRECATED desde la etapa 2 de la
+  memoria de la cuenta: no se crea más y lo existente queda sin borrar. Los próximos pasos viven en Tareas.
 - **Recorrido** (`lib/recorridos/`): un tour guiado de una pantalla. Oscurece la pantalla, deja a la vista una
   cosa a la vez con un borde azul y la explica en un globo con «Saltar», «Anterior» y «Siguiente». Cada pantalla
   que tiene uno muestra el botón «Recorrido» en su cabecera, con un punto azul si no lo viste o si cambió. Todos
   los de tu rol están en el menú del avatar, en «Recorridos». El contenido vive en el repo; lo visto, en la cookie
   `nexus-recorridos`. Ver DECISIONS §Recorridos guiados.
 - **Contexto adicional** (`components/contexto/ContextoAdicional.tsx`): el bloque plegable arriba de
-  una pieza con lo que lee su IA además de lo de siempre: las reuniones (en el cronograma, las que elijas; en
-  los demás documentos del proyecto, las del proyecto con el cliente, que se pueden sacar o sumar; en la preventa,
-  todas las de la empresa), las fuentes manuales y las «Instrucciones adicionales», que pesan más que lo demás y
-  no son evidencia. En todos se puede buscar y sumar cualquier reunión de Meet de tu calendario o del cliente
-  (2026-10-07). Cada artefacto guarda lo suyo: en los proyectos, el handoff, el cronograma, el kickoff, la
-  exploración, el diagnóstico, la planificación, integraciones, la ejecución y la entrega; en la preventa, las
-  reuniones y las fuentes son de la empresa y las instrucciones, de cada pieza. Se llamaba «Contexto del cronograma», «del diagnóstico», etc.
+  una pieza con lo que lee su IA además de lo de siempre (desde la etapa 3 de la memoria de la cuenta, la memoria): las
+  reuniones (en el cronograma, las que elijas; en los demás documentos del proyecto, las que elijas, y Nexus sugiere
+  algunas, desde la etapa 7; hasta entonces entraban todas las del proyecto con el cliente), las fuentes manuales y las
+  «Instrucciones adicionales», que pesan más que lo demás y no son evidencia. En todos se puede buscar y sumar
+  cualquier reunión de Meet de tu calendario o del cliente (2026-10-07). Todos con el mismo enlace y el mismo
+  formulario: «+ Sumar una sesión o un documento» pega el texto o sube un archivo, y el archivo queda además en
+  Información del cliente › Documentos. En el Resumen del proyecto se llama **Contexto del handoff** y vive dentro de
+  la tarjeta del handoff: solo lo lee su agente. Va solo donde un agente lo lee. En la preventa: Preparación, con sus
+  fuentes y sus instrucciones; Casos de uso, solo sus instrucciones; La escala, con la explicación de que no tiene
+  agente; Resumen y Propuesta, sin el bloque. La exploración (de la preventa y del proyecto) no lo tiene: su **página de
+  inicio** lleva las sesiones, las fuentes manuales y las instrucciones, sin reuniones, y Preparación dice qué sesiones
+  lee. Cada artefacto guarda lo suyo: en los proyectos, el handoff, el cronograma, el kickoff, el
+  diagnóstico, la planificación, integraciones, la ejecución y la entrega; en la preventa, las reuniones y las fuentes
+  son de la empresa y las instrucciones, de cada pieza. Se llamaba «Contexto del cronograma», «del diagnóstico», etc.
   hasta el 2026-10-06.
+- **Frontera de los documentos** (`FRONTERA_DE_LOS_DOCUMENTOS`, etapa 4 de la memoria de la cuenta): la regla que viaja
+  con las reuniones y las notas de todo documento que lee el cliente (kickoff, diagnóstico, planificación,
+  integraciones y entrega): sin precios de Smarteam, sin lo dicho puertas adentro como dicho por el cliente, sin decir
+  de dónde salió cada cosa. Las cifras del negocio del cliente van solo donde la sección las pide, y tampoco dicen de
+  dónde salieron. Los documentos internos (implementación y exploración) llevan solo lo de puertas adentro.
+  En el chat de esos cinco documentos, la línea termina en «⚠ revisa» si cita una reunión, una nota, la minuta o el
+  kickoff («según la reunión…», «confirmado en el kickoff»), en los cinco; o si trae un monto, solo en kickoff,
+  planificación e integraciones (en el diagnóstico y la entrega una cifra del cliente es contenido). Nunca marca
+  fechas, plazos ni correos, ni a una persona nombrada como fuente («según Ronald»: eso lo cuida solo la regla). Con
+  `SEGUIMIENTO_HECHOS=1`, «Cambiar con el chat» lleva la frase y la cita de la novedad, y la línea que copia esa cita
+  también termina en «⚠ revisa».
+- **Reunión elegida** (documentos del proyecto): la que una persona sumó al «Contexto adicional» de un documento
+  (`…Override = true`). Desde la etapa 7 es la única que entra a ese documento, y la IA la lee entera: lo que se dijo
+  y su minuta (en un documento del cliente, solo los acuerdos y las decisiones de la revisada), con tope (160.000
+  caracteres en total, 60.000 por reunión, 6 enteras; las siguientes, en resumen, y pasadas las 24 no entran;
+  `lib/contexto/material-del-documento.ts`). Las que no dejaron nada que leer no ocupan lugar, y si no se leyeron todas
+  el mensaje dice cuántas. Se lee aunque sea de antes del piso del proyecto. Sin elegidas, el documento trabaja con la
+  memoria del proyecto (en uno del cliente, de las demás reuniones solo llegan los acuerdos de las minutas revisadas) y
+  el mensaje dice que nadie eligió reuniones. La X sobre una elegida la deja sin tocar (`null`). La exploración todavía
+  lee con la regla de antes.
+- **Reunión sugerida** (documentos del proyecto, etapa 7): la que Nexus propone para un documento, calculada al leer
+  (en el diagnóstico, la reunión que alguien unió a una sesión de la exploración o la de su evento; en todos, las
+  reuniones con hechos abiertos para ese documento; y, desde el 2026-10-10, «Reunión con el cliente en este proyecto»:
+  las que el documento leía antes de la etapa 7 y nadie eligió ni descartó, las 8 más recientes;
+  `lib/contexto/sugerencias-del-documento.ts`). Se ve arriba de la
+  lista del panel, con su motivo. No entra hasta que alguien toca «Usar»; «Descartar» la deja desestimada (`false`,
+  sin candado) y no se sugiere más mientras exista el vínculo (el clasificador puede borrarlo y recrearlo vacío). La X
+  sobre una elegida la devuelve a sugerida, no la descarta.
 - **Preventa** (Ventas → Preventa, `/sales/exploraciones`, modelo `ExploracionDeVenta`): el lienzo de
   una empresa en venta, desde que llega (por el test o desde HubSpot) hasta la primera propuesta y el
   traspaso al CSE. Sus piezas: Preparación (Identificación y Conexión) · Exploración (las reuniones) ·
@@ -59,19 +226,44 @@
   Success (permiso `preventa`, desde el 2026-10-06); armar la propuesta sigue siendo de Ventas. Se
   llamaba «Exploración de venta» hasta el 2026-10-03; la dirección y el modelo conservan ese nombre. No
   confundir con el canvas «Exploración» de un proyecto (el del CSE).
-- **Sesión de la preventa** (pieza Exploración, `SesionPlaneada`): una reunión con el prospecto, en tres pestañas
+- **Sesión de la exploración** (pieza Exploración, `SesionPlaneada`; se llamaba «sesión de la preventa»): una reunión
+  de la exploración, en la preventa o en un proyecto. Desde la etapa A de la memoria de la cuenta, en un prospecto
+  entra sola cada reunión con la empresa (desde un mes antes del alta, y las de antes con alguien de Ventas), menos las
+  de puertas adentro y las de una serie; en un cliente o un proyecto se agrega con «+ Agregar sesión» (una agendada,
+  una que ya pasó o una sin reunión). Puede unirse a un evento del calendario antes de que ocurra; cuando ocurre, espera
+  su transcripción y la lee. Una reunión que no está en una sesión no es de la exploración. Su **título** es el
+  del evento del calendario hasta que alguien le pone otro (desde el 2026-10-08). Va en tres pestañas
   (se llamaban Antes, Durante y Después hasta el 2026-10-07). **Preparación**: en qué estado está la guía, el
   objetivo (lo sugiere el agente), cuándo y con quién, lo que traes de las sesiones anteriores y la guía (abrir,
   preguntar, cerrar). **En vivo**: las notas libres y cada pregunta con su casilla de hecha y lo que respondió. **Análisis**: lo que leyó el agente de esa reunión (resumen y qué se respondió), lo que sugiere y
   **Quedó abierto**. Una pregunta que viene de antes lleva su etiqueta: **«Quedó abierto en la sesión N»**
   (el vendedor la marcó para llevar) o **«Pasó de la sesión N»** (esa sesión se cortó). Una sesión sin
-  conversación pregunta qué pasó: otro canal, se cortó o no se hizo. Ver DECISIONS §Las sesiones de la preventa.
-- **Exploración — Sesiones y Cuestionarios** (desde el 2026-10-05, `lib/guia-exploracion`): la pieza
-  Exploración de un proyecto son dos vistas. **Sesiones**: qué preguntar en cada sesión y con quién, una
-  pestaña por sesión (las que propone el agente, en azul); lo que el CSE anota como «lo que averiguaste»
-  va como sugerencia a **Información del cliente**.
-  **Cuestionarios**: lo que contesta cada persona del cliente antes. El informe de abajo quedó como
-  «Informe anterior», en solo lectura. Ver DECISIONS «La exploración son sesiones y cuestionarios».
+  conversación pregunta qué pasó: otro canal, se cortó o no se hizo. Ver DECISIONS §Las sesiones de la preventa y
+  §La exploración son sus sesiones.
+- **Fuera de la exploración**: lo que se sacó de las sesiones (en un prospecto) o lo que se leyó o se eligió antes y no
+  es sesión (en un cliente o un proyecto). Va plegado en la página de inicio. No se borra, y se vuelve sesión con un
+  clic.
+- **Página de inicio de la exploración**: lo primero al abrir Exploración. La próxima sesión con «Preparar la sesión»,
+  las sesiones con su reunión y su estado, «+ Agregar sesión», «Fuera de la exploración», las fuentes manuales, las
+  instrucciones y «Lo que la IA ya sabe». No tiene lista general de reuniones.
+- **Estados de la reunión de una sesión**: sin reunión, agendada (unida a un evento del calendario), esperando la
+  transcripción (hasta 6 horas después de terminar), leída, sin leer, solo notas, terminó sin transcripción ni notas,
+  cancelada en el calendario, corta (casi sin conversación) y no se hizo. Cada estado dice qué hacer. La que se unió
+  sola por la fecha lo dice: «ligada por fecha».
+- **Correo de seguimiento** (sesión de la preventa o de la exploración de un proyecto › «Análisis»): el correo que se
+  le manda al cliente después de una reunión: lo que entendimos, lo que acordamos y los próximos pasos (la minuta),
+  las preguntas de «Quedó abierto» y la próxima reunión o una sesión extra para profundizar. Lo arma el agente a
+  pedido; lo revisa y lo manda una persona desde su correo. Nexus no envía nada. Ver DECISIONS §El correo de seguimiento.
+- **Exploración del proyecto** (desde el 2026-10-07, `lib/exploraciones` con `marco = "cs"`): la pieza
+  Exploración de un proyecto es el MISMO lienzo de la preventa —sesiones en el riel, cada una con
+  Preparación, En vivo y Análisis— con las preguntas de Customer Success: la **estrategia** del cliente
+  (retos, resultados que persigue y obstáculos) y la escala. Lo que se confirma de la estrategia va como
+  sugerencia a **Información del cliente**. Debajo de las sesiones, **Cuestionarios** (lo que contesta cada
+  persona del cliente) e «Informe anterior». Desde la etapa A de la memoria de la cuenta abre en su **página de
+  inicio**, y solo cuentan las reuniones que son de una sesión: lo demás del proyecto le llega por la memoria. Ver
+  DECISIONS «La exploración del proyecto es la de la preventa» y «La exploración son sus sesiones».
+- **Exploración — Sesiones y Cuestionarios** (del 2026-10-05 al 2026-10-07, `lib/guia-exploracion`): la
+  versión anterior, con una pestaña por sesión. Sus datos se migran con `scripts/migrar-guia-de-exploracion.ts`.
 - **Exploración** (canvas "Exploración", `agent-exploracion-canvas`, hasta el 2026-10-02): guía **INTERNA** por
   proyecto para descubrir el negocio del cliente cuando el kickoff ya pasó — qué hay que
   entender, cómo preguntarlo, en qué orden y a quién del cliente involucrar en cada sesión.
@@ -157,6 +349,9 @@
   facturar en un año, en USD. Lo estima **Ventas a mano** (celda `ventas.write`); Nexus no lo
   deriva de cobros ni de proyectos. `null` = **sin estimar**, que NO es cero: el "potencial
   estimado" del listado suma los cargados y cuenta los sin estimar aparte.
+- **meta comercial** (`MetaComercial`, `lib/ventas/metas.ts`): cuánto tiene que vender una persona en el año, copiado
+  de las metas de HubSpot, con el **avance** que calcula HubSpot. Una meta trimestral son cuatro tramos; el total se
+  suma al leer. **Vendedor** de un negocio ganado (`VentaGanada.vendedorId`): el dueño del trato en HubSpot.
 - **potencial estimado**: la suma de los TAM de las empresas que se están viendo en /clients,
   con el conteo de las que todavía no tienen TAM al lado. No es pipeline ni forecast — es el
   techo teórico de la cartera según Ventas.
@@ -622,16 +817,54 @@
   retiró** el 2026-08-14. Reemplazó a las cuatro tarjetas de texto ese mismo día **sin agregar
   ningún campo obligatorio**, así que las propuestas ya publicadas la estrenan solas: sin
   `titular` cae al rótulo del documento. Ver DECISIONS §«Por qué Smarteam».
+- **Color de la cuenta** (Éxito del cliente, `saludDeLaCuenta`): rojo **Riesgo alto**, amarillo **Señales de
+  riesgo**, verde **Va bien** y gris **Sin datos**. Sale de la entrega, el uso, la relación y la renovación (las cuatro
+  lecturas de la ficha); al pasar el mouse dice por qué en una línea. Las alertas del agente y la deuda no pintan. La
+  relación cuenta solo donde Smarteam **acompaña** la cuenta (proyecto activo o relación gestionada en HubSpot).
+  Ver DECISIONS §El color de cada cuenta.
+- **Alerta cerrada** (`CsAlert` RESOLVED o DISMISSED): resuelta o descartada, con una nota corta opcional
+  (`resolutionNote`). Sale de «A quién llamar», se consulta 30 días y se puede volver a abrir. El agente la vuelve a
+  levantar solo con una señal nueva (más grave, o evidencia que no estaba).
+- **Clasificación de la cuenta** (Éxito del cliente › Cartera, `lib/cs/clasificacion.ts`): el **tipo de relación**
+  (proyecto en curso, servicio recurrente, solo licencias, sin servicio activo, excliente), el **momento** (arranque,
+  implementación, adopción, recurrente, renovación cercana, expansión, salida, sin actividad) y el **potencial** (alto,
+  medio, bajo, sin estimar). Nexus los **propone** con reglas y la CSL los **confirma**; si la cuenta cambia, vuelve a
+  proponer. Lo confirmado vive en `ClasificacionDeCuenta`. Ver DECISIONS §La clasificación de cada cuenta.
+- **Relación gestionada con HubSpot** (`lib/cs/relacion-gestionada.ts`): la relación de Smarteam con una cuenta en
+  HubSpot. Solo mientras Smarteam la GESTIONA, HubSpot comparte su uso, activación y licencias y suma su MRR a los
+  puntos de partner. Se sostiene con trabajo en el portal del cliente (cada cosa que se crea o edita cuenta 60 días);
+  sin trabajo, termina sola. «Solo vendida» = Smarteam le vendió la suscripción pero no la gestiona.
+- **Corrección del color** (`CorreccionDeSalud`): la CSL o dirección cambian el color que calcula Nexus, con una razón.
+  Vale 30 días o hasta una razón roja nueva; el color de Nexus se sigue viendo («Nexus diría»).
+- **En espera del cliente**: color propio (⏸) de una cuenta frenada por el cliente; no cuenta como riesgo. Lo propone
+  Nexus con el motivo de bloqueo de HubSpot y lo marca la CSL. Si además hay algo rojo, gana el rojo.
+- **Queja del cliente** (`CsAlertCategory.QUEJA`): alerta con la frase literal del cliente, verificada contra la reunión
+  o el correo. La levanta el vigía y, desde la etapa 6 de la memoria de la cuenta, también la lectura de cada reunión.
+  Verificada, pinta el color de la cuenta.
+- **Detector** (de alertas): quien levanta una `CsAlert`. Son tres: las reglas en código, la lectura de cada reunión (la
+  queja con su cita) y el vigía con IA, que recibe el riesgo como evidencia y decide. Todas tienen el mismo ciclo.
+  Cobranza tiene sus alertas aparte.
+- **Vista de la cartera** (`VistaDeCartera`): un nombre y los filtros de la pestaña «Cartera». Compartida; las de
+  arranque están en el código.
+- **Pase de cuenta**: cambiar el CSE de una cuenta. Escribe «CSE Encargado» (`cse_encargado`) y «CSL Encargado»
+  (`csl_encargado`, la CSL) en HubSpot y le manda al CSE nuevo el resumen de la cuenta en «Para ti».
 - **Carga del equipo** (`/customer-success/carga`, `lib/carga`): las horas comprometidas de cada persona de CS por
-  semana —reuniones agendadas, preparación y entrega estimada del cronograma— contra sus horas disponibles (contrato ×
-  parte productiva). **Utilización** = horas ÷ disponibles; semáforo: con espacio (< 70 %), llena (70–85 %), sobrecarga
-  (> 85 %). Las semanas que vienen se **proyectan** con el ritmo de reuniones de las últimas cuatro. Sin montos.
+  semana —reuniones agendadas, preparación y entrega del cronograma (lo respondido o, si no, lo estimado)— contra sus
+  horas disponibles (contrato × parte productiva). **Utilización** = horas ÷ disponibles; semáforo: con espacio
+  (< 70 %), llena (70–85 %), sobrecarga (> 85 %). Las semanas que vienen se **proyectan** con el ritmo de reuniones de
+  las últimas cuatro. En orden alfabético, sin ranking. Sin montos. La ven la CSL y dirección.
+- **Tu carga** (`/tu-carga`): la misma cuenta, pero solo la de quien la abre (CSE y CSL; dirección la ve como pestaña de
+  Rentabilidad): 8 semanas, sus cuentas y lo que tiene sin anotar de «¿cuánto te tomó?». Sin montos.
+- **Con dato real**: la parte de las horas que no es supuesto: las del calendario más las que respondió la persona. La
+  preparación y la entrega sin respuesta son **estimadas**.
 - **Factor de complejidad** (`lib/carga/complejidad.ts`): cuánto más trabajo pide una cuenta que la base, de 1,0 a 3,0,
   sumando por variable (Hubs, Enterprise, usuarios, integración, etapa, industria, uso, relación, Escala). Cada variable
   dice si el dato está, es parcial o falta.
 - **Supuestos de la carga** (`ConfigCarga`): los valores editables del cálculo, con quién los cambió y cuándo.
-- **Costo de la hora** (Éxito del cliente › Rentabilidad): **directo** = planilla ÷ horas pagadas; **cargado** = planilla entera ÷
-  horas con clientes. El margen de una cuenta es lo cobrado − sus horas reales × el costo de la hora elegido.
+- **Costo de la hora** (Éxito del cliente › Rentabilidad, solo dirección): **por persona** = su planilla ÷ sus horas
+  pagadas (la de entrada en el margen); **por equipo** = el promedio de su equipo; **cargado** = planilla entera ÷ horas
+  con clientes. El margen de una cuenta es lo cobrado − lo que costaron sus horas con el costo elegido. Todo en dólares,
+  con el tipo de cambio del día de cada monto.
 - **Para ti** (`/para-ti`, primer ítem del menú, `lib/para-ti`): lo que le toca a cada persona en Nexus, juntado de
   todos los módulos y recortado a lo suyo y a sus frentes. Arriba lo que dejó un agente; después «Para hoy», «Esta
   semana» y «Cuando puedas»; a la derecha los avisos. El número del menú cuenta lo de hoy y los avisos sin leer.
@@ -664,5 +897,12 @@
   hecha o publica un documento por primera vez. La respuesta va en minutos y calibra las horas de la carga por tipo de
   fase; nunca se muestra por persona. «Omitir» y «No lo hice yo» quedan registrados. Lo que no se responde queda tres
   días en «Para ti» y después **vence**. Se configura y se mira en Feedback › Encuestas. Ver DECISIONS §«¿Cuánto te tomó?».
-- **calibrar** (Tiempos): reemplazar el supuesto de horas de un tipo de fase por lo que anotó el equipo. Un tipo
-  **calibra** con 20 respuestas: desde ahí la carga usa su mediana. Con menos de 5 la mediana ni se muestra.
+- **calibrar** (Tiempos, «Ajustar el cálculo» › Calibración): Nexus **propone** un número nuevo para un supuesto con lo
+  que anotó el equipo y la CSL o dirección lo **usa** o lo **descarta**; nada entra solo. Un tipo de fase alcanza con 20
+  respuestas; una tarea clave, con 3 de la encuesta de arranque o 10 al terminarla; una variable del factor, con 5
+  cuentas que la tienen y 5 que no. Con menos de 5 respuestas la mediana ni se muestra.
+- **tarea clave** (`lib/tiempos/familias.ts`): una de las 12 clases de trabajo que pesan en la carga (integración,
+  pipeline, migración, automatizaciones…). Se reconoce por el título de la tarea, se pregunta siempre al terminarla y
+  puede tener sus propias horas en los supuestos. Las demás tareas son **comunes**.
+- **encuesta de arranque** (momento `ARRANQUE`): una sola vez, cuánto le toma normalmente a cada CSE y CSL cada tarea
+  clave. Se manda desde Feedback › Encuestas › Automáticas, llega a «Para ti» y vence en 14 días.

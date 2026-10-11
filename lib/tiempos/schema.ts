@@ -13,7 +13,12 @@ const minutos = z
 /** Responder u omitir una pregunta. */
 export const respuestaSchema = z.discriminatedUnion("accion", [
   z.object({ accion: z.literal("responder"), minutos }),
-  z.object({ accion: z.literal("omitir"), motivo: z.enum(["omitir", "no_lo_hice"]) }),
+  z.object({
+    accion: z.literal("omitir"),
+    motivo: z.enum(["omitir", "no_lo_hice"]),
+    /** Con «No lo hice yo»: quién la hizo. La pregunta pasa a esa persona. */
+    quien: z.string().trim().toLowerCase().email("Ese correo no es válido.").optional(),
+  }),
 ]);
 export type RespuestaInput = z.infer<typeof respuestaSchema>;
 

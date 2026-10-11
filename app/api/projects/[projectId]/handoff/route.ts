@@ -10,9 +10,10 @@ import {
 import { createHandoffCanvas, reconcileHandoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { elegirAgente, pipelineKeyDeProyecto, AGENTES_DEL_GRUPO } from "@/lib/agents/resolver";
-import { whereCorridasDeDocumento } from "@/lib/agents/historial-corridas";
+import { PASO_DE_LAS_SUGERENCIAS, whereCorridasDeDocumento, whereCorridasDelAgente } from "@/lib/agents/historial-corridas";
 import { resumenDesactualizado } from "@/lib/handoff/resumen";
 import { estaColgada } from "@/lib/agents/run-colgada";
+import { contarSugerenciasPendientes, leerCongelado } from "@/lib/handoff/congelado-server";
 
 type Params = { params: Promise<{ projectId: string }> };
 
@@ -104,19 +105,29 @@ export async function GET(_req: NextRequest, { params }: Params) {
      ⚠ Mismo `where` que la lista, de una sola fuente: si divergieran, el botón aparecería y
      abriría una lista que no coincide. */
   const whereCorridas = whereCorridasDeDocumento(projectId, "handoff");
-  const [lastRun, handoffRunCount] = await Promise.all([
+  const [ultimaGeneracion, handoffRunCount, lastRun, congelado, sugerenciasPendientes] = await Promise.all([
     prisma.agentRun.findFirst({
       where: whereCorridas,
       orderBy: { createdAt: "desc" },
       select: { id: true, createdAt: true, updatedAt: true, status: true, sourceSessionIds: true },
     }),
     prisma.agentRun.count({ where: whereCorridas }),
+    /* La corrida EN CURSO se busca entre todas, también «Buscar lo nuevo» (etapa 3b), que no cuenta como
+       corrida del documento: la sección tiene que verla correr para no ofrecer otra encima. */
+    prisma.agentRun.findFirst({
+      where: whereCorridasDelAgente(projectId, "handoff"),
+      orderBy: { createdAt: "desc" },
+      select: { id: true, createdAt: true, updatedAt: true, status: true, stepLabel: true },
+    }),
+    /* 3b: ¿está congelado?, y cuántas sugerencias esperan revisión en el documento. */
+    leerCongelado(projectId),
+    canvasId ? contarSugerenciasPendientes(canvasId) : Promise.resolve(0),
   ]);
 
   let sourceSessions: { id: string; title: string; date: string }[] = [];
-  if (lastRun?.sourceSessionIds?.length) {
+  if (ultimaGeneracion?.sourceSessionIds?.length) {
     const sessions = await prisma.firefliesSession.findMany({
-      where: { id: { in: lastRun.sourceSessionIds } },
+      where: { id: { in: ultimaGeneracion.sourceSessionIds } },
       select: { id: true, title: true, date: true },
     });
     sourceSessions = sessions.map((s) => ({
@@ -170,14 +181,20 @@ export async function GET(_req: NextRequest, { params }: Params) {
     canvasId,
     generated: blockCount > 0,
     blockCount,
-    lastRunAt: lastRun?.createdAt ?? null,
-    lastRunStatus: lastRun?.status ?? null,
+    lastRunAt: ultimaGeneracion?.createdAt ?? null,
+    lastRunStatus: ultimaGeneracion?.status ?? null,
     /* La corrida que SIGUE en curso (no colgada): la sección la retoma al montar —recargar o abrir el
-       proyecto en otra pestaña— en vez de ofrecer «Generar» encima y lanzar otra corrida pagada. */
+       proyecto en otra pestaña— en vez de ofrecer «Generar» encima y lanzar otra corrida pagada.
+       `sugerir`: es «Buscar lo nuevo» (etapa 3b). Al terminar, la sección no sincroniza con HubSpot ni avisa al
+       cronograma: buscar no reescribe el documento, igual que cuando la búsqueda se lanzó desde esta pestaña. */
     corridaEnCurso:
       lastRun && (lastRun.status === "RUNNING" || lastRun.status === "PENDING") && !estaColgada(lastRun)
-        ? { runId: lastRun.id }
+        ? { runId: lastRun.id, sugerir: lastRun.stepLabel === PASO_DE_LAS_SUGERENCIAS }
         : null,
+    /* 3b: el congelado (`congelado: true` con cuándo, quién y cómo) y lo que espera revisión. Con el handoff
+       congelado, la pantalla ofrece «Buscar lo nuevo» y «Rehacer desde cero» en vez de «Regenerar». */
+    congelado,
+    sugerenciasPendientes,
     /* Cuántas corridas hay: decide si se ofrece "Ver historial" (ver `debeVerHistorial`). */
     handoffRunCount,
     sourceSessions,

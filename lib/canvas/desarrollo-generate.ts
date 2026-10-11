@@ -26,6 +26,7 @@ import { tagLabels } from "@/lib/tags/catalog";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
 import { documentoConContexto } from "@/lib/contexto/documento";
+import { memoriaDelDocumento } from "@/lib/memoria";
 
 /** Asegura el canvas "Desarrollo" del proyecto (lo crea si falta) + reconcilia sus
  *  secciones. Idempotente. Devuelve el canvasId. */
@@ -70,25 +71,38 @@ export async function runDesarrolloGeneration(opts: {
     }),
     prisma.project.findUnique({
       where: { id: projectId },
-      select: { tags: true, client: { select: { name: true, company: true, industry: true } } },
+      select: { tags: true, clientId: true, client: { select: { name: true, company: true, industry: true } } },
     }),
-    /* El «Contexto adicional» del documento (2026-10-07): las reuniones con el cliente que nadie sacó
-       (o las que el CSE agregó), sus notas y sus instrucciones. Antes el handoff era la única fuente,
+    /* El «Contexto adicional» del documento (2026-10-07): las reuniones que eligió el equipo (desde la
+       etapa 7, solo esas, enteras), sus notas y sus instrucciones. Antes el handoff era la única fuente,
        y lo que se precisó después con el equipo técnico del cliente no le llegaba. */
     cargarMaterialDelDocumento(projectId, documentoConContexto("tech-requirements")!),
   ]);
   const tagsLabel = tagLabels(project?.tags ?? []).join(", ");
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
   const reunionesCtx = material.reuniones
-    ? `\n=== LAS REUNIONES DEL CONTEXTO DE INTEGRACIONES (precisan el alcance del handoff; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente y nada de acá agranda lo vendido) ===\n${material.reuniones}\n`
-    : "";
+    ? `\n=== LAS REUNIONES ELEGIDAS POR EL EQUIPO PARA INTEGRACIONES (precisan el alcance del handoff; con su minuta y lo que se dijo, salvo las marcadas «en resumen»; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente y nada de acá agranda lo vendido) ===\n${material.reuniones}\n`
+    : material.avisoSinReuniones
+      ? `\n${material.avisoSinReuniones}\n`
+      : "";
   const notasCtx = material.notas ? `\n=== NOTAS DEL EQUIPO PARA INTEGRACIONES ===\n${material.notas}\n` : "";
+  /* La memoria de la cuenta y del proyecto (lib/memoria, etapa 3), con el alcance del CLIENTE: integraciones se ve en
+     vivo desde afuera. Suma la ficha confirmada (sus herramientas actuales), los procesos validados y los acuerdos de
+     las reuniones con el cliente que su material no lee. Nada de acá agranda lo vendido. */
+  const memoria = await memoriaDelDocumento(projectId, {
+    lector: "tech-requirements",
+    clientId: project?.clientId ?? null,
+    yaLeidas: material.sesionesUsadas,
+  });
+  const memoriaCtx = memoria.texto ? `\n${memoria.texto}\n(Lo de la memoria precisa el contexto; nada de acá agranda el alcance vendido.)\n` : "";
+  // La regla otra vez, justo antes de la instrucción: el bloque de reuniones puede ser largo.
+  const cierreCtx = material.cierreDeFrontera ? `\n${material.cierreDeFrontera}\n` : "";
   const userMessage = `${material.instrucciones}Empresa: ${companyName}
 Industria: ${project?.client?.industry ?? "No especificada"}
 ${tagsLabel ? `Alcance etiquetado (tags del proyecto): ${tagsLabel}\n` : ""}
 === HANDOFF DEL PROYECTO — DESARROLLO Y ALCANCE (TU FUENTE ANCLA) ===
 ${handoffCtx || "(Sin handoff con detalle técnico. Proponé la estructura desde buenas prácticas de HubSpot y marcá lo específico del cliente como ⚠️ Por validar.)"}
-${reunionesCtx}${notasCtx}
+${reunionesCtx}${notasCtx}${memoriaCtx}${cierreCtx}
 Generá el requerimiento técnico siguiendo tus instrucciones: preciso y técnico, con nombres de objetos/propiedades/endpoints de HubSpot; marcá con ⚠️ Por validar lo que no esté confirmado en la fuente; no inventes IDs, propiedades, volúmenes ni SLAs.`;
 
   // Carry-forward: la generación sobreescribe los bloques EN EL LUGAR — sin la data

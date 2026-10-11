@@ -15,6 +15,8 @@ interface UserLite {
   permissions: PermissionMap;
   /** ¿Le compartieron algún documento de Roles? Enciende ese ítem del menú. */
   hasSharedDocs: boolean;
+  /** Tareas internas en el piloto: Marketing o ya tiene algo en Tareas (lo calcula AppShell). */
+  enTareas?: boolean;
   /** La vista de Finanzas (lib/finanzas/vista.ts): decide el panel de Finanzas. */
   vistaFinanzas: VistaFinanzas;
 }

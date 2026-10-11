@@ -109,7 +109,7 @@ describe("⚠ una reunión sin transcripción NO es una fuente citable", () => {
         cobertura: { ocurridas: 65, sinRegistro: 25 },
       }),
     );
-    expect(serialized).toContain("25 no dejaron transcripción");
+    expect(serialized).toContain("25 no dejaron minuta ni resumen");
     expect(serialized).toContain("no supongas su contenido");
     expect(serialized, "la reunión muda se coló como fuente citable").not.toContain(
       "FUENTE [sesion:s1]",
@@ -139,7 +139,7 @@ describe("⭐ el hueco de material se cita a SÍ MISMO, no a HubSpot", () => {
     expect(serialized).toContain("FUENTE [cobertura:material]");
     // El número es el del proyecto (65/25), NO el de la ventana de sesiones del fixture (1).
     expect(serialized).toContain("De las 65 reunión(es)");
-    expect(serialized).toContain("25 no dejaron transcripción");
+    expect(serialized).toContain("25 no dejaron minuta ni resumen");
   });
 
   it("sin hueco no inventa la fuente", () => {
@@ -248,5 +248,16 @@ describe("presupuesto y etiquetas", () => {
        nosotros» no pesan igual, y sin la etiqueta el modelo no puede distinguirlos. */
     const { sources } = armarContextoDeBrief(datos());
     expect(sources.get("sesion:s1")?.label).toContain("CON EL CLIENTE");
+  });
+});
+
+describe("⭐ lo que Nexus ya sabe de la cuenta es una fuente citable propia (etapa 3 de la memoria)", () => {
+  it("con memoria, entra con su clave y su texto; sin ella, no hay fuente", () => {
+    const con = armarContextoDeBrief(datos({ memoriaDeLaCuenta: "=== LO QUE NEXUS YA SABE (memoria) ===\nLa ficha dice X." }));
+    expect(con.sources.has("memoria:cuenta")).toBe(true);
+    expect(con.serialized).toContain("FUENTE [memoria:cuenta]");
+    expect(con.serialized).toContain("La ficha dice X.");
+    const sin = armarContextoDeBrief(datos({ memoriaDeLaCuenta: "   " }));
+    expect(sin.sources.has("memoria:cuenta")).toBe(false);
   });
 });

@@ -35,6 +35,10 @@ const leer = (p: string) => readFileSync(join(RAIZ, p), "utf8");
 /** Los rótulos tal como se midieron en el navegador el 2026-10-07, con su ancho en píxeles. */
 const MEDIDOS: Record<string, number> = {
   "Para ti": 38.46,
+  // «Tu carga» se midió el 2026-10-07 con la misma pila y peso (400 14px ui-sans-serif): 52,92.
+  "Tu carga": 52.92,
+  // «Tareas» (2026-10-09): estimado contra «Equipo» (43,08), seis letras de la misma pila; con desplegable sobra lugar.
+  Tareas: 44.5,
   Clientes: 48.71,
   Marketing: 63.16,
   "Éxito del cliente": 97.04,

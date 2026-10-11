@@ -11,7 +11,7 @@ import { fmtDia, plural } from "@/lib/cs/formato";
 import type { CuentaParaBuscar } from "@/lib/cs/cartera-reglas";
 import { Avatar, CajaDeTabla, Chip, EncabezadoDeTabla, Flecha, Salud } from "../piezas";
 
-const COLUMNAS = "grid-cols-[minmax(0,1.5fr)_112px_minmax(0,1.6fr)_96px_64px_30px_16px]";
+const COLUMNAS = "grid-cols-[minmax(0,1.5fr)_136px_minmax(0,1.6fr)_96px_64px_30px_16px]";
 
 /** El campo de búsqueda (la forma del índice de clientes). Enter y Esc los decide quien lo usa. */
 export function CampoDeBusqueda({
@@ -56,6 +56,14 @@ export function OtrasCuentas({ cuentas, hoy, conFiltro = false }: { cuentas: rea
         Fuera de esta lista · {plural(cuentas.length, "cuenta", "cuentas")}
         <span className="font-normal text-fg-muted">{conFiltro ? " que el filtro deja afuera o sin nada que pida llamar esta semana" : " sin nada que pida llamar esta semana"}</span>
       </p>
+      <TablaDeCuentas cuentas={cuentas} hoy={hoy} />
+    </section>
+  );
+}
+
+/** Una fila por cuenta, con su color y su porqué: la usan la búsqueda y «Toda la cartera». */
+export function TablaDeCuentas({ cuentas, hoy }: { cuentas: readonly CuentaParaBuscar[]; hoy: string }) {
+  return (
       <CajaDeTabla minimo="min-w-[820px]">
         <EncabezadoDeTabla columnas={COLUMNAS}>
           <span>Cuenta</span>
@@ -78,7 +86,7 @@ export function OtrasCuentas({ cuentas, hoy, conFiltro = false }: { cuentas: rea
                 {c.proyectosActivos > 0 ? plural(c.proyectosActivos, "proyecto activo", "proyectos activos") : "sin proyecto activo"}
               </span>
             </span>
-            <Salud salud={c.salud} />
+            <Salud salud={c.salud} porque={c.porqueDeLaSalud} />
             <span className="flex min-w-0 flex-wrap items-center gap-1.5">
               {c.principal ? (
                 <>
@@ -96,6 +104,5 @@ export function OtrasCuentas({ cuentas, hoy, conFiltro = false }: { cuentas: rea
           </Link>
         ))}
       </CajaDeTabla>
-    </section>
   );
 }

@@ -100,7 +100,8 @@ export async function requireAccessToClient(clientId: string): Promise<AccessRes
   // 7. Un prospecto en preventa, para quien trabaja las preventas (no una empresa que ya es cliente).
   if (await can(tm, "preventa", "read")) {
     const enPreventa = await prisma.exploracionDeVenta.count({
-      where: { clientId, archivadaEn: null, client: { kind: "PROSPECTO" } },
+      // Solo una PREVENTA: la exploración de un proyecto (projectId) no abre la empresa (lib/exploraciones/marco.ts).
+      where: { clientId, archivadaEn: null, projectId: null, client: { kind: "PROSPECTO" } },
     });
     if (enPreventa > 0) return { user, reason: "preventa" };
   }

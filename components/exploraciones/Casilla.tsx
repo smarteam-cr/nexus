@@ -38,6 +38,7 @@ import {
 import { cn } from "@/lib/cn";
 import { useLienzo } from "./contexto";
 import { Propuestas } from "./Propuestas";
+import { definicionEnElMarco } from "@/lib/exploraciones/marco";
 
 const APERTURA: { clave: Apertura["valor"]; etiqueta: string }[] = [
   { clave: "si", etiqueta: "Sí, quiere acompañamiento" },
@@ -741,8 +742,9 @@ export function Casilla({
   onListo?: () => void;
   pie?: HTMLElement | null;
 }) {
-  const { exp, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
-  const def = definicionDe(clave);
+  const { exp, marco, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
+  // Con el nombre de su marco: en un proyecto, «Metas» es «Resultados que persigue».
+  const def = definicionEnElMarco(clave, marco);
   const valor = exp.estado.contenido.casillas[clave] as ValoresDeCasillas[typeof clave] | undefined;
   const pendientes = pendientesPara((d) => d.tipo === "casilla" && d.clave === clave);
   const [editando, setEditando] = useState(editarDeEntrada && puedeEditar);

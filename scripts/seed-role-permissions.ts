@@ -9,6 +9,10 @@
  * cronograma con IA. Sigue viendo todo por clientes.viewAll. SUPER_ADMIN NO se siembra: el
  * engine lo hardcodea all-true (anti-lockout) y el PUT de plantillas lo rechaza.
  *
+ * Una celda nueva del registry entra sola: la plantilla parte de DEFAULT_MATRIX (así llegó `handoff.congelar`,
+ * 2026-10-10: CSE, Ventas y la CSL). Las filas ya sembradas que no la traen caen al default de código
+ * (computeEffective), así que no hace falta volver a sembrar para que valga.
+ *
  * Idempotente (upsert). Imprime el diff por rol contra el DEFAULT de código y,
  * si la fila ya existe, contra lo sembrado antes. La tabla RolePermission es
  * INVISIBLE para el código viejo de prod (no la consulta) — sembrar no cambia

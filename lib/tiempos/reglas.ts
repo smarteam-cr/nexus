@@ -2,8 +2,10 @@
  * lib/tiempos/reglas.ts — las reglas de «¿cuánto te tomó?» (2026-10-05). CLIENT-SAFE y puras.
  *
  * Se le pregunta a quien termina algo, en el momento: al marcar una tarea del cronograma como hecha o al
- * publicar un documento por primera vez. Las respuestas calibran las horas POR TIPO DE FASE de la carga de
- * Customer Success: con 20 respuestas de un tipo, su mediana reemplaza el supuesto. Nunca se muestran por
+ * publicar un documento por primera vez. Y una vez, con la ENCUESTA DE ARRANQUE, cuánto le toma normalmente cada
+ * tarea clave (lib/tiempos/familias.ts). Las respuestas calibran las horas de la carga de Customer Success: por
+ * tipo de fase con 20 respuestas; por tarea clave desde el arranque. Nexus PROPONE el número nuevo en «Ajustar el
+ * cálculo» y la CSL o dirección lo confirma: nada entra solo a la carga (2026-10-07). Nunca se muestran por
  * persona ni sirven para evaluar a nadie (docs/DECISIONS.md › «Tiempos»).
  *
  * Acá vive todo lo que decide algo: a quién y en qué tareas se pregunta, cada cuánto (muestreo y tope por
@@ -13,7 +15,7 @@
 
 /* ── Los momentos ─────────────────────────────────────────────────────────────────── */
 
-export type Momento = "TAREA_HECHA" | "DOCUMENTO_PUBLICADO" | "CIERRE_SEMANA";
+export type Momento = "TAREA_HECHA" | "DOCUMENTO_PUBLICADO" | "CIERRE_SEMANA" | "ARRANQUE";
 
 export interface DefinicionDeMomento {
   clave: Momento;
@@ -23,6 +25,8 @@ export interface DefinicionDeMomento {
   /** false = el momento existe en el diseño pero todavía no tiene pantalla: no se puede activar. */
   disponible: boolean;
   motivoNoDisponible?: string;
+  /** No se prende ni se pausa: se MANDA una vez, con un botón (la encuesta de arranque). */
+  manual?: boolean;
 }
 
 /** Sumar un momento = una entrada acá + llamar a su disparador desde el código. Aparece solo en Feedback › Encuestas. */
@@ -45,6 +49,13 @@ export const MOMENTOS: readonly DefinicionDeMomento[] = [
     cuando: "El viernes en la tarde: trae lo ya anotado y pide solo lo que falta, por cliente",
     disponible: false,
     motivoNoDisponible: "Se activa cuando exista su pantalla",
+  },
+  {
+    clave: "ARRANQUE",
+    nombre: "Encuesta de arranque",
+    cuando: "Se manda una vez: cuánto le toma normalmente a cada persona cada tarea clave",
+    disponible: true,
+    manual: true,
   },
 ];
 
@@ -114,22 +125,14 @@ export const MINIMO_PARA_MEDIANA = 5;
 export const DIAS_PARA_RESPONDER = 3;
 /** Una tarea marcada más de estos días después de su semana no pregunta: nadie se acuerda. */
 export const DIAS_DE_GRACIA = 14;
+/** La encuesta de arranque queda estos días en «Para ti». */
+export const DIAS_PARA_EL_ARRANQUE = 14;
+/** Con estas respuestas del arranque, una tarea clave ya tiene un primer número que proponer. */
+export const MINIMO_DEL_ARRANQUE = 3;
+/** Con estas respuestas al terminar una tarea clave, su número se confirma con lo que de verdad tomó. */
+export const META_DE_TAREA_CLAVE = 10;
 /** Al aplicar un avance, como mucho estas preguntas juntas. */
 export const MAXIMO_POR_LOTE = 3;
-
-/**
- * Lo que la carga supone hoy por tipo de fase, en minutos. Son los del diseño «Rentabilidad y carga»
- * (Configuración 2 h, Planificación 1,5 h…): todavía no hay una carga en el código que los tenga. Cuando
- * exista, lee estos mismos números y, con 20 respuestas, la mediana (`calibracionPorTipo`).
- */
-export const SUPUESTO_MINUTOS: Readonly<Record<TipoDeFase, number>> = {
-  CONFIGURACION: 120,
-  PLANIFICACION: 90,
-  EXPLORACION: 60,
-  ADOPCION: 60,
-  SEGUIMIENTO: 30,
-  SIN: 90,
-};
 
 /* ── La configuración de una encuesta ─────────────────────────────────────────────── */
 
@@ -159,6 +162,7 @@ export interface ConfigDeEncuesta {
   topePorDia: number | null;
 }
 
+/** «Más de un día» es el piso de lo que suele tomar una integración: «Otro…» deja escribir el número. */
 const OPCIONES_DE_TAREA: OpcionDeTiempo[] = [
   { texto: "15 min", minutos: 15 },
   { texto: "30 min", minutos: 30 },
@@ -166,6 +170,15 @@ const OPCIONES_DE_TAREA: OpcionDeTiempo[] = [
   { texto: "2 h", minutos: 120 },
   { texto: "Medio día", minutos: 240 },
   { texto: "Un día", minutos: 480 },
+  { texto: "Más de un día", minutos: 960 },
+];
+
+const OPCIONES_DE_ARRANQUE: OpcionDeTiempo[] = [
+  { texto: "1 h", minutos: 60 },
+  { texto: "2 h", minutos: 120 },
+  { texto: "Medio día", minutos: 240 },
+  { texto: "Un día", minutos: 480 },
+  { texto: "Más de un día", minutos: 960 },
 ];
 
 const OPCIONES_DE_DOCUMENTO: OpcionDeTiempo[] = [
@@ -211,6 +224,17 @@ export const CONFIG_POR_DEFECTO: Readonly<Record<Momento, ConfigDeEncuesta>> = {
     estimacion: "no",
     muestreo: { modo: "todas", cadaN: 3 },
     topePorDia: 1,
+  },
+  ARRANQUE: {
+    v: 1,
+    aQuien: { roles: ["CSE", "CSL"], frentes: [], personas: [] },
+    tareas: { tipos: TODOS_LOS_TIPOS, parties: ["SMARTEAM", "AMBOS"], proyectos: [] },
+    documentos: [],
+    pregunta: "¿Cuánto te toma normalmente…?",
+    opciones: OPCIONES_DE_ARRANQUE,
+    estimacion: "despues",
+    muestreo: { modo: "todas", cadaN: 3 },
+    topePorDia: null,
   },
 };
 
@@ -314,8 +338,13 @@ export function huella(texto: string): number {
   return h >>> 0;
 }
 
-/** ¿Le toca pregunta a esta cosa? `respuestasDelTipo` = cuántas respuestas ya tiene su tipo de fase. */
-export function tocaPorMuestreo(c: ConfigDeEncuesta, clave: string, respuestasDelTipo: number): boolean {
+/**
+ * ¿Le toca pregunta a esta cosa? `respuestasDelTipo` = cuántas respuestas ya tiene su tipo de fase. Una TAREA CLAVE
+ * (`esTareaClave`) se pregunta siempre: se termina pocas veces al mes en toda la cartera, y saltarla con el muestreo
+ * dejaría su número sin confirmar por años.
+ */
+export function tocaPorMuestreo(c: ConfigDeEncuesta, clave: string, respuestasDelTipo: number, esTareaClave = false): boolean {
+  if (esTareaClave) return true;
   const uno = huella(clave) % Math.max(2, c.muestreo.cadaN) === 0;
   if (c.muestreo.modo === "todas") return true;
   if (c.muestreo.modo === "uno_de") return uno;
@@ -328,11 +357,12 @@ export function caben(c: ConfigDeEncuesta, yaHoy: number): number {
 }
 
 /**
- * Las tareas de un avance aplicado (varias a la vez) que llevan pregunta: las que pasan el muestreo, una por tipo
- * de fase, primero los tipos con menos respuestas, hasta MAXIMO_POR_LOTE y lo que quede del tope del día. Un
- * avance llegó a marcar 94 tareas en un día: preguntar por todas sería un formulario que se cierra sin leer.
+ * Las tareas de un avance aplicado (varias a la vez) que llevan pregunta, hasta MAXIMO_POR_LOTE y lo que quede del
+ * tope del día. Primero las TAREAS CLAVE, una por familia; después las comunes que pasan el muestreo, una por tipo de
+ * fase, primero los tipos con menos respuestas. Un avance llegó a marcar 94 tareas en un día: preguntar por todas
+ * sería un formulario que se cierra sin leer.
  */
-export function elegirDelLote<T extends { clave: string; tipo: TipoDeFase }>(
+export function elegirDelLote<T extends { clave: string; tipo: TipoDeFase; familia?: string | null }>(
   c: ConfigDeEncuesta,
   candidatas: readonly T[],
   respuestasPorTipo: Readonly<Partial<Record<TipoDeFase, number>>>,
@@ -340,12 +370,27 @@ export function elegirDelLote<T extends { clave: string; tipo: TipoDeFase }>(
 ): T[] {
   const cupo = Math.min(MAXIMO_POR_LOTE, caben(c, yaHoy));
   if (cupo <= 0) return [];
-  const pasan = candidatas.filter((t) => tocaPorMuestreo(c, t.clave, respuestasPorTipo[t.tipo] ?? 0));
+  const porFamilia = new Map<string, T>();
+  for (const t of candidatas) if (t.familia && !porFamilia.has(t.familia)) porFamilia.set(t.familia, t);
+  const pasan = candidatas.filter((t) => !t.familia && tocaPorMuestreo(c, t.clave, respuestasPorTipo[t.tipo] ?? 0));
   const porTipo = new Map<TipoDeFase, T>();
   for (const t of pasan) if (!porTipo.has(t.tipo)) porTipo.set(t.tipo, t);
-  return [...porTipo.values()]
-    .sort((a, b) => (respuestasPorTipo[a.tipo] ?? 0) - (respuestasPorTipo[b.tipo] ?? 0))
-    .slice(0, cupo);
+  const comunes = [...porTipo.values()].sort((a, b) => (respuestasPorTipo[a.tipo] ?? 0) - (respuestasPorTipo[b.tipo] ?? 0));
+  return [...porFamilia.values(), ...comunes].slice(0, cupo);
+}
+
+/** Cuando una persona marca a mano (una sola pregunta): la tarea clave primero, si no, la común que pase el muestreo. */
+export function elegirDeUnaMarca<T extends { clave: string; tipo: TipoDeFase; familia?: string | null }>(
+  c: ConfigDeEncuesta,
+  candidatas: readonly T[],
+  respuestasPorTipo: Readonly<Partial<Record<TipoDeFase, number>>>,
+  yaHoy: number,
+): T[] {
+  if (caben(c, yaHoy) <= 0) return [];
+  const clave = candidatas.find((t) => !!t.familia);
+  if (clave) return [clave];
+  const comun = candidatas.find((t) => tocaPorMuestreo(c, t.clave, respuestasPorTipo[t.tipo] ?? 0));
+  return comun ? [comun] : [];
 }
 
 /* ── El estado de una pregunta ────────────────────────────────────────────────────── */
@@ -353,6 +398,8 @@ export function elegirDelLote<T extends { clave: string; tipo: TipoDeFase }>(
 export type EstadoGuardado = "pendiente" | "respondida" | "omitida" | "retirada";
 export type EstadoVisible = EstadoGuardado | "vencida";
 export type MotivoDeOmision = "omitir" | "no_lo_hice";
+/** En la encuesta de arranque, «No lo hice yo» se dice «No la hago»: la persona no hace esa tarea. */
+export const NO_LA_HAGO = "No la hago";
 
 /** Una pendiente que pasó su plazo cuenta como vencida: no se guarda, se deriva. */
 export function estadoVisible(estado: string, venceAt: Date, ahora: Date): EstadoVisible {
@@ -360,11 +407,19 @@ export function estadoVisible(estado: string, venceAt: Date, ahora: Date): Estad
   return estado === "respondida" || estado === "omitida" || estado === "retirada" ? estado : "pendiente";
 }
 
-export function venceEn(desde: Date): Date {
-  return new Date(desde.getTime() + DIAS_PARA_RESPONDER * 24 * 60 * 60 * 1000);
+export function venceEn(desde: Date, dias = DIAS_PARA_RESPONDER): Date {
+  return new Date(desde.getTime() + dias * 24 * 60 * 60 * 1000);
 }
 
 export const claveDeTarea = (taskId: string) => `tarea:${taskId}`;
+/** La pregunta que pasa a quien hizo la tarea («No lo hice yo» → «¿Quién la hizo?»). */
+export const claveReasignada = (clave: string, email: string) => `${clave}:${email.trim().toLowerCase()}`;
+export const claveDeArranque = (familia: string, email: string) => `arranque:${familia}:${email.trim().toLowerCase()}`;
+/** La familia de una pregunta del arranque, desde su clave. */
+export function familiaDeLaClave(clave: string): string | null {
+  const m = /^arranque:([a-z]+):/.exec(clave);
+  return m ? m[1] : null;
+}
 /** Con esta clave «Para ti» reconoce el pendiente de tiempos y lo abre ahí mismo (components/tiempos/PendienteDeTiempos). */
 export const PENDIENTE_DE_TIEMPOS = "tiempos";
 export const claveDeDocumento = (projectId: string, doc: Documento) => `doc:${projectId}:${doc}`;
@@ -420,14 +475,27 @@ export interface CalibracionDeTipo {
   /** La mitad del medio (percentiles 25 y 75), con la misma condición. */
   p25: number | null;
   p75: number | null;
+  /** Lo que supone hoy la carga por tarea de este tipo, en minutos, ANTES de la parte y del factor de la cuenta. */
   supuesto: number;
+  /** La mediana de lo que suponía la carga para ESAS mismas tareas (con su parte y su factor): se compara con `mediana`. */
+  estimadoMediana: number | null;
+  /** Ya hay respuestas para proponer un número nuevo en «Ajustar el cálculo». */
   calibra: boolean;
 }
 
-/** Por tipo de fase: cuántas respuestas hay, su mediana y si ya alcanzan para reemplazar el supuesto. */
-export function calibracionPorTipo(respuestas: readonly { tipo: string | null; minutos: number }[]): CalibracionDeTipo[] {
+/**
+ * Por tipo de fase: cuántas respuestas hay, su mediana, lo que suponía la carga para esas mismas tareas y si ya
+ * alcanzan para proponer un número nuevo. `supuestos` = los minutos que la carga usa hoy por tipo (sus supuestos ×
+ * 60): ese número vive en un solo lugar, lib/carga/config.ts.
+ */
+export function calibracionPorTipo(
+  respuestas: readonly { tipo: string | null; minutos: number; estimado?: number | null }[],
+  supuestos: Readonly<Record<TipoDeFase, number>>,
+): CalibracionDeTipo[] {
   return TIPOS_DE_FASE.map(({ clave, nombre }) => {
-    const mins = respuestas.filter((r) => tipoDeFase(r.tipo) === clave).map((r) => r.minutos);
+    const suyas = respuestas.filter((r) => tipoDeFase(r.tipo) === clave);
+    const mins = suyas.map((r) => r.minutos);
+    const estimados = suyas.map((r) => r.estimado).filter((x): x is number => typeof x === "number" && x > 0);
     const alcanza = mins.length >= MINIMO_PARA_MEDIANA;
     return {
       tipo: clave,
@@ -436,15 +504,11 @@ export function calibracionPorTipo(respuestas: readonly { tipo: string | null; m
       mediana: alcanza ? cuantil(mins, 0.5) : null,
       p25: alcanza ? cuantil(mins, 0.25) : null,
       p75: alcanza ? cuantil(mins, 0.75) : null,
-      supuesto: SUPUESTO_MINUTOS[clave],
+      supuesto: Math.round(supuestos[clave]),
+      estimadoMediana: alcanza && estimados.length > 0 ? cuantil(estimados, 0.5) : null,
       calibra: mins.length >= META_PARA_CALIBRAR,
     };
   });
-}
-
-/** Lo que la carga usa hoy para un tipo: la mediana si ya calibra, si no el supuesto. */
-export function minutosDeLaCarga(c: Pick<CalibracionDeTipo, "calibra" | "mediana" | "supuesto">): number {
-  return c.calibra && c.mediana !== null ? c.mediana : c.supuesto;
 }
 
 export interface Tasa {
@@ -480,11 +544,41 @@ export function tasaDeRespuesta(
   return t;
 }
 
-/** La línea que dice qué supone la carga, para mostrar al lado o después de responder. null si no hay supuesto. */
-export function textoDeEstimacion(tipo: TipoDeFase | null, minutos: number | null, calibrada: boolean): string | null {
-  if (minutos === null || tipo === null) return null;
-  const que = tipo === "SIN" ? "una tarea sin tipo de fase" : `una tarea de ${nombreDeTipo(tipo)}`;
-  return calibrada
-    ? `Lo que suele tomar ${que}, según lo que anotó el equipo: ${formatoMinutos(minutos)}.`
-    : `La carga supone ${formatoMinutos(minutos)} para ${que}.`;
+/** Cómo se armó lo que suponía la carga para una tarea: horas base, parte de Smarteam y factor de la cuenta. */
+export interface PartesDelEstimado {
+  /** Horas de la tarea antes de la parte y del factor. */
+  base: number;
+  /** De dónde salen las horas base: el número de su tarea clave o el de su tipo de fase. */
+  de: "familia" | "tipo";
+  /** El nombre de la tarea clave o del tipo de fase. */
+  nombre: string;
+  /** La parte de Smarteam: 1, la de una tarea compartida o 0. */
+  parte: number;
+  factor: number;
+}
+
+const coma = (x: number, d = 2) => String(Math.round(x * 10 ** d) / 10 ** d).replace(".", ",");
+
+/** Las horas que resultan, en minutos. */
+export function minutosDelEstimado(e: PartesDelEstimado): number {
+  return Math.round(e.base * e.parte * e.factor * 60);
+}
+
+/**
+ * La línea que dice qué suponía la carga y cómo lo calculó, para mostrar al lado o después de responder:
+ * «La carga suponía 4 h 18: 2 h de una tarea de Configuración × factor 2,15 de la cuenta.». null sin horas.
+ */
+export function textoDelEstimado(e: PartesDelEstimado | null): string | null {
+  if (!e || e.base <= 0 || e.parte <= 0) return null;
+  const que = e.de === "familia" ? `«${e.nombre}»` : e.nombre === "Sin tipo" ? "una tarea sin tipo de fase" : `una tarea de ${e.nombre}`;
+  const partes = [`${formatoMinutos(e.base * 60)} de ${que}`];
+  if (e.parte !== 1) partes.push(`${coma(e.parte)} (compartida)`);
+  if (Math.abs(e.factor - 1) > 0.005) partes.push(`factor ${coma(e.factor)} de la cuenta`);
+  const total = formatoMinutos(minutosDelEstimado(e));
+  return partes.length === 1 ? `La carga suponía ${total} para ${que}.` : `La carga suponía ${total}: ${partes.join(" × ")}.`;
+}
+
+/** Para una pregunta ya guardada, de la que solo queda el número. */
+export function textoDelEstimadoGuardado(minutos: number | null): string | null {
+  return minutos && minutos > 0 ? `La carga suponía ${formatoMinutos(minutos)} para esta tarea, con el factor de su cuenta.` : null;
 }

@@ -1,10 +1,11 @@
+import { SIN_ORIGEN_DE_CONTEXTO } from "@/lib/documents/origen-del-adjunto";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { proyectoDelCliente } from "@/lib/projects/proyecto-del-cliente";
 import { withClientAccess, apiError } from "@/lib/api";
 import { guardPermission } from "@/lib/auth/api-guards";
-import { resolveArtifactGate, artifactGateMessage } from "@/lib/auth/permissions/artifact-gate";
+import { resolveArtifactGate, artifactGateMessage, gateDelPedidoDelHandoff } from "@/lib/auth/permissions/artifact-gate";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { esAgenteRetirado } from "@/lib/agents/retirados";
 import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
@@ -18,12 +19,11 @@ import { conSemanaCeroDelPipeline, contextoDeLimitesParaElHandoff, guardarLimite
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { extractTitleTerms } from "@/lib/utils/matching";
-// `canvasDeEmpresaParaPrompt`: el canvas de empresa sin la escala 0-4 (2026-09-12, Escala 5.2).
-import { EMPTY_CLIENT_CANVAS, canvasDeEmpresaParaPrompt } from "@/lib/canvas/template";
+// La memoria de la cuenta y del proyecto (lib/memoria): reemplaza al canvas de empresa en el handoff y suma lo que se
+// sabe en el kickoff (DECISIONS «La memoria de la cuenta y del proyecto: un solo cargador»).
+import { memoriaDeLaCuenta, memoriaDelDocumento } from "@/lib/memoria";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
-import type { ClientCanvas } from "@/lib/canvas/template";
-import { updateCanvasAsync } from "@/lib/canvas/update-agent";
 import { getOutputFormatInstructions, getBlockOutputFormatInstructions } from "@/lib/canvas/agent-output-schema";
 import { geometriaDeBloque } from "@/lib/canvas/agent-output-doc";
 import { postProcessCards } from "@/lib/canvas/post-process";
@@ -46,6 +46,10 @@ import { cargarContextoDelDetalle } from "@/lib/contexto/cargar";
 import { renderDetalleDeCronograma, renderLoQueYaHay, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
 import { huellasDeFrontera, type HuellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
+import { leerPedidoDelHandoff, modoDeGeneracion, respuestaDelModo } from "@/lib/handoff/congelado";
+import { congelarHandoff, leerCongelado, materialDesdeElCongelado } from "@/lib/handoff/congelado-server";
+import { runSugerenciasDelHandoff } from "@/lib/handoff/sugerencias-server";
+import { PASO_DE_LAS_SUGERENCIAS } from "@/lib/agents/historial-corridas";
 import { exploracionParaElHandoff } from "@/lib/exploraciones/handoff";
 import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto, tipoExigidoPorAgente, elegirAgente, GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 import { debeAnteponerSemanaCero } from "@/lib/timeline/semana-cero";
@@ -170,6 +174,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
      *  fase (`token` null). El agente de detalle sin esto responde 409: es una pestaña de antes.
      *  E2c: con `recalcular` (solo con token), recalcula las tareas de las fases desfasadas. */
     borrador?: { token: string | null; version: number | null; recalcular?: { sin: string[] } };
+    /** 3b (DECISIONS «El handoff se congela»): con el handoff congelado, `{ modo: "sugerir" }` («Buscar lo
+     *  nuevo») o `{ modo: "rehacer", motivo }` («Rehacer desde cero»). Sin esto y congelado: 409. */
+    handoff?: unknown;
   };
   const bodyStage: number        = typeof body?.stage === "number" ? body.stage : 1;
   const bodyStep: number         = typeof body?.step  === "number" ? body.step  : 0;
@@ -186,6 +193,14 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   let pedidoDeTareas: PedidoDeTareas | null = null;
   let timelineDelBorrador: string | null = null;
   let sobreDelDetalle: EstructuraSupuesta | null = null;
+  /* 3b: qué se hace con el handoff (lib/handoff/congelado.ts › modoDeGeneracion). Lo fija la puerta del
+     congelado, en la rama del handoff de abajo: «generar» es lo de siempre; «sugerir» corre «Buscar lo nuevo»
+     (lib/handoff/sugerencias-server.ts) en vez de la generación; «rehacer» corre la generación de siempre y
+     vuelve a congelar al terminar. */
+  let modoDelHandoff: "generar" | "sugerir" | "rehacer" = "generar";
+  let congeladoDesde: string | null = null;
+  let motivoDelRehacer: string | null = null;
+  let quienRehace: string | null = null;
   // El pop-up de Agentes (y el tab "Información del cliente") manda projectId con el
   // SENTINEL "__strategy__", que NO es un id de Project real → FK violation en
   // agentRun.create (AgentRun_projectId_fkey). Lo resolvemos al proyecto __strategy__
@@ -212,7 +227,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // ── 1. Cargar datos del cliente ──────────────────────────────────────────────
   const client = await prisma.client.findUnique({
     where: { id: clientId },
-    select: { name: true, company: true, industry: true, notes: true, hubspotCompanyId: true, canvas: true },
+    select: { name: true, company: true, industry: true, notes: true, hubspotCompanyId: true },
   });
   if (!client) return apiError("not_found", 404);
 
@@ -375,7 +390,14 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // artefacto no existe) o `regenerate` (si ya existe) de su sección — matriz
   // editable en /team. Los agentes de análisis interno y el de AVANCE del cronograma
   // (solo propone, el CSE confirma) mantienen el acceso normal (withClientAccess).
-  const artifactGate = await resolveArtifactGate(agent, clientId, bodyProjectId ?? null);
+  // «Buscar lo nuevo» sobre un handoff congelado pide `handoff.congelar` y no `regenerate` (etapa 3b): no
+  // reescribe el handoff. «Rehacer desde cero» sigue con la celda de siempre. Un «sugerir» sobre un handoff sin
+  // congelar lo corta la puerta del congelado, más abajo, antes de cualquier trabajo.
+  const artifactGate = gateDelPedidoDelHandoff(
+    await resolveArtifactGate(agent, clientId, bodyProjectId ?? null),
+    agent.agentGroup === "handoff" ? leerPedidoDelHandoff(body?.handoff) : null,
+    bodyProjectId ?? null,
+  );
   if (artifactGate) {
     const gateGuard = await guardPermission(artifactGate.section, artifactGate.action);
     if (gateGuard instanceof NextResponse) {
@@ -423,6 +445,19 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // recolectar fuentes o llamar a Claude.
   // Por convención de id: el base O una variante por tipo (agent-timeline-detail--<tipo>).
   const isTimelineDetailAgent = esAgenteDeDetalle(agent.id);
+  /* El Kickoff y la planificación LEGACY (los agentes dormidos del grupo; el principal hace
+     short-circuit a su runner) reemplazan el mensaje base entero más abajo (10b y 10b''). */
+  const isKickoffAgent = agent.id === "agent-kickoff-canvas";
+  const isPlanificacionGroupLegacy = agent.agentGroup === "planificacion" && !isPlanificacionAgent;
+  /* ¿Este agente usa el mensaje base? El kickoff, el detalle y la planificación legacy (con
+     proyecto) lo reemplazan entero, así que armarlo era pagar de más: llamadas a HubSpot
+     (asociaciones de deals, line items, timeline de la empresa), lecturas de reuniones, la base de
+     conocimiento y los documentos del cliente, para tirarlos (Memoria de la cuenta · Etapa 0: 18
+     corridas del kickoff y 23 del detalle en 60 días). */
+  const armaElMensajeBase = !(
+    bodyProjectId &&
+    (isKickoffAgent || isTimelineDetailAgent || isPlanificacionGroupLegacy)
+  );
   /* E2a: el `borrador` lo usa el paso 2 de «Regenerar todo» (el detalle, todas las fases) y, desde
      E2b, «Regenerar» de una fase, solo con token null (nace su borrador, con `soloFase`). Mal formado,
      con otro agente, o una fase dentro de un borrador abierto (token; llega con E3): 400, antes de
@@ -502,6 +537,38 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
        documento del mismo trato vendido. */
     const vetoDuenio = await vetoSiElHandoffEsDeOtro(bodyProjectId);
     if (vetoDuenio) return vetoDuenio;
+
+    /* ── LA PUERTA DEL CONGELADO (etapa 3b, DECISIONS «El handoff se congela») ──────────────────
+       Un handoff congelado ya no lo regenera la IA. Va DESPUÉS del veto (de quién es el handoff) y
+       ANTES de cualquier trabajo de la generación (lo vigila lib/handoff/congelado.test.ts): una pestaña
+       de antes, que manda el pedido sin modo, recibe 409 sin pagar nada. «Buscar lo nuevo» sin nada
+       posterior al congelado también se corta acá, antes de crear la corrida. */
+    const pedidoDelHandoff = leerPedidoDelHandoff(body?.handoff);
+    if (pedidoDelHandoff === "invalido") {
+      return NextResponse.json(
+        { error: "PEDIDO_INVALIDO", message: "El pedido del handoff no es válido: recarga la página y vuelve a intentarlo." },
+        { status: 400 },
+      );
+    }
+    const congelado = await leerCongelado(bodyProjectId);
+    const modo = modoDeGeneracion({ congelado: congelado.congelado, pedido: pedidoDelHandoff });
+    if (typeof modo !== "string") {
+      const r = respuestaDelModo(modo.error);
+      return NextResponse.json(r.body, { status: r.status });
+    }
+    if (modo === "sugerir" && congelado.at) {
+      const nuevo = await materialDesdeElCongelado(bodyProjectId, new Date(congelado.at));
+      if (nuevo.reuniones.length === 0 && nuevo.fuentesManuales.length === 0) {
+        const r = respuestaDelModo("SIN_NOVEDADES", congelado.at);
+        return NextResponse.json(r.body, { status: r.status });
+      }
+    }
+    modoDelHandoff = modo;
+    congeladoDesde = congelado.at;
+    if (modo === "rehacer" && pedidoDelHandoff?.modo === "rehacer") {
+      motivoDelRehacer = pedidoDelHandoff.motivo;
+      quienRehace = await triggeredByEmail();
+    }
 
     // Auto-sanar: adoptar las sesiones HUÉRFANAS del cliente (matcheadas a nivel
     // cliente pero sin SessionProject) y reclasificarlas. Cubre el caso del proyecto
@@ -613,6 +680,26 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     return NextResponse.json({ ok: true, canvasId: r.canvasId, sections: r.sectionCount, runId: existingRunId });
   };
 
+  // ── «Buscar lo nuevo» sobre un handoff congelado (etapa 3b) ──────────────────
+  // No es la generación: lee solo lo posterior al congelado y deja sugerencias en borrador, con su cita. No
+  // pasa por la persistencia de abajo (ni `persistTimelineFromAgentOutput`, ni etiquetas, ni el sello, ni el
+  // resumen, ni los resultados, ni la ficha, ni el auto-desarrollo). La salida la escribe el runner.
+  if (modoDelHandoff === "sugerir" && bodyProjectId && congeladoDesde) {
+    setPhase("Buscando lo nuevo en las reuniones…");
+    const r = await runSugerenciasDelHandoff({
+      projectId: bodyProjectId,
+      agentRunId: existingRunId,
+      desde: new Date(congeladoDesde),
+    });
+    return NextResponse.json({
+      ok: true,
+      canvasId: r.canvasId,
+      sugerencias: r.sugerencias,
+      sections: r.secciones,
+      runId: existingRunId,
+    });
+  }
+
   // ── Desarrollo: short-circuit al runner self-contained ────────────────────────
   // El requerimiento técnico no necesita cards/docs/deal ni el path de block-format;
   // el runner asegura el canvas, arma su input desde el handoff y persiste. El gating
@@ -687,18 +774,13 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       ? { OR: [{ projectId: bodyProjectId }, { projectId: null }] }
       : {};
 
-  const [existingCardsResult, stageNotesResult, clientDocumentsResult, dealProjectResult] =
+  /* ClientContextCard y StageNote SALIERON del prompt (Memoria de la cuenta · Etapa 0): medido en
+     producción, 0 StageNote y 0 cards en canvas — el handoff recibía plantillas vacías presentadas
+     como «conocimiento validado». La memoria de la cuenta ocupa ese lugar (ver `memoriaDelHandoff`,
+     abajo). Los documentos solo se leen si este agente usa el mensaje base. */
+  const [clientDocumentsResult, dealProjectResult] =
     await Promise.allSettled([
-      prisma.clientContextCard.findMany({
-        where: { clientId, ...soloDeEsteProyecto },
-        orderBy: { order: "asc" },
-        select: { title: true, content: true },
-      }),
-      prisma.stageNote.findMany({
-        where: { clientId, ...soloDeEsteProyecto },
-        select: { stage: true, step: true, content: true },
-      }),
-      prisma.clientDocument.findMany({
+      !armaElMensajeBase ? Promise.resolve([]) : prisma.clientDocument.findMany({
         /* ⚠ AND EXPLÍCITO, NO SPREAD (auditoría 2026-08-08): esta query ya tiene su propio
            OR (contenido|FILE), y en JS la key posterior PISA a la del spread — el filtro por
            proyecto se descartaba en silencio al construir el objeto, sin error de tsc y con
@@ -712,6 +794,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
             // Los documentos que el cliente subió en el cuestionario previo ya entran por su propio
             // bloque (lib/cuestionario/contexto.ts), CON su «qué es». Acá entrarían otra vez, sin él.
             { cuestionarioPestanaId: null },
+            // Lo subido en el «Contexto adicional» de una pieza ya entra por esa pieza (y una minuta de la
+            // preventa puede traer precios): acá solo lo subido en Documentos (lib/documents/origen-del-adjunto.ts).
+            SIN_ORIGEN_DE_CONTEXTO,
             {
               OR: [
                 { content: { not: null } }, // Docs with text content
@@ -730,13 +815,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         : Promise.resolve(null),
     ]);
 
-  if (existingCardsResult.status === "rejected") console.error("[analyze] existingCards error:", existingCardsResult.reason);
-  if (stageNotesResult.status === "rejected") console.error("[analyze] stageNotes error:", stageNotesResult.reason);
   if (clientDocumentsResult.status === "rejected") console.error("[analyze] clientDocuments error:", clientDocumentsResult.reason);
   if (dealProjectResult.status === "rejected") console.error("[analyze] dealProject error:", dealProjectResult.reason);
 
-  const existingCards = existingCardsResult.status === "fulfilled" ? existingCardsResult.value : [];
-  const stageNotes = stageNotesResult.status === "fulfilled" ? stageNotesResult.value : [];
   const clientDocuments = clientDocumentsResult.status === "fulfilled" ? clientDocumentsResult.value : [];
   const dealProject = dealProjectResult.status === "fulfilled" ? dealProjectResult.value : null;
 
@@ -768,7 +849,10 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // Ganado. null = sin ancla (deal sin cerrar, sin hubspotDealId, o el try de abajo falló) →
   // el helper de presupuesto de sesiones cae a un solo bloque por recencia.
   let dealProjectCloseDate: number | null = null;
-  try {
+  // Sin mensaje base (kickoff, detalle, planificación legacy) no se llama a HubSpot: lo que trae
+  // solo vive en ese mensaje (ver `armaElMensajeBase`). El `try` queda pegado al `if` para no
+  // re-indentar el bloque (tiene plantillas de texto multilínea que cambiarían el prompt).
+  if (armaElMensajeBase) try {
     const { getSystemHubspotClient, getHubspotClient } = await import("@/lib/hubspot/client");
     // Buscar la cuenta HubSpot del cliente (o la del sistema)
     const hsAccount = await prisma.hubspotAccount.findFirst({
@@ -1162,7 +1246,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   }
 
   // ── 4. Buscar y traer transcripciones (Fireflies + Google Meet) ──────────────
-  setPhase("Analizando sesiones…");
+  if (armaElMensajeBase) setPhase("Analizando sesiones…");
   // Cargar TODOS los emails internos del equipo Smarteam — necesarios para:
   //  - Etiquetar sesiones como "puras de ventas" vs "mixtas" (handoff/kickoff).
   //  - Distinguir participantes internos vs externos (cliente, HubSpot reps).
@@ -1248,7 +1332,10 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   let manualSourcesContent = ""; // #handoff-manual — bloque de fuentes manuales (solo handoff)
   let handoffSourceSessionIds: string[] = []; // ids de sesiones de ventas usadas (handoff)
 
-  try {
+  // Ídem §3b: sin mensaje base no se leen reuniones (el kickoff y el detalle leen las suyas en su
+  // propio mensaje). El AgentRun del kickoff queda con `sourceSessionIds` vacío en vez de las
+  // reuniones de venta del handoff, que nunca leyó.
+  if (armaElMensajeBase) try {
     let matchingSessions: RawTranscript[] = [];
     // Link sesión↔proyecto para la política de feeding del handoff (isPrimary +
     // confidence + override). Solo aplica al camino con proyecto.
@@ -1459,7 +1546,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
 
   // ── Knowledge base (PUBLISHED + pineados al agente) ──────────────────────
   let knowledgeBaseContent = "";
-  try {
+  if (armaElMensajeBase) try {
     // 1. Pineados al agente: completos, al inicio, marcados como REFERENCIA PRINCIPAL
     const pinnedIds = agent.pinnedKnowledgeIds ?? [];
     const pinnedDocs = pinnedIds.length > 0
@@ -1496,12 +1583,6 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     console.error("[analyze] Knowledge base error:", e);
   }
 
-  // ── 6. Construir contexto de notas por subetapa ──────────────────────────────
-  const stageNotesContent = stageNotes
-    .filter((n) => n.content?.trim())
-    .map((n) => `[Etapa ${n.stage} / Paso ${n.step}]\n${n.content}`)
-    .join("\n\n");
-
   // ── 7. Construir contexto de documentos adjuntos ──────────────────────────────
   const docsContent = clientDocuments
     .map((d) => {
@@ -1517,14 +1598,6 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     })
     .filter(Boolean)
     .join("\n\n");
-
-  // ── 8. Construir contexto previo de las cards ────────────────────────────────
-  const previousCards = existingCards.length > 0
-    ? existingCards
-        .filter((c) => c.content.trim())
-        .map((c) => `**${c.title}:**\n${c.content}`)
-        .join("\n\n")
-    : "";
 
   // ── 9. Tipo de output del agente ──────────────────────────────────────────────
   const isFlowchart         = agent.outputType === "FLOWCHART";
@@ -1591,16 +1664,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       "En caso de conflicto entre lo que dicen las transcripciones/documentos y una card marcada con ⚠️, prevalece siempre la card del CSE.";
   }
 
-  // Instrucción de prioridad del canvas de proyecto.
-  // ⚠ NO va al detalle del cronograma: su userMessage se reemplaza entero (10b') y no trae ninguna
-  // sección «CANVAS DEL PROYECTO». La orden quedaba colgada y le restaba peso a las reuniones que el
-  // CSE eligió, que son las que sí le llegan (validación 2026-09-23).
-  if (!isTimelineDetailAgent) {
-    effectiveSystemPrompt +=
-      "\n\n---\nPRIORIDAD DEL CANVAS: La sección 'CANVAS DEL PROYECTO' contiene información que el consultor revisó y validó. " +
-      "Si hay contradicciones entre el canvas y otras fuentes (transcripciones, ejecuciones anteriores, datos del CRM), " +
-      "PRIORIZA SIEMPRE lo que dice el canvas. El canvas es la fuente de verdad del proyecto.";
-  }
+  // La orden de priorizar el canvas del proyecto se RETIRÓ (Memoria de la cuenta · Etapa 0): no hay
+  // canvas que priorizar (0 de 168 clientes con canvas de empresa, 0 cards en el canvas del
+  // proyecto). Colgada, le restaba peso a las reuniones y a la ficha confirmada.
 
   // Inyectar reglas de formato para agentes que apuntan a canvases no-default.
   // Los GRUPOS que usan el formato sections+blocks (en lugar de cards): handoff,
@@ -1639,47 +1705,17 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     effectiveSystemPrompt += getOutputFormatInstructions({ targetSections: defaultCanvasSections });
   }
 
-  // ── 9c. Canvas: cargar para contexto ──────────────────────────────────────────
-  const clientCanvas = (client.canvas as ClientCanvas | null) ?? EMPTY_CLIENT_CANVAS;
-
-  // Canvas de proyecto: ahora se lee desde ClientContextCard en vez de Project.canvas JSON
-  let projectCanvasText = "";
-  if (bodyProjectId) {
-    const canvasCards = await prisma.clientContextCard.findMany({
-      where: { projectId: bodyProjectId, canvasSection: { not: null } },
-      orderBy: [{ canvasSection: "asc" }, { canvasOrder: "asc" }],
-      select: { title: true, content: true, canvasSection: true, cardType: true },
-    });
-
-    if (canvasCards.length > 0) {
-      const sectionLabels: Record<string, string> = {
-        objetivo_alcance: "Objetivo y alcance",
-        hipotesis_recomendaciones: "Hipótesis y recomendaciones",
-        procesos: "Procesos",
-        plan_implementacion: "Plan de implementación",
-        documentos: "Documentos del cliente",
-      };
-      const grouped = new Map<string, typeof canvasCards>();
-      canvasCards.forEach((c) => {
-        const s = c.canvasSection!;
-        if (!grouped.has(s)) grouped.set(s, []);
-        grouped.get(s)!.push(c);
-      });
-      const parts: string[] = [];
-      for (const [sectionKey, cards] of grouped.entries()) {
-        const label = sectionLabels[sectionKey] ?? sectionKey;
-        parts.push(`[Sección: ${label}]`);
-        for (const c of cards) {
-          if (c.cardType === "FLOWCHART") {
-            parts.push(`- Card: "${c.title}" → (diagrama de proceso)`);
-          } else {
-            parts.push(`- Card: "${c.title}" → ${c.content.slice(0, 500)}`);
-          }
-        }
-      }
-      projectCanvasText = parts.join("\n");
-    }
-  }
+  // ── 9c. La memoria de la cuenta (lib/memoria, etapa 3) ───────────────────────
+  // Reemplaza al canvas de empresa y al «canvas del proyecto», que estaban vacíos en producción, y a
+  // la ficha recortada de la etapa 0. Solo el handoff, con el alcance `sin-lo-interno`: ese agente
+  // escribe en una sola llamada secciones que terminan en el kickoff, el diagnóstico, la entrega y el
+  // cuestionario previo, que ve el cliente (precedente del 2026-10-01). Lee lo confirmado y lo
+  // propuesto de la ficha con su fuente, sin los campos internos, sin la postura de las personas y sin
+  // lo que él mismo propuso (lib/memoria/consumidores.ts › handoff). La historia de la cuenta no va
+  // acá: le llega por `loadPriorRelationshipContext` (10c). Sin nada que decir es "".
+  const memoriaDelHandoff = isHandoffAgent
+    ? (await memoriaDeLaCuenta(clientId, { lector: "handoff", projectId: bodyProjectId ?? null })).texto
+    : "";
 
   // Set de IDs de cards que ya están en el canvas (para excluir del step chaining)
   const canvasCardIds = new Set<string>();
@@ -1896,14 +1932,7 @@ Notas base: ${client.notes ?? "Sin notas"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}` : ""}
 ${classificationLabel ? `Clasificación del proyecto: ${classificationLabel}` : ""}
 
-${bodyProjectId ? `=== CANVAS DE EMPRESA (conocimiento compartido del cliente) ===
-Úsalo como base. Contenido existente = conocimiento validado. Campos vacíos = oportunidad de llenar.
-${JSON.stringify(canvasDeEmpresaParaPrompt(clientCanvas), null, 2)}
-
-${projectCanvasText ? `=== CANVAS DEL PROYECTO (información validada por el consultor — PRIORIDAD MÁXIMA) ===
-La siguiente información fue revisada y validada por el consultor. Si hay contradicciones entre el canvas y otras fuentes (transcripciones, ejecuciones anteriores), PRIORIZA lo que dice el canvas.
-
-${projectCanvasText}` : "=== CANVAS DEL PROYECTO ===\n(Sin información validada aún)"}
+${memoriaDelHandoff ? `${memoriaDelHandoff}
 
 ` : ""}${prevStepCards.length > 0 || prevStepHumanCards.length > 0 ? `=== ANÁLISIS DE LA SUBETAPA ANTERIOR${prevStepLabel ? ` (${prevStepLabel})` : ""} ===
 Cards del paso anterior para referencia:
@@ -1916,15 +1945,16 @@ ${[
   ...prevStepHumanCards.map((c) => `[CREADO POR CSE ⚠️] **${c.title}:**\n${c.content}`),
 ].join("\n\n")}\n\n` : ""}${acquisitionContent ? `=== DATOS DE ADQUISICIÓN (HubSpot empresa) ===\n${acquisitionContent}\n\n` : ""}${dealContent ? `=== DEAL CERRADO Y PRODUCTOS (HubSpot) ===\n${dealContent}\n\n` : serviceTypeLabel ? `=== SERVICIO CONTRATADO ===\nTipo de servicio: ${serviceTypeLabel}\n(No se encontró deal en HubSpot, pero el tipo de servicio contratado es ${serviceTypeLabel})\n\n` : ""}${operativaBlock ? `${operativaBlock}
 
-` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${modalidadRegistradaBlock}${!isCardsAndFlowcharts && previousCards ? `=== CONTEXTO ACTUAL (ya registrado) ===\n${previousCards.slice(0, 3000)}\n\n` : ""}${stageNotesContent ? `=== NOTAS DEL WORKSPACE (por subetapa) ===\n${stageNotesContent.slice(0, 3000)}\n\n` : ""}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${salesSessionsBlock}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verificá que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omitilos.\n` : ""}
+` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${modalidadRegistradaBlock}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${salesSessionsBlock}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verifica que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omítelos.\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────
   // El Kickoff NO consume las fuentes crudas del handoff (transcripts de venta/docs/deal): su input
   // es el HANDOFF ya curado + el cronograma + (desde el 2026-10-07) su propio «Contexto adicional»
-  // (reuniones con el cliente, notas e instrucciones; ver más abajo). Gateado por id para no afectar
-  // a ningún otro agente (diagnóstico, handoff, etc. quedan intactos).
-  const isKickoffAgent = agent.id === "agent-kickoff-canvas";
+  // (reuniones con el cliente, notas e instrucciones; ver más abajo) + (desde la etapa 3 de la memoria)
+  // la memoria de la cuenta y del proyecto con el alcance del cliente. Gateado por id para no afectar
+  // a ningún otro agente (diagnóstico, handoff, etc. quedan intactos). `isKickoffAgent` se define
+  // arriba, con `armaElMensajeBase`: por eso el kickoff no arma el mensaje base que acá reemplaza.
   let userMessage = baseUserMessage;
   /* La Escala del Kickoff (2026-09-12): el resumen para posicionar + el estimado que dejó la
      propuesta del trato. Se guarda afuera del `if` porque la generación, más abajo, necesita saber
@@ -1952,39 +1982,58 @@ Analiza toda la información anterior y completa las secciones de contexto del c
       posicion: await posicionDeLaPropuesta(bodyProjectId),
     });
     /* El «Contexto adicional» del kickoff (2026-10-07, «el contexto adicional es de cada
-       artefacto»): las reuniones con el cliente que nadie sacó, sus notas y sus instrucciones. El
-       handoff sigue siendo el ancla; las reuniones completan lo que se acordó después (nombres,
-       fechas, quién participa). Sin nada de eso, el mensaje es el de siempre, byte por byte. */
+       artefacto»): las reuniones que eligió el equipo (desde la etapa 7, solo esas, enteras), sus
+       notas y sus instrucciones. El handoff sigue siendo el ancla; las reuniones completan lo que se
+       acordó después (nombres, fechas, quién participa). Sin elegidas, la línea lo dice. Sin nada de
+       eso —ni la memoria de abajo—, el handoff es la «ÚNICA FUENTE», como antes. */
     const materialDelKickoff = await cargarMaterialDelDocumento(bodyProjectId, documentoConContexto("kickoff")!);
     const conMaterial = !!(materialDelKickoff.reuniones || materialDelKickoff.notas);
     const reunionesDelKickoff = materialDelKickoff.reuniones
-      ? `=== LAS REUNIONES DEL CONTEXTO DEL KICKOFF (completan el handoff: quién participa, qué se acordó después, fechas dichas por el cliente. Nada de precios, descuentos ni negociación; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente; y nada de acá agranda el alcance vendido) ===
+      ? `=== LAS REUNIONES ELEGIDAS POR EL EQUIPO PARA EL KICKOFF (completan el handoff: quién participa, qué se acordó después, fechas dichas por el cliente. Nada de precios, descuentos ni negociación; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente; y nada de acá agranda el alcance vendido) ===
 ${materialDelKickoff.reuniones}
 
 `
-      : "";
+      : materialDelKickoff.avisoSinReuniones
+        ? `${materialDelKickoff.avisoSinReuniones}
+
+`
+        : "";
     const notasDelKickoff = materialDelKickoff.notas
       ? `=== NOTAS DEL EQUIPO PARA EL KICKOFF ===
 ${materialDelKickoff.notas}
 
 `
       : "";
+    /* La memoria de la cuenta y del proyecto (lib/memoria, etapa 3), con el alcance del cliente: la ficha confirmada
+       (las personas, sin su postura), los procesos validados y, de las reuniones con el cliente que su material NO lee
+       (`yaLeidas`), solo los acuerdos y las decisiones. Va después del handoff, que sigue siendo el ancla. Sin nada
+       que decir es "" y el mensaje es el de siempre. Con memoria, el handoff deja de ser la «ÚNICA FUENTE» (es el
+       ancla): decir «única» y sumar otra fuente justo debajo eran dos instrucciones que se contradecían. */
+    const memoriaDelKickoff = (
+      await memoriaDelDocumento(bodyProjectId, { lector: "kickoff", clientId, yaLeidas: materialDelKickoff.sesionesUsadas })
+    ).texto;
+    const bloqueDeMemoriaDelKickoff = memoriaDelKickoff
+      ? `=== PARA LAS PERSONAS Y LOS ACUERDOS POSTERIORES A LA VENTA (úsalo para personas y acuerdos posteriores a la venta; nada de acá agranda el alcance vendido) ===
+${memoriaDelKickoff}
+
+`
+      : "";
     userMessage = `${materialDelKickoff.instrucciones}Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}${tagsLabel ? `Alcance etiquetado (tags del proyecto): ${tagsLabel}\n` : ""}
-=== HANDOFF DEL PROYECTO (${conMaterial ? "TU FUENTE ANCLA" : "ESTA ES TU ÚNICA FUENTE"}) ===
+=== HANDOFF DEL PROYECTO (${conMaterial || memoriaDelKickoff ? "TU FUENTE ANCLA" : "ESTA ES TU ÚNICA FUENTE"}) ===
 ${handoffCtx || "(Sin handoff todavía. Dejá vacías las secciones sin respaldo; no inventes contenido.)"}
 
-${reunionesDelKickoff}${notasDelKickoff}${timelineCtx ? `${timelineCtx}\n\n` : ""}${escalaDelKickoff.texto}
-
+${bloqueDeMemoriaDelKickoff}${reunionesDelKickoff}${notasDelKickoff}${timelineCtx ? `${timelineCtx}\n\n` : ""}${escalaDelKickoff.texto}
+${materialDelKickoff.cierreDeFrontera ? `\n${materialDelKickoff.cierreDeFrontera}\n` : ""}
 Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: es una PRESENTACIÓN (poco texto, cards con título corto y detalle de una línea), tono post-venta, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
   }
 
   // ── 10b''. Input LEGACY del grupo planificacion ──────────────────────────────
   // agent-planificacion-canvas ya NO pasa por acá (short-circuit por id al runner del
   // motor de landings). Esta rama queda para los agentes DORMIDOS del grupo, si los
-  // hubiera — por eso gatea por grupo y excluye al principal.
-  const isPlanificacionGroupLegacy = agent.agentGroup === "planificacion" && !isPlanificacionAgent;
+  // hubiera — por eso gatea por grupo y excluye al principal (`isPlanificacionGroupLegacy` se
+  // define arriba, con `armaElMensajeBase`).
   if (isPlanificacionGroupLegacy && bodyProjectId) {
     // Allowlist: la planificación se comparte con el cliente por enlace desde el 2026-10-02.
     const handoffCtx = await loadHandoffContext(bodyProjectId, {
@@ -2554,12 +2603,8 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
     });
   }
 
-  // ── 12b. Disparar agente de canvas post-ejecución (fire-and-forget) ──────────
-  if (bodyProjectId && analysisJson?.cards?.length) {
-    updateCanvasAsync(clientId, bodyProjectId, run.id, analysisJson.cards).catch((e) =>
-      console.error("[canvas-update] Error:", e)
-    );
-  }
+  // (12b. El agente de canvas post-ejecución —`updateCanvasAsync`, que escribía CanvasSuggestion—
+  // se retiró en la Etapa 0 de la memoria: nadie leía esas sugerencias.)
 
   // ── 13. Si es FLOWCHART, crear ClientContextCard tipo FLOWCHART ──────────────
   if (isFlowchart) {
@@ -2703,6 +2748,13 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
 
     // Persistir el cronograma si el agente lo devolvió (mismo helper que el path de cards)
     const timelineSync = await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent, fuentesParaLasCitas);
+    /* «Rehacer desde cero» (etapa 3b): la generación de siempre ya escribió el documento; ahora vuelve a
+       congelarse, con foto nueva y el hito «rehecho» con el motivo (lib/handoff/congelado-server.ts). Si la
+       corrida falló antes de llegar acá, el handoff sigue congelado como estaba. Nunca tumba la corrida. */
+    if (isHandoffAgent && modoDelHandoff === "rehacer" && bodyProjectId && totalBlocks > 0) {
+      const c = await congelarHandoff(bodyProjectId, { via: "rehacer", porEmail: quienRehace, motivo: motivoDelRehacer });
+      if (!c.ok) console.warn(`[analyze handoff] rehecho, pero no se volvió a congelar: ${c.motivo}`);
+    }
     // Tanda M — el handoff SIEMPRE corre detached (runDetached): esta respuesta se descarta y
     // solo `markDone` persiste `AgentRun.output`, que en éxito NO se toca (línea ~2130/2146 ya
     // guardó el analysisJson real — no pisarlo). Si hubo error de timeline, se MERGEA acá (no se
@@ -3023,7 +3075,9 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       projectId:    bodyProjectId,
       stage:        bodyStage,
       step:         bodyStep,
-      stepLabel:    bodyStepLabel,
+      // «Buscar lo nuevo» (3b) no es una corrida del documento: con este paso queda fuera del historial y del
+      // «último handoff» que lee el cronograma (lib/agents/historial-corridas.ts).
+      stepLabel:    modoDelHandoff === "sugerir" ? PASO_DE_LAS_SUGERENCIAS : bodyStepLabel,
       sectionLabel: bodySectionLabel ?? agent.sectionLabel ?? null,
       status:       "RUNNING",
       output:       "{}",

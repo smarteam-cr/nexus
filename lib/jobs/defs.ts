@@ -17,6 +17,8 @@
  *   - ventas-ganadas-daily → espejo de los tratos ganados de HubSpot (lo VENDIDO del
  *     año, con su fecha de cierre). Diario ≥ 6:00 CR, incluidos fines de semana: un
  *     trato se gana cualquier día, y el reporte anual lo lee de la base.
+ *   - seguimiento-reuniones → la lectura de cada reunión con un cliente o un prospecto, por la cola
+ *     `LecturaDeReunion` (memoria de la cuenta, etapa 2). Cada tick. Gated por SEGUIMIENTO_REUNIONES_ENABLED≠0.
  *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
  *     ≥ 7:00 CR, después de los espejos. Si alguno está en rojo el job LANZA: semáforo rojo
  *     en Integraciones + Sentry con tags.job. Solo lecturas. (B-08)
@@ -219,6 +221,39 @@ const googleEnrichRetry: JobDef = {
 };
 
 /**
+ * La lectura de cada reunión (memoria de la cuenta, etapa 2, lib/lecturas/leer.ts). Cada tick: si está el SQL de las
+ * columnas `seguimiento*` y queda presupuesto automático, toma 2 reuniones de la cola (`LecturaDeReunion`) con un
+ * update condicional, las lee en paralelo con 420 s de tope cada una (el tope CORTA la lectura) y después vincula a su
+ * proyecto las reuniones que la lectura no toma. Una colgada más de 15 minutos vuelve a la cola; un error se reintenta
+ * a los 5 y a los 30 minutos y a la tercera (también la tercera vez que se cuelga) queda en `error`: ahí el job LANZA
+ * (semáforo rojo + Sentry). Sin nada que tomar devuelve SIN_TURNO. Lo que
+ * sigue a cada lectura (avance, ficha, etapa, preventa) corre en segundo plano: el tick no lo espera.
+ * `SEGUIMIENTO_REUNIONES_ENABLED=0` lo apaga y el enriquecimiento vuelve al post-proceso viejo.
+ */
+const seguimientoReuniones: JobDef = {
+  key: "seguimiento-reuniones",
+  shouldRun: () => encendido("seguimiento-reuniones"),
+  run: async (now) => {
+    const { correrTandaDeSeguimiento } = await import("@/lib/lecturas/leer");
+    const r = await correrTandaDeSeguimiento(now);
+    if (r.sinTurno) return SIN_TURNO;
+    const porEstado = new Map<string, number>();
+    for (const l of r.leidas) porEstado.set(l.estado, (porEstado.get(l.estado) ?? 0) + 1);
+    console.log(
+      `[jobs/seguimiento-reuniones] ${r.leidas.length} lectura(s): ${[...porEstado.entries()].map(([e, n]) => `${n} ${e}`).join(", ") || "ninguna"}` +
+        (r.vinculo ? ` · vínculo: ${r.vinculo.vinculadas} de ${r.vinculo.revisadas} reunión(es) con solo notas` : ""),
+    );
+    if (r.erroresFinales.length) {
+      const fallo = new Error(
+        `${r.erroresFinales.length} reunión(es) quedaron en error tras 3 intentos: ${r.erroresFinales.map((x) => `${x.sessionId} (${x.error.slice(0, 120)})`).join("; ")}`,
+      );
+      fallo.name = "LecturaDeReunionFallida";
+      throw fallo;
+    }
+  },
+};
+
+/**
  * El espejo de lo VENDIDO. Se sincroniza el AÑO EN CURSO, no todo el histórico: los años
  * cerrados se cargan una vez con scripts/backfill-ventas-ganadas.ts y no hace falta
  * volver a pedirlos todos los días.
@@ -249,6 +284,19 @@ const ventasGanadasDaily: JobDef = {
     console.log(
       `[jobs/ventas-ganadas] ${dateKey} — ${r.traidas} tratos: ${r.altas} nuevos, ${r.actualizadas} con cambios (${r.cambios} anotados), ${r.reclasificadas} reclasificados${r.sinMonto ? `, ${r.sinMonto} sin monto` : ""}${r.errores.length ? `, ${r.errores.length} errores` : ""}`,
     );
+    // Las metas comerciales de HubSpot (2026-10-08), en la misma corrida: miden lo vendido contra la meta. Si fallan,
+    // no tumban el job: lo vendido ya quedó copiado, y las metas de ayer siguen ahí.
+    try {
+      const { syncMetasComerciales } = await import("@/lib/ventas/metas-sync");
+      const m = await syncMetasComerciales();
+      console.log(
+        m.sinPermiso
+          ? `[jobs/ventas-ganadas] ${dateKey} — metas: sin el permiso de HubSpot (reconectar desde Integraciones)`
+          : `[jobs/ventas-ganadas] ${dateKey} — metas: ${m.guardadas} tramos${m.sinPersona ? `, ${m.sinPersona} sin persona en Nexus` : ""}${m.dadasDeBaja ? `, ${m.dadasDeBaja} dadas de baja` : ""}${m.errores.length ? `, ${m.errores.length} errores` : ""}`,
+      );
+    } catch (e) {
+      console.error(`[jobs/ventas-ganadas] ${dateKey} — metas: ${e instanceof Error ? e.message : String(e)}`);
+    }
   },
 };
 
@@ -484,11 +532,52 @@ const licenciasRenovacionDaily: JobDef = {
     if (!(await claimDateKey("licencias-renovacion-daily", dateKey, now))) return SIN_TURNO;
     const { correrAvisosDeRenovacion } = await import("@/lib/cs/avisos-de-renovacion");
     const r = await correrAvisosDeRenovacion(now);
-    console.log(`[jobs/licencias] ${dateKey} — ${r.creados} aviso(s) de renovación sobre ${r.revisados} cliente(s)`);
+    console.log(`[jobs/licencias] ${dateKey} — ${r.creados} aviso(s) de renovación nuevos y ${r.cerrados} cerrado(s) sobre ${r.revisados} cliente(s)`);
+  },
+};
+
+/**
+ * Recordar revisar la adopción (2026-10-07, lib/cs/recordatorios-de-adopcion.ts): a los 30 días del inicio, una
+ * semana antes de la entrega y una vez al mes en las cuentas recurrentes. Un aviso de «Para ti» al CSE de la cuenta
+ * y a quien lleva el frente de Customer Success. Sin IA. ≥ 7:00 CR, una vez al día.
+ */
+const adopcionRecordatoriosDaily: JobDef = {
+  key: "adopcion-recordatorios-daily",
+  shouldRun: (_now, parts) => parts.hour >= 7,
+  run: async (now) => {
+    const { dateKey } = (await import("./time")).crDateParts(now);
+    if (!(await claimDateKey("adopcion-recordatorios-daily", dateKey, now))) return SIN_TURNO;
+    const { correrRecordatoriosDeAdopcion } = await import("@/lib/cs/recordatorios-de-adopcion-server");
+    const r = await correrRecordatoriosDeAdopcion(now);
+    console.log(`[jobs/adopcion] ${dateKey} — ${r.recordatorios} recordatorio(s), ${r.avisos} aviso(s)`);
+  },
+};
+
+/**
+ * Tareas internas — el lunes (docs/tareas-plan.md §5.8): vence las propuestas que nadie decidió en 14 días, pasa a
+ * «Por asignar» lo abierto de quien se dio de baja y muda al sprint de casa lo de quien cambió de área. Sin IA. Los
+ * lunes ≥ 6:00 CR. Con `TAREAS_CIERRE_AUTOMATICO=1`, antes revisa como sistema la semana pasada de quien no la
+ * revisó (apagado por defecto).
+ */
+const tareasSemanaLunes: JobDef = {
+  key: "tareas-semana-lunes",
+  shouldRun: (_now, parts) => parts.weekday === "Mon" && parts.hour >= 6,
+  run: async (now) => {
+    const { dateKey } = (await import("./time")).crDateParts(now);
+    if (!(await claimDateKey("tareas-semana-lunes", dateKey, now))) return SIN_TURNO;
+    const { cerrarSemanaPasadaComoSistema, cierreAutomaticoPrendido, mantenimientoDelLunes } = await import("@/lib/tareas/mutaciones");
+    if (cierreAutomaticoPrendido()) {
+      const c = await cerrarSemanaPasadaComoSistema(now);
+      console.log(`[jobs/tareas-lunes] ${dateKey} — el sistema revisó la semana pasada de ${c.personas} persona(s): ${c.tareas} tarea(s) pasaron a esta semana`);
+    }
+    const r = await mantenimientoDelLunes(now);
+    console.log(
+      `[jobs/tareas-lunes] ${dateKey} — ${r.vencidas} propuesta(s) y ${r.proyectosVencidos} proyecto(s) vencidos, ${r.aPorAsignar} a «Por asignar», ${r.mudadas} mudada(s) de sprint${r.privadasDeBajas ? `, ${r.privadasDeBajas} privada(s) de bajas sin tocar` : ""}`,
+    );
   },
 };
 
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, seguimientoReuniones, ventasGanadasDaily, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, invariantsDaily];
 }

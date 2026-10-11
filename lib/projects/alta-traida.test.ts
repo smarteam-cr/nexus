@@ -315,8 +315,11 @@ describe("C-18: el botón muerto de /sessions es un enlace, y el modal preselecc
        que no hizo nada durante meses— o quitarle el `?traer=` al enlace: llega a Clientes y la
        persona tiene que encontrar la empresa a mano en el modal. */
     const src = fuente(SESSIONS);
-    const i = src.indexOf("function NonClientAnalysisPlaceholder(");
-    expect(i, "se movió el placeholder; revisar esta guarda").toBeGreaterThan(0);
+    /* ⚠ REAPUNTADA (2026-10-09), con esta razón: el enlace vivía en el placeholder de la pestaña
+       «Análisis» de /sessions, que se retiró (Memoria de la cuenta · Etapa 0). Pasó a su propio
+       componente, en la vista de sesiones de una empresa de HubSpot; la doctrina no cambia. */
+    const i = src.indexOf("function EnlaceTraerDeHubspot(");
+    expect(i, "se movió el enlace; revisar esta guarda").toBeGreaterThan(0);
     const fin = src.indexOf("function ClientListItem(", i);
     expect(fin, "se movió el ítem del sidebar; revisar esta guarda").toBeGreaterThan(i);
     const bloque = src.slice(i, fin);

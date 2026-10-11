@@ -1,11 +1,12 @@
 /**
- * lib/sessions/destinos-de-contexto.ts — EL MISMO PANEL, TRES DESTINOS.
+ * lib/sessions/destinos-de-contexto.ts — EL MISMO PANEL, VARIOS DESTINOS.
  *
  * El panel de «Contexto» (Google Meet: qué reuniones alimentan, cuáles se sacaron, buscar más) sirve
- * a TRES documentos: el HANDOFF, el CRONOGRAMA (desde el 2026-09-23) y el DIAGNÓSTICO (desde el
+ * al HANDOFF, al CRONOGRAMA (desde el 2026-09-23) y a los DOCUMENTOS del proyecto (desde el
  * 2026-09-28). Son la misma pantalla con reglas distintas, y lo que cambia entre uno y otro vive ACÁ,
  * puro y con test — para que la ruta y el componente no terminen con `if (destino === ...)`
- * desparramados que un día dicen cosas distintas sobre la misma reunión.
+ * desparramados que un día dicen cosas distintas sobre la misma reunión. El lector de cada documento
+ * (`getProjectDocumentSessions`) usa la MISMA regla: lo que el panel dice que alimenta es lo que se lee.
  *
  * ── LO QUE CAMBIA ────────────────────────────────────────────────────────────
  *  · HANDOFF: la política del link (`linkFeedsHandoff`: primario / confianza alta / forzada) + la
@@ -15,16 +16,31 @@
  *    implementación, las semanales y las de revisión, que son las del cronograma. Tampoco hay lista
  *    de «excluidas»: sacar una es dejar de elegirla, y vuelve a la lista de reuniones del proyecto
  *    del buscador (2026-09-23, segunda versión).
- *  · DIAGNÓSTICO: arranca SUGERIDO (decisión de Elías, 2026-09-28) — toda reunión del proyecto CON
- *    EL CLIENTE alimenta, sin que nadie la elija. El CSE saca las que no sirven (la X, `false`) o
- *    agrega otras (`true`). Si arrancara vacío como el cronograma, el primer diagnóstico saldría sin
- *    reuniones cada vez que el CSE se olvida de elegir. «Con el cliente» es la misma etiqueta que
- *    usan los agentes (`etiquetaDeSala`); una reunión sin participantes registrados no se sugiere.
- *  · PLANIFICACIÓN y EJECUCIÓN (2026-09-29): la misma regla sugerida que el diagnóstico, cada una
- *    con su propia columna — sacar una reunión de un documento no la saca de los otros.
- *  · KICKOFF, EXPLORACIÓN, INTEGRACIONES y ENTREGA (2026-10-07, «el contexto adicional es de cada
- *    artefacto»): la misma regla sugerida, cada uno con su columna.
+ *  · LOS SEIS DOCUMENTOS (`DESTINOS_SOLO_ELEGIDAS`: diagnóstico, planificación, ejecución, kickoff,
+ *    integraciones y entrega) — SOLO LAS ELEGIDAS desde la etapa 7 de la memoria de la cuenta
+ *    (DECISIONS «Los documentos leen la memoria y solo las reuniones elegidas», 2026-10-09). Igual que
+ *    el cronograma: una reunión sin tocar NO entra; entra la que una persona eligió (`true`, cada
+ *    documento en su columna: sacarla de uno no la saca de los otros). La X sobre una elegida vuelve a
+ *    `null`, como en el cronograma, y no hay lista de «excluidas». `false` = «Nexus la sugirió y la
+ *    desestimaste» (`desestimadaPorElCse`): no entra y no pone candado (session-project-locks.ts); un
+ *    `false` de antes (la X sobre una sugerida) se lee igual: la persona la sacó.
+ *      Hasta entonces arrancaban SUGERIDOS (diagnóstico desde el 2026-09-28, planificación y ejecución
+ *    desde el 2026-09-29, el resto desde el 2026-10-07): toda reunión del proyecto con el cliente
+ *    entraba sin que nadie la eligiera. La razón era «si arrancara vacío, el primer diagnóstico
+ *    saldría sin reuniones cada vez que el CSE se olvida de elegir». DECISIONS la contesta: con la
+ *    memoria del proyecto (lib/memoria) un documento sin elegidas ya no sale vacío, y el modo
+ *    sugerido metía por defecto las llamadas de venta, con precios, en documentos que ve el cliente.
+ *    Lo que hacía el modo sugerido lo hacen las SUGERENCIAS CALCULADAS (se calculan al leer y nunca
+ *    escriben `true` solas: `true` es el candado humano); «Usar» es el clic de una persona y escribe
+ *    `true`.
+ *  · ⚠ EXPLORACIÓN: sigue con la regla sugerida (`linkFeedsExploracion`) hasta salir de este módulo.
+ *    Desde la etapa A (2026-10-09) la exploración nueva ya NO lee esta columna: lee solo la reunión de
+ *    cada una de sus sesiones (lib/exploraciones/fuentes.ts). Queda por los tipos de
+ *    `guardContextoDelDocumento` y por la guía vieja (lib/guia-exploracion/servidor.ts);
+ *    `explorationOverride` queda DEPRECATED (sin DROP) y sale en la limpieza de la etapa 0, después de
+ *    scripts/migrar-guia-de-exploracion.ts.
  */
+import { documentoDelDestino } from "@/lib/contexto/documento";
 import { linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { linkFeedsTimeline } from "@/lib/timeline/session-feeding";
 
@@ -40,11 +56,10 @@ export type DestinoDeContexto =
   | "entrega";
 
 /**
- * Los destinos que arrancan SUGERIDOS (diagnóstico desde el 2026-09-28; planificación y ejecución
- * desde el 2026-09-29): toda reunión del proyecto con el cliente alimenta sin que nadie la elija, y
- * cada uno guarda su propio afinado en su columna de `SessionProject`.
+ * Los destinos de los DOCUMENTOS del proyecto (lib/contexto/documento.ts): cada uno guarda su propio
+ * afinado en su columna de `SessionProject`. Qué regla lee cada uno lo dice `DESTINOS_SOLO_ELEGIDAS`.
  */
-export const DESTINOS_SUGERIDOS = [
+export const DESTINOS_DE_DOCUMENTO = [
   "diagnostico",
   "planificacion",
   "ejecucion",
@@ -53,26 +68,47 @@ export const DESTINOS_SUGERIDOS = [
   "integraciones",
   "entrega",
 ] as const;
-export type DestinoSugerido = (typeof DESTINOS_SUGERIDOS)[number];
+export type DestinoDeDocumento = (typeof DESTINOS_DE_DOCUMENTO)[number];
+/** @deprecated (etapa 7): desde que los documentos leen solo las elegidas, el nombre engaña. Usa `DestinoDeDocumento`. */
+export type DestinoSugerido = DestinoDeDocumento;
 
-export function esDestinoSugerido(d: DestinoDeContexto): d is DestinoSugerido {
-  return (DESTINOS_SUGERIDOS as readonly string[]).includes(d);
+/**
+ * Los documentos que leen SOLO LAS ELEGIDAS (etapa 7, 2026-10): todos menos la exploración, que
+ * conserva su regla sugerida hasta salir del módulo (etapa A).
+ */
+export const DESTINOS_SOLO_ELEGIDAS = [
+  "diagnostico",
+  "planificacion",
+  "ejecucion",
+  "kickoff",
+  "integraciones",
+  "entrega",
+] as const satisfies readonly DestinoDeDocumento[];
+export type DestinoSoloElegidas = (typeof DESTINOS_SOLO_ELEGIDAS)[number];
+
+export function esDestinoDeDocumento(d: DestinoDeContexto): d is DestinoDeDocumento {
+  return (DESTINOS_DE_DOCUMENTO as readonly string[]).includes(d);
 }
 
-/** La columna de `SessionProject` donde cada destino sugerido guarda la X o el «Agregar». */
+export function esSoloElegidas(d: DestinoDeContexto): d is DestinoSoloElegidas {
+  return (DESTINOS_SOLO_ELEGIDAS as readonly string[]).includes(d);
+}
+
+/** La columna de `SessionProject` donde cada documento guarda su afinado: elegida, sacada o desestimada. */
 export const COLUMNA_DEL_DESTINO = {
   diagnostico: "diagnosisOverride",
   planificacion: "planningOverride",
   ejecucion: "implementationOverride",
   kickoff: "kickoffOverride",
+  /** @deprecated (etapa A, 2026-10-09): la exploración nueva no la lee; queda por la guía vieja. */
   exploracion: "explorationOverride",
   integraciones: "techRequirementsOverride",
   entrega: "deliveryOverride",
-} as const satisfies Record<DestinoSugerido, string>;
+} as const satisfies Record<DestinoDeDocumento, string>;
 
 /** `?para=` de la ruta. Cualquier otra cosa es el handoff: es el destino histórico. */
 export function parseDestino(v: string | null | undefined): DestinoDeContexto {
-  return v === "cronograma" || (v != null && (DESTINOS_SUGERIDOS as readonly string[]).includes(v))
+  return v === "cronograma" || (v != null && (DESTINOS_DE_DOCUMENTO as readonly string[]).includes(v))
     ? (v as DestinoDeContexto)
     : "handoff";
 }
@@ -93,41 +129,46 @@ export interface VinculoDelPanel {
   deliveryOverride: boolean | null;
 }
 
-/** El afinado humano del destino: la X (`false`) o «Agregar» (`true`). */
+/** El afinado humano del destino: `true` (elegida o agregada), `false` (sacada o desestimada) o `null` (sin tocar). */
 function afinado(destino: DestinoDeContexto, v: VinculoDelPanel): boolean | null {
   if (destino === "cronograma") return v.timelineOverride;
-  if (esDestinoSugerido(destino)) return v[COLUMNA_DEL_DESTINO[destino]];
+  if (esDestinoDeDocumento(destino)) return v[COLUMNA_DEL_DESTINO[destino]];
   return v.handoffOverride;
 }
 
 /**
- * La regla de los destinos SUGERIDOS, sola: agregada a mano entra, sacada no, y sin tocar entra si
- * es con el cliente. La usan el panel (vía `alimenta`) y los runners (vía `getProjectDocumentSessions`).
+ * La regla de los SEIS DOCUMENTOS (etapa 7), sola: entra SOLO la que eligió una persona (`true`).
+ * Sin tocar (`null`) no entra, desestimada (`false`) tampoco, y el tombstone (`included: false`) manda
+ * sobre todo. La usan el panel (vía `alimenta`) y el lector (vía `getProjectDocumentSessions`).
  */
-export function linkFeedsDocumento(v: { included: boolean; override: boolean | null }, conElCliente: boolean): boolean {
+export function linkFeedsDocumento(v: { included: boolean; override: boolean | null }): boolean {
+  return v.included && v.override === true;
+}
+
+/**
+ * La regla SUGERIDA de antes, que conserva solo la EXPLORACIÓN mientras siga en este módulo:
+ * agregada a mano entra, sacada no, y sin tocar entra si es con el cliente.
+ */
+export function linkFeedsExploracion(v: { included: boolean; override: boolean | null }, conElCliente: boolean): boolean {
   if (!v.included) return false;
   if (v.override !== null) return v.override;
   return conElCliente;
-}
-
-/** La del diagnóstico, con su nombre de siempre (mismo resultado que `linkFeedsDocumento`). */
-export function linkFeedsDiagnosis(
-  v: { included: boolean; diagnosisOverride: boolean | null },
-  conElCliente: boolean,
-): boolean {
-  return linkFeedsDocumento({ included: v.included, override: v.diagnosisOverride }, conElCliente);
 }
 
 /**
  * ¿Este vínculo alimenta el documento del destino?
  *
  * @param aplica el veredicto de la regla PROPIA del destino para esa reunión: en el HANDOFF,
- *   `classifyHandoffSession`; en los SUGERIDOS, «¿fue con el cliente?». El cronograma no tiene regla.
+ *   `classifyHandoffSession`; en la EXPLORACIÓN, «¿fue con el cliente?». El cronograma y los seis
+ *   documentos no tienen regla: entra lo elegido.
  */
 export function alimenta(destino: DestinoDeContexto, v: VinculoDelPanel, aplica: boolean): boolean {
   if (destino === "cronograma") return linkFeedsTimeline(v);
-  if (esDestinoSugerido(destino)) {
-    return linkFeedsDocumento({ included: v.included, override: v[COLUMNA_DEL_DESTINO[destino]] }, aplica);
+  if (esSoloElegidas(destino)) {
+    return linkFeedsDocumento({ included: v.included, override: v[COLUMNA_DEL_DESTINO[destino]] });
+  }
+  if (destino === "exploracion") {
+    return linkFeedsExploracion({ included: v.included, override: v.explorationOverride }, aplica);
   }
   // Excluida de la membresía del proyecto (tombstone humano) no alimenta NADA.
   return (
@@ -140,27 +181,36 @@ export function alimenta(destino: DestinoDeContexto, v: VinculoDelPanel, aplica:
 }
 
 /**
- * La sacó un humano de ESTE documento (sigue siendo del proyecto).
+ * La sacó un humano de ESTE documento (sigue siendo del proyecto) y se muestra como «Excluida».
  *
- * En el cronograma no existe: ahí se elige lo que entra, y sacar una es dejar de elegirla — vuelve
- * al buscador como cualquier otra reunión del proyecto. Un `false` que haya quedado de la primera
- * versión se lee igual que `null`.
+ * En el cronograma y en los seis documentos no existe: ahí se elige lo que entra, y sacar una es
+ * dejar de elegirla — vuelve al buscador como cualquier otra reunión del proyecto. Un `false` que
+ * haya quedado de antes se lee como desestimada (`desestimadaPorElCse`), no como excluida.
  */
 export function excluidaAMano(destino: DestinoDeContexto, v: VinculoDelPanel): boolean {
-  if (destino === "cronograma") return false;
+  if (destino === "cronograma" || esSoloElegidas(destino)) return false;
   return v.included && afinado(destino, v) === false;
 }
 
-/** La agregó (o en el cronograma, la eligió) un humano para ESTE documento. */
+/**
+ * Nexus la sugirió para ESTE documento y una persona la desestimó (`false`, sin candado). Solo en los
+ * seis documentos: las sugerencias calculadas no la vuelven a ofrecer. No entra al documento.
+ */
+export function desestimadaPorElCse(destino: DestinoDeContexto, v: VinculoDelPanel): boolean {
+  return esSoloElegidas(destino) && v.included && afinado(destino, v) === false;
+}
+
+/** La agregó (o en el cronograma y los documentos, la eligió) un humano para ESTE documento. */
 export function forzadaAMano(destino: DestinoDeContexto, v: VinculoDelPanel): boolean {
   return afinado(destino, v) === true;
 }
 
 /** Por qué alimenta, en palabras: la fila del panel lo muestra. */
 export function origenDelVinculo(destino: DestinoDeContexto, v: VinculoDelPanel): string {
-  // En el cronograma solo alimenta la elegida, así que el porqué es siempre el mismo.
+  // En el cronograma y los seis documentos solo alimenta la elegida, así que el porqué es siempre el mismo.
   if (destino === "cronograma") return "elegida para el cronograma";
-  if (esDestinoSugerido(destino)) return forzadaAMano(destino, v) ? "agregada a mano" : "sugerida: reunión con el cliente";
+  if (esSoloElegidas(destino)) return `elegida para ${documentoDelDestino(destino)?.elDocumento ?? "este documento"}`;
+  if (destino === "exploracion") return forzadaAMano(destino, v) ? "agregada a mano" : "sugerida: reunión con el cliente";
   if (forzadaAMano(destino, v)) return "forzada a mano";
   return v.isPrimary ? "primaria" : "confianza alta";
 }
@@ -170,7 +220,30 @@ export function usaReglaDeRelevancia(destino: DestinoDeContexto): boolean {
   return destino === "handoff";
 }
 
-/** ¿El destino sugiere solo, por «reunión con el cliente»? */
+/** ¿El destino sugiere solo, por «reunión con el cliente»? Desde la etapa 7, solo la exploración. */
 export function sugiereConElCliente(destino: DestinoDeContexto): boolean {
-  return esDestinoSugerido(destino);
+  return destino === "exploracion";
+}
+
+/**
+ * QUÉ ESCRIBE la puerta de un documento en su columna (POST .../contexto/[pieza]/sessions). Puro.
+ *
+ * En los seis documentos (los tres valores de la etapa 7):
+ *   · «Usar» o «Agregar» (`feeds: true`) → `true`: la eligió una persona (también al deshacer una X:
+ *     devolver es elegir).
+ *   · la X sobre una elegida (`feeds: false`) → `null`: deja de elegirla, como en el cronograma.
+ *   · «Descartar» una sugerencia (`feeds: false, desestimar: true`) → `false`: desestimada, sin candado.
+ * En la exploración (la regla sugerida de antes): la X → `false`; deshacer la X de una sugerida → `null`
+ * (vuelve a «sugerida»); agregar → `true`.
+ */
+export function valorDelAfinado(
+  destino: DestinoDeDocumento,
+  p: { feeds: boolean; desestimar: boolean; sugerida: boolean },
+): boolean | null {
+  if (esSoloElegidas(destino)) {
+    if (p.feeds) return true;
+    return p.desestimar ? false : null;
+  }
+  if (!p.feeds) return false;
+  return p.sugerida ? null : true;
 }

@@ -163,7 +163,9 @@ export function bloqueParaElHandoff(o: { estado: EstadoDeExploracion; escala: Es
 
 /**
  * Lo interno de la exploración, para el CSE en la columna del contexto del proyecto (pantalla
- * interna, nunca un documento ni un prompt): cada casilla que el cliente no ve, con lo que tiene.
+ * interna) y para la memoria INTERNA de la cuenta (lib/exploraciones/para-la-memoria.ts: solo la
+ * leen los agentes internos, nunca un documento del cliente ni el handoff): cada casilla que el
+ * cliente no ve, con lo que tiene.
  */
 export function internoParaElCse(estado: EstadoDeExploracion, escala: EscalaDelLienzo): { etiqueta: string; lineas: string[] }[] {
   const nombreDim = nombreDeDimension(escala);

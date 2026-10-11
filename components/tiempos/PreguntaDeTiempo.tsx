@@ -10,22 +10,42 @@
  *
  * Lo que supone la carga se ve DESPUÉS de responder por defecto: al lado empuja a elegir ese número y la respuesta
  * deja de servir para corregirlo (lo decide la encuesta en Feedback › Encuestas).
+ *
+ * «No lo hice yo» pregunta quién la hizo y le pasa la pregunta a esa persona (2026-10-07): el tiempo lo dice quien lo
+ * sabe. En la encuesta de arranque se dice «No la hago».
  */
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { formatoMinutos, type MotivoDeOmision } from "@/lib/tiempos/reglas";
+import { formatoMinutos, NO_LA_HAGO, type MotivoDeOmision } from "@/lib/tiempos/reglas";
 import type { PreguntaParaResponder } from "@/lib/tiempos/tipos";
 
-export type Resultado = { tipo: "respondida"; minutos: number } | { tipo: "omitida"; motivo: MotivoDeOmision };
+export type Resultado =
+  | { tipo: "respondida"; minutos: number }
+  | { tipo: "omitida"; motivo: MotivoDeOmision; quien?: { email: string; nombre: string } };
 
 export async function enviarRespuesta(id: string, r: Resultado): Promise<void> {
   await fetchJson(`/api/tiempos/preguntas/${id}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(r.tipo === "respondida" ? { accion: "responder", minutos: r.minutos } : { accion: "omitir", motivo: r.motivo }),
+    body: JSON.stringify(
+      r.tipo === "respondida" ? { accion: "responder", minutos: r.minutos } : { accion: "omitir", motivo: r.motivo, quien: r.quien?.email },
+    ),
   });
+}
+
+type Persona = { email: string; nombre: string };
+let equipo: Promise<Persona[]> | null = null;
+/** El equipo, una vez por página: a quién se le puede pasar la pregunta. */
+function cargarEquipo(): Promise<Persona[]> {
+  equipo ??= fetchJson<{ personas: Persona[] }>("/api/tiempos/equipo")
+    .then((d) => d.personas)
+    .catch(() => {
+      equipo = null;
+      return [];
+    });
+  return equipo;
 }
 
 const CHIP = "h-7 rounded-full border px-3 text-xs transition-colors disabled:opacity-50";
@@ -60,6 +80,20 @@ export default function PreguntaDeTiempo({
   const [otro, setOtro] = useState(false);
   const [cantidad, setCantidad] = useState("");
   const [unidad, setUnidad] = useState<"min" | "h">("min");
+  const [preguntandoQuien, setPreguntandoQuien] = useState(false);
+  const [personas, setPersonas] = useState<Persona[] | null>(null);
+  const [quien, setQuien] = useState("");
+  const esArranque = pregunta.momento === "ARRANQUE";
+
+  const abrirQuien = () => {
+    setPreguntandoQuien(true);
+    void cargarEquipo().then(setPersonas);
+  };
+
+  const pasarla = () => {
+    const p = personas?.find((x) => x.email === quien);
+    void guardar(p ? { tipo: "omitida", motivo: "no_lo_hice", quien: p } : { tipo: "omitida", motivo: "no_lo_hice" });
+  };
 
   const guardar = async (r: Resultado) => {
     setGuardando(true);
@@ -68,6 +102,7 @@ export default function PreguntaDeTiempo({
       setResultado(r);
       setCambiando(false);
       setOtro(false);
+      setPreguntandoQuien(false);
       onListo?.(r);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
@@ -109,7 +144,11 @@ export default function PreguntaDeTiempo({
           {resultado!.tipo === "respondida"
             ? `Anotado: ${formatoMinutos(resultado!.minutos)}. Gracias.`
             : resultado!.motivo === "no_lo_hice"
-              ? "Anotado: no la hiciste tú. No vuelve a preguntarse."
+              ? esArranque
+                ? "Anotado: no la haces."
+                : resultado!.quien
+                  ? `Se la pasaste a ${resultado!.quien.nombre}.`
+                  : "Anotado: no la hiciste tú. No vuelve a preguntarse."
               : "Omitida. No vuelve a preguntarse."}
         </span>
         <button type="button" onClick={() => setCambiando(true)} className="font-semibold text-brand hover:text-brand-light">
@@ -129,7 +168,7 @@ export default function PreguntaDeTiempo({
         {variante === "lista" ? (
           <span className="flex min-w-0 flex-col">
             <span className="text-[13px] font-medium text-fg">{pregunta.titulo}</span>
-            <span className="text-xs text-fg-muted">{pregunta.contexto}</span>
+            {pregunta.contexto && <span className="text-xs text-fg-muted">{pregunta.contexto}</span>}
           </span>
         ) : (
           <span className="text-[13px] font-semibold text-fg">{pregunta.pregunta}</span>
@@ -162,7 +201,40 @@ export default function PreguntaDeTiempo({
         <button type="button" disabled={guardando} onClick={() => setOtro((v) => !v)} className={cn(CHIP, otro ? CHIP_ELEGIDO : CHIP_NORMAL)}>
           Otro…
         </button>
+        {esArranque && (
+          <button type="button" disabled={guardando} onClick={() => void guardar({ tipo: "omitida", motivo: "no_lo_hice" })} className={cn(CHIP, CHIP_NORMAL)}>
+            {NO_LA_HAGO}
+          </button>
+        )}
       </div>
+
+      {preguntandoQuien && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-fg-secondary">¿Quién la hizo?</span>
+          <select
+            value={quien}
+            onChange={(e) => setQuien(e.target.value)}
+            aria-label="Quién la hizo"
+            className="h-7 max-w-[220px] rounded-lg border border-line bg-surface px-1.5 text-xs text-fg"
+          >
+            <option value="">{personas === null ? "Cargando…" : "No sé"}</option>
+            {(personas ?? []).map((p) => (
+              <option key={p.email} value={p.email}>
+                {p.nombre}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={guardando}
+            onClick={pasarla}
+            className="h-7 rounded-lg border border-line bg-surface px-2.5 text-xs font-medium text-fg-secondary hover:bg-surface-hover hover:text-fg"
+          >
+            {quien ? "Pasársela" : "Listo"}
+          </button>
+          <span className="basis-full text-[11px] text-fg-muted">Le llega a esa persona, para que diga cuánto le tomó.</span>
+        </div>
+      )}
 
       {otro && (
         <div className="mt-2 flex items-center gap-1.5">
@@ -197,9 +269,11 @@ export default function PreguntaDeTiempo({
       <div className={cn("flex flex-wrap items-center justify-between gap-2", variante === "lista" ? "mt-1" : "mt-2.5 border-t border-line pt-2")}>
         {variante !== "lista" && <span className="text-xs text-fg-muted">Sirve para calibrar la carga, no para evaluarte.</span>}
         <span className="ml-auto flex gap-0.5">
-          <button type="button" disabled={guardando} onClick={() => void guardar({ tipo: "omitida", motivo: "no_lo_hice" })} className="rounded px-1.5 py-1 text-xs text-fg-muted hover:text-fg">
-            No lo hice yo
-          </button>
+          {!esArranque && (
+            <button type="button" disabled={guardando} onClick={abrirQuien} aria-expanded={preguntandoQuien} className="rounded px-1.5 py-1 text-xs text-fg-muted hover:text-fg">
+              No lo hice yo
+            </button>
+          )}
           <button type="button" disabled={guardando} onClick={() => void guardar({ tipo: "omitida", motivo: "omitir" })} className="rounded px-1.5 py-1 text-xs text-fg-muted hover:text-fg">
             Omitir
           </button>

@@ -53,6 +53,15 @@ describe("motivoApagado", () => {
     expect(motivoApagado("google-enrich-retry", { GOOGLE_ADMIN_EMAIL: "a@b", GOOGLE_SERVICE_ACCOUNT_KEY: "{}" })).toBeNull();
   });
 
+  it("seguimiento-reuniones está prendido sin la variable y solo «0» lo apaga, diciendo que vuelve el post-proceso viejo", () => {
+    expect(motivoApagado("seguimiento-reuniones", {})).toBeNull();
+    expect(motivoApagado("seguimiento-reuniones", { SEGUIMIENTO_REUNIONES_ENABLED: "1" })).toBeNull();
+    expect(motivoApagado("seguimiento-reuniones", { SEGUIMIENTO_REUNIONES_ENABLED: "" })).toBeNull();
+    const apagado = motivoApagado("seguimiento-reuniones", { SEGUIMIENTO_REUNIONES_ENABLED: "0" });
+    expect(apagado).toContain("SEGUIMIENTO_REUNIONES_ENABLED=0");
+    expect(apagado).toContain("post-proceso viejo");
+  });
+
   it("un job sin requisito nunca está apagado por configuración", () => {
     for (const key of ["maintenance-daily", "ventas-ganadas-daily", "invariants-daily", "marketing-weekly", "no-existe"]) {
       expect(motivoApagado(key, {}), key).toBeNull();
@@ -80,8 +89,8 @@ describe("defs.ts decide con esta regla y no con una copia", () => {
   });
 
   it("cada job con requisito consulta la regla en su shouldRun", () => {
-    /* 9 desde el 2026-10-05: el tipo de cambio del BCCR. */
-    expect(JOBS_CON_REQUISITO.length).toBe(9);
+    /* 9 desde el 2026-10-05: el tipo de cambio del BCCR. 10 desde el 2026-10-10: la lectura de cada reunión. */
+    expect(JOBS_CON_REQUISITO.length).toBe(10);
     for (const key of JOBS_CON_REQUISITO) expect(defs, key).toContain(`encendido("${key}")`);
     expect(defs).toContain("motivoApagado(jobKey, process.env) === null");
   });

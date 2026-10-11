@@ -19,7 +19,13 @@
 import { prisma } from "@/lib/db/prisma";
 import { asignarDuenioManual } from "./duenio-manual";
 import { linkFeedsTimeline } from "@/lib/timeline/session-feeding";
-import { COLUMNA_DEL_DESTINO, linkFeedsDocumento, type DestinoSugerido } from "./destinos-de-contexto";
+import {
+  COLUMNA_DEL_DESTINO,
+  esSoloElegidas,
+  linkFeedsDocumento,
+  linkFeedsExploracion,
+  type DestinoDeDocumento,
+} from "./destinos-de-contexto";
 import { etiquetaDeSala } from "./etiqueta-de-sala";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
@@ -94,6 +100,31 @@ export function whereBelongsToClient(clientId: string) {
 }
 
 /**
+ * Filtro de `FirefliesSession` (para componer en un `where` de una relación `session`): la reunión sigue VINCULADA a ese
+ * proyecto (el vínculo incluido). Lo usan los lectores de los hechos de un proyecto (lib/seguimiento): una reunión que
+ * alguien desvinculó del proyecto deja de proponerle novedades y de entrar a su memoria. Vive acá para que nadie lea
+ * `SessionProject` por su cuenta.
+ */
+export function whereVinculadaAlProyecto(projectId: string) {
+  return { projects: { some: { projectId, included: true } } };
+}
+
+/**
+ * EL dueño de una sesión, cuando hace falta UNO solo (no "¿es de este cliente?", que es
+ * `belongsToClient`, sino "¿de quién es?"). Es la precedencia que ya usan INV42 y Tareas:
+ * `resolvedClientId` ya materializa el override manual (paso 1 de la cascada de
+ * lib/sessions/categorize.ts), así que gana; el manual cuenta solo si no hay resolución
+ * (por ejemplo, la cascada todavía no corrió). Un manual colgado —cliente borrado, que no es
+ * clave foránea— no le gana nunca a una resolución viva.
+ */
+export function duenoDeLaSesion(s: {
+  resolvedClientId: string | null;
+  manualClientId: string | null;
+}): string | null {
+  return s.resolvedClientId ?? s.manualClientId ?? null;
+}
+
+/**
  * Le da dueño a una sesión HUÉRFANA para que pueda alimentar un proyecto. Es la contracara de
  * `belongsToClient`, y vive al lado porque hay que leerlas juntas.
  *
@@ -152,8 +183,17 @@ function foldOrganizer(participants: string[], organizerEmail: string | null): s
  * pertenecen a su cliente. Las que cruzan cliente se descartan (→ `dropped` +
  * console.warn). Esta es la noción ÚNICA de membresía que todo consumidor
  * (handoff, cronograma, watchdog, análisis) debe respetar.
+ *
+ * `elegidaEn` (etapa 7, solo lo pasa `getProjectDocumentSessions`): la columna del documento que se está
+ * leyendo. Un vínculo con `true` en esa columna lo eligió una PERSONA para ese documento, y el piso del
+ * proyecto no lo deja afuera, igual que a un vínculo manual (piso-del-proyecto.ts). Sin eso, una reunión
+ * de antes del piso se veía «elegida» en el panel y el documento no la leía. Solo vale para ESE
+ * documento: el resto de la membresía (el handoff, la memoria) sigue con el piso.
  */
-export async function getProjectMemberSessions(projectId: string): Promise<ProjectSourcesResult> {
+export async function getProjectMemberSessions(
+  projectId: string,
+  opts: { elegidaEn?: (typeof COLUMNA_DEL_DESTINO)[DestinoDeDocumento] } = {},
+): Promise<ProjectSourcesResult> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: { clientId: true, createdAt: true, hubspotCreatedAt: true },
@@ -209,7 +249,8 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
       dropped.push({ sessionId: s.id, title: s.title, resolvedClientId: s.resolvedClientId });
       continue;
     }
-    if (quedaAntesDelPiso(s.date.getTime(), piso, l.source)) {
+    const elegidaParaEsteDocumento = opts.elegidaEn ? l[opts.elegidaEn] === true : false;
+    if (!elegidaParaEsteDocumento && quedaAntesDelPiso(s.date.getTime(), piso, l.source)) {
       anteriores.push({ sessionId: s.id, title: s.title, resolvedClientId: s.resolvedClientId });
       continue;
     }
@@ -274,30 +315,49 @@ export async function getProjectTimelineSessions(projectId: string): Promise<Pro
 }
 
 /**
- * Sesiones que alimentan al DIAGNÓSTICO (2026-09-28, «Contexto del diagnóstico»): de la membresía
- * del proyecto, las SUGERIDAS (reuniones con el cliente que nadie sacó) más las agregadas a mano.
- * Mismo chokepoint que el resto, y la regla es la del panel (`linkFeedsDiagnosis`): lo que la
- * pantalla muestra como «alimenta» es exactamente lo que lee el runner. Las futuras NO se cortan
- * acá: eso lo hace quien arma el material.
+ * Sesiones que alimentan al DIAGNÓSTICO: de la membresía del proyecto, SOLO las que eligió una
+ * persona (etapa 7, ver `getProjectDocumentSessions`). Las futuras NO se cortan acá: eso lo hace quien
+ * arma el material.
  */
 export async function getProjectDiagnosisSessions(projectId: string): Promise<ProjectSourcesResult> {
   return getProjectDocumentSessions(projectId, "diagnostico");
 }
 
 /**
- * Lo mismo para cualquier documento con contexto SUGERIDO (diagnóstico, planificación, ejecución —
- * 2026-09-29): cada uno con su propia columna de afinado, la misma regla que muestra su panel.
+ * Sesiones que alimentan a un DOCUMENTO con «Contexto adicional» (lib/contexto/documento.ts), cada
+ * uno con su propia columna de afinado y la MISMA regla que muestra su panel (`alimenta`,
+ * lib/sessions/destinos-de-contexto.ts): lo que la pantalla dice que alimenta es lo que se lee.
+ *
+ *  · Los seis de `DESTINOS_SOLO_ELEGIDAS` (diagnóstico, planificación, ejecución, kickoff,
+ *    integraciones y entrega — etapa 7, DECISIONS «Los documentos leen la memoria y solo las
+ *    reuniones elegidas»): SOLO las que eligió una persona (`true`). Sin tocar no entra, y no se mira
+ *    la sala: una elegida de puertas adentro entra, con su rótulo (el material la marca). Tampoco la
+ *    deja afuera el piso del proyecto (`elegidaEn`): el panel la muestra elegida y el documento la lee.
+ *  · La exploración conserva la regla sugerida de antes (`linkFeedsExploracion`: con el cliente y nadie
+ *    la sacó, o agregada) hasta salir del módulo.
+ *
+ * Mismo chokepoint que el resto (`getProjectMemberSessions`): la pertenencia al cliente y el tombstone
+ * no se re-implementan. Las futuras NO se cortan acá: eso lo hace quien arma el material.
  */
 export async function getProjectDocumentSessions(
   projectId: string,
-  destino: DestinoSugerido,
+  destino: DestinoDeDocumento,
 ): Promise<ProjectSourcesResult> {
+  const columna = COLUMNA_DEL_DESTINO[destino];
+  if (esSoloElegidas(destino)) {
+    // La elegida de antes del piso del proyecto se lee igual: la eligió una persona (`elegidaEn`).
+    const r = await getProjectMemberSessions(projectId, { elegidaEn: columna });
+    return {
+      // La membresía ya trae `included: true`; la regla lo vuelve a mirar a propósito (una sola regla).
+      sessions: r.sessions.filter((s) => linkFeedsDocumento({ included: true, override: s[columna] })),
+      dropped: r.dropped,
+    };
+  }
   const [r, categorias] = await Promise.all([getProjectMemberSessions(projectId), getSessionCategories()]);
   const dominiosPropios = buildInternalDomainsSet(categorias);
-  const columna = COLUMNA_DEL_DESTINO[destino];
   return {
     sessions: r.sessions.filter((s) =>
-      linkFeedsDocumento(
+      linkFeedsExploracion(
         { included: true, override: s[columna] },
         etiquetaDeSala({ participants: s.participants }, dominiosPropios) === "CON EL CLIENTE",
       ),
@@ -388,6 +448,42 @@ export async function contarSesionesSinRevisar(
     const clientId = clienteDe.get(l.projectId);
     if (!clientId || !belongsToClient(l.session, clientId)) continue;
     out.set(l.projectId, (out.get(l.projectId) ?? 0) + 1);
+  }
+  return out;
+}
+
+/**
+ * De una lista de dominios y correos, los que también aparecen en reuniones de OTROS clientes del último
+ * año: HubSpot, una agencia, un integrador que trabaja con varias empresas. Reconocer a una empresa por esa
+ * gente mezcla clientes (invariante 1): «Agendadas» de la exploración listaba, con título y hora, reuniones
+ * de otros clientes porque en una reunión de la empresa había estado alguien de HubSpot. Solo mira quiénes
+ * estuvieron, nunca el contenido de una reunión. Un dominio genérico (gmail) se pasa como correo, no como
+ * dominio: lo usan muchas empresas.
+ */
+export async function genteCompartidaConOtrosClientes(
+  clientId: string,
+  o: { dominios: readonly string[]; correos: readonly string[]; desde?: Date },
+): Promise<{ dominios: Set<string>; correos: Set<string> }> {
+  const dominios = [...new Set(o.dominios.map((d) => d.trim().toLowerCase()).filter(Boolean))];
+  const correos = [...new Set(o.correos.map((c) => c.trim().toLowerCase()).filter(Boolean))];
+  const vacio = { dominios: new Set<string>(), correos: new Set<string>() };
+  if (!dominios.length && !correos.length) return vacio;
+  const desde = o.desde ?? new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  // De otro: tiene dueño y no es de este cliente (ni por la resolución ni por el manual).
+  const filas = await prisma.$queryRaw<{ correo: string }[]>`
+    SELECT DISTINCT lower(p) AS "correo"
+    FROM "FirefliesSession" s, unnest(s."participants") AS p
+    WHERE s."date" >= ${desde}
+      AND (s."resolvedClientId" IS NOT NULL OR s."manualClientId" IS NOT NULL)
+      AND s."resolvedClientId" IS DISTINCT FROM ${clientId}
+      AND s."manualClientId" IS DISTINCT FROM ${clientId}
+      AND (lower(split_part(p, '@', 2)) = ANY(${dominios}::text[]) OR lower(p) = ANY(${correos}::text[]))`;
+  const out = { dominios: new Set<string>(), correos: new Set<string>() };
+  const pedidos = new Set(dominios);
+  for (const f of filas) {
+    const d = f.correo.split("@")[1] ?? "";
+    if (pedidos.has(d)) out.dominios.add(d);
+    out.correos.add(f.correo);
   }
   return out;
 }

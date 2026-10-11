@@ -13,7 +13,7 @@ import {
   reemplazaA,
   sugerenciaVigente,
 } from "./etapa-sugerida";
-import { citaEstaEnElTexto, etapasQueSePuedenDetectar, leerRespuestaDeEtapa, pedidoDeEtapa } from "./etapa-desde-reunion";
+import { citaEstaEnElTexto, citasDeLasSenalesDeEtapa, etapasQueSePuedenDetectar, leerRespuestaDeEtapa, pedidoDeEtapa, textoDeLasSenalesDeEtapa } from "./etapa-desde-reunion";
 
 const CS = resolvePipeline("826270797")!;
 const HANDOFF = "1225193551";
@@ -172,5 +172,32 @@ describe("la escritura en HubSpot pasa solo por la encuesta", () => {
   it("mover la etapa borra la pregunta, sin que la ruta escriba en Project", () => {
     const src = leer("app/api/projects/[projectId]/estado-hubspot/route.ts");
     expect(src).toContain("cerrarSugerenciaDeEtapa(projectId)");
+  });
+});
+
+describe("la etapa desde los hechos (memoria de la cuenta, etapa 6): sin releer la reunión", () => {
+  const senal = { frase: "Se presentó el diagnóstico al cliente", cita: "Hoy les presentamos el diagnóstico completo" };
+  it("el texto lleva cada señal con su frase literal y el resumen de la minuta, marcado como contexto", () => {
+    const t = textoDeLasSenalesDeEtapa([senal], "Se revisaron las prioridades.");
+    expect(t).toContain("- Se presentó el diagnóstico al cliente\n  Lo que se dijo, tal cual: «Hoy les presentamos el diagnóstico completo»");
+    expect(t).toContain("Resumen de la reunión (lo escribió la IA: sirve de contexto, no se cita):\nSe revisaron las prioridades.");
+    expect(textoDeLasSenalesDeEtapa([senal], null)).not.toContain("Resumen de la reunión");
+    expect(citasDeLasSenalesDeEtapa([senal])).toEqual([senal.cita]);
+  });
+  it("la cita vale solo si está en la cita literal de una señal: una sacada de la frase o del resumen (escritos por la IA) no pasa", () => {
+    const resumen = "El equipo presentó el diagnóstico y el cliente quedó conforme con el plan de trabajo.";
+    const texto = textoDeLasSenalesDeEtapa([senal], resumen);
+    const respuesta = (input: Record<string, unknown>) => ({ content: [{ type: "tool_use" as const, id: "t", name: "decidir_etapa", input, caller: undefined }] });
+    const ctx = { def: CS, actualStageId: EXPLORACION, texto, soloEstasCitas: citasDeLasSenalesDeEtapa([senal]) };
+    expect(leerRespuestaDeEtapa(respuesta({ mover: true, etapa: DIAGNOSTICO, cita: "les presentamos el diagnóstico completo", motivo: "Se presentó." }) as never, ctx)?.stageId).toBe(DIAGNOSTICO);
+    expect(leerRespuestaDeEtapa(respuesta({ mover: true, etapa: DIAGNOSTICO, cita: "ya configuramos todos los pipelines", motivo: "x" }) as never, ctx)).toBeNull();
+    // Del resumen de la minuta o de la frase de la señal: están en el texto, pero no son lo que se dijo.
+    expect(leerRespuestaDeEtapa(respuesta({ mover: true, etapa: DIAGNOSTICO, cita: "el cliente quedó conforme con el plan", motivo: "x" }) as never, ctx)).toBeNull();
+    expect(leerRespuestaDeEtapa(respuesta({ mover: true, etapa: DIAGNOSTICO, cita: "Se presentó el diagnóstico al cliente", motivo: "x" }) as never, ctx)).toBeNull();
+  });
+  it("el detector acepta el texto en vez de releer la reunión, y entonces verifica solo contra las citas (sin citas, ninguna pasa)", () => {
+    const src = readFileSync(join(__dirname, "etapa-desde-reunion-server.ts"), "utf8");
+    expect(src).toContain("opts.texto?.trim()");
+    expect(src).toContain("soloEstasCitas: opts.citas ?? []");
   });
 });

@@ -9,6 +9,7 @@
  * servidor. Los pedidos salen EN FILA, cada uno con la versión que dejó el anterior: dos clics
  * seguidos no se pisan entre sí ni se toman por un conflicto con otra persona.
  */
+import type { Marco } from "@/lib/exploraciones/marco";
 import { createContext, useContext } from "react";
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import type { Letra } from "@/lib/escala/documento/tipos";
@@ -28,6 +29,12 @@ export interface OpcionesDeCambio {
 
 export interface Lienzo {
   exp: ExploracionParaLaPantalla;
+  /**
+   * Qué se explora (lib/exploraciones/marco.ts): la arquitectura de la venta en la preventa, la
+   * estrategia del cliente en la exploración de un proyecto (Customer Success). Decide las tarjetas, sus
+   * nombres y sus preguntas; todo lo demás es el mismo lienzo.
+   */
+  marco: Marco;
   escala: EscalaDelLienzo;
   /** El chequeo de lo confirmado CON EVIDENCIA: lo que leen la propuesta, el handoff y «lista para proponer». */
   chequeo: ResultadoDelChequeo;
@@ -77,11 +84,27 @@ export interface Lienzo {
    */
   sesion: {
     elegida: string | null;
+    /** Elige una sesión: sale de la página de inicio. */
     elegir: (clave: string) => void;
     momentos: Readonly<Record<string, MomentoDeLaSesion>>;
     ponerMomento: (clave: string, m: MomentoDeLaSesion) => void;
+    /**
+     * La página de inicio de Exploración (etapa A, diseño v13): la próxima sesión, las sesiones con su
+     * reunión, «+ Agregar sesión», las fuentes manuales y las instrucciones. Al entrar a la pieza se
+     * arranca acá, salvo con `?sesion=<id>` en la dirección.
+     */
+    enInicio: boolean;
+    irAlInicio: () => void;
+    /** Abre el selector de «Agregar sesión» (BuscarReunionesDeLaPreventa): una sesión nueva o unir una que ya está. */
+    buscarReunion: (modo: ModoDelSelector) => void;
   };
 }
+
+/**
+ * Para qué se abre el selector de reuniones: agregar una sesión nueva (las agendadas, las que ya pasaron
+ * o todo; `elegir` abre la sesión al agregarla) o unir una sesión que ya está a su reunión.
+ */
+export type ModoDelSelector = { tipo: "nueva"; ver?: "agendadas" | "pasadas"; elegir?: boolean } | { tipo: "unir"; sesionId: string };
 
 /** Antes (la guía), durante (las notas del vendedor) y después (la reunión y lo que salió). */
 export type MomentoDeLaSesion = "antes" | "durante" | "despues";

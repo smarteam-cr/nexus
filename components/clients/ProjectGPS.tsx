@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Alert, Modal } from "@/components/ui";
+import { Alert, ListSkeleton, Modal } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonEnlace, FranjaDeSugerencias, QueSigue } from "@/components/ui/sistema";
 import MinuteDialog from "./MinuteDialog";
 import ActionItemsDialog from "./ActionItemsDialog";
@@ -23,10 +23,11 @@ import { porQueEstaAca, queSigueDelProyecto, restoDeLosPendientes } from "@/lib/
 import type { EtapaEnHubspot } from "@/lib/projects/etapa-sugerida";
 import { useMe } from "@/hooks/useMe";
 import EncuestaDeEtapa from "./EncuestaDeEtapa";
+import type { TareasDelProyectoDatos, TareaVista } from "@/lib/tareas/tipos";
 
 
 export interface PendingItem {
-  id?: string;             // ActionItem.id (nuevo) — undefined si viene del Json viejo
+  id?: string;             // Tarea.id (desde la etapa 2 de la memoria de la cuenta; antes, ActionItem.id)
   text: string;
   done: boolean;
   source?: string;
@@ -41,6 +42,65 @@ export interface PendingItem {
   deletedAt?: string | null; // ISO — set si la tarea fue borrada (soft-delete) → Histórico
   sessionId?: string | null;
   sessionTitle?: string | null;
+  /* Lo de Tareas (memoria de la cuenta, etapa 2): la versión para el PATCH y lo que quien mira puede hacer con ella. */
+  version?: number;
+  /** Una propuesta: espera que la decida quien la recibe, en Mis tareas. */
+  porDecidir?: boolean;
+  puedeTerminar?: boolean;
+  puedeReabrir?: boolean;
+  /** Pasarla a «Ya no se hará» (nada se borra). */
+  puedeSacar?: boolean;
+  /** Está en «Ya no se hará». */
+  noSeHara?: boolean;
+  /** Dónde se abre: Mis tareas, con la tarea abierta. */
+  href?: string;
+}
+
+/** Lo que el panel guarda de /api/tareas/del-proyecto, ya en la forma de la lista. */
+interface PendientesDelProyecto {
+  recientes: PendingItem[];
+  recientesTotal: number;
+  abiertas: PendingItem[];
+  abiertasTotal: number;
+  historial: PendingItem[];
+}
+
+/** El motivo de «Ya no se hará» cuando se saca desde la lista del proyecto: Tareas lo pide siempre. */
+const MOTIVO_AL_SACAR = "Se sacó de los pendientes del proyecto.";
+
+/** Una tarea en la forma de la lista de pendientes (la misma lista y el mismo diálogo de antes, sin rediseño). */
+function aPendiente(t: TareaVista): PendingItem {
+  return {
+    id: t.id,
+    text: t.titulo,
+    done: t.estado === "hecha",
+    ownerEmail: null,
+    ladoResponsable: null,
+    responsableNombre: t.responsable?.nombre ?? "Por asignar",
+    // `venceEl` es un día (AAAA-MM-DD): al mediodía local, para que el «para el 14 oct» no se corra un día en Costa Rica.
+    dueDate: t.venceEl ? `${t.venceEl}T12:00:00` : null,
+    status: t.estado === "hecha" ? "DONE" : t.estado === "en_curso" ? "IN_PROGRESS" : "PENDING",
+    deletedAt: null,
+    sessionId: null,
+    sessionTitle: null,
+    version: t.version,
+    porDecidir: t.estado === "propuesta",
+    puedeTerminar: t.acciones.terminar,
+    puedeReabrir: t.acciones.reabrir,
+    puedeSacar: t.acciones.noSeHara,
+    noSeHara: t.estado === "no_se_hara",
+    href: `/tareas?t=${encodeURIComponent(t.id)}`,
+  };
+}
+
+function aPendientesDelProyecto(d: TareasDelProyectoDatos): PendientesDelProyecto {
+  return {
+    recientes: d.recientes.map(aPendiente),
+    recientesTotal: d.recientesTotal,
+    abiertas: d.abiertas.map(aPendiente),
+    abiertasTotal: d.abiertasTotal,
+    historial: d.historial.map(aPendiente),
+  };
 }
 
 interface NextSessionInfo {
@@ -100,6 +160,7 @@ interface GPSData {
   nextSessionDate: string | null;
   nextSessionNote: string | null;
   lastSessionSummary: string | null;
+  /** DEPRECATED — viene vacío: los pendientes son tareas y se piden a /api/tareas/del-proyecto. */
   pendingItems: PendingItem[];
   currentState: string | null;
 
@@ -120,7 +181,6 @@ interface GPSData {
   /** D-08: % de reuniones del cliente con transcripción (últimos 90 días). Ausente en respuestas viejas. */
   coberturaDelCliente?: CoberturaDelCliente | null;
   projectInfo?: ProjectInfo;
-  historyItems?: PendingItem[]; // tareas hechas o borradas (tab Histórico del modal)
   setup?: SetupSignals; // #5 — qué canvas tiene generados el proyecto (indicador del widget)
   /**
    * Los CANVAS del proyecto, ya filtrados por lo que le corresponde (`piezaAplica`) y con su
@@ -162,14 +222,6 @@ interface GPSData {
    * bloque no aparece en vez de romper.
    */
   brief?: BriefDeProyecto | null;
-  /** Lo abierto de las últimas 4 semanas, vencido primero (2026-10-04). Ausente en respuestas
-   *  cacheadas viejas: ahí se cae a los abiertos de siempre. */
-  pendientesRecientes?: PendingItem[];
-  /** Cuántos abiertos son de las últimas 4 semanas (el panel muestra hasta 5). Ausente en
-   *  respuestas cacheadas viejas: ahí se dice «y N más» sin decir de cuándo. */
-  pendientesRecientesTotal?: number;
-  /** Cuántos abiertos hay en total, para el «y N más». */
-  pendientesAbiertos?: number;
   /**
    * La encuesta de la etapa (lib/projects/etapa-sugerida.ts): las etapas que se pueden elegir, la
    * sugerencia de una reunión si sigue en pie, y por qué no se puede mover desde Nexus. Ausente en
@@ -207,6 +259,42 @@ type SetupSignals = {
 };
 
 
+/** Lo que devuelve un pedido del widget: los datos, o el error ya en palabras para la pantalla. */
+type Respuesta<T> = { ok: true; datos: T } | { ok: false; error: string };
+
+/** Pide el GPS del proyecto SIN tocar el estado: quien lo llama aplica la respuesta (ver los efectos del widget). */
+async function pedirGPS(projectId: string): Promise<Respuesta<GPSData>> {
+  try {
+    const res = await fetch(`/api/projects/${projectId}/gps`);
+    if (!res.ok) {
+      let detail = `Error ${res.status}`;
+      try {
+        const text = await res.text();
+        const parsed = (() => { try { return JSON.parse(text); } catch { return null; } })();
+        if (parsed?.error) detail = parsed.error;
+      } catch { /* ignore */ }
+      return { ok: false, error: detail };
+    }
+    return { ok: true, datos: (await res.json()) as GPSData };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error de red" };
+  }
+}
+
+/** Pide los pendientes (tareas) del proyecto SIN tocar el estado. */
+async function pedirPendientes(projectId: string): Promise<Respuesta<PendientesDelProyecto>> {
+  try {
+    const res = await fetch(`/api/tareas/del-proyecto/${encodeURIComponent(projectId)}`);
+    const j = (await res.json().catch(() => null)) as (TareasDelProyectoDatos & { error?: string }) | null;
+    if (!res.ok || !j) {
+      return { ok: false, error: j?.error ?? `No se pudieron cargar los pendientes (error ${res.status}).` };
+    }
+    return { ok: true, datos: aPendientesDelProyecto(j) };
+  } catch {
+    return { ok: false, error: "No se pudieron cargar los pendientes. Revisa tu conexión." };
+  }
+}
+
 export default function ProjectGPS({ projectId, clientId }: { projectId: string; clientId: string }) {
   // Inicializa desde el cache de módulo → al remontar (cambio de tab) renderiza al
   // instante, sin recarga. (Ver lib/clients/gps-cache.ts)
@@ -226,42 +314,69 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   const puedeMoverLaEtapa = me?.permissions?.sections?.proyectos?.cambiarEstadoHubspot === true;
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const fetchGPS = useCallback(async () => {
-    setError(null);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/gps`);
-      if (!res.ok) {
-        let detail = `Error ${res.status}`;
-        try {
-          const text = await res.text();
-          const parsed = (() => { try { return JSON.parse(text); } catch { return null; } })();
-          if (parsed?.error) detail = parsed.error;
-        } catch { /* ignore */ }
-        setError(detail);
-        return;
-      }
-      const d = await res.json();
-      setData(d);
-      writeGpsCache(projectId, d);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error de red");
+  const aplicarGPS = useCallback((r: Respuesta<GPSData>) => {
+    if (!r.ok) {
+      setError(r.error);
+      return;
     }
+    setError(null);
+    setData(r.datos);
+    writeGpsCache(projectId, r.datos);
   }, [projectId]);
+
+  /** Para los botones («Reintentar», el resumen, la encuesta): piden y aplican de una. */
+  const fetchGPS = useCallback(async () => aplicarGPS(await pedirGPS(projectId)), [projectId, aplicarGPS]);
+
+  /* Los PENDIENTES del proyecto son tareas (memoria de la cuenta, etapa 2: `ActionItem` se retiró). Se piden aparte, a
+     /api/tareas/del-proyecto, con la regla de visibilidad de Tareas; el mismo caché de módulo que el GPS, con su clave. */
+  const claveDePendientes = `tareas:${projectId}`;
+  const [pendientes, setPendientes] = useState<PendientesDelProyecto | null>(() => readGpsCache<PendientesDelProyecto>(claveDePendientes)?.data ?? null);
+  const [errorDePendientes, setErrorDePendientes] = useState<string | null>(null);
+
+  const aplicarPendientes = useCallback((r: Respuesta<PendientesDelProyecto>) => {
+    if (!r.ok) {
+      setErrorDePendientes(r.error);
+      return;
+    }
+    setErrorDePendientes(null);
+    setPendientes(r.datos);
+    writeGpsCache(claveDePendientes, r.datos);
+  }, [claveDePendientes]);
+
+  const fetchPendientes = useCallback(
+    async () => aplicarPendientes(await pedirPendientes(projectId)),
+    [projectId, aplicarPendientes],
+  );
+
+  /* Los dos efectos piden afuera (pedirGPS / pedirPendientes) y aplican la respuesta en el callback del `.then`, no en
+     su cuerpo: llamar acá a una función que hace setState es lo que marca react-hooks/set-state-in-effect. Con
+     `vigente`, la respuesta de un proyecto que ya se dejó (o de una señal vieja) no pisa la pantalla del actual. */
 
   // Montaje: SOLO fetch si NO hay cache → cambiar de tab o entrar a otro canvas
   // (kickoff, cronograma…) no recarga el widget. El refresh real lo dispara
   // gpsRefreshSignal (sesión nueva detectada por el auto-sync de Meet).
   useEffect(() => {
-    if (!readGpsCache<GPSData>(projectId)) fetchGPS();
-  }, [projectId, fetchGPS]);
+    let vigente = true;
+    if (!readGpsCache<GPSData>(projectId)) {
+      void pedirGPS(projectId).then((r) => { if (vigente) aplicarGPS(r); });
+    }
+    if (!readGpsCache<PendientesDelProyecto>(claveDePendientes)) {
+      void pedirPendientes(projectId).then((r) => { if (vigente) aplicarPendientes(r); });
+    }
+    return () => { vigente = false; };
+  }, [projectId, claveDePendientes, aplicarGPS, aplicarPendientes]);
 
   // Sesión nueva detectada (auto-sync de Meet bumpea la señal) → refetch forzado.
   const firstSignalRef = useRef(true);
   useEffect(() => {
     if (firstSignalRef.current) { firstSignalRef.current = false; return; }
     invalidateGps(projectId);
-    fetchGPS();
-  }, [gpsRefreshSignal, projectId, fetchGPS]);
+    invalidateGps(claveDePendientes);
+    let vigente = true;
+    void pedirGPS(projectId).then((r) => { if (vigente) aplicarGPS(r); });
+    void pedirPendientes(projectId).then((r) => { if (vigente) aplicarPendientes(r); });
+    return () => { vigente = false; };
+  }, [gpsRefreshSignal, projectId, claveDePendientes, aplicarGPS, aplicarPendientes]);
 
   const saveField = useCallback(async (field: string, value: unknown) => {
     try {
@@ -333,105 +448,103 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   }, [projectId, debouncedSave]);
 
   // ── Mutaciones de pendientes (compartidas con el dialog) ──────────────────────
-  // Modelo de dos listas: pendingItems = SOLO abiertas; historyItems = hechas o
-  // borradas. Las mutaciones MUEVEN el item entre listas (por id), así el tab
-  // Pendientes y el tab Histórico del modal se alimentan directo sin filtrar.
-  const patchDone = useCallback((id: string, done: boolean) => {
-    fetch(`/api/action-items/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ done }),
-    }).catch(() => fetchGPS());
-  }, [fetchGPS]);
+  // Son TAREAS: cada cambio va por las rutas de Tareas (el único escritor), con la versión que se leyó. La lista se mueve
+  // al instante (optimista) y después se vuelve a pedir: lo que diga el servidor manda (un 409, un permiso que cambió).
+  const cambiarPendientes = useCallback((fn: (p: PendientesDelProyecto) => PendientesDelProyecto) => {
+    setPendientes((cur) => {
+      if (!cur) return cur;
+      const next = fn(cur);
+      writeGpsCache(claveDePendientes, next);
+      return next;
+    });
+  }, [claveDePendientes]);
+
+  const buscarPendiente = useCallback((id: string): PendingItem | null => {
+    const p = pendientes;
+    if (!p) return null;
+    return p.abiertas.find((i) => i.id === id) ?? p.recientes.find((i) => i.id === id) ?? p.historial.find((i) => i.id === id) ?? null;
+  }, [pendientes]);
+
+  const patchEstado = useCallback(async (item: PendingItem, hacia: "hecha" | "pendiente" | "no_se_hara", motivo?: string) => {
+    try {
+      const res = await fetch(`/api/tareas/${encodeURIComponent(item.id!)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion: "estado", version: item.version ?? 0, hacia, ...(motivo ? { motivo } : {}) }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        toast.error(j?.error ?? "No se pudo guardar el cambio.");
+      }
+    } catch {
+      toast.error("No se pudo guardar el cambio. Revisa tu conexión.");
+    }
+    void fetchPendientes();
+  }, [fetchPendientes, toast]);
+
+  /** Saca una tarea de lo abierto (lista reciente y diálogo) y la pone arriba del histórico. */
+  const alHistorial = useCallback((id: string, movida: PendingItem) => {
+    cambiarPendientes((cur) => {
+      const enRecientes = cur.recientes.some((i) => i.id === id);
+      return {
+        recientes: cur.recientes.filter((i) => i.id !== id),
+        recientesTotal: Math.max(0, cur.recientesTotal - (enRecientes ? 1 : 0)),
+        abiertas: cur.abiertas.filter((i) => i.id !== id),
+        abiertasTotal: Math.max(0, cur.abiertasTotal - 1),
+        historial: [movida, ...cur.historial.filter((i) => i.id !== id)],
+      };
+    });
+  }, [cambiarPendientes]);
 
   // Marcar una pendiente como hecha → sale de Pendientes y pasa al Histórico.
   const toggleItem = useCallback(async (id: string) => {
-    setData((cur) => {
-      if (!cur) return cur;
-      const pIdx = cur.pendingItems.findIndex((i) => i.id === id);
-      if (pIdx === -1) return cur;
-      const item = cur.pendingItems[pIdx];
-      const moved: PendingItem = { ...item, done: true, status: "DONE" };
-      const next = {
-        ...cur,
-        pendingItems: cur.pendingItems.filter((_, i) => i !== pIdx),
-        historyItems: [moved, ...(cur.historyItems ?? [])],
-      };
-      writeGpsCache(projectId, next);
-      if (item.id) patchDone(item.id, true);
-      return next;
-    });
-  }, [projectId, patchDone]);
+    const item = buscarPendiente(id);
+    if (!item?.id || !item.puedeTerminar) return;
+    alHistorial(id, { ...item, done: true, status: "DONE", puedeTerminar: false, puedeSacar: false, puedeReabrir: true });
+    await patchEstado(item, "hecha");
+  }, [buscarPendiente, alHistorial, patchEstado]);
 
-  // Restaurar desde el Histórico (hecha o borrada) → vuelve a Pendientes.
+  // Restaurar desde el Histórico (hecha o «ya no se hará») → vuelve a Pendientes.
   const restoreItem = useCallback(async (id: string) => {
-    setData((cur) => {
-      if (!cur) return cur;
-      const history = cur.historyItems ?? [];
-      const hIdx = history.findIndex((i) => i.id === id);
-      if (hIdx === -1) return cur;
-      const item = history[hIdx];
-      const restored: PendingItem = { ...item, done: false, status: "PENDING", deletedAt: null };
-      const next = {
-        ...cur,
-        historyItems: history.filter((_, i) => i !== hIdx),
-        pendingItems: [...cur.pendingItems, restored],
-      };
-      writeGpsCache(projectId, next);
-      if (item.id) {
-        fetch(`/api/action-items/${item.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ done: false, deletedAt: null }),
-        }).catch(() => fetchGPS());
-      }
-      return next;
-    });
-  }, [projectId, fetchGPS]);
+    const item = buscarPendiente(id);
+    if (!item?.id || !item.puedeReabrir) return;
+    const restaurada: PendingItem = { ...item, done: false, status: "PENDING", noSeHara: false, puedeReabrir: false, puedeTerminar: true, puedeSacar: true };
+    cambiarPendientes((cur) => ({
+      ...cur,
+      historial: cur.historial.filter((i) => i.id !== id),
+      abiertas: [...cur.abiertas, restaurada],
+      abiertasTotal: cur.abiertasTotal + 1,
+    }));
+    await patchEstado(item, "pendiente");
+  }, [buscarPendiente, cambiarPendientes, patchEstado]);
 
+  // Agregar = una tarea tuya de este proyecto, sin semana (un pendiente del proyecto). Por la ruta de Mis tareas.
   const addItem = useCallback(async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const res = await fetch(`/api/action-items`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: trimmed, clientId, projectId, source: "manual" }),
-    });
-    if (res.ok) {
-      const created = await res.json();
-      setData((cur) => {
-        if (!cur) return cur;
-        const newItem: PendingItem = {
-          id: created.id, text: trimmed, done: false, source: "manual",
-          ownerEmail: null, dueDate: null, status: "PENDING", sessionId: null, sessionTitle: null,
-        };
-        const next = { ...cur, pendingItems: [...cur.pendingItems, newItem] };
-        writeGpsCache(projectId, next);
-        return next;
+    const titulo = text.trim();
+    if (!titulo) return;
+    try {
+      const res = await fetch(`/api/tareas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ titulo, clientId, projectId, cuando: "sin_semana" }),
       });
-    }
-  }, [clientId, projectId]);
-
-  // Borrar = soft-delete: sale de Pendientes y pasa al Histórico (no se elimina).
-  const removeItem = useCallback(async (id: string) => {
-    setData((cur) => {
-      if (!cur) return cur;
-      const pIdx = cur.pendingItems.findIndex((i) => i.id === id);
-      if (pIdx === -1) return cur;
-      const item = cur.pendingItems[pIdx];
-      const deleted: PendingItem = { ...item, deletedAt: new Date().toISOString() };
-      const next = {
-        ...cur,
-        pendingItems: cur.pendingItems.filter((_, i) => i !== pIdx),
-        historyItems: [deleted, ...(cur.historyItems ?? [])],
-      };
-      writeGpsCache(projectId, next);
-      if (item.id) {
-        fetch(`/api/action-items/${item.id}`, { method: "DELETE" }).catch(() => fetchGPS());
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        toast.error(j?.error ?? "No se pudo agregar el pendiente.");
       }
-      return next;
-    });
-  }, [projectId, fetchGPS]);
+    } catch {
+      toast.error("No se pudo agregar el pendiente. Revisa tu conexión.");
+    }
+    void fetchPendientes();
+  }, [clientId, projectId, toast, fetchPendientes]);
+
+  // Sacar = «Ya no se hará» (nada se borra): sale de Pendientes y pasa al Histórico.
+  const removeItem = useCallback(async (id: string) => {
+    const item = buscarPendiente(id);
+    if (!item?.id || !item.puedeSacar) return;
+    alHistorial(id, { ...item, noSeHara: true, puedeTerminar: false, puedeSacar: false, puedeReabrir: true });
+    await patchEstado(item, "no_se_hara", MOTIVO_AL_SACAR);
+  }, [buscarPendiente, alHistorial, patchEstado]);
 
   // ── Lo que el Resumen le cuenta al panel del proyecto ────────────────────────
   // Se calcula ANTES de los early-returns: los hooks no pueden quedar detrás de un `if`.
@@ -571,12 +684,11 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   const lineas = porQueEstaAca(etapa);
   const encuesta = data.etapaHubspot ?? null;
 
-  // Pendientes: lo reciente (decisión del 2026-10-04). Respuestas cacheadas viejas no traen el
-  // campo: ahí se cae a los abiertos de siempre.
-  const recientes = data.pendientesRecientes ?? data.pendingItems.filter((i) => !i.done).slice(0, 5);
-  const abiertosTotal = data.pendientesAbiertos ?? data.pendingItems.filter((i) => !i.done).length;
+  // Pendientes: lo reciente (decisión del 2026-10-04), de Tareas desde la etapa 2 de la memoria de la cuenta.
+  const recientes = pendientes?.recientes ?? [];
+  const abiertosTotal = pendientes?.abiertasTotal ?? 0;
   // Lo que no se muestra, separado en recientes que no entraron y anteriores (no todo es «antiguo»).
-  const recientesTotal = data.pendientesRecientes ? (data.pendientesRecientesTotal ?? null) : null;
+  const recientesTotal = pendientes ? pendientes.recientesTotal : null;
   const resto = restoDeLosPendientes({ mostrados: recientes.length, recientes: recientesTotal, abiertos: abiertosTotal });
 
   const rotulo = "text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-fg-muted";
@@ -706,6 +818,9 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     }
     if (a.tipo === "sesiones") return <BotonAzul onClick={() => setSesionesAbiertas(true)}>Revisar las reuniones</BotonAzul>;
     if (a.tipo === "etapa") return <BotonAzul onClick={() => setEncuestaAbierta(true)}>Responder la pregunta</BotonAzul>;
+    if (a.tipo === "novedades") {
+      return <BotonAzul onClick={() => (resumenCtx.abrirNovedades ?? resumenCtx.abrirPieza)(a.slug)}>Revisar las novedades de «{a.etiqueta}» →</BotonAzul>;
+    }
     return undefined;
   })();
 
@@ -740,14 +855,21 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
         )}
       </section>
 
-      <section className="flex flex-col gap-2.5">
+      <section className="flex flex-col gap-2.5" data-recorrido="ficha.pendientes">
         <div className="flex items-baseline justify-between">
           <span className={rotulo}>Pendientes recientes · {recientesTotal ?? recientes.length}</span>
           <button onClick={() => setItemsDialogOpen(true)} className="text-[11px] text-brand hover:text-brand-light">
             {abiertosTotal > 0 ? `Ver los ${abiertosTotal}` : "Ver el histórico"}
           </button>
         </div>
-        {recientes.length > 0 ? (
+        {!pendientes && errorDePendientes ? (
+          <p className="text-[13px] text-fg-muted">
+            {errorDePendientes}{" "}
+            <BotonEnlace onClick={() => void fetchPendientes()}>Reintentar</BotonEnlace>
+          </p>
+        ) : !pendientes ? (
+          <ListSkeleton rows={2} compact />
+        ) : recientes.length > 0 ? (
           <div className="divide-y divide-line rounded-xl border border-line bg-surface px-3">
             {recientes.map((item) => {
               const vence = item.dueDate ? new Date(item.dueDate) : null;
@@ -755,16 +877,26 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
               const quien = item.responsableNombre ?? item.ladoResponsable ?? item.ownerEmail ?? null;
               return (
                 <label key={item.id ?? item.text} className="flex items-start gap-2 py-2">
-                  <input
-                    type="checkbox"
-                    aria-label="Marcar como hecho"
-                    className="mt-[3px]"
-                    onChange={() => item.id && toggleItem(item.id)}
-                  />
+                  {item.puedeTerminar ? (
+                    <input
+                      type="checkbox"
+                      aria-label="Marcar como hecho"
+                      className="mt-[3px]"
+                      onChange={() => item.id && toggleItem(item.id)}
+                    />
+                  ) : (
+                    // Una propuesta la decide quien la recibe, y la tarea de otra persona la marca ella: sin casilla.
+                    <span className="mt-[3px] w-[13px] flex-shrink-0" aria-hidden="true" />
+                  )}
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <span className="text-[13px] text-fg">{item.text}</span>
                     <span className="text-xs text-fg-muted">
                       {[
+                        item.porDecidir && item.href ? (
+                          <a key="decidir" href={item.href} className="text-brand hover:text-brand-light" title="Se decide en Mis tareas">
+                            Por decidir
+                          </a>
+                        ) : null,
                         quien,
                         vence ? (
                           <span key="vence" className={vencido ? "text-warn-ink" : undefined}>
@@ -952,8 +1084,8 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
       <ActionItemsDialog
         open={itemsDialogOpen}
         onClose={() => setItemsDialogOpen(false)}
-        items={data.pendingItems}
-        history={data.historyItems ?? []}
+        items={pendientes?.abiertas ?? []}
+        history={pendientes?.historial ?? []}
         onToggle={toggleItem}
         onAdd={addItem}
         onRemove={removeItem}

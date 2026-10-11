@@ -65,25 +65,51 @@ describe("los pedidos fuera de alcance", () => {
   });
 });
 
-describe("el análisis post-sesión los detecta y los guarda", () => {
+describe("los campos de la lectura de seguimiento (memoria de la cuenta, etapa 2)", () => {
+  it("cada lado lleva lo suyo: el correo solo en lo de Smarteam, el título de seguimiento solo en lo del cliente", () => {
+    const [cliente, smarteam] = leerCompromisos([
+      { quien: "CLIENTE", que: "Enviar la base", ownerEmail: "x@smarteamcr.com", tituloDeSeguimiento: "Recordarle a Ana que envíe la base", frenaElPlan: true },
+      { quien: "SMARTEAM", que: "Mandar el tablero", ownerEmail: "Lidia@SmarteamCR.com", tituloDeSeguimiento: "No va" },
+    ]);
+    expect(cliente).toMatchObject({ ownerEmail: null, tituloDeSeguimiento: "Recordarle a Ana que envíe la base", frenaElPlan: true });
+    expect(smarteam).toMatchObject({ ownerEmail: "lidia@smarteamcr.com", tituloDeSeguimiento: null, frenaElPlan: false });
+  });
+});
+
+/* ACTUALIZADA (2026-10-10, memoria de la cuenta, etapa 2): el post-proceso pasó a ser la lectura de seguimiento. Los
+   compromisos ya no son ActionItem (DEPRECATED): van a propuestas de Tarea por el escritor de Tareas, y la cita se
+   verifica contra lo que se mandó (lib/sessions/lectura-salida.ts). La adenda de este archivo queda para la copia
+   congelada (post-process-viejo.ts); la lectura nueva pide lo mismo por una herramienta. */
+describe("la lectura de seguimiento los detecta y los guarda", () => {
   const src = fs.readFileSync(path.join(process.cwd(), "lib/sessions/post-process.ts"), "utf8");
 
-  it("la adenda se suma al prompt (vive en código: no depende de re-sembrar)", () => {
-    expect(src).toContain("ADENDA_COMPROMISOS_Y_ALCANCE");
+  it("los pide por la herramienta (vive en código: no depende de re-sembrar), sin la regex de antes", () => {
+    expect(src).toContain("adendaDeLaHerramienta(");
+    expect(src).toContain("tool_choice: { type: \"tool\", name: HERRAMIENTA_DE_LA_LECTURA }");
+    expect(src).not.toMatch(/rawText\.match\(/);
   });
 
-  it("los compromisos van a ActionItem con quién se comprometió", () => {
-    expect(src).toContain("leerCompromisos(parsed.compromisos)");
-    expect(src).toContain("ladoResponsable: c.quien");
+  it("la cita se verifica y los compromisos van a propuestas de Tarea, nunca a ActionItem", () => {
+    expect(src).toContain("verificarCitas(salidaCruda, fuenteDeLasCitas(transcript, overview))");
+    expect(src).toContain("escribirSalidaDeSeguimiento(");
+    expect(src).not.toMatch(/\.actionItem\.(create|createMany|upsert)\(/);
   });
 
-  it("los pedidos van a PedidoFueraDeAlcance y nunca pisan una decisión del CSE", () => {
-    expect(src).toContain("leerPedidosFueraDeAlcance(parsed.fueraDeAlcance)");
+  it("los pedidos van a PedidoFueraDeAlcance solo en un cliente con proyecto, y nunca pisan una decisión del CSE", () => {
+    expect(src).toContain("const pideFueraDeAlcance = ruta === \"completa\" && !!project;");
+    expect(src).toContain("for (const pf of salida.fueraDeAlcance)");
     expect(src).toContain("} else if (!previo.decididoAt) {");
   });
 
   it("la reunión se fecha en hora de Costa Rica, no en UTC", () => {
     expect(src).toContain("fechaLocalDeLaReunion(session.date)");
     expect(src).not.toContain("session.date.toISOString().slice(0, 10)");
+  });
+
+  it("la copia congelada (el retroceso) sigue con la adenda y su destino de siempre", () => {
+    const viejo = fs.readFileSync(path.join(process.cwd(), "lib/sessions/post-process-viejo.ts"), "utf8");
+    expect(viejo).toContain("ADENDA_COMPROMISOS_Y_ALCANCE");
+    expect(viejo).toContain("leerCompromisos(parsed.compromisos)");
+    expect(viejo).toContain("export async function postProcessSessionViejo(");
   });
 });

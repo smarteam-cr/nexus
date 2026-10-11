@@ -22,6 +22,8 @@ import {
   huecosDelResumen,
   loQueTraes,
   nombreDeLaPestana,
+  tituloAGuardar,
+  tituloDeLaSesion,
   OBJECIONES_DE_BASE,
   ordenDeLaConversacion,
   paraDeUnAbierto,
@@ -36,7 +38,14 @@ import {
   sesionHecha,
   estadoDeLaSesion,
   TIPOS_DE_OBJECION,
+  avisoDeLasSesiones,
+  clavesDeLasSesiones,
+  estadoDeLaReunionDeLaSesion,
+  lecturasDeLaExploracion,
+  reunionesFueraDeLaExploracion,
+  TEXTO_DEL_ESTADO_DE_LA_REUNION,
   type ReunionDeLaExploracion,
+  type SesionPlaneada,
 } from "./guia";
 import { contextoDeLaGuia, herramientaDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia, voseoEnLaGuia, type ContextoDeLaGuia } from "./guia-pedido";
 import type { PosicionEnElMapa } from "./mapa";
@@ -132,8 +141,10 @@ describe("las sesiones", () => {
   it("sin sesiones planeadas, la próxima es la agendada en HubSpot", () => {
     expect(proximaReunion([], [{ titulo: "Revisión", inicio: "2026-10-02T14:00:00.000Z" }], HOY)).toMatchObject({ numero: 1, desde: "hubspot", titulo: "Revisión" });
     expect(proximaReunion([], [], HOY)).toMatchObject({ numero: 1, desde: null });
-    // Ya se leyeron dos reuniones aunque nadie las planeó en el lienzo: la próxima es la tercera.
-    expect(proximaReunion([], [], HOY, 2)).toMatchObject({ numero: 3 });
+    // Etapa A: las lecturas del agente ya no inflan el número (el número suelto de antes se ignora)…
+    expect(proximaReunion([], [], HOY, 2)).toMatchObject({ numero: 1 });
+    // …cuentan las sesiones que ya pasaron, también las que entraron solas en un prospecto.
+    expect(proximaReunion([], [], HOY, { pasadasSinSesion: 2 })).toMatchObject({ numero: 3 });
   });
 
   it("se guardan por una operación validada, y se leen dejando afuera lo que no tiene la forma", () => {
@@ -232,23 +243,39 @@ describe("una pestaña por sesión (Elías, 2026-10-03)", () => {
     { id: "d1", titulo: "Resumen del Smartflow", fecha: "2026-09-20", origen: "documento", leida: true },
   ];
 
-  it("la reunión de una sesión es la elegida a mano o la del mismo día", () => {
-    expect(reunionDeLaSesion({ id: "s-a", fecha: "2026-10-02" }, reuniones)?.id).toBe("m2");
-    expect(reunionDeLaSesion({ id: "s-a", fecha: "2026-10-02", reunion: { id: "m1", origen: "meet" } }, reuniones)?.id).toBe("m1");
+  it("la reunión de una sesión es la elegida a mano o la del mismo día, y dice cómo se ligó", () => {
+    expect(reunionDeLaSesion({ id: "s-a", fecha: "2026-10-02" }, reuniones)).toMatchObject({ reunion: { id: "m2" }, como: "fecha" });
+    expect(reunionDeLaSesion({ id: "s-a", fecha: "2026-10-02", reunion: { id: "m1", origen: "meet" } }, reuniones)).toMatchObject({ reunion: { id: "m1" }, como: "elegida" });
     expect(reunionDeLaSesion({ id: "s-a", fecha: "2026-10-05" }, reuniones)).toBeNull();
     expect(reunionDeLaSesion({ id: "s-a" }, reuniones)).toBeNull();
+    /* Lo sumado a mano se liga por la fecha solo si ese día no hay reunión (la minuta de una sesión que no
+       quedó grabada, como antes de la etapa A); si la hay, gana la reunión y lo sumado queda en «Fuentes manuales». */
+    expect(reunionDeLaSesion({ id: "s-a", fecha: "2026-09-20" }, reuniones)).toMatchObject({ reunion: { id: "d1" }, como: "fecha" });
+    const minutaDelMismoDia: ReunionDeLaExploracion = { id: "d2", titulo: "Minuta", fecha: "2026-10-02", origen: "documento", leida: true };
+    expect(reunionDeLaSesion({ id: "s-a", fecha: "2026-10-02" }, [minutaDelMismoDia, ...reuniones])).toMatchObject({ reunion: { id: "m2" }, como: "fecha" });
   });
 
-  it("las pestañas van por fecha; una reunión que no está en ninguna sesión es su propia pestaña", () => {
-    const p = pestanasDeSesiones([{ id: "s-b", fecha: "2026-10-02" }, { id: "s-c", titulo: "Sin fecha" }], reuniones, "2026-10-03");
-    // El documento de solo día es de ese día, no del anterior.
-    expect(p[0].fecha).toBe("2026-09-20");
-    expect(p.map((x) => [x.numero, x.clave, x.reunion?.id ?? null, x.hecha])).toEqual([
-      [1, "r-documento-d1", "d1", true],
-      [2, "r-meet-m1", "m1", true],
-      [3, "s-b", "m2", true],
-      [4, "s-c", null, false],
+  it("⛔ una reunión de puertas adentro no se liga sola (ni por la fecha ni por el evento); elegida a mano, sí", () => {
+    const interna: ReunionDeLaExploracion = { id: "i1", titulo: "Preparación interna", fecha: "2026-10-02T14:00:00Z", origen: "meet", leida: false, puertasAdentro: true };
+    expect(reunionDeLaSesion({ id: "s-a", fecha: "2026-10-02" }, [interna])).toBeNull();
+    const evento = { id: "e7", calendario: "eli@smarteamcr.com", inicio: "2026-10-02T14:30:00.000Z" };
+    expect(reunionDeLaSesion({ id: "s-a", evento }, [interna])).toBeNull();
+    expect(reunionDeLaSesion({ id: "s-a", reunion: { id: "i1", origen: "meet" } }, [interna])).toMatchObject({ reunion: { id: "i1" }, como: "elegida" });
+  });
+
+  it("en un prospecto las pestañas van por fecha y cada reunión que no está en una sesión entra sola (no lo sumado a mano)", () => {
+    const p = pestanasDeSesiones([{ id: "s-b", fecha: "2026-10-02" }, { id: "s-c", titulo: "Sin fecha" }], reuniones, "2026-10-03", { automaticas: true, fuera: new Set() });
+    expect(p.map((x) => [x.numero, x.clave, x.reunion?.id ?? null, x.hecha, x.ligadaPor ?? null])).toEqual([
+      [1, "r-meet-m1", "m1", true, null],
+      [2, "s-b", "m2", true, "fecha"],
+      [3, "s-c", null, false, null],
     ]);
+  });
+
+  it("en un cliente o un proyecto, una reunión que no está en una sesión no es pestaña (Noelito: ninguna «Sesión N» fantasma)", () => {
+    const p = pestanasDeSesiones([{ id: "s-b", fecha: "2026-10-02" }], reuniones, "2026-10-03");
+    expect(p.map((x) => x.clave)).toEqual(["s-b"]);
+    expect(pestanasDeSesiones([], reuniones, "2026-10-03", { automaticas: false, fuera: new Set() })).toEqual([]);
   });
 
   it("lo que se llevó de la sesión anterior llega a la guía de la próxima, primero", () => {
@@ -431,7 +458,8 @@ describe("⭐ cada sesión dice si ya ocurrió (2026-10-06)", () => {
 });
 
 describe("⭐ las sesiones se encadenan (rediseño del 2026-10-07)", () => {
-  // CreditForce: la revisión del 28 sep, la del 2 oct que se cortó a los 6 minutos y la próxima.
+  // CreditForce (un prospecto: sus reuniones entran solas como sesión): la revisión del 28 sep, la del 2 oct que se cortó a los 6 minutos y la próxima.
+  const PROSPECTO = { automaticas: true, fuera: new Set<string>() };
   const reuniones: ReunionDeLaExploracion[] = [
     { id: "m1", titulo: "Revisión de Diagnóstico de Rendimiento", fecha: "2026-09-28T15:00:00Z", origen: "meet", leida: true },
     { id: "m2", titulo: "Comenzando el camino", fecha: "2026-10-02T14:00:00Z", origen: "meet", leida: true, corta: { minutos: 6 } },
@@ -440,10 +468,15 @@ describe("⭐ las sesiones se encadenan (rediseño del 2026-10-07)", () => {
 
   it("lo llevado dice de qué sesión viene; sin el dato, de la última que dejó qué leer (no de la que se cortó)", () => {
     const sesiones = [{ id: "s-prox", explorar: [ABIERTO] }];
-    const p = pestanasDeSesiones(sesiones, reuniones, "2026-10-07");
+    const p = pestanasDeSesiones(sesiones, reuniones, "2026-10-07", PROSPECTO);
     const prox = p.find((x) => x.clave === "s-prox")!;
     expect(procedenciasDeLaSesion(prox, p).abiertos.get(ABIERTO)).toBe(1);
-    const conOrigen = pestanasDeSesiones([{ id: "s-prox", explorar: [ABIERTO], explorarDe: { [ABIERTO]: "s-dos" } }, { id: "s-dos", reunion: { id: "m2", origen: "meet" } }], reuniones, "2026-10-07");
+    const conOrigen = pestanasDeSesiones(
+      [{ id: "s-prox", explorar: [ABIERTO], explorarDe: { [ABIERTO]: "s-dos" } }, { id: "s-dos", reunion: { id: "m2", origen: "meet" } }],
+      reuniones,
+      "2026-10-07",
+      PROSPECTO,
+    );
     expect(procedenciasDeLaSesion(conOrigen.find((x) => x.clave === "s-prox")!, conOrigen).abiertos.get(ABIERTO)).toBe(2);
   });
 
@@ -452,7 +485,7 @@ describe("⭐ las sesiones se encadenan (rediseño del 2026-10-07)", () => {
       { id: "s-dos", reunion: { id: "m2", origen: "meet" as const }, resultado: "cortada" as const, pasaron: ["metas", "tiempos"] },
       { id: "s-prox" },
     ];
-    const p = pestanasDeSesiones(sesiones, reuniones, "2026-10-07");
+    const p = pestanasDeSesiones(sesiones, reuniones, "2026-10-07", PROSPECTO);
     const prox = p.find((x) => x.clave === "s-prox")!;
     const proc = procedenciasDeLaSesion(prox, p);
     expect(proc.pasaron.get("metas")).toBe(2);
@@ -491,7 +524,7 @@ describe("⭐ las sesiones se encadenan (rediseño del 2026-10-07)", () => {
       { id: "s-dos", reunion: { id: "m2", origen: "meet" as const }, resultado: "cortada" as const, pasaron: ["metas", "tiempos"] },
       { id: "s-prox", explorar: [ABIERTO] },
     ];
-    const p = pestanasDeSesiones(sesiones, reuniones, "2026-10-07");
+    const p = pestanasDeSesiones(sesiones, reuniones, "2026-10-07", PROSPECTO);
     const filas = loQueTraes(p.find((x) => x.clave === "s-prox")!, p, {
       nombreDe: (para) => ({ metas: "Metas", tiempos: "Tiempos" })[para] ?? para,
       tecnica: { reunion: "Reunión del 28 sep 2026: Revisión de Diagnóstico de Rendimiento", temas: ["Integración"] },
@@ -506,7 +539,7 @@ describe("⭐ las sesiones se encadenan (rediseño del 2026-10-07)", () => {
   });
 
   it("la que no se hizo no lleva número: las demás se cuentan sin ella", () => {
-    const p = pestanasDeSesiones([{ id: "s-dos", reunion: { id: "m2", origen: "meet" }, resultado: "noSeHizo" }, { id: "s-prox" }], reuniones, "2026-10-07");
+    const p = pestanasDeSesiones([{ id: "s-dos", reunion: { id: "m2", origen: "meet" }, resultado: "noSeHizo" }, { id: "s-prox" }], reuniones, "2026-10-07", PROSPECTO);
     expect(p.map((x) => [x.clave, x.numero, nombreDeLaPestana(x)])).toEqual([
       ["r-meet-m1", 1, "Sesión 1"],
       ["s-dos", 0, "No se hizo"],
@@ -695,5 +728,210 @@ describe("⭐ los retos de su industria van a la preparación, como hipótesis (
     const c = ctx({ suIndustria: null });
     expect((herramientaDeLaGuia(c).input_schema as { properties: Record<string, unknown> }).properties).not.toHaveProperty("retosDeLaIndustria");
     expect(leerLaGuiaDelAgente(respuesta(RETOS), c, null)?.retosDeLaIndustria).toBeUndefined();
+  });
+});
+
+describe("lo vendido en la guía de un proyecto (Elías, 2026-10-07)", () => {
+  const VENDIDO = {
+    apertura: ["Hola"],
+    preguntas: [],
+    loVendido: [
+      { tema: "Integración con el ERP", pregunta: "¿Cómo pasan hoy los pedidos del ERP a ventas?", repreguntas: ["a", "b", "c", "d"] },
+      { tema: "integración con el ERP", pregunta: "repetida", repreguntas: [] },
+      { tema: "Sales Hub", pregunta: "¿Quién va a usar el pipeline?", repreguntas: [] },
+      { tema: "", pregunta: "sin tema", repreguntas: [] },
+    ],
+    cierre: "Agendar",
+  };
+
+  it("en un proyecto se piden, se leen sin repetir el tema y se guardan", () => {
+    const c = ctx({ marco: "cs", loVendido: "• Sales Hub — lo que suele esconder: el proceso real." });
+    const props = (herramientaDeLaGuia(c).input_schema as { properties: Record<string, unknown>; required: string[] });
+    expect(props.properties).toHaveProperty("loVendido");
+    expect(props.required).toContain("loVendido");
+    expect(String(pedidoDeLaGuia(c).messages[0].content)).toContain("=== LO VENDIDO");
+    const g = leerLaGuiaDelAgente(respuesta(VENDIDO), c, null);
+    expect(g?.loVendido?.map((v) => v.tema)).toEqual(["Integración con el ERP", "Sales Hub"]);
+    expect(g?.loVendido?.[0].repreguntas).toHaveLength(3);
+    expect(g?.loVendido?.[0].id).toMatch(/^vendido:/);
+    expect(leerPropuesta({ ...propuestaVacia(), guia: g }).guia).toEqual(g);
+  });
+
+  it("en la preventa no se piden ni se aceptan", () => {
+    const c = ctx();
+    expect((herramientaDeLaGuia(c).input_schema as { properties: Record<string, unknown> }).properties).not.toHaveProperty("loVendido");
+    expect(leerLaGuiaDelAgente(respuesta(VENDIDO), c, null)?.loVendido).toBeUndefined();
+  });
+
+  it("se muestran como su propio lado y la conversación las intercala", () => {
+    const guia = { preguntas: [{ para: "retos", pregunta: "¿Qué los frena?", repreguntas: [] }], loVendido: [{ id: "vendido:abc", tema: "ERP", pregunta: "¿Cómo pasan los pedidos?", repreguntas: [] }] };
+    const p = preguntasParaMostrar(guia, ["retos"], ["1.3"], ESCALA);
+    const vendido = p.find((x) => x.tipo === "vendido");
+    expect(vendido && ladoDeLaPregunta(vendido)).toBe("vendido");
+    expect(vendido?.tema).toBe("ERP");
+    expect(ordenDeLaConversacion(p).map((x) => x.para)).toEqual(["retos", "vendido:abc", "1.3"]);
+  });
+});
+
+describe("⭐ cada sesión tiene su título: el del calendario, o el que le pones (Elías, 2026-10-08)", () => {
+  const reunion = { id: "m1", titulo: "Polaris + HubSpot | Smarteam", fecha: "2026-10-02T16:00:00.000Z", origen: "meet" as const, leida: true };
+
+  it("sin nombre propio toma el de su reunión; con nombre propio, ese; sin ninguno, «Sesión N»", () => {
+    expect(tituloDeLaSesion({ sesion: { id: "s-a" }, reunion })).toBe("Polaris + HubSpot | Smarteam");
+    expect(tituloDeLaSesion({ sesion: { id: "s-a", titulo: "Revisión del diagnóstico" }, reunion })).toBe("Revisión del diagnóstico");
+    expect(tituloDeLaSesion({ sesion: null, reunion })).toBe("Polaris + HubSpot | Smarteam");
+    expect(tituloDeLaSesion({ sesion: { id: "s-a" }, reunion: null })).toBeNull();
+  });
+
+  it("vacío o igual al del calendario no se guarda: sigue al calendario", () => {
+    expect(tituloAGuardar("   ", reunion.titulo)).toBeUndefined();
+    expect(tituloAGuardar(" Polaris + HubSpot | Smarteam ", reunion.titulo)).toBeUndefined();
+    expect(tituloAGuardar("Demo  de   Sales Hub", reunion.titulo)).toBe("Demo de Sales Hub");
+    expect(tituloAGuardar("x".repeat(200), null)).toHaveLength(120);
+  });
+});
+
+// ── La exploración son sus sesiones (etapa A, 2026-10-09) ─────────────────────
+
+describe("⭐ la reunión de una sesión unida a su evento del calendario (etapa A)", () => {
+  const evento = { id: "e1", calendario: "eli@smarteamcr.com", inicio: "2026-10-15T15:00:00.000Z", fin: "2026-10-15T16:00:00.000Z" };
+  const reuniones: ReunionDeLaExploracion[] = [
+    { id: "gmeet_e1", titulo: "Revisión", fecha: "2026-10-15T15:02:00Z", origen: "meet", leida: false, texto: "transcripcion" },
+    { id: "otra", titulo: "Mismo día, otra hora", fecha: "2026-10-15T21:00:00Z", origen: "meet", leida: false, texto: "transcripcion" },
+  ];
+
+  it("por la fila gmeet_<evento>, por su googleEventId o, si no está, por la que empieza a menos de dos horas", () => {
+    expect(reunionDeLaSesion({ id: "s-a", evento }, reuniones)).toMatchObject({ reunion: { id: "gmeet_e1" }, como: "evento" });
+    const porEventoId: ReunionDeLaExploracion[] = [{ id: "x9", titulo: "Revisión", fecha: "2026-10-15T15:30:00Z", origen: "meet", leida: false, eventoId: "e1" }];
+    expect(reunionDeLaSesion({ id: "s-a", evento }, porEventoId)).toMatchObject({ reunion: { id: "x9" }, como: "evento" });
+    const cercana: ReunionDeLaExploracion[] = [{ id: "z1", titulo: "Revisión", fecha: "2026-10-15T16:10:00Z", origen: "meet", leida: false }];
+    expect(reunionDeLaSesion({ id: "s-a", evento }, cercana)).toMatchObject({ reunion: { id: "z1" }, como: "evento" });
+  });
+
+  it("una reunión de HubSpot elegida que también quedó en Meet: la sesión toma la de Meet (la de HubSpot deja de listarse)", () => {
+    const deHubspot: SesionPlaneada = { id: "s-h", fecha: "2026-10-15", reunion: { id: "h1", origen: "hubspot", inicio: "2026-10-15T15:00:00.000Z" } };
+    expect(reunionDeLaSesion(deHubspot, reuniones)).toMatchObject({ reunion: { id: "gmeet_e1" }, como: "elegida" });
+    // Mientras la de HubSpot está en la lista (Meet no la tiene con texto), es esa.
+    const conLaDeHubspot: ReunionDeLaExploracion[] = [...reuniones, { id: "h1", titulo: "Revisión", fecha: "2026-10-15T15:00:00.000Z", origen: "hubspot", leida: false }];
+    expect(reunionDeLaSesion(deHubspot, conLaDeHubspot)).toMatchObject({ reunion: { id: "h1", origen: "hubspot" }, como: "elegida" });
+    // Sin la hora, solo si ese día hay UNA de Meet (acá hay dos: no se adivina).
+    expect(reunionDeLaSesion({ id: "s-h", fecha: "2026-10-15", reunion: { id: "h1", origen: "hubspot" } }, reuniones)).toBeNull();
+    expect(reunionDeLaSesion({ id: "s-h", fecha: "2026-10-15", reunion: { id: "h1", origen: "hubspot" } }, reuniones.slice(0, 1))).toMatchObject({ reunion: { id: "gmeet_e1" } });
+  });
+
+  it("con evento NO cae a la del mismo día; cancelada, no busca la cercana", () => {
+    const soloOtra = reuniones.filter((r) => r.id === "otra");
+    expect(reunionDeLaSesion({ id: "s-a", fecha: "2026-10-15", evento }, soloOtra)).toBeNull();
+    const cercana: ReunionDeLaExploracion[] = [{ id: "z1", titulo: "Revisión", fecha: "2026-10-15T15:30:00Z", origen: "meet", leida: false }];
+    expect(reunionDeLaSesion({ id: "s-a", evento: { ...evento, cancelada: true } }, cercana)).toBeNull();
+  });
+
+  it("dos sesiones no se quedan con la misma reunión: la elegida a mano gana", () => {
+    const p = pestanasDeSesiones(
+      [
+        { id: "s-fecha", fecha: "2026-10-15" },
+        { id: "s-elegida", reunion: { id: "gmeet_e1", origen: "meet" } },
+      ],
+      reuniones,
+      "2026-10-20",
+    );
+    expect(p.map((x) => [x.clave, x.reunion?.id ?? null, x.ligadaPor ?? null])).toEqual([
+      ["s-fecha", "otra", "fecha"],
+      ["s-elegida", "gmeet_e1", "elegida"],
+    ]);
+  });
+
+  it("el título de la sesión, sin reunión todavía, es el del evento del calendario", () => {
+    expect(tituloDeLaSesion({ sesion: { id: "s-a", evento: { ...evento, titulo: "Revisión con Acme" } }, reunion: null })).toBe("Revisión con Acme");
+  });
+
+  it("la próxima dice la hora del evento; el día sigue siendo el de Costa Rica", () => {
+    const p = proximaReunion([{ id: "s-a", fecha: "2026-10-15", evento }], [], "2026-10-09");
+    expect(p).toMatchObject({ fecha: "2026-10-15", inicio: "2026-10-15T15:00:00.000Z", sesionId: "s-a" });
+    expect(proximaReunion([{ id: "s-a", fecha: "2026-10-15", evento: { ...evento, cancelada: true } }], [], "2026-10-09").inicio).toBeNull();
+  });
+});
+
+describe("⭐ en qué está la reunión de una sesión (etapa A)", () => {
+  const AHORA = new Date("2026-10-15T18:00:00Z");
+  const evento = { id: "e1", calendario: "eli@smarteamcr.com", inicio: "2026-10-20T15:00:00.000Z" };
+  const reunion = (r: Partial<ReunionDeLaExploracion>): ReunionDeLaExploracion => ({ id: "m", titulo: "R", fecha: "2026-10-14T15:00:00Z", origen: "meet", leida: false, ...r });
+  const estadoDe = (sesion: SesionPlaneada | null, r: ReunionDeLaExploracion | null) => estadoDeLaReunionDeLaSesion({ sesion, reunion: r }, AHORA);
+
+  it("los seis del tablero: sin reunión, agendada, esperando, leída, sin texto y cancelada", () => {
+    expect(estadoDe({ id: "s" }, null)).toBe("sinReunion");
+    expect(estadoDe({ id: "s", evento }, null)).toBe("agendada");
+    expect(estadoDe({ id: "s", evento: { ...evento, inicio: "2026-10-15T15:00:00.000Z", fin: "2026-10-15T16:00:00.000Z" } }, null)).toBe("esperando");
+    expect(estadoDe({ id: "s" }, reunion({ leida: true }))).toBe("leida");
+    expect(estadoDe({ id: "s", evento: { ...evento, inicio: "2026-10-14T15:00:00.000Z" } }, null)).toBe("sinTexto");
+    expect(estadoDe({ id: "s", evento: { ...evento, cancelada: true } }, null)).toBe("cancelada");
+  });
+
+  it("unida a una reunión de HubSpot: agendada mientras no ocurre; después espera y, sin llegar, termina sin texto", () => {
+    const hubspot = (inicio: string): SesionPlaneada => ({ id: "s", fecha: inicio.slice(0, 10), reunion: { id: "h1", origen: "hubspot", inicio } });
+    expect(estadoDe(hubspot("2026-10-20T15:00:00.000Z"), null)).toBe("agendada");
+    expect(estadoDe(hubspot("2026-10-15T15:00:00.000Z"), null)).toBe("esperando");
+    expect(estadoDe(hubspot("2026-10-10T15:00:00.000Z"), null)).toBe("sinTexto");
+    // Sin la hora (unida antes de que se guardara), por el día.
+    expect(estadoDe({ id: "s", fecha: "2026-10-21", reunion: { id: "h1", origen: "hubspot" } }, null)).toBe("agendada");
+    // Una de Meet elegida que no está en la lista sigue sin reunión.
+    expect(estadoDe({ id: "s", reunion: { id: "m9", origen: "meet" } }, null)).toBe("sinReunion");
+  });
+
+  it("y los de la reunión que llegó: esperando su transcripción, sin texto, corta, sin leer, solo notas, no se hizo", () => {
+    expect(estadoDe({ id: "s" }, reunion({ texto: "nada", fecha: "2026-10-15T15:00:00Z" }))).toBe("esperando");
+    expect(estadoDe({ id: "s" }, reunion({ texto: "nada" }))).toBe("sinTexto");
+    expect(estadoDe({ id: "s" }, reunion({ corta: { minutos: 6 } }))).toBe("corta");
+    expect(estadoDe({ id: "s" }, reunion({ texto: "transcripcion" }))).toBe("sinLeer");
+    expect(estadoDe({ id: "s" }, reunion({ texto: "notas" }))).toBe("soloNotasSinLeer");
+    expect(estadoDe({ id: "s", resultado: "noSeHizo" }, reunion({ leida: true }))).toBe("noSeHizo");
+    expect(TEXTO_DEL_ESTADO_DE_LA_REUNION.sinTexto.aviso).toBe(true);
+  });
+
+  it("«Qué sigue» de las sesiones: la primera, la que pasó sin reunión y la de solo notas", () => {
+    expect(avisoDeLasSesiones([], { automaticas: false, hoy: "2026-10-15", ahora: AHORA })).toMatch(/^Agrega la primera sesión/);
+    expect(avisoDeLasSesiones([], { automaticas: true, hoy: "2026-10-15", ahora: AHORA })).toBeNull();
+    const pasada = pestanasDeSesiones([{ id: "s-a", fecha: "2026-10-10" }], [], "2026-10-15");
+    expect(avisoDeLasSesiones(pasada, { automaticas: false, hoy: "2026-10-15", ahora: AHORA })).toBe("La sesión 1 ya pasó y no tiene reunión: únela o di qué pasó.");
+    const conNotas = pestanasDeSesiones([{ id: "s-a", reunion: { id: "m", origen: "meet" } }], [reunion({ texto: "notas" })], "2026-10-15");
+    expect(avisoDeLasSesiones(conNotas, { automaticas: false, hoy: "2026-10-15", ahora: AHORA })).toBe("La sesión 1 tiene solo notas de Gemini: léela.");
+  });
+});
+
+describe("⭐ «Fuera de la exploración» y lo que llega a los documentos (etapa A)", () => {
+  const reuniones: ReunionDeLaExploracion[] = [
+    { id: "m1", titulo: "Sesión vieja", fecha: "2026-09-28T15:00:00Z", origen: "meet", leida: true, legado: true },
+    { id: "m2", titulo: "La de la sesión", fecha: "2026-10-02T14:00:00Z", origen: "meet", leida: true },
+    { id: "m3", titulo: "Sacada", fecha: "2026-10-03T14:00:00Z", origen: "meet", leida: true },
+    { id: "d1", titulo: "Minuta", fecha: "2026-09-20", origen: "documento", leida: true },
+  ];
+  const sesiones: SesionPlaneada[] = [{ id: "s-a", reunion: { id: "m2", origen: "meet" } }];
+
+  it("en un cliente, lo de antes que no es sesión; en un prospecto, lo que alguien sacó (nunca lo sumado a mano)", () => {
+    expect(reunionesFueraDeLaExploracion(sesiones, reuniones, { automaticas: false, fuera: new Set() }).map((r) => r.id)).toEqual(["m1"]);
+    expect(reunionesFueraDeLaExploracion(sesiones, reuniones, { automaticas: true, fuera: new Set(["meet:m3", "documento:d1"]) }).map((r) => r.id)).toEqual(["m3"]);
+    // En un prospecto, lo sacado tampoco entra solo como sesión.
+    const p = pestanasDeSesiones(sesiones, reuniones.filter((r) => !r.legado), "2026-10-09", { automaticas: true, fuera: new Set(["meet:m3"]) });
+    expect(p.map((x) => x.clave)).toEqual(["s-a"]);
+  });
+
+  it("las claves de las sesiones incluyen lo que nombran aunque no esté en la lista", () => {
+    const claves = clavesDeLasSesiones([...sesiones, { id: "s-b", evento: { id: "e9", calendario: "eli@smarteamcr.com", inicio: "2026-10-20T15:00:00.000Z" } }], []);
+    expect([...claves].sort()).toEqual(["meet:gmeet_e9", "meet:m2"]);
+  });
+
+  it("al Diagnóstico y a la guía llega solo lo leído de las sesiones (y de lo sumado a mano)", () => {
+    const lectura = (fecha: string) => ({ etiqueta: "Reunión", resumen: "…", fecha, cobertura: [], en: fecha, corridaId: "r" });
+    const lecturas = {
+      "meet:m1": lectura("2026-09-28T15:00:00Z"),
+      "meet:m2": lectura("2026-10-02T14:00:00Z"),
+      "meet:m3": lectura("2026-10-03T14:00:00Z"),
+      "documento:d1": lectura("2026-09-20"),
+    };
+    expect(Object.keys(lecturasDeLaExploracion(lecturas, sesiones, { automaticas: false, fuera: [] })).sort()).toEqual(["documento:d1", "meet:m2"]);
+    // Una sesión ligada por fecha también cuenta (con la fecha que guarda la lectura).
+    expect(Object.keys(lecturasDeLaExploracion(lecturas, [{ id: "s-x", fecha: "2026-10-03" }], { automaticas: false, fuera: [] })).sort()).toEqual(["documento:d1", "meet:m3"]);
+    // En un prospecto, todo menos lo sacado.
+    expect(Object.keys(lecturasDeLaExploracion(lecturas, [], { automaticas: true, fuera: ["meet:m1"] })).sort()).toEqual(["documento:d1", "meet:m2", "meet:m3"]);
   });
 });

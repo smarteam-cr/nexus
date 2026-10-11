@@ -16,11 +16,20 @@
  *
  * La guía es material de preparación, no un dato del cliente: vive en la mitad del agente
  * (`propuesta.guia`), se muestra directo, sin «usar», y NUNCA llega a la propuesta ni al handoff.
+ *
+ * La exploración son sus SESIONES (etapa A, 2026-10-09): una reunión es de la exploración solo si es la
+ * de una sesión (`reunionDeLaSesion`: la elegida, la de su evento del calendario o, sin evento, la del
+ * mismo día). En un prospecto, cada reunión con la empresa entra sola como sesión (se calcula al leer,
+ * sin escribirse: `pestanasDeSesiones` con `automaticas`) y se saca con `contenido.fuera`. En un cliente
+ * o un proyecto nada entra solo: se agrega con «+ Agregar sesión». Lo que no es sesión no es pestaña, no
+ * se lee y su lectura no llega a los documentos (`lecturasDeLaExploracion`).
  */
 import { LETRAS, type Letra } from "@/lib/escala/documento/tipos";
 import { CASILLAS_DEL_RESUMEN, type ClaveDeCasilla } from "./casillas";
+import { esTarjeta, MARCO_DE_VENTA, type Marco } from "./marco";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { aFecha, hoyEnCostaRica } from "./fechas";
+import { coincideConElEvento, HORAS_ESPERANDO_LA_TRANSCRIPCION, mismaReunion } from "./lectura";
 
 // ── Las sesiones ──────────────────────────────────────────────────────────────
 
@@ -36,18 +45,49 @@ export type OrigenDeReunion = "meet" | "hubspot" | "documento";
 export const RESULTADOS_DE_LA_SESION = ["otroCanal", "cortada", "noSeHizo"] as const;
 export type ResultadoDeLaSesion = (typeof RESULTADOS_DE_LA_SESION)[number];
 
+/**
+ * El evento del calendario al que se unió una sesión antes de que ocurra (etapa A, 2026-10-09). Cuando
+ * la reunión ocurre, la sesión se liga a su fila de Meet (`gmeet_<id>` o `googleEventId`) o, si no, a la
+ * reunión de la empresa que empieza a menos de dos horas. Si la mueven en el calendario, la sesión toma
+ * la fecha nueva; si la cancelan, la sesión y su guía siguen (lib/exploraciones/calendario.ts).
+ */
+export interface EventoDeLaSesion {
+  /** El id de la instancia en Google Calendar (en una serie, el de esa fecha). */
+  id: string;
+  /** El calendario donde se leyó (el correo de quien la unió): ahí se vuelve a mirar. */
+  calendario: string;
+  /** ISO. */
+  inicio: string;
+  /** ISO. */
+  fin?: string;
+  /** Cómo se llama en el calendario: el título de la sesión mientras nadie le ponga otro. */
+  titulo?: string;
+  /** Es la instancia de una serie: se usa solo esa fecha. */
+  serie?: true;
+  /** La cancelaron en el calendario. */
+  cancelada?: true;
+  /** Cuándo se miró por última vez en el calendario (ISO). */
+  revisadoEn?: string;
+}
+
 /** Una sesión que planea el vendedor. La fecha es `AAAA-MM-DD`; sin fecha, todavía no se agendó. */
 export interface SesionPlaneada {
   id: string;
   titulo?: string;
+  /** El día (en Costa Rica). Con `evento`, es el día de `evento.inicio`. */
   fecha?: string;
   /** La marcó hecha el vendedor. Una con fecha pasada también cuenta como hecha. */
   hecha?: boolean;
   /**
-   * La reunión de esta sesión, elegida a mano. Sin ella, es la del mismo día (`reunionDeLaSesion`).
-   * Pedido de Elías (2026-10-03): «por fecha, y se corrige a mano».
+   * La reunión de esta sesión, elegida a mano. Sin ella, la de su evento o la del mismo día
+   * (`reunionDeLaSesion`). Pedido de Elías (2026-10-03): «por fecha, y se corrige a mano».
+   * `inicio` (ISO): la hora de una reunión de HubSpot, la guarda el servidor al unirla. Con ella se sabe si
+   * todavía no ocurre y, cuando ocurre y queda grabada en Meet, se liga su gemela de Meet (la de HubSpot
+   * deja de listarse: la misma reunión cuenta una vez).
    */
-  reunion?: { id: string; origen: OrigenDeReunion };
+  reunion?: { id: string; origen: OrigenDeReunion; inicio?: string };
+  /** El evento del calendario al que se unió (puede ser una reunión que todavía no ocurre). */
+  evento?: EventoDeLaSesion;
   /** Lo que quedó de una sesión anterior para explorar en esta (lo que se dijo y nadie siguió). */
   explorar?: string[];
   /** De qué sesión viene cada punto de `explorar` (su id): la guía dice «Quedó abierto en la sesión N». */
@@ -69,9 +109,16 @@ export interface SesionPlaneada {
   hechas?: string[];
 }
 
-export const MAX_SESIONES = 12;
+/** Hasta cuántas sesiones tiene una exploración (subió de 12 a 20 en la etapa A: ahora se materializan más). */
+export const MAX_SESIONES = 20;
+
+/** El id de una sesión nueva (`s-` y letras y números, como el esquema): lo usan el servidor y la pantalla. */
+export const nuevoIdDeSesion = (): string => `s-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 /** Cuántos puntos se llevan a una sesión: más no entran en una reunión. */
 export const MAX_PARA_EXPLORAR = 10;
+
+/** Qué texto dejó una reunión de Meet: su transcripción, solo las notas de Gemini o nada (todavía). */
+export type TextoDeLaReunion = "transcripcion" | "notas" | "nada";
 
 /** Una reunión de la exploración, leída o no: lo que se liga a una sesión. */
 export interface ReunionDeLaExploracion {
@@ -86,6 +133,25 @@ export interface ReunionDeLaExploracion {
    * hay qué leer. `minutos` es dónde termina, si la transcripción lo dice.
    */
   corta?: { minutos: number | null };
+  /** El id del evento del calendario (`googleEventId`), para ligarla a la sesión que se unió a ese evento. */
+  eventoId?: string;
+  /** Solo en las de Meet: qué texto dejó. Sin el dato (las de HubSpot y lo sumado a mano), tiene texto. */
+  texto?: TextoDeLaReunion;
+  /**
+   * En un cliente o un proyecto: se leyó o se eligió ANTES de la etapa A y no es la reunión de ninguna
+   * sesión. No es de la exploración: va a «Fuera de la exploración» y vuelve a ser sesión con un clic.
+   */
+  legado?: true;
+  /**
+   * Solo estuvo gente de Smarteam. No se liga sola a una sesión (por la fecha ni por la cercanía a un
+   * evento): lo dicho entre el equipo no es palabra del cliente. Se puede unir eligiéndola a mano.
+   */
+  puertasAdentro?: true;
+}
+
+/** La clave de una reunión (`meet:<id>`, `hubspot:<id>`, `documento:<id>`): la de `lecturas` y la de `contenido.fuera`. */
+export function claveDeReunion(r: { origen: string; id: string }): string {
+  return `${r.origen}:${r.id}`;
 }
 
 /** Hasta cuántos caracteres se mira una transcripción para saber si tiene conversación. */
@@ -115,11 +181,94 @@ function diaDe(iso: string): string {
   return hoyEnCostaRica(aFecha(iso));
 }
 
-/** La reunión de una sesión: la elegida a mano o, si no hay, la del mismo día. */
-export function reunionDeLaSesion(s: SesionPlaneada, reuniones: readonly ReunionDeLaExploracion[]): ReunionDeLaExploracion | null {
-  if (s.reunion) return reuniones.find((r) => r.id === s.reunion?.id && r.origen === s.reunion?.origen) ?? null;
+/** Cómo se ligó una sesión con su reunión: la eligió una persona, es la de su evento del calendario, o es la del mismo día. */
+export type ComoSeLigo = "elegida" | "evento" | "fecha";
+
+export interface ReunionLigada {
+  reunion: ReunionDeLaExploracion;
+  como: ComoSeLigo;
+}
+
+/**
+ * La gemela de Meet de una reunión de HubSpot elegida a mano: cuando la reunión también quedó grabada en
+ * Meet, la de HubSpot deja de listarse (cuenta una vez, la de Meet) y la sesión no puede quedarse sin
+ * reunión. Con la hora que guardó el servidor, la de Meet que empieza a menos de dos horas; sin ella (una
+ * unida antes de que se guardara), la única de Meet de ese día. Nunca una de puertas adentro.
+ */
+function gemelaDeMeet(s: SesionPlaneada, reuniones: readonly ReunionDeLaExploracion[]): ReunionDeLaExploracion | undefined {
+  if (s.reunion?.origen !== "hubspot") return undefined;
+  const deMeet = reuniones.filter((x) => x.origen === "meet" && !x.puertasAdentro);
+  const inicio = s.reunion.inicio;
+  if (inicio) return deMeet.find((x) => mismaReunion(x.fecha, inicio));
+  if (!s.fecha) return undefined;
+  const delDia = deMeet.filter((x) => diaDe(x.fecha) === s.fecha);
+  return delDia.length === 1 ? delDia[0] : undefined;
+}
+
+/**
+ * La reunión de una sesión, en este orden: la elegida a mano (`reunion`; si es de HubSpot y quedó grabada
+ * en Meet, su gemela de Meet); la de su evento del calendario (`evento`: la fila de Meet de ese evento o,
+ * si no está, una de la empresa que empieza a menos de dos horas, salvo que la hayan cancelado); y, sin
+ * evento, la del mismo día. Una sesión con evento NO cae a la del mismo día: el evento dice cuál es.
+ * Lo que se liga solo (por el evento o por la fecha) nunca es lo que alguien sacó de la exploración
+ * (`fuera`) ni una reunión de puertas adentro. Lo sumado a mano se liga por la fecha solo si ese día no
+ * le queda ninguna reunión (la minuta de una sesión que no quedó grabada); si no, va a «Fuentes manuales».
+ */
+export function reunionDeLaSesion(
+  s: SesionPlaneada,
+  reuniones: readonly ReunionDeLaExploracion[],
+  fuera: ReadonlySet<string> = new Set(),
+): ReunionLigada | null {
+  if (s.reunion) {
+    const r = reuniones.find((x) => x.id === s.reunion?.id && x.origen === s.reunion?.origen) ?? gemelaDeMeet(s, reuniones);
+    return r ? { reunion: r, como: "elegida" } : null;
+  }
+  const libres = reuniones.filter((x) => x.origen !== "documento" && !x.puertasAdentro && !fuera.has(claveDeReunion(x)));
+  const evento = s.evento;
+  if (evento) {
+    const r =
+      reuniones.find((x) => x.origen === "meet" && coincideConElEvento(evento.id, x)) ??
+      (evento.cancelada ? undefined : libres.find((x) => mismaReunion(x.fecha, evento.inicio)));
+    return r ? { reunion: r, como: "evento" } : null;
+  }
   if (!s.fecha) return null;
-  return reuniones.find((r) => diaDe(r.fecha) === s.fecha) ?? null;
+  const r = libres.find((x) => diaDe(x.fecha) === s.fecha) ?? reuniones.find((x) => x.origen === "documento" && diaDe(x.fecha) === s.fecha);
+  return r ? { reunion: r, como: "fecha" } : null;
+}
+
+/**
+ * Liga cada sesión con su reunión: primero las elegidas a mano y después, entre las que nadie eligió, las
+ * de su evento o del mismo día (dos sesiones no se quedan con la misma reunión). Devuelve, por índice de
+ * sesión, su reunión, y las claves de las reuniones que ya son de alguna sesión.
+ */
+function ligarSesiones(
+  sesiones: readonly SesionPlaneada[],
+  reuniones: readonly ReunionDeLaExploracion[],
+  fuera: ReadonlySet<string>,
+): { ligadas: Map<number, ReunionLigada>; usadas: Set<string> } {
+  const ligadas = new Map<number, ReunionLigada>();
+  const usadas = new Set<string>();
+  sesiones.forEach((s, i) => {
+    if (!s.reunion) return;
+    const l = reunionDeLaSesion(s, reuniones, fuera);
+    if (l) {
+      ligadas.set(i, l);
+      usadas.add(claveDeReunion(l.reunion));
+    }
+  });
+  sesiones.forEach((s, i) => {
+    if (s.reunion) return;
+    const l = reunionDeLaSesion(
+      s,
+      reuniones.filter((r) => !usadas.has(claveDeReunion(r))),
+      fuera,
+    );
+    if (l) {
+      ligadas.set(i, l);
+      usadas.add(claveDeReunion(l.reunion));
+    }
+  });
+  return { ligadas, usadas };
 }
 
 /**
@@ -137,9 +286,12 @@ export function guiaDeAntesDeLaReunion(
   return antes(sesionId ? propuesta.guias[sesionId] : null) ?? antes(propuesta.guia);
 }
 
-/** Una pestaña de Exploración: una sesión planeada o una reunión que no está en ninguna. */
+/**
+ * Una pestaña de Exploración: una sesión planeada o, en un prospecto, una reunión que entró sola como
+ * sesión (sin escribirse: `sesion` es null hasta que alguien le escribe algo).
+ */
 export interface PestanaDeSesion {
-  /** El id de la sesión, o `r-<id>` para una reunión suelta. */
+  /** El id de la sesión, o `r-<origen>-<id>` para una sesión automática de un prospecto. */
   clave: string;
   numero: number;
   sesion: SesionPlaneada | null;
@@ -148,6 +300,8 @@ export interface PestanaDeSesion {
   hecha: boolean;
   /** El vendedor dijo que no se hizo: no cuenta como sesión (no lleva número) y se pinta apagada. */
   noSeHizo?: boolean;
+  /** Cómo se ligó su reunión (la pantalla dice «ligada por fecha · cambiar» cuando es por fecha). */
+  ligadaPor?: ComoSeLigo;
 }
 
 /** Cómo se nombra una pestaña: «Sesión 3», o «No se hizo» si no cuenta. */
@@ -155,29 +309,85 @@ export function nombreDeLaPestana(p: Pick<PestanaDeSesion, "numero" | "noSeHizo"
   return p.noSeHizo ? "No se hizo" : `Sesión ${p.numero}`;
 }
 
+/** Hasta cuántas letras lleva el título de una sesión (el esquema de `SesionPlaneada.titulo`). */
+export const MAX_TITULO_DE_LA_SESION = 120;
+
 /**
- * Las pestañas, en orden de fecha: las sesiones planeadas (con su reunión) y las reuniones que no
- * quedaron en ninguna sesión (para no perder ninguna: se suman a las sesiones con un clic). Las sin
- * fecha van al final, en el orden en que se agregaron.
+ * El título de una sesión (Elías, 2026-10-08: «que tomen el nombre de la sesión de calendar y se les
+ * pueda cambiar el nombre»): el que le puso el vendedor o, si no, el de su reunión, que es el del evento
+ * del calendario (en Meet o en HubSpot). null = ni uno ni otro: se llama «Sesión N».
  */
-export function pestanasDeSesiones(sesiones: readonly SesionPlaneada[], reuniones: readonly ReunionDeLaExploracion[], hoy: string): PestanaDeSesion[] {
-  const usadas = new Set<string>();
-  const deSesiones = sesiones.map((s, i) => {
-    const r = reunionDeLaSesion(s, reuniones);
-    if (r) usadas.add(`${r.origen}:${r.id}`);
-    return { s, r, i };
-  });
-  const sueltas = reuniones.filter((r) => !usadas.has(`${r.origen}:${r.id}`));
+export function tituloDeLaSesion(p: Pick<PestanaDeSesion, "sesion" | "reunion">): string | null {
+  return p.sesion?.titulo?.trim() || p.reunion?.titulo?.trim() || p.sesion?.evento?.titulo?.trim() || null;
+}
+
+/**
+ * El título que se guarda al renombrar: vacío o igual al del calendario no se guarda (`undefined`), así
+ * la sesión sigue el nombre de su reunión si cambia.
+ */
+export function tituloAGuardar(escrito: string, delCalendario: string | null | undefined): string | undefined {
+  const t = escrito.trim().replace(/\s+/g, " ").slice(0, MAX_TITULO_DE_LA_SESION);
+  if (!t || t === (delCalendario ?? "").trim()) return undefined;
+  return t;
+}
+
+/**
+ * Cómo se arman las pestañas: `automaticas` (un prospecto: cada reunión con la empresa que no está en
+ * una sesión entra sola como sesión) y `fuera` (las claves `origen:id` que alguien sacó de la
+ * exploración). Sin opciones, nada entra solo (un cliente o un proyecto).
+ */
+export interface OpcionesDeLasPestanas {
+  automaticas: boolean;
+  fuera: ReadonlySet<string>;
+}
+
+const SIN_AUTOMATICAS: OpcionesDeLasPestanas = { automaticas: false, fuera: new Set() };
+
+/** Las opciones de las pestañas desde lo que trae la pantalla (`automaticas` y `contenido.fuera`). */
+export function opcionesDeLasPestanas(automaticas: boolean, fuera: readonly string[]): OpcionesDeLasPestanas {
+  return { automaticas, fuera: new Set(fuera) };
+}
+
+/**
+ * Las pestañas, en orden de fecha: las sesiones (con su reunión) y, solo en un prospecto, las reuniones
+ * que entraron solas como sesión (las que no están en una sesión, ni en `fuera`, ni son lo sumado a mano,
+ * que va a «Fuentes manuales»). En un cliente o un proyecto una reunión que no está en una sesión no es
+ * pestaña (Noelito: ninguna «Sesión N» fantasma). Las sin fecha van al final, en el orden en que se
+ * agregaron.
+ */
+export function pestanasDeSesiones(
+  sesiones: readonly SesionPlaneada[],
+  reuniones: readonly ReunionDeLaExploracion[],
+  hoy: string,
+  o: OpcionesDeLasPestanas = SIN_AUTOMATICAS,
+): PestanaDeSesion[] {
+  const { ligadas, usadas } = ligarSesiones(sesiones, reuniones, o.fuera);
+  const sueltas = o.automaticas
+    ? reuniones.filter((r) => !usadas.has(claveDeReunion(r)) && r.origen !== "documento" && !r.legado && !o.fuera.has(claveDeReunion(r)))
+    : [];
   const todas = [
-    ...deSesiones.map(({ s, r, i }) => ({
-      clave: s.id,
-      sesion: s,
+    ...sesiones.map((s, i) => {
+      const l = ligadas.get(i) ?? null;
+      const r = l?.reunion ?? null;
+      return {
+        clave: s.id,
+        sesion: s,
+        reunion: r,
+        fecha: s.fecha ?? (r ? diaDe(r.fecha) : null),
+        hecha: sesionHecha(s, hoy) || !!r,
+        orden: i,
+        ligadaPor: l?.como,
+      };
+    }),
+    ...sueltas.map((r, i) => ({
+      clave: `r-${r.origen}-${r.id}`,
+      sesion: null,
       reunion: r,
-      fecha: s.fecha ?? (r ? diaDe(r.fecha) : null),
-      hecha: sesionHecha(s, hoy) || !!r,
-      orden: i,
+      fecha: diaDe(r.fecha),
+      hecha: true,
+      orden: sesiones.length + i,
+      ligadaPor: undefined as ComoSeLigo | undefined,
     })),
-    ...sueltas.map((r, i) => ({ clave: `r-${r.origen}-${r.id}`, sesion: null, reunion: r, fecha: diaDe(r.fecha), hecha: true, orden: sesiones.length + i })),
   ];
   todas.sort((a, b) => (a.fecha && b.fecha ? a.fecha.localeCompare(b.fecha) || a.orden - b.orden : a.fecha ? -1 : b.fecha ? 1 : a.orden - b.orden));
   // La que no se hizo no lleva número: las demás se cuentan sin ella.
@@ -185,9 +395,161 @@ export function pestanasDeSesiones(sesiones: readonly SesionPlaneada[], reunione
   return todas.map((p) => {
     const noSeHizo = p.sesion?.resultado === "noSeHizo";
     if (!noSeHizo) n++;
-    return { clave: p.clave, sesion: p.sesion, reunion: p.reunion, fecha: p.fecha, hecha: p.hecha, numero: noSeHizo ? 0 : n, ...(noSeHizo ? { noSeHizo: true } : {}) };
+    return {
+      clave: p.clave,
+      sesion: p.sesion,
+      reunion: p.reunion,
+      fecha: p.fecha,
+      hecha: p.hecha,
+      numero: noSeHizo ? 0 : n,
+      ...(noSeHizo ? { noSeHizo: true } : {}),
+      ...(p.ligadaPor ? { ligadaPor: p.ligadaPor } : {}),
+    };
   });
 }
+
+/**
+ * «Fuera de la exploración»: lo que alguna vez fue de la exploración y no es la reunión de ninguna sesión.
+ * En un prospecto, lo que alguien sacó (`fuera`); en un cliente o un proyecto, lo que se leyó o se eligió
+ * antes de la etapa A (`legado`). No es una lista general de reuniones: las demás las tiene la memoria.
+ * La más nueva primero.
+ */
+export function reunionesFueraDeLaExploracion(
+  sesiones: readonly SesionPlaneada[],
+  reuniones: readonly ReunionDeLaExploracion[],
+  o: OpcionesDeLasPestanas,
+): ReunionDeLaExploracion[] {
+  const { usadas } = ligarSesiones(sesiones, reuniones, o.fuera);
+  return reuniones
+    .filter((r) => !usadas.has(claveDeReunion(r)) && r.origen !== "documento")
+    .filter((r) => (o.automaticas ? o.fuera.has(claveDeReunion(r)) : !!r.legado))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+}
+
+/**
+ * Las claves de las reuniones que son de alguna sesión: la ligada a cada una (con las reuniones que se
+ * conocen) y, aunque no esté en la lista, la que la sesión nombra (la elegida, o la fila de Meet de su
+ * evento). Lo usan los documentos y la guía para leer solo lo de las sesiones.
+ */
+export function clavesDeLasSesiones(sesiones: readonly SesionPlaneada[], reuniones: readonly ReunionDeLaExploracion[]): Set<string> {
+  const { usadas } = ligarSesiones(sesiones, reuniones, new Set());
+  for (const s of sesiones) {
+    if (s.reunion) usadas.add(claveDeReunion(s.reunion));
+    else if (s.evento) usadas.add(`meet:gmeet_${s.evento.id}`);
+  }
+  return usadas;
+}
+
+/**
+ * Lo que el agente leyó de cada reunión, solo de las que son de la exploración (decisión del 2026-10-08:
+ * no se borra nada, se deja de leer). En un prospecto, todo menos lo que alguien sacó; en un cliente o un
+ * proyecto, las de sus sesiones (`clavesDeLasSesiones`, con las fechas que guarda cada lectura para la
+ * ligadura por fecha). Lo sumado a mano siempre cuenta: son las fuentes manuales de la exploración.
+ */
+export function lecturasDeLaExploracion<L extends { etiqueta: string; fecha?: string; titulo?: string }>(
+  lecturas: Readonly<Record<string, L>>,
+  sesiones: readonly SesionPlaneada[],
+  o: { automaticas: boolean; fuera: readonly string[] },
+): Record<string, L> {
+  const fuera = new Set(o.fuera);
+  const entradas = Object.entries(lecturas);
+  if (o.automaticas) return Object.fromEntries(entradas.filter(([k]) => !fuera.has(k)));
+  const reuniones: ReunionDeLaExploracion[] = entradas.flatMap(([k, l]) => {
+    const i = k.indexOf(":");
+    const origen = k.slice(0, i);
+    if ((origen !== "meet" && origen !== "hubspot" && origen !== "documento") || !l.fecha) return [];
+    return [{ id: k.slice(i + 1), titulo: l.titulo ?? l.etiqueta, fecha: l.fecha, origen, leida: true }];
+  });
+  const claves = clavesDeLasSesiones(sesiones, reuniones);
+  return Object.fromEntries(entradas.filter(([k]) => k.startsWith("documento:") || claves.has(k)));
+}
+
+// ── En qué está la reunión de una sesión (etapa A) ────────────────────────────
+
+/**
+ * En qué está la reunión de una sesión, para decirlo sin mentir sobre la lectura sola (los estados del
+ * tablero Sesion.dc.html, más `corta`, `soloNotasSinLeer` y `noSeHizo`).
+ */
+export type EstadoDeLaReunion =
+  | "sinReunion"
+  | "agendada"
+  | "esperando"
+  | "sinTexto"
+  | "cancelada"
+  | "corta"
+  | "sinLeer"
+  | "soloNotasSinLeer"
+  | "leida"
+  | "noSeHizo";
+
+const HORA = 60 * 60 * 1000;
+
+export function estadoDeLaReunionDeLaSesion(p: Pick<PestanaDeSesion, "sesion" | "reunion">, ahora: Date = new Date()): EstadoDeLaReunion {
+  if (p.sesion?.resultado === "noSeHizo") return "noSeHizo";
+  const r = p.reunion;
+  const espera = (iso: string | undefined) => !!iso && ahora.getTime() - Date.parse(iso) < HORAS_ESPERANDO_LA_TRANSCRIPCION * HORA;
+  if (r) {
+    if (r.corta) return "corta";
+    if (r.leida) return "leida";
+    if (r.texto === "nada") return espera(p.sesion?.evento?.fin ?? r.fecha) ? "esperando" : "sinTexto";
+    if (r.texto === "notas") return "soloNotasSinLeer";
+    return "sinLeer";
+  }
+  const e = p.sesion?.evento;
+  if (!e) {
+    /* Unida a una reunión de HubSpot que todavía no está en la lista: la agendada (HubSpot da la agenda
+       hacia adelante y la lista solo trae las que ya pasaron) o una que pasó y todavía no llegó. */
+    const h = p.sesion?.reunion;
+    if (h?.origen !== "hubspot") return "sinReunion";
+    const inicio = h.inicio ?? (p.sesion?.fecha ? `${p.sesion.fecha}T23:59:59.999-06:00` : null);
+    if (!inicio || Number.isNaN(Date.parse(inicio))) return "sinReunion";
+    if (Date.parse(inicio) > ahora.getTime()) return "agendada";
+    return h.inicio && espera(h.inicio) ? "esperando" : "sinTexto";
+  }
+  if (e.cancelada) return "cancelada";
+  if (Date.parse(e.inicio) > ahora.getTime()) return "agendada";
+  return espera(e.fin ?? e.inicio) ? "esperando" : "sinTexto";
+}
+
+/**
+ * Lo primero que falta en las sesiones, en una frase (va antes que lo demás en «Qué sigue»): en un
+ * cliente o un proyecto sin ninguna, agregar la primera (la exploración arranca vacía: Noelito, Cemaco);
+ * una sesión que ya pasó sin reunión; una con solo notas de Gemini que nadie leyó. null = nada.
+ */
+export function avisoDeLasSesiones(
+  pestanas: readonly PestanaDeSesion[],
+  o: { automaticas: boolean; hoy: string; ahora?: Date },
+): string | null {
+  if (!o.automaticas && pestanas.length === 0) return "Agrega la primera sesión: una agendada, una que ya pasó o una sin reunión todavía.";
+  const ahora = o.ahora ?? new Date();
+  const conSesion = pestanas.filter((p) => p.sesion && !p.noSeHizo && !p.sesion.resultado);
+  const sinReunion = conSesion.find((p) => estadoDeLaReunionDeLaSesion(p, ahora) === "sinReunion" && !!p.fecha && p.fecha < o.hoy);
+  if (sinReunion) return `La sesión ${sinReunion.numero} ya pasó y no tiene reunión: únela o di qué pasó.`;
+  const soloNotas = pestanas.find((p) => !p.noSeHizo && estadoDeLaReunionDeLaSesion(p, ahora) === "soloNotasSinLeer");
+  if (soloNotas) return `La sesión ${soloNotas.numero} tiene solo notas de Gemini: léela.`;
+  return null;
+}
+
+/**
+ * Lo que dice cada estado, con las palabras del tablero (la pantalla puede sumar la fecha y las acciones).
+ * `aviso`: se pinta en ámbar (falta algo).
+ */
+export const TEXTO_DEL_ESTADO_DE_LA_REUNION: Record<EstadoDeLaReunion, { titulo: string; detalle: string; aviso: boolean }> = {
+  sinReunion: { titulo: "Sin reunión del calendario", detalle: "Asocia una reunión. La guía se puede preparar igual.", aviso: false },
+  agendada: {
+    titulo: "Unida a una reunión del calendario",
+    detalle: "Cuando ocurra, Nexus espera su transcripción y la lee sola. Si la mueven en el calendario, la sesión toma la fecha nueva.",
+    aviso: false,
+  },
+  esperando: { titulo: "Esperando la transcripción", detalle: "Meet puede tardar hasta una hora en dejarla. Nexus la lee cuando llegue.", aviso: false },
+  sinTexto: { titulo: "Terminó sin transcripción ni notas de Gemini", detalle: "Suma la minuta o dile qué pasó con ella.", aviso: true },
+  cancelada: { titulo: "La reunión se canceló en el calendario", detalle: "La sesión y su guía siguen. Asocia otra reunión.", aviso: true },
+  corta: { titulo: "Casi no tuvo conversación", detalle: "Dile qué pasó con ella.", aviso: true },
+  sinLeer: { titulo: "Sin leer", detalle: "El agente todavía no la leyó.", aviso: true },
+  soloNotasSinLeer: { titulo: "Solo notas de Gemini, sin leer", detalle: "Léela. Cuando llegue la transcripción, se vuelve a leer.", aviso: true },
+  leida: { titulo: "Leída por el agente", detalle: "", aviso: false },
+  noSeHizo: { titulo: "No se hizo", detalle: "No cuenta como sesión.", aviso: false },
+};
 
 /**
  * En qué está una sesión, para decirlo en pantalla (2026-10-06, pedido de Elías: «se debe especificar
@@ -213,17 +575,30 @@ export function sesionHecha(s: SesionPlaneada, hoy: string): boolean {
 }
 
 /**
- * La próxima reunión: la primera sesión planeada que no pasó (las con fecha primero) o, si no hay, la
- * agendada en HubSpot. Su número cuenta lo que ya pasó: las sesiones hechas o, si son más, las
- * reuniones que el agente ya leyó (el vendedor no siempre planea las sesiones en el lienzo).
+ * La próxima reunión: la primera sesión que no pasó (las con fecha primero; una unida a un evento del
+ * calendario, con su hora) o, si no hay, la agendada en HubSpot. Su número cuenta las SESIONES que ya
+ * pasaron (etapa A: antes contaba también las lecturas del agente, e inflaba el número). En un prospecto,
+ * las sesiones que entraron solas y ya pasaron se pasan en `pasadasSinSesion` (no son `SesionPlaneada`).
+ * Un número suelto en `o` es el conteo de lecturas de antes: se ignora (@deprecated, lo pasan pantallas
+ * que todavía no se actualizaron).
  */
 export function proximaReunion(
   sesiones: readonly SesionPlaneada[],
   agenda: readonly { titulo: string; inicio: string }[],
   hoy: string,
-  reunionesLeidas = 0,
-): { numero: number; titulo: string | null; fecha: string | null; desde: "sesion" | "hubspot" | null; sesionId: string | null } {
-  const hechas = Math.max(sesiones.filter((s) => sesionHecha(s, hoy) && s.resultado !== "noSeHizo").length, reunionesLeidas);
+  o: number | { pasadasSinSesion?: number } = {},
+): {
+  numero: number;
+  titulo: string | null;
+  /** El día (`AAAA-MM-DD`, en Costa Rica) o, en la agenda de HubSpot, el ISO. */
+  fecha: string | null;
+  /** La hora, si la sesión está unida a un evento del calendario que no se canceló (ISO). */
+  inicio?: string | null;
+  desde: "sesion" | "hubspot" | null;
+  sesionId: string | null;
+} {
+  const sinSesion = typeof o === "object" ? Math.max(0, o.pasadasSinSesion ?? 0) : 0;
+  const hechas = sesiones.filter((s) => sesionHecha(s, hoy) && s.resultado !== "noSeHizo").length + sinSesion;
   const pendientes = sesiones
     .map((s, i) => ({ s, i }))
     .filter(({ s }) => !sesionHecha(s, hoy))
@@ -231,7 +606,8 @@ export function proximaReunion(
   const numero = hechas + 1;
   if (pendientes[0]) {
     const s = pendientes[0].s;
-    return { numero, titulo: s.titulo ?? null, fecha: s.fecha ?? null, desde: "sesion", sesionId: s.id };
+    const inicio = s.evento && !s.evento.cancelada ? s.evento.inicio : null;
+    return { numero, titulo: s.titulo ?? s.evento?.titulo ?? null, fecha: s.fecha ?? inicio, inicio, desde: "sesion", sesionId: s.id };
   }
   if (agenda[0]) return { numero, titulo: agenda[0].titulo, fecha: agenda[0].inicio, desde: "hubspot", sesionId: null };
   return { numero, titulo: null, fecha: null, desde: null, sesionId: null };
@@ -254,20 +630,14 @@ export const MAX_PREGUNTAS_POR_REUNION = 8;
  * cuesta no actuar; el presupuesto al final (hablar de plata antes de la meta es vender antes de
  * diagnosticar).
  */
-export const PRIORIDAD_DE_LAS_TARJETAS: readonly (typeof CASILLAS_DEL_RESUMEN)[number][] = [
-  "metas",
-  "retos",
-  "consecuencias",
-  "autoridad",
-  "tiempos",
-  "implicaciones",
-  "planes",
-  "presupuesto",
-];
+export const PRIORIDAD_DE_LAS_TARJETAS = MARCO_DE_VENTA.prioridad as readonly (typeof CASILLAS_DEL_RESUMEN)[number][];
 
-/** Las tarjetas del resumen que siguen vacías, en el orden en que conviene preguntarlas. */
-export function huecosDelResumen(casillas: Partial<Record<ClaveDeCasilla, unknown>>): ClaveDeCasilla[] {
-  return PRIORIDAD_DE_LAS_TARJETAS.filter((clave) => {
+/**
+ * Las tarjetas que siguen vacías, en el orden en que conviene preguntarlas. Las del marco de la
+ * exploración (lib/exploraciones/marco.ts): las ocho de la venta, o las tres de la estrategia (Customer Success).
+ */
+export function huecosDelResumen(casillas: Partial<Record<ClaveDeCasilla, unknown>>, marco: Marco = MARCO_DE_VENTA): ClaveDeCasilla[] {
+  return marco.prioridad.filter((clave) => {
     const v = casillas[clave];
     return v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
   });
@@ -312,8 +682,10 @@ export function enfoqueDeLaGuia(
 }
 
 /**
- * Qué cubre la próxima reunión: hasta 5 tarjetas vacías y, con lo que queda hasta 8 preguntas, hasta
- * 4 dimensiones sin evidencia. Lo usan la pantalla y el pedido al agente: tienen que decir lo mismo.
+ * Qué cubre la próxima reunión: las tarjetas vacías (hasta 5 en la venta, las 3 de la estrategia en un
+ * proyecto) y, con lo que queda hasta 8 preguntas, las dimensiones sin evidencia (hasta 4 en la venta,
+ * 5 en un proyecto: Customer Success explora más la escala). Lo usan la pantalla y el pedido al agente:
+ * tienen que decir lo mismo.
  */
 export function focoDeLaGuia(
   casillas: Partial<Record<ClaveDeCasilla, unknown>>,
@@ -321,25 +693,17 @@ export function focoDeLaGuia(
   areas: readonly string[],
   posiciones: Readonly<Record<string, PosicionParaLaGuia | undefined>>,
   aExplorar: Readonly<Record<string, unknown>>,
+  marco: Marco = MARCO_DE_VENTA,
 ): { huecos: ClaveDeCasilla[]; enfoque: string[] } {
-  const huecos = huecosDelResumen(casillas).slice(0, MAX_TARJETAS_EN_LA_GUIA);
-  const enfoque = enfoqueDeLaGuia(escala, areas, posiciones, aExplorar, Math.min(MAX_DIMENSIONES_EN_FOCO, MAX_PREGUNTAS_POR_REUNION - huecos.length));
+  const huecos = huecosDelResumen(casillas, marco).slice(0, marco.maxTarjetas);
+  const enfoque = enfoqueDeLaGuia(escala, areas, posiciones, aExplorar, Math.min(marco.maxDimensiones, MAX_PREGUNTAS_POR_REUNION - huecos.length));
   return { huecos, enfoque };
 }
 
 // ── Lo de base: lo que la guía muestra aunque el agente no la haya armado ─────
 
-/** La pregunta de base de cada tarjeta del resumen (en lenguaje llano, tuteando al cliente). */
-export const PREGUNTA_DE_BASE: Record<(typeof CASILLAS_DEL_RESUMEN)[number], string> = {
-  metas: "¿Qué quieres lograr este año? ¿De cuánto a cuánto, y para cuándo?",
-  planes: "¿Qué han intentado hasta ahora para llegar?",
-  retos: "¿Qué los frena hoy?",
-  tiempos: "¿Para cuándo lo necesitan? ¿Hay alguna fecha que mande, como una renovación o un lanzamiento?",
-  presupuesto: "¿Tienen un rango de inversión pensado para esto, o contra qué lo van a comparar?",
-  autoridad: "Además de ti, ¿quién tiene que estar de acuerdo para avanzar? ¿Quién da el visto bueno final?",
-  consecuencias: "Si esto sigue igual seis meses más, ¿qué pasa? ¿Cuánto les cuesta?",
-  implicaciones: "Si lo logran, ¿qué cambia para el negocio, y para ti?",
-};
+/** La pregunta de base de cada tarjeta de la venta (en lenguaje llano, tuteando al cliente). Las de cada marco, en marco.ts. */
+export const PREGUNTA_DE_BASE = MARCO_DE_VENTA.preguntaDeBase as Readonly<Record<(typeof CASILLAS_DEL_RESUMEN)[number], string>>;
 
 /** Para conectar cuando la empresa no hizo el test y todavía no se habló: preguntas de conexión. */
 export const CONEXION_DE_BASE: readonly string[] = [
@@ -437,6 +801,13 @@ export interface GuiaDeLaSesion {
    * se usen para armar preguntas»). Son hipótesis: no van al Resumen, van a la preparación de la reunión.
    */
   retosDeLaIndustria?: RetoDeLaIndustria[];
+  /**
+   * Solo en un proyecto (Customer Success): las preguntas sobre LO QUE SE VENDIÓ, una por pieza del
+   * alcance (Elías, 2026-10-07: «la guía solo pregunta por la escala y la estrategia; debe tomar mucho
+   * más en cuenta lo que aparece en lo vendido»). Quién lo va a usar, cómo trabaja hoy, qué datos toca
+   * y qué tiene que pasar para que el cliente diga que funcionó.
+   */
+  loVendido?: PreguntaDeLoVendido[];
   /** Cómo abrir la conversación, desde algo de la empresa. */
   apertura: string[];
   /** La escala explicada en simple: solo cuando no hizo el test y todavía no se habló. */
@@ -445,6 +816,25 @@ export interface GuiaDeLaSesion {
   objeciones: Objecion[];
   pocaApertura: string | null;
   cierre: string | null;
+}
+
+/** Una pregunta sobre una pieza de lo vendido. `id` sale del tema (`idDeLoVendido`): estable entre guías. */
+export interface PreguntaDeLoVendido {
+  id: string;
+  /** La pieza del alcance, en pocas palabras («Integración con el ERP», «Sales Hub»). */
+  tema: string;
+  pregunta: string;
+  repreguntas: string[];
+}
+
+export const MAX_PREGUNTAS_DE_LO_VENDIDO = 5;
+
+/** El id de una pregunta de lo vendido: `vendido:` y una huella de su tema (con él se guardan su casilla y su nota). */
+export function idDeLoVendido(tema: string): string {
+  const t = tema.trim().toLowerCase();
+  let h = 5381;
+  for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0;
+  return `vendido:${h.toString(36)}`;
 }
 
 /** Un reto típico de su industria (hipótesis) y la pregunta para confirmarlo. */
@@ -523,8 +913,10 @@ export function textoDeLaProcedencia(p: Procedencia): string {
 export interface PreguntaParaMostrar {
   /** A qué apunta: una tarjeta, una dimensión o, para un punto llevado que ninguna pregunta retoma, `abierto:<n>`. */
   para: string;
-  tipo: "tarjeta" | "dimension" | "abierto";
+  tipo: "tarjeta" | "dimension" | "vendido" | "abierto";
   pregunta: string;
+  /** Para una pregunta de lo vendido: la pieza del alcance a la que apunta. */
+  tema?: string;
   repreguntas: string[];
   /** Para un punto llevado: lo que se dijo (la pregunta va en `pregunta`). */
   contexto?: string;
@@ -536,8 +928,8 @@ export interface PreguntaParaMostrar {
   apunta?: { tipo: "tarjeta" | "dimension"; para: string };
 }
 
-/** De qué lado está una pregunta: la arquitectura de la venta, la escala o ninguno (un punto llevado sin ubicar). */
-export function ladoDeLaPregunta(p: Pick<PreguntaParaMostrar, "tipo" | "apunta">): "tarjeta" | "dimension" | null {
+/** De qué lado está una pregunta: el marco, la escala, lo vendido o ninguno (un punto llevado sin ubicar). */
+export function ladoDeLaPregunta(p: Pick<PreguntaParaMostrar, "tipo" | "apunta">): "tarjeta" | "dimension" | "vendido" | null {
   return p.tipo === "abierto" ? (p.apunta?.tipo ?? null) : p.tipo;
 }
 
@@ -587,7 +979,7 @@ export function procedenciasDeLaSesion(
  * dimensión en la escala). Primero las tarjetas, después las dimensiones.
  */
 export function preguntasParaMostrar(
-  guia: Pick<GuiaDeLaSesion, "preguntas" | "ubicaciones"> | null,
+  guia: Pick<GuiaDeLaSesion, "preguntas" | "ubicaciones" | "loVendido"> | null,
   huecos: readonly string[],
   enfoque: readonly string[],
   escala: EscalaDelLienzo,
@@ -595,11 +987,12 @@ export function preguntasParaMostrar(
     abiertos: new Map(),
     pasaron: new Map(),
   },
+  marco: Marco = MARCO_DE_VENTA,
 ): PreguntaParaMostrar[] {
   const preguntaDeLaDimension = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.pregunta ?? null;
   const ladoDelPara = (para: string | undefined): PreguntaParaMostrar["apunta"] => {
     if (!para) return undefined;
-    if ((CASILLAS_DEL_RESUMEN as readonly string[]).includes(para)) return { tipo: "tarjeta", para };
+    if (esTarjeta(para)) return { tipo: "tarjeta", para };
     return escala.areas.some((a) => a.dimensiones.some((d) => d.id === para)) ? { tipo: "dimension", para } : undefined;
   };
   const out: PreguntaParaMostrar[] = [];
@@ -622,8 +1015,10 @@ export function preguntasParaMostrar(
       out.push({ para, tipo, pregunta: base, repreguntas: [], ...(pasoDe ? { procedencia: { tipo: "paso" as const, numero: pasoDe } } : {}) });
     }
   };
-  for (const h of huecos) armar(h, "tarjeta", PREGUNTA_DE_BASE[h as keyof typeof PREGUNTA_DE_BASE] ?? null);
+  for (const h of huecos) armar(h, "tarjeta", marco.preguntaDeBase[h as ClaveDeCasilla] ?? null);
   for (const d of enfoque) armar(d, "dimension", preguntaDeLaDimension(d));
+  // Lo vendido (solo en un proyecto): una pregunta por pieza del alcance, como la escribió el agente.
+  for (const v of guia?.loVendido ?? []) out.push({ para: v.id, tipo: "vendido", pregunta: v.pregunta, repreguntas: v.repreguntas, tema: v.tema });
   // Lo llevado que ninguna pregunta retoma va igual, como su propia pregunta: no se pierde.
   for (const [t, numero] of procedencias.abiertos) {
     if (retomados.has(t)) continue;
@@ -666,9 +1061,11 @@ export function ordenDeLaConversacion(preguntas: readonly PreguntaParaMostrar[])
   const intercalar = (lista: readonly PreguntaParaMostrar[]) => {
     const tarjetas = lista.filter((p) => p.tipo === "tarjeta");
     const dimensiones = lista.filter((p) => p.tipo === "dimension");
+    const vendido = lista.filter((p) => p.tipo === "vendido");
     const out: PreguntaParaMostrar[] = lista.filter((p) => p.tipo === "abierto");
-    for (let i = 0; i < Math.max(tarjetas.length, dimensiones.length); i++) {
+    for (let i = 0; i < Math.max(tarjetas.length, dimensiones.length, vendido.length); i++) {
       if (tarjetas[i]) out.push(tarjetas[i]);
+      if (vendido[i]) out.push(vendido[i]);
       if (dimensiones[i]) out.push(dimensiones[i]);
     }
     return out;

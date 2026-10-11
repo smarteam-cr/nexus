@@ -28,6 +28,7 @@ import { OBJETO_PROYECTOS } from "./asociaciones-proyecto";
 import { prisma } from "@/lib/db/prisma";
 import { detectarGemelas, type ClienteComparable, type Gemela } from "@/lib/clients/gemelas";
 import { resolvePipeline, decidirCierre, estadoCrudoDeHubspot } from "@/lib/projects/kind";
+import { encargadoDelProyecto } from "@/lib/hubspot/encargados";
 
 /** Un proyecto de HubSpot que Nexus todavía no tiene. */
 export interface ProyectoFaltante {
@@ -136,7 +137,7 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
          paga —mismo criterio que `hs_merged_object_ids` en el paso 4— y sin ellas la lista
          ofrece proyectos terminados, que es el caso que deja el alta sin salida. */
       properties:
-        "hs_name,hs_pipeline,hubspot_owner_id,csl_encargado," +
+        "hs_name,hs_pipeline,hubspot_owner_id,cse_encargado,csl_encargado," +
         "hs_pipeline_stage,hs_status,estatus_del_proyecto",
       ...(after ? { after } : {}),
     });
@@ -160,7 +161,8 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
            —mirando el mismo record— iba a cerrar. Ver `estadoCrudoDeHubspot`. */
         rawStatus: estadoCrudoDeHubspot(r.properties),
         ownerId: r.properties.hubspot_owner_id ?? null,
-        cslEncargado: r.properties.csl_encargado ?? null,
+        // «CSE Encargado» primero (2026-10-09): el mismo encargado que lee el espejo (`encargadoDelProyecto`).
+        cslEncargado: encargadoDelProyecto(r.properties),
       });
     }
     after = body.paging?.next?.after;

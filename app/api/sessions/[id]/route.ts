@@ -4,10 +4,19 @@ import { asignarDuenioManual } from "@/lib/sessions/duenio-manual";
 import { withAuth, apiError } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { reResolveSession } from "@/lib/sessions/resolve-client";
+import { guardAccesoALaReunion } from "@/lib/sessions/acceso-a-la-reunion";
 
-// GET /api/sessions/[id] — transcript lazy load
+/**
+ * GET /api/sessions/[id] — la transcripción y el resumen, a pedido (la lista de /sessions).
+ *
+ * Con dueño, solo quien tiene acceso a ese cliente; sin acceso, 404 (lib/sessions/acceso-a-la-reunion.ts). Hasta el
+ * 2026-10-10 servía la transcripción de cualquier reunión a cualquier usuario interno, y con eso anulaba el 404 de la
+ * página de la reunión y de su minuta.
+ */
 export const GET = withAuth(async (_req, ctx) => {
   const { id } = await ctx.params;
+  const acceso = await guardAccesoALaReunion(id);
+  if (acceso instanceof NextResponse) return acceso;
 
   const session = await prisma.firefliesSession.findUnique({
     where: { id },

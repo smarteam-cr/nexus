@@ -11,13 +11,18 @@
  *   - included === false         → tombstone: un humano EXCLUYÓ este proyecto
  *   - handoffOverride !== null   → la "X"/"Agregar" del panel de handoff lo tocó
  *   - timelineOverride === true  → el CSE eligió la reunión en el Contexto del CRONOGRAMA (2026-09-23)
- *   - diagnosisOverride === true → el CSE la agregó en el Contexto del DIAGNÓSTICO (2026-09-28). La X
- *                                  (`false`) no lockea, por la misma razón que la del cronograma.
+ *   - diagnosisOverride === true → el CSE la eligió en el Contexto del DIAGNÓSTICO (2026-09-28).
  *   - planningOverride / implementationOverride === true → lo mismo en la PLANIFICACIÓN y la
  *                                  EJECUCIÓN (2026-09-29).
  *   - kickoffOverride / explorationOverride / techRequirementsOverride / deliveryOverride === true →
  *                                  lo mismo en el KICKOFF, la EXPLORACIÓN, INTEGRACIONES y la ENTREGA
  *                                  (2026-10-07).
+ *
+ * En los seis documentos que leen solo las elegidas (etapa 7, lib/sessions/destinos-de-contexto.ts), la
+ * X sobre una elegida escribe `null` y «Descartar» una reunión que Nexus sugirió escribe `false`
+ * (desestimada). Ninguna de las dos pone candado: solo `true` lo pone. Elegir sobre un vínculo que ya
+ * existía escribe solo el afinado (no `source`), así la X después suelta el candado. En la exploración,
+ * la X sigue escribiendo `false`, sin candado.
  *
  * Desde la segunda versión (2026-09-23, entra solo lo elegido) la X escribe `null`; un `false` solo
  * queda de la primera. Ninguno de los dos lockea, y el motivo sigue siendo el de abajo.

@@ -15,12 +15,10 @@ import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { SENTINEL_SERVICE_TYPE as SENTINEL } from "@/lib/projects/kind";
 const CANVAS_NAME = "Información del cliente";
 const CANVAS_SLUG = "client-info";
-const INFO_SECTIONS = [
-  { key: "stakeholders", label: "Stakeholders" },
-  { key: "retos_estrategicos", label: "Retos Estratégicos" },
-  { key: "oportunidades", label: "Oportunidades" },
-  { key: "procesos", label: "Procesos" },
-];
+// stakeholders/retos_estrategicos/oportunidades se retiraron (2026-10-09, Memoria de la cuenta ·
+// Etapa 0): esa información vive en la ficha del cliente (Client.ficha). Las filas existentes
+// quedan, no se borran. Es la misma lista que lib/canvas/strategy-project.ts: cambian juntas.
+const INFO_SECTIONS = [{ key: "procesos", label: "Procesos" }];
 
 /**
  * Devuelve el id de la sección "procesos" del canvas Información del cliente,

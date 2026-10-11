@@ -821,7 +821,10 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
     expect(iRun).toBeGreaterThan(-1);
     expect(iFusion, "se fusiona antes de guardar la corrida").toBeGreaterThan(iRun);
     const iRama = ruta.lastIndexOf("if (isTimelineDetailAgent) {", iFusion);
-    const rama = ruta.slice(iRama, ruta.indexOf("updateCanvasAsync", iRama));
+    /* ⚠ REAPUNTADA (2026-10-09), con esta razón: el tramo terminaba en `updateCanvasAsync`, que se
+       retiró (Memoria de la cuenta · Etapa 0). Lo que sigue a la rama del detalle es el bloque de
+       los flowcharts; la doctrina (una sola salida, sin vista previa) no cambia. */
+    const rama = ruta.slice(iRama, ruta.indexOf("if (isFlowchart) {", iRama));
     expect(rama.length, "no encontré la rama del detalle").toBeGreaterThan(300);
     expect(rama.match(/return NextResponse\.json\(/g) ?? [], "la rama del detalle tiene otra salida").toHaveLength(1);
     expect(rama).toMatch(/return NextResponse\.json\(\{\s*tareas,\s*run: \{/);

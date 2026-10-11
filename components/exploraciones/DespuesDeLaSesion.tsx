@@ -6,23 +6,28 @@
  * preguntar, qué se respondió. Después, lo que sugiere de ESTA reunión (cada cosa con Usar o
  * Descartar), la alerta si se puso técnica, el siguiente paso acordado y cuánto avanzó la preventa, y
  * «Quedó abierto»: lo que no se preguntó y lo que se dijo sin explorar, con una casilla para llevarlo
- * a la próxima sesión (entra primero en su guía, con «Quedó abierto en la sesión N»).
+ * a la próxima sesión (entra primero en su guía, con «Quedó abierto en la sesión N»). Al final, el correo
+ * de seguimiento para el cliente (CorreoDeSeguimiento.tsx), que usa lo que se marcó ahí.
  *
- * Una reunión que casi no tiene conversación (o una sesión sin reunión) no espera una lectura: pregunta
- * qué pasó —se hizo por otro canal, se cortó y hay que reagendarla, o no se hizo— para que no quede
- * como una reunión hecha que nadie analizó.
+ * Una reunión que casi no tiene conversación (o una sesión sin reunión, o una que terminó sin transcripción
+ * ni notas) no espera una lectura: pregunta qué pasó —se hizo por otro canal, se cortó y hay que
+ * reagendarla, o no se hizo— para que no quede como una reunión hecha que nadie analizó. Ahí mismo se
+ * suma la minuta (etapa A): lo sumado pasa a ser la reunión de ESA sesión (SumarAMano › `paraSesionId`).
  */
 import { useState } from "react";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import { listaParaProponer } from "@/lib/exploraciones/calidad";
-import { definicionDe, type SiguientePaso } from "@/lib/exploraciones/casillas";
+import { type SiguientePaso } from "@/lib/exploraciones/casillas";
+import { avanceDeLaEstrategia, escalaConEvidencia } from "@/lib/exploraciones/avance-del-proyecto";
+import { definicionEnElMarco, type Marco } from "@/lib/exploraciones/marco";
 import { claveDeLaReunion, type DestinoDePropuesta, type ItemPropuesto, type LecturaDeReunion } from "@/lib/exploraciones/contenido";
 import { focoDeLaGuia, MAX_SESIONES, separarPregunta, type PestanaDeSesion, type PreguntaParaMostrar, type ResultadoDeLaSesion } from "@/lib/exploraciones/guia";
 import { claveDeNotaDeSesion } from "@/lib/exploraciones/notas-de-sesion";
 import { Casilla } from "./Casilla";
-import { abrirElContextoAdicional } from "./ContextoDeLaPreventa";
+import { CorreoDeSeguimiento } from "./CorreoDeSeguimiento";
 import { useLienzo } from "./contexto";
+import SumarAMano from "./SumarAMano";
 import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion } from "./piezas-de-la-sesion";
 import { FilaSugerida } from "./Propuestas";
 import { useCorrida } from "./useCorrida";
@@ -33,10 +38,10 @@ import { useSesiones } from "./useSesiones";
 export type Llevar = { texto: string; item: ItemPropuesto | null; para?: string };
 
 /** Dónde aterriza lo propuesto, en una palabra o dos, sobre la fila. */
-function destinoCorto(d: DestinoDePropuesta, nombreDeDimension: (id: string) => string): string {
+function destinoCorto(d: DestinoDePropuesta, nombreDeDimension: (id: string) => string, marco: Marco): string {
   switch (d.tipo) {
     case "casilla":
-      return definicionDe(d.clave).etiqueta;
+      return definicionEnElMarco(d.clave, marco).etiqueta;
     case "nivel":
       return `Escala · ${nombreDeDimension(d.dimensionId)}`;
     case "aExplorar":
@@ -82,8 +87,11 @@ function LoQueLeyo({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: Le
             ? "El agente la leyó antes de que resumiera cada reunión: vuelve a leerla para ver qué se habló y qué se respondió."
             : "Todavía sin leer: cuando el agente la lea, acá aparece qué se habló y qué se respondió de lo planeado."}
         </p>
-        {puedeEditar && r?.leida && r.origen === "meet" && (
-          <BotonBlanco disabled={lanzando || corriendo} onClick={() => void lanzar("leer", { sesionId: r.id })}>
+        {puedeEditar && r?.leida && (r.origen === "meet" || r.origen === "hubspot") && (
+          <BotonBlanco
+            disabled={lanzando || corriendo}
+            onClick={() => void lanzar("leer", r.origen === "meet" ? { sesionId: r.id } : { hubspotId: r.id })}
+          >
             Volver a leer
           </BotonBlanco>
         )}
@@ -91,12 +99,26 @@ function LoQueLeyo({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: Le
     );
   }
   const c = lectura.cobertura.length ? cumplimiento(lectura.cobertura) : null;
+  /* Volver a leerla aunque ya tenga lectura: la grabación de una reunión de HubSpot puede no haber estado
+     cuando el agente la leyó (CreditForce, 28 sep: leyó la invitación y dijo que no hubo conversación). */
+  const releer = puedeEditar && r && (r.origen === "meet" || r.origen === "hubspot");
   return (
     <section data-recorrido="preventa.sesion.salio" className="flex flex-col gap-3 rounded-xl border border-info-line bg-info-surface px-[18px] py-4">
-      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">
-        <IconoDeSugerencia className="h-[13px] w-[13px]" />
-        Lo que leyó el agente
-      </p>
+      <div className="flex items-center gap-2">
+        <p className="flex flex-1 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">
+          <IconoDeSugerencia className="h-[13px] w-[13px]" />
+          Lo que leyó el agente
+        </p>
+        {releer && (
+          <BotonTexto
+            disabled={lanzando || corriendo}
+            title="El agente la vuelve a leer entera: lo que dice de ella se reemplaza."
+            onClick={() => void lanzar("leer", r.origen === "meet" ? { sesionId: r.id } : { hubspotId: r.id })}
+          >
+            Volver a leer
+          </BotonTexto>
+        )}
+      </div>
       <p className="text-sm leading-[21px] text-fg">{lectura.resumen}</p>
       {!c && <p className="text-[12.5px] text-fg-muted">No había una guía armada antes de esta reunión: no hay con qué comparar lo que se preguntó.</p>}
       {c && (
@@ -107,7 +129,7 @@ function LoQueLeyo({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: Le
           </div>
           <ul>
             {lectura.cobertura.map((x) => {
-              const p: PreguntaParaMostrar = { para: x.para, tipo: /^\d/.test(x.para) ? "dimension" : "tarjeta", pregunta: x.pregunta, repreguntas: [] };
+              const p: PreguntaParaMostrar = { para: x.para, tipo: /^\d/.test(x.para) ? "dimension" : x.para.startsWith("vendido:") ? "vendido" : "tarjeta", pregunta: x.pregunta, repreguntas: [] };
               return (
                 <li key={x.para} className="flex items-center gap-2.5 border-b border-surface-hover py-[7px] last:border-b-0">
                   <span className="scale-[0.85]">
@@ -135,7 +157,7 @@ function LoQueLeyo({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: Le
 // ── Lo que sugiere de esta reunión ────────────────────────────────────────────
 
 function LoQueSugiere({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: LecturaDeReunion | null }) {
-  const { exp, revisables, escala, cambiar, puedeEditar, guardando, abrirRevision } = useLienzo();
+  const { exp, revisables, escala, marco, cambiar, puedeEditar, guardando, abrirRevision } = useLienzo();
   const [todas, setTodas] = useState(false);
   const r = pestana.reunion;
   const items = revisables.filter(
@@ -173,7 +195,7 @@ function LoQueSugiere({ pestana, lectura }: { pestana: PestanaDeSesion; lectura:
       {visibles.length > 0 && (
         <ul className="flex flex-col gap-1.5">
           {visibles.map((it) => (
-            <FilaSugerida key={it.id} item={it} destino={destinoCorto(it.destino, nombreDeDimension)} />
+            <FilaSugerida key={it.id} item={it} destino={destinoCorto(it.destino, nombreDeDimension, marco)} />
           ))}
         </ul>
       )}
@@ -205,14 +227,17 @@ function LoQueSugiere({ pestana, lectura }: { pestana: PestanaDeSesion; lectura:
 // ── El siguiente paso y cuánto avanzó ─────────────────────────────────────────
 
 function PasoYAvance({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: LecturaDeReunion | null }) {
-  const { exp, chequeo } = useLienzo();
+  const { exp, chequeo, marco } = useLienzo();
+  const enProyecto = marco.clave === "cs";
   const { todas } = useSesiones();
   const paso = exp.estado.contenido.casillas.siguientePaso as SiguientePaso | undefined;
   // El paso acordado es de la última sesión hecha antes de su fecha: ahí se acordó.
   const hechas = todas.filter((p) => p.hecha && !p.noSeHizo && p.fecha && (!paso?.fecha || p.fecha <= paso.fecha));
   const esDeEsta = !!paso?.que && hechas[hechas.length - 1]?.clave === pestana.clave;
-  const puntos = listaParaProponer(exp.estado, chequeo);
+  // En un proyecto, lo que avanza es la estrategia del cliente (avance-del-proyecto.ts).
+  const puntos: { id: string; corto: string; cumplido: boolean }[] = enProyecto ? avanceDeLaEstrategia(exp.estado) : listaParaProponer(exp.estado, chequeo);
   const listos = puntos.filter((p) => p.cumplido);
+  const escala = enProyecto ? escalaConEvidencia(chequeo) : null;
   // Sin `listosAntes` (el resumen de una reunión leída antes del rediseño) no se sabe qué faltaba ese día.
   const antes = lectura?.listosAntes ? new Set(lectura.listosAntes) : null;
   const sumo = antes ? listos.filter((p) => !antes.has(p.id)) : [];
@@ -234,9 +259,14 @@ function PasoYAvance({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: 
       <div className="min-w-0">
         <Rotulo>Cuánto avanzó</Rotulo>
         <p className="mt-1.5 text-[15px] font-semibold text-fg">
-          Para proponer: {antes ? `${antes.size} → ` : ""}
+          {enProyecto ? "Estrategia" : "Para proponer"}: {antes ? `${antes.size} → ` : ""}
           {listos.length} de {puntos.length}
         </p>
+        {escala && escala.de > 0 && (
+          <p className="text-[13px] text-fg-secondary">
+            Escala: {escala.con} de {escala.de} dimensiones con evidencia
+          </p>
+        )}
         <p className="mt-0.5 text-[13px] text-fg-secondary">
           {!antes
             ? "Hoy, con todo lo confirmado."
@@ -404,9 +434,28 @@ const OPCIONES: { clave: ResultadoDeLaSesion; titulo: string; ayuda: (siguiente:
   { clave: "noSeHizo", titulo: "No se hizo", ayuda: () => "Sale de las sesiones. La reunión sigue en Meet." },
 ];
 
-function QuePaso({ pestana, numeroSiguiente, claveSiguiente }: { pestana: PestanaDeSesion; numeroSiguiente: number; claveSiguiente: string | null }) {
-  const { exp, escala, mapa, puedeEditar, guardando, sesion: seleccion } = useLienzo();
+function QuePaso({
+  pestana,
+  numeroSiguiente,
+  claveSiguiente,
+  minutaAbierta,
+  onMinuta,
+}: {
+  pestana: PestanaDeSesion;
+  numeroSiguiente: number;
+  claveSiguiente: string | null;
+  minutaAbierta: boolean;
+  onMinuta: (sesionId: string) => void;
+}) {
+  const { exp, escala, mapa, marco, puedeEditar, guardando, sesion: seleccion } = useLienzo();
   const editar = useEditarLaSesion(pestana, "despues");
+  /* «Sumar la minuta»: el formulario, con la sesión de la que es. Si era una reunión suelta, se vuelve
+     sesión primero (cambia de pestaña: por eso lo abierto vive en SesionesDeExploracion). */
+  const minutaDe = minutaAbierta ? (pestana.sesion?.id ?? null) : null;
+  const sumarLaMinuta = async () => {
+    const id = await editar(null);
+    if (id) onMinuta(id);
+  };
   const r = pestana.reunion;
   const s = pestana.sesion;
   const resultado = s?.resultado ?? null;
@@ -418,7 +467,7 @@ function QuePaso({ pestana, numeroSiguiente, claveSiguiente }: { pestana: Pestan
       if (clave !== "cortada") return { ...x, resultado: clave, pasaron: undefined };
       // Lo que tenía preparado: su guía o, si no se armó, lo que faltaba al cortarse.
       const guia = e.propuesta.guias[x.id] ?? null;
-      const foco = focoDeLaGuia(e.contenido.casillas, escala, e.areas, mapa.posiciones, e.contenido.aExplorar);
+      const foco = focoDeLaGuia(e.contenido.casillas, escala, e.areas, mapa.posiciones, e.contenido.aExplorar, marco);
       const pasaron = guia ? [...guia.huecos, ...guia.enfoque] : [...foco.huecos, ...foco.enfoque];
       return { ...x, resultado: clave, pasaron: pasaron.slice(0, 20) };
     }).then((id) => {
@@ -430,7 +479,7 @@ function QuePaso({ pestana, numeroSiguiente, claveSiguiente }: { pestana: Pestan
     seleccion.elegir(claveSiguiente);
     seleccion.ponerMomento(claveSiguiente, "antes");
   };
-  const nombres = (s?.pasaron ?? []).map((p) => nombreDelPara(p, escala).toLowerCase());
+  const nombres = (s?.pasaron ?? []).map((p) => nombreDelPara(p, escala, marco).toLowerCase());
 
   return (
     <>
@@ -488,13 +537,23 @@ function QuePaso({ pestana, numeroSiguiente, claveSiguiente }: { pestana: Pestan
             Ya no cuenta como sesión. Si te equivocaste, vuelve a tocar «No se hizo».
           </div>
         )}
-        <p className="px-[18px] pb-4 text-[13px] text-fg-secondary">
-          ¿Tienes la grabación o una minuta de otro lado? Súmala en{" "}
-          <button type="button" className="text-brand hover:underline" onClick={abrirElContextoAdicional}>
-            «Contexto adicional»
-          </button>{" "}
-          y el agente la lee.
-        </p>
+        {minutaDe ? (
+          <div className="px-[18px] pb-4">
+            <SumarAMano paraSesionId={minutaDe} sinLista abiertoAlInicio />
+          </div>
+        ) : (
+          <p className="px-[18px] pb-4 text-[13px] text-fg-secondary">
+            ¿Tienes la grabación o una minuta de otro lado?{" "}
+            {puedeEditar ? (
+              <button type="button" className="text-brand hover:underline" disabled={guardando} onClick={() => void sumarLaMinuta()}>
+                Súmala
+              </button>
+            ) : (
+              "Súmala"
+            )}{" "}
+            y pasa a ser la reunión de esta sesión: el agente la lee.
+          </p>
+        )}
       </section>
       <TusNotas pestana={pestana} vacio />
     </>
@@ -508,8 +567,13 @@ export default function DespuesDeLaSesion({
   llevados,
   armarLaSiguiente,
   soltar,
+  minutaAbierta = false,
+  onMinuta,
 }: {
   pestana: PestanaDeSesion;
+  /** «Sumar la minuta» abierto (también desde el enlace del encabezado de una sesión que terminó sin transcripción). */
+  minutaAbierta?: boolean;
+  onMinuta: (sesionId: string) => void;
   numeroSiguiente: number;
   /** La sesión siguiente, si ya existe (para ir a ella). */
   claveSiguiente: string | null;
@@ -518,17 +582,19 @@ export default function DespuesDeLaSesion({
   armarLaSiguiente: (llevar?: Llevar) => void;
   soltar: (texto: string) => void;
 }) {
-  const { exp, puedeEditar } = useLienzo();
+  const { exp, marco, puedeEditar } = useLienzo();
+  const enProyecto = marco.clave === "cs";
   const { sesiones } = useSesiones();
   const { corriendo, lanzando } = useCorrida();
   const r = pestana.reunion;
   const lectura = r ? (exp.estado.propuesta.lecturas[claveDeLaReunion(r)] ?? null) : null;
-  const sinQueLeer = !!pestana.sesion?.resultado || (!!r?.corta && !lectura) || !r;
+  // Sin transcripción ni notas (etapa A) tampoco hay qué leer: se pregunta qué pasó y se suma la minuta.
+  const sinQueLeer = !!pestana.sesion?.resultado || (!!r?.corta && !lectura) || (r?.texto === "nada" && !lectura) || !r;
 
   if (sinQueLeer) {
     return (
       <div className="space-y-5">
-        <QuePaso pestana={pestana} numeroSiguiente={numeroSiguiente} claveSiguiente={claveSiguiente} />
+        <QuePaso pestana={pestana} numeroSiguiente={numeroSiguiente} claveSiguiente={claveSiguiente} minutaAbierta={minutaAbierta} onMinuta={onMinuta} />
       </div>
     );
   }
@@ -539,21 +605,31 @@ export default function DespuesDeLaSesion({
       <LoQueSugiere pestana={pestana} lectura={lectura} />
       <PasoYAvance pestana={pestana} lectura={lectura} />
       <QuedoAbierto pestana={pestana} lectura={lectura} numeroSiguiente={numeroSiguiente} llevar={(l) => armarLaSiguiente(l)} soltar={soltar} />
+      <CorreoDeSeguimiento pestana={pestana} />
 
       <details className="rounded-xl border border-line bg-surface">
         <summary className="cursor-pointer select-none px-[18px] py-3.5 text-sm font-semibold text-fg">
-          Datos de la sesión <span className="text-[13px] font-normal text-fg-muted">· siguiente paso, portal visto, apertura, producto mostrado, tus notas</span>
+          Datos de la sesión{" "}
+          <span className="text-[13px] font-normal text-fg-muted">
+            {enProyecto ? "· siguiente paso, lo propio de la cuenta, tus notas" : "· siguiente paso, portal visto, apertura, producto mostrado, tus notas"}
+          </span>
         </summary>
         <div className="space-y-4 border-t border-line p-4">
           <Casilla clave="siguientePaso" />
-          <div className="space-y-2">
-            <Casilla clave="portal" />
-            <SinPortal />
-          </div>
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Casilla clave="apertura" />
-            <Casilla clave="producto" />
-          </div>
+          {enProyecto ? (
+            <Casilla clave="particularidades" />
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Casilla clave="portal" />
+                <SinPortal />
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                <Casilla clave="apertura" />
+                <Casilla clave="producto" />
+              </div>
+            </>
+          )}
           <TusNotas pestana={pestana} />
         </div>
       </details>

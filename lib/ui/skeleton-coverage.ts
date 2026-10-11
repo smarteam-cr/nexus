@@ -23,6 +23,12 @@ export type Cobertura =
 export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   // ── Para ti (2026-10-04) ────────────────────────────────────────────────────
   "para-ti": { modo: "own" },
+  tareas: { modo: "own" },
+  "tareas/equipo": { modo: "own" },
+  "tareas/delegadas": { modo: "own" },
+  "tareas/por-cliente": { modo: "own" },
+  "tareas/proyectos/[id]": { modo: "own" },
+  "tareas/espacios/[id]": { modo: "own" },
 
   // ── Clientes ────────────────────────────────────────────────────────────────
   clients: { modo: "own" },
@@ -74,6 +80,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "finanzas/costos/comisiones-vendedor": { modo: "own" },
   "finanzas/caja-neta": { modo: "own" },
   "finanzas/tipo-de-cambio": { modo: "own" },
+  "finanzas/modelo-de-comisiones": { modo: "own" },
   "finanzas/ingresos-variables": { modo: "own" },
   "finanzas/comisiones-partner": { modo: "own" },
   // Siete indicadores + dos charts + una tabla de 12×10: no se parece a ninguna
@@ -88,6 +95,8 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "customer-success/carga/supuestos": { modo: "own" },
   "customer-success/carga/datos": { modo: "own" },
   "customer-success/rentabilidad": { modo: "own" },
+  "customer-success/rentabilidad/cuenta/[clientId]": { modo: "own" },
+  "tu-carga": { modo: "own" },
 
   // ── Marketing (el layout mantiene header + tabs; el loading cubre el slot) ───
   marketing: { modo: "exempt", razon: "redirect a /marketing/contenido" },
@@ -125,7 +134,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   escala: { modo: "own" },
   "escala/[area]": { modo: "own" },
   "escala/borrador": { modo: "own" },
-  "escala/borrador": { modo: "own" },
+  "escala/borrador/[area]": { modo: "own" },
   "escala/comentarios": { modo: "exempt", razon: "redirect puro a /feedback: los comentarios de la escala se deciden ahí (2026-10-05)" },
   // Feedback (2026-10-04): la bandeja abre por defecto; su skeleton tiene sus tres columnas.
   feedback: { modo: "own" },

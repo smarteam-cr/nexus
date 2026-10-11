@@ -55,6 +55,8 @@ interface Datos {
   anteriores: MapaAnterior[];
   indice: IndiceDeProcesos | null;
   corrida: Corrida | null;
+  /** Reuniones nuevas desde el último mapeo que describen cómo trabaja hoy el cliente (lib/procesos/novedades.ts). */
+  reunionesNuevas?: number;
 }
 
 async function leerError(r: Response, porDefecto: string): Promise<string> {
@@ -319,8 +321,17 @@ export default function ProcesosDeLaCuenta({ clientId, slotDelPanel }: { clientI
 
   let queSigue: React.ReactNode = null;
   if (datos && !corriendo) {
+    const nuevas = datos.reunionesNuevas ?? 0;
     if (!tieneProcesos) {
       queSigue = <QueSigue accion={botonDeMapear(true)}>El agente lee las reuniones del cliente enteras y arma cada proceso dos veces: cómo es hoy y cómo queda con HubSpot.</QueSigue>;
+    } else if (nuevas > 0) {
+      // Procesos conserva su lectura propia: los hechos de las reuniones no cambian el mapa, solo avisan (etapa 6).
+      queSigue = (
+        <QueSigue accion={botonDeMapear(true)}>
+          {nuevas === 1 ? "1 reunión desde el último mapa describe" : `${nuevas} reuniones desde el último mapa describen`} cómo trabaja hoy el cliente.
+          Vuelve a mapear para sumarlo: lo que editaste a mano no se pisa.
+        </QueSigue>
+      );
     } else if (borradores.length > 0) {
       queSigue = (
         <QueSigue accion={<BotonAzul onClick={() => setAbierto(borradores[0].blockId)}>Revisar {borradores[0].mapa.nombre}</BotonAzul>}>

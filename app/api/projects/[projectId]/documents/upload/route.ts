@@ -6,12 +6,17 @@
  *   · `{ accion: "preparar", nombre, tipo, tamano }` → valida lo declarado y da un permiso firmado.
  *   · `{ accion: "confirmar", path, nombre }` → valida lo REAL, extrae el texto y crea la fila.
  * El porqué y el flujo, en lib/storage/subida-directa.ts.
+ *
+ * Con `origen` (2026-10-07) lo sube el «Contexto adicional» de una pieza (lib/documents/origen-del-adjunto.ts):
+ * el documento queda en la empresa con su origen y la respuesta trae el TEXTO extraído, que la pieza
+ * guarda como su fuente.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { isDocumentMimeAllowed } from "@/lib/storage/client";
-import { confirmarDocumento, prepararDocumento } from "@/lib/documents/subida-de-documento";
+import { confirmarDocumento, guardarEnLosDocumentosDeLaEmpresa, prepararDocumento } from "@/lib/documents/subida-de-documento";
+import { esOrigenDelAdjunto } from "@/lib/documents/origen-del-adjunto";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -46,6 +51,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
 
   const subido = await confirmarDocumento(carpeta, body.path, body.nombre);
   if (!subido.ok) return NextResponse.json({ error: subido.error }, { status: subido.status });
+
+  if (body.origen !== undefined) {
+    if (!esOrigenDelAdjunto(body.origen)) return NextResponse.json({ error: "Origen inválido." }, { status: 400 });
+    const titulo = typeof body.titulo === "string" ? body.titulo : null;
+    const doc = await guardarEnLosDocumentosDeLaEmpresa({ clientId: project.clientId, projectId, origen: body.origen, subido, titulo });
+    return NextResponse.json({ id: doc.id, nombre: subido.nombre, texto: subido.contenido });
+  }
 
   const doc = await prisma.clientDocument.create({
     data: {

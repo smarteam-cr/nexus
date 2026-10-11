@@ -4,21 +4,21 @@
  *   · `{ titulo, texto, fecha? }` — el texto pegado.
  *   · `{ accion: "preparar", nombre, tipo, tamano, titulo?, fecha? }` — permiso para subir un archivo
  *     DIRECTO a Supabase: el nginx del VPS corta todo cuerpo de más de 1 MB (lib/storage/subida-directa.ts).
- *   · `{ accion: "confirmar", path, nombre, titulo?, fecha? }` — valida lo subido, saca el texto y BORRA
- *     el archivo: de la exploración se guarda solo el texto (lib/exploraciones/documentos.ts).
+ *   · `{ accion: "confirmar", path, nombre, titulo?, fecha? }` — valida lo subido y saca el texto. De la
+ *     exploración se guarda el texto (lib/exploraciones/documentos.ts); el ARCHIVO queda en Información
+ *     del cliente › Documentos, a nivel de empresa (2026-10-07: antes se borraba).
  * Al sumarlo, el agente lo lee en segundo plano.
  *
  * GET pide `ventas.read`; POST, `ventas.write` (gasta IA).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
-import { guardPermission } from "@/lib/auth/api-guards";
-import { confirmarDocumento, prepararDocumento } from "@/lib/documents/subida-de-documento";
+import { guardDeLaExploracion } from "@/lib/exploraciones/guardia";
+import { confirmarDocumento, guardarEnLosDocumentosDeLaEmpresa, prepararDocumento } from "@/lib/documents/subida-de-documento";
 import { lanzarCorrida } from "@/lib/exploraciones/agente";
 import { crearDocumento, listarDocumentos, type OrigenDelDocumento } from "@/lib/exploraciones/documentos";
 import { DocumentoPegadoSchema } from "@/lib/exploraciones/esquemas";
 import { leerExploracion } from "@/lib/exploraciones/servidor";
-import { borrarSubido } from "@/lib/storage/subida-directa";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -27,7 +27,7 @@ const carpetaDe = (id: string) => `exploraciones/${id}`;
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const guard = await guardPermission("preventa", "read");
+  const guard = await guardDeLaExploracion(id, "read");
   if (guard instanceof NextResponse) return guard;
   const lectura = await leerExploracion(id);
   if (lectura.estado !== "ok") return NextResponse.json({ documentos: [] });
@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
 export async function POST(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const guard = await guardPermission("preventa", "write");
+  const guard = await guardDeLaExploracion(id, "write");
   if (guard instanceof NextResponse) return guard;
 
   const lectura = await leerExploracion(id);
@@ -59,12 +59,21 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   } else if (cuerpo.accion === "confirmar") {
     const subido = await confirmarDocumento(carpetaDe(id), cuerpo.path, cuerpo.nombre);
     if (!subido.ok) return NextResponse.json({ error: subido.error }, { status: subido.status });
-    // De la exploración se guarda solo el texto: el archivo se borra apenas se leyó.
-    await borrarSubido("documentos", subido.path);
-    if (!subido.contenido) {
-      return NextResponse.json({ error: "No se pudo sacar texto de ese archivo (¿es un PDF escaneado o una imagen?). Pega el texto." }, { status: 422 });
-    }
     const titulo = (typeof cuerpo.titulo === "string" && cuerpo.titulo.trim()) || subido.nombre.replace(/\.[^.]+$/, "");
+    // El archivo queda entre los documentos de la empresa, se lea o no su texto.
+    await guardarEnLosDocumentosDeLaEmpresa({
+      clientId: lectura.fila.clientId,
+      projectId: lectura.fila.projectId,
+      origen: lectura.fila.projectId ? "exploracion" : "preventa",
+      subido,
+      titulo,
+    });
+    if (!subido.contenido) {
+      return NextResponse.json(
+        { error: "No se pudo sacar texto de ese archivo (¿es un PDF escaneado o una imagen?). Quedó en Información del cliente › Documentos; pega aquí el texto." },
+        { status: 422 },
+      );
+    }
     const r = DocumentoPegadoSchema.safeParse({ titulo: titulo.slice(0, 120), texto: subido.contenido, fecha: cuerpo.fecha || undefined });
     if (!r.success) return cuerpoInvalido(r.error);
     datos = { ...r.data, origen: "archivo", nombreArchivo: subido.nombre.slice(0, 200) };
@@ -74,7 +83,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     datos = { ...r.data, origen: "pegado", nombreArchivo: null };
   }
 
-  const email = guard.user.email ?? "";
+  const email = guard.email ?? "";
   const creado = await crearDocumento({ exploracionId: id, ...datos, creadoPor: email });
   if (!creado.ok) return NextResponse.json({ error: creado.error }, { status: creado.status });
 

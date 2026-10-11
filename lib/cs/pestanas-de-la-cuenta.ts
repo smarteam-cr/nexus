@@ -47,6 +47,7 @@ export const PESTANA_DEL_MOTIVO: Record<ClaveDeMotivo, PestanaDeCuenta | null> =
   alertaDelAgente: null,
   sinDatos: null,
   relacionPorVencer: "renovacion",
+  relacionTerminada: "renovacion",
   bajaDePlan: "renovacion",
   atrasado: "proyectos",
   usoCayendo: "adopcion",

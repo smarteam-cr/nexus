@@ -6,6 +6,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { nombreDeJob } from "@/lib/jobs/nombres";
+import { SOLICITUDES_PARA_VENTAS_WHERE } from "@/lib/sessions/solicitudes-fuera-de-alcance";
 import { plural } from "../armar";
 import type { Fuente } from "../fuente";
 import type { Pendiente } from "../tipos";
@@ -123,11 +124,12 @@ export const PEDIDOS_PARA_VENTAS: Fuente = {
   frente: "VENTAS",
   alDia: "Los pedidos de clientes que pueden ser venta",
   async medir(_a, c) {
-    // Lo mismo que «Oportunidades detectadas» de Ventas (lib/ventas/cargar-oportunidades.ts): lo que el cliente pidió
-    // fuera del alcance y sigue abierto. Solo lo de los últimos 60 días: lo viejo ya se habló o se perdió.
+    // Lo mismo que «Oportunidades detectadas» de Ventas (lib/ventas/cargar-oportunidades.ts): lo que el CSE confirmó
+    // fuera del alcance y sigue abierto (2026-10-07), más lo que no tiene proyecto (no hay un CSE que lo confirme). Solo
+    // lo de los últimos 60 días: lo viejo ya se habló o se perdió.
     const desde = new Date(c.ahora.getTime() - DIAS_DE_UN_PEDIDO_FRESCO * 86_400_000);
     const pedidos = await prisma.pedidoFueraDeAlcance.findMany({
-      where: { estado: { in: ["PEDIDO", "COTIZADO"] }, createdAt: { gte: desde }, NOT: { project: { proyectoInterno: true } } },
+      where: { ...SOLICITUDES_PARA_VENTAS_WHERE, createdAt: { gte: desde }, NOT: { project: { proyectoInterno: true } } },
       select: { id: true, pedido: true, createdAt: true, client: { select: { name: true } } },
       orderBy: { createdAt: "asc" },
       take: 100,

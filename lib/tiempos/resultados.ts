@@ -8,11 +8,16 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { ROLE_LABEL } from "@/lib/auth/roles";
 import { FRENTES } from "@/lib/para-ti/frentes";
+import { cargarConfigCarga } from "@/lib/carga/queries";
+import { FAMILIAS_POR_NOMBRE, familiaDe } from "./familias";
+import { supuestosEnMinutos } from "./servidor";
 import {
   DOCUMENTOS,
   META_PARA_CALIBRAR,
+  MINIMO_DEL_ARRANQUE,
   MINIMO_PARA_MEDIANA,
   MOMENTOS,
+  familiaDeLaClave,
   PARTIES,
   calibracionPorTipo,
   cuantil,
@@ -25,7 +30,7 @@ import {
   type ConfigDeEncuesta,
   type Momento,
 } from "./reglas";
-import type { DatosDeTiempos, FilaDeEncuesta, PeriodoDeTiempos } from "./tipos";
+import type { DatosDeTiempos, EstadoDelArranque, FilaDeEncuesta, FilaDeFamilia, PeriodoDeTiempos } from "./tipos";
 
 const DIA = 24 * 60 * 60 * 1000;
 
@@ -76,11 +81,11 @@ function unir(xs: readonly string[], y = "y"): string {
 
 export async function datosDeTiempos(periodo: PeriodoDeTiempos, ahora = new Date()): Promise<DatosDeTiempos> {
   const desde = desdeDelPeriodo(periodo, ahora);
-  const [filasDeEncuesta, preguntas, miembros, timelines] = await Promise.all([
+  const [filasDeEncuesta, preguntas, miembros, timelines, configuracion, tareasDeCronogramas, delArranque] = await Promise.all([
     prisma.encuestaDeTiempo.findMany({ select: { id: true, momento: true, activa: true, config: true } }),
     prisma.preguntaDeTiempo.findMany({
       where: desde ? { ocurrioAt: { gte: desde } } : {},
-      select: { encuestaId: true, estado: true, motivoOmision: true, venceAt: true, minutos: true, tipoFase: true, documento: true },
+      select: { encuestaId: true, estado: true, motivoOmision: true, venceAt: true, minutos: true, estimadoMinutos: true, tipoFase: true, documento: true, titulo: true },
     }),
     prisma.teamMember.findMany({
       where: { deactivatedAt: null },
@@ -89,7 +94,24 @@ export async function datosDeTiempos(periodo: PeriodoDeTiempos, ahora = new Date
     }),
     // Los proyectos que tienen cronograma: los únicos con tareas que marcar.
     prisma.projectTimeline.findMany({ select: { project: { select: { id: true, name: true, client: { select: { name: true } } } } } }),
+    cargarConfigCarga(),
+    // Las tareas de Smarteam o compartidas de todos los cronogramas (sin sesiones), para contar las tareas clave.
+    prisma.timelineTask.findMany({
+      where: {
+        AND: [
+          { OR: [{ type: null }, { type: "TASK" }] },
+          { OR: [{ party: null }, { party: { in: ["SMARTEAM", "AMBOS"] } }] },
+        ],
+      },
+      select: { title: true, status: true, phase: { select: { timeline: { select: { projectId: true } } } } },
+    }),
+    // La encuesta de arranque se mira entera, sin el período: se manda una vez.
+    prisma.preguntaDeTiempo.findMany({
+      where: { encuesta: { momento: "ARRANQUE" } },
+      select: { personaEmail: true, clave: true, estado: true, motivoOmision: true, minutos: true, venceAt: true, createdAt: true },
+    }),
   ]);
+  const supuestos = supuestosEnMinutos(configuracion.config);
 
   const porMomento = new Map(filasDeEncuesta.map((f) => [f.momento, f]));
   const encuestas: FilaDeEncuesta[] = MOMENTOS.map((m) => {
@@ -115,7 +137,12 @@ export async function datosDeTiempos(periodo: PeriodoDeTiempos, ahora = new Date
   const idDocs = porMomento.get("DOCUMENTO_PUBLICADO")?.id ?? null;
   const respondidas = preguntas.filter((p) => p.estado === "respondida" && p.minutos !== null);
   const deTareas = respondidas.filter((p) => p.encuestaId === idTareas);
-  const calibracion = calibracionPorTipo(deTareas.map((p) => ({ tipo: p.tipoFase, minutos: p.minutos ?? 0 })));
+  const calibracion = calibracionPorTipo(
+    deTareas.map((p) => ({ tipo: p.tipoFase, minutos: p.minutos ?? 0, estimado: p.estimadoMinutos })),
+    supuestos,
+  );
+  const familias = filasDeFamilias(tareasDeCronogramas, delArranque, deTareas, configuracion.config.horasPorFamilia, ahora);
+  const arranque = estadoDelArranque(delArranque, porMomento.get("ARRANQUE")?.config, ahora);
 
   const documentos = DOCUMENTOS.map((d) => {
     const suyas = idDocs ? preguntas.filter((p) => p.encuestaId === idDocs && p.documento === d.clave) : [];
@@ -139,18 +166,99 @@ export async function datosDeTiempos(periodo: PeriodoDeTiempos, ahora = new Date
   return {
     periodo,
     encuestas,
+    arranque,
+    familias,
     calibracion,
     documentos,
     respuestasDeTareas: deTareas.length,
-    queSigue: queSigue(encuestas, calibracion),
+    queSigue: queSigue(encuestas, calibracion, arranque),
     personas: miembros.map((m) => ({ email: m.email.toLowerCase(), nombre: m.name, rol: ROLES[m.roleEnum] ?? m.roleEnum })),
     proyectos,
   };
 }
 
+type PreguntaDelArranque = {
+  personaEmail: string;
+  clave: string;
+  estado: string;
+  motivoOmision: string | null;
+  minutos: number | null;
+  venceAt: Date;
+  createdAt: Date;
+};
+
+/** Por tarea clave: cuántas hay en los cronogramas, lo que dijo el arranque y lo que se respondió al terminarlas. */
+function filasDeFamilias(
+  tareas: readonly { title: string; status: string; phase: { timeline: { projectId: string } } }[],
+  delArranque: readonly PreguntaDelArranque[],
+  alTerminar: readonly { titulo: string; minutos: number | null }[],
+  horasPorFamilia: Readonly<Partial<Record<string, number>>>,
+  ahora: Date,
+): FilaDeFamilia[] {
+  const conteo = new Map<string, { tareas: number; hechas: number; proyectos: Set<string> }>();
+  for (const t of tareas) {
+    const f = familiaDe(t.title);
+    if (!f) continue;
+    const c = conteo.get(f) ?? { tareas: 0, hechas: 0, proyectos: new Set<string>() };
+    c.tareas++;
+    if (t.status === "DONE") c.hechas++;
+    c.proyectos.add(t.phase.timeline.projectId);
+    conteo.set(f, c);
+  }
+  return FAMILIAS_POR_NOMBRE.map((f) => {
+    const c = conteo.get(f.clave);
+    const suyas = delArranque.filter((p) => familiaDeLaClave(p.clave) === f.clave);
+    const horas = suyas
+      .filter((p) => estadoVisible(p.estado, p.venceAt, ahora) === "respondida" && p.minutos !== null)
+      .map((p) => p.minutos ?? 0);
+    const terminadas = alTerminar.filter((p) => familiaDe(p.titulo) === f.clave && p.minutos !== null).map((p) => p.minutos ?? 0);
+    const propio = horasPorFamilia[f.clave];
+    return {
+      clave: f.clave,
+      nombre: f.nombre,
+      seReconocePor: f.seReconocePor,
+      tareas: c?.tareas ?? 0,
+      hechas: c?.hechas ?? 0,
+      proyectos: c?.proyectos.size ?? 0,
+      arranque: {
+        respuestas: horas.length,
+        mediana: horas.length >= MINIMO_DEL_ARRANQUE ? cuantil(horas, 0.5) : null,
+        noLaHacen: suyas.filter((p) => p.estado === "omitida" && p.motivoOmision === "no_lo_hice").length,
+      },
+      alTerminar: { respuestas: terminadas.length, mediana: terminadas.length >= MINIMO_PARA_MEDIANA ? cuantil(terminadas, 0.5) : null },
+      supuestoHoras: typeof propio === "number" ? propio : null,
+    };
+  });
+}
+
+/** Cómo va la encuesta de arranque, por persona pero sin decir quién: cuántas completas, a medias y sin empezar. */
+function estadoDelArranque(preguntas: readonly PreguntaDelArranque[], config: unknown, ahora: Date): EstadoDelArranque {
+  const c = leerConfig(config, "ARRANQUE");
+  const aQuien = unir(c.aQuien.roles.map((r) => ROLES[r] ?? r)) || "nadie todavía";
+  const porPersona = new Map<string, PreguntaDelArranque[]>();
+  for (const p of preguntas) porPersona.set(p.personaEmail, [...(porPersona.get(p.personaEmail) ?? []), p]);
+  let completas = 0;
+  let aMedias = 0;
+  let sinEmpezar = 0;
+  let vencidas = 0;
+  for (const suyas of porPersona.values()) {
+    const estados = suyas.map((p) => estadoVisible(p.estado, p.venceAt, ahora));
+    const cerradas = estados.filter((e) => e === "respondida" || e === "omitida").length;
+    vencidas += estados.filter((e) => e === "vencida").length;
+    if (cerradas === suyas.length) completas++;
+    else if (cerradas > 0) aMedias++;
+    else sinEmpezar++;
+  }
+  const primera = preguntas.reduce<Date | null>((min, p) => (!min || p.createdAt < min ? p.createdAt : min), null);
+  return { mandadaEl: primera ? primera.toISOString() : null, aQuien, personas: porPersona.size, completas, aMedias, sinEmpezar, vencidas };
+}
+
 /** Lo único que conviene hacer ahora, en una frase. */
-function queSigue(encuestas: readonly FilaDeEncuesta[], cal: readonly CalibracionDeTipo[]): string {
-  const disponibles = encuestas.filter((e) => e.disponible);
+function queSigue(encuestas: readonly FilaDeEncuesta[], cal: readonly CalibracionDeTipo[], arranque: EstadoDelArranque): string {
+  if (!arranque.mandadaEl) {
+    return "Manda la encuesta de arranque: en una semana da un primer número por cada tarea clave. Después enciende «Al marcar una tarea como hecha».";
+  }
+  const disponibles = encuestas.filter((e) => e.disponible && e.momento !== "ARRANQUE");
   const activas = disponibles.filter((e) => e.activa);
   if (activas.length === 0) {
     return "Las preguntas están pausadas. Cuéntale al equipo qué va a ver y para qué sirve, y actívalas: nadie recibe ninguna hasta entonces.";
@@ -167,7 +275,7 @@ function queSigue(encuestas: readonly FilaDeEncuesta[], cal: readonly Calibracio
     return `Se responde el ${t.porcentaje} %. Con menos preguntas por día suele subir: prueba bajar el tope.`;
   }
   const faltan = cal.filter((c) => !c.calibra && c.tipo !== "SIN");
-  if (faltan.length === 0) return "Todos los tipos de fase ya calibran: la carga puede dejar de usar los supuestos.";
+  if (faltan.length === 0) return "Todos los tipos de fase ya tienen sus respuestas: revisa lo que propone «Ajustar el cálculo» en la carga.";
   const casiNada = faltan.filter((c) => c.respuestas <= 2).map((c) => c.nombre);
   if (tareas.preguntas >= 20 && casiNada.length > 0) {
     return `${unir(casiNada)} casi no se ${casiNada.length === 1 ? "marca" : "marcan"} en el cronograma: con esta pregunta ${casiNada.length === 1 ? "va" : "van"} a tardar meses en llegar a ${META_PARA_CALIBRAR}.`;

@@ -11,6 +11,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { loadFueraDeAlcanceDeTodos } from "@/lib/canvas/load-canvas-context";
+import { SOLICITUDES_PARA_VENTAS_WHERE } from "@/lib/sessions/solicitudes-fuera-de-alcance";
 import { agruparPorCliente, recortarTexto, type OportunidadDetectada, type OportunidadesDeCliente } from "./oportunidades";
 
 export async function cargarOportunidadesDetectadas(): Promise<OportunidadesDeCliente[]> {
@@ -28,10 +29,10 @@ export async function cargarOportunidadesDetectadas(): Promise<OportunidadesDeCl
     }),
     loadFueraDeAlcanceDeTodos(),
     /* Los pedidos fuera de alcance que salieron en las REUNIONES (2026-10-02, lib/sessions/
-       compromisos-y-alcance.ts). Solo los que siguen abiertos: lo descartado o lo que ya estaba
-       incluido no es una oportunidad. */
+       compromisos-y-alcance.ts). Solo lo que el CSE confirmó y sigue abierto (2026-10-07), más lo que no
+       tiene proyecto: lo descartado, lo que ya estaba incluido o lo que nadie revisó no es una oportunidad. */
     prisma.pedidoFueraDeAlcance.findMany({
-      where: { estado: { in: ["PEDIDO", "COTIZADO"] } },
+      where: SOLICITUDES_PARA_VENTAS_WHERE,
       select: {
         pedido: true,
         quienLoPidio: true,

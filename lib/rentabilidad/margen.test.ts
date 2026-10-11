@@ -93,3 +93,29 @@ describe("C · margen", () => {
     expect(t.sinIngreso.map((f) => f.clienteId)).toEqual(["c"]);
   });
 });
+
+describe("D · los tres costos de la hora (2026-10-07)", () => {
+  const c: CuentaParaMargen = {
+    clienteId: "x",
+    nombre: "X",
+    cse: null,
+    ingreso: 3000,
+    fuenteDelIngreso: "Cobranza",
+    horas: { reuniones: 20, preparacion: 5, entrega: 25, declarada: 10 },
+    reuniones: 10,
+    plan: { sesiones: 0, horasTareas: 40 },
+    costos: { persona: 1500, equipo: 1200 },
+  };
+  it("D1 por persona y por equipo usan el costo de quien hizo cada hora; cargado, la tarifa", () => {
+    expect(filaDeMargen(c, 28, 1.5, "persona")).toMatchObject({ costo: 1500, margen: 1500, tarifa: 30 });
+    expect(filaDeMargen(c, 28, 1.5, "equipo")).toMatchObject({ costo: 1200, margen: 1800, tarifa: 24 });
+    expect(filaDeMargen(c, 28, 1.5, "cargado")).toMatchObject({ costo: 1400, margen: 1600, tarifa: 28 });
+  });
+  it("D2 las horas planeadas se valoran a lo que costó una hora real de la cuenta con el mismo modo", () => {
+    expect(filaDeMargen(c, 28, 1.5, "persona").margenPlaneado).toBe(3000 - 40 * 30);
+    // Sin sus costos (una cuenta de antes), cae a la tarifa.
+    const { costos: _sin, ...vieja } = c;
+    void _sin;
+    expect(filaDeMargen(vieja, 28, 1.5, "persona")).toMatchObject({ costo: 1400, tarifa: 28 });
+  });
+});

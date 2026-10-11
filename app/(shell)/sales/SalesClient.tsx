@@ -19,6 +19,8 @@ interface SalesPendingItem {
 interface SalesResult {
   cards: SalesCard[];
   pendingItems: SalesPendingItem[];
+  /** Reuniones del grupo que eran de otra empresa y no entraron al análisis (un análisis, una empresa). */
+  afuera: number;
 }
 
 type RepFilter = "all" | "M. Salas" | "A. Pinzón";
@@ -71,6 +73,9 @@ export default function SalesClient({
   /** null = la página no las cargó (sin `ventas.read`): el bloque no se pinta. */
   oportunidades: OportunidadesDeCliente[] | null;
 }) {
+  /* «Analizar» pide la misma celda que las oportunidades (`ventas.read`: la ruta responde 403 sin ella). La página las
+     manda en null justo cuando falta la celda: sin ella, el botón no se puede usar y lo dice. */
+  const puedeAnalizar = oportunidades !== null;
   const [analyzing, setAnalyzing] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, SalesResult>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -120,6 +125,7 @@ export default function SalesClient({
           [prospect.domain]: {
             cards: data.cards ?? [],
             pendingItems: data.pendingItems ?? [],
+            afuera: typeof data.afuera === "number" ? data.afuera : 0,
           },
         }));
       }
@@ -283,8 +289,8 @@ export default function SalesClient({
                   <div className="flex-shrink-0 flex flex-col items-end gap-1">
                     <button
                       onClick={() => handleAnalyze(prospect)}
-                      disabled={isAnalyzing || !!analyzing || !canAnalyze}
-                      title={!canAnalyze ? "No hay transcripts disponibles para analizar" : undefined}
+                      disabled={isAnalyzing || !!analyzing || !canAnalyze || !puedeAnalizar}
+                      title={!puedeAnalizar ? "Analizar pide acceso a Ventas" : !canAnalyze ? "No hay transcripts disponibles para analizar" : undefined}
                       className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand hover:bg-brand/90 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {isAnalyzing ? (
@@ -311,6 +317,12 @@ export default function SalesClient({
                         </>
                       )}
                     </button>
+                    {!puedeAnalizar && <span className="text-xs text-fg-muted">Pide acceso a Ventas</span>}
+                    {result && result.afuera > 0 && (
+                      <span className="max-w-[220px] text-right text-xs text-fg-muted">
+                        {result.afuera === 1 ? "1 reunión era de otra empresa y no entró al análisis." : `${result.afuera} reuniones eran de otra empresa y no entraron al análisis.`}
+                      </span>
+                    )}
                     {!canAnalyze && (
                       <span className="text-xs text-gray-600">Sin transcript</span>
                     )}

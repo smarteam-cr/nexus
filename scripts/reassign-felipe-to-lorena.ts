@@ -18,6 +18,7 @@
  * Dry-run por default. Aplicar con: npx tsx scripts/reassign-felipe-to-lorena.ts --apply
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";

@@ -15,12 +15,19 @@ import { leerPropuesta } from "./esquemas";
 import { aFecha, diaConAnio, diaCorto } from "./fechas";
 import { esDeLaEmpresa } from "./hubspot";
 import {
+  actividadQueSeLee,
   agendadasQueYaPasaron,
   agendaRenovada,
+  cuentaEnLaPreventa,
+  SIN_CORTE,
+  type CorteDeLaPreventa,
   debeLeerSola,
+  HECHAS_POR_LECTURA,
   hayQueLeerAlPreparar,
+  hechasParaLeerSolas,
   PASADAS_QUE_CONSERVA_LA_FOTO,
   reunionesDeHubspotQueYaPasaron,
+  reunionesHechasDeHubspot,
   reunionesLeidasDeHubspot,
 } from "./lectura";
 import { calcularMetricas } from "./metricas";
@@ -287,6 +294,87 @@ describe("⛔ la foto nueva conserva las reuniones de HubSpot que ya pasaron (El
   });
 });
 
+describe("⛔ las reuniones grabadas con HubSpot son reuniones de la preventa, aunque nunca hayan estado agendadas (Elías, 2026-10-07)", () => {
+  // CreditForce: la del 28 sep se grabó con HubSpot; Meet tiene su copia sin transcripción.
+  const AHORA = new Date("2026-10-07T18:00:00.000Z");
+  const ALTA = new Date("2026-09-30T12:00:00.000Z");
+  const desde = ALTA.getTime() - 30 * 86_400_000;
+  const corte: CorteDeLaPreventa = { desde, esProspecto: true, ventas: new Set(["apinzon@smarteamcr.com"]) };
+  const reunion = (id: string, inicio: string, extra: Partial<{ texto: string; resultado: string; tipo: string; internos: string[] }> = {}) => ({
+    id,
+    tipo: "MEETING",
+    ts: Date.parse(inicio),
+    titulo: `Reunión ${id}`,
+    texto: "Lo que dejó el grabador de HubSpot.",
+    ...extra,
+  });
+  const material = [
+    reunion("h28", "2026-09-28T20:45:00.000Z"),
+    reunion("sin-texto", "2026-10-01T15:00:00.000Z", { texto: "" }),
+    reunion("cancelada", "2026-10-02T15:00:00.000Z", { resultado: "cancelada" }),
+    reunion("futura", "2026-10-09T15:00:00.000Z"),
+    reunion("vieja", "2026-07-01T15:00:00.000Z"),
+    reunion("nota", "2026-10-03T15:00:00.000Z", { tipo: "NOTE" }),
+  ];
+
+  it("cuentan las que ya pasaron, se hicieron y dejaron qué leer, desde un mes antes del alta", () => {
+    expect(reunionesHechasDeHubspot(material, { corte, ahora: AHORA })).toEqual([
+      { id: "h28", titulo: "Reunión h28", inicio: "2026-09-28T20:45:00.000Z" },
+    ]);
+  });
+
+  it("la foto las suma a la agenda y se listan como reuniones, leídas o no", () => {
+    const hechas = reunionesHechasDeHubspot(material, { corte, ahora: AHORA });
+    const agenda = agendaRenovada({ anterior: [], nueva: hechas, ahora: AHORA });
+    expect(reunionesDeHubspotQueYaPasaron(agenda, ["h28"], [], AHORA).map((r) => [r.id, r.leida])).toEqual([["h28", true]]);
+    expect(agendadasQueYaPasaron(agenda, [], [], AHORA).map((r) => r.id), "sin leer, se avisa").toEqual(["h28"]);
+  });
+
+  it("la copia de Meet SIN transcripción no la tapa; una CON transcripción sí (cuenta una vez, la de Meet)", () => {
+    const agenda = reunionesHechasDeHubspot(material, { corte, ahora: AHORA });
+    expect(reunionesDeHubspotQueYaPasaron(agenda, [], [{ fecha: "2026-09-28T20:50:00.000Z" }], AHORA)).toEqual([]);
+  });
+
+  it("como mucho las más recientes, y el agente lee solo las nuevas de después del alta, como una de Meet", () => {
+    const muchas = Array.from({ length: HECHAS_POR_LECTURA + 3 }, (_, i) => reunion(`m${i}`, new Date(Date.parse("2026-09-23T15:00:00.000Z") + i * 86_400_000).toISOString()));
+    const hechas = reunionesHechasDeHubspot(muchas, { corte, ahora: AHORA });
+    expect(hechas).toHaveLength(HECHAS_POR_LECTURA);
+    expect(hechas[0].id).toBe(`m${HECHAS_POR_LECTURA + 2}`);
+    expect(hechasParaLeerSolas(hechas, { creadaEn: ALTA, leidas: ["m14"], ahora: AHORA })).toEqual(["m13", "m12", "m11", "m10", "m9", "m8", "m7"]);
+  });
+
+  it("⭐ en un prospecto, una de antes del corte cuenta si estuvo alguien de Ventas (Elías, 2026-10-08)", () => {
+    const conAndres = reunion("julio", "2026-07-08T16:00:00.000Z", { internos: ["APinzon@smarteamcr.com"] });
+    const sinVentas = reunion("agosto", "2026-08-01T16:00:00.000Z", { internos: ["cse@smarteamcr.com"] });
+    expect(reunionesHechasDeHubspot([conAndres, sinVentas], { corte, ahora: AHORA }).map((h) => [h.id, h.conVentas])).toEqual([["julio", true]]);
+    // En una empresa que ya es cliente, no: las de antes son de lo que ya compró.
+    expect(reunionesHechasDeHubspot([conAndres], { corte: { ...corte, esProspecto: false }, ahora: AHORA })).toEqual([]);
+  });
+
+  it("⭐ en la preventa de un cliente, el agente lee solo la reunión nueva que tuvo a alguien de Ventas", () => {
+    const hechas = [
+      { id: "con", inicio: "2026-10-06T16:00:00.000Z", conVentas: true },
+      { id: "sin", inicio: "2026-10-06T18:00:00.000Z" },
+    ];
+    expect(hechasParaLeerSolas(hechas, { creadaEn: ALTA, leidas: [], ahora: AHORA })).toEqual(["con", "sin"]);
+    expect(hechasParaLeerSolas(hechas, { creadaEn: ALTA, leidas: [], ahora: AHORA, soloConVentas: true })).toEqual(["con"]);
+  });
+});
+
+describe("⭐ el corte de la preventa (Elías, 2026-10-08)", () => {
+  const corte: CorteDeLaPreventa = { desde: Date.parse("2026-09-06T00:00:00.000Z"), esProspecto: true, ventas: new Set(["msalas@smarteamcr.com"]) };
+  it("desde un mes antes del alta, todas; de antes, solo en un prospecto y con Ventas", () => {
+    expect(cuentaEnLaPreventa(Date.parse("2026-09-28T16:00:00.000Z"), [], corte)).toBe(true);
+    expect(cuentaEnLaPreventa(Date.parse("2026-08-26T16:00:00.000Z"), ["msalas@smarteamcr.com"], corte)).toBe(true);
+    expect(cuentaEnLaPreventa(Date.parse("2026-08-26T16:00:00.000Z"), ["cse@smarteamcr.com"], corte)).toBe(false);
+    expect(cuentaEnLaPreventa(Date.parse("2026-08-26T16:00:00.000Z"), ["msalas@smarteamcr.com"], { ...corte, esProspecto: false })).toBe(false);
+    expect(cuentaEnLaPreventa(Number.NaN, ["msalas@smarteamcr.com"], corte)).toBe(false);
+  });
+  it("una exploración de proyecto no tiene corte", () => {
+    expect(cuentaEnLaPreventa(Date.parse("2023-08-07T16:00:00.000Z"), [], SIN_CORTE)).toBe(true);
+  });
+});
+
 describe("la métrica", () => {
   const AHORA = new Date("2026-12-01T12:00:00.000Z");
   const todos = { dimensiones: true, meta: true, autoridad: true, consecuencia: true, portal: true, siguientePaso: true, noExplorado: true };
@@ -343,6 +431,27 @@ describe("las notas del vendedor de cada sesión (pestaña «Durante», Elías 2
   });
 });
 
+describe("⛔ «Leer» lee la actividad de HubSpot desde un mes antes del alta, como las reuniones de Meet (2026-10-08)", () => {
+  // Grupo Servica, cliente desde 2023: la primera lectura tomó sus 25 actividades más recientes, capacitaciones de 2023 y 2024.
+  const corte: CorteDeLaPreventa = { desde: Date.parse("2026-09-07T00:00:00.000Z"), esProspecto: false, ventas: new Set(["msalas@smarteamcr.com"]) };
+  const a = (id: string, fecha: string, extra: { tipo?: string; internos?: string[] } = {}) => ({ id, ts: Date.parse(fecha), ...extra });
+  const material = [
+    a("hoy", "2026-10-08T21:00:00.000Z"),
+    a("leida", "2026-09-30T16:00:00.000Z"),
+    a("2024", "2024-04-11T16:00:00.000Z", { tipo: "MEETING", internos: ["msalas@smarteamcr.com"] }),
+    a("nota-vieja", "2026-07-01T16:00:00.000Z", { tipo: "NOTE" }),
+    a("sin-fecha", "x"),
+  ];
+
+  it("solo lo que no se leyó y es de después del corte", () => {
+    expect(actividadQueSeLee(material, { yaLeidas: new Set(["leida"]), corte }).map((x) => x.id)).toEqual(["hoy"]);
+  });
+
+  it("en un prospecto, también una reunión de antes con Ventas; una nota de antes, no", () => {
+    expect(actividadQueSeLee(material, { yaLeidas: new Set(["leida"]), corte: { ...corte, esProspecto: true } }).map((x) => x.id)).toEqual(["hoy", "2024"]);
+  });
+});
+
 describe("⭐ la primera preparación sigue leyendo lo que ya estaba grabado (2026-10-07)", () => {
   it("sigue si quedó sin leer una reunión de Meet con conversación o algo sumado a mano", () => {
     expect(hayQueLeerAlPreparar([{ origen: "meet", leida: false }])).toBe(true);
@@ -360,17 +469,24 @@ describe("⭐ la primera preparación sigue leyendo lo que ya estaba grabado (20
 describe("⭐ una reunión de HubSpot leída aparece en Exploración aunque no estuviera en la agenda (2026-10-07)", () => {
   const lectura = (fecha?: string) => ({ etiqueta: "Reunión en HubSpot del 28 sept 2026: Revisión", resumen: "x", cobertura: [], en: "2026-10-07T00:00:00.000Z", corridaId: "r", ...(fecha ? { fecha, titulo: "Revisión del diagnóstico" } : {}) });
 
+  // Un mes antes del alta de CreditForce (1 oct).
+  const desde = Date.parse("2026-09-01T00:00:00.000Z");
+
   it("sale de su lectura, con su fecha y su título", () => {
-    expect(reunionesLeidasDeHubspot({ "hubspot:h1": lectura("2026-09-28T20:45:00.000Z") }, [], [])).toEqual([
+    expect(reunionesLeidasDeHubspot({ "hubspot:h1": lectura("2026-09-28T20:45:00.000Z") }, [], [], desde)).toEqual([
       { id: "h1", titulo: "Revisión del diagnóstico", fecha: "2026-09-28T20:45:00.000Z", origen: "hubspot", leida: true },
     ]);
   });
 
   it("no se repite: ni la que ya lista la agenda, ni la que también está en Meet, ni una sin fecha ni la de Meet", () => {
-    expect(reunionesLeidasDeHubspot({ "hubspot:h1": lectura("2026-09-28T20:45:00.000Z") }, [{ id: "h1", origen: "hubspot" }], [])).toEqual([]);
-    expect(reunionesLeidasDeHubspot({ "hubspot:h1": lectura("2026-09-28T20:45:00.000Z") }, [], [{ fecha: "2026-09-28T21:00:00.000Z" }])).toEqual([]);
-    expect(reunionesLeidasDeHubspot({ "hubspot:h1": lectura() }, [], [])).toEqual([]);
-    expect(reunionesLeidasDeHubspot({ "meet:m1": lectura("2026-09-28T20:45:00.000Z") }, [], [])).toEqual([]);
+    expect(reunionesLeidasDeHubspot({ "hubspot:h1": lectura("2026-09-28T20:45:00.000Z") }, [{ id: "h1", origen: "hubspot" }], [], desde)).toEqual([]);
+    expect(reunionesLeidasDeHubspot({ "hubspot:h1": lectura("2026-09-28T20:45:00.000Z") }, [], [{ fecha: "2026-09-28T21:00:00.000Z" }], desde)).toEqual([]);
+    expect(reunionesLeidasDeHubspot({ "hubspot:h1": lectura() }, [], [], desde)).toEqual([]);
+    expect(reunionesLeidasDeHubspot({ "meet:m1": lectura("2026-09-28T20:45:00.000Z") }, [], [], desde)).toEqual([]);
+  });
+
+  it("⛔ una de antes de un mes antes del alta no es sesión de la preventa, aunque se haya leído (Grupo Servica, 2026-10-08)", () => {
+    expect(reunionesLeidasDeHubspot({ "hubspot:vieja": lectura("2023-08-07T20:00:00.000Z") }, [], [], desde)).toEqual([]);
   });
 
   it("la lectura guarda su fecha y su título; sin «lo listo antes» también se lee", () => {

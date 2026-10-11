@@ -22,6 +22,12 @@ import { IrAPestana, Vacio, type IrA } from "./comun";
 
 const COLOR_DE_LECTURA = { rojo: "rojo", ambar: "ambar", verde: "verde", gris: "gris" } as const;
 
+/** La primera línea con contenido de un texto de la ficha, sin viñetas ni negritas. */
+function primeraLinea(texto: string): string {
+  const linea = texto.split("\n").map((l) => l.replace(/^\s*[-*•\d.)]+\s*/, "").replace(/\*\*/g, "").trim()).find(Boolean) ?? "";
+  return linea;
+}
+
 function ChipDeMotivo({ m }: { m: Motivo }) {
   if (m.ia) return <Chip tono="ia">Agente vigía</Chip>;
   if (m.cruce) return <Chip tono="cruce">{m.clave === "riesgoDoble" ? "Riesgo doble" : "Cruce"}</Chip>;
@@ -39,6 +45,19 @@ export default function PestanaEstado({ data, irA }: { data: CsAccountData; irA:
   return (
     <div className="flex flex-col gap-8">
       <AccountBriefSection clientId={data.clientId} brief={data.brief} />
+
+      {/* Lo que persigue la empresa, en una línea (2026-10-09): el detalle está en la pestaña Resultados. */}
+      {data.empresa && (data.empresa.resultados.trim() || data.empresa.retos.trim()) && (
+        <button
+          type="button"
+          onClick={() => irA("resultados")}
+          className="flex flex-wrap items-baseline gap-x-2 rounded-xl border border-line bg-surface px-4 py-3 text-left text-[13px] transition-colors hover:bg-surface-hover"
+        >
+          <span className={ROTULO_DEL_SISTEMA}>Lo que persigue</span>
+          <span className="min-w-0 flex-1 truncate text-fg">{primeraLinea(data.empresa.resultados || data.empresa.retos)}</span>
+          <span className="text-xs font-semibold text-brand">Ver resultados</span>
+        </button>
+      )}
 
       <section className="flex flex-col gap-3">
         <TituloDeSeccion titulo="Cómo está" ayuda={`Al ${fmtDia(data.hoy)}. Cuatro lecturas, cada una con su porqué. Toca una para ver el detalle.`} />

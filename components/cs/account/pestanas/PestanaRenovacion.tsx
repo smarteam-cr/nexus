@@ -19,6 +19,7 @@ import { diasEntre, enCuanto, fmtCambio, fmtDia, fmtMonto, haceCuanto, miles } f
 import { oportunidades } from "@/lib/cs/cartera-reglas";
 import { renovacionDeLaFicha, type HubDeLaRenovacion, type MontosPorMoneda } from "@/lib/cs/ficha-reglas";
 import { listaParaRenovar } from "@/lib/cs/lista-para-renovar";
+import { relacionTerminada } from "@/lib/cs/lectura-partner";
 import { NOMBRE_DE_LA_PESTANA } from "@/lib/cs/pestanas-de-la-cuenta";
 import { PARTNER_STATE_META } from "@/lib/cs/partner-state";
 import type { CsAccountData } from "@/lib/cs/load-account";
@@ -45,6 +46,8 @@ export default function PestanaRenovacion({ data, irA }: { data: CsAccountData; 
 
   const { proxima, queRenueva, despues, queRenuevaDespues, calendario } = r;
   const venceEn = p?.relacionGestionadaVence ? diasEntre(hoy, p.relacionGestionadaVence) : null;
+  // Terminada, HubSpot deja de compartir el uso: se dice con su fecha, no como «no está gestionada».
+  const terminoLaRelacion = p ? relacionTerminada(p, hoy) : null;
   const lineaDeHub = (hs: HubDeLaRenovacion[]) => hs.map((h) => `${h.nombre.replace(/ Hub$/, "")}${h.plan ? ` ${h.plan}` : ""}`).join(" y ");
   // Cada moneda por su lado: «US$1.200 + ₡300.000», nunca un número que suma las dos.
   const enMonedas = (m: MontosPorMoneda) => m.map((x) => fmtMonto(x.monto, x.moneda)).join(" + ");
@@ -142,12 +145,18 @@ export default function PestanaRenovacion({ data, irA }: { data: CsAccountData; 
       <section className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         <div className="rounded-xl border border-line bg-surface px-4 pb-1.5 pt-4">
           <span className="text-[15px] font-semibold text-fg">Relación gestionada</span>
-          <Dato etiqueta="Vence (estimado por HubSpot)" primero>
+          <Dato etiqueta={!p.gestionada && terminoLaRelacion ? "Terminó" : "Vence (estimado por HubSpot)"} primero>
             {p.gestionada && p.relacionGestionadaVence ? (
               <b className={cn("font-semibold", venceEn !== null && venceEn <= 30 && "text-warn-ink")}>
                 {fmtDia(p.relacionGestionadaVence, hoy)}
                 {venceEn !== null && venceEn >= 0 ? ` · ${enCuanto(p.relacionGestionadaVence, hoy)}` : ""}
               </b>
+            ) : terminoLaRelacion ? (
+              <>
+                <b className="font-semibold text-warn-ink">{fmtDia(terminoLaRelacion, hoy)}</b>
+                <br />
+                <span className="text-xs text-fg-muted">{haceCuanto(terminoLaRelacion, hoy)}: desde entonces HubSpot no comparte el uso</span>
+              </>
             ) : (
               <span className="text-fg-muted">{p.gestionada ? "sin fecha" : "no está gestionada"}</span>
             )}

@@ -24,6 +24,8 @@
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { fetchAllPartnerClients, type PartnerClientRecord } from "@/lib/hubspot/partner-clients";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import { leerDuenos } from "@/lib/hubspot/duenos";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 export interface PartnerSyncResult {
@@ -190,6 +192,40 @@ function materialKey(s: {
  */
 export const PARTNER_CREATE_SKIP = /^(smarteam([ _].*)?|hub id:.*)$/i;
 
+/**
+ * La clave que la copia SUMA a las propiedades crudas de cada registro: quién de Smarteam trabajó por última vez en
+ * el portal (2026-10-09). HubSpot da solo el id de usuario (`hs_last_active_partner_employee`); se traduce con los
+ * dueños del portal y, si la persona está en el equipo, con su nombre de Nexus. La lee lib/cs/lectura-partner.ts.
+ */
+export const CLAVE_ULTIMO_ACTIVO = "nexus_ultimo_activo";
+
+/** id de usuario de HubSpot → cómo se llama (el nombre del equipo, el de HubSpot o el correo). null si falla. */
+async function nombresDeUsuarios(): Promise<Map<string, string> | null> {
+  try {
+    const hs = await getSystemHubspotClient();
+    const { porUsuario } = await leerDuenos(hs);
+    const equipo = await prisma.teamMember.findMany({ select: { name: true, email: true } });
+    const porCorreo = new Map(equipo.map((m) => [m.email.trim().toLowerCase(), m.name]));
+    const out = new Map<string, string>();
+    for (const [id, d] of porUsuario) {
+      const nombre = (d.email && porCorreo.get(d.email)) || d.nombre || d.email;
+      if (nombre) out.set(id, nombre);
+    }
+    return out;
+  } catch (e) {
+    console.error("[partner-sync] no se pudieron traducir los usuarios de HubSpot:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/** Las propiedades crudas del registro con quién trabajó por última vez, si se sabe. */
+function conUltimoActivo(rec: PartnerClientRecord, nombres: Map<string, string> | null): Record<string, unknown> {
+  const props = rec.properties as Record<string, unknown>;
+  const id = props.hs_last_active_partner_employee;
+  const nombre = id !== null && id !== undefined && id !== "" ? nombres?.get(String(id)) : undefined;
+  return nombre ? { ...props, [CLAVE_ULTIMO_ACTIVO]: nombre } : props;
+}
+
 export async function syncPartnerClients(
   options: { createClients?: boolean } = {},
 ): Promise<PartnerSyncResult> {
@@ -220,6 +256,7 @@ export async function syncPartnerClients(
     }
     result.total = fetched.records.length;
     result.associationsOk = fetched.associationsOk;
+    const nombres = await nombresDeUsuarios();
     const canRelink = fetched.associationsOk; // sin asociaciones confiables NO se re-matchea ni se crean Clients
 
     // ── Índices de matching (SIN prospectos: un vínculo a prospecto es invisible
@@ -279,14 +316,14 @@ export async function syncPartnerClients(
           // matchearlos — un Client solo-nombre roba sesiones por el fallback débil
           // de título (caso real: "Alejandro Rodríguez" se llevó 57 sesiones internas).
           // El snapshot igual se sincroniza (queda sin vincular, invisible en CS).
+          // ⚠ Sin `continue`: el registro se copia igual, sin vincular. Hasta el 2026-10-09 se saltaba entero y sus
+          // datos quedaban congelados en la primera copia (siete registros del 10 jul, entre ellos RSM Costa Rica).
           const unmatchable = !scalars.domain && rec.associatedCompanyIds.length === 0;
-          if (!clientId && (PARTNER_CREATE_SKIP.test(name) || unmatchable)) {
-            result.unmatched++;
-            continue;
-          }
+          const noSeCrea = !clientId && (PARTNER_CREATE_SKIP.test(name) || unmatchable);
+          if (noSeCrea) result.unmatched++;
 
           // Crear Client si no hay match (decisión de producto).
-          if (!clientId) {
+          if (!clientId && !noSeCrea) {
             const draft = {
               name,
               domain: scalars.domain,
@@ -335,7 +372,7 @@ export async function syncPartnerClients(
         const base = {
           fetchedAt: new Date(),
           fetchStatus: fetched.associationsOk ? "ok" : "partial",
-          properties: rec.properties as Prisma.InputJsonValue,
+          properties: conUltimoActivo(rec, nombres) as Prisma.InputJsonValue,
           ...scalars,
           seats: scalars.seats as Prisma.InputJsonValue,
           renewalsByHub: scalars.renewalsByHub as Prisma.InputJsonValue,

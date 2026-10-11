@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
-import { esLiderDeCs } from "@/lib/cs/acceso";
+import { veRentabilidad, veSuCarga } from "@/lib/rentabilidad/acceso";
+import { RUTA_DE_TU_CARGA } from "@/lib/carga/rutas";
 import { cargarCargaDelEquipo } from "@/lib/carga/queries";
 import { sinReunionesRecientes } from "@/lib/carga/senales";
 import { cargarPipelineParaContratar, cargarRentabilidad } from "@/lib/rentabilidad/queries";
+import { leerDecisionesDeContratacion } from "@/lib/rentabilidad/decisiones";
 import type { Periodo } from "@/lib/rentabilidad/margen";
 import Rentabilidad from "@/components/rentabilidad/Rentabilidad";
 // Mismo contenedor que loading.tsx — la fuente única evita que page y skeleton deriven.
@@ -13,17 +15,22 @@ export const dynamic = "force-dynamic";
 
 const PERIODOS: Periodo[] = ["mes", "trimestre", "anio"];
 
-// RENTABILIDAD — el margen de cada cuenta con sus horas reales y cuándo contratar (2026-10-06). De la CSL y de dirección,
-// como el resto de Éxito del cliente (decisión de Elías): usa la planilla del período SUMADA para el costo de la hora,
-// nunca lo que cobra una persona. Lo vigila lib/auth/customer-success-propio.test.ts.
+// RENTABILIDAD — el margen de cada cuenta con sus horas reales, el costo de la hora y cuándo contratar (2026-10-06). Solo
+// dirección (decisión de Elías del 2026-10-07): muestra el costo de la hora de cada persona, sacado de la planilla. Quien
+// lleva cuentas va a «Tu carga». Lo vigila lib/rentabilidad/acceso.test.ts.
 export default async function RentabilidadPage({ searchParams }: { searchParams: Promise<{ periodo?: string; vista?: string }> }) {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !esLiderDeCs(ctx.role)) redirect("/clients");
+  if (!ctx || !veRentabilidad(ctx.role)) redirect(ctx && veSuCarga(ctx.role) ? RUTA_DE_TU_CARGA : "/clients");
 
   const sp = await searchParams;
   const periodo = PERIODOS.includes(sp.periodo as Periodo) ? (sp.periodo as Periodo) : "trimestre";
   const ahora = new Date();
-  const [datos, carga, pipeline] = await Promise.all([cargarRentabilidad(periodo, ahora), cargarCargaDelEquipo(ahora), cargarPipelineParaContratar()]);
+  const [datos, carga, pipeline, decisiones] = await Promise.all([
+    cargarRentabilidad(periodo, ahora),
+    cargarCargaDelEquipo(ahora),
+    cargarPipelineParaContratar(),
+    leerDecisionesDeContratacion(),
+  ]);
   const config = carga.configuracion.config;
   // La capacidad es la de quien está trabajando cuentas: quien no aparece en el calendario hace semanas (otra tarea,
   // vacaciones) no es espacio, igual que en la carga del equipo. Se dice quién quedó afuera.
@@ -34,18 +41,21 @@ export default async function RentabilidadPage({ searchParams }: { searchParams:
     <Rentabilidad
       datos={datos}
       contratacion={{
-        base: carga.equipo.horas + carga.sinCse.horas,
-        sinCse: carga.sinCse.horas,
+        base: carga.equipo.horas + carga.sinCse.horasFueraDelEquipo,
+        sinCse: carga.sinCse.horasFueraDelEquipo,
         capacidad: activos.reduce((a, p) => a + p.disponible, 0),
         horasPorCse: config.capacidad.horasContrato * config.capacidad.productiva,
         personas: activos.length,
         fueraDeLaCapacidad: cse.filter((p) => !activos.includes(p)).map((p) => p.nombre),
         tratos: pipeline.tratos,
         error: pipeline.error,
+        utilizacionMedida: carga.equipo.utilizacion,
+        semanasMedidas: carga.semanas.length,
+        decisiones,
       }}
       config={config}
       hoyISO={new Date(+ahora - 6 * 3_600_000).toISOString().slice(0, 10)}
-      pestanaInicial={sp.vista === "contratacion" ? "contratacion" : "margen"}
+      pestanaInicial={sp.vista === "contratacion" ? "contratacion" : sp.vista === "costo" ? "costo" : "margen"}
       contenedor={SHELL_DEFAULT}
     />
   );

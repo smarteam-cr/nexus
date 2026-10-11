@@ -28,7 +28,7 @@ import { UMBRALES, usoCayendo } from "@/lib/cs/lectura-partner";
 import { PARTNER_STATE_META } from "@/lib/cs/partner-state";
 import { NOMBRE_DE_LA_PESTANA, PESTANAS_DE_LA_CUENTA, pestanaDeLaUrl, type PestanaDeCuenta } from "@/lib/cs/pestanas-de-la-cuenta";
 import type { CsAccountData } from "@/lib/cs/load-account";
-import { Chip, ChipDeCabecera, Punto } from "../piezas";
+import { Chip, ChipDeCabecera, META_DE_SALUD, Punto } from "../piezas";
 import PanelDeLaCuenta from "./PanelDeLaCuenta";
 import PestanaEstado from "./pestanas/PestanaEstado";
 import PestanaAdopcion from "./pestanas/PestanaAdopcion";
@@ -43,10 +43,16 @@ const mesYAnio = (ymd: string) => `${MESES_LARGOS[Number(ymd.slice(5, 7)) - 1]} 
 export default function AccountView({
   data,
   puedeCurar,
+  soloAdopcion = false,
 }: {
   data: CsAccountData;
   /** ⚠ Resolver la propuesta de salud exige `clientes.viewAll`; abrir esta ficha, no. */
   puedeCurar: boolean;
+  /**
+   * La ve el CSE de la cuenta (2026-10-07): solo la pestaña Adopción, sin el panel y sin montos. La cuenta
+   * ya llega vaciada desde el servidor (`soloLaAdopcion`, lib/cs/adopcion-del-cse.ts).
+   */
+  soloAdopcion?: boolean;
 }) {
   const { cuenta, hoy } = data;
   const p = cuenta.partner;
@@ -93,6 +99,34 @@ export default function AccountView({
   const cuenta_ = (k: PestanaDeCuenta): number | undefined =>
     k === "proyectos" ? data.projects.length : k === "resultados" ? data.resultados.length : k === "conversaciones" ? (data.signals?.engagements90d ?? undefined) : undefined;
 
+  if (soloAdopcion) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <CabeceraDeFicha
+          volver={{ href: `/clients/${cuenta.clientId}`, etiqueta: "Ficha del cliente" }}
+          titulo={cuenta.nombre}
+          chips={<ChipHubspot conectado={!!p} title={p ? "Vinculada a HubSpot Partner" : PARTNER_STATE_META[data.partnerState === "ok" ? "no_match" : data.partnerState].message} />}
+          acciones={
+            p?.enlacePortal ? (
+              <AccionDeCabecera href={p.enlacePortal} externa>
+                Abrir en HubSpot ↗
+              </AccionDeCabecera>
+            ) : undefined
+          }
+        />
+        <main className="min-w-0 flex-1 bg-surface-muted px-6 pb-12 pt-5 xl:px-8">
+          <div className="flex max-w-[1060px] flex-col gap-5">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-sm font-semibold text-fg">Adopción</h2>
+              <p className="text-xs text-fg-muted">Qué de lo que tiene el cliente está prendido y se usa.</p>
+            </div>
+            <PestanaAdopcion data={data} irA={null} />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <CabeceraDeFicha
@@ -106,6 +140,11 @@ export default function AccountView({
             {p?.pais && <ChipDeCabecera>{p.pais}</ChipDeCabecera>}
             {p?.clienteDesde && <ChipDeCabecera>Cliente desde {mesYAnio(p.clienteDesde)}</ChipDeCabecera>}
             {(p?.partnersQueGestionan ?? 1) >= 2 && <Chip tono="atencion">Otro partner la gestiona</Chip>}
+            {/* El color de la cuenta: el MISMO del índice, con su porqué al pasar el mouse. */}
+            <ChipDeCabecera title={`${META_DE_SALUD[data.salud.salud].texto}: ${data.salud.porque}`}>
+              <Punto color={META_DE_SALUD[data.salud.salud].color} />
+              {META_DE_SALUD[data.salud.salud].texto}
+            </ChipDeCabecera>
           </>
         }
         acciones={

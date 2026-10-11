@@ -24,7 +24,7 @@ export default async function SessionsPage({
 
   // C-20 (2026-09-04): las consultas, la cascada y la cobertura viven en UN cargador que
   // comparten esta página y GET /api/sessions/grupo. Acá solo queda lo que depende de la URL.
-  const { sessionsWithMeta, clients, categories, hubspotCompanies, teamMembersLite, cobertura } =
+  const { sessionsWithMeta, clients, categories, hubspotCompanies, cobertura } =
     await cargarSesionesCategorizadas();
 
   // ── C-19: el índice de la barra + SOLO las filas del grupo elegido ──────────────
@@ -48,7 +48,6 @@ export default async function SessionsPage({
       clients={clients}
       categories={categories}
       hubspotCompanies={hubspotCompanies}
-      teamMembers={teamMembersLite}
       cobertura={cobertura}
     />
   );

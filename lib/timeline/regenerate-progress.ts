@@ -11,12 +11,18 @@
  * (ancla, revalidada en vivo) → sesiones pasadas → handoff. El agente infiere el
  * mapeo etapa→fase. Best-effort: cualquier fallo devuelve { skipped, reason } sin
  * lanzar (no debe tumbar el post-process que lo llama).
+ *
+ * Las sesiones (memoria de la cuenta, etapa 3): la reunión NUEVA entera y las anteriores con lo que ya dejaron (minuta
+ * y notas), no 12 transcripciones; más la memoria del proyecto (compromisos abiertos, desviaciones ya registradas,
+ * resultados), sin repetir esas reuniones (lib/sessions/project-sessions.ts y lib/memoria).
  */
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
+import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { getProjectStage } from "@/lib/hubspot/stage";
-import { getPastSessionsForProject } from "@/lib/sessions/project-sessions";
+import { getSessionsForProgress } from "@/lib/sessions/project-sessions";
+import { memoriaDelProyecto } from "@/lib/memoria";
 import { loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
 import { normalizeFingerprint } from "@/lib/timeline/particularidad-identity";
@@ -136,6 +142,12 @@ export interface ProgressMessageInputs {
   operativaBlock: string;
   sessionsBlock: string;
   /**
+   * La memoria del proyecto (lib/memoria, etapa 3), con el alcance interno y SIN las reuniones que ya van en
+   * `sessionsBlock`: los compromisos abiertos, las desviaciones ya registradas y los resultados. Opcional: sin memoria el
+   * mensaje queda byte-idéntico al de antes. Va después de las sesiones y las notas.
+   */
+  memoriaBlock?: string;
+  /**
    * Las notas del «Contexto del cronograma» (2026-09-23), ya rotuladas. Opcional y condicional:
    * sin notas el mensaje queda byte-idéntico al de antes. Va DESPUÉS de las sesiones: es material
    * del mismo tipo (lo que pasó), pegado a mano porque no quedó en ninguna reunión.
@@ -170,6 +182,7 @@ export function buildProgressUserMessage(i: ProgressMessageInputs): string {
     i.sessionsBlock || "(sin sesiones pasadas registradas)",
     "",
     ...(i.notasBlock?.trim() ? [i.notasBlock, ""] : []),
+    ...(i.memoriaBlock?.trim() ? [i.memoriaBlock, ""] : []),
     "=== HANDOFF CURADO (alcance del proyecto) ===",
     i.handoffCtx || "(sin handoff confirmado)",
     "",
@@ -190,7 +203,12 @@ export function buildProgressUserMessage(i: ProgressMessageInputs): string {
  */
 export async function regenerateTimelineProgress(
   projectId: string,
-  opts: { asOfSessionId?: string } = {},
+  /**
+   * `disparadoPorSistema`: lo llama el post-proceso automático de una reunión. Ahí la corrida no
+   * es de nadie: `triggeredByEmail()` podría devolver a quien disparó el auto-sync y cargarle el
+   * gasto a su presupuesto humano. Con la bandera, la llamada se mide como automática.
+   */
+  opts: { asOfSessionId?: string; disparadoPorSistema?: boolean } = {},
 ): Promise<ProgressResult> {
   try {
     // 1. Proyecto + timeline con fases/tareas (estado confirmado = base)
@@ -267,7 +285,9 @@ export async function regenerateTimelineProgress(
     // 3. Contexto: sesiones pasadas + handoff + cronograma con avance confirmado + las
     //    instrucciones del CSE (mismo canvas "timeline" que ya lee el detalle — Tanda N).
     const [pastSessions, handoffCtx, timelineCtx, canvasCronograma, categorias, notasBlock] = await Promise.all([
-      getPastSessionsForProject(projectId),
+      /* La reunión NUEVA entera (la del post-proceso, o la más reciente con algo que leer si se pidió con el botón) y
+         las demás con lo que ya dejaron (minuta y notas), nunca sus transcripciones (lib/sessions/project-sessions.ts). */
+      getSessionsForProgress(projectId, { nuevaId: opts.asOfSessionId ?? null }),
       loadHandoffContext(projectId, { onlyConfirmed: true }),
       loadTimelineContext(projectId, { includeProgress: true }),
       prisma.projectCanvas.findFirst({
@@ -279,7 +299,7 @@ export async function regenerateTimelineProgress(
          min): cambian poco y se editan en /sessions/categories sin deploy. */
       getSessionCategories(),
       /* Las notas del «Contexto del cronograma». Las REUNIONES del avance NO son las elegidas ahí:
-         son las 12 más recientes del proyecto (`getPastSessionsForProject`), a propósito — ver
+         son las 12 más recientes del proyecto (`getSessionsForProgress`), a propósito — ver
          lib/sessions/project-sessions.ts. */
       cargarNotasDelCronograma(projectId),
     ]);
@@ -302,14 +322,28 @@ export async function regenerateTimelineProgress(
       .map(
         (s) =>
           `[${fechaLocalDeLaReunion(s.date)}] ${prefijoDeSala(etiquetaDeSala(s, dominiosPropios))}` +
-          `${s.content}`,
+          `${s.entera ? "(LA REUNIÓN NUEVA, entera) " : ""}${s.content}`,
       )
       .join("\n\n---\n\n");
-    const colaSinContenido = sinContenido.length
-      ? `Además hubo ${sinContenido.length} reunión(es) del proyecto SIN transcripción ni ` +
-        `resumen — ocurrieron, pero no hay material para leer: ` +
-        sinContenido.map((s) => `"${s.title}" (${fechaLocalDeLaReunion(s.date)})`).join(", ")
-      : "";
+    /* ⚠ Desde la memoria (etapa 3) las anteriores van con su minuta y sus notas, nunca con la transcripción: una que
+       tiene transcripción pero no dejó minuta ni notas tampoco tiene contenido acá. No se le dice al modelo que «no hay
+       material»: lo hay, solo que no se relee. */
+    const sinNada = sinContenido.filter((s) => !s.conTranscripcion);
+    const soloTranscripcion = sinContenido.filter((s) => s.conTranscripcion);
+    const listaDeReuniones = (xs: typeof sinContenido) =>
+      xs.map((s) => `"${s.title}" (${fechaLocalDeLaReunion(s.date)})`).join(", ");
+    const colaSinContenido = [
+      sinNada.length
+        ? `Además hubo ${sinNada.length} reunión(es) del proyecto SIN transcripción ni ` +
+          `resumen — ocurrieron, pero no hay material para leer: ${listaDeReuniones(sinNada)}`
+        : "",
+      soloTranscripcion.length
+        ? `Además hubo ${soloTranscripcion.length} reunión(es) del proyecto sin minuta ni notas ` +
+          `(tienen transcripción, pero no se relee): ${listaDeReuniones(soloTranscripcion)}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
     const sessionsBlock = [bloqueConContenido, colaSinContenido]
       .filter(Boolean)
       .join("\n\n---\n\n");
@@ -338,6 +372,11 @@ export async function regenerateTimelineProgress(
     });
     if (!agent) return { status: "skipped", reason: "agent_not_seeded", projectId };
 
+    /* La memoria del proyecto (lib/memoria, etapa 3), con el alcance interno: los compromisos abiertos (de Tareas, por
+       su puerta), las desviaciones ya registradas (para no volver a proponerlas) y los resultados. Sin las reuniones que
+       ya van arriba (`yaLeidas`). Si falla, el avance sigue sin ella: la memoria nunca tira. */
+    const memoriaBlock = (await memoriaDelProyecto(projectId, { lector: "avance", yaLeidas: pastSessions.map((s) => s.id) })).texto;
+
     const userMessage = buildProgressUserMessage({
       instrucciones,
       companyName: project.client.name,
@@ -347,21 +386,33 @@ export async function regenerateTimelineProgress(
       operativaBlock: bloqueDeOperativa(project),
       sessionsBlock,
       notasBlock,
+      memoriaBlock,
       handoffCtx,
       timelineCtx,
       hoy: fechaLocalDeLaReunion(new Date()),
     });
 
-    // 5. Claude
+    // 5. Claude. Medido a nombre del agente (antes gastaba sin nombre en el medidor).
+    const disparador = opts.disparadoPorSistema ? null : await triggeredByEmail();
     let rawText: string;
     try {
-      const msg = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        // 6.000 (antes 3.000): con las particularidades y el razonamiento, 3.000 cortaba la respuesta.
-        max_tokens: 6000,
-        system: `${agent.systemPrompt ?? ""}\n\nESTILO (OBLIGATORIO): TODO el texto en español con TUTEO neutro ("tú"): "Transforma", "centraliza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".`,
-        messages: [{ role: "user", content: userMessage }],
-      });
+      const msg = await conContextoDeIA(
+        {
+          agentSlug: AGENT_ID_PROGRESS,
+          clientId: project.clientId,
+          projectId,
+          triggeredByEmail: disparador,
+          origen: opts.disparadoPorSistema ? "sessions/post-process › avance" : "timeline/progress",
+        },
+        () =>
+          anthropic.messages.create({
+            model: "claude-sonnet-4-6",
+            // 6.000 (antes 3.000): con las particularidades y el razonamiento, 3.000 cortaba la respuesta.
+            max_tokens: 6000,
+            system: `${agent.systemPrompt ?? ""}\n\nESTILO (OBLIGATORIO): TODO el texto en español con TUTEO neutro ("tú"): "Transforma", "centraliza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".`,
+            messages: [{ role: "user", content: userMessage }],
+          }),
+      );
       rawText = (msg.content[0] as { type: string; text: string }).text.trim();
     } catch (e) {
       return { status: "error", reason: `Claude error: ${(e as Error).message}`, projectId };
@@ -462,7 +513,7 @@ export async function regenerateTimelineProgress(
         status: "DONE",
         stepLabel: "Avance de cronograma",
         output: JSON.stringify(parsed),
-        triggeredByEmail: await triggeredByEmail(),
+        triggeredByEmail: disparador,
       },
     });
 

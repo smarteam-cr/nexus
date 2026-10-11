@@ -112,6 +112,15 @@ const LECTORES: Lector[] = [
       "del CSE, que nunca se publica — igual lleva la allowlist de Exploración por prolijidad",
   },
   {
+    archivo: "lib/exploraciones/fuentes-del-proyecto.ts",
+    pieza: "exploration",
+    exposicion: "interno",
+    porque:
+      "el agente de la exploración del proyecto (el lienzo de la preventa con las preguntas de Customer " +
+      "Success, 2026-10-07): lee el handoff para preguntar desde lo vendido. Herramienta interna del CSE, " +
+      "nunca se publica; lo que confirma va a Información del cliente como sugerencia",
+  },
+  {
     archivo: "lib/cuestionario/prellenar.ts",
     pieza: null, // el cuestionario previo vive dentro de Exploración, no es una pieza propia
     exposicion: "directo",
@@ -148,13 +157,40 @@ const LECTORES: Lector[] = [
       "que ya está en este censo",
   },
   {
+    archivo: "scripts/sondeo-de-hechos.ts",
+    pieza: null,
+    exposicion: "interno",
+    porque:
+      "el sondeo de hechos (memoria de la cuenta, etapa 5; no se despliega) le pasa a la lectura de hechos SOLO el " +
+      "alcance vendido de cada proyecto vinculado, recortado, para que sepa de qué proyecto habla cada hecho. Lo que " +
+      "sale va a un reporte local (backups/), nunca a un documento del cliente",
+  },
+  {
+    archivo: "lib/seguimiento/hechos-server.ts",
+    pieza: null,
+    exposicion: "interno",
+    porque:
+      "la lectura de hechos de cada reunión (memoria de la cuenta, etapa 6) le pasa SOLO el alcance vendido de cada " +
+      "proyecto vinculado, recortado, para que sepa de qué proyecto habla cada hecho. Los hechos son internos: nada " +
+      "de lo que ve el cliente los lee (lib/seguimiento/hechos-internos.test.ts); una novedad la aplica una persona",
+  },
+  {
     archivo: "lib/sessions/post-process.ts",
     pieza: null,
     exposicion: "interno",
     porque:
       "el análisis de cada reunión lee SOLO el alcance vendido y lo que quedó afuera, para reconocer un " +
       "pedido fuera de alcance (2026-10-02). Lo que produce —la minuta, los compromisos y los pedidos— es " +
-      "interno: ningún documento del cliente lo lee",
+      "interno: ningún documento del cliente lo lee. Desde la etapa 2 de la memoria de la cuenta solo lo " +
+      "pide en una reunión de un CLIENTE con proyecto principal, y los compromisos van a propuestas de Tarea",
+  },
+  {
+    archivo: "lib/sessions/post-process-viejo.ts",
+    pieza: null,
+    exposicion: "interno",
+    porque:
+      "la copia congelada del post-proceso de antes de la etapa 2 (el retroceso de SEGUIMIENTO_REUNIONES_ENABLED=0). " +
+      "Lee lo mismo que el post-proceso —solo el alcance vendido y lo que quedó afuera— y lo que produce es interno",
   },
   {
     archivo: "lib/handoff/proponer-resultados.ts",
@@ -260,6 +296,16 @@ const LECTORES: Lector[] = [
     pieza: null,
     exposicion: "interno",
     porque: "el resumen «cómo va este proyecto» es del equipo; nunca sale de Nexus",
+  },
+  {
+    archivo: "lib/handoff/sugerencias-server.ts",
+    pieza: "handoff",
+    exposicion: "interno",
+    porque:
+      "«Buscar lo nuevo» sobre un handoff congelado (etapa 3b): lee lo que ya dice el handoff (sin las " +
+      "sugerencias que nadie revisó) para no repetirlo, y deja sugerencias en borrador EN el handoff, que es " +
+      "interno. Lo que alguien usa pasa a ser handoff y llega al cliente solo por las allowlists de kickoff y " +
+      "Entrega que este archivo guarda",
   },
   {
     archivo: "app/api/clients/[id]/analyze/route.ts",

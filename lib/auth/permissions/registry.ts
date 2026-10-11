@@ -60,6 +60,17 @@ export const PERMISSION_SECTIONS = [
         label: "Confirmar los resultados que persigue el cliente",
         enforced: true,
       },
+      {
+        /* Congelar el handoff y pedirle sugerencias («Buscar lo nuevo») una vez congelado (etapa 3b, DECISIONS
+           «El handoff se congela», 2026-10-10). Celda propia y no `regenerate` porque va al CSE, que NO regenera
+           el handoff: congelar deja lo vendido como foto fija y las sugerencias solo suman borradores que una
+           persona usa o descarta; ninguna de las dos reescribe el documento. «Rehacer desde cero» sí lo reescribe
+           y sigue pidiendo `regenerate`. Aplicar el cronograma que propone el handoff congela solo, por la regla,
+           sin mirar esta celda. */
+        key: "congelar",
+        label: "Congelar el handoff y buscar lo nuevo en las reuniones",
+        enforced: true,
+      },
     ],
   },
   {
@@ -319,6 +330,16 @@ export const PERMISSION_SECTIONS = [
     label: "Aguinaldo (muestra lo que ganó cada persona)",
     soloPorPersona: true,
     actions: [{ key: "read", label: "Ver el aguinaldo de cada persona", enforced: true }],
+  },
+  /* Tareas internas (docs/tareas-plan.md §11). Lo propio no lleva celda: anotar, sugerir, decidir lo tuyo, revisar tu
+     semana y leer una reunión son de todo interno. `manage` hace LÍDER de un sprint: asignar directo, repartir «Por
+     asignar» y marcar en la retro las tareas de su equipo. Se da a una PERSONA (su override en /team), nunca a un rol, y
+     vale solo en su equipo (lib/tareas/equipos.ts). */
+  {
+    key: "tareas",
+    label: "Tareas internas (líder del sprint de su equipo)",
+    soloPorPersona: true,
+    actions: [{ key: "manage", label: "Liderar el sprint de su equipo: asignar, repartir y revisar con el equipo", enforced: true }],
   },
   {
     key: "conocimientos",

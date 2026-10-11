@@ -1,5 +1,8 @@
 /**
- * lib/asistente/handler.ts — EL MANEJADOR DE LA CONVERSACIÓN, UNO SOLO PARA LOS TRES DUEÑOS.
+ * lib/asistente/handler.ts — EL MANEJADOR DE LA CONVERSACIÓN, UNO SOLO PARA LOS TRES DUEÑOS DE DOCUMENTO.
+ *
+ * ⚠ El cuarto dueño —la persona, en el chat de tareas— NO pasa por acá: tiene su propia ruta y su
+ * propio turno (lib/tareas/chat). Este manejador rechaza la pieza «tareas» (ver `PIEZA_TAREAS`).
  *
  * ── POR QUÉ ESTÁ ACÁ Y NO ADENTRO DE UNA RUTA ────────────────────────────────────────────────
  * El chat nació sobre documentos de PROYECTO, con toda su lógica dentro de esa ruta. Al sumar la
@@ -23,11 +26,11 @@ import {
   agregarTurno,
   empezarDeCero,
   hiloVivo,
-  type Dueno,
+  type DuenoDeDocumento,
   type HiloConTurnos,
 } from "./hilo";
 import { correrTurno, MODELO_DEL_ASISTENTE } from "./turno";
-import { PIEZA_CRONOGRAMA } from "./piezas";
+import { PIEZA_CRONOGRAMA, PIEZA_TAREAS } from "./piezas";
 import { leerAcuerdo, marcaDeDesenlace, textoVisible } from "./acuerdo";
 import { textoDelDesenlace } from "./textos-del-acuerdo";
 import { estadosDeAcuerdo } from "./acuerdo-vivo";
@@ -74,8 +77,14 @@ const bodySchema = z.union([
   }),
 ]);
 
-/** El hilo tal como lo pinta el panel: el acuerdo sale del texto, no de una columna aparte. */
-function aVista(hilo: HiloConTurnos | null) {
+/** El chat de tareas va por su propia ruta: acá no se abre ni se corre. */
+const NO_ES_DE_ACA = "El chat de tareas va por /api/tareas/asistente.";
+
+/**
+ * El hilo tal como lo pinta el panel: el acuerdo sale del texto, no de una columna aparte.
+ * Exportado para el chat de tareas, que pinta la misma vista desde su ruta.
+ */
+export function aVista(hilo: HiloConTurnos | null) {
   if (!hilo) return { hilo: null };
   return {
     hilo: {
@@ -113,9 +122,10 @@ function aVista(hilo: HiloConTurnos | null) {
  * que acordarse de mantener. Lo que este módulo garantiza es que, ya autorizado, los tres se
  * comporten igual.
  */
-export async function manejarGetDelAsistente(req: NextRequest, dueno: Dueno) {
+export async function manejarGetDelAsistente(req: NextRequest, dueno: DuenoDeDocumento) {
   const pieza = piezaSchema.safeParse(req.nextUrl.searchParams.get("pieza") ?? "");
   if (!pieza.success) return NextResponse.json({ error: "pieza requerida" }, { status: 400 });
+  if (pieza.data === PIEZA_TAREAS) return NextResponse.json({ error: NO_ES_DE_ACA }, { status: 400 });
 
   const usuarioEmail = await triggeredByEmail();
   if (!usuarioEmail) return NextResponse.json({ error: "sin sesión" }, { status: 401 });
@@ -125,7 +135,7 @@ export async function manejarGetDelAsistente(req: NextRequest, dueno: Dueno) {
 }
 
 /** POST — un turno, un hilo nuevo, o el desenlace de un acuerdo. Ver el `bodySchema`. */
-export async function manejarPostDelAsistente(req: NextRequest, dueno: Dueno) {
+export async function manejarPostDelAsistente(req: NextRequest, dueno: DuenoDeDocumento) {
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {
     return NextResponse.json(
@@ -133,6 +143,9 @@ export async function manejarPostDelAsistente(req: NextRequest, dueno: Dueno) {
       { status: 400 },
     );
   }
+  /* ⛔ Antes que nada, también antes del desenlace: un desenlace mandado desde el navegador apagaría
+     (o reviviría) un acuerdo de tareas sin aplicarlo. Ese lo escribe el servidor al aplicar. */
+  if (parsed.data.pieza === PIEZA_TAREAS) return NextResponse.json({ error: NO_ES_DE_ACA }, { status: 400 });
 
   /* ⚠ El correo sale de la SESIÓN, nunca del body: es la clave del hilo, así que aceptarlo del
      cliente dejaría leer y continuar la conversación de otra persona. */

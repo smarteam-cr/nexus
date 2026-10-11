@@ -9,6 +9,7 @@
  *   D) Rol desconocido en runtime (enum viejo) → all-false defensivo.
  *   E) Capas null (fila ausente / Json inválido ya parseado a null) → default puro.
  *   F) computeEffective no muta DEFAULT_MATRIX (clone real).
+ *   G) Quién trae `handoff.congelar` por defecto (decisión del 2026-10-10).
  *
  * Correr: `npx vitest run lib/auth/permissions/defaults.test.ts --project unit`.
  */
@@ -88,6 +89,17 @@ test("D — rol desconocido (enum viejo en runtime) → all-false", () => {
 test("E — capas null → default puro (deploy-safe con tabla vacía)", () => {
   const eff = computeEffective("VENTAS", null, null);
   expect(eff).toEqual(DEFAULT_MATRIX.VENTAS);
+});
+
+test("G — `handoff.congelar`: CSE, VENTAS, CSL y SUPER_ADMIN; nadie más (decisión del 2026-10-10)", () => {
+  /* Congelar el handoff y pedirle sugerencias («Buscar lo nuevo») es celda propia y no `regenerate`: la ola 3 la
+     colgó de `regenerate` y el CSE, que es quien congela, quedaba afuera. DEV y MARKETING regeneran el handoff pero
+     no lo congelan por defecto; ADMIN no tiene ninguna celda del handoff. La edición que lo pone en rojo: mover la
+     celda de rol sin decidirlo (se cambia acá a propósito, con el porqué en registry.ts). */
+  const conCongelar = ALL_ROLES.filter((r) => DEFAULT_MATRIX[r].sections.handoff.congelar === true);
+  expect(conCongelar.sort()).toEqual(["CSE", "CSL", "SUPER_ADMIN", "VENTAS"]);
+  // El CSE congela pero no regenera ni rehace: «Rehacer desde cero» sigue con `regenerate`.
+  expect(DEFAULT_MATRIX.CSE.sections.handoff.regenerate).toBe(false);
 });
 
 test("F — computeEffective NO muta DEFAULT_MATRIX", () => {

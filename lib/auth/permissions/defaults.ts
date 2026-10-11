@@ -61,8 +61,10 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
   CSE: grant({
     /* El resultado que persigue el cliente es el criterio de éxito de la implementación, y quien
        conoce al cliente es el CSE (decisión de Elías, 2026-10-02). Solo esa sección: el resto del
-       handoff sigue sin ser suyo. */
-    handoff: ["confirmarResultados"],
+       handoff sigue sin ser suyo.
+       `congelar` (2026-10-10): el CSE congela el handoff y le pide sugerencias («Buscar lo nuevo»);
+       no lo regenera ni lo rehace desde cero. Ver la celda en registry.ts. */
+    handoff: ["confirmarResultados", "congelar"],
     kickoff: ["generate", "regenerate"],
     desarrollo: ["generate", "regenerate"],
     exploracion: ["generate", "regenerate"],
@@ -97,7 +99,8 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     clientes: ["viewAll", "classify"],
     // Conserva lo que ya tenía: hasta 2026-08-16 entraba al área por `clientes.viewAll`.
     customerSuccess: ["read"],
-    handoff: ["create", "write", "generate", "regenerate", "confirmarResultados"],
+    // `congelar` (2026-10-10): Ventas cierra la venta y puede dejar el handoff como la foto fija de lo vendido.
+    handoff: ["create", "write", "generate", "regenerate", "confirmarResultados", "congelar"],
     kickoff: ["generate", "regenerate"],
     desarrollo: ["generate", "regenerate"],
     exploracion: ["generate", "regenerate"],
@@ -161,7 +164,8 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     clientes: ["viewAll", "share", "delete", "classify"],
     // El área es SU centro de decisión; además es el único rol (con SUPER_ADMIN) que ve partner.
     customerSuccess: ["read"],
-    handoff: ["write", "generate", "regenerate", "confirmarResultados"],
+    // `congelar` (2026-10-10): la CSL congela y busca lo nuevo, como el CSE de su equipo.
+    handoff: ["write", "generate", "regenerate", "confirmarResultados", "congelar"],
     kickoff: ["generate", "regenerate"],
     desarrollo: ["generate", "regenerate"],
     exploracion: ["generate", "regenerate"],

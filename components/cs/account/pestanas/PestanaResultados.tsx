@@ -11,14 +11,71 @@ import Link from "next/link";
 import { ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import type { CsAccountData } from "@/lib/cs/load-account";
 import { Chip, TituloDeSeccion } from "../../piezas";
+import { TextoConFormato } from "@/components/clients/TextoConFormato";
+import { fmtDia } from "@/lib/cs/formato";
+
+
+/**
+ * Lo que persigue la EMPRESA (2026-10-09, entrega 6 del plan de la cartera): lo confirmado en Información del
+ * cliente, que también vive en la empresa de HubSpot. Arriba de los resultados de cada proyecto: la cuenta se
+ * entiende por lo que busca el cliente, no por un proyecto.
+ */
+function LoQuePersigueLaEmpresa({ data }: { data: CsAccountData }) {
+  const e = data.empresa;
+  if (!e) {
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line bg-surface px-6 py-5 text-center">
+        <b className="text-sm font-semibold text-fg">Todavía no hay nada confirmado de la empresa</b>
+        <span className="max-w-[520px] text-[13px] text-fg-muted">
+          Los resultados, los retos y el dolor principal se confirman en Información del cliente; de ahí van a HubSpot.
+        </span>
+        <Link href={`/clients/${data.clientId}`} className="text-xs font-semibold text-brand hover:text-brand-light">
+          Abrir Información del cliente →
+        </Link>
+      </div>
+    );
+  }
+  const bloques = [
+    { titulo: "Resultados que persigue", texto: e.resultados },
+    { titulo: "Retos estratégicos", texto: e.retos },
+    { titulo: "Dolor principal", texto: e.dolor },
+  ].filter((b) => b.texto.trim());
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4" data-recorrido="cs.empresa">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {bloques.map((b) => (
+          <div key={b.titulo} className="flex min-w-0 flex-col gap-1.5">
+            <span className={ROTULO_DEL_SISTEMA}>{b.titulo}</span>
+            <TextoConFormato texto={b.texto} className="text-[13px] text-fg" />
+          </div>
+        ))}
+      </div>
+      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2 text-xs text-fg-muted">
+        <span>
+          Información del cliente{e.confirmadaAt ? ` · confirmada el ${fmtDia(e.confirmadaAt.slice(0, 10), data.hoy)}` : ""}
+          {e.confirmadaPor ? ` por ${e.confirmadaPor}` : ""} · también en la empresa de HubSpot
+        </span>
+        {e.hayPropuesta && <Chip tono="ia">Hay una propuesta sin revisar</Chip>}
+        <Link href={`/clients/${data.clientId}`} className="font-semibold text-brand hover:text-brand-light">
+          Abrir →
+        </Link>
+      </span>
+    </div>
+  );
+}
 
 export default function PestanaResultados({ data }: { data: CsAccountData }) {
   const confirmados = data.resultados.filter((r) => r.confirmado).length;
   const porValidar = data.resultados.filter((r) => r.porValidar).length;
   return (
     <div className="flex flex-col gap-6">
+      <section className="flex flex-col gap-3">
+        <TituloDeSeccion titulo="Lo que persigue la empresa" ayuda="Lo confirmado en Información del cliente: vale para todos sus proyectos y vive también en la empresa de HubSpot." />
+        <LoQuePersigueLaEmpresa data={data} />
+      </section>
+
       <TituloDeSeccion
-        titulo="Resultados que el cliente necesita alcanzar"
+        titulo="Resultados de cada proyecto"
         ayuda="Lo que se prometió en el handoff, con cómo se mide, su línea base, su meta y su plazo. Es de lo que se habla en la reunión de valor."
         derecha={
           data.resultados.length > 0 ? (

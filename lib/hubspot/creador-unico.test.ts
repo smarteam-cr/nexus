@@ -269,6 +269,8 @@ describe("el cuerpo del POST, para los tres pipelines", () => {
         `crear un proyecto de ${key} escribió el encargado: le secuestra el acceso al CSE que ` +
           `de verdad va a llevarlo, y en silencio`,
       ).not.toHaveProperty("csl_encargado");
+      // Desde el 2026-10-09 el espejo lee primero «CSE Encargado»: la misma promesa vale para ella.
+      expect(llamadas[0].body.properties, `crear un proyecto de ${key} escribió el «CSE Encargado»`).not.toHaveProperty("cse_encargado");
     }
   });
 
@@ -286,6 +288,10 @@ describe("el cuerpo del POST, para los tres pipelines", () => {
     expect(
       cuerpoDelCreador.includes("csl_encargado"),
       "el creador volvió a tocar `csl_encargado`",
+    ).toBe(false);
+    expect(
+      /propiedadesDeEncargados|cse_encargado/.test(cuerpoDelCreador),
+      "el creador escribe los encargados (cse_encargado / csl_encargado)",
     ).toBe(false);
   });
 

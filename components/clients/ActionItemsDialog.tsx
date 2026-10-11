@@ -3,17 +3,15 @@
 /**
  * ActionItemsDialog
  *
- * Modal central de pendientes (action items) del proyecto. Es presentacional:
- * opera sobre las listas que mantiene ProjectGPS (una sola fuente de verdad, que
- * vive en el cache de GPS), así que su estado se "mantiene en memoria" al cerrar
- * el dialog o cambiar de tab. Reusa las mutaciones del padre (toggle/add/remove).
+ * Modal central de pendientes del proyecto. Desde la etapa 2 de la memoria de la cuenta los pendientes son TAREAS
+ * (`ActionItem` se retiró): las listas vienen de /api/tareas/del-proyecto y las mantiene ProjectGPS, que hace cada
+ * cambio por las rutas de Tareas. Es presentacional y reusa las mutaciones del padre (toggle/add/remove/restore).
  *
  * Dos tabs:
- *  - Pendientes: tareas abiertas (`items`). Checkbox marca hecha (→ Histórico),
- *    la X borra (soft-delete → Histórico), y el form agrega nuevas.
- *  - Histórico: tareas hechas o borradas (`history`). Las HECHAS conservan el
- *    check para des-marcarlas y devolverlas a Pendientes; las BORRADAS se
- *    muestran tachadas/atenuadas, sin acción.
+ *  - Pendientes: lo abierto y lo que espera decisión (`items`). La casilla marca hecha (→ Histórico) solo si quien
+ *    mira puede; una propuesta dice «Por decidir» y se decide en Mis tareas; la X la pasa a «Ya no se hará» (nada se
+ *    borra), y el form agrega una tarea tuya de este proyecto.
+ *  - Histórico: hechas y «Ya no se hará» (`history`). «Restaurar» la devuelve a Pendientes si quien mira puede.
  */
 import { useState } from "react";
 import Link from "next/link";
@@ -52,6 +50,11 @@ function ItemMeta({ item }: { item: PendingItem }) {
       {!item.sessionId && item.source && item.source !== "manual" && (
         <span className="text-[10px] text-fg-muted truncate">↑ {item.source}</span>
       )}
+      {item.href && (
+        <Link href={item.href} className="text-[10px] text-brand hover:underline" title="Abrir en Mis tareas">
+          {item.porDecidir ? "Por decidir · se decide en Tareas" : "Abrir en Tareas"}
+        </Link>
+      )}
     </div>
   );
 }
@@ -72,7 +75,7 @@ export default function ActionItemsDialog({
   history: PendingItem[]; // hechas o borradas
   onToggle: (id: string) => void;
   onAdd: (text: string) => void;
-  onRemove: (id: string) => void;
+  onRemove: (id: string) => void; // → «Ya no se hará»
   onRestore: (id: string) => void; // hecha o borrada → vuelve a Pendientes
 }) {
   const [newText, setNewText] = useState("");
@@ -122,22 +125,29 @@ export default function ActionItemsDialog({
               {items.length === 0 && <p className="text-sm text-fg-muted py-6 text-center">No hay pendientes todavía.</p>}
               {items.map((item, i) => (
                 <div key={item.id ?? i} className="flex items-start gap-2.5 group rounded-lg hover:bg-surface-muted px-2 py-1.5 -mx-2">
-                  <button
-                    onClick={() => item.id && onToggle(item.id)}
-                    className="mt-0.5 w-4 h-4 rounded border border-line hover:border-fg-muted flex-shrink-0 flex items-center justify-center transition-colors"
-                    title="Marcar como hecha"
-                  />
+                  {item.puedeTerminar !== false ? (
+                    <button
+                      onClick={() => item.id && onToggle(item.id)}
+                      className="mt-0.5 w-4 h-4 rounded border border-line hover:border-fg-muted flex-shrink-0 flex items-center justify-center transition-colors"
+                      title="Marcar como hecha"
+                    />
+                  ) : (
+                    // Una propuesta la decide quien la recibe; la tarea de otra persona la marca ella.
+                    <span className="mt-0.5 w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                  )}
                   <div className="flex-1 min-w-0">
                     <span className="text-sm block text-fg-secondary">{item.text}</span>
                     <ItemMeta item={item} />
                   </div>
-                  <button
-                    onClick={() => item.id && onRemove(item.id)}
-                    className="text-fg-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm flex-shrink-0"
-                    title="Eliminar"
-                  >
-                    ×
-                  </button>
+                  {item.puedeSacar !== false && (
+                    <button
+                      onClick={() => item.id && onRemove(item.id)}
+                      className="text-fg-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm flex-shrink-0"
+                      title="Ya no se hará"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               ))}
             </>
@@ -145,14 +155,14 @@ export default function ActionItemsDialog({
             <>
               {history.length === 0 && <p className="text-sm text-fg-muted py-6 text-center">El histórico está vacío.</p>}
               {history.map((item, i) => {
-                const isDeleted = !!item.deletedAt;
+                const isDeleted = !!item.deletedAt || !!item.noSeHara;
                 return (
                   <div key={item.id ?? i} className="flex items-start gap-2.5 group rounded-lg hover:bg-surface-muted px-2 py-1.5 -mx-2">
                     {/* Indicador de estado (no interactivo): check verde = hecha, × = borrada. */}
                     {isDeleted ? (
                       <span
                         className="mt-0.5 w-4 h-4 rounded border border-line/60 flex-shrink-0 flex items-center justify-center text-fg-muted text-[10px]"
-                        title="Tarea borrada"
+                        title="Ya no se hará"
                       >
                         ×
                       </span>
@@ -170,19 +180,21 @@ export default function ActionItemsDialog({
                       <span className="text-sm block line-through text-fg-muted">{item.text}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] uppercase tracking-wide text-fg-muted">
-                          {isDeleted ? "Borrada" : "Hecha"}
+                          {isDeleted ? "Ya no se hará" : "Hecha"}
                         </span>
                         <ItemMeta item={item} />
                       </div>
                     </div>
-                    {/* CTA restaurar — aparece al hover, para hechas y borradas. */}
-                    <button
-                      onClick={() => item.id && onRestore(item.id)}
-                      className="text-[11px] font-semibold text-brand hover:text-brand/80 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 whitespace-nowrap mt-0.5"
-                      title="Restaurar a Pendientes"
-                    >
-                      Restaurar
-                    </button>
+                    {/* CTA restaurar — aparece al hover, para hechas y «ya no se hará», si quien mira puede. */}
+                    {item.puedeReabrir !== false && (
+                      <button
+                        onClick={() => item.id && onRestore(item.id)}
+                        className="text-[11px] font-semibold text-brand hover:text-brand/80 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 whitespace-nowrap mt-0.5"
+                        title="Restaurar a Pendientes"
+                      >
+                        Restaurar
+                      </button>
+                    )}
                   </div>
                 );
               })}

@@ -8,19 +8,29 @@
  * cruza de una sesión a otra: llevar lo que quedó abierto a la siguiente, con de qué sesión viene y a
  * qué apunta. Cada momento está en su archivo: AntesDeLaSesion, DuranteLaSesion y DespuesDeLaSesion.
  * El estado de la guía y su botón viven en la preparación (AntesDeLaSesion › EstadoDeLaGuia).
+ *
+ * Etapa A (2026-10-09): debajo de los datos, en qué está la reunión de la sesión (los seis estados del
+ * tablero Sesion.dc.html: sin reunión, unida a una agendada, esperando la transcripción, leída, sin
+ * transcripción ni notas, cancelada en el calendario), sin mentir sobre la lectura sola. Unir o cambiar
+ * la reunión abre el selector de «Agregar sesión» en modo «unir».
  */
-import { useEffect, useState } from "react";
-import { Alert, Select } from "@/components/ui";
+import { useEffect, useRef, useState } from "react";
+import { Pencil } from "lucide-react";
+import { Alert, IconButton, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { Persona } from "@/lib/exploraciones/casillas";
 import type { Operacion } from "@/lib/exploraciones/contenido";
 import { aFecha, diaConAnio, diaCorto, hoyEnCostaRica } from "@/lib/exploraciones/fechas";
+import { horario } from "@/lib/exploraciones/inicio";
 import {
   DURACION_DE_LA_SESION,
   ETIQUETA_DEL_ESTADO,
   MAX_PARA_EXPLORAR,
   MAX_SESIONES,
+  MAX_TITULO_DE_LA_SESION,
   nombreDeLaPestana,
+  tituloAGuardar,
+  tituloDeLaSesion,
   type EstadoDeLaSesion,
   type OrigenDeReunion,
   type PestanaDeSesion,
@@ -50,32 +60,144 @@ function EstadoDeLaSesionChip({ estado, noSeHizo }: { estado: EstadoDeLaSesion; 
   return <span className={cn("rounded-full border px-2 py-0.5 text-[11.5px] font-semibold", TONO_DEL_ESTADO[estado])}>{ETIQUETA_DEL_ESTADO[estado]}</span>;
 }
 
-function EncabezadoDeLaSesion({ pestana, momento, alMomento }: { pestana: PestanaDeSesion; momento: MomentoDeLaSesion; alMomento: (m: MomentoDeLaSesion) => void }) {
-  const { exp, reuniones, puedeEditar, guardando, sesion: seleccion } = useLienzo();
-  const { todas, sesiones, guardar, claveDeLaProxima, proxima, agregar, estadoDe } = useSesiones();
+/** Un punto ámbar: la reunión de la sesión pide algo (o espera). */
+function PuntoAmbar() {
+  return <span aria-hidden className="h-[7px] w-[7px] flex-none rounded-full bg-warning" />;
+}
+
+function IconoDeCalendario({ azul }: { azul: boolean }) {
+  return (
+    <svg className={cn("h-[15px] w-[15px] flex-none", azul ? "text-brand" : "text-fg-muted")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  );
+}
+
+/**
+ * En qué está la reunión de la sesión, debajo de su línea de datos (los seis estados del tablero
+ * Sesion.dc.html, más «solo notas de Gemini»). Lo que ya dice la línea de datos (leída, sin leer, casi
+ * sin conversación) no se repite.
+ */
+function LineaDeLaReunion({ pestana, onSumarMinuta }: { pestana: PestanaDeSesion; onSumarMinuta: () => void }) {
+  const { puedeEditar, guardando, sesion: seleccion } = useLienzo();
+  const { estadoDeLaReunion } = useSesiones();
+  const estado = estadoDeLaReunion(pestana);
+  const s = pestana.sesion;
+  const e = s?.evento;
+  // Unida a una reunión de la agenda de HubSpot (todavía no ocurre): su título lo guardó la sesión al unirla.
+  const deHubspot = !e && s?.reunion?.origen === "hubspot";
+  const tituloDelEvento = e?.titulo ?? pestana.reunion?.titulo ?? (deHubspot ? (s?.titulo ?? null) : null);
+  const donde = deHubspot ? "en HubSpot" : "en el calendario";
+  const unida = tituloDelEvento ? `Unida a «${tituloDelEvento}» ${donde}` : deHubspot ? "Unida a una reunión de HubSpot" : "Unida a una reunión del calendario";
+  const unir = () => (s ? seleccion.buscarReunion({ tipo: "unir", sesionId: s.id }) : seleccion.buscarReunion({ tipo: "nueva", elegir: true }));
+  const enlace = (texto: string, onClick: () => void, fuerte = false) =>
+    puedeEditar ? (
+      <button type="button" disabled={guardando} className={cn("text-brand hover:underline disabled:opacity-50", fuerte && "font-semibold")} onClick={onClick}>
+        {texto}
+      </button>
+    ) : null;
+  /** El ícono y, separadas por «·», las partes que haya (un enlace que no se puede usar no deja un «·» suelto). */
+  const linea = (icono: React.ReactNode, ...partes: React.ReactNode[]) => (
+    <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-fg-muted">
+      {icono}
+      {partes
+        .filter((x) => x !== null && x !== false)
+        .map((x, i) => (
+          <span key={i} className="inline-flex items-center gap-2">
+            {i > 0 && <span aria-hidden>·</span>}
+            {x}
+          </span>
+        ))}
+    </p>
+  );
+  switch (estado) {
+    case "sinReunion":
+      return linea(<IconoDeCalendario azul={false} />, <span className="text-fg-secondary">Sin reunión del calendario</span>, enlace("asociar una reunión", unir, true), "la guía se puede preparar igual");
+    case "agendada":
+      return (
+        <>
+          {linea(<IconoDeCalendario azul />, <span className="text-fg-secondary">{unida}</span>, "cuando ocurra, Nexus espera su transcripción y la lee sola", enlace("cambiar reunión", unir))}
+          {!deHubspot && <p className="mt-1 text-xs text-fg-muted">Si la mueven en el calendario, la sesión toma la fecha nueva.</p>}
+        </>
+      );
+    case "esperando":
+      return linea(<PuntoAmbar />, <span className="font-medium text-warn-ink">Esperando la transcripción</span>, "Meet puede tardar hasta una hora; cuando llegue, el agente la lee solo");
+    case "sinTexto":
+      return linea(<PuntoAmbar />, <span className="font-medium text-warn-ink">Terminó sin transcripción ni notas de Gemini</span>, enlace("sumar la minuta", onSumarMinuta), "o dile qué pasó con ella");
+    case "cancelada":
+      return linea(
+        <PuntoAmbar />,
+        <span className="font-medium text-warn-ink">{e ? `La reunión del ${diaCorto(e.inicio)} se canceló en el calendario` : "La reunión se canceló en el calendario"}</span>,
+        "la sesión y su guía siguen",
+        enlace("asociar otra reunión", unir, true),
+      );
+    case "soloNotasSinLeer":
+      return linea(<PuntoAmbar />, <span className="font-medium text-warn-ink">Solo notas de Gemini, sin leer</span>, "léela: cuando llegue la transcripción, se vuelve a leer");
+    case "leida":
+      return e ? linea(<IconoDeCalendario azul={false} />, <span>{unida}</span>) : null;
+    default:
+      return null;
+  }
+}
+
+function EncabezadoDeLaSesion({
+  pestana,
+  momento,
+  alMomento,
+  onSumarMinuta,
+}: {
+  pestana: PestanaDeSesion;
+  momento: MomentoDeLaSesion;
+  alMomento: (m: MomentoDeLaSesion) => void;
+  onSumarMinuta: () => void;
+}) {
+  const { exp, puedeEditar, guardando, sesion: seleccion } = useLienzo();
+  const { todas, sesiones, guardar, claveDeLaProxima, proxima, agregar, estadoDe, yaEmpezo } = useSesiones();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const estado = estadoDe(pestana);
   const s = pestana.sesion;
   const r = pestana.reunion;
   const [editando, setEditando] = useState(false);
-  const [cambiandoReunion, setCambiandoReunion] = useState(false);
-  const [titulo, setTitulo] = useState(s?.titulo ?? "");
-  const [visto, setVisto] = useState(s?.titulo);
-  if (visto !== s?.titulo) {
-    setVisto(s?.titulo);
-    setTitulo(s?.titulo ?? "");
-  }
+  const titulo = tituloDeLaSesion(pestana);
+  const [renombrando, setRenombrando] = useState(false);
+  const [nombre, setNombre] = useState("");
+  const cancelado = useRef(false);
   const cambiarSesion = (nueva: SesionPlaneada) => void guardar(sesiones.map((x) => (x.id === nueva.id ? nueva : x)));
+
+  /**
+   * Cambia el nombre de la sesión (Elías, 2026-10-08). Vacío o igual al del calendario, vuelve a seguir
+   * el de su reunión. Una reunión que no estaba en tus sesiones, o la próxima sin planear, se vuelve
+   * sesión con ese nombre.
+   */
+  const renombrar = async () => {
+    setRenombrando(false);
+    if (cancelado.current) return;
+    const nuevo = tituloAGuardar(nombre, r?.titulo);
+    if (s) {
+      if ((s.titulo?.trim() || undefined) === nuevo) return;
+      const { titulo: _viejo, ...resto } = s;
+      void _viejo;
+      cambiarSesion(nuevo ? { ...resto, titulo: nuevo } : resto);
+      return;
+    }
+    if (!nuevo || sesiones.length >= MAX_SESIONES) return;
+    const nueva: SesionPlaneada = r
+      ? { id: nuevoIdDeSesion(), titulo: nuevo, fecha: hoyEnCostaRica(aFecha(r.fecha)), reunion: { id: r.id, origen: r.origen } }
+      : { id: nuevoIdDeSesion(), titulo: nuevo };
+    const ok = await guardar([...sesiones, nueva]);
+    if (!ok) return;
+    seleccion.elegir(nueva.id);
+    seleccion.ponerMomento(nueva.id, momento);
+  };
   const e = exp.estado;
   const leyendo = corriendo && corrida?.modo === "leer";
 
-  const elegirReunion = (valor: string) => {
-    if (!s) return;
-    const [origen, ...resto] = valor.split(":");
-    const reunion = valor ? { id: resto.join(":"), origen: origen as OrigenDeReunion } : undefined;
-    void guardar(sesiones.map((x) => (x.id === s.id ? { ...x, reunion } : x)));
-    setCambiandoReunion(false);
+  const cambiarReunion = () => {
+    if (s) seleccion.buscarReunion({ tipo: "unir", sesionId: s.id });
   };
+  const evento = s?.evento;
+  const hora = evento && !evento.cancelada ? horario(evento.inicio, evento.fin) : "";
 
   const enlace = (texto: string, onClick: () => void) => (
     <button type="button" className="text-brand hover:underline" onClick={onClick}>
@@ -86,30 +208,32 @@ function EncabezadoDeLaSesion({ pestana, momento, alMomento }: { pestana: Pestan
   // La línea de datos de debajo del título: en el análisis, la reunión; en vivo, con quién; en la preparación, cuándo.
   const datos: React.ReactNode[] = [];
   if (momento === "despues" && r) {
-    datos.push(diaLargo(r.fecha), ORIGEN[r.origen], r.titulo);
+    // El nombre del calendario va en el título; acá solo si le cambiaste el nombre a la sesión.
+    datos.push(diaLargo(r.fecha), ORIGEN[r.origen]);
+    if (titulo !== r.titulo.trim()) datos.push(`en el calendario: «${r.titulo}»`);
     if (r.corta) datos.push(<span className="text-warn-ink">sin transcripción</span>);
+    else if (r.texto === "nada" && !r.leida) datos.push(<span className="text-warn-ink">sin transcripción ni notas</span>);
     else datos.push(r.leida ? <span className="text-success-ink">leída por el agente ✓</span> : <span className="text-warn-ink">sin leer</span>);
-    if (puedeEditar && s && reuniones.length > 0) datos.push(enlace("cambiar reunión", () => setCambiandoReunion((x) => !x)));
+    // La del mismo día, sin que nadie la eligiera: se dice, para poder cambiarla.
+    if (pestana.ligadaPor === "fecha") datos.push("ligada por fecha");
+    if (puedeEditar && s) datos.push(enlace("cambiar reunión", cambiarReunion));
   } else if (momento === "despues" && s) {
-    datos.push(s.fecha ? diaLargo(s.fecha) : "sin fecha", "todavía sin reunión: cuando llegue la transcripción se liga sola");
-    if (puedeEditar && reuniones.length > 0) datos.push(enlace("elegirla", () => setCambiandoReunion((x) => !x)));
+    datos.push(s.fecha ? diaLargo(s.fecha) : "sin fecha");
+    if (hora) datos.push(hora);
+    if (evento) datos.push("Google Meet");
   } else if (momento === "durante") {
     const quien = ((e.contenido.casillas.autoridad as Persona[] | undefined) ?? [])[0]?.nombre;
     if (quien) datos.push(`Con ${quien}`);
     datos.push(`${DURACION_DE_LA_SESION} min`, "se guarda solo");
   } else if (s) {
-    datos.push(s.fecha ? diaLargo(s.fecha) : "Sin agendar");
-    if (s.titulo) datos.push(s.titulo);
+    // Cancelada en el calendario, la sesión vuelve a estar sin agendar (su guía sigue).
+    datos.push(s.fecha && !evento?.cancelada ? diaLargo(s.fecha) : "Sin agendar");
+    if (hora) datos.push(hora);
     datos.push(`${DURACION_DE_LA_SESION} min`);
     if (puedeEditar) datos.push(enlace(editando ? "listo" : "editar", () => setEditando((x) => !x)));
   } else if (r) {
-    datos.push(diaLargo(r.fecha), "esta reunión no está en tus sesiones");
-    if (puedeEditar && sesiones.length < MAX_SESIONES)
-      datos.push(
-        enlace("sumarla a mis sesiones", () =>
-          void guardar([...sesiones, { id: nuevoIdDeSesion(), titulo: r.titulo.slice(0, 120), fecha: hoyEnCostaRica(aFecha(r.fecha)), reunion: { id: r.id, origen: r.origen } }]),
-        ),
-      );
+    // Un prospecto: la reunión entró sola como sesión (se vuelve sesión guardada cuando le escribes algo).
+    datos.push(diaLargo(r.fecha), "entró sola como sesión");
   } else {
     datos.push(proxima.desde === "hubspot" && proxima.fecha ? `agendada en HubSpot para el ${diaConAnio(proxima.fecha)}` : "Sin agendar", `${DURACION_DE_LA_SESION} min`);
     if (puedeEditar) datos.push(enlace("ponerle fecha", agregar));
@@ -122,6 +246,7 @@ function EncabezadoDeLaSesion({ pestana, momento, alMomento }: { pestana: Pestan
         {todas.map((p) => (
           <option key={p.clave} value={p.clave}>
             {nombreDeLaPestana(p)}
+            {tituloDeLaSesion(p) ? ` · ${tituloDeLaSesion(p)}` : ""}
             {p.fecha ? ` · ${diaCorto(p.fecha)}` : ""}
             {p.clave === claveDeLaProxima ? " · próxima" : ""}
           </option>
@@ -130,10 +255,51 @@ function EncabezadoDeLaSesion({ pestana, momento, alMomento }: { pestana: Pestan
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="min-w-0">
+          {/* Con título, el número va arriba, chico; sin título, la sesión se llama «Sesión N». */}
+          {titulo && <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">{pestana.noSeHizo ? "Sesión" : `Sesión ${pestana.numero}`}</p>}
           <div className="flex flex-wrap items-center gap-2.5">
-            <h2 className="text-[22px] font-bold leading-7 text-fg">{nombreDeLaPestana(pestana)}</h2>
+            {renombrando ? (
+              <input
+                autoFocus
+                className="h-9 w-[28rem] max-w-full rounded-lg border border-line bg-surface px-3 text-[17px] font-semibold text-fg"
+                value={nombre}
+                maxLength={MAX_TITULO_DE_LA_SESION}
+                placeholder={r ? r.titulo : nombreDeLaPestana(pestana)}
+                aria-label="Nombre de la sesión"
+                disabled={guardando}
+                onChange={(ev) => setNombre(ev.target.value)}
+                onKeyDown={(ev) => {
+                  if (ev.key === "Enter") ev.currentTarget.blur();
+                  if (ev.key === "Escape") {
+                    cancelado.current = true;
+                    ev.currentTarget.blur();
+                  }
+                }}
+                onBlur={() => void renombrar()}
+              />
+            ) : (
+              <h2 className="min-w-0 break-words text-[22px] font-bold leading-7 text-fg">{titulo ?? nombreDeLaPestana(pestana)}</h2>
+            )}
+            {puedeEditar && !renombrando && (
+              <IconButton
+                aria-label="Cambiar el nombre de la sesión"
+                size="xs"
+                disabled={guardando}
+                icon={<Pencil className="h-3.5 w-3.5" />}
+                onClick={() => {
+                  cancelado.current = false;
+                  setNombre(titulo ?? "");
+                  setRenombrando(true);
+                }}
+              />
+            )}
             <EstadoDeLaSesionChip estado={estado} noSeHizo={pestana.noSeHizo} />
           </div>
+          {renombrando && (
+            <p className="mt-1 text-[12px] text-fg-muted">
+              {r ? `Si lo dejas vacío, vuelve al nombre del calendario: «${r.titulo}».` : `Si lo dejas vacío, se llama «${nombreDeLaPestana(pestana)}».`} Enter guarda; Esc deja el de antes.
+            </p>
+          )}
           <p className="mt-0.5 text-[13px] text-fg-muted">
             {datos.map((d, i) => (
               <span key={i}>
@@ -142,6 +308,7 @@ function EncabezadoDeLaSesion({ pestana, momento, alMomento }: { pestana: Pestan
               </span>
             ))}
           </p>
+          {momento !== "durante" && <LineaDeLaReunion pestana={pestana} onSumarMinuta={onSumarMinuta} />}
         </div>
         <span className="flex-1" />
         <div data-recorrido="preventa.sesion.momento">
@@ -152,13 +319,13 @@ function EncabezadoDeLaSesion({ pestana, momento, alMomento }: { pestana: Pestan
             opciones={[
               { clave: "antes", nombre: "Preparación" },
               { clave: "durante", nombre: "En vivo" },
-              { clave: "despues", nombre: "Análisis", ...(estado === "ocurrio" ? {} : { desactivada: "Todavía no ocurre" }) },
+              { clave: "despues", nombre: "Análisis", ...(estado === "ocurrio" || yaEmpezo(pestana) ? {} : { desactivada: "Todavía no ocurre" }) },
             ]}
             valor={momento}
             onCambiar={alMomento}
           />
         </div>
-        {momento === "despues" && r && !r.leida && !r.corta && puedeEditar && (
+        {momento === "despues" && r && !r.leida && !r.corta && r.texto !== "nada" && puedeEditar && (
           <button
             type="button"
             disabled={lanzando || corriendo}
@@ -177,36 +344,8 @@ function EncabezadoDeLaSesion({ pestana, momento, alMomento }: { pestana: Pestan
       )}
       {corrida?.estado === "ERROR" && corrida.modo === "leer" && <Alert variant="danger">{corrida.error}</Alert>}
 
-      {cambiandoReunion && s && (
-        <Select
-          className="w-auto max-w-md text-[13px]"
-          aria-label="Elegir la reunión de esta sesión"
-          disabled={guardando}
-          value={s.reunion ? `${s.reunion.origen}:${s.reunion.id}` : ""}
-          onChange={(ev) => elegirReunion(ev.target.value)}
-        >
-          <option value="">La del mismo día</option>
-          {reuniones.map((x) => (
-            <option key={`${x.origen}:${x.id}`} value={`${x.origen}:${x.id}`}>
-              {diaCorto(x.fecha)} · {x.titulo.slice(0, 60)}
-            </option>
-          ))}
-        </Select>
-      )}
-
       {editando && s && (
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            className="h-9 w-72 max-w-full rounded-lg border border-line bg-surface px-3 text-[13px] text-fg"
-            value={titulo}
-            placeholder="De qué va esta sesión (opcional)"
-            aria-label={`Tema de la sesión ${pestana.numero}`}
-            onChange={(ev) => setTitulo(ev.target.value)}
-            onBlur={() => {
-              const t = titulo.trim();
-              if (t !== (s.titulo ?? "")) cambiarSesion({ ...s, ...(t ? { titulo: t } : { titulo: undefined }) });
-            }}
-          />
           <input
             type="date"
             className="h-9 rounded-lg border border-line bg-surface px-3 text-[13px] text-fg"
@@ -247,7 +386,11 @@ function soloLoQueSigue(s: SesionPlaneada): SesionPlaneada {
 export default function SesionesDeExploracion() {
   const { exp, cambiar, sesion: seleccion } = useLienzo();
   const { lanzar } = useCorrida();
-  const { sesiones, hoy, pestanas, activa, esLaProxima, momento, guardar } = useSesiones();
+  const { sesiones, hoy, pestanas, activa, esLaProxima, momento, guardar, estadoDeLaReunion } = useSesiones();
+  /* «Sumar la minuta» abierto en el análisis de esta sesión (lo abre el enlace del encabezado o el de «¿Qué
+     pasó?»). Vive acá porque sumar la minuta de una reunión suelta la vuelve sesión: cambia de pestaña. */
+  const [minuta, setMinuta] = useState<string | null>(null);
+  const estadoDeLaReunionActiva = estadoDeLaReunion(activa);
 
   // El recorrido de la preventa muestra los tres momentos de la sesión abierta (lib/recorridos/contenido/preventa.ts).
   const ponerMomento = seleccion.ponerMomento;
@@ -320,15 +463,29 @@ export default function SesionesDeExploracion() {
 
   return (
     <div className="space-y-5">
-      <EncabezadoDeLaSesion pestana={activa} momento={momento} alMomento={(m) => seleccion.ponerMomento(activa.clave, m)} />
+      <EncabezadoDeLaSesion
+        pestana={activa}
+        momento={momento}
+        alMomento={(m) => seleccion.ponerMomento(activa.clave, m)}
+        onSumarMinuta={() => {
+          setMinuta(activa.sesion?.id ?? activa.clave);
+          seleccion.ponerMomento(activa.clave, "despues");
+        }}
+      />
       {momento === "antes" ? (
         <AntesDeLaSesion key={activa.clave} pestana={activa} esLaProxima={esLaProxima} />
       ) : momento === "durante" ? (
         <DuranteLaSesion key={activa.clave} pestana={activa} esLaProxima={esLaProxima} />
-      ) : activa.hecha ? (
+      ) : estadoDeLaReunionActiva === "esperando" ? (
+        <p className="rounded-xl border border-dashed border-line bg-surface px-4 py-6 text-center text-[13px] text-fg-muted">
+          Esperando la transcripción. Meet puede tardar hasta una hora; cuando llegue, el agente la lee solo y acá aparece lo que salió.
+        </p>
+      ) : activa.hecha || estadoDeLaReunionActiva === "sinTexto" ? (
         <DespuesDeLaSesion
           key={activa.clave}
           pestana={activa}
+          minutaAbierta={minuta !== null && (minuta === activa.clave || minuta === activa.sesion?.id)}
+          onMinuta={setMinuta}
           numeroSiguiente={numeroSiguiente}
           claveSiguiente={siguiente?.clave ?? null}
           llevados={llevados}
@@ -337,7 +494,7 @@ export default function SesionesDeExploracion() {
         />
       ) : (
         <p className="rounded-xl border border-dashed border-line bg-surface px-4 py-6 text-center text-[13px] text-fg-muted">
-          Esta sesión todavía no ocurre. Cuando llegue su reunión de Meet o HubSpot, o la sumes en «Contexto adicional», acá aparece lo que salió.
+          Esta sesión todavía no ocurre. Cuando ocurra y llegue su transcripción, acá aparece lo que salió.
         </p>
       )}
     </div>

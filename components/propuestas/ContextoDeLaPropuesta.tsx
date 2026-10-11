@@ -7,12 +7,13 @@
  * Pedido de Elías: «la sección de contexto de cada propuesta debe verse igual a las secciones de
  * contexto de kickoff, diagnósticos, etc.». Por eso es el MISMO molde que el contexto del handoff
  * (components/clients/ProjectContextSection.tsx): filas plegables de «alrededor» (FilaDeAlrededor)
- * y, adentro, las columnas de siempre (ContextColumn / ContextRow) —HubSpot · Google Meet · Fuentes
+ * y, adentro, las columnas de siempre (ContextColumn / ContextRow) —HubSpot · Reuniones · Fuentes
  * manuales · Preventa— con las mismas insignias («Material», «Incluida», «Excluida») y la misma X.
  * Lo que es propio de la propuesta queda igual que antes:
  *   · HubSpot: las notas, llamadas y reuniones de la empresa; la X las saca SOLO de esta propuesta.
- *   · Google Meet: las sesiones del prospecto que se eligieron, más «Buscar más sesiones».
- *   · Fuentes manuales: pegar un texto o leer una URL (el diagnóstico web).
+ *   · Reuniones: las sesiones del prospecto que se eligieron, más «Buscar una reunión de Meet».
+ *   · Fuentes manuales: pegar un texto, subir un archivo (queda en los documentos de la empresa) o leer
+ *     una URL (el diagnóstico web).
  *   · Preventa: la de la empresa, con o sin (components/propuestas/ColumnaPreventa.tsx).
  *   · Casos de uso con precio fijo: entran con su precio exacto; el agente no los escribe.
  * Las cuentas dicen lo que ALIMENTA: una fuente excluida sigue a la vista, pero no cuenta.
@@ -29,6 +30,10 @@ import { fechaDeVentas } from "@/lib/business-cases/estado-de-la-propuesta";
 import ColumnaPreventa, { type PreventaDeLaPropuesta } from "./ColumnaPreventa";
 import ListaDeReuniones from "@/components/contexto/ListaDeReuniones";
 import { estadoDeLaReunion, fechaDeReunion } from "@/lib/contexto/lista-de-reuniones";
+import EnlaceDeContexto from "@/components/contexto/EnlaceDeContexto";
+import SumarFuente, { tituloConFecha, type DatosPegados, type DatosSubidos } from "@/components/contexto/SumarFuente";
+import { VACIO_DE_LAS_FUENTES } from "@/components/clients/FuentesManualesColumn";
+import { subirDirecto } from "@/lib/storage/subir-directo";
 
 type SessionMeta = { sessionId: string; title: string; date: string; participants: string[]; applies: boolean; hasTranscript: boolean; enProyecto?: boolean };
 type Transcript = {
@@ -123,10 +128,6 @@ export default function ContextoDeLaPropuesta({
   const [loadingTranscripts, setLoadingTranscripts] = useState(true);
   const [ctxAbierto, setCtxAbierto] = useState(true);
   const [casosAbierto, setCasosAbierto] = useState(false);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newContent, setNewContent] = useState("");
-  const [savingSource, setSavingSource] = useState(false);
   const [newUrl, setNewUrl] = useState("");
   const [fetchingUrl, setFetchingUrl] = useState(false);
   const [busyTranscriptId, setBusyTranscriptId] = useState<string | null>(null);
@@ -286,27 +287,39 @@ export default function ContextoDeLaPropuesta({
     }
   };
 
-  const addSource = async () => {
-    const content = newContent.trim();
-    if (!content || savingSource) return;
-    setSavingSource(true);
+  /* «Sumar una sesión o un documento», el formulario de toda columna de fuentes manuales (2026-10-07).
+     Devuelven el error para mostrar en el formulario, o null. */
+  const alPegar = async (d: DatosPegados): Promise<string | null> => {
+    const titulo = tituloConFecha(d.titulo, d.fecha);
     try {
       await fetchJson(`/api/business-cases/${bcId}/transcript`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "PASTED", rawText: newTitle.trim() ? `${newTitle.trim()}\n\n${content}` : content }),
+        body: JSON.stringify({ source: "PASTED", rawText: titulo ? `${titulo}
+
+${d.texto}` : d.texto, fileName: titulo }),
       });
-      setNewTitle("");
-      setNewContent("");
-      setShowAdd(false);
       toast.success("Fuente agregada.");
       void loadTranscripts();
       onAfterChange?.();
+      return null;
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo agregar.");
-    } finally {
-      setSavingSource(false);
+      return e instanceof ApiError ? e.message : "No se pudo agregar.";
     }
+  };
+
+  // El archivo queda además en Información del cliente › Documentos (lo hace la ruta).
+  const alSubir = async (d: DatosSubidos): Promise<string | null> => {
+    const r = await subirDirecto<{ transcript?: { hasText?: boolean } }>({
+      ruta: `/api/business-cases/${bcId}/transcript`,
+      archivo: d.archivo,
+      extra: { ...(d.titulo ? { titulo: d.titulo } : {}), ...(d.fecha ? { fecha: d.fecha } : {}) },
+    });
+    if (!r.ok) return r.error;
+    toast.success(r.data.transcript?.hasText === false ? "Archivo agregado, pero sin texto legible." : "Archivo agregado.");
+    void loadTranscripts();
+    onAfterChange?.();
+    return null;
   };
 
   // Leer una URL (diagnóstico web) en el servidor. El texto queda congelado al pegar; «Releer» lo refresca.
@@ -478,7 +491,7 @@ export default function ContextoDeLaPropuesta({
               </ContextColumnList>
             </ContextColumn>
 
-            <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={included.length}>
+            <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Reuniones" count={included.length}>
               <div className="flex flex-1 flex-col gap-2">
               {/* La lista de reuniones de todo «Contexto adicional»: elegir varias, quitar, deshacer con Ctrl+Z. */}
               <ListaDeReuniones
@@ -491,28 +504,18 @@ export default function ContextoDeLaPropuesta({
                 puedeEditar={puedeEditar}
                 escribir={escribirReuniones}
                 onBuscar={() => setShowSearch(true)}
-                vacio="Sin reuniones elegidas. Agrégalas con «Buscar más sesiones»."
+                vacio="Sin reuniones elegidas. Búscalas con «Buscar una reunión de Meet»."
                 etiquetaQuitar={(titulo) => `Quitar «${titulo}» de esta propuesta`}
                 tituloQuitar="Sacar de esta propuesta"
                 cargando={loadingSessions}
               />
-              {puedeEditar && (
-                <button
-                  type="button"
-                  onClick={() => setShowSearch(true)}
-                  className="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line px-2 py-1.5 text-[11px] font-medium text-brand transition-colors hover:text-brand-dark"
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-                  </svg>
-                  Buscar más sesiones
-                </button>
-              )}
+              {puedeEditar && <EnlaceDeContexto onClick={() => setShowSearch(true)}>Buscar una reunión de Meet</EnlaceDeContexto>}
               </div>
             </ContextColumn>
 
             <ContextColumn icon={CTX_ICONS.note} color="#7c6df2" title="Fuentes manuales" count={transcripts.length}>
-              <ContextColumnList loading={loadingTranscripts} empty="Sin fuentes. Pega lo que no quedó en ninguna reunión.">
+              <div className="flex flex-1 flex-col gap-2">
+              <ContextColumnList loading={loadingTranscripts} empty={VACIO_DE_LAS_FUENTES}>
                 {transcripts.map((t) => {
                   const isUrl = isUrlTranscript(t);
                   const busy = busyTranscriptId === t.id;
@@ -536,76 +539,28 @@ export default function ContextoDeLaPropuesta({
                   );
                 })}
               </ContextColumnList>
-              {puedeEditar &&
-                (showAdd ? (
-                  <div className="mt-2 space-y-1.5 rounded-lg border border-line p-2">
-                    <input
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      placeholder="Título, con la fecha si son notas de una reunión"
-                      className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-[11px] text-fg focus:border-brand focus:outline-none"
-                    />
-                    <textarea
-                      value={newContent}
-                      onChange={(e) => setNewContent(e.target.value)}
-                      rows={3}
-                      placeholder="Pega la nota, el correo o la transcripción…"
-                      className="w-full resize-y rounded-lg border border-line bg-surface px-2 py-1.5 text-[11px] text-fg focus:border-brand focus:outline-none"
-                    />
-                    <div className="flex justify-end gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowAdd(false);
-                          setNewTitle("");
-                          setNewContent("");
-                        }}
-                        className="rounded-lg px-2 py-1 text-[11px] text-fg-muted transition-colors hover:text-fg"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void addSource()}
-                        disabled={savingSource || newContent.trim().length === 0}
-                        className="rounded-lg bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-40"
-                      >
-                        {savingSource ? "Agregando…" : "Agregar"}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="mt-2 flex gap-1.5">
-                      <input
-                        value={newUrl}
-                        onChange={(e) => setNewUrl(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && void addUrlSource()}
-                        placeholder="Leer una URL (diagnóstico web)…"
-                        aria-label="URL para leer"
-                        className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 py-1.5 text-[11px] text-fg focus:border-brand focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void addUrlSource()}
-                        disabled={fetchingUrl || newUrl.trim().length === 0}
-                        className="flex-shrink-0 rounded-lg border border-line bg-surface px-2.5 py-1 text-[11px] font-semibold text-fg-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
-                      >
-                        {fetchingUrl ? "Leyendo…" : "Leer"}
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowAdd(true)}
-                      className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line px-2 py-1.5 text-[11px] font-medium text-fg-muted transition-colors hover:text-fg-secondary"
-                    >
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      Agregar fuente
-                    </button>
-                  </>
-                ))}
+              {puedeEditar && (
+                <div className="flex gap-1.5">
+                  <input
+                    value={newUrl}
+                    onChange={(e) => setNewUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void addUrlSource()}
+                    placeholder="Leer una URL (diagnóstico web)…"
+                    aria-label="URL para leer"
+                    className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 py-1.5 text-[11px] text-fg focus:border-brand focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void addUrlSource()}
+                    disabled={fetchingUrl || newUrl.trim().length === 0}
+                    className="flex-shrink-0 rounded-lg border border-line bg-surface px-2.5 py-1 text-[11px] font-semibold text-fg-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
+                  >
+                    {fetchingUrl ? "Leyendo…" : "Leer"}
+                  </button>
+                </div>
+              )}
+              {puedeEditar && <SumarFuente alPegar={alPegar} alSubir={alSubir} />}
+              </div>
             </ContextColumn>
 
             <ContextColumn icon={CTX_ICONS.note} color="#d97706" title="Preventa" count={preventaCuenta}>

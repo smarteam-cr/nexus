@@ -315,6 +315,41 @@ describe("cada job tiene nombre legible («Para ti» dice QUÉ falló)", () => {
   });
 });
 
+// ── seguimiento-reuniones (memoria de la cuenta, etapa 2) ─────────────────────────
+// vi.mock y vi.hoisted suben solos al principio del archivo: acá quedan junto a las pruebas que los usan.
+const correrTandaDeSeguimiento = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/lecturas/leer", () => ({ correrTandaDeSeguimiento }));
+
+describe("seguimiento-reuniones", () => {
+  const tanda = (c: Record<string, unknown>) => ({ sinTurno: false, leidas: [], erroresFinales: [], vinculo: null, ...c });
+
+  it("sin el SQL, sin presupuesto o sin nada en la cola devuelve SIN_TURNO (no anota un «ok» por minuto)", async () => {
+    for (const motivo of ["sin_sql", "sin_presupuesto", "nada"]) {
+      correrTandaDeSeguimiento.mockResolvedValueOnce(tanda({ sinTurno: true, motivo }));
+      await expect(job("seguimiento-reuniones").run(AHORA)).resolves.toBe(SIN_TURNO);
+    }
+  });
+
+  it("con lecturas hechas es una corrida, y una reunión que quedó en error tras 3 intentos LANZA (rojo + Sentry)", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    correrTandaDeSeguimiento.mockResolvedValueOnce(tanda({ leidas: [{ sessionId: "s1", estado: "lista", final: true, resultado: { status: "ok", sessionId: "s1" } }] }));
+    await expect(job("seguimiento-reuniones").run(AHORA)).resolves.not.toBe(SIN_TURNO);
+    correrTandaDeSeguimiento.mockResolvedValueOnce(
+      tanda({ leidas: [{ sessionId: "s2", estado: "error", final: true, resultado: { status: "error", sessionId: "s2", reason: "Claude: 529" } }], erroresFinales: [{ sessionId: "s2", error: "Claude: 529" }] }),
+    );
+    await expect(job("seguimiento-reuniones").run(AHORA)).rejects.toThrow(/s2/);
+    log.mockRestore();
+  });
+
+  it("se apaga con SEGUIMIENTO_REUNIONES_ENABLED=0 (la misma regla que dice el motivo en Integraciones)", () => {
+    vi.stubEnv("SEGUIMIENTO_REUNIONES_ENABLED", "0");
+    expect(job("seguimiento-reuniones").shouldRun(AHORA, { weekday: "Mon", hour: 9, dateKey: HOY } as never)).toBe(false);
+    vi.stubEnv("SEGUIMIENTO_REUNIONES_ENABLED", "");
+    expect(job("seguimiento-reuniones").shouldRun(AHORA, { weekday: "Mon", hour: 9, dateKey: HOY } as never)).toBe(true);
+    vi.unstubAllEnvs();
+  });
+});
+
 // ── tipo-cambio-daily (auditoría 2026-10-05) ─────────────────────────────────────
 // vi.mock y vi.hoisted suben solos al principio del archivo: acá quedan junto a las pruebas que los usan.
 const { sincronizarTipoDeCambio, estadoDelTurno } = vi.hoisted(() => ({ sincronizarTipoDeCambio: vi.fn(), estadoDelTurno: vi.fn() }));

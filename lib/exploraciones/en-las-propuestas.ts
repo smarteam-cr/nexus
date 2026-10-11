@@ -24,6 +24,7 @@ import type { Meta } from "./casillas";
 import { listaParaProponer } from "./calidad";
 import { internoParaElCse } from "./para-el-handoff";
 import { chequeoDe, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, exploracionParaLaPropuesta } from "./servidor";
+import { DE_LA_PREVENTA } from "./marco";
 
 /** Lo que pinta la columna «Preventa» del contexto (components/clients/ExploracionDeVentaColumn.tsx). */
 export interface ResumenParaElContexto {
@@ -76,7 +77,7 @@ export interface PreventaDisponible {
 export async function preventasDeLaEmpresa(clientId: string): Promise<PreventaDisponible[]> {
   if (!modeloDisponible(prisma.exploracionDeVenta)) return [];
   const filas = await prisma.exploracionDeVenta.findMany({
-    where: { clientId, archivadaEn: null },
+    where: { clientId, archivadaEn: null, ...DE_LA_PREVENTA },
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,

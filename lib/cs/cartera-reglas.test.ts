@@ -3,8 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { leerPartner } from "./lectura-partner";
 import {
-  QUE_PONE_CADA_MARCA,
+  QUE_PINTA_CADA_COLOR,
   adopcionPorHub,
+  alertasParaRevisar,
   buscarEnLaLista,
   carteraEnUnaLinea,
   consumoDeLaCartera,
@@ -23,7 +24,6 @@ import {
   saludDeLaCuenta,
   ultimoContactoDeLaCuenta,
   type AlertaDeCuenta,
-  type ClaveDeMotivo,
   type CuentaDeCartera,
   type ProyectoDeCuenta,
 } from "./cartera-reglas";
@@ -101,7 +101,7 @@ describe("motivos de una cuenta", () => {
   it("una cuenta sana no tiene motivos", () => {
     const m = motivosDeLaCuenta(cuenta("sana"), HOY);
     expect(m).toEqual([]);
-    expect(saludDeLaCuenta(m)).toBe("saludable");
+    expect(saludDeLaCuenta(cuenta("sana"), HOY).salud).toBe("saludable");
   });
 
   it("⭐ riesgo doble: proyecto bloqueado y renovación en 90 días, marcado como cruce", () => {
@@ -155,6 +155,26 @@ describe("motivos de una cuenta", () => {
     expect(m.clave).toBe("relacionPorVencer");
     expect(m.prioridad).toBe("alta");
     expect(m.texto).toBe("La relación gestionada vence en 9 días: nadie de Smarteam trabaja en el portal desde el 28 jul");
+  });
+
+  it("⭐ la relación gestionada que terminó es motivo mientras es reciente (Cicadex, 2026-10-07)", () => {
+    /* Cuando termina, el motivo «por vencer» desaparece justo cuando se perdió el uso. HOY = 4 oct. */
+    const termino = (fin: string, extra: Record<string, string> = {}) =>
+      motivosDeLaCuenta(
+        cuenta("cicadex", { crudo: { hs_is_managed: "false", hs_unified_usage_score: "", hs_managed_relationship_end_date: fin, ...extra } }),
+        HOY,
+      ).find((m) => m.clave === "relacionTerminada");
+    expect(termino("2026-09-05T00:00:00Z")).toMatchObject({
+      prioridad: "alta",
+      texto: "La relación gestionada terminó el 5 sep: desde entonces HubSpot no comparte el uso",
+    });
+    expect(termino("2026-08-01T00:00:00Z")?.prioridad).toBe("media");
+    // Las terminadas hace más de 90 días no llenan la lista (hay relaciones terminadas en 2021).
+    expect(termino("2026-06-01T00:00:00Z")).toBeUndefined();
+    // Una cuenta inactiva en HubSpot ya tiene su propio motivo: la relación terminó porque se fue.
+    expect(termino("2026-09-05T00:00:00Z", { hs_is_active: "false" })).toBeUndefined();
+    // Una fecha que todavía no llegó no terminó nada.
+    expect(termino("2026-10-20T00:00:00Z")).toBeUndefined();
   });
 
   it("sin contacto en más de 21 días", () => {
@@ -238,15 +258,19 @@ describe("⭐ el último contacto es con el CLIENTE: una reunión interna sobre 
 describe("⭐ la lista de la semana, en el orden de Elías", () => {
   const cuentas = [
     cuenta("media-atrasada", { proyectos: [proyecto({ atraso: { dias: 9, fase: "Integración" } })] }),
-    cuenta("sin-datos", { crudo: null }),
+    cuenta("sin-datos", { crudo: null, proyectos: [], ultimoContacto: null }),
+    cuenta("sin-partner", { crudo: null }),
     cuenta("alta-bloqueada", { proyectos: [proyecto({ bloqueado: true })] }),
     cuenta("cancelada", { crudo: { hs_cancellation_products: "SERVICE", hs_next_cancellation_date: "2026-12-31" } }),
     cuenta("sana"),
   ];
   const lista = listaParaLlamar(cuentas, HOY);
 
-  it("la cancelación va primera, después lo alto, después lo que no tiene datos, después lo medio", () => {
-    expect(lista.map((f) => f.clientId)).toEqual(["cancelada", "alta-bloqueada", "sin-datos", "media-atrasada"]);
+  it("primero el color (rojo, amarillo, sin datos, verde) y, adentro, la cancelación primera", () => {
+    /* «sin-partner» no está vinculada a HubSpot Partner, pero su entrega va al día y hay contacto:
+       es verde y va al final, aunque su motivo para llamar sea «sin datos» (2026-10-07). */
+    expect(lista.map((f) => f.clientId)).toEqual(["cancelada", "alta-bloqueada", "media-atrasada", "sin-datos", "sin-partner"]);
+    expect(lista.map((f) => f.salud)).toEqual(["en-riesgo", "en-riesgo", "en-friccion", "sin-datos", "saludable"]);
   });
 
   it("una cuenta sin motivos no está en la lista", () => {
@@ -499,65 +523,192 @@ describe("⭐ buscar con un filtro puesto", () => {
   });
 });
 
-describe("⭐ la leyenda de las marcas dice lo que hacen las reglas", () => {
-  /* Una cuenta por cada motivo y prioridad posibles. Si una regla cambia de prioridad o de umbral
-     (p. ej. la relación por vencer pasa a ser urgente a los 20 días), el par que da ya no es el que
-     dice la leyenda y esto se pone en rojo. */
-  const RENUEVA_PRONTO = { hs_sales_hub_renewal_date: "2026-11-14" };
+describe("⭐ el color de cada cuenta (Elías, 2026-10-07)", () => {
+  /* Pedido: que Alex Vanegas vea de un vistazo qué cuentas necesitan atención. El color sale de las
+     cuatro lecturas de la ficha (entrega, uso, relación, renovación), no de los motivos para llamar:
+     antes 11 cuentas estaban en rojo solo por alertas del agente (kölbi entre ellas). */
   const deuda = (diasMax: number) => ({
     vencidas: { cantidad: 1, montos: { USD: 900 }, diasMax },
     sinFacturarAtrasadas: { cantidad: 0, diasMax: 0 },
     promesasIncumplidas: 0,
     ultimoPago: null,
   });
-  const casos: CuentaDeCartera[] = [
-    cuenta("cancelacion", { crudo: { hs_cancellation_products: "SERVICE" } }),
-    cuenta("riesgoDoble", { crudo: RENUEVA_PRONTO, proyectos: [proyecto({ bloqueado: true })] }),
-    cuenta("bloqueado", { proyectos: [proyecto({ bloqueado: true })] }),
-    cuenta("deudaGrave", { facturacion: deuda(38) }),
-    cuenta("deudaReciente", { facturacion: deuda(10) }),
-    cuenta("usoTrasCierre", {
-      crudo: { hs_last_4_weeks_usage_score_trend: "-0.15" },
-      proyectos: [proyecto({ activo: false, cerradoEn: "2026-08-08" })],
-    }),
-    cuenta("renuevaConUsoBajo", { crudo: { hs_sales_hub_renewal_date: "2026-10-31", hs_unified_usage_score: "29" } }),
-    cuenta("alertaAlta", { alertas: [alerta({ severidad: "HIGH" })] }),
-    cuenta("alertaMedia", { alertas: [alerta({ severidad: "MEDIUM" })] }),
-    cuenta("relacionUrgente", { crudo: { hs_managed_relationship_estimated_expiration_date: "2026-10-13" } }),
-    cuenta("relacionPorVencer", { crudo: { hs_managed_relationship_estimated_expiration_date: "2026-10-30" } }),
-    cuenta("sinDatos", { crudo: null }),
-    cuenta("inactiva", { crudo: { hs_is_active: "false" } }),
-    cuenta("bajaDePlan", { crudo: { ...RENUEVA_PRONTO, hs_next_renewal_date: "2026-11-14", hs_renewal_mrr_change: "-355" } }),
-    cuenta("atrasado", { proyectos: [proyecto({ atraso: { dias: 9, fase: null } })] }),
-    cuenta("usoCayendo", { crudo: { hs_last_4_weeks_usage_score_trend: "-0.15" } }),
-    cuenta("licenciasSinUsar", {
-      crudo: { ...RENUEVA_PRONTO, hs_sales_seats_assigned: "4", hs_sales_seats_available: "6", hs_sales_seats_limit: "10" },
-    }),
-    cuenta("sinContacto", { ultimoContacto: "2026-08-31T00:00:00Z" }),
-    cuenta("sinContactoRegistrado", { ultimoContacto: null }),
-    cuenta("tickets", { ticketsAbiertos: 3 }),
-  ];
-  const motivos = casos.flatMap((c) => motivosDeLaCuenta(c, HOY));
-  const clave = (x: { clave: ClaveDeMotivo; prioridad: string }) => `${x.clave}:${x.prioridad}`;
-  const dan = new Set(motivos.map(clave));
-  const dice = new Set(QUE_PONE_CADA_MARCA.map(clave));
 
-  it("todo motivo y prioridad que dan las reglas está en la leyenda", () => {
-    expect([...dan].filter((k) => !dice.has(k)), "las reglas dan esto y la leyenda no lo dice").toEqual([]);
+  it("una cuenta sana va en verde y dice por qué", () => {
+    const s = saludDeLaCuenta(cuenta("sana"), HOY);
+    expect(s.salud).toBe("saludable");
+    expect(s.porque).toBe("Va bien: entrega al día, uso 60 de 100 y último contacto hace 3 días.");
   });
 
-  it("y la leyenda no dice nada que las reglas no den", () => {
+  it("⭐ una alerta del agente NO pinta la cuenta: se ve aparte y se resuelve en la lista", () => {
+    /* La edición que pone esto en rojo: volver a sacar el color de los motivos (alertaAlta es alta). */
+    const c = cuenta("kolbi", { alertas: [alerta({ severidad: "HIGH" })] });
+    expect(saludDeLaCuenta(c, HOY).salud).toBe("saludable");
+    const [fila] = listaParaLlamar([c], HOY);
+    expect(fila).toMatchObject({ salud: "saludable", principal: { clave: "alertaDelAgente" } });
+    expect(fila.alertas.map((a) => a.id)).toEqual(["a1"]);
+  });
+
+  it("⭐ como kölbi: uso cayendo → amarillo, con su porqué en una línea", () => {
+    const s = saludDeLaCuenta(cuenta("kolbi", { crudo: { hs_last_4_weeks_usage_score_trend: "-0.08" } }), HOY);
+    expect(s.salud).toBe("en-friccion");
+    expect(s.porque).toMatch(/^Uso cayendo: 60 de 100, .*8.* en 4 semanas\.$/);
+  });
+
+  it("una renovación cerca no pinta sola", () => {
+    expect(saludDeLaCuenta(cuenta("x", { crudo: { hs_sales_hub_renewal_date: "2026-11-14" } }), HOY).salud).toBe("saludable");
+  });
+
+  it("⭐ renovación cerca CON el uso mal → rojo, en una sola razón", () => {
+    const s = saludDeLaCuenta(cuenta("x", { crudo: { hs_sales_hub_renewal_date: "2026-10-31", hs_unified_usage_score: "29" } }), HOY);
+    expect(s.salud).toBe("en-riesgo");
+    expect(s.razones.map((r) => r.clave)).toEqual(["renuevaEnRiesgo"]);
+    expect(s.porque).toBe("Renueva en 27 días con el uso bajo (29 de 100).");
+  });
+
+  it("renovación cerca con un proyecto atrasado → rojo", () => {
+    const c = cuenta("x", {
+      crudo: { hs_sales_hub_renewal_date: "2026-10-31" },
+      proyectos: [proyecto({ atraso: { dias: 9, fase: null } })],
+    });
+    expect(saludDeLaCuenta(c, HOY).porque).toBe("Renueva en 27 días con un proyecto atrasado («Implementación Sales Hub» va 9 días tarde).");
+  });
+
+  it("un uso sin puntaje es no saber, no un problema: no pinta", () => {
+    expect(saludDeLaCuenta(cuenta("x", { crudo: { hs_unified_usage_score: "" } }), HOY).salud).toBe("saludable");
+  });
+
+  it("la deuda vencida NO pinta (el pedido nombra entrega, adopción, relación y renovación): es un motivo para llamar", () => {
+    const c = cuenta("x", { facturacion: deuda(38) });
+    expect(saludDeLaCuenta(c, HOY).salud).toBe("saludable");
+    expect(listaParaLlamar([c], HOY)[0].principal.clave).toBe("facturasVencidas");
+  });
+
+  it("con varias señales dice la más grave y cuántas más", () => {
+    const s = saludDeLaCuenta(
+      cuenta("x", { proyectos: [proyecto({ bloqueado: true })], ultimoContacto: "2026-08-31T00:00:00Z", facturacion: deuda(10) }),
+      HOY,
+    );
+    expect(s.salud).toBe("en-riesgo");
+    expect(s.porque).toBe("«Implementación Sales Hub» está bloqueado · y 1 señal más.");
+  });
+
+  it("sin proyecto, sin puntaje y sin contacto → gris «Sin datos», no verde", () => {
+    const s = saludDeLaCuenta(cuenta("x", { crudo: null, proyectos: [], ultimoContacto: null }), HOY);
+    expect(s.salud).toBe("sin-datos");
+  });
+
+  it("⭐ la relación pinta solo donde Smarteam acompaña la cuenta (proyecto activo o relación gestionada)", () => {
+    /* Medido el 2026-10-07: 32 cuentas en amarillo solo por no tener contacto, sin proyecto ni
+       relación gestionada. La edición que lo pone en rojo: sacar `acompanamos` de la regla. */
+    const vieja = "2026-05-01T00:00:00Z";
+    const noLaAcompanamos = cuenta("x", { crudo: { hs_is_managed: "false", hs_unified_usage_score: "" }, proyectos: [], ultimoContacto: vieja });
+    expect(saludDeLaCuenta(noLaAcompanamos, HOY)).toMatchObject({ salud: "sin-datos" });
+    expect(saludDeLaCuenta(noLaAcompanamos, HOY).porque).toBe(
+      "Smarteam no la acompaña hoy (sin proyecto activo ni relación gestionada en HubSpot) y el último contacto fue hace 156 días.",
+    );
+    expect(saludDeLaCuenta(cuenta("x", { proyectos: [], ultimoContacto: vieja }), HOY).razones.map((r) => r.clave)).toEqual(["fria"]);
+    expect(saludDeLaCuenta(cuenta("x", { crudo: null, ultimoContacto: vieja }), HOY).razones.map((r) => r.clave)).toEqual(["fria"]);
+  });
+
+  it("con proyecto activo y ningún contacto en 6 meses → amarillo", () => {
+    expect(saludDeLaCuenta(cuenta("x", { ultimoContacto: null }), HOY)).toMatchObject({
+      salud: "en-friccion",
+      razones: [{ clave: "sinContacto" }],
+    });
+  });
+
+  it("la lista va por color: rojo, amarillo, sin datos, verde", () => {
+    const lista = listaParaLlamar(
+      [
+        cuenta("verde-con-alerta", { alertas: [alerta()] }),
+        cuenta("amarilla", { proyectos: [proyecto({ atraso: { dias: 9, fase: null } })] }),
+        cuenta("gris", { crudo: null, proyectos: [], ultimoContacto: null }),
+        cuenta("roja", { proyectos: [proyecto({ bloqueado: true })] }),
+      ],
+      HOY,
+    );
+    expect(lista.map((f) => f.clientId)).toEqual(["roja", "amarilla", "gris", "verde-con-alerta"]);
+  });
+});
+
+describe("⭐ la vista «Alertas»: la revisión del día", () => {
+  it("trae las alertas de TODAS las cuentas, también las que no tienen motivo para llamar", () => {
+    /* Un aviso de renovación (delAgente: false) no es un motivo: sin esta vista no había dónde cerrarlo. */
+    const aviso = alerta({ id: "r1", delAgente: false, severidad: "MEDIUM", titulo: "Renovación en 60 días" });
+    const sana = cuenta("sana", { alertas: [aviso] });
+    expect(listaParaLlamar([sana], HOY)).toEqual([]);
+    expect(alertasParaRevisar([sana], HOY).map((c) => c.alertas.map((a) => a.id))).toEqual([["r1"]]);
+  });
+
+  it("primero las cuentas con una alerta alta; adentro, la más grave y la más nueva primero", () => {
+    const r = alertasParaRevisar(
+      [
+        cuenta("media", { alertas: [alerta({ id: "m1", severidad: "MEDIUM" })] }),
+        cuenta("sin", { alertas: [] }),
+        cuenta("alta", {
+          alertas: [
+            alerta({ id: "a-vieja", severidad: "LOW", detectadaEn: "2026-09-01" }),
+            alerta({ id: "a-alta", severidad: "HIGH", detectadaEn: "2026-09-02" }),
+            alerta({ id: "a-media", severidad: "MEDIUM", detectadaEn: "2026-10-01" }),
+          ],
+        }),
+      ],
+      HOY,
+    );
+    expect(r.map((c) => c.clientId)).toEqual(["alta", "media"]);
+    expect(r[0].alertas.map((a) => a.id)).toEqual(["a-alta", "a-media", "a-vieja"]);
+  });
+});
+
+/** La frase de una queja o un retraso, ya verificada por el runner del vigía. */
+const CITA = { texto: "el reporte de ventas sigue sin funcionar", fuente: "reunion" as const, id: "s1", fecha: "2026-10-01", titulo: "Seguimiento" };
+
+describe("⭐ la leyenda de los colores dice lo que hacen las reglas", () => {
+  /* Una cuenta por cada razón que pinta. Si una regla cambia de color o de umbral, la razón que da ya
+     no es la que dice la leyenda y esto se pone en rojo. */
+  const RENUEVA_PRONTO = { hs_sales_hub_renewal_date: "2026-10-31" };
+  const casos: CuentaDeCartera[] = [
+    cuenta("bloqueado", { proyectos: [proyecto({ bloqueado: true })] }),
+    cuenta("cancelacion", { crudo: { hs_cancellation_products: "SERVICE" } }),
+    cuenta("renuevaConUsoBajo", { crudo: { ...RENUEVA_PRONTO, hs_unified_usage_score: "29" } }),
+    cuenta("renuevaAtrasada", { crudo: RENUEVA_PRONTO, proyectos: [proyecto({ atraso: { dias: 9, fase: null } })] }),
+    cuenta("atrasado", { proyectos: [proyecto({ atraso: { dias: 9, fase: null } })] }),
+    cuenta("usoCayendo", { crudo: { hs_last_4_weeks_usage_score_trend: "-0.15" } }),
+    cuenta("usoBajo", { crudo: { hs_unified_usage_score: "29" } }),
+    cuenta("hubSinActivar", { crudo: { hs_is_sales_hub_activated: "false" } }),
+    cuenta("fria", { ultimoContacto: "2026-08-31T00:00:00Z" }),
+    cuenta("sinContacto", { ultimoContacto: null }),
+    // 2026-10-09: quejas y retrasos con la frase verificada, y el motivo de bloqueo sin el estado.
+    cuenta("queja", { alertas: [alerta({ categoria: "QUEJA", severidad: "MEDIUM", cita: CITA })] }),
+    cuenta("quejaGrave", { alertas: [alerta({ categoria: "QUEJA", severidad: "HIGH", cita: CITA })] }),
+    cuenta("retraso", { alertas: [alerta({ categoria: "TIMELINE_OVERDUE", severidad: "MEDIUM", cita: CITA })] }),
+    cuenta("retrasoGrave", { alertas: [alerta({ categoria: "TIMELINE_OVERDUE", severidad: "HIGH", cita: CITA })] }),
+    cuenta("bloqueoPorMotivo", { proyectos: [proyecto({ motivoBloqueo: "Atraso por Smarteam" })] }),
+  ];
+  const resultados = casos.map((c) => ({ id: c.clientId, ...saludDeLaCuenta(c, HOY) }));
+  const dan = new Set(resultados.flatMap((r) => r.razones.map((x) => x.clave)));
+  const dice = new Set(QUE_PINTA_CADA_COLOR.map((x) => x.clave));
+
+  it("todo lo que pinta una cuenta está en la leyenda, y nada de la leyenda es inventado", () => {
+    expect([...dan].filter((k) => !dice.has(k)), "las reglas dan esto y la leyenda no lo dice").toEqual([]);
     expect([...dice].filter((k) => !dan.has(k)), "la leyenda dice esto y ninguna cuenta lo da").toEqual([]);
   });
 
-  it("cada texto va en la marca que le pone a la cuenta", () => {
-    const leyenda = leyendaDeSalud();
-    for (const m of motivos) {
-      const fila = QUE_PONE_CADA_MARCA.find((x) => clave(x) === clave(m))!;
-      const marca = leyenda.find((l) => l.salud === saludDeLaCuenta([m]))!;
-      expect(marca.texto, `«${fila.texto}» va en «${marca.nombre}»`).toContain(fila.texto);
+  it("cada razón pinta el color que dice la leyenda", () => {
+    for (const r of resultados) {
+      expect(r.razones, r.id).toHaveLength(1);
+      const fila = QUE_PINTA_CADA_COLOR.find((x) => x.clave === r.razones[0].clave)!;
+      expect(r.salud, `${r.id} → «${fila.texto}»`).toBe(fila.salud);
     }
-    expect(leyenda.map((l) => l.salud)).toEqual(["en-riesgo", "en-friccion", "saludable"]);
+  });
+
+  it("cada texto va en el color que pinta", () => {
+    const leyenda = leyendaDeSalud();
+    for (const fila of QUE_PINTA_CADA_COLOR) {
+      expect(leyenda.find((l) => l.salud === fila.salud)!.texto).toContain(fila.texto);
+    }
+    expect(leyenda.map((l) => l.salud)).toEqual(["en-riesgo", "en-friccion", "en-espera", "saludable", "sin-datos"]);
   });
 
   it("el índice pinta esta leyenda, no una escrita a mano", () => {

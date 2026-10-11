@@ -168,9 +168,9 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
     for (const c of finanzas.children ?? []) expect(c.vistas, `${c.href} no declara sus vistas`).toBeDefined();
   });
 
-  it("higiene: un typo en `section` crearía un bloque extra — hoy hay exactamente 6", () => {
+  it("higiene: un typo en `section` crearía un bloque extra — hoy hay exactamente 7", () => {
     const secciones = (finanzas.children ?? []).map((c) => c.section).filter(Boolean);
-    expect(new Set(secciones)).toEqual(new Set(["Mi día", "Mi área", "Ingresos", "Costos y gastos", "Cuadre", "Reportes"]));
+    expect(new Set(secciones)).toEqual(new Set(["Mi día", "Mi área", "Ingresos", "Costos y gastos", "Cuadre", "Reportes", "Modelos"]));
   });
 });
 

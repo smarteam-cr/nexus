@@ -4,9 +4,15 @@ import { prisma } from "@/lib/db/prisma";
 import { hubspotCompanyUrl } from "@/lib/hubspot/urls";
 import {
   CAMPOS_DE_LA_FICHA,
+  camposPropuestos,
   camposQueCambiaron,
+  conDecisiones,
+  conHistoria,
+  decisionesAlConfirmar,
+  decisionesAlDescartar,
   escrituraEnHubspot,
   fichaTieneContenido,
+  historiaAlConfirmar,
   leerFicha,
   quitarDeLaPropuesta,
   validarValores,
@@ -14,6 +20,7 @@ import {
   type FichaGuardada,
 } from "@/lib/clients/ficha";
 import { sincronizarFichaConHubspot } from "@/lib/clients/ficha-hubspot";
+import { traerCambiosDeHubspot } from "@/lib/clients/ficha-desde-hubspot-server";
 import { resultadosDelCliente } from "@/lib/handoff/resultados";
 import { resultadosParaLaFicha } from "@/lib/handoff/resultados-medibles";
 
@@ -25,6 +32,11 @@ import { resultadosParaLaFicha } from "@/lib/handoff/resultados-medibles";
  *        propósito: si HubSpot falla, lo que el CSE escribió no se pierde y se reintenta
  *        confirmando de nuevo (sin cambios, solo re-sincroniza).
  *      → { descartarPropuesta: true } borra la propuesta de la IA sin tocar lo confirmado.
+ *      → { descartarCampos: [claves] } descarta esos campos de la propuesta.
+ *
+ * Cada campo propuesto que se usa, se cambia o se descarta queda anotado en `ficha.decisiones`, con el correo de
+ * quien lo decidió (lib/lo-propuesto: lo cuenta «Uso de Nexus»). No toca HubSpot. Y cada campo que cambia al
+ * confirmar guarda su historia (`ficha.historia`: quién, cuándo y de qué fuente), que lee la memoria de la cuenta.
  *
  * «Resultados que persigue» no viaja desde la pantalla: se arma acá con los resultados CONFIRMADOS
  * de los proyectos del cliente (lib/handoff/resultados.ts › resultadosDelCliente), que se editan en
@@ -78,6 +90,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const guard = await guardAccessToClient(id);
   if (guard instanceof NextResponse) return guard;
 
+  /* Lo que alguien cambió en HubSpot (retos, dolor principal) vuelve como propuesta (2026-10-09). Se espera como
+     mucho 2,5 s: si HubSpot tarda, la ficha se abre igual y la propuesta aparece la próxima vez. */
+  await Promise.race([traerCambiosDeHubspot(id), new Promise((r) => setTimeout(r, 2500))]);
   const client = await cargar(id);
   if (!client) return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
   return responder(id, leerFicha(client.ficha), empresaDelSistema(client));
@@ -97,9 +112,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (!client) return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
   const companyId = empresaDelSistema(client);
   const actual = leerFicha(client.ficha);
+  const quien = guard.user.email;
+  const ahoraIso = new Date().toISOString();
 
   if (body?.descartarPropuesta) {
-    const nueva: FichaGuardada = { ...actual, propuesta: null };
+    const nueva: FichaGuardada = conDecisiones(
+      { ...actual, propuesta: null },
+      decisionesAlDescartar(actual, camposPropuestos(actual), quien, ahoraIso),
+    );
     await prisma.client.update({ where: { id }, data: { ficha: nueva as object } });
     return responder(id, nueva, companyId);
   }
@@ -112,7 +132,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       (k): k is ClaveDeFicha => typeof k === "string" && validas.has(k),
     );
     if (!claves.length) return NextResponse.json({ error: "No hay campos para descartar." }, { status: 400 });
-    const nueva = quitarDeLaPropuesta(actual, claves);
+    const nueva = conDecisiones(quitarDeLaPropuesta(actual, claves), decisionesAlDescartar(actual, claves, quien, ahoraIso));
     await prisma.client.update({ where: { id }, data: { ficha: nueva as object } });
     return responder(id, nueva, companyId);
   }
@@ -128,6 +148,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const primeraVez = !actual.confirmadaAt;
   const cambios = camposQueCambiaron(actual.valores, v.valores);
+  // Qué se hizo con cada campo que estaba propuesto: usado, usado con cambios o desestimado.
+  const decisiones = decisionesAlConfirmar(actual, v.valores, quien, ahoraIso);
   const escritura = escrituraEnHubspot({
     primeraVez,
     cambios,
@@ -139,19 +161,27 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // con lo que está», así que la propuesta se descarta.
   if (!primeraVez && !cambios.length && escritura.alDia) {
     if (!actual.propuesta) return responder(id, actual, companyId, { sinCambios: true });
-    const nueva: FichaGuardada = { ...actual, propuesta: null };
+    const nueva: FichaGuardada = conDecisiones({ ...actual, propuesta: null }, decisiones);
     await prisma.client.update({ where: { id }, data: { ficha: nueva as object } });
     return responder(id, nueva, companyId, { sinCambios: true });
   }
 
   const autor = guard.user.teamMember?.name || guard.user.email;
-  const confirmada: FichaGuardada = {
-    ...actual,
-    valores: v.valores,
-    confirmadaAt: new Date().toISOString(),
-    confirmadaPor: autor,
-    propuesta: null,
-  };
+  // De dónde salió cada campo que cambia (quién, cuándo, de qué fuente): lo lee la memoria de la cuenta (lib/memoria).
+  const historia = historiaAlConfirmar(actual, v.valores, quien, ahoraIso);
+  const confirmada: FichaGuardada = conDecisiones(
+    conHistoria(
+      {
+        ...actual,
+        valores: v.valores,
+        confirmadaAt: new Date().toISOString(),
+        confirmadaPor: autor,
+        propuesta: null,
+      },
+      historia,
+    ),
+    decisiones,
+  );
   // 1) Nexus primero: lo confirmado no depende de que HubSpot conteste.
   await prisma.client.update({ where: { id }, data: { ficha: confirmada as object } });
 

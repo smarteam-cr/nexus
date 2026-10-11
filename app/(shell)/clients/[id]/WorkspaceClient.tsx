@@ -11,6 +11,8 @@ import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import AvisoDeFicha from "@/components/clients/AvisoDeFicha";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
+import SolicitudesFueraDeAlcance from "@/components/clients/SolicitudesFueraDeAlcance";
+import { PESTANA_DE_SOLICITUDES } from "@/lib/sessions/solicitudes-fuera-de-alcance";
 import AltaTrabada from "@/components/projects/AltaTrabada";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
 import RielDelCliente, { type ProyectoDelRiel } from "@/components/clients/RielDelCliente";
@@ -31,6 +33,10 @@ import {
 // constante vivía en un módulo que importa Prisma).
 const STRATEGY_TAB_ID = SENTINEL_SERVICE_TYPE;
 const PROCESOS_TAB_ID = "__procesos__";
+const SOLICITUDES_TAB_ID = PESTANA_DE_SOLICITUDES;
+/** Las pestañas de La cuenta: no son un proyecto. */
+const esDeLaCuenta = (id: string | null | undefined) =>
+  id === STRATEGY_TAB_ID || id === PROCESOS_TAB_ID || id === SOLICITUDES_TAB_ID;
 
 interface ProjectSummary {
   id: string;
@@ -114,6 +120,8 @@ export interface SeededCanvas {
   hasContent: boolean;
   /** El handoff corrió después de escribirse este documento (lib/pieces/piece-staleness.ts). */
   stale?: boolean;
+  /** Las novedades de las reuniones para este documento (etapa 6; 0 con los hechos apagados). */
+  novedades?: number;
 }
 
 export default function WorkspaceClient({
@@ -435,7 +443,7 @@ function ProjectSection({
     if (vistas.gps === gpsRefreshSignal && vistas.timeline === timelineRefreshSignal) return;
     senalesVistas.current = { gps: gpsRefreshSignal, timeline: timelineRefreshSignal };
     const id = activeProjectId;
-    if (!id || id === STRATEGY_TAB_ID || id === PROCESOS_TAB_ID) return;
+    if (!id || esDeLaCuenta(id)) return;
     let vivo = true;
     const t = setTimeout(() => {
       fetch(`/api/projects/${encodeURIComponent(id)}/timeline/proposal`)
@@ -481,10 +489,7 @@ function ProjectSection({
     // useSearchParams puede venir vacío en el primer render → el restore no dispararía.
     const tab = new URLSearchParams(window.location.search).get("tab");
     if (!tab) return;
-    const valid =
-      tab === STRATEGY_TAB_ID ||
-      tab === PROCESOS_TAB_ID ||
-      projects.some((p) => p.id === tab);
+    const valid = esDeLaCuenta(tab) || projects.some((p) => p.id === tab);
     if (valid && tab !== activeProjectId) setActiveProjectId(tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -497,8 +502,7 @@ function ProjectSection({
   const tabDeLaUrl = searchParams.get("tab");
   useEffect(() => {
     if (!tabRestoredRef.current || !tabDeLaUrl || tabDeLaUrl === activeProjectId) return;
-    const valida =
-      tabDeLaUrl === STRATEGY_TAB_ID || tabDeLaUrl === PROCESOS_TAB_ID || projects.some((p) => p.id === tabDeLaUrl);
+    const valida = esDeLaCuenta(tabDeLaUrl) || projects.some((p) => p.id === tabDeLaUrl);
     if (valida) setActiveProjectId(tabDeLaUrl);
     // Solo cuando cambia la URL: si dependiera de `activeProjectId`, un clic en una pestaña (que
     // fija la pestaña ANTES de escribir la URL) volvería a la anterior.
@@ -507,6 +511,7 @@ function ProjectSection({
 
   const isStrategy = activeProjectId === STRATEGY_TAB_ID;
   const isProcesos = activeProjectId === PROCESOS_TAB_ID;
+  const isSolicitudes = activeProjectId === SOLICITUDES_TAB_ID;
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   /* El proyecto cuyas piezas cuelgan en el riel: el abierto o, mientras se mira algo de la cuenta
@@ -607,8 +612,10 @@ function ProjectSection({
           activo={activeProject?.id ?? null}
           proyectoDelRiel={proyectoDelRiel?.id ?? null}
           onElegirProyecto={selectTab}
-          onElegirCuenta={(que) => selectTab(que === "info" ? STRATEGY_TAB_ID : PROCESOS_TAB_ID)}
-          cuentaActiva={isStrategy ? "info" : isProcesos ? "procesos" : null}
+          onElegirCuenta={(que) =>
+            selectTab(que === "info" ? STRATEGY_TAB_ID : que === "procesos" ? PROCESOS_TAB_ID : SOLICITUDES_TAB_ID)
+          }
+          cuentaActiva={isStrategy ? "info" : isProcesos ? "procesos" : isSolicitudes ? "solicitudes" : null}
           avisoDeLaFicha={<AvisoDeFicha clientId={clientId} />}
           slotDePiezas={setSlotDePiezas}
           /* Traer AHORA los proyectos de HubSpot. La sincronización del montaje corre SIN
@@ -639,6 +646,16 @@ function ProjectSection({
             clientId={clientId}
             slotDelPanel={panelVisible ? slotDelPanel : null}
           />
+        )}
+        {isSolicitudes && (
+          <div className="px-8 pb-10 pt-6">
+            <SolicitudesFueraDeAlcance
+              key={SOLICITUDES_TAB_ID}
+              clientId={clientId}
+              proyectos={projects.map((p) => ({ id: p.id, nombre: p.name }))}
+              slotDelPanel={panelVisible ? slotDelPanel : null}
+            />
+          </div>
         )}
         {proyectoDelRiel && (
           <ProjectCanvasPanel

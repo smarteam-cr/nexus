@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { confirmarDocumento, prepararDocumento } from "@/lib/documents/subida-de-documento";
+import { confirmarDocumento, guardarEnLosDocumentosDeLaEmpresa, prepararDocumento } from "@/lib/documents/subida-de-documento";
 import {
   addPastedTranscript,
   addUploadedTranscript,
@@ -56,7 +56,7 @@ export async function POST(
 
   const bc = await prisma.businessCase.findUnique({
     where: { id },
-    select: { id: true },
+    select: { id: true, clientId: true },
   });
   if (!bc) {
     return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
@@ -87,6 +87,10 @@ export async function POST(
     const subido = await confirmarDocumento(carpeta, path, nombre);
     if (!subido.ok) return NextResponse.json({ error: subido.error }, { status: subido.status });
     const rawText = subido.contenido ?? "";
+    // El archivo queda además entre los documentos de la empresa (2026-10-07): la transcripción y el
+    // documento apuntan al mismo path, y borrar la transcripción no borra el archivo.
+    const titulo = typeof (body as { titulo?: unknown }).titulo === "string" ? (body as { titulo: string }).titulo : null;
+    await guardarEnLosDocumentosDeLaEmpresa({ clientId: bc.clientId, projectId: null, origen: "propuesta", subido, titulo });
     const created = await addUploadedTranscript({
       businessCaseId: id,
       rawText,

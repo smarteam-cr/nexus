@@ -28,6 +28,7 @@
  */
 import { CATALOGO_DE_SECCIONES } from "@/lib/landing/catalogo-de-secciones";
 import { SEPARADOR_DE_BLOQUES } from "@/lib/landing/formato-de-seccion";
+import { reglaDeFronteraDelChat } from "@/lib/contexto/frontera-de-los-documentos";
 import {
   OPERACIONES_DE_DOCUMENTO_VALIDAS,
   type CapacidadesDelDocumento,
@@ -78,10 +79,22 @@ export function reglaDeOcultar(puede: boolean): string {
     : "- ⛔ EN ESTE DOCUMENTO NO SE OCULTAN SECCIONES DESDE ACÁ: se hace con el ojo que está junto a cada sección, y se aplica al subirlo al cliente. Si te lo piden, dilo así — no lo intentes.";
 }
 
-/** Las reglas del editor para UNA pieza: el tronco más lo que depende de sus capacidades. */
+/**
+ * Las reglas del editor para UNA pieza: el tronco más lo que depende de sus capacidades, y la
+ * FRONTERA de los documentos que lee el cliente (etapa 4, 2026-10: kickoff, diagnóstico,
+ * planificación, integraciones y entrega). El chat tiene que conocerla ANTES de escribir, no
+ * enterarse por el «⚠ revisa» de la línea. La propuesta comercial y los perfiles de puesto no la
+ * llevan: ahí los precios los escribe Ventas a mano.
+ */
 export function reglasDelDocumento(pieza: string): string {
   const cap = capacidadesDeLaPieza(pieza);
-  return [REGLAS_DURAS_DEL_DOCUMENTO, reglaDeCrear(cap.puedeCrear), reglaDeOcultar(cap.puedeOcultar)].join("\n");
+  const frontera = reglaDeFronteraDelChat(pieza);
+  return [
+    REGLAS_DURAS_DEL_DOCUMENTO,
+    reglaDeCrear(cap.puedeCrear),
+    reglaDeOcultar(cap.puedeOcultar),
+    ...(frontera ? [frontera] : []),
+  ].join("\n");
 }
 
 /** Una consecuencia que el CSE tiene que saber ANTES de pedir el cambio. */

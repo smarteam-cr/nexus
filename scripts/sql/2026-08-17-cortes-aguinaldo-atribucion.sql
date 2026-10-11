@@ -195,8 +195,16 @@ CREATE TABLE IF NOT EXISTS "AguinaldoPago" (
 -- ⚠ Con `sujetoTeamMemberId` NULL este unique NO colisiona (los NULL no son
 -- iguales entre sí en Postgres): ése es el hueco que cierra INV19, exigiendo que
 -- toda fila tenga persona.
-CREATE UNIQUE INDEX IF NOT EXISTS "AguinaldoPago_anio_sujeto_moneda_key"
-  ON "AguinaldoPago" ("anio", "sujetoTeamMemberId", "moneda");
+-- ⚠ Idempotente (2026-10-10): al final del archivo este índice se renombra al nombre que le da Prisma. Si el
+-- archivo ya corrió, existe con ESE nombre; crearlo otra vez con el corto dejaba dos índices iguales y el
+-- RENAME del final fallaba («already exists»), lo que frenaba el bootstrap de la base local en cada corrida.
+DO $$
+BEGIN
+  IF to_regclass('public."AguinaldoPago_anio_sujetoTeamMemberId_moneda_key"') IS NULL THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS "AguinaldoPago_anio_sujeto_moneda_key"
+      ON "AguinaldoPago" ("anio", "sujetoTeamMemberId", "moneda");
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS "AguinaldoPago_anio_idx"
   ON "AguinaldoPago" ("anio");
 

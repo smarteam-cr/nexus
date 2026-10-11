@@ -9,15 +9,25 @@
  * de las sesiones, 2026-10-07); dónde parece estar cada área; y las objeciones que ya puso el cliente.
  *
  * No repite contenido: es un índice. Cada cosa abre su lugar (la casilla en el cajón, la pieza).
+ *
+ * En Exploración (etapa A, 2026-10-09) suma «Las sesiones»: cuántas hay leídas, sin leer, agendadas y
+ * sin reunión (tablero Main.dc.html).
+ *
+ * En la exploración de un proyecto (2026-10-07) dice lo mismo con su marco: la estrategia del cliente
+ * (retos, resultados, obstáculos) en vez de la arquitectura de la venta, cuánto se entiende al cliente en
+ * vez de «para proponer», las áreas en juego para elegir, y sin objeciones.
  */
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { listaParaProponer, puntoQueSePregunta, type PasoDeQueSigue } from "@/lib/exploraciones/calidad";
-import { CASILLAS_DEL_RESUMEN, definicionDe, ETIQUETA_DE_LA_OBJECION, type Objecion } from "@/lib/exploraciones/casillas";
+import { ETIQUETA_DE_LA_OBJECION, type Objecion } from "@/lib/exploraciones/casillas";
+import { avanceDeLaEstrategia, escalaConEvidencia } from "@/lib/exploraciones/avance-del-proyecto";
+import { conteoDeLasSesiones } from "@/lib/exploraciones/inicio";
+import { definicionEnElMarco } from "@/lib/exploraciones/marco";
 import { useLienzo, type PasoDelLienzoUI } from "./contexto";
 import { NivelChip } from "./QueVaPrimero";
-import { LETRA_DEL_MARCO, lineasDe } from "./Resumen";
+import { lineasDe } from "./Resumen";
 import { IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { useSesiones } from "./useSesiones";
@@ -42,18 +52,21 @@ function Bloque({ titulo, accion, children }: { titulo: string; accion?: React.R
   );
 }
 
-/** Las ocho casillas del marco, de a cuatro: verde lo confirmado, azul lo que sugirió el agente, punteado lo que falta. */
+/**
+ * Las tarjetas del marco: las ocho de la venta de a cuatro, las tres de la estrategia de a tres. Verde
+ * lo confirmado, azul lo que sugirió el agente, punteado lo que falta.
+ */
 function Arquitectura() {
-  const { exp, pendientesPara, abrirCasilla } = useLienzo();
+  const { exp, marco, pendientesPara, abrirCasilla } = useLienzo();
   const { paras } = useLoQueSePreguntaEnLaProxima();
-  const confirmadas = CASILLAS_DEL_RESUMEN.filter((c) => lineasDe(c, exp.estado.contenido.casillas[c]).length > 0).length;
+  const confirmadas = marco.tarjetas.filter((c) => lineasDe(c, exp.estado.contenido.casillas[c]).length > 0).length;
   return (
-    <Bloque titulo="Arquitectura de la venta" accion={<span className="text-[11px] text-fg-muted">{confirmadas} de 8</span>}>
-      <div data-recorrido="preventa.panel.marco" className="grid grid-cols-4 gap-1.5">
-        {CASILLAS_DEL_RESUMEN.map((clave) => {
+    <Bloque titulo={marco.nombre} accion={<span className="text-[11px] text-fg-muted">{confirmadas} de {marco.tarjetas.length}</span>}>
+      <div data-recorrido="preventa.panel.marco" className={cn("grid gap-1.5", marco.tarjetas.length === 3 ? "grid-cols-3" : "grid-cols-4")}>
+        {marco.tarjetas.map((clave) => {
           const lleno = lineasDe(clave, exp.estado.contenido.casillas[clave]).length > 0;
           const propuestas = pendientesPara((d) => d.tipo === "casilla" && d.clave === clave).length;
-          const etiqueta = definicionDe(clave).etiqueta;
+          const etiqueta = definicionEnElMarco(clave, marco).etiqueta;
           return (
             <button
               key={clave}
@@ -70,7 +83,7 @@ function Arquitectura() {
               )}
             >
               {!lleno && propuestas > 0 && <IconoDeSugerencia className="absolute right-[3px] top-[3px] h-3 w-3" />}
-              {LETRA_DEL_MARCO[clave].letra}
+              {marco.letras[clave]?.letra ?? etiqueta.charAt(0)}
               <span className="w-full truncate px-1 text-center text-[10px] font-medium leading-tight">{etiqueta}</span>
             </button>
           );
@@ -140,21 +153,100 @@ function ParaProponer() {
   );
 }
 
+/**
+ * En un proyecto: cuánto se entiende al cliente. La estrategia (las tres tarjetas, verde lo confirmado,
+ * azul lo que pregunta la guía de la próxima sesión) y cuántas dimensiones ya tienen evidencia.
+ */
+function AvanceDelProyecto() {
+  const { exp, chequeo } = useLienzo();
+  const { paras } = useLoQueSePreguntaEnLaProxima();
+  const puntos = avanceDeLaEstrategia(exp.estado);
+  const { con, de } = escalaConEvidencia(chequeo);
+  const estado = (p: (typeof puntos)[number]) => (p.cumplido ? "listo" : paras.has(p.id) ? "hoy" : "falta");
+  return (
+    <Bloque titulo="Cuánto se entiende" accion={<span className="text-[11px] text-fg-muted">{puntos.filter((p) => p.cumplido).length} de {puntos.length}</span>}>
+      <div className="flex flex-wrap gap-1.5">
+        {puntos.map((p) => {
+          const e = estado(p);
+          return (
+            <span
+              key={p.id}
+              title={p.titulo}
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[11.5px]",
+                e === "listo" && "border-success-line bg-success-surface text-success-ink",
+                e === "hoy" && "border-info-line bg-info-surface text-brand",
+                e === "falta" && "border-dashed border-line text-fg-muted",
+              )}
+            >
+              {e === "listo" && "✓ "}
+              {p.corto}
+            </span>
+          );
+        })}
+      </div>
+      <p className="text-[12.5px] text-fg-secondary">
+        Escala: {de === 0 ? "elige las áreas en juego" : `${con} de ${de} dimensiones con evidencia`}
+      </p>
+      <p className="text-[11px] text-fg-muted">Verde: confirmado · azul: se pregunta en la próxima sesión</p>
+    </Bloque>
+  );
+}
+
+/** En un proyecto: las áreas en juego, para sumar o sacar (la guía pregunta por sus dimensiones). */
+function AreasEnJuego() {
+  const { exp, escala, puedeEditar, guardando, cambiar } = useLienzo();
+  const enJuego = new Set(exp.estado.areas);
+  const alternar = (id: string) => {
+    const areas = enJuego.has(id) ? exp.estado.areas.filter((a) => a !== id) : [...exp.estado.areas, id];
+    void cambiar([{ op: "areas", areas }]);
+  };
+  return (
+    <div className="flex flex-wrap gap-1.5" aria-label="Áreas en juego">
+      {escala.areas.map((a) => {
+        const activa = enJuego.has(a.id);
+        return (
+          <button
+            key={a.id}
+            type="button"
+            disabled={!puedeEditar || guardando}
+            aria-pressed={activa}
+            onClick={() => alternar(a.id)}
+            className={cn(
+              "rounded-full border px-2.5 py-0.5 text-[12px] transition-colors disabled:opacity-60",
+              activa ? "border-info-line bg-info-surface font-semibold text-brand" : "border-line text-fg-muted hover:bg-surface-hover hover:text-fg",
+            )}
+          >
+            {activa ? "✓ " : "+ "}
+            {a.nombre}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Dónde parece estar cada área en juego, y si sale de evidencia o de hipótesis. */
 function LaEscala() {
-  const { mapa, irA } = useLienzo();
+  const { mapa, marco, irA } = useLienzo();
   const areas = mapa.chequeo.areas;
+  const enProyecto = marco.clave === "cs";
   return (
     <Bloque
       titulo="La escala"
       accion={
-        <button type="button" className="text-[11px] text-brand hover:underline" onClick={() => irA("escala")}>
-          Ver el mapa
-        </button>
+        enProyecto ? undefined : (
+          <button type="button" className="text-[11px] text-brand hover:underline" onClick={() => irA("escala")}>
+            Ver el mapa
+          </button>
+        )
       }
     >
+      {enProyecto && <AreasEnJuego />}
       {areas.length === 0 ? (
-        <p data-recorrido="preventa.panel.escala" className="text-xs text-fg-muted">Elige las áreas en juego en «La escala».</p>
+        <p data-recorrido="preventa.panel.escala" className="text-xs text-fg-muted">
+          {enProyecto ? "Elige arriba las áreas en juego." : "Elige las áreas en juego en «La escala»."}
+        </p>
       ) : (
         <ul data-recorrido="preventa.panel.escala" className="space-y-1.5 rounded-xl border border-line bg-surface px-3 py-2.5">
           {areas.map((a) => {
@@ -204,6 +296,36 @@ function Objeciones() {
   );
 }
 
+/** «Las sesiones»: en qué está la reunión de cada una, contado (lo que no hay no se dice). */
+function LasSesiones() {
+  const { pestanas, estadoDeLaReunion } = useSesiones();
+  if (pestanas.length === 0) return null;
+  const c = conteoDeLasSesiones(pestanas.map(estadoDeLaReunion));
+  const filas: { n: number; marca: string; clase: string; texto: string }[] = [
+    { n: c.leidas, marca: "●", clase: "text-success-ink", texto: c.leidas === 1 ? "leída" : "leídas" },
+    { n: c.sinLeer, marca: "●", clase: "text-warning", texto: "sin leer" },
+    { n: c.atencion, marca: "●", clase: "text-warning", texto: c.atencion === 1 ? "pide atención" : "piden atención" },
+    { n: c.agendadas, marca: "●", clase: "text-fg-muted", texto: c.agendadas === 1 ? "agendada" : "agendadas" },
+    { n: c.sinReunion, marca: "○", clase: "text-fg-muted", texto: "sin reunión" },
+  ];
+  return (
+    <Bloque titulo="Las sesiones">
+      <ul className="space-y-1.5">
+        {filas
+          .filter((f) => f.n > 0)
+          .map((f) => (
+            <li key={f.texto} className="text-[13px] text-fg-secondary">
+              <span className={f.clase} aria-hidden>
+                {f.marca}
+              </span>{" "}
+              {f.n} {f.texto}
+            </li>
+          ))}
+      </ul>
+    </Bloque>
+  );
+}
+
 function Proyectos() {
   const { proyectos } = useLienzo();
   if (proyectos.length === 0) return null;
@@ -233,7 +355,8 @@ export default function PanelDeContexto({
   /** La pieza abierta: en «La escala» no se repite dónde está cada área (tablero del 2026-10-05). */
   paso: PasoDelLienzoUI;
 }) {
-  const { irA, revisables, abrirRevision } = useLienzo();
+  const { irA, revisables, abrirRevision, marco } = useLienzo();
+  const enProyecto = marco.clave === "cs";
   return (
     <div className="space-y-6">
       <section data-recorrido="que-sigue" className="flex flex-col gap-2 rounded-xl border border-info-line bg-info-surface p-3.5">
@@ -251,11 +374,12 @@ export default function PanelDeContexto({
           )
         )}
       </section>
+      {paso === "exploracion" && <LasSesiones />}
       <Arquitectura />
-      <ParaProponer />
+      {enProyecto ? <AvanceDelProyecto /> : <ParaProponer />}
       {paso !== "escala" && <LaEscala />}
-      <Objeciones />
-      <Proyectos />
+      {marco.conObjeciones && <Objeciones />}
+      {!enProyecto && <Proyectos />}
     </div>
   );
 }

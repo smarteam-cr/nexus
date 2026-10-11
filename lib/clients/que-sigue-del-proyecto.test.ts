@@ -77,6 +77,21 @@ describe("qué sigue", () => {
     });
     expect(q.texto).toContain("quedó desactualizado");
   });
+  it("⭐ etapa 6: las novedades del documento de la etapa van después del desactualizado y antes del resumen", () => {
+    const conNovedades = (stale: boolean): PiezaParaQueSigue[] => [{ slug: "diagnosis", etiqueta: "Diagnóstico", estado: "generada", stale, novedades: 3 }];
+    // Desactualizado gana: primero hay que regenerarlo.
+    expect(queSigueDelProyecto({ ...base, etapa: etapa("x", "Diagnóstico"), piezas: conNovedades(true) }).texto).toContain("quedó desactualizado");
+    // Al día, con novedades: van antes que el resumen pendiente.
+    const q = queSigueDelProyecto({ ...base, etapa: etapa("x", "Diagnóstico"), piezas: conNovedades(false), resumenPendiente: { motivo: null } });
+    expect(q.accion).toEqual({ tipo: "novedades", slug: "diagnosis", etiqueta: "Diagnóstico", n: 3 });
+    expect(q.texto).toBe("«Diagnóstico» tiene 3 novedades de reuniones recientes: revísalas antes de mostrar el documento.");
+    // Sin novedades, el orden de siempre: el resumen.
+    const sin: PiezaParaQueSigue[] = [{ slug: "diagnosis", etiqueta: "Diagnóstico", estado: "generada", stale: false, novedades: 0 }];
+    expect(queSigueDelProyecto({ ...base, etapa: etapa("x", "Diagnóstico"), piezas: sin, resumenPendiente: { motivo: null } }).accion).toEqual({ tipo: "resumen" });
+    // Las de otra pieza (no la de la etapa) no entran al «Qué sigue»: se ven en el riel.
+    const otra: PiezaParaQueSigue[] = [...sin, { slug: "kickoff", etiqueta: "Kickoff", estado: "generada", stale: false, novedades: 2 }];
+    expect(queSigueDelProyecto({ ...base, etapa: etapa("x", "Diagnóstico"), piezas: otra }).accion).toBeNull();
+  });
   it("después, el resumen pendiente y la próxima reunión", () => {
     const sinPieza = { ...base, etapa: etapa("x", "Adopción") };
     expect(queSigueDelProyecto({ ...sinPieza, resumenPendiente: { motivo: "Hubo una reunión nueva." } }).accion).toEqual({ tipo: "resumen" });
@@ -107,12 +122,15 @@ describe("⭐ «Pendientes recientes»: lo que no se muestra se cuenta bien", ()
   it("sin el número de recientes (respuesta vieja) no inventa de cuándo son", () => {
     expect(restoDeLosPendientes({ mostrados: 5, recientes: null, abiertos: 9 }).texto).toBe("y 4 más");
   });
-  it("el panel usa esta cuenta y la ruta manda el número de recientes", () => {
+  it("el panel usa esta cuenta y la consulta de Tareas manda el número de recientes", () => {
+    /* Desde la etapa 2 de la memoria de la cuenta los pendientes son tareas: los manda /api/tareas/del-proyecto
+       (`cargarTareasDelProyecto`), no el GPS. */
     const raiz = process.cwd();
     const panel = fs.readFileSync(path.join(raiz, "components/clients/ProjectGPS.tsx"), "utf8");
     expect(panel).toContain("restoDeLosPendientes(");
     expect(panel, "volvió «abiertos − mostrados = más antiguos»").not.toMatch(/abiertosTotal\s*-\s*recientes\.length/);
-    const ruta = fs.readFileSync(path.join(raiz, "app/api/projects/[projectId]/gps/route.ts"), "utf8");
-    expect(ruta).toMatch(/pendientesRecientesTotal,/);
+    expect(panel).toContain("/api/tareas/del-proyecto/");
+    const consulta = fs.readFileSync(path.join(raiz, "lib/tareas/consultas.ts"), "utf8");
+    expect(consulta).toMatch(/recientesTotal,/);
   });
 });

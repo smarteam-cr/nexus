@@ -11,6 +11,9 @@
  *   2. Las dos secciones con CIFRAS —«El plan, cumplido» y «Qué queda abierto»— las escribe
  *      ESTE archivo desde el cronograma, con `lib/delivery/claims.ts`. **El agente ni las
  *      ve**: no están en el template que se le manda.
+ *   2b. El desafío y los objetivos del DIAGNÓSTICO (2026-10-07): la IA los recibe y dice cómo
+ *      quedó cada uno, pero la lista y los títulos los pone este archivo (lib/delivery/objetivos.ts):
+ *      la IA no puede inventar un objetivo, y sin diagnóstico «El desafío que resolvimos» se apaga.
  *   3. «Tu posición en la Escala» (2026-09-12) — el punto de partida que midió el Diagnóstico,
  *      la meta y la ventana de remedición (`lib/escala/posicion.ts`). Tampoco la ve el agente:
  *      el nivel nuevo no se declara el día de la entrega.
@@ -38,8 +41,19 @@ import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
 import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
 import { documentoConContexto } from "@/lib/contexto/documento";
+import { memoriaDelDocumento } from "@/lib/memoria";
 import { loadProjectSummary } from "@/lib/portfolio/load";
 import { summarizeParticularidades } from "@/lib/timeline/particularidades-summary";
+import { resultadosDelProyecto } from "@/lib/handoff/resultados";
+import { resultadosParaPrompt } from "@/lib/handoff/resultados-medibles";
+import {
+  diagnosticoParaLaEntrega,
+  leerDesafioDelDiagnostico,
+  leerObjetivosDelDiagnostico,
+  normalizarObjetivosPropuestos,
+  type DesafioDelDiagnostico,
+  type ObjetivoDelDiagnostico,
+} from "@/lib/delivery/objetivos";
 import {
   buildDeliveryClaims,
   metricasDeCumplimiento,
@@ -63,12 +77,32 @@ const KEYS_DERIVADAS = new Set(
   ENTREGA_TEMPLATE.sections.filter((d) => d.agentGenerated === false && d.key !== "cierre").map((d) => d.key),
 );
 
+/**
+ * El desafío y los objetivos del Diagnóstico del proyecto, tal como están escritos. El Diagnóstico
+ * es un documento de cara al cliente, así que nada de esto es interno.
+ */
+async function desafioYObjetivosDelDiagnostico(
+  projectId: string,
+): Promise<{ desafio: DesafioDelDiagnostico | null; objetivos: ObjetivoDelDiagnostico[] }> {
+  const bloques = await prisma.canvasBlock.findMany({
+    where: {
+      blockType: "CARD",
+      section: { key: { in: ["desafio", "objetivos"] }, canvas: canvasOfNested("diagnosis", { projectId }) },
+    },
+    orderBy: { order: "asc" },
+    select: { data: true, section: { select: { key: true } } },
+  });
+  const deLa = (key: string) => bloques.find((b) => b.section.key === key)?.data;
+  return { desafio: leerDesafioDelDiagnostico(deLa("desafio")), objetivos: leerObjetivosDelDiagnostico(deLa("objetivos")) };
+}
+
 /*
  * LAS REUNIONES (2026-10-07): las del «Contexto adicional» de la Entrega, por el mismo cargador que
  * el diagnóstico (lib/contexto/material-del-documento.ts). Antes eran las últimas reuniones de TODOS
  * los vínculos del proyecto, también las de puertas adentro y sin decir de qué sala eran, en un
- * documento que abre el cliente. Ahora entran las reuniones con el cliente que nadie sacó (más las
- * agregadas a mano), cada una con su sala, y el CSE ve en la pantalla cuáles son.
+ * documento que abre el cliente. Desde el 2026-10-07 entraban las reuniones con el cliente que nadie
+ * sacó; desde la etapa 7 de la memoria de la cuenta, SOLO las que eligió el equipo, enteras, cada una
+ * con su sala, y el CSE ve en la pantalla cuáles son. Sin elegidas, la memoria lleva el peso.
  */
 
 /** Genera (o regenera) el documento de entrega. */
@@ -123,15 +157,28 @@ export async function runEntregaGeneration(opts: {
     loadProjectSummary(projectId).catch(() => null),
   ]);
 
-  const [procesosCtx, material, miembros] = await Promise.all([
+  const [procesosCtx, material, miembros, delDiagnostico, resultados] = await Promise.all([
     project?.clientId ? serializeProcesosForPrompt(project.clientId, { onlyConfirmed: false }) : Promise.resolve(""),
     cargarMaterialDelDocumento(projectId, documentoConContexto("delivery")!),
     /* La cifra «Reuniones de trabajo» que ve el cliente sigue saliendo de la membresía del proyecto,
        como siempre (lib/delivery/claims.ts): el «Contexto adicional» decide qué LEE el agente, no
        cuántas reuniones tuvo el proyecto. */
     getProjectMemberSessions(projectId),
+    desafioYObjetivosDelDiagnostico(projectId),
+    resultadosDelProyecto(projectId).catch(() => null),
   ]);
   const r = material.resumen;
+  /* La memoria de la cuenta y del proyecto (lib/memoria, etapa 3), con el alcance del CLIENTE (la entrega la abre el
+     cliente): la ficha confirmada y, de las reuniones con el cliente que su material no lee, los acuerdos y las
+     decisiones. Sin procesos, historia, resultados ni desviaciones: ya los lee, o traen las cifras del proyecto que
+     escribe Nexus (lib/memoria/consumidores.ts › delivery). */
+  const memoria = await memoriaDelDocumento(projectId, {
+    lector: "delivery",
+    clientId: project?.clientId ?? null,
+    yaLeidas: material.sesionesUsadas,
+  });
+  const bloqueDelDiagnostico = diagnosticoParaLaEntrega(delDiagnostico);
+  const bloqueDeResultados = resultadosParaPrompt(resultados?.resultados ?? []);
 
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
   const hubs = tagLabels(project?.tags ?? []);
@@ -149,18 +196,25 @@ export async function runEntregaGeneration(opts: {
     kickoffCtx ? `\n=== KICKOFF (lo que se le prometió al arrancar) ===\n${kickoffCtx}` : "",
     desarrolloCtx ? `\n=== REQUERIMIENTO TÉCNICO (lo que se construyó a medida) ===\n${desarrolloCtx}` : "",
     procesosCtx ? `\n=== PROCESOS DEL CLIENTE ===\n${procesosCtx}` : "",
+    bloqueDelDiagnostico
+      ? `\n=== DIAGNÓSTICO — EL DESAFÍO Y LOS OBJETIVOS QUE SE LE PRESENTARON AL CLIENTE ===\n${bloqueDelDiagnostico}`
+      : "\n=== SIN DIAGNÓSTICO ===\nEl proyecto no tiene desafío ni objetivos en un diagnóstico: «El desafío que resolvimos» va vacío y los objetivos salen de los resultados del handoff.",
+    bloqueDeResultados ? `\n=== RESULTADOS MEDIBLES DEL HANDOFF (línea base y meta) ===\n${bloqueDeResultados}` : "",
     /* La COBERTURA va explícita. Un agente que ve 4 reuniones sin saber que hay 61 más que no
        se pudieron leer concluye con una confianza que el material no respalda — y en un cierre
        eso se traduce en afirmar que algo «no pasó» cuando simplemente no quedó escrito.
        En Wherex son 4 con contenido sobre 65. */
     material.reuniones
-      ? `\n=== REUNIONES DEL PROYECTO CON EL CLIENTE (lo que pasó de verdad; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente) ===\n` +
-        `Cobertura: ${r.leidas} reuniones con contenido, de ${r.ocurridas} que alimentan este documento. ` +
-        `Las demás no tienen transcripción ni minuta guardada, o no cupieron — eso NO significa que no ` +
-        `hayan ocurrido, así que no concluyas nada de su ausencia.\n\n` +
+      ? `\n=== LAS REUNIONES ELEGIDAS POR EL EQUIPO (lo que pasó de verdad, con su minuta y lo que se dijo, salvo las marcadas «en resumen»; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente) ===\n` +
+        `Cobertura: ${r.leidas} reuniones con contenido, de ${r.ocurridas} elegidas que ya ocurrieron. ` +
+        `Las demás no tienen transcripción ni minuta guardada, o no cupieron, y el proyecto tuvo otras que nadie eligió — ` +
+        `eso NO significa que no hayan ocurrido, así que no concluyas nada de su ausencia.\n\n` +
         material.reuniones
-      : "\n=== SIN REUNIONES CON TRANSCRIPCIÓN ===\nNo hay material de sesiones: no inventes citas ni números del negocio del cliente — la sección de impacto va vacía.",
+      : `\n${material.avisoSinReuniones || "=== SIN REUNIONES CON TRANSCRIPCIÓN ==="}\nSin transcripciones no hay citas: no inventes citas ni números del negocio del cliente — la sección de impacto va vacía. No concluyas nada de la falta de reuniones.`,
     material.notas ? `\n=== NOTAS DEL EQUIPO PARA LA ENTREGA ===\n${material.notas}` : "",
+    memoria.texto ? `\n${memoria.texto}` : "",
+    // La regla otra vez, antes del recordatorio final: el bloque de reuniones puede ser largo.
+    material.cierreDeFrontera ? `\n${material.cierreDeFrontera}` : "",
     "",
     /* El recordatorio va al FINAL además de estar en el prompt del sistema: es la instrucción
        que más cuesta que se respete, porque escribir «logramos completar el 100%» es el reflejo
@@ -209,11 +263,38 @@ export async function runEntregaGeneration(opts: {
     return true;
   };
 
+  /* El desafío y los objetivos: la lista la pone el Diagnóstico, no la IA (lib/delivery/objetivos.ts).
+     Sin desafío en el diagnóstico, la sección se escribe vacía y se apaga sola. */
+  const acomodar = (key: string, data: unknown): unknown => {
+    if (key === "desafio_resuelto" && !delDiagnostico.desafio) return { intro: "", items: [] };
+    if (key !== "logros") return data;
+    const d = { ...((data ?? {}) as Record<string, unknown>) };
+    delete d.items; // las capacidades en prosa de antes: el formato nuevo las reemplaza
+    const previo = (prevDataByKey.logros ?? {}) as Record<string, unknown>;
+    return {
+      ...d,
+      objetivosPropuestos: normalizarObjetivosPropuestos({
+        delDiagnostico: delDiagnostico.objetivos,
+        delAgente: d.objetivosPropuestos,
+        confirmados: previo.objetivosConfirmados,
+      }),
+      objetivosConfirmados: Array.isArray(previo.objetivosConfirmados) ? previo.objetivosConfirmados : [],
+    };
+  };
+
   let sectionCount = 0;
+  const escritas = new Set<string>();
   for (const s of gen.sections) {
     // Cinturón: si el template cambiara y le mandara una key derivada al modelo, se descarta.
     if (KEYS_DERIVADAS.has(s.key)) continue;
-    if (await escribir(s.key, s.data)) sectionCount++;
+    if (await escribir(s.key, acomodar(s.key, s.data))) {
+      sectionCount++;
+      escritas.add(s.key);
+    }
+  }
+  // Si la IA no devolvió los objetivos, igual quedan los del diagnóstico, «por medir».
+  if (!escritas.has("logros") && delDiagnostico.objetivos.length) {
+    if (await escribir("logros", acomodar("logros", { intro: "", objetivosPropuestos: [] }))) sectionCount++;
   }
 
   // ── Las cifras, desde el cronograma. El agente no participa ──────────────────

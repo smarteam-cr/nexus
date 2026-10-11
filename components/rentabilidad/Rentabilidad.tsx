@@ -1,23 +1,28 @@
 "use client";
 
 /**
- * components/rentabilidad/Rentabilidad.tsx — Éxito del cliente › Rentabilidad (la CSL y dirección): el margen de cada cuenta con
- * sus horas reales, y cuándo hace falta contratar según el pipeline.
+ * components/rentabilidad/Rentabilidad.tsx — Éxito del cliente › Rentabilidad, SOLO DIRECCIÓN (2026-10-07): el margen de
+ * cada cuenta con sus horas reales, el costo de la hora por persona y por equipo, y cuándo hace falta contratar.
  *
- * Todo en dólares, con el tipo de cambio de cada mes. Nunca muestra el costo de una persona: la planilla se usa
- * entera, para el costo de la hora. La propuesta de contratar la PROPONE Nexus y la confirma dirección.
+ * Todo en dólares, con el tipo de cambio del día de cada monto. El costo de la hora de cada persona sí se muestra (decisión
+ * de Elías: «por persona, y que se pueda ver por equipo»); el salario mensual de nadie. La propuesta de contratar la
+ * PROPONE Nexus y la confirma o descarta dirección, con su motivo. «Tu carga» es la cuarta pestaña: lleva a su ruta.
  */
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Alert, PageHeader, Segmentado, Tabs } from "@/components/ui";
+import { Alert, PageHeader, Segmentado, Tabs, Textarea } from "@/components/ui";
+import { BotonAzul, BotonBlanco } from "@/components/ui/sistema";
+import { useToast } from "@/components/ui/Toast";
 import { ChipDeCabecera } from "@/components/cs/piezas";
 import { Cifra, ENLACE_BLANCO, coma } from "@/components/carga/piezas";
 import { cn } from "@/lib/cn";
 import { ETIQUETA_DE_TRATO, type ConfigCarga } from "@/lib/carga/config";
 import { ETIQUETA_DE_ESCENARIO, PROBABILIDAD_MINIMA, proyectarDemanda, type Escenario, type TratoParaProyectar } from "@/lib/carga/contratacion";
-import { RUTA_DE_LA_CARGA, RUTA_DE_LA_RENTABILIDAD, RUTA_DE_LOS_SUPUESTOS } from "@/lib/carga/rutas";
-import { ETIQUETA_DEL_PERIODO, tablaDeMargen, type FilaDeMargen, type Periodo } from "@/lib/rentabilidad/margen";
+import { RUTA_DE_LA_CARGA, RUTA_DE_LA_RENTABILIDAD, RUTA_DE_LOS_SUPUESTOS, RUTA_DE_TU_CARGA, rutaDelMargenDeLaCuenta } from "@/lib/carga/rutas";
+import { ETIQUETA_DEL_MODO, ETIQUETA_DEL_PERIODO, tablaDeMargen, type FilaDeMargen, type ModoDeCosto, type Periodo } from "@/lib/rentabilidad/margen";
 import type { DatosDeRentabilidad } from "@/lib/rentabilidad/queries";
+import type { DecisionDeContratacion } from "@/lib/rentabilidad/decisiones";
 
 export interface DatosDeContratacion {
   /** Horas comprometidas por semana del equipo que lleva cuentas, más las de cuentas sin CSE vigente. */
@@ -30,12 +35,16 @@ export interface DatosDeContratacion {
   fueraDeLaCapacidad: string[];
   tratos: TratoParaProyectar[];
   error: string | null;
+  /** La utilización medida del equipo en las semanas cerradas (la de la carga), y cuántas semanas. */
+  utilizacionMedida: number;
+  semanasMedidas: number;
+  /** Lo que dirección ya decidió, de lo más nuevo a lo más viejo. */
+  decisiones: DecisionDeContratacion[];
 }
 
-export type Pestana = "margen" | "contratacion";
+export type Pestana = "margen" | "costo" | "contratacion";
 /** Las cuentas sin cobros que se muestran en filas; el resto va en una línea. */
 const SIN_COBRO_A_LA_VISTA = 12;
-type Modo = "cargado" | "directo";
 
 const miles = (n: number) => String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 const usd = (x: number) => `${x < 0 ? "−" : ""}US$ ${miles(x)}`;
@@ -64,8 +73,13 @@ export default function Rentabilidad({
   hoyISO: string;
   contenedor: string;
 }) {
+  const router = useRouter();
   const [pestana, setPestana] = useState<Pestana>(pestanaInicial);
   const h = datos.costoDeLaHora;
+  const cambiarPestana = (p: Pestana | "tu-carga") => {
+    if (p === "tu-carga") router.push(RUTA_DE_TU_CARGA);
+    else setPestana(p);
+  };
   return (
     <div className={cn(contenedor, "space-y-6")}>
       <PageHeader
@@ -74,10 +88,10 @@ export default function Rentabilidad({
         badges={
           <>
             <ChipDeCabecera>{datos.rango.etiqueta}</ChipDeCabecera>
-            <ChipDeCabecera>CSL y dirección</ChipDeCabecera>
+            <ChipDeCabecera>Solo Super Admin</ChipDeCabecera>
           </>
         }
-        description="El margen de cada cuenta con sus horas reales, contra lo que su cronograma planeaba, y cuándo hace falta contratar. Todo en dólares, con el tipo de cambio de cada mes."
+        description="El margen de cada cuenta con sus horas reales, contra lo que su cronograma planeaba, el costo de la hora de cada persona y cuándo hace falta contratar. Todo en dólares, con el tipo de cambio del día de cada monto."
         action={
           <div className="flex flex-wrap items-center gap-2">
             <nav aria-label="Período" className="inline-flex gap-0.5 rounded-[10px] bg-surface-muted p-[3px]">
@@ -102,13 +116,15 @@ export default function Rentabilidad({
         }
       />
 
-      <Tabs<Pestana>
+      <Tabs<Pestana | "tu-carga">
         aria-label="Secciones de Rentabilidad"
         value={pestana}
-        onChange={setPestana}
+        onChange={cambiarPestana}
         items={[
           { key: "margen", label: "Margen por cuenta" },
+          { key: "costo", label: "Costo de la hora" },
           { key: "contratacion", label: "Contratación" },
+          { key: "tu-carga", label: "Tu carga" },
         ]}
       />
 
@@ -129,13 +145,15 @@ export default function Rentabilidad({
             <Cifra rotulo="Costo de una hora con clientes" valor={h.cargado !== null ? usd1(h.cargado) : "—"} nota="Lo que cada hora con clientes tiene que cubrir de la planilla entera" />
             <Cifra rotulo="Ingreso por hora con clientes" valor={h.ingresoPorHora !== null ? usd1(h.ingresoPorHora) : "—"} nota={`${usd(datos.totales.ingreso)} ÷ ${miles(datos.totales.horasConClientes)} h. Sin la comisión de HubSpot`} />
             <Cifra
-              rotulo="Planilla que va a clientes"
+              rotulo="Horas con clientes"
               valor={h.parteAClientes !== null ? `${Math.round(h.parteAClientes * 100)} %` : "—"}
-              nota={`${miles(datos.totales.horasConClientes)} de ${miles(datos.totales.horasPagadas)} h pagadas: reuniones, preparación y entrega estimada`}
+              nota={`${miles(datos.totales.horasConClientes)} de ${miles(datos.totales.horasPagadas)} h pagadas: reuniones, preparación y entrega`}
             />
           </div>
           <MargenPorCuenta datos={datos} />
         </>
+      ) : pestana === "costo" ? (
+        <CostoDeLaHora datos={datos} />
       ) : (
         <Contratacion contratacion={contratacion} config={config} hoyISO={hoyISO} />
       )}
@@ -143,32 +161,63 @@ export default function Rentabilidad({
   );
 }
 
+function OrigenDeLasHoras({ datos }: { datos: DatosDeRentabilidad }) {
+  const o = datos.horasPorOrigen;
+  const total = o.calendario + o.declaradas + o.estimadas;
+  if (total <= 0) return null;
+  const partes = [
+    { clave: "calendario", texto: "Del calendario (agendadas)", h: o.calendario, clase: "bg-fg border-fg" },
+    { clave: "declaradas", texto: "Respondidas por el equipo", h: o.declaradas, clase: "bg-fg-muted border-fg-muted" },
+    { clave: "estimadas", texto: "Estimadas (preparación y entrega sin respuesta)", h: o.estimadas, clase: "bg-surface-muted border-dashed border-fg-muted" },
+  ];
+  return (
+    <div className="space-y-1.5 px-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">De dónde salen las horas</p>
+      <span className="flex h-2.5 gap-px overflow-hidden rounded-full bg-surface-muted">
+        {partes.map((p) => (p.h > 0 ? <span key={p.clave} className={cn("h-full border", p.clase)} style={{ width: `${(p.h / total) * 100}%` }} title={`${p.texto}: ${miles(p.h)} h`} /> : null))}
+      </span>
+      <span className="flex flex-wrap gap-4 text-xs text-fg-secondary">
+        {partes.map((p) => (
+          <span key={p.clave} className="inline-flex items-center gap-1.5">
+            <span aria-hidden className={cn("inline-block h-2.5 w-2.5 rounded-sm border", p.clase)} />
+            {p.texto} · {Math.round((p.h / total) * 100)} %
+          </span>
+        ))}
+      </span>
+    </div>
+  );
+}
+
+const NOTA_DEL_MODO: Record<ModoDeCosto, string> = {
+  persona: "Por persona: cada hora al costo de quien la hizo (su planilla ÷ sus horas pagadas). Quien no tiene planilla ni salario en el período va al costo de una hora pagada promedio.",
+  equipo: "Por equipo: cada hora al costo promedio del equipo de quien la hizo (Customer Success, Ventas, Marketing…).",
+  cargado: "Cargado: cada hora con clientes paga su parte de la planilla entera (dirección, ventas, marketing, lo interno). Es el que dice si una cuenta deja plata.",
+};
+
 function MargenPorCuenta({ datos }: { datos: DatosDeRentabilidad }) {
-  const [modo, setModo] = useState<Modo>("cargado");
-  const tarifa = (modo === "cargado" ? datos.costoDeLaHora.cargado : datos.costoDeLaHora.directo) ?? 0;
-  const { conIngreso, sinIngreso } = useMemo(() => tablaDeMargen(datos.cuentas, tarifa, datos.totales.horasPorSesion), [datos, tarifa]);
+  const [modo, setModo] = useState<ModoDeCosto>("persona");
+  const tarifa = datos.costoDeLaHora.cargado ?? 0;
+  const { conIngreso, sinIngreso } = useMemo(() => tablaDeMargen(datos.cuentas, tarifa, datos.totales.horasPorSesion, modo), [datos, tarifa, modo]);
   return (
     <section className="space-y-3 rounded-xl border border-line bg-surface py-4">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4">
         <h2 className="text-sm font-semibold text-fg">Margen real contra margen estimado</h2>
         <span className="flex items-center gap-2">
           <span className="text-xs text-fg-muted">Costo de la hora</span>
-          <Segmentado<Modo>
+          <Segmentado<ModoDeCosto>
             etiqueta="Costo de la hora"
             valor={modo}
             onCambio={setModo}
             opciones={[
-              { clave: "cargado", etiqueta: `Cargado · ${usd1(datos.costoDeLaHora.cargado ?? 0)}` },
-              { clave: "directo", etiqueta: `Directo · ${usd1(datos.costoDeLaHora.directo ?? 0)}` },
+              { clave: "persona", etiqueta: ETIQUETA_DEL_MODO.persona },
+              { clave: "equipo", etiqueta: ETIQUETA_DEL_MODO.equipo },
+              { clave: "cargado", etiqueta: `${ETIQUETA_DEL_MODO.cargado} · ${usd1(datos.costoDeLaHora.cargado ?? 0)}` },
             ]}
           />
         </span>
       </div>
-      <p className="px-4 text-xs text-fg-muted">
-        {modo === "cargado"
-          ? "Cargado: cada hora con clientes paga su parte de la planilla entera (dirección, ventas, marketing, lo interno). Es el que dice si una cuenta deja plata."
-          : "Directo: lo que cuesta una hora pagada de cualquiera. Sirve para comparar, pero deja afuera todo lo que no es una cuenta."}
-      </p>
+      <p className="px-4 text-xs text-fg-muted">{NOTA_DEL_MODO[modo]}</p>
+      <OrigenDeLasHoras datos={datos} />
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-[13px] leading-[19px]">
           <thead>
@@ -176,7 +225,7 @@ function MargenPorCuenta({ datos }: { datos: DatosDeRentabilidad }) {
               <th className="px-4 py-2">Cuenta</th>
               <th className="px-3 py-2 text-right">Cobrado</th>
               <th className="px-3 py-2 text-right">Horas reales</th>
-              <th className="px-3 py-2 text-right">Por hora</th>
+              <th className="px-3 py-2 text-right">Costo</th>
               <th className="px-3 py-2 text-right">Margen real</th>
               <th className="px-3 py-2 text-right">Horas planeadas</th>
               <th className="px-3 py-2 text-right">Margen estimado</th>
@@ -185,7 +234,7 @@ function MargenPorCuenta({ datos }: { datos: DatosDeRentabilidad }) {
           </thead>
           <tbody>
             {conIngreso.map((f) => (
-              <Fila key={f.clienteId} f={f} tarifa={tarifa} />
+              <Fila key={f.clienteId} f={f} />
             ))}
             {sinIngreso.length > 0 && (
               <tr className="border-b border-line bg-surface-muted">
@@ -195,7 +244,7 @@ function MargenPorCuenta({ datos }: { datos: DatosDeRentabilidad }) {
               </tr>
             )}
             {sinIngreso.slice(0, SIN_COBRO_A_LA_VISTA).map((f) => (
-              <Fila key={f.clienteId} f={f} tarifa={tarifa} />
+              <Fila key={f.clienteId} f={f} />
             ))}
             {sinIngreso.length > SIN_COBRO_A_LA_VISTA && (
               <tr>
@@ -210,8 +259,8 @@ function MargenPorCuenta({ datos }: { datos: DatosDeRentabilidad }) {
       </div>
       <div className="space-y-1 px-4 text-xs text-fg-muted">
         <p>
-          <b className="text-fg-secondary">Horas reales</b> = reuniones del calendario (cada persona que estuvo × la duración) + {datos.preparacionMin} min de preparación
-          por persona y reunión + entrega estimada del cronograma.
+          <b className="text-fg-secondary">Horas reales</b> = reuniones del calendario (cada persona invitada × la duración, hasta tener la asistencia de Meet) +{" "}
+          {datos.preparacionMin} min de preparación por persona y reunión + entrega del cronograma (lo respondido en «¿Cuánto te tomó?»; si no, lo estimado).
         </p>
         <p>
           <b className="text-fg-secondary">Horas planeadas</b> = lo que el cronograma ponía en el período: sus sesiones (a {coma(datos.totales.horasPorSesion, 1)} h-persona cada
@@ -223,12 +272,14 @@ function MargenPorCuenta({ datos }: { datos: DatosDeRentabilidad }) {
   );
 }
 
-function Fila({ f, tarifa }: { f: FilaDeMargen; tarifa: number }) {
+function Fila({ f }: { f: FilaDeMargen }) {
   const bajo = f.margenPct !== null && f.margenPct < 0.15;
   return (
     <tr className="border-b border-line last:border-b-0">
       <td className="min-w-[220px] px-4 py-2.5">
-        <span className="block font-semibold text-fg">{f.nombre}</span>
+        <Link href={rutaDelMargenDeLaCuenta(f.clienteId)} className="block font-semibold text-fg hover:text-brand">
+          {f.nombre}
+        </Link>
         <span className="block text-xs text-fg-muted">
           {f.cse ?? "Sin CSE"}
           {f.fuenteDelIngreso === "Odoo" && " · facturado en Odoo"}
@@ -242,13 +293,21 @@ function Fila({ f, tarifa }: { f: FilaDeMargen; tarifa: number }) {
           <>
             <span className="block whitespace-nowrap">{miles(f.horas)} h</span>
             <span className="block text-xs text-fg-muted">
-              {miles(f.desglose.reuniones)} reun. · {miles(f.desglose.preparacion)} prep. · {f.sinEntregaEstimada ? "sin entrega estimada" : `${miles(f.desglose.entrega)} entrega`}
+              {miles(f.desglose.reuniones)} reun. · {miles(f.desglose.preparacion)} prep. · {f.sinEntregaEstimada ? "sin entrega" : `${miles(f.desglose.entrega)} entrega`}
+              {(f.desglose.declarada ?? 0) >= 0.5 && ` (${miles(f.desglose.declarada ?? 0)} respondidas)`}
             </span>
           </>
         )}
       </td>
-      <td className={cn("whitespace-nowrap px-3 py-2.5 text-right tabular-nums", f.porHora !== null && f.porHora < tarifa * 1.25 && "font-semibold text-danger-ink")}>
-        {f.porHora !== null ? usd1(f.porHora) : "—"}
+      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
+        {f.horas < 0.5 ? (
+          <span className="text-fg-muted">—</span>
+        ) : (
+          <>
+            <span className="block">{usd(f.costo)}</span>
+            <span className="block text-xs text-fg-muted">{usd1(f.tarifa)} la hora</span>
+          </>
+        )}
       </td>
       <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
         {f.horas < 0.5 && f.ingreso > 0 ? (
@@ -310,7 +369,8 @@ function Contratacion({ contratacion: c, config, hoyISO }: { contratacion: Datos
           opciones={(["seguro", "ponderado", "todo"] as Escenario[]).map((e) => ({ clave: e, etiqueta: ETIQUETA_DE_ESCENARIO[e] }))}
         />
         <span className="text-xs text-fg-muted">
-          Hoy: {miles(c.base)} h por semana ({c.sinCse > 0 ? `${miles(c.sinCse)} de cuentas sin CSE vigente · ` : ""}de la{" "}
+          Medido: el equipo está al <b className="text-fg">{c.utilizacionMedida} %</b> en las últimas {c.semanasMedidas} semanas. Hoy: {miles(c.base)} h por
+          semana ({c.sinCse > 0 ? `${miles(c.sinCse)} de cuentas sin CSE vigente · ` : ""}de la{" "}
           <Link href={RUTA_DE_LA_CARGA} className="font-semibold text-brand hover:text-brand-light">
             carga del equipo
           </Link>
@@ -393,8 +453,35 @@ function Contratacion({ contratacion: c, config, hoyISO }: { contratacion: Datos
             </p>
           )}
           <p className="text-xs text-fg-muted">Nexus no contrata ni reasigna: solo avisa con tiempo.</p>
+          <Decidir
+            propuesta={
+              p.primerMesSobre
+                ? `Abrir la búsqueda de ${p.cseQueFaltan === 1 ? "un CSE" : `${p.cseQueFaltan} CSE`}${p.abrirBusquedaAntesDe ? ` antes del ${fecha(p.abrirBusquedaAntesDe, hoyISO.slice(0, 4))}` : ""} (${ETIQUETA_DE_ESCENARIO[escenario].toLowerCase()})`
+                : `No contratar todavía (${ETIQUETA_DE_ESCENARIO[escenario].toLowerCase()})`
+            }
+            decisiones={c.decisiones}
+            hoyISO={hoyISO}
+          />
         </section>
       </div>
+
+      {c.decisiones.length > 0 && (
+        <section className="space-y-2 rounded-xl border border-line bg-surface px-4 py-3">
+          <h2 className="text-sm font-semibold text-fg">Lo que ya se decidió</h2>
+          <ul className="divide-y divide-line text-[13px]">
+            {c.decisiones.map((d) => (
+              <li key={d.clave} className="py-2">
+                <span className="font-semibold text-fg">{d.valor === "CONFIRMADA" ? "Confirmada" : "Descartada"}</span>{" "}
+                <span className="text-fg-muted">
+                  · {fecha(d.decididoEn, hoyISO.slice(0, 4))} · {d.decididoPor}
+                </span>
+                {d.propuesta && <span className="block text-fg-secondary">{d.propuesta}</span>}
+                {d.motivo && <span className="block text-xs text-fg-muted">Por qué: {d.motivo}</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="space-y-2 rounded-xl border border-line bg-surface py-4">
         <div className="flex flex-wrap items-baseline justify-between gap-3 px-4">
@@ -412,6 +499,7 @@ function Contratacion({ contratacion: c, config, hoyISO }: { contratacion: Datos
                 <th className="px-3 py-2">Cierre</th>
                 <th className="px-3 py-2">Qué trae</th>
                 <th className="px-3 py-2 text-right">Horas por semana</th>
+                <th className="px-3 py-2">De dónde salen las horas</th>
                 <th className="px-4 py-2 text-right">Cuenta en el escenario</th>
               </tr>
             </thead>
@@ -435,6 +523,9 @@ function Contratacion({ contratacion: c, config, hoyISO }: { contratacion: Datos
                     {!t.tipoPorNombre && <span className="block text-xs text-fg-muted">{t.esClienteActual ? "Ya es cliente" : "Empresa nueva"}</span>}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{coma(t.horasSemana, 1)} h</td>
+                  <td className="px-3 py-2.5 text-xs text-fg-muted" title="El catálogo de casos de uso todavía no tiene horas: cuando las tenga, salen de la propuesta">
+                    Por el tipo de trato
+                  </td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{t.cuenta > 0 ? `${coma(t.cuenta, 1)} h desde ${MESES[Number(t.llega.slice(5, 7)) - 1]}` : "—"}</td>
                 </tr>
               ))}
@@ -448,6 +539,190 @@ function Contratacion({ contratacion: c, config, hoyISO }: { contratacion: Datos
           </p>
         )}
       </section>
+    </div>
+  );
+}
+
+/** Confirmar o descartar la propuesta de contratar, con su motivo. Queda firmada, una por mes. */
+function Decidir({ propuesta, decisiones, hoyISO }: { propuesta: string; decisiones: DecisionDeContratacion[]; hoyISO: string }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [motivo, setMotivo] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const deEsteMes = decisiones.find((d) => d.mes === hoyISO.slice(0, 7));
+
+  const decidir = async (valor: "CONFIRMADA" | "DESCARTADA") => {
+    if (valor === "DESCARTADA" && !motivo.trim()) {
+      toast.error("Para descartar la propuesta, escribe por qué.");
+      return;
+    }
+    setGuardando(true);
+    try {
+      const r = await fetch("/api/cobranza/costos/contratacion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ valor, propuesta, motivo: motivo.trim() || undefined }),
+      });
+      const cuerpo = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(cuerpo.error ?? "No se pudo guardar.");
+      toast.success(valor === "CONFIRMADA" ? "Propuesta confirmada: queda en «Lo que ya se decidió»." : "Propuesta descartada, con su motivo.");
+      setMotivo("");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 border-t border-line pt-3">
+      {deEsteMes && (
+        <p className="text-xs text-fg-secondary">
+          Este mes ya se {deEsteMes.valor === "CONFIRMADA" ? "confirmó" : "descartó"}: {deEsteMes.propuesta}. Decidir de nuevo la reemplaza.
+        </p>
+      )}
+      <label className="block">
+        <span className="sr-only">Motivo</span>
+        <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} maxLength={1000} placeholder="Por qué (obligatorio para descartar)" />
+      </label>
+      <span className="flex flex-wrap justify-end gap-2">
+        <BotonBlanco onClick={() => void decidir("DESCARTADA")} disabled={guardando}>
+          Descartar
+        </BotonBlanco>
+        <BotonAzul onClick={() => void decidir("CONFIRMADA")} disabled={guardando}>
+          {guardando ? "Guardando…" : "Confirmar la propuesta"}
+        </BotonAzul>
+      </span>
+    </div>
+  );
+}
+
+/** El costo de la hora por equipo y por persona. ⛔ Solo dirección: esta página ya lo es. Nunca el salario mensual. */
+function CostoDeLaHora({ datos }: { datos: DatosDeRentabilidad }) {
+  const equipos = datos.costos.equipos;
+  const [equipo, setEquipo] = useState<string>("todos");
+  const personas = datos.costos.personas.filter((p) => equipo === "todos" || p.equipo === equipo);
+  const pctTexto = (x: number | null) => (x === null ? "—" : `${Math.round(x * 100)} %`);
+  return (
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-4">
+        <section className="space-y-2 rounded-xl border border-line bg-surface py-4">
+          <h2 className="px-4 text-sm font-semibold text-fg">Por equipo · {datos.rango.etiqueta}</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[13px] leading-[19px]">
+              <thead>
+                <tr className="border-b border-line text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+                  <th className="px-4 py-2">Equipo</th>
+                  <th className="px-3 py-2 text-right">Personas</th>
+                  <th className="px-3 py-2 text-right">Planilla</th>
+                  <th className="px-3 py-2 text-right">Horas pagadas</th>
+                  <th className="px-3 py-2 text-right">Costo de la hora</th>
+                  <th className="px-3 py-2 text-right">Horas con clientes</th>
+                  <th className="px-4 py-2 text-right">Parte con clientes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {equipos.map((e) => (
+                  <tr key={e.equipo} className="border-b border-line last:border-b-0">
+                    <td className="px-4 py-2.5 font-semibold text-fg">{e.equipo}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{e.personas}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{usd(e.planilla)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{miles(e.horasPagadas)} h</td>
+                    <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{e.costoHora !== null ? usd1(e.costoHora) : "—"}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{miles(e.horasConClientes)} h</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{pctTexto(e.parteConClientes)}</td>
+                  </tr>
+                ))}
+                <tr className="bg-surface-muted">
+                  <td className="px-4 py-2.5 font-semibold text-fg">Todo el equipo</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{equipos.reduce((a, e) => a + e.personas, 0)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{usd(datos.totales.planilla)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{miles(datos.totales.horasPagadas)} h</td>
+                  <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{datos.costoDeLaHora.directo !== null ? usd1(datos.costoDeLaHora.directo) : "—"}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{miles(datos.totales.horasConClientes)} h</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{pctTexto(datos.costoDeLaHora.parteAClientes)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="space-y-2 rounded-xl border border-line bg-surface py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4">
+            <h2 className="text-sm font-semibold text-fg">Por persona</h2>
+            <label className="flex items-center gap-2 text-xs text-fg-muted">
+              Equipo
+              <select
+                value={equipo}
+                onChange={(e) => setEquipo(e.target.value)}
+                className="h-7 rounded-lg border border-line bg-surface px-1.5 text-xs text-fg"
+              >
+                <option value="todos">Todos</option>
+                {equipos.map((e) => (
+                  <option key={e.equipo} value={e.equipo}>
+                    {e.equipo}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[13px] leading-[19px]">
+              <thead>
+                <tr className="border-b border-line text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+                  <th className="px-4 py-2">Persona</th>
+                  <th className="px-3 py-2">Equipo</th>
+                  <th className="px-3 py-2 text-right">Horas pagadas</th>
+                  <th className="px-3 py-2 text-right">Costo de la hora</th>
+                  <th className="px-3 py-2 text-right">Horas con clientes</th>
+                  <th className="px-4 py-2">De dónde sale</th>
+                </tr>
+              </thead>
+              <tbody>
+                {personas.map((p) => (
+                  <tr key={p.id} className="border-b border-line last:border-b-0">
+                    <td className="px-4 py-2.5 font-semibold text-fg">{p.nombre}</td>
+                    <td className="px-3 py-2.5 text-fg-secondary">{p.equipo}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{miles(p.horasPagadas)} h</td>
+                    <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{p.costoHora !== null ? usd1(p.costoHora) : <span className="font-normal text-warn-ink">Sin planilla</span>}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{miles(p.horasConClientes)} h</td>
+                    <td className="px-4 py-2.5 text-xs text-fg-muted">
+                      {p.fuente === "libro" ? "Libro de planilla" : p.fuente === "libro-media" ? "Libro (una quincena, la otra por pagarse)" : p.fuente === "costo-recurrente" ? "Salario registrado en Costos" : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <aside className="space-y-3">
+        <section className="space-y-2 rounded-xl bg-surface-muted p-4 text-[13px] leading-[19px] text-fg-secondary">
+          <h2 className="text-sm font-semibold text-fg">De dónde sale</h2>
+          <p>
+            <b className="text-fg">Planilla:</b> lo pagado en el libro de planilla de Finanzas, quincena por quincena, con el tipo de cambio del día del pago; sin
+            libro, el salario registrado en Costos. Más la reserva de aguinaldo (13 pagos en 12 meses).
+          </p>
+          <p>
+            <b className="text-fg">Horas pagadas:</b> horas de contrato × las semanas en que estuvo en el equipo.
+          </p>
+          <p>
+            <b className="text-fg">Costo de la hora:</b> planilla ÷ horas pagadas. Con eso se valora cada hora en el margen «por persona».
+          </p>
+          <p>
+            <b className="text-fg">Horas con clientes:</b> reuniones del calendario, preparación y entrega en las cuentas.
+          </p>
+        </section>
+        <section className="space-y-2 rounded-xl bg-surface-muted p-4 text-[13px] leading-[19px] text-fg-secondary">
+          <h2 className="text-sm font-semibold text-fg">Quién ve esto</h2>
+          <p>Solo dirección (Super Admin). Nunca se muestra el salario mensual de nadie: solo su costo por hora.</p>
+          {datos.personas.sinCosto.length > 0 && (
+            <p className="text-xs text-fg-muted">Sin planilla en el período: {datos.personas.sinCosto.join(", ")}.</p>
+          )}
+        </section>
+      </aside>
     </div>
   );
 }

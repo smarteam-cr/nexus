@@ -1,14 +1,16 @@
 /**
- * Helper para crear ActionItems desde pendientes generados por agentes.
+ * lib/canvas/merge-pending-items.ts — los pendientes que devolvía un agente de /analyze. YA NO CREA NADA.
  *
- * Antes este helper escribía a Project.pendingItems (Json). Ahora crea rows
- * en la tabla ActionItem (modelo del ciclo de reunión, F1 del rediseño).
- * La firma se mantiene para no romper a los callers — internamente:
- *   - Resuelve clientId desde projectId
- *   - Crea 1 ActionItem por cada NewPendingItem nuevo (no duplicado)
- *   - Deduplicación idempotente por text normalizado + clientId + source
+ * DEPRECATED — memoria de la cuenta, etapa 2 (2026-10-10; DECISIONS «La lectura de cada reunión es durable…»):
+ * `ActionItem` se retiró y este era su tercer escritor (además del post-proceso y de la ruta /api/action-items). Los
+ * próximos pasos viven en Tareas y nacen de la lectura de cada reunión, por el único escritor de Tareas. /analyze no
+ * puede escribir tareas (está en los PROHIBIDOS de lib/tareas/guardas.test.ts), así que acá no se crea nada: lo que
+ * devolvió el agente queda en `AgentRun.output`, como cualquier otra salida, y se cuenta como salteado.
+ *
+ * La firma se queda para no tocar a quien llama (app/api/clients/[id]/analyze/route.ts, en dos lugares). Borrar
+ * este archivo (y esas dos llamadas) cuando ningún agente de /analyze pida `pendingItems`: el formato común ya no lo
+ * pide (lib/canvas/agent-output-schema.ts).
  */
-import { prisma } from "@/lib/db/prisma";
 
 export interface NewPendingItem {
   text: string;
@@ -21,79 +23,16 @@ export interface MergeResult {
   total: number;
 }
 
-function normalizeText(t: string): string {
-  return t.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-/**
- * Crea ActionItems para los pendientes nuevos. Idempotente por
- * `text normalizado + clientId + source`. Si `projectId` es null/undefined o
- * la lista nueva está vacía, no hace nada.
- *
- * Devuelve cantidad de items NUEVOS creados, saltados (duplicados/vacíos), y
- * total actual de ActionItems pendientes (`done=false`) del proyecto.
- */
+/** No crea nada: cuenta lo que llegó como salteado y lo deja en el log. */
 export async function mergePendingItemsToProject(
   projectId: string | null | undefined,
   newItems: NewPendingItem[] | undefined | null,
 ): Promise<MergeResult> {
-  if (!projectId || !newItems || newItems.length === 0) {
-    return { added: 0, skipped: 0, total: 0 };
+  const recibidos = (newItems ?? []).filter((it) => (it?.text ?? "").trim()).length;
+  if (projectId && recibidos > 0) {
+    console.log(
+      `[merge-pending-items] project=${projectId} pendientes=${recibidos}: no se crean (ActionItem se retiró; los próximos pasos son tareas). Quedan en AgentRun.output.`,
+    );
   }
-
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { id: true, clientId: true },
-  });
-  if (!project) return { added: 0, skipped: 0, total: 0 };
-
-  // Cargar ActionItems existentes del proyecto para deduplicar
-  const existing = await prisma.actionItem.findMany({
-    where: { projectId },
-    select: { text: true, source: true },
-  });
-  const existingKeys = new Set(
-    existing.map((it) => `${normalizeText(it.text)}::${it.source ?? ""}`),
-  );
-
-  let added = 0;
-  let skipped = 0;
-
-  for (const newItem of newItems) {
-    const text = (newItem.text ?? "").trim();
-    if (!text) {
-      skipped++;
-      continue;
-    }
-    const source = newItem.source?.trim() || "agent";
-    const key = `${normalizeText(text)}::${source}`;
-    if (existingKeys.has(key)) {
-      skipped++;
-      continue;
-    }
-
-    await prisma.actionItem.create({
-      data: {
-        text,
-        clientId: project.clientId,
-        projectId: project.id,
-        source,
-        status: "PENDING",
-        done: false,
-      },
-    });
-    existingKeys.add(key);
-    added++;
-  }
-
-  // Total actual de ActionItems pendientes del proyecto
-  const total = await prisma.actionItem.count({
-    where: { projectId, done: false },
-  });
-
-  console.log(
-    `[merge-pending-items] project=${projectId} added=${added} skipped=${skipped} totalPending=${total}`,
-  );
-
-  return { added, skipped, total };
+  return { added: 0, skipped: recibidos, total: 0 };
 }

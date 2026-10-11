@@ -40,6 +40,8 @@ import { HUBSPOT_HUB_SLUGS, sanitizeTags, tagLabels, usaEscala, type HubspotHubS
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
 import { MONEY_RULE_BRIEF } from "@/lib/business-cases/money-brief";
+import { leerFicha } from "@/lib/clients/ficha";
+import { memoriaDeLaCuenta } from "@/lib/memoria";
 import {
   INVERSION_SECTION_KEY,
   sembrarLicenciasIniciales,
@@ -97,7 +99,7 @@ export async function POST(
       // QUIÉN es la propuesta: hasta el 2026-08-14 no entraba al prompt y el agente tenía
       // que deducirlo del transcript — medido, se equivoca (en REMPRO escribió "Smarteam
       // acompaña a O4Bi", que es el ERP que se nombra en la sesión, no el prospecto).
-      client: { select: { name: true, notes: true, industry: true } },
+      client: { select: { name: true, notes: true, industry: true, kind: true, ficha: true } },
       // La exploración de venta de la que nació (lib/exploraciones): su fuente principal.
       exploracionId: true,
     },
@@ -236,6 +238,19 @@ export async function POST(
   }
   if (bc.client.industry?.trim()) {
     preamble.push(`# Industria del cliente\n${bc.client.industry.trim()}`);
+  }
+  /* LO QUE NEXUS YA SABE DE LA EMPRESA (lib/memoria, etapa 3), con el alcance del CLIENTE: la ficha confirmada (sin lo
+     interno ni la postura de las personas), los procesos validados y la historia de sus proyectos. Solo si la empresa
+     ya es cliente (una expansión) o tiene la ficha confirmada: de un prospecto Nexus todavía no sabe nada propio. Va
+     DESPUÉS del chequeo de fuentes: no cuenta como la fuente que la generación exige. "" si no hay nada que decir. */
+  if (bc.client.kind !== "PROSPECTO" || leerFicha(bc.client.ficha).confirmadaAt) {
+    const memoria = await memoriaDeLaCuenta(bc.clientId, { lector: "business-case" });
+    if (memoria.texto) {
+      preamble.push(
+        `# Lo que ya se sabe de esta empresa\nPara no contradecir lo que ya se sabe ni repreguntarlo: nada de acá es una ` +
+          `fuente de lo que dijo el cliente en esta venta, ni agranda lo que se propone.\n\n${memoria.texto}`,
+      );
+    }
   }
   // La sección "Qué se implementa" lleva una columna por CADA Hub, no solo por los
   // vendidos: lo vendido arranca encendido y el resto queda para que el cliente explore

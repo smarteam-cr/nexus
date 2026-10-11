@@ -12,9 +12,15 @@
  * exactamente lo que se le manda a un desarrollador externo.
  *
  * ── EL CRITERIO, Y POR QUÉ NO HACE FALTA UNA COLUMNA NUEVA ───────────────────
- * El dato ya está en la base: `Project.handoffGeneratedAt` (cuándo corrió el handoff por
- * última vez) contra `ProjectCanvas.contentUpdatedAt` (cuándo se tocó el documento). Si
- * el handoff es POSTERIOR, lo que se escribió salió de una versión anterior del handoff.
+ * El dato ya está en la base: cuándo cambió el handoff por última vez contra
+ * `ProjectCanvas.contentUpdatedAt` (cuándo se tocó el documento). Si el handoff es POSTERIOR,
+ * lo que se escribió salió de una versión anterior del handoff.
+ *
+ * «Cuándo cambió el handoff» lo resuelve `ultimoCambioDelHandoff` (lib/handoff/congelado-server.ts),
+ * una sola función para las dos pantallas que lo calculan (app/api/projects/[projectId]/canvases y la
+ * ficha del cliente). Sin congelar es `Project.handoffGeneratedAt`, como siempre. Con el handoff
+ * CONGELADO (etapa 3b) esa fecha deja de moverse: cuenta también una edición posterior al congelado
+ * que cambió lo que dice —una sugerencia usada, un bloque editado—; descartar una sugerencia no.
  *
  * Se deriva en cada lectura en vez de guardarse, por el mismo motivo que `proposed` en
  * piece-state.ts: una marca guardada hay que acordarse de expirarla desde los cuatro
@@ -49,16 +55,17 @@ const enMilis = (v: Date | string | null | undefined): number | null => {
 };
 
 /**
- * ¿El requerimiento técnico se escribió ANTES de la última corrida del handoff?
+ * ¿El requerimiento técnico se escribió ANTES del último cambio del handoff?
+ * `handoffCambioAt` sale de `ultimoCambioDelHandoff` (ver el encabezado).
  * Devuelve false ante cualquier duda — ver "las tres puertas" en el encabezado.
  */
 export function piezaDesactualizadaPorHandoff(
   pieza: PiezaParaVejez,
-  handoffGeneratedAt: Date | string | null,
+  handoffCambioAt: Date | string | null,
 ): boolean {
   if (pieza.slug !== PIEZA_QUE_SIGUE_AL_HANDOFF) return false;
   if (!pieza.hasContent) return false;
-  const handoff = enMilis(handoffGeneratedAt);
+  const handoff = enMilis(handoffCambioAt);
   const documento = enMilis(pieza.contentUpdatedAt);
   if (handoff === null || documento === null) return false;
   return handoff > documento;
@@ -69,6 +76,6 @@ export const AVISO_DESACTUALIZADA = "El handoff cambió después";
 
 /** La frase completa, para el tooltip. */
 export const AVISO_DESACTUALIZADA_LARGO =
-  "El handoff se regeneró después de que se escribió este documento. No se reescribió solo " +
-  "a propósito (habría borrado lo editado a mano). Revisalo y, si corresponde, regeneralo " +
-  "desde su propio botón.";
+  "El handoff cambió (se regeneró, se usó una sugerencia o alguien lo editó) después de que se " +
+  "escribió este documento. No se reescribió solo a propósito (habría borrado lo editado a mano). " +
+  "Revísalo y, si corresponde, regenéralo desde su propio botón.";

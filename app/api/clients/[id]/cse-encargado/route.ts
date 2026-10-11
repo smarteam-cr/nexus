@@ -2,13 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToClient, guardPermission } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
-import { actualizarCslEncargado, resolverOwnerIdPorEmail } from "@/lib/hubspot/project-record";
+import { actualizarEncargadosDelProyecto, resolverOwnerIdPorEmail } from "@/lib/hubspot/project-record";
+import { escribirEncargadosEnLaEmpresa, laCsl } from "@/lib/hubspot/encargados-de-la-cuenta";
+import { cargarCuentas, hoyEnCostaRica } from "@/lib/cs/cartera";
+import { lineaDeLoEsencial, resumenDelPase } from "@/lib/cs/pase-de-cuenta";
+import { loEsencialDeLaCuenta } from "@/lib/memoria";
 import { syncProjectsForClient } from "@/lib/hubspot/sync-projects";
 import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 import { avisar } from "@/lib/para-ti/avisos-server";
 
 /**
- * PATCH /api/clients/[id]/cse-encargado — reasignar el CSE encargado de una CUENTA.
+ * PATCH /api/clients/[id]/cse-encargado — reasignar el CSE encargado de una CUENTA (el «pase de cuenta»).
+ *
+ * ── DESDE EL 2026-10-09: «CSE ENCARGADO» Y «CSL ENCARGADO» (entrega 5 del plan de la cartera) ──────────
+ * Escribe «CSE Encargado» (`cse_encargado`) = el CSE elegido y «CSL Encargado» (`csl_encargado`) = la CSL del
+ * equipo, en los proyectos de implementación, en la EMPRESA y en sus CONTACTOS. El espejo lee primero
+ * `cse_encargado` (lib/hubspot/encargados.ts). Al CSE nuevo le llega en «Para ti» el resumen de la cuenta; al
+ * anterior, una línea de que la cuenta pasó.
  *
  * ── ES POR CLIENTE, NO POR PROYECTO, Y ESA ES LA IDEA ────────────────────────
  * Elías, 2026-08-21: *«Los customer success del pipeline de implementación de hubspot son los
@@ -86,6 +96,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const hs = await getSystemHubspotClient();
 
+  // Quién la llevaba (para avisarle que pasó) y la CSL que queda como «CSL Encargado».
+  const antes = await prisma.project.findMany({
+    where: { id: { in: proyectos.map((p) => p.id) } },
+    select: { hubspotOwnerEmail: true },
+  });
+  const anteriores = [...new Set(antes.map((p) => p.hubspotOwnerEmail?.toLowerCase()).filter((e): e is string => !!e))].filter(
+    (e) => e !== destino.email.toLowerCase(),
+  );
+  const csl = await laCsl();
+  const cslOwnerId = csl ? await resolverOwnerIdPorEmail(hs, csl.email) : null;
+
   const ownerId = await resolverOwnerIdPorEmail(hs, destino.email);
   if (!ownerId) {
     return NextResponse.json(
@@ -107,7 +128,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const escritos: string[] = [];
   for (const p of proyectos) {
     try {
-      await actualizarCslEncargado(hs, p.hubspotServiceId!, ownerId);
+      await actualizarEncargadosDelProyecto(hs, p.hubspotServiceId!, { cse: ownerId, csl: cslOwnerId });
       escritos.push(p.name);
     } catch (e) {
       return NextResponse.json(
@@ -123,6 +144,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       );
     }
   }
+
+  /* La empresa y sus contactos (2026-10-09). No frena el pase: lo que decide quién ve la cuenta son los proyectos,
+     que ya quedaron escritos. Lo que no entró se dice en la respuesta. */
+  const empresaId = (await prisma.client.findUnique({ where: { id: clientId }, select: { hubspotCompanyId: true } }))?.hubspotCompanyId ?? null;
+  const enLaEmpresa = empresaId
+    ? await escribirEncargadosEnLaEmpresa(hs, empresaId, { cse: ownerId, csl: cslOwnerId })
+    : { empresa: false, contactos: 0, contactosFallidos: 0, error: "el cliente no está ligado a una empresa de HubSpot" };
 
   /* Un solo sync por cliente al final, no uno por proyecto: el espejo trae TODOS los proyectos
      de la empresa en la misma corrida, así que llamarlo N veces sería pagar lo mismo N veces. */
@@ -141,16 +169,44 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   // «Para ti» (2026-10-04): a quien queda como encargado le llega el aviso (salvo que se lo haya asignado a sí mismo).
+  // Desde el 2026-10-09 trae el resumen de la cuenta (lib/cs/pase-de-cuenta.ts); si no se puede armar, los proyectos.
+  // Desde la etapa 3 de la memoria (2026-10-10), también lo esencial de la memoria interna: la ficha confirmada, las
+  // personas, los compromisos abiertos y los pedidos fuera de alcance abiertos (lib/memoria › loEsencialDeLaCuenta).
   const cliente = await prisma.client.findUnique({ where: { id: clientId }, select: { name: true } });
+  const hoy = hoyEnCostaRica();
+  const [[cuenta], esencial] = await Promise.all([
+    cargarCuentas(null, { clientIds: [clientId], incluirSinServicio: true }).catch(() => []),
+    loEsencialDeLaCuenta(clientId, { lector: "pase-de-cuenta" }),
+  ]);
+  const proyectosEnUnaLinea =
+    proyectos.length === 1 ? `«${proyectos[0].name}».` : `${proyectos.length} proyectos: ${proyectos.map((p) => `«${p.name}»`).join(", ")}.`;
   await avisar({
     para: destino.email,
     tipo: "proyecto.encargado",
     titulo: `Quedaste como encargado de ${cliente?.name ?? "una cuenta"}`,
-    detalle: proyectos.length === 1 ? `«${proyectos[0].name}».` : `${proyectos.length} proyectos: ${proyectos.map((p) => `«${p.name}»`).join(", ")}.`,
+    detalle: cuenta ? resumenDelPase(cuenta, hoy, esencial) : [lineaDeLoEsencial(esencial), proyectosEnUnaLinea].filter(Boolean).join(" "),
     href: `/clients/${encodeURIComponent(clientId)}`,
     actorEmail: guard.user.email,
     dedupeKey: `proyecto.encargado:${clientId}:${new Date().toISOString().slice(0, 10)}`,
   });
+  for (const anterior of anteriores) {
+    await avisar({
+      para: anterior,
+      tipo: "proyecto.encargado",
+      titulo: `${cliente?.name ?? "Una cuenta"} pasó a ${destino.name}`,
+      detalle: `Desde hoy la lleva ${destino.name}. ${proyectosEnUnaLinea}`,
+      href: `/clients/${encodeURIComponent(clientId)}`,
+      actorEmail: guard.user.email,
+      dedupeKey: `proyecto.encargado.paso:${clientId}:${anterior}:${new Date().toISOString().slice(0, 10)}`,
+    });
+  }
 
-  return NextResponse.json({ encargado: destino.name, proyectos: proyectos.length });
+  return NextResponse.json({
+    encargado: destino.name,
+    proyectos: proyectos.length,
+    empresa: enLaEmpresa.empresa,
+    contactos: enLaEmpresa.contactos,
+    contactosFallidos: enLaEmpresa.contactosFallidos,
+    avisoEmpresa: enLaEmpresa.error,
+  });
 }

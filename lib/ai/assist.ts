@@ -61,6 +61,7 @@ export interface DocumentAssistInput {
    *  "Mejorar con IA" podía reintroducir los superlativos que la voz prohíbe. */
   brandVoice?: boolean;
   maxTokens?: number;
+  /** Tope de búsquedas web (5 si no viene). `0` la apaga: ni la herramienta ni su instrucción van en la llamada. */
   maxWebSearches?: number;
 }
 
@@ -78,6 +79,14 @@ export interface DocumentAssistResult {
   usedWebSearch: boolean;
 }
 
+/**
+ * ¿Lleva la búsqueda web? `maxWebSearches: 0` la apaga entera (ni la herramienta ni su párrafo): el assist del
+ * diagnóstico lleva lo que se dijo en las reuniones, y eso no puede terminar en una consulta al buscador.
+ */
+function conBusquedaWeb(input: Pick<DocumentAssistInput, "maxWebSearches">): boolean {
+  return (input.maxWebSearches ?? 5) > 0;
+}
+
 /** Reglas fijas del assist (idénticas en espíritu a las de canvas-agent: JSON
  *  puro, texto plano, no inventar, idioma/tuteo). */
 function fixedRules(input: DocumentAssistInput): string {
@@ -85,11 +94,12 @@ function fixedRules(input: DocumentAssistInput): string {
     input.lang && !input.lang.startsWith("es")
       ? `IDIOMA (OBLIGATORIO): TODO el contenido va en el idioma del documento: "${input.lang}" (código ISO 639-1). Si una sección actual quedó en otro idioma, corregila como parte de la edición.`
       : `IDIOMA: el documento es en español. ESTILO (OBLIGATORIO): TUTEO neutro (segunda persona con "tú"): "Transforma", "centraliza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "tenés", "querés", "podés" ni "vos".`;
+  const busqueda = conBusquedaWeb(input)
+    ? `Tienes la herramienta web_search. Úsala SOLO cuando la instrucción requiera información que NO está en el documento (metodologías, mejores prácticas actuales, datos del mercado). Para ediciones de redacción, estructura o estilo NO busques.\n\n`
+    : "";
   return `Vas a MEJORAR un ${input.docLabel} existente según la instrucción del usuario.
 
-Tienes la herramienta web_search. Úsala SOLO cuando la instrucción requiera información que NO está en el documento (metodologías, mejores prácticas actuales, datos del mercado). Para ediciones de redacción, estructura o estilo NO busques.
-
-Devuelve SOLO un objeto JSON válido, sin texto alrededor ni fences de markdown, con UNA key por CADA sección que decidas cambiar (y SOLO esas — no repitas secciones sin cambios) y como valor el objeto de datos COMPLETO de esa sección con su forma exacta. Agrega la key "__reasoning" con 1-3 frases de por qué hiciste esos cambios (en el idioma del documento).
+${busqueda}Devuelve SOLO un objeto JSON válido, sin texto alrededor ni fences de markdown, con UNA key por CADA sección que decidas cambiar (y SOLO esas — no repitas secciones sin cambios) y como valor el objeto de datos COMPLETO de esa sección con su forma exacta. Agrega la key "__reasoning" con 1-3 frases de por qué hiciste esos cambios (en el idioma del documento).
 
 Reglas estrictas:
 - Texto PLANO en cada campo (sin markdown salvo en los campos "md", sin **).
@@ -139,13 +149,17 @@ export async function runDocumentAssist(input: DocumentAssistInput): Promise<Doc
       model: MODEL,
       max_tokens: input.maxTokens ?? 8000,
       system,
-      tools: [
-        {
-          type: "web_search_20260209",
-          name: "web_search",
-          max_uses: input.maxWebSearches ?? 5,
-        },
-      ],
+      ...(conBusquedaWeb(input)
+        ? {
+            tools: [
+              {
+                type: "web_search_20260209" as const,
+                name: "web_search" as const,
+                max_uses: input.maxWebSearches ?? 5,
+              },
+            ],
+          }
+        : {}),
       messages,
     });
 

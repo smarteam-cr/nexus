@@ -1,3 +1,4 @@
+import { entraATareas } from "@/lib/tareas/menu";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { requireUser, UnauthorizedError } from "@/lib/auth/supabase";
@@ -15,6 +16,7 @@ import RecorridosProvider from "@/components/recorridos/RecorridosProvider";
 import { COOKIE_DE_RECORRIDOS } from "@/lib/recorridos/vistos";
 import FeedbackProvider from "@/components/feedback/FeedbackProvider";
 import PreguntasFlotantes from "@/components/tiempos/PreguntasFlotantes";
+import { AsistenteDeTareasProvider } from "@/components/tareas/AsistenteDeTareas";
 
 export default async function AppShell({
   children,
@@ -56,6 +58,11 @@ export default async function AppShell({
         esAdminDeRoles({ role: user.teamMember.roleEnum }) ||
         (await hasSharedRoleDocs(user.teamMember.id));
 
+  // Tareas internas en el piloto: Marketing o quien ya tenga algo en Tareas (dirección entra por el gate).
+  const enTareas = await entraATareas(user.teamMember ?? null);
+  // El chat de tareas (1B): quien entra a Tareas y puede conversar con el asistente (la celda `asistente.read`).
+  const chatDeTareas = (isSuperAdmin || enTareas) && (isSuperAdmin || permissions.sections.asistente?.read === true);
+
   // Info compacta para el avatar del sidebar + gating de navegación.
   const userLite = {
     email: user.email,
@@ -64,6 +71,7 @@ export default async function AppShell({
     isSuperAdmin,
     permissions,
     hasSharedDocs,
+    enTareas,
     // El panel de Finanzas de esta persona (rediseño 2026-10-03): sale de su fila, sin consulta extra.
     vistaFinanzas: vistaFinanzasDe({
       roleEnum: user.teamMember?.roleEnum,
@@ -94,6 +102,9 @@ export default async function AppShell({
         {/* Feedback desde cualquier pantalla (2026-10-04): el botón vive en el pie del menú y el panel
             no se desmonta al navegar. Va con la versión que corre, para saber qué estaba viendo la persona. */}
         <FeedbackProvider version={process.env.GIT_SHA?.slice(0, 7) ?? null}>
+        {/* El chat de tareas (1B): un hilo por persona que la sigue por todas las pantallas, así que se monta una
+            vez acá. Dentro del Feedback: un solo panel derecho a la vez (abrir uno cierra el otro). */}
+        <AsistenteDeTareasProvider habilitado={chatDeTareas} email={user.teamMember?.email ?? user.email}>
         <PanelLateralProvider initialOpen={panelAbierto}>
         <SidebarShell user={userLite} initialOpen={!sidebarCollapsed}>
           {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
@@ -108,6 +119,7 @@ export default async function AppShell({
           {children}
         </SidebarShell>
         </PanelLateralProvider>
+        </AsistenteDeTareasProvider>
         </FeedbackProvider>
       </RecorridosProvider>
     </AgentRunsProvider>

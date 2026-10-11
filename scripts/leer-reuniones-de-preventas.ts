@@ -2,9 +2,14 @@
  * scripts/leer-reuniones-de-preventas.ts — pone al día las sesiones de las preventas vivas con el
  * rediseño del 2026-10-07 (cada reunión con «Lo que leyó el agente»). Dos pasos por preventa:
  *
- *  1. Las reuniones grabadas que el agente NUNCA leyó (con conversación) y lo sumado a mano sin leer:
- *     la lectura de siempre, como si el vendedor apretara «Leer». Propone lo que salga de ellas, que el
- *     vendedor usa o descarta, y rearma la guía. Cada lectura toma las dos más recientes: hasta 4 vueltas.
+ *  0. (Solo con --apply) Mira HubSpot: suma a la preventa las reuniones que se grabaron con HubSpot y
+ *     dejaron su resumen (lib/exploraciones/reuniones-de-hubspot.ts). Sin esto, una preventa que nadie abrió
+ *     desde el 2026-10-08 no las tiene (Polaris, COLFAR, Megasuper: el reporte
+ *     scripts/auditar-analisis-de-preventas.ts --hubspot las lista).
+ *  1. Las reuniones grabadas que el agente NUNCA leyó (con conversación), las de HubSpot sin leer y lo
+ *     sumado a mano sin leer: la lectura de siempre, como si el vendedor apretara «Leer». Propone lo que
+ *     salga de ellas, que el vendedor usa o descarta, y rearma la guía. Cada lectura toma las dos reuniones
+ *     de Meet más recientes y lo que falte de HubSpot: hasta 4 vueltas.
  *  2. Las que el agente leyó ANTES del rediseño y no tienen resumen: SOLO el resumen (no propone nada,
  *     no marca nada como leído ni toca la guía). Incluye las reuniones de HubSpot: con su resumen
  *     aparecen en Exploración aunque no hayan estado en la agenda (la del 28 sep de CreditForce).
@@ -26,9 +31,9 @@ import { prisma } from "@/lib/db/prisma";
 import { lanzarCorrida } from "@/lib/exploraciones/agente";
 import { leerContenido, leerPropuesta } from "@/lib/exploraciones/esquemas";
 import { reunionesDeLaExploracion, type LoQueSeRelee } from "@/lib/exploraciones/fuentes";
-import type { ReunionDeLaExploracion } from "@/lib/exploraciones/guia";
-import { hayQueLeerAlPreparar } from "@/lib/exploraciones/lectura";
+import { claveDeReunion, type ReunionDeLaExploracion } from "@/lib/exploraciones/guia";
 import { leerLoLeido } from "@/lib/exploraciones/lo-leido";
+import { mirarReunionesDeHubspot } from "@/lib/exploraciones/reuniones-de-hubspot";
 import { describirDestino, resolverApply } from "./lib/guard";
 
 const TABLAS = ["ExploracionDeVenta"];
@@ -64,21 +69,34 @@ const nombre = (r: ReunionDeLaExploracion) => `${dia(r.fecha)} · ${r.titulo}`;
 /** Qué le falta a una preventa, mirando solo la base. */
 async function planDe(fila: Fila) {
   const propuesta = leerPropuesta(fila.propuesta);
-  const reuniones = await reunionesDeLaExploracion({
-    exploracionId: fila.id,
-    clientId: fila.clientId,
-    creadaEn: fila.createdAt,
-    propuesta,
-    leido: leerLoLeido(fila.test),
-    elegidas: leerContenido(fila.contenido).reunionesElegidas,
-  });
-  const sinLeer = reuniones.filter((r) => !r.leida && ((r.origen === "meet" && !r.corta) || r.origen === "documento"));
+  const contenido = leerContenido(fila.contenido);
+  /* Las mismas reuniones que ven la pantalla y el agente (etapa A): las de las sesiones, sin lo que se sacó de la
+     exploración ni lo de antes que no es sesión. Sin las sesiones y lo sacado, este script leía (y cobraba)
+     reuniones que el agente ya no lee. */
+  const fuera = new Set(contenido.fuera);
+  const reuniones = (
+    await reunionesDeLaExploracion({
+      exploracionId: fila.id,
+      clientId: fila.clientId,
+      projectId: null,
+      creadaEn: fila.createdAt,
+      propuesta,
+      leido: leerLoLeido(fila.test),
+      sesiones: contenido.sesiones,
+      fuera: contenido.fuera,
+      elegidas: contenido.reunionesElegidas,
+    })
+  ).filter((r) => r.origen === "documento" || (!r.legado && !fuera.has(claveDeReunion(r))));
+  // Las de HubSpot también: desde el 2026-10-08 traen el resumen de su grabación (no solo la invitación).
+  const sinLeer = reuniones.filter((r) => !r.leida && ((r.origen === "meet" && !r.corta && r.texto !== "nada") || r.origen === "documento" || r.origen === "hubspot"));
   const conResumen = (origen: string, id: string) => !!propuesta.lecturas[`${origen}:${id}`];
   const meet = reuniones.filter((r) => r.origen === "meet" && r.leida && !r.corta && !conResumen("meet", r.id));
   const documentos = reuniones.filter((r) => r.origen === "documento" && r.leida && !conResumen("documento", r.id));
   /* Cuáles de lo leído en HubSpot fueron reuniones no se sabe sin preguntarle a HubSpot: lo dicen las
      etiquetas que guardaron las lecturas. Las que ya tienen resumen (por su etiqueta) no cuentan. */
-  const etiquetasConResumen = new Set(Object.values(propuesta.lecturas).map((l) => l.etiqueta.slice(0, 200)));
+  // Sin el «(se hizo)» que las etiquetas sumaron después: la misma reunión, leída antes y después, es una.
+  const comparable = (e: string) => e.replace(/ \([^)]*\)(?=:)/, "").slice(0, 200);
+  const etiquetasConResumen = new Set(Object.values(propuesta.lecturas).map((l) => comparable(l.etiqueta)));
   const deHubspot = [
     ...new Set(
       propuesta.corridas
@@ -86,7 +104,7 @@ async function planDe(fila: Fila) {
         .flatMap((c) => c.leyo)
         .filter((e) => e.startsWith("Reunión en HubSpot") && !/no ocurrió|no se presentó/.test(e)),
     ),
-  ].filter((e) => !etiquetasConResumen.has(e.slice(0, 200)));
+  ].filter((e) => !etiquetasConResumen.has(comparable(e)));
   const releer: LoQueSeRelee = {
     sesiones: meet.map((r) => r.id),
     documentos: documentos.map((r) => r.id),
@@ -145,11 +163,25 @@ async function main() {
 
   const ids = (
     await prisma.exploracionDeVenta.findMany({
-      where: { archivadaEn: null, ...(soloUna ? { id: soloUna } : {}) },
+      // Solo preventas: la exploración de un proyecto (projectId) no se lee con este script.
+      where: { archivadaEn: null, projectId: null, ...(soloUna ? { id: soloUna } : {}) },
       select: { id: true },
       orderBy: { createdAt: "asc" },
     })
   ).map((f) => f.id);
+
+  // 0. Con --apply, primero HubSpot: las reuniones grabadas allá entran a la preventa (escribe la foto).
+  if (APPLY) {
+    console.log("0. Mirando HubSpot (las reuniones grabadas con su resumen)…");
+    for (const id of ids) {
+      const r = await mirarReunionesDeHubspot(id, new Date(), { forzar: true }).catch((e) => {
+        console.error(`   ${id}: no se pudo mirar HubSpot`, e);
+        return null;
+      });
+      if (r?.cambio) console.log(`   ${id}: sumó reuniones de HubSpot${r.lanzada ? " (y el agente salió a leerlas)" : ""}`);
+    }
+    console.log("");
+  }
 
   const planes = [];
   for (const id of ids) {
@@ -166,7 +198,7 @@ async function main() {
     if (plan.sinLeer.length) {
       lecturas++;
       console.log(`  1. Leer (${plan.sinLeer.length} sin leer):`);
-      for (const r of plan.sinLeer) console.log(`     · ${nombre(r)}${r.origen === "documento" ? " (sumado a mano)" : ""}`);
+      for (const r of plan.sinLeer) console.log(`     · ${nombre(r)}${r.origen === "documento" ? " (sumado a mano)" : r.origen === "hubspot" ? " (HubSpot)" : ""}`);
     }
     const aResumir = [...plan.meet.map(nombre), ...plan.documentos.map((r) => `${nombre(r)} (sumado a mano)`), ...plan.deHubspot];
     if (aResumir.length) {
@@ -181,7 +213,9 @@ async function main() {
   console.log("Costo aproximado: una lectura con su guía, unos US$0,20–0,35; un resumen, unos centavos.");
 
   if (!APPLY) {
-    console.log("\nNada escrito. Con --apply (y --firma) corre las lecturas y los resúmenes.");
+    console.log("\nNada escrito. Con --apply (y --firma) mira HubSpot y corre las lecturas y los resúmenes.");
+    console.log("En seco no se mira HubSpot: las reuniones grabadas allá que la preventa todavía no tiene las lista");
+    console.log("scripts/auditar-analisis-de-preventas.ts --hubspot.");
     return;
   }
 
@@ -198,7 +232,7 @@ async function main() {
     console.log(`■ ${fila.client.name}`);
     // 1. Lo que nunca se leyó, de a dos reuniones por vuelta.
     let plan = await planDe((await leerFila(fila.id))!);
-    for (let vuelta = 1; vuelta <= VUELTAS_DE_LECTURA && hayQueLeerAlPreparar(plan.sinLeer); vuelta++) {
+    for (let vuelta = 1; vuelta <= VUELTAS_DE_LECTURA && plan.sinLeer.length > 0; vuelta++) {
       const antes = plan.sinLeer.map((r) => r.id).join();
       console.log(`  1. Leyendo (vuelta ${vuelta})…`);
       console.log(`     → ${await correr(fila.id, { triggeredByEmail: firma })}`);

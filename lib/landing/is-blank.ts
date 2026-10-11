@@ -63,6 +63,11 @@ export const NO_CONTENIDO = new Set([
   // esta entrada se publicaría el encabezado del plan sin una sola fase, y "Limpiar" volvería
   // a mentir — la misma trampa de `anchoRecurrente`.
   "avisoFase1",
+  // Las PROPUESTAS de la IA que el cliente nunca ve (Entrega: el impacto y los objetivos). Una
+  // sección que solo tiene propuestas sin aceptar no tiene nada que mostrarle: sin estas entradas
+  // el cliente veía el título de la sección y nada debajo (2026-10-07).
+  "kpisPropuestos",
+  "objetivosPropuestos",
 ]);
 
 /** Una sección está "en blanco" si todos sus strings y arrays lo están. */

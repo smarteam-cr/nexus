@@ -12,6 +12,7 @@
  *   - https://www.googleapis.com/auth/documents.readonly
  *   - https://www.googleapis.com/auth/admin.directory.user.readonly
  *   - https://www.googleapis.com/auth/calendar.readonly
+ *   - https://www.googleapis.com/auth/calendar.events.owned (solo getAgendaWriteAuth, aparte)
  */
 
 // Import profundo a propósito, nunca la raíz "googleapis": la raíz carga los tipos de ~400 APIs y
@@ -70,6 +71,26 @@ export function getImpersonatedAuth(userEmail: string): JWT {
     email: client_email,
     key: private_key,
     scopes: SCOPES_IMPERSONATE,
+    subject: userEmail,
+  });
+}
+
+// ── getAgendaWriteAuth ────────────────────────────────────────────────────────
+
+/**
+ * Tareas internas (2026-10-09): crear y quitar los bloques de una tarea en el calendario de su dueña. Es un JWT APARTE
+ * con `calendar.events.owned` (ver, crear, cambiar y borrar eventos solo en los calendarios de los que la persona es
+ * dueña), impersonando SOLO a quien hace clic.
+ *
+ * ⛔ No se suma a SCOPES_IMPERSONATE: si Google Admin no autorizó este permiso, pedirlo junto a los de lectura haría
+ * fallar TODAS las lecturas (Meet, Drive, Docs). Aparte, si falta, falla solo agendar y la pantalla ofrece el enlace.
+ */
+export function getAgendaWriteAuth(userEmail: string): JWT {
+  const { client_email, private_key } = getServiceAccountKey();
+  return new JWT({
+    email: client_email,
+    key: private_key,
+    scopes: ["https://www.googleapis.com/auth/calendar.events.owned"],
     subject: userEmail,
   });
 }

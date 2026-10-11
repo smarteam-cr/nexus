@@ -19,6 +19,7 @@ import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import { bloqueParaElHandoff } from "./para-el-handoff";
 import { exploracionParaLaPropuesta } from "./servidor";
+import { DE_LA_PREVENTA } from "./marco";
 
 const VENTANA_DIAS = 180;
 const DIA = 24 * 60 * 60 * 1000;
@@ -48,7 +49,7 @@ export async function exploracionDelProyecto(projectId: string): Promise<string 
 
   // Sin enlace por el negocio: la viva. Una archivada se abandonó (o ya tuvo su propuesta, que va arriba).
   const exp = await prisma.exploracionDeVenta.findFirst({
-    where: { clientId: p.clientId, archivadaEn: null },
+    where: { clientId: p.clientId, archivadaEn: null, ...DE_LA_PREVENTA },
     orderBy: { updatedAt: "desc" },
     select: { id: true, createdAt: true, updatedAt: true },
   });

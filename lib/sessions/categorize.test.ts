@@ -544,9 +544,11 @@ test("D-08 · la ficha del cliente: el GPS cuenta con dos COUNT (pasadas, con tr
 
 test("el orden de atribución: todo armador de CategorizeContext recorre los clientes del más antiguo al más nuevo", () => {
   /* Sin orden, dos clientes con el mismo dominio se reparten las reuniones al azar entre corridas
-     (caso «Club de Amantes del Vino» duplicado, 2026-10-02). Los tres armadores de producción. */
+     (caso «Club de Amantes del Vino» duplicado, 2026-10-02). Los dos armadores de producción.
+     ACTUALIZADA (2026-10-09): el post-proceso ya no atribuye, lee resolvedClientId (DECISIONS ›
+     Memoria de la cuenta · Etapa 0). Su guarda propia vive en post-process-dueno.test.ts. */
   const leer = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
-  for (const f of ["lib/sessions/resolve-client.ts", "lib/sessions/post-process.ts"]) {
+  for (const f of ["lib/sessions/resolve-client.ts"]) {
     const src = leer(f);
     const i = src.indexOf("prisma.client.findMany(");
     expect(i, `${f} ya no lee los clientes`).toBeGreaterThan(-1);

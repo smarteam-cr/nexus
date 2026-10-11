@@ -25,6 +25,7 @@
  *   npx tsx scripts/backfill-project-pipeline.ts --apply
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { tokenDeCuenta as leerTokenDeCuenta } from "@/lib/hubspot/client";

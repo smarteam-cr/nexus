@@ -51,6 +51,7 @@ import {
 import { projectedEnd, describeEndShift } from "@/lib/timeline/weeks";
 import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
 import { aplicadosDelChat, eventosDelChatAplicado } from "@/lib/timeline/eventos-de-la-propuesta";
+import { congelarHandoff } from "@/lib/handoff/congelado-server";
 
 /** El comienzo de la razón de la auditoría, según de dónde viene la propuesta. */
 function razonDeDonde(d: DeDondeViene): string {
@@ -287,6 +288,16 @@ export async function POST(
     }
   } catch (e) {
     console.error("[borrador/aplicar] auditoría best-effort falló:", e instanceof Error ? e.message : e);
+  }
+
+  /* ── EL HANDOFF SE CONGELA (etapa 3b, DECISIONS «El handoff se congela») ────────────────────
+     La primera vez que se aplica el cronograma que propone el handoff, lo vendido pasa a ser plan: el
+     handoff queda como foto fija. Solo si se aplicó algo (resolver la propuesta desmarcándolo todo no
+     es aplicarla). Las siguientes veces no hace nada: `congelarHandoff` es idempotente. Nunca tumba la
+     respuesta: el cronograma ya quedó aplicado. */
+  if (origen === "handoff" && aplicadas > 0) {
+    const c = await congelarHandoff(projectId, { via: "cronograma", porEmail: guard.user.email ?? null });
+    if (!c.ok) console.warn(`[borrador/aplicar] no se congeló el handoff: ${c.motivo}`);
   }
 
   /* ── EL DESENLACE DE LA PROPUESTA DE LAS REUNIONES (medición, best-effort) ──────────────────

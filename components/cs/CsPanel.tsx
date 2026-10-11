@@ -13,7 +13,7 @@
  * se filtra. Las fechas relativas se calculan contra `data.hoy`, nunca contra el reloj del
  * navegador: el servidor y el cliente tienen que pintar lo mismo.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
@@ -23,9 +23,19 @@ import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { cn } from "@/lib/cn";
 import { diasEntre, fmtDia, fmtMonto, haceCuanto, plural } from "@/lib/cs/formato";
 import type { CarteraDeLaCsl } from "@/lib/cs/cartera";
-import { leyendaDeSalud, type FiltroDeEntrega, type SaludDeCuenta } from "@/lib/cs/cartera-reglas";
-import { Punto } from "./piezas";
+import { leyendaDeSalud, type FiltroDeEntrega } from "@/lib/cs/cartera-reglas";
+import {
+  CLAVES_DE_FILTROS,
+  FILTROS_VACIOS,
+  filtrosDesdeParametros,
+  parametrosDeFiltros,
+  type FiltrosDeCartera,
+} from "@/lib/cs/filtros-de-cartera";
+import { REGLA_DE_LA_RELACION } from "@/lib/cs/relacion-gestionada";
+import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
+import { META_DE_SALUD, Punto } from "./piezas";
 import Llamar from "./cartera/Llamar";
+import Cartera from "./cartera/Cartera";
 import Renovaciones from "./cartera/Renovaciones";
 import UsoYLicencias from "./cartera/UsoYLicencias";
 import Crecimiento from "./cartera/Crecimiento";
@@ -33,7 +43,8 @@ import Equipo from "./cartera/Equipo";
 import NivelDePartner from "./cartera/NivelDePartner";
 import PanelLateral from "@/components/ui/PanelLateral";
 
-type Pestana = "llamar" | "renovaciones" | "uso" | "crecimiento" | "equipo" | "nivel";
+type Pestana = "llamar" | "cartera" | "renovaciones" | "uso" | "crecimiento" | "equipo" | "nivel";
+const PESTANAS: readonly Pestana[] = ["llamar", "cartera", "renovaciones", "uso", "crecimiento", "equipo", "nivel"];
 
 /** Un dato de más de 3 días ya se avisa. */
 const DIAS_PARA_VIEJO = 3;
@@ -42,8 +53,17 @@ export default function CsPanel({
   data,
   puedeCurar,
   contenedor,
+  yo,
+  parametros,
+  puedeReasignar,
 }: {
   data: CarteraDeLaCsl;
+  /** El correo de quien mira (borra solo las vistas que creó). */
+  yo: string | null;
+  /** La dirección con que se abrió: la pestaña y los filtros de «Cartera» viven ahí (una vista es un enlace). */
+  parametros: Record<string, string | string[] | undefined>;
+  /** Puede pasar una cuenta a otro CSE (`proyectos.reasignarEncargado`). */
+  puedeReasignar: boolean;
   /** El padding de la columna de contenido: la página pasa su `SHELL_*`, el mismo que su loading. */
   contenedor: string;
   /**
@@ -53,8 +73,35 @@ export default function CsPanel({
    */
   puedeCurar: boolean;
 }) {
-  const [pestana, setPestana] = useState<Pestana>("llamar");
+  const pedida = typeof parametros.pestana === "string" ? parametros.pestana : null;
+  const [pestana, setPestana] = useState<Pestana>(PESTANAS.includes(pedida as Pestana) ? (pedida as Pestana) : "llamar");
+  const [filtros, setFiltros] = useState<FiltrosDeCartera>(() => filtrosDesdeParametros(parametros));
   const [filtroDeEntrega, setFiltroDeEntrega] = useState<FiltroDeEntrega | null>(null);
+
+  // La pestaña y los filtros a la dirección, sin volver a pedir la página (`history.replaceState`).
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("pestana");
+    for (const k of CLAVES_DE_FILTROS) url.searchParams.delete(k);
+    if (pestana !== "llamar") url.searchParams.set("pestana", pestana);
+    if (pestana === "cartera") for (const [k, v] of parametrosDeFiltros(filtros)) url.searchParams.set(k, v);
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, [pestana, filtros]);
+
+  const verEnCartera = (f: FiltrosDeCartera) => {
+    setFiltros(f);
+    setPestana("cartera");
+  };
+
+  // El recorrido guiado abre la pestaña de cada paso (lib/recorridos/contenido/exito.ts).
+  useEffect(() => {
+    const alPedido = (e: Event) => {
+      const a = (e as CustomEvent<AccionDelRecorrido>).detail;
+      if (a?.evento === "cs.pestana" && a.valor && PESTANAS.includes(a.valor as Pestana)) setPestana(a.valor as Pestana);
+    };
+    window.addEventListener(EVENTO_DEL_RECORRIDO, alPedido);
+    return () => window.removeEventListener(EVENTO_DEL_RECORRIDO, alPedido);
+  }, []);
   const { linea, entrega, fuentes } = data;
   // Todos los que llevan algún cliente, para el filtro por CSE (quien está de baja ya no aparece:
   // sus proyectos cuentan como sin CSE).
@@ -131,6 +178,7 @@ export default function CsPanel({
           onChange={(k) => setPestana(k)}
           items={[
             { key: "llamar", label: "A quién llamar", count: data.llamar.length },
+            { key: "cartera", label: "Cartera", count: data.cartera.filter((f) => f.enCartera).length },
             { key: "renovaciones", label: "Renovaciones", count: renovaciones90.length },
             { key: "uso", label: "Uso y licencias", count: conConsumo },
             { key: "crecimiento", label: "Crecimiento", count: data.oportunidades.length },
@@ -144,6 +192,8 @@ export default function CsPanel({
           <Llamar
             filas={data.llamar}
             cuentas={data.cuentas}
+            alertas={data.alertasAbiertas}
+            cerradas={data.alertasCerradas}
             cses={cses}
             hoy={data.hoy}
             entrega={entrega}
@@ -151,15 +201,34 @@ export default function CsPanel({
             onQuitarFiltro={() => setFiltroDeEntrega(null)}
           />
         )}
+        {pestana === "cartera" && (
+          <Cartera
+            filas={data.cartera}
+            cses={cses}
+            hoy={data.hoy}
+            puedeEditar={data.clasificacionLista}
+            puedeCorregir={data.ajustesListos}
+            filtros={filtros}
+            onFiltros={setFiltros}
+            vistas={data.vistas}
+            vistasListas={data.vistasListas}
+            yo={yo}
+            equipoParaPase={data.equipoParaPase}
+            puedeReasignar={puedeReasignar}
+          />
+        )}
         {pestana === "renovaciones" && <Renovaciones filas={data.renovaciones} hoy={data.hoy} />}
         {pestana === "uso" && <UsoYLicencias adopcion={data.adopcion} primeros90={data.primeros90} consumo={data.consumo} />}
         {pestana === "crecimiento" && <Crecimiento oportunidades={data.oportunidades} />}
-        {pestana === "equipo" && <Equipo equipo={data.equipo} />}
+        {pestana === "equipo" && (
+          <Equipo equipo={data.equipo} cartera={data.cartera} meta={data.metaRecurrentes} idsDelEquipo={data.idsDelEquipo} onVer={verEnCartera} />
+        )}
         {pestana === "nivel" && <NivelDePartner nivel={data.nivel} hoy={data.hoy} />}
       </main>
 
       <PanelLateral etiqueta="Cartera" ancho="lg:w-[360px]" className="py-8">
-        <QueSigueDeLaCartera data={data} onVer={setPestana} />
+        <QueSigueDeLaCartera data={data} onVer={setPestana} onVerEnCartera={verEnCartera} />
+        <RelacionConHubspot data={data} onVerEnCartera={verEnCartera} />
         <Fuentes data={data} puedeCurar={puedeCurar} />
         <Leyenda />
       </PanelLateral>
@@ -206,10 +275,19 @@ function BotonDeEntrega({ color, numero, texto, onClick }: { color: "rojo" | "am
   );
 }
 
-function QueSigueDeLaCartera({ data, onVer }: { data: CarteraDeLaCsl; onVer: (p: Pestana) => void }) {
+function QueSigueDeLaCartera({
+  data,
+  onVer,
+  onVerEnCartera,
+}: {
+  data: CarteraDeLaCsl;
+  onVer: (p: Pestana) => void;
+  onVerEnCartera: (f: FiltrosDeCartera) => void;
+}) {
   const primera = data.llamar[0];
   const en30 = data.renovaciones.filter((r) => r.dias <= 30).length;
   const taller = data.adopcion.find((h) => h.tallerGrupal);
+  const relacionUrgente = data.cartera.filter((f) => f.enCartera && f.relacion.estado === "urgente").length;
   return (
     <QueSigue
       accion={
@@ -224,8 +302,20 @@ function QueSigueDeLaCartera({ data, onVer }: { data: CarteraDeLaCsl; onVer: (p:
       }
     >
       <p>{primera ? `${primera.nombre}: ${primera.principal.texto}.` : "Nada urgente en la cartera esta semana."}</p>
-      {(en30 > 0 || taller) && (
+      {(en30 > 0 || taller || relacionUrgente > 0) && (
         <div className="mt-2 flex flex-col gap-1.5 border-t border-info-line pt-2 text-[13px] text-fg-secondary">
+          {relacionUrgente > 0 && (
+            <span>
+              {plural(relacionUrgente, "relación con HubSpot vence", "relaciones con HubSpot vencen")} en 14 días o menos.{" "}
+              <button
+                type="button"
+                onClick={() => onVerEnCartera({ ...FILTROS_VACIOS, hubspot: ["urgente"] })}
+                className="text-brand hover:text-brand-light"
+              >
+                Ver cuáles
+              </button>
+            </span>
+          )}
           {en30 > 0 && (
             <span>
               {plural(en30, "renovación", "renovaciones")} en 30 días.{" "}
@@ -245,6 +335,45 @@ function QueSigueDeLaCartera({ data, onVer }: { data: CarteraDeLaCsl; onVer: (p:
         </div>
       )}
     </QueSigue>
+  );
+}
+
+/**
+ * La relación de Smarteam con las cuentas en HubSpot, en el panel (2026-10-09): cuántas gestiona, cuántas vencen y
+ * cuántas terminaron, y la regla en palabras. Sin la relación, HubSpot deja de compartir el uso de la cuenta y se
+ * pierden sus puntos de partner: es lo primero que tiene que entender Customer Success.
+ */
+function RelacionConHubspot({ data, onVerEnCartera }: { data: CarteraDeLaCsl; onVerEnCartera: (f: FiltrosDeCartera) => void }) {
+  const enCartera = data.cartera.filter((f) => f.enCartera);
+  const cuantas = (estados: string[]) => enCartera.filter((f) => estados.includes(f.relacion.estado)).length;
+  const filas: Array<{ texto: string; n: number; estados: FiltrosDeCartera["hubspot"]; atencion: boolean }> = [
+    { texto: "vencen en 30 días o menos", n: cuantas(["urgente", "por-vencer"]), estados: ["urgente", "por-vencer"], atencion: true },
+    {
+      texto: "terminaron hace poco",
+      n: enCartera.filter((f) => f.relacion.estado === "terminada" && f.relacion.tono === "ambar").length,
+      estados: ["terminada"],
+      atencion: true,
+    },
+    { texto: "gestionadas al día", n: cuantas(["gestionada"]), estados: ["gestionada"], atencion: false },
+  ];
+  return (
+    <section className="flex flex-col gap-2.5" data-recorrido="cs.relacion-indice">
+      <p className={ROTULO_DEL_SISTEMA}>Relación con HubSpot</p>
+      <div className="flex flex-col divide-y divide-line rounded-xl border border-line bg-surface">
+        {filas.map((f) => (
+          <button
+            key={f.texto}
+            type="button"
+            onClick={() => onVerEnCartera({ ...FILTROS_VACIOS, hubspot: f.estados })}
+            className="flex items-center justify-between gap-3 px-3 py-2 text-left text-[13px] transition-colors hover:bg-surface-hover"
+          >
+            <span className="text-fg-secondary">{f.texto}</span>
+            <b className={cn("tabular-nums", f.atencion && f.n > 0 ? "text-warn-ink" : "text-fg")}>{f.n}</b>
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-fg-muted">{REGLA_DE_LA_RELACION}</p>
+    </section>
   );
 }
 
@@ -336,6 +465,12 @@ function Fuentes({ data, puedeCurar }: { data: CarteraDeLaCsl; puedeCurar: boole
         <FilaDeFuente nombre="Puntos de nivel" que="los calcula HubSpot" fecha={f.puntos.at ? fmtDia(f.puntos.at, data.hoy) : "sin datos"} viejo={!f.puntos.at || diasEntre(f.puntos.at, data.hoy) > 60} />
         <FilaDeFuente nombre="Señales de HubSpot" que="tickets, contactos y registro de la empresa" fecha={f.senales.apagado ? `apagado · ${fecha(f.senales.at)}` : fecha(f.senales.at)} viejo={viejo(f.senales.at) || !!f.senales.apagado} />
         <FilaDeFuente nombre="Reuniones de Nexus" que="último contacto y minutas" fecha={fecha(f.reuniones.at)} viejo={false} />
+        <FilaDeFuente
+          nombre="Correos del cliente"
+          que="el vigía busca quejas y retrasos"
+          fecha={f.correos.conPermiso === true ? "los lee" : f.correos.conPermiso === false ? "sin permiso de HubSpot: solo reuniones" : "todavía no se sabe"}
+          viejo={f.correos.conPermiso === false}
+        />
         <FilaDeFuente nombre="Proyectos y cronogramas" que="bloqueos, atrasos y avance" fecha="en vivo" viejo={false} />
         <FilaDeFuente
           nombre="Agente vigía"
@@ -365,18 +500,12 @@ function Fuentes({ data, puedeCurar }: { data: CarteraDeLaCsl; puedeCurar: boole
   );
 }
 
-const COLOR_DE_LA_SALUD: Record<SaludDeCuenta, "rojo" | "ambar" | "verde"> = {
-  "en-riesgo": "rojo",
-  "en-friccion": "ambar",
-  saludable: "verde",
-};
-
-/** La leyenda sale de las MISMAS reglas que marcan cada cuenta (`QUE_PONE_CADA_MARCA`): no se escribe a mano. */
+/** La leyenda sale de las MISMAS reglas que pintan cada cuenta (`QUE_PINTA_CADA_COLOR`): no se escribe a mano. */
 function Leyenda() {
-  const filas = useMemo(() => leyendaDeSalud().map((f) => ({ ...f, color: COLOR_DE_LA_SALUD[f.salud] })), []);
+  const filas = useMemo(() => leyendaDeSalud().map((f) => ({ ...f, color: META_DE_SALUD[f.salud].color })), []);
   return (
     <section className="flex flex-col gap-2">
-      <p className={ROTULO_DEL_SISTEMA}>Qué es cada marca</p>
+      <p className={ROTULO_DEL_SISTEMA}>Qué es cada color</p>
       <div className="flex flex-col gap-2 text-[13px] text-fg-secondary">
         {filas.map((f) => (
           <span key={f.nombre} className="flex items-start gap-2">
@@ -386,6 +515,14 @@ function Leyenda() {
             </span>
           </span>
         ))}
+        <span className="flex items-start gap-2">
+          <span className="mt-0.5 inline-flex flex-shrink-0 items-center gap-1 text-[11px] font-semibold text-brand">✦</span>
+          <span>las alertas del agente vigía no pintan: se ven aparte y se resuelven en la lista</span>
+        </span>
+        <span className="pl-4 text-xs text-fg-muted">
+          El contacto pinta solo donde Smarteam acompaña la cuenta (proyecto activo o relación gestionada). La deuda vencida no
+          pinta: aparece como motivo para llamar.
+        </span>
         <span className="flex items-start gap-2">
           <span className="inline-flex flex-shrink-0 items-center rounded-full border border-fg bg-surface px-2 py-px text-[11px] font-semibold text-fg">Cruce</span>
           <span>junta dos fuentes que HubSpot no ve juntas</span>

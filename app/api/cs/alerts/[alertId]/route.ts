@@ -1,9 +1,12 @@
 /**
- * PATCH /api/cs/alerts/[alertId]   body: { status: "SEEN" | "RESOLVED" | "DISMISSED" | "OPEN" }
+ * PATCH /api/cs/alerts/[alertId]   body: { status: "SEEN" | "RESOLVED" | "DISMISSED" | "OPEN", nota?: string }
  *
  * Ciclo de vida de una alerta del watchdog desde el feed: marcar vista, resolver,
  * descartar (o reabrir). Registra quién y cuándo. Desde el 2026-10-04 es de la CSL y dirección
  * (`guardLiderDeCs`); hasta entonces la celda `customerSuccess.read`.
+ *
+ * Al resolver o descartar se puede dejar una nota corta de qué se hizo (2026-10-07, opcional:
+ * `notaDeCierre`). Reabrir la borra junto con quién y cuándo la cerró.
  *
  * ⚠ Y SE VERIFICA A QUÉ CLIENTE PERTENECE LA ALERTA. El gate viejo (`seeAllClients`) implicaba
  * acceso a todos los clientes; la celda nueva no. Sin este chequeo, un CSE con el id de una
@@ -15,6 +18,7 @@ import { guardLiderDeCs } from "@/lib/auth/api-guards";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { serializeAlert } from "@/lib/cs/load-panel";
+import { notaDeCierre } from "@/lib/cs/alertas-reglas";
 import type { CsAlertStatus } from "@prisma/client";
 
 const STATUSES = ["OPEN", "SEEN", "RESOLVED", "DISMISSED"] as const;
@@ -27,7 +31,7 @@ export async function PATCH(
   const guard = await guardLiderDeCs();
   if (guard instanceof NextResponse) return guard;
 
-  let body: { status?: unknown } = {};
+  let body: { status?: unknown; nota?: unknown } = {};
   try {
     body = await req.json();
   } catch {
@@ -36,6 +40,9 @@ export async function PATCH(
   const status = typeof body.status === "string" ? body.status : "";
   if (!(STATUSES as readonly string[]).includes(status)) {
     return NextResponse.json({ error: `status debe ser uno de ${STATUSES.join("|")}` }, { status: 400 });
+  }
+  if (body.nota !== undefined && body.nota !== null && typeof body.nota !== "string") {
+    return NextResponse.json({ error: "La nota tiene que ser texto." }, { status: 400 });
   }
 
   /* La alerta tiene que pasar el where del usuario. Se resuelve con `findFirst` y el filtro
@@ -56,8 +63,10 @@ export async function PATCH(
     data: {
       status: status as CsAlertStatus,
       ...(status === "SEEN" ? { seenAt: now, seenByEmail: email } : {}),
-      ...(status === "RESOLVED" || status === "DISMISSED" ? { resolvedAt: now, resolvedByEmail: email } : {}),
-      ...(status === "OPEN" ? { seenAt: null, seenByEmail: null, resolvedAt: null, resolvedByEmail: null } : {}),
+      ...(status === "RESOLVED" || status === "DISMISSED"
+        ? { resolvedAt: now, resolvedByEmail: email, resolutionNote: notaDeCierre(body.nota) }
+        : {}),
+      ...(status === "OPEN" ? { seenAt: null, seenByEmail: null, resolvedAt: null, resolvedByEmail: null, resolutionNote: null } : {}),
     },
     include: { client: { select: { name: true } }, project: { select: { name: true } } },
   });

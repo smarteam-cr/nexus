@@ -24,8 +24,9 @@ import {
   MIN_BUSQUEDA_SIN_DUENIO,
 } from "@/lib/sessions/candidatas-internas";
 import { resumirSala, textoDeSala } from "@/lib/sessions/participantes";
-import { usaReglaDeRelevancia, type DestinoDeContexto } from "@/lib/sessions/destinos-de-contexto";
-import { documentoDelDestino } from "@/lib/contexto/documento";
+import { esSoloElegidas, usaReglaDeRelevancia, type DestinoDeContexto } from "@/lib/sessions/destinos-de-contexto";
+import { MAX_ELEGIDAS_ENTERAS, documentoDelDestino } from "@/lib/contexto/documento";
+import { BotonBlanco, BotonTexto, BotonUsar, FilaSugerida, FranjaDeSugerencias } from "@/components/ui/sistema";
 import {
   avisoDelMaterial,
   insigniaDelMaterial,
@@ -33,6 +34,7 @@ import {
   type InformeDelMaterial,
   type InsigniaDelMaterial,
 } from "@/lib/contexto/material-cronograma";
+import EnlaceDeContexto from "@/components/contexto/EnlaceDeContexto";
 import ListaDeReuniones from "@/components/contexto/ListaDeReuniones";
 import { estadoDeLaReunion, estadoDesdeInsignia, fechaDeReunion } from "@/lib/contexto/lista-de-reuniones";
 
@@ -96,6 +98,27 @@ interface CandidateSession {
   motivoNoAdoptable?: string | null;
   /** Todavía no ocurrió (solo las reuniones del proyecto que se ofrecen en el cronograma). */
   futura?: boolean;
+  /** Nexus la sugirió para este documento y alguien la descartó (etapa 7). Se puede elegir igual. */
+  desestimada?: boolean;
+  /** Es del proyecto (vínculo vivo): va bajo «Del proyecto». En el cronograma, todas; en los seis documentos, arriba de las del cliente. */
+  delProyecto?: boolean;
+}
+/**
+ * Una reunión que Nexus SUGIERE para el documento (etapa 7, solo los seis que leen las elegidas): las sesiones de la
+ * exploración en el diagnóstico, las reuniones con hechos abiertos y las reuniones con el cliente que el documento leía
+ * antes de la etapa 7. Se calcula al leer; no entra hasta que alguien
+ * toca «Usar» (escribe `true`), y «Descartar» la deja desestimada (`false`).
+ */
+interface SugeridaSession {
+  sessionId: string;
+  title: string;
+  date: string;
+  participants: string[];
+  /** Por qué la sugiere Nexus: «Sesión 2 de la exploración», la frase de un hecho o «Reunión con el cliente en este proyecto». */
+  motivo: string;
+  fuente: "exploracion" | "hecho" | "reunion";
+  alsoIn?: string[];
+  sinContenido?: boolean;
 }
 
 /** Una fila del modal o el rótulo de un grupo. */
@@ -121,6 +144,7 @@ export default function SessionSelectionReview({
   onCount,
   onExcludedCount,
   onErrorDeCarga,
+  onSugeridas,
   destino = "handoff",
   materialDelCronograma = null,
 }: {
@@ -144,6 +168,8 @@ export default function SessionSelectionReview({
    * no se llama: un fallo no es «0 reuniones elegidas» (revisión adversarial, 2026-09-24).
    */
   onErrorDeCarga?: (error: boolean) => void;
+  /** Reporta cuántas reuniones sugiere Nexus (solo los seis documentos que leen las elegidas): la línea cerrada lo dice. */
+  onSugeridas?: (n: number) => void;
   /**
    * SOLO el cronograma (2026-09-23): qué le llega a la IA de cada reunión elegida — el informe de
    * GET /timeline/material, que sale del mismo cargador que usan los agentes. Con él, cada fila dice
@@ -153,12 +179,14 @@ export default function SessionSelectionReview({
   materialDelCronograma?: InformeDelMaterial | null;
 }) {
   const esCronograma = destino === "cronograma";
-  /* El DIAGNÓSTICO (2026-09-28) se ve como el handoff —arranca con reuniones que ya alimentan, la X
-     las deja como «Excluida» y el buscador ofrece las del cliente— pero lee y escribe en lo suyo. */
-  /* Diagnóstico, planificación y ejecución (lib/contexto/documento.ts) comparten la regla sugerida y
-     escriben cada uno en SU columna, por la puerta de su pieza. */
+  /* Los documentos del proyecto (lib/contexto/documento.ts) escriben cada uno en SU columna, por la
+     puerta de su pieza. Desde la etapa 7 los seis que leen SOLO LAS ELEGIDAS (diagnóstico,
+     planificación, ejecución, kickoff, integraciones y entrega) se comportan como el cronograma: la X
+     deja de elegirla (sin «Excluidas»), deshacer la vuelve a elegir, y lo que sugiere Nexus va arriba,
+     aparte, con «Usar» y «Descartar» (DECISIONS «Los documentos leen la memoria y solo las reuniones
+     elegidas»). */
   const docConContexto = documentoDelDestino(destino);
-  const esSugerido = docConContexto !== null;
+  const soloElegidas = esSoloElegidas(destino);
   /* Cada destino lee su lista y escribe en SU puerta: la X del cronograma nunca toca el handoff. */
   const urlCandidatas = `/api/projects/${projectId}/session-candidates${destino === "handoff" ? "" : `?para=${destino}`}`;
   const urlPuerta = esCronograma
@@ -175,11 +203,23 @@ export default function SessionSelectionReview({
      título (el chip «aplica» es del handoff). */
   const conRegla = usaReglaDeRelevancia(destino);
 
-  const [data, setData] = useState<{ feeding: FeedingSession[]; excluded: ExcludedSession[]; candidates: CandidateSession[] }>({
+  const [data, setDataCruda] = useState<{
+    feeding: FeedingSession[];
+    excluded: ExcludedSession[];
+    candidates: CandidateSession[];
+    sugeridas: SugeridaSession[];
+  }>({
     feeding: [],
     excluded: [],
     candidates: [],
+    sugeridas: [],
   });
+  /* El handoff y el cronograma no traen `sugeridas`: sin el campo, ninguna. */
+  const setData = useCallback(
+    (d: { feeding: FeedingSession[]; excluded: ExcludedSession[]; candidates: CandidateSession[]; sugeridas?: SugeridaSession[] }) =>
+      setDataCruda({ ...d, sugeridas: Array.isArray(d.sugeridas) ? d.sugeridas : [] }),
+    [],
+  );
   const [loading, setLoading] = useState(true);
   /* ⛔ Que la lista no cargue NO es que no haya ninguna (revisión adversarial, 2026-09-24): un 500 o
      un corte de red dejaban la lista vacía y el contador en 0, y el cronograma decía «Todavía no
@@ -288,7 +328,7 @@ export default function SessionSelectionReview({
     } catch {
       /* ignore */
     }
-  }, [urlCandidatas]);
+  }, [urlCandidatas, setData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -312,7 +352,7 @@ export default function SessionSelectionReview({
     return () => {
       cancelled = true;
     };
-  }, [urlCandidatas]);
+  }, [urlCandidatas, setData]);
 
   const toast = useToast();
   const setFeeds = useCallback(
@@ -343,9 +383,10 @@ export default function SessionSelectionReview({
   /* Quitar o devolver varias de una vez (la lista de reuniones de todo «Contexto adicional»: la X,
      «Quitar las N», «Vaciar y buscar», «Volver a incluir» y deshacer). La misma puerta, en su forma
      de lista: una sola transacción, y si una no pasa no se escribe ninguna y el error dice cuál.
-     `sugeridas` (solo deshacer): las que vuelven a «sugerida» y no a «agregada a mano». */
+     `sugeridas` (solo deshacer, fuera de los seis documentos): las que vuelven a «sugerida» y no a
+     «agregada a mano». `desestimar` (solo los seis documentos): «Descartar» una sugerencia de Nexus. */
   const postReuniones = useCallback(
-    async (cuerpo: { sessionIds: string[]; feeds: boolean; sugeridas?: string[] }): Promise<boolean> => {
+    async (cuerpo: { sessionIds: string[]; feeds: boolean; sugeridas?: string[]; desestimar?: boolean }): Promise<boolean> => {
       try {
         const r = await fetch(urlPuerta, {
           method: "POST",
@@ -375,7 +416,8 @@ export default function SessionSelectionReview({
   /* Deshacer deja cada reunión como estaba antes de la X: «agregada a mano» si lo estaba, y si no,
      «sugerida» (el afinado vacío). Sin esto, deshacer la dejaba forzada y con candado. Se recuerda
      cómo estaba cada una mientras alimentaba: al deshacer ya está entre las excluidas. El cronograma
-     no tiene «sugerida» (solo alimenta la elegida): ahí devolver es elegirla. */
+     y los seis documentos (etapa 7) no tienen «sugerida» en la lista (solo alimenta la elegida): ahí
+     devolver es elegirla. */
   const forzadas = useRef(new Map<string, boolean>());
   useEffect(() => {
     for (const s of data.feeding) forzadas.current.set(s.sessionId, s.forced);
@@ -385,28 +427,57 @@ export default function SessionSelectionReview({
       postReuniones({
         sessionIds,
         feeds: true,
-        ...(esCronograma ? {} : { sugeridas: sessionIds.filter((id) => forzadas.current.get(id) === false) }),
+        ...(esCronograma || soloElegidas ? {} : { sugeridas: sessionIds.filter((id) => forzadas.current.get(id) === false) }),
       }),
-    [postReuniones, esCronograma],
+    [postReuniones, esCronograma, soloElegidas],
+  );
+
+  /* Lo que sugiere Nexus (los seis documentos): «Usar» la elige (`true`, el clic de una persona) y
+     «Descartar» la desestima (`false`, sin candado: no se sugiere más mientras exista el vínculo; el clasificador
+     puede borrar un vínculo que nadie eligió y recrearlo vacío). Nada de esto pasa solo. */
+  const [decidiendo, setDecidiendo] = useState<string | null>(null);
+  const usarSugeridas = useCallback(
+    async (sessionIds: string[], clave: string) => {
+      setDecidiendo(clave);
+      try {
+        await postReuniones({ sessionIds, feeds: true });
+      } finally {
+        setDecidiendo(null);
+      }
+    },
+    [postReuniones],
+  );
+  const descartarSugerida = useCallback(
+    async (sessionId: string) => {
+      setDecidiendo(sessionId);
+      try {
+        await postReuniones({ sessionIds: [sessionId], feeds: false, desestimar: true });
+      } finally {
+        setDecidiendo(null);
+      }
+    },
+    [postReuniones],
   );
 
   useEffect(() => {
     if (!loading && !errorDeCarga) {
       onCount?.(data.feeding.length);
       onExcludedCount?.(data.excluded.length);
+      onSugeridas?.(soloElegidas ? data.sugeridas.length : 0);
     }
-  }, [loading, errorDeCarga, data.feeding.length, data.excluded.length, onCount, onExcludedCount]);
+  }, [loading, errorDeCarga, data.feeding.length, data.excluded.length, data.sugeridas.length, soloElegidas, onCount, onExcludedCount, onSugeridas]);
   useEffect(() => {
     if (!loading) onErrorDeCarga?.(errorDeCarga);
   }, [loading, errorDeCarga, onErrorDeCarga]);
 
   const { feeding, excluded, candidates } = data;
+  const sugeridas = soloElegidas ? data.sugeridas : [];
   /* El filtro mira título Y participantes: el caso que lo motivó es "esta reunión la tuvo Marco
      con alguien de tal empresa", y ese dato no está en el título. Escribir un dominio la encuentra. */
   const filtered = candidates.filter((c) => coincideConLaBusqueda(c, search));
   /* Las sin dueño van DEBAJO de las del cliente, con su separador, y sin repetir: una que ya está en
      alguna lista (un proyecto interno ya las recibe todas) o que se acaba de agregar no se duplica. */
-  const yaListadas = new Set([...feeding, ...excluded, ...candidates].map((s) => s.sessionId));
+  const yaListadas = new Set([...feeding, ...excluded, ...candidates, ...sugeridas].map((s) => s.sessionId));
   /* El calendario también se filtra acá con lo escrito: con una o dos letras el servidor devuelve
      las recientes sin filtrar, y la lista tiene que responder igual a lo que se tipea. */
   const delCalendario =
@@ -419,13 +490,31 @@ export default function SessionSelectionReview({
     consultaSinDuenio.length >= MIN_BUSQUEDA_SIN_DUENIO && sinDuenio.q === consultaSinDuenio
       ? sinDuenio.sesiones.filter((s) => !yaListadas.has(s.sessionId) && !enElCalendario.has(s.sessionId))
       : [];
+  /* Las del servidor, con sus grupos. En los seis documentos, las del proyecto van arriba («Del proyecto») y las demás
+     del cliente debajo: desde la etapa 7 una reunión del proyecto entra solo si alguien la elige. */
+  const filtradasDelProyecto = soloElegidas ? filtered.filter((c) => c.delProyecto) : [];
+  const filtradasDelCliente = soloElegidas ? filtered.filter((c) => !c.delProyecto) : filtered;
+  const conGrupoDelProyecto = esCronograma || filtradasDelProyecto.length > 0;
+  const listaDelServidor: FilaDelModal[] = esCronograma
+    ? [{ separador: "Del proyecto" }, ...filtered]
+    : filtradasDelProyecto.length > 0
+      ? [
+          { separador: "Del proyecto" },
+          ...filtradasDelProyecto,
+          ...(filtradasDelCliente.length > 0 ? [{ separador: "Del cliente" }, ...filtradasDelCliente] : []),
+        ]
+      : [{ separador: "Del cliente" }, ...filtered];
+  /* Dónde se buscó, en palabras: el cronograma busca en el proyecto; los seis documentos, en el proyecto y el
+     cliente; el handoff, en el cliente. */
+  const dondeBusca = esCronograma ? "del proyecto" : soloElegidas ? "del proyecto y del cliente" : "del cliente";
+  const niDonde = esCronograma ? "del proyecto" : soloElegidas ? "del proyecto ni del cliente" : "del cliente";
   const filasDelModal: FilaDelModal[] =
     delCalendario.length === 0 && huerfanasQueCoinciden.length === 0
-      ? esCronograma && filtered.length > 0
-        ? [{ separador: "Del proyecto" }, ...filtered]
+      ? conGrupoDelProyecto && filtered.length > 0
+        ? listaDelServidor
         : filtered
       : [
-          ...(filtered.length > 0 ? [{ separador: esCronograma ? "Del proyecto" : "Del cliente" }, ...filtered] : []),
+          ...(filtered.length > 0 ? listaDelServidor : []),
           ...(delCalendario.length > 0
             ? [{ separador: "De tu calendario · al elegirla queda como reunión del proyecto" }, ...delCalendario]
             : []),
@@ -451,7 +540,9 @@ export default function SessionSelectionReview({
         placeholder={
           esCronograma
             ? "Buscar en el proyecto y en tu calendario — título, persona o dominio…"
-            : "Buscar en el cliente y en tu calendario — título, persona o dominio…"
+            : soloElegidas
+              ? "Buscar en el proyecto, en el cliente y en tu calendario — título, persona o dominio…"
+              : "Buscar en el cliente y en tu calendario — título, persona o dominio…"
         }
         aria-label="Buscar sesiones"
         aria-describedby="ayuda-buscar-sesiones"
@@ -472,7 +563,7 @@ export default function SessionSelectionReview({
         ) : claveCalendario ? (
           `Se buscó en todo tu calendario${esCronograma ? "" : " y en las reuniones sin cliente asignado"}${calendario.hayMas ? " — hay más resultados: afina la búsqueda" : ""}.`
         ) : (
-          `Arriba, las reuniones ${esCronograma ? "del proyecto" : "del cliente"}; abajo, tus reuniones más recientes que ya tienen cliente. Con ${MIN_BUSQUEDA_CALENDARIO} letras o más se busca en todo tu calendario, también en las que no tienen cliente asignado.`
+          `Arriba, las reuniones ${dondeBusca}; abajo, tus reuniones más recientes que ya tienen cliente. Con ${MIN_BUSQUEDA_CALENDARIO} letras o más se busca en todo tu calendario, también en las que no tienen cliente asignado.`
         )}
       </p>
       {filasDelModal.length === 0 ? (
@@ -480,8 +571,8 @@ export default function SessionSelectionReview({
           {sinDuenioPendiente || calendarioPendiente
             ? "Buscando…"
             : search.trim()
-              ? `Ninguna reunión coincide con «${search.trim()}», ni ${esCronograma ? "en el proyecto" : "del cliente"} ni en tu calendario.`
-              : `No hay reuniones para elegir: ni ${esCronograma ? "del proyecto" : "del cliente"} ni en tu calendario.`}
+              ? `Ninguna reunión coincide con «${search.trim()}», ni ${esCronograma ? "en el proyecto" : niDonde} ni en tu calendario.`
+              : `No hay reuniones para elegir: ni ${niDonde} ni en tu calendario.`}
         </p>
       ) : (
         // ⚠ El tope va en vh, no en un valor fijo: el cuerpo del Modal YA scrollea dentro de un
@@ -548,6 +639,12 @@ export default function SessionSelectionReview({
                        nunca estuvo — y la persona no entiende por qué "reaparece". */
                     <span className="text-[9px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
                       la excluiste
+                    </span>
+                  )}
+                  {c.desestimada && (
+                    /* Nexus la sugirió y alguien la descartó: se puede elegir igual, pero que se sepa. */
+                    <span className="text-[9px] font-medium text-fg-muted bg-surface-muted border border-line rounded-full px-1.5 py-0.5 flex-shrink-0">
+                      la descartaste
                     </span>
                   )}
                 </div>
@@ -627,21 +724,76 @@ export default function SessionSelectionReview({
       const insignia = insigniaDelMaterial(fila);
       if (insignia) insignias.set(fila.sessionId, insignia);
     }
+    // Igual que la preventa: la lista arriba y el enlace al pie, a la misma altura que el de la otra columna.
     return (
-      <>
+      <div className="flex flex-1 flex-col gap-2">
         {avisoMaterial.length > 0 && (
-          <p className="mb-2 rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2 text-[11px] leading-snug text-warn-ink">
+          <p className="rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2 text-[11px] leading-snug text-warn-ink">
             {avisoMaterial.join(" ")}
           </p>
         )}
         {!material && alimentanVacias > 0 && (
-          <p className="mb-2 rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2 text-[11px] leading-snug text-warn-ink">
+          <p className="rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2 text-[11px] leading-snug text-warn-ink">
             <strong>
               {alimentanVacias} {alimentanVacias === 1 ? "reunión alimenta" : "reuniones alimentan"}
             </strong>{" "}
             {esteDocumento} sin transcripción ni resumen. El documento se va a escribir sobre ese
             hueco — si tienes las notas, pégalas en <em>Fuentes manuales</em>.
           </p>
+        )}
+        {/* Lo que sugiere Nexus (etapa 7, solo los seis documentos): arriba y una sola vez, con las piezas del
+            sistema. Se calcula al leer: no entra al documento hasta que alguien toca «Usar». */}
+        {sugeridas.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <FranjaDeSugerencias
+              acciones={
+                !readOnly && sugeridas.length > 1 ? (
+                  <BotonBlanco
+                    onClick={() => void usarSugeridas(sugeridas.map((s) => s.sessionId), "todas")}
+                    disabled={decidiendo !== null}
+                  >
+                    Usar todas
+                  </BotonBlanco>
+                ) : undefined
+              }
+            >
+              Nexus sugiere {sugeridas.length} {sugeridas.length === 1 ? "reunión" : "reuniones"} para {docConContexto?.elDocumento ?? esteDocumento}. La IA
+              no las lee enteras hasta que las uses.
+            </FranjaDeSugerencias>
+            <ul className="flex flex-col gap-1.5">
+              {sugeridas.map((s) => (
+                <FilaSugerida
+                  key={s.sessionId}
+                  origen={<span className="min-w-0 truncate" title={s.motivo}>{s.motivo}</span>}
+                  acciones={
+                    readOnly ? undefined : (
+                      <>
+                        <BotonTexto
+                          onClick={() => void descartarSugerida(s.sessionId)}
+                          disabled={decidiendo !== null}
+                          title="Por ahora no la sugiere más para este documento"
+                        >
+                          Descartar
+                        </BotonTexto>
+                        <BotonUsar
+                          onClick={() => void usarSugeridas([s.sessionId], s.sessionId)}
+                          disabled={decidiendo !== null}
+                          title={`La IA la lee al escribir ${esteDocumento} (entera si está entre las ${MAX_ELEGIDAS_ENTERAS} elegidas más recientes)`}
+                        />
+                      </>
+                    )
+                  }
+                >
+                  <span className="font-medium">{s.title || "Sin título"}</span>
+                  <span className="text-xs text-fg-muted">
+                    {" "}
+                    · {datosDeLaReunion(s.date, s.alsoIn)}
+                    {s.sinContenido ? " · sin transcripción" : ""}
+                  </span>
+                </FilaSugerida>
+              ))}
+            </ul>
+          </div>
         )}
         {/* La lista de reuniones de todo «Contexto adicional» (2026-10-09): una tarjeta, casillas para
             elegir varias, la X al pasar el mouse, deshacer con Ctrl+Z y las excluidas plegadas. Los
@@ -658,7 +810,8 @@ export default function SessionSelectionReview({
               title: insignia?.detalle,
             };
           })}
-          excluidas={excluded.map((s) => ({
+          /* En el cronograma y en los seis documentos no hay excluidas: sacar es dejar de elegir. */
+          excluidas={soloElegidas ? [] : excluded.map((s) => ({
             id: s.sessionId,
             titulo: s.title || "Sin título",
             datos: datosDeLaReunion(s.date, s.alsoIn),
@@ -672,29 +825,23 @@ export default function SessionSelectionReview({
               ? `No se pudo cargar la lista de reuniones ${delDocumento}: recarga la página. Lo que elegiste sigue elegido.`
               : esCronograma
                 ? "Todavía no elegiste reuniones para el cronograma. Búscalas en tu calendario o entre las del proyecto."
-                : esSugerido
-                  ? "Todavía no hay reuniones con el cliente en este proyecto. Agrégalas con “Buscar más sesiones”."
-                  : `Ninguna sesión alimenta ${esteDocumento}. Agrégala con “Buscar más sesiones”.`
+                : soloElegidas
+                  ? "Sin reuniones elegidas: la IA no lee ninguna reunión, solo la memoria del proyecto. Elige las que quieras que lea enteras."
+                  : `Ninguna reunión alimenta ${esteDocumento}. Búscala con «Buscar una reunión de Meet».`
           }
-          etiquetaQuitar={(titulo) => (esCronograma ? `Sacar «${titulo}» del cronograma` : `Excluir «${titulo}» ${delDocumento}`)}
+          etiquetaQuitar={(titulo) =>
+            esCronograma || soloElegidas ? `Sacar «${titulo}» ${delDocumento}` : `Excluir «${titulo}» ${delDocumento}`
+          }
           tituloQuitar={
-            esCronograma
-              ? "Sacar del cronograma (sigue siendo reunión del proyecto)"
+            esCronograma || soloElegidas
+              ? `Sacar ${delDocumento} (sigue siendo reunión del proyecto)`
               : `Excluir ${delDocumento} (no la desvincula del proyecto)`
           }
           cargando={loading}
         />
-        {!readOnly && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="mt-2 w-full inline-flex items-center justify-center gap-1 text-[11px] font-medium text-brand hover:text-brand-dark border border-dashed border-line rounded-lg px-2 py-1.5 transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" /></svg>
-            {esCronograma ? "Buscar sesiones" : "Buscar más sesiones"}
-          </button>
-        )}
+        {!readOnly && <EnlaceDeContexto onClick={() => setShowModal(true)}>Buscar una reunión de Meet</EnlaceDeContexto>}
         {searchModal}
-      </>
+      </div>
     );
   }
 

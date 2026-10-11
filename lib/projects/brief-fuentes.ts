@@ -36,6 +36,9 @@ export const MAX_CHARS_POR_BLOQUE = 4000;
  */
 export const MAX_CHARS_HANDOFF = 9000;
 
+/** La memoria de la cuenta tiene el suyo: ya viene recortada a su tope (lib/memoria, 6.000). */
+export const MAX_CHARS_MEMORIA = 6000;
+
 export interface ContextoDeBrief {
   serialized: string;
   sources: Map<string, BriefSource>;
@@ -67,8 +70,19 @@ export interface DesviacionParaBrief {
 export interface CoberturaDeMaterial {
   /** Reuniones del proyecto que ya ocurrieron. */
   ocurridas: number;
-  /** De ésas, cuántas no dejaron NI transcripción NI minuta. */
+  /** De ésas, cuántas no dejaron NI minuta NI resumen de la reunión. */
   sinRegistro: number;
+}
+
+/** Una solicitud fuera de alcance del proyecto (2026-10-07): el resumen las nombra con su estado. */
+export interface SolicitudParaBrief {
+  pedido: string;
+  /** El estado en palabras («Por revisar», «Confirmada», «Cotizada»…). */
+  estado: string;
+  quienLoPidio: string | null;
+  monto: string | null;
+  nota: string | null;
+  at: Date;
 }
 
 export interface DatosDeBrief {
@@ -94,8 +108,15 @@ export interface DatosDeBrief {
    * lo dice y el bloque lo repite adentro del texto.
    */
   historiaDelCliente: string | null;
+  /**
+   * LO QUE NEXUS YA SABE DE LA CUENTA (lib/memoria, etapa 3, alcance interno): la ficha con lo propuesto y su fuente,
+   * los procesos, la auditoría del portal y lo aprendido en la preventa. Opcional: sin ella, el contexto no cambia.
+   */
+  memoriaDeLaCuenta?: string | null;
   sesiones: SesionParaBrief[];
   desviaciones: DesviacionParaBrief[];
+  /** Lo que el cliente pidió fuera de lo vendido, sin lo descartado ni lo que ya estaba incluido. */
+  solicitudes?: SolicitudParaBrief[];
   cobertura: CoberturaDeMaterial;
 }
 
@@ -189,10 +210,42 @@ export function armarContextoDeBrief(d: DatosDeBrief): ContextoDeBrief {
     );
   }
 
+  /* LO QUE NEXUS YA SABE DE LA CUENTA (2026-10-10). También es trasfondo: la ficha y los procesos son de la cuenta, no
+     de este proyecto, y lo propuesto no está confirmado (el bloque lo dice adentro, en su rótulo). */
+  if (d.memoriaDeLaCuenta) {
+    agregar(
+      { kind: "memoria", id: "cuenta", label: "Lo que Nexus ya sabe de la cuenta", date: null },
+      d.memoriaDeLaCuenta,
+      MAX_CHARS_MEMORIA,
+    );
+  }
+
   for (const s of d.desviaciones) {
     agregar(
       { kind: "desviacion", id: s.id, label: `${s.kind} · ${s.title}`, date: s.lastDetectedAt },
       [s.title, s.detail ?? ""].filter(Boolean).join("\n"),
+    );
+  }
+
+  /* LAS SOLICITUDES FUERA DE ALCANCE (2026-10-07, Elías: «si hay solicitudes de este tipo, deben
+     aparecer en el resumen del servicio»). Un solo bloque con todas, y el pedido de nombrarlas va
+     ADENTRO: el prompt del agente vive en la base y no se re-siembra por esto. */
+  const solicitudes = d.solicitudes ?? [];
+  if (solicitudes.length) {
+    const ultima = solicitudes.reduce((a, s) => (s.at > a ? s.at : a), solicitudes[0].at);
+    agregar(
+      { kind: "solicitudes", id: "fuera-de-alcance", label: "Solicitudes fuera de alcance", date: ultima },
+      "Lo que el cliente pidió y NO está en lo vendido. Nómbralas en el resumen con su estado: el equipo necesita verlas ahí. " +
+        "«Por revisar» = todavía nadie confirmó que esté fuera de lo vendido.\n" +
+        solicitudes
+          .map(
+            (s) =>
+              `- ${s.pedido} — ${s.estado}` +
+              `${s.quienLoPidio ? ` — lo pidió: ${s.quienLoPidio}` : ""}` +
+              `${s.monto ? ` — monto: ${s.monto}` : ""}` +
+              `${s.nota ? ` — seguimiento: ${s.nota}` : ""}`,
+          )
+          .join("\n"),
     );
   }
 
@@ -229,7 +282,7 @@ export function armarContextoDeBrief(d: DatosDeBrief): ContextoDeBrief {
     agregar(
       { kind: "cobertura", id: "material", label: "Cobertura de registro", date: null },
       `De las ${d.cobertura.ocurridas} reunión(es) de este proyecto que ya ocurrieron, ` +
-        `${d.cobertura.sinRegistro} no dejaron transcripción ni minuta. No sabemos qué se habló ` +
+        `${d.cobertura.sinRegistro} no dejaron minuta ni resumen. No sabemos qué se habló ` +
         `ahí: no supongas su contenido. Este conteo lo mide Nexus sobre el proyecto completo, no ` +
         `sobre las reuniones que citás arriba.`,
     );

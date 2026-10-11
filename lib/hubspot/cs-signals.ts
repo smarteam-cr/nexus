@@ -145,7 +145,7 @@ export async function computeClientSignals(clientId: string): Promise<ClientSign
   // registro de la empresa en HubSpot cuenta cosas que no pasan por las reuniones de Nexus.
   let engagementItems: ItemDeActividad[] = [];
   try {
-    const items = (await fetchCompanyTimelineItems(hs, client.hubspotCompanyId)).filter(
+    const items = (await fetchCompanyTimelineItems(hs, client.hubspotCompanyId, { grabaciones: false })).filter(
       (i) => i.ts <= now,
     );
     engagementItems = items.map((i) => ({ type: i.type, title: i.title, date: i.date, ts: i.ts, resumen: i.body.slice(0, 280) }));

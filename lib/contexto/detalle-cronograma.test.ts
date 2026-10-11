@@ -465,13 +465,56 @@ describe("⛔ analyze: PRIORIDAD DEL CANVAS, trazabilidad y frontera del detalle
   const ruta = fs.readFileSync(path.join(process.cwd(), "app/api/clients/[id]/analyze/route.ts"), "utf8").replace(/\r\n/g, "\n");
   const codigo = ruta.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
 
-  it("⭐ PRIORIDAD DEL CANVAS no va al detalle (su mensaje no trae ningún «CANVAS DEL PROYECTO»)", () => {
-    /* Colgada, la orden «prioriza SIEMPRE el canvas» le restaba peso a las reuniones elegidas, que
-       son lo único del proyecto que el detalle sí lee. La edición que la pone en rojo: sacar la
-       condición. */
-    const i = codigo.indexOf("PRIORIDAD DEL CANVAS");
-    expect(i, "se movió el ancla: revisa esta guarda").toBeGreaterThan(0);
-    expect(codigo.slice(Math.max(0, i - 300), i)).toContain("if (!isTimelineDetailAgent)");
+  it("⭐ no existe la orden PRIORIDAD DEL CANVAS (no hay canvas que priorizar)", () => {
+    /* ⚠ INVERTIDA (2026-10-09), con esta razón: la orden ya no iba al detalle, y desde la Etapa 0 de
+       la memoria no va a ningún agente — no hay canvas que priorizar (0 de 168 clientes con canvas de
+       empresa, 0 cards en el canvas del proyecto). Colgada, le restaba peso a las reuniones y a la
+       ficha confirmada. La edición que la pone en rojo: devolver la orden o el bloque vacío. */
+    expect(codigo, "volvió la orden de priorizar un canvas que no existe").not.toContain("PRIORIDAD DEL CANVAS");
+    expect(codigo, "volvió el bloque «CANVAS DEL PROYECTO»").not.toContain("CANVAS DEL PROYECTO");
+  });
+
+  it("⭐ el mensaje base lleva la memoria de la cuenta SIN LO INTERNO, nunca el canvas de empresa", () => {
+    /* El handoff escribe en una sola llamada secciones que terminan en el kickoff, el diagnóstico, la
+       entrega y el cuestionario previo, que ve el cliente: desde la etapa 3 de la memoria lee
+       `memoriaDeLaCuenta` con su lector («handoff» = alcance `sin-lo-interno`, sin lo que él mismo
+       propuso; lib/memoria/consumidores.ts). La edición que la pone en rojo: leer la ficha por su
+       cuenta (con lo interno), pedir la memoria con otro lector, o volver a leer `client.canvas`. */
+    const i = codigo.indexOf("const memoriaDelHandoff");
+    expect(i, "desapareció la memoria del mensaje base").toBeGreaterThan(0);
+    const def = codigo.slice(i, i + 300);
+    expect(def).toContain("memoriaDeLaCuenta(");
+    expect(def, "el handoff tiene que leer la memoria con SU lector (sin lo interno)").toContain('lector: "handoff"');
+    expect(codigo, "el handoff volvió a leer la ficha por su cuenta").not.toContain("fichaParaPrompt(");
+    expect(codigo, "volvió el canvas de empresa al prompt").not.toContain("client.canvas");
+    const base = codigo.slice(codigo.indexOf("const baseUserMessage"));
+    expect(base.slice(0, 1200), "la memoria no entra al mensaje base").toContain("${memoriaDelHandoff}");
+  });
+
+  it("⭐ el kickoff, el detalle y la planificación legacy no arman lo que después tiran (§3b y §4)", () => {
+    /* Su mensaje se reemplaza entero: pagar HubSpot, reuniones, base de conocimiento y documentos para
+       tirarlos era gasto puro (18 corridas del kickoff y 23 del detalle en 60 días). La edición que la
+       pone en rojo: sacar la condición de alguno de los bloques, o achicar el conjunto que la apaga. */
+    const i = codigo.indexOf("const armaElMensajeBase");
+    expect(i, "desapareció la bandera del mensaje base").toBeGreaterThan(0);
+    const def = codigo.slice(i, i + 200);
+    for (const quien of ["isKickoffAgent", "isTimelineDetailAgent", "isPlanificacionGroupLegacy"]) {
+      expect(def, `${quien} dejó de apagar el mensaje base`).toContain(quien);
+    }
+    const hubspot = codigo.indexOf('await import("@/lib/hubspot/client")');
+    expect(codigo.slice(hubspot - 120, hubspot), "§3b (HubSpot) dejó de depender de la bandera").toContain(
+      "if (armaElMensajeBase) try {",
+    );
+    const sesiones = codigo.indexOf("let matchingSessions: RawTranscript[] = [];");
+    expect(codigo.slice(sesiones - 80, sesiones), "§4 (reuniones) dejó de depender de la bandera").toContain(
+      "if (armaElMensajeBase) try {",
+    );
+    const conocimiento = codigo.indexOf('let knowledgeBaseContent = "";');
+    expect(codigo.slice(conocimiento, conocimiento + 120), "la base de conocimiento dejó de depender de la bandera").toContain(
+      "if (armaElMensajeBase) try {",
+    );
+    const docs = codigo.indexOf("prisma.clientDocument.findMany(");
+    expect(codigo.slice(docs - 80, docs), "los documentos dejaron de depender de la bandera").toContain("armaElMensajeBase");
   });
 
   it("⭐ la corrida del detalle registra las reuniones que leyó — y el anclaje del handoff no las usa", () => {

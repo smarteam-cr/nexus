@@ -15,9 +15,23 @@ import { loadPortfolio, type PortfolioRow } from "@/lib/portfolio/load";
 import { serializeAlert, type CsAlertRow } from "@/lib/cs/load-panel";
 import { resolvePartnerState, type PartnerState } from "@/lib/cs/partner-state";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
-import { cargarCuentas, hoyEnCostaRica, ultimoContactoDeUnCliente } from "./cartera";
-import { alertaDeLaCuenta, motivosDeLaCuenta, type CuentaDeCartera, type Motivo } from "./cartera-reglas";
+import { alertasCerradas, cargarCuentas, hoyEnCostaRica, ultimoContactoDeUnCliente, ultimoUsoConocido } from "./cartera";
+import {
+  alertaDeLaCuenta,
+  motivosDeLaCuenta,
+  saludDeLaCuenta,
+  type AlertaCerrada,
+  type CuentaDeCartera,
+  type Motivo,
+  type SaludConPorque,
+} from "./cartera-reglas";
 import { estadoDeLaCuenta, type Lectura } from "./ficha-reglas";
+import { clasificarCuenta, type ClasificacionDeLaCuenta } from "./clasificacion";
+import { leerClasificaciones } from "./clasificacion-server";
+import { leerAjustes } from "./ajustes-de-salud-server";
+import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
+import { camposPropuestos, leerFicha } from "@/lib/clients/ficha";
+import { propuestaDeEspera, sugerirEspera, SIN_AJUSTES, type PropuestaDeEspera } from "./ajustes-de-salud";
 import { leerPartner } from "./lectura-partner";
 import { leerResultadosDelHandoff, porValidar, sinConfirmar, sinDato } from "@/lib/handoff/resultados-medibles";
 import type { SemanaDeUso } from "./adopcion";
@@ -118,6 +132,35 @@ export interface CsAccountData {
   cuenta: CuentaDeCartera;
   motivos: Motivo[];
   estado: Lectura[];
+  /** El color de la cuenta y su porqué: el MISMO que la muestra en el índice. */
+  salud: SaludConPorque;
+  /** Sus alertas cerradas de los últimos 30 días (resueltas o descartadas), para consultarlas. */
+  alertasCerradas: AlertaCerrada[];
+  /** Tipo de relación, potencial y momento: lo confirmado y lo que propone Nexus. null = no se muestra (CSE). */
+  clasificacion: ClasificacionDeLaCuenta | null;
+  /** false = el SQL de la clasificación todavía no corrió: se ven las propuestas, no se puede confirmar. */
+  clasificacionLista: boolean;
+  /** false = el SQL de las correcciones del color todavía no corrió: se ve el color de Nexus y no se corrige. */
+  ajustesListos: boolean;
+  /** Nexus propone «en espera del cliente» (un proyecto dice que el freno es del cliente). null = nada que proponer. */
+  esperaPropuesta: PropuestaDeEspera | null;
+  /**
+   * Lo que persigue la EMPRESA (2026-10-09, entrega 6): los resultados, los retos y el dolor principal confirmados
+   * en Información del cliente (los que también viven en la empresa de HubSpot). null = la ficha no tiene nada.
+   */
+  empresa: {
+    resultados: string;
+    retos: string;
+    dolor: string;
+    confirmadaAt: string | null;
+    confirmadaPor: string | null;
+    /** Hay una propuesta sin revisar en Información del cliente. */
+    hayPropuesta: boolean;
+  } | null;
+  /** A quién se le puede pasar la cuenta: el equipo activo (sin las cuentas de prueba). */
+  equipoParaPase: Array<{ email: string; name: string }>;
+  /** Puede pasar la cuenta (`proyectos.reasignarEncargado`). Lo pone la página. */
+  puedeReasignar?: boolean;
   /** Las personas del cliente en HubSpot (copia de señales). */
   contactos: Array<{ nombre: string; cargo: string | null; email: string | null; ultimoContacto: string | null }>;
   resultados: Array<{
@@ -151,7 +194,7 @@ export async function loadCsAccount(
 ): Promise<CsAccountData | null> {
   const client = await prisma.client.findFirst({
     where: { id: clientId, ...(clientWhere ?? {}) },
-    select: { id: true, name: true, company: true },
+    select: { id: true, name: true, company: true, ficha: true },
   });
   if (!client) return null;
 
@@ -248,7 +291,8 @@ export async function loadCsAccount(
   // ya están cargadas arriba y se leen con la misma regla del índice: con una lista vacía, la ficha
   // decía «Ninguna alerta abierta» de una cuenta que sí las tenía.
   const hoy = hoyEnCostaRica();
-  const [armada] = await cargarCuentas(clientWhere, { clientIds: [clientId], filas: projects }).catch(() => []);
+  // `incluirSinServicio`: una cuenta sin nada activo también se arma, para clasificarla.
+  const [armada] = await cargarCuentas(clientWhere, { clientIds: [clientId], filas: projects, incluirSinServicio: true }).catch(() => []);
   /* El último contacto de la de respaldo sale de la MISMA regla que el índice (reuniones con el
      cliente o HubSpot). Con solo HubSpot, una cuenta fuera de la cartera con una reunión la semana
      pasada decía «Sin contacto registrado» (D16). Si la lectura falla, queda HubSpot. */
@@ -256,18 +300,31 @@ export async function loadCsAccount(
   const ultimoContactoDeRespaldo = armada
     ? null
     : await ultimoContactoDeUnCliente(clientId, ultimoHubspot).catch(() => ultimoHubspot?.toISOString() ?? null);
+  const lecturaDeRespaldo = !armada && includePartner && partner ? leerPartner(partner.properties) : null;
+  // Sin puntaje hoy: el último que dio HubSpot, igual que en el índice (`cargarCuentas`).
+  const usoAnteriorDeRespaldo =
+    partner && lecturaDeRespaldo?.uso === null
+      ? ((await ultimoUsoConocido([partner.hubspotPartnerClientId]).catch(() => null))?.get(partner.hubspotPartnerClientId) ?? null)
+      : null;
+  // El color corregido a mano y el «en espera»: la cuenta armada ya los trae; la de respaldo los lee acá.
+  const ajustesLeidos = await leerAjustes([clientId]).catch(() => ({ porCliente: new Map(), faltaLaTabla: true }));
   const cuenta: CuentaDeCartera = armada ?? {
     clientId,
     nombre: client.company || client.name,
-    partner: includePartner && partner ? leerPartner(partner.properties) : null,
+    partner: lecturaDeRespaldo,
+    usoAnterior: usoAnteriorDeRespaldo,
     proyectos: [],
     ultimoContacto: ultimoContactoDeRespaldo,
     ticketsAbiertos: csSignals?.ticketsSupported ? csSignals.openTicketCount : null,
     alertas: alerts.map(alertaDeLaCuenta),
     facturacion: null,
     licenciasManuales: [],
+    ajustes: ajustesLeidos.porCliente.get(clientId) ?? null,
   };
-  if (!includePartner) cuenta.partner = null;
+  if (!includePartner) {
+    cuenta.partner = null;
+    cuenta.usoAnterior = null;
+  }
   const engagement = (csSignals?.engagement ?? null) as { contactos?: unknown } | null;
   const contactos = asArray<{ nombre?: string; cargo?: string | null; email?: string | null; ultimoContacto?: string | null }>(engagement?.contactos).map((c) => ({
     nombre: c.nombre ?? "Sin nombre",
@@ -362,6 +419,31 @@ export async function loadCsAccount(
     cuenta,
     motivos: motivosDeLaCuenta(cuenta, hoy),
     estado: estadoDeLaCuenta(cuenta, hoy),
+    salud: saludDeLaCuenta(cuenta, hoy),
+    clasificacion: clasificarCuenta(cuenta, hoy),
+    clasificacionLista: !(await leerClasificaciones([clientId]).catch(() => ({ faltaLaTabla: true }))).faltaLaTabla,
+    ajustesListos: !ajustesLeidos.faltaLaTabla,
+    empresa: (() => {
+      const f = leerFicha(client.ficha);
+      const v = f.valores;
+      if (!v.resultadosQuePersigue.trim() && !v.retosEstrategicos.trim() && !v.dolorPrincipal.trim()) return null;
+      return {
+        resultados: v.resultadosQuePersigue,
+        retos: v.retosEstrategicos,
+        dolor: v.dolorPrincipal,
+        confirmadaAt: f.confirmadaAt,
+        confirmadaPor: f.confirmadaPor,
+        hayPropuesta: camposPropuestos(f).length > 0,
+      };
+    })(),
+    equipoParaPase: (
+      await prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { email: true, name: true }, orderBy: { name: "asc" } })
+    ).filter((m) => !esCuentaDePrueba(m.name)),
+    esperaPropuesta: (() => {
+      const propuesta = propuestaDeEspera(cuenta.proyectos);
+      return sugerirEspera(propuesta, cuenta.ajustes ?? SIN_AJUSTES) ? propuesta : null;
+    })(),
+    alertasCerradas: await alertasCerradas([clientId]).catch(() => []),
     contactos,
     resultados,
     historialDeUso: [...historial].reverse().map((h) => ({

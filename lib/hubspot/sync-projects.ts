@@ -8,6 +8,7 @@ import { cerradoPorEstadoCrudo, decidirCierre, estadoCrudoDeHubspot, resolvePipe
 import type { Client } from "@hubspot/api-client";
 import { detectarFusion, explicarFusion } from "@/lib/hubspot/empresa-fusionada";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
+import { encargadoDelProyecto } from "@/lib/hubspot/encargados";
 
 // ── Mapeo de nombre del proyecto → serviceType + projectType ─────────────────
 
@@ -1159,12 +1160,14 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
     const mapping = inferServiceMapping(servicioContratado);
 
     // ── Resolver CSE encargado (gobierna la VISIBILIDAD del cliente) ──────────
-    // La asignación del CSE vive en la propiedad custom "CSL Encargado" (csl_encargado),
-    // un campo OWNER (guarda un owner id). La visibilidad (lib/auth/access) matchea por
-    // EMAIL, así que resolvemos ESE owner → email/nombre y lo priorizamos sobre el owner
-    // estándar (hubspot_owner_id, que suele ser el SA/líder técnico cuando el servicio
-    // lleva integraciones, NO el CSE). Fallback al owner estándar si no hay csl_encargado.
-    const cslOwnerId = (props.csl_encargado ?? "").trim() || null;
+    // La asignación del CSE vive en la propiedad custom "CSE Encargado" (cse_encargado) y, si
+    // está vacía, en "CSL Encargado" (csl_encargado), que es donde vivía hasta el 2026-10-09 y
+    // donde la tienen Desarrollo y Sitios web (ver lib/hubspot/encargados.ts). Son campos OWNER
+    // (guardan un owner id). La visibilidad (lib/auth/access) matchea por EMAIL, así que
+    // resolvemos ESE owner → email/nombre y lo priorizamos sobre el owner estándar
+    // (hubspot_owner_id, que suele ser el SA/líder técnico cuando el servicio lleva
+    // integraciones, NO el CSE). Fallback al owner estándar si no hay ninguno de los dos.
+    const cslOwnerId = encargadoDelProyecto(props);
     const stdOwnerId = (props.hubspot_owner_id ?? "").trim() || null;
     const [cslOwner, stdOwner] = await Promise.all([
       resolveOwner(hsClient, cslOwnerId),

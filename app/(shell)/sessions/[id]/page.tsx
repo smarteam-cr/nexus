@@ -1,35 +1,59 @@
-import { requireConsultantSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
+import { requireAccessToClient } from "@/lib/auth/access";
+import { requireInternalUser, ForbiddenError, UnauthorizedError, type AppUserWithTeamMember } from "@/lib/auth/supabase";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
-import {
-  categorizeSession,
-  buildInternalDomainsSet,
-  type CategorizeContext,
-} from "@/lib/sessions/categorize";
+import { duenoDeLaSesion } from "@/lib/sessions/project-sources";
+import { esquemaDesactualizado } from "@/lib/db/esquema";
+import { cargarTarjeta } from "@/lib/seguimiento/tarjeta-server";
+import { tarjetaTieneAlgo } from "@/lib/seguimiento/tarjeta";
+import LoQueDejoLaReunion from "@/components/seguimiento/LoQueDejoLaReunion";
+import LeerEstaReunion from "@/components/seguimiento/LeerEstaReunion";
+import { MIN_TRANSCRIPT_CHARS } from "@/lib/google/doc-parse";
+import { contextoDeTareas, tareasDisponible } from "@/lib/tareas/servidor";
+import { contarTareasDeLaReunion } from "@/lib/tareas/consultas";
 import SessionView, { type SessionViewData } from "./SessionView";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Vista unificada de UNA reunión: combina transcript + minuta + acciones +
+ * Vista unificada de UNA reunión: combina transcript + minuta + las tareas que dejó +
  * cards generadas + prep (si futura). Es el corazón del flujo del CSE.
+ *
+ * Desde el 2026-10-09 (memoria de la cuenta, etapa 1):
+ *   · el dueño de la reunión es `resolvedClientId` (el manual solo si no hay), sin recategorizar acá;
+ *   · con dueño, pide ACCESO a ese cliente: sin acceso, 404 (antes cualquiera del equipo leía cualquier transcripción);
+ *   · arriba de las pestañas va «Lo que dejó esta reunión» (lib/seguimiento), si la reunión tiene tarjeta; y «Leer esta
+ *     reunión» si todavía no tiene minuta (desde el 2026-10-10).
+ * Desde el 2026-10-10 (etapa 2): «N tareas» cuenta las tareas que dejó, de las que ve quien mira (`ActionItem` se retiró).
  */
+
+/** Cuántas tareas dejó la reunión, de las que ve quien mira. Sin las tablas de Tareas (o sin un SQL), 0: la página se ve igual. */
+async function tareasQueDejo(sessionId: string, user: AppUserWithTeamMember): Promise<number> {
+  if (!user.teamMember || !(await tareasDisponible())) return 0;
+  try {
+    return await contarTareasDeLaReunion(await contextoDeTareas(user), sessionId);
+  } catch (e) {
+    if (esquemaDesactualizado(e)) return 0;
+    throw e;
+  }
+}
 export default async function SessionPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  let user: AppUserWithTeamMember;
   try {
-    await requireConsultantSession();
+    ({ user } = await requireInternalUser());
   } catch {
     redirect("/");
   }
 
   const { id } = await params;
 
-  // 1. Cargar la sesión + minuta + acciones + asignaciones de proyecto (paralelo)
-  const [session, minute, actionItems, agentRuns, clients, categories, projectAssignments] =
+  // 1. Cargar la sesión + minuta + cuántas tareas dejó + asignaciones de proyecto (paralelo)
+  const [session, minute, tareasDeLaReunion, agentRuns, projectAssignments] =
     await Promise.all([
       prisma.firefliesSession.findUnique({
         where: { id },
@@ -45,6 +69,7 @@ export default async function SessionPage({
           source: true,
           googleDocId: true,
           organizerEmail: true,
+          resolvedClientId: true,
           manualClientId: true,
         },
       }),
@@ -64,20 +89,7 @@ export default async function SessionPage({
           updatedAt: true,
         },
       }),
-      prisma.actionItem.findMany({
-        where: { sessionId: id },
-        orderBy: [{ done: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
-        select: {
-          id: true,
-          text: true,
-          ownerEmail: true,
-          dueDate: true,
-          status: true,
-          done: true,
-          source: true,
-          createdAt: true,
-        },
-      }),
+      tareasQueDejo(id, user),
       // Cards generadas por agentes que usaron esta sesión como input
       prisma.agentRun.findMany({
         where: { sourceSessionIds: { has: id } },
@@ -96,12 +108,6 @@ export default async function SessionPage({
           },
         },
         orderBy: { createdAt: "desc" },
-      }),
-      prisma.client.findMany({
-        select: { id: true, name: true, company: true, emailDomains: true },
-      }),
-      prisma.sessionCategory.findMany({
-        select: { id: true, name: true, slug: true, domains: true, kind: true, color: true },
       }),
       // F3-C: asignaciones SessionProject para esta sesión
       prisma.sessionProject.findMany({
@@ -122,23 +128,26 @@ export default async function SessionPage({
 
   if (!session) notFound();
 
-  // 2. Resolver cliente matched (vía categorize cascade)
-  const ctx: CategorizeContext = {
-    clients,
-    categories,
-    hubspotCompaniesByDomain: new Map(),
-    internalDomains: buildInternalDomainsSet(categories),
-  };
-  const group = categorizeSession(
-    {
-      participants: session.participants,
-      manualClientId: session.manualClientId,
-      title: session.title,
-    },
-    ctx,
-  );
-  const matchedClient =
-    group.kind === "client" ? clients.find((c) => c.id === group.id) ?? null : null;
+  // 2. El dueño de la reunión: `resolvedClientId` (el manual solo si no hay). Con dueño, hace falta acceso a ese
+  //    cliente; sin acceso, la reunión no existe para quien mira.
+  const duenoId = duenoDeLaSesion(session);
+  if (duenoId) {
+    try {
+      await requireAccessToClient(duenoId);
+    } catch (e) {
+      if (e instanceof ForbiddenError || e instanceof UnauthorizedError) notFound();
+      throw e;
+    }
+  }
+  const matchedClient = duenoId
+    ? await prisma.client.findUnique({ where: { id: duenoId }, select: { id: true, name: true, company: true } })
+    : null;
+
+  // «Lo que dejó esta reunión». Si a la base le falta un SQL, la página se ve igual, sin la tarjeta.
+  const tarjeta = await cargarTarjeta(id, user).catch((e) => {
+    if (esquemaDesactualizado(e)) return null;
+    throw e;
+  });
 
   // 3. Cargar TeamMembers para selector de owner
   const teamMembers = await prisma.teamMember.findMany({
@@ -187,16 +196,7 @@ export default async function SessionPage({
           updatedAt: minute.updatedAt.toISOString(),
         }
       : null,
-    actionItems: actionItems.map((a) => ({
-      id: a.id,
-      text: a.text,
-      ownerEmail: a.ownerEmail,
-      dueDate: a.dueDate?.toISOString() ?? null,
-      status: a.status,
-      done: a.done,
-      source: a.source,
-      createdAt: a.createdAt.toISOString(),
-    })),
+    tareasDeLaReunion,
     cardsBySource: agentRuns
       .filter((r) => r.cards.length > 0)
       .map((r) => ({
@@ -229,7 +229,18 @@ export default async function SessionPage({
     })),
   };
 
-  return (
-    <SessionView data={data} />
-  );
+  // «Leer esta reunión»: una reunión con tarjeta (de un cliente o un prospecto, no de puertas adentro, y que quien mira
+  // puede ver), con transcripción y sin minuta. Es el camino de una persona cuando la cola no la leyó (el remedio de INV44).
+  const puedeLeer = !!tarjeta && !minute && (session.transcript?.trim().length ?? 0) >= MIN_TRANSCRIPT_CHARS;
+  const arriba =
+    tarjeta && tarjetaTieneAlgo(tarjeta) ? (
+      <>
+        <LoQueDejoLaReunion inicial={tarjeta} />
+        {puedeLeer && <LeerEstaReunion sessionId={session.id} />}
+      </>
+    ) : puedeLeer ? (
+      <LeerEstaReunion sessionId={session.id} />
+    ) : undefined;
+
+  return <SessionView data={data} tarjeta={arriba} />;
 }

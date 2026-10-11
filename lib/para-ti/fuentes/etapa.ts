@@ -1,7 +1,8 @@
 /**
  * lib/para-ti/fuentes/etapa.ts — la etapa que una reunión sugiere mover en HubSpot, en los proyectos que llevas
  * (2026-10-07). La regla es la de la ficha (`sugerenciaVigente`): si alguien ya movió la tarjeta en HubSpot, la
- * pregunta desaparece sola. Solo para quien puede responderla (`proyectos.cambiarEstadoHubspot`): al resto no le
+ * pregunta desaparece sola. Desde el 2026-10-09 también deja de pedirse a los 30 días (lib/lo-propuesto): la ficha la
+ * sigue mostrando. Solo para quien puede responderla (`proyectos.cambiarEstadoHubspot`): al resto no le
  * sirve de nada saber que hay una pregunta que no puede contestar.
  */
 import "server-only";
@@ -9,6 +10,7 @@ import { prisma } from "@/lib/db/prisma";
 import { urlDeProyecto } from "@/lib/agents/run-url";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { sugerenciaVigente } from "@/lib/projects/etapa-sugerida";
+import { vencioSinRevisar } from "@/lib/lo-propuesto/ciclo";
 import { haceCuanto } from "../armar";
 import type { Fuente } from "../fuente";
 import type { Pendiente } from "../tipos";
@@ -39,7 +41,7 @@ export const ETAPA_SUGERIDA: Fuente = {
         motivo: f.etapaPropuestaMotivo,
         at: f.etapaPropuestaAt,
       });
-      if (!s) return [];
+      if (!s || (s.at && vencioSinRevisar(s.at, c.hoyISO))) return [];
       const espera = haceCuanto(s.at, c.ahora);
       return [
         {

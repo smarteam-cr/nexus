@@ -16,7 +16,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { costoDeLlamada } from "./precios";
-import { contextoDeIA, type ContextoDeCorrida } from "./contexto-de-corrida";
+import { contextoDeIA, origenDeLaFila, type ContextoDeCorrida } from "./contexto-de-corrida";
 
 /** La forma de `response.usage` del SDK, leída a la defensiva: los campos de caché son opcionales. */
 export interface UsageCrudo {
@@ -81,7 +81,8 @@ export function registrarLlamada(datos: LlamadaMedida): void {
           clientId: ctx.clientId ?? null,
           projectId: ctx.projectId ?? null,
           triggeredByEmail: ctx.triggeredByEmail ?? null,
-          origen: ctx.origen ?? null,
+          // Con la reunión que la disparó, si la hay: «reunion:<sessionId> › <sitio>» (contexto-de-corrida.ts).
+          origen: origenDeLaFila(ctx),
         },
       })
       .catch((e) => {

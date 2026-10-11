@@ -46,16 +46,24 @@ const PANTALLAS = [
   "app/(shell)/customer-success/carga/persona/[id]/page.tsx",
   "app/(shell)/customer-success/carga/supuestos/page.tsx",
   "app/(shell)/customer-success/carga/datos/page.tsx",
-  // Rentabilidad (2026-10-06): el margen de cada cuenta con la planilla SUMADA. Decisión de Elías: la CSL y dirección.
-  "app/(shell)/customer-success/rentabilidad/page.tsx",
+  // Rentabilidad salió de esta lista el 2026-10-07: vuelve a ser solo de dirección (decisión de Elías). La vigila
+  // lib/rentabilidad/acceso.test.ts.
 ];
 const APIS = [
   "app/api/cs/account-brief/[clientId]/route.ts",
   "app/api/cs/alerts/route.ts",
   "app/api/cs/alerts/[alertId]/route.ts",
   "app/api/cs/carga/config/route.ts",
+  // La clasificación de las cuentas (2026-10-07): la confirma la CSL o dirección.
+  "app/api/cs/clasificacion/route.ts",
+  "app/api/cs/clasificacion/[clientId]/route.ts",
+  // Corregir el color, «en espera del cliente» y las vistas guardadas de la cartera (2026-10-09).
+  "app/api/cs/salud/[clientId]/route.ts",
+  "app/api/cs/vistas/route.ts",
+  "app/api/cs/vistas/[id]/route.ts",
 ];
 const AREA = [...PANTALLAS, ...APIS];
+const CUENTA = "app/(shell)/customer-success/[clientId]/page.tsx";
 
 /**
  * Lo que se quedó en `seeAllClients` A PROPÓSITO, cada uno con su motivo. Son barridos caros que
@@ -93,7 +101,9 @@ describe("el área es de la CSL y dirección, por rol", () => {
   it("las pantallas preguntan el rol ANTES de cargar nada", () => {
     for (const p of PANTALLAS) {
       const src = sinComentarios(p);
-      const gate = src.indexOf("if (!ctx || !esLiderDeCs(ctx.role)) redirect(");
+      /* La cuenta tiene una sola excepción (2026-10-07): el CSE de la cuenta entra a la pestaña Adopción. El gate
+         sigue antes de cargar, y el test de abajo verifica que la cuenta le llega vaciada. */
+      const gate = p === CUENTA ? src.indexOf("if (!lider && !suCse) redirect(") : src.indexOf("if (!ctx || !esLiderDeCs(ctx.role)) redirect(");
       expect(gate, `${p} dejó de pedir el rol`).toBeGreaterThan(0);
       const cargadores = ["cargarCarteraDeLaCsl(", "loadCsAccount(", "cargarCargaDelEquipo(", "cargarRentabilidad("].map((f) => src.indexOf(f)).filter((i) => i > 0);
       /* Sin esto la comparación de abajo no podía fallar: si se renombra el cargador, la lista
@@ -105,6 +115,19 @@ describe("el área es de la CSL y dirección, por rol", () => {
       const carga = Math.min(...cargadores);
       expect(gate, `${p} carga datos antes de mirar el rol`).toBeLessThan(carga);
     }
+  });
+
+  it("la única excepción: el CSE de la cuenta ve solo la Adopción, sin montos", () => {
+    /* Decisión de Elías (2026-10-07): los recordatorios de revisar la adopción le abren la pestaña al CSE de la
+       cuenta. Que no se vuelva una puerta a la ficha entera: sin rol, la cuenta pasa SIEMPRE por `soloLaAdopcion`. */
+    const src = sinComentarios(CUENTA);
+    expect(src).toContain("const lider = esLiderDeCs(ctx.role)");
+    expect(src).toContain("!lider && (await esCseDeLaCuenta(");
+    const vaciada = src.indexOf("soloLaAdopcion(data)");
+    const entera = src.indexOf("<AccountView data={data}");
+    expect(vaciada, "el CSE recibe la cuenta vaciada").toBeGreaterThan(0);
+    expect(src.slice(vaciada - 200, vaciada)).toContain("if (suCse)");
+    expect(entera, "la ficha entera sigue siendo de la CSL y dirección").toBeGreaterThan(vaciada);
   });
 
   it("⭐ la cuarta puerta: el atajo «Ver portal del cliente» de la ficha del cliente pide lo mismo que la página", () => {

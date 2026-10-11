@@ -1,7 +1,13 @@
 "use client";
 
+/**
+ * components/clients/DocumentUpload.tsx — Información del cliente › Documentos: los documentos de la
+ * EMPRESA (2026-10-07). Lista lo subido acá, lo subido en el «Contexto adicional» de cualquier pieza
+ * (preventa o proyecto) y lo que adjuntó el cliente en el cuestionario, cada uno con de dónde vino.
+ * Lo que se sube acá queda en el proyecto de estrategia (`projectId`), que es la casa de la empresa.
+ */
 import { useState, useEffect, useRef, useCallback } from "react";
-import { IconCheck } from "@/components/ui";
+import { Alert, IconCheck } from "@/components/ui";
 import { subirDirecto } from "@/lib/storage/subir-directo";
 
 interface ProjectDocument {
@@ -14,6 +20,9 @@ interface ProjectDocument {
   downloadUrl: string | null;
   hasContent: boolean;
   createdAt: string;
+  /** De dónde vino: «Subido en el contexto del cronograma», «Proyecto X», el cuestionario. */
+  deDonde: string | null;
+  borrable: boolean;
 }
 
 const FILE_ICONS: Record<string, string> = {
@@ -66,10 +75,15 @@ export default function DocumentUpload({ projectId }: { projectId: string }) {
       const res = await fetch(`/api/projects/${projectId}/documents`);
       const data = await res.json();
       setDocuments(data.documents ?? []);
-    } catch { /* ignore */ }
+    } catch {
+      /* la lista queda como estaba; el próximo intento dice lo que pase */
+    }
   }, [projectId]);
 
-  useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga la lista al montar; el setState llega después del fetch
+    fetchDocuments();
+  }, [fetchDocuments]);
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -111,11 +125,7 @@ export default function DocumentUpload({ projectId }: { projectId: string }) {
         setLinkUrl("");
         // El backend deduplica por URL: si ya existía, lo actualiza (re-lee
         // el contenido) en vez de duplicar. Avisamos cuál de los dos pasó.
-        setInfo(
-          data.updated
-            ? "Ese documento ya estaba agregado — se actualizó su contenido."
-            : "Documento agregado.",
-        );
+        setInfo(data.updated ? "Ese documento ya estaba agregado — se actualizó su contenido." : "Documento agregado.");
         await fetchDocuments();
       }
     } catch {
@@ -127,13 +137,20 @@ export default function DocumentUpload({ projectId }: { projectId: string }) {
 
   const handleDelete = async (docId: string) => {
     try {
-      await fetch(`/api/projects/${projectId}/documents`, {
+      const res = await fetch(`/api/projects/${projectId}/documents`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documentId: docId }),
       });
+      if (!res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(d.error ?? "No se pudo eliminar.");
+        return;
+      }
       setDocuments((prev) => prev.filter((d) => d.id !== docId));
-    } catch { /* ignore */ }
+    } catch {
+      setError("No se pudo eliminar: revisa la conexión.");
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -146,18 +163,27 @@ export default function DocumentUpload({ projectId }: { projectId: string }) {
     <div className="space-y-3">
       {/* Upload area */}
       <div
-        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className="flex flex-col items-center justify-center gap-2 px-4 py-6 border-2 border-dashed border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 cursor-pointer transition-colors"
+        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line px-4 py-6 transition-colors hover:border-fg-muted hover:bg-surface-hover"
       >
-        <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+        <svg className="h-6 w-6 text-fg-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+          />
         </svg>
-        <p className="text-xs text-gray-400">
-          {uploading ? uploadProgress : "Arrastra archivos o haz clic para subir"}
+        <p className="text-xs text-fg-muted">{uploading ? uploadProgress : "Arrastra archivos o haz clic para subir"}</p>
+        <p className="text-center text-[10px] text-fg-muted">
+          PDF, Excel, Word, CSV, imágenes · Max 10MB. Aquí también quedan los que subes en el «Contexto adicional» de la
+          preventa o de un proyecto.
         </p>
-        <p className="text-[10px] text-gray-300">PDF, Excel, Word, CSV, imágenes · Max 10MB</p>
         <input
           ref={fileInputRef}
           type="file"
@@ -174,32 +200,32 @@ export default function DocumentUpload({ projectId }: { projectId: string }) {
           type="url"
           value={linkUrl}
           onChange={(e) => setLinkUrl(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") handleAddLink(); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleAddLink();
+          }}
           disabled={addingLink}
           placeholder="Pegar enlace de Google (Docs/Slides/Sheets) o página web…"
-          className="flex-1 px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white text-gray-800 placeholder:text-gray-400 focus:border-gray-400 focus:ring-1 focus:ring-gray-300 disabled:bg-gray-50 disabled:cursor-not-allowed"
+          className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-xs text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
         />
         <button
           onClick={handleAddLink}
           disabled={addingLink || !linkUrl.trim()}
-          className="px-3 py-2 text-xs font-medium rounded-lg bg-gray-900 text-white hover:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex-shrink-0"
+          className="flex-shrink-0 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {addingLink ? "Leyendo…" : "Agregar"}
         </button>
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-600">&times;</button>
-        </div>
+        <Alert variant="danger" onDismiss={() => setError(null)}>
+          {error}
+        </Alert>
       )}
 
       {info && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs">
-          <span>{info}</span>
-          <button onClick={() => setInfo(null)} className="ml-auto text-amber-400 hover:text-amber-600">&times;</button>
-        </div>
+        <Alert variant="warning" onDismiss={() => setInfo(null)}>
+          {info}
+        </Alert>
       )}
 
       {/* Document list */}
@@ -208,49 +234,63 @@ export default function DocumentUpload({ projectId }: { projectId: string }) {
           {documents.map((doc) => (
             <div
               key={doc.id}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors group"
+              className="group flex items-center gap-3 rounded-xl bg-surface-muted px-3 py-2.5 transition-colors hover:bg-surface-hover"
             >
-              <span className="text-lg flex-shrink-0">
+              <span className="flex-shrink-0 text-lg">
                 {FILE_ICONS[doc.mimeType ?? ""] ?? (doc.type === "URL" ? "🔗" : "📎")}
               </span>
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0 flex-1">
                 {doc.downloadUrl ? (
                   <a
                     href={doc.downloadUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs font-medium text-gray-800 hover:text-brand truncate block"
+                    className="block truncate text-xs font-medium text-fg hover:text-brand"
                   >
                     {doc.fileName ?? doc.title}
                   </a>
                 ) : (
-                  <p className="text-xs font-medium text-gray-800 truncate">{doc.fileName ?? doc.title}</p>
+                  <p className="truncate text-xs font-medium text-fg">{doc.fileName ?? doc.title}</p>
                 )}
-                <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                <div className="flex flex-wrap items-center gap-x-2 text-[10px] text-fg-muted">
                   {/* Tipo de Google (docs por link) o tamaño (archivos subidos) */}
                   {doc.type === "URL" && GOOGLE_TYPE_LABEL[doc.mimeType ?? ""] ? (
-                    <span className="text-blue-500">{GOOGLE_TYPE_LABEL[doc.mimeType ?? ""]}</span>
+                    <span className="text-brand">{GOOGLE_TYPE_LABEL[doc.mimeType ?? ""]}</span>
                   ) : doc.type === "URL" ? (
-                    <span className="text-blue-500">Enlace</span>
+                    <span className="text-brand">Enlace</span>
                   ) : null}
                   {doc.fileSize && <span>{formatSize(doc.fileSize)}</span>}
                   {doc.hasContent ? (
-                    <span className="inline-flex items-center gap-1 text-green-500"><IconCheck className="w-3 h-3" />Texto extraído</span>
+                    <span className="inline-flex items-center gap-1 text-success-ink">
+                      <IconCheck className="h-3 w-3" />
+                      Texto extraído
+                    </span>
                   ) : doc.type === "URL" ? (
-                    <span className="text-amber-500">sin texto</span>
+                    <span className="text-warn-ink">sin texto</span>
                   ) : null}
                   <span>{new Date(doc.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</span>
+                  {doc.deDonde && <span>· {doc.deDonde}</span>}
                 </div>
               </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
-                className="p-1 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-                title="Eliminar"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
+              {doc.borrable && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(doc.id);
+                  }}
+                  className="rounded p-1 text-fg-muted opacity-0 transition-colors hover:bg-danger-surface hover:text-danger-ink group-hover:opacity-100"
+                  title="Eliminar"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
+              )}
             </div>
           ))}
         </div>

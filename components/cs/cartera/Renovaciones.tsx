@@ -16,7 +16,7 @@ import { Avatar, CajaDeTabla, Chip, EncabezadoDeTabla, GrupoDeTabla, Salud } fro
 
 type Ventana = "30" | "60" | "90";
 
-const COLUMNAS = "grid-cols-[minmax(0,1.1fr)_minmax(0,1.5fr)_92px_100px_112px_100px_minmax(0,1fr)_30px]";
+const COLUMNAS = "grid-cols-[minmax(0,1.1fr)_minmax(0,1.5fr)_92px_100px_112px_136px_minmax(0,1fr)_30px]";
 
 const TRAMOS: Array<{ desde: number; hasta: number; titulo: string }> = [
   { desde: 0, hasta: 30, titulo: "Próximos 30 días" },
@@ -114,7 +114,7 @@ export default function Renovaciones({ filas, hoy }: { filas: FilaDeRenovacion[]
                       >
                         {f.cambioEsperado === null ? "sin dato" : f.cambioEsperado === 0 ? "sin cambio" : fmtCambio(f.cambioEsperado, f.moneda)}
                       </span>
-                      <Salud salud={f.salud} />
+                      <Salud salud={f.salud} porque={f.porqueDeLaSalud} />
                       <span className="text-[13px] text-fg-secondary">{f.conversacion}</span>
                       <Avatar nombre={f.cse?.nombre ?? null} />
                     </Link>

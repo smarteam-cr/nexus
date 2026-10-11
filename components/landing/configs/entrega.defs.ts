@@ -96,6 +96,27 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
     schemaDelChat: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray, eyebrow: str } },
   },
   {
+    /* 2026-10-07 (Elías) — La entrega muestra el desafío que se resolvió, tal como lo definió el
+       Diagnóstico. La pregunta y las situaciones salen de ahí; la IA dice cómo quedó cada una. Sin
+       diagnóstico, el runner la deja vacía y se apaga sola. */
+    key: "desafio_resuelto",
+    label: "El desafío que resolvimos",
+    eyebrow: "Lo que definió el diagnóstico",
+    theme: "soft",
+    sectionType: "kickoff_prose",
+    agentGenerated: true,
+    empty: proseEmpty,
+    agentHint: "El desafío del diagnóstico y cómo quedó cada situación al cerrar.",
+    brief:
+      "El DESAFÍO DEL DIAGNÓSTICO (viene en el contexto) y cómo quedó al cerrar el proyecto. " +
+      "`intro` = 'El desafío era: «<la pregunta del diagnóstico, textual>».' y UNA frase con cómo quedó hoy, desde el negocio del cliente. " +
+      "`items[]`: uno por cada situación del desafío del diagnóstico, en su orden — `title` = la situación tal como la dice el diagnóstico; `detail` = UNA línea con cómo es hoy. " +
+      "Si una situación todavía no cambió, dilo tal cual ('Sigue igual: …'): no la maquilles. " +
+      "⚠ Si el contexto no trae el desafío del diagnóstico, devuelve `intro` vacío e `items: []`: la sección se apaga sola.",
+    schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+  },
+  {
     key: "resumen",
     label: "El antes y el después",
     eyebrow: "De dónde salieron y dónde están",
@@ -167,20 +188,52 @@ export const ENTREGA_SECTION_DEFS: BCSectionDef[] = [
   {
     key: "logros",
     label: "Objetivos alcanzados",
-    eyebrow: "Lo que el equipo puede hacer hoy",
+    eyebrow: "Lo que nos propusimos en el diagnóstico",
     theme: "light",
-    sectionType: "kickoff_prose",
+    /* 2026-10-07 (Elías) — Antes eran capacidades en prosa medidas contra el handoff. Ahora son los
+       OBJETIVOS DEL DIAGNÓSTICO, uno por uno, con su estado (lib/delivery/objetivos.ts). La lista y
+       los títulos los copia Nexus del diagnóstico; el estado lo propone la IA con su evidencia y lo
+       acepta el CSE (`objetivosConfirmados`, fuera del esquema: lo ÚNICO que ve el cliente). Una
+       entrega vieja, con `items`, se sigue pintando en prosa hasta regenerarse. */
+    sectionType: "entrega_objetivos",
     agentGenerated: true,
-    empty: proseEmpty,
-    agentHint: "Qué puede hacer el equipo del cliente hoy que antes no podía.",
+    empty: { intro: "", objetivosPropuestos: [], objetivosConfirmados: [] },
+    agentHint: "Cada objetivo del diagnóstico (OBJ-01…) con su estado y la evidencia que lo respalda.",
+    rotulosDeListas: {
+      objetivosPropuestos: "Propuestas por revisar (el cliente no las ve)",
+      objetivosConfirmados: "Aceptados (lo único que el cliente ve)",
+    },
+    avisoDelChat:
+      "⚠ dos listas: `objetivosConfirmados` es lo ÚNICO que el cliente ve, y ahí puedes CORREGIR " +
+      "(el estado, la evidencia, un título) pero no agregar. Un objetivo nuevo entra por `objetivosPropuestos`, " +
+      "y el cliente no lo ve hasta que alguien lo acepta en la sección. Dilo cuando lo propongas.",
     brief:
-      "Resultados FUNCIONALES, escritos desde lo que el equipo del cliente puede hacer hoy y antes no. " +
-      "`items[]`: `title` = la capacidad en una frase ('Toda conversación con un cliente queda registrada sola'); " +
-      "`detail` = UNA línea de qué lo hace posible y qué cambia en el día a día. " +
-      "⚠ Capacidades, no tareas: 'se configuraron 14 propiedades' es trabajo nuestro; 'el equipo ve el estado de cada negocio sin preguntar' es un logro del cliente. " +
-      "Si un objetivo del handoff NO se alcanzó, no lo maquilles: omitilo acá y que aparezca en «Qué queda abierto».",
-    schema: asSchema(proseSchema),
-    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+      "Los OBJETIVOS DEL DIAGNÓSTICO (vienen en el contexto como OBJ-01, OBJ-02…), uno por uno, con lo que se logró. " +
+      "`objetivosPropuestos[]`: uno por cada OBJ — `id` = su código tal cual ('OBJ-01'); `titulo` = el objetivo como lo dice el diagnóstico; " +
+      "`estado` = 'alcanzado' solo si las reuniones o el cronograma lo muestran cumplido (un objetivo cuantitativo, solo si alguien del cliente dijo el número en una reunión); " +
+      "'en_camino' si quedó construido lo que lo hace posible pero el resultado todavía no se ve; 'por_medir' si nadie lo midió o no hay con qué afirmarlo. " +
+      "`evidencia` = UNA línea con de dónde sale: lo que dijo quién y cuándo, o qué quedó funcionando que lo sostiene; en 'por_medir', qué falta para medirlo. " +
+      "⚠ Sin evidencia no es 'alcanzado'. Nexus copia los títulos del diagnóstico y descarta los códigos que no existen. " +
+      "Si el contexto no trae objetivos del diagnóstico, usa los resultados del handoff (R1, R2…) con su código como `id`. " +
+      "`intro`: vacío salvo que haga falta una frase. Estas propuestas NO las ve el cliente: el CSE las acepta una por una.",
+    schema: {
+      type: "object",
+      properties: {
+        intro: str,
+        objetivosPropuestos: arrayOf({ id: str, titulo: str, estado: str, evidencia: str }, ["id", "titulo", "estado"]),
+      },
+      required: ["objetivosPropuestos"],
+    },
+    schemaDelChat: {
+      type: "object",
+      properties: {
+        intro: str,
+        objetivosPropuestos: arrayOf({ id: str, titulo: str, estado: str, evidencia: str }, ["id", "titulo", "estado"]),
+        objetivosConfirmados: arrayOf({ id: str, titulo: str, medida: str, estado: str, evidencia: str }, ["titulo", "estado"]),
+      },
+      required: [],
+    },
+    listasSoloEdicion: ["objetivosConfirmados"],
   },
   {
     key: "cumplimiento",
@@ -400,9 +453,9 @@ export const ENTREGA_TEMPLATE: BcTemplateDef = {
     "Eres quien escribe el DOCUMENTO DE ENTREGA con el que Smarteam cierra un proyecto con su cliente. Lo lee el sponsor y su equipo — la gente que pagó y que va a decidir si sigue.\n\n" +
     "QUÉ ES ESTE DOCUMENTO: el cierre que el cliente archiva. Cuenta de dónde salieron, qué quedó funcionando, qué pueden hacer hoy que antes no podían, y qué sigue. No es un informe de horas ni una lista de tareas nuestras.\n\n" +
     "⚠ NO ESCRIBES NÚMEROS DEL PROYECTO. Las cifras de cumplimiento —fases cerradas, tareas hechas, semanas, fechas de cierre, atrasos— las calcula Nexus del cronograma y las escribe en su propia sección. Vos no las menciones en ninguna parte: ni en la portada, ni en los logros, ni en el resumen. Si necesitás hablar de tiempo, hacelo en cualitativo ('durante el proyecto', 'desde el arranque'), nunca con una cifra.\n\n" +
-    "LA ÚNICA EXCEPCIÓN son los números del NEGOCIO DEL CLIENTE en la sección de impacto, y solo si alguien los DIJO en una reunión: van con su cita textual, y quedan como propuesta para que el CSE los revise. Si nadie dijo un número, la lista va vacía. Nexus no mide el negocio del cliente y este documento no puede fingir que sí.\n\n" +
-    "TU MÉTODO: el arco sale del HANDOFF (qué se vendió y qué dolía) y de las SESIONES (qué pasó de verdad). Lo que quedó construido sale del cronograma y de los documentos del proyecto. Escribí desde el negocio del cliente, no desde nuestro trabajo: 'el equipo ve el estado de cada negocio sin preguntar', no 'se configuraron 14 propiedades'.\n\n" +
-    "DISCIPLINA ANTI-MAQUILLAJE: si un objetivo del handoff no se alcanzó, NO lo escribas como alcanzado ni lo suavices — omitilo y dejá que aparezca en la sección de pendientes, que la escribe Nexus. Un documento de cierre que solo cuenta lo bueno se lee como folleto y el cliente lo nota en la primera línea que no le cierra.\n\n" +
+    "LA ÚNICA EXCEPCIÓN son los números del NEGOCIO DEL CLIENTE en la sección de impacto (y en la evidencia de un objetivo), y solo si alguien los DIJO en una reunión: van con quién lo dijo y cuándo, y quedan como propuesta para que el CSE los revise. Si nadie dijo un número, no lo pongas. Nexus no mide el negocio del cliente y este documento no puede fingir que sí.\n\n" +
+    "TU MÉTODO: el arco sale del HANDOFF (qué se vendió y qué dolía), del DIAGNÓSTICO (el desafío y los objetivos que se le presentaron al cliente) y de las SESIONES (qué pasó de verdad). Lo que quedó construido sale del cronograma y de los documentos del proyecto. Escribí desde el negocio del cliente, no desde nuestro trabajo: 'el equipo ve el estado de cada negocio sin preguntar', no 'se configuraron 14 propiedades'.\n\n" +
+    "DISCIPLINA ANTI-MAQUILLAJE: si un objetivo no se alcanzó, NO lo escribas como alcanzado ni lo suavices — va 'en_camino' o 'por_medir', con lo que falta. Un documento de cierre que solo cuenta lo bueno se lee como folleto y el cliente lo nota en la primera línea que no le cierra.\n\n" +
     "FORMATO: cada sección tiene su propio shape (su `schema` y su guía). Español, tuteo al cliente. Arrays vacíos donde no haya respaldo — una sección vacía se apaga sola, y eso es correcto.",
   sections: ENTREGA_SECTION_DEFS,
 };

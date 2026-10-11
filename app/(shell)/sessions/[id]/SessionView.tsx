@@ -3,10 +3,11 @@
 /**
  * app/sessions/[id]/SessionView.tsx
  *
- * Vista cruda de una sesión (post F3-C). El análisis (minuta, acciones, cards,
- * participantes) ya NO vive acá — se movió al tab "Reuniones" del proyecto
- * asignado. Esta vista sirve para:
+ * Vista de una sesión. Sirve para:
  *
+ *   - Revisar «Lo que dejó esta reunión» (prop `tarjeta`, desde el 2026-10-09): la minuta, los pedidos fuera de
+ *     alcance, los campos de la ficha y tus tareas que propuso Nexus al leerla, en una sola revisión
+ *     (components/seguimiento/LoQueDejoLaReunion.tsx, lib/seguimiento). Va arriba de las pestañas.
  *   - Ver el transcript completo
  *   - Ver participantes / fecha / duración / Doc link
  *   - Confirmar/cambiar a qué proyecto(s) pertenece la sesión (selector N:N)
@@ -14,7 +15,7 @@
  * Si la sesión tiene un proyecto primario, un banner arriba linkea al tab
  * Reuniones del proyecto para acceso rápido.
  */
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { BackLink, IconCheck } from "@/components/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -47,16 +48,8 @@ export interface SessionViewData {
     reviewedByEmail: string | null;
     updatedAt: string;
   } | null;
-  actionItems: {
-    id: string;
-    text: string;
-    ownerEmail: string | null;
-    dueDate: string | null;
-    status: "PENDING" | "IN_PROGRESS" | "BLOCKED" | "DONE";
-    done: boolean;
-    source: string | null;
-    createdAt: string;
-  }[];
+  /** Cuántas tareas dejó la reunión, de las que ve quien mira (desde el 2026-10-10: `ActionItem` se retiró). */
+  tareasDeLaReunion: number;
   cardsBySource: {
     runId: string;
     agentName: string;
@@ -100,10 +93,10 @@ function formatDuration(mins: number) {
 
 type TabKey = "transcript" | "meta";
 
-export default function SessionView({ data }: { data: SessionViewData }) {
+export default function SessionView({ data, tarjeta }: { data: SessionViewData; tarjeta?: ReactNode }) {
   const [tab, setTab] = useState<TabKey>("transcript");
   const router = useRouter();
-  const { session, client, projectAssignments, availableProjects, minute, actionItems } = data;
+  const { session, client, projectAssignments, availableProjects, minute, tareasDeLaReunion } = data;
 
   const primary = projectAssignments.find((a) => a.isPrimary);
   const secondaries = projectAssignments.filter((a) => !a.isPrimary);
@@ -150,6 +143,9 @@ export default function SessionView({ data }: { data: SessionViewData }) {
           )}
         </div>
       </div>
+
+      {/* ── Lo que dejó esta reunión (lib/seguimiento) ────────────────────── */}
+      {tarjeta}
 
       {/* ── Banner: análisis vive en proyecto X ───────────────────────────── */}
       {primary && client && (
@@ -201,7 +197,7 @@ export default function SessionView({ data }: { data: SessionViewData }) {
             ⚠ Sin proyecto asignado
           </p>
           <p className="text-xs text-amber-400/80 mt-1">
-            Asigná esta sesión a un proyecto desde el tab "Meta" para que el análisis se genere ahí.
+            Asigna esta sesión a un proyecto desde la pestaña «Meta» para que el análisis se genere ahí.
           </p>
         </div>
       )}
@@ -225,7 +221,7 @@ export default function SessionView({ data }: { data: SessionViewData }) {
         {/* Resumen rápido de cuántas cosas viven en el proyecto, sin tabs */}
         <div className="ml-auto flex items-center gap-4 px-2 text-xs text-gray-500">
           {minute && <span>📝 minuta {minute.status.toLowerCase()}</span>}
-          {actionItems.length > 0 && <span className="inline-flex items-center gap-1"><IconCheck className="w-3 h-3" />{actionItems.length} acciones</span>}
+          {tareasDeLaReunion > 0 && <span className="inline-flex items-center gap-1"><IconCheck className="w-3 h-3" />{tareasDeLaReunion} {tareasDeLaReunion === 1 ? "tarea" : "tareas"}</span>}
         </div>
       </div>
 

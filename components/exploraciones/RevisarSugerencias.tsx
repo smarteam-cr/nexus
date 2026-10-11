@@ -18,6 +18,7 @@ import { NOMBRE_DEL_PASO, ORDEN_DE_PIEZAS, piezaDelDestino } from "./piezas";
 import { DeDondeSale, describirPropuesta, origenEnUnaLinea } from "./Propuestas";
 import { NivelChip } from "./QueVaPrimero";
 import Segmentos from "./Segmentos";
+import { definicionEnElMarco } from "@/lib/exploraciones/marco";
 
 type Filtro = "todo" | PasoDelLienzoUI;
 
@@ -28,7 +29,7 @@ interface Grupo {
 }
 
 export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }: { abierto: boolean; filtroInicial: Filtro; onCerrar: () => void }) {
-  const { revisables, escala, nombreDeNivel, cambiar, puedeEditar, guardando } = useLienzo();
+  const { revisables, escala, marco, nombreDeNivel, cambiar, puedeEditar, guardando } = useLienzo();
   const [filtro, setFiltro] = useState<Filtro>(filtroInicial);
   const [visto, setVisto] = useState({ abierto, filtroInicial });
   const [foco, setFoco] = useState(0);
@@ -56,7 +57,7 @@ export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }:
     let sub: string;
     switch (d.tipo) {
       case "casilla":
-        sub = definicionDe(d.clave).etiqueta;
+        sub = definicionEnElMarco(d.clave, marco).etiqueta;
         break;
       case "nivel":
       case "aExplorar":

@@ -38,7 +38,8 @@ export const PROJECT_PROPERTIES = [
   "hs_pipeline",
   "hs_pipeline_stage",    // D.2: etapa actual del pipeline de CS (ancla del cronograma vivo)
   "proyecto_interno",     // booleancheckbox: proyecto de Smarteam para Smarteam (ver lib/projects/kind.ts)
-  "csl_encargado",        // propiedad custom OWNER = CSE encargado (fuente de verdad de la asignación → visibilidad)
+  "cse_encargado",        // propiedad custom OWNER = CSE de la cuenta (2026-10-09: manda; ver lib/hubspot/encargados.ts)
+  "csl_encargado",        // propiedad custom OWNER = la CSL; antes del 2026-10-09 guardaba al CSE (lo lee si «CSE Encargado» está vacío)
   // CS360 — dashboard de la CSL (internal names confirmados por discover-partner-clients.ts):
   "hs_priority",          // low | medium | high
   "motivo_de_bloqueo",    // enum radio 7 valores ("Cliente pidió pausa", "Atraso por Smarteam", …)
@@ -63,7 +64,7 @@ export const GRUPOS_DE_PROPIEDAD: { titulo: string; props: readonly string[] }[]
   },
   {
     titulo: "Quién lo lleva",
-    props: ["hubspot_owner_id", "account_manager", "csl_encargado", "proyecto_interno"],
+    props: ["hubspot_owner_id", "account_manager", "cse_encargado", "csl_encargado", "proyecto_interno"],
   },
   {
     titulo: "Seguimiento (CS360)",

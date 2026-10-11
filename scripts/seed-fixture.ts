@@ -413,6 +413,53 @@ async function sembrarRoles() {
   console.log("✓ Roles: PERFIL + PROPUESTA (compartida con el CSE ficticio)");
 }
 
+/**
+ * Tareas internas (2026-10-09): un «Sprint planning» de Marketing de puertas adentro, el lunes de esta semana a las
+ * 9:30 CR, con notas de Gemini en el formato real («[Persona] Tema: qué hacer»). Sirve para probar «Leer una reunión»
+ * en local sin tocar producción: tres líneas que forman un proyecto («campaña de lanzamiento»), una con un cliente
+ * (FX Alfa), una que nombra a alguien de otro equipo (Vera, Ventas) y una sin dueño (va a «Por asignar»).
+ * No siembra tareas: las crea la lectura, que es lo que se prueba.
+ */
+async function sembrarReunionDeTareas() {
+  const MARKETING = EQUIPO[4]; // Mario Marketing Ficticio
+  const hoy = new Date();
+  const lunes = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate() - ((hoy.getUTCDay() + 6) % 7), 15, 30)); // 9:30 CR
+  const notas = [
+    "Resumen",
+    "Planificación ficticia de la semana de marketing: la campaña de lanzamiento de FX Beta y el reporte de FX Alfa.",
+    "",
+    "Decisiones",
+    "Acordada",
+    "La campaña de lanzamiento es la prioridad de la semana.",
+    "",
+    "Próximos pasos",
+    `[${MARKETING.name}] Copies lanzamiento: Escribir los copies de la campaña de lanzamiento de FX Beta.`,
+    `[${MARKETING.name}] Landing lanzamiento: Diseñar la landing de la campaña de lanzamiento.`,
+    `[${MARKETING.name}] Correos lanzamiento: Armar la secuencia de correos de la campaña de lanzamiento.`,
+    `[${MARKETING.name}] Reporte Alfa: Terminar el reporte mensual de FX Alfa Industrias para el viernes.`,
+    `[${SUPER.name}] Licencia de video: Consultar con Vera Ventas Ficticia el estado de la licencia de edición.`,
+    "[El equipo] Fotos del evento: Publicar las fotos del evento en LinkedIn.",
+    "",
+    "Detalles",
+    `Prioridad de la semana: ${MARKETING.name} y ${SUPER.name} acuerdan que la campaña de lanzamiento va primero (00:01:10).`,
+  ].join("\n");
+  await prisma.firefliesSession.create({
+    data: {
+      id: "fx-ses-sprint-marketing",
+      title: "FX Sprint planning de marketing (ficticia)",
+      date: lunes,
+      duration: 30,
+      participants: [MARKETING.email, SUPER.email],
+      summary: { overview: notas, action_items: [] },
+      transcript: `Transcripción ficticia del sprint planning de marketing. ${notas}`,
+      source: "google_meet",
+      organizerEmail: SUPER.email,
+      resolvedClientId: null, // sin dueño: interna, así cada línea sugiere su cliente (FX Alfa)
+    },
+  });
+  console.log("✓ Tareas: el sprint planning ficticio de Marketing (léelo en /tareas › Leer una reunión)");
+}
+
 async function main() {
   console.log("Sembrando el mundo ficticio fx-*…\n");
   await borrarMundoAnterior();
@@ -423,6 +470,7 @@ async function main() {
   await sembrarCronograma();
   await sembrarCobranza();
   await sembrarRoles();
+  await sembrarReunionDeTareas();
   console.log("\n✅ Fixture listo. Todo lleva prefijo fx- y es re-sembrable (idempotente).");
 }
 

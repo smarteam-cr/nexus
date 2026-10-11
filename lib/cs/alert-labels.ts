@@ -43,6 +43,7 @@ export const CATEGORY_LABEL: Record<string, string> = {
   LICENSE_UNUSED: "Licencias sin usar",
   PROJECT_BLOCKED: "Bloqueado en HubSpot",
   STAGE_STALLED: "Etapa estancada",
+  QUEJA: "Queja del cliente",
   OTHER: "Otro",
 };
 

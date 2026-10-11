@@ -3,6 +3,7 @@ import {
   leerPartner,
   licenciasSumadas,
   porcentajeDeTendencia,
+  relacionTerminada,
   textoPlano,
   usoBajo,
   usoCayendo,
@@ -151,6 +152,26 @@ describe("leerPartner", () => {
 
   it("las licencias se suman entre tipos", () => {
     expect(licenciasSumadas(l)).toEqual({ asignadas: 32, libres: 8, limite: 40 });
+  });
+});
+
+describe("⭐ la relación gestionada que terminó (Cicadex, 2026-10-07)", () => {
+  /* HubSpot solo da el uso de las cuentas gestionadas. Cuando termina la relación, el uso deja de
+     llegar y la fecha de fin es lo único que explica por qué. */
+  it("la fecha de fin se lee solo si la cuenta ya no está gestionada", () => {
+    expect(leerPartner({ hs_is_managed: "false", hs_managed_relationship_end_date: "2026-09-05T00:00:00Z" })!.relacionGestionadaTermino).toBe(
+      "2026-09-05",
+    );
+    expect(leerPartner({ hs_is_managed: "true", hs_managed_relationship_end_date: "2026-09-05T00:00:00Z" })!.relacionGestionadaTermino).toBeNull();
+    expect(leerPartner({ hs_is_managed: "false", hs_managed_relationship_end_date: "" })!.relacionGestionadaTermino).toBeNull();
+  });
+
+  it("solo cuenta como terminada si la fecha ya pasó", () => {
+    const l = leerPartner({ hs_is_managed: "false", hs_managed_relationship_end_date: "2026-09-05" })!;
+    expect(relacionTerminada(l, "2026-10-07")).toBe("2026-09-05");
+    expect(relacionTerminada(l, "2026-09-05")).toBe("2026-09-05");
+    expect(relacionTerminada(l, "2026-09-01")).toBeNull();
+    expect(relacionTerminada(leerPartner({ hs_is_managed: "false" })!, "2026-10-07")).toBeNull();
   });
 });
 

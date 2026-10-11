@@ -9,7 +9,8 @@
  *  · PROYECTOS: uno por fila, con su tipo debajo. Debajo del proyecto abierto cuelgan sus piezas
  *    (las pinta `PiezasDelRiel`, por portal, desde el panel del proyecto: es el que sabe cuáles
  *    tiene y en qué estado están).
- *  · LA CUENTA: «Información del cliente» y «Procesos».
+ *  · LA CUENTA: «Información del cliente», «Procesos» y «Fuera de alcance» (2026-10-07: las solicitudes
+ *    fuera de alcance de todos sus proyectos, con su seguimiento).
  *  · Al pie, «Traer proyectos de HubSpot».
  *
  * Copia medida por medida el riel de la preventa: filas de 14 px con un punto de 8 px, la pieza
@@ -19,6 +20,8 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import type { EstadoDePieza } from "@/components/canvas/SelectorDePiezas";
 import { IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+
+export type CuentaDelRiel = "info" | "procesos" | "solicitudes";
 
 export interface ProyectoDelRiel {
   id: string;
@@ -46,8 +49,8 @@ export default function RielDelCliente({
   /** El proyecto cuyas piezas se ven colgadas: el abierto, o el último que se abrió. */
   proyectoDelRiel: string | null;
   onElegirProyecto: (id: string) => void;
-  onElegirCuenta: (que: "info" | "procesos") => void;
-  cuentaActiva: "info" | "procesos" | null;
+  onElegirCuenta: (que: CuentaDelRiel) => void;
+  cuentaActiva: CuentaDelRiel | null;
   /** El contador de campos que propuso la IA en la ficha (`AvisoDeFicha`). */
   avisoDeLaFicha: ReactNode;
   /** Dónde el panel del proyecto pinta sus piezas. */
@@ -102,6 +105,7 @@ export default function RielDelCliente({
           extra={avisoDeLaFicha}
         />
         <FilaDeCuenta etiqueta="Procesos" activa={cuentaActiva === "procesos"} onClick={() => onElegirCuenta("procesos")} />
+        <FilaDeCuenta etiqueta="Fuera de alcance" activa={cuentaActiva === "solicitudes"} onClick={() => onElegirCuenta("solicitudes")} />
       </div>
 
       {traer.visible && (
@@ -154,6 +158,12 @@ export interface FilaDelRielDePiezas {
   aviso?: { corto: string; largo?: string; tono: "atencion" | "neutro" } | null;
   /** El handoff dejó una propuesta sin decidir en esta pieza (el cronograma). */
   propuesta?: boolean;
+  /**
+   * Etapa 6: cuántas novedades de reuniones tiene esta pieza (lo que una reunión le cambia; lib/seguimiento/novedades.ts).
+   * Se pinta con la misma chispa que la propuesta y el número, DESPUÉS del aviso («desactualizado» no se esconde: sin ese
+   * renglón el CSE creía que la pieza estaba al día). La propuesta del cronograma gana sobre los dos.
+   */
+  novedades?: number;
   ocupada?: boolean;
 }
 
@@ -168,7 +178,8 @@ const PUNTO: Record<EstadoDePieza, string> = {
  * riel: el estado de cada pieza (generada, vacía, desactualizada) y su activación viven allá.
  *
  * El punto de color dice el estado y nunca solo: «desactualizado» va escrito, la propuesta lleva la
- * chispa, y lo que todavía no existe en el proyecto queda plegado en «+ N por activar».
+ * chispa, y lo que todavía no existe en el proyecto queda plegado en «+ N por activar». Las novedades
+ * de las reuniones (etapa 6) llevan la misma chispa con su número; el aviso que tapan va en el `title`.
  */
 export function PiezasDelRiel({
   resumen,
@@ -177,6 +188,7 @@ export function PiezasDelRiel({
   onAlternarPorActivar,
   onElegir,
   onActivar,
+  slotDeSesiones,
 }: {
   resumen: { activa: boolean; meta?: string | null; onClick: () => void };
   filas: FilaDelRielDePiezas[];
@@ -184,6 +196,11 @@ export function PiezasDelRiel({
   onAlternarPorActivar: () => void;
   onElegir: (slug: string) => void;
   onActivar: (slug: string) => void;
+  /**
+   * Debajo de la fila «Exploración», cuando está abierta: ahí la exploración del proyecto pinta sus
+   * sesiones por portal, como la preventa las cuelga de su pieza (2026-10-07).
+   */
+  slotDeSesiones?: (el: HTMLDivElement | null) => void;
 }) {
   const existentes = filas.filter((f) => f.estado !== "por_activar");
   const porActivar = filas.filter((f) => f.estado === "por_activar");
@@ -205,10 +222,15 @@ export function PiezasDelRiel({
         <li key={f.slug}>
           <button
             type="button"
-            onClick={() => onElegir(f.slug)}
+            // Con «Exploración» ya abierta, el clic vuelve a su página de inicio (lo escucha LienzoDeExploracion).
+            onClick={() => (f.slug === "exploration" && f.activa ? window.dispatchEvent(new Event("exploracion:inicio")) : onElegir(f.slug))}
             aria-current={f.activa ? "page" : undefined}
             data-recorrido={f.propuesta ? "ficha.propuesta" : undefined}
-            title={f.aviso?.largo ?? (f.estado === "generada" ? "Generada" : "Todavía sin contenido: entra y genérala")}
+            title={
+              !f.propuesta && (f.novedades ?? 0) > 0
+                ? `${f.novedades === 1 ? "1 novedad de una reunión" : `${f.novedades} novedades de reuniones`} para revisar${f.aviso?.largo ? `. ${f.aviso.largo}` : ""}`
+                : (f.aviso?.largo ?? (f.estado === "generada" ? "Generada" : "Todavía sin contenido: entra y genérala"))
+            }
             className={clase(f.activa)}
           >
             <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", f.activa ? "bg-brand" : PUNTO[f.estado as EstadoDePieza])} aria-hidden="true" />
@@ -222,11 +244,25 @@ export function PiezasDelRiel({
                 propuesta
               </span>
             ) : (
-              f.aviso && (
-                <span className={cn("flex-shrink-0 text-[11.5px]", f.aviso.tono === "atencion" ? "text-warn-ink" : "text-fg-muted")}>{f.aviso.corto}</span>
-              )
+              // El aviso («desactualizado», lo que le falta) va primero y no se esconde detrás de las novedades: es el
+              // mismo orden que «Qué sigue» (lib/clients/que-sigue-del-proyecto.ts).
+              <>
+                {f.aviso && (
+                  <span className={cn("flex-shrink-0 text-[11.5px]", f.aviso.tono === "atencion" ? "text-warn-ink" : "text-fg-muted")}>{f.aviso.corto}</span>
+                )}
+                {(f.novedades ?? 0) > 0 && (
+                  <span
+                    data-recorrido="ficha.novedades"
+                    className="inline-flex flex-shrink-0 items-center gap-0.5 rounded-full border border-info-line bg-info-surface py-0 pl-1 pr-1.5 text-[11px] font-semibold tabular-nums text-brand"
+                  >
+                    <IconoDeSugerencia className="h-3 w-3" />
+                    {f.novedades}
+                  </span>
+                )}
+              </>
             )}
           </button>
+          {f.slug === "exploration" && f.activa && slotDeSesiones && <div ref={slotDeSesiones} />}
         </li>
       ))}
       {porActivar.length > 0 && (

@@ -135,7 +135,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     brief:
       heroTitleBrief("Diagnóstico") +
       "Portada del informe. `headline`: la TESIS del diagnóstico en una línea, dicha al cliente, que junte lo que invierte y lo que pierde ('FUNDAUNA invierte en captar y en atender, pero hoy pierde la pista de cada lead después del primer contacto'). No pongas 'Diagnóstico de X': el título ya lo dice. " +
-      "`subhead`: 2 frases — la primera con el dato que lo muestra (volumen, canales, lo que no deja registro); la segunda empieza con 'El desafío en una frase:' y lo nombra. " +
+      "`subhead`: 2 frases — la primera con el dato que lo muestra (volumen, canales, lo que no deja registro); la segunda empieza con 'El desafío en una frase:' y lo nombra como lo vive el cliente hoy, con lo que le cuesta y sin la solución (el criterio de la sección Desafío principal). " +
       "`tags`: los hubs/áreas diagnosticadas ('Marketing Hub', 'Sales Hub', 'Service Hub').",
     schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
     /* ⭐ `eyebrow` SOLO acá y no en el esquema del agente: es el rótulo chico de arriba, lo
@@ -201,7 +201,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "El corazón del informe: el problema contado en tres columnas unidas por códigos (la cuarta, las acciones y cómo generan dinero, sale sola de la tabla de Acciones). " +
       "`sintomas` (4-8): lo que se VE hoy, con el dato que lo muestra — `id` = 'S1', 'S2'…; `titulo` en 3-7 palabras ('Leads sin seguimiento visible'); `detalle` = 1-2 líneas con cifras si las fuentes las traen ('Cerca de 2.900 leads al mes; la tasa de conversión es desconocida'). " +
-      "`causas` (4-8): POR QUÉ pasa — causas, no síntomas ('Nadie es dueño del dato' explica; 'el CRM está desordenado' describe) — `id` = 'F1', 'F2'…; `titulo` en 3-8 palabras ('Sin CRM ni registro común'); `detalle` = 1 línea con cómo se manifiesta y de dónde salió; `explica` = los síntomas que explica ('S1, S3'). Cada causa explica al menos un síntoma y cada síntoma lo explica al menos una causa. " +
+      "`causas` (4-8): POR QUÉ pasa — causas, no síntomas ('Nadie es dueño del dato' explica; 'el CRM está desordenado' describe) — `id` = 'F1', 'F2'…; `titulo` en 3-8 palabras ('Cada área anota en su propio lugar'); `detalle` = 1 línea con cómo se manifiesta y de dónde salió; `explica` = los síntomas que explica ('S1, S3'). Cada causa explica al menos un síntoma y cada síntoma lo explica al menos una causa. " +
       "`consecuencias` (4-8): las consecuencias NEGATIVAS, cómo se pierde dinero, tiempo o clientes por esas causas — `titulo` en 3-8 palabras ('Pauta pagada sin saber cuántas matrículas genera'); `detalle` = 1 línea; `por` = las causas que la producen ('F1, F2'). Cada causa tiene al menos una. " +
       "Trazable o no va: un síntoma sin fuente o una causa sin evidencia es una opinión. `intro`: vacío salvo que haga falta una frase.",
     schema: obj({
@@ -219,9 +219,15 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     sectionType: "kickoff_prose",
     agentGenerated: true,
     empty: proseEmpty,
-    agentHint: "La pregunta que resume el problema + los 4-6 bloqueos que la explican.",
+    agentHint: "La pregunta que resume el problema + 4-6 situaciones de hoy con lo que le cuestan, sin la solución.",
+    /* 2026-10-07 (Elías) — El desafío describe lo que le pasa HOY al cliente, sin la solución
+       escondida. «No puede automatizar porque no tiene segmentación» ya dice qué hay que vender;
+       «le hablan igual a todos sus contactos y la mitad no abre nada» dice qué pasa y qué cuesta.
+       Los ejemplos de antes («Sin registro único», «Sin medición») empujaban justo a la carencia. */
     brief:
-      "El problema en una pregunta. `intro` = UNA pregunta que lo resume, en palabras del cliente ('¿Qué nos está impidiendo convertir la pauta en matrículas medibles y atender a los proyectos con trazabilidad?'). `items` (4-6): los bloqueos que la explican — `title` = el bloqueo en 2-4 palabras ('Sin registro único', 'Sin medición'); `detail` = UNA línea que lo concreta. Cada bloqueo sale de una o más causas (F) de la sección anterior; no repitas sus textos, resúmelos.",
+      "El problema en una pregunta, contado como lo vive el cliente HOY. `intro` = UNA pregunta que lo resume en palabras del cliente y que hable del resultado que no consigue ('¿Por qué invertimos en pauta y no sabemos cuántas matrículas nos trae?'). " +
+      "`items` (4-6): lo que pasa hoy — `title` = la situación en 3-6 palabras, dicha como un hecho de su operación ('Le hablan igual a todos', 'Cada lead depende de quién lo atiende'); `detail` = UNA línea con lo que eso le cuesta (tiempo, plata, clientes u oportunidades), con la cifra si las fuentes la traen ('La misma campaña llega a quien ya compró y a quien nunca abrió un correo'). Cada situación sale de una o más causas (F) de la sección anterior; no repitas sus textos. " +
+      "⛔ Sin la solución escondida: no nombres herramientas ni funciones, y no armes la situación como una carencia ('Sin segmentación', 'No tiene CRM', 'Falta automatizar', 'No puede automatizar porque no segmenta'): eso ya dice qué hay que comprar. Describe qué pasa y qué cuesta; la solución va en Acciones.",
     schema: asSchema(proseSchema),
     schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },

@@ -298,6 +298,20 @@ export async function marcarLeido(reporteId: string, lado: "autor" | "revisor") 
   });
 }
 
+/**
+ * Quien revisa lo marca como leído o no leído desde la Bandeja (2026-10-08, pedido de Elías). No leído es lo mismo
+ * que nunca abierto: vuelve el punto azul y, si lo último de la conversación lo escribió quien reportó, vuelve a
+ * «Te respondieron». Es de dirección entera, no de una persona: `revisorLeyoAt` es uno solo por reporte.
+ */
+export async function cambiarLectura(reporteId: string, leido: boolean) {
+  const { count } = await prisma.feedbackReporte.updateMany({
+    where: { id: reporteId },
+    data: { revisorLeyoAt: leido ? new Date() : null },
+  });
+  if (count === 0) throw new ErrorDeFeedback("Ese reporte no existe.", 404);
+  return { leido };
+}
+
 export async function crearTema(
   datos: { titulo: string; detalle?: string; pantalla?: string; columna: Columna; aNombreDe?: string },
   revisorEmail: string,

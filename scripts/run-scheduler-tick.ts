@@ -13,6 +13,7 @@
  *   CS_WATCHDOG_ENABLED=1 npx tsx scripts/run-scheduler-tick.ts --exec
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { prisma } from "../lib/db/prisma";
 import { crDateParts } from "../lib/jobs/time";
 import { allJobs } from "../lib/jobs/defs";

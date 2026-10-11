@@ -43,8 +43,24 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/cs/vigia-por-cliente.ts": { modo: "criterio", criterio: "cartera" },
   // La carga de CS (2026-10-06): los cronogramas y las cuentas de la cartera, como Éxito del cliente.
   "lib/carga/queries.ts": { modo: "criterio", criterio: "cartera" },
+  // La lectura de seguimiento (memoria de la cuenta, etapa 2): el CSE de la cuenta, para lo que prometió el cliente.
+  "lib/lecturas/personas.ts": { modo: "criterio", criterio: "cartera" },
   // «Para ti» (2026-10-04): las implementaciones abiertas, con el criterio de la línea del índice de clientes.
   "lib/para-ti/fuentes/cs.ts": { modo: "criterio", criterio: "clasificable" },
+  // «Lo que dejó esta reunión» (2026-10-09, memoria de la cuenta, etapa 1): los proyectos del cliente dueño de la
+  // reunión, con el mismo criterio que el selector de proyectos de la página de la reunión.
+  "lib/seguimiento/tarjeta-server.ts": { modo: "criterio", criterio: "clasificable" },
+  "lib/sessions/reuniones-para-seguimiento.ts": { modo: "criterio", criterio: "clasificable" },
+  // Los hechos de una reunión (memoria de la cuenta, etapas 5 y 6): los proyectos vinculados del cliente dueño, con el
+  // mismo criterio que la tarjeta de la reunión.
+  "lib/sessions/reunion-para-hechos.ts": { modo: "criterio", criterio: "clasificable" },
+  "lib/lo-propuesto/registro-server.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: cuenta, para «Uso de Nexus», las sugerencias de etapa y las fechas del " +
+      "diagnóstico que Nexus dejó guardadas en CUALQUIER proyecto. Filtrar por un criterio escondería propuestas que " +
+      "existieron (de un proyecto cerrado después) y el uso saldría más bajo de lo que fue.",
+  },
   "lib/para-ti/fuentes/etapa.ts": {
     modo: "exento",
     razon:
@@ -125,7 +141,41 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "Filtrar acá con un criterio de alcance sería no sincronizar lo que sí existe.",
   },
 
+  // Tareas internas (2026-10-09): el proyecto de HubSpot de una tarea solo puede ser uno activo (clasificable).
+  "lib/tareas/consultas.ts": { modo: "criterio", criterio: "clasificable" },
+  "lib/tareas/mutaciones.ts": { modo: "criterio", criterio: "clasificable" },
+  // El ámbito (interno / cliente): una empresa es interna si TODOS sus proyectos clasificables lo son.
+  "lib/tareas/ambito-server.ts": { modo: "criterio", criterio: "clasificable" },
+  // El chat de tareas (1B): las H# del chip de un cliente son sus proyectos activos (clasificables); los que nombra lo
+  // pendiente se leen por id solo para su nombre.
+  "lib/tareas/chat/contexto.ts": { modo: "criterio", criterio: "clasificable" },
   // ── Los exentos, cada uno con su motivo ────────────────────────────────────
+  "lib/tareas/clientes.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: busca de qué cuentas es DUEÑA una persona, con el mismo filtro de " +
+      "pipeline que requireAccessToClient (PROYECTO_DE_PIPELINE_CS_WHERE). Es acceso, no alcance.",
+  },
+  "lib/cs/adopcion-del-cse-server.ts": {
+    modo: "exento",
+    razon:
+      "decide si quien abre la pestaña Adopción es el CSE de la cuenta: busca un proyecto donde sea el encargado en " +
+      "HubSpot, acotado por PIPELINE (`PROYECTO_DE_PIPELINE_CS_WHERE`), igual que lib/auth/access.ts decide el dueño de " +
+      "la cuenta. Es una pregunta de acceso, no de pantalla.",
+  },
+  "lib/para-ti/fuentes/proyectos.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: lee la fecha de presentación del diagnóstico de los proyectos que " +
+      "el alcance de «Para ti» ya decidió que son tuyos (`id in …`). El criterio lo pone lib/para-ti/alcance-server.ts.",
+  },
+  "lib/sessions/solicitudes-server.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: verifica que el proyecto al que se asigna una solicitud " +
+      "fuera de alcance sea de ESE cliente (`findFirst` por id y clientId). Cualquier proyecto del " +
+      "cliente vale, activo o cerrado: una solicitud de un proyecto que ya cerró sigue siendo suya.",
+  },
   "lib/exploraciones/handoff.ts": {
     modo: "exento",
     razon:

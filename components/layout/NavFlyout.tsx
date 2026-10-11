@@ -203,4 +203,40 @@ export function RolesNavFlyout({
   return <NavFlyout item={item} items={items} isOpen={isOpen} />;
 }
 
+/**
+ * Flyout de Tareas: sus hijos fijos (Mis tareas, Semana del equipo, Por cliente) y, debajo, los ESPACIOS libres de quien
+ * mira (de /api/tareas/espacios, que ya filtra: solo aquellos donde está). Sin la lista, solo los fijos.
+ */
+export function TareasNavFlyout({
+  item,
+  fijos,
+  isOpen,
+}: {
+  item: Pick<NavItemConfig, "href" | "label" | "icon" | "match">;
+  fijos: readonly NavChildConfig[];
+  isOpen: boolean;
+}) {
+  const [espacios, setEspacios] = useState<{ id: string; nombre: string }[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    fetchJson<{ espacios: { id: string; nombre: string }[] }>("/api/tareas/espacios")
+      .then((d) => {
+        if (alive) setEspacios(d.espacios);
+      })
+      .catch(() => {
+        /* sin lista (o sin el SQL de Tareas): solo los fijos */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const items: PanelItem[] = [
+    ...fijos.map((c) => ({ href: c.href, label: c.label, exact: c.exact })),
+    ...espacios.map((e) => ({ href: `/tareas/espacios/${e.id}`, label: e.nombre, exact: true, section: "Tus espacios" })),
+  ];
+  return <NavFlyout item={item} items={items} isOpen={isOpen} />;
+}
+
 export type { NavChildConfig };

@@ -18,6 +18,7 @@
  * —el servidor vuelve a validar todo, y su respuesta es la que queda—.
  */
 import type { Cierre, Despues, Letra } from "@/lib/escala/documento/tipos";
+import { aFecha, hoyEnCostaRica } from "./fechas";
 import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
 import {
   definicionDe,
@@ -177,18 +178,29 @@ export interface ContenidoDeExploracion {
    * escriben: se siguen leyendo como fuente del agente.
    */
   notas: Record<string, string>;
-  /** Las sesiones que planea el vendedor, las que necesite (lib/exploraciones/guia.ts). */
+  /**
+   * Las sesiones de la exploración (lib/exploraciones/guia.ts). En un prospecto, además, las reuniones
+   * que entraron solas se calculan al leer, sin escribirse: se vuelven `SesionPlaneada` cuando alguien
+   * les escribe algo (título, objetivo, una nota).
+   */
   sesiones: SesionPlaneada[];
   medicion: Medicion;
   /** El prospecto no usa HubSpot: no hay portal que mirar (cuenta como revisado). */
   sinPortal: boolean;
   /**
-   * Las reuniones de Meet que el vendedor eligió en el buscador de «Contexto adicional» (sus ids). Se
-   * listan y se leen aunque sean de antes del alta o no estén entre las más recientes (Elías,
-   * 2026-10-07: «siempre se debe poder buscar y agregar cualquier sesión de Meet»). Se leen por el
-   * chokepoint: un id de otro cliente no sale.
+   * @deprecated (etapa A, 2026-10-09): se lee y no se escribe más (desde el 2026-10-10 no existe la operación
+   * que la escribía, y el POST de /api/sales/exploraciones/[id]/reuniones responde 410). Las reuniones de Meet
+   * que el vendedor eligió en el buscador de «Contexto adicional». En un prospecto cuentan como unidas (son
+   * sesiones); en un cliente o un proyecto van a «Fuera de la exploración». Una reunión se agrega ahora como
+   * sesión (`agregarSesion`). Se leen por el chokepoint: un id de otro cliente no sale.
    */
   reunionesElegidas: string[];
+  /**
+   * «Fuera de la exploración» en un prospecto: las reuniones que alguien sacó (claves `origen:id`,
+   * `meet:<id>` o `hubspot:<id>`). No entran solas como sesión ni el agente las lee solo. No se borra
+   * nada: vuelven con un clic.
+   */
+  fuera: string[];
   /** Los casos de uso que van a la propuesta: del catálogo (por su id) o los que propuso el agente (`ia-…`). */
   casosDeUso: Record<string, CasoDeUsoElegido>;
   /** Los títulos de los casos de uso que el vendedor descartó: la próxima tanda no los repite. */
@@ -202,6 +214,10 @@ export interface ContenidoDeExploracion {
 
 /** Cuántas reuniones se pueden elegir a mano en el buscador de la preventa. */
 export const MAX_REUNIONES_ELEGIDAS = 20;
+/** Cuántas reuniones recuerda «Fuera de la exploración» (las más viejas se caen primero). */
+export const MAX_FUERA = 200;
+/** Hasta cuántos caracteres tiene el id de una reunión (los de una serie de Meet llegan a ~190). */
+export const MAX_ID_DE_REUNION = 200;
 
 export function contenidoVacio(): ContenidoDeExploracion {
   return {
@@ -217,6 +233,7 @@ export function contenidoVacio(): ContenidoDeExploracion {
     medicion: {},
     sinPortal: false,
     reunionesElegidas: [],
+    fuera: [],
     casosDeUso: {},
     casosDescartados: [],
     edicionElegida: null,
@@ -303,8 +320,12 @@ export interface CorridaDelAgente {
 export interface PropuestaDeExploracion {
   version: 1;
   items: ItemPropuesto[];
-  /** Ids de las sesiones de Meet, las actividades de HubSpot y los documentos sumados a mano que el agente ya leyó. */
-  leidas: { sesiones: string[]; hubspot: string[]; documentos: string[] };
+  /**
+   * Ids de las sesiones de Meet, las actividades de HubSpot y los documentos sumados a mano que el agente
+   * ya leyó. `soloNotas` (etapa A): las reuniones de Meet que leyó solo con las notas de Gemini, sin
+   * transcripción. No van en `sesiones`: cuando llega la transcripción se vuelven a leer.
+   */
+  leidas: { sesiones: string[]; hubspot: string[]; documentos: string[]; soloNotas?: string[] };
   corridas: CorridaDelAgente[];
   /**
    * La guía de la próxima reunión (lib/exploraciones/guia.ts). Material de preparación, no un dato
@@ -327,7 +348,29 @@ export interface PropuestaDeExploracion {
    * `documento:<id>` (`claveDeLaReunion`). Las últimas 24.
    */
   lecturas: Record<string, LecturaDeReunion>;
+  /**
+   * El correo de seguimiento de cada reunión (2026-10-07, lib/exploraciones/correo-de-seguimiento.ts):
+   * lo arma el agente a pedido y lo revisa y lo manda una persona. Por reunión, con la misma clave de
+   * `lecturas`. Los últimos 24.
+   */
+  correos: Record<string, CorreoDeSeguimiento>;
 }
+
+/** El correo de seguimiento de una reunión: qué entendimos, lo acordado, lo que quedó abierto y la próxima reunión. */
+export interface CorreoDeSeguimiento {
+  asunto: string;
+  /** El correo entero, listo para copiar: lo arma el código con lo que escribió el agente. */
+  cuerpo: string;
+  /** Los correos del cliente que estuvieron en la reunión (sin Smarteam). Vacío si no se sabe. */
+  para: string[];
+  /** Cuándo lo armó el agente (ISO) y en qué corrida. */
+  en: string;
+  corridaId: string;
+  /** Una persona lo cambió después: volver a armarlo pide confirmación. */
+  editado?: boolean;
+}
+
+export const MAX_CORREOS = 24;
 
 /** La clave de una reunión en `lecturas`: su origen y su id. */
 export function claveDeLaReunion(r: { origen: string; id: string }): string {
@@ -385,7 +428,17 @@ export interface AlertaTecnica {
 }
 
 export function propuestaVacia(): PropuestaDeExploracion {
-  return { version: 1, items: [], leidas: { sesiones: [], hubspot: [], documentos: [] }, corridas: [], guia: null, guias: {}, alertaTecnica: null, lecturas: {} };
+  return {
+    version: 1,
+    items: [],
+    leidas: { sesiones: [], hubspot: [], documentos: [], soloNotas: [] },
+    corridas: [],
+    guia: null,
+    guias: {},
+    alertaTecnica: null,
+    lecturas: {},
+    correos: {},
+  };
 }
 
 /** Tope de lo pendiente: lo más viejo se cae primero. */
@@ -581,18 +634,21 @@ function pesoDelNivel(it: ItemPropuesto): number {
 /**
  * ¿La fuente es algo que dijo o hizo el cliente? El test (T), su actividad en HubSpot (H: correos,
  * notas, reuniones), una reunión de Meet (S), algo sumado a mano (M) y las notas del vendedor (N). La
- * ficha de la empresa (E0), sus contactos y negocios (C0, D0), su sitio (W0) y lo que se encontró en
- * internet (W1, W2) no lo son.
+ * ficha de la empresa (E0), sus contactos y negocios (C0, D0), su sitio (W0), lo que se encontró en
+ * internet (W1, W2) y lo que Nexus ya sabe de la cuenta (A0 en la preventa, F0 en un proyecto: la memoria
+ * de la cuenta) no lo son.
  */
 export function esFuenteDelCliente(id: string): boolean {
-  return /^[THSMN]\d/.test(id);
+  /* V0 y Q0 son de la exploración de un proyecto (fuentes-del-proyecto.ts): el handoff se escribió con
+     las reuniones de venta y los cuestionarios los contestó el cliente. */
+  return /^[THSMNVQ]\d/.test(id);
 }
 
 /**
  * Las casillas del marco que solo pueden salir de lo que dijo o hizo el cliente (Elías, 2026-10-07).
  * «Quién decide» no está: los contactos de HubSpot son un hecho, y el papel ya exige que la fuente lo diga.
  */
-export const CASILLAS_QUE_DICE_EL_CLIENTE = ["metas", "planes", "retos", "tiempos", "presupuesto", "consecuencias", "implicaciones"] as const satisfies readonly ClaveDeCasilla[];
+export const CASILLAS_QUE_DICE_EL_CLIENTE = ["metas", "planes", "retos", "tiempos", "presupuesto", "consecuencias", "implicaciones", "obstaculos"] as const satisfies readonly ClaveDeCasilla[];
 
 /**
  * ¿A esta propuesta le falta fundamento del cliente? Un nivel o una casilla del marco que solo cita la
@@ -745,10 +801,23 @@ export type Operacion =
   | { op: "nota"; paso: string; texto: string }
   /** La lista entera de sesiones planeadas (agregar, fechar, marcar hecha o quitar). */
   | { op: "sesiones"; sesiones: SesionPlaneada[] }
+  /**
+   * Agregar UNA sesión (etapa A): no reemplaza la lista, así se puede reintentar después de un 409 sin
+   * pisar a otra persona. La repetida (mismo id, misma reunión o mismo evento) no se agrega dos veces.
+   * Si su reunión estaba en «Fuera de la exploración», sale de ahí.
+   */
+  | { op: "agregarSesion"; sesion: SesionPlaneada }
+  /** Quitar sesiones por su id. En un prospecto, la pantalla suma `fuera` con su reunión en el mismo pedido. */
+  | { op: "quitarSesiones"; ids: string[] }
+  /** Sacar (o devolver) reuniones de la exploración de un prospecto, por su clave `origen:id`. */
+  | { op: "fuera"; claves: string[]; fuera: boolean }
+  /**
+   * El evento del calendario de una sesión se movió o se canceló (lib/exploraciones/calendario.ts): toma
+   * la fecha nueva (`fecha` es el día de `inicio` en Costa Rica) sin tocar lo demás de la sesión.
+   */
+  | { op: "evento"; sesionId: string; inicio?: string; fin?: string; titulo?: string; cancelada?: boolean; revisadoEn?: string }
   | { op: "medicion"; medicion: Medicion }
   | { op: "sinPortal"; valor: boolean }
-  /** Sumar o quitar una reunión elegida en el buscador (la adopción, si hace falta, la hace la ruta antes). */
-  | { op: "reunionElegida"; sessionId: string; elegida: boolean }
   | { op: "casoDeUso"; useCaseId: string; valor: CasoDeUsoElegido | null }
   | { op: "usar"; itemId: string; valor?: unknown }
   /** «Usar todas»: cada una por su cuenta; la que ya no está o ya no corresponde se salta. */
@@ -757,6 +826,8 @@ export type Operacion =
   | { op: "responsable"; email: string | null }
   /** «Entendido» en el aviso de que la última reunión se puso técnica. */
   | { op: "alertaTecnicaVista" }
+  /** El correo de seguimiento de una reunión, cambiado a mano (el asunto, el cuerpo o los dos). */
+  | { op: "correo"; clave: string; asunto?: string; cuerpo?: string }
   | { op: "archivar" };
 
 export type ResultadoDeOperaciones = { ok: true; estado: EstadoDeExploracion } | { ok: false; error: string };
@@ -932,17 +1003,56 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
     }
     case "sesiones":
       return { ok: true, estado: { ...estado, contenido: { ...c, sesiones: op.sesiones.slice(0, MAX_SESIONES) } } };
+    case "agregarSesion": {
+      // Con evento, la fecha es el día de su inicio en Costa Rica (así no cambian sesionHecha ni proximaReunion).
+      const s = op.sesion.evento && !op.sesion.fecha ? { ...op.sesion, fecha: hoyEnCostaRica(aFecha(op.sesion.evento.inicio)) } : op.sesion;
+      const repetida = c.sesiones.some(
+        (x) =>
+          x.id === s.id ||
+          (!!s.reunion && x.reunion?.id === s.reunion.id && x.reunion.origen === s.reunion.origen) ||
+          (!!s.evento && x.evento?.id === s.evento.id),
+      );
+      if (repetida) return { ok: true, estado };
+      if (c.sesiones.length >= MAX_SESIONES) return { ok: false, error: `Ya hay ${MAX_SESIONES} sesiones: quita una antes de agregar otra.` };
+      // Su reunión deja de estar «Fuera de la exploración»: ahora es una sesión.
+      const sale = new Set([s.reunion ? `${s.reunion.origen}:${s.reunion.id}` : "", s.evento ? `meet:gmeet_${s.evento.id}` : ""].filter(Boolean));
+      return { ok: true, estado: { ...estado, contenido: { ...c, sesiones: [...c.sesiones, s], fuera: c.fuera.filter((k) => !sale.has(k)) } } };
+    }
+    case "quitarSesiones": {
+      const ids = new Set(op.ids);
+      return { ok: true, estado: { ...estado, contenido: { ...c, sesiones: c.sesiones.filter((s) => !ids.has(s.id)) } } };
+    }
+    case "fuera": {
+      const claves = new Set(op.claves);
+      const resto = c.fuera.filter((k) => !claves.has(k));
+      return { ok: true, estado: { ...estado, contenido: { ...c, fuera: op.fuera ? [...resto, ...claves].slice(-MAX_FUERA) : resto } } };
+    }
+    case "evento": {
+      const i = c.sesiones.findIndex((s) => s.id === op.sesionId);
+      if (i < 0) return { ok: false, error: "Esa sesión ya no está." };
+      const s = c.sesiones[i];
+      if (!s.evento) return { ok: false, error: "Esa sesión no está unida a una reunión del calendario." };
+      const inicio = op.inicio ?? s.evento.inicio;
+      if (Number.isNaN(Date.parse(inicio))) return { ok: false, error: "La fecha de la reunión no se entiende." };
+      const { cancelada: _cancelada, ...resto } = s.evento;
+      void _cancelada;
+      const cancelada = op.cancelada === undefined ? s.evento.cancelada : op.cancelada || undefined;
+      const evento = {
+        ...resto,
+        inicio,
+        ...(op.fin !== undefined ? { fin: op.fin } : {}),
+        ...(op.titulo ? { titulo: op.titulo } : {}),
+        ...(cancelada ? { cancelada: true as const } : {}),
+        ...(op.revisadoEn ? { revisadoEn: op.revisadoEn } : {}),
+      };
+      const sesiones = [...c.sesiones];
+      sesiones[i] = { ...s, evento, fecha: hoyEnCostaRica(aFecha(inicio)) };
+      return { ok: true, estado: { ...estado, contenido: { ...c, sesiones } } };
+    }
     case "medicion":
       return { ok: true, estado: { ...estado, contenido: { ...c, medicion: { ...c.medicion, ...op.medicion } } } };
     case "sinPortal":
       return { ok: true, estado: { ...estado, contenido: { ...c, sinPortal: op.valor } } };
-    case "reunionElegida": {
-      const resto = c.reunionesElegidas.filter((id) => id !== op.sessionId);
-      if (op.elegida && resto.length >= MAX_REUNIONES_ELEGIDAS) {
-        return { ok: false, error: `Ya hay ${MAX_REUNIONES_ELEGIDAS} reuniones elegidas: quita una antes de sumar otra.` };
-      }
-      return { ok: true, estado: { ...estado, contenido: { ...c, reunionesElegidas: op.elegida ? [op.sessionId, ...resto] : resto } } };
-    }
     case "casoDeUso": {
       if (op.valor) return aplicarAlDestino(estado, { tipo: "casoDeUso", useCaseId: op.useCaseId }, op.valor, validez, validador);
       const casosDeUso = { ...c.casosDeUso };
@@ -985,6 +1095,12 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
     }
     case "responsable":
       return { ok: true, estado: { ...estado, responsableEmail: op.email } };
+    case "correo": {
+      const c = estado.propuesta.correos[op.clave];
+      if (!c) return { ok: false, error: "Ese correo ya no está: vuelve a armarlo." };
+      const nuevo = { ...c, ...(op.asunto !== undefined ? { asunto: op.asunto } : {}), ...(op.cuerpo !== undefined ? { cuerpo: op.cuerpo } : {}), editado: true };
+      return { ok: true, estado: { ...estado, propuesta: { ...estado.propuesta, correos: { ...estado.propuesta.correos, [op.clave]: nuevo } } } };
+    }
     case "alertaTecnicaVista": {
       const a = estado.propuesta.alertaTecnica;
       if (!a) return { ok: true, estado };
@@ -993,6 +1109,42 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
     case "archivar":
       return { ok: true, estado: { ...estado, archivada: true } };
   }
+}
+
+/**
+ * Lo que manda la PANTALLA (el PATCH de la exploración) no fija el evento del calendario de una sesión:
+ * eso lo fija el servidor (POST …/sesiones, que relee el evento en
+ * Google, en el calendario de quien busca o de quien lleva la exploración; y `mirarCalendario`). Sin esto,
+ * una sesión con el evento de OTRO calendario hacía que `mirarCalendario` leyera ese calendario con la
+ * delegación y escribiera su título en la exploración. En la lista entera (`sesiones`) cada sesión conserva
+ * el evento guardado (por su id) y la pantalla no lo cambia. En una sesión nueva (el «Deshacer» de sacar
+ * sesiones devuelve la sesión con su evento), el evento entra solo si es del calendario de quien pide o del
+ * de quien lleva la exploración, los mismos que acepta POST …/sesiones; si no, la sesión entra sin evento.
+ * Además `mirarCalendario` vuelve a mirar que tenga a alguien de la empresa invitado. La operación
+ * `evento` es solo del servidor.
+ */
+export function operacionesDeLaPantalla(
+  antes: EstadoDeExploracion,
+  ops: readonly Operacion[],
+  o: { quienPide?: string | null } = {},
+): { ok: true; ops: Operacion[] } | { ok: false; error: string } {
+  const guardadas = new Map(antes.contenido.sesiones.map((s) => [s.id, s]));
+  const permitidos = new Set([o.quienPide, antes.responsableEmail].filter((x): x is string => !!x).map((x) => x.trim().toLowerCase()));
+  const conLoDelServidor = (s: SesionPlaneada, g: SesionPlaneada | undefined, nueva: boolean): SesionPlaneada => {
+    const { evento, reunion, ...resto } = s;
+    const laGuardada = !!reunion && !!g?.reunion && g.reunion.id === reunion.id && g.reunion.origen === reunion.origen;
+    const r = reunion ? (laGuardada ? g!.reunion! : reunion) : undefined;
+    const e = nueva ? (evento && permitidos.has(evento.calendario.trim().toLowerCase()) ? evento : undefined) : g?.evento;
+    return { ...resto, ...(r ? { reunion: r } : {}), ...(e ? { evento: e } : {}) };
+  };
+  const salida: Operacion[] = [];
+  for (const op of ops) {
+    if (op.op === "evento") return { ok: false, error: "El evento del calendario de una sesión lo cambia solo Nexus, al mirar el calendario." };
+    if (op.op === "sesiones") salida.push({ op: "sesiones", sesiones: op.sesiones.map((s) => conLoDelServidor(s, guardadas.get(s.id), !guardadas.has(s.id))) });
+    else if (op.op === "agregarSesion") salida.push({ op: "agregarSesion", sesion: conLoDelServidor(op.sesion, guardadas.get(op.sesion.id), !guardadas.has(op.sesion.id)) });
+    else salida.push(op);
+  }
+  return { ok: true, ops: salida };
 }
 
 /** Aplica las operaciones en orden. Si una no corresponde, no se aplica NINGUNA. */

@@ -1,199 +1,113 @@
 "use client";
 
 /**
- * ContextoDeLaPreventa — el «Contexto adicional» de la preventa (2026-10-06).
+ * ContextoDeLaPreventa — el «Contexto adicional» de las piezas de la preventa que leen algo (2026-10-06;
+ * desde el 2026-10-09, sin lista de reuniones).
  *
- * Pedido de Elías: en vez de «¿Una sesión que no quedó en Meet?», el mismo bloque del cronograma,
- * arriba de cada pieza (salvo La cuenta, que es la ficha de la empresa). Tres partes:
- *   · Reuniones — las de Google Meet y HubSpot con la empresa, leídas o no. El agente encuentra solo
- *     las recientes; «Buscar una reunión» suma cualquier otra de la empresa o de tu calendario
- *     (2026-10-07), y la que sumaste se quita con su X.
- *   · Fuentes manuales — lo que no quedó en Meet: una llamada de Gong, una minuta (SumarAMano).
- *   · Instrucciones adicionales — lo que el vendedor le pide a la IA, una por pieza desde el
- *     2026-10-07 (`instrucciones:<pieza>` en `contenido.notas`, sin SQL): las de Preparación las lee
- *     la preparación; las de Exploración, la lectura de cada reunión y la guía; las de Casos de uso,
- *     los casos. Las piezas sin agente propio (Resumen, La escala, Propuesta) dicen dónde se escriben.
- *     No son evidencia.
- *
- * Con `?sumar=1` (la preventa que se abre «Con una transcripción») arranca abierto y con el
- * formulario de las fuentes manuales a la vista.
+ * Las reuniones de la exploración son sus SESIONES (etapa A): viven en la página de inicio de
+ * Exploración, que también tiene las fuentes manuales y sus instrucciones. Acá queda lo de cada pieza
+ * (diseño «Piezas»), y nunca una lista de reuniones: mostrarlas donde ningún agente las lee le hacía
+ * creer al vendedor que esa pieza las usaba.
+ *   · `preparacion` — la preparación lee las 3 sesiones más recientes de Exploración, las fuentes
+ *     manuales (que se suman acá o en Exploración) y sus instrucciones.
+ *   · `casos` — los casos de uso no leen reuniones: salen del lienzo. Solo sus instrucciones.
+ *   · `sinAgente` — La escala no tiene agente propio: solo la explicación.
+ * Las instrucciones son de cada pieza (`instrucciones:<pieza>` en `contenido.notas`, sin SQL) y no son
+ * evidencia.
  */
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { ContextColumn, CTX_ICONS } from "@/components/clients/context-column";
 import ContextoAdicional from "@/components/contexto/ContextoAdicional";
-import ListaDeReuniones from "@/components/contexto/ListaDeReuniones";
-import { datosConOrigen, estadoDeLectura } from "@/lib/contexto/lista-de-reuniones";
 import InstruccionesAdicionales from "@/components/contexto/InstruccionesAdicionales";
-import {
-  claveDeInstrucciones,
-  MAX_NOTA_DE_SESION,
-  type PiezaConInstrucciones,
-} from "@/lib/exploraciones/notas-de-sesion";
-import BuscarReunionesDeLaPreventa from "./BuscarReunionesDeLaPreventa";
+import { claveDeInstrucciones, MAX_NOTA_DE_SESION, type PiezaConInstrucciones } from "@/lib/exploraciones/notas-de-sesion";
 import SumarAMano from "./SumarAMano";
 import { useLienzo } from "./contexto";
+import { useSesiones } from "./useSesiones";
 
-const DE_DONDE = {
-  meet: "Google Meet",
-  hubspot: "HubSpot",
-  documento: "Sumada a mano",
-} as const;
-
-/** El evento con que otra pieza abre el «Contexto adicional» (el «Después» de una sesión sin transcripción). */
-const EVENTO_ABRIR = "preventa:abrir-contexto";
-
-/** Abre el «Contexto adicional» y lo trae a la vista, desde cualquier pieza del lienzo. */
-export function abrirElContextoAdicional() {
-  window.dispatchEvent(new Event(EVENTO_ABRIR));
-}
+/** Qué pieza muestra el bloque: Preparación, Casos de uso o una sin agente propio (La escala). */
+export type ModoDelContexto = "preparacion" | "casos" | "sinAgente";
 
 /** Qué agente lee las instrucciones de cada pieza (lo dice el bloque). */
-const QUIEN_LAS_LEE: Record<PiezaConInstrucciones, string> = {
+const QUIEN_LAS_LEE: Record<Exclude<PiezaConInstrucciones, "exploracion">, string> = {
   preparacion: "la preparación: la radiografía, el «por qué ahora», la hipótesis de valor, cómo conectar y las primeras hipótesis",
-  exploracion: "la lectura de cada reunión y la guía de la próxima sesión",
   casos: "los casos de uso que propone",
 };
 
-/**
- * El «Contexto adicional» de una pieza. `pieza` dice de quién son las instrucciones: null en las
- * piezas sin agente propio (Resumen, La escala, Propuesta), que muestran dónde escribirlas.
- */
-export default function ContextoDeLaPreventa({ pieza }: { pieza: PiezaConInstrucciones | null }) {
-  const { exp, reuniones, documentos, puedeEditar, cambiar, recargar } =
-    useLienzo();
-  const [buscando, setBuscando] = useState(false);
-  const elegidas = new Set(exp.estado.contenido.reunionesElegidas);
-  /* Quitar o devolver reuniones sumadas con el buscador, de a una o de a muchas: UN cambio del lienzo
-     (con su versión, y su aviso si falla) y después se relee la lista. Devolver vuelve a elegir lo que
-     ya estaba elegido, así que no hace falta volver a pasar por el buscador. */
-  const escribirReuniones = async (ids: string[], incluir: boolean): Promise<boolean> => {
-    const ok = await cambiar(ids.map((sessionId) => ({ op: "reunionElegida" as const, sessionId, elegida: incluir })));
-    if (ok) await recargar();
-    return ok;
+function IconoDeInformacion() {
+  return (
+    <svg className="mt-0.5 h-4 w-4 flex-none text-fg-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8h.01M11 12h1v4h1" />
+    </svg>
+  );
+}
+
+export default function ContextoDeLaPreventa({ modo }: { modo: ModoDelContexto }) {
+  const { exp, marco, documentos, puedeEditar, cambiar, irA, sesion } = useLienzo();
+  const { pestanas, estadoDeLaReunion } = useSesiones();
+  const enProyecto = marco.clave === "cs";
+  const [abierto, setAbierto] = useState(false);
+
+  const leidas = pestanas.filter((p) => estadoDeLaReunion(p) === "leida").length;
+  const verLasSesiones = () => {
+    irA("exploracion");
+    sesion.irAlInicio();
   };
-  const sumarAlAbrir = useSearchParams().get("sumar") === "1";
-  const [abierto, setAbierto] = useState(sumarAlAbrir);
-  const caja = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const abrir = () => {
-      setAbierto(true);
-      caja.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    };
-    window.addEventListener(EVENTO_ABRIR, abrir);
-    return () => window.removeEventListener(EVENTO_ABRIR, abrir);
-  }, []);
+  const pieza: Exclude<PiezaConInstrucciones, "exploracion"> | null = modo === "sinAgente" ? null : modo;
+  const instrucciones = pieza ? (exp.estado.contenido.notas[claveDeInstrucciones(pieza)] ?? "") : "";
+  const activas = instrucciones.trim() ? " · instrucciones activas" : "";
 
-  // Las sumadas a mano ya están en su columna: acá van solo las de Meet y HubSpot, la más nueva arriba.
-  const deCalendario = reuniones
-    .filter((r) => r.origen !== "documento")
-    .sort((a, b) => b.fecha.localeCompare(a.fecha));
-  const sinLeer = deCalendario.filter((r) => !r.leida).length;
-  const instrucciones = pieza
-    ? (exp.estado.contenido.notas[claveDeInstrucciones(pieza)] ?? "")
-    : "";
-
-  const resumen = [
-    `${deCalendario.length} ${deCalendario.length === 1 ? "reunión" : "reuniones"}${sinLeer ? ` (${sinLeer} sin leer)` : ""}`,
-    `${documentos.length} ${documentos.length === 1 ? "fuente manual" : "fuentes manuales"}`,
-    ...(instrucciones.trim() ? ["instrucciones activas"] : []),
-  ].join(" · ");
+  const resumen =
+    modo === "preparacion"
+      ? `lee las 3 sesiones más recientes · ${documentos.length} ${documentos.length === 1 ? "fuente manual" : "fuentes manuales"}${activas}`
+      : modo === "casos"
+        ? `lee el lienzo · ${leidas} ${leidas === 1 ? "sesión leída" : "sesiones leídas"}${activas}`
+        : "sin agente propio";
 
   return (
-    <div ref={caja} data-recorrido="preventa.contexto">
-      <ContextoAdicional
-        abierto={abierto}
-        onAlternar={() => setAbierto((v) => !v)}
-        resumen={resumen}
-        explicacion={
-          <>
-            Con esto el agente prepara la preventa, lee cada reunión, arma la
-            guía de la próxima sesión y propone los casos de uso. Las reuniones y
-            las fuentes son de la empresa y se ven en todas las piezas; las
-            instrucciones, en cambio, son de cada pieza. Las reuniones recientes
-            de Meet y de HubSpot con la empresa{" "}
-            <span className="font-medium text-fg-secondary">
-              las encuentra solo
-            </span>
-            ; busca cualquier otra de Meet, o suma a mano lo que no quedó ahí.
-          </>
-        }
-      >
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <ContextColumn
-            icon={CTX_ICONS.meet}
-            color="#16a34a"
-            title="Reuniones"
-            count={deCalendario.length}
-          >
-            <div className="flex flex-1 flex-col gap-2">
-              {/* La lista de reuniones de todo «Contexto adicional» (2026-10-09). Acá solo se quitan las que
-                  se sumaron con el buscador: las que encontró el agente son de la empresa y no llevan
-                  casilla (dejan el hueco, para que los títulos queden alineados). «Elegir todas» aparece
-                  con 2 o más que se puedan quitar, y elige solo esas. El origen va en la línea de datos. */}
-              <ListaDeReuniones
-                reuniones={deCalendario.map((r) => ({
-                  // Las de HubSpot llevan su origen en la clave: otro sistema, otra serie de ids.
-                  id: r.origen === "meet" ? r.id : `${r.origen}:${r.id}`,
-                  titulo: r.titulo,
-                  datos: datosConOrigen(DE_DONDE[r.origen], r.fecha),
-                  estado: estadoDeLectura(r.leida),
-                  quitable: r.origen === "meet" && elegidas.has(r.id),
-                }))}
-                puedeEditar={puedeEditar}
-                escribir={escribirReuniones}
-                onBuscar={() => setBuscando(true)}
-                minimoParaElegir={2}
-                vacio="Todavía no hay reuniones con la empresa en Meet ni en HubSpot."
-                etiquetaQuitar={(titulo) => `Quitar «${titulo}» de esta preventa`}
-                tituloQuitar="La sumaste con el buscador: quitarla la saca de esta preventa (sigue siendo de la empresa)."
-              />
-              {puedeEditar && (
-                <button
-                  type="button"
-                  onClick={() => setBuscando(true)}
-                  className="mt-auto self-start text-[11px] font-semibold text-brand transition-colors hover:text-brand-dark"
-                >
-                  + Buscar una reunión de Meet
-                </button>
-              )}
-            </div>
-          </ContextColumn>
-          <ContextColumn
-            icon={CTX_ICONS.note}
-            color="#7c6df2"
-            title="Fuentes manuales"
-            count={documentos.length}
-          >
-            <SumarAMano abiertoAlInicio={sumarAlAbrir} />
-          </ContextColumn>
-        </div>
-        {pieza ? (
-          <InstruccionesAdicionales
-            key={pieza}
-            guardadas={instrucciones}
-            soloLectura={!puedeEditar}
-            tope={MAX_NOTA_DE_SESION}
-            explicacion={`Son de esta pieza: las lee solo ${QUIEN_LAS_LEE[pieza]}. No cuentan como algo que dijo el cliente.`}
-            ejemplo='Ej.: "Enfócate en el área de Servicio: Ventas ya la resolvieron con otro proveedor."'
-            onGuardar={(texto) =>
-              cambiar([
-                { op: "nota", paso: claveDeInstrucciones(pieza), texto },
-              ])
-            }
-          />
-        ) : (
-          <p className="rounded-xl border border-dashed border-line px-4 py-3 text-xs text-fg-muted">
-            Esta pieza no tiene agente propio. Las instrucciones para la IA se
-            escriben en la pieza de su agente: Preparación, Exploración o Casos
-            de uso.
+    <div data-recorrido="preventa.contexto">
+      <ContextoAdicional abierto={abierto} onAlternar={() => setAbierto((v) => !v)} resumen={resumen}>
+        {modo === "sinAgente" ? (
+          <p className="rounded-xl border border-dashed border-line px-3.5 py-3 text-[13px] leading-[19px] text-fg-secondary">
+            Esta pieza no lee reuniones ni tiene agente propio: muestra los niveles que propusieron Preparación y la lectura de las sesiones. Las instrucciones para la IA
+            van en Preparación, Exploración o Casos de uso.
           </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-start gap-3 rounded-xl border border-line bg-surface-muted px-3.5 py-3">
+              <IconoDeInformacion />
+              <p className="min-w-0 flex-[1_1_420px] text-[13px] leading-[19px] text-fg-secondary">
+                {modo === "preparacion"
+                  ? "Lee las 3 sesiones más recientes de Exploración y las fuentes manuales."
+                  : "Esta pieza no lee reuniones. Los casos salen de lo que quedó en el lienzo después de leer las sesiones: dónde está cada equipo, lo que le falta para Funcional y lo confirmado del Resumen."}
+              </p>
+              <button type="button" onClick={verLasSesiones} className="flex-none text-[13px] font-semibold text-brand hover:text-brand-light">
+                {modo === "preparacion" ? "Ver las sesiones" : "Ver las sesiones en Exploración"}
+              </button>
+            </div>
+            {modo === "preparacion" && (
+              <ContextColumn icon={CTX_ICONS.note} color="var(--color-secondary)" title="Fuentes manuales" count={documentos.length}>
+                <SumarAMano />
+              </ContextColumn>
+            )}
+            {pieza && (
+              <InstruccionesAdicionales
+                key={pieza}
+                guardadas={instrucciones}
+                soloLectura={!puedeEditar}
+                tope={MAX_NOTA_DE_SESION}
+                explicacion={`Son de esta pieza: las lee solo ${QUIEN_LAS_LEE[pieza]}. No cuentan como algo que dijo el cliente.`}
+                ejemplo={
+                  enProyecto
+                    ? 'Ej.: "Pregunta sobre todo por Servicio: es donde el cliente siente que pierde clientes."'
+                    : 'Ej.: "Enfócate en el área de Servicio: Ventas ya la resolvieron con otro proveedor."'
+                }
+                onGuardar={(texto) => cambiar([{ op: "nota", paso: claveDeInstrucciones(pieza), texto }])}
+              />
+            )}
+          </>
         )}
       </ContextoAdicional>
-      <BuscarReunionesDeLaPreventa
-        abierto={buscando}
-        onCerrar={() => setBuscando(false)}
-      />
     </div>
   );
 }

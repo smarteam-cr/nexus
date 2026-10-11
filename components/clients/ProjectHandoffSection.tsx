@@ -22,7 +22,8 @@ import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/cli
 import { useWorkspace } from "./WorkspaceContext";
 import { useMe } from "@/hooks/useMe";
 import ProjectContextSection from "./ProjectContextSection";
-import { Alert } from "@/components/ui";
+import { Alert, ConfirmDialog, Field, Modal, Textarea } from "@/components/ui";
+import { lineaDelCongelado, MOTIVO_MINIMO, type EstadoDelHandoff, type PedidoDelHandoff } from "@/lib/handoff/congelado";
 import { BotonAzul, BotonBlanco, BotonEnlace, BotonTexto, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { FilaDeAlrededor } from "./FilaDeAlrededor";
 import { useContextoDelResumen } from "./contexto-del-resumen";
@@ -64,8 +65,9 @@ interface HandoffStatus {
   blockCount: number;
   lastRunAt: string | null;
   lastRunStatus: string | null;
-  /** La corrida del handoff que sigue en curso (no colgada). La sección la retoma al montar. */
-  corridaEnCurso?: { runId: string } | null;
+  /** La corrida del handoff que sigue en curso (no colgada). La sección la retoma al montar.
+   *  `sugerir`: es «Buscar lo nuevo» (no reescribe el documento). Opcional: el cache de antes no lo trae. */
+  corridaEnCurso?: { runId: string; sugerir?: boolean } | null;
   /** Cuántas corridas del agente de handoff existen — decide si se ofrece "Ver historial".
    *  Opcional: una entrada del cache de módulo anterior al deploy no lo trae. */
   handoffRunCount?: number;
@@ -81,6 +83,10 @@ interface HandoffStatus {
   handoffResumen?: string | null;
   /** El handoff se regeneró DESPUÉS del resumen: lo que dice describe una versión anterior. */
   handoffResumenViejo?: boolean;
+  /** 3b: ¿está congelado? (la foto fija de lo vendido). Opcional: el cache de antes del deploy no lo trae. */
+  congelado?: EstadoDelHandoff;
+  /** 3b: los bloques en borrador que esperan «Usar» o «Descartar» en el documento. */
+  sugerenciasPendientes?: number;
 }
 
 function fmtDate(d: string): string {
@@ -215,6 +221,13 @@ export default function ProjectHandoffSection({
   const [error, setError] = useState<string | null>(null);
   const [showDoc, setShowDoc] = useState(false);
   const [showHistorial, setShowHistorial] = useState(false);
+  /* 3b (DECISIONS «El handoff se congela»): «Congelar», con su confirmación, y «Rehacer desde cero», con su
+     motivo. «Congelar» y «Buscar lo nuevo» los ve quien tiene `handoff.congelar`; «Rehacer desde cero», quien
+     puede regenerar el handoff. Las mismas celdas que pide el servidor. */
+  const [confirmarCongelar, setConfirmarCongelar] = useState(false);
+  const [congelando, setCongelando] = useState(false);
+  const [rehacerAbierto, setRehacerAbierto] = useState(false);
+  const [motivoRehacer, setMotivoRehacer] = useState("");
   const { bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh } = useWorkspace();
   const toast = useToast();
   const pathname = usePathname();
@@ -238,6 +251,9 @@ export default function ProjectHandoffSection({
   const canGenerateHandoff = status?.generated
     ? handoffPerms?.regenerate === true
     : handoffPerms?.generate === true;
+  /* 3b: congelar y «Buscar lo nuevo» son su propia celda (`handoff.congelar`, 2026-10-10): el CSE la tiene y no
+     regenera. Ninguna de las dos reescribe el documento; «Rehacer desde cero» sí, y sigue con `canGenerateHandoff`. */
+  const puedeCongelar = handoffPerms?.congelar === true;
   /* Ver el historial no lleva celda de permiso, igual que ver el documento: se gobierna por
      acceso al proyecto (el endpoint lo hace cumplir). Se ofrece con 2+ corridas, o con una
      sola que FALLÓ — ahí el historial es el único lugar donde queda escrito el motivo. */
@@ -283,11 +299,13 @@ export default function ProjectHandoffSection({
     docRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [showDoc]);
 
-  const fetchStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async (): Promise<HandoffStatus | null> => {
+    let leido: HandoffStatus | null = null;
     try {
       const r = await fetch(`/api/projects/${projectId}/handoff`);
       if (r.ok) {
         const d = (await r.json()) as HandoffStatus;
+        leido = d;
         writeHandoffStatusCache(projectId, d); // revisitas pintan sin skeleton
         setStatus(d);
         // Se re-siembra SIEMPRE que nadie haya tipeado — no una sola vez. Ver el comentario
@@ -299,6 +317,7 @@ export default function ProjectHandoffSection({
       }
     } catch { /* ignore */ }
     setLoading(false);
+    return leido;
   }, [projectId]);
 
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
@@ -412,6 +431,10 @@ export default function ProjectHandoffSection({
        HubSpot, el aviso del cronograma sin sincronizar) los hace solo quien la sigue primero. */
   const retomadaRef = useRef<string | null>(null);
   const runIdEnCurso = status?.corridaEnCurso?.runId ?? null;
+  /* «Buscar lo nuevo» (3b): al terminar NO se sincroniza con HubSpot ni se avisa al cronograma, igual que cuando la
+     búsqueda se lanzó desde esta pestaña (handleGenerate › `sugiriendo`). Sin esto, recargar a mitad de una búsqueda
+     creaba el proyecto en HubSpot si el handoff no estaba vinculado. */
+  const sugiriendoEnCurso = status?.corridaEnCurso?.sugerir === true;
   const handoffIdEnCurso = status?.handoffId ?? null;
   useEffect(() => {
     if (!runIdEnCurso || generating || retomadaRef.current === runIdEnCurso) return;
@@ -429,6 +452,19 @@ export default function ProjectHandoffSection({
     void (async () => {
       try {
         const result = await enCurso;
+        if (sugiriendoEnCurso) {
+          if (result.status === "ERROR") {
+            setError(
+              puedeCongelar
+                ? (result.error ?? "No se pudo buscar lo nuevo. Vuelve a intentarlo.")
+                : "La última búsqueda de lo nuevo en el handoff falló.",
+            );
+          } else if (result.status === "TIMEOUT") {
+            setError("La búsqueda de lo nuevo está tardando más de lo normal. Revisa en unos minutos.");
+          }
+          await fetchStatus();
+          return;
+        }
         if (result.status === "ERROR") {
           setError(
             canGenerateHandoff
@@ -462,9 +498,13 @@ export default function ProjectHandoffSection({
         setGenerating(false);
       }
     })();
-  }, [runIdEnCurso, handoffIdEnCurso, generating, clientId, canGenerateHandoff, toast, fetchStatus, fetchTags, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
+  }, [runIdEnCurso, sugiriendoEnCurso, handoffIdEnCurso, generating, clientId, canGenerateHandoff, puedeCongelar, toast, fetchStatus, fetchTags, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
 
-  const handleGenerate = useCallback(async () => {
+  /* `pedido` (3b): sin nada, la generación de siempre; con el handoff congelado, «Buscar lo nuevo»
+     (`sugerir`: deja sugerencias en borrador, no reescribe nada) o «Rehacer desde cero» (`rehacer`, con
+     motivo: la generación de siempre, y queda congelado otra vez). */
+  const handleGenerate = useCallback(async (pedido?: PedidoDelHandoff) => {
+    const sugiriendo = pedido?.modo === "sugerir";
     const agentId = status?.agentId;
     if (!agentId) { setError("No se encontró el agente de handoff."); return; }
     maybeRequestPermission(); // gesto del usuario → ofrecer activar notificaciones (una vez)
@@ -507,24 +547,36 @@ export default function ProjectHandoffSection({
         return;
       }
 
-      // 1. Asegurar entidad Handoff + canvas
-      const ensure = await fetch(`/api/projects/${projectId}/handoff`, { method: "POST" });
-      const ensureData = await ensure.json().catch(() => ({}));
-      if (!ensure.ok) { setError(ensureData.error ?? "No se pudo preparar el handoff."); return; }
-      const handoffId: string | undefined = ensureData.handoffId;
+      // 1. Asegurar entidad Handoff + canvas. «Buscar lo nuevo» se lo salta: solo corre sobre un handoff
+      //    congelado, que ya tiene documento, y quien lo pide puede ser un CSE (`handoff.congelar`), que no
+      //    tiene la celda que pide este paso (generar, regenerar o editar el handoff).
+      let handoffId: string | undefined;
+      if (!sugiriendo) {
+        const ensure = await fetch(`/api/projects/${projectId}/handoff`, { method: "POST" });
+        const ensureData = await ensure.json().catch(() => ({}));
+        if (!ensure.ok) { setError(ensureData.error ?? "No se pudo preparar el handoff."); return; }
+        handoffId = ensureData.handoffId;
+      }
 
       // 2. Correr el agente handoff (async/background, scopeado a las sesiones del proyecto)
       const res = await fetch(`/api/clients/${clientId}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId, projectId, async: true }),
+        body: JSON.stringify({ agentId, projectId, async: true, ...(pedido ? { handoff: pedido } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // «Buscar lo nuevo» sin nada posterior al congelado no es un error: no hay qué buscar todavía.
+        if (data.error === "SIN_NOVEDADES") {
+          toast.info(data.message ?? "No hay reuniones nuevas desde que se congeló el handoff.");
+          return;
+        }
         // NO_PROJECT_SESSIONS u otro error → mostrar el mensaje claro, no generar.
-        setError(data.message ?? data.error ?? "No se pudo generar el handoff.");
+        setError(data.message ?? data.error ?? (sugiriendo ? "No se pudo buscar lo nuevo." : "No se pudo generar el handoff."));
+        if (data.error === "HANDOFF_CONGELADO" || data.error === "NO_CONGELADO") void fetchStatus();
         return;
       }
+      let resultado: PolledRun | null = null;
       if (data.runId) {
         /* La corrida es de esta sección: el retomar no la vuelve a seguir, y una sección remontada
            en esta pestaña (cambiar de proyecto y volver) espera este mismo seguimiento. */
@@ -534,13 +586,17 @@ export default function ProjectHandoffSection({
         const id = data.runId as string;
         void seguimiento.finally(() => SEGUIMIENTOS_DEL_HANDOFF.delete(id)).catch(() => {});
         const result = await seguimiento;
+        resultado = result;
         if (result.status === "ERROR") {
           // result.error viene humanizado desde AgentRun.output.error (créditos/429/timeout…).
-          setError(result.error ?? "El handoff falló durante la generación. Reintentá.");
+          setError(
+            result.error ??
+              (sugiriendo ? "No se pudo buscar lo nuevo. Vuelve a intentarlo." : "El handoff falló durante la generación. Vuelve a intentarlo."),
+          );
           void notifyAgentDone({ group: "handoff", ok: false, url: notifyUrl });
           return;
         }
-        if (result.status === "TIMEOUT") { setError("La generación está tardando más de lo normal. Revisá en unos minutos."); return; }
+        if (result.status === "TIMEOUT") { setError("La generación está tardando más de lo normal. Revisa en unos minutos."); return; }
         // Tanda M — el handoff (documento) puede haber terminado DONE mientras el cronograma
         // no se pudo sincronizar (ej. reconciliación fallida, error de base). Sin esto, el CSE
         // solo se enteraba si por casualidad abría la pestaña Cronograma. Sticky (con acción)
@@ -551,6 +607,30 @@ export default function ProjectHandoffSection({
             { action: { label: "Entendido", onClick: () => {} } },
           );
         }
+      }
+      /* «Buscar lo nuevo» no reescribe el documento: no hay nada que sincronizar con HubSpot ni que avisar
+         al cronograma. Se abre el documento si dejó sugerencias. */
+      if (sugiriendo) {
+        const fresco = await fetchStatus();
+        if ((resultado?.sectionCount ?? 0) > 0) {
+          const n = fresco?.sugerenciasPendientes ?? 0;
+          /* Usarlas o descartarlas es editar el documento (`handoff.write`): quien solo puede congelar (el CSE)
+             las pide, pero las revisa quien edita el handoff. */
+          toast.success(
+            canEdit
+              ? n === 1
+                ? "Lo nuevo quedó como una sugerencia en el documento: úsala o descártala."
+                : `Lo nuevo quedó como ${n} sugerencias en el documento: úsalas o descártalas.`
+              : n === 1
+                ? "Lo nuevo quedó como una sugerencia en el documento. La revisa quien edita el handoff."
+                : `Lo nuevo quedó como ${n} sugerencias en el documento. Las revisa quien edita el handoff.`,
+          );
+          bajarAlDocumento.current = true;
+          setShowDoc(true);
+        } else {
+          toast.info("No encontré nada nuevo en las reuniones desde que se congeló el handoff.");
+        }
+        return;
       }
       // 3. Sync a HubSpot (best-effort; reconciliable)
       if (handoffId) {
@@ -568,11 +648,43 @@ export default function ProjectHandoffSection({
       bumpCanvasRefresh(); // el handoff pudo auto-crear el canvas "Desarrollo" → el panel lo muestra sin recargar
       void notifyAgentDone({ group: "handoff", ok: true, url: notifyUrl });
     } catch {
-      setError("Error de conexión al generar el handoff.");
+      setError(sugiriendo ? "Error de conexión al buscar lo nuevo." : "Error de conexión al generar el handoff.");
     } finally {
       setGenerating(false);
     }
-  }, [projectId, clientId, track, fetchStatus, fetchTags, status?.agentId, status?.contextExclusions, exclusions, exclusionsDirty, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
+  }, [projectId, clientId, track, toast, fetchStatus, fetchTags, status?.agentId, status?.contextExclusions, exclusions, exclusionsDirty, canEdit, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
+
+  /** «Congelar» (3b): foto protegida + hito; desde ahí la IA ya no lo regenera. */
+  const handleCongelar = useCallback(async () => {
+    setCongelando(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/projects/${projectId}/handoff/congelar`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setError(d.message ?? d.error ?? "No se pudo congelar el handoff.");
+      } else {
+        invalidateHandoffStatus(projectId);
+        await fetchStatus();
+        toast.success("Handoff congelado: la IA ya no lo regenera.");
+      }
+    } catch {
+      setError("Error de conexión al congelar el handoff.");
+    } finally {
+      setCongelando(false);
+      setConfirmarCongelar(false);
+    }
+  }, [projectId, fetchStatus, toast]);
+
+  /** «Rehacer desde cero» (3b): con el motivo, la generación de siempre; al terminar queda congelado otra vez. */
+  const motivoListo = motivoRehacer.trim().length >= MOTIVO_MINIMO;
+  const handleRehacer = useCallback(() => {
+    const motivo = motivoRehacer.trim();
+    if (motivo.length < MOTIVO_MINIMO) return;
+    setRehacerAbierto(false);
+    setMotivoRehacer("");
+    void handleGenerate({ modo: "rehacer", motivo });
+  }, [motivoRehacer, handleGenerate]);
 
   // Gate CONJUNTO status+me: si la sección se pintara apenas llega el status pero antes
   // de /api/me, el bloque de contexto de editores se INSERTARÍA después (canEdit pasa a
@@ -608,6 +720,8 @@ export default function ProjectHandoffSection({
     : <span className="rounded-full border border-line bg-surface-muted px-2 py-px text-[11px] font-semibold text-fg-muted">Sin generar</span>;
 
   const esVenta = status.pipelineKey !== "development" && status.pipelineKey !== "web";
+  const estaCongelado = status.congelado?.congelado === true;
+  const sugerenciasPendientes = status.sugerenciasPendientes ?? 0;
   const exclusionesSinGuardar = exclusionsDirty && exclusions.trim() !== (status.contextExclusions ?? "");
 
   return (
@@ -640,6 +754,26 @@ export default function ProjectHandoffSection({
                 `${readiness.feedingCount} reunión${readiness.feedingCount === 1 ? "" : "es"} cumplen la regla (${readiness.withTranscript} con transcripción${readiness.manualSources > 0 ? `, ${readiness.manualSources} fuente${readiness.manualSources === 1 ? "" : "s"} manual${readiness.manualSources === 1 ? "" : "es"}` : ""}). Las que entran al documento dependen del espacio disponible.`
               : "Ninguna reunión alimenta este handoff todavía: revisa el contexto o pega una fuente manual."}
           </p>
+          {/* 3b: «Congelado el 2 sep, al aplicar el cronograma · N sugerencias para revisar». */}
+          {estaCongelado && status.congelado && (
+            <p className="text-xs text-fg-muted">
+              {lineaDelCongelado(status.congelado)}
+              {sugerenciasPendientes > 0 && (
+                <>
+                  {" · "}
+                  <BotonEnlace
+                    className="py-0"
+                    onClick={() => {
+                      if (!showDoc) bajarAlDocumento.current = true;
+                      setShowDoc(true);
+                    }}
+                  >
+                    {sugerenciasPendientes === 1 ? "1 sugerencia para revisar" : `${sugerenciasPendientes} sugerencias para revisar`}
+                  </BotonEnlace>
+                </>
+              )}
+            </p>
+          )}
           {/* ── EL ENLACE DISCRETO AL HERMANO MAYOR ── una línea, no un bloque: este proyecto TIENE
               su handoff y lo genera acá; el alcance vendido vive en la implementación. */}
           {status.hermanoMayor && (
@@ -655,15 +789,65 @@ export default function ProjectHandoffSection({
             </p>
           )}
         </div>
-        {canGenerateHandoff &&
-          (generated ? (
-            <BotonEnlace className="flex-shrink-0" onClick={() => void handleGenerate()} disabled={generating}>
-              {generating ? (phase ?? "Generando…") : "Regenerar"}
-            </BotonEnlace>
-          ) : (
+        {/* 3b: congelado, «Regenerar» pasa a «Buscar lo nuevo» (sugerencias en borrador) y queda el enlace
+            secundario «Rehacer desde cero», con motivo. Sin congelar, «Congelar» al lado de «Regenerar».
+            «Congelar» y «Buscar lo nuevo» piden `handoff.congelar` (el CSE la tiene); generar, regenerar y
+            rehacer, la celda de siempre. Las mismas que pide el servidor. */}
+        {(canGenerateHandoff || (generated && puedeCongelar)) &&
+          (!generated && estaCongelado ? (
+            /* Congelado y vacío (alguien lo vació a mano: sigue editable). «Generar» daría 409 HANDOFF_CONGELADO y
+               «Buscar lo nuevo» no tiene sobre qué sugerir: la salida es rehacerlo, con motivo, y queda congelado
+               otra vez. */
+            <BotonAzul
+              className="flex-shrink-0"
+              onClick={() => setRehacerAbierto(true)}
+              disabled={generating}
+              title="El handoff está congelado y vacío. La IA lo vuelve a escribir con todas las reuniones; pide un motivo y al terminar queda congelado otra vez."
+            >
+              {generating ? (phase ?? "Generando…") : "Rehacer desde cero"}
+            </BotonAzul>
+          ) : !generated ? (
             <BotonAzul className="flex-shrink-0" onClick={() => void handleGenerate()} disabled={generating}>
               {generating ? (phase ?? "Generando…") : "Generar handoff"}
             </BotonAzul>
+          ) : estaCongelado ? (
+            <div className="flex flex-shrink-0 items-center gap-2">
+              {canGenerateHandoff && (
+                <BotonTexto
+                  onClick={() => setRehacerAbierto(true)}
+                  disabled={generating}
+                  title="La IA lo vuelve a escribir con todas las reuniones. Pide un motivo y al terminar queda congelado otra vez."
+                >
+                  Rehacer desde cero
+                </BotonTexto>
+              )}
+              {puedeCongelar && (
+                <BotonEnlace
+                  onClick={() => void handleGenerate({ modo: "sugerir" })}
+                  disabled={generating}
+                  title="Lee las reuniones posteriores al congelado y deja lo nuevo como sugerencias en el documento, con su cita."
+                >
+                  {generating ? (phase ?? "Buscando…") : "Buscar lo nuevo"}
+                </BotonEnlace>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-shrink-0 items-center gap-2">
+              {puedeCongelar && (
+                <BotonBlanco
+                  onClick={() => setConfirmarCongelar(true)}
+                  disabled={generating || congelando}
+                  title="Deja el handoff como la foto fija de lo vendido: la IA ya no lo regenera."
+                >
+                  {congelando ? "Congelando…" : "Congelar"}
+                </BotonBlanco>
+              )}
+              {canGenerateHandoff && (
+                <BotonEnlace onClick={() => void handleGenerate()} disabled={generating}>
+                  {generating ? (phase ?? "Generando…") : "Regenerar"}
+                </BotonEnlace>
+              )}
+            </div>
           ))}
       </div>
 
@@ -717,6 +901,21 @@ export default function ProjectHandoffSection({
       )}
       {/* #5 — la clasificación del proyecto, compartida con el BC. UN solo eje de datos. */}
       <TagsStrip tags={tags} canEdit={canManageContext} onSetTags={saveTags} />
+
+      {/* «Contexto del handoff» — HubSpot · Reuniones · Fuentes manuales (· Preventa). Vive ADENTRO
+          de la tarjeta del handoff (2026-10-07, pedido de Elías): solo lo lee su agente, y a todo el
+          ancho, debajo del resumen del proyecto, se leía como contexto del Resumen. El CSE (owner)
+          también lo ve y gestiona; el server enforce el scope de owner. */}
+      {canManageContext && (
+        <div className="overflow-hidden rounded-lg border border-line [&>div]:border-t-0">
+          <ProjectContextSection
+            projectId={projectId}
+            canEdit={canManageContext}
+            generated={generated}
+            onSessionsChange={fetchStatus}
+          />
+        </div>
+      )}
 
       {(generated && status.canvasId) || puedeVerHistorial ? (
         <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -781,20 +980,10 @@ export default function ProjectHandoffSection({
       )}
 
     {/* ── ALREDEDOR DEL HANDOFF ──────────────────────────────────────────────────
-        Lo que decide qué entra al documento (el contexto y las exclusiones), lo que persigue el
-        cliente y lo que pidió fuera de lo vendido. Cuatro filas plegables con la misma cabecera
-        (FilaDeAlrededor). A todo el ancho; desaparece si no hay ninguna fila. */}
+        Lo que persigue el cliente, lo que pidió fuera de lo vendido y las exclusiones. Filas
+        plegables con la misma cabecera (FilaDeAlrededor). A todo el ancho; desaparece si no hay
+        ninguna fila. El contexto se mudó a la tarjeta del handoff (2026-10-07). */}
     <section className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface empty:hidden lg:col-span-2 [&>*:first-child]:border-t-0">
-      {/* Contexto — HubSpot · Google Meet · Fuentes manuales. El CSE (owner) también lo ve y
-          gestiona; el server enforce el scope de owner. */}
-      {canManageContext && (
-        <ProjectContextSection
-          projectId={projectId}
-          canEdit={canManageContext}
-          generated={generated}
-          onSessionsChange={fetchStatus}
-        />
-      )}
 
       {/* Los resultados del cliente como lista medible (2026-10-02): la única captura de su línea
           base y su meta — los objetivos del diagnóstico los toman de acá. Desde el 2026-10-05 se
@@ -826,7 +1015,7 @@ export default function ProjectHandoffSection({
       )}
 
       {/* Lo que el cliente pidió en las reuniones y no está en lo vendido (2026-10-02): el CSE decide. */}
-      {visible && <PedidosFueraDeAlcance projectId={projectId} />}
+      {visible && <PedidosFueraDeAlcance projectId={projectId} clientId={clientId} />}
 
       {/* Exclusiones para el handoff — texto libre del CSE que el agente debe ignorar
           (temas de OTROS proyectos del cliente). Se inyecta como regla dura al generar. */}
@@ -871,7 +1060,9 @@ export default function ProjectHandoffSection({
               {status.exclusionAutomatica ? "Suma acá otros t" : "T"}emas que el agente debe
               IGNORAR al generar: útil cuando el cliente tiene varios proyectos (ej.
               &quot;ignora el proyecto DocuSign&quot;, &quot;no hables de contratos&quot;).
-              Si las cambias, regenera el handoff (y después el kickoff).
+              {estaCongelado
+                ? " El handoff está congelado: si las cambias, valen la próxima vez que busques lo nuevo."
+                : " Si las cambias, regenera el handoff (y después el kickoff)."}
             </p>
             <textarea
               value={exclusions}
@@ -897,6 +1088,49 @@ export default function ProjectHandoffSection({
       {showHistorial && (
         <HistorialHandoffModal projectId={projectId} onClose={() => setShowHistorial(false)} />
       )}
+
+      {/* 3b · «Congelar»: se confirma, porque desde ahí la IA ya no lo regenera. */}
+      <ConfirmDialog
+        open={confirmarCongelar}
+        onCancel={() => !congelando && setConfirmarCongelar(false)}
+        onConfirm={handleCongelar}
+        loading={congelando}
+        variant="default"
+        title="¿Congelar el handoff?"
+        description="Queda como la foto fija de lo vendido: la IA ya no lo regenera. Lo puedes seguir editando a mano, y lo nuevo de las reuniones llega como sugerencias con «Buscar lo nuevo». Para volver a escribirlo entero hay que rehacerlo desde cero, con un motivo."
+        confirmLabel="Congelar"
+      />
+
+      {/* 3b · «Rehacer desde cero»: pide el motivo (queda en el historial del documento). */}
+      <Modal
+        open={rehacerAbierto}
+        onClose={() => setRehacerAbierto(false)}
+        title="¿Rehacer el handoff desde cero?"
+        description="La IA lo vuelve a escribir con todas las reuniones, como la primera vez. Lo que editaste a mano se conserva y las sugerencias sin revisar se descartan. Al terminar queda congelado otra vez."
+        size="md"
+        footer={
+          <>
+            <BotonBlanco onClick={() => setRehacerAbierto(false)}>Cancelar</BotonBlanco>
+            <BotonAzul onClick={handleRehacer} disabled={!motivoListo || generating}>
+              Rehacer desde cero
+            </BotonAzul>
+          </>
+        }
+      >
+        <Field
+          label="Por qué lo rehaces"
+          hint={`${MOTIVO_MINIMO} caracteres o más. Por ejemplo: «Ciclo 2: arranca el área de Servicio».`}
+          required
+        >
+          <Textarea
+            value={motivoRehacer}
+            onChange={(e) => setMotivoRehacer(e.target.value)}
+            rows={3}
+            maxLength={1000}
+            placeholder="Cuenta qué cambió para que haga falta volver a escribirlo."
+          />
+        </Field>
+      </Modal>
     </div>
   );
 }

@@ -12,10 +12,11 @@
  * listing otros puedan ser selects igual»*.
  *
  * ── QUÉ CAMBIA AL ELEGIR ─────────────────────────────────────────────────────
- * Escribe `csl_encargado` en TODOS los proyectos del cliente que están en el pipeline de
- * Implementación de HubSpot — porque el encargado es de la CUENTA, no de un proyecto. Los de
- * Desarrollo/Sitios web NO se tocan: cuelgan como hijos y tienen su propio encargado técnico.
- * Eso lo decide el endpoint; acá solo se elige.
+ * Escribe «CSE Encargado» (`cse_encargado`) en TODOS los proyectos del cliente que están en el pipeline de
+ * Implementación de HubSpot, en la empresa y en sus contactos, y deja «CSL Encargado» con la CSL (desde el
+ * 2026-10-09; antes escribía `csl_encargado`, que guardaba al CSE) — porque el encargado es de la CUENTA, no de un
+ * proyecto. Los de Desarrollo/Sitios web NO se tocan: cuelgan como hijos y tienen su propio encargado técnico.
+ * Eso lo decide el endpoint; acá solo se elige. Al CSE nuevo le llega el resumen de la cuenta en «Para ti».
  */
 import { useRouter } from "next/navigation";
 import { CeldaSelect, type OpcionDeCelda } from "@/components/ui/CeldaSelect";

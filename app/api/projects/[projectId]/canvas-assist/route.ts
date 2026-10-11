@@ -130,12 +130,15 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     .filter(Boolean)
     .join("\n\n");
 
-  /* El DIAGNÓSTICO lee exactamente lo mismo que su generación (2026-09-28): sesiones del contexto,
-     notas, encuesta, ficha, handoff cliente-safe, exploración y procesos. Con solo el handoff, el
-     assist no podía anclar un síntoma a una reunión que nunca vio. */
+  /* El DIAGNÓSTICO lee lo mismo que su generación (2026-09-28): sesiones del contexto, notas, encuesta,
+     ficha, handoff cliente-safe, exploración y procesos. Con solo el handoff, el assist no podía anclar
+     un síntoma a una reunión que nunca vio. Desde la etapa 7, con una diferencia: las reuniones elegidas
+     van EN RESUMEN (`paraElAssist`) y no enteras — este pedido manda el contexto entero cada vez — y sin
+     búsqueda web (abajo): lo dicho por terceros en una reunión no puede terminar en una consulta al buscador. */
+  const esDiagnostico = pieza.slug === "diagnosis";
   const context =
-    pieza.slug === "diagnosis"
-      ? await fuentesDelDiagnostico(projectId)
+    esDiagnostico
+      ? await fuentesDelDiagnostico(projectId, { paraElAssist: true })
       : [
           `Empresa: ${project?.client.name ?? "—"} · Industria: ${project?.client.industry ?? "No especificada"}`,
           handoffCtx ? `=== HANDOFF CURADO (única fuente de datos del proyecto; no inventes) ===\n${handoffCtx}` : "",
@@ -166,7 +169,8 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       // Mismo gate que la generación: el requerimiento técnico (brandVoice:false)
       // no lleva voz comercial; el kickoff sí (lo lee el cliente).
       brandVoice: doc.tpl.brandVoice !== false,
-      maxWebSearches: 3,
+      // El diagnóstico lleva lo que se dijo en las reuniones: sin búsqueda web (ver arriba).
+      maxWebSearches: esDiagnostico ? 0 : 3,
     });
     await prisma.agentRun.update({
       where: { id: run.id },

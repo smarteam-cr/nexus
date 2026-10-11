@@ -1,8 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/api";
+import { NextResponse } from "next/server";
+import { withPermission } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
+import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
+import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
+import { duenosPorCantidad, sesionesDelDueno } from "@/lib/ventas/dueno-del-analisis";
 
 const INTERNAL_DOMAIN = DOMINIO_PROPIO;
 
@@ -67,7 +71,17 @@ Reglas para pendientes:
 FORMATO JSON COMPLETO:
 { "cards": [...], "pendingItems": [...] }`;
 
-export const POST = withAuth(async (req) => {
+/**
+ * El «Análisis de ventas» de /sales.
+ *
+ * Desde el 2026-10-09 (Memoria de la cuenta · Etapa 0) pide la celda `ventas.read` —la misma que
+ * gatea las oportunidades de /sales— y nunca junta en el mismo prompt reuniones de dos clientes:
+ * el dueño sale de `duenoDeLaSesion` (chokepoint) y, si hay uno, se exige acceso a ese cliente.
+ * Si el grupo junta reuniones de varias empresas (se arma por dominio: gmail o un holding), se analizan
+ * las de la empresa con más reuniones a la que quien pide tiene acceso, y la respuesta dice cuántas
+ * quedaron afuera (`afuera`). La llamada queda medida a nombre del análisis y de quien apretó el botón.
+ */
+export const POST = withPermission("ventas", "read", async (req) => {
   let sessionIds: string[];
   try {
     const body = await req.json() as { sessionIds?: string[] };
@@ -106,13 +120,39 @@ export const POST = withAuth(async (req) => {
   // 2. Cargar transcripts
   const sessions = await prisma.firefliesSession.findMany({
     where: { id: { in: sessionIds }, transcript: { not: null } },
-    select: { id: true, title: true, date: true, participants: true, transcript: true },
+    select: {
+      id: true,
+      title: true,
+      date: true,
+      participants: true,
+      transcript: true,
+      resolvedClientId: true,
+      manualClientId: true,
+    },
     orderBy: { date: "asc" },
   });
 
   if (!sessions.length) {
     return NextResponse.json({ error: "No se encontraron sesiones con transcript" }, { status: 404 });
   }
+
+  // 2b. De quién son. Un solo cliente por análisis (invariante 1), y con acceso a ese cliente: la empresa con más
+  // reuniones a la que quien pide tiene acceso. Las de las otras quedan afuera y se avisa.
+  const duenos = duenosPorCantidad(sessions);
+  let elegido: string | null = null;
+  for (const d of duenos) {
+    const acceso = await guardAccessToClient(d);
+    if (!(acceso instanceof NextResponse)) {
+      elegido = d;
+      break;
+    }
+  }
+  if (duenos.length && !elegido) {
+    return NextResponse.json({ error: "No tienes acceso a la empresa de estas reuniones." }, { status: 403 });
+  }
+  const dueno = { clientId: elegido };
+  const delDueno = sesionesDelDueno(sessions, elegido);
+  const afuera = sessions.length - delDueno.length;
 
   // 3. Cargar knowledge pineado al agente (sin truncar)
   let knowledgeBlock = "";
@@ -132,8 +172,8 @@ export const POST = withAuth(async (req) => {
     }
   }
 
-  // 4. Construir userMessage
-  const transcriptBlocks = sessions.map((s, i) => {
+  // 4. Construir userMessage (solo las reuniones de esa empresa)
+  const transcriptBlocks = delDueno.map((s, i) => {
     const externalParticipants = s.participants
       .filter((p) => !p.toLowerCase().endsWith(`@${INTERNAL_DOMAIN}`))
       .join(", ") || "sin información";
@@ -175,12 +215,22 @@ export const POST = withAuth(async (req) => {
   // 5. Llamar a Claude
   let rawText: string;
   try {
-    const msg = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8000,
-      system: agent.systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
-    });
+    const systemPrompt = agent.systemPrompt;
+    const msg = await conContextoDeIA(
+      {
+        agentSlug: "sales-analysis-legacy",
+        clientId: dueno.clientId,
+        triggeredByEmail: await triggeredByEmail(),
+        origen: "sales/analyze",
+      },
+      () =>
+        anthropic.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: 8000,
+          system: systemPrompt,
+          messages: [{ role: "user", content: userMessage }],
+        }),
+    );
     rawText = (msg.content[0] as { type: string; text: string }).text.trim();
   } catch (e) {
     const msg = (e as Error).message ?? "";
@@ -216,5 +266,5 @@ export const POST = withAuth(async (req) => {
     .filter((it) => it.text.length > 0)
     .slice(0, 5);
 
-  return NextResponse.json({ cards: parsed.cards, pendingItems });
+  return NextResponse.json({ cards: parsed.cards, pendingItems, analizadas: delDueno.length, afuera });
 });

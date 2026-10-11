@@ -140,7 +140,8 @@ export function factorDeComplejidad(d: DatosDeComplejidad, config: ConfigCarga):
 
   if (d.nivelEscala) {
     const baja = d.nivelEscala === "DEFICIENTE" || d.nivelEscala === "INICIAL";
-    v.push({ clave: "escala", nombre: "Nivel en la Escala", valor: d.nivelEscala.toLowerCase(), suma: baja ? p.escalaBaja : 0, fuente: "Diagnóstico", estado: "tenemos" });
+    const nombre = { DEFICIENTE: "Deficiente", INICIAL: "Inicial", FUNCIONAL: "Funcional", EFICIENTE: "Eficiente", OPTIMO: "Óptimo" }[d.nivelEscala];
+    v.push({ clave: "escala", nombre: "Nivel en la Escala", valor: `${nombre}, del diagnóstico`, suma: baja ? p.escalaBaja : 0, fuente: "Diagnóstico", estado: "tenemos" });
   } else {
     v.push({ clave: "escala", nombre: "Nivel en la Escala", valor: "Sin dato", suma: 0, fuente: "Diagnóstico", estado: "falta" });
   }
@@ -160,7 +161,8 @@ export function factorDeComplejidad(d: DatosDeComplejidad, config: ConfigCarga):
     valor: d.diasSinReunion === null ? "Sin reuniones" : d.diasSinReunion <= 0 ? "Activa: reunión hoy" : `${fria ? "Fría" : "Activa"}: última reunión hace ${d.diasSinReunion} días`,
     suma: fria ? p.relacionFria : 0,
     fuente: "Calendario",
-    estado: "tenemos",
+    // Sin ninguna reunión en el calendario no se sabe si la relación está fría o se lleva por otro canal: se dice.
+    estado: d.diasSinReunion === null ? "parcial" : "tenemos",
   });
 
   const factor = Math.min(FACTOR_MAXIMO, 1 + v.reduce((a, x) => a + x.suma, 0));

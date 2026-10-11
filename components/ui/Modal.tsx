@@ -12,6 +12,9 @@ const SIZE = {
   lg: "max-w-lg",
   xl: "max-w-2xl",
   xxl: "max-w-5xl", // layouts anchos (ej. curación de fase a dos columnas)
+  // Un diálogo grande, casi de pantalla (Tareas: «Agendar» y «Revisa tu semana», con la semana entera). Pisa el alto
+  // de la base: hasta 1.280 px de ancho y el 88 % del alto. Los otros tamaños no cambian.
+  pantalla: "max-w-[1280px] h-[88vh] max-h-[88vh]",
 } as const;
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
@@ -29,6 +32,8 @@ export interface ModalProps {
   /** z-index del overlay (clase Tailwind). Subir cuando el modal se abre DESDE otra capa
    *  alta (ej. un drawer en z-[60]) para que no quede debajo. Default: z-50. */
   z?: string;
+  /** El cuerpo sin relleno ni scroll propio: el contenido maneja su propio layout (una grilla, dos columnas). */
+  cuerpoSinRelleno?: boolean;
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────────
@@ -48,6 +53,7 @@ export function Modal({
   closeOnBackdrop = true,
   closeOnEscape = true,
   z = "z-50",
+  cuerpoSinRelleno = false,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -119,7 +125,7 @@ export function Modal({
           </div>
         )}
 
-        <div className={cn("px-5 overflow-y-auto flex-1", hasHeader ? "pb-5" : "py-5")}>
+        <div className={cn(cuerpoSinRelleno ? "flex-1 min-h-0 overflow-hidden" : cn("px-5 overflow-y-auto flex-1", hasHeader ? "pb-5" : "py-5"))}>
           {children}
         </div>
 

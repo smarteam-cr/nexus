@@ -25,7 +25,7 @@
  *
  * ⛔ Y el modelo es FIJO POR HILO (`lib/asistente/hilo.ts`): es parte de la clave de la caché.
  */
-import type { Dueno } from "./hilo";
+import type { DuenoDeDocumento } from "./hilo";
 import {
   OPERACIONES_DE_DOCUMENTO_VALIDAS,
   aplicarOperacionesDeDocumento,
@@ -63,7 +63,8 @@ import {
   materialDelCronograma,
   TOPE_POR_SECCION_CHARS,
 } from "./contexto";
-import { huellasDeFrontera, lineasConFrontera } from "@/lib/contexto/frontera-del-cronograma";
+import { huellasDeFrontera, lineasConFrontera, traeUnMonto, type HuellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
+import { lineasConFronteraDeDocumento } from "@/lib/contexto/frontera-de-los-documentos";
 import type { LecturaDelMaterial } from "@/lib/contexto/material-cronograma";
 import { PIEZA_CRONOGRAMA } from "./piezas";
 import {
@@ -72,13 +73,16 @@ import {
   type Operacion,
   type OperacionDelChat,
 } from "@/lib/timeline/operaciones";
-import { leerAcuerdo, marcaDeAcuerdo, textoVisible, MARCA_DE_ACUERDO, type CambioAcordado } from "./acuerdo";
+import { leerAcuerdo, leerDesenlace, marcaDeAcuerdo, textoVisible, MARCA_DE_ACUERDO, type CambioAcordado } from "./acuerdo";
+import { textosDeLasNovedades } from "./alcance";
 import {
   acuerdoPendienteDelHilo,
   bloqueDePendientes,
+  esTurnoDeDesenlace,
   fusionarPendientes,
   indiceDeEtiqueta,
   podarIrresolubles,
+  type TurnoDelLibro,
 } from "./acuerdo-vivo";
 import {
   acuerdoSobreLaPropuesta,
@@ -999,7 +1003,7 @@ export interface ResultadoDelTurno {
  * ⚠ El cronograma es de PROYECTO por definición: no existe el cronograma de una propuesta
  * comercial. Que el tipo lo exija evita que un hilo de otro dueño caiga ahí con un id vacío.
  */
-async function contextoDeLaPieza(dueno: Dueno, pieza: string) {
+async function contextoDeLaPieza(dueno: DuenoDeDocumento, pieza: string) {
   if (pieza === PIEZA_CRONOGRAMA) {
     if (!("projectId" in dueno)) {
       return { texto: "Este documento no tiene cronograma.", cierreActual: null };
@@ -1034,6 +1038,20 @@ async function contextoDeLaPieza(dueno: Dueno, pieza: string) {
  */
 const RESUMEN_DE_ARRASTRE = "Esto sigue acordado y sin aplicar.";
 
+/**
+ * Etapa 6: la frase y la cita de las novedades que llevaron los mensajes de la persona desde el último acuerdo aplicado
+ * (un desenlace OK corta: lo de antes ya se escribió o se dejó).
+ */
+function textosDeNovedadesDelHilo(turnos: readonly TurnoDelLibro[]): string[] {
+  const out: string[] = [];
+  for (let i = turnos.length - 1; i >= 0; i--) {
+    const t = turnos[i];
+    if (esTurnoDeDesenlace(t) && (leerDesenlace(t.contenido).desenlace?.ok ?? true)) break;
+    if (t.rol === "CSE") out.push(...textosDeLasNovedades(t.contenido));
+  }
+  return out;
+}
+
 export async function correrTurno(
   hilo: HiloConTurnos,
   mensajeDelCse: string,
@@ -1042,7 +1060,7 @@ export async function correrTurno(
 ): Promise<ResultadoDelTurno> {
   const esCronograma = hilo.pieza === PIEZA_CRONOGRAMA;
   /* El dueño del hilo, reconstruido de sus tres columnas. Exactamente una está seteada. */
-  const dueno: Dueno = hilo.projectId
+  const dueno: DuenoDeDocumento = hilo.projectId
     ? { projectId: hilo.projectId }
     : hilo.businessCaseId
       ? { businessCaseId: hilo.businessCaseId }
@@ -1202,6 +1220,18 @@ export async function correrTurno(
    * 2026-09-24). Sin material (sin huellas) las líneas salen tal cual.
    */
   const huellas = esCronograma && ctx.material?.interno.length ? huellasDeFrontera(ctx.material.interno) : null;
+  /* ⭐ LA FRONTERA DE LOS DOCUMENTOS (etapa 4, 2026-10): en un documento que lee el cliente, la línea
+     que dice de dónde salió o trae un monto (donde corresponde) lleva el «⚠ revisa…»
+     (lib/contexto/frontera-de-los-documentos.ts). Esas reglas corren SIN huellas. La copia de una
+     frase sí las necesita: el turno de un documento no lee reuniones (contexto.ts), SALVO la NOVEDAD
+     que trae «Cambiar con el chat» (etapa 6), con la frase y la cita literal de la reunión. Sus huellas
+     van acá, así la línea del acuerdo que copia la cita queda marcada. Y si la novedad trae un monto,
+     los montos se marcan también donde la pieza no lo pide (el diagnóstico, la entrega): no se le
+     ruega al modelo, se filtra. Se miran los mensajes de la persona desde el último acuerdo aplicado
+     (el acuerdo acumula lo de esos turnos) y el de ahora. */
+  const textosDeNovedades = [...textosDeNovedadesDelHilo(hilo.turnos), ...textosDeLasNovedades(mensajeDelCse)];
+  const huellasDelDocumento: HuellasDeFrontera | null = textosDeNovedades.length ? huellasDeFrontera(textosDeNovedades) : null;
+  const montosDeLaNovedad = { montos: textosDeNovedades.some((t) => traeUnMonto(t)) };
   /* E3 P5: CONGELADO (solo lectura), lo pendiente se le cuenta al modelo con las líneas GUARDADAS —las
      que leyó el CSE—: no hay contra qué volver a traducirlas mientras la propuesta no se puede leer. */
   const lineasCongeladas =
@@ -1209,7 +1239,9 @@ export async function correrTurno(
   const lineasParaLosDosLectores = (ops: readonly unknown[]) =>
     lineasCongeladas && ops === libro.vivas
       ? [...lineasCongeladas]
-      : esCronograma ? lineasConFrontera(describir(ops), ops as Operacion[], huellas) : describir(ops);
+      : esCronograma
+        ? lineasConFrontera(describir(ops), ops as Operacion[], huellas)
+        : lineasConFronteraDeDocumento(describir(ops), ops, hilo.pieza, huellasDelDocumento, montosDeLaNovedad);
   const lineasVivas = lineasParaLosDosLectores(libro.vivas);
 
   /* El historial tal cual quedó guardado, más lo pendiente, más lo que el CSE acaba de escribir.
@@ -1541,8 +1573,16 @@ export async function correrTurno(
         resumen: resumenDelModelo || RESUMEN_DE_ARRASTRE,
         operaciones: opsDeDoc,
         /* ⛔ Las líneas salen del MISMO objeto que se va a ejecutar. Es lo único que hace hermética
-           la cajita: lo que la persona lee no puede divergir de lo que pasa. */
-        lineas: describirOperacionesDeDocumento(seccionesDelDoc, opsDeDoc),
+           la cajita: lo que la persona lee no puede divergir de lo que pasa. Y pasan por la MISMA
+           frontera que el bloque de pendientes del modelo (`lineasParaLosDosLectores`): si el CSE
+           pide «arregla la que dice revisa», el modelo ve esa marca. */
+        lineas: lineasConFronteraDeDocumento(
+          describirOperacionesDeDocumento(seccionesDelDoc, opsDeDoc),
+          opsDeDoc,
+          hilo.pieza,
+          huellasDelDocumento,
+          montosDeLaNovedad,
+        ),
         dependencias: dependenciasDeOperacionesDeDocumento(opsDeDoc),
         ...(preguntaAbierta ? { enEspera: true } : {}),
         /* ⚠ Un pendiente que se cayó porque alguien editó la sección a mano lo calcula la APP,

@@ -1,8 +1,10 @@
 /**
  * lib/tiempos/ciclo.int.test.ts — «¿cuánto te tomó?» de punta a punta contra una base REAL.
  *
- * Marcar una tarea hecha pregunta (una sola vez); responder la anota; desmarcar la retira; un avance pregunta por una
- * por tipo de fase; publicar un documento pregunta solo la primera vez; y lo que lee la carga es solo lo respondido.
+ * Marcar una tarea hecha pregunta (una sola vez); responder la anota; desmarcar la retira; un avance pregunta primero
+ * por las tareas clave y después por una por tipo de fase; «No lo hice yo» le pasa la pregunta a quien la hizo; la
+ * encuesta de arranque pregunta por cada tarea clave; publicar un documento pregunta solo la primera vez; y lo que lee
+ * la carga es solo lo respondido.
  * Correr con la base local: `npm run test:int`.
  */
 import { describe, expect, it, vi } from "vitest";
@@ -12,6 +14,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { alDesmarcarTareas, alMarcarTareasHechas, alPublicarDocumento } from "./disparar";
 import { misPreguntasPendientes, responderPregunta } from "./preguntas";
+import { mandarEncuestaDeArranque } from "./arranque";
+import { FAMILIAS } from "./familias";
 import { CONFIG_POR_DEFECTO, type Momento } from "./reglas";
 import { csvDeTiempos, datosDeTiempos, tiemposAnotados } from "./resultados";
 import { cuantasPendientes } from "./servidor";
@@ -70,11 +74,17 @@ describe("al marcar una tarea hecha", () => {
     const [p] = await alMarcarTareasHechas({ email: CSE, taskIds: ids, origen: "cronograma" });
     expect(p.titulo).toBe("Configurar el pipeline");
     expect(p.contexto).toContain("Grupo Prueba");
-    expect(p.estimacion).toEqual({ modo: "despues", texto: "La carga supone 2 h para una tarea de Configuración." });
+    // «Configurar el pipeline» es una tarea clave sin número propio: cuenta como su tipo de fase, con el factor de la cuenta.
+    expect(p.contexto).toContain("tarea clave");
+    expect(p.estimacion.modo).toBe("despues");
+    expect(p.estimacion.texto).toMatch(/^La carga suponía .*2 h de una tarea de Configuración/);
+    const guardada = await prisma.preguntaDeTiempo.findUniqueOrThrow({ where: { id: p.id } });
+    expect(guardada.estimadoMinutos).toBeGreaterThanOrEqual(120);
     expect(await alMarcarTareasHechas({ email: CSE, taskIds: ids, origen: "cronograma" })).toEqual([]);
 
     const fila = await prisma.preguntaDeTiempo.findUniqueOrThrow({ where: { id: p.id } });
-    expect(fila).toMatchObject({ personaEmail: CSE, rol: "CSE", projectId: project.id, tipoFase: "CONFIGURACION", party: "SMARTEAM", estimadoMinutos: 120 });
+    // 2 h × el factor de la cuenta de prueba (1,1): 132 min.
+    expect(fila).toMatchObject({ personaEmail: CSE, rol: "CSE", projectId: project.id, tipoFase: "CONFIGURACION", party: "SMARTEAM", estimadoMinutos: 132 });
   });
 
   it("no pregunta en tareas del cliente, a quien no está en la lista, ni por lo marcado más de 14 días tarde", async () => {
@@ -122,7 +132,7 @@ describe("al marcar una tarea hecha", () => {
 });
 
 describe("al aplicar un avance", () => {
-  it("pregunta por una por tipo de fase, juntas en un lote", async () => {
+  it("pregunta primero por la tarea clave y después por una por tipo de fase, juntas en un lote", async () => {
     await activar("TAREA_HECHA");
     const { ids } = await mundo([
       { titulo: "Configurar A" },
@@ -131,10 +141,51 @@ describe("al aplicar un avance", () => {
       { titulo: "Entregar manual", fase: 1 },
     ]);
     const lote = await alMarcarTareasHechas({ email: CSE, taskIds: ids, origen: "avance" });
-    expect(lote).toHaveLength(2);
+    expect(lote).toHaveLength(3);
+    expect(lote[0].titulo).toBe("Capacitar a ventas");
     expect(new Set(lote.map((p) => p.lote)).size).toBe(1);
     expect(lote[0].lote).not.toBeNull();
-    expect(new Set(lote.map((p) => p.contexto.split(" · ")[1]))).toEqual(new Set(["Configuración", "Adopción"]));
+    expect(new Set(lote.map((p) => p.contexto.split(" · ")[1]))).toEqual(new Set(["tarea clave", "Configuración", "Adopción"]));
+  });
+});
+
+describe("«No lo hice yo»", () => {
+  it("con quién la hizo, la pregunta pasa a esa persona con lo que suponía la carga", async () => {
+    await activar("TAREA_HECHA");
+    const { ids } = await mundo([{ titulo: "Configurar A" }]);
+    const [p] = await alMarcarTareasHechas({ email: CSE, taskIds: ids, origen: "cronograma" });
+    await expect(responderPregunta(p.id, CSE, { accion: "omitir", motivo: "no_lo_hice", quien: "nadie@test.local" })).rejects.toThrow("activa");
+    const r = await responderPregunta(p.id, CSE, { accion: "omitir", motivo: "no_lo_hice", quien: VENTAS });
+    expect(r.pasoA).toBe(VENTAS);
+    const [suya] = await misPreguntasPendientes(VENTAS);
+    expect(suya).toMatchObject({ titulo: "Configurar A", taskId: ids[0] });
+    expect(suya.contexto).toContain("te la pasaron");
+    const original = await prisma.preguntaDeTiempo.findUniqueOrThrow({ where: { id: p.id } });
+    const nueva = await prisma.preguntaDeTiempo.findUniqueOrThrow({ where: { id: suya.id } });
+    expect(original).toMatchObject({ estado: "omitida", motivoOmision: "no_lo_hice" });
+    expect(nueva).toMatchObject({ estado: "pendiente", origen: "reasignada", estimadoMinutos: original.estimadoMinutos });
+  });
+});
+
+describe("la encuesta de arranque", () => {
+  it("le llega a cada CSE una pregunta por tarea clave, una sola vez, y no a Ventas", async () => {
+    await mundo([]);
+    const r = await mandarEncuestaDeArranque("elias@test.local");
+    expect(r).toEqual({ personas: 1, preguntas: FAMILIAS.length });
+    expect(await mandarEncuestaDeArranque("elias@test.local")).toEqual({ personas: 0, preguntas: 0 });
+    const suyas = await misPreguntasPendientes(CSE);
+    expect(suyas).toHaveLength(FAMILIAS.length);
+    expect(suyas.every((p) => p.momento === "ARRANQUE")).toBe(true);
+    expect(await misPreguntasPendientes(VENTAS)).toEqual([]);
+    expect((await cuantasPendientes(CSE)).deArranque).toBe(FAMILIAS.length);
+
+    await responderPregunta(suyas[0].id, CSE, { accion: "responder", minutos: 240 });
+    await responderPregunta(suyas[1].id, CSE, { accion: "omitir", motivo: "no_lo_hice" });
+    const d = await datosDeTiempos("todo");
+    expect(d.arranque).toMatchObject({ personas: 1, completas: 0, aMedias: 1, sinEmpezar: 0 });
+    expect(d.familias).toHaveLength(FAMILIAS.length);
+    expect(d.familias.reduce((n, f) => n + f.arranque.respuestas, 0)).toBe(1);
+    expect(d.familias.reduce((n, f) => n + f.arranque.noLaHacen, 0)).toBe(1);
   });
 });
 

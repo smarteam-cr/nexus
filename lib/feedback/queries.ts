@@ -265,8 +265,8 @@ export interface ReporteDeBandeja {
   estado: string;
   temaId: string | null;
   tieneCaptura: boolean;
-  /** Nunca lo abrió quien revisa. */
-  sinAbrir: boolean;
+  /** Quien revisa tiene algo sin leer: nunca lo abrió, lo marcó como no leído o la persona le volvió a escribir. */
+  noLeido: boolean;
   /** Quien reportó contestó algo que quien revisa no leyó. */
   respondio: boolean;
   sugerencia: { temaId: string; enComun: string[] } | null;
@@ -338,7 +338,7 @@ export async function datosDeBandeja(): Promise<DatosDeBandeja> {
         estado: r.estado,
         temaId: r.temaId,
         tieneCaptura: !!r.capturaPath,
-        sinAbrir: !r.revisorLeyoAt,
+        noLeido: !r.revisorLeyoAt || teRespondio(r),
         respondio: teRespondio(r),
         sugerencia: sinDecidir ? temaMasParecido(r.cuerpo, comparables) : null,
         escala: r.escalaAncla ? { ancla: r.escalaAncla } : null,

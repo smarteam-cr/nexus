@@ -28,6 +28,7 @@
  *   ALLOW_PROD_WRITE=1 npx tsx scripts/corregir-sesiones-cruzadas.ts --apply
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";

@@ -10,6 +10,7 @@
  *   npx tsx scripts/run-cs-signals.ts --limit 3        → corta tras N clientes (smoke)
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { prisma } from "../lib/db/prisma";
 import { computeClientSignals, refreshAllCsSignals } from "../lib/hubspot/cs-signals";
 import { CS_CLIENT_WHERE } from "../lib/clients/kind";

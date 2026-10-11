@@ -22,7 +22,35 @@ import { describe, expect, it } from "vitest";
 
 const RAIZ = process.cwd();
 
-type Destino = "ventas" | "propuesta-al-cliente" | "handoff-interno" | "disparo" | "cuestionario-al-cliente" | "guia-interna";
+type Destino =
+  | "ventas"
+  | "propuesta-al-cliente"
+  | "handoff-interno"
+  | "disparo"
+  | "cuestionario-al-cliente"
+  | "guia-interna"
+  /** La exploración de un PROYECTO (2026-10-07, lib/exploraciones/marco.ts): la pieza de la ficha y lo que leen sus documentos. */
+  | "exploracion-del-proyecto"
+  /** El correo de seguimiento de una reunión (2026-10-07): lo lee el cliente, lo revisa y lo manda una persona. */
+  | "correo-al-cliente"
+  /**
+   * El agente vigía de Éxito del cliente (2026-10-09): lee los CORREOS de la empresa en HubSpot con el lector de la
+   * exploración (`correosDeLaEmpresa`), nunca una exploración. Sus alertas son internas (la CSL).
+   */
+  | "vigia-interno"
+  /**
+   * La memoria INTERNA de la cuenta (2026-10-09, lib/memoria, etapa 3): lo aprendido en la preventa —con lo interno
+   * rotulado— para los agentes internos (implementación, avance, resumen del proyecto, exploración del proyecto). Nunca
+   * llega al alcance del cliente ni al handoff: lo corta el armador (lib/memoria/armar.ts) y lo prueba frontera.test.ts.
+   */
+  | "memoria-interna"
+  /**
+   * Las SUGERENCIAS del panel de los documentos del proyecto (etapa 7 de la memoria de la cuenta, 2026-10-10): qué
+   * reunión es la de cada sesión de la exploración del proyecto, para sugerirla en el diagnóstico. Pantalla interna; solo
+   * las sesiones y su número, nunca lo que se confirmó ni lo que leyó el agente. Nada llega a un documento hasta que una
+   * persona toca «Usar».
+   */
+  | "sugerencias-del-documento";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/(shell)/sales/exploraciones/page.tsx": { destino: "ventas", motivo: "La lista de exploraciones." },
@@ -34,8 +62,34 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/api/sales/exploraciones/[id]/documentos/route.ts": { destino: "ventas", motivo: "Sumar a mano una sesión o un documento, y listarlos." },
   "app/api/sales/exploraciones/[id]/documentos/[documentoId]/route.ts": { destino: "ventas", motivo: "Quitar lo que se sumó a mano." },
   "app/api/sales/exploraciones/[id]/preparacion/route.ts": { destino: "ventas", motivo: "Los hechos de HubSpot de la pieza Preparación." },
-  "app/api/sales/exploraciones/[id]/reuniones/route.ts": { destino: "ventas", motivo: "El buscador de reuniones de «Contexto adicional»: sumar o quitar una reunión elegida." },
+  "app/api/sales/exploraciones/[id]/reuniones/route.ts": {
+    destino: "ventas",
+    motivo: "El buscador del selector de «Agregar sesión»: las reuniones de la empresa y del calendario. El POST (elegir una suelta) responde 410 desde el 2026-10-10.",
+  },
   "app/api/sales/exploraciones/empresas/route.ts": { destino: "ventas", motivo: "Buscar la empresa." },
+  "app/api/sales/exploraciones/[id]/hubspot/route.ts": {
+    destino: "ventas",
+    motivo: "Al abrir la preventa, sumar las reuniones que se grabaron con HubSpot (y que el agente lea las nuevas).",
+  },
+  "app/api/sales/exploraciones/[id]/agendadas/route.ts": {
+    destino: "ventas",
+    motivo: "«Agendadas · próximas 6 semanas» del selector de «Agregar sesión» (etapa A): lee el calendario y dice si ya es una sesión.",
+  },
+  "app/api/sales/exploraciones/[id]/sesiones/route.ts": {
+    destino: "ventas",
+    motivo: "«+ Agregar sesión» (etapa A): agrega una sesión agendada, una que ya pasó (adopta la sin dueño) o una sin reunión.",
+  },
+  "app/api/sales/exploraciones/[id]/calendario/route.ts": {
+    destino: "ventas",
+    motivo: "Al abrir la exploración, mirar si las reuniones agendadas de las sesiones se movieron o se cancelaron (etapa A).",
+  },
+  "app/api/sales/exploraciones/[id]/correo/route.ts": {
+    destino: "correo-al-cliente",
+    motivo:
+      "Armar el correo de seguimiento de una reunión. Lo que lee el agente lo decide `insumosDelCorreo` (sin lo interno). " +
+      "Desde la etapa 3 de la memoria suma la minuta y los compromisos de esa reunión (sin la cita) y la memoria de la cuenta " +
+      "con el alcance del cliente (lector «correo» en lib/memoria/consumidores.ts). Nunca Tareas.",
+  },
   "app/api/sales/exploraciones/sugerencias/route.ts": { destino: "ventas", motivo: "«Llegaron por el test»." },
   "app/api/business-cases/[id]/preventa/route.ts": {
     destino: "ventas",
@@ -50,6 +104,14 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/api/clients/[id]/analyze/route.ts": { destino: "handoff-interno", motivo: "El bloque de la exploración en el handoff de Customer Success." },
   "app/api/projects/[projectId]/exploracion-de-venta/route.ts": { destino: "handoff-interno", motivo: "La cuarta columna del contexto del handoff." },
   "lib/sessions/post-process.ts": { destino: "disparo", motivo: "Lanza la lectura automática de una reunión; no lee contenido." },
+  "lib/sessions/post-process-viejo.ts": {
+    destino: "disparo",
+    motivo: "La copia congelada del post-proceso (el retroceso de SEGUIMIENTO_REUNIONES_ENABLED=0): lanza lo mismo; no lee contenido.",
+  },
+  "lib/lecturas/personas.ts": {
+    destino: "ventas",
+    motivo: "La lectura de seguimiento (memoria de la cuenta, etapa 2): a quién va el seguimiento de lo que prometió un prospecto. Solo el responsable de la preventa viva, nada de su contenido.",
+  },
   "lib/auth/access.ts": {
     destino: "ventas",
     motivo: "Acceso a la empresa de una preventa viva (un prospecto) para quien trabaja las preventas. Solo cuenta filas.",
@@ -69,6 +131,52 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "lib/guia-exploracion/agente.ts": {
     destino: "guia-interna",
     motivo: "El agente de la guía lee los niveles del preliminar como punto de partida (interno, nunca al cliente).",
+  },
+  "app/api/projects/[projectId]/exploracion/route.ts": {
+    destino: "exploracion-del-proyecto",
+    motivo: "Abrir y leer la exploración del proyecto en su ficha (pantalla interna del CSE).",
+  },
+  "lib/canvas/load-canvas-context.ts": {
+    destino: "exploracion-del-proyecto",
+    motivo:
+      "Diagnóstico y Planificación leen lo confirmado de la exploración del proyecto (la estrategia, la escala con evidencia): " +
+      "lo dijo el cliente con su CSE, en el proyecto. Nunca una preventa ni la libreta del CSE.",
+  },
+  "lib/tareas/clientes.ts": {
+    destino: "ventas",
+    motivo:
+      "Tareas internas: qué empresas puede elegir una persona en una tarea. Es el paso de la preventa de " +
+      "requireAccessToClient (un prospecto con una preventa viva). Solo cuenta filas, con DE_LA_PREVENTA.",
+  },
+  "lib/tareas/mutaciones.ts": {
+    destino: "ventas",
+    motivo: "Tareas internas: vincular una preventa a una tarea. Solo su id y el nombre de la empresa, con DE_LA_PREVENTA.",
+  },
+  "lib/tareas/consultas.ts": {
+    destino: "ventas",
+    motivo: "Tareas internas: buscar una preventa para vincularla (nombre de la empresa) y el enlace del vínculo. Con DE_LA_PREVENTA.",
+  },
+  "lib/cs/cartera.ts": {
+    destino: "ventas",
+    motivo: "La clasificación de la cartera (Éxito del cliente, interno): si la empresa tiene una preventa abierta. Solo cuenta filas, con DE_LA_PREVENTA.",
+  },
+  "lib/cs/watchdog-cuenta.ts": {
+    destino: "vigia-interno",
+    motivo: "Los correos del cliente con la empresa en HubSpot, para ver quejas y retrasos. No lee ninguna exploración.",
+  },
+  "lib/memoria/cargar.ts": {
+    destino: "memoria-interna",
+    motivo:
+      "La memoria de la cuenta: lo aprendido en la preventa, solo en el alcance interno (queCargar). Por la puerta " +
+      "loAprendidoEnLaPreventa (la escala estimada y lo que dijo el cliente, más lo interno rotulado), nunca la fila.",
+  },
+  "lib/contexto/sugerencias-del-documento.ts": {
+    destino: "sugerencias-del-documento",
+    motivo: "La regla pura de las sugerencias: qué reunión es de qué sesión (sesionUnidaALaReunion) y su número (pestanasDeSesiones).",
+  },
+  "lib/contexto/sugerencias-del-documento-server.ts": {
+    destino: "sugerencias-del-documento",
+    motivo: "Arma las sugerencias del panel: las sesiones de la exploración del proyecto por su puerta (sesionesDeLaExploracionDelProyecto).",
   },
   "lib/cuestionario/escala.ts": {
     destino: "cuestionario-al-cliente",
@@ -94,9 +202,33 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     permitidas: /\bubicacionPreviaDelProyecto\b/,
     prohibidas: /exploracionParaLaPropuesta|bloqueParaElHandoff|exploracionParaElHandoff|internoParaElCse|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\.estado\b/,
   },
+  "exploracion-del-proyecto": {
+    permitidas: /\btextoDeLaExploracionDelProyecto\b|\basegurarExploracionDelProyecto\b/,
+    // Nunca lo de la preventa: ni la propuesta, ni el handoff, ni lo interno.
+    prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff/,
+  },
+  "correo-al-cliente": {
+    permitidas: /\barmarCorreoDeSeguimiento\b/,
+    // Ni los hechos de las reuniones (memoria de la cuenta, etapa 6): traen citas internas y nadie los revisó.
+    prohibidas: /exploracionParaLaPropuesta|bloqueParaElHandoff|exploracionParaElHandoff|internoParaElCse|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\.estado\b|hechoDeReunion|HechoDeReunion|@\/lib\/seguimiento\/hechos/,
+  },
+  "vigia-interno": {
+    permitidas: /\bcorreosDeLaEmpresa\b/,
+    // Sin `.estado`: el vigía lee el estado de los cobros de la cuenta, que no es el de una exploración.
+    prohibidas: /exploracionParaLaPropuesta|bloqueParaElHandoff|exploracionParaElHandoff|internoParaElCse|leerContenido|leerExploracion\b|\.exploracionDeVenta\b/,
+  },
   disparo: {
     permitidas: /leerReunionNueva/,
     prohibidas: /exploracionParaElHandoff|bloqueParaLaPropuesta|\.exploracionDeVenta\b/,
+  },
+  "sugerencias-del-documento": {
+    permitidas: /\bsesionesDeLaExploracionDelProyecto\b|\bsesionUnidaALaReunion\b/,
+    // Solo qué reunión es de qué sesión: ni la propuesta, ni el handoff, ni lo interno, ni lo confirmado.
+    prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|textoDeLaExploracionDelProyecto/,
+  },
+  "memoria-interna": {
+    permitidas: /\bloAprendidoEnLaPreventa\b/,
+    prohibidas: /bloqueParaLaPropuesta|\bparaLaPropuesta\b|leerExploracion\b|\.exploracionDeVenta\b/,
   },
 };
 
@@ -154,5 +286,19 @@ describe("⛔ quién lee una exploración de venta", () => {
   it("ningún documento del cliente la lee directo (kickoff, entrega, diagnóstico, cronograma)", () => {
     const deDocumentos = lectores.filter((f) => /kickoff|entrega|diagnostic|timeline|cronograma|external/i.test(f));
     expect(deDocumentos).toEqual([]);
+  });
+});
+
+describe("⛔ la lectura que alimenta el correo al cliente no recibe la memoria interna", () => {
+  /* El resumen de la LECTURA de una reunión es lo que el correo de seguimiento usa como «lo que se leyó» (alcance
+     cliente). En un proyecto, la memoria interna (F0) trae los hechos de otras reuniones sin revisar: al leer, no entra.
+     La edición que pone esto en rojo: volver a llamar `fuentesDelProyecto` sin `conMemoria` al leer. */
+  it("fuentes.ts pide las fuentes del proyecto sin la memoria cuando lee una reunión", () => {
+    const fuente = fs.readFileSync(path.join(RAIZ, "lib/exploraciones/fuentes.ts"), "utf8");
+    expect(fuente).toContain('fuentesDelProyecto(opts.projectId, opts.clientId, { conMemoria: opts.modo !== "leer" })');
+  });
+  it("y fuentes-del-proyecto.ts no lee la memoria con `conMemoria: false`", () => {
+    const fuente = fs.readFileSync(path.join(RAIZ, "lib/exploraciones/fuentes-del-proyecto.ts"), "utf8");
+    expect(fuente).toMatch(/conMemoria\s*\?\s*memoriaDeLaCuenta\(/);
   });
 });

@@ -33,6 +33,7 @@ import {
   cambiosDeSesion,
   diasHaciaAtras,
   enLotes,
+  esBloqueDeTarea,
   eventIdDeFila,
   fusionarCopia,
   idDeSesion,
@@ -99,7 +100,7 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
         singleEvents: true,
         orderBy: "startTime",
         pageToken,
-        fields: "nextPageToken,items(id,summary,start,end,attendees,organizer,conferenceData,attachments)",
+        fields: "nextPageToken,items(id,summary,description,extendedProperties,start,end,attendees,organizer,conferenceData,attachments)",
       });
 
       const items = res.data.items ?? [];
@@ -135,6 +136,8 @@ function processItems(
     // Solo eventos con Google Meet
     const confType = item.conferenceData?.conferenceSolution?.key?.type;
     if (confType !== "hangoutsMeet") continue;
+    // Un bloque de una tarea de Nexus nunca es una sesión, aunque Google le haya puesto un Meet.
+    if (esBloqueDeTarea(item)) continue;
 
     const eventId = item.id;
     if (!eventId) continue;

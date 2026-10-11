@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
 import { iniciales } from "@/lib/cs/formato";
-import type { SaludDeCuenta } from "@/lib/cs/cartera-reglas";
+import { NOMBRE_DE_LA_SALUD, type SaludDeCuenta } from "@/lib/cs/cartera-reglas";
 
 export type TonoDeChip = "neutro" | "atencion" | "ia" | "cruce" | "confirmado";
 
@@ -43,32 +43,49 @@ export function ChipDeCabecera({ children, title }: { children: ReactNode; title
   );
 }
 
-export type ColorDePunto = "rojo" | "ambar" | "verde" | "gris";
+export type ColorDePunto = "rojo" | "ambar" | "verde" | "gris" | "espera";
 
-const PUNTO: Record<ColorDePunto, string> = {
+const PUNTO: Record<Exclude<ColorDePunto, "espera">, string> = {
   rojo: "bg-destructive",
   ambar: "bg-warning",
   verde: "bg-success",
   gris: "bg-fg-muted",
 };
 
+/** El punto de color. «En espera del cliente» no es un punto: es una pausa (⏸) en gris pizarra. */
 export function Punto({ color, className }: { color: ColorDePunto; className?: string }) {
+  if (color === "espera") {
+    return (
+      <span aria-hidden className={cn("inline-flex h-2 w-2 flex-shrink-0 justify-between", className)}>
+        <span className="w-[3px] rounded-[1px] bg-fg-secondary" />
+        <span className="w-[3px] rounded-[1px] bg-fg-secondary" />
+      </span>
+    );
+  }
   return <span aria-hidden className={cn("inline-block h-2 w-2 flex-shrink-0 rounded-full", PUNTO[color], className)} />;
 }
 
 export const META_DE_SALUD: Record<SaludDeCuenta, { texto: string; color: ColorDePunto }> = {
-  "en-riesgo": { texto: "En riesgo", color: "rojo" },
-  "en-friccion": { texto: "En fricción", color: "ambar" },
-  saludable: { texto: "Saludable", color: "verde" },
+  "en-riesgo": { texto: NOMBRE_DE_LA_SALUD["en-riesgo"], color: "rojo" },
+  "en-friccion": { texto: NOMBRE_DE_LA_SALUD["en-friccion"], color: "ambar" },
+  "en-espera": { texto: NOMBRE_DE_LA_SALUD["en-espera"], color: "espera" },
+  saludable: { texto: NOMBRE_DE_LA_SALUD.saludable, color: "verde" },
+  "sin-datos": { texto: NOMBRE_DE_LA_SALUD["sin-datos"], color: "gris" },
 };
 
-/** La salud de una cuenta: punto + palabra (nunca solo el color). */
-export function Salud({ salud }: { salud: SaludDeCuenta }) {
+/**
+ * La salud de una cuenta: punto + palabra (nunca solo el color). Con `porque`, al pasar el mouse dice
+ * en una línea por qué tiene ese color (la capa de tooltips de la app toma el `title`).
+ */
+export function Salud({ salud, porque, corto = false }: { salud: SaludDeCuenta; porque?: string; corto?: boolean }) {
   const m = META_DE_SALUD[salud];
   return (
-    <span className="inline-flex items-center gap-1.5 text-[13px] text-fg">
+    <span
+      title={porque ? `${m.texto}: ${porque}` : undefined}
+      className={cn("inline-flex items-center gap-1.5 text-[13px] text-fg", porque && "cursor-help")}
+    >
       <Punto color={m.color} />
-      {m.texto}
+      {corto ? <span className="sr-only">{m.texto}</span> : m.texto}
     </span>
   );
 }

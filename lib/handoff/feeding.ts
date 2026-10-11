@@ -85,7 +85,7 @@ export async function projectHasEraEngagements(projectId: string): Promise<boole
       select: { id: true },
     });
     const hsClient = hsAccount ? await getHubspotClient(hsAccount.id) : await getSystemHubspotClient();
-    const items = await fetchCompanyTimelineItems(hsClient, companyId, { since: projectEraSince(project) });
+    const items = await fetchCompanyTimelineItems(hsClient, companyId, { since: projectEraSince(project), grabaciones: false });
     return items.length > 0;
   } catch {
     return false;

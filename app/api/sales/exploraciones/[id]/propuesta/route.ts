@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
 import { guardPermission } from "@/lib/auth/api-guards";
+import { guardDeLaExploracion } from "@/lib/exploraciones/guardia";
 import { armarPropuesta, catalogoDeCasosDeUso, negociosDeLaEmpresa } from "@/lib/exploraciones/propuesta";
 import { propuestasDeLaEmpresa } from "@/lib/exploraciones/en-las-propuestas";
 import { leerExploracion } from "@/lib/exploraciones/servidor";
@@ -26,7 +27,7 @@ const Cuerpo = z.object({
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const guard = await guardPermission("preventa", "read");
+  const guard = await guardDeLaExploracion(id, "read");
   if (guard instanceof NextResponse) return guard;
 
   const lectura = await leerExploracion(id);
@@ -44,6 +45,10 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
   const guard = await guardPermission("ventas", "write");
   if (guard instanceof NextResponse) return guard;
+  // La exploración de un proyecto no arma propuestas comerciales: el cliente ya compró.
+  const quien = await guardDeLaExploracion(id, "read");
+  if (quien instanceof NextResponse) return quien;
+  if (quien.projectId) return NextResponse.json({ error: "La exploración de un proyecto no arma propuestas." }, { status: 409 });
 
   let raw: unknown;
   try {

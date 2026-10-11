@@ -321,90 +321,9 @@ export const GET = withProjectAccess(async (
     createdAtSource: project.hubspotCreatedAt ? "hubspot" : "nexus",
   };
 
-  // ── ActionItems del proyecto (tabla nueva, reemplaza el Json legacy) ─────
-  const actionItemSelect = {
-    id: true,
-    text: true,
-    ownerEmail: true,
-    ladoResponsable: true,
-    responsableNombre: true,
-    dueDate: true,
-    status: true,
-    done: true,
-    deletedAt: true,
-    source: true,
-    sessionId: true,
-    session: { select: { id: true, title: true, date: true } },
-    createdAt: true,
-  } as const;
-
-  type ActionItemRow = {
-    id: string;
-    text: string;
-    ownerEmail: string | null;
-    ladoResponsable: string | null;
-    responsableNombre: string | null;
-    dueDate: Date | null;
-    status: "PENDING" | "IN_PROGRESS" | "BLOCKED" | "DONE";
-    done: boolean;
-    deletedAt: Date | null;
-    source: string | null;
-    sessionId: string | null;
-    session: { id: string; title: string | null; date: Date | null } | null;
-    createdAt: Date;
-  };
-
-  const toCompat = (a: ActionItemRow) => ({
-    text: a.text,
-    done: a.done,
-    source: a.source ?? undefined,
-    addedAt: a.createdAt.toISOString(),
-    // Campos extra para que el UI nuevo aproveche si quiere
-    id: a.id,
-    ownerEmail: a.ownerEmail,
-    ladoResponsable: a.ladoResponsable,
-    responsableNombre: a.responsableNombre,
-    dueDate: a.dueDate?.toISOString() ?? null,
-    status: a.status,
-    deletedAt: a.deletedAt?.toISOString() ?? null,
-    sessionId: a.sessionId,
-    sessionTitle: a.session?.title ?? null,
-  });
-
-  /* Lo RECIENTE del panel de la ficha (rediseño del 2026-10-04, decisión de Elías): los pendientes
-     abiertos de las últimas 4 semanas. Medido en producción, el promedio es de 50 abiertos por
-     proyecto con el 62 % vencido y el 76 % de hace más de 60 días: la lista de siempre (los 20 de
-     fecha más vieja) mostraba justo el ruido. El diálogo «Ver todos» sigue leyendo `pendingItems`. */
-  const desdeHace4Semanas = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000);
-  const whereRecientes = { projectId, done: false, deletedAt: null, createdAt: { gte: desdeHace4Semanas } };
-  /* Tres números y no dos: con solo «abiertos − mostrados», el «y N más antiguos» contaba como
-     antiguos a los recientes que no entraban en los 5 (restoDeLosPendientes, lib/clients). */
-  const [pendientesRecientesRows, pendientesRecientesTotal, pendientesAbiertos] = await Promise.all([
-    prisma.actionItem.findMany({
-      where: whereRecientes,
-      orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
-      select: actionItemSelect,
-      take: 5,
-    }),
-    prisma.actionItem.count({ where: whereRecientes }),
-    prisma.actionItem.count({ where: { projectId, done: false, deletedAt: null } }),
-  ]);
-
-  // Pendientes ABIERTOS (no hechos, no borrados) — lo que ve el widget + tab Pendientes.
-  const [openItems, historyRows, setup, canvases] = await Promise.all([
-    prisma.actionItem.findMany({
-      where: { projectId, done: false, deletedAt: null },
-      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-      select: actionItemSelect,
-      take: 20,
-    }),
-    // Histórico: tareas HECHAS o BORRADAS del proyecto (tab Histórico del modal).
-    prisma.actionItem.findMany({
-      where: { projectId, OR: [{ done: true }, { deletedAt: { not: null } }] },
-      orderBy: { updatedAt: "desc" },
-      select: actionItemSelect,
-      take: 50,
-    }),
+  /* DEPRECATED — los pendientes del proyecto ya no salen de acá (memoria de la cuenta, etapa 2: `ActionItem` se retiró).
+     Son tareas: el panel los pide a /api/tareas/del-proyecto/[projectId], con la regla de visibilidad de Tareas. */
+  const [setup, canvases] = await Promise.all([
     /* Sigue haciendo falta por DOS señales que no son piezas de canvas y no se pueden
        derivar de los bloques: el estado de tres valores del Cronograma (vive en
        ProjectTimeline) y los procesos (viven a nivel CLIENTE). Las otras dos que trae
@@ -442,7 +361,7 @@ export const GET = withProjectAccess(async (
      La frescura se DERIVA acá, en el servidor, y NO viajan cuatro fechas para que el navegador
      saque la conclusión: dos consumidores calculándola por su cuenta terminarían diciendo cosas
      distintas sobre el mismo resumen. Viaja el veredicto y su motivo. */
-  const [briefRow, ultimaSesion, ultimaDesviacion, handoffRow] = await Promise.all([
+  const [briefRow, ultimaSesion, ultimaDesviacion, handoffRow, ultimaSolicitud] = await Promise.all([
     prisma.projectBrief.findUnique({
       where: { projectId },
       select: {
@@ -475,6 +394,8 @@ export const GET = withProjectAccess(async (
        alimentaba— y desde el 2026-09-22 importa el doble: la narrativa del resumen se apoya en el
        handoff, así que un handoff nuevo deja el texto contando una versión vieja de lo vendido. */
     prisma.handoff.findUnique({ where: { projectId }, select: { updatedAt: true } }),
+    // El resumen nombra las solicitudes fuera de alcance (2026-10-07): una que cambió lo deja viejo.
+    prisma.pedidoFueraDeAlcance.findFirst({ where: { projectId }, orderBy: { updatedAt: "desc" }, select: { updatedAt: true } }),
   ]);
   const frescura = evaluarFrescura(briefRow?.generatedAt ?? null, {
     ultimaSesionConContenido: ultimaSesion?.date ?? null,
@@ -488,6 +409,7 @@ export const GET = withProjectAccess(async (
        `null` — preferimos no avisar de un cambio real antes que avisar de uno que no pasó. */
     etapaSincronizadaEn: null,
     ultimaDesviacionEn: ultimaDesviacion?.lastDetectedAt ?? null,
+    ultimaSolicitudEn: ultimaSolicitud?.updatedAt ?? null,
     marcadoVencidoEn: briefRow?.staleAt ?? null,
   });
   const brief = briefRow
@@ -510,8 +432,6 @@ export const GET = withProjectAccess(async (
     handoffDelHermano,
   });
 
-  // Para compat hacia atrás: también devolver `pendingItems` con shape antiguo
-  // basado en ActionItems (el GPS UI viejo lee `pendingItems`).
   /* D-08 (2026-09-04): % de reuniones del CLIENTE con transcripción — la ficha del cliente. Dos
      COUNT sobre el índice [resolvedClientId, date], nunca filas ni blobs. Solo las que YA
      ocurrieron y dentro de la ventana (la misma que el aviso de /sessions), y «con transcripción»
@@ -529,8 +449,9 @@ export const GET = withProjectAccess(async (
     ventanaDias: VENTANA_DE_COBERTURA_DIAS,
   };
 
-  const pendingItemsCompat = openItems.map(toCompat);
-  const historyItems = historyRows.map(toCompat);
+  /* DEPRECATED — `pendingItems` y `actionItems` viajan vacíos para una respuesta cacheada vieja que todavía los lea: los
+     pendientes son tareas (/api/tareas/del-proyecto/[projectId]). Borrar cuando ningún lector quede. */
+  const pendingItemsCompat: never[] = [];
 
   /* E2b P7: de dónde viene la propuesta, quién la dejó y cuándo. Solo si el cartel se pinta. */
   const [timelineProposalAutoria] = hayPropuestaParaRevisar(project.timeline?.pendingProposal ?? null)
@@ -555,13 +476,7 @@ export const GET = withProjectAccess(async (
     etapa, // el bloque "Etapa" — null cuando no hay etapa que mostrar
     etapaHubspot, // la encuesta de la etapa: opciones, sugerencia de una reunión y bloqueo
     projectInfo,
-    actionItems: pendingItemsCompat, // alias semántico
-    /* El panel de la ficha: lo de las últimas 4 semanas (hasta 5, con fecha primero), cuántos hay
-       de esas 4 semanas y cuántos abiertos en total, para decir «y N más» sin traerlos. */
-    pendientesRecientes: pendientesRecientesRows.map(toCompat),
-    pendientesRecientesTotal,
-    pendientesAbiertos,
-    historyItems, // tareas hechas o borradas (tab Histórico)
+    actionItems: pendingItemsCompat, // DEPRECATED (alias de `pendingItems`, vacío)
     setup, // #5 — { handoff, kickoff, cronograma, procesos } para el indicador del widget
     /* El bloque "Canvas": qué documentos le corresponden a ESTE proyecto y cuáles ya están.
        El servidor manda la lista ya filtrada por `piezaAplica`; el widget solo pinta. */

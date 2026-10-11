@@ -1,105 +1,166 @@
 "use client";
 
 /**
- * «Equipo» — cómo está cada CSE, para las reuniones uno a uno: cuentas, lo que gestiona al mes,
- * cuántas en riesgo, el uso promedio de su cartera y el avance de sus proyectos en Nexus. Al lado,
- * el CSM de HubSpot con quien más coordina.
+ * «Equipo» — cómo está cada CSE, para las reuniones uno a uno (rediseño 2026-10-09, entrega 4 de
+ * docs/exito-del-cliente-cartera-plan.md): sus cuentas, las recurrentes contra la meta (de 6 a 7, configurable en
+ * los supuestos de la carga), cuántas en riesgo, en espera del cliente, sin contacto y con la relación de HubSpot
+ * por vencer, el uso promedio, los atrasos y bloqueos de sus proyectos y sus horas (la 1:1 en la carga).
  *
- * Una cuenta con dos CSE cuenta para quien lleva más proyectos en ella (si no, la plata se
- * contaría dos veces). Los atrasos y bloqueos son POR PROYECTO, de quien lo lleva.
+ * Cada número abre la pestaña «Cartera» con ese filtro. Una cuenta con dos CSE cuenta para quien lleva más
+ * proyectos en ella (el mismo CSE que filtra la cartera). Los atrasos y bloqueos son POR PROYECTO, de quien lo lleva.
  */
 import Link from "next/link";
 import { EmptyState } from "@/components/ui";
-import { RUTA_DE_LA_CARGA, RUTA_DE_LA_RENTABILIDAD } from "@/lib/carga/rutas";
+import { RUTA_DE_LA_CARGA, RUTA_DE_LOS_SUPUESTOS, rutaDeLaUnoAUno } from "@/lib/carga/rutas";
 import { cn } from "@/lib/cn";
-import { fmtMonto, plural } from "@/lib/cs/formato";
+import { plural } from "@/lib/cs/formato";
 import { UMBRALES } from "@/lib/cs/lectura-partner";
 import type { FilaDeEquipo } from "@/lib/cs/cartera-reglas";
-import { Avatar, Barra, CajaDeTabla, EncabezadoDeTabla } from "../piezas";
+import type { FilaDeLaCartera } from "@/lib/cs/clasificacion";
+import { cifrasDelCse, contraLaMeta, filtroDeLaCifra, type CifrasDelCse, type FiltrosDeCartera } from "@/lib/cs/filtros-de-cartera";
+import { Avatar, CajaDeTabla, EncabezadoDeTabla } from "../piezas";
 
-const COLUMNAS = "grid-cols-[minmax(0,1.2fr)_70px_110px_86px_96px_140px_84px_88px_minmax(0,1.1fr)]";
+const COLUMNAS = "grid-cols-[minmax(0,1.2fr)_64px_150px_70px_70px_76px_92px_80px_72px_72px_64px]";
 
 export default function Equipo({
   equipo,
+  cartera,
+  meta,
+  idsDelEquipo,
+  onVer,
 }: {
   equipo: { filas: FilaDeEquipo[]; proyectosSinCse: number; deBaja: { nombre: string; proyectos: number }[] };
+  cartera: readonly FilaDeLaCartera[];
+  /** Cuántas recurrentes lleva bien un CSE. */
+  meta: { min: number; max: number };
+  /** El id de cada persona por correo, para su 1:1 en la carga. */
+  idsDelEquipo: Record<string, string>;
+  onVer: (f: FiltrosDeCartera) => void;
 }) {
   if (equipo.filas.length === 0 && equipo.proyectosSinCse === 0) {
     return <EmptyState title="Sin CSE asignados" description="Ningún proyecto activo tiene un CSE en HubSpot." />;
   }
+  const tope = Math.max(meta.max + 2, ...equipo.filas.map((f) => cifrasDelCse(cartera, f.nombre).recurrentes));
   const n = (x: number, alerta = false) => <span className={cn("text-right tabular-nums", alerta && x > 0 && "font-semibold text-warn-ink")}>{x}</span>;
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-recorrido="cs.equipo">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
         <span className="text-[13px] text-fg-secondary">
-          <span className="font-semibold text-fg">Carga y rentabilidad:</span> horas por semana de cada persona, señales para la 1:1, y el margen de cada cuenta con sus horas reales.
+          <span className="font-semibold text-fg">Recurrentes por CSE:</span> la meta es de {meta.min} a {meta.max}.{" "}
+          <span className="text-fg-muted">Cada número abre esas cuentas en «Cartera».</span>
         </span>
         <span className="flex flex-wrap items-center gap-4">
+          <Link href={RUTA_DE_LOS_SUPUESTOS} className="text-xs text-fg-muted transition-colors hover:text-fg">
+            Cambiar la meta
+          </Link>
           <Link href={RUTA_DE_LA_CARGA} className="text-xs font-semibold text-brand transition-colors hover:text-brand-light">
             Ver la carga del equipo
           </Link>
-          <Link href={RUTA_DE_LA_RENTABILIDAD} className="text-xs font-semibold text-brand transition-colors hover:text-brand-light">
-            Ver la rentabilidad
-          </Link>
         </span>
       </div>
-      <CajaDeTabla minimo="min-w-[1060px]">
+      <CajaDeTabla minimo="min-w-[1120px]">
         <EncabezadoDeTabla columnas={COLUMNAS}>
           <span>CSE</span>
           <span className="text-right">Cuentas</span>
-          <span className="text-right">Gestiona al mes</span>
+          <span>Recurrentes</span>
           <span className="text-right">En riesgo</span>
+          <span className="text-right">En espera</span>
+          <span className="text-right">Sin contacto</span>
+          <span className="text-right">HubSpot por vencer</span>
           <span>Uso promedio</span>
-          <span>Avance de proyectos</span>
           <span className="text-right">Atrasados</span>
           <span className="text-right">Bloqueados</span>
-          <span>CSM de HubSpot</span>
+          <span className="text-right">Horas</span>
         </EncabezadoDeTabla>
-        {equipo.filas.map((f, i) => (
-          <div key={f.email ?? f.nombre} className={cn("grid items-center gap-4 px-4 py-3.5 text-[13px] text-fg", COLUMNAS, i > 0 && "border-t border-line")}>
-            <span className="flex min-w-0 items-center gap-2">
-              <Avatar nombre={f.nombre} />
-              <span className="truncate text-sm font-semibold">{f.nombre}</span>
-            </span>
-            {n(f.cuentas)}
-            <span className="text-right tabular-nums">{fmtMonto(f.mrr)}</span>
-            {n(f.enRiesgo, true)}
-            <span className={cn("tabular-nums", f.usoPromedio !== null && f.usoPromedio < UMBRALES.usoBajo && "text-warn-ink")}>
-              {f.usoPromedio ?? <span className="text-fg-muted">sin dato</span>}
-            </span>
-            {f.avance !== null ? (
-              <span className="flex items-center gap-2">
-                <Barra valor={f.avance * 100} ancho="w-16" />
-                <span className="tabular-nums">{Math.round(f.avance * 100)} %</span>
+        {equipo.filas.map((f, i) => {
+          const c = cifrasDelCse(cartera, f.nombre);
+          const id = f.email ? idsDelEquipo[f.email.toLowerCase()] : undefined;
+          const ver = (cifra: keyof CifrasDelCse) => () => onVer(filtroDeLaCifra(f.nombre, cifra));
+          return (
+            <div key={f.email ?? f.nombre} className={cn("grid items-center gap-4 px-4 py-3.5 text-[13px] text-fg", COLUMNAS, i > 0 && "border-t border-line")}>
+              <span className="flex min-w-0 items-center gap-2">
+                <Avatar nombre={f.nombre} />
+                <span className="truncate text-sm font-semibold">{f.nombre}</span>
               </span>
-            ) : (
-              <span className="text-fg-muted">sin cronograma</span>
-            )}
-            {n(f.atrasados, true)}
-            {n(f.bloqueados, true)}
-            <span className="truncate text-fg-secondary">{f.csmFrecuente ? `${f.csmFrecuente.nombre} en ${f.csmFrecuente.cuentas}` : "—"}</span>
-          </div>
-        ))}
+              <Cifra onClick={ver("cuentas")} titulo={`Ver las ${c.cuentas} cuentas de ${f.nombre}`}>
+                {n(c.cuentas)}
+              </Cifra>
+              <button type="button" onClick={ver("recurrentes")} className="flex items-center gap-2 text-left" title={`Ver sus recurrentes · meta de ${meta.min} a ${meta.max}`}>
+                <BarraDeLaMeta valor={c.recurrentes} meta={meta} tope={tope} />
+                <span className={cn("tabular-nums", contraLaMeta(c.recurrentes, meta) === "arriba" && "font-semibold text-warn-ink")}>{c.recurrentes}</span>
+              </button>
+              <Cifra onClick={ver("enRiesgo")} titulo="Ver las que están en riesgo">
+                {n(c.enRiesgo, true)}
+              </Cifra>
+              <Cifra onClick={ver("enEspera")} titulo="Ver las que esperan al cliente">
+                {n(c.enEspera)}
+              </Cifra>
+              <Cifra onClick={ver("sinContacto")} titulo="Ver las que no tienen contacto reciente">
+                {n(c.sinContacto, true)}
+              </Cifra>
+              <Cifra onClick={ver("relacionPorVencer")} titulo="Ver las que pierden la relación con HubSpot">
+                {n(c.relacionPorVencer, true)}
+              </Cifra>
+              <span className={cn("tabular-nums", f.usoPromedio !== null && f.usoPromedio < UMBRALES.usoBajo && "text-warn-ink")}>
+                {f.usoPromedio ?? <span className="text-fg-muted">sin dato</span>}
+              </span>
+              {n(f.atrasados, true)}
+              {n(f.bloqueados, true)}
+              <span className="text-right">
+                {id ? (
+                  <Link href={rutaDeLaUnoAUno(id)} className="text-xs font-semibold text-brand transition-colors hover:text-brand-light">
+                    Ver
+                  </Link>
+                ) : (
+                  <span className="text-fg-muted">—</span>
+                )}
+              </span>
+            </div>
+          );
+        })}
         {equipo.proyectosSinCse > 0 && (
           <div className={cn("grid items-center gap-4 bg-warn-surface px-4 py-3.5 text-[13px]", COLUMNAS, equipo.filas.length > 0 && "border-t border-line")}>
             <span className="flex items-center gap-2">
               <Avatar nombre={null} />
               <span className="text-sm font-semibold text-warn-ink">Sin CSE asignado</span>
             </span>
-            <span className="col-span-7 text-warn-ink">
-              {plural(equipo.proyectosSinCse, "proyecto activo", "proyectos activos")} sin encargado en HubSpot
+            <span className="col-span-9 text-warn-ink">
+              {plural(equipo.proyectosSinCse, "proyecto activo", "proyectos activos")} sin encargado
               {equipo.deBaja.length > 0
                 ? `, ${equipo.deBaja.reduce((s, d) => s + d.proyectos, 0)} de gente que ya no está en el equipo: ${equipo.deBaja.map((d) => `${d.nombre} (${d.proyectos})`).join(", ")}.`
                 : "."}
             </span>
-            <span className="text-warn-ink">asignar en HubSpot</span>
+            <span className="text-right text-xs text-warn-ink">pase de cuenta</span>
           </div>
         )}
       </CajaDeTabla>
       <p className="text-xs text-fg-muted">
-        Una cuenta con dos CSE cuenta para quien lleva más proyectos en ella. El avance sale de los cronogramas de Nexus; el CSM es
-        el de HubSpot que más se repite en sus cuentas.
+        Una cuenta con dos CSE cuenta para quien lleva más proyectos en ella. Recurrente = el tipo de relación confirmado (o
+        propuesto) en «Cartera». Atrasados y bloqueados son proyectos.
       </p>
     </div>
+  );
+}
+
+function Cifra({ onClick, titulo, children }: { onClick: () => void; titulo: string; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} title={titulo} className="rounded text-right transition-colors hover:text-brand">
+      {children}
+    </button>
+  );
+}
+
+/** La barra de las recurrentes con la banda de la meta pintada detrás. */
+function BarraDeLaMeta({ valor, meta, tope }: { valor: number; meta: { min: number; max: number }; tope: number }) {
+  const pct = (x: number) => `${Math.min(100, (x / tope) * 100)}%`;
+  const donde = contraLaMeta(valor, meta);
+  return (
+    <span aria-hidden className="relative h-2 w-20 overflow-hidden rounded-full bg-surface-hover">
+      <span className="absolute inset-y-0 bg-success-surface" style={{ left: pct(meta.min), width: `calc(${pct(meta.max)} - ${pct(meta.min)})` }} />
+      <span
+        className={cn("absolute inset-y-0 left-0 rounded-full", donde === "arriba" ? "bg-warning" : donde === "en-la-meta" ? "bg-success" : "bg-fg-muted")}
+        style={{ width: pct(valor) }}
+      />
+    </span>
   );
 }

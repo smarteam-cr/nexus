@@ -37,7 +37,7 @@ import {
   useChatDeSeccion,
 } from "@/components/asistente/chat-de-seccion";
 import { PIEZA_CRONOGRAMA } from "@/lib/asistente/piezas";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
 import { arrastreDeDesmarcadas } from "@/lib/asistente/arrastre";
@@ -53,10 +53,14 @@ import {
   textoMientrasAplica,
 } from "@/lib/asistente/textos-del-acuerdo";
 import { notaDeDescarte } from "@/lib/asistente/desenlace";
+import { novedadesPorAplicar, type NovedadEnElTurno } from "@/lib/asistente/alcance";
 import type { EstadoDeAcuerdo } from "@/lib/asistente/acuerdo-vivo";
 import type { Operacion } from "@/lib/timeline/operaciones";
 import ReactMarkdown from "react-markdown";
 import { useHydrated } from "@/lib/hooks/useHydrated";
+
+/** Lo dispara un chat al abrirse: los demás se cierran (ver el efecto de abajo). */
+const EVENTO_CHAT_ABIERTO = "nexus:chat-abierto";
 /* Puro (sin Prisma): la misma fuente de conteos que la línea cerrada del «Contexto del cronograma». */
 import { lineaDeLectura, type LecturaDelMaterial } from "@/lib/contexto/material-cronograma";
 /* L1: qué dice el cajón con una propuesta (puro, con su tabla). */
@@ -117,6 +121,37 @@ export interface ResultadoDeAplicar {
    * vuelve a evaluar). Va al hilo como línea aparte: en `avisos` se leía «el editor hizo algo distinto».
    */
   notas?: string[];
+  /**
+   * 1B (chat de tareas): el SERVIDOR aplicó y escribió el desenlace en la misma transacción, y manda el hilo
+   * como quedó. Con esto el cajón pinta ese hilo y NO escribe el desenlace (ni en el éxito ni en el fallo).
+   */
+  hilo?: { turnos: unknown[] };
+  /** 1B: lo que se puede hacer después, debajo del acuerdo aplicado («Agendar las 6», «Abrir el borrador»). */
+  acciones?: AccionDelChat[];
+}
+
+/** 1B: una acción que se ofrece debajo de un acuerdo aplicado. */
+export interface AccionDelChat {
+  texto: string;
+  alHacer: () => void;
+}
+
+/**
+ * 1B: los rótulos de un carril que no es el cronograma ni un documento (el chat de tareas). Sin ellos, los de
+ * siempre. `alDestino` va con su artículo («a tus tareas»): «Aplicar al tus tareas» sería un error.
+ */
+export interface RotulosDelChat {
+  alDestino: string;
+  vacio?: { intro: string; cierre: string };
+  /** El texto del botón sobre lo que quedó marcado («Crear 6 tareas»). null = el de siempre. */
+  boton?: (acuerdo: AcuerdoDelChat, desmarcadas: ReadonlySet<number>) => string | null;
+}
+
+/** 1B: lo que señala la persona en el chat de tareas. Viaja en el pedido de ESTE turno, no en el texto. */
+export interface ChipDelChat {
+  tipo: "tarea" | "proyecto" | "cliente" | "reunion";
+  id: string;
+  etiqueta: string;
 }
 
 interface Props {
@@ -144,7 +179,11 @@ interface Props {
    * permiso. ⚠ Devuelve el MOTIVO del fallo o `null` si anduvo — sin eso el panel no puede
    * distinguir «se aplicó» de «falló», que es justo el bug que se arregló.
    */
-  onAplicar?: (acuerdo: AcuerdoDelChat) => Promise<ResultadoDeAplicar>;
+  onAplicar?: (
+    acuerdo: AcuerdoDelChat,
+    /** 1B: el turno del acuerdo y lo desmarcado (índices de la lista ENTERA): el chat de tareas los manda al servidor. */
+    de?: { turnoId: string; desmarcadas: readonly number[] },
+  ) => Promise<ResultadoDeAplicar>;
   /**
    * Por qué NO se puede aplicar ahora mismo, si es que no se puede. Apaga el botón y se lee en él.
    *
@@ -176,6 +215,22 @@ interface Props {
    * nunca se guarda como turno: entraría al contexto del modelo.
    */
   divisoria?: { texto: string; cuando: string } | null;
+  /** 1B: los rótulos del chat de tareas. Ver `RotulosDelChat`. */
+  rotulos?: RotulosDelChat;
+  /** 1B: más ancho para leer un plan largo. ⚠ El cronograma nunca: su Gantt se corre 400 px. */
+  ancho?: "normal" | "amplio";
+  /** 1B: con esto, la cabecera ofrece cambiar el ancho («Más ancho» / «Más angosto»). */
+  onAncho?: () => void;
+  /** 1B: lo que se señaló (una tarea, un proyecto, un cliente o una reunión), con su ✕. */
+  chip?: ChipDelChat | null;
+  onSoltarChip?: () => void;
+  /** 1B: llena el campo SIN mandarlo, cada vez que sube `n` («o pídeselo al asistente»). */
+  borrador?: { texto: string; n: number } | null;
+  /**
+   * Etapa 6 (memoria de la cuenta): un acuerdo se aplicó bien y los mensajes que lo armaron llevaban NOVEDADES de
+   * reuniones («Cambiar con el chat» de la franja del documento). Quien monta el chat las da por usadas.
+   */
+  onNovedadesAplicadas?: (novedades: NovedadEnElTurno[]) => void;
 }
 
 /** El id del cajón. Lo apunta el `aria-controls` del botón que lo abre, en el otro componente. */
@@ -196,6 +251,13 @@ export default function ChatDelAsistente({
   pedidoDeFoco = 0,
   aviso = null,
   divisoria = null,
+  rotulos,
+  ancho = "normal",
+  onAncho,
+  chip = null,
+  onSoltarChip,
+  borrador = null,
+  onNovedadesAplicadas,
 }: Props) {
   const hydrated = useHydrated();
   /** Por qué no se aplica ESTE acuerdo ahora (E3 P5: puede depender del acuerdo). */
@@ -233,6 +295,10 @@ export default function ChatDelAsistente({
      carteles decían «al cronograma»; desde que atiende diez documentos, un acuerdo sobre una
      Entrega ofrecía «Aplicar al cronograma». Visto en pantalla el 2026-08-22. */
   const nombreDeLaPieza = pieza === PIEZA_CRONOGRAMA ? "cronograma" : "documento";
+  /* 1B: con su artículo, para que el chat de tareas diga «a tus tareas» y no «al tus tareas». */
+  const alDestino = rotulos?.alDestino ?? `al ${nombreDeLaPieza}`;
+  /* 1B: lo que se ofrece debajo de un acuerdo aplicado, por turno (vive en la pantalla: se pierde al recargar). */
+  const [accionesDe, setAccionesDe] = useState<Record<string, AccionDelChat[]>>({});
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   /** Alto máximo del composer antes de scrollear adentro — ~10 líneas, para no comerse la caja de mensajes. */
   const ALTO_MAXIMO_COMPOSER = 200;
@@ -312,6 +378,21 @@ export default function ChatDelAsistente({
     return () => window.removeEventListener("keydown", onKey);
   }, [abierto, onClose]);
 
+  /* 1B: un solo chat a la vez. El de tareas (en todas las pantallas) y el de un documento ocupan el mismo lado y se
+     tapaban. El que se abre avisa; el otro, si estaba abierto, se cierra (lo escrito y el hilo quedan guardados). */
+  const idDelCajon = useId();
+  useEffect(() => {
+    if (abierto) window.dispatchEvent(new CustomEvent(EVENTO_CHAT_ABIERTO, { detail: idDelCajon }));
+  }, [abierto, idDelCajon]);
+  useEffect(() => {
+    if (!abierto) return;
+    const onOtro = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== idDelCajon) onClose();
+    };
+    window.addEventListener(EVENTO_CHAT_ABIERTO, onOtro);
+    return () => window.removeEventListener(EVENTO_CHAT_ABIERTO, onOtro);
+  }, [abierto, onClose, idDelCajon]);
+
   /**
    * ⭐ EL FOCO ENTRA AL CAJÓN Y VUELVE DE DONDE VINO.
    *
@@ -349,6 +430,15 @@ export default function ChatDelAsistente({
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoDeFoco]);
+
+  /* 1B: «o pídeselo al asistente» llena el campo con lo que ya se escribió, sin mandarlo. */
+  useEffect(() => {
+    if (!borrador?.n) return;
+    setTexto(borrador.texto);
+    const t = window.setTimeout(() => composerRef.current?.focus(), 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [borrador?.n]);
 
   useEffect(() => {
     finRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -398,6 +488,8 @@ export default function ChatDelAsistente({
              turnos después), y este campo es el gatillo para que el servidor adjunte el contenido
              completo de esa sección a ESTE turno. */
           ...(seccionReferida ? { seccion: { key: seccionReferida.key } } : {}),
+          /* 1B: lo que se señaló en el chat de tareas; el servidor lo resuelve con la visibilidad de quien pide. */
+          ...(chip ? { chip: { tipo: chip.tipo, id: chip.id } } : {}),
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -531,8 +623,11 @@ export default function ChatDelAsistente({
    * ⚠ `descartadas` es el CONJUNTO de índices, no su tamaño. Era un número, y el número no
    * alcanzaba: ver `notaDeDescarte`. El llamador ya tiene el `Set` a mano.
    */
-  async function aplicar(acuerdo: AcuerdoDelChat, descartadas?: ReadonlySet<number>) {
-    if (!onAplicar || aplicando) return;
+  async function aplicar(acuerdo: AcuerdoDelChat, descartadas?: ReadonlySet<number>, turnoId?: string) {
+    /* ⛔ Tampoco mientras el asistente piensa: el turno que viene puede traer un acuerdo nuevo que reemplace a este, y
+       aplicar el viejo en el medio escribe lo que la persona ya está cambiando. */
+    if (!onAplicar || aplicando || pensando) return;
+    const de = turnoId ? { turnoId, desmarcadas: [...(descartadas ?? [])] } : undefined;
     /* Revisión de E3 (#19): se manda lo marcado CON sus líneas alineadas (`loQueSeManda`), así quien
        aplica cita la línea que falló. `acuerdo` queda entero: la nota de lo descartado lo necesita. */
     const mandado = loQueSeManda(acuerdo, descartadas);
@@ -540,7 +635,20 @@ export default function ChatDelAsistente({
     setAplicandoEste(mandado);
     setError(null);
     try {
-      const { fallo, avisos, destino: destinoDelResultado, notas } = await onAplicar(mandado);
+      const { fallo, avisos, destino: destinoDelResultado, notas, hilo, acciones } = await onAplicar(mandado, de);
+      /* ⭐ 1B: el chat de tareas aplica EN EL SERVIDOR, que escribe el desenlace en la misma transacción. Acá
+         se pinta el hilo que mandó y no se escribe nada: un segundo desenlace desde el navegador apagaría (o
+         reviviría) un acuerdo sin aplicarlo. Va antes del `if (fallo)`: tampoco se escribe el del fallo. */
+      if (hilo) {
+        setTurnos(hilo.turnos as TurnoVista[]);
+        if (acciones?.length && turnoId) setAccionesDe((m) => ({ ...m, [turnoId]: acciones }));
+        if (fallo) {
+          setError(fallo);
+        } else {
+          soltarElFocoDelCajon();
+        }
+        return;
+      }
       /* E3 P5: a dónde fue lo decide quien aplicó; si no lo dice, lo que pide el acuerdo. */
       const destino = destinoDelResultado ?? destinoDelAcuerdo(mandado);
       if (fallo) {
@@ -578,13 +686,22 @@ export default function ChatDelAsistente({
         /* ⛔ Si el desenlace NO se pudo escribir, hay que DECIRLO. El cambio ya entró, pero el
            botón sigue vivo en el último turno y el silencio invita a apretarlo otra vez — sobre
            operaciones que no son idempotentes. */
+        /* Etapa 6: las novedades de reuniones que llevaban los mensajes de este acuerdo quedan usadas. El chip de la
+           novedad se suelta: si siguiera puesto, el próximo mensaje la volvería a llevar. */
+        if (onNovedadesAplicadas && turnoId) {
+          const usadas = novedadesPorAplicar(turnos, turnoId);
+          if (usadas.length) {
+            onNovedadesAplicadas(usadas);
+            if (seccionReferida?.novedad) soltarSeccion();
+          }
+        }
         if (!quedoEscrito) {
           setError(
             (destino === "propuesta"
               ? "El cambio pasó a la propuesta"
               : destino === "descarte"
                 ? "La propuesta se descartó"
-                : `El cambio se aplicó al ${nombreDeLaPieza}`) +
+                : `El cambio se aplicó ${alDestino}`) +
               ", pero no se pudo dejar constancia en la conversación. ⚠ No lo apliques de nuevo: se " +
               "duplicaría. Recarga para ver el hilo.",
           );
@@ -622,7 +739,7 @@ export default function ChatDelAsistente({
     <aside
       ref={cajonRef}
       id={ID_DEL_CAJON}
-      className="fixed right-0 top-0 h-full z-[45] w-[400px] max-w-[92vw] bg-surface border-l border-line shadow-2xl flex flex-col"
+      className={`fixed right-0 top-0 h-full z-[45] ${ancho === "amplio" ? "w-[560px]" : "w-[400px]"} max-w-[92vw] bg-surface border-l border-line shadow-2xl flex flex-col`}
       aria-label={`Asistente sobre ${piezaLabel}`}
     >
       <header className="px-4 py-3 border-b border-line flex items-center justify-between shrink-0">
@@ -637,6 +754,15 @@ export default function ChatDelAsistente({
           ) : null}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {onAncho ? (
+            <button
+              onClick={onAncho}
+              className="hidden sm:inline-flex px-2 py-1 rounded-lg text-xs text-fg-muted hover:text-fg hover:bg-surface-hover transition-colors"
+              title={ancho === "amplio" ? "Volver al ancho de siempre" : "Más ancho, para leer un plan largo"}
+            >
+              {ancho === "amplio" ? "Más angosto" : "Más ancho"}
+            </button>
+          ) : null}
           {turnos.length > 0 && (
             <button
               onClick={() => void empezarDeCero()}
@@ -666,7 +792,7 @@ export default function ChatDelAsistente({
 
         {!cargando && turnos.length === 0 && conEstadoVacio && (
           <div className="text-sm text-fg-secondary space-y-2">
-            <p>Pregúntale qué se puede cambiar y qué va a costar. Por ejemplo:</p>
+            <p>{rotulos?.vacio?.intro ?? "Pregúntale qué se puede cambiar y qué va a costar. Por ejemplo:"}</p>
             {/* L1: sin propuesta, los ejemplos del aviso (los de siempre, sin «Aplica la propuesta»). Lo que se le
                 pide a una propuesta va en la bienvenida, con sus números y sus fases de verdad. */}
             {aviso?.ejemplos.length ? (
@@ -683,7 +809,7 @@ export default function ChatDelAsistente({
               </ol>
             )}
             <p className="text-xs text-fg-muted">
-              Cuando estén de acuerdo, te deja la instrucción lista para revisar y aplicar.
+              {rotulos?.vacio?.cierre ?? "Cuando estén de acuerdo, te deja la instrucción lista para revisar y aplicar."}
             </p>
             {pieza === PIEZA_CRONOGRAMA ? (
               <p className="text-xs text-fg-muted">
@@ -761,10 +887,27 @@ export default function ChatDelAsistente({
                  * cada vez que se scrollea el hilo hacia arriba.
                  */}
                 {t.estado === "aplicado" ? (
+                  <>
                   <p className="text-sm text-fg-secondary mt-1">
                     {/* E3 P5: lo que fue a la propuesta lo dice así («Pasado a la propuesta…»). */}
                     {textoDelAcuerdoAplicado(t.acuerdo) ?? "Aplicado. ¿Hay que cambiar algo más?"}
                   </p>
+                  {/* 1B: lo que sigue («Agendar las 6», «Abrir el borrador»). El chat no agenda ni activa. */}
+                  {accionesDe[t.id]?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {accionesDe[t.id].map((a) => (
+                        <button
+                          key={a.texto}
+                          type="button"
+                          onClick={a.alHacer}
+                          className="px-2.5 py-1 rounded-lg text-xs font-medium border border-line bg-surface text-fg hover:bg-surface-hover transition-colors"
+                        >
+                          {a.texto}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  </>
                 ) : t.estado === "soltado" ? null : t.estado === "retomado" ? null : (
                   <>
                 {/* El texto del asistente, o el resumen si el turno no trajo texto. ⚠ NUNCA los
@@ -860,7 +1003,7 @@ export default function ChatDelAsistente({
                       className={
                         `mt-2 space-y-1 ${pieza === PIEZA_CRONOGRAMA ? "list-disc" : "list-decimal"} pl-4 text-sm text-fg marker:text-fg-muted` +
                         (t.acuerdo.lineas.length > 6
-                          ? " max-h-56 overflow-y-auto pr-1 overscroll-contain" +
+                          ? (ancho === "amplio" ? " max-h-[55vh]" : " max-h-56") + " overflow-y-auto pr-1 overscroll-contain" +
                             " focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-info-line rounded"
                           : "")
                       }
@@ -978,7 +1121,7 @@ export default function ChatDelAsistente({
                         ...(instruccionEditada[t.id] !== undefined
                           ? { instruccion: instruccionEditada[t.id] }
                           : {}),
-                      }, desmarcadas[t.id])
+                      }, desmarcadas[t.id], t.id)
                     }
                     /* ⛔ Sin líneas no se aplica: aprobar lo que no se puede leer es
                        exactamente lo que la cajita existe para impedir. */
@@ -989,6 +1132,7 @@ export default function ChatDelAsistente({
                        explica tarde. */
                     disabled={
                       aplicando ||
+                      pensando ||
                       !!motivoPara(t.acuerdo!) ||
                       sinNadaQueAplicar(t.id, t.acuerdo!) ||
                       (!!t.acuerdo!.operaciones?.length && !t.acuerdo!.lineas?.length)
@@ -1002,14 +1146,16 @@ export default function ChatDelAsistente({
                       : sinNadaQueAplicar(t.id, t.acuerdo)
                         ? "No queda nada marcado"
                         : /* E3 P5: con una propuesta, «Pasar a la propuesta», «Aplicar la propuesta…».
-                             Revisión de E3 (#21): el «(N)» solo con algo desmarcado, como el de siempre. */
+                             Revisión de E3 (#21): el «(N)» solo con algo desmarcado, como el de siempre.
+                             1B: el chat de tareas dice lo que hace («Crear 6 tareas»). */
+                          rotulos?.boton?.(t.acuerdo, desmarcadas[t.id] ?? EMPTY) ??
                           textoDelBoton(
                             t.acuerdo,
                             operacionesAceptadas(t.id, t.acuerdo).length,
                             desmarcadas[t.id]?.size ?? 0,
                           ) ??
                           (t.acuerdo.operaciones
-                          ? `Aplicar al ${nombreDeLaPieza}${
+                          ? `Aplicar ${alDestino}${
                               (desmarcadas[t.id]?.size ?? 0) > 0
                                 ? ` (${operacionesAceptadas(t.id, t.acuerdo).length})`
                                 : ""
@@ -1057,7 +1203,7 @@ export default function ChatDelAsistente({
             {/* E3 P5: lo que va a la propuesta lo dice así («Pasando a la propuesta…»). */}
             {(aplicandoEste ? textoMientrasAplica(aplicandoEste) : null) ??
               (turnos[turnos.length - 1]?.acuerdo?.operaciones?.length
-                ? `Aplicando los cambios al ${nombreDeLaPieza}…`
+                ? `Aplicando los cambios ${alDestino}…`
                 : "Aplicando los cambios… puede tardar unos minutos.")}
           </p>
         )}
@@ -1099,7 +1245,9 @@ export default function ChatDelAsistente({
                 ? aviso?.variante === "editable"
                   ? `Sobre «${seccionReferida.label}» de la propuesta`
                   : `Sobre la fase «${seccionReferida.label}»`
-                : `Sobre «${seccionReferida.label}»`}
+                : seccionReferida.novedad
+                  ? `Sobre «${seccionReferida.label}» · con lo que dejó «${seccionReferida.novedad.reunion}»`
+                  : `Sobre «${seccionReferida.label}»`}
               <button
                 type="button"
                 onClick={soltarSeccion}
@@ -1120,6 +1268,24 @@ export default function ChatDelAsistente({
             </span>
           </div>
         )}
+        {chip ? (
+          <div className="mb-2 flex items-center gap-1.5 text-xs">
+            <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-info-line bg-info-surface px-2 py-1 text-info-ink">
+              <span className="truncate">Sobre {chip.etiqueta}</span>
+              {onSoltarChip ? (
+                <button
+                  type="button"
+                  onClick={onSoltarChip}
+                  aria-label="Dejar de hablar solo de esto"
+                  title="Dejar de hablar solo de esto"
+                  className="text-info-ink/70 hover:text-info-ink"
+                >
+                  ✕
+                </button>
+              ) : null}
+            </span>
+          </div>
+        ) : null}
         <textarea
           ref={composerRef}
           value={texto}

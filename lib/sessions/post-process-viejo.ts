@@ -1,0 +1,528 @@
+/**
+ * lib/sessions/post-process-viejo.ts — COPIA CONGELADA del post-proceso de antes de la etapa 2 de la memoria de la
+ * cuenta (2026-10-10). DEPRECATED — borrar a los 30 días de un INV44 en verde con la lectura de seguimiento prendida.
+ *
+ * ⛔ No se mejora ni se arregla: es el RETROCESO DE EMERGENCIA de `SEGUIMIENTO_REUNIONES_ENABLED=0` (o de la base
+ * sin las columnas `seguimiento*`). Dispara y olvida, lee el JSON con una regex, no verifica las citas y escribe
+ * `ActionItem`, que desde la etapa 2 ninguna pantalla muestra. El camino de verdad es lib/sessions/post-process.ts
+ * (`leerReunionDeSeguimiento`) por la cola de lib/lecturas. Ver docs/RUNBOOK.md «La lectura de cada reunión».
+ *
+ * Lo de abajo es el post-proceso tal como estaba, con un solo cambio: la función se llama `postProcessSessionViejo`.
+ *
+ * Procesa el transcript de una FirefliesSession con el agente "Análisis
+ * post-sesión" y persiste:
+ *   - 1 SessionMinute (DRAFT)
+ *   - N ActionItems vinculados a la sesión
+ *
+ * Reusable desde el endpoint manual (/api/sessions/[id]/post-process) y desde
+ * el auto-trigger en `lib/google/meet-enrichment.ts`.
+ *
+ * Idempotente: si la sesión ya tiene `SessionMinute`, no la reemplaza
+ * (a menos que se pase `force: true`).
+ */
+import { prisma } from "@/lib/db/prisma";
+import { anthropic } from "@/lib/anthropic";
+import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
+import { duenoDeLaSesion } from "@/lib/sessions/project-sources";
+import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";
+import { titleMentionsKickoff } from "@/lib/sessions/session-type";
+import { maybeReanchorToKickoff } from "@/lib/timeline/reanchor";
+import { loadHandoffContext } from "@/lib/canvas/load-canvas-context";
+import {
+  ADENDA_COMPROMISOS_Y_ALCANCE,
+  fechaComprometida,
+  fechaLocalDeLaReunion,
+  leerCompromisos,
+  leerPedidosFueraDeAlcance,
+} from "@/lib/sessions/compromisos-y-alcance";
+import { ADENDA_PRESENTACION_DEL_DIAGNOSTICO, leerPresentacionDetectada } from "@/lib/canvas/presentacion-del-diagnostico";
+import { citaEstaEnLasFuentes, normalizarParaCita } from "@/lib/timeline/limites";
+
+const AGENT_ID_POST_SESSION = "agent-post-session";
+
+interface AgentOutput {
+  minute?: {
+    summary?: string;
+    agreements?: { text: string }[];
+    decisions?: { text: string; rationale?: string }[];
+    risks?: { text: string; severity?: "low" | "med" | "high" }[];
+    topics?: string[];
+  };
+  actionItems?: {
+    text: string;
+    ownerEmail?: string | null;
+    dueDate?: string | null;
+  }[];
+  stageProgress?: { advance: boolean; reason?: string };
+  // 2026-10-02 — ver lib/sessions/compromisos-y-alcance.ts (la adenda que los pide).
+  compromisos?: unknown;
+  fueraDeAlcance?: unknown;
+  // F5: sub-topics detectados (lead-scoring, workflow-builder, etc.)
+  detectedTopics?: string[];
+}
+
+export interface PostProcessResult {
+  status: "ok" | "skipped" | "error";
+  reason?: string;
+  sessionId: string;
+  clientId?: string;
+  minuteId?: string;
+  actionItemsCreated?: number;
+}
+
+/**
+ * Ejecuta el agente post-sesión sobre una sesión y persiste minuta + acciones.
+ * Es seguro de llamar concurrentemente: la unicidad de SessionMinute.sessionId
+ * en DB protege contra duplicados.
+ */
+export async function postProcessSessionViejo(
+  sessionId: string,
+  opts: { force?: boolean } = {},
+): Promise<PostProcessResult> {
+  // 1. Cargar sesión con transcript
+  const session = await prisma.firefliesSession.findUnique({
+    where: { id: sessionId },
+    select: {
+      id: true,
+      title: true,
+      date: true,
+      participants: true,
+      resolvedClientId: true,
+      manualClientId: true,
+      transcript: true,
+      summary: true,
+    },
+  });
+
+  if (!session) {
+    return { status: "error", sessionId, reason: "Session not found" };
+  }
+  if (!session.transcript || session.transcript.trim().length < 200) {
+    return { status: "skipped", sessionId, reason: "No transcript (or too short)" };
+  }
+
+  // 2. Si ya hay minuta y no es force, saltar
+  if (!opts.force) {
+    const existing = await prisma.sessionMinute.findUnique({
+      where: { sessionId },
+      select: { id: true, status: true },
+    });
+    if (existing) {
+      return {
+        status: "skipped",
+        sessionId,
+        reason: `Already has minute (${existing.status})`,
+        minuteId: existing.id,
+      };
+    }
+  }
+
+  // 3. El dueño de la reunión. NO se vuelve a categorizar: la fuente ÚNICA de "de quién es la
+  //    sesión" es `resolvedClientId`, que meet-sync ya materializó con la cascada completa (con el
+  //    mapa de HubSpot). Antes esto armaba su propio CategorizeContext SIN ese mapa y podía decidir
+  //    otro cliente que el resto de Nexus (invariante 1 y 2 de CLAUDE.md). Sin dueño, no se lee.
+  //    (DECISIONS › Memoria de la cuenta · Etapa 0.)
+  const duenoId = duenoDeLaSesion(session);
+  if (!duenoId) {
+    return {
+      status: "skipped",
+      sessionId,
+      reason: "Sin dueño: la reunión no está atribuida a ningún cliente",
+    };
+  }
+
+  const [client, teamMembers] = await Promise.all([
+    prisma.client.findUnique({
+      where: { id: duenoId },
+      select: { id: true, name: true, company: true, industry: true },
+    }),
+    prisma.teamMember.findMany({ select: { email: true, name: true, area: true, deactivatedAt: true } }),
+  ]);
+  if (!client) {
+    return { status: "skipped", sessionId, reason: "El dueño de la reunión ya no existe" };
+  }
+
+  // 4a. Clasificador sesión→proyecto: persiste SessionProject (N:N) y devuelve
+  //     el proyecto primario. Si el cliente tiene 1 proyecto, atajo trivial; si
+  //     tiene 2+, llama al agente IA. Si tiene 0, primaryProjectId=null.
+  const classify = await classifySessionToProjects(sessionId, client.id);
+  const primaryProjectId = classify.primaryProjectId ?? null;
+
+  // Ciclo de vida: si ESTA sesión es el Kick Off del proyecto, re-anclar el
+  // cronograma al Kick Off real (best-effort; las guardas —sin avance, sin
+  // baseline— viven en maybeReanchorToKickoff). Cubre el flujo real: el Kick Off
+  // ocurre → Fireflies la ingiere → se clasifica → el ancla se corrige sola.
+  // El pre-filtro es AMPLIO a propósito (no usa la cascada de tipos): acá alcanza con
+  // que el título mencione un kickoff. Angostarlo a "esta sesión ES de tipo kickoff"
+  // dejaría de re-anclar en títulos mixtos tipo "Kickoff + review", que es justo cuando
+  // hace falta. La verificación de verdad la hacen las guardas de maybeReanchorToKickoff.
+  if (primaryProjectId && titleMentionsKickoff(session.title ?? "")) {
+    try {
+      await maybeReanchorToKickoff(primaryProjectId);
+    } catch (e) {
+      console.error("[post-process] re-anclaje best-effort falló:", e);
+    }
+  }
+
+  // 4b. Cargar proyecto primario para usarlo en el prompt + metadata
+  const project = primaryProjectId
+    ? await prisma.project.findUnique({
+        where: { id: primaryProjectId },
+        select: { id: true, name: true, serviceType: true },
+      })
+    : null;
+
+  /* La fecha de presentación del diagnóstico (2026-10-07): solo se pide si el proyecto tiene un
+     diagnóstico generado que todavía no se presentó. Si no, el pedido al modelo no cambia. */
+  const pideFechaDelDiagnostico = project
+    ? await import("@/lib/canvas/presentacion-del-diagnostico-server")
+        .then((m) => m.diagnosticoSinPresentar(project.id))
+        .catch(() => false)
+    : false;
+
+  const previousActionItems = await prisma.actionItem.findMany({
+    where: { clientId: client.id, done: false },
+    select: { text: true, status: true, ownerEmail: true, dueDate: true },
+    orderBy: { createdAt: "desc" },
+    take: 15,
+  });
+
+  // 5. Construir prompt
+  // Roster de owners SUGERIBLES: solo miembros activos (no se sugiere a desactivados).
+  const teamRoster = teamMembers
+    .filter((m) => !m.deactivatedAt)
+    .map((m) => `- ${m.name} <${m.email}>${m.area ? ` [${m.area}]` : ""}`)
+    .join("\n");
+
+  const previousItemsBlock =
+    previousActionItems.length > 0
+      ? `\n\n=== ACCIONES PENDIENTES PREVIAS DEL CLIENTE ===\n${previousActionItems
+          .map((a) => `- [${a.status}] ${a.text}${a.ownerEmail ? ` (@${a.ownerEmail})` : ""}`)
+          .join("\n")}`
+      : "";
+
+  /* Lo que se VENDIÓ, para que el agente reconozca un pedido fuera de alcance (2026-10-02). Solo el
+     alcance y lo que quedó afuera; interno (la minuta y los pedidos no salen al cliente). */
+  const alcanceVendido = project
+    ? (await loadHandoffContext(project.id, { onlyConfirmed: false, includeKeys: ["alcance_contratado", "fuera_de_alcance"] }).catch(() => "")).slice(0, 4000)
+    : "";
+  const alcanceBlock = alcanceVendido.trim()
+    ? `\n\n=== LO QUE SE VENDIÓ (para reconocer lo que está fuera de alcance) ===\n${alcanceVendido}`
+    : "";
+
+  const summaryBlock =
+    session.summary && typeof session.summary === "object" && "overview" in (session.summary as object)
+      ? `\n\n=== RESUMEN GENERADO POR GEMINI NOTES ===\n${(session.summary as { overview?: string }).overview ?? ""}`
+      : "";
+
+  const userMessage = [
+    `=== CLIENTE ===`,
+    `Nombre: ${client.name}`,
+    client.company ? `Empresa: ${client.company}` : null,
+    client.industry ? `Industria: ${client.industry}` : null,
+    project ? `\nProyecto activo: ${project.name}` : "",
+    "",
+    `=== EQUIPO INTERNO (emails válidos para ownerEmail) ===`,
+    teamRoster,
+    "",
+    `=== REUNIÓN ===`,
+    `Título: ${session.title}`,
+    // En hora de Costa Rica: en UTC, una reunión de las 18:00 caía al día siguiente y toda fecha calculada desde ahí también.
+    `Fecha: ${fechaLocalDeLaReunion(session.date)}`,
+    `Participantes: ${session.participants.join(", ")}`,
+    summaryBlock,
+    alcanceBlock,
+    previousItemsBlock,
+    "",
+    `=== TRANSCRIPT ===`,
+    session.transcript.slice(0, 60000), // protección contra transcripts gigantes
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  // 6. Llamar a Claude — atribuida (C-01): sin humano detrás, cobra contra el presupuesto automático.
+  let rawText: string;
+  try {
+    const ctxDeGasto = {
+      agentSlug: AGENT_ID_POST_SESSION,
+      clientId: client.id,
+      projectId: project?.id ?? null,
+      triggeredByEmail: null,
+      origen: "sessions/post-process",
+    };
+    const msg = await conContextoDeIA(ctxDeGasto, async () => anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 6000,
+      // La adenda pide los compromisos con fecha y los pedidos fuera de alcance (lib/sessions/compromisos-y-alcance.ts).
+      // Vive en código a propósito: funciona sin re-sembrar el prompt de la base.
+      system:
+        ((await prisma.agent.findUnique({ where: { id: AGENT_ID_POST_SESSION }, select: { systemPrompt: true } }))?.systemPrompt ?? "") +
+        ADENDA_COMPROMISOS_Y_ALCANCE +
+        (pideFechaDelDiagnostico ? ADENDA_PRESENTACION_DEL_DIAGNOSTICO : ""),
+      messages: [{ role: "user", content: userMessage }],
+    }));
+    rawText = (msg.content[0] as { type: string; text: string }).text.trim();
+  } catch (e) {
+    return { status: "error", sessionId, clientId: client.id, reason: `Claude error: ${(e as Error).message}` };
+  }
+
+  // 7. Parsear JSON
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    return { status: "error", sessionId, clientId: client.id, reason: "No JSON in Claude response" };
+  }
+  let parsed: AgentOutput;
+  try {
+    parsed = JSON.parse(jsonMatch[0]) as AgentOutput;
+  } catch (e) {
+    return { status: "error", sessionId, clientId: client.id, reason: `JSON parse: ${(e as Error).message}` };
+  }
+
+  // 8. Crear AgentRun para trazabilidad
+  const run = await prisma.agentRun.create({
+    data: {
+      agentId: AGENT_ID_POST_SESSION,
+      clientId: client.id,
+      projectId: project?.id ?? null,
+      status: "DONE",
+      stepLabel: "Análisis post-sesión",
+      output: JSON.stringify(parsed),
+    },
+  });
+
+  // 9. Crear/reemplazar SessionMinute (idempotente)
+  const minuteData = {
+    summary: parsed.minute?.summary?.trim() ?? "(Sin resumen generado)",
+    agreements: (parsed.minute?.agreements ?? []) as unknown as object,
+    decisions: (parsed.minute?.decisions ?? []) as unknown as object,
+    risks: (parsed.minute?.risks ?? []) as unknown as object,
+    topics: (parsed.minute?.topics ?? []) as unknown as object,
+    status: "DRAFT" as const,
+    generatedByAgentRunId: run.id,
+  };
+
+  const minute = await prisma.sessionMinute.upsert({
+    where: { sessionId },
+    create: { sessionId, ...minuteData },
+    update: opts.force
+      ? { ...minuteData, status: "DRAFT", reviewedAt: null, reviewedByEmail: null }
+      : minuteData, // solo entra aquí si NO había minute (else lo skipea arriba)
+  });
+
+  // 9b. Persistir detectedTopics en la sesión (F5-A)
+  if (parsed.detectedTopics && Array.isArray(parsed.detectedTopics)) {
+    const topics = parsed.detectedTopics
+      .map((t) => String(t).trim().toLowerCase())
+      .filter((t) => t.length > 0 && t.length < 50)
+      .slice(0, 10);
+    if (topics.length > 0) {
+      await prisma.firefliesSession.update({
+        where: { id: sessionId },
+        data: { detectedTopics: [...new Set(topics)] },
+      });
+    }
+  }
+
+  // 10. Crear ActionItems (deduplicar por text + clientId + source ya existente)
+  const newItems = parsed.actionItems ?? [];
+  let created = 0;
+  for (const ai of newItems) {
+    const text = (ai.text ?? "").trim();
+    if (!text) continue;
+
+    const existing = await prisma.actionItem.findFirst({
+      where: {
+        clientId: client.id,
+        sessionId,
+        text,
+        source: "agent:post-session",
+      },
+      select: { id: true },
+    });
+    if (existing) continue;
+
+    let dueDate: Date | null = null;
+    if (ai.dueDate) {
+      const d = new Date(ai.dueDate);
+      if (!isNaN(d.getTime())) dueDate = d;
+    }
+
+    const ownerEmail = ai.ownerEmail?.trim().toLowerCase() || null;
+    const validOwner = ownerEmail && teamMembers.some((m) => m.email.toLowerCase() === ownerEmail)
+      ? ownerEmail
+      : null;
+
+    await prisma.actionItem.create({
+      data: {
+        text,
+        clientId: client.id,
+        projectId: project?.id ?? null,
+        sessionId,
+        ownerEmail: validOwner,
+        dueDate,
+        status: "PENDING",
+        done: false,
+        source: "agent:post-session",
+        generatedByAgentRunId: run.id,
+      },
+    });
+    created++;
+  }
+
+  // 10b. Compromisos con fecha (de los dos lados) → ActionItem con quién se comprometió y la cita.
+  for (const c of leerCompromisos(parsed.compromisos)) {
+    const ya = await prisma.actionItem.findFirst({
+      where: { clientId: client.id, sessionId, text: c.que },
+      select: { id: true },
+    });
+    if (ya) continue;
+    // Si es de Smarteam y el nombre coincide con alguien del equipo, queda asignado a esa persona.
+    const delEquipo =
+      c.quien === "SMARTEAM" && c.responsable
+        ? teamMembers.find((m) => !m.deactivatedAt && m.name.toLowerCase().includes(c.responsable.toLowerCase().split(" ")[0]))
+        : undefined;
+    await prisma.actionItem.create({
+      data: {
+        text: c.que,
+        clientId: client.id,
+        projectId: project?.id ?? null,
+        sessionId,
+        ownerEmail: delEquipo?.email.toLowerCase() ?? null,
+        ladoResponsable: c.quien,
+        responsableNombre: c.responsable || null,
+        cita: c.cita || null,
+        dueDate: fechaComprometida(c.fecha),
+        status: "PENDING",
+        done: false,
+        source: "agent:post-session:compromiso",
+        generatedByAgentRunId: run.id,
+      },
+    });
+    created++;
+  }
+
+  // 10c. Pedidos fuera de alcance → PedidoFueraDeAlcance. La IA los PROPONE: entran «por revisar» y el CSE
+  // los confirma o los descarta (2026-10-07, lib/sessions/solicitudes-fuera-de-alcance.ts); Ventas ve los
+  // confirmados. El mismo pedido en otra reunión (misma huella) actualiza la fila, pero NUNCA pisa una
+  // decisión del CSE ni le cambia el estado: eso lo decide una persona.
+  for (const pf of leerPedidosFueraDeAlcance(parsed.fueraDeAlcance)) {
+    const previo = await prisma.pedidoFueraDeAlcance.findUnique({
+      where: { clientId_huella: { clientId: client.id, huella: pf.huella } },
+      select: { id: true, decididoAt: true },
+    });
+    if (!previo) {
+      await prisma.pedidoFueraDeAlcance.create({
+        data: {
+          clientId: client.id,
+          projectId: project?.id ?? null,
+          sessionId,
+          huella: pf.huella,
+          pedido: pf.pedido,
+          quienLoPidio: pf.quienLoPidio || null,
+          estado: "PEDIDO",
+          monto: pf.monto,
+          cita: pf.cita || null,
+        },
+      });
+    } else if (!previo.decididoAt) {
+      await prisma.pedidoFueraDeAlcance.update({
+        where: { id: previo.id },
+        data: { ...(pf.monto ? { monto: pf.monto } : {}), ...(pf.cita ? { cita: pf.cita } : {}), sessionId },
+      });
+    }
+  }
+
+  // Refrescar el cache de heat ya que recién creamos un AgentRun.
+  if (project) {
+    const { invalidateProjectHeat } = await import("@/lib/projects/heat");
+    invalidateProjectHeat(project.id);
+  }
+
+  // D.2 — Cronograma vivo: tras la sesión nueva, regenerar el BORRADOR de avance
+  // del cronograma (la función no toca status; el CSE confirma). Best-effort: si
+  // falla, NO tumba el post-process. Sólo corre si el proyecto tiene detalle
+  // (lo verifica adentro y devuelve skipped si no).
+  if (project) {
+    try {
+      const { regenerateTimelineProgress } = await import("@/lib/timeline/regenerate-progress");
+      const r = await regenerateTimelineProgress(project.id, {
+        asOfSessionId: sessionId,
+        /* Corre dentro del post-proceso automático: el gasto no es de quien disparó el
+           auto-sync (ver regenerate-progress.ts, `disparadoPorSistema`). */
+        disparadoPorSistema: true,
+      });
+      if (r.status === "ok") {
+        console.log(`[post-session] ✓ avance de cronograma propuesto (${r.phasesDone} fases, ${r.tasksDone} tareas)`);
+      }
+    } catch (e) {
+      console.error(`[post-session] avance de cronograma falló (no bloqueante):`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  // Ficha del cliente: igual que el avance del cronograma, cada sesión puede sumarle algo (un
+  // stakeholder nuevo, un dato duro, un reto). Queda como PROPUESTA que el CSE confirma; con Haiku,
+  // porque corre con cada reunión. Best-effort: nunca tumba el post-proceso.
+  try {
+    const { proponerFichaDesdeSesion } = await import("@/lib/clients/ficha-propuesta");
+    const r = await proponerFichaDesdeSesion(sessionId, client.id, project?.id ?? null);
+    if (r.status === "ok" && r.cambiados) console.log(`[post-session] ✓ ficha del cliente: ${r.cambiados} campos propuestos`);
+    if (r.status === "error") console.error(`[post-session] ficha del cliente falló (no bloqueante): ${r.error}`);
+  } catch (e) {
+    console.error(`[post-session] ficha del cliente falló (no bloqueante):`, e instanceof Error ? e.message : e);
+  }
+
+  // La fecha de presentación del diagnóstico: si la reunión la dice, queda PROPUESTA con su frase, que
+  // tiene que aparecer tal cual en la reunión (lib/canvas/presentacion-del-diagnostico.ts). Best-effort.
+  if (project && pideFechaDelDiagnostico) {
+    const fechaDeLaReunion = fechaLocalDeLaReunion(session.date);
+    const detectada = leerPresentacionDetectada((parsed as Record<string, unknown>).presentacionDiagnostico, fechaDeLaReunion);
+    if (detectada && citaEstaEnLasFuentes(detectada.cita, normalizarParaCita(`${session.transcript ?? ""}\n${summaryBlock}`))) {
+      const { proponerFechaDesdeReunion } = await import("@/lib/canvas/presentacion-del-diagnostico-server");
+      if (
+        await proponerFechaDesdeReunion(project.id, {
+          ...detectada,
+          reunion: { id: sessionId, titulo: session.title ?? null, fecha: fechaDeLaReunion },
+        })
+      ) {
+        console.log(`[post-session] ✓ fecha de presentación del diagnóstico propuesta: ${detectada.fecha}`);
+      }
+    }
+  }
+
+  // La etapa en HubSpot: si la reunión muestra que el proyecto ya pasó a otra etapa, queda como
+  // SUGERENCIA que el CSE aprueba en la encuesta de la etapa (lib/projects/etapa-sugerida.ts). Nada
+  // se escribe en HubSpot desde acá. Con Haiku, porque corre con cada reunión. Best-effort.
+  if (project) {
+    try {
+      const { proponerEtapaDesdeSesion } = await import("@/lib/projects/etapa-desde-reunion-server");
+      const r = await proponerEtapaDesdeSesion(sessionId, project.id);
+      if (r.status === "sugerida") console.log(`[post-session] ✓ etapa sugerida para HubSpot: ${r.stageId}`);
+      if (r.status === "error") console.error(`[post-session] etapa sugerida falló (no bloqueante): ${r.error}`);
+    } catch (e) {
+      console.error(`[post-session] etapa sugerida falló (no bloqueante):`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  // Exploración de venta: si la empresa tiene una viva, el agente lee esta reunión y propone qué va
+  // en cada casilla (lib/exploraciones/agente.ts decide si corresponde y corre en segundo plano).
+  // Solo dispara; best-effort: nunca tumba el post-proceso.
+  try {
+    const { leerReunionNueva } = await import("@/lib/exploraciones/agente");
+    const r = await leerReunionNueva({ sesionId: sessionId, fecha: session.date, clientId: client.id });
+    if (r === "lanzada") console.log(`[post-session] ✓ exploración de venta: el agente está leyendo la reunión`);
+  } catch (e) {
+    console.error(`[post-session] exploración de venta falló (no bloqueante):`, e instanceof Error ? e.message : e);
+  }
+
+  console.log(
+    `[post-session] ✓ "${session.title}" (cliente=${client.name}) — minuta DRAFT + ${created} action items`,
+  );
+
+  return {
+    status: "ok",
+    sessionId,
+    clientId: client.id,
+    minuteId: minute.id,
+    actionItemsCreated: created,
+  };
+}

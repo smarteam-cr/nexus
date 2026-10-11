@@ -9,6 +9,7 @@
  *   F) Todo `agentGroup` del registro de piezas tiene su `case` en artifact-gate, y el
  *      `default` es fail-closed para los que no (A-18): correr sin celda no es una opción.
  *   G) El 403 de «regenerar» se lee bien con cualquier etiqueta (femenino, plural).
+ *   G2) «Buscar lo nuevo» sobre un handoff congelado pide `handoff.congelar`, no `regenerate`.
  *   H) La matriz plegable: la mezcla decide cómo arranca un área; la cabecera, la persona.
  *
  * Correr: `npx vitest run lib/auth/permissions/registry.test.ts --project unit`.
@@ -24,7 +25,7 @@ import {
   sectionByKey,
 } from "./registry";
 import { PIECES } from "@/lib/pieces/registry";
-import { artifactGateMessage, resolveArtifactGate, type ArtifactGate } from "./artifact-gate";
+import { artifactGateMessage, gateDelPedidoDelHandoff, resolveArtifactGate, type ArtifactGate } from "./artifact-gate";
 import { alTocarCabecera, areasAbiertasAlInicio, estaAbierta, hayMezcla } from "./matriz-plegable";
 
 // artifact-gate toca prisma en los `case` con señal; acá solo se ejercita el `default`.
@@ -125,6 +126,27 @@ test("G — el 403 de regenerar concuerda con cualquier etiqueta (femenino y plu
       /\bgenerad[oa]s?\b/,
     );
   }
+});
+
+test("G2 — «Buscar lo nuevo» pide `handoff.congelar`; generar, regenerar y rehacer, la celda de siempre", () => {
+  /* 2026-10-10 (DECISIONS «El handoff se congela»): «Buscar lo nuevo» solo deja sugerencias en borrador, no
+     reescribe el handoff, así que pide la celda del CSE y no `regenerate`. La edición que lo pone en rojo: que
+     «rehacer» o un pedido sin modo pasen a pedir `congelar` (el CSE reescribiría el documento). */
+  const regenerar: ArtifactGate = { section: "handoff", action: "regenerate" };
+  expect(gateDelPedidoDelHandoff(regenerar, { modo: "sugerir" }, "p1")).toEqual({ section: "handoff", action: "congelar" });
+  expect(gateDelPedidoDelHandoff(regenerar, { modo: "rehacer" }, "p1")).toBe(regenerar);
+  expect(gateDelPedidoDelHandoff(regenerar, null, "p1")).toBe(regenerar);
+  expect(gateDelPedidoDelHandoff(regenerar, "invalido", "p1")).toBe(regenerar);
+  // Sin proyecto la rama del handoff no corre: el pedido ni se mira.
+  expect(gateDelPedidoDelHandoff(regenerar, { modo: "sugerir" }, null)).toBe(regenerar);
+  // Solo el handoff: otro documento con «sugerir» sigue con su celda.
+  const kickoff: ArtifactGate = { section: "kickoff", action: "regenerate" };
+  expect(gateDelPedidoDelHandoff(kickoff, { modo: "sugerir" }, "p1")).toBe(kickoff);
+  expect(gateDelPedidoDelHandoff(null, { modo: "sugerir" }, "p1")).toBeNull();
+
+  const m = artifactGateMessage({ section: "handoff", action: "congelar" });
+  expect(m).toContain("Buscar lo nuevo");
+  expect(m).not.toMatch(/\bgenerad[oa]s?\b/);
 });
 
 // ── H) La matriz plegable (components/team/PermissionMatrix.tsx) ─────────────────────────────

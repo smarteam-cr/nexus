@@ -18,7 +18,8 @@
 import { ROTULO_DEL_SISTEMA, IconoDeSugerencia } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import { diasEntre, enCuanto, fmtDia, plural } from "@/lib/cs/formato";
-import { NOMBRE_DEL_HUB, UMBRALES, fraccion, porcentajeDeTendencia, usoCayendo, type HubDePartner } from "@/lib/cs/lectura-partner";
+import { NOMBRE_DEL_HUB, UMBRALES, fraccion, porcentajeDeTendencia, relacionTerminada, usoCayendo, type HubDePartner } from "@/lib/cs/lectura-partner";
+import { porQueNoHayUso } from "@/lib/cs/ficha-reglas";
 import {
   delContratoAlUso,
   licenciasDeLaCuenta,
@@ -36,7 +37,8 @@ import { IrAPestana, Medidor, Vacio, type IrA } from "./comun";
 
 const PRINCIPALES: HubDePartner[] = ["marketing", "sales", "service", "operations", "content", "commerce"];
 
-export default function PestanaAdopcion({ data, irA }: { data: CsAccountData; irA: IrA }) {
+/** `irA` null = la ve el CSE de la cuenta, que solo tiene esta pestaña (lib/cs/adopcion-del-cse.ts). */
+export default function PestanaAdopcion({ data, irA }: { data: CsAccountData; irA: IrA | null }) {
   const p = data.cuenta.partner;
   if (!p) {
     return <Vacio>{data.partnerState === "ok" ? "Sin datos de HubSpot Partner para esta cuenta." : PARTNER_STATE_META[data.partnerState].message}</Vacio>;
@@ -89,9 +91,9 @@ export default function PestanaAdopcion({ data, irA }: { data: CsAccountData; ir
               {p.tendencia !== null && <Chip tono={usoCayendo(p) ? "atencion" : "neutro"}>{porcentajeDeTendencia(p.tendencia)} en 4 semanas</Chip>}
               {p.nivelDeUso && <Chip>Nivel de uso: {p.nivelDeUso}</Chip>}
             </span>
-            <span className="text-[13px] text-fg-secondary">
+            <span className={cn("text-[13px]", p.uso === null && relacionTerminada(p, data.hoy) ? "text-warn-ink" : "text-fg-secondary")}>
               {p.uso === null
-                ? "HubSpot todavía no da el puntaje de esta cuenta."
+                ? porQueNoHayUso(data.cuenta, data.hoy)
                 : bajo > 0
                   ? `Lleva ${plural(bajo, "semana", "semanas")} bajo ${UMBRALES.usoBajo}, el umbral de Smarteam.`
                   : p.uso < UMBRALES.usoBajo
@@ -196,7 +198,7 @@ export default function PestanaAdopcion({ data, irA }: { data: CsAccountData; ir
                   "Tiene todos los hubs."
                 )}
               </span>
-              {noContratados.length > 0 && (
+              {noContratados.length > 0 && irA && (
                 <IrAPestana a="renovacion" irA={irA}>
                   Ver crecimiento
                 </IrAPestana>

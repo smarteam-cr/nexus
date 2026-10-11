@@ -30,8 +30,35 @@ export const LIMITE_HISTORIAL = 20;
  * colado en el historial —y, peor, en el `lastRun` del encabezado del handoff, que muestra «con
  * N sesiones» y su fecha—. El rescate protegía de un borrado que nunca ocurrió; el daño era
  * real y alcanzable. Se elige el filtro estricto.
+ *
+ * ⚠ «BUSCAR LO NUEVO» NO ES UNA CORRIDA DEL DOCUMENTO (etapa 3b, 2026-10-10). Sobre un handoff congelado, el
+ * agente de handoff deja sugerencias en borrador y no reescribe nada: su corrida nace con el paso
+ * `PASO_DE_LAS_SUGERENCIAS` y queda fuera. Si entrara, el «último handoff» que leen el cronograma
+ * (lib/timeline/leer-referencias.ts, fuentes-de-la-explicacion.ts) y el encabezado del handoff («armado con N
+ * reuniones») serían una corrida sin fases ni documento. `stepLabel` null va explícito: un `not` solo deja
+ * afuera también las filas sin paso, que son casi todas.
  */
+export const PASO_DE_LAS_SUGERENCIAS = "Buscar lo nuevo en el handoff";
+
+/**
+ * El pedazo del `where` que deja afuera «Buscar lo nuevo». Lo usa también un lector que no es de UN proyecto (la lista
+ * de handoffs del cliente, app/api/clients/[id]/handoffs): ahí `projectId` es una lista. Lo vigila el censo de
+ * lib/agents/historial-corridas.test.ts.
+ */
+export const SIN_BUSCAR_LO_NUEVO = {
+  OR: [{ stepLabel: null }, { stepLabel: { not: PASO_DE_LAS_SUGERENCIAS } }],
+} satisfies Prisma.AgentRunWhereInput;
+
 export function whereCorridasDeDocumento(projectId: string, grupo: string): Prisma.AgentRunWhereInput {
+  return { ...whereCorridasDelAgente(projectId, grupo), ...SIN_BUSCAR_LO_NUEVO };
+}
+
+/**
+ * TODAS las corridas del agente de ese grupo en el proyecto, también «Buscar lo nuevo». Solo para saber si hay
+ * una EN CURSO (la pantalla del handoff no puede ofrecer otra encima). El historial, su contador y el «último
+ * handoff» usan `whereCorridasDeDocumento`.
+ */
+export function whereCorridasDelAgente(projectId: string, grupo: string): Prisma.AgentRunWhereInput {
   return { projectId, agent: { agentGroup: grupo } };
 }
 

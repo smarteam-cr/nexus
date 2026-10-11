@@ -11,9 +11,17 @@
  * La versión vieja se tragaba todo error (`catch { ignore }` y un `if (r.ok)` sin `else`): un 403
  * al pegar una nota dejaba el formulario abierto, sin mensaje, y la persona creía que había
  * guardado. Ahora cada fallo se dice con el motivo que manda el servidor.
+ *
+ * ── EL FORMULARIO DE LA PREVENTA (2026-10-07) ────────────────────────────────
+ * Pedido de Elías: el mismo botón y la misma forma en todo «Contexto adicional». El «Agregar fuente»
+ * punteado se fue: al pie va «+ Sumar una sesión o un documento» (`SumarFuente`), que pega el texto o
+ * sube un archivo. El archivo queda en Información del cliente › Documentos (`adjunto.origen`) y su
+ * texto, como una fuente más de esta columna.
  */
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
+import SumarFuente, { fechaDeLaFuente, tituloConFecha, type DatosPegados, type DatosSubidos } from "@/components/contexto/SumarFuente";
+import { subirAdjuntoDelProyecto } from "@/lib/documents/subir-adjunto";
 import { ContextColumnList, ContextRow, CTX_ICONS } from "./context-column";
 
 export interface FuenteManual {
@@ -29,20 +37,23 @@ async function motivo(r: Response, porDefecto: string): Promise<string> {
   return d?.error ?? porDefecto;
 }
 
+/** El vacío de toda columna de fuentes manuales: el mismo de la preventa. */
+export const VACIO_DE_LAS_FUENTES =
+  "Nada sumado. Una llamada de Gong, una minuta o el resumen del Smartflow: súmalo y el agente lo lee como una transcripción.";
+
 export default function FuentesManualesColumn({
   endpoint,
   canEdit,
   onCount,
   tope,
   largoQueLee,
-  vacio = "Sin notas ni transcripciones a mano.",
-  placeholder = "Pega el transcript o resumen…",
-  placeholderTitulo = "Título (ej. Zoom con el cliente)",
-  etiquetaAgregar = "Agregar fuente",
+  adjunto,
 }: {
   /** Base de la API: GET/POST acá y DELETE en `${endpoint}/${id}`. */
   endpoint: string;
   canEdit: boolean;
+  /** Dónde queda un archivo subido: el proyecto y desde qué pieza (lib/documents/origen-del-adjunto.ts). */
+  adjunto: { projectId: string; origen: string };
   /** Reporta cuántas fuentes hay (para el contador del encabezado). */
   onCount?: (n: number) => void;
   /**
@@ -59,18 +70,10 @@ export default function FuentesManualesColumn({
    * cronograma llevan la fecha de carga en su encabezado. Sin esto, título + contenido.
    */
   largoQueLee?: (fuentes: ReadonlyArray<{ title: string | null; content: string; createdAt?: string }>) => number;
-  vacio?: string;
-  placeholder?: string;
-  placeholderTitulo?: string;
-  etiquetaAgregar?: string;
 }) {
   const toast = useToast();
   const [sources, setSources] = useState<FuenteManual[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newContent, setNewContent] = useState("");
-  const [saving, setSaving] = useState(false);
 
   const fetchSources = useCallback(async () => {
     try {
@@ -119,29 +122,44 @@ export default function FuentesManualesColumn({
     if (!loading) onCount?.(sources.length);
   }, [loading, sources.length, onCount]);
 
-  const addSource = useCallback(async () => {
-    const content = newContent.trim();
-    if (!content || saving) return;
-    setSaving(true);
-    try {
-      const r = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newTitle.trim() || undefined, content }),
-      });
-      if (r.ok) {
-        setNewTitle("");
-        setNewContent("");
-        setShowAdd(false);
+  /** Guarda una fuente. Devuelve el error para mostrar en el formulario, o null. */
+  const guardar = useCallback(
+    async (title: string | null, content: string): Promise<string | null> => {
+      try {
+        const r = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: title || undefined, content }),
+        });
+        if (!r.ok) return await motivo(r, "No se pudo guardar la fuente.");
         await fetchSources();
-      } else {
-        toast.error(await motivo(r, "No se pudo guardar la fuente."));
+        return null;
+      } catch {
+        return "No se pudo guardar la fuente: revisa la conexión.";
       }
-    } catch {
-      toast.error("No se pudo guardar la fuente: revisa la conexión.");
-    }
-    setSaving(false);
-  }, [endpoint, newTitle, newContent, saving, fetchSources, toast]);
+    },
+    [endpoint, fetchSources],
+  );
+
+  const alPegar = useCallback(
+    (d: DatosPegados) => guardar(tituloConFecha(d.titulo, d.fecha), d.texto),
+    [guardar],
+  );
+
+  /* El archivo va primero a los documentos de la empresa (queda ahí pase lo que pase) y su texto, después,
+     a esta columna. Si el texto no entra, el archivo igual quedó guardado: el error lo dice. */
+  const alSubir = useCallback(
+    async (d: DatosSubidos): Promise<string | null> => {
+      const r = await subirAdjuntoDelProyecto({ ...adjunto, archivo: d.archivo, titulo: d.titulo });
+      if (!r.ok) return r.error;
+      if (!r.texto) {
+        return "No se pudo sacar texto de ese archivo (¿es un PDF escaneado o una imagen?). Quedó en Información del cliente › Documentos; pega aquí el texto.";
+      }
+      const e = await guardar(tituloConFecha(d.titulo || r.nombre.replace(/\.[^.]+$/, ""), d.fecha), r.texto);
+      return e ? `${e} El archivo quedó en Información del cliente › Documentos.` : null;
+    },
+    [adjunto, guardar],
+  );
 
   const removeSource = useCallback(
     async (id: string) => {
@@ -170,67 +188,22 @@ export default function FuentesManualesColumn({
           recorta o queda afuera. Resume o quita alguna.
         </p>
       )}
-      <ContextColumnList loading={loading} empty={vacio}>
-        {sources.map((s) => (
-          <ContextRow
-            key={s.id}
-            icon={CTX_ICONS.note}
-            meta="Manual"
-            title={s.title || "Sin título"}
-            snippet={s.content.slice(0, 120)}
-            onRemove={canEdit ? () => removeSource(s.id) : undefined}
-            removeTitle="Quitar fuente"
-          />
-        ))}
-      </ContextColumnList>
-
-      {canEdit &&
-        (showAdd ? (
-          <div className="mt-2 space-y-1.5 rounded-lg border border-line p-2">
-            <input
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder={placeholderTitulo}
-              className="w-full px-2 py-1.5 text-[11px] bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand"
+      <div className="flex flex-1 flex-col gap-2">
+        <ContextColumnList loading={loading} empty={VACIO_DE_LAS_FUENTES}>
+          {sources.map((s) => (
+            <ContextRow
+              key={s.id}
+              icon={CTX_ICONS.note}
+              meta={`Sumado el ${fechaDeLaFuente(s.createdAt, false)}`}
+              title={s.title || "Sin título"}
+              snippet={s.content.slice(0, 120)}
+              onRemove={canEdit ? () => removeSource(s.id) : undefined}
+              removeTitle="Quitar fuente"
             />
-            <textarea
-              value={newContent}
-              onChange={(e) => setNewContent(e.target.value)}
-              rows={3}
-              placeholder={placeholder}
-              className="w-full px-2 py-1.5 text-[11px] bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand resize-y"
-            />
-            <div className="flex justify-end gap-1.5">
-              <button
-                onClick={() => {
-                  setShowAdd(false);
-                  setNewTitle("");
-                  setNewContent("");
-                }}
-                className="text-[11px] text-fg-muted hover:text-fg px-2 py-1 rounded-lg transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={addSource}
-                disabled={saving || newContent.trim().length === 0}
-                className="text-[11px] font-semibold text-primary-fg bg-brand hover:bg-brand-dark disabled:opacity-40 px-2.5 py-1 rounded-lg transition-colors"
-              >
-                {saving ? "Agregando…" : "Agregar"}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setShowAdd(true)}
-            className="mt-2 w-full inline-flex items-center justify-center gap-1 text-[11px] font-medium text-fg-muted hover:text-fg-secondary border border-dashed border-line rounded-lg px-2 py-1.5 transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            {etiquetaAgregar}
-          </button>
-        ))}
+          ))}
+        </ContextColumnList>
+        {canEdit && <SumarFuente alPegar={alPegar} alSubir={alSubir} />}
+      </div>
     </>
   );
 }

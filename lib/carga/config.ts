@@ -15,6 +15,8 @@
  * ⛔ Acá no hay montos ni salarios: la carga es de horas. El dinero vive en lib/rentabilidad (la CSL y dirección).
  */
 
+import { CLAVES_DE_FAMILIA, type ClaveDeFamilia } from "@/lib/tiempos/familias";
+
 /** Los tipos de fase del cronograma (`TimelineActivityType`) más «SIN» para las fases viejas sin tipo. */
 export const TIPOS_DE_FASE = ["CONFIGURACION", "PLANIFICACION", "EXPLORACION", "ADOPCION", "SEGUIMIENTO", "SIN"] as const;
 export type TipoDeFase = (typeof TIPOS_DE_FASE)[number];
@@ -78,6 +80,12 @@ export interface ConfigCarga {
   preparacionMin: number;
   /** Horas de una tarea «Smarteam» del cronograma, antes del factor de la cuenta, por tipo de fase. */
   horasPorTipo: Record<TipoDeFase, number>;
+  /**
+   * Horas de una TAREA CLAVE (lib/tiempos/familias.ts), antes del factor. Vacío de fábrica: sin número propio, una
+   * tarea clave cuenta como su tipo de fase. Se llena con la calibración (la encuesta de arranque y lo que se responde
+   * al terminarlas), siempre confirmado por una persona.
+   */
+  horasPorFamilia: Partial<Record<ClaveDeFamilia, number>>;
   /** Cuánto de una tarea «Ambos» cae del lado de Smarteam (0,5 = la mitad). */
   ambosFraccion: number;
   /** Lo que suma cada variable al factor de complejidad (base 1,0). */
@@ -90,10 +98,20 @@ export interface ConfigCarga {
   traspaso: number;
   /** Semanas que toma contratar y formar a un CSE (para avisar con tiempo). */
   semanasParaContratar: number;
+  /**
+   * Cuántas cuentas con servicio recurrente lleva bien un CSE (Elías, 2026-10-07: de 6 a 7). Lo mira la pestaña
+   * Equipo de Éxito del cliente: la barra de cada CSE contra esta banda.
+   */
+  metaRecurrentes: { min: number; max: number };
   /** Horas por semana que suma un trato ganado, por tipo, desde el mes siguiente a su cierre. */
   horasPorTrato: Record<TipoDeTrato, number>;
   /** Ajustes por persona (medio tiempo, alguien que también hace otra cosa), por correo en minúscula. */
   personas: Record<string, Partial<CapacidadDePersona>>;
+  /**
+   * Las propuestas de la calibración que alguien descartó: clave de la propuesta → el número propuesto. No vuelve a
+   * proponerse hasta que el número cambie (lib/carga/calibracion.ts).
+   */
+  descartes: Record<string, number>;
 }
 
 export const CONFIG_DE_FABRICA: ConfigCarga = {
@@ -101,6 +119,7 @@ export const CONFIG_DE_FABRICA: ConfigCarga = {
   paraCuentasCsl: 0.4,
   preparacionMin: 15,
   horasPorTipo: { CONFIGURACION: 2, PLANIFICACION: 1.5, EXPLORACION: 1, ADOPCION: 1, SEGUIMIENTO: 0.5, SIN: 1.5 },
+  horasPorFamilia: {},
   ambosFraccion: 0.5,
   pesos: {
     hub: 0.1,
@@ -121,8 +140,10 @@ export const CONFIG_DE_FABRICA: ConfigCarga = {
   semanasSenal: 3,
   traspaso: 0.25,
   semanasParaContratar: 10,
+  metaRecurrentes: { min: 6, max: 7 },
   horasPorTrato: { impl: 8, caso: 4, soporte: 3, lic: 1, integ: 1, ses: 1, web: 0, marca: 0 },
   personas: {},
+  descartes: {},
 };
 
 /** Techo del factor de complejidad: una cuenta nunca pesa más de tres veces la base. */
@@ -167,9 +188,27 @@ export function completarConfig(guardada: unknown): ConfigCarga {
     semanasSenal: num(g.semanasSenal, f.semanasSenal),
     traspaso: num(g.traspaso, f.traspaso),
     semanasParaContratar: num(g.semanasParaContratar, f.semanasParaContratar),
+    metaRecurrentes: {
+      min: num((g.metaRecurrentes as Partial<ConfigCarga["metaRecurrentes"]> | undefined)?.min, f.metaRecurrentes.min),
+      max: num((g.metaRecurrentes as Partial<ConfigCarga["metaRecurrentes"]> | undefined)?.max, f.metaRecurrentes.max),
+    },
     horasPorTrato: Object.fromEntries(TIPOS_DE_TRATO.map((t) => [t, num(tratos[t], f.horasPorTrato[t])])) as Record<TipoDeTrato, number>,
     personas,
+    horasPorFamilia: soloNumeros(g.horasPorFamilia, CLAVES_DE_FAMILIA),
+    descartes: soloNumeros(g.descartes, null) as Record<string, number>,
   };
+}
+
+/** Los valores numéricos de un mapa guardado; con `claves`, solo esas. */
+function soloNumeros<K extends string>(x: unknown, claves: readonly K[] | null): Partial<Record<K, number>> {
+  const out: Partial<Record<K, number>> = {};
+  if (!x || typeof x !== "object") return out;
+  for (const [k, v] of Object.entries(x)) {
+    if (typeof v !== "number" || !Number.isFinite(v)) continue;
+    if (claves && !(claves as readonly string[]).includes(k)) continue;
+    out[k as K] = v;
+  }
+  return out;
 }
 
 /** Las horas que una persona tiene disponibles por semana para trabajo comprometido (cuentas e internas). */

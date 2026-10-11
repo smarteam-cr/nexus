@@ -66,7 +66,8 @@ export interface ClassifyResult {
 export async function classifySessionToProjects(
   sessionId: string,
   clientId: string,
-  opts: { dryRun?: boolean } = {},
+  /** `signal`: el corte del tope de la lectura de seguimiento (lib/lecturas/leer.ts); corta la llamada al modelo. */
+  opts: { dryRun?: boolean; signal?: AbortSignal } = {},
 ): Promise<ClassifyResult> {
   const dryRun = opts.dryRun === true;
   // 1. Cargar los proyectos a los que se le puede colgar una sesión. El criterio es el
@@ -166,6 +167,7 @@ export async function classifySessionToProjects(
       title: true,
       participants: true,
       transcript: true,
+      summary: true,
       date: true,
     },
   });
@@ -244,8 +246,7 @@ export async function classifySessionToProjects(
     `=== PROYECTOS ACTIVOS DEL CLIENTE ===`,
     projectsBlock,
     "",
-    `=== TRANSCRIPT ===`,
-    (session.transcript ?? "").slice(0, 30000),
+    ...contenidoDeLaReunion(session.transcript, session.summary),
   ].join("\n");
 
   let rawText: string;
@@ -263,7 +264,7 @@ export async function classifySessionToProjects(
       max_tokens: 1200,
       system: agent.systemPrompt,
       messages: [{ role: "user", content: userMessage }],
-    }));
+    }, opts.signal ? { signal: opts.signal } : undefined));
     rawText = (msg.content[0] as { type: string; text: string }).text.trim();
   } catch (e) {
     return { status: "error", reason: `Claude error: ${(e as Error).message}` };
@@ -374,6 +375,22 @@ export async function classifySessionToProjects(
     primaryProjectId,
     assignmentsCreated: count,
   };
+}
+
+/**
+ * Lo que el clasificador lee de la reunión: la transcripción; sin ella, el resumen de las notas de Gemini con ESE
+ * rótulo (memoria de la cuenta, etapa 2). Antes mandaba una transcripción vacía, y una reunión con solo notas se
+ * clasificaba a ciegas: es la que el job de la lectura vincula a su proyecto (lib/sessions/vincular-al-llegar.ts).
+ */
+export function contenidoDeLaReunion(transcript: string | null | undefined, summary: unknown): string[] {
+  const t = (transcript ?? "").trim();
+  if (t) return [`=== TRANSCRIPT ===`, t.slice(0, 30000)];
+  const overview =
+    summary && typeof summary === "object" && !Array.isArray(summary) && typeof (summary as { overview?: unknown }).overview === "string"
+      ? ((summary as { overview: string }).overview ?? "").trim()
+      : "";
+  if (overview) return [`=== RESUMEN DE LAS NOTAS DE GEMINI (la reunión no tiene transcripción) ===`, overview.slice(0, 12000)];
+  return [`=== TRANSCRIPT ===`, ""];
 }
 
 /**

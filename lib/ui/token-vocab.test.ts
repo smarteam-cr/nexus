@@ -64,9 +64,8 @@ const DEUDA_TOKENS: Record<string, number> = {
   "app/(shell)/knowledge/KnowledgeClient.tsx": 47,
   "app/(shell)/sales/SalesClient.tsx": 58,
   "app/(shell)/sessions/[id]/SessionView.tsx": 49,
-  "app/(shell)/sessions/AnalysisPanel.tsx": 72,
   "app/(shell)/sessions/categories/CategoriesClient.tsx": 51,
-  "app/(shell)/sessions/SessionsClient.tsx": 161,
+  "app/(shell)/sessions/SessionsClient.tsx": 150,
   "app/(shell)/team/page.tsx": 2,
   "components/canvas/AnchorDatePicker.tsx": 10,
   "components/canvas/CronogramaCanvas.tsx": 20, // E4: −10 con el banner de «Pedir cambio con IA», que se retiró
@@ -81,7 +80,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/clients/ClientContextCards.tsx": 108,
   "components/clients/ClientSharing.tsx": 28,
   "components/clients/CronogramaProgressButton.tsx": 1,
-  "components/clients/DocumentUpload.tsx": 23,
   "components/clients/MinuteDialog.tsx": 44,
   "components/clients/ProjectSessionsReview.tsx": 1,
   "components/clients/SectionDiscoveryModal.tsx": 37,
@@ -115,10 +113,8 @@ const DEUDA_ALERTS: Record<string, number> = {
   "app/(shell)/clients/NewClientButton.tsx": 1,
   "app/(shell)/integrations/GoogleMeetCard.tsx": 2,
   "app/(shell)/knowledge/KnowledgeClient.tsx": 1,
-  "app/(shell)/sessions/AnalysisPanel.tsx": 1,
   "components/canvas/CronogramaCanvas.tsx": 2,
   "components/clients/ClientContextCards.tsx": 1,
-  "components/clients/DocumentUpload.tsx": 1,
   "components/handoffs/HandoffStepper.tsx": 2,
 };
 
@@ -169,7 +165,7 @@ describe("Ratchet de alerts: el error rojo ad-hoc solo ENCOGE", () => {
  * pasada coordinada con la otra PC.
  */
 const DEUDA_TABBARS: Record<string, number> = {
-  "app/(shell)/sessions/SessionsClient.tsx": 2,
+  "app/(shell)/sessions/SessionsClient.tsx": 1,
   "app/(shell)/sessions/[id]/SessionView.tsx": 1,
   "components/clients/ActionItemsDialog.tsx": 1,
   "components/clients/ClientContextCards.tsx": 3,

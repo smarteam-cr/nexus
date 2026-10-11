@@ -77,7 +77,7 @@ Reglas estrictas:
 - Devuelve el texto COMPLETO del campo: conserva lo que ya había, suma lo nuevo y quita repeticiones. Si una fuente contradice lo que había, reemplázalo por lo más reciente.
 - Formato: viñetas con «- », una idea por viñeta, frases cortas. **Negrita** solo para cifras o nombres clave. Sin títulos.
 - Datos duros tal cual aparecen (números, porcentajes, plazos, herramientas). Fechas absolutas, nunca «la semana pasada».
-- stakeholders: SOLO personas del CLIENTE. Nunca incluyas al equipo de Smarteam (consultores, CSE, ventas, desarrolladores, ni a nadie con correo de Smarteam), aunque participen en todas las reuniones. Una viñeta por persona con el formato «Nombre — cargo — papel en el proyecto — postura». Si falta un dato, omítelo; no lo adivines.
+- stakeholders: SOLO personas del CLIENTE. Nunca incluyas al equipo de Smarteam (consultores, CSE, ventas, desarrolladores, ni a nadie con correo de Smarteam), aunque participen en todas las reuniones. Una viñeta por persona con el formato «Nombre — cargo — papel en el proyecto — postura», siempre las cuatro partes. Si falta un dato, escribe «sin dato» en esa parte: nunca la omitas ni la adivines.
 - aperturaAsesoria: solo uno de ${aperturas}, y solo si hay evidencia clara; la evidencia va en porQueApertura.
 - motivacionCompra: por qué nos eligieron y por qué ahora, si la fuente lo dice.
 - La ficha es ESTRATÉGICA, no una minuta. No anotes pedidos operativos de una reunión (un reporte, un filtro, una vista, un error puntual, una tarea de configuración): eso vive en la minuta y el cronograma. Solo entra lo que cambia cómo entendemos al cliente: su negocio, sus metas, sus dolores de fondo, su gente, sus herramientas.

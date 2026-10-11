@@ -70,6 +70,8 @@ export default async function ExploracionPage({
     );
   }
 
+  // La exploración de un proyecto vive en su ficha, no en Preventa (lib/exploraciones/marco.ts).
+  if (lectura.fila.projectId) redirect(`/clients/${lectura.fila.clientId}?tab=${encodeURIComponent(lectura.fila.projectId)}&canvas=exploration`);
   const exp = await paraLaPantallaCompleta(lectura.fila);
   /* La información de la empresa es la MISMA de su ficha de cliente (Elías, 2026-10-06): vive en su
      proyecto de estrategia, que se crea acá si un prospecto todavía no lo tiene (como al mapear sus

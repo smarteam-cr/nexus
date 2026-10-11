@@ -12,6 +12,8 @@ import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { belongsToClient, whereBelongsToClient } from "@/lib/sessions/project-sources";
 import {
   alimenta,
+  desestimadaPorElCse,
+  esSoloElegidas,
   excluidaAMano,
   forzadaAMano,
   origenDelVinculo,
@@ -20,6 +22,7 @@ import {
   usaReglaDeRelevancia,
 } from "@/lib/sessions/destinos-de-contexto";
 import { etiquetaDeSala } from "@/lib/sessions/etiqueta-de-sala";
+import { sugerenciasParaElDocumento, type SugerenciaParaElPanel } from "@/lib/contexto/sugerencias-del-documento-server";
 
 /**
  * GET /api/projects/[projectId]/session-candidates
@@ -41,11 +44,18 @@ import { etiquetaDeSala } from "@/lib/sessions/etiqueta-de-sala";
  * .../timeline/calendario. Lo que cambia entre los dos destinos vive en
  * `lib/sessions/destinos-de-contexto.ts`; elegir/sacar va por POST .../timeline/sessions.
  *
- * ── `?para=diagnostico` (2026-09-28, «Contexto del diagnóstico») ──────────────
- * Arranca SUGERIDO: `feeding` son las reuniones del proyecto CON EL CLIENTE que nadie sacó, más las
- * agregadas a mano; `excluded` son las que el CSE sacó (la X). Las candidatas son las del cliente,
- * como en el handoff, y `applies` marca las que son con el cliente. Sacar/agregar va por POST
- * .../contexto/diagnosis/sessions.
+ * ── `?para=` un documento (diagnóstico, planificación, ejecución, kickoff, integraciones, entrega) ──
+ * Desde la etapa 7 (DECISIONS «Los documentos leen la memoria y solo las reuniones elegidas») se
+ * comportan como el cronograma: `feeding` son SOLO las elegidas (`true`), con el origen «elegida para
+ * …»; `excluded` queda vacío (sacar es dejar de elegir). Aparte, `sugeridas`: las reuniones que Nexus
+ * sugiere para ese documento (lib/contexto/sugerencias-del-documento-server.ts: las sesiones de la
+ * exploración en el diagnóstico y las reuniones con hechos abiertos ruteados a él), con su título, su
+ * fecha, su motivo y quiénes estuvieron. Se calculan al leer: esta ruta no escribe nada, y una
+ * sugerencia no se repite entre las candidatas. Las candidatas son las demás reuniones del PROYECTO
+ * (todas, con `delProyecto: true`, como en el cronograma) y las 100 más recientes del cliente, sin regla
+ * de relevancia; una que el CSE desestimó viene marcada (`desestimada`). Usar, descartar y sacar van por
+ * POST .../contexto/[pieza]/sessions. (Hasta la etapa 7 arrancaban SUGERIDOS: toda reunión del proyecto
+ * con el cliente alimentaba, y la X la dejaba «Excluida». La exploración conserva esa regla.)
  */
 export async function GET(
   req: NextRequest,
@@ -101,7 +111,8 @@ export async function GET(
   // (included=false, tombstone humano) no alimenta NADA; si es miembro, aplica la
   // política de link (primario / confianza alta / forzada) + la regla de relevancia.
   //   El cronograma no tiene regla de relevancia: `alimenta` ni la consulta en ese destino.
-  //   El diagnóstico tiene la suya: la reunión fue con el cliente (la sugerencia).
+  //   Los seis documentos tampoco (etapa 7): entra la elegida. Solo la exploración conserva
+  //   la suya: la reunión fue con el cliente (la sugerencia de antes).
   const esCronograma = destino === "cronograma";
   const sugiere = sugiereConElCliente(destino);
   const dominiosPropios = (guard.interno && !esCronograma) || sugiere
@@ -179,14 +190,29 @@ export async function GET(
     }));
   const excludedIds = new Set(excluded.map((e) => e.sessionId));
 
+  /* ── Las SUGERIDAS (etapa 7, solo los seis documentos que leen las elegidas) ──
+     Se calculan al leer y no escriben nada: `true` lo pone el clic de una persona («Usar»). Si fallan,
+     el panel sigue igual, sin sugerencias. Las que el CSE desestimó (`false`) no se sugieren de nuevo mientras
+     exista el vínculo (el `false` no pone candado: el clasificador puede borrarlo y recrearlo vacío) y en el
+     buscador vienen marcadas. */
+  const soloElegidas = esSoloElegidas(destino);
+  const sugeridasCrudas: SugerenciaParaElPanel[] = soloElegidas
+    ? await sugerenciasParaElDocumento(projectId, destino).catch((e: unknown) => {
+        console.warn(`[session-candidates] project=${projectId}: las sugerencias fallaron (no bloqueante):`, e instanceof Error ? e.message : e);
+        return [];
+      })
+    : [];
+  const sugeridasIds = new Set(sugeridasCrudas.map((s) => s.sessionId));
+  const desestimadaIds = new Set(safeRows.filter((r) => desestimadaPorElCse(destino, r)).map((r) => r.session.id));
+
   // Candidatas para el pop-up: todas las sesiones del cliente que NO alimentan ya el
   // handoff (incluye las linkeadas-pero-excluidas y las no linkeadas). `applies` marca
   // las que entrarían por regla, para destacarlas arriba. Ownership = misma regla que
   // belongsToClient (resolvedClientId O manualClientId) — antes solo resolvedClientId
   // y una sesión asignada a mano desaparecía de la columna Y del modal.
   /* El cronograma no ofrece las demás reuniones del cliente: sus candidatas son las del PROYECTO
-     (abajo) y las del calendario de quien busca (.../timeline/calendario), que es lo que pidió
-     Elías. Por eso ni se consultan. */
+     (abajo) y las del calendario de quien busca (.../session-candidates/calendario), que es lo que pidió
+     Elías. Por eso ni se consultan. Los seis documentos ofrecen las dos: las del proyecto y estas. */
   const clientSessions = esCronograma ? [] : await prisma.firefliesSession.findMany({
     where: {
       ...whereBelongsToClient(clientId),
@@ -270,20 +296,27 @@ export async function GET(
      así que una reunión vacía se pintaba «Incluida» en verde —indistinguible de una llena de
      material— y el CSE no tenía cómo saber que ese documento se está escribiendo sobre nada.
      Es el mismo pecado que la lista de candidatas ya había dejado de cometer. */
-  /* Las candidatas del CRONOGRAMA: las demás reuniones del proyecto (vínculo vivo) que todavía no
-     se eligieron. Salen de las mismas filas ya filtradas por el chokepoint (`safeRows`), así que
-     un vínculo cruzado nunca se ofrece. */
-  const delProyecto = esCronograma
+  /* Las candidatas del CRONOGRAMA y de los SEIS DOCUMENTOS: las demás reuniones del proyecto (vínculo
+     vivo) que todavía no se eligieron. Salen de las mismas filas ya filtradas por el chokepoint
+     (`safeRows`), así que un vínculo cruzado nunca se ofrece. En los documentos van además de las 100
+     más recientes del cliente: desde la etapa 7 una reunión del proyecto entra solo si alguien la
+     elige, y una que quedó fuera de esas 100 no se podía elegir de ninguna forma («Buscar en tu
+     calendario» saca a propósito las que ya son del proyecto). Una sugerida ya está arriba. */
+  const delProyecto = esCronograma || soloElegidas
     ? safeRows
-        .filter((r) => r.included && !feedingIds.has(r.session.id))
+        .filter((r) => r.included && !feedingIds.has(r.session.id) && !sugeridasIds.has(r.session.id))
         .map((r) => ({ ...r.session, projects: [] as { projectId: string }[] }))
     : [];
+  const delProyectoIds = new Set(delProyecto.map((s) => s.id));
+  // Las del proyecto van en su grupo: no se repiten entre las del cliente.
+  const delCliente = clientSessions.filter((s) => !delProyectoIds.has(s.id));
 
   const idsVisibles = [
-    ...clientSessions.map((s) => s.id),
+    ...delCliente.map((s) => s.id),
     ...internas.map((s) => s.id),
     ...delProyecto.map((s) => s.id),
     ...feeding.map((f) => f.sessionId),
+    ...sugeridasCrudas.map((s) => s.sessionId),
   ];
   const conContenido = new Set<string>(
     idsVisibles.length === 0
@@ -301,7 +334,7 @@ export async function GET(
         ).map((r) => r.id),
   );
 
-  const candidates = [...clientSessions, ...internas, ...delProyecto]
+  const candidates = [...delCliente, ...internas, ...delProyecto]
     /* ⚠ Se saca `!excludedIds.has(s.id)` A PROPÓSITO, y volver a ponerlo parece la optimización
        más obvia del archivo ("no muestres lo que ya está excluido"). Reconstruye el incidente: la
        «X» sacaba la sesión de la lista **y del único buscador que podía traerla de vuelta**, así
@@ -310,7 +343,8 @@ export async function GET(
 
        REGLA DE ESTE ENDPOINT: **el buscador nunca esconde algo que un click sacó.** Las excluidas
        vuelven con su marca y el botón dice "Reincluir" en vez de "Agregar". */
-    .filter((s) => !feedingIds.has(s.id))
+    // Una sugerida ya está arriba, con su «Usar»: no se repite entre las candidatas.
+    .filter((s) => !feedingIds.has(s.id) && !sugeridasIds.has(s.id))
     .map((s) => {
       /* El cronograma no tiene regla de relevancia: toda reunión del cliente puede alimentarlo,
          así que ninguna se destaca ni se atenúa por el título. */
@@ -335,13 +369,20 @@ export async function GET(
         applies: cls.include,
         // Por qué (no) aplica la regla — tooltip del modal (antes era opaco).
         reason: cls.reason,
-        linkedElsewhere: esCronograma
+        // Las del proyecto traen sus otros proyectos del mapa de arriba (su fila no trae `projects`).
+        linkedElsewhere: delProyectoIds.has(s.id)
           ? (alsoInBySession.get(s.id) ?? []).length > 0
           : s.projects.some((p) => p.projectId !== projectId),
+        /* Es del proyecto (vínculo vivo): el panel la pone bajo «Del proyecto», arriba de las del cliente. En el
+           cronograma son todas. */
+        delProyecto: delProyectoIds.has(s.id),
         /* La sacó un humano de este proyecto. Viaja para que el botón diga "Reincluir" y la fila
            lo muestre: una excluida que vuelve al buscador sin marca se lee como una que nunca
            estuvo, y la persona no entiende por qué "reaparece". */
         excluidaAca: excludedIds.has(s.id),
+        /* Nexus la sugirió para este documento y el CSE la descartó (etapa 7). Elegirla igual se puede:
+           la fila lo dice para que no parezca una que nunca estuvo. */
+        desestimada: desestimadaIds.has(s.id),
         /* No hay transcript, ni resumen, ni minuta: la reunión ocurrió y no quedó nada. Se
            MUESTRA igual —esconderla sería otra desaparición silenciosa— pero marcada, porque
            agregarla no le suma un dato al documento. */
@@ -350,7 +391,8 @@ export async function GET(
            botón lo dice, porque es un efecto que no se ve desde el modal. */
         sinDuenio: internas.some((i) => i.id === s.id),
         /* Solo las del proyecto pueden ser futuras (las demás candidatas ya las cortan en la
-           consulta): se marcan, porque elegirla no aporta nada hasta que ocurra. */
+           consulta): se marcan, porque elegirla no aporta nada hasta que ocurra. Desde la etapa 7
+           también en los seis documentos, que ofrecen las del proyecto. */
         futura: s.date.getTime() > Date.now(),
       };
     })
@@ -370,5 +412,18 @@ export async function GET(
      falta nada, y meterlas volvería el aviso ruido permanente en cualquier proyecto con agenda. */
   for (const f of feeding) f.sinContenido = !f.futura && !conContenido.has(f.sessionId);
 
-  return NextResponse.json({ feeding, excluded, candidates, unreviewedCount });
+  /* Las sugeridas, como las pinta el panel. Ya ocurrieron todas (la regla saca las futuras), así que
+     `sinContenido` dice si de verdad no dejó nada. */
+  const sugeridas = sugeridasCrudas.map((s) => ({
+    sessionId: s.sessionId,
+    title: s.titulo,
+    date: new Date(s.fecha),
+    participants: s.participantes,
+    motivo: s.motivo,
+    fuente: s.fuente,
+    alsoIn: alsoInBySession.get(s.sessionId) ?? [],
+    sinContenido: !conContenido.has(s.sessionId),
+  }));
+
+  return NextResponse.json({ feeding, excluded, candidates, unreviewedCount, sugeridas });
 }

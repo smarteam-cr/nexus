@@ -35,15 +35,15 @@ export function useCorrida() {
   const vistaAlMontar = useRef(exp.actualizadaEn);
   useEffect(() => s.montar(vistaAlMontar.current), [s]);
 
-  /** `sesionId`: para leer una reunión de Meet puntual (la de una pestaña de sesión). */
+  /** `sesionId`: para leer una reunión de Meet puntual (la de una pestaña de sesión). `hubspotId`: para resumir una de HubSpot ya leída. */
   const lanzar = useCallback(
-    async (modo: ModoDeLaCorrida, opciones: { sesionId?: string } = {}) => {
+    async (modo: ModoDeLaCorrida, opciones: { sesionId?: string; hubspotId?: string } = {}) => {
       s.ponerLanzando(true);
       try {
         const res = await fetch(`/api/sales/exploraciones/${exp.id}/agente`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ modo, ...(opciones.sesionId ? { sesionId: opciones.sesionId } : {}) }),
+          body: JSON.stringify({ modo, ...(opciones.sesionId ? { sesionId: opciones.sesionId } : {}), ...(opciones.hubspotId ? { hubspotId: opciones.hubspotId } : {}) }),
         });
         const data = (await res.json().catch(() => ({}))) as { error?: string; yaCorria?: boolean };
         if (!res.ok) {

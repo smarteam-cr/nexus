@@ -12,6 +12,10 @@
  *
  * «Lo que falta para cerrar la etapa» NO sale acá: ya lo dice la tarjeta de la etapa, en el centro,
  * y la misma frase dos veces en la misma pantalla enseña a no leer ninguna.
+ *
+ * Etapa 6 de la memoria de la cuenta (2026-10-10): justo después del documento de la etapa desactualizado van sus
+ * NOVEDADES (lo que las reuniones recientes le cambian; lib/seguimiento/novedades.ts). El número viaja en la pieza, el
+ * mismo que muestra el riel: así los dos lugares no pueden decir cosas distintas.
  */
 import type { ProjectLifecycleStage } from "@prisma/client";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
@@ -24,6 +28,8 @@ export interface PiezaParaQueSigue {
   etiqueta: string;
   estado: "generada" | "vacia" | "por_activar";
   stale: boolean;
+  /** Las novedades de reuniones para esta pieza (etapa 6; el mismo número del riel). */
+  novedades?: number;
 }
 
 export type AccionDeQueSigue =
@@ -31,7 +37,8 @@ export type AccionDeQueSigue =
   | { tipo: "sesiones" }
   | { tipo: "resumen" }
   | { tipo: "agendar" }
-  | { tipo: "etapa" };
+  | { tipo: "etapa" }
+  | { tipo: "novedades"; slug: string; etiqueta: string; n: number };
 
 export interface QueSigueDelProyecto {
   texto: string;
@@ -55,7 +62,12 @@ const POR_NOMBRE = new Map<string, ProjectLifecycleStage>([
 export function etapaDeNexus(etapa: EtapaParaLaUI | null): ProjectLifecycleStage | null {
   if (!etapa) return null;
   if ((STAGE_LABEL_ES as Record<string, string>)[etapa.id]) return etapa.id as ProjectLifecycleStage;
-  return POR_NOMBRE.get(sinTildes(etapa.label)) ?? null;
+  return etapaDeNexusPorNombre(etapa.label);
+}
+
+/** El rótulo de una etapa del pipeline de HubSpot → la etapa de Nexus (también «Continuidad»), o null. */
+export function etapaDeNexusPorNombre(rotulo: string | null | undefined): ProjectLifecycleStage | null {
+  return rotulo ? (POR_NOMBRE.get(sinTildes(rotulo)) ?? null) : null;
 }
 
 /**
@@ -125,6 +137,13 @@ export function queSigueDelProyecto(i: {
       return {
         texto: `«${pieza.etiqueta}» quedó desactualizado: el handoff cambió después de escribirlo. Regenéralo antes de mostrarlo.`,
         accion: { tipo: "pieza", slug: pieza.slug, etiqueta: pieza.etiqueta },
+      };
+    }
+    const n = pieza?.novedades ?? 0;
+    if (pieza && n > 0) {
+      return {
+        texto: `«${pieza.etiqueta}» tiene ${n === 1 ? "1 novedad de una reunión reciente" : `${n} novedades de reuniones recientes`}: revísalas antes de mostrar el documento.`,
+        accion: { tipo: "novedades", slug: pieza.slug, etiqueta: pieza.etiqueta, n },
       };
     }
   }

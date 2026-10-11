@@ -1,5 +1,6 @@
 /**
  * POST /api/tiempos/preguntas/[id] — responder («1 h») u omitir («Omitir» · «No lo hice yo») una pregunta propia.
+ * «No lo hice yo» con `quien` le pasa la pregunta a esa persona; la respuesta dice a quién (`pasoA`).
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { guardInternalUser } from "@/lib/auth/api-guards";
@@ -24,10 +25,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   try {
-    await responderPregunta(id, guard.user.email, parsed.data);
+    const { pasoA } = await responderPregunta(id, guard.user.email, parsed.data);
+    return NextResponse.json({ ok: true, pasoA });
   } catch (e) {
     if (e instanceof ErrorDeTiempos) return NextResponse.json({ error: e.message }, { status: e.status });
     throw e;
   }
-  return NextResponse.json({ ok: true });
 }

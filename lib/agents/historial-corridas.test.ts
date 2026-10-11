@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   whereCorridasDeDocumento,
+  PASO_DE_LAS_SUGERENCIAS,
   resumenDeCorrida,
   duracionLegible,
   debeVerHistorial,
@@ -32,12 +33,25 @@ const fila = (over: Partial<FilaDeCorrida> = {}): FilaDeCorrida => ({
   ...over,
 });
 
+/* «Buscar lo nuevo» sobre un handoff congelado deja sugerencias y no reescribe el documento: su corrida no
+   cuenta (etapa 3b). Sin paso (null) cuenta: son casi todas. */
+const SIN_LAS_SUGERENCIAS = { OR: [{ stepLabel: null }, { stepLabel: { not: PASO_DE_LAS_SUGERENCIAS } }] };
+
 describe("whereCorridasDeDocumento", () => {
   it("acota al proyecto y al grupo del agente", () => {
     expect(whereCorridasDeDocumento("p1", "kickoff")).toEqual({
       projectId: "p1",
       agent: { agentGroup: "kickoff" },
+      ...SIN_LAS_SUGERENCIAS,
     });
+  });
+
+  it("deja afuera «Buscar lo nuevo» sin dejar afuera las corridas sin paso", () => {
+    /* La edición que la pone en rojo: escribir `stepLabel: { not: PASO }` a secas, que en SQL deja afuera
+       también las filas con stepLabel null (todas las del handoff) y el historial queda vacío. */
+    const w = whereCorridasDeDocumento("p1", "handoff");
+    expect(w.OR).toEqual(SIN_LAS_SUGERENCIAS.OR);
+    expect(PASO_DE_LAS_SUGERENCIAS).toBe("Buscar lo nuevo en el handoff");
   });
 
   it("⚠ NO hay rescate de huérfanas: el handoff filtra igual de estricto que los demás", () => {
@@ -49,6 +63,7 @@ describe("whereCorridasDeDocumento", () => {
     expect(whereCorridasDeDocumento("p1", "handoff")).toEqual({
       projectId: "p1",
       agent: { agentGroup: "handoff" },
+      ...SIN_LAS_SUGERENCIAS,
     });
   });
 });
@@ -151,6 +166,34 @@ describe("guardas: el where es UNO, el detalle no es IDOR, y el output crudo no 
       );
       expect(codigo, `${archivo} volvió a escribir el filtro a mano`).not.toMatch(
         /agentGroup:\s*"handoff"/,
+      );
+    }
+  });
+
+  it("⛔ todo lector de corridas del handoff deja afuera «Buscar lo nuevo»", () => {
+    /* La lista de handoffs del cliente leía la última corrida con `sourceSessionIds` sin mirar el paso: después de
+       una búsqueda mostraba como «las sesiones con las que se armó el handoff» las reuniones posteriores al
+       congelado. La edición que la pone en rojo: un `agentRun.findMany` con `agentGroup: "handoff"` sin el filtro. */
+    const archivos: string[] = [];
+    const recorrer = (dir: string) => {
+      for (const e of fs.readdirSync(path.join(RAIZ, dir), { withFileTypes: true })) {
+        const rel = path.posix.join(dir, e.name);
+        if (e.isDirectory()) recorrer(rel);
+        else if (/\.(ts|tsx)$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) archivos.push(rel);
+      }
+    };
+    recorrer("app");
+    recorrer("lib");
+    const lectores = archivos.filter((a) => {
+      const codigo = sinComentarios(leer(a));
+      return /agentRun\.\w+\(/.test(codigo) && /agentGroup:\s*"handoff"/.test(codigo);
+    });
+    expect(lectores, "el censo no encontró ningún lector: el escaneo se rompió").toContain(
+      "app/api/clients/[id]/handoffs/route.ts",
+    );
+    for (const a of lectores) {
+      expect(sinComentarios(leer(a)), `${a} lee corridas del handoff sin dejar afuera «Buscar lo nuevo»`).toMatch(
+        /SIN_BUSCAR_LO_NUEVO|whereCorridasDeDocumento\(/,
       );
     }
   });

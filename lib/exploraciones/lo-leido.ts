@@ -14,13 +14,23 @@ export interface LoLeidoDeHubspot {
   agenda: { id: string; titulo: string; inicio: string }[];
   correosSinPermiso: number;
   leidoEn: string | null;
+  /**
+   * Cuándo se miraron por última vez las reuniones de HubSpot (lo hace cada corrida del agente y, sin él,
+   * el lienzo al abrirse: lib/exploraciones/reuniones-de-hubspot.ts). null = nunca.
+   */
+  reunionesEn?: string | null;
+  /**
+   * Cuándo se miraron por última vez en el calendario los eventos de las sesiones unidas (el lienzo, al
+   * abrirse, como mucho cada 10 minutos: lib/exploraciones/calendario.ts). null = nunca.
+   */
+  calendarioEn?: string | null;
 }
 
 const esObjeto = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 const LETRAS = new Set(["D", "I", "F", "E", "O"]);
 
 export function leerLoLeido(raw: unknown): LoLeidoDeHubspot {
-  const vacio: LoLeidoDeHubspot = { tests: [], agenda: [], correosSinPermiso: 0, leidoEn: null };
+  const vacio: LoLeidoDeHubspot = { tests: [], agenda: [], correosSinPermiso: 0, leidoEn: null, reunionesEn: null, calendarioEn: null };
   if (!esObjeto(raw)) return vacio;
   const tests = Array.isArray(raw.tests)
     ? raw.tests.flatMap((t) => {
@@ -54,5 +64,7 @@ export function leerLoLeido(raw: unknown): LoLeidoDeHubspot {
     agenda,
     correosSinPermiso: typeof raw.correosSinPermiso === "number" ? raw.correosSinPermiso : 0,
     leidoEn: typeof raw.leidoEn === "string" ? raw.leidoEn : null,
+    reunionesEn: typeof raw.reunionesEn === "string" ? raw.reunionesEn : null,
+    calendarioEn: typeof raw.calendarioEn === "string" ? raw.calendarioEn : null,
   };
 }

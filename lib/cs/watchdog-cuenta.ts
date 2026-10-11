@@ -10,6 +10,10 @@
  * base—, así no hace falta re-sembrar el agente (la misma doctrina que el bloque de límites del
  * handoff). Al final va la guía de cruces: qué buscar con todo junto y cómo tipificarlo.
  *
+ * Desde el 2026-10-10 suma la MEMORIA de la cuenta y del proyecto (lib/memoria, alcance interno, lector «vigia»): la
+ * ficha, los procesos, la historia, lo fuera de alcance, la preventa, la auditoría, las desviaciones y los hechos de las
+ * reuniones. Lo que ya lee por su lado (las reuniones, los compromisos vencidos, los resultados) no se repite.
+ *
  * Todo resumido, nunca crudo: el vigía corre todos los días sobre la cartera y cada token cuenta. La
  * única lectura de texto crudo es un EXTRACTO acotado de la transcripción de las reuniones que no
  * tienen minuta (2026-10-05, con topes por reunión y por bloque: lib/cs/transcripcion-del-vigia.ts).
@@ -23,15 +27,20 @@ import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 import { leerResultadosDelHandoff, porValidar } from "@/lib/handoff/resultados-medibles";
 import { lineaDeLaDuracion, lineaDeLaFecha, limitesDeLaFila, revisarLimites } from "@/lib/timeline/limites";
 import { SELECT_LIMITES, conSemanaCeroDelPipeline } from "@/lib/timeline/limites-servidor";
-import { leerPartner, porcentajeDeTendencia, licenciasSumadas, fraccion } from "./lectura-partner";
+import { leerPartner, porcentajeDeTendencia, licenciasSumadas, fraccion, relacionTerminada } from "./lectura-partner";
 import { hayDeudaDelCliente, resumirFacturacion, textoDeVencidas, type CobroDeLaCuenta } from "./facturacion-de-la-cuenta";
 import { diasEntre, fmtCambio, fmtDia } from "./formato";
 import { TOPE_TRANSCRIPCION_CUENTA, extractosDelBloque } from "./transcripcion-del-vigia";
+import { correosDeLaEmpresa } from "@/lib/exploraciones/hubspot";
+import { memoriaDelDocumento } from "@/lib/memoria";
 
 const DIA_MS = 86_400_000;
 /** Reuniones de la cuenta que entran al contexto: las de las últimas 6 semanas, hasta 8. */
 const VENTANA_DE_REUNIONES_DIAS = 45;
 const TOPE_DE_REUNIONES = 8;
+/** Correos del cliente que entran al contexto: los de la misma ventana, hasta 8, cada uno recortado. */
+const TOPE_DE_CORREOS = 8;
+const LARGO_DEL_CORREO = 600;
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -48,7 +57,11 @@ export const GUIA_DE_CRUCES = [
   "- Una reunión INTERNA habla de un problema con este cliente (queja, pago, escalamiento, cambio de interlocutor) → la categoría que corresponda; cítala como evidencia.",
   "- Un «extracto de la transcripción» es un pedazo de la reunión (el principio y el final): cita la frase que leíste y no supongas lo que no está.",
   "- La relación gestionada vence en 30 días o menos → PROACTIVE_ACTION: alguien de Smarteam tiene que trabajar en el portal o se pierden los datos de uso.",
-  "En cada alerta pon en evidence.fuentes las fuentes que cruzaste: cronograma, handoff, etapa, facturacion, hubspot, hubspot_partner, reuniones, reuniones_internas.",
+  "- QUEJA (categoría válida): el cliente se queja, reclama o dice que algo no le sirve, en una reunión CON el cliente o en un correo SUYO → QUEJA, MEDIUM (HIGH si pide escalar, dice que se va o es la segunda vez). Una queja que solo se comenta en una reunión INTERNA no es QUEJA.",
+  "- Un RETRASO que el cliente nombra (algo prometido que no llegó, una fecha que se corrió), en una reunión con él o en un correo suyo → TIMELINE_OVERDUE.",
+  '- En una QUEJA o un retraso del cliente pon evidence.cita = { "texto": la frase del cliente COPIADA TAL CUAL (12 caracteres o más, sin resumir, sin traducir, sin corregir), "sessionId": el de la reunión, o "correoId": el del correo }. Sin una frase literal del cliente no es QUEJA: usa otra categoría.',
+  "- Lo que Nexus ya sabe (la memoria) es contexto: lo marcado «propuesto, sin revisar» nadie lo confirmó, y no sirve como la frase literal de una QUEJA.",
+  "En cada alerta pon en evidence.fuentes las fuentes que cruzaste: cronograma, handoff, etapa, facturacion, hubspot, hubspot_partner, reuniones, reuniones_internas, correos, memoria.",
   "No inventes cifras ni fechas: si un dato no está arriba, no existe.",
 ].join("\n");
 
@@ -59,16 +72,84 @@ export async function bloquesDeLaCuenta(i: {
   /** Las reuniones que el bloque del proyecto ya listó (no se repiten). */
   sesionesYaListadas: ReadonlySet<string>;
   ahora: Date;
-}): Promise<string> {
+}): Promise<{ texto: string; correos: Map<string, CorreoLeido>; correosConPermiso: boolean | null }> {
   const hoy = ymd(i.ahora);
-  const partes = await Promise.all([
+  const [handoff, memoria, facturacion, partner, registro, reuniones, correos] = await Promise.all([
     bloqueDelHandoff(i.projectId).catch(() => null),
+    bloqueDeLaMemoria(i.projectId, i.clientId).catch(() => null),
     bloqueDeFacturacion(i.clientId, hoy).catch(() => null),
     bloqueDePartner(i.clientId, hoy).catch(() => null),
     bloqueDelRegistro(i.clientId, i.ahora).catch(() => null),
     bloqueDeReuniones(i.clientId, i.sesionesYaListadas, i.ahora).catch(() => null),
+    bloqueDeCorreos(i.clientId, i.ahora).catch(() => null),
   ]);
-  return [...partes.filter((p): p is string => !!p), GUIA_DE_CRUCES].join("\n\n");
+  const partes = [handoff, memoria, facturacion, partner, registro, reuniones, correos?.texto ?? null];
+  return {
+    texto: [...partes.filter((p): p is string => !!p), GUIA_DE_CRUCES].join("\n\n"),
+    correos: correos?.leidos ?? new Map(),
+    correosConPermiso: correos?.conPermiso ?? null,
+  };
+}
+
+/**
+ * Lo que Nexus ya sabe de la cuenta y del proyecto: la memoria, con el alcance interno (DECISIONS «La memoria de la
+ * cuenta y del proyecto: un solo cargador»). Trae la ficha, los procesos, la historia, lo fuera de alcance, la preventa,
+ * la auditoría, las desviaciones y los hechos de las reuniones. Sin las reuniones, los compromisos ni los resultados:
+ * el vigía ya los lee por su lado (lib/memoria/consumidores.ts › «vigia»). ⛔ La memoria nunca trae facturación ni
+ * Partner: esos bloques son del vigía. Sin nada que decir, no va.
+ */
+async function bloqueDeLaMemoria(projectId: string, clientId: string): Promise<string | null> {
+  const m = await memoriaDelDocumento(projectId, { lector: "vigia", clientId });
+  return m.texto.trim() ? m.texto : null;
+}
+
+/** Un correo que el vigía leyó: con él el runner verifica la frase de una queja (lib/cs/cita-de-alerta.ts). */
+export interface CorreoLeido {
+  texto: string;
+  asunto: string;
+  /** AAAA-MM-DD. */
+  fecha: string;
+}
+
+/**
+ * Los correos del cliente con la empresa en HubSpot (2026-10-09, entrega 2): solo los que escribe alguien de
+ * afuera, los más nuevos, recortados. Sin el permiso de correos de HubSpot (`sales-email-read`) llegan tapados y
+ * el bloque lo dice: el vigía mira solo las reuniones.
+ */
+async function bloqueDeCorreos(
+  clientId: string,
+  ahora: Date,
+): Promise<{ texto: string | null; leidos: Map<string, CorreoLeido>; conPermiso: boolean | null } | null> {
+  const cliente = await prisma.client.findUnique({ where: { id: clientId }, select: { hubspotCompanyId: true } });
+  if (!cliente?.hubspotCompanyId) return null;
+  const [r, categorias] = await Promise.all([
+    correosDeLaEmpresa(cliente.hubspotCompanyId, new Date(ahora.getTime() - VENTANA_DE_REUNIONES_DIAS * DIA_MS)),
+    prisma.sessionCategory.findMany({ select: { domains: true, kind: true } }),
+  ]);
+  if (!r) return null;
+  // Con permiso, HubSpot entrega los correos legibles; sin él, todos tapados (así lo dice Fuentes en la pantalla).
+  const conPermiso = r.correos.length > 0 ? true : r.sinPermiso > 0 ? false : null;
+  const propios = buildInternalDomainsSet(categorias);
+  const delCliente = r.correos.filter((c) => !c.de || !propios.has(c.de.split("@")[1] ?? "")).slice(0, TOPE_DE_CORREOS);
+  const hoy = ymd(ahora);
+  const leidos = new Map<string, CorreoLeido>();
+  const lineas = delCliente.map((c) => {
+    const fecha = ymd(new Date(c.ts));
+    leidos.set(c.id, { texto: c.texto, asunto: c.asunto, fecha });
+    const cuerpo = c.texto.replace(/\s+/g, " ").trim().slice(0, LARGO_DEL_CORREO);
+    return `- [${fmtDia(fecha, hoy)}] correo de ${c.de ?? "el cliente"}${c.asunto ? ` «${c.asunto}»` : ""} correoId=${c.id}: ${cuerpo}`;
+  });
+  if (lineas.length === 0) {
+    if (r.sinPermiso > 0) {
+      return {
+        texto: "=== CORREOS DEL CLIENTE (HubSpot) ===\n(HubSpot no deja leer los correos: falta el permiso de correos. Mira solo las reuniones.)",
+        leidos,
+        conPermiso,
+      };
+    }
+    return { texto: null, leidos, conPermiso };
+  }
+  return { texto: ["=== CORREOS DEL CLIENTE CON SMARTEAM (HubSpot, últimas 6 semanas) ===", ...lineas].join("\n"), leidos, conPermiso };
 }
 
 async function bloqueDelHandoff(projectId: string): Promise<string | null> {
@@ -148,6 +229,12 @@ async function bloqueDePartner(clientId: string, hoy: string): Promise<string | 
     const d = diasEntre(hoy, l.relacionGestionadaVence);
     lineas.push(
       `- Relación gestionada: vence el ${fmtDia(l.relacionGestionadaVence, hoy)} (en ${d} días)${l.ultimaActividadDeSmarteam ? ` · última actividad de Smarteam en el portal: ${fmtDia(l.ultimaActividadDeSmarteam, hoy)}` : ""}`,
+    );
+  }
+  const termino = relacionTerminada(l, hoy);
+  if (termino) {
+    lineas.push(
+      `- Relación gestionada: TERMINÓ el ${fmtDia(termino, hoy)}. Desde entonces HubSpot no comparte el uso de la cuenta: que falte el puntaje no quiere decir que no lo usen.`,
     );
   }
   if ((l.partnersQueGestionan ?? 1) >= 2) lineas.push(`- Otro partner también gestiona la cuenta (${l.partnersQueGestionan} en total).`);

@@ -33,6 +33,11 @@
  * Lo usan los previews del detalle (`marcarFugas`), el revisor de fases (`fugaEn` sobre los
  * nombres) y el chat del cronograma (`lineasConFrontera`): un solo detector. (E4, 2026-09: «Pedir
  * cambio con IA», que lo usaba con `fugasDeLaPropuesta`, se retiró.)
+ *
+ * Desde la etapa 4 (2026-10) el detector de los DOCUMENTOS (./frontera-de-los-documentos.ts) usa
+ * las mismas piezas de acá —`diceDeDondeSalio`, `traeUnMonto` y `copiaEn`—, no una copia: una
+ * segunda normalización o una segunda expresión de la cita divergiría callada. Lo que cambia allá
+ * es QUÉ se marca (en un documento las fechas y los plazos son contenido legítimo), no CÓMO.
  */
 
 export type CampoDeFrontera = "titulo" | "nota";
@@ -112,6 +117,33 @@ const FECHA_NUMERICA = /\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/;
 const MONTO = /(?:US\$|\$|₡|€|\bUSD|\bCRC|\bCLP|\bCOP|\bMXN|\bEUR)\s?\d|\d[\d.,]*\s?(?:usd|d[oó]lares|pesos|colones|euros)\b/i;
 const CORREO = /[\w.+-]+@[\w-]+\.[\w.]+/;
 
+/** ¿El texto dice de dónde salió? («según la reunión», «confirmado en el kick-off», «por la nota»). */
+export function diceDeDondeSalio(texto: string | null | undefined): boolean {
+  return !!texto && CITA.test(normalizarParaFrontera(texto));
+}
+
+/** ¿El texto trae un monto? («US$18.000», «₡500.000», «2.000 dólares»). */
+export function traeUnMonto(texto: string | null | undefined): boolean {
+  return !!texto && MONTO.test(texto);
+}
+
+/** Las rachas del texto YA normalizado contra las del material, con la ventana del campo. */
+function copiaNormalizada(n: string, h: HuellasDeFrontera, campo: CampoDeFrontera): boolean {
+  const { palabras: largo, conContenido } = VENTANA_DE_COPIA[campo];
+  const palabras = n.split(" ").filter(Boolean);
+  return rachas(palabras, largo, conContenido).some((r) => h.ngramas[campo].has(r));
+}
+
+/** ¿El texto copia una frase entera del material? Sin huellas activas (sin material), nunca. */
+export function copiaEn(
+  texto: string | null | undefined,
+  h: HuellasDeFrontera,
+  campo: CampoDeFrontera = "nota",
+): boolean {
+  if (!h.activa || !texto || !texto.trim()) return false;
+  return copiaNormalizada(normalizarParaFrontera(texto), h, campo);
+}
+
 /**
  * El primer motivo por el que `texto` cruza la frontera, o `null`. `campo` elige la ventana de la
  * copia: "titulo" para títulos de tarea y nombres de fase, "nota" para las notas.
@@ -128,9 +160,7 @@ export function fugaEn(
   if (FECHA.test(n) || FECHA_NUMERICA.test(texto)) return MOTIVOS_DE_FUGA.fecha;
   if (PLAZO.test(n)) return MOTIVOS_DE_FUGA.plazo;
   if (CORREO.test(texto)) return MOTIVOS_DE_FUGA.correo;
-  const { palabras: largo, conContenido } = VENTANA_DE_COPIA[campo];
-  const palabras = n.split(" ").filter(Boolean);
-  if (rachas(palabras, largo, conContenido).some((r) => h.ngramas[campo].has(r))) return MOTIVOS_DE_FUGA.copia;
+  if (copiaNormalizada(n, h, campo)) return MOTIVOS_DE_FUGA.copia;
   return null;
 }
 

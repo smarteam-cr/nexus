@@ -6,9 +6,15 @@
  * 30 días de cada renovación, deja una alerta de «Renovación» en Éxito del cliente, una por cliente,
  * hub, fecha y umbral (la llave lo garantiza: correr dos veces no duplica). Antes la renovación solo
  * la miraba el vigilante con IA, que en producción no corre desde julio.
+ *
+ * Y se CIERRA sola (2026-10-07) cuando deja de corresponder: la renovación pasó, cambió de fecha o
+ * ya cruzó al umbral siguiente, que tiene su propio aviso. Antes quedaban abiertas para siempre: el
+ * 7 de octubre eran 38 de las 105 alertas abiertas de la cartera. Una que la CSL cerró a mano no
+ * vuelve en el mismo umbral; el umbral siguiente sí sale, porque la renovación está más cerca.
  */
 import { prisma } from "@/lib/db/prisma";
 import { fechaLocalDeLaReunion } from "@/lib/sessions/compromisos-y-alcance";
+import { CIERRE_DEL_SISTEMA, avisosQueYaNoCorresponden } from "./alertas-reglas";
 import {
   avisoDeRenovacion,
   combinarLicencias,
@@ -38,20 +44,25 @@ export async function cargarLicenciasDelCliente(clientId: string): Promise<Licen
   };
 }
 
-/** Una pasada: crea los avisos que tocan hoy. Devuelve cuántos creó. */
-export async function correrAvisosDeRenovacion(ahora: Date): Promise<{ creados: number; revisados: number }> {
+/** Con qué empieza la llave de todo aviso de renovación (una por cliente, hub, fecha y umbral). */
+const PREFIJO = "renovacion:";
+
+/** Una pasada: crea los avisos que tocan hoy y cierra los que ya no corresponden. */
+export async function correrAvisosDeRenovacion(ahora: Date): Promise<{ creados: number; cerrados: number; revisados: number }> {
   const hoy = fechaLocalDeLaReunion(ahora);
   const clientes = await prisma.client.findMany({
     where: { OR: [{ partnerSnapshot: { isNot: null } }, { licencias: { some: {} } }] },
     select: { id: true, name: true },
   });
   let creados = 0;
+  const llavesDeHoy = new Set<string>();
   for (const cliente of clientes) {
     const { licencias } = await cargarLicenciasDelCliente(cliente.id);
     for (const l of licencias) {
       const aviso = avisoDeRenovacion(l.renovacion, hoy);
       if (!aviso) continue;
       const dedupeKey = `renovacion:${cliente.id}:${l.hub}:${l.renovacion}:${aviso.umbral}`;
+      llavesDeHoy.add(dedupeKey);
       const ya = await prisma.csAlert.findFirst({ where: { dedupeKey }, select: { id: true } });
       if (ya) continue;
       await prisma.csAlert.create({
@@ -71,5 +82,23 @@ export async function correrAvisosDeRenovacion(ahora: Date): Promise<{ creados: 
       creados++;
     }
   }
-  return { creados, revisados: clientes.length };
+
+  // Los abiertos que hoy ya no tocan se cierran solos, firmados por el sistema y con su porqué.
+  const abiertos = await prisma.csAlert.findMany({
+    where: { dedupeKey: { startsWith: PREFIJO }, status: { in: ["OPEN", "SEEN"] } },
+    select: { id: true, dedupeKey: true },
+  });
+  const sobran = avisosQueYaNoCorresponden(abiertos, llavesDeHoy);
+  if (sobran.length > 0) {
+    await prisma.csAlert.updateMany({
+      where: { id: { in: sobran }, status: { in: ["OPEN", "SEEN"] } },
+      data: {
+        status: "RESOLVED",
+        resolvedAt: ahora,
+        resolvedByEmail: CIERRE_DEL_SISTEMA,
+        resolutionNote: "Se cerró sola: la renovación ya pasó, cambió de fecha o tiene un aviso más cercano.",
+      },
+    });
+  }
+  return { creados, cerrados: sobran.length, revisados: clientes.length };
 }

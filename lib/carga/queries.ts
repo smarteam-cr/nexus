@@ -14,13 +14,18 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { modeloDisponible } from "@/lib/db/esquema";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
 import { proyectoClasificableWhere, proyectoDeCarteraWhere } from "@/lib/projects/scope";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { SECCION_DE_ESCALA } from "@/lib/escala/contexto";
+import { leerPosicion, valorDeNivel } from "@/lib/escala/posicion";
 import { completarConfig, horasDisponibles, type ConfigCarga } from "./config";
+import { propuestasDeCalibracion, type PropuestaDeCalibracion, type RespuestaAlTerminar, type RespuestaDelArranque } from "./calibracion";
 import { filasDeCobertura, resumenDeCobertura, type FilaDeCobertura, type MedicionDeCarga } from "./cobertura";
 import { correlacion, factorDeComplejidad, horasPorPuntoDeFactor, type FactorExplicado } from "./complejidad";
-import { entregaEstimada, type CronogramaParaCarga } from "./entrega";
+import { entregaEstimada, type CronogramaParaCarga, type TiempoDeclarado } from "./entrega";
 import { tiempoEnReuniones, type ReunionParaCarga, type TipoDeEmpresa } from "./reuniones";
 import { diasEntre, etiquetaDelLunes, inicioDelLunes, lunesDe, lunesHasta, sumarSemanas } from "./semana";
 import { cargaDePersona, cargaDelEquipo, horasPorCuenta, type CargaDelEquipo, type CargaDePersona } from "./utilizacion";
@@ -77,6 +82,8 @@ export interface CuentaDeLaPersona {
   reuniones: number;
   preparacion: number;
   entrega: number;
+  /** La parte de la entrega que respondió la persona. */
+  entregaDeclarada: number;
   factor: number;
 }
 
@@ -113,8 +120,12 @@ export interface DatosDeLaCarga {
   /** Horas por punto de factor de la cartera, y qué tanto explica el factor las horas vistas. */
   horasPorPunto: number;
   correlacion: number | null;
-  /** Lo que piden por semana las cuentas sin un CSE vigente (alguien las va a tener que tomar). */
-  sinCse: { horas: number; cuentas: number };
+  /**
+   * Lo que piden por semana las cuentas sin un CSE vigente (alguien las va a tener que tomar). `horasFueraDelEquipo` es
+   * la parte que no está ya en la carga de un CSE (las reuniones de la CSL y la entrega de un dueño que se fue): es lo
+   * que la contratación suma a la base.
+   */
+  sinCse: { horas: number; horasFueraDelEquipo: number; cuentas: number };
   /** Reuniones contadas y descartadas (día completo o sin duración) en la ventana. */
   reuniones: { contadas: number; descartadas: number };
   cobertura: { filas: FilaDeCobertura[]; resumen: ReturnType<typeof resumenDeCobertura> };
@@ -125,7 +136,31 @@ export interface DatosDeLaCarga {
 const r1 = (x: number) => Math.round(x * 10) / 10;
 const norm = (e: string | null | undefined) => (e ?? "").trim().toLowerCase();
 
-export async function cargarCargaDelEquipo(ahora = new Date()): Promise<DatosDeLaCarga> {
+/**
+ * Lo que respondió cada persona en «¿cuánto te tomó?», por tarea: reemplaza al estimado en la entrega. Si dos personas
+ * respondieron por la misma tarea (se la pasaron), cuenta la que anotó más tarde. Sin las tablas de lib/tiempos (el
+ * SQL sin correr), no hay nada declarado.
+ */
+export async function leerTiemposDeclarados(): Promise<Map<string, TiempoDeclarado>> {
+  if (!modeloDisponible(prisma.preguntaDeTiempo)) return new Map();
+  try {
+    const filas = await prisma.preguntaDeTiempo.findMany({
+      where: { estado: "respondida", taskId: { not: null }, minutos: { not: null } },
+      orderBy: { respondidaAt: "asc" },
+      select: { taskId: true, personaEmail: true, minutos: true },
+    });
+    return new Map(filas.map((f) => [f.taskId as string, { persona: f.personaEmail.toLowerCase(), horas: (f.minutos ?? 0) / 60 }]));
+  } catch (e) {
+    if (esTablaFaltante(e)) return new Map();
+    throw e;
+  }
+}
+
+/**
+ * La carga del equipo de CS. `ademas` suma a una persona que no es CSE ni CSL (dirección mirando «Tu carga»): no
+ * cuenta en el equipo, solo se calcula la suya.
+ */
+export async function cargarCargaDelEquipo(ahora = new Date(), opciones: { ademas?: string } = {}): Promise<DatosDeLaCarga> {
   const configuracion = await cargarConfigCarga();
   const config = configuracion.config;
   const lunesActual = lunesDe(ahora);
@@ -135,29 +170,37 @@ export async function cargarCargaDelEquipo(ahora = new Date()): Promise<DatosDeL
   const hasta = inicioDelLunes(lunesActual);
   const desdeCobertura = inicioDelLunes(sumarSemanas(lunesActual, -SEMANAS_DE_COBERTURA));
 
-  const [miembros, { reuniones, empresas }, cronogramasDb, clientesDb] = await Promise.all([
+  const [miembros, { reuniones, empresas }, cronogramasDb, clientesDb, declarados] = await Promise.all([
     leerEquipo(),
     leerReuniones(desde, hasta),
     leerCronogramasDeCartera(),
     leerCuentasDeCartera(),
+    leerTiemposDeclarados(),
   ]);
 
   // Quiénes llevan cuentas, y quiénes ya no están.
   const deBaja = new Map(miembros.filter((m) => m.deactivatedAt).map((m) => [norm(m.email), m.name]));
+  const ademas = norm(opciones.ademas);
   const equipoCs = miembros.filter(
-    (m) => !m.deactivatedAt && (ROLES_DE_CS as readonly string[]).includes(m.roleEnum) && !esCuentaDePrueba(m.name),
+    (m) =>
+      !m.deactivatedAt &&
+      !esCuentaDePrueba(m.name) &&
+      ((ROLES_DE_CS as readonly string[]).includes(m.roleEnum) || (!!ademas && norm(m.email) === ademas)),
   );
   const personasParaReuniones = miembros.map((m) => ({ email: norm(m.email), nombre: m.name, baja: m.deactivatedAt }));
   const tiempo = tiempoEnReuniones(reuniones, personasParaReuniones, equipoCs.map((m) => m.email));
 
   // La última reunión de cada cuenta (fuera de la ventana también), para la relación, y el factor de complejidad.
-  const ultimaPorCliente = await ultimaReunionPorCliente(clientesDb.map((c) => c.id), ahora);
-  const factores = factoresDeComplejidad(clientesDb, ultimaPorCliente, config, ahora);
+  const [ultimaPorCliente, niveles] = await Promise.all([
+    ultimaReunionPorCliente(clientesDb.map((c) => c.id), ahora),
+    nivelesDeEscala(clientesDb.map((c) => c.id)),
+  ]);
+  const factores = factoresDeComplejidad(clientesDb, ultimaPorCliente, config, ahora, niveles);
   const factorDe = (clienteId: string) => factores.get(clienteId)?.factor ?? 1;
 
   // La entrega estimada de los cronogramas.
   const cronogramas = aCronogramas(cronogramasDb);
-  const entrega = entregaEstimada(cronogramas, factorDe, config, ahora);
+  const entrega = entregaEstimada(cronogramas, factorDe, config, ahora, declarados);
 
   // La carga de cada persona y del equipo.
   const nombreDe = new Map(clientesDb.map((c) => [c.id, c.name]));
@@ -181,21 +224,36 @@ export async function cargarCargaDelEquipo(ahora = new Date()): Promise<DatosDeL
       }));
       return { ...carga, cuentas };
     })
-    .sort((a, b) => Number(a.esCsl) - Number(b.esCsl) || b.promedio.utilizacion - a.promedio.utilizacion);
-  const equipo = cargaDelEquipo(personas, config);
+    // Orden alfabético, sin ranking (decisión de Elías, 2026-10-07); la CSL va aparte, al final.
+    .sort((a, b) => Number(a.esCsl) - Number(b.esCsl) || a.nombre.localeCompare(b.nombre, "es"));
+  // Quien se sumó con `ademas` y no es de CS no cuenta en el equipo.
+  const delEquipo = personas.filter((p) => equipoCs.some((m) => norm(m.email) === p.email && (ROLES_DE_CS as readonly string[]).includes(m.roleEnum)));
+  const equipo = cargaDelEquipo(delEquipo, config);
 
   // Las cuentas: lo que le piden al equipo de CS contra lo que su complejidad predice.
-  const csEmails = new Set(equipoCs.map((m) => norm(m.email)));
+  const csEmails = new Set(equipoCs.filter((m) => (ROLES_DE_CS as readonly string[]).includes(m.roleEnum)).map((m) => norm(m.email)));
   const n = semanas.length;
   const horasPorCliente = new Map<string, number>();
+  // Lo que NO está ya en la carga de un CSE del equipo: las reuniones de la CSL (que no cuenta en el equipo) y la
+  // entrega de un dueño que ya no está. La contratación lo suma a la base; las reuniones de un CSE en una cuenta sin
+  // CSE ya están en su carga y sumarlas otra vez las contaba dos veces.
+  const cseDelEquipo = new Set(equipoCs.filter((m) => m.roleEnum === "CSE").map((m) => norm(m.email)));
+  const fueraDelEquipoPorCliente = new Map<string, number>();
+  const sumar = (mapa: Map<string, number>, id: string, h: number) => mapa.set(id, (mapa.get(id) ?? 0) + h);
   for (const [clienteId, vista] of tiempo.porCuenta) {
-    let h = 0;
-    for (const [email, pp] of vista.porPersona) if (csEmails.has(email)) h += pp.minutos / 60 + (pp.reuniones * config.preparacionMin) / 60;
-    horasPorCliente.set(clienteId, h);
+    for (const [email, pp] of vista.porPersona) {
+      if (!csEmails.has(email)) continue;
+      const h = pp.minutos / 60 + (pp.reuniones * config.preparacionMin) / 60;
+      sumar(horasPorCliente, clienteId, h);
+      if (!cseDelEquipo.has(email)) sumar(fueraDelEquipoPorCliente, clienteId, h);
+    }
   }
-  for (const [, semanasDeLaPersona] of entrega.porPersona) {
+  for (const [email, semanasDeLaPersona] of entrega.porPersona) {
     for (const l of semanas) {
-      for (const [clienteId, h] of semanasDeLaPersona.get(l)?.porCliente ?? []) horasPorCliente.set(clienteId, (horasPorCliente.get(clienteId) ?? 0) + h);
+      for (const [clienteId, h] of semanasDeLaPersona.get(l)?.porCliente ?? []) {
+        sumar(horasPorCliente, clienteId, h);
+        if (!cseDelEquipo.has(email)) sumar(fueraDelEquipoPorCliente, clienteId, h);
+      }
     }
   }
   const base = clientesDb.map((c) => {
@@ -236,6 +294,7 @@ export async function cargarCargaDelEquipo(ahora = new Date()): Promise<DatosDeL
     clientes: clientesDb,
     ultimaPorCliente,
     atrasadasDelEquipo: [...entrega.atrasadas.entries()].filter(([e]) => csEmails.has(e)).reduce((a, [, x]) => a + x, 0),
+    conEscala: niveles.size,
     configuracion,
     deBaja,
   });
@@ -251,7 +310,11 @@ export async function cargarCargaDelEquipo(ahora = new Date()): Promise<DatosDeL
     cuentas,
     horasPorPunto: Math.round(k * 100) / 100,
     correlacion: correlacion(cuentas.map((c) => [c.factor.factor, c.horasSemana])),
-    sinCse: { horas: r1(sinCseLista.reduce((a, c) => a + c.horasSemana, 0)), cuentas: sinCseLista.length },
+    sinCse: {
+      horas: r1(sinCseLista.reduce((a, c) => a + c.horasSemana, 0)),
+      horasFueraDelEquipo: r1(sinCseLista.reduce((a, c) => a + (fueraDelEquipoPorCliente.get(c.clienteId) ?? 0), 0) / n),
+      cuentas: sinCseLista.length,
+    },
     reuniones: { contadas: tiempo.reunionesContadas, descartadas: tiempo.reunionesDescartadas },
     cobertura: { filas: cobertura, resumen: resumenDeCobertura(cobertura) },
     tareasPorTipo: cronogramasDb
@@ -304,7 +367,7 @@ export async function leerCronogramasDeCartera() {
           startWeek: true,
           activityType: true,
           sessionCount: true,
-          tasks: { select: { weekIndex: true, status: true, party: true, type: true, dueDateOverride: true, statusChangedByEmail: true } },
+          tasks: { select: { id: true, title: true, weekIndex: true, status: true, party: true, type: true, dueDateOverride: true, statusChangedByEmail: true } },
         },
       },
     },
@@ -323,15 +386,15 @@ export function aCronogramas(filas: CronogramaDb[]): CronogramaParaCarga[] {
       duracionSemanas: f.durationWeeks,
       semanaInicio: f.startWeek,
       tipo: f.activityType,
-      tareas: f.tasks.map((x) => ({ weekIndex: x.weekIndex, estado: x.status, parte: x.party, tipo: x.type, fechaManual: x.dueDateOverride })),
+      tareas: f.tasks.map((x) => ({ id: x.id, titulo: x.title, weekIndex: x.weekIndex, estado: x.status, parte: x.party, tipo: x.type, fechaManual: x.dueDateOverride })),
     })),
   }));
 }
 
-/** Los clientes de la cartera con lo que pide el factor de complejidad. */
-export async function leerCuentasDeCartera() {
+/** Los clientes de la cartera con lo que pide el factor de complejidad. Con `ids`, solo esos. */
+export async function leerCuentasDeCartera(ids?: readonly string[]) {
   return prisma.client.findMany({
-    where: { AND: [CS_CLIENT_WHERE, { projects: { some: proyectoDeCarteraWhere() } }] },
+    where: { AND: [CS_CLIENT_WHERE, { projects: { some: proyectoDeCarteraWhere() } }, ...(ids ? [{ id: { in: [...ids] } }] : [])] },
     select: {
       id: true,
       name: true,
@@ -358,7 +421,42 @@ export async function ultimaReunionPorCliente(ids: string[], ahora: Date): Promi
   return new Map(ultimas.map((u) => [u.resolvedClientId as string, u._max.date]));
 }
 
-export function factoresDeComplejidad(cuentas: CuentaDb[], ultimaPorCliente: Map<string, Date | null>, config: ConfigCarga, ahora: Date): Map<string, FactorExplicado> {
+export type NivelDeEscala = "DEFICIENTE" | "INICIAL" | "FUNCIONAL" | "EFICIENTE" | "OPTIMO";
+const NIVEL_POR_VALOR: Record<number, NivelDeEscala> = { 1: "DEFICIENTE", 2: "INICIAL", 3: "FUNCIONAL", 4: "EFICIENTE", 5: "OPTIMO" };
+
+/**
+ * El nivel en la Escala de cada cuenta, sacado del DIAGNÓSTICO de sus proyectos (la sección «escala», la que el
+ * Diagnóstico ubica con evidencia). Se toma el nivel más bajo entre sus áreas y capas: el factor pregunta si la
+ * operación está en Deficiente o Inicial. Sin diagnóstico con Escala, la cuenta no aparece (el factor dice «falta»).
+ */
+export async function nivelesDeEscala(ids: string[]): Promise<Map<string, NivelDeEscala>> {
+  if (ids.length === 0) return new Map();
+  const bloques = await prisma.canvasBlock.findMany({
+    where: {
+      blockType: "CARD",
+      section: { key: SECCION_DE_ESCALA.diagnostico, canvas: canvasOfNested("diagnosis", { project: { clientId: { in: ids } } }) },
+    },
+    select: { data: true, section: { select: { canvas: { select: { project: { select: { clientId: true } } } } } } },
+  });
+  const minimoPorCliente = new Map<string, number>();
+  for (const b of bloques) {
+    const clienteId = b.section.canvas.project?.clientId;
+    const pos = leerPosicion(b.data);
+    if (!clienteId || !pos) continue;
+    const valores = pos.areas.flatMap((a) => [valorDeNivel(a.base), valorDeNivel(a.produccion)]).filter((v): v is number => v !== null);
+    if (valores.length === 0) continue;
+    minimoPorCliente.set(clienteId, Math.min(minimoPorCliente.get(clienteId) ?? Infinity, ...valores));
+  }
+  return new Map([...minimoPorCliente].map(([id, v]) => [id, NIVEL_POR_VALOR[v]]));
+}
+
+export function factoresDeComplejidad(
+  cuentas: CuentaDb[],
+  ultimaPorCliente: Map<string, Date | null>,
+  config: ConfigCarga,
+  ahora: Date,
+  niveles: Map<string, NivelDeEscala> = new Map(),
+): Map<string, FactorExplicado> {
   const factores = new Map<string, FactorExplicado>();
   for (const c of cuentas) {
     const ps = c.partnerSnapshot;
@@ -376,13 +474,26 @@ export function factoresDeComplejidad(cuentas: CuentaDb[], ultimaPorCliente: Map
           industria: c.industry?.trim() || null,
           tendenciaDeUso: ps?.uusTrend ?? null,
           diasSinReunion: ultima ? diasEntre(ultima, ahora) : null,
-          nivelEscala: null,
+          nivelEscala: niveles.get(c.id) ?? null,
         },
         config,
       ),
     );
   }
   return factores;
+}
+
+/**
+ * El factor de complejidad de unas pocas cuentas (lo que lee «¿cuánto te tomó?» al preguntar). Una cuenta fuera de la
+ * cartera vale 1: no hay con qué calcularle el factor.
+ */
+export async function factoresDeLasCuentas(ids: readonly string[], config: ConfigCarga, ahora = new Date()): Promise<Map<string, FactorExplicado>> {
+  const unicos = [...new Set(ids.filter(Boolean))];
+  if (unicos.length === 0) return new Map();
+  const cuentas = await leerCuentasDeCartera(unicos);
+  const encontradas = cuentas.map((c) => c.id);
+  const [ultimas, niveles] = await Promise.all([ultimaReunionPorCliente(encontradas, ahora), nivelesDeEscala(encontradas)]);
+  return factoresDeComplejidad(cuentas, ultimas, config, ahora, niveles);
 }
 
 /** El CSE de una cuenta: el dueño en HubSpot de la mayoría de sus proyectos de cartera, o nadie si ya no está. */
@@ -428,6 +539,8 @@ interface EntradaDeCobertura {
   }>;
   ultimaPorCliente: Map<string, Date | null>;
   atrasadasDelEquipo: number;
+  /** Cuentas con el nivel de la Escala ubicado en un diagnóstico. */
+  conEscala: number;
   configuracion: ConfigGuardada;
   deBaja: Map<string, string>;
 }
@@ -469,7 +582,7 @@ async function medirCobertura(e: EntradaDeCobertura): Promise<FilaDeCobertura[]>
       conIndustria: e.clientes.filter((c) => c.industry?.trim()).length,
       conEtapa: e.clientes.filter((c) => c.projects.some((p) => p.hubspotPipelineStageLabel)).length,
       conReunion: e.clientes.filter((c) => e.ultimaPorCliente.get(c.id)).length,
-      conEscala: 0,
+      conEscala: e.conEscala,
       conTendencia: e.clientes.filter((c) => c.partnerSnapshot?.uusTrend != null).length,
     },
     fases: { total: fases.length, conSesiones: fases.filter((f) => f.sessionCount != null).length },
@@ -495,4 +608,94 @@ export function coberturaDeVariables(cuentas: CuentaConCarga[]): Record<string, 
     }
   }
   return out;
+}
+
+// ── Tu carga ─────────────────────────────────────────────────────────────────
+
+export interface CuentaDeTuCarga {
+  clienteId: string;
+  nombre: string;
+  etapa: string | null;
+  factor: number;
+  reuniones: number;
+  preparacion: number;
+  entrega: number;
+  /** La parte de la entrega que respondiste tú. */
+  entregaDeclarada: number;
+  horas: number;
+}
+
+/**
+ * Lo que ve una persona en «Tu carga»: SOLO lo suyo. Se calcula con la carga del equipo (es la misma cuenta) y se
+ * recorta en el servidor: a la pantalla no llega nada de otra persona.
+ */
+export interface DatosDeTuCarga {
+  hoy: string;
+  semanas: Array<{ lunes: string; etiqueta: string }>;
+  futuras: Array<{ lunes: string; etiqueta: string }>;
+  persona: CargaDePersona | null;
+  cuentas: CuentaDeTuCarga[];
+  config: Pick<ConfigCarga, "capacidad" | "preparacionMin" | "ambosFraccion" | "semaforo">;
+}
+
+export async function cargarTuCarga(email: string, ahora = new Date()): Promise<DatosDeTuCarga> {
+  const e = norm(email);
+  const datos = await cargarCargaDelEquipo(ahora, { ademas: e });
+  const p = datos.personas.find((x) => x.email === e) ?? null;
+  const etapaDe = new Map(datos.cuentas.map((c) => [c.clienteId, c.etapas.join(" · ") || null]));
+  const { config } = datos.configuracion;
+  // Sin sus cuentas adentro (van aparte, con lo que la pantalla necesita).
+  const persona: CargaDePersona | null = p ? (({ cuentas, ...resto }) => (void cuentas, resto))(p) : null;
+  return {
+    hoy: datos.hoy,
+    semanas: datos.semanas,
+    futuras: datos.futuras,
+    persona,
+    cuentas: (p?.cuentas ?? []).map((c) => ({
+      clienteId: c.clienteId,
+      nombre: c.nombre,
+      etapa: etapaDe.get(c.clienteId) ?? null,
+      factor: c.factor,
+      reuniones: c.reuniones,
+      preparacion: c.preparacion,
+      entrega: c.entrega,
+      entregaDeclarada: c.entregaDeclarada,
+      horas: c.horas,
+    })),
+    config: { capacidad: config.capacidad, preparacionMin: config.preparacionMin, ambosFraccion: config.ambosFraccion, semaforo: config.semaforo },
+  };
+}
+
+// ── La calibración ───────────────────────────────────────────────────────────
+
+/**
+ * Lo que propone la calibración (lib/carga/calibracion.ts) con lo respondido hasta hoy: «¿cuánto te tomó?» al terminar
+ * una tarea y la encuesta de arranque. Sin las tablas de lib/tiempos, no hay nada que proponer.
+ */
+export async function cargarCalibracion(config: ConfigCarga, cuentas: CuentaConCarga[]): Promise<PropuestaDeCalibracion[]> {
+  let alTerminar: RespuestaAlTerminar[] = [];
+  let delArranque: RespuestaDelArranque[] = [];
+  if (modeloDisponible(prisma.preguntaDeTiempo)) {
+    try {
+      const filas = await prisma.preguntaDeTiempo.findMany({
+        where: { estado: "respondida", minutos: { not: null }, encuesta: { momento: { in: ["TAREA_HECHA", "ARRANQUE"] } } },
+        select: { clave: true, titulo: true, tipoFase: true, minutos: true, estimadoMinutos: true, encuesta: { select: { momento: true } } },
+      });
+      alTerminar = filas
+        .filter((f) => f.encuesta.momento === "TAREA_HECHA")
+        .map((f) => ({ tipoFase: f.tipoFase, titulo: f.titulo, minutos: f.minutos ?? 0, estimado: f.estimadoMinutos }));
+      delArranque = filas
+        .filter((f) => f.encuesta.momento === "ARRANQUE")
+        .map((f) => ({ familia: /^arranque:([a-z]+):/.exec(f.clave)?.[1] ?? "", minutos: f.minutos ?? 0 }))
+        .filter((f) => f.familia);
+    } catch (e) {
+      if (!esTablaFaltante(e)) throw e;
+    }
+  }
+  return propuestasDeCalibracion(
+    config,
+    alTerminar,
+    delArranque,
+    cuentas.map((c) => ({ factor: c.factor, horasSemana: c.horasSemana })),
+  );
 }

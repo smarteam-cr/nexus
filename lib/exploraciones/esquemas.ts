@@ -36,7 +36,10 @@ import {
   ESTADOS_DEL_CRITERIO,
   FUENTES_DEL_NIVEL,
   MAX_CASOS_DESCARTADOS,
+  MAX_CORREOS,
   MAX_DESCARTADAS,
+  MAX_FUERA,
+  MAX_ID_DE_REUNION,
   MAX_LECTURAS,
   MAX_REUNIONES_ELEGIDAS,
   MODOS_DE_LA_CORRIDA,
@@ -46,6 +49,7 @@ import {
   type AExplorar,
   type CasoDeUsoElegido,
   type ContenidoDeExploracion,
+  type CorreoDeSeguimiento,
   type CorridaDelAgente,
   type DestinoDePropuesta,
   type EdicionElegida,
@@ -62,15 +66,18 @@ import {
 import {
   MAX_PREGUNTAS_EN_LA_GUIA,
   MAX_PARA_EXPLORAR,
+  MAX_PREGUNTAS_DE_LO_VENDIDO,
   MAX_RETOS_DE_LA_INDUSTRIA,
   MAX_SESIONES,
   REPREGUNTAS_POR_PREGUNTA,
   RESULTADOS_DE_LA_SESION,
   TIPOS_DE_OBJECION,
+  type EventoDeLaSesion,
   type GuiaDeLaSesion,
   type SesionPlaneada,
 } from "./guia";
 import { MAX_CLAVE_DE_NOTA } from "./notas-de-sesion";
+import { MAX_ASUNTO_DEL_CORREO, MAX_CUERPO_DEL_CORREO, MAX_DESTINATARIOS } from "./correo-de-seguimiento";
 
 const texto = (max: number) => z.string().trim().max(max);
 const textoLleno = (max: number) => z.string().trim().min(1).max(max);
@@ -290,6 +297,30 @@ export function seProponeDeAUno(d: DestinoDePropuesta): boolean {
 
 // ── Las operaciones (lo que manda la pantalla) ────────────────────────────────
 
+/** El id de una reunión: hasta 200 (los de una instancia de una serie de Meet llegan a ~190). */
+export const ID_DE_REUNION = z.string().min(1).max(MAX_ID_DE_REUNION);
+
+/** La clave de una reunión (`meet:<id>`, `hubspot:<id>`, `documento:<id>`): la de `lecturas`, `correos` y `fuera`. */
+export const CLAVE_DE_REUNION = z.string().regex(new RegExp(`^(meet|hubspot|documento):.{1,${MAX_ID_DE_REUNION}}$`));
+
+/** Una fecha ISO que se entiende (Google la da con su zona; se guarda en UTC). */
+const FECHA_ISO = z
+  .string()
+  .max(40)
+  .refine((s) => !Number.isNaN(Date.parse(s)), "Fecha inválida");
+
+/** El evento del calendario al que se unió una sesión (lib/exploraciones/guia.ts › `EventoDeLaSesion`). */
+export const EventoDeLaSesionSchema: z.ZodType<EventoDeLaSesion> = z.object({
+  id: z.string().regex(/^[A-Za-z0-9_]{1,200}$/),
+  calendario: z.string().email().max(200),
+  inicio: FECHA_ISO,
+  fin: FECHA_ISO.optional(),
+  titulo: texto(300).optional(),
+  serie: z.literal(true).optional(),
+  cancelada: z.literal(true).optional(),
+  revisadoEn: FECHA_ISO.optional(),
+});
+
 /** Una sesión planeada por el vendedor (lib/exploraciones/guia.ts). */
 export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
   id: z.string().regex(/^s-[a-z0-9]{1,24}$/),
@@ -299,7 +330,8 @@ export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
   hecha: z.boolean().optional(),
-  reunion: z.object({ id: z.string().min(1).max(60), origen: z.enum(["meet", "hubspot", "documento"]) }).optional(),
+  reunion: z.object({ id: ID_DE_REUNION, origen: z.enum(["meet", "hubspot", "documento"]), inicio: FECHA_ISO.optional() }).optional(),
+  evento: EventoDeLaSesionSchema.optional(),
   explorar: z.array(textoLleno(600)).max(MAX_PARA_EXPLORAR).optional(),
   explorarDe: z
     .record(z.string().max(600), z.string().regex(/^s-[a-z0-9]{1,24}$/))
@@ -313,7 +345,7 @@ export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
   objetivoDescartado: textoLleno(400).optional(),
   resultado: z.enum(RESULTADOS_DE_LA_SESION).optional(),
   pasaron: z.array(z.string().min(1).max(40)).max(20).optional(),
-  hechas: z.array(z.string().min(1).max(40)).max(20).optional(),
+  hechas: z.array(z.string().min(1).max(40)).max(30).optional(),
 });
 
 export const OperacionSchema = z.discriminatedUnion("op", [
@@ -327,9 +359,20 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("restablecerEscala"), sugerida: EscalaSugeridaSchema }),
   z.object({ op: z.literal("nota"), paso: z.string().min(1).max(MAX_CLAVE_DE_NOTA), texto: z.string().max(4000) }),
   z.object({ op: z.literal("sesiones"), sesiones: z.array(SesionPlaneadaSchema).max(MAX_SESIONES) }),
+  z.object({ op: z.literal("agregarSesion"), sesion: SesionPlaneadaSchema }),
+  z.object({ op: z.literal("quitarSesiones"), ids: z.array(z.string().regex(/^s-[a-z0-9]{1,24}$/)).min(1).max(MAX_SESIONES) }),
+  z.object({ op: z.literal("fuera"), claves: z.array(CLAVE_DE_REUNION).min(1).max(50), fuera: z.boolean() }),
+  z.object({
+    op: z.literal("evento"),
+    sesionId: z.string().regex(/^s-[a-z0-9]{1,24}$/),
+    inicio: FECHA_ISO.optional(),
+    fin: FECHA_ISO.optional(),
+    titulo: texto(300).optional(),
+    cancelada: z.boolean().optional(),
+    revisadoEn: FECHA_ISO.optional(),
+  }),
   z.object({ op: z.literal("medicion"), medicion: MedicionSchema }),
   z.object({ op: z.literal("sinPortal"), valor: z.boolean() }),
-  z.object({ op: z.literal("reunionElegida"), sessionId: z.string().min(1).max(60), elegida: z.boolean() }),
   z.object({ op: z.literal("casoDeUso"), useCaseId: ID_CASO_DE_USO, valor: CasoDeUsoElegidoSchema.nullable() }),
   z.object({ op: z.literal("usar"), itemId: z.string().min(1).max(120), valor: z.unknown().optional() }),
   z.object({
@@ -339,6 +382,12 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("descartar"), itemIds: z.array(z.string().min(1).max(120)).min(1).max(250) }),
   z.object({ op: z.literal("responsable"), email: z.string().email().max(200).nullable() }),
   z.object({ op: z.literal("alertaTecnicaVista") }),
+  z.object({
+    op: z.literal("correo"),
+    clave: CLAVE_DE_REUNION,
+    asunto: z.string().max(MAX_ASUNTO_DEL_CORREO).optional(),
+    cuerpo: z.string().max(MAX_CUERPO_DEL_CORREO).optional(),
+  }),
   z.object({ op: z.literal("archivar") }),
 ]);
 
@@ -395,6 +444,17 @@ const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
     .array(z.object({ reto: textoDeGuia(300), pregunta: textoDeGuia(300) }))
     .max(MAX_RETOS_DE_LA_INDUSTRIA)
     .optional(),
+  loVendido: z
+    .array(
+      z.object({
+        id: z.string().regex(/^vendido:[a-z0-9]{1,12}$/),
+        tema: textoDeGuia(120),
+        pregunta: textoDeGuia(400),
+        repreguntas: z.array(textoDeGuia(300)).max(REPREGUNTAS_POR_PREGUNTA),
+      }),
+    )
+    .max(MAX_PREGUNTAS_DE_LO_VENDIDO)
+    .optional(),
   apertura: z.array(textoDeGuia(400)).max(4),
   escalaEnSimple: textoDeGuia(800).nullable(),
   preguntas: z.array(PreguntaDeLaGuiaSchema).max(MAX_PREGUNTAS_EN_LA_GUIA),
@@ -437,6 +497,20 @@ function registroValido<T>(raw: unknown, clave: z.ZodType<string>, valor: z.ZodT
 const listaDeTextos = (raw: unknown, max: number): string[] =>
   Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string" && x.length <= 200).slice(-max) : [];
 
+/**
+ * Una sesión guardada. Si lo único que no tiene la forma es su evento del calendario, se pierde solo el
+ * evento (antes la sesión desaparecía entera, con su objetivo y lo que se llevó).
+ */
+function leerSesion(raw: unknown): SesionPlaneada | null {
+  const r = SesionPlaneadaSchema.safeParse(raw);
+  if (r.success) return r.data;
+  if (!esObjeto(raw) || raw.evento === undefined) return null;
+  const { evento: _evento, ...sinEvento } = raw;
+  void _evento;
+  const sin = SesionPlaneadaSchema.safeParse(sinEvento);
+  return sin.success ? sin.data : null;
+}
+
 /** Lee el JSON guardado. Lo que no tiene la forma queda afuera; nunca tira. */
 export function leerContenido(raw: unknown): ContenidoDeExploracion {
   const c = contenidoVacio();
@@ -471,15 +545,17 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   c.notas = registroValido(raw.notas, z.string().max(MAX_CLAVE_DE_NOTA), z.string().max(4000));
   if (Array.isArray(raw.sesiones)) {
     c.sesiones = raw.sesiones
-      .map((s) => SesionPlaneadaSchema.safeParse(s))
-      .filter((r) => r.success)
-      .map((r) => r.data)
+      .map(leerSesion)
+      .filter((s): s is SesionPlaneada => s !== null)
       .slice(0, MAX_SESIONES);
   }
   const med = MedicionSchema.safeParse(raw.medicion);
   if (med.success) c.medicion = med.data;
   c.sinPortal = raw.sinPortal === true;
-  c.reunionesElegidas = listaDeTextos(raw.reunionesElegidas, MAX_REUNIONES_ELEGIDAS).filter((id) => id.length <= 60);
+  c.reunionesElegidas = listaDeTextos(raw.reunionesElegidas, MAX_REUNIONES_ELEGIDAS).filter((id) => id.length <= MAX_ID_DE_REUNION);
+  c.fuera = Array.isArray(raw.fuera)
+    ? raw.fuera.filter((k): k is string => typeof k === "string" && CLAVE_DE_REUNION.safeParse(k).success).slice(-MAX_FUERA)
+    : [];
   c.casosDeUso = registroValido(raw.casosDeUso, ID_CASO_DE_USO, CasoDeUsoElegidoSchema);
   c.casosDescartados = listaDeTextos(raw.casosDescartados, MAX_CASOS_DESCARTADOS);
   const elegida = EdicionElegidaSchema.safeParse(raw.edicionElegida);
@@ -524,8 +600,17 @@ const LecturaDeReunionSchema: z.ZodType<LecturaDeReunion> = z.object({
   corridaId: z.string().max(60),
 });
 
-/** La clave de una reunión en `lecturas` (contenido.ts › `claveDeLaReunion`). */
-const CLAVE_DE_LECTURA = z.string().regex(/^(meet|hubspot|documento):.{1,80}$/);
+/** La clave de una reunión en `lecturas` (contenido.ts › `claveDeLaReunion`). Hasta 200 después del prefijo (antes 80: la lectura de una reunión de una serie se perdía al volver a abrir). */
+const CLAVE_DE_LECTURA = CLAVE_DE_REUNION;
+
+const CorreoDeSeguimientoSchema: z.ZodType<CorreoDeSeguimiento> = z.object({
+  asunto: z.string().max(MAX_ASUNTO_DEL_CORREO),
+  cuerpo: z.string().max(MAX_CUERPO_DEL_CORREO),
+  para: z.array(z.string().max(200)).max(MAX_DESTINATARIOS),
+  en: z.string().max(40),
+  corridaId: z.string().max(60),
+  editado: z.boolean().optional(),
+});
 
 export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   const p = propuestaVacia();
@@ -535,6 +620,7 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
       sesiones: listaDeTextos(raw.leidas.sesiones, 300),
       hubspot: listaDeTextos(raw.leidas.hubspot, 500),
       documentos: listaDeTextos(raw.leidas.documentos, 300),
+      soloNotas: listaDeTextos(raw.leidas.soloNotas, 300),
     };
   }
   if (Array.isArray(raw.corridas)) {
@@ -559,6 +645,7 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   const tecnica = AlertaTecnicaSchema.safeParse(raw.alertaTecnica);
   p.alertaTecnica = tecnica.success ? tecnica.data : null;
   p.lecturas = Object.fromEntries(Object.entries(registroValido(raw.lecturas, CLAVE_DE_LECTURA, LecturaDeReunionSchema)).slice(-MAX_LECTURAS));
+  p.correos = Object.fromEntries(Object.entries(registroValido(raw.correos, CLAVE_DE_LECTURA, CorreoDeSeguimientoSchema)).slice(-MAX_CORREOS));
   if (!Array.isArray(raw.items)) return p;
   const items: ItemPropuesto[] = [];
   for (const it of raw.items) {

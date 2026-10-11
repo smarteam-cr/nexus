@@ -14,6 +14,7 @@
  *   npx tsx scripts/inspect-project-sessions.ts "honda"
  *   npx tsx scripts/inspect-project-sessions.ts "honda" --dias 180
  */
+import "./lib/permitir-server-only";
 import { Prisma } from "@prisma/client";
 import { createScriptDb } from "./lib/db";
 import { classifyHandoffSession, linkFeedsHandoff } from "@/lib/handoff/session-relevance";

@@ -154,21 +154,34 @@ export async function prepararVinculosManuales(
  * `sugeridas` (opcional, solo con `feeds: true`): las de `ids` que deshacer devuelve a «sugerida» —el
  * afinado vacío, como estaban antes de la X— en vez de «agregada a mano». Sin esto, sacar una sugerida
  * del handoff o de un documento y deshacerlo la dejaba forzada: con candado, y el clasificador ya no
- * la movía. Las puertas que no tienen «sugerida» (el cronograma) lo ignoran.
+ * la movía. Las puertas que no tienen «sugerida» (el cronograma y, desde la etapa 7, los seis documentos
+ * que leen solo las elegidas) lo ignoran.
+ *
+ * `desestimar` (opcional, solo con `feeds: false`; etapa 7): «Descartar» una reunión que Nexus sugirió
+ * para un documento. La puerta de los documentos la guarda como `false` (desestimada, sin candado) en vez
+ * de `null` (la X sobre una elegida). Las otras puertas lo ignoran.
  *
  * El cuerpo de las tres puertas de un proyecto (handoff, cronograma y documentos): `{ sessionId,
  * feeds }` (una reunión) o `{ sessionIds, feeds }` (varias). Devuelve las reuniones sin repetir.
  */
 export function leerCuerpoDeVinculos(
   body: unknown,
-): { ok: true; ids: string[]; feeds: boolean; sugeridas: Set<string> } | { ok: false; error: string } {
+):
+  | { ok: true; ids: string[]; feeds: boolean; sugeridas: Set<string>; desestimar: boolean }
+  | { ok: false; error: string } {
   const b = (body && typeof body === "object" ? body : {}) as {
     sessionId?: unknown;
     sessionIds?: unknown;
     feeds?: unknown;
     sugeridas?: unknown;
+    desestimar?: unknown;
   };
   if (typeof b.feeds !== "boolean") return { ok: false, error: "sessionId y feeds (boolean) requeridos" };
+  if (b.desestimar !== undefined && typeof b.desestimar !== "boolean") {
+    return { ok: false, error: "desestimar tiene que ser true o false" };
+  }
+  // Desestimar es descartar una sugerencia: no se puede a la vez elegirla.
+  if (b.desestimar === true && b.feeds) return { ok: false, error: "desestimar solo vale para sacar una reunión (feeds: false)" };
   const crudos = Array.isArray(b.sessionIds) ? b.sessionIds : [b.sessionId];
   const ids = [...new Set(crudos.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean))];
   if (ids.length === 0) return { ok: false, error: "sessionId y feeds (boolean) requeridos" };
@@ -179,19 +192,38 @@ export function leerCuerpoDeVinculos(
       ? b.sugeridas.filter((x): x is string => typeof x === "string").filter((x) => ids.includes(x))
       : [],
   );
-  return { ok: true, ids, feeds: b.feeds, sugeridas };
+  return { ok: true, ids, feeds: b.feeds, sugeridas, desestimar: b.desestimar === true };
+}
+
+/**
+ * Qué texto tiene que tener una reunión para entrar: la transcripción (lo de siempre), algo (la
+ * transcripción o las notas de Gemini) o nada (la sesión espera la minuta: exploración, etapa A).
+ */
+export type TextoQueSeExige = "transcripcion" | "algo" | "nada";
+
+/** Por qué una reunión no entra por su texto. null = entra. Pura: la prueba no necesita base. */
+export function motivoPorElTexto(exigir: TextoQueSeExige, s: { transcript: string | null; summary: unknown }): string | null {
+  const conTranscripcion = !!(s.transcript ?? "").trim();
+  if (exigir === "nada" || conTranscripcion) return null;
+  if (exigir === "algo" && s.summary !== null && s.summary !== undefined) return null;
+  return exigir === "algo"
+    ? "Esa reunión no tiene transcripción ni notas de Gemini: el agente no tendría qué leer."
+    : "Esa reunión no tiene transcripción: el agente no tendría qué leer.";
 }
 
 /**
  * La misma regla para la PREVENTA (2026-10-07), que no tiene proyecto ni vínculo: sumar una reunión
  * elegida en el buscador de «Contexto adicional». Una del cliente se suma; una sin dueño se ADOPTA
- * (solo lo que `motivoParaNoAdoptar` deja); una de otro cliente se rechaza (INV1). Sin transcripción
- * no se suma: la preventa no tendría qué leer. Igual que arriba, relee después de adoptar.
+ * (solo lo que `motivoParaNoAdoptar` deja); una de otro cliente se rechaza (INV1). Por defecto, sin
+ * transcripción no se suma (`exigir: "transcripcion"`, lo de siempre). La exploración (etapa A,
+ * 2026-10-09) pide `"nada"` al agregar una sesión que ya pasó: una reunión con solo notas se lee, y una
+ * sin nada espera la minuta. Igual que arriba, relee después de adoptar.
  */
 export async function prepararReunionParaElCliente(i: {
   sessionId: string;
   clientId: string;
   actorEmail: string | null;
+  exigir?: TextoQueSeExige;
 }): Promise<ResultadoDeAgregar> {
   const session = await prisma.firefliesSession.findUnique({
     where: { id: i.sessionId },
@@ -202,14 +234,14 @@ export async function prepararReunionParaElCliente(i: {
       participants: true,
       organizerEmail: true,
       transcript: true,
+      summary: true,
       projects: { select: { project: { select: { clientId: true } } } },
     },
   });
   if (!session) return { ok: false, status: 404, error: "Esa reunión no existe." };
   if (session.date.getTime() > Date.now()) return { ok: false, status: 400, error: "Esa reunión todavía no ocurre: no hay nada que leer." };
-  if (!(session.transcript ?? "").trim()) {
-    return { ok: false, status: 400, error: "Esa reunión no tiene transcripción: el agente no tendría qué leer." };
-  }
+  const motivoDelTexto = motivoPorElTexto(i.exigir ?? "transcripcion", session);
+  if (motivoDelTexto) return { ok: false, status: 400, error: motivoDelTexto };
   if (belongsToClient(session, i.clientId)) return { ok: true };
   const sinDuenio = session.resolvedClientId === null && session.manualClientId === null;
   if (!sinDuenio) {

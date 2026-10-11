@@ -13,7 +13,8 @@ import { useState } from "react";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import { puntoQueSePregunta, listaParaProponer } from "@/lib/exploraciones/calidad";
-import { CASILLAS_DEL_RESUMEN, ETIQUETA_DEL_ROL, type Persona, type SiguientePaso } from "@/lib/exploraciones/casillas";
+import { ETIQUETA_DEL_ROL, type Persona, type SiguientePaso } from "@/lib/exploraciones/casillas";
+import { avanceDeLaEstrategia } from "@/lib/exploraciones/avance-del-proyecto";
 import { esFuenteDeHipotesis } from "@/lib/exploraciones/contenido";
 import { diaCorto, diaYHora } from "@/lib/exploraciones/fechas";
 import {
@@ -56,12 +57,12 @@ function enLista(xs: readonly string[]): string {
  * la armada pero vieja, que dice QUÉ cambió desde entonces.
  */
 function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
-  const { escala, puedeEditar } = useLienzo();
+  const { escala, marco, puedeEditar } = useLienzo();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const { guia, foco } = useGuiaDeLaSesion(pestana, true);
   const armando = (corriendo && corrida?.modo === "guia") || lanzando;
   const cambios = guia ? cambiosDesdeLaGuia(guia, foco.huecos, foco.enfoque, pestana.sesion?.explorar ?? []) : null;
-  const nombre = (para: string) => nombreDelPara(para, escala);
+  const nombre = (para: string) => nombreDelPara(para, escala, marco);
 
   let titulo: string;
   let detalle: string;
@@ -74,7 +75,10 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
     tono = "info";
   } else if (!guia) {
     titulo = "Esta es la guía de base";
-    detalle = "Preguntas generales para lo que falta. «Armar la guía» la adapta a esta empresa: escribe las preguntas con lo que ya se sabe, suma repreguntas, cómo abrir y cómo responder objeciones.";
+    detalle =
+      marco.clave === "cs"
+        ? "Preguntas generales para lo que falta. «Armar la guía» la adapta a este cliente: escribe las preguntas con lo que dice el handoff, suma repreguntas y cómo abrir y cerrar."
+        : "Preguntas generales para lo que falta. «Armar la guía» la adapta a esta empresa: escribe las preguntas con lo que ya se sabe, suma repreguntas, cómo abrir y cómo responder objeciones.";
     boton = "Armar la guía";
     tono = "info";
   } else if (cambios) {
@@ -129,8 +133,15 @@ function siSaleBien(faltan: number, cubre: number): string {
   return `La guía cubre ${cubre} de los ${faltan} puntos que faltan para proponer.`;
 }
 
+/** En un proyecto: cuánto de la estrategia que falta cubre la guía. */
+function siSaleBienEnElProyecto(faltan: number, cubre: number): string {
+  if (faltan === 0) return "La estrategia del cliente ya está: esta sesión profundiza en la escala.";
+  if (cubre === faltan) return `Si sale bien, la estrategia del cliente queda completa: la guía cubre ${faltan === 1 ? "lo que falta" : `las ${faltan} tarjetas que faltan`}.`;
+  return `La guía cubre ${cubre} de las ${faltan} tarjetas de la estrategia que faltan.`;
+}
+
 function Objetivo({ pestana, esLaProxima, sugerido, preguntas }: { pestana: PestanaDeSesion; esLaProxima: boolean; sugerido: string | null; preguntas: PreguntaParaMostrar[] }) {
-  const { exp, chequeo, puedeEditar, guardando } = useLienzo();
+  const { exp, chequeo, marco, puedeEditar, guardando } = useLienzo();
   const editar = useEditarLaSesion(pestana, "antes");
   const s = pestana.sesion;
   const confirmado = s?.objetivo ?? null;
@@ -138,11 +149,15 @@ function Objetivo({ pestana, esLaProxima, sugerido, preguntas }: { pestana: Pest
   const [editando, setEditando] = useState(false);
   const [texto, setTexto] = useState("");
 
-  const puntos = listaParaProponer(exp.estado, chequeo);
+  const enProyecto = marco.clave === "cs";
+  const puntos = enProyecto ? [] : listaParaProponer(exp.estado, chequeo);
   const paras = new Set(preguntas.map((p) => p.apunta?.para ?? p.para));
   const hayDimensiones = preguntas.some((p) => ladoDeLaPregunta(p) === "dimension");
   const faltan = puntos.filter((p) => !p.cumplido);
   const cubre = faltan.filter((p) => puntoQueSePregunta(p.id, paras, hayDimensiones)).length;
+  const faltanDelProyecto = enProyecto ? avanceDeLaEstrategia(exp.estado).filter((p) => !p.cumplido) : [];
+  const cubreDelProyecto = faltanDelProyecto.filter((p) => paras.has(p.id)).length;
+  const saleBien = enProyecto ? siSaleBienEnElProyecto(faltanDelProyecto.length, cubreDelProyecto) : siSaleBien(faltan.length, cubre);
 
   const guardar = (valor: string) => {
     const t = valor.trim();
@@ -179,7 +194,7 @@ function Objetivo({ pestana, esLaProxima, sugerido, preguntas }: { pestana: Pest
         <div className="min-w-0 flex-1 space-y-1.5">
           <Rotulo>Objetivo de la sesión</Rotulo>
           <p className="text-[15px] font-semibold leading-[1.4] text-fg">{confirmado}</p>
-          {esLaProxima && <p className="text-[13px] leading-[1.45] text-fg-secondary">{siSaleBien(faltan.length, cubre)}</p>}
+          {esLaProxima && <p className="text-[13px] leading-[1.45] text-fg-secondary">{saleBien}</p>}
         </div>
         {puedeEditar && (
           <BotonBlanco
@@ -203,7 +218,7 @@ function Objetivo({ pestana, esLaProxima, sugerido, preguntas }: { pestana: Pest
           El agente sugiere el objetivo de esta sesión
         </p>
         <p className="text-[15px] font-semibold leading-[1.4] text-fg">{ofrecer}</p>
-        {esLaProxima && <p className="text-[13px] leading-[1.45] text-fg-secondary">{siSaleBien(faltan.length, cubre)}</p>}
+        {esLaProxima && <p className="text-[13px] leading-[1.45] text-fg-secondary">{saleBien}</p>}
         {puedeEditar && (
           <div className="flex items-center justify-end gap-2">
             <BotonTexto disabled={guardando} onClick={() => void editar((x) => ({ ...x, objetivoDescartado: ofrecer }))}>
@@ -245,7 +260,7 @@ function Objetivo({ pestana, esLaProxima, sugerido, preguntas }: { pestana: Pest
 // ── Cuándo y con quién ────────────────────────────────────────────────────────
 
 function CuandoYConQuien({ pestana }: { pestana: PestanaDeSesion }) {
-  const { exp } = useLienzo();
+  const { exp, marco } = useLienzo();
   const { hoy, todas, proxima } = useSesiones();
   const c = exp.estado.contenido.casillas;
   const paso = c.siguientePaso as SiguientePaso | undefined;
@@ -255,7 +270,8 @@ function CuandoYConQuien({ pestana }: { pestana: PestanaDeSesion }) {
   const fecha = pestana.sesion?.fecha ?? pestana.fecha ?? deHubspot;
   const pasoVencido = !!paso?.fecha && paso.fecha < hoy;
   const faltan: string[] = [];
-  if (!personas.some((p) => p.rol === "firma")) faltan.push("Falta: quién firma");
+  // Quién firma es de la venta: en un proyecto el cliente ya compró.
+  if (marco.clave !== "cs" && !personas.some((p) => p.rol === "firma")) faltan.push("Falta: quién firma");
   const t = exp.estado.propuesta.alertaTecnica;
   if (t && !t.vista) {
     const de = todas.find((p) => p.reunion && t.reunion.includes(p.reunion.titulo));
@@ -307,10 +323,10 @@ function CuandoYConQuien({ pestana }: { pestana: PestanaDeSesion }) {
 // ── Lo que traes de las sesiones anteriores ───────────────────────────────────
 
 function LoQueTraes({ pestana }: { pestana: PestanaDeSesion }) {
-  const { exp, escala, sesion: seleccion } = useLienzo();
+  const { exp, escala, marco, sesion: seleccion } = useLienzo();
   const { todas } = useSesiones();
-  const filas = loQueTraes(pestana, todas, { nombreDe: (para) => nombreDelPara(para, escala), tecnica: exp.estado.propuesta.alertaTecnica });
-  const respondidas = CASILLAS_DEL_RESUMEN.filter((c) => lineasDe(c, exp.estado.contenido.casillas[c]).length > 0);
+  const filas = loQueTraes(pestana, todas, { nombreDe: (para) => nombreDelPara(para, escala, marco), tecnica: exp.estado.propuesta.alertaTecnica });
+  const respondidas = marco.tarjetas.filter((c) => lineasDe(c, exp.estado.contenido.casillas[c]).length > 0);
   const hayAnteriores = todas.slice(0, Math.max(0, todas.findIndex((p) => p.clave === pestana.clave))).some((p) => p.hecha && !p.noSeHizo);
   if (!filas.length && !(hayAnteriores && respondidas.length)) return null;
   const ir = (clave: string) => {
@@ -348,7 +364,7 @@ function LoQueTraes({ pestana }: { pestana: PestanaDeSesion }) {
           <p className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-[13px] leading-[19px] text-fg-secondary">
             {respondidas.map((c) => (
               <span key={c} className="rounded-full border border-success-line bg-success-surface px-2 py-px text-[11.5px] text-success-ink">
-                ✓ {nombreDelPara(c, escala)}
+                ✓ {nombreDelPara(c, escala, marco)}
               </span>
             ))}
             <span className="font-semibold text-fg">→ la guía no lo vuelve a preguntar.</span>
@@ -462,19 +478,24 @@ function Columna({ titulo, detalle, preguntas, vacio }: { titulo: string; detall
 }
 
 function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
-  const { exp, escala } = useLienzo();
+  const { exp, escala, marco } = useLienzo();
+  const enProyecto = marco.clave === "cs";
   const { guia, preguntas, enOrden } = useGuiaDeLaSesion(pestana, esLaProxima);
   const [vista, setVista] = useState<Vista>("orden");
   const e = exp.estado;
   const conTest = exp.leido.tests.length > 0;
   const conEvidencia = Object.values(e.contenido.chequeo).some((x) => !esFuenteDeHipotesis(x.fuente)) || e.propuesta.leidas.sesiones.length > 0;
-  const desdeCero = esLaProxima && !conTest && !conEvidencia && pestana.numero === 1;
+  // En un proyecto el cliente ya compró: nunca se arranca «desde cero».
+  const desdeCero = !enProyecto && esLaProxima && !conTest && !conEvidencia && pestana.numero === 1;
   const apertura = guia?.apertura ?? [];
   const deTarjetas = preguntas.filter((p) => ladoDeLaPregunta(p) === "tarjeta");
   const deDimensiones = preguntas.filter((p) => ladoDeLaPregunta(p) === "dimension");
+  // Lo vendido (solo en un proyecto): sus preguntas las escribe el agente al armar la guía.
+  const deLoVendido = preguntas.filter((p) => ladoDeLaPregunta(p) === "vendido");
   // Solo lo llevado que todavía no se sabe a qué apunta (se llevó después de armar la guía).
   const sueltas = preguntas.filter((p) => ladoDeLaPregunta(p) === null);
-  const faltan = CASILLAS_DEL_RESUMEN.filter((c) => lineasDe(c, e.contenido.casillas[c]).length === 0).length;
+  const faltan = marco.tarjetas.filter((c) => lineasDe(c, e.contenido.casillas[c]).length === 0).length;
+  const donde = enProyecto ? "en el panel de la derecha" : "en «La escala»";
   const areasEnJuego = escala.areas.filter((a) => e.areas.includes(a.id)).map((a) => a.nombre);
 
   return (
@@ -531,7 +552,9 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
             </ol>
           ) : (
             <p className="text-[13px] text-fg-muted">
-              {e.areas.length === 0 ? "Elige las áreas en juego en «La escala» para saber qué preguntar." : "El marco está completo y las dimensiones en juego tienen evidencia: esta sesión confirma y profundiza."}
+              {e.areas.length === 0
+                ? `Elige las áreas en juego ${donde} para saber qué preguntar.`
+                : `${enProyecto ? "La estrategia está completa" : "El marco está completo"} y las dimensiones en juego tienen evidencia: esta sesión confirma y profundiza.`}
             </p>
           )}
         </Tramo>
@@ -548,25 +571,35 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
               </ul>
             </div>
           )}
-          <div className="grid items-start gap-4 xl:grid-cols-2">
+          <div className={`grid items-start gap-4 ${enProyecto ? "xl:grid-cols-3" : "xl:grid-cols-2"}`}>
             <Columna
-              titulo="Arquitectura de la venta"
-              detalle={faltan > 0 ? `faltan ${faltan} de 8` : "completa"}
+              titulo={marco.nombre}
+              detalle={faltan > 0 ? `faltan ${faltan} de ${marco.tarjetas.length}` : "completa"}
               preguntas={deTarjetas}
-              vacio="El marco está completo: no falta nada por preguntar."
+              vacio={enProyecto ? "La estrategia está completa: no falta nada por preguntar." : "El marco está completo: no falta nada por preguntar."}
             />
             <Columna
               titulo="Escala de rendimiento"
               detalle={[areasEnJuego.join(" · "), deDimensiones.length ? `${deDimensiones.length} sin evidencia` : ""].filter(Boolean).join(" · ")}
               preguntas={deDimensiones}
-              vacio={e.areas.length === 0 ? "Elige las áreas en juego en «La escala» para saber qué dimensiones preguntar." : "Todas las dimensiones en juego ya tienen evidencia."}
+              vacio={e.areas.length === 0 ? `Elige las áreas en juego ${donde} para saber qué dimensiones preguntar.` : "Todas las dimensiones en juego ya tienen evidencia."}
             />
+            {enProyecto && (
+              <Columna
+                titulo="Lo vendido"
+                detalle={deLoVendido.length ? `${deLoVendido.length} ${deLoVendido.length === 1 ? "pieza" : "piezas"} del alcance` : ""}
+                preguntas={deLoVendido}
+                vacio={guia ? "La guía no trajo preguntas de lo vendido: actualízala para que las arme desde el handoff." : "Arma la guía: pregunta por cada pieza de lo vendido, desde el handoff."}
+              />
+            )}
           </div>
         </div>
       )}
 
       <Tramo nombre="Cerrar" minutos={TRAMOS_DE_LA_SESION.cerrar} className="border-t border-line">
-        <p className="text-[14.5px] font-semibold leading-[21px] text-fg">Pide el siguiente paso con fecha y con quién.</p>
+        <p className="text-[14.5px] font-semibold leading-[21px] text-fg">
+          {enProyecto ? "Confirma lo que entendiste y acuerda el siguiente paso, con fecha y con quién." : "Pide el siguiente paso con fecha y con quién."}
+        </p>
         <p className="mt-1 text-[13px] leading-[19px] text-fg-secondary">{guia?.cierre ?? CIERRE_DE_BASE}</p>
       </Tramo>
     </section>
@@ -575,8 +608,10 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
 
 /** Qué hacer si se resiste, plegado: lo que se pregunta ante cada objeción, y la señal de poca apertura. */
 export function SiSeResiste({ pestana, esLaProxima, compacto = false }: { pestana: PestanaDeSesion; esLaProxima: boolean; compacto?: boolean }) {
-  const { abrirObjeciones } = useLienzo();
+  const { abrirObjeciones, marco } = useLienzo();
   const { guia } = useGuiaDeLaSesion(pestana, esLaProxima);
+  // Las objeciones son de la venta: en un proyecto el cliente ya compró.
+  if (!marco.conObjeciones) return null;
   const objeciones = guia?.objeciones.length ? guia.objeciones : OBJECIONES_DE_BASE;
   const nombres = objeciones.slice(0, 3).map((o) => OBJECION[o.tipo].toLowerCase());
   return (

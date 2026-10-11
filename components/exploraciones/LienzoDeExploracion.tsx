@@ -11,13 +11,27 @@
  * agente aparece en su lugar, para usarlo o descartarlo. La pieza abierta queda en la dirección
  * (`?pieza=`): recargar o compartir el enlace abre la misma. Las casillas se abren en un cajón que
  * vive acá, para poder abrirlas desde cualquier columna.
+ *
+ * ── EN UN PROYECTO (2026-10-07) ─────────────────────────────────────────────
+ * Con `proyecto`, el mismo lienzo es la pieza Exploración de la ficha del cliente: la exploración de
+ * Customer Success (lib/exploraciones/marco.ts). Sin riel ni panel propios: las sesiones se pintan por
+ * portal debajo de la fila «Exploración» del riel de la ficha (con «Cuestionarios» e «Informe anterior»)
+ * y el panel de la derecha, en el de la ficha. Al centro, la página de inicio o la sesión elegida.
+ *
+ * ── LA PÁGINA DE INICIO (etapa A, 2026-10-09) ──────────────────────────────
+ * Exploración abre en su página de inicio (InicioDeLaExploracion): la próxima sesión, las sesiones con
+ * su reunión, «+ Agregar sesión», las fuentes manuales y las instrucciones. Elegir una sesión sale del
+ * inicio; tocar «Exploración» en el riel (o en el de la ficha, con el evento `exploracion:inicio`)
+ * vuelve. Con `?sesion=<id>` (los enlaces de «Para ti») se abre esa sesión. El «Contexto adicional» de
+ * la exploración se retiró: las demás piezas con agente tienen el suyo, sin lista de reuniones.
  */
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Drawer, useToast } from "@/components/ui";
 import type { EstadoDePieza } from "@/components/canvas/SelectorDePiezas";
 import type { Letra } from "@/lib/escala/documento/tipos";
-import { CASILLAS_DEL_RESUMEN, definicionDe, type ClaveDeCasilla } from "@/lib/exploraciones/casillas";
+import { CASILLAS_DEL_RESUMEN, type ClaveDeCasilla } from "@/lib/exploraciones/casillas";
 import { listaParaProponer, queSigueConPaso } from "@/lib/exploraciones/calidad";
 import {
   aplicarOperaciones,
@@ -31,12 +45,16 @@ import {
 } from "@/lib/exploraciones/contenido";
 import { idsDeLaEscala, type EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { chequeoConfirmado, chequeoDelMapa, posicionesDelMapa } from "@/lib/exploraciones/mapa";
+import { definicionEnElMarco, marcoDe } from "@/lib/exploraciones/marco";
+import { queSigueDelProyecto } from "@/lib/exploraciones/avance-del-proyecto";
 import { sePuedeReintentar } from "@/lib/exploraciones/reintento";
 import { estadoDeLaConexion } from "@/lib/exploraciones/senales";
 import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
+import { hoyEnCostaRica } from "@/lib/exploraciones/fechas";
+import { opcionesDeLasPestanas, pestanasDeSesiones } from "@/lib/exploraciones/guia";
 import { Casilla } from "./Casilla";
 import ManejoDeObjeciones from "./ManejoDeObjeciones";
-import { LienzoContexto, type Lienzo, type MomentoDeLaSesion, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
+import { LienzoContexto, type Lienzo, type ModoDelSelector, type MomentoDeLaSesion, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
 import PanelDeContexto from "./PanelDeContexto";
 import { NOMBRE_DEL_PASO, piezaDelDestino } from "./piezas";
 import PasoCasosDeUso from "./PasoCasosDeUso";
@@ -44,19 +62,25 @@ import { PasoInformacion, PasoProcesos, type InfoDeLaEmpresa } from "./PasoDeLaE
 import PasoEscala from "./PasoEscala";
 import PasoExploracion from "./PasoExploracion";
 import PasoPreparacion from "./PasoPreparacion";
-import ContextoDeLaPreventa from "./ContextoDeLaPreventa";
-import type { PiezaConInstrucciones } from "@/lib/exploraciones/notas-de-sesion";
+import ContextoDeLaPreventa, { type ModoDelContexto } from "./ContextoDeLaPreventa";
+import BuscarReunionesDeLaPreventa from "./BuscarReunionesDeLaPreventa";
+import { MirarCalendario } from "./MirarCalendario";
 
-/** Qué piezas tienen agente propio, y por eso sus instrucciones (las demás no). */
-const PIEZA_DE_LAS_INSTRUCCIONES: Partial<Record<PasoDelLienzoUI, PiezaConInstrucciones>> = {
+/**
+ * El «Contexto adicional» de cada pieza de la preventa (2026-10-09): Preparación (sus fuentes y sus
+ * instrucciones), Casos de uso (no lee reuniones: lee el lienzo) y La escala (sin agente propio). Las
+ * demás no lo llevan: Exploración tiene su página de inicio, y el Resumen y la Propuesta no leen nada.
+ */
+const MODO_DEL_CONTEXTO: Partial<Record<PasoDelLienzoUI, ModoDelContexto>> = {
   preparacion: "preparacion",
-  exploracion: "exploracion",
   casos: "casos",
+  escala: "sinAgente",
 };
 import PasoPropuesta from "./PasoPropuesta";
 import Resumen, { lineasDe } from "./Resumen";
 import RevisarSugerencias from "./RevisarSugerencias";
-import RielDePiezas, { type FilaDelRiel } from "./RielDePiezas";
+import { MirarHubspot } from "./MirarHubspot";
+import RielDePiezas, { Sesiones, type FilaDelRiel } from "./RielDePiezas";
 import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
 
 /** Qué es cada pieza, en una línea, debajo de su nombre. Exploración y lo de la cuenta llevan su propio encabezado. */
@@ -80,6 +104,20 @@ const AYUDA_DEL_ESTADO: Record<EstadoDePieza, string> = {
 
 const esPieza = (x: string | null | undefined): x is PasoDelLienzoUI => !!x && x in NOMBRE_DEL_PASO;
 
+/** Dónde vive la exploración de un proyecto en la ficha del cliente. */
+export interface EnElProyecto {
+  /** El panel de la derecha de la ficha (null si está oculto). */
+  slotDelPanel: HTMLElement | null;
+  /** Debajo de la fila «Exploración» del riel de la ficha (null si no está a la vista). */
+  slotDeSesiones: HTMLElement | null;
+  /** Lo que se manda a cada persona del cliente. */
+  cuestionarios: ReactNode;
+  /** El informe viejo en solo lectura; null si el proyecto no lo tenía. */
+  informeAnterior: ReactNode | null;
+}
+
+type VistaDelProyecto = "sesiones" | "cuestionarios" | "informe";
+
 export default function LienzoDeExploracion({
   inicial,
   escala,
@@ -87,18 +125,23 @@ export default function LienzoDeExploracion({
   puedeProponer,
   infoDeLaEmpresa,
   piezaInicial,
+  proyecto,
 }: {
   inicial: ExploracionParaLaPantalla;
   escala: EscalaDelLienzo;
   puedeEditar: boolean;
   puedeProponer: boolean;
-  /** Dónde vive la información de la empresa (la misma de la ficha del cliente). */
-  infoDeLaEmpresa: InfoDeLaEmpresa;
+  /** Dónde vive la información de la empresa (la misma de la ficha del cliente). En un proyecto no hace falta: la ficha la tiene. */
+  infoDeLaEmpresa?: InfoDeLaEmpresa;
   /** La de `?pieza=` en la dirección; sin ella, el Resumen. */
   piezaInicial?: string | null;
+  /** La exploración de un proyecto, dentro de la ficha del cliente (ver arriba). */
+  proyecto?: EnElProyecto;
 }) {
   const router = useRouter();
   const toast = useToast();
+  // `?sesion=<id>` (los enlaces de «Para ti»): se abre esa sesión en vez de la página de inicio.
+  const sesionDeLaDireccion = useSearchParams().get("sesion");
   const [exp, setExp] = useState(inicial);
   const [sinLeer, setSinLeer] = useState(inicial.sinLeer ?? []);
   const [proyectos, setProyectos] = useState(inicial.proyectos ?? []);
@@ -106,8 +149,11 @@ export default function LienzoDeExploracion({
   const [propuestas, setPropuestas] = useState(inicial.propuestas ?? []);
   const [reuniones, setReuniones] = useState(inicial.reuniones ?? []);
   const [guardando, setGuardando] = useState(false);
-  const [paso, setPasoCrudo] = useState<PasoDelLienzoUI>(esPieza(piezaInicial) ? piezaInicial : "resumen");
-  const [sesionElegida, setSesionElegida] = useState<string | null>(null);
+  const [paso, setPasoCrudo] = useState<PasoDelLienzoUI>(proyecto ? "exploracion" : esPieza(piezaInicial) ? piezaInicial : "resumen");
+  const [vista, setVista] = useState<VistaDelProyecto>("sesiones");
+  const [sesionElegida, setSesionElegida] = useState<string | null>(sesionDeLaDireccion);
+  const [enInicio, setEnInicio] = useState(!sesionDeLaDireccion);
+  const [selector, setSelector] = useState<ModoDelSelector | null>(null);
   const [momentos, setMomentos] = useState<Record<string, MomentoDeLaSesion>>({});
   const [casillaAbierta, setCasillaAbierta] = useState<ClaveDeCasilla | null>(null);
   const [objecionesAbiertas, setObjecionesAbiertas] = useState(false);
@@ -115,7 +161,17 @@ export default function LienzoDeExploracion({
   // El pie del cajón: ahí van «Guardar» y «Cancelar», fijos abajo aunque el formulario sea largo.
   const [pie, setPie] = useState<HTMLDivElement | null>(null);
   // La pieza abierta queda en la dirección, sin otra navegación (no vuelve a pedir la página).
+  const enProyecto = !!proyecto;
+  // La pieza abierta, por referencia: entrar a Exploración desde OTRA pieza arranca en su página de inicio.
+  const pasoActual = useRef(paso);
+  useEffect(() => {
+    pasoActual.current = paso;
+  }, [paso]);
   const setPaso = useCallback((p: PasoDelLienzoUI) => {
+    // En un proyecto hay una sola pieza (la exploración): la dirección es la de la ficha.
+    if (enProyecto) return;
+    if (p === "exploracion" && pasoActual.current !== "exploracion") setEnInicio(true);
+    pasoActual.current = p;
     setPasoCrudo(p);
     try {
       const url = new URL(window.location.href);
@@ -125,7 +181,7 @@ export default function LienzoDeExploracion({
     } catch {
       /* sin la dirección, igual cambia de pieza */
     }
-  }, []);
+  }, [enProyecto]);
 
   /* Lo último que confirmó el servidor, y la fila de pedidos: cada uno sale con la versión que dejó
      el anterior. */
@@ -287,8 +343,10 @@ export default function LienzoDeExploracion({
     [setPaso],
   );
 
+  const marco = marcoDe(exp.marco);
   const lienzo: Lienzo = {
     exp,
+    marco,
     escala,
     chequeo,
     mapa,
@@ -313,9 +371,15 @@ export default function LienzoDeExploracion({
     abrirObjeciones: () => setObjecionesAbiertas(true),
     sesion: {
       elegida: sesionElegida,
-      elegir: setSesionElegida,
+      elegir: (clave) => {
+        setSesionElegida(clave);
+        setEnInicio(false);
+      },
       momentos,
       ponerMomento: (clave, m) => setMomentos((x) => ({ ...x, [clave]: m })),
+      enInicio,
+      irAlInicio: () => setEnInicio(true),
+      buscarReunion: setSelector,
     },
   };
 
@@ -324,17 +388,49 @@ export default function LienzoDeExploracion({
   useEffect(() => {
     const alPedido = (e: Event) => {
       const a = (e as CustomEvent<AccionDelRecorrido>).detail;
+      // La página de inicio de Exploración («inicio») o la próxima sesión («proxima»).
+      if (a?.evento === "preventa.sesion") {
+        setSelector(null);
+        if (enProyecto) setVista("sesiones");
+        if (a.valor === "inicio") setEnInicio(true);
+        else {
+          setSesionElegida(null);
+          setEnInicio(false);
+        }
+        return;
+      }
       if (a?.evento !== "preventa.pieza" || !esPieza(a.valor)) return;
       setCasillaAbierta(null);
       setObjecionesAbiertas(false);
+      setSelector(null);
       setRevision((r) => ({ ...r, abierto: false }));
       setPaso(a.valor);
     };
     window.addEventListener(EVENTO_DEL_RECORRIDO, alPedido);
     return () => window.removeEventListener(EVENTO_DEL_RECORRIDO, alPedido);
-  }, [setPaso]);
+  }, [setPaso, enProyecto]);
 
-  const sigue = queSigueConPaso(exp.estado, chequeo, sinLeer);
+  /* En la ficha del cliente, tocar «Exploración» cuando ya está abierta vuelve a la página de inicio
+     (components/clients/RielDelCliente.tsx emite el evento). */
+  useEffect(() => {
+    if (!enProyecto) return;
+    const alInicio = () => {
+      setVista("sesiones");
+      setEnInicio(true);
+    };
+    window.addEventListener("exploracion:inicio", alInicio);
+    return () => window.removeEventListener("exploracion:inicio", alInicio);
+  }, [enProyecto]);
+
+  // Lo que falta en las sesiones va primero en «Qué sigue» (la exploración de un cliente arranca vacía).
+  const hoy = hoyEnCostaRica();
+  const sesionesParaSigue = {
+    pestanas: pestanasDeSesiones(exp.estado.contenido.sesiones, reuniones, hoy, opcionesDeLasPestanas(exp.automaticas, exp.estado.contenido.fuera)),
+    automaticas: exp.automaticas,
+  };
+  const sigue = enProyecto
+    ? { texto: queSigueDelProyecto(exp.estado, chequeo, sinLeer, revisables.length, sesionesParaSigue), paso: null }
+    : queSigueConPaso(exp.estado, chequeo, sinLeer, hoy, sesionesParaSigue);
   const deCadaPaso = (p: PasoDelLienzoUI) => revisables.filter((it) => piezaDelDestino(it.destino) === p).length;
 
   /* El punto de cada pieza: verde si ya tiene contenido, ámbar si hay algo para revisar o hacer,
@@ -374,8 +470,61 @@ export default function LienzoDeExploracion({
   const delResumen = deCadaPaso("resumen");
   const confirmadas = CASILLAS_DEL_RESUMEN.filter((c) => lineasDe(c, exp.estado.contenido.casillas[c]).length > 0).length;
 
+  /* Lo que comparten las dos formas: el cajón de cada casilla y el de lo que sugirió el agente. */
+  const cajones = (
+    <>
+      <MirarCalendario />
+      <BuscarReunionesDeLaPreventa modo={selector} onCerrar={() => setSelector(null)} />
+      <ManejoDeObjeciones abierto={objecionesAbiertas} onCerrar={() => setObjecionesAbiertas(false)} />
+      <RevisarSugerencias abierto={revision.abierto} filtroInicial={revision.filtro} onCerrar={() => setRevision((r) => ({ ...r, abierto: false }))} />
+      <Drawer
+        open={casillaAbierta !== null}
+        onClose={() => setCasillaAbierta(null)}
+        title={casillaAbierta ? definicionEnElMarco(casillaAbierta, marco).etiqueta : undefined}
+        description={casillaAbierta ? definicionEnElMarco(casillaAbierta, marco).ayuda : undefined}
+        size="lg"
+        footer={puedeEditar ? <div ref={setPie} className="flex items-center gap-2" /> : undefined}
+      >
+        {casillaAbierta && <Casilla key={casillaAbierta} clave={casillaAbierta} sinTitulo editarDeEntrada pie={pie} onListo={() => setCasillaAbierta(null)} />}
+      </Drawer>
+    </>
+  );
+
+  if (proyecto) {
+    const extras = [
+      { clave: "cuestionarios", etiqueta: "Cuestionarios", activa: vista === "cuestionarios", onClick: () => setVista("cuestionarios") },
+      ...(proyecto.informeAnterior ? [{ clave: "informe", etiqueta: "Informe anterior", activa: vista === "informe", onClick: () => setVista("informe") }] : []),
+    ];
+    return (
+      <LienzoContexto.Provider value={lienzo}>
+        {proyecto.slotDeSesiones &&
+          createPortal(
+            <Sesiones
+              abierta={vista === "sesiones"}
+              alElegir={(clave) => {
+                setVista("sesiones");
+                lienzo.sesion.elegir(clave);
+              }}
+              extras={extras}
+            />,
+            proyecto.slotDeSesiones,
+          )}
+        {proyecto.slotDelPanel && createPortal(<PanelDeContexto sigue={sigue} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} paso="exploracion" />, proyecto.slotDelPanel)}
+        <div className="space-y-6">
+          <div hidden={vista !== "sesiones"}>
+            <PasoExploracion />
+          </div>
+          <div hidden={vista !== "cuestionarios"}>{proyecto.cuestionarios}</div>
+          {vista === "informe" && proyecto.informeAnterior}
+        </div>
+        {cajones}
+      </LienzoContexto.Provider>
+    );
+  }
+
   return (
     <LienzoContexto.Provider value={lienzo}>
+      <MirarHubspot />
       <div className="flex-1 bg-surface-muted lg:grid lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[14.5rem_minmax(0,1fr)_18.75rem]">
         <aside className="border-b border-line bg-surface px-3 py-4 lg:sticky lg:top-0 lg:h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r lg:py-4">
           <RielDePiezas
@@ -394,18 +543,17 @@ export default function LienzoDeExploracion({
               <p className="text-sm text-fg-muted">{DE_QUE_VA[paso]}</p>
             </header>
           )}
-          {/* El «Contexto adicional» (2026-10-06): las reuniones y las fuentes, las mismas en todas las
-              piezas; las instrucciones, de cada pieza con agente (2026-10-07). La cuenta es la ficha de
-              la empresa y tiene lo suyo. */}
-          {paso !== "informacion" && paso !== "procesos" && (
+          {/* El «Contexto adicional» de las piezas que leen algo (2026-10-09): sin lista de reuniones,
+              que son las sesiones de Exploración. Ver MODO_DEL_CONTEXTO. */}
+          {MODO_DEL_CONTEXTO[paso] && (
             <div className="mb-6">
-              <ContextoDeLaPreventa pieza={PIEZA_DE_LAS_INSTRUCCIONES[paso] ?? null} />
+              <ContextoDeLaPreventa modo={MODO_DEL_CONTEXTO[paso]!} />
             </div>
           )}
           {paso === "resumen" && <Resumen />}
           {paso === "preparacion" && <PasoPreparacion />}
           {paso === "exploracion" && <PasoExploracion />}
-          {paso === "informacion" && <PasoInformacion info={infoDeLaEmpresa} />}
+          {paso === "informacion" && infoDeLaEmpresa && <PasoInformacion info={infoDeLaEmpresa} />}
           {paso === "procesos" && <PasoProcesos />}
           {paso === "escala" && <PasoEscala />}
           {paso === "casos" && <PasoCasosDeUso />}
@@ -417,19 +565,7 @@ export default function LienzoDeExploracion({
         </aside>
       </div>
 
-      <ManejoDeObjeciones abierto={objecionesAbiertas} onCerrar={() => setObjecionesAbiertas(false)} />
-      <RevisarSugerencias abierto={revision.abierto} filtroInicial={revision.filtro} onCerrar={() => setRevision((r) => ({ ...r, abierto: false }))} />
-
-      <Drawer
-        open={casillaAbierta !== null}
-        onClose={() => setCasillaAbierta(null)}
-        title={casillaAbierta ? definicionDe(casillaAbierta).etiqueta : undefined}
-        description={casillaAbierta ? definicionDe(casillaAbierta).ayuda : undefined}
-        size="lg"
-        footer={puedeEditar ? <div ref={setPie} className="flex items-center gap-2" /> : undefined}
-      >
-        {casillaAbierta && <Casilla key={casillaAbierta} clave={casillaAbierta} sinTitulo editarDeEntrada pie={pie} onListo={() => setCasillaAbierta(null)} />}
-      </Drawer>
+      {cajones}
     </LienzoContexto.Provider>
   );
 }

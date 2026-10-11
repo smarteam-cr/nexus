@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { esLiderDeCs } from "@/lib/cs/acceso";
+import { veRentabilidad } from "@/lib/rentabilidad/acceso";
 import { cargarCargaDelEquipo } from "@/lib/carga/queries";
 import { senalesParaLaUnoAUno } from "@/lib/carga/senales";
 import CargaDelEquipo from "@/components/carga/CargaDelEquipo";
@@ -17,6 +18,6 @@ export default async function CargaDelEquipoPage() {
   if (!ctx || !esLiderDeCs(ctx.role)) redirect("/clients");
 
   const datos = await cargarCargaDelEquipo();
-  const senales = senalesParaLaUnoAUno(datos.personas, datos.sinCse, datos.configuracion.config, datos.futuras[0]?.lunes ?? datos.hoy);
-  return <CargaDelEquipo datos={datos} senales={senales} contenedor={SHELL_DEFAULT} />;
+  const senales = senalesParaLaUnoAUno(datos.personas, datos.sinCse, datos.configuracion.config, datos.futuras[0]?.lunes ?? datos.hoy, datos.equipo);
+  return <CargaDelEquipo datos={datos} senales={senales} contenedor={SHELL_DEFAULT} conRentabilidad={veRentabilidad(ctx.role)} />;
 }

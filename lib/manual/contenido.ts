@@ -210,12 +210,16 @@ export const DOC_AGENTES: Record<string, string> = {
 export const DOC_MENU: Record<string, string> = {
   "para-ti":
     "Lo que te toca hoy, juntado de todos los módulos: lo de tus proyectos y tus preventas, lo de lo que llevas (se elige en Equipo) y los avisos de lo que pasó. Cada cosa te lleva a donde se hace.",
+  tareas:
+    "Lo que se acuerda en las reuniones de tu equipo, en tu semana y en tu agenda: Nexus lee la reunión y te propone tus tareas, tú las decides, las agendas y el viernes revisas tu semana.",
   clients:
     "La cartera: todas las empresas, con sus proyectos adentro. Es la pantalla donde se trabaja el día a día de un cliente.",
   marketing:
     "El contenido de Smarteam: ideas, temas, campañas, la voz de marca y a quién le hablamos.",
   "customer-success":
     "El tablero del líder de CS: cómo viene cada cuenta, qué está trabado y qué cliente está en riesgo.",
+  "tu-carga":
+    "Tus horas de las últimas semanas y las que vienen: reuniones, preparación y lo que pide el cronograma de tus cuentas. Solo lo tuyo, sin montos.",
   sales:
     "Lo que se vende: las propuestas para prospectos, el catálogo de casos de uso y las licitaciones de SICOP.",
   finanzas:

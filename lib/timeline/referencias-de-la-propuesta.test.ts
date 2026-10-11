@@ -204,7 +204,14 @@ describe("la lectura (leer-referencias.ts) y el GET", () => {
       expect(b?.handoff).toEqual(a?.handoff);
       expect(db.agentRunFindFirst).toHaveBeenCalledTimes(1);
       const q = db.agentRunFindFirst.mock.calls[0][0];
-      expect(q.where).toEqual({ projectId: "p1", agent: { agentGroup: "handoff" }, status: "DONE" });
+      /* Sin «Buscar lo nuevo» (etapa 3b): una corrida que solo dejó sugerencias no trae fases, y si se leyera
+         como «el último handoff» la comparación desaparecería (lib/agents/historial-corridas.ts). */
+      expect(q.where).toEqual({
+        projectId: "p1",
+        agent: { agentGroup: "handoff" },
+        OR: [{ stepLabel: null }, { stepLabel: { not: "Buscar lo nuevo en el handoff" } }],
+        status: "DONE",
+      });
       expect(q.orderBy).toEqual({ createdAt: "desc" });
       await leer("otro-token");
       expect(db.agentRunFindFirst, "otra propuesta, otra lectura").toHaveBeenCalledTimes(2);

@@ -12,6 +12,8 @@ import WorkspaceClient, { type SeededCanvas } from "./WorkspaceClient";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { piezaDesactualizadaPorHandoff } from "@/lib/pieces/piece-staleness";
+import { ultimoCambioDelHandoff } from "@/lib/handoff/congelado-server";
+import { conteoDeNovedadesDelProyecto } from "@/lib/seguimiento/novedades-server";
 import { hayPropuestaParaRevisar } from "@/lib/timeline/borrador";
 import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
 
@@ -28,12 +30,17 @@ async function seedCanvases(projectId: string): Promise<SeededCanvas[]> {
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     select: { id: true, slug: true, name: true, isDefault: true, sections: true, contentUpdatedAt: true },
   });
-  const [conContenido, proyecto] = await Promise.all([
+  const [conContenido, handoffCambioAt] = await Promise.all([
     loadCanvasesConContenido(projectId, canvases),
-    // Misma señal de vejez que /api/projects/[id]/canvases: si una sola la calculara, la
-    // fila arrancaría sin aviso y lo estrenaría al llegar el refetch.
-    prisma.project.findUnique({ where: { id: projectId }, select: { handoffGeneratedAt: true } }),
+    // Misma señal de vejez que /api/projects/[id]/canvases (la misma función): si una sola la
+    // calculara, la fila arrancaría sin aviso y lo estrenaría al llegar el refetch.
+    ultimoCambioDelHandoff(projectId),
   ]);
+  // El número de novedades del riel (etapa 6): la misma función que el listado, por la misma razón.
+  const novedades = await conteoDeNovedadesDelProyecto(
+    projectId,
+    canvases.filter((c) => c.slug && conContenido.has(c.id)).map((c) => c.slug!),
+  );
   return canvases.map((c) => ({
     id: c.id,
     slug: c.slug,
@@ -41,9 +48,10 @@ async function seedCanvases(projectId: string): Promise<SeededCanvas[]> {
     isDefault: c.isDefault,
     sections: (c.sections as Array<{ key: string; label: string }> | null) ?? [],
     hasContent: conContenido.has(c.id),
+    novedades: (c.slug && novedades[c.slug]) || 0,
     stale: piezaDesactualizadaPorHandoff(
       { slug: c.slug, contentUpdatedAt: c.contentUpdatedAt, hasContent: conContenido.has(c.id) },
-      proyecto?.handoffGeneratedAt ?? null,
+      handoffCambioAt,
     ),
   }));
 }

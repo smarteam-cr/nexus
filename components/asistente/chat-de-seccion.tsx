@@ -59,7 +59,7 @@ export {
   lineaDeAlcance,
   mensajeSinAlcance,
 } from "@/lib/asistente/alcance";
-export type { SeccionReferida } from "@/lib/asistente/alcance";
+export type { NovedadReferida, SeccionReferida } from "@/lib/asistente/alcance";
 
 interface Registro {
   /** `null` = el chat está abierto sin alcance, o cerrado. */

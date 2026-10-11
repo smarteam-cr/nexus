@@ -37,6 +37,8 @@ export interface SenalesDeFrescura {
   etapaSincronizadaEn: Date | null;
   /** La desviación del cronograma detectada más recientemente. */
   ultimaDesviacionEn: Date | null;
+  /** La última vez que cambió una solicitud fuera de alcance del proyecto (2026-10-07). */
+  ultimaSolicitudEn?: Date | null;
   /** La marca EXPLÍCITA de la fila (`ProjectBrief.staleAt`). */
   marcadoVencidoEn: Date | null;
 }
@@ -61,6 +63,7 @@ const DERIVADOS: ReadonlyArray<{
   { campo: "handoffActualizadoEn", frase: "se regeneró el handoff" },
   { campo: "etapaSincronizadaEn", frase: "cambió la etapa en HubSpot" },
   { campo: "ultimaDesviacionEn", frase: "se detectó una desviación nueva" },
+  { campo: "ultimaSolicitudEn", frase: "cambió una solicitud fuera de alcance" },
 ];
 
 /**
@@ -79,7 +82,7 @@ export function evaluarFrescura(
 
   const razones = DERIVADOS.filter((d) => {
     const cuando = s[d.campo];
-    return cuando !== null && cuando.getTime() > generadoEn.getTime();
+    return cuando != null && cuando.getTime() > generadoEn.getTime();
   }).map((d) => d.frase);
 
   /* La marca explícita se suma a las derivadas en vez de reemplazarlas: si además de la marca

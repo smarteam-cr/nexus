@@ -15,6 +15,14 @@
  * adicionales» del handoff (2026-10-07): las guarda su canvas y solo las lee el agente del handoff. La edición la gatea `canEdit` en el padre
  * (ProjectHandoffSection): el CSE cura el contexto de SUS proyectos. Su gemelo para el
  * CRONOGRAMA (sin la columna de HubSpot) es components/canvas/CronogramaContextSection.tsx.
+ *
+ * ── «CONTEXTO DEL HANDOFF», ADENTRO DE SU TARJETA (2026-10-07) ─────────────────
+ * Elías: «es importante que se llame contexto del handoff y que realmente esté en la parte del
+ * handoff». El 2026-10-06 todos los bloques pasaron a llamarse «Contexto adicional»; en las otras
+ * piezas funciona porque el bloque está arriba del único documento que lo lee. En el Resumen no:
+ * conviven el resumen del proyecto, la etapa y el handoff, y SOLO el agente del handoff lee esto.
+ * Por eso conserva su nombre propio y vive dentro de la tarjeta del handoff (su columna), no a todo
+ * el ancho debajo de las dos. Las columnas se acomodan al ancho de la tarjeta (container query).
  */
 import { useState, useCallback } from "react";
 import HubspotTimelinePanel from "./HubspotTimelinePanel";
@@ -74,8 +82,8 @@ export default function ProjectContextSection({
     /* La cabecera es la fila común de «Alrededor del handoff» (FilaDeAlrededor). El cuerpo queda
        montado aunque esté plegado: los contadores de la cabecera los reportan las columnas. */
     <FilaDeAlrededor
-      titulo="Contexto adicional"
-      ayuda={`Lo que leyó el agente: reuniones, notas de HubSpot, fuentes a mano${exploracion ? " y la preventa" : ""}.`}
+      titulo="Contexto del handoff"
+      ayuda={`Lo que lee el agente del handoff: reuniones, notas de HubSpot, fuentes a mano${exploracion ? " y la preventa" : ""}.`}
       meta={`${feedTotal} fuente${feedTotal === 1 ? "" : "s"}${excludedTotal > 0 ? ` · ${excludedTotal} excluida${excludedTotal === 1 ? "" : "s"}` : ""}${instruccionesActivas ? " · instrucciones activas" : ""}`}
       abierto={open}
       onAlternar={() => setOverride(!open)}
@@ -85,7 +93,9 @@ export default function ProjectContextSection({
           generación; <span className="font-medium text-fg-secondary">excluye</span> lo que sea de otro proyecto. En HubSpot,
           el material de la era del proyecto; el resto queda como trasfondo.
         </p>
-        <div className={`grid grid-cols-1 gap-3 ${exploracion ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3"}`}>
+        {/* Dentro de la tarjeta del handoff: dos columnas cuando la tarjeta da (container query), una si no. */}
+        <div className="@container">
+        <div className="grid grid-cols-1 gap-3 @xl:grid-cols-2">
           <ContextColumn icon={CTX_ICONS.hubspot} color="#ff7a59" title="HubSpot" count={hubspotCount}>
             <HubspotTimelinePanel
               projectId={projectId}
@@ -96,7 +106,7 @@ export default function ProjectContextSection({
             />
           </ContextColumn>
 
-          <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={meetCount}>
+          <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Reuniones" count={meetCount}>
             <SessionSelectionReview
               projectId={projectId}
               columnMode
@@ -112,6 +122,7 @@ export default function ProjectContextSection({
               endpoint={`/api/projects/${projectId}/handoff-sources`}
               canEdit={canEdit}
               onCount={setManualCount}
+              adjunto={{ projectId, origen: "handoff" }}
             />
           </ContextColumn>
 
@@ -120,6 +131,7 @@ export default function ProjectContextSection({
               <ExploracionDeVentaResumen datos={exploracion} />
             </ContextColumn>
           )}
+        </div>
         </div>
         <div className="mt-3">
           <InstruccionesDelDocumento

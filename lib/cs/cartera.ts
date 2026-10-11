@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { loadPortfolio, type PortfolioRow } from "@/lib/portfolio/load";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
+import { etapaDeNexusPorNombre } from "@/lib/clients/que-sigue-del-proyecto";
 import { belongsToClient, whereBelongsToClient } from "@/lib/sessions/project-sources";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { motivoApagado } from "@/lib/jobs/requisitos";
@@ -29,7 +30,9 @@ import {
   VENTANA_TRAS_CIERRE,
   adopcionPorHub,
   alertaDeLaCuenta,
+  alertasParaRevisar,
   carteraEnUnaLinea,
+  cierreDeLaAlerta,
   consumoDeLaCartera,
   entregaDeProyectos,
   equipo,
@@ -41,9 +44,19 @@ import {
   primeros90Dias,
   renovacionesProximas,
   ultimoContactoDeLaCuenta,
+  type AlertaCerrada,
   type CuentaDeCartera,
   type ProyectoDeCuenta,
+  type UsoAnterior,
 } from "./cartera-reglas";
+import type { CierreAnterior } from "./alertas-reglas";
+import { filasDeLaCartera } from "./clasificacion";
+import { leerClasificaciones } from "./clasificacion-server";
+import { leerAjustes } from "./ajustes-de-salud-server";
+import { leerVistas } from "./vistas-de-cartera-server";
+import { cargarConfigCarga } from "@/lib/carga/queries";
+import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
+import { DE_LA_PREVENTA } from "@/lib/exploraciones/marco";
 
 const DIA_MS = 86_400_000;
 
@@ -52,6 +65,26 @@ const ymd = (d: Date) => d.toISOString().slice(0, 10);
 /** «Hoy» en Costa Rica (UTC−6), que es donde se lee la pantalla. */
 export function hoyEnCostaRica(ahora = new Date()): string {
   return ymd(new Date(ahora.getTime() - 6 * 3_600_000));
+}
+
+/**
+ * El último puntaje de uso que dio HubSpot por registro de Partner Clients, de la copia semanal.
+ * Solo se pide para las cuentas que hoy vienen sin puntaje (`CuentaDeCartera.usoAnterior`).
+ */
+export async function ultimoUsoConocido(partnerIds: string[]): Promise<Map<string, UsoAnterior>> {
+  const out = new Map<string, UsoAnterior>();
+  if (partnerIds.length === 0) return out;
+  const filas = await prisma.partnerUsageSnapshot.findMany({
+    where: { hubspotPartnerClientId: { in: partnerIds }, uusScore: { not: null } },
+    orderBy: { weekKey: "desc" },
+    select: { hubspotPartnerClientId: true, uusScore: true, capturedAt: true },
+  });
+  for (const f of filas) {
+    if (!out.has(f.hubspotPartnerClientId) && f.uusScore !== null) {
+      out.set(f.hubspotPartnerClientId, { uso: Math.round(f.uusScore), fecha: ymd(f.capturedAt) });
+    }
+  }
+  return out;
 }
 
 function esBloqueado(hubspotStatus: string | null, etapa: string | null): boolean {
@@ -78,6 +111,9 @@ function proyectoDesdeFila(
     id: r.projectId,
     nombre: r.projectName,
     etapa: r.stageLabel ?? s.stage?.label ?? null,
+    // La etapa que el equipo mueve en HubSpot manda: «Continuidad» es un servicio recurrente y «Adopción» es
+    // adopción aunque Nexus infiera otra. Sin una que se reconozca (Bloqueado), la que infiere Nexus.
+    etapaClave: etapaDeNexusPorNombre(r.stageLabel) ?? s.stage?.effective ?? null,
     ...cseVigente(r.cseName, r.cseEmail, deBaja),
     activo: true,
     bloqueado: esBloqueado(ops?.hubspotStatus ?? null, r.stageLabel),
@@ -128,10 +164,15 @@ export async function ultimoContactoDeUnCliente(clientId: string, ultimoHubspot:
  * Las cuentas, ya armadas. `clientIds` = las que se quieren (null = toda la cartera que deja ver
  * `clientWhere`). La cartera es: clientes con proyecto activo de cartera, más los clientes con
  * suscripción activa en HubSpot Partner aunque hoy no tengan proyecto (renuevan igual).
+ *
+ * Con `incluirSinServicio` (2026-10-07) vienen además los clientes SIN nada activo, marcados `enCartera: false`:
+ * son los que la clasificación llama «sin servicio activo» o «excliente», y los que la CSL quiere encontrar
+ * («alto potencial sin servicio activo»). Las preguntas de la cartera (a quién llamar, qué renueva…) siguen
+ * mirando solo las que están en la cartera.
  */
 export async function cargarCuentas(
   clientWhere: Prisma.ClientWhereInput | null,
-  opciones: { clientIds?: string[]; filas?: PortfolioRow[] } = {},
+  opciones: { clientIds?: string[]; filas?: PortfolioRow[]; incluirSinServicio?: boolean } = {},
 ): Promise<CuentaDeCartera[]> {
   const ahora = new Date();
   const hoy = hoyEnCostaRica(ahora);
@@ -147,20 +188,27 @@ export async function cargarCuentas(
   const filas = (opciones.filas ?? (await loadPortfolio(filtroCliente))).filter((r) => r.status === "active");
   const conPartner = await prisma.clientPartnerSnapshot.findMany({
     where: { client: filtroCliente },
-    select: { clientId: true, properties: true },
+    select: { clientId: true, hubspotPartnerClientId: true, properties: true },
   });
   const partnerPorCliente = new Map(conPartner.map((s) => [s.clientId as string, leerPartner(s.properties)]));
+  const registroPorCliente = new Map(conPartner.map((s) => [s.clientId as string, s.hubspotPartnerClientId]));
 
-  const ids = [
-    ...new Set([
-      ...filas.map((r) => r.clientId),
-      ...conPartner.filter((s) => partnerPorCliente.get(s.clientId as string)?.activa).map((s) => s.clientId as string),
-    ]),
-  ];
+  const deLaCartera = new Set([
+    ...filas.map((r) => r.clientId),
+    ...conPartner.filter((s) => partnerPorCliente.get(s.clientId as string)?.activa).map((s) => s.clientId as string),
+  ]);
+  const sinServicio = opciones.incluirSinServicio
+    ? (await prisma.client.findMany({ where: filtroCliente, select: { id: true } })).map((c) => c.id)
+    : [];
+  const ids = [...new Set([...deLaCartera, ...sinServicio])];
   if (ids.length === 0) return [];
 
-  const [clientes, ops, cerrados, senales, contactoDe, alertas, cuentasFin, manuales, deBaja] = await Promise.all([
-    prisma.client.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, company: true } }),
+  // Las cuentas que hoy vienen sin puntaje de uso: se busca el último que dio HubSpot.
+  const sinUso = ids
+    .filter((id) => partnerPorCliente.has(id) && partnerPorCliente.get(id)?.uso === null)
+    .map((id) => registroPorCliente.get(id) as string);
+  const [clientes, ops, cerrados, senales, contactoDe, alertas, cuentasFin, manuales, deBaja, usoAnterior, cierres, preventas, clasificaciones, ajustes] = await Promise.all([
+    prisma.client.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, company: true, tamUsd: true } }),
     prisma.project.findMany({
       where: { id: { in: filas.map((r) => r.projectId) } },
       select: { id: true, hubspotStatus: true, hubspotBlockReason: true, hubspotBlockDetail: true },
@@ -187,7 +235,7 @@ export async function cargarCuentas(
       orderBy: { lastDetectedAt: "desc" },
       select: {
         id: true, clientId: true, severity: true, category: true, title: true, reason: true, suggestedAction: true,
-        status: true, agentRunId: true, lastDetectedAt: true, project: { select: { name: true } },
+        status: true, agentRunId: true, lastDetectedAt: true, dedupeKey: true, evidence: true, project: { select: { name: true } },
       },
     }),
     prisma.cuentaFinanciera.findMany({
@@ -195,6 +243,8 @@ export async function cargarCuentas(
       select: {
         clientId: true,
         creditoDias: true,
+        // Para la clasificación: los servicios recurrentes que siguen activos.
+        servicios: { where: { modalidad: "RECURRENTE", estado: "ACTIVO" }, select: { id: true } },
         cobros: {
           select: { estado: true, fechaProgramada: true, fechaEmision: true, fechaCobro: true, promesaPago: true, monto: true, moneda: true },
         },
@@ -205,10 +255,26 @@ export async function cargarCuentas(
       select: { clientId: true, hub: true, plan: true, fechaRenovacion: true, montoMensual: true, moneda: true },
     }),
     cseDeBajaPorCorreo(),
+    ultimoUsoConocido(sinUso),
+    // Para la clasificación: el último proyecto de cartera cerrado (cualquier fecha), las preventas abiertas y lo
+    // que ya confirmó la CSL.
+    prisma.project.groupBy({
+      by: ["clientId"],
+      where: { ...PROYECTO_DE_PIPELINE_CS_WHERE, clientId: { in: ids }, status: { in: ["inactive", "completed"] } },
+      _max: { updatedAt: true },
+    }),
+    prisma.exploracionDeVenta.findMany({ where: { clientId: { in: ids }, archivadaEn: null, ...DE_LA_PREVENTA }, select: { clientId: true } }),
+    leerClasificaciones(ids),
+    // El color corregido a mano y el «en espera del cliente» (2026-10-09).
+    leerAjustes(ids),
   ]);
+  const ultimoCierrePorCliente = new Map(cierres.map((c) => [c.clientId, c._max.updatedAt ? ymd(c._max.updatedAt) : null]));
+  const conPreventa = new Set(preventas.map((p) => p.clientId));
 
   const opsPorProyecto = new Map(ops.map((o) => [o.id, o]));
   const senalPorCliente = new Map(senales.map((s) => [s.clientId, s]));
+  // Una alerta que volvió muestra cómo se cerró la vez anterior.
+  const cierreAnterior = await cierresAnteriores(alertas.map((a) => a.dedupeKey));
 
   return clientes
     .map((cl): CuentaDeCartera => {
@@ -250,10 +316,13 @@ export async function cargarCuentas(
         clientId: cl.id,
         nombre: cl.company || cl.name,
         partner: partnerPorCliente.get(cl.id) ?? null,
+        usoAnterior: usoAnterior.get(registroPorCliente.get(cl.id) ?? "") ?? null,
         proyectos,
         ultimoContacto,
         ticketsAbiertos: senal?.ticketsSupported ? senal.openTicketCount : null,
-        alertas: alertas.filter((a) => a.clientId === cl.id).map(alertaDeLaCuenta),
+        alertas: alertas
+          .filter((a) => a.clientId === cl.id)
+          .map((a) => ({ ...alertaDeLaCuenta(a), antes: cierreAnterior.get(a.dedupeKey) ?? null })),
         facturacion: resumirFacturacion(cobros, hoy, fin?.creditoDias ?? null),
         licenciasManuales: manuales
           .filter((m) => m.clientId === cl.id)
@@ -265,6 +334,13 @@ export async function cargarCuentas(
             // Texto libre hasta el 2026-10-05: «usd» y «USD» eran dos monedas.
             moneda: normalizarMoneda(m.moneda),
           })),
+        enCartera: deLaCartera.has(cl.id),
+        serviciosRecurrentes: fin?.servicios.length ?? 0,
+        ultimoCierre: ultimoCierrePorCliente.get(cl.id) ?? null,
+        preventaViva: conPreventa.has(cl.id),
+        tamUsd: cl.tamUsd === null ? null : Number(cl.tamUsd),
+        clasificacion: clasificaciones.porCliente.get(cl.id) ?? null,
+        ajustes: ajustes.porCliente.get(cl.id) ?? null,
       };
     })
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -277,6 +353,8 @@ export interface FuentesDeCartera {
   senales: { at: string | null; apagado: string | null };
   reuniones: { at: string | null };
   vigia: { encendido: boolean; motivo: string | null; ultimaCorrida: string | null };
+  /** Si el vigía pudo leer los correos de los clientes en su última corrida que lo supo (2026-10-09). */
+  correos: { conPermiso: boolean | null };
 }
 
 export async function cargarFuentes(cuentas: readonly CuentaDeCartera[]): Promise<FuentesDeCartera> {
@@ -291,6 +369,26 @@ export async function cargarFuentes(cuentas: readonly CuentaDeCartera[]): Promis
     prisma.csSettings.findUnique({ where: { id: "cs" }, select: { watchdogEnabled: true } }),
     prisma.agentRun.findFirst({ where: { agentSlug: "cs-watchdog", status: "DONE" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
   ]);
+  // El permiso de correos lo dice la última corrida del vigía que pudo saberlo (las de antes del 2026-10-09 no lo dicen).
+  const conCorreos = await prisma.agentRun
+    .findMany({
+      where: { agentSlug: "cs-watchdog", status: "DONE", output: { contains: "correosConPermiso" } },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { output: true },
+    })
+    .catch(() => []);
+  const permisoDeCorreos = (() => {
+    for (const r of conCorreos) {
+      try {
+        const v = (JSON.parse(r.output ?? "{}") as { correosConPermiso?: unknown }).correosConPermiso;
+        if (typeof v === "boolean") return v;
+      } catch {
+        /* una salida vieja o rota no dice nada */
+      }
+    }
+    return null;
+  })();
   /* Encendido = el interruptor de la base, que desde el 2026-10-05 (D14) frena TODAS las vías. Sin
      la variable del cron el barrido diario no corre, pero el vigía sigue corriendo al abrir cada
      cliente y a mano: decir «apagado» por la variable era mentir. El motivo del cron queda en `motivo`. */
@@ -304,13 +402,22 @@ export async function cargarFuentes(cuentas: readonly CuentaDeCartera[]): Promis
     senales: { at: senales._max.fetchedAt?.toISOString() ?? null, apagado: motivoApagado("cs-signals-daily", process.env) },
     reuniones: { at: reunion._max.date?.toISOString() ?? null },
     vigia: { encendido: !apagadoEnAjustes, motivo: motivoVigia, ultimaCorrida: corrida?.createdAt.toISOString() ?? null },
+    correos: { conPermiso: permisoDeCorreos },
   };
 }
 
 /** Todo lo que pinta el índice, ya calculado (el navegador solo filtra). */
 export async function cargarCarteraDeLaCsl(clientWhere: Prisma.ClientWhereInput | null) {
   const hoy = hoyEnCostaRica();
-  const cuentas = await cargarCuentas(clientWhere);
+  // Las vistas guardadas, la meta de recurrentes por CSE y el id de cada persona (para su 1:1 en la carga).
+  const [vistas, configCarga, delEquipo] = await Promise.all([
+    leerVistas().catch(() => ({ vistas: [], faltaLaTabla: true })),
+    cargarConfigCarga().catch(() => null),
+    prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { id: true, email: true, name: true }, orderBy: { name: "asc" } }),
+  ]);
+  // Todas las cuentas para la clasificación y el buscador; las preguntas de la cartera, solo las que están en ella.
+  const todas = await cargarCuentas(clientWhere, { incluirSinServicio: true });
+  const cuentas = todas.filter((c) => c.enCartera !== false);
   const fuentes = await cargarFuentes(cuentas);
   const llamar = listaParaLlamar(cuentas, hoy);
   const adopcion = adopcionPorHub(cuentas);
@@ -323,7 +430,22 @@ export async function cargarCarteraDeLaCsl(clientWhere: Prisma.ClientWhereInput 
     entrega: entregaDeProyectos(cuentas),
     llamar,
     /** Todas las cuentas, para el buscador del índice (las pestañas solo traen las que aparecen en alguna pregunta). */
-    cuentas: cuentasParaBuscar(cuentas, hoy),
+    cuentas: cuentasParaBuscar(todas, hoy),
+    /** La pestaña «Cartera»: TODOS los clientes, con su clasificación (lo confirmado y lo que propone Nexus). */
+    cartera: filasDeLaCartera(todas, hoy),
+    /** false = el SQL de la clasificación todavía no corrió: se ven las propuestas, pero no se puede confirmar. */
+    clasificacionLista: !(await leerClasificaciones(todas.slice(0, 1).map((c) => c.clientId))).faltaLaTabla,
+    /** Las vistas guardadas de la pestaña «Cartera» (compartidas). */
+    vistas: vistas.vistas,
+    vistasListas: !vistas.faltaLaTabla,
+    /** Cuántas recurrentes lleva bien un CSE (los supuestos de la carga). */
+    metaRecurrentes: configCarga?.config.metaRecurrentes ?? { min: 6, max: 7 },
+    /** El id de cada persona del equipo por correo, para abrir su 1:1 en la carga. */
+    idsDelEquipo: Object.fromEntries(delEquipo.map((m) => [m.email.toLowerCase(), m.id])) as Record<string, string>,
+    /** A quién se le puede pasar una cuenta: el equipo activo (sin las cuentas de prueba). */
+    equipoParaPase: delEquipo.filter((m) => !esCuentaDePrueba(m.name)).map((m) => ({ email: m.email, name: m.name })),
+    /** false = el SQL de las correcciones del color todavía no corrió: se ve el color de Nexus, sin corregir. */
+    ajustesListos: !(await leerAjustes(todas.slice(0, 1).map((c) => c.clientId))).faltaLaTabla,
     renovaciones: renovacionesProximas(cuentas, hoy, 120),
     adopcion,
     primeros90: primeros90Dias(cuentas, hoy),
@@ -332,7 +454,71 @@ export async function cargarCarteraDeLaCsl(clientWhere: Prisma.ClientWhereInput 
     equipo: equipo(cuentas, hoy),
     nivel: nivelDePartner(cuentas, hoy),
     fuentes,
+    /** Las abiertas, por cuenta: la vista «Alertas» de «A quién llamar». */
+    alertasAbiertas: alertasParaRevisar(todas, hoy),
+    /** Las cerradas de los últimos `DIAS_DE_CERRADAS` días: salen de la lista, pero se consultan. */
+    alertasCerradas: await alertasCerradas(todas.map((c) => c.clientId)),
   };
 }
 
 export type CarteraDeLaCsl = Awaited<ReturnType<typeof cargarCarteraDeLaCsl>>;
+
+/** Cuántos días se pueden consultar las alertas cerradas desde el índice. */
+export const DIAS_DE_CERRADAS = 30;
+
+/**
+ * Las alertas cerradas (resueltas o descartadas) de las cuentas que se ven, de los últimos
+ * `DIAS_DE_CERRADAS` días: la lista principal ya no las muestra, pero se pueden consultar.
+ */
+export async function alertasCerradas(clientIds: readonly string[], ahora = new Date()): Promise<AlertaCerrada[]> {
+  if (clientIds.length === 0) return [];
+  const filas = await prisma.csAlert.findMany({
+    where: {
+      clientId: { in: [...clientIds] },
+      status: { in: ["RESOLVED", "DISMISSED"] },
+      resolvedAt: { gte: new Date(ahora.getTime() - DIAS_DE_CERRADAS * DIA_MS) },
+    },
+    orderBy: { resolvedAt: "desc" },
+    take: 300,
+    select: {
+      id: true, clientId: true, severity: true, title: true, reason: true, agentRunId: true, status: true,
+      resolvedAt: true, resolvedByEmail: true, resolutionNote: true,
+      client: { select: { name: true, company: true } }, project: { select: { name: true } },
+    },
+  });
+  return filas.flatMap((a) => {
+    const cierre = cierreDeLaAlerta(a);
+    if (!cierre) return [];
+    return [{
+      id: a.id,
+      clientId: a.clientId,
+      cuenta: a.client.company || a.client.name,
+      severidad: a.severity,
+      titulo: a.title,
+      razon: a.reason,
+      proyecto: a.project?.name ?? null,
+      delAgente: !!a.agentRunId,
+      estado: cierre.estado,
+      cerradaEn: cierre.fecha,
+      quien: cierre.quien,
+      nota: cierre.nota,
+    }];
+  });
+}
+
+/** Por llave: cómo se cerró la última alerta cerrada de cada una (para mostrarla junto a la que volvió). */
+export async function cierresAnteriores(llaves: readonly string[]): Promise<Map<string, CierreAnterior>> {
+  const out = new Map<string, CierreAnterior>();
+  if (llaves.length === 0) return out;
+  const filas = await prisma.csAlert.findMany({
+    where: { dedupeKey: { in: [...new Set(llaves)] }, status: { in: ["RESOLVED", "DISMISSED"] } },
+    orderBy: { resolvedAt: "desc" },
+    select: { dedupeKey: true, status: true, resolvedAt: true, resolvedByEmail: true, resolutionNote: true },
+  });
+  for (const f of filas) {
+    if (out.has(f.dedupeKey)) continue;
+    const cierre = cierreDeLaAlerta(f);
+    if (cierre) out.set(f.dedupeKey, cierre);
+  }
+  return out;
+}

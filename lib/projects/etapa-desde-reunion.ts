@@ -181,10 +181,14 @@ export interface EtapaDetectada {
 /**
  * Lo que devolvió el modelo, validado. `null` = no se sugiere nada: no movió, eligió una etapa que no
  * es de avance, la cita no está en la reunión o no explicó por qué.
+ *
+ * `soloEstasCitas`: cuando el texto lo armó la lectura de hechos (frases y resumen escritos por la IA), la cita vale solo
+ * si está TAL CUAL dentro de una de las citas literales de las señales (ya verificadas contra la reunión). La frase y el
+ * resumen son contexto: una «cita» copiada de ellos no es la frase de la reunión y no pasa.
  */
 export function leerRespuestaDeEtapa(
   respuesta: Pick<Anthropic.Messages.Message, "content">,
-  ctx: { def: PipelineDef; actualStageId: string | null | undefined; texto: string },
+  ctx: { def: PipelineDef; actualStageId: string | null | undefined; texto: string; soloEstasCitas?: readonly string[] },
 ): EtapaDetectada | null {
   const bloque = respuesta.content.find((b) => b.type === "tool_use" && b.name === TOOL_NAME);
   if (!bloque || bloque.type !== "tool_use") return null;
@@ -195,10 +199,36 @@ export function leerRespuestaDeEtapa(
   if (!etapa) return null;
   const cita = input.cita.replace(/\s+/g, " ").trim();
   const motivo = input.motivo.replace(/\s+/g, " ").trim();
-  if (!motivo || cita.length > MAX_CITA || !citaEstaEnElTexto(cita, ctx.texto)) return null;
+  const verificada = ctx.soloEstasCitas ? ctx.soloEstasCitas.some((c) => citaEstaEnElTexto(cita, c)) : citaEstaEnElTexto(cita, ctx.texto);
+  if (!motivo || cita.length > MAX_CITA || !verificada) return null;
   return {
     stageId: etapa.id,
     cita,
     motivo: motivo.length <= MAX_MOTIVO ? motivo : `${motivo.slice(0, MAX_MOTIVO - 1).trimEnd()}…`,
   };
+}
+
+/**
+ * El texto que lee la etapa cuando la manda la lectura de hechos (memoria de la cuenta, etapa 6): las señales de etapa
+ * de la reunión con su frase literal (ya verificada contra la reunión) y el resumen de la minuta. Así la etapa corre solo
+ * con algo que decir y sin releer la reunión entera. ⚠ La cita de la respuesta NO se verifica contra este texto (la
+ * frase de cada señal y el resumen los escribió la IA): se verifica solo contra las citas literales de las señales
+ * (`citasDeLasSenalesDeEtapa`, que van en `soloEstasCitas`).
+ */
+export function textoDeLasSenalesDeEtapa(senales: ReadonlyArray<{ frase: string; cita: string }>, resumenDeLaMinuta: string | null): string {
+  const lineas = senales
+    .filter((s) => s.frase.trim() && s.cita.trim())
+    .map((s) => `- ${s.frase.trim()}\n  Lo que se dijo, tal cual: «${s.cita.trim()}»`);
+  return [
+    "Lo que la reunión muestra que ya pasó (cada hecho con la frase literal que dijo alguien en la reunión; cita SOLO esa frase literal):",
+    ...lineas,
+    resumenDeLaMinuta?.trim() ? `\nResumen de la reunión (lo escribió la IA: sirve de contexto, no se cita):\n${resumenDeLaMinuta.trim()}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** Las citas literales de las señales: lo único contra lo que se verifica la cita de la etapa que manda la lectura de hechos. */
+export function citasDeLasSenalesDeEtapa(senales: ReadonlyArray<{ frase: string; cita: string }>): string[] {
+  return senales.filter((s) => s.frase.trim() && s.cita.trim()).map((s) => s.cita.trim());
 }

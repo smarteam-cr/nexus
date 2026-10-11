@@ -27,6 +27,8 @@ function rutas(dir: string): string[] {
 
 const SOLO_QUIEN_REVISA = [
   "app/api/feedback/[id]/decision/route.ts",
+  // Marcar leído o no leído en la Bandeja (2026-10-08).
+  "app/api/feedback/[id]/lectura/route.ts",
   "app/api/feedback/temas/route.ts",
   "app/api/feedback/temas/[id]/route.ts",
   // «Ya se subió»: lo de «Listo» pasa a «En Nexus» (2026-10-07).

@@ -487,9 +487,10 @@ export default function ClientsGrid({
          proyectos del cliente que están en el pipeline de Implementación de HubSpot. Sin
          permiso se pinta exactamente como antes (texto). Ver `CseEncargadoSelect`. */
       headerHint:
-        "Cambiar este valor actualiza la propiedad «CSE encargado» en HubSpot, en todos los " +
-        "proyectos del cliente que están en el pipeline de Implementación de HubSpot. Los " +
-        "proyectos de Desarrollo o Sitios web no se tocan: tienen su propio encargado técnico.",
+        "Cambiar este valor actualiza «CSE Encargado» en HubSpot: en todos los proyectos del " +
+        "cliente que están en el pipeline de Implementación, en la empresa y en sus contactos " +
+        "(«CSL Encargado» queda con la CSL). Los proyectos de Desarrollo o Sitios web no se " +
+        "tocan: tienen su propio encargado técnico.",
       render: (c) => (
         <span className="flex min-w-0 items-center gap-2">
           {c.cseNames.length > 0 ? (

@@ -10,10 +10,16 @@ import { prisma } from "@/lib/db/prisma";
 import { urlDeProyecto } from "@/lib/agents/run-url";
 import { altaEnCurso, EXPLICACION_DEL_PASO, siguientePaso } from "@/lib/projects/alta";
 import { contarSesionesSinRevisar } from "@/lib/sessions/project-sources";
+import { urlDeSolicitudes } from "@/lib/sessions/solicitudes-fuera-de-alcance";
+import { estadoDeLaPresentacion, fechaEnPalabras, leerPresentacion } from "@/lib/canvas/presentacion-del-diagnostico";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { hayPropuestaParaRevisar } from "@/lib/timeline/borrador";
 import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
 import { fraseDeAutoria } from "@/lib/timeline/autoria-de-la-propuesta";
+import { vencioSinRevisar } from "@/lib/lo-propuesto/ciclo";
+import { pedidoCubiertoPorLaReunion } from "@/lib/seguimiento/tarjeta";
 import { haceCuanto, plural } from "../armar";
+import { reunionesDelRenglon } from "./reuniones";
 import type { Fuente } from "../fuente";
 import type { Pendiente } from "../tipos";
 
@@ -126,18 +132,28 @@ export const REUNIONES_SIN_REVISAR: Fuente = {
   },
 };
 
+/**
+ * Los pedidos fuera de alcance que nadie decidió. Desde el 2026-10-09 (memoria de la cuenta, etapa 1) deja afuera los que
+ * salieron de una reunión de los últimos 30 días (ya están en «Lo que dejaron tus reuniones»: cada cosa en un solo
+ * renglón) y los que llevan más de 30 días sin revisar (vencidos: se siguen viendo en La cuenta › Fuera de alcance).
+ */
 export const PEDIDOS_FUERA_DE_ALCANCE: Fuente = {
   clave: "pedidos-fuera-de-alcance",
   frente: null,
   alDia: "Los pedidos fuera de alcance de tus clientes",
   aplica: conProyectos,
-  async medir(a) {
+  async medir(a, c) {
     const porId = new Map(a.proyectos.map((p) => [p.id, p]));
-    const pedidos = await prisma.pedidoFueraDeAlcance.findMany({
-      where: { projectId: { in: [...porId.keys()] }, estado: "PEDIDO", decididoAt: null },
-      select: { id: true, projectId: true, pedido: true, createdAt: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const [todos, delRenglon] = await Promise.all([
+      prisma.pedidoFueraDeAlcance.findMany({
+        where: { projectId: { in: [...porId.keys()] }, estado: "PEDIDO", decididoAt: null },
+        select: { id: true, projectId: true, pedido: true, createdAt: true, sessionId: true },
+        orderBy: { createdAt: "asc" },
+      }),
+      reunionesDelRenglon(a.proyectos, c.hoyISO),
+    ]);
+    const cubiertas = new Set(delRenglon.map((r) => r.sessionId));
+    const pedidos = todos.filter((pe) => !pedidoCubiertoPorLaReunion(pe, cubiertas) && !vencioSinRevisar(pe.createdAt, c.hoyISO));
     const porProyecto = new Map<string, typeof pedidos>();
     for (const pe of pedidos) {
       if (!pe.projectId) continue;
@@ -157,10 +173,10 @@ export const PEDIDOS_FUERA_DE_ALCANCE: Fuente = {
             lista.length === 1
               ? `${p.empresa} pidió algo fuera del alcance`
               : `${p.empresa} pidió ${lista.length} cosas fuera del alcance`,
-          detalle: `«${recortar(primero.pedido, 110)}». Decide si se lo pasas a Ventas.`,
-          meta: `Pedidos fuera de alcance · ${p.name}`,
-          accion: "Decidir",
-          href: urlDeProyecto(p.clientId, p.id),
+          detalle: `«${recortar(primero.pedido, 110)}». Confírmala o descártala: al confirmarla les avisamos a Customer Success y al vendedor.`,
+          meta: `Fuera de alcance · ${p.name}`,
+          accion: lista.length === 1 ? "Revisarla" : "Revisarlas",
+          href: urlDeSolicitudes(p.clientId),
           desde: primero.createdAt.toISOString(),
         },
       ];
@@ -168,84 +184,74 @@ export const PEDIDOS_FUERA_DE_ALCANCE: Fuente = {
   },
 };
 
-/** Un pendiente vencido hace más que esto ya no se persigue desde «Para ti»: es historia, no lo de hoy. */
-export const DIAS_DE_UN_PENDIENTE_VIGENTE = 30;
-
-export const PENDIENTES_DE_REUNIONES: Fuente = {
-  clave: "pendientes-de-reuniones",
+/**
+ * La fecha de presentación del diagnóstico (2026-10-07, lib/canvas/presentacion-del-diagnostico.ts): reconfirmar que
+ * está terminado cuando se acerca la fecha, y usar o descartar la fecha que leyó Nexus en una reunión. Solo mientras
+ * el diagnóstico es un borrador: presentado o aprobado, ya no hay nada que preguntar.
+ */
+export const PRESENTACION_DEL_DIAGNOSTICO: Fuente = {
+  clave: "presentacion-del-diagnostico",
   frente: null,
-  alDia: "Los pendientes que salieron de tus reuniones",
+  alDia: "Las fechas de presentación de tus diagnósticos",
+  aplica: conProyectos,
   async medir(a, c) {
-    const inicioDeHoy = new Date(`${c.hoyISO}T00:00:00-06:00`);
-    const enUnaSemana = new Date(inicioDeHoy.getTime() + 7 * 86_400_000);
-    // Solo lo vencido en los últimos 30 días (2026-10-05): había ~1.900 pendientes vencidos de meses atrás, y la fila
-    // decía «200» (un tope de la consulta) donde había 449. Ahora el número es la cuenta real de lo reciente.
-    const desde = new Date(inicioDeHoy.getTime() - DIAS_DE_UN_PENDIENTE_VIGENTE * 86_400_000);
-    const base = {
-      ownerEmail: { equals: a.email, mode: "insensitive" as const },
-      done: false,
-      deletedAt: null,
-      status: { not: "DONE" as const },
-    };
-    const vencidosWhere = { ...base, dueDate: { gte: desde, lt: inicioDeHoy } };
-    const proximosWhere = { ...base, dueDate: { gte: inicioDeHoy, lt: enUnaSemana } };
-    const select = { id: true, text: true, dueDate: true, clientId: true, projectId: true, client: { select: { name: true } } } as const;
-    const [nVencidos, nProximos, viejo, siguiente, clientesVencidos, clientesProximos] = await Promise.all([
-      prisma.actionItem.count({ where: vencidosWhere }),
-      prisma.actionItem.count({ where: proximosWhere }),
-      prisma.actionItem.findFirst({ where: vencidosWhere, select, orderBy: { dueDate: "asc" } }),
-      prisma.actionItem.findFirst({ where: proximosWhere, select, orderBy: { dueDate: "asc" } }),
-      prisma.actionItem.groupBy({ by: ["clientId"], where: vencidosWhere }),
-      prisma.actionItem.groupBy({ by: ["clientId"], where: proximosWhere }),
-    ]);
-    const out: Pendiente[] = [];
-    const hrefDe = (i: NonNullable<typeof viejo>) =>
-      i.projectId ? urlDeProyecto(i.clientId, i.projectId) : `/clients/${encodeURIComponent(i.clientId)}`;
-    if (nVencidos > 0 && viejo) {
-      out.push({
-        clave: "pendientes-de-reuniones:vencidos",
-        fuente: "pendientes-de-reuniones",
-        cuando: "hoy",
-        delAgente: false,
-        titulo:
-          nVencidos === 1
-            ? "Venció un pendiente de tus reuniones"
-            : `Vencieron ${nVencidos} pendientes de tus reuniones en el último mes`,
-        detalle: `${nVencidos === 1 ? "Es" : "El más viejo"}: «${recortar(viejo.text, 90)}», de ${viejo.client.name} (venció el ${diaCorto(viejo.dueDate!)}).`,
-        meta: `Pendientes de reuniones · ${plural(clientesVencidos.length, "cliente", "clientes")}`,
-        accion: nVencidos === 1 ? "Ir al pendiente" : "Ir al más viejo",
-        href: hrefDe(viejo),
-        desde: viejo.dueDate!.toISOString(),
-      });
-    }
-    if (nProximos > 0 && siguiente) {
-      out.push({
-        clave: "pendientes-de-reuniones:semana",
-        fuente: "pendientes-de-reuniones",
-        cuando: "semana",
-        delAgente: false,
-        titulo:
-          nProximos === 1
-            ? "Un pendiente de tus reuniones vence esta semana"
-            : `${nProximos} pendientes de tus reuniones vencen esta semana`,
-        detalle: `${nProximos === 1 ? "Es" : "El primero"}: «${recortar(siguiente.text, 90)}», de ${siguiente.client.name} (vence el ${diaCorto(siguiente.dueDate!)}).`,
-        meta: `Pendientes de reuniones · ${plural(clientesProximos.length, "cliente", "clientes")}`,
-        accion: nProximos === 1 ? "Ir al pendiente" : "Ir al primero",
-        href: hrefDe(siguiente),
-        desde: siguiente.dueDate!.toISOString(),
-      });
-    }
-    return out;
+    const porId = new Map(a.proyectos.map((p) => [p.id, p]));
+    const filas = await prisma.project.findMany({
+      where: { id: { in: [...porId.keys()] }, diagnosticoPresentacion: { not: Prisma.DbNull } },
+      select: { id: true, diagnosticoPresentacion: true },
+    });
+    if (filas.length === 0) return [];
+    const borradores = await prisma.projectCanvas.findMany({
+      where: { ...canvasOfNested("diagnosis", { projectId: { in: filas.map((f) => f.id) } }), estadoDocumento: { notIn: ["presentado", "aprobado"] } },
+      select: { id: true, projectId: true },
+    });
+    const canvasDe = new Map(borradores.map((b) => [b.projectId, b.id]));
+    return filas.flatMap((f): Pendiente[] => {
+      const p = porId.get(f.id);
+      const canvasId = canvasDe.get(f.id);
+      if (!p || !canvasId) return [];
+      const pr = leerPresentacion(f.diagnosticoPresentacion);
+      const href = urlDeProyecto(p.clientId, p.id, canvasId);
+      if (estadoDeLaPresentacion(pr, c.hoyISO) === "por-reconfirmar" && pr.fecha) {
+        return [
+          {
+            clave: `presentacion-del-diagnostico:${p.id}`,
+            fuente: "presentacion-del-diagnostico",
+            cuando: "hoy",
+            delAgente: false,
+            titulo: `¿Está terminado el diagnóstico de ${p.empresa}?`,
+            detalle: `Se presenta el ${fechaEnPalabras(pr.fecha)}. Confírmalo y le avisamos al vendedor para que lo revise antes.`,
+            meta: `Diagnóstico · ${p.name}`,
+            accion: "Confirmar",
+            href,
+            desde: pr.fijadaEn ?? null,
+          },
+        ];
+      }
+      // La fecha que leyó Nexus deja de pedirse a los 30 días (se sigue viendo en el diagnóstico).
+      if (pr.propuesta && pr.propuesta.fecha !== pr.fecha && !vencioSinRevisar(pr.propuesta.en || pr.propuesta.reunion.fecha, c.hoyISO)) {
+        return [
+          {
+            clave: `presentacion-del-diagnostico:propuesta:${p.id}`,
+            fuente: "presentacion-del-diagnostico",
+            cuando: "semana",
+            delAgente: true,
+            titulo: `Nexus leyó cuándo se presenta el diagnóstico de ${p.empresa}`,
+            detalle: `El ${fechaEnPalabras(pr.propuesta.fecha)}, según «${recortar(pr.propuesta.cita, 100)}». Úsala o cámbiala.`,
+            meta: `Diagnóstico · ${p.name}`,
+            accion: "Revisarla",
+            href,
+            desde: pr.propuesta.en || null,
+          },
+        ];
+      }
+      return [];
+    });
   },
 };
 
-const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-
-/** «30 sep», en la fecha de Costa Rica. */
-export function diaCorto(d: Date): string {
-  const cr = new Date(d.getTime() - 6 * 3_600_000);
-  return `${cr.getUTCDate()} ${MESES[cr.getUTCMonth()]}`;
-}
+/* Los pendientes de tus reuniones (`ActionItem`) dejaron de ser una fuente el 2026-10-10 (memoria de la cuenta, etapa 2):
+   los compromisos de una reunión son propuestas de Tarea y los cuenta la fuente TAREAS (fuentes/tareas.ts). */
 
 export function recortar(texto: string, max: number): string {
   const t = texto.replace(/\s+/g, " ").trim();

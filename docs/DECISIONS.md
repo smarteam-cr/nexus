@@ -111,18 +111,27 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   pendiente en un CRM y un asset pendiente en un sitio son el MISMO objeto: insumo que debe el
   cliente) sino el DESTINO. Destinos: *desviación fechada* → `Particularidad`; *insumo del cliente* →
   tarea `party=CLIENTE` (`client-blockers`); *riesgo interno/fricción* → `CsAlert` (watchdog, nunca
-  cruza); *pedido de alcance nuevo* → entidad `ScopeRequest` (decide el CSL; diseñada, ver plan);
+  cruza); *pedido de alcance nuevo* → entidad `ScopeRequest` (diseñada, ver plan; ⚠ se construyó el
+  2026-10-07 sobre `PedidoFueraDeAlcance` y lo decide el CSE, no el CSL: ver «Seis mejoras en clientes»);
   *hallazgo de entrega* → `KnowledgeDocument`. *Prueba de admisión de un tipo:* quién actúa · dónde
   aterriza · qué pasa si nadie lo hace (dos tipos con la misma acción/persona/lugar son uno). *Regla:*
   el tipo vive en el HECHO (arriba), NO dentro de `Particularidad`; el apply RUTEA (código
   determinista). *Detección:* UN clasificador que viaja sobre una pasada de transcript ya existente
-  (hoy el agente de avance), NUNCA N agentes por destino que relean el transcript (la pasada full-
+  (la lectura de cada reunión al llegar: el post-proceso, `lib/sessions/post-process.ts`; desde la etapa 2
+  de la memoria de la cuenta comparte la fila `LecturaDeReunion` con Tareas, ver «La lectura de cada reunión
+  es durable…» — corregido el 2026-10-09: hasta ese día decía «hoy el agente de avance»), NUNCA N agentes
+  por destino que relean el transcript (la pasada full-
   transcript es de las más caras del sistema). *Estado:* `Particularidad` reconcebida = desviación
   FECHADA, 2 kinds (`ATRASO` con `weeksImpact` OBLIGATORIO + `COMPROMISO`), `SOLICITUD` deprecado
   (filas legacy conservan el enum + fallback de render; se auditan con
   `scripts/migrate-particularidades-audit.ts`, que exporta sin borrar), `occurredAt` = fecha de la
   sesión del hecho, `sourceQuote` = cita interna que NUNCA cruza al cliente (fail-closed). El router
   de hechos + `ScopeRequest` quedan diseñados para construir tras un sondeo de distribución.
+  ⚠ **Enmendado el 2026-10-09** (memoria de la cuenta): `ScopeRequest` se construyó como
+  `PedidoFueraDeAlcance` (ver «Seis mejoras en clientes»). El sondeo de distribución es la etapa 5: un script
+  sin deploy, `scripts/sondeo-de-hechos.ts`, que deja cada hecho con su cita y su destino en
+  `backups/<fecha>-sondeo-de-hechos/` y decide la variante y el modelo de la lectura de hechos. El router es la
+  etapa 6, con los tipos y la prueba de admisión escritos en «Hechos, enrutador y novedades».
 - **`TaskParty` se usa en DOS EJES; el criterio vive en cada prompt, no en el enum.** *Por qué:* en una
   TAREA `party` = *quién la ejecuta* (dueño) y el agente de detalle manda 4 de 5 tipos de fase a AMBOS
   (las sesiones son conjuntas); en una PARTICULARIDAD `party` = *quién CAUSÓ el corrimiento*. Es el
@@ -4147,9 +4156,12 @@ escala y sin tocar el diagnóstico del CSE.
   filtrar datos, no rogarle al modelo: lo interno (hipótesis, presupuesto, quién decide, lo no
   explorado, el producto mostrado, la apertura, el contexto, el siguiente paso) lo ve el CSE en la
   columna «Exploración de venta» del contexto del proyecto, que es pantalla interna.
-- **La lectura automática solo mientras se vende.** Cada reunión nueva dispara al agente solo si la
-  empresa sigue siendo prospecto, la exploración tiene menos de seis meses y la venta todavía no
-  tiene proyecto. Sin ese freno, cada reunión de implementación de la cuenta disparaba una corrida
+- **La lectura automática solo mientras se vende.** ⚠ Desde el 2026-10-08 también en la de un cliente, con una
+  reunión con alguien de Ventas (ver «Las reuniones grabadas con HubSpot entran solas a la preventa»). ⚠ Desde la
+  etapa A de la memoria de la cuenta (2026-10-09), en la de un cliente solo se lee sola la reunión unida a una de sus
+  sesiones, sin el filtro de Ventas (ver «La exploración son sus sesiones»). Cada reunión
+  nueva dispara al agente solo si la empresa sigue siendo prospecto, la exploración tiene menos de seis meses y la
+  venta todavía no tiene proyecto. Sin ese freno, cada reunión de implementación de la cuenta disparaba una corrida
   (HubSpot y Claude, contra el presupuesto automático) para siempre — la multiplicación por sesión
   que se sospechó en la caída del 21-sep. El botón sigue disponible a mano.
 - **La métrica se mide con la foto del momento de proponer**, no con lo que se completó después; y
@@ -4332,7 +4344,11 @@ objeciones, y ver de un vistazo qué le falta para proponer.
   que se dijo y nadie exploró» (cada punto se lleva a la próxima sesión con un clic, con lo sugerido
   por el agente a la vista) y «Armar la siguiente sesión». La escala, las áreas en juego y los datos
   de la medición pasan a la pieza «La escala».
-- **La reunión se liga a su sesión por fecha, y se corrige a mano** (`SesionPlaneada.reunion`). Una
+- **SUPERSEDED 2026-10-09 (memoria de la cuenta, etapa A):** la reunión de una sesión es la que se unió a ella
+  (la elegida, la de su evento del calendario o, sin evento, la del mismo día, marcada «ligada por fecha»). Una
+  reunión que no está en una sesión no es de la exploración: no se lee ni es pestaña. Ver «La exploración son sus
+  sesiones».
+  **La reunión se liga a su sesión por fecha, y se corrige a mano** (`SesionPlaneada.reunion`). Una
   reunión que no quedó en ninguna sesión aparece como pestaña propia, para no perderla. La guía se
   guarda por sesión (`propuesta.guias`), así el «antes» de una sesión que ya pasó muestra lo que se
   preparó para ella; lo que se lleva a una sesión (`SesionPlaneada.explorar`) entra primero en su
@@ -4521,11 +4537,20 @@ forma en todas las piezas de preventas y de clientes. Va por tandas: esta es la 
   trabajar la IA, y abierta, las columnas y las «Instrucciones adicionales». Cada pieza pone sus
   columnas, que son las que saben dónde se guarda cada cosa. El chat del cronograma ahora nombra el
   bloque así (su prompt está en el código: se rehace la caché una vez).
-- **En la preventa, el bloque va arriba de cada pieza, salvo La cuenta** (es la ficha de la empresa).
+- **SUPERSEDED 2026-10-09 (memoria de la cuenta, etapas 0 y A):** el bloque va solo en las piezas cuyo agente
+  lo lee. Como quedó: Preparación, con sus fuentes y sus instrucciones (dice qué lee: las sesiones más recientes de
+  Exploración); Casos de uso, solo sus instrucciones (su agente no lee reuniones); La escala, con la explicación de que
+  no tiene agente; la Exploración abre en su página de inicio, con las sesiones, las fuentes manuales y las
+  instrucciones, sin el bloque ni lista de reuniones; Resumen y Propuesta no lo muestran. Ver «Etapa 0: arreglos y
+  limpieza» y «La exploración son sus sesiones».
+  **En la preventa, el bloque va arriba de cada pieza, salvo La cuenta** (es la ficha de la empresa).
   Tres partes: las reuniones de Meet y HubSpot con la empresa, leídas o no; las fuentes manuales (lo
   que antes era «¿Una sesión que no quedó en Meet?»); y las instrucciones adicionales. Con `?sumar=1`
   (la preventa que se abre «Con una transcripción») arranca abierto y con el formulario a la vista.
-- **En la preventa las reuniones no se eligen**, a diferencia del cronograma: no hay otro proyecto de
+- **SUPERSEDED 2026-10-09 (memoria de la cuenta, etapa A):** en un prospecto cada reunión con la empresa entra sola
+  como sesión (salvo las internas y las de una serie) y se saca, una o varias a la vez, a «Fuera de la
+  exploración»; en un cliente o un proyecto nada entra solo: se agrega con «+ Agregar sesión».
+  **En la preventa las reuniones no se eligen**, a diferencia del cronograma: no hay otro proyecto de
   la misma empresa con el que confundirlas, y el agente ya lee las más recientes sin leer. Elegirlas es
   la tanda 2.
 - **Las instrucciones adicionales de la preventa se guardan como una nota más** (`contenido.notas`, la
@@ -4772,6 +4797,7 @@ la tanda configurada en 1 publicación de empresa y 0 de perfil personal: las ú
 - **Encuestas, rediseñada para que se entienda cómo se usa (2026-10-06, Elías: «No es tan entendible la forma de utilizar las encuestas para obtener feedback del equipo»; diseño aprobado «Feedback · Encuestas (v2)» en Claude Design).** Las dos clases se eligen arriba: «Tus preguntas» (las escribe dirección) y «Automáticas» («¿cuánto te tomó?»); la clase va en `?clase=` sin volver a pedir la página. Una pregunta mandada a varias personas se lee como UNA tarjeta y no como una fila por persona (`agruparPedidos`, lib/feedback/encuestas.ts: mismo autor, texto, pantalla y plazo): quién contestó, a quién se le espera y si ya la vio, y lo que dijo cada uno. Está abierta mientras a alguien todavía le aparece (la misma regla de la burbuja, `pedidoAplica`); después, cerrada. El formulario dejó el panel: «Nueva pregunta», el único botón azul, abre un cajón con cuatro pasos y la burbuja tal como la ve la persona (`CuerpoDelPedido`, el mismo componente que la burbuja real, así la vista previa no puede mentir). Sin preguntas, la pestaña explica cómo funciona en tres pasos y ofrece preguntas para empezar. El panel dice qué sigue (primero, las respuestas que esperan una decisión en la Bandeja), quién no reporta hace 30 días con «Preguntarle» y qué es cada clase. En Automáticas, una tarjeta por momento con su interruptor y cómo le aparece a la persona, y debajo lo que dicen las respuestas; los documentos publicados quedaron solo en el CSV, porque la carga todavía no tiene un supuesto por documento.
 - **Cada reporte va a su propio tema; se junta solo lo que pide LO MISMO (2026-10-07, Elías: «deberían ser los reportes individuales… cada reporte tiene su propia pantalla… y debería poder generar su propio prompt»).** En la hoja de ruta, el tema «Finanzas» había juntado dos pedidos distintos de Alex (desestimar cobros en Conciliación y corregir una quincena pagada en Planilla): «Llevar a la hoja de ruta» abría en «Sumarlo a un tema» apenas existía uno. Ahora abre en «Su propio tema», con el nombre propuesto desde la primera frase del reporte (`nombreDesdeElReporte`, lib/feedback/reglas.ts), y en «Con otro que pide lo mismo» solo si «Se parece a» encontró uno. Los temas siguen existiendo: cuando varias personas piden lo mismo, el tema las cuenta y eso ordena la columna. Dentro de un tema, cada reporte tiene su propio «Generar prompt» (su pantalla, sus marcas y su conversación) y «Separarlo en su propio tema» (`accion: "separar"` en `/api/feedback/[id]/decision`): el tema nuevo queda en la MISMA columna, así a quien lo pidió no le cambia el estado ni le llega un aviso. Si el que sale es el reporte del que nació el tema, el que queda pasa a ser su origen y su pantalla. Con un solo reporte no hay nada que separar.
 - **«Listo» es hecho; «En Nexus» es subido (2026-10-07, Elías: «cuando se ponga en listo, que ya está el cambio hecho y que en la próxima subida se agregará; y cuando se suba, que ya se aplicó y puede volver a probar»).** La hoja de ruta tiene cinco columnas: Por decidir · Planeado · En curso · Listo · En Nexus (clave `subido`, sin SQL: la columna es texto). *Por qué:* «Listo» le decía a la persona «ya está en Nexus» el día en que el cambio quedaba en el código, y entre una subida y otra pasan días: probaba y no encontraba nada. Ahora, al avanzar, a quien lo pidió le llega cada paso en «Para ti»: «En curso» (se está haciendo), «Listo» (ya está hecho y llega con la próxima subida) y «En Nexus» (ya lo puede probar; si algo no quedó, que lo cuente desde Feedback). Volver a una columna anterior no avisa. Para quien reportó, «Listo» se lee «Hecho, en la próxima subida» y todavía no es verde; verde es «Ya está en Nexus». «Listo» se ve en la hoja de ruta hasta que se sube; «En Nexus», 28 días. Después de cada subida, «Ya se subió» (en la columna «Listo», `POST /api/feedback/temas/subir`) pasa todo lo de «Listo» a «En Nexus» de una vez, con la misma regla que moverlos a mano. Se llama «En Nexus» y no «Deploy» porque es lo que lee la persona: que ya está donde lo usa.
+- **Leído o no leído en la Bandeja (2026-10-08, Elías: «debería poder marcarse de forma sencilla cada ítem como no leído»).** Como en un correo: abrir un reporte lo deja leído; el punto de cada fila lo cambia (azul, lo que no leíste; al pasar el mouse por una fila leída, un círculo vacío para dejarla no leída) y arriba del reporte va «Marcar como no leído». No leído es `revisorLeyoAt` vacío (`POST /api/feedback/[id]/lectura`, solo quien revisa): vuelve el punto y, si lo último de la conversación lo escribió la persona, vuelve a «Te respondieron» y al número de la pestaña. El punto ya no es solo de lo nuevo: también sale en lo cerrado y en una respuesta sin leer. ⚠ Es de dirección entera: hay un solo `revisorLeyoAt` por reporte, así que lo que marca uno lo ven los otros. Con el dedo no hay punto que tocar (el toque abre el reporte): se marca desde arriba del reporte. Sin SQL.
 
 ## Recorridos guiados: React Joyride, con el contenido en el repo (2026-10-04)
 
@@ -4992,6 +5018,17 @@ producción no había ningún comentario ni ningún reporte de la escala: no hub
   de Feedback (`lib/feedback`), siempre con `avisar()`. El frente Escala cuenta los comentarios de la Escala que esperan
   una decisión (reportes de Feedback con ancla, sin revisar) y pide Super Admin, porque se deciden en la bandeja de
   Feedback.
+- **Lo que dejaron tus reuniones, en un renglón** (2026-10-09, memoria de la cuenta, etapa 1): un solo renglón
+  agrupado con tus reuniones con clientes de los últimos 30 días, con un enlace a la tarjeta «Lo que dejó esta
+  reunión» de cada una. Cuenta solo lo que se decide en la tarjeta (la minuta sin revisar, los pedidos fuera de
+  alcance sin decidir y los campos de la ficha de esa reunión). Las tareas propuestas, la etapa, la fecha del
+  diagnóstico y las alertas siguen en sus propios renglones: una cosa, un solo renglón. Las reuniones de prospectos
+  no entran (se ven en la tarjeta de la reunión). *Por qué:* revisar lo de una reunión en cuatro pantallas era la
+  razón de que nadie lo revisara (2 de 533 minutas revisadas al 9-oct).
+- **Lo propuesto deja de pedir revisión a los 30 días** (misma etapa): los renglones de pedidos fuera de alcance, etapa
+  sugerida y fecha del diagnóstico propuesta dejan de pedir revisión 30 días después de que nació lo propuesto, y un
+  pedido que ya está en el renglón de su reunión no se repite. La pantalla de cada módulo los sigue mostrando (la marca
+  «Venció sin revisar» está, por ahora, solo en la tarjeta de la reunión), y decidir después sigue valiendo. *Por qué:* un pendiente que nunca se va deja de mirarse.
 
 ## El tipo de cambio del BCCR, día por día (2026-10-05)
 
@@ -5056,6 +5093,15 @@ Alexander Vanegas (CSL) y dirección.
   esa persona como dueña de proyectos activos (Lorena Osorio, Felipe Sepúlveda y Brandon Centeno, al
   2026-10-05). Esos proyectos cuentan como sin CSE y Equipo dice de quién eran, para reasignarlos en
   HubSpot. El filtro por CSE lista a todos los que llevan algún cliente, no solo a los de la lista.
+- **Sin relación gestionada, HubSpot no comparte el uso, y la pantalla lo dice** (2026-10-07, Cicadex).
+  Medido ese día: 48 de 48 cuentas gestionadas traen puntaje y 0 de 119 sin gestionar. 18 cuentas con
+  puntaje en julio lo perdieron porque HubSpot terminó la relación entre el 12 jul y el 6 oct, con la
+  copia diaria apagada: no saltó ningún «por vencer», y la ficha decía «sin puntaje» como si nunca lo
+  hubiera tenido. Ahora el estado de la ficha y la pestaña Adopción dicen cuándo terminó y el último
+  puntaje con su fecha (`porQueNoHayUso`), que sale de la copia semanal y nunca reemplaza al de hoy.
+  «A quién llamar» suma el motivo `relacionTerminada` durante 90 días (alta los primeros 30): sin él, el
+  aviso de la relación desaparecía justo al perderse. Más atrás no, porque hay relaciones terminadas en
+  2021 con la cuenta todavía activa en HubSpot.
 
 ## Clientes con el sistema «Nexus · interfaz interna»: el índice y la ficha (2026-10-04)
 
@@ -5084,7 +5130,9 @@ Alexander Vanegas (CSL) y dirección.
   de cronograma → reuniones sin revisar → el documento de la etapa sin generar o desactualizado →
   resumen vencido → agendar la próxima reunión. Los dos primeros los pinta la ficha con sus propios
   carteles. Lo que falta para cerrar la etapa no se repite: ya lo dice la tarjeta de la etapa.
-  Regla pura en `lib/clients/que-sigue-del-proyecto.ts`.
+  Regla pura en `lib/clients/que-sigue-del-proyecto.ts`. ⚠ Desde la etapa 6 de la memoria de la cuenta, las
+  novedades de reuniones del documento de la etapa van justo después del documento desactualizado (ver «Hechos,
+  enrutador y novedades»).
 - **El resumen del proyecto y «Qué se vendió» se generan solos al abrir el Resumen** (decisión de
   Elías), si faltan o quedaron viejos: una vez por versión y por sesión del navegador, sin avisos.
   El de «Qué se vendió» solo para quien puede generar el handoff (el servidor pide la misma celda);
@@ -5166,6 +5214,195 @@ Alexander Vanegas (CSL) y dirección.
 - **El avance hacia la meta de cada resultado no se mide**: la pestaña lo dice en vez de inventarlo.
 - El recorrido «Una cuenta de Éxito del cliente» pasó a la versión 2: sus pasos de adopción y
   proyectos apuntan a las pestañas, y suma uno sobre las pestañas.
+
+## El color de cada cuenta y las alertas que se cierran (2026-10-07)
+
+> Elías, para la rutina de Alex Vanegas (CSL), que revisa la cartera los primeros 10 minutos del día:
+> cada cuenta con un color (verde va bien, amarillo señales de riesgo, rojo riesgo alto) que diga por
+> qué al pasar el mouse, y alertas que se puedan resolver o descartar con una nota corta y que vuelvan
+> solo con una señal nueva. Medido ese día: 88 de 93 cuentas pintadas por los motivos para llamar, 11
+> en rojo solo por alertas del agente (kölbi entre ellas), y 105 alertas abiertas, ninguna cerrada.
+
+- **El color sale de las cuatro lecturas de la ficha** (`saludDeLaCuenta`, lib/cs/cartera-reglas.ts):
+  entrega, uso, relación y renovación, las MISMAS de `estadoDeLaCuenta`, así la lista, la ficha y el
+  chip de la cabecera no se contradicen. Ya no sale de los motivos para llamar, que siguen ordenando
+  la lista y diciendo «Por qué llamar».
+  - **Rojo, solo con un hecho duro**: un proyecto bloqueado, una cancelación registrada en HubSpot, o
+    una renovación a 90 días o menos que llega con el uso mal o un proyecto atrasado.
+  - **Amarillo**: un proyecto atrasado; el uso bajo, cayendo o con hubs sin activar; más de
+    `DIAS_SIN_CONTACTO` días sin contacto, o ninguno en 6 meses.
+  - **Verde**: nada de lo anterior, y algo dice que va bien (entrega al día, uso o contacto reciente).
+  - **Gris «Sin datos»**: nada dice cómo va.
+- **Lo que NO pinta, a propósito.** Las alertas del agente vigía: son lo que la IA cree, se ven en la
+  fila con su chispa y se resuelven ahí. La deuda vencida: el pedido nombra entrega, adopción,
+  relación y renovación; sigue siendo un motivo para llamar. Una renovación cerca sola, y un uso sin
+  puntaje (no saber no es un problema).
+- **La relación pinta solo donde Smarteam acompaña la cuenta** (`laAcompanamos`: un proyecto activo
+  o la relación gestionada en HubSpot). La primera versión dejaba 59 de 93 en amarillo, 32 de ellas
+  solo por no tener contacto y sin proyecto ni relación gestionada: cuentas de las que nadie espera
+  una llamada. Esas van en gris y su porqué lo dice. Con la regla: 13 rojas, 29 amarillas, 16 verdes,
+  35 grises; kölbi en amarillo por el uso cayendo.
+- **La lista va por color**: rojo, amarillo, gris, verde, y dentro de cada color el orden de antes
+  (cancelación, lo urgente, sin datos, gravedad). El gris va después del amarillo: arriba tapaba lo
+  que sí pide una llamada. Todas las cuentas con su color, en la pestaña «Cartera» (antes el filtro «Toda la
+  cartera» de «A quién llamar»; ver §La clasificación de cada cuenta).
+- **Una alerta se cierra con una nota opcional** (`CsAlert.resolutionNote`, una línea de hasta 280
+  caracteres; SQL `scripts/sql/2026-10-07-nota-de-la-alerta.sql`, antes del deploy). Se resuelve o
+  descarta en la vista «Alertas» de «A quién llamar», que junta las de TODAS las cuentas (también los
+  avisos de renovación, que no son motivo para llamar: sin esa vista no había dónde cerrarlos), desde
+  el botón «Revisar N alertas» de cada fila o desde el panel de la cuenta, con el mismo componente
+  (`AlertaParaCerrar`). Con ese botón en la fila, las alertas del agente no repiten su chip. Las
+  cerradas de los últimos 30 días se consultan y se vuelven a abrir.
+- **Vuelve solo con una señal nueva** (`queHacerConLaRedeteccion`, lib/cs/alertas-reglas.ts): el
+  agente la ve más grave, o trae evidencia que no estaba (otra reunión, evento, tarea o negocio).
+  Antes una cerrada se callaba 7 días y volvía igual aunque nada hubiera cambiado. Vuelve como
+  alerta nueva y dice cómo se cerró la anterior. El agente recibe las cerradas de 30 días con su
+  nota, para no repetirlas.
+- **Los avisos de renovación que ya no corresponden se cierran solos** (la renovación pasó, cambió de
+  fecha o cruzó al umbral siguiente), firmados `sistema` y con su porqué. Antes se juntaban el de 90,
+  el de 60 y el de 30 de la misma fecha (38 abiertos el 2026-10-07): se limpian en la primera corrida
+  del job después del deploy.
+- Los recorridos del índice (v2) y de la cuenta (v3) lo explican.
+
+## La clasificación de cada cuenta: Nexus propone, la CSL confirma (2026-10-07)
+
+> Primera entrega del plan para que Éxito del cliente le sirva a Alex Vanegas (CSL) para administrar la cartera
+> (docs/exito-del-cliente-cartera-plan.md). Elías pidió cuatro datos por cuenta —tipo de relación, potencial, CSE
+> responsable y momento—, que Nexus los proponga con lo que sabe y que Alex los confirme o los cambie; y que, cuando
+> la cuenta cambie, Nexus proponga el valor nuevo.
+
+- **Nexus propone con reglas, sin IA** (`lib/cs/clasificacion.ts`, puro, con pruebas), y la propuesta se calcula al
+  leer: si la cuenta cambia, cambia sola. La tabla `ClasificacionDeCuenta` guarda solo lo confirmado (con quién y
+  cuándo) y lo descartado (el valor y la «huella» de la razón que lo propuso). SQL aditivo
+  `scripts/sql/2026-10-07-clasificacion-de-cuenta.sql`, antes del deploy; sin la tabla, la cartera se ve igual con
+  las propuestas y confirmar responde 503. Los valores son texto, no enum: sumar uno no pide `ALTER TYPE`.
+- **Los valores**, con los que sumé a los de Elías:
+  - Tipo de relación: proyecto en curso · servicio recurrente · **solo licencias** (gestionamos sus licencias sin un
+    servicio de Smarteam) · sin servicio activo · excliente (nada activo hace más de un año). Con proyecto y servicio
+    recurrente a la vez manda «servicio recurrente»: el proyecto lo dice el momento.
+  - Potencial: alto · medio · bajo · **sin estimar** (no es lo mismo que bajo). Sale del TAM de Ventas; sin TAM, de las
+    oportunidades que ve Nexus y de lo que paga en licencias. ⚠ Los cortes (`CORTES_DE_POTENCIAL`) son un supuesto a
+    calibrar con Alex. Sin TAM ni licencias activas, «sin estimar»: Nexus no inventa el potencial de un cliente dormido.
+  - Momento: **arranque** (antes del kickoff) · implementación · adopción · recurrente · renovación cercana (90 días) ·
+    **expansión** (preventa abierta) · **salida** (cancelación registrada) · **sin actividad**.
+  - CSE: el de HubSpot. No se propone: se cambia con el pase de cuenta (entrega 5).
+- **La etapa de HubSpot manda sobre la que infiere Nexus** para el momento y la relación (`etapaDeNexusPorNombre`, la
+  misma equivalencia por nombre de la ficha): el equipo la mueve en HubSpot. kölbi tenía un proyecto en «Continuidad» y
+  otro en «Adopción» y Nexus los leía como implementación.
+- **La propuesta se ve una vez y en su celda**: sin nada confirmado, en azul con la chispa; elegirla la confirma, y
+  confirmar le quita el azul (no la pinta de verde ni la mueve). Con algo confirmado y una propuesta distinta, lo
+  confirmado queda y debajo va «Nexus propone: X · Usar · ✕». El porqué, al pasar el mouse. `CeldaSelect` ganó la
+  forma `sugerencia` para esto.
+- **Lo descartado no vuelve hasta que cambie la razón** (la huella: los proyectos, la fecha de renovación, el TAM…).
+  Confirmar un valor borra el descarte de ese dato.
+- **Pestaña «Cartera»** en el índice: reemplaza al filtro «Toda la cartera» de «A quién llamar». Por defecto las
+  cuentas de la cartera; «Fuera de la cartera» muestra los demás clientes (los dormidos, y alguno con un servicio
+  recurrente en Cobranza sin proyecto ni licencias); «Por confirmar» deja las que tienen una propuesta a la vista.
+  La franja de arriba usa todas las propuestas de las cuentas que se ven en un solo pedido (`POST /api/cs/clasificacion`,
+  una transacción por cuenta). La clasificación también está en el panel de cada cuenta. La confirma la CSL o un super
+  admin (`guardLiderDeCs`), igual que el resto del área.
+- **El universo de la cartera no cambió**: «A quién llamar», las renovaciones y las demás preguntas siguen mirando las
+  93 cuentas con proyecto o suscripción activa. Solo la clasificación y el buscador ven los 168 clientes.
+- Los recorridos del índice (v3) y de la cuenta (v4) lo explican.
+
+## La cartera de la CSL: relación con HubSpot, color más fiel, vistas, Equipo, pase de cuenta y lo que persigue la empresa (2026-10-09)
+
+> Entregas 2 a 6 de docs/exito-del-cliente-cartera-plan.md (pedido de Elías para Alex Vanegas, CSL), más la relación
+> con HubSpot como dato de cada cuenta. Elías, sobre esa relación: «es tan importante que lo entienda Customer Success
+> que hasta deberíamos replantear la interfaz»; y después, «aplícalo, junto con lo que falta del plan».
+
+- **La relación gestionada con HubSpot es un dato de cada cuenta** (`lib/cs/relacion-gestionada.ts`, puro). HubSpot
+  comparte el uso, la activación y las licencias solo de las cuentas que Smarteam GESTIONA, y la relación se sostiene
+  con trabajo: cada cosa que alguien de Smarteam crea o edita en el portal del cliente cuenta 60 días; entrar sin hacer
+  nada no cuenta (knowledge.hubspot.com/partner-tools/earn-managed-mrr-credit). Medido el 2026-10-09: en 34 de las 47
+  gestionadas el vencimiento cae 59 a 61 días después de la última actividad, 20 clientes habían perdido la relación
+  sin que nadie lo notara (la copia de Partner estuvo apagada de julio a octubre) y 7 vencían en un mes. Estados:
+  gestionada · vence en 30 días · vence en 14 días (urgente) · terminada · solo vendida · sin relación · sin Partner.
+  Se ve en la columna «HubSpot» de «Cartera», en el panel del índice (con la regla en palabras), en el panel de cada
+  cuenta (cuándo vence, lo último que hizo Smarteam en su portal y quién, y qué hacer) y en la pestaña Equipo. La copia
+  de Partner guarda además el NOMBRE de quien trabajó por última vez (`nexus_ultimo_activo`).
+- **«Para ti»**: al CSE de la cuenta le llega cuando la relación vence en 14 días o menos, o terminó hace un mes o menos
+  y la cuenta sigue activa (`pideTrabajoEnElPortal`); a quien lidera Customer Success, todas juntas. Ninguna escribe
+  nada: es un pendiente que se va solo cuando alguien trabaja en el portal.
+- **Bug de la copia de Partner arreglado**: un registro que no se emparejaba con ningún cliente (y que no se crea, como
+  «Hub ID: …») hacía `continue` antes de guardarse, así que quedaba congelado para siempre. Ahora se guarda sin cliente.
+
+**Entrega 2 · el color más fiel** (`saludDeLaCuenta` = `saludSegunNexus` + la corrección de una persona):
+- **Quejas y retrasos de reuniones y correos pintan, con la frase literal verificada.** El vigía levanta «Queja del
+  cliente» (`QUEJA`, valor nuevo de `CsAlertCategory`) o un retraso (`TIMELINE_OVERDUE`) con `evidence.cita` =
+  la frase y de dónde (reunión o correo). El runner la busca TAL CUAL en la transcripción o la minuta de esa reunión
+  (por el chokepoint de pertenencia: una reunión de otro cliente no verifica nada; una de puertas adentro tampoco) o en
+  el correo, y solo verificada pinta: amarillo; rojo si es grave o la cuenta renueva en 90 días o menos. Las demás
+  alertas del vigía siguen sin pintar (regla del 2026-10-07). La guía va en el MENSAJE (`GUIA_DE_CRUCES`): sin
+  re-sembrar el prompt. Una frase verificada nueva cuenta como evidencia nueva para que la alerta vuelva.
+  ⚠ **Enmendado el 2026-10-09** (memoria de la cuenta, etapa 6): la QUEJA verificada también la levanta la lectura
+  de cada reunión, como un detector más, con la misma verificación (cliente hablando, cita tal cual en la reunión,
+  nunca una reunión de puertas adentro) y la misma `evidence.cita`, así pinta igual. El riesgo no: va como evidencia
+  al vigía, que juzga la cuenta entera y decide. Una sola alerta por cita: si el vigía y la lectura ven la misma, no
+  se duplica. Ver «Un solo sistema de alertas, con tres detectores».
+- **Correos**: el vigía lee los del cliente con la empresa en HubSpot (`correosDeLaEmpresa`, solo los que escribe alguien
+  de afuera, 6 semanas, 8 como mucho). Sin el permiso de correos llegan tapados: el vigía mira solo reuniones y «De
+  dónde salen los datos» lo dice («sin permiso de HubSpot: solo reuniones»).
+- **El motivo de bloqueo cuenta aunque el estado no diga bloqueado** (amarillo, con su porqué).
+- **Corregir el color** (CSL y super admin, `guardLiderDeCs`): color + razón corta. Vale 30 días o hasta que Nexus vea
+  una razón ROJA que no veía al corregir (se guardan las razones rojas de ese momento); al dejar de valer, a quien la
+  puso le llega en «Para ti». El color de Nexus se ve al lado («Nexus diría…»). Se ve en «Cartera», en el panel de la
+  cuenta y en la cabecera de la ficha del cliente, donde lo ve también el CSE (que no la hace).
+- **«En espera del cliente»**: un estado propio (⏸, gris pizarra), con la nota de qué se espera; no cuenta como riesgo.
+  Nexus lo PROPONE cuando un proyecto activo dice «Atraso por cliente», «Cliente no responde» o «Cliente pidió pausa»;
+  lo marca o lo quita la CSL. Marcado, el freno del cliente deja de pintar; si además hay algo rojo que no es ese freno
+  («Atraso por Smarteam», una queja grave, una cancelación), gana el rojo y dice «y en espera del cliente».
+- **`CorreccionDeSalud` es append-only**: cada cambio es una fila (corregir, quitar, en espera, quitar, descartar la
+  propuesta) y el estado es el último evento de cada clase (`ajustesDesdeEventos`). Así queda quién hizo qué y cuándo.
+  `tipo` es texto con CHECK, no enum.
+
+**Entrega 3 · filtros y vistas**: color, relación con HubSpot, tipo de relación, momento, potencial, CSE (y «Sin CSE»),
+renovación y sin contacto, con varios valores a la vez (`lib/cs/filtros-de-cartera.ts`). Viven en la dirección: una
+vista es un enlace. Cinco vistas de arranque (en el código, no se guardan) y las guardadas en `VistaDeCartera`,
+compartidas entre la CSL y dirección; solo quien la creó la borra.
+- **El filtro por CSE mira al CSE de la cuenta** (quien lleva más proyectos en ella), el mismo que cuenta la pestaña
+  Equipo: así cada número de Equipo deja la lista con ese mismo número.
+
+**Entrega 4 · Equipo**: por CSE, sus cuentas, las recurrentes contra la meta (6 a 7, `ConfigCarga.metaRecurrentes`,
+editable en los supuestos de la carga), en riesgo, en espera, sin contacto, la relación con HubSpot por vencer, el uso,
+los atrasos y bloqueos y su 1:1 en la carga. Cada número abre esas cuentas en «Cartera». ⚠ «Alto potencial sin
+servicio» no va por CSE: una cuenta sin proyecto activo no tiene CSE en Nexus; está como vista de la cartera.
+
+**Entrega 5 · el pase de cuenta y «CSE Encargado»** (decisión de Elías: migrar):
+- **El espejo lee primero «CSE Encargado» (`cse_encargado`) y, si está vacío, «CSL Encargado» (`csl_encargado`)**
+  (`encargadoDelProyecto`, lib/hubspot/encargados.ts). Hasta hoy `csl_encargado` guardaba al CSE. Con esa lectura, la
+  migración no le cambia a nadie las cuentas que ve, en ningún orden.
+- **El pase** (la celda «CSE encargado», en «Cartera», en el panel de la cuenta y en el listado de clientes): escribe
+  `cse_encargado` = el CSE y `csl_encargado` = la CSL (el rol en Nexus, no un correo en el código; las cuentas de
+  prueba no cuentan) en los proyectos de implementación, en la EMPRESA y en sus CONTACTOS. Desarrollo y Sitios web no
+  se tocan. Al CSE nuevo le llega en «Para ti» el resumen de la cuenta (`resumenDelPase`: color y porqué, relación,
+  momento, renovación, alertas, último contacto, en espera, HubSpot y proyectos); al anterior, una línea.
+- **`scripts/migrar-cse-encargado.ts`** (en seco por defecto; escribe solo en HubSpot): copia CSL → CSE en los proyectos
+  de implementación, pone a la CSL en «CSL Encargado» y escribe los dos en las empresas y sus contactos. Antes de
+  escribir verifica que el encargado que lee el espejo de cada proyecto no cambie; si alguno cambiaría, no escribe
+  nada. En seco el 2026-10-09: 75 proyectos, 64 empresas, 775 contactos, ninguno cambia de encargado.
+  ⚠ Antes de correrlo: el deploy que lee «CSE Encargado» en producción, y revisar en HubSpot si algún workflow,
+  reporte o vista usa «CSL Encargado» de los proyectos (después dice la CSL).
+  ⚠ Después, un proyecto nuevo con «CSE Encargado» vacío y «CSL Encargado» = la CSL queda a nombre de la CSL: el
+  equipo tiene que llenar «CSE Encargado» al crear proyectos en HubSpot.
+
+**Entrega 6 · lo que persigue la empresa**:
+- **Lo que alguien cambia en HubSpot vuelve como propuesta** (retos estratégicos y dolor principal,
+  `lib/clients/ficha-desde-hubspot.ts`): si el valor de la empresa no es el que escribió Nexus, se propone en
+  Información del cliente (nunca se pisa lo confirmado), al abrirla y como mucho cada 10 minutos por cliente. Se
+  propone UNA vez: descartado, no vuelve hasta que HubSpot cambie de nuevo (`FichaGuardada.hubspotVisto`).
+  «Resultados que persigue» no vuelve: sale de los resultados medibles confirmados de cada proyecto.
+- **La preventa también lleva a la ficha lo que sabe.** ⚠ Desde la etapa 3 de la memoria (2026-10-10) va por su propia
+  puerta, sin IA (`proponerALaFichaSinIA` con lib/exploraciones/a-la-ficha.ts, origen «Preventa»): al preparar y al
+  confirmar una casilla en el lienzo, con las metas dentro de los retos y lo interno marcado. La exploración del proyecto
+  sigue por `proponerFichaDesdeLoAveriguado`. Ver «La memoria de la cuenta y del proyecto: un solo cargador». En los dos
+  casos, recién al confirmar la ficha se escribe en la empresa de HubSpot.
+- **En la cuenta de Éxito del cliente**, la pestaña Resultados abre con «Lo que persigue la empresa» (lo confirmado, con
+  quién y cuándo, y si hay una propuesta sin revisar) y Estado de la cuenta lo dice en una línea.
+
+**SQL, antes del deploy**: `scripts/sql/2026-10-09-cartera-de-la-csl.sql` (las dos tablas, con RLS) y
+`scripts/sql/2026-10-09-queja-del-cliente.sql` (el valor `QUEJA`). Sin ellos, `/api/health` responde 503 y el deploy se
+revierte. Sin las tablas, el código se ve con el color de Nexus y sin vistas guardadas, y guardar responde 503.
 
 ## Planilla al día y «Usar el monto de la factura» (2026-10-06)
 
@@ -5352,12 +5589,10 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
 > Pedido de Elías: medir la carga de cada CSE para la 1:1 semanal de Alex Vanegas (CSL), y para Marco Salas y él, el
 > margen real de cada cuenta y cuándo contratar. Diseño aprobado en el artefacto «Rentabilidad» (versiones 8 a 10).
 
-- **Dos pantallas, y el dinero en una sola.** «Carga del equipo» es de HORAS y no muestra un monto. «Rentabilidad» usa
-  la planilla del período SUMADA para el costo de la hora y nunca muestra el costo de una persona. Las dos viven en
-  Éxito del cliente y son de la CSL y de dirección, por rol (`esLiderDeCs`; decisión de Elías del mismo día: la
-  primera versión dejaba Rentabilidad solo a dirección, en Finanzas). Dirección la tiene también en Finanzas › Reportes.
-  ⚠ Con eso la CSL ve el total de la planilla del período (sale de multiplicar el costo de una hora pagada por las
-  horas pagadas), como ADMIN ya ve el total en Gastos del mes. Lo que cobra cada persona sigue siendo solo de dirección.
+- ~~**Dos pantallas, y el dinero en una sola.** … Las dos viven en Éxito del cliente y son de la CSL y de dirección …
+  nunca muestra el costo de una persona.~~ **Superado el 2026-10-07** (ver «Rentabilidad es de dirección y la carga lee
+  lo respondido»): Rentabilidad volvió a ser solo de dirección y muestra el costo de la hora de cada persona. Sigue en
+  pie que «Carga del equipo» es de HORAS, sin un monto, y es de la CSL y dirección.
 - **La carga es tiempo AGENDADO más lo que pide el cronograma, y lo dice.** Reuniones de Calendar (inicio y duración
   del evento; cuenta a todos los invitados hasta leer la asistencia de Meet), preparación por reunión con un cliente
   y la entrega estimada: tareas del cronograma × horas por tipo de fase × factor de complejidad de la cuenta. Una
@@ -5386,7 +5621,7 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   la tasa de cada mes (`convertir`); lo que no tiene tasa no se adivina, se avisa.
 - **Lo que no se construyó todavía, a propósito**: la lectura de la IA arriba de cada pantalla (pide un agente con su
   corrida y su costo), la complejidad en la pestaña de la cuenta, «Tu semana», la asistencia de Meet, las horas por
-  tarea y por caso de uso, y leer en la carga las respuestas de «¿cuánto te tomó?» (ver esa sección).
+  tarea y por caso de uso. (Leer en la carga las respuestas de «¿cuánto te tomó?» se hizo el 2026-10-07.)
 
 ## «¿Cuánto te tomó?»: un módulo propio que Feedback configura (2026-10-05)
 
@@ -5406,7 +5641,8 @@ Design), con la pestaña rehecha para mostrar primero si ya alcanza para calibra
 - **Nacen pausadas.** Sin fila, un momento está apagado con su configuración por defecto; la fila nace la primera vez
   que dirección la guarda o la activa. Así nadie del equipo recibe una pregunta antes de que se le cuente para qué es.
 - **Pregunta quien marca o publica, y «No lo hice yo» existe por eso**: no siempre es quien hizo el trabajo. No cuenta
-  como respuesta ni como omisión en contra de nadie.
+  como respuesta ni como omisión en contra de nadie. Desde el 2026-10-07 pregunta «¿Quién la hizo?» y le pasa la
+  pregunta a esa persona (ver la sección siguiente).
 - **Muestreo determinista** (huella de la clave: desmarcar y volver a marcar cae igual). Por defecto, todas hasta tener
   20 respuestas por tipo de fase y después 1 de cada 3, hasta 3 por día. Un avance de la IA aplicado de golpe pregunta
   por hasta tres, una por tipo, primero los tipos con menos respuestas: una persona llegó a marcar 94 en un día.
@@ -5417,9 +5653,9 @@ Design), con la pestaña rehecha para mostrar primero si ya alcanza para calibra
   pendiente con su plazo de tres días pasado, así que no hace falta un job.
 - **Lo que supone la carga se ve después de responder** por defecto: al lado empuja a elegir ese número y la respuesta
   deja de servir para corregirlo. Se cambia por pregunta («Al lado» o «No mostrarla»).
-- **Los supuestos son los del diseño** (Configuración 2 h, Planificación 1,5 h…, `SUPUESTO_MINUTOS`). Lo que va a leer la
-  carga es `tiemposAnotados({ desde, hasta })` (solo lo respondido), y con 20 respuestas de un tipo la mediana
-  reemplaza el supuesto (`minutosDeLaCarga`).
+- ~~**Los supuestos son los del diseño** (`SUPUESTO_MINUTOS`) … con 20 respuestas de un tipo la mediana reemplaza el
+  supuesto (`minutosDeLaCarga`).~~ **Superado el 2026-10-07**: la copia de los supuestos se borró (salen de
+  `lib/carga/config.ts`) y nada reemplaza solo un número: la calibración lo PROPONE y la CSL o dirección lo confirma.
 - **Nunca por persona en pantalla**: Feedback › Encuestas cuenta por tipo de fase y por documento, y el CSV lleva el rol y
   no el nombre. La lectura para la carga sí trae el correo, porque la carga es por persona.
 - **En «Para ti» es un pendiente agrupado que se contesta ahí mismo**, nunca un aviso: no es algo que pasó, es algo que
@@ -5428,6 +5664,56 @@ Design), con la pestaña rehecha para mostrar primero si ya alcanza para calibra
   del documento como en el diseño: los documentos se publican desde el pop-up «Acceso», que se cierra enseguida.
 - **Lo que no se hizo**: «Tu semana» (espera su pantalla) y el detalle de cada pregunta (motivos por semana, últimas
   respuestas: el CSV lo cubre mientras tanto).
+
+## Rentabilidad es de dirección y la carga lee lo respondido (2026-10-07)
+
+> Elías contestó el plan de la carga y la rentabilidad y se rediseñó en el lienzo «Rentabilidad · diseño» (página «Rediseño
+> del 7 oct», 9 tableros). El plan de aplicación, con lo que quedó fuera, está en `docs/rentabilidad-y-carga-plan.md`.
+
+- **Rentabilidad es solo de dirección (SUPER_ADMIN)** (`veRentabilidad`, lib/rentabilidad/acceso.ts). Revierte lo del
+  2026-10-06: muestra el costo de la hora de cada persona, sacado de la planilla. La CSL se queda con Carga del equipo y
+  «Ajustar el cálculo» (horas, sin montos). Un CSE o la CSL que entra a Rentabilidad va a «Tu carga». Lo vigila
+  `lib/rentabilidad/acceso.test.ts`.
+- **«Tu carga» es una ruta propia, `/tu-carga`**, en el menú para CSE y CSL (gate `soloRoles`: por ROL y sin el pase de
+  dirección). Dirección la abre como la cuarta pestaña de Rentabilidad. La persona sale de la SESIÓN: la página no lee
+  la dirección ni la búsqueda, y la pantalla recibe solo lo suyo (`cargarTuCarga` recorta en el servidor). No cuelga de
+  `/customer-success` porque el menú iluminaría «Éxito del cliente», que el CSE no tiene.
+- **Orden alfabético, sin ranking**, en todas las listas de personas; la CSL va aparte. Las horas libres no nombran a
+  nadie.
+- **El costo de la hora, de tres maneras** (`ModoDeCosto`, lib/rentabilidad/margen.ts): por persona (la de entrada:
+  cada hora al costo de quien la hizo), por equipo (al promedio de su equipo) y cargado (la planilla entera ÷ las horas
+  con clientes). Quien no tiene planilla ni salario en el período va al costo de una hora pagada promedio, y se avisa.
+  Nunca se muestra el salario mensual de nadie: solo su costo por hora.
+- **Cada cobro, factura y quincena en colones se convierte con el tipo de cambio de SU DÍA** (`tasaDelDia`, hasta una
+  semana atrás); sin el del día, con el del mes. Lo que no tiene ninguna no se adivina.
+- **Lo respondido manda en la entrega** (lib/carga/entrega.ts): si quien hizo la tarea anotó cuánto le tomó, eso
+  reemplaza al estimado y va a esa persona (puede no ser el dueño del proyecto). Cada número dice de dónde sale: del
+  calendario (lo agendado, hasta tener la asistencia de Meet), respondido o estimado. «Con dato real» = calendario +
+  respondido.
+- **12 tareas clave, reconocidas por el título** (lib/tiempos/familias.ts): integración, pipeline, migración,
+  automatizaciones… Una tarea cae en UNA sola (la primera de la lista que calza: la actividad gana al objeto). Se
+  preguntan siempre, sin muestreo, y van primero en el tope del día. Tienen sus propias horas en los supuestos
+  (`horasPorFamilia`, vacío de fábrica: sin número propio cuenta como su tipo de fase).
+- **La encuesta de arranque** (momento `ARRANQUE`, texto: sin SQL): se manda una vez desde Feedback › Encuestas, una
+  pregunta por tarea clave a cada CSE y CSL («¿Cuánto te toma normalmente…?»), vence en 14 días. *Por qué:* una tarea
+  clave se termina pocas veces al mes en toda la cartera; si solo se pregunta al terminarla, juntar respuestas lleva más
+  de un año. Da un primer número en una semana.
+- **La calibración PROPONE, una persona confirma** (lib/carga/calibracion.ts; «Ajustar el cálculo» › Calibración): por
+  tipo de fase con 20 respuestas, comparando cada una con lo que suponía la carga para ESA tarea (con su parte y el
+  factor de su cuenta); por tarea clave con 3 del arranque o 10 al terminarla; por variable del factor con 5 cuentas
+  que la tienen y 5 que no. «Usar» guarda una fila nueva de `ConfigCarga` con el porqué; «Descartar» lo recuerda con su
+  número y no vuelve hasta que el número cambie.
+- **Lo que suponía la carga se guarda con la respuesta**, ya con la parte de Smarteam y el factor de la cuenta
+  (`PreguntaDeTiempo.estimadoMinutos`), y la pregunta lo dice («La carga suponía 4 h 18: 2 h × factor 2,15»). Sin
+  columna nueva.
+- **«No lo hice yo» pregunta quién la hizo** y le pasa la pregunta a esa persona (clave `<clave>:<correo>`, tres días
+  para contestar): el tiempo lo dice quien lo sabe.
+- **La decisión de contratar queda escrita** (`DecisionFinanzas`, clave `contratacion-AAAA-MM`, una por mes): dirección
+  confirma o descarta la propuesta de Nexus, con su motivo (obligatorio para descartar). Sin tabla nueva.
+- **La foto del mes NO se construyó todavía.** Pide una tabla nueva (`FotoMargenCuenta`) y, al aplicarlo,
+  `prisma/schema.prisma` tenía cambios sin subir de otras sesiones: con el modelo adentro, su deploy se revertiría
+  por la salud del esquema. Mientras tanto, el mes a mes de una cuenta se calcula en vivo y lo dice.
+- **Sin «Lectura del agente»** arriba de cada pantalla: pide un agente con su corrida y su costo (fase 5).
 
 ## Las sesiones de la preventa se encadenan: antes, durante y después (2026-10-07)
 
@@ -5503,12 +5789,15 @@ con los que se inició la exploración se puedan rellenar de forma retroactiva»
   leyó, mientras se vende (la misma puerta que la lectura automática: prospecto, seis meses, sin proyecto) y si
   quedó una reunión de Meet con conversación, algo sumado a mano o una reunión de HubSpot que ya ocurrió. Es una
   sola lectura (las dos reuniones de Meet más recientes); lo demás queda «sin leer», con su botón. Cuesta una
-  lectura más, unos US$0,20–0,35 con la guía.
+  lectura más, unos US$0,20–0,35 con la guía. ⚠ Desde la etapa A de la memoria de la cuenta, mira solo las reuniones
+  que son sesiones (las unidas o, en un prospecto, las que entran solas).
 - **Una reunión de HubSpot que el agente leyó aparece en Exploración**, aunque no haya estado en la agenda
   (`reunionesLeidasDeHubspot`, desde su lectura, que ahora guarda la fecha y el título). La del 28 sep de
   CreditForce, la primera de verdad, solo existe en HubSpot (Meet no tiene su transcripción) y no se veía: la
   «Sesión 1» era la llamada de 6 minutos. Si la misma reunión también está en Meet con su transcripción, cuenta
-  una vez, y lo respondido se junta de las dos (`juntarCobertura`).
+  una vez, y lo respondido se junta de las dos (`juntarCobertura`). ⚠ Desde la etapa A de la memoria de la cuenta,
+  en un cliente o un proyecto una reunión leída que no está en una sesión aparece en «Fuera de la exploración» y se
+  vuelve sesión con un clic.
 - **Lo de antes se pone al día con un script** (`scripts/leer-reuniones-de-preventas.ts`, en seco por defecto,
   lo corre Elías con `--apply`). Lee lo que nunca se leyó: la lectura de siempre, de a dos reuniones, hasta 4
   vueltas. De lo leído antes del rediseño arma SOLO el resumen (`resumirLoYaLeido`): no propone nada, no marca
@@ -5538,14 +5827,19 @@ las columnas de la sugerencia (`Project.etapaPropuesta*`), sin quien sugiriera n
   presentamos») no cuenta, y la frase tiene que aparecer TAL CUAL en la reunión o la sugerencia se cae (la regla de la
   preventa para un nivel de la escala). No mira reuniones de más de 21 días, ni proyectos cerrados, ni la etapa en
   Bloqueado o Continuidad: desde ahí salir no se lee de una reunión. ⛔ No lee el avance del cronograma (la
-  circularidad de `etapa-hubspot.ts`).
+  circularidad de `etapa-hubspot.ts`). ⚠ Desde la etapa 6 de la memoria de la cuenta corre solo cuando la lectura de
+  la reunión deja una señal de etapa, sobre esa señal y su cita, para cada proyecto vinculado: ya no vuelve a leer
+  la reunión (ver «Hechos, enrutador y novedades»).
 - **La sugerencia se guarda en las columnas de 2026-08-16, sin SQL nuevo.** La cita y la reunión van como JSON con
   versión dentro de `etapaPropuestaMotivo` (TEXT): una columna nueva era DDL coordinado entre las dos PCs por dos datos
   que solo lee la encuesta. Un texto plano se sigue leyendo como motivo.
 - **Una sugerencia se apaga sola si alguien ya movió la tarjeta** a esa etapa o más allá (`sugerenciaVigente`, al
   leer, sin escribir), y una nueva reemplaza a la que hay solo si va MÁS LEJOS. Responder la encuesta (mover a la
   sugerida, a otra, o «Sigue en …») la borra: `cerrarSugerenciaDeEtapa`, fuera de la ruta, porque `estado-hubspot` tiene
-  prohibido escribir en `Project` (`lib/projects/estado-a-hubspot.test.ts`).
+  prohibido escribir en `Project` (`lib/projects/estado-a-hubspot.test.ts`). ⚠ Desde la etapa 1 de la memoria de
+  la cuenta (2026-10-09), la pregunta también vence: a los 30 días deja de pedirse en «Para ti» y la tarjeta de la
+  reunión la muestra con «Venció sin revisar»; responderla después sigue valiendo. Quién la respondió no se guarda
+  todavía (`cerrarSugerenciaDeEtapa` la borra sin rastro), y «Uso de Nexus» lo dice así.
 - **En el «Qué sigue» del proyecto va después de las reuniones sin revisar** y antes del documento de la etapa: el
   documento «de la etapa» depende de que la etapa sea la verdadera.
 - **Cuesta una llamada a Haiku por reunión** de un proyecto con tablero conocido, registro en HubSpot y alguna etapa a
@@ -5584,7 +5878,12 @@ ejemplo de Conexión con el cliente ya conectado, las pestañas internas chicas,
   (`session-candidates/calendario?para=`), con el guard de la puerta de cada documento: el cronograma sigue con
   `cronograma.write` y sin el del handoff. Se retiró `timeline/calendario`. Las reglas de qué se ofrece no
   cambiaron: sin buscar, solo las que ya tienen cliente; las de otro cliente se marcan, no se esconden.
-- **La preventa suma cualquier reunión de Meet** («Buscar una reunión de Meet», de la empresa o de tu calendario).
+- **SUPERSEDED 2026-10-09 (memoria de la cuenta, etapa A):** una reunión con solo notas de Gemini también se puede
+  agregar y se lee (queda marcada en `propuesta.leidas.soloNotas` y se vuelve a leer cuando llega la transcripción).
+  Se agrega como sesión, con «+ Agregar sesión», no a una lista aparte: `contenido.reunionesElegidas` queda
+  DEPRECATED (en un prospecto cuenta como unida a una sesión; en un cliente va a «Fuera de la exploración»). Ver «La
+  exploración son sus sesiones».
+  **La preventa suma cualquier reunión de Meet** («Buscar una reunión de Meet», de la empresa o de tu calendario).
   Una de la empresa entra; una sin cliente se adopta con la misma regla de los proyectos
   (`prepararReunionParaElCliente`); una de otro cliente se rechaza; sin transcripción no se suma (no hay qué leer).
   Queda en `contenido.reunionesElegidas` (sin SQL) y se lista y se lee aunque sea de antes del alta, por el
@@ -5640,8 +5939,17 @@ había un solo bloque para todas sus piezas.
   uso, los casos (`instrucciones:<pieza>` en `contenido.notas`, `bloqueDeInstrucciones(notas, pieza)`). Las
   reuniones y las fuentes manuales siguen siendo de la empresa y se ven en todas: son la misma conversación.
   Resumen, La escala y Propuesta no tienen agente propio y dicen dónde escribirlas. No había instrucciones
-  guardadas en producción (medido): nada que migrar.
-- **En los proyectos, cada documento con IA tiene su «Contexto adicional» completo** (Elías eligió «sí,
+  guardadas en producción (medido): nada que migrar. ⚠ **Corregido el 2026-10-09** (memoria de la cuenta, etapas
+  0 y A): las reuniones y las fuentes ya no «se ven en todas». Se ven solo donde un agente las lee (Preparación y
+  Exploración; en la Exploración, dentro de su página de inicio y sin lista de reuniones); Casos de uso muestra solo
+  sus instrucciones; Resumen, La escala y Propuesta no tienen el bloque. Las instrucciones siguen siendo de cada pieza.
+- **SUPERSEDED 2026-10-09 (memoria de la cuenta, etapas A y 7):** la exploración sale de los destinos sugeridos (etapa
+  A): lee solo la reunión de cada sesión y no lee `explorationOverride`, que queda DEPRECATED sin DROP. Los otros seis
+  documentos (kickoff, diagnóstico, planificación, ejecución, integraciones y entrega) pasan a leer la memoria del
+  proyecto más SOLO las reuniones elegidas (etapa 7); lo que hacía el modo sugerido lo hacen sugerencias calculadas, que
+  nunca escriben `true` solas. «Arrancan SUGERIDOS» deja de valer. Ver «La exploración son sus sesiones» y «Los
+  documentos leen la memoria y solo las reuniones elegidas».
+  **En los proyectos, cada documento con IA tiene su «Contexto adicional» completo** (Elías eligió «sí,
   todo»): el kickoff, la exploración, integraciones y la entrega suman el bloque de reuniones, notas e
   instrucciones que ya tenían el diagnóstico, la planificación y la ejecución (`DocumentoContextSection`,
   arriba del documento). Arrancan SUGERIDOS, como el diagnóstico: entra toda reunión del proyecto con el
@@ -5664,7 +5972,9 @@ había un solo bloque para todas sus piezas.
   La cifra «Reuniones de trabajo» que ve el cliente no cambia: sigue saliendo de la membresía del proyecto.
 - **La exploración**: al preparar las sesiones, la guía lee además las reuniones y las notas de su bloque; al
   leer, la reunión sale del mismo bloque (las del cliente que nadie sacó, más las agregadas). Antes leía
-  cualquier reunión del proyecto, también las internas.
+  cualquier reunión del proyecto, también las internas. ⚠ Desde la etapa A de la memoria de la cuenta, la exploración
+  no tiene bloque de reuniones: lee solo la reunión de cada una de sus sesiones (ver «La exploración son sus
+  sesiones»).
 - **Una sola lista de reuniones para todo «Contexto adicional»** (2026-10-09, diseño «Contexto adicional ·
   Reuniones»): la propuesta, el handoff, el cronograma, los documentos del proyecto y la preventa usan la misma
   (`components/contexto/ListaDeReuniones`): casillas con «Elegir todas», «Quitar las N», X por fila y «Deshacer»
@@ -5672,7 +5982,232 @@ había un solo bloque para todas sus piezas.
   pantalla tenía su versión y ya decían cosas distintas sobre lo mismo. Las puertas de los proyectos aceptan
   varias reuniones en UNA transacción: si una no pasa, no se escribe ninguna y el error dice cuál. *Las excluidas
   quedan plegadas* («Excluidas (N)», cerrado): lo que lee el agente es la lista de arriba, y a la vista
-  competían con ella; se abren para devolver una con «Volver a incluir».
+  competían con ella; se abren para devolver una con «Volver a incluir». ⚠ Desde la etapa 7 de la memoria de la
+  cuenta, en los documentos del proyecto no hay excluidas ni «deshacer vuelve a sugerida»: se comportan como el
+  cronograma, y las sugerencias van arriba, aparte (ver «Los documentos leen la memoria y solo las reuniones elegidas»).
+
+## La exploración del proyecto es la de la preventa, y los adjuntos son de la empresa (2026-10-07)
+
+**Contexto.** Elías: «copia todo el módulo de exploración de las preventas y aplícalo a los proyectos… la
+única diferencia deberían ser las preguntas: Customer Success debería hacer más preguntas sobre la escala y
+sobre estrategia: los retos que el cliente tiene, los resultados que persigue y los obstáculos que los
+impiden». Además, un solo botón en todo «Contexto adicional», y que los archivos que se suben ahí (preventa
+o proyecto) queden en Información del cliente › Documentos, a nivel de empresa.
+
+- **La exploración de un proyecto es una fila de `ExploracionDeVenta`** con `projectId` y `marco = "cs"`:
+  el mismo lienzo, las mismas sesiones (Preparación, En vivo, Análisis), la misma guía y el mismo agente.
+  Copiar los componentes habría hecho divergir el formato a la primera mejora. Lo que cambia por marco vive
+  en un solo lugar (`lib/exploraciones/marco.ts`): las tarjetas, sus nombres, sus preguntas de base, cuántas
+  dimensiones pregunta una sesión y si hay objeciones. SQL aditivo: `2026-10-07-exploracion-del-proyecto.sql`.
+- **Customer Success explora la estrategia y la escala.** Tres tarjetas —Retos, Resultados que persigue
+  (la casilla `metas`, en cifras) y Obstáculos (casilla nueva `obstaculos`)— y hasta 5 dimensiones sin
+  evidencia por sesión (la venta, 4). Sin objeciones, sin presupuesto ni quién firma: el cliente ya compró.
+- **El agente del proyecto lee lo del proyecto, no HubSpot**: el handoff (V0) y los cuestionarios (Q0)
+  cuentan como lo que dijo el cliente; el kickoff (K0), la ficha (F0) y lo que estimó la preventa (P0), no.
+  Las reuniones salen por el chokepoint (las del proyecto que alimentan su exploración y las elegidas a
+  mano). Solo lee sesiones y arma la guía: no se prepara ni propone casos de uso. No lee solo las reuniones
+  nuevas (la lectura automática es de la preventa). ⚠ **SUPERSEDED en lo de las reuniones, 2026-10-09** (memoria
+  de la cuenta, etapa A): lee solo la reunión de cada sesión, siempre por el chokepoint, y lee sola la que se unió
+  a una sesión de forma explícita (elegida o por su evento del calendario) cuando llega su transcripción. Ver «La
+  exploración son sus sesiones».
+- **Una exploración de proyecto no es una preventa.** Toda lectura de Ventas filtra `DE_LA_PREVENTA`
+  (`projectId: null`): el listado, «Para ti», el acceso a un prospecto, la propuesta, el handoff, las
+  métricas y los scripts. El índice «una viva por empresa» pasó a valer solo para la preventa y se sumó
+  «una viva por proyecto». Lo vigila `lib/exploraciones/marco.test.ts`. La página de la preventa redirige
+  una exploración de proyecto a su ficha.
+- **Una sola guarda para las rutas** (`lib/exploraciones/guardia.ts`): una preventa pide `preventa`; la de
+  un proyecto, el acceso al proyecto para leer y la celda de generar la exploración para cambiar algo.
+- **SUPERSEDED 2026-10-09 (memoria de la cuenta, etapa A):** la exploración abre en su página de inicio, con sus
+  sesiones, las fuentes manuales y las instrucciones adentro, sin lista de reuniones y sin el «Contexto adicional» de
+  la preventa arriba. Ver «La exploración son sus sesiones».
+  **En la ficha**: las sesiones cuelgan de la fila «Exploración» del riel (con «Cuestionarios» e «Informe
+  anterior»), el panel de la derecha es el de la preventa con la estrategia, y arriba va el «Contexto
+  adicional» de la preventa. Lo que se confirma de la estrategia va como sugerencia a Información del
+  cliente. Diagnóstico y Planificación leen lo confirmado (sin la libreta del CSE).
+- **La guía vieja** (`GuiaDeExploracion`) se migra con `scripts/migrar-guia-de-exploracion.ts` (en seco
+  por defecto); su interfaz se borró. Sus datos quedan. ⚠ Su uso como respaldo de la exploración en el contexto
+  de los documentos se retira recién después de que se corra esa migración (etapa 0 de la memoria de la cuenta).
+- **Un solo enlace y un solo formulario en todo «Contexto adicional»** (`EnlaceDeContexto`, `SumarFuente`):
+  «+ Buscar una reunión de Meet» y «+ Sumar una sesión o un documento» (pegar el texto o subir un archivo),
+  en el cronograma, los documentos del proyecto, el handoff, la propuesta y la preventa. La columna se
+  llama «Reuniones» en todos.
+- **Los archivos del contexto son de la empresa.** Un archivo subido en cualquier «Contexto adicional»
+  queda como `ClientDocument` con su `origen` (la preventa ya no lo borra) y su texto, como fuente de esa
+  pieza. Documentos lista la empresa entera y dice de dónde vino cada archivo. Un documento con origen no
+  entra al contexto general de los agentes (`/analyze`): ya entra por su pieza, y una minuta de la preventa
+  puede traer precios.
+- **En el Resumen se llama «Contexto del handoff» y vive dentro de la tarjeta del handoff** (excepción a
+  «el mismo nombre en todas las piezas» del 2026-10-06). En las otras piezas «Contexto adicional» funciona
+  porque el bloque está arriba del único documento que lo lee; el Resumen junta el resumen del proyecto, la
+  etapa y el handoff, y solo el agente del handoff lee ese bloque. A todo el ancho, debajo de las dos
+  columnas, se leía como contexto del Resumen (Elías: «es importante que se llame contexto del handoff y que
+  realmente esté en la parte del handoff»). Sus columnas se acomodan al ancho de la tarjeta.
+
+## Seis mejoras en clientes: fecha del diagnóstico, guía, desafío, fuera de alcance, entrega y adopción (2026-10-07)
+
+**Contexto.** Elías pidió seis mejoras en la parte de clientes. Tres preguntas que se contestaron antes de
+construir: el recordatorio de adopción le ABRE Éxito del cliente al CSE de la cuenta; el «resumen del servicio»
+es el resumen del proyecto (ProjectBrief); y lo vendido va como un bloque propio en la guía.
+
+- **El diagnóstico pregunta cuándo se presenta** (`lib/canvas/presentacion-del-diagnostico.ts`, columna
+  `Project.diagnosticoPresentacion`, SQL `2026-10-07-presentacion-del-diagnostico.sql`). Con el diagnóstico
+  generado y en borrador, la encuesta se abre sola una vez por sesión del navegador; «Todavía no sé» también es
+  una respuesta. Como las fechas del cronograma: si una reunión lo dice, Nexus lo propone con la frase tal cual
+  (verificada contra la transcripción), y la persona la usa o la descarta. Dos días antes, la persona confirma
+  que está terminado y reconfirma la fecha (o la cambia): ahí le llega un aviso de «Para ti» al vendedor dueño de
+  la empresa en HubSpot, con el enlace al diagnóstico. Solo un aviso. Cambiarla pide lo mismo que presentarlo.
+  El aviso no se repite para la misma fecha. «Listo» vale para SU fecha: si la fecha se mueve, se vuelve a pedir.
+- **Lo vendido es un tercer bloque de la guía de exploración de un proyecto**, al lado de la estrategia y la
+  escala (`GuiaDeLaSesion.loVendido`): entre 3 y 5 preguntas, una por pieza del alcance, sobre cómo el cliente
+  la va a usar en su negocio. El agente lee el handoff, las etiquetas del proyecto con su lente y los resultados
+  medibles del handoff. El id de cada pregunta sale del tema, así su casilla y su nota sobreviven a rearmar la
+  guía. Solo en el marco de Customer Success: la preventa no tiene nada vendido todavía.
+- **El desafío principal del diagnóstico describe lo que le pasa hoy al cliente y lo que le cuesta, sin la
+  solución adentro** (el brief de `desafio`). «No puede automatizar porque no tiene segmentación» ya trae la
+  respuesta; «le habla igual a todos sus contactos» describe el hecho.
+- **Las solicitudes fuera de alcance se retomaron y se terminaron** (`lib/sessions/solicitudes-fuera-de-alcance.ts`,
+  SQL `2026-10-07-solicitudes-fuera-de-alcance.sql`). El agente las PROPONE al leer cada reunión; el CSE las
+  confirma o las descarta. Al confirmar, aviso al vendedor dueño de la empresa en HubSpot y a quien lleva el
+  frente de Customer Success. Viven en la cuenta («Fuera de alcance», en el riel), con su seguimiento (cotizada,
+  aprobada, no la tomó) y su historial: nadie las lleva en un Excel. El resumen del proyecto las nombra.
+  Corrige lo diseñado («decide el CSL»): lo decide el CSE, que estuvo en la reunión.
+  ⚠ **Enmendado el 2026-10-09** (memoria de la cuenta, etapa 2): un pedido fuera de alcance solo nace en una reunión
+  de un CLIENTE que tiene proyecto principal, comparado contra lo que se vendió en ese proyecto y con su
+  `projectId`. Sin proyecto no se le pide al modelo, y en un prospecto tampoco: no hay nada vendido contra qué
+  comparar. Se sigue en La cuenta porque es una oportunidad de la empresa. Los 10 que había sin proyecto (3 de ellos
+  en prospectos) los ubica o los descarta una persona, con `scripts/revisar-pedidos-fuera-de-alcance.ts` en seco primero.
+- **La entrega muestra el desafío que se resolvió y los objetivos alcanzados**, tomados del diagnóstico
+  (`desafio_resuelto` y `logros` con `lib/delivery/objetivos.ts`). La lista y los títulos de los objetivos los
+  pone el diagnóstico; la IA propone el estado de cada uno (alcanzado, en camino, por medir) y la persona lo
+  acepta. «Alcanzado» sin evidencia baja a «por medir»: la entrega no maquilla.
+- **Recordatorio de revisar la adopción** (`lib/cs/recordatorios-de-adopcion.ts`, job
+  `adopcion-recordatorios-daily`): a los 30 días del inicio, en la semana antes de la entrega y en la primera
+  semana de cada mes en las cuentas recurrentes (tag `recurrente` o la etapa Continuidad). Un aviso de «Para ti»
+  al CSE del proyecto y a quien lleva el frente de Customer Success, que lleva a la pestaña Adopción. Cada
+  momento tiene una ventana de 7 días: no es retroactivo. Sin IA.
+- **El CSE de la cuenta entra a Éxito del cliente, solo a Adopción** (`lib/cs/adopcion-del-cse.ts`). Excepción
+  a «Éxito del cliente es de la CSL y dirección» (2026-10-04), decidida por Elías. Sin el panel, sin las otras
+  pestañas y sin montos: la cuenta se vacía en el servidor antes de llegar a la pantalla. ⚠ Lo que sí ve es el
+  uso de HubSpot Partner (uso, licencias, activación), que el código marcaba como confidencial por los términos
+  de partner (solo CSL y dirección). Si eso no se puede abrir, la salida es quitar la excepción en
+  `app/(shell)/customer-success/[clientId]/page.tsx`; los recordatorios siguen llegando.
+
+## El correo de seguimiento después de una reunión de exploración (2026-10-07)
+
+**Contexto.** Elías: el grabador conectado a HubSpot solo deja un resumen de la reunión. Pidió que Nexus arme
+el correo que se le manda al cliente después: qué entendimos, qué preguntas quedaron abiertas, si quiere una
+sesión extra para profundizar, y la minuta. Vale para la preventa y para la exploración de un proyecto.
+
+- **Va en «Análisis» de cada sesión, después de «Quedó abierto»** (`components/exploraciones/CorreoDeSeguimiento.tsx`).
+  Se arma a pedido, con un botón: nunca solo. Lo revisa, lo cambia y lo manda una persona desde su correo
+  («Copiar el correo» o «Abrir en tu correo»). **Nexus no envía nada.** Lo cambiado se guarda solo.
+- **El agente escribe las partes y el código arma el correo** (`componerElCorreo`): saludo, lo que entendimos,
+  lo que acordamos, los próximos pasos (con quién y para cuándo), las preguntas abiertas, la próxima reunión y
+  la firma de quien lo pidió. Así tiene siempre la misma forma.
+- **Al agente solo le llega lo que el cliente puede leer** (`insumosDelCorreo`, lo vigila
+  `lib/exploraciones/correo-de-seguimiento.test.ts`): lo que se leyó de la reunión, lo que respondió el cliente
+  (de la lectura y de lo anotado en «En vivo») y lo de «Quedó abierto». Sin el presupuesto, quién decide, las
+  objeciones, las hipótesis, los niveles de la escala, las notas libres ni las instrucciones adicionales. La
+  reunión entera sí va (de ahí salen la minuta y lo que entendimos), y por eso el prompt prohíbe precios y lo
+  que el equipo habló sin el cliente, y la pantalla avisa en ámbar si el texto menciona un monto, deja un
+  espacio por completar o tiene voseo. La ruta está en el censo de lectores con su propia puerta
+  (`correo-al-cliente`).
+- **Sin la conversación no hay correo** (pedido de Elías al verlo en CreditForce, 2026-10-08): con una reunión que
+  solo trae la invitación, el agente escribió «No contamos con notas de lo que CreditForce compartió…» como algo
+  que entendimos, en un correo para el cliente. Ahora el agente lo marca (`sinConversacion`), el correo no se
+  arma, el que hubiera se borra y la pantalla dice por qué y que se puede sumar la grabación o la minuta en
+  «Contexto adicional».
+- **Las preguntas abiertas salen solo de «Quedó abierto»**: lo planeado que no se preguntó, lo que el agente vio
+  que se dijo sin explorar en esa reunión y lo que se marcó para llevar a la próxima sesión. Hasta cuatro, las
+  que se pueden contestar por correo. Sin nada abierto, el correo no lleva preguntas aunque el agente escriba
+  alguna.
+- **La próxima reunión la pone el código, no el agente**: la próxima sesión planeada con fecha o, si no hay, la
+  agenda de HubSpot. Si no hay ninguna y en la reunión se acordó una, se confirma esa; si tampoco, ofrece una
+  sesión extra para profundizar y pide dos o tres horarios. Nunca inventa una fecha.
+- **Se guarda en `propuesta.correos`, por reunión** (la misma clave de las lecturas, los últimos 24), sin SQL.
+  Cambiarlo a mano es la operación `correo`: no sube la versión (es de lo que escribe el agente) y no se
+  reintenta sobre un correo que se volvió a armar. «Regenerar» (arriba a la derecha, el botón azul de las
+  tarjetas) lo vuelve a escribir con lo que hay hoy; si se cambió a mano, pide confirmación.
+- **Una corrida propia en el medidor** (`exploracion-correo-de-seguimiento`), aparte de la del agente de la
+  exploración, que la pantalla sigue. Medido con dos reuniones reales (Grupo Monge y Discover Puerto Rico):
+  unos 16.000 tokens de entrada y 1.000 de salida, ~US$0,06 por correo. Si sale en voseo se pide una vez más.
+- **El voseo en prosa se mide distinto que en el código** (`voseoEnProsa`, lib/ui/voseo-formas.ts): la regla por
+  forma también caza «hoteles», «Alajuela» o «wireframe», y en el correo eso era un aviso falso y una segunda
+  llamada en cada corrida. Cuenta «vos», el presente en -ás, -és o -ís en minúscula (sin el futuro) y una lista
+  de imperativos de correo («contame», «avisame», «fijate»).
+- **Lo que suma desde la etapa 3 de la memoria de la cuenta** (2026-10-09): la minuta de esa reunión (acuerdos y
+  decisiones, sin riesgos, y solo si la reunión fue con el cliente), los compromisos de esa reunión sin su cita, y la
+  ficha recortada (`memoriaDeLaCuenta` con el alcance «cliente»), rotulada «para no repreguntar; no lo cites como
+  algo acordado en esta reunión». El correo NUNCA lee Tareas: lo ve el cliente. Los compromisos salen de la lectura
+  de esa reunión, no de las tareas que nacieron de ella. El censo de `insumosDelCorreo` se amplía a propósito, con
+  los centinelas de la ficha interna, la postura de las personas y la preventa. *Por qué:* el correo volvía a sacar
+  «lo que acordamos» de la transcripción cuando la minuta ya lo tenía, y repreguntaba lo que la cuenta ya sabía.
+
+## Las reuniones grabadas con HubSpot entran solas a la preventa (2026-10-07)
+
+**Contexto.** En CreditForce, la primera reunión (28 sep) tiene dos copias: la de Meet, sin transcripción
+(Gemini no tomó notas), y la de HubSpot, que el agente leía pero no aparecía en «Contexto adicional» ni como
+sesión. Elías: «debería ser como reunión de forma automática», como el handoff y la propuesta, que ya muestran
+lo de HubSpot. ⚠ Al leerla, el agente dijo que solo traía la invitación: era lo único que devolvía la API con
+que Nexus lee HubSpot. La grabación de 49 minutos estaba en HubSpot (ver «La grabación de una reunión de HubSpot»,
+abajo).
+
+- **Una reunión de HubSpot que ya se hizo y dejó qué leer es una reunión de la preventa**, aunque nunca haya
+  estado agendada (`reunionesHechasDeHubspot`, lib/exploraciones/lectura.ts): la foto de HubSpot las guarda con
+  la agenda, desde un mes antes del alta y como mucho las 12 más recientes de cada mirada. Antes guardaba solo
+  las agendadas, y una reunión que ya había pasado la primera vez que se miró HubSpot no aparecía nunca. Las que
+  HubSpot dice que no ocurrieron no cuentan; la que también está en Meet CON transcripción cuenta una vez, la de
+  Meet. ⚠ Desde la etapa A de la memoria de la cuenta (2026-10-09) eso vale para un prospecto (entra sola como
+  sesión, salvo que esté en «Fuera de la exploración»); en la preventa de un cliente, una reunión de HubSpot es de
+  la exploración solo si alguien la agrega como sesión.
+- **El lienzo las mira al abrirse** (`mirarReunionesDeHubspot`, lib/exploraciones/reuniones-de-hubspot.ts): las
+  de HubSpot no avisan cuando llegan, las de Meet sí. Como mucho una vez cada media hora por preventa (~15
+  pedidos a HubSpot cada vez), y cada corrida del agente cuenta como mirada. Solo la preventa: la exploración de
+  un proyecto no lee HubSpot. Solo lee HubSpot.
+- **El agente lee solo las nuevas, con las reglas de una de Meet**: mientras se vende, de después del alta y de
+  hace a lo sumo dos semanas, sin persona detrás (cobra contra el presupuesto automático).
+- **«Volver a leer» también para una de HubSpot** que el agente leyó antes de resumir cada reunión: arma su
+  resumen, lo mismo que hace el script de la puesta al día con todas.
+- **En el buscador**, la copia de Meet sin transcripción de una reunión que está en HubSpot dice «Ya está, desde
+  HubSpot» en vez de «No se puede leer».
+- **La grabación de una reunión de HubSpot se lee aparte** (2026-10-08, `lib/hubspot/grabaciones-de-reuniones.ts`).
+  Desde el 31 de agosto de 2026, HubSpot guarda la grabación en la propia reunión: el resumen de IA en
+  `hs_meeting_summary` y el número de la transcripción en `hs_meeting_transcription_id`. La API v1 de engagements,
+  la que usa Nexus, no trae ninguno de los dos: de la reunión del 28 sep de CreditForce llegaba la invitación. Medido
+  ese día contra HubSpot, solo leyendo:
+  - **El resumen sí** se lee con los permisos de siempre (la API v3 de reuniones): 1.784 letras de esa reunión.
+    Entra a la preventa (preparar, leer, la mirada al abrir), al correo de seguimiento y al registro de HubSpot del
+    handoff y de la propuesta. Las señales diarias de Éxito del cliente y el chequeo del handoff no lo piden: solo
+    miran si hay actividad.
+  - **La transcripción completa** pide el permiso `crm.extensions_calling_transcripts.read`, que la app no tiene
+    (HubSpot respondió 403). El código ya la pide: al leer, las 3 reuniones grabadas más recientes; en el correo,
+    la de esa reunión. Sin el permiso sigue con el resumen, y lo negado no se vuelve a pedir por una hora.
+  - **«Volver a leer» lee entera la reunión** (propone y reemplaza lo que el agente dijo de ella), también cuando ya
+    tiene lectura: la que decía «no hubo conversación» se corrige así. Antes solo la resumía y, como la lectura que
+    ya estaba ganaba, no cambiaba nada.
+- **Una reunión cuenta en la preventa desde un mes antes del alta; las de antes, solo en un prospecto y con alguien
+  de Ventas** (2026-10-08, `CorteDeLaPreventa` y `cuentaEnLaPreventa` en lib/exploraciones/lectura.ts; vale para
+  Meet y para HubSpot). «Leer» tomaba toda la actividad de HubSpot sin leer, de cualquier fecha, y cada reunión
+  leída pasaba a ser una sesión: en Cicadex y Grupo Servica, que ya eran clientes, aparecieron 16 y 22 sesiones de
+  agosto de 2023 a agosto de 2026, capacitaciones y kickoffs de proyectos anteriores. En un prospecto, en cambio,
+  lo de antes es la historia de la venta (Polaris empezó con HubSpot en julio y se abrió en octubre), y Elías lo
+  quiso así: «siempre y cuando sean sesiones donde haya participado alguien de ventas». Ventas es lo mismo que en
+  el handoff (`salesPresenceEmails`: área Ventas más la preventa técnica). Quién estuvo se lee de HubSpot: el dueño
+  de la reunión y sus asistentes que son usuarios (`hs_attendee_owner_ids`), pasados a correo con la lista de
+  usuarios (activos y archivados, guardada una hora). Lo demás de antes del corte lo sigue mirando «Preparar»,
+  como contexto y sin marcarlo. Lo que ya se leyó no se borra: deja de listarse como sesión.
+- **SUPERSEDED 2026-10-09 (memoria de la cuenta, etapa A):** en la preventa de un cliente se lee sola SOLO la reunión
+  unida a una de sus sesiones (elegida o por su evento del calendario; la ligada por fecha no cuenta), sin el filtro
+  de Ventas: que la hayan unido a una sesión ya dice que es de la exploración. Ver «La exploración son sus sesiones».
+  **El agente también lee solo en la preventa de una empresa que ya es cliente** (Elías, 2026-10-08: «Sí»; antes,
+  solo en un prospecto). Mismos frenos (seis meses, sin proyecto nuevo de esa venta, reunión de después del alta y
+  de hace a lo sumo dos semanas) y uno más: la reunión tiene que haber tenido a alguien de Ventas. Sin eso, cada
+  reunión de un proyecto en curso de ese cliente dispararía una corrida. La reunión de un cliente sin nadie de
+  Ventas (la lleva un CSE) se lee con el botón.
+- **Si HubSpot no dice quién estuvo, no hay Ventas.** Las de antes del corte no cuentan y la de un cliente no se
+  lee sola: queda como antes de este cambio. No se pudo comprobar en vivo el 2026-10-08 (el token del sistema
+  estaba vencido y no se renueva desde una PC): `scripts/auditar-analisis-de-preventas.ts --hubspot` aplica la
+  misma regla y lo muestra.
 
 ## La escala vive como datos; el `.md` se genera (2026-10-08)
 
@@ -5703,6 +6238,22 @@ etapas: docs/escala/plan-escala-como-datos.md.
 - **Pendiente, antes de un botón «Publicar» en Nexus:** llevar a TypeScript las pruebas 2 y 3 del cálculo y
   aflojar la prueba 7 (hoy cada versión de la escala exige versión nueva de la especificación y del manual).
 
+## Cada sesión de la preventa tiene su título (2026-10-08)
+
+**Contexto.** Elías: «que las sesiones se puedan titular, que tomen el nombre de la sesión de calendar y se les pueda
+cambiar el nombre». Se llamaban «Sesión 1», «Sesión 2»: con siete u ocho, la barra no decía cuál era cuál.
+
+- **El título es el de la reunión, que es el del evento del calendario** (en Meet o en HubSpot), hasta que alguien
+  le pone otro (`tituloDeLaSesion`, lib/exploraciones/guia.ts). Se guarda en `SesionPlaneada.titulo`, el campo que
+  ya existía para «de qué va», sin SQL.
+- **Vacío o igual al del calendario no se guarda** (`tituloAGuardar`): la sesión sigue el nombre de su reunión si
+  cambia. «Sumarla a mis sesiones» ya no copia el nombre: lo toma del calendario.
+- **Se cambia con el lápiz junto al nombre**, en la cabecera de la sesión; Enter guarda y Esc deja el de antes. En
+  una reunión que no estaba en tus sesiones, o en la próxima sin planear, cambiarle el nombre la vuelve sesión.
+- **El número no se pierde**: en la barra va delante del título («2. Revisión del diagnóstico») y en la cabecera,
+  arriba, chico. «Quedó abierto en la sesión N» sigue igual. Con el nombre cambiado, el análisis dice el del
+  calendario.
+
 ## El borrador de la escala se publica desde Nexus (2026-10-08)
 
 **Contexto.** Etapa «El borrador en Nexus» del plan de la escala como datos. Elías decidió que la
@@ -5721,6 +6272,35 @@ especificación y el manual sacan una versión nueva solo cuando cambian ellos.
 - **La fecha de la bitácora se escribe a mano en hora de Costa Rica** (`fechaYHora`): con `toLocaleString`, el
   servidor y el navegador la escribían distinto («p. m.» con otro espacio) y React no hidrataba la pantalla.
 
+## Las metas comerciales y quién vendió, como dato general de Nexus (2026-10-08)
+
+> Para el modelo nuevo de comisiones (Finanzas › Comisiones), la comisión se mueve con la meta del año de cada
+> persona. Elías: las metas ya están en HubSpot («OFICIAL | META 2026 - SMARTEAM»: Andrés US$335.000, Marco
+> US$400.000) y «es importante que a nivel de arquitectura esto se guarde bien para que se pueda consumir desde todo
+> Nexus».
+
+- **Las metas se COPIAN de HubSpot, no se cargan a mano.** `MetaComercial` es un espejo de solo lectura de los
+  «goal targets» (`/crm/v3/objects/goal_targets`, permiso `crm.objects.goals.read`, opcional en la app pública). Una
+  meta trimestral son cuatro filas por persona; el total del año se suma al leer. Lo corre el job
+  `ventas-ganadas-daily`, después de los negocios ganados; si falla, no tumba el job.
+- **Solo cuenta la meta de ventas** (`hs_goal_type = sales_quota`). Medido el 2026-10-08: en el portal conviven
+  «2026 ONFIRE | LLAMADAS PROSPECCIÓN» (llamadas, 51 tramos semanales de Andrés), «Diagnóstico | Leads» y las del
+  Partner Mutual Action Plan. Sumadas, la meta de Andrés daba US$335.505 en vez de 335.000. Se copian todas (son
+  dato), pero `metasPorPersona` suma solo las de ventas. Con eso da exacto lo que muestra HubSpot: Andrés
+  US$184.370 de 335.000 (55 %), Marco US$301.535,67 de 400.000 (75 %).
+- **El avance oficial es el de HubSpot** (`hs_kpi_value`): es el número que el equipo ya ve en HubSpot. Nexus no lo
+  recalcula. Lo vendido según los negocios ganados de Nexus va al lado, como control, y no se mezclan.
+- **Quién vendió vive en `VentaGanada.vendedorId`**, resuelto por el correo del dueño del trato en HubSpot (también
+  de quien ya se fue). El dueño crudo (`hubspotOwnerId`) se guarda aunque no sea nadie de Nexus. Un cambio de dueño
+  actualiza la fila pero no va a la bitácora de la venta: la bitácora es de cuánto vale, no de quién es.
+- **Una sola puerta de lectura**: `lib/ventas/metas.ts` (`metasPorPersona`). Comisiones, «Para ti», la ficha de una
+  persona o un reporte importan de ahí; nadie lee `MetaComercial` por su cuenta.
+- **Nunca se borra**: una meta que HubSpot deja de devolver queda `vigente=false`, y solo si la lectura terminó
+  entera. Sin el permiso, la copia no toca nada.
+- ⚠ **El permiso entra por el código, no por entorno**, porque Elías ya lo declaró «Opcional» en la app pública. La
+  primera vez hay que **reconectar HubSpot** desde Integraciones después del deploy; hasta entonces la copia dice
+  «sin permiso».
+
 ## El editor de la escala: se edita sobre la escala misma (2026-10-08)
 
 **Contexto.** Etapa «El editor» del plan de la escala como datos: cambiar el borrador sin bajar ni subir el `.md`.
@@ -5737,6 +6317,260 @@ especificación y el manual sacan una versión nueva solo cuando cambian ellos.
   especificación publicada).
 - **El feedback de esa parte se ve al editarla** y el cambio se vincula al reporte (`EscalaCambio.feedbackId`). La
   bandeja de Feedback no se tocó: ese módulo lo estaba cambiando otra sesión.
+
+## Tareas internas: lo que se acuerda en las reuniones, en tu semana y en tu agenda (2026-10-09, 1A.1)
+
+**Contexto.** Smarteam llevaba las tareas de sus equipos en TaskView y en Excel, y lo que se acordaba en el planning
+del lunes y la retro del viernes había que pasarlo a mano. Elías pidió un módulo en Nexus: que lea las reuniones de
+cada equipo, proponga las tareas (nunca las cree solo), deje anotar a mano y pedirle algo a otra persona o equipo, y
+lleve cada tarea a Google Calendar. Piloto con Marketing (líder: Alejandra Ortega; Lidia Flores), retroactivo desde el
+«Sprint planning de marketing» del lunes 5 de octubre. El plan completo, con las preguntas y sus respuestas, está en
+`docs/tareas-plan.md`.
+
+- **La IA propone y la persona decide: nada entra solo.** Cada línea de «Próximos pasos» de las notas de Gemini es una
+  PROPUESTA para su dueño (Usar · Más adelante · Descartar · «¿Es T-12?»). El dueño sale SOLO del corchete
+  («[Lidia Flores] …»): un nombre en el detalle es una mención, y solo cuenta como pedido con una lista cerrada de
+  verbos («pedirle a…», «que X haga…»); «consultar con» o «coordinar con» nunca. Lo que no tiene dueño claro va a
+  «Por asignar» del equipo de la reunión, sin semana.
+- **La IA es la excepción, no el camino.** La lectura arma todo con código; llama a Haiku (una sola vez, con
+  herramienta forzada, temperatura 0 y un tope de tokens por línea) solo si hace falta: un dueño dudoso, una tarea
+  parecida con la que podría duplicar, una retro, tres o más líneas que forman un proyecto, o una línea con más de un
+  cliente posible. Medido en local: 6 líneas, 2.087 tokens de entrada y 373 de salida (~US$0,004).
+- **Cada reunión se lee UNA vez**, y su gemela (la misma reunión dos veces en el calendario, una con notas) se lee
+  por la que tiene notas. Una reunión con más de 7 días no avisa a nadie, salvo «Avisar igual» (lo usa el piloto
+  retroactivo). Las reuniones salen SOLO del chokepoint (`lib/sessions/reuniones-para-tareas.ts`): `lib/tareas` no
+  lee `FirefliesSession` (lo vigila `lib/tareas/guardas.test.ts`). ⚠ **Enmendado el 2026-10-09** (memoria de la
+  cuenta, etapa 2): la fase 3 del plan de Tareas se adelanta y ahora incluye los compromisos del cliente. La lectura
+  de cada reunión con un cliente o un prospecto (el post-proceso) usa la MISMA fila `LecturaDeReunion`, con un estado
+  propio (`seguimiento*`), y deja propuestas de `Tarea`: lo que se comprometió Smarteam, para quien lo dijo; lo que
+  prometió el cliente, como tarea de seguimiento para el CSE. Ver «La lectura de cada reunión es durable…».
+- **Una tarea vive en el sprint de casa de su responsable**, y la clave del sprint es la del área (`equipo` en
+  `lib/tareas/equipos.ts`); quien no tiene un área conocida tiene su sprint personal. Un pedido a otro equipo lleva
+  `pedidaPorEquipo` y su líder lo ve en «Lo pedido a otros equipos».
+- **El líder de un sprint es quien tiene `tareas.manage` por override en /team** y es de ese equipo (sección nueva del
+  registro, `soloPorPersona`: no se da por rol). Es lo ÚNICO que decide el líder; el frente `LIDERAR_CS` de «Para ti»
+  es otra cosa (las alertas de cartera). Un equipo puede no tener líder. Sugerir a otra persona es proponer; asignar
+  directo solo puede el líder de su equipo.
+- **Un proyecto de tareas nunca es un `Project`.** Un `Project` es un servicio que se factura y vive en HubSpot; un
+  proyecto de tareas («Campaña de SAP») agrupa trabajo interno, y PUEDE servir a un `Project` (su `projectId`). La
+  «tarea grande» del primer diseño se reemplazó por el proyecto. Si tres o más líneas de una reunión comparten raíces,
+  Nexus SUGIERE un proyecto (en azul); usarlo no reparte nada: cada persona decide su tarea.
+- **Para quién es cada tarea (el «ámbito»):** cliente, prospecto, aliado, interno o «sin clasificar», con una sola
+  regla (`ambitoDe`). Una empresa INTERNO o un proyecto marcado interno (SmartAgro) es «Interno». En una reunión
+  interna, Nexus sugiere el cliente de cada línea (en azul) hasta que la persona lo confirma al decidir.
+- **Las empresas que se pueden elegir salen de una sola función** (`clientesQueVesParaTareas`): el acceso de
+  `requireAccessToClient` (con la preventa), de cualquier tipo, más las de Smarteam. Es una excepción declarada a
+  «`kinds: all` es para una sola pantalla»: Marketing y Ventas trabajan con prospectos y aliados.
+- **En tu sprint ves lo de tu equipo con su cliente; lo que se protege es lo que no es la fila.** La cita de la
+  reunión se ve solo si estuviste en ella o la reunión es de un cliente que ves; si no, dice «Salió de una reunión
+  con un cliente». Una tarea «Solo para mí» y lo de un espacio privado se ven en la semana del equipo como una fila
+  opaca que solo dice cuánto pesa. INV42 vigila que ninguna tarea lleve la cita de una reunión de otro cliente.
+- **Cada persona revisa su semana** («Revisa tu semana», supera el «Cerrar la semana» del líder): «La terminé» o
+  «Sigue» por tarea, y lo que sigue nunca cae en una semana pasada ni en una que ya revisaste (`semanaDestino`). Una
+  semana pasada se revisa cuando sea («Semanas sin revisar») y su «La terminé» fecha la tarea el viernes de ESA semana.
+  Se puede corregir durante 7 días. Lo que dijo la retro viene en azul y no se marca solo.
+- **Agendar: una tarea, su bloque**, en el Google Calendar de la dueña y con su clic. Nexus propone el horario (el
+  primer hueco de 8:00 a 17:00, por prioridad, antes de que venza) y crea el bloque privado con un permiso APARTE
+  (`calendar.events.owned`, `getAgendaWriteAuth`): sumarlo a los permisos de lectura rompería todas las lecturas si
+  falta. Sin el permiso, el diálogo ofrece el enlace de plantilla y «Ya la agendé». La sincronización de Meet ignora
+  esos bloques (`esBloqueDeTarea`). Solo la dueña escribe su calendario; un líder nunca.
+- **Un solo SQL con el modelo entero** (`scripts/sql/2026-10-09-tareas.sql`, 13 tablas, supera «cada tabla en su
+  fase»): las fases siguientes (tablero, chat, lectura automática, plantillas) no llevan DDL. CHECKs en la base para
+  lo que no puede pasar (hecha ⇔ fecha de terminada, semana ⇒ responsable), RLS + RESTRICTIVE en las 13, e INV38–INV43
+  para lo que cruza tablas.
+- **Un solo escritor.** `lib/tareas/mutaciones.ts` escribe las tablas de tareas y `anotarResultado()` es el único que
+  escribe `ResultadoDeSemana` (la foto de cada semana, con su cliente y su proyecto). Nada que llegue al cliente ni a
+  los agentes que escriben documentos lee tareas (censo en `lib/tareas/guardas.test.ts`). Fusionar dos fichas mueve
+  sus tareas (`SE_MUDAN`): con `onDelete: SetNull` perderían el cliente en silencio. ⚠ **Enmendado el 2026-10-09**
+  (memoria de la cuenta, etapa 2; en el código desde el 2026-10-10): `LecturaDeReunion` tiene un segundo escritor
+  declarado, la cola de la lectura de seguimiento (`lib/lecturas/cola.ts`), que escribe SOLO las columnas
+  `seguimiento*` (una prueba de la guarda lo revisa campo por campo); la fila nueva la crea `lib/tareas/lectura.ts`
+  (`crearFilaDelSeguimiento`), y las propuestas de `Tarea` las sigue escribiendo Tareas. Los agentes INTERNOS (el vigía,
+  la memoria interna del proyecto, el avance y la lectura de seguimiento) leen una proyección de las tareas por UNA sola
+  puerta, `lib/tareas/para-agentes.ts`: título, para cuándo, estado y lado (cliente o Smarteam), nunca la cita, el
+  contexto, las notas ni lo privado. Nada que ve el cliente (documentos de cara al cliente, correo de seguimiento, vista
+  externa) lee tareas. El censo de `lib/tareas/guardas.test.ts` ya nombra esa puerta. Ver «La lectura de cada reunión
+  es durable…».
+- **En el menú, durante el piloto:** dirección, Marketing y quien ya tenga algo en Tareas (`tareasPiloto`, un hecho de
+  datos que calcula AppShell). Desde la fase 2, para todo el equipo.
+- **«Nueva tarea», al pie del menú, junto a Feedback**, con el mismo gate del ítem: abre un diálogo con la MISMA
+  línea de Mis tareas («¿Es T-12?», «Para…»), sin salir de la pantalla. Lo que necesita se pide al abrirlo.
+- **El lunes (job `tareas-semana-lunes`, 6:00 CR, sin IA):** vence las propuestas que nadie decidió en 14 días (no
+  son lápidas: si se vuelve a hablar del tema, se vuelve a proponer), pasa a «Por asignar» lo abierto de quien se dio
+  de baja y muda al sprint de casa lo de quien cambió de área. Lo privado de una baja NO pasa a «Por asignar»: su
+  título es solo suyo. Con `TAREAS_CIERRE_AUTOMATICO=1` (apagado por defecto) además revisa como `sistema` la semana
+  PASADA de quien no la revisó: lo abierto pasa a esta semana con un pase que no cuenta ni avisa, y en Mis tareas
+  aparece «El sistema pasó N tareas… Revisar»; la respuesta de la persona reemplaza la del sistema. Solo la semana
+  pasada: las anteriores quedan en «Semanas sin revisar».
+- **«Revisar con el equipo» (la líder, en la retro):** la misma revisión con una pestaña por persona y solo lo que ve
+  de su sprint. Lo que marca queda a su nombre; a cada persona le llega UN aviso (cuántas marcó, cuántas siguen para
+  agendar). No hay paso 2: el calendario lo toca solo su dueña. Si a la persona le queda algo privado sin marcar, la
+  semana NO se cierra a su nombre: el aviso dice que le falta. Al construirlo apareció un hueco: la semana de otra
+  persona se cargaba sin el filtro de visibilidad y la líder habría visto sus tareas privadas; ahora pasa por
+  `tareasVisiblesWhere`, como todas las listas.
+- **El arrastre de la agenda escribe una sola vez, al soltar.** La geometría es pura (`lib/ui/agenda-geometria.ts`):
+  la medida se lee viva en cada movimiento, sin medida no se mueve nada y nunca se suelta en lo que ya pasó.
+- **Comentarios y dependencias, con la visibilidad de la tarea.** Un comentario lo ve quien ve la tarea y avisa a los
+  otros involucrados (nunca a quien escribió); no se borra, se archiva. «Esperar a…» solo con una tarea que ves, sin
+  círculos; una que no ves aparece sin título. Cuando la que bloquea queda hecha, a quien esperaba le llega UN aviso
+  (con el título solo si la ve). Las dependencias no mueven fechas: si la bloqueadora pasó a otra semana, se dice.
+- **«Tareas internas por cliente»** (`/tareas/por-cliente`): lo abierto sale de la tarea (su cliente de hoy) y lo hecho
+  en el período, de la foto de cada semana (`ResultadoDeSemana`): el pasado no cambia si la tarea cambia de cliente.
+  Solo sobre lo que ves. No es el cronograma que ve el cliente, y la pantalla lo dice.
+- **Un proyecto tiene su página** (`/tareas/proyectos/[id]`): lista o tablero, y el tablero por estado o por sección.
+  El tablero es de columnas FIJAS (`components/ui/Tablero`, la mecánica de la hoja de ruta de Feedback): arrastrar solo
+  cambia el estado o la sección, con las mismas reglas que el cajón (si no se puede, vuelve y lo dice). Las secciones
+  agrupan, no son estado; una sección con tareas no se quita. Feedback sigue con su copia de la mecánica: llevarla a
+  `Tablero` es un cambio aparte, sin mover lo que ya muestra.
+- **Espacios libres** («Evento SmartAgro»): para un trabajo que junta a varios equipos. Quien lo crea queda como admin y
+  nace con su primer proyecto, del mismo nombre; entre sus miembros las tareas se asignan directo. Lo ven sus miembros
+  o todo Smarteam, según se elija. Nunca se queda sin admin, y se archiva solo sin proyectos activos (no se borra
+  nada). Los espacios de equipo no se editan: salen del área de cada persona. En el panel de Mis tareas, «Tus
+  espacios» lista solo aquellos donde estás (también para dirección: si no, sería toda la casa).
+- **Vincular no es sincronizar.** Una tarea puede llevar registros que la acompañan sin cambiar para quién es: un
+  registro de HubSpot (se pega el enlace de su ficha; solo del portal del sistema y de objetos que la app lee), una
+  propuesta comercial o una preventa. Nada se escribe en HubSpot y al leer no se le llama: se muestra la foto de cuando
+  se vinculó (sin correo, teléfono ni montos). La empresa del registro decide su cliente: si es uno que no ves, no se
+  vincula; sin cliente claro, se ve sin título salvo para quien ve toda la cartera. Una propuesta pide poder abrir
+  propuestas; una preventa, preventas. Un proyecto también tiene sus vínculos (los agrega quien lo administra), y
+  «Actualizar» vuelve a leer en HubSpot el nombre, la etapa y la empresa de un registro (la foto dice de qué día es; si
+  HubSpot ya no lo tiene, queda «Ya no está en HubSpot»). Nada se escribe en HubSpot.
+- **Etiquetas**: hasta 5 por tarea, libres; agrupan y se buscan con «#», no son estado.
+- **Las vistas son de la misma semana, no otras listas**: Mis tareas y la Semana del equipo tienen Lista (o Personas),
+  Tablero (Pendiente · En curso · Hecha, arrastrar = cambiar el estado) y, en Mis tareas, Calendario (los bloques de
+  Nexus; lo ocupado del resto del calendario lo lee solo «Agendar»). Las **métricas** del equipo se calculan solo sobre
+  lo que ve quien mira —una privada ajena no entra a ninguna cifra— y, sin respuestas, no muestran un 0 %: dicen que
+  nadie marcó su semana.
+- **Nivel 2: la conversación, cuando las notas no alcanzan** (§7.3). Sin «Próximos pasos» ni tareas anotadas, Nexus
+  lee la conversación solo (si quedan llamadas automáticas del día); con notas, «¿Faltó algo?» la lee con un clic y
+  dice cuánto cuesta más o menos. Una vez por reunión (se reintenta si falló). La transcripción va comprimida y
+  numerada por turno, por el chokepoint (`conversacionParaTareas`); el modelo devuelve el número del turno y la cita es
+  el pedazo de ese turno, que pone el código. Lo que ya salió de las notas no se repite (título y detalle de la línea),
+  el dueño solo puede ser alguien del equipo que estuvo, y un título con voseo o recortado llega marcado «Revisa el
+  título». Todo queda como propuesta, con su aviso aparte del de las notas.
+- **La revisión del 9 de octubre (14 fallas confirmadas, todas arregladas, con su prueba)**. Las que cambian reglas:
+  - *Lo que sale de una reunión de cliente* no lleva su título ni su detalle a quien no estuvo: las notas de una
+    propuesta arrancan vacías (el detalle vive en la cita, que tiene su regla), `pedidaPorTexto` no se escribe, y el
+    aviso nombra la reunión solo a quien vería su cita (si no, «una reunión con un cliente»).
+  - *Reabrir una tarea de una semana ya revisada* la pasa a la primera semana sin revisar, como «Sigue». La foto de
+    esa semana pasa a «pasa» si todavía se puede corregir; si no, queda como se decidió. Antes quedaba abierta en una
+    semana revisada (INV40) y volver a terminarla chocaba.
+  - *Un bloque de agenda lo quita quien lo tiene en su calendario*, aunque la tarea ya no sea suya. Reagendar borra los
+    bloques propios que todavía no terminaron, después de crear los nuevos; los de otra persona se conservan.
+  - *Un pedido a un equipo sin líder no entra* (nadie lo decidiría), y se dice dónde llega: al «Por decidir» del líder.
+  - *Meter una tarea en un proyecto* pide verlo, como el selector; si el proyecto no cambia, no se pide.
+  - *La cita de una reunión ata la tarea a su cliente* (INV42): puede quedar sin cliente o con el de la reunión, nunca
+    con otro. INV41 mira solo fusiones entre dos clientes distintos, e INV42 usa la precedencia del chokepoint
+    (`resolvedClientId`, el manual solo si no hay).
+  - *«Solo para mí» lo cambia solo su responsable* (`cambiarPrivada`): la líder y dirección pueden editar la tarea,
+    pero no eso.
+  - *Segunda revisión, el mismo día (15 más, arregladas con su prueba)*: un proyecto sugerido no se reusa si es de
+    otro cliente (las líneas quedan sueltas); el cliente de una tarea se verifica solo si CAMBIA (quien recibe la
+    propuesta de una reunión de una cuenta que no ve la puede usar); una lectura colgada se ve como error y se
+    reintenta, con lo elegido ahora y a nombre de quien reintenta, una sola vez aunque se pida dos veces; una lectura
+    sin notas se relee cuando llegan; la reunión gemela se lee por la fila que tiene las notas; «Más adelante» dentro
+    de la semana que se revisa la saca de esa semana; corregir una revisión no deja la tarea contada en dos semanas;
+    descartar o vencer un proyecto sugerido suelta también lo aceptado adentro; «Propuestas» y «Por asignar» ya no se
+    pisan; y una conversación que no se pudo leer dice por qué (sin turnos no se ofrece de nuevo).
+- **El chat de tareas (1B) es el mismo chat de Nexus con su propio turno** (`lib/tareas/chat`). Reusa de
+  lib/asistente el hilo guardado, el acuerdo con su marcador, el libro de lo pendiente, la herramienta única
+  `registrar_cambio_acordado`, la prueba en seco con un reintento, las líneas que arma el servidor y el cajón. No es
+  un tercer carril dentro de `lib/asistente/turno.ts`, como decía el plan (§6.8): ese archivo lo leen unas 40
+  pruebas por su texto, y los pedidos del cronograma y de los documentos tenían que quedar byte a byte iguales (sus
+  cachés y sus pruebas). *Lo revertiría:* que el chat de un documento necesite lo mismo que el de tareas.
+- **Su hilo cuelga de la PERSONA** (`Dueno` `{ personal: true }`, los tres ids en null): uno por persona, en todas las
+  pantallas. El handler genérico, el contexto y el turno de los documentos reciben `DuenoDeDocumento`, así que un
+  hilo personal no puede llegar a `contextoDeDocumento` (sin ids, su `findFirst` traería el canvas de una propuesta
+  cualquiera). Leer un hilo personal por id exige el correo. El handler genérico rechaza la pieza «tareas».
+- **Al modelo le llega una ventana**: desde el último acuerdo aplicado, como mucho 12 turnos, saltando de a 6 para que
+  el prefijo cacheado dure varios turnos. Dos bloques cacheados en `system` (el prompt y TU CONTEXTO, ≤ 13.000
+  caracteres) y uno en `messages` (el último de la ventana). El chip NO cambia TU CONTEXTO: lo que suma toma una
+  etiqueta después de las del contexto y se define en su bloque, en `messages`; si no, cada chip invalidaría la caché.
+- **El contexto nunca lleva una cita** (ni las notas de una tarea que la repiten), y el chip de una reunión trae solo
+  sus próximos pasos y su resumen, por el chokepoint. Para LISTAR no se usa `tareasVisiblesWhere` (al Super Admin le
+  traería toda la casa): lo suyo, lo de su sprint si lidera y lo que nombra.
+- **Lo acordado se guarda con ids, no con etiquetas**: un pendiente no cambia de cliente si entre dos turnos cambia
+  la lista C#. Un cliente que no está en la lista se resuelve por su nombre exacto entre los que ve la persona; si es
+  de varias empresas, el rechazo nombra las candidatas. Descartar un pendiente arrastra lo que depende de él (el
+  proyecto se lleva sus tareas), y lo nuevo idéntico a algo pendiente no se duplica.
+- **`leerAcuerdo` conserva `dependencias` y `rotulos`.** Hasta el 2026-10-09 descartaba las dependencias que el turno
+  escribía, y la cajita caía a la cascada del cronograma: sobre un documento (o una tarea) daba cero, y desmarcar lo
+  que crea algo dejaba vivo lo que lo llena. Arreglarlo también corrige los documentos.
+- **Aplicar es en el servidor, todo o nada** (`POST /api/tareas/operaciones {turnoId, desmarcadas}`): lee el acuerdo
+  del hilo de esa persona (no acepta operaciones del navegador), recalcula el cierre de lo desmarcado, revalida contra
+  la foto de hoy (si algo ya no entra, 422 sin escribir) y aplica por `mutaciones.ts` con las mismas reglas que la
+  pantalla. **El desenlace se escribe en la misma transacción** (`agregarTurnoEnTx`, con el hilo bloqueado): un
+  segundo clic dice «Ya estaba aplicado», y si el navegador se cierra el acuerdo no queda vivo. Cada creación lleva
+  `origenId` = `c:<turno>:<i>`, así reaplicar no duplica. Los avisos salen después del commit.
+- **Lo que el chat acordó como sugerencia sigue siendo sugerencia** aunque quien aplica pudiera asignarla; «asígnale»
+  de quien no lidera ni comparte el espacio libre entra como propuesta y la línea lo dice.
+- **Un plan entra como BORRADOR** (decisión 21 del plan): el proyecto en `propuesta` y sus tareas adentro SIN
+  responsable ni sprint, con a quién iban en un evento `plan` (así no aparecen en la semana de nadie). Activarlo
+  (`decidirProyecto` «usar») las reparte con las reglas de siempre, evaluadas para quien activa; descartarlo archiva
+  las que esperaban. Un borrador no se activa editando su estado desde el chat.
+- **El cajón no escribe el desenlace en el chat de tareas**: con el hilo que manda el servidor, lo pinta y termina.
+  Sus rótulos («a tus tareas», «Crear 6 tareas») entran por props desde `components/tareas`: el cajón no importa
+  lib/tareas (censo). Se monta UNA vez en el shell, y abrirlo cierra el Feedback (y al revés).
+- **Tope: 30 mensajes por persona por día**, contados en todos sus hilos de tareas. El pensamiento queda en el valor
+  por defecto hasta medirlo con `scripts/probar-asistente.ts` (pendiente).
+- **La revisión del chat (34 fallas confirmadas, todas arregladas, con su prueba).** Las que cambian reglas:
+  - *Un acuerdo solo lo trae un mensaje del asistente.* Los marcadores se sacan del mensaje de la persona y de la
+    respuesta antes de guardarlos, lo pendiente se lee solo de los turnos del asistente, y aplicar responde 404 si el
+    turno no es suyo. Además se vuelve a validar lo guardado (prioridad, estado, semana en lunes, forma del origen).
+  - *Lo que el aplicar siempre rechazaría, el chat lo rechaza antes con su porqué*: sumar tareas a un borrador ya
+    guardado, asignar o mover de semana una tarea de un plan sin activar, «Solo para mí» dentro de un plan, una tarea
+    de un plan con otro cliente, y cambiarle el estado a un borrador. El PATCH de un proyecto tampoco activa un
+    borrador: activarlo es decidirlo, que reparte sus tareas.
+  - *Lo que depende de algo que cayó, cae con su motivo*, al preparar y al podar: el acuerdo ya no queda trabado en 422.
+  - *Un borrador que vence se lleva sus tareas* (quedaban abiertas y sin dueño), y al activarlo, una tarea igual a una
+    sugerencia que ya existe se archiva y suma una mención a la otra.
+  - *Un choque con una sugerencia o un borrador igual sin decidir responde 409*, no 500; y un origen ya usado tiene
+    que ser de quien aplica.
+  - *Contestar una pregunta en texto no se reclama*: se reclama solo si el texto anuncia un cambio sin la herramienta.
+  - *Un solo chat abierto a la vez* (el de tareas y el de un documento se tapaban), y no se aplica mientras el
+    asistente piensa.
+- **Cada tarea que genera Nexus nace con su CONTEXTO** (Elías, 2026-10-09: «Cada tarea que se genera debe tener una
+  descripción con contexto»): de una a tres frases que dicen para qué es, para quién y qué se espera. Va en una
+  columna propia, `Tarea.contexto` (SQL `2026-10-09-tareas2-contexto.sql`, después del de las tablas), y NO se edita:
+  lo de la persona sigue en «notas», así lo que escribió alguien nunca se pisa y el cajón lo muestra arriba, una vez,
+  con la marca de Nexus. *De dónde sale:*
+  - de las notas de una reunión, con una llamada aparte a Haiku por lectura (`lib/tareas/ia/contexto.ts`, menos
+    de un centavo de dólar), separada de la que decide de quién es cada línea para no tocar esa lógica. Una lectura que nadie pidió
+    cuenta contra el cupo automático;
+  - de la conversación, en la misma llamada que ya la lee (un campo más);
+  - del chat, que tiene que escribirlo en cada `tarea.crear` (sin él, en voseo o repitiendo el título, se le reclama).
+  Si el modelo no está, falla o no sirve, el contexto lo arma el código (`contextoDeRespaldo`): el detalle de la
+  línea y el párrafo de «Detalles» que más se le parece. *Quién lo ve:* el de una reunión, con la regla de su cita,
+  más quien la hace o la pidió si ve a ese cliente (lo necesita para hacerla aunque no haya estado); el resto lee
+  «salió de una reunión con un cliente». El del chat va con la fila, como las notas. El buscador del servidor no lo
+  busca (sería un oráculo de lo que no se ve). Lo que no hizo: las tareas a mano no llevan contexto de Nexus (lo que
+  escribe la persona va en notas) y los proyectos sugeridos todavía no escriben su descripción.
+- **«Lo que delegaste»** (`/tareas/delegadas`, Elías, 2026-10-09: «que se puedan ver qué tareas delegadas a otras
+  personas de otros equipos o del equipo se están haciendo»): una ruta propia y no una pestaña de Mis tareas (ahí
+  `?vista=` ya es lista, tablero o calendario de TU semana). Entra lo que pediste (`pedidaPorEmail`), lo que creaste
+  para otra persona y lo que asignaste directo (evento `asignada`), con la regla de visibilidad de siempre; lo abierto
+  siempre y lo cerrado de 30 días, con su motivo. No entra lo de un plan en borrador (todavía no le llegó a nadie).
+  Agrupado: atrasadas (vencida o de una semana pasada, aunque esté en curso), todavía no deciden, en curso,
+  pendientes y cerradas. Cada fila dice quién la tiene, para cuándo, su contexto y lo último que pasó; «Retirar el
+  pedido» mientras no la decidan. ⚠ Quien la pidió sigue viendo una tarea que el responsable marcó «Solo para mí»:
+  ya pasaba en el cajón; la lista no lo cambia.
+- **Lo que dejó la revisión del contexto y de «Lo que delegaste» (18 fallas confirmadas, todas arregladas con su
+  prueba).** Las que cambian reglas:
+  - *Lo que el chat escribe desde una reunión queda atado a esa reunión.* Si en el turno el modelo leyó una reunión
+    (el chip de la reunión, o el de una tarea que salió de una), el SERVIDOR le pone esa reunión a las tareas que se
+    crean (`sessionId`, sin cita): su contexto se ve con la regla de la cita y no con la fila, aunque el modelo haya
+    copiado algo de la reunión. La línea que se lee antes de aplicar muestra el contexto entero (lo que se guarda).
+  - *La excepción de quien hace o pidió la tarea pide saber de quién es la reunión*: una de afuera sin dueño resuelto
+    podría ser de un cliente que esa persona no ve; ahí, solo quien estuvo.
+  - *Las corridas de IA de la lectura van con el cliente de la reunión, y la del contexto no guarda el texto* (solo
+    cuántos escribió): en el montón sin cliente las veía más gente que la regla de la cita.
+  - *El respaldo sin modelo no pega lo de otro tema*: no cuentan las palabras vacías, tiene que compartir algo con el
+    título, el tema del párrafo tiene que ser el de la línea y no puede nombrar a otra empresa.
+  - *Se escribe en tandas de 12 líneas*: una respuesta cortada deja con el respaldo solo a sus líneas.
+  - *«Portugués», «francés», «estrés»… no son voseo* (la lista de agudas de `lib/ui/voseo-formas.ts`).
+  - *Tomar una tarea no es delegarla*, y lo cerrado entra por cuándo se cerró (no por la última edición).
+  - *Retirar el pedido de una tarea TUYA que le pasaste a otra persona te la devuelve como estaba*; antes la cerraba
+    para siempre.
 
 ## La escala 8.8: una limpieza que no cambia qué se mide; lo demás, a la 9.0 (2026-10-09)
 
@@ -5795,3 +6629,1063 @@ cliente, *land and expand* y servicio recurrente.
   la campaña corriendo; 1.7.F5, sin el plazo por tipo de cliente; 1.3.O3, sin pedir que se use la ficha; 3.7.F2,
   sin las entregas), y lo que querían pedir quedó en la 9.0. Se aplicaron 354 reemplazos de línea; una segunda
   revisión miró cada uno y corrigió 10 detalles más (entre ellos, 1.5.O1 recupera «en tiempo real», como en la 8.7).
+
+## La memoria de la cuenta: una sola lectura por reunión, en cinco piezas (2026-10-09)
+
+**Contexto.** Elías pidió una memoria de cada cuenta que lean todos los agentes y que cada reunión se lea una sola vez.
+La auditoría del 9-oct (`docs/memoria-de-la-cuenta-plan.md`) encontró que la lectura al llegar ya existe (el
+post-proceso) y que lo que falla es revisar: de 533 minutas, 2 estaban revisadas; de 3.994 acciones vivas, una persona
+había tocado 46; la ficha estaba confirmada en 2 de 168 clientes. Elías aceptó la lectura única con una condición: que
+la arquitectura sirva para las partes nuevas de Nexus. Las etapas, con su orden y sus valores por defecto, están en ese
+plan; las reglas de cada una, en las secciones que siguen.
+
+- **Una sola lectura por reunión, y es el post-proceso.** Cada reunión con un cliente o un prospecto se lee una vez, al
+  llegar (`lib/sessions/post-process.ts`). Desde la etapa 2 comparte la fila `LecturaDeReunion` con Tareas: una fila,
+  una pasada, dos salidas. Un módulo nuevo no agrega su propio lector de reuniones: se suma como destino. *Por qué:*
+  la regla de un clasificador sobre una pasada que ya existe («Eje de tipificación…», arriba) ya lo decía. Hoy una
+  reunión dispara hasta siete llamadas, y el avance relee las 12 últimas del proyecto con cada reunión nueva. Leer una
+  vez cuesta poco (≈US$0,15 por reunión); lo caro son las relecturas.
+- **Cinco piezas, cada una en un solo lugar.** (1) Una entrada: cada fuente entra por su adaptador a la misma cola,
+  `LecturaDeReunion` (hoy Meet; HubSpot, correos y notas pegadas, después). (2) Una salida estándar: minuta,
+  compromisos, pedidos fuera de alcance, señales y hechos, cada uno con su cita verificada. (3) Un registro de
+  destinos: cada módulo declara qué le sirve y dónde lo muestra; el modelo clasifica y el código reparte
+  (`lib/seguimiento/destinos.ts`, etapa 6). (4) Un solo cargador de memoria: `memoriaDeLaCuenta` y
+  `memoriaDelProyecto` (`lib/memoria`, etapa 3), con un alcance para el cliente y otro interno. (5) Un ciclo de vida
+  de lo propuesto: pendiente, usado, desestimado o vencido, con quién y cuándo (`lib/lo-propuesto`, etapa 1). *Por
+  qué:* sumar una fuente es escribir un adaptador; sumar un módulo, una entrada en el registro; sumar un agente,
+  llamar al cargador. Nada de eso pide tocar lo demás.
+- **Qué se lee según la empresa** (`client.kind`; rige desde la etapa 2, en `lib/sessions/post-process.ts`): de un
+  cliente, todo; de un prospecto, la minuta y los compromisos,
+  sin fuera de alcance (no hay nada vendido contra qué comparar), y la preventa sigue leyendo la reunión entera como
+  memoria de su lienzo; de un aliado, nada. Una reunión de puertas adentro no la lee el seguimiento (la lee Tareas),
+  y una interna vinculada a mano nunca alimenta lo que ve el cliente. El dueño sale siempre de `resolvedClientId` (el
+  manual, solo si no hay).
+- **El contexto general es la memoria, no una lista de reuniones.** Todo agente lee la memoria de la cuenta y la del
+  proyecto; cada pieza suma solo lo poco que eligió: la exploración, sus sesiones (etapa A); los documentos del
+  proyecto, las reuniones elegidas, leídas enteras (etapa 7); el cronograma, como hoy, sus elegidas. Casos de uso y La
+  escala no leen reuniones. *Por qué:* cada pieza armaba su contexto con su propio corte de «las más recientes», y
+  ninguna leía la minuta.
+- **Todo lo que propone Nexus se puede desestimar**, y «Uso de Nexus» mide qué se usa, qué se desestima y qué vence,
+  por módulo y por persona. *Por qué:* si la memoria suma propuestas sin cerrarlas, se repite lo de las minutas y la
+  ficha.
+- **El orden de construcción:** primero estas enmiendas; después las etapas 0, A y 4, en paralelo; luego 1, 2, 3, 3b,
+  5, 6 y 7. La 2 va antes de la 3 porque la memoria del proyecto lee los compromisos abiertos desde Tareas. Cada etapa
+  se despliega sola. Solo la 2 (5 columnas `seguimiento*`) y la 6 (`HechoDeReunion`) llevan SQL, aditivo y con RLS.
+- **El costo se atribuye a la reunión que lo disparó**, con `LlmCall.origen = "reunion:<sessionId> › <sitio>"` (el
+  formato, en «La lectura de cada reunión es durable…»), sin SQL. *Por
+  qué:* `LlmCall` no tiene `sessionId`, y el costo del avance se midió por cercanía en el tiempo; sin esto no se puede
+  comprobar que la etapa 2 y el sondeo no suben el costo.
+- **Fuera por ahora:** las reuniones grabadas en HubSpot, los correos y las notas pegadas como fuentes de la lectura
+  única. Entran cuando tengan un disparo definido y medido, y la deduplicación contra Meet. *Por qué:* la caída del
+  21-sep se sospechó de un disparo sin freno.
+
+## Memoria de la cuenta · Etapa 0: arreglos y limpieza (2026-10-09)
+
+**Contexto.** Lo que la memoria necesita arreglado antes de apoyarse en ello, y lo que sobra. Los números son de
+producción, medidos el 9-oct con consultas de solo lectura.
+
+- **El dueño de una reunión es `resolvedClientId`, y el manual solo si no hay** (`duenoDeLaSesion`, en
+  `lib/sessions/project-sources.ts`: la precedencia que ya usan INV42 y Tareas, escrita una vez). El post-proceso deja
+  de recategorizar la reunión por su cuenta y, sin dueño, no la lee. *Por qué:* recalculaba el dueño sin la guarda de
+  nombres ambiguos ni el mapa de HubSpot (le pasaba un mapa vacío). Es el invariante 1 con otra cara.
+- **El resumen del proyecto y el análisis de ventas pasan por el chokepoint.** El resumen lee las reuniones del
+  proyecto que están incluidas y son del cliente (`getProjectMemberSessions`), así deja de citar las que una persona
+  sacó. El análisis de ventas (`/api/sales/analyze`) pide `ventas.read` y nunca junta dos empresas en el mismo prompt:
+  si el grupo de /sales (que se arma por dominio: gmail o un holding juntan varias) trae reuniones de más de una, analiza
+  las de la empresa con más reuniones a la que quien pide tiene acceso y dice cuántas quedaron afuera; queda medido. El
+  botón se muestra deshabilitado, con el motivo, a quien no tiene `ventas.read`. *Por qué:* los dos leían reuniones sin
+  `belongsToClient`, y cualquier interno podía mandar reuniones de dos clientes al mismo prompt. El primer arreglo
+  respondía 409 y dejaba el botón sin salida (en /sales no hay cómo elegir reuniones). El vigía del proyecto ya filtra
+  por `belongsToClient` (`lib/cs/watchdog-context.ts`), con la entrega 2 de la cartera.
+- **La regla propia de la propuesta comercial se queda** (`lib/business-cases/feeding.ts:84-104`): admite reuniones sin
+  dueño de un prospecto todavía no resuelto, nunca las de otro cliente, así que cumple el invariante 1. Queda escrita la
+  diferencia de forma: usa «el override manda», que puede dejar afuera una reunión (falso negativo), nunca meter una
+  ajena. *Por qué:* pasarla por `getClientSessions` perdería esas reuniones.
+- **El handoff lee la ficha confirmada, RECORTADA** (`fichaParaPrompt` con `paraDocumentoDelCliente: true`), y deja de
+  recibir `Client.canvas`, `ClientContextCard` y `StageNote`. La orden «PRIORIDAD DEL CANVAS» desaparece para todos los
+  agentes. *Por qué:* recibía una plantilla vacía presentada como «conocimiento validado» y no recibía lo único que
+  vale. Recortada por la misma razón que «Lo interno NO se le manda al agente del handoff» (2026-10-01): lo que escribe
+  llega en una sola llamada al kickoff, al diagnóstico, a la entrega y al cuestionario previo. Sacar lo muerto no pierde
+  nada humano: 0 de 168 clientes tienen canvas con contenido, hay 0 `StageNote`, y las 71 `ClientContextCard` son todas
+  del agente, ninguna en un canvas, la última del 1-jul. Desde la etapa 3 la ficha le llega por la memoria.
+- **El kickoff, el detalle del cronograma y la planificación vieja no arman el contexto general** de `/analyze` (la
+  actividad de HubSpot y las reuniones), y el registro del kickoff deja de anotar reuniones de venta que no leyó. *Por
+  qué:* armaban un mensaje que después se reemplazaba entero; en 60 días fueron 18 corridas del kickoff y 23 del
+  detalle, cada una con sus llamadas a HubSpot.
+- **La llamada del avance queda registrada con su agente**, y el panel de los documentos dice cuántas reuniones lee
+  (24) y que las lee en resumen. ⚠ **SUPERSEDED por la etapa 7** («Los documentos leen la memoria y solo las reuniones
+  elegidas»): el panel dice que lee enteras las reuniones que elijas (hasta 6; las siguientes en resumen; pasadas las
+  24 no entran) y, sin elegidas, qué le llega (`queLeeSinElegidas`, lib/contexto/documento.ts).
+- **Se retira lo que no tiene pantalla:** las rutas `process-session`, los dos `canvas/refresh` (cliente y proyecto),
+  `integrations/summarize` y el lector huérfano `canvas/suggestions`; `CanvasSuggestion`, con sus escritores (tenía 8
+  pendientes que nadie podía ver; mandar una card al canvas de empresa responde 410, y la rama de proyecto queda); y
+  las 3 secciones vacías de Información del cliente (`stakeholders`, `retos_estrategicos`, `oportunidades`), que dejan
+  de crearse en los dos lugares donde nacían: esa información vive en la ficha. Las filas existentes no se borran. En
+  el schema, `Client.canvas`, `StageNote` y `CanvasSuggestion` quedan DEPRECATED con fecha y sin DROP. ⚠ No están sin
+  lectores: `Client.canvas` lo leen y escriben GET y PUT de `/api/clients/[id]/canvas` (sin pantalla) y `StageNote` lo
+  lee `lib/clients/last-interaction.ts`; hay que retirarlos antes del DROP. `ClientContextCard` sale del mensaje del
+  handoff y de todo agente no encadenado, pero los agentes encadenados por paso (`associatedStep`) todavía leen las del
+  paso anterior y las HUMAN del cliente (`app/api/clients/[id]/analyze/route.ts`); eso y las pantallas que la usan son la
+  deuda #24 de ARCHITECTURE.
+- **`/api/sessions/analyze` y el modo «análisis» de /sessions se retiran** (decisión de Elías). Se usaron 4 veces en
+  total, la última el 18-jun; no tenían guarda de cliente ni medidor, y su salida podía llegar al handoff. Los agentes
+  `agent-sales-analysis` y `agent-service-analysis` pasan a Borrador desde /agents. El «Análisis de ventas» de /sales se
+  queda, con la guarda nueva.
+- **El respaldo de `GuiaDeExploracion` se retira recién después de correr `scripts/migrar-guia-de-exploracion.ts`**,
+  fuera de esta ola. *Por qué:* hasta entonces es el único lugar donde están esas guías. Su ruta
+  (`/api/projects/[projectId]/guia-exploracion`) no tiene pantalla: desde el 2026-10-10 el PATCH y el POST (que lanzaba
+  el agente de la guía vieja y cobraba) responden 410, y queda solo el GET de solo lectura. El script lee
+  `lib/guia-exploracion`, no la ruta; la ruta y el módulo se retiran juntos.
+- **Los pedidos fuera de alcance se revisan con un script en simulacro** (`scripts/revisar-pedidos-fuera-de-alcance.ts`):
+  lista los que no tienen proyecto y los de prospectos, y cada cambio pasa por `cambiarSolicitud`, con historial y
+  firma. Nunca confirma nada, así que no sale ningún aviso. Hay 10 sin proyecto (6 de Grupo Servica, 1 de Plastimex y
+  3 de prospectos) y 17 con un estado que escribió el modelo sin que nadie lo revisara.
+- **En la preventa, el «Contexto adicional» va solo donde un agente lo lee.** Como quedó con la etapa A: Preparación,
+  con sus fuentes y sus instrucciones; Casos de uso, solo sus instrucciones; La escala, con la explicación de que no
+  tiene agente; Exploración, en su página de inicio (las sesiones, las fuentes manuales y las instrucciones, sin el
+  bloque); Resumen y Propuesta, nada. *Por qué:* mostrar reuniones donde nadie las lee le hace creer al vendedor que esa
+  pieza las usa.
+- **Sin SQL.** Su deploy arrastra los SQL pendientes del árbol: los dice `npm run check:esquema`.
+
+## La exploración son sus sesiones (2026-10-09)
+
+**Contexto.** En Ferretería Noelito el proyecto tiene 45 reuniones vinculadas: la exploración arrancaba con hasta 30
+sugeridas y el riel convertía cada reunión suelta en su propia pestaña, así que salían «sesiones» que no eran de la
+exploración. Elías aprobó el diseño v13: la exploración abre en una página de inicio con sus sesiones, sin lista general
+de reuniones, y lo demás llega por la memoria. Esto corrige siete reglas de la preventa y de la exploración del
+proyecto, marcadas SUPERSEDED en su lugar.
+
+- **Una reunión es de la exploración solo si es la de una de sus sesiones.** La de una sesión es la que se unió a ella:
+  la elegida, la de su evento del calendario o, si no tiene evento, la del mismo día. Una reunión que no está en una
+  sesión no se lee ni es pestaña. *Por qué:* el contexto general es la memoria; la exploración lee entero solo lo suyo.
+- **Lo que se liga solo (por la fecha o a ±2 h del evento) nunca es una reunión de puertas adentro** (revisión del
+  2026-10-10): en un cliente o un proyecto, una reunión del equipo ese día se leía como palabra del cliente y llegaba al
+  Diagnóstico y al correo de seguimiento. Elegida a mano, sí entra, y el agente la lee rotulada [PUERTAS ADENTRO]. El
+  correo de seguimiento no se arma para una reunión de puertas adentro.
+- **Lo sumado a mano se liga por la fecha solo si ese día no queda ninguna reunión** (la minuta de una sesión que no
+  quedó grabada, como antes de la etapa A); si hay reunión, gana la reunión y lo sumado queda en «Fuentes manuales».
+  También se puede unir a una sesión a propósito, desde «Sumado a mano» del selector de «Agregar sesión». *Por qué:* sin esto, las
+  sesiones que se apoyaban en una minuta de su día quedaban sin reunión al desplegar la etapa A, y con ellas su análisis
+  y su correo.
+- **Una sesión unida a una reunión de HubSpot guarda su hora** (`reunion.inicio`, la pone el servidor): mientras no
+  ocurre, la sesión dice «agendada» (HubSpot da la agenda hacia adelante y la lista solo trae las que ya pasaron);
+  cuando ocurre y queda grabada también en Meet, la sesión toma la de Meet (la de HubSpot deja de listarse) y se lee
+  sola como cualquier unida. «Una que ya pasó» ofrece también las reuniones de HubSpot que ya pasaron.
+- **La página de inicio:** la próxima sesión con «Preparar la sesión»; las sesiones con su reunión y su estado;
+  «+ Agregar sesión» (una agendada, una que ya pasó o una sin reunión todavía); «Fuera de la exploración», plegado; las
+  fuentes manuales; las instrucciones, y «Lo que la IA ya sabe», que se muestra desde la etapa 3 (los conteos de la memoria,
+  en tarjetas; «Ver la memoria del proyecto» espera a que exista una página a la que llevar). No tiene lista general de
+  reuniones.
+- **En un prospecto, cada reunión con la empresa entra sola como sesión**, salvo las de puertas adentro y las instancias
+  de una serie, y con el corte de siempre (`cuentaEnLaPreventa`). Las automáticas se CALCULAN al leer, sin escribirse:
+  son las candidatas que no están en `contenido.fuera` ni en una sesión, y pasan a ser una `SesionPlaneada` cuando
+  alguien les escribe algo (título, objetivo o nota). *Por qué:* sin un escritor de fondo no hay choque con la persona
+  ni con el agente, y deshacer es trivial. Se sacan una o varias a la vez a «Fuera de la exploración»
+  (`contenido.fuera`, claves `origen:id`, tope 200), que no borra nada y se vuelve sesión con un clic.
+- **En un cliente o un proyecto nada entra solo**: se agrega con «+ Agregar sesión». «Una que ya pasó» lista las
+  reuniones de toda la empresa, por el chokepoint del cliente (la segunda fase de un servicio puede estar en otro
+  proyecto). Ahí, «Fuera de la exploración» son las reuniones leídas o elegidas antes que no quedaron en una sesión:
+  solo lo que alguna vez fue de la exploración.
+- **Una sesión se une a su evento antes de que ocurra** (`SesionPlaneada.evento`: el id de la instancia, el calendario
+  de quien la unió y el inicio). Cuando ocurre, se liga con la reunión de ese evento (`gmeet_<eventId>` o
+  `googleEventId`) y, si no está, con la de la empresa a ±2 h. Si la mueven en el calendario, la sesión toma la fecha
+  nueva; si la cancelan, la sesión lo dice y sigue. Espera la transcripción 6 h antes de decir «terminó sin
+  transcripción ni notas».
+- **Las agendadas salen del calendario de quien busca y del de quien lleva la exploración**, de las próximas 6 semanas,
+  con un lector a pedido que guarda lo leído 2 minutos y NUNCA ensancha el `timeMax` de la sincronización de Meet. A la
+  empresa se la reconoce por sus dominios registrados y por la gente de sus reuniones que NO aparece en reuniones de
+  otros clientes (`genteCompartidaConOtrosClientes`, en el chokepoint): con alguien de HubSpot o de una agencia en una
+  reunión, «Agendadas» listaba reuniones de otros clientes (invariante 1). El evento de una sesión lo fija solo el
+  servidor (la pantalla no lo puede cambiar por el PATCH) y tiene que tener a alguien de la empresa invitado, al unirlo
+  y cada vez que se vuelve a mirar. El título de un evento del calendario no viaja al correo de seguimiento. Al
+  abrir el lienzo, como mucho cada 10 minutos por exploración, Nexus relee hasta 5 eventos unidos (`events.get`, solo
+  lectura; ver RUNBOOK). *Por qué:* la sincronización completa fue la sospechosa de la caída del 21-sep.
+- **Ligar por fecha sigue, marcado «ligada por fecha · cambiar»**, solo para una sesión con fecha y sin evento, y nunca
+  dispara la lectura sola. *Por qué:* no se gasta una lectura en una adivinanza.
+- **«Una que ya pasó» primero mira lo que haría fallar el agregado** (el tope de sesiones, la sesión a unir) y recién
+  después adopta una reunión sin dueño: adoptar le cambia el dueño en todo Nexus y no se deshace sola.
+- **Qué se lee solo:** en un prospecto, la regla de hoy con dos frenos más (no está en «Fuera» y no es de una serie);
+  en un proyecto o en la preventa de un cliente, solo la reunión unida de forma explícita (elegida o por su evento),
+  cuando llega su transcripción, sin el filtro de Ventas. Va por `leerReunionNueva`, que llama el post-proceso, y desde
+  la etapa 2 se muda a la cola de la lectura de cada reunión como un destino más. Cobra contra el presupuesto
+  automático, una lectura por sesión (≈US$0,20–0,35, estimado con lo que cuesta leer en la preventa; no medido).
+- **Una reunión con solo notas de Gemini se agrega y se lee**, y queda en `propuesta.leidas.soloNotas`: cuando llega su
+  transcripción se vuelve a leer.
+- **El id de una reunión admite hasta 200 caracteres** en todos los lugares donde se lee o se valida (antes 60, y 80 en
+  las claves de las lecturas y los correos, donde la lectura de una reunión con id largo se perdía sin aviso). El tope
+  de sesiones sube de 12 a 20, porque ahora se materializan más.
+- **Queda DEPRECATED, sin DROP ni script:** `contenido.reunionesElegidas` (en un prospecto cuenta como unida a una
+  sesión; en un cliente va a «Fuera») y `SessionProject.explorationOverride` (la exploración ya no lo lee; sigue
+  declarado hasta la limpieza de la etapa 0, con su marca DEPRECATED en el schema). Desde el 2026-10-10
+  `reunionesElegidas` se lee y nada la escribe: la operación `reunionElegida` ya no existe y el POST de
+  `/api/sales/exploraciones/[id]/reuniones` (que además adoptaba reuniones sin dueño) responde 410.
+- **Las otras piezas de la preventa dicen qué leen:** Preparación, las 3 sesiones más recientes de Exploración más sus
+  fuentes manuales y sus instrucciones; Casos de uso, que no lee reuniones (solo sus instrucciones); La escala muestra el
+  bloque solo para decir que no tiene agente; Resumen y Propuesta no tienen bloque.
+- **Los estados de la reunión de una sesión:** sin reunión, agendada, esperando la transcripción, leída, sin leer, solo
+  notas, terminó sin transcripción ni notas, cancelada en el calendario, corta y no se hizo. Cada uno dice qué hacer.
+- **Sin SQL**: todo vive en los JSON de `ExploracionDeVenta`. Después del deploy, las exploraciones de Noelito y Cemaco
+  y las preventas de Cicadex y Grupo Servica (clientes) abren solo con sus sesiones; lo leído antes queda en «Fuera de
+  la exploración».
+
+## La frontera llega a los documentos (2026-10-09)
+
+**Contexto.** La regla de no usar precios ni lo dicho puertas adentro (`FRONTERA_DEL_MATERIAL`) vivía solo en el
+material del cronograma. De los siete documentos, solo el kickoff decía algo de precios, y el diagnóstico llamaba a las
+reuniones «la fuente principal». El chat de los documentos tampoco pasaba por el detector. Va antes de las etapas 6 y 7,
+que mandan más texto de reuniones a documentos que ve el cliente.
+
+- **La regla viaja DENTRO del material** (`FRONTERA_DE_LOS_DOCUMENTOS`, en `material.reuniones` y `material.notas`):
+  nunca precios, montos, descuentos ni condiciones de lo que cobra Smarteam, aunque se hayan dicho; nunca lo dicho
+  [PUERTAS ADENTRO] como dicho por el cliente; nunca de dónde salió cada cosa. Las cifras del negocio del cliente van
+  solo donde la sección las pide, y tampoco dicen de dónde salieron (la regla decía «con su fuente» y se contradecía;
+  se corrigió el 2026-10-10). *Por qué:* adentro del material ningún lector la puede olvidar ni repetir a su manera. Sin
+  reuniones ni notas, el mensaje queda igual.
+- **En qué piezas:** los documentos de cara al cliente (kickoff, diagnóstico, planificación, integraciones y entrega)
+  reciben la regla entera; los internos (implementación y exploración), solo la de puertas adentro. Lo decide
+  `pieceBySlug().clientFacing`. La propuesta comercial y los roles quedan fuera: ahí los precios los escribe Ventas a
+  mano y su chat no lee reuniones.
+- **El chat de los documentos marca la línea con «⚠ revisa»**, con un detector propio. En las cinco piezas, la cita de
+  una reunión, una nota, la minuta o el kickoff («según la reunión del lunes», «confirmado en el kickoff»), también al
+  lado de una cifra del cliente; los montos, solo en kickoff, planificación e integraciones (en el diagnóstico y la
+  entrega una cifra del cliente es contenido); nunca fechas, plazos ni correos. Una persona nombrada como fuente
+  («según Ronald») no se marca: la cuida solo la regla. *Por qué:* el detector del cronograma marca fechas, y en un
+  documento una fecha o un plazo son contenido legítimo. Marca las dos salidas del chat de documentos (la lista que se
+  aplica y las líneas del acuerdo). Solo avisa: la persona desmarca o pide otra cosa.
+- **Lo interno del material va aparte** (`materialInterno`: el texto de cada reunión leída y el bloque de notas), para
+  calcular las huellas de lo copiado, como en el cronograma. El chat de documentos no recibe ese material; desde la
+  etapa 6 (con `SEGUIMIENTO_HECHOS=1`), «Cambiar con el chat» lleva la frase y la cita de la novedad, y con ellas se
+  arman las huellas del turno (`huellasDeFrontera`, lib/asistente/turno.ts): la línea del acuerdo que copia la cita
+  queda con «⚠ revisa…». Con la bandera apagada no hay huellas y la marca por copia no corre.
+- **Sin «red tras generar» por ahora** (decisión de Elías): no se revisa con el detector el documento ya generado. Si
+  hace falta, es una pieza aparte.
+- **Sin SQL ni re-siembra.** Cambia el texto que reciben los siete documentos y la línea de reglas del chat de cinco;
+  su caché se rehace una vez.
+
+## Una sola revisión por reunión: lo que dejó cada reunión y el ciclo de vida de lo propuesto (2026-10-09)
+
+> **Estado (2026-10-10): construida, sin commit ni deploy.** Está en el código: `lib/lo-propuesto` (ciclo, conteo y un lector por tipo), `lib/seguimiento` (la tarjeta, su carga y «Usar todo»), `lib/sessions/reuniones-para-seguimiento.ts`, la tarjeta en `/sessions/[id]` (`#lo-que-dejo`), su API `/api/sessions/[id]/lo-que-dejo`, el renglón de «Para ti» y `scripts/uso-de-nexus.ts`. Sin SQL.
+
+**Contexto.** De 533 minutas, 2 estaban revisadas; el 98 % de las acciones seguía abierto; había 21 propuestas de ficha
+sin confirmar contra 2 confirmadas. Cada cosa se revisaba en otra pantalla, y nada vencía. Va antes de los hechos: si no,
+las propuestas nuevas caerían en colas que nadie revisa.
+
+- **«Lo que dejó esta reunión» junta en una tarjeta lo que Nexus propuso al leerla**: la minuta, los pedidos fuera de
+  alcance, los campos de la ficha, la etapa sugerida, la fecha del diagnóstico, tus tareas propuestas, las alertas que
+  la citan (solo para quien lidera Customer Success) y los compromisos: lo demás que dejó la reunión en Tareas (desde la
+  etapa 2; antes, `ActionItem`), plegados y solo para leer. Está en la página de la reunión, y agrupada en un renglón
+  de «Para ti». *Por qué:* una sola revisión por reunión, en un solo lugar.
+- **El dueño sale de `resolvedClientId`**: sin dueño no hay tarjeta, y una reunión de puertas adentro nunca la tiene (la
+  lee Tareas). La página de una reunión y el PATCH de su minuta pasan a pedir acceso al cliente: sin acceso, 404. *Por
+  qué:* hasta ahora cualquiera del equipo leía cualquier transcripción, y la página recalculaba el dueño por su cuenta.
+- **«Usar todo» = la minuta revisada + los pedidos confirmados + TUS tareas propuestas de esa reunión** (y, desde la
+  etapa 6, las novedades de los documentos que puedes decidir: quedan usadas, como un «Listo»). Nunca la ficha, la
+  etapa, la fecha del diagnóstico, las alertas ni el avance: la ficha y la etapa escriben en HubSpot o tienen su propia
+  puerta, y una alerta pide juicio. Cada cosa va por su chokepoint (`cambiarSolicitud`, `decidirTarea`,
+  `decidirDestinoDeHecho`); si la tarjeta cambió desde que se cargó, responde 409 con la nueva.
+- **Todo lo propuesto se puede desestimar, salvo la minuta** (decisión de Elías): la minuta es memoria de la reunión y la
+  lee la etapa 3; si está mal, se corrige.
+- **Cuatro estados para todo lo propuesto** (`lib/lo-propuesto`): pendiente, usado, desestimado y vencido. «Sin firma»
+  marca lo que cambió de estado sin una persona, y un cierre del sistema cuenta como vencido. Los leen la tarjeta, «Para
+  ti» y «Uso de Nexus». *Por qué:* un solo ciclo para todos los tipos, que cualquier propuesta nueva usa.
+- **Vencer se calcula al leer, no se guarda.** La tarjeta deja de pedir revisión 30 días después de la fecha de la
+  reunión; cada tipo, 30 días después de que nació. Las tareas propuestas conservan sus 14 días guardados (regla de
+  Tareas). Decidir después del vencimiento sigue valiendo y reemplaza al «vencido». *Por qué:* no hace falta un job, y
+  vencer no borra nada.
+- **Quién decidió, sin tabla nueva.** La minuta, los pedidos, las tareas y las alertas ya lo guardan; la ficha y la
+  fecha del diagnóstico lo guardan dentro de su propio JSON (`FichaGuardada.decisiones`, `descartadasPor`). La etapa no
+  lo guarda (responder la encuesta borra la sugerencia) y queda como «no guarda quién decidió», igual que los demás
+  tipos sin registro.
+- **«Uso de Nexus» va en el panel de dirección de «Para ti»** (decisión de Elías): por módulo y por persona, cuánto se
+  usó, se desestimó o venció. Sale de los estados que ya guarda cada tipo. Esta etapa deja los datos (una función de
+  servidor y un script de solo lectura); la pantalla va en ese panel cuando se construya.
+- **Las reuniones de prospectos no entran a «Para ti»**: se revisan en la tarjeta de la reunión. Desde la etapa 2 ya no
+  dejan pedidos fuera de alcance.
+- **Cómo quedó en el código (2026-10-10):**
+  - «Usar todo» toca solo lo que se VE (los topes por sección: 8 pedidos, 10 tareas, 6 campos), y deja afuera los pedidos
+    de un prospecto («Sin nada vendido: revísalo») y los que no tienen proyecto («Sin proyecto: revísalo en La cuenta»):
+    esos se revisan uno por uno. Confirmar un pedido avisa a Ventas y a quien lidera Customer Success, como a mano.
+  - Un pedido «Ya estaba incluida» (`INCLUIDO`) cuenta como usado: alguien lo revisó y decidió qué era.
+  - La huella de «Usar todo» es un hash de lo pendiente (ids, estados y la versión de cada tarea): si cambió, 409 con la
+    tarjeta nueva y sin escribir nada. Después, cada cosa por su lado: una tarea que ya decidió otra persona no frena lo demás.
+  - La propuesta de ficha no guarda de qué reunión salió: se reconoce por la etiqueta de su fuente
+    (`etiquetaDeSesion`, «Sesión «título» del 9 oct 2026», con la fecha armada a mano), y la lectura tolera las formas que
+    escribía cada versión de Node («9 oct. 2026», «sept»). Dos reuniones con el mismo título el mismo día se confunden.
+  - Una reunión sin dueño no tiene tarjeta, y su página la sigue viendo todo el equipo interno (no hay cliente al que
+    pedirle acceso). Con dueño, la página y el PATCH de la minuta dan 404 sin acceso; el PATCH valida con Zod.
+  - Lo decidido en la tarjeta queda en su lugar, sin la marca de sugerencia, hasta recargar; después, los pedidos y los
+    campos de la ficha van plegados en «Ya revisado», y las tareas y las alertas decididas salen de la tarjeta (se ven
+    en Tareas y en Éxito del cliente). La marca «Venció sin revisar» está, por ahora, solo en la tarjeta de la reunión.
+  - Los compromisos se leen por UN adaptador (`lib/seguimiento/compromisos-server.ts`, desde la etapa 2): las tareas que
+    dejó la reunión y que ve quien mira (`cargarTareasDeLaReunion`, con la visibilidad de Tareas), sin sus propias
+    propuestas (esas se deciden arriba, en «Tus tareas») y sin el texto de la reunión. `lib/seguimiento` ya no lee
+    `ActionItem`.
+  - «Uso de Nexus»: `usoDeLoPropuesto` (lib/lo-propuesto/uso-server.ts) cuenta lo que NACIÓ en una ventana y cómo está
+    hoy; las decisiones de la ventana sobre lo que nació antes van aparte («De antes»). Por persona solo con
+    `conPersonas`. El script no imprime correos.
+  - Desde el 2026-10-10 cuenta también lo propuesto de las etapas 3b y 6, cada tipo con su lector en
+    `lib/lo-propuesto/registro-server.ts`: la **novedad** (un destino a la sección de un documento: «Listo» o el chat la
+    usan, «No aplica» la desestima; vence con la regla de la franja), el **hecho** para Procesos (el aviso «Volver a
+    mapear», solo de un hecho sacado de una transcripción; no tiene un «no») y la **sugerencia del handoff** congelado
+    (en borrador = pendiente, confirmada = usada, ya no está = desestimada; sin firma, porque el bloque no guarda quién
+    la usó y descartar lo borra). Lo delegado de un hecho (la ficha, la alerta, la etapa, el avance, el vigía) lo cuenta
+    su propio tipo. Lo que el sistema retiró al cambiar el dueño de la reunión cuenta como vencido. Sin la tabla de los
+    hechos, esos dos tipos salen en cero.
+  - El renglón «Lo que dejaron tus reuniones» de «Para ti» cuenta también los hechos con una novedad que puedes decidir,
+    con la misma regla que la tarjeta (`pideDecisionDeNovedad`). Con `SEGUIMIENTO_HECHOS` apagada no cambia nada.
+- **Sin SQL.**
+
+## La lectura de cada reunión es durable, comparte la fila con Tareas y ActionItem se retira (2026-10-09)
+
+> **Estado (2026-10-10): las dos partes están en el código, SIN commit ni deploy y con el SQL sin aplicar.** La primera (el núcleo): la cola (`lib/lecturas`), el job `seguimiento-reuniones`, la bandera `SEGUIMIENTO_REUNIONES_ENABLED`, la salida por herramienta con citas verificadas (`lib/sessions/lectura-salida.ts`), los compromisos a propuestas de Tarea (`lib/tareas/seguimiento.ts`), el costo por reunión, el vínculo de las reuniones con solo notas, INV44 y `scripts/comparar-lectura-de-reuniones.ts`. La segunda (los lectores): los «Pendientes» del Resumen (`/api/tareas/del-proyecto/[projectId]`), «Para ti» (sin `PENDIENTES_DE_REUNIONES`), la página de la reunión y el vigía leen Tareas; `lib/tareas/para-agentes.ts`; `POST /api/action-items` en 410; la copia de `/analyze` apagada y el modelo DEPRECATED. Hasta el deploy, en producción la reunión la sigue leyendo el post-proceso de antes, que escribe `ActionItem`.
+
+**Contexto.** El post-proceso se disparaba sin esperar resultado, en dos pasadas de hasta 120 reuniones, y si fallaba
+nadie lo reintentaba. Leía el JSON con una regex, guardaba compromisos y pedidos con citas sin verificar y escribía
+`ActionItem`, que no se usa: de 3.994 vivas, una persona tocó 46. Tareas ya tenía una tabla para leer cada reunión una
+vez (`LecturaDeReunion`). Elías decidió que `ActionItem` se retira y que los próximos pasos pasan a Tareas, por CSE.
+
+- **Una fila, una pasada, dos salidas.** La lectura de seguimiento usa la misma fila `LecturaDeReunion` que Tareas, con
+  su propio estado en 5 columnas aditivas (`seguimientoEstado`, `seguimientoDesde`, `seguimientoIntentos`,
+  `seguimientoLeidaAt` y `seguimientoError`). *Por qué:* `sessionId` es único, así que tiene que ser la misma fila, y
+  `estado` es la salida de Tareas, que sus pantallas y sus reintentos ya usan. La cola (`lib/lecturas/cola.ts`) es el
+  segundo escritor de esa tabla, declarado en la guarda de Tareas. Cuando la fila la crea el seguimiento, nace con los
+  campos que Tareas exige y con valores que significan algo: el equipo de la mayoría o `cs`, el rol `planning` (una
+  reunión de cliente propone, no cierra), la semana de la reunión y el estado de Tareas `en_espera` hasta que el
+  seguimiento termina. La crea `lib/tareas/lectura.ts` (`crearFilaDelSeguimiento`) a pedido de la cola: la cola escribe
+  solo las columnas `seguimiento*`, y una prueba de la guarda lo revisa campo por campo. Mientras espera, pedirla para
+  tareas («Leer una reunión») se la pide YA a la lectura de seguimiento (`leerAhora`, contra el presupuesto de quien la
+  pide), en vez de quedar diciendo «leyendo» hasta que el job la tome (sin presupuesto automático, nunca); con la
+  bandera apagada o sin el SQL de la cola, la lee Tareas. Al terminar, su salida de Tareas dice «La leyó el seguimiento
+  de la reunión» (`modo = "seguimiento"`), y «¿Faltó algo?» no se ofrece: la conversación ya se leyó entera. Si el
+  seguimiento termina sin salida (sin texto, la reunión dejó de ser de un cliente o falló tres veces), la fila se suelta
+  para Tareas (`sin_texto` o `error`), así se puede leer para tareas; una fila que Tareas ya leyó o pidió no se toca.
+  Los estados del seguimiento son `en_espera`, `leyendo`, `lista`, `sin_texto`, `copia`, `error` y `omitida` (al leerla
+  ya no era de un cliente ni de un prospecto, o era de puertas adentro). Una fila COPIA (la misma reunión en dos series
+  del calendario) no se lee dos veces: pedirla lee la original.
+- **Un job con toma atómica, reintentos y presupuesto** (`seguimiento-reuniones`). Toma 2 lecturas por tick, en
+  paralelo; una que lleva más de 15 minutos leyendo vuelve a la cola; se reintenta hasta 3 veces (a los 5 y a los 30
+  minutos), y el tick en que una llega a `error` (también por colgarse tres veces) el job falla: semáforo rojo y Sentry.
+  Si no queda presupuesto automático, se salta la tanda, aunque la guardia de presupuesto esté solo en aviso. El
+  enriquecimiento de Meet solo encola. Lo que sigue a la lectura (avance, ficha, etapa, preventa) corre después de
+  marcarla, para no trabar el scheduler, que corre los jobs en serie. *Por qué:* «dispara y olvida» perdía las lecturas
+  que fallaban.
+- **El tope CORTA la lectura, y alcanza para lo que el código permite** (corrección del 2026-10-10). 420 s por
+  lectura: el clasificador, el primer intento de 6.000 tokens y el reintento de 12.000 (solo esos 12.000 tardan de 130 a
+  240 s). Un `AbortSignal` llega al clasificador y a cada llamada a Claude, y si llega antes de la primera escritura de
+  la salida, la lectura termina en error sin escribir nada; una vez que empieza a escribir, termina. Si ni 60 s después
+  del corte terminó (algo que no escucha el corte), la fila queda `leyendo` —no vuelve a la cola, donde otra pasada la
+  leería en paralelo— y la rescata la regla de colgada a los 15 minutos; cuando esa lectura por fin termina, deja su
+  resultado y corre lo que sigue. *Por qué:* con 120 s y sin corte, toda lectura que se cortaba vencía el tope y seguía
+  viva por detrás: a los 5 minutos otra pasada leía la misma reunión (doble costo, otra minuta en borrador) o la
+  encontraba con minuta y lo que sigue nunca corría. El precio: un tick con una lectura larga traba al scheduler hasta 8
+  minutos.
+- **`SEGUIMIENTO_REUNIONES_ENABLED=0` vuelve al post-proceso viejo** (una copia congelada que escribe `ActionItem`). Es un
+  retroceso de emergencia: los lectores que pasaron a Tareas no vuelven atrás, así que en ese modo las `ActionItem`
+  nuevas no se ven en ninguna pantalla. Lo dice el RUNBOOK.
+- **La salida es una herramienta, no una regex** (`registrar_lectura`). Si se corta, se reintenta una vez con más tope,
+  sin pasar los 21.333 tokens que admite una llamada sin streaming; si vuelve a cortarse, queda en error.
+- **Una cita que no aparece en el texto descarta el compromiso o el pedido**: no se guarda «sin cita», y cuántos se
+  descartaron queda en la corrida. *Por qué:* una cita inventada en una tarea de seguimiento le haría reclamar al
+  cliente algo que no prometió.
+- **El dueño sale de `resolvedClientId`** (el manual, solo si no hay), sin recategorizar; sin dueño, la lectura queda
+  omitida. Una reunión que gana dueño se encola si todavía NO se leyó (o quedó sin texto, en error u omitida): la que
+  le cambia una persona (`reResolveSession`) y, desde el 2026-10-10, las frescas que gana un cliente en la
+  re-resolución masiva (`resolveAllSessions`, cuando se crea un cliente o se le suma un dominio; hasta 100 por corrida).
+  Las que gana un cliente en la sincronización de Meet al crearse se encolan al enriquecerse, como todas.
+  ⚠ **Una reunión que ya se leyó NO se vuelve a leer si le cambian el dueño**: lo que dejó (las propuestas de Tarea, los
+  pedidos fuera de alcance) queda con el cliente anterior hasta que alguien lo corrija a mano. INV42 lo muestra para las
+  tareas e INV46 para los pedidos. *Por qué:* releerla pisaría la minuta (que es memoria y quizás ya se revisó), y las
+  propuestas viejas conservan su `origenId`, así que una relectura no crearía las del dueño nuevo. Retirar sola lo no
+  decidido y releer sin tocar la minuta es una decisión pendiente de Elías.
+- **«Generar minuta» (MinuteDialog) y «Leer esta reunión» (la página de una reunión sin minuta) leen YA**, por la misma
+  cola: toman la fila (409 si el job o alguien más la está leyendo desde hace menos de 15 minutos) y cobran contra el
+  presupuesto de quien la pidió, sin el corte de 14 días. «Leer esta reunión» es el remedio de INV44 para una reunión
+  puntual; para varias, `scripts/encolar-lecturas-pendientes.ts` (en seco primero), que solo encola. Con `force`, una
+  minuta ya revisada o editada no se rehace (409): es memoria y se corrige en la reunión.
+- **Una sola regla para las puertas de una reunión** (`lib/sessions/acceso-a-la-reunion.ts`, 2026-10-10): con dueño,
+  acceso a ese cliente, y sin acceso 404; sin dueño, cualquier usuario interno, como en /sessions. La siguen la página,
+  la minuta, «Generar minuta», la transcripción (`GET /api/sessions/[id]`) y sus proyectos. *Por qué:* la página pedía
+  acceso pero `GET /api/sessions/[id]` servía la transcripción de cualquier reunión a cualquier interno, y la minuta
+  respondía 404 sin dueño mientras la página la mostraba (8 minutas de reuniones sin dueño no se podían aceptar).
+  `enrich` y `summarize` quedan como deuda nombrada en la guarda. ⚠ Las reuniones cuyo dueño es Smarteam (un cliente
+  INTERNO) piden acceso a ese cliente como cualquier otra: un CSE sin ese acceso las ve en /sessions y recibe 404 al
+  abrirlas. Está pendiente de Elías si deben seguir abiertas para quien estuvo.
+- **La ruta según la empresa:** cliente, la lectura completa; prospecto, la minuta y los compromisos, sin pedidos fuera
+  de alcance ni propuesta de ficha (la ficha de un prospecto la lleva la preventa); aliado, interno o sin dueño, nada. **Un pedido fuera de alcance solo nace en una reunión de un CLIENTE con
+  proyecto principal**: sin proyecto no se le pide al modelo, porque no hay nada vendido contra qué comparar. **Una
+  reunión de puertas adentro (todos los que estuvieron son de la casa) no se lee, aunque la cascada le haya puesto un
+  cliente por el título** (2026-10-10): lo dicho sin el cliente no se le atribuye. Es la misma regla de la tarjeta y de
+  «Para ti» (`esDePuertasAdentro`), y la aplican la cola, la lectura e INV44. Antes se leía, dejaba pedidos fuera de
+  alcance y tareas «lo prometió el cliente», y su fila de Tareas quedaba como leída: Tareas ya no procesaba sus
+  «Próximos pasos». Esas reuniones las lee Tareas. ⚠ Que una reunión de Smarteam o de un aliado no deje minuta también
+  le quita la minuta a los proyectos internos (medido el 2026-10-10: 5 proyectos de clientes INTERNO tuvieron 22 minutas
+  en 60 días); la minuta del proyecto (MinuteDialog) dice por qué en vez de esperar un minuto. Está pendiente de Elías
+  confirmar que es lo que quiere.
+- **Los compromisos pasan a propuestas de `Tarea`**, por el escritor de Tareas. Lo que se comprometió Smarteam, para
+  quien lo dijo (si no se sabe con seguridad, a «Por asignar» de su equipo). Lo que prometió el cliente, como **tarea de
+  seguimiento** para el CSE del proyecto («Recordarle a Ana que envíe la base»), con la cita verificada y la marca
+  «frena el plan» si aplica. Para lo de Smarteam, el NOMBRE que se dijo, si se resuelve con seguridad, manda sobre el
+  correo que eligió el modelo; con un nombre dudoso vale el correo (al revés del orden del plan: el modelo elige el correo
+  de una lista y se equivoca más que la transcripción; lo congela `lib/tareas/seguimiento.test.ts`). En un prospecto, el seguimiento va a quien lleva la preventa viva; sin preventa, solo se
+  proponen los compromisos de Smarteam. Las propuestas vencen a los 14 días, como toda propuesta de Tareas. *Por qué:*
+  un próximo paso, un solo destino. El cronograma no se toca en esta etapa: el canal al cronograma de lo que frena el
+  plan es de la etapa 6.
+- **`ActionItem` queda DEPRECATED, sin DROP y sin borrar filas**, con todos sus escritores apagados: el post-proceso, la
+  copia de pendientes de `/analyze` y la ruta que los creaba, que ahora responde 410. El script histórico
+  `scripts/migrate-pending-items-to-action-items.ts`, que todavía los creaba con `--apply`, se retiró el 2026-10-10. Una
+  prueba impide escribir uno nuevo, también desde `scripts/` (`lib/sessions/action-item-retirado.test.ts`). Los «Pendientes» del Resumen, «Para ti», la página de la reunión y el vigía leen Tareas. Lo histórico no se
+  importa.
+- **Los pendientes del proyecto toman la visibilidad de Tareas** (`tareasVisiblesWhere`): alguien de otro equipo con
+  acceso al cliente puede ver menos que antes. Se acepta: es la regla ya decidida de Tareas.
+- **La frontera Tareas ↔ agentes.** Los agentes INTERNOS (el vigía, la memoria interna del proyecto y el avance) leen
+  una proyección de las tareas por UNA sola puerta, `lib/tareas/para-agentes.ts`: título, para cuándo, estado y lado
+  (cliente o Smarteam). Nunca la cita, el contexto, las notas ni lo privado. Nada que ve el cliente lee tareas: ni los
+  documentos de cara al cliente, ni el correo de seguimiento, ni la vista externa. El censo de `lib/tareas/guardas.test.ts`
+  se enmienda con esa puerta, y la prueba de que ninguna lectura de los agentes nombra la cita suma `lib/cs`. La lectura
+  de seguimiento también es un agente: los títulos que manda como «YA SON TAREAS» salen de la misma puerta
+  (`titulosParaLaLectura`), sin lo de un espacio de «solo miembros» ni el borrador de un plan, y una prueba lo vigila.
+  *Por qué:*
+  los compromisos pasan a Tareas y el vigía y la memoria los necesitan; abrir las tablas a cada lector repetiría la fuga
+  que el censo existe para evitar.
+- **Cómo quedaron los lectores (segunda parte, 2026-10-10):**
+  - Los «Pendientes recientes» del Resumen y su diálogo se ven igual, con datos de Tareas (`cargarTareasDelProyecto`):
+    las tareas del proyecto de HubSpot que ve quien mira (sin las privadas de otras personas, tampoco para el Super
+    Admin: es una pantalla del cliente, no la semana de alguien), lo abierto y lo que espera decisión de las últimas 4 semanas
+    (hasta 5) y el resto en «Ver los N». Una propuesta dice «Por decidir» y se decide en Mis tareas; la casilla aparece
+    solo si quien mira puede terminarla; «Agregar» crea una tarea tuya del proyecto sin semana; la X la pasa a «Ya no se
+    hará» con el motivo fijo «Se sacó de los pendientes del proyecto.» (Tareas exige un motivo; nada se borra). El GPS
+    ya no lee pendientes: `pendingItems` y `actionItems` viajan vacíos.
+  - La página de la reunión dice «N tareas» (las que dejó y ve quien mira, `contarTareasDeLaReunion`), y la tarjeta
+    «Lo que dejó esta reunión» muestra plegado lo demás que dejó en Tareas (`cargarTareasDeLaReunion`), con la misma regla.
+  - En «Para ti» la fuente TAREAS dice «Salieron de tus reuniones»: no hay otra lista de lo vencido de las reuniones.
+  - El vigía lee «Compromisos vencidos (Tareas)» por `pendientesVencidosParaElVigia`. La puerta también trae
+    `compromisosAbiertosParaAgentes`, para la memoria interna del proyecto y el avance. Su `lado` sale del evento con
+    que nació la tarea (la lectura de seguimiento lo guarda); sin ese evento, es trabajo de Smarteam.
+  - La puerta, en el censo: los agentes internos (`lib/cs` y `lib/memoria`) importan de `lib/tareas` solo
+    `para-agentes.ts` y no consultan sus tablas; `lib/cs` entra a la prueba de la cita.
+- **Las reuniones que la lectura no toma se vinculan a su proyecto** desde el job (las que ya ocurrieron; solo el
+  clasificador, nunca el override): las de solo notas, y desde el 2026-10-10 también las que tienen transcripción y no
+  están en la cola (transcripción corta, de puertas adentro, o con dueño por la re-resolución masiva). Las que la lectura
+  va a leer o ya leyó, no: las vincula ella. Leer las de solo notas es de la etapa 6.
+- **INV44 es la lectura**: toda reunión con un cliente o un prospecto, de 14 días o menos, enriquecida hace más de 24 h,
+  con transcripción y que no es de puertas adentro, tiene su lectura (lista, sin texto, copia o error) o su minuta. Una
+  en `error` cuenta porque la señal es el job, que se pone en rojo ese tick. Su remedio: el job en Integraciones; una
+  por una, «Leer esta reunión»; varias, el script de la cola. El día del deploy, las reuniones enriquecidas antes de que
+  existiera la cola no tienen fila: se encolan con `scripts/encolar-lecturas-pendientes.ts` (medido el 2026-10-10: 6 de
+  92 sin minuta). El invariante de los hechos de la etapa 6 pasa a ser INV45. **INV46** es su gemelo de INV42 para los
+  pedidos: ningún pedido fuera de alcance vivo queda en un cliente que no es el dueño de su reunión.
+- **El costo por reunión, sin SQL:** toda llamada a la IA que dispara la lectura de una reunión (la lectura, el
+  clasificador, el avance, la ficha, la etapa, la preventa, y el clasificador de las reuniones con solo notas) queda en
+  `LlmCall.origen` como `reunion:<sessionId> › <sitio>` (solo `reunion:<sessionId>` si el sitio no dijo nada). Lo pone
+  `conLaReunion` UNA vez, arriba de la lectura; cada sitio sigue poniendo su `origen` y el medidor guarda los dos juntos
+  (`origenDeLaFila`, lib/ai/contexto-de-corrida.ts). *Por qué así:* nadie agrupaba por `origen` (la pantalla de gasto
+  agrupa por agente y por corrida; el presupuesto, por quién la disparó), así que el prefijo no rompe nada, y sumar por
+  reunión es `split_part(origen, ' ', 1)` en SQL o `reunionDelOrigen` en código. Lo de adentro sigue diciendo de dónde
+  vino («sessions/post-process › avance»), que un `origen` reemplazado habría perdido.
+- **SQL:** `scripts/sql/2026-10-10-lectura-de-seguimiento.sql` (las 5 columnas, su CHECK y su índice), después del SQL de
+  Tareas y antes del deploy. Requisito duro: el código de Tareas en producción. Antes de prender,
+  `scripts/comparar-lectura-de-reuniones.ts` compara minutas viejas y nuevas en 20 reuniones (≈US$1,6). Los pedidos sin
+  proyecto los ubica (o los descarta) una persona con `scripts/revisar-pedidos-fuera-de-alcance.ts` (etapa 0), que ya
+  cubre lo que el plan llamaba `ubicar-pedidos-sin-proyecto.ts`.
+
+## La memoria de la cuenta y del proyecto: un solo cargador (2026-10-09)
+
+> **Estado (2026-10-10): núcleo y lectores en el código, sin commit ni deploy**: `lib/memoria` (tipos, registro de lectores, armador puro, cargador), la ficha con `origenPorCampo` y su `historia`, `lib/sessions/recortar-transcripcion.ts` y la puerta `lib/exploraciones/para-la-memoria.ts`. Ya leen la memoria todos sus lectores: el handoff, el kickoff, el diagnóstico y la planificación (desde la etapa 7, sin la ficha ni los procesos, que leen aparte), integraciones, la implementación, la entrega, el avance, el resumen del proyecto, la propuesta comercial, la preventa (A0), la exploración del proyecto (F0), el correo de seguimiento, el pase de cuenta y el vigía. La lista de lo que falta conectar (`AUN_SIN_CONECTAR`, lib/memoria/consumidores.test.ts) está vacía. `fichaParaPrompt` (lo que el diagnóstico y la planificación leen de la ficha) también corta en código la postura de las personas para un documento del cliente.
+
+**Contexto.** Cada agente armaba su contexto de la cuenta por su cuenta, y los que más lo necesitan (handoff, kickoff,
+cronograma, vigía) no leían la ficha. La ficha estaba confirmada en 2 de 168 clientes; el resumen del proyecto solo lo
+mostraba la pantalla y se rehacía releyendo 12 reuniones.
+
+- **Un solo cargador** (`lib/memoria`): `memoriaDeLaCuenta` (la ficha, los procesos, la historia de los proyectos, lo
+  fuera de alcance y lo aprendido en la preventa) y `memoriaDelProyecto` (las minutas, los acuerdos, los compromisos
+  abiertos, las desviaciones y los resultados). Los hechos de las reuniones (etapa 6) entran solo al alcance interno, en
+  las dos: los usados, y los pendientes rotulados «propuesto por la lectura de «X» del <fecha>, sin revisar»; nunca los
+  que quedaron solo delegados ni los desestimados (`hechosParaLaMemoria`, lib/seguimiento/hechos-server.ts). Un agente
+  nuevo llama al cargador: no arma su propio contexto, y ninguno vuelve a leer todas las reuniones.
+- **Tres alcances, no dos:** `cliente`, `sin-lo-interno` e `interno`. Cada consumidor está declarado en un registro que
+  valida un test, y el alcance de cada pieza sale de `pieceBySlug().clientFacing`, no de una lista aparte. El handoff es
+  `sin-lo-interno` a propósito: es interno, pero escribe en una sola llamada secciones que leen el kickoff y el
+  cuestionario del cliente (el criterio de «Lo interno NO se le manda al agente del handoff»). *Por qué:* con dos
+  alcances, el handoff recibía lo interno o lo perdía todo.
+- **Quién lee qué:** el kickoff, el diagnóstico, la planificación, integraciones, la entrega, la propuesta comercial y el
+  correo de seguimiento, el alcance `cliente`; el handoff, `sin-lo-interno`; la implementación, el avance, el resumen del
+  proyecto, la exploración del proyecto, la preventa de un cliente que ya existe y el vigía, `interno`. El vigía lee la
+  memoria desde el 2026-10-10 (la condición era la entrega 2 de la cartera, que ya está en el código): la cuenta y el
+  proyecto, sin las reuniones, los compromisos ni los resultados, que ya lee por su lado (`lib/cs/watchdog-cuenta.ts`).
+  La facturación y Partner los sigue leyendo aparte: nunca entran a la memoria.
+- **Para el cliente se corta en código, no en el prompt**: la postura de las personas (de los stakeholders, solo nombre,
+  cargo y papel), los campos internos de la ficha, lo fuera de alcance, lo interno de la preventa, los riesgos de la
+  minuta y las reuniones que no fueron con el cliente. *Por qué:* la postura era una instrucción al modelo, y la regla
+  del repo es filtrar datos, no rogarle al modelo.
+  - **La postura no se corta por posición (revisión del 2026-10-10).** De una viñeta de primer nivel con las cuatro
+    partes (nombre — cargo — papel — postura) quedan las tres primeras; con menos, solo el nombre, porque no se sabe
+    qué parte falta («Ana — muy escéptica»); una sub-viñeta no va, y una viñeta que no empieza con un nombre tampoco
+    (`stakeholdersSinPostura`). Por eso la ficha pide siempre las cuatro partes, con «sin dato» en la que falta
+    (lib/clients/ficha-pedido.ts, la ayuda del campo y la preventa).
+  - **La regla de la frontera viaja DENTRO del bloque de la memoria** fuera del alcance interno: para un documento del
+    cliente, la de su pieza (`fronteraDeLaPieza`, la misma del bloque de reuniones); para el handoff, una propia (lo que
+    escribe puede llegar al kickoff y al cuestionario). Y la red en código: de las minutas, fuera del alcance interno,
+    quedan afuera los acuerdos con un monto o que hablan de negociación sin cifra («15% de descuento», «precio
+    especial», «condiciones de pago», `traeNegociacion`), y las minutas que ninguna persona revisó
+    (`minutasSinRevisar`): el borrador del kickoff alimenta el cuestionario que abre el cliente sin revisión.
+  - **La memoria del proyecto respeta la X de cada documento.** Cada lector con «Contexto adicional» propio declara su
+    destino (`ConsumidorDeLaMemoria.destino`); una reunión que el CSE sacó de ESE documento no vuelve por la memoria.
+    Las que no entraron a su material por espacio, sí.
+- **Los agentes internos leen también lo propuesto de la ficha, con su fuente** (decisión de Elías). Nunca lo que propuso
+  el mismo agente que lee, ni lo derivado de él, y nunca en lo que ve el cliente. *Por qué:* el handoff propone a la
+  ficha; si leyera lo propuesto, en la regeneración siguiente leería lo que él mismo inventó.
+- **La ficha guarda fuente, fecha y autor por campo**, y en lo propuesto, el origen de cada campo (`origenPorCampo`,
+  escrito en `fusionarPropuesta`, así cubre todas las puertas). Los descartes quedan registrados. Vive en el mismo JSON,
+  con versión del formato: sin SQL. *Por qué:* un agente tiene que saber qué tan viejo es un dato y de dónde salió, y la
+  regla anterior no se cumple sin el origen por campo.
+- **La memoria nunca lleva facturación, montos de Partner ni rentabilidad**, en ningún alcance: eso sigue siendo del
+  vigía. Un test congela que nada de rentabilidad, costos ni comisiones entra a la memoria. *Por qué:* lo interno
+  también tiene capas; Partner y la plata de la cartera son de la CSL y dirección, y la rentabilidad, de dirección.
+- **Los compromisos abiertos salen de Tareas, solo en el alcance `interno`**, por la puerta `lib/tareas/para-agentes.ts`.
+  *Por qué:* la etapa 2 va antes y ahí viven los próximos pasos; el handoff y lo que ve el cliente no leen tareas.
+- **Lo de la preventa va a la ficha desde el primer día**, como propuesta y con lo interno marcado (decisión de Elías). La
+  marca no es solo texto: el campo propuesto que trae algo interno (la radiografía en «A qué se dedica», «quién decide»
+  en las personas) queda marcado (`PropuestaDeFicha.internoPorCampo`) y no le llega al handoff hasta que el CSE lo
+  confirma. Mismo criterio para las puertas con IA: la ficha no lee reuniones de puertas adentro (`fuentesDelCliente`
+  y cada reunión en `proponerFichaDesdeSesion`), porque lo propuesto lo lee el handoff. El mapa: la
+  radiografía a «A qué se dedica», su CRM actual a las herramientas, los retos a los retos, las consecuencias y las
+  implicaciones al dolor, quién decide a las personas, la apertura a la asesoría y el «por qué ahora» a la motivación.
+  Las metas de la preventa quedan dentro de los retos: la ficha no las acepta en «Resultados que persigue», que sale de
+  los resultados confirmados de cada proyecto. El presupuesto, las objeciones, la hipótesis de valor y la escala no
+  fuerzan campos nuevos. *Por qué:* hasta ahora solo llegaba desde una exploración de proyecto, y lo aprendido en la
+  venta se perdía en el traspaso.
+- **En la preventa, la memoria entra con el id `A0`**, que no cuenta como fuente del cliente: la regla «sin una pista del
+  cliente no hay nivel» sigue en pie.
+- **Los hallazgos confirmados de la auditoría del portal entran como contexto interno**, no como propuesta a la ficha.
+- **El pase de cuenta suma lo esencial de la memoria**: la ficha confirmada, las personas, los compromisos abiertos y
+  los pedidos fuera de alcance.
+- **El resumen del proyecto lee minutas en vez de releer reuniones, y el avance lee la reunión nueva entera** (recortada
+  a 40.000 caracteres) más las minutas de las anteriores, no 12 reuniones. Los dos, por el chokepoint.
+- **Sin SQL ni re-siembra.** Suma unos 2.000 a 4.000 tokens por generación (≈US$0,01) y ahorra las relecturas.
+- **Cómo quedó el núcleo en el código (2026-10-10):**
+  - `lib/memoria/consumidores.ts` declara cada lector con su pieza, su alcance (de `pieceBySlug().clientFacing`, salvo
+    el handoff), los orígenes de la ficha que no lee (los suyos) y las partes que ya tiene por otro lado (la preventa no
+    se lee a sí misma). `queCargar(alcance)` dice qué se pide a la base: lo que el alcance no usa ni se consulta.
+  - `lib/memoria/armar.ts` es la única función que decide qué entra, y se prueba sin base. Además de lo de arriba, para
+    el cliente corta los acuerdos de la minuta que traen un monto, quién causó una desviación, su detalle y las que
+    nadie confirmó, los ids de trato, los procesos sin validar y los resultados sin confirmar. **El handoff tampoco
+    recibe la postura de las personas**: es la misma razón que lo deja sin los campos internos.
+  - Topes: 6.900 caracteres la cuenta y 8.900 el proyecto, cada parte con el suyo (los 900 de más son de los hechos de
+    la etapa 6, que solo existen en el alcance interno); las últimas 8 reuniones con contenido, 560 caracteres cada una.
+    Sin nada que decir, el texto es "" y no se manda.
+  - La ficha: `fusionarPropuesta` acumula `origenPorCampo`; en las propuestas de antes el origen se deduce de las
+    etiquetas de sus fuentes, y lo que no se reconoce cuenta como «desconocido», que para excluir vale como sí. Lo
+    propuesto también queda afuera si una de sus fuentes es del lector («Actualizar con IA» lee los handoffs). Al
+    confirmar, cada campo que cambia guarda su `historia` (formato 2 de `Client.ficha`).
+  - Las reuniones salen de `getProjectMemberSessions` + `soloOcurridas` y su contenido de UNA consulta (resumen y
+    minuta, nunca la transcripción); en el alcance interno van con `resumenDeReunion`.
+  - La preventa entra por `loAprendidoEnLaPreventa` (lib/exploraciones/para-la-memoria.ts, la preventa más reciente,
+    abierta o archivada): lo que recibe el handoff más lo interno rotulado, primero lo interno.
+  - Para el pase de cuenta, `loEsencialDeLaCuenta` da lo mismo en líneas cortas para un aviso (no un bloque de prompt):
+    la ficha confirmada, las personas, los compromisos abiertos de los proyectos activos y lo fuera de alcance abierto.
+    Lo llama la ruta del pase (`app/api/clients/[id]/cse-encargado`), no `lib/cs/pase-de-cuenta.ts`, que es puro.
+  - `queSabeLaIA` da los conteos de «Lo que la IA ya sabe» (pantalla.ts los manda) y la página de inicio de la
+    exploración los muestra en tarjetas (lib/exploraciones/lo-que-sabe-la-ia.ts). El congelado del handoff lo lee del
+    último hito `congelado` | `rehecho` del canvas del handoff (del dueño, si cuelga de un hermano), con cómo se congeló;
+    en un proyecto dice además si la empresa tuvo una preventa (`ultimaPreventa`, por la puerta de la preventa).
+  - Las pruebas: `armar.test.ts`, `frontera.test.ts` (centinelas en todo lo interno, y que el código no lea plata),
+    `consumidores.test.ts` (el censo y la lista de lo que falta conectar, que solo encoge) y `cargar.test.ts`.
+- **Cómo quedaron los lectores en el código (2026-10-10, segunda parte):**
+  - Cada lector pide la memoria con SU nombre (`lector: "…"`), y el registro dice además qué partes NO recibe porque
+    ya las tiene o porque no le sirven (`sinPartes`): el handoff, sin la historia (la sigue leyendo por
+    `loadPriorRelationshipContext`, con los handoffs previos); la implementación, sin los procesos (los lee enteros);
+    integraciones, sin desviaciones ni resultados; la entrega, sin procesos, historia, resultados ni desviaciones (ya
+    los lee, o traen semanas y fechas que en la entrega escribe Nexus); el resumen del proyecto, sin la historia ni lo
+    fuera de alcance (los lee aparte); la propuesta comercial, sin los procesos; el correo, solo la ficha.
+  - `memoriaDelDocumento` junta la memoria de la cuenta y la del proyecto para un documento de proyecto. El material de
+    cada documento (`cargarMaterialDelDocumento`) devuelve `sesionesUsadas`, que van como `yaLeidas`: la misma reunión
+    no se lee dos veces.
+  - El handoff: `memoriaDeLaCuenta` con el alcance `sin-lo-interno` reemplaza la ficha recortada de la etapa 0, en el
+    mismo lugar del mensaje base.
+  - El kickoff, integraciones y la entrega (alcance del cliente) y la implementación (interno) suman su bloque después
+    de su material, con el rótulo de que nada de ahí agranda lo vendido.
+  - El avance (`getSessionsForProgress`, lib/sessions/project-sessions.ts): la reunión NUEVA entera —la del
+    post-proceso o, con el botón, la más reciente con algo que leer—, las demás con lo que ya dejaron (minuta y notas),
+    nunca 12 transcripciones; más la memoria del proyecto (compromisos abiertos, desviaciones ya registradas,
+    resultados) sin esas reuniones.
+  - El resumen del proyecto: el contenido de cada reunión es `resumenDeReunion` (UNA consulta, sin transcripción); «sin
+    registro» pasa a ser «sin minuta ni resumen»; y lo que Nexus sabe de la cuenta es una fuente citable propia
+    (`memoria:cuenta`).
+  - La propuesta comercial: solo si la empresa no es prospecto o tiene la ficha confirmada, y DESPUÉS del chequeo de
+    fuentes: no cuenta como la fuente que la generación exige.
+  - La preventa: A0 solo en una empresa que no es prospecto, y no al releer una reunión. F0 de la exploración del
+    proyecto pasa a ser la memoria (antes, la ficha confirmada sola). El prompt de los dos dice que A0 y F0 no alcanzan
+    para un nivel ni una casilla del marco.
+  - Lo de la preventa a la ficha (`lib/exploraciones/a-la-ficha.ts`, sin IA, origen «Preventa»): al PREPARAR, lo que la
+    preparación propuso para las casillas con campo (sin lo descartado ni lo que no tiene una pista del cliente); al
+    CONFIRMAR en el lienzo, lo nuevo. Cada campo suma lo nuevo a lo que la ficha ya tenía, sin repetir; cuando la
+    casilla es interna, la fuente dice «interno de la preventa» y el campo queda marcado (`interno` → `internoPorCampo`):
+    sin confirmar, no le llega al handoff. Una persona siempre lleva cuatro partes (nombre — cargo — papel — postura, con
+    «sin dato» en la que falta), así el recorte para el cliente deja nombre, cargo y papel. La exploración de un PROYECTO
+    sigue por la puerta con IA («lo que averiguó el CSE»).
+  - El correo: la minuta y los compromisos de ESA reunión salen de su `SessionMinute` (acuerdos y decisiones) y de la
+    salida de su lectura de seguimiento (`AgentRun.output` del agente post-sesión: los compromisos sin la cita ni el
+    correo), solo si la reunión fue de Meet y con el cliente, y sin las líneas con monto.
+  - El pase de cuenta: el detalle de un aviso se corta a 280 caracteres, así que lo esencial va en UNA línea de conteos
+    y nombres («Lo que ya se sabe: 4 datos confirmados de la ficha · personas: Ana, Luis · 2 compromisos abiertos · 1
+    pedido fuera de alcance abierto»), DESPUÉS del color, la relación, la renovación y las alertas, que tienen que
+    entrar siempre (antes iba segunda y las empujaba fuera del corte). El detalle sigue en la ficha. ⚠ Eso no cumple
+    del todo la decisión de Elías (que el CSE nuevo reciba lo esencial, no conteos): cómo entregarlo entero —un segundo
+    aviso, una vista— lo decide él.
+  - Medido sin IA con una cuenta llena hasta el tope (`lib/memoria/por-lector.test.ts`, con `MEDIR=<archivo>`): el
+    handoff suma ~2.200 caracteres, el kickoff ~6.200, integraciones ~6.000, la implementación ~11.900, la entrega
+    ~4.700, la propuesta comercial ~2.000, la preventa ~4.300, la exploración del proyecto ~6.000, el correo ~1.400 y el
+    avance ~6.700 de memoria (más la reunión nueva entera, hasta 40.000, y los resúmenes de las demás, en vez de 12
+    transcripciones). Con fichas sin confirmar —la mayoría—, mucho menos.
+
+## El handoff se congela (2026-10-09)
+
+> **Estado (2026-10-10): en el código, sin commitear.** Las reglas en `lib/handoff/congelado.ts`, lo que escribe la
+> base en `lib/handoff/congelado-server.ts`, «Buscar lo nuevo» en `lib/handoff/sugerencias.ts` y `-server.ts`, la ruta
+> `POST /api/projects/[projectId]/handoff/congelar`, la puerta del congelado en /analyze y los botones en
+> `ProjectHandoffSection`. Sin SQL (usa `HitoDeDocumento` y `VersionDeDocumento.protegida`, del 2026-10-02). Los
+> handoffs que ya existían siguen sin congelar hasta que Elías corra `scripts/congelar-handoffs-aplicados.ts`.
+
+**Contexto.** El handoff es la foto fija de lo vendido en un proyecto, pero no era fijo: se regeneraba con el botón, sus
+bloques nacían confirmados y un bloque «después del cierre» se alimentaba de reuniones posteriores. Elías decidió
+congelarlo en un momento que siempre exista, no al publicar el kickoff (es opcional: 27 de 32 proyectos con handoff no
+lo tenían publicado).
+
+- **Se congela con «Congelar» o, solo, la primera vez que se aplica el cronograma que propone.** «Congelar» y «Buscar
+  lo nuevo» piden su propia celda, `handoff.congelar`: por defecto el CSE, la CSL, Ventas y dirección (Dev y Marketing
+  la reciben desde /team si hace falta; ADMIN no tiene ninguna celda del handoff). «Rehacer desde cero» reescribe el
+  documento y sigue pidiendo `handoff.regenerate`, que el CSE no tiene. Al aplicar el cronograma congela quien lo aplica
+  (también un CSE): ahí no decide la persona, lo decide la regla, y no se mira la celda. *Por qué:* aplicar ese
+  cronograma es el momento en que lo vendido pasa a ser plan.
+  - ⚠ **Corrige lo del 2026-10-09** («congela quien puede regenerar, sin celda propia»): con esa regla el CSE, que es
+    quien congela, no podía. Congelar y buscar lo nuevo no reescriben el documento, así que no van con `regenerate`.
+    Las sugerencias las pide el CSE, pero usarlas o descartarlas es editar el documento (`handoff.write`).
+  - ⚠ **La primera generación de un proyecto sin cronograma NO congela.** Ahí el handoff crea las fases directo, sin
+    propuesta que aplicar; congelarlo en ese momento dejaría congelado todo handoff recién nacido, antes de que el
+    equipo sume las reuniones que faltaban. Queda para «Congelar» o para la primera propuesta del handoff que se aplique.
+- **Se guarda como un hito del canvas del handoff, con su foto protegida** (`HitoDeDocumento` y
+  `VersionDeDocumento.protegida`, del SQL del 2026-10-02), sin columnas nuevas. *Por qué:* la fila de `Handoff` no siempre
+  existe, el hito ya guarda quién y cuándo, y la foto ES la foto fija de lo vendido. El estado lo dice el último hito
+  «congelado» o «rehecho»; cómo se congeló (botón, cronograma, rehacer, migración) va en el texto del hito. Congelar es
+  idempotente y toma la fila del canvas con `FOR UPDATE`: dos «Aplicar» a la vez dejan un solo congelado.
+- **Sigue editable a mano. La IA ya no lo regenera**: con el handoff congelado, /analyze responde 409 a un pedido sin
+  modo (una pestaña de antes) y «Regenerar» pasa a «Buscar lo nuevo». Lo nuevo de las reuniones posteriores llega como
+  sugerencias, bloques en borrador con su cita que se usan o se descartan. Se piden a mano, solo leen lo posterior al
+  congelado y solo suman: no vuelven a proponer fases ni tocan las etiquetas, el resumen, los resultados ni la ficha. Un
+  pedido nuevo se dice como «Pedido nuevo, fuera de lo vendido» y va a fuera de alcance por la vía que ya existe (la
+  lectura de cada reunión). *Por qué:* lo vendido no cambia por una reunión; lo acordado después se ve sin pisar lo que
+  se vendió.
+  - **Qué lee:** lo que ya dice el handoff, las reuniones que alimentan el handoff con fecha posterior al congelado (la
+    misma política que la generación, por el chokepoint, solo las que ya ocurrieron) y las fuentes manuales cargadas
+    después, más las exclusiones y las instrucciones del handoff. No lee HubSpot. Sin nada posterior, 409 antes de crear
+    la corrida.
+  - **La cita se verifica:** la frase tiene que aparecer tal cual en la reunión que nombra el modelo; si no, la
+    sugerencia no entra. «Resultados que el cliente necesita alcanzar» no recibe sugerencias (un resultado va a los
+    documentos, nunca al handoff).
+  - **Cada búsqueda lee TODO lo posterior al congelado**, así que sus sugerencias reemplazan a las que nadie revisó; las
+    usadas ya son contenido y las retocadas a mano se quedan. Si no encontró nada, no borra nada. Lo que alguien descartó
+    no vuelve: cada corrida guarda en su salida lo que propuso, y la siguiente no repite esa cita ni ese texto.
+  - **Mientras nadie la usa, una sugerencia no llega a ningún agente** (kickoff, diagnóstico, entrega…): el loader del
+    canvas la deja afuera (`esSugerenciaPendiente`). Usada, es handoff como cualquier otro bloque.
+  - **La corrida de «Buscar lo nuevo» no es una corrida del documento:** nace con el paso «Buscar lo nuevo en el
+    handoff» y queda fuera del historial del handoff y del «último handoff» que lee el cronograma
+    (`whereCorridasDeDocumento`); si no, la comparación de la propuesta del cronograma con el último handoff desaparecía.
+    Tampoco cuenta en la lista de handoffs del cliente («las sesiones con las que se armó»), ni para marcar qué corrida
+    está vigente en el historial (sus bloques nacen del agente y son los más nuevos): las dos usan
+    `SIN_BUSCAR_LO_NUEVO`, y un censo de lib/agents/historial-corridas.test.ts frena a un lector nuevo que lo olvide. Si
+    se recarga la página a mitad de una búsqueda, la sección la retoma sabiendo que es una búsqueda (`corridaEnCurso.sugerir`):
+    al terminar no sincroniza con HubSpot ni avisa al cronograma.
+- **Un handoff congelado que alguien vació a mano** se rehace desde cero (con motivo) desde la misma tarjeta: «Generar»
+  daría 409 y «Buscar lo nuevo» no tiene sobre qué sugerir.
+- **El enrutador de la etapa 6 nunca escribe en el handoff**: un acuerdo de alcance va a los documentos del proyecto.
+  *Por qué:* resuelve el choque del plan entre «nunca el handoff» y «sugerencias sobre el handoff»: las sugerencias son a
+  pedido y solo suman.
+- **«Rehacer desde cero» pide un motivo** (10 caracteres o más), corre la generación de siempre y, al terminar, deja el
+  hito «rehecho» con el motivo y enseguida el «congelado» nuevo, con una foto nueva. Antes de la foto se van las
+  sugerencias que nadie revisó. Si la corrida falla, el handoff queda congelado como estaba: no hay un estado a medio
+  rehacer.
+- **El aviso de «desactualizado» sale de lo último que cambió el handoff**: la generación, o una edición o una
+  sugerencia usada después del congelado. Lo calcula una sola función para las dos pantallas (`ultimoCambioDelHandoff`).
+  Descartar una sugerencia toca el documento pero no cambia lo vendido: se compara con la foto del congelado, sin los
+  borradores, y solo cuenta si cambió.
+- **El bloque «después del cierre»** sigue sirviendo para la primera generación y para rehacer; una vez congelado, lo
+  posterior llega como sugerencias.
+- **Recurrentes:** el ciclo nuevo es otro proyecto con su handoff, que se congela solo. Un recurrente que lleva varios
+  ciclos en un solo cronograma se congela una vez, y el ciclo nuevo se hace con «Rehacer desde cero» y el motivo «Ciclo
+  N».
+- **Los 53 handoffs que ya existen** se congelan solo si Elías lo decide, con `scripts/congelar-handoffs-aplicados.ts`
+  (simulacro primero, sin Wherex). Dos grupos: A, los que tienen aplicada una propuesta del handoff (la misma regla de
+  hoy), que congela `--apply`; y B, los que tienen el cronograma creado directo por el handoff, que solo entran con
+  `--tambien-creados`.
+
+## Un solo sistema de alertas, con tres detectores (2026-10-09)
+
+> **Estado (2026-10-10):** las reglas en código y el vigía ya escriben en `CsAlert`. El detector de la lectura de cada
+> reunión está en el código (etapa 6: `lib/cs/alertas-de-la-lectura.ts` y su `-server`), detrás de la bandera
+> `SEGUIMIENTO_HECHOS` (apagada por defecto): mientras esté apagada, la queja la sigue levantando solo el vigía.
+
+**Contexto.** El plan de la cartera decía que la queja la levanta el vigía, y la lectura de cada reunión iba a dejar
+quejas y riesgos por su lado. Elías tomó la recomendación: un solo sistema, varios detectores. Un solo agente que lo haga
+todo no conviene: las reglas cuestan US$0 y son exactas, y el vigía solo se paga donde hace falta juicio.
+
+- **Todas las alertas de la cuenta viven en `CsAlert`, con el mismo ciclo**: abierta, resuelta o descartada con una nota,
+  y vuelve solo con una señal nueva (`queHacerConLaRedeteccion`).
+- **Tres detectores:** (1) las reglas en código (hoy, los avisos de renovación; mañana, las que se sumen); (2) la
+  lectura de cada reunión, que levanta sola la QUEJA verificada (nunca en una reunión de puertas adentro); y (3) el
+  vigía con IA, que juzga la cuenta entera, recibe el riesgo de la lectura como evidencia y decide si levanta una alerta.
+- **«El cliente hablando» se comprueba, no se le cree al modelo** (revisión de la etapa 6, 2026-10-10): la lectura
+  levanta la queja solo si la cita está en la TRANSCRIPCIÓN, en el turno de alguien que no es del equipo
+  (`loDijoElCliente`, lib/seguimiento/hechos/tipos.ts). Una cita de las notas de Gemini es un resumen, no palabras del
+  cliente, y con un solo nombre que coincide con alguien del equipo «cliente» lo dijo el modelo: esas quejas van como
+  evidencia al vigía (destino `vigia.queja`). Por lo mismo, el hecho guarda quién lo dijo solo si lo comprobó el turno.
+  Y el vigía no da por verificada una QUEJA cuya frase está en el turno de alguien de Smarteam (nombre y apellido de
+  alguien del equipo): lo que dice el equipo no es una queja del cliente.
+- **Una alerta por cita**: si el vigía y la lectura ven la misma queja, no se duplica. La de la lectura usa la misma
+  `evidence.cita`, así pinta el color igual que la del vigía. «La misma» es la misma FRASE de la misma reunión (una
+  contiene a la otra: cada detector corta la cita a su manera): dos quejas distintas de la misma reunión son dos
+  alertas. Al actualizar una alerta, las reuniones y los hechos de su evidencia se acumulan (`juntarEvidencia`): si no,
+  al cerrarla, volver a ver la reunión vieja contaba como evidencia nueva y la reabría.
+- **Cobranza conserva sus alertas aparte** (`AlertaCobro`). Igualar su ciclo (nota al cerrar, volver con una señal nueva
+  en vez de los 7 días) lo decide Finanzas.
+- **La lectura levanta SOLO la queja.** Nunca un retraso (`TIMELINE_OVERDUE`): eso lo juzga el vigía con el cronograma.
+  Su llave empieza con `lectura:` y la alerta es de la cuenta (sin proyecto), como la queja del vigía. Antes de crear,
+  cada detector busca la gemela abierta con la misma cita (`mismaCitaVerificada`, lib/cs/alertas-reglas.ts) y la
+  actualiza, SOLO para la queja: un retraso es de su proyecto, y el de otro proyecto que cita la misma reunión es otra
+  alerta.
+- **El riesgo, al vigía.** El contexto del vigía suma «Riesgos de reuniones recientes sin alerta» (de 30 días, con su
+  cita, su reunión y quién lo dijo; también las quejas sin comprobar), y el barrido diario toma como candidato el
+  proyecto con un riesgo nuevo desde su última corrida, aunque tenga una alerta abierta. Sin riesgos (o con la bandera
+  apagada) la sección no va: el pedido del vigía queda como sin la etapa 6.
+- **Una reunión que cambia de dueño cierra la alerta de queja que sostenía en el cliente anterior**, firmada por el
+  sistema con «La reunión cambió de dueño» (o le saca esa reunión, si la sostienen otras). Ver «Hechos, enrutador y
+  novedades».
+
+## Hechos, enrutador y novedades (2026-10-09)
+
+> **Estado (2026-10-10): la etapa 5 está en el código y sin correr** (`scripts/sondeo-de-hechos.ts` y los módulos puros
+> de `lib/seguimiento/hechos`: los tipos, el pedido, la verificación de las citas y el texto de la reunión, que lee
+> `lib/sessions/reunion-para-hechos.ts` por el chokepoint). **El núcleo de la etapa 6 está en el código y APAGADO**: la
+> tabla `HechoDeReunion` (SQL `scripts/sql/2026-10-10-hechos-de-reunion.sql`, sin aplicar), el registro de destinos, el
+> enrutador (el sondeo ya los usa en seco), la lectura de hechos (`lib/seguimiento/hechos-server.ts`), la ficha, el
+> avance y la etapa desde los hechos, el detector de la queja, INV45, los hechos en la memoria interna y **las
+> novedades en pantalla** (el cálculo, el riel, la franja arriba del documento, «Qué sigue», los hechos en la tarjeta de
+> la reunión y «Volver a mapear» de Procesos). Corre solo con `SEGUIMIENTO_HECHOS=1` (solo «1»: cualquier otro valor la
+> deja apagada) y el SQL aplicado; sin las dos, la lectura de cada reunión sigue como antes y nada de esto se ve ni le
+> llega a ningún agente: apagarla también saca los hechos ya escritos de la memoria interna y del vigía.
+
+**Contexto.** Etapas 5 y 6 de la memoria de la cuenta. Hoy la ficha y la etapa vuelven a leer cada reunión con Haiku, el
+avance corre con cada reunión, y lo que una reunión cambia en un documento nadie lo ve hasta regenerarlo. La variante y
+el modelo de la lectura de hechos los iba a decidir el sondeo (etapa 5) antes del código de la etapa 6. El código se
+escribió entero sin el sondeo y quedó apagado: hasta que Elías lo corra y decida, rige un valor por defecto
+(`VARIANTE_DE_HECHOS = "aparte-con-cache"`, con Sonnet 4.6; ver «La llamada de hechos», abajo).
+
+- **Un hecho es una frase con su cita literal verificada**, de quién es (la cuenta o un proyecto vinculado), su tipo y su
+  estado (`HechoDeReunion`). Lo escribe la lectura de cada reunión; el código decide a dónde va. *Por qué:* el modelo
+  clasifica y el código rutea (el eje del DESTINO, arriba).
+- **Los tipos, con la prueba de admisión** (quién actúa · dónde aterriza · qué pasa si nadie lo hace):
+  - `cuenta` (una herramienta, la estructura, un reto): el CSE confirma · propuesta a la ficha · la ficha no se entera.
+  - `persona`: el CSE · la ficha, si es de la cuenta, o el kickoff › equipo, si es del proyecto · los documentos quedan
+    con personas viejas.
+  - `acuerdo`, con su tema (pipeline, propiedades, integración, automatización, conversaciones, proceso después,
+    alcance): el CSE · una novedad en la sección que corresponde de Planificación, Integraciones, Kickoff o Diagnóstico
+    · el documento queda viejo.
+  - `resultado`: el CSE · diagnóstico › objetivos y kickoff › métricas · el documento persigue lo que el cliente ya no
+    persigue.
+  - `proceso_hoy`: el CSE · Procesos, con «Volver a mapear» · el mapa envejece.
+  - `queja`: la CSL o el CSE · una `CsAlert` QUEJA verificada (si no se comprobó que la dijo el cliente, evidencia
+    para el vigía) · nadie llama al cliente que se quejó.
+  - `riesgo`: el vigía · evidencia para su juicio · el vigía no lo ve.
+  - `senal_cronograma`: el CSE aplica · el avance de cada proyecto vinculado · el cronograma no se entera.
+  - `senal_etapa`: el CSE responde · la encuesta de la etapa · la etapa queda vieja.
+- **Lo que NO es un hecho:** un compromiso (va a Tareas por la salida estándar de la etapa 2) y un pedido nuevo (va a
+  `PedidoFueraDeAlcance`). El hallazgo de entrega a `KnowledgeDocument` queda fuera, como destino futuro del registro.
+- **El registro de destinos** (`lib/seguimiento/destinos.ts`) dice qué tipos le sirven a cada módulo y dónde los muestra,
+  y un test lo congela contra las secciones reales de cada documento. Las decisiones van a Planificación e Integraciones,
+  nunca a Ejecución (sus pipelines y propiedades se retiraron el 2-oct). Un resultado va a los documentos (diagnóstico y
+  kickoff), nunca al handoff ni a la ficha: «Resultados que persigue» sale de los resultados confirmados de cada
+  proyecto.
+- **El enrutador está en código** (`lib/seguimiento/enrutador.ts`): una reunión interna o de un aliado no deja nada; en
+  un prospecto no hay avance, etapa ni novedades de proyecto, y si tiene una preventa viva, solo la preventa propone a la
+  ficha (si no se puede saber si la preventa está viva, se toma como viva); un hecho de un proyecto no vinculado pasa a
+  la cuenta; un hecho repetido no se vuelve a mandar, aunque el anterior ya esté delegado (la propuesta a la ficha): si
+  no, la reunión siguiente volvía a proponer lo que el CSE quizás descartó.
+- **La ficha deja de releer la reunión**: se propone desde los hechos (`proponerFichaDesdeHechos`), con la misma llamada
+  a Haiku pero sobre las viñetas de los hechos. *Por qué:* el modelo de la ficha integra el valor completo del campo y
+  evita viñetas repetidas; escribir directo perdería eso.
+- **La etapa y el avance corren solo con señal.** El avance, para cada proyecto vinculado que cumple `linkFeedsAvance`
+  (incluida y principal, o secundaria con confianza de 0,4 o más). *Por qué:* corrige el plan, que decía la política del
+  handoff; esa filtra por relevancia de venta, y el avance perdería justo las reuniones de implementación. La etapa lee
+  las señales y el resumen de la minuta, pero su cita se verifica SOLO contra las citas literales de las señales: la
+  frase de cada señal y el resumen los escribió la IA, y una «cita» copiada de ellos no es la frase de la reunión.
+- **Procesos conserva su lectura propia**: es por paso (quién, herramienta, momento, estado), con Opus y solo a pedido.
+  Un hecho `proceso_hoy` solo avisa «Volver a mapear». *Por qué:* alimentarlo con hechos perdería el detalle por paso.
+- **Una novedad no se guarda: se calcula** con los hechos pendientes, el registro y los documentos que ya tienen
+  contenido. Se ve en la tarjeta de la reunión, en el riel junto a la pieza, arriba del documento y en «Qué sigue», justo
+  después del documento desactualizado. Como mucho 5 por documento. Tiene tres acciones: «Cambiar con el chat», «Sumar
+  la reunión al contexto» (un clic humano, nunca un `true` automático) y «No aplica». Queda usada al aplicar el acuerdo
+  del chat que la llevaba o con «Listo». En Integraciones avisa que aplicar es publicar, porque se lee en vivo.
+- **Las novedades en pantalla (cómo quedó en el código, 2026-10-10):**
+  - El cálculo es puro (`lib/seguimiento/novedades.ts`): solo destinos «novedad» pendientes, de piezas con contenido,
+    sin vencidos, una por huella (la reunión más reciente; las demás se deciden junto con ella) y como mucho 5.
+  - El listado de piezas y la siembra de la ficha traen el número de cada pieza con la MISMA función
+    (`conteoDeNovedadesDelProyecto`); el detalle (`GET /api/projects/[id]/novedades`, acceso al proyecto) se pide solo
+    si alguna pieza tiene. En el riel va la chispa con el número, DESPUÉS del aviso de la fila («desactualizado», lo que
+    le falta): el mismo orden que «Qué sigue», y sin ese renglón el CSE creía que la pieza estaba al día. La propuesta
+    del cronograma gana sobre los dos.
+  - Una novedad de proyecto sale solo de una reunión que sigue vinculada (incluida) a ese proyecto
+    (`whereVinculadaAlProyecto`, el chokepoint): desvincular una reunión le saca sus novedades al proyecto. Lo mismo vale
+    para la memoria interna del proyecto y para los riesgos del vigía.
+  - Decidir es `PATCH /api/projects/[id]/novedades/[hechoId]` con la celda de generar ese documento
+    (`guardContextoDelDocumento`): decide todas las secciones pendientes de ese documento en el hecho, por
+    `decidirDestinoDeHecho` (el único escritor). Acepta `reemplazaAId` (acuerdos vigentes), sin pantalla todavía.
+  - «Cambiar con el chat» fija la sección con la novedad adentro (`SeccionReferida.novedad`): viaja en el mensaje, dentro
+    del bloque de alcance y con la regla de no copiar la cita ni poner precios; la red de la frontera de la etapa 4 marca
+    igual la línea del acuerdo que la repita. Al aplicar bien un acuerdo, quedan usadas las novedades que llevaron los
+    mensajes de la persona desde el último acuerdo aplicado (`novedadesPorAplicar`) y el chip se suelta.
+  - «Qué sigue» mira solo la pieza de la etapa: el número viaja en la pieza (`PiezaParaQueSigue.novedades`), el mismo
+    que el riel, en vez de una consulta aparte en la ruta del GPS.
+  - En la tarjeta de la reunión, cada hecho dice a dónde fue; una novedad que puedes decidir pide decisión y entra a
+    «Usar todo», que la da por usada como un «Listo». Solo con la misma regla que la franja: sin vencer y en un
+    documento que ya tiene contenido. Nunca entran la ficha, la alerta, el avance ni la etapa.
+  - Procesos: «Qué sigue» cuenta las reuniones con hechos `proceso_hoy` pendientes escritos después del último mapeo que
+    terminó (`lib/procesos/novedades.ts`), contando solo los hechos sacados de una transcripción (lo único que lee el
+    mapeo). Al terminar un mapeo, los hechos de las reuniones que leyó y que existían al arrancar quedan usados
+    (`marcarProcesosUsados`); los de una reunión con solo notas siguen pendientes hasta vencer, sin avisar.
+  - «Cambiar con el chat» trae al turno la frase y la cita de una reunión: con ellas se arman las huellas de la frontera
+    del documento (la línea del acuerdo que copia la cita queda con «⚠ revisa…»), y si traen un monto, los montos se
+    marcan también donde la pieza no lo pide (el diagnóstico, la entrega).
+- **El estado de un hecho tiene dos niveles**: uno por destino (pendiente, usado, desestimado o delegado; «delegado»
+  quiere decir que su ciclo vive en el destino, como la propuesta de ficha o la `CsAlert`) y uno general, con los cuatro
+  estados del ciclo de vida. «Vencido» se calcula a los 30 días: no hace falta un job.
+- **Acuerdos vigentes:** `HechoDeReunion` lleva desde el primer día la columna `reemplazaAId`, para saber si un acuerdo
+  posterior reemplazó a otro. La pantalla de los acuerdos vigentes, y quién confirma un reemplazo, vienen después.
+- **Una reunión que cambia de dueño** (`reResolveSession` y `resolveAllSessions`) retira sus hechos VIVOS del cliente
+  anterior, firmados por el sistema con la nota «La reunión cambió de dueño»: lo pendiente queda desestimado, y lo
+  delegado se retira de su módulo (la alerta de queja se cierra, o pierde esa reunión si la sostienen otras; los campos
+  que la reunión propuso salen de la propuesta de la ficha; la etapa sugerida que salió de ella se borra) y queda
+  desestimado. Lo que no se pudo retirar sigue delegado y el hecho vivo, así INV45 lo muestra. Lo usado no se toca: ya
+  lo decidió una persona. El job de la lectura vuelve a pedir los hechos en el cliente nuevo: solo los hechos, sin
+  releer la minuta. Y la lectura vuelve a mirar el dueño justo antes de escribir: si cambió mientras el modelo leía, no
+  escribe nada.
+- **INV45 mira lo vivo** (pendiente o delegado), no lo usado ni lo desestimado: (a) el hecho es del dueño de su reunión,
+  (b) ese dueño no es de Smarteam ni un aliado, (c) su proyecto es del mismo cliente. Una reunión que alguien desvinculó
+  del proyecto no lo viola: es del mismo cliente y los lectores ya no la ven. Su remedio existe: corregir el dueño en
+  /sessions, o `scripts/hechos-fuera-de-su-cliente.ts --apply`, que retira esos hechos igual que un cambio de dueño.
+- **La llamada de hechos** va aparte de la lectura, con Sonnet 4.6 y la reunión cacheada, hasta que el sondeo decida
+  (`VARIANTE_DE_HECHOS`, lib/seguimiento/hechos-server.ts). ⚠ La lectura de hoy todavía no arma su pedido con el mismo
+  prefijo (`prefijoDeLaReunion`): hasta que lo haga, la caché se escribe y no se comparte. Su estado vive en su corrida
+  (`AgentRun` «seguimiento-hechos»), una por reunión y dueño; si falla (o se cuelga más de 15 minutos), el job de la
+  lectura la reintenta hasta 3 veces, contra el presupuesto automático (los dueños se miran en una sola consulta por
+  tick). El avance, la ficha y la etapa salen de los hechos solo si la lectura de hechos los aplicó (quedó lista, ya
+  estaba leída o la está leyendo otra corrida); si falla o se omite, corren por el camino de siempre, y si el reintento
+  la lee después, los vuelve a proponer. Una reunión leída solo con las notas que después recibe su transcripción se
+  vuelve a leer con ella (lo vivo de las notas queda desestimado: «Se volvió a leer con la transcripción»).
+- **Un acuerdo puede reemplazar a uno viejo** (`reemplazaAId`): solo lo escribe una persona al usar la novedad del
+  acuerdo nuevo (`decidirDestinoDeHecho`, mismo cliente y mismo tema). El código nunca lo decide solo.
+- **Recién acá se amplía la cobertura**: se leen las reuniones con solo notas (el 21 % de las reuniones con cliente) y,
+  en las transcripciones largas, se suman las notas priorizadas de Gemini. Con la bandera prendida, el enriquecimiento
+  de Meet y la cola encolan también las de solo notas (resumen de Gemini de 400 caracteres o más, de 14 días o menos);
+  la lectura las vincula a su proyecto (solo el clasificador), no escribe minuta y deja sus hechos. Apagada, la
+  cobertura de la etapa 2 no cambia.
+- **El canal al cronograma** del compromiso del cliente que frena el plan (una tarea del cliente propuesta en el
+  cronograma, nunca escrita sola) se diseña en esta etapa; hasta entonces es solo la marca en la tarea de seguimiento.
+- **Nada que ve el cliente lee hechos** (un escaneo lo vigila), e INV45 vigila que todo hecho vivo sea del cliente de
+  su reunión. En la memoria, los hechos van solo al alcance interno. La LECTURA de una reunión de la exploración de un
+  proyecto no recibe la memoria interna (F0): su resumen es lo que el correo de seguimiento, que lee el cliente, usa
+  como «lo que se leyó de la reunión».
+- **El sondeo (etapa 5)** es `scripts/sondeo-de-hechos.ts`, sin deploy: unas 30 reuniones recientes (sin internas,
+  aliadas ni Wherex; como mucho 3 por cliente), con los mismos módulos puros que va a usar la etapa 6 y las citas
+  verificadas, comparado con lo que encuentran el Haiku de la ficha y la lectura de procesos, y con el costo con caché y
+  sin ella. Cuesta unos US$3,5 y solo escribe la telemetría de `LlmCall`. Deja cada hecho con su cita y su destino en
+  `backups/<fecha>-sondeo-de-hechos/`. Con eso Elías decide la variante (aparte con caché, aparte sin caché o en la misma
+  llamada) y el modelo (Sonnet 4.6 o Haiku 4.5). Hasta entonces la lectura de hechos se despliega apagada: sin la
+  variable no corre, y se prende con `SEGUIMIENTO_HECHOS=1` en el `.env` del servidor (cambiarla pide recrear el
+  contenedor: `bash scripts/deploy.sh`).
+- **SQL:** la tabla `HechoDeReunion`, con RLS y RESTRICTIVE, después del SQL de Tareas (tiene una FK a
+  `LecturaDeReunion`).
+
+## Los documentos leen la memoria y solo las reuniones elegidas (2026-10-09)
+
+> **Estado (2026-10-10): la etapa 7 está entera en el código, SIN desplegar.** El lector (solo las elegidas, enteras,
+> `lib/contexto/material-del-documento.ts`), la regla (`lib/sessions/destinos-de-contexto.ts`), la puerta (`null`,
+> `false` y `true`), la memoria del diagnóstico y de la planificación, las sugerencias calculadas
+> (`lib/contexto/sugerencias-del-documento.ts`) y el panel. ⚠ Medido ese día en producción, solo lectura
+> (`scripts/medir-contexto-de-documentos.ts`): ninguna reunión está elegida ni desestimada en ningún documento (las
+> seis columnas en `null`), así que **los 52 documentos ya generados de 32 proyectos se regenerarían sin reuniones**
+> (hoy los alimentan 1.361, todas por la regla sugerida). Y todavía no habría sugerencias: la tabla de hechos no existe
+> en producción y las 2 exploraciones de proyecto vivas no tienen reuniones unidas a sus sesiones. **Lo resuelve la
+> migración del 2026-10-10** (abajo): las 6 más recientes de cada documento con contenido quedan elegidas, y las demás
+> que la regla vieja leía se sugieren desde el día del deploy. La revisión del
+> mismo día sumó: las elegidas vacías no ocupan lugar, la línea de cobertura, la minuta recortada en los documentos del
+> cliente, la regla repetida al final, la elegida de antes del piso, las reuniones del proyecto en el buscador y el
+> assist del diagnóstico en resumen. Quedan dos decisiones de Elías (abajo), que ya no frenan el deploy: qué trae la
+> memoria de las minutas en borrador y el impacto de la entrega sin elegidas.
+
+**Contexto.** Desde el 2026-09-28 (diagnóstico), el 2026-09-29 (planificación y ejecución) y el 2026-10-07 (kickoff,
+integraciones y entrega), los documentos del proyecto arrancaban SUGERIDOS: toda reunión del proyecto con el cliente
+entraba sin que nadie la eligiera. La razón está escrita en `lib/sessions/destinos-de-contexto.ts`: si el diagnóstico
+arrancara vacío, saldría sin reuniones cada vez que alguien se olvida de elegir. Esta sección la contesta.
+
+- **Con la memoria del proyecto (etapa 3), un documento sin reuniones elegidas no sale vacío, pero de las reuniones
+  trae poco**: trabaja con lo que dejaron las demás reuniones (en los documentos del cliente, solo los acuerdos y las
+  decisiones de las minutas revisadas), la historia, las desviaciones que ve el cliente y la ficha confirmada (el
+  diagnóstico y la planificación la leen aparte); los compromisos, solo en la ejecución, que también lee las minutas en
+  borrador. ⚠ Medido el 2026-10-10 en producción, solo lectura, sobre los vínculos incluidos de proyectos activos con
+  reuniones de los últimos 180 días: **4 minutas revisadas, 689 en borrador y 593 reuniones sin minuta**. O sea que en
+  los cinco documentos del cliente, sin elegidas, hoy no llega casi nada de las reuniones. El panel lo dice
+  (`queLeeSinElegidas`, lib/contexto/documento.ts): «Sin elegidas, no lee ninguna reunión: de las demás le llegan solo
+  los acuerdos y las decisiones de las minutas revisadas»; en la entrega suma que la sección de impacto sale vacía, y
+  en la ejecución dice que lee sus minutas y los compromisos abiertos. ~~**Pendiente de Elías, antes del deploy**: (a)
+  … o (b) que el deploy espere a que haya sugerencias…~~ **(b) lo resolvió la migración del 2026-10-10** (los
+  documentos con contenido quedan con sus 6 reuniones más recientes elegidas, y el resto se sugiere desde el día del
+  deploy). **Sigue abierta, sin frenar el deploy:** (a) que la memoria de alcance cliente lea también los acuerdos y las
+  decisiones de las minutas en borrador, con la frontera y sin montos como ya hace `acuerdosYDecisiones` (cuenta para
+  lo que nadie eligió).
+- **El modo sugerido metía por defecto las llamadas de venta, con precios, en documentos que ve el cliente.** La frontera
+  (etapa 4) lo frena en el texto; con «solo las elegidas», además, deja de entrar.
+- **Lo que hacía el modo sugerido lo hacen las sugerencias calculadas**: el diagnóstico sugiere las sesiones de la
+  exploración, y cada documento, las reuniones con hechos abiertos que el registro rutea a él y (desde la migración del
+  2026-10-10) las reuniones con el cliente que la regla vieja leía. Se calculan al leer y
+  nunca escriben `true` solas: `true` es el candado humano (`isLockedLink`, `lib/sessions/session-project-locks.ts`),
+  que deja al clasificador sin tocar ese vínculo.
+  - *De la exploración* cuenta la reunión que una persona unió a una sesión o la de su evento del calendario
+    (`sesionUnidaALaReunion`), con el número de la sesión que muestra la exploración. La ligada solo por la fecha no:
+    es una adivinanza. *De los hechos*, los pendientes que el registro rutea a la pieza, por `novedadesDelProyecto`
+    (solo con `SEGUIMIENTO_HECHOS=1` y su SQL), aunque el documento todavía no esté generado. Una sugerencia sale
+    siempre de la membresía del proyecto (el chokepoint): nunca una reunión de otro cliente, ni una elegida, ni una
+    desestimada, ni una que todavía no ocurrió. Como mucho 10.
+  - *En el panel* van arriba de la lista, una sola vez: «Nexus sugiere N reuniones para …» con «Usar todas», y una fila
+    por reunión con su motivo, «Descartar» y «Usar». La línea cerrada dice «N elegidas · M sugeridas». En el buscador,
+    una desestimada viene marcada «la descartaste» y se puede elegir igual.
+  - *El buscador ofrece las demás reuniones del proyecto* (vínculo vivo, ni elegidas ni sugeridas), bajo «Del
+    proyecto», como el cronograma, y debajo las 100 más recientes del cliente. *Por qué:* desde que solo entra lo
+    elegido, una reunión del proyecto que quedaba fuera de esas 100 no se podía elegir de ninguna forma («Buscar en tu
+    calendario» saca a propósito las que ya son del proyecto). Medido el 2026-10-10: 58 reuniones vinculadas en 9
+    proyectos (Grupo Inve, kölbi, Smarteam), 48 con contenido.
+- **Los tres valores de cada columna:** «Usar» es el clic de una persona y escribe `true`; «Descartar» escribe `false`,
+  que no pone candado (los `false` de antes, la X sobre una sugerida, se leen igual); la X sobre una elegida vuelve a
+  `null`, como en el cronograma. Sin tocar, una reunión no entra. Una desestimada no se sugiere más **mientras exista el
+  vínculo**: el `false` no pone candado, así que el clasificador puede borrar un vínculo que nadie eligió y recrearlo
+  vacío, y ahí puede volver a sugerirse. Se aceptó a propósito (guardar el descarte aparte es otra tabla o el JSON del
+  canvas); el botón dice «Por ahora no la sugiere más».
+- **Elegir no toca `source`**: sobre un vínculo que ya existe, la puerta escribe solo el afinado de ese documento, así
+  la X después suelta el candado. Para que una elegida de antes del piso del proyecto (lib/sessions/piso-del-proyecto.ts,
+  que solo deja pasar los vínculos manuales) se lea, el lector la exime del piso **en ese documento**
+  (`getProjectMemberSessions(projectId, { elegidaEn })`); la membresía del resto (el handoff, la memoria, las
+  sugerencias) sigue con el piso. Sin eso, el panel la mostraba elegida y el documento decía «Nadie eligió reuniones».
+- **Las elegidas se leen enteras, con tope**: 160.000 caracteres en total, 60.000 por reunión y 6 enteras como máximo, las
+  más recientes; las siguientes van en resumen (2.000 cada una, dentro del mismo total) y, pasadas las 24
+  (`MAX_ELEGIDAS_A_LEER`, número propio), no entran. **Primero se apartan las que no tienen nada que leer**
+  (transcripción, notas de Gemini o minuta; en un documento del cliente, la minuta cuenta solo si está revisada): una
+  vacía no ocupa uno de los 6 lugares ni le quita espacio a otra. Si no se leyeron todas, la primera línea del bloque,
+  después de la regla, dice cuántas de cuántas y por qué («Se leyeron 24 de las 30…: 2 no dejaron transcripción… y 4,
+  las más viejas, no entraron por espacio»). Cada reunión entera va con lo que se dijo: si no entra, el principio y el
+  final de la transcripción (ahí se acuerda qué sigue), cortados en la base. Las notas de Gemini solo si no hay
+  transcripción. El resto llega por la memoria, nunca como transcripción; la memoria no lee las que se desestimaron
+  para ese documento.
+- **La minuta de una elegida, con la regla de la memoria** (`minutaParaElDocumento`): en los cinco documentos del
+  cliente va solo la minuta revisada, y de ella solo los acuerdos y las decisiones, sin los que traen un monto. Nunca su
+  resumen, sus riesgos (una valoración interna, con severidad) ni una minuta en borrador. La memoria saca además los que
+  hablan de negociación; acá no, porque la transcripción que va al lado ya lleva la regla adelante. La ejecución
+  (interna) la lee entera.
+- **Sin reuniones que leer, el mensaje lo dice** (`avisoSinReuniones`): «Nadie eligió reuniones para …», donde iría el
+  bloque de reuniones. Sin esa línea, el modelo no distingue «no hubo reuniones» de «nadie las eligió». En la entrega,
+  sin reuniones la sección de impacto va vacía (sus cifras salen de lo que se dijo); el panel lo avisa. **Pendiente de
+  Elías:** si eso alcanza o si el impacto puede salir de las cifras de las minutas revisadas que trae la memoria.
+- **La frontera, también al final del mensaje** (`cierreDeFronteraDelDocumento`): el bloque de reuniones puede traer
+  160.000 caracteres de transcripción y la regla va al principio; los cinco documentos del cliente (y la ejecución, con
+  la suya) la repiten justo antes de la instrucción final, solo con reuniones o notas. Con transcripciones enteras suma
+  una línea: el final de una transcripción suele ser lo que el equipo habló cuando el cliente ya había colgado, y llega
+  rotulado «CON EL CLIENTE» (la sala se decide por quién estuvo, no por quién hablaba). ⚠ **Riesgo aceptado hasta
+  nuevo aviso**: la generación no revisa lo que sale (la red «⚠ revisa» de `lineasConFronteraDeDocumento` es solo del
+  chat), así que un precio dicho en una reunión que la IA igual copie llega al documento sin marca, y lo ve el CSE al
+  revisarlo antes de publicar.
+- **«Mejorar con IA» del diagnóstico lee las elegidas en resumen y sin búsqueda web** (canvas-assist,
+  `fuentesDelDiagnostico(projectId, { paraElAssist: true })`, `maxWebSearches: 0`): manda el contexto entero en cada
+  pedido, y 160.000 caracteres de transcripción por pedido no se justifican para mejorar una sección; y lo dicho por
+  terceros en una reunión no puede terminar en una consulta al buscador. El botón no se muestra donde hay chat, pero la
+  ruta sigue abierta para quien puede regenerar.
+- **Aplica a seis documentos**: kickoff, diagnóstico, planificación, ejecución, integraciones y entrega. La exploración
+  pasa a sus sesiones en la etapa A. El handoff y el cronograma no cambian.
+- ~~**Sin backfill**: no se escribe `true` en ninguna reunión que hoy entra por sugerencia.~~ **Corregido el
+  2026-10-10** (decisión de Elías: «que los clientes queden bien»): hay una migración acotada, ver «La migración
+  (2026-10-10)» abajo. El porqué de la regla vieja —escribir `true` en masa le pone candado a vínculos que nadie
+  eligió— sigue en pie, y por eso la migración se limita a 6 reuniones por documento con contenido.
+- **Va después de las etapas 3, 4, 6 y A.** La memoria ya está conectada también al diagnóstico y a la planificación
+  (sin la ficha ni los procesos, que ya leen; el diagnóstico tampoco los resultados). Antes del deploy,
+  `scripts/medir-contexto-de-documentos.ts` (solo lectura) dice cuántas reuniones alimentan hoy cada documento, y se
+  avisa al equipo: desde ese día un documento sin reuniones elegidas se genera con la memoria y sin transcripciones, y
+  **regenerar uno de los que ya están pierde todo lo que sacaba de las reuniones** (en los documentos del cliente la
+  memoria solo trae las minutas revisadas, y casi no hay): antes de regenerar, elegir las reuniones que importan.
+  (Desde el 2026-10-10 eso lo hace la migración de abajo para los documentos que ya tienen contenido.)
+- **Sin SQL.**
+
+### La migración (2026-10-10)
+
+> Elías, al ver que con la etapa 7 ningún documento iba a tener reuniones elegidas: «Realmente me interesa que los
+> clientes queden bien, como entender lo que actualmente llevan y migrarlo a esta nueva arquitectura».
+
+- **Por qué quedaban en cero.** El modo sugerido no guardaba nada: entraba sola toda reunión con el cliente y nadie tuvo
+  que elegir nunca (0 vínculos en `true` en las seis columnas, medido el 2026-10-10). Con «solo las elegidas», regenerar
+  cualquier documento lo dejaba sin reuniones, y el día del deploy tampoco había sugerencias (la tabla de hechos no
+  existe en producción y las exploraciones de proyecto no tenían reuniones unidas a sus sesiones).
+- **Qué leía cada documento, de verdad.** El diagnóstico, la planificación, la ejecución y la entrega leían en modo
+  sugerido. **El kickoff y las integraciones leían solo el handoff hasta el 2026-10-07** (674d9159, «El kickoff deja de
+  leer solo el handoff»): lo que tienen generado de antes no salió de ninguna reunión. Medido en producción el
+  2026-10-10, de los documentos con contenido, 17 de 18 kickoffs y 37 de 38 integraciones se generaron antes de esa
+  fecha. Migrarles 6 transcripciones enteras no es «lo que llevaban», es contenido nuevo (y en un documento que ve el
+  cliente, con reuniones con Ventas y precios), así que **no se migran**: les quedan las sugerencias. La fecha vive en
+  `DESDE_QUE_LEE_REUNIONES` y la última generación es el bloque más nuevo escrito por la IA. `--tambien-los-que-no-leian`
+  los incluye si Elías decide lo contrario.
+- **Qué hace `scripts/migrar-reuniones-de-los-documentos.ts` (parte A).** Por proyecto activo y por cada uno de los seis
+  documentos que YA tiene contenido generado, calcula qué reuniones leía con la regla vieja (la que conserva la
+  exploración: membresía del chokepoint con su piso, con el cliente, nadie la sacó, ya ocurrida). **Primero aparta las
+  que no tienen nada que leer** (`tieneQueLeer`, la misma regla del lector nuevo: transcripción, notas de Gemini o minuta;
+  en un documento del cliente, la minuta revisada): una vacía no ocupa un lugar ni le pone el candado a una reunión para
+  nada. De las demás elige (`true`) las **6 más recientes** (`MIGRADAS_POR_DOCUMENTO` = `MAX_ELEGIDAS_ENTERAS`, las que
+  el lector nuevo lee enteras). Solo donde la columna está en `null`, y solo si nadie eligió nada en ese documento (si ya
+  hay un `true`, una persona ya decidió). Nunca toca un `false` ni un `true`, ni `source`, `reviewedAt`, `included` u
+  otra columna. La regla vive pura en `lib/contexto/migracion-de-reuniones.ts`, con su prueba. Simulacro del 2026-10-10
+  (solo lectura): **81 proyectos activos revisados, 69 documentos con contenido; 85 elecciones en 45 vínculos y 45
+  reuniones distintas** (35 en diagnósticos, 24 en planificaciones, 12 en ejecuciones, 6 en una entrega y 4 en cada
+  uno: el kickoff y las integraciones generados después del 2026-10-07); 313 reuniones vacías se saltaron; 11 de las
+  migradas tuvieron a alguien de Ventas en la sala (la frontera de la etapa 4 sigue en el texto).
+- **Una vez por documento y por exploración.** Lo migrado queda anotado en `CronJobState`
+  («migrar-reuniones-de-los-documentos», `MarcaDeLaMigracion`), en la misma transacción que la escritura, y una corrida
+  siguiente no lo vuelve a tocar. Sin eso, correrla otra vez después de que una persona deshizo algo lo volvía a hacer:
+  la X sobre una elegida escribe `null` (no `false`), y «Sacar» de una sesión de la exploración no deja la reunión en
+  `fuera`.
+- **La consecuencia aceptada: esas reuniones dejan de reclasificarse.** Un `true` es el candado humano
+  (`isLockedLink`), y el candado congela la **reunión entera**, no solo el vínculo: el clasificador
+  (`reclassifyClientSessions`) saltea toda reunión con algún vínculo con candado, y `classifySessionToProjects` conserva
+  como primario el vínculo con candado. Una reunión migrada ya no llega sola a un proyecto nuevo del cliente cuando nace
+  (el caso RC Inmobiliaria que el reclasificador existe para cubrir). En el simulacro, **36 de las 45 reuniones** tenían
+  todos sus vínculos libres y quedan congeladas, las 36 dentro de la ventana de 90 días del clasificador; el script las
+  cuenta antes de escribir. *Por qué se acepta:* esas reuniones alimentaban el documento sin que nadie lo cuestionara, y
+  sin la migración el documento se regeneraba sin ellas. *Por qué solo 6:* son las que se leen enteras; más no mejora el
+  documento (irían en resumen) y cada una de más es una reunión congelada sin que nadie la haya elegido. La X sobre una
+  elegida la vuelve a `null` y suelta el candado. **Pendiente de Elías** si acepta el congelamiento por reunión (la otra
+  opción es correr el reclasificador de los clientes con proyectos nuevos antes de migrar).
+- **Lo que no se migra queda como sugerencia** («Reunión con el cliente en este proyecto»,
+  `lib/contexto/sugerencias-del-documento.ts`): las reuniones que la regla vieja leía y no están elegidas ni
+  desestimadas, las 8 más recientes, después de las sesiones de la exploración y de los hechos, sin repetirlas. Se
+  calculan al leer y nunca escriben. Con eso el panel tiene sugerencias desde el día del deploy, también en un proyecto
+  nuevo y en un documento sin generar. Sin los dominios de Smarteam (no se sabe la sala), esta fuente no sugiere nada.
+  ⚠ **La X sobre una elegida la devuelve a sugerida**: vuelve a `null`, y como suele ser de las más recientes, reaparece
+  arriba en el acto. Para que no vuelva, «Descartar». **Pendiente de Elías:** aceptarlo así o que la X sobre una elegida
+  escriba `false` en los seis documentos.
+- **Las exploraciones (parte B).** En cada exploración viva de un proyecto y en cada preventa viva de una empresa que no
+  es prospecto (en el prospecto las sesiones entran solas), las reuniones que el agente ya leyó —o que una persona
+  eligió antes de la etapa A— y no son de ninguna sesión se proponen como sesiones unidas a su reunión, como
+  «+ Agregar sesión», sin pasar el tope (`MAX_SESIONES`; si no entran todas, las más recientes) y en orden por fecha.
+  Se escriben por la mutación de la ruta (`aplicarCambios` › `agregarSesion`, con su versión); ante un conflicto se
+  recalcula sobre la fila nueva, así lo que una persona sacó o ligó mientras tanto no vuelve. No pasan: lo sumado a
+  mano (ya se lee sin sesión), HubSpot en un proyecto, lo que no ocurrió, lo de antes del corte de la preventa (un mes
+  antes del alta: así no vuelven las lecturas de 2023 de Grupo Servica; **salvo la que una persona eligió a mano en el
+  buscador**, que existía justo para sumar reuniones viejas), lo de otra empresa, lo de puertas adentro, **toda reunión
+  de HubSpot de la preventa** (la foto guardada no trae los asistentes: no se sabe si fue la preparación del equipo), lo
+  que alguien sacó y la reunión de HubSpot cuya gemela de Meet ya está. La regla pura vive en
+  `lib/exploraciones/migracion-de-sesiones.ts`. Simulacro del 2026-10-10: 3 sesiones nuevas (2 en Cicadex, 1 en Grupo
+  Servica) en las 5 exploraciones vivas que aplican.
+- **Cuándo se corre**: una sola ventana, justo después de los SQL y antes del deploy, antes de que alguien regenere un
+  documento (RUNBOOK › «Migrar las reuniones de los documentos»).

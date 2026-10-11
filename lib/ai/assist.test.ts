@@ -67,6 +67,15 @@ test("a — solo texto: propone, resume por label y no marca web search", async 
   expect(params.tools).toEqual([{ type: "web_search_20260209", name: "web_search", max_uses: 5 }]);
 });
 
+// (a2) maxWebSearches: 0 (el assist del diagnóstico, que lleva lo que se dijo en las reuniones): sin la herramienta.
+test("a2 — maxWebSearches 0: ni la herramienta ni su instrucción van en la llamada", async () => {
+  createMock.mockResolvedValueOnce(textMsg() as never);
+  await runDocumentAssist({ ...baseInput(), maxWebSearches: 0 });
+  const params = createMock.mock.calls.at(-1)![0] as { tools?: unknown; system: string };
+  expect(params.tools).toBeUndefined();
+  expect(params.system).not.toContain("web_search. Úsala");
+});
+
 // (b) Con server_tool_use + web_search_tool_result: citations dedupeadas + flag.
 test("b — con búsquedas: junta citations (dedupe por url) y marca usedWebSearch", async () => {
   createMock.mockResolvedValueOnce({

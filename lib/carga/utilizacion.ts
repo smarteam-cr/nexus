@@ -3,8 +3,12 @@
  *
  * ── LA CUENTA ────────────────────────────────────────────────────────────────
  * Horas de la semana = reuniones (con clientes, comerciales e internas) + preparación por reunión con un cliente +
- * entrega estimada del cronograma. Utilización = horas ÷ horas disponibles (contrato × parte productiva). Es carga
- * COMPROMETIDA: una persona al 100 % no tiene espacio para nada que no esté en el calendario o en el plan.
+ * entrega del cronograma (lo respondido en «¿cuánto te tomó?» o, si no, el estimado). Utilización = horas ÷ horas
+ * disponibles (contrato × parte productiva). Es carga COMPROMETIDA: una persona al 100 % no tiene espacio para nada
+ * que no esté en el calendario o en el plan.
+ *
+ * «Con dato real» = las horas del calendario más las que respondió la persona; la preparación y la entrega sin
+ * respuesta son estimadas. Con la asistencia de Meet, las del calendario pasarán a ser medidas.
  *
  * ── LO QUE VIENE ─────────────────────────────────────────────────────────────
  * Las semanas futuras se proyectan con el ritmo de reuniones de las últimas semanas (incluida su preparación) más la
@@ -39,8 +43,12 @@ export interface SemanaDePersona {
   interna: number;
   /** Preparación y seguimiento de las reuniones con clientes (supuesto). */
   preparacion: number;
-  /** Trabajo fuera de reunión que pide el cronograma (estimado). */
+  /** Trabajo fuera de reunión que pide el cronograma (lo respondido más lo estimado). */
   entrega: number;
+  /** La parte de `entrega` que respondió la persona. */
+  declarada: number;
+  /** Horas del calendario más las respondidas: lo que no es supuesto. */
+  conDatoReal: number;
   total: number;
   disponible: number;
   /** Porcentaje (100 = toda la capacidad comprometida). */
@@ -79,7 +87,7 @@ const r1 = (x: number) => Math.round(x * 10) / 10;
 function semana(
   lunes: string,
   m: MinutosDeLaSemana | undefined,
-  entrega: number,
+  entrega: { horas: number; declaradas: number } | undefined,
   disponible: number,
   config: ConfigCarga,
   proyectada: boolean,
@@ -90,7 +98,10 @@ function semana(
   const interna = (m?.interna ?? 0) / 60;
   const reunionesConCliente = m?.reunionesConCliente ?? 0;
   const preparacion = (reunionesConCliente * config.preparacionMin) / 60;
-  const total = cliente + comercial + interna + preparacion + entrega;
+  const horasEntrega = entrega?.horas ?? 0;
+  // Lo proyectado no tiene dato real: las reuniones son el ritmo de semanas anteriores.
+  const declarada = proyectada ? 0 : (entrega?.declaradas ?? 0);
+  const total = cliente + comercial + interna + preparacion + horasEntrega;
   const utilizacion = disponible > 0 ? (total / disponible) * 100 : 0;
   return {
     lunes,
@@ -98,7 +109,9 @@ function semana(
     comercial: r1(comercial),
     interna: r1(interna),
     preparacion: r1(preparacion),
-    entrega: r1(entrega),
+    entrega: r1(horasEntrega),
+    declarada: r1(declarada),
+    conDatoReal: proyectada ? 0 : r1(cliente + comercial + interna + declarada),
     total: r1(total),
     disponible: r1(disponible),
     utilizacion: Math.round(utilizacion),
@@ -132,7 +145,7 @@ export function cargaDePersona(
   const desde = persona.desde ?? null;
   const semanas = op.semanas.map((l) => {
     const dentro = !desde || l >= desde;
-    return semana(l, minutos?.get(l), horasEntrega?.get(l)?.horas ?? 0, dentro ? disponible : 0, config, false, dentro);
+    return semana(l, minutos?.get(l), horasEntrega?.get(l), dentro ? disponible : 0, config, false, dentro);
   });
   const presentes = semanas.filter((s) => s.enElEquipo);
 
@@ -150,12 +163,13 @@ export function cargaDePersona(
     porCliente: new Map(),
   };
   const proyeccion = op.futuras.map((l) => {
-    const s = semana(l, ritmo, horasEntrega?.get(l)?.horas ?? 0, disponible, config, true);
+    const s = semana(l, ritmo, horasEntrega?.get(l), disponible, config, true);
     return { ...s, reunionesConCliente: Math.round(reunionesProm) };
   });
 
   const n = Math.max(1, presentes.length);
-  const suma = (k: "cliente" | "comercial" | "interna" | "preparacion" | "entrega" | "total") => r1(presentes.reduce((a, s) => a + s[k], 0) / n);
+  const suma = (k: "cliente" | "comercial" | "interna" | "preparacion" | "entrega" | "declarada" | "conDatoReal" | "total") =>
+    r1(presentes.reduce((a, s) => a + s[k], 0) / n);
   const totalProm = presentes.reduce((a, s) => a + s.total, 0) / n;
   const utilProm = disponible > 0 ? (totalProm / disponible) * 100 : 0;
 
@@ -181,6 +195,8 @@ export function cargaDePersona(
       interna: suma("interna"),
       preparacion: suma("preparacion"),
       entrega: suma("entrega"),
+      declarada: suma("declarada"),
+      conDatoReal: suma("conDatoReal"),
       total: suma("total"),
       utilizacion: Math.round(utilProm),
       semaforo: semaforoDe(utilProm, config),
@@ -205,6 +221,8 @@ export interface CargaDelEquipo {
   /** Horas comprometidas ÷ horas disponibles, sumadas semana por semana (cada semana con quienes estaban). */
   utilizacion: number;
   semaforo: Semaforo;
+  /** Porcentaje de las horas de las semanas cerradas que salen del calendario o de lo que respondió cada persona. */
+  conDatoReal: number;
   semanas: Array<{ lunes: string; horas: number; disponible: number; utilizacion: number }>;
   /** Utilización del equipo por semana proyectada, con el equipo de hoy. */
   proyeccion: Array<{ lunes: string; horas: number; utilizacion: number }>;
@@ -223,6 +241,7 @@ export function cargaDelEquipo(personas: CargaDePersona[], config: ConfigCarga):
   const sumaD = semanas.reduce((a, s) => a + s.disponible, 0);
   const utilizacion = sumaD > 0 ? (sumaH / sumaD) * 100 : 0;
   const disponible = equipo.reduce((a, p) => a + p.disponible, 0);
+  const real = equipo.reduce((a, p) => a + p.semanas.reduce((b, s) => b + (s.enElEquipo ? s.conDatoReal : 0), 0), 0);
   const futuras = equipo[0]?.proyeccion.map((s) => s.lunes) ?? [];
   const proyeccion = futuras.map((l, i) => {
     const h = equipo.reduce((a, p) => a + (p.proyeccion[i]?.total ?? 0), 0);
@@ -233,6 +252,7 @@ export function cargaDelEquipo(personas: CargaDePersona[], config: ConfigCarga):
     disponible: r1(disponible),
     utilizacion: Math.round(utilizacion),
     semaforo: semaforoDe(utilizacion, config),
+    conDatoReal: sumaH > 0 ? Math.round((real / sumaH) * 100) : 0,
     semanas,
     proyeccion,
   };
@@ -245,6 +265,8 @@ export interface HorasDeLaCuenta {
   reuniones: number;
   preparacion: number;
   entrega: number;
+  /** La parte de `entrega` que respondió la persona. */
+  entregaDeclarada: number;
 }
 
 /**
@@ -260,9 +282,9 @@ export function horasPorCuenta(
 ): HorasDeLaCuenta[] {
   const e = email.trim().toLowerCase();
   const n = Math.max(1, semanas.length);
-  const acc = new Map<string, { reuniones: number; preparacion: number; entrega: number }>();
+  const acc = new Map<string, { reuniones: number; preparacion: number; entrega: number; declarada: number }>();
   const get = (id: string) => {
-    const x = acc.get(id) ?? { reuniones: 0, preparacion: 0, entrega: 0 };
+    const x = acc.get(id) ?? { reuniones: 0, preparacion: 0, entrega: 0, declarada: 0 };
     acc.set(id, x);
     return x;
   };
@@ -275,6 +297,7 @@ export function horasPorCuenta(
       x.preparacion += (pc.reuniones * config.preparacionMin) / 60;
     }
     for (const [id, h] of ent?.get(l)?.porCliente ?? []) get(id).entrega += h;
+    for (const [id, h] of ent?.get(l)?.declaradasPorCliente ?? []) get(id).declarada += h;
   }
   return [...acc.entries()]
     .map(([clienteId, x]) => ({
@@ -282,6 +305,7 @@ export function horasPorCuenta(
       reuniones: r1(x.reuniones / n),
       preparacion: r1(x.preparacion / n),
       entrega: r1(x.entrega / n),
+      entregaDeclarada: r1(x.declarada / n),
       horas: r1((x.reuniones + x.preparacion + x.entrega) / n),
     }))
     .filter((x) => x.horas > 0)

@@ -10,20 +10,9 @@ const PROJECT_SECTIONS = [
   "documentos",
 ];
 
-const CLIENT_SECTIONS = [
-  "perfil",
-  "stakeholders",
-  "herramientas",
-  "contexto_comercial",
-  "madurez",
-  "retos_estrategicos",
-  "escala_rendimiento",
-  "oportunidades_futuras",
-];
-
 /**
- * POST /api/cards/[cardId]/send-to-canvas — clonar una tarjeta a un canvas de proyecto o proponerla
- * al canvas de empresa.
+ * POST /api/cards/[cardId]/send-to-canvas — clonar una tarjeta a un canvas de proyecto. Proponerla al
+ * canvas de empresa se retiró (responde 410).
  *
  * ⛔ TENÍA CERO GUARDA (auditoría 2026-09-03), y era la peor de las dos rutas de tarjetas: aceptaba
  * un `targetProjectId` del body sin cruzarlo con nada, así que con solo pasar el middleware se podía
@@ -130,30 +119,14 @@ export async function POST(
     return NextResponse.json({ ok: true, cloneId: clone.id, section });
   }
 
-  // ── Enviar al canvas de empresa (como sugerencia) ──
+  // ── Enviar al canvas de empresa: RETIRADO (Memoria de la cuenta · Etapa 0, 2026-10-09) ──
+  // Creaba una CanvasSuggestion que ninguna pantalla mostraba: el canvas de empresa estaba vacío en
+  // los 168 clientes y su lugar lo tomó la ficha del cliente (Información del cliente).
   if (target === "client") {
-    if (!CLIENT_SECTIONS.includes(section)) {
-      return NextResponse.json({ error: "invalid client section" }, { status: 400 });
-    }
-
-    // Crear CanvasSuggestion. `suggested` (Json, REQUERIDO) es el valor que el
-    // flujo de aprobación aplica a canvas[section] — faltaba y este create
-    // LANZABA en runtime siempre (bug real que el ignoreBuildErrors escondía:
-    // "Enviar al canvas de empresa" desde un card estaba roto en prod).
-    const suggestion = await prisma.canvasSuggestion.create({
-      data: {
-        clientId: original.clientId,
-        section,
-        field: original.title,
-        suggested: original.content,
-        suggestedValue: original.content,
-        source: "manual",
-        sourceLabel: original.title,
-        status: "pending",
-      },
-    });
-
-    return NextResponse.json({ ok: true, suggestionId: suggestion.id, section });
+    return NextResponse.json(
+      { error: "El canvas de empresa se retiró: lo de la cuenta va a Información del cliente." },
+      { status: 410 },
+    );
   }
 
   return NextResponse.json({ error: "invalid target (project or client)" }, { status: 400 });

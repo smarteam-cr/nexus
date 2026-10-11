@@ -24,6 +24,7 @@ import { listaParaProponer } from "./calidad";
 import { calcularMetricas, DIAS_DE_LA_METRICA, type Metricas } from "./metricas";
 import { leerContenido } from "./esquemas";
 import { bloquearFila, chequeoDe, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
+import { DE_LA_PREVENTA } from "./marco";
 
 /** El tipo de la primera venta que sale de una exploración: la implementación de HubSpot. */
 export const TIPO_DE_LA_PROPUESTA = DEFAULT_BC_TYPE_ID;
@@ -173,7 +174,7 @@ export async function metricasDeLasPropuestas(ahora = new Date()): Promise<Metri
   if (!modeloDisponible(prisma.exploracionDeVenta)) return null;
   const desde = new Date(ahora.getTime() - DIAS_DE_LA_METRICA * 24 * 60 * 60 * 1000);
   const [filas, sinExploracion] = await Promise.all([
-    prisma.exploracionDeVenta.findMany({ select: { contenido: true } }),
+    prisma.exploracionDeVenta.findMany({ where: DE_LA_PREVENTA, select: { contenido: true } }),
     prisma.businessCase.count({ where: { createdAt: { gte: desde }, exploracionId: null, client: { kind: "PROSPECTO" } } }),
   ]);
   const fotos = filas.flatMap((f) => leerContenido(f.contenido).alProponer);

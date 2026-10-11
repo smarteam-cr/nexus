@@ -30,10 +30,32 @@ import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
 import { tieneContenidoDeProceso } from "@/lib/procesos/mapa";
 
-export type ArtifactGate = {
-  section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion" | "diagnostico" | "planificacion" | "implementacion" | "entrega";
-  action: "generate" | "regenerate";
-};
+export type ArtifactGate =
+  | {
+      section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion" | "diagnostico" | "planificacion" | "implementacion" | "entrega";
+      action: "generate" | "regenerate";
+    }
+  /** «Buscar lo nuevo» sobre un handoff congelado (ver `gateDelPedidoDelHandoff`). */
+  | { section: "handoff"; action: "congelar" };
+
+/**
+ * «Buscar lo nuevo» sobre un handoff congelado (etapa 3b, DECISIONS «El handoff se congela») no reescribe el
+ * handoff: deja sugerencias en borrador. Pide `handoff.congelar` —la celda de quien congela, que tiene el CSE—
+ * y no `regenerate`. La generación de siempre y «Rehacer desde cero» siguen con lo que diga resolveArtifactGate.
+ *
+ * Solo con proyecto: la rama del handoff de /analyze corre con proyecto, y es ella la que corta un «sugerir»
+ * sobre un handoff sin congelar (409 NO_CONGELADO) antes de cualquier trabajo. Sin proyecto, el pedido ni se
+ * lee y la generación pide su celda de siempre. `pedido` es lo que devuelve `leerPedidoDelHandoff`.
+ */
+export function gateDelPedidoDelHandoff(
+  gate: ArtifactGate | null,
+  pedido: { modo: string } | null | "invalido",
+  projectId: string | null,
+): ArtifactGate | null {
+  if (gate?.section !== "handoff" || !projectId) return gate;
+  if (pedido && pedido !== "invalido" && pedido.modo === "sugerir") return { section: "handoff", action: "congelar" };
+  return gate;
+}
 
 async function hasAiTimelineDetail(projectId: string | null): Promise<boolean> {
   if (!projectId) return false;
@@ -204,6 +226,9 @@ export function artifactGateMessage(gate: ArtifactGate): string {
     implementacion: "la guía de implementación",
     entrega: "el documento de entrega",
   };
+  if (gate.action === "congelar") {
+    return "Buscar lo nuevo en el handoff necesita el permiso de congelarlo, y tu rol no lo tiene. Puedes seguir haciendo cambios a mano.";
+  }
   /* «(ya existe una versión)» y no «(ya está generado)»: la frase va con etiquetas en femenino y
      en plural («la exploración del negocio», «los procesos»), y un participio fijo no concuerda. */
   return gate.action === "regenerate"

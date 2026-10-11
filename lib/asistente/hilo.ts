@@ -35,7 +35,7 @@
  */
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
-import type { RolDeMensaje } from "@prisma/client";
+import type { Prisma, RolDeMensaje } from "@prisma/client";
 
 /**
  * ⭐ DE QUÉ CUELGA EL HILO. Exactamente uno.
@@ -48,13 +48,25 @@ import type { RolDeMensaje } from "@prisma/client";
  * ⚠ El tipo lo hace CERRADO: `Dueno` es una unión de tres formas con una sola clave cada una, así
  * que «ninguno» y «dos a la vez» son errores de compilación, no algo que validar en runtime.
  */
-export type Dueno =
+export type DuenoDeDocumento =
   | { projectId: string }
   | { businessCaseId: string }
   | { roleId: string };
 
-/** El `where` de Prisma para ese dueño, con los otros dos en null. */
+/**
+ * ⭐ EL CUARTO DUEÑO (2026-10-09): el chat de TAREAS (lib/tareas/chat) no cuelga de un documento sino
+ * de la persona — un hilo por persona, con los tres dueños en null. La base ya lo aceptaba (no hay
+ * CHECK de «exactamente uno»); lo que cambia es el tipo.
+ *
+ * ⛔ Por eso son DOS tipos: el handler genérico, el contexto y el turno reciben `DuenoDeDocumento`, así
+ * que un dueño personal no puede llegar por error a `contextoDeDocumento` — donde, sin ninguno de los
+ * tres ids, el `findFirst({ isActive: true })` traería el canvas de una propuesta cualquiera.
+ */
+export type Dueno = DuenoDeDocumento | { personal: true };
+
+/** El `where` de Prisma para ese dueño, con los otros dos en null (los tres, si es personal). */
 export function whereDelDueno(d: Dueno) {
+  if ("personal" in d) return { projectId: null, businessCaseId: null, roleId: null };
   return {
     projectId: "projectId" in d ? d.projectId : null,
     businessCaseId: "businessCaseId" in d ? d.businessCaseId : null,
@@ -80,7 +92,7 @@ export interface TurnoDelHilo {
 
 export interface HiloConTurnos {
   id: string;
-  /** ⚠ Nullable: un hilo puede colgar de un business case o de un rol. Ver `Dueno`. */
+  /** ⚠ Nullable: un hilo puede colgar de un business case, de un rol o de la persona. Ver `Dueno`. */
   projectId: string | null;
   businessCaseId: string | null;
   roleId: string | null;
@@ -182,9 +194,20 @@ export interface TurnoNuevo {
   llmCallId?: string | null;
 }
 
+function datosDelTurno(hiloId: string, turno: TurnoNuevo) {
+  return {
+    hiloId,
+    rol: turno.rol,
+    contenido: turno.contenido,
+    shaDeContexto: turno.shaDeContexto ?? null,
+    llmCallId: turno.llmCallId ?? null,
+  };
+}
+
 /**
- * Suma un turno al hilo. ⚠ Es el ÚNICO escritor de `MensajeDeChat`: la guarda de al lado exige
- * que nadie más lo cree, para que el orden y la huella no se puedan escribir a medias.
+ * Suma un turno al hilo. ⚠ Es el ÚNICO escritor de `MensajeDeChat` (con su gemelo de abajo, que lo
+ * hace dentro de una transacción): la guarda de al lado exige que nadie más lo cree, para que el
+ * orden y la huella no se puedan escribir a medias.
  */
 export async function agregarTurno(
   hiloId: string,
@@ -192,16 +215,7 @@ export async function agregarTurno(
   opts?: { ultimoRunId?: string | null },
 ): Promise<TurnoDelHilo> {
   const [mensaje] = await prisma.$transaction([
-    prisma.mensajeDeChat.create({
-      data: {
-        hiloId,
-        rol: turno.rol,
-        contenido: turno.contenido,
-        shaDeContexto: turno.shaDeContexto ?? null,
-        llmCallId: turno.llmCallId ?? null,
-      },
-      select: TURNOS_EN_ORDEN.select,
-    }),
+    prisma.mensajeDeChat.create({ data: datosDelTurno(hiloId, turno), select: TURNOS_EN_ORDEN.select }),
     prisma.hiloDeChat.update({
       where: { id: hiloId },
       data: { ...(opts?.ultimoRunId !== undefined ? { ultimoRunId: opts.ultimoRunId } : {}) },
@@ -211,15 +225,64 @@ export async function agregarTurno(
 }
 
 /**
+ * ⭐ El mismo turno, DENTRO de una transacción interactiva. Lo usa el chat de tareas para escribir el
+ * desenlace en la misma transacción que aplica lo acordado (lib/tareas/mutaciones.ts): si una de las
+ * dos cosas falla, no queda ninguna. `agregarTurno` no sirve ahí: abre su propio `$transaction` por
+ * lotes, que no se anida.
+ */
+export async function agregarTurnoEnTx(
+  tx: Prisma.TransactionClient,
+  hiloId: string,
+  turno: TurnoNuevo,
+): Promise<TurnoDelHilo> {
+  const mensaje = await tx.mensajeDeChat.create({ data: datosDelTurno(hiloId, turno), select: TURNOS_EN_ORDEN.select });
+  await tx.hiloDeChat.update({ where: { id: hiloId }, data: {} });
+  return mensaje;
+}
+
+/**
+ * Bloquea el hilo hasta que termine la transacción y devuelve sus turnos RELEÍDOS adentro. Dos clics a
+ * la vez en «Aplicar» no leen los dos el acuerdo como vivo: el segundo espera y ve el desenlace.
+ */
+export async function bloquearHiloEnTx(
+  tx: Prisma.TransactionClient,
+  hiloId: string,
+): Promise<TurnoDelHilo[]> {
+  await tx.$queryRaw`SELECT id FROM "HiloDeChat" WHERE id = ${hiloId} FOR UPDATE`;
+  return tx.mensajeDeChat.findMany({ where: { hiloId }, ...TURNOS_EN_ORDEN });
+}
+
+/**
  * Un hilo por id, ANCLADO al proyecto. ⛔ `findFirst` con `projectId`, nunca `findUnique({id})`:
  * el id de un hilo no puede ser la llave para leer la conversación de otro proyecto.
+ *
+ * ⛔ Con el dueño PERSONAL el correo es obligatorio: los tres ids van en null, así que sin él el id
+ * solo abriría el hilo de tareas de CUALQUIER persona.
  */
-export async function leerHilo(hiloId: string, dueno: Dueno): Promise<HiloConTurnos | null> {
+export async function leerHilo(hiloId: string, dueno: Dueno, usuarioEmail?: string): Promise<HiloConTurnos | null> {
+  if ("personal" in dueno && !usuarioEmail) return null;
   const hilo = await prisma.hiloDeChat.findFirst({
-    where: { id: hiloId, ...whereDelDueno(dueno) },
+    where: { id: hiloId, ...whereDelDueno(dueno), ...(usuarioEmail ? { usuarioEmail } : {}) },
     include: { mensajes: TURNOS_EN_ORDEN },
   });
   return hilo ? aHiloConTurnos(hilo) : null;
+}
+
+/**
+ * Cuántos turnos escribió hoy esta persona en esa pieza, en TODOS sus hilos (no solo el vivo: si no,
+ * «empezar de cero» saltearía el tope). Un turno con reintento cuenta uno: se persiste uno solo.
+ */
+export async function turnosDeHoy(
+  pedido: Omit<PedidoDeHilo, "modelo">,
+  desde: Date,
+): Promise<number> {
+  return prisma.mensajeDeChat.count({
+    where: {
+      rol: "CSE",
+      createdAt: { gte: desde },
+      hilo: { ...whereDelDueno(pedido.dueno), pieza: pedido.pieza, usuarioEmail: pedido.usuarioEmail },
+    },
+  });
 }
 
 type FilaConMensajes = {

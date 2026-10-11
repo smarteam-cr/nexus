@@ -1,4 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// La memoria (lib/memoria) es del servidor: estas pruebas solo cubren la parte pura del mensaje.
+vi.mock("@/lib/memoria", () => ({ memoriaDelProyecto: async () => ({ texto: "", partes: [] }) }));
 import { buildProgressUserMessage, fusionarParticularidadesPendientes } from "./regenerate-progress";
 import { bloqueDeInstruccionesDeDoc } from "@/lib/business-cases/section-briefs";
 import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";

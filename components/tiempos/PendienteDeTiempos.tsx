@@ -5,6 +5,7 @@
  *
  * Es UN pendiente con la misma fila que los demás de «Para ti», pero se contesta ahí mismo: «Anotar» lo abre con
  * cada tarea o documento y sus opciones de un clic. Llegar con `?tiempos=1` (el enlace del pendiente) lo abre solo.
+ * La encuesta de arranque (cuánto te toma cada tarea clave) va primero, como un solo formulario con su cabecera.
  */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -15,7 +16,8 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import type { Pendiente } from "@/lib/para-ti/tipos";
 import type { PreguntaParaResponder } from "@/lib/tiempos/tipos";
 import { avisarCambioDeParaTi } from "@/components/para-ti/cuenta";
-import PreguntaDeTiempo, { enviarRespuesta } from "./PreguntaDeTiempo";
+import { enviarRespuesta } from "./PreguntaDeTiempo";
+import ListaDePreguntas from "./ListaDePreguntas";
 
 const BOTON_BLANCO =
   "shrink-0 rounded-md border border-line bg-surface px-2.5 py-[5px] text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg";
@@ -43,7 +45,7 @@ export default function PendienteDeTiempos({ item }: { item: Pendiente }) {
     };
   }, [abierto, preguntas]);
 
-  const quedan = (preguntas ?? []).filter((p) => !respondidas.has(p.id));
+  const quedan = (preguntas ?? []).filter((p) => !respondidas.has(p.id) && p.momento !== "ARRANQUE");
 
   const terminar = () => {
     avisarCambioDeParaTi();
@@ -94,11 +96,7 @@ export default function PendienteDeTiempos({ item }: { item: Pendiente }) {
             <p className="py-3 text-xs text-fg-muted">No queda nada sin anotar.</p>
           ) : (
             <>
-              <div className="divide-y divide-line">
-                {preguntas.map((p) => (
-                  <PreguntaDeTiempo key={p.id} pregunta={p} variante="lista" onListo={() => marcar(p.id)} />
-                ))}
-              </div>
+              <ListaDePreguntas preguntas={preguntas} onListo={marcar} />
               {quedan.length > 1 && (
                 <div className="flex justify-end gap-1 pt-1">
                   <BotonTexto disabled={guardando} onClick={() => void omitirTodas("no_lo_hice")}>

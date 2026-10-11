@@ -90,6 +90,6 @@ describe("leerLoLeido (la foto que guarda el agente)", () => {
   });
 
   it("sin foto (exploración que el agente todavía no leyó): todo vacío", () => {
-    expect(leerLoLeido(null)).toEqual({ tests: [], agenda: [], correosSinPermiso: 0, leidoEn: null });
+    expect(leerLoLeido(null)).toEqual({ tests: [], agenda: [], correosSinPermiso: 0, leidoEn: null, reunionesEn: null, calendarioEn: null });
   });
 });

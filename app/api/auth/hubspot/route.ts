@@ -78,12 +78,20 @@ const HUBSPOT_SCOPES = [
 //   acá, rompería la instalación desde el deploy hasta que alguien tocara la app. Hoy:
 //   `sales-email-read`, para que la exploración de venta lea los correos con la empresa (sin él,
 //   HubSpot los devuelve tachados y el lienzo avisa cuántos no pudo leer).
+// · `crm.objects.goals.read` (2026-10-08): las metas comerciales («OFICIAL | META 2026 - SMARTEAM») y su avance,
+//   para las comisiones y todo lo que mida lo vendido contra la meta (lib/ventas/metas-sync.ts). Solo lectura. Ya
+//   está declarado «Opcional» en la app pública (Elías, 2026-10-08), por eso entra acá y no por entorno. Sin él,
+//   la copia de metas responde `sinPermiso` y no toca nada; se arregla reconectando HubSpot desde Integraciones.
 const HUBSPOT_OPTIONAL_SCOPES = [
   "social",
   "crm.objects.partner-clients.read",
   "files",
+  "crm.objects.goals.read",
   ...(process.env.HUBSPOT_SCOPES_OPCIONALES_EXTRA ?? "").split(/\s+/).filter(Boolean),
-].join(" ");
+]
+  // Si el entorno repite uno que ya está acá, se pide una sola vez.
+  .filter((s, i, todos) => todos.indexOf(s) === i)
+  .join(" ");
 
 /**
  * GET /api/auth/hubspot — arranca el OAuth con HubSpot.

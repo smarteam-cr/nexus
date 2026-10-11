@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CONFIG_DE_FABRICA, completarConfig, horasDisponibles, parteParaCuentas, semaforoDe } from "./config";
 import { diasEntre, etiquetaDelLunes, inicioDelLunes, lunesDe, lunesDeFecha, lunesHasta, sumarSemanas } from "./semana";
 import { destinoDe, minutosContables, tiempoEnReuniones, type ReunionParaCarga } from "./reuniones";
-import { entregaEstimada, horasDeTarea, planDelPeriodo, type CronogramaParaCarga } from "./entrega";
+import { entregaEstimada, estimarTarea, horasDeTarea, planDelPeriodo, type CronogramaParaCarga } from "./entrega";
 import { correlacion, factorDeComplejidad, horasPorPuntoDeFactor, type DatosDeComplejidad } from "./complejidad";
 import { cargaDePersona, cargaDelEquipo, horasPorCuenta } from "./utilizacion";
 import { simularTraspasos } from "./simulacion";
@@ -162,6 +162,50 @@ describe("D · entrega estimada", () => {
     // Atrasadas: la sesión abierta de la semana 0 (su fin pasó) y no la del cliente.
     expect(e.atrasadas.get(HEIVER)).toBe(1);
   });
+  it("D2b lo que respondió quien hizo la tarea reemplaza al estimado y va a esa persona", () => {
+    const c = crono([
+      {
+        orden: 0,
+        duracionSemanas: 4,
+        semanaInicio: null,
+        tipo: "CONFIGURACION",
+        tareas: [
+          { id: "t1", titulo: "Configurar A", weekIndex: 0, estado: "DONE", parte: "SMARTEAM", tipo: "TASK", fechaManual: null },
+          { id: "t2", titulo: "Configurar B", weekIndex: 0, estado: "DONE", parte: "SMARTEAM", tipo: "TASK", fechaManual: null },
+          { id: "t3", titulo: "Configurar C", weekIndex: 3, estado: "DONE", parte: "SMARTEAM", tipo: "TASK", fechaManual: null },
+        ],
+      },
+    ]);
+    const declarados = new Map([
+      ["t1", { persona: HEIVER, horas: 5 }],
+      ["t3", { persona: "otra@smarteamcr.com", horas: 1 }],
+    ]);
+    const e = entregaEstimada([c], () => 1.5, C, new Date("2026-09-30T15:00:00Z"), declarados);
+    const s = e.porPersona.get(HEIVER)!.get("2026-09-14")!;
+    expect(s.horas).toBe(8); // 5 respondidas + 3 estimadas (2 h × 1,5)
+    expect(s.declaradas).toBe(5);
+    // La de la semana 3 ya está hecha y viene: cuenta solo porque alguien dijo cuánto le tomó, y es de esa persona.
+    expect(e.porPersona.get("otra@smarteamcr.com")!.get("2026-10-05")!.declaradas).toBe(1);
+    expect(e.porPersona.get(HEIVER)!.get("2026-10-05")).toBeUndefined();
+  });
+  it("D2c una tarea clave con número propio usa ese número; sin él, el de su tipo de fase", () => {
+    const conPipeline = { ...C, horasPorFamilia: { pipeline: 4 } };
+    expect(estimarTarea({ tipoFase: "CONFIGURACION", parte: "SMARTEAM", titulo: "Configurar el pipeline de ventas" }, 2, conPipeline)).toMatchObject({
+      horas: 8,
+      base: 4,
+      de: "familia",
+      familia: "pipeline",
+      nombre: "Pipeline o etapas",
+    });
+    expect(estimarTarea({ tipoFase: "CONFIGURACION", parte: "AMBOS", titulo: "Configurar el pipeline de ventas" }, 1, C)).toMatchObject({
+      horas: 1,
+      base: 2,
+      de: "tipo",
+      familia: "pipeline",
+      nombre: "Configuración",
+      parte: 0.5,
+    });
+  });
   it("D3 sin fecha de arranque no se ubica en una semana: se cuenta aparte", () => {
     const c = crono([{ orden: 0, duracionSemanas: 2, semanaInicio: null, tipo: null, tareas: [{ weekIndex: 0, estado: "PENDING", parte: "SMARTEAM", tipo: "TASK", fechaManual: null }] }], { ancla: null });
     const e = entregaEstimada([c], () => 1, C, new Date("2026-09-30T15:00:00Z"));
@@ -290,7 +334,7 @@ describe("F · utilización", () => {
   });
   it("F4 lo que pide cada cuenta por semana", () => {
     const cuentas = horasPorCuenta(HEIVER, tiempo, sinEntrega, semanas, C);
-    expect(cuentas).toEqual([{ clienteId: "acme", reuniones: 30, preparacion: 2.5, entrega: 0, horas: 32.5 }]);
+    expect(cuentas).toEqual([{ clienteId: "acme", reuniones: 30, preparacion: 2.5, entrega: 0, entregaDeclarada: 0, horas: 32.5 }]);
   });
 });
 

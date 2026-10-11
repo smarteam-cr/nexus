@@ -10,6 +10,7 @@
  * decide la pantalla, que es la que conoce la dirección (components/no-encontrada/PaginaNoEncontrada).
  * Si armar el menú falla, el 404 sale igual, sin sugerencias: una página de error no puede romperse.
  */
+import { entraATareas } from "@/lib/tareas/menu";
 import { requireUser } from "@/lib/auth/supabase";
 import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
@@ -28,7 +29,7 @@ async function menuQuePuedeAbrir(): Promise<DestinoConIcono[]> {
   // Mismo criterio que AppShell para el ítem de Roles.
   const hasSharedDocs =
     isSuperAdmin || !tm ? false : esAdminDeRoles({ role: tm.roleEnum }) || (await hasSharedRoleDocs(tm.id));
-  const ctx = { isSuperAdmin, permissions, hasSharedDocs, role: tm?.roleEnum ?? null };
+  const ctx = { isSuperAdmin, permissions, hasSharedDocs, role: tm?.roleEnum ?? null, enTareas: await entraATareas(tm ?? null) };
   const hijosCtx = {
     isCostos: isCostosRole(tm?.roleEnum),
     vista: vistaFinanzasDe({ roleEnum: tm?.roleEnum, vistaFinanzas: tm?.vistaFinanzas }),

@@ -15,7 +15,7 @@ import type { Cierre, Despues, Escala } from "@/lib/escala/documento/tipos";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
 import { cuantasParaRevisar, listaParaProponer, queSigue, type PuntoDeCalidad } from "./calidad";
-import { aplicarOperaciones, cambioLoConfirmado, type EstadoDeExploracion, type Operacion, type Validez } from "./contenido";
+import { aplicarOperaciones, cambioLoConfirmado, operacionesDeLaPantalla, type EstadoDeExploracion, type Operacion, type Validez } from "./contenido";
 import { leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
 import { escalaParaElLienzo, idsDeLaEscala, type EscalaDelLienzo } from "./escala-del-lienzo";
 import type { DocumentoDeLaLista } from "./documentos";
@@ -26,12 +26,16 @@ import { chequeoConfirmado } from "./mapa";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
 import { bloqueParaLaPropuesta, posicionDesdeElChequeo } from "./para-la-propuesta";
 import type { PosicionEnLaEscala } from "@/lib/escala/posicion";
+import type { ViaDelCongelado } from "@/lib/handoff/congelado";
+import { DE_LA_PREVENTA, marcoDe, type ClaveDeMarco } from "./marco";
 
 export const SQL_DE_EXPLORACIONES = "scripts/sql/2026-10-01-exploracion-de-venta.sql";
 
 const SELECT_FILA = {
   id: true,
   clientId: true,
+  projectId: true,
+  marco: true,
   edicion: true,
   perfilCierre: true,
   perfilDespues: true,
@@ -140,6 +144,8 @@ export interface FilaDeLaLista {
   sugeridas: number;
   /** La fecha de la próxima reunión: la próxima sesión planeada o, si no hay, la agenda de HubSpot. La lee «Para ti». */
   proximaReunion: string | null;
+  /** La sesión de esa próxima reunión, si es una sesión planeada: «Abrir la guía» de «Para ti» abre esa sesión. */
+  proximaSesionId: string | null;
   creadaEn: string;
   actualizadaEn: string;
 }
@@ -151,7 +157,7 @@ export async function listarExploraciones(general: Escala | null): Promise<Lista
   let filas: FilaDeExploracion[];
   try {
     filas = await prisma.exploracionDeVenta.findMany({
-      where: { archivadaEn: null },
+      where: { archivadaEn: null, ...DE_LA_PREVENTA },
       orderBy: { updatedAt: "desc" },
       take: 200,
       select: SELECT_FILA,
@@ -193,12 +199,10 @@ export async function listarExploraciones(general: Escala | null): Promise<Lista
         responsableEmail: f.responsableEmail,
         responsableNombre: f.responsableEmail ? (nombreDe.get(f.responsableEmail.toLowerCase()) ?? null) : null,
         sugeridas: cuantasParaRevisar(estado),
-        proximaReunion: proximaReunion(
-          estado.contenido.sesiones,
-          loQueVieneDeLaAgenda(leerLoLeido(f.test)).agenda,
-          hoy,
-          estado.propuesta.leidas.sesiones.length,
-        ).fecha,
+        // Cuenta sesiones, no lecturas del agente (etapa A).
+        ...(({ fecha, sesionId }) => ({ proximaReunion: fecha, proximaSesionId: sesionId }))(
+          proximaReunion(estado.contenido.sesiones, loQueVieneDeLaAgenda(leerLoLeido(f.test)).agenda, hoy),
+        ),
         creadaEn: f.createdAt.toISOString(),
         actualizadaEn: f.updatedAt.toISOString(),
       };
@@ -212,7 +216,7 @@ export { equipoParaLaPreventa } from "./responsable";
 // ── Cambiar ───────────────────────────────────────────────────────────────────
 
 export type ResultadoDeCambios =
-  | { estado: "ok"; fila: FilaDeExploracion; confirmado: boolean; responsableAntes: string | null }
+  | { estado: "ok"; fila: FilaDeExploracion; confirmado: boolean; responsableAntes: string | null; antes: EstadoDeExploracion }
   | { estado: "no-existe" }
   | { estado: "invalido"; error: string }
   /** Otra persona cambió lo confirmado entretanto: la pantalla recarga en vez de pisar. */
@@ -235,13 +239,20 @@ export function datosParaGuardar(estado: EstadoDeExploracion): Prisma.Exploracio
   };
 }
 
+/**
+ * Aplica operaciones con la fila bloqueada. `eventosDeConfianza`: las arma el servidor (POST …/sesiones,
+ * `mirarCalendario`) y pueden fijar el evento del calendario de una sesión. Sin eso (el PATCH de la pantalla), el
+ * evento de cada sesión se conserva como estaba (contenido.ts › `operacionesDeLaPantalla`).
+ */
 export async function aplicarCambios(
   id: string,
   version: number,
   operaciones: readonly Operacion[],
   general: Escala,
+  /** `db`: el cliente de un script (scripts/migrar-reuniones-de-los-documentos.ts, pool de 2). Sin él, el de la app. */
+  o: { eventosDeConfianza?: boolean; quienPide?: string | null; db?: Pick<typeof prisma, "$transaction"> } = {},
 ): Promise<ResultadoDeCambios> {
-  return prisma.$transaction(async (tx) => {
+  return (o.db ?? prisma).$transaction(async (tx) => {
     await bloquearFila(tx, id);
     const fila = await tx.exploracionDeVenta.findUnique({ where: { id }, select: SELECT_FILA });
     if (!fila) return { estado: "no-existe" } as const;
@@ -252,7 +263,9 @@ export async function aplicarCambios(
     // Los ids se validan contra la escala con la edición que la exploración tiene AHORA. Los ids de
     // las dimensiones son los mismos en todas las ediciones; lo único propio de una edición son
     // algunos criterios, y la pantalla cambia la edición sola, en un pedido aparte.
-    const r = aplicarOperaciones(antes, operaciones, validezPara(general, escalaDeLaExploracion(general, antes)), VALIDADOR_ESTRICTO);
+    const deLaPantalla = o.eventosDeConfianza ? ({ ok: true, ops: [...operaciones] } as const) : operacionesDeLaPantalla(antes, operaciones, { quienPide: o.quienPide });
+    if (!deLaPantalla.ok) return { estado: "invalido", error: deLaPantalla.error } as const;
+    const r = aplicarOperaciones(antes, deLaPantalla.ops, validezPara(general, escalaDeLaExploracion(general, antes)), VALIDADOR_ESTRICTO);
     if (!r.ok) return { estado: "invalido", error: r.error } as const;
 
     const confirmado = cambioLoConfirmado(antes, r.estado);
@@ -267,7 +280,7 @@ export async function aplicarCambios(
       },
       select: SELECT_FILA,
     });
-    return { estado: "ok", fila: actualizada, confirmado, responsableAntes: antes.responsableEmail } as const;
+    return { estado: "ok", fila: actualizada, confirmado, responsableAntes: antes.responsableEmail, antes } as const;
   });
 }
 
@@ -297,10 +310,42 @@ export function loQueVieneDeLaAgenda(leido: LoLeidoDeHubspot, ahora = Date.now()
   return { ...leido, agenda: leido.agenda.filter((a) => Date.parse(a.inicio) > ahora) };
 }
 
+/**
+ * «Lo que la IA ya sabe, sin que elijas nada» en la página de inicio de la exploración (diseño v13). Lo
+ * llena la memoria (lib/memoria › `queSabeLaIA`, en pantalla.ts) y lo muestra la página de inicio
+ * (components/exploraciones/InicioDeLaExploracion.tsx, textos en lib/exploraciones/lo-que-sabe-la-ia.ts).
+ * Son conteos, nunca el contenido.
+ */
+export interface LoQueSabeLaIA {
+  /** En un proyecto: hay handoff. */
+  handoff?: boolean;
+  /** En un proyecto: cuándo se congeló el handoff (etapa 3b), o null si no está congelado. */
+  handoffCongeladoAt?: string | null;
+  /** En un proyecto: cómo se congeló el handoff (lib/handoff/congelado.ts › `ViaDelCongelado`). */
+  handoffVia?: ViaDelCongelado | null;
+  /** En un proyecto: si la empresa tuvo una preventa (lo aprendido ahí llega a la memoria interna). */
+  preventa?: { fecha: string; archivada: boolean } | null;
+  /** Los datos de Información del cliente: confirmados y propuestos. */
+  ficha?: { confirmados: number; propuestos: number };
+  /** Los propuestos, por quién los propuso («Preventa», «Handoff», «Sesiones»…): «3 datos propuestos al preparar». */
+  propuestosPorOrigen?: Record<string, number>;
+  /** En un proyecto: cuántas reuniones tienen minuta (se leyeron al llegar). */
+  reunionesConMinuta?: number;
+  /** En la preventa: lo leído de HubSpot (su actividad y sus negocios) y si hizo el test. */
+  hubspot?: { actividad: boolean; negocios: boolean };
+  test?: boolean;
+  /** Adónde lleva «Ver la memoria del proyecto», cuando exista. */
+  memoriaUrl?: string | null;
+}
+
 /** Lo que la pantalla del lienzo recibe: la fila ya leída, sin los objetos de Prisma. */
 export interface ExploracionParaLaPantalla {
   id: string;
   version: number;
+  /** El proyecto, si es la exploración de un proyecto (Customer Success); null = una preventa. */
+  projectId: string | null;
+  /** Qué se explora: la venta o la estrategia del cliente (lib/exploraciones/marco.ts). */
+  marco: ClaveDeMarco;
   empresa: { clientId: string; nombre: string; hubspotCompanyId: string | null; industria: string | null; kind: string };
   estado: EstadoDeExploracion;
   /** Lo que el agente leyó de HubSpot: el test, la agenda, los correos que no pudo leer. */
@@ -316,6 +361,14 @@ export interface ExploracionParaLaPantalla {
   reuniones?: ReunionDeLaExploracion[];
   /** Las propuestas comerciales que nacieron de esta exploración. Igual que `sinLeer`. */
   propuestas?: { id: string; nombre: string; estado: string; creadaEn: string }[];
+  /**
+   * Un prospecto (etapa A, 2026-10-09): cada reunión con la empresa entra sola como sesión (se calcula al
+   * leer: guia.ts › `pestanasDeSesiones` con `opcionesDeLasPestanas(automaticas, estado.contenido.fuera)`).
+   * En un cliente o un proyecto, false: nada entra solo, se agrega con «+ Agregar sesión».
+   */
+  automaticas: boolean;
+  /** «Lo que la IA ya sabe, sin que elijas nada» (la memoria, etapa 3). Viaja al abrir y al recargar; lo muestra la página de inicio. */
+  loQueSabeLaIA?: LoQueSabeLaIA;
   creadaPor: string;
   creadaEn: string;
   actualizadaEn: string;
@@ -325,6 +378,8 @@ export function paraLaPantalla(fila: FilaDeExploracion): ExploracionParaLaPantal
   return {
     id: fila.id,
     version: fila.version,
+    projectId: fila.projectId,
+    marco: marcoDe(fila.marco).clave,
     empresa: {
       clientId: fila.client.id,
       nombre: fila.client.name,
@@ -334,6 +389,7 @@ export function paraLaPantalla(fila: FilaDeExploracion): ExploracionParaLaPantal
     },
     estado: estadoDesdeFila(fila),
     leido: loQueVieneDeLaAgenda(leerLoLeido(fila.test)),
+    automaticas: !fila.projectId && fila.client.kind === "PROSPECTO",
     creadaPor: fila.creadaPor,
     creadaEn: fila.createdAt.toISOString(),
     actualizadaEn: fila.updatedAt.toISOString(),

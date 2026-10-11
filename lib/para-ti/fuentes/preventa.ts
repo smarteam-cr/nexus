@@ -52,7 +52,8 @@ export const PREVENTAS: Fuente = {
           detalle: "La guía de la próxima sesión está en la preventa.",
           meta: `Preventa · ${f.empresa}`,
           accion: "Abrir la guía",
-          href: `${href}?pieza=exploracion`,
+          // Con una sesión planeada, la guía de esa sesión; si la reunión es de la agenda de HubSpot, el inicio de Exploración.
+          href: `${href}?pieza=exploracion${f.proximaSesionId ? `&sesion=${encodeURIComponent(f.proximaSesionId)}` : ""}`,
         });
       }
       const viva = c.ahora.getTime() - Date.parse(f.actualizadaEn) < DIAS_DE_UNA_PREVENTA_VIVA * 86_400_000;

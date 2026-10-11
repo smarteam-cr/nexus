@@ -7,13 +7,19 @@
  * A la derecha, cómo queda cada persona con los valores del formulario, sin guardar. Es una vista previa: la
  * preparación y las horas disponibles se recalculan en vivo; la entrega estimada y el factor de cada cuenta se
  * recalculan recién al guardar (dependen de cada tarea y cada cuenta).
+ *
+ * Tres pestañas desde el 2026-10-07: Supuestos (el formulario), Calibración (lo que Nexus propone con lo que respondió
+ * el equipo: «Usar» o «Descartar», una por una) e Historial (cada cambio, con quién, cuándo y por qué).
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Alert, Input, PageHeader } from "@/components/ui";
+import { Segmentado } from "@/components/ui/Segmentado";
 import { useToast } from "@/components/ui/Toast";
-import { BotonAzul } from "@/components/ui/sistema";
+import { BotonAzul, BotonBlanco, BotonTexto } from "@/components/ui/sistema";
+import { FAMILIAS_POR_NOMBRE } from "@/lib/tiempos/familias";
+import type { PropuestaDeCalibracion } from "@/lib/carga/calibracion";
 import { cn } from "@/lib/cn";
 import {
   DESCRIPCION_DE_PESO,
@@ -35,13 +41,19 @@ export interface CoberturaDeVariable {
 }
 
 
+type Vista = "supuestos" | "calibracion" | "historial";
+
 export default function Supuestos({
+  vistaInicial = "supuestos",
+  calibracion = [],
   configuracion,
   personas,
   coberturaDeVariables,
   tareasPorTipo,
   contenedor,
 }: {
+  vistaInicial?: Vista;
+  calibracion?: PropuestaDeCalibracion[];
   configuracion: ConfigGuardada;
   personas: PersonaConCuentas[];
   coberturaDeVariables: Record<string, CoberturaDeVariable>;
@@ -53,6 +65,15 @@ export default function Supuestos({
   const [c, setC] = useState<ConfigCarga>(configuracion.config);
   const [motivo, setMotivo] = useState("");
   const [guardando, setGuardando] = useState(false);
+  const [vistaActual, setVista] = useState<Vista>(vistaInicial);
+  const abiertas = calibracion.filter((p) => !p.descartada);
+  const cambiarVista = (v: Vista) => {
+    setVista(v);
+    const url = new URL(window.location.href);
+    if (v === "supuestos") url.searchParams.delete("vista");
+    else url.searchParams.set("vista", v);
+    window.history.replaceState(null, "", url);
+  };
   const cambiado = JSON.stringify(c) !== JSON.stringify(configuracion.config);
 
   // La misma cuenta que la carga, semana por semana: solo cambian la preparación y las horas disponibles. La entrega
@@ -124,6 +145,38 @@ export default function Supuestos({
         </Alert>
       )}
 
+      <Segmentado<Vista>
+        etiqueta="Qué mirar"
+        valor={vistaActual}
+        onCambio={cambiarVista}
+        opciones={[
+          { clave: "supuestos", etiqueta: "Supuestos" },
+          { clave: "calibracion", etiqueta: "Calibración", cuenta: abiertas.length || undefined },
+          { clave: "historial", etiqueta: "Historial", cuenta: configuracion.historia.length || undefined },
+        ]}
+      />
+
+      {vistaActual === "calibracion" && <Calibracion propuestas={calibracion} sinTabla={configuracion.sinTabla} />}
+
+      {vistaActual === "historial" && (
+        <section className="space-y-2 rounded-xl border border-line bg-surface p-4">
+          <h2 className="text-sm font-semibold text-fg">Cada cambio de los supuestos</h2>
+          {configuracion.historia.length === 0 ? (
+            <p className="text-[13px] text-fg-secondary">Nadie los cambió todavía: rigen los valores de fábrica.</p>
+          ) : (
+            <ul className="divide-y divide-line text-[13px]">
+              {configuracion.historia.map((h) => (
+                <li key={h.id} className="py-2">
+                  <span className="text-fg">{fechaYHora(h.en)}</span> <span className="text-fg-muted">· {h.por}</span>
+                  {h.motivo && <span className="block text-fg-secondary">{h.motivo}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {vistaActual === "supuestos" && (
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-4">
           <Bloque titulo="Capacidad">
@@ -154,6 +207,32 @@ export default function Supuestos({
                     <span className="block text-xs text-fg-muted">{tareasPorTipo[t] ?? 0} tareas</span>
                   </span>
                   <Numero valor={c.horasPorTipo[t]} unidad="h" paso={0.5} onCambio={(v) => setC({ ...c, horasPorTipo: { ...c.horasPorTipo, [t]: v } })} parse={num} />
+                </label>
+              ))}
+            </div>
+            <div className="pt-3">
+              <span className="block text-[13px] font-semibold text-fg">Horas de las tareas clave, antes del factor</span>
+              <span className="block text-xs text-fg-muted">Vacío = cuenta como su tipo de fase. Se llenan desde «Calibración»</span>
+            </div>
+            <div className="grid gap-2 pt-2 sm:grid-cols-2 lg:grid-cols-3">
+              {FAMILIAS_POR_NOMBRE.map((f) => (
+                <label key={f.clave} className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2">
+                  <span className="min-w-0 text-[13px] text-fg">{f.nombre}</span>
+                  <Numero
+                    valor={c.horasPorFamilia[f.clave] ?? null}
+                    unidad="h"
+                    paso={0.5}
+                    opcional
+                    vacio="—"
+                    etiqueta={`Horas de ${f.nombre}`}
+                    onCambio={(v) => setC({ ...c, horasPorFamilia: { ...c.horasPorFamilia, [f.clave]: v } })}
+                    onVaciar={() => {
+                      const resto = { ...c.horasPorFamilia };
+                      delete resto[f.clave];
+                      setC({ ...c, horasPorFamilia: resto });
+                    }}
+                    parse={num}
+                  />
                 </label>
               ))}
             </div>
@@ -223,6 +302,22 @@ export default function Supuestos({
             </Fila>
             <Fila nombre="Traspaso de una cuenta" nota="Lo que suma quien la recibe el primer mes">
               <Numero valor={Math.round(c.traspaso * 100)} unidad="%" onCambio={(v) => setC({ ...c, traspaso: v / 100 })} parse={num} />
+            </Fila>
+            <Fila nombre="Recurrentes por CSE, desde" nota="La banda de la pestaña Equipo de Éxito del cliente">
+              <Numero
+                valor={c.metaRecurrentes.min}
+                unidad="cuentas"
+                onCambio={(v) => setC({ ...c, metaRecurrentes: { ...c.metaRecurrentes, min: Math.round(v) } })}
+                parse={num}
+              />
+            </Fila>
+            <Fila nombre="Recurrentes por CSE, hasta">
+              <Numero
+                valor={c.metaRecurrentes.max}
+                unidad="cuentas"
+                onCambio={(v) => setC({ ...c, metaRecurrentes: { ...c.metaRecurrentes, max: Math.round(v) } })}
+                parse={num}
+              />
             </Fila>
           </Bloque>
 
@@ -319,24 +414,109 @@ export default function Supuestos({
             <p className="text-xs text-fg-muted">La entrega estimada y el factor de cada cuenta se recalculan al guardar.</p>
           </section>
 
-          {configuracion.historia.length > 0 && (
-            <section className="space-y-2 rounded-xl bg-surface-muted p-4">
-              <h2 className="text-sm font-semibold text-fg">Cambios anteriores</h2>
-              <ul className="space-y-1.5 text-xs text-fg-secondary">
-                {configuracion.historia.map((h) => (
-                  <li key={h.id}>
-                    <span className="text-fg">{fechaYHora(h.en)}</span> · {h.por}
-                    {h.motivo && <span className="block text-fg-muted">{h.motivo}</span>}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
           <Link href={RUTA_DE_LA_CARGA} className={ENLACE_BLANCO}>
             Volver a la carga del equipo
           </Link>
         </aside>
       </div>
+      )}
+    </div>
+  );
+}
+
+/** Lo que propone la calibración: una tarjeta por propuesta, con su porqué, «Usar» y «Descartar». */
+function Calibracion({ propuestas, sinTabla }: { propuestas: PropuestaDeCalibracion[]; sinTabla: boolean }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [enCurso, setEnCurso] = useState<string | null>(null);
+  const [verDescartadas, setVerDescartadas] = useState(false);
+  const abiertas = propuestas.filter((p) => !p.descartada);
+  const descartadas = propuestas.filter((p) => p.descartada);
+  const valor = (x: number | null, unidad: "h" | "peso") => (x === null ? "su tipo de fase" : unidad === "h" ? horas(x) : `+${coma(x, 2)}`);
+
+  const decidir = async (p: PropuestaDeCalibracion, accion: "usar" | "descartar") => {
+    setEnCurso(p.clave);
+    try {
+      const r = await fetch("/api/cs/carga/calibracion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion, clave: p.clave, propuesto: p.propuesto, porque: p.porque }),
+      });
+      const cuerpo = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(cuerpo.error ?? "No se pudo guardar.");
+      toast.success(accion === "usar" ? `${p.que}: la carga ya usa ${valor(p.propuesto, p.unidad)}.` : "Descartada: no vuelve hasta que cambie el número.");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
+    } finally {
+      setEnCurso(null);
+    }
+  };
+
+  const tarjeta = (p: PropuestaDeCalibracion) => (
+    <li key={p.clave} className="flex flex-wrap items-start justify-between gap-4 border-b border-line py-3 last:border-b-0">
+      <div className="min-w-0 max-w-[720px] space-y-1">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+          {p.clase === "tipo" ? "Tipo de fase" : p.clase === "familia" ? "Tarea clave" : "Factor de complejidad"} ·{" "}
+          {p.fuente === "arranque" ? "encuesta de arranque" : p.fuente === "al-terminar" ? "respuestas al terminar" : "cuentas de la cartera"}
+        </p>
+        <p className="text-sm font-semibold text-fg">
+          {p.que}: {valor(p.actual, p.unidad)} → <span className="text-brand">{valor(p.propuesto, p.unidad)}</span>
+        </p>
+        <p className="text-[13px] leading-[19px] text-fg-secondary">{p.porque}</p>
+      </div>
+      {!p.descartada && (
+        <span className="flex flex-shrink-0 items-center gap-1">
+          <BotonTexto onClick={() => void decidir(p, "descartar")} disabled={sinTabla || enCurso !== null}>
+            Descartar
+          </BotonTexto>
+          <BotonAzul onClick={() => void decidir(p, "usar")} disabled={sinTabla || enCurso !== null}>
+            {enCurso === p.clave ? "Guardando…" : "Usar"}
+          </BotonAzul>
+        </span>
+      )}
+    </li>
+  );
+
+  return (
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="rounded-xl border border-line bg-surface px-4 py-3">
+        <h2 className="text-sm font-semibold text-fg">Lo que propone la calibración</h2>
+        {abiertas.length === 0 ? (
+          <p className="py-3 text-[13px] text-fg-secondary">
+            Nada que proponer por ahora. Las propuestas aparecen cuando el equipo responde la encuesta de arranque o «¿Cuánto te tomó?» al terminar sus
+            tareas.
+          </p>
+        ) : (
+          <ul>{abiertas.map(tarjeta)}</ul>
+        )}
+        {descartadas.length > 0 && (
+          <div className="border-t border-line pt-2">
+            <BotonBlanco onClick={() => setVerDescartadas((v) => !v)}>
+              {verDescartadas ? "Ocultar las descartadas" : `Ver las ${descartadas.length} descartadas`}
+            </BotonBlanco>
+            {verDescartadas && <ul className="opacity-70">{descartadas.map(tarjeta)}</ul>}
+          </div>
+        )}
+      </section>
+      <section className="flex flex-col gap-2.5 rounded-xl bg-surface-muted p-4">
+        <h2 className="text-sm font-semibold text-fg">Cómo se calibra</h2>
+        <ul className="list-disc space-y-1.5 pl-[18px] text-[13px] leading-[19px] text-fg-secondary">
+          <li>
+            <b className="text-fg">Por tipo de fase:</b> con 20 respuestas al terminar una tarea de ese tipo. Cada respuesta se compara con lo que suponía la
+            carga para esa tarea, con su parte y el factor de su cuenta.
+          </li>
+          <li>
+            <b className="text-fg">Por tarea clave:</b> primero con la encuesta de arranque (desde 3 respuestas); con 10 respuestas al terminarla, manda lo que
+            de verdad tomó.
+          </li>
+          <li>
+            <b className="text-fg">Por variable del factor:</b> con 5 cuentas que la tienen y 5 que no. Si las que la tienen piden más de lo que predice su
+            factor, su peso sube.
+          </li>
+          <li>Nada entra solo: «Usar» guarda el cambio con su porqué en el historial. «Descartar» lo guarda y no vuelve hasta que cambie el número.</li>
+        </ul>
+      </section>
     </div>
   );
 }

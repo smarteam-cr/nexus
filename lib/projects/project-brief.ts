@@ -22,13 +22,17 @@ import { Prisma } from "@prisma/client";
 import { parsearBriefCitado } from "@/lib/cs/brief-citas";
 import { generarTextoDeBrief } from "@/lib/cs/brief-llm";
 import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
-import { fetchTranscriptContent } from "@/lib/sessions/transcript";
+import { resumenDeReunion } from "@/lib/contexto/material-cronograma";
+import { memoriaDeLaCuenta } from "@/lib/memoria";
+import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
+import { soloOcurridas } from "@/lib/sessions/ocurridas";
 import { etiquetaDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
 import { loadHandoffContext, loadPriorRelationshipContext } from "@/lib/canvas/load-canvas-context";
 import { loadProjectSummary } from "@/lib/portfolio/load";
 import { textoDeCronogramaParaBrief } from "./brief-cronograma";
+import { rotuloDeSolicitud } from "@/lib/sessions/solicitudes-fuera-de-alcance";
 import { armarContextoDeBrief, type DatosDeBrief } from "./brief-fuentes";
 
 const AGENT_ID = "agent-project-brief";
@@ -70,43 +74,38 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
   });
   if (!p) return null;
 
+  /* LAS REUNIONES SALEN DEL CHOKEPOINT (2026-10-09, Memoria de la cuenta · Etapa 0). Antes se
+     leían por `projects: { some: { projectId } }` a mano: entraban reuniones que una persona había
+     SACADO del proyecto (tombstone, `included: false`) y vínculos viejos de OTRO cliente — el
+     invariante 1 de CLAUDE.md. `getProjectMemberSessions` aplica `included`, `belongsToClient` y el
+     piso del proyecto, igual que el handoff, el cronograma y el vigía.
+     ⚠ SOLO LAS QUE YA OCURRIERON (`soloOcurridas`): la agenda recurrente de Google vive en la misma
+     tabla y una reunión agendada sin transcripción gastaba el cupo desplazando a las reales.
+     `participants` ya trae al organizador (lo pliega el chokepoint): sirve para la ETIQUETA DE SALA
+     (Tanda 3) — «lo dijo el cliente» y «lo dijimos nosotros» no pesan igual. */
+  const { sessions: miembros } = await getProjectMemberSessions(projectId);
+  const ocurridasDelProyecto = [...soloOcurridas(miembros)].sort((a, b) => b.date - a.date);
+  const sesiones = ocurridasDelProyecto.slice(0, MAX_SESIONES);
+
   /* ⚠ La cobertura se mide sobre TODO el proyecto, no sobre `MAX_SESIONES`. El conteo viejo salía
      de la ventana de 12 y el texto decía «de este proyecto»: en Wherex daba 8 cuando eran 25 sobre
-     65. Son dos counts indexados (`projects` + `date`), no traen filas: mucho más barato que
-     `fetchTranscriptContent` sobre el historial entero.
-     «Sin registro» = ni transcripción ni minuta, que es EXACTAMENTE lo que hace que
-     `fetchTranscriptContent` devuelva null — el mismo criterio con el que una reunión se queda
-     afuera de las fuentes citables, medido en la base en vez de fila por fila. */
-  const ocurridas = { projects: { some: { projectId } }, date: { lte: new Date() } } as const;
+     65. «Sin registro» = ni minuta ni resumen (desde la etapa 3 de la memoria el resumen lee lo que
+     ya dejó cada reunión, no su transcripción): es EXACTAMENTE lo que hace que `resumenDeReunion`
+     quede vacío — el mismo criterio con el que una reunión se queda afuera de las fuentes citables,
+     medido en la base en vez de fila por fila. */
+  const totalOcurridas = ocurridasDelProyecto.length;
 
   const [
-    sesiones,
     desviaciones,
     categorias,
     handoffTexto,
-    totalOcurridas,
     sinRegistro,
     historiaDelCliente,
     summary,
+    solicitudes,
+    memoriaDeLaCuentaTexto,
+    filasDeContenido,
   ] = await Promise.all([
-    prisma.firefliesSession.findMany({
-      /* ⚠ SOLO LAS QUE YA OCURRIERON. Las más recientes incluían las AGENDADAS —hay 459 sesiones
-         futuras en el corpus por la agenda recurrente de Google—, así que el resumen se armaba
-         gastando su cupo en reuniones que todavía no pasaron. Sin transcripción no aportaban nada
-         y encima desplazaban a las reales. */
-      where: ocurridas,
-      orderBy: { date: "desc" },
-      take: MAX_SESIONES,
-      /* `participants` y `organizerEmail` son para la ETIQUETA DE SALA (Tanda 3): «lo dijo el
-         cliente» y «lo dijimos nosotros» no pesan igual, y sin eso el modelo no los distingue. */
-      select: {
-        id: true,
-        title: true,
-        date: true,
-        participants: true,
-        organizerEmail: true,
-      },
-    }),
     prisma.particularidad.findMany({
       where: { timeline: { projectId } },
       orderBy: { lastDetectedAt: "desc" },
@@ -124,10 +123,15 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
        en `lib/handoff/duenio.test.ts` que lo hace cumplir.
        El largo no hace falta acotarlo acá: `armarContextoDeBrief` capea cada bloque. */
     loadHandoffContext(projectId, { onlyConfirmed: true }),
-    prisma.firefliesSession.count({ where: ocurridas }),
-    prisma.firefliesSession.count({
-      where: { ...ocurridas, transcript: null, summary: { equals: Prisma.DbNull } },
-    }),
+    totalOcurridas === 0
+      ? Promise.resolve(0)
+      : prisma.firefliesSession.count({
+          where: {
+            id: { in: ocurridasDelProyecto.map((s) => s.id) },
+            summary: { equals: Prisma.DbNull },
+            minute: { is: null },
+          },
+        }),
     /* EL RECORRIDO DEL CLIENTE (2026-09-22). El mismo bloque que ya leen el handoff y la
        exploración: proyectos y handoffs anteriores + la última Entrega publicada. Es lo que deja
        contar de dónde viene la relación en vez de arrancar la historia en la reunión de la
@@ -136,16 +140,37 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
     /* EL PLAN, MEDIDO. `catch` a null y no throw: que el cronograma no se pueda leer no puede
        tumbar el resumen entero — el resto del material sigue sirviendo. */
     loadProjectSummary(projectId).catch(() => null),
+    /* Las solicitudes fuera de alcance (2026-10-07): lo descartado y lo que ya estaba incluido no
+       son solicitudes, así que no entran. */
+    prisma.pedidoFueraDeAlcance.findMany({
+      where: { projectId, estado: { notIn: ["DESCARTADO", "INCLUIDO"] } },
+      orderBy: { updatedAt: "desc" },
+      take: 10,
+      select: { pedido: true, estado: true, quienLoPidio: true, monto: true, nota: true, updatedAt: true },
+    }),
+    /* LO QUE NEXUS YA SABE DE LA CUENTA (lib/memoria, etapa 3), con el alcance interno: la ficha (con lo propuesto y
+       su fuente), los procesos, la auditoría del portal y lo aprendido en la preventa. Sin la historia ni lo fuera de
+       alcance: ya los lee arriba (lib/memoria/consumidores.ts › resumen-del-proyecto). "" si no hay nada. */
+    memoriaDeLaCuenta(p.clientId, { lector: "resumen-del-proyecto", projectId }).then((m) => m.texto),
+    /* Lo que dejó cada reunión (la minuta y las notas, `resumenDeReunion`), con UNA consulta: el resumen ya no relee
+       las transcripciones de las 12 últimas. */
+    sesiones.length
+      ? prisma.firefliesSession.findMany({
+          where: { id: { in: sesiones.map((s) => s.id) } },
+          select: { id: true, summary: true, minute: { select: { summary: true, decisions: true, agreements: true, risks: true, status: true } } },
+        })
+      : Promise.resolve([]),
     ]);
 
-  /* El contenido lo serializa el helper compartido: sabe leer los DOS shapes de resumen
-     (Fireflies y Gemini Notes) y prioriza el resumen sobre el transcript crudo. Re-implementarlo
-     acá habría vuelto a tropezar con el `action_items` que en un shape es string y en el otro
-     array — el bug que ese archivo documenta. */
+  /* El contenido lo serializa el helper compartido (`resumenDeReunion`): sabe leer los DOS shapes de resumen
+     (Fireflies y Gemini Notes) y pone primero la minuta revisada. Re-implementarlo acá habría vuelto a tropezar con el
+     `action_items` que en un shape es string y en el otro array — el bug que ese archivo documenta. */
   const dominiosPropios = buildInternalDomainsSet(categorias);
-  const contenidos = await Promise.all(
-    sesiones.map((s) => fetchTranscriptContent(s.id, s.title)),
-  );
+  const porId = new Map(filasDeContenido.map((f) => [f.id, f]));
+  const contenidos = sesiones.map((s) => {
+    const f = porId.get(s.id);
+    return f ? resumenDeReunion({ title: s.title, summary: f.summary, minuta: f.minute }).texto.trim() || null : null;
+  });
 
   return {
     projectName: p.name,
@@ -168,14 +193,15 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
     handoff: handoffTexto.trim() ? { texto: handoffTexto, at: p.handoff?.updatedAt ?? null } : null,
     cronograma: textoDeCronogramaParaBrief(summary),
     historiaDelCliente: historiaDelCliente.trim() || null,
+    memoriaDeLaCuenta: memoriaDeLaCuentaTexto.trim() || null,
     sesiones: sesiones.map((s, i) => ({
       id: s.id,
       title: s.title,
-      date: s.date,
+      date: new Date(s.date),
       /* `null` cuando la reunión no dejó NADA: el armador la cuenta como reunión sin material en
          vez de volverla citable. */
       content: contenidos[i],
-      etiquetaDeSala: etiquetaDeSala(s, dominiosPropios),
+      etiquetaDeSala: etiquetaDeSala({ participants: s.participants }, dominiosPropios),
     })),
     desviaciones: desviaciones.map((d) => ({
       id: d.id,
@@ -183,6 +209,14 @@ async function cargarDatos(projectId: string): Promise<DatosDeBrief | null> {
       title: d.title,
       detail: d.detail,
       lastDetectedAt: d.lastDetectedAt,
+    })),
+    solicitudes: solicitudes.map((s) => ({
+      pedido: s.pedido,
+      estado: rotuloDeSolicitud(s.estado),
+      quienLoPidio: s.quienLoPidio,
+      monto: s.monto,
+      nota: s.nota,
+      at: s.updatedAt,
     })),
     cobertura: { ocurridas: totalOcurridas, sinRegistro },
   };

@@ -28,6 +28,10 @@ export interface CsAlertRow {
   firstDetectedAt: string;
   lastDetectedAt: string;
   createdAt: string;
+  /** Cuándo y quién la cerró, y qué anotó (lib/cs/alertas-reglas.ts). null mientras está abierta. */
+  resolvedAt: string | null;
+  resolvedByEmail: string | null;
+  resolutionNote: string | null;
 }
 
 export interface ClientSignalsRow {
@@ -70,6 +74,9 @@ export function serializeAlert(a: {
   firstDetectedAt: Date;
   lastDetectedAt: Date;
   createdAt: Date;
+  resolvedAt?: Date | null;
+  resolvedByEmail?: string | null;
+  resolutionNote?: string | null;
 }): CsAlertRow {
   return {
     id: a.id,
@@ -90,6 +97,9 @@ export function serializeAlert(a: {
     firstDetectedAt: a.firstDetectedAt.toISOString(),
     lastDetectedAt: a.lastDetectedAt.toISOString(),
     createdAt: a.createdAt.toISOString(),
+    resolvedAt: a.resolvedAt?.toISOString() ?? null,
+    resolvedByEmail: a.resolvedByEmail ?? null,
+    resolutionNote: a.resolutionNote ?? null,
   };
 }
 

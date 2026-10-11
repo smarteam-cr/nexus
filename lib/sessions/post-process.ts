@@ -1,503 +1,548 @@
 /**
- * lib/sessions/post-process.ts
+ * lib/sessions/post-process.ts — la LECTURA DE SEGUIMIENTO de una reunión (memoria de la cuenta, etapa 2).
  *
- * Procesa el transcript de una FirefliesSession con el agente "Análisis
- * post-sesión" y persiste:
- *   - 1 SessionMinute (DRAFT)
- *   - N ActionItems vinculados a la sesión
+ * La pasada única sobre cada reunión con un cliente o un prospecto: deja la minuta, los compromisos de los dos lados
+ * (como propuestas de Tarea) y, en una reunión de un cliente con proyecto, los pedidos fuera de alcance. Después, en
+ * segundo plano, lo que sigue: el avance del cronograma, la ficha, la fecha del diagnóstico, la etapa y la preventa.
+ * Ver docs/DECISIONS.md «La lectura de cada reunión es durable…».
  *
- * Reusable desde el endpoint manual (/api/sessions/[id]/post-process) y desde
- * el auto-trigger en `lib/google/meet-enrichment.ts`.
+ * Con `SEGUIMIENTO_HECHOS` prendida y su SQL (memoria de la cuenta, etapa 6), lo que sigue empieza por la lectura de
+ * HECHOS (lib/seguimiento/hechos-server.ts), y el avance, la ficha y la etapa salen de ellos. Una reunión con SOLO notas
+ * de Gemini no deja minuta, pero sí sus hechos. Apagada, todo sigue como antes (DECISIONS «Hechos, enrutador y novedades»).
  *
- * Idempotente: si la sesión ya tiene `SessionMinute`, no la reemplaza
- * (a menos que se pase `force: true`).
+ * ── LO QUE CAMBIÓ CONTRA EL POST-PROCESO VIEJO (lib/sessions/post-process-viejo.ts) ─────────────────────────
+ *  · Lo lee el job `seguimiento-reuniones` por la cola (lib/lecturas), con toma atómica, reintentos y presupuesto. El
+ *    enriquecimiento de Meet solo encola: se acabó el «dispara y olvida».
+ *  · El dueño sale de `resolvedClientId` (el manual, solo si no hay), sin volver a categorizar; sin dueño, no se lee.
+ *  · La ruta la decide el tipo de empresa: de un cliente, todo; de un prospecto, la minuta y los compromisos; de un
+ *    aliado o de Smarteam, nada. Una reunión de puertas adentro (solo estuvo el equipo) tampoco, aunque su dueño sea un
+ *    cliente: lo dicho sin el cliente no se le atribuye (la lee Tareas).
+ *  · Los títulos que ya son tareas («YA SON TAREAS») salen de la puerta de los agentes (lib/tareas/para-agentes.ts).
+ *  · Se puede CORTAR (`signal`): el corte llega al clasificador y a cada llamada, y si llega antes de escribir, no se
+ *    escribe nada (lib/lecturas/leer.ts pone el tope).
+ *  · Con `force`, una minuta ya revisada o editada no se rehace: es memoria y se corrige, no se pisa.
+ *  · La salida es una HERRAMIENTA (lib/sessions/lectura-salida.ts), no una regex. Si se corta, se reintenta una vez con
+ *    más tope; si vuelve a cortarse, error.
+ *  · Cada cita se verifica contra lo que se mandó: lo que no aparece tal cual, se descarta.
+ *  · Los compromisos ya no son `ActionItem` (DEPRECATED): son propuestas de Tarea (lib/tareas/seguimiento.ts), por el
+ *    único escritor de Tareas.
+ *  · Toda llamada a la IA que dispara la lectura queda en `LlmCall` con `origen = "reunion:<sessionId> › <sitio>"`.
+ *
+ * El orden de las escrituras importa: las propuestas y los pedidos van ANTES que la minuta, que se escribe la última.
+ * Así «ya tiene minuta» quiere decir que la lectura terminó entera, y un reintento después de un corte no pierde nada.
  */
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
-import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
-import {
-  categorizeSession,
-  buildInternalDomainsSet,
-  type CategorizeContext,
-  ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
-} from "@/lib/sessions/categorize";
-import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";
+import { conContextoDeIA, conLaReunion } from "@/lib/ai/contexto-de-corrida";
+import { duenoDeLaSesion } from "@/lib/sessions/project-sources";
+import { classifySessionToProjects, getPrimaryProjectIdForSession } from "@/lib/sessions/classify-session-project";
 import { titleMentionsKickoff } from "@/lib/sessions/session-type";
 import { maybeReanchorToKickoff } from "@/lib/timeline/reanchor";
 import { loadHandoffContext } from "@/lib/canvas/load-canvas-context";
+import { fechaLocalDeLaReunion } from "@/lib/sessions/compromisos-y-alcance";
+import { ADENDA_PRESENTACION_DEL_DIAGNOSTICO, leerPresentacionDetectada } from "@/lib/canvas/presentacion-del-diagnostico";
+import { citaEstaEnLasFuentes, normalizarParaCita } from "@/lib/timeline/limites";
+import { MIN_TRANSCRIPT_CHARS } from "@/lib/google/doc-parse";
 import {
-  ADENDA_COMPROMISOS_Y_ALCANCE,
-  fechaComprometida,
-  fechaLocalDeLaReunion,
-  leerCompromisos,
-  leerPedidosFueraDeAlcance,
-} from "@/lib/sessions/compromisos-y-alcance";
+  TOPE_DE_LA_TRANSCRIPCION,
+  adendaDeLaHerramienta,
+  fuenteDeLasCitas,
+  herramientaDeLaLectura,
+  leerSalidaDeLaLectura,
+  verificarCitas,
+  HERRAMIENTA_DE_LA_LECTURA,
+  type SalidaDeLaLectura,
+} from "@/lib/sessions/lectura-salida";
+import { TOPE_DE_TOKENS, rutaDeLaLectura, type RutaDeLaLectura } from "@/lib/lecturas/reglas";
+import { MIN_NOTAS_PARA_LEER, hechosPrendidos } from "@/lib/seguimiento/hechos/reglas";
+import { cseDeLaCuenta, cseDelProyecto, responsableDeLaPreventaViva } from "@/lib/lecturas/personas";
+import { armarPropuestasDeSeguimiento } from "@/lib/tareas/seguimiento";
+import { escribirSalidaDeSeguimiento } from "@/lib/tareas/lectura";
+import { titulosParaLaLectura } from "@/lib/tareas/para-agentes";
+import { miembrosActivos } from "@/lib/tareas/servidor";
+import { esDePuertasAdentro } from "@/lib/sessions/reuniones-para-seguimiento";
 
 const AGENT_ID_POST_SESSION = "agent-post-session";
 
-interface AgentOutput {
-  minute?: {
-    summary?: string;
-    agreements?: { text: string }[];
-    decisions?: { text: string; rationale?: string }[];
-    risks?: { text: string; severity?: "low" | "med" | "high" }[];
-    topics?: string[];
-  };
-  actionItems?: {
-    text: string;
-    ownerEmail?: string | null;
-    dueDate?: string | null;
-  }[];
-  stageProgress?: { advance: boolean; reason?: string };
-  // 2026-10-02 — ver lib/sessions/compromisos-y-alcance.ts (la adenda que los pide).
-  compromisos?: unknown;
-  fueraDeAlcance?: unknown;
-  // F5: sub-topics detectados (lead-scoring, workflow-builder, etc.)
-  detectedTopics?: string[];
-}
-
-export interface PostProcessResult {
-  status: "ok" | "skipped" | "error";
+export interface ResultadoDeLaLectura {
+  /**
+   * `omitida`: sin dueño, de un aliado o de Smarteam, o de puertas adentro. `sin_texto`: sin transcripción. `skipped`:
+   * ya tenía minuta (o, con `force`, la minuta ya estaba revisada o editada).
+   */
+  status: "ok" | "skipped" | "omitida" | "sin_texto" | "error";
   reason?: string;
   sessionId: string;
   clientId?: string;
+  ruta?: RutaDeLaLectura;
   minuteId?: string;
-  actionItemsCreated?: number;
+  /** Las propuestas de Tarea nuevas, con responsable y «Por asignar». */
+  propuestas?: number;
+  porAsignar?: number;
+  pedidos?: number;
+  descartadosPorCita?: { compromisos: number; pedidos: number };
+  tokens?: { entrada: number; salida: number };
+  /** Solo con `soloLeer`: lo que salió (ya con las citas verificadas), sin escribir nada. */
+  salida?: SalidaDeLaLectura;
+  /**
+   * Lo que sigue (avance, ficha, fecha del diagnóstico, etapa, preventa). Quien llama lo corre DESPUÉS de marcar la
+   * lectura, en segundo plano: el scheduler corre los jobs en serie y esto no lo puede trabar. Atribuido a la reunión.
+   */
+  despues?: () => Promise<void>;
+}
+
+/** Compatibilidad: el nombre de siempre del resultado. */
+export type PostProcessResult = ResultadoDeLaLectura;
+
+export interface OpcionesDeLaLectura {
+  /** Rehace la minuta aunque ya exista (el botón «Generar minuta» de nuevo). */
+  force?: boolean;
+  /** Quién la pidió: cobra contra el presupuesto humano. null = la cola (presupuesto automático). */
+  pedidaPorEmail?: string | null;
+  /** La fila de la cola (`LecturaDeReunion`): hace falta para escribir las propuestas de Tarea. */
+  lecturaId?: string | null;
+  /** Lee y devuelve la salida SIN escribir nada (ni la corrida, ni la minuta, ni los vínculos). El script de comparación. */
+  soloLeer?: boolean;
+  /**
+   * El corte del tope (lib/lecturas/leer.ts): llega al clasificador y a cada llamada a Claude, y si llegó antes de la
+   * primera escritura de la salida, la lectura termina en error sin escribir nada.
+   */
+  signal?: AbortSignal;
 }
 
 /**
- * Ejecuta el agente post-sesión sobre una sesión y persiste minuta + acciones.
- * Es seguro de llamar concurrentemente: la unicidad de SessionMinute.sessionId
- * en DB protege contra duplicados.
+ * Lee una reunión. No toca la cola: la toma y el resultado los maneja lib/lecturas (`procesarLectura`, `leerAhora`).
+ * Lanza solo ante un error de la base; un error del modelo vuelve como `status: "error"`.
  */
-export async function postProcessSession(
-  sessionId: string,
-  opts: { force?: boolean } = {},
-): Promise<PostProcessResult> {
-  // 1. Cargar sesión con transcript
+export async function leerReunionDeSeguimiento(sessionId: string, opts: OpcionesDeLaLectura = {}): Promise<ResultadoDeLaLectura> {
+  return conLaReunion(sessionId, () => leer(sessionId, opts));
+}
+
+/**
+ * El nombre de siempre. La lectura de verdad pasa por la cola (la toma, el resultado y lo que sigue): esto la pide YA,
+ * como el botón «Generar minuta». Con la bandera apagada o sin el SQL, el post-proceso viejo.
+ */
+export async function postProcessSession(sessionId: string, opts: { force?: boolean } = {}): Promise<ResultadoDeLaLectura | { status: "ocupada"; sessionId: string; reason: string }> {
+  const { leerAhora } = await import("@/lib/lecturas/leer");
+  return leerAhora(sessionId, { force: opts.force, pedidaPorEmail: null });
+}
+
+async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<ResultadoDeLaLectura> {
+  // 1. La reunión.
   const session = await prisma.firefliesSession.findUnique({
     where: { id: sessionId },
-    select: {
-      id: true,
-      title: true,
-      date: true,
-      participants: true,
-      manualClientId: true,
-      transcript: true,
-      summary: true,
-    },
+    select: { id: true, title: true, date: true, participants: true, organizerEmail: true, resolvedClientId: true, manualClientId: true, transcript: true, summary: true },
   });
+  if (!session) return { status: "error", sessionId, reason: "La reunión no existe." };
 
-  if (!session) {
-    return { status: "error", sessionId, reason: "Session not found" };
+  // 2. El dueño. NO se vuelve a categorizar: la fuente ÚNICA de "de quién es la sesión" es `resolvedClientId`, que
+  //    meet-sync materializó con la cascada completa (invariantes 1 y 2 de CLAUDE.md). Sin dueño, no se lee.
+  const duenoId = duenoDeLaSesion(session);
+  if (!duenoId) return { status: "omitida", sessionId, reason: "Sin dueño: la reunión no está atribuida a ningún cliente" };
+  const client = await prisma.client.findUnique({ where: { id: duenoId }, select: { id: true, name: true, company: true, industry: true, kind: true } });
+  if (!client) return { status: "omitida", sessionId, reason: "El dueño de la reunión ya no existe" };
+
+  // 3. La ruta según la empresa: de un aliado o de Smarteam, nada.
+  const ruta = rutaDeLaLectura(client.kind);
+  if (!ruta) {
+    return { status: "omitida", sessionId, clientId: client.id, reason: `La reunión es de ${client.kind === "ALIADO" ? "un aliado" : "Smarteam"}: el seguimiento no la lee` };
   }
-  if (!session.transcript || session.transcript.trim().length < 200) {
-    return { status: "skipped", sessionId, reason: "No transcript (or too short)" };
+  // Una reunión de puertas adentro (todos los que estuvieron son de la casa) no se lee aunque la cascada le haya puesto
+  // un cliente por el título: lo que se dijo ahí no lo dijo el cliente (la misma regla que la tarjeta y «Para ti»).
+  if (await esDePuertasAdentro({ participants: session.participants, organizerEmail: session.organizerEmail })) {
+    return { status: "omitida", sessionId, clientId: client.id, reason: "Es una reunión de puertas adentro (solo estuvo el equipo): la lee Tareas, no el seguimiento" };
   }
-
-  // 2. Si ya hay minuta y no es force, saltar
-  if (!opts.force) {
-    const existing = await prisma.sessionMinute.findUnique({
-      where: { sessionId },
-      select: { id: true, status: true },
-    });
-    if (existing) {
-      return {
-        status: "skipped",
-        sessionId,
-        reason: `Already has minute (${existing.status})`,
-        minuteId: existing.id,
-      };
-    }
-  }
-
-  // 3. Matchear sesión a cliente
-  const [clients, categories, teamMembers] = await Promise.all([
-    prisma.client.findMany({
-      orderBy: ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
-      select: { id: true, name: true, company: true, emailDomains: true, industry: true, siglas: true },
-    }),
-    prisma.sessionCategory.findMany({
-      select: { id: true, name: true, slug: true, domains: true, kind: true, color: true },
-    }),
-    prisma.teamMember.findMany({ select: { email: true, name: true, area: true, deactivatedAt: true } }),
-  ]);
-
-  const ctx: CategorizeContext = {
-    clients,
-    categories,
-    hubspotCompaniesByDomain: new Map(),
-    internalDomains: buildInternalDomainsSet(categories),
-  };
-
-  const group = categorizeSession(
-    {
-      participants: session.participants,
-      manualClientId: session.manualClientId,
-      title: session.title,
-    },
-    ctx,
-  );
-  if (group.kind !== "client") {
+  const transcript = session.transcript ?? "";
+  if (transcript.trim().length < MIN_TRANSCRIPT_CHARS) {
+    const sinTexto: ResultadoDeLaLectura = { status: "sin_texto", sessionId, clientId: client.id, ruta, reason: "Sin transcripción (o muy corta)" };
+    // Memoria de la cuenta, etapa 6 (solo con SEGUIMIENTO_HECHOS prendida y el SQL): una reunión con SOLO notas de
+    // Gemini no deja minuta, pero sí sus hechos (fuente «notas»). Antes, el clasificador la vincula a su proyecto (solo
+    // el clasificador, nunca el override), para que cada hecho sepa de qué proyecto es.
+    if (opts.soloLeer || !hechosPrendidos(process.env)) return sinTexto;
+    const { hechosActivos } = await import("@/lib/seguimiento/hechos-server");
+    if (!(await hechosActivos()) || !tieneNotasParaLeer(session.summary)) return sinTexto;
+    if (ruta === "completa") await classifySessionToProjects(sessionId, client.id, { signal: opts.signal }).catch(() => null);
     return {
-      status: "skipped",
-      sessionId,
-      reason: `Session not matched to a client (categorized as ${group.kind})`,
+      ...sinTexto,
+      reason: "Sin transcripción: se leen solo sus hechos, de las notas de Gemini",
+      despues: () => conLaReunion(sessionId, () => soloLosHechos(sessionId, { lecturaId: opts.lecturaId ?? null, quien: opts.pedidaPorEmail ?? null })),
     };
   }
 
-  const client = clients.find((c) => c.id === group.id);
-  if (!client) {
-    return { status: "error", sessionId, reason: "Matched client not found" };
-  }
-
-  // 4a. Clasificador sesión→proyecto: persiste SessionProject (N:N) y devuelve
-  //     el proyecto primario. Si el cliente tiene 1 proyecto, atajo trivial; si
-  //     tiene 2+, llama al agente IA. Si tiene 0, primaryProjectId=null.
-  const classify = await classifySessionToProjects(sessionId, client.id);
-  const primaryProjectId = classify.primaryProjectId ?? null;
-
-  // Ciclo de vida: si ESTA sesión es el Kick Off del proyecto, re-anclar el
-  // cronograma al Kick Off real (best-effort; las guardas —sin avance, sin
-  // baseline— viven en maybeReanchorToKickoff). Cubre el flujo real: el Kick Off
-  // ocurre → Fireflies la ingiere → se clasifica → el ancla se corrige sola.
-  // El pre-filtro es AMPLIO a propósito (no usa la cascada de tipos): acá alcanza con
-  // que el título mencione un kickoff. Angostarlo a "esta sesión ES de tipo kickoff"
-  // dejaría de re-anclar en títulos mixtos tipo "Kickoff + review", que es justo cuando
-  // hace falta. La verificación de verdad la hacen las guardas de maybeReanchorToKickoff.
-  if (primaryProjectId && titleMentionsKickoff(session.title ?? "")) {
-    try {
-      await maybeReanchorToKickoff(primaryProjectId);
-    } catch (e) {
-      console.error("[post-process] re-anclaje best-effort falló:", e);
+  // 4. Ya leída: «tiene minuta» = la lectura terminó entera (la minuta se escribe la última). Con `force` se rehace,
+  //    salvo que una persona ya la haya revisado o editado: la minuta es memoria y se corrige, no se pisa.
+  if (!opts.soloLeer) {
+    const existente = await prisma.sessionMinute.findUnique({ where: { sessionId }, select: { id: true, status: true } });
+    if (existente && !opts.force) return { status: "skipped", sessionId, clientId: client.id, ruta, minuteId: existente.id, reason: `Ya tenía minuta (${existente.status})` };
+    if (existente && (existente.status === "REVIEWED" || existente.status === "EDITED")) {
+      return { status: "skipped", sessionId, clientId: client.id, ruta, minuteId: existente.id, reason: "La minuta ya se revisó: no se rehace (se corrige en la reunión)" };
     }
   }
+  if (!opts.soloLeer && !opts.lecturaId) return { status: "error", sessionId, clientId: client.id, ruta, reason: "Falta la fila de la cola: la lectura se pide por lib/lecturas." };
 
-  // 4b. Cargar proyecto primario para usarlo en el prompt + metadata
-  const project = primaryProjectId
-    ? await prisma.project.findUnique({
-        where: { id: primaryProjectId },
-        select: { id: true, name: true, serviceType: true },
-      })
-    : null;
+  // 5. El proyecto (solo en un cliente). El clasificador persiste SessionProject y devuelve el primario; con un solo
+  //    proyecto es un atajo sin IA. Al solo leer, el primario que ya hay (sin escribir y sin otra llamada).
+  let primaryProjectId: string | null = null;
+  if (ruta === "completa") {
+    primaryProjectId = opts.soloLeer
+      ? await getPrimaryProjectIdForSession(sessionId)
+      : ((await classifySessionToProjects(sessionId, client.id, { signal: opts.signal })).primaryProjectId ?? null);
+    // Ciclo de vida: si ESTA reunión es el kickoff, re-anclar el cronograma al kickoff real (best-effort; las guardas
+    // viven en maybeReanchorToKickoff). El pre-filtro por título es amplio a propósito.
+    if (!opts.soloLeer && primaryProjectId && titleMentionsKickoff(session.title ?? "")) {
+      try {
+        await maybeReanchorToKickoff(primaryProjectId);
+      } catch (e) {
+        console.error("[lectura] re-anclaje best-effort falló:", e);
+      }
+    }
+  }
+  const project = primaryProjectId ? await prisma.project.findUnique({ where: { id: primaryProjectId }, select: { id: true, name: true, serviceType: true } }) : null;
 
-  const previousActionItems = await prisma.actionItem.findMany({
-    where: { clientId: client.id, done: false },
-    select: { text: true, status: true, ownerEmail: true, dueDate: true },
-    orderBy: { createdAt: "desc" },
-    take: 15,
-  });
-
-  // 5. Construir prompt
-  // Roster de owners SUGERIBLES: solo miembros activos (no se sugiere a desactivados).
-  const teamRoster = teamMembers
-    .filter((m) => !m.deactivatedAt)
-    .map((m) => `- ${m.name} <${m.email}>${m.area ? ` [${m.area}]` : ""}`)
-    .join("\n");
-
-  const previousItemsBlock =
-    previousActionItems.length > 0
-      ? `\n\n=== ACCIONES PENDIENTES PREVIAS DEL CLIENTE ===\n${previousActionItems
-          .map((a) => `- [${a.status}] ${a.text}${a.ownerEmail ? ` (@${a.ownerEmail})` : ""}`)
-          .join("\n")}`
-      : "";
-
-  /* Lo que se VENDIÓ, para que el agente reconozca un pedido fuera de alcance (2026-10-02). Solo el
-     alcance y lo que quedó afuera; interno (la minuta y los pedidos no salen al cliente). */
-  const alcanceVendido = project
-    ? (await loadHandoffContext(project.id, { onlyConfirmed: false, includeKeys: ["alcance_contratado", "fuera_de_alcance"] }).catch(() => "")).slice(0, 4000)
-    : "";
-  const alcanceBlock = alcanceVendido.trim()
-    ? `\n\n=== LO QUE SE VENDIÓ (para reconocer lo que está fuera de alcance) ===\n${alcanceVendido}`
+  /* La fecha de presentación del diagnóstico: solo si el proyecto tiene un diagnóstico generado que todavía no se
+     presentó. Los pedidos fuera de alcance: solo en un cliente con proyecto (hay algo vendido contra qué comparar). */
+  const pidePresentacion = project
+    ? await import("@/lib/canvas/presentacion-del-diagnostico-server").then((m) => m.diagnosticoSinPresentar(project.id)).catch(() => false)
+    : false;
+  const pideFueraDeAlcance = ruta === "completa" && !!project;
+  const alcanceVendido = pideFueraDeAlcance
+    ? (await loadHandoffContext(project!.id, { onlyConfirmed: false, includeKeys: ["alcance_contratado", "fuera_de_alcance"] }).catch(() => "")).slice(0, 4000)
     : "";
 
-  const summaryBlock =
-    session.summary && typeof session.summary === "object" && "overview" in (session.summary as object)
-      ? `\n\n=== RESUMEN GENERADO POR GEMINI NOTES ===\n${(session.summary as { overview?: string }).overview ?? ""}`
-      : "";
-
+  // 6. El mensaje. Lo que ya es una tarea no se vuelve a proponer: los títulos, por la puerta de los agentes (sin lo
+  //    privado, lo de un espacio de «solo miembros» ni el borrador de un plan).
+  const miembros = await miembrosActivos();
+  const yaSonTareas = (await titulosParaLaLectura({ clientId: client.id, sessionId }).catch(() => [] as string[])).slice(0, 30);
+  const overview =
+    session.summary && typeof session.summary === "object" && "overview" in (session.summary as object) ? String((session.summary as { overview?: unknown }).overview ?? "") : "";
   const userMessage = [
     `=== CLIENTE ===`,
     `Nombre: ${client.name}`,
     client.company ? `Empresa: ${client.company}` : null,
     client.industry ? `Industria: ${client.industry}` : null,
+    ruta === "prospecto" ? `(Es un PROSPECTO: todavía no compró.)` : null,
     project ? `\nProyecto activo: ${project.name}` : "",
     "",
-    `=== EQUIPO INTERNO (emails válidos para ownerEmail) ===`,
-    teamRoster,
+    `=== EQUIPO INTERNO (correos válidos para ownerEmail) ===`,
+    miembros.map((m) => `- ${m.nombre} <${m.email}>${m.area ? ` [${m.area}]` : ""}`).join("\n"),
     "",
     `=== REUNIÓN ===`,
     `Título: ${session.title}`,
     // En hora de Costa Rica: en UTC, una reunión de las 18:00 caía al día siguiente y toda fecha calculada desde ahí también.
     `Fecha: ${fechaLocalDeLaReunion(session.date)}`,
     `Participantes: ${session.participants.join(", ")}`,
-    summaryBlock,
-    alcanceBlock,
-    previousItemsBlock,
+    overview ? `\n\n=== RESUMEN GENERADO POR GEMINI NOTES ===\n${overview}` : "",
+    alcanceVendido.trim() ? `\n\n=== LO QUE SE VENDIÓ (para reconocer lo que está fuera de alcance) ===\n${alcanceVendido}` : "",
+    yaSonTareas.length ? `\n\n=== YA SON TAREAS (no las repitas como compromiso) ===\n${yaSonTareas.map((t) => `- ${t}`).join("\n")}` : "",
     "",
     `=== TRANSCRIPT ===`,
-    session.transcript.slice(0, 60000), // protección contra transcripts gigantes
+    transcript.slice(0, TOPE_DE_LA_TRANSCRIPCION),
   ]
-    .filter(Boolean)
+    .filter((x) => x !== null)
     .join("\n");
 
-  // 6. Llamar a Claude — atribuida (C-01): sin humano detrás, cobra contra el presupuesto automático.
-  let rawText: string;
-  try {
-    const ctxDeGasto = {
-      agentSlug: AGENT_ID_POST_SESSION,
-      clientId: client.id,
-      projectId: project?.id ?? null,
-      triggeredByEmail: null,
-      origen: "sessions/post-process",
-    };
-    const msg = await conContextoDeIA(ctxDeGasto, async () => anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 6000,
-      // La adenda pide los compromisos con fecha y los pedidos fuera de alcance (lib/sessions/compromisos-y-alcance.ts).
-      // Vive en código a propósito: funciona sin re-sembrar el prompt de la base.
-      system:
-        ((await prisma.agent.findUnique({ where: { id: AGENT_ID_POST_SESSION }, select: { systemPrompt: true } }))?.systemPrompt ?? "") +
-        ADENDA_COMPROMISOS_Y_ALCANCE,
-      messages: [{ role: "user", content: userMessage }],
-    }));
-    rawText = (msg.content[0] as { type: string; text: string }).text.trim();
-  } catch (e) {
-    return { status: "error", sessionId, clientId: client.id, reason: `Claude error: ${(e as Error).message}` };
-  }
+  const system =
+    ((await prisma.agent.findUnique({ where: { id: AGENT_ID_POST_SESSION }, select: { systemPrompt: true } }))?.systemPrompt ?? "") +
+    adendaDeLaHerramienta({ pideFueraDeAlcance }) +
+    (pidePresentacion ? ADENDA_PRESENTACION_DEL_DIAGNOSTICO : "");
+  const herramienta = herramientaDeLaLectura({ pideFueraDeAlcance, pidePresentacion, emailsDelEquipo: miembros.map((m) => m.email) });
 
-  // 7. Parsear JSON
-  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    return { status: "error", sessionId, clientId: client.id, reason: "No JSON in Claude response" };
-  }
-  let parsed: AgentOutput;
-  try {
-    parsed = JSON.parse(jsonMatch[0]) as AgentOutput;
-  } catch (e) {
-    return { status: "error", sessionId, clientId: client.id, reason: `JSON parse: ${(e as Error).message}` };
-  }
-
-  // 8. Crear AgentRun para trazabilidad
-  const run = await prisma.agentRun.create({
-    data: {
-      agentId: AGENT_ID_POST_SESSION,
-      clientId: client.id,
-      projectId: project?.id ?? null,
-      status: "DONE",
-      stepLabel: "Análisis post-sesión",
-      output: JSON.stringify(parsed),
-    },
-  });
-
-  // 9. Crear/reemplazar SessionMinute (idempotente)
-  const minuteData = {
-    summary: parsed.minute?.summary?.trim() ?? "(Sin resumen generado)",
-    agreements: (parsed.minute?.agreements ?? []) as unknown as object,
-    decisions: (parsed.minute?.decisions ?? []) as unknown as object,
-    risks: (parsed.minute?.risks ?? []) as unknown as object,
-    topics: (parsed.minute?.topics ?? []) as unknown as object,
-    status: "DRAFT" as const,
-    generatedByAgentRunId: run.id,
+  // 7. La llamada. Sin una persona detrás, cobra contra el presupuesto automático (C-01).
+  const run = opts.soloLeer
+    ? null
+    : await prisma.agentRun.create({
+        data: {
+          agentId: AGENT_ID_POST_SESSION,
+          clientId: client.id,
+          projectId: project?.id ?? null,
+          status: "RUNNING",
+          triggeredByEmail: opts.pedidaPorEmail ?? null,
+          sourceSessionIds: [sessionId],
+          stepLabel: "Análisis post-sesión",
+          currentPhase: "Leyendo la reunión",
+        },
+        select: { id: true },
+      });
+  const marcarError = async (reason: string): Promise<ResultadoDeLaLectura> => {
+    if (run) await prisma.agentRun.update({ where: { id: run.id }, data: { status: "ERROR", output: reason.slice(0, 2_000), currentPhase: null } }).catch(() => undefined);
+    return { status: "error", sessionId, clientId: client.id, ruta, reason };
   };
 
+  const tokens = { entrada: 0, salida: 0 };
+  const llamar = (maxTokens: number) =>
+    conContextoDeIA(
+      { agentSlug: AGENT_ID_POST_SESSION, agentRunId: run?.id ?? null, clientId: client.id, projectId: project?.id ?? null, triggeredByEmail: opts.pedidaPorEmail ?? null, origen: "sessions/post-process" },
+      () =>
+        anthropic.messages.create(
+          {
+            model: "claude-sonnet-4-6",
+            max_tokens: maxTokens,
+            system,
+            tools: [herramienta],
+            tool_choice: { type: "tool", name: HERRAMIENTA_DE_LA_LECTURA },
+            messages: [{ role: "user", content: userMessage }],
+          },
+          opts.signal ? { signal: opts.signal } : undefined,
+        ),
+    );
+  const cortada = () => `La lectura tardó más del tope y se cortó antes de escribir.`;
+  let salidaCruda: SalidaDeLaLectura | null = null;
+  try {
+    for (const tope of TOPE_DE_TOKENS) {
+      const msg = await llamar(tope);
+      tokens.entrada += msg.usage?.input_tokens ?? 0;
+      tokens.salida += msg.usage?.output_tokens ?? 0;
+      if (msg.stop_reason === "max_tokens") continue;
+      salidaCruda = leerSalidaDeLaLectura(msg);
+      if (!salidaCruda) return await marcarError("El modelo no llamó a la herramienta de la lectura.");
+      break;
+    }
+  } catch (e) {
+    return await marcarError(opts.signal?.aborted ? cortada() : `Claude: ${(e as Error).message}`);
+  }
+  if (!salidaCruda) return await marcarError(`La respuesta se cortó dos veces (tope de ${TOPE_DE_TOKENS[TOPE_DE_TOKENS.length - 1]} tokens).`);
+  // El corte llegó mientras respondía el modelo (o justo después): no se empieza a escribir. Una vez que se empieza,
+  // se termina (son escrituras cortas), así nunca queda una lectura a medias.
+  if (opts.signal?.aborted) return await marcarError(cortada());
+
+  // 8. Las citas: lo que no aparece TAL CUAL en lo que se mandó, se descarta.
+  if (!pideFueraDeAlcance) salidaCruda = { ...salidaCruda, fueraDeAlcance: [] };
+  const { validos: salida, descartadosPorCita } = verificarCitas(salidaCruda, fuenteDeLasCitas(transcript, overview));
+
+  if (opts.soloLeer) return { status: "ok", sessionId, clientId: client.id, ruta, salida, descartadosPorCita, tokens, pedidos: salida.fueraDeAlcance.length };
+
+  await prisma.agentRun.update({
+    where: { id: run!.id },
+    data: { status: "DONE", output: JSON.stringify({ salida, descartadosPorCita, ruta, tokens }), currentPhase: null },
+  });
+
+  // 9. Los compromisos → propuestas de Tarea, por el único escritor de Tareas.
+  const lectura = await prisma.lecturaDeReunion.findUnique({ where: { id: opts.lecturaId! }, select: { id: true, equipo: true } });
+  if (!lectura) return { status: "error", sessionId, clientId: client.id, ruta, reason: "La fila de la cola ya no existe." };
+  const [cseProyecto, cseCuenta, preventa] = await Promise.all([
+    ruta === "completa" ? cseDelProyecto(project?.id ?? null) : Promise.resolve(null),
+    ruta === "completa" && !project ? cseDeLaCuenta(client.id) : Promise.resolve(null),
+    ruta === "prospecto" ? responsableDeLaPreventaViva(client.id) : Promise.resolve(undefined),
+  ]);
+  const armado = armarPropuestasDeSeguimiento({
+    compromisos: salida.compromisos,
+    lectura,
+    reunion: { id: sessionId, inicio: session.date, participantes: session.participants.map((p) => p.toLowerCase()) },
+    miembros,
+    cseDelProyecto: cseProyecto,
+    cseDeLaCuenta: cseCuenta,
+    ...(ruta === "prospecto" ? { responsableDeLaPreventa: preventa } : {}),
+    clientId: client.id,
+    projectId: project?.id ?? null,
+    ruta,
+  });
+  const escrita = await escribirSalidaDeSeguimiento(lectura.id, sessionId, armado.propuestas, new Date(), { lineas: salida.compromisos.length, costo: tokens });
+
+  // 10. Los pedidos fuera de alcance → PedidoFueraDeAlcance, solo en un cliente con proyecto y con la cita verificada.
+  //     La IA los PROPONE: entran «por revisar» y el CSE los confirma o los descarta (lib/sessions/solicitudes-fuera-de-alcance.ts).
+  //     El mismo pedido en otra reunión (misma huella) actualiza la fila, pero NUNCA pisa una decisión del CSE.
+  if (pideFueraDeAlcance && project) {
+    for (const pf of salida.fueraDeAlcance) {
+      const previo = await prisma.pedidoFueraDeAlcance.findUnique({ where: { clientId_huella: { clientId: client.id, huella: pf.huella } }, select: { id: true, decididoAt: true } });
+      if (!previo) {
+        await prisma.pedidoFueraDeAlcance.create({
+          data: { clientId: client.id, projectId: project.id, sessionId, huella: pf.huella, pedido: pf.pedido, quienLoPidio: pf.quienLoPidio || null, estado: "PEDIDO", monto: pf.monto, cita: pf.cita || null },
+        });
+      } else if (!previo.decididoAt) {
+        await prisma.pedidoFueraDeAlcance.update({ where: { id: previo.id }, data: { ...(pf.monto ? { monto: pf.monto } : {}), ...(pf.cita ? { cita: pf.cita } : {}), sessionId } });
+      }
+    }
+  }
+
+  // 11. Los temas de la reunión (F5-A).
+  if (salida.detectedTopics.length) {
+    await prisma.firefliesSession.update({ where: { id: sessionId }, data: { detectedTopics: [...new Set(salida.detectedTopics)] }, select: { id: true } });
+  }
+
+  // 12. La minuta, la última: «tiene minuta» = la lectura terminó entera.
+  const minuteData = {
+    summary: salida.minuta.summary,
+    agreements: salida.minuta.agreements as unknown as object,
+    decisions: salida.minuta.decisions as unknown as object,
+    risks: salida.minuta.risks as unknown as object,
+    topics: salida.minuta.topics as unknown as object,
+    status: "DRAFT" as const,
+    generatedByAgentRunId: run!.id,
+  };
   const minute = await prisma.sessionMinute.upsert({
     where: { sessionId },
     create: { sessionId, ...minuteData },
-    update: opts.force
-      ? { ...minuteData, status: "DRAFT", reviewedAt: null, reviewedByEmail: null }
-      : minuteData, // solo entra aquí si NO había minute (else lo skipea arriba)
+    update: opts.force ? { ...minuteData, reviewedAt: null, reviewedByEmail: null } : minuteData,
+    select: { id: true },
   });
 
-  // 9b. Persistir detectedTopics en la sesión (F5-A)
-  if (parsed.detectedTopics && Array.isArray(parsed.detectedTopics)) {
-    const topics = parsed.detectedTopics
-      .map((t) => String(t).trim().toLowerCase())
-      .filter((t) => t.length > 0 && t.length < 50)
-      .slice(0, 10);
-    if (topics.length > 0) {
-      await prisma.firefliesSession.update({
-        where: { id: sessionId },
-        data: { detectedTopics: [...new Set(topics)] },
-      });
-    }
-  }
-
-  // 10. Crear ActionItems (deduplicar por text + clientId + source ya existente)
-  const newItems = parsed.actionItems ?? [];
-  let created = 0;
-  for (const ai of newItems) {
-    const text = (ai.text ?? "").trim();
-    if (!text) continue;
-
-    const existing = await prisma.actionItem.findFirst({
-      where: {
-        clientId: client.id,
-        sessionId,
-        text,
-        source: "agent:post-session",
-      },
-      select: { id: true },
-    });
-    if (existing) continue;
-
-    let dueDate: Date | null = null;
-    if (ai.dueDate) {
-      const d = new Date(ai.dueDate);
-      if (!isNaN(d.getTime())) dueDate = d;
-    }
-
-    const ownerEmail = ai.ownerEmail?.trim().toLowerCase() || null;
-    const validOwner = ownerEmail && teamMembers.some((m) => m.email.toLowerCase() === ownerEmail)
-      ? ownerEmail
-      : null;
-
-    await prisma.actionItem.create({
-      data: {
-        text,
-        clientId: client.id,
-        projectId: project?.id ?? null,
-        sessionId,
-        ownerEmail: validOwner,
-        dueDate,
-        status: "PENDING",
-        done: false,
-        source: "agent:post-session",
-        generatedByAgentRunId: run.id,
-      },
-    });
-    created++;
-  }
-
-  // 10b. Compromisos con fecha (de los dos lados) → ActionItem con quién se comprometió y la cita.
-  for (const c of leerCompromisos(parsed.compromisos)) {
-    const ya = await prisma.actionItem.findFirst({
-      where: { clientId: client.id, sessionId, text: c.que },
-      select: { id: true },
-    });
-    if (ya) continue;
-    // Si es de Smarteam y el nombre coincide con alguien del equipo, queda asignado a esa persona.
-    const delEquipo =
-      c.quien === "SMARTEAM" && c.responsable
-        ? teamMembers.find((m) => !m.deactivatedAt && m.name.toLowerCase().includes(c.responsable.toLowerCase().split(" ")[0]))
-        : undefined;
-    await prisma.actionItem.create({
-      data: {
-        text: c.que,
-        clientId: client.id,
-        projectId: project?.id ?? null,
-        sessionId,
-        ownerEmail: delEquipo?.email.toLowerCase() ?? null,
-        ladoResponsable: c.quien,
-        responsableNombre: c.responsable || null,
-        cita: c.cita || null,
-        dueDate: fechaComprometida(c.fecha),
-        status: "PENDING",
-        done: false,
-        source: "agent:post-session:compromiso",
-        generatedByAgentRunId: run.id,
-      },
-    });
-    created++;
-  }
-
-  // 10c. Pedidos fuera de alcance → PedidoFueraDeAlcance (lo decide el CSE; Ventas lo ve). El mismo
-  // pedido en otra reunión (misma huella) actualiza la fila, pero NUNCA pisa una decisión del CSE.
-  for (const pf of leerPedidosFueraDeAlcance(parsed.fueraDeAlcance)) {
-    const previo = await prisma.pedidoFueraDeAlcance.findUnique({
-      where: { clientId_huella: { clientId: client.id, huella: pf.huella } },
-      select: { id: true, decididoAt: true },
-    });
-    if (!previo) {
-      await prisma.pedidoFueraDeAlcance.create({
-        data: {
-          clientId: client.id,
-          projectId: project?.id ?? null,
-          sessionId,
-          huella: pf.huella,
-          pedido: pf.pedido,
-          quienLoPidio: pf.quienLoPidio || null,
-          estado: pf.estado,
-          monto: pf.monto,
-          cita: pf.cita || null,
-        },
-      });
-    } else if (!previo.decididoAt) {
-      await prisma.pedidoFueraDeAlcance.update({
-        where: { id: previo.id },
-        data: { estado: pf.estado, ...(pf.monto ? { monto: pf.monto } : {}), ...(pf.cita ? { cita: pf.cita } : {}), sessionId },
-      });
-    }
-  }
-
-  // Refrescar el cache de heat ya que recién creamos un AgentRun.
-  if (project) {
-    const { invalidateProjectHeat } = await import("@/lib/projects/heat");
-    invalidateProjectHeat(project.id);
-  }
-
-  // D.2 — Cronograma vivo: tras la sesión nueva, regenerar el BORRADOR de avance
-  // del cronograma (la función no toca status; el CSE confirma). Best-effort: si
-  // falla, NO tumba el post-process. Sólo corre si el proyecto tiene detalle
-  // (lo verifica adentro y devuelve skipped si no).
-  if (project) {
-    try {
-      const { regenerateTimelineProgress } = await import("@/lib/timeline/regenerate-progress");
-      const r = await regenerateTimelineProgress(project.id, { asOfSessionId: sessionId });
-      if (r.status === "ok") {
-        console.log(`[post-session] ✓ avance de cronograma propuesto (${r.phasesDone} fases, ${r.tasksDone} tareas)`);
-      }
-    } catch (e) {
-      console.error(`[post-session] avance de cronograma falló (no bloqueante):`, e instanceof Error ? e.message : e);
-    }
-  }
-
-  // Ficha del cliente: igual que el avance del cronograma, cada sesión puede sumarle algo (un
-  // stakeholder nuevo, un dato duro, un reto). Queda como PROPUESTA que el CSE confirma; con Haiku,
-  // porque corre con cada reunión. Best-effort: nunca tumba el post-proceso.
-  try {
-    const { proponerFichaDesdeSesion } = await import("@/lib/clients/ficha-propuesta");
-    const r = await proponerFichaDesdeSesion(sessionId, client.id, project?.id ?? null);
-    if (r.status === "ok" && r.cambiados) console.log(`[post-session] ✓ ficha del cliente: ${r.cambiados} campos propuestos`);
-    if (r.status === "error") console.error(`[post-session] ficha del cliente falló (no bloqueante): ${r.error}`);
-  } catch (e) {
-    console.error(`[post-session] ficha del cliente falló (no bloqueante):`, e instanceof Error ? e.message : e);
-  }
-
-  // La etapa en HubSpot: si la reunión muestra que el proyecto ya pasó a otra etapa, queda como
-  // SUGERENCIA que el CSE aprueba en la encuesta de la etapa (lib/projects/etapa-sugerida.ts). Nada
-  // se escribe en HubSpot desde acá. Con Haiku, porque corre con cada reunión. Best-effort.
-  if (project) {
-    try {
-      const { proponerEtapaDesdeSesion } = await import("@/lib/projects/etapa-desde-reunion-server");
-      const r = await proponerEtapaDesdeSesion(sessionId, project.id);
-      if (r.status === "sugerida") console.log(`[post-session] ✓ etapa sugerida para HubSpot: ${r.stageId}`);
-      if (r.status === "error") console.error(`[post-session] etapa sugerida falló (no bloqueante): ${r.error}`);
-    } catch (e) {
-      console.error(`[post-session] etapa sugerida falló (no bloqueante):`, e instanceof Error ? e.message : e);
-    }
-  }
-
-  // Exploración de venta: si la empresa tiene una viva, el agente lee esta reunión y propone qué va
-  // en cada casilla (lib/exploraciones/agente.ts decide si corresponde y corre en segundo plano).
-  // Solo dispara; best-effort: nunca tumba el post-proceso.
-  try {
-    const { leerReunionNueva } = await import("@/lib/exploraciones/agente");
-    const r = await leerReunionNueva({ sesionId: sessionId, fecha: session.date, clientId: client.id });
-    if (r === "lanzada") console.log(`[post-session] ✓ exploración de venta: el agente está leyendo la reunión`);
-  } catch (e) {
-    console.error(`[post-session] exploración de venta falló (no bloqueante):`, e instanceof Error ? e.message : e);
-  }
-
   console.log(
-    `[post-session] ✓ "${session.title}" (cliente=${client.name}) — minuta DRAFT + ${created} action items`,
+    `[lectura] ✓ "${session.title}" (${client.name}, ${ruta}) — minuta + ${escrita.propuestas} propuesta(s), ${escrita.porAsignar} por asignar, ${salida.fueraDeAlcance.length} pedido(s)` +
+      (descartadosPorCita.compromisos + descartadosPorCita.pedidos ? ` · ${descartadosPorCita.compromisos + descartadosPorCita.pedidos} descartado(s) por la cita` : ""),
   );
+
+  const despues = () =>
+    conLaReunion(sessionId, () =>
+      loQueSigue({
+        sessionId,
+        titulo: session.title ?? null,
+        fecha: session.date,
+        transcript,
+        overview,
+        clientId: client.id,
+        projectId: project?.id ?? null,
+        ruta,
+        pidePresentacion,
+        presentacion: salida.presentacionDiagnostico,
+        lecturaId: opts.lecturaId ?? null,
+        quien: opts.pedidaPorEmail ?? null,
+      }),
+    );
 
   return {
     status: "ok",
     sessionId,
     clientId: client.id,
+    ruta,
     minuteId: minute.id,
-    actionItemsCreated: created,
+    propuestas: escrita.propuestas,
+    porAsignar: escrita.porAsignar,
+    pedidos: pideFueraDeAlcance ? salida.fueraDeAlcance.length : 0,
+    descartadosPorCita,
+    tokens,
+    despues,
   };
+}
+
+/** ¿Las notas de Gemini alcanzan para leer sus hechos? (memoria de la cuenta, etapa 6: la cobertura de las de solo notas). */
+function tieneNotasParaLeer(summary: unknown): boolean {
+  if (!summary || typeof summary !== "object" || Array.isArray(summary)) return false;
+  const o = (summary as { overview?: unknown }).overview;
+  const texto = Array.isArray(o) ? o.filter((x) => typeof x === "string").join("\n") : typeof o === "string" ? o : "";
+  return texto.trim().length >= MIN_NOTAS_PARA_LEER;
+}
+
+/** Una reunión con solo notas: solo sus hechos (no hay minuta que escribir). Nunca lanza. */
+async function soloLosHechos(sessionId: string, o: { lecturaId: string | null; quien: string | null }): Promise<void> {
+  try {
+    const { leerHechosDeLaReunion } = await import("@/lib/seguimiento/hechos-server");
+    const r = await leerHechosDeLaReunion(sessionId, o);
+    if (r.estado === "error") console.error(`[lectura] los hechos de la reunión (solo notas) fallaron (no bloqueante; se reintentan): ${r.error}`);
+  } catch (e) {
+    console.error(`[lectura] los hechos de la reunión (solo notas) fallaron (no bloqueante):`, e instanceof Error ? e.message : e);
+  }
+}
+
+/**
+ * Lo que sigue a la lectura, en segundo plano y best-effort: nada de esto tumba la lectura ni se espera para marcarla.
+ * El avance, la fecha del diagnóstico y la etapa, solo en un cliente con proyecto; la ficha, solo en un cliente; la
+ * preventa decide sola si le toca (lib/exploraciones/agente.ts).
+ *
+ * Con la lectura de hechos prendida (`SEGUIMIENTO_HECHOS` y el SQL, memoria de la cuenta, etapa 6), el avance, la ficha y
+ * la etapa salen de los HECHOS de la reunión (lib/seguimiento/hechos-server.ts): la ficha deja de releer la reunión, y
+ * el avance y la etapa corren solo con una señal (el avance, para cada proyecto que cumple `linkFeedsAvance`, no solo
+ * el principal). Si la lectura de hechos no quedó lista (falló, se omitió), esos tres corren por el camino de siempre.
+ */
+async function loQueSigue(c: {
+  sessionId: string;
+  titulo: string | null;
+  fecha: Date;
+  transcript: string;
+  overview: string;
+  clientId: string;
+  projectId: string | null;
+  ruta: RutaDeLaLectura;
+  pidePresentacion: boolean;
+  presentacion: unknown;
+  lecturaId: string | null;
+  quien: string | null;
+}): Promise<void> {
+  // Memoria de la cuenta, etapa 6: con los hechos prendidos, el avance, la ficha y la etapa salen de ellos, PERO solo si
+  // la lectura de hechos los aplicó (quedó lista en esta pasada), ya los había aplicado con la transcripción (`ya_leida`),
+  // o los está aplicando otra corrida (`ocupada`). En cualquier otro caso (falló, se omitió, sin texto) corre el camino de
+  // siempre: si no, una minuta rehecha o una reunión cuyos hechos fallaron se quedaban sin avance, ficha ni etapa.
+  // La bandera se mira primero (pura): apagada, el módulo de los hechos ni se carga.
+  let conHechos = false;
+  if (hechosPrendidos(process.env)) {
+    try {
+      const { hechosActivos, leerHechosDeLaReunion } = await import("@/lib/seguimiento/hechos-server");
+      if (await hechosActivos()) {
+        const r = await leerHechosDeLaReunion(c.sessionId, { lecturaId: c.lecturaId, quien: c.quien });
+        conHechos = r.estado === "lista" || r.estado === "ya_leida" || r.estado === "ocupada";
+        if (r.estado === "error") console.error(`[lectura] los hechos de la reunión fallaron (no bloqueante; corre el camino de siempre): ${r.error}`);
+      }
+    } catch (e) {
+      console.error(`[lectura] los hechos de la reunión fallaron (no bloqueante):`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  if (c.projectId) {
+    try {
+      const { invalidateProjectHeat } = await import("@/lib/projects/heat");
+      invalidateProjectHeat(c.projectId);
+    } catch {
+      /* fuera de Next (un script) no hay caché que invalidar */
+    }
+  }
+  // D.2 — Cronograma vivo: tras la reunión, el BORRADOR de avance del cronograma (no toca status; el CSE confirma).
+  // Con los hechos, corre desde ellos (solo con una señal de cronograma).
+  if (c.projectId && !conHechos) {
+    try {
+      const { regenerateTimelineProgress } = await import("@/lib/timeline/regenerate-progress");
+      const r = await regenerateTimelineProgress(c.projectId, { asOfSessionId: c.sessionId, disparadoPorSistema: true });
+      if (r.status === "ok") console.log(`[lectura] ✓ avance de cronograma propuesto (${r.phasesDone} fases, ${r.tasksDone} tareas)`);
+    } catch (e) {
+      console.error(`[lectura] avance de cronograma falló (no bloqueante):`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  // La ficha del cliente: cada reunión puede sumarle algo; queda como PROPUESTA que el CSE confirma. Un prospecto no:
+  // su ficha la lleva la preventa. Con los hechos, se propone desde ellos (`proponerFichaDesdeHechos`): no relee la reunión.
+  if (c.ruta === "completa" && !conHechos) {
+    try {
+      const { proponerFichaDesdeSesion } = await import("@/lib/clients/ficha-propuesta");
+      const r = await proponerFichaDesdeSesion(c.sessionId, c.clientId, c.projectId);
+      if (r.status === "ok" && r.cambiados) console.log(`[lectura] ✓ ficha del cliente: ${r.cambiados} campos propuestos`);
+      if (r.status === "error") console.error(`[lectura] ficha del cliente falló (no bloqueante): ${r.error}`);
+    } catch (e) {
+      console.error(`[lectura] ficha del cliente falló (no bloqueante):`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  // La fecha de presentación del diagnóstico: queda PROPUESTA con su frase, que tiene que aparecer tal cual.
+  if (c.projectId && c.pidePresentacion) {
+    try {
+      const fechaDeLaReunion = fechaLocalDeLaReunion(c.fecha);
+      const detectada = leerPresentacionDetectada(c.presentacion, fechaDeLaReunion);
+      if (detectada && citaEstaEnLasFuentes(detectada.cita, normalizarParaCita(fuenteDeLasCitas(c.transcript, c.overview)))) {
+        const { proponerFechaDesdeReunion } = await import("@/lib/canvas/presentacion-del-diagnostico-server");
+        if (await proponerFechaDesdeReunion(c.projectId, { ...detectada, reunion: { id: c.sessionId, titulo: c.titulo, fecha: fechaDeLaReunion } })) {
+          console.log(`[lectura] ✓ fecha de presentación del diagnóstico propuesta: ${detectada.fecha}`);
+        }
+      }
+    } catch (e) {
+      console.error(`[lectura] fecha del diagnóstico falló (no bloqueante):`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  // La etapa en HubSpot: si la reunión muestra que el proyecto ya pasó a otra, queda como SUGERENCIA (nada se escribe allá).
+  // Con los hechos, corre desde ellos (solo con una señal de etapa, para cada proyecto vinculado).
+  if (c.projectId && !conHechos) {
+    try {
+      const { proponerEtapaDesdeSesion } = await import("@/lib/projects/etapa-desde-reunion-server");
+      const r = await proponerEtapaDesdeSesion(c.sessionId, c.projectId);
+      if (r.status === "sugerida") console.log(`[lectura] ✓ etapa sugerida para HubSpot: ${r.stageId}`);
+      if (r.status === "error") console.error(`[lectura] etapa sugerida falló (no bloqueante): ${r.error}`);
+    } catch (e) {
+      console.error(`[lectura] etapa sugerida falló (no bloqueante):`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  // Exploración de venta: si la empresa tiene una viva, el agente lee esta reunión (decide él si corresponde).
+  try {
+    const { leerReunionNueva } = await import("@/lib/exploraciones/agente");
+    const r = await leerReunionNueva({ sesionId: c.sessionId, fecha: c.fecha, clientId: c.clientId });
+    if (r === "lanzada") console.log(`[lectura] ✓ exploración de venta: el agente está leyendo la reunión`);
+  } catch (e) {
+    console.error(`[lectura] exploración de venta falló (no bloqueante):`, e instanceof Error ? e.message : e);
+  }
 }

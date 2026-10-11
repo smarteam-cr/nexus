@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// La memoria (lib/memoria) es del servidor: estas pruebas solo cubren la parte pura del mensaje.
+vi.mock("@/lib/memoria", () => ({ memoriaDelProyecto: async () => ({ texto: "", partes: [] }) }));
 import fs from "node:fs";
 import path from "node:path";
 import { fuentesDelDetalle, renderDetalleDeCronograma } from "@/lib/contexto/detalle-cronograma";
@@ -379,7 +382,8 @@ describe("⭐ el buscador: las reuniones del proyecto y las de TU calendario", (
     /* `safeRows` ya descartó los vínculos cruzados: una consulta propia podría ofrecer una reunión
        de otro cliente que quedó colgada del proyecto. */
     const src = sinComentarios(leer("app/api/projects/[projectId]/session-candidates/route.ts"));
-    expect(src).toMatch(/const delProyecto = esCronograma\s*\?\s*safeRows/);
+    // Desde la etapa 7 los seis documentos también ofrecen las del proyecto, de las mismas filas.
+    expect(src).toMatch(/const delProyecto = esCronograma(?: \|\| soloElegidas)?\s*\?\s*safeRows/);
     expect(src, "el cronograma volvió a ofrecer todas las reuniones del cliente").toContain(
       "const clientSessions = esCronograma ? [] :",
     );
@@ -446,15 +450,29 @@ describe("⭐ la pantalla dice lo que le llega a la IA, con el MISMO cargador (p
     /* Revisión del paso D3 (2026-09-24): la guarda de arriba solo pedía que el mapa de insignias se
        ARMARA. Se podía volver a pintar «Elegida» en verde en cada fila, o no renderizar el aviso ni
        el paréntesis de la línea cerrada, y todo seguía verde (probado: 68/68).
-       Las ediciones que la ponen en rojo: sacar `insignias.get(s.sessionId) ??` del badge, el
-       detalle del `meetMeta`, el render del aviso o el `(${loQueNoEntra})` de la línea. */
+       Las ediciones que la ponen en rojo: sacar la insignia del informe del estado de la fila, el
+       detalle de su `title`, el render del aviso o el `(${loQueNoEntra})` de la línea.
+       Desde «una sola lista de reuniones» (3ddb7309, 2026-10-09) la fila es de ListaDeReuniones: la
+       insignia llega como punto + texto (`estadoDesdeInsignia`, que también lleva su detalle) y el
+       detalle («la IA lee 3 200 de 7 100 caracteres») va además en el `title` de la fila. Lo que no
+       ocurrió o no tiene transcripción manda sobre la insignia (lib/sessions/alimenta-sin-contenido.test.ts). */
     const panel = sinComentarios(leer("components/clients/SessionSelectionReview.tsx"));
-    expect(panel, "la fila dejó de usar la insignia del informe (vuelve a decir «Elegida» siempre)").toContain(
-      '(insignias.get(s.sessionId) ?? { label: esCronograma ? "Elegida" : "Incluida", tone: "green" })',
+    expect(panel, "la fila dejó de leer su insignia del mapa del informe").toContain(
+      "const insignia = insignias.get(s.sessionId);",
+    );
+    expect(panel, "la fila dejó de usar la insignia del informe (vuelve a no decir nada, o «Elegida» siempre)").toContain(
+      "estado: estadoDeLaReunion({ futura: s.futura, sinTranscripcion: s.sinContenido }) ?? estadoDesdeInsignia(insignia),",
     );
     expect(panel, "la fila dejó de decir cuánto lee la IA cuando se corta lo principal").toContain(
-      "meta={meetMeta(s.date, s.alsoIn, s.futura, insignias.get(s.sessionId)?.detalle)}",
+      "title: insignia?.detalle,",
     );
+    // Y la lista los pinta: el estado en la línea de datos (con su detalle) y el `title` en la fila.
+    const lista = sinComentarios(leer("components/contexto/ListaDeReuniones.tsx"));
+    expect(lista, "la lista dejó de pintar el estado de cada fila").toContain(
+      "<LineaDeDatos datos={r.datos} estado={r.estado} />",
+    );
+    expect(lista, "el estado dejó de llevar su detalle").toContain("title={estado.detalle}");
+    expect(lista, "la fila dejó de llevar su `title`").toContain("title={r.title}");
     expect(panel, "el aviso del informe se calcula pero no se muestra").toMatch(
       /\{avisoMaterial\.length > 0 && \(\s*<p[^>]*>\s*\{avisoMaterial\.join\(" "\)\}/,
     );

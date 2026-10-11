@@ -75,7 +75,10 @@ describe("⛔ el agente de detalle no escribe ni una tarea", () => {
        curación pasa a ser una gentileza del navegador — el que no la mande, escribe. */
     const i = src.indexOf("if (isTimelineDetailAgent) {");
     expect(i, "se movió el ancla: revisá esta guarda").toBeGreaterThan(0);
-    const tramo = src.slice(i, src.indexOf("updateCanvasAsync", i));
+    /* ⚠ REAPUNTADA (2026-10-09), con esta razón: el tramo terminaba en `updateCanvasAsync`, que se
+       retiró (Memoria de la cuenta · Etapa 0). Ahora termina en el bloque de los flowcharts que sigue
+       a la salida del detalle (la fusión); lo que mira no cambia. */
+    const tramo = src.slice(i, src.indexOf("if (isFlowchart) {", src.indexOf("fusionarDetalleEnElBorrador(", i)));
     expect(tramo.length, "el tramo salió vacío — la guarda no está mirando nada").toBeGreaterThan(300);
     expect(tramo, "la propuesta volvió a depender de una bandera del cliente").not.toContain("previewOnly");
     /* ⚠ ACTUALIZADA en E2b P5a (2026-09-25), con esta razón: pedía la vista previa de todas las fases

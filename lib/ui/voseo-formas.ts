@@ -34,6 +34,10 @@ export const AGUDAS_DE_TUTEO: ReadonlySet<string> = new Set([
   "guardé",
   // Sustantivos, gentilicios y nombres
   "país", "multipaís", "inglés", "interés", "cortés", "comité", "caché", "josé", "andrés", "mié",
+  // …y lo que escribe la IA en el contexto de una tarea («traducir la landing al portugués», «el estrés del equipo»)
+  "quizás", "francés", "portugués", "japonés", "holandés", "escocés", "irlandés", "finlandés", "danés", "libanés",
+  "neerlandés", "estrés", "exprés", "compás", "anís", "ciempiés", "cafés", "papás", "mamás", "bebés", "sofás",
+  "comités", "veintitrés", "dieciséis", "veintiséis", "marqués", "burgués", "ciprés", "adiós", "autobús", "parís",
 ]);
 
 /**
@@ -81,4 +85,33 @@ export function formasDeVoseo(texto: string): string[] {
   for (const m of texto.matchAll(AGUDA)) if (!AGUDAS_DE_TUTEO.has(m[0].toLowerCase())) out.push(m[0]);
   for (const m of texto.matchAll(PRONOMBRE_PEGADO)) if (!NO_SON_VOSEO.has(m[0].toLowerCase())) out.push(m[0]);
   return out;
+}
+
+/**
+ * Los imperativos del voseo que aparecen en un correo o en un mensaje («contame», «avisame», «fijate»).
+ * En PROSA son los únicos de la familia del pronombre pegado que se cuentan: la regla por forma también caza
+ * «hoteles», «Alajuela» o «wireframe», y en un texto que escribe un agente eso es un aviso falso en cada corrida.
+ */
+const IMPERATIVOS_DEL_VOSEO: ReadonlySet<string> = new Set([
+  "contame", "decime", "avisame", "escribime", "mandame", "pasame", "compartime", "confirmame", "llamame", "mostrame",
+  "contanos", "decinos", "avisanos", "escribinos", "mandanos", "pasanos", "compartinos", "confirmanos", "llamanos",
+  "mostranos", "fijate", "acordate", "mirá", "avisá", "contá", "decí", "escribí", "mandá", "pasá", "compartí",
+  "confirmá", "revisá", "probá", "pensá", "tené", "poné", "vení",
+]);
+
+/**
+ * El voseo de un texto en PROSA, el que escribe un agente para una persona (un correo, una guía): solo lo que
+ * casi seguro es voseo. Cuenta «vos» y «sos», el presente terminado en -ás, -és o -ís («podés», «tenés»,
+ * «vivís») salvo el futuro («podrás», que es igual en tuteo), y los imperativos de la lista de arriba. El
+ * presente solo en minúscula: con mayúscula casi siempre es un nombre propio («Inés», «Tomás», «Bogotá»), y un
+ * agente que vosea no lo hace solo al empezar una frase.
+ */
+export function voseoEnProsa(texto: string): string[] {
+  const out = new Set<string>();
+  for (const w of formasDeVoseo(texto)) {
+    const l = w.toLowerCase();
+    if (l === "vos" || l === "sos" || IMPERATIVOS_DEL_VOSEO.has(l)) out.add(w);
+    else if (w === l && /(?:ás|és|ís)$/.test(l) && !/rás$/.test(l)) out.add(w);
+  }
+  return [...out];
 }

@@ -18,6 +18,7 @@
  * Correrlo dos veces no cambia nada la segunda: lo que ya tiene un resumen al día se salta.
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { imprimirDestino, resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { loadHandoffContext } from "@/lib/canvas/load-canvas-context";

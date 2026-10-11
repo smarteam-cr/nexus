@@ -4,6 +4,7 @@ import {
   diasHaciaAtras,
   DIAS_POR_DEFECTO,
   enLotes,
+  esBloqueDeTarea,
   eventIdDeFila,
   fusionarCopia,
   idDeSesion,
@@ -215,5 +216,17 @@ describe("piezas chicas", () => {
   it("enLotes parte sin perder ni repetir", () => {
     expect(enLotes([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
     expect(enLotes([], 3)).toEqual([]);
+  });
+});
+
+describe("esBloqueDeTarea: un bloque de una tarea de Nexus nunca es una sesión", () => {
+  it("por su marca, por la descripción o por el título sin invitados", () => {
+    expect(esBloqueDeTarea({ extendedProperties: { private: { nexusTareaId: "t1" } } })).toBe(true);
+    expect(esBloqueDeTarea({ description: "https://nexus/tareas?t=t1 · nexustarea t1" })).toBe(true);
+    expect(esBloqueDeTarea({ summary: "Tarea · Subir estático evento", attendees: [{ email: "lflores@smarteamcr.com" }] })).toBe(true);
+  });
+  it("una reunión llamada «Tarea …» con invitados sí es una reunión", () => {
+    expect(esBloqueDeTarea({ summary: "Tarea · revisión con el cliente", attendees: [{ email: "a@x" }, { email: "b@y" }] })).toBe(false);
+    expect(esBloqueDeTarea({ summary: "Sprint planning de marketing" })).toBe(false);
   });
 });

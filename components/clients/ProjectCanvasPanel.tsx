@@ -11,7 +11,7 @@ import { HANDOFF_SECCION_PRINCIPAL } from "@/lib/canvas/canvas-defs";
 import KickoffWorkspace from "@/components/canvas/KickoffWorkspace";
 import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import ExploracionWorkspace from "@/components/canvas/ExploracionWorkspace";
-import ExploracionConCuestionario from "@/components/cuestionario/ExploracionConCuestionario";
+import ExploracionDelProyecto from "@/components/exploraciones/ExploracionDelProyecto";
 import DiagnosticoWorkspace from "@/components/canvas/DiagnosticoWorkspace";
 import PlanificacionWorkspace from "@/components/canvas/PlanificacionWorkspace";
 import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
@@ -48,6 +48,9 @@ import { useWorkspace } from "./WorkspaceContext";
 import { useToast } from "@/components/ui/Toast";
 import { readCanvasCache } from "@/lib/clients/canvas-cache";
 import { AplicadorDeDocumentoProvider } from "@/components/asistente/aplicador-de-documento";
+import NovedadesDelDocumento from "./NovedadesDelDocumento";
+import type { NovedadesDeLaPieza } from "@/lib/seguimiento/novedades";
+import type { NovedadEnElTurno } from "@/lib/asistente/alcance";
 import { usePantallaDelRecorrido } from "@/components/recorridos/contexto";
 
 /**
@@ -89,6 +92,8 @@ interface CanvasMeta {
   hasContent?: boolean;
   /** El handoff corrió después de escribirse este documento (lib/pieces/piece-staleness.ts). */
   stale?: boolean;
+  /** Las novedades de las reuniones para este documento (etapa 6; 0 con los hechos apagados). */
+  novedades?: number;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -220,6 +225,8 @@ export default function ProjectCanvasPanel({
      disparar dos veces. Era exclusivo del Cronograma; dejarlo así obligó a Desarrollo a
      armarse una segunda barra debajo del nombre, que es el defecto que esto corrige. */
   const [canvasHeaderSlot, setCanvasHeaderSlot] = useState<HTMLDivElement | null>(null);
+  // Debajo de la fila «Exploración» del riel: ahí cuelgan las sesiones de la exploración del proyecto.
+  const [slotDeSesiones, setSlotDeSesiones] = useState<HTMLDivElement | null>(null);
 
   /* El asistente que conversa, para los DOCUMENTOS. ⚠ El cronograma monta el suyo adentro de
      CronogramaCanvas, porque su «Aplicar» tiene que entrar por `submitAssist` — el mismo camino
@@ -333,6 +340,60 @@ export default function ProjectCanvasPanel({
       .finally(() => setListLoaded(true));
   }, [projectId, buscarCanvasDeLaUrl]);
 
+  /* ── LAS NOVEDADES DE LAS REUNIONES (memoria de la cuenta, etapa 6) ─────────────────
+     Lo que un hecho pendiente de una reunión le propone a un documento con contenido (lib/seguimiento/novedades.ts).
+     El listado de canvases ya trae cuántas tiene cada pieza (0 con SEGUIMIENTO_HECHOS apagada o sin el SQL): el detalle
+     se pide SOLO si alguna tiene, así con los hechos apagados no hay ni un pedido de más. */
+  const [novedades, setNovedades] = useState<Record<string, NovedadesDeLaPieza> | null>(null);
+  const [novedadesAbiertas, setNovedadesAbiertas] = useState(false);
+  /** Remonta el «Contexto adicional» del documento cuando una novedad le suma su reunión. */
+  const [contextoNonce, setContextoNonce] = useState(0);
+  const hayNovedadesEnElListado = canvases.some((c) => (c.novedades ?? 0) > 0);
+  const cargarNovedades = useCallback(() => {
+    fetch(`/api/projects/${projectId}/novedades`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { activas?: boolean; porPieza?: Record<string, NovedadesDeLaPieza> } | null) => {
+        if (d) setNovedades(d.activas ? (d.porPieza ?? {}) : {});
+      })
+      .catch(() => {});
+  }, [projectId]);
+  useEffect(() => {
+    if (hayNovedadesEnElListado) cargarNovedades();
+    // Sin novedades en el listado, el detalle viejo se va.
+    else setNovedades(null);
+  }, [hayNovedadesEnElListado, cargarNovedades, canvasRefreshSignal]);
+  const novedadesCambiaron = useCallback(() => {
+    cargarNovedades();
+    void refetchCanvases();
+    bumpGpsRefresh();
+  }, [cargarNovedades, refetchCanvases, bumpGpsRefresh]);
+  /** Cuántas novedades tiene una pieza: el detalle si ya llegó; si no, el número del listado. */
+  const nNovedades = useCallback(
+    (slug: string): number => (novedades ? (novedades[slug]?.items.length ?? 0) : (canvases.find((c) => c.slug === slug)?.novedades ?? 0)),
+    [novedades, canvases],
+  );
+  /** El acuerdo del chat que llevaba novedades se aplicó: quedan usadas (la misma ruta que «Listo»). */
+  const usarNovedadesDelChat = useCallback(
+    async (lista: NovedadEnElTurno[]) => {
+      let alguna = false;
+      for (const n of lista) {
+        for (const id of n.hechoIds) {
+          const r = await fetch(`/api/projects/${projectId}/novedades/${encodeURIComponent(id)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accion: "usar", pieza: n.pieza }),
+          }).catch(() => null);
+          if (r?.ok) alguna = true;
+        }
+      }
+      if (alguna) {
+        toast.success("La novedad de la reunión quedó usada.");
+        novedadesCambiaron();
+      }
+    },
+    [projectId, toast, novedadesCambiaron],
+  );
+
   const [activando, setActivando] = useState<string | null>(null);
 
   /**
@@ -413,8 +474,8 @@ export default function ProjectCanvasPanel({
     setAvisosDePiezas((prev) => (JSON.stringify(prev) === JSON.stringify(a) ? prev : a));
   }, []);
   const piezasParaQueSigue = useMemo<PiezaParaQueSigue[]>(
-    () => pieceRows.map((r) => ({ slug: r.slug, etiqueta: r.label, estado: r.state, stale: !!r.stale })),
-    [pieceRows],
+    () => pieceRows.map((r) => ({ slug: r.slug, etiqueta: r.label, estado: r.state, stale: !!r.stale, novedades: nNovedades(r.slug) })),
+    [pieceRows, nNovedades],
   );
   const abrirPieza = useCallback(
     (slug: string) => {
@@ -425,19 +486,28 @@ export default function ProjectCanvasPanel({
     },
     [pieceRows, switchCanvas, activarPieza],
   );
+  /** Abre la pieza con su franja de novedades desplegada (el «Qué sigue» de las novedades). */
+  const abrirNovedades = useCallback(
+    (slug: string) => {
+      setNovedadesAbiertas(true);
+      abrirPieza(slug);
+    },
+    [abrirPieza],
+  );
   const contextoDelResumen = useMemo<ContextoDelResumen>(
     () => ({
       slotDelPanel: enResumen ? slotDelPanel : null,
       queSigueOcupado,
       piezas: piezasParaQueSigue,
       abrirPieza,
+      abrirNovedades,
       aLaVista: visible && enResumen,
       proyectoVisible: visible,
       onEtapa: setEtapaMeta,
       onQueSigue,
       onAvisosDePiezas,
     }),
-    [enResumen, slotDelPanel, queSigueOcupado, piezasParaQueSigue, abrirPieza, visible, onQueSigue, onAvisosDePiezas],
+    [enResumen, slotDelPanel, queSigueOcupado, piezasParaQueSigue, abrirPieza, abrirNovedades, visible, onQueSigue, onAvisosDePiezas],
   );
 
   // El recorrido de la pieza abierta (el cronograma o la exploración): el botón «Recorrido» de la
@@ -487,6 +557,10 @@ export default function ProjectCanvasPanel({
           queSigueProyecto.accion?.tipo === "pieza" ? (
             <BotonAzul onClick={() => abrirPieza((queSigueProyecto.accion as { slug: string }).slug)}>
               Abrir «{queSigueProyecto.accion.etiqueta}» →
+            </BotonAzul>
+          ) : queSigueProyecto.accion?.tipo === "novedades" ? (
+            <BotonAzul onClick={() => abrirNovedades((queSigueProyecto.accion as { slug: string }).slug)}>
+              Revisar las novedades de «{queSigueProyecto.accion.etiqueta}»
             </BotonAzul>
           ) : queSigueProyecto.accion ? (
             <BotonBlanco onClick={irAlResumen}>Ir al Resumen</BotonBlanco>
@@ -557,6 +631,7 @@ export default function ProjectCanvasPanel({
                       ? avisoDelResumen
                       : null,
                 propuesta: row.slug === PIEZA_CRONOGRAMA && propuestaPendiente,
+                novedades: nNovedades(row.slug),
                 ocupada: activando === row.slug,
               };
             })}
@@ -575,6 +650,7 @@ export default function ProjectCanvasPanel({
             onActivar={(slug) => {
               if (activando === null) void activarPieza(slug);
             }}
+            slotDeSesiones={setSlotDeSesiones}
           />,
           slotDePiezas,
         )}
@@ -751,12 +827,30 @@ export default function ProjectCanvasPanel({
           marco, no adentro: es del equipo, no de lo que ve el cliente, y adentro quedaba cerrado y no
           se veía (2026-10-05). Va antes de TODOS los documentos en el orden de la página: desde el
           2026-10-07 también lo tienen el kickoff, integraciones, la exploración y la entrega. */}
-      {docConContexto && activeCanvasId && (
+      {/* La exploración trae el suyo, el de la preventa (ContextoDeLaPreventa, adentro de su lienzo). */}
+      {docConContexto && activeCanvasId && activeSlug !== "exploration" && (
         <DocumentoContextSection
-          key={`contexto-${activeCanvasId}`}
+          key={`contexto-${activeCanvasId}-${contextoNonce}`}
           projectId={projectId}
           doc={docConContexto}
           generado={filaActiva ? filaActiva.state === "generada" : !!activeCanvas?.hasContent}
+        />
+      )}
+
+      {/* Las NOVEDADES de las reuniones para el documento abierto (etapa 6): la franja azul arriba del marco, con una
+          fila por novedad («Cambiar con el chat», «Listo», «No aplica»). Va adentro del proveedor del chat: el que
+          provee no consume, así que es un componente aparte. Sin novedades (o con los hechos apagados), no se pinta. */}
+      {visible && !enResumen && activeSlug && activeCanvas && (novedades?.[activeSlug]?.items.length ?? 0) > 0 && (
+        <NovedadesDelDocumento
+          key={`novedades-${activeCanvasId}`}
+          projectId={projectId}
+          pieza={activeSlug}
+          secciones={activeCanvas.sections ?? []}
+          novedades={novedades![activeSlug]}
+          abierta={novedadesAbiertas}
+          onAlternar={() => setNovedadesAbiertas((v) => !v)}
+          onCambio={novedadesCambiaron}
+          onReunionSumada={() => setContextoNonce((n) => n + 1)}
         />
       )}
 
@@ -832,15 +926,15 @@ export default function ProjectCanvasPanel({
         </MarcoDelDocumento>
       )}
 
-      {/* Exploración: Sesiones y Cuestionarios (2026-10-05). Es una herramienta de trabajo, no un
-          documento: va FUERA del marco y pinta su propia columna derecha. Solo el informe viejo
-          —del motor de landings— lleva su marco. */}
+      {/* Exploración: el lienzo de la preventa con las preguntas de Customer Success (2026-10-07). Es
+          una herramienta de trabajo, no un documento: va FUERA del marco, cuelga sus sesiones del riel
+          y pinta su propia columna derecha. Solo el informe viejo —del motor de landings— lleva su marco. */}
       {activeSlug === "exploration" && activeCanvasId && (
         <CanvasBoundary label="la Exploración">
-          <ExploracionConCuestionario
+          <ExploracionDelProyecto
             projectId={projectId}
-            clientId={clientId}
             slotDelPanel={!enResumen ? slotDelPanel : null}
+            slotDeSesiones={visible ? slotDeSesiones : null}
             informeAnterior={
               piezasConContenido.includes("exploration") ? (
                 <MarcoDelDocumento loVeElCliente={false}>
@@ -920,6 +1014,7 @@ export default function ProjectCanvasPanel({
           piezaLabel={pieceLabel(activeSlug)}
           abierto={chatAbierto}
           onClose={() => setChatAbierto(false)}
+          onNovedadesAplicadas={(n) => void usarNovedadesDelChat(n)}
         />
       )}
     </div>

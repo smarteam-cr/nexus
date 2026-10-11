@@ -7,9 +7,15 @@
  *
  * Pedido de Elías: «así como el cronograma, cada canvas tenga su espacio para agregar contexto — así
  * queda más claro cuáles sesiones lo están alimentando». El gemelo de CronogramaContextSection, para
- * los documentos de lib/contexto/documento.ts (hoy, el diagnóstico). Dos columnas:
- *   · Google Meet — arranca SUGERIDO: toda reunión del proyecto con el cliente ya alimenta, y el CSE
- *     saca las que no sirven (quedan «Excluida», con «Incluir» para volver) o busca otras.
+ * los documentos de lib/contexto/documento.ts. Dos columnas:
+ *   · Reuniones — SOLO LAS ELEGIDAS desde la etapa 7 (DECISIONS «Los documentos leen la memoria y
+ *     solo las reuniones elegidas»): la IA lee enteras las que elige una persona, y arriba Nexus
+ *     sugiere algunas (las sesiones de la exploración en el diagnóstico, las reuniones con hechos
+ *     abiertos) con «Usar» y «Descartar». Sin elegidas, el documento trabaja con la memoria del
+ *     proyecto, y la explicación dice qué trae de las demás reuniones (`queLeeSinElegidas`: en los
+ *     documentos del cliente, solo los acuerdos de las minutas revisadas; en la entrega, el impacto
+ *     sale vacío). La X deja de elegirla: no hay «Excluidas». (Hasta la etapa 7 arrancaba SUGERIDO: toda
+ *     reunión del proyecto con el cliente alimentaba.)
  *   · Fuentes manuales — notas pegadas a mano (lo que no quedó en ninguna reunión).
  *   · Instrucciones adicionales — lo que el CSE le pide a la IA de ESTE documento (InstruccionesDelDocumento).
  * Lo que esta sección muestra es exactamente lo que lee el runner: la misma regla
@@ -24,8 +30,15 @@ import { useCallback, useState } from "react";
 import SessionSelectionReview from "@/components/clients/SessionSelectionReview";
 import FuentesManualesColumn from "@/components/clients/FuentesManualesColumn";
 import { ContextColumn, CTX_ICONS } from "@/components/clients/context-column";
+import ContextoAdicional from "@/components/contexto/ContextoAdicional";
 import InstruccionesDelDocumento from "@/components/contexto/InstruccionesDelDocumento";
-import { TOPE_NOTAS_DEL_DOCUMENTO, type DocumentoConContexto } from "@/lib/contexto/documento";
+import {
+  MAX_ELEGIDAS_A_LEER,
+  MAX_ELEGIDAS_ENTERAS,
+  TOPE_NOTAS_DEL_DOCUMENTO,
+  queLeeSinElegidas,
+  type DocumentoConContexto,
+} from "@/lib/contexto/documento";
 
 export default function DocumentoContextSection({
   projectId,
@@ -42,81 +55,72 @@ export default function DocumentoContextSection({
   const [override, setOverride] = useState<boolean | null>(null);
   const abierto = override ?? !generado;
   const [reuniones, setReunionesState] = useState(0);
+  const [sugeridas, setSugeridasState] = useState(0);
   const [notas, setNotasState] = useState(0);
   const [reunionesIlegibles, setReunionesIlegibles] = useState(false);
   const [instruccionesActivas, setInstruccionesActivasState] = useState(false);
   const setInstruccionesActivas = useCallback((v: boolean) => setInstruccionesActivasState(v), []);
   const setReuniones = useCallback((n: number) => setReunionesState((c) => (c === n ? c : n)), []);
+  const setSugeridas = useCallback((n: number) => setSugeridasState((c) => (c === n ? c : n)), []);
   const setNotas = useCallback((n: number) => setNotasState((c) => (c === n ? c : n)), []);
 
   return (
-    <div className="rounded-xl border border-line bg-surface">
-      <button
-        onClick={() => setOverride(!abierto)}
-        aria-expanded={abierto}
-        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-surface-hover transition-colors text-left rounded-xl"
-      >
-        <svg
-          className={`w-3.5 h-3.5 text-fg-secondary flex-shrink-0 transition-transform ${abierto ? "" : "-rotate-90"}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-        <span className="text-xs font-semibold text-fg">{doc.titulo}</span>
-        {/* Cerrada se sigue leyendo con qué se va a generar. */}
-        <span className="text-[11px] text-fg-muted truncate">
+    <ContextoAdicional
+      abierto={abierto}
+      onAlternar={() => setOverride(!abierto)}
+      /* Cerrada se sigue leyendo con qué se va a generar. */
+      resumen={
+        <>
           {reunionesIlegibles
             ? "no se pudieron cargar las reuniones"
-            : `${reuniones} ${reuniones === 1 ? "reunión lo alimenta" : "reuniones lo alimentan"}`}{" "}
-          · {notas} nota{notas === 1 ? "" : "s"}
+            : reuniones > MAX_ELEGIDAS_A_LEER
+              ? `lee ${MAX_ELEGIDAS_A_LEER} de ${reuniones} elegidas`
+              : `${reuniones} ${reuniones === 1 ? "elegida" : "elegidas"}`}
+          {!reunionesIlegibles && sugeridas > 0 ? ` · ${sugeridas} ${sugeridas === 1 ? "sugerida" : "sugeridas"}` : ""}{" "}
+          · {notas} {notas === 1 ? "fuente manual" : "fuentes manuales"}
           {instruccionesActivas ? " · instrucciones activas" : ""}
-        </span>
-        <span className="ml-auto text-[11px] text-fg-muted flex-shrink-0">{abierto ? "Colapsar" : "Expandir"}</span>
-      </button>
-
-      {/* Siempre montado: los contadores de la línea cerrada salen de las columnas. */}
-      <div className={abierto ? "px-4 pb-3 space-y-3" : "hidden"}>
-        <p className="text-[11px] text-fg-muted leading-relaxed">
-          Con esto —más las demás fuentes del documento— la IA {doc.laIa}. Arranca con{" "}
-          <span className="font-medium text-fg-secondary">todas las reuniones del proyecto con el cliente</span>: saca
-          las que no sirven y busca las que falten. Si son muchas, se reparten el espacio. Sacarla de acá no la saca
-          de los otros documentos ni del proyecto.
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={reuniones}>
-            <SessionSelectionReview
-              projectId={projectId}
-              destino={doc.destino}
-              columnMode
-              onCount={setReuniones}
-              onErrorDeCarga={setReunionesIlegibles}
-              readOnly={!canEdit}
-            />
-          </ContextColumn>
-          <ContextColumn icon={CTX_ICONS.note} color="#7c6df2" title="Fuentes manuales" count={notas}>
-            <FuentesManualesColumn
-              endpoint={`/api/projects/${projectId}/contexto/${doc.pieza}/notas`}
-              canEdit={canEdit}
-              onCount={setNotas}
-              tope={TOPE_NOTAS_DEL_DOCUMENTO}
-              vacio="Sin notas. Pega aquí lo que no quedó en ninguna reunión."
-              placeholderTitulo="Título, con la fecha si son notas de una reunión (ej. Reunión del 1 sept)"
-              placeholder="Pega la nota, el correo o la decisión…"
-              etiquetaAgregar="Agregar nota"
-            />
-          </ContextColumn>
-        </div>
-        <InstruccionesDelDocumento
-          projectId={projectId}
-          slug={doc.pieza}
-          elDocumento={doc.elDocumento}
-          ejemplo={doc.ejemplo}
-          soloLectura={!canEdit}
-          onActivas={setInstruccionesActivas}
-        />
+        </>
+      }
+      explicacion={
+        <>
+          Con esto —más la memoria del proyecto— la IA {doc.laIa}. Lee{" "}
+          <span className="font-medium text-fg-secondary">enteras las reuniones que elijas</span> (hasta{" "}
+          {MAX_ELEGIDAS_ENTERAS}, las más recientes; las siguientes, en resumen, y pasadas las {MAX_ELEGIDAS_A_LEER} no
+          entran), y Nexus te sugiere algunas arriba. {queLeeSinElegidas(doc)} Sacar una de acá no la saca de los otros
+          documentos ni del proyecto.
+        </>
+      }
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Reuniones" count={reuniones}>
+          <SessionSelectionReview
+            projectId={projectId}
+            destino={doc.destino}
+            columnMode
+            onCount={setReuniones}
+            onSugeridas={setSugeridas}
+            onErrorDeCarga={setReunionesIlegibles}
+            readOnly={!canEdit}
+          />
+        </ContextColumn>
+        <ContextColumn icon={CTX_ICONS.note} color="#7c6df2" title="Fuentes manuales" count={notas}>
+          <FuentesManualesColumn
+            endpoint={`/api/projects/${projectId}/contexto/${doc.pieza}/notas`}
+            canEdit={canEdit}
+            onCount={setNotas}
+            tope={TOPE_NOTAS_DEL_DOCUMENTO}
+            adjunto={{ projectId, origen: doc.pieza }}
+          />
+        </ContextColumn>
       </div>
-    </div>
+      <InstruccionesDelDocumento
+        projectId={projectId}
+        slug={doc.pieza}
+        elDocumento={doc.elDocumento}
+        ejemplo={doc.ejemplo}
+        soloLectura={!canEdit}
+        onActivas={setInstruccionesActivas}
+      />
+    </ContextoAdicional>
   );
 }

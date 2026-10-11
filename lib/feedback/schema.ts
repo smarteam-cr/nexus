@@ -103,3 +103,8 @@ export const CrearPedido = z.object({
 export const MarcarPedido = z.object({
   accion: z.enum(["visto", "ahora_no"]),
 });
+
+/** Quien revisa marca un reporte de la Bandeja como leído o no leído. */
+export const MarcarLectura = z.object({
+  leido: z.boolean(),
+});

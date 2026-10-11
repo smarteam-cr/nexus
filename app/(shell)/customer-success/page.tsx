@@ -19,7 +19,11 @@ export const dynamic = "force-dynamic";
 // dinero —MRR, comisión, puntos de partner—, que es dato de partner (términos con HubSpot) y no se
 // delega por plantilla. Hasta el 2026-10-04 colgaba de la celda `customerSuccess.read` y el CSE
 // entraba a ver sus cuentas.
-export default async function CustomerSuccessPage() {
+export default async function CustomerSuccessPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !esLiderDeCs(ctx.role)) redirect("/clients");
 
@@ -28,7 +32,11 @@ export default async function CustomerSuccessPage() {
   // endpoints siguen exigiendo `clientes.viewAll`. Sin esta bandera los botones se pintarían igual
   // y darían 403 si una plantilla le saca ese permiso a la CSL.
   const puedeCurar = await can(ctx.teamMember, "clientes", "viewAll");
+  // El pase de cuenta (2026-10-09) pide lo mismo que reasignar el CSE en el listado de clientes.
+  const puedeReasignar = await can(ctx.teamMember, "proyectos", "reasignarEncargado");
   const data = await cargarCarteraDeLaCsl(where);
 
-  return <CsPanel data={data} puedeCurar={puedeCurar} contenedor={SHELL_DEFAULT} />;
+  // La pestaña y los filtros de «Cartera» viven en la dirección: una vista es un enlace.
+  const parametros = await searchParams;
+  return <CsPanel data={data} puedeCurar={puedeCurar} contenedor={SHELL_DEFAULT} yo={ctx.user.email ?? null} parametros={parametros} puedeReasignar={puedeReasignar} />;
 }

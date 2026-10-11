@@ -11,6 +11,9 @@ import { forceRefreshSystemToken, getSystemHubspotClient } from "@/lib/hubspot/c
 import { PROPIEDADES_DEL_RASTRO, rastroDe, type RastroDelContacto } from "./senales";
 import { agruparLlegadas, esDePrueba, leerNotaDelTest, type LlegadaAgrupada, type NotaDeLlegada } from "./llegadas";
 import { leerResultadoDelTest, PROPIEDADES_DEL_TEST, type ResultadoDelTest } from "./test-de-marketing";
+import { reunionQueNoOcurrio } from "./lectura";
+import { grabacionesDeReuniones } from "@/lib/hubspot/grabaciones-de-reuniones";
+import { textoDeLaReunion } from "@/lib/hubspot/transcripcion-de-reunion";
 
 interface Pedido {
   method: "GET" | "POST";
@@ -240,6 +243,11 @@ export interface ActividadDeHubspot {
   texto: string;
   /** El resultado de una reunión que ya pasó, si HubSpot lo dice: se hizo, se canceló, se reagendó. */
   resultado?: ResultadoDeReunion;
+  /**
+   * De una reunión que ya pasó: los correos de la gente de Smarteam que estuvo (su dueño y los
+   * asistentes que son usuarios de HubSpot). Dice si estuvo alguien de Ventas (lectura.ts › `conVentas`).
+   */
+  internos?: string[];
 }
 
 export type ResultadoDeReunion = "hecha" | "cancelada" | "reagendada" | "no_se_presento";
@@ -262,7 +270,7 @@ export function resultadoDeReunion(outcome: unknown): ResultadoDeReunion | undef
 }
 
 /** Una reunión que no ocurrió como estaba agendada: ni es agenda ni es algo que el cliente dijo. */
-export const reunionQueNoOcurrio = (r: ResultadoDeReunion | undefined) => r === "cancelada" || r === "reagendada" || r === "no_se_presento";
+export { reunionQueNoOcurrio };
 
 export interface ActividadDeLaEmpresa {
   /** Lo que ya pasó, más reciente primero. */
@@ -284,10 +292,44 @@ export interface ActividadDeLaEmpresa {
 }
 
 type V1 = {
-  engagement?: { id?: number | string; type?: string; timestamp?: number };
-  associations?: { companyIds?: (number | string)[] };
+  engagement?: { id?: number | string; type?: string; timestamp?: number; ownerId?: number | string | null };
+  associations?: { companyIds?: (number | string)[]; ownerIds?: (number | string)[] };
   metadata?: Record<string, unknown>;
 };
+
+/** Los usuarios de HubSpot de una reunión (v1): su dueño y los asociados. Ids, sin repetir. */
+function propietariosDe(e: V1): string[] {
+  const ids = [e.engagement?.ownerId, ...(e.associations?.ownerIds ?? [])].filter((x) => x !== null && x !== undefined && x !== "").map(String);
+  return [...new Set(ids)];
+}
+
+const UNA_HORA = 60 * 60 * 1000;
+let correosEnCache: { en: number; mapa: Map<string, string> } | null = null;
+
+/**
+ * El correo de cada usuario de HubSpot (id → correo, en minúscula), también de los archivados (un
+ * vendedor que ya se fue). Se guarda una hora: cambia poco y cada reunión lo pregunta.
+ */
+async function correosDeLosPropietarios(): Promise<Map<string, string>> {
+  if (correosEnCache && Date.now() - correosEnCache.en < UNA_HORA) return correosEnCache.mapa;
+  const mapa = new Map<string, string>();
+  for (const archivados of [false, true]) {
+    let despues: string | undefined;
+    for (let pagina = 0; pagina < 5; pagina++) {
+      const data = await pedirAHubspot<{ results?: { id?: string | number; email?: string | null }[]; paging?: { next?: { after?: string } } }>({
+        method: "GET",
+        path: `/crm/v3/owners?limit=500&archived=${archivados}${despues ? `&after=${encodeURIComponent(despues)}` : ""}`,
+      });
+      if (!data) break;
+      for (const o of data.results ?? []) if (o.id != null && o.email) mapa.set(String(o.id), o.email.trim().toLowerCase());
+      despues = data.paging?.next?.after;
+      if (!despues) break;
+    }
+  }
+  // Sin respuesta no se guarda: la próxima mirada vuelve a preguntar.
+  if (mapa.size) correosEnCache = { en: Date.now(), mapa };
+  return mapa;
+}
 
 /**
  * ¿Una actividad leída por un CONTACTO es de esta empresa? Si cuelga de otras empresas y no de ésta
@@ -385,11 +427,24 @@ async function engagementsDe(objeto: "company" | "contact", id: string): Promise
   return todos;
 }
 
+/** De cuántas reuniones que ya pasaron se pide la grabación (resumen de IA) en cada lectura: las más recientes. */
+const REUNIONES_CON_GRABACION = 15;
+
 /**
  * La actividad de la empresa Y de sus contactos (la nota del test y las reuniones que agenda el
  * prospecto pueden colgar solo del contacto). Sin repetidos; las reuniones futuras van aparte.
+ *
+ * De las reuniones que ya pasaron se trae además la grabación de HubSpot (lib/hubspot/
+ * grabaciones-de-reuniones.ts): el resumen de IA y, de las `transcripciones` más recientes, la
+ * transcripción completa. La API v1 solo trae la descripción, que suele ser la invitación (la del 28 sep
+ * de CreditForce, con 49 minutos grabados en HubSpot). Una reunión grabada sin descripción ahora cuenta.
  */
-export async function leerActividad(companyId: string, contactos: readonly ContactoDeHubspot[], ahora = new Date()): Promise<ActividadDeLaEmpresa> {
+export async function leerActividad(
+  companyId: string,
+  contactos: readonly ContactoDeHubspot[],
+  ahora = new Date(),
+  o: { transcripciones?: number } = {},
+): Promise<ActividadDeLaEmpresa> {
   const [deLaEmpresa, ...deLosContactos] = await Promise.all([
     engagementsDe("company", companyId),
     ...contactos.slice(0, 12).map((c) => engagementsDe("contact", c.id)),
@@ -401,6 +456,10 @@ export async function leerActividad(companyId: string, contactos: readonly Conta
   let correosSinPermiso = 0;
   const enlacesDelTest: EnlaceDelTest[] = [];
   const noOcurrieron: string[] = [];
+  // Las reuniones que ya pasaron y se hicieron, con o sin texto: su grabación puede estar aparte.
+  const pasadas: ActividadDeHubspot[] = [];
+  // Los usuarios de HubSpot de cada una (v1), para saber si estuvo alguien de Ventas.
+  const propietarios = new Map<string, string[]>();
   for (const e of lotes.flat()) {
     const enlace = enlaceDeLaNota(e);
     if (enlace && !enlacesDelTest.some((x) => x.url === enlace.url)) enlacesDelTest.push(enlace);
@@ -418,12 +477,76 @@ export async function leerActividad(companyId: string, contactos: readonly Conta
       continue;
     }
     if (a.tipo === "MEETING" && reunionQueNoOcurrio(a.resultado)) noOcurrieron.push(a.id);
+    if (a.tipo === "MEETING" && !reunionQueNoOcurrio(a.resultado)) {
+      pasadas.push(a);
+      propietarios.set(a.id, propietariosDe(e));
+      continue;
+    }
     if (!a.texto) continue;
     material.push(a);
+  }
+  pasadas.sort((a, b) => b.ts - a.ts);
+  const grabaciones = await grabacionesDeReuniones(
+    pasadas.slice(0, REUNIONES_CON_GRABACION).map((r) => r.id),
+    { transcripciones: o.transcripciones ?? 0 },
+  ).catch(() => new Map<string, { resumen: string | null; transcripcion: string | null; propietarios?: string[] }>());
+  const correoDe = pasadas.length ? await correosDeLosPropietarios().catch(() => new Map<string, string>()) : new Map<string, string>();
+  for (const r of pasadas) {
+    const g = grabaciones.get(r.id);
+    const texto = g ? textoDeLaReunion({ resumen: g.resumen, transcripcion: g.transcripcion, resto: r.texto }) : r.texto;
+    const ids = [...(propietarios.get(r.id) ?? []), ...(g?.propietarios ?? [])];
+    const internos = [...new Set(ids.flatMap((id) => correoDe.get(id) ?? []))];
+    if (texto) material.push({ ...r, texto, ...(internos.length ? { internos } : {}) });
   }
   material.sort((a, b) => b.ts - a.ts);
   agenda.sort((a, b) => a.inicio.localeCompare(b.inicio));
   return { material: material.slice(0, 40), agenda, correosSinPermiso, enlacesDelTest, noOcurrieron };
+}
+
+// ── Los correos de una empresa (para el agente vigía de Éxito del cliente) ──────────────────
+
+export interface CorreoDeLaEmpresa {
+  /** Id del engagement (v1): es lo que cita el vigía (`correoId`). */
+  id: string;
+  /** Cuándo se mandó (ms). */
+  ts: number;
+  asunto: string;
+  /** Quién lo mandó (correo, en minúscula), si HubSpot lo dice. */
+  de: string | null;
+  texto: string;
+}
+
+/**
+ * Los correos de una empresa desde `desde`, el más nuevo primero (2026-10-09). Los lee el agente vigía para ver
+ * quejas y retrasos en lo que escribe el cliente. Sin el permiso de correos (`sales-email-read`), HubSpot los
+ * entrega tapados: se cuentan en `sinPermiso` para que la pantalla lo diga. null = HubSpot no respondió.
+ */
+export async function correosDeLaEmpresa(
+  companyId: string,
+  desde: Date,
+): Promise<{ correos: CorreoDeLaEmpresa[]; sinPermiso: number } | null> {
+  const lote = await engagementsDe("company", companyId).catch(() => null);
+  if (!lote) return null;
+  const correos: CorreoDeLaEmpresa[] = [];
+  let sinPermiso = 0;
+  const vistos = new Set<string>();
+  for (const e of lote) {
+    if (e.engagement?.type !== "EMAIL") continue;
+    const ts = typeof e.engagement?.timestamp === "number" ? e.engagement.timestamp : 0;
+    if (ts < desde.getTime()) continue;
+    const a = aActividad(e);
+    if (a === "tapado") {
+      sinPermiso++;
+      continue;
+    }
+    if (!a || vistos.has(a.id)) continue;
+    vistos.add(a.id);
+    const from = (e.metadata?.from ?? null) as { email?: unknown } | null;
+    const de = typeof from?.email === "string" && from.email.trim() ? from.email.trim().toLowerCase() : null;
+    correos.push({ id: a.id, ts, asunto: a.titulo, de, texto: a.texto });
+  }
+  correos.sort((x, y) => y.ts - x.ts);
+  return { correos, sinPermiso };
 }
 
 // ── «Llegaron por el test» ────────────────────────────────────────────────────

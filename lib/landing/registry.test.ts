@@ -441,6 +441,7 @@ describe("un renderer, un contrato de datos", () => {
     exploracion_temas: "modulo",
     estimacion: "modulo",
     impacto_declarado: "modulo",
+    entrega_objetivos: "modulo",
     prompts_breeze: "modulo",
     cronograma_gantt: "modulo",
     antes_despues: "modulo",
@@ -996,7 +997,7 @@ describe("Entrega: registry completo + keys congeladas", () => {
        documento arranca justificándose, que es lo último que uno quiere leer en una entrega. */
     const keys = ENTREGA_SECTION_DEFS.map((d) => d.key);
     expect(keys).toEqual([
-      "portada", "resumen", "alcance", "logros",
+      "portada", "desafio_resuelto", "resumen", "alcance", "logros",
       "cumplimiento", "impacto", "escala", "pendientes", "continuidad", "recomendaciones", "cierre",
     ]);
     expect(keys.indexOf("pendientes")).toBeGreaterThan(keys.indexOf("logros"));
@@ -1033,7 +1034,7 @@ describe("Entrega: registry completo + keys congeladas", () => {
       expect(ENTREGA_DEF_BY_KEY[k].noHide, `${k} no debería poder ocultarse`).toBe(true);
     }
     const ocultables = ENTREGA_SECTION_DEFS.filter((d) => !d.noHide).map((d) => d.key);
-    expect(ocultables).toHaveLength(9);
+    expect(ocultables).toHaveLength(10);
   });
 
   it("las keys 1:1 con las secciones del canvas", () => {

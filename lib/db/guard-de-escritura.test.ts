@@ -227,7 +227,6 @@ const SIN_TABLAS: string[] = [
   "scripts/migrate-add-kickoff-canvas.ts",
   "scripts/migrate-canvas-reorg.ts",
   "scripts/migrate-create-handoff-entities.ts",
-  "scripts/migrate-pending-items-to-action-items.ts",
   "scripts/migrate-procesos-to-blocks.ts",
   "scripts/migrate-sessions-to-projects.ts",
   "scripts/migrate-strategy-to-client-info.ts",

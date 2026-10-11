@@ -9,13 +9,25 @@ import { refreshAccessToken } from "@/lib/hubspot/client";
 import { detectarFusion, type VeredictoDeFusion } from "@/lib/hubspot/empresa-fusionada";
 import { crDateParts } from "@/lib/jobs/time";
 import {
+  DE_LA_CUENTA,
+  SE_MUDAN,
+  SE_QUEDAN_A_PROPOSITO,
+  SIN_CHOCAR,
+  TABLAS_DE_LA_FUSION,
+  UNO_A_UNO,
   destinoUnoAUno,
   idDeHubspotFinal,
+  plegarClasificacion,
   plegarCuenta,
   plegarFicha,
+  repartirSinChocar,
+  resolverChoques,
+  tablaDe,
   textoDeFusionDeCuenta,
   type CuentaParaFusionar,
   type FichaParaFusionar,
+  type ChoqueResuelto,
+  type PliegueDeClasificacion,
 } from "@/lib/clients/fusion-de-empresas";
 
 /**
@@ -25,17 +37,25 @@ import {
  * otra y después borra la otra, ya vacía. Qué datos quedan lo decide lib/clients/fusion-de-empresas.ts (puro, con
  * pruebas); este archivo mide, muestra y, con permiso, mueve las filas en UNA transacción.
  *
- * Reasigna (absorbida → canónico):
+ * Reasigna (absorbida → canónico). QUÉ tablas y con qué regla lo declaran las listas de lib/clients/fusion-de-empresas.ts
+ * (SE_MUDAN, SIN_CHOCAR, UNO_A_UNO, DE_LA_CUENTA…), y lib/clients/fusion-cubre-el-esquema.test.ts se pone rojo si una
+ * relación hacia la ficha no está en ninguna (2026-10-09: se perdían en cascada las solicitudes fuera de alcance, las
+ * licencias, la clasificación, las correcciones del color, las preguntas de tiempo y los clientes de Mercury):
  *   · Todo lo que apunta a la ficha: proyectos, handoffs, documentos, tarjetas de contexto, conocimiento, auditorías,
  *     corridas de agentes, business cases, exploraciones de venta, usuarios externos, tareas, sugerencias, alertas de
- *     CS, ingresos variables, comisiones, ventas ganadas, filas de importación, comentarios de la escala, y los
- *     punteros sin relación (sesiones —automático y manual—, eventos, llamadas a la IA, uso de partners).
- *   · StageNote y ClientAssignment sin chocar con sus únicos: lo que choca se queda el del canónico.
- *   · Lo uno a uno (cuenta de HubSpot, señales de CS, snapshot de CS360, brief): se muda si el canónico no lo tiene.
+ *     CS, correcciones del color, preguntas de tiempo, ingresos variables, comisiones, ventas ganadas, filas de
+ *     importación, comentarios de la escala, y los punteros sin relación (sesiones —automático y manual—, eventos,
+ *     llamadas a la IA, uso de partners).
+ *   · Notas de etapa, asignaciones, solicitudes fuera de alcance y licencias sin chocar con sus únicos: lo que choca se
+ *     queda el del canónico, y el de la absorbida va entero al respaldo.
+ *   · Lo uno a uno (cuenta de HubSpot, señales de CS, snapshot de CS360, brief, clasificación de la cartera): se muda
+ *     si el canónico no lo tiene. La clasificación, si las dos tienen, toma de la otra lo que el canónico no confirmó.
  *   · ⭐ La CUENTA DE COBRO (2026-10-01). Si solo la absorbida tiene, se muda entera. Si las dos, la del canónico
- *     recibe servicios, cobros, alertas, bitácora, facturas soltadas, clientes de Odoo y sus facturas, toma de la otra
- *     los datos que le faltan, anota la fusión en su bitácora, y la otra se borra ya vacía. Hasta ese día el script se
- *     negaba: borrar la ficha se llevaba la cuenta en cascada con su plata (caso real: Librería Internacional).
+ *     recibe servicios, cobros, alertas, bitácora, facturas soltadas, clientes de Odoo y de Mercury y sus facturas, toma
+ *     de la otra los datos que le faltan, anota la fusión en su bitácora, y la otra se borra ya vacía. Hasta ese día el
+ *     script se negaba: borrar la ficha se llevaba la cuenta en cascada con su plata (caso real: Librería Internacional).
+ *   · Lo que se queda A PROPÓSITO apuntando a la absorbida (SE_QUEDAN_A_PROPOSITO: la foto semanal de Tareas) se cuenta
+ *     y se avisa.
  *
  * Y en la ficha que sigue: suma los dominios de correo (las reuniones siguen llegando: INV2), junta las notas, toma lo
  * que le falta y apunta a la empresa de HubSpot VIVA. Si las dos empresas se fusionaron en HubSpot en una tercera
@@ -65,90 +85,41 @@ if (!QUIERE_ESCRIBIR) {
     .join(" ");
 }
 
-/** Las relaciones que se mudan cambiando UNA columna: [modelo de Prisma, columna que apunta a la ficha]. */
-const SE_MUDAN = [
-  ["project", "clientId"],
-  ["handoff", "clientId"],
-  ["clientDocument", "clientId"],
-  ["clientContextCard", "clientId"],
-  ["knowledge", "clientId"],
-  ["audit", "clientId"],
-  ["agentRun", "clientId"],
-  ["businessCase", "clientId"],
-  ["exploracionDeVenta", "clientId"],
-  ["appUser", "clientId"],
-  ["actionItem", "clientId"],
-  ["canvasSuggestion", "clientId"],
-  ["csAlert", "clientId"],
-  ["ingresoVariable", "clientId"],
-  ["comisionPartner", "clientId"],
-  ["reglaComisionVendedor", "clientId"],
-  ["ventaGanada", "clientId"],
-  ["importacionFila", "aplicadoClientId"],
-  ["escalaComentario", "clienteId"],
-  /* Sin relación en el esquema: la base no las cascadea ni las protege (lib/db/punteros-al-borrar.test.ts). */
-  ["firefliesSession", "resolvedClientId"],
-  ["firefliesSession", "manualClientId"],
-  ["timelineEvent", "clientId"],
-  ["llmCall", "clientId"],
-  ["partnerUsageSnapshot", "clientId"],
-] as const;
+/* Las listas de QUÉ se muda y con qué regla (SE_MUDAN, SIN_CHOCAR, UNO_A_UNO, DE_LA_CUENTA, SE_QUEDAN_A_PROPOSITO)
+   viven en lib/clients/fusion-de-empresas.ts: ahí las cubre lib/clients/fusion-cubre-el-esquema.test.ts contra el
+   esquema. Este archivo solo las recorre. */
 
-/** Lo uno a uno que cuelga de la ficha: se muda si el canónico no lo tiene. */
-const UNO_A_UNO = ["hubspotAccount", "clientCsSignals", "clientPartnerSnapshot", "csAccountBrief"] as const;
+/**
+ * Lo que se muda EN ESTA BASE: lo de SE_MUDAN cuya tabla existe. Una tabla que todavía no está (producción antes de
+ * aplicar el SQL de un módulo nuevo, como Tareas el 2026-10-09) no tiene filas que mudar, y contarla reventaba el
+ * script entero. Se arma en `main` con el catálogo.
+ */
+let seMudanAqui: readonly (typeof SE_MUDAN)[number][] = SE_MUDAN;
+/** Las tablas de la fusión que existen en esta base (lo mismo que `seMudanAqui`, para las demás listas). */
+let tablasAqui: ReadonlySet<string> | null = null;
+const estaAqui = (modelo: string) => !tablasAqui || tablasAqui.has(tablaDe(modelo));
 
-/** Lo que cuelga de la cuenta de cobro: se muda a la del canónico cuando las dos tienen. */
-const DE_LA_CUENTA = ["servicioContratado", "cobro", "alertaCobro", "bitacoraCobro", "facturaLiberada", "facturaOdoo", "odooPartnerVinculo"] as const;
+/** Las tablas de la lista que existen en la base (una consulta al catálogo, solo lectura). */
+async function tablasQueExisten(nombres: readonly string[]): Promise<Set<string>> {
+  const filas = await prisma.$queryRaw<{ nombre: string }[]>`
+    SELECT t.nombre FROM unnest(${[...nombres]}::text[]) AS t(nombre)
+    WHERE to_regclass(format('public.%I', t.nombre)) IS NOT NULL`;
+  return new Set(filas.map((f) => f.nombre));
+}
 
-/** Las tablas que puede escribir una corrida con --apply: el guard las respalda con pg_dump antes de empezar. */
-const TABLAS = [
-  "Client",
-  "Project",
-  "Handoff",
-  "ClientDocument",
-  "ClientContextCard",
-  "Knowledge",
-  "Audit",
-  "AgentRun",
-  "BusinessCase",
-  "ExploracionDeVenta",
-  "AppUser",
-  "ActionItem",
-  "CanvasSuggestion",
-  "CsAlert",
-  "IngresoVariable",
-  "ComisionPartner",
-  "ReglaComisionVendedor",
-  "VentaGanada",
-  "ImportacionFila",
-  "EscalaComentario",
-  "FirefliesSession",
-  "TimelineEvent",
-  "LlmCall",
-  "PartnerUsageSnapshot",
-  "StageNote",
-  "ClientAssignment",
-  "HubspotAccount",
-  "ClientCsSignals",
-  "ClientPartnerSnapshot",
-  "CsAccountBrief",
-  "CuentaFinanciera",
-  "ServicioContratado",
-  "Cobro",
-  "AlertaCobro",
-  "BitacoraCobro",
-  "FacturaLiberada",
-  "FacturaOdoo",
-  "OdooPartnerVinculo",
-];
+/** Las tablas que puede escribir una corrida con --apply (salen de las listas): el guard las respalda con pg_dump. */
+const TABLAS = TABLAS_DE_LA_FUSION;
 
 /* La forma común de los delegados de Prisma que se usan por nombre. `as unknown as`: TypeScript no puede seguir un
-   índice dinámico sobre el cliente, y cada uno de estos modelos tiene `id` de texto (verificado en el esquema). */
+   índice dinámico sobre el cliente. Los modelos de SE_MUDAN, SIN_CHOCAR y DE_LA_CUENTA tienen `id` de texto
+   (verificado en el esquema); los de UNO_A_UNO se buscan por `clientId`; los de SE_QUEDAN_A_PROPOSITO solo se cuentan. */
+type Fila = { id: string } & Record<string, unknown>;
 type Delegado = {
   updateMany(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<{ count: number }>;
-  findMany(args: { where: Record<string, unknown>; select: { id: true } }): Promise<Array<{ id: string }>>;
+  findMany(args: { where: Record<string, unknown>; select?: Record<string, true> }): Promise<Fila[]>;
   findUnique(args: { where: Record<string, unknown> }): Promise<Record<string, unknown> | null>;
   count(args: { where: Record<string, unknown> }): Promise<number>;
+  deleteMany(args: { where: Record<string, unknown> }): Promise<{ count: number }>;
 };
 type Db = typeof prisma | Prisma.TransactionClient;
 const delegado = (db: Db, modelo: string) => (db as unknown as Record<string, Delegado>)[modelo]!;
@@ -261,47 +232,77 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
 
   /* ── Lo que se muda ──────────────────────────────────────────────────────────── */
   const mueven: Record<string, string[]> = {};
-  for (const [modelo, columna] of SE_MUDAN) {
+  for (const [modelo, columna] of seMudanAqui) {
     const filas = await delegado(prisma, modelo).findMany({ where: { [columna]: dup.ficha.id }, select: { id: true } });
     if (filas.length) mueven[`${modelo}.${columna}`] = filas.map((f) => f.id);
   }
   /* ⛔ Una sola exploración VIVA por empresa (índice único parcial): si las dos tienen, decide una persona. */
-  const vivas = await prisma.exploracionDeVenta.count({ where: { clientId: { in: [canon.ficha.id, dup.ficha.id] }, archivadaEn: null } });
-  const vivasDeLaAbsorbida = await prisma.exploracionDeVenta.count({ where: { clientId: dup.ficha.id, archivadaEn: null } });
+  const vivas = await prisma.exploracionDeVenta.count({ where: { clientId: { in: [canon.ficha.id, dup.ficha.id] }, archivadaEn: null, projectId: null } });
+  const vivasDeLaAbsorbida = await prisma.exploracionDeVenta.count({ where: { clientId: dup.ficha.id, archivadaEn: null, projectId: null } });
   if (vivasDeLaAbsorbida > 0 && vivas > vivasDeLaAbsorbida) {
     console.log("  ⛔ NO SE TOCA: las dos tienen una exploración de venta abierta. Archiva una y vuelve.");
     return { applied: false };
   }
-  /* StageNote y ClientAssignment: lo que choca con un único del canónico se queda el del canónico. */
-  const [notasDup, notasCanon, asignDup, asignCanon] = await Promise.all([
-    prisma.stageNote.findMany({ where: { clientId: dup.ficha.id } }),
-    prisma.stageNote.findMany({ where: { clientId: canon.ficha.id }, select: { stage: true, step: true } }),
-    prisma.clientAssignment.findMany({ where: { clientId: dup.ficha.id } }),
-    prisma.clientAssignment.findMany({ where: { clientId: canon.ficha.id }, select: { teamMemberId: true, targetRole: true } }),
-  ]);
-  const claveNota = (n: { stage: unknown; step: unknown }) => `${String(n.stage)}:${String(n.step)}`;
-  const claveAsig = (a: { teamMemberId: string | null; targetRole: unknown }) => `${String(a.teamMemberId)}:${String(a.targetRole)}`;
-  const notasCanonSet = new Set(notasCanon.map(claveNota));
-  const asignCanonSet = new Set(asignCanon.map(claveAsig));
-  const notasMueven = notasDup.filter((n) => !notasCanonSet.has(claveNota(n)));
-  const notasSeVan = notasDup.filter((n) => notasCanonSet.has(claveNota(n)));
-  const asignMueven = asignDup.filter((a) => !asignCanonSet.has(claveAsig(a)));
-  const asignSeVan = asignDup.filter((a) => asignCanonSet.has(claveAsig(a)));
+  /* Lo que tiene un único compuesto con la ficha (SIN_CHOCAR): lo que choca con una fila del canónico se queda la del
+     canónico, y la de la absorbida va entera al respaldo. */
+  const sinChocar: Record<string, { etiqueta: string; total: number; pasan: Fila[]; chocan: Fila[]; choques: ChoqueResuelto<Fila>[] }> = {};
+  for (const s of SIN_CHOCAR) {
+    if (!estaAqui(s.modelo)) continue;
+    const [deDup, deCanon] = await Promise.all([
+      delegado(prisma, s.modelo).findMany({ where: { clientId: dup.ficha.id } }),
+      delegado(prisma, s.modelo).findMany({ where: { clientId: canon.ficha.id } }),
+    ]);
+    const { pasan, chocan } = repartirSinChocar(deDup, deCanon, s.clave);
+    /* Lo que choca no siempre es «queda la del canónico»: una solicitud que alguien decidió en la absorbida le gana a
+       una sin decidir, y una licencia se completa con lo que le falta (resolverChoques). */
+    const choques = resolverChoques(s.modelo, chocan, deCanon, s.clave);
+    sinChocar[s.modelo] = { etiqueta: s.etiqueta, total: deDup.length, pasan, chocan, choques };
+  }
+  const frenos = Object.values(sinChocar).flatMap((r) => r.choques.filter((c) => c.accion === "frenar"));
+  if (frenos.length) {
+    console.log(`  ⛔ NO SE TOCA: ${frenos.map((c) => c.motivo).join("; ")}. Decide a mano con cuál se queda y vuelve.`);
+    return { applied: false };
+  }
 
   const unoAUno: Record<string, { destino: ReturnType<typeof destinoUnoAUno>; filaDeLaAbsorbida: Record<string, unknown> | null }> = {};
+  let pliegueClasificacion: PliegueDeClasificacion | null = null;
   for (const modelo of UNO_A_UNO) {
+    if (!estaAqui(modelo)) continue;
     const [deCanon, deDup] = await Promise.all([
       delegado(prisma, modelo).findUnique({ where: { clientId: canon.ficha.id } }),
       delegado(prisma, modelo).findUnique({ where: { clientId: dup.ficha.id } }),
     ]);
     unoAUno[modelo] = { destino: destinoUnoAUno(!!deCanon, !!deDup), filaDeLaAbsorbida: deDup };
+    /* La clasificación la confirmó una persona: si las dos tienen, la del canónico toma lo que no tiene confirmado. */
+    if (modelo === "clasificacionDeCuenta" && deCanon && deDup) pliegueClasificacion = plegarClasificacion(deCanon, deDup);
+  }
+  /* ⛔ Si las dos tienen cuenta de HubSpot propia, la de la absorbida se borra con la ficha y se lleva en cascada el
+     conocimiento y las auditorías que le cuelgan por `accountId` (aunque ya se hayan mudado de ficha). */
+  const cuentaHsDup = unoAUno.hubspotAccount?.destino === "queda-el-de-la-que-sigue" ? unoAUno.hubspotAccount.filaDeLaAbsorbida : null;
+  if (cuentaHsDup) {
+    const accountId = String(cuentaHsDup.id);
+    const colgados = (await prisma.knowledge.count({ where: { accountId } })) + (await prisma.audit.count({ where: { accountId } }));
+    if (colgados > 0) {
+      console.log(`  ⛔ NO SE TOCA: las dos tienen cuenta de HubSpot propia y la de la absorbida tiene ${colgados} conocimiento(s) o auditoría(s) colgados: borrarla se los llevaría. Decide a mano a qué cuenta pasan.`);
+      return { applied: false };
+    }
+  }
+
+  /* Lo que se queda A PROPÓSITO apuntando a la absorbida: se cuenta para decirlo. */
+  const seQuedan: Record<string, number> = {};
+  for (const clave of Object.keys(SE_QUEDAN_A_PROPOSITO)) {
+    const [modelo, columna] = clave.split(".") as [string, string];
+    if (!estaAqui(modelo)) continue;
+    const n = await delegado(prisma, modelo).count({ where: { [columna]: dup.ficha.id } });
+    if (n) seQuedan[clave] = n;
   }
 
   /* ── La cuenta de cobro ──────────────────────────────────────────────────────── */
   const fecha = crDateParts(new Date()).dateKey;
   const deLaCuenta: Record<string, string[]> = {};
+  const deLaCuentaAqui = DE_LA_CUENTA.filter(estaAqui);
   if (canon.cuenta && dup.cuenta) {
-    for (const modelo of DE_LA_CUENTA) {
+    for (const modelo of deLaCuentaAqui) {
       const filas = await delegado(prisma, modelo).findMany({ where: { cuentaId: dup.cuenta.id }, select: { id: true } });
       if (filas.length) deLaCuenta[modelo] = filas.map((f) => f.id);
     }
@@ -323,11 +324,30 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
   console.log("\n  Pasa a la ficha que sigue:");
   const etiquetas = Object.entries(mueven).map(([k, v]) => `${k.replace(/\.(clientId|clienteId)$/, "")} ${v.length}`);
   console.log(`    ${etiquetas.join(" · ") || "nada"}`);
-  if (notasDup.length) console.log(`    notas de etapa: ${notasMueven.length} pasan, ${notasSeVan.length} chocan y queda la del canónico`);
-  if (asignDup.length) console.log(`    asignaciones: ${asignMueven.length} pasan, ${asignSeVan.length} chocan y queda la del canónico`);
+  for (const r of Object.values(sinChocar)) {
+    if (!r.total) console.log(`    ${r.etiqueta}: la absorbida no tiene`);
+    else {
+      const n = (a: string) => r.choques.filter((c) => c.accion === a).length;
+      const partes = [
+        n("borrar-absorbida") ? `${n("borrar-absorbida")} chocan y queda la del canónico` : null,
+        n("reemplazar") ? `${n("reemplazar")} chocan y queda la de la absorbida (la decidió una persona)` : null,
+        n("plegar") ? `${n("plegar")} chocan y la del canónico toma de la otra lo que le falta` : null,
+      ].filter(Boolean);
+      console.log(`    ${r.etiqueta}: ${r.pasan.length} pasan${partes.length ? `, ${partes.join(", ")}` : ""}`);
+      for (const c of r.choques) if (c.motivo) console.log(`      ⚠ ${c.motivo}`);
+    }
+  }
+  const sinUnoAUno = Object.entries(unoAUno).filter(([, u]) => u.destino === "nada").map(([m]) => m);
+  if (sinUnoAUno.length) console.log(`    la absorbida no tiene: ${sinUnoAUno.join(", ")}`);
   for (const [modelo, u] of Object.entries(unoAUno)) {
     if (u.destino === "mover") console.log(`    ${modelo}: se muda`);
-    if (u.destino === "queda-el-de-la-que-sigue") console.log(`    ${modelo}: las dos tienen; queda el del canónico y el otro se va`);
+    if (u.destino === "queda-el-de-la-que-sigue") {
+      const toma = modelo === "clasificacionDeCuenta" && pliegueClasificacion?.tomados.length ? ` (toma de la otra: ${pliegueClasificacion.tomados.join(", ")})` : "";
+      console.log(`    ${modelo}: las dos tienen; queda el del canónico${toma} y el otro se va`);
+    }
+  }
+  for (const [clave, n] of Object.entries(seQuedan)) {
+    console.log(`    ⚠ ${clave}: ${n} fila(s) siguen con el id de la absorbida, a propósito: ${SE_QUEDAN_A_PROPOSITO[clave]}`);
   }
   console.log("\n  Cuenta de cobro:");
   if (!dup.cuenta) console.log("    la absorbida no tiene: nada que mover");
@@ -364,12 +384,21 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
     fichas: { sigue: fichaCanonEntera, absorbida: fichaDupEntera },
     cuentas: { sigue: cuentaCanonEntera, absorbida: cuentaDupEntera },
     mueven,
+    sinChocarPasan: Object.fromEntries(Object.entries(sinChocar).filter(([, r]) => r.pasan.length).map(([m, r]) => [m, r.pasan.map((f) => f.id)])),
+    unoAUnoSeMudan: Object.entries(unoAUno).filter(([, u]) => u.destino === "mover").map(([m]) => m),
+    clasificacionTomaDeLaOtra: pliegueClasificacion?.tomados ?? [],
     deLaCuenta,
     seBorranEnteras: {
-      notasDeEtapa: notasSeVan,
-      asignaciones: asignSeVan,
+      sinChocar: Object.fromEntries(Object.entries(sinChocar).filter(([, r]) => r.chocan.length).map(([m, r]) => [m, r.chocan])),
+      // Lo de la que sigue que se reemplaza (queda la de la absorbida) o se completa (las licencias), como estaba.
+      sinChocarDeLaQueSigue: Object.fromEntries(
+        Object.entries(sinChocar)
+          .filter(([, r]) => r.choques.some((c) => c.accion === "reemplazar" || c.accion === "plegar"))
+          .map(([m, r]) => [m, r.choques.filter((c) => c.accion === "reemplazar" || c.accion === "plegar").map((c) => c.sigue)]),
+      ),
       unoAUno: Object.fromEntries(Object.entries(unoAUno).filter(([, u]) => u.destino === "queda-el-de-la-que-sigue").map(([m, u]) => [m, u.filaDeLaAbsorbida])),
     },
+    seQuedanConElIdDeLaAbsorbida: seQuedan,
     hubspot: hub,
   });
   console.log(`\n  respaldo: ${antes}`);
@@ -377,15 +406,33 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
   await prisma.$transaction(
     async (tx) => {
       const a = { canon: canon.ficha.id, dup: dup.ficha.id };
-      for (const [modelo, columna] of SE_MUDAN) {
+      for (const [modelo, columna] of seMudanAqui) {
         await delegado(tx, modelo).updateMany({ where: { [columna]: a.dup }, data: { [columna]: a.canon } });
       }
-      if (notasMueven.length) await tx.stageNote.updateMany({ where: { id: { in: notasMueven.map((n) => n.id) } }, data: { clientId: a.canon } });
-      if (notasSeVan.length) await tx.stageNote.deleteMany({ where: { id: { in: notasSeVan.map((n) => n.id) } } });
-      if (asignMueven.length) await tx.clientAssignment.updateMany({ where: { id: { in: asignMueven.map((x) => x.id) } }, data: { clientId: a.canon } });
-      if (asignSeVan.length) await tx.clientAssignment.deleteMany({ where: { id: { in: asignSeVan.map((x) => x.id) } } });
+      for (const [modelo, r] of Object.entries(sinChocar)) {
+        if (r.pasan.length) await delegado(tx, modelo).updateMany({ where: { id: { in: r.pasan.map((f) => f.id) } }, data: { clientId: a.canon } });
+        for (const c of r.choques) {
+          const idSigue = String(c.sigue.id);
+          if (c.accion === "reemplazar") {
+            // Primero se borra la del canónico: las dos tienen la misma clave única.
+            await delegado(tx, modelo).deleteMany({ where: { id: { in: [idSigue] } } });
+            await delegado(tx, modelo).updateMany({ where: { id: { in: [c.absorbida.id] } }, data: { clientId: a.canon } });
+            continue;
+          }
+          if (c.accion === "plegar" && c.cambios && Object.keys(c.cambios).length) {
+            await delegado(tx, modelo).updateMany({ where: { id: { in: [idSigue] } }, data: c.cambios });
+          }
+          await delegado(tx, modelo).deleteMany({ where: { id: { in: [c.absorbida.id] } } });
+        }
+      }
       for (const [modelo, u] of Object.entries(unoAUno)) {
         if (u.destino === "mover") await delegado(tx, modelo).updateMany({ where: { clientId: a.dup }, data: { clientId: a.canon } });
+      }
+      if (pliegueClasificacion && Object.keys(pliegueClasificacion.cambios).length) {
+        await tx.clasificacionDeCuenta.update({
+          where: { clientId: a.canon },
+          data: pliegueClasificacion.cambios as Prisma.ClasificacionDeCuentaUpdateInput,
+        });
       }
 
       /* La cuenta de cobro, ANTES de borrar la ficha: borrarla se la llevaría en cascada con sus cobros. */
@@ -400,7 +447,7 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
           },
         });
       } else if (dup.cuenta && canon.cuenta) {
-        for (const modelo of DE_LA_CUENTA) {
+        for (const modelo of deLaCuentaAqui) {
           await delegado(tx, modelo).updateMany({ where: { cuentaId: dup.cuenta.id }, data: { cuentaId: canon.cuenta.id } });
         }
         if (Object.keys(pliegueCuenta!.cambios).length) {
@@ -422,6 +469,7 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
                 facturasSoltadas: n("facturaLiberada"),
                 clientesDeOdoo: n("odooPartnerVinculo"),
                 facturasDeOdoo: n("facturaOdoo"),
+                clientesDeMercury: n("clienteMercury"),
               },
               pliegueCuenta!.diferencias,
             ),
@@ -458,8 +506,9 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
     hubspotCompanyId: hub.id,
     comoDeshacer:
       "Recrear la ficha absorbida (y su cuenta, si se borró) con los datos y los ids del respaldo «antes»; devolver a la " +
-      "absorbida cada id de «mueven» y de «deLaCuenta»; recrear lo de «seBorranEnteras»; y dejar la ficha que sigue con " +
-      "los dominios, notas, nombre e id de HubSpot de «antes».",
+      "absorbida cada id de «mueven», de «sinChocarPasan» y de «deLaCuenta», y lo uno a uno de «unoAUnoSeMudan»; " +
+      "recrear lo de «seBorranEnteras»; quitarle a la clasificación de la que sigue lo de «clasificacionTomaDeLaOtra»; y " +
+      "dejar la ficha que sigue con los dominios, notas, nombre e id de HubSpot de «antes».",
   });
   console.log(`  ✓ Fusionada: «${dup.ficha.name}» → «${opciones.nombre ?? canon.ficha.name}». Respaldo de lo hecho: ${despues}`);
   return { applied: true };
@@ -496,7 +545,13 @@ async function main() {
   const nombre = argValue("--nombre");
   /* ⛔ El guard de siempre: con --apply exige ALLOW_PROD_WRITE=1 contra producción y respalda las tablas con pg_dump
      antes de devolver. */
-  const APPLY = resolverApply({ tablas: TABLAS });
+  // Solo lo que existe en esta base: el respaldo de una tabla que no está haría fallar el pg_dump y no escribir nada.
+  const existen = await tablasQueExisten([...TABLAS, ...Object.keys(SE_QUEDAN_A_PROPOSITO).map((k) => tablaDe(k.split(".")[0]!))]);
+  const noEstan = TABLAS.filter((t) => !existen.has(t));
+  seMudanAqui = SE_MUDAN.filter(([m]) => existen.has(tablaDe(m)));
+  tablasAqui = existen;
+  if (noEstan.length) console.log(`(esta base no tiene ${noEstan.join(", ")}: ahí no hay nada que mudar ni respaldar)`);
+  const APPLY = resolverApply({ tablas: TABLAS.filter((t) => existen.has(t)) });
   if (APPLY !== QUIERE_ESCRIBIR) throw new Error("--apply y el guard no dicen lo mismo: no se escribe nada.");
   console.log(`Base: ${describirDestino(process.env.DATABASE_URL)} · ${APPLY ? "APLICAR" : "SIMULACRO (no escribe)"}`);
   if (APPLY) {

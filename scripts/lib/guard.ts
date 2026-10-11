@@ -286,19 +286,28 @@ export function resolverApply(opts: OpcionesDeApply = {}): boolean {
 const HOSTS_LOCALES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 /**
- * Aborta si `url` NO es un host local — SIN excepción, ni con `ALLOW_PROD_WRITE=1`. Para
- * escrituras que JAMÁS deben tocar la base compartida (datos ficticios del fixture, copias
- * de contexto real para pruebas): a diferencia de `assertProdWriteAllowed`, acá no existe
- * la salida de autorizar prod — es un candado, no un semáforo. `contexto` sale en el mensaje.
+ * ¿`url` es una base LOCAL (loopback) y no producción? Puro, sin efectos: lo usan
+ * `assertLocalWriteOnly` (que aborta el proceso) y quien no puede matar el proceso para frenar
+ * (el setup global de los tests de integración, que lanza un error).
  */
-export function assertLocalWriteOnly(url: string | undefined, contexto = "escritura"): void {
+export function esBaseLocal(url: string | undefined): boolean {
   let host = "";
   try {
     host = new URL(url ?? "").hostname;
   } catch {
     host = "";
   }
-  if (!url || esHostProduccion(url) || !HOSTS_LOCALES.has(host)) {
+  return !!url && !esHostProduccion(url) && HOSTS_LOCALES.has(host);
+}
+
+/**
+ * Aborta si `url` NO es un host local — SIN excepción, ni con `ALLOW_PROD_WRITE=1`. Para
+ * escrituras que JAMÁS deben tocar la base compartida (datos ficticios del fixture, copias
+ * de contexto real para pruebas): a diferencia de `assertProdWriteAllowed`, acá no existe
+ * la salida de autorizar prod — es un candado, no un semáforo. `contexto` sale en el mensaje.
+ */
+export function assertLocalWriteOnly(url: string | undefined, contexto = "escritura"): void {
+  if (!esBaseLocal(url)) {
     console.error(`⛔ ${contexto} SOLO corre contra una base LOCAL (localhost). Destino: ${describirDestino(url)}`);
     console.error("   Este script NO acepta ALLOW_PROD_WRITE — no hay forma de autorizarlo contra prod.");
     process.exit(1);

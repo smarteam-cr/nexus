@@ -1,59 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToClient } from "@/lib/auth/api-guards";
-import { prisma } from "@/lib/db/prisma";
+import { NextResponse } from "next/server";
+import { guardInternalUser } from "@/lib/auth/api-guards";
 
 /**
- * POST /api/action-items
+ * POST /api/action-items — RETIRADA (memoria de la cuenta, etapa 2; 2026-10-10).
  *
- * Crea un ActionItem manual (no generado por agente).
- * Body: { text, clientId, projectId?, sessionId?, ownerEmail?, dueDate?, source? }
+ * Creaba un `ActionItem` a mano. `ActionItem` quedó DEPRECATED: ningún camino lo crea y los pendientes de un proyecto
+ * son tareas (POST /api/tareas con `projectId` y `clientId`, por el único escritor de Tareas). Responde 410 para que
+ * una pestaña vieja diga por qué no se guardó, en vez de crear algo que ninguna pantalla muestra. PATCH y DELETE de
+ * /api/action-items/[id] se quedan para lo histórico (DECISIONS «La lectura de cada reunión es durable…»).
  */
-export async function POST(req: NextRequest) {
-  let body: {
-    text?: string;
-    clientId?: string;
-    projectId?: string | null;
-    sessionId?: string | null;
-    ownerEmail?: string | null;
-    dueDate?: string | null;
-    source?: string;
-  };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
-
-  const text = (body.text ?? "").trim();
-  if (!text) {
-    return NextResponse.json({ error: "text requerido" }, { status: 400 });
-  }
-  if (!body.clientId) {
-    return NextResponse.json({ error: "clientId requerido" }, { status: 400 });
-  }
-
-  const guard = await guardAccessToClient(body.clientId);
+export async function POST() {
+  const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
-
-  let dueDate: Date | null = null;
-  if (body.dueDate) {
-    const d = new Date(body.dueDate);
-    if (!isNaN(d.getTime())) dueDate = d;
-  }
-
-  const created = await prisma.actionItem.create({
-    data: {
-      text,
-      clientId: body.clientId,
-      projectId: body.projectId ?? null,
-      sessionId: body.sessionId ?? null,
-      ownerEmail: body.ownerEmail?.toLowerCase() || null,
-      dueDate,
-      status: "PENDING",
-      done: false,
-      source: body.source ?? "manual",
-    },
-  });
-
-  return NextResponse.json(created, { status: 201 });
+  return NextResponse.json(
+    { error: "Los pendientes ahora son tareas. Recarga la página y agrégalo desde «Pendientes recientes»." },
+    { status: 410 },
+  );
 }

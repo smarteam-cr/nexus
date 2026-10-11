@@ -14,8 +14,10 @@ import {
   industriaDelVendedor,
   laEscalaTieneBase,
   MAX_REUNIONES_ELEGIDAS,
+  MAX_FUERA,
   sinFundamentoDelCliente,
   idDelItem,
+  operacionesDeLaPantalla,
   propuestaVacia,
   propuestaVigente,
   type DestinoDePropuesta,
@@ -24,7 +26,8 @@ import {
   type Operacion,
   type Validez,
 } from "./contenido";
-import { leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
+import { CambiosSchema, leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
+import { MAX_SESIONES, type SesionPlaneada } from "./guia";
 
 /** Como en el servidor: con el validador estricto. */
 const aplicarOperaciones = (e: EstadoDeExploracion, ops: Operacion[], v: Validez) => aplicar(e, ops, v, VALIDADOR_ESTRICTO);
@@ -355,23 +358,19 @@ describe("la alerta de conversación técnica (2026-10-06)", () => {
   });
 });
 
-describe("⭐ las reuniones elegidas en el buscador (2026-10-07)", () => {
-  it("se suman arriba sin repetirse, se quitan, y tienen tope", () => {
-    let e = estado();
-    let r = aplicarOperaciones(e, [{ op: "reunionElegida", sessionId: "m1", elegida: true }, { op: "reunionElegida", sessionId: "m2", elegida: true }, { op: "reunionElegida", sessionId: "m1", elegida: true }], VALIDEZ);
-    expect(r.ok && r.estado.contenido.reunionesElegidas).toEqual(["m1", "m2"]);
-    if (!r.ok) return;
-    e = r.estado;
-    r = aplicarOperaciones(e, [{ op: "reunionElegida", sessionId: "m2", elegida: false }], VALIDEZ);
-    expect(r.ok && r.estado.contenido.reunionesElegidas).toEqual(["m1"]);
-    const lleno = estado();
-    lleno.contenido.reunionesElegidas = Array.from({ length: MAX_REUNIONES_ELEGIDAS }, (_, i) => `x${i}`);
-    expect(aplicarOperaciones(lleno, [{ op: "reunionElegida", sessionId: "nueva", elegida: true }], VALIDEZ).ok).toBe(false);
+describe("⭐ las reuniones elegidas en el buscador (2026-10-07, DEPRECATED desde la etapa A)", () => {
+  it("⛔ ya no se escriben: la operación no existe y el PATCH la rechaza (2026-10-10)", () => {
+    /* La edición que la pone en rojo: devolver `reunionElegida` al esquema de las operaciones. Una reunión se agrega
+       como sesión (`agregarSesion`), que antes de adoptar una reunión sin dueño mira lo que haría fallar el agregado. */
+    const r = CambiosSchema.safeParse({ version: 0, operaciones: [{ op: "reunionElegida", sessionId: "m1", elegida: true }] });
+    expect(r.success).toBe(false);
   });
 
-  it("se guardan y se vuelven a leer; lo viejo sin la lista se lee vacío", () => {
+  it("lo guardado se sigue leyendo (con su tope); lo viejo sin la lista se lee vacío", () => {
     expect(leerContenido({ ...contenidoVacio(), reunionesElegidas: ["m1", 4, "m2"] }).reunionesElegidas).toEqual(["m1", "m2"]);
     expect(leerContenido({ version: 1 }).reunionesElegidas).toEqual([]);
+    const muchas = Array.from({ length: MAX_REUNIONES_ELEGIDAS + 5 }, (_, i) => `x${i}`);
+    expect(leerContenido({ ...contenidoVacio(), reunionesElegidas: muchas }).reunionesElegidas).toHaveLength(MAX_REUNIONES_ELEGIDAS);
   });
 });
 
@@ -437,5 +436,152 @@ describe("⭐ los casos de uso esperan a que la escala tenga base (2026-10-07)",
     confirmado.contenido.chequeo = { "1.3": { nivel: "I", fuente: "reunion" } };
     confirmado.propuesta.items = [caso("pipeline")];
     expect(laEscalaTieneBase(confirmado)).toBe(true);
+  });
+});
+
+// ── La exploración son sus sesiones (etapa A, 2026-10-09) ─────────────────────
+
+describe("⭐ agregar, quitar y sacar sesiones (etapa A)", () => {
+  const evento = { id: "e1", calendario: "eli@smarteamcr.com", inicio: "2026-10-15T15:00:00.000Z" };
+
+  it("agregar una sesión no repite la misma reunión ni el mismo evento, y saca su reunión de «Fuera»", () => {
+    const e = estado();
+    e.contenido.fuera = ["meet:m1", "hubspot:h1"];
+    let r = aplicarOperaciones(e, [{ op: "agregarSesion", sesion: { id: "s-a", reunion: { id: "m1", origen: "meet" }, fecha: "2026-10-01" } }], VALIDEZ);
+    expect(r.ok && r.estado.contenido.fuera).toEqual(["hubspot:h1"]);
+    if (!r.ok) return;
+    r = aplicarOperaciones(r.estado, [{ op: "agregarSesion", sesion: { id: "s-b", reunion: { id: "m1", origen: "meet" } } }], VALIDEZ);
+    expect(r.ok && r.estado.contenido.sesiones.map((s) => s.id)).toEqual(["s-a"]);
+    if (!r.ok) return;
+    r = aplicarOperaciones(r.estado, [{ op: "agregarSesion", sesion: { id: "s-c", evento } }, { op: "agregarSesion", sesion: { id: "s-d", evento } }], VALIDEZ);
+    expect(r.ok && r.estado.contenido.sesiones.map((s) => s.id)).toEqual(["s-a", "s-c"]);
+    // Con evento y sin fecha, la fecha es el día de su inicio en Costa Rica.
+    expect(r.ok && r.estado.contenido.sesiones[1].fecha).toBe("2026-10-15");
+  });
+
+  it("respeta el tope de sesiones (20)", () => {
+    const lleno = estado();
+    lleno.contenido.sesiones = Array.from({ length: MAX_SESIONES }, (_, i) => ({ id: `s-${i}` }));
+    expect(MAX_SESIONES).toBe(20);
+    expect(aplicarOperaciones(lleno, [{ op: "agregarSesion", sesion: { id: "s-nueva" } }], VALIDEZ).ok).toBe(false);
+  });
+
+  it("quitar sesiones por su id; sacar y devolver reuniones a la exploración", () => {
+    const e = estado();
+    e.contenido.sesiones = [{ id: "s-a" }, { id: "s-b" }, { id: "s-c" }];
+    let r = aplicarOperaciones(e, [{ op: "quitarSesiones", ids: ["s-a", "s-c"] }, { op: "fuera", claves: ["meet:m1", "meet:m2"], fuera: true }], VALIDEZ);
+    expect(r.ok && r.estado.contenido.sesiones.map((s) => s.id)).toEqual(["s-b"]);
+    expect(r.ok && r.estado.contenido.fuera).toEqual(["meet:m1", "meet:m2"]);
+    if (!r.ok) return;
+    r = aplicarOperaciones(r.estado, [{ op: "fuera", claves: ["meet:m1"], fuera: false }, { op: "fuera", claves: ["meet:m2"], fuera: true }], VALIDEZ);
+    expect(r.ok && r.estado.contenido.fuera).toEqual(["meet:m2"]);
+    const lleno = estado();
+    lleno.contenido.fuera = Array.from({ length: MAX_FUERA }, (_, i) => `meet:x${i}`);
+    const r2 = aplicarOperaciones(lleno, [{ op: "fuera", claves: ["meet:nueva"], fuera: true }], VALIDEZ);
+    expect(r2.ok && r2.estado.contenido.fuera.length).toBe(MAX_FUERA);
+    expect(r2.ok && r2.estado.contenido.fuera.at(-1)).toBe("meet:nueva");
+  });
+
+  it("la op evento cambia la fecha y la hora, o la marca cancelada, sin tocar el objetivo ni lo que se llevó", () => {
+    const e = estado();
+    const s: SesionPlaneada = { id: "s-a", fecha: "2026-10-15", objetivo: "Entender el embudo", explorar: ["algo"], hechas: ["metas"], evento };
+    e.contenido.sesiones = [s];
+    let r = aplicarOperaciones(e, [{ op: "evento", sesionId: "s-a", inicio: "2026-10-17T02:00:00.000Z", fin: "2026-10-17T03:00:00.000Z" }], VALIDEZ);
+    if (!r.ok) throw new Error(r.error);
+    const movida = r.estado.contenido.sesiones[0];
+    // Las 8 de la noche del 16 en Costa Rica: es del 16, no del 17.
+    expect(movida).toMatchObject({
+      fecha: "2026-10-16",
+      objetivo: "Entender el embudo",
+      explorar: ["algo"],
+      hechas: ["metas"],
+      evento: { id: "e1", inicio: "2026-10-17T02:00:00.000Z", fin: "2026-10-17T03:00:00.000Z" },
+    });
+    r = aplicarOperaciones(r.estado, [{ op: "evento", sesionId: "s-a", cancelada: true }], VALIDEZ);
+    expect(r.ok && r.estado.contenido.sesiones[0].evento?.cancelada).toBe(true);
+    if (!r.ok) return;
+    r = aplicarOperaciones(r.estado, [{ op: "evento", sesionId: "s-a", cancelada: false }], VALIDEZ);
+    expect(r.ok && r.estado.contenido.sesiones[0].evento?.cancelada).toBeUndefined();
+    expect(aplicarOperaciones(estado(), [{ op: "evento", sesionId: "s-x", cancelada: true }], VALIDEZ).ok).toBe(false);
+  });
+
+  it("⛔ la pantalla no fija el evento del calendario: lo guardado se conserva y uno ajeno no entra", () => {
+    const e = estado();
+    e.responsableEmail = "ana@smarteamcr.com";
+    e.contenido.sesiones = [{ id: "s-a", fecha: "2026-10-15", evento }];
+    const ajeno = { id: "privado", calendario: "gerente@smarteamcr.com", inicio: "2026-10-16T15:00:00.000Z" };
+    // La lista entera: cada sesión conserva su evento guardado (no el que manda la pantalla); una nueva con uno ajeno entra sin él.
+    const lista = operacionesDeLaPantalla(e, [{ op: "sesiones", sesiones: [{ id: "s-a", fecha: "2026-10-15", evento: ajeno }, { id: "s-b", evento: ajeno }] }], { quienPide: "eli@smarteamcr.com" });
+    expect(lista.ok && lista.ops[0]).toEqual({ op: "sesiones", sesiones: [{ id: "s-a", fecha: "2026-10-15", evento }, { id: "s-b" }] });
+    // Agregar (el «Deshacer» de sacar): entra el evento del calendario de quien pide o de quien la lleva; otro, no.
+    const propio = operacionesDeLaPantalla(e, [{ op: "agregarSesion", sesion: { id: "s-c", evento } }], { quienPide: "Eli@smarteamcr.com" });
+    expect(propio.ok && propio.ops[0]).toEqual({ op: "agregarSesion", sesion: { id: "s-c", evento } });
+    const delResponsable = { ...ajeno, calendario: "ana@smarteamcr.com" };
+    const r2 = operacionesDeLaPantalla(e, [{ op: "agregarSesion", sesion: { id: "s-c", evento: delResponsable } }], { quienPide: "eli@smarteamcr.com" });
+    expect(r2.ok && r2.ops[0]).toEqual({ op: "agregarSesion", sesion: { id: "s-c", evento: delResponsable } });
+    const r3 = operacionesDeLaPantalla(e, [{ op: "agregarSesion", sesion: { id: "s-c", evento: ajeno } }], { quienPide: "eli@smarteamcr.com" });
+    expect(r3.ok && r3.ops[0]).toEqual({ op: "agregarSesion", sesion: { id: "s-c" } });
+    // La operación `evento` es solo del servidor.
+    expect(operacionesDeLaPantalla(e, [{ op: "evento", sesionId: "s-a", cancelada: true }]).ok).toBe(false);
+    // Lo demás pasa igual.
+    const nota: Operacion = { op: "nota", paso: "sesion:s-a", texto: "x" };
+    expect(operacionesDeLaPantalla(e, [nota])).toEqual({ ok: true, ops: [nota] });
+  });
+
+  it("las operaciones nuevas pasan el esquema estricto", () => {
+    const r = CambiosSchema.safeParse({
+      version: 0,
+      operaciones: [
+        { op: "agregarSesion", sesion: { id: "s-a", evento } },
+        { op: "quitarSesiones", ids: ["s-a"] },
+        { op: "fuera", claves: ["meet:m1", "hubspot:123"], fuera: true },
+        { op: "evento", sesionId: "s-a", inicio: "2026-10-15T09:00:00-06:00", cancelada: false },
+      ],
+    });
+    expect(r.success).toBe(true);
+    expect(CambiosSchema.safeParse({ version: 0, operaciones: [{ op: "fuera", claves: ["otro:m1"], fuera: true }] }).success).toBe(false);
+  });
+});
+
+describe("⭐ el tope de id de una reunión es 200 (etapa A)", () => {
+  // Una instancia de una serie de Meet: gmeet_ + el evento + _AAAAMMDDTHHMMSSZ (llegan a ~190).
+  const largo = `gmeet_${"a".repeat(164)}_20261019T150000Z`;
+  const demasiado = "b".repeat(201);
+
+  it("un id de 187 sobrevive en la sesión, en las elegidas, en las lecturas y en los correos; uno de 201 no", () => {
+    expect(largo.length).toBe(187);
+    const c = leerContenido({
+      ...contenidoVacio(),
+      sesiones: [
+        { id: "s-a", reunion: { id: largo, origen: "meet" } },
+        { id: "s-b", reunion: { id: demasiado, origen: "meet" } },
+      ],
+      reunionesElegidas: [largo, demasiado],
+    });
+    expect(c.sesiones.map((s) => s.id)).toEqual(["s-a"]);
+    expect(c.reunionesElegidas).toEqual([largo]);
+    const lectura = { etiqueta: "Reunión", resumen: "Se habló", cobertura: [], en: "2026-10-09T00:00:00.000Z", corridaId: "r1" };
+    const correo = { asunto: "Hola", cuerpo: "…", para: [], en: "2026-10-09T00:00:00.000Z", corridaId: "r1" };
+    const p = leerPropuesta({
+      lecturas: { [`meet:${largo}`]: lectura, [`meet:${demasiado}`]: lectura },
+      correos: { [`meet:${largo}`]: correo },
+    });
+    expect(Object.keys(p.lecturas)).toEqual([`meet:${largo}`]);
+    expect(Object.keys(p.correos)).toEqual([`meet:${largo}`]);
+  });
+
+  it("una sesión con su evento mal formado pierde solo el evento (antes desaparecía entera)", () => {
+    const c = leerContenido({
+      ...contenidoVacio(),
+      sesiones: [{ id: "s-a", objetivo: "Entender el embudo", evento: { id: "e con espacios", calendario: "no-es-correo", inicio: "ayer" } }],
+    });
+    expect(c.sesiones).toEqual([{ id: "s-a", objetivo: "Entender el embudo" }]);
+  });
+
+  it("«Fuera» y lo leído con solo notas se guardan y se vuelven a leer; lo viejo sin ellos se lee vacío", () => {
+    expect(leerContenido({ ...contenidoVacio(), fuera: ["meet:m1", "x", 3, "hubspot:9"] }).fuera).toEqual(["meet:m1", "hubspot:9"]);
+    expect(leerContenido({ version: 1 }).fuera).toEqual([]);
+    expect(leerPropuesta({ leidas: { sesiones: ["m1"], hubspot: [], documentos: [], soloNotas: ["m2"] } }).leidas.soloNotas).toEqual(["m2"]);
+    expect(leerPropuesta({ leidas: { sesiones: [], hubspot: [], documentos: [] } }).leidas.soloNotas).toEqual([]);
   });
 });

@@ -20,6 +20,7 @@ import { contenidoVacio, propuestaVacia, type ContenidoDeExploracion } from "./c
 import { leerEmpresa } from "./hubspot";
 import { industriaLegible, sugerirEdicion } from "./industria";
 import { escalaParaExplorar } from "./servidor";
+import { DE_LA_PREVENTA } from "./marco";
 
 export type ResultadoDelAlta =
   | { ok: true; id: string; existia: boolean }
@@ -41,7 +42,7 @@ export async function crearExploracion(companyId: string, email: string): Promis
   if (!cliente.ok) return { ok: false, status: 409, error: cliente.mensaje };
 
   const viva = await prisma.exploracionDeVenta.findFirst({
-    where: { clientId: cliente.clientId, archivadaEn: null },
+    where: { clientId: cliente.clientId, archivadaEn: null, ...DE_LA_PREVENTA },
     select: { id: true },
   });
   if (viva) return { ok: true, id: viva.id, existia: true };
@@ -83,7 +84,7 @@ export async function crearExploracion(companyId: string, email: string): Promis
     // Dos altas a la vez para la misma empresa: el índice único parcial deja pasar una sola.
     if (esUnicoViolado(e)) {
       const otra = await prisma.exploracionDeVenta.findFirst({
-        where: { clientId: cliente.clientId, archivadaEn: null },
+        where: { clientId: cliente.clientId, archivadaEn: null, ...DE_LA_PREVENTA },
         select: { id: true },
       });
       if (otra) return { ok: true, id: otra.id, existia: true };

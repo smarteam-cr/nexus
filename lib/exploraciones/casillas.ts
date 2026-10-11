@@ -199,6 +199,8 @@ export interface DefinicionDeCasilla {
    * traspaso). «Hipótesis» se retiró el 2026-10-01: se repetía con el mapa de la escala y la guía.
    */
   retirada?: true;
+  /** Solo la usa la exploración de un proyecto (Customer Success): la preventa no la propone ni la muestra. */
+  soloDelProyecto?: true;
 }
 
 export const CLAVES_DE_CASILLA = [
@@ -225,6 +227,7 @@ export const CLAVES_DE_CASILLA = [
   "industria",
   "hipotesisDeValor",
   "estrategiaDeConexion",
+  "obstaculos",
 ] as const;
 export type ClaveDeCasilla = (typeof CLAVES_DE_CASILLA)[number];
 
@@ -477,6 +480,20 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     alCliente: false,
     alHandoff: "interno",
   },
+  // ── Solo de la exploración de un proyecto (marco de Customer Success, 2026-10-07: lib/exploraciones/marco.ts) ──
+  {
+    clave: "obstaculos",
+    etiqueta: "Obstáculos",
+    ayuda: "Lo que hoy le impide llegar a los resultados que persigue. Suelen salir de las dimensiones bajas de la escala.",
+    explicacion:
+      "Lo que se interpone entre el cliente y sus resultados: un proceso que nadie sigue, datos que no se confían, un equipo sin tiempo. Atarlos a una dimensión de la escala ayuda a decidir por dónde empezar.",
+    ejemplo: "Cada vendedor lleva sus clientes en su Excel: nadie ve cuándo uno deja de comprar.",
+    paso: "resumen",
+    tipo: "retos",
+    alCliente: false,
+    alHandoff: "normal",
+    soloDelProyecto: true,
+  },
 ];
 
 /** Las casillas del resumen, en el orden del marco: metas, planes, retos y tiempos; presupuesto y quién decide; consecuencias e implicaciones. */
@@ -531,6 +548,7 @@ export const TIPO_DE_CASILLA = {
   industria: "texto",
   hipotesisDeValor: "lista",
   estrategiaDeConexion: "conexion",
+  obstaculos: "retos",
 } as const satisfies Record<ClaveDeCasilla, TipoDeCasilla>;
 
 /** El valor guardado de cada tipo de casilla. */
@@ -584,6 +602,7 @@ export function origenDeLaFuente(id: string): string {
   if (id === "W1") return "la investigación de la empresa";
   if (id === "W2") return "la investigación de su industria";
   if (id === "W0") return "su sitio web";
+  if (id === "A0") return "lo que Nexus ya sabe de la cuenta";
   if (/^T\d/.test(id)) return "el diagnóstico";
   if (/^[SM]\d/.test(id)) return "una reunión";
   return "HubSpot";

@@ -30,6 +30,8 @@ import { drive as apiDrive } from "googleapis/build/src/apis/drive";
 import { prisma } from "@/lib/db/prisma";
 import { getImpersonatedAuth } from "@/lib/google/auth";
 import { summarizeTranscript } from "@/lib/ai/summarize-session";
+import { DIAS_DE_FRESCURA, seguimientoPrendido } from "@/lib/lecturas/reglas";
+import { MIN_NOTAS_PARA_LEER, hechosPrendidos } from "@/lib/seguimiento/hechos/reglas";
 import { parseDocTabs, parseDocBody, MAX_TRANSCRIPT_CHARS, MIN_TRANSCRIPT_CHARS, type DocTab } from "./doc-parse";
 import { candidatosImpersonables } from "./elegir-impersonado";
 import {
@@ -54,11 +56,10 @@ const GRACIA_MS = 3_600_000;
    rescate procesaría las ~2.300 filas reseteadas de UNA — el «50 por corrida» del script
    era ilusorio. Con tope, el drenaje se auto-regula con el cooldown de 20 min. */
 const TOPE_PASADA = 120;
-/* El post-proceso (minuta + acciones + propuesta de avance) fue diseñado para reuniones
-   FRESCAS: correrlo sobre lo rescatado de hace meses llenaría los tableros de ActionItems
-   viejos en PENDING y propondría avances «as of» sesiones de mayo. El transcript y el
-   summary quedan igual; las minutas viejas se piden a demanda desde la sesión. */
-const POST_PROCESO_RECIENTE_MS = 14 * 24 * 3_600_000;
+/* La lectura de la reunión (minuta + compromisos + propuesta de avance) es para reuniones FRESCAS: correrla sobre lo
+   rescatado de hace meses llenaría los tableros de propuestas viejas y propondría avances «as of» sesiones de mayo.
+   El transcript y el summary quedan igual; las minutas viejas se piden a demanda desde la sesión. La frescura vive en
+   lib/lecturas/reglas.ts (`DIAS_DE_FRESCURA`): es la misma regla que usan la cola, el job e INV44. */
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -395,15 +396,27 @@ async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProce
     select: { id: true },
   });
 
-  // Auto-trigger del Análisis post-sesión: con transcript real Y RECIENTE, generar minuta
-  // DRAFT + acciones en background. Idempotente (no reemplaza si ya existe minuta). El corte
-  // de antigüedad protege al rescate: ver POST_PROCESO_RECIENTE_MS.
-  const esReciente = Date.now() - s.date.getTime() <= POST_PROCESO_RECIENTE_MS;
-  if (esReciente && lectura.transcript && lectura.transcript.trim().length >= MIN_TRANSCRIPT_CHARS) {
-    const { postProcessSession } = await import("@/lib/sessions/post-process");
-    postProcessSession(s.id).catch((err) => {
-      console.log(`[google/enrich] post-process falló para ${s.id}:`, mensajeDe(err));
-    });
+  /* La lectura de la reunión (memoria de la cuenta, etapa 2): el enriquecimiento SOLO ENCOLA. La lee el job
+     `seguimiento-reuniones` (lib/lecturas), con toma atómica, reintentos y presupuesto; la cola decide si corresponde
+     (de un cliente o un prospecto, de 14 días o menos, con transcripción). Antes se disparaba el post-proceso sin
+     esperarlo, y si fallaba nadie lo reintentaba. Encolar es barato y nunca lanza.
+     Con `SEGUIMIENTO_REUNIONES_ENABLED=0` o sin las columnas del SQL, el camino viejo: dispara y olvida.
+     Con `SEGUIMIENTO_HECHOS` prendida (memoria de la cuenta, etapa 6), una reunión con SOLO notas de Gemini también se
+     encola: deja sus hechos (no una minuta). El camino viejo no la toca. */
+  const esReciente = Date.now() - s.date.getTime() <= DIAS_DE_FRESCURA * 86_400_000;
+  const conTranscripcion = !!lectura.transcript && lectura.transcript.trim().length >= MIN_TRANSCRIPT_CHARS;
+  const soloNotas = !conTranscripcion && hechosPrendidos(process.env) && largoDeLasNotas(finalSummary) >= MIN_NOTAS_PARA_LEER;
+  if (esReciente && (conTranscripcion || soloNotas)) {
+    const { encolarSeguimiento, seguimientoDisponible } = await import("@/lib/lecturas/cola");
+    if (seguimientoPrendido(process.env) && (await seguimientoDisponible())) {
+      await encolarSeguimiento(s.id);
+    } else if (conTranscripcion) {
+      const { postProcessSessionViejo } = await import("@/lib/sessions/post-process-viejo");
+      const { conLaReunion } = await import("@/lib/ai/contexto-de-corrida");
+      conLaReunion(s.id, () => postProcessSessionViejo(s.id)).catch((err) => {
+        console.log(`[google/enrich] post-process falló para ${s.id}:`, mensajeDe(err));
+      });
+    }
   }
 
   if (lectura.transcript || finalSummary) {
@@ -411,6 +424,14 @@ async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProce
     return { estado: "enriched", status: null };
   }
   return { estado: "skipped", status: null };
+}
+
+/** El largo de las notas de Gemini (`summary.overview`): con la lectura de hechos prendida, alcanzan para encolar. */
+function largoDeLasNotas(summary: unknown): number {
+  if (!summary || typeof summary !== "object" || Array.isArray(summary)) return 0;
+  const o = (summary as { overview?: unknown }).overview;
+  const texto = Array.isArray(o) ? o.filter((x) => typeof x === "string").join(" ") : typeof o === "string" ? o : "";
+  return texto.trim().length;
 }
 
 /** Corre un lote con backoff: tras un batch con 429/5xx, duerme antes del siguiente. */

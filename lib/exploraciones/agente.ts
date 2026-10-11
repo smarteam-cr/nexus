@@ -43,6 +43,8 @@ import {
   type ContextoDelPedido,
   type Lectura,
 } from "./agente-pedido";
+import { proponerALaFichaSinIA } from "@/lib/clients/ficha-propuesta";
+import { aportesDeLaPreparacion, ORIGEN_DE_LA_PREVENTA, propuestaParaLaFicha } from "./a-la-ficha";
 import { exploracionParaLosCasos } from "./casos-de-uso";
 import { listaParaProponer } from "./calidad";
 import {
@@ -60,17 +62,29 @@ import {
   type ModoDeLaCorrida,
 } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
-import { leerPropuesta } from "./esquemas";
-import { leerFuentes, reunionesDeLaExploracion, type LoQueSeLeyo, type LoQueSeRelee } from "./fuentes";
-import { agendaRenovada, debeLeerSola, hayQueLeerAlPreparar, mismaReunion } from "./lectura";
+import { leerContenido, leerPropuesta } from "./esquemas";
+import { leerFuentes, reunionesDeLaExploracion, reunionesSinLeer, type LoQueSeLeyo, type LoQueSeRelee } from "./fuentes";
+import { agendaRenovada, exploracionesQueLeenLaReunion, hayQueLeerAlPreparar, mismaReunion } from "./lectura";
+import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia, voseoEnLaGuia } from "./guia-pedido";
-import { guiaDeAntesDeLaReunion, preguntasParaMostrar, reunionDeLaSesion, type GuiaDeLaSesion } from "./guia";
+import {
+  guiaDeAntesDeLaReunion,
+  MAX_SESIONES,
+  opcionesDeLasPestanas,
+  pestanasDeSesiones,
+  preguntasParaMostrar,
+  reunionDeLaSesion,
+  type GuiaDeLaSesion,
+} from "./guia";
 import { leerEmpresa } from "./hubspot";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
 import { leerLaRadiografia, pedidoDeLaRadiografia } from "./radiografia-pedido";
 import { posicionesDelMapa } from "./mapa";
+import { DE_LA_PREVENTA, marcoDe, type Marco } from "./marco";
+import { avanceDeLaEstrategia } from "./avance-del-proyecto";
+import { fuentesDelProyecto, loVendidoDelProyecto } from "./fuentes-del-proyecto";
 import {
   bloquearFila,
   chequeoDe,
@@ -96,11 +110,17 @@ const ETIQUETA: Record<ModoDelAgente, string> = {
   guia: "Preventa: armar la guía de la próxima reunión",
 };
 
+/** En la exploración de un proyecto (lib/exploraciones/marco.ts) solo se lee y se arma la guía. */
+const ETIQUETA_DEL_PROYECTO: Partial<Record<ModoDelAgente, string>> = {
+  leer: "Exploración: leer la sesión",
+  guia: "Exploración: armar la guía de la próxima sesión",
+};
+
 /** Lo que una corrida leyó, para guardarlo con lo propuesto. */
 interface LoQueLeyoLaCorrida {
   /** Cómo lo ve el vendedor, para la historia. */
   leyo: string[];
-  leidas: { sesiones: string[]; hubspot: string[]; documentos: string[] };
+  leidas: { sesiones: string[]; hubspot: string[]; documentos: string[]; soloNotas?: string[] };
   /**
    * La foto de HubSpot (el test, la agenda, los correos). null = no leyó HubSpot: queda la anterior.
    * Su agenda trae solo lo que viene: las que ya pasaron se conservan de la foto anterior al guardar.
@@ -133,6 +153,12 @@ interface OpcionesDeLaCorrida {
    * scripts/leer-reuniones-de-preventas.ts.
    */
   releer?: LoQueSeRelee;
+  /**
+   * Con `releer`: la lectura ENTERA de eso (propone y reemplaza lo que el agente dijo de la reunión), no solo
+   * el resumen. La pide «Volver a leer» de una reunión de HubSpot: cuando su grabación no se leía, el agente
+   * la había resumido como una invitación (CreditForce, 28 sep), y el resumen solo no la corregía.
+   */
+  completa?: boolean;
 }
 
 /**
@@ -156,6 +182,9 @@ export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, 
   const lectura = await leerExploracion(exploracionId);
   if (lectura.estado !== "ok") return { ok: false, status: lectura.estado === "no-existe" ? 404 : 503, error: "Esa exploración no existe." };
   if (lectura.fila.archivadaEn) return { ok: false, status: 409, error: "La preventa está archivada: el agente ya no trabaja en ella." };
+  const delProyecto = !!lectura.fila.projectId;
+  // La exploración de un proyecto no se prepara ni propone casos de uso: lee las sesiones y arma la guía.
+  if (delProyecto && !ETIQUETA_DEL_PROYECTO[modo]) return { ok: false, status: 409, error: "En la exploración de un proyecto el agente solo lee las sesiones y arma la guía." };
   const clientId = lectura.fila.clientId;
 
   /* Una corrida a la vez, y la revisión con el alta en la MISMA transacción, con la fila bloqueada:
@@ -177,10 +206,11 @@ export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, 
         agentSlug: AGENTE_DE_LA_EXPLORACION,
         clientId,
         status: "RUNNING",
-        stepLabel: opts.releer ? "Preventa: resumir las reuniones ya leídas" : ETIQUETA[modo],
+        stepLabel:
+          opts.releer && !opts.completa ? "Preventa: resumir las reuniones ya leídas" : ((delProyecto ? ETIQUETA_DEL_PROYECTO[modo] : null) ?? ETIQUETA[modo]),
         currentPhase: "Empezando…",
         triggeredByEmail: opts.triggeredByEmail,
-        filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}), ...(opts.releer ? { soloResumen: true } : {}) } as Prisma.InputJsonValue,
+        filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}), ...(opts.releer && !opts.completa ? { soloResumen: true } : {}) } as Prisma.InputJsonValue,
       },
       select: { id: true },
     });
@@ -225,7 +255,10 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     const leido = await leerFuentes({
       exploracionId,
       clientId: fila.clientId,
+      projectId: fila.projectId,
       elegidas: estado.contenido.reunionesElegidas,
+      fuera: estado.contenido.fuera,
+      leido: leerLoLeido(fila.test),
       companyId: fila.client.hubspotCompanyId,
       creadaEn: fila.createdAt,
       escala,
@@ -238,7 +271,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       ...(modo === "leer" && opts.releer ? { releer: opts.releer } : {}),
     });
 
-    if (modo === "leer" && opts.releer) {
+    if (modo === "leer" && opts.releer && !opts.completa) {
       await resumirLoYaLeido(runId, exploracionId, { fila, estado, escala, leido }, opts);
       return;
     }
@@ -254,6 +287,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
 
     const ctx: ContextoDelPedido = {
       modo,
+      marco: marcoDe(fila.marco).clave,
       empresa: fila.client.name,
       industria: fila.client.industry,
       escala,
@@ -267,7 +301,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
          vendedor sumó a mano (M). Con eso no se propone cómo conectar. */
       ...(modo === "preparar" ? { yaHablaron: (leido.reunionesDeHubspot ?? 0) > 0 || leido.fuentes.some((f) => /^[SM]\d/.test(f.id)) } : {}),
       equipo: await nombresDelEquipo(),
-      ...(modo === "leer" ? planDeLaLectura(estado, escala, leido) : {}),
+      ...(modo === "leer" ? planDeLaLectura(estado, escala, leido, marcoDe(fila.marco)) : {}),
     };
 
     /* Al preparar, primero la radiografía: el agente investiga la empresa en internet. Lo que
@@ -319,13 +353,25 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       {
         leyo: leido.fuentes.map((f) => f.etiqueta),
         leidas: leido.leidas,
-        foto: { tests: leido.tests, agenda: leido.agenda, correosSinPermiso: leido.correosSinPermiso },
+        // Lo que viene y lo que ya se hizo en HubSpot: las dos son reuniones de la empresa (lectura.ts).
+        foto: { tests: leido.tests, agenda: [...leido.agenda, ...(leido.hechasEnHubspot ?? [])], correosSinPermiso: leido.correosSinPermiso },
         noOcurrieron: leido.noOcurrieron ?? [],
         tecnica,
         lecturas,
       },
       { runId, modo, automatica: opts.automatica === true },
     );
+    /* Lo que la preparación propuso para las casillas que tienen campo en la ficha (la radiografía, su CRM, el porqué
+       ahora, quién decide…) va a la propuesta de «Información del cliente» desde el primer día, sin IA y con lo interno
+       marcado (lib/exploraciones/a-la-ficha.ts; DECISIONS «La memoria de la cuenta y del proyecto»). Solo la preventa:
+       la exploración de un proyecto no prepara. Si falla, la preparación sigue igual. */
+    if (modo === "preparar" && !fila.projectId) {
+      const aportes = aportesDeLaPreparacion([...deLaWeb, ...delTest, ...deLaIA], estado.contenido.descartadas);
+      if (aportes.length) {
+        const r = await proponerALaFichaSinIA({ clientId: fila.clientId, origen: ORIGEN_DE_LA_PREVENTA, armar: (f) => propuestaParaLaFicha(f, aportes) });
+        if (r.status === "error") console.error(`[exploraciones/agente] la preparación no llegó a la ficha ${exploracionId}: ${r.error}`);
+      }
+    }
     /* Con lo nuevo ya guardado, la guía de la próxima reunión se rearma en la misma corrida (la
        pantalla la sigue sola). Si falla, lo propuesto queda igual: la guía de base sigue ahí. */
     await fase(runId, "Armando la guía de la próxima reunión…");
@@ -366,18 +412,22 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
 }
 
 /** Los nombres del equipo de Smarteam, de alta o de baja: el agente no los pone como gente del cliente. */
-async function nombresDelEquipo(): Promise<string[]> {
+export async function nombresDelEquipo(): Promise<string[]> {
   const filas = await prisma.teamMember.findMany({ select: { name: true } }).catch(() => [] as { name: string }[]);
   return [...new Set(filas.map((f) => f.name.trim()).filter(Boolean))].slice(0, 80);
 }
 
 /**
- * Mientras se vende: a un prospecto, dentro de los seis meses del alta y antes de que la venta tenga un
- * proyecto. Solo ahí el agente lee solo: después, cada reunión de implementación dispararía una corrida
- * (HubSpot y Claude) contra el presupuesto automático, para siempre. El botón sigue a mano.
+ * Mientras se vende: a un prospecto o a una empresa que ya es cliente (Elías, 2026-10-08: Cicadex y
+ * Grupo Servica), dentro de los seis meses del alta y antes de que la venta tenga un proyecto. Solo ahí
+ * el agente lee solo: después, cada reunión de implementación dispararía una corrida (HubSpot y Claude)
+ * contra el presupuesto automático, para siempre. El botón sigue a mano. En la de un cliente, además,
+ * solo la reunión unida a una sesión (etapa A, 2026-10-09; reemplaza al filtro de Ventas:
+ * `leerReunionNueva`, reuniones-de-hubspot.ts): las de sus proyectos en curso no la disparan. No se
+ * aplica a la exploración de un proyecto: ahí lee sola la reunión que alguien unió a una sesión.
  */
-async function seVendeTodavia(exp: { clientId: string; createdAt: Date; client: { kind: string } }, ahora = new Date()): Promise<boolean> {
-  if (exp.client.kind !== "PROSPECTO") return false;
+export async function seVendeTodavia(exp: { clientId: string; createdAt: Date; client: { kind: string } }, ahora = new Date()): Promise<boolean> {
+  if (exp.client.kind !== "PROSPECTO" && exp.client.kind !== "CLIENTE") return false;
   if (ahora.getTime() - exp.createdAt.getTime() > DIAS_DE_LECTURA_AUTOMATICA * 24 * 60 * 60 * 1000) return false;
   const yaHayProyecto = await prisma.project.count({ where: proyectoClasificableWhere({ clientId: exp.clientId, createdAt: { gte: exp.createdAt } }) });
   return yaHayProyecto === 0;
@@ -399,15 +449,20 @@ async function leerLoQueYaHabia(exploracionId: string, huboReunionesEnHubspot: b
   if (propuesta.corridas.some((c) => c.modo === "leer")) return;
   if (!(await seVendeTodavia(fila))) return;
   if (!huboReunionesEnHubspot) {
-    const reuniones = await reunionesDeLaExploracion({
+    /* Solo lo de la exploración (etapa A): lo que sus sesiones (en un prospecto, también las que entraron
+       solas) dejaron sin leer. Las de HubSpot no cuentan (las miró la preparación). */
+    const contenido = estadoDesdeFila(fila).contenido;
+    const sinLeer = await reunionesSinLeer({
       exploracionId,
       clientId: fila.clientId,
       creadaEn: fila.createdAt,
       propuesta,
       leido: leerLoLeido(fila.test),
-      elegidas: estadoDesdeFila(fila).contenido.reunionesElegidas,
+      sesiones: contenido.sesiones,
+      fuera: contenido.fuera,
+      elegidas: contenido.reunionesElegidas,
     });
-    if (!hayQueLeerAlPreparar(reuniones)) return;
+    if (!hayQueLeerAlPreparar(sinLeer.map((r) => ({ origen: r.origen, leida: false })))) return;
   }
   await lanzarCorrida(exploracionId, "leer", { triggeredByEmail: opts.triggeredByEmail, automatica: true });
 }
@@ -661,7 +716,43 @@ async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeL
   const pendientes = pendientesVigentes(estado, escalaVig.general, escala);
   const loLeido = leerLoLeido(fila.test);
   const ahora = new Date();
+  const marco = marcoDe(fila.marco);
+  // En un proyecto, la guía pregunta desde lo que ya se sabe: el handoff, los cuestionarios y lo que estimó la preventa.
+  const proyecto = fila.projectId
+    ? (await fuentesDelProyecto(fila.projectId, fila.clientId).catch(() => []))
+        .filter((f) => f.id === "V0" || f.id === "Q0" || f.id === "P0")
+        .map((f) => `--- ${f.etiqueta} ---\n${f.texto.slice(0, f.id === "V0" ? 8_000 : 4_000)}`)
+        .join("\n\n")
+    : undefined;
+  const loVendido = fila.projectId ? await loVendidoDelProyecto(fila.projectId).catch(() => "") : undefined;
+  /* En un prospecto, las reuniones que entraron solas como sesión y ya pasaron cuentan para el número de
+     la próxima (no son `SesionPlaneada`). En un cliente o un proyecto nada entra solo. */
+  const automaticas = !fila.projectId && fila.client.kind === "PROSPECTO";
+  const pasadasSinSesion = automaticas
+    ? await reunionesDeLaExploracion({
+        exploracionId,
+        clientId: fila.clientId,
+        projectId: fila.projectId,
+        creadaEn: fila.createdAt,
+        propuesta: estado.propuesta,
+        leido: loLeido,
+        sesiones: estado.contenido.sesiones,
+        fuera: estado.contenido.fuera,
+        elegidas: estado.contenido.reunionesElegidas,
+      })
+        .then(
+          (rs) =>
+            pestanasDeSesiones(estado.contenido.sesiones, rs, hoyEnCostaRica(ahora), opcionesDeLasPestanas(true, estado.contenido.fuera)).filter((p) => !p.sesion && p.hecha)
+              .length,
+        )
+        .catch(() => 0)
+    : 0;
   const ctx = contextoDeLaGuia({
+    marco,
+    proyecto,
+    loVendido,
+    automaticas,
+    pasadasSinSesion,
     empresa: fila.client.name,
     industria: fila.client.industry,
     estado,
@@ -707,7 +798,12 @@ async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeL
  * lectura trae solo el resumen. Antes se comparaba contra lo que faltaba el día de la lectura, y una
  * reunión leída tarde salía con «no se preguntó» en preguntas que nadie llevó.
  */
-function planDeLaLectura(estado: EstadoDeExploracion, escala: EscalaDelLienzo, leido: Pick<LoQueSeLeyo, "reunionesLeidas">): Pick<ContextoDelPedido, "reuniones" | "planeado"> {
+function planDeLaLectura(
+  estado: EstadoDeExploracion,
+  escala: EscalaDelLienzo,
+  leido: Pick<LoQueSeLeyo, "reunionesLeidas">,
+  marco: Marco,
+): Pick<ContextoDelPedido, "reuniones" | "planeado"> {
   const reuniones = leido.reunionesLeidas ?? [];
   if (!reuniones.length) return {};
   const ultima = [...reuniones].sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
@@ -715,10 +811,10 @@ function planDeLaLectura(estado: EstadoDeExploracion, escala: EscalaDelLienzo, l
   const sesion = estado.contenido.sesiones.find((s) => reunionDeLaSesion(s, [comoReunion]) !== null) ?? null;
   const guia = guiaDeAntesDeLaReunion(estado.propuesta, sesion?.id ?? null, ultima.fecha);
   const preguntas = guia
-    ? preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala)
+    ? preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco)
         .filter((p) => p.tipo !== "abierto")
-        .slice(0, 12)
-        .map((p) => ({ para: p.para, pregunta: p.pregunta }))
+        .slice(0, 16)
+        .map((p) => ({ para: p.para, pregunta: (p.tema ? `${p.tema}: ${p.pregunta}` : p.pregunta).slice(0, 400) }))
     : [];
   return {
     reuniones: reuniones.map((r) => ({ fuente: r.fuente, etiqueta: r.etiqueta })),
@@ -733,7 +829,7 @@ function lecturasDeLaCorrida(
     estado: EstadoDeExploracion;
     escala: EscalaDelLienzo;
     leido: LoQueSeLeyo;
-    ctx: Pick<ContextoDelPedido, "planeado">;
+    ctx: Pick<ContextoDelPedido, "planeado" | "marco">;
     runId: string;
     /** El resumen de una reunión leída hace tiempo: lo listo de hoy no es lo que había antes de ella. */
     sinListosAntes?: boolean;
@@ -741,9 +837,10 @@ function lecturasDeLaCorrida(
 ): Record<string, LecturaDeReunion> {
   const reuniones = o.leido.reunionesLeidas ?? [];
   const ultima = [...reuniones].sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
+  // En un proyecto, lo listo es la estrategia (avance-del-proyecto.ts), no «lista para proponer».
   const listosAntes = o.sinListosAntes
     ? null
-    : listaParaProponer(o.estado, chequeoDe(o.escala, o.estado))
+    : (o.ctx.marco === "cs" ? avanceDeLaEstrategia(o.estado) : listaParaProponer(o.estado, chequeoDe(o.escala, o.estado)))
         .filter((p) => p.cumplido)
         .map((p) => p.id);
   const en = new Date().toISOString();
@@ -780,7 +877,7 @@ function lecturasDeLaCorrida(
 async function resumirLoYaLeido(
   runId: string,
   exploracionId: string,
-  ex: { fila: { clientId: string; client: { name: string } }; estado: EstadoDeExploracion; escala: EscalaDelLienzo; leido: LoQueSeLeyo },
+  ex: { fila: { clientId: string; marco?: string | null; client: { name: string } }; estado: EstadoDeExploracion; escala: EscalaDelLienzo; leido: LoQueSeLeyo },
   opts: OpcionesDeLaCorrida,
 ) {
   const reuniones = ex.leido.reunionesLeidas ?? [];
@@ -793,7 +890,7 @@ async function resumirLoYaLeido(
       hoy: new Date().toISOString(),
       proxima: ex.leido.agenda[0] ?? null,
       equipo: await nombresDelEquipo(),
-      ...planDeLaLectura(ex.estado, ex.escala, ex.leido),
+      ...planDeLaLectura(ex.estado, ex.escala, ex.leido, marcoDe(ex.fila.marco)),
     };
     await fase(runId, "Resumiendo las reuniones…");
     const respuesta = await conContextoDeIA(
@@ -859,8 +956,8 @@ async function guardarGuia(exploracionId: string, guia: GuiaDeLaSesion, corrida:
     const fila = await tx.exploracionDeVenta.findUnique({ where: { id: exploracionId }, select: { propuesta: true } });
     if (!fila) return;
     const actual = leerPropuesta(fila.propuesta);
-    // Las de las últimas 12 sesiones: una por sesión, la nueva reemplaza a la vieja de la misma.
-    const guias = sesionId ? Object.fromEntries(Object.entries({ ...actual.guias, [sesionId]: guia }).slice(-12)) : actual.guias;
+    // Las de las últimas sesiones (hasta MAX_SESIONES): una por sesión, la nueva reemplaza a la vieja de la misma.
+    const guias = sesionId ? Object.fromEntries(Object.entries({ ...actual.guias, [sesionId]: guia }).slice(-MAX_SESIONES)) : actual.guias;
     const propuesta = {
       ...actual,
       guia,
@@ -915,6 +1012,8 @@ async function guardar(
       sesiones: union(fusion.leidas.sesiones, leido.leidas.sesiones),
       hubspot: union(fusion.leidas.hubspot, leido.leidas.hubspot),
       documentos: union(fusion.leidas.documentos, leido.leidas.documentos ?? []),
+      // Las que se leyeron solo con las notas de Gemini; una que ya se leyó con su transcripción sale de acá.
+      soloNotas: union(fusion.leidas.soloNotas ?? [], leido.leidas.soloNotas ?? []).filter((id) => !leido.leidas.sesiones.includes(id)),
     };
     // Lo que esta corrida dejó pendiente y antes no estaba: es lo que la historia cuenta.
     const nuevas = propuestaVigente({ ...estado, propuesta: { ...fusion, leidas } }).filter((it) => !antes.has(it.id));
@@ -947,6 +1046,9 @@ async function guardar(
           ...leido.foto,
           agenda: agendaRenovada({ anterior: leerLoLeido(fila.test).agenda, nueva: leido.foto.agenda, noOcurrieron: leido.noOcurrieron, ahora }),
           leidoEn: ahora.toISOString(),
+          reunionesEn: ahora.toISOString(),
+          // La última mirada al calendario no es de esta corrida: se conserva (lib/exploraciones/calendario.ts).
+          calendarioEn: leerLoLeido(fila.test).calendarioEn ?? null,
         }
       : null;
     await tx.exploracionDeVenta.update({
@@ -961,24 +1063,64 @@ async function guardar(
 }
 
 /**
- * Llegó la transcripción de una reunión (lib/sessions/post-process.ts): si la empresa tiene una
- * exploración viva y la reunión es de después del alta, de hace a lo sumo dos semanas y nadie la
- * leyó, el agente la lee solo. Solo DISPARA: la corrida va en segundo plano y cobra contra el
- * presupuesto automático (sin persona). Si ya hay una corrida en curso, no lanza otra: la reunión
- * queda avisada como «sin leer».
+ * Llegó la transcripción de una reunión (lib/sessions/post-process.ts): el agente la lee SOLO en las
+ * exploraciones vivas del cliente donde corresponde (lectura.ts › `exploracionesQueLeenLaReunion`):
+ *   · la de un PROYECTO, o la preventa de un CLIENTE, solo si la reunión está unida a una de sus sesiones
+ *     de forma explícita (elegida, o por su evento del calendario). La ligadura por fecha no cuenta: no se
+ *     gasta en una adivinanza. Reemplaza al filtro de Ventas de la preventa de un cliente (etapa A).
+ *   · la preventa de un PROSPECTO: la regla de siempre (de después del alta, de hace a lo sumo dos
+ *     semanas, sin leer, mientras se vende), sin las que se sacaron, las de puertas adentro ni las de una
+ *     serie.
+ * Solo DISPARA: cada corrida va en segundo plano y cobra contra el presupuesto automático (sin persona).
+ * Si ya hay una corrida en curso, no lanza otra: la reunión queda avisada como «sin leer». Devuelve el
+ * resultado de la primera exploración que la lee. En la etapa 2 este llamado se muda a la cola de
+ * `LecturaDeReunion`, como un destino del registro.
  */
 export async function leerReunionNueva(o: { sesionId: string; fecha: Date; clientId: string }): Promise<"lanzada" | "ya-corre" | "no-corresponde"> {
   if (!modeloDisponible(prisma.exploracionDeVenta)) return "no-corresponde";
-  const exp = await prisma.exploracionDeVenta.findFirst({
-    where: { clientId: o.clientId, archivadaEn: null },
-    select: { id: true, createdAt: true, propuesta: true, client: { select: { kind: true } } },
+  // A propósito las dos clases de fila: la preventa (DE_LA_PREVENTA) y la exploración de cada proyecto del cliente.
+  const filas = await prisma.exploracionDeVenta.findMany({
+    where: { clientId: o.clientId, archivadaEn: null, OR: [DE_LA_PREVENTA, { projectId: { not: null } }] },
+    select: { id: true, projectId: true, createdAt: true, contenido: true, propuesta: true, client: { select: { kind: true } } },
   });
-  if (!exp) return "no-corresponde";
+  if (!filas.length) return "no-corresponde";
   const ahora = new Date();
-  if (!(await seVendeTodavia({ clientId: o.clientId, createdAt: exp.createdAt, client: exp.client }, ahora))) return "no-corresponde";
-  const leidas = leerPropuesta(exp.propuesta).leidas.sesiones;
-  if (!debeLeerSola({ fechaDeLaReunion: o.fecha, creadaEn: exp.createdAt, sesionId: o.sesionId, leidas, ahora })) return "no-corresponde";
-  const r = await lanzarCorrida(exp.id, "leer", { triggeredByEmail: null, sesionId: o.sesionId, automatica: true });
-  if (!r.ok) return "no-corresponde";
-  return r.yaCorria ? "ya-corre" : "lanzada";
+  const [sesion, categorias] = await Promise.all([
+    prisma.firefliesSession.findUnique({ where: { id: o.sesionId }, select: { googleEventId: true, participants: true, organizerEmail: true } }),
+    prisma.sessionCategory.findMany({ select: { domains: true, kind: true } }).catch(() => []),
+  ]);
+  const exps = await Promise.all(
+    filas.map(async (f) => {
+      const contenido = leerContenido(f.contenido);
+      return {
+        id: f.id,
+        delProyecto: !!f.projectId,
+        esProspecto: f.client.kind === "PROSPECTO",
+        creadaEn: f.createdAt,
+        sesiones: contenido.sesiones,
+        fuera: contenido.fuera,
+        leidas: leerPropuesta(f.propuesta).leidas.sesiones,
+        // seVendeTodavia solo importa en la preventa (cuesta una consulta): en un proyecto no se mira.
+        seVende: f.projectId ? true : await seVendeTodavia({ clientId: o.clientId, createdAt: f.createdAt, client: f.client }, ahora),
+      };
+    }),
+  );
+  const ids = exploracionesQueLeenLaReunion(
+    exps,
+    {
+      id: o.sesionId,
+      // Sin la fila (no debería pasar: la manda el post-proceso), sin evento ni sala conocidos.
+      eventoId: sesion?.googleEventId ?? null,
+      fecha: o.fecha,
+      participants: sesion ? [...sesion.participants, ...(sesion.organizerEmail ? [sesion.organizerEmail] : [])] : [],
+    },
+    { ahora, internos: buildInternalDomainsSet(categorias) },
+  );
+  let primera: "lanzada" | "ya-corre" | "no-corresponde" | null = null;
+  for (const id of ids) {
+    const r = await lanzarCorrida(id, "leer", { triggeredByEmail: null, sesionId: o.sesionId, automatica: true });
+    const resultado = !r.ok ? "no-corresponde" : r.yaCorria ? "ya-corre" : "lanzada";
+    primera ??= resultado;
+  }
+  return primera ?? "no-corresponde";
 }

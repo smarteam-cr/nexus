@@ -3,8 +3,9 @@
  * (`/sales/exploraciones/[id]`), que pasa por TODAS sus piezas en orden: Resumen, Preparación,
  * Exploración (con los tres momentos de la sesión), La escala, Casos de uso y Propuesta.
  *
- * Cada paso pide su pieza (`preventa.pieza`, lo escucha `LienzoDeExploracion`) y, en Exploración, el
- * momento de la sesión (`preventa.momento`, lo escucha `SesionesDeExploracion`). Así «Anterior» deja
+ * Cada paso pide su pieza (`preventa.pieza`, lo escucha `LienzoDeExploracion`) y, en Exploración, su
+ * página de inicio o la próxima sesión (`preventa.sesion`, también el lienzo) y el momento de la sesión
+ * (`preventa.momento`, lo escucha `SesionesDeExploracion`). Así «Anterior» deja
  * la pantalla igual que la primera vez. Los pasos del riel y del panel no piden nada: se ven en
  * cualquier pieza. Mientras corre el recorrido, abrir Preparación o Casos de uso no despierta al
  * agente (se abrieron para mostrarlas, no para trabajarlas).
@@ -23,7 +24,11 @@ const LISTADO = "/sales/exploraciones";
 
 type Pieza = "resumen" | "preparacion" | "exploracion" | "escala" | "casos" | "propuesta";
 const pieza = (valor: Pieza): AccionDelRecorrido => ({ evento: "preventa.pieza", valor });
-const momento = (valor: "antes" | "durante" | "despues"): readonly AccionDelRecorrido[] => [pieza("exploracion"), { evento: "preventa.momento", valor }];
+/** La página de inicio de Exploración (etapa A): la próxima sesión, las sesiones, «+ Agregar sesión», las fuentes. */
+const inicio: readonly AccionDelRecorrido[] = [pieza("exploracion"), { evento: "preventa.sesion", valor: "inicio" }];
+/** La próxima sesión, abierta. */
+const enLaSesion: readonly AccionDelRecorrido[] = [pieza("exploracion"), { evento: "preventa.sesion", valor: "proxima" }];
+const momento = (valor: "antes" | "durante" | "despues"): readonly AccionDelRecorrido[] => [...enLaSesion, { evento: "preventa.momento", valor }];
 /** Preparación tiene dos pestañas desde el 2026-10-06 (la escucha PasoPreparacion). */
 const preparacion = (valor: "identificacion" | "conexion"): readonly AccionDelRecorrido[] => [pieza("preparacion"), { evento: "preventa.preparacion", valor }];
 
@@ -32,7 +37,8 @@ export const PREVENTA: Recorrido = {
   // 2 (2026-10-06): Preparación en dos pestañas, la investigación de la industria y las fichas.
   // 3 (2026-10-07): las sesiones rediseñadas (objetivo, guía en tramos, Durante con preguntas, lo que leyó el agente).
   // 4 (2026-10-07): las pestañas de la sesión se llaman Preparación, En vivo y Análisis; la guía dice si está al día.
-  version: 4,
+  // 5 (2026-10-09): Exploración abre en su página de inicio (las sesiones, cada una con su reunión; «+ Agregar sesión»).
+  version: 5,
   titulo: "Una preventa",
   descripcion: "Todas sus piezas, de la preparación a la propuesta",
   rotulo: "Recorrido · Preventa",
@@ -112,18 +118,39 @@ export const PREVENTA: Recorrido = {
     },
     // Exploración
     {
+      ancla: "preventa.inicio",
+      titulo: "Exploración: tus sesiones",
+      texto: "Cada sesión con su reunión y en qué está: leída, sin leer, agendada o sin reunión. En un prospecto, cada reunión con la empresa entra sola; en un cliente, la agregas tú.",
+      lado: "top",
+      accion: inicio,
+    },
+    {
+      ancla: "preventa.inicio.agregar",
+      titulo: "Agregar una sesión",
+      texto: "Una agendada (Nexus espera su transcripción y la lee sola), una que ya pasó o una sin reunión, para preparar la guía antes de agendarla.",
+      lado: "bottom-end",
+      accion: inicio,
+    },
+    {
+      ancla: "preventa.inicio.fuentes",
+      titulo: "Fuentes manuales e instrucciones",
+      texto: "Lo que no quedó en Meet, como una minuta o un documento, y lo que la IA tiene que tener en cuenta al leer las sesiones.",
+      lado: "top",
+      accion: inicio,
+    },
+    {
       ancla: "preventa.sesiones",
-      titulo: "Exploración: una sesión por reunión",
-      texto: "Cada reunión con el cliente es una sesión: ✓ la hecha, ● la que miras y ● en ámbar la que no dejó qué leer. «+ Agregar sesión» planea otra.",
+      titulo: "Las sesiones, también en el riel",
+      texto: "✓ la leída, ● en ámbar la que pide algo y ○ la que no tiene reunión. Toca «Exploración» para volver a la página de inicio.",
       lado: "right-start",
-      accion: pieza("exploracion"),
+      accion: inicio,
     },
     {
       ancla: "preventa.sesion.momento",
       titulo: "Preparación, en vivo y análisis",
       texto: "Cada sesión tiene tres pestañas: la guía para prepararla, lo que anotas mientras ocurre y lo que salió de la reunión.",
       lado: "bottom-end",
-      accion: pieza("exploracion"),
+      accion: enLaSesion,
     },
     {
       ancla: "preventa.sesion.preguntas",

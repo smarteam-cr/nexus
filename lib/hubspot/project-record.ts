@@ -1,6 +1,7 @@
 import type { Client as HsClient } from "@hubspot/api-client";
 import { getSystemAccessToken, getPortalInfo } from "@/lib/hubspot/client";
 import type { PipelineDef } from "@/lib/projects/kind";
+import { propiedadesDeEncargados, type Encargados } from "@/lib/hubspot/encargados";
 import { ESTADOS_PROPONIBLES, esProponible } from "@/lib/projects/estado-hubspot";
 import { etapasProponibles } from "@/lib/projects/etapa-hubspot";
 import {
@@ -168,7 +169,9 @@ export async function actualizarProyectoInterno(
 }
 
 /**
- * Cambia el CSE ENCARGADO (`csl_encargado`) de un proyecto que ya existe en HubSpot.
+ * Cambia los ENCARGADOS de un proyecto que ya existe en HubSpot: «CSE Encargado» (`cse_encargado`) = el CSE de la
+ * cuenta y, si se pasa, «CSL Encargado» (`csl_encargado`) = la CSL (2026-10-09, entrega 5 del plan de la cartera;
+ * hasta ese día solo escribía `csl_encargado`, que guardaba al CSE). Ver lib/hubspot/encargados-de-la-cuenta.ts.
  *
  * ── POR QUÉ ESCRIBE ALLÁ Y NO ACÁ ────────────────────────────────────────────
  * Mismo motivo que sus dos vecinas: `Project.hubspotOwnerId/Name/Email` los escribe SOLO el
@@ -183,17 +186,16 @@ export async function actualizarProyectoInterno(
  * propósito («la asignación del encargado es una decisión de la persona, no un efecto secundario
  * del alta»). Esta función es esa decisión, tomada explícitamente.
  */
-export async function actualizarCslEncargado(
+export async function actualizarEncargadosDelProyecto(
   hs: HsClient,
   recordId: string,
-  ownerId: string,
+  encargados: Encargados,
 ): Promise<void> {
-  const id = ownerId.trim();
-  if (!id) throw new Error("Falta el owner de HubSpot al que reasignar el proyecto");
+  if (!encargados.cse.trim()) throw new Error("Falta el owner de HubSpot al que reasignar el proyecto");
   const res = await hs.apiRequest({
     method: "PATCH",
     path: `/crm/v3/objects/${OBJETO_PROYECTOS}/${recordId}`,
-    body: { properties: { csl_encargado: id } },
+    body: { properties: propiedadesDeEncargados({ cse: encargados.cse.trim(), csl: encargados.csl?.trim() || null }) },
   });
   if (!res.ok) {
     const cuerpo = await res.text().catch(() => "");

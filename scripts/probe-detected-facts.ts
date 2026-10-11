@@ -14,6 +14,7 @@
  * Uso: npx tsx scripts/probe-detected-facts.ts
  */
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { regenerateTimelineProgress } from "@/lib/timeline/regenerate-progress";

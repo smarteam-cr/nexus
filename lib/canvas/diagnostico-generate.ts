@@ -7,10 +7,12 @@
  *
  * ── LAS FUENTES (2026-09-28, «el agente escucha») ────────────────────────────────
  * El diagnóstico se escribe DESPUÉS de las encuestas y de las sesiones de exploración, así que lee:
- *   1. Las REUNIONES de su «Contexto» (lib/contexto/material-del-documento.ts): arranca con toda
- *      reunión del proyecto con el cliente y el CSE saca o agrega. Lo que el panel dice que alimenta
- *      es exactamente lo que se lee. Antes no leía NINGUNA reunión.
- *   2. Las NOTAS que el CSE pegó en ese mismo Contexto.
+ *   1. Las REUNIONES de su «Contexto» (lib/contexto/material-del-documento.ts): desde la etapa 7 de
+ *      la memoria de la cuenta, SOLO las que eligió el equipo, leídas enteras (antes arrancaba con
+ *      toda reunión del proyecto con el cliente). Lo que el panel dice que alimenta es exactamente lo
+ *      que se lee. Sin elegidas, el mensaje lo dice y la memoria lleva el peso.
+ *   2. Las NOTAS que el CSE pegó en ese mismo Contexto, y la MEMORIA de la cuenta y del proyecto
+ *      (lib/memoria, recortada para el cliente). Todo lo arma `fuentesDelDiagnostico`.
  *   3. Las respuestas a la ENCUESTA previa (lib/cuestionario/contexto.ts).
  *   4. La FICHA del cliente CONFIRMADA, sin sus campos internos (`fichaParaPrompt` con
  *      `paraDocumentoDelCliente`): apertura a la asesoría, motivación y oportunidades no entran.

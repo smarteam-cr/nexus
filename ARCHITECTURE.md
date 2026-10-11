@@ -36,13 +36,13 @@ Monolito App Router, sin `src/`:
 
 | Carpeta | Qué vive ahí |
 |---|---|
-| `app/` | 67 `page.tsx` + ~252 `route.ts` en SEIS superficies con reglas de auth DISTINTAS: `(shell)/` (interna: sidebar + sesión), `api/`, `external/` (pública por token), `print/` (render PDF, bypass `?pdfToken=`), `portal/`, `auth/`, más la raíz pública (login). El criterio vive en `middleware.ts` (PUBLIC_PATHS / PUBLIC_PREFIXES) |
-| `lib/` | 42 módulos de dominio (forma ideal: vertical slice, §1) + infra compartida (`lib/db/`, `lib/auth/`, `lib/anthropic.ts`) |
+| `app/` | 118 `page.tsx` + 441 `route.ts` (medido el 2026-10-10) en SEIS superficies con reglas de auth DISTINTAS: `(shell)/` (interna: sidebar + sesión), `api/`, `external/` (pública por token), `print/` (render PDF, bypass `?pdfToken=`), `portal/`, `auth/`, más la raíz pública (login). El criterio vive en `middleware.ts` (PUBLIC_PATHS / PUBLIC_PREFIXES) |
+| `lib/` | 71 carpetas (medido el 2026-10-10): los módulos de dominio (forma ideal: vertical slice, §1) + la infra compartida (`lib/db/`, `lib/auth/`, `lib/anthropic.ts`) |
 | `components/` | React por módulo; `components/ui` = el vocabulario del §1-UI; `components/landing` = el motor de documentos del §1-WEB |
-| `scripts/` | ~158 `.ts` de operación (dry-run-first + guard anti-prod, ver cap. D) + `scripts/sql/` (los DDL a mano) + `scripts/archive/` (one-offs históricos, no son catálogo) + `deploy.sh` |
-| `prisma/` | `schema.prisma` (93 modelos, 79 enums) + `migrations/0_init` (baseline, cap. D) + `migrations-archive/` + `policies.sql` (RLS idempotente) + 3 seeds |
+| `scripts/` | ~240 `.ts` de operación (dry-run-first + guard anti-prod, ver cap. D) + `scripts/sql/` (los DDL a mano) + `scripts/archive/` (one-offs históricos, no son catálogo) + `deploy.sh` |
+| `prisma/` | `schema.prisma` (168 modelos, 90 enums, medido el 2026-10-10) + `migrations/0_init` (baseline, cap. D) + `migrations-archive/` + `policies.sql` (RLS idempotente) + 3 seeds |
 | `docs/` | `DECISIONS` (el porqué, no re-litigar) · `GLOSSARY` · `RUNBOOK` (operación de PROD) · `KNOWN-ERRORS` · `CHANGELOG` |
-| `hooks/` | 3 hooks React globales (hay 1 más en `lib/hooks/` — deuda de consolidación) |
+| `hooks/` | 3 hooks React globales (hay 2 más en `lib/hooks/` — deuda de consolidación) |
 
 ### C. Correr en local
 
@@ -212,13 +212,16 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**551**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+**629**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`
 (`test/setup.integration.ts` carga `.env.test` con override, ABORTA si el host es Supabase,
 y TRUNCA todas las tablas antes de cada caso — por eso `fileParallelism: false`). Prerequisito:
-`npm run db:local -- up`. Los primeros cubren el chokepoint de sesiones (invariante #1) y
+`npm run db:local -- up`. Antes de cada corrida, `test/global-setup.integration.ts` le aplica a
+`nexus_test` los `scripts/sql/` posteriores al baseline (la misma regla que el bootstrap, en
+`scripts/lib/sql-posteriores.ts`): un `.sql` nuevo ya no deja los tests en rojo por una base atrasada,
+y por eso todo `.sql` tiene que poder correr dos veces. Los primeros cubren el chokepoint de sesiones (invariante #1) y
 `visibleRoleWhere` con filas reales. Integration NO corre en CI todavía (falta el service
 container — pendiente declarado en ci.yml).
 
@@ -483,7 +486,7 @@ Lógica de resolución:
 
 **Estado actual (junio 2026, post-Fase 1 del módulo externo)**: lock-down total.
 
-**Regla simple**: **TODAS las tablas del schema `public` tienen RLS habilitado** (31 de 31, excepto `_prisma_migrations` que es metadata interna de Prisma y no se expone vía PostgREST). La mayoría sin policies SELECT — con anon/JWT no se lee nada. Solo bypassean los roles `postgres` (que usa Prisma) y `service_role`, ambos con `BYPASSRLS=true`.
+**Regla simple**: **TODAS las tablas del schema `public` tienen RLS habilitado**, excepto `_prisma_migrations`, que es metadata interna de Prisma y no se expone vía PostgREST. Cuando se escribió esto eran 31; el 2026-10-10 el schema declara 168 modelos, y cada SQL nuevo habilita RLS en su tabla (`prisma/policies.sql` es la red idempotente). No se volvió a contar en la base. La mayoría sin policies SELECT — con anon/JWT no se lee nada. Solo bypassean los roles `postgres` (que usa Prisma) y `service_role`, ambos con `BYPASSRLS=true`.
 
 **Por qué TODAS y no solo las cliente-visibles**: descubrimos durante la verificación que Supabase, por default, auto-otorga `GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon`. Eso significa que **cualquier tabla sin RLS habilitado es leíble con la publishable key**, que está en el bundle JS del browser y por lo tanto disponible para cualquier persona. Antes del lock-down total, `FirefliesSession` (15.385 transcripts), `TeamMember` (16 emails internos), `AgentRun` (61 outputs IA crudos) y `KnowledgeDocument` (contenido propietario) eran extraíbles con una llamada `supabase.from(t).select('*')` desde cualquier máquina. El plan original había declarado "alcance quirúrgico, solo las 5 tablas de la superficie externa" — eso fue diagnóstico incorrecto. La regla correcta es "RLS en todo, policies SELECT solo donde se necesite acceso externo legítimo".
 
@@ -653,7 +656,7 @@ carpeta de su integración.
 - **Antes de dar por terminado un cambio en un módulo con tests**, correr `npm test -- lib/<modulo>` y verificar que pasen.
 - **Si tocás `prisma/schema.prisma`**: NO existe una "DB de dev" y `db push` está prohibido — el flujo completo (SQL aditivo a mano + `migrate diff` como detector + `prisma generate` + `check:invariants`) está en **Parte 0 · cap. D**. El smoke sigue siendo abrir una ruta que use el modelo y ver que carga.
 
-**La suite vive y frena merges**: 130 archivos / ~1500 casos bajo `lib/` (el conteo exacto lo vigila `doc-sync`), organizados en las cinco familias de la Parte 0 · cap. F — unit de motor, golden, ratchets, escaneos estructurales y registros congelados. Módulo nuevo sin tests = módulo no terminado (regla de arriba, ahora sí cumplida por los módulos recientes: cobranza, timeline, roles, marketing…). Los módulos viejos sin cobertura se cubren cuando se tocan.
+**La suite vive y frena merges**: 627 archivos unit y más de 10.000 casos bajo `lib/` el 2026-10-10 (el conteo exacto de archivos lo vigila `doc-sync`, en la Parte 0 · cap. F), organizados en las cinco familias de la Parte 0 · cap. F — unit de motor, golden, ratchets, escaneos estructurales y registros congelados. Módulo nuevo sin tests = módulo no terminado (regla de arriba, ahora sí cumplida por los módulos recientes: cobranza, timeline, roles, marketing…). Los módulos viejos sin cobertura se cubren cuando se tocan.
 
 > El project `integration` está VIVO desde el 2026-08-01 (F4): `npm run test:int` contra la base local `nexus_test` (ver Parte 0 · cap. F). *Pendiente real*: crecer la suite (hoy cubre el chokepoint de sesiones y el acceso de Roles) y llevarla al CI con un service container.
 
@@ -696,7 +699,7 @@ Cosas que duelen, pero el módulo externo puede abrirse sin tenerlas resueltas (
 10. **Refactor de `components/clients/ProjectCanvasPanel.tsx` (1000 líneas)** dividiendo responsabilidades.
 11. **Centralizar parseo JSON de Claude** en `lib/ai/parse-json-output.ts` (helper aún NO construido — hoy lo más cercano es `lib/ai/section-schema.ts`) y migrar los callers.
 12. ~~**Resolver los 29 errores TypeScript baseline.**~~ ✅ **HECHO** (baseline en 0 desde 2026-07, `tsc-baseline.txt`; el ratchet del CI impide que vuelva a subir).
-13. **Sincronizar `ActionItem.done` con `status === "DONE"`** o eliminar uno. Quedarse con `status` (más expresivo).
+13. ~~**Sincronizar `ActionItem.done` con `status === "DONE"`** o eliminar uno.~~ Ya no aplica: `ActionItem` quedó DEPRECATED el 2026-10-10 (memoria de la cuenta, etapa 2), sin escritores; los pendientes son tareas. Se borra con el modelo (después del 2027-04-01).
 14. **Eliminar `Project.lastSessionSummary`** y leer siempre de `SessionMinute` (último primario).
 15. **Test suite mínimo** para `lib/sessions/`, `lib/projects/`, `lib/canvas/` cuando se toquen.
 16. **Rate limiting + `ClaudeUsage` tracking** antes de cualquier flujo que dispare >50 llamadas/día.
@@ -705,9 +708,9 @@ Cosas que duelen, pero el módulo externo puede abrirse sin tenerlas resueltas (
 19. **Borrar `Project.pendingItems`** (Json deprecated) tras confirmar 0 lectores.
 20. **Reconciliar `lib/matching/cascade.ts` vs `lib/sessions/categorize.ts`** (nombres similares, conceptos solapados).
 21. **Rotar la `sb_secret_...` de Supabase Auth** (quedó en transcript de chat al pegarla durante setup). No urgente porque hoy no se usa server-side activamente, pero higiénico.
-22. **Aplicar `requireAccessToClient` al resto de endpoints fuera del onboarding**: `/api/hubspot/*`, `/api/knowledge/*`, `/api/agents/*`, `/api/sales/*`, `/api/audits/*`. Hoy quedan con `requireConsultantSession` (gate por sesión) pero sin ownership.
+22. **Aplicar `requireAccessToClient` al resto de endpoints fuera del onboarding**: `/api/hubspot/*`, `/api/knowledge/*`, `/api/agents/*`, `/api/sales/*`, `/api/audits/*`. Hoy quedan con `requireConsultantSession` (gate por sesión) pero sin ownership. Avance de la etapa 0 de la memoria de la cuenta (2026-10-09, DECISIONS «Memoria de la cuenta · Etapa 0»): `/api/sessions/analyze` y el modo «análisis» de /sessions se retiran (4 corridas en total; no tenían guarda de cliente ni medidor), y `/api/sales/analyze` pasa a pedir `ventas.read` y nunca junta dos empresas en el mismo prompt: si el grupo trae reuniones de más de una, analiza las de la empresa con más reuniones a la que quien pide tiene acceso y devuelve cuántas quedaron afuera (`afuera`). Queda medido. (El primer arreglo respondía 409 y dejaba el botón sin salida.)
 23. **Re-apuntar el agente `preparacion` (DEUDA del retiro del Resumen).** El grupo `preparacion` todavía emite `ClientContextCard` a `canvasSection="procesos"` (vía `GROUP_TO_SECTION` en `app/api/clients/[id]/analyze/route.ts`) — un sistema RETIRADO: el canvas Resumen se eliminó y "procesos" ahora vive como `CanvasBlock` en "Información del cliente". Mientras esto no se cierre, **cada corrida de `preparacion` escribe cards que ya no se renderizan en ningún lado**. Cerrar = migrar el agente a block-format y rutear su salida a la sección `procesos` del canvas de Información del cliente (cross-project: el strategy project `__strategy__` del cliente). La data EXISTENTE ya se migró con `scripts/migrate-procesos-to-blocks.ts`.
-24. **Limpiar el subsistema de cards muerto en `ProjectCanvasPanel.tsx`.** Tras el retiro del Resumen, `isResumenCanvas` es siempre false y toda la grilla masonry de cards + las effects de `canvas-cards` + sus handlers quedan como código muerto (gateado y marcado DEPRECATED). Borrarlo junto al endpoint `app/api/projects/[id]/canvas-cards` y `DEFAULT_SECTIONS`. (Relacionado con el ítem 10.)
+24. **Limpiar el subsistema de cards muerto en `ProjectCanvasPanel.tsx`.** Tras el retiro del Resumen, `isResumenCanvas` es siempre false y toda la grilla masonry de cards + las effects de `canvas-cards` + sus handlers quedan como código muerto (gateado y marcado DEPRECATED). Borrarlo junto al endpoint `app/api/projects/[id]/canvas-cards` y `DEFAULT_SECTIONS`. (Relacionado con el ítem 10.) `CanvasSuggestion` se retira en la etapa 0 de la memoria de la cuenta (2026-10-09), con sus escritores y su único lector, y `ClientContextCard` sale del mensaje del handoff y de todo agente no encadenado. ⚠ Los agentes encadenados por paso (`associatedStep`) TODAVÍA leen las cards del paso anterior y las HUMAN del cliente (`app/api/clients/[id]/analyze/route.ts`): retirar esa vía es parte de este ítem. Quedan además `ClientContextCards`, `SendToCanvasMenu` y `context-cards`. Antes de cualquier DROP: `Client.canvas` lo leen y escriben GET y PUT de `app/api/clients/[id]/canvas` (sin pantalla) y `StageNote` lo lee `lib/clients/last-interaction.ts`.
 25. **Pinear Node a 24 en los TRES entornos** (retirado de la tanda del 2026-08-01 a propósito: es el único cambio que toca el runtime de PROD y merece su propio deploy con su propio smoke). Hoy: local 24.x y CI 24, imagen Docker `node:22-bookworm-slim`, `@types/node` en `^20` — los tipos van 2-4 majors atrás del runtime. El paquete completo: `engines: { "node": ">=24 <25" }` en package.json + `.nvmrc` con `24` + `.npmrc` con `engine-strict=true` + `Dockerfile` a `node:24-bookworm-slim` (bcrypt se recompila y Chrome-for-Testing se re-baja en el build; deploy.sh rebuildea siempre y el rollback `nexus:prev` cubre) + `@types/node` a `^24`.
 
 ---

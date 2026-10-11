@@ -20,12 +20,15 @@ export const NOMBRE_DE_JOB: Readonly<Record<string, string>> = {
   "maintenance-daily": "El mantenimiento diario",
   "cobranza-quincenal": "El corte de cobranza",
   "google-enrich-retry": "El reintento de las reuniones de Google Meet",
+  "seguimiento-reuniones": "La lectura de cada reunión",
   "ventas-ganadas-daily": "La copia de ventas ganadas",
   "odoo-espejo-daily": "La copia de Odoo",
   "mercury-espejo-daily": "La copia de Mercury",
   "tipo-cambio-daily": "La copia del tipo de cambio del BCCR",
   "planilla-quincena-daily": "La quincena de planilla en curso",
   "licencias-renovacion-daily": "El aviso de renovaciones de licencias",
+  "adopcion-recordatorios-daily": "El recordatorio de revisar la adopción",
+  "tareas-semana-lunes": "El mantenimiento de las tareas del lunes",
   "invariants-daily": "La revisión diaria de la base",
 };
 

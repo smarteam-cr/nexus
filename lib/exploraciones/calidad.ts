@@ -15,7 +15,18 @@ import { estaDebajo } from "@/lib/escala/chequeo";
 import { metaEnCifras } from "./casillas";
 import { esFuenteDeHipotesis, esHipotesisDeNivel, propuestaVigente, type EstadoDeExploracion } from "./contenido";
 import { diaCorto, hoyEnCostaRica } from "./fechas";
+import { avisoDeLasSesiones, type PestanaDeSesion } from "./guia";
 import type { ReunionSinLeer } from "./lectura";
+
+/**
+ * Las sesiones, para que «Qué sigue» avise lo que falta en ellas antes que lo demás (etapa A): las pestañas
+ * de Exploración (guia.ts › `pestanasDeSesiones`) y si en esta exploración las reuniones entran solas.
+ */
+export interface SesionesParaQueSigue {
+  pestanas: readonly PestanaDeSesion[];
+  automaticas: boolean;
+  ahora?: Date;
+}
 
 export interface PuntoDeCalidad {
   id: "frena" | "meta" | "tiempos" | "presupuesto" | "autoridad" | "consecuencia" | "siguientePaso";
@@ -101,7 +112,11 @@ export function queSigueConPaso(
   chequeo: ResultadoDelChequeo,
   sinLeer: readonly ReunionSinLeer[] = [],
   hoy = hoyEnCostaRica(),
+  sesiones?: SesionesParaQueSigue,
 ): { texto: string; paso: PasoDeQueSigue | null } {
+  // Lo que falta en las sesiones va antes que lo demás (la preventa de un cliente arranca vacía).
+  const aviso = sesiones ? avisoDeLasSesiones(sesiones.pestanas, { automaticas: sesiones.automaticas, hoy, ahora: sesiones.ahora }) : null;
+  if (aviso) return { texto: aviso, paso: "exploracion" };
   const revisables = cuantasParaRevisar(estado);
   if (!estado.perfilCierre || !estado.perfilDespues) {
     return { texto: "Revisa la escala y el perfil de negocio: hacen falta antes de medir.", paso: "escala" };
@@ -144,6 +159,12 @@ export function queSigueConPaso(
 }
 
 /** Lo mismo, solo el texto (la lista de exploraciones). */
-export function queSigue(estado: EstadoDeExploracion, chequeo: ResultadoDelChequeo, sinLeer: readonly ReunionSinLeer[] = [], hoy = hoyEnCostaRica()): string {
-  return queSigueConPaso(estado, chequeo, sinLeer, hoy).texto;
+export function queSigue(
+  estado: EstadoDeExploracion,
+  chequeo: ResultadoDelChequeo,
+  sinLeer: readonly ReunionSinLeer[] = [],
+  hoy = hoyEnCostaRica(),
+  sesiones?: SesionesParaQueSigue,
+): string {
+  return queSigueConPaso(estado, chequeo, sinLeer, hoy, sesiones).texto;
 }

@@ -10,17 +10,22 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  DATOS_DE_LA_CLASIFICACION,
   destinoUnoAUno,
   dominioDeCompany,
   idDeHubspotFinal,
   juntarNotas,
+  plegarClasificacion,
   plegarCuenta,
   plegarFicha,
+  repartirSinChocar,
+  resolverChoques,
   textoDeFusionDeCuenta,
   type CuentaParaFusionar,
   type FichaParaFusionar,
 } from "./fusion-de-empresas";
 import type { VeredictoDeFusion } from "@/lib/hubspot/empresa-fusionada";
+import { DATOS_DE_CLASIFICACION } from "@/lib/cs/clasificacion";
 
 const ficha = (p: Partial<FichaParaFusionar>): FichaParaFusionar => ({
   id: "x",
@@ -147,6 +152,106 @@ describe("lo que es uno a uno", () => {
   });
 });
 
+describe("lo que choca con un único (SIN_CHOCAR)", () => {
+  it("⭐ las licencias: pasa el hub que la que sigue no tiene; el que ya tiene se queda el suyo", () => {
+    const sigue = [{ id: "s1", hub: "sales_hub", plan: "Pro" }];
+    const absorbida = [
+      { id: "a1", hub: "sales_hub", plan: "Starter" },
+      { id: "a2", hub: "service_hub", plan: "Pro" },
+    ];
+    const r = repartirSinChocar(absorbida, sigue, ["hub"]);
+    expect(r.pasan.map((f) => f.id)).toEqual(["a2"]);
+    expect(r.chocan).toEqual([{ id: "a1", hub: "sales_hub", plan: "Starter" }]);
+  });
+
+  it("la clave compuesta compara todas sus columnas (notas de etapa: etapa y paso)", () => {
+    const sigue = [{ stage: "HANDOFF", step: 1 }];
+    const absorbida = [
+      { id: "a1", stage: "HANDOFF", step: 1 },
+      { id: "a2", stage: "HANDOFF", step: 2 },
+      { id: "a3", stage: "KICKOFF", step: 1 },
+    ];
+    expect(repartirSinChocar(absorbida, sigue, ["stage", "step"]).pasan.map((f) => f.id)).toEqual(["a2", "a3"]);
+  });
+
+  it("un nulo en la clave cuenta como un valor más: dos asignaciones al mismo rol sin persona son la misma", () => {
+    const sigue = [{ teamMemberId: null, targetRole: "CSE" }];
+    const absorbida = [
+      { id: "a1", teamMemberId: null, targetRole: "CSE" },
+      { id: "a2", teamMemberId: "tm1", targetRole: null },
+      { id: "a3", teamMemberId: null, targetRole: "VENTAS" },
+    ];
+    const r = repartirSinChocar(absorbida, sigue, ["teamMemberId", "targetRole"]);
+    expect(r.chocan.map((f) => f.id)).toEqual(["a1"]);
+    expect(r.pasan.map((f) => f.id)).toEqual(["a2", "a3"]);
+  });
+
+  it("sin nada en la que sigue, pasa todo; sin nada en la absorbida, no pasa nada", () => {
+    expect(repartirSinChocar([{ id: "a1", huella: "x" }], [], ["huella"]).pasan).toHaveLength(1);
+    expect(repartirSinChocar([], [{ huella: "x" }], ["huella"])).toEqual({ pasan: [], chocan: [] });
+  });
+
+  it("⛔ una solicitud fuera de alcance que alguien decidió no se borra: le gana a la que nadie decidió; si las dos, se frena", () => {
+    const sinDecidir = { id: "s1", huella: "h", estado: "PEDIDO", decididoAt: null, pedido: "Reportes de ventas" };
+    const cotizada = { id: "a1", huella: "h", estado: "COTIZADO", decididoAt: new Date("2026-10-05"), monto: "US$1.200", pedido: "Reportes de ventas" };
+    expect(resolverChoques("pedidoFueraDeAlcance", [cotizada], [sinDecidir], ["huella"]).map((c) => c.accion)).toEqual(["reemplazar"]);
+    expect(resolverChoques("pedidoFueraDeAlcance", [{ ...sinDecidir, id: "a1" }], [{ ...cotizada, id: "s1" }], ["huella"]).map((c) => c.accion)).toEqual(["borrar-absorbida"]);
+    expect(resolverChoques("pedidoFueraDeAlcance", [{ ...sinDecidir, id: "a1" }], [sinDecidir], ["huella"]).map((c) => c.accion)).toEqual(["borrar-absorbida"]);
+    const ambas = resolverChoques("pedidoFueraDeAlcance", [cotizada], [{ ...cotizada, id: "s1", estado: "APROBADO" }], ["huella"]);
+    expect(ambas[0]).toMatchObject({ accion: "frenar" });
+    expect(ambas[0].motivo).toMatch(/Reportes de ventas/);
+  });
+
+  it("⭐ una licencia que choca: la de la que sigue toma lo que le falta y junta las notas; un dato distinto queda el suyo y se avisa", () => {
+    const sigue = { id: "s1", hub: "sales_hub", plan: "Pro", fechaCompra: null, fechaRenovacion: new Date("2027-01-01"), montoMensual: null, moneda: null, nota: "La compró Ana" };
+    const absorbida = { id: "a1", hub: "sales_hub", plan: "Starter", fechaCompra: new Date("2025-03-01"), fechaRenovacion: null, montoMensual: 450, moneda: "USD", nota: "Asientos: 5" };
+    const [c] = resolverChoques("licenciaCliente", [absorbida], [sigue], ["hub"]);
+    expect(c.accion).toBe("plegar");
+    expect(c.cambios).toEqual({ fechaCompra: absorbida.fechaCompra, montoMensual: 450, moneda: "USD", nota: "La compró Ana\n\nAsientos: 5" });
+    expect(c.motivo).toMatch(/plan/);
+  });
+
+  it("las notas de etapa y las asignaciones siguen como siempre: queda la de la que sigue", () => {
+    expect(resolverChoques("stageNote", [{ id: "a1", stage: "HANDOFF", step: 1 }], [{ id: "s1", stage: "HANDOFF", step: 1 }], ["stage", "step"]).map((c) => c.accion)).toEqual(["borrar-absorbida"]);
+  });
+});
+
+describe("la clasificación de la cartera (la confirmó una persona)", () => {
+  const vacia = { relacion: null, relacionPor: null, relacionEn: null, potencial: null, potencialPor: null, potencialEn: null, momento: null, momentoPor: null, momentoEn: null, descartes: {} };
+  const EN = new Date("2026-10-08T15:00:00Z");
+
+  it("los datos son los mismos que confirma la pantalla: un dato nuevo no se queda afuera de la fusión", () => {
+    expect([...DATOS_DE_LA_CLASIFICACION]).toEqual(DATOS_DE_CLASIFICACION.map((d) => d.clave));
+  });
+
+  it("⭐ la que sigue conserva lo que confirmó y toma de la otra lo que no tiene, con su autor y su fecha", () => {
+    const sigue = { ...vacia, relacion: "proyecto", relacionPor: "alex@x", relacionEn: EN };
+    const absorbida = { ...vacia, relacion: "recurrente", relacionPor: "otra@x", relacionEn: EN, potencial: "alto", potencialPor: "otra@x", potencialEn: EN };
+    const p = plegarClasificacion(sigue, absorbida);
+    expect(p.tomados).toEqual(["potencial"]);
+    expect(p.cambios).toEqual({ potencial: "alto", potencialPor: "otra@x", potencialEn: EN });
+  });
+
+  it("lo que toma deja de estar descartado; los demás descartes de la que sigue quedan", () => {
+    const sigue = { ...vacia, descartes: { momento: { valor: "adopcion", huella: "h1" }, potencial: { valor: "bajo", huella: "h2" } } };
+    const absorbida = { ...vacia, momento: "recurrente", momentoPor: "otra@x", momentoEn: EN };
+    const p = plegarClasificacion(sigue, absorbida);
+    expect(p.tomados).toEqual(["momento"]);
+    expect(p.cambios.descartes).toEqual({ potencial: { valor: "bajo", huella: "h2" } });
+  });
+
+  it("si la otra no confirmó nada que falte, no cambia nada (ni los descartes)", () => {
+    const sigue = { ...vacia, relacion: "proyecto", descartes: { momento: { valor: "adopcion", huella: "h1" } } };
+    expect(plegarClasificacion(sigue, { ...vacia, relacion: "recurrente" })).toEqual({ cambios: {}, tomados: [] });
+    expect(plegarClasificacion(sigue, vacia)).toEqual({ cambios: {}, tomados: [] });
+  });
+
+  it("unos descartes ilegibles no rompen nada", () => {
+    const p = plegarClasificacion({ ...vacia, descartes: "basura" }, { ...vacia, momento: "adopcion" });
+    expect(p.cambios).toEqual({ momento: "adopcion", momentoPor: null, momentoEn: null });
+  });
+});
+
 describe("la cuenta de cobro", () => {
   const SIGUE_C = cuenta({ id: "cmtx", moneda: "CRC", cedulaJuridica: "3-101-167504", razonSocial: "Desarrollos Culturales Costarricenses DCC, S.A.," });
   const ABSORBIDA_C = cuenta({ id: "cmry", moneda: "USD", cedulaJuridica: "3101167504", correoCobro: "cxp@libreriainternacional.com" });
@@ -168,5 +273,10 @@ describe("la cuenta de cobro", () => {
     expect(t).toBe(
       "egonzalez@smarteamcr.com fusionó en esta cuenta la de «Librería Internacional», que era la misma empresa: pasaron 1 servicio(s), 1 cobro(s), 1 cliente(s) de Odoo con 4 documento(s), 1 línea(s) de bitácora. Quedaron los datos de esta cuenta donde decían distinto: moneda: queda «CRC» (la otra decía «USD»).",
     );
+  });
+
+  it("los clientes de Mercury que se mudaron también se dicen", () => {
+    const t = textoDeFusionDeCuenta("egonzalez@smarteamcr.com", "Teamnet", { servicios: 2, cobros: 6, alertas: 0, bitacora: 0, facturasSoltadas: 0, clientesDeOdoo: 0, facturasDeOdoo: 0, clientesDeMercury: 1 }, []);
+    expect(t).toBe("egonzalez@smarteamcr.com fusionó en esta cuenta la de «Teamnet», que era la misma empresa: pasaron 2 servicio(s), 6 cobro(s), 1 cliente(s) de Mercury.");
   });
 });

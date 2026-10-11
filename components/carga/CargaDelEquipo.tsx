@@ -3,6 +3,10 @@
  * las señales para la 1:1 y lo que pide cada cuenta frente a su complejidad. Sin montos: el dinero está en Rentabilidad.
  *
  * Componente del servidor (sin estado): recibe todo ya calculado por `cargarCargaDelEquipo`.
+ *
+ * Rediseño del 7 oct («Rentabilidad · diseño», tablero «Carga del equipo»): las personas en orden alfabético, sin
+ * ranking, con la CSL aparte; las horas libres sin nombres; y cada persona dice cuántas de sus horas tienen dato real
+ * (del calendario o respondidas en «¿cuánto te tomó?»).
  */
 import Link from "next/link";
 import { Alert, PageHeader } from "@/components/ui";
@@ -28,14 +32,25 @@ import {
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
 
-export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: DatosDeLaCarga; senales: Senal[]; contenedor: string }) {
+export default function CargaDelEquipo({
+  datos,
+  senales,
+  contenedor,
+  conRentabilidad = false,
+}: {
+  datos: DatosDeLaCarga;
+  senales: Senal[];
+  contenedor: string;
+  /** Dirección también ve Rentabilidad: el enlace solo aparece para quien puede abrirla. */
+  conRentabilidad?: boolean;
+}) {
   const { config } = datos.configuracion;
   const cse = datos.personas.filter((p) => !p.esCsl);
+  const csl = datos.personas.filter((p) => p.esCsl);
   const lunesActual = datos.futuras[0]?.lunes ?? datos.hoy;
-  const libres = horasLibres(datos.personas, config, lunesActual).map((x) => ({ nombre: x.p.nombre.split(" ")[0], h: x.libres }));
-  const totalLibres = libres.reduce((a, x) => a + x.h, 0);
+  const libres = horasLibres(datos.personas, config, lunesActual);
+  const totalLibres = libres.reduce((a, x) => a + x.libres, 0);
   const enSobrecarga = datos.personas.filter((p) => p.senal).length;
-  const atrasadas = datos.personas.reduce((a, p) => a + p.atrasadas, 0);
 
   return (
     <div className={cn(contenedor, "space-y-6")}>
@@ -57,9 +72,11 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
             <Link href={RUTA_DE_LOS_SUPUESTOS} className={ENLACE_BLANCO}>
               Ajustar el cálculo
             </Link>
-            <Link href={RUTA_DE_LA_RENTABILIDAD} className={ENLACE_BLANCO}>
-              Rentabilidad
-            </Link>
+            {conRentabilidad && (
+              <Link href={RUTA_DE_LA_RENTABILIDAD} className={ENLACE_BLANCO}>
+                Rentabilidad
+              </Link>
+            )}
           </div>
         }
       />
@@ -79,7 +96,7 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
         <Cifra
           rotulo="Horas libres esta semana"
           valor={horas(totalLibres)}
-          nota={libres.length ? libres.slice(0, 3).map((x) => `${x.nombre} ${Math.round(x.h)} h`).join(" · ") : "Nadie tiene horas libres"}
+          nota={libres.length ? `${plural(libres.length, "persona con espacio", "personas con espacio")}` : "Nadie tiene horas libres"}
         />
         <Cifra
           rotulo="Sobrecarga sostenida"
@@ -87,7 +104,11 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
           alerta={enSobrecarga > 0}
           nota={`Más del ${config.semaforo.sobrecarga} % durante ${config.semanasSenal} semanas o más`}
         />
-        <Cifra rotulo="Tareas atrasadas o sin marcar" valor={atrasadas} nota="No suman a la carga: puede ser trabajo hecho y no marcado" />
+        <Cifra
+          rotulo="Horas con dato real"
+          valor={`${datos.equipo.conDatoReal} %`}
+          nota="Del calendario o respondidas por cada persona; el resto es estimado"
+        />
       </div>
 
       <section className="space-y-3 rounded-xl border border-line bg-surface py-4">
@@ -120,12 +141,14 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
                 ))}
                 <th className="whitespace-nowrap px-3 py-2 text-right">Promedio</th>
                 <th className="whitespace-nowrap px-3 py-2">En qué se va la semana</th>
-                <th className="whitespace-nowrap px-3 py-2 text-right">Atrasadas</th>
+                <th className="whitespace-nowrap px-3 py-2 text-right" title="Del calendario o respondidas en «¿Cuánto te tomó?»; el resto es estimado">
+                  Con dato real
+                </th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
             <tbody>
-              {datos.personas.map((p) => {
+              {[...cse, ...csl].map((p, i, todas) => {
                 const primera = p.semanas.find((s) => s.enElEquipo);
                 const detalle =
                   p.semanasEnElEquipo === 0
@@ -139,11 +162,23 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
                         : p.ultimaSemanaConReuniones
                           ? `Sin reuniones desde el ${etiquetaDelLunes(p.ultimaSemanaConReuniones)}`
                           : "Sin reuniones en el calendario";
-                return (
+                const real = p.promedio.total > 0 ? Math.round((p.promedio.conDatoReal / p.promedio.total) * 100) : null;
+                const abreLaCsl = p.esCsl && !todas[i - 1]?.esCsl;
+                return [
+                  abreLaCsl && (
+                    <tr key="csl" className="border-b border-line bg-surface-muted">
+                      <td colSpan={datos.semanas.length + datos.futuras.length + 6} className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+                        Líder de Customer Success · {Math.round(config.paraCuentasCsl * 100)} % para cuentas
+                      </td>
+                    </tr>
+                  ),
                   <tr key={p.email} className="border-b border-line last:border-b-0">
                     <td className="min-w-[190px] px-4 py-2.5">
                       <span className="block font-semibold text-fg">{p.nombre}</span>
-                      <span className="block text-xs text-fg-muted">{detalle}</span>
+                      <span className="block text-xs text-fg-muted">
+                        {detalle}
+                        {p.atrasadas > 0 && ` · ${plural(p.atrasadas, "tarea atrasada", "tareas atrasadas")}`}
+                      </span>
                     </td>
                     <td className="px-3 py-2.5">
                       {!p.esCsl && sinReunionesRecientes(p, lunesActual) ? (
@@ -170,7 +205,7 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
                         {coma(p.promedio.entrega)} entrega
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{p.atrasadas || <span className="text-fg-muted">0</span>}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-fg-secondary">{real === null ? <span className="text-fg-muted">—</span> : `${real} %`}</td>
                     <td className="px-4 py-2.5 text-right">
                       {p.id && (
                         <Link href={rutaDeLaUnoAUno(p.id)} className={cn(ENLACE_AZUL, "whitespace-nowrap")}>
@@ -178,8 +213,8 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
                         </Link>
                       )}
                     </td>
-                  </tr>
-                );
+                  </tr>,
+                ];
               })}
             </tbody>
           </table>
@@ -208,9 +243,11 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
                     </div>
                     <span className="text-[13px] leading-[19px] text-fg-secondary">{s.texto}</span>
                   </div>
-                  <Link href={destinoDe(s)} className={cn(ENLACE_BLANCO, "flex-shrink-0 whitespace-nowrap")}>
-                    {s.accion}
-                  </Link>
+                  {destinoDe(s) && (
+                    <Link href={destinoDe(s)!} className={cn(ENLACE_BLANCO, "flex-shrink-0 whitespace-nowrap")}>
+                      {s.accion}
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>
@@ -232,8 +269,15 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
               <b className="text-fg">Preparación:</b> {config.preparacionMin} min por reunión con un cliente.
             </li>
             <li>
-              <b className="text-fg">Entrega estimada:</b> las tareas del cronograma × horas por tipo de fase × factor de complejidad de la cuenta. «Ambos» cuenta{" "}
-              {Math.round(config.ambosFraccion * 100)} %; «Cliente» y «Desarrollo» no cuentan.
+              <b className="text-fg">Entrega:</b> lo que respondió quien hizo la tarea en «¿Cuánto te tomó?»; si no hay respuesta, las horas de su tarea clave
+              o de su tipo de fase × el factor de complejidad de la cuenta. «Ambos» cuenta {Math.round(config.ambosFraccion * 100)} %; «Cliente» y «Desarrollo» no
+              cuentan.
+            </li>
+            <li>
+              <b className="text-fg">Con dato real:</b> las horas del calendario más las respondidas. La preparación y la entrega sin respuesta son estimadas.
+            </li>
+            <li>
+              <b className="text-fg">Atrasadas:</b> suman en la semana que el plan les puso; no se vuelven a sumar en la semana de hoy.
             </li>
             <li>
               <b className="text-fg">Proyectada:</b> el ritmo de reuniones de las últimas {datos.semanas.length} semanas más las tareas que el cronograma pone en
@@ -243,9 +287,14 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
           <p className="text-xs text-fg-muted">
             {datos.reuniones.contadas} reuniones contadas; {datos.reuniones.descartadas} de día completo o sin duración no cuentan.
           </p>
-          <Link href={RUTA_DE_LOS_SUPUESTOS} className={cn(ENLACE_AZUL, "self-start")}>
-            Ver y ajustar los supuestos
-          </Link>
+          <span className="flex flex-wrap gap-4">
+            <Link href={RUTA_DE_LOS_SUPUESTOS} className={ENLACE_AZUL}>
+              Ver y ajustar los supuestos
+            </Link>
+            <Link href={`${RUTA_DE_LOS_SUPUESTOS}?vista=calibracion`} className={ENLACE_AZUL}>
+              Ver la calibración
+            </Link>
+          </span>
         </section>
       </div>
 
@@ -254,7 +303,8 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
   );
 }
 
-function destinoDe(s: Senal): string {
+function destinoDe(s: Senal): string | null {
+  if (s.destino.tipo === "ninguno") return null;
   if (s.destino.tipo === "persona") return rutaDeLaUnoAUno(s.destino.id);
   if (s.destino.tipo === "supuestos") return RUTA_DE_LOS_SUPUESTOS;
   return "/customer-success";

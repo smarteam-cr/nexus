@@ -27,6 +27,7 @@ import {
   useHayAplicadorDeDocumento,
 } from "./aplicador-de-documento";
 import { useUndo } from "@/components/ui/UndoProvider";
+import type { NovedadEnElTurno } from "@/lib/asistente/alcance";
 
 /** El rótulo del aviso de lo aplicado: «Aplicado · Deshacer». */
 const ROTULO_DE_LO_APLICADO = "Aplicado";
@@ -37,6 +38,7 @@ export default function ChatDelDocumento({
   piezaLabel,
   abierto,
   onClose,
+  onNovedadesAplicadas,
 }: {
   /** La base de la API del dueño del documento — ver `ChatDelAsistente`. */
   base: string;
@@ -44,6 +46,8 @@ export default function ChatDelDocumento({
   piezaLabel: string;
   abierto: boolean;
   onClose: () => void;
+  /** Etapa 6: las novedades de reuniones que llevaba el acuerdo aplicado (las da por usadas quien monta). */
+  onNovedadesAplicadas?: (novedades: NovedadEnElTurno[]) => void;
 }) {
   const obtenerAplicador = useAplicadorDeDocumento();
   const hayAplicador = useHayAplicadorDeDocumento();
@@ -110,6 +114,7 @@ export default function ChatDelDocumento({
          con su motivo, en vez de dejar que el clic falle y escriba un desenlace. */
       motivoParaNoAplicar={hayAplicador ? null : "Abriendo el documento…"}
       onAplicar={aplicar}
+      onNovedadesAplicadas={onNovedadesAplicadas}
     />
   );
 }

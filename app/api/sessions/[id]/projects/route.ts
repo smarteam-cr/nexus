@@ -1,22 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject, guardInternalUser } from "@/lib/auth/api-guards";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { belongsToClient } from "@/lib/sessions/project-sources";
+import { guardAccesoALaReunion } from "@/lib/sessions/acceso-a-la-reunion";
 
 /**
  * GET /api/sessions/[id]/projects
  *
  * Lista los proyectos asignados a una sesión (vía SessionProject).
  * Incluye name + isPrimary + source + confidence.
+ *
+ * Con dueño, solo quien tiene acceso a ese cliente; sin acceso, 404 (lib/sessions/acceso-a-la-reunion.ts).
  */
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userGuard = await guardInternalUser();
-  if (userGuard instanceof NextResponse) return userGuard;
-
   const { id } = await params;
+  const acceso = await guardAccesoALaReunion(id);
+  if (acceso instanceof NextResponse) return acceso;
   const assignments = await prisma.sessionProject.findMany({
     where: { sessionId: id },
     orderBy: [{ isPrimary: "desc" }, { confidence: "desc" }],

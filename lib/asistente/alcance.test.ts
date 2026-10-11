@@ -7,11 +7,22 @@
  * (el hilo se re-manda entero). E4 P1 suma la de una FASE («IA» del Gantt). Lo que se cuida:
  *   · la línea de fase dice qué fase y su id, y que es una pista, no un límite;
  *   · la línea de SECCIÓN no cambia ni un byte: los hilos viejos se siguen limpiando al pintar;
- *   · `mensajeSinAlcance` saca las dos marcas y deja intacto un texto sin marca.
+ *   · `mensajeSinAlcance` saca las dos marcas y deja intacto un texto sin marca;
+ *   · etapa 6: la novedad de una reunión va dentro del bloque y dice qué hechos se usan al aplicar.
  * Cada `it` nombra la edición que lo pone en rojo.
  */
 import { describe, expect, it } from "vitest";
-import { lineaDeAlcance, MARCA_DE_ALCANCE, MARCA_DE_FASE, MARCAS_DE_ALCANCE, mensajeSinAlcance } from "./alcance";
+import {
+  lineaDeAlcance,
+  MARCA_DE_ALCANCE,
+  MARCA_DE_FASE,
+  MARCA_DE_NOVEDAD,
+  MARCAS_DE_ALCANCE,
+  mensajeSinAlcance,
+  novedadesDelTexto,
+  textosDeLasNovedades,
+  novedadesPorAplicar,
+} from "./alcance";
 
 describe("⭐ la línea de una fase", () => {
   it("empieza con [SOBRE LA FASE «X» [id]], dice «no un límite» y cierra con una línea en blanco", () => {
@@ -56,5 +67,60 @@ describe("`mensajeSinAlcance`: lo que la persona escribió, sin la línea", () =
     expect(mensajeSinAlcance(pedido)).toBe(pedido);
     const conParrafos = "Primero esto.\n\nY después esto.";
     expect(mensajeSinAlcance(conParrafos), "cortó un mensaje sin marca").toBe(conParrafos);
+  });
+});
+
+describe("⭐ la NOVEDAD de una reunión viaja en el turno (etapa 6)", () => {
+  const novedad = {
+    pieza: "planning",
+    hechoIds: ["cmh1", "cmh2"],
+    frase: "El pipeline de ventas queda con seis etapas.",
+    cita: "dejemos el pipeline\n\nen seis etapas",
+    reunion: "Seguimiento semanal",
+    fecha: "2026-10-08",
+  };
+  const linea = lineaDeAlcance({ key: "pipelines", label: "Pipelines", novedad });
+
+  it("va dentro del bloque, con su marca, la frase, la cita y la regla de la frontera", () => {
+    /* La edición que la pone en rojo: dejar un salto doble de la cita (el bloque se cerraría antes y la marca se pintaría
+       arriba del mensaje) o sacar la regla de no copiar la cita ni poner precios. */
+    expect(linea.startsWith("[SOBRE LA SECCIÓN «Pipelines» (pipelines)]\n[NOVEDAD planning cmh1,cmh2]\n")).toBe(true);
+    expect(linea).toContain("«El pipeline de ventas queda con seis etapas.»");
+    expect(linea).toContain("«dejemos el pipeline en seis etapas»");
+    expect(linea).toContain("No copies la cita tal cual");
+    expect(linea).toContain("pongas precios ni montos de lo que cobra Smarteam");
+    expect(linea.indexOf("\n\n"), "el bloque se cierra antes de tiempo").toBe(linea.length - 2);
+    expect(mensajeSinAlcance(`${linea}aplícalo`)).toBe("aplícalo");
+  });
+
+  it("los ids raros o un documento inventado no dejan marca", () => {
+    expect(lineaDeAlcance({ key: "x", label: "X", novedad: { ...novedad, hechoIds: ["a]b"] } })).not.toContain(MARCA_DE_NOVEDAD);
+    expect(lineaDeAlcance({ key: "x", label: "X", novedad: { ...novedad, pieza: "Planificación" } })).not.toContain(MARCA_DE_NOVEDAD);
+  });
+
+  it("`textosDeLasNovedades` saca la frase y la cita (para las huellas de la frontera); sin bloque, nada", () => {
+    expect(textosDeLasNovedades(`${linea}aplícalo`)).toEqual(["El pipeline de ventas queda con seis etapas.", "dejemos el pipeline en seis etapas"]);
+    expect(textosDeLasNovedades("hola")).toEqual([]);
+    expect(textosDeLasNovedades(`${lineaDeAlcance({ key: "x", label: "X" })}hola`)).toEqual([]);
+  });
+
+  it("`novedadesDelTexto` lee la marca; un texto sin bloque, nada", () => {
+    expect(novedadesDelTexto(`${linea}aplícalo`)).toEqual([{ pieza: "planning", hechoIds: ["cmh1", "cmh2"] }]);
+    expect(novedadesDelTexto("[NOVEDAD planning cmh1]\n\nhola")).toEqual([]);
+    expect(novedadesDelTexto(`${lineaDeAlcance({ key: "x", label: "X" })}hola`)).toEqual([]);
+  });
+
+  it("`novedadesPorAplicar`: las de los mensajes desde el último acuerdo aplicado hasta el que se aplica", () => {
+    const turnos = [
+      { id: "1", rol: "CSE", texto: `${lineaDeAlcance({ key: "x", label: "X", novedad: { ...novedad, hechoIds: ["viejo"] } })}hazlo` },
+      { id: "2", rol: "ASISTENTE", texto: "ok", estado: "aplicado" },
+      { id: "3", rol: "CSE", texto: `${linea}aplícalo` },
+      { id: "4", rol: "ASISTENTE", texto: "¿seis o siete?", estado: null },
+      { id: "5", rol: "CSE", texto: `${linea}seis` },
+      { id: "6", rol: "ASISTENTE", texto: "listo", estado: "vivo" },
+    ];
+    expect(novedadesPorAplicar(turnos, "6")).toEqual([{ pieza: "planning", hechoIds: ["cmh1", "cmh2"] }]);
+    expect(novedadesPorAplicar(turnos, "2")).toEqual([{ pieza: "planning", hechoIds: ["viejo"] }]);
+    expect(novedadesPorAplicar(turnos, "nada")).toEqual([]);
   });
 });

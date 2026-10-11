@@ -76,3 +76,34 @@ export async function confirmarDocumento(
   const nombre = original || path.slice(carpeta.length + 1).replace(/^\d+_/, "");
   return { ok: true, path, nombre, tamano: v.objeto.size, tipo: v.objeto.mimetype, contenido };
 }
+
+/**
+ * Deja un archivo YA confirmado entre los documentos de la empresa (Información del cliente ›
+ * Documentos, 2026-10-07): lo que se sube en el «Contexto adicional» de una pieza queda también ahí,
+ * con su origen. El archivo NO se borra: el documento apunta a él. `projectId` es el proyecto donde se
+ * subió (null en la preventa y la propuesta: todavía no hay proyecto).
+ */
+export async function guardarEnLosDocumentosDeLaEmpresa(input: {
+  clientId: string;
+  projectId: string | null;
+  origen: string;
+  subido: Extract<DocumentoConfirmado, { ok: true }>;
+  titulo?: string | null;
+}): Promise<{ id: string }> {
+  const { subido } = input;
+  return prisma.clientDocument.create({
+    data: {
+      clientId: input.clientId,
+      projectId: input.projectId,
+      title: (input.titulo?.trim() || subido.nombre).slice(0, 200),
+      type: "FILE",
+      url: subido.path,
+      fileName: subido.nombre,
+      fileSize: subido.tamano,
+      mimeType: subido.tipo,
+      content: subido.contenido,
+      origen: input.origen,
+    },
+    select: { id: true },
+  });
+}

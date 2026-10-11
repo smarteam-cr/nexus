@@ -182,3 +182,21 @@ export function enLotes<T>(lista: T[], tamano: number): T[][] {
   for (let i = 0; i < lista.length; i += tamano) lotes.push(lista.slice(i, i + tamano));
   return lotes;
 }
+
+/**
+ * ¿Este evento es un BLOQUE de una tarea de Nexus (lib/google/agenda.ts)? Tareas internas crea un bloque privado por
+ * tarea en el calendario de su dueña. Un bloque nunca se vuelve sesión ni se le adjudica a un cliente: meet-sync lo
+ * salta aunque Google le haya agregado un Meet. Se reconoce por su marca (`nexusTareaId`), por la descripción
+ * («nexustarea <id>», la del enlace de plantilla) o por el título «Tarea · …» sin más asistentes que el organizador.
+ */
+export function esBloqueDeTarea(e: {
+  summary?: string | null;
+  description?: string | null;
+  extendedProperties?: { private?: Record<string, string> | null } | null;
+  attendees?: readonly unknown[] | null;
+}): boolean {
+  if (e.extendedProperties?.private?.nexusTareaId) return true;
+  if ((e.description ?? "").includes("nexustarea ")) return true;
+  const sinInvitados = !e.attendees || e.attendees.length <= 1;
+  return sinInvitados && /^tarea\s*·/i.test((e.summary ?? "").trim());
+}

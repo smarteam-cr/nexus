@@ -12,14 +12,22 @@
  * puso a la persona). En una semana que viene, solo lo que sigue abierto. Las abiertas con fecha pasada se cuentan
  * aparte como «atrasadas o sin marcar»: pueden ser trabajo hecho y no marcado, y sumarlas inventaría carga.
  *
- * ⚠ Es una ESTIMACIÓN hasta que las tareas tengan horas (propias o respondidas al marcarlas hechas).
+ * ── LO RESPONDIDO MANDA ──────────────────────────────────────────────────────
+ * Si quien hizo la tarea anotó cuánto le tomó («¿cuánto te tomó?», lib/tiempos), eso reemplaza al estimado: ya trae
+ * adentro la parte de Smarteam y la complejidad de la cuenta. Va a la persona que lo anotó (puede no ser el dueño del
+ * proyecto) y cuenta como DECLARADO; el resto, como estimado. Así cada número dice de dónde sale.
  */
 import { addWeeks, computePhaseRanges, overduePlannedEnd } from "@/lib/timeline/weeks";
+import { familiaDe, familiaPorClave, type ClaveDeFamilia } from "@/lib/tiempos/familias";
 import type { ConfigCarga, TipoDeFase } from "./config";
-import { TIPOS_DE_FASE } from "./config";
+import { ETIQUETA_DE_TIPO, TIPOS_DE_FASE } from "./config";
 import { lunesDe, lunesDeFecha } from "./semana";
 
 export interface TareaParaCarga {
+  /** El id de la tarea: con él se encuentra lo que respondió quien la hizo. */
+  id?: string;
+  /** Con el título se reconoce si es una tarea clave (lib/tiempos/familias.ts). */
+  titulo?: string | null;
   weekIndex: number;
   estado: string;
   parte: string | null;
@@ -45,8 +53,18 @@ export interface CronogramaParaCarga {
 
 export interface EntregaDeLaSemana {
   horas: number;
+  /** La parte de `horas` que respondió quien hizo la tarea (el resto es estimado). */
+  declaradas: number;
   tareas: number;
   porCliente: Map<string, number>;
+  /** La parte declarada de cada cuenta. */
+  declaradasPorCliente: Map<string, number>;
+}
+
+/** Lo que alguien anotó para una tarea: quién y cuántas horas. */
+export interface TiempoDeclarado {
+  persona: string;
+  horas: number;
 }
 
 export interface EntregaEstimada {
@@ -71,9 +89,47 @@ export function parteDeSmarteam(parte: string | null, config: ConfigCarga): numb
   return 1; // SMARTEAM o sin parte declarada
 }
 
+export interface EstimadoDeTarea {
+  /** base × parte × factor. */
+  horas: number;
+  /** Horas antes de la parte y del factor: las de su tarea clave si tiene número propio; si no, las de su tipo de fase. */
+  base: number;
+  de: "familia" | "tipo";
+  familia: ClaveDeFamilia | null;
+  /** El nombre de la tarea clave o del tipo de fase. */
+  nombre: string;
+  parte: number;
+  factor: number;
+}
+
+/**
+ * Lo que la carga supone para una tarea. Es UNA sola cuenta para la carga, el plan de la rentabilidad y lo que se le
+ * muestra a quien responde «¿cuánto te tomó?» (y se guarda con su respuesta para compararlas).
+ */
+export function estimarTarea(
+  t: { tipoFase: string | null; parte: string | null; titulo?: string | null },
+  factor: number,
+  config: ConfigCarga,
+): EstimadoDeTarea {
+  const familia = familiaDe(t.titulo);
+  const propia = familia ? config.horasPorFamilia[familia] : undefined;
+  const tipo = tipoDeFase(t.tipoFase);
+  const base = propia ?? config.horasPorTipo[tipo];
+  const parte = parteDeSmarteam(t.parte, config);
+  return {
+    horas: base * parte * factor,
+    base,
+    de: propia !== undefined ? "familia" : "tipo",
+    familia,
+    nombre: propia !== undefined && familia ? (familiaPorClave(familia)?.nombre ?? familia) : tipo === "SIN" ? "Sin tipo" : ETIQUETA_DE_TIPO[tipo],
+    parte,
+    factor,
+  };
+}
+
 /** Horas estimadas de una tarea en una cuenta. */
-export function horasDeTarea(tipo: string | null, parte: string | null, factor: number, config: ConfigCarga): number {
-  return config.horasPorTipo[tipoDeFase(tipo)] * parteDeSmarteam(parte, config) * factor;
+export function horasDeTarea(tipo: string | null, parte: string | null, factor: number, config: ConfigCarga, titulo?: string | null): number {
+  return estimarTarea({ tipoFase: tipo, parte, titulo }, factor, config).horas;
 }
 
 /** Recorre las tareas de un cronograma con la fecha en que el plan las pone. */
@@ -93,14 +149,16 @@ export function* tareasConFecha(c: CronogramaParaCarga): Generator<{ tarea: Tare
 }
 
 /**
- * La entrega estimada de los cronogramas, por persona y semana. `factorDe` da el factor de complejidad de una cuenta
- * (1 si no se conoce). `hoy` separa lo que ya pasó de lo que viene.
+ * La entrega de los cronogramas, por persona y semana. `factorDe` da el factor de complejidad de una cuenta (1 si no
+ * se conoce). `hoy` separa lo que ya pasó de lo que viene. `declarados` = lo que respondió quien hizo cada tarea, por
+ * id de tarea: reemplaza al estimado.
  */
 export function entregaEstimada(
   cronogramas: CronogramaParaCarga[],
   factorDe: (clienteId: string) => number,
   config: ConfigCarga,
   hoy: Date,
+  declarados: ReadonlyMap<string, TiempoDeclarado> = new Map(),
 ): EntregaEstimada {
   const porPersona = new Map<string, Map<string, EntregaDeLaSemana>>();
   const atrasadas = new Map<string, number>();
@@ -108,11 +166,13 @@ export function entregaEstimada(
   const lunesDeHoy = lunesDe(hoy);
 
   for (const c of cronogramas) {
-    const email = c.responsableEmail?.trim().toLowerCase();
-    if (!email) continue;
+    const dueno = c.responsableEmail?.trim().toLowerCase();
+    if (!dueno) continue;
     const factor = factorDe(c.clienteId);
     for (const { tarea, fase, fecha, finPlaneado } of tareasConFecha(c)) {
       if (tarea.estado === "SUSPENDED") continue;
+      const declarado = tarea.id ? declarados.get(tarea.id) : undefined;
+      const email = declarado?.persona.trim().toLowerCase() || dueno;
       const abierta = ABIERTA.has(tarea.estado);
       const deSmarteam = parteDeSmarteam(tarea.parte, config) > 0 || tarea.parte === "DEV";
       if (!fecha) {
@@ -123,15 +183,20 @@ export function entregaEstimada(
         atrasadas.set(email, (atrasadas.get(email) ?? 0) + 1);
       }
       if (tarea.tipo === "SESSION") continue; // las sesiones ya están en el calendario
-      const horas = horasDeTarea(fase.tipo, tarea.parte, factor, config);
+      const horas = declarado ? declarado.horas : horasDeTarea(fase.tipo, tarea.parte, factor, config, tarea.titulo);
       if (horas <= 0) continue;
       const lunes = lunesDeFecha(fecha);
-      if (lunes >= lunesDeHoy && !abierta) continue; // lo que viene, solo si sigue abierto
+      // Lo que viene, solo si sigue abierto (salvo que alguien ya haya dicho cuánto le tomó: eso pasó).
+      if (lunes >= lunesDeHoy && !abierta && !declarado) continue;
       const semanas = porPersona.get(email) ?? new Map<string, EntregaDeLaSemana>();
-      const s = semanas.get(lunes) ?? { horas: 0, tareas: 0, porCliente: new Map() };
+      const s = semanas.get(lunes) ?? { horas: 0, declaradas: 0, tareas: 0, porCliente: new Map(), declaradasPorCliente: new Map() };
       s.horas += horas;
       s.tareas++;
       s.porCliente.set(c.clienteId, (s.porCliente.get(c.clienteId) ?? 0) + horas);
+      if (declarado) {
+        s.declaradas += horas;
+        s.declaradasPorCliente.set(c.clienteId, (s.declaradasPorCliente.get(c.clienteId) ?? 0) + horas);
+      }
       semanas.set(lunes, s);
       porPersona.set(email, semanas);
     }
@@ -161,7 +226,7 @@ export function planDelPeriodo(
       if (!fecha || fecha < desde || fecha >= hasta || tarea.estado === "SUSPENDED") continue;
       const p = out.get(c.clienteId) ?? { sesiones: 0, horasTareas: 0 };
       if (tarea.tipo === "SESSION") p.sesiones++;
-      else p.horasTareas += horasDeTarea(fase.tipo, tarea.parte, factor, config);
+      else p.horasTareas += horasDeTarea(fase.tipo, tarea.parte, factor, config, tarea.titulo);
       out.set(c.clienteId, p);
     }
   }

@@ -87,3 +87,15 @@ export function linkFeedsHandoff(
   if (!link.isPrimary && (link.confidence ?? 0) < HANDOFF_MIN_SECONDARY_CONFIDENCE) return false;
   return appliesRule;
 }
+
+/**
+ * ¿Este LINK sesión↔proyecto alimenta el AVANCE del cronograma? (memoria de la cuenta, etapa 6; DECISIONS «Hechos,
+ * enrutador y novedades»). Incluido, y principal o secundario con confianza de 0,4 o más. ⛔ SIN la relevancia de venta
+ * de `linkFeedsHandoff`: esa deja afuera las reuniones sin Ventas en la sala ni título de handoff, que son justo las de
+ * implementación, las que más mueven el plan. El enrutador corre el avance solo con una señal de cronograma y solo para
+ * los proyectos que cumplen esto.
+ */
+export function linkFeedsAvance(link: { included: boolean; isPrimary: boolean; confidence: number | null }): boolean {
+  if (!link.included) return false;
+  return link.isPrimary || (link.confidence ?? 0) >= HANDOFF_MIN_SECONDARY_CONFIDENCE;
+}

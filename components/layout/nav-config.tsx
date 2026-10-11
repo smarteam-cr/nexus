@@ -20,6 +20,7 @@ import type { PermissionMap } from "@/lib/auth/permissions/types";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import { MARKETING_NAV } from "@/components/marketing/nav-config";
 import { ROLES_DE_EXITO_DEL_CLIENTE } from "@/lib/cs/acceso";
+import { ROLES_CON_CARGA_PROPIA } from "@/lib/rentabilidad/acceso";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -35,7 +36,18 @@ export type NavGate =
    * Por ROL, fuera de la matriz (no se delega por plantilla): Éxito del cliente es de la CSL y de
    * dirección (2026-10-04, `lib/cs/acceso.ts`). SUPER_ADMIN pasa siempre.
    */
-  | { kind: "roles"; roles: readonly string[] };
+  | { kind: "roles"; roles: readonly string[] }
+  /**
+   * Por ROL y SIN el pase de dirección: «Tu carga» (2026-10-07) es la carga propia de quien lleva cuentas. Dirección la
+   * ve como pestaña de Rentabilidad; en el menú sería un ítem de más.
+   */
+  | { kind: "soloRoles"; roles: readonly string[] }
+  /**
+   * Tareas internas, durante el piloto (2026-10-09): Marketing, dirección y quien ya tenga una tarea, una propuesta o un
+   * espacio (`enTareas`, un HECHO de datos que calcula AppShell). Desde la fase 2, `always`. La página no tiene gate:
+   * cualquiera entra desde un aviso o desde «Para ti».
+   */
+  | { kind: "tareasPiloto" };
 
 export interface NavChildConfig {
   href: string;
@@ -82,7 +94,7 @@ export interface NavItemConfig {
   /** `href` es uno de los hijos: si la persona no lo ve, el clic en el ítem lleva al primer hijo que ve. */
   entradaEsHijo?: boolean;
   /** Hijos cargados por fetch (el flyout de Roles lista los perfiles). */
-  dynamicChildren?: "roles";
+  dynamicChildren?: "roles" | "tareas";
   /** Lleva un número al lado (lo que pide atención hoy). Solo «Para ti» (components/para-ti/cuenta.ts). */
   cuenta?: "para-ti";
   group: "operacion" | "administracion";
@@ -98,6 +110,8 @@ export interface NavContext {
   hasSharedDocs?: boolean;
   /** El rol de la persona (`TeamRole`), para los gates por rol. */
   role?: string | null;
+  /** Tareas internas en el piloto: es de Marketing o ya tiene algo en Tareas. Lo calcula AppShell. */
+  enTareas?: boolean;
 }
 
 /** Espeja 1:1 los booleanos canSeeX del Sidebar pre-migración. PURO y testeable. */
@@ -108,6 +122,8 @@ export function canSeeNavItem(item: Pick<NavItemConfig, "gate">, ctx: NavContext
   // Roles: dirección lo administra; el resto entra solo si le compartieron algo.
   if (gate.kind === "superAdminOrSharedDocs") return ctx.isSuperAdmin || ctx.hasSharedDocs === true;
   if (gate.kind === "roles") return ctx.isSuperAdmin || (!!ctx.role && gate.roles.includes(ctx.role));
+  if (gate.kind === "soloRoles") return !!ctx.role && gate.roles.includes(ctx.role);
+  if (gate.kind === "tareasPiloto") return ctx.isSuperAdmin || ctx.enTareas === true;
   const sections = (ctx.permissions?.sections ?? {}) as Record<
     string,
     Record<string, boolean> | undefined
@@ -202,6 +218,26 @@ export const APP_NAV: readonly NavItemConfig[] = [
     ),
   },
   {
+    // Tareas internas (2026-10-09, docs/tareas-plan.md): lo que se acuerda en una reunión termina en la semana y en la
+    // agenda de cada persona. Justo después de «Para ti». En el piloto, Marketing y quien ya tenga algo en Tareas.
+    key: "tareas",
+    label: "Tareas",
+    href: "/tareas",
+    group: "operacion",
+    gate: { kind: "tareasPiloto" },
+    // Además de estos, el desplegable suma los espacios libres de quien mira (TareasNavFlyout, por fetch).
+    dynamicChildren: "tareas",
+    children: [
+      { href: "/tareas", label: "Mis tareas", exact: true },
+      { href: "/tareas/delegadas", label: "Lo que delegaste" },
+      { href: "/tareas/equipo", label: "Semana del equipo" },
+      { href: "/tareas/por-cliente", label: "Por cliente" },
+    ],
+    icon: icon(
+      "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
+    ),
+  },
+  {
     key: "clients",
     label: "Clientes",
     href: "/clients",
@@ -239,6 +275,17 @@ export const APP_NAV: readonly NavItemConfig[] = [
     icon: icon(
       "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
     ),
+  },
+  {
+    // Tu carga (2026-10-07): las horas de la semana de quien lleva cuentas, solo las suyas. Es una pestaña de
+    // Rentabilidad (decisión de Elías), pero Rentabilidad es de dirección: el CSE y la CSL llegan por acá. Sin montos. La
+    // ruta va fuera de /customer-success para no encender «Éxito del cliente» a la vez.
+    key: "tu-carga",
+    label: "Tu carga",
+    href: "/tu-carga",
+    gate: { kind: "soloRoles", roles: ROLES_CON_CARGA_PROPIA },
+    group: "operacion",
+    icon: icon("M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"),
   },
   {
     key: "sales",
@@ -342,6 +389,9 @@ export const APP_NAV: readonly NavItemConfig[] = [
       { href: "/finanzas/integraciones", label: "Integraciones", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
       // Proyección, reportes de cobranza y el corte quincenal: se mudaron de las pestañas de Cobranza.
       { href: "/finanzas/reportes", label: "Reportes de cobranza", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA"] },
+      // El MODELO de comisiones (2026-10-07): porcentajes, cuándo aplican y sus topes. Solo Super Admin, en sus dos vistas.
+      // No es lo que se le paga a cada vendedor (Comisiones de vendedor, con la planilla): esto define las reglas.
+      { href: "/finanzas/modelo-de-comisiones", label: "Comisiones", section: "Modelos", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
     ],
     icon: icon(
       "M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z",

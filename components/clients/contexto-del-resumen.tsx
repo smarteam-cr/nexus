@@ -34,6 +34,8 @@ export interface ContextoDelResumen {
   queSigueOcupado: boolean;
   piezas: PiezaParaQueSigue[];
   abrirPieza: (slug: string) => void;
+  /** Etapa 6: abre la pieza con su franja de novedades desplegada (el «Qué sigue» de las novedades). */
+  abrirNovedades?: (slug: string) => void;
   aLaVista: boolean;
   /** ¿Se está mirando el proyecto? Falso mientras se mira algo de la cuenta: el documento del
    *  handoff se desmonta, como fuera del Resumen (sus entradas de deshacer no quedan vivas). */

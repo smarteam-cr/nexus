@@ -270,7 +270,7 @@ por fecha en `CronJobState`: matar el contenedor a mitad de un job NO re-dispara
 Cada corrida deja su resultado en `CronJobState.lastResult` y el **semáforo de
 Integraciones** lo pinta (B-03); un fallo llega a Sentry con `tags.job` (B-02), y un job que no
 toma el turno del día no anota nada, así que un rojo queda rojo hasta la corrida siguiente. Hasta el
-2026-09-04 esta sección listaba 6 jobs; son 13 (`allJobs()`), más tres disparos por navegación:
+2026-09-04 esta sección listaba 6 jobs; son 18 (`allJobs()`), más los disparos por navegación:
 
 | Job | Cuándo | Gate | Qué hace |
 |---|---|---|---|
@@ -282,20 +282,23 @@ toma el turno del día no anota nada, así que un rojo queda rojo hasta la corri
 | `maintenance-daily` | una vez al día, a cualquier hora (en la práctica, pasada la medianoche CR) | — | barre `PrintJobToken` expirados y `ExternalVerifyAttempt` sin actividad en 24 h, y refresca las alertas de cobranza: abre vencidos y promesas incumplidas, pone al día las filas vivas y cierra las que ya no aplican (`lib/cobranza/alertas-refresco.ts`). No guarda corte. Si el refresco falla, el job queda en rojo y no reintenta hasta el día siguiente |
 | `cobranza-quincenal` | ≥ 7:00 CR en los días de corte (`esDiaDeCorte`) | `COBRANZA_CRON_ENABLED=1` | la tanda quincenal de cobranza: extiende las suscripciones, abre todas las alertas (falta facturar, cuentas sin datos, catch-ups) y guarda la foto de la quincena para Reportes. INV32 da rojo si el último corte tiene más de 17 días |
 | `google-enrich-retry` | cada tick, hasta 20 sesiones | `GOOGLE_SERVICE_ACCOUNT_KEY` + `GOOGLE_ADMIN_EMAIL` | reintenta el enriquecimiento de Meet que falló (backoff y tope de intentos) |
-| `ventas-ganadas-daily` | todos los días ≥ 6:00 CR (fines de semana incluidos) | — | espeja los tratos ganados del año en curso |
+| `seguimiento-reuniones` | cada tick, 2 lecturas en paralelo (420 s de tope cada una: el tope CORTA la lectura) | `SEGUIMIENTO_REUNIONES_ENABLED` ≠ `0` (prendido por defecto) y el SQL `2026-10-10-lectura-de-seguimiento.sql` | la lectura de cada reunión con un cliente o un prospecto (no de puertas adentro), por la cola `LecturaDeReunion` (`lib/lecturas`): minuta, compromisos a propuestas de Tarea y pedidos fuera de alcance; después vincula a su proyecto las reuniones que la lectura no toma y, con `SEGUIMIENTO_HECHOS=1`, reintenta hasta 2 lecturas de hechos que fallaron o de reuniones que cambiaron de dueño (con la bandera prendida también entran las reuniones con solo notas). Sin presupuesto automático no toma nada; sin nada en la cola no anota. Una reunión que falla (o se cuelga) 3 veces queda en `error` y ese tick el job FALLA (rojo + Sentry). Ver «La lectura de cada reunión» |
+| `ventas-ganadas-daily` | todos los días ≥ 6:00 CR (fines de semana incluidos) | — | espeja los tratos ganados del año en curso, con quién vendió cada uno, y después las metas comerciales de HubSpot (`MetaComercial`). Sin el permiso de metas lo dice en el log y sigue; se arregla reconectando HubSpot desde Integraciones |
 | `odoo-espejo-daily` | ≥ 6:00 CR, una vez al día | `ODOO_PASSWORD` (contraseña o clave de API), `ODOO_LOGIN` si la clave no es de `direct`, y `ODOO_SYNC_ENABLED` ≠ `0` | espeja las facturas de Odoo (Nexus solo lee). Si la corrida falla, el job FALLA (rojo + Sentry); un rechazo de credenciales retiene el turno hasta mañana (ver «El espejo de Odoo no corre»). INV31 da rojo si la última corrida buena tiene más de 20 h |
 | `mercury-espejo-daily` | ≥ 6:00 CR, una vez al día | `MERCURY_API_TOKEN` (token «Read Only» de Mercury) y `MERCURY_SYNC_ENABLED` ≠ `0` | copia las facturas, los clientes y los movimientos de Mercury (Nexus solo lee: el token no puede escribir). Si falla, el job FALLA (rojo + Sentry); un token rechazado retiene el turno hasta mañana (ver «La copia de Mercury no corre») |
 | `tipo-cambio-daily` | ≥ 6:00 CR, una vez al día | `TIPO_CAMBIO_SYNC_ENABLED` ≠ `0`; `BCCR_TOKEN` opcional | trae la venta y la compra de referencia del BCCR del día a `TipoCambioDia` (con `BCCR_TOKEN`, del servicio del BCCR; sin él, del API de Hacienda). Si falta el histórico desde 2023 lo intenta en la misma corrida. FALLA (rojo + Sentry) si no quedó la tasa de hoy; un fallo pasajero suelta el turno. Primera carga del histórico: `scripts/traer-tipo-de-cambio.ts --apply` |
 | `planilla-quincena-daily` | ≥ 6:00 CR, una vez al día | — | se asegura de que la quincena de planilla de hoy exista en el libro, con el salario que rige (`completarQuincenas`, PENDIENTE: pagarla la marca una persona). Re-generar no duplica nada. Las quincenas atrasadas no las crea solo: eso es «Completar las que faltan» en el historial de planilla |
 | `licencias-renovacion-daily` | ≥ 7:00 CR, una vez al día | — | a 90, 60 y 30 días de cada renovación de licencias (HubSpot Partner + lo cargado a mano en la información del cliente), una alerta de «Renovación» en Éxito del cliente; una por cliente, hub, fecha y umbral. Sin IA (`lib/cs/avisos-de-renovacion.ts`) |
-| `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 21 invariantes solo-base (`lib/invariantes/`, B-07); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
+| `adopcion-recordatorios-daily` | ≥ 7:00 CR, una vez al día | — | recuerda revisar la adopción: a los 30 días del inicio de un proyecto de CS, en la semana antes de su entrega y en la primera semana de cada mes en las cuentas recurrentes. Un aviso de «Para ti» al CSE del proyecto y a quien lleva el frente de Customer Success, que lleva a la pestaña Adopción. Cada momento tiene una ventana de 7 días: no es retroactivo. Sin IA (`lib/cs/recordatorios-de-adopcion.ts`) |
+| `tareas-semana-lunes` | lunes ≥ 6:00 CR | — | Tareas internas: vence las propuestas (tareas y proyectos) que nadie decidió en 14 días, pasa a «Por asignar» lo abierto de quien se dio de baja (lo privado no) y muda al sprint de casa lo de quien cambió de área. Todo como `sistema`, con su evento; correrlo dos veces no cambia nada. Con `TAREAS_CIERRE_AUTOMATICO=1` en el `.env` (apagado por defecto), antes revisa como `sistema` la semana pasada de quien no la revisó: lo abierto pasa a esta semana y la persona lo corrige desde Mis tareas (`cerrarSemanaPasadaComoSistema`) |
+| `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 35 invariantes solo-base (`lib/invariantes/`, B-07; INV38–43 son de Tareas internas; INV44, la lectura de cada reunión; INV45, los hechos de las reuniones; INV46, los pedidos fuera de alcance de una reunión de otro cliente); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
 
 ⚠ Sin `CS_WATCHDOG_ENABLED` y `COBRANZA_CRON_ENABLED` en el `.env` cinco de estos no corren, y sin
 `ODOO_PASSWORD` tampoco el espejo. Hasta el 2026-09-12 el semáforo los pintaba en gris («nunca
 corrió»), igual que a un job que todavía no llegó a su hora; ahora dice **apagado** con el motivo, que
 sale de la misma regla que usa `shouldRun` (`lib/jobs/requisitos.ts`).
 
-**Tres disparos por navegación**, que no pasan por el scheduler:
+**Disparos por navegación**, que no pasan por el scheduler:
 - **Auto-sync de Google Meet**: `POST /api/integrations/google/auto-sync` al cargar el shell
   (`components/layout/SidebarShell.tsx`) y la pantalla de sesiones
   (`app/(shell)/sessions/SessionsClient.tsx`), con freno en el servidor desde el 2026-09-21
@@ -314,6 +317,130 @@ sale de la misma regla que usa `shouldRun` (`lib/jobs/requisitos.ts`).
   (`lib/cs/vigia-por-cliente.ts`). NO depende de `CS_WATCHDOG_ENABLED`: lo frena
   `CsSettings.watchdogEnabled`, que desde ese día frena también la corrida a mano. Llama a Claude
   (una vez por proyecto) aunque el cron del vigía esté apagado.
+- **Calendario de la exploración al abrir** (desde la etapa A de la memoria de la cuenta): al abrir el lienzo de una
+  exploración, como mucho cada 10 minutos por exploración (el sello va en la foto de la exploración, como el de las
+  reuniones de HubSpot), relee hasta 5 eventos de Google Calendar unidos a sus sesiones, de los que empiezan entre ayer
+  y dentro de 6 semanas (`events.get`, solo lectura, con el permiso de siempre: `calendar.readonly`). Lee el calendario
+  de quien unió cada sesión (el servidor lo fija al unirla: la pantalla no lo puede cambiar). Si un evento se movió, la
+  sesión toma la fecha nueva; si se canceló, lo marca. Solo escribe lo de un evento que sigue teniendo a alguien de la
+  empresa invitado. Nunca
+  corre la sincronización de Meet ni le ensancha el `timeMax`.
+
+### La lectura de cada reunión (memoria de la cuenta, desde la etapa 2)
+
+> **Estado (2026-10-10): en el código, SIN desplegar y con el SQL sin aplicar.** Hasta el deploy, en producción cada
+> reunión la sigue leyendo el post-proceso de antes, que dispara y olvida y escribe `ActionItem`.
+
+El enriquecimiento de Meet solo encola cada reunión con un cliente o un prospecto (de 14 días o menos, con
+transcripción y que no es de puertas adentro), y el job `seguimiento-reuniones` la lee (`lib/lecturas`, DECISIONS «La
+lectura de cada reunión es durable…»): cada tick toma 2 lecturas con un update condicional, con 420 s de tope cada una;
+el tope corta la lectura (si no terminó ni 60 s después, la fila queda `leyendo` y la rescata la regla de colgada). Una
+colgada más de 15 min vuelve a la cola, y un error se reintenta a los 5 y a los 30 minutos y a la tercera queda en
+`error` (también la tercera vez que se cuelga): ese tick el job falla (rojo + Sentry, con el id de la reunión). Sin
+presupuesto automático no toma nada, aunque la guardia esté solo en aviso. ⚠ Un tick con una lectura larga traba al
+scheduler hasta 8 minutos (corre los jobs en serie). La cola es `LecturaDeReunion`, la misma fila que usa Tareas, con
+su propio estado en `seguimientoEstado` (`en_espera`, `leyendo`, `lista`, `sin_texto`, `copia`, `error`, `omitida`).
+Después de sus lecturas, el job vincula a su proyecto las reuniones que la lectura no toma (el clasificador; una que no
+se pudo vincular no se reintenta en 24 h). INV44 da rojo si una reunión de 14 días o menos con transcripción no tiene su
+lectura (o su minuta) a las 24 h; INV46, si un pedido fuera de alcance quedó en un cliente que no es el dueño de su
+reunión. «Generar minuta» (en la minuta del proyecto) y «Leer esta reunión» (en la página de una reunión sin minuta)
+leen YA por la misma cola (409 si ya se está leyendo), y «Leer una reunión» de Tareas también, si la reunión espera en
+la cola.
+
+- **Antes del deploy que la trae:** el SQL de la lectura de seguimiento, después del de Tareas:
+  `$env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-10-10-lectura-de-seguimiento.sql; Remove-Item Env:ALLOW_PROD_WRITE`,
+  después `npx prisma generate` y `npm run check:esquema` en verde. Sin el SQL, `/api/health` responde 503 y el deploy
+  se revierte solo.
+- **Lo recomendado: correr el ensayo de abajo ANTES del deploy y desplegarla prendida.** ⚠ Con
+  `SEGUIMIENTO_REUNIONES_ENABLED=0` el deploy NO deja todo como antes: el post-proceso de antes escribe `ActionItem`,
+  pero los «Pendientes» del Resumen, «Para ti», la página de la reunión y el vigía ya leen Tareas, así que los
+  compromisos de las reuniones nuevas no se ven en ninguna pantalla hasta prenderla (la minuta sí se ve). Desplegar con
+  la bandera en 0 solo sirve como retroceso de emergencia (ver «Para volver atrás»), no como paso previo.
+- **Antes de prenderla:** `npx tsx scripts/comparar-lectura-de-reuniones.ts`, desde una PC. Solo lee la base (la
+  conexión nace de solo lectura), llama a Claude unas 20 veces (≈US$1,6) y compara las minutas nuevas con las viejas,
+  con las citas verificadas y descartadas. Prenderla = sacar la variable del `.env` y `bash scripts/deploy.sh`.
+- **Justo después del deploy:** las reuniones frescas que se enriquecieron ANTES de que existiera la cola no tienen fila
+  e INV44 las reclama (medido el 2026-10-10: 6 de 92 sin minuta). Desde una PC: `npx tsx
+  scripts/encolar-lecturas-pendientes.ts` (en seco: lista lo que encolaría y por qué no entra el resto) y después
+  `$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/encolar-lecturas-pendientes.ts --apply; Remove-Item Env:ALLOW_PROD_WRITE`
+  (respalda `LecturaDeReunion` con pg_dump; sin pg_dump, `SIN_RESPALDO=1`). Solo encola: las lee el job, de a 2 por
+  minuto y con presupuesto automático.
+- **Después:** el semáforo de Integraciones con «La lectura de cada reunión» en verde, INV44 en verde cuando el job
+  terminó lo encolado (con presupuesto, de a 2 por minuto), y el costo por reunión en `LlmCall`: las llamadas de cada
+  reunión llevan `origen = "reunion:<sessionId> › <sitio>"` (sumar por reunión con `split_part(origen, ' ', 1)`).
+- **Una reunión en `error`:** el error queda en `LecturaDeReunion.seguimientoError`; se vuelve a leer con «Leer esta
+  reunión» en su página (`/sessions/<id>`, si no tiene minuta), o con `scripts/encolar-lecturas-pendientes.ts --sesion
+  <id>` (sin el corte de 14 días). Varias a la vez: `--tambien-errores`. No hace falta tocar la base a mano.
+- **Si a una reunión ya leída le cambian el dueño:** no se vuelve a leer. Lo que dejó para el dueño anterior se corrige
+  a mano: las propuestas de Tarea las muestra INV42 (se desestiman o se cambia su cliente desde Tareas) y los pedidos
+  fuera de alcance, INV46 (se descartan en «Fuera de alcance» del cliente equivocado). Sus HECHOS vivos (etapa 6) se
+  retiran solos, firmados por el sistema con «La reunión cambió de dueño»: lo pendiente queda desestimado, la alerta de
+  queja que sostenían se cierra, los campos que la reunión propuso salen de la propuesta de la ficha y la etapa
+  sugerida que salió de ella se borra. El job vuelve a pedir los hechos en el cliente nuevo. Lo que no se pudo retirar
+  sigue vivo y lo muestra INV45 (remedio: `scripts/hechos-fuera-de-su-cliente.ts`, abajo). Lo usado no se toca.
+- **Para volver atrás:** `SEGUIMIENTO_REUNIONES_ENABLED=0` en el `.env` del VPS y `bash scripts/deploy.sh` (recrea el
+  contenedor con el `.env` nuevo). Vuelve al post-proceso viejo (`lib/sessions/post-process-viejo.ts`), que dispara y
+  olvida y escribe `ActionItem`. Es un retroceso de emergencia: los «Pendientes» del Resumen, «Para ti», la página de
+  la reunión y el vigía leen Tareas (la segunda parte de la etapa 2), así que las `ActionItem` que se creen en ese modo
+  no se ven en ninguna pantalla. Las filas que quedaron en la cola esperan hasta que se vuelva a prender.
+- **`ActionItem`, lo histórico:** nada lo crea (lo vigila `lib/sessions/action-item-retirado.test.ts`); `POST
+  /api/action-items` responde 410 y la copia de pendientes de `/analyze` no escribe. Las filas viejas siguen en la base,
+  sin borrar; PATCH y DELETE de `/api/action-items/[id]` se quedan para ellas.
+
+### El sondeo de hechos y la bandera `SEGUIMIENTO_HECHOS` (memoria de la cuenta, etapas 5 y 6)
+
+> **Estado (2026-10-10): el sondeo (etapa 5) ya está en el código y nadie lo corrió todavía. La etapa 6 entera (la
+> lectura de hechos, el enrutador, el detector de la queja, INV45 y las novedades en pantalla) está en el código,
+> APAGADA, con su SQL sin aplicar.**
+
+- **El sondeo no se despliega.** Se corre desde una PC con
+  `npx tsx scripts/sondeo-de-hechos.ts --por <tu correo>` (sin `--por` no arranca), sin `ALLOW_PROD_WRITE`: elige las
+  reuniones con una conexión de solo lectura y no escribe en la base. Lee unas 30 reuniones recientes de clientes con
+  transcripción (sin Wherex, internas ni aliadas; como mucho 3 por cliente; `--notas N` y `--prospectos N` suman
+  reuniones con solo notas y de prospectos) y llama a Claude contra el presupuesto humano, con el correo de `--por`
+  (≈US$3,5); la única fila que queda es la telemetría de `LlmCall`. Con `--solo-elegir` muestra la lista sin llamar a
+  Claude. El resultado queda en `backups/<fecha>-sondeo-de-hechos/`: un `.md` por reunión con cada hecho, su cita y su
+  destino, un `resumen.md` (el costo de cada variante, la proyección al mes y las citas descartadas) y un `sondeo.json`.
+  ⚠ Lleva citas de reuniones de clientes: no sale de la PC. Con eso se eligen la variante y el modelo (DECISIONS
+  «Hechos, enrutador y novedades»).
+- **La bandera `SEGUIMIENTO_HECHOS` está apagada por defecto**: sin la variable (o con cualquier valor que no sea
+  `1`), la lectura de hechos no corre y la lectura de cada reunión sigue exactamente como antes (su avance, su ficha y su
+  etapa de siempre). La etapa 6 se despliega así y se prende después de mirar el sondeo.
+- **⚠ El SQL va ANTES del deploy que trae el modelo, aunque la bandera quede apagada:** el cliente de Prisma ya conoce
+  `HechoDeReunion`, y sin la tabla `/api/health` responde 503 y el deploy se revierte solo. Va después de
+  `2026-10-09-tareas.sql` (la FK a `LecturaDeReunion`); no depende de `2026-10-10-lectura-de-seguimiento.sql`, así que
+  sirve el orden en que los lista `npm run check:esquema` (por nombre: este primero):
+  `$env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-10-10-hechos-de-reunion.sql; Remove-Item Env:ALLOW_PROD_WRITE`,
+  y `npm run check:esquema` en verde.
+- **Para prenderla:** con el SQL aplicado y el código desplegado, `SEGUIMIENTO_HECHOS=1` en el `.env` del VPS y
+  `bash scripts/deploy.sh` (recrea el contenedor con el `.env` nuevo). Sin la tabla, aunque la bandera esté prendida,
+  nada corre (`hechosDisponible`).
+- **Qué cambia al prenderla:** cada reunión leída deja sus hechos (`HechoDeReunion`, corrida «seguimiento-hechos», unos
+  US$0,03–0,06 por reunión con Sonnet 4.6); la ficha se propone desde los hechos (no relee la reunión); el avance y la
+  etapa corren solo con una señal (el avance, para cada proyecto vinculado que cumple `linkFeedsAvance`); la queja que
+  dijo el cliente (comprobado por su turno en la transcripción) levanta una alerta, y el riesgo y la queja sin comprobar
+  van al vigía, que suma la sección «Riesgos de reuniones recientes sin alerta» y toma esos proyectos en el barrido; se
+  leen también las reuniones con solo notas; los hechos entran a la memoria interna de los agentes; y aparecen las
+  novedades: el número en el riel, la franja arriba del documento, el renglón en «Qué sigue», los hechos en la tarjeta
+  de la reunión, el aviso «Volver a mapear» en Procesos y su cuenta en «Lo que dejaron tus reuniones» de «Para ti».
+  «Uso de Nexus» los cuenta leyendo la tabla: si después se apaga la bandera, sigue contando los que ya se escribieron.
+  Apagada, nada de eso se ve ni le llega a ningún agente (ni hace
+  un pedido de más: el listado de piezas trae 0 novedades y la pantalla no pide el detalle).
+- **Una lectura de hechos que falla** queda en su corrida (`AgentRun` con `agentSlug = 'seguimiento-hechos'`, en
+  ERROR); el job `seguimiento-reuniones` la reintenta (2 por tick, hasta 3 veces por reunión y dueño; los dueños se
+  miran en una sola consulta por tick). Si la lectura de hechos no queda lista (falla o se omite), el avance, la ficha y
+  la etapa de esa reunión corren por el camino de siempre; si después el reintento la lee, los vuelve a proponer.
+- **Una reunión leída solo con las notas que después recibe su transcripción** se vuelve a leer con la transcripción
+  (lo vivo de la lectura de las notas queda desestimado con «Se volvió a leer con la transcripción»).
+- **INV45 en rojo** (un hecho vivo que no es del cliente de su reunión): revisar el dueño de la reunión en /sessions y
+  corregirlo si está mal (al cambiar de dueño los hechos se retiran solos). Si está bien, desde una PC:
+  `npx tsx scripts/hechos-fuera-de-su-cliente.ts` (simulacro, solo lee) y, revisado,
+  `$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/hechos-fuera-de-su-cliente.ts --apply; Remove-Item Env:ALLOW_PROD_WRITE`:
+  retira esos hechos de su módulo (la alerta, la propuesta de la ficha, la etapa) y los desestima con la nota de por
+  qué. Respalda antes `HechoDeReunion`, `CsAlert`, `Client` y `Project` (pide `pg_dump`).
+- **Para apagarla otra vez:** sacar la variable (o `SEGUIMIENTO_HECHOS=0`) y `bash scripts/deploy.sh`. Los hechos que ya
+  se escribieron quedan en la base, pero dejan de verse y de llegarle a los agentes (la memoria y el vigía); nada nuevo
+  los escribe. Un cambio de dueño los sigue corrigiendo aunque la bandera esté apagada.
 
 ### Prender la copia diaria de Éxito del cliente
 
@@ -330,10 +457,78 @@ el `.env` nuevo; sin SQL):
   (hasta 5 por tick), que **gastan API de Anthropic**. ⚠ Con esta bandera la copia de Partner también
   CREA clientes para los registros de Partner que no encuentra (`partnerCreaClientes`): mirar la lista
   de clientes los días siguientes. El vigía se apaga sin deploy con `CsSettings.watchdogEnabled`.
+  Desde el 2026-10-10 el vigía lee además la memoria de la cuenta y del proyecto (la ficha, los procesos,
+  la historia, lo fuera de alcance, la preventa, la auditoría, las desviaciones y los hechos): como mucho
+  unos 9.000 caracteres más por proyecto en cada corrida, con fichas sin confirmar mucho menos.
 
 El permiso `crm.objects.partner-clients.read` ya está concedido. Al día siguiente, Integraciones › Jobs
 del servidor tiene que mostrar los jobs en verde; si dicen **apagado**, nombran la variable que falta.
 Para no esperar a las 6:00: «Actualizar partner» y «Actualizar señales» en Éxito del cliente.
+
+### Migrar «CSE Encargado» en HubSpot (una vez, 2026-10-09)
+
+Desde el 2026-10-09 el espejo de proyectos lee primero «CSE Encargado» (`cse_encargado`) y, si está vacío,
+«CSL Encargado» (`csl_encargado`), que es donde vivía el CSE (DECISIONS §La cartera de la CSL). La migración
+lo deja como decidió Elías: «CSE Encargado» = el CSE, «CSL Encargado» = la CSL, en los proyectos de
+implementación, sus empresas y sus contactos. Escribe solo en HubSpot.
+
+1. Con el deploy que trae la lectura nueva ya en producción.
+2. Alguien con acceso de administrador revisa en HubSpot si algún workflow, reporte o vista usa «CSL
+   Encargado» de los proyectos: después de migrar dice la CSL, no el CSE.
+3. Desde una PC, en seco (solo lee): `npx tsx scripts/migrar-cse-encargado.ts`. Tiene que decir que ningún
+   proyecto cambia de encargado (si alguno cambiaría, el script no escribe nada).
+4. Con `--apply`: `$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/migrar-cse-encargado.ts --apply`.
+5. El sync de proyectos de cada cliente lo trae a Nexus (al abrir la ficha, o el automático).
+
+### Congelar los handoffs que ya existían (etapa 3b, una vez)
+
+El handoff se congela solo la primera vez que se aplica el cronograma que propone, o con «Congelar» (DECISIONS «El
+handoff se congela»). Los handoffs de antes quedan sin congelar hasta que Elías decida. Sin SQL: usa las tablas del
+estado del documento (`scripts/sql/2026-10-02-estado-del-documento.sql`, ya aplicado; `npm run check:esquema` lo dice).
+
+1. Con el deploy que trae el congelado ya en producción: el código de antes no lee el hito y seguiría regenerando
+   esos handoffs.
+2. Desde una PC, en simulacro (solo lee): `npx tsx scripts/congelar-handoffs-aplicados.ts`. Lista el grupo A (con una
+   propuesta del handoff aplicada) y el B (el cronograma lo creó el handoff directo), y lo que queda fuera (Wherex, ya
+   congelados, sin documento, sin cronograma del handoff).
+3. Para congelar el grupo A: `$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/congelar-handoffs-aplicados.ts --apply`. Con
+   `--tambien-creados` suma el B. Respalda antes `HitoDeDocumento` y `VersionDeDocumento` (pg_dump en el PATH o
+   `SIN_RESPALDO=1` a sabiendas). Correrlo otra vez no cambia nada.
+4. Deshacer un congelado: no hay botón. El hito es una fila de `HitoDeDocumento` (tipo «congelado», con el texto
+   «Al ordenar los handoffs que ya tenían su cronograma aplicado»); borrarla deja el handoff sin congelar. La foto
+   protegida puede quedarse.
+
+### Migrar las reuniones de los documentos (etapa 7, una vez, 2026-10-10)
+
+Desde la etapa 7 los seis documentos del proyecto leen solo las reuniones elegidas, y nadie eligió nunca: sin esto,
+regenerar un documento lo deja sin reuniones (DECISIONS «Los documentos leen la memoria y solo las reuniones elegidas»
+› «La migración (2026-10-10)»). El script elige, en cada documento que ya tiene contenido, las 6 reuniones más
+recientes que leía con la regla de antes y que tienen algo que leer (solo donde nadie decidió nada), y pasa a sesión,
+en las exploraciones de un proyecto y en las preventas de clientes, las reuniones de Meet que el agente ya leyó. El
+kickoff y las integraciones generados antes del 2026-10-07 no se migran: entonces no leían reuniones. Sin SQL propio.
+
+**Cuándo:** una sola ventana, justo después de aplicar los SQL de la memoria de la cuenta y antes del deploy, antes de
+que alguien regenere un documento. Las sesiones nuevas de la parte B solo se ven con el código de la etapa A
+desplegado; la parte A sirve igual con el código viejo (que lee también lo sugerido).
+
+⚠ **Lo que congela:** un `true` le pone el candado a la reunión entera: el clasificador ya no la reasigna a un
+proyecto nuevo del cliente. El simulacro dice cuántas reuniones quedan así antes de escribir (el 10-oct, 36).
+
+1. Desde una PC, en simulacro (solo lee): `npx tsx scripts/migrar-reuniones-de-los-documentos.ts`. Imprime, por
+   documento, cuántas reuniones leía, cuántas se eligen, cuántas quedan para sugerir y cuántas se saltaron por vacías;
+   el total de vínculos, cuántas reuniones dejan de reclasificarse y, por exploración, qué reunión pasa a sesión y por
+   qué no las demás. `--proyecto <id>` para uno solo; `--tambien-los-que-no-leian` incluye el kickoff y las
+   integraciones de antes del 2026-10-07 (solo si Elías lo decide).
+2. Aplicar: `$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/migrar-reuniones-de-los-documentos.ts --apply --firma tu@smarteamcr.com; Remove-Item Env:ALLOW_PROD_WRITE`.
+   Respalda antes `SessionProject`, `ExploracionDeVenta` y `CronJobState` (pg_dump en el PATH o `SIN_RESPALDO=1` a
+   sabiendas) y deja las filas que toca en `backups/<fecha>-migrar-reuniones-de-los-documentos/antes.<hora>.json`. Lo
+   migrado queda anotado en `CronJobState` («migrar-reuniones-de-los-documentos»): una corrida siguiente no vuelve a
+   tocar ese documento ni esa exploración, aunque alguien lo haya deshecho en el medio.
+3. Deshacer: el JSON «antes» lista cada vínculo y en qué columnas se escribió `true`; volver esas columnas a `null`
+   (solo las de ese JSON). Las sesiones nuevas de una exploración se sacan desde su página de inicio («Sacar»), o se
+   devuelve la fila del JSON: `contenido`, `propuesta`, `areas`, `edicion`, `perfilCierre`, `perfilDespues` y
+   `responsableEmail` (la mutación reescribe todas, normalizadas). Si se deshace para volver a migrar, borrar también
+   la fila `migrar-reuniones-de-los-documentos` de `CronJobState` (o devolverle `marcaAntes` del JSON).
 
 ### El espejo de Odoo no corre
 
@@ -575,8 +770,27 @@ Tiene que terminar en «✓ 1/1 pares fusionados». Después: `npm run check:inv
 `npx tsx scripts/backfill-resolved-client.ts` (simulacro → changed=0). La lista de empresas tarda hasta un minuto en
 mostrar una sola.
 
-**Deshacer.** El JSON «antes» tiene las dos fichas y las dos cuentas enteras, lo que se borra entero (las notas de etapa
-que chocaban, lo uno a uno que ya tenía la que sigue) y el id de cada fila que se mudó; el «despues», qué quedó.
+**Cuándo NO fusiona** (lo dice el simulacro y no escribe nada): si las dos tienen una exploración de venta abierta (se
+archiva una); si las dos tienen cuenta de HubSpot propia y la de la absorbida tiene conocimiento o auditorías colgados
+(borrarla se los llevaría: se decide a mano a qué cuenta pasan); y si una solicitud fuera de alcance que choca está
+decidida en las dos fichas (se elige a mano con cuál se queda).
+
+**Lo que choca con un único** (notas de etapa, asignaciones, solicitudes fuera de alcance, licencias): queda la de la que
+sigue, salvo donde hay una decisión humana. Una solicitud que alguien decidió en la absorbida (confirmada, cotizada,
+descartada…) le gana a una sin decidir de la que sigue; una licencia de la que sigue toma de la otra lo que le falta
+(plan, fechas, monto, moneda) y junta las notas, y si un dato es distinto en las dos queda el de la que sigue y el
+simulacro lo avisa. La clasificación de la cartera se pliega igual: la que sigue toma de la otra lo que no tiene
+confirmado. Las correcciones del color se mudan enteras: el estado es el último evento de cada clase, así que una
+corrección o un «en espera» de la absorbida más nuevo le gana a la de la que sigue (regla pendiente de confirmar con
+Elías).
+
+**Tareas:** las tareas, sus proyectos y sus vínculos se mudan; la foto de cada semana (`ResultadoDeSemana.fotoCliente`)
+se queda con el id de la absorbida a propósito (el pasado no cambia), así que lo hecho de la absorbida no aparece en
+«Tareas internas por cliente» de la que sigue. El simulacro cuenta cuántas fotos quedan así.
+
+**Deshacer.** El JSON «antes» tiene las dos fichas y las dos cuentas enteras, lo que se borra entero (las notas de etapa,
+asignaciones, solicitudes y licencias que chocaban, con su fila de la que sigue cuando se reemplazó o se completó, lo uno
+a uno que ya tenía la que sigue, con la clasificación de la absorbida) y el id de cada fila que se mudó; el «despues», qué quedó.
 
 ## Respaldo y restauración (Supabase)
 

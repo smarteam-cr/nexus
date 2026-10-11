@@ -22,7 +22,8 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { RAIZ, listarTsx } from "@/lib/ui/scan-source";
-import { decidirHilo, huellaDeContexto } from "./hilo";
+import { decidirHilo, huellaDeContexto, whereDelDueno } from "./hilo";
+import { PIEZAS_CON_CHAT, PIEZA_TAREAS, tieneChat } from "./piezas";
 
 /** Comentarios fuera: NOMBRAR una tabla para explicar por qué no se escribe no es escribirla. */
 function soloCodigo(src: string): string {
@@ -37,6 +38,16 @@ const TABLAS_DEL_DOCUMENTO = [
   "canvasBlock",
   "canvasSection",
   "projectCanvas",
+  /* Las de Tareas internas (2026-10-09): el chat de tareas acuerda, y aplicar es de lib/tareas/mutaciones.ts. */
+  "tarea",
+  "tareaRelacion",
+  "tareaComentario",
+  "tareaVinculo",
+  "tareaEvento",
+  "proyectoDeTareas",
+  "espacioDeTareas",
+  "plantillaDeTareas",
+  "cierreDeSemana",
 ];
 const VERBOS_DE_ESCRITURA = ["create", "createMany", "update", "updateMany", "upsert", "delete", "deleteMany"];
 
@@ -169,5 +180,33 @@ describe("las decisiones del schema no se relajan solas", () => {
       /contexto\s+String/.test(m),
       "apareció una columna que guarda el texto del contexto: es la decisión que se descartó",
     ).toBe(false);
+  });
+});
+
+describe("el cuarto dueño: la persona, en el chat de tareas (2026-10-09)", () => {
+  it("un hilo personal tiene los tres dueños en null", () => {
+    expect(whereDelDueno({ personal: true })).toEqual({ projectId: null, businessCaseId: null, roleId: null });
+  });
+
+  it("⛔ la pieza «tareas» no es un canvas: no está en el desplegable", () => {
+    expect(PIEZAS_CON_CHAT).not.toContain(PIEZA_TAREAS);
+    expect(tieneChat(PIEZA_TAREAS)).toBe(false);
+  });
+
+  it("⛔ el manejador genérico rechaza la pieza «tareas» en GET y en POST (también el desenlace)", () => {
+    const src = soloCodigo(fs.readFileSync(path.join(RAIZ, "lib/asistente/handler.ts"), "utf8"));
+    const get = src.slice(src.indexOf("export async function manejarGetDelAsistente"), src.indexOf("export async function manejarPostDelAsistente"));
+    const post = src.slice(src.indexOf("export async function manejarPostDelAsistente"));
+    expect(get).toContain("=== PIEZA_TAREAS");
+    // En el POST, antes del desenlace y antes de abrir el hilo.
+    const rechazo = post.indexOf("parsed.data.pieza === PIEZA_TAREAS");
+    expect(rechazo).toBeGreaterThan(-1);
+    expect(rechazo).toBeLessThan(post.indexOf('"desenlace" in parsed.data'));
+    expect(rechazo).toBeLessThan(post.indexOf("abrirHilo(pedido)"));
+  });
+
+  it("⛔ con el dueño personal, leer un hilo por id exige el correo", () => {
+    const src = soloCodigo(fs.readFileSync(path.join(RAIZ, "lib/asistente/hilo.ts"), "utf8"));
+    expect(src).toContain('if ("personal" in dueno && !usuarioEmail) return null;');
   });
 });

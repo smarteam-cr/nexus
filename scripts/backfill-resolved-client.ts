@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";

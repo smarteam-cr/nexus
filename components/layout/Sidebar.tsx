@@ -10,9 +10,10 @@ import type { PermissionMap } from "@/lib/auth/permissions/types";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import { APP_NAV, canSeeNavItem, visibleNavChildren } from "./nav-config";
-import NavFlyout, { RolesNavFlyout } from "./NavFlyout";
-import { useCuentaParaTi } from "@/components/para-ti/cuenta";
+import NavFlyout, { RolesNavFlyout, TareasNavFlyout } from "./NavFlyout";
 import BotonDeFeedback from "@/components/feedback/BotonDeFeedback";
+import BotonDeNuevaTarea from "@/components/tareas/BotonDeNuevaTarea";
+import { useCuentaParaTi } from "@/components/para-ti/cuenta";
 
 interface UserLite {
   email: string;
@@ -23,6 +24,8 @@ interface UserLite {
   permissions: PermissionMap;
   /** ¿Le compartieron algún documento de Roles? Enciende ese ítem del menú. */
   hasSharedDocs: boolean;
+  /** Tareas internas en el piloto: Marketing o ya tiene algo en Tareas (lo calcula AppShell). */
+  enTareas?: boolean;
   /** La vista de Finanzas (lib/finanzas/vista.ts): decide el panel de Finanzas. */
   vistaFinanzas: VistaFinanzas;
 }
@@ -228,6 +231,7 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
     permissions: user.permissions,
     hasSharedDocs: user.hasSharedDocs,
     role: user.role,
+    enTareas: user.enTareas,
   };
 
   return (
@@ -294,6 +298,9 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
               )}
               <div className="space-y-0.5">
                 {items.map((item) => {
+                  if (item.dynamicChildren === "tareas" && item.children) {
+                    return <TareasNavFlyout key={item.key} item={item} fijos={item.children} isOpen={isOpen} />;
+                  }
                   if (item.dynamicChildren === "roles") {
                     return <RolesNavFlyout key={item.key} item={item} isOpen={isOpen} />;
                   }
@@ -334,6 +341,8 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
       <div className="flex-shrink-0 border-t border-gray-800/60 py-2">
         <div className={isOpen ? "px-2" : "px-1"}>
           {/* Feedback (2026-10-04): reportar desde cualquier pantalla, con la captura de lo que se ve. */}
+          {/* «+ Tarea» (2026-10-09): anotar una tarea sin salir de la pantalla; con el mismo gate del ítem Tareas. */}
+          {canSeeNavItem({ gate: { kind: "tareasPiloto" } }, navCtx) && <BotonDeNuevaTarea isOpen={isOpen} />}
           <BotonDeFeedback isOpen={isOpen} />
           <RunsIndicator isOpen={isOpen} />
           <UserAvatar user={user} isOpen={isOpen} />

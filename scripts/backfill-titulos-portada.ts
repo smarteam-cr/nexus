@@ -33,6 +33,7 @@
  *   npx tsx scripts/backfill-titulos-portada.ts --apply
  *   npx tsx scripts/backfill-titulos-portada.ts --slug=kickoff   # acota a un tipo
  */
+import "./lib/permitir-server-only";
 import { createScriptDb } from "./lib/db";
 import { resolverApply } from "./lib/guard";
 import type { Prisma } from "@prisma/client";

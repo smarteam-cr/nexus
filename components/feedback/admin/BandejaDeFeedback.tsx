@@ -23,6 +23,11 @@
  *
  * Lo que queda por hacer (sin revisar o en la hoja de ruta) tiene «Generar prompt»: el prompt para arreglarlo
  * con Claude Code, armado con lo que ya cargó la bandeja (lib/feedback/prompt.ts).
+ *
+ * Leído o no leído (2026-10-08, pedido de Elías): abrir un reporte lo deja leído; el punto de cada fila (al pasar
+ * el mouse, si ya está leído) y «Marcar como no leído» arriba del reporte lo vuelven a dejar pendiente, como en un
+ * correo. Lo que se cambia en esta visita manda sobre lo que trajo la página (`lectura`): la página no se vuelve a
+ * pedir al pasar de un reporte a otro, y sin esto el que abriste seguía con el punto azul.
  */
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -94,6 +99,11 @@ export default function BandejaDeFeedback({
   const [sel, setSel] = useState<string | null>(
     reporteInicial ?? datos.reportes.find((r) => r.estado === "sin_revisar")?.id ?? datos.reportes.find((r) => r.estado !== "en_hoja")?.id ?? null,
   );
+  /** Por reporte, si quedó no leído en esta visita (`false`: leído). El que se abre al entrar ya queda leído. */
+  const [lectura, setLectura] = useState<Record<string, boolean>>(() => (sel ? { [sel]: false } : {}));
+  const noLeido = useCallback((r: ReporteDeBandeja) => lectura[r.id] ?? r.noLeido, [lectura]);
+  // Leerlo apaga «Te respondió»; marcarlo no leído lo vuelve a contar el servidor (si lo último lo escribió quien reportó).
+  const respondio = useCallback((r: ReporteDeBandeja) => (lectura[r.id] === false ? false : r.respondio), [lectura]);
   const [detalle, setDetalle] = useState<ReporteDetalle | null>(null);
   const [dialogo, setDialogo] = useState(false);
   const [verPrompt, setVerPrompt] = useState(false);
@@ -109,7 +119,7 @@ export default function BandejaDeFeedback({
       // Lo que está en la hoja de ruta vive en su tema, no acá.
       if (r.estado === "en_hoja" && !elegido) return false;
       if (filtro === "sin" && r.estado !== "sin_revisar" && !elegido) return false;
-      if (filtro === "respondieron" && !r.respondio && !elegido) return false;
+      if (filtro === "respondieron" && !respondio(r) && !elegido) return false;
       if (filtro === "cerrados" && !cerrado(r) && !elegido) return false;
       if (tipo !== "todos" && r.tipo !== tipo) return false;
       if (origen === "escala" && !r.escala) return false;
@@ -117,11 +127,12 @@ export default function BandejaDeFeedback({
       if (q && !`${r.cuerpo} ${r.autor.nombre} ${r.pantalla} ${r.escala?.ancla ?? ""}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [datos.reportes, filtro, tipo, origen, busqueda, sel]);
+  }, [datos.reportes, filtro, tipo, origen, busqueda, sel, respondio]);
 
   const actual = datos.reportes.find((r) => r.id === sel) ?? null;
 
   const cargarDetalle = useCallback(async (id: string) => {
+    setLectura((l) => (l[id] === false ? l : { ...l, [id]: false })); // abrirlo lo deja leído
     try {
       const r = await fetch(`/api/feedback/${id}`, { cache: "no-store" });
       const d = (await r.json().catch(() => null)) as { reporte?: ReporteDetalle } | null;
@@ -147,12 +158,37 @@ export default function BandejaDeFeedback({
     };
   }, [sel]);
 
+  /** Leído o no leído: se ve enseguida y, si no se guarda, vuelve a como estaba. */
+  const cambiarLectura = useCallback(
+    async (id: string, leido: boolean) => {
+      setLectura((l) => ({ ...l, [id]: !leido }));
+      const r = await postJson(`/api/feedback/${id}/lectura`, { leido });
+      if (!r.ok) {
+        setLectura((l) => ({ ...l, [id]: leido })); // como estaba: lo contrario de lo que se pidió
+        toast.error(r.error ?? "No se pudo guardar.");
+        return;
+      }
+      router.refresh(); // los números de las pestañas y «Te respondieron» los cuenta el servidor
+    },
+    [router, toast],
+  );
+
   /** Cambiar de reporte: el detalle anterior se va enseguida (no se ve uno con la captura del otro). */
-  const elegir = useCallback((id: string) => {
-    setDetalle(null);
-    setVerPrompt(false);
-    setSel(id);
-  }, []);
+  const elegir = useCallback(
+    (id: string) => {
+      if (id === sel) {
+        // Ya está abierto: no se vuelve a pedir (se quedaba sin la captura). Si lo marcaste no leído, vuelve a leído.
+        const r = datos.reportes.find((x) => x.id === id);
+        if (r && noLeido(r)) void cambiarLectura(id, true);
+        return;
+      }
+      setLectura((l) => (l[id] === false ? l : { ...l, [id]: false })); // abrirlo lo deja leído
+      setDetalle(null);
+      setVerPrompt(false);
+      setSel(id);
+    },
+    [sel, datos.reportes, noLeido, cambiarLectura],
+  );
 
   const refrescar = useCallback(async () => {
     router.refresh();
@@ -179,7 +215,7 @@ export default function BandejaDeFeedback({
     [datos.reportes],
   );
 
-  const cuentaRespondieron = datos.reportes.filter((r) => r.respondio && r.estado !== "en_hoja").length;
+  const cuentaRespondieron = datos.reportes.filter((r) => respondio(r) && r.estado !== "en_hoja").length;
   const cuentaCerrados = datos.reportes.filter(cerrado).length;
   const conFiltros = tipo !== "todos" || origen !== "todos" || busqueda.trim() !== "";
   const quitarFiltros = () => {
@@ -275,9 +311,19 @@ export default function BandejaDeFeedback({
         {/* ── La lista ── */}
         <section aria-label="Reportes" data-recorrido="feedback.bandeja.lista" className="flex max-h-[420px] flex-col overflow-y-auto border-b border-line lg:max-h-none lg:border-b-0 lg:border-r">
           {visibles.map((r) => (
-            <FilaDeReporte key={r.id} r={r} actual={r.id === sel} conSugerencia={!!r.sugerencia && !descartadas.has(r.id)} onElegir={() => elegir(r.id)} />
+            <FilaDeReporte
+              key={r.id}
+              r={r}
+              actual={r.id === sel}
+              noLeido={noLeido(r)}
+              respondio={respondio(r)}
+              conSugerencia={!!r.sugerencia && !descartadas.has(r.id)}
+              onElegir={() => elegir(r.id)}
+              onLectura={() => void cambiarLectura(r.id, noLeido(r))}
+            />
           ))}
-          <p className="px-3.5 py-3 text-xs text-fg-muted">
+          {/* El pie de la lista: gris, centrado y hasta abajo, para que no se lea como un reporte más. */}
+          <p className="flex-1 bg-surface-muted px-6 py-4 text-center text-[11px] leading-[1.5] text-fg-muted">
             {filtro === "cerrados"
               ? "Lo cerrado queda acá para buscarlo o deshacerlo."
               : "Lo más nuevo arriba. Al decidir, el reporte sale de acá: lo que llevas a la hoja de ruta sigue en su tema."}
@@ -305,6 +351,14 @@ export default function BandejaDeFeedback({
                   <span className="rounded-full border border-line bg-surface px-2.5 py-px text-xs font-semibold text-fg-secondary">{NOMBRE_DEL_ESTADO[actual.estado] ?? actual.estado}</span>
                 )}
                 <span className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => void cambiarLectura(actual.id, noLeido(actual))}
+                  className="mr-2 inline-flex items-center gap-1.5 text-[13px] font-semibold text-fg-secondary transition-colors hover:text-fg"
+                >
+                  <Icono d={noLeido(actual) ? SOBRE_ABIERTO : SOBRE} className="h-[15px] w-[15px]" />
+                  {noLeido(actual) ? "Marcar como leído" : "Marcar como no leído"}
+                </button>
                 {detalle?.id === actual.id && (
                   <EnlaceDeRuta ruta={detalle.ruta} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-brand hover:text-brand-light">
                     Abrir «{actual.pantalla}»
@@ -464,6 +518,9 @@ function MarcoVacio({ children }: { children: ReactNode }) {
   return <div className="flex min-h-[420px] items-center justify-center rounded-xl border border-line bg-surface">{children}</div>;
 }
 
+const SOBRE = "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M3 7l9 6 9-6";
+const SOBRE_ABIERTO = "M3 10l9-6 9 6v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M3 10l9 6 9-6";
+
 function Icono({ d, className = "h-6 w-6" }: { d: string; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
@@ -472,44 +529,81 @@ function Icono({ d, className = "h-6 w-6" }: { d: string; className?: string }) 
   );
 }
 
-/** Una fila de la lista, como en un correo: tipo y pantalla, el texto y quién lo mandó. */
-function FilaDeReporte({ r, actual, conSugerencia, onElegir }: { r: ReporteDeBandeja; actual: boolean; conSugerencia: boolean; onElegir: () => void }) {
+/**
+ * Una fila de la lista, como en un correo: tipo y pantalla, el texto y quién lo mandó. El punto de abajo a la
+ * derecha marca leído o no leído: azul si no lo leíste; al pasar el mouse, un círculo vacío para dejarlo no leído.
+ * Va AL LADO del botón de la fila y no adentro (un botón no puede ir dentro de otro). Con el dedo no aparece y el
+ * toque abre el reporte: ahí se marca desde arriba del reporte.
+ */
+function FilaDeReporte({
+  r,
+  actual,
+  noLeido,
+  respondio,
+  conSugerencia,
+  onElegir,
+  onLectura,
+}: {
+  r: ReporteDeBandeja;
+  actual: boolean;
+  noLeido: boolean;
+  respondio: boolean;
+  conSugerencia: boolean;
+  onElegir: () => void;
+  onLectura: () => void;
+}) {
   const decidido = r.estado !== "sin_revisar";
-  const sinAbrir = r.sinAbrir && !actual && !decidido;
+  const accion = noLeido ? "Marcar como leído" : "Marcar como no leído";
   return (
-    <button
-      type="button"
-      onClick={onElegir}
-      aria-current={actual ? "true" : undefined}
-      className={cn(
-        "flex w-full flex-none flex-col gap-1.5 border-b border-line px-3.5 py-3 text-left transition-colors",
-        actual ? "bg-info-surface" : "bg-surface hover:bg-surface-hover",
-      )}
-    >
-      <span className="flex w-full items-center justify-between gap-2">
-        <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
-          <IconoDeTipo tipo={r.tipo} />
-          <span className="truncate">
-            {TIPO[r.tipo].nombre} · {r.pantalla}
-            {r.escala ? ` · ${r.escala.ancla}` : ""}
-          </span>
-        </span>
-        <span className="flex-none text-xs text-fg-muted">{haceCuanto(r.creado)}</span>
-      </span>
-      <span className={cn("line-clamp-2 text-[13px] leading-[1.4] text-fg", sinAbrir && "font-semibold")}>{r.cuerpo}</span>
-      <span className="flex w-full flex-wrap items-center gap-1.5">
-        <Iniciales texto={r.autor.iniciales} className="h-5 w-5 text-[9px]" />
-        <span className="text-xs text-fg-secondary">{r.autor.nombre}</span>
-        {r.tipo === "falla" && r.meFrena && (
-          <span className="rounded-full border border-warn-line bg-warn-surface px-[7px] text-[11px] font-semibold text-warn-ink">Le frena</span>
+    <div className="group relative flex-none">
+      <button
+        type="button"
+        onClick={onElegir}
+        aria-current={actual ? "true" : undefined}
+        className={cn(
+          "flex w-full flex-col gap-1.5 border-b border-line px-3.5 py-3 text-left transition-colors",
+          actual ? "bg-info-surface" : "bg-surface hover:bg-surface-hover",
         )}
-        {decidido && <span className="rounded-full border border-line bg-surface px-[7px] text-[11px] font-semibold text-fg-secondary">{NOMBRE_DEL_ESTADO[r.estado] ?? r.estado}</span>}
-        {/* En ámbar, como los mensajes sin leer de «Para ti»: alguien te escribió y espera de ti. */}
-        {r.respondio && <span className="rounded-full border border-warn-line bg-warn-surface px-[7px] text-[11px] font-semibold text-warn-ink">Te respondió</span>}
-        {conSugerencia && !decidido && <span className="text-[11px] text-fg-muted">· se parece a un tema</span>}
-        {sinAbrir && <span aria-label="sin abrir" className="ml-auto h-[7px] w-[7px] rounded-full bg-brand" />}
-      </span>
-    </button>
+      >
+        <span className="flex w-full items-center justify-between gap-2">
+          <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
+            <IconoDeTipo tipo={r.tipo} />
+            <span className="truncate">
+              {TIPO[r.tipo].nombre} · {r.pantalla}
+              {r.escala ? ` · ${r.escala.ancla}` : ""}
+            </span>
+          </span>
+          <span className="flex-none text-xs text-fg-muted">{haceCuanto(r.creado)}</span>
+        </span>
+        <span className={cn("line-clamp-2 text-[13px] leading-[1.4] text-fg", noLeido && "font-semibold")}>{r.cuerpo}</span>
+        {/* pr-6: el lugar del punto, que va encima. */}
+        <span className="flex w-full flex-wrap items-center gap-1.5 pr-6">
+          <Iniciales texto={r.autor.iniciales} className="h-5 w-5 text-[9px]" />
+          <span className="text-xs text-fg-secondary">{r.autor.nombre}</span>
+          {r.tipo === "falla" && r.meFrena && (
+            <span className="rounded-full border border-warn-line bg-warn-surface px-[7px] text-[11px] font-semibold text-warn-ink">Le frena</span>
+          )}
+          {decidido && <span className="rounded-full border border-line bg-surface px-[7px] text-[11px] font-semibold text-fg-secondary">{NOMBRE_DEL_ESTADO[r.estado] ?? r.estado}</span>}
+          {/* En ámbar, como los mensajes sin leer de «Para ti»: alguien te escribió y espera de ti. */}
+          {respondio && <span className="rounded-full border border-warn-line bg-warn-surface px-[7px] text-[11px] font-semibold text-warn-ink">Te respondió</span>}
+          {conSugerencia && !decidido && <span className="text-[11px] text-fg-muted">· se parece a un tema</span>}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onLectura}
+        aria-label={`${accion}: ${numeroDeReporte(r.numero)}`}
+        title={accion}
+        className={cn(
+          "absolute bottom-3 right-3 flex h-5 w-5 items-center justify-center rounded-full transition-opacity hover:bg-surface-hover",
+          noLeido
+            ? "opacity-100"
+            : "pointer-events-none opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100",
+        )}
+      >
+        <span className={cn("h-[7px] w-[7px] rounded-full", noLeido ? "bg-brand" : "border border-fg-muted")} />
+      </button>
+    </div>
   );
 }
 

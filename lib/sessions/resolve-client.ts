@@ -31,6 +31,7 @@ import {
 } from "@/lib/sessions/categorize";
 export { ORDEN_DE_CLIENTES_PARA_ATRIBUIR };
 import { searchCompaniesByDomains, type HubspotCompanyLite } from "@/lib/hubspot/companies";
+import { DIAS_DE_FRESCURA } from "@/lib/lecturas/reglas";
 
 
 /** Carga el contexto de categorización (clientes + categorías) una sola vez. */
@@ -135,6 +136,27 @@ export async function reResolveSession(
       .then((m) => m.reclassifyClientSessions(resolved))
       .catch(() => {});
   }
+  // La lectura de seguimiento (memoria de la cuenta, etapa 2): una reunión que recibe dueño a mano también tiene que
+  // tener su lectura. La cola decide si corresponde (de un cliente o un prospecto, no de puertas adentro, fresca, con
+  // transcripción) y nunca lanza; con la bandera apagada no se encola nada.
+  // ⚠ Solo entra una reunión que todavía NO se leyó (o quedó sin texto, en error u omitida): una lista no se vuelve a
+  // leer, y lo que dejó para el dueño anterior (propuestas de Tarea, pedidos fuera de alcance) queda con ese cliente
+  // hasta que alguien lo corrija a mano; INV42 (tareas) e INV46 (pedidos) lo muestran (DECISIONS «La lectura de cada
+  // reunión es durable…»).
+  if (resolved && resolved !== session.resolvedClientId) {
+    void import("@/lib/lecturas/reglas")
+      .then(async (r) => (r.seguimientoPrendido(process.env) ? (await import("@/lib/lecturas/cola")).encolarSeguimiento(sessionId) : null))
+      .catch(() => {});
+  }
+  // Los HECHOS de la reunión (memoria de la cuenta, etapa 6): los pendientes que eran del dueño anterior quedan
+  // desestimados («La reunión cambió de dueño»), y el job de la lectura vuelve a pedir los hechos en el cliente nuevo
+  // (solo los hechos: la minuta no se relee y lo decidido no se toca). Sin la tabla no hace nada; nunca lanza.
+  if (resolved !== session.resolvedClientId) {
+    const duenoNuevo = resolved ?? session.manualClientId ?? null;
+    void import("@/lib/seguimiento/hechos-server")
+      .then((m) => m.alCambiarDeDueno([{ sessionId, duenoNuevo }]))
+      .catch(() => {});
+  }
 }
 
 export interface ResolveAllResult {
@@ -154,11 +176,13 @@ export interface ResolveAllResult {
  */
 /** Tope de clientes a auto-reclasificar en una corrida (evita tormenta en imports masivos). */
 const MAX_AUTO_RECLASSIFY_CLIENTS = 20;
+/** Tope de reuniones frescas que una corrida encola para su lectura de seguimiento (las que ganaron dueño). */
+const MAX_LECTURAS_A_ENCOLAR = 100;
 
 export async function resolveAllSessions(opts?: { dryRun?: boolean; reclassify?: boolean }): Promise<ResolveAllResult> {
   const ctx = await buildCategorizeCtx();
   const sessions = await prisma.firefliesSession.findMany({
-    select: { id: true, title: true, participants: true, manualClientId: true, resolvedClientId: true },
+    select: { id: true, title: true, date: true, participants: true, manualClientId: true, resolvedClientId: true },
   });
   // Señal fuerte: poblar el map de HubSpot con los dominios externos de TODAS las
   // sesiones (1 batch). El paso 5 del cascade resuelve dominio→company→Client ligado.
@@ -219,6 +243,37 @@ export async function resolveAllSessions(opts?: { dryRun?: boolean; reclassify?:
             .catch(() => {});
         }
       }
+    }
+
+    // La lectura de seguimiento (memoria de la cuenta, etapa 2): una reunión fresca que GANÓ dueño acá (un cliente nuevo,
+    // un dominio nuevo) no pasó por el enriquecimiento con ese dueño, así que nadie la encoló, e INV44 la reclamaba
+    // para siempre. Se encolan las de los últimos 14 días; la cola decide si corresponde y nunca lanza. En serie y con
+    // tope, en segundo plano: una re-resolución que mueve cientos de reuniones no puede disparar cientos de consultas
+    // a la vez.
+    // Los HECHOS de las reuniones que cambiaron de dueño (memoria de la cuenta, etapa 6): los pendientes del dueño
+    // anterior quedan desestimados; el job vuelve a pedirlos en el cliente nuevo. En segundo plano y nunca lanza.
+    const manualDe = new Map(sessions.map((s) => [s.id, s.manualClientId]));
+    const cambios = [...idsByNewValue].flatMap(([valor, ids]) => ids.map((id) => ({ sessionId: id, duenoNuevo: valor ?? manualDe.get(id) ?? null })));
+    if (cambios.length) {
+      void import("@/lib/seguimiento/hechos-server")
+        .then((m) => m.alCambiarDeDueno(cambios))
+        .catch(() => {});
+    }
+
+    const ganaronDueno = new Set([...idsByNewValue].filter(([valor]) => valor !== null).flatMap(([, ids]) => ids));
+    const ahora = Date.now();
+    const frescas = sessions
+      .filter((s) => ganaronDueno.has(s.id) && +s.date <= ahora && ahora - +s.date <= DIAS_DE_FRESCURA * 86_400_000)
+      .map((s) => s.id)
+      .slice(0, MAX_LECTURAS_A_ENCOLAR);
+    if (frescas.length) {
+      void import("@/lib/lecturas/reglas")
+        .then(async (r) => {
+          if (!r.seguimientoPrendido(process.env)) return;
+          const { encolarSeguimiento } = await import("@/lib/lecturas/cola");
+          for (const id of frescas) await encolarSeguimiento(id);
+        })
+        .catch(() => {});
     }
   }
 

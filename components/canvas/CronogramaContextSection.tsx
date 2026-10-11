@@ -140,7 +140,7 @@ export default function CronogramaContextSection({
       }
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={reuniones}>
+        <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Reuniones" count={reuniones}>
           <SessionSelectionReview
             projectId={projectId}
             destino="cronograma"
@@ -159,10 +159,7 @@ export default function CronogramaContextSection({
             onCount={setNotas}
             tope={TOPE_NOTAS_CRONOGRAMA}
             largoQueLee={largoDeLasNotas}
-            vacio="Sin notas. Pega aquí lo que no quedó en ninguna reunión."
-            placeholderTitulo="Título, con la fecha si son notas de una reunión (ej. Reunión del 1 ago)"
-            placeholder="Pega la nota, el resumen o la decisión…"
-            etiquetaAgregar="Agregar nota"
+            adjunto={{ projectId, origen: "cronograma" }}
           />
         </ContextColumn>
       </div>

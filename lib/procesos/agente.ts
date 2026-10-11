@@ -204,7 +204,10 @@ async function leerReunion(clientId: string, cliente: string, r: ReunionDelClien
 
 export type ResultadoDelMapeo = { procesos: number; respetados: number; reuniones: number; leidasAhora: number; hechos: number; citas: number; citasOk: number; bajados: number };
 
-async function mapear(runId: string, clientId: string, triggeredByEmail: string | null): Promise<ResultadoDelMapeo> {
+/** Lo que devuelve el mapeo: el resultado que se guarda y las reuniones que leyó (para dar por usados sus hechos; no se guarda). */
+type MapeoTerminado = ResultadoDelMapeo & { sesionesLeidas: string[] };
+
+async function mapear(runId: string, clientId: string, triggeredByEmail: string | null): Promise<MapeoTerminado> {
   const cliente = (await prisma.client.findUnique({ where: { id: clientId }, select: { name: true } }))?.name ?? "(cliente)";
   await fase(runId, "Buscando las reuniones del cliente");
   const reuniones = await reunionesDelCliente(clientId);
@@ -325,7 +328,7 @@ async function mapear(runId: string, clientId: string, triggeredByEmail: string 
       });
     }
   });
-  return { procesos: listos.length, respetados: respetados.size, reuniones: lecturas.length, leidasAhora: faltan.length, hechos, ...totales };
+  return { procesos: listos.length, respetados: respetados.size, reuniones: lecturas.length, leidasAhora: faltan.length, hechos, ...totales, sesionesLeidas: lecturas.map((l) => l.id) };
 }
 
 /** La corrida en curso (o la última) del cliente. Una «en curso» de hace demasiado se da por muerta. */
@@ -349,11 +352,16 @@ export async function iniciarMapeo(clientId: string, triggeredByEmail: string | 
   if (enCurso && enCurso.status === "RUNNING") return { runId: enCurso.id, yaCorria: true };
   const run = await prisma.agentRun.create({
     data: { agentId: null, agentSlug: SLUG_DEL_MAPEO, clientId, status: "RUNNING", currentPhase: "Arrancando", triggeredByEmail, stepLabel: "Mapeo de procesos" },
-    select: { id: true },
+    select: { id: true, createdAt: true },
   });
   void conContextoDeIA({ agentSlug: SLUG_DEL_MAPEO, agentRunId: run.id, clientId, triggeredByEmail }, async () => {
     try {
-      const resultado = await mapear(run.id, clientId, triggeredByEmail);
+      const { sesionesLeidas, ...resultado } = await mapear(run.id, clientId, triggeredByEmail);
+      /* Los hechos de cómo trabaja hoy el cliente de las reuniones que este mapeo leyó dejan de avisar «Volver a mapear»
+         (memoria de la cuenta, etapa 6). Antes del DONE: así la pantalla, que relee al ver el DONE, ya no muestra el
+         aviso. Nunca lanza. */
+      const { marcarProcesosUsados } = await import("@/lib/seguimiento/hechos-server");
+      await marcarProcesosUsados({ clientId, agentRunId: run.id, hasta: run.createdAt, sessionIds: sesionesLeidas, quien: triggeredByEmail });
       await prisma.agentRun.update({ where: { id: run.id }, data: { status: "DONE", currentPhase: null, output: JSON.stringify(resultado) } });
     } catch (e) {
       const mensaje = e instanceof Error ? e.message : "El mapeo falló.";

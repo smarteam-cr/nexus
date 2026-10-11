@@ -16,6 +16,13 @@
  *  · compromisos → ActionItem con quién se comprometió (cliente o Smarteam), la fecha y la cita.
  *  · fueraDeAlcance → PedidoFueraDeAlcance: lo decide el CSE y Ventas lo ve como oportunidad.
  * El agente de avance queda para lo suyo: los atrasos y las fechas del plan que se mueven.
+ *
+ * ── DESDE LA ETAPA 2 DE LA MEMORIA DE LA CUENTA (2026-10-10) ─────────────────────────────────
+ * La lectura de seguimiento pide lo mismo por una HERRAMIENTA (lib/sessions/lectura-salida.ts) y no por
+ * esta adenda: los compromisos (con fecha o sin ella) pasan a propuestas de Tarea (lib/tareas/seguimiento.ts)
+ * y cada cita se verifica contra lo que se mandó. `leerCompromisos` y `leerPedidosFueraDeAlcance` son las
+ * mismas para los dos caminos. La adenda de arriba (y el destino ActionItem) quedan solo para el post-proceso
+ * viejo (lib/sessions/post-process-viejo.ts), el retroceso de `SEGUIMIENTO_REUNIONES_ENABLED=0`.
  */
 import { fingerprintFromTitle } from "@/lib/timeline/particularidad-identity";
 
@@ -43,6 +50,15 @@ export interface CompromisoDetectado {
   fecha: string | null;
   tipo: "PLAN" | "INSUMO" | "ACCION";
   cita: string;
+  /**
+   * Desde la lectura de seguimiento (memoria de la cuenta, etapa 2, lib/sessions/lectura-salida.ts). En minúsculas y
+   * solo si lo prometió alguien de Smarteam: quién se comprometió. Que sea del equipo ACTIVO lo decide quien lo usa.
+   */
+  ownerEmail: string | null;
+  /** Solo si lo prometió el cliente: lo que tiene que hacer el CSE para que se cumpla («Recordarle a Ana que…»). */
+  tituloDeSeguimiento: string | null;
+  /** Sin eso, el proyecto no avanza (un insumo del que depende una entrega, una aprobación). */
+  frenaElPlan: boolean;
 }
 
 export type EstadoDePedido = "PEDIDO" | "COTIZADO" | "APROBADO" | "DESCARTADO" | "INCLUIDO";
@@ -69,13 +85,21 @@ export function leerCompromisos(raw: unknown): CompromisoDetectado[] {
     const que = texto(c.que, 500);
     if (!que) continue;
     const fecha = texto(c.fecha, 10);
+    const quien = c.quien === "SMARTEAM" ? "SMARTEAM" : "CLIENTE";
+    const ownerEmail = texto(c.ownerEmail, 160).toLowerCase();
+    const tituloDeSeguimiento = texto(c.tituloDeSeguimiento, 160);
     out.push({
-      quien: c.quien === "SMARTEAM" ? "SMARTEAM" : "CLIENTE",
+      quien,
       responsable: texto(c.responsable, 120),
       que,
       fecha: FECHA.test(fecha) ? fecha : null,
       tipo: c.tipo === "PLAN" || c.tipo === "INSUMO" ? c.tipo : "ACCION",
       cita: texto(c.cita, 400),
+      // Cada lado lleva lo suyo: un correo del equipo en lo que prometió el cliente, o un título de seguimiento en lo que
+      // prometió Smarteam, sería el modelo confundiendo los lados.
+      ownerEmail: quien === "SMARTEAM" && ownerEmail.includes("@") ? ownerEmail : null,
+      tituloDeSeguimiento: quien === "CLIENTE" && tituloDeSeguimiento ? tituloDeSeguimiento : null,
+      frenaElPlan: c.frenaElPlan === true,
     });
   }
   return out.slice(0, 20);

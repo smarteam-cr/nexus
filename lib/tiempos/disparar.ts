@@ -5,13 +5,18 @@
  * documento) y NUNCA lanza: perder una pregunta es mucho menos grave que fallar un «Hecha». Devuelve lo que hay
  * que mostrar; la ruta lo agrega a su respuesta y la pantalla pregunta ahí mismo.
  *
- * Las reglas (a quién, en qué, cada cuánto) son las de lib/tiempos/reglas.ts.
+ * Las reglas (a quién, en qué, cada cuánto) son las de lib/tiempos/reglas.ts. Lo que suponía la carga se guarda con
+ * la respuesta, ya con la parte de Smarteam y el factor de la cuenta (`estimarTarea`, lib/carga/entrega.ts): así la
+ * calibración compara lo mismo con lo mismo.
  */
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { computePhaseRanges, overduePlannedEnd } from "@/lib/timeline/weeks";
+import { estimarTarea } from "@/lib/carga/entrega";
+import { cargarConfigCarga, factoresDeLasCuentas } from "@/lib/carga/queries";
+import { familiaDe } from "./familias";
 import {
   aplicaAPersona,
   aplicaATarea,
@@ -20,20 +25,24 @@ import {
   claveDeTarea,
   cuandoFue,
   cuantil,
+  elegirDeUnaMarca,
   elegirDelLote,
   inicioDelDiaCR,
   marcadaDemasiadoTarde,
   META_PARA_CALIBRAR,
+  minutosDelEstimado,
   nombreDeDocumento,
   nombreDeTipo,
   partyDe,
+  textoDelEstimado,
   tipoDeFase,
   tocaPorMuestreo,
   venceEn,
   type Documento,
+  type PartesDelEstimado,
   type TipoDeFase,
 } from "./reglas";
-import { calibracionActual, encuestaDe, estimacionDeDocumento, estimacionDeTarea, personaQueResponde, tiemposDisponible } from "./servidor";
+import { calibracionActual, encuestaDe, estimacionDeDocumento, personaQueResponde, tiemposDisponible } from "./servidor";
 import type { PreguntaParaResponder } from "./tipos";
 
 const isoDia = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
@@ -47,7 +56,7 @@ async function preguntasDeHoy(email: string, ahora: Date): Promise<number> {
  * Crea la pregunta, o reabre una retirada (la tarea se desmarcó y se volvió a marcar). Si ya existe otra cosa
  * (respondida, omitida, pendiente), no pregunta de nuevo. Una carrera con otra pestaña cae en el único.
  */
-async function crearOReabrir(
+export async function crearOReabrir(
   encuestaId: string,
   clave: string,
   datos: Omit<Prisma.PreguntaDeTiempoUncheckedCreateInput, "encuestaId" | "clave">,
@@ -123,6 +132,7 @@ export async function alMarcarTareasHechas(args: {
           clave: claveDeTarea(t.id),
           id: t.id,
           titulo: t.title,
+          familia: familiaDe(t.title),
           tipo: tipoDeFase(t.phase.activityType) as TipoDeFase,
           party: partyDe(t.party),
           projectId: tl.project.id,
@@ -134,24 +144,28 @@ export async function alMarcarTareasHechas(args: {
       .filter((t) => aplicaATarea(encuesta.config, t) && !marcadaDemasiadoTarde(t.finPlaneado, ahora));
     if (candidatas.length === 0) return [];
 
-    const cal = await calibracionActual(encuesta.id);
+    const { config: carga } = await cargarConfigCarga();
+    const cal = await calibracionActual(encuesta.id, carga);
     const porTipo = Object.fromEntries(cal.map((c) => [c.tipo, c.respuestas])) as Partial<Record<TipoDeFase, number>>;
     const yaHoy = await preguntasDeHoy(persona.email, ahora);
     const elegidas =
       args.origen === "avance"
         ? elegirDelLote(encuesta.config, candidatas, porTipo, yaHoy)
-        : candidatas.filter((t) => tocaPorMuestreo(encuesta.config, t.clave, porTipo[t.tipo] ?? 0)).slice(0, Math.min(1, caben(encuesta.config, yaHoy)));
+        : elegirDeUnaMarca(encuesta.config, candidatas, porTipo, yaHoy);
     if (elegidas.length === 0) return [];
+    const factores = await factoresDeLasCuentas(elegidas.map((t) => t.clientId), carga, ahora);
 
     const lote = args.origen === "avance" && elegidas.length > 1 ? randomUUID() : null;
     const vence = venceEn(ahora);
     const salida: PreguntaParaResponder[] = [];
     for (const t of elegidas) {
-      const est = estimacionDeTarea(cal, t.tipo);
+      const e = estimarTarea({ tipoFase: t.tipo, parte: t.party, titulo: t.titulo }, factores.get(t.clientId)?.factor ?? 1, carga);
+      const partes: PartesDelEstimado = { base: e.base, de: e.de, nombre: e.nombre, parte: e.parte, factor: e.factor };
+      const minutos = minutosDelEstimado(partes);
       const id = await crearOReabrir(encuesta.id, t.clave, {
         personaEmail: persona.email,
         rol: persona.rol,
-        estimadoMinutos: est.minutos,
+        estimadoMinutos: minutos > 0 ? minutos : null,
         projectId: t.projectId,
         clientId: t.clientId,
         taskId: t.id,
@@ -169,9 +183,9 @@ export async function alMarcarTareasHechas(args: {
         momento: "TAREA_HECHA",
         pregunta: encuesta.config.pregunta,
         titulo: t.titulo,
-        contexto: [t.cliente, nombreDeTipo(t.tipo), `marcada ${cuandoFue(ahora, ahora)}`].filter(Boolean).join(" · "),
+        contexto: [t.cliente, t.familia ? "tarea clave" : nombreDeTipo(t.tipo), `marcada ${cuandoFue(ahora, ahora)}`].filter(Boolean).join(" · "),
         opciones: encuesta.config.opciones,
-        estimacion: { modo: encuesta.config.estimacion, texto: est.texto },
+        estimacion: { modo: encuesta.config.estimacion, texto: textoDelEstimado(partes) },
         taskId: t.id,
         lote,
         venceAt: vence.toISOString(),

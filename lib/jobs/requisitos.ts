@@ -19,6 +19,8 @@
  * en la base: ese apagado no aparece acá, y su `run` devuelve `SIN_TURNO` (no anota nada).
  */
 
+import { MOTIVO_APAGADO as MOTIVO_APAGADO_DEL_SEGUIMIENTO, seguimientoPrendido } from "@/lib/lecturas/reglas";
+
 export type Entorno = Readonly<Record<string, string | undefined>>;
 
 const falta = (...variables: string[]) =>
@@ -80,6 +82,10 @@ const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
   "tipo-cambio-daily": (env) =>
     /* No necesita credencial: sin `BCCR_TOKEN` usa el API de Hacienda, que es abierto. Solo se apaga a propósito. */
     env.TIPO_CAMBIO_SYNC_ENABLED === "0" ? "Apagado a propósito: TIPO_CAMBIO_SYNC_ENABLED=0 en el .env del servidor." : null,
+  /* La lectura de cada reunión (memoria de la cuenta, etapa 2). Prendida por defecto: solo se apaga a propósito, y
+     apagada vuelve el post-proceso viejo. La regla es UNA (`seguimientoPrendido`, lib/lecturas/reglas.ts); la variable
+     se nombra acá para que doc-sync exija que el .env.example la declare. */
+  "seguimiento-reuniones": (env) => (seguimientoPrendido({ SEGUIMIENTO_REUNIONES_ENABLED: env.SEGUIMIENTO_REUNIONES_ENABLED }) ? null : MOTIVO_APAGADO_DEL_SEGUIMIENTO),
 };
 
 /** Los jobs que tienen requisito. La guarda de `requisitos.test.ts` exige que `defs.ts` los consulte a todos. */

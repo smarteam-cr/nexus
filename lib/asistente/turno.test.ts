@@ -400,6 +400,36 @@ describe("la regla de las fechas está en el prompt", () => {
     );
   });
 
+  it("⛔ y las del acuerdo de un DOCUMENTO también, por su propia frontera (etapa 4) — en los dos lectores", () => {
+    /* Un documento que lee el cliente (kickoff, diagnóstico, planificación, integraciones, entrega)
+       marca con «⚠ revisa» la línea que dice de dónde salió o trae un monto donde corresponde
+       (lib/contexto/frontera-de-los-documentos.ts). Son DOS salidas: la cajita que lee el CSE (las
+       líneas del acuerdo del documento) y el bloque de pendientes del modelo. Con una sola, el modelo
+       no ve la marca que el CSE le pide corregir. Las ediciones que la ponen en rojo: volver la rama
+       de documentos del traductor a `describir(ops)` a secas, o armar las líneas del acuerdo del
+       documento con `describirOperacionesDeDocumento` sin pasarlas por la frontera. */
+    const iArmador = FUENTE.indexOf("const lineasParaLosDosLectores");
+    const armador = FUENTE.slice(iArmador, FUENTE.indexOf(";", iArmador));
+    expect(armador, "la rama de documentos del traductor dejó de pasar por la frontera").toContain(
+      "lineasConFronteraDeDocumento(describir(ops), ops, hilo.pieza, huellasDelDocumento, montosDeLaNovedad)",
+    );
+    expect(armador, "la rama de documentos volvió a describir a secas").not.toMatch(/:\s*describir\(ops\)\s*$/);
+
+    const i = FUENTE.indexOf("if (opsDeDoc.length > 0) {");
+    expect(i, "se movió la rama del documento").toBeGreaterThan(-1);
+    const rama = FUENTE.slice(i, FUENTE.indexOf("dependencias:", i));
+    expect(rama, "las líneas de la cajita del documento salen sin frontera").toContain("lineas: lineasConFronteraDeDocumento(");
+    expect(rama, "la frontera del documento dejó de describir lo que se va a ejecutar").toContain(
+      "describirOperacionesDeDocumento(seccionesDelDoc, opsDeDoc)",
+    );
+    expect(rama, "las dos salidas del documento usan huellas distintas").toContain("huellasDelDocumento");
+    expect(rama, "las dos salidas del documento marcan los montos de la novedad").toContain("montosDeLaNovedad");
+    /* El turno de un documento no lee material, salvo la NOVEDAD de una reunión (etapa 6): con su frase y su cita se
+       arman las huellas (la copia queda marcada) y, si trae un monto, los montos se marcan aunque la pieza no lo pida. */
+    expect(FUENTE).toContain("huellasDeFrontera(textosDeNovedades)");
+    expect(FUENTE).toContain("textosDeNovedades.some((t) => traeUnMonto(t))");
+  });
+
   it("⭐ y la doble confirmación antes de borrar trabajo hecho", () => {
     /* Pedido de Elías: «el chat debería avisar, esa fase fue creada por un humano, ¿seguro que
        querés borrarla?, con una confirmación doble. Pero no es que no debería poder borrarlas». */
