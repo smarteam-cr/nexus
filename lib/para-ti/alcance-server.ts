@@ -131,6 +131,7 @@ export async function alcanceDe(tm: MiembroParaAlcance): Promise<Alcance> {
           proyectoInterno: true,
           hermanoCsProjectId: true,
           altaEstado: true,
+          esPrueba: true,
           hubspotOwnerEmail: true,
         },
       },

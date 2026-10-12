@@ -51,6 +51,8 @@ interface ProjectSummary {
   hubspotPipelineId?: string | null;
   proyectoInterno?: boolean;
   hermanoCsProjectId?: string | null;
+  /** `Project.esPrueba` (2026-10-11): un proyecto de prueba se ve marcado en el riel y en el centro. */
+  esPrueba?: boolean;
   /** `Project.altaEstado` — un alta a medio hacer no cobra ni se publica (lib/projects/alta.ts). */
   altaEstado?: string | null;
   /** Diagnóstico del alta trabada: alimentan el cartel con el botón "Reintentar". */
@@ -74,7 +76,7 @@ interface ProjectSummary {
  * riel lista los proyectos, y hay que poder distinguirlos—, y lo que implica para la plata y la
  * cartera («no entra a cobranza», «no suma a la cartera de CS») va en el `title`.
  */
-function claseDelProyecto(p: ProjectSummary, projects: ProjectSummary[]): Pick<ProyectoDelRiel, "tipo" | "ayuda"> {
+function claseDelProyecto(p: ProjectSummary, projects: ProjectSummary[]): Pick<ProyectoDelRiel, "tipo" | "ayuda" | "prueba"> {
   const def = resolvePipeline(p.hubspotPipelineId ?? null);
   const hermano = p.hermanoCsProjectId
     ? projects.find((o) => o.id === p.hermanoCsProjectId)
@@ -88,6 +90,13 @@ function claseDelProyecto(p: ProjectSummary, projects: ProjectSummary[]): Pick<P
     }),
   );
 
+  if (p.esPrueba) {
+    return {
+      tipo: "Proyecto de prueba",
+      ayuda: "Usa los datos reales de la empresa, pero no está en HubSpot, no cuenta en la cartera ni en Cobranza y el cliente no lo ve.",
+      prueba: true,
+    };
+  }
   const partes = [def?.label ?? "Implementación de HubSpot"];
   const ayuda: string[] = [];
   if (def?.help) ayuda.push(def.help);
@@ -629,6 +638,14 @@ function ProjectSection({
       <main className="min-w-0">
         {/* Con la columna derecha cerrada, sus avisos del proyecto (alta a medio hacer, propuesta de
             cronograma) bajan acá, compactos y con el mismo botón. Ver `avisosDelProyecto`. */}
+        {/* Un proyecto de prueba (2026-10-11) lo dice SIEMPRE, arriba de todo: se lleva a una sesión
+            con el CSE y no puede confundirse con el real. */}
+        {activeProject?.esPrueba && (
+          <div role="note" className="border-b border-warn-line bg-warn-surface px-6 py-2 text-[13px] text-warn-ink">
+            <span className="font-semibold">Proyecto de prueba.</span> Usa los datos reales de la empresa, pero no está
+            en HubSpot, no cuenta en la cartera ni en Cobranza y el cliente no lo ve.
+          </div>
+        )}
         {!panelVisible && activeProject && <div className="flex flex-col">{avisosDelProyecto("centro")}</div>}
         {avisoDeSync && <div className="px-6 pt-6">{avisoDeSync}</div>}
 

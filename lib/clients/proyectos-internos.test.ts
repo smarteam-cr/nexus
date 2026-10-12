@@ -44,6 +44,7 @@ function proyecto(over: Partial<ProyectoCandidatoInterno> = {}): ProyectoCandida
     proyectoInterno: false,
     hermanoCsProjectId: null,
     altaEstado: null,
+    esPrueba: false,
     hubspotPipelineStageLabel: "Handoff",
     hubspotOwnerName: null,
     ...over,

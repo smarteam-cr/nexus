@@ -386,6 +386,15 @@ model Project {
   // NOT NULL DEFAULT false porque un checkbox sin marcar SIGNIFICA "no interno" — al
   // aplicar la migración los 70 proyectos del portal estaban vacíos (ver el .sql).
   proyectoInterno          Boolean  @default(false)
+  // PROYECTO DE PRUEBA (2026-10-11, docs/smartloop-plan.md). Cuelga de un cliente real y lee lo
+  // suyo (ficha, procesos, reuniones, memoria), pero no existe en HubSpot ni escribe allá, y queda
+  // FUERA de la cartera, Cobranza, el vigía, «Para ti», el clasificador y la vista del cliente
+  // (átomo NO_ES_PRUEBA de lib/projects/scope.ts). Sirve para probar un módulo nuevo con datos
+  // reales antes de llevarlo al proyecto real. NOT NULL DEFAULT false: casi todo es real.
+  esPrueba                 Boolean  @default(false)
+  // De qué proyecto real es la prueba (sus reuniones se copiaron al crearla). Escalar sin FK, como
+  // `hermanoCsProjectId`: borrar el real no rompe la prueba.
+  pruebaDeProjectId        String?
   // El HECHO de la asociación proyecto↔proyecto en HubSpot (typeId 1254), en ids de
   // HubSpot. Se guarda SIEMPRE, aunque el otro proyecto todavía no exista en Nexus:
   // así el orden de llegada deja de importar.

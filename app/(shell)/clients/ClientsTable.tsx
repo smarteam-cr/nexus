@@ -97,6 +97,7 @@ export const consultarIndice = cache(async (
             proyectoInterno: true,
             hermanoCsProjectId: true,
             altaEstado: true,
+            esPrueba: true,
             // Solo para las filas de la pestaña «Proyectos internos», que muestra proyectos y
             // no empresas, y para la línea de proyectos abiertos debajo del nombre.
             id: true,

@@ -30,6 +30,8 @@ export interface ProyectoDelRiel {
   tipo: string;
   /** Lo que el tipo implica para la plata y la cartera, en el `title`. */
   ayuda?: string;
+  /** Un proyecto de prueba (2026-10-11): lleva su marca, para no confundirlo con el real. */
+  prueba?: boolean;
 }
 
 export default function RielDelCliente({
@@ -88,7 +90,7 @@ export default function RielDelCliente({
                 </svg>
                 <span className="flex min-w-0 flex-col gap-px">
                   <span className={cn("text-sm leading-[1.35]", abierto ? "font-semibold text-fg" : "font-medium text-fg-secondary")}>{p.nombre}</span>
-                  <span className="text-xs leading-[1.35] text-fg-muted">{p.tipo}</span>
+                  <span className={cn("text-xs leading-[1.35]", p.prueba ? "font-medium text-warn-ink" : "text-fg-muted")}>{p.tipo}</span>
                 </span>
               </button>
               {abierto && <div ref={slotDePiezas} />}

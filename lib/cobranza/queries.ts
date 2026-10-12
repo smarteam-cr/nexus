@@ -981,7 +981,7 @@ export async function cargarPausadosPorCliente(clientIds: ReadonlyArray<string>)
   const ids = [...new Set(clientIds)];
   if (ids.length === 0) return new Map();
   const filas = await prisma.project.findMany({
-    where: { AND: [{ clientId: { in: ids } }, NO_ES_CONTENEDOR_WHERE, { OR: [...PROYECTO_PAUSADO_WHERE.OR, { status: "active" }] }] },
+    where: { AND: [{ clientId: { in: ids } }, NO_ES_CONTENEDOR_WHERE, { esPrueba: false }, { OR: [...PROYECTO_PAUSADO_WHERE.OR, { status: "active" }] }] },
     select: { ...PROYECTO_PARA_PAUSA_SELECT, clientId: true },
     orderBy: { name: "asc" },
   });

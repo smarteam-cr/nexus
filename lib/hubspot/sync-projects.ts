@@ -1262,6 +1262,8 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
           clientId,
           name: projectName,
           hubspotServiceId: null,
+          // Un proyecto de prueba (2026-10-11) nunca se adopta: no es de HubSpot aunque se llame igual.
+          esPrueba: false,
           status: "active",
           // Positivo y con el NULL explícito: `notIn` descartaría las filas en NULL, que son
           // casi todas (ver lib/projects/scope.ts, mismo cuidado).

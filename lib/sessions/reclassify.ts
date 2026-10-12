@@ -61,6 +61,9 @@ export async function reclassifyClientSessions(
     select: {
       id: true,
       projects: {
+        // Un vínculo con un proyecto de prueba (2026-10-11) no congela la reunión: la prueba no
+        // decide a qué proyecto real pertenece.
+        where: { project: { esPrueba: false } },
         select: { source: true, reviewedAt: true, included: true, handoffOverride: true, timelineOverride: true, diagnosisOverride: true, planningOverride: true, implementationOverride: true, kickoffOverride: true, explorationOverride: true, techRequirementsOverride: true, deliveryOverride: true },
       },
     },

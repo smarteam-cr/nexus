@@ -84,6 +84,7 @@ describe("los nombres de los proyectos abiertos", () => {
     proyectoInterno: false,
     hermanoCsProjectId: null,
     altaEstado: null,
+    esPrueba: false,
     ...extra,
   });
 

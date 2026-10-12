@@ -23,6 +23,7 @@ const SELECT_FILTRO = {
   proyectoInterno: true,
   hermanoCsProjectId: true,
   altaEstado: true,
+  esPrueba: true,
   clientId: true,
 } as const;
 

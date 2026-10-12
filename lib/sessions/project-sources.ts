@@ -207,6 +207,7 @@ export async function getProjectMemberSessions(
       id: { not: projectId },
       createdAt: { lt: project.createdAt },
       ...NO_ES_CONTENEDOR_WHERE,
+      esPrueba: false, // un proyecto de prueba no es historia que le ponga piso a otro
     },
   });
   const piso = pisoDelProyecto(project, anteriorDelCliente > 0);

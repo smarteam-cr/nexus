@@ -49,6 +49,8 @@ export interface ProyectoParaFiltro {
    * cobertura.
    */
   altaEstado: string | null;
+  /** `Project.esPrueba` (2026-10-11): un proyecto de prueba no cuenta en ninguna lista real. */
+  esPrueba: boolean;
 }
 
 /**
@@ -153,8 +155,22 @@ const ALTA_TERMINADA: CriterioDeProyecto = {
  */
 const REGLA_HUBSPOT_O_ALTA_EN_CURSO: CriterioDeCliente = {
   nombre: "regla-hubspot-o-alta-en-curso",
-  where: { OR: [...RAMAS_REGLA_HUBSPOT, { altaEstado: { in: [...ESTADOS_EN_CURSO] } }] },
-  cumple: (p, c) => cumpleReglaHubspot(p, c) || altaEnCurso(parseEstadoDeAlta(p.altaEstado)),
+  // La rama de `esPrueba`: un proyecto de prueba no existe en HubSpot (no tiene
+  // `hubspotServiceId`) y tiene que poder abrirse igual desde la ficha del cliente.
+  where: { OR: [...RAMAS_REGLA_HUBSPOT, { altaEstado: { in: [...ESTADOS_EN_CURSO] } }, { esPrueba: true }] },
+  cumple: (p, c) => cumpleReglaHubspot(p, c) || altaEnCurso(parseEstadoDeAlta(p.altaEstado)) || p.esPrueba,
+};
+
+/**
+ * No es un PROYECTO DE PRUEBA (2026-10-11, docs/smartloop-plan.md). Un proyecto de prueba cuelga de
+ * un cliente real para probar un módulo con sus datos, y no puede contar en ninguna lista real: ni
+ * cartera, ni Cobranza, ni el clasificador de reuniones, ni el dueño de la cuenta. Sí se NAVEGA
+ * (rama de arriba). La columna es NOT NULL, así que acá no hay trampa con los NULL.
+ */
+const NO_ES_PRUEBA: CriterioDeProyecto = {
+  nombre: "no-es-prueba",
+  where: { esPrueba: false },
+  cumple: (p) => p.esPrueba === false,
 };
 
 // ── Los átomos derivados del registro de pipelines ───────────────────────────
@@ -303,6 +319,7 @@ const DE_CARTERA: readonly CriterioDeCliente[] = [
   CUENTA_PARA_CARTERA,
   NO_ES_INTERNO,
   ALTA_TERMINADA,
+  NO_ES_PRUEBA,
 ];
 
 /** FACTURABLE — el panel de Cobranza. */
@@ -314,6 +331,7 @@ const FACTURABLE: readonly CriterioDeCliente[] = [
   NO_ES_INTERNO,
   NO_ES_HERMANO_DE_CS,
   ALTA_TERMINADA,
+  NO_ES_PRUEBA,
 ];
 
 /**
@@ -325,7 +343,7 @@ const FACTURABLE: readonly CriterioDeCliente[] = [
  * de pipeline ni de interno: un desarrollo interno tiene sesiones como cualquier otro — es
  * justamente el caso SmartAgro que destapó todo esto.
  */
-const CLASIFICABLE: readonly CriterioDeProyecto[] = [ACTIVO, NO_ES_SENTINEL];
+const CLASIFICABLE: readonly CriterioDeProyecto[] = [ACTIVO, NO_ES_SENTINEL, NO_ES_PRUEBA];
 
 /**
  * DE PIPELINE CS — no es una de las cuatro pantallas: es EL CRITERIO QUE DECIDE quién es
@@ -335,7 +353,7 @@ const CLASIFICABLE: readonly CriterioDeProyecto[] = [ACTIVO, NO_ES_SENTINEL];
  * cuenta no deja de serlo porque el proyecto se pausó, y el contenedor "Información del
  * cliente" no tiene owner de todas formas.
  */
-const PIPELINE_CS: readonly CriterioDeProyecto[] = [ES_PIPELINE_CS];
+const PIPELINE_CS: readonly CriterioDeProyecto[] = [ES_PIPELINE_CS, NO_ES_PRUEBA];
 
 /**
  * «No es el contenedor "Información del cliente"», solo. Para quien pregunta por EXISTENCIA (¿el

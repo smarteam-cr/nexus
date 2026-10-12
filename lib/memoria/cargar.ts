@@ -124,7 +124,7 @@ async function leerEntregaPublicada(clientId: string, proyectoActualId: string |
     where: {
       ...canvasOf("delivery"),
       publishedSnapshotAt: { not: null },
-      project: { clientId, ...NO_ES_CONTENEDOR_WHERE, ...(proyectoActualId ? { id: { not: proyectoActualId } } : {}) },
+      project: { clientId, ...NO_ES_CONTENEDOR_WHERE, esPrueba: false, ...(proyectoActualId ? { id: { not: proyectoActualId } } : {}) },
     },
     orderBy: { publishedSnapshotAt: "desc" },
     select: { projectId: true, project: { select: { name: true } } },
@@ -191,7 +191,7 @@ async function cargarDatosDeLaCuenta(
             name: true,
             ficha: true,
             projects: {
-              where: NO_ES_CONTENEDOR_WHERE,
+              where: { ...NO_ES_CONTENEDOR_WHERE, esPrueba: false }, // un proyecto de prueba no es historia
               orderBy: { createdAt: "desc" },
               take: TOPES_DE_LA_MEMORIA.proyectos,
               select: { id: true, name: true, serviceType: true, status: true, createdAt: true, hubspotDealId: true },
@@ -425,7 +425,7 @@ export async function loEsencialDeLaCuenta(clientId: string, opts: { lector: Lec
       () =>
         prisma.client.findUnique({
           where: { id: clientId },
-          select: { ficha: true, projects: { where: { ...NO_ES_CONTENEDOR_WHERE, status: "active" }, orderBy: { createdAt: "desc" }, take: 6, select: { id: true, name: true } } },
+          select: { ficha: true, projects: { where: { ...NO_ES_CONTENEDOR_WHERE, status: "active", esPrueba: false }, orderBy: { createdAt: "desc" }, take: 6, select: { id: true, name: true } } },
         }),
       null,
     ),

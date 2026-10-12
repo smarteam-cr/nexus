@@ -88,12 +88,14 @@ export default async function ClientLayout({
   const activeProjects = enProyectos
     ? await prisma.project.findMany({
         where: proyectoNavegableWhere({ clientId: id }),
-        select: { id: true },
+        select: { id: true, esPrueba: true },
         orderBy: { createdAt: "asc" },
       })
     : [];
+  // Un proyecto de prueba (2026-10-11) no cuenta para abrir solo: con un real y su prueba, abre el real.
+  const proyectosReales = activeProjects.filter((p) => !p.esPrueba);
   const initialProjectId =
-    activeProjects.length === 1 ? activeProjects[0].id : SENTINEL_SERVICE_TYPE;
+    proyectosReales.length === 1 ? proyectosReales[0].id : SENTINEL_SERVICE_TYPE;
 
   // Nombre de empresa live desde HubSpot. Es una llamada de RED en el camino crítico del
   // header: solo se paga en el espacio de proyectos, donde el nombre de HubSpot es el que

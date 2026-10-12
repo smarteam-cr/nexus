@@ -183,6 +183,7 @@ describe("⛔ «Para ti» respeta el REVOKE igual que requireAccessToClient", ()
         proyectoInterno: false,
         hermanoCsProjectId: null,
         altaEstado: null,
+        esPrueba: false,
         hubspotOwnerEmail: "ana@smarteamcr.com",
       },
     ],

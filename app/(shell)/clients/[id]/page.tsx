@@ -129,6 +129,7 @@ export default async function ClientPage({
         // los muestra vive en el rail: pedirlos aparte sería una query por proyecto para un
         // caso que en el 99% de las filas no dispara nada.
         altaEstado: true,
+        esPrueba: true,
         altaError: true,
         altaUltimoIntentoAt: true,
         altaActorEmail: true,
@@ -189,8 +190,9 @@ export default async function ClientPage({
   const initialProjectId =
     tabParam && visibleProjects.some((p) => p.id === tabParam)
       ? tabParam
-      : visibleProjects.length === 1
-        ? visibleProjects[0].id
+      : /* Un proyecto de prueba no cuenta para abrir solo: con un real y su prueba, abre el real. */
+        visibleProjects.filter((p) => !p.esPrueba).length === 1
+        ? visibleProjects.filter((p) => !p.esPrueba)[0].id
         : null;
   const initialCanvases = initialProjectId ? await seedCanvases(initialProjectId) : null;
 

@@ -82,6 +82,11 @@ export async function POST(
   const { projectId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
+  // Un proyecto de prueba (2026-10-11) nunca se comparte con el cliente.
+  const esPrueba = await prisma.project.findUnique({ where: { id: projectId }, select: { esPrueba: true } });
+  if (esPrueba?.esPrueba) {
+    return NextResponse.json({ error: "Es un proyecto de prueba: el cliente no lo ve." }, { status: 409 });
+  }
 
   const accessToken = generateAccessToken();
   const password = generatePassword();

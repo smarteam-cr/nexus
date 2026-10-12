@@ -48,6 +48,7 @@ export async function correrRecordatoriosDeAdopcion(ahora: Date): Promise<{ reco
             proyectoInterno: true,
             hermanoCsProjectId: true,
             altaEstado: true,
+            esPrueba: true,
             hubspotOwnerEmail: true,
             hubspotCreatedAt: true,
             hubspotPipelineStageId: true,

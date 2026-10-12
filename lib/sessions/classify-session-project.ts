@@ -89,7 +89,9 @@ export async function classifySessionToProjects(
 
   // 2. Links existentes: locks POR LINK (manual / revisado / tombstone / override).
   const existing = await prisma.sessionProject.findMany({
-    where: { sessionId },
+    // Sin los vínculos con un proyecto de prueba (2026-10-11): no cuentan como candado ni como
+    // primario. El clasificador tampoco los borra (su `source` es "prueba", no "agent"/"legacy").
+    where: { sessionId, project: { esPrueba: false } },
     select: {
       projectId: true,
       source: true,

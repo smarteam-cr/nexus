@@ -46,6 +46,7 @@ function proyecto(over: Partial<ProyectoParaFiltro> = {}): ProyectoParaFiltro {
     proyectoInterno: false,
     hermanoCsProjectId: null,
     altaEstado: null,
+    esPrueba: false,
     ...over,
   };
 }
@@ -79,7 +80,7 @@ describe("el trabajo interno cuenta como proyecto abierto", () => {
     expect(
       ATOMOS_POR_CRITERIO.clasificable,
       "CLASIFICABLE cambió de átomos: revisar si el filtro de trabajo interno sigue vivo",
-    ).toEqual(["activo", "no-es-sentinel"]);
+    ).toEqual(["activo", "no-es-sentinel", "no-es-prueba"]); // la prueba (2026-10-11) no saca lo interno
     expect(ATOMOS_POR_CRITERIO.cartera).toContain("no-es-interno");
   });
 });

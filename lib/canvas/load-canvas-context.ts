@@ -58,7 +58,8 @@ interface BlockLite {
    scope-coverage.test.ts — tope 1: se define UNA vez, a nivel de módulo, y las queries de
    `loadPriorRelationshipContext` y `loadCiclosAnterioresContext` la REUSAN, nunca la vuelven a
    escribir). */
-const noEsSentinel = { OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }] };
+// `esPrueba: false`: un proyecto de prueba (2026-10-11) no es historia del cliente.
+const noEsSentinel = { OR: [{ serviceType: null }, { serviceType: { not: SENTINEL_SERVICE_TYPE } }], esPrueba: false };
 
 /**
  * Marco breve de la relación PREVIA del cliente con Smarteam (proyectos y handoffs

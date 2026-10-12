@@ -83,6 +83,7 @@ export async function computeClientActivityMap(
       prisma.project.findMany({
         where: {
           clientId: { in: clientIds },
+          esPrueba: false, // la próxima reunión de un proyecto de prueba no es del cliente
           OR: [
             { nextSessionDate: { gt: nowDate } },
             { salesNextSessionDate: { gt: nowDate } },

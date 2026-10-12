@@ -295,6 +295,7 @@ async function main(): Promise<number> {
         proyectoInterno: true,
         hermanoCsProjectId: true,
         altaEstado: true,
+        esPrueba: true,
         client: { select: { name: true, hubspotCompanyId: true, hubspotAccount: { select: { id: true } } } },
       },
     });

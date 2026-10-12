@@ -143,6 +143,7 @@ const PROYECTO_BASE: ProyectoParaFiltro = {
   proyectoInterno: false,
   hermanoCsProjectId: null,
   altaEstado: null,
+  esPrueba: false,
 };
 
 const CLIENTE_CON_PORTAL: ClienteParaFiltro = { hubspotCompanyId: "co1", tieneHubspotAccount: false };
@@ -321,6 +322,18 @@ describe("casos con nombre y apellido", () => {
     expect(cart({ serviceType: SENTINEL_SERVICE_TYPE })).toBe(false);
     expect(fact({ serviceType: SENTINEL_SERVICE_TYPE })).toBe(false);
     expect(esProyectoClasificable({ ...PROYECTO_BASE, serviceType: SENTINEL_SERVICE_TYPE })).toBe(false);
+  });
+
+  it("un proyecto de prueba se navega y no es nada más (2026-10-11)", () => {
+    // Sin servicio de HubSpot y en un cliente CON portal: igual tiene pestaña.
+    expect(nav({ esPrueba: true, hubspotServiceId: null })).toBe(true);
+    expect(cart({ esPrueba: true })).toBe(false);
+    expect(fact({ esPrueba: true })).toBe(false);
+    expect(esProyectoClasificable({ ...PROYECTO_BASE, esPrueba: true })).toBe(false);
+    expect(pipCs({ esPrueba: true })).toBe(false);
+    // Y la rama de la prueba no resucita al contenedor ni a un proyecto cerrado.
+    expect(nav({ esPrueba: true, serviceType: SENTINEL_SERVICE_TYPE })).toBe(false);
+    expect(nav({ esPrueba: true, status: "inactive" })).toBe(false);
   });
 
   it("un desarrollo tiene pestaña pero NO es cartera de CS", () => {

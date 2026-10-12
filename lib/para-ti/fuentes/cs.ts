@@ -84,7 +84,7 @@ export const VIGIA: Fuente = {
         take: 100,
       }),
       prisma.project.findMany({
-        where: { healthProposed: { not: null } },
+        where: { healthProposed: { not: null }, esPrueba: false },
         select: { id: true, name: true, clientId: true, healthProposedAt: true, client: { select: { name: true } } },
         orderBy: { healthProposedAt: "asc" },
         take: 50,
