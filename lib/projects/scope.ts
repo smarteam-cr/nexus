@@ -224,7 +224,9 @@ const NO_ES_INTERNO: CriterioDeProyecto = {
   cumple: (p) => p.proyectoInterno === false,
 };
 
-const PIPELINES_QUE_NO_SON_CS = PROJECT_PIPELINES.filter((p) => p.key !== "customer-success").map(
+/* Un servicio recurrente de Customer Success (SmartLoop, 2026-10-11) también decide quién es el CSE de la
+   cuenta: es la continuidad del servicio, no un proyecto hijo. */
+const PIPELINES_QUE_NO_SON_CS = PROJECT_PIPELINES.filter((p) => p.key !== "customer-success" && !p.servicioRecurrente).map(
   (p) => p.hubspotPipelineId,
 );
 

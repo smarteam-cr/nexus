@@ -613,9 +613,10 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             proximaReunion: proximaDeCualquierFrente,
             etapaSugerida: data.etapaHubspot?.sugerencia ? { hasta: data.etapaHubspot.sugerencia.hasta } : null,
             cuestionarios: resumenCtx.cuestionarios ?? null,
+            ciclo: resumenCtx.ciclo ?? null,
           })
         : null,
-    [data, resumenCtx.piezas, resumenCtx.cuestionarios, sinRevisar, proximaDeCualquierFrente],
+    [data, resumenCtx.piezas, resumenCtx.cuestionarios, resumenCtx.ciclo, sinRevisar, proximaDeCualquierFrente],
   );
   useEffect(() => {
     onQueSigue(queSigue);

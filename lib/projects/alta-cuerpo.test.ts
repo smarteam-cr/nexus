@@ -165,6 +165,7 @@ describe("los nombres de los tres tipos", () => {
     "customer-success": "Implementación de HubSpot",
     development: "Desarrollo e integración",
     web: "Sitios web",
+    smartloop: "SmartLoop",
   };
 
   for (const p of PROJECT_PIPELINES) {
@@ -173,8 +174,9 @@ describe("los nombres de los tres tipos", () => {
     });
   }
 
-  it("son tres, no dos", () => {
-    expect(PROJECT_PIPELINES.length).toBe(3);
+  it("son cuatro: el cuarto es SmartLoop (2026-10-11), que no se da de alta desde el formulario", () => {
+    expect(PROJECT_PIPELINES.length).toBe(4);
+    expect(PROJECT_PIPELINES.filter((p) => !p.servicioRecurrente).length).toBe(3);
   });
 
   it("ninguno arrastra el nombre viejo", () => {

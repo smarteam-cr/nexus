@@ -664,7 +664,9 @@ export default function NuevoProyectoStepper() {
                   <p className="text-2xs font-medium text-fg-muted uppercase tracking-wider">
                     Tipo de proyecto
                   </p>
-                  {PROJECT_PIPELINES.map((p) => (
+                  {/* SmartLoop (servicio recurrente) todavía no se da de alta desde acá: los proyectos reales
+                      llegan con la migración desde «Continuidad» (docs/smartloop-plan.md). */}
+                  {PROJECT_PIPELINES.filter((p) => !p.servicioRecurrente).map((p) => (
                     <label
                       key={p.key}
                       className="flex items-start gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer"

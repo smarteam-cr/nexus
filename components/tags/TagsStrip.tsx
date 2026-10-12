@@ -47,10 +47,16 @@ export default function TagsStrip({
   tags,
   canEdit = false,
   onSetTags,
+  servicio = null,
 }: {
   tags: string[];
   canEdit?: boolean;
   onSetTags: (slugs: string[]) => void;
+  /**
+   * El servicio recurrente del proyecto («SmartLoop», 2026-10-11). Va primero, como el tipo de servicio, y
+   * apaga el aviso de «tipo de implementación»: un servicio recurrente no es una implementación.
+   */
+  servicio?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -79,10 +85,15 @@ export default function TagsStrip({
   const secciones = seccionesDelCatalogo()
     .map((s) => ({ ...s, tags: s.tags.filter((t) => !selected.includes(t.slug)) }))
     .filter((s) => s.tags.length > 0);
-  const faltan = faltanEjesRequeridos(selected);
+  const faltan = faltanEjesRequeridos(selected).filter((eje) => !(servicio && eje === "tipo_implementacion"));
 
   return (
     <div ref={ref} className="relative flex flex-wrap items-center gap-1.5">
+      {servicio && (
+        <span className={`${CHIP} border-info-line bg-info-surface text-brand`} title="El tipo de servicio sale del pipeline de HubSpot">
+          Servicio: {servicio}
+        </span>
+      )}
       {enOrden.map((slug) => {
         const def = tagDef(slug);
         return (

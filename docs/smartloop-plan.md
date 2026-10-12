@@ -75,6 +75,22 @@ Continuidad, CSE Carolina Bersot). Se prueba con un **proyecto de prueba** en pr
 7. Gantt de la cuenta con enlace para el cliente.
 8. (Fase siguiente) Tareas del CSE.
 
+## Avance
+
+- **Etapa 0 · proyecto de prueba:** hecha y en producción (18fb4806). FACO: «FACO · SmartLoop (prueba)», de
+  «PLAN DE CONTINUIDAD | HONDA FACO».
+- **Etapa 1 · modo recurrente y ciclo:** en el código. SmartLoop en la tabla de pipelines, tablas `CicloDeProyecto` y
+  `CasoDeUso` (SQL `2026-10-11-ciclos-y-casos-de-uso.sql`), pieza «Ciclo» con la guía del CSE, la etapa «Ciclo N ·
+  etapa» en la ficha, el traspaso con «Servicio: SmartLoop» y el «Qué sigue». Para la prueba de FACO:
+  `crear-proyecto-de-prueba.ts --de <real> --pipeline smartloop --apply` la pasa a SmartLoop.
+
+## Para cuando lleguen los proyectos reales (la migración)
+
+- Revisar los lugares que tratan distinto a `customer-success` por su clave (handoff por tipo, cartera, recordatorios
+  de adopción, clasificación «recurrente»). El dueño de la cuenta ya cuenta SmartLoop como de Customer Success.
+- Dar de alta SmartLoop desde Nexus (hoy bloqueado en el formulario y en `POST /api/projects`).
+- Con proyectos en HubSpot, la etapa se mueve con la encuesta; el ciclo de Nexus sigue al espejo.
+
 ## Abierto
 
 - La lista preliminar de casos de uso (Elías la pasa).

@@ -8,6 +8,7 @@ import { ultimoCambioDelHandoff } from "@/lib/handoff/congelado-server";
 import { conteoDeNovedadesDelProyecto } from "@/lib/seguimiento/novedades-server";
 import { cargarEstadoDeCuestionarios } from "@/lib/pieces/estado-de-cuestionarios-server";
 import { slugForCanvas } from "@/lib/pieces/registry";
+import { estadoDelCicloParaElRiel } from "@/lib/servicios/ciclos-server";
 
 // GET: list canvases for a project (default first, then by createdAt)
 export async function GET(
@@ -62,7 +63,7 @@ export async function GET(
   /* Los Cuestionarios (2026-10-11) no viven en un canvas: su fila del riel sale de sus propias tablas.
      El «Ahora no» de su sugerencia está en las secciones del Kickoff, que ya vienen en esta lista. */
   const kickoff = canvases.find((c) => slugForCanvas(c) === "kickoff");
-  const [handoffCambioAt, novedades, estadoCuestionarios, puedeEditarCuestionarios] = await Promise.all([
+  const [handoffCambioAt, novedades, estadoCuestionarios, puedeEditarCuestionarios, ciclo] = await Promise.all([
     ultimoCambioDelHandoff(projectId),
     conteoDeNovedadesDelProyecto(
       projectId,
@@ -74,11 +75,15 @@ export async function GET(
     guardHandoffAccess(guard.clientId)
       .then((r) => !(r instanceof NextResponse))
       .catch(() => false),
+    /* El Ciclo de un servicio recurrente (2026-10-11): tampoco vive en un canvas. null = el proyecto no es
+       recurrente (o la tabla todavía no existe): la pieza no se lista. */
+    estadoDelCicloParaElRiel(projectId).catch(() => null),
   ]);
   const cuestionarios = estadoCuestionarios ? { ...estadoCuestionarios, puedeEditar: puedeEditarCuestionarios } : null;
 
   return NextResponse.json({
     cuestionarios,
+    ciclo,
     canvases: canvases.map((c) => ({
       ...c,
       hasContent: conContenido.has(c.id),

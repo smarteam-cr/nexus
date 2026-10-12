@@ -41,6 +41,11 @@ export interface ContextoDelResumen {
    * «Ahora no». null = la pieza no está a la vista en el riel, o su estado todavía no llegó.
    */
   cuestionarios?: { publicados: number; descartada: boolean } | null;
+  /**
+   * El Ciclo de un servicio recurrente (2026-10-11): si hay uno abierto y lo primero que falta en su etapa.
+   * null = el proyecto no es recurrente, o su estado todavía no llegó.
+   */
+  ciclo?: { corto: string; abierto: boolean; falta: string | null; numero: number } | null;
   /** «Ahora no» de «Manda los cuestionarios al cliente». */
   descartarCuestionarios?: () => void;
   aLaVista: boolean;

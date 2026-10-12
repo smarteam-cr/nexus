@@ -13,6 +13,9 @@
  *
  * Correrlo de nuevo NO crea otro: reusa el que ya existe y le suma las reuniones nuevas del real.
  *
+ * `--pipeline <clave>` (de lib/projects/kind.ts, p. ej. `smartloop`) lo pone en ese tipo de proyecto: con
+ * SmartLoop tiene la pieza «Ciclo» y su etapa es la del ciclo. Sobre una prueba que ya existe, la cambia.
+ *
  *   npx tsx scripts/crear-proyecto-de-prueba.ts --de <projectId>                          # simulacro
  *   npx tsx scripts/crear-proyecto-de-prueba.ts --de <projectId> --nombre "FACO · SmartLoop (prueba)"
  *   $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/crear-proyecto-de-prueba.ts --de <projectId> --apply
@@ -27,6 +30,7 @@ import { imprimirDestino, resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { belongsToClient } from "@/lib/sessions/project-sources";
+import { PROJECT_PIPELINES } from "@/lib/projects/kind";
 
 const APPLY = resolverApply({ tablas: ["Project", "SessionProject"] });
 
@@ -59,10 +63,16 @@ async function main() {
     process.exit(1);
   }
   const nombre = arg("--nombre") ?? `${real.name} · prueba`;
+  const clavePipeline = arg("--pipeline");
+  const pipeline = clavePipeline ? PROJECT_PIPELINES.find((p) => p.key === clavePipeline) : null;
+  if (clavePipeline && !pipeline) {
+    console.error(`No conozco el pipeline «${clavePipeline}». Opciones: ${PROJECT_PIPELINES.map((p) => p.key).join(", ")}.`);
+    process.exit(1);
+  }
 
   const yaExiste = await prisma.project.findFirst({
     where: { esPrueba: true, pruebaDeProjectId: real.id },
-    select: { id: true, name: true },
+    select: { id: true, name: true, hubspotPipelineId: true },
   });
 
   const vinculos = await prisma.sessionProject.findMany({
@@ -91,6 +101,13 @@ async function main() {
       ? `Prueba:         ya existe «${yaExiste.name}» (${yaExiste.id}): se le suman las reuniones nuevas.`
       : `Prueba:         se crea «${nombre}», con la fecha de inicio del real.`,
   );
+  if (pipeline) {
+    console.log(
+      yaExiste?.hubspotPipelineId === pipeline.hubspotPipelineId
+        ? `Tipo:           ya es ${pipeline.label}.`
+        : `Tipo:           queda como ${pipeline.label}.`,
+    );
+  }
   console.log(`Reuniones:      ${aCopiar.length} por copiar (de ${delCliente.length} del real; ${yaCopiadas.size} ya estaban).`);
   for (const v of aCopiar.slice(0, 12)) {
     console.log(`  · ${v.session.date.toISOString().slice(0, 10)}  ${v.session.title ?? "(sin título)"}`);
@@ -117,12 +134,16 @@ async function main() {
         hubspotCreatedAt: real.hubspotCreatedAt,
         hubspotOwnerEmail: real.hubspotOwnerEmail,
         hubspotOwnerName: real.hubspotOwnerName,
+        ...(pipeline ? { hubspotPipelineId: pipeline.hubspotPipelineId } : {}),
       },
       select: { id: true, name: true },
     });
-    await createDefaultCanvases(creado.id, null, tx);
+    await createDefaultCanvases(creado.id, pipeline?.hubspotPipelineId ?? null, tx);
     return creado;
   }));
+  if (yaExiste && pipeline && yaExiste.hubspotPipelineId !== pipeline.hubspotPipelineId) {
+    await prisma.project.update({ where: { id: yaExiste.id }, data: { hubspotPipelineId: pipeline.hubspotPipelineId } });
+  }
 
   if (aCopiar.length > 0) {
     await prisma.sessionProject.createMany({

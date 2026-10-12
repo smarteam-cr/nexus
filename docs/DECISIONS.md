@@ -7785,3 +7785,38 @@ le pregunta a la persona del cliente.
   pieza de proyecto con canvas ya acepta entries reservadas y la sugerencia nace de que el kickoff esté generado.
 - **El recorrido** pasa a ser propio («Cuestionarios», `ficha-cuestionarios`); el de la exploración subió a la versión 6
   y ya no los nombra.
+
+## Servicios recurrentes (SmartLoop): proyecto de prueba y el ciclo como pieza (2026-10-11)
+
+> Pedido de Elías: llevar en Nexus los servicios recurrentes de SmartLoop, tanto los vendidos con un plan
+> (FACO) como los que pasaron de temporal a recurrente sin plan. El plan acordado, por etapas, está en
+> `docs/smartloop-plan.md`; la fuente de verdad del servicio es su documento de proceso (v0.3.0).
+
+- **Se prueba con un proyecto de prueba, en producción** (`Project.esPrueba`, `pruebaDeProjectId`). Cuelga del cliente
+  real y lee lo suyo; no existe en HubSpot. El átomo `NO_ES_PRUEBA` de `lib/projects/scope.ts` lo saca de cartera,
+  Cobranza, el clasificador y el dueño de la cuenta, y se sigue navegando (rama de NAVEGABLE). A mano: la adopción por
+  nombre del sync de HubSpot, la próxima reunión del índice, la memoria e historia del cliente, el piso de reuniones y
+  los candados del clasificador (sus vínculos tienen `source = "prueba"`: el clasificador no los borra ni los cuenta).
+  No se comparte con el cliente (409 al crear el acceso) y no tiene encuesta de etapa. *Por qué:* probar con datos
+  reales sin tocar el proyecto real ni la cartera. Se crea con `scripts/crear-proyecto-de-prueba.ts`.
+- **SmartLoop es una fila de la tabla de pipelines** (`942509592`, etapas transcritas del portal) con
+  `servicioRecurrente: "smartloop"`. Un servicio recurrente nuevo es otra fila más su guía en `lib/servicios`: no código
+  nuevo. El pipeline espeja las cinco etapas del método (Elías agregó «Aprendizaje» el mismo día) y
+  «Cancelado» cierra. SmartLoop **no se da de alta desde Nexus** todavía (formulario y API): los proyectos reales llegan
+  con la migración desde «Continuidad». Cuenta como pipeline de Customer Success para decidir el CSE de la cuenta.
+- **El ciclo es una tabla propia** (`CicloDeProyecto`: número, tramo, fechas, meta, etapa, estado; uno abierto por
+  proyecto) y **el caso de uso también** (`CasoDeUso`, de la empresa: puede estar sugerido, en el plan o en un ciclo, y
+  mueve varias dimensiones de la escala). El compromiso (`Project.compromiso`) es opcional: mes a mes, seis meses o un
+  año. SQL `2026-10-11-ciclos-y-casos-de-uso.sql`.
+- **La etapa de un proyecto recurrente es la de su ciclo abierto** («Ciclo 1 · Implementación»), con la línea de las
+  cinco etapas del método (`lib/lifecycle/load.ts`, rama de pipeline; no se tocó cómo decide el motor de 8 etapas). En
+  un proyecto que existe en HubSpot la etapa sale de allá, por nombre; en uno que no (la prueba), del ciclo.
+- **La pieza «Ciclo»** (`hasCanvas: false`, como Cuestionarios) y **las piezas de un servicio recurrente** son solo
+  Ciclo, Cronograma, Cuestionarios y Exploración (`PIEZAS_DE_UN_SERVICIO_RECURRENTE`): sin kickoff, diagnóstico,
+  planificación ni entrega. El traspaso muestra «Servicio: SmartLoop» y no pide el tipo de implementación.
+- **La guía del CSE sale de la sección 5 del documento de proceso** (`lib/servicios/smartloop.ts`): por etapa, qué haces,
+  qué tiene que quedar y la señal de que se saltó. Lo que Nexus puede comprobar lleva marca (hoy: casos con criterio,
+  meta y fechas); lo demás va sin marca, nunca como hecho. La señal se prende solo si Nexus la ve (un caso sin criterio
+  después de planificar). El «Qué sigue» del proyecto dice «Abre el ciclo N» o lo primero que falta.
+- **Leer el ciclo pide acceso al proyecto; cambiarlo, editar el cronograma** (`guardTimelineEdit`). Quitar un caso de
+  uso lo deja descartado, no lo borra.

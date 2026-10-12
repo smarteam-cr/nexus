@@ -265,7 +265,8 @@ describe("revisión de 3897d105", () => {
        revertía, sin que se viera, un bloque del handoff. La edición que la pone en rojo: sacar
        `visible` de la condición, o no pasarlo desde el panel. */
     expect(sinComentarios(HANDOFF_UI)).toContain("{generated && showDoc && visible && status.canvasId && (");
-    expect(sinComentarios(PANEL)).toContain("<ProjectHandoffSection projectId={projectId} clientId={clientId} visible={enResumen} />");
+    // Desde el 2026-10-11 lleva además el servicio recurrente (en varias líneas); lo que se cuida es `visible={enResumen}`.
+    expect(sinComentarios(PANEL)).toMatch(/<ProjectHandoffSection\s+projectId=\{projectId\}\s+clientId=\{clientId\}\s+visible=\{enResumen\}/);
   });
 
   it("un `?canvas=` de OTRO proyecto no se aplica al abierto, y la pestaña sigue a `?tab=`", () => {

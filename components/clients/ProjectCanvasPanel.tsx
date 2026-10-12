@@ -17,6 +17,9 @@ import PlanificacionWorkspace from "@/components/canvas/PlanificacionWorkspace";
 import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
 import EntregaWorkspace from "@/components/canvas/EntregaWorkspace";
 import CuestionarioPanel from "@/components/cuestionario/CuestionarioPanel";
+import PanelDelCiclo from "@/components/ciclos/PanelDelCiclo";
+import { PIEZA_CICLO, PIEZAS_DE_UN_SERVICIO_RECURRENTE } from "@/lib/servicios/ciclo";
+import { resolvePipeline } from "@/lib/projects/kind";
 import { PIEZA_CUESTIONARIOS, type EstadoDeCuestionarios } from "@/lib/pieces/estado-de-cuestionarios";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
@@ -111,6 +114,7 @@ export default function ProjectCanvasPanel({
   slotDelPanel = null,
   propuestaPendiente = false,
   queSigueOcupado = false,
+  esPrueba = false,
   onAbrirDesdeOculto,
 }: {
   projectId: string;
@@ -133,6 +137,8 @@ export default function ProjectCanvasPanel({
   propuestaPendiente?: boolean;
   /** El alta a medio hacer o la propuesta ya ocupan el «Qué sigue» del panel. */
   queSigueOcupado?: boolean;
+  /** Un proyecto de prueba (2026-10-11): no se comparte con el cliente, así que no lleva «Acceso». */
+  esPrueba?: boolean;
   /** Abrir una pieza (o el Resumen, con null) mientras el panel está oculto. */
   onAbrirDesdeOculto?: (canvasId: string | null) => void;
 }) {
@@ -231,6 +237,8 @@ export default function ProjectCanvasPanel({
   const [estadoCuestionarios, setEstadoCuestionarios] = useState<EstadoDeCuestionarios | null>(null);
   /** Ya volvió un listado con el estado de los Cuestionarios: recién ahí se sabe si la pieza corresponde. */
   const [cuestionariosLeidos, setCuestionariosLeidos] = useState(false);
+  /** El Ciclo de un servicio recurrente (llega con el listado; null si el proyecto no es recurrente). */
+  const [estadoCiclo, setEstadoCiclo] = useState<{ corto: string; abierto: boolean; falta: string | null; numero: number } | null>(null);
   /* Slot en el header para los CTAs de un canvas que necesita ESTADO PROPIO para decidir
      qué botón mostrar. El canvas los renderiza acá por portal y quedan junto al nombre, en
      el mismo lugar que el `CanvasAgentButton` que este panel monta para los demás.
@@ -271,9 +279,17 @@ export default function ProjectCanvasPanel({
   const conCuestionarios = canvases.some((c) => slugForCanvas(c) === "exploration") || (estadoCuestionarios?.total ?? 0) > 0;
   const estadoDeLaFilaDeCuestionarios = conCuestionarios ? (estadoCuestionarios?.enviado ? "generada" : "vacia") : undefined;
   // Las filas del riel salen del FLUJO (lib/flow), no de la lista de canvases.
+  /* Un SERVICIO RECURRENTE (2026-10-11, docs/smartloop-plan.md) tiene sus propias piezas: el Ciclo primero y
+     nada del flujo de una implementación (kickoff, diagnóstico, entrega). Lo dice su fila de pipelines. */
+  const esRecurrente = !!resolvePipeline(hubspotPipelineId ?? null)?.servicioRecurrente;
+  const estadoDeLaFilaDelCiclo = esRecurrente ? (estadoCiclo?.abierto ? "generada" : "vacia") : undefined;
   const pieceRows = useMemo(
-    () => buildPieceRows(canvases, { sinCanvas: { [PIEZA_CUESTIONARIOS]: estadoDeLaFilaDeCuestionarios } }),
-    [canvases, estadoDeLaFilaDeCuestionarios],
+    () =>
+      buildPieceRows(canvases, {
+        sinCanvas: { [PIEZA_CUESTIONARIOS]: estadoDeLaFilaDeCuestionarios, [PIEZA_CICLO]: estadoDeLaFilaDelCiclo },
+        piezasDelServicio: esRecurrente ? PIEZAS_DE_UN_SERVICIO_RECURRENTE : undefined,
+      }),
+    [canvases, estadoDeLaFilaDeCuestionarios, estadoDeLaFilaDelCiclo, esRecurrente],
   );
   // Qué piezas ya tienen algo escrito — lo mira `pieceReadiness` para avisar cuando a una
   // pieza le faltan sus pasos previos.
@@ -361,6 +377,7 @@ export default function ProjectCanvasPanel({
         setCanvases(list);
         setEstadoCuestionarios((d.cuestionarios as EstadoDeCuestionarios | null | undefined) ?? null);
         setCuestionariosLeidos(true);
+        setEstadoCiclo((d.ciclo as { corto: string; abierto: boolean; falta: string | null; numero: number } | null | undefined) ?? null);
         setActiveCanvasId((prev) => {
           // Selección vigente que sigue existiendo → se mantiene.
           if (prev && list.some((c) => c.id === prev)) return prev;
@@ -487,6 +504,10 @@ export default function ProjectCanvasPanel({
     if (piezaSinCanvas !== PIEZA_CUESTIONARIOS || !listLoaded || !cuestionariosLeidos || conCuestionarios) return;
     irAlResumen();
   }, [piezaSinCanvas, listLoaded, cuestionariosLeidos, conCuestionarios, irAlResumen]);
+  // Lo mismo con `?canvas=cycle` en un proyecto que no es de un servicio recurrente.
+  useEffect(() => {
+    if (piezaSinCanvas === PIEZA_CICLO && !esRecurrente) irAlResumen();
+  }, [piezaSinCanvas, esRecurrente, irAlResumen]);
 
   /* El esqueleto se apaga cuando VOLVIÓ la consulta de la lista, no cuando la lista trae
      algo: un proyecto sin piezas es un estado válido y antes se quedaba cargando para
@@ -538,8 +559,8 @@ export default function ProjectCanvasPanel({
   );
   const abrirPieza = useCallback(
     (slug: string) => {
-      // Los Cuestionarios no tienen canvas: se abren por su slug (y nunca se «activan»).
-      if (slug === PIEZA_CUESTIONARIOS) {
+      // Los Cuestionarios y el Ciclo no tienen canvas: se abren por su slug (y nunca se «activan»).
+      if (slug === PIEZA_CUESTIONARIOS || slug === PIEZA_CICLO) {
         if (visible) abrirPiezaSinCanvas(slug);
         else onAbrirDesdeOculto?.(slug);
         return;
@@ -592,6 +613,7 @@ export default function ProjectCanvasPanel({
       abrirPieza,
       abrirNovedades,
       cuestionarios: cuestionariosParaQueSigue,
+      ciclo: esRecurrente ? estadoCiclo : null,
       descartarCuestionarios: puedeDescartarCuestionarios ? () => void descartarCuestionarios() : undefined,
       aLaVista: visible && enResumen,
       proyectoVisible: visible,
@@ -599,7 +621,7 @@ export default function ProjectCanvasPanel({
       onQueSigue,
       onAvisosDePiezas,
     }),
-    [enResumen, slotDelPanel, queSigueOcupado, piezasParaQueSigue, abrirPieza, abrirNovedades, cuestionariosParaQueSigue, descartarCuestionarios, puedeDescartarCuestionarios, visible, onQueSigue, onAvisosDePiezas],
+    [enResumen, slotDelPanel, queSigueOcupado, piezasParaQueSigue, abrirPieza, abrirNovedades, cuestionariosParaQueSigue, esRecurrente, estadoCiclo, descartarCuestionarios, puedeDescartarCuestionarios, visible, onQueSigue, onAvisosDePiezas],
   );
 
   // El recorrido de la pieza abierta (el cronograma o la exploración): el botón «Recorrido» de la
@@ -721,6 +743,20 @@ export default function ProjectCanvasPanel({
                 hubspotPipelineId: hubspotPipelineId ?? null,
               });
               const avisoDelResumen = avisosDePiezas[row.slug];
+              // El Ciclo (servicio recurrente) tampoco: su fila dice en qué ciclo y etapa va.
+              if (row.slug === PIEZA_CICLO) {
+                return {
+                  slug: row.slug,
+                  etiqueta: row.label,
+                  estado: row.state === "generada" ? "generada" : "pendiente",
+                  activa: visible && !enResumen && piezaSinCanvas === row.slug,
+                  aviso: {
+                    corto: estadoCiclo?.corto ?? "",
+                    largo: "El tramo, la meta, la etapa, los casos de uso y lo que te toca en cada etapa.",
+                    tono: "neutro",
+                  },
+                };
+              }
               // Los Cuestionarios no tienen canvas: su fila dice cómo van, siempre escrito.
               if (row.slug === PIEZA_CUESTIONARIOS) {
                 return {
@@ -763,7 +799,7 @@ export default function ProjectCanvasPanel({
                 toast.info("Espera a que la IA termine en el cronograma para cambiar de pieza.");
                 return;
               }
-              if (slug === PIEZA_CUESTIONARIOS) {
+              if (slug === PIEZA_CUESTIONARIOS || slug === PIEZA_CICLO) {
                 if (visible) abrirPiezaSinCanvas(slug);
                 else onAbrirDesdeOculto?.(slug);
                 return;
@@ -899,7 +935,8 @@ export default function ProjectCanvasPanel({
               credenciales destraban todas las superficies externas (kickoff, cronograma), por eso
               vive acá y no en un canvas. */}
           {/* Los cuestionarios tienen su propio enlace por persona: el acceso del proyecto no va ahí. */}
-          {activeSlug !== "exploration" && !piezaSinCanvas && <ExternalAccessButton projectId={projectId} />}
+          {/* Un proyecto de prueba nunca se comparte: sin «Acceso». */}
+          {activeSlug !== "exploration" && !piezaSinCanvas && !esPrueba && <ExternalAccessButton projectId={projectId} />}
         </div>
       </div>
 
@@ -939,7 +976,12 @@ export default function ProjectCanvasPanel({
       <ProveedorDelResumen value={contextoDelResumen}>
       <div hidden={!enResumen} className="grid items-start gap-4 lg:grid-cols-2">
         <ProjectGPS projectId={projectId} clientId={clientId} />
-        <ProjectHandoffSection projectId={projectId} clientId={clientId} visible={enResumen} />
+        <ProjectHandoffSection
+          projectId={projectId}
+          clientId={clientId}
+          visible={enResumen}
+          servicio={esRecurrente ? (resolvePipeline(hubspotPipelineId ?? null)?.label ?? null) : null}
+        />
       </div>
       </ProveedorDelResumen>
 
@@ -1085,6 +1127,14 @@ export default function ProjectCanvasPanel({
       )}
       {activeSlug === "questionnaires" && conCuestionarios && slotDelPanel && !queSigueOcupado && queSigueParaElDocumento &&
         createPortal(<QueSigue accion={queSigueParaElDocumento.accion}>{queSigueParaElDocumento.texto}</QueSigue>, slotDelPanel)}
+
+      {/* Ciclo (2026-10-11, docs/smartloop-plan.md): el ciclo de un servicio recurrente, con la guía del CSE. Como
+          los Cuestionarios, es una herramienta de trabajo y va fuera del marco del motor de landings. */}
+      {activeSlug === "cycle" && esRecurrente && (
+        <CanvasBoundary label="el ciclo">
+          <PanelDelCiclo projectId={projectId} onCambio={cuestionariosCambiaron} />
+        </CanvasBoundary>
+      )}
 
       {/* Cronograma: Gantt + editor del ProjectTimeline (fases/tareas/semanas).
           Fuente única — el Kickoff lo refleja read-only. clientId habilita el

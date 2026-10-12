@@ -340,6 +340,21 @@
   versión de hoy de los validados. Los mapas del formato anterior (`nodes` + `edges`) se siguen viendo hasta volver a
   mapear. El mapa se cambia en el **editor de pantalla completa**: cada cambio es una **operación**
   (`lib/procesos/operaciones.ts`), la misma que va a proponer el chat. Ver DECISIONS §Procesos.
+- **Proyecto de prueba** (`Project.esPrueba`): un proyecto colgado de un cliente real para probar un módulo nuevo con sus
+  datos. No existe en HubSpot, no cuenta en la cartera ni en Cobranza, el clasificador no le cuelga reuniones y el
+  cliente no lo ve. En la ficha lleva la marca «Proyecto de prueba». Se crea con `scripts/crear-proyecto-de-prueba.ts`.
+- **Servicio recurrente** (`PipelineDef.servicioRecurrente`, `lib/servicios`): un servicio que avanza por ciclos, hoy
+  SmartLoop. Su proyecto tiene la pieza «Ciclo» y su etapa es la del ciclo abierto. Ver `docs/smartloop-plan.md`.
+- **Ciclo** (`CicloDeProyecto`): un tramo con fechas de un servicio recurrente que pasa por las cinco etapas del método
+  (Diagnóstico, Planificación, Implementación, Adopción, Aprendizaje). Abre con un diagnóstico y cierra con la sesión de
+  aprendizaje; uno abierto por proyecto, y los cerrados se conservan.
+- **Caso de uso** (`CasoDeUso`): lo que se hace en un ciclo, con el resultado que persigue, lo que mueve en la escala
+  (puede ser más de una dimensión), por qué ahora y su **criterio de aceptación** (cómo se sabe que funcionó). Es de la
+  empresa: puede estar sugerido, en el plan de crecimiento o dentro de un ciclo.
+- **Compromiso** (`Project.compromiso`): cuánto se comprometió el servicio recurrente (mes a mes, seis meses, un año).
+  Opcional.
+- **Guía del CSE** (`lib/servicios/<servicio>.ts`): por etapa del ciclo, qué hace el CSE, qué tiene que quedar producido
+  y la señal de que la etapa se saltó; sale del documento de proceso del servicio.
 - **Proyecto sentinel `__strategy__`**: proyecto especial por cliente que aloja el canvas de
   contexto/estrategia (no es un proyecto real de servicio).
 - **`hubspotCompanyId`** (en `Client`): id de la company de HubSpot ligada al cliente. Habilita

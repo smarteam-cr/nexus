@@ -165,6 +165,26 @@ export const PIECES: PieceDefinition[] = [
     hasCanvas: false,
   },
   {
+    slug: "cycle",
+    label: "Ciclo",
+    // Pieza NUEVA (2026-10-11, docs/smartloop-plan.md): nunca vivió en ProjectCanvas.name.
+    legacyNames: [],
+    scope: "project",
+    // El ciclo de un servicio recurrente: tramo, fechas, meta, etapa, casos de uso y la guía del CSE.
+    agentGroup: null,
+    permissionSection: null,
+    createdWithProject: false,
+    isDefaultCanvas: false,
+    // Solo la tienen los proyectos de un servicio recurrente (`PipelineDef.servicioRecurrente`); ahí no
+    // se apaga: es la pieza central.
+    optional: false,
+    enabledByTags: [],
+    ownRenderer: true, // PanelDelCiclo
+    clientFacing: false,
+    // Vive en sus tablas (CicloDeProyecto, CasoDeUso), no en un canvas.
+    hasCanvas: false,
+  },
+  {
     slug: "timeline",
     label: "Cronograma",
     legacyNames: ["Cronograma"],

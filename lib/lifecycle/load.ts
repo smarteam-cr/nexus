@@ -13,11 +13,13 @@ import type { ProjectLifecycleStage, ProjectStageGateKey } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma";
 import { KICKOFF_TITLE_FILTERS, pickKickoffSessionDate } from "@/lib/sessions/kickoff-pick";
 import { RECURRENTE_TAG } from "@/lib/tags/catalog";
+import { ETAPAS_DEL_CICLO, ETIQUETA_DE_ETAPA, esEtapaDelCiclo, etapaDelProyecto, etapaPorNombre, type EtapaDelCiclo } from "@/lib/servicios/ciclo";
 import {
   buscarEtapa,
   fuenteDelCiclo,
   hechosDeProyecto,
   lineaDeAvance,
+  resolvePipeline,
   type PipelineStage,
   type ProjectPipelineKey,
 } from "@/lib/projects/kind";
@@ -106,6 +108,12 @@ export interface LifecyclePipeline extends LifecycleComun {
   linea: readonly PipelineStage[];
   /** Posición en la línea. `null` si la etapa está FUERA de ella (Cancelado) o se desconoce. */
   position: { index: number; total: number } | null;
+  /**
+   * Un SERVICIO RECURRENTE (2026-10-11, docs/smartloop-plan.md): el ciclo abierto. Con esto la etapa es
+   * la del ciclo («Ciclo 1 · Implementación») y la línea son las cinco etapas del método. `null` = el
+   * pipeline usa ciclos pero el proyecto todavía no abrió el primero. Ausente = no usa ciclos.
+   */
+  ciclo?: { numero: number; nombre: string | null; etapa: EtapaDelCiclo | null } | null;
 }
 
 /**
@@ -200,6 +208,8 @@ async function loadLifecycleBatchUncached(
         hubspotPipelineStageId: true,
         hubspotPipelineStageLabel: true,
         hubspotStageSyncedAt: true,
+        // Un servicio recurrente que existe en HubSpot toma la etapa de allá; uno que no (la prueba), del ciclo.
+        hubspotServiceId: true,
       },
     }),
     prisma.projectStageGate.findMany({
@@ -221,6 +231,16 @@ async function loadLifecycleBatchUncached(
       select: { projectId: true, session: { select: { date: true } } },
     }),
   ]);
+
+  /* Los ciclos abiertos, solo si alguno de estos proyectos es de un servicio recurrente: el resto no paga la consulta. */
+  const conCiclos = projects.filter((p) => fuenteDelCiclo(hechosDeProyecto(p)).tipo === "pipeline" && resolvePipeline(p.hubspotPipelineId)?.servicioRecurrente);
+  const ciclosAbiertos = conCiclos.length
+    ? await prisma.cicloDeProyecto.findMany({
+        where: { projectId: { in: conCiclos.map((p) => p.id) }, estado: "abierto" },
+        select: { projectId: true, numero: true, nombre: true, etapa: true },
+      })
+    : [];
+  const cicloPorProyecto = new Map(ciclosAbiertos.map((c) => [c.projectId, c]));
 
   const clientIds = [...new Set(projects.map((p) => p.clientId))];
   const snapshots = clientIds.length
@@ -264,6 +284,31 @@ async function loadLifecycleBatchUncached(
     if (fuente.tipo === "pipeline") {
       const def = fuente.pipeline;
       const etapa = buscarEtapa(def, p.hubspotPipelineStageId);
+      if (def.servicioRecurrente && !etapa?.terminal) {
+        /* SERVICIO RECURRENTE: la etapa es la del ciclo abierto. En un proyecto que existe en HubSpot la mueve
+           el equipo allá (se lee por nombre); en uno que no (la prueba), la lleva el ciclo en Nexus. */
+        const c = cicloPorProyecto.get(p.id) ?? null;
+        const etapaCiclo: EtapaDelCiclo | null = p.hubspotServiceId
+          ? etapaPorNombre(etapa?.label ?? p.hubspotPipelineStageLabel)
+          : c && esEtapaDelCiclo(c.etapa)
+            ? c.etapa
+            : null;
+        const lineaCiclo: PipelineStage[] = ETAPAS_DEL_CICLO.map((e) => ({ id: e, label: ETIQUETA_DE_ETAPA[e], enLinea: true, terminal: false }));
+        const idxCiclo = etapaCiclo ? ETAPAS_DEL_CICLO.indexOf(etapaCiclo) : -1;
+        out.set(p.id, {
+          ...comun,
+          fuente: "pipeline",
+          pipeline: { key: def.key, label: def.label },
+          etapa,
+          stageId: p.hubspotPipelineStageId,
+          stageSyncedAt: p.hubspotStageSyncedAt,
+          linea: lineaCiclo,
+          position: c && idxCiclo >= 0 ? { index: idxCiclo + 1, total: lineaCiclo.length } : null,
+          label: c ? etapaDelProyecto({ numero: c.numero, etapa: etapaCiclo ?? c.etapa }) : "Sin ciclo abierto",
+          ciclo: c ? { numero: c.numero, nombre: c.nombre, etapa: etapaCiclo } : null,
+        });
+        continue;
+      }
       const linea = lineaDeAvance(def);
       const idx = etapa ? linea.findIndex((s) => s.id === etapa.id) : -1;
       out.set(p.id, {

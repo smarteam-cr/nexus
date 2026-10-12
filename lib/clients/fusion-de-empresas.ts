@@ -72,6 +72,9 @@ export const SE_MUDAN = [
   ["correccionDeSalud", "clientId"],
   /* «¿Cuánto te tomó?» (2026-10-09): `onDelete: SetNull`; sin mudarla, la respuesta queda sin cliente. */
   ["preguntaDeTiempo", "clientId"],
+  /* El camino de crecimiento (2026-10-11, docs/smartloop-plan.md): `onDelete: Cascade`, así que sin mudarlos se
+     BORRARÍAN los casos de uso de la absorbida. */
+  ["casoDeUso", "clientId"],
   /* Los hechos de las reuniones (memoria de la cuenta, etapa 6): `onDelete: Cascade`, así que sin mudarlos se BORRARÍAN
      con la ficha absorbida. Se mudan enteros: las reuniones también pasan a la que sigue (más abajo), así que INV45
      (todo hecho es del cliente de su reunión) sigue en verde. Sin único con la ficha: dos hechos iguales de las dos

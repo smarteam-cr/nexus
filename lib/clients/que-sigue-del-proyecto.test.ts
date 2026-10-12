@@ -195,3 +195,34 @@ describe("⭐ «Pendientes recientes»: lo que no se muestra se cuenta bien", ()
     expect(consulta).toMatch(/recientesTotal,/);
   });
 });
+
+describe("qué sigue en un servicio recurrente (2026-10-11)", () => {
+  const conCiclo: PiezaParaQueSigue[] = [{ slug: "cycle", etiqueta: "Ciclo", estado: "vacia", stale: false }];
+  it("sin ciclo abierto, lo primero es abrirlo (lleva a la pieza «Ciclo»)", () => {
+    const q = queSigueDelProyecto({ ...base, piezas: conCiclo, etapa: null, ciclo: { corto: "sin abrir", abierto: false, falta: null, numero: 1 } });
+    expect(q.texto).toMatch(/^Abre el ciclo 1/);
+    expect(q.accion).toEqual({ tipo: "pieza", slug: "cycle", etiqueta: "Ciclo" });
+  });
+  it("con el ciclo abierto, lo primero que falta en su etapa", () => {
+    const q = queSigueDelProyecto({
+      ...base,
+      piezas: conCiclo,
+      etapa: null,
+      ciclo: { corto: "Ciclo 1 · Planificación", abierto: true, falta: "Falta la meta del ciclo.", numero: 1 },
+    });
+    expect(q.texto).toBe("Ciclo 1 · Planificación: falta la meta del ciclo.");
+  });
+  it("sin nada que falte, sigue con lo de siempre (y nunca con el flujo de una implementación)", () => {
+    const q = queSigueDelProyecto({
+      ...base,
+      piezas: conCiclo,
+      etapa: etapa("x", "Ciclo 1 · Adopción"),
+      ciclo: { corto: "Ciclo 1 · Adopción", abierto: true, falta: null, numero: 1 },
+    });
+    expect(q.accion).toBeNull();
+  });
+  it("las reuniones sin revisar le ganan al ciclo", () => {
+    const q = queSigueDelProyecto({ ...base, piezas: conCiclo, etapa: null, sesionesSinRevisar: 1, ciclo: { corto: "sin abrir", abierto: false, falta: null, numero: 1 } });
+    expect(q.accion).toEqual({ tipo: "sesiones" });
+  });
+});

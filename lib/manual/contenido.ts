@@ -97,6 +97,12 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
     cuando:
       "Se arma en la planificación y se mantiene vivo durante todo el proyecto. Es el documento que más veces vas a abrir.",
   },
+  cycle: {
+    paraQue:
+      "El ciclo de un servicio recurrente como SmartLoop: el tramo con sus fechas, la meta, la etapa en la que va (de diagnóstico a aprendizaje), los casos de uso con su criterio de aceptación y lo que tienes que hacer en cada etapa.",
+    cuando:
+      "Solo en los proyectos de un servicio recurrente. Lo abres al empezar cada ciclo y lo revisas en cada sesión con el champion; el ciclo se cierra con la sesión de aprendizaje.",
+  },
   questionnaires: {
     paraQue:
       "Lo que contesta el cliente antes de las sesiones: el cuestionario táctico (métricas y operación, por Hub), el de la escala de rendimiento y el de estrategia (su desafío central, los resultados que necesita y qué se lo impide). Cada uno va a una persona del cliente, con su propio enlace.",
@@ -157,6 +163,7 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
 export const SIN_SECCIONES: Record<string, string> = {
   timeline: "Su contenido son fases y tareas en una línea de tiempo, no secciones de texto.",
   questionnaires: "Cada cuestionario tiene sus pestañas y sus preguntas, y se arma para una persona del cliente.",
+  cycle: "Es un tramo con fechas, una meta, su etapa y sus casos de uso, no secciones de texto.",
   "client-info": "Se arma con los bloques que los agentes van sumando reunión tras reunión.",
   "business-case": "Sus secciones dependen del tipo de propuesta que elija Ventas al crearla.",
 };

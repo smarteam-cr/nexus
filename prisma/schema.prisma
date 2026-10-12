@@ -201,6 +201,7 @@ model Client {
   agentRuns              AgentRun[]
   contextCards           ClientContextCard[]
   projects               Project[]
+  casosDeUso             CasoDeUso[] // el camino de crecimiento de la empresa (docs/smartloop-plan.md)
   canvasSuggestions      CanvasSuggestion[]
   actionItems            ActionItem[]
   pedidosFueraDeAlcance  PedidoFueraDeAlcance[]
@@ -395,6 +396,10 @@ model Project {
   // De qué proyecto real es la prueba (sus reuniones se copiaron al crearla). Escalar sin FK, como
   // `hermanoCsProjectId`: borrar el real no rompe la prueba.
   pruebaDeProjectId        String?
+  // Servicio recurrente (2026-10-11, docs/smartloop-plan.md): el compromiso que se vendió —
+  // "mensual" | "semestral" | "anual"—, o null si no se definió. NO es requerido: un cliente puede
+  // ir mes a mes. Texto y no enum, como el resto de los valores de negocio que pueden crecer.
+  compromiso               String?
   // El HECHO de la asociación proyecto↔proyecto en HubSpot (typeId 1254), en ids de
   // HubSpot. Se guarda SIEMPRE, aunque el otro proyecto todavía no exista en Nexus:
   // así el orden de llegada deja de importar.
@@ -529,6 +534,8 @@ model Project {
   personasDeCuestionario CuestionarioResponsable[]
   guiaDeExploracion  GuiaDeExploracion?
   timeline            ProjectTimeline?
+  ciclos              CicloDeProyecto[] // servicio recurrente: un tramo con fechas, de diagnóstico a aprendizaje
+  casosDeUso          CasoDeUso[]
   hilosDeChat         HiloDeChat[] // el asistente que conversa, un hilo por documento
   handoff             Handoff?
   handoffSources      HandoffSource[]
@@ -6834,4 +6841,77 @@ model FuenteDeTareas {
   lecturas LecturaDeReunion[]
 
   @@index([serie])
+}
+
+// ═══ SERVICIOS RECURRENTES (SmartLoop) — docs/smartloop-plan.md ═══════════════════════════════
+
+/// Un CICLO de un proyecto recurrente: un tramo con fechas que abre con un diagnóstico y cierra con
+/// la sesión de aprendizaje. La etapa del proyecto es la etapa del ciclo abierto. Lo que se cerró se
+/// conserva entero: el ciclo siguiente es una fila nueva, nunca se reescribe el anterior.
+model CicloDeProyecto {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// 1, 2, 3… dentro del proyecto.
+  numero    Int
+  /// El tramo, si lo hay ("Corregir y adoptar"). null = sin nombre.
+  nombre    String?
+  /// Las fechas del tramo (día, en hora de Costa Rica). null = todavía sin fecha.
+  desde     DateTime? @db.Date
+  hasta     DateTime? @db.Date
+  /// La meta del ciclo, en palabras del resultado que persigue el cliente.
+  meta      String?   @db.Text
+  /// diagnostico | planificacion | implementacion | adopcion | aprendizaje (lib/servicios/ciclo.ts).
+  /// En un proyecto que existe en HubSpot la etapa la mueve el equipo allá.
+  etapa     String    @default("diagnostico")
+  /// abierto | cerrado. Uno abierto por proyecto (índice parcial en el SQL).
+  estado    String    @default("abierto")
+  cerradoAt DateTime?
+  cerradoPor String?
+  creadoPor String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  casosDeUso CasoDeUso[]
+
+  @@unique([projectId, numero])
+}
+
+/// Un CASO DE USO del camino de crecimiento: qué se hace, qué resultado persigue, qué mueve en la
+/// escala (puede ser más de una dimensión), por qué ahora y cómo se sabe que funcionó. Es de la
+/// EMPRESA; puede estar sugerido sin proyecto, en el plan de un proyecto o dentro de un ciclo.
+model CasoDeUso {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// nullable porque un caso sugerido todavía no es de ningún proyecto.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  /// nullable porque está en el plan, todavía no en un ciclo.
+  cicloId   String?
+  ciclo     CicloDeProyecto? @relation(fields: [cicloId], references: [id], onDelete: SetNull)
+  titulo    String
+  /// Qué resultado del cliente persigue.
+  resultado String?  @db.Text
+  /// Qué mueve en la escala: [{ area, dimension, nivel }]. Puede ser más de una.
+  mueve     Json     @default("[]")
+  /// Por qué ahora (la regla de prioridad, el pedido del cliente, qué destraba).
+  porque    String?  @db.Text
+  /// El criterio de aceptación y su métrica.
+  criterio  String?  @db.Text
+  metrica   String?
+  /// Lo medido al cerrar el ciclo.
+  criterioMedido String? @db.Text
+  /// escala | pedido | propuesta | entrega | manual
+  origen    String   @default("manual")
+  /// sugerido | en_plan | en_ciclo | cumplido | no_cumplido | descartado
+  estado    String   @default("en_ciclo")
+  orden     Int      @default(0)
+  creadoPor String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([cicloId])
 }

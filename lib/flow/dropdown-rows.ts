@@ -44,6 +44,12 @@ export interface OpcionesDeFilas {
    * algo que no se activa. Por eso el widget (que no lo pasa) no la cuenta.
    */
   sinCanvas?: Partial<Record<string, RowState>>;
+  /**
+   * Las piezas de un SERVICIO RECURRENTE, en su orden (lib/servicios/ciclo.ts). Un proyecto así no recorre
+   * el flujo de una implementación —no lleva kickoff, diagnóstico ni entrega—: sus filas son éstas y
+   * nada más (más los canvases sueltos del CSE). Sin el campo, el flujo de siempre.
+   */
+  piezasDelServicio?: readonly string[];
 }
 
 export type RowState =
@@ -104,7 +110,7 @@ export function buildPieceRows(
     else custom.push(c);
   }
 
-  const delFlujo: PieceRow[] = piezasParaMostrar()
+  const delFlujo: PieceRow[] = (opts.piezasDelServicio ?? piezasParaMostrar())
     .filter((slug) => opts.incluirHandoff || !FUERA_DEL_DESPLEGABLE.has(slug))
     .filter((slug) => pieceBySlug(slug)?.hasCanvas !== false || opts.sinCanvas?.[slug] !== undefined)
     .map((slug) => {

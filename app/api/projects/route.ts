@@ -72,6 +72,8 @@ export async function POST(req: NextRequest) {
 
   const pipeline = parseProjectPipeline(body.pipeline);
   if (!pipeline) return malo("Elegí de qué tipo es el proyecto.");
+  // SmartLoop todavía no se da de alta desde Nexus: los proyectos reales llegan con la migración (docs/smartloop-plan.md).
+  if (pipeline.servicioRecurrente) return malo("Un servicio recurrente todavía no se da de alta desde Nexus.");
 
   const interno = body.interno === true;
   const hermanoHsId = body.hermanoHsId?.trim() || null;

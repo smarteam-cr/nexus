@@ -78,7 +78,7 @@ export interface ProjectCapabilities {
  * que sea porque alguien lo decidió mirando esta línea.
  */
 
-export type ProjectPipelineKey = "customer-success" | "development" | "web";
+export type ProjectPipelineKey = "customer-success" | "development" | "web" | "smartloop";
 
 /**
  * Una ETAPA del pipeline, tal como la declara HubSpot.
@@ -191,6 +191,13 @@ export interface PipelineDef {
   seedPieces: readonly string[];
   /** La fila de la tabla de decisiones, para un proyecto NO interno y SIN hermano. */
   base: ProjectCapabilities;
+  /**
+   * Un SERVICIO RECURRENTE que avanza por ciclos (2026-10-11, docs/smartloop-plan.md): la clave de su
+   * guía en `lib/servicios`. Con esto el proyecto tiene la pieza «Ciclo» y su etapa es la del ciclo
+   * abierto. Sin el campo, el pipeline no usa ciclos. Un servicio recurrente nuevo es una fila con
+   * este campo y su guía: no código nuevo.
+   */
+  servicioRecurrente?: "smartloop";
 }
 
 /**
@@ -383,6 +390,35 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
        `publicable`. Sacárselo sería un cambio que nadie pidió. */
     seedPieces: ["handoff", "kickoff", "timeline", "exploration"],
     base: BASE_ENTREGA_TECNICA,
+  },
+  {
+    key: "smartloop",
+    hubspotPipelineId: "942509592",
+    label: "SmartLoop",
+    help: "Servicio recurrente: avanza por ciclos, cada uno de diagnóstico a aprendizaje. Se factura y es cartera de CS.",
+    /* Transcritas del portal el 2026-10-11 (`scripts/inspect-project-pipelines.ts`), con «Aprendizaje»
+       recién agregada por Elías: el pipeline espeja las cinco etapas del método. La línea del ciclo la dibuja
+       `lib/servicios/ciclo.ts`; esta lista sirve para leer la etapa de HubSpot y para la encuesta.
+       «Cancelado» es la etapa de cierre en HubSpot y acá también: sale de la cartera y de Cobranza. */
+    stages: [
+      { id: "1455022174", label: "Diagnóstico", enLinea: true, terminal: false },
+      { id: "1454928384", label: "Planificación", enLinea: true, terminal: false },
+      { id: "1454928385", label: "Implementación", enLinea: true, terminal: false },
+      { id: "1454928386", label: "Adopción", enLinea: true, terminal: false },
+      { id: "1455649026", label: "Aprendizaje", enLinea: true, terminal: false },
+      { id: "1454928389", label: "Cancelado", enLinea: false, terminal: true },
+    ],
+    closedStageIds: ["1454928389"], // Cancelado
+    initialStageId: "1455022174", // Diagnóstico
+    canBeSiblingOf: [],
+    handoffDelHermano: false,
+    frenteDeEntrega: "CSE",
+    equipoDeEntrega: "entrega",
+    /* Sin kickoff: el servicio arranca con el traspaso y el diagnóstico del ciclo 1. La pieza «Ciclo»
+       no vive en un canvas: no se siembra (la arma el panel). */
+    seedPieces: ["handoff", "timeline", "exploration"],
+    base: BASE_CUSTOMER_SUCCESS,
+    servicioRecurrente: "smartloop",
   },
 ] as const;
 

@@ -681,6 +681,7 @@ function ProjectSection({
             nombreDelProyecto={proyectoDelRiel.name}
             tags={proyectoDelRiel.tags}
             hubspotPipelineId={proyectoDelRiel.hubspotPipelineId}
+            esPrueba={proyectoDelRiel.esPrueba ?? false}
             initialCanvases={proyectoDelRiel.id === initialCanvasesProjectId ? initialCanvases : null}
             visible={!!activeProject}
             slotDePiezas={slotDePiezas}

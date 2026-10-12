@@ -197,9 +197,13 @@ export default function ProjectHandoffSection({
   projectId,
   clientId,
   visible: visibleEnElPanel = true,
+  servicio = null,
 }: {
   projectId: string;
   clientId: string;
+  /** El servicio recurrente del proyecto («SmartLoop»), si lo es (2026-10-11): el traspaso lo muestra en vez
+   *  de pedir el «tipo de implementación», que en un servicio recurrente no aplica. */
+  servicio?: string | null;
   /** ¿Se ve el Resumen? La sección queda MONTADA aunque no se vea (conserva «Generando…» y las
    *  exclusiones sin guardar), pero el DOCUMENTO se desmonta: montado y oculto, sus entradas de
    *  deshacer seguían en la pila y un Ctrl+Z en otro documento revertía, sin que se viera, un cambio
@@ -900,7 +904,7 @@ export default function ProjectHandoffSection({
         </p>
       )}
       {/* #5 — la clasificación del proyecto, compartida con el BC. UN solo eje de datos. */}
-      <TagsStrip tags={tags} canEdit={canManageContext} onSetTags={saveTags} />
+      <TagsStrip tags={tags} canEdit={canManageContext} onSetTags={saveTags} servicio={servicio} />
 
       {/* «Contexto del handoff» — HubSpot · Reuniones · Fuentes manuales (· Preventa). Vive ADENTRO
           de la tarjeta del handoff (2026-10-07, pedido de Elías): solo lo lee su agente, y a todo el

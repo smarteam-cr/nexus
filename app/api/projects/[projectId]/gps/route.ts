@@ -123,6 +123,7 @@ export const GET = withProjectAccess(async (
       pendingItems: true,
       serviceType: true,
       hubspotServiceId: true,
+      esPrueba: true,
       hubspotPipelineStageLabel: true,
       hubspotPipelineStageId: true,
       hubspotStageSyncedAt: true,
@@ -164,7 +165,8 @@ export const GET = withProjectAccess(async (
   /* Lo de la ENCUESTA de la etapa: las etapas que se pueden elegir, la sugerencia de una reunión si
      sigue en pie, y por qué no se puede mover desde Nexus si no se puede. HubSpot → Nexus es el
      espejo; Nexus → HubSpot es solo esta encuesta, que aprueba el CSE. */
-  const etapaHubspot = etapaEnHubspot({
+  /* Un proyecto de prueba no está en HubSpot: no hay encuesta (la etapa de su ciclo se mueve en la pieza «Ciclo»). */
+  const etapaHubspot = project.esPrueba ? null : etapaEnHubspot({
     def: resolvePipeline(project.hubspotPipelineId),
     hubspotServiceId: project.hubspotServiceId,
     actualStageId: project.hubspotPipelineStageId,

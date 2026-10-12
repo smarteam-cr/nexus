@@ -121,6 +121,12 @@ export function queSigueDelProyecto(i: {
    * pieza a la vista en el riel (sin Exploración) o todavía no llegó su estado: no se sugiere nada.
    */
   cuestionarios?: { publicados: number; descartada: boolean } | null;
+  /**
+   * El Ciclo de un servicio recurrente (2026-10-11, docs/smartloop-plan.md). null = el proyecto no es
+   * recurrente. Sin ciclo abierto, lo primero es abrirlo; con uno abierto, lo primero que falta en su etapa
+   * (si Nexus lo puede comprobar).
+   */
+  ciclo?: { corto: string; abierto: boolean; falta: string | null; numero: number } | null;
 }): QueSigueDelProyecto {
   if (i.sesionesSinRevisar > 0) {
     const n = i.sesionesSinRevisar;
@@ -135,6 +141,22 @@ export function queSigueDelProyecto(i: {
       texto: `Una reunión muestra que el proyecto ya pasó a ${i.etapaSugerida.hasta}. Confirma la etapa: se escribe en HubSpot.`,
       accion: { tipo: "etapa" },
     };
+  }
+
+  /* Un servicio recurrente no recorre el flujo de una implementación: lo que sigue sale de su ciclo. */
+  if (i.ciclo) {
+    const pieza = i.piezas.find((p) => p.slug === "cycle");
+    const accion = pieza ? ({ tipo: "pieza", slug: pieza.slug, etiqueta: pieza.etiqueta } as const) : null;
+    if (!i.ciclo.abierto) {
+      return {
+        texto: `Abre el ciclo ${i.ciclo.numero}: el tramo con sus fechas, la meta y los casos de uso. Arranca con el diagnóstico.`,
+        accion,
+      };
+    }
+    if (i.ciclo.falta) {
+      const falta = i.ciclo.falta.replace(/\.$/, "");
+      return { texto: `${i.ciclo.corto}: ${falta.charAt(0).toLowerCase()}${falta.slice(1)}.`, accion };
+    }
   }
 
   const stage = etapaDeNexus(i.etapa);
