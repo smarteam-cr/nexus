@@ -45,7 +45,7 @@ export interface ContextoDelResumen {
    * El Ciclo de un servicio recurrente (2026-10-11): si hay uno abierto y lo primero que falta en su etapa.
    * null = el proyecto no es recurrente, o su estado todavía no llegó.
    */
-  ciclo?: { corto: string; abierto: boolean; falta: string | null; numero: number } | null;
+  ciclo?: { corto: string; abierto: boolean; falta: string | null; numero: number; piezaDeLaEtapa?: string | null } | null;
   /** «Ahora no» de «Manda los cuestionarios al cliente». */
   descartarCuestionarios?: () => void;
   aLaVista: boolean;

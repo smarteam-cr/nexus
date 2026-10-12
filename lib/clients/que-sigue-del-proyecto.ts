@@ -126,7 +126,7 @@ export function queSigueDelProyecto(i: {
    * recurrente. Sin ciclo abierto, lo primero es abrirlo; con uno abierto, lo primero que falta en su etapa
    * (si Nexus lo puede comprobar).
    */
-  ciclo?: { corto: string; abierto: boolean; falta: string | null; numero: number } | null;
+  ciclo?: { corto: string; abierto: boolean; falta: string | null; numero: number; piezaDeLaEtapa?: string | null } | null;
 }): QueSigueDelProyecto {
   if (i.sesionesSinRevisar > 0) {
     const n = i.sesionesSinRevisar;
@@ -145,11 +145,13 @@ export function queSigueDelProyecto(i: {
 
   /* Un servicio recurrente no recorre el flujo de una implementación: lo que sigue sale de su ciclo. */
   if (i.ciclo) {
-    const pieza = i.piezas.find((p) => p.slug === "cycle");
+    // Lleva al artefacto de la etapa en curso (sin ciclo abierto, al Diagnóstico: abrirlo empieza el ciclo).
+    const slug = i.ciclo.abierto ? (i.ciclo.piezaDeLaEtapa ?? "cycle-diagnosis") : "cycle-diagnosis";
+    const pieza = i.piezas.find((p) => p.slug === slug);
     const accion = pieza ? ({ tipo: "pieza", slug: pieza.slug, etiqueta: pieza.etiqueta } as const) : null;
     if (!i.ciclo.abierto) {
       return {
-        texto: `Abre el ciclo ${i.ciclo.numero}: el tramo con sus fechas, la meta y los casos de uso. Arranca con el diagnóstico.`,
+        texto: `El ciclo ${i.ciclo.numero} todavía no empezó: abre el Diagnóstico, que es su primera etapa.`,
         accion,
       };
     }

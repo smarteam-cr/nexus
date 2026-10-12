@@ -8,12 +8,34 @@
  */
 
 /**
- * Las piezas de un proyecto de servicio recurrente, en el orden del riel. El Ciclo primero (es la pieza
- * central); el Cronograma, los Cuestionarios y la Exploración (el diagnóstico del ciclo) se reusan tal
- * cual. No lleva kickoff, diagnóstico, planificación ni entrega: el ciclo los reemplaza.
+ * Los ARTEFACTOS del ciclo (2026-10-11, pedido de Elías): uno por cada etapa que produce algo. Implementación y
+ * Adopción no son artefactos —son trabajo que se sigue en el cronograma—, así que su etapa la lleva el Cronograma.
  */
-export const PIEZAS_DE_UN_SERVICIO_RECURRENTE = ["cycle", "timeline", "questionnaires", "exploration"] as const;
-export const PIEZA_CICLO = "cycle";
+export const PIEZA_DIAGNOSTICO_DEL_CICLO = "cycle-diagnosis";
+export const PIEZA_PLAN_DEL_CICLO = "cycle-plan";
+export const PIEZA_APRENDIZAJE_DEL_CICLO = "cycle-learning";
+export const PIEZAS_DEL_CICLO = [PIEZA_DIAGNOSTICO_DEL_CICLO, PIEZA_PLAN_DEL_CICLO, "timeline", PIEZA_APRENDIZAJE_DEL_CICLO] as const;
+
+/**
+ * Las piezas de un proyecto de servicio recurrente, en el orden del riel: los artefactos del ciclo y, después, los
+ * insumos del diagnóstico (Cuestionarios y Exploración), que se reusan tal cual. No lleva kickoff, diagnóstico,
+ * planificación ni entrega de una implementación: el ciclo los reemplaza.
+ */
+export const PIEZAS_DE_UN_SERVICIO_RECURRENTE = [...PIEZAS_DEL_CICLO, "questionnaires", "exploration"] as const;
+
+/** El artefacto donde se trabaja cada etapa del ciclo. */
+export const PIEZA_DE_LA_ETAPA: Record<EtapaDelCiclo, string> = {
+  diagnostico: PIEZA_DIAGNOSTICO_DEL_CICLO,
+  planificacion: PIEZA_PLAN_DEL_CICLO,
+  implementacion: "timeline",
+  adopcion: "timeline",
+  aprendizaje: PIEZA_APRENDIZAJE_DEL_CICLO,
+};
+
+/** Las etapas que se trabajan en un artefacto (el Cronograma lleva dos). */
+export function etapasDeLaPieza(slug: string): EtapaDelCiclo[] {
+  return ETAPAS_DEL_CICLO.filter((e) => PIEZA_DE_LA_ETAPA[e] === slug);
+}
 
 export const ETAPAS_DEL_CICLO = ["diagnostico", "planificacion", "implementacion", "adopcion", "aprendizaje"] as const;
 export type EtapaDelCiclo = (typeof ETAPAS_DEL_CICLO)[number];

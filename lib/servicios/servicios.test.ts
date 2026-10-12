@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ETAPAS_DEL_CICLO, etapaPorNombre, etapaSiguiente, etapaDelProyecto, leerMueve, nombreDelCiclo, PIEZAS_DE_UN_SERVICIO_RECURRENTE } from "./ciclo";
+import { ETAPAS_DEL_CICLO, etapaPorNombre, etapaSiguiente, etapaDelProyecto, etapasDeLaPieza, leerMueve, nombreDelCiclo, PIEZA_DE_LA_ETAPA, PIEZAS_DE_UN_SERVICIO_RECURRENTE } from "./ciclo";
 import { guiaDelCiclo } from "./guia";
 import { SERVICIOS_RECURRENTES } from "./index";
 import { GUIA_SMARTLOOP } from "./smartloop";
@@ -97,23 +97,32 @@ describe("la guía del CSE", () => {
 });
 
 describe("las piezas de un servicio recurrente", () => {
-  it("el Ciclo primero, y ninguna pieza de una implementación (kickoff, diagnóstico, entrega)", () => {
-    expect(PIEZAS_DE_UN_SERVICIO_RECURRENTE[0]).toBe("cycle");
+  it("los artefactos del ciclo primero, después los insumos, y ninguna pieza de una implementación", () => {
+    expect(PIEZAS_DE_UN_SERVICIO_RECURRENTE).toEqual(["cycle-diagnosis", "cycle-plan", "timeline", "cycle-learning", "questionnaires", "exploration"]);
     for (const s of PIEZAS_DE_UN_SERVICIO_RECURRENTE) expect(pieceBySlug(s), s).not.toBeNull();
     const filas = buildPieceRows(
       [
         { id: "k", slug: "kickoff", name: "Kickoff" },
         { id: "t", slug: "timeline", name: "Cronograma" },
       ],
-      { piezasDelServicio: PIEZAS_DE_UN_SERVICIO_RECURRENTE, sinCanvas: { cycle: "vacia" } },
+      {
+        piezasDelServicio: PIEZAS_DE_UN_SERVICIO_RECURRENTE,
+        sinCanvas: { "cycle-diagnosis": "vacia", "cycle-plan": "vacia", "cycle-learning": "vacia" },
+      },
     ).map((r) => r.slug);
-    expect(filas).toEqual(["cycle", "timeline", "exploration"]);
+    expect(filas).toEqual(["cycle-diagnosis", "cycle-plan", "timeline", "cycle-learning", "exploration"]);
     expect(filas).not.toContain("kickoff");
   });
 
-  it("sin el servicio, el Ciclo no aparece en el flujo de una implementación", () => {
+  it("cada etapa tiene su artefacto; Implementación y Adopción se trabajan en el Cronograma", () => {
+    for (const e of ETAPAS_DEL_CICLO) expect(PIEZA_DE_LA_ETAPA[e], e).toBeTruthy();
+    expect(etapasDeLaPieza("timeline")).toEqual(["implementacion", "adopcion"]);
+    expect(etapasDeLaPieza("cycle-plan")).toEqual(["planificacion"]);
+  });
+
+  it("sin el servicio, los artefactos del ciclo no aparecen en el flujo de una implementación", () => {
     const filas = buildPieceRows([{ id: "t", slug: "timeline", name: "Cronograma" }]).map((r) => r.slug);
-    expect(filas).not.toContain("cycle");
+    expect(filas.filter((x) => x.startsWith("cycle-"))).toEqual([]);
   });
 
   it("SmartLoop no se da de alta desde el formulario ni lleva kickoff", () => {

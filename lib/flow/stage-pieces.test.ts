@@ -69,7 +69,7 @@ describe("las piezas del flujo", () => {
   it("toda pieza de PROYECTO está en exactamente una etapa", () => {
     /* Salvo el Ciclo (2026-10-11): es de los servicios recurrentes, que no recorren el flujo de una
        implementación; sus piezas las lista `PIEZAS_DE_UN_SERVICIO_RECURRENTE` (lib/servicios/ciclo.ts). */
-    for (const slug of deProyecto.filter((s) => s !== "cycle")) {
+    for (const slug of deProyecto.filter((s) => !s.startsWith("cycle-"))) {
       const etapas = STAGE_FLOW.filter((f) => f.pieces.includes(slug)).map((f) => f.stage);
       expect(etapas.length, `la pieza "${slug}" está en ${etapas.length} etapas: ${etapas}`).toBe(1);
     }

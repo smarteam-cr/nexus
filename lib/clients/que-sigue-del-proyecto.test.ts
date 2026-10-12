@@ -197,20 +197,24 @@ describe("⭐ «Pendientes recientes»: lo que no se muestra se cuenta bien", ()
 });
 
 describe("qué sigue en un servicio recurrente (2026-10-11)", () => {
-  const conCiclo: PiezaParaQueSigue[] = [{ slug: "cycle", etiqueta: "Ciclo", estado: "vacia", stale: false }];
-  it("sin ciclo abierto, lo primero es abrirlo (lleva a la pieza «Ciclo»)", () => {
+  const conCiclo: PiezaParaQueSigue[] = [
+    { slug: "cycle-diagnosis", etiqueta: "Diagnóstico", estado: "vacia", stale: false },
+    { slug: "cycle-plan", etiqueta: "Plan del ciclo", estado: "vacia", stale: false },
+  ];
+  it("sin ciclo abierto, lleva al Diagnóstico (abrirlo empieza el ciclo)", () => {
     const q = queSigueDelProyecto({ ...base, piezas: conCiclo, etapa: null, ciclo: { corto: "sin abrir", abierto: false, falta: null, numero: 1 } });
-    expect(q.texto).toMatch(/^Abre el ciclo 1/);
-    expect(q.accion).toEqual({ tipo: "pieza", slug: "cycle", etiqueta: "Ciclo" });
+    expect(q.texto).toMatch(/^El ciclo 1 todavía no empezó/);
+    expect(q.accion).toEqual({ tipo: "pieza", slug: "cycle-diagnosis", etiqueta: "Diagnóstico" });
   });
-  it("con el ciclo abierto, lo primero que falta en su etapa", () => {
+  it("con el ciclo abierto, lo primero que falta en su etapa, y lleva a su artefacto", () => {
     const q = queSigueDelProyecto({
       ...base,
       piezas: conCiclo,
       etapa: null,
-      ciclo: { corto: "Ciclo 1 · Planificación", abierto: true, falta: "Falta la meta del ciclo.", numero: 1 },
+      ciclo: { corto: "Ciclo 1 · Planificación", abierto: true, falta: "Falta la meta del ciclo.", numero: 1, piezaDeLaEtapa: "cycle-plan" },
     });
     expect(q.texto).toBe("Ciclo 1 · Planificación: falta la meta del ciclo.");
+    expect(q.accion).toEqual({ tipo: "pieza", slug: "cycle-plan", etiqueta: "Plan del ciclo" });
   });
   it("sin nada que falte, sigue con lo de siempre (y nunca con el flujo de una implementación)", () => {
     const q = queSigueDelProyecto({

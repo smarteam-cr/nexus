@@ -17,8 +17,18 @@ import PlanificacionWorkspace from "@/components/canvas/PlanificacionWorkspace";
 import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
 import EntregaWorkspace from "@/components/canvas/EntregaWorkspace";
 import CuestionarioPanel from "@/components/cuestionario/CuestionarioPanel";
-import PanelDelCiclo from "@/components/ciclos/PanelDelCiclo";
-import { PIEZA_CICLO, PIEZAS_DE_UN_SERVICIO_RECURRENTE } from "@/lib/servicios/ciclo";
+import PiezaDelCiclo from "@/components/ciclos/PiezaDelCiclo";
+import {
+  ETIQUETA_DE_ETAPA,
+  PIEZA_APRENDIZAJE_DEL_CICLO,
+  PIEZA_DIAGNOSTICO_DEL_CICLO,
+  PIEZA_PLAN_DEL_CICLO,
+  PIEZAS_DEL_CICLO,
+  PIEZAS_DE_UN_SERVICIO_RECURRENTE,
+  etapasDeLaPieza,
+  nombreDelCiclo,
+} from "@/lib/servicios/ciclo";
+import type { CicloParaElRiel } from "@/lib/servicios/ciclos-server";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { PIEZA_CUESTIONARIOS, type EstadoDeCuestionarios } from "@/lib/pieces/estado-de-cuestionarios";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
@@ -237,8 +247,8 @@ export default function ProjectCanvasPanel({
   const [estadoCuestionarios, setEstadoCuestionarios] = useState<EstadoDeCuestionarios | null>(null);
   /** Ya volvió un listado con el estado de los Cuestionarios: recién ahí se sabe si la pieza corresponde. */
   const [cuestionariosLeidos, setCuestionariosLeidos] = useState(false);
-  /** El Ciclo de un servicio recurrente (llega con el listado; null si el proyecto no es recurrente). */
-  const [estadoCiclo, setEstadoCiclo] = useState<{ corto: string; abierto: boolean; falta: string | null; numero: number } | null>(null);
+  /** El ciclo de un servicio recurrente (llega con el listado; null si el proyecto no es recurrente). */
+  const [estadoCiclo, setEstadoCiclo] = useState<CicloParaElRiel | null>(null);
   /* Slot en el header para los CTAs de un canvas que necesita ESTADO PROPIO para decidir
      qué botón mostrar. El canvas los renderiza acá por portal y quedan junto al nombre, en
      el mismo lugar que el `CanvasAgentButton` que este panel monta para los demás.
@@ -279,18 +289,58 @@ export default function ProjectCanvasPanel({
   const conCuestionarios = canvases.some((c) => slugForCanvas(c) === "exploration") || (estadoCuestionarios?.total ?? 0) > 0;
   const estadoDeLaFilaDeCuestionarios = conCuestionarios ? (estadoCuestionarios?.enviado ? "generada" : "vacia") : undefined;
   // Las filas del riel salen del FLUJO (lib/flow), no de la lista de canvases.
-  /* Un SERVICIO RECURRENTE (2026-10-11, docs/smartloop-plan.md) tiene sus propias piezas: el Ciclo primero y
-     nada del flujo de una implementación (kickoff, diagnóstico, entrega). Lo dice su fila de pipelines. */
+  /* Un SERVICIO RECURRENTE (2026-10-11, docs/smartloop-plan.md) tiene sus propias piezas: los artefactos de su ciclo
+     (Diagnóstico, Plan del ciclo, Cronograma, Aprendizaje) y nada del flujo de una implementación. Lo dice su fila de
+     pipelines. Los artefactos del ciclo no viven en un canvas: su estado sale del ciclo. */
   const esRecurrente = !!resolvePipeline(hubspotPipelineId ?? null)?.servicioRecurrente;
-  const estadoDeLaFilaDelCiclo = esRecurrente ? (estadoCiclo?.abierto ? "generada" : "vacia") : undefined;
+  const etapaDelCiclo = estadoCiclo?.abierto ? estadoCiclo.etapa : null;
+  const planListo = !!estadoCiclo?.planListo;
   const pieceRows = useMemo(
     () =>
       buildPieceRows(canvases, {
-        sinCanvas: { [PIEZA_CUESTIONARIOS]: estadoDeLaFilaDeCuestionarios, [PIEZA_CICLO]: estadoDeLaFilaDelCiclo },
+        sinCanvas: {
+          [PIEZA_CUESTIONARIOS]: estadoDeLaFilaDeCuestionarios,
+          ...(esRecurrente
+            ? {
+                [PIEZA_DIAGNOSTICO_DEL_CICLO]: etapaDelCiclo && etapaDelCiclo !== "diagnostico" ? ("generada" as const) : ("vacia" as const),
+                [PIEZA_PLAN_DEL_CICLO]: planListo ? ("generada" as const) : ("vacia" as const),
+                [PIEZA_APRENDIZAJE_DEL_CICLO]: "vacia" as const,
+              }
+            : {}),
+        },
         piezasDelServicio: esRecurrente ? PIEZAS_DE_UN_SERVICIO_RECURRENTE : undefined,
       }),
-    [canvases, estadoDeLaFilaDeCuestionarios, estadoDeLaFilaDelCiclo, esRecurrente],
+    [canvases, estadoDeLaFilaDeCuestionarios, esRecurrente, etapaDelCiclo, planListo],
   );
+  /** ¿Es una pieza que no vive en un canvas (Cuestionarios, los artefactos del ciclo)? Se abre por su slug. */
+  const esSinCanvas = useCallback((slug: string) => pieceBySlug(slug)?.hasCanvas === false, []);
+  /** Lo que dice la fila de un artefacto del ciclo: la etapa en curso o cuándo cierra. */
+  const avisoDelCiclo = (slug: string): { corto: string; largo?: string; tono: "neutro" } | null => {
+    if (!estadoCiclo?.abierto || !etapaDelCiclo) return null;
+    if (etapasDeLaPieza(slug).includes(etapaDelCiclo)) {
+      return { corto: slug === "timeline" ? `en curso · ${ETIQUETA_DE_ETAPA[etapaDelCiclo]}` : "en curso", tono: "neutro" };
+    }
+    if (slug === PIEZA_APRENDIZAJE_DEL_CICLO && estadoCiclo.hasta) {
+      const [, m, d] = estadoCiclo.hasta.split("-");
+      return { corto: `cierra ${Number(d)}/${Number(m)}`, largo: "El ciclo cierra con la sesión de aprendizaje.", tono: "neutro" };
+    }
+    return null;
+  };
+  /** El rótulo que agrupa: el ciclo sobre su primer artefacto, los insumos sobre los Cuestionarios o la Exploración. */
+  const encabezadoDe = (slug: string, primeroDeInsumos: boolean) => {
+    if (!esRecurrente) return undefined;
+    if (slug === PIEZA_DIAGNOSTICO_DEL_CICLO) {
+      if (!estadoCiclo?.abierto) return { titulo: estadoCiclo ? `Ciclo ${estadoCiclo.numero}` : "Ciclo" };
+      const [, md, dd] = estadoCiclo.desde?.split("-") ?? [];
+      const [, mh, dh] = estadoCiclo.hasta?.split("-") ?? [];
+      return {
+        titulo: nombreDelCiclo({ numero: estadoCiclo.numero, nombre: estadoCiclo.nombre }),
+        detalle: estadoCiclo.desde && estadoCiclo.hasta ? `${Number(dd)}/${Number(md)} – ${Number(dh)}/${Number(mh)}` : null,
+      };
+    }
+    if (primeroDeInsumos) return { titulo: "Insumos del diagnóstico" };
+    return undefined;
+  };
   // Qué piezas ya tienen algo escrito — lo mira `pieceReadiness` para avisar cuando a una
   // pieza le faltan sus pasos previos.
   const piezasConContenido = pieceRows.filter((r) => r.state === "generada").map((r) => r.slug);
@@ -377,7 +427,7 @@ export default function ProjectCanvasPanel({
         setCanvases(list);
         setEstadoCuestionarios((d.cuestionarios as EstadoDeCuestionarios | null | undefined) ?? null);
         setCuestionariosLeidos(true);
-        setEstadoCiclo((d.ciclo as { corto: string; abierto: boolean; falta: string | null; numero: number } | null | undefined) ?? null);
+        setEstadoCiclo((d.ciclo as CicloParaElRiel | null | undefined) ?? null);
         setActiveCanvasId((prev) => {
           // Selección vigente que sigue existiendo → se mantiene.
           if (prev && list.some((c) => c.id === prev)) return prev;
@@ -504,9 +554,9 @@ export default function ProjectCanvasPanel({
     if (piezaSinCanvas !== PIEZA_CUESTIONARIOS || !listLoaded || !cuestionariosLeidos || conCuestionarios) return;
     irAlResumen();
   }, [piezaSinCanvas, listLoaded, cuestionariosLeidos, conCuestionarios, irAlResumen]);
-  // Lo mismo con `?canvas=cycle` en un proyecto que no es de un servicio recurrente.
+  // Lo mismo con un artefacto del ciclo en un proyecto que no es de un servicio recurrente.
   useEffect(() => {
-    if (piezaSinCanvas === PIEZA_CICLO && !esRecurrente) irAlResumen();
+    if (piezaSinCanvas && (PIEZAS_DEL_CICLO as readonly string[]).includes(piezaSinCanvas) && !esRecurrente) irAlResumen();
   }, [piezaSinCanvas, esRecurrente, irAlResumen]);
 
   /* El esqueleto se apaga cuando VOLVIÓ la consulta de la lista, no cuando la lista trae
@@ -559,8 +609,8 @@ export default function ProjectCanvasPanel({
   );
   const abrirPieza = useCallback(
     (slug: string) => {
-      // Los Cuestionarios y el Ciclo no tienen canvas: se abren por su slug (y nunca se «activan»).
-      if (slug === PIEZA_CUESTIONARIOS || slug === PIEZA_CICLO) {
+      // Las piezas sin canvas (Cuestionarios, los artefactos del ciclo) se abren por su slug y nunca se «activan».
+      if (esSinCanvas(slug)) {
         if (visible) abrirPiezaSinCanvas(slug);
         else onAbrirDesdeOculto?.(slug);
         return;
@@ -570,7 +620,7 @@ export default function ProjectCanvasPanel({
       if (row.canvasId) switchCanvas(row.canvasId);
       else void activarPieza(slug);
     },
-    [pieceRows, switchCanvas, activarPieza, visible, abrirPiezaSinCanvas, onAbrirDesdeOculto],
+    [pieceRows, switchCanvas, activarPieza, visible, abrirPiezaSinCanvas, onAbrirDesdeOculto, esSinCanvas],
   );
   /** Para el «Qué sigue» recomendado de los Cuestionarios. null = la pieza no está o su estado no llegó. */
   const cuestionariosParaQueSigue = useMemo(
@@ -743,18 +793,19 @@ export default function ProjectCanvasPanel({
                 hubspotPipelineId: hubspotPipelineId ?? null,
               });
               const avisoDelResumen = avisosDePiezas[row.slug];
-              // El Ciclo (servicio recurrente) tampoco: su fila dice en qué ciclo y etapa va.
-              if (row.slug === PIEZA_CICLO) {
+              const encabezado = encabezadoDe(
+                row.slug,
+                row.slug === (pieceRows.some((r) => r.slug === PIEZA_CUESTIONARIOS) ? PIEZA_CUESTIONARIOS : "exploration"),
+              );
+              // Los artefactos del ciclo (servicio recurrente) no tienen canvas: su fila dice la etapa en curso.
+              if (row.slug === PIEZA_DIAGNOSTICO_DEL_CICLO || row.slug === PIEZA_PLAN_DEL_CICLO || row.slug === PIEZA_APRENDIZAJE_DEL_CICLO) {
                 return {
                   slug: row.slug,
                   etiqueta: row.label,
                   estado: row.state === "generada" ? "generada" : "pendiente",
                   activa: visible && !enResumen && piezaSinCanvas === row.slug,
-                  aviso: {
-                    corto: estadoCiclo?.corto ?? "",
-                    largo: "El tramo, la meta, la etapa, los casos de uso y lo que te toca en cada etapa.",
-                    tono: "neutro",
-                  },
+                  aviso: avisoDelCiclo(row.slug),
+                  encabezado,
                 };
               }
               // Los Cuestionarios no tienen canvas: su fila dice cómo van, siempre escrito.
@@ -762,6 +813,7 @@ export default function ProjectCanvasPanel({
                 return {
                   slug: row.slug,
                   etiqueta: row.label,
+                  encabezado,
                   estado: row.state === "generada" ? "generada" : "pendiente",
                   activa: visible && !enResumen && piezaSinCanvas === row.slug,
                   aviso: {
@@ -771,16 +823,20 @@ export default function ProjectCanvasPanel({
                   },
                 };
               }
+              const avisoCiclo = esRecurrente && row.slug === "timeline" ? avisoDelCiclo(row.slug) : null;
               return {
                 slug: row.slug,
                 etiqueta: row.label,
+                encabezado,
                 estado: row.state === "generada" ? "generada" : row.state === "vacia" ? "pendiente" : "por_activar",
                 activa: visible && !enResumen && !piezaSinCanvas && row.canvasId !== null && row.canvasId === activeCanvasId,
                 /* El aviso COMPRIMIDO ("Sin tag X" / "Antes: Y"); la frase completa va en el title.
                    Si no, el de «el handoff corrió después»: el encadenado ya NO reescribe solo
                    (borraba ediciones a mano) y sin este renglón el CSE creía que estaba al día.
                    Si no, lo que el Resumen sabe de la pieza («opcional», «sin subir»). */
-                aviso: readiness.shortReason
+                aviso: avisoCiclo
+                  ? avisoCiclo
+                  : readiness.shortReason
                   ? { corto: readiness.shortReason, largo: readiness.reason ?? undefined, tono: "neutro" }
                   : row.stale
                     ? { corto: "desactualizado", largo: AVISO_DESACTUALIZADA_LARGO, tono: "atencion" }
@@ -799,7 +855,7 @@ export default function ProjectCanvasPanel({
                 toast.info("Espera a que la IA termine en el cronograma para cambiar de pieza.");
                 return;
               }
-              if (slug === PIEZA_CUESTIONARIOS || slug === PIEZA_CICLO) {
+              if (esSinCanvas(slug)) {
                 if (visible) abrirPiezaSinCanvas(slug);
                 else onAbrirDesdeOculto?.(slug);
                 return;
@@ -1127,12 +1183,32 @@ export default function ProjectCanvasPanel({
       )}
       {activeSlug === "questionnaires" && conCuestionarios && slotDelPanel && !queSigueOcupado && queSigueParaElDocumento &&
         createPortal(<QueSigue accion={queSigueParaElDocumento.accion}>{queSigueParaElDocumento.texto}</QueSigue>, slotDelPanel)}
+      {/* En los artefactos del ciclo, el «Qué sigue» del proyecto a la derecha; sin el botón si lleva al mismo artefacto. */}
+      {esRecurrente && activeSlug && (PIEZAS_DEL_CICLO as readonly string[]).includes(activeSlug) && activeSlug !== "timeline" &&
+        slotDelPanel && !queSigueOcupado && queSigueParaElDocumento &&
+        createPortal(
+          <QueSigue
+            accion={
+              queSigueProyecto?.accion?.tipo === "pieza" && queSigueProyecto.accion.slug === activeSlug ? null : queSigueParaElDocumento.accion
+            }
+          >
+            {queSigueParaElDocumento.texto}
+          </QueSigue>,
+          slotDelPanel,
+        )}
 
       {/* Ciclo (2026-10-11, docs/smartloop-plan.md): el ciclo de un servicio recurrente, con la guía del CSE. Como
           los Cuestionarios, es una herramienta de trabajo y va fuera del marco del motor de landings. */}
-      {activeSlug === "cycle" && esRecurrente && (
+      {esRecurrente && (activeSlug === "cycle-diagnosis" || activeSlug === "cycle-plan" || activeSlug === "cycle-learning") && (
         <CanvasBoundary label="el ciclo">
-          <PanelDelCiclo projectId={projectId} onCambio={cuestionariosCambiaron} />
+          <PiezaDelCiclo key={activeSlug} projectId={projectId} slug={activeSlug} onCambio={cuestionariosCambiaron} onAbrirPieza={abrirPieza} />
+        </CanvasBoundary>
+      )}
+      {/* En un servicio recurrente, arriba del Cronograma va la cabecera del ciclo (y la guía si la etapa en curso se
+          trabaja acá: Implementación y Adopción). */}
+      {esRecurrente && activeSlug === "timeline" && (
+        <CanvasBoundary label="el ciclo">
+          <PiezaDelCiclo projectId={projectId} slug="timeline" onCambio={cuestionariosCambiaron} />
         </CanvasBoundary>
       )}
 

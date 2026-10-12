@@ -167,6 +167,12 @@ export interface FilaDelRielDePiezas {
    */
   novedades?: number;
   ocupada?: boolean;
+  /**
+   * Un rótulo ARRIBA de esta fila, que agrupa las que siguen (2026-10-11): en un servicio recurrente, «Ciclo 1 ·
+   * Corregir y adoptar · 7 sep – 6 nov» sobre los artefactos del ciclo, y «Insumos del diagnóstico» sobre los
+   * Cuestionarios y la Exploración. No se cliquea.
+   */
+  encabezado?: { titulo: string; detalle?: string | null };
 }
 
 const PUNTO: Record<EstadoDePieza, string> = {
@@ -222,6 +228,14 @@ export function PiezasDelRiel({
       </li>
       {existentes.map((f) => (
         <li key={f.slug}>
+          {f.encabezado && (
+            <p className="flex items-baseline justify-between gap-2 px-2.5 pb-0.5 pt-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-muted">
+              <span className="min-w-0 truncate" title={f.encabezado.titulo}>
+                {f.encabezado.titulo}
+              </span>
+              {f.encabezado.detalle && <span className="flex-shrink-0 font-normal normal-case tracking-normal">{f.encabezado.detalle}</span>}
+            </p>
+          )}
           <button
             type="button"
             // Con «Exploración» ya abierta, el clic vuelve a su página de inicio (lo escucha LienzoDeExploracion).

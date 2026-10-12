@@ -165,23 +165,63 @@ export const PIECES: PieceDefinition[] = [
     hasCanvas: false,
   },
   {
-    slug: "cycle",
-    label: "Ciclo",
+    slug: "cycle-diagnosis",
+    label: "Diagnóstico",
     // Pieza NUEVA (2026-10-11, docs/smartloop-plan.md): nunca vivió en ProjectCanvas.name.
     legacyNames: [],
     scope: "project",
-    // El ciclo de un servicio recurrente: tramo, fechas, meta, etapa, casos de uso y la guía del CSE.
+    // El diagnóstico del ciclo: de qué nivel parte cada dimensión del área. Sus insumos son la Exploración y los Cuestionarios.
     agentGroup: null,
     permissionSection: null,
     createdWithProject: false,
     isDefaultCanvas: false,
-    // Solo la tienen los proyectos de un servicio recurrente (`PipelineDef.servicioRecurrente`); ahí no
-    // se apaga: es la pieza central.
+    // Solo la tienen los proyectos de un servicio recurrente (`PipelineDef.servicioRecurrente`): es un artefacto
+    // de su ciclo, no se apaga.
     optional: false,
     enabledByTags: [],
-    ownRenderer: true, // PanelDelCiclo
+    ownRenderer: true, // PiezaDelCiclo
     clientFacing: false,
-    // Vive en sus tablas (CicloDeProyecto, CasoDeUso), no en un canvas.
+    // Vive en las tablas del ciclo (CicloDeProyecto, CasoDeUso), no en un canvas.
+    hasCanvas: false,
+  },
+  {
+    slug: "cycle-plan",
+    label: "Plan del ciclo",
+    // Pieza NUEVA (2026-10-11, docs/smartloop-plan.md): nunca vivió en ProjectCanvas.name.
+    legacyNames: [],
+    scope: "project",
+    // La meta del ciclo y sus casos de uso, cada uno con su criterio de aceptación.
+    agentGroup: null,
+    permissionSection: null,
+    createdWithProject: false,
+    isDefaultCanvas: false,
+    // Solo la tienen los proyectos de un servicio recurrente (`PipelineDef.servicioRecurrente`): es un artefacto
+    // de su ciclo, no se apaga.
+    optional: false,
+    enabledByTags: [],
+    ownRenderer: true, // PiezaDelCiclo
+    clientFacing: false,
+    // Vive en las tablas del ciclo (CicloDeProyecto, CasoDeUso), no en un canvas.
+    hasCanvas: false,
+  },
+  {
+    slug: "cycle-learning",
+    label: "Aprendizaje",
+    // Pieza NUEVA (2026-10-11, docs/smartloop-plan.md): nunca vivió en ProjectCanvas.name.
+    legacyNames: [],
+    scope: "project",
+    // La sesión de cierre del ciclo: se miden los criterios, se decide cada pendiente y se propone el siguiente.
+    agentGroup: null,
+    permissionSection: null,
+    createdWithProject: false,
+    isDefaultCanvas: false,
+    // Solo la tienen los proyectos de un servicio recurrente (`PipelineDef.servicioRecurrente`): es un artefacto
+    // de su ciclo, no se apaga.
+    optional: false,
+    enabledByTags: [],
+    ownRenderer: true, // PiezaDelCiclo
+    clientFacing: false,
+    // Vive en las tablas del ciclo (CicloDeProyecto, CasoDeUso), no en un canvas.
     hasCanvas: false,
   },
   {

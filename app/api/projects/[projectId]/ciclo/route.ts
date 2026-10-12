@@ -1,7 +1,8 @@
 /**
  * El CICLO de un proyecto recurrente (docs/smartloop-plan.md, etapa 1).
  *
- * GET   → el estado: el ciclo abierto con sus casos de uso, la guía del CSE y los ciclos cerrados.
+ * GET   → el estado: el ciclo abierto con sus casos de uso, la guía del CSE y los ciclos cerrados. Si el proyecto
+ *         nunca tuvo un ciclo, abre el primero (sin formulario).
  * POST  → abre el ciclo siguiente (409 si hay uno abierto).
  * PATCH → cambia el ciclo abierto (tramo, fechas, meta, etapa) o el compromiso del servicio.
  *
@@ -38,6 +39,13 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     if (!estado) return NextResponse.json({ error: "Este proyecto no es de un servicio recurrente." }, { status: 404 });
     // Quien no puede editar el cronograma ve el ciclo sin controles (la misma vara que el POST y el PATCH).
     const puedeEditar = !((await guardCapability("editTimeline")) instanceof NextResponse);
+    /* El primer ciclo nace solo (pedido de Elías, 2026-10-11): sin formulario para abrirlo. El tramo y las fechas
+       se completan después, en la cabecera del ciclo. Solo si nunca hubo uno y quien mira puede editar. */
+    if (!estado.abierto && estado.cerrados.length === 0 && puedeEditar) {
+      await abrirCiclo(projectId, {}, correoDe(guard)).catch(() => null); // otra pestaña pudo abrirlo a la vez
+      const recien = await cargarEstadoDelCiclo(projectId);
+      if (recien) return NextResponse.json({ ...recien, puedeEditar });
+    }
     return NextResponse.json({ ...estado, puedeEditar });
   } catch (e) {
     return error(e);

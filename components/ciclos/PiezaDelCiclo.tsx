@@ -1,133 +1,127 @@
 "use client";
 
 /**
- * La pieza «Ciclo» de un proyecto recurrente (docs/smartloop-plan.md, etapa 1).
+ * Los ARTEFACTOS del ciclo de un proyecto recurrente (docs/smartloop-plan.md; rediseño del 2026-10-11, pedido de
+ * Elías): Diagnóstico, Plan del ciclo y Aprendizaje, más la cabecera que se pinta arriba del Cronograma.
  *
- * Arriba lo que el CSE necesita para trabajar: en qué etapa va el ciclo y qué le toca hacer (la guía, que
- * sale del documento de proceso del servicio). Debajo, el ciclo en sí: tramo, fechas, compromiso, meta y
- * los casos de uso con su criterio de aceptación. Sin ciclo abierto, se abre el siguiente.
+ * Arriba de cada uno, la CABECERA del ciclo (tramo, fechas, compromiso y la etapa, con «Pasar a…») y la GUÍA de su
+ * etapa, que sale del documento de proceso del servicio: qué haces, qué tiene que quedar y la señal de que se saltó.
+ * Lo que Nexus comprueba lleva marca; lo que no puede comprobar va sin marca, nunca como hecho.
  *
- * Lo que comprueba Nexus lleva su marca (hecho o falta); lo que todavía no puede comprobar va sin marca,
- * nunca como hecho. La señal de que la etapa se saltó va en ámbar solo cuando Nexus la ve.
+ * El primer ciclo nace solo (GET /ciclo): no hay formulario para abrirlo.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Alert, Field, Input, Select, Textarea } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonTexto, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
-import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import {
   COMPROMISOS,
   ETAPAS_DEL_CICLO,
   ETIQUETA_DE_COMPROMISO,
   ETIQUETA_DE_ETAPA,
+  PIEZA_APRENDIZAJE_DEL_CICLO,
+  PIEZA_DIAGNOSTICO_DEL_CICLO,
+  PIEZA_PLAN_DEL_CICLO,
   etapaSiguiente,
+  etapasDeLaPieza,
   nombreDelCiclo,
   type Compromiso,
   type EtapaDelCiclo,
 } from "@/lib/servicios/ciclo";
-import type { CasoDeUsoVista, EstadoDelCiclo } from "@/lib/servicios/ciclos-server";
-
-type Estado = EstadoDelCiclo & { puedeEditar: boolean };
+import { guiaDeServicio } from "@/lib/servicios";
+import { guiaDelCiclo } from "@/lib/servicios/guia";
+import type { CasoDeUsoVista } from "@/lib/servicios/ciclos-server";
+import { useCiclo, type EstadoConPermiso } from "./useCiclo";
 
 const FECHA = new Intl.DateTimeFormat("es-CR", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const fecha = (iso: string | null) => (iso ? FECHA.format(new Date(`${iso}T00:00:00Z`)) : null);
 
-export default function PanelDelCiclo({ projectId, onCambio }: { projectId: string; onCambio?: () => void }) {
-  const toast = useToast();
-  const [estado, setEstado] = useState<Estado | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [guardando, setGuardando] = useState(false);
-
-  const cargar = useCallback(async () => {
-    const res = await fetch(`/api/projects/${projectId}/ciclo`, { cache: "no-store" });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      setError(data?.error ?? "No se pudo cargar el ciclo.");
-      return;
-    }
-    setError(null);
-    setEstado(data as Estado);
-  }, [projectId]);
-
-  useEffect(() => {
-    void cargar();
-  }, [cargar]);
-
-  /** Manda un cambio, recarga y avisa al riel. Devuelve si salió bien. */
-  const enviar = useCallback(
-    async (url: string, method: "POST" | "PATCH", body: unknown, ok?: string): Promise<boolean> => {
-      setGuardando(true);
-      try {
-        const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) {
-          toast.error(data?.error ?? "No se pudo guardar.");
-          return false;
-        }
-        if (ok) toast.success(ok);
-        await cargar();
-        onCambio?.();
-        return true;
-      } finally {
-        setGuardando(false);
-      }
-    },
-    [cargar, onCambio, toast],
-  );
+export default function PiezaDelCiclo({
+  projectId,
+  slug,
+  onCambio,
+  onAbrirPieza,
+}: {
+  projectId: string;
+  /** Qué artefacto: el diagnóstico, el plan, el aprendizaje, o `timeline` (la cabecera arriba del Cronograma). */
+  slug: string;
+  onCambio?: () => void;
+  onAbrirPieza?: (slug: string) => void;
+}) {
+  const { estado, error, guardando, enviar } = useCiclo(projectId, onCambio);
 
   if (error) return <Alert variant="danger">{error}</Alert>;
   if (!estado) {
     return (
-      <div className="space-y-4" aria-busy="true">
+      <div className="space-y-3" aria-busy="true">
         <div className="skeleton-shimmer h-10 rounded-lg" />
         <div className="skeleton-shimmer h-10 rounded-lg" />
       </div>
     );
   }
-
-  const urlCiclo = `/api/projects/${projectId}/ciclo`;
-  const urlCasos = `${urlCiclo}/casos`;
   const ciclo = estado.abierto;
-  const siguienteNumero = (estado.cerrados[0]?.numero ?? 0) + 1;
+  if (!ciclo) {
+    return (
+      <p className="rounded-xl border border-dashed border-line px-4 py-3 text-[13px] text-fg-muted">
+        {estado.puedeEditar
+          ? "No hay un ciclo abierto: el siguiente se abre al cerrar el anterior con su sesión de aprendizaje."
+          : "Todavía no hay un ciclo abierto. Lo abre quien puede editar el cronograma."}
+      </p>
+    );
+  }
+
+  const etapasDeEsta = etapasDeLaPieza(slug);
+  const enCurso = etapasDeEsta.includes(ciclo.etapa);
+  // La guía de la etapa de este artefacto; en el Cronograma, la de la etapa en curso solo si es una de las suyas.
+  const etapaDeLaGuia: EtapaDelCiclo | null = slug === "timeline" ? (enCurso ? ciclo.etapa : null) : (etapasDeEsta[0] ?? null);
 
   return (
     <div className="space-y-6">
-      {!ciclo ? (
-        <AbrirCiclo
-          numero={siguienteNumero}
-          puedeEditar={estado.puedeEditar}
-          guardando={guardando}
-          onAbrir={(datos) => enviar(urlCiclo, "POST", datos, `Se abrió el ciclo ${siguienteNumero}.`)}
-        />
-      ) : (
+      <CabeceraDelCiclo
+        estado={estado}
+        guardando={guardando}
+        onGuardar={(cambios) => enviar("", "PATCH", cambios, "Listo.")}
+        onEtapa={(etapa) => enviar("", "PATCH", { etapa }, `El ciclo pasó a ${ETIQUETA_DE_ETAPA[etapa]}.`)}
+      />
+      {etapaDeLaGuia && <Guia estado={estado} etapa={etapaDeLaGuia} enCurso={enCurso} />}
+
+      {slug === PIEZA_DIAGNOSTICO_DEL_CICLO && (
+        <section className="space-y-3 rounded-xl border border-line bg-surface p-5">
+          <h2 className="text-sm font-semibold text-fg">El nivel de partida</h2>
+          <p className="text-[13px] text-fg-secondary">
+            Aquí va a quedar el nivel de cada dimensión del área con el que arranca el ciclo, guardado en la empresa para
+            compararlo ciclo tras ciclo. Mientras tanto se trabaja con sus insumos:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <BotonBlanco onClick={() => onAbrirPieza?.("exploration")}>Abrir la Exploración</BotonBlanco>
+            <BotonBlanco onClick={() => onAbrirPieza?.("questionnaires")}>Abrir los Cuestionarios</BotonBlanco>
+          </div>
+        </section>
+      )}
+
+      {slug === PIEZA_PLAN_DEL_CICLO && (
         <>
-          <Cabecera
-            estado={estado}
-            guardando={guardando}
-            onGuardar={(cambios) => enviar(urlCiclo, "PATCH", cambios, "Listo.")}
-          />
-          <Etapa
-            estado={estado}
-            guardando={guardando}
-            onCambiar={(etapa) => enviar(urlCiclo, "PATCH", { etapa }, `El ciclo pasó a ${ETIQUETA_DE_ETAPA[etapa]}.`)}
-          />
-          <Guia estado={estado} />
-          <Meta
-            key={ciclo.meta ?? ""}
-            meta={ciclo.meta}
-            puedeEditar={estado.puedeEditar}
-            onGuardar={(meta) => enviar(urlCiclo, "PATCH", { meta })}
-          />
+          <Meta key={ciclo.meta ?? ""} meta={ciclo.meta} puedeEditar={estado.puedeEditar} onGuardar={(meta) => enviar("", "PATCH", { meta })} />
           <CasosDeUso
             estado={estado}
             guardando={guardando}
-            onCrear={(datos) => enviar(urlCasos, "POST", datos, "Se sumó el caso de uso.")}
-            onCambiar={(datos) => enviar(urlCasos, "PATCH", datos)}
+            onCrear={(datos) => enviar("/casos", "POST", datos, "Se sumó el caso de uso.")}
+            onCambiar={(datos) => enviar("/casos", "PATCH", datos)}
           />
         </>
       )}
 
-      {estado.cerrados.length > 0 && (
+      {slug === PIEZA_APRENDIZAJE_DEL_CICLO && (
+        <section className="space-y-2 rounded-xl border border-line bg-surface p-5">
+          <h2 className="text-sm font-semibold text-fg">La sesión de aprendizaje</h2>
+          <p className="text-[13px] text-fg-secondary">{guiaDeServicio(estado.servicio)?.reglaDeCierre}</p>
+          <p className="text-[13px] text-fg-muted">
+            {ciclo.hasta ? `El ciclo termina el ${fecha(ciclo.hasta)}.` : "El ciclo todavía no tiene fecha de cierre: ponla en la cabecera."}
+          </p>
+        </section>
+      )}
+
+      {slug !== "timeline" && estado.cerrados.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-fg">Ciclos anteriores</h2>
           <ul className="space-y-1 text-[13px] text-fg-secondary">
@@ -144,89 +138,39 @@ export default function PanelDelCiclo({ projectId, onCambio }: { projectId: stri
   );
 }
 
-// ── Abrir un ciclo ───────────────────────────────────────────────────────────
+// ── La cabecera del ciclo: tramo, fechas, compromiso y etapa ─────────────────
 
-function AbrirCiclo({
-  numero,
-  puedeEditar,
-  guardando,
-  onAbrir,
-}: {
-  numero: number;
-  puedeEditar: boolean;
-  guardando: boolean;
-  onAbrir: (datos: { nombre: string | null; desde: string | null; hasta: string | null; meta: string | null }) => Promise<boolean>;
-}) {
-  const [nombre, setNombre] = useState("");
-  const [desde, setDesde] = useState("");
-  const [hasta, setHasta] = useState("");
-  const [meta, setMeta] = useState("");
-  return (
-    <section className="space-y-4 rounded-xl border border-line bg-surface p-5">
-      <div>
-        <h2 className="text-sm font-semibold text-fg">{numero === 1 ? "Todavía no hay un ciclo abierto" : `El ciclo ${numero - 1} se cerró`}</h2>
-        <p className="mt-1 text-[13px] text-fg-muted">
-          Un ciclo es un tramo con fechas: abre con un diagnóstico y cierra con la sesión de aprendizaje. El tramo, las fechas y la meta se
-          pueden completar después.
-        </p>
-      </div>
-      {puedeEditar ? (
-        <>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Tramo (opcional)">
-              <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Corregir y adoptar" maxLength={200} />
-            </Field>
-            <Field label="Desde">
-              <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
-            </Field>
-            <Field label="Hasta">
-              <Input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
-            </Field>
-          </div>
-          <Field label="Meta del ciclo (opcional)" hint="El resultado que persigue el cliente en este tramo.">
-            <Textarea value={meta} onChange={(e) => setMeta(e.target.value)} rows={2} maxLength={4000} />
-          </Field>
-          <BotonAzul
-            disabled={guardando}
-            onClick={() => void onAbrir({ nombre: nombre || null, desde: desde || null, hasta: hasta || null, meta: meta || null })}
-          >
-            Abrir el ciclo {numero}
-          </BotonAzul>
-        </>
-      ) : (
-        <p className="text-[13px] text-fg-muted">Lo abre quien puede editar el cronograma.</p>
-      )}
-    </section>
-  );
-}
-
-// ── Cabecera: tramo, fechas y compromiso ─────────────────────────────────────
-
-function Cabecera({
+function CabeceraDelCiclo({
   estado,
   guardando,
   onGuardar,
+  onEtapa,
 }: {
-  estado: Estado;
+  estado: EstadoConPermiso;
   guardando: boolean;
   onGuardar: (cambios: Record<string, string | null>) => Promise<boolean>;
+  onEtapa: (etapa: EtapaDelCiclo) => Promise<boolean>;
 }) {
   const ciclo = estado.abierto!;
   const [editando, setEditando] = useState(false);
   const [nombre, setNombre] = useState(ciclo.nombre ?? "");
   const [desde, setDesde] = useState(ciclo.desde ?? "");
   const [hasta, setHasta] = useState(ciclo.hasta ?? "");
-  const fechas = ciclo.desde && ciclo.hasta ? `${fecha(ciclo.desde)} al ${fecha(ciclo.hasta)}` : "Sin fechas";
+  const idx = ETAPAS_DEL_CICLO.indexOf(ciclo.etapa);
+  const siguiente = etapaSiguiente(ciclo.etapa);
+  const puedeMover = estado.puedeEditar && !estado.enHubspot;
+  const fechas = ciclo.desde && ciclo.hasta ? `${fecha(ciclo.desde)} – ${fecha(ciclo.hasta)}` : "Sin fechas";
+
   return (
-    <section className="rounded-xl border border-line bg-surface p-5">
+    <section className="space-y-3 rounded-xl border border-line bg-surface p-4">
       {!editando ? (
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <p className={ROTULO_DEL_SISTEMA}>{estado.nombreDelServicio}</p>
-            <h2 className="mt-1 text-[15px] font-semibold text-fg">{nombreDelCiclo(ciclo)}</h2>
-            <p className="mt-0.5 text-[13px] text-fg-muted">{fechas}</p>
+            <p className="mt-0.5 text-[15px] font-semibold text-fg">{nombreDelCiclo(ciclo)}</p>
+            <p className="text-[13px] text-fg-muted">{fechas}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-[13px] text-fg-secondary">
               Compromiso
               <Select
@@ -243,14 +187,14 @@ function Cabecera({
                 ))}
               </Select>
             </label>
-            {estado.puedeEditar && <BotonBlanco onClick={() => setEditando(true)}>Editar</BotonBlanco>}
+            {estado.puedeEditar && <BotonTexto onClick={() => setEditando(true)}>{ciclo.desde ? "Editar" : "Poner tramo y fechas"}</BotonTexto>}
           </div>
         </div>
       ) : (
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Tramo">
-              <Input value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={200} />
+              <Input value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={200} placeholder="Corregir y adoptar" />
             </Field>
             <Field label="Desde">
               <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
@@ -272,81 +216,48 @@ function Cabecera({
           </div>
         </div>
       )}
-    </section>
-  );
-}
 
-// ── La etapa del ciclo ───────────────────────────────────────────────────────
-
-function Etapa({
-  estado,
-  guardando,
-  onCambiar,
-}: {
-  estado: Estado;
-  guardando: boolean;
-  onCambiar: (etapa: EtapaDelCiclo) => Promise<boolean>;
-}) {
-  const actual = estado.abierto!.etapa;
-  const idx = ETAPAS_DEL_CICLO.indexOf(actual);
-  const siguiente = etapaSiguiente(actual);
-  const puedeMover = estado.puedeEditar && !estado.enHubspot;
-  return (
-    <section className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-fg">Etapa del ciclo</h2>
+      <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
+        <ol className="flex flex-1 flex-wrap items-center gap-1" aria-label="Etapas del ciclo">
+          {ETAPAS_DEL_CICLO.map((e, i) => (
+            <li
+              key={e}
+              aria-current={i === idx ? "step" : undefined}
+              className={cn(
+                "rounded-full px-2.5 py-0.5 text-xs",
+                i === idx ? "bg-info-surface font-semibold text-brand" : i < idx ? "text-fg-secondary" : "text-fg-muted",
+              )}
+            >
+              {i < idx ? "✓ " : ""}
+              {ETIQUETA_DE_ETAPA[e]}
+            </li>
+          ))}
+        </ol>
         {puedeMover && siguiente && (
-          <BotonBlanco disabled={guardando} onClick={() => void onCambiar(siguiente)}>
+          <BotonBlanco disabled={guardando} onClick={() => void onEtapa(siguiente)}>
             Pasar a {ETIQUETA_DE_ETAPA[siguiente]}
           </BotonBlanco>
         )}
+        {estado.enHubspot && <span className="text-xs text-fg-muted">La etapa la mueve el equipo en HubSpot.</span>}
       </div>
-      <ol className="grid grid-cols-5 gap-1.5" aria-label="Etapas del ciclo">
-        {ETAPAS_DEL_CICLO.map((e, i) => {
-          const hecha = i < idx;
-          const enCurso = i === idx;
-          return (
-            <li key={e}>
-              <button
-                type="button"
-                disabled={!puedeMover || guardando || enCurso}
-                onClick={() => void onCambiar(e)}
-                title={puedeMover && !enCurso ? `Mover el ciclo a ${ETIQUETA_DE_ETAPA[e]}` : undefined}
-                aria-current={enCurso ? "step" : undefined}
-                className={cn(
-                  "w-full rounded-lg border px-2 py-2 text-center text-xs transition-colors",
-                  enCurso
-                    ? "border-info-line bg-info-surface font-semibold text-brand"
-                    : hecha
-                      ? "border-line bg-surface text-fg-secondary"
-                      : "border-line bg-surface-muted text-fg-muted",
-                  puedeMover && !enCurso && "hover:bg-surface-hover",
-                )}
-              >
-                {ETIQUETA_DE_ETAPA[e]}
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-      {estado.enHubspot ? (
-        <p className="text-xs text-fg-muted">La etapa la mueve el equipo en HubSpot.</p>
-      ) : actual === "aprendizaje" ? (
-        <p className="text-xs text-fg-muted">El ciclo se cierra con la sesión de aprendizaje.</p>
-      ) : null}
     </section>
   );
 }
 
-// ── La guía del CSE ──────────────────────────────────────────────────────────
+// ── La guía del CSE para una etapa ───────────────────────────────────────────
 
-function Guia({ estado }: { estado: Estado }) {
-  const g = estado.guia;
-  if (!g) return null;
+function Guia({ estado, etapa, enCurso }: { estado: EstadoConPermiso; etapa: EtapaDelCiclo; enCurso: boolean }) {
+  const servicio = guiaDeServicio(estado.servicio);
+  const ciclo = estado.abierto;
+  if (!servicio || !ciclo) return null;
+  const g = guiaDelCiclo(servicio, { etapa, meta: ciclo.meta, desde: ciclo.desde, hasta: ciclo.hasta, casos: ciclo.casos });
   return (
     <section className="space-y-3 rounded-xl border border-line bg-surface p-5">
       <div>
-        <p className={ROTULO_DEL_SISTEMA}>Qué haces en {ETIQUETA_DE_ETAPA[g.etapa]}</p>
+        <p className={ROTULO_DEL_SISTEMA}>
+          Qué haces en {ETIQUETA_DE_ETAPA[etapa]}
+          {enCurso ? " · etapa en curso" : ""}
+        </p>
         <p className="mt-1.5 text-[13px] leading-relaxed text-fg">{g.guia.queHaces}</p>
       </div>
       <div>
@@ -375,7 +286,7 @@ function Guia({ estado }: { estado: Estado }) {
           ))}
         </ul>
       </div>
-      {g.senalVista ? (
+      {enCurso && g.senalVista ? (
         <Alert variant="warning">{g.senalVista}</Alert>
       ) : (
         <p className="text-xs text-fg-muted">
@@ -420,7 +331,7 @@ function CasosDeUso({
   onCrear,
   onCambiar,
 }: {
-  estado: Estado;
+  estado: EstadoConPermiso;
   guardando: boolean;
   onCrear: (datos: { titulo: string; criterio: string | null; metrica: string | null }) => Promise<boolean>;
   onCambiar: (datos: { id: string } & Record<string, unknown>) => Promise<boolean>;

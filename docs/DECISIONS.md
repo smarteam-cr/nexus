@@ -7811,10 +7811,18 @@ le pregunta a la persona del cliente.
 - **La etapa de un proyecto recurrente es la de su ciclo abierto** («Ciclo 1 · Implementación»), con la línea de las
   cinco etapas del método (`lib/lifecycle/load.ts`, rama de pipeline; no se tocó cómo decide el motor de 8 etapas). En
   un proyecto que existe en HubSpot la etapa sale de allá, por nombre; en uno que no (la prueba), del ciclo.
-- **La pieza «Ciclo»** (`hasCanvas: false`, como Cuestionarios) y **las piezas de un servicio recurrente** son solo
-  Ciclo, Cronograma, Cuestionarios y Exploración (`PIEZAS_DE_UN_SERVICIO_RECURRENTE`): sin kickoff, diagnóstico,
-  planificación ni entrega. El traspaso muestra «Servicio: SmartLoop» y no pide el tipo de implementación.
-- **La guía del CSE sale de la sección 5 del documento de proceso** (`lib/servicios/smartloop.ts`): por etapa, qué haces,
+- **El ciclo es un GRUPO del riel, con un artefacto por cada etapa que produce algo** (Elías, el mismo día: «¿no es
+  mejor que cada etapa del ciclo esté como un artefacto en el menú?»; una sola página «Ciclo» con un formulario adelante
+  era más pesada que el resto de Nexus). El grupo «Ciclo 1 · tramo · fechas» lleva **Diagnóstico**, **Plan del ciclo**
+  (meta y casos de uso), **Cronograma** y **Aprendizaje**; debajo, «Insumos del diagnóstico»: Cuestionarios y
+  Exploración. Implementación y Adopción NO son artefactos: no producen un documento, son trabajo que se sigue en el
+  Cronograma, y su etapa la marca él (`PIEZA_DE_LA_ETAPA`). Los artefactos del ciclo no viven en un canvas
+  (`hasCanvas: false`). No hay formulario para abrir el ciclo: el primero nace solo al abrir un artefacto, y el tramo y
+  las fechas se completan en la cabecera del ciclo, que va arriba de cada artefacto (también del Cronograma). Un servicio
+  recurrente no lleva kickoff, diagnóstico, planificación ni entrega de una implementación. El traspaso muestra
+  «Servicio: SmartLoop» y no pide el tipo de implementación.
+- **La guía del CSE sale de la sección 5 del documento de proceso** (`lib/servicios/smartloop.ts`), arriba del artefacto
+  de cada etapa: qué haces,
   qué tiene que quedar y la señal de que se saltó. Lo que Nexus puede comprobar lleva marca (hoy: casos con criterio,
   meta y fechas); lo demás va sin marca, nunca como hecho. La señal se prende solo si Nexus la ve (un caso sin criterio
   después de planificar). El «Qué sigue» del proyecto dice «Abre el ciclo N» o lo primero que falta.

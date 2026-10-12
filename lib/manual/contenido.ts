@@ -97,11 +97,20 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
     cuando:
       "Se arma en la planificación y se mantiene vivo durante todo el proyecto. Es el documento que más veces vas a abrir.",
   },
-  cycle: {
+  "cycle-diagnosis": {
     paraQue:
-      "El ciclo de un servicio recurrente como SmartLoop: el tramo con sus fechas, la meta, la etapa en la que va (de diagnóstico a aprendizaje), los casos de uso con su criterio de aceptación y lo que tienes que hacer en cada etapa.",
-    cuando:
-      "Solo en los proyectos de un servicio recurrente. Lo abres al empezar cada ciclo y lo revisas en cada sesión con el champion; el ciclo se cierra con la sesión de aprendizaje.",
+      "El diagnóstico de un ciclo de un servicio recurrente como SmartLoop: de qué nivel parte cada dimensión del área y qué retos se van a atacar. Sus insumos son la Exploración y los Cuestionarios.",
+    cuando: "Al abrir cada ciclo de un servicio recurrente: es su primera etapa. Desde el segundo ciclo puede ser simple.",
+  },
+  "cycle-plan": {
+    paraQue:
+      "El plan de un ciclo: la meta y los casos de uso, cada uno con su criterio de aceptación (cómo se va a saber que funcionó).",
+    cuando: "En la planificación del ciclo, antes de armar el cronograma con el cliente.",
+  },
+  "cycle-learning": {
+    paraQue:
+      "La sesión de cierre de un ciclo: se mide el criterio de cada caso de uso y la meta, se decide cada pendiente y se propone el siguiente ciclo.",
+    cuando: "Al final de cada ciclo. Sin ella, el ciclo no se cierra.",
   },
   questionnaires: {
     paraQue:
@@ -163,7 +172,9 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
 export const SIN_SECCIONES: Record<string, string> = {
   timeline: "Su contenido son fases y tareas en una línea de tiempo, no secciones de texto.",
   questionnaires: "Cada cuestionario tiene sus pestañas y sus preguntas, y se arma para una persona del cliente.",
-  cycle: "Es un tramo con fechas, una meta, su etapa y sus casos de uso, no secciones de texto.",
+  "cycle-diagnosis": "Es el nivel de cada dimensión del área en una fecha, no secciones de texto.",
+  "cycle-plan": "Es la meta y una lista de casos de uso con su criterio, no secciones de texto.",
+  "cycle-learning": "Es la medición de los criterios y la decisión de cada pendiente, no secciones de texto.",
   "client-info": "Se arma con los bloques que los agentes van sumando reunión tras reunión.",
   "business-case": "Sus secciones dependen del tipo de propuesta que elija Ventas al crearla.",
 };

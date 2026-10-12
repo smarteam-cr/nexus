@@ -344,7 +344,8 @@
   datos. No existe en HubSpot, no cuenta en la cartera ni en Cobranza, el clasificador no le cuelga reuniones y el
   cliente no lo ve. En la ficha lleva la marca «Proyecto de prueba». Se crea con `scripts/crear-proyecto-de-prueba.ts`.
 - **Servicio recurrente** (`PipelineDef.servicioRecurrente`, `lib/servicios`): un servicio que avanza por ciclos, hoy
-  SmartLoop. Su proyecto tiene la pieza «Ciclo» y su etapa es la del ciclo abierto. Ver `docs/smartloop-plan.md`.
+  SmartLoop. En el riel, su ciclo es un grupo con un artefacto por etapa (Diagnóstico, Plan del ciclo, Cronograma,
+  Aprendizaje) y su etapa es la del ciclo abierto. Ver `docs/smartloop-plan.md`.
 - **Ciclo** (`CicloDeProyecto`): un tramo con fechas de un servicio recurrente que pasa por las cinco etapas del método
   (Diagnóstico, Planificación, Implementación, Adopción, Aprendizaje). Abre con un diagnóstico y cierra con la sesión de
   aprendizaje; uno abierto por proyecto, y los cerrados se conservan.

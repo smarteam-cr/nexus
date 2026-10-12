@@ -80,7 +80,7 @@ Continuidad, CSE Carolina Bersot). Se prueba con un **proyecto de prueba** en pr
 - **Etapa 0 · proyecto de prueba:** hecha y en producción (18fb4806). FACO: «FACO · SmartLoop (prueba)», de
   «PLAN DE CONTINUIDAD | HONDA FACO».
 - **Etapa 1 · modo recurrente y ciclo:** en el código. SmartLoop en la tabla de pipelines, tablas `CicloDeProyecto` y
-  `CasoDeUso` (SQL `2026-10-11-ciclos-y-casos-de-uso.sql`), pieza «Ciclo» con la guía del CSE, la etapa «Ciclo N ·
+  `CasoDeUso` (SQL `2026-10-11-ciclos-y-casos-de-uso.sql`), el ciclo como grupo del riel (Diagnóstico, Plan del ciclo, Cronograma, Aprendizaje) con la guía del CSE, la etapa «Ciclo N ·
   etapa» en la ficha, el traspaso con «Servicio: SmartLoop» y el «Qué sigue». Para la prueba de FACO:
   `crear-proyecto-de-prueba.ts --de <real> --pipeline smartloop --apply` la pasa a SmartLoop.
 

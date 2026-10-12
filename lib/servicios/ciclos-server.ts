@@ -20,6 +20,7 @@ import {
   etapaDelProyecto,
   etapaPorNombre,
   leerMueve,
+  PIEZA_DE_LA_ETAPA,
   type Compromiso,
   type EtapaDelCiclo,
   type MovimientoEnLaEscala,
@@ -144,31 +145,62 @@ export async function cargarEstadoDelCiclo(projectId: string): Promise<EstadoDel
   };
 }
 
-/**
- * La fila del riel y el «Qué sigue»: «Ciclo 1 · Implementación» (o «sin abrir») y lo primero que falta en su
- * etapa, si Nexus lo puede comprobar. null si el proyecto no es recurrente.
- */
-export async function estadoDelCicloParaElRiel(
-  projectId: string,
-): Promise<{ corto: string; abierto: boolean; falta: string | null; numero: number } | null> {
+/** Lo que el riel y el «Qué sigue» necesitan del ciclo, sin cargar la página entera. */
+export interface CicloParaElRiel {
+  abierto: boolean;
+  /** El número del ciclo abierto, o el del siguiente si no hay ninguno abierto. */
+  numero: number;
+  nombre: string | null;
+  desde: string | null;
+  hasta: string | null;
+  etapa: EtapaDelCiclo | null;
+  /** «Ciclo 1 · Implementación» o «sin abrir». */
+  corto: string;
+  /** Lo primero que falta en la etapa (o la señal de que se saltó), si Nexus lo puede comprobar. */
+  falta: string | null;
+  /** El artefacto donde se trabaja la etapa en curso (lib/servicios/ciclo.ts). */
+  piezaDeLaEtapa: string | null;
+  /** El plan del ciclo está escrito: meta, y casos de uso, todos con criterio. */
+  planListo: boolean;
+}
+
+/** null si el proyecto no es recurrente. */
+export async function estadoDelCicloParaElRiel(projectId: string): Promise<CicloParaElRiel | null> {
   const p = await proyectoRecurrente(projectId).catch(() => null);
   const guiaServicio = guiaDeServicio(p?.servicio);
   if (!p?.servicio || !guiaServicio) return null;
   const c = await prisma.cicloDeProyecto.findFirst({
     where: { projectId, estado: "abierto" },
     select: {
-      numero: true, etapa: true, meta: true, desde: true, hasta: true,
+      numero: true, nombre: true, etapa: true, meta: true, desde: true, hasta: true,
       casosDeUso: { where: { estado: { not: "descartado" } }, select: { titulo: true, criterio: true } },
     },
   });
   if (!c) {
     const ultimo = await prisma.cicloDeProyecto.findFirst({ where: { projectId }, orderBy: { numero: "desc" }, select: { numero: true } });
-    return { corto: "sin abrir", abierto: false, falta: null, numero: (ultimo?.numero ?? 0) + 1 };
+    return {
+      abierto: false, numero: (ultimo?.numero ?? 0) + 1, nombre: null, desde: null, hasta: null, etapa: null,
+      corto: "sin abrir", falta: null, piezaDeLaEtapa: null, planListo: false,
+    };
   }
   const etapaLeida = p.hubspotServiceId ? (etapaPorNombre(p.hubspotPipelineStageLabel) ?? c.etapa) : c.etapa;
   const etapa = esEtapaDelCiclo(etapaLeida) ? etapaLeida : "diagnostico";
-  const g = guiaDelCiclo(guiaServicio, { etapa, meta: c.meta, desde: dia(c.desde), hasta: dia(c.hasta), casos: c.casosDeUso });
-  return { corto: etapaDelProyecto({ numero: c.numero, etapa }), abierto: true, falta: g.senalVista ?? (g.primeroQueFalta ? `Falta ${g.primeroQueFalta.charAt(0).toLowerCase()}${g.primeroQueFalta.slice(1)}.` : null), numero: c.numero };
+  const estado = { etapa, meta: c.meta, desde: dia(c.desde), hasta: dia(c.hasta), casos: c.casosDeUso };
+  const g = guiaDelCiclo(guiaServicio, estado);
+  const plan = guiaDelCiclo(guiaServicio, { ...estado, etapa: "planificacion" });
+  const faltaDelPlan = plan.producido.some((x) => (x.clave === "meta" || x.clave === "casos-con-criterio") && x.hecho === false);
+  return {
+    abierto: true,
+    numero: c.numero,
+    nombre: c.nombre,
+    desde: estado.desde,
+    hasta: estado.hasta,
+    etapa,
+    corto: etapaDelProyecto({ numero: c.numero, etapa }),
+    falta: g.senalVista ?? (g.primeroQueFalta ? `Falta ${g.primeroQueFalta.charAt(0).toLowerCase()}${g.primeroQueFalta.slice(1)}.` : null),
+    piezaDeLaEtapa: PIEZA_DE_LA_ETAPA[etapa],
+    planListo: !faltaDelPlan,
+  };
 }
 
 const fecha = (s: string | null | undefined) => (s ? new Date(`${s}T00:00:00.000Z`) : null);
