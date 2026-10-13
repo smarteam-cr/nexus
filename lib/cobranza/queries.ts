@@ -42,6 +42,7 @@ import {
   type MonedaTarjeta,
 } from "./tarjetas";
 import { coberturaDe, periodoDe, periodosDeAguinaldo, quincenasDistintas } from "./planilla";
+import { quincenasQueFaltanGenerar } from "./planilla-server";
 import {
   detectarInconsistencias,
   type EstadoParaAuditar,
@@ -1852,6 +1853,11 @@ export interface LibroPlanillaDTO {
   cobertura: { registradas: number; posibles: number; texto: string };
   /** Los períodos que abarca el libro hoy, del más viejo al más nuevo. */
   periodos: string[];
+  /**
+   * Las quincenas que faltan generar hasta la de hoy: sin ninguna fila o a medias (lib/cobranza/planilla-server.ts). Las
+   * calcula el servidor con el catálogo de salarios: es la misma lista que completa «Completar las que faltan».
+   */
+  porGenerar: Array<{ periodo: string; quincena: 1 | 2 }>;
 }
 
 /**
@@ -1991,7 +1997,8 @@ export async function loadCalendarioPlanilla(
   );
 }
 
-export async function loadLibroPlanilla(): Promise<LibroPlanillaDTO> {
+export async function loadLibroPlanilla(hoyISO: string = crDateParts(new Date()).dateKey): Promise<LibroPlanillaDTO> {
+  const porGenerar = quincenasQueFaltanGenerar(hoyISO);
   const filas = await prisma.pagoPlanilla.findMany({
     include: {
       comisiones: {
@@ -2043,6 +2050,7 @@ export async function loadLibroPlanilla(): Promise<LibroPlanillaDTO> {
     pagos,
     cobertura: coberturaDe(quincenasDistintas(pagos), periodos),
     periodos,
+    porGenerar: await porGenerar,
   };
 }
 

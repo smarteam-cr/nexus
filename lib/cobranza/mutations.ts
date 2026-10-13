@@ -79,8 +79,9 @@ import type {
   partnerPatchSchema,
 } from "./schema";
 import { montoQuincena } from "./engine";
-import { periodoDe, quincenaDe, quincenasDelPeriodo, quincenasPorGenerar } from "./planilla";
+import { periodoDe, quincenaDe, quincenasDelPeriodo } from "./planilla";
 import { salarioVigenteEn, type MovimientoDeSalario } from "./calendario-planilla";
+import { cargarSalariosPorPersona, quincenasQueFaltanGenerar, salarioDeLaPersonaEn } from "./planilla-server";
 import { buildCarteraEngineInput, loadComisionesVendedor } from "./queries";
 import { huellaDeBorrado, huellaEditadaPorOtro, mismaPersona } from "@/lib/finanzas/revision";
 import { etiquetaMes } from "@/lib/finanzas/gastos";
@@ -2276,57 +2277,25 @@ export async function corregirQuincenaPagada(
  *
  * Mismo contrato que `generarQuincena`: CREATE-ONLY y PENDIENTE. Nada queda pagado: lo marca una persona, con su fecha.
  * `soloLaDeHoy`: la que usa el job diario, para que la quincena en curso exista sin que nadie apriete nada.
+ *
+ * ⭐ Una quincena que quedó A MEDIAS también falta (2026-10-12, lib/cobranza/planilla-server.ts): completarla agrega a
+ * quien no está, y la fila que ya existe no se toca (`skipDuplicates` sobre persona + período + quincena).
  */
 export async function completarQuincenas(
   hoyISO: string,
   opciones: { soloLaDeHoy?: boolean } = {},
 ): Promise<{ quincenas: Array<{ periodo: string; quincena: 1 | 2; creadas: number }>; sinSalario: number }> {
-  const generadas = await prisma.pagoPlanilla.findMany({ distinct: ["periodo", "quincena"], select: { periodo: true, quincena: true } });
-  const lista = opciones.soloLaDeHoy ? [{ periodo: periodoDe(hoyISO), quincena: quincenaDe(hoyISO) }] : quincenasPorGenerar(generadas, hoyISO);
+  /* Por persona (lib/cobranza/planilla-server.ts). Un salario sin persona no entra, como en `generarQuincena`. */
+  const { personas, sinSalario } = await cargarSalariosPorPersona();
+  const lista = opciones.soloLaDeHoy ? [{ periodo: periodoDe(hoyISO), quincena: quincenaDe(hoyISO) }] : await quincenasQueFaltanGenerar(hoyISO, personas);
   if (lista.length === 0) return { quincenas: [], sinSalario: 0 };
-
-  const salarios = await prisma.costoRecurrente.findMany({
-    where: { categoria: "SALARIO" },
-    select: {
-      teamMemberId: true,
-      nombre: true,
-      monto: true,
-      moneda: true,
-      activo: true,
-      finalizadoEl: true,
-      teamMember: { select: { name: true } },
-      movimientos: { select: { tipo: true, fechaEfectiva: true, monto: true, montoAnterior: true, moneda: true } },
-    },
-  });
-  /* Por persona, juntando los movimientos de todos sus costos de salario (el nombre del costo cambia con el puesto: se
-     ata por `teamMemberId`, igual que el calendario). Un salario sin persona no entra, como en `generarQuincena`. */
-  const personas = new Map<string, { nombre: string; movimientos: MovimientoDeSalario[]; actual: { monto: number; moneda: string } | null }>();
-  let sinSalario = 0;
-  for (const sal of salarios) {
-    if (!sal.teamMemberId) {
-      if (sal.activo && sal.finalizadoEl === null) sinSalario++;
-      continue;
-    }
-    const p = personas.get(sal.teamMemberId) ?? { nombre: sal.teamMember?.name ?? sal.nombre, movimientos: [], actual: null };
-    p.movimientos.push(
-      ...sal.movimientos.map((m) => ({
-        tipo: m.tipo,
-        fechaEfectiva: m.fechaEfectiva.toISOString().slice(0, 10),
-        monto: Number(m.monto),
-        montoAnterior: m.montoAnterior === null ? null : Number(m.montoAnterior),
-        moneda: m.moneda as string,
-      })),
-    );
-    if (sal.activo && sal.finalizadoEl === null) p.actual = { monto: Number(sal.monto), moneda: sal.moneda as string };
-    personas.set(sal.teamMemberId, p);
-  }
 
   const quincenas: Array<{ periodo: string; quincena: 1 | 2; creadas: number }> = [];
   for (const q of lista) {
     const dia = quincenasDelPeriodo(q.periodo).find((x) => x.quincena === q.quincena);
     if (!dia) continue;
     const filas = [...personas.entries()].flatMap(([id, p]) => {
-      const salario = p.movimientos.length > 0 ? salarioVigenteEn(p.movimientos, dia.fechaProgramada) : p.actual;
+      const salario = salarioDeLaPersonaEn(p, dia.fechaProgramada);
       if (!salario) return [];
       return [
         {

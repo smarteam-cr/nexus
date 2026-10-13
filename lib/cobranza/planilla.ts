@@ -161,9 +161,10 @@ export function quincenasDistintas(
  * ⚠ Huecos, no «de la última en adelante»: medido en prod el 2026-10-06, alguien ya había generado la 1.ª de octubre con
  * el botón viejo, y agosto (2.ª) y septiembre quedaban EN MEDIO. Mirando solo hacia adelante desde la última, el hueco
  * no se veía nunca más.
- * ⚠ Una quincena con alguna fila cuenta como generada: si le falta una persona, eso lo dice el calendario de cada una, no
- * esto. Sin ninguna generada, solo la de hoy. Más atrás de un año no se mira: eso ya no es un atraso, es un libro que
- * nadie llevaba (lo declara `coberturaDe`, que no fabrica).
+ * ⚠ `generadas` son las quincenas que ya cuentan como generadas: las que quedaron a medias se sacan antes
+ * (`quincenasGeneradas`). Si a una quincena llena le falta una persona, eso lo dice el calendario de cada una, no esto.
+ * Sin ninguna generada, solo la de hoy. Más atrás de un año no se mira: eso ya no es un atraso, es un libro que nadie
+ * llevaba (lo declara `coberturaDe`, que no fabrica).
  */
 export function quincenasPorGenerar(
   generadas: ReadonlyArray<{ periodo: string; quincena: number }>,
@@ -191,6 +192,29 @@ export function quincenasPorGenerar(
     }
   }
   return out;
+}
+
+/**
+ * ¿La quincena quedó A MEDIAS? (2026-10-12) Tiene filas de menos de la mitad de las personas que tenían salario en ella.
+ * Pasa cuando alguien anota UNA persona desde el calendario en una quincena que nadie generó: medido en prod ese día, la
+ * 2.ª de agosto y las dos de septiembre tenían solo a Alejandra, de 11 a 13 personas.
+ *
+ * ⚠ Una o dos personas que faltan en una quincena llena NO la dejan a medias: eso puede ser a propósito (alguien que
+ * entró después, o que se pagó por otro lado) y lo dice el calendario de cada una. Medido el mismo día: en julio y la
+ * 1.ª de agosto faltaban 1 o 2 de 13, y esas filas no se fabrican.
+ */
+export function quincenaAMedias(filas: number, esperadas: number): boolean {
+  return filas * 2 < esperadas;
+}
+
+/** De las quincenas que tienen filas, las que cuentan como generadas: todas menos las que quedaron a medias. */
+export function quincenasGeneradas(
+  conteos: ReadonlyArray<{ periodo: string; quincena: number; filas: number }>,
+  esperadasEn: (periodo: string, quincena: 1 | 2) => number,
+): Array<{ periodo: string; quincena: number }> {
+  return conteos
+    .filter((c) => (c.quincena !== 1 && c.quincena !== 2) || !quincenaAMedias(c.filas, esperadasEn(c.periodo, c.quincena)))
+    .map(({ periodo, quincena }) => ({ periodo, quincena }));
 }
 
 /**

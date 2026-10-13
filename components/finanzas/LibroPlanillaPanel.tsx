@@ -26,7 +26,6 @@ import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { Button, PageHeader, EmptyState, Modal, Field, Input } from "@/components/ui";
 import { etiquetaMes, fmtFecha, fmtMonto } from "@/components/cobranza/format";
-import { quincenasPorGenerar } from "@/lib/cobranza/planilla";
 import { parseMontoLocal } from "@/lib/cobranza/import-core";
 
 interface Props {
@@ -51,8 +50,9 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
   const [pagando, setPagando] = useState<PagoPlanillaDTO | null>(null);
   const [pagandoQuincena, setPagandoQuincena] = useState<{ periodo: string; quincena: 1 | 2; pagos: PagoPlanillaDTO[] } | null>(null);
 
-  /* Lo que falta generar: las quincenas del último año, hasta la de hoy, que no tienen ninguna fila. */
-  const porGenerar = useMemo(() => quincenasPorGenerar(libro.pagos, todayISO), [libro.pagos, todayISO]);
+  /* Lo que falta generar: las quincenas del último año, hasta la de hoy, sin ninguna fila o a medias. La lista la arma el
+     servidor con el catálogo de salarios (lib/cobranza/planilla-server.ts): es la misma que completa el botón. */
+  const porGenerar = libro.porGenerar;
 
   const grupos = useMemo(() => {
     const porPeriodo = new Map<string, PagoPlanillaDTO[]>();

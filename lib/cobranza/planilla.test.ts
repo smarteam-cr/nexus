@@ -17,7 +17,9 @@ import {
   primeraQuincenaDe,
   quincenaDe,
   quincenasDelPeriodo,
+  quincenaAMedias,
   quincenasDistintas,
+  quincenasGeneradas,
   quincenasPorGenerar,
 } from "./planilla";
 
@@ -62,6 +64,40 @@ describe("quincenasPorGenerar — «Completar las que faltan» (2026-10-06)", ()
 
   it("una generada por adelantado no fabrica nada", () => {
     expect(quincenasPorGenerar([{ periodo: "2026-11", quincena: 1 }], "2026-10-06")).toEqual([]);
+  });
+});
+
+describe("quincenaAMedias · quincenasGeneradas — una quincena con una sola persona no está generada (2026-10-12)", () => {
+  /** El libro como estaba en prod el 2026-10-12: Alejandra anotada sola desde el calendario en agosto (2.ª) y septiembre. */
+  const conteos = [
+    { periodo: "2026-07", quincena: 1, filas: 12 },
+    { periodo: "2026-07", quincena: 2, filas: 12 },
+    { periodo: "2026-08", quincena: 1, filas: 12 },
+    { periodo: "2026-08", quincena: 2, filas: 1 },
+    { periodo: "2026-09", quincena: 1, filas: 1 },
+    { periodo: "2026-09", quincena: 2, filas: 1 },
+    { periodo: "2026-10", quincena: 1, filas: 16 },
+  ];
+  /** Las personas con salario en cada quincena, según el catálogo. */
+  const esperadas: Record<string, number> = { "2026-07|1": 13, "2026-07|2": 13, "2026-08|1": 14, "2026-08|2": 11, "2026-09|1": 13, "2026-09|2": 14, "2026-10|1": 16 };
+  const esperadasEn = (p: string, q: 1 | 2) => esperadas[`${p}|${q}`] ?? 0;
+
+  it("menos de la mitad está a medias; la mitad o más, no", () => {
+    expect(quincenaAMedias(1, 13)).toBe(true);
+    expect(quincenaAMedias(6, 13)).toBe(true);
+    expect(quincenaAMedias(7, 13)).toBe(false);
+    expect(quincenaAMedias(12, 13)).toBe(false);
+    expect(quincenaAMedias(0, 0)).toBe(false);
+  });
+
+  it("⭐ las de una sola persona vuelven a faltar; las llenas a las que les falta alguien, no (eso es de cada persona)", () => {
+    const generadas = quincenasGeneradas(conteos, esperadasEn);
+    expect(generadas.map((g) => `${g.periodo}|${g.quincena}`)).toEqual(["2026-07|1", "2026-07|2", "2026-08|1", "2026-10|1"]);
+    expect(quincenasPorGenerar(generadas, "2026-10-12")).toEqual([
+      { periodo: "2026-08", quincena: 2 },
+      { periodo: "2026-09", quincena: 1 },
+      { periodo: "2026-09", quincena: 2 },
+    ]);
   });
 });
 
