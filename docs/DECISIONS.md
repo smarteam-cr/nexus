@@ -7828,3 +7828,57 @@ le pregunta a la persona del cliente.
   después de planificar). El «Qué sigue» del proyecto dice «Abre el ciclo N» o lo primero que falta.
 - **Leer el ciclo pide acceso al proyecto; cambiarlo, editar el cronograma** (`guardTimelineEdit`). Quitar un caso de
   uso lo deja descartado, no lo borra.
+
+## El catálogo de casos de uso: resultados atados a la escala, en el repo (2026-10-12)
+
+> Pedido de Elías: un catálogo mínimo de casos de uso para la preventa y las propuestas, que diga el RESULTADO que
+> obtiene el cliente y no el trabajo, con HubSpot, Insider y la creación de activos, apoyado en la escala 8.8. Lo revisa
+> el equipo en Nexus y sugiere cambios o casos nuevos. Diseño aprobado: «Catálogo de casos de uso» (Claude Design,
+> tableros Main, EnLaEscala, Caso, Sugerir y Proponer).
+
+- **El catálogo vive en el repo** (`lib/casos-de-uso/catalogo.ts`, 26 casos), no en la tabla `UseCase`. *Por qué:* cada
+  caso cita criterios de la escala y `catalogo.test.ts` verifica contra la escala del repo que existan, que caigan en una
+  dimensión que el caso dice mover y entre su nivel de partida y el de llegada; en la base no hay prueba que lo sostenga.
+  La tabla estaba vacía en producción (medido el 2026-10-11), así que su pantalla de administración se retiró; sus rutas
+  y `BusinessCaseUseCase` quedan para la fase 2 (el precio).
+- **Cuatro tipos, los de la escala** («Land and expand»): aterrizar, reactivar, expandir y complementario. Uno que
+  aterriza o reactiva llega a Funcional; uno complementario no cita criterios.
+- **Dos vistas**: «Por tipo» (tarjetas con el salto de nivel por área, filtros por área, herramienta, tipo, servicio y
+  nivel de partida, y un buscador que mira también lo que dice el cliente) y «En la escala» (cuántos casos suben cada
+  dimensión, y los huecos). La vista y la dimensión van en la dirección. Cada caso tiene su página
+  (`/sales/use-cases/<id>`) con los criterios palabra por palabra de la escala PUBLICADA. La nota interna (`aviso`) no
+  sale en ninguna pantalla ni le llega al agente.
+- **Se sugiere por Feedback, no se edita en Nexus (v1).** «Sugerir un cambio» abre el panel con el caso y la parte;
+  «Proponer un caso nuevo», un formulario propio sin captura. Los dos son reportes comunes: el caso va escrito al
+  principio del texto (`lib/casos-de-uso/feedback.ts`), sin columna nueva. *Por qué:* el catálogo es código; una edición
+  en pantalla no tendría dónde guardarse.
+- **Lo ve quien tiene Preventa** (`preventa.read`, también en el menú), además de Ventas: lo usa la preventa.
+- **La preventa parte del catálogo.** El agente de casos recibe los casos que tocan las áreas en juego y usa uno si calza
+  (su id en `catalogo` y su título tal cual: el código pone el título, no el modelo); propone uno propio solo si ninguno
+  calza. Un caso del catálogo se guarda como `cat-<id>` (`lib/casos-de-uso/en-la-preventa.ts`): no es un caso libre
+  (`ia-…`) ni una fila de `UseCase`, así que no crea `BusinessCaseUseCase` y entra a la propuesta como contexto, con lo
+  que el cliente obtiene. La lista «Del catálogo de Smarteam» muestra los de las áreas en juego, con enlace a su ficha.
+- **Fase 2, pendiente:** las licencias (hubs, ediciones y asientos) y el precio de cada caso.
+
+## Servicios recurrentes: el ciclo con los documentos de siempre (2026-10-12)
+
+> Elías, sobre el diseño del 2026-10-11 desplegado: usar el diseño que ya está codeado, optimizado para el CSE de un
+> servicio recurrente. Supera, de la sección anterior, el ciclo como grupo con «Diagnóstico del ciclo» y «Plan del ciclo».
+
+- **Importa la etapa del ciclo, no su número.** La tarjeta de la etapa del Resumen dice «Implementación · 3 de 5» con el
+  ciclo y sus fechas al lado, y es el control del ciclo: «Cambiar etapa» hacia adelante o hacia atrás (solo sin HubSpot;
+  con HubSpot, la encuesta), «Editar el ciclo» y lo que tiene que quedar en la etapa. Sin ciclo abierto, el proyecto está
+  en Diagnóstico y el primero se abre solo al cambiar algo (antes decía «Sin ciclo abierto» y contradecía al «Qué sigue»).
+- **La etapa que muestran los documentos es una sugerencia**: con el Diagnóstico escrito, Planificación; con la
+  Planificación, Implementación. Nunca mueve la etapa sola.
+- **El ciclo usa los documentos de siempre**: Exploración, Diagnóstico, Planificación, Integraciones y Entrega, más
+  Adopción y Aprendizaje, propios del ciclo. El Cronograma va junto al Resumen. El plan del ciclo responde al
+  Diagnóstico y a la Planificación: no hay un artefacto aparte.
+- **Los casos de uso y la escala son secciones de la cuenta**, para toda empresa. La escala junta, por ahora, los
+  niveles CONFIRMADOS de las exploraciones de la empresa (la preventa y la de cada proyecto) con su fecha; guardar la
+  posición del Diagnóstico de cada ciclo es lo que sigue.
+- **El Resumen de un recurrente suma lo que debe el cliente, los hitos y las sesiones fijas**, calculados al abrir: las
+  tareas del cronograma con responsable CLIENTE, el fin de cada fase y las series del calendario con la empresa.
+- **Las piezas del riel se ocultan** (en todo proyecto): `Project.piezasOcultas`, del proyecto y no de una persona, y
+  cosmético (lo cambia cualquiera con acceso). No borra ni apaga nada: quedan en «Ver N piezas más».
+

@@ -120,6 +120,13 @@
   la aprueba el CSE (o el CSL o dirección). Si una reunión muestra que el proyecto avanzó, queda una **etapa
   sugerida** (`Project.etapaPropuesta*`) con la frase de la reunión, y esa respuesta viene marcada. HubSpot → Nexus
   sigue siendo el espejo. Ver DECISIONS §La etapa se sincroniza con HubSpot en los dos sentidos.
+- **Catálogo de casos de uso** (Ventas › Casos de uso, `/sales/use-cases`, `lib/casos-de-uso/catalogo.ts`): lo que un
+  cliente consigue con Smarteam, caso por caso: el resultado (nunca el trabajo), lo que dice el cliente cuando lo
+  necesita, lo que obtiene y qué mueve en la Escala de Rendimiento (dimensión, de qué nivel a cuál y qué criterios). Cuatro
+  tipos: **aterrizar** (lleva un área a Funcional), **reactivar** (un HubSpot que no se usa), **expandir** (desde
+  Funcional) y **complementario** (no mueve la escala). Vive en el repo, no en la base: se mira en Nexus, se sugiere un
+  cambio o un caso nuevo por Feedback y se edita en el código. Lo usan la preventa (ids `cat-…`) y la propuesta. Las
+  licencias y el precio son la fase 2. No es el `CasoDeUso` de SmartLoop (lo que se hace en un ciclo).
 - **Propuesta comercial** (modelo `BusinessCase`): lo que Ventas le arma a un prospecto —qué le
   duele, qué le proponemos, qué gana y cuánto cuesta—. Vive FUERA del proyecto, porque todavía no
   hay proyecto. **Se llamaba "Business Case" hasta el 2026-08-03**; el renombre fue solo del
@@ -344,8 +351,12 @@
   datos. No existe en HubSpot, no cuenta en la cartera ni en Cobranza, el clasificador no le cuelga reuniones y el
   cliente no lo ve. En la ficha lleva la marca «Proyecto de prueba». Se crea con `scripts/crear-proyecto-de-prueba.ts`.
 - **Servicio recurrente** (`PipelineDef.servicioRecurrente`, `lib/servicios`): un servicio que avanza por ciclos, hoy
-  SmartLoop. En el riel, su ciclo es un grupo con un artefacto por etapa (Diagnóstico, Plan del ciclo, Cronograma,
-  Aprendizaje) y su etapa es la del ciclo abierto. Ver `docs/smartloop-plan.md`.
+  SmartLoop. En el riel, el Cronograma va junto al Resumen y el ciclo es un grupo «Ciclo · <etapa>» con los documentos de
+  siempre más Adopción y Aprendizaje; su etapa es la del ciclo abierto. Ver `docs/smartloop-plan.md`.
+- **Pieza oculta** (`Project.piezasOcultas`): una pieza del riel que el equipo ocultó en ese proyecto; queda en «Ver N
+  piezas más», no se borra ni se apaga.
+- **La escala de la empresa** (La cuenta › La escala): dónde está la empresa en cada área de la escala, con la fecha y de
+  dónde sale (las exploraciones con niveles confirmados). Sirve venga o no de una preventa.
 - **Ciclo** (`CicloDeProyecto`): un tramo con fechas de un servicio recurrente que pasa por las cinco etapas del método
   (Diagnóstico, Planificación, Implementación, Adopción, Aprendizaje). Abre con un diagnóstico y cierra con la sesión de
   aprendizaje; uno abierto por proyecto, y los cerrados se conservan.
