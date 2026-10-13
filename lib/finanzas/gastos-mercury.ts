@@ -122,6 +122,8 @@ const ALIAS: Record<string, string[]> = {
   amazonwebservices: ["aws"],
   googleworkspace: ["gsuite", "googlegsuite"],
   magnific: ["freepik"],
+  // El tema de WordPress se cobra como «Elegant Themes» y en Nexus se llama por su producto (2026-10-12).
+  elegantthemes: ["divi"],
 };
 
 /** Qué tanto se parece un recurrente de Nexus a un comercio: 3 = mismo nombre o alias, 2 = uno contiene al otro, 1 = una palabra. */

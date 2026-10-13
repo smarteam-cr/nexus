@@ -79,6 +79,7 @@ describe("los nombres", () => {
     expect(parecido("AWS", "Amazon Web Services")).toBe(3);
     expect(parecido("Mercury", "Mercury Technologies, Inc.")).toBe(2);
     expect(parecido("Userback.io", "Userback")).toBe(2);
+    expect(parecido("DIVI", "Elegant Themes")).toBe(3);
     expect(parecido("Atom Chat", "Hubspot")).toBe(0);
   });
 });
