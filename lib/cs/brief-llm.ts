@@ -13,7 +13,15 @@
  * mismo corte, así que el segundo intento pide explícitamente ser más breve. Si vuelve a cortarse,
  * se rinde con un error que dice la causa real en vez de un JSON a medias que el parser
  * reportaría como «malformado» — que mandaría a buscar el problema al lugar equivocado.
+ *
+ * ── LA SALIDA ES UNA HERRAMIENTA (2026-10-12) ────────────────────────────────
+ * El modelo escribía el JSON como texto y, con citas que traen comillas rectas sin escapar, a veces
+ * no se podía leer («output del agente con JSON inválido», el resumen de Honda FACO el 10 y el 12 de
+ * octubre). Ahora la respuesta llega por una herramienta forzada (`registrar_brief`): la API arma el
+ * objeto, así que no hay comillas que escapar. Se devuelve como JSON para que `brief-citas.ts` lo
+ * valide igual que siempre.
  */
+import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/lib/anthropic";
 
 export const BRIEF_MODEL = "claude-sonnet-4-6";
@@ -23,9 +31,34 @@ export const BRIEF_MODEL = "claude-sonnet-4-6";
  */
 export const BRIEF_MAX_TOKENS = 5000;
 
+/** La forma del brief. `narrativa` es opcional: el brief de CUENTA no la pide. */
+const HERRAMIENTA_DEL_BRIEF: Anthropic.Tool = {
+  name: "registrar_brief",
+  description: "Registra el resumen con cada afirmación y la fuente que la respalda.",
+  input_schema: {
+    type: "object",
+    properties: {
+      headline: { type: "string", description: "La frase de arriba del resumen." },
+      narrativa: { type: "string", description: "Dos o tres párrafos, si las instrucciones la piden." },
+      statements: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            text: { type: "string" },
+            source: { type: "string", description: "La etiqueta de la fuente, tal como aparece en el material." },
+          },
+          required: ["text", "source"],
+        },
+      },
+    },
+    required: ["headline", "statements"],
+  },
+};
+
 /**
- * Pide el brief y devuelve el texto crudo. El parseo y la validación de citas son de
- * `brief-citas.ts` — acá no se interpreta nada.
+ * Pide el brief y devuelve su JSON. El parseo y la validación de citas son de `brief-citas.ts`:
+ * acá no se interpreta nada.
  *
  * @param instruccion qué se le pide redactar; es lo único que cambia entre cuenta y proyecto.
  */
@@ -39,6 +72,8 @@ export async function generarTextoDeBrief(
       model: BRIEF_MODEL,
       max_tokens: BRIEF_MAX_TOKENS,
       system: systemPrompt,
+      tools: [HERRAMIENTA_DEL_BRIEF],
+      tool_choice: { type: "tool", name: HERRAMIENTA_DEL_BRIEF.name },
       messages: [
         {
           role: "user",
@@ -48,16 +83,21 @@ export async function generarTextoDeBrief(
           // (1.024 tokens en Sonnet) la marca no hace nada, y no falla.
           content: [
             { type: "text", text: serialized, cache_control: { type: "ephemeral" } },
-            { type: "text", text: `\n\n${instruccion} Devolvé SOLO el JSON.${extra}` },
+            { type: "text", text: `\n\n${instruccion} Entrégalo con la herramienta ${HERRAMIENTA_DEL_BRIEF.name}.${extra}` },
           ],
         },
       ],
     });
-  const textoDe = (msg: Awaited<ReturnType<typeof pedir>>) =>
-    msg.content
-      .map((b) => (b.type === "text" ? (b as { text: string }).text : ""))
+  /* Sin el bloque de la herramienta (no debería pasar con tool_choice forzado) cae al texto: el parser
+     dice entonces qué faltó. */
+  const salidaDe = (msg: Awaited<ReturnType<typeof pedir>>) => {
+    const uso = msg.content.find((b) => b.type === "tool_use");
+    if (uso && uso.type === "tool_use") return JSON.stringify(uso.input);
+    return msg.content
+      .map((b) => (b.type === "text" ? b.text : ""))
       .join("")
       .trim();
+  };
 
   let msg = await pedir("");
   if (msg.stop_reason === "max_tokens") {
@@ -65,5 +105,5 @@ export async function generarTextoDeBrief(
     msg = await pedir("\n\nIMPORTANTE: sé conciso — máximo 8 afirmaciones, sin repetir.");
     if (msg.stop_reason === "max_tokens") throw new Error("output del agente truncado (max_tokens)");
   }
-  return textoDe(msg);
+  return salidaDe(msg);
 }
