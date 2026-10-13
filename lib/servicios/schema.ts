@@ -45,3 +45,17 @@ export const crearCasoSchema = z.object({ titulo: z.string().trim().min(1).max(2
 export const actualizarCasoSchema = z
   .object({ id: z.string().min(1), titulo: z.string().max(200).optional(), quitar: z.boolean().optional(), ...datosDeCaso })
   .strict();
+
+/** Un caso de uso de la EMPRESA (La cuenta › Casos de uso): al plan de crecimiento o al ciclo abierto de un proyecto. */
+export const crearCasoDeLaEmpresaSchema = z
+  .object({ titulo: z.string().trim().min(1).max(200), projectId: z.string().min(1).max(60).nullable().optional(), ...datosDeCaso })
+  .strict();
+
+export const actualizarCasoDeLaEmpresaSchema = z
+  .object({
+    titulo: z.string().max(200).optional(),
+    quitar: z.boolean().optional(),
+    estado: z.enum(["sugerido", "en_plan", "cumplido", "no_cumplido"]).optional(),
+    ...datosDeCaso,
+  })
+  .strict();

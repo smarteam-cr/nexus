@@ -48,6 +48,23 @@ pasar a recurrente con casos de uso concretos.
   que cualquier tipo de proyecto activa. Un servicio recurrente nuevo es configuración (una fila de
   pipeline + su guía desde su documento de proceso), no código nuevo.
 
+- **La escala es una sección de la empresa, para todas** (Elías, 2026-10-12): «La cuenta › La escala»
+  guarda la posición fechada de cada área y dimensión, venga o no la empresa de una preventa. Sin
+  posición, la sección ofrece tres caminos: el diagnóstico del ciclo, el cuestionario de la escala o una
+  estimación de Nexus (solo donde hay una pista del cliente). Hoy no existe dónde guardarla: hace falta
+  una tabla nueva (SQL aditivo), con la forma de `EstimadoGuardado` y los niveles derivados con
+  `calcularChequeo`.
+- **El diagnóstico del ciclo posiciona al cliente**: las 8 dimensiones de cada área y unidad, nivel
+  calculado y nivel del CSE (con su razón si difieren), «no aplica» con razón. La IA propone con la
+  evidencia de las reuniones; el CSE confirma. Al guardar queda en la escala de la empresa.
+- **La etapa del ciclo se deduce de lo que existe** (diagnóstico guardado, plan aprobado, casos en
+  curso, aprendizaje hecho) y el CSE la corrige hacia adelante o hacia atrás.
+- **El Resumen de un recurrente es del servicio**, no de una implementación: ciclo con tramo y día,
+  meta, etapa, la escala de partida y objetivo, casos de uso, ruta del año, dependencias de FACO, hitos
+  y sesiones fijas. Sin el handoff de implementación.
+
+Diseño: https://claude.ai/artifact/8j9tXPbVSaKWGzXZkVg7FJ (2026-10-12).
+
 ## Prueba con FACO
 
 FACO en Nexus es **Honda Costa Rica** (proyecto real: «PLAN DE CONTINUIDAD | HONDA FACO», etapa
@@ -80,9 +97,31 @@ Continuidad, CSE Carolina Bersot). Se prueba con un **proyecto de prueba** en pr
 - **Etapa 0 · proyecto de prueba:** hecha y en producción (18fb4806). FACO: «FACO · SmartLoop (prueba)», de
   «PLAN DE CONTINUIDAD | HONDA FACO».
 - **Etapa 1 · modo recurrente y ciclo:** en el código. SmartLoop en la tabla de pipelines, tablas `CicloDeProyecto` y
-  `CasoDeUso` (SQL `2026-10-11-ciclos-y-casos-de-uso.sql`), el ciclo como grupo del riel (Diagnóstico, Plan del ciclo, Cronograma, Aprendizaje) con la guía del CSE, la etapa «Ciclo N ·
-  etapa» en la ficha, el traspaso con «Servicio: SmartLoop» y el «Qué sigue». Para la prueba de FACO:
-  `crear-proyecto-de-prueba.ts --de <real> --pipeline smartloop --apply` la pasa a SmartLoop.
+  `CasoDeUso` (SQL `2026-10-11-ciclos-y-casos-de-uso.sql`), el traspaso con «Servicio: SmartLoop» y el «Qué sigue». Para
+  la prueba de FACO: `crear-proyecto-de-prueba.ts --de <real> --pipeline smartloop --apply` la pasa a SmartLoop.
+- **El riel y la etapa, rehechos sobre lo que ya existe (2026-10-12, pedido de Elías):** sin código desplegado. SQL
+  `2026-10-12-piezas-ocultas.sql` antes del deploy.
+  - Riel: Resumen y Cronograma arriba; el grupo «Ciclo · <etapa>» con los documentos de siempre (Cuestionarios,
+    Exploración, Diagnóstico, Planificación, Integraciones, Entrega) más Adopción y Aprendizaje. Se fueron «Diagnóstico
+    del ciclo» y «Plan del ciclo».
+  - La tarjeta de la etapa del Resumen es la del ciclo: «Cambiar etapa» hacia adelante o hacia atrás, «Editar el ciclo»
+    (tramo, fechas, meta, compromiso), la sugerencia de la etapa que muestran los documentos y lo que tiene que quedar.
+    Sin ciclo abierto el proyecto está en Diagnóstico; el primero se abre solo al cambiar algo.
+  - Panel del Resumen: lo que debe el cliente (tareas del cronograma con responsable CLIENTE), los hitos (el fin de
+    cada fase) y las sesiones fijas (las series del calendario con la empresa).
+  - Ocultar piezas del riel (en una implementación y en un recurrente): quedan en «Ver N piezas más».
+  - La cuenta suma «La escala» (dónde está la empresa en cada área, con la fecha y de dónde sale; sirve sin preventa)
+    y «Casos de uso» (en un ciclo, en el plan de crecimiento, sugeridos y cerrados).
+
+## Orden desde el 2026-10-12
+
+1. ~~Arreglos del ciclo~~ y ~~la escala y los casos de uso como secciones de la cuenta~~ (en el código).
+2. Guardar la posición en la escala con su fecha cuando el Diagnóstico la cierra (hoy La escala junta lo confirmado en
+   las exploraciones), y que el Diagnóstico de un recurrente posicione.
+3. El traductor (etapa 5) con el plan de 60 días de FACO cargado en el proyecto de prueba.
+4. Cronograma del ciclo (etapa 3) y aprendizaje y cierre (etapa 4), antes del 6 nov: al cerrar un ciclo, se congelan
+   sus documentos y quedan en «Ciclos anteriores».
+5. Etapas 6, 7 y 8, y la migración.
 
 ## Para cuando lleguen los proyectos reales (la migración)
 

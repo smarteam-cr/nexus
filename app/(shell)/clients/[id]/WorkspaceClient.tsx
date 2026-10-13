@@ -13,6 +13,8 @@ import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
 import SolicitudesFueraDeAlcance from "@/components/clients/SolicitudesFueraDeAlcance";
 import { PESTANA_DE_SOLICITUDES } from "@/lib/sessions/solicitudes-fuera-de-alcance";
+import EscalaDeLaCuenta from "@/components/clients/EscalaDeLaCuenta";
+import CasosDeUsoDeLaCuenta from "@/components/clients/CasosDeUsoDeLaCuenta";
 import AltaTrabada from "@/components/projects/AltaTrabada";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
 import RielDelCliente, { type ProyectoDelRiel } from "@/components/clients/RielDelCliente";
@@ -34,9 +36,11 @@ import {
 const STRATEGY_TAB_ID = SENTINEL_SERVICE_TYPE;
 const PROCESOS_TAB_ID = "__procesos__";
 const SOLICITUDES_TAB_ID = PESTANA_DE_SOLICITUDES;
+const ESCALA_TAB_ID = "__escala__";
+const CASOS_TAB_ID = "__casos__";
 /** Las pestañas de La cuenta: no son un proyecto. */
 const esDeLaCuenta = (id: string | null | undefined) =>
-  id === STRATEGY_TAB_ID || id === PROCESOS_TAB_ID || id === SOLICITUDES_TAB_ID;
+  id === STRATEGY_TAB_ID || id === PROCESOS_TAB_ID || id === SOLICITUDES_TAB_ID || id === ESCALA_TAB_ID || id === CASOS_TAB_ID;
 
 interface ProjectSummary {
   id: string;
@@ -521,6 +525,8 @@ function ProjectSection({
   const isStrategy = activeProjectId === STRATEGY_TAB_ID;
   const isProcesos = activeProjectId === PROCESOS_TAB_ID;
   const isSolicitudes = activeProjectId === SOLICITUDES_TAB_ID;
+  const isEscala = activeProjectId === ESCALA_TAB_ID;
+  const isCasos = activeProjectId === CASOS_TAB_ID;
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   /* El proyecto cuyas piezas cuelgan en el riel: el abierto o, mientras se mira algo de la cuenta
@@ -622,9 +628,21 @@ function ProjectSection({
           proyectoDelRiel={proyectoDelRiel?.id ?? null}
           onElegirProyecto={selectTab}
           onElegirCuenta={(que) =>
-            selectTab(que === "info" ? STRATEGY_TAB_ID : que === "procesos" ? PROCESOS_TAB_ID : SOLICITUDES_TAB_ID)
+            selectTab(
+              que === "info"
+                ? STRATEGY_TAB_ID
+                : que === "procesos"
+                  ? PROCESOS_TAB_ID
+                  : que === "escala"
+                    ? ESCALA_TAB_ID
+                    : que === "casos"
+                      ? CASOS_TAB_ID
+                      : SOLICITUDES_TAB_ID,
+            )
           }
-          cuentaActiva={isStrategy ? "info" : isProcesos ? "procesos" : isSolicitudes ? "solicitudes" : null}
+          cuentaActiva={
+            isStrategy ? "info" : isProcesos ? "procesos" : isEscala ? "escala" : isCasos ? "casos" : isSolicitudes ? "solicitudes" : null
+          }
           avisoDeLaFicha={<AvisoDeFicha clientId={clientId} />}
           slotDePiezas={setSlotDePiezas}
           /* Traer AHORA los proyectos de HubSpot. La sincronización del montaje corre SIN
@@ -664,6 +682,15 @@ function ProjectSection({
             slotDelPanel={panelVisible ? slotDelPanel : null}
           />
         )}
+        {isEscala && (
+          <EscalaDeLaCuenta
+            key={ESCALA_TAB_ID}
+            clientId={clientId}
+            slotDelPanel={panelVisible ? slotDelPanel : null}
+            onAbrirExploracion={(projectId) => abrirEnProyecto(projectId, "exploration")}
+          />
+        )}
+        {isCasos && <CasosDeUsoDeLaCuenta key={CASOS_TAB_ID} clientId={clientId} slotDelPanel={panelVisible ? slotDelPanel : null} />}
         {isSolicitudes && (
           <div className="px-8 pb-10 pt-6">
             <SolicitudesFueraDeAlcance

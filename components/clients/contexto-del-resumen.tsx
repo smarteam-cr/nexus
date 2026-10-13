@@ -21,6 +21,7 @@
  */
 import { createContext, useContext } from "react";
 import type { PiezaParaQueSigue, QueSigueDelProyecto } from "@/lib/clients/que-sigue-del-proyecto";
+import type { CicloParaElRiel } from "@/lib/servicios/ciclos-server";
 
 /** La anotación de una pieza en el riel. «atencion» en ámbar; «neutro» en gris. */
 export interface AvisoDePieza {
@@ -42,10 +43,12 @@ export interface ContextoDelResumen {
    */
   cuestionarios?: { publicados: number; descartada: boolean } | null;
   /**
-   * El Ciclo de un servicio recurrente (2026-10-11): si hay uno abierto y lo primero que falta en su etapa.
+   * El Ciclo de un servicio recurrente: su etapa, lo que tiene que quedar y lo primero que falta.
    * null = el proyecto no es recurrente, o su estado todavía no llegó.
    */
-  ciclo?: { corto: string; abierto: boolean; falta: string | null; numero: number; piezaDeLaEtapa?: string | null } | null;
+  ciclo?: CicloParaElRiel | null;
+  /** Avisa que el ciclo cambió (la etapa, sus datos): el riel y el «Qué sigue» se ponen al día. */
+  onCicloCambio?: () => void;
   /** «Ahora no» de «Manda los cuestionarios al cliente». */
   descartarCuestionarios?: () => void;
   aLaVista: boolean;

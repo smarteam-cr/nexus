@@ -148,6 +148,34 @@ export async function agendadasParaElSelector(fila: FilaDeExploracion, quienBusc
   return datos;
 }
 
+/**
+ * Las reuniones agendadas con la empresa en estos calendarios (próximas 6 semanas), sin una exploración: las usa el
+ * Resumen de un proyecto recurrente para sus sesiones fijas (2026-10-12). Mismo reconocimiento de la empresa que el
+ * selector, mismas guardas (nunca una reunión de otro cliente) y solo lectura en Google.
+ */
+export async function agendadasConLaEmpresa(
+  clientId: string,
+  calendarios: readonly string[],
+  ahora = new Date(),
+): Promise<{ agendadas: Agendada[]; aviso: string | null }> {
+  const cals = [...new Set(calendarios.filter(Boolean).map((c) => c.trim().toLowerCase()))];
+  const { dominios, correos, internos } = await genteParaReconocer(clientId);
+  if (!dominios.length && !correos.length) {
+    return { agendadas: [], aviso: "La empresa todavía no tiene dominios ni reuniones: Nexus no puede reconocer sus reuniones agendadas." };
+  }
+  let aviso: string | null = null;
+  const listas: Agendada[][] = [];
+  for (const calendario of cals) {
+    const r = await eventosProximos(calendario, { semanas: SEMANAS_DE_AGENDADAS, ahora });
+    if (!r.ok) {
+      if (calendario === cals[0]) aviso = AVISO_DEL_MOTIVO[r.motivo];
+      continue;
+    }
+    listas.push(filtrarAgendadas(r.datos, { calendario, dominios, correos, internos, ahora }));
+  }
+  return { agendadas: juntarAgendadas(listas), aviso };
+}
+
 /** Olvida lo guardado de una exploración (al unir una sesión, «Ya es la sesión N» tiene que verse enseguida). */
 export function olvidarAgendadas(exploracionId: string): void {
   for (const k of memoria.keys()) if (k.endsWith(`|${exploracionId}`)) memoria.delete(k);

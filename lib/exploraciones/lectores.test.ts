@@ -50,7 +50,13 @@ type Destino =
    * las sesiones y su número, nunca lo que se confirmó ni lo que leyó el agente. Nada llega a un documento hasta que una
    * persona toca «Usar».
    */
-  | "sugerencias-del-documento";
+  | "sugerencias-del-documento"
+  /**
+   * La escala de la EMPRESA (La cuenta › La escala, 2026-10-12) y el panel del Resumen de un servicio recurrente: los
+   * niveles CONFIRMADOS de cada exploración (de la preventa y de cada proyecto) y las reuniones agendadas con la empresa.
+   * Pantallas internas; nada llega a un documento ni al cliente.
+   */
+  | "escala-de-la-empresa";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/(shell)/sales/exploraciones/page.tsx": { destino: "ventas", motivo: "La lista de exploraciones." },
@@ -160,6 +166,18 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "ventas",
     motivo: "La clasificación de la cartera (Éxito del cliente, interno): si la empresa tiene una preventa abierta. Solo cuenta filas, con DE_LA_PREVENTA.",
   },
+  "app/api/clients/[id]/escala/route.ts": {
+    destino: "escala-de-la-empresa",
+    motivo: "La cuenta › La escala: los niveles confirmados de las exploraciones de la empresa, con la fecha. Pantalla interna.",
+  },
+  "components/clients/EscalaDeLaCuenta.tsx": {
+    destino: "escala-de-la-empresa",
+    motivo: "La pantalla de La escala de la cuenta (solo los tipos de escalaDeLaEmpresa).",
+  },
+  "lib/servicios/panel-del-servicio-server.ts": {
+    destino: "escala-de-la-empresa",
+    motivo: "Las sesiones fijas del Resumen de un servicio recurrente: las reuniones de una serie con la empresa en el calendario. No lee ninguna exploración.",
+  },
   "lib/cs/watchdog-cuenta.ts": {
     destino: "vigia-interno",
     motivo: "Los correos del cliente con la empresa en HubSpot, para ver quejas y retrasos. No lee ninguna exploración.",
@@ -225,6 +243,11 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     permitidas: /\bsesionesDeLaExploracionDelProyecto\b|\bsesionUnidaALaReunion\b/,
     // Solo qué reunión es de qué sesión: ni la propuesta, ni el handoff, ni lo interno, ni lo confirmado.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|textoDeLaExploracionDelProyecto/,
+  },
+  "escala-de-la-empresa": {
+    permitidas: /\bescalaDeLaEmpresa\b|EscalaDeLaEmpresa\b|\bagendadasConLaEmpresa\b/,
+    // Solo los niveles confirmados y las reuniones agendadas: ni la propuesta, ni el handoff, ni lo interno de la preventa.
+    prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b/,
   },
   "memoria-interna": {
     permitidas: /\bloAprendidoEnLaPreventa\b/,

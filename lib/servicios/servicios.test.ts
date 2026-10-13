@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ETAPAS_DEL_CICLO, etapaPorNombre, etapaSiguiente, etapaDelProyecto, etapasDeLaPieza, leerMueve, nombreDelCiclo, PIEZA_DE_LA_ETAPA, PIEZAS_DE_UN_SERVICIO_RECURRENTE } from "./ciclo";
+import { ETAPAS_DEL_CICLO, etapaPorNombre, etapaPosterior, etapaQueMuestranLasPiezas, etapaSiguiente, etapaDelProyecto, etapasDeLaPieza, leerMueve, nombreDelCiclo, PIEZA_DE_LA_ETAPA, PIEZAS_DE_UN_SERVICIO_RECURRENTE } from "./ciclo";
 import { guiaDelCiclo } from "./guia";
 import { SERVICIOS_RECURRENTES } from "./index";
 import { GUIA_SMARTLOOP } from "./smartloop";
@@ -97,8 +97,18 @@ describe("la guía del CSE", () => {
 });
 
 describe("las piezas de un servicio recurrente", () => {
-  it("los artefactos del ciclo primero, después los insumos, y ninguna pieza de una implementación", () => {
-    expect(PIEZAS_DE_UN_SERVICIO_RECURRENTE).toEqual(["cycle-diagnosis", "cycle-plan", "timeline", "cycle-learning", "questionnaires", "exploration"]);
+  it("el Cronograma junto al Resumen y, en el ciclo, los documentos de siempre más Adopción y Aprendizaje (2026-10-12)", () => {
+    expect(PIEZAS_DE_UN_SERVICIO_RECURRENTE).toEqual([
+      "timeline",
+      "questionnaires",
+      "exploration",
+      "diagnosis",
+      "planning",
+      "tech-requirements",
+      "cycle-adoption",
+      "cycle-learning",
+      "delivery",
+    ]);
     for (const s of PIEZAS_DE_UN_SERVICIO_RECURRENTE) expect(pieceBySlug(s), s).not.toBeNull();
     const filas = buildPieceRows(
       [
@@ -107,17 +117,26 @@ describe("las piezas de un servicio recurrente", () => {
       ],
       {
         piezasDelServicio: PIEZAS_DE_UN_SERVICIO_RECURRENTE,
-        sinCanvas: { "cycle-diagnosis": "vacia", "cycle-plan": "vacia", "cycle-learning": "vacia" },
+        sinCanvas: { "cycle-adoption": "vacia", "cycle-learning": "vacia" },
       },
     ).map((r) => r.slug);
-    expect(filas).toEqual(["cycle-diagnosis", "cycle-plan", "timeline", "cycle-learning", "exploration"]);
+    expect(filas).toEqual(["timeline", "exploration", "diagnosis", "planning", "tech-requirements", "cycle-adoption", "cycle-learning", "delivery"]);
     expect(filas).not.toContain("kickoff");
   });
 
-  it("cada etapa tiene su artefacto; Implementación y Adopción se trabajan en el Cronograma", () => {
+  it("cada etapa tiene su artefacto: el Diagnóstico, la Planificación, el Cronograma, Adopción y Aprendizaje", () => {
     for (const e of ETAPAS_DEL_CICLO) expect(PIEZA_DE_LA_ETAPA[e], e).toBeTruthy();
-    expect(etapasDeLaPieza("timeline")).toEqual(["implementacion", "adopcion"]);
-    expect(etapasDeLaPieza("cycle-plan")).toEqual(["planificacion"]);
+    expect(etapasDeLaPieza("timeline")).toEqual(["implementacion"]);
+    expect(etapasDeLaPieza("planning")).toEqual(["planificacion"]);
+    expect(etapasDeLaPieza("cycle-adoption")).toEqual(["adopcion"]);
+  });
+
+  it("la etapa que muestran los documentos es solo una sugerencia hacia adelante", () => {
+    expect(etapaQueMuestranLasPiezas([])).toBeNull();
+    expect(etapaQueMuestranLasPiezas(["diagnosis"])).toBe("planificacion");
+    expect(etapaQueMuestranLasPiezas(["diagnosis", "planning"])).toBe("implementacion");
+    expect(etapaPosterior("implementacion", "diagnostico")).toBe(true);
+    expect(etapaPosterior("diagnostico", "implementacion")).toBe(false);
   });
 
   it("sin el servicio, los artefactos del ciclo no aparecen en el flujo de una implementación", () => {

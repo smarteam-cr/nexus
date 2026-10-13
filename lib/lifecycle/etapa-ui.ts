@@ -48,9 +48,7 @@ export function etapaParaLaUI(lc: ProjectLifecycle | null): EtapaParaLaUI | null
       posicion: lc.position,
       linea: lc.linea.map((s) => ({ id: s.id, label: s.label })),
       // Un servicio recurrente muestra la línea de su CICLO (2026-10-11), no las etapas del pipeline.
-      tituloDeLaLinea: lc.ciclo
-        ? `Ciclo ${lc.ciclo.numero}${lc.ciclo.nombre ? ` · ${lc.ciclo.nombre}` : ""}`
-        : `Etapas de ${lc.pipeline.label}`,
+      tituloDeLaLinea: lc.ciclo ? "Etapas del ciclo" : `Etapas de ${lc.pipeline.label}`,
       curada: false,
       curadaPorque: null,
       razones: [],

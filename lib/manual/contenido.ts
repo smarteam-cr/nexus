@@ -97,15 +97,10 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
     cuando:
       "Se arma en la planificación y se mantiene vivo durante todo el proyecto. Es el documento que más veces vas a abrir.",
   },
-  "cycle-diagnosis": {
+  "cycle-adoption": {
     paraQue:
-      "El diagnóstico de un ciclo de un servicio recurrente como SmartLoop: de qué nivel parte cada dimensión del área y qué retos se van a atacar. Sus insumos son la Exploración y los Cuestionarios.",
-    cuando: "Al abrir cada ciclo de un servicio recurrente: es su primera etapa. Desde el segundo ciclo puede ser simple.",
-  },
-  "cycle-plan": {
-    paraQue:
-      "El plan de un ciclo: la meta y los casos de uso, cada uno con su criterio de aceptación (cómo se va a saber que funcionó).",
-    cuando: "En la planificación del ciclo, antes de armar el cronograma con el cliente.",
+      "La adopción de un ciclo de un servicio recurrente como SmartLoop: que el equipo del cliente use lo implementado en su trabajo diario y que los hábitos se sostengan.",
+    cuando: "Después de implementar cada ciclo, antes de la sesión de aprendizaje.",
   },
   "cycle-learning": {
     paraQue:
@@ -172,8 +167,7 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
 export const SIN_SECCIONES: Record<string, string> = {
   timeline: "Su contenido son fases y tareas en una línea de tiempo, no secciones de texto.",
   questionnaires: "Cada cuestionario tiene sus pestañas y sus preguntas, y se arma para una persona del cliente.",
-  "cycle-diagnosis": "Es el nivel de cada dimensión del área en una fecha, no secciones de texto.",
-  "cycle-plan": "Es la meta y una lista de casos de uso con su criterio, no secciones de texto.",
+  "cycle-adoption": "Es el acompañamiento al equipo del cliente y los hábitos que se sostienen, no secciones de texto.",
   "cycle-learning": "Es la medición de los criterios y la decisión de cada pendiente, no secciones de texto.",
   "client-info": "Se arma con los bloques que los agentes van sumando reunión tras reunión.",
   "business-case": "Sus secciones dependen del tipo de propuesta que elija Ventas al crearla.",

@@ -13,7 +13,7 @@ import type { ProjectLifecycleStage, ProjectStageGateKey } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma";
 import { KICKOFF_TITLE_FILTERS, pickKickoffSessionDate } from "@/lib/sessions/kickoff-pick";
 import { RECURRENTE_TAG } from "@/lib/tags/catalog";
-import { ETAPAS_DEL_CICLO, ETIQUETA_DE_ETAPA, esEtapaDelCiclo, etapaDelProyecto, etapaPorNombre, type EtapaDelCiclo } from "@/lib/servicios/ciclo";
+import { ETAPAS_DEL_CICLO, ETIQUETA_DE_ETAPA, esEtapaDelCiclo, etapaPorNombre, type EtapaDelCiclo } from "@/lib/servicios/ciclo";
 import {
   buscarEtapa,
   fuenteDelCiclo,
@@ -294,7 +294,10 @@ async function loadLifecycleBatchUncached(
             ? c.etapa
             : null;
         const lineaCiclo: PipelineStage[] = ETAPAS_DEL_CICLO.map((e) => ({ id: e, label: ETIQUETA_DE_ETAPA[e], enLinea: true, terminal: false }));
-        const idxCiclo = etapaCiclo ? ETAPAS_DEL_CICLO.indexOf(etapaCiclo) : -1;
+        /* Sin ciclo abierto el proyecto está en Diagnóstico (2026-10-12): el primero se abre solo al cambiar la etapa.
+           Antes decía «Sin ciclo abierto» mientras el «Qué sigue» hablaba de una etapa. */
+        const etapaVista: EtapaDelCiclo | null = etapaCiclo ?? (c || p.hubspotServiceId ? null : "diagnostico");
+        const idxCiclo = etapaVista ? ETAPAS_DEL_CICLO.indexOf(etapaVista) : -1;
         out.set(p.id, {
           ...comun,
           fuente: "pipeline",
@@ -303,9 +306,10 @@ async function loadLifecycleBatchUncached(
           stageId: p.hubspotPipelineStageId,
           stageSyncedAt: p.hubspotStageSyncedAt,
           linea: lineaCiclo,
-          position: c && idxCiclo >= 0 ? { index: idxCiclo + 1, total: lineaCiclo.length } : null,
-          label: c ? etapaDelProyecto({ numero: c.numero, etapa: etapaCiclo ?? c.etapa }) : "Sin ciclo abierto",
-          ciclo: c ? { numero: c.numero, nombre: c.nombre, etapa: etapaCiclo } : null,
+          position: idxCiclo >= 0 ? { index: idxCiclo + 1, total: lineaCiclo.length } : null,
+          // Importa la etapa, no el número del ciclo (Elías, 2026-10-12): «Implementación», y el ciclo va aparte.
+          label: etapaVista ? ETIQUETA_DE_ETAPA[etapaVista] : (etapa?.label ?? "Sin etapa"),
+          ciclo: { numero: c?.numero ?? 1, nombre: c?.nombre ?? null, etapa: etapaVista },
         });
         continue;
       }

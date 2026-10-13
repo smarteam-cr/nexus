@@ -75,7 +75,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   try {
     const { compromiso, ...cambios } = body.data;
     if (compromiso !== undefined) await cambiarCompromiso(projectId, compromiso);
-    if (Object.keys(cambios).length > 0) await actualizarCiclo(projectId, cambios);
+    if (Object.keys(cambios).length > 0) await actualizarCiclo(projectId, cambios, correoDe(guard));
     return NextResponse.json({ ok: true });
   } catch (e) {
     return error(e);

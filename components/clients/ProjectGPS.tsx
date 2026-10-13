@@ -23,6 +23,8 @@ import { porQueEstaAca, queSigueDelProyecto, restoDeLosPendientes } from "@/lib/
 import type { EtapaEnHubspot } from "@/lib/projects/etapa-sugerida";
 import { useMe } from "@/hooks/useMe";
 import EncuestaDeEtapa from "./EncuestaDeEtapa";
+import { CambiarEtapaDelCiclo, EditarElCiclo, SugerenciaDeEtapaDelCiclo } from "@/components/ciclos/ControlesDelCiclo";
+import PanelDelServicio from "@/components/ciclos/PanelDelServicio";
 import type { TareasDelProyectoDatos, TareaVista } from "@/lib/tareas/tipos";
 
 
@@ -683,8 +685,21 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   const cobertura = data.coberturaDelCliente ?? null;
   const pctTranscript = cobertura ? pctConTranscript(cobertura) : null;
   const etapa = data.etapa ?? null;
-  const lineas = porQueEstaAca(etapa);
   const encuesta = data.etapaHubspot ?? null;
+  /* Un servicio recurrente (2026-10-12): la tarjeta de la etapa ES la del ciclo. Lo que tiene que quedar en la
+     etapa en curso reemplaza al «Para pasar a…» de una implementación. */
+  const ciclo = resumenCtx.ciclo ?? null;
+  const lineas = ciclo
+    ? ciclo.producido.map((x) => ({ hecho: x.hecho === true, texto: x.hecho === false ? `${x.texto} · falta` : x.texto }))
+    : porQueEstaAca(etapa);
+  const cicloCambio = () => {
+    invalidateGps(projectId);
+    void fetchGPS();
+    resumenCtx.onCicloCambio?.();
+  };
+  const [, mDesde, dDesde] = ciclo?.desde?.split("-") ?? [];
+  const [, mHasta, dHasta] = ciclo?.hasta?.split("-") ?? [];
+  const fechasDelCiclo = ciclo?.desde && ciclo?.hasta ? ` · ${Number(dDesde)}/${Number(mDesde)} – ${Number(dHasta)}/${Number(mHasta)}` : "";
 
   // Pendientes: lo reciente (decisión del 2026-10-04), de Tareas desde la etapa 2 de la memoria de la cuenta.
   const recientes = pendientes?.recientes ?? [];
@@ -838,6 +853,11 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   const panel = (
     <>
       {!resumenCtx.queSigueOcupado && queSigue && <QueSigue accion={accionDeQueSigue}>{queSigue.texto}</QueSigue>}
+
+      {/* Un servicio recurrente (2026-10-12): lo que debe el cliente, los hitos y las sesiones fijas. */}
+      {resumenCtx.ciclo && (
+        <PanelDelServicio projectId={projectId} refresco={gpsRefreshSignal} onAbrirCronograma={() => resumenCtx.abrirPieza("timeline")} />
+      )}
 
       <section className="flex flex-col gap-2.5">
         <div className="flex items-baseline justify-between">
@@ -1019,8 +1039,18 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
                 {etapa.posicion.index} de {etapa.posicion.total}
               </span>
             )}
+            {ciclo && (
+              <span className="text-xs text-fg-muted">
+                · Ciclo {ciclo.numero}
+                {fechasDelCiclo}
+              </span>
+            )}
           </div>
           <div className="flex items-baseline gap-3">
+            {ciclo && !ciclo.enHubspot && ciclo.puedeEditar && (
+              <CambiarEtapaDelCiclo projectId={projectId} etapa={ciclo.etapa} onCambio={cicloCambio} />
+            )}
+            {ciclo && <EditarElCiclo projectId={projectId} onCambio={cicloCambio} />}
             {/* Nexus → HubSpot: solo por la encuesta. HubSpot → Nexus: el espejo, como siempre. */}
             {encuesta && !encuesta.bloqueo && encuesta.opciones.length > 0 && (
               <BotonEnlace onClick={() => setEncuestaAbierta(true)}>Cambiar etapa</BotonEnlace>
@@ -1039,6 +1069,16 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             {encuesta.sugerencia.desde ?? "otra etapa"}.
           </FranjaDeSugerencias>
         )}
+        {ciclo && !encuesta?.sugerencia && (ciclo.puedeEditar || ciclo.enHubspot) && (
+          <SugerenciaDeEtapaDelCiclo
+            projectId={projectId}
+            etapa={ciclo.etapa}
+            piezasConContenido={resumenCtx.piezas.filter((x) => x.estado === "generada").map((x) => x.slug)}
+            enHubspot={ciclo.enHubspot}
+            onCambio={cicloCambio}
+            onResponder={encuesta && !encuesta.bloqueo ? () => setEncuestaAbierta(true) : undefined}
+          />
+        )}
         {etapa && etapa.linea.length > 0 && etapa.posicion && (
           <ol className="grid gap-1" style={{ gridTemplateColumns: `repeat(${etapa.linea.length}, minmax(0, 1fr))` }}>
             {etapa.linea.map((s, k) => {
@@ -1056,6 +1096,9 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
         )}
         {lineas.length > 0 && (
           <div className="flex flex-col gap-1 border-t border-line pt-2.5 text-[13px] text-fg-secondary">
+            {ciclo?.etapa && (
+              <span className="text-xs text-fg-muted">En {ciclo.corto} tiene que quedar:</span>
+            )}
             {lineas.map((l, k) => (
               <span key={k}>
                 {l.hecho ? <span className="font-bold text-success">✓</span> : <span className="text-fg-muted">○</span>} {l.texto}

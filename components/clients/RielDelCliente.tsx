@@ -9,8 +9,9 @@
  *  · PROYECTOS: uno por fila, con su tipo debajo. Debajo del proyecto abierto cuelgan sus piezas
  *    (las pinta `PiezasDelRiel`, por portal, desde el panel del proyecto: es el que sabe cuáles
  *    tiene y en qué estado están).
- *  · LA CUENTA: «Información del cliente», «Procesos» y «Fuera de alcance» (2026-10-07: las solicitudes
- *    fuera de alcance de todos sus proyectos, con su seguimiento).
+ *  · LA CUENTA: «Información del cliente», «Procesos», «La escala» y «Casos de uso» (2026-10-12: dónde está la
+ *    empresa en la escala y lo que se hace con ella, venga o no de una preventa) y «Fuera de alcance» (2026-10-07:
+ *    las solicitudes fuera de alcance de todos sus proyectos, con su seguimiento).
  *  · Al pie, «Traer proyectos de HubSpot».
  *
  * Copia medida por medida el riel de la preventa: filas de 14 px con un punto de 8 px, la pieza
@@ -21,7 +22,7 @@ import { cn } from "@/lib/cn";
 import type { EstadoDePieza } from "@/components/canvas/SelectorDePiezas";
 import { IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 
-export type CuentaDelRiel = "info" | "procesos" | "solicitudes";
+export type CuentaDelRiel = "info" | "procesos" | "escala" | "casos" | "solicitudes";
 
 export interface ProyectoDelRiel {
   id: string;
@@ -107,6 +108,8 @@ export default function RielDelCliente({
           extra={avisoDeLaFicha}
         />
         <FilaDeCuenta etiqueta="Procesos" activa={cuentaActiva === "procesos"} onClick={() => onElegirCuenta("procesos")} />
+        <FilaDeCuenta etiqueta="La escala" activa={cuentaActiva === "escala"} onClick={() => onElegirCuenta("escala")} />
+        <FilaDeCuenta etiqueta="Casos de uso" activa={cuentaActiva === "casos"} onClick={() => onElegirCuenta("casos")} />
         <FilaDeCuenta etiqueta="Fuera de alcance" activa={cuentaActiva === "solicitudes"} onClick={() => onElegirCuenta("solicitudes")} />
       </div>
 
@@ -168,11 +171,13 @@ export interface FilaDelRielDePiezas {
   novedades?: number;
   ocupada?: boolean;
   /**
-   * Un rótulo ARRIBA de esta fila, que agrupa las que siguen (2026-10-11): en un servicio recurrente, «Ciclo 1 ·
-   * Corregir y adoptar · 7 sep – 6 nov» sobre los artefactos del ciclo, y «Insumos del diagnóstico» sobre los
-   * Cuestionarios y la Exploración. No se cliquea.
+   * El grupo de la fila (2026-10-12): en un servicio recurrente, «Ciclo · Implementación» sobre los artefactos del
+   * ciclo. El rótulo se pinta arriba de la primera fila VISIBLE del grupo (así ocultar la primera no lo borra). No
+   * se cliquea.
    */
-  encabezado?: { titulo: string; detalle?: string | null };
+  grupo?: { id: string; titulo: string; detalle?: string | null };
+  /** El equipo la ocultó del riel (2026-10-12): va plegada en «Ver N piezas más», salvo mientras está abierta. */
+  oculta?: boolean;
 }
 
 const PUNTO: Record<EstadoDePieza, string> = {
@@ -186,8 +191,9 @@ const PUNTO: Record<EstadoDePieza, string> = {
  * riel: el estado de cada pieza (generada, vacía, desactualizada) y su activación viven allá.
  *
  * El punto de color dice el estado y nunca solo: «desactualizado» va escrito, la propuesta lleva la
- * chispa, y lo que todavía no existe en el proyecto queda plegado en «+ N por activar». Las novedades
- * de las reuniones (etapa 6) llevan la misma chispa con su número; el aviso que tapan va en el `title`.
+ * chispa, y lo que todavía no existe en el proyecto queda plegado en «Ver N piezas más», junto con lo que
+ * el equipo ocultó (2026-10-12: cada fila se oculta con el ojo que aparece al pasar el mouse). Las
+ * novedades de las reuniones (etapa 6) llevan la misma chispa con su número; el aviso que tapan va en el `title`.
  */
 export function PiezasDelRiel({
   resumen,
@@ -196,6 +202,7 @@ export function PiezasDelRiel({
   onAlternarPorActivar,
   onElegir,
   onActivar,
+  onOcultar,
   slotDeSesiones,
 }: {
   resumen: { activa: boolean; meta?: string | null; onClick: () => void };
@@ -204,14 +211,19 @@ export function PiezasDelRiel({
   onAlternarPorActivar: () => void;
   onElegir: (slug: string) => void;
   onActivar: (slug: string) => void;
+  /** Ocultar (`true`) o volver a mostrar (`false`) una pieza del riel. Sin él, las filas no se ocultan. */
+  onOcultar?: (slug: string, oculta: boolean) => void;
   /**
    * Debajo de la fila «Exploración», cuando está abierta: ahí la exploración del proyecto pinta sus
    * sesiones por portal, como la preventa las cuelga de su pieza (2026-10-07).
    */
   slotDeSesiones?: (el: HTMLDivElement | null) => void;
 }) {
-  const existentes = filas.filter((f) => f.estado !== "por_activar");
+  // La pieza abierta se ve en su lugar aunque esté oculta: no se pierde de vista dónde se está.
+  const existentes = filas.filter((f) => f.estado !== "por_activar" && (!f.oculta || f.activa));
+  const ocultas = filas.filter((f) => f.estado !== "por_activar" && f.oculta && !f.activa);
   const porActivar = filas.filter((f) => f.estado === "por_activar");
+  const plegadas = ocultas.length + porActivar.length;
   const clase = (activa: boolean) =>
     cn(
       "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors",
@@ -226,16 +238,17 @@ export function PiezasDelRiel({
           {resumen.meta && <span className={cn("flex-shrink-0 text-[11.5px]", resumen.activa ? "" : "text-fg-muted")}>{resumen.meta}</span>}
         </button>
       </li>
-      {existentes.map((f) => (
+      {existentes.map((f, k) => (
         <li key={f.slug}>
-          {f.encabezado && (
+          {f.grupo && f.grupo.id !== existentes[k - 1]?.grupo?.id && (
             <p className="flex items-baseline justify-between gap-2 px-2.5 pb-0.5 pt-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-muted">
-              <span className="min-w-0 truncate" title={f.encabezado.titulo}>
-                {f.encabezado.titulo}
+              <span className="min-w-0 truncate" title={f.grupo.titulo}>
+                {f.grupo.titulo}
               </span>
-              {f.encabezado.detalle && <span className="flex-shrink-0 font-normal normal-case tracking-normal">{f.encabezado.detalle}</span>}
+              {f.grupo.detalle && <span className="flex-shrink-0 font-normal normal-case tracking-normal">{f.grupo.detalle}</span>}
             </p>
           )}
+          <div className="group/fila relative flex items-center">
           <button
             type="button"
             // Con «Exploración» ya abierta, el clic vuelve a su página de inicio (lo escucha LienzoDeExploracion).
@@ -249,7 +262,7 @@ export function PiezasDelRiel({
               /* Los Cuestionarios (2026-10-11) traen siempre su aviso («sin enviar», «enviado», «respondido 1 de 2»):
                  no se generan, se mandan. */
             }
-            className={clase(f.activa)}
+            className={cn(clase(f.activa), onOcultar && "pr-7")}
           >
             <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", f.activa ? "bg-brand" : PUNTO[f.estado as EstadoDePieza])} aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">{f.etiqueta}</span>
@@ -280,10 +293,31 @@ export function PiezasDelRiel({
               </>
             )}
           </button>
+          {onOcultar && (
+            <button
+              type="button"
+              onClick={() => onOcultar(f.slug, !f.oculta)}
+              aria-label={f.oculta ? `Mostrar «${f.etiqueta}» en el riel` : `Ocultar «${f.etiqueta}» del riel`}
+              title={f.oculta ? "Volver a mostrarla en el riel" : "Ocultarla del riel: queda en «Ver más piezas»"}
+              className="absolute right-1 flex h-6 w-6 items-center justify-center rounded-md text-fg-muted opacity-0 transition-opacity hover:bg-surface-hover hover:text-fg focus-visible:opacity-100 group-hover/fila:opacity-100"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5" aria-hidden="true">
+                {f.oculta ? (
+                  <>
+                    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </>
+                ) : (
+                  <path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.1A9.7 9.7 0 0112 5c5 0 9 4.5 10 7a13 13 0 01-3.2 4.3M6.6 6.6C4.3 8 2.7 10.2 2 12c1 2.5 5 7 10 7a9.6 9.6 0 004.4-1" />
+                )}
+              </svg>
+            </button>
+          )}
+          </div>
           {f.slug === "exploration" && f.activa && slotDeSesiones && <div ref={slotDeSesiones} />}
         </li>
       ))}
-      {porActivar.length > 0 && (
+      {plegadas > 0 && (
         <li>
           <button
             type="button"
@@ -291,10 +325,31 @@ export function PiezasDelRiel({
             aria-expanded={porActivarAbiertas}
             className="w-full rounded-lg px-2.5 py-1.5 text-left text-[13px] text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
           >
-            {porActivarAbiertas ? "Ocultar las piezas por activar" : `+ ${porActivar.length} ${porActivar.length === 1 ? "pieza" : "piezas"} por activar`}
+            {porActivarAbiertas ? "Ver menos" : `Ver ${plegadas} ${plegadas === 1 ? "pieza" : "piezas"} más +`}
           </button>
         </li>
       )}
+      {porActivarAbiertas &&
+        ocultas.map((f) => (
+          <li key={f.slug}>
+            <div className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-fg-muted">
+              <button
+                type="button"
+                onClick={() => onElegir(f.slug)}
+                title="Abrirla (sigue oculta del riel)"
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left transition-colors hover:text-fg"
+              >
+                <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", PUNTO[f.estado as EstadoDePieza])} aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">{f.etiqueta}</span>
+              </button>
+              {onOcultar && (
+                <button type="button" onClick={() => onOcultar(f.slug, false)} className="flex-shrink-0 text-[11.5px] text-brand hover:text-brand-light">
+                  Mostrar
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
       {porActivarAbiertas &&
         porActivar.map((f) => (
           <li key={f.slug}>

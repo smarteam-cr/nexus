@@ -165,43 +165,23 @@ export const PIECES: PieceDefinition[] = [
     hasCanvas: false,
   },
   {
-    slug: "cycle-diagnosis",
-    label: "Diagnóstico",
-    // Pieza NUEVA (2026-10-11, docs/smartloop-plan.md): nunca vivió en ProjectCanvas.name.
+    slug: "cycle-adoption",
+    label: "Adopción",
+    // Pieza NUEVA (2026-10-12, docs/smartloop-plan.md): nunca vivió en ProjectCanvas.name.
     legacyNames: [],
     scope: "project",
-    // El diagnóstico del ciclo: de qué nivel parte cada dimensión del área. Sus insumos son la Exploración y los Cuestionarios.
+    // La etapa en que el equipo del cliente hace suyo lo implementado: la guía del CSE y cómo usan HubSpot.
     agentGroup: null,
     permissionSection: null,
     createdWithProject: false,
     isDefaultCanvas: false,
     // Solo la tienen los proyectos de un servicio recurrente (`PipelineDef.servicioRecurrente`): es un artefacto
-    // de su ciclo, no se apaga.
+    // de su ciclo, no se apaga (se puede ocultar del riel).
     optional: false,
     enabledByTags: [],
     ownRenderer: true, // PiezaDelCiclo
     clientFacing: false,
-    // Vive en las tablas del ciclo (CicloDeProyecto, CasoDeUso), no en un canvas.
-    hasCanvas: false,
-  },
-  {
-    slug: "cycle-plan",
-    label: "Plan del ciclo",
-    // Pieza NUEVA (2026-10-11, docs/smartloop-plan.md): nunca vivió en ProjectCanvas.name.
-    legacyNames: [],
-    scope: "project",
-    // La meta del ciclo y sus casos de uso, cada uno con su criterio de aceptación.
-    agentGroup: null,
-    permissionSection: null,
-    createdWithProject: false,
-    isDefaultCanvas: false,
-    // Solo la tienen los proyectos de un servicio recurrente (`PipelineDef.servicioRecurrente`): es un artefacto
-    // de su ciclo, no se apaga.
-    optional: false,
-    enabledByTags: [],
-    ownRenderer: true, // PiezaDelCiclo
-    clientFacing: false,
-    // Vive en las tablas del ciclo (CicloDeProyecto, CasoDeUso), no en un canvas.
+    // Vive en las tablas del ciclo, no en un canvas.
     hasCanvas: false,
   },
   {

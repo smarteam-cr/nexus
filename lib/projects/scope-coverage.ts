@@ -150,6 +150,12 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   // pendiente se leen por id solo para su nombre.
   "lib/tareas/chat/contexto.ts": { modo: "criterio", criterio: "clasificable" },
   // ── Los exentos, cada uno con su motivo ────────────────────────────────────
+  "lib/exploraciones/escala-de-la-empresa.ts": {
+    modo: "exento",
+    razon:
+      "no decide qué proyectos cuentan para una cifra: lista los proyectos abiertos de la empresa (status distinto de " +
+      "completed) solo para ofrecer dónde posicionarla en la escala.",
+  },
   "lib/tareas/clientes.ts": {
     modo: "exento",
     razon:

@@ -122,9 +122,8 @@ export function queSigueDelProyecto(i: {
    */
   cuestionarios?: { publicados: number; descartada: boolean } | null;
   /**
-   * El Ciclo de un servicio recurrente (2026-10-11, docs/smartloop-plan.md). null = el proyecto no es
-   * recurrente. Sin ciclo abierto, lo primero es abrirlo; con uno abierto, lo primero que falta en su etapa
-   * (si Nexus lo puede comprobar).
+   * El Ciclo de un servicio recurrente (docs/smartloop-plan.md). null = el proyecto no es recurrente. Lo primero
+   * que falta en su etapa (si Nexus lo puede comprobar) y, si no, el artefacto de la etapa todavía sin escribir.
    */
   ciclo?: { corto: string; abierto: boolean; falta: string | null; numero: number; piezaDeLaEtapa?: string | null } | null;
 }): QueSigueDelProyecto {
@@ -143,21 +142,18 @@ export function queSigueDelProyecto(i: {
     };
   }
 
-  /* Un servicio recurrente no recorre el flujo de una implementación: lo que sigue sale de su ciclo. */
+  /* Un servicio recurrente no recorre el flujo de una implementación: lo que sigue sale de su ciclo. Sin ciclo
+     abierto el proyecto está en Diagnóstico (el ciclo se abre solo al cambiar la etapa). */
   if (i.ciclo) {
-    // Lleva al artefacto de la etapa en curso (sin ciclo abierto, al Diagnóstico: abrirlo empieza el ciclo).
-    const slug = i.ciclo.abierto ? (i.ciclo.piezaDeLaEtapa ?? "cycle-diagnosis") : "cycle-diagnosis";
+    const slug = i.ciclo.piezaDeLaEtapa ?? "diagnosis";
     const pieza = i.piezas.find((p) => p.slug === slug);
     const accion = pieza ? ({ tipo: "pieza", slug: pieza.slug, etiqueta: pieza.etiqueta } as const) : null;
-    if (!i.ciclo.abierto) {
-      return {
-        texto: `El ciclo ${i.ciclo.numero} todavía no empezó: abre el Diagnóstico, que es su primera etapa.`,
-        accion,
-      };
-    }
     if (i.ciclo.falta) {
       const falta = i.ciclo.falta.replace(/\.$/, "");
       return { texto: `${i.ciclo.corto}: ${falta.charAt(0).toLowerCase()}${falta.slice(1)}.`, accion };
+    }
+    if (pieza && pieza.estado !== "generada" && slug !== "timeline") {
+      return { texto: `El ciclo está en ${i.ciclo.corto}: trabaja «${pieza.etiqueta}».`, accion };
     }
   }
 

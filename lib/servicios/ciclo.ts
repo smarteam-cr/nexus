@@ -8,33 +8,62 @@
  */
 
 /**
- * Los ARTEFACTOS del ciclo (2026-10-11, pedido de Elías): uno por cada etapa que produce algo. Implementación y
- * Adopción no son artefactos —son trabajo que se sigue en el cronograma—, así que su etapa la lleva el Cronograma.
+ * Los ARTEFACTOS del ciclo (2026-10-12, pedido de Elías): los mismos documentos de una implementación —Exploración,
+ * Diagnóstico, Planificación, Integraciones y Entrega—, más Adopción y Aprendizaje, que son propios del ciclo y no
+ * viven en un canvas. El Cronograma va afuera del ciclo, junto al Resumen: se abre todos los días. Los Cuestionarios
+ * van con la Exploración, como en una implementación (aparecen cuando el proyecto tiene la Exploración).
+ *
+ * ⚠ Reemplaza a «Diagnóstico del ciclo» y «Plan del ciclo» (2026-10-11): el plan responde al Diagnóstico y a la
+ * Planificación, y los casos de uso son una sección de la cuenta.
  */
-export const PIEZA_DIAGNOSTICO_DEL_CICLO = "cycle-diagnosis";
-export const PIEZA_PLAN_DEL_CICLO = "cycle-plan";
+export const PIEZA_ADOPCION_DEL_CICLO = "cycle-adoption";
 export const PIEZA_APRENDIZAJE_DEL_CICLO = "cycle-learning";
-export const PIEZAS_DEL_CICLO = [PIEZA_DIAGNOSTICO_DEL_CICLO, PIEZA_PLAN_DEL_CICLO, "timeline", PIEZA_APRENDIZAJE_DEL_CICLO] as const;
+export const PIEZAS_DEL_CICLO = [
+  "questionnaires",
+  "exploration",
+  "diagnosis",
+  "planning",
+  "tech-requirements",
+  PIEZA_ADOPCION_DEL_CICLO,
+  PIEZA_APRENDIZAJE_DEL_CICLO,
+  "delivery",
+] as const;
 
-/**
- * Las piezas de un proyecto de servicio recurrente, en el orden del riel: los artefactos del ciclo y, después, los
- * insumos del diagnóstico (Cuestionarios y Exploración), que se reusan tal cual. No lleva kickoff, diagnóstico,
- * planificación ni entrega de una implementación: el ciclo los reemplaza.
- */
-export const PIEZAS_DE_UN_SERVICIO_RECURRENTE = [...PIEZAS_DEL_CICLO, "questionnaires", "exploration"] as const;
+/** Los artefactos propios del ciclo: no viven en un canvas y su estado sale del ciclo. */
+export const PIEZAS_PROPIAS_DEL_CICLO = [PIEZA_ADOPCION_DEL_CICLO, PIEZA_APRENDIZAJE_DEL_CICLO] as const;
+
+/** Las piezas de un proyecto de servicio recurrente, en el orden del riel (el Resumen va aparte, arriba). */
+export const PIEZAS_DE_UN_SERVICIO_RECURRENTE = ["timeline", ...PIEZAS_DEL_CICLO] as const;
 
 /** El artefacto donde se trabaja cada etapa del ciclo. */
 export const PIEZA_DE_LA_ETAPA: Record<EtapaDelCiclo, string> = {
-  diagnostico: PIEZA_DIAGNOSTICO_DEL_CICLO,
-  planificacion: PIEZA_PLAN_DEL_CICLO,
+  diagnostico: "diagnosis",
+  planificacion: "planning",
   implementacion: "timeline",
-  adopcion: "timeline",
+  adopcion: PIEZA_ADOPCION_DEL_CICLO,
   aprendizaje: PIEZA_APRENDIZAJE_DEL_CICLO,
 };
 
-/** Las etapas que se trabajan en un artefacto (el Cronograma lleva dos). */
+/** Las etapas que se trabajan en un artefacto. */
 export function etapasDeLaPieza(slug: string): EtapaDelCiclo[] {
   return ETAPAS_DEL_CICLO.filter((e) => PIEZA_DE_LA_ETAPA[e] === slug);
+}
+
+/**
+ * La etapa que muestran los documentos del proyecto (2026-10-12): con el Diagnóstico escrito, el ciclo ya está en
+ * Planificación; con la Planificación escrita, en Implementación. null = los documentos no dicen más que eso.
+ * Es una SUGERENCIA: la etapa la cambia una persona, hacia adelante o hacia atrás.
+ */
+export function etapaQueMuestranLasPiezas(conContenido: ReadonlySet<string> | readonly string[]): EtapaDelCiclo | null {
+  const tiene = (s: string) => (conContenido instanceof Set ? conContenido.has(s) : (conContenido as readonly string[]).includes(s));
+  if (tiene("planning")) return "implementacion";
+  if (tiene("diagnosis")) return "planificacion";
+  return null;
+}
+
+/** ¿`a` va después de `b` en el ciclo? */
+export function etapaPosterior(a: EtapaDelCiclo, b: EtapaDelCiclo): boolean {
+  return ETAPAS_DEL_CICLO.indexOf(a) > ETAPAS_DEL_CICLO.indexOf(b);
 }
 
 export const ETAPAS_DEL_CICLO = ["diagnostico", "planificacion", "implementacion", "adopcion", "aprendizaje"] as const;

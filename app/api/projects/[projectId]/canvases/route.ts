@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject, guardHandoffAccess } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardCapability, guardHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
@@ -63,7 +63,7 @@ export async function GET(
   /* Los Cuestionarios (2026-10-11) no viven en un canvas: su fila del riel sale de sus propias tablas.
      El «Ahora no» de su sugerencia está en las secciones del Kickoff, que ya vienen en esta lista. */
   const kickoff = canvases.find((c) => slugForCanvas(c) === "kickoff");
-  const [handoffCambioAt, novedades, estadoCuestionarios, puedeEditarCuestionarios, ciclo] = await Promise.all([
+  const [handoffCambioAt, novedades, estadoCuestionarios, puedeEditarCuestionarios, ciclo, piezasOcultas] = await Promise.all([
     ultimoCambioDelHandoff(projectId),
     conteoDeNovedadesDelProyecto(
       projectId,
@@ -77,13 +77,21 @@ export async function GET(
       .catch(() => false),
     /* El Ciclo de un servicio recurrente (2026-10-11): tampoco vive en un canvas. null = el proyecto no es
        recurrente (o la tabla todavía no existe): la pieza no se lista. */
-    estadoDelCicloParaElRiel(projectId).catch(() => null),
+    estadoDelCicloParaElRiel(projectId)
+      .then(async (c) => (c ? { ...c, puedeEditar: !((await guardCapability("editTimeline")) instanceof NextResponse) } : null))
+      .catch(() => null),
+    /* Las piezas que el equipo ocultó del riel (2026-10-12). Sin la columna todavía, ninguna. */
+    prisma.project
+      .findUnique({ where: { id: projectId }, select: { piezasOcultas: true } })
+      .then((p) => p?.piezasOcultas ?? [])
+      .catch(() => [] as string[]),
   ]);
   const cuestionarios = estadoCuestionarios ? { ...estadoCuestionarios, puedeEditar: puedeEditarCuestionarios } : null;
 
   return NextResponse.json({
     cuestionarios,
     ciclo,
+    piezasOcultas,
     canvases: canvases.map((c) => ({
       ...c,
       hasContent: conContenido.has(c.id),
