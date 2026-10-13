@@ -224,7 +224,8 @@ export async function ignorarClienteMercury(input: { mercuryCustomerId: string; 
 
 const PREFIJO = "MERCURY-";
 
-async function cargarEstadoMercury(): Promise<EstadoMercury> {
+/** Todo lo que se cruza con Mercury, leído de la base. Lo usa también scripts/cargar-cuenta-desde-mercury.ts. */
+export async function cargarEstadoMercury(): Promise<EstadoMercury> {
   const [facturas, clientes, cuentas, cobros, movimientos, marcas, copiaOk] = await Promise.all([
     prisma.facturaMercury.findMany({
       where: { estadoEspejo: "VIGENTE" },
