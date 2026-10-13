@@ -10,6 +10,7 @@
  *     nivel, el nombre GENERAL de la dimensión que frena (nunca el de la edición) y texto neutro, en
  *     el idioma de la propuesta.
  */
+import { casoDeLaPreventa } from "@/lib/casos-de-uso/en-la-preventa";
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import type { AreaEnLaEscala, PosicionEnLaEscala } from "@/lib/escala/posicion";
@@ -213,15 +214,18 @@ export function bloqueParaLaPropuesta(o: {
     );
   }
 
-  const casos = Object.values(c.casosDeUso);
+  const casos = Object.entries(c.casosDeUso);
   if (casos.length) {
     const nombreDeArea = (id: string | null) => (id ? (escala.areas.find((a) => a.id === id)?.nombre ?? null) : null);
     partes.push(
       "",
       "## Para qué va cada caso de uso elegido",
-      ...casos.map(
-        (k) => `- ${k.titulo}${nombreDeArea(k.areaId) ? ` (${nombreDeArea(k.areaId)})` : ""}${k.razon ? `: ${k.razon}` : ""}${k.descripcion ? ` Qué es: ${k.descripcion}` : ""}`,
-      ),
+      ...casos.map(([id, k]) => {
+        // Un caso del catálogo de Smarteam suma lo que el cliente obtiene (nunca su nota interna).
+        const delCatalogo = casoDeLaPreventa(id);
+        const obtiene = delCatalogo ? ` Lo que obtiene: ${delCatalogo.obtienes.join(" ")}` : "";
+        return `- ${k.titulo}${nombreDeArea(k.areaId) ? ` (${nombreDeArea(k.areaId)})` : ""}${k.razon ? `: ${k.razon}` : ""}${k.descripcion ? ` Qué es: ${k.descripcion}` : ""}${obtiene}`;
+      }),
     );
   }
 

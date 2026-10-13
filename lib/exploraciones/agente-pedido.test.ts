@@ -5,6 +5,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
+import { casoPorId } from "@/lib/casos-de-uso/catalogo";
+import { casosParaLasAreas } from "@/lib/casos-de-uso/en-la-preventa";
 import {
   citaVerificable,
   esDelEquipoDeSmarteam,
@@ -485,7 +487,7 @@ describe("propuestasDelTest", () => {
   });
 });
 
-describe("los casos de uso que propone (experimental, sin la biblioteca)", () => {
+describe("los casos de uso que propone", () => {
   const CTX = {
     empresa: "Acme",
     edicion: "escala general",
@@ -517,13 +519,37 @@ describe("los casos de uso que propone (experimental, sin la biblioteca)", () =>
     expect(r.descartadas).toBe(6);
   });
 
-  it("el pedido no usa catálogo, lleva lo que ya está y lo descartado, y fuerza su herramienta", () => {
+  it("sin catálogo, el pedido no lo nombra, lleva lo que ya está y lo descartado, y fuerza su herramienta", () => {
     const p = pedidoDeCasos(CTX);
     expect(p.tool_choice).toEqual({ type: "tool", name: "proponer_casos" });
     const cuerpo = String(p.messages[0].content);
     expect(cuerpo).toContain("=== YA ESTÁN (no los repitas) ===\n- Pipeline con etapas");
     expect(cuerpo).toContain("- Tablero de ventas");
     expect(cuerpo).not.toMatch(/catálogo/i);
+  });
+
+  it("con el catálogo, lo manda y un caso suyo lleva su id `cat-` y su título, aunque el modelo escriba otro", () => {
+    const catalogo = casosParaLasAreas(["1"]);
+    const ctx = { ...CTX, catalogo };
+    const cuerpo = String(pedidoDeCasos(ctx).messages[0].content);
+    expect(cuerpo).toContain("=== EL CATÁLOGO DE SMARTEAM");
+    expect(cuerpo).toContain("[cobranza]");
+    const r = leerLosCasos(
+      conCasos([
+        caso("Cobranza a tiempo", { catalogo: "cobranza", dimensiones: [] }),
+        caso("Uno propio", { catalogo: "" }),
+        caso("De otra área", { catalogo: "personalizacion-web" }),
+      ]),
+      ctx,
+      "run_1",
+      AHORA,
+    );
+    expect(r.items[0].destino).toEqual({ tipo: "casoDeUso", useCaseId: "cat-cobranza" });
+    // Sin dimensiones del modelo, las del caso en esa área (y solo las de las áreas en juego del contexto).
+    expect(r.items[0].valor).toMatchObject({ titulo: casoPorId("cobranza")!.titulo });
+    expect(r.items[1].destino).toEqual({ tipo: "casoDeUso", useCaseId: idDeCasoLibre("Uno propio") });
+    // Un caso del catálogo que no toca el área se toma como propio, con el título que escribió el modelo.
+    expect(r.items[2].destino).toEqual({ tipo: "casoDeUso", useCaseId: idDeCasoLibre("De otra área") });
   });
 });
 

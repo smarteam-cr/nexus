@@ -11,11 +11,14 @@
  *   4. Abre el panel en un reporte cuando la dirección trae `?feedback=<id>` (los avisos de «Para ti»).
  *   5. Lo abre una pantalla con lo que se está mirando ya puesto: la escala, desde el botón de cada
  *      criterio, nivel o dimensión (`abrir({ escala })`, 2026-10-05). El reporte queda anclado ahí.
+ *   6. Lo abre el catálogo de casos de uso (`abrir({ catalogo })`, 2026-10-12): para sugerir un cambio en un caso
+ *      o proponer uno nuevo. Proponer uno nuevo no lleva captura: es una idea, no algo que se ve en la pantalla.
  *
  * El panel NO tapa la pantalla (como el chat del asistente): se sigue viendo lo que se reporta.
  */
 import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import type { SobreElCatalogo } from "@/lib/casos-de-uso/feedback";
 import type { SobreLaEscala } from "@/lib/feedback/escala";
 import { pedidoAplica } from "@/lib/feedback/reglas";
 import type { PedidoParaMi } from "@/lib/feedback/queries";
@@ -36,7 +39,7 @@ export interface Captura {
 interface ContextoDeFeedback {
   abierto: boolean;
   alternar: () => void;
-  abrir: (opciones?: { en?: Pestana; reporteId?: string; pedido?: PedidoParaMi; escala?: SobreLaEscala }) => void;
+  abrir: (opciones?: { en?: Pestana; reporteId?: string; pedido?: PedidoParaMi; escala?: SobreLaEscala; catalogo?: SobreElCatalogo }) => void;
 }
 
 const Contexto = createContext<ContextoDeFeedback | null>(null);
@@ -72,6 +75,8 @@ export default function FeedbackProvider({
   const [respondiendo, setRespondiendo] = useState<PedidoParaMi | null>(null);
   /** Lo que se está mirando en la escala, si el panel se abrió desde ahí. */
   const [sobreLaEscala, setSobreLaEscala] = useState<SobreLaEscala | null>(null);
+  /** El caso del catálogo, si el panel se abrió desde ahí. */
+  const [sobreElCatalogo, setSobreElCatalogo] = useState<SobreElCatalogo | null>(null);
   const [reinicio, setReinicio] = useState(0);
   const urlAnterior = useRef<string | null>(null);
 
@@ -113,13 +118,15 @@ export default function FeedbackProvider({
       if (opciones?.pedido) setRespondiendo(opciones.pedido);
       // Abrirlo desde otro criterio cambia el ancla; abrirlo desde el pie del menú la quita.
       setSobreLaEscala(opciones?.escala ?? null);
+      setSobreElCatalogo(opciones?.catalogo ?? null);
+      const sinCaptura = opciones?.catalogo?.modo === "nuevo";
       if (!abierto) {
         setAbierto(true);
         setMarcas([]);
         setReinicio((n) => n + 1);
-        if (p === "dar") void tomarCaptura();
+        if (p === "dar" && !sinCaptura) void tomarCaptura();
         else setCaptura(SIN_CAPTURA);
-      } else if (p === "dar" && captura.estado === "sin") {
+      } else if (p === "dar" && captura.estado === "sin" && !sinCaptura) {
         void tomarCaptura();
       }
     },
@@ -132,6 +139,7 @@ export default function FeedbackProvider({
     setMarcas([]);
     setRespondiendo(null);
     setSobreLaEscala(null);
+    setSobreElCatalogo(null);
     if (urlAnterior.current) URL.revokeObjectURL(urlAnterior.current);
     urlAnterior.current = null;
     setCaptura(SIN_CAPTURA);
@@ -165,7 +173,7 @@ export default function FeedbackProvider({
         <PanelDeFeedback
           // Con el panel abierto, «Dar feedback» sobre otro criterio de la escala arranca el formulario de
           // nuevo: lo escrito sobre uno no se manda anclado a otro.
-          key={`${reinicio}:${sobreLaEscala?.ancla ?? ""}`}
+          key={`${reinicio}:${sobreLaEscala?.ancla ?? ""}:${sobreElCatalogo ? (sobreElCatalogo.modo === "nuevo" ? "nuevo" : sobreElCatalogo.casoId) : ""}`}
           enPestana={pestana}
           onPestana={setPestana}
           reporteId={reporteId}
@@ -178,6 +186,7 @@ export default function FeedbackProvider({
           onVolverACapturar={() => void tomarCaptura()}
           respondiendo={respondiendo}
           sobreLaEscala={sobreLaEscala}
+          sobreElCatalogo={sobreElCatalogo}
           onRespondido={(id) => {
             quitarPedido(id);
             setRespondiendo(null);

@@ -10,12 +10,27 @@
  *
  * Abierto desde la escala (el botón de un criterio, un nivel o una dimensión, 2026-10-05), arriba dice
  * sobre qué es y el reporte se manda anclado ahí (`escala`): es el mismo formulario de siempre.
+ *
+ * Abierto desde el catálogo de casos de uso (2026-10-12, tableros «Sugerir» y «Proponer» del diseño del catálogo):
+ * sugerir un cambio en un caso es el mismo formulario con el caso y la parte arriba; proponer uno nuevo es un
+ * formulario propio (`ProponerUnCaso`), sin captura. Los dos llegan a la bandeja como un reporte común, con el caso
+ * escrito al principio (lib/casos-de-uso/feedback.ts).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Segmentado } from "@/components/ui/Segmentado";
 import { Tabs } from "@/components/ui/Tabs";
 import { ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { PUNTO_DE_HERRAMIENTA } from "@/components/casos-de-uso/piezas";
+import type { AreaDeLaEscala, Herramienta } from "@/lib/casos-de-uso/catalogo";
+import {
+  cuerpoDeLaPropuesta,
+  cuerpoDeLaSugerencia,
+  PARTES_DEL_CASO,
+  propuestaIncompleta,
+  type ParteDelCaso,
+  type SobreElCatalogo,
+} from "@/lib/casos-de-uso/feedback";
 import { cn } from "@/lib/cn";
 import { EVENTO_DE_FEEDBACK_ENVIADO, type SobreLaEscala } from "@/lib/feedback/escala";
 import type { PedidoParaMi, ReporteDeLista, ReporteDetalle } from "@/lib/feedback/queries";
@@ -50,6 +65,8 @@ interface Props {
   respondiendo: PedidoParaMi | null;
   /** Abierto desde la escala: lo que se estaba mirando. */
   sobreLaEscala: SobreLaEscala | null;
+  /** Abierto desde el catálogo de casos de uso: el caso, o un caso nuevo. */
+  sobreElCatalogo: SobreElCatalogo | null;
   onRespondido: (pedidoId: string) => void;
   version: string | null;
   onFestejar: (ideas: number) => void;
@@ -116,7 +133,11 @@ export function PanelDeFeedback(p: Props) {
           <div className="min-w-0">
             <p className="text-[15px] font-semibold leading-5 text-fg">Feedback</p>
             <p className="truncate text-xs text-fg-muted">
-              {p.sobreLaEscala ? `Sobre la escala · ${p.sobreLaEscala.ancla}` : `Sobre «${pantalla}»`}
+              {p.sobreLaEscala
+                ? `Sobre la escala · ${p.sobreLaEscala.ancla}`
+                : p.sobreElCatalogo
+                  ? "Sobre el catálogo de casos de uso"
+                  : `Sobre «${pantalla}»`}
             </p>
           </div>
           <button
@@ -152,7 +173,9 @@ export function PanelDeFeedback(p: Props) {
         />
       </div>
 
-      {p.enPestana === "dar" ? (
+      {p.enPestana === "dar" && p.sobreElCatalogo?.modo === "nuevo" ? (
+        <ProponerUnCaso {...p} pantalla={pantalla} ruta={ruta} onEnviado={() => void cargarReportes()} />
+      ) : p.enPestana === "dar" ? (
         <DarFeedback {...p} pantalla={pantalla} ruta={ruta} cuentaReportes={reportes?.length ?? null} onEnviado={() => void cargarReportes()} />
       ) : (
         <MisReportes
@@ -184,7 +207,9 @@ interface Enviado {
 function DarFeedback(
   p: Props & { pantalla: string; ruta: string; cuentaReportes: number | null; onEnviado: () => void },
 ) {
-  const [tipo, setTipo] = useState<TipoDeFeedback>(p.respondiendo || p.sobreLaEscala ? "mejora" : "falla");
+  const sobreElCaso = p.sobreElCatalogo?.modo === "cambio" ? p.sobreElCatalogo : null;
+  const [tipo, setTipo] = useState<TipoDeFeedback>(p.respondiendo || p.sobreLaEscala || sobreElCaso ? "mejora" : "falla");
+  const [parte, setParte] = useState<ParteDelCaso>("El caso entero");
   const [cuerpo, setCuerpo] = useState("");
   const [frena, setFrena] = useState<"si" | "no">("no");
   const [detalles, setDetalles] = useState(false);
@@ -236,7 +261,7 @@ function DarFeedback(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tipo,
-          cuerpo,
+          cuerpo: sobreElCaso ? cuerpoDeLaSugerencia(sobreElCaso, parte, cuerpo) : cuerpo,
           meFrena: tipo === "falla" && frena === "si",
           pantalla: p.pantalla,
           ruta: p.ruta,
@@ -323,6 +348,29 @@ function DarFeedback(
           </div>
         )}
 
+        {sobreElCaso && (
+          <div className="space-y-2.5 rounded-[10px] border border-line bg-surface-muted px-3.5 py-3">
+            <div className="space-y-0.5">
+              <p className={ROTULO_DEL_SISTEMA}>Sobre el caso de uso</p>
+              <p className="text-[13px] font-semibold text-fg">{sobreElCaso.titulo}</p>
+            </div>
+            <label className="block space-y-1">
+              <span className="block text-xs text-fg-muted">Qué parte</span>
+              <select
+                value={parte}
+                onChange={(e) => setParte(e.target.value as ParteDelCaso)}
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-fg focus:border-brand focus:outline-none"
+              >
+                {PARTES_DEL_CASO.map((x) => (
+                  <option key={x} value={x}>
+                    {x}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+
         <div className="space-y-2">
           <p className={ROTULO_DEL_SISTEMA}>Qué tipo de feedback</p>
           <Segmentado
@@ -334,7 +382,7 @@ function DarFeedback(
         </div>
 
         <label className="block space-y-1.5">
-          <span className="block text-[13px] font-semibold text-fg">{def.etiqueta}</span>
+          <span className="block text-[13px] font-semibold text-fg">{sobreElCaso ? "Qué cambiarías" : def.etiqueta}</span>
           <textarea
             value={cuerpo}
             onChange={(e) => setCuerpo(e.target.value)}
@@ -457,6 +505,13 @@ function DarFeedback(
           )}
         </div>
 
+        {sobreElCaso && (
+          <p className="text-xs text-fg-muted">
+            Llega a la bandeja de Feedback con el caso y la parte enlazados. Si se acepta, entra en la próxima versión del catálogo y te
+            avisamos en «Para ti».
+          </p>
+        )}
+
         {error && <p className="rounded-lg border border-danger-line bg-danger-surface px-3 py-2 text-[13px] text-danger-ink">{error}</p>}
       </div>
 
@@ -471,7 +526,215 @@ function DarFeedback(
           title="Ctrl + Enter"
           className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {enviando ? "Mandando…" : def.boton}
+          {enviando ? "Mandando…" : sobreElCaso ? "Mandar la sugerencia" : def.boton}
+        </button>
+      </div>
+    </>
+  );
+}
+
+// ── Proponer un caso nuevo del catálogo ───────────────────────────────────────
+
+const AREAS_DE_LA_PROPUESTA: { clave: AreaDeLaEscala | "no-se"; nombre: string }[] = [
+  { clave: "1", nombre: "Ventas" },
+  { clave: "2", nombre: "Marketing" },
+  { clave: "3", nombre: "Servicio" },
+  { clave: "no-se", nombre: "No sé" },
+];
+
+const HERRAMIENTAS_DE_LA_PROPUESTA: { clave: Herramienta; nombre: string }[] = [
+  { clave: "hubspot", nombre: "HubSpot" },
+  { clave: "insider", nombre: "Insider" },
+  { clave: "smarteam", nombre: "Solo Smarteam" },
+];
+
+const OPCION_DE_LA_PROPUESTA = "inline-flex items-center gap-1.5 rounded-full border px-3 py-[5px] text-xs font-medium transition-colors";
+const ENTRADA_DE_LA_PROPUESTA =
+  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none";
+
+/** Un caso nuevo: lo que el cliente consigue. Lo de la escala y los servicios lo completa quien lo revisa. Sin captura. */
+function ProponerUnCaso(p: Props & { pantalla: string; ruta: string; onEnviado: () => void }) {
+  const [resultado, setResultado] = useState("");
+  const [frases, setFrases] = useState("");
+  const [areas, setAreas] = useState<(AreaDeLaEscala | "no-se")[]>([]);
+  const [herramientas, setHerramientas] = useState<Herramienta[]>([]);
+  const [cliente, setCliente] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [enviado, setEnviado] = useState<Enviado | null>(null);
+  const propuesta = { resultado, frases, areas, herramientas, cliente };
+  const incompleta = propuestaIncompleta(propuesta);
+
+  // «No sé» y un área no van juntas: elegir una saca la otra.
+  const alternarArea = (a: AreaDeLaEscala | "no-se") =>
+    setAreas((xs) => (xs.includes(a) ? xs.filter((x) => x !== a) : a === "no-se" ? ["no-se"] : [...xs.filter((x) => x !== "no-se"), a]));
+  const alternarHerramienta = (h: Herramienta) => setHerramientas((xs) => (xs.includes(h) ? xs.filter((x) => x !== h) : [...xs, h]));
+
+  const mandar = async () => {
+    if (incompleta || enviando) return;
+    setEnviando(true);
+    setError(null);
+    const cuerpo = cuerpoDeLaPropuesta(propuesta);
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "mejora",
+          cuerpo,
+          meFrena: false,
+          pantalla: p.pantalla,
+          ruta: p.ruta,
+          navegador: typeof navigator === "undefined" ? "" : describirNavegador(navigator.userAgent),
+          ventana: `${window.innerWidth} × ${window.innerHeight}`,
+          version: p.version ?? undefined,
+        }),
+      });
+      const d = (await res.json().catch(() => null)) as { error?: string; reporte?: { numero: number; urgente: boolean }; ideasEn30Dias?: number } | null;
+      if (!res.ok || !d?.reporte) {
+        setError(d?.error ?? "No se pudo mandar. Vuelve a intentarlo.");
+        return;
+      }
+      setEnviado({ numero: d.reporte.numero, urgente: false, tipo: "mejora", cuerpo, conCaptura: false, marcas: 0, errores: [] });
+      p.onFestejar(d.ideasEn30Dias ?? 0);
+      p.onEnviado();
+      window.dispatchEvent(new Event(EVENTO_DE_FEEDBACK_ENVIADO));
+    } catch {
+      setError("No hay conexión. Revisa tu internet e inténtalo de nuevo.");
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  if (enviado) {
+    return (
+      <Recibido
+        enviado={enviado}
+        ruta={p.ruta}
+        onMisReportes={() => p.onPestana("mis")}
+        onOtro={() => {
+          setEnviado(null);
+          setResultado("");
+          setFrases("");
+          setAreas([]);
+          setHerramientas([]);
+          setCliente("");
+        }}
+      />
+    );
+  }
+
+  return (
+    <>
+      <div className="min-h-0 flex-1 space-y-[18px] overflow-y-auto px-4 pb-5 pt-4">
+        <div className="space-y-0.5 rounded-[10px] border border-line bg-surface-muted px-3.5 py-3">
+          <p className={ROTULO_DEL_SISTEMA}>Catálogo de casos de uso</p>
+          <p className="text-[13px] font-semibold text-fg">Un caso nuevo</p>
+          <p className="text-xs text-fg-muted">Cuenta lo que el cliente consigue. Lo de la escala y los servicios lo completa quien lo revisa.</p>
+        </div>
+
+        <label className="block space-y-1.5">
+          <span className="block text-[13px] font-semibold text-fg">Qué consigue el cliente</span>
+          <input type="text" value={resultado} onChange={(e) => setResultado(e.target.value)} autoFocus className={ENTRADA_DE_LA_PROPUESTA} />
+          <span className="block text-xs text-fg-muted">
+            Empieza por el resultado, no por el trabajo: «Cobra a tiempo…», no «Configuramos workflows de cobro».
+          </span>
+        </label>
+
+        <label className="block space-y-1.5">
+          <span className="block text-[13px] font-semibold text-fg">Qué dice el cliente cuando lo necesita</span>
+          <textarea
+            value={frases}
+            onChange={(e) => setFrases(e.target.value)}
+            rows={3}
+            placeholder="Una frase por línea, como la dijo en la reunión"
+            className={cn(ENTRADA_DE_LA_PROPUESTA, "resize-y py-2.5 leading-[19px]")}
+          />
+        </label>
+
+        <div className="space-y-2" role="group" aria-label="Qué área mejora">
+          <p className="text-[13px] font-semibold text-fg">Qué área mejora</p>
+          <div className="flex flex-wrap gap-1.5">
+            {AREAS_DE_LA_PROPUESTA.map((a) => {
+              const elegida = areas.includes(a.clave);
+              return (
+                <button
+                  key={a.clave}
+                  type="button"
+                  aria-pressed={elegida}
+                  onClick={() => alternarArea(a.clave)}
+                  className={cn(
+                    OPCION_DE_LA_PROPUESTA,
+                    elegida
+                      ? "border-brand bg-info-surface text-fg"
+                      : a.clave === "no-se"
+                        ? "border-dashed border-line bg-surface-muted text-fg-muted hover:text-fg-secondary"
+                        : "border-line bg-surface text-fg-secondary hover:bg-surface-hover",
+                  )}
+                >
+                  {elegida && <span aria-hidden="true">✓</span>}
+                  {a.nombre}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2" role="group" aria-label="Con qué herramienta">
+          <p className="text-[13px] font-semibold text-fg">Con qué herramienta</p>
+          <div className="flex flex-wrap gap-1.5">
+            {HERRAMIENTAS_DE_LA_PROPUESTA.map((h) => {
+              const elegida = herramientas.includes(h.clave);
+              return (
+                <button
+                  key={h.clave}
+                  type="button"
+                  aria-pressed={elegida}
+                  onClick={() => alternarHerramienta(h.clave)}
+                  className={cn(
+                    OPCION_DE_LA_PROPUESTA,
+                    elegida ? "border-brand bg-info-surface text-fg" : "border-line bg-surface text-fg-secondary hover:bg-surface-hover",
+                  )}
+                >
+                  <span aria-hidden="true" className={cn("h-[7px] w-[7px] rounded-full", PUNTO_DE_HERRAMIENTA[h.clave])} />
+                  {h.nombre}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <label className="block space-y-1.5">
+          <span className="block text-[13px] font-semibold text-fg">
+            Con qué cliente salió <span className="font-normal text-fg-muted">(opcional)</span>
+          </span>
+          <input
+            type="text"
+            value={cliente}
+            onChange={(e) => setCliente(e.target.value)}
+            placeholder="El nombre de la empresa o de la preventa"
+            className={ENTRADA_DE_LA_PROPUESTA}
+          />
+        </label>
+
+        <p className="text-xs text-fg-muted">
+          Llega a la bandeja de Feedback como «Una mejora» del catálogo. Si se acepta, dirección lo arma con la escala y entra en la próxima versión.
+        </p>
+
+        {error && <p className="rounded-lg border border-danger-line bg-danger-surface px-3 py-2 text-[13px] text-danger-ink">{error}</p>}
+      </div>
+
+      <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
+        <button type="button" onClick={p.onCerrar} className="rounded-md px-2.5 py-2 text-[13px] text-fg-muted hover:text-fg">
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={() => void mandar()}
+          disabled={incompleta || enviando}
+          className="rounded-lg bg-primary px-4 py-2 text-[13px] font-semibold text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {enviando ? "Mandando…" : "Mandar la propuesta"}
         </button>
       </div>
     </>

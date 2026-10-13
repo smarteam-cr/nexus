@@ -21,6 +21,7 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Prisma } from "@prisma/client";
 import { getAnthropic } from "@/lib/anthropic";
+import { casosParaLasAreas } from "@/lib/casos-de-uso/en-la-preventa";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { estaColgada, MOTIVO_COLGADA } from "@/lib/agents/run-colgada";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
@@ -505,9 +506,9 @@ async function investigar(runId: string, fila: { clientId: string; client: { nam
 }
 
 /**
- * Los casos de uso, en modo EXPERIMENTAL: el agente los propone sin la biblioteca (que hoy está
- * vacía), a partir de dónde parece estar cada equipo, lo que le falta y sus metas. Cada tanda no
- * repite lo que ya está ni lo que el vendedor descartó. No lee HubSpot ni las reuniones.
+ * Los casos de uso: el agente parte del catálogo de Smarteam (lib/casos-de-uso, los que tocan las áreas en juego)
+ * y propone uno propio solo si ninguno calza, a partir de dónde parece estar cada equipo, lo que le falta y sus
+ * metas. Cada tanda no repite lo que ya está ni lo que el vendedor descartó. No lee HubSpot ni las reuniones.
  */
 async function proponerCasos(
   runId: string,
@@ -539,6 +540,7 @@ async function proponerCasos(
     ],
     descartados: ex.estado.contenido.casosDescartados,
     instrucciones: bloqueDeInstrucciones(ex.estado.contenido.notas, "casos"),
+    catalogo: casosParaLasAreas(ex.estado.areas),
   };
   await fase(runId, "Pensando casos de uso…");
   const respuesta = await conContextoDeIA(

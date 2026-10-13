@@ -16,6 +16,8 @@ import type { Prisma } from "@prisma/client";
 import { createBusinessCase } from "@/lib/business-cases";
 import { bcTypeOrNull, DEFAULT_BC_TYPE_ID, seedTagsFor } from "@/lib/business-cases/case-types";
 import { createBusinessCaseCanvas } from "@/lib/canvas/default-canvases";
+import { CATALOGO_DE_CASOS } from "@/lib/casos-de-uso/catalogo";
+import { idEnLaPreventa } from "@/lib/casos-de-uso/en-la-preventa";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
 import { fetchCompanyDeals, type AvailableDeal } from "@/lib/hubspot/deals";
@@ -35,10 +37,30 @@ export interface CasoDelCatalogo {
   descripcion: string;
   precio: string | null;
   tags: string[];
+  /** Solo los del catálogo de Smarteam (lib/casos-de-uso): sus áreas y las dimensiones que mueve, para la preventa. */
+  areas?: string[];
+  dimensiones?: string[];
 }
 
-/** Los casos de uso del catálogo que aplican a la implementación de HubSpot. Sin la tabla, vacío. */
+/**
+ * Los casos de uso que se pueden elegir en la preventa: primero los del catálogo de Smarteam (lib/casos-de-uso, id
+ * `cat-…`, sin precio hasta la fase 2) y después las filas de la tabla `UseCase` que aplican a la implementación de
+ * HubSpot (esas traen precio). Sin la tabla, solo los del catálogo.
+ */
 export async function catalogoDeCasosDeUso(): Promise<CasoDelCatalogo[]> {
+  const delRepo: CasoDelCatalogo[] = CATALOGO_DE_CASOS.map((c) => ({
+    id: idEnLaPreventa(c.id),
+    titulo: c.titulo,
+    descripcion: c.promesa,
+    precio: null,
+    tags: [],
+    areas: [...c.areas],
+    dimensiones: c.mueve.map((m) => m.dimension),
+  }));
+  return [...delRepo, ...(await deLaTabla())];
+}
+
+async function deLaTabla(): Promise<CasoDelCatalogo[]> {
   try {
     const filas = await prisma.useCase.findMany({
       where: { active: true },

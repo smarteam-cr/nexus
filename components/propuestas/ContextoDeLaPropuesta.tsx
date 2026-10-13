@@ -598,10 +598,10 @@ ${d.texto}` : d.texto, fileName: titulo }),
             </p>
           ) : !ucEnabled || useCases.length === 0 ? (
             <p className="rounded-lg border border-dashed border-line bg-surface-muted px-3 py-2.5 text-xs leading-[18px] text-fg-muted">
-              Todavía no hay ninguno en el catálogo para este tipo de propuesta. Cuando haya, se marcan acá (y los que eligió la preventa
-              llegan marcados).{" "}
+              Los casos de uso con precio llegan en la fase 2 del catálogo: hasta entonces el precio va en la sección de inversión. El
+              catálogo sirve de punto de partida para lo que le propones al cliente.{" "}
               <Link href="/sales/use-cases" className="font-semibold text-brand hover:text-brand-dark">
-                Ir a Casos de uso
+                Ver el catálogo
               </Link>
             </p>
           ) : (

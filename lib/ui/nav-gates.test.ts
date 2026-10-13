@@ -223,14 +223,15 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
     expect(visibles(c)).toEqual(UNIVERSALES);
   });
 
-  it("⭐ todo Customer Success entra a Preventa, y de Ventas solo ve ese hijo (Elías, 2026-10-06)", () => {
+  it("⭐ todo Customer Success entra a Preventa, y de Ventas ve solo Preventa y el catálogo de casos de uso (Elías, 2026-10-06 y 2026-10-12)", () => {
     const ventas = APP_NAV.find((it) => it.key === "sales")!;
     const hijos = (permissions: PermissionMap) => visibleNavChildren(ventas, { isCostos: false, permissions }).map((c) => c.href);
     for (const rol of ["CSE", "CSL"] as const) {
       const permissions = DEFAULT_MATRIX[rol];
       expect(canSeeNavItem(ventas, { isSuperAdmin: false, permissions, role: rol }), rol).toBe(true);
     }
-    expect(hijos(DEFAULT_MATRIX.CSE)).toEqual(["/sales/exploraciones"]);
+    // El catálogo de casos de uso también (2026-10-12): lo usa la preventa.
+    expect(hijos(DEFAULT_MATRIX.CSE)).toEqual(["/sales/exploraciones", "/sales/use-cases"]);
     expect(hijos(DEFAULT_MATRIX.VENTAS)).toEqual(["/sales/exploraciones", "/business-cases", "/sales/use-cases", "/sales/sicop"]);
     expect(ventas.entradaEsHijo, "un CSE que hace clic en Ventas no puede caer en Propuestas").toBe(true);
   });

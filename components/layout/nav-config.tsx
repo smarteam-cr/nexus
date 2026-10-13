@@ -312,10 +312,9 @@ export const APP_NAV: readonly NavItemConfig[] = [
       // del proceso (se explora, después se propone).
       { href: "/sales/exploraciones", label: "Preventa", permiso: { section: "preventa", action: "read" } },
       { href: "/business-cases", label: "Propuestas", permiso: { section: "ventas", action: "read" } },
-      // El CATÁLOGO de servicios pre-cotizados que el vendedor marca en el checklist de una
-      // propuesta. Hasta hoy solo se llegaba por un link chiquito del encabezado de
-      // /business-cases; es un área propia y va en el menú como tal.
-      { href: "/sales/use-cases", label: "Casos de uso", permiso: { section: "ventas", action: "read" } },
+      // El catálogo de casos de uso (2026-10-12): lo que consigue un cliente, atado a la escala. Lo usan la
+      // preventa y las propuestas, así que lo ve quien tiene Preventa (todo Customer Success y Ventas).
+      { href: "/sales/use-cases", label: "Casos de uso", permiso: { section: "preventa", action: "read" } },
       // Licitaciones públicas: viven como tickets del pipeline «Gobiernos» de HubSpot,
       // no como tratos. Una hoja se declara acá en la MISMA tanda que crea su ruta.
       { href: "/sales/sicop", label: "SICOP", permiso: { section: "ventas", action: "read" } },

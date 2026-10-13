@@ -10,6 +10,9 @@
  * descartado no vuelve. Desde el 2026-10-07, solo con base en la escala (`laEscalaTieneBase`): sin un
  * nivel, no habría sobre qué apoyarlos.
  *
+ * Desde el 2026-10-12 el agente parte del catálogo de Smarteam (lib/casos-de-uso, ids `cat-…`) y la lista «Del catálogo
+ * de Smarteam» muestra los casos que tocan las áreas en juego, con un enlace a su ficha.
+ *
  * Se ve como en el diseño del 2026-10-03: una franja azul arriba (cuántos sugiere el agente, otra
  * tanda, usar todos), los elegidos como filas con su marca verde, y los sugeridos en dos columnas de
  * tarjetas compactas con el porqué plegado.
@@ -19,6 +22,7 @@
  * 2026-10-01 (PasoPropuesta.tsx).
  */
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Alert, Badge, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { esCasoLibre, laEscalaTieneBase, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
@@ -35,6 +39,9 @@ interface Caso {
   titulo: string;
   descripcion: string;
   precio: string | null;
+  /** Solo los del catálogo de Smarteam: sus áreas y las dimensiones que mueve. */
+  areas?: string[];
+  dimensiones?: string[];
 }
 interface DatosDelPaso {
   catalogo: Caso[];
@@ -151,7 +158,8 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
   const elegidos = Object.entries(e.contenido.casosDeUso);
   const areas = escala.areas.filter((a) => e.areas.includes(a.id));
   const propuestos = pendientesPara((d) => d.tipo === "casoDeUso");
-  const libres = catalogo.filter((c) => !(c.id in e.contenido.casosDeUso));
+  // Del catálogo de Smarteam, solo los que tocan un área en juego; los de la tabla (con precio), todos.
+  const libres = catalogo.filter((c) => !(c.id in e.contenido.casosDeUso) && (!c.areas || c.areas.some((a) => e.areas.includes(a))));
   const yaPropuso = e.propuesta.corridas.some((c) => c.modo === "casos");
   const conBase = laEscalaTieneBase(e);
 
@@ -166,8 +174,17 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
   }, [enRecorrido, puedeEditar, areas.length, conBase, yaPropuso, exp.id, lanzar]);
 
   const quitar = (id: string) => void cambiar([{ op: "casoDeUso", useCaseId: id, valor: null }]);
-  const elegirDelCatalogo = (caso: Caso, areaId: string | null) =>
-    void cambiar([{ op: "casoDeUso", useCaseId: caso.id, valor: { titulo: caso.titulo, areaId, razon: caso.descripcion.slice(0, 400) } }]);
+  const elegirDelCatalogo = (caso: Caso, areaId: string | null) => {
+    // Las dimensiones que mueve en el área elegida (sin área, todas): así el caso dice qué sube, como los del agente.
+    const dimensiones = (caso.dimensiones ?? []).filter((d) => !areaId || d.split(".")[0] === areaId).slice(0, 8);
+    void cambiar([
+      {
+        op: "casoDeUso",
+        useCaseId: caso.id,
+        valor: { titulo: caso.titulo, areaId, razon: caso.descripcion.slice(0, 400), ...(dimensiones.length ? { dimensiones } : {}) },
+      },
+    ]);
+  };
   const esPropia = corrida?.modo === "casos";
   const nombresDeAreas = areas.map((a) => a.nombre).join(" y ");
 
@@ -202,10 +219,10 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
               <strong>
                 El agente sugiere {propuestos.length} {propuestos.length === 1 ? "caso" : "casos"}
               </strong>
-              {nombresDeAreas ? ` para ${nombresDeAreas}` : ""}, según dónde está cada equipo. Experimental: sin biblioteca ni precio.
+              {nombresDeAreas ? ` para ${nombresDeAreas}` : ""}, según dónde está cada equipo. Parte del catálogo de Smarteam; todavía sin precio.
             </>
           ) : (
-            <>El agente propone casos de uso según dónde está cada equipo en la escala y lo que contó el cliente. Experimental: sin biblioteca ni precio; cada tanda cuesta unos centavos.</>
+            <>El agente propone casos de uso del catálogo de Smarteam según dónde está cada equipo en la escala y lo que contó el cliente, y uno propio si ninguno calza. Todavía sin precio; cada tanda cuesta unos centavos.</>
           )}
         </FranjaDeSugerencias>
       </div>
@@ -253,6 +270,11 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
                     )}
                   </p>
                   <p className="line-clamp-2 text-xs text-fg-muted">{c.descripcion}</p>
+                  {c.id.startsWith("cat-") && (
+                    <Link href={`/sales/use-cases/${c.id.slice(4)}`} target="_blank" className="text-xs text-brand hover:text-brand-light">
+                      Ver el caso
+                    </Link>
+                  )}
                 </div>
                 {puedeEditar && (
                   <Select

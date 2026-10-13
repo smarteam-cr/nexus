@@ -64,7 +64,7 @@ const DEPARTAMENTOS: Departamento[] = [
     ],
     enNexus: [
       { nombre: "Ventas → Propuestas", url: "/business-cases", detalle: "la propuesta de cada prospecto, generada a partir de lo que se habló con él." },
-      { nombre: "Ventas → Casos de uso", url: "/sales/use-cases", detalle: "el catálogo de servicios pre-cotizados." },
+      { nombre: "Ventas → Casos de uso", url: "/sales/use-cases", detalle: "lo que un cliente consigue con Smarteam, atado a la Escala de Rendimiento." },
       { nombre: "Ventas → SICOP", url: "/sales/sicop", detalle: "las licitaciones públicas." },
     ],
     leerMas: [a("servicios"), " · ", a("casos"), " · ", deCs("escala"), " · ", deCs("customerSuccess")],

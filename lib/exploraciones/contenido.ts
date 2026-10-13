@@ -105,7 +105,7 @@ export interface Medicion {
 
 /**
  * Un caso de uso elegido para la propuesta, con el área que lleva a Funcional y por qué. Puede ser
- * del catálogo de Smarteam (su id es el del catálogo) o uno que propuso el agente sin el catálogo
+ * del catálogo de Smarteam (`cat-<id>`, lib/casos-de-uso), una fila de la tabla `UseCase` (su id) o uno que propuso el agente sin el catálogo
  * (id `ia-…`, ver `idDeCasoLibre`): ese no tiene precio ni fila en el catálogo, y entra a la
  * propuesta solo como contexto. El título se guarda con el elegido: la propuesta y el traspaso lo
  * nombran sin depender de que el catálogo siga igual.

@@ -15,6 +15,7 @@
  *   · la captura: su enlace firmado vence en una hora. Si hace falta, el prompt dice que se pida;
  *   · los ids de la ruta: `/clients/cm9…` se escribe `/clients/[id]`, que es como se llama la carpeta.
  */
+import { ENCABEZADO_DEL_CATALOGO } from "@/lib/casos-de-uso/feedback";
 import type { DetalleDeEscala, FilaDelManual } from "./escala";
 import { COLUMNA, numeroDeReporte, TIPO, type Columna, type TipoDeFeedback } from "./reglas";
 
@@ -160,6 +161,10 @@ function lineasDeEscala(e: EscalaParaPrompt): string[] {
 const CIERRE_DE_LA_ESCALA =
   "La escala vive en docs/escala/. Propón el cambio como una versión nueva, siguiendo su especificación, su historial y sus pruebas. No la publiques: muéstrame el cambio primero.";
 
+/** Un reporte del catálogo de casos de uso (lo dice el principio del texto, lib/casos-de-uso/feedback.ts). */
+const CIERRE_DEL_CATALOGO =
+  "El catálogo de casos de uso vive en lib/casos-de-uso/catalogo.ts. Aplica el cambio ahí: cada caso dice el resultado que obtiene el cliente, no el trabajo, y sus criterios tienen que calzar con la escala (lib/casos-de-uso/catalogo.test.ts). Muéstrame el cambio antes de subirlo.";
+
 const CIERRE: Record<TipoDeFeedback, string> = {
   falla: "Busca la causa en el código de esa pantalla antes de cambiar nada. Al terminar, dime en una frase qué estaba mal y qué cambiaste.",
   mejora:
@@ -199,7 +204,7 @@ export function promptDeReporte(r: ReporteParaPrompt): string {
   const conversacion = lineasDeConversacion(r);
   if (conversacion.length) bloques.push(conversacion);
 
-  const cierre = [r.escala ? CIERRE_DE_LA_ESCALA : CIERRE[r.tipo]];
+  const cierre = [r.escala ? CIERRE_DE_LA_ESCALA : r.cuerpo.startsWith(`[${ENCABEZADO_DEL_CATALOGO}`) ? CIERRE_DEL_CATALOGO : CIERRE[r.tipo]];
   if (r.tieneCaptura) cierre.push(`Si necesitas ver la pantalla, pídeme la captura del ${numero}.`);
   bloques.push(cierre);
 

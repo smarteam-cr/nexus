@@ -98,6 +98,12 @@ describe("el prompt de un reporte", () => {
     expect(duda).not.toContain("urgente");
   });
 
+  it("un reporte del catálogo de casos de uso manda a editar el catálogo", () => {
+    const p = promptDeReporte(reporte({ tipo: "mejora", cuerpo: "[Catálogo de casos de uso · Un caso nuevo]\n\nQué consigue el cliente: Cobra a tiempo" }));
+    expect(p).toContain("lib/casos-de-uso/catalogo.ts");
+    expect(p).not.toContain("docs/DECISIONS.md");
+  });
+
   it("de la conversación van solo los últimos mensajes, y lo dice", () => {
     const mensajes = Array.from({ length: MAX_MENSAJES_EN_EL_PROMPT + 2 }, (_, i) => ({ deQuienReporto: i % 2 === 0, cuerpo: `mensaje ${i + 1}` }));
     const p = promptDeReporte(reporte({ mensajes }));

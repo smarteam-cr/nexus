@@ -22,6 +22,8 @@
  */
 import { definicionEnElMarco, MARCO_DE_CS, type ClaveDeMarco } from "./marco";
 import type Anthropic from "@anthropic-ai/sdk";
+import type { CasoDelCatalogo } from "@/lib/casos-de-uso/catalogo";
+import { catalogoParaElAgente, dimensionesEnElArea, idEnLaPreventa } from "@/lib/casos-de-uso/en-la-preventa";
 import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
 import {
   CANALES_DE_CONEXION,
@@ -1066,7 +1068,7 @@ export function leerLaIndustria(respuesta: Anthropic.Messages.Message, ctx: Pick
   return { edicion: slug, razon, perfil: null };
 }
 
-// ── Proponer casos de uso (experimental: sin la biblioteca) ───────────────────
+// ── Proponer casos de uso (desde el catálogo de Smarteam, o uno propio) ──────
 
 export const NOMBRE_DE_LA_HERRAMIENTA_DE_CASOS = "proponer_casos";
 
@@ -1086,10 +1088,17 @@ export interface ContextoDeCasos {
   descartados: string[];
   /** Las instrucciones adicionales del vendedor (contexto de la preventa), ya como bloque, o "". */
   instrucciones?: string;
+  /**
+   * Los casos del catálogo de Smarteam que tocan las áreas en juego (lib/casos-de-uso). Si uno calza, el agente lo
+   * usa con su id y su título; si ninguno calza, propone uno propio. Sin catálogo, solo propios.
+   */
+  catalogo?: readonly CasoDelCatalogo[];
 }
 
 export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const dims = ctx.areas.flatMap((a) => a.dimensiones.map((d) => d.id));
+  const catalogo = ctx.catalogo ?? [];
+  const conCatalogo = catalogo.length > 0;
   const tool: Anthropic.Messages.Tool = {
     name: NOMBRE_DE_LA_HERRAMIENTA_DE_CASOS,
     description: "Propone casos de uso para la primera propuesta, por área. Llámala una sola vez.",
@@ -1102,8 +1111,11 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
             type: "object",
             properties: {
               areaId: { type: "string", enum: ctx.areas.map((a) => a.id) },
-              titulo: { type: "string", description: "Corto y concreto, como lo diría el cliente (máximo 80 caracteres)." },
-              descripcion: { type: "string", description: "Qué se implementa en HubSpot y cómo lo usa el equipo, en dos o tres frases." },
+              ...(conCatalogo
+                ? { catalogo: { type: "string", enum: ["", ...catalogo.map((c) => c.id)], description: "El id del caso del catálogo, si es ese. Vacío si es uno propio." } }
+                : {}),
+              titulo: { type: "string", description: "El resultado que consigue el cliente, corto (máximo 80 caracteres). Si es del catálogo, su título tal cual." },
+              descripcion: { type: "string", description: "Qué consigue el cliente y cómo lo nota su equipo, en dos o tres frases: el resultado, no el trabajo." },
               dimensiones: { type: "array", items: { type: "string", enum: dims.length ? dims : ["0.0"] }, description: "Las dimensiones de la escala que mueve." },
               razon: { type: "string", description: "Una frase: qué de lo que le falta, o de su meta, resuelve." },
             },
@@ -1117,7 +1129,12 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
   const sistema = `Eres el analista de ventas de Smarteam, una consultora que implementa HubSpot. Ayudas a un vendedor a armar la PRIMERA propuesta de un prospecto: casos de uso que llevan cada área en juego a Funcional en la Escala de Rendimiento, empezando por lo que va primero.
 
 Reglas:
-- Cada caso de uso es algo concreto que se implementa en HubSpot y que el equipo usa (no «capacitación» ni «consultoría» sueltas).
+- Un caso de uso dice el RESULTADO que obtiene el cliente, no el trabajo que hace Smarteam: «Ves en qué va cada negocio sin preguntar», no «Configuramos el pipeline». Nada de «capacitación» ni «consultoría» sueltas.${
+    conCatalogo
+      ? `
+- Parte del CATÁLOGO DE SMARTEAM (abajo). Si un caso del catálogo calza con lo que le falta, úsalo: su id en «catalogo» y su título tal cual; la descripción y la razón, para esta empresa. Propón uno propio (con «catalogo» vacío) solo si ninguno calza.`
+      : ""
+  }
 - Empieza por lo que frena al área (sus dimensiones más bajas) y por lo que le falta para Funcional; después, lo que toca una meta con cifras.
 - Como máximo ${MAX_CASOS_POR_AREA} por área. Menos es mejor si alcanza: una primera venta que el cliente pueda sostener.
 - La razón nombra qué de lo que le falta, o de su meta, resuelve. Sin frases de venta, sin precios, sin montos de dinero.
@@ -1131,6 +1148,7 @@ Reglas:
     `=== LA EXPLORACIÓN ===\n${ctx.exploracion}\n\n` +
     `=== LAS DIMENSIONES (para el campo «dimensiones») ===\n` +
     ctx.areas.map((a) => `${a.nombre}: ${a.dimensiones.map((d) => `${d.id} ${d.nombre}`).join("; ")}`).join("\n") +
+    (conCatalogo ? `\n\n=== EL CATÁLOGO DE SMARTEAM (los que tocan estas áreas) ===\n${catalogoParaElAgente(catalogo)}` : "") +
     `\n\n=== YA ESTÁN (no los repitas) ===\n${ctx.yaEstan.length ? ctx.yaEstan.map((t) => `- ${t}`).join("\n") : "(ninguno)"}` +
     `\n\n=== EL VENDEDOR LOS DESCARTÓ (no los vuelvas a proponer) ===\n${ctx.descartados.length ? ctx.descartados.map((t) => `- ${t}`).join("\n") : "(ninguno)"}`;
   return {
@@ -1145,8 +1163,8 @@ Reglas:
 
 /**
  * Lo que devolvió, filtrado: en un área en juego, con título, descripción y razón, sin repetir lo que
- * ya está ni lo descartado, y con el tope por área. El id sale del título (`idDeCasoLibre`): un caso
- * descartado deja su lápida y no vuelve.
+ * ya está ni lo descartado, y con el tope por área. Un caso del catálogo lleva su id (`cat-…`) y su título; uno
+ * propio, un id que sale del título (`idDeCasoLibre`). Un caso descartado deja su lápida y no vuelve.
  */
 export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: ContextoDeCasos, corridaId: string, ahora = new Date()): Lectura {
   const bloque = respuesta.content.find((b) => b.type === "tool_use" && b.name === NOMBRE_DE_LA_HERRAMIENTA_DE_CASOS);
@@ -1154,12 +1172,16 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
   const areas = new Map(ctx.areas.map((a) => [a.id, a]));
   const vistos = new Set([...ctx.yaEstan, ...ctx.descartados].map(normalizarTexto));
   const porArea = new Map<string, number>();
+  const delCatalogo = new Map((ctx.catalogo ?? []).map((c) => [c.id, c]));
   const items: ItemPropuesto[] = [];
   let descartadas = 0;
   for (const x of lista(input.casos)) {
     const areaId = str(x.areaId);
     const area = areaId ? areas.get(areaId) : undefined;
-    const titulo = str(x.titulo)?.slice(0, 200);
+    // Del catálogo, y de un área que el caso toca: el título es el suyo, no el que escribió el modelo.
+    const caso = area ? delCatalogo.get(str(x.catalogo) ?? "") : undefined;
+    const delCaso = caso && caso.areas.includes(area!.id as (typeof caso.areas)[number]) ? caso : undefined;
+    const titulo = (delCaso?.titulo ?? str(x.titulo))?.slice(0, 200);
     const descripcion = str(x.descripcion)?.slice(0, 800);
     const razon = str(x.razon)?.slice(0, 400);
     if (!area || !titulo || !descripcion || !razon || vistos.has(normalizarTexto(titulo)) || (porArea.get(area.id) ?? 0) >= MAX_CASOS_POR_AREA) {
@@ -1167,8 +1189,9 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
       continue;
     }
     const deEstaArea = new Set(area.dimensiones.map((d) => d.id));
-    const dimensiones = (Array.isArray(x.dimensiones) ? x.dimensiones : []).filter((d): d is string => typeof d === "string" && deEstaArea.has(d)).slice(0, 8);
-    const destino: DestinoDePropuesta = { tipo: "casoDeUso", useCaseId: idDeCasoLibre(titulo) };
+    const pedidas = (Array.isArray(x.dimensiones) ? x.dimensiones : []).filter((d): d is string => typeof d === "string");
+    const dimensiones = (delCaso && pedidas.length === 0 ? dimensionesEnElArea(delCaso, area.id) : pedidas).filter((d) => deEstaArea.has(d)).slice(0, 8);
+    const destino: DestinoDePropuesta = { tipo: "casoDeUso", useCaseId: delCaso ? idEnLaPreventa(delCaso.id) : idDeCasoLibre(titulo) };
     const valor = VALIDADOR_ESTRICTO.valorDelDestino(destino, { titulo, areaId: area.id, razon, descripcion, ...(dimensiones.length ? { dimensiones } : {}) });
     if (valor === null) {
       descartadas++;

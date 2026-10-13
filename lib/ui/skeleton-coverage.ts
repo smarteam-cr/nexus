@@ -114,7 +114,9 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
 
   // ── Ventas ──────────────────────────────────────────────────────────────────
   sales: { modo: "own" },
-  "sales/use-cases": { modo: "inherits", de: "sales" },
+  // El catálogo de casos de uso: tarjetas en grilla; la ficha, dos columnas. No se parecen a /sales.
+  "sales/use-cases": { modo: "own" },
+  "sales/use-cases/[id]": { modo: "own" },
   // Forma PROPIA: secciones plegables por etapa del pipeline, no las tarjetas de
   // prospecto de /sales. Heredar prometería otra pantalla.
   "sales/sicop": { modo: "own" },
