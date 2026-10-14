@@ -87,12 +87,14 @@ const PROFILE_MD = `Smarteam es una consultora de HubSpot que está pasando a se
 
 **Misión del puesto.** Entender qué resultado persigue el cliente, ubicarlo en la **Escala de Rendimiento** —la forma en que Smarteam ubica dónde está cada cliente y hacia dónde puede crecer— y proponerle el siguiente paso que lo acerca a ese resultado. El criterio de éxito es el resultado que el cliente espera, no el proyecto que se firma.
 
-Es el puesto que entiende las necesidades del cliente y sabe dónde encaja cada servicio de Smarteam: qué resuelve cada uno, para quién y en qué orden conviene hacerlo.`;
+Es el puesto que entiende las necesidades del cliente y sabe dónde encaja cada servicio de Smarteam: qué resuelve cada uno, para quién y en qué orden conviene hacerlo.
+
+Todo gira alrededor de explorar bien, porque **una buena exploración es lo que produce una buena propuesta**. El diagnóstico que hace Ventas es el necesario para cerrar la primera venta y darle al cliente previsibilidad de hacia dónde puede crecer — no el diagnóstico completo, que viene después.`;
 
 const CONTENT = {
   smarteam: {
     proposito:
-      "Creemos que las empresas merecen un aliado estratégico que realmente se involucre, entienda su realidad y las ayude a crecer con sentido. Por eso acá la buena consultoría depende del MÉTODO y no de quién la haga: trabajamos con IA primero, apoyados en Nexus, la herramienta interna donde ese método vive.",
+      "Creemos que las empresas merecen un aliado estratégico que realmente se involucre, entienda su realidad y las ayude a crecer con sentido.",
     estructuraTitulo: "Cómo está armado el equipo",
     estructuraNota:
       "Este es el esqueleto del equipo, no una cadena de mando. Da una idea de las piezas que existen y con quiénes trabajarías.",
@@ -116,7 +118,7 @@ const CONTENT = {
       {
         title: "Exploración consultiva",
         detail:
-          "El centro del puesto: una buena exploración es lo que produce una buena propuesta. Se lleva en el lienzo de Exploraciones de Nexus — se ubica al cliente en la Escala de Rendimiento y se registra qué quiere lograr, qué retos tiene y qué le cuesta no lograrlo, combinando la Escala con las preguntas de metas, planes, retos, tiempos, presupuesto, quién decide y consecuencias que ya usa HubSpot. También se mide qué tan abierto está a la asesoría, porque eso decide si es un cliente para crecer o si conviene descalificarlo a tiempo. Es el diagnóstico necesario para hacer la primera venta y darle al cliente previsibilidad de hacia dónde puede crecer — no el diagnóstico completo, que viene después.",
+          "En el lienzo de Exploraciones de Nexus: ubicar al cliente en la Escala de Rendimiento y registrar qué quiere lograr, qué lo frena y qué le cuesta no lograrlo, con las preguntas de metas, planes, retos, tiempos, presupuesto, quién decide y consecuencias de HubSpot. También se mide qué tan abierto está a la asesoría: ahí se decide si es un cliente para crecer o si conviene descalificarlo.",
       },
       {
         title: "Pipeline técnico-comercial de punta a punta",
