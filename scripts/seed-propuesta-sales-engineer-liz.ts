@@ -66,6 +66,25 @@
  *     variantes de las que quedaron.
  * ⛔ Sin tocar: propuesta económica, meta, fechas y beneficios.
  *
+ * ── QUINTA RONDA (2026-10-14): LA COMISIÓN PREMIA LLEGAR A LA META ───────────
+ * Antes era 5% plano sobre cualquier venta y 10% de cualquier licencia, sin relación con
+ * el resultado del mes. Ahora:
+ *   · Venta: 5% fijo en los 3 meses de rampa; desde el mes 4 el porcentaje sale de cuánto
+ *     de la meta mensual se alcanzó (<60% → 3%, 60-100% → 4%, >100% → 5%).
+ *   · Qué cuenta: clientes nuevos que trae ella, lo que se le venda a esas cuentas en sus
+ *     primeros 6 meses, y la expansión donde es el puente con quien decide (venta conjunta
+ *     con CS, comisión compartida). Se fue la lista vieja de re-implementaciones/upgrades/
+ *     cross-selling en general.
+ *   · Licencias: el 10% queda, pero SOLO de cuentas nuevas que trae Smarteam, y se reparte
+ *     si la venta es compartida. Fuera el «Íntegro para ti».
+ *   · Dos bloques nuevos: «Qué ventas te cuentan» y «Cuándo se paga y cuándo se revisa»
+ *     (se paga cuando el cliente paga la factura, al mes siguiente; el esquema se revisa en
+ *     la evaluación del mes 3 y cuando esté calculado el margen por proyecto).
+ *   · Se corrigieron las DOS contradicciones que quedaban fuera de la oferta: el «se paga
+ *     aparte del salario» de partnerships y el de los caminos de éxito, que prometían
+ *     comisión sin condición y sin mencionar que la expansión se comparte.
+ * ⛔ Salario, meta, fechas y beneficios: sin tocar.
+ *
  * ⚠ TUTEO, no voseo (preferencia de Elías): "puedes", "llevas", "tú". Las propuestas de
  * CSE anteriores tienen voseo y quedaron fuera de esa norma — ver el resumen de la sesión.
  *
@@ -180,7 +199,7 @@ const CONTENT = {
       {
         title: "Aliados y licencias de la solución",
         detail:
-          "Detectar qué licencia o add-on necesita cada solución (ATOM Chat, Cooby, NUA Talk, Aircall, Infobip) y moverlo con el aliado que corresponde. Es una de las dos partes del puesto que se pagan aparte del salario.",
+          "Detectar qué licencia o add-on necesita cada solución (ATOM Chat, Cooby, NUA Talk, Aircall, Infobip) y moverlo con el aliado que corresponde. Cuando la licencia es de una cuenta nueva, además entra en comisión — las condiciones están en la propuesta económica.",
       },
     ],
   },
@@ -303,7 +322,7 @@ const CONTENT = {
       {
         title: "Llegas a quien decide",
         detail:
-          "En las cuentas donde el día a día lo lleva alguien sin poder de decisión, abres la puerta con quien sí decide. Ahí es donde la cartera crece — y esa parte se paga aparte del salario.",
+          "En las cuentas donde el día a día lo lleva alguien sin poder de decisión, abres la puerta con quien sí decide. Ahí es donde la cartera crece, en venta conjunta con Customer Success.",
       },
     ],
   },
@@ -360,16 +379,31 @@ const CONTENT = {
       {
         titulo: "Comisión por venta",
         texto:
-          "5% sobre el valor de cada venta que cierres: clientes nuevos, re-implementaciones, upgrades y cross-selling. Hacer crecer el negocio se paga aparte del salario.",
+          "Durante los 3 meses de rampa, 5% fijo sobre el valor de la venta. Desde el mes 4, cuando la meta de $30.000 ya corre completa, el porcentaje depende de cuánto de la meta del mes alcances: por debajo del 60%, 3% · entre el 60% y el 100%, 4% · por encima de la meta, 5%.",
         enfasis: true,
       },
       {
         titulo: "Comisión por licencias",
         texto:
-          "10% del valor de la licencia vendida o incrementada, durante sus primeros 3 meses. Íntegro para ti.",
+          "10% del valor de la licencia durante sus primeros 3 meses, solo para licencias de cuentas nuevas que trae Smarteam. Si la venta es compartida, ese 10% se reparte.",
       },
     ],
     bloques: [
+      {
+        titulo: "Qué ventas te cuentan",
+        items: [
+          "Los clientes nuevos que traes.",
+          "Lo que se le venda a esas mismas cuentas durante sus primeros 6 meses.",
+          "La expansión en cuentas donde eres el puente con quien decide: es venta conjunta con Customer Success y la comisión se comparte.",
+        ],
+      },
+      {
+        titulo: "Cuándo se paga y cuándo se revisa",
+        items: [
+          "Las comisiones se pagan cuando el cliente paga la factura, al mes siguiente.",
+          "El esquema de comisiones se revisa en la evaluación del mes 3 y cuando Smarteam tenga calculado el margen de cada proyecto.",
+        ],
+      },
       {
         titulo: "Otros detalles",
         items: [
