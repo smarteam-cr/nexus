@@ -45,6 +45,27 @@
  *   · Cartera instalada: el objetivo es SUBIR al cliente en la escala; los productos y las
  *     licencias quedan como medios.
  *
+ * ── TERCERA RONDA (2026-10-14): SIMPLIFICAR Y HABLAR UN SOLO IDIOMA ──────────
+ * Liz no conoce la escala, así que se nombra SIEMPRE «Escala de Rendimiento» y se explica
+ * UNA sola vez, en la misión («la forma en que Smarteam ubica dónde está cada cliente y
+ * hacia dónde puede crecer»). Antes aparecía como «matriz interna de Rendimiento», «matriz
+ * de Rendimiento» y «la escala».
+ *   · «Cómo es Smarteam» suma el método por encima de la persona + IA primero sobre Nexus.
+ *   · El perfil pierde el párrafo de «dirección técnica-comercial integral» y «centro de
+ *     soluciones» (quedaba del enfoque viejo): ahora dice que es quien entiende las
+ *     necesidades del cliente y sabe dónde encaja cada servicio.
+ *   · Responsabilidades: fuera los porcentajes de tiempo, fuera «la negociación y el cierre
+ *     se coordinan con el CEO», fuera la tarjeta de Arquitectura técnica y ROI, y fuera el
+ *     SOW — las propuestas se generan en Nexus y lo de Liz es explorar lo suficiente.
+ *   · El diagnóstico de ventas queda nombrado igual en todo el documento: el necesario para
+ *     la primera venta y para darle previsibilidad al cliente, NO el completo.
+ *   · Cartera instalada (responsabilidad + acción semanal + sesión con CS): el rol es ser el
+ *     PUENTE con quien decide, en las cuentas donde el interlocutor del día a día no decide.
+ *   · Caminos: de 9 y 11 a **6 y 6**. Se fue «Entrega sin sorpresas» y toda mención al SOW;
+ *     entra «Una buena exploración produce una buena propuesta». Las que se fueron decían
+ *     variantes de las que quedaron.
+ * ⛔ Sin tocar: propuesta económica, meta, fechas y beneficios.
+ *
  * ⚠ TUTEO, no voseo (preferencia de Elías): "puedes", "llevas", "tú". Las propuestas de
  * CSE anteriores tienen voseo y quedaron fuera de esa norma — ver el resumen de la sesión.
  *
@@ -60,18 +81,18 @@ const ROLE_ID = "cmv5o2pi500vb07qllgpbfdsu";
 const TITLE = "Liz Navarro · Sales Engineer";
 const AREA = "Propuesta de contratación · Smarteam";
 const SUMMARY =
-  "Entiende qué resultado persigue el cliente, lo ubica en la matriz de Rendimiento y le propone el siguiente paso que lo acerca a ese resultado.";
+  "Entiende qué resultado persigue el cliente, lo ubica en la Escala de Rendimiento y le propone el siguiente paso que lo acerca a ese resultado.";
 
 const PROFILE_MD = `Smarteam es una consultora de HubSpot que está pasando a ser una **consultoría tecnológica potenciada por IA**. En la práctica, la IA se encarga del trabajo repetitivo y las personas hacen lo que la IA no puede: entender el negocio del cliente, diseñar la solución y sostener la conversación difícil.
 
-**Misión del puesto.** Entender qué resultado persigue el cliente, ubicarlo en la **matriz interna de Rendimiento** y proponerle el siguiente paso que lo acerca a ese resultado. El criterio de éxito es el resultado que el cliente espera, no el proyecto que se firma.
+**Misión del puesto.** Entender qué resultado persigue el cliente, ubicarlo en la **Escala de Rendimiento** —la forma en que Smarteam ubica dónde está cada cliente y hacia dónde puede crecer— y proponerle el siguiente paso que lo acerca a ese resultado. El criterio de éxito es el resultado que el cliente espera, no el proyecto que se firma.
 
-El puesto nace como una posición estratégica dentro del crecimiento comercial, y evoluciona del enfoque de ventas asistidas hacia una **dirección técnica-comercial integral**: conectar oportunidades con soluciones viables, escalables y rentables. El objetivo es consolidar *Sales Engineering* como un centro de soluciones y conocimiento técnico-comercial que potencie la relación con HubSpot, impulse clientes nuevos y maximice el valor de la cartera instalada.`;
+Es el puesto que entiende las necesidades del cliente y sabe dónde encaja cada servicio de Smarteam: qué resuelve cada uno, para quién y en qué orden conviene hacerlo.`;
 
 const CONTENT = {
   smarteam: {
     proposito:
-      "Creemos que las empresas merecen un aliado estratégico que realmente se involucre, entienda su realidad y las ayude a crecer con sentido.",
+      "Creemos que las empresas merecen un aliado estratégico que realmente se involucre, entienda su realidad y las ayude a crecer con sentido. Por eso acá la buena consultoría depende del MÉTODO y no de quién la haga: trabajamos con IA primero, apoyados en Nexus, la herramienta interna donde ese método vive.",
     estructuraTitulo: "Cómo está armado el equipo",
     estructuraNota:
       "Este es el esqueleto del equipo, no una cadena de mando. Da una idea de las piezas que existen y con quiénes trabajarías.",
@@ -95,7 +116,7 @@ const CONTENT = {
       {
         title: "Exploración consultiva",
         detail:
-          "El centro del puesto. Cada exploración se lleva en el lienzo de Exploraciones de Nexus: se ubica al cliente en cada dimensión de la escala y se registra qué quiere lograr, qué retos tiene y qué le cuesta no lograrlo — la escala combinada con las preguntas de metas, planes, retos, tiempos, presupuesto, quién decide y consecuencias que ya usa HubSpot. También se mide qué tan abierto está a la asesoría, porque eso decide si es un cliente para crecer o si conviene descalificarlo a tiempo. Es un diagnóstico PRELIMINAR: la profundidad justa para cerrar la primera venta, no el diagnóstico completo que hace después Customer Success.",
+          "El centro del puesto: una buena exploración es lo que produce una buena propuesta. Se lleva en el lienzo de Exploraciones de Nexus — se ubica al cliente en la Escala de Rendimiento y se registra qué quiere lograr, qué retos tiene y qué le cuesta no lograrlo, combinando la Escala con las preguntas de metas, planes, retos, tiempos, presupuesto, quién decide y consecuencias que ya usa HubSpot. También se mide qué tan abierto está a la asesoría, porque eso decide si es un cliente para crecer o si conviene descalificarlo a tiempo. Es el diagnóstico necesario para hacer la primera venta y darle al cliente previsibilidad de hacia dónde puede crecer — no el diagnóstico completo, que viene después.",
       },
       {
         title: "Pipeline técnico-comercial de punta a punta",
@@ -108,32 +129,27 @@ const CONTENT = {
           "El demo ocurre DESPUÉS de explorar y muestra lo que la exploración encontró: cuenta el caso del cliente —con sus retos y sus números—, no nuestro catálogo. Un demo antes de entender el negocio es una lista de funcionalidades.",
       },
       {
-        title: "Arquitectura técnica y ROI por industria",
+        title: "Propuestas y modelo comercial",
         detail:
-          "Diseñar la arquitectura de cada oportunidad y su proyección de ROI, personalizada al sector del cliente. Es lo que separa una propuesta de una lista de precios.",
+          "Las propuestas se generan en Nexus; lo tuyo es explorar lo suficiente para que salgan bien, porque la propuesta se arma con lo que encontraste. Se entra con una implementación base o con un caso de uso; el crecimiento de ahí en adelante vive en SmartLoop y en el catálogo de casos de uso.",
       },
       {
-        title: "Propuestas, SOWs y modelo comercial",
-        detail:
-          "Elaborar las propuestas y los SOWs con precisión y enfoque de rentabilidad, y analizar factibilidad técnica y márgenes ANTES del cierre. Se entra con una implementación base o con un caso de uso; el crecimiento de ahí en adelante vive en SmartLoop y en el catálogo de casos de uso.",
-      },
-      {
-        title: "Prospección y negocios nuevos (20% del tiempo)",
+        title: "Prospección y negocios nuevos",
         detail:
           "Ejecutar outbound sobre los sectores foco e identificar oportunidades en bases internas o referidas. La vara son 3 clientes nuevos por trimestre por captación propia.",
       },
       {
-        title: "Oportunidades inbound (50% del tiempo)",
+        title: "Oportunidades inbound",
         detail:
-          "Gestionar los leads que llegan de eventos, marketing y HubSpot, y llevar el proceso comercial completo. La negociación y el cierre se coordinan con el CEO.",
+          "Gestionar los leads que llegan de eventos, marketing y HubSpot, y llevar el proceso comercial completo hasta el cierre.",
       },
       {
-        title: "Crecimiento de la cartera instalada (20% del tiempo)",
+        title: "Crecimiento de la cartera instalada",
         detail:
-          "Subir al cliente en la escala: mirar dónde quedó cada cuenta activa y proponer el siguiente paso que la mueve. Las re-implementaciones, los upgrades y los productos —ATOM Chat, Cooby, NUA Talk, Aircall, Infobip, integraciones por API— son los MEDIOS para ese salto, no el objetivo.",
+          "La expansión en las cuentas donde la persona con la que el equipo trabaja día a día no toma decisiones: ahí eres el puente con quien sí las toma. Customer Success sostiene la relación operativa; tú abres la conversación de crecimiento con quien puede aprobarla.",
       },
       {
-        title: "Planificación y estrategia (10% del tiempo)",
+        title: "Planificación y estrategia",
         detail:
           "Analizar conversiones, tasas de cierre y performance comercial, y proponer mejoras de pricing, forecast y procesos en la planeación mensual con el CEO y el CFO.",
       },
@@ -174,7 +190,7 @@ const CONTENT = {
     hasta: "$30.000 USD en ingresos nuevos cada mes",
     fecha: "el cierre del mes 3",
     contexto:
-      "Los primeros tres meses son de rampa: aprender el proceso consultivo, construir pipeline y cerrar las primeras cuentas. Al cerrar el mes 3 la meta corre completa, y es el mismo hito en el que sube el salario base. Es UNA sola meta porque todo lo demás —las exploraciones, la conversión, el crecimiento en la escala— existe para moverla.",
+      "Los primeros tres meses son de rampa: aprender el proceso consultivo, construir pipeline y cerrar las primeras cuentas. Al cerrar el mes 3 la meta corre completa, y es el mismo hito en el que sube el salario base. Es UNA sola meta porque todo lo demás —las exploraciones, la conversión, el crecimiento de la cartera— existe para moverla.",
   },
 
   // D2 lead · 5 actos HUMANOS con número semanal. Los KPIs del documento son MENSUALES
@@ -190,8 +206,8 @@ const CONTENT = {
       {
         title: "Explorar antes de proponer",
         detail:
-          "Lleva la exploración en el lienzo hasta dejarlo completo: el cliente ubicado en cada dimensión de la escala, qué quiere lograr, sus retos, lo que le cuesta no lograrlo y qué tan abierto está a la asesoría.",
-        meta: "2 exploraciones por semana con el lienzo completo.",
+          "Explora hasta tener lo necesario para la primera venta: dónde está el cliente en la Escala de Rendimiento, qué quiere lograr, qué lo frena y qué tan abierto está a la asesoría. No busques el diagnóstico completo — busca el que le da previsibilidad de hacia dónde puede crecer.",
+        meta: "2 exploraciones por semana.",
       },
       {
         title: "Dejar cada oportunidad con su siguiente paso",
@@ -200,10 +216,10 @@ const CONTENT = {
         meta: "Todo el pipeline, una vez por semana.",
       },
       {
-        title: "Buscar el crecimiento en la cartera activa",
+        title: "Llegar a quien decide en las cuentas activas",
         detail:
-          "Mira el comportamiento de un cliente actual y detecta el upgrade, la re-implementación o el servicio que todavía no compró.",
-        meta: "1 oportunidad por semana.",
+          "Identifica una cuenta donde el día a día lo lleva alguien que no decide, y abre la conversación de crecimiento con quien sí puede aprobarla.",
+        meta: "1 cuenta por semana.",
       },
       {
         title: "Validar que lo vendido se puede entregar",
@@ -241,7 +257,7 @@ const CONTENT = {
         quienes: "Tú con Customer Success.",
         cuando: "Quincenal.",
         formato:
-          "Qué cuentas tienen espacio para un upgrade, una re-implementación o un servicio nuevo, y cuáles tienen una desalineación entre lo vendido y lo implementado.",
+          "Qué cuentas se quedaron en el techo de quien las lleva día a día. Customer Success te dice dónde hace falta una decisión que su interlocutor no puede tomar, y tú abres esa conversación con quien sí decide.",
       },
       {
         evento: "Planeación comercial",
@@ -253,22 +269,19 @@ const CONTENT = {
     ],
   },
 
+  // Seis y seis. Antes eran 9 y 11, y la mitad decía variantes de lo mismo: con la
+  // exploración al centro, cada tarjeta que no habla de ella o de su consecuencia sobra.
   successPaths: {
     items: [
       {
-        title: "La solución antes que el producto",
+        title: "Una buena exploración produce una buena propuesta",
         detail:
-          "Entiendes el negocio del cliente y diseñas la arquitectura que lo resuelve. El demo muestra su caso, y el precio deja de ser el único argumento.",
+          "Cuando exploras bien, la propuesta se arma sola con lo que encontraste: el cliente se reconoce en ella y no hay que sostenerla con descuentos. Y eso mismo llega al equipo que implementa, que arranca sabiendo qué busca el cliente en vez de empezar de cero.",
       },
       {
-        title: "Pipeline que se lee solo",
+        title: "El cliente ve dónde está y hacia dónde va",
         detail:
-          "Cualquiera abre HubSpot y sabe en qué va cada oportunidad, sin tener que preguntarte.",
-      },
-      {
-        title: "Forecast confiable",
-        detail:
-          "Lo que dices que va a cerrar, cierra. El CEO y el CFO pueden planificar con tu número.",
+          "Sale de la conversación entendiendo su posición en la Escala de Rendimiento y cuál es el siguiente paso. Esa previsibilidad es buena parte de lo que compra.",
       },
       {
         title: "Prospección propia viva",
@@ -276,29 +289,19 @@ const CONTENT = {
           "No dependes solo del inbound: traes oportunidades que nadie te pasó, y por eso un mes flojo de leads no es un mes flojo de ventas.",
       },
       {
+        title: "Forecast confiable",
+        detail:
+          "Lo que dices que va a cerrar, cierra, y el pipeline en HubSpot se lee sin tener que preguntarte. Dirección puede planificar con tu número.",
+      },
+      {
         title: "HubSpot como aliado, no como proveedor",
         detail:
           "Los Reps y los Channel Consultants te conocen, te traen leads y te acompañan en las oportunidades grandes.",
       },
       {
-        title: "Rentabilidad antes de la firma",
+        title: "Llegas a quien decide",
         detail:
-          "Revisas factibilidad y margen antes de prometer. No entra un contrato que deje al equipo trabajando en rojo.",
-      },
-      {
-        title: "La cartera también crece",
-        detail:
-          "Los clientes activos generan ingresos nuevos todos los meses. Esa parte se paga aparte del salario.",
-      },
-      {
-        title: "Entrega sin sorpresas",
-        detail:
-          "Lo que firmaste es lo que el equipo implementa: el proyecto no arranca descubriendo promesas que no estaban en el SOW. Y tu exploración viaja con el handoff al Customer Success Executive —el resultado que busca el cliente, sus retos y su posición en la escala—, así que él profundiza en vez de empezar de cero.",
-      },
-      {
-        title: "Criterio comercial propio",
-        detail:
-          "Propones pricing, foco y proceso con datos en la mano, y los defiendes en la mesa con el CEO y el CFO.",
+          "En las cuentas donde el día a día lo lleva alguien sin poder de decisión, abres la puerta con quien sí decide. Ahí es donde la cartera crece — y esa parte se paga aparte del salario.",
       },
     ],
   },
@@ -316,14 +319,9 @@ const CONTENT = {
           "La exploración se llena por llenar: casillas completas que nadie retoma después y que el cliente no siente que reflejen su realidad. Un diagnóstico que no se usa cuesta la reunión y la credibilidad.",
       },
       {
-        title: "Pipeline desactualizado",
-        detail:
-          "HubSpot dice una cosa y la realidad otra. El forecast deja de servir para decidir y cada estado hay que preguntarlo.",
-      },
-      {
         title: "Forecast inflado",
         detail:
-          "Se promete el mes y se cae en la última semana. A la tercera vez, nadie planifica con tu número.",
+          "Se promete el mes y se cae en la última semana, o el pipeline en HubSpot dice una cosa y la realidad otra. A la tercera vez, nadie planifica con tu número.",
       },
       {
         title: "Solo inbound",
@@ -331,34 +329,14 @@ const CONTENT = {
           "La prospección propia se abandona apenas entran leads. Cuando el inbound baja, no hay pipeline de respaldo.",
       },
       {
-        title: "Vender lo que no se puede entregar",
+        title: "La cuenta se queda sin interlocutor",
         detail:
-          "Se firma sin revisar factibilidad ni margen. El problema aparece en la implementación y lo paga otro equipo.",
-      },
-      {
-        title: "Cartera instalada abandonada",
-        detail:
-          "Toda la energía va a lo nuevo. Los clientes activos renuevan sin crecer — o directamente no renuevan.",
-      },
-      {
-        title: "HubSpot desconectado",
-        detail:
-          "Las oportunidades no se registran en el portal de partners y los Reps dejan de traer leads. El estatus de partner se enfría solo.",
+          "Se trabaja solo con quien lleva el día a día y nunca se llega a quien decide. La cuenta renueva sin crecer — o directamente no renueva.",
       },
       {
         title: "Descuento en lugar de argumento",
         detail:
           "Se baja el precio para cerrar sin medir el impacto: el contrato entra y la rentabilidad no. Y los descuentos no se ofrecen de pasada en una reunión, menos todavía si está grabada: lo que se dice ahí queda, y después se negocia contra eso.",
-      },
-      {
-        title: "Promesas fuera del alcance",
-        detail:
-          "Se ofrece en la venta lo que no está en el SOW. El cliente lo reclama después y la relación arranca en deuda.",
-      },
-      {
-        title: "Venta en solitario",
-        detail:
-          "Lo que la venta aprende no vuelve a Marketing, a Customer Success ni a Desarrollo. Los mismos problemas se repiten negocio tras negocio.",
       },
     ],
   },
