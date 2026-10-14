@@ -26,8 +26,24 @@
  *   · Comisión: 5% sobre el valor de la venta + 10% de la licencia durante sus primeros
  *     3 meses, este último ÍNTEGRO para ella (en las de CSE se partía con el CSL porque
  *     la cuenta la trabajaban dos personas; acá cierra ella).
- *   · La meta de $40.000 USD mensuales corre completa al cerrar el mes 3 — el MISMO hito
- *     en que sube el salario, para que el documento no prometa dos relojes distintos.
+ *   · La meta corre completa al cerrar el mes 3 — el MISMO hito en que sube el salario, para
+ *     que el documento no prometa dos relojes distintos. **$30.000 USD mensuales** (bajada
+ *     de los $40.000 del documento de Ventas, confirmado por Elías el 2026-10-13).
+ *
+ * ── SEGUNDA RONDA (2026-10-13): EL CENTRO PASA A SER LA EXPLORACIÓN ──────────
+ * El documento estaba escrito alrededor del demo y la arquitectura técnica. Elías lo
+ * recentró: el eje es la **exploración consultiva** y el demo es una CONSECUENCIA de ella.
+ *   · La misión deja de ser "conectar negocio con arquitectura" y pasa a ser entender qué
+ *     resultado persigue el cliente, ubicarlo en la matriz de Rendimiento y proponerle el
+ *     siguiente paso. El criterio de éxito es el RESULTADO del cliente, no el proyecto.
+ *   · Entra "Exploración consultiva" como PRIMERA responsabilidad (lienzo de Exploraciones,
+ *     escala + GPCT/B/A/C&I, apertura a la asesoría como criterio de descalificación, y el
+ *     aviso de que es preliminar: la profundidad justa para la primera venta).
+ *   · El proceso pasa al consultivo: identificar → investigar → conectar → explorar → asesorar.
+ *   · En acciones semanales, el demo deja de medirse solo: lo reemplazan 2 exploraciones con
+ *     el lienzo completo. Se suma declarar oportunidades en el portal de partners.
+ *   · Cartera instalada: el objetivo es SUBIR al cliente en la escala; los productos y las
+ *     licencias quedan como medios.
  *
  * ⚠ TUTEO, no voseo (preferencia de Elías): "puedes", "llevas", "tú". Las propuestas de
  * CSE anteriores tienen voseo y quedaron fuera de esa norma — ver el resumen de la sesión.
@@ -44,11 +60,11 @@ const ROLE_ID = "cmv5o2pi500vb07qllgpbfdsu";
 const TITLE = "Liz Navarro · Sales Engineer";
 const AREA = "Propuesta de contratación · Smarteam";
 const SUMMARY =
-  "Conecta la visión de negocio con la arquitectura técnica: lidera el pipeline técnico-comercial, los demos consultivos y la relación con HubSpot.";
+  "Entiende qué resultado persigue el cliente, lo ubica en la matriz de Rendimiento y le propone el siguiente paso que lo acerca a ese resultado.";
 
 const PROFILE_MD = `Smarteam es una consultora de HubSpot que está pasando a ser una **consultoría tecnológica potenciada por IA**. En la práctica, la IA se encarga del trabajo repetitivo y las personas hacen lo que la IA no puede: entender el negocio del cliente, diseñar la solución y sostener la conversación difícil.
 
-**Misión del puesto.** Acelerar el crecimiento comercial de Smarteam conectando la visión de negocio con la arquitectura técnica. No se trata solo de vender: se trata de diseñar soluciones inteligentes que generen resultados medibles y relaciones sostenibles.
+**Misión del puesto.** Entender qué resultado persigue el cliente, ubicarlo en la **matriz interna de Rendimiento** y proponerle el siguiente paso que lo acerca a ese resultado. El criterio de éxito es el resultado que el cliente espera, no el proyecto que se firma.
 
 El puesto nace como una posición estratégica dentro del crecimiento comercial, y evoluciona del enfoque de ventas asistidas hacia una **dirección técnica-comercial integral**: conectar oportunidades con soluciones viables, escalables y rentables. El objetivo es consolidar *Sales Engineering* como un centro de soluciones y conocimiento técnico-comercial que potencie la relación con HubSpot, impulse clientes nuevos y maximice el valor de la cartera instalada.`;
 
@@ -77,14 +93,19 @@ const CONTENT = {
   responsibilities: {
     items: [
       {
+        title: "Exploración consultiva",
+        detail:
+          "El centro del puesto. Cada exploración se lleva en el lienzo de Exploraciones de Nexus: se ubica al cliente en cada dimensión de la escala y se registra qué quiere lograr, qué retos tiene y qué le cuesta no lograrlo — la escala combinada con las preguntas de metas, planes, retos, tiempos, presupuesto, quién decide y consecuencias que ya usa HubSpot. También se mide qué tan abierto está a la asesoría, porque eso decide si es un cliente para crecer o si conviene descalificarlo a tiempo. Es un diagnóstico PRELIMINAR: la profundidad justa para cerrar la primera venta, no el diagnóstico completo que hace después Customer Success.",
+      },
+      {
         title: "Pipeline técnico-comercial de punta a punta",
         detail:
-          "Liderar la venta desde la exploración hasta el cierre, cumpliendo el proceso Smarteam: Identificación → Exploración → Demo + Business Case → Negociación → Cierre.",
+          "Liderar la venta desde la identificación hasta el cierre, cumpliendo el proceso consultivo de Smarteam: identificar → investigar por qué lo que hacemos le funciona a esa empresa → conectar → explorar → asesorar.",
       },
       {
         title: "Demos consultivos",
         detail:
-          "Conducir los demos mostrando cómo la solución técnica —HubSpot, ATOM, IA e integraciones— cambia los resultados del cliente. El demo cuenta su caso, no nuestro catálogo.",
+          "El demo ocurre DESPUÉS de explorar y muestra lo que la exploración encontró: cuenta el caso del cliente —con sus retos y sus números—, no nuestro catálogo. Un demo antes de entender el negocio es una lista de funcionalidades.",
       },
       {
         title: "Arquitectura técnica y ROI por industria",
@@ -92,9 +113,9 @@ const CONTENT = {
           "Diseñar la arquitectura de cada oportunidad y su proyección de ROI, personalizada al sector del cliente. Es lo que separa una propuesta de una lista de precios.",
       },
       {
-        title: "Propuestas técnicas, SOWs y margen",
+        title: "Propuestas, SOWs y modelo comercial",
         detail:
-          "Elaborar las propuestas y los SOWs con precisión y enfoque de rentabilidad, y analizar factibilidad técnica y márgenes ANTES del cierre.",
+          "Elaborar las propuestas y los SOWs con precisión y enfoque de rentabilidad, y analizar factibilidad técnica y márgenes ANTES del cierre. Se entra con una implementación base o con un caso de uso; el crecimiento de ahí en adelante vive en SmartLoop y en el catálogo de casos de uso.",
       },
       {
         title: "Prospección y negocios nuevos (20% del tiempo)",
@@ -109,7 +130,7 @@ const CONTENT = {
       {
         title: "Crecimiento de la cartera instalada (20% del tiempo)",
         detail:
-          "Analizar el comportamiento de los clientes activos y empujar re-implementaciones, upgrades y cross-selling: ATOM Chat, Cooby, NUA Talk, Aircall, Infobip e integraciones por API.",
+          "Subir al cliente en la escala: mirar dónde quedó cada cuenta activa y proponer el siguiente paso que la mueve. Las re-implementaciones, los upgrades y los productos —ATOM Chat, Cooby, NUA Talk, Aircall, Infobip, integraciones por API— son los MEDIOS para ese salto, no el objetivo.",
       },
       {
         title: "Planificación y estrategia (10% del tiempo)",
@@ -150,10 +171,10 @@ const CONTENT = {
   // y la rampa de 3 meses es justamente el recorrido.
   wig: {
     desde: "Pipeline en cero y el proceso por aprender",
-    hasta: "$40.000 USD en ingresos nuevos cada mes",
+    hasta: "$30.000 USD en ingresos nuevos cada mes",
     fecha: "el cierre del mes 3",
     contexto:
-      "Los primeros tres meses son de rampa: aprender el proceso Smarteam, construir pipeline y cerrar las primeras cuentas. Al cerrar el mes 3 la meta corre completa, y es el mismo hito en el que sube el salario base. Es UNA sola meta porque todo lo demás —demos, conversión, upselling, forecast— existe para moverla.",
+      "Los primeros tres meses son de rampa: aprender el proceso consultivo, construir pipeline y cerrar las primeras cuentas. Al cerrar el mes 3 la meta corre completa, y es el mismo hito en el que sube el salario base. Es UNA sola meta porque todo lo demás —las exploraciones, la conversión, el crecimiento en la escala— existe para moverla.",
   },
 
   // D2 lead · 5 actos HUMANOS con número semanal. Los KPIs del documento son MENSUALES
@@ -164,13 +185,13 @@ const CONTENT = {
         title: "Abrir conversaciones que nadie te pasó",
         detail:
           "Sal a buscar oportunidades en los sectores foco: outbound, base interna y referidos. No esperes a que el lead entre solo.",
-        meta: "2 reuniones o demos iniciales agendados por semana.",
+        meta: "2 reuniones iniciales agendadas por semana.",
       },
       {
-        title: "Llevar el demo al negocio, no a la herramienta",
+        title: "Explorar antes de proponer",
         detail:
-          "Prepara y conduce el demo consultivo con el caso y los números del cliente enfrente: qué le cambia, no qué botones tiene.",
-        meta: "2 por semana.",
+          "Lleva la exploración en el lienzo hasta dejarlo completo: el cliente ubicado en cada dimensión de la escala, qué quiere lograr, sus retos, lo que le cuesta no lograrlo y qué tan abierto está a la asesoría.",
+        meta: "2 exploraciones por semana con el lienzo completo.",
       },
       {
         title: "Dejar cada oportunidad con su siguiente paso",
@@ -189,6 +210,12 @@ const CONTENT = {
         detail:
           "Antes de mandar la propuesta, revisa factibilidad técnica y margen con quien vaya a implementarlo. Vender lo que no se puede entregar se paga después.",
         meta: "Cada propuesta, sin excepción.",
+      },
+      {
+        title: "Declarar las oportunidades ante HubSpot",
+        detail:
+          "Registra en el portal de partners las oportunidades de la semana. Lo que no está declarado no existe para el partner: no suma al estatus ni te consigue acompañamiento.",
+        meta: "Todas las oportunidades abiertas, cada semana.",
       },
     ],
   },
@@ -266,7 +293,7 @@ const CONTENT = {
       {
         title: "Entrega sin sorpresas",
         detail:
-          "Lo que firmaste es lo que el equipo implementa: el proyecto no arranca descubriendo promesas que no estaban en el SOW.",
+          "Lo que firmaste es lo que el equipo implementa: el proyecto no arranca descubriendo promesas que no estaban en el SOW. Y tu exploración viaja con el handoff al Customer Success Executive —el resultado que busca el cliente, sus retos y su posición en la escala—, así que él profundiza en vez de empezar de cero.",
       },
       {
         title: "Criterio comercial propio",
@@ -279,9 +306,14 @@ const CONTENT = {
   failurePaths: {
     items: [
       {
-        title: "Vender la herramienta, no la solución",
+        title: "Demo sin exploración",
         detail:
-          "El demo recorre funcionalidades y el cliente no sabe qué cambia en su negocio. Se cierra por precio, o no se cierra.",
+          "Se muestra la herramienta antes de entender el negocio. El demo recorre funcionalidades, el cliente no sabe qué le cambia y el precio queda como único argumento.",
+      },
+      {
+        title: "Diagnóstico de trámite",
+        detail:
+          "La exploración se llena por llenar: casillas completas que nadie retoma después y que el cliente no siente que reflejen su realidad. Un diagnóstico que no se usa cuesta la reunión y la credibilidad.",
       },
       {
         title: "Pipeline desactualizado",
@@ -316,7 +348,7 @@ const CONTENT = {
       {
         title: "Descuento en lugar de argumento",
         detail:
-          "Se baja el precio para cerrar sin medir el impacto. El contrato entra y la rentabilidad no.",
+          "Se baja el precio para cerrar sin medir el impacto: el contrato entra y la rentabilidad no. Y los descuentos no se ofrecen de pasada en una reunión, menos todavía si está grabada: lo que se dice ahí queda, y después se negocia contra eso.",
       },
       {
         title: "Promesas fuera del alcance",
@@ -343,7 +375,7 @@ const CONTENT = {
       {
         titulo: "Plan de crecimiento (al finalizar el mes 3)",
         texto:
-          "Al cerrar los 3 meses iniciales el salario base pasa a $3,000.00 mensuales ($1,500.00 quincenal). Es el mismo hito en el que la meta de $40.000 USD mensuales empieza a correr completa, y viene con una revisión formal del desempeño y la evolución del rol.",
+          "Al cerrar los 3 meses iniciales el salario base pasa a $3,000.00 mensuales ($1,500.00 quincenal). Es el mismo hito en el que la meta de $30.000 USD mensuales empieza a correr completa, y viene con una revisión formal del desempeño y la evolución del rol.",
       },
       {
         titulo: "Comisión por venta",
