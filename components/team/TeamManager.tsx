@@ -201,6 +201,25 @@ export default function TeamManager({
     load();
   }, [load]);
 
+  const toast = useToast();
+  const [entrandoComo, setEntrandoComo] = useState<string | null>(null);
+  const verComo = async (m: TeamMember) => {
+    setEntrandoComo(m.id);
+    const res = await fetch("/api/ver-como", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ teamMemberId: m.id }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const data = await res?.json().catch(() => ({}));
+      toast.error(typeof data?.error === "string" ? data.error : "No se pudo entrar como esa persona.");
+      setEntrandoComo(null);
+      return;
+    }
+    /* Recarga entera: la identidad nueva tiene que valer para el menú, los permisos y todo lo que ya cargó. */
+    window.location.href = "/";
+  };
+
   const onUploaded = useCallback((id: string, photoUrl: string | null) => {
     setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, photoUrl } : m)));
   }, []);
@@ -263,6 +282,32 @@ export default function TeamManager({
                 <span className="text-xs text-fg-secondary">{fechaDeSalida(m.deactivatedAt)}</span>
               ) : (
                 <span className="text-fg-muted">—</span>
+              ),
+          } satisfies TableColumn<TeamMember>,
+        ]
+      : []),
+    /* «Ver como» (2026-10-13, lib/auth/ver-como.ts): un Super Admin mira Nexus como esta persona, en solo lectura.
+       No se ofrece con otro Super Admin (ve lo mismo que tú) ni en «Fuera del equipo». */
+    ...(canAdminPermissions && tab === "miembros"
+      ? [
+          {
+            key: "verComo",
+            header: "",
+            width: "w-28",
+            render: (m: TeamMember) =>
+              m.roleEnum === "SUPER_ADMIN" || m.email.toLowerCase() === miEmail ? null : (
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  disabled={entrandoComo !== null}
+                  title={`Ver Nexus exactamente como lo ve ${m.name}, en solo lectura`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void verComo(m);
+                  }}
+                >
+                  {entrandoComo === m.id ? "Entrando…" : "Ver como"}
+                </Button>
               ),
           } satisfies TableColumn<TeamMember>,
         ]

@@ -17,6 +17,8 @@ import { COOKIE_DE_RECORRIDOS } from "@/lib/recorridos/vistos";
 import FeedbackProvider from "@/components/feedback/FeedbackProvider";
 import PreguntasFlotantes from "@/components/tiempos/PreguntasFlotantes";
 import { AsistenteDeTareasProvider } from "@/components/tareas/AsistenteDeTareas";
+import BannerVerComo from "./BannerVerComo";
+import { ROLE_LABEL } from "@/components/team/roles-ui";
 
 export default async function AppShell({
   children,
@@ -116,6 +118,13 @@ export default async function AppShell({
               la app —incluidos los que todavía no existen— y lo pinta con el tema en vez de
               dejar que lo pinte el sistema operativo. Ver components/ui/Tooltip.tsx. */}
           <TooltipLayer />
+          {/* «Ver como» (lib/auth/ver-como.ts): un Super Admin mirando como otra persona lo ve en TODA pantalla. */}
+          {user.verComoDe && user.teamMember && (
+            <BannerVerComo
+              nombre={user.teamMember.name}
+              rol={ROLE_LABEL[user.teamMember.roleEnum] ?? user.teamMember.roleEnum}
+            />
+          )}
           {children}
         </SidebarShell>
         </PanelLateralProvider>

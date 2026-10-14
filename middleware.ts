@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { COOKIE_VER_COMO, MENSAJE_SOLO_LECTURA, bloqueaEscritura } from "@/lib/auth/ver-como";
 
 // Rutas públicas exactas
 //   - /sw.js → Service Worker de notificaciones (asset público, sin secretos). Debe servirse
@@ -58,6 +59,13 @@ export async function middleware(request: NextRequest) {
   const esRutaDeImpresion = pathname.startsWith("/print/doc/");
   if (esRutaDeImpresion && request.nextUrl.searchParams.has("pdfToken")) {
     return NextResponse.next();
+  }
+
+  // «Ver como» (lib/auth/ver-como.ts): mirando como otra persona, Nexus es SOLO LECTURA. Se corta acá, antes de
+  // cualquier handler, para que ninguna escritura —un «leído», una corrida de IA, un cambio de etapa— quede a nombre
+  // de la persona mirada. La cookie sola no da acceso a nada: la identidad la decide requireUser.
+  if (bloqueaEscritura(request.method, pathname, request.cookies.has(COOKIE_VER_COMO))) {
+    return NextResponse.json({ error: MENSAJE_SOLO_LECTURA, soloLectura: true }, { status: 403 });
   }
 
   // Importante: el middleware tiene que RETORNAR la response que Supabase

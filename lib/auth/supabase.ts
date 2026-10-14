@@ -12,9 +12,11 @@
  * Cada uno lanza UnauthorizedError (401) o ForbiddenError (403).
  */
 import { cache } from "react";
+import { cookies } from "next/headers";
 import { getSupabaseUser } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db/prisma";
 import type { AppUser, TeamMember, TeamRole } from "@prisma/client";
+import { COOKIE_VER_COMO, motivoParaNoVerComo } from "./ver-como";
 
 export class UnauthorizedError extends Error {
   status = 401;
@@ -38,7 +40,40 @@ export class NotImplementedError extends Error {
   }
 }
 
-export type AppUserWithTeamMember = AppUser & { teamMember: TeamMember | null };
+export type AppUserWithTeamMember = AppUser & {
+  teamMember: TeamMember | null;
+  /**
+   * Presente SOLO mientras un SUPER_ADMIN mira Nexus como esta persona (lib/auth/ver-como.ts): quién está mirando de
+   * verdad. Todo lo demás del objeto es de la persona mirada; las escrituras las corta el middleware.
+   */
+  verComoDe?: { email: string; name: string };
+};
+
+/**
+ * «Ver como» (2026-10-13): si quien tiene la sesión es SUPER_ADMIN y eligió a alguien, la identidad del pedido pasa a
+ * ser esa persona. Cualquier duda (cookie vieja, persona dada de baja, otro admin) cae a la identidad real: nunca un
+ * error, nunca alguien distinto de quien se eligió.
+ */
+async function identidadVista(real: AppUserWithTeamMember): Promise<AppUserWithTeamMember> {
+  if (real.teamMember?.roleEnum !== "SUPER_ADMIN") return real;
+  let elegido: string | undefined;
+  try {
+    elegido = (await cookies()).get(COOKIE_VER_COMO)?.value;
+  } catch {
+    return real; // fuera de un pedido (scripts): no hay cookie que leer
+  }
+  if (!elegido) return real;
+  const objetivo = await prisma.appUser.findFirst({
+    where: { teamMemberId: elegido },
+    include: { teamMember: true },
+  });
+  const motivo = motivoParaNoVerComo(
+    real.teamMember,
+    objetivo?.teamMember ? { ...objetivo.teamMember, kind: objetivo.kind } : null,
+  );
+  if (motivo || !objetivo) return real;
+  return { ...objetivo, verComoDe: { email: real.email, name: real.teamMember.name } };
+}
 
 /**
  * Resuelve el AppUser logueado vía sesión Supabase Auth.
@@ -61,7 +96,7 @@ export const requireUser = cache(async (): Promise<AppUserWithTeamMember> => {
     include: { teamMember: true },
   });
   if (!appUser) throw new ForbiddenError("Usuario autenticado pero sin AppUser");
-  return appUser;
+  return identidadVista(appUser);
 });
 
 /**
