@@ -114,7 +114,7 @@ describe("⛔ lib/seguimiento", () => {
 
   it("«Usar todo» nunca toca la ficha, la etapa, la fecha del diagnóstico ni las alertas, y no escribe tareas por su cuenta", () => {
     const src = soloCodigo(leer("lib/seguimiento/usar-todo-server.ts"));
-    for (const prohibido of [/\.client\.update/, /etapaPropuesta/, /diagnosticoPresentacion/, /\.csAlert\./, /\.actionItem\./, /\.tarea\.(update|create|delete)/]) {
+    for (const prohibido of [/\.client\.update/, /etapaPropuesta/, /diagnosticoPresentacion/, /presentacionDeDocumento/, /\.csAlert\./, /\.actionItem\./, /\.tarea\.(update|create|delete)/]) {
       expect(src, `usar-todo-server.ts no puede tocar ${prohibido}`).not.toMatch(prohibido);
     }
     expect(src).toContain("cambiarSolicitud(");

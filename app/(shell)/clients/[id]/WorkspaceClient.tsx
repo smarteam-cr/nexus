@@ -20,6 +20,7 @@ import TimelineProposalPendiente from "@/components/projects/TimelineProposalPen
 import RielDelCliente, { type ProyectoDelRiel } from "@/components/clients/RielDelCliente";
 import PanelLateral, { usePanelLateral } from "@/components/ui/PanelLateral";
 import DisparoDelVigia from "@/components/cs/DisparoDelVigia";
+import PreguntaSobreLaCuenta from "@/components/encuestas-de-cuenta/PreguntaSobreLaCuenta";
 import { parseEstadoDeAlta, siguientePaso } from "@/lib/projects/alta";
 import { leerAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 import {
@@ -376,6 +377,8 @@ export default function WorkspaceClient({
     <div className="flex flex-col" style={{ height: "calc(100vh - 57px)" }}>
       {/* El agente vigía, en segundo plano, si hace más de 48 h que no revisa este cliente (D14). */}
       <DisparoDelVigia clientId={clientId} />
+      {/* Lo que Customer Success sabe de este cliente (¿tiene apertura a la asesoría?), preguntado al entrar. */}
+      <PreguntaSobreLaCuenta clientId={clientId} />
       {/* Indicador discreto de sync de fondo (F4) — desaparece al terminar bien. */}
       {syncing && (
         <div

@@ -20,7 +20,7 @@ import { prisma as prismaDeLaApp } from "@/lib/db/prisma";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { PASO_DE_LAS_SUGERENCIAS } from "@/lib/agents/historial-corridas";
 import { camposPropuestos, leerFicha } from "@/lib/clients/ficha";
-import { leerPresentacion } from "@/lib/canvas/presentacion-del-diagnostico";
+import { decisionesDeLasPropuestas, type FilaDePresentacion } from "@/lib/presentaciones/reglas";
 import { huellaDeLaSugerencia, sugerenciaDelBloque } from "@/lib/handoff/sugerencias";
 import { sugerenciaVigente } from "@/lib/projects/etapa-sugerida";
 import { resolvePipeline } from "@/lib/projects/kind";
@@ -137,20 +137,32 @@ const camposDeFicha: Lector = async ({ db }, hoyISO) => {
 };
 
 const etapasYFechas: Lector = async ({ db }, hoyISO) => {
-  const filas = await seguro(
-    db.project.findMany({
-      where: { OR: [{ etapaPropuestaStageId: { not: null } }, { diagnosticoPresentacion: { not: Prisma.DbNull } }] },
-      select: {
-        hubspotPipelineId: true,
-        hubspotPipelineStageId: true,
-        etapaPropuestaStageId: true,
-        etapaPropuestaMotivo: true,
-        etapaPropuestaAt: true,
-        diagnosticoPresentacion: true,
-      },
-    }),
-    [],
-  );
+  const [filas, presentaciones] = await Promise.all([
+    seguro(
+      db.project.findMany({
+        where: { etapaPropuestaStageId: { not: null } },
+        select: {
+          hubspotPipelineId: true,
+          hubspotPipelineStageId: true,
+          etapaPropuestaStageId: true,
+          etapaPropuestaMotivo: true,
+          etapaPropuestaAt: true,
+        },
+      }),
+      [],
+    ),
+    // La fecha de presentación del diagnóstico que leyó Nexus en una reunión, y qué hizo una persona con ella
+    // (lib/presentaciones, 2026-10-14: una fila por respuesta, así se sabe quién la usó o la descartó).
+    modeloDisponible(db.presentacionDeDocumento)
+      ? seguro(
+          db.presentacionDeDocumento.findMany({
+            where: { documento: "diagnostico", evento: { in: ["propuesta", "fecha", "descarte"] } },
+            select: { projectId: true, evento: true, fecha: true, porEmail: true, sessionId: true, detalle: true, createdAt: true },
+          }),
+          [],
+        )
+      : Promise.resolve([]),
+  ]);
   const etapa: ItemParaContar[] = [];
   const fecha: ItemParaContar[] = [];
   for (const p of filas) {
@@ -162,15 +174,17 @@ const etapasYFechas: Lector = async ({ db }, hoyISO) => {
         })
       : null;
     if (s?.at) etapa.push({ ...estadoDeEtapa(s.at, hoyISO), nacioEn: s.at });
-    const pr = leerPresentacion(p.diagnosticoPresentacion);
-    if (pr.propuesta) {
-      const en = pr.propuesta.en || pr.propuesta.reunion.fecha;
-      fecha.push({ ...estadoDePropuestaDeFecha(en, hoyISO), nacioEn: new Date(en).toISOString() });
+  }
+  const porProyecto = new Map<string, FilaDePresentacion[]>();
+  for (const f of presentaciones) {
+    if (!f.projectId) continue;
+    porProyecto.set(f.projectId, [...(porProyecto.get(f.projectId) ?? []), f]);
+  }
+  for (const filasDelProyecto of porProyecto.values()) {
+    for (const d of decisionesDeLasPropuestas(filasDelProyecto)) {
+      if (d.estado === "pendiente") fecha.push({ ...estadoDePropuestaDeFecha(d.nacioEn, hoyISO), nacioEn: d.nacioEn });
+      else fecha.push({ ...estadoDeFechaDecidida({ usada: d.estado === "usado", por: d.por ?? "", en: d.en ?? d.nacioEn }), nacioEn: d.nacioEn });
     }
-    if (pr.fijadaPor && pr.fijadaEn && pr.fuente?.startsWith("Lo leyó Nexus")) {
-      fecha.push({ ...estadoDeFechaDecidida({ usada: true, por: pr.fijadaPor, en: pr.fijadaEn }), nacioEn: pr.fijadaEn });
-    }
-    for (const d of pr.descartadasPor ?? []) fecha.push({ ...estadoDeFechaDecidida({ usada: false, por: d.por, en: d.en }), nacioEn: d.en });
   }
   return { "etapa-sugerida": etapa, "fecha-del-diagnostico": fecha };
 };

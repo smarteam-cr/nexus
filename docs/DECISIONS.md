@@ -6050,7 +6050,9 @@ o proyecto) queden en Información del cliente › Documentos, a nivel de empres
 construir: el recordatorio de adopción le ABRE Éxito del cliente al CSE de la cuenta; el «resumen del servicio»
 es el resumen del proyecto (ProjectBrief); y lo vendido va como un bloque propio en la guía.
 
-- **El diagnóstico pregunta cuándo se presenta** (`lib/canvas/presentacion-del-diagnostico.ts`, columna
+- **SUPERSEDED 2026-10-14** (ver «Cuándo se presenta cada documento»): la pregunta es de los cuatro documentos, la
+  responde solo Customer Success y no se abre como modal.
+  **El diagnóstico pregunta cuándo se presenta** (`lib/canvas/presentacion-del-diagnostico.ts`, columna
   `Project.diagnosticoPresentacion`, SQL `2026-10-07-presentacion-del-diagnostico.sql`). Con el diagnóstico
   generado y en borrador, la encuesta se abre sola una vez por sesión del navegador; «Todavía no sé» también es
   una respuesta. Como las fechas del cronograma: si una reunión lo dice, Nexus lo propone con la frase tal cual
@@ -7882,3 +7884,67 @@ le pregunta a la persona del cliente.
 - **Las piezas del riel se ocultan** (en todo proyecto): `Project.piezasOcultas`, del proyecto y no de una persona, y
   cosmético (lo cambia cualquiera con acceso). No borra ni apaga nada: quedan en «Ver N piezas más».
 
+## Preguntas sobre la cuenta: lo que Customer Success sabe de cada cliente (2026-10-13)
+
+> Pedido de Elías: al entrar a un cliente, que cada persona de Customer Success responda «¿Este cliente tiene apertura
+> a la asesoría?» (no solo nos pide cosas para implementar, también quiere nuestra guía). Con «No sé», volver a
+> preguntar la primera vez que entra después de una semana. Y que todo quede guardado para analizarlo.
+
+- **Es un módulo propio que Feedback configura** (`lib/encuestas-de-cuenta`), como los tiempos: no es un pedido de
+  opinión (esos son sobre una pantalla, en texto libre, y terminan en un reporte). Las preguntas viven en un registro en
+  el código (`preguntas.ts`); sumar una es una entrada. La primera, `apertura-asesoria`, nace **activa**.
+- **Se le pregunta a cada persona, no a la cuenta**: CSE y CSL, en clientes de la cartera (`kind = CLIENTE`). Dos
+  personas pueden ver distinto al mismo cliente, y eso también es un dato («Con respuestas distintas»).
+- **Cuándo vuelve**: Sí o No cierran la pregunta para esa persona y ese cliente; «No sé» vuelve pasados 7 días, la
+  primera vez que entra; «Ahora no», al día siguiente. Cambiar lo que pregunta es subir la `version`: se vuelve a
+  preguntar a todos. La regla es pura (`decidirSiPreguntar`) y la decide el servidor.
+- **Se guarda todo, sin pisar nada** (`RespuestaDeCuenta`, append-only, vigilado por `guardas.test.ts`): cada vez que se
+  mostró, se respondió o se dejó para después, con la versión y el texto de la pregunta, el nombre del cliente
+  congelado, quién, su rol, por qué ve al cliente (encargado en HubSpot o no) y el porqué opcional. La lectura vigente
+  es la última respuesta de cada persona; la historia completa sale en el CSV (Feedback › Encuestas › Sobre los
+  clientes › «Descargar CSV»). La fusión de fichas las muda.
+- **La burbuja va abajo a la derecha de la ficha**, como el pedido de opinión, y nunca a la vez que él ni con el panel
+  de Feedback abierto. Un «mostrada» por sesión del navegador (y el servidor no repite uno en 12 h).
+- **No se cruza todavía con la casilla «Apertura a la asesoría» de la preventa** (`lib/exploraciones/casillas.ts`):
+  es la misma pregunta hecha en otro momento (en la venta, por el vendedor). Juntarlas en la ficha es un paso aparte.
+- Dirección (SUPER_ADMIN) no recibe la pregunta: la configura y ve los resultados.
+
+## Cuándo se presenta cada documento: lo responde Customer Success, y queda quién (2026-10-14)
+
+**Contexto.** Elías abrió un diagnóstico como Super Admin y le saltó el modal «¿Cuándo planeas presentarlo al
+cliente?». La pregunta del 2026-10-07 se abría sola a cualquiera que pudiera generar el diagnóstico (también a
+dirección), no dejaba decir que ya se presentó (la fecha no aceptaba días pasados) y guardaba solo la última respuesta
+en un Json, sin la historia. Pidió: solo Customer Success, todos los documentos que se presentan, «Ya lo presenté», y
+que quede registrado quién respondió.
+
+- **Una pregunta para los cuatro documentos que se presentan**: kickoff, diagnóstico, planificación y entrega
+  (`lib/presentaciones/reglas.ts`). Tres respuestas: una fecha (hoy o después), «Todavía no sé» (vuelve a la semana)
+  y «Ya lo presenté» con el día real (hoy o antes). Pasada la fecha, se pregunta «¿Ya lo presentaste?». Solo el
+  diagnóstico pide, dos días antes, confirmar que está terminado: es lo que avisa al vendedor (sin cambios).
+- **Responde solo Customer Success**: el encargado del proyecto en HubSpot y quien generó el documento (la última
+  corrida con persona), si son CSE o CSL y siguen en el equipo; si ninguno lo es, la CSL. La CSL siempre puede
+  responder. Dirección ve la línea con quién respondió, pero no responde por el CSE: el servidor responde 403. Una
+  cuenta de prueba («Test CSE…») no cuenta como persona del equipo.
+- **Append-only** (`PresentacionDeDocumento`, SQL `2026-10-14-presentaciones-de-documentos.sql`): cada respuesta es una
+  fila con quién, su rol, por qué le tocaba (encargado · generó · líder), el día y el documento. El estado sale de
+  leer las filas en orden (`plegar`): nada se guarda dos veces. La fecha que lee Nexus en una reunión también es una
+  fila (sin persona, con la reunión), y «Uso de Nexus» sabe quién la usó o la descartó. Una prueba frena cualquier
+  `update` o `delete` de la tabla, y que la escriba alguien fuera de `lib/presentaciones/servidor.ts`.
+- **Sin modal.** La línea va arriba del documento (la ve todo el que lo abre) y la pregunta, en una tarjeta abajo a la
+  derecha que sale sola solo a quien le toca. «Ahora no» la calla 20 horas; el pendiente sigue en «Para ti».
+- **Una tarjeta a la vez en ese rincón** (`components/ui/turno-de-tarjetas.ts`): primero «¿cuánto te tomó?» (responde
+  a lo que la persona acaba de hacer), después esta y después la pregunta sobre la cuenta. Ninguna con el panel de
+  Feedback abierto ni con un pedido de opinión.
+- **Sin respuesta, se pregunta solo por un documento generado en los últimos 30 días.** Medido ese día: sin el tope, a
+  un CSE le llegaban más de 30 pendientes por kickoffs de hace meses. Con el tope, de 1 a 5 por persona. Lo que ya se
+  respondió (una fecha que pasó, el diagnóstico por confirmar) se sigue preguntando aunque el documento sea viejo.
+- **«¿Cuánto te tomó?» no es otra encuesta**: «Ya lo presenté» hace la misma pregunta que publicar el documento, con la
+  misma clave (`doc:<proyecto>:<documento>`), así cada documento se pregunta una sola vez. El momento pasó a llamarse
+  «Al publicar o presentar un documento» y sigue apagado hasta que dirección lo active.
+- **En el diagnóstico, «Ya lo presenté» no lo marca «Presentado»**: eso guarda la versión que vio el cliente y pide el
+  hilo cerrado y la política revisada. La línea dice que se use «Presentar al cliente», en el estado del documento.
+- **`Project.diagnosticoPresentacion` queda DEPRECATED** (eliminar después del 2026-11-15) y sin lectores. En
+  producción tenía 0 filas el 2026-10-14; lo que llegue antes del deploy lo pasa a la tabla
+  `scripts/migrar-presentacion-del-diagnostico.ts`.
+- **Se mira y se descarga en Feedback › Encuestas › Automáticas**: las últimas respuestas con quién las dio, y el CSV
+  con todas las filas (también las fechas que leyó Nexus y los «Ahora no»).

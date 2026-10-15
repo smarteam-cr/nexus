@@ -6,11 +6,13 @@
  * Los documentos se publican desde el pop-up «Acceso», que se cierra enseguida; por eso la pregunta no vive dentro de
  * él sino en una tarjeta fija abajo a la derecha, montada una vez en el shell. Quien publica llama a
  * `mostrarPreguntaDeTiempo` con lo que devolvió la ruta, y la tarjeta queda hasta que se responda o se cierre
- * (cerrada, la pregunta sigue en «Para ti»).
+ * (cerrada, la pregunta sigue en «Para ti»). Desde el 2026-10-14 pide su turno (components/ui/turno-de-tarjetas.ts):
+ * va antes que las otras preguntas del rincón, porque responde a lo que la persona acaba de hacer.
  */
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Z } from "@/lib/ui/z";
+import { PRIORIDAD_DE_TARJETA, useTurnoDeTarjeta } from "@/components/ui/turno-de-tarjetas";
 import type { PreguntaParaResponder } from "@/lib/tiempos/tipos";
 import PreguntaDeTiempo from "./PreguntaDeTiempo";
 
@@ -32,7 +34,9 @@ export default function PreguntasFlotantes() {
     return () => window.removeEventListener(EVENTO, escuchar);
   }, []);
 
-  if (!pregunta) return null;
+  const toca = useTurnoDeTarjeta("tiempo", !!pregunta, PRIORIDAD_DE_TARJETA.tiempo);
+
+  if (!pregunta || !toca) return null;
   return createPortal(
     <div className="fixed bottom-6 right-6 w-[400px] max-w-[calc(100vw-32px)]" style={{ zIndex: Z.POPOVER }}>
       <PreguntaDeTiempo

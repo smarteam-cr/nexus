@@ -45,7 +45,7 @@ const CABECERA = "text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-
 /** Lo que dice cada tarjeta: cuándo sale, cómo se llama y qué ve la persona. */
 const TARJETA: Record<Momento, { cuando: string; titulo: (e: FilaDeEncuesta) => string; vista: string }> = {
   TAREA_HECHA: { cuando: "Al marcar una tarea como hecha", titulo: (e) => e.config.pregunta, vista: "La tarea que marcó, con su cliente y su fase" },
-  DOCUMENTO_PUBLICADO: { cuando: "Al publicar un documento", titulo: (e) => e.config.pregunta, vista: "El documento que publicó, la primera vez" },
+  DOCUMENTO_PUBLICADO: { cuando: "Al publicar o presentar un documento", titulo: (e) => e.config.pregunta, vista: "El documento que publicó o presentó, la primera vez" },
   CIERRE_SEMANA: { cuando: "Los viernes", titulo: () => "Tu semana", vista: "Cuánto de la semana fue con clientes, por proyecto" },
   ARRANQUE: { cuando: "Se manda una vez", titulo: () => "Encuesta de arranque", vista: "Cuánto le toma normalmente cada tarea clave" },
 };

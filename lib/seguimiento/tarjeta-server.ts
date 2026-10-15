@@ -13,7 +13,6 @@
  * Las reglas de qué entra y cómo está cada cosa: lib/seguimiento/tarjeta.ts.
  */
 import "server-only";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { requireAccessToClient } from "@/lib/auth/access";
 import { ForbiddenError, UnauthorizedError, type AppUserWithTeamMember } from "@/lib/auth/supabase";
@@ -26,7 +25,9 @@ import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import { SENTINEL_SERVICE_TYPE, resolvePipeline } from "@/lib/projects/kind";
 import { leerMotivoDeEtapa, sugerenciaVigente } from "@/lib/projects/etapa-sugerida";
-import { fechaEnPalabras, leerPresentacion } from "@/lib/canvas/presentacion-del-diagnostico";
+import { fechaEnPalabras } from "@/lib/canvas/presentacion-del-diagnostico";
+import { plegar } from "@/lib/presentaciones/reglas";
+import { presentacionesDisponible } from "@/lib/presentaciones/servidor";
 import { campoDeFicha, camposDeLaReunion, decisionesDeLaReunion, leerFicha, type ClaveDeFicha } from "@/lib/clients/ficha";
 import { urlDeSolicitudes } from "@/lib/sessions/solicitudes-fuera-de-alcance";
 import { reunionParaLaTarjeta } from "@/lib/sessions/reuniones-para-seguimiento";
@@ -135,7 +136,7 @@ export async function cargarTarjeta(sessionId: string, user: AppUserWithTeamMemb
     prisma.client.findUnique({ where: { id: clientId }, select: { ficha: true } }),
     seguro(
       prisma.project.findMany({
-        where: proyectoClasificableWhere({ clientId, OR: [{ etapaPropuestaStageId: { not: null } }, { diagnosticoPresentacion: { not: Prisma.DbNull } }] }),
+        where: proyectoClasificableWhere({ clientId, etapaPropuestaStageId: { not: null } }),
         select: {
           id: true,
           name: true,
@@ -144,7 +145,6 @@ export async function cargarTarjeta(sessionId: string, user: AppUserWithTeamMemb
           etapaPropuestaStageId: true,
           etapaPropuestaMotivo: true,
           etapaPropuestaAt: true,
-          diagnosticoPresentacion: true,
         },
       }),
       [],
@@ -244,9 +244,32 @@ export async function cargarTarjeta(sessionId: string, user: AppUserWithTeamMemb
     });
   }
 
-  // La fecha del diagnóstico que leyó Nexus en esta reunión, si el diagnóstico sigue en borrador.
-  const conFecha = proyectos
-    .map((p) => ({ p, pr: leerPresentacion(p.diagnosticoPresentacion) }))
+  // La fecha del diagnóstico que leyó Nexus en esta reunión, si el diagnóstico sigue en borrador y nadie la decidió
+  // (lib/presentaciones: una fila por respuesta; la de Nexus lleva la reunión).
+  const deEstaReunion = !presentacionesDisponible()
+    ? []
+    : await seguro(
+        prisma.presentacionDeDocumento.findMany({
+          where: { sessionId, evento: "propuesta", documento: "diagnostico", project: proyectoClasificableWhere({ clientId }) },
+          select: { projectId: true, project: { select: { name: true } } },
+        }),
+        [],
+      );
+  const idsConFecha = [...new Set(deEstaReunion.map((f) => f.projectId).filter((id): id is string => !!id))];
+  const filasDeFecha = idsConFecha.length
+    ? await seguro(
+        prisma.presentacionDeDocumento.findMany({
+          where: { projectId: { in: idsConFecha }, documento: "diagnostico" },
+          select: { projectId: true, evento: true, fecha: true, porEmail: true, sessionId: true, detalle: true, createdAt: true },
+        }),
+        [],
+      )
+    : [];
+  const conFecha = idsConFecha
+    .map((id) => ({
+      p: { id, name: deEstaReunion.find((f) => f.projectId === id)?.project?.name ?? "" },
+      pr: plegar(filasDeFecha.filter((f) => f.projectId === id)),
+    }))
     .filter(({ pr }) => pr.propuesta?.reunion.id === sessionId && pr.propuesta.fecha !== pr.fecha);
   const borradores = conFecha.length
     ? await prisma.projectCanvas.findMany({

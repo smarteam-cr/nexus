@@ -60,6 +60,9 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "no pregunta «¿qué proyectos cuentan?»: cuenta, para «Uso de Nexus», las sugerencias de etapa y las fechas del " +
       "diagnóstico que Nexus dejó guardadas en CUALQUIER proyecto. Filtrar por un criterio escondería propuestas que " +
       "existieron (de un proyecto cerrado después) y el uso saldría más bajo de lo que fue.",
+  // Cuándo se presenta cada documento (2026-10-14): lo que le toca responder a cada persona de Customer Success, en los
+  // proyectos abiertos de implementación (la misma línea que el índice de clientes y «Para ti»).
+  "lib/presentaciones/servidor.ts": { modo: "criterio", criterio: "clasificable" },
   },
   "lib/para-ti/fuentes/etapa.ts": {
     modo: "exento",
@@ -168,12 +171,6 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "decide si quien abre la pestaña Adopción es el CSE de la cuenta: busca un proyecto donde sea el encargado en " +
       "HubSpot, acotado por PIPELINE (`PROYECTO_DE_PIPELINE_CS_WHERE`), igual que lib/auth/access.ts decide el dueño de " +
       "la cuenta. Es una pregunta de acceso, no de pantalla.",
-  },
-  "lib/para-ti/fuentes/proyectos.ts": {
-    modo: "exento",
-    razon:
-      "no pregunta «¿qué proyectos cuentan?»: lee la fecha de presentación del diagnóstico de los proyectos que " +
-      "el alcance de «Para ti» ya decidió que son tuyos (`id in …`). El criterio lo pone lib/para-ti/alcance-server.ts.",
   },
   "lib/sessions/solicitudes-server.ts": {
     modo: "exento",

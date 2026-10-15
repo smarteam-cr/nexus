@@ -39,8 +39,8 @@ export const MOMENTOS: readonly DefinicionDeMomento[] = [
   },
   {
     clave: "DOCUMENTO_PUBLICADO",
-    nombre: "Al publicar un documento",
-    cuando: "Al compartir con el cliente un diagnóstico, una planificación, un kickoff o una entrega, la primera vez",
+    nombre: "Al publicar o presentar un documento",
+    cuando: "Al compartir con el cliente un diagnóstico, una planificación, un kickoff o una entrega, o al decir «Ya lo presenté»: la primera vez",
     disponible: true,
   },
   {

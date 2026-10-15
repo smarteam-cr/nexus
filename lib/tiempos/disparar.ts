@@ -222,9 +222,37 @@ export async function alPublicarDocumento(args: {
   yaEstabaPublicado: boolean;
   ahora?: Date;
 }): Promise<PreguntaParaResponder | null> {
+  if (args.yaEstabaPublicado) return null;
+  return preguntarPorElDocumento({ ...args, origen: "publicar", contexto: "lo acabas de publicar" });
+}
+
+/**
+ * «Ya lo presenté» (lib/presentaciones, 2026-10-14): la MISMA pregunta que al publicarlo, con la misma clave, así cada
+ * documento se pregunta una sola vez, lo que pase primero. Solo si el momento «Al publicar o presentar un documento»
+ * está activo.
+ */
+export async function alPresentarDocumento(args: {
+  email: string | null | undefined;
+  projectId: string;
+  documento: Documento;
+  /** AAAA-MM-DD: el día que se presentó, en palabras en la tarjeta. */
+  enPalabras: string;
+  ahora?: Date;
+}): Promise<PreguntaParaResponder | null> {
+  return preguntarPorElDocumento({ ...args, origen: "presentar", contexto: `lo presentaste el ${args.enPalabras}` });
+}
+
+async function preguntarPorElDocumento(args: {
+  email: string | null | undefined;
+  projectId: string;
+  documento: Documento;
+  origen: "publicar" | "presentar";
+  contexto: string;
+  ahora?: Date;
+}): Promise<PreguntaParaResponder | null> {
   try {
     const ahora = args.ahora ?? new Date();
-    if (!args.email || args.yaEstabaPublicado || !tiemposDisponible()) return null;
+    if (!args.email || !tiemposDisponible()) return null;
     const encuesta = await encuestaDe("DOCUMENTO_PUBLICADO");
     if (!encuesta.activa || !encuesta.id || !encuesta.config.documentos.includes(args.documento)) return null;
     const persona = await personaQueResponde(args.email);
@@ -254,7 +282,7 @@ export async function alPublicarDocumento(args: {
       clientId: proyecto.clientId,
       documento: args.documento,
       titulo: nombre,
-      origen: "publicar",
+      origen: args.origen,
       ocurrioAt: ahora,
       venceAt: vence,
     });
@@ -264,7 +292,7 @@ export async function alPublicarDocumento(args: {
       momento: "DOCUMENTO_PUBLICADO",
       pregunta: encuesta.config.pregunta,
       titulo: nombre,
-      contexto: [proyecto.client?.name, "lo acabas de publicar"].filter(Boolean).join(" · "),
+      contexto: [proyecto.client?.name, args.contexto].filter(Boolean).join(" · "),
       opciones: encuesta.config.opciones,
       estimacion: { modo: encuesta.config.estimacion, texto: estimacionDeDocumento(mediana, args.documento) },
       taskId: null,
@@ -272,7 +300,7 @@ export async function alPublicarDocumento(args: {
       venceAt: vence.toISOString(),
     };
   } catch (e) {
-    console.error("[tiempos] no se pudo crear la pregunta de un documento publicado:", e instanceof Error ? e.message : e);
+    console.error(`[tiempos] no se pudo crear la pregunta de un documento (${args.origen}):`, e instanceof Error ? e.message : e);
     return null;
   }
 }

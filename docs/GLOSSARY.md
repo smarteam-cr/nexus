@@ -102,9 +102,13 @@
 - **Tipo de fase** (`tipo` en la salida del handoff, `lib/timeline/acomodar-en-paralelo.ts`): arranque,
   diagnóstico, planificación, configuración, migración, desarrollo, capacitación, pruebas o cierre. Con él,
   el código pone los inicios (lo que va en paralelo); nunca alarga el plan que armó la IA.
-- **Fecha de presentación del diagnóstico** (`Project.diagnosticoPresentacion`): cuándo se le presenta el
-  diagnóstico al cliente. Nexus la pregunta al generarlo, la propone si una reunión la dice, y dos días antes pide
-  confirmar que está **listo**: ahí avisa al vendedor dueño de la empresa en HubSpot. Ver DECISIONS §Seis mejoras.
+- **Presentación de un documento** (`PresentacionDeDocumento`, `lib/presentaciones`): cuándo se le presenta al cliente
+  el kickoff, el diagnóstico, la planificación o la entrega. Lo responde solo Customer Success (el encargado del
+  proyecto, quien generó el documento o la CSL): una fecha, «Todavía no sé» o **«Ya lo presenté»**. Cada respuesta
+  es una fila, con quién y cuándo. Del diagnóstico, Nexus propone la fecha si una reunión la dice, y dos días antes
+  pide confirmar que está **listo**: ahí avisa al vendedor dueño de la empresa en HubSpot. Hasta el 2026-10-14 era
+  solo del diagnóstico (`Project.diagnosticoPresentacion`, DEPRECATED). Ver DECISIONS §Cuándo se presenta cada
+  documento.
 - **Solicitud fuera de alcance** (`PedidoFueraDeAlcance`): algo que el cliente pidió en una reunión y no estaba en
   lo vendido. La propone el agente, la confirma o la descarta el CSE, y se sigue en la cuenta («Fuera de alcance»):
   confirmada, cotizada, aprobada, no la tomó. Al confirmarla, avisa al vendedor y a Customer Success. Hasta el deploy de
@@ -945,3 +949,10 @@
   puede tener sus propias horas en los supuestos. Las demás tareas son **comunes**.
 - **encuesta de arranque** (momento `ARRANQUE`): una sola vez, cuánto le toma normalmente a cada CSE y CSL cada tarea
   clave. Se manda desde Feedback › Encuestas › Automáticas, llega a «Para ti» y vence en 14 días.
+
+- **Pregunta sobre la cuenta** (`lib/encuestas-de-cuenta`, `RespuestaDeCuenta`): lo que Customer Success sabe de un
+  cliente y nadie anota, preguntado a cada CSE y CSL al entrar a su ficha. La primera: «¿Este cliente tiene apertura a
+  la asesoría?» (Sí · No · No sé, con un porqué opcional). Con «No sé» vuelve a la semana. Se guarda cada evento sin
+  pisar el anterior; se mira y se descarga en Feedback › Encuestas › Sobre los clientes.
+- **Apertura a la asesoría**: el cliente no solo nos pide cosas para implementar, también quiere nuestra guía sobre qué
+  hacer, en qué orden y por qué.

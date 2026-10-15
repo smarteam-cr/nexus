@@ -232,6 +232,7 @@ model Client {
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
 }
+  respuestasDeCuenta     RespuestaDeCuenta[] // Preguntas sobre la cuenta: lo que Customer Success sabe de ella (SET NULL)
 
 // ─── SystemConfig (config GLOBAL de Nexus, singleton — no por usuario) ─────────
 // Un solo row (id="system"; se upsert). Hoy guarda el logo de Smarteam
@@ -342,9 +343,9 @@ model Project {
   // Publish del DIAGNÓSTICO y de la PLANIFICACIÓN al cliente (2026-10-02): mismo mecanismo que la
   // Entrega (snapshot congelado al publicar, el chokepoint exige NO-null en cada lectura).
   diagnosticoPublishedAt   DateTime?
-  // Cuándo se le presenta el diagnóstico al cliente (2026-10-07): la fecha que fijó una persona, la que
-  // propuso Nexus desde una reunión, si ya está listo y el aviso al vendedor. Json con versión:
-  // lib/canvas/presentacion-del-diagnostico.ts.
+  // DEPRECATED — eliminar después del 2026-11-15. Cuándo se le presentaba el diagnóstico (2026-10-07), en un Json con
+  // la última respuesta. Desde el 2026-10-14 la pregunta es de los cuatro documentos y vive en PresentacionDeDocumento
+  // (append-only); lo que quedó acá lo pasa scripts/migrar-presentacion-del-diagnostico.ts. Sin lectores.
   diagnosticoPresentacion  Json?
   planificacionPublishedAt DateTime?
 
@@ -562,6 +563,7 @@ model Project {
 // requerimiento del canvas Desarrollo. APPEND-ONLY: cada re-estimación es una FILA
 // NUEVA (nunca un update) → queda el historial "estimamos 40h y terminó en 90h", que
 // es lo que permite calibrar. La VIGENTE es la más reciente por createdAt.
+  presentaciones         PresentacionDeDocumento[] // cuándo se le presenta cada documento al cliente, y quién lo respondió (SET NULL)
 //
 // Vive en tabla propia y NO dentro de `CanvasBlock.data` a propósito: las horas tienen
 // que ser CONSULTABLES (sumar el esfuerzo de un período, reportar por proyecto) y
@@ -6381,6 +6383,84 @@ model ProyectoDeTareas {
   @@index([sessionId])
   @@index([plantillaId])
 }
+// ─── Preguntas sobre la cuenta (2026-10-13) ───────────────────────────────────────────────
+// Lo que Customer Success sabe de cada cliente, preguntado al entrar a su ficha (la primera: ¿tiene apertura a la
+// asesoría?). El registro de preguntas vive en lib/encuestas-de-cuenta/preguntas.ts; acá solo si está activa y cada
+// evento. SQL: scripts/sql/2026-10-13-preguntas-sobre-la-cuenta.sql (RLS + RESTRICTIVE).
+
+/// Si una pregunta sobre la cuenta está activa. Sin fila, vale el registro.
+model EncuestaDeCuenta {
+  id                  String   @id @default(cuid())
+  clave               String   @unique
+  activa              Boolean  @default(true)
+  actualizadaPorEmail String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+/// Cada vez que se mostró, se respondió o se dejó para después una pregunta sobre la cuenta. APPEND-ONLY: nunca se
+/// edita ni se borra; la lectura vigente es la última respuesta de cada persona por cliente.
+model RespuestaDeCuenta {
+  id              String   @id @default(cuid())
+  clave           String
+  /// La versión y el texto de la pregunta al preguntar, congelados
+  preguntaVersion Int
+  preguntaTexto   String
+  // nullable porque la respuesta sobrevive a que se borre el cliente (el nombre queda congelado)
+  clientId        String?
+  client          Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientNombre    String
+  personaEmail    String
+  /// El rol al responder (CSE · CSL…)
+  rol             String?
+  /// Por qué la persona ve al cliente (hubspot-owner · granted · view-all…): distingue al encargado del resto
+  motivoDeAcceso  String?
+  /// mostrada · respondida · ahora_no
+  evento          String
+  /// si · no · no_se (solo en «respondida»)
+  valor           String?
+  porQue          String?
+  /// De dónde se respondió (la ruta), por si hay otra puerta mañana
+  contexto        Json?
+  createdAt       DateTime @default(now())
+
+  @@index([clave, clientId, personaEmail, createdAt])
+  @@index([clave, createdAt])
+}
+
+/// Cuándo se le presenta cada documento al cliente (kickoff, diagnóstico, planificación y entrega), y quién lo
+/// respondió (2026-10-14). APPEND-ONLY: nunca se edita ni se borra; el estado de cada documento sale de leer sus filas
+/// en orden (lib/presentaciones/reglas.ts). Responde solo Customer Success. SQL: 2026-10-14-presentaciones-de-documentos.sql.
+model PresentacionDeDocumento {
+  id             String   @id @default(cuid())
+  // nullable porque la respuesta sobrevive a que se borre el proyecto (los nombres quedan congelados)
+  projectId      String?
+  project        Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  proyectoNombre String
+  clientNombre   String?
+  /// kickoff · diagnostico · planificacion · entrega
+  documento      String
+  /// fecha · sin-fecha · presentado · listo · propuesta (la leyó Nexus en una reunión) · descarte · ahora-no
+  evento         String
+  /// AAAA-MM-DD, el día en Costa Rica: la fecha planeada, la de la presentación o la propuesta
+  fecha          String?
+  /// Quién respondió. null solo en «propuesta» (la leyó Nexus)
+  porEmail       String?
+  /// El rol al responder (CSE · CSL)
+  rol            String?
+  /// Por qué le tocaba responder: encargado · genero (generó el documento) · lider (la CSL)
+  motivo         String?
+  /// La reunión de donde salió la propuesta (solo en «propuesta»)
+  sessionId      String?
+  /// De dónde salió la fecha, la cita de la reunión o el aviso al vendedor
+  detalle        Json?
+  createdAt      DateTime @default(now())
+
+  @@index([projectId, documento, createdAt])
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
 
 /// Un plan que se repite («Onboarding en 30 días»): tareas con días hábiles relativos. Usarlo no gasta IA.
 model PlantillaDeTareas {

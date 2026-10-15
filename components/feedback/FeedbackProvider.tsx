@@ -40,6 +40,8 @@ interface ContextoDeFeedback {
   abierto: boolean;
   alternar: () => void;
   abrir: (opciones?: { en?: Pestana; reporteId?: string; pedido?: PedidoParaMi; escala?: SobreLaEscala; catalogo?: SobreElCatalogo }) => void;
+  /** Hay un pedido de opinión abajo a la derecha: otra burbuja (las preguntas sobre la cuenta) se corre para no taparlo. */
+  hayPedido: boolean;
 }
 
 const Contexto = createContext<ContextoDeFeedback | null>(null);
@@ -161,7 +163,10 @@ export default function FeedbackProvider({
 
   const quitarPedido = useCallback((id: string) => setPedidos((ps) => ps.filter((p) => p.id !== id)), []);
 
-  const valor = useMemo<ContextoDeFeedback>(() => ({ abierto, alternar, abrir }), [abierto, alternar, abrir]);
+  const valor = useMemo<ContextoDeFeedback>(
+    () => ({ abierto, alternar, abrir, hayPedido: !!pedidoAqui }),
+    [abierto, alternar, abrir, pedidoAqui],
+  );
 
   return (
     <Contexto.Provider value={valor}>

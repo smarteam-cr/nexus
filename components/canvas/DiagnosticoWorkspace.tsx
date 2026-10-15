@@ -27,7 +27,6 @@ import { buildDiagnosticoConfig, buildDiagnosticoSections, ctxDelDiagnostico } f
 import DocumentAssist from "@/components/ai/DocumentAssist";
 import { revisarHilo, seccionesDelHilo } from "@/lib/canvas/revisar-hilo";
 import EstadoDelDocumento from "./EstadoDelDocumento";
-import PresentacionDelDiagnostico from "./PresentacionDelDiagnostico";
 import { lineaDelDocumento, MENSAJE_APROBADO, revisarParaPresentar, type EstadoVista } from "@/lib/canvas/estado-del-documento";
 import { POLITICA_RECTORA_KEY } from "@/components/landing/configs/diagnostico.defs";
 
@@ -247,8 +246,8 @@ export default function DiagnosticoWorkspace({
         del marco del documento (ProjectCanvasPanel, 2026-10-05). */}
     {/* Borrador → presentado → aprobado (2026-10-02). También fuera de `.stl`: es del equipo. */}
     <EstadoDelDocumento projectId={projectId} canvasId={canvasId} motivosLocales={motivosParaNoPresentar} onEstado={setEstado} />
-    {/* Cuándo se le presenta al cliente (2026-10-07): solo mientras es borrador. */}
-    {estado?.estado === "borrador" && <PresentacionDelDiagnostico projectId={projectId} hayContenido={hasGeneratedContent} />}
+    {/* Cuándo se presenta: lo pregunta el panel del proyecto, arriba del marco, para los cuatro documentos
+        (components/presentaciones/PresentacionDelDocumento.tsx, 2026-10-14). */}
     <div className="stl">
       {cs.error && (
         <div style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>

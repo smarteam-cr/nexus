@@ -1,19 +1,17 @@
 /**
- * lib/canvas/presentacion-del-diagnostico.ts — CUÁNDO SE LE PRESENTA EL DIAGNÓSTICO AL CLIENTE. PURO.
+ * lib/canvas/presentacion-del-diagnostico.ts — LO PROPIO DEL DIAGNÓSTICO en la pregunta de cuándo se presenta. PURO.
  *
- * Pedido de Elías (2026-10-07): al generar un diagnóstico, Nexus pregunta cuándo se planea presentar.
- * Funciona como las fechas del cronograma: si una reunión con el cliente la menciona, Nexus la propone
- * con la frase de la reunión y una persona la usa o la cambia. Cuando se acerca la fecha, la persona
- * confirma que está terminado y reconfirma la fecha; en ese momento le llega un aviso al vendedor
- * dueño de la empresa en HubSpot, con el enlace, para que lo revise antes de la presentación.
+ * Desde el 2026-10-14 la pregunta es de los cuatro documentos que se presentan y vive en lib/presentaciones/reglas.ts
+ * (una fila por respuesta, en `PresentacionDeDocumento`). Acá queda lo que solo hace el diagnóstico y las fechas que
+ * usan los dos:
+ *   · la fecha que lee Nexus en una reunión (`ADENDA_PRESENTACION_DEL_DIAGNOSTICO`, `leerPresentacionDetectada`): la
+ *     lectura de cada reunión la pide si el diagnóstico todavía no se presentó;
+ *   · el Json viejo de `Project.diagnosticoPresentacion` (DEPRECATED), que solo lee la migración
+ *     (scripts/migrar-presentacion-del-diagnostico.ts).
  *
- * Vive en `Project.diagnosticoPresentacion` (Json con versión). Las fechas son AAAA-MM-DD, el día de
- * la presentación en Costa Rica; la cuenta de días se hace a mano, sin zonas horarias.
+ * Las fechas son AAAA-MM-DD, el día de la presentación en Costa Rica; la cuenta de días se hace a mano, sin zonas
+ * horarias.
  */
-
-export const DIAS_ANTES_DE_RECONFIRMAR = 2;
-/** Pasada la fecha, se sigue preguntando unos días (se presentó y no se marcó, o se corrió). */
-export const DIAS_DESPUES_QUE_SE_PREGUNTA = 7;
 
 export interface ReunionDeLaPropuesta {
   id: string;
@@ -22,6 +20,7 @@ export interface ReunionDeLaPropuesta {
   fecha: string;
 }
 
+/** DEPRECATED — el Json de `Project.diagnosticoPresentacion` (2026-10-07 al 2026-10-14). Solo lo lee la migración. */
 export interface PresentacionDelDiagnostico {
   v: 1;
   /** La fecha que fijó una persona. */
@@ -100,93 +99,6 @@ export function diasEntre(desde: string, hasta: string): number {
     return Date.UTC(a, m - 1, d);
   };
   return Math.round((t(hasta) - t(desde)) / 86_400_000);
-}
-
-/** ¿Está terminado para la fecha que hoy vale? */
-export function estaListo(p: PresentacionDelDiagnostico): boolean {
-  return !!p.fecha && p.listo?.fecha === p.fecha;
-}
-
-/** ¿Toca reconfirmar? Desde dos días antes de la fecha hasta una semana después, si no se marcó listo. */
-export function tocaReconfirmar(p: PresentacionDelDiagnostico, hoy: string): boolean {
-  if (!p.fecha || estaListo(p)) return false;
-  const faltan = diasEntre(hoy, p.fecha);
-  return faltan <= DIAS_ANTES_DE_RECONFIRMAR && faltan >= -DIAS_DESPUES_QUE_SE_PREGUNTA;
-}
-
-export type EstadoDeLaPresentacion = "sin-responder" | "sin-fecha" | "con-fecha" | "por-reconfirmar" | "listo";
-
-export function estadoDeLaPresentacion(p: PresentacionDelDiagnostico, hoy: string): EstadoDeLaPresentacion {
-  if (estaListo(p)) return "listo";
-  if (p.fecha) return tocaReconfirmar(p, hoy) ? "por-reconfirmar" : "con-fecha";
-  return p.sinFecha ? "sin-fecha" : "sin-responder";
-}
-
-/**
- * Suma lo que leyó Nexus en una reunión. Devuelve null cuando no cambia nada: la fecha ya es la
- * fijada, alguien ya la descartó, o es la misma que ya se está proponiendo.
- */
-export function conPropuesta(
-  p: PresentacionDelDiagnostico,
-  propuesta: { fecha: string; cita: string; reunion: ReunionDeLaPropuesta },
-  ahora: string,
-): PresentacionDelDiagnostico | null {
-  if (!esFecha(propuesta.fecha) || !propuesta.cita.trim()) return null;
-  if (p.fecha === propuesta.fecha) return null;
-  if ((p.descartadas ?? []).includes(propuesta.fecha)) return null;
-  if (p.propuesta?.fecha === propuesta.fecha) return null;
-  return { ...p, propuesta: { ...propuesta, en: ahora } };
-}
-
-/** Una persona fija la fecha. Si cambia, lo que estaba listo para la otra fecha vuelve a pedirse. */
-export function fijarFecha(
-  p: PresentacionDelDiagnostico,
-  fecha: string,
-  por: string,
-  ahora: string,
-  fuente?: string,
-): PresentacionDelDiagnostico {
-  const usaLaPropuesta = p.propuesta?.fecha === fecha;
-  return {
-    ...p,
-    fecha,
-    fijadaPor: por,
-    fijadaEn: ahora,
-    ...(fuente ? { fuente } : { fuente: undefined }),
-    sinFecha: null,
-    propuesta: usaLaPropuesta ? null : (p.propuesta ?? null),
-    listo: p.listo?.fecha === fecha ? p.listo : null,
-  };
-}
-
-/** «Todavía no sé». */
-export function sinFecha(p: PresentacionDelDiagnostico, por: string, ahora: string): PresentacionDelDiagnostico {
-  return { ...p, fecha: null, sinFecha: { por, en: ahora }, listo: null };
-}
-
-export function usarPropuesta(p: PresentacionDelDiagnostico, por: string, ahora: string): PresentacionDelDiagnostico | null {
-  if (!p.propuesta) return null;
-  const r = p.propuesta.reunion;
-  const fuente = `Lo leyó Nexus en «${r.titulo ?? "una reunión"}» (${r.fecha}): «${p.propuesta.cita}»`;
-  return fijarFecha(p, p.propuesta.fecha, por, ahora, fuente);
-}
-
-/** Descarta la fecha propuesta: no se vuelve a proponer, y queda quién la descartó (si se sabe). */
-export function descartarPropuesta(p: PresentacionDelDiagnostico, por?: string, ahora?: string): PresentacionDelDiagnostico {
-  if (!p.propuesta) return p;
-  const fecha = p.propuesta.fecha;
-  return {
-    ...p,
-    propuesta: null,
-    descartadas: [...(p.descartadas ?? []), fecha].slice(-20),
-    ...(por && ahora ? { descartadasPor: [...(p.descartadasPor ?? []), { fecha, por: por.toLowerCase(), en: ahora }].slice(-20) } : {}),
-  };
-}
-
-/** Terminado: reconfirma la fecha (la que venga, que puede ser otra) y lo deja listo. */
-export function marcarListo(p: PresentacionDelDiagnostico, fecha: string, por: string, ahora: string): PresentacionDelDiagnostico {
-  const fijada = p.fecha === fecha ? p : fijarFecha(p, fecha, por, ahora);
-  return { ...fijada, listo: { fecha, por, en: ahora } };
 }
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];

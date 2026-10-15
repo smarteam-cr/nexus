@@ -11,8 +11,9 @@ import { urlDeProyecto } from "@/lib/agents/run-url";
 import { altaEnCurso, EXPLICACION_DEL_PASO, siguientePaso } from "@/lib/projects/alta";
 import { contarSesionesSinRevisar } from "@/lib/sessions/project-sources";
 import { urlDeSolicitudes } from "@/lib/sessions/solicitudes-fuera-de-alcance";
-import { estadoDeLaPresentacion, fechaEnPalabras, leerPresentacion } from "@/lib/canvas/presentacion-del-diagnostico";
-import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { fechaEnPalabras } from "@/lib/canvas/presentacion-del-diagnostico";
+import { elDocumento, nombreDelDocumento, tituloParaTi } from "@/lib/presentaciones/reglas";
+import { presentacionesQueTeTocan } from "@/lib/presentaciones/servidor";
 import { hayPropuestaParaRevisar } from "@/lib/timeline/borrador";
 import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
 import { fraseDeAutoria } from "@/lib/timeline/autoria-de-la-propuesta";
@@ -185,63 +186,61 @@ export const PEDIDOS_FUERA_DE_ALCANCE: Fuente = {
 };
 
 /**
- * La fecha de presentación del diagnóstico (2026-10-07, lib/canvas/presentacion-del-diagnostico.ts): reconfirmar que
- * está terminado cuando se acerca la fecha, y usar o descartar la fecha que leyó Nexus en una reunión. Solo mientras
- * el diagnóstico es un borrador: presentado o aprobado, ya no hay nada que preguntar.
+ * Cuándo se le presenta cada documento al cliente (2026-10-14, lib/presentaciones): el kickoff, el diagnóstico, la
+ * planificación y la entrega. Le llega SOLO a Customer Success, a quien le toca responder: el encargado del proyecto,
+ * quien generó el documento, o la CSL si no hay nadie de Customer Success. Se va solo cuando se responde. La tarjeta
+ * del documento («Ahora no») no lo calla: acá sigue.
  */
-export const PRESENTACION_DEL_DIAGNOSTICO: Fuente = {
-  clave: "presentacion-del-diagnostico",
+export const PRESENTACIONES: Fuente = {
+  clave: "presentaciones",
   frente: null,
-  alDia: "Las fechas de presentación de tus diagnósticos",
-  aplica: conProyectos,
+  alDia: "Cuándo se presentan tus documentos",
+  aplica: (a) => a.rol === "CSE" || a.rol === "CSL",
   async medir(a, c) {
-    const porId = new Map(a.proyectos.map((p) => [p.id, p]));
-    const filas = await prisma.project.findMany({
-      where: { id: { in: [...porId.keys()] }, diagnosticoPresentacion: { not: Prisma.DbNull } },
-      select: { id: true, diagnosticoPresentacion: true },
-    });
-    if (filas.length === 0) return [];
-    const borradores = await prisma.projectCanvas.findMany({
-      where: { ...canvasOfNested("diagnosis", { projectId: { in: filas.map((f) => f.id) } }), estadoDocumento: { notIn: ["presentado", "aprobado"] } },
-      select: { id: true, projectId: true },
-    });
-    const canvasDe = new Map(borradores.map((b) => [b.projectId, b.id]));
-    return filas.flatMap((f): Pendiente[] => {
-      const p = porId.get(f.id);
-      const canvasId = canvasDe.get(f.id);
-      if (!p || !canvasId) return [];
-      const pr = leerPresentacion(f.diagnosticoPresentacion);
-      const href = urlDeProyecto(p.clientId, p.id, canvasId);
-      if (estadoDeLaPresentacion(pr, c.hoyISO) === "por-reconfirmar" && pr.fecha) {
+    const tocan = await presentacionesQueTeTocan({ email: a.email, rol: a.rol }, a.proyectos.map((p) => p.id), c.ahora);
+    return tocan.flatMap(({ vista: v, href }): Pendiente[] => {
+      const p = v.presentacion;
+      const meta = `${nombreDelDocumento(v.documento)} · ${v.proyecto}`;
+      const responder = `${href}&presentacion=responder`;
+      if (v.pide) {
+        const urgente = v.estado === "por-reconfirmar" || v.estado === "paso-la-fecha";
+        const detalle =
+          v.estado === "por-reconfirmar"
+            ? "Confírmalo y le avisamos al vendedor para que lo revise antes."
+            : v.estado === "paso-la-fecha"
+              ? `Era el ${fechaEnPalabras(p.fecha!)}. Di si se presentó o si se movió.`
+              : v.estado === "sin-fecha"
+                ? "La última vez dijiste «Todavía no sé»."
+                : `Ya está generado. Di cuándo presentas ${elDocumento(v.documento)}, o si ya se presentó.`;
         return [
           {
-            clave: `presentacion-del-diagnostico:${p.id}`,
-            fuente: "presentacion-del-diagnostico",
-            cuando: "hoy",
+            clave: `presentacion:${v.documento}:${v.projectId}`,
+            fuente: "presentaciones",
+            cuando: urgente ? "hoy" : "semana",
             delAgente: false,
-            titulo: `¿Está terminado el diagnóstico de ${p.empresa}?`,
-            detalle: `Se presenta el ${fechaEnPalabras(pr.fecha)}. Confírmalo y le avisamos al vendedor para que lo revise antes.`,
-            meta: `Diagnóstico · ${p.name}`,
-            accion: "Confirmar",
-            href,
-            desde: pr.fijadaEn ?? null,
+            titulo: tituloParaTi(v.estado, v.documento, v.empresa),
+            detalle,
+            meta,
+            accion: "Responder",
+            href: responder,
+            desde: p.ultima?.en ?? null,
           },
         ];
       }
-      // La fecha que leyó Nexus deja de pedirse a los 30 días (se sigue viendo en el diagnóstico).
-      if (pr.propuesta && pr.propuesta.fecha !== pr.fecha && !vencioSinRevisar(pr.propuesta.en || pr.propuesta.reunion.fecha, c.hoyISO)) {
+      // La fecha que leyó Nexus en una reunión deja de pedirse a los 30 días (se sigue viendo en el documento).
+      if (p.propuesta && !vencioSinRevisar(p.propuesta.en || p.propuesta.reunion.fecha, c.hoyISO)) {
         return [
           {
-            clave: `presentacion-del-diagnostico:propuesta:${p.id}`,
-            fuente: "presentacion-del-diagnostico",
+            clave: `presentacion:propuesta:${v.documento}:${v.projectId}`,
+            fuente: "presentaciones",
             cuando: "semana",
             delAgente: true,
-            titulo: `Nexus leyó cuándo se presenta el diagnóstico de ${p.empresa}`,
-            detalle: `El ${fechaEnPalabras(pr.propuesta.fecha)}, según «${recortar(pr.propuesta.cita, 100)}». Úsala o cámbiala.`,
-            meta: `Diagnóstico · ${p.name}`,
+            titulo: `Nexus leyó cuándo se presenta ${elDocumento(v.documento)} de ${v.empresa}`,
+            detalle: `El ${fechaEnPalabras(p.propuesta.fecha)}, según «${recortar(p.propuesta.cita, 100)}». Úsala o cámbiala.`,
+            meta,
             accion: "Revisarla",
             href,
-            desde: pr.propuesta.en || null,
+            desde: p.propuesta.en || null,
           },
         ];
       }

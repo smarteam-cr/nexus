@@ -39,6 +39,8 @@ import { PiezasDelRiel, type FilaDelRielDePiezas } from "./RielDelCliente";
 import PanelDelDocumento from "./PanelDelDocumento";
 import { MarcoDelDocumento } from "./MarcoDelDocumento";
 import DocumentoContextSection from "@/components/canvas/DocumentoContextSection";
+import PresentacionDelDocumento from "@/components/presentaciones/PresentacionDelDocumento";
+import { documentoDeLaPieza } from "@/lib/presentaciones/reglas";
 import { documentoConContexto } from "@/lib/contexto/documento";
 import { ProveedorDelResumen, type AvisoDePieza, type ContextoDelResumen } from "./contexto-del-resumen";
 import type { PiezaParaQueSigue, QueSigueDelProyecto } from "@/lib/clients/que-sigue-del-proyecto";
@@ -1096,6 +1098,17 @@ export default function ProjectCanvasPanel({
           onAlternar={() => setNovedadesAbiertas((v) => !v)}
           onCambio={novedadesCambiaron}
           onReunionSumada={() => setContextoNonce((n) => n + 1)}
+        />
+      )}
+
+      {/* Cuándo se le presenta al cliente (2026-10-14): el kickoff, el diagnóstico, la planificación y la entrega.
+          La línea la ve todo el que abre el documento; la pregunta la responde solo Customer Success. Se remonta con
+          `agentNonce`: recién generado, el documento ya tiene qué presentar. */}
+      {activeCanvasId && documentoDeLaPieza(activeSlug) && (
+        <PresentacionDelDocumento
+          key={`presentacion-${activeCanvasId}-${agentNonce}`}
+          projectId={projectId}
+          documento={documentoDeLaPieza(activeSlug)!}
         />
       )}
 

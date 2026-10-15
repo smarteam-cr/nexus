@@ -170,7 +170,7 @@ export function estadoDePropuestaDeFecha(en: Date | string, hoyISO: string): Est
   return sinDecidir(en, hoyISO);
 }
 
-/** La fecha propuesta que alguien usó (`fijadaPor` con la fuente «Lo leyó Nexus…») o descartó (`descartadasPor`). */
+/** La fecha propuesta que alguien usó o descartó: una fila de `PresentacionDeDocumento` con quién y cuándo (lib/presentaciones). */
 export function estadoDeFechaDecidida(d: { usada: boolean; por: string; en: string }): EstadoCalculado {
   return decidido(d.usada ? "usado" : "desestimado", d.por, d.en);
 }

@@ -115,7 +115,7 @@ export default async function FeedbackPage({
         .map((e) => e.trim().toLowerCase())
         .filter(Boolean)}
       // Las automáticas («¿cuánto te tomó?») van aparte; un enlace viejo a «Tiempos» las abre.
-      claseInicial={sp.clase === "automaticas" || sp.vista === "tiempos" ? "automaticas" : "preguntas"}
+      claseInicial={sp.clase === "cuentas" ? "cuentas" : sp.clase === "automaticas" || sp.vista === "tiempos" ? "automaticas" : "preguntas"}
     />
   );
 }

@@ -79,6 +79,9 @@ export const SE_MUDAN = [
      con la ficha absorbida. Se mudan enteros: las reuniones también pasan a la que sigue (más abajo), así que INV45
      (todo hecho es del cliente de su reunión) sigue en verde. Sin único con la ficha: dos hechos iguales de las dos
      fichas conviven (la huella no es única). */
+  /* Preguntas sobre la cuenta (2026-10-13): `onDelete: SetNull`; sin mudarlas, lo que respondió el equipo queda sin
+     cliente. Es una bitácora: se muda entera. */
+  ["respuestaDeCuenta", "clientId"],
   ["hechoDeReunion", "clientId"],
   /* Sin relación en el esquema: la base no las cascadea ni las protege (lib/db/punteros-al-borrar.test.ts). */
   ["firefliesSession", "resolvedClientId"],

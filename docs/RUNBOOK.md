@@ -467,6 +467,24 @@ Para no esperar a las 6:00: «Actualizar partner» y «Actualizar señales» en 
 
 ### Migrar «CSE Encargado» en HubSpot (una vez, 2026-10-09)
 
+### Preguntas sobre la cuenta (2026-10-13)
+
+Al entrar a un cliente, Nexus le pregunta a cada CSE y CSL si el cliente tiene apertura a la asesoría (DECISIONS
+«Preguntas sobre la cuenta»). Nace activa. Antes del deploy que la trae, desde una PC:
+`$env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-10-13-preguntas-sobre-la-cuenta.sql; Remove-Item Env:ALLOW_PROD_WRITE`
+y `npm run check:esquema` en verde (sin el SQL, `/api/health` responde 503 y el deploy se revierte). Se pausa sin deploy
+desde Feedback › Encuestas › Sobre los clientes; ahí mismo se descargan todas las respuestas en CSV.
+
+### Cuándo se presenta cada documento (2026-10-14)
+
+La pregunta «¿Cuándo lo presentas?» del kickoff, el diagnóstico, la planificación y la entrega (DECISIONS «Cuándo se
+presenta cada documento»). El SQL `scripts/sql/2026-10-14-presentaciones-de-documentos.sql` ya está aplicado en
+producción (2026-10-14; `npm run check:esquema` en verde). Después del deploy, desde una PC, pasar a la tabla lo que haya
+quedado en el Json viejo del diagnóstico (el código de antes lo siguió escribiendo hasta el deploy):
+`npx tsx scripts/migrar-presentacion-del-diagnostico.ts` (simulacro) y, si lista algo,
+`$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/migrar-presentacion-del-diagnostico.ts --apply; Remove-Item Env:ALLOW_PROD_WRITE`
+(respalda `PresentacionDeDocumento`; sin pg_dump, `SIN_RESPALDO=1`). Correrlo dos veces no duplica.
+
 Desde el 2026-10-09 el espejo de proyectos lee primero «CSE Encargado» (`cse_encargado`) y, si está vacío,
 «CSL Encargado» (`csl_encargado`), que es donde vivía el CSE (DECISIONS §La cartera de la CSL). La migración
 lo deja como decidió Elías: «CSE Encargado» = el CSE, «CSL Encargado» = la CSL, en los proyectos de

@@ -7,7 +7,10 @@
  *   persona): cuántos contestaron, a quién se le espera y si ya la vio, y lo que dijo cada uno (la respuesta es un
  *   reporte y se abre en la Bandeja o en su tema). «Nueva pregunta» abre un cajón con los cuatro pasos y la burbuja
  *   tal como le aparece a la persona. La primera vez, la pestaña explica cómo funciona.
- * - Automáticas: «¿cuánto te tomó?», que se hacen solas (lib/tiempos, un módulo propio que Feedback configura).
+ * - Automáticas: «¿cuánto te tomó?», que se hacen solas (lib/tiempos, un módulo propio que Feedback configura), y
+ *   «¿cuándo lo presentas?» de cada documento, con quién respondió (lib/presentaciones, 2026-10-14).
+ * - Sobre los clientes (2026-10-13): lo que Customer Success responde de cada cliente al entrar a su ficha (¿tiene
+ *   apertura a la asesoría?), con sus resultados y la exportación (lib/encuestas-de-cuenta, otro módulo propio).
  *
  * Diseño «Feedback · Encuestas (v2)» (Claude Design): la versión anterior mezclaba las dos cosas sin decir cuál era
  * cuál y escondía el formulario en el panel. La clase abierta va en la dirección (`?clase=automaticas`); Personas
@@ -37,12 +40,14 @@ import { fechaCorta, numeroDeReporte } from "@/lib/feedback/reglas";
 import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
 import type { DatosDeTiempos } from "@/lib/tiempos/tipos";
 import TiemposDeFeedback, { AntesDeActivarlas } from "@/components/tiempos/admin/TiemposDeFeedback";
+import PreguntasSobreLosClientes from "@/components/encuestas-de-cuenta/admin/PreguntasSobreLosClientes";
+import PresentacionesDeFeedback from "@/components/presentaciones/admin/PresentacionesDeFeedback";
 import { CuerpoDelPedido } from "../PedidoDeOpinion";
 import { Iniciales } from "../piezas";
 import { DisposicionDeFeedback } from "./Disposicion";
 import NuevaPregunta, { enDias } from "./NuevaPregunta";
 
-export type ClaseDeEncuesta = "preguntas" | "automaticas";
+export type ClaseDeEncuesta = "preguntas" | "automaticas" | "cuentas";
 
 /** Las cerradas que se ven antes de «Ver las N». */
 const CERRADAS_A_LA_VISTA = 4;
@@ -89,8 +94,8 @@ export default function EncuestasDeFeedback({
     try {
       const url = new URL(window.location.href);
       url.searchParams.set("vista", "encuestas");
-      if (c === "automaticas") url.searchParams.set("clase", "automaticas");
-      else url.searchParams.delete("clase");
+      if (c === "preguntas") url.searchParams.delete("clase");
+      else url.searchParams.set("clase", c);
       window.history.replaceState(window.history.state, "", url);
     } catch {
       /* sin la dirección al día: la clase se ve igual */
@@ -101,7 +106,7 @@ export default function EncuestasDeFeedback({
   useEffect(() => {
     const alPedido = (e: Event) => {
       const a = (e as CustomEvent<AccionDelRecorrido>).detail;
-      if (a?.evento === "feedback.encuestas" && (a.valor === "preguntas" || a.valor === "automaticas")) cambiarClase(a.valor);
+      if (a?.evento === "feedback.encuestas" && (a.valor === "preguntas" || a.valor === "automaticas" || a.valor === "cuentas")) cambiarClase(a.valor);
     };
     window.addEventListener(EVENTO_DEL_RECORRIDO, alPedido);
     return () => window.removeEventListener(EVENTO_DEL_RECORRIDO, alPedido);
@@ -139,13 +144,21 @@ export default function EncuestasDeFeedback({
           {queSigue.texto}
         </QueSigue>
         <QuienesNoReportan callados={callados} onPreguntar={(email) => abrirNueva([email])} />
-        <LasDosClases />
+        <LasClases />
       </>
-    ) : (
+    ) : clase === "automaticas" ? (
       <>
         <QueSigue>{tiempos?.queSigue ?? "Las preguntas automáticas todavía no están disponibles."}</QueSigue>
         {tiempos && <AntesDeActivarlas hayActivas={activas > 0} />}
-        <LasDosClases />
+        <LasClases />
+      </>
+    ) : (
+      <>
+        <QueSigue>
+          Se pregunta sola a Customer Success al entrar a cada cliente. Cada respuesta queda guardada con su fecha y quién la dio:
+          descarga el CSV para analizarlas.
+        </QueSigue>
+        <LasClases />
       </>
     );
 
@@ -162,6 +175,7 @@ export default function EncuestasDeFeedback({
               opciones={[
                 { clave: "preguntas", etiqueta: "Tus preguntas", cuenta: grupos.abiertas.length + grupos.cerradas.length },
                 { clave: "automaticas", etiqueta: "Automáticas", cuenta: tiempos ? `${activas} ${activas === 1 ? "activa" : "activas"}` : undefined },
+                { clave: "cuentas", etiqueta: "Sobre los clientes" },
               ]}
             />
           </div>
@@ -206,14 +220,21 @@ export default function EncuestasDeFeedback({
         ) : (
           <ComoFunciona deQuien={deQuien} onIdea={(texto) => abrirNueva([], texto)} />
         )
-      ) : tiempos ? (
-        <TiemposDeFeedback datos={tiempos} />
+      ) : clase === "cuentas" ? (
+        <PreguntasSobreLosClientes />
       ) : (
-        faltaElSqlDeTiempos && (
-          <Alert variant="warning">
-            Las preguntas automáticas todavía no están disponibles: falta aplicar {faltaElSqlDeTiempos} y reiniciar con el cliente de Prisma nuevo.
-          </Alert>
-        )
+        <div className="space-y-6">
+          {tiempos ? (
+            <TiemposDeFeedback datos={tiempos} />
+          ) : (
+            faltaElSqlDeTiempos && (
+              <Alert variant="warning">
+                Las preguntas automáticas todavía no están disponibles: falta aplicar {faltaElSqlDeTiempos} y reiniciar con el cliente de Prisma nuevo.
+              </Alert>
+            )
+          )}
+          <PresentacionesDeFeedback />
+        </div>
       )}
 
       {nueva && (
@@ -406,15 +427,18 @@ function QuienesNoReportan({ callados, onPreguntar }: { callados: DatosDeEncuest
 }
 
 /** Al pie del panel: qué es cada clase. */
-function LasDosClases() {
+function LasClases() {
   return (
     <div className="space-y-1.5 border-t border-line pt-4">
-      <p className={ROTULO_DEL_SISTEMA}>Las dos clases de encuestas</p>
+      <p className={ROTULO_DEL_SISTEMA}>Las tres clases de encuestas</p>
       <p className="text-[13px] text-fg-secondary">
         <b className="font-semibold text-fg">Tus preguntas</b>: las escribes tú, para quien elijas, sobre una pantalla.
       </p>
       <p className="text-[13px] text-fg-secondary">
-        <b className="font-semibold text-fg">Automáticas</b>: «¿cuánto te tomó?», solas, al terminar algo.
+        <b className="font-semibold text-fg">Automáticas</b>: «¿cuánto te tomó?» y «¿cuándo lo presentas?», solas, en el momento.
+      </p>
+      <p className="text-[13px] text-fg-secondary">
+        <b className="font-semibold text-fg">Sobre los clientes</b>: lo que Customer Success sabe de cada cliente, al entrar a su ficha.
       </p>
     </div>
   );
