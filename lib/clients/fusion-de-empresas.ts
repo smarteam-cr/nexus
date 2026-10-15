@@ -61,6 +61,13 @@ export const SE_MUDAN = [
   ["comisionPartner", "clientId"],
   ["reglaComisionVendedor", "clientId"],
   ["ventaGanada", "clientId"],
+  /* Los negocios abiertos (2026-10-14): la copia los vuelve a resolver por la empresa de HubSpot, pero hasta la próxima
+     corrida (una hora) quedarían sin cliente. */
+  ["negocioAbierto", "clientId"],
+  /* El siguiente paso de cada equipo (2026-10-15): `onDelete: SetNull`. Se muda entero, y el de la CUENTA (objeto
+     «empresa») apunta además a la ficha por `objetoId`, sin FK: el script también lo muda, y si las dos fichas tienen un
+     vigente del mismo equipo queda el de la que sigue (el otro pasa a «reemplazado», con su historia). */
+  ["siguientePaso", "clientId"],
   ["importacionFila", "aplicadoClientId"],
   ["escalaComentario", "clienteId"],
   /* Tareas internas (2026-10-09): `onDelete: SetNull`, así que sin mudarlas perderían el cliente en silencio. */
@@ -72,6 +79,9 @@ export const SE_MUDAN = [
   ["correccionDeSalud", "clientId"],
   /* «¿Cuánto te tomó?» (2026-10-09): `onDelete: SetNull`; sin mudarla, la respuesta queda sin cliente. */
   ["preguntaDeTiempo", "clientId"],
+  /* Preguntas sobre la cuenta (2026-10-13): `onDelete: SetNull`; sin mudarlas, lo que respondió el equipo queda sin
+     cliente. Es una bitácora: se muda entera. */
+  ["respuestaDeCuenta", "clientId"],
   /* El camino de crecimiento (2026-10-11, docs/smartloop-plan.md): `onDelete: Cascade`, así que sin mudarlos se
      BORRARÍAN los casos de uso de la absorbida. */
   ["casoDeUso", "clientId"],
@@ -79,9 +89,6 @@ export const SE_MUDAN = [
      con la ficha absorbida. Se mudan enteros: las reuniones también pasan a la que sigue (más abajo), así que INV45
      (todo hecho es del cliente de su reunión) sigue en verde. Sin único con la ficha: dos hechos iguales de las dos
      fichas conviven (la huella no es única). */
-  /* Preguntas sobre la cuenta (2026-10-13): `onDelete: SetNull`; sin mudarlas, lo que respondió el equipo queda sin
-     cliente. Es una bitácora: se muda entera. */
-  ["respuestaDeCuenta", "clientId"],
   ["hechoDeReunion", "clientId"],
   /* Sin relación en el esquema: la base no las cascadea ni las protege (lib/db/punteros-al-borrar.test.ts). */
   ["firefliesSession", "resolvedClientId"],

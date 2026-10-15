@@ -20,7 +20,6 @@ import type { PermissionMap } from "@/lib/auth/permissions/types";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import { MARKETING_NAV } from "@/components/marketing/nav-config";
 import { ROLES_DE_EXITO_DEL_CLIENTE } from "@/lib/cs/acceso";
-import { ROLES_CON_CARGA_PROPIA } from "@/lib/rentabilidad/acceso";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -37,11 +36,6 @@ export type NavGate =
    * dirección (2026-10-04, `lib/cs/acceso.ts`). SUPER_ADMIN pasa siempre.
    */
   | { kind: "roles"; roles: readonly string[] }
-  /**
-   * Por ROL y SIN el pase de dirección: «Tu carga» (2026-10-07) es la carga propia de quien lleva cuentas. Dirección la
-   * ve como pestaña de Rentabilidad; en el menú sería un ítem de más.
-   */
-  | { kind: "soloRoles"; roles: readonly string[] }
   /**
    * Tareas internas, durante el piloto (2026-10-09): Marketing, dirección y quien ya tenga una tarea, una propuesta o un
    * espacio (`enTareas`, un HECHO de datos que calcula AppShell). Desde la fase 2, `always`. La página no tiene gate:
@@ -122,7 +116,6 @@ export function canSeeNavItem(item: Pick<NavItemConfig, "gate">, ctx: NavContext
   // Roles: dirección lo administra; el resto entra solo si le compartieron algo.
   if (gate.kind === "superAdminOrSharedDocs") return ctx.isSuperAdmin || ctx.hasSharedDocs === true;
   if (gate.kind === "roles") return ctx.isSuperAdmin || (!!ctx.role && gate.roles.includes(ctx.role));
-  if (gate.kind === "soloRoles") return !!ctx.role && gate.roles.includes(ctx.role);
   if (gate.kind === "tareasPiloto") return ctx.isSuperAdmin || ctx.enTareas === true;
   const sections = (ctx.permissions?.sections ?? {}) as Record<
     string,
@@ -275,17 +268,6 @@ export const APP_NAV: readonly NavItemConfig[] = [
     icon: icon(
       "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
     ),
-  },
-  {
-    // Tu carga (2026-10-07): las horas de la semana de quien lleva cuentas, solo las suyas. Es una pestaña de
-    // Rentabilidad (decisión de Elías), pero Rentabilidad es de dirección: el CSE y la CSL llegan por acá. Sin montos. La
-    // ruta va fuera de /customer-success para no encender «Éxito del cliente» a la vez.
-    key: "tu-carga",
-    label: "Tu carga",
-    href: "/tu-carga",
-    gate: { kind: "soloRoles", roles: ROLES_CON_CARGA_PROPIA },
-    group: "operacion",
-    icon: icon("M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"),
   },
   {
     key: "sales",

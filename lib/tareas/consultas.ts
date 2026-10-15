@@ -327,6 +327,18 @@ const NOMBRE_DEL_EVENTO: Record<string, string> = {
   vinculo: "Cambió lo vinculado",
   plan: "Quedó en el borrador de un plan",
   repartida: "Se repartió al activar el plan",
+  hubspot: "Cambió en HubSpot",
+  a_hubspot: "Lo escribió en HubSpot",
+};
+
+/** Los campos que se sincronizan con HubSpot, dichos para la historia (lib/tareas-hubspot/reglas.ts). */
+const CAMPO_DE_HUBSPOT: Record<string, string> = {
+  titulo: "el título",
+  estado: "el estado",
+  vence: "el vencimiento",
+  venceEl: "el vencimiento",
+  prioridad: "la prioridad",
+  responsable: "el responsable",
 };
 
 /** Cómo se dice una decisión sobre una propuesta (sin las claves internas). */
@@ -348,14 +360,18 @@ function textoDelEvento(
   ctx: ContextoDeTareas,
 ): { quien: string; texto: string; detalle: string | null; cuando: string } {
   const d = (e.datos ?? {}) as Record<string, unknown>;
-  const quien = e.porEmail === "agente" ? "Nexus" : e.porEmail === "sistema" ? "El sistema" : e.porEmail === ctx.email ? "Tú" : (ctx.miembros.find((m) => m.email === e.porEmail)?.nombre ?? e.porEmail);
+  const quien =
+    e.porEmail === "agente" ? "Nexus" : e.porEmail === "sistema" ? "El sistema" : e.porEmail === "hubspot" ? "HubSpot" : e.porEmail === ctx.email ? "Tú" : (ctx.miembros.find((m) => m.email === e.porEmail)?.nombre ?? e.porEmail);
+  const camposDeHubspot = (Array.isArray(d.campos) ? d.campos : []).map((c) => CAMPO_DE_HUBSPOT[String(c)]).filter(Boolean);
+  const conflicto = Array.isArray(d.conflictos) && d.conflictos.length ? " · había cambiado en los dos lados: quedó lo más reciente" : "";
   const estado = (v: unknown) => (typeof v === "string" && v in NOMBRE_DEL_ESTADO ? NOMBRE_DEL_ESTADO[v as keyof typeof NOMBRE_DEL_ESTADO].toLowerCase() : String(v ?? ""));
   const detalle =
     e.tipo === "semana" ? `${typeof d.desde === "string" ? `de la semana del ${d.desde}` : "de «más adelante»"} a ${typeof d.hacia === "string" ? `la del ${d.hacia}` : "«más adelante»"}` :
     e.tipo === "estado" ? `a ${estado(d.hacia)}${typeof d.motivo === "string" && d.motivo ? ` · «${d.motivo}»` : ""}` :
     e.tipo === "decidida" ? (typeof d.decision === "string" ? (NOMBRE_DE_LA_DECISION[d.decision] ?? d.decision) : null) :
     e.tipo === "asignada" && d.motivo === "baja" ? "pasó a «Por asignar»: su responsable se dio de baja" :
-    e.tipo === "revisada" ? (REVISION[String(d.resultado)] ?? null) : null;
+    e.tipo === "revisada" ? (REVISION[String(d.resultado)] ?? null) :
+    (e.tipo === "hubspot" || e.tipo === "a_hubspot") && camposDeHubspot.length ? `${camposDeHubspot.join(", ")}${conflicto}` : null;
   // «Nexus la propuso» solo si la propuso Nexus: la que sugiere una persona dice eso.
   const texto = e.tipo === "propuesta" && e.porEmail !== "agente" ? "La sugirió" : (NOMBRE_DEL_EVENTO[e.tipo] ?? e.tipo);
   return { quien, texto, detalle, cuando: e.createdAt.toISOString() };

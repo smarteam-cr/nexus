@@ -5674,10 +5674,12 @@ Design), con la pestaña rehecha para mostrar primero si ya alcanza para calibra
   2026-10-06: muestra el costo de la hora de cada persona, sacado de la planilla. La CSL se queda con Carga del equipo y
   «Ajustar el cálculo» (horas, sin montos). Un CSE o la CSL que entra a Rentabilidad va a «Tu carga». Lo vigila
   `lib/rentabilidad/acceso.test.ts`.
-- **«Tu carga» es una ruta propia, `/tu-carga`**, en el menú para CSE y CSL (gate `soloRoles`: por ROL y sin el pase de
-  dirección). Dirección la abre como la cuarta pestaña de Rentabilidad. La persona sale de la SESIÓN: la página no lee
-  la dirección ni la búsqueda, y la pantalla recibe solo lo suyo (`cargarTuCarga` recorta en el servidor). No cuelga de
-  `/customer-success` porque el menú iluminaría «Éxito del cliente», que el CSE no tiene.
+- **«Tu carga» es una ruta propia, `/tu-carga`**. Dirección la abre como la cuarta pestaña de Rentabilidad. ⚠ **Desde el
+  2026-10-15 no está en el menú de nadie** (decisión de Elías): estaba para CSE y CSL, y la lista de cuentas no era la
+  del CSE encargado: las reuniones y su preparación se le cuentan a cada invitado del calendario. La ruta sigue, y un
+  CSE o la CSL que entra a Rentabilidad va ahí. La persona sale de la SESIÓN: la página no lee la dirección ni la
+  búsqueda, y la pantalla recibe solo lo suyo (`cargarTuCarga` recorta en el servidor). No cuelga de `/customer-success`
+  porque el menú iluminaría «Éxito del cliente», que el CSE no tiene.
 - **Orden alfabético, sin ranking**, en todas las listas de personas; la CSL va aparte. Las horas libres no nombran a
   nadie.
 - **El costo de la hora, de tres maneras** (`ModoDeCosto`, lib/rentabilidad/margen.ts): por persona (la de entrada:
@@ -7908,6 +7910,121 @@ le pregunta a la persona del cliente.
 - **No se cruza todavía con la casilla «Apertura a la asesoría» de la preventa** (`lib/exploraciones/casillas.ts`):
   es la misma pregunta hecha en otro momento (en la venta, por el vendedor). Juntarlas en la ficha es un paso aparte.
 - Dirección (SUPER_ADMIN) no recibe la pregunta: la configura y ve los resultados.
+
+## «Para ti» de Ventas: los negocios abiertos y la pregunta de cierre y monto (2026-10-14)
+
+**Contexto.** Andrés Pinzón armó por fuera («Jarvis», con Todoist) lo que le faltaba a Nexus para vender: sus cierres
+más cerca, su cartera y lo que le falta a cada negocio. Elías pidió llevarlo a Nexus, «Para ti» por equipo, empezando
+por Ventas. El plan completo, con las respuestas de Elías, está en `docs/mi-dia-plan.md`; esta es la etapa 1.
+
+- **Nexus copia los negocios ABIERTOS** (`NegocioAbierto`, `lib/ventas/sync-negocios-abiertos.ts`): los tres
+  pipelines de venta propia, con dueño, empresa primaria, fecha de cierre, monto, probabilidad, el siguiente paso de
+  HubSpot y la última y próxima actividad. Job `negocios-abiertos`, cada hora de 6:00 a 20:00. Solo lee HubSpot; la
+  fila nunca se borra (cerrado = `abierto: false`), y una búsqueda que trae menos de la mitad no cierra nada. *Por qué
+  una copia y no leer en vivo:* «Para ti» se mide en cada visita y cada minuto y medio para el número del menú.
+- **La cartera de un vendedor** (decisión de Elías): las empresas donde es dueño en HubSpot más las empresas donde
+  tiene un negocio abierto aunque no sea su dueño. El dueño de la empresa se mira solo en las empresas que están en
+  Nexus (`Client.hubspotOwnerEmail`): Andrés es dueño de 8.844 empresas en HubSpot y casi todas son prospección.
+- **El orden de la cartera** (decisión de Elías): con fecha de cierre y monto, a las que les falta uno de los dos,
+  solo con negocio y sin negocio.
+- **Nexus pregunta la fecha de cierre y el monto** de un negocio que no los tiene o tiene la fecha vencida, SOLO si se
+  está trabajando (actividad en HubSpot o una reunión de Nexus en los últimos 14 días, o algo agendado en los
+  próximos 14). Propone el valor con la frase copiada de las reuniones de Nexus o del registro de HubSpot
+  (`lib/ventas/propuesta-de-cierre.ts`, Haiku, solo al abrir la pregunta). El vendedor lo usa o escribe otro, y se
+  guarda PRIMERO en HubSpot; si HubSpot no lo acepta, Nexus no cambia nada. «Ahora no» la calla 7 días. *Por qué la
+  frase:* lo que se escribe en HubSpot lo ve todo Ventas y alimenta el forecast; una cita inventada lo ensucia.
+- **`hs_next_step` es solo una sugerencia** (decisión de Elías): HubSpot lo llena; Nexus lo muestra y lo lee como
+  fuente, y nunca lo escribe. El siguiente paso de Nexus son las propiedades `siguiente_paso_*` (etapa 2).
+- **Lo ponderado** es monto × probabilidad de los negocios en dólares que cierran en el año. Lo que está en otra
+  moneda o sin monto se cuenta aparte: no se convierte.
+- **La temperatura** (caliente, en movimiento, frío) es una regla inicial a calibrar con Ventas
+  (`temperaturaDelNegocio`): frío = sin actividad en 21 días o el cierre vencido hace más de 30; caliente =
+  probabilidad de 50 % o más, actividad en la semana y el cierre en 30 días o algo agendado en 7.
+- **«Cierres más cerca» mira 60 días**, no 30: las fechas de cierre se ponen a fin de mes (23 de los 42 negocios de
+  Andrés cerraban el 31 de octubre), así que con 30 días a mitad de mes se perdía el mes siguiente.
+- **Lo ve quien tiene `ventas.read`** y algo propio (negocios, empresas o una meta). Escribir pide ser el dueño del
+  negocio o `ventas.write`.
+- **«Tu cartera» se lee en cuatro vistas** (pedido de Elías al verla, 2026-10-15: no decía qué traía, no se podía
+  filtrar y no se sabía para qué servía). La unidad es la EMPRESA, con sus negocios adentro, y arriba se dice qué
+  trae. *Para mover hoy*: una fila por cuenta con la acción más urgente (`accionDelNegocio`: completar, preparar,
+  retomar, definir el siguiente paso). *Pipeline*: los negocios activos, primero los que tienen fecha y monto (el orden
+  que pidió Elías). *Por limpiar*: pausados, cierres vencidos que nadie trabaja y negocios sin empresa en HubSpot.
+  *Sin negocio*: las empresas propias sin nada abierto, clientes primero (expansión y reactivación). Con buscador y
+  filtros (temperatura, cliente o prospecto, pipeline, de quién).
+- **Un negocio pausado no se está vendiendo**: no entra al pipeline ni a lo ponderado, no se pregunta y va a «Por
+  limpiar». Medido el 2026-10-14: 112 de los 201 negocios abiertos del portal estaban en «Pausados».
+- **Un negocio sin empresa en HubSpot** toma el nombre de la empresa de su propio nombre («CCN - …» → «CCN») y va
+  a «Por limpiar» (9 en el portal).
+- **«Para ti» saluda**: «Buenos días, Andrés» (tardes desde las 12, noches desde las 19, hora de Costa Rica), la
+  fecha entera y una línea con lo del día (cierres del mes, negocios por completar, la próxima actividad agendada).
+- **SQL antes del deploy:** `scripts/sql/2026-10-14-negocios-abiertos.sql`. Carga inicial:
+  `scripts/sync-negocios-abiertos.ts`.
+
+## El siguiente paso de cada equipo, en Nexus y en HubSpot (2026-10-15)
+
+**Contexto.** Etapa 2 de `docs/mi-dia-plan.md`. Decisiones de Elías (2026-10-14): un siguiente paso por equipo, con
+qué, fecha y responsable, con los mismos nombres en empresas, negocios y proyectos de HubSpot; también en la empresa
+(varios proyectos, retomar un excliente); `hs_next_step` solo como sugerencia; Marketing no lleva el suyo.
+
+- **La historia vive en Nexus; lo de hoy, en HubSpot.** `SiguientePaso` guarda cada cambio (quién, cuándo, de dónde:
+  persona, chat, reunión o HubSpot). El vigente de cada objeto y equipo (uno solo: índice único parcial del SQL) se
+  escribe en `siguiente_paso_<equipo>`, `_fecha` y `_responsable` (`lib/siguiente-paso`). *Por qué no solo HubSpot:*
+  HubSpot guarda el valor de hoy, no quién lo cambió ni qué decía antes.
+- **Nexus primero, HubSpot después.** Al revés que la fecha de cierre (que se escribe primero en HubSpot): acá lo que
+  importa no se puede perder si HubSpot no responde. El paso queda «pendiente» y el job `negocios-abiertos` lo
+  reintenta cada hora, hasta 5 veces. La pantalla dice «sin escribir en HubSpot» mientras tanto.
+- **Lo que alguien cambia en HubSpot vuelve.** La copia de los negocios abiertos lee las propiedades de los negocios y
+  de las empresas de Nexus: lo distinto entra como un paso nuevo con fuente «hubspot», y lo borrado allá se da por
+  hecho. Gana Nexus mientras no haya escrito lo suyo, o si lo escribió después de leer HubSpot
+  (`decidirImportacion`). ⚠ Los proyectos (0-970) se escriben pero no se leen todavía.
+- **Quién lo escribe:** cada persona, el de su equipo (Ventas; CSE y CSL, el de CS; Dev). Dirección, cualquiera (Marco
+  vende). El objeto pide acceso a su cliente; un negocio sin cliente en Nexus, ser su dueño o `ventas.write`. Darlo por
+  hecho lo puede quien lo lleva o alguien de su equipo, y lo borra de HubSpot.
+- **El siguiente paso de un negocio es el de Nexus.** «Definir siguiente paso» (la acción de la cartera) sale cuando no
+  hay uno de Ventas o se venció; si el negocio tiene `hs_next_step`, el diálogo lo ofrece con «Usar». Hasta el
+  2026-10-14 un `hs_next_step` cualquiera contaba como siguiente paso.
+- **Dónde se ve:** en la cartera de «Para ti» (cada negocio y cada empresa sin negocio), en el panel de «Información del
+  cliente» (los de todos los equipos juntos: la cuenta, sus negocios abiertos y sus proyectos) y en «Para ti» como
+  pendiente de quien lo lleva: con la fecha de hoy o vencida, «Para hoy»; en 7 días, «Esta semana»
+  (`lib/para-ti/fuentes/siguientes-pasos.ts`).
+- **Fusionar dos fichas los muda.** El de la cuenta apunta a la ficha por `objetoId` (sin FK): el script también lo
+  muda, y si las dos tienen el del mismo equipo, queda el de la que sigue.
+- **Todavía no:** la sugerencia desde la minuta de la última reunión y desde el chat (llegan con el chat, etapa 6) y
+  «Agendar» un paso con fecha (etapa 4).
+- **SQL antes del deploy:** `scripts/sql/2026-10-15-siguiente-paso.sql` (aplicado en producción el 2026-10-15).
+
+## Las tareas de HubSpot viven en Tareas internas, en los dos sentidos (2026-10-15)
+
+**Contexto.** Etapa 3 de `docs/mi-dia-plan.md`. Decisiones de Elías (2026-10-14): las tareas de HubSpot se leen y se
+escriben, todas (también las de las secuencias), y cada una dice que viene de HubSpot. Ventas y CSE entran a Tareas.
+
+- **Una tarea de HubSpot es una `Tarea` con `origen = "hubspot"`** (y su `hubspotTaskId`): la misma lista, semana, agenda
+  y revisión que las de Nexus. Entran las abiertas de cada persona del equipo en HubSpot y las completadas esta semana.
+  *Por qué no una lista aparte:* Andrés tenía dos listas (Jarvis y HubSpot) y eso es lo que vino a resolver.
+- **Lo que nace en Nexus no se crea en HubSpot.** Solo lo que vino de HubSpot vuelve allá.
+- **Se sincronizan cinco campos: título, estado, vencimiento, prioridad y responsable.** Cada tarea guarda lo último en
+  que los dos lados estuvieron de acuerdo (`hubspotAcordado`) y cada copia compara los tres campo por campo: lo que
+  cambió de un lado va al otro, y si cambiaron los dos, gana el último y queda en la historia de la tarea
+  (`lib/tareas-hubspot/reglas.ts › comparar`). *Por qué no la fecha de modificación:* HubSpot la mueve solo (el día del
+  vencimiento, una limpieza vieja), así que no dice quién cambió qué. Las notas de HubSpot entran como el contexto de la
+  tarea (no se editan en Nexus); lo de la persona va en sus notas.
+- **«Ya no se hará» no existe en HubSpot:** no se escribe allá. Una tarea borrada en HubSpot, o que pasó a alguien que no
+  está en el equipo de Nexus, queda «Ya no se hará» con el motivo.
+- **La semana sigue al vencimiento**: la del día en que vence (lo vencido, esta semana), por `semanaDestino` (nunca una
+  semana revisada). Cambiar el vencimiento en HubSpot la mueve; moverla de semana en Nexus no cambia el vencimiento.
+- **Para quién es** sale de lo que tiene asociado en HubSpot: el proyecto, si no el negocio, si no la empresa. Solo al
+  crearla: después lo decide la persona.
+- **El escritor único se mantiene.** `lib/tareas/mutaciones.ts` escribe lo que llega de HubSpot
+  (`crearTareaDeHubspot`, `aplicarDesdeHubspot`, `anotarSincronizacionConHubspot`) y nunca llama a HubSpot; lo que va
+  allá lo escribe `lib/tareas-hubspot/sync-server.ts`. Un cambio que una persona hace mientras se lee HubSpot gana: la
+  copia no pisa una versión nueva y lo vuelve a comparar en la siguiente.
+- **Cuándo:** el job `tareas-hubspot`, cada 15 minutos de 6:00 a 21:00, y al guardar una tarea de HubSpot en Nexus (la
+  ruta la escribe allá enseguida). Si HubSpot no responde, la tarea lo dice («sin escribir allá») y el job reintenta.
+- **Se ve de dónde viene:** el chip «HubSpot» (o «HubSpot · secuencia (paso N)») y, en el cajón, los enlaces a la tarea
+  y al negocio, la empresa o el proyecto en HubSpot.
+- **Tareas sale del piloto para Ventas y Customer Success** (`lib/tareas/menu.ts`: VENTAS, CSE y CSL).
+- **SQL antes del deploy:** `scripts/sql/2026-10-15-tareas-de-hubspot.sql` (aplicado en producción el 2026-10-15). Carga
+  inicial: `scripts/sync-tareas-de-hubspot.ts` (corrida el 2026-10-15: 13 tareas de Andrés).
 
 ## Cuándo se presenta cada documento: lo responde Customer Success, y queda quién (2026-10-14)
 

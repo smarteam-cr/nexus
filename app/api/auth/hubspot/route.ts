@@ -82,11 +82,18 @@ const HUBSPOT_SCOPES = [
 //   para las comisiones y todo lo que mida lo vendido contra la meta (lib/ventas/metas-sync.ts). Solo lectura. Ya
 //   está declarado «Opcional» en la app pública (Elías, 2026-10-08), por eso entra acá y no por entorno. Sin él,
 //   la copia de metas responde `sinPermiso` y no toca nada; se arregla reconectando HubSpot desde Integraciones.
+// · `crm.objects.tasks.write` y `crm.schemas.projects.write` (2026-10-14, «Para ti» por equipo, docs/mi-dia-plan.md):
+//   el segundo para crear las propiedades de «siguiente paso» en el objeto Proyectos (concedido al reconectar). El
+//   primero HubSpot NO lo concedió, y no hace falta hoy: medido ese día con los scopes de arriba, leer
+//   (/crm/v3/objects/tasks/search), crear, completar y borrar una tarea responden 200. Se sigue pidiendo por si
+//   HubSpot empieza a exigirlo. Los dos declarados «Opcional» en la app pública por Elías ese día.
 const HUBSPOT_OPTIONAL_SCOPES = [
   "social",
   "crm.objects.partner-clients.read",
   "files",
   "crm.objects.goals.read",
+  "crm.objects.tasks.write",
+  "crm.schemas.projects.write",
   ...(process.env.HUBSPOT_SCOPES_OPCIONALES_EXTRA ?? "").split(/\s+/).filter(Boolean),
 ]
   // Si el entorno repite uno que ya está acá, se pide una sola vez.

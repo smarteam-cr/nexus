@@ -86,6 +86,10 @@ const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
      apagada vuelve el post-proceso viejo. La regla es UNA (`seguimientoPrendido`, lib/lecturas/reglas.ts); la variable
      se nombra acá para que doc-sync exija que el .env.example la declare. */
   "seguimiento-reuniones": (env) => (seguimientoPrendido({ SEGUIMIENTO_REUNIONES_ENABLED: env.SEGUIMIENTO_REUNIONES_ENABLED }) ? null : MOTIVO_APAGADO_DEL_SEGUIMIENTO),
+  /* Las tareas de HubSpot en Tareas internas (2026-10-15, etapa 3 de docs/mi-dia-plan.md). Prendida por defecto: solo se
+     apaga a propósito (y apagada, lo que cambie en Nexus se sigue escribiendo en HubSpot al guardar cada tarea). */
+  "tareas-hubspot": (env) =>
+    env.TAREAS_HUBSPOT_ENABLED === "0" ? "Apagado a propósito: TAREAS_HUBSPOT_ENABLED=0 en el .env del servidor." : null,
 };
 
 /** Los jobs que tienen requisito. La guarda de `requisitos.test.ts` exige que `defs.ts` los consulte a todos. */

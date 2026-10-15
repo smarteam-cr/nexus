@@ -438,6 +438,18 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
       const a = { canon: canon.ficha.id, dup: dup.ficha.id };
       // Antes de mudar los proyectos: el contenedor vacío de la absorbida no pasa (ver arriba). Se lleva su canvas vacío.
       if (contenedorABorrar) await tx.project.delete({ where: { id: contenedorABorrar } });
+      /* El siguiente paso de la CUENTA apunta a la ficha por `objetoId` (sin FK). Un vigente por objeto y equipo: si las
+         dos tienen el del mismo equipo, queda el de la que sigue y el otro pasa a «reemplazado» (sigue en la historia). */
+      if (estaAqui("siguientePaso")) {
+        const deLaQueSigue = await tx.siguientePaso.findMany({ where: { objeto: "empresa", objetoId: a.canon, estado: "vigente" }, select: { equipo: true } });
+        if (deLaQueSigue.length) {
+          await tx.siguientePaso.updateMany({
+            where: { objeto: "empresa", objetoId: a.dup, estado: "vigente", equipo: { in: deLaQueSigue.map((x) => x.equipo) } },
+            data: { estado: "reemplazado", cerradoAt: new Date(), cerradoPor: opciones.firma! },
+          });
+        }
+        await tx.siguientePaso.updateMany({ where: { objeto: "empresa", objetoId: a.dup }, data: { objetoId: a.canon } });
+      }
       for (const [modelo, columna] of seMudanAqui) {
         await delegado(tx, modelo).updateMany({ where: { [columna]: a.dup }, data: { [columna]: a.canon } });
       }

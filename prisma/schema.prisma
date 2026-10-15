@@ -158,6 +158,11 @@ model Client {
   // Porcentaje y no px porque las tres superficies tienen altos distintos y ya afinados
   // (30 sobre navy, 40 en el cronograma del cliente, 36 en el interno) — ver lib/ui/logo-scale.ts.
   logoScale        Int?
+  // El dueño de la empresa en HubSpot (`hubspot_owner_id`) y su correo, copiados por la copia de negocios abiertos
+  // (lib/ventas/sync-negocios-abiertos.ts, 2026-10-14). Es la mitad de «la cartera de un vendedor» (la otra mitad son
+  // sus negocios abiertos). nullable: no toda empresa tiene dueño ni empresa de HubSpot.
+  hubspotOwnerId    String?
+  hubspotOwnerEmail String?
   // QUÉ ES esta empresa. Fuente ÚNICA de "¿cuenta como cliente de CS?" — una empresa es
   // UNA sola cosa, así que reemplaza al booleano `isProspect`. El filtro de los listados
   // NO se escribe a mano en cada query: sale de `lib/clients/kind.ts` (CS_CLIENT_WHERE).
@@ -220,11 +225,14 @@ model Client {
   ingresosVariables      IngresoVariable[]       @relation("IngresosVariablesDeCliente") // Finanzas: entradas fuera del ciclo
   comisionesPartner      ComisionPartner[]       @relation("ComisionesDePartner") // lo que Smarteam GANA de este aliado
   ventasGanadas          VentaGanada[]           @relation("VentasDelCliente") // los tratos ganados en HubSpot (el espejo de lo VENDIDO)
+  negociosAbiertos       NegocioAbierto[]        @relation("NegociosDelCliente") // los tratos ABIERTOS en HubSpot (2026-10-14)
+  siguientesPasos        SiguientePaso[]         @relation("SiguientesPasosDelCliente") // el siguiente paso de cada equipo (2026-10-15)
   reglasComisionVendedor ReglaComisionVendedor[] @relation("ReglasDeComisionVendedor") // ⚠ SUPER_ADMIN-only
   importFilasAplicadas   ImportacionFila[] // Cobranza: trazabilidad del importador
   escalaComentarios      EscalaComentario[] // Escala: comentarios «no calza con este cliente» (SET NULL)
   exploracionesDeVenta   ExploracionDeVenta[] // Ventas: el lienzo de la exploración (una VIVA por empresa)
   preguntasDeTiempo      PreguntaDeTiempo[] // Tiempos: «¿cuánto te tomó?» de su trabajo (SET NULL)
+  respuestasDeCuenta     RespuestaDeCuenta[] // Preguntas sobre la cuenta: lo que Customer Success sabe de ella (SET NULL)
   tareas                 Tarea[]                 @relation("TareasDelCliente") // Tareas internas: para quién (SET NULL)
   proyectosDeTareas      ProyectoDeTareas[]      @relation("ProyectosDeTareasDelCliente")
   vinculosDeTareas       TareaVinculo[]          @relation("VinculosDeTareasDelCliente")
@@ -232,7 +240,6 @@ model Client {
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
 }
-  respuestasDeCuenta     RespuestaDeCuenta[] // Preguntas sobre la cuenta: lo que Customer Success sabe de ella (SET NULL)
 
 // ─── SystemConfig (config GLOBAL de Nexus, singleton — no por usuario) ─────────
 // Un solo row (id="system"; se upsert). Hoy guarda el logo de Smarteam
@@ -556,6 +563,7 @@ model Project {
   proyectosDeTareas      ProyectoDeTareas[]          @relation("ProyectosDeTareasDelProyecto")
   vinculosDeTareas       TareaVinculo[]              @relation("VinculosDeTareasDelProyecto")
   hechosDeReuniones      HechoDeReunion[]            @relation("HechosDelProyecto") // memoria de la cuenta: los hechos de sus reuniones (SET NULL)
+  presentaciones         PresentacionDeDocumento[] // cuándo se le presenta cada documento al cliente, y quién lo respondió (SET NULL)
 }
 
 // ── Desarrollo (requerimiento técnico) ────────────────────────────────────────
@@ -563,7 +571,6 @@ model Project {
 // requerimiento del canvas Desarrollo. APPEND-ONLY: cada re-estimación es una FILA
 // NUEVA (nunca un update) → queda el historial "estimamos 40h y terminó en 90h", que
 // es lo que permite calibrar. La VIGENTE es la más reciente por createdAt.
-  presentaciones         PresentacionDeDocumento[] // cuándo se le presenta cada documento al cliente, y quién lo respondió (SET NULL)
 //
 // Vive en tabla propia y NO dentro de `CanvasBlock.data` a propósito: las horas tienen
 // que ser CONSULTABLES (sumar el esfuerzo de un período, reportar por proyecto) y
@@ -2008,6 +2015,7 @@ model TeamMember {
   // Lo vendido y las metas comerciales de la persona (2026-10-08): dato general, no remuneración.
   ventasGanadas           VentaGanada[]           @relation("VentasDelVendedor")
   metasComerciales        MetaComercial[]         @relation("MetasDelVendedor")
+  negociosAbiertos        NegocioAbierto[]        @relation("NegociosDelVendedor")
 }
 
 // ─── Aviso ────────────────────────────────────────────────────────────────────
@@ -4815,6 +4823,111 @@ model VentaGanada {
   @@index([vendedorId])
 }
 
+// ─── NegocioAbierto ─────────────────────────────────────────────────────────────
+/// Un negocio ABIERTO de HubSpot (2026-10-14, «Para ti» por equipo, docs/mi-dia-plan.md). Espejo de solo lectura de
+/// los tres pipelines de venta propia, para que «Para ti» de Ventas muestre los cierres más cerca, la cartera y lo
+/// ponderado sin preguntarle a HubSpot en cada visita. Lo copia lib/ventas/sync-negocios-abiertos.ts.
+/// La fila nunca se borra: un negocio que dejó de volver (ganado, perdido o borrado) queda `abierto = false`.
+/// Lo ganado sigue en `VentaGanada`. SQL: scripts/sql/2026-10-14-negocios-abiertos.sql (RLS + deny).
+model NegocioAbierto {
+  id            String  @id @default(cuid())
+  hubspotDealId String  @unique
+  nombre        String
+  pipelineId    String
+  pipelineLabel String?
+  etapaId       String
+  etapaLabel    String?
+  /// `hs_deal_stage_probability`, de 0 a 1. null = HubSpot no la dio.
+  probabilidad  Float?
+  /// La fecha de cierre, como día de calendario. null = el negocio no tiene.
+  fechaCierre   DateTime? @db.Date
+  /// En la moneda del negocio, tal como está en HubSpot. null = sin monto (no es cero).
+  monto         Decimal?  @db.Decimal(14, 2)
+  moneda        String    @default("USD")
+  /// `hs_next_step`: lo llena HubSpot (o la persona). Nexus lo lee como sugerencia y NUNCA lo escribe.
+  siguientePasoHubspot String? @db.Text
+  /// `notes_next_activity_date` y `notes_last_updated`: la próxima actividad agendada y la última registrada.
+  proximaActividadAt   DateTime?
+  ultimaActividadAt    DateTime?
+  creadoEnHubspot      DateTime?
+  /// El dueño del negocio en HubSpot, guardado aunque no sea nadie de Nexus.
+  hubspotOwnerId String?
+  // nullable porque el dueño puede no estar en Nexus. SetNull: borrar a la persona no borra el negocio.
+  vendedorId     String?
+  vendedor       TeamMember? @relation("NegociosDelVendedor", fields: [vendedorId], references: [id], onDelete: SetNull)
+  /// La empresa primaria del negocio en HubSpot y su nombre, aunque no sea un cliente de Nexus.
+  hubspotCompanyId String?
+  empresaNombre    String?
+  // nullable porque la empresa puede no estar en Nexus. SetNull: borrar el cliente no borra el negocio.
+  clientId         String?
+  client           Client? @relation("NegociosDelCliente", fields: [clientId], references: [id], onDelete: SetNull)
+  /// false = dejó de volver como abierto en la última copia completa (se ganó, se perdió o se borró).
+  abierto        Boolean   @default(true)
+  cerradoEn      DateTime?
+  /// «Ahora no» de la pregunta de cierre y monto: no se vuelve a preguntar hasta esta fecha.
+  preguntaPospuestaHasta DateTime?
+  /// Lo que propuso Nexus para la fecha y el monto, con la frase de donde salió (lib/ventas/propuesta-de-cierre.ts).
+  propuesta      Json?
+  /// Quién respondió la última pregunta desde Nexus (lo que se escribió en HubSpot) y cuándo.
+  respondidoPor  String?
+  respondidoAt   DateTime?
+  sincronizadoEn DateTime
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([vendedorId, abierto])
+  @@index([clientId])
+  @@index([hubspotCompanyId])
+}
+
+// ─── SiguientePaso ──────────────────────────────────────────────────────────────
+/// El siguiente paso de un equipo (Ventas, CS o Dev) sobre una empresa, un negocio o un proyecto (2026-10-15,
+/// etapa 2 de docs/mi-dia-plan.md). Cada cambio es una fila: la historia queda en Nexus y el vigente de cada
+/// objeto y equipo se escribe en las propiedades «siguiente_paso_<equipo>» de HubSpot (lib/siguiente-paso).
+/// Un vigente por objeto y equipo: lo asegura un índice único parcial del SQL (Prisma no los modela).
+/// SQL: scripts/sql/2026-10-15-siguiente-paso.sql (RLS + deny).
+model SiguientePaso {
+  id        String  @id @default(cuid())
+  /// empresa | negocio | proyecto
+  objeto    String
+  /// El id de Nexus: Client.id, NegocioAbierto.id o Project.id. Sin FK: son tres tablas distintas.
+  objetoId  String
+  /// ventas | cs | dev
+  equipo    String
+  que       String    @db.Text
+  /// Para cuándo, como día de calendario. null = sin fecha.
+  fecha     DateTime? @db.Date
+  /// Quién lo lleva (correo de Nexus) y su usuario de HubSpot, si lo tiene.
+  responsableEmail   String?
+  responsableOwnerId String?
+  /// Quién lo escribió: el correo de la persona, o «hubspot» si se cambió allá.
+  escritoPor String
+  /// persona | chat | reunion | hubspot
+  fuente     String
+  /// vigente | hecho | reemplazado
+  estado     String    @default("vigente")
+  cerradoPor String?
+  cerradoAt  DateTime?
+  /// Dónde vive en HubSpot: companies | deals | 0-970, y su id. null = el objeto no está en HubSpot.
+  hubspotObjectType String?
+  hubspotObjectId   String?
+  /// pendiente | escrito | error | sin_hubspot. Lo que dice HubSpot de este paso (el vigente) o de su cierre.
+  hubspotEstado     String    @default("pendiente")
+  hubspotError      String?
+  hubspotEscritoAt  DateTime?
+  hubspotIntentos   Int       @default(0)
+  // nullable porque un negocio puede no tener cliente en Nexus. SetNull: borrar el cliente no borra la historia.
+  clientId   String?
+  client     Client?   @relation("SiguientesPasosDelCliente", fields: [clientId], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([objeto, objetoId, equipo, estado])
+  @@index([clientId, estado])
+  @@index([responsableEmail, estado])
+  @@index([hubspotEstado])
+}
+
 // ─── MetaComercial ──────────────────────────────────────────────────────────────
 /// Una meta comercial de HubSpot (un «goal target»): cuánto tiene que vender una persona en un tramo
 /// de tiempo y cuánto lleva según HubSpot. Espejo de SOLO LECTURA (lib/ventas/metas-sync.ts), para que
@@ -6270,6 +6383,84 @@ model PreguntaDeTiempo {
   @@index([taskId])
 }
 
+// ─── Preguntas sobre la cuenta (2026-10-13) ───────────────────────────────────────────────
+// Lo que Customer Success sabe de cada cliente, preguntado al entrar a su ficha (la primera: ¿tiene apertura a la
+// asesoría?). El registro de preguntas vive en lib/encuestas-de-cuenta/preguntas.ts; acá solo si está activa y cada
+// evento. SQL: scripts/sql/2026-10-13-preguntas-sobre-la-cuenta.sql (RLS + RESTRICTIVE).
+
+/// Si una pregunta sobre la cuenta está activa. Sin fila, vale el registro.
+model EncuestaDeCuenta {
+  id                  String   @id @default(cuid())
+  clave               String   @unique
+  activa              Boolean  @default(true)
+  actualizadaPorEmail String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+/// Cada vez que se mostró, se respondió o se dejó para después una pregunta sobre la cuenta. APPEND-ONLY: nunca se
+/// edita ni se borra; la lectura vigente es la última respuesta de cada persona por cliente.
+model RespuestaDeCuenta {
+  id              String   @id @default(cuid())
+  clave           String
+  /// La versión y el texto de la pregunta al preguntar, congelados
+  preguntaVersion Int
+  preguntaTexto   String
+  // nullable porque la respuesta sobrevive a que se borre el cliente (el nombre queda congelado)
+  clientId        String?
+  client          Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientNombre    String
+  personaEmail    String
+  /// El rol al responder (CSE · CSL…)
+  rol             String?
+  /// Por qué la persona ve al cliente (hubspot-owner · granted · view-all…): distingue al encargado del resto
+  motivoDeAcceso  String?
+  /// mostrada · respondida · ahora_no
+  evento          String
+  /// si · no · no_se (solo en «respondida»)
+  valor           String?
+  porQue          String?
+  /// De dónde se respondió (la ruta), por si hay otra puerta mañana
+  contexto        Json?
+  createdAt       DateTime @default(now())
+
+  @@index([clave, clientId, personaEmail, createdAt])
+  @@index([clave, createdAt])
+}
+
+/// Cuándo se le presenta cada documento al cliente (kickoff, diagnóstico, planificación y entrega), y quién lo
+/// respondió (2026-10-14). APPEND-ONLY: nunca se edita ni se borra; el estado de cada documento sale de leer sus filas
+/// en orden (lib/presentaciones/reglas.ts). Responde solo Customer Success. SQL: 2026-10-14-presentaciones-de-documentos.sql.
+model PresentacionDeDocumento {
+  id             String   @id @default(cuid())
+  // nullable porque la respuesta sobrevive a que se borre el proyecto (los nombres quedan congelados)
+  projectId      String?
+  project        Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  proyectoNombre String
+  clientNombre   String?
+  /// kickoff · diagnostico · planificacion · entrega
+  documento      String
+  /// fecha · sin-fecha · presentado · listo · propuesta (la leyó Nexus en una reunión) · descarte · ahora-no
+  evento         String
+  /// AAAA-MM-DD, el día en Costa Rica: la fecha planeada, la de la presentación o la propuesta
+  fecha          String?
+  /// Quién respondió. null solo en «propuesta» (la leyó Nexus)
+  porEmail       String?
+  /// El rol al responder (CSE · CSL)
+  rol            String?
+  /// Por qué le tocaba responder: encargado · genero (generó el documento) · lider (la CSL)
+  motivo         String?
+  /// La reunión de donde salió la propuesta (solo en «propuesta»)
+  sessionId      String?
+  /// De dónde salió la fecha, la cita de la reunión o el aviso al vendedor
+  detalle        Json?
+  createdAt      DateTime @default(now())
+
+  @@index([projectId, documento, createdAt])
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
 // ─── Tareas internas ─────────────────────────────────────────────────────────
 // docs/tareas-plan.md. Lo que se acuerda en una reunión termina en la semana y en la agenda de cada persona, dentro de
 // espacios y proyectos, con el cliente a la vista. ⛔ Nunca llega al cliente ni al cronograma (lib/tareas/guardas.test.ts).
@@ -6383,84 +6574,6 @@ model ProyectoDeTareas {
   @@index([sessionId])
   @@index([plantillaId])
 }
-// ─── Preguntas sobre la cuenta (2026-10-13) ───────────────────────────────────────────────
-// Lo que Customer Success sabe de cada cliente, preguntado al entrar a su ficha (la primera: ¿tiene apertura a la
-// asesoría?). El registro de preguntas vive en lib/encuestas-de-cuenta/preguntas.ts; acá solo si está activa y cada
-// evento. SQL: scripts/sql/2026-10-13-preguntas-sobre-la-cuenta.sql (RLS + RESTRICTIVE).
-
-/// Si una pregunta sobre la cuenta está activa. Sin fila, vale el registro.
-model EncuestaDeCuenta {
-  id                  String   @id @default(cuid())
-  clave               String   @unique
-  activa              Boolean  @default(true)
-  actualizadaPorEmail String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-}
-
-/// Cada vez que se mostró, se respondió o se dejó para después una pregunta sobre la cuenta. APPEND-ONLY: nunca se
-/// edita ni se borra; la lectura vigente es la última respuesta de cada persona por cliente.
-model RespuestaDeCuenta {
-  id              String   @id @default(cuid())
-  clave           String
-  /// La versión y el texto de la pregunta al preguntar, congelados
-  preguntaVersion Int
-  preguntaTexto   String
-  // nullable porque la respuesta sobrevive a que se borre el cliente (el nombre queda congelado)
-  clientId        String?
-  client          Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  clientNombre    String
-  personaEmail    String
-  /// El rol al responder (CSE · CSL…)
-  rol             String?
-  /// Por qué la persona ve al cliente (hubspot-owner · granted · view-all…): distingue al encargado del resto
-  motivoDeAcceso  String?
-  /// mostrada · respondida · ahora_no
-  evento          String
-  /// si · no · no_se (solo en «respondida»)
-  valor           String?
-  porQue          String?
-  /// De dónde se respondió (la ruta), por si hay otra puerta mañana
-  contexto        Json?
-  createdAt       DateTime @default(now())
-
-  @@index([clave, clientId, personaEmail, createdAt])
-  @@index([clave, createdAt])
-}
-
-/// Cuándo se le presenta cada documento al cliente (kickoff, diagnóstico, planificación y entrega), y quién lo
-/// respondió (2026-10-14). APPEND-ONLY: nunca se edita ni se borra; el estado de cada documento sale de leer sus filas
-/// en orden (lib/presentaciones/reglas.ts). Responde solo Customer Success. SQL: 2026-10-14-presentaciones-de-documentos.sql.
-model PresentacionDeDocumento {
-  id             String   @id @default(cuid())
-  // nullable porque la respuesta sobrevive a que se borre el proyecto (los nombres quedan congelados)
-  projectId      String?
-  project        Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  proyectoNombre String
-  clientNombre   String?
-  /// kickoff · diagnostico · planificacion · entrega
-  documento      String
-  /// fecha · sin-fecha · presentado · listo · propuesta (la leyó Nexus en una reunión) · descarte · ahora-no
-  evento         String
-  /// AAAA-MM-DD, el día en Costa Rica: la fecha planeada, la de la presentación o la propuesta
-  fecha          String?
-  /// Quién respondió. null solo en «propuesta» (la leyó Nexus)
-  porEmail       String?
-  /// El rol al responder (CSE · CSL)
-  rol            String?
-  /// Por qué le tocaba responder: encargado · genero (generó el documento) · lider (la CSL)
-  motivo         String?
-  /// La reunión de donde salió la propuesta (solo en «propuesta»)
-  sessionId      String?
-  /// De dónde salió la fecha, la cita de la reunión o el aviso al vendedor
-  detalle        Json?
-  createdAt      DateTime @default(now())
-
-  @@index([projectId, documento, createdAt])
-  @@index([sessionId])
-  @@index([createdAt])
-}
-
 
 /// Un plan que se repite («Onboarding en 30 días»): tareas con días hábiles relativos. Usarlo no gasta IA.
 model PlantillaDeTareas {
@@ -6539,7 +6652,7 @@ model Tarea {
   projectId  String?
   project    Project?          @relation("TareasDelProyecto", fields: [projectId], references: [id], onDelete: SetNull)
 
-  /// mano | pedido | reunion | notas | chat | plantilla (no cambia: es la métrica «cómo entran»)
+  /// mano | pedido | reunion | notas | chat | plantilla | hubspot (no cambia: es la métrica «cómo entran»)
   origen          String
   // nullable porque null = la propuso Nexus
   creadaPorEmail  String?
@@ -6580,6 +6693,18 @@ model Tarea {
   agendaBloques      Json?
   agendadaAt         DateTime?
   agendaVerificadaAt DateTime?
+
+  /// Las tareas de HubSpot (2026-10-15, etapa 3 de docs/mi-dia-plan.md; lib/tareas-hubspot). Solo con `origen = "hubspot"`.
+  /// El id de la tarea en HubSpot.
+  hubspotTaskId         String?   @unique
+  /// Lo último en que Nexus y HubSpot estuvieron de acuerdo (título, estado, vencimiento, prioridad, responsable): con
+  /// eso cada copia sabe qué lado cambió.
+  hubspotAcordado       Json?
+  /// Lo de HubSpot que se muestra y no se sincroniza: el tipo, la secuencia, la hora del vencimiento, el registro.
+  hubspotDatos          Json?
+  hubspotSincronizadaAt DateTime?
+  /// Lo que no se pudo escribir en HubSpot; null = al día.
+  hubspotError          String?
 
   /// PATCH con otra versión → 409
   version     Int       @default(0)

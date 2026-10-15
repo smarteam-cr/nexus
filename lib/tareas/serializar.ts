@@ -19,7 +19,10 @@ import { datosDeAmbito, ambitoConDatos, type DatosDeAmbito } from "./ambito-serv
 import { administraElProyecto, veLaTarea } from "./visibilidad";
 import { equipoDe, type ContextoDeTareas } from "./servidor";
 import type { ClientesQueVes } from "./clientes";
-import type { EmpresaVista, PersonaVista, ProyectoVista, SalioDe, SugerenciasDeTarea, TareaVista, RelacionVista } from "./tipos";
+import type { EmpresaVista, HubspotDeTarea, PersonaVista, ProyectoVista, SalioDe, SugerenciasDeTarea, TareaVista, RelacionVista } from "./tipos";
+import { portalDelSistema } from "@/lib/hubspot/registro-para-vincular";
+import { hubspotCompanyUrl, hubspotDealUrl, hubspotProjectUrl } from "@/lib/hubspot/urls";
+import { leerDatosDeHubspot, rotuloDeHubspot } from "@/lib/tareas-hubspot/reglas";
 
 const ESPACIO_SELECT = { tipo: true, visibilidad: true, equipo: true, miembros: { select: { email: true } } } as const;
 
@@ -79,6 +82,9 @@ export const SELECT_TAREA = {
   version: true,
   archivadaAt: true,
   createdAt: true,
+  hubspotTaskId: true,
+  hubspotDatos: true,
+  hubspotError: true,
   proyecto: { select: { id: true, nombre: true, estado: true, espacio: { select: ESPACIO_SELECT } } },
   mismaQue: {
     select: {
@@ -117,6 +123,8 @@ export interface ContextoDeSerializar {
   /** Las candidatas («¿Es T-12?») que quien mira puede ver. */
   candidatas: Map<string, { id: string; numero: number; titulo: string; responsable: string | null; pases: number }>;
   ahora: Date;
+  /** El portal de HubSpot del sistema, para los enlaces de las tareas de HubSpot (null si no hay ninguna). */
+  portal?: string | null;
 }
 
 /** Arma todo lo que el serializador necesita para un lote de filas, en pocas consultas. */
@@ -170,7 +178,25 @@ export async function prepararSerializacion(ctx: ContextoDeTareas, clientes: Cli
   const faltan = [...porTarea.values()].map((c) => c.sessionId).filter((s): s is string => !!s && !salas.has(s));
   if (faltan.length) for (const [k, v] of await salasDeReuniones({ email: ctx.email, esSuperAdmin: ctx.esSuperAdmin, clientes }, faltan)) salas.set(k, v);
 
-  return { ctx, clientes, ambito, salas, sugeridos, cierres: porTarea, candidatas, ahora };
+  const portal = filas.some((f) => f.hubspotTaskId) ? await portalDelSistema().catch(() => null) : null;
+  return { ctx, clientes, ambito, salas, sugeridos, cierres: porTarea, candidatas, ahora, portal };
+}
+
+const NOMBRE_DEL_REGISTRO = { deal: "el negocio", company: "la empresa", "0-970": "el proyecto" } as const;
+
+/** De dónde viene una tarea de HubSpot y dónde abrirla. */
+function hubspotDe(f: FilaDeTarea, s: ContextoDeSerializar): HubspotDeTarea | null {
+  if (!f.hubspotTaskId) return null;
+  const d = leerDatosDeHubspot(f.hubspotDatos);
+  const portal = s.portal ?? null;
+  const reg = d.registro;
+  const regUrl = !reg ? null : reg.objeto === "deal" ? hubspotDealUrl(portal, reg.id) : reg.objeto === "company" ? hubspotCompanyUrl(portal, reg.id) : hubspotProjectUrl(portal, reg.id);
+  return {
+    rotulo: rotuloDeHubspot(d),
+    url: portal ? `https://app.hubspot.com/tasks/${portal}/view/all/task/${f.hubspotTaskId}` : null,
+    registro: reg && regUrl ? { texto: `Abrir ${NOMBRE_DEL_REGISTRO[reg.objeto]} en HubSpot`, url: regUrl } : null,
+    error: f.hubspotError,
+  };
 }
 
 function persona(email: string | null | undefined, s: ContextoDeSerializar): PersonaVista | null {
@@ -368,6 +394,7 @@ export function serializarTarea(f: FilaDeTarea, s: ContextoDeSerializar): TareaV
     acciones: accionesDe({ ...f, semana }, ctx, { lunesDeHoy: lunesDeHoy(s.ahora), esMiembroDelEspacioLibre: espacioLibreMio }),
     ...(sugerencias && Object.keys(sugerencias).length ? { sugerencias } : {}),
     ...(sugeridoCierre ? { sugeridoCierre } : {}),
+    hubspot: hubspotDe(f, s),
   };
 }
 

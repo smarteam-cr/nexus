@@ -172,6 +172,10 @@
   (atrasadas, sin decidir, en curso, pendientes y cerradas de 30 días, con el último movimiento).
 - **«¿Faltó algo?»** (nivel 2 de la lectura): leer la CONVERSACIÓN de una reunión ya leída, para los compromisos que
   no quedaron en las notas. Sin «Próximos pasos», Nexus la lee solo. La cita de cada propuesta es lo que dijo la persona.
+- **Tarea de HubSpot** (`Tarea` con `origen = "hubspot"`, `lib/tareas-hubspot`): una tarea de HubSpot de alguien del
+  equipo, en Tareas internas. Lo que cambia de un lado (título, estado, vencimiento, prioridad, responsable) se escribe
+  del otro; si cambiaron los dos, gana el último. Lleva el chip «HubSpot» (o «HubSpot · secuencia»). «Ya no se hará» no
+  se escribe en HubSpot.
 - **Vínculo de una tarea** (`TareaVinculo`): un registro que acompaña a una tarea sin cambiar para quién es: de
   HubSpot (contacto, empresa, negocio, ticket, proyecto u objeto propio, por el enlace de su ficha), una propuesta
   comercial o una preventa. Es una foto: no sincroniza ni escribe en HubSpot. Ver DECISIONS §Tareas internas.
@@ -897,7 +901,7 @@
   (< 70 %), llena (70–85 %), sobrecarga (> 85 %). Las semanas que vienen se **proyectan** con el ritmo de reuniones de
   las últimas cuatro. En orden alfabético, sin ranking. Sin montos. La ven la CSL y dirección.
 - **Tu carga** (`/tu-carga`): la misma cuenta, pero solo la de quien la abre (CSE y CSL; dirección la ve como pestaña de
-  Rentabilidad): 8 semanas, sus cuentas y lo que tiene sin anotar de «¿cuánto te tomó?». Sin montos.
+  Rentabilidad; desde el 2026-10-15 no está en el menú): 8 semanas, sus cuentas y lo que tiene sin anotar de «¿cuánto te tomó?». Sin montos.
 - **Con dato real**: la parte de las horas que no es supuesto: las del calendario más las que respondió la persona. La
   preparación y la entrega sin respuesta son **estimadas**.
 - **Factor de complejidad** (`lib/carga/complejidad.ts`): cuánto más trabajo pide una cuenta que la base, de 1,0 a 3,0,
@@ -956,3 +960,20 @@
   pisar el anterior; se mira y se descarga en Feedback › Encuestas › Sobre los clientes.
 - **Apertura a la asesoría**: el cliente no solo nos pide cosas para implementar, también quiere nuestra guía sobre qué
   hacer, en qué orden y por qué.
+- **Negocio abierto** (`NegocioAbierto`, `lib/ventas`): la copia de un negocio de HubSpot que todavía no se ganó ni se
+  perdió, de los tres pipelines de venta propia. La trae el job `negocios-abiertos` cada hora. Lo ganado vive en
+  `VentaGanada`.
+- **Cartera de un vendedor** («Para ti» › «Tu cartera»): las empresas de Nexus donde es dueño en HubSpot más las
+  empresas donde tiene un negocio abierto. Va en cuatro grupos: con fecha de cierre y monto, les falta uno, solo
+  negocio y sin negocio.
+- **Pregunta de cierre y monto**: Nexus le pregunta al vendedor la fecha de cierre o el monto de un negocio que no los
+  tiene (o tiene la fecha vencida) y que se está trabajando. Propone el valor con la frase de donde salió y la
+  respuesta se guarda en HubSpot.
+- **Temperatura de un negocio**: caliente, en movimiento o frío, según la actividad, la probabilidad y el cierre
+  (`temperaturaDelNegocio`).
+- **Ponderado**: monto × probabilidad de los negocios en dólares que cierran en el año.
+- **Siguiente paso por equipo** (`SiguientePaso`; en HubSpot, `siguiente_paso_ventas`, `_cs`, `_dev`, con `_fecha` y
+  `_responsable`): qué sigue con una empresa, un negocio o un proyecto del lado de Ventas, CS o Dev, para cuándo y quién
+  lo lleva. Uno vigente por objeto y equipo; cada cambio queda en la historia de Nexus y el vigente se escribe en
+  HubSpot, con el mismo nombre en los tres objetos (`lib/siguiente-paso`). Se da por hecho («Ya se hizo») o se
+  reemplaza. `hs_next_step` es de HubSpot: Nexus lo lee y lo ofrece como sugerencia, nunca lo escribe.

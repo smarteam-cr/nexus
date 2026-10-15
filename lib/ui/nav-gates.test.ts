@@ -97,8 +97,6 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "clients",
       "marketing",
       "customer-success",
-      // Tu carga (2026-10-07): la CSL lleva cuentas.
-      "tu-carga",
       "sales",
       "audits",
       "sessions",
@@ -136,7 +134,6 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "clients",
       "marketing",
       "customer-success",
-      "tu-carga",
       "sessions",
       "knowledge",
       "documentacion",
@@ -144,14 +141,12 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
     ]);
   });
 
-  it("⭐ Tu carga es de quien lleva cuentas (CSE y CSL), por ROL y sin el pase de dirección", () => {
-    /* 2026-10-07 (decisión de Elías): la carga propia es una pestaña de Rentabilidad, que es de dirección. El CSE y la
-       CSL llegan por este ítem; dirección la ve como pestaña y en el menú sería un ítem de más. Ningún permiso la abre. */
-    expect(visibles(ctx(false, {}, false, "CSE"))).toEqual(["para-ti", "clients", "marketing", "tu-carga", "sessions", "knowledge", "documentacion", "escala"]);
-    expect(visibles(ctx(false, {}, false, "CSL"))).toContain("tu-carga");
-    expect(visibles(ctx(true, {}, false, "SUPER_ADMIN"))).not.toContain("tu-carga");
-    for (const rol of ["VENTAS", "DEV", "MARKETING", "ADMIN", null]) {
-      expect(visibles(ctx(false, { clientes: { viewAll: true }, ventas: { read: true } }, false, rol)), `${rol} ve Tu carga`).not.toContain("tu-carga");
+  it("⭐ Tu carga no está en el menú de nadie", () => {
+    /* 2026-10-15 (decisión de Elías): se sacó del menú para todos. La ruta /tu-carga sigue (dirección la abre como
+       pestaña de Rentabilidad). */
+    expect(visibles(ctx(false, {}, false, "CSE"))).toEqual(["para-ti", "clients", "marketing", "sessions", "knowledge", "documentacion", "escala"]);
+    for (const rol of ["CSE", "CSL", "SUPER_ADMIN", "VENTAS", "DEV", "MARKETING", "ADMIN", null]) {
+      expect(visibles(ctx(rol === "SUPER_ADMIN", { clientes: { viewAll: true }, ventas: { read: true } }, false, rol)), `${rol} ve Tu carga`).not.toContain("tu-carga");
     }
   });
 

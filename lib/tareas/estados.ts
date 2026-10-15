@@ -84,7 +84,7 @@ export const TIPOS_DE_TAREA = ["puesto", "apoyo"] as const;
 export type TipoDeTarea = (typeof TIPOS_DE_TAREA)[number];
 
 /** Cómo entró la tarea. No cambia nunca: es la métrica «cómo entran». */
-export const ORIGENES = ["mano", "pedido", "reunion", "notas", "chat", "plantilla"] as const;
+export const ORIGENES = ["mano", "pedido", "reunion", "notas", "chat", "plantilla", "hubspot"] as const;
 export type OrigenDeTarea = (typeof ORIGENES)[number];
 export const NOMBRE_DEL_ORIGEN: Record<OrigenDeTarea, string> = {
   mano: "A mano",
@@ -93,6 +93,7 @@ export const NOMBRE_DEL_ORIGEN: Record<OrigenDeTarea, string> = {
   notas: "De unas notas",
   chat: "Del asistente",
   plantilla: "De una plantilla",
+  hubspot: "De HubSpot",
 };
 
 /* ── Agenda ───────────────────────────────────────────────────────────────────────── */

@@ -177,6 +177,9 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "app/(shell)/sessions/[id]/page.tsx": "la página de la reunión: cuántas tareas dejó (contarTareasDeLaReunion, solo lo visible)",
       "lib/seguimiento/compromisos-server.ts": "«Lo que dejó esta reunión»: lo demás que dejó la reunión en Tareas, para leer (cargarTareasDeLaReunion, solo lo visible)",
       "components/clients/ProjectGPS.tsx": "los «Pendientes recientes» del Resumen: el tipo de /api/tareas/del-proyecto (no consulta; los cambios van por las rutas de Tareas)",
+      // Las tareas de HubSpot (2026-10-15, etapa 3 de docs/mi-dia-plan.md).
+      "lib/tareas-hubspot/reglas.ts": "las tareas de HubSpot: solo los tipos de prioridad (puro)",
+      "lib/tareas-hubspot/sync-server.ts": "la copia de las tareas de HubSpot: escribe Tareas SOLO por el escritor único (crearTareaDeHubspot, aplicarDesdeHubspot, anotarSincronizacionConHubspot); lo que va a HubSpot lo escribe acá, nunca lib/tareas",
     };
     const afuera = TODO.filter((rel) => !/^(lib\/tareas|components\/tareas|app\/api\/tareas|app\/\(shell\)\/tareas)\//.test(rel)).filter((rel) => /@\/lib\/tareas\//.test(soloCodigo(leer(rel))));
     const sinDeclarar = afuera.filter((rel) => !CENSO[rel]);

@@ -22,6 +22,8 @@ export const NOMBRE_DE_JOB: Readonly<Record<string, string>> = {
   "google-enrich-retry": "El reintento de las reuniones de Google Meet",
   "seguimiento-reuniones": "La lectura de cada reunión",
   "ventas-ganadas-daily": "La copia de ventas ganadas",
+  "negocios-abiertos": "La copia de los negocios abiertos",
+  "tareas-hubspot": "Las tareas de HubSpot",
   "odoo-espejo-daily": "La copia de Odoo",
   "mercury-espejo-daily": "La copia de Mercury",
   "tipo-cambio-daily": "La copia del tipo de cambio del BCCR",

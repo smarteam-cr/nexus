@@ -13,7 +13,7 @@ export interface AvailableDeal {
   stage: string | null; // label de la etapa DENTRO del pipeline, ej. "Contactado"
 }
 
-interface PipelineMeta {
+export interface PipelineMeta {
   labels: Map<string, string>; // pipelineId → label
   stages: Map<string, Map<string, string>>; // pipelineId → (stageId → label)
 }
@@ -22,7 +22,7 @@ interface PipelineMeta {
 // restart del server lo refresca.
 let dealPipelineCache: PipelineMeta | null = null;
 
-async function dealPipelineMeta(hsClient: HsClient): Promise<PipelineMeta> {
+export async function dealPipelineMeta(hsClient: HsClient): Promise<PipelineMeta> {
   if (dealPipelineCache) return dealPipelineCache;
   const labels = new Map<string, string>();
   const stages = new Map<string, Map<string, string>>();

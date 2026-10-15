@@ -88,6 +88,10 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     motivo: "El agente de avance. Ya cortaba desde su primer día; es el precedente que este archivo generaliza.",
   },
   "lib/cs/load-account.ts": { clase: "contexto", motivo: "El resumen de cuenta de CS. Ya cortaba." },
+  "lib/ventas/propuesta-de-cierre-server.ts": {
+    clase: "contexto",
+    motivo: "La propuesta de fecha de cierre y monto de un negocio (2026-10-14). Lee por getClientSessions, que corta en hoy.",
+  },
   "lib/projects/project-brief.ts": {
     clase: "contexto",
     indirecto: true,

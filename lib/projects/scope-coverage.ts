@@ -47,6 +47,12 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/lecturas/personas.ts": { modo: "criterio", criterio: "cartera" },
   // «Para ti» (2026-10-04): las implementaciones abiertas, con el criterio de la línea del índice de clientes.
   "lib/para-ti/fuentes/cs.ts": { modo: "criterio", criterio: "clasificable" },
+  // El siguiente paso de cada equipo (2026-10-15, etapa 2 de docs/mi-dia-plan.md): los proyectos abiertos de la cuenta.
+  "lib/siguiente-paso/lectura-server.ts": { modo: "criterio", criterio: "clasificable" },
+  // Las tareas de HubSpot (2026-10-15, etapa 3 de docs/mi-dia-plan.md): el proyecto asociado a la tarea en HubSpot, si está
+  // abierto (mutaciones.ts exige lo mismo al elegir el proyecto de una tarea a mano).
+  "lib/tareas-hubspot/sync-server.ts": { modo: "criterio", criterio: "clasificable" },
+  "lib/para-ti/fuentes/siguientes-pasos.ts": { modo: "exento", razon: "Busca por id el nombre de los proyectos de los siguientes pasos de la persona: no pregunta qué proyectos cuentan." },
   // «Lo que dejó esta reunión» (2026-10-09, memoria de la cuenta, etapa 1): los proyectos del cliente dueño de la
   // reunión, con el mismo criterio que el selector de proyectos de la página de la reunión.
   "lib/seguimiento/tarjeta-server.ts": { modo: "criterio", criterio: "clasificable" },
@@ -54,15 +60,15 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   // Los hechos de una reunión (memoria de la cuenta, etapas 5 y 6): los proyectos vinculados del cliente dueño, con el
   // mismo criterio que la tarjeta de la reunión.
   "lib/sessions/reunion-para-hechos.ts": { modo: "criterio", criterio: "clasificable" },
+  // Cuándo se presenta cada documento (2026-10-14): lo que le toca responder a cada persona de Customer Success, en los
+  // proyectos abiertos de implementación (la misma línea que el índice de clientes y «Para ti»).
+  "lib/presentaciones/servidor.ts": { modo: "criterio", criterio: "clasificable" },
   "lib/lo-propuesto/registro-server.ts": {
     modo: "exento",
     razon:
       "no pregunta «¿qué proyectos cuentan?»: cuenta, para «Uso de Nexus», las sugerencias de etapa y las fechas del " +
       "diagnóstico que Nexus dejó guardadas en CUALQUIER proyecto. Filtrar por un criterio escondería propuestas que " +
       "existieron (de un proyecto cerrado después) y el uso saldría más bajo de lo que fue.",
-  // Cuándo se presenta cada documento (2026-10-14): lo que le toca responder a cada persona de Customer Success, en los
-  // proyectos abiertos de implementación (la misma línea que el índice de clientes y «Para ti»).
-  "lib/presentaciones/servidor.ts": { modo: "criterio", criterio: "clasificable" },
   },
   "lib/para-ti/fuentes/etapa.ts": {
     modo: "exento",

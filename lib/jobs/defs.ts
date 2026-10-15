@@ -17,6 +17,9 @@
  *   - ventas-ganadas-daily → espejo de los tratos ganados de HubSpot (lo VENDIDO del
  *     año, con su fecha de cierre). Diario ≥ 6:00 CR, incluidos fines de semana: un
  *     trato se gana cualquier día, y el reporte anual lo lee de la base.
+ *   - negocios-abiertos → la copia de los negocios ABIERTOS de HubSpot y del dueño de cada empresa
+ *     (lib/ventas/sync-negocios-abiertos.ts), cada hora de 6:00 a 20:00 CR, todos los días: «Para ti» de Ventas
+ *     muestra los cierres más cerca y la cartera desde esta copia.
  *   - seguimiento-reuniones → la lectura de cada reunión con un cliente o un prospecto, por la cola
  *     `LecturaDeReunion` (memoria de la cuenta, etapa 2). Cada tick. Gated por SEGUIMIENTO_REUNIONES_ENABLED≠0.
  *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
@@ -230,6 +233,67 @@ const googleEnrichRetry: JobDef = {
  * sigue a cada lectura (avance, ficha, etapa, preventa) corre en segundo plano: el tick no lo espera.
  * `SEGUIMIENTO_REUNIONES_ENABLED=0` lo apaga y el enriquecimiento vuelve al post-proceso viejo.
  */
+const negociosAbiertos: JobDef = {
+  key: "negocios-abiertos",
+  shouldRun: (_now, parts) => parts.hour >= 6 && parts.hour <= 20,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const p = crDateParts(now);
+    // Una corrida por hora: la clave del turno es el día y la hora de Costa Rica.
+    const turno = `${p.dateKey}T${String(p.hour).padStart(2, "0")}`;
+    if (!(await claimDateKey("negocios-abiertos", turno, now))) return SIN_TURNO;
+    const { syncNegociosAbiertos } = await import("@/lib/ventas/sync-negocios-abiertos");
+    const r = await syncNegociosAbiertos();
+    if (r.locked || r.parcial) {
+      // Transitorio (otra corrida en curso o una búsqueda que trajo poco): se suelta el turno para reintentar.
+      await prisma.cronJobState
+        .updateMany({ where: { id: "negocios-abiertos", lastRunDateKey: turno }, data: { lastRunDateKey: null } })
+        .catch(() => {});
+      console.log(`[jobs/negocios-abiertos] ${turno} — ${r.locked ? "lock ajeno" : "corrida PARCIAL"}; turno liberado para reintentar`);
+      return;
+    }
+    // Lo que quedó sin escribir en HubSpot del siguiente paso de cada equipo (lib/siguiente-paso, etapa 2).
+    const { reintentarEscrituras } = await import("@/lib/siguiente-paso/escritura-server");
+    const pasos = await reintentarEscrituras().catch((e) => {
+      console.error("[jobs/negocios-abiertos] reintento de siguientes pasos:", e);
+      return null;
+    });
+    console.log(
+      `[jobs/negocios-abiertos] ${turno} — ${r.traidos} abiertos: ${r.altas} nuevos, ${r.actualizados} con cambios, ${r.cerrados} cerrados, ${r.duenosActualizados} dueños de empresa` +
+        ` · siguientes pasos: ${r.pasos.nuevos} desde HubSpot, ${r.pasos.cerrados} borrados allá${pasos?.intentados ? `, ${pasos.escritos} de ${pasos.intentados} reescritos` : ""}` +
+        `${r.errores.length ? `, ${r.errores.length} errores` : ""}`,
+    );
+  },
+};
+
+/**
+ * Las tareas de HubSpot del equipo, en Tareas internas, en los dos sentidos (2026-10-15, etapa 3 de docs/mi-dia-plan.md;
+ * lib/tareas-hubspot). Cada 15 minutos de 6:00 a 21:00 de Costa Rica. Si otra corrida tiene el candado, suelta el turno.
+ */
+const tareasHubspot: JobDef = {
+  key: "tareas-hubspot",
+  shouldRun: (_now, parts) => encendido("tareas-hubspot") && parts.hour >= 6 && parts.hour <= 21,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const p = crDateParts(now);
+    const cuarto = Math.floor(now.getUTCMinutes() / 15) * 15;
+    const turno = `${p.dateKey}T${String(p.hour).padStart(2, "0")}:${String(cuarto).padStart(2, "0")}`;
+    if (!(await claimDateKey("tareas-hubspot", turno, now))) return SIN_TURNO;
+    const { copiarTareasDeHubspot } = await import("@/lib/tareas-hubspot/sync-server");
+    const r = await copiarTareasDeHubspot({}, now);
+    if (r.locked) {
+      await prisma.cronJobState
+        .updateMany({ where: { id: "tareas-hubspot", lastRunDateKey: turno }, data: { lastRunDateKey: null } })
+        .catch(() => {});
+      return;
+    }
+    console.log(
+      `[jobs/tareas-hubspot] ${turno} — ${r.traidas} de HubSpot: ${r.nuevas} nuevas, ${r.aplicadasEnNexus} cambiaron allá, ${r.escritasEnHubspot} escritas allá, ${r.cerradas} cerradas${r.errores.length ? `, ${r.errores.length} errores` : ""}`,
+    );
+    if (r.errores.length) console.warn(`[jobs/tareas-hubspot] ${r.errores.slice(0, 5).join(" · ")}`);
+  },
+};
+
 const seguimientoReuniones: JobDef = {
   key: "seguimiento-reuniones",
   shouldRun: () => encendido("seguimiento-reuniones"),
@@ -579,5 +643,5 @@ const tareasSemanaLunes: JobDef = {
 
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, seguimientoReuniones, ventasGanadasDaily, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, invariantsDaily];
 }

@@ -172,12 +172,34 @@ export function CajonDeTarea({
             </div>
           )}
 
+          {/* Una tarea de HubSpot: de dónde viene, dónde abrirla y si quedó algo sin escribir allá. */}
+          {t.hubspot && (
+            <div className="space-y-1 rounded-lg border border-line bg-surface px-3 py-2.5 text-[13px]">
+              <p className="text-fg-secondary">
+                {t.hubspot.rotulo}: el título, el estado, el vencimiento, la prioridad y el responsable se escriben allá.
+              </p>
+              <p className="flex flex-wrap gap-x-3 gap-y-1">
+                {t.hubspot.url && (
+                  <a href={t.hubspot.url} target="_blank" rel="noreferrer" className="text-xs text-brand hover:text-brand-light">
+                    Abrir la tarea en HubSpot
+                  </a>
+                )}
+                {t.hubspot.registro && (
+                  <a href={t.hubspot.registro.url} target="_blank" rel="noreferrer" className="text-xs text-brand hover:text-brand-light">
+                    {t.hubspot.registro.texto}
+                  </a>
+                )}
+              </p>
+              {t.hubspot.error && <p className="text-xs text-warn-ink">{t.hubspot.error} Se vuelve a intentar en 15 minutos.</p>}
+            </div>
+          )}
+
           {/* El contexto que escribió Nexus al generarla: arriba, una vez, con su marca. No se edita (lo tuyo va en Notas). */}
           {(t.contexto || t.contextoOculto) && (
             <div className="rounded-lg border border-line bg-surface-muted px-3 py-2.5">
               <p className={cn(ROTULO_DEL_SISTEMA, "flex items-center gap-1.5")}>
-                <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
-                Contexto · lo escribió Nexus
+                {!t.hubspot && <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />}
+                {t.hubspot ? "Notas de la tarea en HubSpot" : "Contexto · lo escribió Nexus"}
               </p>
               {t.contexto ? (
                 <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-fg-secondary">{t.contexto}</p>

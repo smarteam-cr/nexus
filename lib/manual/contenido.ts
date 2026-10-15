@@ -237,8 +237,6 @@ export const DOC_MENU: Record<string, string> = {
     "El contenido de Smarteam: ideas, temas, campañas, la voz de marca y a quién le hablamos.",
   "customer-success":
     "El tablero del líder de CS: cómo viene cada cuenta, qué está trabado y qué cliente está en riesgo.",
-  "tu-carga":
-    "Tus horas de las últimas semanas y las que vienen: reuniones, preparación y lo que pide el cronograma de tus cuentas. Solo lo tuyo, sin montos.",
   sales:
     "Lo que se vende: las propuestas para prospectos, el catálogo de casos de uso y las licitaciones de SICOP.",
   finanzas:

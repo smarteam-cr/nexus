@@ -10,7 +10,8 @@
  *   - El «para quién» se rellena hacia abajo: una tarea en un proyecto con cliente lo hereda; con proyecto de HubSpot,
  *     su cliente es el del proyecto.
  *   - Fusionar nunca cruza clientes.
- *   - Nunca escribe Project, Client, TimelineTask ni nada en HubSpot.
+ *   - Nunca escribe Project, Client, TimelineTask ni nada en HubSpot. Lo que llega de HubSpot (las tareas de HubSpot,
+ *     etapa 3 de docs/mi-dia-plan.md) se escribe acá; lo que va hacia HubSpot lo escribe lib/tareas-hubspot.
  *   - Los avisos salen DESPUÉS de escribir, una vez por destinatario, nunca a quien hizo la acción.
  */
 import "server-only";
@@ -37,6 +38,7 @@ import {
   aDate,
   comoFecha,
   lunesDeFecha,
+  hoyEnCostaRica,
   lunesDeHoy,
   primeraSemanaSinRevisar,
   semanaAlAceptar,
@@ -2495,6 +2497,228 @@ export async function aplicarAcuerdoDelChat(ctx: ContextoDeTareas, clientes: Cli
     for (const email of tocadas) olvidarMedicion(email);
   }
   return resultado;
+}
+
+/* ── Las tareas de HubSpot (2026-10-15, etapa 3 de docs/mi-dia-plan.md) ────────────────────────────────────────────
+   Lo escribe la copia de lib/tareas-hubspot (job `tareas-hubspot`): las tareas de HubSpot del equipo entran como
+   `origen = "hubspot"` y lo que cambia allá se aplica acá. Este archivo nunca llama a HubSpot: lo que cambia en Nexus lo
+   escribe allá lib/tareas-hubspot, y acá solo se anota (`anotarSincronizacionConHubspot`). */
+
+/** Quien firma lo que llega de HubSpot en la historia de una tarea. */
+export const HUBSPOT = "hubspot";
+
+export interface TareaDesdeHubspot {
+  hubspotTaskId: string;
+  titulo: string;
+  /** Las notas de la tarea en HubSpot, como texto. No se editan en Nexus (lo de la persona va en notas). */
+  contexto: string | null;
+  estado: "pendiente" | "en_curso" | "hecha";
+  completadaAt: Date | null;
+  venceEl: string | null;
+  prioridad: Prioridad;
+  responsableEmail: string;
+  equipo: string;
+  clientId: string | null;
+  projectId: string | null;
+  datos: Prisma.InputJsonValue;
+  acordado: Prisma.InputJsonValue;
+}
+
+/** La semana de una tarea abierta de HubSpot: la de su vencimiento (lo vencido, la de hoy); sin vencimiento, ninguna. */
+async function semanaDeHubspot(db: Db, responsable: string, venceEl: string | null, ahora: Date): Promise<string | null> {
+  if (!venceEl) return null;
+  return semanaDestino(db, responsable, lunesDeFecha(venceEl), true, ahora);
+}
+
+/** Crea la tarea de una tarea de HubSpot que todavía no está. null = ya estaba (otra corrida llegó primero). */
+export async function crearTareaDeHubspot(n: TareaDesdeHubspot, ahora = new Date()): Promise<{ id: string } | null> {
+  const hecha = n.estado === "hecha";
+  const semana = hecha
+    ? n.completadaAt
+      ? lunesDeFecha(hoyEnCostaRica(n.completadaAt))
+      : null
+    : await semanaDeHubspot(prisma, n.responsableEmail, n.venceEl, ahora);
+  const titulo = n.titulo.trim().slice(0, 300);
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const t = await tx.tarea.create({
+        data: {
+          titulo,
+          huella: huellaDeTexto(titulo),
+          contexto: n.contexto,
+          estado: n.estado,
+          completadaAt: hecha ? (n.completadaAt ?? ahora) : null,
+          prioridad: n.prioridad,
+          tipo: "puesto",
+          equipo: n.equipo,
+          responsableEmail: n.responsableEmail,
+          semana: semana ? aDate(semana) : null,
+          venceEl: n.venceEl ? aDate(n.venceEl) : null,
+          clientId: n.clientId,
+          projectId: n.projectId,
+          origen: "hubspot",
+          origenId: `h:${n.hubspotTaskId}`,
+          pedidaPorTexto: "HubSpot",
+          hubspotTaskId: n.hubspotTaskId,
+          hubspotAcordado: n.acordado,
+          hubspotDatos: n.datos,
+          hubspotSincronizadaAt: ahora,
+        },
+        select: { id: true },
+      });
+      await evento(tx, { tareaId: t.id, tipo: "creada", porEmail: HUBSPOT, datos: { desde: "hubspot" } });
+      return t;
+    }, OPCIONES_DE_TX);
+  } catch (e) {
+    if (esUnicoDuplicado(e)) return null;
+    throw e;
+  }
+}
+
+export interface CambiosDesdeHubspot {
+  titulo?: string;
+  estado?: "pendiente" | "en_curso" | "hecha" | "no_se_hara";
+  /** Por qué «Ya no se hará» (se borró en HubSpot, pasó a alguien de afuera). */
+  motivo?: string;
+  completadaAt?: Date | null;
+  venceEl?: string | null;
+  prioridad?: Prioridad;
+  /** Con su sprint de casa. */
+  responsable?: { email: string; equipo: string };
+  contexto?: string | null;
+  clientId?: string | null;
+  projectId?: string | null;
+}
+
+/**
+ * Aplica lo que cambió en HubSpot. Con control de versión: si una persona la cambió mientras se leía HubSpot, no toca
+ * nada y la corrida siguiente vuelve a comparar con lo nuevo. Mueve la semana con el vencimiento (o el responsable), y
+ * anota el resultado de la semana como lo haría la persona al terminarla.
+ */
+export async function aplicarDesdeHubspot(
+  id: string,
+  version: number,
+  c: CambiosDesdeHubspot,
+  extra: { datos: Prisma.InputJsonValue; acordado: Prisma.InputJsonValue; conflictos: ReadonlyArray<{ campo: string; gano: string }>; error?: string | null },
+  ahora = new Date(),
+): Promise<"aplicado" | "cambio-en-nexus"> {
+  const t = await prisma.tarea.findUnique({ where: { id }, select: SELECT_PARA_ESCRIBIR });
+  if (!t || t.version !== version || t.archivadaAt) return "cambio-en-nexus";
+  const desde = leerEstado(t.estado);
+  const hacia = c.estado ?? desde;
+  const responsable = c.responsable?.email ?? t.responsableEmail;
+  const semanaActual = comoFecha(t.semana);
+  const abierta = estaAbierta(hacia);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const data: Prisma.TareaUncheckedUpdateInput = {
+        hubspotDatos: extra.datos,
+        hubspotAcordado: extra.acordado,
+        hubspotSincronizadaAt: ahora,
+        hubspotError: extra.error ?? null,
+      };
+      if (c.titulo !== undefined) {
+        data.titulo = c.titulo.slice(0, 300);
+        data.huella = huellaDeTexto(c.titulo);
+      }
+      if (c.prioridad !== undefined) data.prioridad = c.prioridad;
+      if (c.contexto !== undefined) data.contexto = c.contexto;
+      if (c.venceEl !== undefined) data.venceEl = c.venceEl ? aDate(c.venceEl) : null;
+      if (c.clientId !== undefined) data.clientId = c.clientId;
+      if (c.projectId !== undefined) data.projectId = c.projectId;
+      if (c.responsable) {
+        data.responsableEmail = c.responsable.email;
+        data.equipo = c.responsable.equipo;
+      }
+      if (hacia !== desde) {
+        data.estado = hacia;
+        data.completadaAt = hacia === "hecha" ? (c.completadaAt ?? ahora) : null;
+        if (hacia === "no_se_hara") data.motivo = c.motivo ?? "Cambió en HubSpot.";
+        else if (desde === "no_se_hara") data.motivo = null;
+      }
+
+      // La semana de lo abierto sigue al vencimiento: si cambió, si cambió el responsable o si se reabrió.
+      let semana = semanaActual;
+      const reabierta = hacia !== desde && !estaAbierta(desde) && abierta;
+      if (abierta && responsable && (c.venceEl !== undefined || c.responsable || reabierta)) {
+        const vence = c.venceEl !== undefined ? c.venceEl : comoFecha(t.venceEl);
+        const deseada = vence ? lunesDeFecha(vence) : semanaActual;
+        semana = deseada ? await semanaDestino(tx, responsable, deseada, true, ahora) : null;
+        if (semana !== semanaActual) {
+          data.semana = semana ? aDate(semana) : null;
+          data.agendaEstado = "sin_agendar";
+        }
+      }
+
+      const r = await tx.tarea.updateMany({ where: { id, version }, data: { ...data, version: { increment: 1 } } });
+      if (r.count === 0) throw new ErrorDeTareas(409, "cambio-en-nexus");
+
+      // El resultado de la semana, como al terminarla o reabrirla a mano.
+      if (hacia !== desde && semanaActual && t.responsableEmail) {
+        if (hacia === "hecha" || hacia === "no_se_hara") {
+          try {
+            await anotarResultado(tx, { ...t, responsableEmail: responsable }, semanaActual, hacia, HUBSPOT, ahora);
+          } catch (e) {
+            // La persona ya revisó esa semana: lo que cerró ella no se corrige desde HubSpot.
+            if (!(e instanceof ErrorDeTareas)) throw e;
+          }
+        } else if (reabierta && semana === semanaActual) {
+          await quitarResultado(tx, t.id, semanaActual);
+        }
+      }
+
+      const campos = Object.keys(c).filter((k) => k !== "completadaAt" && k !== "motivo" && k !== "contexto" && k !== "clientId" && k !== "projectId");
+      if (campos.length || extra.conflictos.length) {
+        await evento(tx, {
+          tareaId: t.id,
+          tipo: "hubspot",
+          porEmail: HUBSPOT,
+          datos: { campos, conflictos: extra.conflictos.map((x) => ({ ...x })), ...(hacia !== desde ? { desde, hacia } : {}) },
+        });
+      }
+      if (semana !== semanaActual) await evento(tx, { tareaId: t.id, tipo: "semana", porEmail: HUBSPOT, datos: { desde: semanaActual, hacia: semana } });
+    }, OPCIONES_DE_TX);
+  } catch (e) {
+    if (e instanceof ErrorDeTareas && e.message === "cambio-en-nexus") return "cambio-en-nexus";
+    throw e;
+  }
+  if (t.responsableEmail) olvidarMedicion(t.responsableEmail);
+  if (responsable && responsable !== t.responsableEmail) olvidarMedicion(responsable);
+  return "aplicado";
+}
+
+/**
+ * Lo que se anota después de mirar HubSpot sin cambiar nada de lo que ve la persona: lo acordado, lo de HubSpot que se
+ * muestra, y si se pudo escribir allá. No sube la versión: no es un cambio de la tarea (una persona que la está
+ * editando no tiene por qué chocar).
+ */
+export async function anotarSincronizacionConHubspot(
+  id: string,
+  d: {
+    acordado?: Prisma.InputJsonValue;
+    datos?: Prisma.InputJsonValue;
+    error: string | null;
+    /** Lo que se escribió en HubSpot (los campos), para la historia de la tarea. */
+    escritos?: readonly string[];
+    conflictos?: ReadonlyArray<{ campo: string; gano: string }>;
+  },
+  ahora = new Date(),
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.tarea.updateMany({
+      where: { id },
+      data: {
+        ...(d.acordado !== undefined ? { hubspotAcordado: d.acordado } : {}),
+        ...(d.datos !== undefined ? { hubspotDatos: d.datos } : {}),
+        hubspotError: d.error,
+        hubspotSincronizadaAt: ahora,
+      },
+    });
+    if (d.escritos?.length) {
+      await evento(tx, { tareaId: id, tipo: "a_hubspot", porEmail: "agente", datos: { campos: [...d.escritos], conflictos: (d.conflictos ?? []).map((x) => ({ ...x })) } });
+    }
+  }, OPCIONES_DE_TX);
 }
 
 export { etiquetaT, claveDeEquipo };

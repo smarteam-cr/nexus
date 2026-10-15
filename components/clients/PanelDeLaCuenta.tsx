@@ -9,11 +9,13 @@
  *    renueva en los próximos 90 días. En ese orden: lo primero bloquea lo que leen los agentes.
  *  · «Licencias»: cuántas hay y cuál renueva primero.
  *  · «La empresa»: dominios, industria y TAM, tal como los tiene Nexus.
+ *  · «Siguientes pasos»: el de cada equipo en la cuenta, sus negocios y sus proyectos (2026-10-15).
  */
 import { useEffect, useState } from "react";
 import { QueSigue, BotonAzul, BotonBlanco, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { EVENTO_FICHA_CAMBIO, camposPropuestos, type ClaveDeFicha, type FichaGuardada } from "@/lib/clients/ficha";
 import { NOMBRE_DEL_HUB, avisoDeRenovacion, type LicenciaDeHub } from "@/lib/cs/licencias";
+import SiguientesPasosDeLaCuenta from "@/components/siguiente-paso/SiguientesPasosDeLaCuenta";
 
 interface Empresa {
   emailDomains: string[];
@@ -114,6 +116,8 @@ export default function PanelDeLaCuenta({
   return (
     <>
       {queSigue && <QueSigue accion={queSigue.accion ?? undefined}>{queSigue.texto}</QueSigue>}
+
+      <SiguientesPasosDeLaCuenta clientId={clientId} />
 
       {fuentes.length > 0 && (
         <section data-recorrido="info.fuentes" className="flex flex-col gap-2.5">

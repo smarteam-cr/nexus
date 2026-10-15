@@ -43,6 +43,15 @@ export function horas(minutos: number | null | undefined): string {
 export function ChipsDeTarea({ t, sinPara = false, sinPedida = false }: { t: TareaVista; sinPara?: boolean; sinPedida?: boolean }) {
   const chips: ReactNode[] = [];
   if (t.privada) chips.push(<Chip key="privada">Solo para mí</Chip>);
+  // De dónde viene (etapa 3 de docs/mi-dia-plan.md): una tarea de HubSpot lo dice siempre.
+  if (t.hubspot) {
+    chips.push(
+      <Chip key="hubspot" tono={t.hubspot.error ? "ambar" : "neutro"} title={t.hubspot.error ?? "Viene de HubSpot: lo que cambies acá se escribe allá"}>
+        {t.hubspot.rotulo}
+        {t.hubspot.error ? " · sin escribir allá" : ""}
+      </Chip>,
+    );
+  }
   if (!sinPara) {
     if (t.ambito.ambito !== "sin_clasificar") chips.push(<Chip key="para" title={`Para quién: ${t.ambito.etiqueta}`}>{t.ambito.etiqueta}</Chip>);
   }

@@ -91,6 +91,19 @@ export interface TareaVista {
   sugerencias?: SugerenciasDeTarea;
   /** Lo que dijo la retro de esta tarea (prellena «Revisa tu semana», en azul). */
   sugeridoCierre?: { resultado: "hecha" | "no_hecha"; cita: string | null; semana: string };
+  /** Una tarea de HubSpot (etapa 3 de docs/mi-dia-plan.md): de dónde viene y dónde abrirla. */
+  hubspot?: HubspotDeTarea | null;
+}
+
+export interface HubspotDeTarea {
+  /** «HubSpot» o «HubSpot · secuencia (paso 2)». */
+  rotulo: string;
+  /** La tarea en HubSpot. */
+  url: string | null;
+  /** El negocio, la empresa o el proyecto al que está asociada en HubSpot. */
+  registro: { texto: string; url: string } | null;
+  /** Lo que no se pudo escribir en HubSpot; null = al día. */
+  error: string | null;
 }
 
 /** Una tarea relacionada por una dependencia. Sin título si quien mira no la ve. */

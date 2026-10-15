@@ -15,6 +15,8 @@ import {
   REUNIONES_SIN_REVISAR,
 } from "./fuentes/proyectos";
 import { PREVENTAS } from "./fuentes/preventa";
+import { NEGOCIOS } from "./fuentes/negocios";
+import { SIGUIENTES_PASOS } from "./fuentes/siguientes-pasos";
 import { ETAPA_SUGERIDA } from "./fuentes/etapa";
 import { LO_QUE_DEJARON_TUS_REUNIONES } from "./fuentes/reuniones";
 import { TIEMPOS_SIN_ANOTAR } from "./fuentes/tiempos";
@@ -40,6 +42,8 @@ export const FUENTES: readonly Fuente[] = [
   PEDIDOS_FUERA_DE_ALCANCE,
   PRESENTACIONES,
   PREVENTAS,
+  NEGOCIOS,
+  SIGUIENTES_PASOS,
   FINANZAS_DEVUELTO,
   TIEMPOS_SIN_ANOTAR,
   TAREAS,
