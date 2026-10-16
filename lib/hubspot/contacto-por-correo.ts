@@ -11,7 +11,7 @@
  * se puede buscar es «correo-invalido». Así la pantalla no dice que el contacto no existe cuando
  * HubSpot ni contestó. Agregar una persona no puede fallar porque HubSpot falló.
  */
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "./sdk";
 import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
 
 export interface ContactoPorCorreo {

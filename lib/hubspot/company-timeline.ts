@@ -26,7 +26,7 @@
  * demás llamadores (generación de propuesta, handoff, columnas de HubSpot) ya lo envuelven en
  * try/catch y siguen sin el timeline: la generación no se rompe.
  */
-import type { Client } from "@hubspot/api-client";
+import type { Client } from "./sdk";
 import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
 import { grabacionesDeReuniones } from "./grabaciones-de-reuniones";
 import { textoDeLaReunion } from "./transcripcion-de-reunion";

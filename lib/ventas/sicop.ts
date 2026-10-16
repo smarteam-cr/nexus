@@ -19,7 +19,7 @@
  * Retry-401 con `forceRefreshSystemToken`: la cuenta del sistema es compartida (PROD +
  * local + scripts) y el refresh token ROTA.
  */
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "@/lib/hubspot/sdk";
 import { getSystemHubspotClient, forceRefreshSystemToken } from "@/lib/hubspot/client";
 import { prisma } from "@/lib/db/prisma";
 

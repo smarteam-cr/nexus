@@ -22,7 +22,7 @@
  *
  * Retry-401 con forceRefreshSystemToken (token del sistema compartido PROD/local).
  */
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "./sdk";
 import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
 
 /** Slug documentado del objeto (HubSpot-defined). El discovery confirmó que existe

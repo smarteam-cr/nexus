@@ -1,4 +1,4 @@
-import { Client } from "@hubspot/api-client";
+import { Client } from "./sdk";
 import { getHubspotClient, tokenDeCuenta } from "./client";
 import { prisma } from "@/lib/db/prisma";
 

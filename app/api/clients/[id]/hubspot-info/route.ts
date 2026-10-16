@@ -1,7 +1,7 @@
 import { withClientAccess } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
-import { Client } from "@hubspot/api-client";
+import { Client } from "@/lib/hubspot/sdk";
 import { NextResponse } from "next/server";
 import { hubspotCompanyListUrl, hubspotCompanyUrl } from "@/lib/hubspot/urls";
 

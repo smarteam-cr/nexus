@@ -1,4 +1,4 @@
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "./sdk";
 import { getSystemAccessToken, getPortalInfo } from "@/lib/hubspot/client";
 import type { PipelineDef } from "@/lib/projects/kind";
 import { propiedadesDeEncargados, type Encargados } from "@/lib/hubspot/encargados";

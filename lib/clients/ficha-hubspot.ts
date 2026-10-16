@@ -1,4 +1,4 @@
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "@/lib/hubspot/sdk";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import {
   cuerpoDeLaNota,

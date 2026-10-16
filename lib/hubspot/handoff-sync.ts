@@ -1,4 +1,4 @@
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "./sdk";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { prisma } from "@/lib/db/prisma";
 import { crearProjectRecord, hasProjectsWriteScope } from "@/lib/hubspot/project-record";

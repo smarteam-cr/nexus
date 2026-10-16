@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { sanitizeTags, normalizeTag } from "@/lib/tags/catalog";
 import { cerradoPorEstadoCrudo, decidirCierre, estadoCrudoDeHubspot, resolvePipeline } from "@/lib/projects/kind";
-import type { Client } from "@hubspot/api-client";
+import type { Client } from "./sdk";
 import { detectarFusion, explicarFusion } from "@/lib/hubspot/empresa-fusionada";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
 import { encargadoDelProyecto } from "@/lib/hubspot/encargados";

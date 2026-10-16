@@ -14,7 +14,7 @@
  * Sin permiso para una de las dos, se sigue sin ella: nunca rompe la lectura. Lo que se negó no se
  * vuelve a pedir por una hora (cada pedido negado es un 403 más en el log).
  */
-import type { Client } from "@hubspot/api-client";
+import type { Client } from "./sdk";
 import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
 import { textoDeLaTranscripcion, type IntervencionDeHubspot } from "./transcripcion-de-reunion";
 

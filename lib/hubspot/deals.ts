@@ -1,4 +1,4 @@
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "./sdk";
 
 export interface AvailableDeal {
   id: string;

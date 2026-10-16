@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/hubspot/client", () => ({ getSystemHubspotClient: vi.fn(), forceRefreshSystemToken: vi.fn() }));
 
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "@/lib/hubspot/sdk";
 import { sincronizarFichaConHubspot } from "./ficha-hubspot";
 import { cuerpoDeLaNota, esNotaDeLaFicha, valoresVacios } from "./ficha";
 import { fetchCompanyTimelineItems } from "@/lib/hubspot/company-timeline";

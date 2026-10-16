@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withClientAccess } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "@/lib/hubspot/sdk";
 
 interface LineItem {
   id: string;

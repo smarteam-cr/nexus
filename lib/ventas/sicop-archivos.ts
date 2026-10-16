@@ -24,7 +24,7 @@
  * nada que extraer sin OCR. Tratarlo como fallo haría que «la mitad necesita OCR» se leyera
  * como «la integración está rota», que manda a arreglar lo que no está roto.
  */
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "@/lib/hubspot/sdk";
 import type { SicopAdjuntoEstado } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";

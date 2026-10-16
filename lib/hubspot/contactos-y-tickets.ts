@@ -8,7 +8,7 @@
  * ⛔ «No se pudo leer» no es «no tiene»: una empresa cuyo lote de asociaciones falló vuelve en `ilegibles`, y la copia
  * NO le da de baja a nadie (un 429 no puede vaciar la lista de personas de un cliente). Un 403 es `sinPermiso`.
  */
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "./sdk";
 import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
 
 const LOTE = 100;

@@ -14,7 +14,7 @@
  * abriendo el tablero.
  */
 import { describe, expect, it, vi } from "vitest";
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "./sdk";
 import { actualizarEstadoProyecto, actualizarEtapaProyecto } from "./project-record";
 import { PROJECT_PIPELINES, type PipelineDef } from "@/lib/projects/kind";
 import { etapasProponibles } from "@/lib/projects/etapa-hubspot";

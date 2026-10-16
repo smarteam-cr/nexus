@@ -8,7 +8,7 @@
 
 import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
 import { extractDomains } from "@/lib/utils/matching";
-import type { Client as HubSpotClient } from "@hubspot/api-client";
+import type { Client as HubSpotClient } from "@/lib/hubspot/sdk";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 

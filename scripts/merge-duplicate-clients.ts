@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Client as HubspotClient } from "@hubspot/api-client";
+import { Client as HubspotClient } from "@/lib/hubspot/sdk";
 import type { Prisma } from "@prisma/client";
 import { describirDestino, resolverApply } from "./lib/guard";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";

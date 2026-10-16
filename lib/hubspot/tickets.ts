@@ -20,7 +20,7 @@
  * fricción se vería tranquilo por un fallo pasajero de HubSpot. Quien llama (cs-signals.ts) atrapa
  * el error y conserva los tickets de la copia anterior.
  */
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "./sdk";
 import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
 
 export interface CompanyTicket {

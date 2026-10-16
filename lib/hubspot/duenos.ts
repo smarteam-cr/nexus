@@ -6,7 +6,7 @@
  * traducir, también los dueños archivados: una venta o una meta de alguien que ya se fue sigue
  * siendo suya.
  */
-import type { Client } from "@hubspot/api-client";
+import type { Client } from "./sdk";
 
 export interface Dueno {
   ownerId: string;

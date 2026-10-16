@@ -16,7 +16,7 @@
  * vacía y el vigía leería «el sponsor dejó de aparecer» por un fallo pasajero de HubSpot. Quien
  * llama (cs-signals.ts) atrapa el error y conserva los contactos de la copia anterior.
  */
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "./sdk";
 import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
 
 export interface ContactoDeEmpresa {

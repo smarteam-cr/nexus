@@ -15,7 +15,7 @@
  * HubSpot y la base son falsos: `apiRequest` contesta lo que cada test diga.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Client as HsClient } from "@hubspot/api-client";
+import type { Client as HsClient } from "./sdk";
 
 const hubspot = vi.hoisted(() => ({ apiRequest: vi.fn() }));
 const db = vi.hoisted(() => ({
