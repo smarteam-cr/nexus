@@ -69,7 +69,7 @@ import {
   type DocumentoConContexto,
 } from "./documento";
 import { fronteraDeLaPieza } from "./frontera-de-los-documentos";
-import { traeUnMonto } from "./frontera-del-cronograma";
+import { traeNegociacion, traeUnMonto } from "./frontera-del-cronograma";
 import { recortarReunion, resumenDeReunion, type MinutaDeReunion } from "./material-cronograma";
 import { pieceBySlug } from "@/lib/pieces/registry";
 
@@ -149,14 +149,13 @@ export async function cargarMaterialDelDocumento(
   const dominiosPropios = buildInternalDomainsSet(categorias);
   const ahora = Date.now();
   const soloElegidas = esSoloElegidas(doc.destino);
-  const delCliente = pieceBySlug(doc.pieza)?.clientFacing !== false;
 
   const ocurridas = soloOcurridas(sessions, ahora);
   /* Primero cuáles tienen algo que leer: una elegida vacía no ocupa uno de los 6 lugares de reunión entera ni le quita
      espacio a una que tiene transcripción. */
   const plan =
     soloElegidas && !opts.elegidasEnResumen
-      ? planDeLasElegidas(ocurridas, await elegidasConContenido(ocurridas.map((s) => s.id), { delCliente }))
+      ? planDeLasElegidas(ocurridas, await elegidasConContenido(ocurridas.map((s) => s.id)))
       : null;
   // Las más recientes, si no caben todas; y después en orden de fecha, que es como se cuenta una historia.
   const aLeer = (plan ? [...plan.enteras, ...plan.enResumen] : masRecientes(ocurridas, MAX_REUNIONES_DEL_DOCUMENTO)).sort(
@@ -219,7 +218,7 @@ export async function cargarMaterialDelDocumento(
  * cliente, la minuta cuenta solo si la revisó una persona (`minutaParaElDocumento`: una en borrador no llega). Viaja un
  * booleano por reunión, nunca el texto: el mismo criterio que el panel (session-candidates).
  */
-async function elegidasConContenido(ids: readonly string[], o: { delCliente: boolean }): Promise<Set<string>> {
+async function elegidasConContenido(ids: readonly string[]): Promise<Set<string>> {
   if (!ids.length) return new Set();
   // La regla es UNA (`tieneQueLeer`, documento.ts): la usa también la migración del 2026-10-10.
   const filas = await prisma.$queryRaw<{ id: string; texto: boolean; minuta: boolean; minutaRevisada: boolean }[]>`
@@ -229,7 +228,7 @@ async function elegidasConContenido(ids: readonly string[], o: { delCliente: boo
       EXISTS (SELECT 1 FROM "SessionMinute" m WHERE m."sessionId" = s."id" AND m."status" IN ('REVIEWED', 'EDITED')) AS "minutaRevisada"
     FROM "FirefliesSession" s
     WHERE s."id" IN (${Prisma.join([...ids])})`;
-  return new Set(filas.filter((f) => tieneQueLeer(f, o)).map((f) => f.id));
+  return new Set(filas.filter((f) => tieneQueLeer(f)).map((f) => f.id));
 }
 
 /** Lo que se leyó de una reunión, y si entró entera (las elegidas) o en resumen. */
@@ -359,7 +358,7 @@ const MARCA_DE_TRANSCRIPCION_CORTADA = "\n[…]\n";
  * fecha otra vez: nada que no haya ocurrido llega al prompt) y la transcripción cortada EN SQL —el
  * principio y el final, nunca el texto entero—. Para las enteras, a `plan.espacio`; para las que van en
  * resumen y no tienen notas ni minuta, el principio de la transcripción a 2.000. La minuta pasa antes por
- * `minutaParaElDocumento`: en un documento del cliente, solo los acuerdos y las decisiones de la revisada.
+ * `minutaParaElDocumento`: en un documento del cliente, solo los acuerdos y las decisiones (también de un borrador).
  */
 async function leerLasElegidas(
   plan: Pick<PlanDeLasElegidas<{ id: string }>, "enteras" | "enResumen" | "espacio">,
@@ -377,7 +376,7 @@ async function leerLasElegidas(
       minute: { select: { summary: true, decisions: true, agreements: true, risks: true, status: true } },
     },
   });
-  // La minuta que puede leer ESTE documento: en uno del cliente, solo los acuerdos y las decisiones de la revisada.
+  // La minuta que puede leer ESTE documento: en uno del cliente, solo los acuerdos y las decisiones.
   const porId = new Map(filas.map((f) => [f.id, { ...f, minute: minutaParaElDocumento(f.minute, o.pieza) }]));
   const idsEnteras = plan.enteras.map((s) => s.id).filter((id) => porId.has(id));
   const espacio = plan.espacio;
@@ -441,16 +440,16 @@ function textosDeLaMinuta(v: unknown): string[] {
 
 /**
  * LA MINUTA QUE PUEDE LEER UN DOCUMENTO. Puro. En uno que lee el cliente (`clientFacing`), la misma regla que la memoria
- * (`queCargar`, lib/memoria/consumidores.ts): solo la minuta que revisó una persona, y de ella solo los acuerdos y las
- * decisiones, sin los que traen un monto. Nunca su resumen ni sus riesgos (una valoración interna, con severidad) y
- * nunca una en borrador: lo escribió la IA y nadie lo miró. La memoria saca además los que hablan de negociación; acá
- * la transcripción que va al lado ya lleva la regla adelante. En un documento interno (la ejecución), la minuta entera.
+ * (`queCargar`, lib/memoria/consumidores.ts): solo los acuerdos y las decisiones, sin los que traen un monto o hablan de
+ * negociación. Nunca su resumen ni sus riesgos (una valoración interna, con severidad). Desde el 2026-10-15 (la IA como
+ * borrador) también la minuta que nadie revisó: conserva su estado, y el texto la marca «en borrador» para que lo
+ * confirmado mande. En un documento interno (la ejecución), la minuta entera.
  */
 export function minutaParaElDocumento(m: MinutaDeReunion | null, pieza: string): MinutaDeReunion | null {
   if (!m) return null;
   if (pieceBySlug(pieza)?.clientFacing === false) return m;
-  if (m.status !== "REVIEWED" && m.status !== "EDITED") return null;
-  const sinMontos = (v: unknown) => textosDeLaMinuta(v).filter((t) => !traeUnMonto(t));
+  // La IA como borrador (2026-10-15): también la minuta que nadie revisó, con su estado (el texto la marca «en borrador»).
+  const sinMontos = (v: unknown) => textosDeLaMinuta(v).filter((t) => !traeUnMonto(t) && !traeNegociacion(t));
   const decisions = sinMontos(m.decisions);
   const agreements = sinMontos(m.agreements);
   if (!decisions.length && !agreements.length) return null;

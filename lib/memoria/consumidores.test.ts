@@ -144,14 +144,17 @@ describe("la X de cada documento", () => {
 });
 
 describe("queCargar", () => {
-  it("para el cliente no se carga nada interno", () => {
-    expect(Object.values(queCargar("cliente")).every((v) => v === false)).toBe(true);
+  it("para el cliente no se carga nada interno (las minutas en borrador no lo son: llegan marcadas)", () => {
+    const { minutasSinRevisar, ...resto } = queCargar("cliente");
+    expect(Object.values(resto).every((v) => v === false)).toBe(true);
+    // La IA como borrador (2026-10-15): solo sus acuerdos y decisiones, sin montos ni negociación (frontera.test.ts).
+    expect(minutasSinRevisar).toBe(true);
   });
   it("sin-lo-interno: lo propuesto y lo sin validar, nunca lo interno", () => {
     const q = queCargar("sin-lo-interno");
-    expect(q.fichaPropuesta && q.procesosSinValidar && q.resultadosSinConfirmar).toBe(true);
-    expect([q.camposInternos, q.posturaDeLasPersonas, q.fueraDeAlcance, q.preventa, q.auditoria, q.compromisos, q.minutaCompleta, q.minutasSinRevisar, q.reunionesPuertasAdentro, q.desviacionesNoVisibles, q.atribucionDeDesviaciones, q.idsDeTrato, q.hechos]).toEqual(
-      Array(13).fill(false),
+    expect(q.fichaPropuesta && q.procesosSinValidar && q.resultadosSinConfirmar && q.minutasSinRevisar).toBe(true);
+    expect([q.camposInternos, q.posturaDeLasPersonas, q.fueraDeAlcance, q.preventa, q.auditoria, q.compromisos, q.minutaCompleta, q.reunionesPuertasAdentro, q.desviacionesNoVisibles, q.atribucionDeDesviaciones, q.idsDeTrato, q.hechos]).toEqual(
+      Array(12).fill(false),
     );
   });
   it("interno: todo", () => {

@@ -242,7 +242,9 @@ export function queCargar(alcance: AlcanceDeMemoria): QueCargar {
     auditoria: interno,
     compromisos: interno,
     minutaCompleta: interno,
-    minutasSinRevisar: interno,
+    // La IA como borrador (2026-10-15, decisión de Elías): las minutas que nadie revisó llegan a todos, marcadas como
+    // borrador; fuera del alcance interno, solo sus acuerdos y decisiones sin montos ni negociación. Lo confirmado manda.
+    minutasSinRevisar: true,
     reunionesPuertasAdentro: interno,
     desviacionesNoVisibles: interno,
     atribucionDeDesviaciones: interno,

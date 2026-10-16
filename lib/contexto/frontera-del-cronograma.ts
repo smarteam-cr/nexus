@@ -127,6 +127,20 @@ export function traeUnMonto(texto: string | null | undefined): boolean {
   return !!texto && MONTO.test(texto);
 }
 
+/* La negociación sin cifra: «descuento del 15% por pago anual», «precio especial si firman este mes». `traeUnMonto`
+   solo reconoce montos con moneda. Sobre el texto normalizado (sin tildes ni signos); el «%», sobre el original.
+   Vivía en lib/memoria/armar.ts (que la re-exporta); se mudó acá el 2026-10-15 para que la use también la minuta en
+   borrador de los documentos del cliente sin que lib/contexto importe la memoria. */
+const NEGOCIACION =
+  /\b(?:descuentos?|precios?|tarifas?|cotizacion(?:es)?|cotizar|cotizad[oa]s?|bonificacion(?:es)?|bonificad[oa]s?|rebajas?|gratis|sin costo|por ciento|condiciones (?:comerciales|de pago)|formas? de pago|plan de pagos?|pago (?:anual|mensual|trimestral|por adelantado|adelantado|unico))\b/;
+const PORCENTAJE = /\d\s?%/;
+
+/** ¿La línea habla de lo que cobra Smarteam aunque no traiga un monto? (precio, descuento, porcentaje, condiciones de pago). */
+export function traeNegociacion(texto: string | null | undefined): boolean {
+  if (!texto) return false;
+  return PORCENTAJE.test(texto) || NEGOCIACION.test(normalizarParaFrontera(texto));
+}
+
 /** Las rachas del texto YA normalizado contra las del material, con la ventana del campo. */
 function copiaNormalizada(n: string, h: HuellasDeFrontera, campo: CampoDeFrontera): boolean {
   const { palabras: largo, conContenido } = VENTANA_DE_COPIA[campo];

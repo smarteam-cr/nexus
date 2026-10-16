@@ -8120,3 +8120,26 @@ recuerda, cualquier contexto de la reunión; y todo tiene que servir para cualqu
   ⚠ Si Meet descubre después el documento de esa reunión, el enriquecimiento lo trae y reemplaza lo agregado a mano
   (la transcripción real gana).
 - **Pendiente:** ofrecer «agregarla como reunión» desde el «Contexto adicional» cuando lo que se suma es una reunión.
+
+## La IA como borrador; lo confirmado manda (2026-10-15)
+
+**Contexto.** Etapa 4b del roadmap de «Para ti» (`docs/mi-dia-plan.md`). Medido ese día: de 1.140 cosas que propuso
+Nexus en 30 días se usaron 22, y había 4 minutas revisadas de 797. Como los documentos que ve el cliente leían solo
+las minutas revisadas, casi nada de lo conversado les llegaba. Elías: lo que llena la IA es un borrador que se usa desde
+el primer momento; lo que confirma una persona manda; si algo nuevo lo contradice, Nexus pregunta.
+
+- **Las minutas en borrador llegan a todos los lectores, marcadas.** `queCargar` (lib/memoria/consumidores.ts) deja
+  `minutasSinRevisar` en `true` en los tres alcances, y la memoria las rotula «(minuta en borrador, sin revisar)». En los
+  documentos del cliente y el handoff siguen yendo solo los acuerdos y las decisiones, sin montos ni negociación
+  (`acuerdosYDecisiones`), y nunca de una reunión de puertas adentro. Lo mismo en las reuniones elegidas de un documento
+  del cliente (`minutaParaElDocumento`, que ahora también quita la negociación). *Supera* la regla de la etapa 3 («fuera
+  del alcance interno, solo las minutas que revisó una persona») y la de la etapa 7 en `tieneQueLeer`.
+- **Toda memoria lleva la regla `LO_CONFIRMADO_MANDA`** en su encabezado: si un borrador contradice algo confirmado (la
+  ficha confirmada, una minuta revisada), vale lo confirmado.
+- **La ficha pregunta cuando lo nuevo contradice lo confirmado** (`lib/clients/contradice.ts`, sin IA): si la propuesta
+  de un campo deja de decir un renglón que una persona confirmó, la caja pasa a ámbar, dice qué deja de decir y ofrece
+  «Vale lo confirmado» o «Vale lo nuevo». Si solo suma, es una propuesta como siempre.
+- **Lo que NO cambió, a propósito:** lo propuesto de la ficha sigue sin llegar a los documentos del cliente (decisión de
+  Elías de la etapa 3); se usa en los agentes internos y en el handoff. Cambiarlo es otra decisión.
+- **Pendiente:** llevar la pregunta de la contradicción también a «Para ti» y al chat; prender la lectura de hechos
+  (`SEGUIMIENTO_HECHOS`) con el resultado del sondeo.

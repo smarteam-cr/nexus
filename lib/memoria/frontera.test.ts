@@ -200,7 +200,7 @@ describe("⛔ la frontera de la memoria", () => {
     expect(armarMemoriaDeLaCuenta(cuenta, { alcance: "interno", pieza: "implementation" }).texto).not.toMatch(/pases (?:al documento )?precios/);
   });
 
-  it("⛔ para el cliente, ni la negociación sin cifra ni una minuta que nadie revisó", () => {
+  it("⛔ para el cliente, nunca la negociación sin cifra; la minuta en borrador llega marcada y con la misma red", () => {
     const conNegociacion: DatosDelProyecto = {
       ...proyecto,
       reuniones: [
@@ -224,16 +224,19 @@ describe("⛔ la frontera de la memoria", () => {
           fecha: "2026-10-04T15:00:00.000Z",
           sala: "CON EL CLIENTE",
           resumen: "",
-          minuta: { resumen: null, acuerdos: [S("minuta-sin-revisar")], decisiones: [], riesgos: [], revisada: false },
+          minuta: { resumen: null, acuerdos: ["Mandar el listado de usuarios", `${S("borrador-descuento")}: 10% de descuento`], decisiones: [], riesgos: [], revisada: false },
         },
       ],
     };
     const t = armarMemoriaDelProyecto(conNegociacion, { alcance: "cliente", pieza: "kickoff" }).texto;
     expect(t.match(/SECRETO-[\w-]+/g) ?? []).toEqual([]);
     expect(t).toContain("Acuerdo: Enviar la base de contactos");
+    // La IA como borrador (2026-10-15): la minuta que nadie revisó llega, marcada, sin su negociación.
+    expect(t).toContain("Sin revisar (minuta en borrador, sin revisar)");
+    expect(t).toContain("Acuerdo: Mandar el listado de usuarios");
     // Interno: todo.
     const interno = armarMemoriaDelProyecto(conNegociacion, { alcance: "interno" }).texto;
-    expect(interno).toContain(S("minuta-sin-revisar"));
+    expect(interno).toContain("Mandar el listado de usuarios");
     expect(interno).toContain(S("descuento"));
   });
 

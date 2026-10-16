@@ -407,7 +407,7 @@ describe("⭐ los seis documentos leen SOLO LAS ELEGIDAS, enteras (etapa 7)", ()
     expect(textoDeUnaElegidaEntera({ title: "x", summary: notasDeGemini, minuta, transcripcion: "algo" }, 0)).toBe("");
   });
 
-  it("⛔ en un documento del cliente, la minuta llega solo con los acuerdos y las decisiones de la revisada", () => {
+  it("⛔ en un documento del cliente, la minuta llega solo con los acuerdos y las decisiones (también en borrador)", () => {
     const conRiesgos = {
       summary: "MINUTA-RESUMEN con la valoración del equipo.",
       decisions: [{ text: "DECISION-1: el pipeline queda con 6 etapas." }, { text: "La implementación queda en US$18.000." }],
@@ -424,8 +424,12 @@ describe("⭐ los seis documentos leen SOLO LAS ELEGIDAS, enteras (etapa 7)", ()
       expect(t, pieza).not.toContain("RIESGO-1");
       expect(t, pieza).not.toContain("MINUTA-RESUMEN");
       expect(t, pieza).not.toContain("US$18.000");
-      // Una minuta en borrador no llega: la escribió la IA y nadie la miró.
-      expect(minutaParaElDocumento({ ...conRiesgos, status: "DRAFT" }, pieza), pieza).toBeNull();
+      // La IA como borrador (2026-10-15): una minuta en borrador llega con lo mismo, y conserva su estado para marcarla.
+      const borrador = minutaParaElDocumento({ ...conRiesgos, status: "DRAFT", agreements: ["ACUERDO-1", "Descuento del 10% por pago anual."] }, pieza);
+      expect(borrador?.status, pieza).toBe("DRAFT");
+      expect(borrador?.agreements, pieza).toEqual(["ACUERDO-1"]);
+      expect(borrador?.risks, pieza).toEqual([]);
+      expect(borrador?.summary, pieza).toBeNull();
       const enResumen = textoDeUnaElegidaEnResumen({ title: "x", summary: null, minuta: m, transcripcion: null });
       expect(enResumen, pieza).not.toContain("RIESGO-1");
     }
@@ -509,7 +513,7 @@ describe("⭐ los seis documentos leen SOLO LAS ELEGIDAS, enteras (etapa 7)", ()
       expect(t, d.pieza).toMatch(/^Sin elegidas, no lee ninguna reunión/);
       expect(t, d.pieza).not.toMatch(/\b(tenés|podés|elegí|usá)\b/);
     }
-    expect(queLeeSinElegidas({ pieza: "diagnosis" })).toContain("solo los acuerdos y las decisiones de las minutas revisadas");
+    expect(queLeeSinElegidas({ pieza: "diagnosis" })).toContain("los acuerdos y las decisiones de sus minutas, también las que están en borrador");
     expect(queLeeSinElegidas({ pieza: "delivery" })).toContain("La sección de impacto sale vacía");
     expect(queLeeSinElegidas({ pieza: "implementation" })).toContain("compromisos abiertos");
     expect(leer("components/canvas/DocumentoContextSection.tsx")).toContain("{queLeeSinElegidas(doc)}");

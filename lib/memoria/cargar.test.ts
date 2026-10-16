@@ -167,7 +167,7 @@ describe("memoriaDelProyecto", () => {
     expect(db.firefliesSession.findMany.mock.calls[0][0].where.id.in).toContain("sacada");
   });
 
-  it("⛔ para el cliente, solo las minutas que revisó una persona", async () => {
+  it("para el cliente, también las minutas en borrador, marcadas (la IA como borrador, 2026-10-15)", async () => {
     const minuta = (revisada: boolean, texto: string) => ({ summary: null, decisions: [], agreements: [{ text: texto }], risks: [], status: revisada ? "REVIEWED" : "DRAFT" });
     fuentes.getProjectMemberSessions.mockResolvedValue({ sessions: [sesion("r1", -3), sesion("r2", -2)], dropped: [] });
     db.firefliesSession.findMany.mockResolvedValue([
@@ -176,7 +176,9 @@ describe("memoriaDelProyecto", () => {
     ]);
     const m = await memoriaDelProyecto("p1", { lector: "kickoff" });
     expect(m.texto).toContain("Acuerdo: Enviar la base");
-    expect(m.texto).not.toContain("SECRETO-SIN-REVISAR");
+    expect(m.texto).toContain("Acuerdo: SECRETO-SIN-REVISAR");
+    expect(m.texto).toContain("Sin revisar (minuta en borrador, sin revisar)");
+    expect(m.texto).not.toMatch(/Revisada \(minuta en borrador/);
   });
 
   it("⛔ los hechos del proyecto: solo el alcance interno, con el cliente del proyecto", async () => {

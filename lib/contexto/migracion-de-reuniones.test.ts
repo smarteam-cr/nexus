@@ -94,12 +94,12 @@ describe("el plan de un documento", () => {
 });
 
 describe("qué tiene algo que leer (la regla del lector nuevo)", () => {
-  it("transcripción o notas siempre; la minuta, en un documento del cliente, solo revisada", () => {
-    expect(tieneQueLeer({ texto: true, minuta: false, minutaRevisada: false }, { delCliente: true })).toBe(true);
-    expect(tieneQueLeer({ texto: false, minuta: true, minutaRevisada: false }, { delCliente: true })).toBe(false);
-    expect(tieneQueLeer({ texto: false, minuta: true, minutaRevisada: false }, { delCliente: false })).toBe(true);
-    expect(tieneQueLeer({ texto: false, minuta: true, minutaRevisada: true }, { delCliente: true })).toBe(true);
-    expect(tieneQueLeer({ texto: false, minuta: false, minutaRevisada: false }, { delCliente: false })).toBe(false);
+  it("transcripción, notas o minuta (también en borrador, desde la IA como borrador del 2026-10-15)", () => {
+    expect(tieneQueLeer({ texto: true, minuta: false, minutaRevisada: false })).toBe(true);
+    expect(tieneQueLeer({ texto: false, minuta: true, minutaRevisada: false })).toBe(true);
+    expect(tieneQueLeer({ texto: false, minuta: true, minutaRevisada: false })).toBe(true);
+    expect(tieneQueLeer({ texto: false, minuta: true, minutaRevisada: true })).toBe(true);
+    expect(tieneQueLeer({ texto: false, minuta: false, minutaRevisada: false })).toBe(false);
   });
 });
 

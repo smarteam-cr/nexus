@@ -66,7 +66,6 @@ import {
   type MarcaDeLaMigracion,
   type ReunionDeLaReglaVieja,
 } from "@/lib/contexto/migracion-de-reuniones";
-import { pieceBySlug } from "@/lib/pieces/registry";
 import { SUGERIDAS_DE_LA_REGLA_VIEJA } from "@/lib/contexto/sugerencias-del-documento";
 import { PRESALES_EMAILS } from "@/lib/handoff/sales-presence";
 import { parsearEscala } from "@/lib/escala/documento/parsear";
@@ -227,7 +226,6 @@ async function main(): Promise<void> {
         if (!ultimaGeneracion.has(clave)) continue;
         documentosConContenido++;
         const columna = COLUMNA_DEL_DESTINO[destino];
-        const delClienteDoc = pieceBySlug(doc.pieza)?.clientFacing !== false;
         const s = porDocumento.get(destino) ?? vacio();
         s.documentos++;
         porDocumento.set(destino, s);
@@ -255,7 +253,7 @@ async function main(): Promise<void> {
           fecha: v.session.date.getTime(),
           conElCliente: etiquetaDeSala({ participants: conOrganizador(v.session) }, dominiosPropios) === "CON EL CLIENTE",
           afinado: v[columna],
-          tieneQueLeer: tieneQueLeer(queDeja.get(v.session.id) ?? { texto: false, minuta: false, minutaRevisada: false }, { delCliente: delClienteDoc }),
+          tieneQueLeer: tieneQueLeer(queDeja.get(v.session.id) ?? { texto: false, minuta: false, minutaRevisada: false }),
         }));
         // Una elegida de antes del piso también es una decisión de una persona (el lector nuevo la lee).
         const hayElegidasFueraDeLaLista = delProyecto.some((v) => v[columna] === true && !miembros.includes(v));

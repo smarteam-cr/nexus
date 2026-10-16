@@ -34,6 +34,7 @@ import { BotonAzul, BotonBlanco, BotonTexto, FranjaDeSugerencias, IconoDeSugeren
 import { Alert } from "@/components/ui";
 import { useMe } from "@/hooks/useMe";
 import { TextoConFormato } from "./TextoConFormato";
+import { loQueDejaDeDecir } from "@/lib/clients/contradice";
 import ResultadosMediblesDelHandoff from "./ResultadosMediblesDelHandoff";
 
 interface ProyectoConResultados {
@@ -333,6 +334,7 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
                 key={c.clave}
                 campo={c}
                 valor={borrador[c.clave]}
+                confirmado={ficha.confirmadaAt || ficha.historia?.[c.clave] ? (ficha.valores[c.clave] ?? "") : ""}
                 cambiado={cambios.includes(c.clave)}
                 propuesta={propuestas.includes(c.clave) ? ficha.propuesta!.valores[c.clave]! : null}
                 fuentes={ficha.propuesta?.fuentesPorCampo[c.clave] ?? []}
@@ -436,6 +438,7 @@ function EstadoDeLaFicha({ ficha, hubspotUrl }: { ficha: FichaGuardada; hubspotU
 function Campo({
   campo,
   valor,
+  confirmado,
   cambiado,
   propuesta,
   fuentes,
@@ -445,6 +448,8 @@ function Campo({
 }: {
   campo: CampoDeFicha;
   valor: string;
+  /** Lo que una persona confirmó en este campo (vacío si nadie confirmó nada). */
+  confirmado: string;
   cambiado: boolean;
   propuesta: string | null;
   fuentes: string[];
@@ -456,6 +461,17 @@ function Campo({
   const destino =
     campo.destino.tipo === "nota" ? "Va en la nota de HubSpot" : "Propiedad de la empresa en HubSpot";
   const esLista = campo.destino.tipo === "lista";
+  /* La IA como borrador (2026-10-15): si lo nuevo deja de decir algo que una persona confirmó, Nexus no lo pisa: pregunta
+     cuál vale. Si solo suma, es una propuesta como cualquier otra. */
+  const dejaDeDecir =
+    propuesta === null || !confirmado.trim()
+      ? []
+      : esLista
+        ? propuesta !== confirmado
+          ? [etiquetaDeApertura(confirmado)]
+          : []
+        : loQueDejaDeDecir(confirmado, propuesta);
+  const pregunta = dejaDeDecir.length > 0;
   return (
     <div id={`campo-${campo.clave}`} className="flex scroll-mt-24 flex-col gap-1.5">
       <div className="flex flex-wrap items-baseline gap-2">
@@ -476,9 +492,23 @@ function Campo({
            Ocupa el lugar del campo y se lee como va a quedar si se usa: viñetas como viñetas y
            negritas como negritas. «Usar» lo deja como el valor del campo, editable; «Descartar»
            devuelve el campo con lo que tenía. Lo de hoy se puede mirar sin perder la propuesta. */
-        <div data-recorrido="info.propuesta" className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface px-3 py-2.5">
+        <div
+          data-recorrido="info.propuesta"
+          className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 ${pregunta ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface"}`}
+        >
           <IconoDeSugerencia className="mt-0.5 h-[15px] w-[15px] flex-shrink-0 text-brand" />
           <div className="min-w-0 flex-1">
+            {pregunta && (
+              <div className="mb-2 text-[13px] text-warn-ink">
+                <p className="font-semibold">Esto cambia lo confirmado. ¿Cuál vale?</p>
+                <p className="mt-0.5">Lo nuevo deja de decir:</p>
+                <ul className="mt-0.5 list-disc pl-5">
+                  {dejaDeDecir.map((l) => (
+                    <li key={l}>{l}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {esLista ? (
               <p className="text-sm text-fg">{etiquetaDeApertura(propuesta)}</p>
             ) : (
@@ -503,10 +533,10 @@ function Campo({
             )}
           </div>
           <BotonTexto className="flex-shrink-0" onClick={onDescartar}>
-            Descartar
+            {pregunta ? "Vale lo confirmado" : "Descartar"}
           </BotonTexto>
           <BotonAzul className="flex-shrink-0" onClick={onUsar}>
-            Usar
+            {pregunta ? "Vale lo nuevo" : "Usar"}
           </BotonAzul>
         </div>
       ) : esLista ? (

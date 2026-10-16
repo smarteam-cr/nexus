@@ -19,7 +19,7 @@
  */
 import { CAMPOS_DE_LA_FICHA, etiquetaDeApertura, fichaParaLaMemoria, stakeholdersSinPostura, type FichaGuardada } from "@/lib/clients/ficha";
 import { fronteraDeLaPieza } from "@/lib/contexto/frontera-de-los-documentos";
-import { normalizarParaFrontera, traeUnMonto } from "@/lib/contexto/frontera-del-cronograma";
+import { traeNegociacion, traeUnMonto } from "@/lib/contexto/frontera-del-cronograma";
 import { resultadosParaPrompt, sinConfirmar } from "@/lib/handoff/resultados-medibles";
 import type { MapaDeProceso } from "@/lib/procesos/mapa";
 import { prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
@@ -94,6 +94,14 @@ const TITULOS: Record<ClaveDeParte, string> = {
 /** Las partes que solo existen en el alcance interno. */
 const SOLO_INTERNAS: ReadonlySet<ClaveDeParte> = new Set(["fueraDeAlcance", "preventa", "auditoria", "compromisos", "hechos"]);
 
+/**
+ * La IA como borrador (2026-10-15): lo que escribió la IA se usa desde el primer momento, pero lo que confirmó una
+ * persona manda. Va en el encabezado de toda memoria.
+ */
+export const LO_CONFIRMADO_MANDA =
+  "Lo marcado «borrador» lo escribió la IA y nadie lo revisó: úsalo, pero si contradice algo confirmado (la ficha " +
+  "confirmada, una minuta revisada), vale lo confirmado.";
+
 const LINEA_DEL_ALCANCE: Record<AlcanceDeMemoria, string> = {
   cliente: "⛔ Va a un documento que lee el cliente: úsalo sin decir de dónde salió cada cosa.",
   "sin-lo-interno": "No trae nada interno. Lo propuesto úsalo solo si tus fuentes lo confirman.",
@@ -166,7 +174,7 @@ function juntar(encabezado: string, partes: readonly ParteArmada[], tope: number
 /** El encabezado del bloque: el rótulo, de quién es y, fuera del alcance interno, la regla de la frontera ADENTRO. */
 function encabezado(alcance: AlcanceDeMemoria, de: string, pieza: string | null | undefined): string {
   const frontera = fronteraDeLaMemoria(alcance, pieza);
-  return `=== ${ROTULO_DE_LA_MEMORIA} ===\n${de} ${LINEA_DEL_ALCANCE[alcance]}${frontera ? `\n${frontera}` : ""}`;
+  return `=== ${ROTULO_DE_LA_MEMORIA} ===\n${de} ${LINEA_DEL_ALCANCE[alcance]}\n${LO_CONFIRMADO_MANDA}${frontera ? `\n${frontera}` : ""}`;
 }
 
 // ── La memoria de la cuenta ──────────────────────────────────────────────────────────────────
@@ -310,17 +318,9 @@ export function armarMemoriaDeLaCuenta(datos: DatosDeLaCuenta, opts: OpcionesDeL
 
 // ── La memoria del proyecto ──────────────────────────────────────────────────────────────────
 
-/* La negociación sin cifra: «descuento del 15% por pago anual», «precio especial si firman este mes». `traeUnMonto`
-   solo reconoce montos con moneda. Sobre el texto normalizado (sin tildes ni signos); el «%», sobre el original. */
-const NEGOCIACION =
-  /\b(?:descuentos?|precios?|tarifas?|cotizacion(?:es)?|cotizar|cotizad[oa]s?|bonificacion(?:es)?|bonificad[oa]s?|rebajas?|gratis|sin costo|por ciento|condiciones (?:comerciales|de pago)|formas? de pago|plan de pagos?|pago (?:anual|mensual|trimestral|por adelantado|adelantado|unico))\b/;
-const PORCENTAJE = /\d\s?%/;
-
-/** ¿La línea habla de lo que cobra Smarteam aunque no traiga un monto? (precio, descuento, porcentaje, condiciones de pago). */
-export function traeNegociacion(texto: string | null | undefined): boolean {
-  if (!texto) return false;
-  return PORCENTAJE.test(texto) || NEGOCIACION.test(normalizarParaFrontera(texto));
-}
+/* La negociación sin cifra vive junto a `traeUnMonto` (lib/contexto/frontera-del-cronograma.ts): la usan también los
+   documentos del cliente con la minuta en borrador (lib/contexto/material-del-documento.ts). Se re-exporta acá. */
+export { traeNegociacion };
 
 /**
  * De una minuta, solo las decisiones y los acuerdos. Con `sinMontos` (lo que va a un documento del cliente o al
@@ -349,11 +349,13 @@ function parteDeMinutas(datos: DatosDelProyecto, q: QueCargar, yaLeidas: Readonl
     if (bloques.length >= TOPES_DE_LA_MEMORIA.reuniones) break;
     if (yaLeidas.has(r.id)) continue;
     if (!q.reunionesPuertasAdentro && r.sala !== "CON EL CLIENTE") continue;
-    // Fuera del alcance interno, solo las minutas que revisó una persona: una de IA sin revisar no llega al cliente.
+    // Una minuta que nadie revisó llega como borrador (la IA como borrador, 2026-10-15): marcada, y fuera del alcance
+    // interno solo con sus acuerdos y decisiones, sin montos ni negociación (`acuerdosYDecisiones`).
     if (!q.minutasSinRevisar && !r.minuta?.revisada) continue;
+    const borrador = r.minuta && !r.minuta.revisada ? " (minuta en borrador, sin revisar)" : "";
     const cuerpo = q.minutaCompleta ? r.resumen.trim() || (r.minuta ? minutaEntera(r.minuta) : "") : acuerdosYDecisiones(r.minuta);
     if (!cuerpo.trim()) continue;
-    bloques.push(`#### ${diaDeCostaRica(r.fecha)} · ${prefijoDeSala(r.sala)}${r.titulo}\n${recortarAlTope(cuerpo, TOPES_DE_LA_MEMORIA.porReunion)}`);
+    bloques.push(`#### ${diaDeCostaRica(r.fecha)} · ${prefijoDeSala(r.sala)}${r.titulo}${borrador}\n${recortarAlTope(cuerpo, TOPES_DE_LA_MEMORIA.porReunion)}`);
   }
   return bloques.join("\n\n");
 }

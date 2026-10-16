@@ -170,19 +170,20 @@ export interface QueDejaLaReunion {
 }
 
 /**
- * ¿UNA ELEGIDA TIENE ALGO QUE LEER? Puro. Transcripción, notas de Gemini o minuta; en un documento que lee el cliente
- * (`delCliente`), la minuta cuenta solo si la revisó una persona (una en borrador no llega: `minutaParaElDocumento`).
+ * ¿UNA ELEGIDA TIENE ALGO QUE LEER? Puro. Transcripción, notas de Gemini o minuta. Hasta el 2026-10-15, en un documento
+ * que lee el cliente (`delCliente`) la minuta contaba solo si la revisó una persona; desde la IA como borrador, una en
+ * borrador también llega (`minutaParaElDocumento`), así que cuenta igual en todos.
  * La usan el lector (material-del-documento.ts › `elegidasConContenido`) y la migración del 2026-10-10
  * (scripts/migrar-reuniones-de-los-documentos.ts): así las 6 que se migran son las que el lector lee enteras.
  */
-export function tieneQueLeer(r: QueDejaLaReunion, o: { delCliente: boolean }): boolean {
-  return r.texto || (o.delCliente ? r.minutaRevisada : r.minuta);
+export function tieneQueLeer(r: QueDejaLaReunion): boolean {
+  return r.texto || r.minuta;
 }
 
 /**
  * QUÉ LEE UN DOCUMENTO SIN REUNIONES ELEGIDAS, en una frase para el panel. Puro. En los documentos que lee el cliente,
- * la memoria trae de las demás reuniones solo los acuerdos y las decisiones de las minutas que revisó una persona
- * (`queCargar`, lib/memoria/consumidores.ts), y hay pocas. En la entrega, además, la sección de impacto sale vacía: sus
+ * la memoria trae de las demás reuniones solo los acuerdos y las decisiones de sus minutas, también las que están en
+ * borrador (`queCargar`, lib/memoria/consumidores.ts; la IA como borrador, 2026-10-15). En la entrega, además, la sección de impacto sale vacía: sus
  * cifras salen de lo que se dijo en una reunión. En la ejecución (interna), la memoria lee también las minutas en
  * borrador y los compromisos abiertos.
  */
@@ -191,7 +192,7 @@ export function queLeeSinElegidas(doc: Pick<DocumentoConContexto, "pieza">): str
     return "Sin elegidas, no lee ninguna reunión entera: de las demás le llega lo que quedó en sus minutas, y los compromisos abiertos.";
   }
   const base =
-    "Sin elegidas, no lee ninguna reunión: de las demás le llegan solo los acuerdos y las decisiones de las minutas revisadas.";
+    "Sin elegidas, no lee ninguna reunión entera: de las demás le llegan los acuerdos y las decisiones de sus minutas, también las que están en borrador.";
   return doc.pieza === "delivery" ? `${base} La sección de impacto sale vacía: sus cifras salen de las reuniones.` : base;
 }
 
