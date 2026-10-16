@@ -68,6 +68,8 @@ export const SE_MUDAN = [
      «empresa») apunta además a la ficha por `objetoId`, sin FK: el script también lo muda, y si las dos fichas tienen un
      vigente del mismo equipo queda el de la que sigue (el otro pasa a «reemplazado», con su historia). */
   ["siguientePaso", "clientId"],
+  /* Las notas de la cuenta (2026-10-16, etapa 5): `onDelete: Cascade`, así que sin mudarlas se borrarían con la ficha. */
+  ["notaDeLaCuenta", "clientId"],
   ["importacionFila", "aplicadoClientId"],
   ["escalaComentario", "clienteId"],
   /* Tareas internas (2026-10-09): `onDelete: SetNull`, así que sin mudarlas perderían el cliente en silencio. */

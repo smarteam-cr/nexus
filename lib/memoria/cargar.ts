@@ -51,6 +51,7 @@ import type {
   HechoDeLaMemoria,
   PersonaDeLaMemoria,
   TicketDeLaMemoria,
+  NotaDelEquipoDeLaMemoria,
   LoQueSabeLaIADeLaMemoria,
   MemoriaArmada,
   PedidoDeLaMemoria,
@@ -183,7 +184,7 @@ async function cargarDatosDeLaCuenta(
   q: QueCargar,
   opts: { proyectoActualId: string | null; sinPartes: ReadonlySet<ClaveDeParte> },
 ): Promise<DatosDeLaCuenta | null> {
-  const [cliente, procesos, entrega, fueraDeAlcance, preventa, auditoria, hechos, personasYTickets] = await Promise.all([
+  const [cliente, procesos, entrega, fueraDeAlcance, preventa, auditoria, hechos, personasYTickets, notasDelEquipo] = await Promise.all([
     seguro(
       "el cliente",
       () =>
@@ -213,6 +214,7 @@ async function cargarDatosDeLaCuenta(
     q.personasYTickets && !(opts.sinPartes.has("personas") && opts.sinPartes.has("tickets"))
       ? seguro("las personas y los tickets de HubSpot", () => leerPersonasYTickets(clientId), null)
       : Promise.resolve(null),
+    q.notasDelEquipo && !opts.sinPartes.has("notasDelEquipo") ? seguro("las notas del equipo", () => leerNotasDelEquipo(clientId), []) : Promise.resolve([]),
   ]);
   if (!cliente) return null;
   return {
@@ -234,7 +236,18 @@ async function cargarDatosDeLaCuenta(
     hechos,
     personas: personasYTickets?.personas ?? [],
     tickets: personasYTickets?.tickets ?? [],
+    notasDelEquipo,
   };
+}
+
+/**
+ * Las notas del equipo (etapa 5 de docs/mi-dia-plan.md), por su única puerta de lectura (lib/notas/lectura-server.ts).
+ * Import dinámico: los alcances que no lo cargan ni lo importan. Sin la tabla, vacío.
+ */
+async function leerNotasDelEquipo(clientId: string): Promise<NotaDelEquipoDeLaMemoria[]> {
+  const [{ notasParaLaMemoria }, { ETIQUETA_DEL_CANAL }] = await Promise.all([import("@/lib/notas/lectura-server"), import("@/lib/notas/reglas")]);
+  const notas = await notasParaLaMemoria(clientId);
+  return notas.map((n) => ({ canal: ETIQUETA_DEL_CANAL[n.canal] ?? n.canal, fecha: n.fecha, texto: n.texto, autor: n.autor }));
 }
 
 /**

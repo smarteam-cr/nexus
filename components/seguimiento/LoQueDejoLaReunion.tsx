@@ -18,7 +18,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useToast } from "@/components/ui";
+import { Textarea, useToast } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonTexto, BotonUsar, FilaSugerida, FranjaDeSugerencias, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import type { EstadoDeLoPropuesto } from "@/lib/lo-propuesto/tipos";
@@ -62,6 +62,7 @@ function clavesPendientes(t: Tarjeta): Set<string> {
   for (const x of t.secciones.tareas.items) s.add(`tarea:${x.id}`);
   for (const a of t.secciones.alertas?.items ?? []) s.add(`alerta:${a.id}`);
   for (const h of t.secciones.hechos?.items ?? []) if (h.pideDecision) s.add(`hecho:${h.id}`);
+  if (t.secciones.notaParaHubspot) s.add("nota");
   return s;
 }
 
@@ -398,6 +399,30 @@ export default function LoQueDejoLaReunion({ inicial }: { inicial: Tarjeta }) {
         </Bloque>
       )}
 
+      {secciones.notaParaHubspot && (
+        <Bloque titulo="Nota para HubSpot">
+          {yaNoPide("nota") ? (
+            <FilaNeutra estado={yaNoPide("nota")!}>La nota para HubSpot</FilaNeutra>
+          ) : (
+            <NotaParaHubspot
+              sugerida={secciones.notaParaHubspot.sugerida}
+              proyecto={secciones.notaParaHubspot.proyecto}
+              ocupado={ocupado !== null}
+              onUsar={(texto) =>
+                accion("nota", "Escrita en HubSpot", () =>
+                  pedir(`/api/sessions/${encodeURIComponent(sessionId)}/nota-para-hubspot`, { method: "POST", body: JSON.stringify({ accion: "usar", texto }) }),
+                )
+              }
+              onDescartar={() =>
+                accion("nota", "No se usó", () =>
+                  pedir(`/api/sessions/${encodeURIComponent(sessionId)}/nota-para-hubspot`, { method: "POST", body: JSON.stringify({ accion: "descartar" }) }),
+                )
+              }
+            />
+          )}
+        </Bloque>
+      )}
+
       {secciones.alertas && secciones.alertas.items.length > 0 && (
         <Bloque titulo="Alertas que citan esta reunión" mas={secciones.alertas.mas} href={secciones.alertas.href}>
           <ul className="space-y-2">
@@ -532,6 +557,49 @@ export default function LoQueDejoLaReunion({ inicial }: { inicial: Tarjeta }) {
         </p>
       </div>
     </section>
+  );
+}
+
+/**
+ * La nota para HubSpot (etapa 5 de docs/mi-dia-plan.md): Nexus la arma con lo acordado de la minuta; la persona la cambia,
+ * la usa (se escribe en HubSpot a su nombre) o la descarta. Nunca entra a «Usar todo»: escribe en HubSpot.
+ */
+export function NotaParaHubspot({
+  sugerida,
+  proyecto,
+  ocupado,
+  onUsar,
+  onDescartar,
+}: {
+  sugerida: string;
+  proyecto: string | null;
+  ocupado: boolean;
+  onUsar: (texto: string) => void;
+  onDescartar: () => void;
+}) {
+  const [texto, setTexto] = useState(sugerida);
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-fg-muted">
+        Esta reunión no queda en el registro de HubSpot. Nexus armó la nota con lo acordado: cámbiala si hace falta.
+        {proyecto ? ` Va a la empresa y al proyecto «${proyecto}».` : " Va a la empresa."}
+      </p>
+      <Textarea
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        rows={Math.min(10, Math.max(4, texto.split("\n").length + 1))}
+        aria-label="La nota para HubSpot"
+        className="border-info-line bg-info-surface text-[13px]"
+      />
+      <div className="flex items-center justify-end gap-2">
+        <BotonTexto disabled={ocupado} onClick={onDescartar}>
+          Descartar
+        </BotonTexto>
+        <BotonUsar disabled={ocupado || !texto.trim()} onClick={() => onUsar(texto)}>
+          Usar y escribir en HubSpot
+        </BotonUsar>
+      </div>
+    </div>
   );
 }
 

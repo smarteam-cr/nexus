@@ -208,6 +208,21 @@ export function estadoDeDestinoDeHecho(
  * SIN FIRMA: el bloque no guarda quién la usó, y descartar lo borra, así que no se distingue de una sugerencia que
  * reemplazó otra búsqueda o «Rehacer desde cero» (`GUARDA` lo dice en «Uso de Nexus»).
  */
+// ── Nota para HubSpot (etapa 5 de docs/mi-dia-plan.md) ─────────────────────────────
+
+/**
+ * La nota que Nexus sugiere después de una reunión: usada (se escribió) o descartada, con quién y cuándo; sin decidir,
+ * pendiente por 30 días desde la reunión (el plazo de la tarjeta) y vencida después.
+ */
+export function estadoDeNotaParaHubspot(
+  decision: { estado: "usada" | "descartada"; por: string; en: Date | string } | null,
+  fechaDeLaReunion: Date | string,
+  hoyISO: string,
+): EstadoCalculado {
+  if (decision) return decidido(decision.estado === "usada" ? "usado" : "desestimado", decision.por, decision.en);
+  return sinDecidir(fechaDeLaReunion, hoyISO);
+}
+
 export function estadoDeSugerenciaDelHandoff(bloque: { status: string } | null, nacio: Date | string, hoyISO: string): EstadoCalculado {
   if (!bloque) return { estado: "desestimado", sinFirma: true, decididoPor: null, decididoEn: null };
   if (bloque.status === "DRAFT") return sinDecidir(nacio, hoyISO);

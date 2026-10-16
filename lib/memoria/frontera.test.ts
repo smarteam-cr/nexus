@@ -64,6 +64,8 @@ const cuenta: DatosDeLaCuenta = {
   // Las personas y los tickets de HubSpot (etapa 6a): solo el alcance interno.
   personas: [{ nombre: S("persona-de-hubspot"), cargo: "Gerente", ultimaReunion: "2026-10-01T15:00:00.000Z" }],
   tickets: [{ asunto: S("ticket-abierto"), etapa: "Nuevo", prioridad: "HIGH", desde: "2026-10-01T15:00:00.000Z" }],
+  // Las notas del equipo (etapa 5): solo el alcance interno.
+  notasDelEquipo: [{ canal: "WhatsApp", fecha: "2026-10-01", texto: S("nota-del-equipo"), autor: "Ana" }],
 };
 
 const proyecto: DatosDelProyecto = {
@@ -133,6 +135,7 @@ describe("⛔ la frontera de la memoria", () => {
       "hecho-del-proyecto",
       "persona-de-hubspot",
       "ticket-abierto",
+      "nota-del-equipo",
     ]) {
       expect(t, s).not.toContain(S(s));
     }
@@ -145,7 +148,7 @@ describe("⛔ la frontera de la memoria", () => {
   it("interno: entra todo (la prueba de que los centinelas están donde deben)", () => {
     // (Los riesgos de la minuta van adentro del resumen de la reunión, que arma `resumenDeReunion` en el cargador.)
     const t = textoDe("interno");
-    for (const s of ["postura", "motivacion", "oportunidades", "preventa-interna", "fuera-de-alcance", "hallazgo", "compromiso", "notas-de-la-reunion", "puertas-adentro", "desviacion-no-visible", "party", "hecho-de-la-cuenta", "hecho-del-proyecto", "persona-de-hubspot", "ticket-abierto"]) {
+    for (const s of ["postura", "motivacion", "oportunidades", "preventa-interna", "fuera-de-alcance", "hallazgo", "compromiso", "notas-de-la-reunion", "puertas-adentro", "desviacion-no-visible", "party", "hecho-de-la-cuenta", "hecho-del-proyecto", "persona-de-hubspot", "ticket-abierto", "nota-del-equipo"]) {
       expect(t, s).toContain(S(s));
     }
     // Un hecho pendiente va rotulado como propuesto por la lectura y sin revisar; uno usado, tal cual.

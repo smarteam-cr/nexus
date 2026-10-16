@@ -16,6 +16,7 @@ import { PESTANA_DE_SOLICITUDES } from "@/lib/sessions/solicitudes-fuera-de-alca
 import EscalaDeLaCuenta from "@/components/clients/EscalaDeLaCuenta";
 import CasosDeUsoDeLaCuenta from "@/components/clients/CasosDeUsoDeLaCuenta";
 import PersonasYTickets from "@/components/clients/PersonasYTickets";
+import NotasDeLaCuenta from "@/components/clients/NotasDeLaCuenta";
 import AltaTrabada from "@/components/projects/AltaTrabada";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
 import RielDelCliente, { type ProyectoDelRiel } from "@/components/clients/RielDelCliente";
@@ -41,6 +42,7 @@ const SOLICITUDES_TAB_ID = PESTANA_DE_SOLICITUDES;
 const ESCALA_TAB_ID = "__escala__";
 const CASOS_TAB_ID = "__casos__";
 const PERSONAS_TAB_ID = "__personas__";
+const NOTAS_TAB_ID = "__notas__";
 /** Las pestañas de La cuenta: no son un proyecto. */
 const esDeLaCuenta = (id: string | null | undefined) =>
   id === STRATEGY_TAB_ID ||
@@ -48,7 +50,8 @@ const esDeLaCuenta = (id: string | null | undefined) =>
   id === SOLICITUDES_TAB_ID ||
   id === ESCALA_TAB_ID ||
   id === CASOS_TAB_ID ||
-  id === PERSONAS_TAB_ID;
+  id === PERSONAS_TAB_ID ||
+  id === NOTAS_TAB_ID;
 
 interface ProjectSummary {
   id: string;
@@ -538,6 +541,7 @@ function ProjectSection({
   const isEscala = activeProjectId === ESCALA_TAB_ID;
   const isCasos = activeProjectId === CASOS_TAB_ID;
   const isPersonas = activeProjectId === PERSONAS_TAB_ID;
+  const isNotas = activeProjectId === NOTAS_TAB_ID;
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   /* El proyecto cuyas piezas cuelgan en el riel: el abierto o, mientras se mira algo de la cuenta
@@ -646,6 +650,8 @@ function ProjectSection({
                   ? PROCESOS_TAB_ID
                   : que === "personas"
                     ? PERSONAS_TAB_ID
+                  : que === "notas"
+                    ? NOTAS_TAB_ID
                   : que === "escala"
                     ? ESCALA_TAB_ID
                     : que === "casos"
@@ -660,6 +666,8 @@ function ProjectSection({
                 ? "procesos"
                 : isPersonas
                   ? "personas"
+                  : isNotas
+                    ? "notas"
                   : isEscala
                     ? "escala"
                     : isCasos
@@ -716,6 +724,7 @@ function ProjectSection({
           />
         )}
         {isPersonas && <PersonasYTickets key={PERSONAS_TAB_ID} clientId={clientId} />}
+        {isNotas && <NotasDeLaCuenta key={NOTAS_TAB_ID} clientId={clientId} proyectos={projects.map((p) => ({ id: p.id, nombre: p.name }))} />}
         {isCasos && <CasosDeUsoDeLaCuenta key={CASOS_TAB_ID} clientId={clientId} slotDelPanel={panelVisible ? slotDelPanel : null} />}
         {isSolicitudes && (
           <div className="px-8 pb-10 pt-6">

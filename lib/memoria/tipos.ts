@@ -37,7 +37,8 @@ export type ClaveDeParte =
   | "resultados"
   | "hechos"
   | "personas"
-  | "tickets";
+  | "tickets"
+  | "notasDelEquipo";
 
 export interface ParteDeLaMemoria {
   clave: ClaveDeParte;
@@ -100,6 +101,11 @@ export interface QueCargar {
    * alcance interno: la lista de contactos de HubSpot no está curada (gente que se fue, contactos de prospección).
    */
   personasYTickets: boolean;
+  /**
+   * Las notas del equipo (etapa 5 de docs/mi-dia-plan.md): lo que pasó por WhatsApp, una llamada o un correo. Solo el
+   * alcance interno: las escribe el equipo para el equipo, sin la frontera de lo que ve el cliente.
+   */
+  notasDelEquipo: boolean;
 }
 
 // ── Lo que recibe el armador de la cuenta ───────────────────────────────────────────────────
@@ -182,6 +188,17 @@ export interface DatosDeLaCuenta {
   personas?: PersonaDeLaMemoria[];
   /** Los tickets abiertos del cliente en HubSpot. Solo el alcance interno. */
   tickets?: TicketDeLaMemoria[];
+  /** Las notas del equipo, las más nuevas primero. Solo el alcance interno. */
+  notasDelEquipo?: NotaDelEquipoDeLaMemoria[];
+}
+
+export interface NotaDelEquipoDeLaMemoria {
+  /** La etiqueta del canal («WhatsApp», «Llamada»…). */
+  canal: string;
+  /** AAAA-MM-DD. */
+  fecha: string;
+  texto: string;
+  autor: string;
 }
 
 export interface PersonaDeLaMemoria {

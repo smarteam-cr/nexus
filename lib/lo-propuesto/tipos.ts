@@ -43,7 +43,8 @@ export type ClaveDeTipo =
   | "compromiso-legacy"
   | "novedad"
   | "hecho"
-  | "sugerencia-del-handoff";
+  | "sugerencia-del-handoff"
+  | "nota-para-hubspot";
 
 export const TIPOS_DE_LO_PROPUESTO: readonly ClaveDeTipo[] = [
   "minuta",
@@ -58,6 +59,7 @@ export const TIPOS_DE_LO_PROPUESTO: readonly ClaveDeTipo[] = [
   "novedad",
   "hecho",
   "sugerencia-del-handoff",
+  "nota-para-hubspot",
 ];
 
 export const NOMBRE_DEL_TIPO: Record<ClaveDeTipo, string> = {
@@ -73,6 +75,7 @@ export const NOMBRE_DEL_TIPO: Record<ClaveDeTipo, string> = {
   novedad: "Novedad para un documento",
   hecho: "Hecho de una reunión para Procesos",
   "sugerencia-del-handoff": "Sugerencia sobre el handoff congelado",
+  "nota-para-hubspot": "Nota para HubSpot después de una reunión",
 };
 
 export const MODULO_DEL_TIPO: Record<ClaveDeTipo, ModuloDeLoPropuesto> = {
@@ -88,6 +91,7 @@ export const MODULO_DEL_TIPO: Record<ClaveDeTipo, ModuloDeLoPropuesto> = {
   novedad: "clientes",
   hecho: "clientes",
   "sugerencia-del-handoff": "clientes",
+  "nota-para-hubspot": "reuniones",
 };
 
 /**
@@ -114,6 +118,7 @@ export const GUARDA: Record<ClaveDeTipo, { quien: boolean; descarte: boolean }> 
   novedad: { quien: true, descarte: true },
   hecho: { quien: true, descarte: false },
   "sugerencia-del-handoff": { quien: false, descarte: false },
+  "nota-para-hubspot": { quien: true, descarte: true },
 };
 
 /** Cuántos días pide revisión lo propuesto (y la tarjeta de una reunión, desde la fecha de la reunión). */

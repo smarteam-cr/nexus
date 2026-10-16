@@ -229,6 +229,7 @@ model Client {
   siguientesPasos        SiguientePaso[]         @relation("SiguientesPasosDelCliente") // el siguiente paso de cada equipo (2026-10-15)
   contactosDeHubspot     ContactoDeHubspot[]     @relation("ContactosDeHubspot") // la copia de sus contactos de HubSpot (2026-10-16)
   ticketsDeHubspot       TicketDeHubspot[]       @relation("TicketsDeHubspot") // la copia de sus tickets de HubSpot (2026-10-16)
+  notasDeLaCuenta        NotaDeLaCuenta[]        @relation("NotasDeLaCuenta") // lo que pasó por WhatsApp, una llamada o un correo (2026-10-16)
   reglasComisionVendedor ReglaComisionVendedor[] @relation("ReglasDeComisionVendedor") // ⚠ SUPER_ADMIN-only
   importFilasAplicadas   ImportacionFila[] // Cobranza: trazabilidad del importador
   escalaComentarios      EscalaComentario[] // Escala: comentarios «no calza con este cliente» (SET NULL)
@@ -566,6 +567,7 @@ model Project {
   vinculosDeTareas       TareaVinculo[]              @relation("VinculosDeTareasDelProyecto")
   hechosDeReuniones      HechoDeReunion[]            @relation("HechosDelProyecto") // memoria de la cuenta: los hechos de sus reuniones (SET NULL)
   presentaciones         PresentacionDeDocumento[] // cuándo se le presenta cada documento al cliente, y quién lo respondió (SET NULL)
+  notasDeLaCuenta        NotaDeLaCuenta[]          @relation("NotasDelProyecto") // las notas de la cuenta sobre este proyecto (SET NULL)
 }
 
 // ── Desarrollo (requerimiento técnico) ────────────────────────────────────────
@@ -2286,6 +2288,7 @@ model FirefliesSession {
   hechos                HechoDeReunion[]       @relation("HechosDeLaReunion") // memoria de la cuenta: se leen SOLO por lib/seguimiento (CASCADE)
   turnos                TurnoDeReunion[]       @relation("TurnosDeLaReunion") // la búsqueda en las reuniones (etapa 4c): CASCADE
   indexada              ReunionIndexada?       @relation("ReunionIndexada")
+  notasParaHubspot      NotaDeLaCuenta[]       @relation("NotasDeLaReunion") // la nota para HubSpot que se sugirió después de la reunión (SET NULL)
 
   // Índices para los queries principales:
   //   /sessions: findMany({ where: { date: { lt: now } }, orderBy: { date: desc } })
@@ -7198,6 +7201,52 @@ model TicketDeHubspot {
 
   @@unique([clientId, hubspotId])
   @@index([clientId, abierto])
+}
+
+// ─── Notas de la cuenta (etapa 5 de docs/mi-dia-plan.md) ───
+
+/// Una nota de la cuenta (2026-10-16): lo que pasó por WhatsApp, una llamada, un correo o en persona, que no quedó en
+/// una reunión de Meet. También guarda la nota para HubSpot que Nexus sugiere después de una reunión, cuando alguien la
+/// usa o la descarta. Nexus primero, HubSpot después: se escribe como nota de la empresa (y del negocio o el proyecto) y
+/// el job `contactos-y-tickets` reintenta lo que quedó sin escribir. La escribe SOLO lib/notas/escritura-server.ts.
+/// Una sugerencia por reunión: lo asegura un índice único parcial del SQL (Prisma no los modela).
+/// SQL: scripts/sql/2026-10-16-notas-de-la-cuenta.sql (RLS + deny).
+model NotaDeLaCuenta {
+  id               String            @id @default(cuid())
+  clientId         String
+  client           Client            @relation("NotasDeLaCuenta", fields: [clientId], references: [id], onDelete: Cascade)
+  // nullable porque una nota puede ser de la cuenta entera, sin proyecto.
+  projectId        String?
+  project          Project?          @relation("NotasDelProyecto", fields: [projectId], references: [id], onDelete: SetNull)
+  /// El negocio de HubSpot (id del trato), si la nota es de un negocio. Id externo: no hay FK.
+  hubspotDealId    String?
+  /// whatsapp | llamada | correo | en_persona | reunion | otro
+  canal            String
+  /// Cuándo pasó, como día de calendario.
+  fecha            DateTime          @db.Date
+  texto            String            @db.Text
+  autorEmail       String
+  /// persona | reunion (la sugerida después de una reunión) | chat
+  origen           String            @default("persona")
+  // nullable porque solo la nota sugerida después de una reunión sale de una. SetNull: borrar la reunión no borra la nota.
+  sessionId        String?
+  session          FirefliesSession? @relation("NotasDeLaReunion", fields: [sessionId], references: [id], onDelete: SetNull)
+  /// vigente | descartada (una sugerencia que no se usó) | archivada (se sacó de Nexus; en HubSpot queda)
+  estado           String            @default("vigente")
+  archivadaPor     String?
+  archivadaAt      DateTime?
+  /// pendiente | escrita | error | sin_hubspot (la empresa no está en HubSpot) | no_va (una sugerencia descartada)
+  hubspotEstado    String            @default("pendiente")
+  hubspotNotaId    String?
+  hubspotError     String?
+  hubspotIntentos  Int               @default(0)
+  hubspotEscritaAt DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([clientId, estado, fecha])
+  @@index([sessionId])
+  @@index([hubspotEstado])
 }
 
 // ─── La búsqueda en las reuniones (etapa 4c de docs/mi-dia-plan.md) ───

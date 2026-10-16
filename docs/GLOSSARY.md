@@ -16,6 +16,13 @@
   sin Finanzas ni montos. Por ahora solo se ve en Nexus: no se envía.
 - **Registro de equipos** (`lib/equipos/registro.ts`, desde el 2026-10-16): quién es parte de cada equipo (por rol), su
   sprint de Tareas, el siguiente paso que lleva, su cartera y qué ve en «Para ti». Sumar un equipo es sumar una entrada.
+- **Nota de la cuenta** (`NotaDeLaCuenta`, La cuenta › Notas, `lib/notas`, desde el 2026-10-16): lo que pasó por
+  WhatsApp, una llamada, un correo o en persona con un cliente. Se escribe en HubSpot como nota de la empresa (y del
+  negocio o el proyecto), a nombre de quien la anotó, y entra a la memoria interna de la cuenta («Notas del equipo»).
+  Sacarla de Nexus no la borra en HubSpot.
+- **Nota para HubSpot** (la sugerida después de una reunión): la nota que Nexus arma con lo acordado y lo decidido de la
+  minuta de una reunión con el cliente, porque esas reuniones no quedan en el registro de HubSpot. Se cambia, se usa o
+  se descarta en «Lo que dejó esta reunión»; una decisión por reunión.
 - **Personas y tickets** (La cuenta › Personas y tickets, `lib/contactos`, desde el 2026-10-16): la copia de solo lectura
   de los contactos y los tickets de HubSpot de cada empresa de Nexus (`ContactoDeHubspot`, `TicketDeHubspot`), cada hora.
   Cada persona dice cuándo estuvo por última vez en una reunión con el cliente (cruzando el correo de los invitados), y

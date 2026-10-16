@@ -35,6 +35,7 @@ import type {
   HechoDeLaMemoria,
   PersonaDeLaMemoria,
   TicketDeLaMemoria,
+  NotaDelEquipoDeLaMemoria,
   MemoriaArmada,
   MinutaDeLaMemoria,
   ParteDeLaMemoria,
@@ -52,7 +53,8 @@ export const ROTULO_DE_LA_MEMORIA =
 export const TOPES_DE_LA_MEMORIA = {
   // + `partes.hechos` en cada uno (memoria de la cuenta, etapa 6): los hechos solo existen en el alcance interno.
   // + `partes.personas` y `partes.tickets` (etapa 6a de docs/mi-dia-plan.md), también solo del alcance interno.
-  cuenta: 8100,
+  // + `partes.notasDelEquipo` (etapa 5), también solo del alcance interno.
+  cuenta: 9000,
   proyecto: 8900,
   partes: {
     ficha: 2000,
@@ -68,6 +70,7 @@ export const TOPES_DE_LA_MEMORIA = {
     hechos: 900,
     personas: 700,
     tickets: 500,
+    notasDelEquipo: 900,
   } satisfies Record<ClaveDeParte, number>,
   /** Cuántas reuniones del proyecto, como mucho (las más nuevas con contenido). */
   reuniones: 8,
@@ -82,6 +85,9 @@ export const TOPES_DE_LA_MEMORIA = {
   hechos: 12,
   personas: 12,
   tickets: 8,
+  notasDelEquipo: 8,
+  /** Cuánto de cada nota. */
+  porNota: 280,
 } as const;
 
 const TITULOS: Record<ClaveDeParte, string> = {
@@ -98,10 +104,11 @@ const TITULOS: Record<ClaveDeParte, string> = {
   hechos: "Hechos de las reuniones (INTERNO)",
   personas: "Personas del cliente en HubSpot (INTERNO)",
   tickets: "Tickets abiertos en HubSpot (INTERNO)",
+  notasDelEquipo: "Notas del equipo: WhatsApp, llamadas, correos (INTERNO)",
 };
 
 /** Las partes que solo existen en el alcance interno. */
-const SOLO_INTERNAS: ReadonlySet<ClaveDeParte> = new Set(["fueraDeAlcance", "preventa", "auditoria", "compromisos", "hechos", "personas", "tickets"]);
+const SOLO_INTERNAS: ReadonlySet<ClaveDeParte> = new Set(["fueraDeAlcance", "preventa", "auditoria", "compromisos", "hechos", "personas", "tickets", "notasDelEquipo"]);
 
 /**
  * La IA como borrador (2026-10-15): lo que escribió la IA se usa desde el primer momento, pero lo que confirmó una
@@ -308,6 +315,18 @@ export function parteDeTickets(tickets: readonly TicketDeLaMemoria[]): string {
     .join("\n");
 }
 
+/** Las notas del equipo (etapa 5): canal, día, quién y el texto, cada una recortada. */
+export function parteDeNotasDelEquipo(notas: readonly NotaDelEquipoDeLaMemoria[]): string {
+  return notas
+    .slice(0, TOPES_DE_LA_MEMORIA.notasDelEquipo)
+    .map((n) => {
+      const texto = n.texto.replace(/\s+/g, " ").trim();
+      const corto = texto.length > TOPES_DE_LA_MEMORIA.porNota ? `${texto.slice(0, TOPES_DE_LA_MEMORIA.porNota - 1).trimEnd()}…` : texto;
+      return `- [${n.canal} · ${n.fecha} · ${n.autor}] ${corto}`;
+    })
+    .join("\n");
+}
+
 export interface OpcionesDeLaCuenta {
   alcance: AlcanceDeMemoria;
   /** Los orígenes de la ficha que este lector no lee como propuesta (los suyos). */
@@ -343,6 +362,7 @@ export function armarMemoriaDeLaCuenta(datos: DatosDeLaCuenta, opts: OpcionesDeL
     { clave: "hechos", cuerpo: q.hechos ? recortarAlTope(parteDeHechos(datos.hechos ?? []), T.hechos) : "" },
     { clave: "personas", cuerpo: q.personasYTickets ? recortarAlTope(parteDePersonas(datos.personas ?? []), T.personas) : "" },
     { clave: "tickets", cuerpo: q.personasYTickets ? recortarAlTope(parteDeTickets(datos.tickets ?? []), T.tickets) : "" },
+    { clave: "notasDelEquipo", cuerpo: q.notasDelEquipo ? recortarAlTope(parteDeNotasDelEquipo(datos.notasDelEquipo ?? []), T.notasDelEquipo) : "" },
   ];
   const partes = todas.filter((p) => !sin.has(p.clave));
   return juntar(encabezado(opts.alcance, `De la cuenta «${datos.cliente.nombre}».`, opts.pieza), partes, TOPES_DE_LA_MEMORIA.cuenta);

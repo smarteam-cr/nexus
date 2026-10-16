@@ -26,6 +26,7 @@ import { sugerenciaVigente } from "@/lib/projects/etapa-sugerida";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { DESTINOS, destinoPorClave } from "@/lib/seguimiento/destinos";
 import { leerDestinos } from "@/lib/seguimiento/hechos/estado";
+import { notaSugeridaDeLaMinuta, reunionConNotaSugerida, textosDeLaMinuta } from "@/lib/notas/reglas";
 import {
   diaCR,
   estadoDeAlerta,
@@ -35,6 +36,7 @@ import {
   estadoDeEtapa,
   estadoDeFechaDecidida,
   estadoDeMinuta,
+  estadoDeNotaParaHubspot,
   estadoDePedido,
   estadoDePropuestaDeFecha,
   estadoDeSugerenciaDelHandoff,
@@ -294,7 +296,71 @@ function citasDeLaSalida(output: string | null): string[] {
   }
 }
 
-const LECTORES: readonly Lector[] = [minutas, pedidos, tareas, alertas, camposDeFicha, etapasYFechas, compromisosLegacy, hechos, sugerenciasDelHandoff];
+/**
+ * La nota para HubSpot de cada reunión (etapa 5 de docs/mi-dia-plan.md). Nace con la reunión: una por cada reunión con
+ * un cliente o un prospecto, desde que salió la función, cuya minuta dice algo. Decidida = una fila de `NotaDeLaCuenta`
+ * con origen «reunion» (usada o descartada, con quién y cuándo).
+ */
+const notasParaHubspot: Lector = async ({ db, ahora, ...v }, hoyISO) => {
+  const decididas = await seguro(
+    db.notaDeLaCuenta.findMany({
+      where: { origen: "reunion", OR: [{ createdAt: rango(v) }, { session: { date: rango(v) } }] },
+      select: { estado: true, autorEmail: true, createdAt: true, sessionId: true, session: { select: { date: true } } },
+    }),
+    [],
+  );
+  const porReunion = new Map(decididas.filter((d) => d.sessionId).map((d) => [d.sessionId!, d]));
+  const minutasDeLaVentana = await db.sessionMinute.findMany({
+    where: { session: { date: { gte: v.desde, lt: v.hasta, lte: ahora } } },
+    select: {
+      sessionId: true,
+      summary: true,
+      agreements: true,
+      decisions: true,
+      session: { select: { title: true, date: true, resolvedClientId: true, manualClientId: true } },
+    },
+  });
+  const duenos = [...new Set(minutasDeLaVentana.map((m) => m.session.resolvedClientId ?? m.session.manualClientId).filter((x): x is string => !!x))];
+  const clientes = duenos.length ? await db.client.findMany({ where: { id: { in: duenos }, kind: { in: ["CLIENTE", "PROSPECTO"] } }, select: { id: true } }) : [];
+  const conTarjeta = new Set(clientes.map((c) => c.id));
+
+  const items: ItemParaContar[] = [];
+  const vistas = new Set<string>();
+  for (const m of minutasDeLaVentana) {
+    const dueno = m.session.resolvedClientId ?? m.session.manualClientId;
+    const dia = diaCR(m.session.date);
+    if (!dueno || !conTarjeta.has(dueno) || !reunionConNotaSugerida(dia)) continue;
+    const decision = porReunion.get(m.sessionId);
+    const sugerida = notaSugeridaDeLaMinuta({
+      titulo: m.session.title,
+      fecha: dia,
+      resumen: m.summary,
+      acuerdos: textosDeLaMinuta(m.agreements),
+      decisiones: textosDeLaMinuta(m.decisions),
+    });
+    if (!sugerida && !decision) continue;
+    vistas.add(m.sessionId);
+    items.push({
+      ...estadoDeNotaParaHubspot(
+        decision ? { estado: decision.estado === "descartada" ? "descartada" : "usada", por: decision.autorEmail, en: decision.createdAt } : null,
+        m.session.date,
+        hoyISO,
+      ),
+      nacioEn: m.session.date.toISOString(),
+    });
+  }
+  // Lo decidido en la ventana de una reunión de antes.
+  for (const d of decididas) {
+    if (!d.sessionId || vistas.has(d.sessionId) || !d.session) continue;
+    items.push({
+      ...estadoDeNotaParaHubspot({ estado: d.estado === "descartada" ? "descartada" : "usada", por: d.autorEmail, en: d.createdAt }, d.session.date, hoyISO),
+      nacioEn: d.session.date.toISOString(),
+    });
+  }
+  return { "nota-para-hubspot": items };
+};
+
+const LECTORES: readonly Lector[] = [minutas, pedidos, tareas, alertas, camposDeFicha, etapasYFechas, compromisosLegacy, hechos, sugerenciasDelHandoff, notasParaHubspot];
 
 /** Lo propuesto de la ventana, contado por tipo (todos los tipos, aunque salgan en cero). */
 export async function contar(o: OpcionesDeConteo): Promise<ConteoDeTipo[]> {

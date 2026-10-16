@@ -38,6 +38,7 @@
  */
 import { tickMarketingCron } from "@/lib/marketing/cron";
 import { prisma } from "@/lib/db/prisma";
+import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { refreshAllCsSignals } from "@/lib/hubspot/cs-signals";
 import { syncPartnerClients } from "@/lib/cs/partner-sync";
 import { syncVentasGanadas } from "@/lib/ventas/sync-ganadas";
@@ -648,7 +649,8 @@ const tareasSemanaLunes: JobDef = {
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 /**
  * La copia de los contactos y los tickets de HubSpot (etapa 6a de docs/mi-dia-plan.md). Solo lee HubSpot. Una corrida por
- * hora; si otra tiene el candado, se suelta el turno para reintentar en el tick siguiente.
+ * hora; si otra tiene el candado, se suelta el turno para reintentar en el tick siguiente. Después, las notas de la
+ * cuenta que quedaron sin escribir en HubSpot (etapa 5), hasta 25 por corrida y 5 intentos cada una.
  */
 const contactosYTickets: JobDef = {
   key: "contactos-y-tickets",
@@ -670,6 +672,12 @@ const contactosYTickets: JobDef = {
     const m = (n: string, x: typeof r.contactos) =>
       x.sinPermiso ? `${n}: sin permiso` : `${n}: ${x.creados} nuevos, ${x.actualizados} con cambios, ${x.bajas} de baja${x.ilegibles ? `, ${x.ilegibles} empresas sin leer` : ""}`;
     console.log(`[jobs/contactos-y-tickets] ${turno} — ${r.empresas} empresas · ${m("contactos", r.contactos)} · ${m("tickets", r.tickets)}`);
+    const { reintentarNotas } = await import("@/lib/notas/escritura-server");
+    const notas = await reintentarNotas().catch((e: unknown) => {
+      if (esquemaDesactualizado(e)) return null;
+      throw e;
+    });
+    if (notas?.intentadas) console.log(`[jobs/contactos-y-tickets] notas: ${notas.escritas} escritas en HubSpot, ${notas.conError} con error`);
   },
 };
 

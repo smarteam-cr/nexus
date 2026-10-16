@@ -22,6 +22,7 @@ import {
   estadoDeDecisionDeCampo,
   estadoDeEtapa,
   estadoDeMinuta,
+  estadoDeNotaParaHubspot,
   estadoDePedido,
   estadoDePropuestaDeFecha,
   estadoDeTarea,
@@ -118,6 +119,16 @@ export interface EntradaDeLaTarjeta {
    * (la misma regla que `novedadesPorPieza`): sin contenido, el destino se ve pero no se decide ni entra a «Usar todo».
    */
   piezasConContenidoPorProyecto?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Etapa 5 de docs/mi-dia-plan.md: la nota para HubSpot que Nexus sugiere con la minuta (esas reuniones no quedan en el
+   * registro de HubSpot). null = no tiene (una reunión de antes de la función, o una minuta que no dice nada).
+   */
+  notaParaHubspot?: {
+    /** El borrador que arma Nexus con lo acordado y lo decidido. */
+    sugerida: string;
+    /** Lo que ya se decidió, o null. */
+    decision: { estado: "usada" | "descartada"; texto: string; por: string; en: string; hubspotEstado: string } | null;
+  } | null;
   hrefs: { ficha: string; solicitudes: string; tareas: string; exito: string };
 }
 
@@ -184,6 +195,14 @@ export type HechoEnTarjeta = Omit<HechoDeLaReunionEnTarjeta, "destinos" | "estad
   pideDecision: boolean;
 };
 
+/** La nota para HubSpot, mientras nadie la decidió. Nunca entra a «Usar todo»: escribe en HubSpot. */
+export interface NotaParaHubspotEnTarjeta {
+  sugerida: string;
+  estado: EstadoDeLoPropuesto;
+  /** El proyecto al que se asocia (solo si la reunión es de uno). */
+  proyecto: string | null;
+}
+
 export interface CompromisoEnTarjeta {
   id: string;
   texto: string;
@@ -240,6 +259,8 @@ export interface Tarjeta {
     compromisos: SeccionDeLaTarjeta<CompromisoEnTarjeta>;
     /** Etapa 6: lo que Nexus aprendió de la reunión, con a dónde fue cada cosa. */
     hechos: SeccionDeLaTarjeta<HechoEnTarjeta>;
+    /** Etapa 5: la nota para HubSpot sin decidir. Decidida, va a `yaRevisado`. */
+    notaParaHubspot: NotaParaHubspotEnTarjeta | null;
   };
   yaRevisado: YaRevisado[];
   /** Cuánto se decide EN la tarjeta: la minuta, los pedidos, los campos de la ficha y tus tareas. */
@@ -405,6 +426,23 @@ export function armarTarjeta(e: EntradaDeLaTarjeta, opts: { hoyISO: string; quie
   });
   const hechosVisibles = hechos.slice(0, TOPES_DE_LA_TARJETA.hechos);
 
+  // La nota para HubSpot (etapa 5): sin decidir, en su sección; decidida, en lo ya revisado.
+  let notaParaHubspot: NotaParaHubspotEnTarjeta | null = null;
+  if (e.notaParaHubspot) {
+    const d = e.notaParaHubspot.decision;
+    const est = estadoDeNotaParaHubspot(d ? { estado: d.estado, por: d.por, en: d.en } : null, e.reunion.fecha, hoyISO);
+    if (d) {
+      yaRevisado.push({ tipo: "nota-para-hubspot", id: `nota:${e.reunion.id}`, texto: d.estado === "usada" ? "La nota para HubSpot" : "La nota para HubSpot (no se usó)", estado: est.estado, por: est.decididoPor });
+    } else {
+      notaParaHubspot = {
+        sugerida: e.notaParaHubspot.sugerida,
+        estado: est.estado,
+        proyecto: e.reunion.proyectos.length === 1 ? e.reunion.proyectos[0].name : null,
+      };
+      huella.push(`nota:${e.reunion.id}`);
+    }
+  }
+
   const alertas: AlertaEnTarjeta[] | null = quienMira.esLiderDeCs
     ? e.alertas
         .map((a) => ({ ...a, estado: estadoDeAlerta(a).estado }))
@@ -435,6 +473,7 @@ export function armarTarjeta(e: EntradaDeLaTarjeta, opts: { hoyISO: string; quie
       alertas: alertas ? seccion(alertas, TOPES_DE_LA_TARJETA.alertas, e.hrefs.exito) : null,
       compromisos: seccion(e.compromisos, TOPES_DE_LA_TARJETA.compromisos, null),
       hechos: seccion(hechos, TOPES_DE_LA_TARJETA.hechos, null),
+      notaParaHubspot,
     },
     yaRevisado,
     pideDecision: loQuePideDecision({
@@ -443,6 +482,7 @@ export function armarTarjeta(e: EntradaDeLaTarjeta, opts: { hoyISO: string; quie
       campos: campos.length,
       tareas: tareas.length,
       novedades: hechos.filter((h) => h.pideDecision).length,
+      nota: !!notaParaHubspot && notaParaHubspot.estado === "pendiente",
     }),
     vencida: vencioSinRevisar(e.reunion.fecha, hoyISO),
     pideHasta: pideHastaDe(e.reunion.fecha),
@@ -457,6 +497,7 @@ export function tarjetaTieneAlgo(t: Tarjeta): boolean {
   const s = t.secciones;
   return (
     !!s.minuta ||
+    !!s.notaParaHubspot ||
     [s.fueraDeAlcance, s.ficha, s.etapa, s.fechaDelDiagnostico, s.tareas, s.compromisos, s.hechos].some((x) => x.items.length > 0) ||
     (s.alertas?.items.length ?? 0) > 0 ||
     t.yaRevisado.length > 0
@@ -464,13 +505,13 @@ export function tarjetaTieneAlgo(t: Tarjeta): boolean {
 }
 
 /**
- * Cuánto se decide en la tarjeta: la minuta, los pedidos, los campos de la ficha, tus tareas y los hechos con una
- * novedad que puedes decidir (etapa 6). La etapa, la fecha del diagnóstico y las alertas tienen su propia confirmación
+ * Cuánto se decide en la tarjeta: la minuta, los pedidos, los campos de la ficha, tus tareas, los hechos con una
+ * novedad que puedes decidir (etapa 6) y la nota para HubSpot (etapa 5 de docs/mi-dia-plan.md). La etapa, la fecha del diagnóstico y las alertas tienen su propia confirmación
  * (y su renglón en «Para ti»), y los compromisos (lo demás que dejó la reunión en Tareas) solo se leen: cada persona
  * decide los suyos. «Para ti» la llama sin las tareas: esas siguen en el renglón de Tareas.
  */
-export function loQuePideDecision(c: { minuta: boolean; pedidos: number; campos: number; tareas?: number; novedades?: number }): number {
-  return (c.minuta ? 1 : 0) + c.pedidos + c.campos + (c.tareas ?? 0) + (c.novedades ?? 0);
+export function loQuePideDecision(c: { minuta: boolean; pedidos: number; campos: number; tareas?: number; novedades?: number; nota?: boolean }): number {
+  return (c.minuta ? 1 : 0) + c.pedidos + c.campos + (c.tareas ?? 0) + (c.novedades ?? 0) + (c.nota ? 1 : 0);
 }
 
 /**

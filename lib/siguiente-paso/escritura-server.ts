@@ -15,7 +15,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
-import { leerDuenos } from "@/lib/hubspot/duenos";
+import { ownerIdPorCorreo } from "@/lib/hubspot/owner-por-correo";
 import { requireAccessToClient } from "@/lib/auth/access";
 import { ForbiddenError, UnauthorizedError } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
@@ -87,27 +87,6 @@ export async function exigirAcceso(o: ObjetoResuelto, persona: Persona): Promise
   throw new ErrorDelPaso(403, "Solo su dueño o alguien con permiso de Ventas puede cambiar este negocio.");
 }
 
-/* ── Los usuarios de HubSpot (para el responsable) ───────────────────────────────────── */
-
-let duenos: { at: number; porCorreo: Map<string, string> } | null = null;
-const VIDA_DE_LOS_DUENOS_MS = 10 * 60 * 1000;
-
-/** El usuario de HubSpot de una persona, por su correo. null = no está en HubSpot (o HubSpot no respondió). */
-async function ownerIdDe(email: string | null): Promise<string | null> {
-  if (!email) return null;
-  if (!duenos || Date.now() - duenos.at > VIDA_DE_LOS_DUENOS_MS) {
-    try {
-      const { porOwner } = await leerDuenos(await getSystemHubspotClient());
-      const porCorreo = new Map<string, string>();
-      for (const d of porOwner.values()) if (d.email && !d.archivado && !porCorreo.has(d.email)) porCorreo.set(d.email, d.ownerId);
-      duenos = { at: Date.now(), porCorreo };
-    } catch {
-      return null;
-    }
-  }
-  return duenos.porCorreo.get(email.toLowerCase()) ?? null;
-}
-
 /* ── Fijar y dar por hecho ───────────────────────────────────────────────────────────── */
 
 export interface NuevoPaso {
@@ -136,7 +115,7 @@ export async function fijarSiguientePaso(persona: Persona, n: NuevoPaso) {
   const responsableEmail = (n.responsableEmail ?? persona.email).trim().toLowerCase();
   const responsable = await prisma.teamMember.findUnique({ where: { email: responsableEmail }, select: { email: true, deactivatedAt: true } });
   if (!responsable || responsable.deactivatedAt) throw new ErrorDelPaso(400, "Esa persona no está en el equipo.");
-  const responsableOwnerId = await ownerIdDe(responsableEmail);
+  const responsableOwnerId = await ownerIdPorCorreo(responsableEmail);
   const fecha = n.fecha ? new Date(`${n.fecha}T00:00:00.000Z`) : null;
   const yo = persona.email.toLowerCase();
   const ahora = new Date();

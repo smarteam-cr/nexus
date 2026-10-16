@@ -8261,3 +8261,29 @@ este es el primero: se arma y se ve en Nexus, sin enviar.
 - **Cada línea lleva a Nexus** con la dirección de `APP_URL`.
 - **No se envía.** El paso 2 (solo a Elías, una semana) espera el permiso de Gmail en Google Admin o un proveedor de
   correo.
+
+## Notas de la cuenta (2026-10-16)
+
+**Contexto.** Etapa 5 del roadmap de «Para ti» (`docs/mi-dia-plan.md`): lo que pasa por WhatsApp, una llamada o un
+correo con un cliente no quedaba en ningún lado de Nexus, y las reuniones de Meet no quedan en el registro de HubSpot.
+
+- **Una nota es de la cuenta** (`NotaDeLaCuenta`): canal, día, texto, quién la escribió y, si aplica, el proyecto o el
+  negocio. La anota cualquiera con acceso al cliente, de cualquier equipo, en La cuenta › Notas. La ve todo el que ve
+  la cuenta; el cliente, nunca.
+- **Nexus primero, HubSpot después** (como el siguiente paso): se escribe enseguida como nota de la empresa, a nombre de
+  quien la escribió (su owner de HubSpot, y su nombre en el texto por si no tiene), y se asocia al negocio y al proyecto
+  con la asociación por defecto de HubSpot. Si HubSpot no responde, queda pendiente y el job `contactos-y-tickets` la
+  reintenta cada hora, hasta 5 veces.
+- **Sacarla de Nexus no la borra en HubSpot.** La saca quien la escribió, quien lidera Customer Success o dirección;
+  deja de verse y de leerse como contexto. Borrar en HubSpot desde Nexus no existe: allá es el registro.
+- **Entra a la memoria interna de la cuenta** («Notas del equipo», las 8 más nuevas, solo el alcance interno). Nunca a
+  lo que lee el cliente ni al handoff: las escribe el equipo para el equipo, sin la frontera de lo que ve el cliente.
+- **Las notas escritas directo en HubSpot se leen al abrir la pestaña** (el registro de la empresa) y se muestran aparte,
+  solo para leer. Las que escribió Nexus no se repiten: se reconocen por el id de la nota.
+- **Después de una reunión con el cliente, Nexus sugiere la nota para HubSpot** con lo acordado y lo decidido de la
+  minuta (o su resumen), sin IA nueva. Se cambia, se usa o se descarta en la tarjeta «Lo que dejó esta reunión», y se
+  puede escribir tal cual desde «Después de tus reuniones». Nunca entra a «Usar todo»: escribe en HubSpot. Una decisión
+  por reunión (índice único parcial). Vale para las reuniones desde el 2026-10-16: con las de antes, aparecían de golpe
+  decenas de sugerencias de hace semanas. «Uso de Nexus» la cuenta como un tipo más de lo propuesto.
+- **Todavía no:** que la nota deje hechos (espera `SEGUIMIENTO_HECHOS`) y sugerir la nota desde el chat (llega con el
+  agente, etapa 6b).

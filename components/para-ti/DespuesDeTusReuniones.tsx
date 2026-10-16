@@ -32,6 +32,7 @@ function queDejo(r: DespuesDeLaReunion): string {
   if (r.minutaPorRevisar) partes.push("la minuta por revisar");
   if (r.tareasPropuestas) partes.push(`${r.tareasPropuestas} ${r.tareasPropuestas === 1 ? "tarea propuesta" : "tareas propuestas"} para ti`);
   if (r.pedidos) partes.push(`${r.pedidos} ${r.pedidos === 1 ? "pedido fuera de alcance" : "pedidos fuera de alcance"}`);
+  if (r.notaParaHubspot) partes.push("la nota para HubSpot");
   return partes.length ? `Dejó ${partes.join(", ")}.` : "No dejó nada para decidir.";
 }
 
@@ -57,8 +58,9 @@ export default function DespuesDeTusReuniones({ reuniones, hoyISO }: { reuniones
 function Reunion({ r, hoyISO }: { r: DespuesDeLaReunion; hoyISO: string }) {
   const router = useRouter();
   const toast = useToast();
-  const [ocupado, setOcupado] = useState<null | "todo" | "paso">(null);
+  const [ocupado, setOcupado] = useState<null | "todo" | "paso" | "nota">(null);
   const [usado, setUsado] = useState(false);
+  const [notaEscrita, setNotaEscrita] = useState(false);
   const pasoVencido = !!r.paso?.fecha && r.paso.fecha < hoyISO;
   const proponer = !!r.equipo && !!r.sugerencia && (!r.paso || pasoVencido);
 
@@ -109,6 +111,28 @@ function Reunion({ r, hoyISO }: { r: DespuesDeLaReunion; hoyISO: string }) {
     }
   }
 
+  /** La nota para HubSpot tal cual la armó Nexus. Para cambiarla, «Revisar» (la tarjeta de la reunión). */
+  async function escribirNota() {
+    if (!r.notaParaHubspot) return;
+    setOcupado("nota");
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(r.sessionId)}/nota-para-hubspot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion: "usar", texto: r.notaParaHubspot }),
+      });
+      const j = (await res.json().catch(() => null)) as { error?: string; hubspotEstado?: string } | null;
+      if (!res.ok) {
+        toast.error(j?.error ?? "No se pudo escribir la nota.");
+        return;
+      }
+      setNotaEscrita(true);
+      toast.success(j?.hubspotEstado === "escrita" ? "La nota quedó en HubSpot." : "Nota guardada. HubSpot no respondió: se reintenta cada hora.");
+    } finally {
+      setOcupado(null);
+    }
+  }
+
   return (
     <li className={cn("space-y-1.5 py-2.5 text-[13px]", usado && "opacity-60")}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -132,6 +156,17 @@ function Reunion({ r, hoyISO }: { r: DespuesDeLaReunion; hoyISO: string }) {
         </span>
       </div>
       <p className="text-xs text-fg-muted">{queDejo(r)}</p>
+      {r.notaParaHubspot && !notaEscrita && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="flex min-w-0 items-center gap-1.5 text-brand">
+            <IconoDeSugerencia className="h-3 w-3 shrink-0" />
+            <span className="line-clamp-1">Nota para HubSpot: {r.notaParaHubspot.split("\n").slice(1).join(" ").trim() || r.notaParaHubspot}</span>
+          </span>
+          <BotonBlanco onClick={escribirNota} disabled={ocupado !== null} title="La escribe en HubSpot tal cual. Para cambiarla, Revisar.">
+            {ocupado === "nota" ? "Escribiendo…" : "Escribir en HubSpot"}
+          </BotonBlanco>
+        </div>
+      )}
       {r.equipo && (
         <div className="text-xs">
           {r.paso && !pasoVencido ? (

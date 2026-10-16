@@ -40,6 +40,8 @@ export interface DespuesDeLaReunion {
   paso: SiguientePasoVisto | null;
   /** Lo que se propone como siguiente paso: la primera de tus tareas propuestas en la reunión. */
   sugerencia: string | null;
+  /** La nota para HubSpot sin decidir (etapa 5): el borrador que armó Nexus con lo acordado. */
+  notaParaHubspot: string | null;
 }
 
 export async function despuesDeTusReuniones(user: AppUserWithTeamMember, rol: string, ahora = new Date()): Promise<DespuesDeLaReunion[]> {
@@ -82,6 +84,7 @@ export async function despuesDeTusReuniones(user: AppUserWithTeamMember, rol: st
       equipo,
       paso: null,
       sugerencia: tareasPendientes[0]?.titulo ?? null,
+      notaParaHubspot: t.secciones.notaParaHubspot?.estado === "pendiente" ? t.secciones.notaParaHubspot.sugerida : null,
     });
   }
   if (equipo && out.length) {

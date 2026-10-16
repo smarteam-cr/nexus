@@ -46,15 +46,15 @@ Un horizonte arranca cuando el anterior está desplegado y probado.
 | | 1 | Negocios abiertos, «Para ti» de Ventas, pregunta de cierre y monto | Ventas | — | ✅ En producción |
 | | 2 | Siguiente paso por equipo, en Nexus y en HubSpot | Todos | — | ✅ En producción |
 | | 3 | Tareas de HubSpot en Nexus, en los dos sentidos | Ventas y CS | — | ✅ En producción · falta probarla con Andrés |
-| **Ahora** | 4a | Medir el uso y completar la cartera | Dirección y CSL | Mediano | Construida (16 oct), sin desplegar; el SQL ya está en la base |
-| | 4b | La IA como borrador; lo confirmado manda | Todos los agentes | Mediano | Construida (15 oct), sin desplegar; falta prender los hechos |
-| | 4f | Agregar una reunión a mano (la transcripción o lo que recuerdas) y asignarla a un cliente y sus proyectos | Todos los equipos | Mediano | Construida (15 oct), sin desplegar |
-| **Siguiente** | 6a | Contactos y tickets de HubSpot en Nexus | Base del resumen y del agente | Mediano | Construida (16 oct), sin desplegar; los SQL y la carga ya están en la base |
-| | 4c | «Para ti» del CSE y el resumen antes de cada reunión | CSE y Ventas | Grande | Construida (16 oct), sin desplegar; los SQL ya están en la base |
-| | 4d | Después de cada reunión, un paso de dos minutos | CSE y Ventas | Chico | Construida (16 oct), sin desplegar |
-| | — | **Pausa de dos semanas: medir y decidir si seguir** | — | — | — |
-| **Después** | 4e | Correo de la mañana, probado en 4 pasos | Todos | Mediano + 3 semanas de prueba | Paso 1 construido (16 oct): se ve en Nexus, no se envía |
-| | 5 | Notas de la cuenta (WhatsApp, llamadas), a HubSpot y al contexto | CSE y Ventas | Mediano | Pendiente |
+| | 4a | Medir el uso y completar la cartera | Dirección y CSL | Mediano | ✅ En producción (16 oct) |
+| | 4b | La IA como borrador; lo confirmado manda | Todos los agentes | Mediano | ✅ En producción (16 oct) · falta prender los hechos |
+| | 4f | Agregar una reunión a mano (la transcripción o lo que recuerdas) y asignarla a un cliente y sus proyectos | Todos los equipos | Mediano | ✅ En producción (16 oct) |
+| | 6a | Contactos y tickets de HubSpot en Nexus | Base del resumen y del agente | Mediano | ✅ En producción (16 oct) |
+| | 4c | «Para ti» del CSE y el resumen antes de cada reunión | CSE y Ventas | Grande | ✅ En producción (16 oct) · falta «lo de hoy en 5 cosas» y planificar la semana |
+| | 4d | Después de cada reunión, un paso de dos minutos | CSE y Ventas | Chico | ✅ En producción (16 oct) |
+| **Ahora** | — | **Medir el uso dos semanas** (en paralelo con lo que sigue) | — | — | Desde el 16 oct |
+| **Siguiente** | 4e | Correo de la mañana, probado en 4 pasos | Todos | Mediano + 3 semanas de prueba | Paso 1 en producción (16 oct): se ve en Nexus, no se envía · el paso 2 espera el permiso de Gmail |
+| | 5 | Notas de la cuenta (WhatsApp, llamadas), a HubSpot y al contexto | CSE y Ventas | Mediano | Construida (16 oct), sin desplegar |
 | | 6b | El agente dentro de Nexus | Todos | Grande | Pendiente |
 | **Más adelante** | 7 | «Para ti» de Dev, Marketing y Finanzas | Esos equipos | Mediano | Pendiente |
 | | 8 | Acciones sugeridas por persona en el chat | Todos | Mediano | Pendiente |
@@ -746,3 +746,16 @@ Paso 1 de 4 construido el 2026-10-16 (las reglas, en DECISIONS «El correo de la
 
 Falta: el paso 2 (mandárselo solo a Elías una semana), que necesita el permiso de Gmail en Google Admin o un proveedor
 de correo; después los pasos 3 y 4.
+
+## Etapa 5, cómo va (2026-10-16)
+
+Construida el 2026-10-16 (las reglas, en DECISIONS «Notas de la cuenta»):
+- La cuenta › Notas (`components/clients/NotasDeLaCuenta.tsx`, `/api/clients/[id]/notas`): anotar, la lista del equipo
+  y las notas escritas directo en HubSpot. La tabla `NotaDeLaCuenta` (SQL `2026-10-16-notas-de-la-cuenta.sql`).
+- La escritura en HubSpot (`lib/notas/escritura-server.ts`), con el reintento en el job `contactos-y-tickets`.
+- «Notas del equipo» en la memoria interna de la cuenta.
+- La nota para HubSpot sugerida después de una reunión, en la tarjeta de la reunión y en «Después de tus reuniones»
+  (`/api/sessions/[id]/nota-para-hubspot`), y como tipo de «Uso de Nexus».
+
+Falta: aplicar el SQL, desplegar y probar una nota real (que llegue a HubSpot asociada a la empresa, al negocio y al
+proyecto). Después: que la nota deje hechos cuando se prenda `SEGUIMIENTO_HECHOS`, y sugerirla desde el chat (6b).

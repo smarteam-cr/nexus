@@ -41,6 +41,8 @@ import { compromisosDeLaReunion } from "./compromisos-server";
 import { destinoPorClave } from "./destinos";
 import { leerDestinos } from "./hechos/estado";
 import { hechosDeLaReunion, piezasConContenidoDelProyecto } from "./novedades-server";
+import { decisionDeLaSugerencia } from "@/lib/notas/lectura-server";
+import { notaSugeridaDeLaMinuta, reunionConNotaSugerida } from "@/lib/notas/reglas";
 import { armarTarjeta, type EntradaDeLaTarjeta, type Tarjeta } from "./tarjeta";
 
 /** Una lectura que depende de un SQL que quizá falta: sin la columna o la tabla, la tarjeta sale sin esa parte. */
@@ -294,6 +296,20 @@ export async function cargarTarjeta(sessionId: string, user: AppUserWithTeamMemb
     ];
   });
 
+  // La nota para HubSpot (etapa 5 de docs/mi-dia-plan.md): el borrador con la minuta, y si alguien ya la decidió.
+  const diaDeLaReunion = diaCR(reunion.fecha);
+  const sugerida =
+    minuta && reunionConNotaSugerida(diaDeLaReunion)
+      ? notaSugeridaDeLaMinuta({
+          titulo: reunion.titulo,
+          fecha: diaDeLaReunion,
+          resumen: minuta.summary,
+          acuerdos: textos(minuta.agreements),
+          decisiones: textos(minuta.decisions),
+        })
+      : null;
+  const decisionDeLaNota = sugerida ? await decisionDeLaSugerencia(sessionId) : null;
+
   const entrada: EntradaDeLaTarjeta = {
     reunion: { id: reunion.id, titulo: reunion.titulo, fecha: reunion.fecha, clientId, empresa: reunion.empresa, proyectos: reunion.proyectos },
     minuta: minuta
@@ -344,6 +360,7 @@ export async function cargarTarjeta(sessionId: string, user: AppUserWithTeamMemb
     hechos,
     piezasQueDecide,
     piezasConContenidoPorProyecto,
+    notaParaHubspot: sugerida ? { sugerida, decision: decisionDeLaNota } : null,
     hrefs: {
       ficha: `/clients/${encodeURIComponent(clientId)}?tab=${SENTINEL_SERVICE_TYPE}`,
       solicitudes: urlDeSolicitudes(clientId),
