@@ -62,6 +62,31 @@ export async function eventosProximos(email: string, o: { semanas: number; ahora
   }
 }
 
+/**
+ * Los eventos del calendario principal de `email` entre dos instantes (la agenda del día de «Para ti», etapa 4c de
+ * docs/mi-dia-plan.md). Solo lee, con el mismo permiso; como mucho 2 días y 100 eventos.
+ */
+export async function eventosEntre(email: string, desde: Date, hasta: Date): Promise<ResultadoDeLaAgenda<calendar_v3.Schema$Event[]>> {
+  if (!agendaDisponible()) return { ok: false, motivo: "sin-google" };
+  const tope = new Date(Math.min(hasta.getTime(), desde.getTime() + 2 * 24 * 60 * 60 * 1000));
+  try {
+    const cal = apiCalendar({ version: "v3", auth: getImpersonatedAuth(email) });
+    const res = await cal.events.list({
+      calendarId: "primary",
+      timeMin: desde.toISOString(),
+      timeMax: tope.toISOString(),
+      singleEvents: true,
+      orderBy: "startTime",
+      maxResults: 100,
+      fields: `items(${CAMPOS_DEL_EVENTO})`,
+    });
+    return { ok: true, datos: (res.data.items ?? []) as calendar_v3.Schema$Event[] };
+  } catch (e) {
+    console.error(`[google/agenda-de-la-empresa] no se pudo leer el calendario de ${email}`, e instanceof Error ? e.message : e);
+    return { ok: false, motivo: motivoDelError(e) };
+  }
+}
+
 /** Lo que dice el calendario hoy de un evento que ya se unió a una sesión. */
 export type EstadoDelEvento =
   /** `invitados`: los correos de quienes están invitados (con quien lo organiza), para mirar que siga siendo con la empresa. */

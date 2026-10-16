@@ -23,11 +23,20 @@ interface Prefijo {
   seccion: string;
 }
 
+/**
+ * Las pantallas que se miden aparte aunque cuelguen de una sección del menú: el resumen antes de una reunión (etapa
+ * 4c), para saber si los CSE lo abren.
+ */
+const SECCIONES_PROPIAS = [{ clave: "preparar", nombre: "Preparar una reunión", prefijo: "/para-ti/reunion" }] as const;
+
 /** Cada prefijo del menú (el ítem y sus hijos) con la clave de su ítem, de más largo a más corto. */
-const PREFIJOS: readonly Prefijo[] = APP_NAV.flatMap((item) => [
-  ...(item.match ?? [item.href]).map((prefijo) => ({ prefijo, seccion: item.key })),
-  ...(item.children ?? []).flatMap((c) => (c.match ?? [c.href]).map((prefijo) => ({ prefijo, seccion: item.key }))),
-]).sort((a, b) => b.prefijo.length - a.prefijo.length);
+const PREFIJOS: readonly Prefijo[] = [
+  ...SECCIONES_PROPIAS.map((s) => ({ prefijo: s.prefijo, seccion: s.clave })),
+  ...APP_NAV.flatMap((item) => [
+    ...(item.match ?? [item.href]).map((prefijo) => ({ prefijo, seccion: item.key })),
+    ...(item.children ?? []).flatMap((c) => (c.match ?? [c.href]).map((prefijo) => ({ prefijo, seccion: item.key }))),
+  ]),
+].sort((a, b) => b.prefijo.length - a.prefijo.length);
 
 const coincide = (ruta: string, prefijo: string) => ruta === prefijo || ruta.startsWith(`${prefijo}/`) || ruta.startsWith(`${prefijo}?`);
 
@@ -43,11 +52,15 @@ export function seccionDeLaRuta(ruta: string): string | null {
 
 /** Las secciones que se pueden guardar: las del menú, en su orden, más «otra». */
 export function seccionesDeNexus(): { clave: string; nombre: string }[] {
-  return [...APP_NAV.map((i) => ({ clave: i.key, nombre: i.label })), { clave: SECCION_OTRA, nombre: "Otras pantallas" }];
+  return [
+    ...APP_NAV.map((i) => ({ clave: i.key, nombre: i.label })),
+    ...SECCIONES_PROPIAS.map((s) => ({ clave: s.clave, nombre: s.nombre })),
+    { clave: SECCION_OTRA, nombre: "Otras pantallas" },
+  ];
 }
 
 export function esSeccionValida(clave: string): boolean {
-  return clave === SECCION_OTRA || APP_NAV.some((i) => i.key === clave);
+  return seccionesDeNexus().some((s) => s.clave === clave);
 }
 
 /** El nombre de una sección para la pantalla. */

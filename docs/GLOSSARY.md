@@ -3,6 +3,19 @@
 - **Sesión** (`FirefliesSession`): una reunión de Google Meet (el modelo conserva el nombre
   "Fireflies" por historia — esa integración se eliminó el 2026-06-04). Tiene
   `participants` (emails), `transcript`, `summary`, `organizerEmail`. ~16k filas.
+- **Preparar una reunión** (`/para-ti/reunion/[evento]?cliente=…`, `lib/mi-dia`, desde el 2026-10-16): el resumen de una
+  cuenta antes de una reunión de hoy, que se abre con «Preparar» desde la agenda de «Para ti»: quién viene (con nombre y
+  cargo), la última vez, lo que se dijo antes de lo que dice el título, lo pendiente de los dos lados, el siguiente paso,
+  los tickets y los negocios abiertos (y las alertas, para quien lidera Customer Success). Sin IA: cada bloque dice de
+  dónde salió.
+- **Búsqueda en las reuniones** (`lib/busqueda`, desde el 2026-10-16): texto completo en español, sin tildes, sobre las
+  transcripciones partidas en turnos (`TurnoDeReunion`). Busca solo en las reuniones de UNA empresa y trae la frase tal
+  cual, con quién la dijo y en qué reunión.
+- **Correo de la mañana** (`/para-ti/correo`, `lib/mi-dia/correo.ts`, desde el 2026-10-16): «tu día» por correo: tus
+  reuniones de hoy, cada una con «Preparar», y como mucho 5 cosas de «Para ti» (lo que dejó un agente y lo de hoy),
+  sin Finanzas ni montos. Por ahora solo se ve en Nexus: no se envía.
+- **Registro de equipos** (`lib/equipos/registro.ts`, desde el 2026-10-16): quién es parte de cada equipo (por rol), su
+  sprint de Tareas, el siguiente paso que lleva, su cartera y qué ve en «Para ti». Sumar un equipo es sumar una entrada.
 - **Personas y tickets** (La cuenta › Personas y tickets, `lib/contactos`, desde el 2026-10-16): la copia de solo lectura
   de los contactos y los tickets de HubSpot de cada empresa de Nexus (`ContactoDeHubspot`, `TicketDeHubspot`), cada hora.
   Cada persona dice cuándo estuvo por última vez en una reunión con el cliente (cruzando el correo de los invitados), y

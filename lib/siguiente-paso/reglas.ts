@@ -10,6 +10,7 @@
  *   · cada persona escribe el de su equipo. `hs_next_step` de HubSpot solo se ofrece como sugerencia.
  */
 import { EQUIPOS_DEL_SIGUIENTE_PASO, nombresDelEquipo, type EquipoDelSiguientePaso } from "./propiedades";
+import { siguientesPasosDelRol } from "@/lib/equipos/registro";
 
 export type ObjetoDelPaso = "empresa" | "negocio" | "proyecto";
 export type FuenteDelPaso = "persona" | "chat" | "reunion" | "hubspot";
@@ -76,22 +77,11 @@ export interface PasosDeLaCuenta {
 
 /**
  * Los equipos cuyo siguiente paso puede escribir una persona: el suyo. Dirección escribe cualquiera (Marco vende).
- * La CSL y el CSE escriben el de CS. Marketing, Finanzas y el resto, ninguno.
+ * La CSL y el CSE escriben el de CS. Marketing, Finanzas y el resto, ninguno. Sale del registro de equipos
+ * (lib/equipos/registro.ts, etapa 4c).
  */
 export function equiposQueEscribe(rol: string | null | undefined): EquipoDelSiguientePaso[] {
-  switch (rol) {
-    case "SUPER_ADMIN":
-      return ["ventas", "cs", "dev"];
-    case "VENTAS":
-      return ["ventas"];
-    case "CSE":
-    case "CSL":
-      return ["cs"];
-    case "DEV":
-      return ["dev"];
-    default:
-      return [];
-  }
+  return siguientesPasosDelRol(rol);
 }
 
 /** El equipo con el que abre el diálogo: el de la persona; dirección, Ventas. */

@@ -122,6 +122,25 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "Las personas de la cuenta AFIRMAN cuándo estuvo cada una en una reunión: solo las que ya ocurrieron. Una " +
       "agendada no dice que la persona estuvo.",
   },
+  "lib/busqueda/buscar-server.ts": {
+    clase: "contexto",
+    motivo:
+      "La búsqueda en las reuniones de una empresa cita lo que se DIJO: solo reuniones con transcripción, que ya ocurrieron " +
+      "(corta por transcripción, no por fecha).",
+  },
+  "lib/busqueda/indexar-server.ts": {
+    clase: "plomeria",
+    motivo: "Parte en turnos las transcripciones (ingest): solo reuniones con transcripción y de antes de `ahora`.",
+  },
+  "lib/mi-dia/despues-server.ts": {
+    clase: "contexto",
+    motivo: "«Después de tus reuniones» habla de reuniones que TERMINARON: corta 15 minutos antes de ahora.",
+  },
+  "lib/mi-dia/resumen-server.ts": {
+    clase: "contexto",
+    motivo:
+      "El resumen antes de una reunión AFIRMA cuál fue «la última vez» con el cliente: solo las que ya ocurrieron.",
+  },
   "lib/uso/lectura-server.ts": {
     clase: "contexto",
     motivo:
@@ -342,6 +361,8 @@ const CORTAN_POR_FECHA = [
   "lib/cs/cartera.ts",
   "lib/uso/lectura-server.ts",
   "lib/contactos/lectura-server.ts",
+  "lib/mi-dia/resumen-server.ts",
+  "lib/mi-dia/despues-server.ts",
   "lib/carga/queries.ts",
   "lib/projects/analyze-participants.ts",
   "lib/lifecycle/load.ts",

@@ -50,10 +50,10 @@ Un horizonte arranca cuando el anterior está desplegado y probado.
 | | 4b | La IA como borrador; lo confirmado manda | Todos los agentes | Mediano | Construida (15 oct), sin desplegar; falta prender los hechos |
 | | 4f | Agregar una reunión a mano (la transcripción o lo que recuerdas) y asignarla a un cliente y sus proyectos | Todos los equipos | Mediano | Construida (15 oct), sin desplegar |
 | **Siguiente** | 6a | Contactos y tickets de HubSpot en Nexus | Base del resumen y del agente | Mediano | Construida (16 oct), sin desplegar; los SQL y la carga ya están en la base |
-| | 4c | «Para ti» del CSE y el resumen antes de cada reunión | CSE y Ventas | Grande | Pendiente |
-| | 4d | Después de cada reunión, un paso de dos minutos | CSE y Ventas | Chico | Pendiente |
+| | 4c | «Para ti» del CSE y el resumen antes de cada reunión | CSE y Ventas | Grande | Construida (16 oct), sin desplegar; los SQL ya están en la base |
+| | 4d | Después de cada reunión, un paso de dos minutos | CSE y Ventas | Chico | Construida (16 oct), sin desplegar |
 | | — | **Pausa de dos semanas: medir y decidir si seguir** | — | — | — |
-| **Después** | 4e | Correo de la mañana, probado en 4 pasos | Todos | Mediano + 3 semanas de prueba | Pendiente |
+| **Después** | 4e | Correo de la mañana, probado en 4 pasos | Todos | Mediano + 3 semanas de prueba | Paso 1 construido (16 oct): se ve en Nexus, no se envía |
 | | 5 | Notas de la cuenta (WhatsApp, llamadas), a HubSpot y al contexto | CSE y Ventas | Mediano | Pendiente |
 | | 6b | El agente dentro de Nexus | Todos | Grande | Pendiente |
 | **Más adelante** | 7 | «Para ti» de Dev, Marketing y Finanzas | Esos equipos | Mediano | Pendiente |
@@ -717,3 +717,32 @@ Construida el 2026-10-16 (las reglas, en DECISIONS «Contactos y tickets de HubS
   790 de 1.259 invitados de afuera tienen nombre y 498, cargo.
 
 Falta: desplegar.
+
+## Etapa 4c, cómo va (2026-10-16)
+
+Construida el 2026-10-16 (las reglas, en DECISIONS «"Para ti" del CSE y el resumen antes de cada reunión»):
+- El registro de equipos (`lib/equipos/registro.ts`): el siguiente paso que escribe cada rol ya sale de ahí.
+- En «Para ti»: la agenda de hoy con la empresa de cada reunión y «Preparar» (Ventas, CS, Dev y dirección), y las
+  cuentas del CSE con su siguiente paso de CS y sus tickets.
+- El resumen antes de cada reunión (`/para-ti/reunion/[evento]`) y la búsqueda en las transcripciones partidas en turnos
+  (`lib/busqueda`, job `indice-de-reuniones`). El latido mide «Preparar una reunión» aparte, para saber si se abre.
+
+Falta: desplegar; que Google Admin autorice `calendar.events.owned` para planificar la semana en el calendario (hoy
+«Planificar la semana» lleva al calendario de Tareas); lo de hoy en 5 cosas (hoy «Para hoy» muestra todo).
+
+## Etapa 4d, cómo va (2026-10-16)
+
+Construida el 2026-10-16 (las reglas, en DECISIONS «Después de cada reunión, un paso de dos minutos»): «Después de tus
+reuniones» en «Para ti» (`lib/mi-dia/despues-server.ts`, `components/para-ti/DespuesDeTusReuniones.tsx`), con «Usar
+todo» y el siguiente paso propuesto desde tus tareas de la reunión.
+
+Falta: desplegar; el correo de seguimiento para las reuniones que no son de una exploración (hoy solo lo arman las
+sesiones de la preventa y de la exploración del proyecto).
+
+## Etapa 4e, cómo va (2026-10-16)
+
+Paso 1 de 4 construido el 2026-10-16 (las reglas, en DECISIONS «El correo de la mañana, paso 1»): el correo se arma
+(`lib/mi-dia/correo.ts`, puro) y se ve en «Para ti» › «Correo de la mañana» (`/para-ti/correo`). No se envía.
+
+Falta: el paso 2 (mandárselo solo a Elías una semana), que necesita el permiso de Gmail en Google Admin o un proveedor
+de correo; después los pasos 3 y 4.

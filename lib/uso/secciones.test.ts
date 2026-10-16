@@ -15,6 +15,12 @@ describe("la sección de una ruta", () => {
     expect(seccionDeLaRuta("/customer-success/abc")).toBe("customer-success");
   });
 
+  it("el resumen antes de una reunión se mide aparte de «Para ti»", () => {
+    expect(seccionDeLaRuta("/para-ti/reunion/abc123?cliente=c1")).toBe("preparar");
+    expect(seccionDeLaRuta("/para-ti")).toBe("para-ti");
+    expect(esSeccionValida("preparar")).toBe(true);
+  });
+
   it("no confunde un prefijo con otra palabra", () => {
     expect(seccionDeLaRuta("/clientsx")).toBe(SECCION_OTRA);
   });

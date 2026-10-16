@@ -2284,6 +2284,8 @@ model FirefliesSession {
   eventosDeTareas       TareaEvento[]          @relation("EventosDeTareasDeLaReunion")
   lecturaDeTareas       LecturaDeReunion?      @relation("LecturaDeLaReunion")
   hechos                HechoDeReunion[]       @relation("HechosDeLaReunion") // memoria de la cuenta: se leen SOLO por lib/seguimiento (CASCADE)
+  turnos                TurnoDeReunion[]       @relation("TurnosDeLaReunion") // la búsqueda en las reuniones (etapa 4c): CASCADE
+  indexada              ReunionIndexada?       @relation("ReunionIndexada")
 
   // Índices para los queries principales:
   //   /sessions: findMany({ where: { date: { lt: now } }, orderBy: { date: desc } })
@@ -7196,4 +7198,29 @@ model TicketDeHubspot {
 
   @@unique([clientId, hubspotId])
   @@index([clientId, abierto])
+}
+
+// ─── La búsqueda en las reuniones (etapa 4c de docs/mi-dia-plan.md) ───
+
+/// Un turno de la transcripción de una reunión (quién habló y qué dijo), para buscar en español sin tildes. La base
+/// tiene además la columna generada "tsv" (no está acá, como `KnowledgeEmbedding.embedding`). La escribe SOLO
+/// lib/busqueda/indexar-server.ts; se busca por lib/busqueda/buscar-server.ts.
+model TurnoDeReunion {
+  id        String           @id @default(cuid())
+  sessionId String
+  session   FirefliesSession @relation("TurnosDeLaReunion", fields: [sessionId], references: [id], onDelete: Cascade)
+  orden     Int
+  hablante  String
+  texto     String           @db.Text
+
+  @@unique([sessionId, orden])
+}
+
+/// Qué reuniones ya se partieron en turnos, con la huella de su transcripción: si cambia, se vuelve a partir.
+model ReunionIndexada {
+  sessionId  String           @id
+  session    FirefliesSession @relation("ReunionIndexada", fields: [sessionId], references: [id], onDelete: Cascade)
+  huella     String
+  turnos     Int
+  indexadoAt DateTime         @default(now())
 }

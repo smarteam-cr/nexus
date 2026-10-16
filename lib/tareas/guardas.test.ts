@@ -177,6 +177,9 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "app/(shell)/sessions/[id]/page.tsx": "la página de la reunión: cuántas tareas dejó (contarTareasDeLaReunion, solo lo visible)",
       "lib/seguimiento/compromisos-server.ts": "«Lo que dejó esta reunión»: lo demás que dejó la reunión en Tareas, para leer (cargarTareasDeLaReunion, solo lo visible)",
       "components/clients/ProjectGPS.tsx": "los «Pendientes recientes» del Resumen: el tipo de /api/tareas/del-proyecto (no consulta; los cambios van por las rutas de Tareas)",
+      "lib/equipos/registro.ts": "el registro de equipos (etapa 4c): solo el TIPO de la clave del sprint (equipos.ts); no lee tareas",
+      "lib/equipos/registro.test.ts": "verifica que cada sprint del registro exista en equipos.ts (puro); no lee tareas",
+      "lib/mi-dia/resumen-server.ts": "el resumen antes de una reunión (etapa 4c): lo pendiente de los dos lados SOLO por lib/tareas/para-agentes.ts (sin la cita, el contexto, las notas ni lo privado)",
       "lib/uso/lectura-server.ts": "«Uso de Nexus» (etapa 4a): solo el nombre del equipo de cada persona (equipos.ts, puro); no lee tareas",
       // Las tareas de HubSpot (2026-10-15, etapa 3 de docs/mi-dia-plan.md).
       "lib/tareas-hubspot/reglas.ts": "las tareas de HubSpot: solo los tipos de prioridad (puro)",

@@ -12,6 +12,13 @@ import { requireInternalUser } from "@/lib/auth/supabase";
 import Link from "next/link";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { ENLACE_BLANCO } from "@/components/carga/piezas";
+import TuAgenda from "@/components/para-ti/TuAgenda";
+import TuCartera from "@/components/para-ti/TuCartera";
+import DespuesDeTusReuniones from "@/components/para-ti/DespuesDeTusReuniones";
+import { despuesDeTusReuniones } from "@/lib/mi-dia/despues-server";
+import { equipoDeRol, veLaAgenda } from "@/lib/equipos/registro";
+import { agendaDeHoy } from "@/lib/mi-dia/agenda-server";
+import { carteraDelCse } from "@/lib/mi-dia/cartera-server";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { accesoParaFrentes, alcanceDe, tienePermiso } from "@/lib/para-ti/alcance-server";
 import { medirParaTi } from "@/lib/para-ti/medir-server";
@@ -49,7 +56,15 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
     ? await vistaDeVentasDelPedido(alcance.teamMemberId, alcance.email, hoyISO, ahora)
     : null;
   const modo: ModoDeVentas = ventas?.estado === "ok" && uno(sp.vista) === "cartera" ? "cartera" : "dia";
-  const [medicion, avisos] = await Promise.all([medirParaTi(alcance, ahora), avisosDe(alcance.email)]);
+  // La agenda del día y la cartera del CSE (etapa 4c): lo decide el registro de equipos (lib/equipos/registro.ts).
+  const [medicion, avisos, agenda, carteraCse, despues] = await Promise.all([
+    medirParaTi(alcance, ahora),
+    avisosDe(alcance.email),
+    veLaAgenda(alcance.rol) ? agendaDeHoy(alcance.email, ahora).catch(() => null) : Promise.resolve(null),
+    equipoDeRol(alcance.rol)?.cartera === "cse" ? carteraDelCse(alcance, hoyISO).catch(() => []) : Promise.resolve([]),
+    // Después de cada reunión (etapa 4d): para quien ve la agenda, las que terminaron en las últimas 36 horas.
+    veLaAgenda(alcance.rol) ? despuesDeTusReuniones(ctx.user, alcance.rol, ahora).catch(() => []) : Promise.resolve([]),
+  ]);
 
   // Un frente que llevas sin el permiso para abrirlo se calla (lib/para-ti/frentes.ts): se dice, para que no parezca
   // que está al día.
@@ -91,12 +106,18 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
         title={`${saludo(reloj.hour)}, ${nombre}`}
         description={`${fechaLarga(hoyISO)} · ${lineaDelDia}`}
         action={
-          // «Uso de Nexus» es de dirección (etapa 4a): cómo se usa Nexus, por equipo y por persona.
-          ctx.role === "SUPER_ADMIN" ? (
-            <Link href="/para-ti/uso" className={ENLACE_BLANCO}>
-              Uso de Nexus
+          <div className="flex flex-wrap gap-2">
+            {/* El correo de la mañana en vista previa (etapa 4e): todavía no se envía. */}
+            <Link href="/para-ti/correo" className={ENLACE_BLANCO}>
+              Correo de la mañana
             </Link>
-          ) : undefined
+            {/* «Uso de Nexus» es de dirección (etapa 4a): cómo se usa Nexus, por equipo y por persona. */}
+            {ctx.role === "SUPER_ADMIN" && (
+              <Link href="/para-ti/uso" className={ENLACE_BLANCO}>
+                Uso de Nexus
+              </Link>
+            )}
+          </div>
         }
       />
       {ventas?.estado === "sin-tabla" && (
@@ -105,6 +126,9 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
       {ventas?.estado === "ok" && (
         <VentasDeParaTi vista={ventas.vista} modo={modo} hoyISO={hoyISO} ahoraISO={ahora.toISOString()} negocioAbierto={uno(sp.negocio)} />
       )}
+      {modo === "dia" && despues.length > 0 && <DespuesDeTusReuniones reuniones={despues} hoyISO={hoyISO} />}
+      {modo === "dia" && agenda && <TuAgenda agenda={agenda} ahora={ahora} />}
+      {modo === "dia" && carteraCse.length > 0 && <TuCartera cuentas={carteraCse} hoyISO={hoyISO} />}
       {modo === "dia" && <ParaTiPantalla medicion={medicion} avisos={avisos} resumen={resumen} />}
     </div>
   );

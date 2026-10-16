@@ -56,7 +56,13 @@ type Destino =
    * niveles CONFIRMADOS de cada exploración (de la preventa y de cada proyecto) y las reuniones agendadas con la empresa.
    * Pantallas internas; nada llega a un documento ni al cliente.
    */
-  | "escala-de-la-empresa";
+  | "escala-de-la-empresa"
+  /**
+   * La agenda de hoy de «Para ti» (etapa 4c de docs/mi-dia-plan.md, 2026-10-16): usa los ayudantes del calendario de
+   * la exploración (los invitados de un evento, sus fechas, los dominios genéricos) para saber con qué empresa es cada
+   * reunión. No lee ninguna exploración.
+   */
+  | "agenda-interna";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/(shell)/sales/exploraciones/page.tsx": { destino: "ventas", motivo: "La lista de exploraciones." },
@@ -196,6 +202,10 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "sugerencias-del-documento",
     motivo: "Arma las sugerencias del panel: las sesiones de la exploración del proyecto por su puerta (sesionesDeLaExploracionDelProyecto).",
   },
+  "lib/mi-dia/agenda.ts": {
+    destino: "agenda-interna",
+    motivo: "La agenda de hoy de «Para ti»: los ayudantes del calendario (invitados, fechas, dominios genéricos). No lee exploraciones.",
+  },
   "lib/cuestionario/escala.ts": {
     destino: "cuestionario-al-cliente",
     motivo: "El cuestionario de escala llega con el nivel ya ubicado marcado, para que la persona lo confirme. Solo niveles.",
@@ -248,6 +258,11 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     permitidas: /\bescalaDeLaEmpresa\b|EscalaDeLaEmpresa\b|\bagendadasConLaEmpresa\b/,
     // Solo los niveles confirmados y las reuniones agendadas: ni la propuesta, ni el handoff, ni lo interno de la preventa.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b/,
+  },
+  "agenda-interna": {
+    permitidas: /\binvitadosDelEvento\b|\bisoDelEvento\b|\bDOMINIOS_GENERICOS\b/,
+    // Solo el calendario: ninguna exploración, ni la propuesta, ni el handoff, ni lo interno.
+    prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\bexploracionesDeVenta\b/,
   },
   "memoria-interna": {
     permitidas: /\bloAprendidoEnLaPreventa\b/,

@@ -22,6 +22,8 @@
  *     muestra los cierres más cerca y la cartera desde esta copia.
  *   - contactos-y-tickets → la copia de los contactos y los tickets de HubSpot de las empresas de Nexus
  *     (lib/contactos/copia-server.ts), cada hora de 6:00 a 20:00 CR, todos los días (etapa 6a de docs/mi-dia-plan.md).
+ *   - indice-de-reuniones → parte en turnos las transcripciones nuevas de las reuniones con clientes y prospectos, para
+ *     la búsqueda (lib/busqueda/indexar-server.ts), cada hora, de a 60 (etapa 4c de docs/mi-dia-plan.md).
  *   - seguimiento-reuniones → la lectura de cada reunión con un cliente o un prospecto, por la cola
  *     `LecturaDeReunion` (memoria de la cuenta, etapa 2). Cada tick. Gated por SEGUIMIENTO_REUNIONES_ENABLED≠0.
  *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
@@ -671,6 +673,25 @@ const contactosYTickets: JobDef = {
   },
 };
 
+/** La búsqueda en las reuniones (etapa 4c): parte en turnos las transcripciones nuevas o que cambiaron. Una corrida por hora. */
+const indiceDeReuniones: JobDef = {
+  key: "indice-de-reuniones",
+  shouldRun: () => true,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const p = crDateParts(now);
+    const turno = `${p.dateKey}T${String(p.hour).padStart(2, "0")}`;
+    if (!(await claimDateKey("indice-de-reuniones", turno, now))) return SIN_TURNO;
+    const { indexarReuniones } = await import("@/lib/busqueda/indexar-server");
+    const r = await indexarReuniones();
+    if (r.sinTabla) {
+      console.log(`[jobs/indice-de-reuniones] ${turno} — falta el SQL 2026-10-16-busqueda-en-reuniones.sql`);
+      return;
+    }
+    console.log(`[jobs/indice-de-reuniones] ${turno} — ${r.partidas} partidas (${r.turnos} turnos), ${r.sinCambio} sin cambio, faltan ${r.faltan}`);
+  },
+};
+
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, invariantsDaily];
 }

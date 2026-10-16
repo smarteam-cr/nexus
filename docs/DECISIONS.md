@@ -8189,3 +8189,62 @@ abiertos.
   tickets abiertos y los cerrados de 90 días) y la página de cada reunión (los invitados con nombre y cargo).
 - **La memoria de la cuenta los lleva solo en el alcance interno**: la lista de contactos de HubSpot no está curada
   (gente que se fue, contactos de prospección), así que no llega a lo que lee el cliente ni al handoff.
+
+## «Para ti» del CSE y el resumen antes de cada reunión (2026-10-16)
+
+**Contexto.** Etapa 4c del roadmap de «Para ti» (`docs/mi-dia-plan.md`): que el CSE sepa qué atender hoy y llegue
+preparado a cada reunión sin armarlo a mano. Ventas recibe lo mismo.
+
+- **Un solo registro de equipos** (`lib/equipos/registro.ts`): cada equipo declara sus roles, su sprint de Tareas, el
+  siguiente paso que lleva, su cartera y qué ve en «Para ti». El siguiente paso que escribe cada rol ya sale de ahí
+  (`equiposQueEscribe`). Los sprints de Tareas siguen saliendo del ÁREA de cada persona (decisión de Tareas); el
+  registro dice cuál es el de cada equipo. Dirección no es un equipo.
+- **La agenda de hoy** en «Para ti» (Ventas, CS, Dev y dirección): las reuniones del calendario de la persona, con la
+  empresa de cada una. La empresa sale de los invitados: el correo exacto de un contacto de HubSpot o el dominio
+  registrado de la empresa (nunca uno de correo personal). Alguien que es de varias empresas (HubSpot, una agencia) no
+  decide si hay otro invitado que es de una sola (invariante 1); si solo hay gente de varias, se elige al preparar.
+- **«Preparar» abre el resumen de la cuenta para esa reunión, sin IA**: quién viene (nombre, cargo y su última reunión),
+  la última vez (la minuta o las notas de la última reunión con el cliente, sin las de puertas adentro), lo que se dijo
+  antes de lo que dice el título, lo pendiente de los dos lados (por la puerta de los agentes de Tareas: sin la cita,
+  el contexto, las notas ni lo privado), el siguiente paso de cada equipo, los tickets y los negocios abiertos. Cada
+  bloque dice de dónde salió. Las alertas, solo para quien lidera Customer Success; el monto de un negocio, solo para
+  quien ve Ventas. *Por qué sin IA:* el riesgo del plan era que el resumen citara mal o mezclara clientes; armado así,
+  cada dato es el de su lugar y la frase citada es la de la transcripción.
+- **La búsqueda en las reuniones**: texto completo en español sin servicio nuevo, sobre las transcripciones partidas en
+  TURNOS (`TurnoDeReunion`, con una columna generada `tsv` que no está en el schema de Prisma). Se busca sin tildes: la
+  columna y la consulta se normalizan igual. Solo en las reuniones de UNA empresa, con la regla única de pertenencia.
+  Se indexan las reuniones con clientes y prospectos de los últimos 180 días (job `indice-de-reuniones`).
+- **La cartera del CSE en «Para ti»**: las cuentas de los proyectos donde es el CSE encargado, primero las que no tienen
+  siguiente paso de CS o lo tienen vencido.
+- **Se mide**: el latido cuenta «Preparar una reunión» como sección propia, para saber si los CSE abren el resumen.
+
+## Después de cada reunión, un paso de dos minutos (2026-10-16)
+
+**Contexto.** Etapa 4d del roadmap de «Para ti» (`docs/mi-dia-plan.md`): que lo que dejó una reunión se cierre ese día.
+
+- **«Después de tus reuniones» en «Para ti»**: las reuniones con clientes y prospectos en las que estuviste y que
+  terminaron en las últimas 36 horas (hasta 5). Cada una dice qué dejó y trae «Usar todo», el MISMO de la tarjeta «Lo
+  que dejó esta reunión» (con su huella: si la reunión cambió, 409 y se revisa en la tarjeta). Se ve también lo que
+  la tarjeta no decide sola: el enlace «Revisar».
+- **El siguiente paso propuesto sale de lo que se comprometió Smarteam en la reunión**: la primera de tus tareas
+  propuestas de esa reunión, cuando tu equipo no tiene un siguiente paso sobre la cuenta o se venció. «Usar como
+  siguiente paso» lo guarda en Nexus y en HubSpot, como cualquier siguiente paso. *Por qué así:* no hace falta otra
+  lectura con IA; es lo que la lectura de la reunión ya dejó.
+- Si nadie lo mira, igual queda como borrador (DECISIONS «La IA como borrador»).
+
+## El correo de la mañana, paso 1 (2026-10-16)
+
+**Contexto.** Etapa 4e del roadmap de «Para ti» (`docs/mi-dia-plan.md`): llevar el día al correo. Se prueba en 4 pasos;
+este es el primero: se arma y se ve en Nexus, sin enviar.
+
+- **Se arma con una función pura** (`lib/mi-dia/correo.ts`) sobre lo mismo que lee «Para ti»: la agenda de hoy (si el
+  equipo de la persona la ve) y su medición. Lo que no está en su «Para ti» no puede estar en el correo.
+- **Como mucho 5 cosas**: primero lo que dejó un agente y espera tu decisión, después lo de hoy. Lo demás se dice en una
+  línea («Y N cosas más en «Para ti»»).
+- **Nunca Finanzas ni montos**: las fuentes de Finanzas y de Cobranza no entran, y una cosa con monto tampoco. *Por
+  qué:* un correo se reenvía y se lee en el teléfono; lo que ve una persona en Nexus no tiene por qué salir de ahí.
+- **Las reuniones llevan «Preparar», no su resumen.** El resumen de la cuenta queda en Nexus, detrás del enlace (con su
+  regla de acceso): en el correo solo va la hora, el título y la empresa. Corrige al plan, que decía «con su resumen».
+- **Cada línea lleva a Nexus** con la dirección de `APP_URL`.
+- **No se envía.** El paso 2 (solo a Elías, una semana) espera el permiso de Gmail en Google Admin o un proveedor de
+  correo.
