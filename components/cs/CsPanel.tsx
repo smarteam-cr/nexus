@@ -221,7 +221,16 @@ export default function CsPanel({
         {pestana === "uso" && <UsoYLicencias adopcion={data.adopcion} primeros90={data.primeros90} consumo={data.consumo} />}
         {pestana === "crecimiento" && <Crecimiento oportunidades={data.oportunidades} />}
         {pestana === "equipo" && (
-          <Equipo equipo={data.equipo} cartera={data.cartera} meta={data.metaRecurrentes} idsDelEquipo={data.idsDelEquipo} onVer={verEnCartera} />
+          <Equipo
+            equipo={data.equipo}
+            cartera={data.cartera}
+            meta={data.metaRecurrentes}
+            idsDelEquipo={data.idsDelEquipo}
+            sinCse={data.sinCse}
+            equipoParaPase={data.equipoParaPase}
+            puedeReasignar={puedeReasignar}
+            onVer={verEnCartera}
+          />
         )}
         {pestana === "nivel" && <NivelDePartner nivel={data.nivel} hoy={data.hoy} />}
       </main>

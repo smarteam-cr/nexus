@@ -7123,3 +7123,22 @@ model CasoDeUso {
   @@index([projectId])
   @@index([cicloId])
 }
+
+// ─── Uso de Nexus (etapa 4a del roadmap de «Para ti», docs/mi-dia-plan.md) ───
+
+/// Cuántas veces abrió cada persona cada sección de Nexus, por día. Lo mínimo para saber si se usa: no guarda qué
+/// cliente ni qué documento miró, ni minutos. Lo escribe solo lib/uso/registro-server.ts; lo lee dirección.
+model UsoDeNexus {
+  id           String   @id @default(cuid())
+  personaEmail String
+  /// La clave del ítem del menú (APP_NAV) o «otra» (lib/uso/secciones.ts)
+  seccion      String
+  /// El día en Costa Rica, AAAA-MM-DD
+  dia          String
+  aperturas    Int      @default(1)
+  primeraAt    DateTime @default(now())
+  ultimaAt     DateTime @default(now())
+
+  @@unique([personaEmail, seccion, dia])
+  @@index([dia])
+}

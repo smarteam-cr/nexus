@@ -16,6 +16,8 @@ import { cn } from "@/lib/cn";
 import { plural } from "@/lib/cs/formato";
 import { UMBRALES } from "@/lib/cs/lectura-partner";
 import type { FilaDeEquipo } from "@/lib/cs/cartera-reglas";
+import type { CuentaSinCse } from "@/lib/cs/sin-cse";
+import CseEncargadoSelect, { type OpcionDeEncargado } from "@/components/clients/CseEncargadoSelect";
 import type { FilaDeLaCartera } from "@/lib/cs/clasificacion";
 import { cifrasDelCse, contraLaMeta, filtroDeLaCifra, type CifrasDelCse, type FiltrosDeCartera } from "@/lib/cs/filtros-de-cartera";
 import { Avatar, CajaDeTabla, EncabezadoDeTabla } from "../piezas";
@@ -27,6 +29,9 @@ export default function Equipo({
   cartera,
   meta,
   idsDelEquipo,
+  sinCse,
+  equipoParaPase,
+  puedeReasignar,
   onVer,
 }: {
   equipo: { filas: FilaDeEquipo[]; proyectosSinCse: number; deBaja: { nombre: string; proyectos: number }[] };
@@ -35,6 +40,10 @@ export default function Equipo({
   meta: { min: number; max: number };
   /** El id de cada persona por correo, para su 1:1 en la carga. */
   idsDelEquipo: Record<string, string>;
+  /** Las cuentas con proyectos activos sin CSE y a quién propone Nexus. */
+  sinCse: readonly CuentaSinCse[];
+  equipoParaPase: OpcionDeEncargado[];
+  puedeReasignar: boolean;
   onVer: (f: FiltrosDeCartera) => void;
 }) {
   if (equipo.filas.length === 0 && equipo.proyectosSinCse === 0) {
@@ -130,10 +139,11 @@ export default function Equipo({
                 ? `, ${equipo.deBaja.reduce((s, d) => s + d.proyectos, 0)} de gente que ya no está en el equipo: ${equipo.deBaja.map((d) => `${d.nombre} (${d.proyectos})`).join(", ")}.`
                 : "."}
             </span>
-            <span className="text-right text-xs text-warn-ink">pase de cuenta</span>
+            <span className="text-right text-xs text-warn-ink">{sinCse.length > 0 ? "abajo" : "pase de cuenta"}</span>
           </div>
         )}
       </CajaDeTabla>
+      {sinCse.length > 0 && <CuentasSinCse cuentas={sinCse} opciones={equipoParaPase} puedeReasignar={puedeReasignar} />}
       <p className="text-xs text-fg-muted">
         Una cuenta con dos CSE cuenta para quien lleva más proyectos en ella. Recurrente = el tipo de relación confirmado (o
         propuesto) en «Cartera». Atrasados y bloqueados son proyectos.
@@ -141,6 +151,66 @@ export default function Equipo({
     </div>
   );
 }
+
+/**
+ * Las cuentas con proyectos activos sin CSE (etapa 4a): Nexus propone a quién, la CSL lo confirma con la misma celda
+ * del pase de cuenta, que escribe «CSE Encargado» en HubSpot. Nada se asigna solo.
+ */
+function CuentasSinCse({
+  cuentas,
+  opciones,
+  puedeReasignar,
+}: {
+  cuentas: readonly CuentaSinCse[];
+  opciones: OpcionDeEncargado[];
+  puedeReasignar: boolean;
+}) {
+  const conPropuesta = cuentas.filter((c) => c.propuesta).length;
+  return (
+    <section className="space-y-2" aria-labelledby="cuentas-sin-cse">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="cuentas-sin-cse" className="text-sm font-semibold text-fg">
+          Cuentas sin CSE · {cuentas.length}
+        </h2>
+        <span className="text-xs text-fg-muted">
+          {conPropuesta > 0
+            ? `Nexus propone en ${conPropuesta}: elígelo para confirmarlo. Se escribe en HubSpot como «CSE Encargado».`
+            : "Elige quién lleva cada una. Se escribe en HubSpot como «CSE Encargado»."}
+        </span>
+      </div>
+      <CajaDeTabla minimo="min-w-[760px]">
+        <EncabezadoDeTabla columnas={COLUMNAS_SIN_CSE}>
+          <span>Cuenta</span>
+          <span>Proyectos sin CSE</span>
+          <span>CSE encargado</span>
+          <span>Por qué</span>
+        </EncabezadoDeTabla>
+        {cuentas.map((c, i) => (
+          <div key={c.clientId} className={cn("grid items-start gap-4 px-4 py-3 text-[13px] text-fg", COLUMNAS_SIN_CSE, i > 0 && "border-t border-line")}>
+            <Link href={`/customer-success/${c.clientId}`} className="truncate font-semibold transition-colors hover:text-brand">
+              {c.nombre}
+            </Link>
+            <span className="min-w-0 text-fg-secondary">
+              {c.proyectos.join(" · ")}
+              {c.deBaja.length > 0 && <span className="block text-xs text-fg-muted">Estaba a nombre de {c.deBaja.join(", ")}.</span>}
+            </span>
+            <CseEncargadoSelect
+              clientId={c.clientId}
+              clientName={c.nombre}
+              nombres={[]}
+              opciones={puedeReasignar ? opciones : []}
+              puedeEditar={puedeReasignar}
+              sugerencia={c.propuesta?.email}
+            />
+            <span className="text-xs text-fg-muted">{c.propuesta ? c.propuesta.motivo : "Nadie del equipo estuvo en sus reuniones de los últimos 90 días."}</span>
+          </div>
+        ))}
+      </CajaDeTabla>
+    </section>
+  );
+}
+
+const COLUMNAS_SIN_CSE = "grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_180px_minmax(0,1fr)]";
 
 function Cifra({ onClick, titulo, children }: { onClick: () => void; titulo: string; children: React.ReactNode }) {
   return (

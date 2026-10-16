@@ -8143,3 +8143,26 @@ el primer momento; lo que confirma una persona manda; si algo nuevo lo contradic
   Elías de la etapa 3); se usa en los agentes internos y en el handoff. Cambiarlo es otra decisión.
 - **Pendiente:** llevar la pregunta de la contradicción también a «Para ti» y al chat; prender la lectura de hechos
   (`SEGUIMIENTO_HECHOS`) con el resultado del sondeo.
+
+## Medir el uso y completar la cartera (2026-10-16)
+
+**Contexto.** Etapa 4a del roadmap de «Para ti» (`docs/mi-dia-plan.md`). Hasta hoy Nexus no podía decir si «Para ti»
+sirve: solo sabe lo que cada persona escribe, y la sesión de Supabase se renueva sola. Y «Para ti» del CSE sale de su
+cartera, así que una cuenta sin CSE no le aparece a nadie (medido el 2026-10-16: 13 cuentas, 16 proyectos activos).
+Elías: «que se guarde lo mínimo que sirva para verificar el uso básico».
+
+- **El latido guarda lo mínimo** (`UsoDeNexus`, SQL `2026-10-16-uso-de-nexus.sql`): una fila por persona, sección y día,
+  con cuántas veces la abrió y la primera y la última hora. No guarda qué cliente ni qué documento miró, ni minutos. Lo
+  escribe solo `lib/uso/registro-server.ts`; lo manda `components/layout/LatidoDeUso.tsx` desde el shell.
+- **La sección es la clave del ítem del menú** (`APP_NAV`), por el prefijo más largo (`lib/uso/secciones.ts`): un
+  módulo nuevo se cuenta solo. Lo que no está en el menú es «otra». La propia pantalla de la medición no se cuenta.
+- **Una apertura es entrar a una sección o volver después de 30 minutos.** Pasar de una ficha a otra no es otra
+  apertura: se mide si Nexus se usa, no cuántos clics hace cada persona.
+- **«Uso de Nexus» es de dirección** (`/para-ti/uso`, solo SUPER_ADMIN, enlace en «Para ti»): Equipo (los días con uso
+  por persona y equipo, en orden alfabético, sin ranking), Para qué se usa (`usoDeLoPropuesto`, 30 días) y Reuniones
+  sin grabar (quién organiza reuniones con clientes que no dejan transcripción, para arreglarlo en Google Workspace).
+  Las otras pestañas del diseño (IA por cliente, Procesos de IA, Conclusiones de la IA) quedan para después.
+- **El CSE de una cuenta sin encargado lo propone Nexus y lo confirma la CSL** (`lib/cs/sin-cse.ts`, Éxito del cliente ›
+  Equipo): primero quien ya lleva otros proyectos activos de la cuenta; si no, el CSE (rol CSE) que estuvo en más
+  reuniones con el cliente en 90 días; si no, nadie. Elegirlo es el pase de cuenta de siempre, que escribe «CSE
+  Encargado» en HubSpot. La CSL no se propone por reuniones: va a muchas y no es la encargada.

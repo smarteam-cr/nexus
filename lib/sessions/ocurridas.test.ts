@@ -112,7 +112,15 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   },
   "lib/cs/cartera.ts": {
     clase: "contexto",
-    motivo: "El último contacto de cada cuenta en la pantalla de la CSL: una reunión agendada no es contacto.",
+    motivo:
+      "El último contacto de cada cuenta en la pantalla de la CSL, y quién estuvo en las reuniones para proponer el CSE de " +
+      "una cuenta sin encargado: una reunión agendada no es contacto ni cuenta como haber estado.",
+  },
+  "lib/uso/lectura-server.ts": {
+    clase: "contexto",
+    motivo:
+      "«Uso de Nexus» AFIRMA cuántas reuniones con clientes no dejaron transcripción: solo las que ya pasaron, con 6 " +
+      "horas para que llegue la transcripción. Una agendada no es una reunión sin grabar.",
   },
   "lib/projects/analyze-participants.ts": {
     clase: "contexto",
@@ -326,6 +334,7 @@ const CORTAN_POR_FECHA = [
   "lib/cs/watchdog-context.ts",
   "lib/cs/watchdog-cuenta.ts",
   "lib/cs/cartera.ts",
+  "lib/uso/lectura-server.ts",
   "lib/carga/queries.ts",
   "lib/projects/analyze-participants.ts",
   "lib/lifecycle/load.ts",

@@ -57,6 +57,7 @@ import { leerVistas } from "./vistas-de-cartera-server";
 import { cargarConfigCarga } from "@/lib/carga/queries";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
 import { DE_LA_PREVENTA } from "@/lib/exploraciones/marco";
+import { cuentasSinCse, DIAS_DE_REUNIONES_PARA_PROPONER, type CseDelEquipo, type CuentaSinCse } from "./sin-cse";
 
 const DIA_MS = 86_400_000;
 
@@ -413,7 +414,11 @@ export async function cargarCarteraDeLaCsl(clientWhere: Prisma.ClientWhereInput 
   const [vistas, configCarga, delEquipo] = await Promise.all([
     leerVistas().catch(() => ({ vistas: [], faltaLaTabla: true })),
     cargarConfigCarga().catch(() => null),
-    prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { id: true, email: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.teamMember.findMany({
+      where: { deactivatedAt: null },
+      select: { id: true, email: true, name: true, roleEnum: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
   // Todas las cuentas para la clasificación y el buscador; las preguntas de la cartera, solo las que están en ella.
   const todas = await cargarCuentas(clientWhere, { incluirSinServicio: true });
@@ -452,6 +457,11 @@ export async function cargarCarteraDeLaCsl(clientWhere: Prisma.ClientWhereInput 
     consumo: consumoDeLaCartera(cuentas),
     oportunidades: oportunidades(cuentas),
     equipo: equipo(cuentas, hoy),
+    /** Las cuentas con proyectos activos sin CSE y a quién propone Nexus (lo confirma la CSL con el pase de cuenta). */
+    sinCse: await proponerCseParaLasCuentas(
+      cuentas,
+      delEquipo.filter((m) => !esCuentaDePrueba(m.name)).map((m) => ({ email: m.email, nombre: m.name, esCse: m.roleEnum === "CSE" })),
+    ),
     nivel: nivelDePartner(cuentas, hoy),
     fuentes,
     /** Las abiertas, por cuenta: la vista «Alertas» de «A quién llamar». */
@@ -462,6 +472,28 @@ export async function cargarCarteraDeLaCsl(clientWhere: Prisma.ClientWhereInput 
 }
 
 export type CarteraDeLaCsl = Awaited<ReturnType<typeof cargarCarteraDeLaCsl>>;
+
+/**
+ * Las cuentas con proyectos activos sin CSE, con la propuesta de `lib/cs/sin-cse.ts`. Las reuniones son las del
+ * cliente (regla ÚNICA de pertenencia) que ya ocurrieron en los últimos 90 días; solo se leen los participantes.
+ */
+async function proponerCseParaLasCuentas(
+  cuentas: readonly CuentaDeCartera[],
+  equipoActivo: readonly CseDelEquipo[],
+  ahora = new Date(),
+): Promise<CuentaSinCse[]> {
+  const conHueco = cuentas.filter((c) => c.proyectos.some((p) => p.activo && !p.cseNombre));
+  if (conHueco.length === 0) return [];
+  const desde = new Date(ahora.getTime() - DIAS_DE_REUNIONES_PARA_PROPONER * DIA_MS);
+  const reuniones = await prisma.firefliesSession.findMany({
+    where: { OR: conHueco.flatMap((c) => whereBelongsToClient(c.clientId).OR), date: { lte: ahora, gte: desde } },
+    select: { resolvedClientId: true, manualClientId: true, participants: true },
+  });
+  const porCuenta = new Map(
+    conHueco.map((c) => [c.clientId, reuniones.filter((r) => belongsToClient(r, c.clientId)).map((r) => r.participants)]),
+  );
+  return cuentasSinCse(conHueco, equipoActivo, porCuenta);
+}
 
 /** Cuántos días se pueden consultar las alertas cerradas desde el índice. */
 export const DIAS_DE_CERRADAS = 30;

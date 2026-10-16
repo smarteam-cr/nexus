@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import Sidebar from "./Sidebar";
+import LatidoDeUso from "./LatidoDeUso";
 
 interface UserLite {
   email: string;
@@ -88,6 +89,8 @@ export default function SidebarShell({ user, initialOpen, children }: Props) {
 
   return (
     <div className="flex min-h-screen">
+      {/* Cuenta las aperturas de cada sección (Uso de Nexus, etapa 4a). No pinta nada. */}
+      <LatidoDeUso />
       {/* ── Sidebar con transición ──
           ⚠ El `sticky` va ACÁ y no en el <aside> de adentro. Este contenedor necesita
           `overflow-hidden` (recorta el menú mientras anima el ancho), y un `overflow` distinto de

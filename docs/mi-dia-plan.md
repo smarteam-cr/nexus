@@ -36,8 +36,9 @@ Tres principios ordenan el roadmap:
 
 ### El roadmap por horizonte
 
-Horizontes en vez de fechas: cada uno arranca cuando cierra el anterior. El tamaño es una estimación
-en jornadas de trabajo, sin contar las pruebas con el equipo: chico (1), mediano (2) y grande (3 a 4).
+Sin fechas, a propósito: el código de una etapa sale en uno a cuatro días de trabajo (el tamaño: chico es 1,
+mediano 2, grande 3 a 4), pero lo que define cuándo se pasa a la siguiente es desplegarla y probarla con el equipo.
+Un horizonte arranca cuando el anterior está desplegado y probado.
 
 | Horizonte | Etapa | Qué entrega | Para quién | Tamaño | Estado |
 |---|---|---|---|---|---|
@@ -45,10 +46,10 @@ en jornadas de trabajo, sin contar las pruebas con el equipo: chico (1), mediano
 | | 1 | Negocios abiertos, «Para ti» de Ventas, pregunta de cierre y monto | Ventas | — | ✅ En producción |
 | | 2 | Siguiente paso por equipo, en Nexus y en HubSpot | Todos | — | ✅ En producción |
 | | 3 | Tareas de HubSpot en Nexus, en los dos sentidos | Ventas y CS | — | ✅ En producción · falta probarla con Andrés |
-| **Ahora** (≈ 2 semanas) | 4a | Medir el uso y completar la cartera | Dirección y CSL | Mediano | ▶ La que sigue |
+| **Ahora** | 4a | Medir el uso y completar la cartera | Dirección y CSL | Mediano | Construida (16 oct), sin desplegar; el SQL ya está en la base |
 | | 4b | La IA como borrador; lo confirmado manda | Todos los agentes | Mediano | Construida (15 oct), sin desplegar; falta prender los hechos |
 | | 4f | Agregar una reunión a mano (la transcripción o lo que recuerdas) y asignarla a un cliente y sus proyectos | Todos los equipos | Mediano | Construida (15 oct), sin desplegar |
-| **Siguiente** (≈ 4 semanas, con la pausa) | 6a | Contactos y tickets de HubSpot en Nexus | Base del resumen y del agente | Mediano | Pendiente · sube antes de la 4c |
+| **Siguiente** | 6a | Contactos y tickets de HubSpot en Nexus | Base del resumen y del agente | Mediano | Pendiente · sube antes de la 4c |
 | | 4c | «Para ti» del CSE y el resumen antes de cada reunión | CSE y Ventas | Grande | Pendiente |
 | | 4d | Después de cada reunión, un paso de dos minutos | CSE y Ventas | Chico | Pendiente |
 | | — | **Pausa de dos semanas: medir y decidir si seguir** | — | — | — |
@@ -689,3 +690,17 @@ Construida el 2026-10-15 (las reglas, en DECISIONS «La IA como borrador; lo con
 
 Falta: que Elías elija la variante y el modelo de la lectura de hechos con el sondeo y la prenda
 (`SEGUIMIENTO_HECHOS=1` en el servidor); llevar la pregunta a «Para ti» y al chat; probar en la app, commit y deploy.
+
+## Etapa 4a, cómo va (2026-10-16)
+
+Construida el 2026-10-16 (las reglas, en DECISIONS «Medir el uso y completar la cartera»):
+- El latido: cada sección que abre cada persona, por día (`UsoDeNexus`, `lib/uso/`,
+  `components/layout/LatidoDeUso.tsx`, `POST /api/uso`). El SQL `2026-10-16-uso-de-nexus.sql` ya se aplicó en
+  producción: empieza a contar con el deploy.
+- «Uso de Nexus» (`/para-ti/uso`, solo dirección, enlace arriba de «Para ti»): Equipo, Para qué se usa y Reuniones sin
+  grabar.
+- La propuesta de CSE para las cuentas sin encargado, en Éxito del cliente › Equipo (`lib/cs/sin-cse.ts`). Medido el
+  2026-10-16: 13 cuentas con 16 proyectos sin CSE; Nexus propone a alguien en 7 (5 por llevar otros proyectos de la
+  cuenta, 2 por haber estado en sus reuniones).
+
+Falta: desplegar, que la CSL confirme los CSE y, después de una semana de registro, mirar «Uso de Nexus».

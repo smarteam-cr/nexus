@@ -32,6 +32,7 @@ export default function CseEncargadoSelect({
   nombres,
   opciones,
   puedeEditar,
+  sugerencia,
 }: {
   clientId: string;
   clientName: string;
@@ -40,6 +41,8 @@ export default function CseEncargadoSelect({
   /** El equipo activo. Vacío ⇒ se pinta como texto, sin desplegable. */
   opciones: OpcionDeEncargado[];
   puedeEditar: boolean;
+  /** El correo que propone Nexus cuando no hay encargado (Éxito del cliente › Equipo): elegirlo es el pase de cuenta. */
+  sugerencia?: string;
 }) {
   const router = useRouter();
 
@@ -70,6 +73,7 @@ export default function CseEncargadoSelect({
       puedeEditar={puedeEditar}
       etiqueta={`CSE encargado de ${clientName}${nombres.length ? `: ${nombres[0]}` : ""}`}
       placeholderBusqueda="Buscar persona…"
+      sugerencia={sugerencia}
       onElegir={async (email) => {
         const r = await fetch(`/api/clients/${clientId}/cse-encargado`, {
           method: "PATCH",

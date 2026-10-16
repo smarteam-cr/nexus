@@ -9,7 +9,9 @@
  * Mide fresco en cada visita (`medirParaTi`) y deja la medición guardada para el número del menú.
  */
 import { requireInternalUser } from "@/lib/auth/supabase";
+import Link from "next/link";
 import { EmptyState, PageHeader } from "@/components/ui";
+import { ENLACE_BLANCO } from "@/components/carga/piezas";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { accesoParaFrentes, alcanceDe, tienePermiso } from "@/lib/para-ti/alcance-server";
 import { medirParaTi } from "@/lib/para-ti/medir-server";
@@ -85,7 +87,18 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className={`${SHELL_DEFAULT} space-y-6`}>
-      <PageHeader title={`${saludo(reloj.hour)}, ${nombre}`} description={`${fechaLarga(hoyISO)} · ${lineaDelDia}`} />
+      <PageHeader
+        title={`${saludo(reloj.hour)}, ${nombre}`}
+        description={`${fechaLarga(hoyISO)} · ${lineaDelDia}`}
+        action={
+          // «Uso de Nexus» es de dirección (etapa 4a): cómo se usa Nexus, por equipo y por persona.
+          ctx.role === "SUPER_ADMIN" ? (
+            <Link href="/para-ti/uso" className={ENLACE_BLANCO}>
+              Uso de Nexus
+            </Link>
+          ) : undefined
+        }
+      />
       {ventas?.estado === "sin-tabla" && (
         <Alert variant="warning">Los negocios de HubSpot todavía no se pueden mostrar: falta aplicar scripts/sql/2026-10-14-negocios-abiertos.sql.</Alert>
       )}

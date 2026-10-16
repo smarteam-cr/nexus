@@ -23,6 +23,7 @@ export type Cobertura =
 export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   // ── Para ti (2026-10-04) ────────────────────────────────────────────────────
   "para-ti": { modo: "own" },
+  "para-ti/uso": { modo: "own" },
   tareas: { modo: "own" },
   "tareas/equipo": { modo: "own" },
   "tareas/delegadas": { modo: "own" },

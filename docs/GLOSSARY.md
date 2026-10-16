@@ -3,6 +3,9 @@
 - **Sesión** (`FirefliesSession`): una reunión de Google Meet (el modelo conserva el nombre
   "Fireflies" por historia — esa integración se eliminó el 2026-06-04). Tiene
   `participants` (emails), `transcript`, `summary`, `organizerEmail`. ~16k filas.
+- **Uso de Nexus** (`/para-ti/uso`, `lib/uso`, desde el 2026-10-16): cómo se usa Nexus, por equipo y por persona; solo
+  dirección. Cuenta **aperturas**: entrar a una sección del menú, o volver a ella después de 30 minutos (`UsoDeNexus`,
+  una fila por persona, sección y día). No guarda qué cliente ni qué documento se miró, ni minutos.
 - **Reunión agregada a mano** (`lib/sessions/reunion-a-mano.ts`, desde el 2026-10-15): una reunión que no pasó por Meet
   (Zoom, Teams, presencial, una llamada), creada con «+ Agregar reunión» (`source = "manual"`, id `manual_…`), o una de
   Meet que no dejó nada y a la que se le agregó lo que pasó. Lo que pasó es la **transcripción** (va a `transcript`) o lo
