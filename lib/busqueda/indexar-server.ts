@@ -63,15 +63,21 @@ export async function indexarReuniones(o: { limite?: number; dias?: number; escr
     r.partidas++;
     r.turnos += turnos.length;
     if (!escribir) continue;
-    await prisma.$transaction([
-      prisma.turnoDeReunion.deleteMany({ where: { sessionId: id } }),
-      prisma.turnoDeReunion.createMany({ data: turnos.map((t) => ({ sessionId: id, orden: t.orden, hablante: t.hablante, texto: t.texto })) }),
-      prisma.reunionIndexada.upsert({
-        where: { sessionId: id },
-        create: { sessionId: id, huella, turnos: turnos.length, indexadoAt: ahora },
-        update: { huella, turnos: turnos.length, indexadoAt: ahora },
-      }),
-    ]);
+    try {
+      await prisma.$transaction([
+        prisma.turnoDeReunion.deleteMany({ where: { sessionId: id } }),
+        prisma.turnoDeReunion.createMany({ data: turnos.map((t) => ({ sessionId: id, orden: t.orden, hablante: t.hablante, texto: t.texto })) }),
+        prisma.reunionIndexada.upsert({
+          where: { sessionId: id },
+          create: { sessionId: id, huella, turnos: turnos.length, indexadoAt: ahora },
+          update: { huella, turnos: turnos.length, indexadoAt: ahora },
+        }),
+      ]);
+    } catch (e) {
+      // Otra corrida (el job o la carga inicial) la partió al mismo tiempo: ya quedó, se sigue con las demás.
+      if ((e as { code?: string }).code === "P2002") continue;
+      throw e;
+    }
   }
   return r;
 }
