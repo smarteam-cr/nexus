@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
 import { loadCartera, loadAlertas, loadRiesgo, loadColaCobros } from "@/lib/cobranza";
+import { cargarUltimosContactos } from "@/lib/cobranza/quien-debe-server";
 import { crDateParts } from "@/lib/jobs/time";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import CobranzaClient from "@/components/cobranza/CobranzaClient";
@@ -33,6 +34,8 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Pro
     loadAlertas({ estados: ["ABIERTA", "VISTA"] }),
     loadRiesgo(todayISO),
   ]);
+  /* «Quién nos debe»: la última llamada o correo con cada cuenta que aparece en la cola. */
+  const contactos = await cargarUltimosContactos(cola.map((c) => c.cuentaId));
 
   // El PageHeader vive en CobranzaClient: su slot `action` carga el botón global
   // "Registrar pago", que necesita el estado del contenedor.
@@ -43,6 +46,7 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Pro
         initialCartera={cartera}
         initialAlertas={alertas}
         initialRiesgo={riesgo}
+        initialContactos={contactos}
         puedeEditar={puedeEditar}
         /* «Registrar pago» de Pendientes llega con ?pago=1: abre el buscador de una vez. */
         abrirPago={pago === "1"}

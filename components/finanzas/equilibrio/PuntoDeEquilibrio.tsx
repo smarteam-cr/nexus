@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
 import { avisoDeActualizacion, type FuenteActualizada } from "@/lib/finanzas/actualizar-tablero";
 import type { ReporteAnualDTO } from "@/lib/cobranza";
+import { fmtMontoLibro } from "@/lib/cobranza/montos";
 import {
   desgloseDelMargen,
   estadoDelMes,
@@ -43,6 +44,7 @@ export default function PuntoDeEquilibrio({
   hoyISO,
   etiquetasDeServicio,
   nombres,
+  pagosAHubspot,
 }: {
   initialReporte: ReporteAnualDTO;
   hoyISO: string;
@@ -50,6 +52,8 @@ export default function PuntoDeEquilibrio({
   etiquetasDeServicio: Record<string, string>;
   /** Email → nombre de pila, para firmar decisiones. */
   nombres: Record<string, string>;
+  /** Los pagos grandes de Mercury a HubSpot del año: la evidencia de las licencias revendidas (lib/finanzas/licencias-server.ts). */
+  pagosAHubspot?: { total: number; pagos: number };
 }) {
   const toast = useToast();
   const [r, setReporte] = useState(initialReporte);
@@ -159,6 +163,15 @@ export default function PuntoDeEquilibrio({
           {r.fx.periodosSinTasa.length > 0 && (
             <Alert variant="warning" title="Falta el tipo de cambio de algunos meses">
               {r.fx.periodosSinTasa.map(nombreDelMes).join(", ")}: lo que está en la otra moneda no está sumado. Se pone en el cierre de cada mes.
+            </Alert>
+          )}
+          {pagosAHubspot && pagosAHubspot.total > 0 && (
+            <Alert variant="warning" title="Las licencias revendidas cuentan como ingreso, pero su costo no">
+              A kölbi, Fundauna, la UNA y Global Supply se les revenden licencias de HubSpot: lo facturado por la licencia suma
+              entero a lo facturado, y el pago de esas licencias a HubSpot no está en el gasto. En {r.anio} salieron de Mercury{" "}
+              {fmtMontoLibro(pagosAHubspot.total, "USD")} a HubSpot en {pagosAHubspot.pagos === 1 ? "un pago grande" : `${pagosAHubspot.pagos} pagos grandes`}, y lo
+              que se paga desde Costa Rica no se ve acá. El margen se ve más alto de lo que es hasta decidir si las licencias salen del
+              equilibrio o entran también como gasto.
             </Alert>
           )}
           {lectura.preliminar.preliminar && (

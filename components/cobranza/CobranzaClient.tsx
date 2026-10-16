@@ -38,10 +38,15 @@ import CuentaDrawer from "./CuentaDrawer";
 import BuscarPagoModal from "./BuscarPagoModal";
 import RegistrarPagoDialog from "./RegistrarPagoDialog";
 import RegistrarPagoManualDialog from "./RegistrarPagoManualDialog";
+import QuienNosDebe from "./QuienNosDebe";
+import type { ContactoDeCuenta } from "@/lib/cobranza/quien-debe";
 
-type Tab = "cobros" | "clientes" | "alertas";
+type Tab = "debe" | "cobros" | "clientes" | "alertas";
 
+/* «Quién nos debe» va primero (2026-10-16): es lo que Dirección pregunta y lo que Alex usa para analizar. La cola de
+   cobros sigue al lado, para el trabajo cuota por cuota. */
 const TABS: Array<{ key: Tab; label: string }> = [
+  { key: "debe", label: "Quién nos debe" },
   { key: "cobros", label: "Cobros" },
   { key: "clientes", label: "Clientes" },
   { key: "alertas", label: "Alertas" },
@@ -55,6 +60,7 @@ export default function CobranzaClient({
   initialCartera,
   initialAlertas,
   initialRiesgo,
+  initialContactos = {},
   puedeEditar,
   abrirPago = false,
   abrirCuenta = null,
@@ -64,6 +70,8 @@ export default function CobranzaClient({
   initialCartera: CarteraRow[];
   initialAlertas: AlertaDTO[];
   initialRiesgo: RiesgoPagoItem[];
+  /** La última llamada o correo con cada cuenta, para «Quién nos debe». */
+  initialContactos?: Record<string, ContactoDeCuenta>;
   /** `cobranza.write` resuelto en el servidor. Decide qué se DIBUJA, no qué se permite. */
   puedeEditar: boolean;
   /** Abrir el buscador de «Registrar pago» al entrar (llega desde Pendientes). */
@@ -73,7 +81,8 @@ export default function CobranzaClient({
   todayISO: string;
 }) {
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>("cobros");
+  /* Quien llega a registrar un pago o a una cuenta viene a trabajar la cola; el resto, a ver quién debe. */
+  const [tab, setTab] = useState<Tab>(abrirPago || abrirCuenta ? "cobros" : "debe");
   const [cola, setCola] = useState(initialCola);
   const [cartera, setCartera] = useState(initialCartera);
   const [alertas, setAlertas] = useState(initialAlertas);
@@ -184,6 +193,9 @@ export default function CobranzaClient({
         })}
       </div>
 
+      {tab === "debe" && (
+        <QuienNosDebe cola={cola} contactos={initialContactos} todayISO={todayISO} onOpenCuenta={setOpenCuentaId} />
+      )}
       {tab === "cobros" && (
         <ColaCobros
           rows={cola}
@@ -192,6 +204,7 @@ export default function CobranzaClient({
           todayISO={todayISO}
           onRegistrarPago={setPagoTarget}
           onOpenCuenta={setOpenCuentaId}
+          onVerQuienDebe={() => setTab("debe")}
         />
       )}
       {tab === "clientes" && (

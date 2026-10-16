@@ -219,11 +219,14 @@ export default function ColaCobros({
   todayISO,
   onRegistrarPago,
   onOpenCuenta,
+  onVerQuienDebe,
 }: {
   rows: ColaCobroRow[];
   setRows: Dispatch<SetStateAction<ColaCobroRow[]>>;
   riesgo: RiesgoPagoItem[];
   todayISO: string;
+  /** Las tarjetas de vencido abren «Quién nos debe» (2026-10-16, Alex: «debería tocar las tablitas rojas y ver quiénes son»). */
+  onVerQuienDebe?: () => void;
   onRegistrarPago: (row: ColaCobroRow) => void;
   onOpenCuenta: (cuentaId: string) => void;
 }) {
@@ -384,17 +387,32 @@ export default function ColaCobros({
 
       {/* ── Cards de resumen (la verdad del día — no las tocan los filtros) ── */}
       <div data-recorrido="fin.cobranza.totales" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
+        <button
+          type="button"
+          onClick={onVerQuienDebe}
+          disabled={!onVerQuienDebe}
+          title={onVerQuienDebe ? "Ver quién debe, cliente por cliente" : undefined}
+          className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-left transition-colors enabled:hover:bg-red-500/10"
+        >
           <p className="text-[11px] font-semibold text-red-600 uppercase tracking-wide">
             Vencido · {cards.nVencidos} cobro{cards.nVencidos !== 1 ? "s" : ""}
           </p>
           <div className="mt-1.5">
             <LineasMoneda totales={cards.vencido} />
           </div>
-        </div>
+          {onVerQuienDebe && <p className="text-[11px] text-fg-muted mt-0.5">clic para ver quién debe</p>}
+        </button>
 
         {/* KPI 1 — la plata que ya pasó el crédito estándar de la casa. */}
-        <KpiVencido30 resumen={resumen} />
+        <button
+          type="button"
+          onClick={onVerQuienDebe}
+          disabled={!onVerQuienDebe}
+          title={onVerQuienDebe ? "Ver quién debe, cliente por cliente" : undefined}
+          className="rounded-xl text-left transition-opacity enabled:hover:opacity-90 [&>div]:h-full"
+        >
+          <KpiVencido30 resumen={resumen} />
+        </button>
 
         {/* KPI 2 — cuánto tarda en entrar la plata (DSO). */}
         <KpiDso resumen={resumen} />

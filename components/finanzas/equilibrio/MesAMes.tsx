@@ -34,18 +34,68 @@ interface Serie {
   nombre: string;
   color: string;
   forma: Forma;
+  /** Qué es y cómo se arma, en palabras (2026-10-16: «hace falta que se explique cómo se arma cada uno»). */
+  queEs: string;
 }
 
 /** En el orden en que pasan las cosas: se vende, se programa, se factura, se cobra; y contra qué se mide. */
 const SERIES: readonly Serie[] = [
-  { clave: "vendido", nombre: "Vendido", color: "var(--serie-2)", forma: "punteada" },
-  { clave: "porFacturar", nombre: "Por facturar", color: "var(--serie-4)", forma: "punteada" },
-  { clave: "facturado", nombre: "Facturado", color: "var(--serie-1)", forma: "linea" },
-  { clave: "cobrado", nombre: "Cobrado", color: "var(--serie-3)", forma: "linea" },
-  { clave: "aliados", nombre: "Aliados", color: "var(--serie-5)", forma: "barra" },
-  { clave: "ingresos", nombre: "Ingresos totales", color: "var(--serie-6)", forma: "punteada" },
-  { clave: "gasto", nombre: "Gasto del mes", color: "var(--fg-muted)", forma: "linea" },
-  { clave: "piso", nombre: "Piso", color: "var(--foreground)", forma: "referencia" },
+  {
+    clave: "vendido",
+    nombre: "Vendido",
+    color: "var(--serie-2)",
+    forma: "punteada",
+    queEs: "Los negocios ganados en HubSpot ese mes (pipeline de ventas y ventas compartidas), por su monto. Es lo que se va a facturar en los meses siguientes: no suma a los ingresos. Un negocio sin monto cuenta como cero.",
+  },
+  {
+    clave: "porFacturar",
+    nombre: "Por facturar",
+    color: "var(--serie-4)",
+    forma: "punteada",
+    queEs: "Las cuotas del mes que todavía no tienen factura. Es trabajo pendiente de Smarteam, no ingreso.",
+  },
+  {
+    clave: "facturado",
+    nombre: "Facturado",
+    color: "var(--serie-1)",
+    forma: "linea",
+    queEs: "Lo facturado a clientes, sin IVA. Lo ya cobrado cuenta en el mes en que entró la plata; lo que está por cobrar, en el mes de la factura. Es lo que se compara con el piso.",
+  },
+  {
+    clave: "cobrado",
+    nombre: "Cobrado",
+    color: "var(--serie-3)",
+    forma: "linea",
+    queEs: "Lo que los clientes ya pagaron, sin IVA, en el mes en que entró la plata.",
+  },
+  {
+    clave: "aliados",
+    nombre: "Aliados",
+    color: "var(--serie-5)",
+    forma: "barra",
+    queEs: "Las comisiones de aliados (HubSpot, Atom Chat…) con monto confirmado, cobradas o no. Las estimadas no suman.",
+  },
+  {
+    clave: "ingresos",
+    nombre: "Ingresos totales",
+    color: "var(--serie-6)",
+    forma: "punteada",
+    queEs: "Lo facturado más lo de los aliados, cuando los aliados cuentan para cubrir el piso. Si no cuentan, es igual a lo facturado.",
+  },
+  {
+    clave: "gasto",
+    nombre: "Gasto del mes",
+    color: "var(--fg-muted)",
+    forma: "linea",
+    queEs: "Lo que costó operar ese mes: planilla, herramientas, costos fijos, tarjetas y la reserva de aguinaldo. Hasta septiembre sale del Excel de egresos; desde octubre, de Nexus.",
+  },
+  {
+    clave: "piso",
+    nombre: "Piso",
+    color: "var(--foreground)",
+    forma: "referencia",
+    queEs: "Lo que cuesta operar un mes con los salarios y costos de hoy, más la reserva de aguinaldo. Es el punto de equilibrio: facturar menos que esto es perder plata.",
+  },
 ];
 
 const MES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -215,7 +265,7 @@ export default function MesAMes({
                 onClick={() => ciclar(s.clave)}
                 aria-pressed={estaFija}
                 aria-label={estaFuera ? `${s.nombre}, fuera del gráfico` : s.nombre}
-                title={estaFuera ? `Devolver ${s.nombre} al gráfico` : estaFija ? `Sacar ${s.nombre} del gráfico` : `Resaltar ${s.nombre}`}
+                title={`${s.queEs} · ${estaFuera ? `Clic para devolver ${s.nombre} al gráfico` : estaFija ? `Clic para sacar ${s.nombre} del gráfico` : `Clic para resaltar ${s.nombre}`}`}
                 className={cn(
                   "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-opacity",
                   estaFuera
@@ -246,6 +296,22 @@ export default function MesAMes({
           )}
         </div>
       )}
+
+      {/* Qué es cada línea, a la vista: la leyenda sola dice el nombre, no cómo se arma. */}
+      <details className="group rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm">
+        <summary className="cursor-pointer select-none text-xs font-semibold text-fg-secondary">¿Qué es cada línea?</summary>
+        <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+          {SERIES.map((s) => (
+            <div key={s.clave} className="flex gap-2">
+              <span aria-hidden className="mt-1.5 inline-block shrink-0" style={muestra(s)} />
+              <div className="min-w-0">
+                <dt className="text-xs font-semibold text-fg">{s.nombre}</dt>
+                <dd className="text-xs text-fg-secondary">{s.queEs}</dd>
+              </div>
+            </div>
+          ))}
+        </dl>
+      </details>
 
       {vista !== "tabla" ? (
         <>

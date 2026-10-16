@@ -13,6 +13,7 @@ import { loadReporteAnual } from "@/lib/cobranza";
 import { TIPO_SERVICIO_LABEL } from "@/lib/cobranza/schema";
 import { prisma } from "@/lib/db/prisma";
 import { crDateParts } from "@/lib/jobs/time";
+import { pagosGrandesAHubspot } from "@/lib/finanzas/licencias-server";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import PuntoDeEquilibrio from "@/components/finanzas/equilibrio/PuntoDeEquilibrio";
 
@@ -26,7 +27,7 @@ export default async function FinanzasEquilibrioPage() {
   // meses entran al promedio del equilibrio.
   const todayISO = crDateParts(new Date()).dateKey;
   const anio = Number(todayISO.slice(0, 4));
-  const reporte = await loadReporteAnual(anio, todayISO);
+  const [reporte, pagosAHubspot] = await Promise.all([loadReporteAnual(anio, todayISO), pagosGrandesAHubspot(anio)]);
 
   // Quién firmó la decisión de los aliados, por su nombre de pila.
   const firmante = reporte.decisionAliados?.decididoPor;
@@ -37,7 +38,13 @@ export default async function FinanzasEquilibrioPage() {
 
   return (
     <div className={SHELL_DEFAULT}>
-      <PuntoDeEquilibrio initialReporte={reporte} hoyISO={todayISO} etiquetasDeServicio={TIPO_SERVICIO_LABEL} nombres={nombres} />
+      <PuntoDeEquilibrio
+        initialReporte={reporte}
+        hoyISO={todayISO}
+        etiquetasDeServicio={TIPO_SERVICIO_LABEL}
+        nombres={nombres}
+        pagosAHubspot={pagosAHubspot}
+      />
     </div>
   );
 }
