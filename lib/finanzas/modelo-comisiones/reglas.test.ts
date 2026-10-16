@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  BONO_DE_CUSTOMER_SUCCESS,
   DECISIONES_DE_LA_PROPUESTA,
+  bonoDeCustomerSuccessAlCien,
   aQuienLeCuenta,
   bonoDelLider,
   bonoTrimestral,
@@ -145,6 +147,21 @@ describe("la simulación de un vendedor", () => {
     const s = simularVendedor({ ...base, ajustes: { v1: { tipo: "licencia" } } });
     expect(s.servicios.some((x) => x.venta.id === "v1")).toBe(false);
     expect(s.licencias.some((x) => x.venta.id === "v1")).toBe(true);
+  });
+});
+
+describe("el bono de quien lidera Customer Success", () => {
+  it("es el 2 % de la meta del trimestre, que sube por escalones", () => {
+    const metas = BONO_DE_CUSTOMER_SUCCESS.escalera.map((e) => e.meta);
+    expect(metas).toEqual([...metas].sort((a, b) => a - b));
+    expect(bonoDeCustomerSuccessAlCien(25000)).toBe(500);
+    expect(bonoTrimestral(bonoDeCustomerSuccessAlCien(25000), 0.7)).toBeCloseTo(350);
+    expect(bonoTrimestral(bonoDeCustomerSuccessAlCien(25000), 0.69)).toBe(0);
+  });
+
+  it("el ritmo de hoy es la base de 12 meses sin renovaciones, repartida en 4 trimestres", () => {
+    const ritmo = BONO_DE_CUSTOMER_SUCCESS.base.expansion / 4;
+    expect(Math.abs(BONO_DE_CUSTOMER_SUCCESS.escalera[1].meta - ritmo)).toBeLessThan(1000);
   });
 });
 

@@ -8084,6 +8084,19 @@ propuesta en dos pestañas: «Cómo funciona» y «Simulación». Las reglas sal
 - **El equipo de ventas es quien tiene el rol de Ventas en Nexus** (hoy Andrés y Liz); lo lidera quien lleva más
   tiempo. Marco vende pero no cuenta para el bono de nadie. El bono de quien lidera sale de las metas de las personas
   que lidera, nunca de las suyas: US$ 500 al mes por persona que llega a su meta, desde el 70 %.
+- **Quien lidera Customer Success gana un bono por el área, no por persona** (`BONO_DE_CUSTOMER_SUCCESS`): el 2 % de la
+  meta de expansión del trimestre, con el mismo mínimo (70 %) y tope del de Ventas. *Por qué:* US$ 500 por cada uno de
+  los 4 CSE sumaba un 18 % de costo sobre la expansión; así son el 5 % de los CSE más el 2 %, parejo en toda la escalera.
+  Lo que vende Alex solo le da el 5 %; con un CSE, 2,5 % cada uno.
+- **La meta de Customer Success sube por escalones: US$ 25.000, 33.000, 37.000 y 40.000 por trimestre.** La base es lo
+  que la cartera compró en expansión de octubre de 2025 a septiembre de 2026 (US$ 134.215, unos US$ 33.500 por
+  trimestre), la vendiera quien la vendiera: hasta ahora la cargaban Marco y Andrés, y desde este esquema la vende
+  Customer Success. Por eso arranca abajo (traspaso), llega al ritmo de hoy y después crece. **Las renovaciones de
+  contrato no cuentan** (decisión de Elías: renovar no es crecer); se sacaron las dos explícitas, ACCCSA «Contrato 2026»
+  (US$ 25.200) y la renovación del Ministerio de Economía (US$ 5.720). Los montos son una foto de ese día, no un cálculo
+  vivo, y se miden por trimestre porque la expansión llega a saltos.
+- **La pestaña «Cómo funciona» se escribe para que la entienda cualquiera** (pedido de Elías): «de cada US$ 100 te
+  llevas 3, 4 o 5», títulos como preguntas, sin jerga.
 - **Una venta es de Ventas en sus primeros 6 meses desde la primera venta del cliente**, de cualquier vendedor; después,
   de quien creó el negocio (la simulación toma al dueño del trato en HubSpot).
 - **Lo que falta decidir con Marco** está en la página, cada pregunta con su contexto, y se cierra antes de construir

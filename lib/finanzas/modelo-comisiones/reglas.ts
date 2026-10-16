@@ -10,9 +10,11 @@
  *  · Una licencia paga el 10 % de su valor mensual durante 3 meses, solo si la trajo Smarteam.
  *  · Ventas se queda con el cliente nuevo y con todo lo que se le venda en los 6 meses desde su primera venta. Después,
  *    la expansión es de quien crea el negocio en HubSpot; si Ventas y Customer Success la hacen juntos, 50 · 50.
- *  · Quien lidera gana US$ 500 al mes por cada persona de su equipo que llega a su meta, en proporción a lo que cumplió,
+ *  · Quien lidera Ventas gana US$ 500 al mes por cada vendedor que llega a su meta, en proporción a lo que cumplió,
  *    desde el 70 % y con tope (200 %, o 150 % si así se decide). Sus propias ventas le dan comisión, no bono. Se paga
  *    cada trimestre. (Reunión de Elías y Marco del 2026-10-15.)
+ *  · Quien lidera Customer Success gana el 2 % de la meta de expansión del área en cada trimestre, con una meta que
+ *    sube por escalones. Los CSE no tienen meta propia: la meta es una sola, del área.
  *  · La meta es mensual. HubSpot la guarda por trimestre y la reparte entre los meses por días: así la mostramos.
  *
  * Es una SIMULACIÓN: dice lo que generaría cada venta. Nada de acá se paga ni se guarda.
@@ -36,6 +38,35 @@ export const MESES_DE_VENTAS = 6;
  * proporción a lo que cumplió. Desde el 70 % de cumplimiento; deja de crecer en el tope (200 %, o 150 %: pendiente).
  */
 export const BONO_DEL_LIDER = { porPersonaAlMes: 500, minimo: 0.7, tope: 2, topeAlternativo: 1.5 } as const;
+
+/**
+ * El bono de quien lidera Customer Success (propuesta del 2026-10-15, escalonada el mismo día): el 2 % de la meta del
+ * área en cada trimestre, con el mismo mínimo y el mismo tope que el de Ventas. NO es por persona: US$ 500 por cada uno
+ * de los 4 CSE habrían sido cerca del 18 % de lo que expande el área.
+ *
+ * La meta sale de lo que la cartera compró en expansión los últimos 12 meses (oct 2025 a sep 2026), la vendiera quien la
+ * vendiera (hasta ahora, casi todo Marco y Andrés), sin las renovaciones de contrato: renovar no es crecer. Es una foto
+ * de ese día, no un cálculo vivo. Sube por escalones porque el área recién empieza a vender lo que antes vendía Ventas.
+ */
+export const BONO_DE_CUSTOMER_SUCCESS = {
+  porcentajeDeLaMeta: 2,
+  base: {
+    periodo: "octubre de 2025 a septiembre de 2026",
+    expansion: 134215,
+    renovacionesFuera: 30920,
+  },
+  escalera: [
+    { meta: 25000, porque: "Traspaso: Marco y Andrés le pasan las cuentas a Customer Success" },
+    { meta: 33000, porque: "El ritmo de hoy" },
+    { meta: 37000, porque: "El ritmo de hoy más un 10 %" },
+    { meta: 40000, porque: "Crecimiento" },
+  ],
+} as const;
+
+/** Lo que gana quien lidera Customer Success si el área llega justo a esa meta. */
+export function bonoDeCustomerSuccessAlCien(meta: number): number {
+  return (meta * BONO_DE_CUSTOMER_SUCCESS.porcentajeDeLaMeta) / 100;
+}
 
 /** Solo para comparar en la simulación: lo que pagaría un 2 % de cada venta del equipo, la idea que el bono reemplaza. */
 export const PARTE_DE_CADA_VENTA_PARA_COMPARAR = 0.02;
