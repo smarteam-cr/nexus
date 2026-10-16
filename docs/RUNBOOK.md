@@ -87,6 +87,13 @@ corrió ya no queda arriba (ver «Esquema atrasado», abajo).
 que trae un cambio en `deploy.sh` corre con la versión VIEJA del script. Para ese deploy,
 primero `git pull --ff-only` a mano y después `bash scripts/deploy.sh`.
 
+⚠️ **«BUILD FALLO» con «JavaScript heap out of memory» en `npm run build`**: el chequeo de tipos de
+`next build` se quedó sin heap. El tope del BUILD vive en el `Dockerfile` (`NODE_OPTIONS` de la etapa
+builder, 6 GB desde el 2026-10-16, cuando el chequeo ya pedía 4,2 GB); no es el de 2 GB del contenedor que
+corre. Medir cuánto pide hoy con `npx tsc --noEmit -p . --incremental false --extendedDiagnostics`
+(«Memory used») y, si hace falta, subirlo mirando la memoria libre del VPS (`free -m`). Mientras tanto el
+contenedor viejo sigue arriba: no hay nada que revertir.
+
 ⚠️ **NUNCA `docker compose up -d` a mano sin `--build` después de un pull.**
 Eso re-levanta la imagen VIEJA contra la base con schema nuevo = el "deploy
 mixto" que generó la ola de errores de julio 2026 (`prisma.roleProfile`

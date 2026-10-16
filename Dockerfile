@@ -71,6 +71,12 @@ ARG GIT_SHA=dev
 ENV NEXT_PUBLIC_GIT_SHA=${GIT_SHA}
 
 RUN npx prisma generate
+# El heap del BUILD, solo en esta etapa (no llega al runner: el tope de 2 GB del contenedor que
+# corre vive en docker-compose.yml). `next build` chequea los tipos de todo el repo, y el
+# 2026-10-16 ese chequeo pedía 4,2 GB (`tsc --noEmit --incremental false --extendedDiagnostics`):
+# con el tope de fábrica de Node (unos 4 GB) el build murió con «heap out of memory». El VPS
+# tiene 16 GB y el build corre con el contenedor viejo arriba, así que 6 GB entra.
+ENV NODE_OPTIONS=--max-old-space-size=6144
 RUN npm run build
 
 # ── 3) runner — imagen final mínima ──────────────────────────────────────────
