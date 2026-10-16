@@ -439,11 +439,19 @@ describe("LAS ETAPAS — transcritas del portal, no derivadas", () => {
       { id: "1409898886", label: "Handoff", enLinea: true, terminal: false },
       { id: "1409897653", label: "Exploración", enLinea: true, terminal: false },
       { id: "1409897655", label: "Requerimientos", enLinea: true, terminal: false },
+      { id: "1452882716", label: "Bloqueado", enLinea: false, terminal: false },
       { id: "1409932561", label: "Desarrollo", enLinea: true, terminal: false },
       { id: "1409932562", label: "Pruebas", enLinea: true, terminal: false },
       { id: "1409932563", label: "Entrega", enLinea: true, terminal: false },
       { id: "1409932564", label: "Finalizado", enLinea: true, terminal: true },
       { id: "1409897657", label: "Cancelado", enLinea: false, terminal: true },
+    ]);
+  });
+
+  it("«Bloqueado» de Development (2026-10-16): fuera de línea, NO cierra y no cuenta en la línea", () => {
+    expect(decidirCierre({ hubspotPipelineId: DEV, stageId: "1452882716", rawStatus: "blocked" })).toBe("abierto");
+    expect(lineaDeAvance(pipelineByKey("development")).map((s) => s.label)).toEqual([
+      "Handoff", "Exploración", "Requerimientos", "Desarrollo", "Pruebas", "Entrega", "Finalizado",
     ]);
   });
 

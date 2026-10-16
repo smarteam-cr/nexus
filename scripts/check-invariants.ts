@@ -10,7 +10,7 @@ import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { detectarFusionesEnLote } from "@/lib/hubspot/empresa-fusionada";
 import { GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
-import { escribeSqlCrudo } from "@/lib/db/escritura-sql-cruda";
+import { escribeSqlCrudo, soloCodigo } from "@/lib/db/escritura-sql-cruda";
 import {
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46,
@@ -399,7 +399,9 @@ async function main(): Promise<number> {
       if (!/\.(ts|mts)$/.test(name)) continue;
       const rel = norm(full).replace(norm(process.cwd()) + "/", "");
       if (ALLOWLIST_INV12.has(rel)) continue;
-      const src = readFileSync(full, "utf8");
+      // Solo el código: un script de solo lectura que dice en su cabecera «no usa `--apply`» no es un
+      // script con `--apply` (check-esquema, medir-propuesta, 2026-10-16).
+      const src = soloCodigo(readFileSync(full, "utf8"));
       // A-09 (auditoría 2026-09-03): también el SQL crudo con verbo de escritura (pool/client.query
       // con INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE), tenga o no `--apply`. Los tres scripts
       // de la migración de roles hacían ALTER/UPDATE sin guard y sin `--apply`: INV12 no los veía.
@@ -647,7 +649,7 @@ async function main(): Promise<number> {
     if (antesDeOcurrir > 0) {
       console.error(
         `✗ INV16(a) VIOLADO: ${antesDeOcurrir} sesión(es) de Meet enriquecidas ANTES de ocurrir. ` +
-          `Legacy → scripts/recuperar-transcripts-meet.ts; nuevas → se cayó el filtro de fecha.`,
+          `Legacy → scripts/recuperar-transcripts-meet.ts --solo-futuras; nuevas → se cayó el filtro de fecha o el evento se movió después de leerse.`,
       );
     }
     if (transcriptsBasura > 0) {

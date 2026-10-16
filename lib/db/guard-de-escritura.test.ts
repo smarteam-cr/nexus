@@ -38,7 +38,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { escribeSqlCrudo } from "@/lib/db/escritura-sql-cruda";
+import { escribeSqlCrudo, soloCodigo } from "@/lib/db/escritura-sql-cruda";
 
 const RAIZ = process.cwd();
 
@@ -102,15 +102,6 @@ const SIN_GUARD: string[] = [
   "scripts/verify-logos-l2.ts",
   "scripts/verify-timeline-progress.ts",
 ];
-
-/** El fuente sin comentarios: mencionar `prisma.x.update` en prosa no es escribir. */
-function soloCodigo(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .split(/\r?\n/)
-    .filter((l) => !l.trimStart().startsWith("//"))
-    .join("\n");
-}
 
 function escribenSinGuard(): string[] {
   const encontrados: string[] = [];

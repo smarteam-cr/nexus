@@ -27,6 +27,15 @@
  * Uso:
  *   npx tsx scripts/recuperar-transcripts-meet.ts                     # dry-run con conteos
  *   ALLOW_PROD_WRITE=1 npx tsx scripts/recuperar-transcripts-meet.ts --apply --deploy-confirmado --limit 50
+ *   … --solo-futuras --limit 300        # solo las reuniones que todavía no ocurrieron (INV16 a)
+ *
+ * ── --solo-futuras (2026-10-16) ─────────────────────────────────────────────
+ * INV16(a) cuenta las reuniones selladas ANTES de ocurrir. Las del pipeline viejo (mayo–julio) nunca
+ * se van a leer cuando ocurran: la pasada solo toma `enrichedAt: null`. Resetearlas no le pega a
+ * Google —la pasada no toca una fila hasta que su fecha pasó— y les devuelve la lectura. Por eso con
+ * esta opción el tope puede ser alto. Sin ella, el rescate entero sigue siendo el de agosto: ⚠ el
+ * bucket A pasó de 1.494 a 1.901 filas (2026-10-16) porque también cuenta reuniones legítimas con
+ * solo notas de Gemini; no se corre entero sin revisar ese criterio.
  *
  * Conteos del dry-run REAL (2026-08-08, contra producción): 1.494 en A (todas las selladas
  * sin transcript con doc — superset de las corridas quemadas del 17-may/7-jul y de las
@@ -41,6 +50,7 @@ import { bucketDe, datosDeReset, type BucketDeRescate } from "@/lib/google/recup
 
 const APPLY = resolverApply();
 const DEPLOY_CONFIRMADO = process.argv.includes("--deploy-confirmado");
+const SOLO_FUTURAS = process.argv.includes("--solo-futuras");
 const LIMIT = (() => {
   const i = process.argv.indexOf("--limit");
   const n = i >= 0 ? parseInt(process.argv[i + 1] ?? "", 10) : 50;
@@ -83,11 +93,12 @@ async function main() {
 
   const porBucket = new Map<BucketDeRescate, typeof filas>();
   for (const f of filas) {
+    if (SOLO_FUTURAS && f.date.getTime() <= ahora.getTime()) continue;
     const b = bucketDe(f, ahora);
     if (b) porBucket.set(b, [...(porBucket.get(b) ?? []), f]);
   }
 
-  console.log(`Sesiones de Meet examinadas: ${filas.length}`);
+  console.log(`Sesiones de Meet examinadas: ${filas.length}${SOLO_FUTURAS ? " (solo las que todavía no ocurrieron)" : ""}`);
   for (const [bucket, xs] of [...porBucket.entries()].sort()) {
     console.log(`\n── ${bucket}: ${xs.length} filas`);
     for (const f of xs.slice(0, 5)) {

@@ -331,6 +331,10 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
       { id: "1409898886", label: "Handoff", enLinea: true, terminal: false },
       { id: "1409897653", label: "Exploración", enLinea: true, terminal: false },
       { id: "1409897655", label: "Requerimientos", enLinea: true, terminal: false },
+      /* Agregada en el portal después del 2026-07-30 (INV11 la vio el 2026-10-16, con 3
+         proyectos activos parados ahí). Mismo trato que el «Bloqueado» de Customer Success:
+         fuera de la línea y SIN cerrar — un desarrollo bloqueado está esperando, no terminó. */
+      { id: "1452882716", label: "Bloqueado", enLinea: false, terminal: false },
       { id: "1409932561", label: "Desarrollo", enLinea: true, terminal: false },
       { id: "1409932562", label: "Pruebas", enLinea: true, terminal: false },
       { id: "1409932563", label: "Entrega", enLinea: true, terminal: false },

@@ -20,3 +20,16 @@ export const ESCRITURA_SQL_CRUDA =
 export function escribeSqlCrudo(src: string): boolean {
   return ESCRITURA_SQL_CRUDA.test(src);
 }
+
+/**
+ * El fuente sin comentarios: mencionar `prisma.x.update` o `--apply` en prosa no es escribir. Los dos
+ * consumidores miran solo el código. Sin esto, un script de solo lectura que dice en su cabecera
+ * «no usa `--apply`» daba INV12 en rojo (check-esquema, medir-propuesta, 2026-10-16).
+ */
+export function soloCodigo(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split(/\r?\n/)
+    .filter((l) => !/^\s*\/\//.test(l))
+    .join("\n");
+}

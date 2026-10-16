@@ -101,3 +101,14 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   si una funcionalidad nueva obliga a reordenar o apagar una guarda existente para poder probarse, es
   señal de que no tiene un lugar real, no de que falta ajustar el orden.
 - **Un script de consola muere al cargar con «Cannot find module 'server-only'».** *Causa:* `server-only` lo resuelve Next, no es un paquete; un script (`npx tsx scripts/...`) que llega de rebote a un módulo con `import "server-only"` no arranca, y tsc no lo ve. Pasó el 2026-10-10: `lib/lecturas/cola.ts` lo sumó y 24 scripts (check-invariants entre ellos) dejaron de arrancar. *Guarda:* `import "./lib/permitir-server-only";` después de `dotenv/config`, y `lib/db/scripts-server-only.test.ts`, que recorre los imports de cada script y falla si llega a `server-only` sin el shim.
+- **INV1 en rojo con reuniones de un prospecto colgadas de proyectos de Smarteam.** *Causa:* la reunión se resolvió
+  primero a un cliente (por título, «… + SMARTEAM») y el clasificador la vinculó a sus proyectos; cuando después ganó su
+  dueño real (el dominio del prospecto), los vínculos viejos quedaron. El clasificador solo suelta vínculos al volver a
+  clasificar, y un prospecto sin proyectos nunca se clasifica. Pasó el 2026-10-16 con 17 vínculos (CasaMax, Polaris,
+  Quálitas…). *Guarda:* `scripts/cleanup-cross-client-session-projects.ts`, revisando antes caso por caso si el que está
+  mal es el dueño (STLA: el handoff de Secure Title quedó por título en una ficha de cobro del mismo grupo; ahí se
+  corrige el dueño en /sessions, no el vínculo).
+- **Una reunión que ya pasó aparece con fecha futura (INV16 a) y su transcript es de otro día.** *Causa:* alguien movió
+  el MISMO evento del calendario a una fecha nueva después de la reunión; la sync de Meet le pisa `date` a la fila y
+  conserva el transcript viejo (`cambiosDeSesion`). Si la reunión nueva trae otro Doc de Gemini, el reset por Doc nuevo
+  borra el transcript viejo. Visto el 2026-10-16 (kickoff de Spectrum, seguimiento CS + RevOps). Sin guarda todavía.
