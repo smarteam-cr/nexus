@@ -2323,6 +2323,11 @@ export async function completarQuincenas(
  *
  * Lo que NO decide el cliente: la moneda (la del salario que regía en esa quincena) ni el nombre (el de la persona).
  * Una quincena que todavía no llega no se anota acá. Pagarla pasa por `pagarQuincena`, el chokepoint de INV18.
+ *
+ * ⭐ Una quincena en la que el catálogo dice que NO ESTABA también se anota (2026-10-14, F-11 de Alex): Alexander
+ * Vanegas tiene una baja el 16 de agosto y una reactivación el 22 de septiembre, y sí cobró esas quincenas. Lo que se
+ * pagó manda sobre el catálogo. Va con la moneda de su último salario y queda escrito en la fila que el catálogo decía
+ * otra cosa. Solo se rechaza a quien no tiene ningún salario en el catálogo.
  */
 export async function anotarQuincenaPagada(
   data: { teamMemberId: string; periodo: string; quincena: 1 | 2; monto: number },
@@ -2369,7 +2374,14 @@ export async function anotarQuincenaPagada(
       : actual
         ? { monto: Number(actual.monto), moneda: actual.moneda as string }
         : null;
-  if (!vigente) throw new CobranzaError("Esa persona no estaba en planilla en esa quincena.", 409);
+  /* Sin salario en esa quincena: la moneda del último movimiento hasta esa fecha (o del primero, o del costo). */
+  const ordenados = [...movimientos].sort((a, b) => a.fechaEfectiva.localeCompare(b.fechaEfectiva));
+  const monedaDeRespaldo =
+    ordenados.filter((m) => m.fechaEfectiva <= dia.fechaProgramada).at(-1)?.moneda ?? ordenados[0]?.moneda ?? (salarios[0]?.moneda as string | undefined);
+  if (!vigente && !monedaDeRespaldo) {
+    throw new CobranzaError("Esa persona no tiene salario en el catálogo: dale de alta el salario en Salarios y vuelve.", 409);
+  }
+  const moneda = vigente?.moneda ?? monedaDeRespaldo!;
 
   let id: string;
   try {
@@ -2381,7 +2393,7 @@ export async function anotarQuincenaPagada(
         quincena: data.quincena,
         fechaProgramada: dayUTC(dia.fechaProgramada),
         monto: Math.round(data.monto * 100) / 100,
-        moneda: vigente.moneda as "CRC" | "USD",
+        moneda: moneda as "CRC" | "USD",
       },
       select: { id: true },
     });
@@ -2393,7 +2405,14 @@ export async function anotarQuincenaPagada(
     }
     throw e;
   }
-  await pagarQuincena(id, { fechaPago: dia.fechaProgramada }, byEmail);
+  await pagarQuincena(
+    id,
+    {
+      fechaPago: dia.fechaProgramada,
+      ...(vigente ? {} : { notas: "Anotada aunque el catálogo de salarios decía que no estaba en planilla en esta quincena." }),
+    },
+    byEmail,
+  );
   return { id };
 }
 

@@ -91,10 +91,14 @@ type Quincena = CalendarioPersonaDTO["quincenas"][number];
 /**
  * Se escribe a mano: la que falta (se anota pagada), la anotada sin pagar (se corrige y se paga) y, desde 2026-10-07, la
  * pagada (se corrige su monto; la corrección queda escrita en la fila). Alex: «cometí un error y no pude volver a editarlo».
+ * Desde 2026-10-14 también la «no estaba» que ya pasó, si igual se le pagó (F-11: Alexander Vanegas).
  */
 function seEdita(q: Quincena): boolean {
-  return q.clase === "faltante" || (q.clase === "registrada" && q.pagoId !== null);
+  return q.clase === "faltante" || (q.clase === "fuera" && q.pasada) || (q.clase === "registrada" && q.pagoId !== null);
 }
+
+/** Las que no están en el libro y se anotan pagadas: la que falta y la «no estaba» que ya pasó. */
+const seAnota = (q: Quincena) => q.clase === "faltante" || q.clase === "fuera";
 
 const claveDe = (q: Pick<Quincena, "periodo" | "quincena">) => `${q.periodo}-${q.quincena}`;
 
@@ -264,7 +268,7 @@ function FilaDePersona({
   function abrir(q: Quincena) {
     setSel(claveDe(q));
     // La que falta trae de sugerencia la quincena del salario que regía; la anotada, su monto. Se reemplaza al escribir.
-    setValor(String(q.clase === "faltante" ? (q.sugerido ?? "") : (q.monto ?? "")));
+    setValor(String(seAnota(q) ? (q.sugerido ?? "") : (q.monto ?? "")));
   }
 
   /** «Anotar y pasar a la siguiente»: llenar los huecos de un año es una tanda, no un clic suelto. */
@@ -300,7 +304,7 @@ function FilaDePersona({
         onGuardado();
         return;
       }
-      if (q.clase === "faltante") {
+      if (seAnota(q)) {
         await fetchJson("/api/cobranza/costos/pagos-planilla/anotar", {
           method: "POST",
           headers: json,
@@ -525,7 +529,8 @@ function EditorDeQuincena({
   onGuardar: (comoPagada: boolean) => void;
   onCancelar: () => void;
 }) {
-  const falta = q.clase === "faltante";
+  const fuera = q.clase === "fuera";
+  const falta = q.clase === "faltante" || fuera;
   const pagada = q.clase === "registrada" && q.estado === "PAGADO";
   const yaPaso = q.fechaProgramada <= todayISO;
   const mes = MES_LARGO[Number(q.periodo.slice(5, 7)) - 1] ?? q.periodo;
@@ -539,6 +544,8 @@ function EditorDeQuincena({
         <p className="text-[11px] text-fg-muted">
           {pagada
             ? `Pagada${q.fechaPago ? ` el ${fmtFecha(q.fechaPago)}` : ""}. Si el monto está mal, corrígelo: sigue pagada y queda anotado quién la corrigió.`
+            : fuera
+            ? `Según el catálogo de salarios no estaba en planilla. Si igual se le pagó, escribe el monto: queda pagada el ${fmtFecha(q.fechaProgramada)}, a tu nombre, con una nota de que el catálogo decía otra cosa.`
             : falta
             ? `No está en el libro. Escribe lo que se pagó: queda pagada el ${fmtFecha(q.fechaProgramada)}, a tu nombre.`
             : yaPaso
@@ -638,7 +645,9 @@ function Casilla({
         ? " — clic para fijar un aumento desde acá"
         : cel.clase === "registrada" && cel.estado === "PAGADO"
           ? " — clic para corregir el monto"
-          : " — clic para escribir el monto"
+          : cel.clase === "fuera"
+            ? " — clic para anotarla si igual se le pagó"
+            : " — clic para escribir el monto"
       : ""
   }`;
 

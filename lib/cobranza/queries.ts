@@ -85,6 +85,7 @@ import {
   convertir,
   costosDelPiso,
   sumarPorClienteEnPresentacion,
+  TASA_DEL_AGUINALDO,
   tipoIngresoDeCobro,
   type CobroDeCliente,
   type CostoVigente,
@@ -2535,7 +2536,8 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
 
   // Reserva de aguinaldo: el proyectado del año ÷ 12, en cada mes. Por moneda separada
   // (el aguinaldo nunca se convierte en su propio módulo; acá la conversión, si hace
-  // falta, la hace el reporte con la tasa del mes).
+  // falta, la hace el reporte). La parte en colones, a ₡450 fijo (`TASA_DEL_AGUINALDO`,
+  // decisión de Alex del 2026-10-14), no con la tasa del mes.
   for (const [moneda, total] of Object.entries(aguinaldo.totalesProyectado)) {
     if (!total) continue;
     const mensual = Math.round((total / divisor) * 100) / 100;
@@ -2548,6 +2550,7 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
         monto: mensual,
         moneda: moneda as MonedaEq,
         calidad: "ESTIMADO",
+        ...(moneda === "CRC" ? { tasaFija: TASA_DEL_AGUINALDO } : {}),
       });
     }
   }

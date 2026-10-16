@@ -46,6 +46,7 @@ import {
   promedioMensual,
   reservaAguinaldoMensual,
   sumarPorClienteEnPresentacion,
+  TASA_DEL_AGUINALDO,
   tipoIngresoDeCobro,
   type CobroParaImputar,
   type EgresoDeMes,
@@ -182,6 +183,20 @@ describe("C · armado — sumar sin mentir", () => {
     expect(r.meses[0]!.egresos).toBe(200);
     expect(r.meses[1]!.egresos).toBe(0);
     expect(r.fx.periodosSinTasa).toEqual(["2026-02"]);
+  });
+
+  it("C4b la reserva de aguinaldo en colones va a ₡450 fijo, aunque el mes diga ₡500 (Alex, 2026-10-14)", () => {
+    const r = calcularEquilibrio(
+      [
+        eg("2026-01", "RESERVA_AGUINALDO", "Reserva de aguinaldo", 450_000, { moneda: "CRC", calidad: "ESTIMADO", tasaFija: TASA_DEL_AGUINALDO }),
+        eg("2026-01", "FIJO_OPERACION", "Alquiler", 100_000, { moneda: "CRC" }),
+      ],
+      [],
+      { anio: 2026, hoyISO: HOY, tasas: [{ periodo: "2026-01", crcPorUsd: 500, fuente: "BCCR" }] },
+    );
+    expect(r.meses[0]!.egresosPorRubro.RESERVA_AGUINALDO).toBe(1000);
+    // El resto sigue con la tasa del mes.
+    expect(r.meses[0]!.egresosPorRubro.FIJO_OPERACION).toBe(200);
   });
 
   it("C5 un egreso de otro año se ignora en vez de contaminar el reporte", () => {

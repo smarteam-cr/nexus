@@ -320,6 +320,42 @@ describe("«no estaba» y «no se sabe» son cosas distintas", () => {
 });
 
 
+describe("los dos reportes de Alex del 2026-10-14", () => {
+  it("F-13 · un cambio de monto con fecha anterior al alta corrige el alta (Valentina: $2.200, no $2.100)", () => {
+    // Datos reales: el alta se cargó con fecha 5 de octubre y el cambio, un minuto después, con la fecha del día.
+    const movs = [mov("2026-10-05", "ALTA", 2100), mov("2026-10-02", "CAMBIO_MONTO", 2200, 2100)];
+    expect(salarioVigenteEn(movs, "2026-10-04")).toBeNull();
+    expect(salarioVigenteEn(movs, "2026-10-31")!.monto).toBe(2200);
+    const cal = calendarioDePersona([], movs, 2026, "2026-10-14");
+    expect(cal.quincenas.find((q) => q.periodo === "2026-10" && q.quincena === 2)!.monto).toBe(1100);
+  });
+
+  it("en un mismo día el alta va antes que el cambio, aunque llegue en otro orden", () => {
+    const movs = [mov("2026-10-05", "CAMBIO_MONTO", 2200, 2100), mov("2026-10-05", "ALTA", 2100)];
+    expect(salarioVigenteEn(movs, "2026-10-15")!.monto).toBe(2200);
+  });
+
+  it("un cambio después del alta sigue rigiendo desde su fecha (Alejandra no cambia)", () => {
+    expect(salarioVigenteEn(MOVS_ALEJANDRA, "2026-08-30")!.monto).toBe(1000);
+    expect(salarioVigenteEn(MOVS_ALEJANDRA, "2026-08-31")!.monto).toBe(1200);
+  });
+
+  it("F-11 · una «no estaba» que ya pasó trae el último salario de sugerencia; una futura, no", () => {
+    // Alexander Vanegas: alta el 10 de agosto, baja el 16 y reactivación el 22 de septiembre.
+    const movs = [mov("2026-08-10", "ALTA", 2500), mov("2026-08-16", "BAJA", 2500), mov("2026-09-22", "REACTIVACION", 2500)];
+    const cal = calendarioDePersona([pago("2026-08", 1, 1250)], movs, 2026, "2026-10-14");
+    const ago2 = cal.quincenas.find((q) => q.periodo === "2026-08" && q.quincena === 2)!;
+    const sep1 = cal.quincenas.find((q) => q.periodo === "2026-09" && q.quincena === 1)!;
+    expect(ago2).toMatchObject({ clase: "fuera", sugerido: 1250, moneda: "USD" });
+    expect(sep1).toMatchObject({ clase: "fuera", sugerido: 1250 });
+    // No cuentan como faltantes: el catálogo dice que no estaba. La única que falta es la 2.ª de septiembre, ya reactivado.
+    expect(cal.faltantes).toBe(1);
+    expect(cal.quincenas.find((q) => q.periodo === "2026-09" && q.quincena === 2)!.clase).toBe("faltante");
+    const despues = calendarioDePersona([], [mov("2026-01-01", "ALTA", 1000), mov("2026-03-31", "BAJA", 1000)], 2026, "2026-08-21");
+    expect(despues.quincenas.at(-1)).toMatchObject({ clase: "fuera", sugerido: null });
+  });
+});
+
 describe("desde cuándo rige un aumento (lo que anuncia el formulario)", () => {
   it("clasifica la fecha efectiva contra hoy", () => {
     expect(vigenciaDe("2026-09-01", "2026-08-28")).toBe("futuro");
@@ -355,15 +391,18 @@ describe("un aumento RETROACTIVO no reescribe lo que ya se pagó", () => {
     expect(cal.totalRegistrado).toBe(7500);
   });
 
-  it("no se puede aumentar a alguien ANTES de que entrara: el alta manda", () => {
-    /* El historial se lee ordenado por fecha efectiva, así que un aumento fechado antes del
-       ALTA queda pisado por el ALTA. No es una validación que haya que escribir: sale sola de
-       leer los movimientos en orden, y es la respuesta correcta. */
-    const imposible: MovimientoDeSalario[] = [
+  it("un cambio fechado ANTES del alta corrige el alta: rige desde que entró (2026-10-14)", () => {
+    /* Hasta el 2026-10-14 esta prueba decía lo contrario («el alta manda»: un aumento antes de
+       entrar es imposible y se ignoraba). El caso real lo dio vuelta: a Valentina se le corrigió
+       el salario un minuto después del alta, con la fecha del día, que quedaba antes del alta. El
+       catálogo ya decía $2.200 y el calendario seguía en $2.100 (F-13 de Alex). Antes del alta
+       sigue sin haber salario. */
+    const corregido: MovimientoDeSalario[] = [
       mov("2026-07-12", "ALTA", 1000),
       mov("2026-03-01", "CAMBIO_MONTO", 1200, 1000),
     ];
-    expect(salarioVigenteEn(imposible, "2026-09-15")?.monto).toBe(1000);
+    expect(salarioVigenteEn(corregido, "2026-07-11")).toBeNull();
+    expect(salarioVigenteEn(corregido, "2026-09-15")?.monto).toBe(1200);
   });
 
   it("y sí mueve lo que falta pagar — que es todo lo que un retroactivo puede tocar", () => {

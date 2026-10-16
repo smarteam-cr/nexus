@@ -108,6 +108,7 @@ export interface QuincenaDelCalendario {
   /**
    * Lo que correspondía según el salario que regía, en una `faltante` (2026-10-06): el monto con que se ofrece anotarla.
    * Es una SUGERENCIA para el campo, no un monto: la casilla sigue diciendo «falta» hasta que alguien la anota.
+   * En una `fuera` que ya pasó (2026-10-14), el último salario que tuvo: se anota si igual se le pagó.
    */
   sugerido: number | null;
 }
@@ -154,11 +155,25 @@ export function salarioVigenteEn(
    *
    * Con el mismo borde para los dos, uno de los dos casos queda mal. Lo cazó una prueba
    * con los datos reales de Lorena.
+   *
+   * ⚠ UN CAMBIO DE MONTO CON FECHA ANTERIOR AL ALTA CORRIGE EL ALTA (2026-10-14, F-13 de
+   * Alex): rige desde el alta. Valentina entró el 2026-10-05 con $2.100 y un minuto después
+   * se le corrigió a $2.200, con la fecha del día (el 2 de octubre). Ordenado solo por
+   * fecha, el alta le ganaba al cambio y el calendario proyectaba $1.050 por quincena.
+   * Y en un mismo día el orden es alta → cambio → baja, no el de la consulta.
    */
   const apaga = (tipo: string) => tipo === "BAJA" || tipo === "PAUSA" || tipo === "ELIMINACION";
+  const primeraAlta = movimientos
+    .filter((m) => m.tipo === "ALTA")
+    .map((m) => m.fechaEfectiva)
+    .sort()[0];
+  const efectiva = (m: MovimientoDeSalario) =>
+    m.tipo === "CAMBIO_MONTO" && primeraAlta !== undefined && m.fechaEfectiva < primeraAlta ? primeraAlta : m.fechaEfectiva;
+  const ordenDelDia = (tipo: string) => (tipo === "ALTA" || tipo === "REACTIVACION" ? 0 : apaga(tipo) ? 2 : 1);
   const hasta = movimientos
+    .map((m) => ({ ...m, fechaEfectiva: efectiva(m) }))
     .filter((m) => (apaga(m.tipo) ? m.fechaEfectiva < fechaISO : m.fechaEfectiva <= fechaISO))
-    .sort((a, b) => a.fechaEfectiva.localeCompare(b.fechaEfectiva));
+    .sort((a, b) => a.fechaEfectiva.localeCompare(b.fechaEfectiva) || ordenDelDia(a.tipo) - ordenDelDia(b.tipo));
   if (hasta.length === 0) return null;
 
   let monto: number | null = null;
@@ -252,19 +267,28 @@ export function calendarioDePersona(
       : hayHistoria
         ? "fuera"
         : "sinDato";
+    /* Una «no estaba» que ya pasó también se anota si igual se le pagó (2026-10-14, F-11 de Alex: Alexander Vanegas
+       tiene una baja el 16 de agosto y una reactivación el 22 de septiembre, y sí cobró esas quincenas). No cuenta como
+       faltante —el catálogo dice que no estaba—, pero trae de sugerencia el último salario que tuvo. */
+    const ultimo = clase === "fuera" ? [...movimientos].filter((m) => m.fechaEfectiva <= fecha).sort((a, b) => a.fechaEfectiva.localeCompare(b.fechaEfectiva)).at(-1) : undefined;
     return {
       periodo,
       quincena,
       fechaProgramada: fecha,
       monto: clase === "proyectada" ? montoQuincena(vigente!.monto, quincena) : null,
-      moneda: vigente?.moneda ?? pagos[0]?.moneda ?? "USD",
+      moneda: vigente?.moneda ?? ultimo?.moneda ?? pagos[0]?.moneda ?? "USD",
       clase,
       estado: null,
       fechaPago: null,
       salarioMensual: clase === "proyectada" ? vigente!.monto : null,
       pasada,
       pagoId: null,
-      sugerido: clase === "faltante" ? montoQuincena(vigente!.monto, quincena) : null,
+      sugerido:
+        clase === "faltante"
+          ? montoQuincena(vigente!.monto, quincena)
+          : clase === "fuera" && pasada && ultimo && ultimo.monto > 0
+            ? montoQuincena(ultimo.monto, quincena)
+            : null,
     };
   });
 

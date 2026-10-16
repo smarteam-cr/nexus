@@ -99,6 +99,11 @@ export interface EgresoDeMes {
    * tasa de ese día; sin fecha (una fila del Excel, un recurrente), con la del mes.
    */
   fechaISO?: string;
+  /**
+   * Colones por dólar con que se convierte ESTE egreso, por encima de la tasa del día y la del mes. Hoy solo la reserva
+   * de aguinaldo: `TASA_DEL_AGUINALDO` (decisión de Alex, 2026-10-14).
+   */
+  tasaFija?: number;
 }
 
 /**
@@ -478,6 +483,13 @@ export const COLCHONES_DEFECTO: readonly number[] = [10, 15] as const;
 
 /** La regla de Nexus, igual que en aguinaldo.ts. El Excel divide entre 10. */
 export const DIVISOR_AGUINALDO_NEXUS = 12;
+
+/**
+ * Colones por dólar con que la reserva de aguinaldo en colones pasa a dólares (2026-10-14). Decisión de Alex: «usemos
+ * un tipo de cambio fijo de ₡450 para calcular la reserva mensual en dólares». Antes salía con la tasa del mes (₡500),
+ * y el aguinaldo se paga en diciembre con la tasa de ese momento: un número fijo es más honesto que uno que se mueve.
+ */
+export const TASA_DEL_AGUINALDO = 450;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -937,9 +949,13 @@ export function calcularEquilibrio(
    * Convierte y, si no puede, lo anota y devuelve null (nunca un cero silencioso). Con fecha y tasas diarias, con la tasa
    * de ESE día; si no, con la del mes.
    */
-  const aPresentacion = (monto: number, m: MonedaEq, periodo: string, concepto: string, fechaISO?: string): number | null => {
-    const delDia = m !== moneda && fechaISO && tasasDiarias ? tasaDelDia(tasasDiarias, fechaISO) : null;
-    const tasa = delDia ? { periodo, crcPorUsd: delDia.venta, fuente: `BCCR del ${delDia.fecha}` } : (tasaPorPeriodo.get(periodo) ?? null);
+  const aPresentacion = (monto: number, m: MonedaEq, periodo: string, concepto: string, fechaISO?: string, tasaFija?: number): number | null => {
+    const delDia = m !== moneda && !tasaFija && fechaISO && tasasDiarias ? tasaDelDia(tasasDiarias, fechaISO) : null;
+    const tasa = tasaFija
+      ? { periodo, crcPorUsd: tasaFija, fuente: `₡${tasaFija} fijo` }
+      : delDia
+        ? { periodo, crcPorUsd: delDia.venta, fuente: `BCCR del ${delDia.fecha}` }
+        : (tasaPorPeriodo.get(periodo) ?? null);
     const r = convertir(monto, m, moneda, tasa);
     if (r === null) {
       noConvertidos.push({ periodo, moneda: m, monto, concepto });
@@ -968,7 +984,7 @@ export function calcularEquilibrio(
   for (const e of egresos) {
     const mes = porMes.get(e.periodo);
     if (!mes) continue; // fuera del año pedido
-    const monto = aPresentacion(e.monto, e.moneda, e.periodo, e.concepto, e.fechaISO);
+    const monto = aPresentacion(e.monto, e.moneda, e.periodo, e.concepto, e.fechaISO, e.tasaFija);
     if (monto === null) continue;
 
     mes.rubros[e.rubro] = round2(mes.rubros[e.rubro] + monto);
