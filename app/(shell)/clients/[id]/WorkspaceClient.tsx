@@ -15,6 +15,7 @@ import SolicitudesFueraDeAlcance from "@/components/clients/SolicitudesFueraDeAl
 import { PESTANA_DE_SOLICITUDES } from "@/lib/sessions/solicitudes-fuera-de-alcance";
 import EscalaDeLaCuenta from "@/components/clients/EscalaDeLaCuenta";
 import CasosDeUsoDeLaCuenta from "@/components/clients/CasosDeUsoDeLaCuenta";
+import PersonasYTickets from "@/components/clients/PersonasYTickets";
 import AltaTrabada from "@/components/projects/AltaTrabada";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
 import RielDelCliente, { type ProyectoDelRiel } from "@/components/clients/RielDelCliente";
@@ -39,9 +40,15 @@ const PROCESOS_TAB_ID = "__procesos__";
 const SOLICITUDES_TAB_ID = PESTANA_DE_SOLICITUDES;
 const ESCALA_TAB_ID = "__escala__";
 const CASOS_TAB_ID = "__casos__";
+const PERSONAS_TAB_ID = "__personas__";
 /** Las pestañas de La cuenta: no son un proyecto. */
 const esDeLaCuenta = (id: string | null | undefined) =>
-  id === STRATEGY_TAB_ID || id === PROCESOS_TAB_ID || id === SOLICITUDES_TAB_ID || id === ESCALA_TAB_ID || id === CASOS_TAB_ID;
+  id === STRATEGY_TAB_ID ||
+  id === PROCESOS_TAB_ID ||
+  id === SOLICITUDES_TAB_ID ||
+  id === ESCALA_TAB_ID ||
+  id === CASOS_TAB_ID ||
+  id === PERSONAS_TAB_ID;
 
 interface ProjectSummary {
   id: string;
@@ -530,6 +537,7 @@ function ProjectSection({
   const isSolicitudes = activeProjectId === SOLICITUDES_TAB_ID;
   const isEscala = activeProjectId === ESCALA_TAB_ID;
   const isCasos = activeProjectId === CASOS_TAB_ID;
+  const isPersonas = activeProjectId === PERSONAS_TAB_ID;
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   /* El proyecto cuyas piezas cuelgan en el riel: el abierto o, mientras se mira algo de la cuenta
@@ -636,6 +644,8 @@ function ProjectSection({
                 ? STRATEGY_TAB_ID
                 : que === "procesos"
                   ? PROCESOS_TAB_ID
+                  : que === "personas"
+                    ? PERSONAS_TAB_ID
                   : que === "escala"
                     ? ESCALA_TAB_ID
                     : que === "casos"
@@ -644,7 +654,19 @@ function ProjectSection({
             )
           }
           cuentaActiva={
-            isStrategy ? "info" : isProcesos ? "procesos" : isEscala ? "escala" : isCasos ? "casos" : isSolicitudes ? "solicitudes" : null
+            isStrategy
+              ? "info"
+              : isProcesos
+                ? "procesos"
+                : isPersonas
+                  ? "personas"
+                  : isEscala
+                    ? "escala"
+                    : isCasos
+                      ? "casos"
+                      : isSolicitudes
+                        ? "solicitudes"
+                        : null
           }
           avisoDeLaFicha={<AvisoDeFicha clientId={clientId} />}
           slotDePiezas={setSlotDePiezas}
@@ -693,6 +715,7 @@ function ProjectSection({
             onAbrirExploracion={(projectId) => abrirEnProyecto(projectId, "exploration")}
           />
         )}
+        {isPersonas && <PersonasYTickets key={PERSONAS_TAB_ID} clientId={clientId} />}
         {isCasos && <CasosDeUsoDeLaCuenta key={CASOS_TAB_ID} clientId={clientId} slotDelPanel={panelVisible ? slotDelPanel : null} />}
         {isSolicitudes && (
           <div className="px-8 pb-10 pt-6">

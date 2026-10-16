@@ -35,7 +35,9 @@ export type ClaveDeParte =
   | "compromisos"
   | "desviaciones"
   | "resultados"
-  | "hechos";
+  | "hechos"
+  | "personas"
+  | "tickets";
 
 export interface ParteDeLaMemoria {
   clave: ClaveDeParte;
@@ -93,6 +95,11 @@ export interface QueCargar {
    * por la lectura y sin revisar. Solo el alcance interno: un hecho trae lo dicho en la reunión y nadie lo revisó.
    */
   hechos: boolean;
+  /**
+   * Las personas del cliente y sus tickets abiertos, de la copia de HubSpot (etapa 6a de docs/mi-dia-plan.md). Solo el
+   * alcance interno: la lista de contactos de HubSpot no está curada (gente que se fue, contactos de prospección).
+   */
+  personasYTickets: boolean;
 }
 
 // ── Lo que recibe el armador de la cuenta ───────────────────────────────────────────────────
@@ -171,6 +178,25 @@ export interface DatosDeLaCuenta {
   auditoria: AuditoriaDeLaMemoria | null;
   /** Los hechos de la CUENTA (sin proyecto). Solo el alcance interno los carga. */
   hechos?: HechoDeLaMemoria[];
+  /** Las personas del cliente en HubSpot, primero quien estuvo en una reunión hace menos. Solo el alcance interno. */
+  personas?: PersonaDeLaMemoria[];
+  /** Los tickets abiertos del cliente en HubSpot. Solo el alcance interno. */
+  tickets?: TicketDeLaMemoria[];
+}
+
+export interface PersonaDeLaMemoria {
+  nombre: string;
+  cargo: string | null;
+  /** ISO: la última reunión con el cliente en la que estuvo. */
+  ultimaReunion: string | null;
+}
+
+export interface TicketDeLaMemoria {
+  asunto: string;
+  etapa: string | null;
+  prioridad: string | null;
+  /** ISO. */
+  desde: string | null;
 }
 
 // ── Lo que recibe el armador del proyecto ───────────────────────────────────────────────────

@@ -227,6 +227,8 @@ model Client {
   ventasGanadas          VentaGanada[]           @relation("VentasDelCliente") // los tratos ganados en HubSpot (el espejo de lo VENDIDO)
   negociosAbiertos       NegocioAbierto[]        @relation("NegociosDelCliente") // los tratos ABIERTOS en HubSpot (2026-10-14)
   siguientesPasos        SiguientePaso[]         @relation("SiguientesPasosDelCliente") // el siguiente paso de cada equipo (2026-10-15)
+  contactosDeHubspot     ContactoDeHubspot[]     @relation("ContactosDeHubspot") // la copia de sus contactos de HubSpot (2026-10-16)
+  ticketsDeHubspot       TicketDeHubspot[]       @relation("TicketsDeHubspot") // la copia de sus tickets de HubSpot (2026-10-16)
   reglasComisionVendedor ReglaComisionVendedor[] @relation("ReglasDeComisionVendedor") // ⚠ SUPER_ADMIN-only
   importFilasAplicadas   ImportacionFila[] // Cobranza: trazabilidad del importador
   escalaComentarios      EscalaComentario[] // Escala: comentarios «no calza con este cliente» (SET NULL)
@@ -7141,4 +7143,57 @@ model UsoDeNexus {
 
   @@unique([personaEmail, seccion, dia])
   @@index([dia])
+}
+
+// ─── Contactos y tickets de HubSpot (etapa 6a de docs/mi-dia-plan.md) ───
+
+/// La copia de un contacto de HubSpot asociado a una empresa que está en Nexus. Solo lectura: la escribe la copia de
+/// cada hora (lib/contactos/copia-server.ts). Una fila por contacto y cliente: un contacto de dos empresas está en las dos.
+model ContactoDeHubspot {
+  id                String    @id @default(cuid())
+  clientId          String
+  client            Client    @relation("ContactosDeHubspot", fields: [clientId], references: [id], onDelete: Cascade)
+  hubspotId         String
+  nombre            String
+  email             String?
+  cargo             String?
+  /// El correo del dueño del contacto en HubSpot
+  duenoEmail        String?
+  /// notes_last_contacted: la última vez que alguien registró un contacto con esta persona en HubSpot
+  ultimoContactoAt  DateTime?
+  /// notes_last_updated: la última actividad registrada en HubSpot
+  ultimaActividadAt DateTime?
+  creadoEnHubspot   DateTime?
+  /// false = la empresa ya no lo tiene asociado, o se borró en HubSpot. La fila no se borra.
+  vigente           Boolean   @default(true)
+  copiadoAt         DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+
+  @@unique([clientId, hubspotId])
+  @@index([email])
+}
+
+/// La copia de un ticket de HubSpot asociado a una empresa que está en Nexus. Solo lectura, como los contactos.
+model TicketDeHubspot {
+  id                  String    @id @default(cuid())
+  clientId            String
+  client              Client    @relation("TicketsDeHubspot", fields: [clientId], references: [id], onDelete: Cascade)
+  hubspotId           String
+  asunto              String
+  /// El nombre del pipeline y de la etapa (o el id, si HubSpot no devolvió las etapas)
+  pipeline            String?
+  etapa               String?
+  abierto             Boolean
+  prioridad           String?
+  duenoEmail          String?
+  creadoEnHubspot     DateTime?
+  cerradoEnHubspot    DateTime?
+  modificadoEnHubspot DateTime?
+  /// false = la empresa ya no lo tiene asociado, o se borró en HubSpot. La fila no se borra.
+  vigente             Boolean   @default(true)
+  copiadoAt           DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+
+  @@unique([clientId, hubspotId])
+  @@index([clientId, abierto])
 }

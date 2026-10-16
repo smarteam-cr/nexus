@@ -250,5 +250,6 @@ export function queCargar(alcance: AlcanceDeMemoria): QueCargar {
     atribucionDeDesviaciones: interno,
     resultadosSinConfirmar: interno || sinLoInterno,
     hechos: interno,
+    personasYTickets: interno,
   };
 }

@@ -15,7 +15,8 @@ import { cn } from "@/lib/cn";
 import { reunionesSinGrabar, usoDelEquipo, DIAS_DE_REUNIONES_SIN_GRABAR } from "@/lib/uso/lectura-server";
 import { usoDeLoPropuesto } from "@/lib/lo-propuesto/uso-server";
 import UsoDelEquipo from "@/components/uso/UsoDelEquipo";
-import PestanasDeUso, { VISTAS_DE_USO, type VistaDeUso } from "@/components/uso/PestanasDeUso";
+import PestanasDeUso from "@/components/uso/PestanasDeUso";
+import { VISTAS_DE_USO, type VistaDeUso } from "@/lib/uso/vistas";
 
 export const dynamic = "force-dynamic";
 

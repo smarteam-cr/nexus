@@ -3,6 +3,10 @@
 - **Sesión** (`FirefliesSession`): una reunión de Google Meet (el modelo conserva el nombre
   "Fireflies" por historia — esa integración se eliminó el 2026-06-04). Tiene
   `participants` (emails), `transcript`, `summary`, `organizerEmail`. ~16k filas.
+- **Personas y tickets** (La cuenta › Personas y tickets, `lib/contactos`, desde el 2026-10-16): la copia de solo lectura
+  de los contactos y los tickets de HubSpot de cada empresa de Nexus (`ContactoDeHubspot`, `TicketDeHubspot`), cada hora.
+  Cada persona dice cuándo estuvo por última vez en una reunión con el cliente (cruzando el correo de los invitados), y
+  la página de una reunión muestra a sus invitados con nombre y cargo. Se cambian en HubSpot, nunca en Nexus.
 - **Uso de Nexus** (`/para-ti/uso`, `lib/uso`, desde el 2026-10-16): cómo se usa Nexus, por equipo y por persona; solo
   dirección. Cuenta **aperturas**: entrar a una sección del menú, o volver a ella después de 30 minutos (`UsoDeNexus`,
   una fila por persona, sección y día). No guarda qué cliente ni qué documento se miró, ni minutos.

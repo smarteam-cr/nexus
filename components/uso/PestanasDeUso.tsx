@@ -6,10 +6,7 @@
  */
 import { useRouter } from "next/navigation";
 import { Tabs } from "@/components/ui/Tabs";
-
-export type VistaDeUso = "equipo" | "propuesto" | "reuniones";
-
-export const VISTAS_DE_USO: readonly VistaDeUso[] = ["equipo", "propuesto", "reuniones"];
+import type { VistaDeUso } from "@/lib/uso/vistas";
 
 const direccionDe = (v: VistaDeUso) => (v === "equipo" ? "/para-ti/uso" : `/para-ti/uso?vista=${v}`);
 

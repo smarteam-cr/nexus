@@ -20,6 +20,8 @@
  *   - negocios-abiertos → la copia de los negocios ABIERTOS de HubSpot y del dueño de cada empresa
  *     (lib/ventas/sync-negocios-abiertos.ts), cada hora de 6:00 a 20:00 CR, todos los días: «Para ti» de Ventas
  *     muestra los cierres más cerca y la cartera desde esta copia.
+ *   - contactos-y-tickets → la copia de los contactos y los tickets de HubSpot de las empresas de Nexus
+ *     (lib/contactos/copia-server.ts), cada hora de 6:00 a 20:00 CR, todos los días (etapa 6a de docs/mi-dia-plan.md).
  *   - seguimiento-reuniones → la lectura de cada reunión con un cliente o un prospecto, por la cola
  *     `LecturaDeReunion` (memoria de la cuenta, etapa 2). Cada tick. Gated por SEGUIMIENTO_REUNIONES_ENABLED≠0.
  *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
@@ -642,6 +644,33 @@ const tareasSemanaLunes: JobDef = {
 };
 
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
+/**
+ * La copia de los contactos y los tickets de HubSpot (etapa 6a de docs/mi-dia-plan.md). Solo lee HubSpot. Una corrida por
+ * hora; si otra tiene el candado, se suelta el turno para reintentar en el tick siguiente.
+ */
+const contactosYTickets: JobDef = {
+  key: "contactos-y-tickets",
+  shouldRun: (_now, parts) => parts.hour >= 6 && parts.hour <= 20,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const p = crDateParts(now);
+    const turno = `${p.dateKey}T${String(p.hour).padStart(2, "0")}`;
+    if (!(await claimDateKey("contactos-y-tickets", turno, now))) return SIN_TURNO;
+    const { copiarContactosYTickets } = await import("@/lib/contactos/copia-server");
+    const r = await copiarContactosYTickets();
+    if (r.locked) {
+      await prisma.cronJobState
+        .updateMany({ where: { id: "contactos-y-tickets", lastRunDateKey: turno }, data: { lastRunDateKey: null } })
+        .catch(() => {});
+      console.log(`[jobs/contactos-y-tickets] ${turno} — lock ajeno; turno liberado para reintentar`);
+      return;
+    }
+    const m = (n: string, x: typeof r.contactos) =>
+      x.sinPermiso ? `${n}: sin permiso` : `${n}: ${x.creados} nuevos, ${x.actualizados} con cambios, ${x.bajas} de baja${x.ilegibles ? `, ${x.ilegibles} empresas sin leer` : ""}`;
+    console.log(`[jobs/contactos-y-tickets] ${turno} — ${r.empresas} empresas · ${m("contactos", r.contactos)} · ${m("tickets", r.tickets)}`);
+  },
+};
+
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, invariantsDaily];
 }

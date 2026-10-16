@@ -33,6 +33,8 @@ import type {
   DatosDeLaCuenta,
   DatosDelProyecto,
   HechoDeLaMemoria,
+  PersonaDeLaMemoria,
+  TicketDeLaMemoria,
   MemoriaArmada,
   MinutaDeLaMemoria,
   ParteDeLaMemoria,
@@ -49,7 +51,8 @@ export const ROTULO_DE_LA_MEMORIA =
 /** Los topes, en caracteres. Cada parte tiene el suyo y su suma no pasa del total. */
 export const TOPES_DE_LA_MEMORIA = {
   // + `partes.hechos` en cada uno (memoria de la cuenta, etapa 6): los hechos solo existen en el alcance interno.
-  cuenta: 6900,
+  // + `partes.personas` y `partes.tickets` (etapa 6a de docs/mi-dia-plan.md), también solo del alcance interno.
+  cuenta: 8100,
   proyecto: 8900,
   partes: {
     ficha: 2000,
@@ -63,6 +66,8 @@ export const TOPES_DE_LA_MEMORIA = {
     desviaciones: 1000,
     resultados: 1300,
     hechos: 900,
+    personas: 700,
+    tickets: 500,
   } satisfies Record<ClaveDeParte, number>,
   /** Cuántas reuniones del proyecto, como mucho (las más nuevas con contenido). */
   reuniones: 8,
@@ -75,6 +80,8 @@ export const TOPES_DE_LA_MEMORIA = {
   compromisos: 12,
   desviaciones: 8,
   hechos: 12,
+  personas: 12,
+  tickets: 8,
 } as const;
 
 const TITULOS: Record<ClaveDeParte, string> = {
@@ -89,10 +96,12 @@ const TITULOS: Record<ClaveDeParte, string> = {
   desviaciones: "Desviaciones del plan",
   resultados: "Resultados que persigue el proyecto",
   hechos: "Hechos de las reuniones (INTERNO)",
+  personas: "Personas del cliente en HubSpot (INTERNO)",
+  tickets: "Tickets abiertos en HubSpot (INTERNO)",
 };
 
 /** Las partes que solo existen en el alcance interno. */
-const SOLO_INTERNAS: ReadonlySet<ClaveDeParte> = new Set(["fueraDeAlcance", "preventa", "auditoria", "compromisos", "hechos"]);
+const SOLO_INTERNAS: ReadonlySet<ClaveDeParte> = new Set(["fueraDeAlcance", "preventa", "auditoria", "compromisos", "hechos", "personas", "tickets"]);
 
 /**
  * La IA como borrador (2026-10-15): lo que escribió la IA se usa desde el primer momento, pero lo que confirmó una
@@ -278,6 +287,27 @@ export function parteDeHechos(hechos: readonly HechoDeLaMemoria[]): string {
     .join("\n");
 }
 
+const PRIORIDAD_DEL_TICKET: Record<string, string> = { URGENT: "urgente", HIGH: "alta", MEDIUM: "media", LOW: "baja" };
+
+/** Las personas del cliente en HubSpot (etapa 6a): nombre, cargo y su última reunión. Sin correo ni teléfono. */
+export function parteDePersonas(personas: readonly PersonaDeLaMemoria[]): string {
+  return personas
+    .slice(0, TOPES_DE_LA_MEMORIA.personas)
+    .map((p) => `- ${p.nombre}${p.cargo ? ` — ${p.cargo}` : ""}${p.ultimaReunion ? ` · última reunión: ${diaDeCostaRica(p.ultimaReunion)}` : " · sin reuniones en el último año"}`)
+    .join("\n");
+}
+
+/** Los tickets abiertos en HubSpot (etapa 6a). */
+export function parteDeTickets(tickets: readonly TicketDeLaMemoria[]): string {
+  return tickets
+    .slice(0, TOPES_DE_LA_MEMORIA.tickets)
+    .map((t) => {
+      const prioridad = t.prioridad ? `[${PRIORIDAD_DEL_TICKET[t.prioridad] ?? t.prioridad}] ` : "";
+      return `- ${prioridad}${t.asunto.trim()}${t.etapa ? ` · ${t.etapa}` : ""}${t.desde ? ` · desde el ${diaDeCostaRica(t.desde)}` : ""}`;
+    })
+    .join("\n");
+}
+
 export interface OpcionesDeLaCuenta {
   alcance: AlcanceDeMemoria;
   /** Los orígenes de la ficha que este lector no lee como propuesta (los suyos). */
@@ -311,6 +341,8 @@ export function armarMemoriaDeLaCuenta(datos: DatosDeLaCuenta, opts: OpcionesDeL
     { clave: "auditoria", cuerpo: q.auditoria ? recortarAlTope(parteDeAuditoria(datos), T.auditoria) : "" },
     { clave: "preventa", cuerpo: q.preventa ? recortarAlTope(parteDePreventa(datos), T.preventa) : "" },
     { clave: "hechos", cuerpo: q.hechos ? recortarAlTope(parteDeHechos(datos.hechos ?? []), T.hechos) : "" },
+    { clave: "personas", cuerpo: q.personasYTickets ? recortarAlTope(parteDePersonas(datos.personas ?? []), T.personas) : "" },
+    { clave: "tickets", cuerpo: q.personasYTickets ? recortarAlTope(parteDeTickets(datos.tickets ?? []), T.tickets) : "" },
   ];
   const partes = todas.filter((p) => !sin.has(p.clave));
   return juntar(encabezado(opts.alcance, `De la cuenta «${datos.cliente.nombre}».`, opts.pieza), partes, TOPES_DE_LA_MEMORIA.cuenta);

@@ -49,7 +49,7 @@ Un horizonte arranca cuando el anterior está desplegado y probado.
 | **Ahora** | 4a | Medir el uso y completar la cartera | Dirección y CSL | Mediano | Construida (16 oct), sin desplegar; el SQL ya está en la base |
 | | 4b | La IA como borrador; lo confirmado manda | Todos los agentes | Mediano | Construida (15 oct), sin desplegar; falta prender los hechos |
 | | 4f | Agregar una reunión a mano (la transcripción o lo que recuerdas) y asignarla a un cliente y sus proyectos | Todos los equipos | Mediano | Construida (15 oct), sin desplegar |
-| **Siguiente** | 6a | Contactos y tickets de HubSpot en Nexus | Base del resumen y del agente | Mediano | Pendiente · sube antes de la 4c |
+| **Siguiente** | 6a | Contactos y tickets de HubSpot en Nexus | Base del resumen y del agente | Mediano | Construida (16 oct), sin desplegar; los SQL y la carga ya están en la base |
 | | 4c | «Para ti» del CSE y el resumen antes de cada reunión | CSE y Ventas | Grande | Pendiente |
 | | 4d | Después de cada reunión, un paso de dos minutos | CSE y Ventas | Chico | Pendiente |
 | | — | **Pausa de dos semanas: medir y decidir si seguir** | — | — | — |
@@ -704,3 +704,16 @@ Construida el 2026-10-16 (las reglas, en DECISIONS «Medir el uso y completar la
   cuenta, 2 por haber estado en sus reuniones).
 
 Falta: desplegar, que la CSL confirme los CSE y, después de una semana de registro, mirar «Uso de Nexus».
+
+## Etapa 6a, cómo va (2026-10-16)
+
+Construida el 2026-10-16 (las reglas, en DECISIONS «Contactos y tickets de HubSpot en Nexus»):
+- La copia de cada hora (`ContactoDeHubspot`, `TicketDeHubspot`, `lib/contactos/`, `lib/hubspot/contactos-y-tickets.ts`,
+  job `contactos-y-tickets`). El SQL `2026-10-16-contactos-y-tickets.sql` ya se aplicó y la carga inicial ya corrió:
+  185 empresas, 1.405 contactos y 418 tickets.
+- La cuenta › Personas y tickets, y los invitados con nombre y cargo en la página de cada reunión.
+- La memoria de la cuenta suma las personas y los tickets abiertos, solo en el alcance interno.
+- Medido el 2026-10-16: de las 336 reuniones con clientes del último mes, 319 muestran al menos un invitado con nombre;
+  790 de 1.259 invitados de afuera tienen nombre y 498, cargo.
+
+Falta: desplegar.

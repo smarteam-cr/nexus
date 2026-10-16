@@ -12,6 +12,7 @@ import LeerEstaReunion from "@/components/seguimiento/LeerEstaReunion";
 import { MIN_TRANSCRIPT_CHARS } from "@/lib/google/doc-parse";
 import { contextoDeTareas, tareasDisponible } from "@/lib/tareas/servidor";
 import { contarTareasDeLaReunion } from "@/lib/tareas/consultas";
+import { invitadosDe } from "@/lib/contactos/lectura-server";
 import SessionView, { type SessionViewData } from "./SessionView";
 
 export const dynamic = "force-dynamic";
@@ -165,6 +166,9 @@ export default async function SessionPage({
       })
     : [];
 
+  // Quién estuvo, con nombre y cargo: el equipo y los contactos de HubSpot del DUEÑO de la reunión (etapa 6a).
+  const invitados = await invitadosDe(session.participants, duenoId).catch(() => null);
+
   const data: SessionViewData = {
     session: {
       id: session.id,
@@ -172,6 +176,7 @@ export default async function SessionPage({
       date: session.date.toISOString(),
       duration: session.duration,
       participants: session.participants,
+      invitados,
       transcript: session.transcript,
       googleDocId: session.googleDocId,
       organizerEmail: session.organizerEmail,

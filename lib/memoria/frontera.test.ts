@@ -61,6 +61,9 @@ const cuenta: DatosDeLaCuenta = {
   auditoria: { nombre: "Auditoría", fecha: "2026-09-15T12:00:00.000Z", estado: S("auditoria-estado"), hallazgos: [{ seccion: "Workflows", titulo: S("hallazgo"), hallazgo: "x", decision: "Corregir" }] },
   // Los hechos de las reuniones (etapa 6): solo el alcance interno.
   hechos: [{ tipo: "cuenta", tema: null, frase: S("hecho-de-la-cuenta"), estado: "pendiente", reunion: { titulo: "Seguimiento", fecha: "2026-10-01" } }],
+  // Las personas y los tickets de HubSpot (etapa 6a): solo el alcance interno.
+  personas: [{ nombre: S("persona-de-hubspot"), cargo: "Gerente", ultimaReunion: "2026-10-01T15:00:00.000Z" }],
+  tickets: [{ asunto: S("ticket-abierto"), etapa: "Nuevo", prioridad: "HIGH", desde: "2026-10-01T15:00:00.000Z" }],
 };
 
 const proyecto: DatosDelProyecto = {
@@ -128,6 +131,8 @@ describe("⛔ la frontera de la memoria", () => {
       "detalle-desviacion",
       "hecho-de-la-cuenta",
       "hecho-del-proyecto",
+      "persona-de-hubspot",
+      "ticket-abierto",
     ]) {
       expect(t, s).not.toContain(S(s));
     }
@@ -140,7 +145,7 @@ describe("⛔ la frontera de la memoria", () => {
   it("interno: entra todo (la prueba de que los centinelas están donde deben)", () => {
     // (Los riesgos de la minuta van adentro del resumen de la reunión, que arma `resumenDeReunion` en el cargador.)
     const t = textoDe("interno");
-    for (const s of ["postura", "motivacion", "oportunidades", "preventa-interna", "fuera-de-alcance", "hallazgo", "compromiso", "notas-de-la-reunion", "puertas-adentro", "desviacion-no-visible", "party", "hecho-de-la-cuenta", "hecho-del-proyecto"]) {
+    for (const s of ["postura", "motivacion", "oportunidades", "preventa-interna", "fuera-de-alcance", "hallazgo", "compromiso", "notas-de-la-reunion", "puertas-adentro", "desviacion-no-visible", "party", "hecho-de-la-cuenta", "hecho-del-proyecto", "persona-de-hubspot", "ticket-abierto"]) {
       expect(t, s).toContain(S(s));
     }
     // Un hecho pendiente va rotulado como propuesto por la lectura y sin revisar; uno usado, tal cual.

@@ -63,7 +63,7 @@ const DEUDA_TOKENS: Record<string, number> = {
   "app/(shell)/integrations/GoogleMeetCard.tsx": 21,
   "app/(shell)/knowledge/KnowledgeClient.tsx": 47,
   "app/(shell)/sales/SalesClient.tsx": 58,
-  "app/(shell)/sessions/[id]/SessionView.tsx": 49,
+  "app/(shell)/sessions/[id]/SessionView.tsx": 46,
   "app/(shell)/sessions/categories/CategoriesClient.tsx": 51,
   "app/(shell)/sessions/SessionsClient.tsx": 150,
   "app/(shell)/team/page.tsx": 2,

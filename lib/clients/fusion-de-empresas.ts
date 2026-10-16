@@ -107,6 +107,10 @@ export const SIN_CHOCAR = [
   { modelo: "clientAssignment", clave: ["teamMemberId", "targetRole"], etiqueta: "asignaciones" },
   { modelo: "pedidoFueraDeAlcance", clave: ["huella"], etiqueta: "solicitudes fuera de alcance" },
   { modelo: "licenciaCliente", clave: ["hub"], etiqueta: "licencias" },
+  /* La copia de contactos y tickets de HubSpot (2026-10-16, etapa 6a): un contacto de las dos fichas es la misma persona;
+     queda la fila de la que sigue y la copia de la hora siguiente la pone al día. */
+  { modelo: "contactoDeHubspot", clave: ["hubspotId"], etiqueta: "contactos de HubSpot" },
+  { modelo: "ticketDeHubspot", clave: ["hubspotId"], etiqueta: "tickets de HubSpot" },
 ] as const;
 
 /**

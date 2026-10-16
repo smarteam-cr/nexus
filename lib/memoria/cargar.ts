@@ -49,6 +49,8 @@ import type {
   DatosDeLaCuenta,
   DesviacionDeLaMemoria,
   HechoDeLaMemoria,
+  PersonaDeLaMemoria,
+  TicketDeLaMemoria,
   LoQueSabeLaIADeLaMemoria,
   MemoriaArmada,
   PedidoDeLaMemoria,
@@ -181,7 +183,7 @@ async function cargarDatosDeLaCuenta(
   q: QueCargar,
   opts: { proyectoActualId: string | null; sinPartes: ReadonlySet<ClaveDeParte> },
 ): Promise<DatosDeLaCuenta | null> {
-  const [cliente, procesos, entrega, fueraDeAlcance, preventa, auditoria, hechos] = await Promise.all([
+  const [cliente, procesos, entrega, fueraDeAlcance, preventa, auditoria, hechos, personasYTickets] = await Promise.all([
     seguro(
       "el cliente",
       () =>
@@ -208,6 +210,9 @@ async function cargarDatosDeLaCuenta(
       : Promise.resolve(null),
     q.auditoria && !opts.sinPartes.has("auditoria") ? seguro("la auditoría del portal", () => leerAuditoria(clientId), null) : Promise.resolve(null),
     q.hechos && !opts.sinPartes.has("hechos") ? seguro("los hechos de la cuenta", () => leerHechos(clientId, null), []) : Promise.resolve([]),
+    q.personasYTickets && !(opts.sinPartes.has("personas") && opts.sinPartes.has("tickets"))
+      ? seguro("las personas y los tickets de HubSpot", () => leerPersonasYTickets(clientId), null)
+      : Promise.resolve(null),
   ]);
   if (!cliente) return null;
   return {
@@ -227,6 +232,21 @@ async function cargarDatosDeLaCuenta(
     preventa,
     auditoria,
     hechos,
+    personas: personasYTickets?.personas ?? [],
+    tickets: personasYTickets?.tickets ?? [],
+  };
+}
+
+/**
+ * Las personas y los tickets de la copia de HubSpot (etapa 6a), por su única puerta de lectura
+ * (lib/contactos/lectura-server.ts). Import dinámico: los alcances que no lo cargan ni lo importan. Sin la tabla, vacío.
+ */
+async function leerPersonasYTickets(clientId: string): Promise<{ personas: PersonaDeLaMemoria[]; tickets: TicketDeLaMemoria[] }> {
+  const { personasYTicketsDe } = await import("@/lib/contactos/lectura-server");
+  const d = await personasYTicketsDe(clientId);
+  return {
+    personas: d.personas.map((p) => ({ nombre: p.nombre, cargo: p.cargo, ultimaReunion: p.ultimaReunion })),
+    tickets: d.tickets.filter((t) => t.abierto).map((t) => ({ asunto: t.asunto, etapa: t.etapa, prioridad: t.prioridad, desde: t.creado })),
   };
 }
 

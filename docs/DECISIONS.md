@@ -8166,3 +8166,26 @@ Elías: «que se guarde lo mínimo que sirva para verificar el uso básico».
   Equipo): primero quien ya lleva otros proyectos activos de la cuenta; si no, el CSE (rol CSE) que estuvo en más
   reuniones con el cliente en 90 días; si no, nadie. Elegirlo es el pase de cuenta de siempre, que escribe «CSE
   Encargado» en HubSpot. La CSL no se propone por reuniones: va a muchas y no es la encargada.
+
+## Contactos y tickets de HubSpot en Nexus (2026-10-16)
+
+**Contexto.** Etapa 6a del roadmap de «Para ti» (`docs/mi-dia-plan.md`), antes de la 4c: el resumen antes de cada reunión
+necesita saber quién viene y con qué cargo, y Nexus no sabía quiénes son las personas del cliente ni qué problemas tiene
+abiertos.
+
+- **Una copia de solo lectura, cada hora** (`ContactoDeHubspot`, `TicketDeHubspot`, job `contactos-y-tickets`): como la
+  de los negocios. Nexus no escribe contactos ni tickets en HubSpot.
+- **Solo de las empresas de Nexus de tipo cliente o prospecto.** Los aliados no: la empresa de HubSpot como aliado
+  tiene miles de contactos que no son de ningún cliente. Medido el 2026-10-16: 185 empresas, 1.405 contactos, 418
+  tickets.
+- **Una fila por registro y cliente**: un contacto asociado a dos empresas de Nexus está en las dos. Así un invitado
+  nunca toma el nombre de un contacto de otro cliente: el cruce mira solo los contactos del DUEÑO de la reunión.
+- **Se lee por asociaciones en lote** (v4, de a 100 empresas) y no de a una empresa: unas pocas llamadas por corrida.
+  ⚠ HubSpot devuelve como «error» a una empresa sin asociaciones (`NO_ASSOCIATIONS_FOUND`): eso es «no tiene», no «no
+  se pudo leer».
+- **Nunca se borra una fila**: lo que la empresa deja de tener asociado queda `vigente = false`, y solo en un cliente
+  que se leyó entero. Un 429 no vacía la lista de personas de nadie.
+- **Dónde se ve**: La cuenta › Personas y tickets (cada persona con su última reunión y lo último en HubSpot; los
+  tickets abiertos y los cerrados de 90 días) y la página de cada reunión (los invitados con nombre y cargo).
+- **La memoria de la cuenta los lleva solo en el alcance interno**: la lista de contactos de HubSpot no está curada
+  (gente que se fue, contactos de prospección), así que no llega a lo que lee el cliente ni al handoff.

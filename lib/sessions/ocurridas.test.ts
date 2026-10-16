@@ -116,6 +116,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "El último contacto de cada cuenta en la pantalla de la CSL, y quién estuvo en las reuniones para proponer el CSE de " +
       "una cuenta sin encargado: una reunión agendada no es contacto ni cuenta como haber estado.",
   },
+  "lib/contactos/lectura-server.ts": {
+    clase: "contexto",
+    motivo:
+      "Las personas de la cuenta AFIRMAN cuándo estuvo cada una en una reunión: solo las que ya ocurrieron. Una " +
+      "agendada no dice que la persona estuvo.",
+  },
   "lib/uso/lectura-server.ts": {
     clase: "contexto",
     motivo:
@@ -335,6 +341,7 @@ const CORTAN_POR_FECHA = [
   "lib/cs/watchdog-cuenta.ts",
   "lib/cs/cartera.ts",
   "lib/uso/lectura-server.ts",
+  "lib/contactos/lectura-server.ts",
   "lib/carga/queries.ts",
   "lib/projects/analyze-participants.ts",
   "lib/lifecycle/load.ts",

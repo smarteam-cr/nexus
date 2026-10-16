@@ -29,6 +29,8 @@ export interface SessionViewData {
     date: string;
     duration: number;
     participants: string[];
+    /** Los invitados con nombre y cargo (lib/contactos/lectura-server.ts). null = no se pudo leer: se muestran los correos. */
+    invitados: { email: string; nombre: string | null; cargo: string | null; lado: "smarteam" | "cliente" | "otro" }[] | null;
     transcript: string | null;
     googleDocId: string | null;
     organizerEmail: string | null;
@@ -334,16 +336,19 @@ function MetaTab({ data }: { data: SessionViewData }) {
     <div className="space-y-6">
       {/* Participantes */}
       <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-          Participantes ({session.participants.length})
+        <p className="text-xs font-semibold text-fg-muted uppercase tracking-wider mb-2">
+          Participantes ({session.invitados?.length ?? session.participants.length})
         </p>
         <div className="flex flex-wrap gap-1.5">
-          {session.participants.map((p) => (
+          {(session.invitados ?? session.participants.map((email) => ({ email, nombre: null, cargo: null, lado: "otro" as const }))).map((p) => (
             <span
-              key={p}
-              className="text-xs px-2 py-1 rounded-md bg-gray-800 text-gray-300"
+              key={p.email}
+              title={p.email}
+              className={`text-xs px-2 py-1 rounded-md border ${p.lado === "smarteam" ? "border-line bg-surface-muted text-fg-secondary" : "border-line bg-surface text-fg"}`}
             >
-              {p}
+              {p.nombre ?? p.email}
+              {p.cargo && <span className="text-fg-muted"> · {p.cargo}</span>}
+              {p.lado === "smarteam" && <span className="text-fg-muted"> · Smarteam</span>}
             </span>
           ))}
         </div>
