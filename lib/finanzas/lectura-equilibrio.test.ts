@@ -216,6 +216,15 @@ describe("la agenda: cada punto con quien lo decide", () => {
     ]);
     expect(rolDeLinea("PIPELINE_SIN_DECIDIR")).toBe("CEO");
   });
+  it("lo que el CFO ya decidió (aguinaldo en doce, tasa del BCCR) no se vuelve a preguntar en la reunión", () => {
+    const a = armarAgenda({
+      inconsistencias: [linea("AGUINALDO_CRITERIO", "x", 296.3), linea("DESVIO_DE_CAMBIO", "y", 599.84), linea("MONEDA_INFERIDA")],
+      aliadosDecidido: true,
+      aliadosDecidenElResultado: null,
+      mesesParaCerrar: [],
+    });
+    expect(a.map((p) => p.clave)).toEqual(["MONEDA_INFERIDA"]);
+  });
 });
 
 describe("la planilla del piso contra la que se pagó", () => {

@@ -41,6 +41,16 @@ export const ROL_DE_LINEA: Readonly<Record<string, Rol>> = {
 
 export const rolDeLinea = (codigo: string): Rol => ROL_DE_LINEA[codigo] ?? "CFO";
 
+/**
+ * Lo que el CFO ya decidió: la lista de inconsistencias lo sigue detectando (la diferencia con la hoja o con HubSpot
+ * existe), pero ya no es una pregunta para la reunión. Cada entrada dice qué se decidió y dónde quedó escrito.
+ */
+export const YA_DECIDIDO: Readonly<Record<string, string>> = {
+  AGUINALDO_CRITERIO:
+    "En doce: el total estimado de diciembre (salarios del 1-dic al 30-nov) entre doce, que es lo que ya hace Nexus. Alex, «Consultas adicionales», 2026-10-16.",
+  DESVIO_DE_CAMBIO: "Manda la tasa del Banco Central (BCCR) para todo; la de HubSpot no cuenta. Alex, 2026-10-16.",
+};
+
 /** Las líneas que la página muestra en su propio lugar y por eso no van a la agenda. */
 export const LINEAS_CON_LUGAR_PROPIO: readonly string[] = [
   "VENTAS_SIN_COBRANZA",
@@ -101,7 +111,7 @@ export function armarAgenda(e: EntradaDeAgenda): PuntoDeAgenda[] {
     });
   }
   for (const l of e.inconsistencias) {
-    if (LINEAS_CON_LUGAR_PROPIO.includes(l.codigo)) continue;
+    if (LINEAS_CON_LUGAR_PROPIO.includes(l.codigo) || l.codigo in YA_DECIDIDO) continue;
     out.push({
       clave: l.codigo,
       rol: rolDeLinea(l.codigo),
