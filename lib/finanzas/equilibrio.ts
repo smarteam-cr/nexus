@@ -100,8 +100,8 @@ export interface EgresoDeMes {
    */
   fechaISO?: string;
   /**
-   * Colones por dólar con que se convierte ESTE egreso, por encima de la tasa del día y la del mes. Hoy solo la reserva
-   * de aguinaldo: `TASA_DEL_AGUINALDO` (decisión de Alex, 2026-10-14).
+   * Colones por dólar con que se convierte ESTE egreso, por encima de la tasa del día y la del mes. Hoy nadie la usa: el
+   * ₡450 fijo del aguinaldo (14-oct) se dejó el 16-oct por la tasa del BCCR para todo.
    */
   tasaFija?: number;
 }
@@ -483,13 +483,6 @@ export const COLCHONES_DEFECTO: readonly number[] = [10, 15] as const;
 
 /** La regla de Nexus, igual que en aguinaldo.ts. El Excel divide entre 10. */
 export const DIVISOR_AGUINALDO_NEXUS = 12;
-
-/**
- * Colones por dólar con que la reserva de aguinaldo en colones pasa a dólares (2026-10-14). Decisión de Alex: «usemos
- * un tipo de cambio fijo de ₡450 para calcular la reserva mensual en dólares». Antes salía con la tasa del mes (₡500),
- * y el aguinaldo se paga en diciembre con la tasa de ese momento: un número fijo es más honesto que uno que se mueve.
- */
-export const TASA_DEL_AGUINALDO = 450;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 

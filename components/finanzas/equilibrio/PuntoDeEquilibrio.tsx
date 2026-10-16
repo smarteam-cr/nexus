@@ -166,12 +166,12 @@ export default function PuntoDeEquilibrio({
             </Alert>
           )}
           {pagosAHubspot && pagosAHubspot.total > 0 && (
-            <Alert variant="warning" title="Las licencias revendidas cuentan como ingreso, pero su costo no">
-              A kölbi, Fundauna, la UNA y Global Supply se les revenden licencias de HubSpot: lo facturado por la licencia suma
-              entero a lo facturado, y el pago de esas licencias a HubSpot no está en el gasto. En {r.anio} salieron de Mercury{" "}
-              {fmtMontoLibro(pagosAHubspot.total, "USD")} a HubSpot en {pagosAHubspot.pagos === 1 ? "un pago grande" : `${pagosAHubspot.pagos} pagos grandes`}, y lo
-              que se paga desde Costa Rica no se ve acá. El margen se ve más alto de lo que es hasta decidir si las licencias salen del
-              equilibrio o entran también como gasto.
+            <Alert variant="info" title="Las licencias revendidas no cuentan como ingreso">
+              Decisión del 16 de octubre: la licencia que se le revende a un cliente se le paga a HubSpot, así que solo cuenta el
+              servicio de Smarteam. kölbi ya cuenta solo su servicio, según los anexos de su contrato (16,5 % de lo facturado en
+              dólares y 34,7 % en colones). Fundauna, la UNA y Global Supply todavía cuentan la licencia, hasta tener su desglose.
+              En {r.anio} salieron de Mercury {fmtMontoLibro(pagosAHubspot.total, "USD")} a HubSpot en{" "}
+              {pagosAHubspot.pagos === 1 ? "un pago grande" : `${pagosAHubspot.pagos} pagos grandes`}.
             </Alert>
           )}
           {lectura.preliminar.preliminar && (

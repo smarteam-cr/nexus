@@ -59,14 +59,14 @@ const SERIES: readonly Serie[] = [
     nombre: "Facturado",
     color: "var(--serie-1)",
     forma: "linea",
-    queEs: "Lo facturado a clientes, sin IVA. Lo ya cobrado cuenta en el mes en que entró la plata; lo que está por cobrar, en el mes de la factura. Es lo que se compara con el piso.",
+    queEs: "Lo facturado a clientes, sin IVA y sin las licencias que se revenden (solo el servicio de Smarteam). Lo ya cobrado cuenta en el mes en que entró la plata; lo que está por cobrar, en el mes de la factura. Es lo que se compara con el piso.",
   },
   {
     clave: "cobrado",
     nombre: "Cobrado",
     color: "var(--serie-3)",
     forma: "linea",
-    queEs: "Lo que los clientes ya pagaron, sin IVA, en el mes en que entró la plata.",
+    queEs: "Lo que los clientes ya pagaron, sin IVA y sin licencias revendidas, en el mes en que entró la plata.",
   },
   {
     clave: "aliados",

@@ -43,6 +43,7 @@ import {
 } from "./tarjetas";
 import { coberturaDe, periodoDe, periodosDeAguinaldo, quincenasDistintas } from "./planilla";
 import { quincenasQueFaltanGenerar } from "./planilla-server";
+import { parteDeServicio } from "@/lib/finanzas/parte-de-servicio";
 import {
   detectarInconsistencias,
   type EstadoParaAuditar,
@@ -85,7 +86,6 @@ import {
   convertir,
   costosDelPiso,
   sumarPorClienteEnPresentacion,
-  TASA_DEL_AGUINALDO,
   tipoIngresoDeCobro,
   type CobroDeCliente,
   type CostoVigente,
@@ -2536,8 +2536,8 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
 
   // Reserva de aguinaldo: el proyectado del año ÷ 12, en cada mes. Por moneda separada
   // (el aguinaldo nunca se convierte en su propio módulo; acá la conversión, si hace
-  // falta, la hace el reporte). La parte en colones, a ₡450 fijo (`TASA_DEL_AGUINALDO`,
-  // decisión de Alex del 2026-10-14), no con la tasa del mes.
+  // falta, la hace el reporte con la tasa del BCCR, como todo lo demás: decisión de Alex del
+  // 2026-10-16, que deja sin efecto el ₡450 fijo del 14-oct.
   for (const [moneda, total] of Object.entries(aguinaldo.totalesProyectado)) {
     if (!total) continue;
     const mensual = Math.round((total / divisor) * 100) / 100;
@@ -2550,7 +2550,6 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
         monto: mensual,
         moneda: moneda as MonedaEq,
         calidad: "ESTIMADO",
-        ...(moneda === "CRC" ? { tasaFija: TASA_DEL_AGUINALDO } : {}),
       });
     }
   }
@@ -2736,7 +2735,8 @@ export async function loadReporteAnual(
     ingresos.push({
       periodo: t.periodo,
       tipo: t.tipo,
-      monto: num(c.monto)!,
+      /* Solo la parte de servicio: la licencia revendida se le paga a HubSpot (lib/finanzas/parte-de-servicio.ts). */
+      monto: Math.round(num(c.monto)! * parteDeServicio(c.cuentaId, c.moneda) * 100) / 100,
       moneda: c.moneda as MonedaEq,
       tipoServicio: c.servicio.tipoServicio,
       enPlazo: t.enPlazo,
