@@ -89,9 +89,19 @@ export interface TramoParaSumar {
   hubspotGoalId: string | null;
   nombre: string;
   desde: Date;
+  /** El fin del tramo (exclusivo). Opcional: sin él, el tramo no entra al detalle. */
+  hasta?: Date;
   monto: number;
   avance: number | null;
   moneda: string;
+}
+
+/** Un tramo de la meta, con sus fechas en «YYYY-MM-DD» (`hasta`, exclusivo). */
+export interface TramoDelAnio {
+  desde: string;
+  hasta: string;
+  monto: number;
+  avance: number | null;
 }
 
 export interface MetaDelAnio {
@@ -105,6 +115,8 @@ export interface MetaDelAnio {
   /** avance ÷ monto, de 0 a lo que dé (puede pasar de 1). null sin avance o sin monto. */
   cumplimiento: number | null;
   tramos: number;
+  /** Los tramos uno por uno, en orden (los que traen `hasta`): con ellos se saca la meta de un mes o un trimestre. */
+  detalle: TramoDelAnio[];
 }
 
 /**
@@ -117,11 +129,12 @@ export function metasDelAnio(tramos: TramoParaSumar[], anio: number, tipo: strin
   for (const t of tramos) {
     if (!t.teamMemberId || t.tipo !== tipo || t.desde.getUTCFullYear() !== anio) continue;
     const clave = `${t.teamMemberId}|${t.moneda}`;
-    const m = porClave.get(clave) ?? { teamMemberId: t.teamMemberId, metas: [], moneda: t.moneda, monto: 0, avance: null, cumplimiento: null, tramos: 0 };
+    const m = porClave.get(clave) ?? { teamMemberId: t.teamMemberId, metas: [], moneda: t.moneda, monto: 0, avance: null, cumplimiento: null, tramos: 0, detalle: [] };
     m.monto += t.monto;
     if (t.avance !== null) m.avance = (m.avance ?? 0) + t.avance;
     if (!m.metas.includes(t.nombre)) m.metas.push(t.nombre);
     m.tramos++;
+    if (t.hasta) m.detalle.push({ desde: t.desde.toISOString().slice(0, 10), hasta: t.hasta.toISOString().slice(0, 10), monto: t.monto, avance: t.avance });
     porClave.set(clave, m);
   }
   return [...porClave.values()].map((m) => ({
@@ -129,5 +142,6 @@ export function metasDelAnio(tramos: TramoParaSumar[], anio: number, tipo: strin
     monto: Math.round(m.monto * 100) / 100,
     avance: m.avance === null ? null : Math.round(m.avance * 100) / 100,
     cumplimiento: m.avance !== null && m.monto > 0 ? m.avance / m.monto : null,
+    detalle: [...m.detalle].sort((a, b) => a.desde.localeCompare(b.desde)),
   }));
 }

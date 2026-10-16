@@ -1,32 +1,54 @@
+"use client";
+
 /**
- * El modelo de comisiones (/finanzas/modelo-de-comisiones). Caparazón: la cabecera y el estado vacío mientras se define el modelo.
- * Server Component: todavía no hay nada interactivo.
+ * Finanzas › Modelos › Comisiones (/finanzas/modelo-de-comisiones), SOLO SUPER ADMIN. La propuesta de comisiones del
+ * 15 oct de 2026 en dos pestañas: «Cómo funciona» (la explicación, con calculadoras chicas) y «Simulación» (un vendedor
+ * con sus ventas ganadas y su meta de HubSpot). Las reglas viven en lib/finanzas/modelo-comisiones/reglas.ts.
+ *
+ * La pestaña viaja en la dirección (`?pestana=simulacion`) con `history.replaceState`: cambiarla no vuelve a cargar la
+ * página. Lo que se mueve en la simulación no se guarda.
  */
 import Link from "next/link";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { useState } from "react";
+import { PageHeader, Tabs } from "@/components/ui";
+import { ENLACE_BLANCO } from "@/components/carga/piezas";
+import type { DatosDeLaSimulacion } from "@/lib/finanzas/modelo-comisiones/cargar";
+import ComoFunciona from "./ComoFunciona";
+import SimulacionDeComisiones from "./SimulacionDeComisiones";
 
-export default function ModeloDeComisiones() {
+export type PestanaDeComisiones = "como-funciona" | "simulacion";
+
+export default function ModeloDeComisiones({ datos, pestanaInicial }: { datos: DatosDeLaSimulacion; pestanaInicial: PestanaDeComisiones }) {
+  const [pestana, setPestana] = useState<PestanaDeComisiones>(pestanaInicial);
+  const cambiar = (p: PestanaDeComisiones) => {
+    setPestana(p);
+    const url = new URL(window.location.href);
+    if (p === "simulacion") url.searchParams.set("pestana", p);
+    else url.searchParams.delete("pestana");
+    window.history.replaceState(window.history.state, "", url);
+  };
   return (
     <div className="space-y-6">
       <PageHeader
         title="Comisiones"
-        description="El modelo con el que Smarteam calcula las comisiones: qué porcentaje corresponde, cuándo aplica y hasta cuánto puede llegar."
-      />
-      <EmptyState
-        variant="dashed"
-        icon={
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6} aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 5L5 19M7.5 8.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm9 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
-          </svg>
-        }
-        title="Todavía no hay un modelo de comisiones"
-        description="Aquí vas a definir los porcentajes, cuándo aplica cada uno y el máximo que puede pagarse. Lo que se le paga a cada vendedor sigue en Comisiones de vendedor."
+        description="Cómo se calcularía lo que gana cada persona por vender."
         action={
-          <Link href="/finanzas/costos/comisiones-vendedor" className="text-[13px] font-semibold text-brand hover:text-brand-light">
-            Ver Comisiones de vendedor →
+          <Link href="/finanzas/costos/comisiones-vendedor" className={ENLACE_BLANCO}>
+            Lo que se paga hoy →
           </Link>
         }
+        className="mb-0"
       />
+      <Tabs<PestanaDeComisiones>
+        aria-label="Secciones de Comisiones"
+        value={pestana}
+        onChange={cambiar}
+        items={[
+          { key: "como-funciona", label: "Cómo funciona" },
+          { key: "simulacion", label: "Simulación" },
+        ]}
+      />
+      {pestana === "como-funciona" ? <ComoFunciona onSimular={() => cambiar("simulacion")} /> : <SimulacionDeComisiones datos={datos} />}
     </div>
   );
 }

@@ -33,7 +33,7 @@ export async function metasPorPersona(anio: number): Promise<MetaDePersona[]> {
     prisma.metaComercial.findMany({
       // Un día de margen hacia atrás: el 1 de enero en Costa Rica es el 31 de diciembre a las 18:00 en UTC.
       where: { vigente: true, teamMemberId: { not: null }, desde: { gte: new Date(+desde - 86_400_000), lt: hasta } },
-      select: { teamMemberId: true, hubspotGoalId: true, nombre: true, tipo: true, desde: true, monto: true, avance: true, moneda: true, sincronizadoEn: true },
+      select: { teamMemberId: true, hubspotGoalId: true, nombre: true, tipo: true, desde: true, hasta: true, monto: true, avance: true, moneda: true, sincronizadoEn: true },
     }),
     prisma.ventaGanada.findMany({
       where: { estado: "GANADA", excluida: false, vendedorId: { not: null }, fechaCierre: { gte: desde, lt: hasta } },
@@ -48,6 +48,7 @@ export async function metasPorPersona(anio: number): Promise<MetaDePersona[]> {
       hubspotGoalId: t.hubspotGoalId,
       nombre: t.nombre,
       desde: new Date(+t.desde + 6 * 3_600_000),
+      hasta: new Date(+t.hasta + 6 * 3_600_000 + 1),
       monto: Number(t.monto),
       avance: t.avance === null ? null : Number(t.avance),
       moneda: t.moneda,

@@ -578,7 +578,6 @@ describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
    * leer datos: desde ahí el orden gate-antes-de-load vuelve a vigilarse.
    */
   const SIN_DATOS_TODAVIA: Record<string, string> = {
-    "modelo-de-comisiones": "el modelo de comisiones (2026-10-07): por ahora solo la cabecera y el estado vacío",
   };
 
   it("el escaneo encuentra las páginas de Finanzas (guard del propio test)", () => {

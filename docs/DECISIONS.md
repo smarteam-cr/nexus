@@ -8065,3 +8065,26 @@ que quede registrado quién respondió.
   `scripts/migrar-presentacion-del-diagnostico.ts`.
 - **Se mira y se descarga en Feedback › Encuestas › Automáticas**: las últimas respuestas con quién las dio, y el CSV
   con todas las filas (también las fechas que leyó Nexus y los «Ahora no»).
+
+## El modelo de comisiones nuevo: se explica y se simula, no se paga (2026-10-15)
+
+**Contexto.** Elías y Marco quieren cambiar las comisiones de Ventas, Customer Success y quien lidera (hoy Andrés gana un
+5 % fijo se llegue o no a la meta). Finanzas › Modelos › Comisiones (`/finanzas/modelo-de-comisiones`) muestra la
+propuesta en dos pestañas: «Cómo funciona» y «Simulación». Las reglas salen de la reunión del 2026-10-15.
+
+- **Es solo para Super Admin** (`isCostosRole`, el mismo gate de Costos): la simulación muestra lo que vendió y lo que
+  ganaría cada persona. Quién más la ve es una decisión pendiente.
+- **Nada se paga ni se guarda.** Lo que paga hoy sigue en Comisiones de vendedor. Lo que se toca en la simulación (si
+  una venta es licencia, el valor mensual de una licencia, el tope del bono) se pierde al recargar.
+- **Las reglas viven en un solo lugar** (`lib/finanzas/modelo-comisiones/reglas.ts`, puro): las dos pestañas las leen,
+  así una regla que cambia cambia la explicación y el cálculo.
+- **La meta es mensual y la de HubSpot** (`lib/ventas/metas.ts`, que ahora devuelve cada tramo). HubSpot la guarda por
+  trimestre y la reparte por días; Nexus hace la misma cuenta, así la meta de cada mes es la del desglose mensual de
+  HubSpot. Solo cuentan los servicios: las licencias no suman, aunque HubSpot cuente las que tienen monto.
+- **El equipo de ventas es quien tiene el rol de Ventas en Nexus** (hoy Andrés y Liz); lo lidera quien lleva más
+  tiempo. Marco vende pero no cuenta para el bono de nadie. El bono de quien lidera sale de las metas de las personas
+  que lidera, nunca de las suyas: US$ 500 al mes por persona que llega a su meta, desde el 70 %.
+- **Una venta es de Ventas en sus primeros 6 meses desde la primera venta del cliente**, de cualquier vendedor; después,
+  de quien creó el negocio (la simulación toma al dueño del trato en HubSpot).
+- **Lo que falta decidir con Marco** está en la página, cada pregunta con su contexto, y se cierra antes de construir
+  el pago.
