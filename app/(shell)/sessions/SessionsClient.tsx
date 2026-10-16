@@ -16,6 +16,7 @@ import type { FilaDeCoberturaPorCse } from "@/lib/sessions/cobertura-por-cse";
 import type { HubspotCompanyLite } from "@/lib/hubspot/companies";
 import { IconCheck, Alert } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
+import { BotonAgregarReunion } from "@/components/sessions/AgregarReunion";
 import { fetchJson } from "@/lib/api/fetch-json";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -247,6 +248,16 @@ function AvisoDeCobertura({ cobertura }: { cobertura: Cobertura }) {
 // ── Badge de fuente ───────────────────────────────────────────────────────────
 
 function SourceBadge({ source }: { source: string }) {
+  if (source === "manual") {
+    return (
+      <span
+        title="Agregada a mano: no pasó por Meet"
+        className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full bg-surface-hover text-fg-secondary border border-line"
+      >
+        A mano
+      </span>
+    );
+  }
   if (source === "google_meet") {
     return (
       <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
@@ -1825,6 +1836,12 @@ export default function SessionsClient({
 
             {/* ── Buscador (Fase 6) ────────────────────────────────────────── */}
             <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b border-gray-800">
+              {/* Una reunión que no pasó por Meet, o lo que pasó en una que no dejó transcripción (etapa 4f). */}
+              <BotonAgregarReunion
+                className="mb-2 w-full"
+                clientes={clients.map((c) => ({ id: c.id, nombre: c.name }))}
+                onAgregada={() => router.refresh()}
+              />
               <div className="relative">
                 <svg
                   className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600 pointer-events-none"

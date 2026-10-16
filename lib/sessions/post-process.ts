@@ -43,6 +43,7 @@ import { fechaLocalDeLaReunion } from "@/lib/sessions/compromisos-y-alcance";
 import { ADENDA_PRESENTACION_DEL_DIAGNOSTICO, leerPresentacionDetectada } from "@/lib/canvas/presentacion-del-diagnostico";
 import { citaEstaEnLasFuentes, normalizarParaCita } from "@/lib/timeline/limites";
 import { MIN_TRANSCRIPT_CHARS } from "@/lib/google/doc-parse";
+import { MIN_RECUERDO, leerMarcaAMano, recuerdoDeLaReunion } from "@/lib/sessions/reunion-a-mano";
 import {
   TOPE_DE_LA_TRANSCRIPCION,
   adendaDeLaHerramienta,
@@ -152,7 +153,12 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
     return { status: "omitida", sessionId, clientId: client.id, reason: "Es una reunión de puertas adentro (solo estuvo el equipo): la lee Tareas, no el seguimiento" };
   }
   const transcript = session.transcript ?? "";
-  if (transcript.trim().length < MIN_TRANSCRIPT_CHARS) {
+  // Lo que alguien recuerda de una reunión agregada a mano (lib/sessions/reunion-a-mano.ts) se lee entero, como una
+  // transcripción: deja minuta, tareas y pedidos. Pero no son palabras de nadie, y el mensaje lo dice.
+  const marcaAMano = leerMarcaAMano(session.summary);
+  const recuerdo = transcript.trim().length < MIN_TRANSCRIPT_CHARS ? recuerdoDeLaReunion(session.summary) : null;
+  const leeElRecuerdo = !!recuerdo && recuerdo.length >= MIN_RECUERDO;
+  if (transcript.trim().length < MIN_TRANSCRIPT_CHARS && !leeElRecuerdo) {
     const sinTexto: ResultadoDeLaLectura = { status: "sin_texto", sessionId, clientId: client.id, ruta, reason: "Sin transcripción (o muy corta)" };
     // Memoria de la cuenta, etapa 6 (solo con SEGUIMIENTO_HECHOS prendida y el SQL): una reunión con SOLO notas de
     // Gemini no deja minuta, pero sí sus hechos (fuente «notas»). Antes, el clasificador la vincula a su proyecto (solo
@@ -230,12 +236,20 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
     // En hora de Costa Rica: en UTC, una reunión de las 18:00 caía al día siguiente y toda fecha calculada desde ahí también.
     `Fecha: ${fechaLocalDeLaReunion(session.date)}`,
     `Participantes: ${session.participants.join(", ")}`,
-    overview ? `\n\n=== RESUMEN GENERADO POR GEMINI NOTES ===\n${overview}` : "",
+    overview && !leeElRecuerdo ? `\n\n=== RESUMEN GENERADO POR GEMINI NOTES ===\n${overview}` : "",
     alcanceVendido.trim() ? `\n\n=== LO QUE SE VENDIÓ (para reconocer lo que está fuera de alcance) ===\n${alcanceVendido}` : "",
     yaSonTareas.length ? `\n\n=== YA SON TAREAS (no las repitas como compromiso) ===\n${yaSonTareas.map((t) => `- ${t}`).join("\n")}` : "",
     "",
-    `=== TRANSCRIPT ===`,
-    transcript.slice(0, TOPE_DE_LA_TRANSCRIPCION),
+    ...(leeElRecuerdo && marcaAMano
+      ? [
+          `=== LO QUE RECUERDA ${(marcaAMano.nombre ?? marcaAMano.por).toUpperCase()} DE LA REUNIÓN ===`,
+          `(Lo escribió a mano después de la reunión. No es una transcripción: no son palabras textuales de nadie, así que nada de esto es una cita del cliente.)`,
+          (recuerdo ?? "").slice(0, TOPE_DE_LA_TRANSCRIPCION),
+        ]
+      : [
+          marcaAMano?.tipo === "transcripcion" ? `=== TRANSCRIPT (agregado a mano por ${marcaAMano.nombre ?? marcaAMano.por}) ===` : `=== TRANSCRIPT ===`,
+          transcript.slice(0, TOPE_DE_LA_TRANSCRIPCION),
+        ]),
   ]
     .filter((x) => x !== null)
     .join("\n");

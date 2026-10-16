@@ -27,6 +27,7 @@ import { memoriaDeLaCuenta } from "@/lib/memoria";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
+import { queTieneSinTranscripcion } from "@/lib/sessions/reunion-a-mano";
 import { salesPresenceEmails } from "@/lib/handoff/sales-presence";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import type { PropuestaDeExploracion } from "./contenido";
@@ -704,7 +705,9 @@ export async function leerFuentes(opts: {
     if (!texto) return;
     const deLaSala = etiquetaDeSala({ participants: s.participants, organizerEmail: s.organizerEmail }, internosDeLaSala);
     const sala = deLaSala === "PUERTAS ADENTRO" ? prefijoDeSala(deLaSala) : "";
-    const etiqueta = `${sala}Reunión del ${fecha(s.date)}${transcripcion ? "" : " (solo las notas de Gemini)"}: ${s.title}`;
+    // Lo que alguien recuerda de una reunión agregada a mano no son notas de Gemini: se dice qué es.
+    const deQuien = transcripcion ? "" : ` (${queTieneSinTranscripcion(s.summary)})`;
+    const etiqueta = `${sala}Reunión del ${fecha(s.date)}${deQuien}: ${s.title}`;
     fuentes.push({ id: `S${i + 1}`, etiqueta, texto: texto.slice(0, MAX) });
     sesionesUsadas.push(s.id);
     if (marcar) reunionesLeidas.push({ fuente: `S${i + 1}`, clave: `meet:${s.id}`, etiqueta, id: s.id, origen: "meet", fecha: s.date.toISOString(), titulo: s.title });

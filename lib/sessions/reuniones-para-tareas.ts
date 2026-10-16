@@ -24,6 +24,7 @@ import { buildInternalDomainsSet } from "./categorize";
 import { esReunionDePuertasAdentro } from "./candidatas-internas";
 import { comprimirConversacion, type ConversacionComprimida } from "./conversacion";
 import { MAX_TRANSCRIPT_CHARS } from "@/lib/google/doc-parse";
+import { leerMarcaAMano, type TipoDeContenido } from "./reunion-a-mano";
 
 export interface QuienLeeReuniones {
   email: string;
@@ -40,8 +41,10 @@ export interface ReunionParaTareas {
   /** Con el organizador incluido, en minúsculas. */
   participantes: string[];
   organizador: string | null;
-  /** Las notas de Gemini (`summary.overview`), si hay. */
+  /** Las notas de Gemini (`summary.overview`), si hay. En una reunión agregada a mano, lo que recuerda quien la agregó. */
   notas: string | null;
+  /** Lo que pasó se agregó a mano (lib/sessions/reunion-a-mano.ts): una transcripción o lo que alguien recuerda. */
+  aMano: TipoDeContenido | null;
   /** `summary.action_items`, si los trae. */
   actionItems: string[];
   largoTranscript: number;
@@ -120,6 +123,7 @@ async function aReunion(f: Fila, q: QuienLeeReuniones, dominiosPropios: Readonly
     participantes,
     organizador: f.organizerEmail?.toLowerCase() ?? null,
     notas,
+    aMano: leerMarcaAMano(f.summary)?.tipo ?? null,
     actionItems,
     largoTranscript: f.transcript?.length ?? 0,
     huellaTexto: huella(f.transcript) ?? huella(notas),

@@ -8088,3 +8088,35 @@ propuesta en dos pestañas: «Cómo funciona» y «Simulación». Las reglas sal
   de quien creó el negocio (la simulación toma al dueño del trato en HubSpot).
 - **Lo que falta decidir con Marco** está en la página, cada pregunta con su contexto, y se cierra antes de construir
   el pago.
+
+## Agregar una reunión a mano: la transcripción o lo que se recuerda (2026-10-15)
+
+**Contexto.** Etapa 4f del roadmap de «Para ti» (`docs/mi-dia-plan.md`). De 378 reuniones con clientes del último mes,
+94 no dejaron nada: ni transcripción ni notas. Y las reuniones que no pasan por Meet (Zoom, Teams, presenciales, una
+llamada) no existían en Nexus. Elías: agregar una reunión puede ser con la transcripción o con lo que la persona
+recuerda, cualquier contexto de la reunión; y todo tiene que servir para cualquier equipo.
+
+- **«+ Agregar reunión», en Sesiones y en la ficha del cliente** (`components/sessions/AgregarReunion.tsx`). Lo puede
+  hacer cualquiera con acceso al cliente, de cualquier equipo: la reunión es de la cuenta. Las reglas, en
+  `lib/sessions/reunion-a-mano.ts`; la escritura, en `lib/sessions/reunion-a-mano-server.ts`
+  (`/api/clients/[id]/reuniones-a-mano`).
+- **Antes de crear una, se muestran las del cliente ese día.** Si es una de Meet sin transcripción ni notas, se le agrega
+  lo que pasó y no queda dos veces. Lo que dejó Meet nunca se pisa (409). Una nueva lleva `source = "manual"`, un id
+  `manual_…`, el cliente puesto a mano (`asignarDuenioManual`, «humano») y los proyectos vinculados a mano (el
+  clasificador no los toca). El servidor vuelve a pedir confirmación si ese día ya hay reuniones.
+- **La transcripción y el recuerdo se guardan distinto, a propósito.** La transcripción (pegada o en un archivo .txt,
+  .vtt o .srt, que se lee en el navegador; los subtítulos de Zoom y Teams se pasan a turnos «Nombre: …») va a
+  `transcript`, como la de Meet. Word y PDF no se leen: se copia el texto y se pega. Lo que la persona recuerda va a `summary.overview` con la marca `summary.aMano` (quién y cuándo), sin SQL.
+  *Por qué:* un recuerdo no son palabras de nadie. La lectura de cada reunión lo lee entero (minuta, tareas, pedidos
+  fuera de alcance) con un encabezado que lo dice; la lectura de hechos lo toma como «texto sumado a mano», así que una
+  queja que solo está en un recuerdo va al vigía como evidencia y nunca levanta sola una alerta.
+- **Entra a la cola sin el corte de 14 días** (la pidió una persona) y la lee el job, como a cualquier otra. Un recuerdo
+  entra con su propio piso (`MIN_RECUERDO`, 40 caracteres), aunque la lectura de hechos esté apagada.
+- **Quién estuvo:** la gente del equipo se elige de la lista, con su correo; la del cliente se escribe con su correo o
+  solo con el nombre. Una persona sin correo cuenta como alguien de afuera (`esReunionDePuertasAdentro`): Meet guarda
+  siempre correos (medido el 2026-10-15: 0 de 8.281 reuniones con un participante sin «@»), así que esto solo pasa en una
+  reunión agregada a mano. Sin nadie del cliente, la reunión es de puertas adentro y no la lee el seguimiento.
+- **Una reunión de Meet a la que se le agregó algo no la vuelve a tomar el enriquecimiento**: queda con `enrichedAt`.
+  ⚠ Si Meet descubre después el documento de esa reunión, el enriquecimiento lo trae y reemplaza lo agregado a mano
+  (la transcripción real gana).
+- **Pendiente:** ofrecer «agregarla como reunión» desde el «Contexto adicional» cuando lo que se suma es una reunión.

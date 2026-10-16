@@ -227,6 +227,11 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   "lib/google/meet-enrichment.ts": { clase: "plomeria", motivo: "Lectura del documento de Meet. Ya filtra `date < now - 1h` (Tanda R)." },
   "lib/sessions/reclassify.ts": { clase: "plomeria", motivo: "Re-atribuye dueño. La fecha no cambia de quién es una reunión." },
   "lib/sessions/resolve-client.ts": { clase: "plomeria", motivo: "La cascada de dueño, sobre el corpus entero a propósito." },
+  "lib/sessions/reunion-a-mano-server.ts": {
+    clase: "plomeria",
+    motivo:
+      "«Agregar una reunión» (etapa 4f): lee las del cliente un día por el chokepoint (`getClientSessions`, que ya corta en hoy) para preguntar si es una de ellas, y solo mira si tienen texto. No le describe reuniones a un modelo.",
+  },
   "lib/sessions/vincular-al-llegar.ts": {
     clase: "plomeria",
     motivo: "Memoria de la cuenta, etapa 2: vincula a su proyecto las reuniones con solo notas (el clasificador). Ya corta por `date: { lte: ahora - 1h }`.",

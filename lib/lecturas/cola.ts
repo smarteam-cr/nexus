@@ -28,6 +28,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getReunionesParaTareas, type ReunionParaTareas } from "@/lib/sessions/reuniones-para-tareas";
+import { MIN_RECUERDO } from "@/lib/sessions/reunion-a-mano";
 import { esDePuertasAdentro } from "@/lib/sessions/reuniones-para-seguimiento";
 import { crearFilaDelSeguimiento, soltarLaFilaDelSeguimiento } from "@/lib/tareas/lectura";
 import { hechosPrendidos } from "@/lib/seguimiento/hechos/reglas";
@@ -125,8 +126,11 @@ export async function encolarSeguimiento(
         largoNotas: leida.reunion.notas?.trim().length ?? 0,
         ahora,
       },
-      // Con la lectura de hechos prendida, una reunión con solo notas también entra (memoria de la cuenta, etapa 6).
-      { ...opciones, leerSoloNotas: hechosPrendidos(process.env) },
+      // Con la lectura de hechos prendida, una reunión con solo notas también entra (memoria de la cuenta, etapa 6). Lo
+      // que alguien recuerda de una reunión agregada a mano entra siempre, con su propio piso: se lee entero.
+      leida.reunion.aMano === "recuerdo"
+        ? { ...opciones, leerSoloNotas: true, minNotas: MIN_RECUERDO }
+        : { ...opciones, leerSoloNotas: hechosPrendidos(process.env) },
     );
     if (motivo) return { encolada: false, motivo };
     return await ponerEnLaCola(leida.reunion, ahora, profundidad);

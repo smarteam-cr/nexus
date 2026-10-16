@@ -84,6 +84,14 @@ export function esReunionDePuertasAdentro(
   return dominios.every((d) => dominiosPropios.has(d));
 }
 
+/**
+ * El «dominio» de alguien anotado solo por su nombre. Pasa únicamente en una reunión agregada a mano
+ * (lib/sessions/reunion-a-mano.ts): a la gente del equipo se la elige de la lista, con su correo, y
+ * Meet guarda siempre correos. Así que una persona sin correo es alguien de afuera, y la reunión no
+ * puede ser de puertas adentro. No es un dominio de verdad: nunca coincide con uno nuestro.
+ */
+const PERSONA_SIN_CORREO = "(persona sin correo)";
+
 /** Los dominios de quienes estuvieron (organizador incluido), sin calendarios ni salas. */
 function dominiosDeLaSala(s: SesionParaOfrecer): string[] {
   const gente = s.organizerEmail ? [...s.participants, s.organizerEmail] : s.participants;
@@ -91,7 +99,9 @@ function dominiosDeLaSala(s: SesionParaOfrecer): string[] {
      son muebles que Google invita como si fueran personas. Con uno solo en la lista, una reunión
      nuestra dejaba de ser interna. Si NO queda nadie más, la sala queda vacía: una sesión que
      solo tiene un calendario adentro no es una reunión, es un dato incompleto. */
-  return gente.map(dominioDe).filter((d): d is string => d !== null && !esDominioDeCalendario(d));
+  return gente
+    .map((p) => (p.trim() && !p.includes("@") ? PERSONA_SIN_CORREO : dominioDe(p)))
+    .filter((d): d is string => d !== null && !esDominioDeCalendario(d));
 }
 
 /**

@@ -37,6 +37,8 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   // ── Los que usan un criterio ───────────────────────────────────────────────
   "app/(shell)/clients/[id]/layout.tsx": { modo: "criterio", criterio: "navegable" },
   "app/(shell)/clients/[id]/page.tsx": { modo: "criterio", criterio: "navegable" },
+  // «Agregar una reunión» (etapa 4f): los proyectos que se pueden elegir son los que se ven en la ficha.
+  "lib/sessions/reunion-a-mano-server.ts": { modo: "criterio", criterio: "navegable" },
   "lib/portfolio/load.ts": { modo: "criterio", criterio: "cartera" },
   "lib/cs/watchdog.ts": { modo: "criterio", criterio: "cartera" },
   // El vigía de UN cliente (al entrar y a mano, D14): corre para sus proyectos de cartera.

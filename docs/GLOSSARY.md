@@ -3,6 +3,11 @@
 - **Sesión** (`FirefliesSession`): una reunión de Google Meet (el modelo conserva el nombre
   "Fireflies" por historia — esa integración se eliminó el 2026-06-04). Tiene
   `participants` (emails), `transcript`, `summary`, `organizerEmail`. ~16k filas.
+- **Reunión agregada a mano** (`lib/sessions/reunion-a-mano.ts`, desde el 2026-10-15): una reunión que no pasó por Meet
+  (Zoom, Teams, presencial, una llamada), creada con «+ Agregar reunión» (`source = "manual"`, id `manual_…`), o una de
+  Meet que no dejó nada y a la que se le agregó lo que pasó. Lo que pasó es la **transcripción** (va a `transcript`) o lo
+  que la persona **recuerda** (va a `summary.overview` con la marca `summary.aMano`): Nexus lee las dos, pero un recuerdo
+  nunca cuenta como palabras del cliente. Ver DECISIONS §Agregar una reunión a mano.
 - **`resolvedClientId`**: materialización de a qué Client pertenece la sesión — **fuente única
   de ownership**. La calcula `categorizeSession` y la persiste `lib/sessions/resolve-client.ts`.
 - **`manualClientId`**: override manual del consultor (gana sobre la resolución automática).

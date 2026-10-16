@@ -10,6 +10,7 @@ import { prisma } from "@/lib/db/prisma";
 import Link from "next/link";
 import WorkspaceShell from "@/components/clients/WorkspaceShell";
 import { AccionDeCabecera, CabeceraDeFicha, ChipHubspot } from "@/components/layout/CabeceraDeFicha";
+import { BotonAgregarReunion } from "@/components/sessions/AgregarReunion";
 // WorkspaceHeaderPopovers (drawer Contexto con Docs/Sesiones/Deal) — eliminado.
 // Docs y Sesiones se migraron al panel "Información del cliente"; el Deal se
 // descontinuó.
@@ -192,6 +193,8 @@ export default async function ClientLayout({
         }
         acciones={
           <>
+            {/* Una reunión que no pasó por Meet, o lo que pasó en una que no dejó transcripción (etapa 4f). */}
+            <BotonAgregarReunion clienteFijo={{ id, nombre: client.name }} etiqueta="+ Reunión" />
             {canSeeCs && (
               <AccionDeCabecera href={`/customer-success/${id}`} title="Estado de la cuenta en Customer Success">
                 🧭 Ver portal del cliente

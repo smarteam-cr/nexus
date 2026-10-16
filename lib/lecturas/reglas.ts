@@ -124,14 +124,19 @@ export interface ReunionParaEncolar {
  * `leerSoloNotas`: la lectura de hechos está prendida (`SEGUIMIENTO_HECHOS`, memoria de la cuenta, etapa 6): una reunión
  * sin transcripción pero con notas de Gemini de `MIN_NOTAS_PARA_LEER` caracteres o más también entra (deja sus hechos,
  * no una minuta). Sin la bandera, la cobertura de la etapa 2 no cambia.
+ * `minNotas`: el piso de las notas para esta reunión. Lo que una persona recuerda de una reunión agregada a mano entra
+ * con `MIN_RECUERDO` (lib/sessions/reunion-a-mano.ts), aunque la lectura de hechos esté apagada: se lee entero.
  */
-export function motivoParaNoEncolar(o: ReunionParaEncolar, opciones: { sinCorteDeFrescura?: boolean; leerSoloNotas?: boolean } = {}): MotivoParaNoEncolar | null {
+export function motivoParaNoEncolar(
+  o: ReunionParaEncolar,
+  opciones: { sinCorteDeFrescura?: boolean; leerSoloNotas?: boolean; minNotas?: number } = {},
+): MotivoParaNoEncolar | null {
   if (o.kind === null || o.kind === undefined) return "sin_duenio";
   if (!rutaDeLaLectura(o.kind)) return "no_es_cliente";
   if (o.puertasAdentro) return "puertas_adentro";
   if (+o.fecha > +o.ahora) return "futura";
   if (!opciones.sinCorteDeFrescura && +o.ahora - +o.fecha > DIAS_DE_FRESCURA * 86_400_000) return "vieja";
-  if (o.largoTranscript < MIN_TRANSCRIPT_CHARS && !(opciones.leerSoloNotas && (o.largoNotas ?? 0) >= MIN_NOTAS_PARA_LEER)) return "sin_texto";
+  if (o.largoTranscript < MIN_TRANSCRIPT_CHARS && !(opciones.leerSoloNotas && (o.largoNotas ?? 0) >= (opciones.minNotas ?? MIN_NOTAS_PARA_LEER))) return "sin_texto";
   return null;
 }
 

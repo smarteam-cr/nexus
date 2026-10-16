@@ -14,6 +14,7 @@
  */
 import { comprimirConversacion, conversacionComoTexto, type Turno } from "@/lib/sessions/conversacion";
 import { notasPriorizadas } from "@/lib/sessions/notas-de-gemini";
+import { recuerdoDeLaReunion } from "@/lib/sessions/reunion-a-mano";
 import type { FuenteDelTexto } from "./tipos";
 
 /** Cuánto de la conversación se lee: el mismo tope que la lectura de seguimiento. */
@@ -117,12 +118,18 @@ export function armarTextoDeLaReunion(
     }
   }
 
-  if (!conConversacion) {
+  // Lo que alguien recuerda de una reunión agregada a mano no son notas de Gemini: va como texto sumado a mano, que
+  // nunca cuenta como palabras del cliente (lib/sessions/reunion-a-mano.ts).
+  const recuerdo = recuerdoDeLaReunion(e.summary);
+  if (!conConversacion && !recuerdo) {
     const notas = notasComoTexto(e.summary);
     if (notas.length >= MIN_CARACTERES_PARA_LEER) partes.push({ fuente: "notas", texto: notas.slice(0, tope) });
   }
 
-  const sumado = (e.textoSumado ?? "").trim();
+  const sumado = [e.textoSumado ?? "", conConversacion ? "" : (recuerdo ?? "")]
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .join("\n\n");
   if (sumado.length >= MIN_CARACTERES_PARA_LEER) partes.push({ fuente: "texto", texto: sumado.slice(0, tope) });
 
   if (!partes.length) return null;

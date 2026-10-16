@@ -66,6 +66,15 @@ describe("¿es una reunión de puertas adentro?", () => {
   it("una basura sin @ no cuenta como nuestra", () => {
     expect(esReunionDePuertasAdentro({ participants: ["sin-arroba"] }, PROPIOS)).toBe(false);
   });
+
+  it("alguien anotado solo por su nombre es de afuera (reunión agregada a mano)", () => {
+    /* En una reunión agregada a mano, a la gente del equipo se la elige con su correo y a la del
+       cliente se la puede escribir por su nombre. Si el nombre no contara, una reunión con el
+       cliente quedaría como de puertas adentro y la lectura no la leería. */
+    expect(esReunionDePuertasAdentro({ participants: [YO, "Ana Pérez"] }, PROPIOS)).toBe(false);
+    expect(esReunionDePuertasAdentro({ participants: [YO, OTRO_NUESTRO] }, PROPIOS)).toBe(true);
+    expect(esReunionDePuertasAdentro({ participants: [YO, "   "] }, PROPIOS)).toBe(true);
+  });
 });
 
 describe("el piso de 2026", () => {

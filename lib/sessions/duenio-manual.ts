@@ -42,8 +42,15 @@ export type OrigenDelDuenio = "humano" | "adopcion";
 export async function asignarDuenioManual(
   sessionId: string,
   clientId: string | null,
-  opts: { origen: OrigenDelDuenio; actorEmail: string | null; soloSiSinDuenio?: boolean },
+  opts: {
+    origen: OrigenDelDuenio;
+    actorEmail: string | null;
+    soloSiSinDuenio?: boolean;
+    /** La transacción en la que corre (una reunión agregada a mano nace y recibe su dueño en la misma). */
+    db?: Pick<typeof prisma, "firefliesSession">;
+  },
 ): Promise<boolean> {
+  const db = opts.db ?? prisma;
   const data = {
     manualClientId: clientId,
     // Los tres van juntos SIEMPRE. Separarlos es cómo se pierde la procedencia.
@@ -52,7 +59,7 @@ export async function asignarDuenioManual(
     manualClientAt: clientId ? new Date() : null,
   };
   if (opts.soloSiSinDuenio) {
-    const { count } = await prisma.firefliesSession.updateMany({
+    const { count } = await db.firefliesSession.updateMany({
       where: { id: sessionId, resolvedClientId: null, manualClientId: null },
       data,
     });
@@ -60,7 +67,7 @@ export async function asignarDuenioManual(
   }
   /* `update` y no `updateMany` a propósito: un id que no existe tiene que fallar ruidoso, como
      siempre, y no devolver «listo» sobre nada. */
-  await prisma.firefliesSession.update({ where: { id: sessionId }, data });
+  await db.firefliesSession.update({ where: { id: sessionId }, data, select: { id: true } });
   return true;
 }
 
