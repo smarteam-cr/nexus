@@ -8,9 +8,11 @@
  * seis colores quedan bajo 3:1 sobre fondo claro, así que todo valor tiene que poder leerse sin el color.
  *
  * ── CÓMO SE MIRA ────────────────────────────────────────────────────────────────
- *  · Pasar por una serie de la leyenda la resalta y apaga las demás. Un clic la deja fija; otro la saca del gráfico;
- *    otro la devuelve. Sacar una serie no cambia ningún número: es qué se mira, no qué se cuenta. Sin lo vendido la
- *    escala se ajusta sola (lo vendido de febrero aplasta todo lo demás).
+ *  · Cada serie de la leyenda se prende o se apaga con un clic, y se pueden dejar varias a la vez (pedido de Marco y
+ *    Alex, 2026-10-16: «solo se puede marcar una»). Lo que cada quien deja marcado se recuerda en ese navegador.
+ *    «Sin aliados» deja lo que cubren las ventas solas: el piso contra lo facturado y lo cobrado, sin las comisiones.
+ *    Pasar por una serie la resalta. Sacar una serie no cambia ningún número: es qué se mira, no qué se cuenta. Sin lo
+ *    vendido la escala se ajusta sola (lo vendido de febrero aplasta todo lo demás).
  *  · Pasar por un mes lo lee entero: cada serie con su valor (el valor primero), lo facturado por servicio, lo
  *    estimado de aliados que no suma, y si cubrió su gasto. Tocarlo abre su detalle.
  *
@@ -18,7 +20,7 @@
  * tema lo resuelve CSS. Un color resuelto en JS dentro de un `style` es un error de hidratación garantizado
  * (lib/ui/chart-colors-token.test.ts cuenta el día que pasó).
  */
-import { useState, type CSSProperties } from "react";
+import { useMemo, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { cn } from "@/lib/cn";
 import { fmtMontoLibro } from "@/lib/cobranza/montos";
 import type { FilaMes } from "@/lib/finanzas/equilibrio";
@@ -137,6 +139,53 @@ function escala(maximo: number): { tope: number; paso: number } {
 const compacto = (v: number) =>
   v >= 1_000_000 ? `${(v / 1_000_000).toLocaleString("es-CR", { maximumFractionDigits: 1 })}M` : v >= 1000 ? `${v / 1000}k` : String(v);
 
+/** Lo que cada quien deja marcado, en su navegador. Si el navegador no deja guardar, el gráfico arranca con todo. */
+const GUARDADO = "nexus.equilibrio.series-fuera";
+const CLAVES: readonly Clave[] = ["vendido", "porFacturar", "facturado", "cobrado", "aliados", "ingresos", "gasto", "piso"];
+/** «Sin aliados»: lo que cubren las ventas solas. Fuera las comisiones y los ingresos totales, que las suman. */
+const SIN_ALIADOS: readonly Clave[] = ["aliados", "ingresos"];
+
+/* Lo guardado es un almacén externo (`useSyncExternalStore`): el servidor no ve el navegador y arranca con todo, y el
+   cliente lee lo guardado sin un efecto que repinte. `enMemoria` cubre el navegador que no deja guardar. */
+const oyentes = new Set<() => void>();
+let enMemoria = "[]";
+
+function leerGuardado(): string {
+  try {
+    return window.localStorage.getItem(GUARDADO) ?? enMemoria;
+  } catch {
+    return enMemoria;
+  }
+}
+
+function guardar(fuera: ReadonlySet<Clave>) {
+  enMemoria = JSON.stringify([...fuera]);
+  try {
+    window.localStorage.setItem(GUARDADO, enMemoria);
+  } catch {
+    /* Sin almacenamiento (ventana privada): se mira igual, solo no se recuerda. */
+  }
+  for (const o of oyentes) o();
+}
+
+function suscribir(o: () => void) {
+  oyentes.add(o);
+  window.addEventListener("storage", o);
+  return () => {
+    oyentes.delete(o);
+    window.removeEventListener("storage", o);
+  };
+}
+
+function interpretar(crudo: string): ReadonlySet<Clave> {
+  try {
+    const lista = JSON.parse(crudo) as unknown;
+    return new Set(Array.isArray(lista) ? lista.filter((x): x is Clave => CLAVES.includes(x as Clave)) : []);
+  } catch {
+    return new Set();
+  }
+}
+
 export default function MesAMes({
   meses,
   estados,
@@ -156,13 +205,14 @@ export default function MesAMes({
 }) {
   const [vista, setVista] = useState<Vista>("lineas");
   const [enfoque, setEnfoque] = useState<Clave | null>(null);
-  const [fijada, setFijada] = useState<Clave | null>(null);
-  const [fuera, setFuera] = useState<ReadonlySet<Clave>>(() => new Set());
+  const crudo = useSyncExternalStore(suscribir, leerGuardado, () => "[]");
+  const fuera = useMemo(() => interpretar(crudo), [crudo]);
   const [mes, setMes] = useState<number | null>(null);
+  const cambiarFuera = (nuevo: ReadonlySet<Clave>) => guardar(nuevo);
 
   const usd = (n: number) => fmtMontoLibro(Math.round(n), moneda);
   const visible = (k: Clave) => !fuera.has(k);
-  const activa = enfoque !== null && visible(enfoque) ? enfoque : fijada;
+  const activa = enfoque !== null && visible(enfoque) ? enfoque : null;
   const opacidad = (k: Clave) => (activa && activa !== k ? 0.15 : 1);
   const enBarras = vista === "barras";
   const valores = meses.map((m) => valoresDe(m, piso));
@@ -180,19 +230,13 @@ export default function MesAMes({
   const marcas: number[] = [];
   for (let v = 0; v <= tope; v += paso) marcas.push(v);
 
-  const ciclar = (k: Clave) => {
-    if (!visible(k)) {
-      setFuera((f) => new Set([...f].filter((x) => x !== k)));
-      return;
-    }
-    if (fijada === k) {
-      setFijada(null);
-      setEnfoque(null);
-      setFuera((f) => new Set(f).add(k));
-      return;
-    }
-    setFijada(k);
+  const alternar = (k: Clave) => {
+    const nuevo = new Set(fuera);
+    if (nuevo.has(k)) nuevo.delete(k);
+    else nuevo.add(k);
+    cambiarFuera(nuevo);
   };
+  const sinAliados = SIN_ALIADOS.every((k) => fuera.has(k));
 
   /** Una línea del gráfico: rectas entre meses, y un hueco donde no hay dato. */
   const camino = (k: Clave) => {
@@ -229,8 +273,8 @@ export default function MesAMes({
         <div className="flex min-w-0 flex-[1_1_360px] flex-col gap-0.5">
           <h2 className="text-lg font-semibold text-fg">Mes a mes: se vende, se factura, se cobra y se gasta</h2>
           <p className="text-xs leading-[17px] text-fg-muted">
-            Pasa el mouse por una serie para resaltarla: con un clic queda fija, con otro sale del gráfico. Pasa por un mes
-            para leerlo entero, o tócalo para ver de qué está hecho.
+            Toca cada serie para prenderla o apagarla: puedes dejar las que quieras, y quedan así la próxima vez. Pasa por
+            un mes para leerlo entero, o tócalo para ver de qué está hecho.
           </p>
         </div>
         <Segmentado
@@ -252,7 +296,6 @@ export default function MesAMes({
         <div role="group" aria-label="Series" className="flex flex-wrap items-center gap-1.5">
           {SERIES.map((s) => {
             const estaFuera = !visible(s.clave);
-            const estaFija = fijada === s.clave;
             const apagada = !estaFuera && activa !== null && activa !== s.clave;
             return (
               <button
@@ -262,17 +305,15 @@ export default function MesAMes({
                 onMouseLeave={() => setEnfoque(null)}
                 onFocus={() => setEnfoque(s.clave)}
                 onBlur={() => setEnfoque(null)}
-                onClick={() => ciclar(s.clave)}
-                aria-pressed={estaFija}
-                aria-label={estaFuera ? `${s.nombre}, fuera del gráfico` : s.nombre}
-                title={`${s.queEs} · ${estaFuera ? `Clic para devolver ${s.nombre} al gráfico` : estaFija ? `Clic para sacar ${s.nombre} del gráfico` : `Clic para resaltar ${s.nombre}`}`}
+                onClick={() => alternar(s.clave)}
+                aria-pressed={!estaFuera}
+                aria-label={estaFuera ? `${s.nombre}, fuera del gráfico` : `${s.nombre}, en el gráfico`}
+                title={`${s.queEs} · ${estaFuera ? `Clic para mostrar ${s.nombre}` : `Clic para sacar ${s.nombre} del gráfico`}`}
                 className={cn(
                   "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-opacity",
                   estaFuera
                     ? "border-dashed border-line bg-surface text-fg-muted"
-                    : estaFija
-                      ? "border-brand bg-info-surface font-semibold text-fg"
-                      : "border-line bg-surface text-fg-secondary hover:bg-surface-hover",
+                    : "border-brand bg-info-surface font-semibold text-fg hover:bg-surface-hover",
                   apagada && "opacity-45",
                 )}
               >
@@ -281,13 +322,24 @@ export default function MesAMes({
               </button>
             );
           })}
-          {(fijada !== null || fuera.size > 0) && (
+          <button
+            type="button"
+            onClick={() => cambiarFuera(sinAliados ? new Set([...fuera].filter((k) => !SIN_ALIADOS.includes(k))) : new Set([...fuera, ...SIN_ALIADOS]))}
+            aria-pressed={sinAliados}
+            title="Sin las comisiones de los aliados ni los ingresos totales: lo que cubren las ventas solas."
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs font-semibold",
+              sinAliados ? "bg-info-surface text-fg" : "text-brand hover:text-brand-light",
+            )}
+          >
+            {sinAliados ? "Con aliados" : "Sin aliados"}
+          </button>
+          {fuera.size > 0 && (
             <button
               type="button"
               onClick={() => {
-                setFijada(null);
                 setEnfoque(null);
-                setFuera(new Set());
+                cambiarFuera(new Set());
               }}
               className="rounded-md px-2.5 py-1 text-xs font-semibold text-brand hover:text-brand-light"
             >
