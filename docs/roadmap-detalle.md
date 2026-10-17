@@ -379,6 +379,23 @@ producción.
   está arreglado y lo que es de Google Workspace queda en una lista para Elías; el simulacro de la limpieza lista las
   reuniones afectadas.
 
+### Cómo se ejecuta una tanda
+
+1. **Arranque.** La sesión de control abre una sesión por ficha (`start_session`, `use_worktree: true`, contexto
+   «fresh»), con la ficha como brief. Cada una trabaja en su rama, desde `main`.
+2. **Lo que hace cada sesión.** Código, `tsc --noEmit` y los tests unitarios de su zona. No levanta el dev server (el
+   3005 es uno solo) ni corre `test:int` (trunca `nexus_test`, que es compartida). Los worktrees no tienen `.env`, a
+   propósito: ninguna sesión de ejecución toca producción.
+3. **Schema y SQL.** Si una ficha necesita tabla o columna nueva: solo aditivo, su propio `scripts/sql/AAAA-MM-DD-<ficha>.sql`
+   y el modelo en `prisma/schema.prisma`. No aplica nada: lo dice en su parte.
+4. **Al terminar.** Commit en su rama y un parte corto: qué hizo, qué decidió (para DECISIONS), qué SQL trae, qué no
+   pudo verificar y la tabla «Qué probar, en simple».
+5. **Integración (sesión de control).** Revisa el diff, mezcla a `main` de a una (A, después B, después C), resuelve el
+   schema y los compartidos, corre `tsc`, la suite, `test:int` y `check:esquema`, aplica los SQL en producción y
+   escribe DECISIONS, GLOSSARY y el roadmap. Le deja a Elías la tabla de qué probar en el 3004.
+6. **Choques previstos.** A y B tocan la ficha del cliente con archivos distintos (A, las tareas; B, la escala): se
+   mezcla A primero. Las tres pueden tocar `schema.prisma`: se resuelve al mezclar.
+
 ### Después de la primera tanda
 
 Finanzas (pasos 2 a 6), Customer Success (acción semanal de cada cuenta y SmartLoop) e Inicio (las páginas de Ventas y
