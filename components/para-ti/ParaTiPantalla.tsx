@@ -3,8 +3,10 @@
 /**
  * ParaTiPantalla — la pantalla «Para ti» (2026-10-04), medida por medida del tablero «Notificaciones · diseño».
  *
- * «Lo mío»: arriba, una sola vez, lo que dejó un agente (azul, con la chispa); después los hechos por cuándo («Para hoy»,
- * «Esta semana» y, plegado, «Cuando puedas»). A la derecha, los AVISOS (lo que pasó) y lo que se revisó y está al día.
+ * «Lo mío»: arriba, «Lo que importa hoy» (fase 1.1 de docs/nexus-sistema-de-trabajo-plan.md): como mucho cinco, una
+ * por cuenta, con lo demás de esa cuenta plegado («+N en esta cuenta»); lo que dejó un agente va ahí con la chispa. Lo
+ * de hoy que no entró, en «También para hoy»; después «Esta semana» y, plegado, «Cuando puedas». A la derecha, los
+ * AVISOS (lo que pasó) y lo que se revisó y está al día.
  */
 import { useCallback, useState } from "react";
 import Link from "next/link";
@@ -71,7 +73,7 @@ export default function ParaTiPantalla({
     [router],
   );
 
-  const nMio = medicion.agente.length + medicion.hoy.length + medicion.semana.length + medicion.luego.length;
+  const nMio = medicion.importa.length + medicion.tambien.length + medicion.semana.length + medicion.luego.length;
   const nuevos = avisos.filter((a) => a.nuevo).length;
 
   return (
@@ -80,8 +82,8 @@ export default function ParaTiPantalla({
 
       <div className="flex flex-wrap items-start gap-6">
         <div className="flex min-w-0 flex-[2_1_560px] flex-col gap-5">
-          {medicion.agente.length > 0 && <LoDelAgente items={medicion.agente} />}
-          <Bloque titulo="Para hoy" items={medicion.hoy} />
+          <Bloque titulo="Lo que importa hoy" items={medicion.importa} nota="Una cosa por cuenta, la más importante" />
+          <Bloque titulo="También para hoy" items={medicion.tambien} />
           <Bloque titulo="Esta semana" items={medicion.semana} />
           {medicion.luego.length > 0 && (
             <section className="rounded-xl border border-line bg-surface">
@@ -210,63 +212,56 @@ function Enlaces({ enlaces }: { enlaces?: Pendiente["enlaces"] }) {
   );
 }
 
-function LoDelAgente({ items }: { items: Pendiente[] }) {
+function Bloque({ titulo, items, nota }: { titulo: string; items: Pendiente[]; nota?: string }) {
+  if (items.length === 0) return null;
   return (
-    <section aria-label="Lo que dejó el agente" className="flex flex-col gap-1.5">
-      <div className={cn(ROTULO_DEL_SISTEMA, "flex items-center gap-1.5 text-brand")}>
-        <IconoDeSugerencia className="h-[13px] w-[13px] flex-none" />
-        <span>Lo que dejó el agente para que decidas · {items.length}</span>
+    <section aria-label={titulo} className="flex flex-col rounded-xl border border-line bg-surface">
+      <div className="flex flex-wrap items-baseline gap-2.5 px-4 pb-2.5 pt-3.5">
+        <h2 className="text-[15px] font-semibold text-fg">{titulo}</h2>
+        <span className="text-xs text-fg-muted">
+          {plural(items.length, "cosa", "cosas")}
+          {nota ? ` · ${nota}` : ""}
+        </span>
       </div>
-      {items.map((s) => (
-        <div
-          key={s.clave}
-          className="flex flex-wrap items-start gap-2.5 rounded-lg border border-info-line bg-info-surface py-2.5 pl-3 pr-2.5"
-        >
-          <IconoDeSugerencia className="mt-0.5 h-[15px] w-[15px] flex-none text-brand" />
-          <div className="min-w-0 flex-[1_1_300px]">
-            <div className="text-[11px] font-semibold text-brand">{s.meta}</div>
-            <div className="text-sm font-semibold leading-5 text-fg">{s.titulo}</div>
-            <div className="mt-0.5 text-xs leading-[17px] text-fg-muted">{s.detalle}</div>
-            <Enlaces enlaces={s.enlaces} />
-          </div>
-          <Link href={s.href} className={cn(BOTON_BLANCO, "self-center")}>
-            {s.accion}
-          </Link>
-        </div>
+      {items.map((it) => (
+        <Fila key={it.clave} it={it} />
       ))}
     </section>
   );
 }
 
-function Bloque({ titulo, items }: { titulo: string; items: Pendiente[] }) {
-  if (items.length === 0) return null;
+function Fila({ it, dentro = false }: { it: Pendiente; dentro?: boolean }) {
+  const [abierto, setAbierto] = useState(false);
+  // «¿Cuánto te tomó?» se contesta ahí mismo, sin salir de «Para ti» (2026-10-05).
+  if (it.fuente === PENDIENTE_DE_TIEMPOS) return <PendienteDeTiempos item={it} />;
+  const otros = it.otrosEnLaCuenta ?? [];
   return (
-    <section aria-label={titulo} className="flex flex-col rounded-xl border border-line bg-surface">
-      <div className="flex items-baseline gap-2.5 px-4 pb-2.5 pt-3.5">
-        <h2 className="text-[15px] font-semibold text-fg">{titulo}</h2>
-        <span className="text-xs text-fg-muted">{plural(items.length, "cosa", "cosas")}</span>
-      </div>
-      {items.map((it) =>
-        // «¿Cuánto te tomó?» se contesta ahí mismo, sin salir de «Para ti» (2026-10-05).
-        it.fuente === PENDIENTE_DE_TIEMPOS ? (
-          <PendienteDeTiempos key={it.clave} item={it} />
+    <>
+      <div className={cn("flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-t border-line px-4 py-3", dentro && "bg-surface-muted pl-8")}>
+        {it.delAgente ? (
+          <span title="Lo dejó un agente para que decidas" className="flex-none text-brand">
+            <IconoDeSugerencia className="h-[13px] w-[13px]" />
+          </span>
         ) : (
-        <div key={it.clave} className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-t border-line px-4 py-3">
           <span aria-hidden className={cn("h-2 w-2 flex-none rounded-full", it.error ? "bg-destructive" : "bg-warning")} />
-          <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-0.5">
-            <span className="text-sm font-semibold leading-5 text-fg">{it.titulo}</span>
-            <span className="text-[13px] leading-[19px] text-fg-secondary">{it.detalle}</span>
-            <Enlaces enlaces={it.enlaces} />
-            <span className={cn("text-xs leading-4", it.error ? "text-danger-ink" : "text-fg-muted")}>{it.meta}</span>
-          </div>
-          {it.plata && <span className="flex-none text-[13px] tabular-nums text-fg-secondary">{it.plata}</span>}
-          <Link href={it.href} className={BOTON_BLANCO}>
-            {it.accion}
-          </Link>
+        )}
+        <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-0.5">
+          <span className="text-sm font-semibold leading-5 text-fg">{it.titulo}</span>
+          <span className="text-[13px] leading-[19px] text-fg-secondary">{it.detalle}</span>
+          <Enlaces enlaces={it.enlaces} />
+          <span className={cn("text-xs leading-4", it.error ? "text-danger-ink" : it.delAgente ? "text-brand" : "text-fg-muted")}>{it.meta}</span>
+          {otros.length > 0 && (
+            <button type="button" aria-expanded={abierto} onClick={() => setAbierto((v) => !v)} className="self-start text-xs text-brand hover:text-brand-light">
+              {abierto ? "Ocultar" : `+${otros.length} en esta cuenta`}
+            </button>
+          )}
         </div>
-        ),
-      )}
-    </section>
+        {it.plata && <span className="flex-none text-[13px] tabular-nums text-fg-secondary">{it.plata}</span>}
+        <Link href={it.href} className={BOTON_BLANCO}>
+          {it.accion}
+        </Link>
+      </div>
+      {abierto && otros.map((o) => <Fila key={o.clave} it={o} dentro />)}
+    </>
   );
 }
-

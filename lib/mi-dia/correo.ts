@@ -8,6 +8,7 @@
  * teléfono. Las fuentes de Finanzas y de Cobranza no entran, y ningún monto viaja.
  */
 import type { ParaTi, Pendiente } from "@/lib/para-ti/tipos";
+import { elegirLoQueImporta } from "@/lib/para-ti/importa";
 import type { ReunionDeLaAgenda } from "./agenda-server";
 
 export const MAX_COSAS = 5;
@@ -37,11 +38,13 @@ const hora = (iso: string) => new Date(new Date(iso).getTime() - 6 * 3_600_000).
 
 const absoluta = (base: string, href: string) => (/^https?:\/\//.test(href) ? href : `${base.replace(/\/+$/, "")}${href.startsWith("/") ? "" : "/"}${href}`);
 
+/** Las mismas cinco de «Lo que importa hoy» (una por cuenta, lib/para-ti/importa.ts), sin Finanzas ni plata. */
 export function cosasDelCorreo(paraTi: Pick<ParaTi, "agente" | "hoy">): { cosas: Pendiente[]; mas: number } {
   const todas = [...paraTi.agente, ...paraTi.hoy].filter((p) => !FUENTES_FUERA.test(p.fuente) && !p.plata);
   const vistas = new Set<string>();
   const unicas = todas.filter((p) => (vistas.has(p.clave) ? false : (vistas.add(p.clave), true)));
-  return { cosas: unicas.slice(0, MAX_COSAS), mas: Math.max(0, unicas.length - MAX_COSAS) };
+  const { importa } = elegirLoQueImporta(unicas, MAX_COSAS);
+  return { cosas: importa, mas: Math.max(0, unicas.length - importa.length) };
 }
 
 export function armarCorreoDeLaManana(o: {

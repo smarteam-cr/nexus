@@ -9,16 +9,13 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { avisar } from "@/lib/para-ti/avisos-server";
 import { fingerprintFromTitle } from "@/lib/timeline/particularidad-identity";
-import { porQueNoSeAvisoAlVendedor, vendedorDeLaEmpresa } from "@/lib/hubspot/vendedor-de-la-empresa";
 import {
   conEntrada,
   estadoDeSolicitud,
   laConfirma,
   leerHistorial,
   ORDEN_DE_SOLICITUD,
-  urlDeSolicitudes,
   type CambioDeSolicitud,
   type EntradaDelHistorial,
   type EstadoDeSolicitud,
@@ -99,24 +96,13 @@ export interface ResultadoDelAviso {
   sinVendedor: string | null;
 }
 
-async function avisarQueSeConfirmo(f: Fila, actorEmail: string): Promise<ResultadoDelAviso> {
-  const [cliente, vendedor] = await Promise.all([
-    prisma.client.findUnique({ where: { id: f.clientId }, select: { name: true } }),
-    vendedorDeLaEmpresa(f.clientId),
-  ]);
-  const empresa = cliente?.name ?? "Un cliente";
-  const quien = f.quienLoPidio ? ` · Lo pidió: ${f.quienLoPidio}` : "";
-  const avisados = await avisar({
-    para: vendedor.ok ? vendedor.email : null,
-    frente: "LIDERAR_CS",
-    tipo: "alcance.confirmado",
-    titulo: `${empresa} pidió algo fuera del alcance`,
-    detalle: `«${f.pedido}»${quien}${f.project ? ` · ${f.project.name}` : ""}`,
-    href: urlDeSolicitudes(f.clientId),
-    actorEmail,
-    dedupeKey: `alcance.confirmado:${f.id}`,
-  });
-  return { avisados, sinVendedor: vendedor.ok ? null : porQueNoSeAvisoAlVendedor(vendedor.motivo) };
+/**
+ * Al confirmar una solicitud fuera de alcance. Desde el 2026-10-16 (fase 1.3 de docs/nexus-sistema-de-trabajo-plan.md)
+ * NO avisa: la oportunidad ya es un pendiente en «Para ti» de Ventas (PEDIDOS_PARA_VENTAS) y se ve en «Oportunidades
+ * detectadas». Se conserva la forma de la respuesta para la pantalla.
+ */
+function avisarQueSeConfirmo(): ResultadoDelAviso {
+  return { avisados: 0, sinVendedor: null };
 }
 
 export class SolicitudNoEncontrada extends Error {}
@@ -179,7 +165,7 @@ export async function cambiarSolicitud(args: {
     },
     select: SELECT,
   });
-  const aviso = cambiaEstado && laConfirma(antes, c.estado) ? await avisarQueSeConfirmo(fila, args.actorEmail) : null;
+  const aviso = cambiaEstado && laConfirma(antes, c.estado) ? avisarQueSeConfirmo() : null;
   return { solicitud: enPantalla(fila), aviso };
 }
 
@@ -221,5 +207,5 @@ export async function sumarSolicitud(args: {
     }
     throw e;
   }
-  return { solicitud: enPantalla(fila), aviso: await avisarQueSeConfirmo(fila, args.actorEmail) };
+  return { solicitud: enPantalla(fila), aviso: avisarQueSeConfirmo() };
 }

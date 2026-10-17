@@ -96,7 +96,7 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
       delDia.push(`tu próxima actividad: ${proxima.empresa}, ${cuandoEs(proxima.proximaActividad!, hoyISO)}`);
     }
   }
-  const paraHoy = medicion.agente.length + medicion.hoy.length;
+  const paraHoy = medicion.importa.length;
   if (ventas?.estado !== "ok" && paraHoy) delDia.push(`${plural(paraHoy, "cosa", "cosas")} para hoy en Nexus`);
   const lineaDelDia = delDia.length ? `${delDia.join(" · ")}.` : "Nada urgente por hoy.";
 

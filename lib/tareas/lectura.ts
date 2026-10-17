@@ -16,7 +16,6 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getAnthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
-import { avisar } from "@/lib/para-ti/avisos-server";
 import { olvidarMedicion } from "@/lib/para-ti/medir-server";
 import { conversacionParaTareas, duenosDeReuniones, getReunionesParaTareas, MAX_CONVERSACION_PARA_TAREAS, type ReunionParaTareas } from "@/lib/sessions/reuniones-para-tareas";
 import { conversacionComoTexto } from "@/lib/sessions/conversacion";
@@ -590,55 +589,22 @@ async function contextosDeLasNotas(
 }
 
 /**
- * UN aviso por persona y por lectura (nunca uno por tarea), y uno a cada líder si quedó algo por asignar. Lo
- * retroactivo de más de 7 días no avisa, salvo «Avisar igual». `sufijo` separa el aviso del nivel 2 (`:conversacion`) y
- * el de la lectura de seguimiento (`:seguimiento`) del del nivel 1. `porAsignarPorEquipo`: lo por asignar de cada
- * sprint, cuando no es todo del de la lectura (el seguimiento deja lo del cliente en Customer Success o en Ventas).
+ * Después de escribir las propuestas de una lectura. Desde el 2026-10-16 (fase 1.3 de
+ * docs/nexus-sistema-de-trabajo-plan.md) NO avisa: lo propuesto ya es un pendiente en «Para ti» (una línea por reunión,
+ * y el «Por asignar» de cada líder), y un aviso que repite un pendiente lo cuenta dos veces. Solo se olvida la medición
+ * guardada de quienes recibieron algo, para que «Para ti» lo muestre enseguida.
  */
 async function avisarDeLasPropuestas(
   l: { id: string; equipo: string; avisar: boolean; pedidaPorEmail: string | null },
-  reunion: ReunionParaTareas,
+  _reunion: ReunionParaTareas,
   ctx: Pick<ContextoDeTareas, "miembros">,
   r: { porPersona: { email: string; propuestas: number }[]; porAsignar: number },
-  sufijo: string,
+  _sufijo: string,
   porAsignarPorEquipo?: ReadonlyMap<string, number>,
 ) {
-  if (l.avisar) {
-    const detalle =
-      sufijo === ":seguimiento"
-        ? "Nexus las leyó de la reunión: lo que te comprometiste o el seguimiento de lo que prometió el cliente. Nada entra solo: tú decides."
-        : sufijo
-          ? "Nexus las leyó de la conversación. Nada entra solo: tú decides."
-          : "Nexus las leyó de la reunión. Nada entra solo: tú decides.";
-    for (const pp of r.porPersona) {
-      await avisar({
-        para: pp.email,
-        tipo: "tareas.sugerencias",
-        titulo: `Decide ${pp.propuestas === 1 ? "1 tarea" : `${pp.propuestas} tareas`} de ${await nombreDeLaReunionPara(reunion, pp.email)}`,
-        detalle,
-        href: "/tareas",
-        actorEmail: null,
-        dedupeKey: `tareas.sugerencias:lectura:${l.id}${sufijo}`,
-      });
-    }
-    const porEquipo = porAsignarPorEquipo ?? new Map(r.porAsignar > 0 ? [[l.equipo, r.porAsignar]] : []);
-    for (const [equipo, cuantas] of porEquipo) {
-      if (cuantas <= 0) continue;
-      const n = cuantas === 1 ? "1 tarea" : `${cuantas} tareas`;
-      // Uno por líder: el nombre de la reunión va solo a quien vería su cita.
-      for (const lider of lideresDe(equipo, ctx.miembros)) {
-        await avisar({
-          para: lider.email,
-          tipo: "tareas.sugerencias",
-          titulo: `${n} por asignar de ${await nombreDeLaReunionPara(reunion, lider.email)}`,
-          href: `/tareas/equipo?equipo=${encodeURIComponent(equipo)}`,
-          actorEmail: null,
-          dedupeKey: `tareas.sugerencias:lectura:${l.id}${sufijo}:por-asignar${equipo === l.equipo ? "" : `:${equipo}`}`,
-        });
-      }
-    }
-  }
   for (const pp of r.porPersona) olvidarMedicion(pp.email);
+  const porEquipo = porAsignarPorEquipo ?? new Map(r.porAsignar > 0 ? [[l.equipo, r.porAsignar]] : []);
+  for (const [equipo, cuantas] of porEquipo) if (cuantas > 0) for (const lider of lideresDe(equipo, ctx.miembros)) olvidarMedicion(lider.email);
   if (l.pedidaPorEmail) olvidarMedicion(l.pedidaPorEmail);
 }
 
@@ -901,23 +867,6 @@ async function leerLaConversacion(
 
   await avisarDeLasPropuestas({ id: l.id, equipo: l.equipo, avisar: l.avisar, pedidaPorEmail }, reunion, ctx, conv, ":conversacion");
   return conv;
-}
-
-/**
- * Cómo se nombra la reunión en un aviso. El título va solo a quien vería su cita (la regla de `veLaCita`): en una
- * reunión puertas adentro, a cualquiera del equipo; en una con un cliente, a quien estuvo y ve a ese cliente.
- * A los demás, «una reunión con un cliente»: el título de una reunión de cliente es dato de ese cliente.
- */
-async function nombreDeLaReunionPara(reunion: ReunionParaTareas, email: string): Promise<string> {
-  const conTitulo = `«${reunion.titulo}»`;
-  if (reunion.puertasAdentro) return conTitulo;
-  const neutro = "una reunión con un cliente";
-  if (!reunion.participantes.includes(email.toLowerCase())) return neutro;
-  if (!reunion.duenoClienteId) return conTitulo;
-  const tm = await prisma.teamMember.findUnique({ where: { email } });
-  if (!tm) return neutro;
-  const ve = await clientesQueVesParaTareas(tm);
-  return ve.todos || ve.ids.has(reunion.duenoClienteId) ? conTitulo : neutro;
 }
 
 /** El estado de una lectura para la pantalla: solo quien la pidió o quien puede leer esa reunión. */

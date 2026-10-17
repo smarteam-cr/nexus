@@ -8365,3 +8365,22 @@ hacerlo**. El plan, por fases, está en `docs/nexus-sistema-de-trabajo-plan.md`.
   del sprint de ese equipo, para su dueño si es del sprint y, si no, en «Por asignar».
 - **«Para ti» dejó de repetir el siguiente paso**: la fuente «Tus siguientes pasos» se retiró, porque esas tareas ya
   salen en «Tus tareas». «Usar como siguiente paso» (después de una reunión) usa la tarea propuesta, no crea otra.
+
+**Cómo quedó la fase 1 en el código (2026-10-16, sin desplegar; 1.1, 1.3 y 1.4).**
+
+- **«Lo que importa hoy»** (`lib/para-ti/importa.ts`): de lo de hoy y lo que dejó un agente, como mucho cinco, UNA POR
+  CUENTA (la cuenta sale del pendiente o de su enlace `/clients/<id>`); lo demás de esa cuenta va plegado («+N en esta
+  cuenta») y lo que no entra en las cinco va a «También para hoy». El peso sale de la fuente, en el orden de Elías:
+  riesgo (90) > cuenta sin acción (80, llega con la fase 2.1) > decisión que frena (70) > revisar una reunión (60) > lo
+  interno (40) > encuestas y limpieza (20); lo que falló sube 15. Lo que dejó un agente ya no va aparte arriba: compite
+  por peso y lleva la chispa. El número del menú cuenta esas cinco (más los avisos) y el correo de la mañana usa las
+  mismas.
+- **Avisos solo para lo que no es un pendiente**: salieron `tareas.sugerencias`, `tareas.pedido`, `finanzas.devuelto`,
+  `documentacion.comentario` y `alcance.confirmado` (cada uno ya era un pendiente en «Para ti»), y los tipos que nadie
+  escribía. Quedan los mensajes, las buenas noticias y las asignaciones directas. Los avisos viejos de esos tipos se
+  siguen mostrando.
+- **Las tareas de las reuniones**: cada persona tiene como mucho 10 sugerencias de las reuniones sin decidir
+  (`MAX_SUGERENCIAS_POR_PERSONA`); con más, las más viejas vencen solas (no son lápidas: se vuelven a proponer si se vuelve
+  a hablar del tema). Lo que pidió una persona no cuenta. En «Para ti», «Lo que dejaron tus reuniones» es UNA LÍNEA POR
+  REUNIÓN (como mucho 8), con su cuenta, y cuenta también tus tareas propuestas de esa reunión (también de un
+  prospecto); «Nexus te propone N tareas» queda para lo de las reuniones internas y el asistente.

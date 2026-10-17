@@ -8,6 +8,13 @@
 /** Las propuestas (tareas y proyectos) que nadie decidió pasan a `vencida` a los 14 días de crearse. */
 export const DIAS_PARA_VENCER_UNA_PROPUESTA = 14;
 
+/**
+ * Cuántas sugerencias de las reuniones (sin decidir) puede tener una persona a la vez (2026-10-16, fase 1.4 de
+ * docs/nexus-sistema-de-trabajo-plan.md). Con más, las más viejas vencen solas: quedan las más nuevas. Lo que pidió una
+ * persona no cuenta ni vence por esto.
+ */
+export const MAX_SUGERENCIAS_POR_PERSONA = 10;
+
 /** Un texto idéntico a una lápida (rechazada o fusionada por una persona) no se vuelve a proponer por 28 días. */
 export const DIAS_DE_LAPIDA = 28;
 

@@ -1,9 +1,12 @@
 /**
  * lib/para-ti/fuentes/reuniones.ts — lo que dejaron tus reuniones y espera tu revisión (2026-10-09, memoria de la cuenta,
- * etapa 1). UN renglón agrupado, con un enlace por reunión a su tarjeta «Lo que dejó esta reunión» (lib/seguimiento).
+ * etapa 1). Desde el 2026-10-16 (fase 1.4 de docs/nexus-sistema-de-trabajo-plan.md), UNA LÍNEA POR REUNIÓN, con su
+ * cuenta (así «Lo que importa hoy» muestra una por cuenta), que lleva a su tarjeta «Lo que dejó esta reunión». Cuenta
+ * también TUS tareas propuestas de esa reunión (las de un cliente o un prospecto); las de una reunión interna siguen en
+ * el renglón de Tareas.
  *
- * Mira las reuniones de los últimos 30 días de los proyectos que llevas (las de un prospecto no entran: se revisan en la
- * tarjeta de la reunión) y cuenta SOLO lo que se decide en la tarjeta, con la misma regla (`loQuePideDecision`): la
+ * Mira las reuniones de los últimos 30 días de los proyectos que llevas, más las de tus tareas propuestas (también de un
+ * prospecto), y cuenta SOLO lo que se decide en la tarjeta, con la misma regla (`loQuePideDecision`): la
  * minuta en borrador, los pedidos fuera de alcance que propuso Nexus, los campos de la ficha que salieron de esa
  * reunión y, desde la etapa 6, los hechos con una novedad que puedes decidir (vacío con `SEGUIMIENTO_HECHOS` apagada).
  * Las tareas siguen en el renglón de Tareas, y la etapa y la fecha del diagnóstico, en los suyos: cada cosa en un solo
@@ -14,7 +17,7 @@ import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { camposDeLaReunion, leerFicha } from "@/lib/clients/ficha";
 import { documentoConContexto } from "@/lib/contexto/documento";
-import { reunionesRecientesDeProyectos } from "@/lib/sessions/reuniones-para-seguimiento";
+import { reunionParaLaTarjeta, reunionesRecientesDeProyectos } from "@/lib/sessions/reuniones-para-seguimiento";
 import { sumarDias, vencioSinRevisar } from "@/lib/lo-propuesto/ciclo";
 import { PLAZO_PARA_REVISAR_DIAS } from "@/lib/lo-propuesto/tipos";
 import { DESTINOS } from "@/lib/seguimiento/destinos";
@@ -25,8 +28,8 @@ import type { Alcance } from "../alcance-server";
 import type { Fuente } from "../fuente";
 import type { Pendiente } from "../tipos";
 
-/** Cuántos enlaces lleva el renglón (uno por reunión). */
-const MAX_ENLACES = 8;
+/** Cuántas reuniones, como mucho (una línea cada una). */
+const MAX_REUNIONES = 8;
 
 /** El enlace a la tarjeta de una reunión. */
 export function urlDeLoQueDejo(sessionId: string): string {
@@ -57,9 +60,35 @@ export const LO_QUE_DEJARON_TUS_REUNIONES: Fuente = {
   clave: "reuniones-por-revisar-lo-que-dejaron",
   frente: null,
   alDia: "Lo que dejaron tus reuniones",
-  aplica: (a) => a.proyectos.length > 0,
   async medir(a, c) {
-    const reuniones = await reunionesDelRenglon(a.proyectos, c.hoyISO);
+    const yo = a.email.toLowerCase();
+    const [deProyectos, propuestas] = await Promise.all([
+      a.proyectos.length ? reunionesDelRenglon(a.proyectos, c.hoyISO) : Promise.resolve([]),
+      // Tus tareas propuestas que salieron de una reunión con un cliente o un prospecto (fase 1.4).
+      prisma.tarea
+        .groupBy({
+          by: ["sessionId"],
+          where: { estado: "propuesta", archivadaAt: null, responsableEmail: yo, sessionId: { not: null }, clientId: { not: null }, origen: { in: ["reunion", "notas"] } },
+          _count: { _all: true },
+        })
+        .catch((e) => {
+          if (esquemaDesactualizado(e)) return [];
+          throw e;
+        }),
+    ]);
+    const tareasDe = new Map(propuestas.flatMap((g) => (g.sessionId ? [[g.sessionId, g._count._all] as const] : [])));
+    // Las reuniones de tus propuestas que no son de tus proyectos (un prospecto, la cuenta de otro): se leen por el
+    // lector de la tarjeta, con su regla de dueño.
+    const conocidas = new Set(deProyectos.map((r) => r.sessionId));
+    const otras = (
+      await Promise.all(
+        [...tareasDe.keys()]
+          .filter((id) => !conocidas.has(id))
+          .slice(0, MAX_REUNIONES)
+          .map((id) => reunionParaLaTarjeta(id).catch(() => null)),
+      )
+    ).flatMap((r) => (r && !vencioSinRevisar(r.fecha, c.hoyISO) ? [{ sessionId: r.id, projectId: r.proyectos[0]?.id ?? "", clientId: r.clientId, titulo: r.titulo, fecha: r.fecha, empresa: r.empresa.nombre }] : []));
+    const reuniones = [...deProyectos.map((r) => ({ ...r, empresa: null as string | null })), ...otras];
     if (reuniones.length === 0) return [];
     const ids = reuniones.map((r) => r.sessionId);
     const clientes = [...new Set(reuniones.map((r) => r.clientId))];
@@ -78,47 +107,46 @@ export const LO_QUE_DEJARON_TUS_REUNIONES: Fuente = {
     const fichaDe = new Map(fichas.map((f) => [f.id, leerFicha(f.ficha)]));
     const empresaDe = new Map(a.proyectos.map((p) => [p.id, p.empresa]));
 
+    const vistas = new Set<string>();
     const conAlgo = reuniones
+      .filter((r) => (vistas.has(r.sessionId) ? false : (vistas.add(r.sessionId), true)))
       .map((r) => {
         const ficha = fichaDe.get(r.clientId);
-        const n = loQuePideDecision({
+        const partes = {
           minuta: conMinuta.has(r.sessionId),
           pedidos: pedidos.filter((p) => p.sessionId === r.sessionId && p.clientId === r.clientId).length,
           campos: ficha ? camposDeLaReunion(ficha, { title: r.titulo, date: r.fecha }).length : 0,
           novedades: novedades.get(r.sessionId) ?? 0,
-        });
-        return { r, n, empresa: empresaDe.get(r.projectId) ?? "" };
+          tareas: tareasDe.get(r.sessionId) ?? 0,
+        };
+        return { r, partes, n: loQuePideDecision(partes), empresa: r.empresa ?? empresaDe.get(r.projectId) ?? "" };
       })
       .filter((x) => x.n > 0)
-      .sort((x, y) => y.r.fecha.localeCompare(x.r.fecha));
+      .sort((x, y) => y.r.fecha.localeCompare(x.r.fecha))
+      .slice(0, MAX_REUNIONES);
     if (conAlgo.length === 0) return [];
 
-    const total = conAlgo.reduce((s, x) => s + x.n, 0);
-    const [primera] = conAlgo;
-    const empresas = new Set(conAlgo.map((x) => x.empresa));
-    const masVieja = conAlgo[conAlgo.length - 1];
-    const pendiente: Pendiente = {
-      clave: "reuniones-por-revisar-lo-que-dejaron",
-      fuente: "reuniones-por-revisar-lo-que-dejaron",
-      cuando: "semana",
-      delAgente: true,
-      titulo:
-        conAlgo.length === 1
-          ? `Revisa lo que dejó «${primera.r.titulo}»`
-          : `Revisa lo que dejaron ${conAlgo.length} reuniones`,
-      detalle:
-        `Nexus propuso ${plural(total, "cosa", "cosas")} al ${conAlgo.length === 1 ? "leerla" : "leerlas"}: la minuta, los ` +
-        `pedidos fuera de alcance, la información del cliente${conAlgo.some((x) => novedades.has(x.r.sessionId)) ? " y novedades para los documentos" : ""}. ` +
-        "Lo que nadie revisa en 30 días deja de pedirse.",
-      meta: empresas.size === 1 ? `Reuniones · ${primera.empresa}` : "Reuniones",
-      accion: conAlgo.length === 1 ? "Revisarla" : "Empezar por la más reciente",
-      href: urlDeLoQueDejo(primera.r.sessionId),
-      enlaces:
-        conAlgo.length > 1
-          ? conAlgo.slice(0, MAX_ENLACES).map((x) => ({ texto: `${x.empresa ? `${x.empresa} · ` : ""}${x.r.titulo} (${x.n})`, href: urlDeLoQueDejo(x.r.sessionId) }))
-          : undefined,
-      desde: masVieja.r.fecha,
-    };
-    return [pendiente];
+    return conAlgo.map(({ r, partes, n, empresa }): Pendiente => {
+      const que: string[] = [];
+      if (partes.tareas) que.push(plural(partes.tareas, "tarea para ti", "tareas para ti"));
+      if (partes.minuta) que.push("la minuta");
+      if (partes.pedidos) que.push(plural(partes.pedidos, "pedido fuera de alcance", "pedidos fuera de alcance"));
+      if (partes.campos) que.push(plural(partes.campos, "dato de la información del cliente", "datos de la información del cliente"));
+      if (partes.novedades) que.push(plural(partes.novedades, "novedad para los documentos", "novedades para los documentos"));
+      return {
+        clave: `reuniones-por-revisar-lo-que-dejaron:${r.sessionId}`,
+        fuente: "reuniones-por-revisar-lo-que-dejaron",
+        cuando: "semana",
+        delAgente: true,
+        clientId: r.clientId,
+        titulo: `Revisa lo que dejó «${r.titulo}»`,
+        detalle: `Nexus propuso ${plural(n, "cosa", "cosas")} al leerla: ${que.join(", ")}. Lo que nadie revisa en 30 días deja de pedirse.`,
+        meta: empresa ? `Reuniones · ${empresa}` : "Reuniones",
+        accion: "Revisarla",
+        href: urlDeLoQueDejo(r.sessionId),
+        desde: r.fecha,
+      };
+    });
   },
 };
+

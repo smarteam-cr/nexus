@@ -15,7 +15,6 @@
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
-import { avisar } from "@/lib/para-ti/avisos-server";
 import { CobranzaError } from "@/lib/cobranza/mutations";
 import { crDateParts } from "@/lib/jobs/time";
 import { fmtMontoLibro } from "@/lib/cobranza/montos";
@@ -349,35 +348,9 @@ export async function revisar(
       }),
     ),
   ]);
-  if (input.accion === "DEVOLVER") await avisarDevolucion(input.items[0], comentario!, actor, ahora);
+  // Sin aviso (fase 1.3 de docs/nexus-sistema-de-trabajo-plan.md): lo devuelto ya es un pendiente en «Para ti» de quien
+  // lo registró («Te devolvieron…», lib/para-ti/fuentes/finanzas.ts).
   return { n: input.items.length };
-}
-
-/**
- * «Para ti» (2026-10-04): a quien registró lo devuelto le llega un aviso con el comentario. Va DESPUÉS de guardar y no
- * lanza: un aviso perdido no puede deshacer la devolución.
- */
-async function avisarDevolucion(item: { tipo: TipoRevisado; id: string }, comentario: string, actor: string, cuando: Date) {
-  let registro: string | null | undefined;
-  try {
-    registro =
-      item.tipo === "PAGO"
-        ? (await prisma.cobro.findUnique({ where: { id: item.id }, select: { confirmadoPor: true } }))?.confirmadoPor
-        : (await prisma.gastoPuntual.findUnique({ where: { id: item.id }, select: { registradoPor: true } }))?.registradoPor;
-  } catch (e) {
-    console.error(`[para-ti] no se pudo saber quién registró ${item.tipo} ${item.id}: ${e instanceof Error ? e.message : String(e)}`);
-    return;
-  }
-  await avisar({
-    para: registro ?? null,
-    tipo: "finanzas.devuelto",
-    titulo: item.tipo === "PAGO" ? "Te devolvieron un pago para corregir" : "Te devolvieron un gasto para corregir",
-    detalle: `«${comentario}»`,
-    href: "/finanzas/pendientes",
-    actorEmail: actor,
-    // Cada devolución avisa: si se corrige y se vuelve a devolver, es otro aviso.
-    dedupeKey: `finanzas.devuelto:${item.tipo}:${item.id}:${cuando.toISOString()}`,
-  });
 }
 
 /**

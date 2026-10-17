@@ -36,6 +36,12 @@ export interface Pendiente {
   error?: boolean;
   /** Desde cuándo espera (ISO): ordena dentro del bloque. */
   desde?: string | null;
+  /** Cuánto importa (lib/para-ti/importa.ts). Sin esto, el de su fuente. */
+  peso?: number;
+  /** La cuenta de la que es. Sin esto, la del enlace (`/clients/<id>`); null = no es de una cuenta. */
+  clientId?: string | null;
+  /** Solo en «Lo que importa hoy»: lo demás de esta cuenta («+N en esta cuenta»). */
+  otrosEnLaCuenta?: Pendiente[];
 }
 
 /** Uno de los lugares de un pendiente que junta varios: «Wherex (2)» → la ficha de Wherex. */
@@ -54,6 +60,10 @@ export interface ResultadoDeFuente {
 }
 
 export interface ParaTi {
+  /** «Lo que importa hoy» (fase 1.1): como mucho 5, una por cuenta, de lo de hoy y lo que dejó un agente. */
+  importa: Pendiente[];
+  /** Lo de hoy (y del agente) que no entró en las cinco. */
+  tambien: Pendiente[];
   agente: Pendiente[];
   hoy: Pendiente[];
   semana: Pendiente[];
@@ -82,7 +92,7 @@ export interface AvisoVisto {
 
 /** Lo que pide el menú cada minuto y medio. */
 export interface CuentaDeParaTi {
-  /** El número del menú: lo de hoy, lo que dejó el agente y los avisos sin leer. */
+  /** El número del menú: «Lo que importa hoy» (como mucho 5) y los avisos sin leer. */
   cuenta: number;
   avisosNuevos: number;
   /** El aviso sin leer más nuevo, para la notificación del navegador. `creadoAt` (ISO): se notifica solo si es posterior

@@ -116,8 +116,8 @@ describe("nivel 2: la conversación", () => {
     expect(despues.resumen?.conversacion).toMatchObject({ estado: "lista", como: "pedida", propuestas: 1 });
     expect(despues.resumen?.lineas).toBe(1); // el resumen del nivel 1 sigue ahí
     expect(despues.conversacion.puede).toBe(false);
-    // Un aviso por persona para lo de la conversación, aparte del de las notas.
-    expect(await prisma.aviso.count({ where: { paraEmail: LIDIA, tipo: "tareas.sugerencias" } })).toBe(2);
+    // Sin aviso (fase 1.3): lo propuesto ya es un pendiente en «Para ti».
+    expect(await prisma.aviso.count({ where: { paraEmail: LIDIA, tipo: "tareas.sugerencias" } })).toBe(0);
   });
 });
 

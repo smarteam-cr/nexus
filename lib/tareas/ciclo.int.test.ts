@@ -385,6 +385,43 @@ describe("métricas del equipo", () => {
   });
 });
 
+describe("el tope de sugerencias por persona (fase 1.4, 2026-10-16)", () => {
+  it("con más de 10 sugerencias de las reuniones sin decidir, las más viejas vencen solas; lo que pidió una persona no", async () => {
+    await equipo();
+    const cliente = await prisma.client.create({ data: { name: "Wherex" } });
+    const sesion = await prisma.firefliesSession.create({ data: { id: "fx-tareas-tope", title: "Seguimiento Wherex", date: new Date(), participants: [ALE], resolvedClientId: cliente.id } });
+    const lectura = await prisma.lecturaDeReunion.create({ data: { sessionId: sesion.id, equipo: "marketing", rol: "planning", semana: aDate(lunesDeHoy()), pedidaPorEmail: ALE } });
+    // Una sugerencia que pidió una persona: no cuenta ni vence por el tope.
+    await prisma.tarea.create({ data: { titulo: "Pedido de Elías", huella: "pedido-elias", estado: "propuesta", equipo: "marketing", responsableEmail: LIDIA, origen: "pedido", creadaPorEmail: ELIAS, pedidaPorEmail: ELIAS } });
+    const linea = (i: number) => ({
+      lineaId: String(i),
+      titulo: `Compromiso ${i}`,
+      notas: null,
+      contexto: null,
+      cita: `[Lidia] Compromiso ${i}`,
+      responsableEmail: LIDIA,
+      equipo: "marketing",
+      semana: lunesDeHoy(),
+      venceEl: null,
+      clientId: cliente.id,
+      projectId: null,
+      proyectoId: null,
+      pedidaPorEmail: null,
+      pedidaPorEquipo: null,
+      mismaQueId: null,
+      sugerido: {},
+      porAsignar: false,
+    });
+    await prisma.$transaction((tx) =>
+      escribirPropuestasDeLectura(tx, { id: lectura.id, sessionId: sesion.id, tituloReunion: "Seguimiento Wherex", pedidaPorEmail: ALE }, Array.from({ length: 12 }, (_, i) => linea(i + 1))),
+    );
+    const deLidia = await prisma.tarea.findMany({ where: { responsableEmail: LIDIA }, select: { titulo: true, estado: true } });
+    expect(deLidia.filter((t) => t.estado === "propuesta" && t.titulo.startsWith("Compromiso"))).toHaveLength(10);
+    expect(deLidia.filter((t) => t.estado === "vencida").map((t) => t.titulo).sort()).toEqual(["Compromiso 1", "Compromiso 2"]);
+    expect(deLidia.find((t) => t.titulo === "Pedido de Elías")?.estado).toBe("propuesta");
+  });
+});
+
 describe("la revisión del 9 de octubre", () => {
   it("lo que sale de una reunión de cliente no lleva su título ni su detalle a quien no estuvo", async () => {
     const { ctx } = await equipo();

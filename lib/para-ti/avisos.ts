@@ -11,12 +11,16 @@
  * 2026-10-06): es lo que más espera de ti. Un tipo que no está acá se muestra igual.
  */
 
-/** Los tipos que hoy escribe Nexus. Texto con punto: `<módulo>.<qué pasó>`. */
+/**
+ * Los tipos que hoy escribe Nexus. Texto con punto: `<módulo>.<qué pasó>`. Desde el 2026-10-16 (fase 1.3 de
+ * docs/nexus-sistema-de-trabajo-plan.md) solo lo que NO es un pendiente: mensajes, buenas noticias y asignaciones
+ * directas. Salieron los que repetían un pendiente (`tareas.sugerencias`, `tareas.pedido`, `finanzas.devuelto`,
+ * `documentacion.comentario`, `alcance.confirmado`) y los que nadie escribía (`tareas.arrastre`, `tareas.agregada`,
+ * `tareas.mencionada`). Los avisos viejos de esos tipos se siguen mostrando: un tipo que no está acá se muestra igual.
+ */
 export const TIPOS_DE_AVISO = {
-  "finanzas.devuelto": { bueno: false },
   "finanzas.mes-cerrado": { bueno: true },
   "roles.compartido": { bueno: false },
-  "documentacion.comentario": { bueno: false, mensaje: true },
   "documentacion.respuesta": { bueno: false, mensaje: true },
   "cliente.aprobo-documento": { bueno: true },
   "cliente.aprobo-propuesta": { bueno: true },
@@ -25,20 +29,14 @@ export const TIPOS_DE_AVISO = {
   "feedback.nuevo": { bueno: false },
   "feedback.respuesta": { bueno: false, mensaje: true },
   "feedback.estado": { bueno: false },
-  "alcance.confirmado": { bueno: false },
   "diagnostico.listo": { bueno: true },
   "adopcion.revisar": { bueno: false },
   // Tareas internas (docs/tareas-plan.md §8): un aviso por lectura o por pedido, nunca uno por tarea.
-  "tareas.sugerencias": { bueno: false },
-  "tareas.pedido": { bueno: false },
   "tareas.respuesta": { bueno: false },
   "tareas.asignada": { bueno: false },
   "tareas.cerrada": { bueno: false },
-  "tareas.arrastre": { bueno: false },
-  "tareas.agregada": { bueno: false },
   "tareas.dependencia": { bueno: true },
   "tareas.comentario": { bueno: false, mensaje: true },
-  "tareas.mencionada": { bueno: false },
   "tareas.bloque": { bueno: false },
   "tareas.proyecto": { bueno: false },
   "tareas.espacio": { bueno: false },

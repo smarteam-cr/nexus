@@ -6,7 +6,10 @@
  * · Lo demás se reparte por cuándo: «Para hoy», «Esta semana» y «Cuando puedas» (plegado).
  * · Dentro de cada bloque: lo que falló primero (rojo), después lo que más espera.
  * · Una fuente que no se pudo medir se nombra en `sinMedir`: callarla haría creer que está al día.
+ * · Desde el 2026-10-16 (fase 1.1): de lo de hoy y lo del agente, «Lo que importa hoy» (como mucho 5, una por cuenta,
+ *   lib/para-ti/importa.ts); lo que no entra va a «También para hoy».
  */
+import { elegirLoQueImporta } from "./importa";
 import type { ParaTi, Pendiente, ResultadoDeFuente } from "./tipos";
 
 function ordenar(items: readonly Pendiente[]): Pendiente[] {
@@ -40,9 +43,14 @@ export function armarParaTi(resultados: readonly ResultadoDeFuente[]): ParaTi {
       todos.push(it);
     }
   }
+  const agente = ordenar(todos.filter((p) => p.delAgente));
+  const hoy = ordenar(todos.filter((p) => !p.delAgente && p.cuando === "hoy"));
+  const { importa, tambien } = elegirLoQueImporta([...agente, ...hoy]);
   return {
-    agente: ordenar(todos.filter((p) => p.delAgente)),
-    hoy: ordenar(todos.filter((p) => !p.delAgente && p.cuando === "hoy")),
+    importa,
+    tambien: ordenar(tambien),
+    agente,
+    hoy,
     semana: ordenar(todos.filter((p) => !p.delAgente && p.cuando === "semana")),
     luego: ordenar(todos.filter((p) => !p.delAgente && p.cuando === "luego")),
     alDia,
@@ -51,11 +59,11 @@ export function armarParaTi(resultados: readonly ResultadoDeFuente[]): ParaTi {
 }
 
 /**
- * El número del menú: lo que pide atención HOY. Lo de esta semana y lo de «cuando puedas» no suman: un número que
- * nunca baja de 20 se deja de mirar.
+ * El número del menú: «Lo que importa hoy» (como mucho 5) y los avisos sin leer. Lo de esta semana, lo de «cuando
+ * puedas» y lo que no entró en las cinco no suman: un número que nunca baja de 20 se deja de mirar.
  */
-export function cuentaDelMenu(p: Pick<ParaTi, "agente" | "hoy">, avisosNuevos: number): number {
-  return p.agente.length + p.hoy.length + avisosNuevos;
+export function cuentaDelMenu(p: Pick<ParaTi, "importa">, avisosNuevos: number): number {
+  return p.importa.length + avisosNuevos;
 }
 
 /** Lo que el latido del menú necesita de un aviso para decidir si notificarlo. */

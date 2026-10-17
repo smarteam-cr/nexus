@@ -33,7 +33,7 @@ import {
   type BloqueDeAgenda,
   type Prioridad,
 } from "./estados";
-import { DIAS_PARA_CORREGIR_UNA_REVISION, DIAS_PARA_VENCER_UNA_PROPUESTA, MAX_SECCIONES } from "./reglas";
+import { DIAS_PARA_CORREGIR_UNA_REVISION, DIAS_PARA_VENCER_UNA_PROPUESTA, MAX_SECCIONES, MAX_SUGERENCIAS_POR_PERSONA } from "./reglas";
 import {
   aDate,
   comoFecha,
@@ -320,28 +320,11 @@ export async function crearTarea(ctx: ContextoDeTareas, clientes: ClientesQueVes
       return t;
     }, OPCIONES_DE_TX);
 
-    // Avisos, después de escribir.
-    if (estado === "propuesta" && responsable) {
-      await avisar({
-        para: responsable,
-        tipo: "tareas.pedido",
-        titulo: `${ctx.nombre} te sugiere «${titulo}»`,
-        detalle: deOtroEquipo ? `Te la pide ${nombreDelEquipo(ctx.equipo)}. Decide si la tomas.` : "Decide si la tomas.",
-        href: urlDeLaTarea(creada.id),
-        actorEmail: yo,
-        dedupeKey: `tareas.pedido:${creada.id}`,
-      });
-    } else if (n.paraEquipo) {
-      await avisar({
-        para: lideresDe(n.paraEquipo, ctx.miembros).map((m) => m.email),
-        tipo: "tareas.pedido",
-        titulo: `${ctx.nombre} le pide a ${nombreDelEquipo(n.paraEquipo)} «${titulo}»`,
-        detalle: "Está en «Por decidir» de tus tareas: tómala o pásasela a alguien de tu equipo.",
-        href: urlDeLaTarea(creada.id),
-        actorEmail: yo,
-        dedupeKey: `tareas.pedido:${creada.id}`,
-      });
-    } else if (deOtraPersona && responsable) {
+    // Avisos, después de escribir. Una sugerencia o un pedido a un equipo NO avisa (fase 1.3): ya es un pendiente en
+    // «Para ti» («Te pidieron…», «Le pidieron… a tu equipo»). Una asignación directa sí.
+    if (n.paraEquipo) {
+      for (const lider of lideresDe(n.paraEquipo, ctx.miembros)) olvidarMedicion(lider.email);
+    } else if (estado !== "propuesta" && deOtraPersona && responsable) {
       await avisar({
         para: responsable,
         tipo: "tareas.asignada",
@@ -674,15 +657,7 @@ export async function decidirTarea(ctx: ContextoDeTareas, clientes: ClientesQueV
         await evento(tx, { tareaId: igual.id, tipo: "mencionada", porEmail: yo, sessionId: t.sessionId, cita: t.cita, datos: { de: "no_es_mia" } });
       });
     }
-    avisosDespues.push({
-      para,
-      tipo: "tareas.pedido",
-      titulo: `${nombre} dice que «${t.titulo}» es tuya`,
-      detalle: "Decide si la tomas.",
-      href: urlDeLaTarea(t.id),
-      actorEmail: yo,
-      dedupeKey: `tareas.pedido:${t.id}:${para}`,
-    });
+    // Sin aviso (fase 1.3): le queda como sugerencia en «Para ti».
     respuesta(`${nombre} dijo que «${t.titulo}» no era suya; se la pasó a ${nombreDe(para, ctx.miembros)}`);
     olvidarMedicion(para);
   } else if (d.tipo === "misma") {
@@ -944,15 +919,17 @@ export async function asignar(ctx: ContextoDeTareas, id: string, version: number
     return;
   }
   if (nuevo !== ctx.email) {
-    await avisar({
-      para: nuevo,
-      tipo: directo ? "tareas.asignada" : "tareas.pedido",
-      titulo: directo ? `${ctx.nombre} te asignó «${t.titulo}»` : `${ctx.nombre} te sugiere «${t.titulo}»`,
-      detalle: directo ? null : "Decide si la tomas.",
-      href: urlDeLaTarea(t.id),
-      actorEmail: ctx.email,
-      dedupeKey: `tareas.${directo ? "asignada" : "pedido"}:${t.id}:${nuevo}`,
-    });
+    // Solo una asignación directa avisa: una sugerencia ya es un pendiente en «Para ti» (fase 1.3).
+    if (directo) {
+      await avisar({
+        para: nuevo,
+        tipo: "tareas.asignada",
+        titulo: `${ctx.nombre} te asignó «${t.titulo}»`,
+        href: urlDeLaTarea(t.id),
+        actorEmail: ctx.email,
+        dedupeKey: `tareas.asignada:${t.id}:${nuevo}`,
+      });
+    }
     olvidarMedicion(nuevo);
   }
   if (t.responsableEmail && t.responsableEmail !== ctx.email && t.agendaEstado === "agendada") await avisarBloqueQuedo(t, ctx);
@@ -1926,11 +1903,8 @@ async function repartirElPlan(tx: Tx, ctx: ContextoDeTareas, proyectoId: string,
       tipo: deOtroEquipo && pedidaPorEmail ? "apoyo" : "puesto",
     });
     await evento(tx, { tareaId: t.id, tipo: "repartida", porEmail: yo, datos: { para: responsable, equipo, propuesta } });
-    if (propuesta && responsable) {
-      avisos.push({ para: responsable, tipo: "tareas.pedido", titulo: `${ctx.nombre} te sugiere «${t.titulo}»`, detalle: "Es de un plan que se acaba de activar. Decide si la tomas.", href: urlDeLaTarea(t.id), actorEmail: yo, dedupeKey: `tareas.pedido:${t.id}` });
-    } else if (paraEquipo && equipo) {
-      avisos.push({ para: lideresDe(equipo, ctx.miembros).map((m) => m.email), tipo: "tareas.pedido", titulo: `${ctx.nombre} le pide a ${nombreDelEquipo(equipo)} «${t.titulo}»`, detalle: "Está en «Por decidir» de tus tareas: tómala o pásasela a alguien de tu equipo.", href: urlDeLaTarea(t.id), actorEmail: yo, dedupeKey: `tareas.pedido:${t.id}` });
-    } else if (responsable && responsable !== yo) {
+    // Una sugerencia o un pedido a un equipo no avisa (fase 1.3): ya es un pendiente en «Para ti».
+    if (!propuesta && !paraEquipo && responsable && responsable !== yo) {
       avisos.push({ para: responsable, tipo: "tareas.asignada", titulo: `${ctx.nombre} te asignó «${t.titulo}»`, href: urlDeLaTarea(t.id), actorEmail: yo, dedupeKey: `tareas.asignada:${t.id}:${responsable}` });
     }
   }
@@ -2028,7 +2002,38 @@ export async function escribirPropuestasDeLectura(
     await evento(tx, { tareaId: t.id, tipo: p.porAsignar ? "creada" : "propuesta", porEmail: "agente", datos: { lectura: lectura.id, ...p.sugerido } });
     creadas.push({ id: t.id, responsableEmail: p.porAsignar ? null : p.responsableEmail });
   }
+  for (const email of new Set(creadas.flatMap((c) => (c.responsableEmail ? [c.responsableEmail] : [])))) await podarSugerencias(tx, email);
   return { creadas, yaEstaban, sumadas };
+}
+
+/**
+ * Con más de `MAX_SUGERENCIAS_POR_PERSONA` sugerencias de las reuniones sin decidir, las más viejas vencen solas (fase
+ * 1.4): quedan las más nuevas. Solo lo que propuso Nexus de una reunión; lo que pidió una persona no se toca. Vencer no
+ * es una lápida: si se vuelve a hablar del tema, se vuelve a proponer.
+ */
+async function podarSugerencias(tx: Tx, email: string): Promise<number> {
+  const sobran = await tx.tarea.findMany({
+    where: { estado: "propuesta", archivadaAt: null, responsableEmail: email, creadaPorEmail: null, origen: { in: ["reunion", "notas"] } },
+    orderBy: [{ createdAt: "desc" }, { numero: "desc" }],
+    skip: MAX_SUGERENCIAS_POR_PERSONA,
+    select: { id: true, version: true },
+  });
+  const ahora = new Date();
+  for (const t of sobran) {
+    const r = await tx.tarea.updateMany({
+      where: { id: t.id, version: t.version, estado: "propuesta" },
+      data: {
+        estado: "vencida",
+        decision: "vencida",
+        decididaPorEmail: SISTEMA,
+        decididaAt: ahora,
+        motivo: `Había más de ${MAX_SUGERENCIAS_POR_PERSONA} sugerencias de las reuniones sin decidir: quedaron las más nuevas.`,
+        version: { increment: 1 },
+      },
+    });
+    if (r.count) await evento(tx, { tareaId: t.id, tipo: "decidida", porEmail: SISTEMA, datos: { decision: "vencida", porTope: MAX_SUGERENCIAS_POR_PERSONA } });
+  }
+  return sobran.length;
 }
 
 /**
@@ -2346,13 +2351,10 @@ export async function aplicarAcuerdoDelChat(ctx: ContextoDeTareas, clientes: Cli
             anotar(t);
             if (o.despuesDe?.length) await esperar(t, o.despuesDe);
             if (responsable) tocadas.add(responsable);
-            if (propuesta && responsable) {
-              avisosDespues.push({ para: responsable, tipo: "tareas.pedido", titulo: `${ctx.nombre} te sugiere «${o.titulo}»`, detalle: deOtroEquipo ? `Te la pide ${nombreDelEquipo(ctx.equipo)}. Decide si la tomas.` : "Decide si la tomas.", href: urlDeLaTarea(t.id), actorEmail: yo, dedupeKey: `tareas.pedido:${t.id}` });
-            } else if (paraEquipo) {
-              const lideres = lideresDe(paraEquipo, ctx.miembros).map((m) => m.email);
-              lideres.forEach((l) => tocadas.add(l));
-              avisosDespues.push({ para: lideres, tipo: "tareas.pedido", titulo: `${ctx.nombre} le pide a ${nombreDelEquipo(paraEquipo)} «${o.titulo}»`, detalle: "Está en «Por decidir» de tus tareas: tómala o pásasela a alguien de tu equipo.", href: urlDeLaTarea(t.id), actorEmail: yo, dedupeKey: `tareas.pedido:${t.id}` });
-            } else if (deOtraPersona && responsable) {
+            // Una sugerencia o un pedido a un equipo no avisa (fase 1.3): ya es un pendiente en «Para ti».
+            if (paraEquipo) {
+              lideresDe(paraEquipo, ctx.miembros).forEach((l) => tocadas.add(l.email));
+            } else if (!propuesta && deOtraPersona && responsable) {
               avisosDespues.push({ para: responsable, tipo: "tareas.asignada", titulo: `${ctx.nombre} te asignó «${o.titulo}»`, href: urlDeLaTarea(t.id), actorEmail: yo, dedupeKey: `tareas.asignada:${t.id}:${responsable}` });
             }
             break;
@@ -2433,8 +2435,8 @@ export async function aplicarAcuerdoDelChat(ctx: ContextoDeTareas, clientes: Cli
             await evento(tx, { tareaId: t.id, tipo: "asignada", porEmail: yo, datos: { desde: t.responsableEmail, hacia: nuevo, directo, hiloId: a.hiloId } });
             cambios++;
             tocadas.add(nuevo);
-            if (nuevo !== yo) {
-              avisosDespues.push({ para: nuevo, tipo: directo ? "tareas.asignada" : "tareas.pedido", titulo: directo ? `${ctx.nombre} te asignó «${t.titulo}»` : `${ctx.nombre} te sugiere «${t.titulo}»`, detalle: directo ? null : "Decide si la tomas.", href: urlDeLaTarea(t.id), actorEmail: yo, dedupeKey: `tareas.${directo ? "asignada" : "pedido"}:${t.id}:${nuevo}` });
+            if (nuevo !== yo && directo) {
+              avisosDespues.push({ para: nuevo, tipo: "tareas.asignada", titulo: `${ctx.nombre} te asignó «${t.titulo}»`, href: urlDeLaTarea(t.id), actorEmail: yo, dedupeKey: `tareas.asignada:${t.id}:${nuevo}` });
             }
             break;
           }

@@ -166,16 +166,8 @@ export async function crearHilo(datos: {
     },
     select: CAMPOS_DEL_HILO,
   });
-  // «Para ti» (2026-10-04): le llega a quien lleva el frente Documentación (los que resuelven). `avisar` no lanza.
-  await avisar({
-    frente: "DOCUMENTACION",
-    tipo: "documentacion.comentario",
-    titulo: `Comentario nuevo en «${pagina.titulo}»`,
-    detalle: cuerpo,
-    href: `/documentacion/${encodeURIComponent(pagina.slug)}`,
-    actorEmail: email,
-    dedupeKey: `documentacion.comentario:${creado.id}`,
-  });
+  // Sin aviso (fase 1.3 de docs/nexus-sistema-de-trabajo-plan.md): un hilo abierto ya es un pendiente en «Para ti» de
+  // quien lleva el frente Documentación (COMENTARIOS_DE_LA_DOCUMENTACION).
   const autor = await autoresDe(emailsDe([creado]));
   return { ok: true as const, hilo: verHilo(creado, autor) };
 }

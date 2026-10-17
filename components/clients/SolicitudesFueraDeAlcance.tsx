@@ -42,7 +42,7 @@ async function leerError(r: Response, porDefecto: string): Promise<string> {
 export function avisarDelAviso(toast: ReturnType<typeof useToast>, aviso: ResultadoDelAviso | null | undefined) {
   if (!aviso) return;
   if (aviso.avisados > 0) toast.success("Confirmada. Les avisamos a Customer Success y al vendedor.");
-  else toast.success("Confirmada.");
+  else toast.success("Confirmada. Ventas la ve como oportunidad en «Para ti».");
   if (aviso.sinVendedor) toast.info(aviso.sinVendedor);
 }
 

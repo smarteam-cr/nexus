@@ -33,7 +33,17 @@ export const TAREAS: Fuente = {
     const lidera = m ? equiposQueLidera(m) : [];
 
     const [porDecidir, abiertasPorSemana, revisadas, sinAgendar, porAsignar] = await Promise.all([
-      prisma.tarea.groupBy({ by: ["origen"], where: { ...PROPUESTAS_WHERE, responsableEmail: yo, NOT: { proyecto: { estado: "propuesta", origen: { in: ["chat", "plantilla"] } } } }, _count: { _all: true } }),
+      prisma.tarea.groupBy({
+        by: ["origen"],
+        where: {
+          ...PROPUESTAS_WHERE,
+          responsableEmail: yo,
+          NOT: { proyecto: { estado: "propuesta", origen: { in: ["chat", "plantilla"] } } },
+          // Las de una reunión con un cliente o un prospecto se cuentan en la línea de esa reunión (fase 1.4).
+          AND: [{ OR: [{ sessionId: null }, { clientId: null }, { origen: { notIn: ["reunion", "notas"] } }] }],
+        },
+        _count: { _all: true },
+      }),
       prisma.tarea.groupBy({ by: ["semana"], where: { ...ABIERTAS_WHERE, responsableEmail: yo, semana: { lte: aDate(lunes) } }, _count: { _all: true } }),
       prisma.cierreDeSemana.findMany({ where: { personaEmail: yo, semana: { lte: aDate(lunes) } }, select: { semana: true } }),
       prisma.tarea.count({ where: { ...ABIERTAS_WHERE, responsableEmail: yo, semana: aDate(lunes), agendaEstado: { not: "agendada" } } }),
@@ -54,7 +64,7 @@ export const TAREAS: Fuente = {
         cuando: "hoy",
         delAgente: true,
         titulo: `Nexus te propone ${plural(deReuniones, "tarea", "tareas")}`,
-        detalle: "Salieron de tus reuniones. Úsalas, déjalas para más adelante o descártalas: nada entra solo.",
+        detalle: "Salieron de las reuniones de tu equipo o del asistente. Úsalas, déjalas para más adelante o descártalas: nada entra solo.",
         meta: "Tareas · Por decidir",
         accion: "Decidir",
         href: "/tareas",

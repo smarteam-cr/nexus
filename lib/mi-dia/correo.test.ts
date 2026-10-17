@@ -16,14 +16,24 @@ const p = (clave: string, extra: Partial<Pendiente> = {}): Pendiente => ({
 });
 
 describe("el correo de la mañana", () => {
-  it("como mucho 5 cosas: primero lo del agente, sin Finanzas ni plata y sin repetir", () => {
+  it("las mismas cinco de «Lo que importa hoy»: por peso, sin Finanzas ni plata y sin repetir", () => {
     const { cosas, mas } = cosasDelCorreo({
-      agente: [p("agente:1", { delAgente: true }), p("agente:1", { delAgente: true })],
+      agente: [p("cronograma-propuesta:1", { delAgente: true }), p("cronograma-propuesta:1", { delAgente: true })],
       hoy: [p("finanzas-registrar:a"), p("tareas:1", { plata: "US$500" }), p("tareas:2"), p("tareas:3"), p("tareas:4"), p("tareas:5"), p("tareas:6")],
     });
-    expect(cosas.map((c) => c.clave)).toEqual(["agente:1", "tareas:2", "tareas:3", "tareas:4", "tareas:5"]);
+    expect(cosas.map((c) => c.clave)).toEqual(["cronograma-propuesta:1", "tareas:2", "tareas:3", "tareas:4", "tareas:5"]);
     expect(cosas).toHaveLength(MAX_COSAS);
     expect(mas).toBe(1);
+  });
+
+  it("una sola cosa por cuenta: lo demás de esa cuenta no ocupa lugar", () => {
+    const wherex = "/clients/cmr0000000000000000wherex";
+    const { cosas } = cosasDelCorreo({
+      agente: [],
+      hoy: [p("cs-vigia:1", { href: wherex }), p("tareas:1", { href: wherex }), p("tareas:2")],
+    });
+    expect(cosas.map((c) => c.clave)).toEqual(["cs-vigia:1", "tareas:2"]);
+    expect(cosas[0].otrosEnLaCuenta?.map((c) => c.clave)).toEqual(["tareas:1"]);
   });
 
   it("las reuniones de hoy con «Preparar» y cada línea a Nexus", () => {

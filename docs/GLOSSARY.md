@@ -945,9 +945,10 @@
   con clientes. El margen de una cuenta es lo cobrado − lo que costaron sus horas con el costo elegido. Todo en dólares,
   con el tipo de cambio del día de cada monto.
 - **Para ti** (`/para-ti`, primer ítem del menú, `lib/para-ti`): lo que le toca a cada persona en Nexus, juntado de
-  todos los módulos y recortado a lo suyo y a sus frentes. Arriba lo que dejó un agente; después «Para hoy», «Esta
-  semana» y «Cuando puedas»; a la derecha los avisos. El número del menú cuenta lo de hoy y los avisos sin leer.
-  Muestra solo lo tuyo: la pestaña «Del equipo» se retiró el 2026-10-07.
+  todos los módulos y recortado a lo suyo y a sus frentes. Arriba **«Lo que importa hoy»** (desde el 2026-10-16: como
+  mucho cinco, una por cuenta, por peso; `lib/para-ti/importa.ts`), después «También para hoy», «Esta semana» y «Cuando
+  puedas»; a la derecha los avisos. El número del menú cuenta esas cinco y los avisos sin leer. Muestra solo lo tuyo: la
+  pestaña «Del equipo» se retiró el 2026-10-07.
 - **frente / «Lo que lleva»** (`TeamMember.frentes`, `lib/para-ti/frentes.ts`): lo que una persona SIGUE en Smarteam,
   aparte de su rol de acceso: Liderar Customer Success, Ventas, Finanzas (registrar / supervisar), Dirección,
   Marketing, Escala, Documentación, Sistema (Feedback, reservado). No da permisos: decide qué le llega en «Para ti».
