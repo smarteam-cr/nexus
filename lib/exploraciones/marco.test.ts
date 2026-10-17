@@ -257,6 +257,12 @@ describe("⛔ una exploración de proyecto no es una preventa", () => {
     /* La escala de la EMPRESA (La cuenta › La escala, 2026-10-12): lee a propósito las DOS, la preventa y las de cada
        proyecto, porque todas posicionan a la empresa. Pantalla interna; solo lo confirmado. */
     "lib/exploraciones/escala-de-la-empresa.ts",
+    /* Las versiones de la escala (ficha B, 2026-10-17): busca la exploración VIVA de un proyecto por su `projectId` (la
+       foto que deja su diagnóstico), nunca una preventa. */
+    "lib/exploraciones/versiones-de-la-escala.ts",
+    /* La primera versión de la escala de cada exploración viva (ficha B): las dos clases a propósito, como la escala de
+       la empresa. */
+    "scripts/guardar-primera-version-de-la-escala.ts",
   ]);
   function archivos(dir: string): string[] {
     const abs = path.join(RAIZ, dir);

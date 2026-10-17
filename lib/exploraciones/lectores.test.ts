@@ -174,7 +174,13 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   },
   "app/api/clients/[id]/escala/route.ts": {
     destino: "escala-de-la-empresa",
-    motivo: "La cuenta › La escala: los niveles confirmados de las exploraciones de la empresa, con la fecha. Pantalla interna.",
+    motivo:
+      "La cuenta › La escala: los niveles confirmados de las exploraciones de la empresa, con la fecha y sus versiones; " +
+      "guardar una versión, regenerar con el agente y activarlo en un proyecto (ficha B). Pantalla interna.",
+  },
+  "app/api/projects/[projectId]/estado-del-documento/route.ts": {
+    destino: "escala-de-la-empresa",
+    motivo: "Presentar el diagnóstico deja la foto de la escala de la exploración del proyecto (ficha B). No lee contenido: lo escribe versiones-de-la-escala.ts.",
   },
   "components/clients/EscalaDeLaCuenta.tsx": {
     destino: "escala-de-la-empresa",
@@ -255,7 +261,7 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|textoDeLaExploracionDelProyecto/,
   },
   "escala-de-la-empresa": {
-    permitidas: /\bescalaDeLaEmpresa\b|EscalaDeLaEmpresa\b|\bagendadasConLaEmpresa\b/,
+    permitidas: /\bescalaDeLaEmpresa\b|EscalaDeLaEmpresa\b|\bagendadasConLaEmpresa\b|\bguardarVersionDelDiagnostico\b/,
     // Solo los niveles confirmados y las reuniones agendadas: ni la propuesta, ni el handoff, ni lo interno de la preventa.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b/,
   },

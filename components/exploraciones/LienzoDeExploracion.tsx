@@ -146,6 +146,7 @@ export default function LienzoDeExploracion({
   const [documentos, setDocumentos] = useState(inicial.documentos ?? []);
   const [propuestas, setPropuestas] = useState(inicial.propuestas ?? []);
   const [reuniones, setReuniones] = useState(inicial.reuniones ?? []);
+  const [escalaAnterior, setEscalaAnterior] = useState(inicial.escalaAnterior ?? null);
   const [guardando, setGuardando] = useState(false);
   const [paso, setPasoCrudo] = useState<PasoDelLienzoUI>(proyecto ? "exploracion" : esPieza(piezaInicial) ? piezaInicial : "resumen");
   const [vista, setVista] = useState<VistaDelProyecto>("sesiones");
@@ -206,6 +207,7 @@ export default function LienzoDeExploracion({
     if (inicial.documentos) setDocumentos(inicial.documentos);
     if (inicial.propuestas) setPropuestas(inicial.propuestas);
     if (inicial.reuniones) setReuniones(inicial.reuniones);
+    if (inicial.escalaAnterior !== undefined) setEscalaAnterior(inicial.escalaAnterior);
   }
 
   const validez = useMemo<Validez>(() => {
@@ -301,6 +303,7 @@ export default function LienzoDeExploracion({
           if (data.exploracion.documentos) setDocumentos(data.exploracion.documentos);
           if (data.exploracion.propuestas) setPropuestas(data.exploracion.propuestas);
           if (data.exploracion.reuniones) setReuniones(data.exploracion.reuniones);
+          if (data.exploracion.escalaAnterior !== undefined) setEscalaAnterior(data.exploracion.escalaAnterior);
           /* La preparación eligió la industria o el perfil: la escala del lienzo es otra (la arma el
              servidor con esos dos), así que se vuelve a pedir la página. */
           if (antes.edicion !== ahora.edicion || antes.perfilCierre !== ahora.perfilCierre || antes.perfilDespues !== ahora.perfilDespues) {
@@ -355,6 +358,7 @@ export default function LienzoDeExploracion({
     documentos,
     propuestas,
     reuniones,
+    escalaAnterior,
     puedeEditar,
     puedeProponer: puedeEditar && puedeProponer,
     guardando,

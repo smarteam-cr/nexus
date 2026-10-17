@@ -15,7 +15,7 @@ import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import type { AreaEnLaEscala, PosicionEnLaEscala } from "@/lib/escala/posicion";
 import { CASILLAS, type Meta, type Reto } from "./casillas";
-import type { EstadoDeExploracion } from "./contenido";
+import type { ContenidoDeExploracion, EstadoDeExploracion } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 
 /**
@@ -230,4 +230,17 @@ export function bloqueParaLaPropuesta(o: {
   }
 
   return partes.length === encabezado ? "" : partes.join("\n");
+}
+
+/**
+ * Los casos de uso que el vendedor eligió en la preventa, como líneas de la sección «Casos de uso» de la propuesta
+ * (ficha B, 2026-10-17, roadmap «Ventas», paso 1). Solo lo que puede ver el cliente: el título y, de un caso del
+ * catálogo, lo que gana (su promesa); de uno libre, su descripción. Nunca la razón interna ni el aviso del catálogo.
+ * Sin precio: es la fase 2.
+ */
+export function casosElegidosParaLaPropuesta(c: Pick<ContenidoDeExploracion, "casosDeUso">): { id: string; title: string; detail: string; price: string }[] {
+  return Object.entries(c.casosDeUso).map(([id, k]) => {
+    const delCatalogo = casoDeLaPreventa(id);
+    return { id, title: delCatalogo?.titulo ?? k.titulo, detail: delCatalogo?.promesa ?? k.descripcion ?? "", price: "" };
+  });
 }

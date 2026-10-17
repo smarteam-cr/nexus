@@ -57,6 +57,8 @@ export interface Lienzo {
   reuniones: NonNullable<ExploracionParaLaPantalla["reuniones"]>;
   /** Las propuestas comerciales que nacieron de esta exploración (al abrir y al recargar). */
   propuestas: NonNullable<ExploracionParaLaPantalla["propuestas"]>;
+  /** La última versión de la escala de antes de hoy (al abrir y al recargar): contra ella «Qué explorar» dice qué cambió. */
+  escalaAnterior: NonNullable<ExploracionParaLaPantalla["escalaAnterior"]> | null;
   puedeEditar: boolean;
   /** Armar y enlazar la propuesta comercial es de Ventas (`ventas.write`); Customer Success trabaja la preventa sin eso. */
   puedeProponer: boolean;

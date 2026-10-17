@@ -671,7 +671,9 @@ export function enfoqueDeLaGuia(
       orden++;
       if (!d.aplica) continue;
       const p = posiciones[d.id];
-      if (p?.clase === "evidencia") continue;
+      /* Lo que ya tiene evidencia no se vuelve a preguntar, SALVO que alguien lo haya llevado a la próxima sesión (ficha
+         B, 2026-10-17: «Qué explorar» sugiere confirmar una dimensión que cambió de nivel, aunque tenga evidencia). */
+      if (p?.clase === "evidencia" && !(d.id in aExplorar)) continue;
       candidatas.push({ id: d.id, marcada: d.id in aExplorar, nivel: p ? LETRAS.indexOf(p.nivel) : -1, capa: d.capa === "base" ? 0 : 1, orden });
     }
   }

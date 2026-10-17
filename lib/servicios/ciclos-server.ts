@@ -386,7 +386,7 @@ export async function casosDeLaEmpresa(clientId: string): Promise<CasosDeLaEmpre
 /** Suma un caso de uso a la empresa: al plan de crecimiento, o al ciclo abierto de uno de sus proyectos. */
 export async function crearCasoDeLaEmpresa(
   clientId: string,
-  datos: DatosDeCaso & { titulo: string; projectId?: string | null },
+  datos: DatosDeCaso & { titulo: string; projectId?: string | null; deLaEscala?: boolean },
   por: string,
 ) {
   let projectId: string | null = null;
@@ -412,8 +412,9 @@ export async function crearCasoDeLaEmpresa(
       porque: texto(datos.porque) ?? null,
       criterio: texto(datos.criterio) ?? null,
       metrica: texto(datos.metrica) ?? null,
-      origen: "manual",
-      estado: cicloId ? "en_ciclo" : "en_plan",
+      // Lo que sugiere el camino de crecimiento (ficha B) nace sugerido: se revisa con el cliente antes del plan.
+      origen: datos.deLaEscala ? "escala" : "manual",
+      estado: cicloId ? "en_ciclo" : datos.deLaEscala ? "sugerido" : "en_plan",
       orden,
       creadoPor: por,
     },

@@ -15,32 +15,14 @@ import "server-only";
  */
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
-import { chequeoDelMapa, posicionesDelMapa } from "./mapa";
+import { fotoDeLaExploracion, type AreaDeLaFoto, type DimensionDeLaFoto } from "./foto-de-la-escala";
 import { escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila } from "./servidor";
-import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
+import { versionesDeLaEmpresa, type VersionGuardada } from "./versiones-de-la-escala";
+import type { Letra } from "@/lib/escala/documento/tipos";
 
-export interface DimensionDeLaEmpresa {
-  id: string;
-  nombre: string;
-  capa: ClaveDeCapa;
-  nivel: Letra | null;
-  /** `evidencia`: lo dijo el cliente, se vio o lo marcó quien exploró · `hipotesis`: del test o de una hipótesis. */
-  clase: "evidencia" | "hipotesis" | null;
-  /** Una dimensión que no aplica al perfil de la empresa no se cuenta. */
-  aplica: boolean;
-}
-
-export interface AreaDeLaEmpresa {
-  id: string;
-  nombre: string;
-  nivel: Letra | null;
-  puntaje: number | null;
-  capas: Record<ClaveDeCapa, { nombre: string; nivel: Letra | null }>;
-  dimensiones: DimensionDeLaEmpresa[];
-  /** Cuántas dimensiones que aplican tienen nivel. */
-  conNivel: number;
-  aplican: number;
-}
+/** Una dimensión de la empresa: su nivel y de dónde sale (la foto de lo confirmado). */
+export type DimensionDeLaEmpresa = DimensionDeLaFoto;
+export type AreaDeLaEmpresa = AreaDeLaFoto;
 
 export interface PosicionDeLaEmpresa {
   /** De qué exploración sale. */
@@ -54,12 +36,24 @@ export interface PosicionDeLaEmpresa {
   areas: AreaDeLaEmpresa[];
 }
 
+/** Una exploración viva de la empresa: desde ahí se regenera la escala con el agente. */
+export interface ExploracionDeLaEmpresa {
+  id: string;
+  origen: "preventa" | "proyecto";
+  proyecto: { id: string; nombre: string } | null;
+  fecha: string;
+}
+
 export type EscalaDeLaEmpresa =
   | {
       estado: "ok";
       niveles: { letra: Letra; nombre: string }[];
-      /** De la más reciente a la más vieja; solo las que tienen algún nivel. */
+      /** De la más reciente a la más vieja; solo las que tienen algún nivel. Es la escala de HOY de cada exploración. */
       posiciones: PosicionDeLaEmpresa[];
+      /** Las versiones guardadas (la escala en el tiempo), de la más nueva a la más vieja. */
+      versiones: VersionGuardada[];
+      /** Las exploraciones vivas (aunque todavía no tengan niveles): desde ahí se regenera. */
+      exploraciones: ExploracionDeLaEmpresa[];
       /** Los proyectos de la empresa (para ofrecer dónde posicionarla si no tiene posición). */
       proyectos: { id: string; nombre: string }[];
     }
@@ -74,10 +68,10 @@ export async function escalaDeLaEmpresa(clientId: string): Promise<EscalaDeLaEmp
     select: { id: true, name: true },
     orderBy: { createdAt: "desc" },
   });
+  const deLosProyectos = proyectos.map((p) => ({ id: p.id, nombre: p.name }));
+  const vacio = { estado: "ok" as const, niveles: [], posiciones: [], versiones: [], exploraciones: [], proyectos: deLosProyectos };
 
-  if (!modeloDisponible(prisma.exploracionDeVenta)) {
-    return { estado: "ok", niveles: [], posiciones: [], proyectos: proyectos.map((p) => ({ id: p.id, nombre: p.name })) };
-  }
+  if (!modeloDisponible(prisma.exploracionDeVenta)) return vacio;
 
   let filas;
   try {
@@ -102,55 +96,57 @@ export async function escalaDeLaEmpresa(clientId: string): Promise<EscalaDeLaEmp
       },
     });
   } catch (e) {
-    if (esquemaDesactualizado(e)) return { estado: "ok", niveles: [], posiciones: [], proyectos: proyectos.map((p) => ({ id: p.id, nombre: p.name })) };
+    if (esquemaDesactualizado(e)) return vacio;
     throw e;
   }
 
   let niveles: { letra: Letra; nombre: string }[] = [];
   const posiciones: PosicionDeLaEmpresa[] = [];
+  const exploraciones: ExploracionDeLaEmpresa[] = [];
   for (const f of filas) {
     const estado = estadoDesdeFila(f);
     const escala = escalaDeLaExploracion(general.general, estado);
     if (!niveles.length) niveles = escala.niveles;
+    const origen = f.projectId ? ("proyecto" as const) : ("preventa" as const);
+    const proyecto = f.project ? { id: f.project.id, nombre: f.project.name } : null;
+    if (!f.archivadaEn) exploraciones.push({ id: f.id, origen, proyecto, fecha: f.updatedAt.toISOString() });
     // Solo lo confirmado: lo que el agente propone y nadie usó no posiciona a la empresa.
-    const pos = posicionesDelMapa(estado, []);
-    const conAlgo = escala.areas.filter((a) => a.dimensiones.some((d) => pos[d.id]));
-    if (!conAlgo.length) continue;
-    const chequeo = chequeoDelMapa(escala, conAlgo.map((a) => a.id), pos);
-    const nombreDeCapa = (c: ClaveDeCapa) => escala.capas.find((x) => x.clave === c)?.nombre ?? c;
-    posiciones.push({
-      exploracionId: f.id,
-      origen: f.projectId ? "proyecto" : "preventa",
-      proyecto: f.project ? { id: f.project.id, nombre: f.project.name } : null,
-      fecha: f.updatedAt.toISOString(),
-      edicion: escala.edicion?.nombre ?? null,
-      areas: conAlgo.map((a) => {
-        const r = chequeo.areas.find((x) => x.id === a.id);
-        const dims: DimensionDeLaEmpresa[] = a.dimensiones.map((d) => ({
-          id: d.id,
-          nombre: d.nombre,
-          capa: d.capa,
-          nivel: pos[d.id]?.nivel ?? null,
-          clase: pos[d.id]?.clase ?? null,
-          aplica: d.aplica,
-        }));
-        const aplican = dims.filter((d) => d.aplica);
-        return {
-          id: a.id,
-          nombre: a.nombre,
-          nivel: r?.nivel ?? null,
-          puntaje: r?.puntaje ?? null,
-          capas: {
-            base: { nombre: nombreDeCapa("base"), nivel: r?.capas.base.nivel ?? null },
-            produccion: { nombre: nombreDeCapa("produccion"), nivel: r?.capas.produccion.nivel ?? null },
-          },
-          dimensiones: dims,
-          conNivel: aplican.filter((d) => d.nivel).length,
-          aplican: aplican.length,
-        };
-      }),
-    });
+    const foto = fotoDeLaExploracion(escala, estado);
+    if (!foto.areas.length) continue;
+    posiciones.push({ exploracionId: f.id, origen, proyecto, fecha: f.updatedAt.toISOString(), edicion: foto.edicion, areas: foto.areas });
   }
+  if (!niveles.length) niveles = general.general.niveles.map((n) => ({ letra: n.letra, nombre: n.nombre }));
 
-  return { estado: "ok", niveles, posiciones, proyectos: proyectos.map((p) => ({ id: p.id, nombre: p.name })) };
+  const versiones = await versionesDeLaEmpresa(clientId);
+  return { estado: "ok", niveles, posiciones, versiones, exploraciones, proyectos: deLosProyectos };
+}
+
+/**
+ * La escala de la empresa para sugerir casos de uso en una propuesta SIN casos elegidos (ficha B, 2026-10-17): solo los
+ * niveles de la foto más reciente (lo confirmado), sin las frases ni el porqué. null = la empresa no está posicionada.
+ */
+export async function escalaParaLaPropuesta(clientId: string): Promise<AreaDeLaFoto[] | null> {
+  const r = await escalaDeLaEmpresa(clientId);
+  if (r.estado !== "ok") return null;
+  const areas = r.posiciones[0]?.areas ?? r.versiones[0]?.foto.areas ?? null;
+  if (!areas?.length) return null;
+  return areas.map((a) => ({ ...a, dimensiones: a.dimensiones.map((d) => ({ ...d, cita: null, porQue: null })) }));
+}
+
+/**
+ * ¿La exploración (o el proyecto) es de ESTA empresa? La ruta de La cuenta › La escala responde 404 si no: un id de
+ * otra empresa no se regenera ni se guarda desde acá.
+ */
+export async function esDeLaEmpresa(clientId: string, o: { exploracionId?: string; projectId?: string }): Promise<boolean> {
+  try {
+    if (o.exploracionId) {
+      if (!modeloDisponible(prisma.exploracionDeVenta)) return false;
+      return !!(await prisma.exploracionDeVenta.findFirst({ where: { id: o.exploracionId, clientId }, select: { id: true } }));
+    }
+    if (o.projectId) return !!(await prisma.project.findFirst({ where: { id: o.projectId, clientId }, select: { id: true } }));
+    return false;
+  } catch (e) {
+    if (esquemaDesactualizado(e)) return false;
+    throw e;
+  }
 }

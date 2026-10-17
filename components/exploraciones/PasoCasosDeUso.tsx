@@ -28,6 +28,8 @@ import { cn } from "@/lib/cn";
 import { esCasoLibre, laEscalaTieneBase, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { useRecorridos } from "@/components/recorridos/contexto";
 import { useLienzo } from "./contexto";
+import { casosParaElArea, type AreaParaElCamino } from "@/lib/casos-de-uso/camino";
+import { loQueLaFrena } from "@/lib/exploraciones/mapa";
 import FranjaDeSugerencias, { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { useCorrida } from "./useCorrida";
 
@@ -152,7 +154,7 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
 }
 
 function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
-  const { exp, escala, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
+  const { exp, escala, cambiar, puedeEditar, guardando, pendientesPara, mapa, nombreDeNivel } = useLienzo();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const e = exp.estado;
   const elegidos = Object.entries(e.contenido.casosDeUso);
@@ -185,6 +187,29 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
       },
     ]);
   };
+  /* Ficha B (2026-10-17): los casos de la biblioteca que mueven a cada área desde donde parece estar hoy (lo confirmado
+     y, donde no hay, las hipótesis), los que destraban lo que la frena primero. Sin IA: sale del mapa y del catálogo
+     (lib/casos-de-uso/camino.ts). */
+  const yaElegidos = new Set(elegidos.map(([id]) => (id.startsWith("cat-") ? id.slice(4) : id)));
+  const porLaEscala = conBase
+    ? areas.flatMap((a) => {
+        const calculo = mapa.chequeo.areas.find((x) => x.id === a.id);
+        if (!calculo?.nivel) return [];
+        const paraElCamino: AreaParaElCamino = {
+          id: a.id,
+          nombre: a.nombre,
+          nivel: calculo.nivel,
+          objetivo: calculo.objetivo,
+          frena: loQueLaFrena(calculo),
+          capas: {
+            base: { nombre: "", nivel: calculo.capas.base.nivel },
+            produccion: { nombre: "", nivel: calculo.capas.produccion.nivel },
+          },
+          dimensiones: calculo.dimensiones.map((d) => ({ id: d.id, nombre: d.nombre, aplica: d.aplica, nivel: d.nivel, clase: mapa.posiciones[d.id]?.clase ?? null })),
+        };
+        return casosParaElArea(paraElCamino, { excluir: yaElegidos, nombreDeNivel }).map((c) => ({ ...c, area: a }));
+      })
+    : [];
   const esPropia = corrida?.modo === "casos";
   const nombresDeAreas = areas.map((a) => a.nombre).join(" y ");
 
@@ -247,6 +272,44 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
           <ul className="grid items-start gap-3 xl:grid-cols-2">
             {propuestos.map((it) => (
               <TarjetaSugerida key={it.id} item={it} />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {porLaEscala.length > 0 && (
+        <section className="space-y-2" data-recorrido="preventa.casos.biblioteca">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Sugeridos por la escala · de la biblioteca · {porLaEscala.length}</h2>
+          <ul className="grid items-start gap-3 xl:grid-cols-2">
+            {porLaEscala.map((c) => (
+              <li key={c.area.id + c.caso.id} className="flex flex-col gap-1.5 rounded-xl border border-info-line bg-info-surface p-3.5">
+                <p className="flex items-start gap-2 text-sm font-medium text-fg">
+                  <IconoDeSugerencia className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-brand" />
+                  <span className="min-w-0 flex-1">{c.caso.titulo}</span>
+                </p>
+                <p className="text-xs text-fg-secondary">{c.caso.promesa}</p>
+                <p className="text-xs text-brand">
+                  {c.area.nombre}: {c.razon}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link href={"/sales/use-cases/" + c.caso.id} target="_blank" className="text-xs text-brand hover:text-brand-light">
+                    Ver el caso
+                  </Link>
+                  {puedeEditar && (
+                    <BotonBlanco
+                      disabled={guardando}
+                      onClick={() =>
+                        elegirDelCatalogo(
+                          { id: "cat-" + c.caso.id, titulo: c.caso.titulo, descripcion: c.caso.descripcion, precio: null, dimensiones: c.caso.mueve.map((m) => m.dimension) },
+                          c.area.id,
+                        )
+                      }
+                    >
+                      Elegir para {c.area.nombre}
+                    </BotonBlanco>
+                  )}
+                </div>
+              </li>
             ))}
           </ul>
         </section>

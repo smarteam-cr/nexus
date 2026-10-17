@@ -160,6 +160,13 @@ interface OpcionesDeLaCorrida {
    * la había resumido como una invitación (CreditForce, 28 sep), y el resumen solo no la corregía.
    */
   completa?: boolean;
+  /**
+   * Para «leer»: UBICAR la escala con todo lo que Nexus sabe aunque no haya una reunión nueva (ficha B, 2026-10-17:
+   * «Regenerar» y «Activar el agente» desde La cuenta › La escala). Sin esto, en la exploración de un proyecto el agente
+   * solo llamaba al modelo con una sesión (S/H/M) y nunca ubicaba nada con el handoff (V0) ni los cuestionarios (Q0),
+   * que cuentan como lo que dijo el cliente. Lo pide siempre una persona.
+   */
+  posicionar?: boolean;
 }
 
 /**
@@ -211,7 +218,7 @@ export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, 
           opts.releer && !opts.completa ? "Preventa: resumir las reuniones ya leídas" : ((delProyecto ? ETIQUETA_DEL_PROYECTO[modo] : null) ?? ETIQUETA[modo]),
         currentPhase: "Empezando…",
         triggeredByEmail: opts.triggeredByEmail,
-        filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}), ...(opts.releer && !opts.completa ? { soloResumen: true } : {}) } as Prisma.InputJsonValue,
+        filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}), ...(opts.releer && !opts.completa ? { soloResumen: true } : {}), ...(opts.posicionar ? { posicionar: true } : {}) } as Prisma.InputJsonValue,
       },
       select: { id: true },
     });
@@ -327,7 +334,13 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     let descartadas = 0;
     let tecnica: Lectura["tecnica"];
     let lecturas: Record<string, LecturaDeReunion> | undefined;
-    const hayQueLeer = modo === "preparar" ? leido.fuentes.length > 0 : leido.fuentes.some((f) => /^[SHM]\d/.test(f.id));
+    /* «leer» llama al modelo con algo nuevo de una reunión (S/H/M); con `posicionar`, también con lo que el cliente dijo
+       por otro lado (el test T, su actividad en HubSpot H, el handoff V0 o los cuestionarios Q0): lo pide una persona
+       para ubicar la escala. */
+    const hayQueLeer =
+      modo === "preparar"
+        ? leido.fuentes.length > 0
+        : leido.fuentes.some((f) => /^[SHM]\d/.test(f.id)) || (!!opts.posicionar && leido.fuentes.some((f) => /^(T|H|V0|Q0|S|M)/.test(f.id)));
     if (hayQueLeer) {
       await fase(runId, "Pensando qué proponer…");
       const respuesta = await conContextoDeIA(
