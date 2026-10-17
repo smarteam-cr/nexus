@@ -59,8 +59,12 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 .ini ol { margin: 0; padding-left: 0; list-style: none; counter-reset: paso; }
 .ini ol li { counter-increment: paso; position: relative; margin: 0; padding: 7px 0 7px 28px; border-top: 1px solid var(--line); }
 .ini ol li::before { content: counter(paso); position: absolute; left: 0; top: 8px; color: var(--fg-muted); font-variant-numeric: tabular-nums; font-size: 13px; }
-.ini ol li:first-child { color: var(--fg); font-weight: 600; }
-.ini ol li:first-child::after { content: "Lo siguiente"; display: block; width: fit-content; margin-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--info-ink); background: var(--info-bg); border: 1px solid var(--info-line); border-radius: 999px; padding: 0 8px; }
+.ini ol li.sigue { color: var(--fg); font-weight: 600; }
+.ini ol li.hecho { color: var(--fg-muted); }
+.ini ol li .marca { display: inline-block; margin-right: 6px; font-size: 11.5px; font-weight: 600; border: 1px solid; border-radius: 999px; padding: 0 8px; vertical-align: 1px; }
+.ini ol li .marca.hecho { color: var(--ok-ink); background: var(--ok-bg); border-color: var(--ok-line); }
+.ini ol li .marca.curso { color: var(--warn-ink); background: var(--warn-bg); border-color: var(--warn-line); }
+.ini ol li.sigue::after { content: "Lo siguiente"; display: block; width: fit-content; margin-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--info-ink); background: var(--info-bg); border: 1px solid var(--info-line); border-radius: 999px; padding: 0 8px; }
 .ini .tw { border: 0; border-radius: 0; margin: 0 -18px -16px; border-top: 1px solid var(--line); }
 #doc a { color: var(--info-ink); }
 #doc tr:last-child td { border-bottom: 0; }
@@ -102,6 +106,16 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     h.parentNode.insertBefore(card, h);
     var el = h;
     while (el && !(el !== h && /^H[23]$/.test(el.tagName))) { var sig = el.nextElementSibling; card.appendChild(el); el = sig; }
+  });
+  // Marcas de cada paso: [hecho] y [en curso]; «Lo siguiente» va en el primero que falta.
+  doc.querySelectorAll('.ini ol').forEach(function (ol) {
+    var marcado = false;
+    ol.querySelectorAll(':scope > li').forEach(function (li) {
+      var h = li.innerHTML;
+      if (/^\s*\[hecho\]\s*/.test(h)) { li.innerHTML = h.replace(/^\s*\[hecho\]\s*/, '<span class="marca hecho">Hecho</span>'); li.classList.add('hecho'); return; }
+      if (/^\s*\[en curso\]\s*/.test(h)) { li.innerHTML = h.replace(/^\s*\[en curso\]\s*/, '<span class="marca curso">En curso</span>'); return; }
+      if (!marcado) { li.classList.add('sigue'); marcado = true; }
+    });
   });
 })();
 </script>

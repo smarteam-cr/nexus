@@ -18,7 +18,8 @@ import { describe, expect, it } from "vitest";
 import { formasDeVoseo, textosDelFuente } from "@/lib/ui/voseo";
 
 const RAIZ = join(__dirname, "..", "..");
-const leer = (rel: string) => readFileSync(join(RAIZ, rel), "utf8");
+// Sin CRLF: en un checkout de Windows (core.autocrlf) los archivos llegan con «\r\n» y los regex de abajo buscan «\n}\n».
+const leer = (rel: string) => readFileSync(join(RAIZ, rel), "utf8").replace(/\r\n/g, "\n");
 
 /** El código sin comentarios: un comentario que EXPLICA una regla no la viola. */
 function soloCodigo(src: string): string {

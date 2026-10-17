@@ -204,6 +204,15 @@
   (atrasadas, sin decidir, en curso, pendientes y cerradas de 30 días, con el último movimiento).
 - **«¿Faltó algo?»** (nivel 2 de la lectura): leer la CONVERSACIÓN de una reunión ya leída, para los compromisos que
   no quedaron en las notas. Sin «Próximos pasos», Nexus la lee solo. La cita de cada propuesta es lo que dijo la persona.
+- **Reunión del sprint** (`FuenteDeTareas`, Semana del equipo › «La reunión del sprint»): la serie de reuniones
+  recurrentes de un equipo (planning o cierre) que configura quien lidera el sprint. Nexus lee sola cada reunión nueva
+  de esa serie y propone como mucho 5 tareas por persona. **Quiénes están**: la lista de personas de ese sprint.
+- **De dónde viene** (una tarea, `lib/tareas/origen.ts`): reunión con el cliente, sprint interno, HubSpot, el chat, un
+  siguiente paso, una plantilla o a mano. Lo decide la sala de la reunión, no el cliente de la tarea.
+- **Versión de la escala** (`VersionDeLaEscala`): la foto de dónde está una empresa en la escala en un día, con de
+  dónde sale cada nivel. Se ve en La cuenta › La escala, «La escala en el tiempo». Interna.
+- **Camino de crecimiento**: qué sigue en la escala de cada área y por qué, con los casos de la biblioteca que lo
+  mueven. Sale de reglas, sin IA.
 - **Tarea de HubSpot** (`Tarea` con `origen = "hubspot"`, `lib/tareas-hubspot`): una tarea de HubSpot de alguien del
   equipo, en Tareas internas. Lo que cambia de un lado (título, estado, vencimiento, prioridad, responsable) se escribe
   del otro; si cambiaron los dos, gana el último. Lleva el chip «HubSpot» (o «HubSpot · secuencia»). «Ya no se hará» no

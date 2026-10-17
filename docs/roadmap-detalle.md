@@ -396,6 +396,23 @@ producción.
 6. **Choques previstos.** A y B tocan la ficha del cliente con archivos distintos (A, las tareas; B, la escala): se
    mezcla A primero. Las tres pueden tocar `schema.prisma`: se resuelve al mezclar.
 
+### Primera tanda: integrada (17 oct)
+
+A, B y C mezcladas en `main` sin conflictos (solo se cruzaban en `schema.prisma`, que se mezcló solo). SQL de A y B
+aplicados en producción (`check:esquema` en verde). Compartidos escritos en la integración: el job `tareas-sprint`
+(`lib/jobs/defs.ts` y `lib/jobs/nombres.ts`), el contador de tests de ARCHITECTURE (679), DECISIONS (tres secciones),
+GLOSSARY, RUNBOOK (el job y los pasos después del deploy) y KNOWN-ERRORS. `tsc` en 0 con 8 GB de memoria (el chequeo
+ya pide más de 4 GB: el candado de commit local usa 8 GB). La suite pasa; `lib/ui/eslint-guards.test.ts` se corta a
+los 30 s cuando la máquina está cargada con otras sesiones.
+
+Lo que queda para después del deploy está en RUNBOOK › «Después del deploy de la primera tanda». Simulacros del 17 oct:
+el 53 % de las reuniones con clientes del último mes sin transcripción (78 por leer antes de que terminaran, 83 con
+notas sin «Transcribir», 39 sin grabar); la limpieza vacía el texto de 161 reuniones y borra 49 minutas; 7
+exploraciones tienen niveles confirmados para la primera versión de la escala.
+
+Pendiente de la ficha C: una mutación en `lib/tareas` que retire las propuestas sin decidir de una reunión cuyo texto
+cambió (hoy vencen solas a los 14 días).
+
 ### Segunda tanda: fichas para ejecutar (17 oct)
 
 La primera tanda (A, B, C) ya está mezclada en `main`. Mismas reglas de «Cómo se ejecuta una tanda». Cinco sesiones a la

@@ -8436,3 +8436,74 @@ hacerlo**. El plan, por fases, está en `docs/nexus-sistema-de-trabajo-plan.md`.
   - *El cierre en bloque* (`scripts/cerrar-alertas-sueltas.ts`, después del deploy, con respaldo de `CsAlert`): las
     alertas abiertas del vigía sin frase verificada, firmadas por el sistema. Quedan los avisos de la regla (los junta
     ella), lo que levantó la lectura de cada reunión y las quejas y los retrasos con la frase del cliente.
+
+## Las tareas de cada cliente y el sprint de cada equipo (2026-10-17, ficha A)
+
+**Contexto.** Elías: «entro a un cliente y tengo que ver todas las tareas de Smarteam hacia ese cliente, por equipo».
+Y que Customer Success, Marketing y Desarrollo configuren su sprint para que Nexus proponga tareas de lo conversado,
+pocas, diciendo si vienen de una reunión con el cliente o del sprint interno.
+
+- **La ficha del cliente › La cuenta › Tareas** lista las tareas de esa cuenta de cualquier equipo, agrupadas por
+  equipo (Customer Success primero): abiertas, por decidir y hechas en los últimos 30 días. Usa la visibilidad de
+  siempre (`tareasVisiblesWhere`) y nunca muestra lo «Solo para mí» de otra persona, tampoco a Super Admin. Quien no ve
+  la cuenta recibe 404.
+- **De dónde viene una tarea** (`lib/tareas/origen.ts`): reunión con el cliente, sprint interno, HubSpot, el chat, un
+  siguiente paso, una plantilla o a mano. Entre reunión con el cliente y sprint interno decide la SALA de la reunión
+  (de puertas adentro = sprint interno), nunca el cliente de la tarea. Se ve como etiqueta en todas las listas, salvo
+  «A mano» (lo normal) y HubSpot (ya tiene la suya).
+- **Como mucho 5 tareas propuestas por persona en cada reunión** (`MAX_PROPUESTAS_POR_PERSONA_POR_REUNION`), en el
+  único escritor de propuestas y contando todo lo que esa reunión ya le dejó (notas, «¿Faltó algo?» y seguimiento), en
+  el orden de las líneas. «Por asignar» no cuenta. Lo que no entra no se crea y se cuenta en la lectura. Convive con el
+  tope de 10 sugerencias abiertas por persona.
+- **El sprint lo configura quien lo lidera o dirección**, en Semana del equipo › «La reunión del sprint»: hasta 4
+  series por sprint, solo reuniones recurrentes y de puertas adentro en las que estuvo quien la elige (se leen a su
+  nombre). Cada reunión nueva se lee sola entre 15 minutos y 24 horas después de terminar, solo desde el día antes de
+  configurarla; lo lee el job `tareas-sprint` y también al abrir Tareas. Una lectura que falló no se reintenta sola;
+  una sin texto, sí. Si quien la configuró se va del equipo, la serie se pausa.
+- **«Quiénes están»** (`FuenteDeTareas.personas`): una sola lista por sprint; vacía son los del área más quienes lo
+  lideran. Lo que la reunión le propone a alguien de la lista no le llega como pedido de otro equipo; la tarea sigue en
+  el sprint de casa de su responsable.
+
+## La escala en el tiempo, con su evidencia (2026-10-17, ficha B)
+
+**Contexto.** Elías pidió validar que el agente de la escala use toda la información de Nexus, pintar la escala del
+cliente con su evidencia, sugerir qué explorar según lo que cambió, y que la escala de la ficha del cliente sea la
+misma con su histórico.
+
+- **Una versión es una FOTO de lo confirmado** (`VersionDeLaEscala`, un solo escritor:
+  `lib/exploraciones/versiones-de-la-escala.ts`), dimensión por dimensión, con de dónde sale cada nivel (fuente, frase
+  y porqué). Lo que propone el agente no posiciona a la empresa. Se guarda al confirmar un nivel (una por día), al
+  presentar el diagnóstico con el ciclo abierto y con «Guardar esta versión»; una foto igual a la anterior no se guarda.
+  Es interna: el cliente no la ve.
+- **«Regenerar con el agente» desde la ficha solo propone**: los niveles se confirman en la exploración. El modo
+  `posicionar` lee el handoff, los cuestionarios, el test y HubSpot aunque no haya una reunión nueva (antes, en un
+  proyecto el agente no ubicaba nada sin una sesión).
+- **El camino de crecimiento y los casos sugeridos salen de reglas, sin IA**: un caso de la biblioteca calza si mueve
+  una dimensión desde el nivel en que está hoy, y pesa más si destraba lo que frena al área.
+- **Una propuesta nueva trae «Casos de uso»**: lo del checklist, lo elegido en la preventa o, sin nada, los sugeridos
+  de la biblioteca, sin precio; el agente sabe que el prospecto no los eligió.
+- **El siguiente paso de la preventa**: sin sesión agendada, arma el evento en Google Calendar por enlace (Nexus no
+  escribe en el calendario); con una agendada, lleva a planificarla.
+
+## El texto de una reunión tiene que ser el de ESA reunión, y llegar después de que termina (2026-10-05 y 2026-10-17, ficha C)
+
+**Contexto.** Medido en producción el 2026-10-05: sin documento adjunto al evento, el enriquecimiento buscaba en Drive
+las dos primeras palabras de 4 letras o más del título y leía el archivo más nuevo; de 169 reuniones llenadas así, 156
+tenían el texto de otra reunión (RC Inmobiliaria leyó una de AJC). Y el 2026-10-17 se midió que el 53 % de las
+reuniones con clientes del último mes no tenía transcripción: 78 porque Nexus las leía antes de que terminaran.
+
+- **Un archivo de Drive se acepta solo si es de esa reunión** (`lib/google/drive-candidatos.ts`): nombre con la forma
+  de Google, el mismo título (Gemini lo corta a 99 caracteres) y la fecha de ESTA reunión. Si ninguno sirve, queda sin
+  texto.
+- **Se lee 20 minutos después del FIN, no una hora después del inicio** (`listaParaLeer`, con la duración del evento).
+- **«No había nada» no sella mientras la reunión terminó hace menos de 48 horas**: vuelve a mirar a las 2, 4, 8 y 16
+  horas (job `google-enrich-retry`); al tope se sella con su diagnóstico.
+- **Si una cuenta no puede leer el documento, se prueba con otro invitado del equipo** (hasta 3): las notas pueden
+  estar compartidas solo con quien las tomó.
+- **Cuando el texto de una reunión ya leída cambia** (`lib/sessions/reanalizar.ts`): si nadie tocó lo que dejó la
+  lectura y la reunión es de los últimos 14 días, se borran la minuta en borrador y los pedidos de esa corrida, se
+  retiran los hechos pendientes y se vuelve a leer; si alguien ya trabajó algo, no se pisa y se le avisa
+  (`reunion.texto-cambio`). ⚠ Las propuestas de Tarea sin decidir no se borran (las escribe solo `lib/tareas`): vencen a
+  los 14 días.
+- **Por qué falta cada transcripción se mide** (`lib/google/por-que-falta.ts`, `scripts/medir-transcripciones-faltantes.ts`),
+  separando lo que arregla Nexus de lo que es configuración de Google Workspace.

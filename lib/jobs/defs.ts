@@ -229,6 +229,23 @@ const googleEnrichRetry: JobDef = {
 };
 
 /**
+ * Las reuniones de sprint de cada equipo (Tareas, ficha A del 2026-10-17, lib/tareas/fuentes-server.ts). Cada tick
+ * mira las series de sprint configuradas y pide la lectura de cada reunión nueva que terminó; la misma función que
+ * corre al abrir Tareas, con su espera de 10 minutos por proceso (sin `forzar`). Nunca corre la sync de Meet: lee lo
+ * que ya llegó. Sin nada que pedir devuelve SIN_TURNO.
+ */
+const tareasSprint: JobDef = {
+  key: "tareas-sprint",
+  shouldRun: () => true,
+  run: async (now) => {
+    const { mirarLasSeriesDelSprint } = await import("@/lib/tareas/fuentes-server");
+    const r = await mirarLasSeriesDelSprint(now);
+    if (r.omitida || (r.pedidas === 0 && r.pausadas === 0)) return SIN_TURNO;
+    console.log(`[jobs/tareas-sprint] ${r.series} series, ${r.pedidas} lecturas pedidas, ${r.pausadas} pausadas`);
+  },
+};
+
+/**
  * La lectura de cada reunión (memoria de la cuenta, etapa 2, lib/lecturas/leer.ts). Cada tick: si está el SQL de las
  * columnas `seguimiento*` y queda presupuesto automático, toma 2 reuniones de la cola (`LecturaDeReunion`) con un
  * update condicional, las lee en paralelo con 420 s de tope cada una (el tope CORTA la lectura) y después vincula a su
@@ -706,5 +723,5 @@ const indiceDeReuniones: JobDef = {
 };
 
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, invariantsDaily];
 }

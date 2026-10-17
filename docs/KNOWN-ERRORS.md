@@ -2,6 +2,19 @@
 
 No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
 
+- **Una reunión tiene el texto, la minuta o las tareas de OTRA reunión (a veces de otro cliente).** *Causa:* sin
+  documento adjunto, el enriquecimiento tomaba de Drive el archivo más nuevo con las dos primeras palabras del título,
+  y cuando llegaba el documento correcto la lectura no se rehacía. *Guarda:* `lib/google/drive-candidatos.ts` +
+  `lib/sessions/reanalizar.ts`. *Señal:* la primera línea de la transcripción nombra otra reunión, o la minuta se creó
+  antes del último `enrichedAt`. Lo viejo: `scripts/limpiar-analisis-de-otra-reunion.ts`.
+- **Una reunión de una hora o más quedó sin transcripción aunque Gemini la tomó.** *Causa:* hasta el 2026-10-17 se
+  leía una hora después del inicio y se sellaba vacía. *Guarda:* `listaParaLeer` + la espera de 48 horas. Lo viejo:
+  `recuperar-transcripts-meet.ts --solo-antes-de-terminar`.
+- **Un test de guarda que busca «
+}
+» falla solo en Windows.** *Causa:* con `core.autocrlf` los archivos llegan con
+  CRLF. *Guarda:* el test normaliza los fines de línea al leer (`lib/tareas/guardas.test.ts`).
+
 - **Handoff con sesiones de OTRA empresa** (leak cross-cliente). *Causa:* resolución
   sesión→cliente dispersa + title-match con catch-all (`para` matcheaba "Empresa para pruebas"
   y DISTELSA) + la generación confiaba ciego en links `SessionProject` legacy. *Guarda:*
