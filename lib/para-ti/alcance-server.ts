@@ -40,6 +40,8 @@ export interface ProyectoPropio {
   altaEstado: string | null;
   /** La empresa tiene 2+ proyectos abiertos: solo ahí una reunión puede caer en el proyecto equivocado. */
   multiproyecto: boolean;
+  /** Eres el encargado del proyecto en HubSpot (no solo te compartieron la cuenta): la cuenta la llevas tú. */
+  encargado: boolean;
 }
 
 export interface Alcance {
@@ -154,6 +156,7 @@ export async function alcanceDe(tm: MiembroParaAlcance): Promise<Alcance> {
         empresa: c.name,
         altaEstado: p.altaEstado,
         multiproyecto: abiertos.length >= 2,
+        encargado: mio,
       });
     }
   }

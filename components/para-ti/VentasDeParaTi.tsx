@@ -155,39 +155,33 @@ export default function VentasDeParaTi({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Segmentado
-          etiqueta="Qué ver"
-          tamano="grande"
-          opciones={[
-            { clave: "dia", etiqueta: "Tu día" },
-            { clave: "cartera", etiqueta: "Tu cartera", cuenta: vista.empresas.length },
-          ]}
-          valor={modo}
-          onCambio={(k) => cambiarParams({ vista: k === "dia" ? null : k, cartera: null })}
-        />
-        <span className="ml-auto text-xs text-fg-muted">
-          {vista.copiadoAt ? `Negocios traídos de HubSpot: ${hace(vista.copiadoAt, ahora).replace("actividad ", "")}` : "Todavía no se trajeron los negocios de HubSpot."}
-        </span>
-        <BotonBlanco onClick={actualizar} disabled={actualizando}>
-          {actualizando ? "Trayendo…" : "Actualizar"}
-        </BotonBlanco>
-      </div>
+      {/* En «Tu día» (el inicio de la ficha D, 2026-10-17) esto solo deja los diálogos: los números, los cierres y la
+          agenda los pinta el inicio. El selector «Tu día · Tu cartera» vive en la cabecera de la página. */}
+      {modo === "cartera" && (
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="ml-auto text-xs text-fg-muted">
+              {vista.copiadoAt ? `Negocios traídos de HubSpot: ${hace(vista.copiadoAt, ahora).replace("actividad ", "")}` : "Todavía no se trajeron los negocios de HubSpot."}
+            </span>
+            <BotonBlanco onClick={actualizar} disabled={actualizando}>
+              {actualizando ? "Trayendo…" : "Actualizar"}
+            </BotonBlanco>
+          </div>
 
-      <Cifras vista={vista} />
+          <Cifras vista={vista} />
 
-      {modo === "dia" ? (
-        <CierresMasCerca negocios={cercanos} hoyISO={hoyISO} ahora={ahora} onCompletar={completar} onDefinir={definir} />
-      ) : (
-        <Cartera
-          vista={vista}
-          hoyISO={hoyISO}
-          ahora={ahora}
-          vistaActiva={(VISTAS as readonly string[]).includes(params.get("cartera") ?? "") ? (params.get("cartera") as VistaDeCartera) : "mover"}
-          onVista={(v) => cambiarParams({ cartera: v === "mover" ? null : v })}
-          onCompletar={completar}
-          onDefinir={definir}
-        />
+          <CierresMasCerca negocios={cercanos} hoyISO={hoyISO} ahora={ahora} onCompletar={completar} onDefinir={definir} />
+
+          <Cartera
+            vista={vista}
+            hoyISO={hoyISO}
+            ahora={ahora}
+            vistaActiva={(VISTAS as readonly string[]).includes(params.get("cartera") ?? "") ? (params.get("cartera") as VistaDeCartera) : "mover"}
+            onVista={(v) => cambiarParams({ cartera: v === "mover" ? null : v })}
+            onCompletar={completar}
+            onDefinir={definir}
+          />
+        </>
       )}
 
       {definiendo && (

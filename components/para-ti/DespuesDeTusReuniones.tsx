@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * DespuesDeTusReuniones — el paso de dos minutos después de cada reunión (etapa 4d de docs/mi-dia-plan.md).
+ * DespuesDeTusReuniones — el paso de dos minutos después de cada reunión (etapa 4d de docs/mi-dia-plan.md). Desde la
+ * ficha D (2026-10-17) se muestra dentro del panel de la reunión del inicio (components/para-ti/inicio), no como tarjeta.
  *
  * Por cada reunión con un cliente o un prospecto en la que estuviste y que terminó en las últimas 36 horas: lo que dejó
  * (la minuta, tus tareas propuestas, los pedidos fuera de alcance) con «Usar todo», y el siguiente paso de tu equipo
@@ -16,7 +17,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
-import { BotonAzul, BotonBlanco, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { BotonAzul, BotonBlanco, IconoDeSugerencia } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import type { DespuesDeLaReunion } from "@/lib/mi-dia/despues-server";
 
@@ -38,26 +39,7 @@ function queDejo(r: DespuesDeLaReunion): string {
   return partes.length ? `Dejó ${partes.join(", ")}.` : "No dejó nada para decidir.";
 }
 
-export default function DespuesDeTusReuniones({ reuniones, hoyISO }: { reuniones: DespuesDeLaReunion[]; hoyISO: string }) {
-  if (reuniones.length === 0) return null;
-  return (
-    <section className="space-y-2 rounded-xl border border-line bg-surface p-4" aria-labelledby="despues-de-tus-reuniones">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="despues-de-tus-reuniones" className={ROTULO_DEL_SISTEMA}>
-          Después de tus reuniones
-        </h2>
-        <span className="text-xs text-fg-muted">Lo que dejaron las de las últimas 36 horas: dos minutos por reunión.</span>
-      </div>
-      <ul className="divide-y divide-line">
-        {reuniones.map((r) => (
-          <Reunion key={r.sessionId} r={r} hoyISO={hoyISO} />
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function Reunion({ r, hoyISO }: { r: DespuesDeLaReunion; hoyISO: string }) {
+export function ReunionDespues({ r, hoyISO }: { r: DespuesDeLaReunion; hoyISO: string }) {
   const router = useRouter();
   const toast = useToast();
   const [ocupado, setOcupado] = useState<null | "todo" | "paso" | "nota">(null);

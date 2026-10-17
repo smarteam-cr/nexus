@@ -136,6 +136,10 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "contexto",
     motivo: "«Después de tus reuniones» habla de reuniones que TERMINARON: corta 15 minutos antes de ahora.",
   },
+  "lib/mi-dia/servicio-server.ts": {
+    clase: "contexto",
+    motivo: "La regla de servicio del inicio AFIRMA cuál fue «la última reunión» con la cuenta: solo las que ya ocurrieron.",
+  },
   "lib/mi-dia/resumen-server.ts": {
     clase: "contexto",
     motivo:
@@ -363,6 +367,7 @@ const CORTAN_POR_FECHA = [
   "lib/contactos/lectura-server.ts",
   "lib/mi-dia/resumen-server.ts",
   "lib/mi-dia/despues-server.ts",
+  "lib/mi-dia/servicio-server.ts",
   "lib/carga/queries.ts",
   "lib/projects/analyze-participants.ts",
   "lib/lifecycle/load.ts",

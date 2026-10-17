@@ -1,38 +1,45 @@
 /**
- * /para-ti — lo que le toca a cada persona en Nexus (2026-10-04, diseño «Notificaciones · diseño»).
+ * /para-ti — el inicio de cada persona en Nexus (2026-10-04; rediseño de la ficha D, 2026-10-17, diseño «Para ti ·
+ * Ventas y CSE»).
  *
- * Sin gate: es de todo el equipo interno, y no muestra nada que la persona no pueda abrir. Junta lo que hoy está
- * repartido en cada módulo (su «Qué sigue» y su «Necesitan atención») recortado a lo SUYO —sus proyectos, sus
- * preventas, lo que le devolvieron— y a sus FRENTES («Lo que llevas», que se eligen en Equipo). A la derecha, los
- * AVISOS: lo que pasó.
+ * Sin gate: es de todo el equipo interno, y no muestra nada que la persona no pueda abrir. Cada equipo ve su inicio
+ * (lib/mi-dia/inicio.ts, del registro de equipos):
+ *   · Ventas: la agenda, lo que importa hoy, su meta y su pipeline, y «Tu cartera».
+ *   · CSE: la agenda, lo que importa hoy y sus cuentas con su acción de la semana y su reunión de los próximos 8 días.
+ *   · CSL: lo mismo, con toda la cartera.
+ *   · Desarrollo: los clientes con proyecto de desarrollo activo.
+ *   · Marketing: sus tareas internas (Smarteam, SmartAgro).
+ *   · Los demás (dirección, Finanzas): la agenda, lo que importa hoy, las tareas de hoy y los avisos.
  *
  * Mide fresco en cada visita (`medirParaTi`) y deja la medición guardada para el número del menú.
  */
 import { requireInternalUser } from "@/lib/auth/supabase";
 import Link from "next/link";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { Alert, EmptyState, PageHeader } from "@/components/ui";
 import { ENLACE_BLANCO } from "@/components/carga/piezas";
-import TuAgenda from "@/components/para-ti/TuAgenda";
-import TuCartera from "@/components/para-ti/TuCartera";
-import DespuesDeTusReuniones from "@/components/para-ti/DespuesDeTusReuniones";
-import { despuesDeTusReuniones } from "@/lib/mi-dia/despues-server";
-import { equipoDeRol, veLaAgenda } from "@/lib/equipos/registro";
-import { agendaDeHoy } from "@/lib/mi-dia/agenda-server";
-import { carteraDelCse } from "@/lib/mi-dia/cartera-server";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
+import { equipoDeRol, veLaAgenda } from "@/lib/equipos/registro";
+import { agendaDeLaSemana, agendaDelDiaDe } from "@/lib/mi-dia/agenda-server";
+import { cuentasDelInicio, tareasDeHoy, tareasInternas } from "@/lib/mi-dia/inicio-server";
+import { horaCR, huecoLibre, resumenDelDia, varianteDelInicio } from "@/lib/mi-dia/inicio";
+import { cifrasDelInicio, siguienteMovimiento } from "@/lib/mi-dia/cifras";
 import { accesoParaFrentes, alcanceDe, tienePermiso } from "@/lib/para-ti/alcance-server";
 import { medirParaTi } from "@/lib/para-ti/medir-server";
 import { avisosDe } from "@/lib/para-ti/avisos-server";
 import { frente, puedeLlevar } from "@/lib/para-ti/frentes";
-import { plural } from "@/lib/para-ti/armar";
-import ParaTiPantalla from "@/components/para-ti/ParaTiPantalla";
-import VentasDeParaTi, { type ModoDeVentas } from "@/components/para-ti/VentasDeParaTi";
-import { Alert } from "@/components/ui";
+import { lunesDeFecha } from "@/lib/carga/semana";
+import VentasDeParaTi from "@/components/para-ti/VentasDeParaTi";
+import InicioDelDia from "@/components/para-ti/inicio/InicioDelDia";
+import SelectorDelInicio from "@/components/para-ti/inicio/SelectorDelInicio";
+import TusCuentasDelInicio from "@/components/para-ti/inicio/TusCuentasDelInicio";
 import { crDateParts } from "@/lib/jobs/time";
 import { vistaDeVentasDelPedido } from "@/lib/ventas/vista-del-pedido";
-import { cierresMasCerca, cuandoEs, diasHasta, fechaLarga, preguntaDelNegocio, saludo } from "@/lib/ventas/negocios";
+import { fechaLarga, saludo } from "@/lib/ventas/negocios";
 
 export const dynamic = "force-dynamic";
+
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
+const sumarDias = (ymd: string, n: number) => new Date(Date.parse(`${ymd}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 export default async function ParaTiPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
@@ -55,81 +62,166 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
   const ventas = tienePermiso(alcance, "ventas", "read")
     ? await vistaDeVentasDelPedido(alcance.teamMemberId, alcance.email, hoyISO, ahora)
     : null;
-  const modo: ModoDeVentas = ventas?.estado === "ok" && uno(sp.vista) === "cartera" ? "cartera" : "dia";
-  // La agenda del día y la cartera del CSE (etapa 4c): lo decide el registro de equipos (lib/equipos/registro.ts).
-  const [medicion, avisos, agenda, carteraCse, despues] = await Promise.all([
+  const vistaDeVentas = ventas?.estado === "ok" ? ventas.vista : null;
+  const variante = varianteDelInicio({ rol: alcance.rol, frentes: alcance.frentes, tieneVentas: !!vistaDeVentas });
+  const conCuentas = variante === "cse" || variante === "csl" || variante === "dev";
+  const pedida = uno(sp.vista);
+  const modo: "dia" | "cartera" | "cuentas" = vistaDeVentas && pedida === "cartera" ? "cartera" : conCuentas && pedida === "cuentas" ? "cuentas" : "dia";
+
+  // La agenda: el día (o la semana) de `?dia=`, hoy por defecto.
+  const veAgenda = veLaAgenda(alcance.rol);
+  const semana = uno(sp.agenda) === "semana";
+  const diaPedido = uno(sp.dia);
+  const dia = diaPedido && DIA.test(diaPedido) ? diaPedido : hoyISO;
+  const lunes = lunesDeFecha(dia);
+  const enlace = (cambios: Record<string, string | null>) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(sp)) {
+      const x = uno(v);
+      if (x && !["negocio"].includes(k)) p.set(k, x);
+    }
+    for (const [k, v] of Object.entries(cambios)) {
+      if (v) p.set(k, v);
+      else p.delete(k);
+    }
+    const q = p.toString();
+    return q ? `/para-ti?${q}` : "/para-ti";
+  };
+
+  const [medicion, avisos, agenda, cuentas, hoy, internas] = await Promise.all([
     medirParaTi(alcance, ahora),
     avisosDe(alcance.email),
-    veLaAgenda(alcance.rol) ? agendaDeHoy(alcance.email, ahora).catch(() => null) : Promise.resolve(null),
-    equipoDeRol(alcance.rol)?.cartera === "cse" ? carteraDelCse(alcance, hoyISO).catch(() => []) : Promise.resolve([]),
-    // Después de cada reunión (etapa 4d): para quien ve la agenda, las que terminaron en las últimas 36 horas.
-    veLaAgenda(alcance.rol) ? despuesDeTusReuniones(ctx.user, alcance.rol, ahora).catch(() => []) : Promise.resolve([]),
+    veAgenda && modo === "dia"
+      ? (semana ? agendaDeLaSemana(alcance.email, lunes) : agendaDelDiaDe(alcance.email, dia)).catch(() => null)
+      : Promise.resolve(null),
+    conCuentas ? cuentasDelInicio(variante, alcance, { ahora, hoyISO }).catch(() => []) : Promise.resolve([]),
+    tareasDeHoy(alcance.email, hoyISO).catch(() => ({ tareas: [], total: 0 })),
+    variante === "marketing" ? tareasInternas(alcance.email, equipoDeRol(alcance.rol)?.sprint ?? null).catch(() => null) : Promise.resolve(null),
   ]);
 
   // Un frente que llevas sin el permiso para abrirlo se calla (lib/para-ti/frentes.ts): se dice, para que no parezca
   // que está al día.
   const acceso = accesoParaFrentes(alcance);
-  const llegan = alcance.frentes.filter((f) => puedeLlevar(frente(f), acceso));
-  const callados = alcance.frentes.filter((f) => !llegan.includes(f));
-  const partes: string[] = [];
-  if (alcance.proyectos.length) partes.push(`De tus ${plural(alcance.proyectos.length, "proyecto", "proyectos")} de implementación`);
-  if (llegan.length) partes.push(`${partes.length ? "y de lo que llevas" : "De lo que llevas"}: ${llegan.map((f) => frente(f).nombre).join(", ")}`);
-  const sinPermiso = callados.length
-    ? ` Lo de ${callados.map((f) => `«${frente(f).nombre}»`).join(", ")} no te llega hasta que tengas el permiso.`
-    : "";
-  const resumen = `${partes.length ? `${partes.join(" ")}.` : "De lo tuyo en Nexus. En Equipo se elige qué más seguir."}${sinPermiso}`;
+  const callados = alcance.frentes.filter((f) => !puedeLlevar(frente(f), acceso));
 
-  // El saludo y la fecha (pedido de Elías, 2026-10-15): «Buenos días, Andrés» y «Jueves 15 de octubre», más una línea
-  // con lo del día. A quien vende, lo de sus negocios; al resto, lo de «Para ti».
+  // Lo de hoy (los números, el resumen y la reunión que se abre sola). Si la agenda muestra otro día o la semana, la de
+  // hoy se pide aparte.
+  const mostrandoHoy = !semana && dia === hoyISO;
+  const agendaDeHoy = !veAgenda || modo !== "dia" ? null : mostrandoHoy ? agenda : await agendaDelDiaDe(alcance.email, hoyISO).catch(() => null);
+  const reunionesDeHoy = agendaDeHoy?.estado === "ok" ? agendaDeHoy.reuniones : [];
+  const proxima = reunionesDeHoy.find((r) => r.empresas.length > 0 && Date.parse(r.inicio) > ahora.getTime()) ?? null;
+  const hueco = agendaDeHoy?.estado === "ok" ? huecoLibre(reunionesDeHoy, hoyISO, ahora) : null;
+  const lasQueLlevo = variante === "cse" ? new Set(alcance.proyectos.filter((p) => p.encargado).map((p) => p.clientId)) : null;
+  const resumen = resumenDelDia({
+    proxima: proxima ? { hora: horaCR(proxima.inicio), titulo: proxima.titulo, empresa: proxima.empresas.length === 1 ? proxima.nombres[proxima.empresas[0]] : "un cliente" } : null,
+    primero: medicion.importa[0] ? { titulo: medicion.importa[0].titulo } : null,
+    delAgente: [...medicion.importa, ...medicion.tambien].filter((p) => p.delAgente).length,
+    cuentasSinAccion: variante === "cse" ? cuentas.filter((c) => lasQueLlevo!.has(c.clientId) && c.servicio?.falta.length).map((c) => c.empresa) : [],
+    hueco: hueco ? { hora: horaCR(hueco.inicio) } : null,
+  });
+
+  const cifras = cifrasDelInicio(variante, {
+    reuniones: agendaDeHoy?.estado === "ok" ? agendaDeHoy.reuniones : null,
+    veAgenda,
+    ahora,
+    importa: medicion.importa.length,
+    tambien: medicion.tambien.length,
+    semana: medicion.semana.length,
+    avisosNuevos: avisos.filter((a) => a.nuevo).length,
+    cuentas,
+    ventas: vistaDeVentas ? { meta: vistaDeVentas.meta, anio: vistaDeVentas.anio, ponderado: vistaDeVentas.ponderado } : null,
+    tareas: internas ? { hoy: hoy.total, porDecidir: internas.porDecidir, internas: internas.tareas.filter((t) => t.interna).length } : null,
+  });
+
   const nombre = alcance.nombre.trim().split(/\s+/)[0] ?? alcance.nombre;
-  const delDia: string[] = [];
-  if (ventas?.estado === "ok") {
-    const v = ventas.vista;
-    const esteMes = cierresMasCerca(v.negocios, hoyISO).filter((n) => n.fechaCierre!.slice(0, 7) === hoyISO.slice(0, 7)).length;
-    const preguntas = v.negocios.filter((n) => preguntaDelNegocio(n, hoyISO, ahora)).length;
-    const proxima = v.negocios
-      .filter((n) => n.proximaActividad && Date.parse(n.proximaActividad) >= ahora.getTime())
-      .sort((a, b) => Date.parse(a.proximaActividad!) - Date.parse(b.proximaActividad!))[0];
-    if (esteMes) delDia.push(`${plural(esteMes, "cierre", "cierres")} este mes`);
-    if (preguntas) delDia.push(`${plural(preguntas, "negocio", "negocios")} por completar`);
-    if (proxima && diasHasta(proxima.proximaActividad!.slice(0, 10), hoyISO) <= 7) {
-      delDia.push(`tu próxima actividad: ${proxima.empresa}, ${cuandoEs(proxima.proximaActividad!, hoyISO)}`);
-    }
-  }
-  const paraHoy = medicion.importa.length;
-  if (ventas?.estado !== "ok" && paraHoy) delDia.push(`${plural(paraHoy, "cosa", "cosas")} para hoy en Nexus`);
-  const lineaDelDia = delDia.length ? `${delDia.join(" · ")}.` : "Nada urgente por hoy.";
+  const otra = vistaDeVentas
+    ? { clave: "cartera", etiqueta: "Tu cartera", cuenta: vistaDeVentas.empresas.length }
+    : conCuentas
+      ? { clave: "cuentas", etiqueta: variante === "csl" ? "La cartera" : variante === "dev" ? "Clientes con desarrollo" : "Tus cuentas", cuenta: cuentas.length }
+      : null;
 
   return (
     <div className={`${SHELL_DEFAULT} space-y-6`}>
-      <PageHeader
-        title={`${saludo(reloj.hour)}, ${nombre}`}
-        description={`${fechaLarga(hoyISO)} · ${lineaDelDia}`}
-        action={
-          <div className="flex flex-wrap gap-2">
-            {/* El correo de la mañana en vista previa (etapa 4e): todavía no se envía. */}
-            <Link href="/para-ti/correo" className={ENLACE_BLANCO}>
-              Correo de la mañana
-            </Link>
-            {/* «Uso de Nexus» es de dirección (etapa 4a): cómo se usa Nexus, por equipo y por persona. */}
-            {ctx.role === "SUPER_ADMIN" && (
-              <Link href="/para-ti/uso" className={ENLACE_BLANCO}>
-                Uso de Nexus
+      <div className="mx-auto max-w-[1440px] space-y-6">
+        <PageHeader
+          title={`${saludo(reloj.hour)}, ${nombre}`}
+          description={`${fechaLarga(hoyISO)} · ${horaCR(ahora.toISOString())}`}
+          action={
+            <div className="flex flex-wrap items-center gap-3">
+              {otra && <SelectorDelInicio valor={modo} otra={otra} />}
+              {/* El correo de la mañana en vista previa (etapa 4e): todavía no se envía. */}
+              <Link href="/para-ti/correo" className={ENLACE_BLANCO}>
+                Correo de la mañana
               </Link>
-            )}
-          </div>
-        }
-      />
-      {ventas?.estado === "sin-tabla" && (
-        <Alert variant="warning">Los negocios de HubSpot todavía no se pueden mostrar: falta aplicar scripts/sql/2026-10-14-negocios-abiertos.sql.</Alert>
-      )}
-      {ventas?.estado === "ok" && (
-        <VentasDeParaTi vista={ventas.vista} modo={modo} hoyISO={hoyISO} ahoraISO={ahora.toISOString()} negocioAbierto={uno(sp.negocio)} />
-      )}
-      {modo === "dia" && despues.length > 0 && <DespuesDeTusReuniones reuniones={despues} hoyISO={hoyISO} />}
-      {modo === "dia" && agenda && <TuAgenda agenda={agenda} ahora={ahora} />}
-      {modo === "dia" && carteraCse.length > 0 && <TuCartera cuentas={carteraCse} hoyISO={hoyISO} />}
-      {modo === "dia" && <ParaTiPantalla medicion={medicion} avisos={avisos} resumen={resumen} />}
+              {/* «Uso de Nexus» es de dirección (etapa 4a): cómo se usa Nexus, por equipo y por persona. */}
+              {ctx.role === "SUPER_ADMIN" && (
+                <Link href="/para-ti/uso" className={ENLACE_BLANCO}>
+                  Uso de Nexus
+                </Link>
+              )}
+            </div>
+          }
+        />
+        {ventas?.estado === "sin-tabla" && (
+          <Alert variant="warning">Los negocios de HubSpot todavía no se pueden mostrar: falta aplicar scripts/sql/2026-10-14-negocios-abiertos.sql.</Alert>
+        )}
+        {callados.length > 0 && (
+          <p className="text-xs text-fg-muted">Lo de {callados.map((f) => `«${frente(f).nombre}»`).join(", ")} no te llega hasta que tengas el permiso.</p>
+        )}
+
+        {vistaDeVentas && (
+          <VentasDeParaTi vista={vistaDeVentas} modo={modo === "cartera" ? "cartera" : "dia"} hoyISO={hoyISO} ahoraISO={ahora.toISOString()} negocioAbierto={uno(sp.negocio)} />
+        )}
+
+        {modo === "cuentas" && (
+          <TusCuentasDelInicio
+            cuentas={cuentas}
+            titulo={variante === "csl" ? "La cartera" : variante === "dev" ? "Clientes con desarrollo" : "Tus cuentas"}
+            max={null}
+            verTodas={null}
+            conQuienLaLleva={variante !== "cse"}
+            hoyISO={hoyISO}
+          />
+        )}
+
+        {modo === "dia" && (
+          <InicioDelDia
+            d={{
+              variante,
+              hoyISO,
+              ahoraISO: ahora.toISOString(),
+              correo: alcance.email,
+              cifras,
+              resumen,
+              medicion,
+              avisos,
+              agenda:
+                veAgenda && agenda
+                  ? {
+                      datos: agenda,
+                      vista: semana ? "semana" : "dia",
+                      dia: semana ? lunes : dia,
+                      enlaces: {
+                        hoy: enlace({ dia: null }),
+                        anterior: enlace({ dia: sumarDias(semana ? lunes : dia, semana ? -7 : -1) }),
+                        siguiente: enlace({ dia: sumarDias(semana ? lunes : dia, semana ? 7 : 1) }),
+                        dia: enlace({ agenda: null }),
+                        semana: enlace({ agenda: "semana" }),
+                      },
+                    }
+                  : null,
+              cuentas,
+              verLasCuentas: conCuentas ? enlace({ vista: "cuentas", dia: null, agenda: null }) : null,
+              tareasDeHoy: hoy,
+              tareasInternas: internas?.tareas ?? null,
+              movimiento: vistaDeVentas
+                ? { ...siguienteMovimiento(vistaDeVentas.negocios, hoyISO, ahora), verPipeline: "/para-ti?vista=cartera&cartera=pipeline" }
+                : null,
+              abrirDeEntrada: mostrandoHoy ? (proxima?.id ?? null) : null,
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }
