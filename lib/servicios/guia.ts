@@ -8,6 +8,7 @@
  * la versión aprobada, la sesión de aprendizaje).
  */
 import type { EtapaDelCiclo } from "./ciclo";
+import { comprobacionesDelAprendizaje } from "./cierre";
 import type { GuiaDeServicio, GuiaDeEtapa } from "./tipos";
 
 export interface EstadoParaLaGuia {
@@ -16,7 +17,11 @@ export interface EstadoParaLaGuia {
   desde: string | null;
   hasta: string | null;
   /** Los casos de uso del ciclo (sin los descartados). */
-  casos: ReadonlyArray<{ titulo: string; criterio: string | null }>;
+  casos: ReadonlyArray<{ titulo: string; criterio: string | null; criterioMedido?: string | null; decisionAlCerrar?: string | null; id?: string }>;
+  /** Etapa 3 (ficha E): el cronograma del ciclo tiene una versión aprobada. undefined = quien llama no lo sabe. */
+  aprobada?: boolean;
+  /** Etapa 4 (ficha E): el borrador de la sesión de aprendizaje. undefined = quien llama no lo sabe. */
+  aprendizaje?: { metaResultado: string | null; siguienteCiclo: string | null };
 }
 
 export interface ProducidoConEstado {
@@ -46,6 +51,26 @@ function comprobar(clave: string, e: EstadoParaLaGuia): boolean | null {
       return lleno(e.meta);
     case "fechas":
       return !!e.desde && !!e.hasta;
+    case "version-aprobada":
+      return e.aprobada === undefined ? null : e.aprobada;
+    case "criterios-medidos":
+    case "meta-evaluada":
+    case "pendientes-decididos":
+    case "siguiente-ciclo":
+      if (!e.aprendizaje) return null;
+      return comprobacionesDelAprendizaje({
+        meta: e.meta,
+        metaResultado: e.aprendizaje.metaResultado,
+        metaEvaluada: null,
+        siguienteCiclo: e.aprendizaje.siguienteCiclo,
+        casos: e.casos.map((c, i) => ({
+          id: c.id ?? String(i),
+          titulo: c.titulo,
+          criterio: c.criterio,
+          criterioMedido: c.criterioMedido ?? null,
+          decisionAlCerrar: c.decisionAlCerrar ?? null,
+        })),
+      })[clave];
     default:
       return null;
   }

@@ -34,7 +34,7 @@ export function useCiclo(projectId: string, onCambio?: () => void) {
 
   /** Manda un cambio (`ruta` relativa a /ciclo), recarga y avisa al riel. Devuelve si salió bien. */
   const enviar = useCallback(
-    async (ruta: "" | "/casos", method: "POST" | "PATCH", body: unknown, ok?: string): Promise<boolean> => {
+    async (ruta: "" | "/casos" | "/cierre", method: "POST" | "PATCH", body: unknown, ok?: string): Promise<boolean> => {
       setGuardando(true);
       try {
         const res = await fetch(`/api/projects/${projectId}/ciclo${ruta}`, {

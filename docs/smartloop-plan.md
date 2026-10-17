@@ -113,6 +113,18 @@ Continuidad, CSE Carolina Bersot). Se prueba con un **proyecto de prueba** en pr
   - La cuenta suma «La escala» (dónde está la empresa en cada área, con la fecha y de dónde sale; sirve sin preventa)
     y «Casos de uso» (en un ciclo, en el plan de crecimiento, sugeridos y cerrados).
 
+- **Etapas 3, 4 y 5 (ficha E, 2026-10-17):** en el código, sin desplegar. SQL `2026-10-17-ficha-e-ciclo-cronograma-y-cierre.sql`
+  antes del deploy.
+  - Cronograma del ciclo: arriba del Gantt, cada caso de uso es una fase del cronograma del proyecto (`CasoDeUso.faseId`),
+    con su criterio, sus semanas, su avance y sus dependencias del cliente (tareas CLIENTE de la fase). «Armar las fases»,
+    «Aprobar esta versión» (la foto en `CicloDeProyecto.cronogramaAprobado`, y lo que cambió desde ahí) y la propuesta
+    de un clic cuando una dependencia del cliente se atrasa. Las sesiones fijas, del calendario.
+  - Aprendizaje y cierre: en Aprendizaje, lo medido y la decisión de cada caso, la meta evaluada y la propuesta del
+    siguiente ciclo; «Cerrar el ciclo» congela los documentos del ciclo (fotos protegidas) y lo deja en «Ciclos
+    anteriores». Lo que «pasa» entra solo al ciclo siguiente.
+  - Traductor: `scripts/cargar-propuesta-en-ciclo.ts` con la propuesta en JSON (forma en
+    `scripts/data/propuesta-smartloop.ejemplo.json`). Falta pasar el plan de 60 días de FACO a esa forma.
+
 ## Orden desde el 2026-10-12
 
 1. ~~Arreglos del ciclo~~ y ~~la escala y los casos de uso como secciones de la cuenta~~ (en el código).

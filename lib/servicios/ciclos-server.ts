@@ -1,8 +1,9 @@
 /**
  * lib/servicios/ciclos-server.ts — leer y escribir el CICLO de un proyecto recurrente y sus casos de uso.
  *
- * Único escritor de `CicloDeProyecto` y `CasoDeUso` (docs/smartloop-plan.md, etapa 1). Las reglas puras
- * viven en lib/servicios/ciclo.ts y lib/servicios/guia.ts; acá solo se lee y se escribe.
+ * Único escritor de `CicloDeProyecto` y `CasoDeUso` (docs/smartloop-plan.md, etapa 1), junto con sus tres hermanos de
+ * la ficha E: cronograma-del-ciclo-server.ts (etapa 3), cierre-server.ts (etapa 4) y traductor-server.ts (etapa 5). Las
+ * reglas puras viven en lib/servicios/ciclo.ts, guia.ts, cierre.ts y traductor.ts; acá solo se lee y se escribe.
  *
  * Reglas:
  *  · Un ciclo abierto por proyecto (también lo cuida un índice parcial de la base). Abrir el siguiente
@@ -25,6 +26,7 @@ import {
   type EtapaDelCiclo,
   type MovimientoEnLaEscala,
 } from "@/lib/servicios/ciclo";
+import { leerCierre, type CierreGuardado } from "@/lib/servicios/cierre";
 
 export class ErrorDelCiclo extends Error {
   constructor(
@@ -45,6 +47,11 @@ export interface CasoDeUsoVista {
   metrica: string | null;
   origen: string;
   estado: string;
+  /** Etapa 4 (ficha E): lo medido y lo decidido en la sesión de aprendizaje (borrador mientras el ciclo está abierto). */
+  criterioMedido: string | null;
+  decisionAlCerrar: string | null;
+  /** Etapa 3 (ficha E): la fase del cronograma que es este caso de uso. */
+  faseId: string | null;
 }
 
 export interface CicloVista {
@@ -57,6 +64,26 @@ export interface CicloVista {
   etapa: EtapaDelCiclo;
   estado: string;
   casos: CasoDeUsoVista[];
+  /** Etapa 3: la versión aprobada del cronograma del ciclo (0 = sin aprobar). */
+  versionAprobada: number;
+  aprobadoAt: string | null;
+  aprobadoPor: string | null;
+  /** Etapa 4: el borrador de la sesión de aprendizaje. */
+  metaResultado: string | null;
+  metaEvaluada: string | null;
+  siguienteCiclo: string | null;
+}
+
+/** Un ciclo cerrado, para «Ciclos anteriores»: con lo que quedó del cierre (los casos y los documentos congelados). */
+export interface CicloCerradoVista {
+  numero: number;
+  nombre: string | null;
+  desde: string | null;
+  hasta: string | null;
+  cerradoAt: string | null;
+  cerradoPor: string | null;
+  meta: string | null;
+  cierre: CierreGuardado | null;
 }
 
 export interface EstadoDelCiclo {
@@ -68,10 +95,30 @@ export interface EstadoDelCiclo {
   compromiso: Compromiso | null;
   abierto: CicloVista | null;
   guia: GuiaDelCiclo | null;
-  cerrados: Array<{ numero: number; nombre: string | null; desde: string | null; hasta: string | null; cerradoAt: string | null }>;
+  cerrados: CicloCerradoVista[];
 }
 
 const dia = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+
+function casoVista(c: {
+  id: string; titulo: string; resultado: string | null; mueve: unknown; porque: string | null; criterio: string | null;
+  metrica: string | null; origen: string; estado: string; criterioMedido: string | null; decisionAlCerrar: string | null; faseId: string | null;
+}): CasoDeUsoVista {
+  return {
+    id: c.id,
+    titulo: c.titulo,
+    resultado: c.resultado,
+    mueve: leerMueve(c.mueve),
+    porque: c.porque,
+    criterio: c.criterio,
+    metrica: c.metrica,
+    origen: c.origen,
+    estado: c.estado,
+    criterioMedido: c.criterioMedido,
+    decisionAlCerrar: c.decisionAlCerrar,
+    faseId: c.faseId,
+  };
+}
 
 async function proyectoRecurrente(projectId: string) {
   const p = await prisma.project.findUnique({
@@ -110,17 +157,13 @@ export async function cargarEstadoDelCiclo(projectId: string): Promise<EstadoDel
         meta: abierto.meta,
         etapa: etapaDeHubspot ?? (esEtapaDelCiclo(abierto.etapa) ? abierto.etapa : "diagnostico"),
         estado: abierto.estado,
-        casos: abierto.casosDeUso.map((c) => ({
-          id: c.id,
-          titulo: c.titulo,
-          resultado: c.resultado,
-          mueve: leerMueve(c.mueve),
-          porque: c.porque,
-          criterio: c.criterio,
-          metrica: c.metrica,
-          origen: c.origen,
-          estado: c.estado,
-        })),
+        casos: abierto.casosDeUso.map(casoVista),
+        versionAprobada: abierto.versionAprobada,
+        aprobadoAt: abierto.aprobadoAt?.toISOString() ?? null,
+        aprobadoPor: abierto.aprobadoPor,
+        metaResultado: abierto.metaResultado,
+        metaEvaluada: abierto.metaEvaluada,
+        siguienteCiclo: abierto.siguienteCiclo,
       }
     : null;
   return {
@@ -137,11 +180,22 @@ export async function cargarEstadoDelCiclo(projectId: string): Promise<EstadoDel
           desde: vista.desde,
           hasta: vista.hasta,
           casos: vista.casos,
+          aprobada: vista.versionAprobada > 0,
+          aprendizaje: { metaResultado: vista.metaResultado, siguienteCiclo: vista.siguienteCiclo },
         })
       : null,
     cerrados: ciclos
       .filter((c) => c.estado === "cerrado")
-      .map((c) => ({ numero: c.numero, nombre: c.nombre, desde: dia(c.desde), hasta: dia(c.hasta), cerradoAt: c.cerradoAt?.toISOString() ?? null })),
+      .map((c) => ({
+        numero: c.numero,
+        nombre: c.nombre,
+        desde: dia(c.desde),
+        hasta: dia(c.hasta),
+        cerradoAt: c.cerradoAt?.toISOString() ?? null,
+        cerradoPor: c.cerradoPor,
+        meta: c.meta,
+        cierre: leerCierre(c.cierre),
+      })),
   };
 }
 
@@ -179,7 +233,11 @@ export async function estadoDelCicloParaElRiel(projectId: string): Promise<Ciclo
     where: { projectId, estado: "abierto" },
     select: {
       numero: true, nombre: true, etapa: true, meta: true, desde: true, hasta: true,
-      casosDeUso: { where: { estado: { not: "descartado" } }, select: { titulo: true, criterio: true } },
+      versionAprobada: true, metaResultado: true, siguienteCiclo: true,
+      casosDeUso: {
+        where: { estado: { not: "descartado" } },
+        select: { id: true, titulo: true, criterio: true, criterioMedido: true, decisionAlCerrar: true },
+      },
     },
   });
   if (!c) {
@@ -195,7 +253,15 @@ export async function estadoDelCicloParaElRiel(projectId: string): Promise<Ciclo
   }
   const etapaLeida = p.hubspotServiceId ? (etapaPorNombre(p.hubspotPipelineStageLabel) ?? c.etapa) : c.etapa;
   const etapa = esEtapaDelCiclo(etapaLeida) ? etapaLeida : "diagnostico";
-  const estado = { etapa, meta: c.meta, desde: dia(c.desde), hasta: dia(c.hasta), casos: c.casosDeUso };
+  const estado = {
+    etapa,
+    meta: c.meta,
+    desde: dia(c.desde),
+    hasta: dia(c.hasta),
+    casos: c.casosDeUso,
+    aprobada: c.versionAprobada > 0,
+    aprendizaje: { metaResultado: c.metaResultado, siguienteCiclo: c.siguienteCiclo },
+  };
   const g = guiaDelCiclo(guiaServicio, estado);
   const plan = guiaDelCiclo(guiaServicio, { ...estado, etapa: "planificacion" });
   const faltaDelPlan = plan.producido.some((x) => (x.clave === "meta" || x.clave === "casos-con-criterio") && x.hecho === false);
@@ -228,7 +294,7 @@ export async function abrirCiclo(
     const abierto = await tx.cicloDeProyecto.findFirst({ where: { projectId, estado: "abierto" }, select: { numero: true } });
     if (abierto) throw new ErrorDelCiclo(`El ciclo ${abierto.numero} sigue abierto: se cierra con la sesión de aprendizaje.`, 409);
     const ultimo = await tx.cicloDeProyecto.findFirst({ where: { projectId }, orderBy: { numero: "desc" }, select: { numero: true } });
-    return tx.cicloDeProyecto.create({
+    const nuevo = await tx.cicloDeProyecto.create({
       data: {
         projectId,
         numero: (ultimo?.numero ?? 0) + 1,
@@ -240,21 +306,37 @@ export async function abrirCiclo(
       },
       select: { id: true, numero: true },
     });
+    /* Lo que la sesión de aprendizaje del ciclo anterior decidió que «pasa» entra solo al ciclo nuevo (etapa 4, ficha
+       E): el cierre lo dejó en el plan del proyecto con esa marca. Entra sin fase ni medición: es otro ciclo. */
+    await tx.casoDeUso.updateMany({
+      where: { projectId, cicloId: null, estado: "en_plan", decisionAlCerrar: "pasa" },
+      data: { cicloId: nuevo.id, estado: "en_ciclo", decisionAlCerrar: null, criterioMedido: null, faseId: null },
+    });
+    return nuevo;
   });
 }
 
 export async function actualizarCiclo(
   projectId: string,
-  cambios: { nombre?: string | null; desde?: string | null; hasta?: string | null; meta?: string | null; etapa?: EtapaDelCiclo },
+  cambios: {
+    nombre?: string | null;
+    desde?: string | null;
+    hasta?: string | null;
+    meta?: string | null;
+    etapa?: EtapaDelCiclo;
+    metaResultado?: string | null;
+    metaEvaluada?: string | null;
+    siguienteCiclo?: string | null;
+  },
   por?: string,
 ) {
   const p = await proyectoRecurrente(projectId);
   let abierto = await prisma.cicloDeProyecto.findFirst({ where: { projectId, estado: "abierto" }, select: { id: true } });
-  // El primero se abre solo: el proyecto ya estaba en Diagnóstico sin ciclo (estadoDelCicloParaElRiel).
-  if (!abierto && por) {
-    const cerrados = await prisma.cicloDeProyecto.count({ where: { projectId } });
-    if (cerrados === 0) abierto = await abrirCiclo(projectId, {}, por).then((c) => ({ id: c.id }));
-  }
+  /* Sin ciclo abierto el proyecto está en Diagnóstico (estadoDelCicloParaElRiel): el ciclo se abre solo al cambiar algo.
+     Vale para el primero y, desde la ficha E, para el siguiente a uno cerrado (al cerrar, el proyecto vuelve a
+     Diagnóstico). Lo de la sesión de aprendizaje es del ciclo abierto: no abre uno nuevo. */
+  const delAprendizaje = cambios.metaResultado !== undefined || cambios.metaEvaluada !== undefined || cambios.siguienteCiclo !== undefined;
+  if (!abierto && por && !delAprendizaje) abierto = await abrirCiclo(projectId, {}, por).then((c) => ({ id: c.id }));
   if (!abierto) throw new ErrorDelCiclo("No hay un ciclo abierto.", 409);
   if (cambios.etapa && p.hubspotServiceId) {
     throw new ErrorDelCiclo("En un proyecto que está en HubSpot la etapa la mueve el equipo allá.", 409);
@@ -270,6 +352,9 @@ export async function actualizarCiclo(
       ...(cambios.hasta !== undefined ? { hasta: fecha(cambios.hasta) } : {}),
       ...(cambios.meta !== undefined ? { meta: cambios.meta?.trim() || null } : {}),
       ...(cambios.etapa ? { etapa: cambios.etapa } : {}),
+      ...(cambios.metaResultado !== undefined ? { metaResultado: cambios.metaResultado || null } : {}),
+      ...(cambios.metaEvaluada !== undefined ? { metaEvaluada: cambios.metaEvaluada?.trim() || null } : {}),
+      ...(cambios.siguienteCiclo !== undefined ? { siguienteCiclo: cambios.siguienteCiclo?.trim() || null } : {}),
     },
   });
 }
@@ -287,6 +372,12 @@ export interface DatosDeCaso {
   porque?: string | null;
   criterio?: string | null;
   metrica?: string | null;
+}
+
+/** Lo que se escribe de un caso de uso en la sesión de aprendizaje (etapa 4, ficha E): borrador hasta cerrar. */
+export interface DatosDelAprendizaje {
+  criterioMedido?: string | null;
+  decisionAlCerrar?: string | null;
 }
 
 const texto = (v: string | null | undefined) => (v === undefined ? undefined : v?.trim() || null);
@@ -317,7 +408,7 @@ export async function crearCaso(projectId: string, datos: DatosDeCaso & { titulo
 }
 
 /** Cambia un caso de uso del ciclo de ESTE proyecto (404 si es de otro). `quitar` lo deja descartado. */
-export async function actualizarCaso(projectId: string, casoId: string, datos: DatosDeCaso & { quitar?: boolean }) {
+export async function actualizarCaso(projectId: string, casoId: string, datos: DatosDeCaso & DatosDelAprendizaje & { quitar?: boolean }) {
   const caso = await prisma.casoDeUso.findFirst({ where: { id: casoId, projectId }, select: { id: true } });
   if (!caso) throw new ErrorDelCiclo("Ese caso de uso no es de este proyecto.", 404);
   if (datos.titulo !== undefined && !datos.titulo.trim()) throw new ErrorDelCiclo("El caso de uso necesita un título.", 400);
@@ -332,6 +423,8 @@ export async function actualizarCaso(projectId: string, casoId: string, datos: D
           ...(datos.porque !== undefined ? { porque: texto(datos.porque) } : {}),
           ...(datos.criterio !== undefined ? { criterio: texto(datos.criterio) } : {}),
           ...(datos.metrica !== undefined ? { metrica: texto(datos.metrica) } : {}),
+          ...(datos.criterioMedido !== undefined ? { criterioMedido: texto(datos.criterioMedido) } : {}),
+          ...(datos.decisionAlCerrar !== undefined ? { decisionAlCerrar: datos.decisionAlCerrar || null } : {}),
         },
   });
 }
@@ -376,6 +469,9 @@ export async function casosDeLaEmpresa(clientId: string): Promise<CasosDeLaEmpre
       metrica: c.metrica,
       origen: c.origen,
       estado: c.estado,
+      criterioMedido: c.criterioMedido,
+      decisionAlCerrar: c.decisionAlCerrar,
+      faseId: c.faseId,
       proyecto: c.project ? { id: c.project.id, nombre: c.project.name } : null,
       ciclo: c.ciclo ? { numero: c.ciclo.numero, abierto: c.ciclo.estado === "abierto" } : null,
     })),

@@ -881,6 +881,7 @@ model TimelinePhase {
 
   tasks            TimelineTask[]
   particularidades Particularidad[] // desviaciones ancladas a esta fase (opcional; SetNull al borrar la fase)
+  casosDeUso       CasoDeUso[] // ficha E — en un servicio recurrente, el caso de uso que es esta fase
 
   @@index([timelineId, order])
 }
@@ -7131,6 +7132,21 @@ model CicloDeProyecto {
   estado    String    @default("abierto")
   cerradoAt DateTime?
   cerradoPor String?
+  /// Etapa 3 (ficha E) — la VERSIÓN APROBADA del cronograma del ciclo: la foto que se le presentó al cliente
+  /// (lib/timeline/ciclo.ts › FotoDelCronogramaDelCiclo). null = todavía sin aprobar. Cada aprobación sube
+  /// `versionAprobada` y reemplaza la foto; lo que cambió desde ahí se calcula al leer.
+  cronogramaAprobado Json?
+  versionAprobada    Int       @default(0)
+  aprobadoAt         DateTime?
+  aprobadoPor        String?
+  /// Etapa 4 (ficha E) — la sesión de aprendizaje. Se escriben como borrador mientras el ciclo está abierto y
+  /// quedan como el resultado del ciclo al cerrarlo. metaResultado: cumplida | parcial | no_cumplida.
+  metaResultado      String?
+  metaEvaluada       String?   @db.Text
+  siguienteCiclo     String?   @db.Text
+  /// Lo que quedó al cerrar (lib/servicios/cierre.ts › CierreGuardado): cada caso de uso con su criterio medido y
+  /// su decisión, y la foto protegida de cada documento del ciclo. null mientras el ciclo está abierto.
+  cierre             Json?
   creadoPor String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -7166,6 +7182,13 @@ model CasoDeUso {
   metrica   String?
   /// Lo medido al cerrar el ciclo.
   criterioMedido String? @db.Text
+  /// Etapa 4 (ficha E) — qué se decide en la sesión de aprendizaje: cumplido | no_cumplido | pasa | descartado.
+  /// Se aplica al estado al cerrar el ciclo («pasa» vuelve al plan del proyecto y entra al ciclo siguiente).
+  decisionAlCerrar String?
+  /// Etapa 3 (ficha E) — la fase del cronograma del proyecto que es este caso de uso en su ciclo (un caso de uso
+  /// = una fase). nullable porque un caso sugerido o en el plan todavía no tiene fase.
+  faseId    String?
+  fase      TimelinePhase? @relation(fields: [faseId], references: [id], onDelete: SetNull)
   /// escala | pedido | propuesta | entrega | manual
   origen    String   @default("manual")
   /// sugerido | en_plan | en_ciclo | cumplido | no_cumplido | descartado
@@ -7178,6 +7201,7 @@ model CasoDeUso {
   @@index([clientId])
   @@index([projectId])
   @@index([cicloId])
+  @@index([faseId])
 }
 
 // ─── Uso de Nexus (etapa 4a del roadmap de «Para ti», docs/mi-dia-plan.md) ───
