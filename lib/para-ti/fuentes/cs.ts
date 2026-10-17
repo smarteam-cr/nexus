@@ -7,8 +7,11 @@
  * frente (lib/para-ti/frentes.ts).
  *
  * ⛔ Lo del vigía lleva DIRECTO a la ficha de la cuenta (`/customer-success/{clientId}`), nunca al índice: el índice
- * muestra la cartera de quien mira, y una alerta de una cuenta fuera de ella no aparece ahí (2026-10-05). Si son de
- * varias cuentas, el ítem dice cuántas y trae cada cuenta con su enlace (`enlaces`).
+ * muestra la cartera de quien mira, y una alerta de una cuenta fuera de ella no aparece ahí (2026-10-05).
+ *
+ * Una línea POR CUENTA (2026-10-16, fase 1.2 de docs/nexus-sistema-de-trabajo-plan.md): «Lo que importa hoy» toma una
+ * cosa por cuenta, y una línea que juntaba varias cuentas se contaba como de la primera. Las cuentas que no entran en
+ * las primeras cinco van juntas en una línea más, con cada cuenta y su enlace (`enlaces`).
  */
 import "server-only";
 import { Prisma } from "@prisma/client";
@@ -22,6 +25,9 @@ import type { PestanaDeCuenta } from "@/lib/cs/pestanas-de-la-cuenta";
 import { haceCuanto, plural } from "../armar";
 import type { Fuente } from "../fuente";
 import type { EnlaceDePendiente, Pendiente } from "../tipos";
+
+/** Cuántas cuentas del vigía van con su propia línea; las demás, juntas en una. */
+export const CUENTAS_DEL_VIGIA_POR_LINEA = 5;
 
 /** Desde cuántos días una propuesta de cronograma sin decidir pasa a ser cosa de quien lidera. */
 export const DIAS_PARA_QUE_UNA_PROPUESTA_SE_TRABE = 3;
@@ -79,7 +85,7 @@ export const VIGIA: Fuente = {
     const [alertas, propuestas] = await Promise.all([
       prisma.csAlert.findMany({
         where: { status: "OPEN", severity: "HIGH" },
-        select: { id: true, clientId: true, firstDetectedAt: true, client: { select: { name: true } } },
+        select: { id: true, clientId: true, title: true, firstDetectedAt: true, client: { select: { name: true } } },
         orderBy: { firstDetectedAt: "asc" },
         take: 100,
       }),
@@ -94,23 +100,40 @@ export const VIGIA: Fuente = {
     if (alertas.length) {
       // Las alertas se ven en la ficha de su cuenta, en «Alertas» (a la derecha, en cualquier pestaña).
       const cuentas = porCuenta(alertas);
-      const una = cuentas.length === 1;
-      const cuantas = plural(alertas.length, "alerta alta sin revisar", "alertas altas sin revisar");
-      out.push({
-        clave: "cs-vigia:alertas",
-        fuente: "cs-vigia",
-        cuando: "hoy",
-        delAgente: true,
-        titulo: una ? `El vigía dejó ${cuantas} en ${cuentas[0].nombre}` : `El vigía dejó ${cuantas} en ${cuentas.length} cuentas`,
-        detalle: una
-          ? "Están en la ficha de la cuenta, a la derecha, en «Alertas»."
-          : "Cada cuenta abre su ficha; las alertas están a la derecha, en «Alertas».",
-        meta: "Éxito del cliente · el vigía",
-        accion: una ? "Abrir la cuenta" : "Abrir la que más espera",
-        href: fichaDeLaCuenta(cuentas[0].clientId),
-        enlaces: enlacesDe(cuentas),
-        desde: alertas[0].firstDetectedAt.toISOString(),
-      });
+      for (const c of cuentas.slice(0, CUENTAS_DEL_VIGIA_POR_LINEA)) {
+        const primera = alertas.find((a) => a.clientId === c.clientId)!;
+        out.push({
+          clave: `cs-vigia:alertas:${c.clientId}`,
+          fuente: "cs-vigia",
+          cuando: "hoy",
+          delAgente: true,
+          clientId: c.clientId,
+          titulo: c.n > 1 ? `${c.nombre}: ${primera.title} (y ${c.n - 1} más)` : `${c.nombre}: ${primera.title}`,
+          detalle: c.n > 1 ? "Están en la ficha de la cuenta, a la derecha, en «Alertas»." : "Está en la ficha de la cuenta, a la derecha, en «Alertas».",
+          meta: "Éxito del cliente · el vigía",
+          accion: "Abrir la cuenta",
+          href: fichaDeLaCuenta(c.clientId),
+          desde: primera.firstDetectedAt.toISOString(),
+        });
+      }
+      const resto = cuentas.slice(CUENTAS_DEL_VIGIA_POR_LINEA);
+      if (resto.length) {
+        const cuantas = resto.reduce((n, c) => n + c.n, 0);
+        out.push({
+          clave: "cs-vigia:alertas:resto",
+          fuente: "cs-vigia",
+          cuando: "hoy",
+          delAgente: true,
+          clientId: null,
+          titulo: `El vigía dejó ${plural(cuantas, "alerta alta", "alertas altas")} en ${plural(resto.length, "cuenta más", "cuentas más")}`,
+          detalle: "Cada cuenta abre su ficha; las alertas están a la derecha, en «Alertas».",
+          meta: "Éxito del cliente · el vigía",
+          accion: "Abrir la que más espera",
+          href: fichaDeLaCuenta(resto[0].clientId),
+          enlaces: resto.map((c) => ({ texto: c.n > 1 ? `${c.nombre} (${c.n})` : c.nombre, href: fichaDeLaCuenta(c.clientId) })),
+          desde: alertas.find((a) => a.clientId === resto[0].clientId)!.firstDetectedAt.toISOString(),
+        });
+      }
     }
     if (propuestas.length) {
       // La propuesta de estado se confirma o descarta en la pestaña «Proyectos» de la ficha.
@@ -132,6 +155,7 @@ export const VIGIA: Fuente = {
           : "Confírmalos o descártalos en «Proyectos» de cada cuenta: el estado no cambia solo.",
         meta: "Éxito del cliente · estado del proyecto",
         accion: cuentas.length === 1 ? "Revisar" : "Revisar la que más espera",
+        clientId: cuentas.length === 1 ? p.clientId : null,
         href: fichaDeLaCuenta(p.clientId, "proyectos"),
         enlaces: enlacesDe(cuentas, "proyectos"),
         desde: p.healthProposedAt?.toISOString() ?? null,

@@ -12,7 +12,7 @@
 import type { CsAccountData } from "./load-account";
 
 /** Una frase del agente que habla de plata no le llega al CSE. */
-const HABLA_DE_PLATA = /\$|US\$|USD|₡|MRR|d[oó]lar|colones|comisi[oó]n|factur/i;
+export const HABLA_DE_PLATA = /\$|US\$|USD|₡|MRR|d[oó]lar|colones|comisi[oó]n|factur/i;
 
 export function soloLaAdopcion(data: CsAccountData): CsAccountData {
   const p = data.cuenta.partner;

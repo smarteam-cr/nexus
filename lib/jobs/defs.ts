@@ -606,7 +606,7 @@ const licenciasRenovacionDaily: JobDef = {
     if (!(await claimDateKey("licencias-renovacion-daily", dateKey, now))) return SIN_TURNO;
     const { correrAvisosDeRenovacion } = await import("@/lib/cs/avisos-de-renovacion");
     const r = await correrAvisosDeRenovacion(now);
-    console.log(`[jobs/licencias] ${dateKey} — ${r.creados} aviso(s) de renovación nuevos y ${r.cerrados} cerrado(s) sobre ${r.revisados} cliente(s)`);
+    console.log(`[jobs/licencias] ${dateKey} — ${r.creados} aviso(s) de renovación nuevos, ${r.juntados} juntado(s) con lo que vio el vigía y ${r.cerrados} cerrado(s) sobre ${r.revisados} cliente(s)`);
   },
 };
 

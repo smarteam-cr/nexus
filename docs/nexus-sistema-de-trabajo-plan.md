@@ -181,7 +181,7 @@ Alex), vectores si la búsqueda no alcanza, y un MCP si hace falta.
 | Fase | Estado |
 |---|---|
 | 0 · Cimientos | 0.1, 0.2 y 0.3 en el código, sin desplegar (SQL aplicados); 0.6 y 0.7 esperan el deploy; faltan 0.4 y 0.5 |
-| 1 · Atención | 1.1, 1.3 y 1.4 en el código, sin desplegar; falta 1.2 (la lectura de la cuenta) |
+| 1 · Atención | En el código, sin desplegar; después del deploy, el cierre en bloque de las alertas (`scripts/cerrar-alertas-sueltas.ts`) |
 | 2 · La semana | Pendiente |
 | 3 · Después de cada reunión | Pendiente |
 | 4 · El chat de Nexus | Pendiente |

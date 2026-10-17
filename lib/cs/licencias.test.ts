@@ -7,7 +7,16 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { avisoDeRenovacion, combinarLicencias, fechaDeHubspot, licenciasDesdePartner, severidadDelAviso } from "./licencias";
+import {
+  avisoDeRenovacion,
+  avisosDelCliente,
+  combinarLicencias,
+  fechaDeHubspot,
+  licenciasDesdePartner,
+  lineaDelAvisoDeLaFecha,
+  severidadDelAviso,
+  type LicenciaDeHub,
+} from "./licencias";
 
 const KOLBI = {
   hs_marketing_hub_edition: "enterprise",
@@ -68,6 +77,35 @@ describe("el aviso con anticipación", () => {
 
   it("el job de avisos usa el umbral en la llave: cada umbral avisa una vez, sin duplicar", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "lib/cs/avisos-de-renovacion.ts"), "utf8");
-    expect(src).toContain("renovacion:${cliente.id}:${l.hub}:${l.renovacion}:${aviso.umbral}");
+    expect(src).toContain("llaveDelAviso(cliente.id, aviso.renovacion, aviso.umbral)");
+  });
+});
+
+describe("⭐ un aviso por fecha de renovación, con todos sus hubs (2026-10-16)", () => {
+  const l = (hub: LicenciaDeHub["hub"], renovacion: string | null, monto: number | null = null, moneda: string | null = "USD"): LicenciaDeHub => ({
+    hub,
+    plan: "Professional",
+    renovacion,
+    montoMensual: monto,
+    moneda,
+    fechaCompra: null,
+    nota: null,
+    fuenteRenovacion: "hubspot",
+  });
+  const hoy = "2026-10-16";
+  it("los hubs que renuevan el mismo día van juntos; otro día, otro aviso; el más cercano primero", () => {
+    const avisos = avisosDelCliente([l("service", "2026-12-20"), l("sales", "2026-11-30"), l("marketing", "2026-11-30"), l("content", "2027-06-01")], hoy);
+    expect(avisos.map((a) => [a.renovacion, a.licencias.map((x) => x.hub)])).toEqual([
+      ["2026-11-30", ["sales", "marketing"]],
+      ["2026-12-20", ["service"]],
+    ]);
+  });
+  it("la línea con un hub es la de siempre; con varios, los nombra y suma el monto si es la misma moneda", () => {
+    const [uno] = avisosDelCliente([l("sales", "2026-11-30", 500)], hoy);
+    expect(lineaDelAvisoDeLaFecha(uno)).toMatch(/^Sales Hub Professional renueva el 2026-11-30 \(en 45 días\) · 500 USD al mes$/);
+    const [dos] = avisosDelCliente([l("sales", "2026-11-30", 500), l("service", "2026-11-30", 250)], hoy);
+    expect(lineaDelAvisoDeLaFecha(dos)).toMatch(/renuevan el 2026-11-30 \(en 45 días\) · 750 USD al mes$/);
+    const [mezcla] = avisosDelCliente([l("sales", "2026-11-30", 500), l("service", "2026-11-30", 250, "CRC")], hoy);
+    expect(lineaDelAvisoDeLaFecha(mezcla), "colones y dólares no se suman").not.toMatch(/al mes/);
   });
 });

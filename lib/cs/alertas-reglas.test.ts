@@ -6,9 +6,16 @@ import {
   LARGO_DE_LA_NOTA,
   avisosQueYaNoCorresponden,
   diaDelCierre,
+  esAvisoDeRenovacion,
+  esLlaveViejaDelAviso,
+  evidenciaJuntoALaRegla,
   idsDeLaEvidencia,
   juntarEvidencia,
+  llaveDelAviso,
+  llaveDelVigia,
+  llavesViejasDelAviso,
   mismaCitaVerificada,
+  razonJuntoALaRegla,
   notaDeCierre,
   queHacerConLaRedeteccion,
   textoDelCierre,
@@ -167,5 +174,63 @@ describe("juntarEvidencia: actualizar una alerta no pierde lo que ya tenía", ()
   });
   it("sin cita nueva, conserva la vieja", () => {
     expect(juntarEvidencia({ cita: { id: "s1" } }, { hechoIds: ["h2"] }).cita).toEqual({ id: "s1" });
+  });
+});
+
+describe("⭐ una alerta por cuenta y categoría, no una por corrida (2026-10-16, fase 1.2)", () => {
+  it("la huella del agente ya no va en la llave; la queja sigue una por cita", () => {
+    expect(llaveDelVigia("c1", "ADOPTION_RISK", "uso-bajo-octubre")).toBe("c1:ADOPTION_RISK");
+    expect(llaveDelVigia("c1", "ADOPTION_RISK", "otra-huella")).toBe(llaveDelVigia("c1", "ADOPTION_RISK", "uso-bajo-octubre"));
+    expect(llaveDelVigia("c1", "QUEJA", "h1")).not.toBe(llaveDelVigia("c1", "QUEJA", "h2"));
+  });
+  it("el vigía actualiza la abierta sobre lo mismo antes de crear, con la llave que tenga", () => {
+    const src = leer("lib/cs/watchdog.ts");
+    expect(src).toContain("llaveDelVigia(scopeId, a.category, a.fingerprint)");
+    expect(src).toContain("const sobreLoMismo");
+    expect(src, "volvió la huella a la llave").not.toContain("`${scopeId}:${a.category}:${a.fingerprint}`");
+  });
+  it("⭐ un cierre del sistema no suprime: si el agente lo vuelve a ver, vuelve", () => {
+    const cerrada = { status: "RESOLVED", severity: "MEDIUM", evidence: { sessionIds: ["s1"] }, resolvedByEmail: CIERRE_DEL_SISTEMA };
+    expect(queHacerConLaRedeteccion(cerrada, { severity: "MEDIUM", evidence: { sessionIds: ["s1"] } })).toBe("crear");
+    expect(queHacerConLaRedeteccion({ ...cerrada, resolvedByEmail: "avanegas@smarteamcr.com" }, { severity: "MEDIUM", evidence: { sessionIds: ["s1"] } })).toBe("suprimir");
+  });
+  it("juntar dos veces lo mismo no pierde de dónde salieron las citas de antes", () => {
+    const a = { cita: { texto: "x", id: "s1", verificada: true } };
+    const b = { cita: { texto: "y", id: "s2", verificada: true } };
+    const j = juntarEvidencia(a, b);
+    expect(j.citaIds).toEqual(["s1", "s2"]);
+    expect(idsDeLaEvidencia(j).has("cita:s1")).toBe(true);
+    expect(traeEvidenciaNueva(a, j), "la reunión de la cita vieja no es evidencia nueva").toBe(false);
+  });
+});
+
+describe("⭐ la renovación: un aviso por fecha, y el vigía se junta con él", () => {
+  it("la llave de hoy es por fecha; las de antes, por hub", () => {
+    expect(llaveDelAviso("c1", "2026-12-01", 60)).toBe("renovacion:c1:2026-12-01:60");
+    expect(llavesViejasDelAviso("c1", ["sales", "service"], "2026-12-01", 60)).toEqual([
+      "renovacion:c1:sales:2026-12-01:60",
+      "renovacion:c1:service:2026-12-01:60",
+    ]);
+    expect(esLlaveViejaDelAviso("renovacion:c1:sales:2026-12-01:60")).toBe(true);
+    expect(esLlaveViejaDelAviso("renovacion:c1:2026-12-01:60")).toBe(false);
+    expect(esAvisoDeRenovacion({ dedupeKey: "renovacion:c1:2026-12-01:60" })).toBe(true);
+    expect(esAvisoDeRenovacion({ dedupeKey: "c1:RENEWAL_RISK" })).toBe(false);
+  });
+  it("la razón dice la línea de la regla y lo que vio el agente, una vez", () => {
+    const linea = "Sales Hub Professional renueva el 2026-12-01 (en 45 días)";
+    const una = razonJuntoALaRegla(linea, "El uso cayó a la mitad desde septiembre.");
+    expect(una).toBe("Sales Hub Professional renueva el 2026-12-01 (en 45 días). El uso cayó a la mitad desde septiembre.");
+    expect(razonJuntoALaRegla(linea, "")).toBe(`${linea}.`);
+  });
+  it("la evidencia suma lo del agente y conserva lo de la regla", () => {
+    const regla = { hubs: ["sales"], renovacion: "2026-12-01", umbral: 60, lineaDeLaRegla: "Sales renueva" };
+    const j = evidenciaJuntoALaRegla(regla, { sessionIds: ["s1"], renovacion: "otra" }, "Sales renueva");
+    expect(j.renovacion).toBe("2026-12-01");
+    expect(j.sessionIds).toEqual(["s1"]);
+    expect(j.lineaDeLaRegla).toBe("Sales renueva");
+  });
+  it("la regla y el vigía se buscan antes de crear", () => {
+    expect(leer("lib/cs/avisos-de-renovacion.ts")).toContain("const delVigia = await prisma.csAlert.findFirst(");
+    expect(leer("lib/cs/watchdog.ts")).toContain('a.category === "RENEWAL_RISK"');
   });
 });

@@ -159,3 +159,44 @@ export function lineaDelAviso(l: LicenciaDeHub, dias: number): string {
   const dinero = l.montoMensual ? ` · ${l.montoMensual.toLocaleString("es-CR")} ${l.moneda ?? ""} al mes`.trimEnd() : "";
   return `${nombre} renueva el ${l.renovacion} (en ${dias} días)${dinero}`;
 }
+
+/** Los hubs de un cliente que renuevan el MISMO día, con su aviso: un solo aviso por fecha (2026-10-16). */
+export interface AvisoDeLaFecha {
+  renovacion: string;
+  dias: number;
+  umbral: 90 | 60 | 30;
+  licencias: LicenciaDeHub[];
+}
+
+/**
+ * Los avisos de un cliente: uno por fecha de renovación que cae en 90 días o menos, el más cercano primero. Hasta el
+ * 2026-10-16 era uno por hub: un cliente con cinco hubs que renuevan juntos tenía cinco alertas de lo mismo.
+ */
+export function avisosDelCliente(licencias: readonly LicenciaDeHub[], hoy: string): AvisoDeLaFecha[] {
+  const porFecha = new Map<string, AvisoDeLaFecha>();
+  for (const l of licencias) {
+    const aviso = avisoDeRenovacion(l.renovacion, hoy);
+    if (!aviso || !l.renovacion) continue;
+    const ya = porFecha.get(l.renovacion);
+    if (ya) ya.licencias.push(l);
+    else porFecha.set(l.renovacion, { renovacion: l.renovacion, dias: aviso.dias, umbral: aviso.umbral, licencias: [l] });
+  }
+  return [...porFecha.values()].sort((a, b) => a.renovacion.localeCompare(b.renovacion));
+}
+
+/**
+ * La línea de un aviso por fecha. Con un hub, la de siempre. Con varios: «Sales Hub Professional y Service Hub Starter
+ * renuevan el 2027-02-27 (en 45 días) · 7.000 USD al mes»; el monto se suma solo si todos lo tienen y en la misma
+ * moneda (sumar colones y dólares no da un número).
+ */
+export function lineaDelAvisoDeLaFecha(a: AvisoDeLaFecha): string {
+  if (a.licencias.length === 1) return lineaDelAviso(a.licencias[0], a.dias);
+  const nombres = a.licencias.map((l) => `${NOMBRE_DEL_HUB[l.hub]}${l.plan ? ` ${l.plan}` : ""}`);
+  const lista = `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+  const monedas = new Set(a.licencias.map((l) => l.moneda ?? ""));
+  const todosConMonto = a.licencias.every((l) => !!l.montoMensual);
+  const total = Math.round(a.licencias.reduce((s, l) => s + (l.montoMensual ?? 0), 0) * 100) / 100;
+  const moneda = [...monedas][0];
+  const dinero = todosConMonto && monedas.size === 1 ? ` · ${total.toLocaleString("es-CR")} ${moneda}`.trimEnd() + " al mes" : "";
+  return `${lista} renuevan el ${a.renovacion} (en ${a.dias} días)${dinero}`;
+}

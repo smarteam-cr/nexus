@@ -901,6 +901,10 @@
   lecturas de la ficha); al pasar el mouse dice por qué en una línea. Las alertas del agente y la deuda no pintan. La
   relación cuenta solo donde Smarteam **acompaña** la cuenta (proyecto activo o relación gestionada en HubSpot).
   Ver DECISIONS §El color de cada cuenta.
+- **Lectura de la cuenta** (`lib/cs/lectura-de-la-cuenta.ts`, desde el 2026-10-16): cómo está una cuenta en una línea:
+  su color y hasta tres motivos (las razones del color y lo que vio el vigía que el color no dice). La ven quien lidera
+  Customer Success y el CSE de la cuenta, en el chip «Cómo está la cuenta» de la ficha. Reemplaza a mirar las alertas
+  sueltas: el vigía tiene una alerta por cuenta (o proyecto) y categoría, y la actualiza.
 - **Alerta cerrada** (`CsAlert` RESOLVED o DISMISSED): resuelta o descartada, con una nota corta opcional
   (`resolutionNote`). Sale de «A quién llamar», se consulta 30 días y se puede volver a abrir. El agente la vuelve a
   levantar solo con una señal nueva (más grave, o evidencia que no estaba).

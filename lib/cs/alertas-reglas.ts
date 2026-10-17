@@ -41,6 +41,8 @@ export function idsDeLaEvidencia(evidencia: unknown): Set<string> {
   // La frase verificada de una queja o un retraso (2026-10-09): otra reunión u otro correo es evidencia nueva.
   const cita = e.cita as { verificada?: unknown; id?: unknown } | undefined;
   if (cita?.verificada === true && typeof cita.id === "string" && cita.id.trim()) out.add(`cita:${cita.id.trim()}`);
+  // Las de antes: una alerta que juntó varias veces lo mismo (2026-10-16) guarda de dónde salió cada cita.
+  if (Array.isArray(e.citaIds)) for (const id of e.citaIds) if (typeof id === "string" && id.trim()) out.add(`cita:${id.trim()}`);
   return out;
 }
 
@@ -57,14 +59,22 @@ export type QueHacerConLaAlerta = "crear" | "actualizar" | "suprimir";
  * El agente volvió a ver un hecho (misma llave). Qué hacer según la última alerta de esa llave.
  *   · ninguna → crear
  *   · abierta o vista → actualizar la misma (no duplicar)
- *   · cerrada → crear SOLO con una señal nueva (más grave o con evidencia nueva); si no, suprimir.
+ *   · cerrada por el sistema → crear: Nexus la cerró solo (un aviso que dejó de corresponder, el cierre en bloque del
+ *     2026-10-16), no una persona que la revisó; si el agente la vuelve a ver, vuelve.
+ *   · cerrada por una persona → crear SOLO con una señal nueva (más grave o con evidencia nueva); si no, suprimir.
  */
 export function queHacerConLaRedeteccion(
-  existente: { status: EstadoDeAlerta | string; severity: SeveridadDeAlerta | string; evidence: unknown } | null,
+  existente: {
+    status: EstadoDeAlerta | string;
+    severity: SeveridadDeAlerta | string;
+    evidence: unknown;
+    resolvedByEmail?: string | null;
+  } | null,
   nueva: { severity: SeveridadDeAlerta | string; evidence: unknown },
 ): QueHacerConLaAlerta {
   if (!existente) return "crear";
   if (existente.status === "OPEN" || existente.status === "SEEN") return "actualizar";
+  if (existente.resolvedByEmail === CIERRE_DEL_SISTEMA) return "crear";
   if ((RANGO[nueva.severity] ?? 0) > (RANGO[existente.severity] ?? 0)) return "crear";
   if (traeEvidenciaNueva(nueva.evidence, existente.evidence)) return "crear";
   return "suprimir";
@@ -114,6 +124,75 @@ export function juntarEvidencia(vieja: unknown, nueva: unknown): Record<string, 
     if (ids.length) out[lista] = [...new Set(ids)];
   }
   if (!n.cita && v.cita) out.cita = v.cita;
+  // La cita queda la más reciente, pero de dónde salieron las de antes no se pierde: si la alerta se cierra, volver a
+  // ver una de esas reuniones no es evidencia nueva.
+  const citaIds = [v.citaIds, n.citaIds, idDeCitaVerificada(v), idDeCitaVerificada(n)].flatMap((x) =>
+    Array.isArray(x) ? x.filter((id): id is string => typeof id === "string" && !!id.trim()) : typeof x === "string" ? [x] : [],
+  );
+  if (citaIds.length) out.citaIds = [...new Set(citaIds)];
+  return out;
+}
+
+function idDeCitaVerificada(e: Record<string, unknown>): string | null {
+  const c = e.cita as { verificada?: unknown; id?: unknown } | undefined;
+  return c?.verificada === true && typeof c.id === "string" && c.id.trim() ? c.id.trim() : null;
+}
+
+// ── La lectura de la cuenta en lugar de alertas sueltas (2026-10-16, fase 1.2 de docs/nexus-sistema-de-trabajo-plan.md)
+
+/** Con qué empieza la llave de todo aviso de renovación de la regla (lib/cs/avisos-de-renovacion.ts). */
+export const PREFIJO_DE_RENOVACION = "renovacion:";
+
+/**
+ * La llave de una alerta del vigía: UNA por cuenta (o proyecto) y categoría. Hasta el 2026-10-16 llevaba además la
+ * huella que escribía el agente, que cambiaba en cada corrida: cada día nacía otra alerta sobre lo mismo (147 de las 162
+ * de las últimas dos semanas seguían abiertas). Ahora la alerta que ya está se actualiza con lo último que vio.
+ * La queja sigue siendo una por cita: cada una es una frase distinta del cliente, verificada, y pinta el color.
+ */
+export function llaveDelVigia(scopeId: string, categoria: string, huella: string): string {
+  return categoria === "QUEJA" ? `${scopeId}:${categoria}:${huella}` : `${scopeId}:${categoria}`;
+}
+
+/** La llave del aviso de renovación de un cliente para una fecha y un umbral (uno por fecha desde el 2026-10-16). */
+export function llaveDelAviso(clientId: string, renovacion: string, umbral: number): string {
+  return `${PREFIJO_DE_RENOVACION}${clientId}:${renovacion}:${umbral}`;
+}
+
+/** Las llaves de antes del 2026-10-16, una por hub: lo que la CSL cerró con ellas no vuelve en el mismo umbral. */
+export function llavesViejasDelAviso(clientId: string, hubs: readonly string[], renovacion: string, umbral: number): string[] {
+  return hubs.map((h) => `${PREFIJO_DE_RENOVACION}${clientId}:${h}:${renovacion}:${umbral}`);
+}
+
+/** ¿Es una llave de antes (una por hub)? Tiene cuatro partes después del prefijo; la de hoy, tres. */
+export function esLlaveViejaDelAviso(dedupeKey: string): boolean {
+  return dedupeKey.startsWith(PREFIJO_DE_RENOVACION) && dedupeKey.slice(PREFIJO_DE_RENOVACION.length).split(":").length === 4;
+}
+
+/** ¿Esta alerta es un aviso de renovación de la regla? */
+export function esAvisoDeRenovacion(a: { dedupeKey: string }): boolean {
+  return a.dedupeKey.startsWith(PREFIJO_DE_RENOVACION);
+}
+
+/**
+ * La razón de un aviso de renovación que además vio el vigía: la línea de la regla y lo que vio el agente, una vez.
+ * La línea de la regla se guarda la primera vez en la evidencia (`lineaDeLaRegla`), así juntar dos veces no la repite.
+ */
+export function razonJuntoALaRegla(lineaDeLaRegla: string, razonDelVigia: string): string {
+  const regla = lineaDeLaRegla.trim().replace(/[.\s]+$/, "");
+  const vigia = razonDelVigia.trim();
+  if (!vigia || regla.includes(vigia)) return `${regla}.`;
+  return regla ? `${regla}. ${vigia}` : vigia;
+}
+
+/** Los datos de la regla que no se pisan al juntar la evidencia del vigía con un aviso de renovación. */
+const DE_LA_REGLA = ["hub", "hubs", "renovacion", "umbral", "fuente", "lineaDeLaRegla"] as const;
+
+/** La evidencia de un aviso de renovación con lo que vio el vigía: lo del agente se suma, lo de la regla queda. */
+export function evidenciaJuntoALaRegla(deLaRegla: unknown, delVigia: unknown, lineaDeLaRegla: string): Record<string, unknown> {
+  const r = deLaRegla && typeof deLaRegla === "object" && !Array.isArray(deLaRegla) ? (deLaRegla as Record<string, unknown>) : {};
+  const out = juntarEvidencia(r, delVigia);
+  for (const k of DE_LA_REGLA) if (k in r) out[k] = r[k];
+  out.lineaDeLaRegla = typeof r.lineaDeLaRegla === "string" && r.lineaDeLaRegla.trim() ? r.lineaDeLaRegla : lineaDeLaRegla;
   return out;
 }
 

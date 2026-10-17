@@ -4,7 +4,8 @@
  *
  * El aviso es DETERMINISTA (sin IA): un job diario recorre los clientes con licencias y, a 90, 60 y
  * 30 días de cada renovación, deja una alerta de «Renovación» en Éxito del cliente, una por cliente,
- * hub, fecha y umbral (la llave lo garantiza: correr dos veces no duplica). Antes la renovación solo
+ * fecha y umbral, con todos los hubs que renuevan ese día (hasta el 2026-10-16, una por hub; la llave
+ * lo garantiza: correr dos veces no duplica). Antes la renovación solo
  * la miraba el vigilante con IA, que en producción no corre desde julio.
  *
  * Y se CIERRA sola (2026-10-07) cuando deja de corresponder: la renovación pasó, cambió de fecha o
@@ -12,17 +13,23 @@
  * 7 de octubre eran 38 de las 105 alertas abiertas de la cartera. Una que la CSL cerró a mano no
  * vuelve en el mismo umbral; el umbral siguiente sí sale, porque la renovación está más cerca.
  */
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { fechaLocalDeLaReunion } from "@/lib/sessions/compromisos-y-alcance";
-import { CIERRE_DEL_SISTEMA, avisosQueYaNoCorresponden } from "./alertas-reglas";
 import {
-  avisoDeRenovacion,
-  combinarLicencias,
-  licenciasDesdePartner,
-  lineaDelAviso,
-  severidadDelAviso,
-  type LicenciaDeHub,
-} from "./licencias";
+  CIERRE_DEL_SISTEMA,
+  PREFIJO_DE_RENOVACION,
+  avisosQueYaNoCorresponden,
+  esLlaveViejaDelAviso,
+  evidenciaJuntoALaRegla,
+  llaveDelAviso,
+  llavesViejasDelAviso,
+  razonJuntoALaRegla,
+} from "./alertas-reglas";
+import { PREFIJO_DE_LA_LECTURA } from "./alertas-de-la-lectura";
+import { avisosDelCliente, combinarLicencias, licenciasDesdePartner, lineaDelAvisoDeLaFecha, severidadDelAviso, type LicenciaDeHub } from "./licencias";
+
+const RANGO: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
 
 export interface LicenciasDelCliente {
   licencias: LicenciaDeHub[];
@@ -44,38 +51,89 @@ export async function cargarLicenciasDelCliente(clientId: string): Promise<Licen
   };
 }
 
-/** Con qué empieza la llave de todo aviso de renovación (una por cliente, hub, fecha y umbral). */
-const PREFIJO = "renovacion:";
-
-/** Una pasada: crea los avisos que tocan hoy y cierra los que ya no corresponden. */
-export async function correrAvisosDeRenovacion(ahora: Date): Promise<{ creados: number; cerrados: number; revisados: number }> {
+/**
+ * Una pasada: crea los avisos que tocan hoy y cierra los que ya no corresponden.
+ *
+ * Desde el 2026-10-16 (fase 1.2 de docs/nexus-sistema-de-trabajo-plan.md) es UN aviso por fecha de renovación, con
+ * todos los hubs que renuevan ese día, y se junta con la renovación que vio el vigía: si el vigía ya tenía abierta una
+ * alerta de renovación de la cuenta, el aviso la absorbe (conserva lo que vio el agente) en vez de nacer al lado.
+ */
+export async function correrAvisosDeRenovacion(
+  ahora: Date,
+): Promise<{ creados: number; juntados: number; cerrados: number; revisados: number }> {
   const hoy = fechaLocalDeLaReunion(ahora);
   const clientes = await prisma.client.findMany({
     where: { OR: [{ partnerSnapshot: { isNot: null } }, { licencias: { some: {} } }] },
     select: { id: true, name: true },
   });
   let creados = 0;
+  let juntados = 0;
   const llavesDeHoy = new Set<string>();
   for (const cliente of clientes) {
     const { licencias } = await cargarLicenciasDelCliente(cliente.id);
-    for (const l of licencias) {
-      const aviso = avisoDeRenovacion(l.renovacion, hoy);
-      if (!aviso) continue;
-      const dedupeKey = `renovacion:${cliente.id}:${l.hub}:${l.renovacion}:${aviso.umbral}`;
+    for (const aviso of avisosDelCliente(licencias, hoy)) {
+      const dedupeKey = llaveDelAviso(cliente.id, aviso.renovacion, aviso.umbral);
       llavesDeHoy.add(dedupeKey);
       const ya = await prisma.csAlert.findFirst({ where: { dedupeKey }, select: { id: true } });
       if (ya) continue;
+      // Lo que la CSL cerró con la llave de antes (una por hub) no vuelve en el mismo umbral.
+      const viejas = llavesViejasDelAviso(cliente.id, aviso.licencias.map((l) => l.hub), aviso.renovacion, aviso.umbral);
+      const cerradaAntes = await prisma.csAlert.findFirst({
+        where: { dedupeKey: { in: viejas }, status: { in: ["RESOLVED", "DISMISSED"] }, NOT: { resolvedByEmail: CIERRE_DEL_SISTEMA } },
+        select: { id: true },
+      });
+      if (cerradaAntes) continue;
+
+      const linea = lineaDelAvisoDeLaFecha(aviso);
+      const severity = severidadDelAviso(aviso.umbral);
+      const deLaRegla = {
+        hubs: aviso.licencias.map((l) => l.hub),
+        renovacion: aviso.renovacion,
+        umbral: aviso.umbral,
+        fuente: aviso.licencias[0].fuenteRenovacion,
+        lineaDeLaRegla: linea,
+      };
+      const title = `Renovación en ${aviso.dias} días · ${cliente.name}`;
+      const suggestedAction =
+        "Revisa con el cliente el uso de la licencia antes de la renovación: es el momento de ajustar el plan o proponer una expansión.";
+
+      // La renovación que ya vio el vigía se junta con el aviso, en vez de quedar dos alertas de lo mismo.
+      const delVigia = await prisma.csAlert.findFirst({
+        where: {
+          clientId: cliente.id,
+          category: "RENEWAL_RISK",
+          status: { in: ["OPEN", "SEEN"] },
+          NOT: [{ dedupeKey: { startsWith: PREFIJO_DE_RENOVACION } }, { dedupeKey: { startsWith: PREFIJO_DE_LA_LECTURA } }],
+        },
+        orderBy: { lastDetectedAt: "desc" },
+        select: { id: true, reason: true, severity: true, evidence: true, suggestedAction: true },
+      });
+      if (delVigia) {
+        await prisma.csAlert.update({
+          where: { id: delVigia.id },
+          data: {
+            dedupeKey,
+            projectId: null,
+            title,
+            reason: razonJuntoALaRegla(linea, delVigia.reason),
+            severity: (RANGO[severity] ?? 0) > (RANGO[delVigia.severity] ?? 0) ? severity : delVigia.severity,
+            suggestedAction: delVigia.suggestedAction ?? suggestedAction,
+            evidence: evidenciaJuntoALaRegla(deLaRegla, delVigia.evidence, linea) as Prisma.InputJsonValue,
+          },
+        });
+        juntados++;
+        continue;
+      }
       await prisma.csAlert.create({
         data: {
           clientId: cliente.id,
           projectId: null,
-          severity: severidadDelAviso(aviso.umbral),
+          severity,
           category: "RENEWAL_RISK",
-          title: `Renovación en ${aviso.dias} días · ${cliente.name}`,
-          reason: lineaDelAviso(l, aviso.dias),
-          suggestedAction:
-            "Revisa con el cliente el uso de la licencia antes de la renovación: es el momento de ajustar el plan o proponer una expansión.",
-          evidence: { hub: l.hub, renovacion: l.renovacion, umbral: aviso.umbral, fuente: l.fuenteRenovacion },
+          title,
+          reason: linea,
+          suggestedAction,
+          evidence: deLaRegla,
           dedupeKey,
         },
       });
@@ -85,20 +143,20 @@ export async function correrAvisosDeRenovacion(ahora: Date): Promise<{ creados: 
 
   // Los abiertos que hoy ya no tocan se cierran solos, firmados por el sistema y con su porqué.
   const abiertos = await prisma.csAlert.findMany({
-    where: { dedupeKey: { startsWith: PREFIJO }, status: { in: ["OPEN", "SEEN"] } },
+    where: { dedupeKey: { startsWith: PREFIJO_DE_RENOVACION }, status: { in: ["OPEN", "SEEN"] } },
     select: { id: true, dedupeKey: true },
   });
-  const sobran = avisosQueYaNoCorresponden(abiertos, llavesDeHoy);
-  if (sobran.length > 0) {
+  const sobran = new Set(avisosQueYaNoCorresponden(abiertos, llavesDeHoy));
+  const viejos = abiertos.filter((a) => sobran.has(a.id) && esLlaveViejaDelAviso(a.dedupeKey)).map((a) => a.id);
+  const vencidos = [...sobran].filter((id) => !viejos.includes(id));
+  const cerrar = async (ids: string[], nota: string) => {
+    if (ids.length === 0) return;
     await prisma.csAlert.updateMany({
-      where: { id: { in: sobran }, status: { in: ["OPEN", "SEEN"] } },
-      data: {
-        status: "RESOLVED",
-        resolvedAt: ahora,
-        resolvedByEmail: CIERRE_DEL_SISTEMA,
-        resolutionNote: "Se cerró sola: la renovación ya pasó, cambió de fecha o tiene un aviso más cercano.",
-      },
+      where: { id: { in: ids }, status: { in: ["OPEN", "SEEN"] } },
+      data: { status: "RESOLVED", resolvedAt: ahora, resolvedByEmail: CIERRE_DEL_SISTEMA, resolutionNote: nota },
     });
-  }
-  return { creados, cerrados: sobran.length, revisados: clientes.length };
+  };
+  await cerrar(vencidos, "Se cerró sola: la renovación ya pasó, cambió de fecha o tiene un aviso más cercano.");
+  await cerrar(viejos, "Se cerró sola: ahora hay un solo aviso por fecha de renovación, con todos sus hubs.");
+  return { creados, juntados, cerrados: sobran.size, revisados: clientes.length };
 }

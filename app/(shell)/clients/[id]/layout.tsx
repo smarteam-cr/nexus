@@ -1,6 +1,8 @@
 import { requireAccessToClient } from "@/lib/auth/access";
 import { UnauthorizedError, ForbiddenError, requireInternalUser } from "@/lib/auth/supabase";
 import { esLiderDeCs } from "@/lib/cs/acceso";
+import { esCseDeLaCuenta } from "@/lib/cs/adopcion-del-cse-server";
+import { LecturaDeLaCuenta } from "@/components/cs/LecturaDeLaCuenta";
 import { leerAjustes } from "@/lib/cs/ajustes-de-salud-server";
 import { hoyEnCostaRica } from "@/lib/cs/cartera";
 import { NOMBRE_DE_LA_SALUD, quienCorrigio } from "@/lib/cs/cartera-reglas";
@@ -126,6 +128,11 @@ export default async function ClientLayout({
   const hoy = hoyEnCostaRica();
   const correccionVigente = ajustes?.correccion && ajustes.correccion.vence >= hoy ? ajustes.correccion : null;
 
+  /* La lectura de la cuenta (2026-10-16, fase 1.2): el color y hasta tres motivos, para quien lidera Customer Success y
+     el CSE de la cuenta. Se pide al montar el chip, en el navegador: la cabecera no la espera. Con
+     ella, el color corregido va adentro del chip; sin ella, se sigue viendo el chip de la corrección. */
+  const veLaLectura = enProyectos && !!ctx && (canSeeCs || (await esCseDeLaCuenta(id, ctx.teamMember.email)));
+
   // Dominio del cliente (para filtrar sesiones de Fireflies)
   const clientDomain = (() => {
     const raw = client.company?.trim();
@@ -176,7 +183,8 @@ export default async function ClientLayout({
                 ⏸ En espera del cliente
               </span>
             )}
-            {correccionVigente && (
+            {veLaLectura && <LecturaDeLaCuenta clientId={id} />}
+            {correccionVigente && !veLaLectura && (
               <span
                 title={`«${correccionVigente.nota}» · corregido por ${quienCorrigio(correccionVigente)} en Éxito del cliente, hasta el ${fmtDia(correccionVigente.vence, hoy)}`}
                 className="flex-shrink-0 cursor-help rounded border border-line bg-surface px-1.5 py-0.5 text-2xs font-medium text-fg-secondary"

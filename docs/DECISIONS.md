@@ -8366,7 +8366,7 @@ hacerlo**. El plan, por fases, está en `docs/nexus-sistema-de-trabajo-plan.md`.
 - **«Para ti» dejó de repetir el siguiente paso**: la fuente «Tus siguientes pasos» se retiró, porque esas tareas ya
   salen en «Tus tareas». «Usar como siguiente paso» (después de una reunión) usa la tarea propuesta, no crea otra.
 
-**Cómo quedó la fase 1 en el código (2026-10-16, sin desplegar; 1.1, 1.3 y 1.4).**
+**Cómo quedó la fase 1 en el código (2026-10-16, sin desplegar; 1.1, 1.2, 1.3 y 1.4).**
 
 - **«Lo que importa hoy»** (`lib/para-ti/importa.ts`): de lo de hoy y lo que dejó un agente, como mucho cinco, UNA POR
   CUENTA (la cuenta sale del pendiente o de su enlace `/clients/<id>`); lo demás de esa cuenta va plegado («+N en esta
@@ -8384,3 +8384,25 @@ hacerlo**. El plan, por fases, está en `docs/nexus-sistema-de-trabajo-plan.md`.
   a hablar del tema). Lo que pidió una persona no cuenta. En «Para ti», «Lo que dejaron tus reuniones» es UNA LÍNEA POR
   REUNIÓN (como mucho 8), con su cuenta, y cuenta también tus tareas propuestas de esa reunión (también de un
   prospecto); «Nexus te propone N tareas» queda para lo de las reuniones internas y el asistente.
+- **La lectura de la cuenta en lugar de alertas sueltas** (1.2, `lib/cs/lectura-de-la-cuenta.ts`). Medido ese día: 155
+  alertas abiertas en 27 cuentas, 131 del vigía; la huella que escribía el agente iba en la llave y cada corrida creaba
+  otra sobre lo mismo.
+  - *Una alerta del vigía por cuenta (o proyecto) y categoría* (`llaveDelVigia`): la que está abierta sobre lo mismo se
+    actualiza con lo último que vio, tenga la llave que tenga. La queja sigue una por cita: cada una es una frase del
+    cliente verificada, y pinta el color.
+  - *La renovación se junta*: la regla deja UN aviso por fecha con todos los hubs que renuevan ese día (antes, uno por
+    hub; hasta cinco del mismo cliente), el vigía suma lo suyo a ese aviso y la regla absorbe la renovación que el vigía
+    ya tenía abierta. Lo que la CSL cerró con la llave vieja no vuelve en el mismo umbral.
+  - *Un cierre del sistema no suprime*: si el agente vuelve a ver algo que Nexus cerró solo, vuelve. Solo lo que cerró
+    una persona espera una señal nueva.
+  - *La lectura*: el color de Éxito del cliente y hasta tres motivos (sus razones primero; después las alertas de riesgo
+    que ninguna razón dice, la más grave primero). Las sugerencias del vigía (oportunidades, acciones) no son motivos:
+    se cuentan aparte.
+  - *Quién la ve*: quien lidera Customer Success y el CSE de la cuenta (el encargado en HubSpot de un proyecto de CS), en
+    el chip «Cómo está la cuenta» de la cabecera de la ficha. Al CSE le llega sin lo que habla de plata. Los demás siguen
+    viendo solo el chip de la corrección del color.
+  - *En «Para ti»*: el vigía da una línea por cuenta (las primeras cinco; las demás, juntas en una) y el CSE recibe sus
+    cuentas en rojo, con su primer motivo (`TUS_CUENTAS_EN_RIESGO`, peso de riesgo).
+  - *El cierre en bloque* (`scripts/cerrar-alertas-sueltas.ts`, después del deploy, con respaldo de `CsAlert`): las
+    alertas abiertas del vigía sin frase verificada, firmadas por el sistema. Quedan los avisos de la regla (los junta
+    ella), lo que levantó la lectura de cada reunión y las quejas y los retrasos con la frase del cliente.

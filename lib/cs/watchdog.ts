@@ -34,7 +34,17 @@ import { crDateParts, WEEKDAYS_MON_FRI } from "@/lib/jobs/time";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { PROYECTO_DE_CARTERA_WHERE, proyectoDeCarteraWhere } from "@/lib/projects/scope";
 import { leerPartner } from "./lectura-partner";
-import { juntarEvidencia, mismaCitaVerificada, queHacerConLaRedeteccion } from "./alertas-reglas";
+import {
+  esAvisoDeRenovacion,
+  evidenciaJuntoALaRegla,
+  PREFIJO_DE_RENOVACION,
+  juntarEvidencia,
+  llaveDelVigia,
+  mismaCitaVerificada,
+  queHacerConLaRedeteccion,
+  razonJuntoALaRegla,
+} from "./alertas-reglas";
+import { PREFIJO_DE_LA_LECTURA } from "./alertas-de-la-lectura";
 import { hayDeudaDelCliente, resumirFacturacion } from "./facturacion-de-la-cuenta";
 import { CATEGORIAS_QUE_PINTAN, citaEnElTexto, citaPedida, hablanteDeLaCita } from "./cita-de-alerta";
 import type { CorreoLeido } from "./watchdog-cuenta";
@@ -374,8 +384,68 @@ async function runForProjectInner(
     for (const a of alerts) {
       // Hechos de CUENTA dedupean por cliente (multi-proyecto no duplica);
       // hechos de PROYECTO (cronograma/tareas/pipeline) por proyecto.
-      const scopeId = ACCOUNT_CATEGORIES.has(a.category) ? project.clientId : projectId;
-      const dedupeKey = `${scopeId}:${a.category}:${a.fingerprint}`;
+      const deLaCuenta = ACCOUNT_CATEGORIES.has(a.category);
+      const scopeId = deLaCuenta ? project.clientId : projectId;
+      // Una por cuenta (o proyecto) y categoría (2026-10-16, fase 1.2): la huella del agente ya no va en la llave.
+      const dedupeKey = llaveDelVigia(scopeId, a.category, a.fingerprint);
+
+      // La que ya está abierta sobre lo mismo se actualiza con lo último que vio el agente, tenga la llave que tenga:
+      // también las de antes del 2026-10-16, que llevaban la huella. La renovación se junta con el aviso de la regla.
+      // La queja no: sigue una por cita (abajo, con su gemela).
+      if (a.category !== "QUEJA") {
+        const sobreLoMismo: Prisma.CsAlertWhereInput = {
+          clientId: project.clientId,
+          category: a.category,
+          status: { in: ["OPEN", "SEEN"] },
+          ...(deLaCuenta ? {} : { projectId }),
+          NOT: { dedupeKey: { startsWith: PREFIJO_DE_LA_LECTURA } },
+        };
+        // Con un aviso de renovación de la regla abierto, la renovación del vigía va ahí (el más cercano primero).
+        const abierta =
+          (a.category === "RENEWAL_RISK"
+            ? await prisma.csAlert.findFirst({
+                where: { AND: [sobreLoMismo, { dedupeKey: { startsWith: PREFIJO_DE_RENOVACION } }] },
+                orderBy: [{ severity: "desc" }, { lastDetectedAt: "desc" }],
+              })
+            : null) ?? (await prisma.csAlert.findFirst({ where: sobreLoMismo, orderBy: { lastDetectedAt: "desc" } }));
+        if (abierta) {
+          const severity = sevRank(a.severity) > sevRank(abierta.severity) ? a.severity : abierta.severity;
+          if (esAvisoDeRenovacion(abierta)) {
+            // El aviso de la regla conserva su llave y su título (la regla lo cierra sola cuando deja de corresponder);
+            // suma lo que vio el agente.
+            const linea = ((abierta.evidence as { lineaDeLaRegla?: unknown } | null)?.lineaDeLaRegla as string | undefined) ?? abierta.reason;
+            await prisma.csAlert.update({
+              where: { id: abierta.id },
+              data: {
+                occurrences: { increment: 1 },
+                lastDetectedAt: now,
+                reason: razonJuntoALaRegla(linea, a.reason),
+                suggestedAction: a.suggestedAction ?? abierta.suggestedAction,
+                severity,
+                evidence: evidenciaJuntoALaRegla(abierta.evidence, a.evidence, linea) as Prisma.InputJsonValue,
+                agentRunId: run.id,
+              },
+            });
+          } else {
+            await prisma.csAlert.update({
+              where: { id: abierta.id },
+              data: {
+                dedupeKey,
+                occurrences: { increment: 1 },
+                lastDetectedAt: now,
+                title: a.title,
+                reason: a.reason,
+                suggestedAction: a.suggestedAction,
+                severity,
+                evidence: juntarEvidencia(abierta.evidence, a.evidence) as Prisma.InputJsonValue,
+                agentRunId: run.id,
+              },
+            });
+          }
+          merged++;
+          continue;
+        }
+      }
 
       const existing = await prisma.csAlert.findFirst({
         where: { dedupeKey },
@@ -393,7 +463,7 @@ async function runForProjectInner(
             reason: a.reason,
             suggestedAction: a.suggestedAction,
             severity: sevRank(a.severity) > sevRank(existing.severity) ? a.severity : existing.severity,
-            evidence: a.evidence as Prisma.InputJsonValue,
+            evidence: juntarEvidencia(existing.evidence, a.evidence) as Prisma.InputJsonValue,
             agentRunId: run.id,
           },
         });

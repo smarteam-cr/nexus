@@ -29,6 +29,7 @@ export const PESOS = {
 export const PESO_DE_LA_FUENTE: Record<string, number> = {
   // Cliente en riesgo o queja verificada.
   "cs-vigia": PESOS.riesgo,
+  "cs-tus-cuentas": PESOS.riesgo,
   "cs-relaciones-cartera": PESOS.riesgo,
   "cs-relacion-hubspot": PESOS.riesgo - 5,
   // Cuenta sin acción o sin reunión (las reglas de servicio, fase 2.1).

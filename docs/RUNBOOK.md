@@ -299,7 +299,7 @@ toma el turno del día no anota nada, así que un rojo queda rojo hasta la corri
 | `mercury-espejo-daily` | ≥ 6:00 CR, una vez al día | `MERCURY_API_TOKEN` (token «Read Only» de Mercury) y `MERCURY_SYNC_ENABLED` ≠ `0` | copia las facturas, los clientes y los movimientos de Mercury (Nexus solo lee: el token no puede escribir). Si falla, el job FALLA (rojo + Sentry); un token rechazado retiene el turno hasta mañana (ver «La copia de Mercury no corre») |
 | `tipo-cambio-daily` | ≥ 6:00 CR, una vez al día | `TIPO_CAMBIO_SYNC_ENABLED` ≠ `0`; `BCCR_TOKEN` opcional | trae la venta y la compra de referencia del BCCR del día a `TipoCambioDia` (con `BCCR_TOKEN`, del servicio del BCCR; sin él, del API de Hacienda). Si falta el histórico desde 2023 lo intenta en la misma corrida. FALLA (rojo + Sentry) si no quedó la tasa de hoy; un fallo pasajero suelta el turno. Primera carga del histórico: `scripts/traer-tipo-de-cambio.ts --apply` |
 | `planilla-quincena-daily` | ≥ 6:00 CR, una vez al día | — | se asegura de que la quincena de planilla de hoy exista en el libro, con el salario que rige (`completarQuincenas`, PENDIENTE: pagarla la marca una persona). Re-generar no duplica nada. Las quincenas atrasadas no las crea solo: eso es «Completar las que faltan» en el historial de planilla |
-| `licencias-renovacion-daily` | ≥ 7:00 CR, una vez al día | — | a 90, 60 y 30 días de cada renovación de licencias (HubSpot Partner + lo cargado a mano en la información del cliente), una alerta de «Renovación» en Éxito del cliente; una por cliente, hub, fecha y umbral. Sin IA (`lib/cs/avisos-de-renovacion.ts`) |
+| `licencias-renovacion-daily` | ≥ 7:00 CR, una vez al día | — | a 90, 60 y 30 días de cada renovación de licencias (HubSpot Partner + lo cargado a mano en la información del cliente), una alerta de «Renovación» en Éxito del cliente; una por cliente, fecha y umbral, con todos los hubs que renuevan ese día (hasta el 2026-10-16, una por hub). Absorbe la renovación que el vigía ya tenía abierta. Sin IA (`lib/cs/avisos-de-renovacion.ts`) |
 | `adopcion-recordatorios-daily` | ≥ 7:00 CR, una vez al día | — | recuerda revisar la adopción: a los 30 días del inicio de un proyecto de CS, en la semana antes de su entrega y en la primera semana de cada mes en las cuentas recurrentes. Un aviso de «Para ti» al CSE del proyecto y a quien lleva el frente de Customer Success, que lleva a la pestaña Adopción. Cada momento tiene una ventana de 7 días: no es retroactivo. Sin IA (`lib/cs/recordatorios-de-adopcion.ts`) |
 | `tareas-semana-lunes` | lunes ≥ 6:00 CR | — | Tareas internas: vence las propuestas (tareas y proyectos) que nadie decidió en 14 días, pasa a «Por asignar» lo abierto de quien se dio de baja (lo privado no) y muda al sprint de casa lo de quien cambió de área. Todo como `sistema`, con su evento; correrlo dos veces no cambia nada. Con `TAREAS_CIERRE_AUTOMATICO=1` en el `.env` (apagado por defecto), antes revisa como `sistema` la semana pasada de quien no la revisó: lo abierto pasa a esta semana y la persona lo corrige desde Mis tareas (`cerrarSemanaPasadaComoSistema`) |
 | `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 35 invariantes solo-base (`lib/invariantes/`, B-07; INV38–43 son de Tareas internas; INV44, la lectura de cada reunión; INV45, los hechos de las reuniones; INV46, los pedidos fuera de alcance de una reunión de otro cliente); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
@@ -475,6 +475,22 @@ el `.env` nuevo; sin SQL):
 El permiso `crm.objects.partner-clients.read` ya está concedido. Al día siguiente, Integraciones › Jobs
 del servidor tiene que mostrar los jobs en verde; si dicen **apagado**, nombran la variable que falta.
 Para no esperar a las 6:00: «Actualizar partner» y «Actualizar señales» en Éxito del cliente.
+
+### Cerrar las alertas sueltas (fase 1.2, una vez, 2026-10-16)
+
+Desde ese deploy el vigía tiene UNA alerta por cuenta (o proyecto) y categoría, y la ficha del cliente muestra la lectura
+de la cuenta (DECISIONS «Nexus, el sistema de trabajo de cada cuenta», fase 1.2). Las abiertas de antes se cierran en
+bloque, firmadas por el sistema: lo que el vigía siga viendo lo vuelve a abrir, ya con la llave nueva.
+
+1. Con el deploy de la fase 1.2 ya en producción: antes, el vigía las volvería a crear con la llave vieja.
+2. Desde una PC, en simulacro (solo lee): `npx tsx scripts/cerrar-alertas-sueltas.ts`. Dice cuántas se cierran, por
+   categoría y por cuenta, y cuántas quedan (los avisos de renovación de la regla, lo de la lectura de reuniones y las
+   quejas y los retrasos con la frase verificada). Medido el 2026-10-16: 131 de 155, en 27 cuentas.
+3. Aplicar: `$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/cerrar-alertas-sueltas.ts --apply; Remove-Item Env:ALLOW_PROD_WRITE`.
+   Respalda antes `CsAlert` (pg_dump en el PATH o `SIN_RESPALDO=1` a sabiendas). Correrlo otra vez no cambia nada.
+4. Los avisos de renovación por hub los cierra la regla en su corrida siguiente (≥ 7:00 CR) y deja uno por fecha.
+5. Deshacer: las cerradas llevan la nota «Se cerró al pasar a la lectura de la cuenta (2026-10-16)…»; volver a abrir
+   esas filas (`status` OPEN, sin `resolvedAt`, `resolvedByEmail` ni `resolutionNote`) o restaurar el respaldo.
 
 ### Preguntas sobre la cuenta (2026-10-13)
 

@@ -23,6 +23,7 @@ import { TAREAS } from "./fuentes/tareas";
 import { FINANZAS_DEVUELTO, FINANZAS_REGISTRAR, FINANZAS_SUPERVISAR } from "./fuentes/finanzas";
 import { CRONOGRAMAS_TRABADOS, SIN_ENCARGADO, VIGIA } from "./fuentes/cs";
 import { CORRECCION_QUE_CADUCO, RELACION_CON_HUBSPOT, RELACIONES_DE_LA_CARTERA } from "./fuentes/cartera-de-la-csl";
+import { TUS_CUENTAS_EN_RIESGO } from "./fuentes/tus-cuentas";
 import {
   COMENTARIOS_DE_LA_DOCUMENTACION,
   COMENTARIOS_DE_LA_ESCALA,
@@ -47,6 +48,7 @@ export const FUENTES: readonly Fuente[] = [
   TAREAS,
   RELACION_CON_HUBSPOT,
   CORRECCION_QUE_CADUCO,
+  TUS_CUENTAS_EN_RIESGO,
   // Por frente: lo que es tuyo porque lo llevas.
   VIGIA,
   RELACIONES_DE_LA_CARTERA,

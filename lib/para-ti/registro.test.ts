@@ -16,7 +16,7 @@ import { join, relative } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { FRENTES_ACTIVOS } from "./frentes";
 import { TIPOS_DE_AVISO } from "./avisos";
-import { VIGIA } from "./fuentes/cs";
+import { CUENTAS_DEL_VIGIA_POR_LINEA, VIGIA } from "./fuentes/cs";
 import { pestanaDeLaUrl } from "@/lib/cs/pestanas-de-la-cuenta";
 
 const base = vi.hoisted(() => ({ alertas: [] as unknown[], propuestas: [] as unknown[] }));
@@ -96,6 +96,7 @@ describe("⛔ lo del vigía lleva a la ficha de su cuenta, no al índice (2026-1
   const alerta = (clientId: string, name: string, dia: string) => ({
     id: `al-${clientId}-${dia}`,
     clientId,
+    title: `Uso bajo (${dia})`,
     firstDetectedAt: new Date(`2026-10-${dia}T12:00:00Z`),
     client: { name },
   });
@@ -109,7 +110,8 @@ describe("⛔ lo del vigía lleva a la ficha de su cuenta, no al índice (2026-1
   const ctx = { ahora: new Date("2026-10-05T15:00:00Z"), hoyISO: "2026-10-05" };
   const medir = async () => {
     const items = await VIGIA.medir({} as never, ctx);
-    return { alertas: items.find((i) => i.clave === "cs-vigia:alertas"), estados: items.find((i) => i.clave === "cs-vigia:estados") };
+    const deAlertas = items.filter((i) => i.clave.startsWith("cs-vigia:alertas"));
+    return { alertas: deAlertas[0], deAlertas, estados: items.find((i) => i.clave === "cs-vigia:estados") };
   };
 
   it("una cuenta: el botón abre su ficha", async () => {
@@ -121,25 +123,37 @@ describe("⛔ lo del vigía lleva a la ficha de su cuenta, no al índice (2026-1
     expect(estados?.href).toBe("/customer-success/c-wherex?pestana=proyectos");
   });
 
-  it("varias cuentas: dice cuántas y trae cada cuenta con su enlace", async () => {
+  it("⭐ una línea por cuenta (2026-10-16): «Lo que importa hoy» toma una cosa por cuenta", async () => {
     base.alertas = [alerta("c-wherex", "Wherex", "01"), alerta("c-kolbi", "Kölbi", "02"), alerta("c-wherex", "Wherex", "03")];
     base.propuestas = [propuesta("p-1", "c-kolbi", "Kölbi"), propuesta("p-2", "c-wherex", "Wherex")];
-    const { alertas, estados } = await medir();
-    expect(alertas?.titulo).toContain("3 alertas altas sin revisar en 2 cuentas");
-    expect(alertas?.href, "el botón: la que más espera").toBe("/customer-success/c-wherex");
-    expect(alertas?.enlaces).toEqual([
-      { texto: "Wherex (2)", href: "/customer-success/c-wherex" },
-      { texto: "Kölbi", href: "/customer-success/c-kolbi" },
+    const { deAlertas, estados } = await medir();
+    expect(deAlertas.map((i) => [i.clientId, i.titulo])).toEqual([
+      ["c-wherex", "Wherex: Uso bajo (01) (y 1 más)"],
+      ["c-kolbi", "Kölbi: Uso bajo (02)"],
     ]);
+    expect(deAlertas[0].href).toBe("/customer-success/c-wherex");
+    expect(estados?.clientId, "las propuestas de dos cuentas no son de una").toBeNull();
     expect(estados?.enlaces).toEqual([
       { texto: "Kölbi", href: "/customer-success/c-kolbi?pestana=proyectos" },
       { texto: "Wherex", href: "/customer-success/c-wherex?pestana=proyectos" },
     ]);
   });
 
+  it("las cuentas que no entran en las primeras van juntas, con su enlace", async () => {
+    const n = CUENTAS_DEL_VIGIA_POR_LINEA + 2;
+    base.alertas = Array.from({ length: n }, (_, i) => alerta(`c-${i}`, `Cuenta ${i}`, String(i + 1).padStart(2, "0")));
+    const { deAlertas } = await medir();
+    expect(deAlertas).toHaveLength(CUENTAS_DEL_VIGIA_POR_LINEA + 1);
+    const resto = deAlertas[deAlertas.length - 1];
+    expect(resto.clientId).toBeNull();
+    expect(resto.titulo).toContain("en 2 cuentas más");
+    expect(resto.enlaces?.map((e) => e.href)).toEqual([`/customer-success/c-${n - 2}`, `/customer-success/c-${n - 1}`]);
+  });
+
   it("nunca el índice, y la pestaña es una que la ficha entiende", async () => {
     const { alertas, estados } = await medir();
-    for (const href of [alertas?.href, estados?.href, ...(alertas?.enlaces ?? []).map((e) => e.href)]) {
+    const { deAlertas } = await medir();
+    for (const href of [alertas?.href, estados?.href, ...deAlertas.flatMap((a) => [a.href, ...(a.enlaces ?? []).map((e) => e.href)])]) {
       expect(href).toMatch(/^\/customer-success\/[^/?]+/);
     }
     const pestana = new URL(estados!.href, "https://nexus.local").searchParams.get("pestana");
