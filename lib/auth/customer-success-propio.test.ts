@@ -46,6 +46,8 @@ const PANTALLAS = [
   "app/(shell)/customer-success/carga/persona/[id]/page.tsx",
   "app/(shell)/customer-success/carga/supuestos/page.tsx",
   "app/(shell)/customer-success/carga/datos/page.tsx",
+  // La lista de limpieza de HubSpot (2026-10-16, fase 0.5): cada persona ve lo suyo en «Para ti».
+  "app/(shell)/customer-success/limpieza/page.tsx",
   // Rentabilidad salió de esta lista el 2026-10-07: vuelve a ser solo de dirección (decisión de Elías). La vigila
   // lib/rentabilidad/acceso.test.ts.
 ];
@@ -105,7 +107,7 @@ describe("el área es de la CSL y dirección, por rol", () => {
          sigue antes de cargar, y el test de abajo verifica que la cuenta le llega vaciada. */
       const gate = p === CUENTA ? src.indexOf("if (!lider && !suCse) redirect(") : src.indexOf("if (!ctx || !esLiderDeCs(ctx.role)) redirect(");
       expect(gate, `${p} dejó de pedir el rol`).toBeGreaterThan(0);
-      const cargadores = ["cargarCarteraDeLaCsl(", "loadCsAccount(", "cargarCargaDelEquipo(", "cargarRentabilidad("].map((f) => src.indexOf(f)).filter((i) => i > 0);
+      const cargadores = ["cargarCarteraDeLaCsl(", "loadCsAccount(", "cargarCargaDelEquipo(", "cargarRentabilidad(", "cargarListaDeLimpieza("].map((f) => src.indexOf(f)).filter((i) => i > 0);
       /* Sin esto la comparación de abajo no podía fallar: si se renombra el cargador, la lista
          queda vacía, Math.min() da Infinity y «gate < Infinity» pasa siempre. */
       expect(

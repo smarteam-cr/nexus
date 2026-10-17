@@ -180,7 +180,7 @@ Alex), vectores si la búsqueda no alcanza, y un MCP si hace falta.
 
 | Fase | Estado |
 |---|---|
-| 0 · Cimientos | 0.1 a 0.4 en el código, sin desplegar (SQL aplicados); 0.6 y 0.7 esperan el deploy; falta 0.5 |
+| 0 · Cimientos | 0.1 a 0.5 en el código, sin desplegar (SQL aplicados); 0.6 y 0.7 esperan el deploy |
 | 1 · Atención | En el código, sin desplegar; después del deploy, el cierre en bloque de las alertas (`scripts/cerrar-alertas-sueltas.ts`) |
 | 2 · La semana | Pendiente |
 | 3 · Después de cada reunión | Pendiente |

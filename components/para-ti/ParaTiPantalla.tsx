@@ -203,11 +203,18 @@ function Enlaces({ enlaces }: { enlaces?: Pendiente["enlaces"] }) {
   if (!enlaces?.length) return null;
   return (
     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-4">
-      {enlaces.map((e) => (
-        <Link key={e.href} href={e.href} className="text-brand hover:text-brand-light">
-          {e.texto}
-        </Link>
-      ))}
+      {enlaces.map((e) =>
+        /^https?:\/\//.test(e.href) ? (
+          // Un enlace a HubSpot (la lista de limpieza) se abre aparte: Nexus queda donde estaba.
+          <a key={e.href} href={e.href} target="_blank" rel="noreferrer" className="text-brand hover:text-brand-light">
+            {e.texto} ↗
+          </a>
+        ) : (
+          <Link key={e.href} href={e.href} className="text-brand hover:text-brand-light">
+            {e.texto}
+          </Link>
+        ),
+      )}
     </div>
   );
 }

@@ -94,6 +94,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "customer-success": { modo: "own" },
   "customer-success/[clientId]": { modo: "own" },
   "customer-success/carga": { modo: "own" },
+  "customer-success/limpieza": { modo: "own" },
   "customer-success/carga/persona/[id]": { modo: "own" },
   "customer-success/carga/supuestos": { modo: "own" },
   "customer-success/carga/datos": { modo: "own" },

@@ -49,6 +49,8 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/carga/queries.ts": { modo: "criterio", criterio: "cartera" },
   // La lectura de seguimiento (memoria de la cuenta, etapa 2): el CSE de la cuenta, para lo que prometió el cliente.
   "lib/lecturas/personas.ts": { modo: "criterio", criterio: "cartera" },
+  // La lista de limpieza de HubSpot (2026-10-16, fase 0.5): los proyectos abiertos de HubSpot, de cualquier pipeline.
+  "lib/limpieza/lista-server.ts": { modo: "criterio", criterio: "clasificable" },
   // «Para ti» (2026-10-04): las implementaciones abiertas, con el criterio de la línea del índice de clientes.
   "lib/para-ti/fuentes/cs.ts": { modo: "criterio", criterio: "clasificable" },
   // El siguiente paso de cada equipo (2026-10-15, etapa 2 de docs/mi-dia-plan.md): los proyectos abiertos de la cuenta.

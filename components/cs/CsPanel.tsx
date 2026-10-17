@@ -18,7 +18,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 import { Alert, PageHeader, Tabs } from "@/components/ui";
-import { BotonBlanco, QueSigue, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { BOTON_DE_HERRAMIENTA, BotonBlanco, QueSigue, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { RUTA_DE_LA_LIMPIEZA } from "@/lib/limpieza/reglas";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { cn } from "@/lib/cn";
 import { diasEntre, fmtDia, fmtMonto, haceCuanto, plural } from "@/lib/cs/formato";
@@ -123,6 +124,11 @@ export default function CsPanel({
           title="Éxito del cliente"
           recorrido="exito-listado"
           description={`${plural(data.conProyecto, "cuenta con proyecto activo", "cuentas con proyecto activo")} · ${plural(data.gestionadas, "gestionada", "gestionadas")} en HubSpot.`}
+          action={
+            <Link href={RUTA_DE_LA_LIMPIEZA} className={BOTON_DE_HERRAMIENTA}>
+              Limpieza de HubSpot
+            </Link>
+          }
         />
 
         {partnerViejo && (

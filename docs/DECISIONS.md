@@ -8380,6 +8380,21 @@ hacerlo**. El plan, por fases, está en `docs/nexus-sistema-de-trabajo-plan.md`.
     preparar: lo que llega del navegador nunca se aplica tal cual.
   - ⚠ Los escritores del siguiente paso todavía preguntan el acceso con la sesión del pedido: aplicarlos fuera de un
     pedido de la misma persona (un job) falla con 403.
+- **La lista de limpieza de HubSpot** (0.5, `lib/limpieza`): lo que hay que poner al día en HubSpot, por quién lo tiene
+  que hacer. Nexus usa esos datos (el CSE de la cuenta, la etapa, la cartera): si HubSpot miente, Nexus también.
+  - *Cinco motivos*: el proyecto está a nombre de alguien que ya no está; no tiene encargado; lleva más de seis semanas
+    en la misma etapa (menos Continuidad, que dura por diseño); no tiene actividad en HubSpot en un mes; la empresa tiene
+    un servicio recurrente activo en Cobranza y ningún proyecto abierto en HubSpot.
+  - *Quién lo arregla*: el encargado, si está en el equipo; si no (o no hay proyecto), quien lidera el sprint del
+    proyecto (Customer Success o Desarrollo).
+  - *Dónde se ve*: en «Para ti», una línea de «Esta semana» con lo de cada persona y su enlace a HubSpot (es limpieza:
+    no compite con lo de hoy), y la lista entera por responsable en Éxito del cliente › «Limpieza de HubSpot», para la
+    CSL y dirección.
+  - *Dos datos nuevos del espejo de proyectos*: desde cuándo está en la etapa de hoy (`hs_v2_date_entered_current_stage`)
+    y la última actividad (`hs_last_activity_date`), en `Project.hubspotEtapaDesde` y `hubspotUltimaActividad` (SQL
+    `2026-10-16-limpieza-de-hubspot.sql`, aplicado el mismo día). Nacen vacíos y se llenan con la siguiente
+    sincronización de cada cliente; hasta entonces no se avisa nada de lo quieto. Solo lee: lo arregla una persona en
+    HubSpot.
 
 **Cómo quedó la fase 1 en el código (2026-10-16, sin desplegar; 1.1, 1.2, 1.3 y 1.4).**
 

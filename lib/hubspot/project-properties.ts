@@ -46,6 +46,9 @@ export const PROJECT_PROPERTIES = [
   "detalle_del_motivo_de_bloqueo", // texto libre "| Desarrollo"
   "detalle_del_motivo_de_bloqueo__implementaciones", // texto libre "| Implementaciones"
   "estado_de_adopcion",   // No iniciado | Bajo | Medio | Alto
+  // La lista de limpieza (2026-10-16, fase 0.5): cuánto lleva en la etapa y la última actividad del proyecto.
+  "hs_v2_date_entered_current_stage",
+  "hs_last_activity_date",
 ] as const;
 
 /**
@@ -60,7 +63,7 @@ export const GRUPOS_DE_PROPIEDAD: { titulo: string; props: readonly string[] }[]
   },
   {
     titulo: "Estado y etapa",
-    props: ["hs_status", "estatus_del_proyecto", "hs_pipeline", "hs_pipeline_stage", "hs_createdate"],
+    props: ["hs_status", "estatus_del_proyecto", "hs_pipeline", "hs_pipeline_stage", "hs_createdate", "hs_v2_date_entered_current_stage", "hs_last_activity_date"],
   },
   {
     titulo: "Quién lo lleva",

@@ -1189,6 +1189,12 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
     const createdAtRaw = (props.hs_createdate ?? "").trim();
     const hubCreatedAt = createdAtRaw ? new Date(createdAtRaw) : null;
     const hubCreatedAtValid = hubCreatedAt && !isNaN(hubCreatedAt.getTime()) ? hubCreatedAt : null;
+    // Desde cuándo está en la etapa de hoy y su última actividad (la lista de limpieza, fase 0.5).
+    const fechaDe = (v: string | null | undefined): Date | null => {
+      const t = (v ?? "").trim();
+      const d = t ? new Date(t) : null;
+      return d && !isNaN(d.getTime()) ? d : null;
+    };
 
     // ── CS360: propiedades operativas para el dashboard de la CSL ─────────
     // Valores CRUDOS de HubSpot (labels ES en la UI, no acá). Ausente → null
@@ -1237,6 +1243,8 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
       hubspotPipelineStageId: stageId,
       hubspotPipelineStageLabel: stageLabel,
       hubspotStageSyncedAt: stageId ? new Date() : null,
+      hubspotEtapaDesde: fechaDe(props.hs_v2_date_entered_current_stage),
+      hubspotUltimaActividad: fechaDe(props.hs_last_activity_date),
       ...csOps,
       /* El HECHO crudo de la asociación proyecto↔proyecto. Se guarda aunque el hermano
          todavía no exista en Nexus; la resolución la hace `resolverHermanos` al final.

@@ -55,6 +55,7 @@ export const PESO_DE_LA_FUENTE: Record<string, number> = {
   "sistema-jobs": PESOS.interno,
   // Encuestas y limpieza.
   tiempos: PESOS.limpieza,
+  "hubspot-limpieza": PESOS.limpieza,
   "cs-correccion-caduco": PESOS.limpieza + 5,
   "escala-comentarios": PESOS.limpieza + 5,
   "documentacion-comentarios": PESOS.limpieza + 5,
