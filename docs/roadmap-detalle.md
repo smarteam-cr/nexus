@@ -254,11 +254,41 @@ que necesita uno lo dice en su parte; la de control lo escribe al mezclar.
 
 ## En curso ahora
 
-Ninguna etapa en ejecución al corte. Cuando se arranque una, se anota acá: etapa · zona · sesión · rama.
+Decidido el 17 oct: hasta tres carriles a la vez, en zonas distintas. El orden de cada carril está en
+`docs/roadmap.md` › El camino, sin tiempos: Elías decide qué se ejecuta. Se construye todo y se prueba al final.
+Los kickoffs y los diagnósticos no se tocan como datos: lo que existe se sigue consultando en el mismo lugar.
+Cuando se arranque una etapa, se anota acá.
 
-| Etapa | Zona | Sesión | Rama |
-|---|---|---|---|
-| — | — | — | — |
+Decisiones de Elías del 17 oct que ordenan el camino:
+- Tareas: por ahora solo las de seguimiento de la cuenta; las de configuración (desde la Planificación) quedan para
+  después. En la ficha de cada cliente, todas las tareas de Smarteam con esa cuenta, por equipo, con de dónde viene
+  cada una (reunión con el cliente, sprint interno, HubSpot, a mano).
+- Sprints: Customer Success, Marketing y Desarrollo configuran el suyo (la serie de su reunión y quiénes están). De
+  cada reunión, como mucho 5 tareas propuestas por persona (hoy el tope general de sugerencias abiertas es 10).
+- La escala se ve y se regenera en la ficha del cliente, para el equipo; el cliente no la ve.
+- Recuperar «Reuniones con texto ajeno» (worktree `elegant-rhodes-995841`, base del 5 oct): rebasar sobre main, que
+  choca con `post-process.ts` y `meet-enrichment.ts`; después `limpiar-analisis-de-otra-reunion.ts --apply` y
+  regenerar los handoffs de RC Inmobiliaria, AMC, DISTELSA y Grupo Printer.
+- Lo que revisa el equipo (no Elías) está en el roadmap › «Lo que le pides al equipo».
+
+El roadmap se ordena en lo que conecta a los equipos (Tareas, Inicio, Reuniones y memoria, La escala y los casos de
+uso, El chat) y en cada equipo (Ventas, Customer Success, Finanzas). Lo que era la sesión «Nexus 2.0» quedó repartido
+entre Tareas, Inicio, Reuniones y Customer Success.
+
+| Tarjeta del roadmap | Zona | Sesión | Paso en curso | Rama |
+|---|---|---|---|---|
+| Tareas | Tareas y «Para ti» | — | — | — |
+| Inicio («Para ti») | Tareas y «Para ti» (no a la vez que Tareas) | — | — | — |
+| Reuniones y memoria | Reuniones y documentos | — | — | — |
+| La escala y los casos de uso | Ventas y Preventa (`lib/exploraciones`, `lib/escala`, `lib/casos-de-uso`) | — | — | — |
+| El chat de Nexus | Plataforma (`lib/nexus-chat`, nuevo) | — | — | — |
+| Customer Success | Clientes y CS | Clientes \| SmartLoop \| Nexus | — | — |
+| Finanzas | Finanzas | Finanzas \| Nexus | — | — |
+
+⚠ Dos pasos salen de su zona hacia Reuniones y documentos: la agenda de cada cuenta (Reuniones, `lib/sessions` y el
+calendario) y el cronograma del ciclo (Customer Success, `lib/timeline`). Son carpetas distintas; al armar las dos fichas,
+confirmar que no comparten archivos antes de correrlas a la vez. Los documentos con plantillas (Customer Success, paso 6)
+tocan kickoff y diagnóstico: solo pantallas y generación, nunca los bloques guardados.
 
 ## Sesiones abiertas
 
@@ -282,3 +312,74 @@ sesiones de ejecución de su zona o se cierran.
 
 Hay además 8 worktrees de sesiones viejas en `.claude/worktrees/` y dos copias aparte (`nexus-audit`, `nexus-rentabilidad`).
 `E:\Elias\Proyectos\nexus_DEPRECADO_usar_D` no se usa.
+
+## Deuda técnica rescatada de los chats (17 oct)
+
+No va en el roadmap de Elías; la lleva la sesión de control.
+
+- Rotar la clave `sb_secret` de Supabase que quedó en un chat (ARCHITECTURE §12, ítem 21).
+- El refactor de la base (`docs/database-refactoring-plan.md`): partir `Project` en satélites, auditoría por correo a
+  claves foráneas, arrays de ids a tablas pivote. Estancado; volver a medir antes de retomarlo.
+- Pruebas E2E con Playwright (hoy solo vitest).
+- La escala tiene dos modos de diagnóstico (operación nueva y existente): decidir si el diagnóstico de Nexus los
+  distingue.
+
+## Decisiones del 17 oct sobre lo rescatado
+
+- El cotizador de implementaciones base queda afuera de Nexus (no va ni en «Después»).
+- «Ver como otra persona» ya está en producción desde el 13 oct (10f1c5ef, `lib/auth/ver-como.ts`, solo lectura,
+  solo SUPER_ADMIN): Elías lo usa para probar. Está en «Lo que pruebas tú».
+
+## Primera tanda: fichas para ejecutar
+
+Tres sesiones a la vez, una por zona. Cada una arranca de `main`, en su worktree, y lee antes `docs/roadmap.md` y esta
+ficha. No tocan los compartidos (schema, `scripts/sql/`, DECISIONS, GLOSSARY, RUNBOOK, `lib/jobs/defs.ts`,
+`nav-config.tsx`): si los necesitan, lo dicen en su parte y la sesión de control lo escribe al mezclar. Los kickoffs y
+los diagnósticos no se tocan como datos. Cada una cierra con su parte y la tabla «Qué probar, en simple».
+
+Antes de la tanda: push y deploy de lo que está en `main` (lo hace Elías), para que las tres partan de lo mismo que
+producción.
+
+### Ficha A · Tareas de cada cliente y sprints (zona Tareas y «Para ti»)
+
+- **Objetivo.** Tareas, pasos 1 a 3: en la ficha de cada cliente, todas las tareas de Smarteam con esa cuenta, por
+  equipo (qué, para cuándo, de quién y de dónde viene: reunión con el cliente, sprint interno, HubSpot, a mano). Que
+  Customer Success, Marketing y Desarrollo configuren su sprint (la serie de su reunión y quiénes están). De cada
+  reunión, hasta 5 tareas propuestas por persona, con su origen a la vista.
+- **Dónde.** `lib/tareas` (visibilidad por cuenta ya existe en `visibilidad.ts`; lectura de reuniones del equipo en
+  `lectura.ts`; `FuenteDeTareas` tiene tabla y no código), `components/tareas`, y una sección en la ficha del cliente
+  (`app/(shell)/clients/[id]`, `components/clients/RielDelCliente.tsx`).
+- **Fuera.** Las tareas de configuración (desde la Planificación). «Planifica tu semana».
+- **Hecho cuando.** Abrir un cliente muestra sus tareas por equipo con su origen; un líder elige la reunión de su sprint
+  y la siguiente reunión de esa serie propone como mucho 5 tareas por persona; tsc y tests de `lib/tareas` en verde.
+
+### Ficha B · La escala y la preventa (zona Ventas y Preventa)
+
+- **Objetivo.** La escala, pasos 1 a 4 y 6, y Ventas, pasos 1 a 3: comprobar con casos reales que la escala se calcula
+  bien y que su agente usa toda la información de Nexus; pintarla con su evidencia; sugerir qué explorar en la próxima
+  reunión según lo que cambió; la misma escala en la ficha del cliente con su histórico, regenerarla y activar el
+  agente desde ahí; casos de uso inspirados en la biblioteca; armar la propuesta desde la preventa con su sección de
+  casos de uso (y sugeridos cuando no hay preventa); el siguiente paso de la preventa (agendar o planificar la
+  próxima sesión).
+- **Dónde.** `lib/exploraciones` (el agente, `escala-de-la-empresa.ts`, la guía), `lib/escala`, `lib/casos-de-uso`,
+  `components/exploraciones`, `components/clients/EscalaDeLaCuenta.tsx`, `lib/business-cases` y la propuesta.
+- **Fuera.** Licencias y precio de los casos (paso 7). La versión 9.0. Nunca medir con Wherex.
+- **Hecho cuando.** En una preventa real la escala muestra la evidencia de cada nivel y sugiere qué explorar; la ficha
+  del cliente tiene la misma escala con sus versiones; una propuesta nueva trae la sección de casos de uso.
+
+### Ficha C · Que no falte ninguna reunión (zona Reuniones y documentos)
+
+- **Objetivo.** Reuniones, pasos 2 y 3: que toda reunión con cliente (y las de Desarrollo) quede con su transcripción;
+  recuperar el arreglo de las reuniones con texto de otra reunión (worktree `elegant-rhodes-995841`, base del 5 oct:
+  rebasar sobre main, choca con `post-process.ts` y `meet-enrichment.ts`), limpiar esas reuniones y regenerar los
+  handoffs de RC Inmobiliaria, AMC, DISTELSA y Grupo Printer.
+- **Dónde.** `lib/google` (Meet, Drive), `lib/sessions`, `scripts/limpiar-analisis-de-otra-reunion.ts`.
+- **Fuera.** La agenda de cada cuenta y la página de cada reunión (pasos 4 y 5).
+- **Hecho cuando.** Se sabe por qué faltan transcripciones y cuántas faltan hoy, lo que se puede arreglar desde Nexus
+  está arreglado y lo que es de Google Workspace queda en una lista para Elías; el simulacro de la limpieza lista las
+  reuniones afectadas.
+
+### Después de la primera tanda
+
+Finanzas (pasos 2 a 6), Customer Success (acción semanal de cada cuenta y SmartLoop) e Inicio (las páginas de Ventas y
+del CSE) son la segunda tanda: el inicio usa lo que deja la ficha A, y la acción semanal usa las tareas por cuenta.
