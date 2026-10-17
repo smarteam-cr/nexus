@@ -52,6 +52,7 @@ function guardada(extra: Partial<SesionGuardada> = {}): SesionGuardada {
     source: "google_meet",
     manualClientId: null,
     resolvedClientId: "cli_acme",
+    descripcionDelEvento: null,
     ...extra,
   };
 }

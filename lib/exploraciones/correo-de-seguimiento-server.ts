@@ -10,8 +10,9 @@ import "server-only";
  * porque de ahí salen la minuta y lo que entendimos.
  */
 import { Prisma } from "@prisma/client";
+import type Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic } from "@/lib/anthropic";
-import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
+import { conContextoDeIA, type ContextoDeCorrida } from "@/lib/ai/contexto-de-corrida";
 import { prisma } from "@/lib/db/prisma";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
@@ -38,8 +39,9 @@ import {
   voseoEnElCorreo,
   type CompromisoDelCorreo,
   type InsumosDelCorreo,
+  type PartesDelCorreo,
 } from "./correo-de-seguimiento";
-import { leerElCorreo, pedidoDelCorreo, type ContextoDelCorreo } from "./correo-de-seguimiento-pedido";
+import { leerElCorreo, NOMBRE_DE_LA_HERRAMIENTA_DEL_CORREO, pedidoDelCorreo, type ContextoDelCorreo } from "./correo-de-seguimiento-pedido";
 
 /** Lo que se le dice a quien lo pidió cuando la reunión no tiene la conversación. */
 export const SIN_CONVERSACION =
@@ -73,7 +75,7 @@ const AGENTE_DE_LA_LECTURA = "agent-post-session";
  * Lo que dejó una reunión de Meet: su minuta (acuerdos y decisiones) y los compromisos que guardó la última lectura de
  * seguimiento que terminó bien. ⛔ Nunca Tareas: las propuestas de Tarea que salieron de la lectura no se leen acá.
  */
-async function loQueDejoLaReunion(sessionId: string): Promise<NonNullable<LaReunion["deLaReunion"]>> {
+export async function loQueDejoLaReunion(sessionId: string): Promise<NonNullable<LaReunion["deLaReunion"]>> {
   const [minuta, lectura] = await Promise.all([
     prisma.sessionMinute.findUnique({ where: { sessionId }, select: { agreements: true, decisions: true } }).catch(() => null),
     prisma.agentRun
@@ -130,7 +132,46 @@ async function leerLaReunion(
   return { titulo: a.titulo || "Reunión", fecha: a.ts ? new Date(a.ts).toISOString() : null, texto: recortarLaReunion(a.texto, ""), participantes: [] };
 }
 
-async function nombreDe(email: string | null): Promise<string | null> {
+/** Lo que escribió el agente: las partes, el correo armado y lo que devolvió la herramienta (por si el pedido sumó algo). */
+export type CorreoEscrito =
+  | { partes: PartesDelCorreo; armado: { asunto: string; cuerpo: string }; entrada: Record<string, unknown> | null }
+  | "sin-conversacion";
+
+/** Lo que devolvió la herramienta del correo, tal cual (null si no la llamó). */
+function entradaDeLaHerramienta(respuesta: Anthropic.Messages.Message): Record<string, unknown> | null {
+  const b = respuesta.content.find((x) => x.type === "tool_use" && x.name === NOMBRE_DE_LA_HERRAMIENTA_DEL_CORREO);
+  return b && b.type === "tool_use" && b.input && typeof b.input === "object" && !Array.isArray(b.input) ? (b.input as Record<string, unknown>) : null;
+}
+
+/**
+ * Le pide el correo al agente y lo arma con `componerElCorreo`. El correo lo lee el cliente: tiene que estar en tuteo, y
+ * si salió en voseo (las fuentes lo están) se pide una vez más avisándolo, como la guía. Lanza si el agente no lo
+ * devolvió completo. Lo usan la exploración (`armarCorreoDeSeguimiento`) y la página de una reunión (ficha G,
+ * lib/seguimiento/reunion/correo-server.ts): un solo lugar decide cómo se escribe el correo.
+ */
+export async function escribirElCorreoDeSeguimiento(ctx: ContextoDelCorreo, firma: string | null, ia: ContextoDeCorrida): Promise<CorreoEscrito> {
+  const pedir = (aviso = "") => conContextoDeIA(ia, () => getAnthropic().messages.create(pedidoDelCorreo(ctx, aviso)));
+  let respuesta = await pedir();
+  let partes = leerElCorreo(respuesta, ctx);
+  if (!partes) throw new Error("El agente no devolvió el correo completo. Vuelve a intentarlo.");
+  // Sin la conversación (la reunión solo trae la invitación) no hay correo: uno armado con nada no se manda.
+  if (partes === "sin-conversacion") return partes;
+  let armado = componerElCorreo(partes, firma);
+  const voseo = voseoEnElCorreo(`${armado.asunto}\n${armado.cuerpo}`);
+  if (voseo.length) {
+    const otraRespuesta = await pedir(avisoDeVoseo(voseo));
+    const otra = leerElCorreo(otraRespuesta, ctx);
+    const otroArmado = otra && otra !== "sin-conversacion" ? componerElCorreo(otra, firma) : null;
+    if (otra && otra !== "sin-conversacion" && otroArmado && voseoEnElCorreo(`${otroArmado.asunto}\n${otroArmado.cuerpo}`).length < voseo.length) {
+      partes = otra;
+      armado = otroArmado;
+      respuesta = otraRespuesta;
+    }
+  }
+  return { partes, armado, entrada: entradaDeLaHerramienta(respuesta) };
+}
+
+export async function nombreDe(email: string | null): Promise<string | null> {
   if (!email) return null;
   const m = await prisma.teamMember.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { name: true } }).catch(() => null);
   return m?.name?.trim() || null;
@@ -204,32 +245,22 @@ export async function armarCorreoDeSeguimiento(o: {
   });
 
   try {
-    const pedir = (aviso = "") =>
-      conContextoDeIA(
-        { agentSlug: AGENTE_DEL_CORREO, agentRunId: run.id, clientId: fila.clientId, projectId: fila.projectId, triggeredByEmail: o.email, origen: "exploraciones/correo" },
-        () => getAnthropic().messages.create(pedidoDelCorreo(ctx, aviso)),
-      );
-    let partes = leerElCorreo(await pedir(), ctx);
-    if (!partes) throw new Error("El agente no devolvió el correo completo. Vuelve a intentarlo.");
+    const escrito = await escribirElCorreoDeSeguimiento(ctx, firma, {
+      agentSlug: AGENTE_DEL_CORREO,
+      agentRunId: run.id,
+      clientId: fila.clientId,
+      projectId: fila.projectId,
+      triggeredByEmail: o.email,
+      origen: "exploraciones/correo",
+    });
     /* Sin la conversación (la reunión solo trae la invitación) no hay correo: uno armado con nada
        terminaba diciéndole al cliente que no teníamos notas de la reunión. El que hubiera se borra. */
-    if (partes === "sin-conversacion") {
+    if (escrito === "sin-conversacion") {
       await guardarCorreo(fila.id, clave, null);
       await prisma.agentRun.update({ where: { id: run.id }, data: { status: "DONE", currentPhase: null, output: JSON.stringify({ sinConversacion: true }) } });
       return { ok: false, status: 409, error: SIN_CONVERSACION };
     }
-    let armado = componerElCorreo(partes, firma);
-    /* El correo lo lee el cliente: tiene que estar en tuteo. Si salió en voseo (las fuentes lo están),
-       se pide una vez más avisándolo, como la guía. */
-    const voseo = voseoEnElCorreo(`${armado.asunto}\n${armado.cuerpo}`);
-    if (voseo.length) {
-      const otra = leerElCorreo(await pedir(avisoDeVoseo(voseo)), ctx);
-      const otroArmado = otra && otra !== "sin-conversacion" ? componerElCorreo(otra, firma) : null;
-      if (otra && otra !== "sin-conversacion" && otroArmado && voseoEnElCorreo(`${otroArmado.asunto}\n${otroArmado.cuerpo}`).length < voseo.length) {
-        partes = otra;
-        armado = otroArmado;
-      }
-    }
+    const { partes, armado } = escrito;
 
     const correo: CorreoDeSeguimiento = { asunto: armado.asunto, cuerpo: armado.cuerpo, para, en: new Date().toISOString(), corridaId: run.id };
     await guardarCorreo(fila.id, clave, correo);

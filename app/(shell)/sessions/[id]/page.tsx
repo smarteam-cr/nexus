@@ -13,7 +13,8 @@ import { MIN_TRANSCRIPT_CHARS } from "@/lib/google/doc-parse";
 import { contextoDeTareas, tareasDisponible } from "@/lib/tareas/servidor";
 import { contarTareasDeLaReunion } from "@/lib/tareas/consultas";
 import { invitadosDe } from "@/lib/contactos/lectura-server";
-import SessionView, { type SessionViewData } from "./SessionView";
+import { cargarPaginaDeLaReunion } from "@/lib/seguimiento/reunion/pagina-server";
+import SessionView, { type PaginaDeLaVista, type SessionViewData } from "./SessionView";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,8 @@ export const dynamic = "force-dynamic";
  *   · arriba de las pestañas va «Lo que dejó esta reunión» (lib/seguimiento), si la reunión tiene tarjeta; y «Leer esta
  *     reunión» si todavía no tiene minuta (desde el 2026-10-10).
  * Desde el 2026-10-10 (etapa 2): «N tareas» cuenta las tareas que dejó, de las que ve quien mira (`ActionItem` se retiró).
+ * Desde el 2026-10-17 (ficha G): cada reunión con su página: su agenda, sus avisos, sus tareas con responsable y, si fue
+ * con un cliente, el correo de seguimiento y la próxima reunión sugerida (lib/seguimiento/reunion/pagina-server.ts).
  */
 
 /** Cuántas tareas dejó la reunión, de las que ve quien mira. Sin las tablas de Tareas (o sin un SQL), 0: la página se ve igual. */
@@ -72,6 +75,7 @@ export default async function SessionPage({
           organizerEmail: true,
           resolvedClientId: true,
           manualClientId: true,
+          descripcionDelEvento: true,
         },
       }),
       prisma.sessionMinute.findUnique({
@@ -141,7 +145,7 @@ export default async function SessionPage({
     }
   }
   const matchedClient = duenoId
-    ? await prisma.client.findUnique({ where: { id: duenoId }, select: { id: true, name: true, company: true } })
+    ? await prisma.client.findUnique({ where: { id: duenoId }, select: { id: true, name: true, company: true, kind: true } })
     : null;
 
   // «Lo que dejó esta reunión». Si a la base le falta un SQL, la página se ve igual, sin la tarjeta.
@@ -234,18 +238,47 @@ export default async function SessionPage({
     })),
   };
 
+  // Ficha G: la agenda, los avisos, las tareas y «Después de la reunión». Si a la base le falta el SQL, la página se ve
+  // como antes (las lecturas que dependen de él salen vacías adentro; acá, por si falla el resto).
+  const textoDeLaReunion = (session.transcript?.trim().length ?? 0) >= MIN_TRANSCRIPT_CHARS || !!(session.summary as { overview?: string } | null)?.overview?.trim();
+  const pagina: PaginaDeLaVista | undefined = await cargarPaginaDeLaReunion({
+    sessionId: session.id,
+    user,
+    reunion: {
+      titulo: session.title,
+      fecha: session.date,
+      duracionMin: Math.round(session.duration || 0),
+      participantes: session.participants,
+      organizador: session.organizerEmail,
+      descripcion: session.descripcionDelEvento,
+      tieneTexto: textoDeLaReunion,
+      enriquecida: !!session.enrichedAt,
+    },
+    dueno: matchedClient ? { id: matchedClient.id, nombre: matchedClient.name, kind: matchedClient.kind } : null,
+    proyectosDelCliente: availableProjects.length,
+    proyectosVinculados: matchedClient ? projectAssignments.filter((a) => a.project.clientId === matchedClient.id).length : 0,
+  })
+    .then((pg) => ({ ...pg, tuyasPorDecidir: tarjeta ? tarjeta.secciones.tareas.items.length + tarjeta.secciones.tareas.mas : 0 }))
+    .catch((e) => {
+      if (esquemaDesactualizado(e)) return undefined;
+      throw e;
+    });
+
+  // «Lo que dejó esta reunión» sin los compromisos: la página los muestra en «Tareas de esta reunión», con responsable.
+  const tarjetaSinCompromisos = tarjeta && pagina ? { ...tarjeta, secciones: { ...tarjeta.secciones, compromisos: { items: [], mas: 0, href: null } } } : tarjeta;
+
   // «Leer esta reunión»: una reunión con tarjeta (de un cliente o un prospecto, no de puertas adentro, y que quien mira
   // puede ver), con transcripción y sin minuta. Es el camino de una persona cuando la cola no la leyó (el remedio de INV44).
   const puedeLeer = !!tarjeta && !minute && (session.transcript?.trim().length ?? 0) >= MIN_TRANSCRIPT_CHARS;
   const arriba =
-    tarjeta && tarjetaTieneAlgo(tarjeta) ? (
+    tarjetaSinCompromisos && tarjetaTieneAlgo(tarjetaSinCompromisos) ? (
       <>
-        <LoQueDejoLaReunion inicial={tarjeta} />
+        <LoQueDejoLaReunion inicial={tarjetaSinCompromisos} sinCompromisos={!!pagina} />
         {puedeLeer && <LeerEstaReunion sessionId={session.id} />}
       </>
     ) : puedeLeer ? (
       <LeerEstaReunion sessionId={session.id} />
     ) : undefined;
 
-  return <SessionView data={data} tarjeta={arriba} />;
+  return <SessionView data={data} tarjeta={arriba} pagina={pagina} />;
 }

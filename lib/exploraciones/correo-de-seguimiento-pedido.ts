@@ -14,8 +14,16 @@ import { MAX_PREGUNTAS_EN_EL_CORREO, type InsumosDelCorreo, type PartesDelCorreo
 export const NOMBRE_DE_LA_HERRAMIENTA_DEL_CORREO = "escribir_correo";
 
 export interface ContextoDelCorreo {
-  /** «venta» = una preventa (todavía no compró); «cs» = la exploración de un proyecto (ya compró). */
-  marco: "venta" | "cs";
+  /**
+   * «venta» = una preventa (todavía no compró); «cs» = la exploración de un proyecto (ya compró); «reunion» = una reunión
+   * de trabajo con un cliente que ya compró, fuera de una exploración (ficha G, la página de cada reunión).
+   */
+  marco: "venta" | "cs" | "reunion";
+  /**
+   * Ficha G: además del correo, que sugiera la próxima reunión (título y objetivo) en `proximaReunion`. Lo lee
+   * lib/seguimiento/reunion/proxima.ts › `proximaDelAgente`. Sin esto el pedido queda igual que antes.
+   */
+  pedirProxima?: boolean;
   empresa: string;
   reunion: { titulo: string; fecha: string | null };
   /** El nombre de quien lo manda (firma el código, no el agente). */
@@ -51,7 +59,9 @@ function sistema(ctx: ContextoDelCorreo): string {
   const momento =
     ctx.marco === "cs"
       ? "una sesión de exploración del proyecto con un cliente que ya compró: Smarteam está entendiendo su negocio para implementar bien."
-      : "una reunión de exploración con un prospecto que todavía no compró: Smarteam está entendiendo su negocio antes de proponerle algo.";
+      : ctx.marco === "reunion"
+        ? "una reunión de trabajo con un cliente que ya compró: Smarteam lo acompaña en la implementación o en la operación de lo que compró."
+        : "una reunión de exploración con un prospecto que todavía no compró: Smarteam está entendiendo su negocio antes de proponerle algo.";
   return `Eres ${quien}, una consultora que implementa HubSpot. Escribes el correo de seguimiento de ${momento} Lo va a revisar y mandar una persona del equipo hoy.
 
 El correo sirve para tres cosas: que el cliente confirme o corrija lo que entendimos, que quede por escrito lo acordado (la minuta) y que conteste lo que quedó abierto o agende una sesión para profundizar.
@@ -157,6 +167,20 @@ export function pedidoDelCorreo(ctx: ContextoDelCorreo, aviso = ""): Anthropic.M
         agenda: texto("Una o dos frases sobre la próxima reunión o la sesión extra, como se indica."),
         cierre: texto("Una frase corta para cerrar."),
         sinConversacion: { type: "boolean", description: "true si las fuentes no traen la conversación de la reunión (solo la invitación o la agenda)." },
+        ...(ctx.pedirProxima
+          ? {
+              proximaReunion: {
+                type: "object",
+                description:
+                  "La próxima reunión que conviene tener con el cliente después de esta. Va en la invitación del calendario: la lee el cliente, con las mismas reglas del correo.",
+                properties: {
+                  titulo: texto("Hasta 60 caracteres. Nombra el tema, sin la fecha ni «Seguimiento:» si no hace falta."),
+                  objetivo: texto("Una o dos frases: para qué es la reunión y qué se va a revisar o decidir, a partir de lo que quedó pendiente en esta."),
+                },
+                required: ["titulo", "objetivo"],
+              },
+            }
+          : {}),
       },
       required: ["sinConversacion", "asunto", "saludo", "apertura", "entendimos", "acuerdos", "proximosPasos", "preguntas", "agenda", "cierre"],
     },

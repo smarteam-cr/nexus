@@ -14,11 +14,21 @@
  *
  * Si la sesión tiene un proyecto primario, un banner arriba linkea al tab
  * Reuniones del proyecto para acceso rápido.
+ *
+ * Desde el 2026-10-17 (ficha G, prop `pagina`): cada reunión con su página. Arriba van sus AVISOS (el estado de la
+ * reunión y los avisos de «Para ti» que llevan acá; reemplazan los banners de «sin cliente» y «sin proyecto») y su
+ * AGENDA (lo que se iba a tratar); debajo de «Lo que dejó esta reunión», sus TAREAS con responsable y, si fue con un
+ * cliente, «Después de la reunión»: el correo de seguimiento y la próxima reunión sugerida (components/sessions/reunion).
  */
 import { useState, type ReactNode } from "react";
 import { BackLink, IconCheck } from "@/components/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { PaginaDeLaReunion } from "@/lib/seguimiento/reunion/pagina-server";
+import { AvisosDeLaReunion } from "@/components/sessions/reunion/AvisosDeLaReunion";
+import { AgendaDeLaReunion } from "@/components/sessions/reunion/AgendaDeLaReunion";
+import { TareasDeLaReunion } from "@/components/sessions/reunion/TareasDeLaReunion";
+import { DespuesDeLaReunion } from "@/components/sessions/reunion/DespuesDeLaReunion";
 
 // ─── Tipos compartidos con page.tsx ──────────────────────────────────────────
 
@@ -95,7 +105,10 @@ function formatDuration(mins: number) {
 
 type TabKey = "transcript" | "meta";
 
-export default function SessionView({ data, tarjeta }: { data: SessionViewData; tarjeta?: ReactNode }) {
+/** Lo que suma la ficha G: agenda, avisos, tareas y «Después de la reunión». Sin él, la página es la de antes. */
+export type PaginaDeLaVista = PaginaDeLaReunion & { tuyasPorDecidir: number };
+
+export default function SessionView({ data, tarjeta, pagina }: { data: SessionViewData; tarjeta?: ReactNode; pagina?: PaginaDeLaVista }) {
   const [tab, setTab] = useState<TabKey>("transcript");
   const router = useRouter();
   const { session, client, projectAssignments, availableProjects, minute, tareasDeLaReunion } = data;
@@ -146,8 +159,29 @@ export default function SessionView({ data, tarjeta }: { data: SessionViewData; 
         </div>
       </div>
 
+      {/* ── Avisos y agenda (ficha G) ──────────────────────────────────────── */}
+      {pagina && (
+        <AvisosDeLaReunion
+          avisos={pagina.avisos}
+          cliente={client ? { id: client.id, nombre: client.name } : null}
+          onAbrirMeta={() => setTab("meta")}
+        />
+      )}
+      {pagina && <AgendaDeLaReunion sessionId={session.id} agenda={pagina.agenda} puedeEscribir />}
+
       {/* ── Lo que dejó esta reunión (lib/seguimiento) ────────────────────── */}
       {tarjeta}
+
+      {/* ── Tareas y «Después de la reunión» (ficha G) ─────────────────────── */}
+      {pagina && <TareasDeLaReunion tareas={pagina.tareas} tuyasPorDecidir={pagina.tuyasPorDecidir} />}
+      {pagina?.despues && (
+        <DespuesDeLaReunion
+          key={`${pagina.despues.proxima.estado}|${pagina.despues.proxima.titulo}|${pagina.despues.proxima.objetivo}|${pagina.despues.proxima.inicio}|${pagina.despues.correo?.corridaId ?? ""}`}
+          sessionId={session.id}
+          despues={pagina.despues}
+          puedeEscribir
+        />
+      )}
 
       {/* ── Banner: análisis vive en proyecto X ───────────────────────────── */}
       {primary && client && (
@@ -192,8 +226,8 @@ export default function SessionView({ data, tarjeta }: { data: SessionViewData; 
         </div>
       )}
 
-      {/* ── Banner amarillo: sin proyecto asignado ────────────────────────── */}
-      {!primary && client && availableProjects.length > 0 && (
+      {/* ── Banner amarillo: sin proyecto asignado (con la ficha G lo dicen los avisos) ── */}
+      {!pagina && !primary && client && availableProjects.length > 0 && (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
           <p className="text-sm text-amber-300 font-semibold">
             ⚠ Sin proyecto asignado
@@ -204,7 +238,7 @@ export default function SessionView({ data, tarjeta }: { data: SessionViewData; 
         </div>
       )}
 
-      {!client && (
+      {!pagina && !client && (
         <div className="rounded-2xl border border-gray-700 bg-gray-900 p-4">
           <p className="text-sm text-gray-400">
             Esta sesión no fue matched a ningún cliente. No se puede asignar a proyectos.

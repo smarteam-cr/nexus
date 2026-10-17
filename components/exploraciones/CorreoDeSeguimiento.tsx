@@ -24,10 +24,27 @@ const CAMPO = "w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-
 
 function Editor({ clave, correo }: { clave: string; correo: Correo }) {
   const { cambiar, puedeEditar } = useLienzo();
+  return <EditorDelCorreo correo={correo} puedeEditar={puedeEditar} guardar={(c) => cambiar([{ op: "correo", clave, ...c }])} />;
+}
+
+/**
+ * El correo armado, para revisarlo, cambiarlo y mandarlo desde el correo de la persona. Lo usan la exploración y la
+ * página de cada reunión (ficha G, components/sessions/reunion/DespuesDeLaReunion.tsx): `guardar` dice dónde se guarda
+ * lo que se cambia (devuelve algo verdadero si se guardó).
+ */
+export function EditorDelCorreo({
+  correo,
+  puedeEditar,
+  guardar,
+}: {
+  correo: Correo;
+  puedeEditar: boolean;
+  guardar: (cambio: { asunto: string } | { cuerpo: string }) => Promise<unknown>;
+}) {
   const toast = useToast();
   const [copiado, setCopiado] = useState(false);
-  const asunto = useNotaQueSeGuarda(correo.asunto, (texto) => cambiar([{ op: "correo", clave, asunto: texto }]));
-  const cuerpo = useNotaQueSeGuarda(correo.cuerpo, (texto) => cambiar([{ op: "correo", clave, cuerpo: texto }]));
+  const asunto = useNotaQueSeGuarda(correo.asunto, (texto) => guardar({ asunto: texto }));
+  const cuerpo = useNotaQueSeGuarda(correo.cuerpo, (texto) => guardar({ cuerpo: texto }));
   const avisos = avisosDelCorreo(asunto.texto, cuerpo.texto);
   const estado = asunto.estado === "error" || cuerpo.estado === "error" ? "error" : asunto.estado === "guardando" || cuerpo.estado === "guardando" ? "guardando" : asunto.estado === "guardado" || cuerpo.estado === "guardado" ? "guardado" : "quieto";
 

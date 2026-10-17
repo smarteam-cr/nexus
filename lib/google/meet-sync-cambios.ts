@@ -23,6 +23,8 @@ export interface EventoMeet {
   participants: string[];
   googleDocId?: string;
   organizerEmail: string;
+  /** La descripción del evento, ya limpia (lib/sessions/descripcion-del-evento.ts): la agenda. null = sin descripción. */
+  descripcion?: string | null;
 }
 
 /** Lo guardado de una sesión que hace falta para decidir si cambió. Nada pesado: ni transcripción ni resumen. */
@@ -38,6 +40,7 @@ export interface SesionGuardada {
   source: string;
   manualClientId: string | null;
   resolvedClientId: string | null;
+  descripcionDelEvento: string | null;
 }
 
 /** El `select` de Prisma que arma una `SesionGuardada`: la sync no necesita más que esto. */
@@ -53,6 +56,7 @@ export const SELECT_SESION_GUARDADA = {
   source: true,
   manualClientId: true,
   resolvedClientId: true,
+  descripcionDelEvento: true,
 } as const;
 
 /** Solo los campos que cambiaron. Si el Doc es nuevo, además se reinicia el enriquecimiento. */
@@ -66,6 +70,7 @@ export interface CambiosDeSesion {
   organizerEmail?: string;
   source?: "google_meet";
   resolvedClientId?: string | null;
+  descripcionDelEvento?: string | null;
   enrichedAt?: null;
   enrichAttempts?: number;
   enrichError?: null;
@@ -120,6 +125,8 @@ export function fusionarCopia(previa: EventoMeet | undefined, copia: EventoMeet)
     participants: [...new Set([...previa.participants, ...copia.participants])],
     googleDocId: previa.googleDocId ?? copia.googleDocId,
     organizerEmail: previa.organizerEmail || copia.organizerEmail,
+    // La descripción es del evento (igual en todas las copias): la primera que la traiga.
+    descripcion: previa.descripcion ?? copia.descripcion,
   };
 }
 
@@ -165,6 +172,8 @@ export function cambiosDeSesion(
   if (guardada.organizerEmail !== evento.organizerEmail) c.organizerEmail = evento.organizerEmail;
   if (guardada.source !== "google_meet") c.source = "google_meet";
   if (guardada.resolvedClientId !== resolvedClientId) c.resolvedClientId = resolvedClientId;
+  // La agenda (ficha G): si Google la cambió o la borró, se copia tal cual. Un evento sin el dato no la toca.
+  if (evento.descripcion !== undefined && (guardada.descripcionDelEvento ?? null) !== (evento.descripcion ?? null)) c.descripcionDelEvento = evento.descripcion ?? null;
 
   const docNuevo = !!evento.googleDocId && evento.googleDocId !== guardada.googleDocId;
   if (docNuevo) {
