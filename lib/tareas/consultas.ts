@@ -20,7 +20,7 @@ import { datosDeAmbito } from "./ambito-server";
 import { salasDeReuniones } from "@/lib/sessions/reuniones-para-tareas";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import type { ClientesQueVes } from "./clientes";
-import type { ComentarioVista, DatosDelEspacio, DuenoDelVinculo, PermisosDeVinculo, RegistroParaVincular, VinculoVista, EspacioEnLista, GrupoPorCliente, LoQueDelegasteDatos, MisTareasDatos, MovimientoDeTarea, OpcionesDeTareas, PeriodoPorCliente, PersonaDeLaSemana, PorClienteDatos, ProyectoVista, SemanaDelEquipoDatos, TareaDeLaReunion, TareasDelProyectoDatos, TareaVista } from "./tipos";
+import type { ComentarioVista, DatosDelEspacio, DuenoDelVinculo, PermisosDeVinculo, RegistroParaVincular, VinculoVista, EspacioEnLista, GrupoPorCliente, LoQueDelegasteDatos, MisTareasDatos, MovimientoDeTarea, OpcionesDeTareas, PeriodoPorCliente, PersonaDeLaSemana, PorClienteDatos, ProyectoVista, SemanaDelEquipoDatos, TareaDeLaReunion, TareasDeLaCuentaDatos, TareasDelProyectoDatos, TareaVista } from "./tipos";
 import { NOMBRE_DEL_AMBITO, type Ambito } from "./ambito";
 import { metricasDeLaSemana, type MetricasDeLaSemana } from "./metricas";
 import { instanteCR } from "./agenda";
@@ -796,6 +796,44 @@ export async function cargarTareasDelProyecto(
     abiertas: de(abiertasF),
     abiertasTotal,
     historial: de(historialF),
+  };
+}
+
+/** Cuántos días atrás entran las hechas en la ficha del cliente. */
+export const DIAS_DE_LO_HECHO_DE_LA_CUENTA = 30;
+const TOPE_DE_LA_CUENTA = 300;
+
+/**
+ * La ficha del cliente › La cuenta › Tareas (ficha A, 2026-10-17): todo lo que Smarteam tiene que hacer con esa empresa,
+ * de cualquier equipo. Con la regla de todas las listas (`tareasVisiblesWhere`, que ya incluye la regla de las cuentas) y
+ * sin las privadas de otros, aunque quien mira sea Super Admin: es la pantalla de un cliente, no la semana de alguien.
+ * La cita y el contexto de cada reunión van con su regla (lib/tareas/serializar.ts). 404 si es un cliente que no ves.
+ */
+export async function cargarTareasDeLaCuenta(ctx: ContextoDeTareas, clientes: ClientesQueVes, clientId: string, ahora = new Date()): Promise<TareasDeLaCuentaDatos> {
+  if (!clientes.todos && !clientes.ids.has(clientId)) throw new ErrorDeTareas(404, "Ese cliente no existe.");
+  const hechasDesde = new Date(+ahora - DIAS_DE_LO_HECHO_DE_LA_CUENTA * 86_400_000);
+  const deLaCuenta: Prisma.TareaWhereInput = { AND: [tareasVisiblesWhere(ctx), sinPrivadasAjenas(ctx), { clientId }] };
+  const [abiertasF, hechasF] = await Promise.all([
+    prisma.tarea.findMany({
+      where: { AND: [deLaCuenta, ABIERTAS_O_POR_DECIDIR] },
+      select: SELECT_TAREA,
+      orderBy: [{ venceEl: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
+      take: TOPE_DE_LA_CUENTA + 1,
+    }),
+    prisma.tarea.findMany({
+      where: { AND: [deLaCuenta, { archivadaAt: null, estado: "hecha", completadaAt: { gte: hechasDesde } }] },
+      select: SELECT_TAREA,
+      orderBy: { completadaAt: "desc" },
+      take: 100,
+    }),
+  ]);
+  const recortadas = abiertasF.length > TOPE_DE_LA_CUENTA;
+  const filas = [...abiertasF.slice(0, TOPE_DE_LA_CUENTA), ...hechasF];
+  return {
+    hoy: hoyEnCostaRica(ahora),
+    tareas: await serializarTareas(filas, ctx, clientes, ahora),
+    hechasDesde: comoFecha(hechasDesde)!,
+    recortadas,
   };
 }
 

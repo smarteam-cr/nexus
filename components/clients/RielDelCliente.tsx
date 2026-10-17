@@ -22,7 +22,7 @@ import { cn } from "@/lib/cn";
 import type { EstadoDePieza } from "@/components/canvas/SelectorDePiezas";
 import { IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 
-export type CuentaDelRiel = "info" | "procesos" | "personas" | "notas" | "escala" | "casos" | "solicitudes";
+export type CuentaDelRiel = "info" | "procesos" | "personas" | "notas" | "tareas" | "escala" | "casos" | "solicitudes";
 
 export interface ProyectoDelRiel {
   id: string;
@@ -109,6 +109,7 @@ export default function RielDelCliente({
         />
         <FilaDeCuenta etiqueta="Procesos" activa={cuentaActiva === "procesos"} onClick={() => onElegirCuenta("procesos")} />
         <FilaDeCuenta etiqueta="Personas y tickets" activa={cuentaActiva === "personas"} onClick={() => onElegirCuenta("personas")} />
+        <FilaDeCuenta etiqueta="Tareas" activa={cuentaActiva === "tareas"} onClick={() => onElegirCuenta("tareas")} />
         <FilaDeCuenta etiqueta="Notas" activa={cuentaActiva === "notas"} onClick={() => onElegirCuenta("notas")} />
         <FilaDeCuenta etiqueta="La escala" activa={cuentaActiva === "escala"} onClick={() => onElegirCuenta("escala")} />
         <FilaDeCuenta etiqueta="Casos de uso" activa={cuentaActiva === "casos"} onClick={() => onElegirCuenta("casos")} />

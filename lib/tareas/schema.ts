@@ -155,3 +155,21 @@ export const Vincular = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("propuesta"), id }),
   z.object({ tipo: z.literal("preventa"), id }),
 ]);
+
+/* El sprint de cada equipo (ficha A, 2026-10-17): la serie de su reunión y quiénes están. */
+const rolDeReunion = z.enum(["planning", "cierre", "ambos"]);
+
+export const CrearFuente = z.object({
+  equipo: z.string().min(1).max(40),
+  sessionId: id,
+  rol: rolDeReunion.optional(),
+  personas: z.array(correo).max(40).optional(),
+});
+
+export const CambiarFuente = z
+  .object({
+    activa: z.boolean().optional(),
+    rol: rolDeReunion.optional(),
+    personas: z.array(correo).max(40).optional(),
+  })
+  .refine((c) => c.activa !== undefined || c.rol !== undefined || c.personas !== undefined, "No hay nada que cambiar.");

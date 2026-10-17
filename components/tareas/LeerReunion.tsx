@@ -15,6 +15,7 @@
  * Una reunión se lee UNA vez: elegir una ya leída va directo al paso 3.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { textoSinLugar } from "@/lib/tareas/cupo";
 import { Interruptor, Modal, Segmentado, Select } from "@/components/ui";
 import { BotonAzul, BotonTexto, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
@@ -407,6 +408,7 @@ function ResultadoDeLaLectura({
             : "La IA no estaba disponible: se leyó solo con reglas, y lo dudoso quedó por asignar."}
         {r.cierres > 0 ? ` La retro dijo algo de ${r.cierres === 1 ? "1 tarea" : `${r.cierres} tareas`}: lo verás al revisar tu semana.` : ""}
         {r.omitidas.lapida > 0 ? ` ${r.omitidas.lapida === 1 ? "1 línea no se propuso" : `${r.omitidas.lapida} líneas no se propusieron`} porque alguien ya la había descartado.` : ""}
+        {r.sinLugar ? ` ${textoSinLugar(r.sinLugar)}` : ""}
       </p>
       {conversacion}
     </div>
@@ -432,6 +434,7 @@ function ResultadoDelSeguimiento({ r }: { r: NonNullable<EstadoDeLectura["resume
           ? `La leyó el seguimiento de la reunión: leyó la conversación entera y no encontró compromisos${costo}.`
           : `La leyó el seguimiento de la reunión: leyó la conversación entera y dejó lo que se comprometió cada lado${costo}.`}
         {r.omitidas.lapida > 0 ? ` ${r.omitidas.lapida === 1 ? "1 compromiso no se propuso" : `${r.omitidas.lapida} compromisos no se propusieron`} porque alguien ya lo había descartado.` : ""}
+        {r.sinLugar ? ` ${textoSinLugar(r.sinLugar)}` : ""}
       </p>
     </div>
   );
@@ -525,6 +528,7 @@ function SeccionDeLaConversacion({ lectura, pidiendo, onLeer, error }: { lectura
           {c.recortada ? "La conversación era muy larga: se leyeron los primeros turnos. " : ""}
           {c.costo ? `${c.costo.entrada.toLocaleString("es-CR")} tokens de entrada y ${c.costo.salida.toLocaleString("es-CR")} de salida.` : ""}
           {c.omitidas.lapida > 0 ? ` ${c.omitidas.lapida === 1 ? "1 no se propuso" : `${c.omitidas.lapida} no se propusieron`} porque alguien ya la había descartado.` : ""}
+          {c.sinLugar ? ` ${textoSinLugar(c.sinLugar)}` : ""}
         </p>
       </section>
     );

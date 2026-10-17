@@ -43,6 +43,12 @@ import { ABIERTAS_WHERE, candidatasWhere } from "./donde";
 
 export const SLUG_DE_LA_LECTURA = "tareas-lectura";
 
+function totalSinLugar(m: ReadonlyMap<string, number>): number {
+  let n = 0;
+  for (const v of m.values()) n += v;
+  return n;
+}
+
 function quienLee(ctx: ContextoDeTareas, clientes: ClientesQueVes) {
   return { email: ctx.email, esSuperAdmin: ctx.esSuperAdmin, clientes };
 }
@@ -54,6 +60,8 @@ export interface PedidoDeLectura {
   rol?: RolDeReunion;
   equipo?: string;
   avisarIgual?: boolean;
+  /** La serie del sprint que la pidió sola (lib/tareas/fuentes-server.ts). */
+  fuenteId?: string;
 }
 
 export interface LecturaPedida {
@@ -129,6 +137,7 @@ export async function pedirLectura(ctx: ContextoDeTareas, clientes: ClientesQueV
         semanaQueCierra: rol === "planning" ? null : aDate(semanaQueCierra(reunion.inicio)),
         avisar: p.avisarIgual ? true : !vieja,
         pedidaPorEmail: ctx.email,
+        ...(p.fuenteId ? { fuenteId: p.fuenteId } : {}),
       },
     });
     return { id: ya.id, estado: "leyendo", yaLeida: r.count === 0 };
@@ -155,6 +164,7 @@ export async function pedirLectura(ctx: ContextoDeTareas, clientes: ClientesQueV
         leyendoDesde: gemela ? null : ahora,
         avisar: p.avisarIgual ? true : !vieja,
         pedidaPorEmail: ctx.email,
+        fuenteId: p.fuenteId ?? null,
         ...(gemela ? { leidaAt: ahora, resumen: { copiaDe: gemela.id } as Prisma.InputJsonValue } : {}),
       },
       select: { id: true, estado: true },
@@ -206,6 +216,8 @@ export interface ResumenDeLectura {
   porPersona: { email: string; nombre: string; propuestas: number }[];
   /** Cuántas sugerencias de cierre dejó (en un cierre). */
   cierres: number;
+  /** Las que no se propusieron porque esa persona ya tenía 5 de esta reunión (lib/tareas/cupo.ts). */
+  sinLugar?: number;
   /** `seguimiento`: la escribió la lectura de seguimiento de la reunión (memoria de la cuenta, etapa 2), no Tareas. */
   modelo: "codigo" | "haiku" | "sin_ia" | "seguimiento";
   motivosDelModelo: string[];
@@ -228,6 +240,8 @@ export interface ConversacionDeLaLectura {
   omitidas: { lapida: number };
   proyectos: { id: string; nombre: string; nuevo: boolean }[];
   porPersona: { email: string; nombre: string; propuestas: number }[];
+  /** Las que no se propusieron porque esa persona ya tenía 5 de esta reunión (lib/tareas/cupo.ts). */
+  sinLugar?: number;
   turnos: number;
   /** La conversación no entró entera en el tope: faltan los últimos turnos. */
   recortada: boolean;
@@ -289,8 +303,9 @@ export async function procesarLectura(lecturaId: string, ahora = new Date()): Pr
 }
 
 async function procesar(lecturaId: string, ahora: Date) {
-  const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId } });
+  const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, include: { fuente: { select: { personas: true } } } });
   if (!l || l.estado !== "leyendo" || !l.sessionId || !l.pedidaPorEmail) return;
+  const enElSprint = l.fuente?.personas ?? [];
   const tm = await prisma.teamMember.findUnique({ where: { email: l.pedidaPorEmail } });
   if (!tm) throw new Error("Quien pidió la lectura ya no está en el equipo.");
   const ctx = await contextoDeTareas({ teamMember: tm });
@@ -307,7 +322,7 @@ async function procesar(lecturaId: string, ahora: Date) {
     // Nivel 2, en automático: sin «Próximos pasos» ni tareas anotadas, se lee la conversación (si hay, si hay cupo y si
     // no se leyó ya).
     if (reunion.largoTranscript >= MIN_CARACTERES_DE_CONVERSACION && conversacionAnterior?.estado !== "lista" && (await hayCupoAutomatico(ahora))) {
-      const conv = await leerLaConversacion({ id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail }, ctx, clientes, "automatica", null, ahora, {
+      const conv = await leerLaConversacion({ id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint }, ctx, clientes, "automatica", null, ahora, {
         base: resumen,
         datos: { modo: "transcript", leidaAt: ahora },
       });
@@ -325,7 +340,7 @@ async function procesar(lecturaId: string, ahora: Date) {
 
   const semana = comoFecha(l.semana)!;
   const ctxArmado = {
-    lectura: { id: l.id, equipo: l.equipo, semana, pedidaPorEmail: l.pedidaPorEmail, inicio: reunion.inicio },
+    lectura: { id: l.id, equipo: l.equipo, semana, pedidaPorEmail: l.pedidaPorEmail, inicio: reunion.inicio, enElSprint },
     miembros: ctx.miembros,
     participantes: reunion.participantes,
     clienteDeLaReunion,
@@ -485,6 +500,7 @@ async function procesar(lecturaId: string, ahora: Date) {
         proyectos,
         porPersona: [...porPersona.entries()].map(([email, n]) => ({ email, nombre: ctx.miembros.find((m) => m.email === email)?.nombre ?? email, propuestas: n })),
         cierres,
+        sinLugar: totalSinLugar(escritas.sinLugar),
         modelo: modo,
         motivosDelModelo: motivos,
         costo,
@@ -662,7 +678,7 @@ export async function pedirConversacion(ctx: ContextoDeTareas, clientes: Cliente
 /** Lee la conversación pedida con «¿Faltó algo?». NUNCA lanza: un error queda en `resumen.conversacion`. */
 export async function procesarConversacion(lecturaId: string, ahora = new Date()): Promise<void> {
   try {
-    const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId } });
+    const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, include: { fuente: { select: { personas: true } } } });
     const conv = ((l?.resumen ?? null) as ResumenDeLectura | null)?.conversacion;
     if (!l || !l.sessionId || conv?.estado !== "leyendo" || !conv.pedidaPorEmail) return;
     const tm = await prisma.teamMember.findUnique({ where: { email: conv.pedidaPorEmail } });
@@ -670,7 +686,7 @@ export async function procesarConversacion(lecturaId: string, ahora = new Date()
     const ctx = await contextoDeTareas({ teamMember: tm });
     const clientes = await clientesQueVesParaTareas(tm);
     const leida = await leerLaConversacion(
-      { id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail },
+      { id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint: l.fuente?.personas ?? [] },
       ctx,
       clientes,
       "pedida",
@@ -705,7 +721,7 @@ async function guardarConversacion(db: Pick<typeof prisma, "lecturaDeReunion">, 
  * persona. `null` si no hay conversación que leer. `automatica` además cierra la lectura (`base` + `datos`).
  */
 async function leerLaConversacion(
-  l: { id: string; sessionId: string; equipo: string; semana: string; avisar: boolean; pedidaPorEmail: string | null },
+  l: { id: string; sessionId: string; equipo: string; semana: string; avisar: boolean; pedidaPorEmail: string | null; enElSprint?: readonly string[] },
   ctx: ContextoDeTareas,
   clientes: ClientesQueVes,
   como: ConversacionDeLaLectura["como"],
@@ -817,7 +833,7 @@ async function leerLaConversacion(
     salida,
     conversacion.turnos,
     {
-      lectura: { id: l.id, equipo: l.equipo, semana: l.semana, pedidaPorEmail: pedidaPorEmail ?? l.pedidaPorEmail, inicio: reunion.inicio },
+      lectura: { id: l.id, equipo: l.equipo, semana: l.semana, pedidaPorEmail: pedidaPorEmail ?? l.pedidaPorEmail, inicio: reunion.inicio, enElSprint: l.enElSprint },
       miembros: ctx.miembros,
       clienteDeLaReunion,
       clientesPorTarea,
@@ -858,6 +874,7 @@ async function leerLaConversacion(
         omitidas: armado.omitidas,
         proyectos: proyectosEscritos,
         porPersona: [...porPersona.entries()].map(([email, n]) => ({ email, nombre: ctx.miembros.find((m) => m.email === email)?.nombre ?? email, propuestas: n })),
+        sinLugar: totalSinLugar(escritas.sinLugar),
       };
       await guardarConversacion(tx, l.id, lista, automatica ? { ...automatica.datos, estado: "lista", agentRunId: run.id } : {}, automatica?.base);
       return lista;
@@ -990,6 +1007,7 @@ export async function escribirSalidaDeSeguimiento(
         proyectos: [],
         porPersona: [...porPersona.entries()].map(([email, n]) => ({ email, nombre: miembros.find((m) => m.email === email)?.nombre ?? email, propuestas: n })),
         cierres: 0,
+        sinLugar: totalSinLugar(escritas.sinLugar),
         modelo: "seguimiento",
         motivosDelModelo: [],
         costo: extra.costo ?? null,

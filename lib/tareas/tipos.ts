@@ -3,6 +3,7 @@
  */
 import type { AccionesDeTarea, BloqueDeAgenda, EstadoDeProyecto, EstadoDeTarea, Prioridad } from "./estados";
 import type { Ambito, AmbitoCalculado } from "./ambito";
+import type { OrigenVisible } from "./origen";
 
 export interface PersonaVista {
   email: string;
@@ -68,6 +69,8 @@ export interface TareaVista {
   proyectoHubspot: { id: string; nombre: string; cerrado: boolean } | null;
   ambito: AmbitoCalculado;
   origen: string;
+  /** De dónde viene, dicho para una persona: reunión con el cliente, sprint interno, HubSpot, a mano (lib/tareas/origen.ts). */
+  de: OrigenVisible;
   creadaPor: string | null;
   pedidaPor: PersonaVista | null;
   pedidaPorEquipoNombre: string | null;
@@ -185,6 +188,20 @@ export interface TareasDelProyectoDatos {
   abiertasTotal: number;
   /** Hechas y «Ya no se hará», la última primero (hasta 50). */
   historial: TareaVista[];
+}
+
+/**
+ * La ficha del cliente › La cuenta › Tareas (ficha A, 2026-10-17): lo que Smarteam tiene que hacer con esa empresa, de
+ * cualquier equipo, que ve quien mira. Se agrupa por equipo en la pantalla (lib/tareas/de-la-cuenta.ts).
+ */
+export interface TareasDeLaCuentaDatos {
+  hoy: string;
+  /** Lo abierto, lo que espera decisión y lo hecho desde `hechasDesde`. */
+  tareas: TareaVista[];
+  /** Las hechas entran si se terminaron desde este día (30 días). */
+  hechasDesde: string;
+  /** Hay más abiertas de las que se trajeron (tope de 300). */
+  recortadas: boolean;
 }
 
 /** Lo que dejó una reunión en Tareas, solo para leer (la tarjeta «Lo que dejó esta reunión»). Sin el texto de la reunión. */
@@ -347,4 +364,52 @@ export interface RegistroParaVincular {
   id: string;
   tipo: "propuesta" | "preventa";
   etiqueta: string;
+}
+
+/* ── El sprint de cada equipo (ficha A, 2026-10-17) ────────────────────────────────── */
+
+/** Una serie que el sprint lee sola (`FuenteDeTareas`), como la ve la pantalla. */
+export interface FuenteVista {
+  id: string;
+  titulo: string;
+  rol: "planning" | "cierre" | "ambos";
+  /** «Los lunes · termina a las 10:30». */
+  cuando: string;
+  activa: boolean;
+  pausadaMotivo: string | null;
+  /** Quien la configuró: Nexus lee la reunión como esa persona (tiene que haber estado). */
+  dueno: PersonaVista;
+  /** Quiénes están en el sprint. Vacío en la columna = los del área y quienes lo lideran (`personasPorDefecto`). */
+  personas: PersonaVista[];
+  personasPorDefecto: boolean;
+  /** Las últimas reuniones que leyó, con lo que propuso. */
+  ultimas: { lecturaId: string; titulo: string; fecha: string; estado: string; propuestas: number; porAsignar: number; sinLugar: number }[];
+}
+
+/** Una reunión recurrente de tu calendario que puede ser la del sprint. */
+export interface SerieCandidata {
+  sessionId: string;
+  titulo: string;
+  inicio: string;
+  cuando: string;
+  rolSugerido: "planning" | "cierre" | "ambos";
+  participantes: number;
+  /** El sprint que ya la lee, si hay uno. */
+  yaLaLee: string | null;
+}
+
+export interface SprintDelEquipoDatos {
+  equipo: string;
+  nombre: string;
+  puedeConfigurar: boolean;
+  /** Los sprints que quien mira puede configurar (para cambiar de uno a otro). */
+  configurables: { clave: string; nombre: string }[];
+  fuentes: FuenteVista[];
+  /** Toda la gente activa, para elegir quiénes están. */
+  personas: PersonaVista[];
+  /** Quiénes están si nadie lo eligió. */
+  personasPorDefecto: string[];
+  /** Solo para quien puede configurar: las series de su calendario de las últimas 5 semanas. */
+  candidatas: SerieCandidata[];
+  maxSeries: number;
 }

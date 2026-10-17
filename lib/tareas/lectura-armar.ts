@@ -46,7 +46,8 @@ export interface LineaPreparada {
 }
 
 export interface ContextoDeArmado {
-  lectura: { id: string; equipo: string; semana: string; pedidaPorEmail: string | null; inicio: Date };
+  /** `enElSprint`: quiénes están en el sprint que lee (la fuente del equipo): lo suyo no es un pedido de otro equipo. */
+  lectura: { id: string; equipo: string; semana: string; pedidaPorEmail: string | null; inicio: Date; enElSprint?: readonly string[] };
   miembros: readonly MiembroDelEquipo[];
   participantes: readonly string[];
   /** El cliente dueño de la reunión (no INTERNO), si lo tiene: todas sus propuestas nacen con él. */
@@ -129,7 +130,7 @@ export function armarPropuestas(prep: readonly LineaPreparada[], ctx: ContextoDe
     const porAsignar = !dueno;
     const equipoDelDueno = dueno ? equipoDe(dueno) : null;
     const equipo = equipoDelDueno ?? ctx.lectura.equipo;
-    const deOtroEquipo = !!equipoDelDueno && equipoDelDueno !== ctx.lectura.equipo;
+    const deOtroEquipo = !!equipoDelDueno && equipoDelDueno !== ctx.lectura.equipo && !(ctx.lectura.enElSprint ?? []).includes(dueno!);
 
     const clientId = ctx.clienteDeLaReunion ?? null;
     const clienteDeLaIa = leida?.cliente ? (refs.C.get(leida.cliente) ?? null) : null;
@@ -225,7 +226,8 @@ export function fragmentoDelTurno(texto: string, titulo: string, max = 400): str
 }
 
 export interface ContextoDeLaConversacion {
-  lectura: { id: string; equipo: string; semana: string; pedidaPorEmail: string | null; inicio: Date };
+  /** `enElSprint`: quiénes están en el sprint que lee (la fuente del equipo): lo suyo no es un pedido de otro equipo. */
+  lectura: { id: string; equipo: string; semana: string; pedidaPorEmail: string | null; inicio: Date; enElSprint?: readonly string[] };
   miembros: readonly MiembroDelEquipo[];
   clienteDeLaReunion: string | null;
   /** El cliente que nombra el título de cada tarea (por su clave), en una reunión interna. */
@@ -262,7 +264,7 @@ export function armarPropuestasDeLaConversacion(
     const dueno = t.dueno ? (refs.M.get(t.dueno) ?? null) : null;
     const equipoDelDueno = dueno ? equipoDe(dueno) : null;
     const equipo = equipoDelDueno ?? ctx.lectura.equipo;
-    const deOtroEquipo = !!equipoDelDueno && equipoDelDueno !== ctx.lectura.equipo;
+    const deOtroEquipo = !!equipoDelDueno && equipoDelDueno !== ctx.lectura.equipo && !(ctx.lectura.enElSprint ?? []).includes(dueno!);
     const clientId = ctx.clienteDeLaReunion ?? null;
     const clave = claveDeTareaDeConversacion(t.titulo);
     const cl = ctx.clientesPorTarea.get(clave) ?? { candidatos: [], sugerido: null };

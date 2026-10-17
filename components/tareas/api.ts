@@ -5,7 +5,7 @@
  * pantalla lo muestre con un toast.
  */
 import type { MetricasDeLaSemana } from "@/lib/tareas/metricas";
-import type { ComentarioVista, DatosDelEspacio, DuenoDelVinculo, EspacioEnLista, LoQueDelegasteDatos, MisTareasDatos, RegistroParaVincular, VinculoVista, OpcionesDeTareas, SemanaDelEquipoDatos, TareaVista, ProyectoVista } from "@/lib/tareas/tipos";
+import type { ComentarioVista, DatosDelEspacio, DuenoDelVinculo, EspacioEnLista, LoQueDelegasteDatos, MisTareasDatos, RegistroParaVincular, VinculoVista, OpcionesDeTareas, SemanaDelEquipoDatos, SprintDelEquipoDatos, TareasDeLaCuentaDatos, TareaVista, ProyectoVista } from "@/lib/tareas/tipos";
 
 export class ErrorDeApi extends Error {
   constructor(
@@ -40,6 +40,7 @@ function rutaDeVinculos(d: DuenoDelVinculo): string {
 export const apiTareas = {
   mias: () => pedir<MisTareasDatos>("/api/tareas"),
   delegadas: () => pedir<LoQueDelegasteDatos>("/api/tareas/delegadas"),
+  deLaCuenta: (clientId: string) => pedir<TareasDeLaCuentaDatos>(`/api/tareas/del-cliente/${encodeURIComponent(clientId)}`),
   crear: (body: Record<string, unknown>) => pedir<{ id: string; numero: number; estado: string; yaExistia: boolean }>("/api/tareas", json(body)),
   una: (id: string) => pedir<{ tarea: TareaVista; historia: { id: string; tipo: string; texto: string; quien: string; cuando: string; detalle: string | null }[] }>(`/api/tareas/${id}`),
   cambiar: (id: string, body: Record<string, unknown>) =>
@@ -93,6 +94,13 @@ export const apiTareas = {
   cambiarProyecto: (id: string, version: number, cambios: Record<string, unknown>) =>
     pedir<{ proyecto: ProyectoVista; tareas: TareaVista[] }>(`/api/tareas/proyectos/${id}`, { method: "PATCH", body: JSON.stringify({ version, cambios }) }),
   decidirProyecto: (id: string, body: Record<string, unknown>) => pedir<{ ok: true }>(`/api/tareas/proyectos/${id}/decision`, json(body)),
+  sprint: (equipo?: string | null) => pedir<SprintDelEquipoDatos>(`/api/tareas/fuentes${equipo ? `?equipo=${encodeURIComponent(equipo)}` : ""}`),
+  sumarSerie: (body: { equipo: string; sessionId: string; rol?: string; personas?: string[] }) => pedir<{ id: string; sprint: SprintDelEquipoDatos }>("/api/tareas/fuentes", json(body)),
+  cambiarSerie: (id: string, body: { activa?: boolean; rol?: string; personas?: string[] }) =>
+    pedir<{ ok: true }>(`/api/tareas/fuentes/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
+  quitarSerie: (id: string) => pedir<{ ok: true }>(`/api/tareas/fuentes/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  /** Que Nexus mire las series de los sprints (corre después de responder; como mucho cada 10 minutos). */
+  mirarSeries: () => pedir<{ ok: true }>("/api/tareas/fuentes/mirar", { method: "POST" }),
 };
 
 export interface ReunionParaLeer {
@@ -134,6 +142,8 @@ export interface EstadoDeLectura {
     proyectos: { id: string; nombre: string; nuevo: boolean }[];
     porPersona: { email: string; nombre: string; propuestas: number }[];
     cierres: number;
+    /** Las que no se propusieron porque esa persona ya tenía 5 de esta reunión. */
+    sinLugar?: number;
     /** `seguimiento`: la escribió la lectura de seguimiento de la reunión (una reunión con un cliente o un prospecto). */
     modelo: "codigo" | "haiku" | "sin_ia" | "seguimiento";
     motivosDelModelo: string[];
@@ -155,6 +165,7 @@ export interface ConversacionDeLaLectura {
   omitidas: { lapida: number };
   proyectos: { id: string; nombre: string; nuevo: boolean }[];
   porPersona: { email: string; nombre: string; propuestas: number }[];
+  sinLugar?: number;
   turnos: number;
   recortada: boolean;
   costo: { entrada: number; salida: number } | null;

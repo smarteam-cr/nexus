@@ -52,6 +52,15 @@ export function ChipsDeTarea({ t, sinPara = false, sinPedida = false }: { t: Tar
       </Chip>,
     );
   }
+  // De dónde salió (ficha A, 2026-10-17): una reunión con el cliente, el sprint interno, el chat o un siguiente paso.
+  // Lo que se anotó a mano no lleva chip (es lo normal) y lo de HubSpot ya tiene el suyo.
+  if (t.de && t.de.clave !== "mano" && t.de.clave !== "hubspot") {
+    chips.push(
+      <Chip key="de" title={`De dónde viene: ${t.de.etiqueta}`}>
+        {t.de.etiqueta}
+      </Chip>,
+    );
+  }
   if (!sinPara) {
     if (t.ambito.ambito !== "sin_clasificar") chips.push(<Chip key="para" title={`Para quién: ${t.ambito.etiqueta}`}>{t.ambito.etiqueta}</Chip>);
   }

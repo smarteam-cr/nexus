@@ -15,6 +15,13 @@ export const DIAS_PARA_VENCER_UNA_PROPUESTA = 14;
  */
 export const MAX_SUGERENCIAS_POR_PERSONA = 10;
 
+/**
+ * Cuántas tareas le propone UNA reunión a una persona (ficha A del roadmap, 2026-10-17, decisión de Elías). Cuenta
+ * todas las pasadas sobre la misma reunión (las notas y «¿Faltó algo?»). Las siguientes no se proponen: la lectura las
+ * cuenta en su resumen («N quedaron sin proponer»). «Por asignar» no cuenta: no es de nadie todavía.
+ */
+export const MAX_PROPUESTAS_POR_PERSONA_POR_REUNION = 5;
+
 /** Un texto idéntico a una lápida (rechazada o fusionada por una persona) no se vuelve a proponer por 28 días. */
 export const DIAS_DE_LAPIDA = 28;
 
