@@ -13,6 +13,7 @@
  * proyecto, lo que se confirma de la estrategia va como sugerencia a Información del cliente; en la preventa, lo que
  * se confirma en las casillas que tienen campo en la ficha (lib/exploraciones/a-la-ficha.ts).
  */
+import { anotarVersionDelCambio } from "@/lib/exploraciones/versiones-de-la-escala";
 import { NextRequest, NextResponse } from "next/server";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
 import { guardDeLaExploracion } from "@/lib/exploraciones/guardia";
@@ -85,6 +86,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
         { status: 409 },
       );
     case "ok": {
+      // Ficha B (2026-10-17): un nivel confirmado deja la versión del día de la escala de la empresa (nunca frena).
+      if (r.confirmado) anotarVersionDelCambio(id, guard.email);
       /* Lo que se confirma va como sugerencia a Información del cliente: ahí lo leen los agentes, y al confirmarla se
          escribe en la empresa de HubSpot.
          · En la exploración de un PROYECTO (desde el 2026-10-07), la estrategia (retos, resultados que persigue y

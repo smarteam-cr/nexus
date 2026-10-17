@@ -48,7 +48,13 @@ export const actualizarCasoSchema = z
 
 /** Un caso de uso de la EMPRESA (La cuenta › Casos de uso): al plan de crecimiento o al ciclo abierto de un proyecto. */
 export const crearCasoDeLaEmpresaSchema = z
-  .object({ titulo: z.string().trim().min(1).max(200), projectId: z.string().min(1).max(60).nullable().optional(), ...datosDeCaso })
+  .object({
+    titulo: z.string().trim().min(1).max(200),
+    projectId: z.string().min(1).max(60).nullable().optional(),
+    /** Viene del camino de crecimiento de La cuenta › La escala (ficha B): nace SUGERIDO y con origen «escala». */
+    deLaEscala: z.boolean().optional(),
+    ...datosDeCaso,
+  })
   .strict();
 
 export const actualizarCasoDeLaEmpresaSchema = z

@@ -1,5 +1,6 @@
 /**
  * POST /api/sales/exploraciones/[id]/agente   body: { modo: "preparar" | "leer" | "casos", sesionId?, hubspotId? }
+ *   `posicionar` (con «leer», ficha B): ubicar la escala con todo lo que Nexus sabe aunque no haya una reunión nueva.
  *   `hubspotId` (con «leer»): vuelve a leer ENTERA una reunión de HubSpot que el agente ya leyó (su
  *   grabación, el resumen de IA de HubSpot, puede no haber estado cuando la leyó).
  *   Lanza el agente de la exploración en segundo plano (lib/exploraciones/agente.ts). 202 con la
@@ -28,6 +29,8 @@ const Cuerpo = z.object({
   // El id de la reunión: hasta 200 (los de una instancia de una serie de Meet llegan a ~190, etapa A).
   sesionId: z.string().min(1).max(200).optional(),
   hubspotId: z.string().regex(/^\d{1,30}$/).optional(),
+  /** Con «leer»: ubicar la escala con todo lo que Nexus sabe aunque no haya una reunión nueva (ficha B). */
+  posicionar: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest, { params }: Ctx) {
@@ -44,10 +47,11 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const cuerpo = Cuerpo.safeParse(raw);
   if (!cuerpo.success) return cuerpoInvalido(cuerpo.error);
 
-  const { modo, sesionId, hubspotId } = cuerpo.data;
+  const { modo, sesionId, hubspotId, posicionar } = cuerpo.data;
   const r = await lanzarCorrida(id, modo, {
     triggeredByEmail: guard.email,
     sesionId: sesionId ?? null,
+    ...(modo === "leer" && posicionar ? { posicionar: true } : {}),
     // Una reunión de HubSpot ya leída se vuelve a leer entera: propone y reemplaza lo que dijo de ella.
     ...(modo === "leer" && hubspotId ? { releer: { sesiones: [], hubspot: [hubspotId], documentos: [] }, completa: true } : {}),
   });

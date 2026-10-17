@@ -23,10 +23,6 @@ import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { templateById, templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import {
   loadSelectedUseCases,
-  // Alias: se llama "useCases…" por CASOS DE USO, no por un hook de React — y desde que el
-  // trabajo pesado vive dentro de una función, `rules-of-hooks` lo confunde con uno y marca
-  // error. Renombrarlo acá es más barato que apagar la regla en un archivo de servidor.
-  useCasesSectionData as datosDeCasosDeUso,
   USE_CASES_SECTION_KEY,
 } from "@/lib/business-cases/use-cases";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
@@ -36,6 +32,10 @@ import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
 import { escalaParaPosicionar, SECCION_DE_ESCALA, type BloqueDeEscala } from "@/lib/escala/contexto";
 import { AVISO_DE_LA_ESCALA_DESDE_LA_EXPLORACION, TITULOS_DE_LA_SECCION_EN } from "@/lib/exploraciones/para-la-propuesta";
 import { paraLaPropuesta } from "@/lib/exploraciones/servidor";
+import { escalaParaLaPropuesta } from "@/lib/exploraciones/escala-de-la-empresa";
+import { casosSugeridosParaLaPropuesta } from "@/lib/casos-de-uso/camino";
+import { areasContratadas } from "@/lib/escala/areas-por-hub";
+import { itemsDeLaSeccionDeCasos, preambuloDeCasos } from "@/lib/business-cases/casos-para-la-propuesta";
 import { HUBSPOT_HUB_SLUGS, sanitizeTags, tagLabels, usaEscala, type HubspotHubSlug } from "@/lib/tags/catalog";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
@@ -217,6 +217,18 @@ export async function POST(
   // no hay sección de materialización, y sin ella los precios se tejerían en texto libre.
   const checklistOn = templateById(resolved.templateId).features?.useCaseChecklist !== false;
   const selectedUseCases = checklistOn ? await loadSelectedUseCases(id) : [];
+  /* La sección de casos de uso (ficha B, 2026-10-17): lo del checklist, lo elegido en la preventa y, si no hay nada,
+     los SUGERIDOS de la biblioteca según la escala de la empresa o el área que se aterriza
+     (lib/business-cases/casos-para-la-propuesta.ts). Solo en la plantilla que tiene la sección. */
+  const casosDeLaPreventa = checklistOn ? (exploracion?.casos ?? []) : [];
+  const hayQueSugerir = checklistOn && !selectedUseCases.length && !casosDeLaPreventa.length;
+  const escalaDeLaEmpresa = hayQueSugerir ? await escalaParaLaPropuesta(bc.clientId).catch(() => null) : null;
+  const areasEnJuego = exploracion?.areas.length ? exploracion.areas : areasContratadas(sanitizeTags(bc.tags));
+  const seccionDeCasos = itemsDeLaSeccionDeCasos({
+    checklist: selectedUseCases,
+    preventa: casosDeLaPreventa,
+    sugeridos: hayQueSugerir ? casosSugeridosParaLaPropuesta({ areas: areasEnJuego, escala: escalaDeLaEmpresa }) : [],
+  });
 
   const preamble: string[] = [];
   // PARA QUIÉN es la propuesta. Va PRIMERO y como hecho, no como pista: en las fuentes se
@@ -295,6 +307,8 @@ export async function POST(
         .join("\n")}`,
     );
   }
+  const deLosCasos = preambuloDeCasos(seccionDeCasos.origen, seccionDeCasos.items);
+  if (deLosCasos) preamble.push(deLosCasos);
   /* PRECIO (nuestro, prohibido) vs IMPACTO (del cliente, es el argumento). El texto y su
      historia viven en lib/business-cases/money-brief.ts — un route.ts no puede exportarlo
      y el arnés de validación necesita el MISMO string, no una copia. */
@@ -606,7 +620,8 @@ export async function POST(
       // cualquier fuga del LLM: nunca queda contenido generado en esta sección.
       await writeSection(
         USE_CASES_SECTION_KEY,
-        datosDeCasosDeUso(selectedUseCases) as unknown as Prisma.InputJsonValue,
+        // Lo del checklist sale igual que antes (título, detalle y precio exactos); se le suma lo de la preventa o lo sugerido.
+        { items: seccionDeCasos.items } as unknown as Prisma.InputJsonValue,
       );
       // Idioma ≠ español: el agente tradujo los títulos/eyebrows de sección →
       // se aplican como overrides de cara al cliente (editables después como siempre).

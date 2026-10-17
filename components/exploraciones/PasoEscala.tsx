@@ -24,6 +24,9 @@ import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import { esHipotesisDeNivel, type DestinoDePropuesta, type EstimadoGuardado } from "@/lib/exploraciones/contenido";
 import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { cuentaDelArea, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
+import { diaCorto } from "@/lib/exploraciones/fechas";
+import { fotoDeLaExploracion } from "@/lib/exploraciones/foto-de-la-escala";
+import { queExplorar } from "@/lib/exploraciones/que-explorar";
 import { useLienzo } from "./contexto";
 import FranjaDeSugerencias, { BotonAzul, IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { ConQueSeMide } from "./Identificacion";
@@ -98,6 +101,82 @@ function SugerenciasDeLaEscala() {
       <ul className="space-y-1.5">
         {items.map((it) => (
           <FilaSugerida key={it.id} item={it} destino={dondeCae(it.destino, escala)} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// ── 2 · Qué explorar en la próxima sesión, según lo que cambió ───────────────
+
+const ROTULO_DEL_POR: Record<string, string> = { cambio: "Cambió", reunion: "De una reunión", frena: "Lo frena", sinDato: "Sin dato", hipotesis: "Hipótesis" };
+
+/** «2026-10-10» → «10 oct», en la hora de Costa Rica. */
+const elDia = (d: string) => diaCorto(`${d}T12:00:00-06:00`);
+
+/**
+ * Ficha B (2026-10-17): qué conviene llevar a la próxima sesión y por qué, según lo que cambió en la escala desde la
+ * última versión guardada (lib/exploraciones/que-explorar.ts). Llevarla es marcarla «Explorarla a fondo»: la guía la
+ * pregunta primero.
+ */
+function QueExplorarEnLaProxima() {
+  const { exp, escala, mapa, escalaAnterior, cambiar, puedeEditar, guardando, nombreDeNivel } = useLienzo();
+  if (!exp.estado.areas.length) return null;
+  const sugerencias = queExplorar({
+    escala,
+    areas: exp.estado.areas,
+    posiciones: mapa.posiciones,
+    chequeo: mapa.chequeo,
+    ahora: fotoDeLaExploracion(escala, exp.estado),
+    anterior: escalaAnterior,
+    aExplorar: exp.estado.contenido.aExplorar,
+    nombreDeNivel,
+    diaCorto: elDia,
+  });
+  if (!sugerencias.length) return null;
+  const sinLlevar = sugerencias.filter((x) => !x.marcada);
+  const llevar = (xs: typeof sugerencias) =>
+    void cambiar(
+      xs.map((x) => ({ op: "aExplorar" as const, dimensionId: x.dimensionId, valor: { motivo: x.motivo, razon: x.razon.slice(0, 300) } })),
+      { exito: xs.length === 1 ? "Va a la próxima sesión: la guía la pregunta primero." : "Van a la próxima sesión: la guía las pregunta primero." },
+    );
+  return (
+    <section aria-label="Qué explorar en la próxima sesión" data-recorrido="preventa.escala.que-explorar" className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h3 className="text-[15px] font-semibold text-fg">Qué explorar en la próxima sesión</h3>
+          <p className="text-xs text-fg-muted">
+            {escalaAnterior
+              ? "Según lo que cambió desde el " + elDia(escalaAnterior.dia) + " y lo que todavía no tiene evidencia."
+              : "Según lo que todavía no tiene evidencia y lo que frena a cada área."}
+          </p>
+        </div>
+        {puedeEditar && sinLlevar.length > 1 && (
+          <BotonAzul disabled={guardando} onClick={() => llevar(sinLlevar)}>
+            {"Llevar las " + sinLlevar.length}
+          </BotonAzul>
+        )}
+      </div>
+      <ul className="flex flex-col divide-y divide-line">
+        {sugerencias.map((x) => (
+          <li key={x.dimensionId} className="flex flex-wrap items-start justify-between gap-2 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-1.5 text-[13px] font-medium text-fg">
+                <span className="rounded-full border border-line bg-surface-muted px-2 text-[11px] font-semibold text-fg-secondary">{ROTULO_DEL_POR[x.por]}</span>
+                {x.areaNombre} · {x.nombre}
+              </p>
+              <p className="mt-0.5 text-xs text-fg-secondary">{x.razon}</p>
+            </div>
+            {x.marcada ? (
+              <span className="text-xs font-semibold text-success-ink">✓ Va a la próxima sesión</span>
+            ) : (
+              puedeEditar && (
+                <Button size="sm" variant="secondary" disabled={guardando} onClick={() => llevar([x])}>
+                  Llevar a la próxima sesión
+                </Button>
+              )
+            )}
+          </li>
         ))}
       </ul>
     </section>
@@ -465,7 +544,56 @@ function AreaEnJuego({ area, onSacar }: { area: AreaDelLienzo; onSacar: () => vo
         {!abierta && <p className="text-xs text-fg-muted">Toca una dimensión o su nombre para ver por qué está ahí y cómo confirmarlo. Al pasar el cursor por una celda, ves qué dice la escala de ese nivel.</p>}
       </figure>
 
-      {abierta && <DetalleDeDimension key={abierta.id} d={abierta} onCerrar={() => setElegida(null)} />}
+      {abierta ? <DetalleDeDimension key={abierta.id} d={abierta} onCerrar={() => setElegida(null)} /> : <EvidenciaDelArea area={area} onElegir={setElegida} />}
+    </div>
+  );
+}
+
+/**
+ * De dónde sale cada nivel, de un vistazo (ficha B, 2026-10-17: «pintar la escala con su evidencia»): cada dimensión
+ * con su nivel, si es evidencia o hipótesis, de dónde sale y la frase que lo respalda. Tocar una abre su detalle.
+ */
+function EvidenciaDelArea({ area, onElegir }: { area: AreaDelLienzo; onElegir: (id: string) => void }) {
+  const { mapa, nombreDeNivel } = useLienzo();
+  const dims = area.dimensiones.filter((d) => d.aplica);
+  return (
+    <div data-recorrido="preventa.escala.evidencia" className="flex flex-col gap-1.5 border-t border-line pt-4">
+      <Rotulo>De dónde sale cada nivel</Rotulo>
+      <ul className="flex flex-col divide-y divide-line">
+        {dims.map((d) => {
+          const p = mapa.posiciones[d.id];
+          const cita = p?.citas[0]?.cita;
+          return (
+            <li key={d.id}>
+              <button type="button" onClick={() => onElegir(d.id)} className="flex w-full flex-col gap-0.5 py-1.5 text-left hover:bg-surface-hover">
+                <span className="flex flex-wrap items-center justify-between gap-2 text-[13px]">
+                  <span className="text-fg-secondary">
+                    <span className="tabular-nums text-fg-muted">{d.id}</span> {d.nombre}
+                  </span>
+                  {p ? (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-fg">
+                      <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[p.nivel])} aria-hidden="true" />
+                      {nombreDeNivel(p.nivel)}
+                      <span className={cn("text-[11px] font-semibold", p.clase === "evidencia" ? "text-success-ink" : "text-warn-ink")}>
+                        {p.clase === "evidencia" ? "✓ evidencia" : "○ hipótesis"}
+                      </span>
+                      {p.origen === "propuesto" && <span className="text-[11px] font-semibold text-brand">sugerido</span>}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-fg-muted">Sin dato: pregúntalo</span>
+                  )}
+                </span>
+                {p && (
+                  <span className="text-xs text-fg-muted">
+                    {deDonde(p)}
+                    {cita ? <span className="italic text-fg-secondary">{" «" + (cita.length > 140 ? cita.slice(0, 139) + "…" : cita) + "»"}</span> : null}
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -523,6 +651,7 @@ export default function PasoEscala() {
   return (
     <div className="flex flex-col gap-5">
       <SugerenciasDeLaEscala />
+      <QueExplorarEnLaProxima />
       <ConQueSeMide />
       <DondeEstaHoy />
       {hayAreas && (

@@ -19,13 +19,14 @@ import { reunionesDeLaExploracion, reunionesSinLeer } from "./fuentes";
 import { proyectosQueLaReciben } from "./handoff";
 import { leerLoLeido } from "./lo-leido";
 import { propuestasDeLaExploracion } from "./propuesta";
+import { versionAnteriorDeLaExploracion } from "./versiones-de-la-escala";
 import { paraLaPantalla, type ExploracionParaLaPantalla, type FilaDeExploracion, type LoQueSabeLaIA } from "./servidor";
 
 export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<ExploracionParaLaPantalla> {
   const exp = paraLaPantalla(fila);
   // La exploración de un proyecto no le llega a otro handoff ni arma propuestas: eso es de la preventa.
   const delProyecto = !!fila.projectId;
-  const [sinLeer, proyectos, documentos, propuestas, reuniones, sabe] = await Promise.all([
+  const [sinLeer, proyectos, documentos, propuestas, reuniones, sabe, escalaAnterior] = await Promise.all([
     reunionesSinLeer({
       exploracionId: fila.id,
       clientId: fila.client.id,
@@ -71,6 +72,10 @@ export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<E
       console.error("[exploraciones] no se pudo calcular «Lo que la IA ya sabe»", e);
       return null;
     }),
+    versionAnteriorDeLaExploracion(fila.id).catch((e) => {
+      console.error("[exploraciones] no se pudo leer la versión anterior de la escala", e);
+      return null;
+    }),
   ]);
   const loQueSabeLaIA: LoQueSabeLaIA | undefined = sabe
     ? {
@@ -84,5 +89,5 @@ export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<E
         memoriaUrl: null,
       }
     : undefined;
-  return { ...exp, sinLeer, proyectos, documentos, propuestas, reuniones, ...(loQueSabeLaIA ? { loQueSabeLaIA } : {}) };
+  return { ...exp, sinLeer, proyectos, documentos, propuestas, reuniones, escalaAnterior, ...(loQueSabeLaIA ? { loQueSabeLaIA } : {}) };
 }

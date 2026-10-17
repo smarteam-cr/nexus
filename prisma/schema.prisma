@@ -207,6 +207,7 @@ model Client {
   contextCards           ClientContextCard[]
   projects               Project[]
   casosDeUso             CasoDeUso[] // el camino de crecimiento de la empresa (docs/smartloop-plan.md)
+  versionesDeLaEscala    VersionDeLaEscala[] // la escala de la empresa en el tiempo (ficha B, 2026-10-17)
   canvasSuggestions      CanvasSuggestion[]
   actionItems            ActionItem[]
   pedidosFueraDeAlcance  PedidoFueraDeAlcance[]
@@ -559,6 +560,7 @@ model Project {
   timelineSources     TimelineSource[]
   notasDeContexto     NotaDeContexto[]
   exploraciones          ExploracionDeVenta[] // la exploración de Customer Success (el lienzo de la preventa)
+  versionesDeLaEscala    VersionDeLaEscala[] // las fotos de la escala que salieron de este proyecto
   timelineEvents      TimelineEvent[] // Éxito del cliente: eventos crudos del cronograma
   csAlerts            CsAlert[] // Éxito del cliente: alertas del watchdog
   serviciosCobranza   ServicioContratado[] // Cobranza: servicios facturables ligados a este proyecto
@@ -1752,6 +1754,8 @@ model ExploracionDeVenta {
   /// Las sesiones y los documentos que el vendedor sumó a mano.
   documentos ExploracionDocumento[]
   vinculosDeTareas TareaVinculo[]         @relation("VinculosDeTareasDeLaPreventa") // Tareas internas (CASCADE)
+  /// Las fotos de la escala que salieron de esta exploración (VersionDeLaEscala).
+  versionesDeLaEscala VersionDeLaEscala[]
 
   @@index([clientId])
   @@index([projectId])
@@ -7132,6 +7136,7 @@ model CicloDeProyecto {
   updatedAt DateTime @updatedAt
 
   casosDeUso CasoDeUso[]
+  versionesDeLaEscala VersionDeLaEscala[] // la foto de la escala que dejó el diagnóstico del ciclo
 
   @@unique([projectId, numero])
 }
@@ -7316,4 +7321,44 @@ model ReunionIndexada {
   huella     String
   turnos     Int
   indexadoAt DateTime         @default(now())
+}
+
+// ─── La escala de la empresa en el tiempo (ficha B, 2026-10-17) ───────────────
+// SQL: scripts/sql/2026-10-17-ficha-b-versiones-de-la-escala.sql (⛔ nunca `db push`). RLS encendida en su SQL.
+/// Una FOTO de dónde está la empresa en la escala, con su fecha: lo CONFIRMADO de una exploración
+/// (la preventa o la de un proyecto), dimensión por dimensión, con de dónde sale cada nivel. La escribe
+/// SOLO lib/exploraciones/versiones-de-la-escala.ts: al confirmar un nivel (una por exploración y por
+/// día, la del día se actualiza), al presentar el diagnóstico de un ciclo y con «Guardar esta versión».
+/// Una foto igual a la anterior no se guarda. Interno: el cliente no la ve.
+model VersionDeLaEscala {
+  id            String   @id @default(cuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// nullable porque una foto sobrevive a que se borre la exploración de la que salió.
+  exploracionId String?
+  exploracion   ExploracionDeVenta? @relation(fields: [exploracionId], references: [id], onDelete: SetNull)
+  /// nullable porque la preventa no tiene proyecto.
+  projectId     String?
+  project       Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  /// nullable porque solo la foto que deja el diagnóstico de un ciclo lo lleva.
+  cicloId       String?
+  ciclo         CicloDeProyecto? @relation(fields: [cicloId], references: [id], onDelete: SetNull)
+  /// cambio | diagnostico | manual (lib/exploraciones/foto-de-la-escala.ts › ORIGENES_DE_LA_VERSION).
+  origen        String
+  /// El día de la foto en Costa Rica (AAAA-MM-DD): una por exploración y por día con origen `cambio`.
+  dia           String
+  /// La versión de la escala publicada con que se midió.
+  escalaVersion String?
+  edicion       String?
+  /// La foto (FotoDeLaEscala, lib/exploraciones/foto-de-la-escala.ts).
+  foto          Json
+  /// Para no guardar dos veces la misma foto.
+  huella        String
+  creadoPorEmail String?
+  nota          String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([clientId, createdAt])
+  @@index([exploracionId, createdAt])
 }

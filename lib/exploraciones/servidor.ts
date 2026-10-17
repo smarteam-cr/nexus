@@ -7,6 +7,7 @@
  * podía volver a escribir lo descartado. Además, lo confirmado lleva su versión: si dos personas
  * cambian lo mismo a la vez, la segunda recibe un 409 en vez de pisar a la primera.
  */
+import type { FotoDeLaEscala } from "./foto-de-la-escala";
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
@@ -24,7 +25,7 @@ import { hoyEnCostaRica } from "./fechas";
 import type { ReunionSinLeer } from "./lectura";
 import { chequeoConfirmado } from "./mapa";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
-import { bloqueParaLaPropuesta, posicionDesdeElChequeo } from "./para-la-propuesta";
+import { bloqueParaLaPropuesta, casosElegidosParaLaPropuesta, posicionDesdeElChequeo } from "./para-la-propuesta";
 import type { PosicionEnLaEscala } from "@/lib/escala/posicion";
 import type { ViaDelCongelado } from "@/lib/handoff/congelado";
 import { DE_LA_PREVENTA, marcoDe, type ClaveDeMarco } from "./marco";
@@ -293,10 +294,19 @@ export async function aplicarCambios(
 export async function paraLaPropuesta(
   exploracionId: string,
   conEscala: boolean,
-): Promise<{ bloque: string; posicion: (lang: string | null | undefined) => PosicionEnLaEscala } | null> {
+): Promise<{
+  bloque: string;
+  posicion: (lang: string | null | undefined) => PosicionEnLaEscala;
+  /** Los casos de uso elegidos en la preventa, como líneas de la sección «Casos de uso» (sin lo interno). */
+  casos: ReturnType<typeof casosElegidosParaLaPropuesta>;
+  /** Las áreas en juego, en el orden en que se eligieron (para sugerir casos cuando no hay elegidos). */
+  areas: string[];
+} | null> {
   const datos = await exploracionParaLaPropuesta(exploracionId);
   if (!datos) return null;
   return {
+    casos: casosElegidosParaLaPropuesta(datos.estado.contenido),
+    areas: [...datos.estado.areas],
     bloque: bloqueParaLaPropuesta({ ...datos, conEscala }),
     posicion: (lang) => posicionDesdeElChequeo(datos.chequeo, datos.escala, lang),
   };
@@ -369,6 +379,11 @@ export interface ExploracionParaLaPantalla {
   automaticas: boolean;
   /** «Lo que la IA ya sabe, sin que elijas nada» (la memoria, etapa 3). Viaja al abrir y al recargar; lo muestra la página de inicio. */
   loQueSabeLaIA?: LoQueSabeLaIA;
+  /**
+   * La última versión guardada de la escala de esta exploración de ANTES de hoy (ficha B, 2026-10-17): contra ella
+   * «Qué explorar» dice lo que cambió. Igual que `sinLeer`: solo al abrir y al recargar. null = no hay.
+   */
+  escalaAnterior?: { dia: string; foto: FotoDeLaEscala } | null;
   creadaPor: string;
   creadaEn: string;
   actualizadaEn: string;

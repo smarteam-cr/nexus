@@ -31,6 +31,8 @@ import { lineasDe } from "./Resumen";
 import { IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { useSesiones } from "./useSesiones";
+import { diaConSemana } from "@/lib/exploraciones/fechas";
+import { siguientePasoDeLaPreventa } from "@/lib/exploraciones/siguiente-paso-de-la-preventa";
 
 /** A qué apuntan las preguntas de la guía de la próxima sesión: lo que «se pregunta» en ella. */
 function useLoQueSePreguntaEnLaProxima() {
@@ -345,6 +347,72 @@ function Proyectos() {
   );
 }
 
+/**
+ * El siguiente paso de la exploración (ficha B, 2026-10-17, roadmap «Ventas», paso 3): agendar la próxima sesión o, si
+ * ya está agendada, planificarla (lib/exploraciones/siguiente-paso-de-la-preventa.ts). Agendar arma el evento en Google
+ * Calendar por enlace: lo guarda la persona y Google manda la invitación; después se une a la sesión.
+ */
+function SiguientePaso() {
+  const { exp, irA, sesion, puedeEditar } = useLienzo();
+  const { sesiones, hoy, pestanas } = useSesiones();
+  const paso = siguientePasoDeLaPreventa({
+    sesiones,
+    agenda: exp.leido.agenda,
+    guias: exp.estado.propuesta.guias,
+    hoy,
+    empresa: exp.empresa.nombre,
+    pasadasSinSesion: pestanas.filter((p) => !p.sesion && p.hecha).length,
+    dia: (v) => diaConSemana(v.length === 10 ? v + "T12:00:00-06:00" : v),
+    enProyecto: exp.marco === "cs",
+  });
+  const planificar = (id: string | null) => {
+    irA("exploracion");
+    if (!id) return sesion.buscarReunion({ tipo: "nueva", ver: "agendadas" });
+    sesion.elegir(id);
+    sesion.ponerMomento(id, "antes");
+  };
+  return (
+    <section data-recorrido="preventa.siguiente-paso" className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-3.5">
+      <h2 className="text-2xs font-semibold uppercase tracking-[0.08em] text-fg-muted">Siguiente sesión</h2>
+      <p className="text-[13px] leading-[1.45] text-fg">{paso.texto}</p>
+      {paso.tipo === "agendar" && (
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={paso.enlace}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-md border border-line bg-surface px-2.5 py-[5px] text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg"
+          >
+            Crear el evento en Google Calendar
+          </a>
+          {puedeEditar && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                irA("exploracion");
+                sesion.buscarReunion({ tipo: "nueva", ver: "agendadas" });
+              }}
+            >
+              Unirla a la sesión
+            </Button>
+          )}
+        </div>
+      )}
+      {paso.tipo === "planificar" && (
+        <Button size="sm" variant="secondary" className="self-start" onClick={() => planificar(paso.sesionId)}>
+          {paso.sesionId ? "Planificar la sesión " + paso.numero : "Unirla a una sesión"}
+        </Button>
+      )}
+      {paso.tipo === "lista" && paso.sesionId && (
+        <button type="button" className="self-start text-xs font-semibold text-brand hover:underline" onClick={() => planificar(paso.sesionId)}>
+          Ver su preparación
+        </button>
+      )}
+    </section>
+  );
+}
+
 export default function PanelDeContexto({
   sigue,
   nombreDelPaso,
@@ -374,6 +442,7 @@ export default function PanelDeContexto({
           )
         )}
       </section>
+      <SiguientePaso />
       {paso === "exploracion" && <LasSesiones />}
       <Arquitectura />
       {enProyecto ? <AvanceDelProyecto /> : <ParaProponer />}

@@ -17,6 +17,7 @@ import { guardAccessToProject, guardContextoDelDocumento } from "@/lib/auth/api-
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { canvasOf } from "@/lib/pieces/canvas-query";
+import { guardarVersionDelDiagnostico } from "@/lib/exploraciones/versiones-de-la-escala";
 import {
   estadoDelDocumento,
   presentarDocumento,
@@ -99,6 +100,11 @@ export async function POST(req: NextRequest, { params }: Params) {
             )
           : await reabrirDocumento(p.canvasId, p.motivo, por);
     if (!r.ok) return NextResponse.json({ error: r.error, motivos: r.motivos ?? [] }, { status: r.status });
+    /* Ficha B (2026-10-17): presentar el diagnóstico deja la foto de la escala de la exploración del proyecto, con el
+       ciclo abierto si es un servicio recurrente (lib/exploraciones/versiones-de-la-escala.ts). Nunca frena la respuesta. */
+    if (p.accion === "presentar") {
+      void guardarVersionDelDiagnostico(projectId, por).catch((e) => console.error("[estado-del-documento] la escala no guardó su versión", e));
+    }
     return NextResponse.json(r.estado);
   } catch (e) {
     if (esquemaDesactualizado(e)) return esquemaAtrasado();

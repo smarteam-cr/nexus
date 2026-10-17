@@ -185,6 +185,8 @@ describe("qué cubre la guía", () => {
     expect(enfoqueDeLaGuia(ESCALA, ["1"], posiciones, {})).toEqual(["1.4", "1.8", "1.3", "1.5"]);
     expect(enfoqueDeLaGuia(ESCALA, ["1"], posiciones, { "1.7": { motivo: "meta" } })).toEqual(["1.7", "1.4", "1.8", "1.3"]);
     expect(enfoqueDeLaGuia(ESCALA, [], posiciones, {})).toEqual([]);
+    // Ficha B: una con evidencia que alguien llevó a la próxima sesión («Qué explorar»: cambió de nivel) sí entra, primero.
+    expect(enfoqueDeLaGuia(ESCALA, ["1"], posiciones, { "1.1": { motivo: "otro" } })[0]).toBe("1.1");
   });
 
   it("la guía queda vieja si cambiaron las tarjetas vacías o las dimensiones en foco", () => {
