@@ -25,6 +25,7 @@
 
 // Import profundo a propósito, nunca la raíz "googleapis": la raíz carga los tipos de ~400 APIs y
 // dejó sin memoria el build del VPS (2026-09-26). Ver lib/google/googleapis-sin-raiz.test.ts.
+import { limpiarDescripcionDelEvento } from "@/lib/sessions/descripcion-del-evento";
 import { calendar as apiCalendar, type calendar_v3 } from "googleapis/build/src/apis/calendar";
 import { prisma } from "@/lib/db/prisma";
 import { getImpersonatedAuth, listDomainUsers } from "@/lib/google/auth";
@@ -179,6 +180,7 @@ function processItems(
       participants,
       googleDocId,
       organizerEmail,
+      descripcion: limpiarDescripcionDelEvento(item.description),
     });
   }
   if (outOfRange > 0) {
@@ -339,6 +341,7 @@ async function correrSync(daysBack: number): Promise<MeetSyncResult> {
               googleEventId: event.eventId,
               googleDocId: eventDocId,
               organizerEmail: event.organizerEmail,
+              descripcionDelEvento: event.descripcion ?? null,
               // PERF #1: resolver el cliente al crear (sesión nueva → sin override).
               resolvedClientId: resolveSessionClientId({ title: event.title, participants: allParticipants, manualClientId: null }, categorizeCtx),
             },

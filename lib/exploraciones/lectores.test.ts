@@ -102,6 +102,13 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
       "Desde la etapa 3 de la memoria suma la minuta y los compromisos de esa reunión (sin la cita) y la memoria de la cuenta " +
       "con el alcance del cliente (lector «correo» en lib/memoria/consumidores.ts). Nunca Tareas.",
   },
+  "lib/seguimiento/reunion/correo-server.ts": {
+    destino: "correo-al-cliente",
+    motivo:
+      "El correo de seguimiento de una reunión con un cliente, desde su página (ficha G, 2026-10-17). Reúsa el correo de las " +
+      "exploraciones por su puerta (`escribirElCorreoDeSeguimiento`, más los ayudantes puros): nunca una exploración, ni " +
+      "Tareas, ni hechos. Lo de la reunión sale del chokepoint; la memoria, con el alcance del cliente.",
+  },
   "app/api/sales/exploraciones/sugerencias/route.ts": { destino: "ventas", motivo: "«Llegaron por el test»." },
   "app/api/business-cases/[id]/preventa/route.ts": {
     destino: "ventas",
@@ -242,7 +249,7 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff/,
   },
   "correo-al-cliente": {
-    permitidas: /\barmarCorreoDeSeguimiento\b/,
+    permitidas: /\barmarCorreoDeSeguimiento\b|\bescribirElCorreoDeSeguimiento\b/,
     // Ni los hechos de las reuniones (memoria de la cuenta, etapa 6): traen citas internas y nadie los revisó.
     prohibidas: /exploracionParaLaPropuesta|bloqueParaElHandoff|exploracionParaElHandoff|internoParaElCse|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\.estado\b|hechoDeReunion|HechoDeReunion|@\/lib\/seguimiento\/hechos/,
   },

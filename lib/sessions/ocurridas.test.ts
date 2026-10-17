@@ -247,6 +247,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "plomeria",
     motivo: "Mide el largo del transcript de ids YA elegidos por el chokepoint (sin cargar el blob); la membresía y el corte los decide session-relevance.",
   },
+  "lib/sessions/reunion-para-su-pagina.ts": {
+    clase: "agenda",
+    motivo:
+      "La página de una reunión (ficha G): la reunión siguiente con el mismo cliente (para una persona: puede ser futura) y " +
+      "la próxima que dejó agendada otra reunión. Lo que va al correo (un modelo) pasa por getClientSessions, que ya corta por fecha.",
+  },
   "lib/clients/last-interaction.ts": { clase: "agenda", motivo: "Última interacción Y próxima: hace las DOS consultas, partidas a propósito." },
   "components/clients/EspacioSesiones.tsx": {
     clase: "agenda",

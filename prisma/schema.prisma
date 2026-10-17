@@ -2272,6 +2272,9 @@ model FirefliesSession {
   googleDocId        String? // ID del Google Doc de la reunión (Meet)
   googleEventId      String? // ID del evento de Google Calendar (Meet)
   organizerEmail     String? // Email del organizador (para impersonación en enriquecimiento)
+  // Ficha G (2026-10-17): la descripción del evento del calendario, limpia (sin el bloque de Google Meet ni el HTML).
+  // Es la AGENDA de la reunión: lo que se iba a tratar. La escribe la sync de Meet (lib/sessions/descripcion-del-evento.ts).
+  descripcionDelEvento String? @db.Text
   manualClientId     String? // override manual del matching automático de cliente
   // ── QUIÉN puso ese override, y si fue una decisión o un efecto secundario ──────
   // `manualClientId` lo escriben DOS gestos que se ven idénticos en la base: alguien eligiendo
@@ -2303,6 +2306,7 @@ model FirefliesSession {
   turnos                TurnoDeReunion[]       @relation("TurnosDeLaReunion") // la búsqueda en las reuniones (etapa 4c): CASCADE
   indexada              ReunionIndexada?       @relation("ReunionIndexada")
   notasParaHubspot      NotaDeLaCuenta[]       @relation("NotasDeLaReunion") // la nota para HubSpot que se sugirió después de la reunión (SET NULL)
+  seguimiento           SeguimientoDeReunion?  @relation("SeguimientoDeLaReunion") // ficha G: agenda escrita, correo y próxima reunión (CASCADE)
 
   // Índices para los queries principales:
   //   /sessions: findMany({ where: { date: { lt: now } }, orderBy: { date: desc } })
@@ -2311,6 +2315,42 @@ model FirefliesSession {
   @@index([date(sort: Desc)])
   @@index([manualClientId])
   @@index([resolvedClientId, date(sort: Desc)])
+}
+
+/// Ficha G (2026-10-17) · Lo que se hace con UNA reunión después de que ocurre: la agenda que escribió una persona, el
+/// correo de seguimiento (lo arma el agente a pedido, lo manda una persona: Nexus no envía nada) y la próxima reunión
+/// sugerida (la persona la agenda en Google Calendar por enlace: Nexus no escribe en el calendario). Cuelga de la
+/// reunión y no del cliente: el dueño sale siempre de la reunión (`duenoDeLaSesion`), así una reunión que cambia de
+/// dueño no deja nada colgado de otro cliente. Se lee y se escribe SOLO por lib/seguimiento/reunion.
+model SeguimientoDeReunion {
+  id        String           @id @default(cuid())
+  sessionId String           @unique
+  session   FirefliesSession @relation("SeguimientoDeLaReunion", fields: [sessionId], references: [id], onDelete: Cascade)
+
+  /// Lo que se iba a tratar, escrito por una persona (manda sobre la descripción del evento).
+  agenda         String?   @db.Text
+  agendaPorEmail String?
+  agendaEn       DateTime?
+
+  /// El correo de seguimiento: { asunto, cuerpo, para, en, corridaId, editado? } (lib/exploraciones/contenido › CorreoDeSeguimiento).
+  correo Json?
+
+  /// La próxima reunión sugerida: lo que escribió el agente con el correo (objetivo) y lo que cambió la persona.
+  proximaTitulo      String?
+  proximaObjetivo    String?   @db.Text
+  proximaInicio      DateTime?
+  proximaDuracionMin Int?
+  /// null = pendiente · agendada (la persona dice que la guardó en su calendario) · descartada
+  proximaEstado      String?
+  proximaPorEmail    String?
+  proximaEn          DateTime?
+
+  /// Sube con cada escritura (para saber si la fila cambió).
+  version   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([proximaEstado, proximaInicio])
 }
 
 // ─── Ciclo de reunión: Minuta + ActionItems ──────────────────────────────────

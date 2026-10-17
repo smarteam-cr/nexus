@@ -180,8 +180,8 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     excluirOrigenes: [],
     // Solo la ficha recortada (DECISIONS «El correo de seguimiento…»): ni los procesos ni la historia de otros proyectos.
     sinPartes: ["procesos", "historia"],
-    archivos: ["lib/exploraciones/correo-de-seguimiento-server.ts"],
-    motivo: "El correo de seguimiento de una reunión, para no repreguntar lo que ya se sabe.",
+    archivos: ["lib/exploraciones/correo-de-seguimiento-server.ts", "lib/seguimiento/reunion/correo-server.ts"],
+    motivo: "El correo de seguimiento de una reunión (de una exploración o, desde la ficha G, de cualquier reunión con un cliente), para no repreguntar lo que ya se sabe.",
   },
   cuestionario: {
     pieza: null,

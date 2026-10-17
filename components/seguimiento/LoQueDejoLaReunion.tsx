@@ -66,7 +66,11 @@ function clavesPendientes(t: Tarjeta): Set<string> {
   return s;
 }
 
-export default function LoQueDejoLaReunion({ inicial }: { inicial: Tarjeta }) {
+/**
+ * `sinCompromisos`: la página de la reunión (ficha G) muestra las tareas que dejó en su propia sección, con
+ * responsable; ahí no se repiten plegadas.
+ */
+export default function LoQueDejoLaReunion({ inicial, sinCompromisos = false }: { inicial: Tarjeta; sinCompromisos?: boolean }) {
   const toast = useToast();
   const router = useRouter();
   /* `vista` es lo que se pinta (las filas no se mueven al decidir); `vivo` es lo último del servidor (la huella, lo que
@@ -508,7 +512,7 @@ export default function LoQueDejoLaReunion({ inicial }: { inicial: Tarjeta }) {
         </Bloque>
       )}
 
-      {secciones.compromisos.items.length > 0 && (
+      {!sinCompromisos && secciones.compromisos.items.length > 0 && (
         <details className="rounded-lg border border-line bg-surface-muted px-3 py-2">
           <summary className="cursor-pointer text-xs font-medium text-fg-secondary">
             Compromisos que quedaron en Tareas ({secciones.compromisos.items.length + secciones.compromisos.mas}) · solo para leer: cada persona decide los suyos
