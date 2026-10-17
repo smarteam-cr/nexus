@@ -56,6 +56,13 @@ describe("⭐ primero lo que pinta el color, después lo que vio el vigía", () 
     expect(lecturaDeLaCuenta({ salud: "saludable", porque: "", razones: [] }, [conFrase]).motivos).toEqual([]);
   });
 
+  it("el mismo texto se dice una vez (los avisos de renovación por hub, antes de juntarse)", () => {
+    const igual = { categoria: "RENEWAL_RISK", titulo: "Renovación en 88 días · Aditec JCB" };
+    const l = lecturaDeLaCuenta({ salud: "en-friccion", porque: "", razones: [] }, [alerta({ id: "h1", ...igual }), alerta({ id: "h2", ...igual })]);
+    expect(l.motivos.map((m) => m.texto)).toEqual(["Renovación en 88 días · Aditec JCB"]);
+    expect(l.mas).toBe(0);
+  });
+
   it("las sugerencias del vigía no son motivos del color: se cuentan aparte", () => {
     const l = lecturaDeLaCuenta({ salud: "saludable", porque: "Va bien", razones: [] }, [
       alerta({ id: "op", categoria: "EXPANSION_OPPORTUNITY" }),

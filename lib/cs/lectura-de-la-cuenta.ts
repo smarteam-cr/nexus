@@ -103,7 +103,14 @@ export function lecturaDeLaCuenta(
       alertaId: a.id,
     }));
 
-  const todos = [...deLasRazones, ...deLasAlertas];
+  // Un motivo con el mismo texto se dice una vez (antes de juntarse, la renovación dejaba un aviso por hub, todos iguales).
+  const vistos = new Set<string>();
+  const todos = [...deLasRazones, ...deLasAlertas].filter((m) => {
+    const k = m.texto.trim().toLowerCase();
+    if (vistos.has(k)) return false;
+    vistos.add(k);
+    return true;
+  });
   return {
     salud: salud.salud,
     nombre: NOMBRE_DE_LA_SALUD[salud.salud],
