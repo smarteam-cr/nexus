@@ -20,6 +20,22 @@ import { esEntradaDeCliente } from "./espejo";
 import { cuentasSinClienteDeMercury, proponerCuentas, type PropuestaMercury, type ViaMercury } from "./emparejado";
 import { detectarDiferenciasMercury, medidoMercury, type EstadoMercury } from "./diferencias";
 import { sincronizarMercury, ultimaCorridaMercury, ultimaCorridaOkMercury } from "./sync";
+import { configDesdeEntorno, crearTransporteHttp } from "./transporte-http";
+import { MercuryError } from "./transporte";
+import { detalleDeFacturaMercury } from "./detalle-de-factura";
+import type { DetalleDeFactura } from "../detalle-de-factura";
+
+/**
+ * El detalle de una factura de la copia (sus líneas), pedido a Mercury a pedido (2026-10-17). null = la factura no está
+ * en la copia. ⛔ Solo GET. Lanza `MercuryError` si Mercury no contesta: la ruta lo dice tal cual.
+ */
+export async function cargarDetalleDeFacturaMercury(facturaId: string): Promise<DetalleDeFactura | null> {
+  const f = await prisma.facturaMercury.findUnique({ where: { id: facturaId }, select: { mercuryInvoiceId: true, numero: true, invoiceDate: true, moneda: true } });
+  if (!f) return null;
+  const t = crearTransporteHttp({ ...configDesdeEntorno(), timeoutMs: 15_000 });
+  if (!t.factura) throw new MercuryError("PROTOCOLO", "Este transporte no sabe pedir una factura.");
+  return detalleDeFacturaMercury(await t.factura(f.mercuryInvoiceId), { numero: f.numero, fecha: f.invoiceDate.toISOString().slice(0, 10), moneda: f.moneda });
+}
 
 export class MercuryServicioError extends Error {
   readonly status: number;

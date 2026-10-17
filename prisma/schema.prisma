@@ -3467,6 +3467,8 @@ model CuentaFinanciera {
   facturaLiberadas FacturaLiberada[]
   /// Los clientes de Mercury emparejados con esta cuenta (espejo de Mercury, 2026-10-02).
   clientesMercury  ClienteMercury[] @relation("ClientesMercuryDeLaCuenta")
+  /// Los contratos que revenden licencias, con su parte de servicio y su costo (2026-10-17).
+  licenciasRevendidas LicenciaRevendida[]
 
   @@unique([fuente, fuenteIdExterno]) // NULLs no colisionan — las cuentas manuales legacy conviven
   @@index([estadoCuenta])
@@ -7361,4 +7363,72 @@ model VersionDeLaEscala {
 
   @@index([clientId, createdAt])
   @@index([exploracionId, createdAt])
+}
+
+// ─── Un solo libro financiero · ficha F (2026-10-17) ───────────────────────────
+// SQL: scripts/sql/2026-10-17-ficha-f-libro-financiero.sql (ANTES del deploy).
+
+/// Un contrato que revende licencias (HubSpot, Infobip…): qué parte de lo facturado es servicio de Smarteam y cuánto se
+/// le paga al proveedor por la licencia. Uno por cuenta y moneda (kölbi: el anexo en dólares y el anexo en colones).
+/// Lo carga Finanzas; el punto de equilibrio lo lee (lib/finanzas/licencias.ts). Reemplaza la lista fija de
+/// lib/finanzas/parte-de-servicio.ts.
+model LicenciaRevendida {
+  id             String           @id @default(cuid())
+  cuentaId       String
+  cuenta         CuentaFinanciera @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  /// La moneda en que se le factura este contrato: la parte de servicio se aplica a los cobros de esa moneda.
+  moneda         String
+  /// El contrato sin IVA y, de eso, cuánto es servicio de Smarteam. La parte de servicio = montoServicio / montoContrato.
+  montoContrato  Decimal          @db.Decimal(14, 2)
+  montoServicio  Decimal          @db.Decimal(14, 2)
+  proveedor      String           @default("HubSpot")
+  /// Lo que se le paga al proveedor, cada `costoCadaMeses` meses (3 = trimestral). null = todavía no se sabe.
+  costoMonto     Decimal?         @db.Decimal(14, 2)
+  costoMoneda    String?
+  costoCadaMeses Int?
+  /// Desde y hasta cuándo rige (inclusive). null = sin límite de ese lado.
+  desde          DateTime?        @db.Date
+  hasta          DateTime?        @db.Date
+  /// De dónde salen los números («Anexo 1.0, p. 17»).
+  fuente         String           @db.Text
+  notas          String?          @db.Text
+  /// Archivar en vez de borrar: el equilibrio de meses pasados ya se leyó con ella.
+  archivadaEn    DateTime?
+  archivadaPor   String?
+  creadoPor      String
+  actualizadoPor String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([cuentaId])
+}
+
+/// Un gasto financiero revisado movimiento por movimiento (2026-10-17): la comisión de Stripe, la de una transferencia
+/// internacional o la del banco. Nace de un movimiento de la copia de Mercury que una persona revisa: «Es gasto
+/// financiero» (con su monto) o «No es». Solo los GASTO suman al punto de equilibrio, como rubro propio.
+/// ⛔ No toca Mercury: la copia sigue igual; esto es la decisión de una persona sobre un movimiento.
+model GastoFinanciero {
+  id                  String   @id @default(cuid())
+  /// El movimiento de la copia (MovimientoMercury.id): la entrada que llegó con la comisión descontada, o el cargo de
+  /// la comisión. Sin FK: la copia nunca borra movimientos, y uno que desaparece de Mercury queda «DESAPARECIDO».
+  movimientoMercuryId String   @unique
+  /// STRIPE · TRANSFERENCIA_INTERNACIONAL · BANCO (CHECK en el SQL).
+  tipo                String
+  /// GASTO · NO_ES (CHECK en el SQL).
+  decision            String
+  /// El día del movimiento: decide el mes del gasto.
+  fecha               DateTime @db.Date
+  /// Lo que se confirmó (≥ 0). En NO_ES, 0.
+  monto               Decimal  @db.Decimal(12, 2)
+  moneda              String
+  /// Lo que propuso Nexus, para saber si la persona lo cambió. null = Nexus no tenía cómo calcularlo.
+  montoPropuesto      Decimal? @db.Decimal(12, 2)
+  descripcion         String   @db.Text
+  decididoPor         String
+  decididoEn          DateTime
+  nota                String?  @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([fecha])
 }

@@ -19,7 +19,7 @@ import { armarAgenda, rolDeLinea } from "./agenda-equilibrio";
 import { detectarInconsistencias, type Inconsistencia } from "./inconsistencias";
 
 const rubros = (r: Partial<Record<RubroEgreso, number>> = {}): Record<RubroEgreso, number> => ({
-  PLANILLA: 0, HERRAMIENTA: 0, FIJO_OPERACION: 0, TARJETA: 0, RESERVA_AGUINALDO: 0, ...r,
+  PLANILLA: 0, HERRAMIENTA: 0, FIJO_OPERACION: 0, TARJETA: 0, RESERVA_AGUINALDO: 0, LICENCIA: 0, FINANCIERO: 0, ...r,
 });
 
 // [periodo, facturado, aliados, ingresosTotales, egresos, programado sin factura, estado, faltantes]

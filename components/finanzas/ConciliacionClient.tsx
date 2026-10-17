@@ -24,9 +24,11 @@ import DiferenciasOdoo from "@/components/cobranza/DiferenciasOdoo";
 import EmparejadoOdoo from "@/components/cobranza/EmparejadoOdoo";
 import EmparejadoMercury from "@/components/cobranza/EmparejadoMercury";
 import GastosContraMercury, { pendientesDeGastos } from "@/components/finanzas/GastosContraMercury";
+import GastosFinancieros from "@/components/finanzas/GastosFinancieros";
+import LoPagado from "@/components/cobranza/LoPagado";
 import type { GastosContraMercury as DatosDeGastosMercury } from "@/lib/finanzas/gastos-mercury";
 
-type Pestana = "no-cuadra" | "emparejar" | "libro" | "gastos";
+type Pestana = "no-cuadra" | "pagado" | "emparejar" | "libro" | "gastos";
 type Sistema = "odoo" | "mercury";
 
 export default function ConciliacionClient({
@@ -37,6 +39,8 @@ export default function ConciliacionClient({
   conteos,
   soloDecisiones = false,
   gastosMercury = null,
+  abrirEn = "no-cuadra",
+  puedeEditarGastos = false,
 }: {
   vista: VistaFinanzas;
   /** El nombre de pila de quien supervisa (lib/finanzas/vista-server.ts). */
@@ -51,9 +55,13 @@ export default function ConciliacionClient({
   soloDecisiones?: boolean;
   /** Los gastos contra Mercury (2026-10-06). null = quien mira no tiene `gastos.read`: la pestaña no aparece. */
   gastosMercury?: DatosDeGastosMercury | null;
+  /** La pestaña con que abre: Pendientes › «Cobrar lo pagado» llega con ?ver=pagados. */
+  abrirEn?: Pestana;
+  /** `gastos.write`: decidir los gastos financieros (2026-10-17). */
+  puedeEditarGastos?: boolean;
 }) {
   const toast = useToast();
-  const [tab, setTab] = useState<Pestana>("no-cuadra");
+  const [tab, setTab] = useState<Pestana>(abrirEn);
   const [sistema, setSistema] = useState<Sistema>(conteos.porEmparejarOdoo > 0 ? "odoo" : "mercury");
   const [noCuadra, setNoCuadra] = useState(conteos.noCuadra);
   const [porEmparejar, setPorEmparejar] = useState({ odoo: conteos.porEmparejarOdoo, mercury: conteos.porEmparejarMercury });
@@ -119,6 +127,11 @@ export default function ConciliacionClient({
             title: "Las diferencias entre los cobros de Nexus y lo que dicen Odoo y Mercury, con dónde se arregla cada una.",
           },
           {
+            key: "pagado",
+            label: "Lo pagado",
+            title: "Lo que Odoo y Mercury ya dan por facturado o pagado, listo para pasar a Nexus con tu firma.",
+          },
+          {
             key: "emparejar",
             label: "Emparejar",
             count: porEmparejar.odoo + porEmparejar.mercury,
@@ -138,7 +151,14 @@ export default function ConciliacionClient({
         ]}
       />
 
-      {tab === "gastos" && gastosMercury && <GastosContraMercury datos={gastosMercury} />}
+      {tab === "gastos" && gastosMercury && (
+        <div className="space-y-6">
+          <GastosFinancieros puedeEditar={puedeEditarGastos} />
+          <GastosContraMercury datos={gastosMercury} />
+        </div>
+      )}
+
+      {tab === "pagado" && <LoPagado puedeEditar={puedeEditar} />}
 
       {tab === "no-cuadra" && (
         <DiferenciasOdoo

@@ -263,3 +263,57 @@ export function facturasOdooParaFechar(e: EntradaDelLibro, pegados: readonly Peg
   const cobros = new Map(e.cobros.map((c) => [c.id, c]));
   return [...new Set(pegados.filter((p) => p.fuente === "ODOO" && p.pagada && cobros.get(p.cobroId)?.estado !== "COBRADO").map((p) => p.facturaId))];
 }
+
+/* ── Lo que eligió quien confirma (la pantalla de cada mañana, 2026-10-17) ─────────────────────────────────────── */
+
+/**
+ * Lo que la persona vio y marcó en la lista: qué cuotas pegar a su factura y cuáles cobrar, cada una con el día del pago
+ * que se le mostró. El servidor vuelve a decidir todo antes de escribir y aplica SOLO la intersección: lo que no está acá
+ * no se toca, aunque la lista nueva lo traiga.
+ */
+export interface SeleccionDelLibro {
+  pegar: readonly string[];
+  cobrar: ReadonlyArray<{ cobroId: string; fechaCobro: string }>;
+}
+
+export interface AccionesElegidas {
+  acciones: Accion[];
+  /** Lo marcado que ya no se puede aplicar como se vio, con el porqué. No se escribe. */
+  cambiaron: Array<{ cobroId: string; motivo: string }>;
+}
+
+/**
+ * Recorta la decisión de hoy a lo que la persona marcó.
+ *
+ *  · Cobrar una cuota también la pega a su factura: es la misma factura, y una cuota cobrada sin factura no se puede
+ *    explicar después.
+ *  · ⚠ Si el día del pago cambió desde que se mostró la lista (Odoo concilió con otro movimiento, Mercury cambió la
+ *    entrada), esa cuota NO se cobra: la fecha decide el mes del gráfico y la persona firmó otra. Se pega igual.
+ *  · Lo marcado que ya no está en la decisión (alguien la cobró a mano, la factura dejó de estar pagada) se informa.
+ */
+export function accionesElegidas(acciones: readonly Accion[], sel: SeleccionDelLibro): AccionesElegidas {
+  const pegar = new Set(sel.pegar);
+  const cobrar = new Map(sel.cobrar.map((c) => [c.cobroId, c.fechaCobro]));
+  const porId = new Map(acciones.map((a) => [a.cobroId, a]));
+  const out: AccionesElegidas = { acciones: [], cambiaron: [] };
+  for (const id of new Set([...pegar, ...cobrar.keys()])) {
+    if (!porId.has(id)) out.cambiaron.push({ cobroId: id, motivo: "ya no está en la lista: alguien la tocó o la factura cambió" });
+  }
+  for (const a of acciones) {
+    const quiereCobrar = cobrar.has(a.cobroId);
+    const quierePegar = pegar.has(a.cobroId) || quiereCobrar;
+    if (!quierePegar) continue;
+    const elegida: Accion = { fuente: a.fuente, cobroId: a.cobroId, numero: a.numero };
+    if (a.fechaEmision) elegida.fechaEmision = a.fechaEmision;
+    if (a.numeroFactura) elegida.numeroFactura = a.numeroFactura;
+    if (quiereCobrar) {
+      const vista = cobrar.get(a.cobroId)!;
+      if (!a.cobrar) out.cambiaron.push({ cobroId: a.cobroId, motivo: "ya no figura pagada allá: no se cobró" });
+      else if (a.cobrar.fechaCobro !== vista) {
+        out.cambiaron.push({ cobroId: a.cobroId, motivo: `el día del pago cambió (se vio el ${vista}, hoy dice el ${a.cobrar.fechaCobro}): no se cobró` });
+      } else elegida.cobrar = a.cobrar;
+    }
+    if (elegida.fechaEmision || elegida.numeroFactura || elegida.cobrar) out.acciones.push(elegida);
+  }
+  return out;
+}

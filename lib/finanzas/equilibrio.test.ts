@@ -661,7 +661,8 @@ describe("J · estructura y desglose", () => {
 
   it("J2 un rubro sin datos aparece en cero, no desaparece de la estructura", () => {
     const r = calcularEquilibrio([eg("2026-01", "PLANILLA", "Planilla", 1000)], [], { anio: 2026, hoyISO: HOY });
-    expect(r.estructura).toHaveLength(5);
+    // Siete desde el 2026-10-17: se sumaron LICENCIA y FINANCIERO (lib/finanzas/licencias.ts, gastos-financieros.ts).
+    expect(r.estructura).toHaveLength(7);
     expect(r.estructura.find((e) => e.rubro === "TARJETA")).toMatchObject({ montoAnual: 0, pctDelTotal: 0 });
   });
 

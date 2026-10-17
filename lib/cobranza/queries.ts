@@ -43,7 +43,16 @@ import {
 } from "./tarjetas";
 import { coberturaDe, periodoDe, periodosDeAguinaldo, quincenasDistintas } from "./planilla";
 import { quincenasQueFaltanGenerar } from "./planilla-server";
-import { parteDeServicio } from "@/lib/finanzas/parte-de-servicio";
+import {
+  egresosDeLicencias,
+  MODO_LICENCIAS_POR_DEFECTO,
+  parteDeServicio,
+  resumenDeLicencias,
+  type ModoLicencias,
+  type ResumenDeLicencia,
+} from "@/lib/finanzas/licencias";
+import { cargarLicencias } from "@/lib/finanzas/licencias-server";
+import { cargarGastosFinancierosDelAnio } from "@/lib/finanzas/gastos-financieros-server";
 import {
   detectarInconsistencias,
   type EstadoParaAuditar,
@@ -111,7 +120,7 @@ import { facturadoEnOdooSinCuenta, porCobrarEnMercurySinEmparejar } from "@/lib/
 import { CATEGORIAS_SIN_SALARIO } from "@/lib/finanzas/gastos";
 import { cambioDespuesDelCierre, esFaltanteDePlanilla, huellasPorMes, mandaLaTasaConfirmada, type HuellaDelMes, type NumerosDelCierre } from "@/lib/finanzas/cierre";
 import { cargarTasasDelAnio, tasaFirme } from "@/lib/finanzas/tipo-cambio-server";
-import { leerDecisionAliados, type DecisionAliados } from "@/lib/finanzas/decisiones-server";
+import { leerDecisionAliados, leerDecisionLicencias, type DecisionAliados, type DecisionLicencias } from "@/lib/finanzas/decisiones-server";
 import { calidadDeMesDeNexus, costoParaEgreso, egresoDesdeNexus, egresosDeNexus } from "@/lib/finanzas/egresos-nexus";
 import { crDateParts } from "@/lib/jobs/time";
 import type { ComparacionConExcel } from "@/lib/finanzas/cobranza-contra-excel";
@@ -2438,6 +2447,17 @@ export interface ReporteAnualDTO extends ReporteEquilibrio {
    * null = sin decidir: manda `PARTNERSHIP_CUBRE_EL_PISO` (y `criterios.partnershipCubreElPiso` dice cuál rigió).
    */
   decisionAliados: DecisionAliados | null;
+  /**
+   * Las licencias revendidas (2026-10-17, lib/finanzas/licencias.ts): cómo se contaron (`modo`), si dirección lo decidió
+   * y los contratos cargados. `sinCosto` = contratos sin lo que se le paga al proveedor: con INGRESO_Y_COSTO cuentan el
+   * ingreso entero sin su gasto.
+   */
+  licencias: {
+    modo: ModoLicencias;
+    decision: DecisionLicencias | null;
+    contratos: ResumenDeLicencia[];
+    sinCosto: number;
+  };
 }
 
 /**
@@ -2452,7 +2472,7 @@ export interface ReporteAnualDTO extends ReporteEquilibrio {
 export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor = 12) {
   const periodos = Array.from({ length: 12 }, (_, i) => `${anio}-${String(i + 1).padStart(2, "0")}`);
   const deNexus = periodos.filter(egresoDesdeNexus);
-  const [filasEgreso, filasPlanilla, aguinaldo, costosNexus, gastosNexus, cierresNexus] = await Promise.all([
+  const [filasEgreso, filasPlanilla, aguinaldo, costosNexus, gastosNexus, cierresNexus, financieros] = await Promise.all([
     prisma.egresoMensual.findMany({
       where: { periodo: { in: periodos } },
       select: { periodo: true, categoria: true, concepto: true, conceptoClave: true, monto: true, moneda: true, monedaInferida: true },
@@ -2489,6 +2509,8 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
           where: { periodo: { in: deNexus } },
           select: { periodo: true, estado: true, gastosListosPor: true },
         }),
+    // Los gastos financieros confirmados (2026-10-17): comisiones de Stripe, transferencias internacionales y banco.
+    cargarGastosFinancierosDelAnio(anio),
   ]);
 
   const periodoHoy = periodoDe(hoyISO);
@@ -2552,6 +2574,12 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
         calidad: "ESTIMADO",
       });
     }
+  }
+
+  // Los gastos financieros que una persona confirmó, movimiento por movimiento, con el día de cada uno. Son MEDIDOS:
+  // salieron del banco. Rubro ocasional: un mes sin ellos no queda incompleto.
+  for (const f of financieros) {
+    egresos.push({ ...f, rubro: "FINANCIERO", moneda: f.moneda as MonedaEq, calidad: "MEDIDO" });
   }
 
   // Los meses de Nexus: recurrentes sin salarios y gastos del mes, con su calidad ya decidida.
@@ -2621,8 +2649,19 @@ export async function loadReporteAnual(
   const inicioDelOtroAnio = dayUTC(`${anio + 1}-01-01`);
   const divisor = opciones?.divisorAguinaldo ?? 12;
 
-  const [{ egresos, planillaAcc, calidadDada }, filasCobro, filasComision, tasasDelAnio, costosActivos, filasVenta, filasNoVenta, filasCierre, decisionAliados] =
-    await Promise.all([
+  const [
+    { egresos, planillaAcc, calidadDada },
+    filasCobro,
+    filasComision,
+    tasasDelAnio,
+    costosActivos,
+    filasVenta,
+    filasNoVenta,
+    filasCierre,
+    decisionAliados,
+    licencias,
+    decisionLicencias,
+  ] = await Promise.all([
     cargarEgresosDelAnio(anio, hoyISO, divisor),
     prisma.cobro.findMany({
       // Por período, o porque se facturó o se cobró en el año: lo facturado va al mes de emisión y
@@ -2692,7 +2731,11 @@ export async function loadReporteAnual(
     }),
     // Lo que dirección decidió sobre los aliados (null = sin decidir: manda la constante del código).
     leerDecisionAliados(),
+    // Las licencias revendidas por contrato y cómo se cuentan (2026-10-17).
+    cargarLicencias(),
+    leerDecisionLicencias(),
   ]);
+  const modoLicencias: ModoLicencias = decisionLicencias?.modo ?? MODO_LICENCIAS_POR_DEFECTO;
 
   // ── Ingresos ────────────────────────────────────────────────────────────────
   const ingresos: IngresoDeMes[] = [];
@@ -2735,8 +2778,12 @@ export async function loadReporteAnual(
     ingresos.push({
       periodo: t.periodo,
       tipo: t.tipo,
-      /* Solo la parte de servicio: la licencia revendida se le paga a HubSpot (lib/finanzas/parte-de-servicio.ts). */
-      monto: Math.round(num(c.monto)! * parteDeServicio(c.cuentaId, c.moneda) * 100) / 100,
+      /* Con SOLO_SERVICIO, de un contrato con licencias cuenta solo su parte de servicio; con INGRESO_Y_COSTO, todo (y el
+         costo de la licencia sale como gasto, abajo). lib/finanzas/licencias.ts. */
+      monto:
+        modoLicencias === "SOLO_SERVICIO"
+          ? Math.round(num(c.monto)! * parteDeServicio(licencias, c.cuentaId, c.moneda, c.periodo) * 100) / 100
+          : num(c.monto)!,
       moneda: c.moneda as MonedaEq,
       tipoServicio: c.servicio.tipoServicio,
       enPlazo: t.enPlazo,
@@ -2794,6 +2841,15 @@ export async function loadReporteAnual(
     costosActivos.map((c) => ({ nombre: c.nombre, categoria: c.categoria, monto: num(c.monto)!, moneda: c.moneda as MonedaEq, frecuencia: c.frecuencia })),
   );
 
+  // El costo de las licencias revendidas, solo si se cuenta el ingreso entero. Va DESPUÉS de las huellas del cierre: es
+  // un estimado que depende de una decisión, no un gasto que alguien registró, y cambiar la decisión no «cambia» un mes
+  // cerrado.
+  if (modoLicencias === "INGRESO_Y_COSTO") {
+    for (const e of egresosDeLicencias(licencias, periodos)) {
+      egresos.push({ ...e, rubro: "LICENCIA", moneda: e.moneda as MonedaEq, calidad: "ESTIMADO" });
+    }
+  }
+
   const reporte = calcularEquilibrio(egresos, ingresos, {
     anio,
     hoyISO,
@@ -2848,6 +2904,12 @@ export async function loadReporteAnual(
       return !!t?.bccr && !mandaLaTasaConfirmada(t.bccr, t.manual?.registradoPor);
     }),
     decisionAliados,
+    licencias: {
+      modo: modoLicencias,
+      decision: decisionLicencias,
+      contratos: resumenDeLicencias(licencias),
+      sinCosto: licencias.filter((l) => l.costoMonto === null).length,
+    },
     cierres: filasCierre.map((c) => {
       const guardados = c.numeros as unknown as NumerosDelCierre | null;
       return {

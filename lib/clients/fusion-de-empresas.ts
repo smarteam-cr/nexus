@@ -137,6 +137,10 @@ export const DE_LA_CUENTA = [
   "odooPartnerVinculo",
   /* La copia de Mercury (2026-10-02): `onDelete: SetNull`; sin mudarla, el cliente de Mercury quedaba desvinculado. */
   "clienteMercury",
+  /* Los contratos con licencias revendidas (2026-10-17, ficha F): `onDelete: Cascade`; sin mudarlos, fusionar borraba la
+     parte de servicio del contrato. ⚠ Si las dos cuentas tienen un contrato vivo en la misma moneda, el índice único
+     frena la fusión: se archiva uno antes. */
+  "licenciaRevendida",
 ] as const;
 
 /** Las relaciones con una regla propia en el script, que no cabe en las listas de arriba. */

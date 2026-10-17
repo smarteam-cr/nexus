@@ -17,11 +17,23 @@ import { cambiarEstadoCobroTx, CobranzaError } from "@/lib/cobranza/mutations";
 import { esEntradaDeCliente } from "@/lib/cobranza/mercury/espejo";
 import type { OdooTransport } from "@/lib/cobranza/odoo/transporte";
 import { fechasDePagoEnOdoo } from "@/lib/cobranza/odoo/fechas-de-pago";
-import { decidir, facturasOdooParaFechar, pegarMercury, pegarOdoo, type Accion, type CobroDelLibro, type EntradaDelLibro, type Pegado } from "./hechos";
+import {
+  accionesElegidas,
+  decidir,
+  facturasOdooParaFechar,
+  pegarMercury,
+  pegarOdoo,
+  type Accion,
+  type CobroDelLibro,
+  type EntradaDelLibro,
+  type Pegado,
+  type SeleccionDelLibro,
+} from "./hechos";
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
 
 interface DeLaCuota {
+  cuentaId: string;
   cuenta: string;
   periodo: string;
   monto: number;
@@ -101,13 +113,15 @@ export async function cargarEntradaDelLibro(hoy: string): Promise<EntradaDelLibr
     entradasMercury: movimientosDb
       .filter((m) => esEntradaDeCliente({ monto: Number(m.monto), estado: m.estado, tipo: m.tipo, contraparteNombre: m.contraparteNombre, conTarjeta: m.conTarjeta }))
       .map((m) => ({ id: m.id, monto: Number(m.monto), fecha: iso(m.posteadoEn ?? m.creadoEnMercury)!, quien: m.contraparteNombre ?? "" })),
-    datos: new Map(cobros.map((c) => [c.id, { cuenta: c.cuentaNombre, periodo: c.periodo, monto: c.monto, moneda: c.moneda }])),
+    datos: new Map(cobros.map((c) => [c.id, { cuentaId: c.cuentaId, cuenta: c.cuentaNombre, periodo: c.periodo, monto: c.monto, moneda: c.moneda }])),
   };
 }
 
 /**
  * Decide y, con `aplicar`, escribe firmado por `firma`. Sin `cobrar`, a las pagadas solo se les pega la factura.
  * `odoo` = el puerto para pedirle a Odoo el día de cada pago; sin él, las de Odoo pagadas quedan en `pagadasSinFecha`.
+ * `seleccion` = lo que la persona marcó en la pantalla (lib/cobranza/libro/servicio.ts): se escribe SOLO eso, con el día
+ * del pago que vio (`accionesElegidas`). Sin `seleccion` (el script), todo lo decidido.
  */
 export async function aplicarLoQueDicenOdooYMercury(opts: {
   aplicar: boolean;
@@ -115,6 +129,7 @@ export async function aplicarLoQueDicenOdooYMercury(opts: {
   firma: string;
   hoy: string;
   odoo: OdooTransport | null;
+  seleccion?: SeleccionDelLibro;
 }): Promise<ResultadoDelLibro> {
   if (opts.aplicar && !(await prisma.teamMember.findUnique({ where: { email: opts.firma }, select: { id: true } }))) {
     throw new Error(`«${opts.firma}» no es del equipo: lo que se escribe lleva la firma de una persona.`);
@@ -142,7 +157,13 @@ export async function aplicarLoQueDicenOdooYMercury(opts: {
   };
   if (!opts.aplicar) return r;
 
-  for (const a of d.acciones) {
+  let aEscribir: Accion[] = d.acciones;
+  if (opts.seleccion) {
+    const elegidas = accionesElegidas(d.acciones, opts.seleccion);
+    aEscribir = elegidas.acciones;
+    for (const c of elegidas.cambiaron) r.saltadas.push({ cobroId: c.cobroId, cuenta: entrada.datos.get(c.cobroId)?.cuenta ?? "—", motivo: c.motivo });
+  }
+  for (const a of aEscribir) {
     const cobrar = opts.cobrar ? a.cobrar : undefined;
     if (!a.fechaEmision && !a.numeroFactura && !cobrar) continue;
     try {

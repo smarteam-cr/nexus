@@ -61,6 +61,7 @@ export const LINEAS_CON_LUGAR_PROPIO: readonly string[] = [
 
 export type AccionDeAgenda =
   | { tipo: "decidir-aliados" }
+  | { tipo: "decidir-licencias" }
   | { tipo: "linea"; codigo: string }
   | { tipo: "enlace"; href: string; etiqueta: string };
 
@@ -81,6 +82,11 @@ export interface EntradaDeAgenda {
   aliadosDecidenElResultado: boolean | null;
   /** Meses con el gasto completo que el CFO todavía no cerró. */
   mesesParaCerrar: readonly string[];
+  /**
+   * Si dirección ya decidió cómo cuentan las licencias revendidas (2026-10-17, lib/finanzas/licencias.ts). Solo pregunta si
+   * hay contratos cargados: sin contratos, la decisión no mueve un número. Ausente = no preguntar.
+   */
+  licencias?: { decidido: boolean; contratos: number };
 }
 
 /** La agenda, en orden: primero las decisiones de la página, después los puntos de la lista, como vienen (por plata). */
@@ -97,6 +103,17 @@ export function armarAgenda(e: EntradaDeAgenda): PuntoDeAgenda[] {
           : "Sin decidir: hoy cuenta. Cambia el margen y si cada mes cubre su gasto.",
       monto: null,
       accion: { tipo: "decidir-aliados" },
+    });
+  }
+  if (e.licencias && !e.licencias.decidido && e.licencias.contratos > 0) {
+    out.push({
+      clave: "licencias-en-equilibrio",
+      rol: "CEO",
+      pregunta: "¿Las licencias revendidas cuentan como ingreso completo?",
+      detalle:
+        "Sin decidir: hoy cuenta solo el servicio (Alex, 16-oct). Marco pidió contar todo lo facturado y la licencia como gasto, para ver el margen real de cada contrato.",
+      monto: null,
+      accion: { tipo: "decidir-licencias" },
     });
   }
   if (e.mesesParaCerrar.length > 0) {

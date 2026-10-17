@@ -88,5 +88,6 @@ export function crearTransporteHttp(config: ConfigMercury): MercuryTransport {
     facturas: () => todas("/ar/invoices", "invoices"),
     clientes: () => todas("/ar/customers", "customers"),
     movimientos: (desde) => todas("/transactions", "transactions", `&start=${encodeURIComponent(desde)}`),
+    factura: (id) => pedir(`/ar/invoices/${encodeURIComponent(id)}`),
   };
 }

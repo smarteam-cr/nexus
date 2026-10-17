@@ -23,6 +23,8 @@ import { prisma } from "@/lib/db/prisma";
 import { atribuirFacturasDelPartner } from "./atribucion";
 import { crearTransporteXmlRpc, configDesdeEntorno } from "./transporte-xmlrpc";
 import { ODOO_CAMPOS_PARTNER, OdooError, dominioBuscarFicha, explicarFallo } from "./transporte";
+import { detalleDeFacturaOdoo } from "./detalle-de-factura";
+import type { DetalleDeFactura } from "../detalle-de-factura";
 import { copiaRecienHecha, textoOdoo } from "./espejo";
 import {
   buscarPartners,
@@ -1280,6 +1282,17 @@ export interface FacturacionPorCliente extends FacturacionDelAnio {
  * (punto 8 de la revisión con Alex, 2026-09-30). La regla es `facturacionPorCliente` (pura). ⛔ No llama al ERP: sale de
  * la copia, igual que «Emparejar». Sin `anio`, el año anterior al de hoy en Costa Rica: el último año completo.
  */
+/**
+ * El detalle de una factura de la copia (sus líneas y su nota), leído de Odoo a pedido (2026-10-17). null = la factura no
+ * está en la copia. ⛔ Solo lee Odoo. Lanza `OdooError` si Odoo no contesta: la ruta lo dice tal cual.
+ */
+export async function cargarDetalleDeFacturaOdoo(facturaId: string): Promise<DetalleDeFactura | null> {
+  const f = await prisma.facturaOdoo.findUnique({ where: { id: facturaId }, select: { odooMoveId: true, numero: true, invoiceDate: true, moneda: true } });
+  if (!f) return null;
+  const t = crearTransporteXmlRpc({ ...configDesdeEntorno(), timeoutMs: ESPERA_A_PEDIDO_MS });
+  return detalleDeFacturaOdoo(t, { odooMoveId: f.odooMoveId, numero: f.numero, fecha: f.invoiceDate ? f.invoiceDate.toISOString().slice(0, 10) : null, moneda: f.moneda });
+}
+
 export async function cargarFacturacionPorCliente(opts: {
   anio?: number | null;
   /** El permiso de Ventas de quien mira: lo decide la ruta. */
@@ -1289,10 +1302,11 @@ export async function cargarFacturacionPorCliente(opts: {
   const anio = opts.anio ?? Number(crDateParts(opts.ahora ?? new Date()).dateKey.slice(0, 4)) - 1;
   const dia = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
   /* `select` explícito: una columna nueva no tumba la vista si el código llega antes que su SQL. */
-  const [documentos, cuentas, ventas, corridaOk] = await Promise.all([
+  const [documentos, cuentas, ventas, corridaOk, facturasMercury, clientesMercury] = await Promise.all([
     prisma.facturaOdoo.findMany({
       where: { estadoEspejo: "VIGENTE" },
       select: {
+        id: true,
         numero: true,
         moveType: true,
         state: true,
@@ -1324,7 +1338,14 @@ export async function cargarFacturacionPorCliente(opts: {
         })
       : Promise.resolve([]),
     ultimaCorridaOk(),
+    /* Mercury en la facturación por cliente (2026-10-17): sus facturas, y a qué cuenta va cada cliente de Mercury. */
+    prisma.facturaMercury.findMany({
+      where: { estadoEspejo: "VIGENTE" },
+      select: { id: true, numero: true, invoiceDate: true, monto: true, moneda: true, estado: true, mercuryCustomerId: true, clienteNombre: true },
+    }),
+    prisma.clienteMercury.findMany({ where: { cuentaId: { not: null }, ignorado: false }, select: { mercuryCustomerId: true, cuentaId: true } }),
   ]);
+  const cuentaDeMercury = new Map(clientesMercury.map((c) => [c.mercuryCustomerId, c.cuentaId!]));
   const r = facturacionPorCliente(
     documentos.map((d) => ({
       ...d,
@@ -1345,6 +1366,17 @@ export async function cargarFacturacionPorCliente(opts: {
       pipelineId: v.pipelineId,
     })),
     anio,
+    facturasMercury.map((f) => ({
+      id: f.id,
+      numero: f.numero,
+      invoiceDate: f.invoiceDate.toISOString().slice(0, 10),
+      monto: Number(f.monto),
+      moneda: f.moneda,
+      estado: f.estado,
+      mercuryCustomerId: f.mercuryCustomerId,
+      clienteNombre: f.clienteNombre,
+      cuentaId: cuentaDeMercury.get(f.mercuryCustomerId) ?? null,
+    })),
   );
   const copiaAl = corridaOk ? corridaOk.toISOString().slice(0, 10) : null;
   if (opts.conVentas) return { ...r, conVentas: true, copiaAl };

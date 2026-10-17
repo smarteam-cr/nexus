@@ -28,8 +28,9 @@ export default async function ConciliacionPage({ searchParams }: { searchParams:
   const vista = vistaFinanzasDe(ctx.teamMember);
   // Gastos contra Mercury (2026-10-06): solo con `gastos.read`. Son cargos de tarjeta, nunca transferencias ni planilla.
   const puedeVerGastos = await can(ctx.teamMember, "gastos", "read");
-  const [puedeEditar, odoo, mercury, empOdoo, empMercury, copiaOdoo, copiaMercury, supervisor, gastosMercury] = await Promise.all([
+  const [puedeEditar, puedeEditarGastos, odoo, mercury, empOdoo, empMercury, copiaOdoo, copiaMercury, supervisor, gastosMercury] = await Promise.all([
     can(ctx.teamMember, "cobranza", "write"),
+    puedeVerGastos ? can(ctx.teamMember, "gastos", "write") : Promise.resolve(false),
     cargarDiferencias(),
     cargarDiferenciasMercury(),
     contarEmparejado(),
@@ -39,6 +40,7 @@ export default async function ConciliacionPage({ searchParams }: { searchParams:
     nombreDeQuienSupervisa(),
     puedeVerGastos ? cargarGastosContraMercury(crDateParts(new Date()).dateKey) : Promise.resolve(null),
   ]);
+  const ver = (await searchParams).ver;
   const porQuien = filasPorQuien(juntarDiferencias(odoo.inconsistencias, mercury.inconsistencias));
   return (
     <div className={SHELL_DEFAULT}>
@@ -46,7 +48,10 @@ export default async function ConciliacionPage({ searchParams }: { searchParams:
         vista={vista}
         supervisor={supervisor}
         /* Supervisión › «Decidir» llega con ?ver=decisiones. */
-        soloDecisiones={(await searchParams).ver === "decisiones"}
+        soloDecisiones={ver === "decisiones"}
+        /* Pendientes › «Cobrar lo pagado» llega con ?ver=pagados; la tarea de gastos financieros, con ?ver=gastos. */
+        abrirEn={ver === "pagados" ? "pagado" : ver === "gastos" && gastosMercury ? "gastos" : "no-cuadra"}
+        puedeEditarGastos={puedeEditarGastos}
         gastosMercury={gastosMercury}
         puedeEditar={puedeEditar}
         copias={{
