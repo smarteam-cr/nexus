@@ -6,6 +6,10 @@
 > cliente (ver «Lo que encontró la revisión del 2026-10-15» y «Decisiones (Elías, 2026-10-15)»). La
 > página se sigue llamando «Para ti»; «Mi día» es el nombre de trabajo de lo que muestra. Arriba va el
 > roadmap; debajo, el detalle de cada pieza y cómo fue cada etapa.
+>
+> ⚠ **Desde el 2026-10-16 el orden de lo que sigue (etapa 6b en adelante) está en
+> `docs/nexus-sistema-de-trabajo-plan.md`**, que replantea Nexus como el sistema de trabajo de cada cuenta. Lo
+> construido hasta la etapa 5 sigue valiendo.
 
 ## Roadmap
 

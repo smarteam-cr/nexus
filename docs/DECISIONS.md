@@ -6370,6 +6370,9 @@ lleve cada tarea a Google Calendar. Piloto con Marketing (líder: Alejandra Orte
   reunión se ve solo si estuviste en ella o la reunión es de un cliente que ves; si no, dice «Salió de una reunión
   con un cliente». Una tarea «Solo para mí» y lo de un espacio privado se ven en la semana del equipo como una fila
   opaca que solo dice cuánto pesa. INV42 vigila que ninguna tarea lleve la cita de una reunión de otro cliente.
+  ⚠ **Enmendado el 2026-10-16** («Nexus, el sistema de trabajo de cada cuenta»): además de lo de tu equipo, ves todas
+  las tareas de las cuentas a las que tienes acceso, de cualquier equipo, salvo las «Solo para mí». La cita sigue con
+  esta misma regla.
 - **Cada persona revisa su semana** («Revisa tu semana», supera el «Cerrar la semana» del líder): «La terminé» o
   «Sigue» por tarea, y lo que sigue nunca cae en una semana pasada ni en una que ya revisaste (`semanaDestino`). Una
   semana pasada se revisa cuando sea («Semanas sin revisar») y su «La terminé» fecha la tarea el viernes de ESA semana.
@@ -7962,6 +7965,10 @@ por Ventas. El plan completo, con las respuestas de Elías, está en `docs/mi-di
 
 ## El siguiente paso de cada equipo, en Nexus y en HubSpot (2026-10-15)
 
+> ⚠ **Enmendado el 2026-10-16** («Nexus, el sistema de trabajo de cada cuenta»): el siguiente paso de un equipo en una
+> cuenta pasa a ser su próxima tarea abierta con fecha. HubSpot se sigue escribiendo igual, desde esa tarea, y
+> `SiguientePaso` queda DEPRECATED (no tenía filas). Lo de abajo sigue valiendo para HubSpot.
+
 **Contexto.** Etapa 2 de `docs/mi-dia-plan.md`. Decisiones de Elías (2026-10-14): un siguiente paso por equipo, con
 qué, fecha y responsable, con los mismos nombres en empresas, negocios y proyectos de HubSpot; también en la empresa
 (varios proyectos, retomar un excliente); `hs_next_step` solo como sugerencia; Marketing no lleva el suyo.
@@ -8287,3 +8294,42 @@ correo con un cliente no quedaba en ningún lado de Nexus, y las reuniones de Me
   decenas de sugerencias de hace semanas. «Uso de Nexus» la cuenta como un tipo más de lo propuesto.
 - **Todavía no:** que la nota deje hechos (espera `SEGUIMIENTO_HECHOS`) y sugerir la nota desde el chat (llega con el
   agente, etapa 6b).
+
+## Nexus, el sistema de trabajo de cada cuenta (2026-10-16)
+
+**Contexto.** Después de la reunión con Alexander Vanegas (líder de Customer Success) del 2026-10-16 y de una revisión
+del código en cuatro frentes, Elías decidió replantear Nexus: deja de ser un analizador de reuniones que produce
+documentos y pasa a ser **el sistema de trabajo de cada cuenta: sabe lo que pasó, planifica lo que sigue y ayuda a
+hacerlo**. El plan, por fases, está en `docs/nexus-sistema-de-trabajo-plan.md`. Medido ese día: 150 alertas abiertas
+(126 del vigía), 80 tareas propuestas por las reuniones sin decidir, 0 de 53 cuentas activas con siguiente paso, y unas
+10 formas distintas de guardar «algo que hay que hacer».
+
+- **Cuatro capas sobre una base: memoria, plan, entregables y atención.** Encima, una sola capa de operaciones que usan
+  la pantalla y el chat (y un MCP, si algún día hace falta). *Por qué:* un chat que opera Nexus necesita que cada
+  operación diga qué pide, quién puede y cómo se aplica; con 7 listas de operaciones distintas, cada cosa nueva había que
+  enseñársela al chat a mano.
+- **Una sola acción: la tarea.** Se asocia a la cuenta, el contacto, el negocio, el proyecto, el equipo y la persona. El
+  siguiente paso de un equipo en una cuenta es su próxima tarea abierta con fecha. Una reunión planeada es una tarea de
+  tipo reunión, que después queda unida a la reunión que se hizo. *Por qué:* «¿cada cuenta tiene su acción de la
+  semana?» no se podía responder desde un solo lugar.
+- **Visibilidad por cuenta.** Quien tiene acceso a una cuenta ve todas sus tareas que no son «Solo para mí», de
+  cualquier equipo. *Por qué:* Customer Success tiene que estar al tanto de todo lo que se le hace a un cliente (Dev
+  incluido); hoy cada equipo veía solo lo suyo. La cita de una reunión no cambia de regla.
+- **Reglas de servicio.** Cada cuenta con servicio activo: una acción con fecha cada semana y una reunión agendada en
+  los próximos 8 días, salvo una excepción explícita.
+- **Atención: una cosa por cuenta y como mucho 5 en «Hoy».** Las alertas sueltas se reemplazan por una lectura por
+  cuenta (color y hasta 3 motivos) que también ve el CSE, y las abiertas se cierran en bloque con respaldo. Los avisos
+  quedan para lo que no es un pendiente.
+- **Calendario por enlace.** «Agendar» abre Google Calendar con todo lleno, invitados incluidos; la persona lo guarda y
+  Google manda la invitación. Nexus lee el calendario para proponer el hueco. *Por qué:* sin permiso de escritura y sin
+  que Nexus mande invitaciones a un cliente sin que una persona lo vea.
+- **La memoria no es un RAG con vectores.** El chat la lee con herramientas: lo estructurado, la búsqueda por palabras en
+  los turnos y la reunión entera, todas filtradas por cliente en la base. *Por qué:* la separación entre clientes y las
+  citas palabra por palabra ya están resueltas así; una base de vectores sería otro lugar donde romper la primera.
+  Vectores solo si al medir la búsqueda por palabras no alcanza.
+- **Entregables y herramientas.** Entregables (los ve el cliente, con plantillas): Diagnóstico, Planificación,
+  Integraciones, Entrega y Kickoff (lo presenta el CSE, una vez por proyecto). Herramientas del proyecto (internas):
+  Resumen, Cronograma, Cuestionarios, Exploración, Handoff y Ejecución. El diagnóstico de hoy pasa a ser «Diagnóstico
+  estratégico».
+- **Desarrollo** (Alejandro Salas y Brainer) planifica en Tareas como los demás; lo lidera Alex Vanegas.
+- **Se prende la lectura de hechos**, con Sonnet y caché (unos US$22 al mes).
