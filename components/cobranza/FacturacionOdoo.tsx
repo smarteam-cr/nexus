@@ -9,7 +9,9 @@
  *
  * La copia de Odoo ya traía todos los años; lo que faltaba era verla por cliente. La regla —qué es facturado, cobrado
  * y por cobrar, y qué ventas cuentan— vive en lib/cobranza/odoo/facturacion-por-cliente.ts, con sus pruebas.
- * ⛔ Solo mira: no cambia nada, ni en Nexus ni en Odoo.
+ * Desde el 2026-10-17 suma también las facturas de Mercury, y cada cliente abre sus facturas, cada una con su detalle
+ * (sus líneas y su nota, leídas del sistema al abrirlas).
+ * ⛔ Solo mira: no cambia nada, ni en Nexus ni en Odoo ni en Mercury.
  */
 import { useCallback, useEffect, useState } from "react";
 import { EmptyState, Select, Spinner } from "@/components/ui";
@@ -17,7 +19,8 @@ import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
 import { textoDeMontos, type MontoEnMoneda } from "@/lib/cobranza/odoo/diferencias";
 import type { FacturacionDelAnio, VentasDelAnio } from "@/lib/cobranza/odoo/facturacion-por-cliente";
-import { fmtFecha } from "./format";
+import { fmtFecha, fmtMonto } from "./format";
+import DetalleDeFactura, { type FacturaParaVer } from "./DetalleDeFactura";
 
 /** Lo que devuelve GET /api/cobranza/odoo/facturacion (`FacturacionPorCliente`, servicio.ts). */
 type Respuesta = FacturacionDelAnio & { conVentas: boolean; copiaAl: string | null };
@@ -60,6 +63,9 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
   const [datos, setDatos] = useState<Respuesta | null>(null);
   const [cargando, setCargando] = useState(true);
   const [verSinFacturas, setVerSinFacturas] = useState(false);
+  /** La fila con sus facturas abiertas, y la factura cuyo detalle se está viendo. */
+  const [abierta, setAbierta] = useState<string | null>(null);
+  const [viendo, setViendo] = useState<FacturaParaVer | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -97,7 +103,7 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
             className="mt-1"
             value={String(datos.anio)}
             onChange={(e) => setAnio(Number(e.target.value))}
-            title="Elige el año: la lista muestra las facturas de Odoo de ese año, cliente por cliente."
+            title="Elige el año: la lista muestra las facturas de Odoo y de Mercury de ese año, cliente por cliente."
           >
             {anios.map((a) => (
               <option key={a} value={a}>
@@ -109,20 +115,22 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
         <div className="min-w-0 flex-1 text-sm text-fg-secondary">
           <p>
             <strong className="text-fg">{filas.length}</strong> {filas.length === 1 ? "cliente" : "clientes"} con{" "}
-            <strong className="text-fg">{totales.facturas}</strong> {totales.facturas === 1 ? "factura" : "facturas"} en {datos.anio}.
+            <strong className="text-fg">{totales.facturas}</strong> {totales.facturas === 1 ? "factura" : "facturas"} en {datos.anio}
+            {totales.deMercury > 0 && ` (${totales.deMercury} de Mercury)`}.
             Facturado {textoDeMontos(totales.facturado) || "—"} · cobrado {textoDeMontos(totales.cobrado) || "—"}
             {totales.porCobrar.length > 0 && ` · por cobrar ${textoDeMontos(totales.porCobrar)}`}.
           </p>
           <p className="mt-0.5 text-xs text-fg-muted">
-            Todo sin IVA y cada moneda por separado, de la copia de Odoo{datos.copiaAl ? ` del ${fmtFecha(datos.copiaAl)}` : ""}. La
-            factura más reciente va arriba. Esta pestaña solo mira: no cambia nada en Nexus ni en Odoo.
+            Todo sin IVA y cada moneda por separado, de la copia de Odoo{datos.copiaAl ? ` del ${fmtFecha(datos.copiaAl)}` : ""} y la de
+            Mercury. La factura más reciente va arriba; abre un cliente para ver sus facturas y el detalle de cada una. Esta
+            pestaña solo mira: no cambia nada en Nexus, en Odoo ni en Mercury.
           </p>
         </div>
         {cargando && <Spinner />}
       </div>
 
       {filas.length === 0 ? (
-        <EmptyState title={`Ninguna factura de Odoo en ${datos.anio}`} description="Elige otro año." />
+        <EmptyState title={`Ninguna factura de Odoo ni de Mercury en ${datos.anio}`} description="Elige otro año." />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-line bg-surface">
           <table className="w-full text-sm">
@@ -151,10 +159,23 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
               </tr>
             </thead>
             <tbody>
-              {filas.map((f) => (
+              {filas.map((f) => [
                 <tr key={f.clave} className="border-b border-line align-top last:border-0">
                   <td className="px-3 py-2">
-                    <div className="font-medium text-fg">{f.nombre}</div>
+                    <button
+                      type="button"
+                      onClick={() => setAbierta((a) => (a === f.clave ? null : f.clave))}
+                      className="text-left font-medium text-fg hover:underline"
+                      aria-expanded={abierta === f.clave}
+                      title="Ver las facturas de este cliente en el año"
+                    >
+                      <span className="text-fg-muted">{abierta === f.clave ? "▾" : "▸"}</span> {f.nombre}
+                    </button>
+                    {f.deMercury > 0 && (
+                      <div className="text-xs text-fg-muted">
+                        {f.deMercury === f.facturas ? "Todo por Mercury" : `${f.deMercury} de ${f.facturas} por Mercury`}
+                      </div>
+                    )}
                     {f.clientesDeOdoo.length > 0 && (
                       <div className="text-xs text-fg-muted">Facturado a {f.clientesDeOdoo.join(" · ")}</div>
                     )}
@@ -175,8 +196,35 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
                   <Montos ms={f.cobrado} />
                   <Montos ms={f.porCobrar} />
                   {conVentas && <Ventas v={f.ventas} />}
-                </tr>
-              ))}
+                </tr>,
+                abierta === f.clave && (
+                  <tr key={`${f.clave}:facturas`} className="border-b border-line bg-surface-muted">
+                    <td colSpan={conVentas ? 7 : 6} className="px-3 py-2">
+                      <ul className="divide-y divide-line">
+                        {f.documentos.map((d) => (
+                          <li key={`${d.fuente}:${d.numero}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 text-sm">
+                            <span className="w-28 font-medium text-fg">{d.numero}</span>
+                            <span className="text-xs text-fg-muted">{d.fuente === "ODOO" ? "Odoo" : "Mercury"}</span>
+                            <span className="text-fg-secondary">{fmtFecha(d.fecha)}</span>
+                            <span className="text-xs text-fg-muted">{d.estado}</span>
+                            <span className="ml-auto tabular-nums text-fg">{fmtMonto(d.monto, d.moneda)}</span>
+                            {d.id && (
+                              <button
+                                type="button"
+                                onClick={() => setViendo({ fuente: d.fuente, id: d.id!, numero: d.numero, monto: d.monto, moneda: d.moneda })}
+                                className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-fg-secondary hover:bg-surface-hover"
+                                title="Lee las líneas y la nota de esta factura en el sistema, ahora."
+                              >
+                                Ver el detalle
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </td>
+                  </tr>
+                ),
+              ])}
             </tbody>
             <tfoot className="border-t border-line font-medium text-fg">
               <tr className="align-top">
@@ -209,12 +257,12 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
             className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-fg hover:bg-surface-hover"
           >
             <span className="text-fg-muted">{verSinFacturas ? "▾" : "▸"}</span>
-            Con ventas cerradas en {datos.anio} y sin facturas de Odoo ese año ({datos.ventasSinFacturas.length})
+            Con ventas cerradas en {datos.anio} y sin facturas de Odoo ni de Mercury ese año ({datos.ventasSinFacturas.length})
           </button>
           {verSinFacturas && (
             <div className="border-t border-line px-4 py-2">
               <p className="pb-2 text-xs text-fg-muted">
-                Facturan por Mercury, se les facturó otro año, o todavía no se les factura.
+                Se les facturó otro año, todavía no se les factura, o su cliente de Mercury no está emparejado.
               </p>
               {datos.ventasSinFacturas.map((v) => (
                 <div key={v.clientId} className="flex flex-wrap items-baseline gap-x-3 border-b border-line py-1.5 last:border-0">
@@ -239,6 +287,8 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
           )}
         </div>
       )}
+
+      <DetalleDeFactura factura={viendo} onClose={() => setViendo(null)} />
     </div>
   );
 }

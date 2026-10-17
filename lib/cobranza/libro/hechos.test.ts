@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import type { FacturaParaCruzar } from "@/lib/cobranza/odoo/diferencias";
 import type { FacturaMercuryParaCruzar } from "@/lib/cobranza/mercury/diferencias";
-import { decidir, facturasOdooParaFechar, pegaPorMontoSinDudas, pegarMercury, pegarOdoo, type CobroDelLibro, type EntradaDelLibro } from "./hechos";
+import { accionesElegidas, decidir, facturasOdooParaFechar, pegaPorMontoSinDudas, pegarMercury, pegarOdoo, type Accion, type CobroDelLibro, type EntradaDelLibro } from "./hechos";
 
 const cobro = (id: string, o: Partial<CobroDelLibro> = {}): CobroDelLibro => ({
   id,
@@ -187,5 +187,49 @@ describe("pegaPorMontoSinDudas", () => {
   it("otra cuota sin número igual de cerca de la factura la vuelve dudosa", () => {
     expect(pegaPorMontoSinDudas(c, f, [{ ...c, id: "d", fechaProgramada: "2026-08-09" }], [f], "2026-10-16")).toBe(false);
     expect(pegaPorMontoSinDudas(c, f, [{ ...c, id: "d", fechaProgramada: "2026-07-01" }], [f], "2026-10-16")).toBe(true);
+  });
+});
+
+describe("lo que eligió quien confirma (la pantalla de cada mañana)", () => {
+  const acciones: Accion[] = [
+    { fuente: "ODOO", cobroId: "a", numero: "FAC/2026/0001", fechaEmision: "2026-08-03", numeroFactura: "FAC/2026/0001", cobrar: { fechaCobro: "2026-08-20", deDonde: "x" } },
+    { fuente: "ODOO", cobroId: "b", numero: "FAC/2026/0002", fechaEmision: "2026-08-03", numeroFactura: "FAC/2026/0002" },
+    { fuente: "MERCURY", cobroId: "c", numero: "INV-3", cobrar: { fechaCobro: "2026-08-21", deDonde: "y" } },
+  ];
+
+  it("se escribe solo lo marcado: lo que no se marcó no se toca aunque la lista lo traiga", () => {
+    const r = accionesElegidas(acciones, { pegar: ["b"], cobrar: [] });
+    expect(r.acciones.map((a) => a.cobroId)).toEqual(["b"]);
+    expect(r.cambiaron).toEqual([]);
+  });
+
+  it("cobrar también pega la cuota a su factura", () => {
+    const r = accionesElegidas(acciones, { pegar: [], cobrar: [{ cobroId: "a", fechaCobro: "2026-08-20" }] });
+    expect(r.acciones).toEqual([acciones[0]]);
+  });
+
+  it("marcar solo para pegar una pagada NO la cobra", () => {
+    const r = accionesElegidas(acciones, { pegar: ["a"], cobrar: [] });
+    expect(r.acciones[0]!.cobrar).toBeUndefined();
+    expect(r.acciones[0]!.numeroFactura).toBe("FAC/2026/0001");
+  });
+
+  it("⛔ si el día del pago cambió desde que se vio la lista, no se cobra (se pega igual) y se dice por qué", () => {
+    const r = accionesElegidas(acciones, { pegar: [], cobrar: [{ cobroId: "a", fechaCobro: "2026-08-19" }] });
+    expect(r.acciones[0]!.cobrar).toBeUndefined();
+    expect(r.acciones[0]!.fechaEmision).toBe("2026-08-03");
+    expect(r.cambiaron[0]!.motivo).toMatch(/cambió/);
+  });
+
+  it("lo marcado que ya no está en la lista se informa y no se escribe", () => {
+    const r = accionesElegidas(acciones, { pegar: ["z"], cobrar: [{ cobroId: "b", fechaCobro: "2026-08-20" }] });
+    expect(r.cambiaron.map((c) => c.cobroId).sort()).toEqual(["b", "z"]);
+    // «b» ya no figura pagada: se pega, no se cobra.
+    expect(r.acciones.find((a) => a.cobroId === "b")!.cobrar).toBeUndefined();
+  });
+
+  it("una pagada que ya tenía factura y número: cobrarla escribe solo el cobro", () => {
+    const r = accionesElegidas(acciones, { pegar: [], cobrar: [{ cobroId: "c", fechaCobro: "2026-08-21" }] });
+    expect(r.acciones).toEqual([acciones[2]]);
   });
 });

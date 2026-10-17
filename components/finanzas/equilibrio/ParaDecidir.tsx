@@ -21,11 +21,14 @@ export default function ParaDecidir({
   moneda,
   onAbrirLinea,
   onDecidirAliados,
+  onDecidirLicencias,
 }: {
   agenda: PuntoDeAgenda[];
   moneda: string;
   onAbrirLinea: (codigo: string) => void;
   onDecidirAliados: () => void;
+  /** «Decidirlo» de las licencias revendidas (2026-10-17). */
+  onDecidirLicencias?: () => void;
 }) {
   const [rol, setRol] = useState<"todo" | Rol>("todo");
   const visibles = rol === "todo" ? agenda : agenda.filter((p) => p.rol === rol);
@@ -62,6 +65,10 @@ export default function ParaDecidir({
             {p.monto !== null && <span className="shrink-0 text-[13px] tabular-nums text-fg-secondary">{fmtMontoLibro(Math.round(p.monto), moneda)}</span>}
             {p.accion.tipo === "decidir-aliados" ? (
               <button type="button" onClick={onDecidirAliados} className={BOTON}>
+                Decidirlo
+              </button>
+            ) : p.accion.tipo === "decidir-licencias" ? (
+              <button type="button" onClick={onDecidirLicencias} className={BOTON}>
                 Decidirlo
               </button>
             ) : p.accion.tipo === "linea" ? (

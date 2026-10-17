@@ -12,8 +12,11 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
+import { MODOS_LICENCIAS, type ModoLicencias } from "./licencias";
 
 export const CLAVE_ALIADOS = "aliados-cubren-piso";
+/** Cómo cuentan las licencias revendidas (2026-10-17, lib/finanzas/licencias.ts): SOLO_SERVICIO o INGRESO_Y_COSTO. */
+export const CLAVE_LICENCIAS = "licencias-en-equilibrio";
 
 export interface DecisionAliados {
   cuentan: boolean;
@@ -44,6 +47,38 @@ export async function leerDecisionAliados(): Promise<DecisionAliados | null> {
     console.warn("[equilibrio] no se pudo leer la decisión sobre los aliados (¿falta el SQL de 2026-10-05?): se toma «sin decidir»");
     return null;
   }
+}
+
+export interface DecisionLicencias {
+  modo: ModoLicencias;
+  decididoPor: string;
+  /** ISO. */
+  decididoEn: string;
+}
+
+/** La decisión sobre las licencias revendidas, o null si todavía no se decidió. Misma tolerancia que la de los aliados. */
+export async function leerDecisionLicencias(): Promise<DecisionLicencias | null> {
+  try {
+    const d = await prisma.decisionFinanzas.findUnique({
+      where: { clave: CLAVE_LICENCIAS },
+      select: { valor: true, decididoPor: true, decididoEn: true },
+    });
+    if (!d || !(MODOS_LICENCIAS as readonly string[]).includes(d.valor)) return null;
+    return { modo: d.valor as ModoLicencias, decididoPor: d.decididoPor, decididoEn: d.decididoEn.toISOString() };
+  } catch (e) {
+    if (!esquemaDesactualizado(e)) throw e;
+    console.warn("[equilibrio] no se pudo leer la decisión sobre las licencias (¿falta el SQL de 2026-10-05?): se toma «sin decidir»");
+    return null;
+  }
+}
+
+export async function guardarDecisionLicencias(modo: ModoLicencias, actor: string, nota: string | null): Promise<void> {
+  const datos = { valor: modo, decididoPor: actor, decididoEn: new Date(), nota: nota?.trim() || null };
+  await prisma.decisionFinanzas.upsert({
+    where: { clave: CLAVE_LICENCIAS },
+    create: { clave: CLAVE_LICENCIAS, ...datos },
+    update: datos,
+  });
 }
 
 /** Guarda la decisión, con quién la tomó (sale del guard) y cuándo. Cambiarla después es volver a guardarla. */

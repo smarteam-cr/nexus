@@ -25,12 +25,20 @@
  *   la casa y sin excluir —la regla del punto de equilibrio—, de la empresa de esa cuenta. Sin cuenta en Nexus no hay
  *   empresa con qué cruzarlos. ⚠ Es una guía y no un cuadre: una venta cerrada en diciembre se factura en enero.
  * - Orden: la última factura del año, la más reciente arriba.
+ *
+ * ── MERCURY (2026-10-17, plan «Un solo libro financiero», paso 6) ───────────────
+ * Las facturas de Mercury entran a la misma fila que las de Odoo cuando su cliente de Mercury está emparejado con la
+ * cuenta; si no, con su propia fila, «sin cuenta en Nexus». Mercury no tiene notas de crédito: una cancelada no cuenta.
+ * Pagada (`Paid`) = cobrado; sin pagar o en proceso = por cobrar. El monto es el de la factura (lo internacional va sin
+ * IVA). Mercury no reparte pagos parciales: es todo o nada.
  */
 import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/pipelines";
 import { esDocumentoVivo, estaPorCobrar, montosPorMoneda, netoPorCobrar, type MontoEnMoneda } from "./diferencias";
 
 /** Un documento de la copia de Odoo, como lo lee esta vista. */
 export interface DocumentoParaHistorial {
+  /** El id de la fila en Nexus (FacturaOdoo), para abrir su detalle. Opcional: las pruebas viejas no lo traen. */
+  id?: string;
   numero: string;
   moveType: string;
   state: string;
@@ -44,6 +52,36 @@ export interface DocumentoParaHistorial {
   odooPartnerId: number;
   odooPartnerNombre: string;
   cuentaId: string | null;
+}
+
+/** Una factura de la copia de Mercury, como la lee esta vista. */
+export interface FacturaMercuryParaHistorial {
+  id: string;
+  numero: string;
+  /** `YYYY-MM-DD`. */
+  invoiceDate: string;
+  monto: number;
+  moneda: string;
+  /** Unpaid · Paid · Cancelled · Processing. */
+  estado: string;
+  mercuryCustomerId: string;
+  clienteNombre: string;
+  /** La cuenta de Nexus de su cliente de Mercury (el emparejado), o null. */
+  cuentaId: string | null;
+}
+
+/** Una factura de la fila, para la lista que se abre debajo de cada cliente. */
+export interface DocumentoDeLaFila {
+  fuente: "ODOO" | "MERCURY";
+  /** El id de la fila en Nexus: FacturaOdoo.id o FacturaMercury.id. null en una de Odoo sin id (pruebas viejas). */
+  id: string | null;
+  numero: string;
+  fecha: string;
+  /** Sin IVA; negativo en una nota de crédito. */
+  monto: number;
+  moneda: string;
+  /** Lo que dice el sistema: «pagada», «por cobrar», «nota de crédito»… */
+  estado: string;
 }
 
 export interface CuentaParaHistorial {
@@ -82,6 +120,8 @@ export interface FilaDeFacturacion {
   /** Las razones sociales de Odoo a las que se facturó, si no son solo el nombre de la fila. */
   clientesDeOdoo: string[];
   facturas: number;
+  /** De esas facturas, cuántas son de Mercury. */
+  deMercury: number;
   ultimaFactura: string;
   facturado: MontoEnMoneda[];
   cobrado: MontoEnMoneda[];
@@ -89,6 +129,8 @@ export interface FilaDeFacturacion {
   notasSinAplicar: MontoEnMoneda[];
   /** null = sin cuenta en Nexus: no hay empresa con qué cruzar los tratos. */
   ventas: VentasDelAnio | null;
+  /** Las facturas del año de esta fila, la más reciente primero. */
+  documentos: DocumentoDeLaFila[];
 }
 
 export interface VentasSinFacturas {
@@ -104,6 +146,7 @@ export interface FacturacionDelAnio {
   filas: FilaDeFacturacion[];
   totales: {
     facturas: number;
+    deMercury: number;
     facturado: MontoEnMoneda[];
     cobrado: MontoEnMoneda[];
     porCobrar: MontoEnMoneda[];
@@ -111,7 +154,7 @@ export interface FacturacionDelAnio {
     /** Las de las filas con cuenta: lo que se puede comparar con lo facturado. */
     ventas: VentasDelAnio;
   };
-  /** Empresas con ventas cerradas en el año y ninguna factura de Odoo ese año: facturan por Mercury, o se les facturó otro año. */
+  /** Empresas con ventas cerradas en el año y ninguna factura de Odoo ni de Mercury ese año: se les facturó otro año, o todavía no. */
   ventasSinFacturas: VentasSinFacturas[];
   /** Los años con alguna factura viva en la copia, el más nuevo primero. */
   anios: number[];
@@ -162,16 +205,26 @@ export function ventaCuenta(v: VentaParaHistorial, anio: number): boolean {
   return v.estado === "GANADA" && !v.excluida && PIPELINES_VENTA_PROPIA.includes(v.pipelineId) && anioDe(v.fechaCierre) === anio;
 }
 
+/** Cómo se lee el estado de una factura de Odoo en la lista. */
+function estadoDeOdoo(d: DocumentoParaHistorial, pendiente: number): string {
+  if (d.paymentState === "in_payment") return "en proceso de pago";
+  if (pendiente <= 0) return "pagada";
+  return d.paymentState === "partial" ? "pago parcial" : "por cobrar";
+}
+const ESTADO_MERCURY: Readonly<Record<string, string>> = { Paid: "pagada", Unpaid: "por cobrar", Processing: "en proceso de pago" };
+
 export function facturacionPorCliente(
   documentos: readonly DocumentoParaHistorial[],
   cuentas: readonly CuentaParaHistorial[],
   ventas: readonly VentaParaHistorial[],
   anio: number,
+  mercury: readonly FacturaMercuryParaHistorial[] = [],
 ): FacturacionDelAnio {
   const cuentaPorId = new Map(cuentas.map((c) => [c.cuentaId, c]));
   const cuentaPorCliente = new Map(cuentas.map((c) => [c.clientId, c]));
   const deReversion = notasDeReversion(documentos);
-  const anios = [...new Set(documentos.filter(esDocumentoVivo).map((d) => anioDe(d.invoiceDate)))]
+  const mercuryVivas = mercury.filter((f) => f.estado !== "Cancelled");
+  const anios = [...new Set([...documentos.filter(esDocumentoVivo).map((d) => d.invoiceDate), ...mercuryVivas.map((f) => f.invoiceDate)].map(anioDe))]
     .filter(Number.isFinite)
     .sort((a, b) => b - a);
 
@@ -181,26 +234,30 @@ export function facturacionPorCliente(
     cuentaId: string | null;
     clientesDeOdoo: Set<string>;
     facturas: number;
+    deMercury: number;
     ultimaFactura: string;
+    documentos: DocumentoDeLaFila[];
     facturado: Array<{ monto: number; moneda: string }>;
     cobrado: Array<{ monto: number; moneda: string }>;
     porCobrar: Array<{ monto: number; moneda: string }>;
     notasSinAplicar: Array<{ monto: number; moneda: string }>;
   };
   const filas = new Map<string, Acumulado>();
-  const filaDe = (d: DocumentoParaHistorial): Acumulado => {
-    /* Una factura con cuenta que ya no existe se queda con su cliente de Odoo: no se inventa una empresa. */
-    const cuenta = d.cuentaId ? cuentaPorId.get(d.cuentaId) : undefined;
-    const clave = cuenta ? `cuenta:${cuenta.cuentaId}` : `odoo:${d.odooPartnerId}`;
+  const filaCon = (cuentaId: string | null, sinCuenta: string, nombre: string): Acumulado => {
+    /* Una factura con cuenta que ya no existe se queda con su cliente de Odoo o de Mercury: no se inventa una empresa. */
+    const cuenta = cuentaId ? cuentaPorId.get(cuentaId) : undefined;
+    const clave = cuenta ? `cuenta:${cuenta.cuentaId}` : sinCuenta;
     const ya = filas.get(clave);
     if (ya) return ya;
     const nueva: Acumulado = {
       clave,
-      nombre: cuenta?.nombre ?? d.odooPartnerNombre,
+      nombre: cuenta?.nombre ?? nombre,
       cuentaId: cuenta?.cuentaId ?? null,
       clientesDeOdoo: new Set(),
       facturas: 0,
+      deMercury: 0,
       ultimaFactura: "",
+      documentos: [],
       facturado: [],
       cobrado: [],
       porCobrar: [],
@@ -209,6 +266,7 @@ export function facturacionPorCliente(
     filas.set(clave, nueva);
     return nueva;
   };
+  const filaDe = (d: DocumentoParaHistorial) => filaCon(d.cuentaId, `odoo:${d.odooPartnerId}`, d.odooPartnerNombre);
 
   for (const d of documentos) {
     if (anioDe(d.invoiceDate) !== anio) continue;
@@ -221,6 +279,7 @@ export function facturacionPorCliente(
       f.facturado.push({ monto: d.montoNeto, moneda: d.moneda });
       f.cobrado.push({ monto: round2(d.montoNeto - pendiente), moneda: d.moneda });
       if (pendiente > 0) f.porCobrar.push({ monto: pendiente, moneda: d.moneda });
+      f.documentos.push({ fuente: "ODOO", id: d.id ?? null, numero: d.numero, fecha: d.invoiceDate, monto: d.montoNeto, moneda: d.moneda, estado: estadoDeOdoo(d, pendiente) });
     } else if (esNota(d) && !deReversion.has(d.numero)) {
       const f = filaDe(d);
       const aplicado = netoAplicado(d);
@@ -228,7 +287,21 @@ export function facturacionPorCliente(
       f.facturado.push({ monto: -d.montoNeto, moneda: d.moneda });
       if (aplicado > 0) f.cobrado.push({ monto: -aplicado, moneda: d.moneda });
       if (d.montoNeto - aplicado > 0) f.notasSinAplicar.push({ monto: round2(d.montoNeto - aplicado), moneda: d.moneda });
+      f.documentos.push({ fuente: "ODOO", id: d.id ?? null, numero: d.numero, fecha: d.invoiceDate, monto: -d.montoNeto, moneda: d.moneda, estado: "nota de crédito" });
     }
+  }
+
+  for (const m of mercuryVivas) {
+    if (anioDe(m.invoiceDate) !== anio) continue;
+    const f = filaCon(m.cuentaId, `mercury:${m.mercuryCustomerId}`, m.clienteNombre);
+    f.clientesDeOdoo.add(m.clienteNombre);
+    f.facturas++;
+    f.deMercury++;
+    if (m.invoiceDate > f.ultimaFactura) f.ultimaFactura = m.invoiceDate;
+    f.facturado.push({ monto: m.monto, moneda: m.moneda });
+    if (m.estado === "Paid") f.cobrado.push({ monto: m.monto, moneda: m.moneda });
+    else f.porCobrar.push({ monto: m.monto, moneda: m.moneda });
+    f.documentos.push({ fuente: "MERCURY", id: m.id, numero: m.numero, fecha: m.invoiceDate, monto: m.monto, moneda: m.moneda, estado: ESTADO_MERCURY[m.estado] ?? m.estado });
   }
 
   /* Los tratos del año que cuentan, por empresa. */
@@ -249,12 +322,14 @@ export function facturacionPorCliente(
         cuentaId: f.cuentaId,
         clientesDeOdoo: [...f.clientesDeOdoo].filter((n) => n !== f.nombre).sort((a, b) => a.localeCompare(b, "es")),
         facturas: f.facturas,
+        deMercury: f.deMercury,
         ultimaFactura: f.ultimaFactura,
         facturado: montosPorMoneda(f.facturado),
         cobrado: montosPorMoneda(f.cobrado),
         porCobrar: montosPorMoneda(f.porCobrar),
         notasSinAplicar: montosPorMoneda(f.notasSinAplicar),
         ventas: suyas === null ? null : sumarVentas(suyas),
+        documentos: [...f.documentos].sort((a, b) => b.fecha.localeCompare(a.fecha) || b.numero.localeCompare(a.numero)),
       };
     })
     .sort((a, b) => b.ultimaFactura.localeCompare(a.ultimaFactura) || a.nombre.localeCompare(b.nombre, "es"));
@@ -276,6 +351,7 @@ export function facturacionPorCliente(
     filas: listas,
     totales: {
       facturas: listas.reduce((n, f) => n + f.facturas, 0),
+      deMercury: listas.reduce((n, f) => n + f.deMercury, 0),
       facturado: juntar("facturado"),
       cobrado: juntar("cobrado"),
       porCobrar: juntar("porCobrar"),

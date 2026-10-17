@@ -67,13 +67,26 @@ export const PARTNERSHIP_CUBRE_EL_PISO = true;
 
 export type MonedaEq = "CRC" | "USD";
 
-/** Los cinco rubros que componen el costo mensual. */
+/**
+ * Los rubros que componen el costo mensual. Desde el 2026-10-17 (plan «Un solo libro financiero») hay dos más, que no
+ * aparecen todos los meses: LICENCIA (lo que se le paga al proveedor de una licencia revendida, solo si dirección eligió
+ * contar el ingreso completo, lib/finanzas/licencias.ts) y FINANCIERO (las comisiones de Stripe, de las transferencias
+ * internacionales y del banco, revisadas movimiento por movimiento, lib/finanzas/gastos-financieros.ts).
+ */
 export type RubroEgreso =
   | "PLANILLA"
   | "HERRAMIENTA"
   | "FIJO_OPERACION"
   | "TARJETA"
-  | "RESERVA_AGUINALDO";
+  | "RESERVA_AGUINALDO"
+  | "LICENCIA"
+  | "FINANCIERO";
+
+/**
+ * Los rubros que NO se esperan todos los meses: un mes sin gastos financieros no está incompleto, y un mes sin costo de
+ * licencias tampoco. No entran a la calidad del mes (`calidadDelMes`).
+ */
+export const RUBROS_OCASIONALES: ReadonlySet<RubroEgreso> = new Set<RubroEgreso>(["LICENCIA", "FINANCIERO"]);
 
 /**
  * Qué tan firme es un número.
@@ -470,13 +483,15 @@ export interface ReporteEquilibrio {
 
 // ── Constantes ──────────────────────────────────────────────────────────────────
 
-/** Los cinco rubros, en el orden en que se leen en el reporte. */
+/** Los rubros, en el orden en que se leen en el reporte. */
 export const RUBROS: readonly RubroEgreso[] = [
   "PLANILLA",
   "FIJO_OPERACION",
   "HERRAMIENTA",
   "RESERVA_AGUINALDO",
   "TARJETA",
+  "LICENCIA",
+  "FINANCIERO",
 ] as const;
 
 export const COLCHONES_DEFECTO: readonly number[] = [10, 15] as const;
@@ -492,6 +507,8 @@ const rubrosEnCero = (): Record<RubroEgreso, number> => ({
   FIJO_OPERACION: 0,
   TARJETA: 0,
   RESERVA_AGUINALDO: 0,
+  LICENCIA: 0,
+  FINANCIERO: 0,
 });
 
 // ── Piezas ──────────────────────────────────────────────────────────────────────
@@ -855,6 +872,10 @@ export function etiquetaRubro(r: RubroEgreso): string {
       return "tarjetas";
     case "RESERVA_AGUINALDO":
       return "reserva de aguinaldo";
+    case "LICENCIA":
+      return "licencias revendidas";
+    case "FINANCIERO":
+      return "gastos financieros";
   }
 }
 
@@ -972,7 +993,9 @@ export function calcularEquilibrio(
   const conceptosInferidos = new Set<string>();
   // Qué se ESPERA cada mes: solo lo recurrente. Un pago anual no falta once veces.
   const calidadDada = opciones.calidadDada ?? new Map<string, { estado: EstadoMes; faltantes: string[] }>();
-  const esperados = conceptosRecurrentes(egresos.filter((e) => porMes.has(e.periodo) && !calidadDada.has(e.periodo)));
+  const esperados = conceptosRecurrentes(
+    egresos.filter((e) => porMes.has(e.periodo) && !calidadDada.has(e.periodo) && !RUBROS_OCASIONALES.has(e.rubro)),
+  );
 
   for (const e of egresos) {
     const mes = porMes.get(e.periodo);
@@ -985,7 +1008,8 @@ export function calcularEquilibrio(
     mes.presentes.get(e.rubro)!.add(e.conceptoClave);
     mes.calidades.add(e.calidad);
 
-    rubrosDelAnio.add(e.rubro);
+    // Un rubro ocasional no hace PARCIAL a los meses que no lo tienen.
+    if (!RUBROS_OCASIONALES.has(e.rubro)) rubrosDelAnio.add(e.rubro);
     if (!calidadPorRubro.has(e.rubro)) calidadPorRubro.set(e.rubro, new Set());
     calidadPorRubro.get(e.rubro)!.add(e.calidad);
     if (e.monedaInferida) conceptosInferidos.add(e.concepto);

@@ -23,6 +23,11 @@ export interface MercuryTransport {
   clientes(): Promise<Record<string, unknown>[]>;
   /** Los movimientos de todas las cuentas creados desde `desde` (`YYYY-MM-DD`), de todas las páginas. */
   movimientos(desde: string): Promise<Record<string, unknown>[]>;
+  /**
+   * Una factura con sus líneas (`GET /ar/invoices/{id}`), para el detalle que se abre a pedido (2026-10-17). Opcional:
+   * la copia no lo usa, y los transportes de prueba no lo necesitan.
+   */
+  factura?(mercuryInvoiceId: string): Promise<Record<string, unknown>>;
 }
 
 /**

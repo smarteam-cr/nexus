@@ -71,11 +71,11 @@ export function armarPendientes(d: DatosDePendientes): TareaPendiente[] {
     out.push({
       clave: "pagos",
       cuando: "hoy",
-      titulo: `Registrar ${plural(d.pagosDetectados.n, "pago que Odoo o Mercury ya dan por pagado", "pagos que Odoo o Mercury ya dan por pagados")}`,
-      detalle: "En Nexus siguen por cobrar. Confirma la fecha en que entró la plata y regístralo.",
+      titulo: `Cobrar ${plural(d.pagosDetectados.n, "pago que Odoo o Mercury ya dan por pagado", "pagos que Odoo o Mercury ya dan por pagados")}`,
+      detalle: "En Nexus siguen por cobrar. Revisa la lista con el día real de cada pago y confírmala con tu firma.",
       plata: textoDeMontos(d.pagosDetectados.montos),
-      accion: "Ver cuáles",
-      href: "/finanzas/conciliacion",
+      accion: "Revisar y cobrar",
+      href: "/finanzas/conciliacion?ver=pagados",
     });
   }
   if (d.porFacturar.n > 0) {

@@ -19,7 +19,6 @@ import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
 import { avisoDeActualizacion, type FuenteActualizada } from "@/lib/finanzas/actualizar-tablero";
 import type { ReporteAnualDTO } from "@/lib/cobranza";
-import { fmtMontoLibro } from "@/lib/cobranza/montos";
 import {
   desgloseDelMargen,
   estadoDelMes,
@@ -36,6 +35,7 @@ import DeLaVentaALaCaja from "./DeLaVentaALaCaja";
 import Firmeza from "./Firmeza";
 import ParaDecidir from "./ParaDecidir";
 import RendimientoCobranza from "./RendimientoCobranza";
+import LicenciasRevendidas, { DecidirLicencias } from "./LicenciasRevendidas";
 import { DecidirAliados, DetalleDeLinea, DetalleDelMes, SimularLoQueQueda } from "./PanelesDelEquilibrio";
 import { Drawer } from "@/components/ui";
 
@@ -62,6 +62,7 @@ export default function PuntoDeEquilibrio({
   const [simulando, setSimulando] = useState(false);
   const [lineaAbierta, setLineaAbierta] = useState<string | null>(null);
   const [decidiendo, setDecidiendo] = useState(false);
+  const [decidiendoLicencias, setDecidiendoLicencias] = useState(false);
   const [viendoExcel, setViendoExcel] = useState(false);
   const moneda = r.monedaPresentacion;
 
@@ -110,6 +111,7 @@ export default function PuntoDeEquilibrio({
         aliadosDecidido: r.decisionAliados !== null,
         aliadosDecidenElResultado: respuesta ? respuesta.promedioFacturado < respuesta.piso && respuesta.promedioConAliados >= respuesta.piso : null,
         mesesParaCerrar: r.meses.filter((_, i) => estados[i]!.clave === "sinCerrar").map((m) => m.periodo),
+        licencias: { decidido: r.licencias.decision !== null, contratos: r.licencias.contratos.length },
       }),
     };
   }, [r, hoyISO]);
@@ -165,15 +167,6 @@ export default function PuntoDeEquilibrio({
               {r.fx.periodosSinTasa.map(nombreDelMes).join(", ")}: lo que está en la otra moneda no está sumado. Se pone en el cierre de cada mes.
             </Alert>
           )}
-          {pagosAHubspot && pagosAHubspot.total > 0 && (
-            <Alert variant="info" title="Las licencias revendidas no cuentan como ingreso">
-              Decisión del 16 de octubre: la licencia que se le revende a un cliente se le paga a HubSpot, así que solo cuenta el
-              servicio de Smarteam. kölbi ya cuenta solo su servicio, según los anexos de su contrato (16,5 % de lo facturado en
-              dólares y 34,7 % en colones). Fundauna, la UNA y Global Supply todavía cuentan la licencia, hasta tener su desglose.
-              En {r.anio} salieron de Mercury {fmtMontoLibro(pagosAHubspot.total, "USD")} a HubSpot en{" "}
-              {pagosAHubspot.pagos === 1 ? "un pago grande" : `${pagosAHubspot.pagos} pagos grandes`}.
-            </Alert>
-          )}
           {lectura.preliminar.preliminar && (
             <div role="status" className="flex flex-wrap items-center gap-x-3.5 gap-y-2 rounded-[10px] border border-warn-line bg-warn-surface px-3.5 py-2.5 text-[13px] leading-[19px] text-warn-ink">
               <span className="min-w-0 flex-[1_1_520px]">
@@ -226,7 +219,14 @@ export default function PuntoDeEquilibrio({
             onVerExcel={() => setViendoExcel(true)}
             onAbrirLinea={setLineaAbierta}
           />
-          <ParaDecidir agenda={lectura.agenda} moneda={moneda} onAbrirLinea={setLineaAbierta} onDecidirAliados={() => setDecidiendo(true)} />
+          <LicenciasRevendidas licencias={r.licencias} pagosAHubspot={pagosAHubspot} anio={r.anio} nombres={nombres} onCambio={() => void recargar()} />
+          <ParaDecidir
+            agenda={lectura.agenda}
+            moneda={moneda}
+            onAbrirLinea={setLineaAbierta}
+            onDecidirAliados={() => setDecidiendo(true)}
+            onDecidirLicencias={() => setDecidiendoLicencias(true)}
+          />
         </>
       )}
 
@@ -249,6 +249,16 @@ export default function PuntoDeEquilibrio({
           onClose={() => setDecidiendo(false)}
           onDecidido={() => {
             setDecidiendo(false);
+            void recargar();
+          }}
+        />
+      )}
+      {decidiendoLicencias && (
+        <DecidirLicencias
+          actual={r.licencias.modo}
+          onClose={() => setDecidiendoLicencias(false)}
+          onDecidido={() => {
+            setDecidiendoLicencias(false);
             void recargar();
           }}
         />

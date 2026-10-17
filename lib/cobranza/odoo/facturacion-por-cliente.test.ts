@@ -13,6 +13,7 @@ import {
   notasDeReversion,
   type CuentaParaHistorial,
   type DocumentoParaHistorial,
+  type FacturaMercuryParaHistorial,
   type VentaParaHistorial,
 } from "./facturacion-por-cliente";
 
@@ -184,5 +185,64 @@ describe("facturación por cliente, de la copia de Odoo", () => {
     const a = filaDe(facturacionPorCliente(docs, CUENTAS, [], 2025), "Acme")!;
     expect(a.facturas).toBe(1);
     expect(a.facturado).toEqual([{ moneda: "USD", monto: 700 }]);
+  });
+});
+
+describe("Mercury en la facturación por cliente (2026-10-17)", () => {
+  const merc = (p: Partial<FacturaMercuryParaHistorial>): FacturaMercuryParaHistorial => ({
+    id: `fm-${++n}`,
+    numero: `INV-${n}`,
+    invoiceDate: "2025-08-01",
+    monto: 2000,
+    moneda: "USD",
+    estado: "Paid",
+    mercuryCustomerId: "mc-ibero",
+    clienteNombre: "Iberorutas LLC",
+    cuentaId: "c-mercury",
+    ...p,
+  });
+
+  it("las facturas de Mercury de un cliente emparejado van a la fila de su cuenta, con la de Odoo", () => {
+    const r = facturacionPorCliente(
+      [doc({ cuentaId: "c-mercury", odooPartnerNombre: "IBERORUTAS SA", invoiceDate: "2025-05-01" })],
+      CUENTAS,
+      [],
+      2025,
+      [merc({}), merc({ estado: "Unpaid", monto: 500, invoiceDate: "2025-09-01" })],
+    );
+    const f = filaDe(r, "Iberorutas")!;
+    expect(f.facturas).toBe(3);
+    expect(f.deMercury).toBe(2);
+    expect(f.facturado).toEqual([{ monto: 3500, moneda: "USD" }]);
+    expect(f.cobrado).toEqual([{ monto: 3000, moneda: "USD" }]);
+    expect(f.porCobrar).toEqual([{ monto: 500, moneda: "USD" }]);
+    expect(f.ultimaFactura).toBe("2025-09-01");
+    expect(f.documentos.map((d) => d.fuente)).toEqual(["MERCURY", "MERCURY", "ODOO"]);
+    expect(r.totales.deMercury).toBe(2);
+  });
+
+  it("una cancelada no cuenta, y una de un cliente sin emparejar tiene su propia fila sin cuenta", () => {
+    const r = facturacionPorCliente([], CUENTAS, [], 2025, [
+      merc({ estado: "Cancelled" }),
+      merc({ cuentaId: null, mercuryCustomerId: "mc-x", clienteNombre: "Otra LLC" }),
+    ]);
+    expect(r.filas.map((f) => f.nombre)).toEqual(["Otra LLC"]);
+    expect(r.filas[0]!.cuentaId).toBeNull();
+    expect(r.filas[0]!.clave).toBe("mercury:mc-x");
+  });
+
+  it("el año de una factura de Mercury entra a los años para elegir, y una venta con su factura en Mercury ya no sale «sin facturas»", () => {
+    const r = facturacionPorCliente([], CUENTAS, [venta({ clientId: "cl-mercury", clienteNombre: "Iberorutas", fechaCierre: "2026-02-01" })], 2026, [
+      merc({ invoiceDate: "2026-03-01" }),
+    ]);
+    expect(r.anios).toEqual([2026]);
+    expect(r.ventasSinFacturas).toEqual([]);
+    expect(filaDe(r, "Iberorutas")!.ventas!.tratos).toBe(1);
+  });
+
+  it("en proceso de pago en Mercury todavía es por cobrar", () => {
+    const r = facturacionPorCliente([], CUENTAS, [], 2025, [merc({ estado: "Processing" })]);
+    expect(r.filas[0]!.porCobrar).toEqual([{ monto: 2000, moneda: "USD" }]);
+    expect(r.filas[0]!.documentos[0]!.estado).toBe("en proceso de pago");
   });
 });
