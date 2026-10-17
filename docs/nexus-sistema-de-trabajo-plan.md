@@ -180,7 +180,7 @@ Alex), vectores si la búsqueda no alcanza, y un MCP si hace falta.
 
 | Fase | Estado |
 |---|---|
-| 0 · Cimientos | Pendiente |
+| 0 · Cimientos | 0.1, 0.2 y 0.3 en el código, sin desplegar (SQL aplicados); 0.6 y 0.7 esperan el deploy; faltan 0.4 y 0.5 |
 | 1 · Atención | Pendiente |
 | 2 · La semana | Pendiente |
 | 3 · Después de cada reunión | Pendiente |

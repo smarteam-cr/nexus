@@ -1988,6 +1988,11 @@ model TeamMember {
   frentes             String[]  @default([])
   frentesEditadosAt   DateTime?
   frentesEditadosPor  String?
+  // LOS SPRINTS QUE LIDERA (2026-10-16, fase 0.1 de docs/nexus-sistema-de-trabajo-plan.md): claves de
+  // lib/tareas/equipos.ts (cs, desarrollo, marketing…). Una persona puede liderar más de uno y uno que no es el de su
+  // área (Alex Vanegas lidera CS y Desarrollo). Reemplaza al override `tareas.manage`, que solo valía en su área. Se
+  // elige en Equipo. ⚠ La lee cada página (el usuario se carga con su fila entera): el SQL va ANTES del deploy.
+  lideraEquipos       String[]  @default([])
   // Baja blanda: si != null, el miembro pierde acceso (login bloqueado) y desaparece
   // de los listados de personas, pero su histórico (sesiones/handoffs/runs) queda intacto.
   deactivatedAt       DateTime?
@@ -2282,6 +2287,7 @@ model FirefliesSession {
   pedidosFueraDeAlcance PedidoFueraDeAlcance[]
   projects    SessionProject[]
   tareas                Tarea[]                @relation("TareasDeLaReunion") // Tareas internas: se leen SOLO por el chokepoint (SET NULL)
+  tareasPlaneadas       Tarea[]                @relation("ReunionPlaneada") // la reunión planeada en Tareas que se hizo acá
   proyectosDeTareas     ProyectoDeTareas[]     @relation("ProyectosDeTareasDeLaReunion")
   eventosDeTareas       TareaEvento[]          @relation("EventosDeTareasDeLaReunion")
   lecturaDeTareas       LecturaDeReunion?      @relation("LecturaDeLaReunion")
@@ -4893,6 +4899,9 @@ model NegocioAbierto {
 /// objeto y equipo se escribe en las propiedades «siguiente_paso_<equipo>» de HubSpot (lib/siguiente-paso).
 /// Un vigente por objeto y equipo: lo asegura un índice único parcial del SQL (Prisma no los modela).
 /// SQL: scripts/sql/2026-10-15-siguiente-paso.sql (RLS + deny).
+/// ⚠ Desde el 2026-10-16 (fase 0.2 de docs/nexus-sistema-de-trabajo-plan.md) el siguiente paso ES UNA TAREA (la próxima
+/// abierta con fecha del sprint del equipo) y esta tabla es la COPIA de lo que está escrito en HubSpot, con la tarea de
+/// la que salió (`tareaId`). Ya no se escribe a mano: la pone al día lib/siguiente-paso/escritura-server.ts.
 model SiguientePaso {
   id        String  @id @default(cuid())
   /// empresa | negocio | proyecto
@@ -4926,11 +4935,17 @@ model SiguientePaso {
   // nullable porque un negocio puede no tener cliente en Nexus. SetNull: borrar el cliente no borra la historia.
   clientId   String?
   client     Client?   @relation("SiguientesPasosDelCliente", fields: [clientId], references: [id], onDelete: SetNull)
+  /// Desde el 2026-10-16 (fase 0.2) el siguiente paso es una TAREA y esta tabla es la copia de lo que está escrito en
+  /// HubSpot: la tarea de la que salió. null en lo de antes y en lo que escribieron en HubSpot sin tarea.
+  // nullable por eso; SetNull: archivar o fusionar la tarea no borra lo que se escribió en HubSpot.
+  tareaId    String?
+  tarea      Tarea?    @relation("PasosEnHubspot", fields: [tareaId], references: [id], onDelete: SetNull)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
   @@index([objeto, objetoId, equipo, estado])
   @@index([clientId, estado])
+  @@index([tareaId])
   @@index([responsableEmail, estado])
   @@index([hubspotEstado])
 }
@@ -6658,6 +6673,24 @@ model Tarea {
   // nullable: el proyecto de HubSpot. Invariante: project.clientId == clientId
   projectId  String?
   project    Project?          @relation("TareasDelProyecto", fields: [projectId], references: [id], onDelete: SetNull)
+  // LA ACCIÓN ÚNICA (2026-10-16, fase 0.2 de docs/nexus-sistema-de-trabajo-plan.md): una tarea es la unidad de «algo
+  // que hay que hacer» con una cuenta. El siguiente paso de un equipo es su próxima tarea abierta con fecha
+  // (lib/siguiente-paso/desde-tareas.ts) y una reunión planeada es una tarea de clase «reunion».
+  /// El contacto de HubSpot (id externo; el nombre sale de ContactoDeHubspot por cliente). Sin FK: la copia se rehace.
+  hubspotContactId String?
+  /// El negocio de HubSpot (id externo; NegocioAbierto lo trae mientras está abierto). Sin FK por lo mismo.
+  hubspotDealId    String?
+  /// smarteam | cliente: quién se comprometió. Hasta el 2026-10-16 vivía en el evento con que nació.
+  lado             String    @default("smarteam")
+  /// accion | reunion
+  clase            String    @default("accion")
+  /// Solo «reunion»: los correos de quienes se invitan (del cliente y del equipo)
+  invitados        String[]  @default([])
+  /// Solo «reunion»: cuándo se propone (el inicio). La fecha de la tarea es este día.
+  reunionInicio    DateTime?
+  /// Solo «reunion»: la reunión que se hizo (Meet). Se lee SOLO por el chokepoint de sesiones
+  reunionHechaId   String?
+  reunionHecha     FirefliesSession? @relation("ReunionPlaneada", fields: [reunionHechaId], references: [id], onDelete: SetNull)
 
   /// mano | pedido | reunion | notas | chat | plantilla | hubspot (no cambia: es la métrica «cómo entran»)
   origen          String
@@ -6727,6 +6760,7 @@ model Tarea {
   vinculos     TareaVinculo[]
   eventos      TareaEvento[]
   resultados   ResultadoDeSemana[]
+  pasosEnHubspot SiguientePaso[]   @relation("PasosEnHubspot")
 
   @@index([responsableEmail, estado])
   @@index([equipo, semana, estado])
@@ -6739,6 +6773,10 @@ model Tarea {
   @@index([mismaQueId])
   @@index([lecturaId])
   @@index([huella])
+  @@index([clientId, equipo, estado])
+  @@index([hubspotContactId])
+  @@index([hubspotDealId])
+  @@index([reunionHechaId])
 }
 
 /// Relación entre dos tareas: bloquea (desde bloquea a hacia; sin ciclos) o relacionada. Pivote N:N.

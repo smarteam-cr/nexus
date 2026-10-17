@@ -6356,6 +6356,10 @@ lleve cada tarea a Google Calendar. Piloto con Marketing (líder: Alejandra Orte
   registro, `soloPorPersona`: no se da por rol). Es lo ÚNICO que decide el líder; el frente `LIDERAR_CS` de «Para ti»
   es otra cosa (las alertas de cartera). Un equipo puede no tener líder. Sugerir a otra persona es proponer; asignar
   directo solo puede el líder de su equipo.
+  ⚠ **Enmendado el 2026-10-16** (fase 0.1 de docs/nexus-sistema-de-trabajo-plan.md): el líder sale de
+  `TeamMember.lideraEquipos`, que se elige en Equipo («Lidera los sprints de»). Una persona puede liderar más de un
+  sprint y uno que no es el de su área: Alex Vanegas (CSL) lidera Customer Success y Desarrollo. El override
+  `tareas.manage` se retira (nadie lo tenía) y la celda queda oculta.
 - **Un proyecto de tareas nunca es un `Project`.** Un `Project` es un servicio que se factura y vive en HubSpot; un
   proyecto de tareas («Campaña de SAP») agrupa trabajo interno, y PUEDE servir a un `Project` (su `projectId`). La
   «tarea grande» del primer diseño se reemplazó por el proyecto. Si tres o más líneas de una reunión comparten raíces,
@@ -7966,8 +7970,10 @@ por Ventas. El plan completo, con las respuestas de Elías, está en `docs/mi-di
 ## El siguiente paso de cada equipo, en Nexus y en HubSpot (2026-10-15)
 
 > ⚠ **Enmendado el 2026-10-16** («Nexus, el sistema de trabajo de cada cuenta»): el siguiente paso de un equipo en una
-> cuenta pasa a ser su próxima tarea abierta con fecha. HubSpot se sigue escribiendo igual, desde esa tarea, y
-> `SiguientePaso` queda DEPRECATED (no tenía filas). Lo de abajo sigue valiendo para HubSpot.
+> cuenta pasa a ser su próxima tarea abierta con fecha. HubSpot se sigue escribiendo igual, desde esa tarea.
+> `SiguientePaso` no se retiró: pasó a ser la COPIA de lo que está escrito en HubSpot, con la tarea de la que salió
+> (`tareaId`), porque la escritura con reintentos y la copia que vuelve de HubSpot ya vivían ahí. Ver «Cómo quedó la
+> fase 0» en esa sección. Lo de abajo sigue valiendo para HubSpot.
 
 **Contexto.** Etapa 2 de `docs/mi-dia-plan.md`. Decisiones de Elías (2026-10-14): un siguiente paso por equipo, con
 qué, fecha y responsable, con los mismos nombres en empresas, negocios y proyectos de HubSpot; también en la empresa
@@ -8333,3 +8339,29 @@ hacerlo**. El plan, por fases, está en `docs/nexus-sistema-de-trabajo-plan.md`.
   estratégico».
 - **Desarrollo** (Alejandro Salas y Brainer) planifica en Tareas como los demás; lo lidera Alex Vanegas.
 - **Se prende la lectura de hechos**, con Sonnet y caché (unos US$22 al mes).
+
+**Cómo quedó la fase 0 en el código (2026-10-16, sin desplegar).** SQL aplicados en producción el mismo día:
+`2026-10-16-lideres-de-equipo.sql` y `2026-10-16-la-accion-unica.sql`.
+
+- **El líder de un sprint es un dato** (`TeamMember.lideraEquipos`, «Lidera los sprints de» en Equipo). Una persona
+  lidera más de un sprint y uno que no es el de su área. Primeros líderes: Alex Vanegas (CS y Desarrollo) y Alejandra
+  Ortega (Marketing). El override `tareas.manage` se retiró (nadie lo tenía). Quien lidera un sprint escribe también el
+  siguiente paso de ese equipo. **Tareas está en el menú de todo el equipo.**
+- **La regla de las cuentas** (`lib/tareas/visibilidad.ts`): las tareas de las cuentas que ves, de cualquier equipo,
+  menos lo «Solo para mí» y lo de un espacio de «solo miembros» donde no estás. Las empresas de Smarteam no cuentan: el
+  trabajo interno se sigue viendo por su sprint. Lo arma `contextoDeTareas` una vez por pedido; sin él (un aviso a otra
+  persona, un script), se ve menos, nunca más.
+- **La tarea suma su contacto y su negocio de HubSpot** (ids externos, sin FK: las copias se rehacen), **el lado** (antes
+  en el evento con que nació; se copió a la columna), y **la reunión planeada** (`clase = "reunion"`, sus invitados, su
+  inicio y la reunión que se hizo). La reunión planeada todavía no tiene pantalla: llega con la fase 2.
+- **El siguiente paso es la próxima tarea abierta con fecha del sprint del equipo** (`lib/siguiente-paso/desde-tareas.ts`):
+  la fecha es el día de la reunión, el vencimiento o su semana; «Por asignar» del sprint cuenta; una propuesta no.
+  Fijarlo desde el diálogo CAMBIA la tarea que hoy es el siguiente paso (qué, fecha y quién, por el escritor único de
+  Tareas) o crea una (`origen = "paso"`); lo lleva alguien del sprint del equipo. «Ya se hizo» la termina. Para otra
+  persona, sigue las reglas de Tareas: le llega como sugerencia y no es el siguiente paso hasta que la tome.
+- **HubSpot sale de la tarea.** Al guardar, y cada hora para las cuentas cuyas tareas cambiaron (job
+  `negocios-abiertos`), se compara la tarea con la copia y se escribe solo lo distinto. Si alguien lo borra en HubSpot y
+  la tarea no cambia, no se vuelve a escribir (no se pelean). Lo nuevo que alguien escribe en HubSpot entra como tarea
+  del sprint de ese equipo, para su dueño si es del sprint y, si no, en «Por asignar».
+- **«Para ti» dejó de repetir el siguiente paso**: la fuente «Tus siguientes pasos» se retiró, porque esas tareas ya
+  salen en «Tus tareas». «Usar como siguiente paso» (después de una reunión) usa la tarea propuesta, no crea otra.

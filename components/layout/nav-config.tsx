@@ -212,7 +212,8 @@ export const APP_NAV: readonly NavItemConfig[] = [
   },
   {
     // Tareas internas (2026-10-09, docs/tareas-plan.md): lo que se acuerda en una reunión termina en la semana y en la
-    // agenda de cada persona. Justo después de «Para ti». En el piloto, Marketing y quien ya tenga algo en Tareas.
+    // agenda de cada persona. Justo después de «Para ti». Desde el 2026-10-16, para todo el equipo (lib/tareas/menu.ts);
+    // el gate se sigue llamando `tareasPiloto` porque lo congela el test de gates.
     key: "tareas",
     label: "Tareas",
     href: "/tareas",

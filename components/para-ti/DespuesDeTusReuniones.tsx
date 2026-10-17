@@ -8,7 +8,9 @@
  * sobre la cuenta. Si no hay, se propone la primera de tus tareas de esa reunión. Si nadie lo mira, igual queda como
  * borrador: la IA se usa desde el primer momento (DECISIONS «La IA como borrador»).
  *
- * «Usar todo» es el de la tarjeta (POST /api/sessions/[id]/lo-que-dejo); el siguiente paso, POST /api/siguiente-paso.
+ * «Usar todo» es el de la tarjeta (POST /api/sessions/[id]/lo-que-dejo). El siguiente paso es una tarea (fase 0.2):
+ * «Usar como siguiente paso» usa la tarea propuesta (POST /api/tareas/[id]/decision) y la copia de cada hora la escribe en
+ * HubSpot.
  */
 import Link from "next/link";
 import { useState } from "react";
@@ -94,17 +96,18 @@ function Reunion({ r, hoyISO }: { r: DespuesDeLaReunion; hoyISO: string }) {
     if (!r.equipo || !r.sugerencia) return;
     setOcupado("paso");
     try {
-      const res = await fetch("/api/siguiente-paso", {
+      const res = await fetch(`/api/tareas/${encodeURIComponent(r.sugerencia.id)}/decision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ objeto: "empresa", objetoId: r.clientId, equipo: r.equipo, que: r.sugerencia.slice(0, 500) }),
+        body: JSON.stringify({ version: r.sugerencia.version, decision: { tipo: "usar" } }),
       });
-      const j = (await res.json().catch(() => null)) as { error?: string; hubspotEstado?: string } | null;
+      const j = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) {
-        toast.error(j?.error ?? "No se pudo guardar el siguiente paso.");
+        toast.error(j?.error ?? "No se pudo usar la tarea.");
+        if (res.status === 409) router.refresh();
         return;
       }
-      toast.success(j?.hubspotEstado === "pendiente" ? "Guardado. Se escribe en HubSpot en la próxima copia." : "Guardado en Nexus y en HubSpot.");
+      toast.success(`Listo: T-${r.sugerencia.numero} es tu siguiente paso. Se escribe en HubSpot en la próxima copia.`);
       router.refresh();
     } finally {
       setOcupado(null);
@@ -178,7 +181,7 @@ function Reunion({ r, hoyISO }: { r: DespuesDeLaReunion; hoyISO: string }) {
             <span className="flex flex-wrap items-center gap-2 text-brand">
               <IconoDeSugerencia className="h-3 w-3" />
               <span>
-                {pasoVencido ? "El siguiente paso venció. " : "Sin siguiente paso. "}Nexus propone: «{r.sugerencia}»
+                {pasoVencido ? "El siguiente paso venció. " : "Sin siguiente paso. "}Nexus propone: «{r.sugerencia!.titulo}»
               </span>
               <BotonAzul onClick={usarComoPaso} disabled={ocupado !== null}>
                 {ocupado === "paso" ? "Guardando…" : "Usar como siguiente paso"}

@@ -18,6 +18,8 @@ import type { AppUserWithTeamMember } from "@/lib/auth/supabase";
 import { Prisma, type TeamMember } from "@prisma/client";
 import { claveDeEquipo, equiposQueLidera, type MiembroDelEquipo } from "./equipos";
 import type { Quien } from "./estados";
+import type { CuentasQueVe } from "./visibilidad";
+import { cuentasParaVerTareas } from "./clientes";
 
 export { SQL_DE_TAREAS };
 
@@ -127,12 +129,12 @@ export class ErrorDeTareas extends Error {
 export const miembrosActivos = cache(async (): Promise<MiembroDelEquipo[]> => {
   const filas = await prisma.teamMember.findMany({
     where: { deactivatedAt: null },
-    select: { email: true, name: true, area: true, roleEnum: true, permissionOverrides: true },
+    select: { email: true, name: true, area: true, roleEnum: true, lideraEquipos: true },
     orderBy: { name: "asc" },
   });
   return filas
     .filter((m) => !esCuentaDePrueba(m.name))
-    .map((m) => ({ email: m.email.toLowerCase(), nombre: m.name, area: m.area, roleEnum: m.roleEnum, permissionOverrides: m.permissionOverrides }));
+    .map((m) => ({ email: m.email.toLowerCase(), nombre: m.name, area: m.area, roleEnum: m.roleEnum, lideraEquipos: m.lideraEquipos }));
 });
 
 export interface ContextoDeTareas extends Quien {
@@ -143,6 +145,8 @@ export interface ContextoDeTareas extends Quien {
   miembros: MiembroDelEquipo[];
   /** Los miembros de su propio sprint (incluida la persona). */
   companeros: MiembroDelEquipo[];
+  /** Las cuentas cuyas tareas ve, de cualquier equipo (la regla de las cuentas de visibilidad.ts). */
+  cuentas: CuentasQueVe;
 }
 
 /** Quién pide, con su sprint de casa, lo que lidera y el equipo entero. */
@@ -152,8 +156,8 @@ export async function contextoDeTareas(
   const tm = user.teamMember;
   if (!tm) throw new ErrorDeTareas(403, "Tu cuenta no tiene un miembro del equipo.");
   const email = tm.email.toLowerCase();
-  const todos = await miembrosActivos();
-  const yo: MiembroDelEquipo = { email, nombre: tm.name, area: tm.area, roleEnum: tm.roleEnum, permissionOverrides: tm.permissionOverrides };
+  const [todos, cuentas] = await Promise.all([miembrosActivos(), cuentasParaVerTareas(tm)]);
+  const yo: MiembroDelEquipo = { email, nombre: tm.name, area: tm.area, roleEnum: tm.roleEnum, lideraEquipos: tm.lideraEquipos };
   const miembros = todos.some((m) => m.email === email) ? todos : [...todos, yo];
   const equipo = claveDeEquipo(tm.area, email);
   return {
@@ -165,6 +169,7 @@ export async function contextoDeTareas(
     equipo,
     miembros,
     companeros: miembros.filter((m) => claveDeEquipo(m.area, m.email) === equipo),
+    cuentas,
   };
 }
 
@@ -174,7 +179,7 @@ export function equipoDe(email: string, miembros: readonly MiembroDelEquipo[]): 
   return m ? claveDeEquipo(m.area, m.email) : null;
 }
 
-/** Los líderes de un equipo: miembros de ese equipo con `tareas.manage`. */
+/** Los líderes de un sprint: quienes lo tienen en `lideraEquipos` (pueden no ser de esa área). */
 export function lideresDe(equipo: string, miembros: readonly MiembroDelEquipo[]): MiembroDelEquipo[] {
   return miembros.filter((m) => equiposQueLidera(m).includes(equipo));
 }

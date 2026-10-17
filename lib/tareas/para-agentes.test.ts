@@ -14,10 +14,11 @@ vi.mock("./servidor", () => ({ tareasDisponible: vi.fn(async () => disponible.si
 
 import { ABIERTAS_PARA_AGENTES, TOPE_DEL_TITULO, aTareaParaAgente, compromisosAbiertosParaAgentes, lineaParaElVigia, pendientesVencidosParaElVigia } from "./para-agentes";
 
-const fila = (o: Partial<{ titulo: string; venceEl: Date | null; estado: string; datos: unknown }> = {}) => ({
+const fila = (o: Partial<{ titulo: string; venceEl: Date | null; estado: string; datos: unknown; lado: string }> = {}) => ({
   titulo: o.titulo ?? "Recordarle a Ana que envíe la base",
   venceEl: o.venceEl === undefined ? new Date("2026-10-01T00:00:00Z") : o.venceEl,
   estado: o.estado ?? "propuesta",
+  lado: o.lado ?? "smarteam",
   eventos: o.datos === undefined ? [] : [{ datos: o.datos as never }],
 });
 
@@ -36,6 +37,8 @@ describe("⭐ lo que el agente sabe de una tarea", () => {
     });
     expect(aTareaParaAgente(fila({ estado: "en_curso", datos: { lado: "smarteam" } })).estado).toBe("en curso");
     expect(aTareaParaAgente(fila({ estado: "pendiente" })).estado).toBe("pendiente");
+    // Desde el 2026-10-16 el lado vive en su columna; el evento sigue valiendo para lo de antes.
+    expect(aTareaParaAgente(fila({ lado: "cliente" })).lado).toBe("cliente");
   });
 
   it("sin el evento de la lectura, la tarea es trabajo de Smarteam (toda tarea la hace alguien del equipo)", () => {
@@ -66,7 +69,7 @@ describe("⛔ lo que nunca le llega", () => {
     const out = await pendientesVencidosParaElVigia("p1", new Date("2026-10-10T15:00:00Z"));
     expect(out).toHaveLength(1);
     const arg = db.tarea.findMany.mock.calls[0][0];
-    expect(Object.keys(arg.select).sort()).toEqual(["estado", "eventos", "titulo", "venceEl"]);
+    expect(Object.keys(arg.select).sort()).toEqual(["estado", "eventos", "lado", "titulo", "venceEl"]);
     expect(Object.keys(arg.select.eventos.select)).toEqual(["datos"]);
     expect(arg.where.projectId).toBe("p1");
     expect(arg.where.privada).toBe(false);
@@ -92,7 +95,7 @@ describe("⛔ lo que nunca le llega", () => {
     const arg = db.tarea.findMany.mock.calls[0][0];
     expect(arg.where).toMatchObject({ projectId: "p2", privada: false, archivadaAt: null });
     expect(arg.where.venceEl).toBeUndefined();
-    expect(Object.keys(arg.select).sort()).toEqual(["estado", "eventos", "titulo", "venceEl"]);
+    expect(Object.keys(arg.select).sort()).toEqual(["estado", "eventos", "lado", "titulo", "venceEl"]);
     expect(arg.take).toBe(30);
   });
 

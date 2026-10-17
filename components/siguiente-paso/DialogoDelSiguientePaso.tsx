@@ -5,6 +5,9 @@
  * negocio o un proyecto (2026-10-15, etapa 2 de docs/mi-dia-plan.md). Lo abren la cartera de «Para ti» y el panel de la
  * ficha del cliente. Se guarda en Nexus y se escribe en HubSpot (lib/siguiente-paso/escritura-server.ts).
  *
+ * Desde el 2026-10-16 (fase 0.2) el siguiente paso es una TAREA del sprint del equipo: guardar cambia la que hoy es el
+ * siguiente paso o crea una, y la lleva alguien de ese equipo.
+ *
  * `hs_next_step` del negocio se ofrece como sugerencia («HubSpot dice»): se usa con un clic, nunca se escribe.
  */
 import { useMemo, useState } from "react";
@@ -56,11 +59,13 @@ function Formulario({ objeto: o, equipoInicial, onCerrar, datos }: PropsDelDialo
   // Lo que arranca escrito: lo vigente del equipo (la fecha, solo si no pasó); sin vigente, a cargo de quien escribe.
   const valoresDe = (e: EquipoDelSiguientePaso | null) => {
     const v = vigenteDe(e);
-    const soyDelEquipo = !!e && datos.personas.some((p) => p.email === datos.yo && p.equipos.includes(e));
+    const delEquipo = datos.personas.filter((p) => !!e && p.equipos.includes(e));
+    const soyDelEquipo = delEquipo.some((p) => p.email === datos.yo);
     return {
       que: v?.que ?? "",
       fecha: v?.fecha && !estaVencido(v, hoy) ? v.fecha : "",
-      responsable: v?.responsableEmail ?? (soyDelEquipo ? datos.yo : ""),
+      // Lo lleva alguien del equipo: quien lo lleva hoy, quien escribe si es del equipo, o la primera persona.
+      responsable: v?.responsableEmail ?? (soyDelEquipo ? datos.yo : (delEquipo[0]?.email ?? "")),
     };
   };
   const [elegido, setElegido] = useState<EquipoDelSiguientePaso | null>(() =>
@@ -92,12 +97,14 @@ function Formulario({ objeto: o, equipoInicial, onCerrar, datos }: PropsDelDialo
     }
     setGuardando(true);
     try {
-      const r = await fetchJson<{ hubspotEstado: string }>("/api/siguiente-paso", {
+      const r = await fetchJson<{ hubspotEstado: string; estado: string; numero: number }>("/api/siguiente-paso", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ objeto: o.objeto, objetoId: o.objetoId, equipo: elegido, que: que.trim(), fecha: fecha || null, responsableEmail: responsable || null }),
       });
-      if (r.hubspotEstado === "error") toast.info("Quedó en Nexus. HubSpot no respondió: se vuelve a intentar en la próxima hora.");
+      const nombre = personas.find((p) => p.email === responsable)?.nombre ?? "esa persona";
+      if (r.estado === "propuesta") toast.info(`Le llegó a ${nombre.split(" ")[0]} como sugerencia (T-${r.numero}): será el siguiente paso cuando la tome.`);
+      else if (r.hubspotEstado === "error") toast.info("Quedó en Nexus. HubSpot no respondió: se vuelve a intentar en la próxima hora.");
       else if (r.hubspotEstado === "sin_hubspot") toast.success("Quedó en Nexus. Esta empresa no está en HubSpot.");
       else toast.success("Quedó guardado en Nexus y en HubSpot.");
       onCerrar(true);
@@ -112,7 +119,7 @@ function Formulario({ objeto: o, equipoInicial, onCerrar, datos }: PropsDelDialo
     setGuardando(true);
     try {
       await fetchJson(`/api/siguiente-paso/${encodeURIComponent(vigente.id)}/hecho`, { method: "POST" });
-      toast.success("Listo. Se borró de HubSpot y queda en la historia de Nexus.");
+      toast.success("Listo: la tarea quedó hecha y HubSpot se pone al día.");
       onCerrar(true);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo dar por hecho.");
@@ -131,7 +138,7 @@ function Formulario({ objeto: o, equipoInicial, onCerrar, datos }: PropsDelDialo
       footer={
         <div className="flex w-full items-center gap-2">
           {vigente && (
-            <BotonTexto onClick={hecho} disabled={guardando} title="Se borra de HubSpot y queda en la historia de Nexus">
+            <BotonTexto onClick={hecho} disabled={guardando} title="La tarea queda hecha; en HubSpot queda la que sigue o nada">
               Ya se hizo
             </BotonTexto>
           )}
@@ -169,12 +176,13 @@ function Formulario({ objeto: o, equipoInicial, onCerrar, datos }: PropsDelDialo
                   {estaVencido(vigente, hoy) ? `venció el ${fechaCorta(vigente.fecha)}` : `para el ${fechaCorta(vigente.fecha)}`}
                 </span>
               )}
-              {vigente.responsableNombre && ` · ${vigente.responsableNombre}`}. Lo que guardes lo reemplaza; el anterior queda en la historia.
+              {vigente.responsableNombre && ` · ${vigente.responsableNombre}`}.{" "}
+              {vigente.tareaNumero ? `Es la tarea T-${vigente.tareaNumero}: lo que guardes la cambia.` : "Lo que guardes lo cambia."}
             </p>
           ) : (
             <p className="text-[13px] text-fg-secondary">
-              {elegido ? `${NOMBRE_DEL_EQUIPO[elegido]} todavía no tiene un siguiente paso acá.` : ""} Se guarda en Nexus y en HubSpot, con el mismo nombre en
-              empresas, negocios y proyectos.
+              {elegido ? `${NOMBRE_DEL_EQUIPO[elegido]} todavía no tiene un siguiente paso acá.` : ""} Queda como una tarea de su equipo y se escribe en
+              HubSpot, con el mismo nombre en empresas, negocios y proyectos.
             </p>
           )}
 
@@ -195,7 +203,7 @@ function Formulario({ objeto: o, equipoInicial, onCerrar, datos }: PropsDelDialo
             </Field>
             <Field label="Quién lo lleva">
               <Select value={responsable} onChange={(ev) => setResponsable(ev.target.value)}>
-                {!personas.some((p) => p.email === datos.yo) && <option value="">Yo</option>}
+                {personas.length === 0 && <option value="">Nadie del equipo</option>}
                 {personas.map((p) => (
                   <option key={p.email} value={p.email}>
                     {p.email === datos.yo ? `${p.nombre} (yo)` : p.nombre}

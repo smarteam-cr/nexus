@@ -53,10 +53,10 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/para-ti/fuentes/cs.ts": { modo: "criterio", criterio: "clasificable" },
   // El siguiente paso de cada equipo (2026-10-15, etapa 2 de docs/mi-dia-plan.md): los proyectos abiertos de la cuenta.
   "lib/siguiente-paso/lectura-server.ts": { modo: "criterio", criterio: "clasificable" },
+  "lib/siguiente-paso/escritura-server.ts": { modo: "criterio", criterio: "clasificable" },
   // Las tareas de HubSpot (2026-10-15, etapa 3 de docs/mi-dia-plan.md): el proyecto asociado a la tarea en HubSpot, si está
   // abierto (mutaciones.ts exige lo mismo al elegir el proyecto de una tarea a mano).
   "lib/tareas-hubspot/sync-server.ts": { modo: "criterio", criterio: "clasificable" },
-  "lib/para-ti/fuentes/siguientes-pasos.ts": { modo: "exento", razon: "Busca por id el nombre de los proyectos de los siguientes pasos de la persona: no pregunta qué proyectos cuentan." },
   // «Lo que dejó esta reunión» (2026-10-09, memoria de la cuenta, etapa 1): los proyectos del cliente dueño de la
   // reunión, con el mismo criterio que el selector de proyectos de la página de la reunión.
   "lib/seguimiento/tarjeta-server.ts": { modo: "criterio", criterio: "clasificable" },

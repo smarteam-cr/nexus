@@ -178,7 +178,7 @@
   (la sugirió Nexus o la pidió otra persona); una **lápida** es una propuesta descartada, que no se vuelve a proponer
   por 28 días; una **vencida** es una propuesta que nadie decidió en 14 días.
 - **Sprint** (`Tarea.equipo`): el equipo de casa del responsable, por su área (marketing, cs, ventas…). **Por
-  asignar**: las tareas de un sprint sin responsable. El **líder** del sprint es quien tiene `tareas.manage` en /team.
+  asignar**: las tareas de un sprint sin responsable. El **líder** del sprint es quien lo tiene en «Lidera los sprints de» (Equipo, `TeamMember.lideraEquipos`); puede liderar más de uno.
 - **Ámbito** (`lib/tareas/ambito.ts`): para quién es una tarea: cliente, prospecto, aliado, interno o **sin
   clasificar**. Interno = una empresa de Smarteam o un proyecto marcado interno (SmartAgro).
 - **Proyecto de tareas** (`ProyectoDeTareas`): un grupo de tareas con responsable y fechas («Campaña de SAP»). NO es
@@ -1004,8 +1004,13 @@
 - **Temperatura de un negocio**: caliente, en movimiento o frío, según la actividad, la probabilidad y el cierre
   (`temperaturaDelNegocio`).
 - **Ponderado**: monto × probabilidad de los negocios en dólares que cierran en el año.
-- **Siguiente paso por equipo** (`SiguientePaso`; en HubSpot, `siguiente_paso_ventas`, `_cs`, `_dev`, con `_fecha` y
-  `_responsable`): qué sigue con una empresa, un negocio o un proyecto del lado de Ventas, CS o Dev, para cuándo y quién
-  lo lleva. Uno vigente por objeto y equipo; cada cambio queda en la historia de Nexus y el vigente se escribe en
-  HubSpot, con el mismo nombre en los tres objetos (`lib/siguiente-paso`). Se da por hecho («Ya se hizo») o se
-  reemplaza. `hs_next_step` es de HubSpot: Nexus lo lee y lo ofrece como sugerencia, nunca lo escribe.
+- **Siguiente paso por equipo** (en HubSpot, `siguiente_paso_ventas`, `_cs`, `_dev`, con `_fecha` y `_responsable`):
+  qué sigue con una empresa, un negocio o un proyecto del lado de Ventas, CS o Dev, para cuándo y quién lo lleva. Desde
+  el 2026-10-16 es **una tarea**: la próxima abierta con fecha del sprint del equipo (`lib/siguiente-paso/desde-tareas.ts`).
+  Se escribe en HubSpot desde esa tarea, con el mismo nombre en los tres objetos; `SiguientePaso` es la copia de lo que
+  está escrito allá. «Ya se hizo» termina la tarea. `hs_next_step` es de HubSpot: Nexus lo lee y lo ofrece como
+  sugerencia, nunca lo escribe.
+- **Líder de un sprint** (`TeamMember.lideraEquipos`): quien asigna directo, reparte «Por asignar», revisa la semana con
+  el equipo y recibe lo que le piden al equipo. Puede liderar más de un sprint (Alex Vanegas: CS y Desarrollo).
+- **Reunión planeada** (`Tarea.clase = "reunion"`): una tarea con sus invitados y su hora propuesta; cuando ocurre,
+  queda unida a la reunión que se hizo (`reunionHechaId`).

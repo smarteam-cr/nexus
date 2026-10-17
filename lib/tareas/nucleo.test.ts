@@ -18,7 +18,7 @@ import {
 } from "./semana";
 import { fechaDesdeLaReunion, venceDesdeClave } from "./fechas";
 import { cuanSeParecen, esCandidataClara, huellaDeTexto, raices, raicesCompartidas, masParecidas } from "./texto";
-import { claveDeEquipo, equipoDeLaMayoria, equiposQueLidera, nombreDelEquipo, tieneTareasManage } from "./equipos";
+import { claveDeEquipo, equipoDeLaMayoria, equiposQueLidera, nombreDelEquipo } from "./equipos";
 import { ambitoDe } from "./ambito";
 import { enlaceDePlantilla, instanteCR, posicionEnLaGrilla, proponerHorarios } from "./agenda";
 
@@ -216,11 +216,11 @@ describe("equipos", () => {
     expect(nombreDelEquipo("revops", { miembros: 1, paraMi: false })).toBe("RevOps");
   });
 
-  it("el líder es quien tiene tareas.manage en SU override", () => {
-    const ov = { v: 1, sections: { tareas: { manage: true } } };
-    expect(tieneTareasManage(ov)).toBe(true);
-    expect(tieneTareasManage({ v: 1, sections: {} })).toBe(false);
-    expect(equiposQueLidera({ email: "a@x", nombre: "A", area: "Marketing", roleEnum: "MARKETING", permissionOverrides: ov })).toEqual(["marketing"]);
+  it("el líder sale de lideraEquipos: puede liderar más de un sprint, y uno que no es el de su área", () => {
+    expect(equiposQueLidera({ lideraEquipos: ["cs", "desarrollo"] })).toEqual(["cs", "desarrollo"]);
+    expect(equiposQueLidera({ lideraEquipos: ["CS", "cs", "inventado", "persona:x@y"] })).toEqual(["cs"]);
+    expect(equiposQueLidera({ lideraEquipos: null })).toEqual([]);
+    expect(equiposQueLidera({})).toEqual([]);
   });
 
   it("el equipo de la reunión es el de la mayoría; con empate, pregunta", () => {

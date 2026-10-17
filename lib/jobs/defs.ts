@@ -257,15 +257,20 @@ const negociosAbiertos: JobDef = {
       console.log(`[jobs/negocios-abiertos] ${turno} — ${r.locked ? "lock ajeno" : "corrida PARCIAL"}; turno liberado para reintentar`);
       return;
     }
-    // Lo que quedó sin escribir en HubSpot del siguiente paso de cada equipo (lib/siguiente-paso, etapa 2).
-    const { reintentarEscrituras } = await import("@/lib/siguiente-paso/escritura-server");
+    // El siguiente paso de cada equipo es una tarea (fase 0.2): las cuentas cuyas tareas cambiaron en las últimas dos
+    // horas ponen al día lo que dice HubSpot. Después, lo que quedó sin escribir allá (lib/siguiente-paso).
+    const { reintentarEscrituras, sincronizarCuentasCambiadas } = await import("@/lib/siguiente-paso/escritura-server");
+    const puestas = await sincronizarCuentasCambiadas(new Date(now.getTime() - 2 * 3_600_000)).catch((e) => {
+      console.error("[jobs/negocios-abiertos] siguientes pasos desde las tareas:", e);
+      return null;
+    });
     const pasos = await reintentarEscrituras().catch((e) => {
       console.error("[jobs/negocios-abiertos] reintento de siguientes pasos:", e);
       return null;
     });
     console.log(
       `[jobs/negocios-abiertos] ${turno} — ${r.traidos} abiertos: ${r.altas} nuevos, ${r.actualizados} con cambios, ${r.cerrados} cerrados, ${r.duenosActualizados} dueños de empresa` +
-        ` · siguientes pasos: ${r.pasos.nuevos} desde HubSpot, ${r.pasos.cerrados} borrados allá${pasos?.intentados ? `, ${pasos.escritos} de ${pasos.intentados} reescritos` : ""}` +
+        ` · siguientes pasos: ${r.pasos.nuevos} desde HubSpot, ${r.pasos.cerrados} borrados allá${puestas?.cuentas ? `, ${puestas.escritos} escritos de ${puestas.cuentas} cuentas con tareas cambiadas` : ""}${pasos?.intentados ? `, ${pasos.escritos} de ${pasos.intentados} reescritos` : ""}` +
         `${r.errores.length ? `, ${r.errores.length} errores` : ""}`,
     );
   },

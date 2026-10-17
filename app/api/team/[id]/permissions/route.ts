@@ -3,11 +3,14 @@
  *
  * Gate DURO: solo SUPER_ADMIN (decisión del usuario: administrar permisos no es
  * delegable — ni siquiera vía equipo.manage). PATCH acepta cualquier subconjunto:
- *   { roleEnum?, canViewAllClients?, canViewAllExpiresAt?, permissionOverrides?, vistaFinanzas?, frentes? }
+ *   { roleEnum?, canViewAllClients?, canViewAllExpiresAt?, permissionOverrides?, vistaFinanzas?, frentes?, lideraEquipos? }
  *
  * Los FRENTES («Lo que lleva», lib/para-ti/frentes.ts, 2026-10-04) no son permisos: deciden qué le llega a la persona
  * en «Para ti». Al guardarlos, la vista de Finanzas de un Super Admin se desprende de ellos (vistaFinanzasDeFrentes):
  * deja de elegirse aparte, así no quedan dos datos diciendo lo mismo.
+ *
+ * Los SPRINTS QUE LIDERA (`lideraEquipos`, 2026-10-16, fase 0.1 de docs/nexus-sistema-de-trabajo-plan.md) tampoco son
+ * permisos: deciden quién lidera cada sprint en Tareas. REPLACE; ausente = no tocar.
  *
  * Reglas anti-lockout:
  *   - No se puede degradar al ÚLTIMO Super Admin activo.
@@ -32,6 +35,7 @@ import { VISTAS_ELEGIBLES } from "@/lib/finanzas/vista";
 import { frentesDe, vistaFinanzasDeFrentes } from "@/lib/para-ti/frentes";
 import { frentesSchema } from "@/lib/para-ti/schema";
 import { esResponsable } from "@/lib/escala/responsable";
+import { SPRINTS_CON_LIDER } from "@/lib/tareas/equipos";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -49,6 +53,8 @@ const patchSchema = z.strictObject({
   vistaFinanzas: z.enum(VISTAS_ELEGIBLES).nullable().optional(),
   // Lo que lleva (lib/para-ti/frentes.ts): REPLACE. null = vuelve a lo de su rol. Ausente = no tocar.
   frentes: frentesSchema.nullable().optional(),
+  // Los sprints que lidera en Tareas: REPLACE. Ausente = no tocar.
+  lideraEquipos: z.array(z.enum(SPRINTS_CON_LIDER as [string, ...string[]])).max(SPRINTS_CON_LIDER.length).optional(),
 });
 
 /** Bundle que consume el modal: fila + capas del mapa (herencia / pines / efectivo). */
@@ -76,6 +82,7 @@ async function memberBundle(member: TeamMember) {
       }),
       frentesElegidos: member.frentesEditadosAt !== null,
       esResponsableDeLaEscala: esResponsable(member.email),
+      lideraEquipos: member.lideraEquipos,
     },
     // base = lo que HEREDA del rol (default ← plantilla DB), sin overrides
     base: computeEffective(member.roleEnum, template, null),
@@ -165,6 +172,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // La vista de Finanzas sale de los frentes (gana a una vistaFinanzas que viniera en el mismo pedido).
     data.vistaFinanzas = vistaFinanzasDeFrentes(nextRole, body.frentes);
   }
+  if (body.lideraEquipos !== undefined) data.lideraEquipos = [...new Set(body.lideraEquipos)];
   // Json?: limpiar = Prisma.DbNull (columna NULL — "hereda todo"); null/undefined no limpian.
   if (overrides !== undefined) {
     data.permissionOverrides = overrides === null ? Prisma.DbNull : (overrides as Prisma.InputJsonValue);

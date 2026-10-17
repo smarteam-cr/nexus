@@ -7,8 +7,10 @@
  * MUESTRA como «Tus tareas» (es el «equipo personal» de RevOps), pero guarda `revops`. La clave `persona:<correo>`
  * queda solo para quien no tiene área o tiene una sin mapear.
  *
- * El LÍDER de un sprint es quien tiene `tareas.manage` en SU override de /team y es miembro de ese equipo. Es la única
- * fuente del líder; el frente `LIDERAR_CS` de «Para ti» es otra cosa (las alertas de cartera).
+ * El LÍDER de un sprint sale de `TeamMember.lideraEquipos` (2026-10-16, fase 0.1 de docs/nexus-sistema-de-trabajo-plan.md):
+ * una persona puede liderar más de un sprint, y uno que no es el de su área (Alex Vanegas lidera CS y Desarrollo). Se
+ * elige en Equipo. Reemplaza al override `tareas.manage`, que solo valía en su área. Es la única fuente del líder; el
+ * frente `LIDERAR_CS` de «Para ti» es otra cosa (las alertas de cartera).
  */
 export const EQUIPOS = [
   { clave: "marketing", nombre: "Marketing", areas: ["marketing"] },
@@ -57,21 +59,17 @@ export interface MiembroDelEquipo {
   nombre: string;
   area: string | null;
   roleEnum: string;
-  permissionOverrides?: unknown;
+  /** Los sprints que lidera (`TeamMember.lideraEquipos`). */
+  lideraEquipos?: readonly string[] | null;
 }
 
-/** ¿Tiene `tareas.manage` en su override? (no por rol: se da a una persona en /team). */
-export function tieneTareasManage(permissionOverrides: unknown): boolean {
-  // Lectura tolerante del Json (el mismo contrato que parsePermissionMapLoose, sin traer zod al navegador).
-  if (!permissionOverrides || typeof permissionOverrides !== "object" || Array.isArray(permissionOverrides)) return false;
-  const mapa = permissionOverrides as { v?: unknown; sections?: Record<string, Record<string, unknown> | undefined> };
-  if (mapa.v !== 1) return false;
-  return mapa.sections?.tareas?.manage === true;
-}
+/** Las claves de sprint que se pueden liderar: las fijas (un equipo personal no tiene líder). */
+export const SPRINTS_CON_LIDER: readonly ClaveDeEquipoFijo[] = EQUIPOS.map((e) => e.clave);
 
-/** Los equipos que lidera una persona: el de su área, si tiene `tareas.manage`. */
-export function equiposQueLidera(m: MiembroDelEquipo): string[] {
-  return tieneTareasManage(m.permissionOverrides) ? [claveDeEquipo(m.area, m.email)] : [];
+/** Los sprints que lidera una persona: los de `lideraEquipos` que existen, sin repetir. */
+export function equiposQueLidera(m: Pick<MiembroDelEquipo, "lideraEquipos">): string[] {
+  const validas = new Set<string>(SPRINTS_CON_LIDER);
+  return [...new Set((m.lideraEquipos ?? []).map((c) => c.trim().toLowerCase()))].filter((c) => validas.has(c));
 }
 
 /** Los miembros activos de cada equipo, agrupados por clave. Quien arma la lista ya sacó las bajas y la cuenta de prueba. */

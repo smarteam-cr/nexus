@@ -84,7 +84,7 @@ export const TIPOS_DE_TAREA = ["puesto", "apoyo"] as const;
 export type TipoDeTarea = (typeof TIPOS_DE_TAREA)[number];
 
 /** Cómo entró la tarea. No cambia nunca: es la métrica «cómo entran». */
-export const ORIGENES = ["mano", "pedido", "reunion", "notas", "chat", "plantilla", "hubspot"] as const;
+export const ORIGENES = ["mano", "pedido", "reunion", "notas", "chat", "plantilla", "hubspot", "paso"] as const;
 export type OrigenDeTarea = (typeof ORIGENES)[number];
 export const NOMBRE_DEL_ORIGEN: Record<OrigenDeTarea, string> = {
   mano: "A mano",
@@ -94,7 +94,16 @@ export const NOMBRE_DEL_ORIGEN: Record<OrigenDeTarea, string> = {
   chat: "Del asistente",
   plantilla: "De una plantilla",
   hubspot: "De HubSpot",
+  paso: "Siguiente paso",
 };
+
+/** Quién se comprometió (fase 0.2): hasta el 2026-10-16 vivía en el evento con que nació la tarea. */
+export const LADOS = ["smarteam", "cliente"] as const;
+export type LadoDeTarea = (typeof LADOS)[number];
+
+/** Una acción o una reunión planeada (fase 0.2): la reunión lleva invitados y queda unida a la que se hizo. */
+export const CLASES_DE_TAREA = ["accion", "reunion"] as const;
+export type ClaseDeTarea = (typeof CLASES_DE_TAREA)[number];
 
 /* ── Agenda ───────────────────────────────────────────────────────────────────────── */
 
@@ -182,7 +191,7 @@ export function columnaDelTablero(estado: string): ColumnaDelTablero | null {
 export interface Quien {
   email: string;
   esSuperAdmin: boolean;
-  /** Los equipos (claves) que lidera: tiene `tareas.manage` y es miembro. */
+  /** Los sprints (claves) que lidera: `TeamMember.lideraEquipos`. */
   lidera: readonly string[];
 }
 

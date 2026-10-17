@@ -39,6 +39,7 @@ const SELECT_RELACIONADA = {
   equipo: true,
   privada: true,
   archivadaAt: true,
+  clientId: true,
   proyecto: { select: { espacio: { select: ESPACIO_SELECT } } },
 } as const;
 
@@ -157,6 +158,7 @@ export async function prepararSerializacion(ctx: ContextoDeTareas, clientes: Cli
           equipo: true,
           privada: true,
           archivadaAt: true,
+          clientId: true,
           proyecto: { select: { espacio: { select: ESPACIO_SELECT } } },
           _count: { select: { resultados: { where: { resultado: "pasa", decididoPor: { not: "sistema" } } } } },
         },

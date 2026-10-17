@@ -2,9 +2,10 @@
  * POST /api/siguiente-paso   body: { objeto, objetoId, equipo, que, fecha?, responsableEmail? }
  *
  * Fija el siguiente paso de un equipo sobre una empresa, un negocio o un proyecto (2026-10-15, etapa 2 de
- * docs/mi-dia-plan.md). Se guarda en Nexus y se escribe en HubSpot; si HubSpot no responde, queda pendiente y el job
- * `negocios-abiertos` lo reintenta. Pide un usuario interno; el equipo tiene que ser el suyo y el objeto, uno al que
- * tiene acceso (lib/siguiente-paso/escritura-server.ts).
+ * docs/mi-dia-plan.md). Desde el 2026-10-16 (fase 0.2) es una TAREA del sprint del equipo: si el equipo ya tiene uno,
+ * se cambia esa tarea; si no, se crea. Después se escribe en HubSpot; si HubSpot no responde, queda pendiente y el job
+ * `negocios-abiertos` lo reintenta. Pide un usuario interno; el equipo tiene que ser el suyo (o uno que lidera) y el
+ * objeto, uno al que tiene acceso (lib/siguiente-paso/escritura-server.ts).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardInternalUser } from "@/lib/auth/api-guards";
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const p = await fijarSiguientePaso(guard.teamMember, { ...parsed.data, fecha: parsed.data.fecha ?? null });
-    return NextResponse.json({ ok: true, id: p.id, hubspotEstado: p.hubspotEstado, hubspotError: p.hubspotError });
+    return NextResponse.json({ ok: true, id: p.id, numero: p.numero, estado: p.estado, hubspotEstado: p.hubspotEstado, hubspotError: p.hubspotError });
   } catch (e) {
     if (e instanceof ErrorDelPaso) return NextResponse.json({ error: e.message }, { status: e.status });
     if (esquemaDesactualizado(e)) return NextResponse.json({ error: "Falta aplicar scripts/sql/2026-10-15-siguiente-paso.sql." }, { status: 503 });

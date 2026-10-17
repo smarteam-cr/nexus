@@ -6,7 +6,11 @@
  *   - lo de tu sprint (`equipo` ∈ tus equipos), incluido «Por asignar», MENOS las privadas de otros y las de proyectos
  *     de espacios libres «solo miembros» donde no estás (esas cuentan como horas, sin título: filas opacas);
  *   - lo de los proyectos de los espacios que ves: el de tu equipo, los libres donde eres miembro y los libres que ve
- *     todo Smarteam.
+ *     todo Smarteam;
+ *   - lo de las CUENTAS que ves (2026-10-16, decisión 9 de docs/nexus-sistema-de-trabajo-plan.md): quien tiene acceso a
+ *     un cliente ve todas sus tareas, de cualquier equipo, menos las «Solo para mí» y las de un espacio privado donde no
+ *     está. Así Customer Success sabe todo lo que se le hace a un cliente. Las empresas de Smarteam (INTERNO) no cuentan:
+ *     el trabajo interno se sigue viendo por su sprint. La frase citada de una reunión sigue con su regla (serializar.ts).
  * El Super Admin ve todo. Pero el contexto del chat y «Para ti» se recortan igual a lo suyo: si no, le llegaría toda
  * la casa (eso lo decide quien llama, con `soloLoMio`).
  *
@@ -16,9 +20,22 @@
 import type { Prisma } from "@prisma/client";
 import type { Quien } from "./estados";
 
+/** Las cuentas cuyas tareas ve una persona (lib/tareas/clientes.ts › cuentasParaVerTareas), sin las de Smarteam. */
+export interface CuentasQueVe {
+  ids: ReadonlySet<string>;
+}
+
 export interface QuienVe extends Quien {
   /** El sprint de casa de quien mira. */
   equipo: string;
+  /** Sin esto (un aviso a otra persona, un script), no se aplica la regla de las cuentas: ve menos, nunca más. */
+  cuentas?: CuentasQueVe | null;
+}
+
+/** La regla de las cuentas, como filtro; null si no hay ninguna. */
+function deSusCuentas(q: QuienVe): Prisma.TareaWhereInput | null {
+  if (!q.cuentas || q.cuentas.ids.size === 0) return null;
+  return { clientId: { in: [...q.cuentas.ids] } };
 }
 
 /** Los espacios que ve una persona: el de su equipo, los libres donde es miembro y los libres abiertos a todos. */
@@ -76,6 +93,7 @@ export function tareasVisiblesWhere(q: QuienVe): Prisma.TareaWhereInput {
   if (q.esSuperAdmin) return { archivadaAt: null };
   const yo = q.email.toLowerCase();
   const equipos = [...new Set([q.equipo, ...q.lidera])];
+  const cuentas = deSusCuentas(q);
   return {
     archivadaAt: null,
     OR: [
@@ -88,6 +106,7 @@ export function tareasVisiblesWhere(q: QuienVe): Prisma.TareaWhereInput {
         NOT: deEspacioPrivadoAjeno(yo),
       },
       { privada: false, proyecto: { espacio: espaciosVisiblesWhere(q) } },
+      ...(cuentas ? [{ ...cuentas, privada: false, NOT: deEspacioPrivadoAjeno(yo) }] : []),
     ],
   };
 }
@@ -122,6 +141,8 @@ export function veLaTarea(
     equipo: string | null;
     privada: boolean;
     archivadaAt: Date | null;
+    /** Sin el campo, no se aplica la regla de las cuentas (ve menos, nunca más). */
+    clientId?: string | null;
     espacio?: { tipo: string; visibilidad: string; equipo: string | null; miembros: readonly string[] } | null;
   },
   q: QuienVe,
@@ -138,5 +159,6 @@ export function veLaTarea(
     if (t.espacio.tipo === "equipo" && t.espacio.equipo && equipos.has(t.espacio.equipo)) return true;
     if (t.espacio.tipo === "libre" && (t.espacio.visibilidad === "todos" || t.espacio.miembros.includes(yo))) return true;
   }
+  if (t.clientId && q.cuentas?.ids.has(t.clientId) && !espacioPrivadoAjeno) return true;
   return false;
 }

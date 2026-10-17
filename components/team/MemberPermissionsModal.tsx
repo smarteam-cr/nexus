@@ -21,6 +21,7 @@ import PermissionMatrix from "./PermissionMatrix";
 
 import { ROLE_OPTIONS } from "./roles-ui";
 import FrentesDelMiembro from "./FrentesDelMiembro";
+import SprintsQueLidera from "./SprintsQueLidera";
 
 interface MemberBundle {
   member: {
@@ -37,6 +38,8 @@ interface MemberBundle {
     frentes: string[];
     frentesElegidos: boolean;
     esResponsableDeLaEscala: boolean;
+    /** Los sprints que lidera en Tareas (`TeamMember.lideraEquipos`). */
+    lideraEquipos: string[];
   };
   base: PermissionMap;
   overrides: PermissionMap | null;
@@ -72,6 +75,8 @@ export default function MemberPermissionsModal({ memberId, onClose, onSaved }: P
   const [overrides, setOverrides] = useState<SparseSections>({});
   /* «Lo que lleva» (2026-10-04): null = no se tocó en este modal (no se manda); "rol" = volver a lo del rol. */
   const [frentes, setFrentes] = useState<string[] | "rol" | null>(null);
+  /* «Lidera los sprints de» (2026-10-16): null = no se tocó en este modal (no se manda). */
+  const [lidera, setLidera] = useState<string[] | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -183,6 +188,7 @@ export default function MemberPermissionsModal({ memberId, onClose, onSaved }: P
           permissionOverrides: isSA || overrideCount === 0 ? null : { v: 1, sections: overrides },
           // Los frentes solo viajan si se tocaron: abrir y guardar no los marca como «elegidos a mano».
           ...(frentes === null ? {} : { frentes: frentes === "rol" ? null : frentes }),
+          ...(lidera === null ? {} : { lideraEquipos: lidera }),
         }),
       });
       toast.success("Permisos guardados.");
@@ -254,6 +260,15 @@ export default function MemberPermissionsModal({ memberId, onClose, onSaved }: P
             valor={frentes}
             onChange={setFrentes}
             permisos={permisosEfectivos}
+          />
+
+          {/* Los sprints que lidera en Tareas: tampoco es un permiso. Va para todos los roles. */}
+          <SprintsQueLidera
+            area={bundle.member.area}
+            email={bundle.member.email}
+            guardados={bundle.member.lideraEquipos}
+            valor={lidera}
+            onChange={setLidera}
           />
 
           {isSA ? (

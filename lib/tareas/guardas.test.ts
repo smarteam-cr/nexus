@@ -181,6 +181,14 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "lib/equipos/registro.test.ts": "verifica que cada sprint del registro exista en equipos.ts (puro); no lee tareas",
       "lib/mi-dia/resumen-server.ts": "el resumen antes de una reunión (etapa 4c): lo pendiente de los dos lados SOLO por lib/tareas/para-agentes.ts (sin la cita, el contexto, las notas ni lo privado)",
       "lib/uso/lectura-server.ts": "«Uso de Nexus» (etapa 4a): solo el nombre del equipo de cada persona (equipos.ts, puro); no lee tareas",
+      // La acción única (2026-10-16, fase 0.2 de docs/nexus-sistema-de-trabajo-plan.md): el siguiente paso es una tarea.
+      "lib/siguiente-paso/lectura-server.ts": "el siguiente paso de cada equipo SALE de las tareas (lib/tareas/siguiente-paso.ts: lo de la cuenta, nunca lo privado ni lo de un espacio de solo miembros)",
+      "lib/siguiente-paso/escritura-server.ts": "fijar el siguiente paso crea o cambia una tarea y «Ya se hizo» la termina, SIEMPRE por el escritor único (crearTarea, editarTarea, moverDeSemana, asignar, cambiarEstado); lo que va a HubSpot lo escribe acá",
+      "lib/siguiente-paso/copia-server.ts": "lo que alguien escribió en HubSpot como siguiente paso entra como tarea por el escritor único (crearTareaDePasoDeHubspot)",
+      // Los equipos en un solo registro (2026-10-16, fase 0.1): los sprints que lidera cada persona se eligen en Equipo.
+      "app/api/team/[id]/permissions/route.ts": "guardar los sprints que lidera una persona: solo la lista de sprints (equipos.ts, puro); no lee tareas",
+      "components/team/SprintsQueLidera.tsx": "«Lidera los sprints de» en Equipo: solo los nombres de los sprints (equipos.ts, puro); no lee tareas",
+      "app/api/siguiente-paso/personas/route.ts": "quién puede llevar el siguiente paso de cada equipo: el sprint de cada persona (equipos.ts) y lo que lidera",
       // Las tareas de HubSpot (2026-10-15, etapa 3 de docs/mi-dia-plan.md).
       "lib/tareas-hubspot/reglas.ts": "las tareas de HubSpot: solo los tipos de prioridad (puro)",
       "lib/tareas-hubspot/sync-server.ts": "la copia de las tareas de HubSpot: escribe Tareas SOLO por el escritor único (crearTareaDeHubspot, aplicarDesdeHubspot, anotarSincronizacionConHubspot); lo que va a HubSpot lo escribe acá, nunca lib/tareas",

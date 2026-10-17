@@ -230,9 +230,10 @@ export async function contextoDelChatDeTareas(
   for (const m of ctx.miembros) {
     const equipo = claveDeEquipo(m.area, m.email);
     personasPorEmail.set(m.email, { email: m.email, nombre: m.nombre, equipo, equipoNombre: nombreDelEquipo(equipo) });
-    if (equiposQueLidera(m).length) {
+    const lidera = equiposQueLidera(m);
+    if (lidera.length) {
       lideres.add(m.email);
-      equiposConLider.add(equipo);
+      for (const e of lidera) equiposConLider.add(e);
     }
   }
   const ordenPersonas = [...personasPorEmail.values()].sort((a, b) => {

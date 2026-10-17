@@ -4,7 +4,8 @@
  * (la tarjeta «Lo que dejó esta reunión», lib/seguimiento) y el siguiente paso de tu equipo sobre la cuenta. Solo lee.
  *
  * El siguiente paso que se propone sale de lo que se comprometió Smarteam en la reunión: la primera de TUS tareas
- * propuestas de esa reunión. No hay IA nueva: es lo mismo que ya leyó la lectura de la reunión.
+ * propuestas de esa reunión. No hay IA nueva: es lo mismo que ya leyó la lectura de la reunión. Desde el 2026-10-16
+ * (fase 0.2) el siguiente paso es una tarea: «Usar como siguiente paso» USA esa propuesta (no crea otra).
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
@@ -38,8 +39,8 @@ export interface DespuesDeLaReunion {
   equipo: EquipoDelSiguientePaso | null;
   /** El siguiente paso vigente de tu equipo sobre la cuenta. */
   paso: SiguientePasoVisto | null;
-  /** Lo que se propone como siguiente paso: la primera de tus tareas propuestas en la reunión. */
-  sugerencia: string | null;
+  /** Lo que se propone como siguiente paso: la primera de tus tareas propuestas en la reunión (se usa esa tarea). */
+  sugerencia: { id: string; version: number; numero: number; titulo: string } | null;
   /** La nota para HubSpot sin decidir (etapa 5): el borrador que armó Nexus con lo acordado. */
   notaParaHubspot: string | null;
 }
@@ -83,7 +84,9 @@ export async function despuesDeTusReuniones(user: AppUserWithTeamMember, rol: st
       usarTodoVacio: !plan.minuta && plan.pedidos.length === 0 && plan.tareas.length === 0 && plan.novedades.length === 0,
       equipo,
       paso: null,
-      sugerencia: tareasPendientes[0]?.titulo ?? null,
+      sugerencia: tareasPendientes[0]
+        ? { id: tareasPendientes[0].id, version: tareasPendientes[0].version, numero: tareasPendientes[0].numero, titulo: tareasPendientes[0].titulo }
+        : null,
       notaParaHubspot: t.secciones.notaParaHubspot?.estado === "pendiente" ? t.secciones.notaParaHubspot.sugerida : null,
     });
   }

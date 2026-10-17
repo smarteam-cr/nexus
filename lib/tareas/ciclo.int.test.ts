@@ -41,8 +41,8 @@ async function equipo() {
   await prisma.teamMember.createMany({
     data: [
       { name: "Lidia Flores", email: LIDIA, roleEnum: "MARKETING", area: "Marketing" },
-      // La líder del sprint: `tareas.manage` en su override.
-      { name: "Alejandra Ortega", email: ALE, roleEnum: "MARKETING", area: "Marketing", permissionOverrides: { v: 1, sections: { tareas: { manage: true } } } },
+      // La líder del sprint: `lideraEquipos`.
+      { name: "Alejandra Ortega", email: ALE, roleEnum: "MARKETING", area: "Marketing", lideraEquipos: ["marketing"] },
       { name: "Elías González", email: ELIAS, roleEnum: "SUPER_ADMIN", area: "Marketing" },
       { name: "Ana CSE", email: CSE, roleEnum: "CSE", area: "CSE" },
     ],

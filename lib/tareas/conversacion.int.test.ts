@@ -33,7 +33,7 @@ async function equipo() {
   await prisma.teamMember.createMany({
     data: [
       { name: "Lidia Flores", email: LIDIA, roleEnum: "MARKETING", area: "Marketing" },
-      { name: "Alejandra Ortega", email: ALE, roleEnum: "MARKETING", area: "Marketing", permissionOverrides: { v: 1, sections: { tareas: { manage: true } } } },
+      { name: "Alejandra Ortega", email: ALE, roleEnum: "MARKETING", area: "Marketing", lideraEquipos: ["marketing"] },
     ],
   });
   const tms = await prisma.teamMember.findMany();

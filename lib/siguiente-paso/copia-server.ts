@@ -8,12 +8,21 @@
  * paso nuevo con fuente «hubspot», y lo borrado allá se da por hecho.
  *
  * ⚠ Los proyectos (0-970) no se leen todavía: lo que se cambie en el proyecto de HubSpot no vuelve. Se escribe igual.
+ *
+ * Desde el 2026-10-16 (fase 0.2) el siguiente paso es una tarea: lo nuevo que alguien escribió en HubSpot entra como
+ * TAREA del sprint de ese equipo (crearTareaDePasoDeHubspot, el escritor único de Tareas), para su dueño de HubSpot si
+ * es de ese sprint y, si no, en «Por asignar». La copia recuerda esa tarea. Lo que se borró allá se marca en la copia y
+ * la tarea no se toca: la próxima vez que la tarea cambie, se vuelve a escribir.
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { EQUIPOS_DEL_SIGUIENTE_PASO } from "./propiedades";
-import { decidirImportacion, leerDeHubspot, type ObjetoDelPaso, type UltimoPaso } from "./reglas";
+import { decidirImportacion, leerDeHubspot, NOMBRE_DEL_EQUIPO, type ObjetoDelPaso, type UltimoPaso } from "./reglas";
+import { SPRINT_DEL_PASO } from "./desde-tareas";
+import { miembrosActivos } from "@/lib/tareas/servidor";
+import { claveDeEquipo } from "@/lib/tareas/equipos";
+import { crearTareaDePasoDeHubspot } from "@/lib/tareas/mutaciones";
 
 export interface EntradaDeHubspot {
   objeto: ObjetoDelPaso;
@@ -59,6 +68,13 @@ export async function copiarPasosDeHubspot(
   }
 
   const ahora = new Date();
+  const miembros = await miembrosActivos();
+  const sprintDe = new Map(miembros.map((m) => [m.email, claveDeEquipo(m.area, m.email)]));
+  // El negocio de HubSpot de cada negocio de Nexus (para ligar la tarea).
+  const idsNegocio = entradas.filter((e) => e.objeto === "negocio").map((e) => e.objetoId);
+  const dealDe = new Map(
+    idsNegocio.length ? (await prisma.negocioAbierto.findMany({ where: { id: { in: idsNegocio } }, select: { id: true, hubspotDealId: true } })).map((n) => [n.id, n.hubspotDealId]) : [],
+  );
   for (const e of entradas) {
     for (const { clave: equipo } of EQUIPOS_DEL_SIGUIENTE_PASO) {
       const f = ultimo.get(`${e.objeto}:${e.objetoId}:${equipo}`) ?? null;
@@ -91,39 +107,55 @@ export async function copiarPasosDeHubspot(
 
       res.nuevos++;
       if (opciones.dryRun) continue;
-      await prisma
-        .$transaction(async (tx) => {
-          if (f && f.estado === "vigente") {
-            const r = await tx.siguientePaso.updateMany({
-              where: { id: f.id, estado: "vigente", updatedAt: f.updatedAt },
-              data: { estado: "reemplazado", cerradoAt: ahora, cerradoPor: "hubspot" },
-            });
-            if (r.count === 0) throw new Error("cambió en Nexus mientras tanto");
-          }
-          await tx.siguientePaso.create({
-            data: {
-              objeto: e.objeto,
-              objetoId: e.objetoId,
-              equipo,
-              que: enHubspot!.que,
-              fecha: enHubspot!.fecha ? new Date(`${enHubspot!.fecha}T00:00:00.000Z`) : null,
-              responsableOwnerId: enHubspot!.responsableOwnerId,
-              responsableEmail: correoDe(enHubspot!.responsableOwnerId),
-              escritoPor: "hubspot",
-              fuente: "hubspot",
-              clientId: e.clientId,
-              hubspotObjectType: e.hubspotObjectType,
-              hubspotObjectId: e.hubspotObjectId,
-              hubspotEstado: "escrito",
-              hubspotEscritoAt: leidoAt,
-            },
-          });
-        })
-        .catch(() => {
-          // Otro escritor llegó primero (una persona en Nexus, o el índice de un solo vigente): la próxima copia vuelve a
-          // mirar con lo que haya.
-          res.nuevos--;
+      const sprint = SPRINT_DEL_PASO[equipo];
+      const dueno = correoDe(enHubspot!.responsableOwnerId);
+      const responsableEmail = dueno && sprintDe.get(dueno) === sprint ? dueno : null;
+      // Primero se suelta lo vigente (si mientras tanto alguien lo cambió en Nexus, no se toca nada); después la tarea.
+      if (f && f.estado === "vigente") {
+        const r = await prisma.siguientePaso.updateMany({
+          where: { id: f.id, estado: "vigente", updatedAt: f.updatedAt },
+          data: { estado: "reemplazado", cerradoAt: ahora, cerradoPor: "hubspot" },
         });
+        if (r.count === 0) {
+          res.nuevos--;
+          continue;
+        }
+      }
+      const tarea = await crearTareaDePasoDeHubspot(
+        {
+          titulo: enHubspot!.que,
+          venceEl: enHubspot!.fecha,
+          responsableEmail,
+          equipo: sprint,
+          nombreDelEquipo: NOMBRE_DEL_EQUIPO[equipo],
+          clientId: e.clientId,
+          projectId: e.objeto === "proyecto" ? e.objetoId : null,
+          hubspotDealId: e.objeto === "negocio" ? (dealDe.get(e.objetoId) ?? e.hubspotObjectId) : null,
+        },
+        ahora,
+      );
+      await prisma.siguientePaso
+        .create({
+          data: {
+            objeto: e.objeto,
+            objetoId: e.objetoId,
+            equipo,
+            que: enHubspot!.que,
+            fecha: enHubspot!.fecha ? new Date(`${enHubspot!.fecha}T00:00:00.000Z`) : null,
+            responsableOwnerId: enHubspot!.responsableOwnerId,
+            responsableEmail,
+            escritoPor: "hubspot",
+            fuente: "hubspot",
+            tareaId: tarea.id,
+            clientId: e.clientId,
+            hubspotObjectType: e.hubspotObjectType,
+            hubspotObjectId: e.hubspotObjectId,
+            hubspotEstado: "escrito",
+            hubspotEscritoAt: leidoAt,
+          },
+        })
+        // Otro escritor llegó primero (el índice de un solo vigente): la tarea queda, y la próxima copia vuelve a mirar.
+        .catch(() => undefined);
     }
   }
   return res;

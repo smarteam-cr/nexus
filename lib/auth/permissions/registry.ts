@@ -332,14 +332,15 @@ export const PERMISSION_SECTIONS = [
     actions: [{ key: "read", label: "Ver el aguinaldo de cada persona", enforced: true }],
   },
   /* Tareas internas (docs/tareas-plan.md §11). Lo propio no lleva celda: anotar, sugerir, decidir lo tuyo, revisar tu
-     semana y leer una reunión son de todo interno. `manage` hace LÍDER de un sprint: asignar directo, repartir «Por
-     asignar» y marcar en la retro las tareas de su equipo. Se da a una PERSONA (su override en /team), nunca a un rol, y
-     vale solo en su equipo (lib/tareas/equipos.ts). */
+     semana y leer una reunión son de todo interno. ⚠ RETIRADA el 2026-10-16 (fase 0.1 de
+     docs/nexus-sistema-de-trabajo-plan.md): el líder de un sprint ya no es un permiso sino un dato,
+     `TeamMember.lideraEquipos`, que se elige en Equipo y puede ser de más de un sprint. Nadie tenía la celda. Queda
+     declarada y oculta (`enforced: false`) para que un override viejo se siga leyendo sin error. */
   {
     key: "tareas",
     label: "Tareas internas (líder del sprint de su equipo)",
     soloPorPersona: true,
-    actions: [{ key: "manage", label: "Liderar el sprint de su equipo: asignar, repartir y revisar con el equipo", enforced: true }],
+    actions: [{ key: "manage", label: "Liderar el sprint de su equipo (retirada: se elige en «Lidera los sprints de»)", enforced: false }],
   },
   {
     key: "conocimientos",

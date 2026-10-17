@@ -214,6 +214,13 @@ export interface NuevaTarea {
   privada?: boolean;
   seccion?: string | null;
   etiquetas?: string[];
+  /** El negocio y el contacto de HubSpot (ids externos), fase 0.2. */
+  hubspotDealId?: string | null;
+  hubspotContactId?: string | null;
+  /** Quién se comprometió. Sin esto, Smarteam. */
+  lado?: "smarteam" | "cliente";
+  /** «paso» = la escribió alguien como el siguiente paso de su equipo (lib/siguiente-paso). */
+  origen?: "paso";
 }
 
 export interface TareaCreada {
@@ -297,7 +304,10 @@ export async function crearTarea(ctx: ContextoDeTareas, clientes: ClientesQueVes
     proyectoId: para.proyectoId,
     clientId: para.clientId,
     projectId: para.projectId,
-    origen: deOtraPersona || n.paraEquipo ? "pedido" : "mano",
+    hubspotDealId: n.hubspotDealId?.trim() || null,
+    hubspotContactId: n.hubspotContactId?.trim() || null,
+    lado: n.lado ?? "smarteam",
+    origen: n.origen ?? (deOtraPersona || n.paraEquipo ? "pedido" : "mano"),
     creadaPorEmail: yo,
     pedidaPorEmail: deOtraPersona || n.paraEquipo ? yo : null,
     pedidaPorEquipo: deOtroEquipo ? ctx.equipo : null,
@@ -1998,6 +2008,7 @@ export async function escribirPropuestasDeLectura(
         clientId: p.clientId,
         projectId: p.projectId,
         proyectoId: p.proyectoId,
+        lado: p.sugerido.lado === "cliente" ? "cliente" : "smarteam",
         origen: "reunion",
         creadaPorEmail: null,
         pedidaPorEmail: p.pedidaPorEmail,
@@ -2573,6 +2584,56 @@ export async function crearTareaDeHubspot(n: TareaDesdeHubspot, ahora = new Date
     if (esUnicoDuplicado(e)) return null;
     throw e;
   }
+}
+
+/** Un siguiente paso que alguien escribió en HubSpot (`siguiente_paso_<equipo>`), fase 0.2. */
+export interface PasoDesdeHubspot {
+  titulo: string;
+  venceEl: string | null;
+  /** El dueño de HubSpot, si es del sprint del equipo. Sin él, va a «Por asignar» del sprint. */
+  responsableEmail: string | null;
+  /** El sprint del equipo del paso (cs, desarrollo, ventas). */
+  equipo: string;
+  nombreDelEquipo: string;
+  clientId: string | null;
+  projectId: string | null;
+  hubspotDealId: string | null;
+}
+
+/**
+ * Lo que alguien escribió en HubSpot como siguiente paso entra como TAREA del sprint de ese equipo: el siguiente paso
+ * es una tarea (DECISIONS «Nexus, el sistema de trabajo de cada cuenta»). Pendiente, no propuesta: ya lo decidió quien
+ * lo escribió allá. La semana es la de su fecha (lo vencido, esta).
+ */
+export async function crearTareaDePasoDeHubspot(n: PasoDesdeHubspot, ahora = new Date()): Promise<{ id: string }> {
+  const titulo = n.titulo.trim().slice(0, 300);
+  const semana = n.responsableEmail
+    ? await semanaDestino(prisma, n.responsableEmail, n.venceEl ? lunesDeFecha(n.venceEl) : lunesDeHoy(ahora), true, ahora)
+    : null;
+  return prisma.$transaction(async (tx) => {
+    const t = await tx.tarea.create({
+      data: {
+        titulo,
+        huella: huellaDeTexto(titulo),
+        contexto: `Lo escribieron en HubSpot como el siguiente paso de ${n.nombreDelEquipo}.`,
+        estado: "pendiente",
+        prioridad: "media",
+        tipo: "puesto",
+        equipo: n.equipo,
+        responsableEmail: n.responsableEmail,
+        semana: semana ? aDate(semana) : null,
+        venceEl: n.venceEl ? aDate(n.venceEl) : null,
+        clientId: n.clientId,
+        projectId: n.projectId,
+        hubspotDealId: n.hubspotDealId,
+        origen: "paso",
+        pedidaPorTexto: "HubSpot",
+      },
+      select: { id: true },
+    });
+    await evento(tx, { tareaId: t.id, tipo: "creada", porEmail: HUBSPOT, datos: { desde: "siguiente_paso_hubspot" } });
+    return t;
+  }, OPCIONES_DE_TX);
 }
 
 export interface CambiosDesdeHubspot {

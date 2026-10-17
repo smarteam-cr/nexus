@@ -46,6 +46,7 @@ const SELECT_PARA_AGENTES = {
   titulo: true,
   venceEl: true,
   estado: true,
+  lado: true,
   eventos: {
     where: { tipo: { in: ["propuesta", "creada"] } },
     orderBy: { createdAt: "asc" },
@@ -82,10 +83,12 @@ export const ABIERTAS_PARA_AGENTES = {
 
 const ESTADO_PARA_AGENTE: Record<string, EstadoParaAgente> = { propuesta: "sin decidir", pendiente: "pendiente", en_curso: "en curso" };
 
-/** PURO: una fila a lo que lee el agente. El lado sale del evento con que nació (`lado` de la lectura de seguimiento). */
+/** PURO: una fila a lo que lee el agente. El lado sale de su columna (o, en lo de antes, del evento con que nació). */
 export function aTareaParaAgente(f: FilaParaAgente): TareaParaAgente {
+  // El lado vive en su columna desde el 2026-10-16 (fase 0.2); lo de antes, en el evento con que nació.
   const datos = f.eventos[0]?.datos;
-  const lado = datos && typeof datos === "object" && !Array.isArray(datos) && (datos as Record<string, unknown>).lado === "cliente" ? "cliente" : "smarteam";
+  const delEvento = datos && typeof datos === "object" && !Array.isArray(datos) && (datos as Record<string, unknown>).lado === "cliente";
+  const lado = f.lado === "cliente" || delEvento ? "cliente" : "smarteam";
   const titulo = f.titulo.trim();
   return {
     titulo: titulo.length > TOPE_DEL_TITULO ? `${titulo.slice(0, TOPE_DEL_TITULO - 1).trimEnd()}…` : titulo,

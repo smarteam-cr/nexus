@@ -8,12 +8,18 @@
  *   · el de la empresa es el de la cuenta entera: sirve cuando hay varios proyectos y para retomar una cuenta sin nada
  *     abierto (un excliente);
  *   · cada persona escribe el de su equipo. `hs_next_step` de HubSpot solo se ofrece como sugerencia.
+ *
+ * ⚠ Desde el 2026-10-16 (fase 0.2 de docs/nexus-sistema-de-trabajo-plan.md) el siguiente paso ES UNA TAREA: la próxima
+ * abierta con fecha del sprint del equipo (desde-tareas.ts). `SiguientePaso` es la copia de lo que está escrito en
+ * HubSpot, con la tarea de la que salió.
  */
 import { EQUIPOS_DEL_SIGUIENTE_PASO, nombresDelEquipo, type EquipoDelSiguientePaso } from "./propiedades";
 import { siguientesPasosDelRol } from "@/lib/equipos/registro";
+import { SPRINT_DEL_PASO } from "./desde-tareas";
 
 export type ObjetoDelPaso = "empresa" | "negocio" | "proyecto";
-export type FuenteDelPaso = "persona" | "chat" | "reunion" | "hubspot";
+/** `tarea` = la copia que Nexus escribió en HubSpot desde una tarea (fase 0.2). */
+export type FuenteDelPaso = "persona" | "chat" | "reunion" | "hubspot" | "tarea";
 export type EstadoDelPaso = "vigente" | "hecho" | "reemplazado";
 export type EstadoEnHubspot = "pendiente" | "escrito" | "error" | "sin_hubspot";
 
@@ -36,9 +42,13 @@ export const NOMBRE_DEL_EQUIPO: Record<EquipoDelSiguientePaso, string> = Object.
   EQUIPOS_DEL_SIGUIENTE_PASO.map((e) => [e.clave, e.etiqueta]),
 ) as Record<EquipoDelSiguientePaso, string>;
 
-/** Un siguiente paso como lo ve la pantalla. */
+/** Un siguiente paso como lo ve la pantalla. Desde el 2026-10-16 es una tarea: `id` es el de la tarea. */
 export interface SiguientePasoVisto {
   id: string;
+  /** «T-12». */
+  tareaNumero?: number;
+  /** La versión de la tarea (para cambiarla desde el diálogo). */
+  tareaVersion?: number;
   objeto: ObjetoDelPaso;
   objetoId: string;
   equipo: EquipoDelSiguientePaso;
@@ -76,12 +86,14 @@ export interface PasosDeLaCuenta {
 }
 
 /**
- * Los equipos cuyo siguiente paso puede escribir una persona: el suyo. Dirección escribe cualquiera (Marco vende).
- * La CSL y el CSE escriben el de CS. Marketing, Finanzas y el resto, ninguno. Sale del registro de equipos
- * (lib/equipos/registro.ts, etapa 4c).
+ * Los equipos cuyo siguiente paso puede escribir una persona: el suyo y los de los sprints que lidera (Alex lidera CS y
+ * Desarrollo, fase 0.1). Dirección escribe cualquiera (Marco vende). La CSL y el CSE escriben el de CS. Marketing,
+ * Finanzas y el resto, ninguno. Sale del registro de equipos (lib/equipos/registro.ts, etapa 4c).
  */
-export function equiposQueEscribe(rol: string | null | undefined): EquipoDelSiguientePaso[] {
-  return siguientesPasosDelRol(rol);
+export function equiposQueEscribe(rol: string | null | undefined, lidera: readonly string[] = []): EquipoDelSiguientePaso[] {
+  const delRol = siguientesPasosDelRol(rol);
+  const liderados = EQUIPOS_DEL_SIGUIENTE_PASO.map((e) => e.clave).filter((e) => lidera.includes(SPRINT_DEL_PASO[e]));
+  return EQUIPOS_DEL_SIGUIENTE_PASO.map((e) => e.clave).filter((e) => delRol.includes(e) || liderados.includes(e));
 }
 
 /** El equipo con el que abre el diálogo: el de la persona; dirección, Ventas. */

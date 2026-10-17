@@ -1,7 +1,7 @@
 /**
- * POST /api/siguiente-paso/[id]/hecho — da por hecho un siguiente paso vigente (2026-10-15). Lo borra de HubSpot (las
- * tres propiedades del equipo quedan vacías) y la historia queda en Nexus. Lo puede quien lo lleva o alguien de su
- * equipo, con acceso a la cuenta.
+ * POST /api/siguiente-paso/[id]/hecho — «Ya se hizo» (2026-10-15). Desde el 2026-10-16 (fase 0.2) `id` es el de la TAREA
+ * que es el siguiente paso: queda hecha, con las reglas de Tareas (quién puede terminarla), y HubSpot se pone al día con
+ * la tarea que sigue o, si no hay, las propiedades del equipo quedan vacías.
  */
 import { NextResponse } from "next/server";
 import { guardInternalUser } from "@/lib/auth/api-guards";

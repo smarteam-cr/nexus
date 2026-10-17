@@ -11,6 +11,7 @@
  * Se calcula UNA vez por pedido (el serializador la recibe hecha).
  */
 import "server-only";
+import { cache } from "react";
 import { prisma } from "@/lib/db/prisma";
 import type { TeamMember } from "@prisma/client";
 import { can } from "@/lib/auth/permissions/engine";
@@ -36,7 +37,40 @@ export interface ClientesQueVes {
 
 type TmParaAcceso = Pick<TeamMember, "id" | "email" | "roleEnum" | "permissionOverrides" | "canViewAllClients" | "canViewAllExpiresAt">;
 
-export async function clientesQueVesParaTareas(tm: TmParaAcceso): Promise<ClientesQueVes> {
+/** Una vez por pedido y por persona: las opciones, la visibilidad y el serializador la piden en el mismo pedido. */
+const calcularPorPedido = cache(
+  async (id: string, email: string, roleEnum: string, overrides: string, canViewAllClients: boolean, expira: string): Promise<ClientesQueVes> =>
+    calcular({
+      id,
+      email,
+      roleEnum: roleEnum as TeamMember["roleEnum"],
+      permissionOverrides: overrides ? (JSON.parse(overrides) as TeamMember["permissionOverrides"]) : null,
+      canViewAllClients,
+      canViewAllExpiresAt: expira ? new Date(expira) : null,
+    }),
+);
+
+export function clientesQueVesParaTareas(tm: TmParaAcceso): Promise<ClientesQueVes> {
+  return calcularPorPedido(
+    tm.id,
+    tm.email,
+    tm.roleEnum,
+    tm.permissionOverrides == null ? "" : JSON.stringify(tm.permissionOverrides),
+    tm.canViewAllClients,
+    tm.canViewAllExpiresAt ? tm.canViewAllExpiresAt.toISOString() : "",
+  );
+}
+
+/**
+ * Las cuentas cuyas tareas ve (lib/tareas/visibilidad.ts, la regla de las cuentas): las que ve, SIN las de Smarteam.
+ * El trabajo interno se sigue viendo por su sprint: si las empresas INTERNO contaran, todos verían todo lo interno.
+ */
+export async function cuentasParaVerTareas(tm: TmParaAcceso): Promise<{ ids: ReadonlySet<string> }> {
+  const c = await clientesQueVesParaTareas(tm);
+  return { ids: new Set([...c.porId.values()].filter((e) => e.kind !== "INTERNO").map((e) => e.id)) };
+}
+
+async function calcular(tm: TmParaAcceso): Promise<ClientesQueVes> {
   const todas = (
     await prisma.client.findMany({ select: { id: true, name: true, kind: true }, orderBy: { name: "asc" } })
   ).filter((c) => !isTestClient(c.name));
