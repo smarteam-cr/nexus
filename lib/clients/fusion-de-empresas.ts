@@ -95,6 +95,10 @@ export const SE_MUDAN = [
      (todo hecho es del cliente de su reunión) sigue en verde. Sin único con la ficha: dos hechos iguales de las dos
      fichas conviven (la huella no es única). */
   ["hechoDeReunion", "clientId"],
+  /* El chat de Nexus sobre la cuenta (2026-10-17, ficha H): `onDelete: Cascade`, así que sin mudarlas se BORRARÍAN las
+     conversaciones de la absorbida. Sin único: si la misma persona tenía un hilo en las dos fichas, conviven y sigue el
+     más reciente. */
+  ["hiloDeChat", "clientId"],
   /* Sin relación en el esquema: la base no las cascadea ni las protege (lib/db/punteros-al-borrar.test.ts). */
   ["firefliesSession", "resolvedClientId"],
   ["firefliesSession", "manualClientId"],

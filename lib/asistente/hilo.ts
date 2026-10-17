@@ -62,11 +62,19 @@ export type DuenoDeDocumento =
  * que un dueño personal no puede llegar por error a `contextoDeDocumento` — donde, sin ninguno de los
  * tres ids, el `findFirst({ isActive: true })` traería el canvas de una propuesta cualquiera.
  */
-export type Dueno = DuenoDeDocumento | { personal: true };
+export type Dueno = DuenoDeDocumento | { personal: true } | DuenoDeCuenta;
+
+/**
+ * ⭐ EL QUINTO DUEÑO (2026-10-17, ficha H): el chat de NEXUS (lib/nexus-chat) conversa sobre UNA empresa — un hilo por
+ * cuenta y por persona, con la pieza «nexus». Como el personal, no es un documento: el handler genérico no lo recibe, y
+ * leer un hilo de cuenta por id exige el correo.
+ */
+export type DuenoDeCuenta = { clientId: string };
 
 /** El `where` de Prisma para ese dueño, con los otros dos en null (los tres, si es personal). */
 export function whereDelDueno(d: Dueno) {
   if ("personal" in d) return { projectId: null, businessCaseId: null, roleId: null };
+  if ("clientId" in d) return { projectId: null, businessCaseId: null, roleId: null, clientId: d.clientId };
   return {
     projectId: "projectId" in d ? d.projectId : null,
     businessCaseId: "businessCaseId" in d ? d.businessCaseId : null,
@@ -96,6 +104,8 @@ export interface HiloConTurnos {
   projectId: string | null;
   businessCaseId: string | null;
   roleId: string | null;
+  /** La cuenta del chat de Nexus (2026-10-17). Null en los demás. */
+  clientId: string | null;
   pieza: string;
   usuarioEmail: string;
   modelo: string;
@@ -261,6 +271,8 @@ export async function bloquearHiloEnTx(
  */
 export async function leerHilo(hiloId: string, dueno: Dueno, usuarioEmail?: string): Promise<HiloConTurnos | null> {
   if ("personal" in dueno && !usuarioEmail) return null;
+  /* Lo mismo con el dueño CUENTA (el chat de Nexus): el hilo es de la persona en esa cuenta. */
+  if ("clientId" in dueno && !usuarioEmail) return null;
   const hilo = await prisma.hiloDeChat.findFirst({
     where: { id: hiloId, ...whereDelDueno(dueno), ...(usuarioEmail ? { usuarioEmail } : {}) },
     include: { mensajes: TURNOS_EN_ORDEN },
@@ -290,6 +302,7 @@ type FilaConMensajes = {
   projectId: string | null;
   businessCaseId: string | null;
   roleId: string | null;
+  clientId?: string | null;
   pieza: string;
   usuarioEmail: string;
   modelo: string;
@@ -303,6 +316,7 @@ function aHiloConTurnos(hilo: FilaConMensajes): HiloConTurnos {
     projectId: hilo.projectId,
     businessCaseId: hilo.businessCaseId,
     roleId: hilo.roleId,
+    clientId: hilo.clientId ?? null,
     pieza: hilo.pieza,
     usuarioEmail: hilo.usuarioEmail,
     modelo: hilo.modelo,
