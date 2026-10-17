@@ -7,7 +7,19 @@
  *   Lee el Google Doc (Gemini Notes). La POLÍTICA de parseo vive en doc-parse.ts (pura).
  *
  * FASE 2 — Búsqueda en Drive (sesiones sin doc adjunto):
- *   Busca en Drive del impersonado archivos creados ±3 días del meet (VTT / Docs).
+ *   Busca en Drive del impersonado los archivos creados ±3 días del meet y lee SOLO los que son de
+ *   esta reunión: mismo título y misma fecha (lib/google/drive-candidatos.ts). Hasta el 2026-10-05
+ *   leía el más nuevo que tuviera las dos primeras palabras de 4+ letras del título, y así 156 de 169
+ *   reuniones se quedaron con un texto que no era el suyo (CAV con la de Honda, ICB con la de Cayalá).
+ *
+ * Cuando el texto de una reunión ya leída CAMBIA, la lectura no se queda con el texto viejo: lo decide
+ * lib/sessions/reanalizar.ts (rehacer lo que nadie tocó, o avisar).
+ *
+ * ── CUÁNDO SE LEE (2026-10-17, «que no falte ninguna reunión») ────────────────
+ * Después del FIN de la reunión más 20 minutos (`listaParaLeer`), no una hora después del inicio. Y
+ * «no había nada» en una reunión que terminó hace menos de 48 horas no sella: vuelve en 2, 4, 8 y 16
+ * horas (`datosDeEscritura` con `esperarMaterial`). Si una cuenta del equipo no tiene acceso al
+ * documento (403/404) o, buscando en Drive, no tiene nada, se prueba con otro invitado del equipo.
  *
  * ── LAS TRES REGLAS QUE ESTE ARCHIVO APRENDIÓ A GOLPES (2026-08-08) ──────────
  * 1. **Un fallo de lectura NUNCA sella.** Antes, un 429 de la API se tragaba en un catch
@@ -21,7 +33,8 @@
  *    `elegirImpersonado` (puro) cae al primer participante interno.
  * 3. **No se enriquece lo que no ocurrió.** Antes las pasadas tomaban sesiones futuras y
  *    las sellaban vacías (88/171 de Desarrollo selladas ANTES de la reunión). Ahora el
- *    where exige `date < ahora - 1h`.
+ *    where exige `date < ahora - 1h` y, desde el 2026-10-17, que haya TERMINADO hace 20
+ *    minutos (`listaParaLeer`, con la duración del evento).
  */
 
 // Import profundo a propósito, nunca la raíz "googleapis": la raíz carga los tipos de ~400 APIs y
@@ -34,24 +47,37 @@ import { DIAS_DE_FRESCURA, seguimientoPrendido } from "@/lib/lecturas/reglas";
 import { MIN_NOTAS_PARA_LEER, hechosPrendidos } from "@/lib/seguimiento/hechos/reglas";
 import { parseDocTabs, parseDocBody, MAX_TRANSCRIPT_CHARS, MIN_TRANSCRIPT_CHARS, type DocTab } from "./doc-parse";
 import { candidatosImpersonables } from "./elegir-impersonado";
+import { consultaDeDrive, elegirArchivosDeLaReunion, VENTANA_DRIVE_MS, type ArchivoDeDrive } from "./drive-candidatos";
+import { huellaDeTexto, textoCambio } from "@/lib/sessions/analisis-ajeno";
 import {
   datosDeEscritura,
+  debeEsperarMaterial,
   esReintentable,
   esperaBackoffMs,
   esErrorDeCuota,
+  listaParaLeer,
   MAX_ENRICH_ATTEMPTS,
+  probarOtraCuenta,
   type LecturaDoc,
 } from "./enrich-retry";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
-const DRIVE_SEARCH_WINDOW_DAYS = 3; // buscar ±3 días alrededor de la reunión
 /* 10 → 3 (2026-08-08): con 10 en paralelo y sin backoff, una API que ya devolvía cuota
    recibía 10 pedidos más por batch — es la mecánica exacta de la quema del 17-may. */
 const DOC_BATCH = 3;
 const DRIVE_BATCH = 3;
-/** No enriquecer reuniones que todavía no ocurrieron (o están ocurriendo). */
+/**
+ * Prefiltro de la consulta: ninguna reunión se lee antes de una hora de su inicio. El filtro de verdad es `listaParaLeer`
+ * (el FIN de la reunión más 20 minutos), que se aplica sobre lo que trae la consulta.
+ */
 const GRACIA_MS = 3_600_000;
+/* Una serie con el mismo título (la diaria, la semanal): las reuniones de alrededor dicen de cuál es cada archivo de
+   Drive. Dos ventanas, para cubrir también los archivos de los extremos. */
+const VENTANA_DE_LA_SERIE_MS = 2 * VENTANA_DRIVE_MS;
+/* Cuántos archivos se le piden a Drive: el filtro de verdad es `elegirArchivosDeLaReunion`, así que conviene traer de
+   más (con 5, una palabra común dejaba afuera el archivo correcto). */
+const ARCHIVOS_POR_BUSQUEDA = 25;
 /* Tope POR PASADA (auditoría 2026-08-08): sin `take`, el primer auto-sync después del
    rescate procesaría las ~2.300 filas reseteadas de UNA — el «50 por corrida» del script
    era ilusorio. Con tope, el drenaje se auto-regula con el cooldown de 20 min. */
@@ -74,6 +100,8 @@ interface SesionAEnriquecer {
   id: string;
   title: string;
   date: Date;
+  /** Minutos (del evento del calendario): con el inicio, dice cuándo terminó. */
+  duration: number;
   googleDocId: string | null;
   organizerEmail: string | null;
   participants: string[];
@@ -86,6 +114,7 @@ const SELECT_ENRIQUECER = {
   id: true,
   title: true,
   date: true,
+  duration: true,
   googleDocId: true,
   organizerEmail: true,
   participants: true,
@@ -165,55 +194,33 @@ async function fetchDocContent(userEmail: string, docId: string): Promise<Lectur
 // ── BÚSQUEDA EN GOOGLE DRIVE ──────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Extrae 2-3 keywords del título de la reunión para buscar en Drive. */
-function titleKeywords(title: string): string[] {
-  return title
-    .replace(/[^\w\sáéíóúüñÁÉÍÓÚÜÑ]/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length >= 4)
-    .slice(0, 3);
-}
-
 /**
  * Lee el contenido de un archivo de Drive.
- * Soporta: Google Docs (via Docs API) y VTT / texto plano (via export).
+ * Soporta: Google Docs (via Docs API, con su resumen si lo trae) y VTT / texto plano (via export).
  */
-async function readDriveFile(
-  userEmail: string,
-  fileId: string,
-  mimeType: string,
-): Promise<{ ok: true; text: string | null } | { ok: false; error: string; status: number | null }> {
+async function readDriveFile(userEmail: string, fileId: string, mimeType: string): Promise<LecturaDoc> {
   try {
-    const auth = getImpersonatedAuth(userEmail);
-
-    if (mimeType === "application/vnd.google-apps.document") {
-      const doc = await fetchDocContent(userEmail, fileId);
-      if (!doc.ok) return doc;
-      return { ok: true, text: doc.transcript };
-    }
+    if (mimeType === "application/vnd.google-apps.document") return await fetchDocContent(userEmail, fileId);
 
     // VTT, texto plano u otros → exportar como texto
-    const drive = apiDrive({ version: "v3", auth });
+    const drive = apiDrive({ version: "v3", auth: getImpersonatedAuth(userEmail) });
     const res = await drive.files.export(
       { fileId, mimeType: "text/plain" },
       { responseType: "text" },
     );
     const text = (res.data as string).trim().slice(0, MAX_TRANSCRIPT_CHARS);
-    return { ok: true, text: text || null };
+    return { ok: true, transcript: text || null, summary: null, diagnostico: null };
   } catch (err) {
     return { ok: false, error: mensajeDe(err), status: statusDe(err) };
   }
 }
 
 /**
- * Busca en Drive del impersonado transcripts o notas relacionadas con la reunión.
- * Ventana: ±DRIVE_SEARCH_WINDOW_DAYS días alrededor de la fecha.
+ * Busca en el Drive del impersonado el material de ESTA reunión. Solo se leen los archivos que
+ * `elegirArchivosDeLaReunion` reconoce como suyos (mismo título, misma fecha, no de otra reunión de
+ * la serie); si ninguno sirve, la reunión queda sin texto: nunca se cae a un archivo de otra.
  */
-async function searchDriveForTranscript(
-  userEmail: string,
-  title: string,
-  date: Date,
-): Promise<LecturaDoc> {
+async function searchDriveForTranscript(userEmail: string, s: SesionAEnriquecer, otrasFechas: Date[]): Promise<LecturaDoc> {
   const sinResultados = (motivo: string): LecturaDoc => ({
     ok: true,
     transcript: null,
@@ -221,53 +228,32 @@ async function searchDriveForTranscript(
     diagnostico: { tabsVistos: [], motivo },
   });
   try {
-    const auth = getImpersonatedAuth(userEmail);
-    const drive = apiDrive({ version: "v3", auth });
+    const query = consultaDeDrive(s.title, s.date);
+    if (!query) return sinResultados("drive_sin_keywords");
 
-    const windowStart = new Date(date);
-    windowStart.setDate(windowStart.getDate() - DRIVE_SEARCH_WINDOW_DAYS);
-    const windowEnd = new Date(date);
-    windowEnd.setDate(windowEnd.getDate() + DRIVE_SEARCH_WINDOW_DAYS);
-
-    const keywords = titleKeywords(title);
-    if (keywords.length === 0) return sinResultados("drive_sin_keywords");
-
-    // Buscar Google Docs y VTT en la ventana temporal con keywords del título.
-    // Usamos una cláusula "name contains" POR KEYWORD separada con "and", en lugar de
-    // buscar la cadena completa. Esto evita que el pipe | u otros caracteres especiales
-    // del título rompan el match (ej: "Visita Kolbi | Ventas" → keywords: Visita, Kolbi).
-    const nameClause = keywords
-      .slice(0, 2) // máximo 2 para no ser demasiado restrictivo
-      .map((k) => `name contains '${k.replace(/'/g, "\\'")}'`)
-      .join(" and ");
-
-    const query = [
-      `(mimeType='application/vnd.google-apps.document' or mimeType='text/vtt' or mimeType='text/plain')`,
-      `and (${nameClause})`,
-      `and modifiedTime >= '${windowStart.toISOString()}'`,
-      `and modifiedTime <= '${windowEnd.toISOString()}'`,
-      `and trashed = false`,
-    ].join(" ");
-
+    const drive = apiDrive({ version: "v3", auth: getImpersonatedAuth(userEmail) });
     const res = await drive.files.list({
       q: query,
       fields: "files(id, name, mimeType, createdTime)",
-      pageSize: 5,
+      pageSize: ARCHIVOS_POR_BUSQUEDA,
       orderBy: "createdTime desc",
     });
+    const archivos: ArchivoDeDrive[] = (res.data.files ?? [])
+      .filter((f) => f.id && f.name && f.mimeType)
+      .map((f) => ({ id: f.id!, name: f.name!, mimeType: f.mimeType!, createdTime: f.createdTime ?? null }));
 
-    const files = res.data.files ?? [];
-    if (files.length === 0) {
-      console.log(`[google/enrich] Drive: 0 archivos para "${title}" (keywords: ${keywords.join(", ")})`);
-      return sinResultados("drive_sin_resultados");
+    const { elegidos, descartados } = elegirArchivosDeLaReunion({ titulo: s.title, fecha: s.date, otrasFechas }, archivos);
+    if (descartados.length > 0) {
+      console.log(
+        `[google/enrich] Drive: «${s.title}» descarta ${descartados.length}: ` +
+          descartados.slice(0, 5).map((d) => `«${d.nombre}» (${d.motivo})`).join(", "),
+      );
     }
-
-    console.log(`[google/enrich] Drive: ${files.length} archivos para "${title}": ${files.map((f) => f.name).join(", ")}`);
+    if (elegidos.length === 0) return sinResultados(archivos.length === 0 ? "drive_sin_resultados" : "drive_sin_archivo_de_la_reunion");
 
     let fallo: { error: string; status: number | null } | null = null;
-    for (const file of files) {
-      if (!file.id || !file.mimeType) continue;
-      const leido = await readDriveFile(userEmail, file.id, file.mimeType);
+    for (const { archivo } of elegidos) {
+      const leido = await readDriveFile(userEmail, archivo.id, archivo.mimeType);
       if (!leido.ok) {
         // Un archivo ilegible no corta la búsqueda, pero si NINGUNO se pudo leer, el
         // resultado es un FALLO (reintentable), no un «sin contenido» definitivo.
@@ -279,9 +265,9 @@ async function searchDriveForTranscript(
          se aceptaba y se guardaba como transcript, pero INV16(c) —"ningún transcript no-nulo por
          debajo del mínimo"— lo cuenta como basura y el rescate lo vuelve a encolar. La fila
          entraba en un ciclo que no converge nunca: se re-lee, se re-acepta, se re-marca. */
-      if (leido.text && leido.text.trim().length >= MIN_TRANSCRIPT_CHARS) {
-        console.log(`[google/enrich] Drive: leyendo "${file.name}" para "${title}"`);
-        return { ok: true, transcript: leido.text, summary: null, diagnostico: null };
+      if (leido.transcript && leido.transcript.trim().length >= MIN_TRANSCRIPT_CHARS) {
+        console.log(`[google/enrich] Drive: leyendo «${archivo.name}» para «${s.title}»`);
+        return { ok: true, transcript: leido.transcript, summary: leido.summary, diagnostico: null };
       }
     }
 
@@ -292,16 +278,24 @@ async function searchDriveForTranscript(
   }
 }
 
+/** Las otras reuniones con el mismo título alrededor de esta (su serie): deciden de cuál es cada archivo. */
+async function fechasDeLaSerie(s: SesionAEnriquecer): Promise<Date[]> {
+  const otras = await prisma.firefliesSession.findMany({
+    where: {
+      id: { not: s.id },
+      title: s.title,
+      date: { gte: new Date(s.date.getTime() - VENTANA_DE_LA_SERIE_MS), lte: new Date(s.date.getTime() + VENTANA_DE_LA_SERIE_MS) },
+    },
+    select: { date: true },
+  });
+  return otras.map((o) => o.date);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ── EL NÚCLEO: leer una sesión y escribir el resultado ───────────────────────
 // Un solo camino para las dos pasadas, el reintento y el re-enrich individual —
 // tener TRES escritores fue lo que dejó divergir el sellado en primer lugar.
 // ─────────────────────────────────────────────────────────────────────────────
-
-/** ¿El fallo es de la CUENTA impersonada (borrada/offboardeada), no del documento? */
-function esFalloDeCuenta(l: LecturaDoc): boolean {
-  return !l.ok && (l.status === 401 || /invalid_grant|unauthorized_client/i.test(l.error));
-}
 
 async function leerSesion(s: SesionAEnriquecer): Promise<LecturaDoc> {
   const candidatos = candidatosImpersonables(s.organizerEmail, s.participants);
@@ -312,14 +306,18 @@ async function leerSesion(s: SesionAEnriquecer): Promise<LecturaDoc> {
   }
   /* Se itera ante un fallo de CUENTA (auditoría 2026-08-08): un ex-empleado sigue pasando
      el check de dominio, y clavarse en él sellaba la fila por tope aunque otro invitado
-     interno ACTIVO podía leer el mismo doc. Tope de 3 cuentas: más es señal de otro problema. */
+     interno ACTIVO podía leer el mismo doc. Desde el 2026-10-17 también ante un documento sin
+     acceso para esa cuenta (403/404) y, en Drive, ante una cuenta sin nada (las notas que tomó
+     otro invitado quedan en SU Drive): `probarOtraCuenta`. Tope de 3 cuentas. */
+  const buscandoEnDrive = !s.googleDocId;
+  const serie = buscandoEnDrive ? await fechasDeLaSerie(s) : [];
   let ultimo: LecturaDoc = { ok: false, error: "sin_candidatos", status: null };
   for (const impersonado of candidatos.slice(0, 3)) {
     ultimo = s.googleDocId
       ? await fetchDocContent(impersonado, s.googleDocId)
-      : await searchDriveForTranscript(impersonado, s.title, s.date);
-    if (ultimo.ok || !esFalloDeCuenta(ultimo)) return ultimo;
-    console.log(`[google/enrich] cuenta ${impersonado} no impersonable — probando la siguiente`);
+      : await searchDriveForTranscript(impersonado, s, serie);
+    if (!probarOtraCuenta(ultimo, buscandoEnDrive)) return ultimo;
+    console.log(`[google/enrich] «${s.title}»: la cuenta ${impersonado} no la pudo leer — probando la siguiente`);
   }
   return ultimo;
 }
@@ -388,13 +386,25 @@ async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProce
     }
   }
 
+  // ¿El texto nuevo reemplaza a OTRO? Se compara la huella de lo guardado (md5 en la base: la transcripción vieja no
+  // viaja) contra la del texto leído. Volver a leer lo mismo no es un cambio.
+  const huellaAntes = lectura.transcript ? await huellaDeLoGuardado(s.id) : null;
+  const cambioElTexto = textoCambio(huellaAntes, lectura.transcript);
+
+  const ahora = new Date();
+  const datos = datosDeEscritura(lectura, finalSummary ?? null, s.enrichAttempts, ahora, { esperarMaterial: debeEsperarMaterial(s, ahora) });
   await prisma.firefliesSession.update({
     where: { id: s.id },
-    data: datosDeEscritura(lectura, finalSummary ?? null, s.enrichAttempts, new Date()),
+    data: datos,
     // ⚠ Sin select, el UPDATE devuelve la transcripción y el resumen que acaba de escribir: el doble
     // de memoria por sesión, para tirarlo (incidente 2026-09-21).
     select: { id: true },
   });
+  if (!datos.enrichedAt) {
+    // Todavía no había nada y la reunión terminó hace poco: vuelve con el job de reintentos (2, 4, 8 y 16 horas).
+    console.log(`[google/enrich] … «${s.title}»: todavía sin material — se vuelve a mirar (intento ${datos.enrichAttempts}/${MAX_ENRICH_ATTEMPTS})`);
+    return { estado: "skipped", status: null };
+  }
 
   /* La lectura de la reunión (memoria de la cuenta, etapa 2): el enriquecimiento SOLO ENCOLA. La lee el job
      `seguimiento-reuniones` (lib/lecturas), con toma atómica, reintentos y presupuesto; la cola decide si corresponde
@@ -409,7 +419,13 @@ async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProce
   if (esReciente && (conTranscripcion || soloNotas)) {
     const { encolarSeguimiento, seguimientoDisponible } = await import("@/lib/lecturas/cola");
     if (seguimientoPrendido(process.env) && (await seguimientoDisponible())) {
-      await encolarSeguimiento(s.id);
+      if (cambioElTexto && lectura.transcript) {
+        // El texto cambió y la reunión quizás ya se leyó con el viejo: rehacer o avisar (lib/sessions/reanalizar.ts).
+        const { alCambiarElTexto } = await import("@/lib/sessions/reanalizar");
+        await alCambiarElTexto(s.id, huellaDeTexto(lectura.transcript));
+      } else {
+        await encolarSeguimiento(s.id);
+      }
     } else if (conTranscripcion) {
       const { postProcessSessionViejo } = await import("@/lib/sessions/post-process-viejo");
       const { conLaReunion } = await import("@/lib/ai/contexto-de-corrida");
@@ -424,6 +440,13 @@ async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProce
     return { estado: "enriched", status: null };
   }
   return { estado: "skipped", status: null };
+}
+
+/** La huella (md5) de la transcripción guardada, calculada en la base; null si no hay. */
+async function huellaDeLoGuardado(sessionId: string): Promise<string | null> {
+  const filas = await prisma.$queryRaw<Array<{ h: string | null }>>`
+    SELECT md5(transcript) AS h FROM "FirefliesSession" WHERE id = ${sessionId}`;
+  return filas[0]?.h ?? null;
 }
 
 /** El largo de las notas de Gemini (`summary.overview`): con la lectura de hechos prendida, alcanzan para encolar. */
@@ -519,8 +542,13 @@ async function correrPasadas(resultado: EnrichResult): Promise<EnrichResult> {
     take: TOPE_PASADA,
   });
 
-  console.log(`[google/enrich] Pasada 1: ${withDoc.length} sesiones con doc adjunto (tope ${TOPE_PASADA}, batches de ${DOC_BATCH})`);
-  await correrLote(withDoc, DOC_BATCH, resultado);
+  // La consulta trae lo que empezó hace más de una hora; se lee solo lo que ya terminó (`listaParaLeer`).
+  const conDoc = withDoc.filter((s) => listaParaLeer(s, new Date()));
+  console.log(
+    `[google/enrich] Pasada 1: ${conDoc.length} sesiones con doc adjunto (${withDoc.length - conDoc.length} todavía no terminaron; ` +
+      `tope ${TOPE_PASADA}, batches de ${DOC_BATCH})`,
+  );
+  await correrLote(conDoc, DOC_BATCH, resultado);
 
   // ── PASADA 2: Sesiones sin doc adjunto → buscar en Drive ─────────────────────
   const withoutDoc = await prisma.firefliesSession.findMany({
@@ -536,8 +564,9 @@ async function correrPasadas(resultado: EnrichResult): Promise<EnrichResult> {
     take: TOPE_PASADA,
   });
 
-  console.log(`[google/enrich] Pasada 2: ${withoutDoc.length} sesiones sin doc — buscando en Drive`);
-  await correrLote(withoutDoc, DRIVE_BATCH, resultado);
+  const sinDoc = withoutDoc.filter((s) => listaParaLeer(s, new Date()));
+  console.log(`[google/enrich] Pasada 2: ${sinDoc.length} sesiones sin doc — buscando en Drive`);
+  await correrLote(sinDoc, DRIVE_BATCH, resultado);
 
   console.log(
     `[google/enrich] Completado: ${resultado.enriched} con contenido, ${resultado.skipped} sin contenido, ${resultado.errors} errores`,
@@ -611,7 +640,7 @@ export async function enrichSingleSession(sessionId: string): Promise<boolean> {
     select: SELECT_ENRIQUECER,
   });
   if (!session) return false;
-  if (session.date.getTime() > Date.now() - GRACIA_MS) {
+  if (!listaParaLeer(session, new Date(), 0)) {
     // El botón manual tampoco enriquece lo que no ocurrió: sellaría una reunión futura
     // (INV16(a)) y el material ni siquiera existe todavía.
     console.log(`[google/enrich] "${session.title}" todavía no ocurrió — skip`);

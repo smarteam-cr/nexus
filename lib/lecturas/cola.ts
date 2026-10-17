@@ -111,7 +111,7 @@ export async function encolarSeguimiento(
   sessionId: string,
   ahora = new Date(),
   profundidad = 0,
-  opciones: { sinCorteDeFrescura?: boolean } = {},
+  opciones: { sinCorteDeFrescura?: boolean; porTextoNuevo?: boolean } = {},
 ): Promise<ResultadoDeEncolar> {
   try {
     if (!(await seguimientoDisponible())) return { encolada: false, motivo: "sin_sql" };
@@ -129,20 +129,60 @@ export async function encolarSeguimiento(
       // Con la lectura de hechos prendida, una reunión con solo notas también entra (memoria de la cuenta, etapa 6). Lo
       // que alguien recuerda de una reunión agregada a mano entra siempre, con su propio piso: se lee entero.
       leida.reunion.aMano === "recuerdo"
-        ? { ...opciones, leerSoloNotas: true, minNotas: MIN_RECUERDO }
-        : { ...opciones, leerSoloNotas: hechosPrendidos(process.env) },
+        ? { sinCorteDeFrescura: opciones.sinCorteDeFrescura, leerSoloNotas: true, minNotas: MIN_RECUERDO }
+        : { sinCorteDeFrescura: opciones.sinCorteDeFrescura, leerSoloNotas: hechosPrendidos(process.env) },
     );
     if (motivo) return { encolada: false, motivo };
-    return await ponerEnLaCola(leida.reunion, ahora, profundidad);
+    return await ponerEnLaCola(leida.reunion, ahora, profundidad, opciones.porTextoNuevo ? ESTADOS_POR_TEXTO_NUEVO : ESTADOS_QUE_SE_ENCOLAN);
   } catch (e) {
     console.error(`[lecturas] no se pudo encolar la reunión ${sessionId}:`, e instanceof Error ? e.message : e);
     return { encolada: false, motivo: "error" };
   }
 }
 
-async function ponerEnLaCola(reunion: ReunionParaTareas, ahora: Date, profundidad: number): Promise<ResultadoDeEncolar> {
+/**
+ * Cuando el texto de una reunión ya leída CAMBIÓ (llegó el documento correcto después de uno ajeno) y lo que dejó la
+ * lectura anterior ya se limpió (lib/sessions/reanalizar.ts), la fila vuelve a la cola aunque esté `lista`. Nunca una
+ * copia ni una que se está leyendo.
+ */
+const ESTADOS_POR_TEXTO_NUEVO: readonly EstadoDeSeguimiento[] = [...ESTADOS_QUE_SE_ENCOLAN, "lista"];
+
+/**
+ * Vuelve a encolar una reunión cuyo texto cambió, también si su lectura estaba `lista`. Solo la llama
+ * lib/sessions/reanalizar.ts DESPUÉS de borrar la minuta en borrador (si no, la lectura respondería «ya tiene minuta»).
+ * Mismas reglas que `encolarSeguimiento` (de un cliente o un prospecto, fresca, con texto). NUNCA lanza.
+ */
+export async function reencolarPorTextoNuevo(sessionId: string, ahora = new Date()): Promise<ResultadoDeEncolar> {
+  return encolarSeguimiento(sessionId, ahora, 0, { porTextoNuevo: true });
+}
+
+/**
+ * El texto guardado de la reunión era de OTRA reunión y se vació (scripts/limpiar-analisis-de-otra-reunion.ts): su
+ * lectura `lista` pasa a `sin_texto`, así cuando el enriquecimiento traiga el texto correcto la cola la vuelve a tomar.
+ * Solo las columnas `seguimiento*`. Devuelve si cambió.
+ */
+export async function marcarParaReleer(sessionId: string, ahora = new Date()): Promise<boolean> {
+  if (!(await seguimientoDisponible())) return false;
+  const r = await prisma.lecturaDeReunion.updateMany({
+    where: { sessionId, seguimientoEstado: "lista" },
+    data: {
+      seguimientoEstado: "sin_texto",
+      seguimientoDesde: null,
+      seguimientoLeidaAt: ahora,
+      seguimientoError: "El texto guardado era de otra reunión; se vuelve a leer cuando llegue el suyo.",
+    },
+  });
+  return r.count > 0;
+}
+
+async function ponerEnLaCola(
+  reunion: ReunionParaTareas,
+  ahora: Date,
+  profundidad: number,
+  desde: readonly EstadoDeSeguimiento[] = ESTADOS_QUE_SE_ENCOLAN,
+): Promise<ResultadoDeEncolar> {
   const ya = await prisma.lecturaDeReunion.findUnique({ where: { sessionId: reunion.id }, select: { id: true, estado: true, copiaDeId: true, seguimientoEstado: true } });
-  if (ya) return reencolar(ya, ahora, profundidad);
+  if (ya) return reencolar(ya, ahora, profundidad, desde);
 
   // La misma reunión en dos filas (dos series del calendario): se lee una vez, la otra queda como copia.
   const gemela = reunion.huellaTexto
@@ -158,7 +198,7 @@ async function ponerEnLaCola(reunion: ReunionParaTareas, ahora: Date, profundida
     // Otro la creó entre la lectura y la escritura: se trata como existente.
     const otra = await prisma.lecturaDeReunion.findUnique({ where: { sessionId: reunion.id }, select: { id: true, estado: true, copiaDeId: true, seguimientoEstado: true } });
     if (!otra) throw e;
-    return reencolar(otra, ahora, profundidad);
+    return reencolar(otra, ahora, profundidad, desde);
   }
 }
 
@@ -166,6 +206,7 @@ async function reencolar(
   ya: { id: string; estado: string; copiaDeId: string | null; seguimientoEstado: string | null },
   ahora: Date,
   profundidad: number,
+  desde: readonly EstadoDeSeguimiento[] = ESTADOS_QUE_SE_ENCOLAN,
 ): Promise<ResultadoDeEncolar> {
   // Una copia de Tareas es copia también para el seguimiento: se lee la original.
   if (ya.estado === "copia" && ya.copiaDeId) {
@@ -178,7 +219,7 @@ async function reencolar(
     return { encolada: false, lecturaId: ya.id, motivo: "copia" };
   }
   const r = await prisma.lecturaDeReunion.updateMany({
-    where: { id: ya.id, OR: [{ seguimientoEstado: null }, { seguimientoEstado: { in: [...ESTADOS_QUE_SE_ENCOLAN] } }] },
+    where: { id: ya.id, OR: [{ seguimientoEstado: null }, { seguimientoEstado: { in: [...desde] } }] },
     data: { seguimientoEstado: "en_espera", seguimientoDesde: ahora, seguimientoIntentos: 0, seguimientoError: null },
   });
   return r.count > 0 ? { encolada: true, lecturaId: ya.id } : { encolada: false, lecturaId: ya.id, motivo: `ya_${ya.seguimientoEstado ?? "en_cola"}` };

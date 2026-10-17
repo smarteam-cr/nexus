@@ -53,6 +53,7 @@ export function datosDeEscritura(
   summaryFinal: { overview: string } | null,
   attemptsPrevios: number,
   now: Date,
+  opts: { esperarMaterial?: boolean } = {},
 ): DatosDeEscritura {
   if (!lectura.ok) {
     /* Un fallo DETERMINÍSTICO no se reintenta: reintentar 5 veces algo que no puede cambiar
@@ -71,6 +72,18 @@ export function datosDeEscritura(
       return { enrichedAt: now, enrichAttempts: attempts, enrichError: procedencia };
     }
     return { enrichAttempts: attempts, enrichError: procedencia };
+  }
+
+  /* «Leí bien y no había NADA» en una reunión que terminó hace poco no es definitivo (2026-10-17): Gemini escribe el
+     documento minutos después de que termina la reunión, y la transcripción de Meet se crea al final. Antes se sellaba
+     al primer intento, una hora después del INICIO: toda reunión de una hora o más se leía mientras seguía en curso, y
+     sin un documento nuevo en el evento no se volvía a mirar nunca. Mientras dure la espera (`debeEsperarMaterial`),
+     cuenta como un intento y vuelve en 2, 4, 8 y 16 horas; al tope se sella con su diagnóstico, como siempre. */
+  if (opts.esperarMaterial && !lectura.transcript && !summaryFinal && attemptsPrevios + 1 < MAX_ENRICH_ATTEMPTS) {
+    return {
+      enrichAttempts: attemptsPrevios + 1,
+      enrichError: JSON.stringify({ diagnostico: lectura.diagnostico, esperandoMaterial: true, at: now.toISOString() }),
+    };
   }
 
   return {
@@ -116,4 +129,54 @@ export function esperaBackoffMs(fallosConsecutivos: number): number {
 /** ¿El status amerita backoff del lote? (cuota o servidor caído — no un 403 puntual). */
 export function esErrorDeCuota(status: number | null): boolean {
   return status === 429 || (status !== null && status >= 500);
+}
+
+/* ── Cuándo se lee una reunión (2026-10-17) ─────────────────────────────────────────────────── */
+
+/** Cuánto se espera después del FIN de la reunión antes de leerla: Gemini y Meet escriben sus archivos al terminar. */
+export const MARGEN_TRAS_EL_FIN_MS = 20 * 60_000;
+
+/** Una reunión de más de esto (un evento de día completo con Meet) se mide como si durara esto. */
+const DURACION_MAXIMA_MIN = 8 * 60;
+
+/** Mientras la reunión terminó hace menos de esto, «no había nada» no sella: el material puede estar por llegar. */
+export const VENTANA_DE_ESPERA_MS = 48 * 3_600_000;
+
+/** PURA. Cuándo terminó la reunión: el inicio más su duración (0 si no se sabe; un día completo, 8 horas). */
+export function finDeLaReunion(s: { date: Date; duration: number | null | undefined }): Date {
+  const minutos = Math.min(Math.max(s.duration ?? 0, 0), DURACION_MAXIMA_MIN);
+  return new Date(s.date.getTime() + minutos * 60_000);
+}
+
+/**
+ * PURA. ¿Ya se puede leer? Cuando pasaron `margen` minutos desde el FIN (no desde el inicio: hasta el 2026-10-17 se leía
+ * una hora después del inicio, y una reunión de una hora se leía antes de que existiera su transcripción).
+ */
+export function listaParaLeer(s: { date: Date; duration: number | null | undefined }, now: Date, margen = MARGEN_TRAS_EL_FIN_MS): boolean {
+  return now.getTime() >= finDeLaReunion(s).getTime() + margen;
+}
+
+/** PURA. ¿Todavía puede llegar el material? Terminó hace menos de `VENTANA_DE_ESPERA_MS`. */
+export function debeEsperarMaterial(s: { date: Date; duration: number | null | undefined }, now: Date): boolean {
+  return now.getTime() - finDeLaReunion(s).getTime() < VENTANA_DE_ESPERA_MS;
+}
+
+/** PURA. ¿El error de un intento fue de «todavía no había nada» (y no de una lectura que falló)? */
+export function estaEsperandoMaterial(enrichError: string | null): boolean {
+  try {
+    return (JSON.parse(enrichError ?? "{}") as { esperandoMaterial?: unknown }).esperandoMaterial === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * PURA. ¿Con este resultado conviene probar con OTRA cuenta del equipo invitada a la reunión? Una cuenta borrada (401,
+ * invalid_grant), sin acceso al documento (403 o 404: las notas de Gemini pueden estar compartidas solo con quien las
+ * tomó, o con su organizador) o, al buscar en Drive, sin nada en ESA cuenta (las notas que tomó otro invitado quedan en
+ * su Drive). Antes solo se probaba la siguiente ante una cuenta borrada: un 403 se reintentaba 5 veces con la misma.
+ */
+export function probarOtraCuenta(l: LecturaDoc, buscandoEnDrive: boolean): boolean {
+  if (!l.ok) return l.status === 401 || l.status === 403 || l.status === 404 || /invalid_grant|unauthorized_client/i.test(l.error);
+  return buscandoEnDrive && !l.transcript && !l.summary;
 }

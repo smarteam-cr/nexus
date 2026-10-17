@@ -23,8 +23,16 @@
  */
 import { elegirImpersonado } from "./elegir-impersonado";
 import { MIN_TRANSCRIPT_CHARS } from "./doc-parse";
+import { MARGEN_TRAS_EL_FIN_MS, finDeLaReunion } from "./enrich-retry";
 
-export type BucketDeRescate = "A_sellada_con_doc" | "B_sin_doc" | "C_transcript_basura";
+/*
+ *  D — SELLADAS SIN CONTENIDO ANTES DE TERMINAR (2026-10-17): con alguien del equipo invitado y el
+ *      sello antes del fin de la reunión más 20 minutos (con documento o sin él). Hasta ese día la pasada
+ *      leía una hora después del INICIO: una reunión de una hora o más se buscaba en Drive cuando la
+ *      transcripción todavía no existía y se sellaba vacía para siempre. Solo cuenta con la duración
+ *      (`duration`); sin ella no se puede saber cuándo terminó.
+ */
+export type BucketDeRescate = "A_sellada_con_doc" | "B_sin_doc" | "C_transcript_basura" | "D_sellada_antes_de_terminar";
 
 export interface FilaCandidata {
   enrichedAt: Date | null;
@@ -33,6 +41,8 @@ export interface FilaCandidata {
   organizerEmail: string | null;
   participants: readonly string[];
   date: Date;
+  /** Minutos del evento. Sin ella (filas de antes), el bucket D no se evalúa. */
+  duration?: number | null;
 }
 
 /**
@@ -59,6 +69,12 @@ export function bucketDe(f: FilaCandidata, ahora: Date): BucketDeRescate | null 
 
   if (f.enrichedAt === null) return null;
   if (f.transcript !== null) return null; // transcript sano: nada que rescatar
+
+  // D antes que A: es el subconjunto que se sabe por qué quedó vacío (se leyó antes de que terminara).
+  if (f.duration != null && f.duration > 0 && f.date.getTime() <= ahora.getTime() && elegirImpersonado(f.organizerEmail, f.participants) !== null) {
+    const listaDesde = finDeLaReunion({ date: f.date, duration: f.duration }).getTime() + MARGEN_TRAS_EL_FIN_MS;
+    if (f.enrichedAt.getTime() < listaDesde) return "D_sellada_antes_de_terminar";
+  }
 
   if (f.googleDocId !== null) return "A_sellada_con_doc";
 
