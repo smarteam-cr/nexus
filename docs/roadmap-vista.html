@@ -1,0 +1,102 @@
+<title>Roadmap de Nexus</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- Vista de docs/roadmap.md. El contenido se edita en roadmap.md y se arma con: node scripts/roadmap-vista.mjs -->
+<style>
+/* Una columna corta: el resumen arriba, la tabla de iniciativas y la lista de lo que falta validar. */
+:root {
+  --bg: #f9fafb; --surface: #ffffff; --surface-muted: #f3f4f6; --line: #e5e7eb;
+  --fg: #111827; --fg-2: #374151; --fg-muted: #6b7280; --brand: #3b82f6;
+  --ok-bg: #ecfdf5; --ok-line: #a7f3d0; --ok-ink: #065f46;
+  --info-bg: #eff6ff; --info-line: #bfdbfe; --info-ink: #1e40af;
+  --warn-bg: #fffbeb; --warn-line: #fde68a; --warn-ink: #92400e;
+  --idle-bg: #f3f4f6; --idle-line: #e5e7eb; --idle-ink: #4b5563;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b1220; --surface: #111827; --surface-muted: #1f2937; --line: #1f2937;
+  --fg: #f9fafb; --fg-2: #e5e7eb; --fg-muted: #9ca3af; --brand: #60a5fa;
+  --ok-bg: #064e3b40; --ok-line: #04785780; --ok-ink: #6ee7b7;
+  --info-bg: #1e3a8a40; --info-line: #1d4ed880; --info-ink: #93c5fd;
+  --warn-bg: #78350f40; --warn-line: #b4530980; --warn-ink: #fcd34d;
+  --idle-bg: #1f2937; --idle-line: #374151; --idle-ink: #d1d5db;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0b1220; --surface: #111827; --surface-muted: #1f2937; --line: #1f2937;
+  --fg: #f9fafb; --fg-2: #e5e7eb; --fg-muted: #9ca3af; --brand: #60a5fa;
+  --ok-bg: #064e3b40; --ok-line: #04785780; --ok-ink: #6ee7b7;
+  --info-bg: #1e3a8a40; --info-line: #1d4ed880; --info-ink: #93c5fd;
+  --warn-bg: #78350f40; --warn-line: #b4530980; --warn-ink: #fcd34d;
+  --idle-bg: #1f2937; --idle-line: #374151; --idle-ink: #d1d5db;
+  color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.55; margin: 0; }
+main { max-width: 820px; margin: 0 auto; padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.head h1 { font-size: 24px; font-weight: 700; margin: 0; }
+.head .meta { color: var(--fg-muted); font-size: 13px; }
+.resumen { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 8px; }
+.resumen .chip { font-size: 13px; padding: 3px 12px; }
+
+#doc > h1, #doc > p:first-of-type { display: none; }
+#doc h2 { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted); margin: 32px 0 10px; }
+#doc p, #doc li { color: var(--fg-2); }
+#doc strong { color: var(--fg); font-weight: 600; }
+#doc ol, #doc ul { padding-left: 22px; margin: 0; }
+#doc li { margin: 6px 0; }
+#doc code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+.tw { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+#doc table { border-collapse: collapse; width: 100%; }
+#doc th { text-align: left; font-size: 12px; font-weight: 600; color: var(--fg-muted); padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface-muted); white-space: nowrap; }
+#doc td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--fg-2); }
+#doc table.iniciativas td:first-child { color: var(--fg); font-weight: 600; min-width: 220px; }
+#doc table:not(.iniciativas) td:first-child { color: var(--fg-muted); font-variant-numeric: tabular-nums; width: 1%; }
+#doc table:not(.iniciativas) td:nth-child(2) { color: var(--fg); font-weight: 600; }
+#doc .tw + p { margin-top: 10px; font-size: 13.5px; }
+#doc td .ctx { display: block; margin-top: 3px; font-size: 13px; font-weight: 400; line-height: 1.45; color: var(--fg-muted); }
+#doc tr:last-child td { border-bottom: 0; }
+.chip { display: inline-block; font-size: 12.5px; font-weight: 600; padding: 2px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+.s-ok { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok-ink); }
+.s-info { background: var(--info-bg); border-color: var(--info-line); color: var(--info-ink); }
+.s-warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
+.s-idle { background: var(--idle-bg); border-color: var(--idle-line); color: var(--idle-ink); }
+</style>
+
+<main>
+  <div class="head"><h1>Roadmap de Nexus</h1><span class="meta" id="meta"></span></div>
+  <div class="resumen" id="resumen"></div>
+  <article id="doc"></article>
+</main>
+
+<script type="text/plain" id="md">@@ROADMAP_MD@@</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script>
+(function () {
+  var md = document.getElementById('md').textContent;
+  var doc = document.getElementById('doc');
+  doc.innerHTML = marked.parse(md, { gfm: true });
+
+  var corte = md.match(/\*\*Corte:\*\*\s*([0-9-]+)/);
+  if (corte) document.getElementById('meta').textContent = 'Al ' + corte[1];
+
+  var TONOS = { 'Validado': 's-ok', 'En producción': 's-info', 'Por desplegar': 's-warn', 'Por empezar': 's-idle' };
+  var cuenta = {};
+  doc.querySelectorAll('table').forEach(function (t) {
+    var w = document.createElement('div'); w.className = 'tw'; t.parentNode.insertBefore(w, t); w.appendChild(t);
+    var ths = t.querySelectorAll('thead th'), col = -1;
+    for (var i = 0; i < ths.length; i++) if (ths[i].textContent.trim() === 'Estado') col = i;
+    if (col < 0) return;
+    t.classList.add('iniciativas');
+    t.querySelectorAll('tbody tr').forEach(function (tr) {
+      var td = tr.children[col], e = td && td.textContent.trim();
+      if (!TONOS[e]) return;
+      cuenta[e] = (cuenta[e] || 0) + 1;
+      td.innerHTML = '<span class="chip ' + TONOS[e] + '">' + e + '</span>';
+    });
+  });
+  document.getElementById('resumen').innerHTML = Object.keys(TONOS).filter(function (e) { return cuenta[e]; }).map(function (e) {
+    return '<span class="chip ' + TONOS[e] + '">' + cuenta[e] + ' ' + e.toLowerCase() + '</span>';
+  }).join('');
+})();
+</script>

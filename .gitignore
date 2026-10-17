@@ -56,3 +56,6 @@ backups/
 
 # Base local embebida (F1) — datos y logs, nunca versionados
 /.local-db/
+
+# Vista armada del roadmap (scripts/roadmap-vista.mjs)
+.roadmap/

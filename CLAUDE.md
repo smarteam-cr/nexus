@@ -70,6 +70,11 @@ SDK · HubSpot/Google Workspace/Apify (versiones exactas: ARCHITECTURE Parte 0 �
   siendo `npm run check:invariants` + el ojo.
 - Antes de commitear: correr **`/ship-nexus`** (invariantes + tsc/lint en lo tocado + checklist).
 - **No push hasta que el usuario lo pida.**
+- **Cuando Elías tenga que probar algo** (en el 3004, antes o después de un deploy), la respuesta cierra con
+  «**Qué probar, en simple:**»: una tabla `# · Dónde · Qué deberías ver`. Una fila por cosa visible. «Dónde» es
+  el camino en la pantalla («Éxito del cliente › botón «Limpieza de HubSpot», arriba a la derecha») y «Qué
+  deberías ver» es lo que aparece con datos reales, en palabras de la pantalla, sin archivos ni jerga. Debajo:
+  «Si algo de esto no aparece como dice la tabla, mándame una captura.»
 - Tras un cambio de schema (aplicar el `.sql` + `npx prisma generate`): **reiniciar el dev
   server** (el Prisma client viejo no entra por HMR). Tras `git pull` que toca CSS/config:
   `rm -rf .next` + reiniciar.
