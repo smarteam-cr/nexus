@@ -34,6 +34,7 @@ import {
   type Prioridad,
 } from "./estados";
 import { DIAS_PARA_CORREGIR_UNA_REVISION, DIAS_PARA_VENCER_UNA_PROPUESTA, MAX_SECCIONES, MAX_SUGERENCIAS_POR_PERSONA } from "./reglas";
+import { cupoPorPersona } from "./cupo";
 import {
   aDate,
   comoFecha,
@@ -1943,10 +1944,20 @@ export async function escribirPropuestasDeLectura(
   tx: Tx,
   lectura: { id: string; sessionId: string | null; tituloReunion: string; pedidaPorEmail: string | null },
   propuestas: readonly PropuestaDeLectura[],
-): Promise<{ creadas: { id: string; responsableEmail: string | null }[]; yaEstaban: number; sumadas: number }> {
+): Promise<{ creadas: { id: string; responsableEmail: string | null }[]; yaEstaban: number; sumadas: number; sinLugar: Map<string, number> }> {
   const creadas: { id: string; responsableEmail: string | null }[] = [];
   let yaEstaban = 0;
   let sumadas = 0;
+  // Como mucho 5 por persona por reunión (ficha A, 2026-10-17), contando lo que ya dejó esta misma lectura.
+  const duenos = [...new Set(propuestas.flatMap((p) => (!p.porAsignar && p.responsableEmail ? [p.responsableEmail.toLowerCase()] : [])))];
+  const yaTiene = duenos.length
+    ? await tx.tarea.groupBy({
+        by: ["responsableEmail"],
+        where: { lecturaId: lectura.id, creadaPorEmail: null, origen: { in: ["reunion", "notas"] }, responsableEmail: { in: duenos } },
+        _count: { _all: true },
+      })
+    : [];
+  const cupo = cupoPorPersona(new Map(yaTiene.flatMap((g) => (g.responsableEmail ? [[g.responsableEmail, g._count._all] as const] : []))));
   for (const p of propuestas) {
     const origenId = `l:${lectura.id}:${p.lineaId}`;
     const existe = await tx.tarea.findUnique({ where: { origenId }, select: { id: true } });
@@ -1968,6 +1979,7 @@ export async function escribirPropuestasDeLectura(
         continue;
       }
     }
+    if (!p.porAsignar && p.responsableEmail && !cupo.tomar(p.responsableEmail)) continue;
     const t = await tx.tarea.create({
       data: {
         titulo: p.titulo,
@@ -2003,7 +2015,7 @@ export async function escribirPropuestasDeLectura(
     creadas.push({ id: t.id, responsableEmail: p.porAsignar ? null : p.responsableEmail });
   }
   for (const email of new Set(creadas.flatMap((c) => (c.responsableEmail ? [c.responsableEmail] : [])))) await podarSugerencias(tx, email);
-  return { creadas, yaEstaban, sumadas };
+  return { creadas, yaEstaban, sumadas, sinLugar: cupo.sinLugar() };
 }
 
 /**
@@ -2785,3 +2797,40 @@ export async function anotarSincronizacionConHubspot(
 }
 
 export { etiquetaT, claveDeEquipo };
+
+/* ── El sprint de cada equipo: las series que se leen solas (ficha A, 2026-10-17) ─────────────── */
+// Las valida lib/tareas/fuentes-server.ts (quién lidera, qué reunión, quiénes están); acá solo se escriben.
+
+export interface FilaNuevaDeFuente {
+  equipo: string;
+  duenoEmail: string;
+  serie: string;
+  titulo: string;
+  rol: string;
+  diaSemana: number;
+  finHora: string;
+  personas: string[];
+}
+
+export async function escribirFuente(n: FilaNuevaDeFuente): Promise<{ id: string }> {
+  try {
+    return await prisma.fuenteDeTareas.create({ data: n, select: { id: true } });
+  } catch (e) {
+    if ((e as { code?: string })?.code === "P2002") throw new ErrorDeTareas(409, "Tu sprint ya lee esa reunión.");
+    throw e;
+  }
+}
+
+export async function cambiarFilaDeFuente(id: string, c: { activa?: boolean; pausadaMotivo?: string | null; rol?: string; personas?: string[] }): Promise<void> {
+  try {
+    await prisma.fuenteDeTareas.update({ where: { id }, data: c });
+  } catch (e) {
+    if ((e as { code?: string })?.code === "P2002") throw new ErrorDeTareas(409, "Tu sprint ya lee esa reunión en otra fila activa.");
+    throw e;
+  }
+}
+
+/** Lo que ya se leyó queda: las lecturas pierden la referencia (SET NULL), no las tareas. */
+export async function borrarFuente(id: string): Promise<void> {
+  await prisma.fuenteDeTareas.delete({ where: { id } });
+}

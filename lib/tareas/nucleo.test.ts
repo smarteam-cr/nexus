@@ -5,6 +5,12 @@
 import { describe, it, expect } from "vitest";
 import { accionesDe, esLapida, leerEstado, nacePropuesta, columnaDelTablero, leerBloques, repartirBloques } from "./estados";
 import { candidatasWhere } from "./donde";
+import { origenDeLaTarea } from "./origen";
+import { cuandoEsLaSerie, diaYFinDeLaReunion, personasPorDefecto, personasValidas, puedeConfigurarElSprint, seLeeSola } from "./fuentes";
+import { agruparPorEquipo } from "./de-la-cuenta";
+import type { TareaVista } from "./tipos";
+import { cupoPorPersona, textoSinLugar } from "./cupo";
+import { MAX_PROPUESTAS_POR_PERSONA_POR_REUNION } from "./reglas";
 import {
   enVentanaDeRevision,
   primeraSemanaSinRevisar,
@@ -301,5 +307,119 @@ describe("agenda", () => {
     expect(pos.arriba).toBeCloseTo(6 / 10);
     expect(pos.alto).toBeCloseTo(0.5 / 10);
     expect(posicionEnLaGrilla({ inicio: "2026-10-12T15:00:00Z", fin: "2026-10-12T16:00:00Z" }, "2026-10-05")).toBeNull();
+  });
+});
+
+describe("de dónde viene una tarea", () => {
+  it("lo de una reunión se decide por la sala, no por el cliente de la tarea", () => {
+    expect(origenDeLaTarea({ origen: "reunion", sessionId: "s1" }, { puertasAdentro: false })).toEqual({ clave: "reunion_cliente", etiqueta: "Reunión con el cliente" });
+    expect(origenDeLaTarea({ origen: "reunion", sessionId: "s1" }, { puertasAdentro: true })).toEqual({ clave: "sprint", etiqueta: "Sprint interno" });
+  });
+
+  it("sin la sala (notas pegadas, una reunión que ya no está) dice solo que salió de una reunión", () => {
+    expect(origenDeLaTarea({ origen: "notas", sessionId: null }, null).clave).toBe("reunion");
+    expect(origenDeLaTarea({ origen: "reunion", sessionId: "s1" }, undefined).etiqueta).toBe("Notas de una reunión");
+  });
+
+  it("HubSpot, el chat, un siguiente paso y lo de a mano", () => {
+    expect(origenDeLaTarea({ origen: "hubspot", sessionId: null }, null).etiqueta).toBe("HubSpot");
+    expect(origenDeLaTarea({ origen: "chat", sessionId: null }, null).clave).toBe("chat");
+    expect(origenDeLaTarea({ origen: "paso", sessionId: null }, null).clave).toBe("paso");
+    expect(origenDeLaTarea({ origen: "mano", sessionId: null }, null).etiqueta).toBe("A mano");
+    expect(origenDeLaTarea({ origen: "pedido", sessionId: null }, null).clave).toBe("mano");
+    // Un origen que no se conoce no inventa uno.
+    expect(origenDeLaTarea({ origen: "otro", sessionId: null }, null).clave).toBe("mano");
+  });
+});
+
+describe("el cupo de una reunión por persona", () => {
+  it("como mucho 5 por persona, en el orden de las líneas; las demás quedan contadas", () => {
+    const cupo = cupoPorPersona(new Map());
+    const tomadas = Array.from({ length: 7 }, () => cupo.tomar("lidia@smarteamcr.com"));
+    expect(tomadas.filter(Boolean)).toHaveLength(MAX_PROPUESTAS_POR_PERSONA_POR_REUNION);
+    expect(tomadas.slice(0, 5).every(Boolean)).toBe(true);
+    expect(cupo.sinLugar().get("lidia@smarteamcr.com")).toBe(2);
+  });
+
+  it("cuenta lo que la reunión ya le dejó (otra pasada), sin importar mayúsculas", () => {
+    const cupo = cupoPorPersona(new Map([["Lidia@SmarteamCR.com", 4]]));
+    expect(cupo.tomar("lidia@smarteamcr.com")).toBe(true);
+    expect(cupo.tomar("LIDIA@smarteamcr.com")).toBe(false);
+    expect(cupo.tomar("ale@smarteamcr.com")).toBe(true);
+    expect([...cupo.sinLugar()]).toEqual([["lidia@smarteamcr.com", 1]]);
+  });
+
+  it("el texto para la pantalla", () => {
+    expect(textoSinLugar(0)).toBeNull();
+    expect(textoSinLugar(1)).toBe("1 quedó sin proponer: cada reunión propone como mucho 5 tareas por persona.");
+    expect(textoSinLugar(3)).toContain("3 quedaron");
+  });
+});
+
+describe("el sprint de cada equipo (ficha A)", () => {
+  const miembros = [
+    { email: "ana@x.com", nombre: "Ana", area: "CSE", roleEnum: "CSE", lideraEquipos: [] },
+    { email: "alex@x.com", nombre: "Alex", area: "CSL", roleEnum: "CSL", lideraEquipos: ["cs", "desarrollo"] },
+    { email: "bra@x.com", nombre: "Brainer", area: "Development", roleEnum: "DEV", lideraEquipos: [] },
+    { email: "lidia@x.com", nombre: "Lidia", area: "Marketing", roleEnum: "MARKETING", lideraEquipos: [] },
+  ];
+
+  it("se lee sola entre 15 minutos y 24 horas después de terminar, y solo lo de esa serie", () => {
+    const fuente = { serie: "abc", createdAt: new Date("2026-10-10T12:00:00Z"), activa: true };
+    const r = { serie: "abc", inicio: new Date("2026-10-13T15:00:00Z"), fin: new Date("2026-10-13T15:30:00Z") };
+    expect(seLeeSola(r, fuente, new Date("2026-10-13T15:40:00Z"))).toBe(false);
+    expect(seLeeSola(r, fuente, new Date("2026-10-13T15:46:00Z"))).toBe(true);
+    expect(seLeeSola(r, fuente, new Date("2026-10-14T16:00:00Z"))).toBe(false);
+    expect(seLeeSola({ ...r, serie: "otra" }, fuente, new Date("2026-10-13T16:00:00Z"))).toBe(false);
+    expect(seLeeSola(r, { ...fuente, activa: false }, new Date("2026-10-13T16:00:00Z"))).toBe(false);
+  });
+
+  it("lo de antes de configurarla no se lee solo (con un día de margen)", () => {
+    const fuente = { serie: "abc", createdAt: new Date("2026-10-13T18:00:00Z"), activa: true };
+    const hoy = { serie: "abc", inicio: new Date("2026-10-13T15:00:00Z"), fin: new Date("2026-10-13T15:30:00Z") };
+    const semanaPasada = { serie: "abc", inicio: new Date("2026-10-06T15:00:00Z"), fin: new Date("2026-10-06T15:30:00Z") };
+    expect(seLeeSola(hoy, fuente, new Date("2026-10-13T18:05:00Z"))).toBe(true);
+    expect(seLeeSola(semanaPasada, fuente, new Date("2026-10-07T10:00:00Z"))).toBe(false);
+  });
+
+  it("el día y la hora de fin se dicen en Costa Rica", () => {
+    // Lunes 12 oct, 9:00 a 10:30 en Costa Rica (UTC−6).
+    expect(diaYFinDeLaReunion(new Date("2026-10-12T15:00:00Z"), new Date("2026-10-12T16:30:00Z"))).toEqual({ diaSemana: 1, finHora: "10:30" });
+    expect(cuandoEsLaSerie({ diaSemana: 1, finHora: "10:30" })).toBe("Los lunes · termina a las 10:30");
+    expect(cuandoEsLaSerie({ diaSemana: null, finHora: null })).toBe("Cada semana");
+  });
+
+  it("quiénes están por defecto: los del área y quienes lo lideran", () => {
+    expect(personasPorDefecto("desarrollo", miembros).sort()).toEqual(["alex@x.com", "bra@x.com"]);
+    expect(personasPorDefecto("cs", miembros).sort()).toEqual(["alex@x.com", "ana@x.com"]);
+    expect(personasValidas(["Ana@X.com", "ana@x.com", "nadie@x.com"], miembros)).toEqual({ validas: ["ana@x.com"], desconocidas: ["nadie@x.com"] });
+  });
+
+  it("lo configura quien lo lidera o dirección", () => {
+    expect(puedeConfigurarElSprint({ esSuperAdmin: false, lidera: ["cs", "desarrollo"] }, "desarrollo")).toBe(true);
+    expect(puedeConfigurarElSprint({ esSuperAdmin: false, lidera: [] }, "marketing")).toBe(false);
+    expect(puedeConfigurarElSprint({ esSuperAdmin: true, lidera: [] }, "marketing")).toBe(true);
+  });
+});
+
+describe("las tareas de una cuenta, por equipo (ficha A)", () => {
+  const t = (n: number, equipo: string | null, estado: string, extra: Partial<TareaVista> = {}) =>
+    ({ id: `t${n}`, numero: n, equipo, estado, venceEl: null, semana: null, atrasada: false, completadaAt: null, ...extra }) as unknown as TareaVista;
+
+  it("Customer Success primero; por decidir, abiertas y hechas por separado; lo atrasado arriba", () => {
+    const grupos = agruparPorEquipo([
+      t(1, "marketing", "pendiente"),
+      t(2, "cs", "pendiente", { venceEl: "2026-10-30" }),
+      t(3, "cs", "en_curso", { atrasada: true, venceEl: "2026-10-01" }),
+      t(4, "cs", "propuesta"),
+      t(5, "cs", "hecha", { completadaAt: "2026-10-10T10:00:00Z" }),
+      t(6, "cs", "rechazada"),
+      t(7, null, "pendiente"),
+    ]);
+    expect(grupos.map((g) => g.nombre)).toEqual(["Customer Success", "Marketing", "Sin equipo"]);
+    const cs = grupos[0];
+    expect(cs.abiertas.map((x) => x.numero)).toEqual([3, 2]);
+    expect(cs.porDecidir.map((x) => x.numero)).toEqual([4]);
+    expect(cs.hechas.map((x) => x.numero)).toEqual([5]);
   });
 });

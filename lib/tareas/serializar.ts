@@ -12,6 +12,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { salasDeReuniones, type SalaDeLaReunion } from "@/lib/sessions/reuniones-para-tareas";
+import { origenDeLaTarea } from "./origen";
 import { accionesDe, leerBloques, leerEstado, leerEstadoDeAgenda, leerEstadoDeProyecto, leerPrioridad, estaAbierta } from "./estados";
 import { comoFecha, hoyEnCostaRica, lunesDeHoy, viernesDe, estaAtrasada } from "./semana";
 import { claveDeEquipo, nombreDelEquipo } from "./equipos";
@@ -377,6 +378,7 @@ export function serializarTarea(f: FilaDeTarea, s: ContextoDeSerializar): TareaV
     proyectoHubspot: proyectoHs ? { id: proyectoHs.id, nombre: proyectoHs.nombre, cerrado: proyectoHs.cerrado } : null,
     ambito: ambitoConDatos(s.ambito, f.clientId, f.projectId),
     origen: f.origen,
+    de: origenDeLaTarea(f, f.sessionId ? s.salas.get(f.sessionId) : null),
     creadaPor: f.creadaPorEmail,
     pedidaPor: persona(f.pedidaPorEmail, s),
     pedidaPorEquipoNombre: f.pedidaPorEquipo ? nombreDelEquipo(f.pedidaPorEquipo) : null,

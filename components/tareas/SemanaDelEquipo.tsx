@@ -33,6 +33,7 @@ import { RevisarConElEquipo } from "./RevisaTuSemana";
 import { MetricasDelEquipo } from "./MetricasDelEquipo";
 import { TableroDeLaSemana as TableroDelEquipo } from "./VistasDeLaSemana";
 import { BotonDelAsistente } from "./AsistenteDeTareas";
+import { SprintDelEquipo } from "./SprintDelEquipo";
 
 /** Las semanas que ofrece el selector: cuatro hacia atrás y dos hacia adelante (en 1A.2, `SelectorDePeriodo`). */
 function semanasDelSelector(lunesDeHoy: string, elegida: string): string[] {
@@ -211,6 +212,7 @@ export default function SemanaDelEquipo({ inicial }: { inicial: SemanaDelEquipoD
 
       <PanelLateral etiqueta="El equipo" ancho="lg:w-[340px]">
         <div className="space-y-6">
+          {!datos.equipo.startsWith("persona:") && <SprintDelEquipo key={datos.equipo} equipo={datos.equipo} />}
           <section className="space-y-2" data-recorrido="equipo.por-asignar">
             <p className={ROTULO_DEL_SISTEMA}>Por asignar · {datos.porAsignar.length}</p>
             {datos.porAsignar.length === 0 ? (

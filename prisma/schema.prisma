@@ -7092,6 +7092,9 @@ model FuenteDeTareas {
   /// false = pausada
   activa        Boolean  @default(true)
   pausadaMotivo String?
+  /// Quiénes están en el sprint (correos en minúscula; ficha A, 2026-10-17). Vacío = los del área del equipo.
+  /// Lo que la lectura le propone a uno de ellos no va como pedido de otro equipo.
+  personas      String[] @default([])
   createdAt     DateTime @default(now())
 
   lecturas LecturaDeReunion[]

@@ -117,6 +117,8 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
 
   useEffect(() => {
     apiTareas.opciones().then(setOpciones).catch(() => undefined);
+    // Que Nexus mire si terminó una reunión de los sprints (ficha A: el servidor lo hace como mucho cada 10 minutos).
+    apiTareas.mirarSeries().catch(() => undefined);
     apiTareas.espacios().then((r) => setEspacios(r.espacios)).catch(() => setEspacios([]));
   }, []);
 

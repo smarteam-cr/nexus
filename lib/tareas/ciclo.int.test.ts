@@ -19,7 +19,7 @@ import { archivarComentario, asignar, cerrarSemanaPasadaComoSistema, decidirProy
 import { INV40 } from "@/lib/invariantes/tareas";
 import { estadoDeLectura, pedirLectura } from "./lectura";
 import { normalizar } from "./texto";
-import { cargarLoQueDelegaste, cargarComentarios, cargarMetricasDelEquipo, cargarMisTareas, cargarVinculos, cargarVinculosDe, cargarEspacio, cargarMisEspacios, cargarPorCliente, cargarSemanaDePersona, cargarSemanaDelEquipo, cargarTarea } from "./consultas";
+import { cargarLoQueDelegaste, cargarComentarios, cargarMetricasDelEquipo, cargarMisTareas, cargarVinculos, cargarVinculosDe, cargarEspacio, cargarMisEspacios, cargarPorCliente, cargarSemanaDePersona, cargarSemanaDelEquipo, cargarTarea, cargarTareasDeLaCuenta } from "./consultas";
 import { aDate, lunesDeHoy, sumarSemanas } from "./semana";
 import type { ClientesQueVes } from "./clientes";
 
@@ -389,8 +389,12 @@ describe("el tope de sugerencias por persona (fase 1.4, 2026-10-16)", () => {
   it("con más de 10 sugerencias de las reuniones sin decidir, las más viejas vencen solas; lo que pidió una persona no", async () => {
     await equipo();
     const cliente = await prisma.client.create({ data: { name: "Wherex" } });
-    const sesion = await prisma.firefliesSession.create({ data: { id: "fx-tareas-tope", title: "Seguimiento Wherex", date: new Date(), participants: [ALE], resolvedClientId: cliente.id } });
-    const lectura = await prisma.lecturaDeReunion.create({ data: { sessionId: sesion.id, equipo: "marketing", rol: "planning", semana: aDate(lunesDeHoy()), pedidaPorEmail: ALE } });
+    // Tres reuniones: cada una le propone como mucho 5 a una persona (ficha A, 2026-10-17).
+    const lecturas = [];
+    for (const n of [1, 2, 3]) {
+      const sesion = await prisma.firefliesSession.create({ data: { id: `fx-tareas-tope-${n}`, title: "Seguimiento Wherex", date: new Date(), participants: [ALE], resolvedClientId: cliente.id } });
+      lecturas.push({ sesion, lectura: await prisma.lecturaDeReunion.create({ data: { sessionId: sesion.id, equipo: "marketing", rol: "planning", semana: aDate(lunesDeHoy()), pedidaPorEmail: ALE } }) });
+    }
     // Una sugerencia que pidió una persona: no cuenta ni vence por el tope.
     await prisma.tarea.create({ data: { titulo: "Pedido de Elías", huella: "pedido-elias", estado: "propuesta", equipo: "marketing", responsableEmail: LIDIA, origen: "pedido", creadaPorEmail: ELIAS, pedidaPorEmail: ELIAS } });
     const linea = (i: number) => ({
@@ -412,13 +416,54 @@ describe("el tope de sugerencias por persona (fase 1.4, 2026-10-16)", () => {
       sugerido: {},
       porAsignar: false,
     });
-    await prisma.$transaction((tx) =>
-      escribirPropuestasDeLectura(tx, { id: lectura.id, sessionId: sesion.id, tituloReunion: "Seguimiento Wherex", pedidaPorEmail: ALE }, Array.from({ length: 12 }, (_, i) => linea(i + 1))),
-    );
+    for (const [i, { sesion, lectura }] of lecturas.entries()) {
+      const desde = i * 5 + 1;
+      const lineas = Array.from({ length: i === 2 ? 2 : 5 }, (_, k) => linea(desde + k));
+      await prisma.$transaction((tx) => escribirPropuestasDeLectura(tx, { id: lectura.id, sessionId: sesion.id, tituloReunion: "Seguimiento Wherex", pedidaPorEmail: ALE }, lineas));
+    }
     const deLidia = await prisma.tarea.findMany({ where: { responsableEmail: LIDIA }, select: { titulo: true, estado: true } });
     expect(deLidia.filter((t) => t.estado === "propuesta" && t.titulo.startsWith("Compromiso"))).toHaveLength(10);
     expect(deLidia.filter((t) => t.estado === "vencida").map((t) => t.titulo).sort()).toEqual(["Compromiso 1", "Compromiso 2"]);
     expect(deLidia.find((t) => t.titulo === "Pedido de Elías")?.estado).toBe("propuesta");
+  });
+
+  it("una reunión le propone como mucho 5 a cada persona, también si se lee dos veces", async () => {
+    await equipo();
+    const sesion = await prisma.firefliesSession.create({ data: { id: "fx-tareas-cupo", title: "Sprint planning de marketing", date: new Date(), participants: [ALE, LIDIA] } });
+    const lectura = await prisma.lecturaDeReunion.create({ data: { sessionId: sesion.id, equipo: "marketing", rol: "planning", semana: aDate(lunesDeHoy()), pedidaPorEmail: ALE } });
+    const linea = (i: number, quien: string) => ({
+      lineaId: `${quien}-${i}`,
+      titulo: `Pieza ${quien} ${i}`,
+      notas: null,
+      contexto: null,
+      cita: `[${quien}] Pieza ${i}`,
+      responsableEmail: quien,
+      equipo: "marketing",
+      semana: lunesDeHoy(),
+      venceEl: null,
+      clientId: null,
+      projectId: null,
+      proyectoId: null,
+      pedidaPorEmail: null,
+      pedidaPorEquipo: null,
+      mismaQueId: null,
+      sugerido: {},
+      porAsignar: false,
+    });
+    const primera = await prisma.$transaction((tx) =>
+      escribirPropuestasDeLectura(tx, { id: lectura.id, sessionId: sesion.id, tituloReunion: "Sprint planning de marketing", pedidaPorEmail: ALE }, [
+        ...Array.from({ length: 7 }, (_, i) => linea(i + 1, LIDIA)),
+        linea(1, ALE),
+      ]),
+    );
+    expect(primera.creadas.filter((c) => c.responsableEmail === LIDIA)).toHaveLength(5);
+    expect(primera.sinLugar.get(LIDIA)).toBe(2);
+    // La segunda pasada (la conversación) no le suma nada a Lidia; a Alejandra sí.
+    const segunda = await prisma.$transaction((tx) =>
+      escribirPropuestasDeLectura(tx, { id: lectura.id, sessionId: sesion.id, tituloReunion: "Sprint planning de marketing", pedidaPorEmail: ALE }, [linea(9, LIDIA), linea(2, ALE)]),
+    );
+    expect(segunda.creadas.map((c) => c.responsableEmail)).toEqual([ALE]);
+    expect(await prisma.tarea.count({ where: { lecturaId: lectura.id, responsableEmail: LIDIA } })).toBe(5);
   });
 });
 
@@ -793,5 +838,28 @@ describe("la revisión de «Lo que delegaste» y del contexto (2026-10-09)", () 
     const deLidia = (await cargarMisTareas(await ctx(LIDIA), TODOS)).porDecidir[0];
     expect(deLidia.contexto).toBeNull();
     expect(deLidia.contextoOculto).toContain("reunión");
+  });
+});
+
+describe("la ficha del cliente › Tareas (ficha A, 2026-10-17)", () => {
+  it("todas las tareas de la cuenta, de cualquier equipo, con su origen; nunca lo «Solo para mí» de otros", async () => {
+    const { ctx } = await equipo();
+    const cliente = await prisma.client.create({ data: { name: "Wherex" } });
+    const otro = await prisma.client.create({ data: { name: "Otra empresa" } });
+    const base = { huella: "x", origen: "mano", estado: "pendiente" } as const;
+    await prisma.tarea.createMany({
+      data: [
+        { ...base, titulo: "Campaña de Wherex", huella: "campana", equipo: "marketing", responsableEmail: LIDIA, clientId: cliente.id, creadaPorEmail: LIDIA },
+        { ...base, titulo: "Revisar el pipeline", huella: "pipeline", equipo: "cs", responsableEmail: CSE, clientId: cliente.id, creadaPorEmail: CSE, origen: "hubspot" },
+        { ...base, titulo: "Lo mío de Wherex", huella: "mio", equipo: "marketing", responsableEmail: ALE, clientId: cliente.id, creadaPorEmail: ALE, privada: true },
+        { ...base, titulo: "De otra empresa", huella: "otra", equipo: "marketing", responsableEmail: LIDIA, clientId: otro.id, creadaPorEmail: LIDIA },
+      ],
+    });
+    const datos = await cargarTareasDeLaCuenta(await ctx(ELIAS), conClientes(cliente, otro), cliente.id);
+    expect(datos.tareas.map((t) => t.titulo).sort()).toEqual(["Campaña de Wherex", "Revisar el pipeline"]);
+    expect(datos.tareas.find((t) => t.titulo === "Revisar el pipeline")?.de.clave).toBe("hubspot");
+    expect(datos.tareas.find((t) => t.titulo === "Campaña de Wherex")?.de.clave).toBe("mano");
+    // Quien no ve la cuenta: 404, no la lista vacía.
+    await expect(cargarTareasDeLaCuenta(await ctx(LIDIA), NINGUNO, cliente.id)).rejects.toMatchObject({ status: 404 });
   });
 });
