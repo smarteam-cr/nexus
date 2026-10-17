@@ -104,3 +104,28 @@ describe("datosDeReset", () => {
     }
   });
 });
+
+describe("bucket D — selladas vacías antes de que terminara la reunión (2026-10-17)", () => {
+  const INICIO = new Date("2026-10-10T15:00:00Z");
+  const HOY = new Date("2026-10-17T15:00:00Z");
+
+  it("sin doc, organizador nuestro, sellada una hora después del inicio de una reunión de 90 minutos → D", () => {
+    const f = fila({ date: INICIO, duration: 90, enrichedAt: new Date(INICIO.getTime() + 61 * 60_000) });
+    expect(bucketDe(f, HOY)).toBe("D_sellada_antes_de_terminar");
+  });
+
+  it("sellada después del fin más 20 minutos → nada que rescatar (se buscó a tiempo)", () => {
+    const f = fila({ date: INICIO, duration: 30, enrichedAt: new Date(INICIO.getTime() + 61 * 60_000) });
+    expect(bucketDe(f, HOY)).toBeNull();
+  });
+
+  it("sin duración no se puede saber cuándo terminó → no entra a D", () => {
+    expect(bucketDe(fila({ date: INICIO, enrichedAt: new Date(INICIO.getTime() + 61 * 60_000) }), HOY)).toBeNull();
+  });
+
+  it("con doc: sellada antes de terminar es D, después es A; con transcripción sana no se rescata", () => {
+    expect(bucketDe(fila({ date: INICIO, duration: 90, googleDocId: "d", enrichedAt: new Date(INICIO.getTime() + 61 * 60_000) }), HOY)).toBe("D_sellada_antes_de_terminar");
+    expect(bucketDe(fila({ date: INICIO, duration: 30, googleDocId: "d", enrichedAt: new Date(INICIO.getTime() + 61 * 60_000) }), HOY)).toBe("A_sellada_con_doc");
+    expect(bucketDe(fila({ date: INICIO, duration: 90, transcript: "x".repeat(500), enrichedAt: new Date(INICIO.getTime() + 61 * 60_000) }), HOY)).toBeNull();
+  });
+});

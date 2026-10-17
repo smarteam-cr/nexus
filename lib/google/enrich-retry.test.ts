@@ -3,6 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   datosDeEscritura,
+  debeEsperarMaterial,
+  estaEsperandoMaterial,
+  finDeLaReunion,
+  listaParaLeer,
+  probarOtraCuenta,
   esReintentable,
   esperaBackoffMs,
   esErrorDeCuota,
@@ -366,5 +371,75 @@ describe("candado: toda impersonación pasa por el chokepoint", () => {
     expect(pasadas, "las pasadas volvieron a exigir organizerEmail y re-excluyen las ~267").not.toContain(
       "organizerEmail: { not: null }",
     );
+  });
+});
+
+describe("cuándo se lee una reunión y cuándo se espera (2026-10-17)", () => {
+  const INICIO = new Date("2026-10-16T15:00:00Z");
+  const reunion = { date: INICIO, duration: 60 };
+  const mas = (min: number) => new Date(INICIO.getTime() + min * 60_000);
+
+  it("se lee 20 minutos después del FIN, no una hora después del inicio", () => {
+    expect(finDeLaReunion(reunion)).toEqual(mas(60));
+    expect(listaParaLeer(reunion, mas(60))).toBe(false); // antes: a esta hora ya se leía y se sellaba vacía
+    expect(listaParaLeer(reunion, mas(79))).toBe(false);
+    expect(listaParaLeer(reunion, mas(80))).toBe(true);
+  });
+
+  it("una reunión de dos horas no se lee mientras sigue en curso", () => {
+    expect(listaParaLeer({ date: INICIO, duration: 120 }, mas(61))).toBe(false);
+  });
+
+  it("sin duración, el fin es el inicio; un día completo cuenta como 8 horas", () => {
+    expect(finDeLaReunion({ date: INICIO, duration: null })).toEqual(INICIO);
+    expect(finDeLaReunion({ date: INICIO, duration: 24 * 60 })).toEqual(mas(8 * 60));
+  });
+
+  it("«no había nada» en una reunión recién terminada NO sella: cuenta un intento y vuelve", () => {
+    expect(debeEsperarMaterial(reunion, mas(80))).toBe(true);
+    const d = datosDeEscritura(EXITO_SIN_NADA, null, 0, AHORA, { esperarMaterial: true });
+    expect(d.enrichedAt, "se volvió a sellar vacía una reunión que todavía estaba escribiendo Google").toBeUndefined();
+    expect(d.enrichAttempts).toBe(1);
+    expect(d.transcript).toBeUndefined();
+    expect(estaEsperandoMaterial(d.enrichError)).toBe(true);
+    // Y el job de reintentos la vuelve a tomar a las 2 horas, como a un fallo.
+    expect(esReintentable(1, d.enrichError, new Date(AHORA.getTime() + 2 * 3_600_000))).toBe(true);
+  });
+
+  it("al tope se sella con su diagnóstico, como siempre", () => {
+    const d = datosDeEscritura(EXITO_SIN_NADA, null, MAX_ENRICH_ATTEMPTS - 1, AHORA, { esperarMaterial: true });
+    expect(d.enrichedAt).toEqual(AHORA);
+    expect(JSON.parse(d.enrichError!).diagnostico.motivo).toBe("solo_notas");
+  });
+
+  it("con notas de Gemini (sin transcripción) no se espera: la transcripción no estaba prendida", () => {
+    const d = datosDeEscritura(EXITO_SIN_NADA, { overview: "notas" }, 0, AHORA, { esperarMaterial: true });
+    expect(d.enrichedAt).toEqual(AHORA);
+    expect(d.summary).toEqual({ overview: "notas" });
+  });
+
+  it("pasadas 48 horas del fin ya no se espera", () => {
+    expect(debeEsperarMaterial(reunion, mas(60 + 48 * 60))).toBe(false);
+  });
+
+  it("se prueba con otra cuenta ante una cuenta borrada, un documento sin acceso o, en Drive, una cuenta sin nada", () => {
+    expect(probarOtraCuenta({ ok: false, error: "invalid_grant", status: 400 }, false)).toBe(true);
+    expect(probarOtraCuenta({ ok: false, error: "The caller does not have permission", status: 403 }, false)).toBe(true);
+    expect(probarOtraCuenta({ ok: false, error: "File not found", status: 404 }, false)).toBe(true);
+    expect(probarOtraCuenta({ ok: false, error: "Quota exceeded", status: 429 }, false)).toBe(false);
+    expect(probarOtraCuenta(EXITO_SIN_NADA, true)).toBe(true);
+    expect(probarOtraCuenta(EXITO_SIN_NADA, false)).toBe(false);
+    expect(probarOtraCuenta(EXITO_CON_TRANSCRIPT, true)).toBe(false);
+  });
+
+  it("el enriquecimiento usa las tres reglas (y ya no busca en Drive por las dos primeras palabras)", () => {
+    const src = fuente("lib/google/meet-enrichment.ts");
+    expect(src).toContain("listaParaLeer(");
+    expect(src).toContain("esperarMaterial: debeEsperarMaterial(");
+    expect(src).toContain("probarOtraCuenta(");
+    expect(src).toContain("elegirArchivosDeLaReunion(");
+    expect(src).not.toContain("titleKeywords");
+    // El texto que cambia después de leerse no se queda con la lectura vieja (lib/sessions/reanalizar.ts).
+    expect(src).toContain("alCambiarElTexto(");
   });
 });

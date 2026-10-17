@@ -31,6 +31,8 @@ export const TIPOS_DE_AVISO = {
   "feedback.estado": { bueno: false },
   "diagnostico.listo": { bueno: true },
   "adopcion.revisar": { bueno: false },
+  // El texto de una reunión cambió después de leerse y alguien ya había trabajado lo que dejó (lib/sessions/reanalizar.ts).
+  "reunion.texto-cambio": { bueno: false },
   // Tareas internas (docs/tareas-plan.md §8): un aviso por lectura o por pedido, nunca uno por tarea.
   "tareas.respuesta": { bueno: false },
   "tareas.asignada": { bueno: false },

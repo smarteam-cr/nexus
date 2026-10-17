@@ -28,6 +28,7 @@
  *   npx tsx scripts/recuperar-transcripts-meet.ts                     # dry-run con conteos
  *   ALLOW_PROD_WRITE=1 npx tsx scripts/recuperar-transcripts-meet.ts --apply --deploy-confirmado --limit 50
  *   … --solo-futuras --limit 300        # solo las reuniones que todavía no ocurrieron (INV16 a)
+ *   … --solo-antes-de-terminar --limit 300   # solo el bucket D: selladas vacías antes de que terminara la reunión
  *
  * ── --solo-futuras (2026-10-16) ─────────────────────────────────────────────
  * INV16(a) cuenta las reuniones selladas ANTES de ocurrir. Las del pipeline viejo (mayo–julio) nunca
@@ -51,6 +52,9 @@ import { bucketDe, datosDeReset, type BucketDeRescate } from "@/lib/google/recup
 const APPLY = resolverApply();
 const DEPLOY_CONFIRMADO = process.argv.includes("--deploy-confirmado");
 const SOLO_FUTURAS = process.argv.includes("--solo-futuras");
+/* Bucket D (2026-10-17): las que la pasada vieja buscó antes de que terminara la reunión. Como B, no le pega a Google
+   en masa: las drenan las pasadas con su batch chico. */
+const SOLO_ANTES_DE_TERMINAR = process.argv.includes("--solo-antes-de-terminar");
 const LIMIT = (() => {
   const i = process.argv.indexOf("--limit");
   const n = i >= 0 ? parseInt(process.argv[i + 1] ?? "", 10) : 50;
@@ -83,6 +87,7 @@ async function main() {
       id: true,
       title: true,
       date: true,
+      duration: true,
       enrichedAt: true,
       transcript: true,
       googleDocId: true,
@@ -95,6 +100,7 @@ async function main() {
   for (const f of filas) {
     if (SOLO_FUTURAS && f.date.getTime() <= ahora.getTime()) continue;
     const b = bucketDe(f, ahora);
+    if (SOLO_ANTES_DE_TERMINAR && b !== "D_sellada_antes_de_terminar") continue;
     if (b) porBucket.set(b, [...(porBucket.get(b) ?? []), f]);
   }
 
@@ -132,7 +138,7 @@ async function main() {
   }
 
   // ── APPLY: hasta LIMIT filas por corrida, priorizando C (miente hoy) > A > B ──
-  const orden: BucketDeRescate[] = ["C_transcript_basura", "A_sellada_con_doc", "B_sin_doc"];
+  const orden: BucketDeRescate[] = ["C_transcript_basura", "D_sellada_antes_de_terminar", "A_sellada_con_doc", "B_sin_doc"];
   let presupuesto = LIMIT;
   for (const bucket of orden) {
     const xs = (porBucket.get(bucket) ?? []).slice(0, presupuesto);
