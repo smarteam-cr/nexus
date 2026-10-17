@@ -396,6 +396,64 @@ producción.
 6. **Choques previstos.** A y B tocan la ficha del cliente con archivos distintos (A, las tareas; B, la escala): se
    mezcla A primero. Las tres pueden tocar `schema.prisma`: se resuelve al mezclar.
 
+### Segunda tanda: fichas para ejecutar (17 oct)
+
+La primera tanda (A, B, C) ya está mezclada en `main`. Mismas reglas de «Cómo se ejecuta una tanda». Cinco sesiones a la
+vez, en zonas que no se pisan.
+
+#### Ficha D · El inicio de Ventas y del CSE (zona Tareas y «Para ti»)
+
+- **Objetivo.** Inicio, pasos 1 y 2, y Customer Success, paso 1: el inicio de Ventas y del CSE con el diseño del
+  artefacto «Para ti · Ventas y CSE» (https://claude.ai/artifact/FMYuGJ3vN9UyBhyABhnnLm): una guía fácil de consultar,
+  la agenda del día como Google Calendar y cada reunión en un panel al costado; el inicio de la CSL (toda la cartera),
+  Desarrollo (clientes con proyecto de desarrollo activo) y Marketing (sus tareas internas). Cada cuenta con servicio
+  activo tiene su acción de la semana y su reunión agendada; si falta, aparece en el inicio como «Cuenta sin acción».
+- **Dónde.** `lib/para-ti` (fuentes, importa.ts), `components/para-ti`, `app/(shell)/para-ti`, `lib/mi-dia`. Usa las
+  tareas por cuenta que dejó la ficha A.
+- **Fuera.** El correo de la mañana, medir la adopción.
+
+#### Ficha E · SmartLoop (zona Clientes y CS, más `lib/timeline` para el ciclo)
+
+- **Objetivo.** Customer Success, pasos 2 a 4: cargar el plan de FACO en el proyecto de prueba (el traductor de
+  propuestas: casos de uso, avance y cronograma; la carga en producción queda como script con simulacro), el
+  cronograma del ciclo (casos de uso como fases con criterio, versión aprobada, avance, dependencias del cliente y
+  sesiones fijas) y aprendizaje y cierre del ciclo (al cerrar, se congelan sus documentos y quedan en «Ciclos
+  anteriores»). Comprometido para el 6 nov. Ver `docs/smartloop-plan.md`.
+- **Dónde.** `lib/servicios`, `components/ciclos`, `lib/lifecycle`, `lib/timeline` (solo lo del ciclo).
+- **Fuera.** Recomendar recurrencia, el Gantt para el cliente, migrar los recurrentes. Los kickoffs y diagnósticos
+  existentes no se tocan como datos.
+
+#### Ficha F · Finanzas (zona Finanzas)
+
+- **Objetivo.** Finanzas, pasos 2 a 6: cada mañana, lo pagado en Odoo y Mercury listo para cobrar con un clic (sobre
+  `lib/cobranza/libro`, con la firma de quien confirma); el porcentaje de servicio y licencia de cada contrato y a qué
+  clientes les pagamos licencias y por cuánto (hoy hay un parche solo para kölbi en `lib/finanzas/parte-de-servicio.ts`);
+  las comisiones de Stripe y las transferencias internacionales como gasto financiero; el detalle de cada factura de
+  Odoo y de Mercury; Mercury en la facturación por cliente. Plan: artefacto «Un solo libro financiero»
+  (https://claude.ai/artifact/Gbo7THjPG4GZTa5J8ChQzd) y `docs/odoo-decisiones.md`.
+- **Dónde.** `lib/cobranza`, `lib/finanzas`, `components/cobranza`, `components/finanzas`, `app/(shell)/finanzas`.
+- **Fuera.** Pagar comisiones con el modelo nuevo (espera a Marco). Cobrar sin firma humana (no autorizado).
+
+#### Ficha G · Cada reunión con su página (zona Reuniones y documentos)
+
+- **Objetivo.** Reuniones y memoria, pasos 5 y 6: cada reunión con su página (su agenda, sus avisos y sus tareas con
+  responsable), y después de cada reunión con un cliente, el correo de seguimiento (hoy solo en las exploraciones,
+  `lib/exploraciones/correo-de-seguimiento*`) y la próxima reunión sugerida con su objetivo y el enlace para agendarla
+  en Google Calendar.
+- **Dónde.** `app/(shell)/sessions/[id]`, `components/sessions`, `lib/seguimiento`, `lib/sessions`.
+- **Fuera.** La agenda de cada cuenta (paso 4). WhatsApp.
+
+#### Ficha H · El chat de Nexus (zona Plataforma, carpeta nueva)
+
+- **Objetivo.** El chat de Nexus, pasos 1 a 3: un chat sobre la cuenta en la que estás, dentro de Nexus y con su costo
+  medido; lee la memoria de la cuenta y del proyecto, la búsqueda en las reuniones y las tareas, y propone cambios con
+  la capa de operaciones (`lib/operaciones`) en una lista que se aplica con un clic; contarle lo que pasó por WhatsApp
+  o una llamada y que sugiera los cambios; acciones sugeridas a cada persona según sus cuentas y tareas. Ver DECISIONS
+  «Nexus, el sistema de trabajo de cada cuenta» (fase 4).
+- **Dónde.** `lib/nexus-chat` (nuevo), `components/nexus-chat` (nuevo), una ruta de API propia. Reusa
+  `lib/asistente` sin cambiar los chats que ya existen (documentos y tareas).
+- **Fuera.** Generar documentos con plantilla. Nada se escribe sin el clic de la persona.
+
 ### Después de la primera tanda
 
 Finanzas (pasos 2 a 6), Customer Success (acción semanal de cada cuenta y SmartLoop) e Inicio (las páginas de Ventas y
