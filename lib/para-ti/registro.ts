@@ -24,6 +24,7 @@ import { FINANZAS_DEVUELTO, FINANZAS_REGISTRAR, FINANZAS_SUPERVISAR } from "./fu
 import { CRONOGRAMAS_TRABADOS, SIN_ENCARGADO, VIGIA } from "./fuentes/cs";
 import { CORRECCION_QUE_CADUCO, RELACION_CON_HUBSPOT, RELACIONES_DE_LA_CARTERA } from "./fuentes/cartera-de-la-csl";
 import { TUS_CUENTAS_EN_RIESGO } from "./fuentes/tus-cuentas";
+import { CUENTAS_SIN_ACCION } from "./fuentes/servicio";
 import { LIMPIEZA_DE_HUBSPOT } from "./fuentes/limpieza";
 import {
   COMENTARIOS_DE_LA_DOCUMENTACION,
@@ -50,6 +51,7 @@ export const FUENTES: readonly Fuente[] = [
   RELACION_CON_HUBSPOT,
   CORRECCION_QUE_CADUCO,
   TUS_CUENTAS_EN_RIESGO,
+  CUENTAS_SIN_ACCION,
   LIMPIEZA_DE_HUBSPOT,
   // Por frente: lo que es tuyo porque lo llevas.
   VIGIA,

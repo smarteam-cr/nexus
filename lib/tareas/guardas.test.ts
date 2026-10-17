@@ -179,6 +179,9 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "components/clients/ProjectGPS.tsx": "los «Pendientes recientes» del Resumen: el tipo de /api/tareas/del-proyecto (no consulta; los cambios van por las rutas de Tareas)",
       "lib/equipos/registro.ts": "el registro de equipos (etapa 4c): solo el TIPO de la clave del sprint (equipos.ts); no lee tareas",
       "lib/equipos/registro.test.ts": "verifica que cada sprint del registro exista en equipos.ts (puro); no lee tareas",
+      // El inicio de cada equipo (ficha D, 2026-10-17).
+      "lib/mi-dia/servicio-server.ts": "la regla de servicio del inicio: la acción de la semana de cada cuenta (título, fecha y estado; sin la cita, el contexto, las notas ni lo privado)",
+      "lib/mi-dia/inicio-server.ts": "el inicio: TUS tareas de hoy y tus tareas internas (las tuyas y las de tu sprint sin dueño), con su ámbito (no serializa la cita ni el contexto)",
       "lib/mi-dia/resumen-server.ts": "el resumen antes de una reunión (etapa 4c): lo pendiente de los dos lados SOLO por lib/tareas/para-agentes.ts (sin la cita, el contexto, las notas ni lo privado)",
       "lib/uso/lectura-server.ts": "«Uso de Nexus» (etapa 4a): solo el nombre del equipo de cada persona (equipos.ts, puro); no lee tareas",
       // La acción única (2026-10-16, fase 0.2 de docs/nexus-sistema-de-trabajo-plan.md): el siguiente paso es una tarea.

@@ -7199,6 +7199,25 @@ model UsoDeNexus {
   @@index([dia])
 }
 
+// ─── Lo que preparas antes de una reunión (ficha D, el inicio de Ventas y del CSE, 2026-10-17) ───
+
+/// El objetivo y las notas que una persona escribe para una reunión de SU calendario, en el panel de la reunión del
+/// inicio («Para ti»). Una fila por persona y evento de Google Calendar. Lo ve solo esa persona. Lo escribe solo
+/// lib/mi-dia/preparacion-server.ts. Sin FK al cliente a propósito: el evento es del calendario, no de Nexus.
+model PreparacionDeReunion {
+  id           String   @id @default(cuid())
+  personaEmail String
+  /// El id del evento en Google Calendar (en una serie, el de esa fecha)
+  eventoId     String
+  /// Lo que la persona quiere lograr en la reunión. null = usa el que propone Nexus
+  objetivo     String?  @db.Text
+  notas        String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([personaEmail, eventoId])
+}
+
 // ─── Contactos y tickets de HubSpot (etapa 6a de docs/mi-dia-plan.md) ───
 
 /// La copia de un contacto de HubSpot asociado a una empresa que está en Nexus. Solo lectura: la escribe la copia de

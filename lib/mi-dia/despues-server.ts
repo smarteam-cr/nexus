@@ -65,34 +65,71 @@ export async function despuesDeTusReuniones(user: AppUserWithTeamMember, rol: st
   const out: DespuesDeLaReunion[] = [];
   for (const { id } of reuniones) {
     if (out.length >= MAX_REUNIONES) break;
-    const t = await cargarTarjeta(id, user, ahora).catch(() => null);
-    if (!t || (t.reunion.empresa.kind !== "CLIENTE" && t.reunion.empresa.kind !== "PROSPECTO")) continue;
-    const tareasPendientes = t.secciones.tareas.items.filter((x) => x.estado === "pendiente");
-    const plan = t.planDeUsarTodo;
-    out.push({
-      sessionId: t.reunion.id,
-      titulo: t.reunion.titulo,
-      fecha: t.reunion.fecha,
-      clientId: t.reunion.clientId,
-      empresa: t.reunion.empresa.nombre,
-      esProspecto: t.esProspecto,
-      pideDecision: t.pideDecision,
-      minutaPorRevisar: !!t.secciones.minuta && t.secciones.minuta.estado === "pendiente",
-      tareasPropuestas: tareasPendientes.length,
-      pedidos: t.secciones.fueraDeAlcance.items.filter((p) => p.estado === "pendiente").length,
-      huella: t.huella,
-      usarTodoVacio: !plan.minuta && plan.pedidos.length === 0 && plan.tareas.length === 0 && plan.novedades.length === 0,
-      equipo,
-      paso: null,
-      sugerencia: tareasPendientes[0]
-        ? { id: tareasPendientes[0].id, version: tareasPendientes[0].version, numero: tareasPendientes[0].numero, titulo: tareasPendientes[0].titulo }
-        : null,
-      notaParaHubspot: t.secciones.notaParaHubspot?.estado === "pendiente" ? t.secciones.notaParaHubspot.sugerida : null,
-    });
+    const r = await despuesDe(id, user, equipo, ahora);
+    if (r) out.push(r);
   }
   if (equipo && out.length) {
     const pasos = await pasosVigentes([...new Set(out.map((r) => r.clientId))].map((objetoId) => ({ objeto: "empresa" as const, objetoId }))).catch(() => []);
     for (const r of out) r.paso = pasos.find((p) => p.objetoId === r.clientId && p.equipo === equipo) ?? null;
   }
   return out;
+}
+
+/** Lo que dejó UNA reunión (su tarjeta), o null si no es de un cliente o un prospecto, o no se puede ver. */
+async function despuesDe(
+  sessionId: string,
+  user: AppUserWithTeamMember,
+  equipo: EquipoDelSiguientePaso | null,
+  ahora: Date,
+): Promise<DespuesDeLaReunion | null> {
+  const t = await cargarTarjeta(sessionId, user, ahora).catch(() => null);
+  if (!t || (t.reunion.empresa.kind !== "CLIENTE" && t.reunion.empresa.kind !== "PROSPECTO")) return null;
+  const tareasPendientes = t.secciones.tareas.items.filter((x) => x.estado === "pendiente");
+  const plan = t.planDeUsarTodo;
+  return {
+    sessionId: t.reunion.id,
+    titulo: t.reunion.titulo,
+    fecha: t.reunion.fecha,
+    clientId: t.reunion.clientId,
+    empresa: t.reunion.empresa.nombre,
+    esProspecto: t.esProspecto,
+    pideDecision: t.pideDecision,
+    minutaPorRevisar: !!t.secciones.minuta && t.secciones.minuta.estado === "pendiente",
+    tareasPropuestas: tareasPendientes.length,
+    pedidos: t.secciones.fueraDeAlcance.items.filter((p) => p.estado === "pendiente").length,
+    huella: t.huella,
+    usarTodoVacio: !plan.minuta && plan.pedidos.length === 0 && plan.tareas.length === 0 && plan.novedades.length === 0,
+    equipo,
+    paso: null,
+    sugerencia: tareasPendientes[0]
+      ? { id: tareasPendientes[0].id, version: tareasPendientes[0].version, numero: tareasPendientes[0].numero, titulo: tareasPendientes[0].titulo }
+      : null,
+    notaParaHubspot: t.secciones.notaParaHubspot?.estado === "pendiente" ? t.secciones.notaParaHubspot.sugerida : null,
+  };
+}
+
+/**
+ * Lo que dejó la reunión de un evento del calendario (el panel de la agenda del inicio, ficha D): la fila de Meet de
+ * ese evento (`gmeet_<evento>` o su `googleEventId`), si ya llegó y es del cliente que se pidió. null = todavía no hay.
+ */
+export async function loQueDejoElEvento(
+  eventoId: string,
+  clientId: string,
+  user: AppUserWithTeamMember,
+  rol: string,
+  ahora = new Date(),
+): Promise<DespuesDeLaReunion | null> {
+  const fila = await prisma.firefliesSession.findFirst({
+    where: { OR: [{ id: `gmeet_${eventoId}` }, { googleEventId: eventoId }] },
+    orderBy: { date: "desc" },
+    select: { id: true, resolvedClientId: true, manualClientId: true },
+  });
+  if (!fila || (fila.resolvedClientId ?? fila.manualClientId) !== clientId) return null;
+  const equipo = equipoDelRol(rol);
+  const r = await despuesDe(fila.id, user, equipo, ahora);
+  if (r && equipo) {
+    const pasos = await pasosVigentes([{ objeto: "empresa" as const, objetoId: r.clientId }]).catch(() => []);
+    r.paso = pasos.find((p) => p.equipo === equipo) ?? null;
+  }
+  return r;
 }

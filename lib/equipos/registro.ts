@@ -23,8 +23,12 @@ export type ClaveDeEquipo = "ventas" | "cs" | "dev" | "marketing" | "finanzas";
 export type CarteraDelEquipo =
   /** Las empresas donde es dueño en HubSpot y donde tiene un negocio abierto (lib/ventas/negocios). */
   | "ventas"
-  /** Las cuentas de los proyectos donde es el CSE encargado (lib/para-ti/alcance-server.ts). */
+  /** Las cuentas de los proyectos donde es el CSE encargado (lib/para-ti/alcance-server.ts); la CSL, toda la cartera. */
   | "cse"
+  /** Los clientes con un proyecto de desarrollo activo (lib/mi-dia/cuentas-server.ts). */
+  | "dev"
+  /** Sus tareas internas: las de Smarteam y SmartAgro (lib/tareas/ambito.ts). */
+  | "internas"
   /** Todavía no tiene cartera en «Para ti». */
   | null;
 
@@ -39,18 +43,24 @@ export interface EquipoDeNexus {
   siguientePaso: EquipoDelSiguientePaso | null;
   cartera: CarteraDelEquipo;
   paraTi: {
-    /** La agenda del día, con la empresa de cada reunión y «Preparar». */
+    /** La agenda del día, con la empresa de cada reunión y su panel. */
     agenda: boolean;
+    /**
+     * Qué inicio ve (ficha D, 2026-10-17, lib/mi-dia/inicio.ts): Ventas, su pipeline; el CSE, sus cuentas (la CSL, toda
+     * la cartera); Desarrollo, los clientes con proyecto de desarrollo activo; Marketing, sus tareas internas.
+     */
+    inicio: "ventas" | "cse" | "dev" | "marketing" | "general";
   };
 }
 
 export const EQUIPOS_DE_NEXUS: readonly EquipoDeNexus[] = [
-  { clave: "ventas", nombre: "Ventas", roles: ["VENTAS"], sprint: "ventas", siguientePaso: "ventas", cartera: "ventas", paraTi: { agenda: true } },
-  { clave: "cs", nombre: "Customer Success", roles: ["CSE", "CSL"], sprint: "cs", siguientePaso: "cs", cartera: "cse", paraTi: { agenda: true } },
-  // Dev, Marketing y Finanzas: la etapa 7 completa su cartera y lo que ven. Hoy, su siguiente paso (Dev) y su sprint.
-  { clave: "dev", nombre: "Desarrollo", roles: ["DEV"], sprint: "desarrollo", siguientePaso: "dev", cartera: null, paraTi: { agenda: true } },
-  { clave: "marketing", nombre: "Marketing", roles: ["MARKETING"], sprint: "marketing", siguientePaso: null, cartera: null, paraTi: { agenda: false } },
-  { clave: "finanzas", nombre: "Finanzas", roles: ["ADMIN"], sprint: "admin", siguientePaso: null, cartera: null, paraTi: { agenda: false } },
+  { clave: "ventas", nombre: "Ventas", roles: ["VENTAS"], sprint: "ventas", siguientePaso: "ventas", cartera: "ventas", paraTi: { agenda: true, inicio: "ventas" } },
+  { clave: "cs", nombre: "Customer Success", roles: ["CSE", "CSL"], sprint: "cs", siguientePaso: "cs", cartera: "cse", paraTi: { agenda: true, inicio: "cse" } },
+  // Desarrollo: los clientes con proyecto de desarrollo activo. Marketing: sus tareas internas (Smarteam y SmartAgro).
+  // Finanzas: el inicio general (lo suyo vive en Finanzas).
+  { clave: "dev", nombre: "Desarrollo", roles: ["DEV"], sprint: "desarrollo", siguientePaso: "dev", cartera: "dev", paraTi: { agenda: true, inicio: "dev" } },
+  { clave: "marketing", nombre: "Marketing", roles: ["MARKETING"], sprint: "marketing", siguientePaso: null, cartera: "internas", paraTi: { agenda: false, inicio: "marketing" } },
+  { clave: "finanzas", nombre: "Finanzas", roles: ["ADMIN"], sprint: "admin", siguientePaso: null, cartera: null, paraTi: { agenda: false, inicio: "general" } },
 ];
 
 const DIRECCION = "SUPER_ADMIN";

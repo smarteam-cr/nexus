@@ -17,12 +17,19 @@ export interface ReunionDeHoy {
   inicio: string;
   fin: string | null;
   conMeet: boolean;
+  /** El enlace de Meet del evento, si lo trae. */
+  meetUrl: string | null;
+  /** El evento en Google Calendar (para «Abrir en Calendar»). */
+  calendarUrl: string | null;
   /** Las empresas de Nexus de la reunión. Una = esa es; varias = no se sabe cuál (se elige al preparar). */
   empresas: string[];
   /** Los invitados de afuera (sin Smarteam, sin salas ni calendarios). */
   externos: number;
   internos: number;
 }
+
+/** Un evento del calendario con sus enlaces (Meet y la página del evento). */
+export type EventoConEnlaces = EventoDelCalendario & { hangoutLink?: string | null; htmlLink?: string | null };
 
 const dominioDe = (email: string) => email.split("@")[1]?.trim().toLowerCase() ?? "";
 
@@ -60,7 +67,7 @@ export function empresasDeLaReunion(
  * alguien más invitado. Por hora.
  */
 export function agendaDelDia(
-  eventos: readonly EventoDelCalendario[],
+  eventos: readonly EventoConEnlaces[],
   o: {
     porCorreo: ReadonlyMap<string, readonly string[]>;
     porDominio: ReadonlyMap<string, readonly string[]>;
@@ -83,7 +90,9 @@ export function agendaDelDia(
       titulo: e.summary?.trim() || "(Sin título)",
       inicio,
       fin: isoDelEvento(e.end),
-      conMeet: e.conferenceData?.conferenceSolution?.key?.type === "hangoutsMeet",
+      conMeet: e.conferenceData?.conferenceSolution?.key?.type === "hangoutsMeet" || !!e.hangoutLink,
+      meetUrl: e.hangoutLink?.startsWith("https://") ? e.hangoutLink : null,
+      calendarUrl: e.htmlLink?.startsWith("https://") ? e.htmlLink : null,
       empresas: empresasDeLaReunion(externos, o.porCorreo, o.porDominio),
       externos: externos.length,
       internos: gente.length - externos.length,

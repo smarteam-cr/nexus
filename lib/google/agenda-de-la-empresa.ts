@@ -34,7 +34,7 @@ function motivoDelError(e: unknown): MotivoSinAgenda {
 
 /** Los campos que hacen falta para decidir si un evento es una reunión con la empresa (y nada más). */
 const CAMPOS_DEL_EVENTO =
-  "id,status,summary,description,start,end,recurringEventId,extendedProperties,conferenceData(conferenceSolution(key(type))),attendees(email,self,responseStatus,resource),organizer(email)";
+  "id,status,summary,description,start,end,recurringEventId,extendedProperties,conferenceData(conferenceSolution(key(type))),attendees(email,self,responseStatus,resource),organizer(email),hangoutLink,htmlLink";
 
 /**
  * Los eventos del calendario principal de `email` desde ahora hasta dentro de `semanas` semanas, una fila
@@ -64,11 +64,18 @@ export async function eventosProximos(email: string, o: { semanas: number; ahora
 
 /**
  * Los eventos del calendario principal de `email` entre dos instantes (la agenda del día de «Para ti», etapa 4c de
- * docs/mi-dia-plan.md). Solo lee, con el mismo permiso; como mucho 2 días y 100 eventos.
+ * docs/mi-dia-plan.md). Solo lee, con el mismo permiso; como mucho 2 días (o `maxDias`, hasta 8: la vista de semana del
+ * inicio) y 100 eventos (250 con más de 2 días).
  */
-export async function eventosEntre(email: string, desde: Date, hasta: Date): Promise<ResultadoDeLaAgenda<calendar_v3.Schema$Event[]>> {
+export async function eventosEntre(
+  email: string,
+  desde: Date,
+  hasta: Date,
+  o: { maxDias?: number } = {},
+): Promise<ResultadoDeLaAgenda<calendar_v3.Schema$Event[]>> {
   if (!agendaDisponible()) return { ok: false, motivo: "sin-google" };
-  const tope = new Date(Math.min(hasta.getTime(), desde.getTime() + 2 * 24 * 60 * 60 * 1000));
+  const dias = Math.max(1, Math.min(o.maxDias ?? 2, 8));
+  const tope = new Date(Math.min(hasta.getTime(), desde.getTime() + dias * 24 * 60 * 60 * 1000));
   try {
     const cal = apiCalendar({ version: "v3", auth: getImpersonatedAuth(email) });
     const res = await cal.events.list({
@@ -77,7 +84,7 @@ export async function eventosEntre(email: string, desde: Date, hasta: Date): Pro
       timeMax: tope.toISOString(),
       singleEvents: true,
       orderBy: "startTime",
-      maxResults: 100,
+      maxResults: dias > 2 ? 250 : 100,
       fields: `items(${CAMPOS_DEL_EVENTO})`,
     });
     return { ok: true, datos: (res.data.items ?? []) as calendar_v3.Schema$Event[] };
