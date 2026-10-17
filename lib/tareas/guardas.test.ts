@@ -189,6 +189,10 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "app/api/team/[id]/permissions/route.ts": "guardar los sprints que lidera una persona: solo la lista de sprints (equipos.ts, puro); no lee tareas",
       "components/team/SprintsQueLidera.tsx": "«Lidera los sprints de» en Equipo: solo los nombres de los sprints (equipos.ts, puro); no lee tareas",
       "app/api/siguiente-paso/personas/route.ts": "quién puede llevar el siguiente paso de cada equipo: el sprint de cada persona (equipos.ts) y lo que lidera",
+      // La capa de operaciones (2026-10-16, fase 0.4 de docs/nexus-sistema-de-trabajo-plan.md): la puerta del chat de Nexus.
+      "lib/operaciones/contexto-server.ts": "la persona explícita de una operación: su visibilidad en Tareas (contextoDeTareas) y los clientes que ve; no lee tareas",
+      "lib/operaciones/tareas-server.ts": "las operaciones de Tareas: leen SOLO por lib/tareas/para-operaciones.ts (sin la cita, el contexto ni las notas) y escriben SOLO por el escritor único (crearTarea, cambiarEstado, moverDeSemana)",
+      "lib/operaciones/siguiente-paso-server.ts": "fijar el siguiente paso: solo los sprints que lidera la persona (equipos.ts, puro); escribe por lib/siguiente-paso",
       // Las tareas de HubSpot (2026-10-15, etapa 3 de docs/mi-dia-plan.md).
       "lib/tareas-hubspot/reglas.ts": "las tareas de HubSpot: solo los tipos de prioridad (puro)",
       "lib/tareas-hubspot/sync-server.ts": "la copia de las tareas de HubSpot: escribe Tareas SOLO por el escritor único (crearTareaDeHubspot, aplicarDesdeHubspot, anotarSincronizacionConHubspot); lo que va a HubSpot lo escribe acá, nunca lib/tareas",
@@ -232,7 +236,7 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
 
   it("ninguna lectura de los agentes o del chat nombra la cita de una tarea", () => {
     const malos: string[] = [];
-    for (const dir of ["lib/agents", "lib/canvas", "lib/ai", "lib/asistente", "lib/cs", "lib/memoria"]) {
+    for (const dir of ["lib/agents", "lib/canvas", "lib/ai", "lib/asistente", "lib/cs", "lib/memoria", "lib/operaciones"]) {
       for (const rel of fuentes(dir)) {
         const src = soloCodigo(leer(rel));
         if (/\.tarea\.[\s\S]{0,200}\bcita\b|tareaEvento[\s\S]{0,200}\bcita\b|proyectoDeTareas[\s\S]{0,200}\bcita\b/.test(src)) malos.push(rel);

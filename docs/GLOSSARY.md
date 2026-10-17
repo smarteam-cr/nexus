@@ -901,6 +901,9 @@
   lecturas de la ficha); al pasar el mouse dice por qué en una línea. Las alertas del agente y la deuda no pintan. La
   relación cuenta solo donde Smarteam **acompaña** la cuenta (proyecto activo o relación gestionada en HubSpot).
   Ver DECISIONS §El color de cada cuenta.
+- **Operación** (`lib/operaciones`, desde el 2026-10-16): algo que se puede hacer en Nexus desde la pantalla o el chat,
+  escrito una vez: nombre, para qué sirve, qué pide (zod), si **lee** o **propone**, y cómo se prepara y se aplica. Lo
+  que propone se muestra como una línea y se aplica cuando la persona lo confirma, por el escritor único de su módulo.
 - **Lectura de la cuenta** (`lib/cs/lectura-de-la-cuenta.ts`, desde el 2026-10-16): cómo está una cuenta en una línea:
   su color y hasta tres motivos (las razones del color y lo que vio el vigía que el color no dice). La ven quien lidera
   Customer Success y el CSE de la cuenta, en el chip «Cómo está la cuenta» de la ficha. Reemplaza a mirar las alertas

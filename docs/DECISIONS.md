@@ -8365,6 +8365,21 @@ hacerlo**. El plan, por fases, está en `docs/nexus-sistema-de-trabajo-plan.md`.
   del sprint de ese equipo, para su dueño si es del sprint y, si no, en «Por asignar».
 - **«Para ti» dejó de repetir el siguiente paso**: la fuente «Tus siguientes pasos» se retiró, porque esas tareas ya
   salen en «Tus tareas». «Usar como siguiente paso» (después de una reunión) usa la tarea propuesta, no crea otra.
+- **La capa de operaciones** (0.4, `lib/operaciones`): lo que se puede hacer en Nexus desde la pantalla o el chat,
+  escrito una vez. Cada operación tiene nombre, para qué sirve (en tuteo, lo lee el modelo), qué pide (un zod, del que
+  sale el esquema de la herramienta), si lee o propone, `preparar` (valida sin escribir y arma la línea que se lee
+  antes de aplicar) y `aplicar` (por el escritor único de su módulo). La persona va EXPLÍCITA: la capa no lee la sesión.
+  - *Primera tanda*: leer las tareas, las notas y los siguientes pasos de una cuenta; crear una tarea, cambiarle el
+    estado, pasarla de semana; anotar en la cuenta; fijar el siguiente paso de un equipo. Darlo por hecho es terminar su
+    tarea.
+  - *Lo que llega al modelo de Tareas* sale de una puerta propia (`lib/tareas/para-operaciones.ts`): número, título,
+    estado, semana, vencimiento, responsable y lado; nunca la cita, el contexto ni las notas, y con la visibilidad de la
+    persona.
+  - *Aplicar una lista* va en orden y corta en la que falla (lo anterior queda; lo demás no se intenta). Cada operación
+    es atómica por su escritor; una lista de módulos distintos no comparte una transacción. Antes de aplicar se vuelve a
+    preparar: lo que llega del navegador nunca se aplica tal cual.
+  - ⚠ Los escritores del siguiente paso todavía preguntan el acceso con la sesión del pedido: aplicarlos fuera de un
+    pedido de la misma persona (un job) falla con 403.
 
 **Cómo quedó la fase 1 en el código (2026-10-16, sin desplegar; 1.1, 1.2, 1.3 y 1.4).**
 
