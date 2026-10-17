@@ -1756,7 +1756,8 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
 
   it("cobrado en Nexus y sin pagar en Odoo: TEC-AE 0218, 0272 y 0200, y Juanva 0197; la factura que anula una nota suma una vez", () => {
     const l = linea(lista, "ODOO-COBRADO-SIN-PAGAR");
-    expect(l?.donde).toBe("PREGUNTANDO");
+    /* Odoo manda (2026-10-16): el choque es tarea de quien concilia Odoo, no una decisión. */
+    expect(l?.donde).toBe("ODOO");
     expect(l?.titulo).toBe("5 cobros en Cobrado con su factura sin pagar en Odoo");
     expect(l?.items.map((i) => [i.texto, i.nota])).toEqual([
       ["TEC- AE — FAC/2026/0218 por US$3.240", "2026-02 US$3.240 · cobrado en Nexus · sin pagar en Odoo"],

@@ -2246,10 +2246,12 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         montos,
         plata,
         documentos: cobradasSinPagar.flatMap(casaDelPar),
-        donde: "PREGUNTANDO",
+        /* Desde el 2026-10-16 Odoo manda (plan «Un solo libro financiero»): un choque es tarea de quien concilia Odoo
+           cada mañana, no una decisión. Antes era PREGUNTANDO y no contaba en sus pendientes. */
+        donde: "ODOO",
         pasos: [
           "Busca en el banco el depósito de cada fila.",
-          "Si entró, pásale el comprobante a contabilidad para que registre el pago en Odoo, y anota la referencia del depósito en el cobro.",
+          "Si entró, registra el pago en Odoo: Odoo manda, y con eso la fila sale sola en la próxima copia.",
           "Si no entró, sácalo de Cobrado desde el cronograma, con el motivo. Lo decide una persona: Nexus no lo saca solo.",
           "Si la factura tiene una nota de crédito sin aplicar (está en su línea), mírala antes: puede que no se deba.",
         ],

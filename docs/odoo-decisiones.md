@@ -1293,3 +1293,33 @@ corre; el respaldo JSON del script cubre lo que se modifica.
 **Qué la revertiría.** Los tooltips, nada. «Facturación por cliente», que Odoo empiece a registrar pagos que no pasan
 por la factura (anticipos): «cobrado» saldría de los pagos, no de las facturas. La carga de kölbi, que Alex decida
 que esa cuenta no va en Nexus: el respaldo JSON dice qué borrar y qué devolver.
+
+## 2026-10-16 · Odoo y Mercury mandan: la factura se pega sola y lo pagado se cobra en lote, con la firma de una persona
+
+**Qué.** Primera parte de la etapa «Odoo y Mercury mandan» del plan «Un solo libro financiero» (reunión con Alex del
+16-oct). `lib/cobranza/libro/hechos.ts` (puro, con pruebas) decide para cada cuota:
+- **La factura se pega sola.** Por número, o por monto exacto en la misma cuenta y moneda si es la única que calza, a no
+  más de 45 días y en un mes que ya llegó. Más estricto que `cruzar()`, a propósito: ahí un par dudoso se muestra, acá
+  se escribe. La cuota queda facturada con la fecha y el número de la factura.
+- **Lo pagado allá se cobra acá.** Odoo: `paid` o `in_payment` sin saldo («en proceso de pago» = pagado, decisión 2 del
+  16-oct). Mercury: `Paid`. Con el día real del pago: en Odoo, el del movimiento con que se concilió
+  (`lib/cobranza/odoo/fechas-de-pago.ts`, por el puerto); en Mercury, su entrada de plata o, sin ella, el día en que la
+  marcó pagada. Sin día no se cobra: la fecha decide el mes del gráfico.
+- **Los choques no se tocan.** Cobrada en Nexus e impaga allá: `ODOO-COBRADO-SIN-PAGAR` pasa de PREGUNTANDO a ODOO
+  (cuenta en los pendientes de quien concilia cada mañana). Recomendación aprobada por Elías el 16-oct.
+
+`lib/cobranza/libro/aplicar.ts` escribe por `cambiarEstadoCobroTx`, una transacción por cuota, releyéndola antes.
+Por ahora lo corre `scripts/aplicar-odoo-y-mercury.ts` (simulacro por defecto; `--cobrar` para cobrar las pagadas).
+
+**Por qué con la firma de una persona.** El 16-oct se decidió «lo pagado en Odoo o Mercury queda cobrado sin otra
+firma». Quitar la firma humana (INV3/INV25) quedó pendiente de autorizar; hasta entonces el sistema prepara la lista y
+una persona la confirma de una vez con su nombre, la doctrina de `cargar-cuenta-desde-odoo.ts --cobrar-con-firma`.
+INV3 e INV25 no cambian.
+
+Medido el 2026-10-16 (simulacro): 8 cuotas se pegan a su factura (US$14.899), 8 pagadas listas para cobrar
+(US$9.296) y 6 choques (US$5.155). Con la regla de 180 días, Ferretería Noelito de noviembre y diciembre se pegaban a
+facturas de junio: la regla del mes que ya llegó lo impide.
+
+**Qué la revertiría.** Que Alex quiera ver cada par antes de pegarlo: el script sin `--apply` ya es esa lista. Que se
+autorice el cobro sin firma humana: cambia INV25 (firma del sistema con factura pagada en el espejo como evidencia) y
+el aplicador pasa al cron diario.

@@ -66,7 +66,7 @@ export const NO_SON_VOSEO: ReadonlySet<string> = new Set([
   "create", "update", "delete", "generate", "regenerate", "template", "private", "profile", "rotate", "translate",
   "estimate", "estate", "rationale", "realtime", "datetime", "filename", "website", "iframe", "infinite", "polite",
   "authenticate", "createdate", "closedate", "dealname", "lastmodifieddate", "lastactivitydate", "assigneddate",
-  "firstname", "lastname",
+  "firstname", "lastname", "reconcile",
   // Nombres de herramientas (los alias del cruce de gastos con Mercury, lib/finanzas/gastos-mercury.ts)
   "gsuite", "googlegsuite",
   "quirinale",
