@@ -954,3 +954,13 @@ una PC, en este orden, cada script primero en simulacro:
    de que terminaran.
 5. `npx tsx scripts/guardar-primera-version-de-la-escala.ts`, y con `--apply`: la primera versión de la escala de cada
    exploración con niveles confirmados (7 el 17 oct).
+
+### Después del deploy de la segunda tanda (17 oct: fichas D a H)
+
+Los cinco SQL ya están aplicados. Además:
+
+1. La primera sync de Meet después del deploy guarda la descripción de la invitación en las reuniones de los últimos 30
+   días que la tengan (un UPDATE por reunión, una sola vez).
+2. SmartLoop: con el plan de FACO pasado a JSON (la forma está en `scripts/data/propuesta-smartloop.ejemplo.json`),
+   `npx tsx scripts/cargar-propuesta-en-ciclo.ts --proyecto <id de «FACO · SmartLoop (prueba)»> --archivo <faco.json> --por <correo>`
+   en simulacro, y con `ALLOW_PROD_WRITE=1 … --apply`. Se niega si el proyecto ya tiene historia.

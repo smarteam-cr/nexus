@@ -213,6 +213,20 @@
   dónde sale cada nivel. Se ve en La cuenta › La escala, «La escala en el tiempo». Interna.
 - **Camino de crecimiento**: qué sigue en la escala de cada área y por qué, con los casos de la biblioteca que lo
   mueven. Sale de reglas, sin IA.
+- **Cuenta sin acción** («Para ti»): una cuenta con servicio activo sin una tarea con fecha esa semana o sin reunión
+  agendada en los próximos 8 días. Le llega a quien la lleva.
+- **Preparación de una reunión** (`PreparacionDeReunion`): el objetivo y las notas que una persona escribe para una
+  reunión en el panel de la agenda. Solo los ve ella.
+- **Agenda de la reunión**: lo que se iba a tratar en una reunión: lo escrito por una persona, la invitación del
+  calendario o lo que dejó planeado la reunión anterior. **Próxima reunión sugerida**: la que Nexus propone al terminar
+  una reunión con un cliente, para agendar por enlace.
+- **Cronograma del ciclo**: el cronograma de un ciclo de SmartLoop, con cada caso de uso como una fase; tiene su
+  **versión aprobada**. **Ciclos anteriores**: los ciclos cerrados, con sus documentos congelados.
+- **Lo pagado** (Conciliación): lo que Odoo y Mercury dan por pagado, listo para cobrar con la firma de quien confirma.
+- **Licencia revendida** (`LicenciaRevendida`): la parte de un contrato que es licencia de un tercero; el resto es
+  servicio. **Gasto financiero** (`GastoFinanciero`): una comisión de Stripe o de una transferencia, confirmada.
+- **Chat de Nexus** (botón «Nexus» en la ficha del cliente): el chat sobre una cuenta; propone cambios que se aplican con
+  un clic. **Sugerencias**: lo que te toca en esa cuenta, sin IA.
 - **Tarea de HubSpot** (`Tarea` con `origen = "hubspot"`, `lib/tareas-hubspot`): una tarea de HubSpot de alguien del
   equipo, en Tareas internas. Lo que cambia de un lado (título, estado, vencimiento, prioridad, responsable) se escribe
   del otro; si cambiaron los dos, gana el último. Lleva el chip «HubSpot» (o «HubSpot · secuencia»). «Ya no se hará» no

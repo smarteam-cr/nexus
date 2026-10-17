@@ -471,6 +471,22 @@ vez, en zonas que no se pisan.
   `lib/asistente` sin cambiar los chats que ya existen (documentos y tareas).
 - **Fuera.** Generar documentos con plantilla. Nada se escribe sin el clic de la persona.
 
+### Segunda tanda: integrada (17 oct)
+
+D, E, F, G y H mezcladas en `main`. Solo un conflicto, en el censo de `lib/sessions/ocurridas.test.ts` (D y H sumaron su
+entrada en el mismo lugar: quedaron las dos). Los cinco SQL aplicados en producción (`check:esquema` en verde, 187
+tablas). Las cinco tablas nuevas suman su deny-all a `prisma/policies.sql`. `tsc` en 0; la suite unit entera en verde
+(689 archivos, 11.523 casos). DECISIONS (cinco secciones), GLOSSARY y RUNBOOK al día.
+
+Pendiente de decidir (lo dejaron las fichas):
+- D: si una cuenta «En espera del cliente» se exime de «Cuenta sin acción»; si «Tu día, según Nexus» (sin IA) lleva la
+  chispa; que Nexus lea el objetivo y las notas de cada reunión al terminarla.
+- E: pasar el plan de FACO a JSON para cargarlo (`scripts/cargar-propuesta-en-ciclo.ts`).
+- F: si las licencias revendidas cuentan como ingreso completo (está en «Para decidir»); confirmar con datos reales la
+  forma del detalle de factura de Mercury y los tipos de sus comisiones.
+- G: una mutación en `lib/tareas` para crear la tarea de clase «reunion» al agendar la próxima.
+- H: probar el chat con la IA de verdad y medir el costo por turno.
+
 ### Después de la primera tanda
 
 Finanzas (pasos 2 a 6), Customer Success (acción semanal de cada cuenta y SmartLoop) e Inicio (las páginas de Ventas y

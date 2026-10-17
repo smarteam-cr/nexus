@@ -8507,3 +8507,74 @@ reuniones con clientes del último mes no tenía transcripción: 78 porque Nexus
   los 14 días.
 - **Por qué falta cada transcripción se mide** (`lib/google/por-que-falta.ts`, `scripts/medir-transcripciones-faltantes.ts`),
   separando lo que arregla Nexus de lo que es configuración de Google Workspace.
+
+## El inicio de cada equipo y la cuenta sin acción (2026-10-17, ficha D)
+
+**Contexto.** El inicio («Para ti») de Ventas y del CSE se rehízo con el diseño «Para ti · Ventas y CSE»: una guía,
+la agenda del día como Google Calendar y cada reunión en un panel al costado. Y cada cuenta con servicio activo tiene
+que tener su acción de la semana y su reunión agendada.
+
+- **La acción de la semana** es una tarea abierta de la cuenta, de cualquier equipo, que no es «Solo para mí», con
+  fecha dentro de la semana (la de su reunión, su vencimiento o su semana). La semana va de lunes a domingo; desde el
+  sábado cuenta la que viene.
+- **La reunión** es una reunión con la cuenta en los próximos 8 días en el calendario de quien la lleva, o una reunión
+  planeada en Tareas. Un evento cuenta solo si es de UNA empresa (invariante 1). Si no se pudo leer el calendario, se
+  dice eso, no que falta la reunión.
+- **«Cuenta sin acción» le llega solo a quien la lleva** (el encargado en HubSpot de un proyecto de CS abierto), con
+  peso 80 en «Lo que importa hoy». Pendiente de decidir: si «En espera del cliente» la exime.
+- **«Tu día, según Nexus» y la guía de cada reunión no usan IA**: los arma el código con los datos, y cada punto dice
+  de dónde sale. El objetivo y las notas de una reunión son de la persona (`PreparacionDeReunion`) y solo los ve ella;
+  Nexus todavía no los lee.
+- **Cada equipo tiene su inicio** (`varianteDelInicio`, del registro de equipos): el CSE sus cuentas, la CSL toda la
+  cartera, Desarrollo los clientes con proyecto de desarrollo activo y Marketing sus tareas internas.
+
+## El cronograma y el cierre del ciclo de SmartLoop (2026-10-17, ficha E)
+
+- **El cronograma del ciclo es el `ProjectTimeline` del proyecto**, no otro modelo: cada caso de uso es una fase
+  (`CasoDeUso.faseId`) y sus dependencias del cliente son tareas `party=CLIENTE` de esa fase. Así el Gantt, «Lo que debe
+  el cliente» y los hitos ya lo leen.
+- **La versión aprobada vive en el ciclo** (`CicloDeProyecto.cronogramaAprobado`), no en `TimelineBaseline`: la baseline
+  es del proyecto entero y la usa la cartera.
+- **Si una dependencia del cliente se atrasa, Nexus propone correr la fase**; nunca lo hace solo.
+- **Cerrar un ciclo congela sus documentos** con una foto protegida de cada uno y los deja en «Ciclos anteriores»; el
+  ciclo siguiente sigue escribiendo en los mismos documentos. Lo que «pasa» vuelve al plan y entra al ciclo siguiente.
+- **El traductor de propuestas** (`lib/servicios/traductor.ts`): un tramo es un ciclo; el avance es el que declara la
+  propuesta, nunca deducido de la fecha; solo carga en un proyecto sin historia. Pone el ancla del cronograma solo con
+  el clic de una persona o el `--apply`.
+
+## El libro financiero: lo pagado, las licencias revendidas y los gastos financieros (2026-10-17, ficha F)
+
+- **«Lo pagado»** (Conciliación): la lista de lo que Odoo y Mercury dan por pagado se confirma desde la pantalla con la
+  firma de quien la aprueba. Se escribe solo lo que la persona marcó y el servidor vuelve a decidir; si el día del pago
+  cambió desde que lo vio, esa cuota se pega a su factura pero no se cobra. INV3 e INV25 no cambian.
+- **Licencias revendidas** (`LicenciaRevendida`, una viva por cuenta y moneda): el porcentaje de servicio de cada
+  contrato. Reemplaza el parche de kölbi con los mismos números. Por defecto el punto de equilibrio cuenta solo el
+  servicio (`SOLO_SERVICIO`); si dirección decide en «Para decidir» que la licencia cuenta como ingreso completo, su
+  costo entra como estimado y queda fuera de la huella del cierre.
+- **Gastos financieros** (`GastoFinanciero`): las comisiones de Stripe y de las transferencias salen de la copia de
+  Mercury como candidatos; nada entra solo, y solo lo confirmado suma al equilibrio, en el rubro FINANCIERO.
+- **El detalle de una factura** de Odoo o de Mercury se lee del sistema al abrirlo; no se guarda.
+- **Mercury en «Facturación por cliente»**: `Paid` = cobrado; `Unpaid` y `Processing` = por cobrar; `Cancelled` no cuenta.
+
+## Cada reunión con su página (2026-10-17, ficha G)
+
+- **La agenda de una reunión** es lo que escribió una persona (manda), la descripción de la invitación del calendario
+  (`FirefliesSession.descripcionDelEvento`, la guarda la sync de Meet) y la próxima reunión que dejó agendada otra
+  reunión del mismo cliente a ±3 horas.
+- **Los avisos se calculan al leer** y suman los avisos de «Para ti» de quien mira que llevan a esa reunión. Las tareas
+  de la reunión tienen su propia sección, con responsable.
+- **El correo de seguimiento de cualquier reunión con un cliente es el mismo de las exploraciones**
+  (`escribirElCorreoDeSeguimiento`). Nexus no envía nada.
+- **La próxima reunión se agenda por enlace** de Google Calendar, con su objetivo en la invitación; «Ya la agendé» es la
+  palabra de la persona. `SeguimientoDeReunion` cuelga de la reunión, no del cliente.
+
+## El chat de Nexus sobre la cuenta (2026-10-17, ficha H)
+
+- **El modelo nunca elige la empresa.** Las herramientas van sin `clientId`: el servidor pone la del hilo y verifica
+  contra la cuenta todo lo que se nombra. Una operación que no declara cómo se acota (`COMO_SE_ACOTA`) no llega al chat.
+- **Un hilo por cuenta y por persona** (`HiloDeChat.clientId`, la pieza `nexus`).
+- **Propone con la capa de operaciones** en una lista que se aplica con un clic; aplicar la lee del hilo, la vuelve a
+  preparar y corta en la primera que falla.
+- **Costo y topes:** cada turno deja su `AgentRun` y cada llamada su `LlmCall` con `origen = "nexus-chat:<hiloId>"`. 40
+  mensajes y US$3 por persona por día, 6 vueltas por turno y 15 cambios por lista.
+- **«Sugerencias» sin IA**: como mucho 5 por cuenta, con el mensaje de WhatsApp listo para copiar. Nexus no envía nada.

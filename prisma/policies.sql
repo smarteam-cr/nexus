@@ -350,3 +350,41 @@ CREATE POLICY deny_all_non_superuser ON "EscalaCambio"
 --   EXISTS (... project_id = current_setting('request.jwt.claims')::json->>'project_id')
 -- El resto de las tablas se quedan en lock-down permanente (sin policy SELECT).
 -- ─────────────────────────────────────────────────────────────────────────────
+
+-- Las tandas del 2026-10-17 (scripts/sql/2026-10-17-ficha-*.sql): la escala en el tiempo, la preparación de cada
+-- reunión, lo que sigue a una reunión, las licencias revendidas y los gastos financieros. Solo las lee el servidor.
+DROP POLICY IF EXISTS deny_all_non_superuser ON "VersionDeLaEscala";
+CREATE POLICY deny_all_non_superuser ON "VersionDeLaEscala"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "PreparacionDeReunion";
+CREATE POLICY deny_all_non_superuser ON "PreparacionDeReunion"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "SeguimientoDeReunion";
+CREATE POLICY deny_all_non_superuser ON "SeguimientoDeReunion"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "LicenciaRevendida";
+CREATE POLICY deny_all_non_superuser ON "LicenciaRevendida"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "GastoFinanciero";
+CREATE POLICY deny_all_non_superuser ON "GastoFinanciero"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
