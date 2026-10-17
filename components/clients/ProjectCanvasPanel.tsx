@@ -31,6 +31,7 @@ import { resolvePipeline } from "@/lib/projects/kind";
 import { PIEZA_CUESTIONARIOS, type EstadoDeCuestionarios } from "@/lib/pieces/estado-de-cuestionarios";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
+import CronogramaDelCiclo from "@/components/ciclos/CronogramaDelCiclo";
 import CanvasBoundary from "./CanvasBoundary";
 import PrintDocButton from "@/components/print/PrintDocButton";
 import { PrintStagingProvider } from "@/components/print/PrintStaging";
@@ -362,6 +363,8 @@ export default function ProjectCanvasPanel({
      Cambiar de pieza desmonta el cronograma, y la propuesta que se estaba armando —ya pagada— se
      pierde: la vista previa no se guarda en ningún lado. El cronograma avisa con `onOcupado`. */
   const [cronogramaOcupado, setCronogramaOcupado] = useState(false);
+  /* Ficha E: el cronograma del ciclo (arriba del Gantt) arma fases y corre dependencias; el Gantt se vuelve a montar. */
+  const [cicloNonce, setCicloNonce] = useState(0);
   // Update URL when canvas changes (no page reload)
   const switchCanvas = useCallback((canvasId: string) => {
     if (cronogramaOcupado) return;
@@ -1241,11 +1244,26 @@ export default function ProjectCanvasPanel({
       {/* Cronograma: Gantt + editor del ProjectTimeline (fases/tareas/semanas).
           Fuente única — el Kickoff lo refleja read-only. clientId habilita el
           disparo del agente de detalle (POST /api/clients/[clientId]/analyze). */}
+      {/* Servicio recurrente (ficha E, docs/smartloop-plan.md etapa 3): arriba del Gantt, el cronograma del ciclo abierto
+          —cada caso de uso es una fase con su criterio, su avance y sus dependencias del cliente—. */}
+      {activeSlug === "timeline" && esRecurrente && (
+        <CanvasBoundary label="el cronograma del ciclo">
+          <div className="mb-4">
+            <CronogramaDelCiclo
+              projectId={projectId}
+              onCambio={() => {
+                setCicloNonce((n) => n + 1);
+                cicloCambio();
+              }}
+            />
+          </div>
+        </CanvasBoundary>
+      )}
       {activeSlug === "timeline" && (
         // agentNonce remonta el canvas al terminar el CTA de avance → muestra el banner
         <CanvasBoundary label="el Cronograma">
           <CronogramaCanvas
-            key={`cronograma-${agentNonce}`}
+            key={`cronograma-${agentNonce}-${cicloNonce}`}
             projectId={projectId}
             clientId={clientId}
             headerSlot={canvasHeaderSlot}

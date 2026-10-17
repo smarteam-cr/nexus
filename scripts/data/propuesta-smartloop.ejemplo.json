@@ -1,0 +1,44 @@
+{
+  "formato": 1,
+  "propuesta": "EJEMPLO · Plan de 60 días (reemplazar con la propuesta real)",
+  "tramos": [
+    {
+      "nombre": "Tramo 1 · ejemplo",
+      "desde": "2026-09-01",
+      "hasta": "2026-09-30",
+      "meta": "La meta del tramo, en palabras del resultado que persigue el cliente.",
+      "iniciativas": [
+        {
+          "titulo": "Iniciativa de ejemplo ya hecha",
+          "area": "Ventas",
+          "resultado": "Qué resultado del cliente persigue.",
+          "dimensiones": [{ "dimension": "Procesos", "nivel": "Funcional" }],
+          "criterio": "Cómo se sabe que funcionó.",
+          "metrica": "La métrica que lo mide.",
+          "semanas": "1-2",
+          "estado": "hecha"
+        },
+        {
+          "titulo": "Iniciativa de ejemplo que no se terminó (pasa al tramo en curso)",
+          "area": "Ventas",
+          "semanas": "3-4",
+          "estado": "en_curso",
+          "dependencias": [{ "titulo": "El cliente envía la base de contactos", "semana": 3, "hecha": false }]
+        }
+      ]
+    },
+    {
+      "nombre": "Tramo 2 · ejemplo",
+      "desde": "2026-10-01",
+      "hasta": "2026-10-30",
+      "iniciativas": [
+        {
+          "titulo": "Iniciativa de ejemplo pendiente",
+          "area": "Servicio",
+          "criterio": "Cómo se sabe que funcionó.",
+          "semanas": { "desde": 2, "hasta": 4 }
+        }
+      ]
+    }
+  ]
+}

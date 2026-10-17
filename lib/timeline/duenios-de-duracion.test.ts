@@ -70,6 +70,14 @@ const ESCRITORES: { archivo: string; protege: string }[] = [
      (`recalcularCierreDeFase`, que toca solo el estado), vive en escribir-estructura.ts, declarado
      arriba. */
   {
+    /* Entró el 2026-10-17 (ficha E, el cronograma del ciclo de un servicio recurrente). */
+    archivo: "lib/timeline/ciclo-server.ts",
+    protege:
+      "Nunca acorta. Crea la fase de un caso de uso sin tareas (las dependencias se suman después, acotadas a la " +
+      "duración que ya tiene) y, al correr una fase por una dependencia atrasada, solo la ALARGA y mueve las " +
+      "dependencias acotándolas a la última semana nueva (`aplicarPropuestaALaFase`).",
+  },
+  {
     archivo: "scripts/fusionar-fases-cronograma.ts",
     protege:
       "Fusiona dos fases a mano. Ya acotaba: calcula `ultimaSemana = durationWeeks - 1` y mete " +

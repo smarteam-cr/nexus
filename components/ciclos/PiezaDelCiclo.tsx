@@ -18,6 +18,8 @@ import { ETIQUETA_DE_ETAPA, PIEZA_ADOPCION_DEL_CICLO, PIEZA_APRENDIZAJE_DEL_CICL
 import { guiaDeServicio } from "@/lib/servicios";
 import { guiaDelCiclo } from "@/lib/servicios/guia";
 import { useCiclo, type EstadoConPermiso } from "./useCiclo";
+import CierreDelCiclo from "./CierreDelCiclo";
+import CiclosAnteriores from "./CiclosAnteriores";
 
 const FECHA = new Intl.DateTimeFormat("es-CR", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const fecha = (iso: string | null) => (iso ? FECHA.format(new Date(`${iso}T00:00:00Z`)) : null);
@@ -34,7 +36,7 @@ export default function PiezaDelCiclo({
   slug: string;
   onCambio?: () => void;
 }) {
-  const { estado, error } = useCiclo(projectId, onCambio);
+  const { estado, error, enviar } = useCiclo(projectId, onCambio);
 
   if (error) return <Alert variant="danger">{error}</Alert>;
   if (!estado) {
@@ -70,26 +72,18 @@ export default function PiezaDelCiclo({
           <h2 className="text-sm font-semibold text-fg">La sesión de aprendizaje</h2>
           <p className="text-[13px] text-fg-secondary">{guiaDeServicio(estado.servicio)?.reglaDeCierre}</p>
           <p className="text-[13px] text-fg-muted">
-            {ciclo?.hasta
-              ? `El ciclo termina el ${fecha(ciclo.hasta)}.`
-              : "El ciclo todavía no tiene fecha de cierre: ponla en la tarjeta de la etapa, en el Resumen."}
+            {ciclo
+              ? ciclo.hasta
+                ? `${nombreDelCiclo(ciclo)} termina el ${fecha(ciclo.hasta)}.`
+                : "El ciclo todavía no tiene fecha de cierre: ponla en la tarjeta de la etapa, en el Resumen."
+              : "No hay un ciclo abierto: el proyecto está en Diagnóstico y el siguiente ciclo se abre al cambiar su etapa o sus datos."}
           </p>
         </section>
       )}
 
-      {estado.cerrados.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-fg">Ciclos anteriores</h2>
-          <ul className="space-y-1 text-[13px] text-fg-secondary">
-            {estado.cerrados.map((c) => (
-              <li key={c.numero}>
-                {nombreDelCiclo(c)}
-                {c.desde && c.hasta ? ` · ${fecha(c.desde)} al ${fecha(c.hasta)}` : ""}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {slug === PIEZA_APRENDIZAJE_DEL_CICLO && ciclo && <CierreDelCiclo ciclo={ciclo} puedeEditar={estado.puedeEditar} enviar={enviar} />}
+
+      <CiclosAnteriores projectId={projectId} cerrados={estado.cerrados} />
     </div>
   );
 }
@@ -106,6 +100,8 @@ function Guia({ estado, etapa, enCurso }: { estado: EstadoConPermiso; etapa: Eta
     desde: ciclo?.desde ?? null,
     hasta: ciclo?.hasta ?? null,
     casos: ciclo?.casos ?? [],
+    aprobada: ciclo ? ciclo.versionAprobada > 0 : undefined,
+    aprendizaje: ciclo ? { metaResultado: ciclo.metaResultado, siguienteCiclo: ciclo.siguienteCiclo } : undefined,
   });
   return (
     <section className="space-y-3 rounded-xl border border-line bg-surface p-5">
