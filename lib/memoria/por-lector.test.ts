@@ -110,6 +110,7 @@ const PIDE: Record<Exclude<LectorDeMemoria, "pase-de-cuenta" | "lo-que-sabe-la-i
   correo: { cuenta: true, proyecto: false },
   cuestionario: { cuenta: true, proyecto: false },
   vigia: { cuenta: true, proyecto: true },
+  "nexus-chat": { cuenta: true, proyecto: true },
 };
 
 function memoriaDe(lector: keyof typeof PIDE, yaLeidas: string[] = []): string {

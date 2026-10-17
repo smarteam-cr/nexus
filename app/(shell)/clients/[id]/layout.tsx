@@ -13,6 +13,8 @@ import Link from "next/link";
 import WorkspaceShell from "@/components/clients/WorkspaceShell";
 import { AccionDeCabecera, CabeceraDeFicha, ChipHubspot } from "@/components/layout/CabeceraDeFicha";
 import { BotonAgregarReunion } from "@/components/sessions/AgregarReunion";
+import { ChatDeNexus } from "@/components/nexus-chat/ChatDeNexus";
+import { can } from "@/lib/auth/permissions/engine";
 // WorkspaceHeaderPopovers (drawer Contexto con Docs/Sesiones/Deal) — eliminado.
 // Docs y Sesiones se migraron al panel "Información del cliente"; el Deal se
 // descontinuó.
@@ -119,6 +121,8 @@ export default async function ClientLayout({
   // `requireInternalUser` está memoizado por petición: requireAccessToClient ya lo resolvió arriba.
   const ctx = await requireInternalUser().catch(() => null);
   const canSeeCs = !!ctx && esLiderDeCs(ctx.role);
+  /* El chat de Nexus sobre la cuenta (2026-10-17, ficha H): la misma celda que los otros chats (conversar consume modelo). */
+  const puedeChat = !!ctx && (await can(ctx.teamMember, "asistente", "read").catch(() => false));
 
   /* Lo que la CSL le hizo al color de la cuenta en Éxito del cliente (2026-10-09): «en espera del cliente» y la
      corrección del color. Lo ve todo quien abre la ficha —también el CSE, que no entra a Éxito del cliente—: la
@@ -203,6 +207,8 @@ export default async function ClientLayout({
           <>
             {/* Una reunión que no pasó por Meet, o lo que pasó en una que no dejó transcripción (etapa 4f). */}
             <BotonAgregarReunion clienteFijo={{ id, nombre: client.name }} etiqueta="+ Reunión" />
+            {/* El chat de Nexus sobre esta cuenta y lo que te sugiere (lib/nexus-chat). */}
+            {puedeChat && <ChatDeNexus clientId={id} nombre={client.name} />}
             {canSeeCs && (
               <AccionDeCabecera href={`/customer-success/${id}`} title="Estado de la cuenta en Customer Success">
                 🧭 Ver portal del cliente

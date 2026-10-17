@@ -241,6 +241,7 @@ model Client {
   proyectosDeTareas      ProyectoDeTareas[]      @relation("ProyectosDeTareasDelCliente")
   vinculosDeTareas       TareaVinculo[]          @relation("VinculosDeTareasDelCliente")
   hechosDeReuniones      HechoDeReunion[]        @relation("HechosDelCliente") // memoria de la cuenta: los hechos de sus reuniones (CASCADE)
+  hilosDeChat            HiloDeChat[]            @relation("HilosDeChatDeLaCuenta") // el chat de Nexus sobre la cuenta (2026-10-17, CASCADE)
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
 }
@@ -5175,6 +5176,10 @@ model HiloDeChat {
   businessCase   BusinessCase? @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
   roleId         String?
   role           RoleProfile?  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  /// La cuenta (2026-10-17, ficha H): el chat de Nexus (lib/nexus-chat) conversa sobre UNA empresa, un hilo por
+  /// cuenta y por persona con la pieza «nexus». Los otros tres dueños van en null.
+  clientId       String?
+  client         Client?       @relation("HilosDeChatDeLaCuenta", fields: [clientId], references: [id], onDelete: Cascade)
 
   /// Sobre QUÉ documento se conversa — el slug de la pieza (`lib/pieces/registry.ts`).
   /// Un hilo por proyecto y documento: hablar del cronograma y del kickoff son dos
@@ -5205,6 +5210,7 @@ model HiloDeChat {
   /// El camino caliente de los otros dos dueños, igual que el de arriba.
   @@index([businessCaseId, pieza, usuarioEmail])
   @@index([roleId, pieza, usuarioEmail])
+  @@index([clientId, pieza, usuarioEmail])
 }
 
 model MensajeDeChat {

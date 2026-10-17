@@ -27,7 +27,8 @@ export type LectorDeMemoria =
   | "cuestionario"
   | "pase-de-cuenta"
   | "lo-que-sabe-la-ia"
-  | "vigia";
+  | "vigia"
+  | "nexus-chat";
 
 export interface ConsumidorDeLaMemoria {
   /** El slug de la pieza (lib/pieces/registry.ts) que escribe, o null si no escribe una pieza. */
@@ -220,6 +221,15 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     archivos: ["lib/cs/watchdog-cuenta.ts"],
     motivo:
       "El vigía de Éxito del cliente: lo que Nexus ya sabe de la cuenta y del proyecto (la ficha, los procesos, la historia, lo fuera de alcance, la preventa, la auditoría, las desviaciones y los hechos), interno.",
+  },
+  "nexus-chat": {
+    pieza: null,
+    // Lo lee una persona del equipo en el chat de Nexus (lib/nexus-chat), sobre UNA cuenta: interno. Nunca el cliente.
+    alcance: "interno",
+    excluirOrigenes: [],
+    archivos: ["lib/nexus-chat/lecturas-server.ts"],
+    motivo:
+      "El chat de Nexus (2026-10-17, ficha H): lo que Nexus ya sabe de la cuenta (en el contexto de cada turno y con la herramienta «cuenta.memoria») y de un proyecto («proyecto.memoria»), para contestar y proponer cambios.",
   },
 };
 
