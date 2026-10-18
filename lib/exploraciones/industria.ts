@@ -63,6 +63,18 @@ const PISTAS: Record<string, readonly string[]> = {
     "escuela",
   ],
   inmobiliaria: ["real estate", "inmobiliaria", "bienes raices"],
+  turismo: [
+    "leisure travel",
+    "travel",
+    "tourism",
+    "turismo",
+    "hospitality",
+    "hotel",
+    "hoteleria",
+    "viajes",
+    "agencia de viajes",
+  ],
+  automotriz: ["automotive", "automotriz", "concesionario", "vehiculos", "automoviles", "autos"],
 };
 
 /**
