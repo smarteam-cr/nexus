@@ -11,6 +11,8 @@ import {
   SIN_FILTROS,
   sinContacto,
   todas,
+  tendenciaDeLaFraccion,
+  usoDeHubspot,
   type EmpresaDeCs,
   type ProyectoDeCs,
 } from "./cartera-cs";
@@ -41,6 +43,8 @@ function empresa(e: Partial<EmpresaDeCs> = {}): EmpresaDeCs {
     contactos: 3,
     ticketsAbiertos: 0,
     negocios: null,
+    uso: null,
+    invitados: [],
     ...e,
   };
 }
@@ -167,5 +171,84 @@ describe("negociosDeLaEmpresa", () => {
   it("sin negocios activos no hay nada", () => {
     expect(negociosDeLaEmpresa([{ monto: 1, moneda: "USD", etapa: "Pausado" }])).toBeNull();
     expect(negociosDeLaEmpresa([])).toBeNull();
+  });
+});
+
+describe("usoDeHubspot", () => {
+  const hub = (h: "marketing" | "sales" | "service" | "operations", uso: number | null) => ({
+    hub: h,
+    nombre: h,
+    plan: "Professional",
+    activado: true,
+    uso,
+    porActivar: [],
+    licencias: null,
+    renovacion: null,
+    montoMensual: null,
+  });
+  const partner = (o: Partial<Parameters<typeof usoDeHubspot>[0]["partner"] & object> = {}) => ({
+    uso: 62,
+    tendencia: 0.01,
+    hubs: [hub("sales", 50), hub("service", 70)],
+    gestionada: true,
+    relacionGestionadaTermino: null,
+    ...o,
+  });
+  // La copia semanal: la más nueva es la W42 y hace 4 semanas, la W38.
+  const historial = [
+    { semana: "2026-W42", uso: 62, porHub: { sales: 50, service: 70 } },
+    { semana: "2026-W38", uso: 60, porHub: { sales: 60, service: 69 } },
+  ];
+
+  it("muestra el UUS con su tendencia y, sin un hub que baje, ningún hub", () => {
+    const u = usoDeHubspot({ partner: partner(), historial: [{ semana: "2026-W42", uso: 62, porHub: { sales: 50 } }, { semana: "2026-W38", uso: 60, porHub: { sales: 49 } }], hoyISO: HOY });
+    expect(u).toEqual({ estado: "con-uso", uso: 62, tendencia: "igual", hubs: [] });
+  });
+
+  it("si un hub que compró baja, muestra los hubs que compró, cada uno con su tendencia", () => {
+    const u = usoDeHubspot({ partner: partner({ tendencia: -0.12 }), historial, hoyISO: HOY });
+    expect(u).toEqual({
+      estado: "con-uso",
+      uso: 62,
+      tendencia: "baja",
+      hubs: [
+        { hub: "sales", uso: 50, tendencia: "baja" },
+        { hub: "service", uso: 70, tendencia: "igual" },
+      ],
+    });
+  });
+
+  it("solo los hubs con puntaje que la cuenta tiene (Operations no da puntaje)", () => {
+    const u = usoDeHubspot({ partner: partner({ hubs: [hub("sales", 40), hub("operations", null)] }), historial, hoyISO: HOY });
+    expect(u.estado === "con-uso" && u.hubs.map((h) => h.hub)).toEqual(["sales"]);
+  });
+
+  it("sin la copia de hace 4 semanas no inventa la tendencia de un hub", () => {
+    const u = usoDeHubspot({ partner: partner({ tendencia: null }), historial: [historial[0]], hoyISO: HOY });
+    expect(u).toEqual({ estado: "con-uso", uso: 62, tendencia: null, hubs: [] });
+  });
+
+  it("sin HubSpot Partner: sin uso, sin relación ni último puntaje", () => {
+    expect(usoDeHubspot({ partner: null, usoAnterior: { uso: 40, fecha: "2026-07-01" }, hoyISO: HOY })).toEqual({ estado: "sin-uso", terminoLaRelacion: null, ultimo: null });
+  });
+
+  it("si la relación gestionada terminó, lo dice con el último puntaje", () => {
+    const u = usoDeHubspot({
+      partner: partner({ uso: null, gestionada: false, relacionGestionadaTermino: "2026-08-20" }),
+      usoAnterior: { uso: 41, fecha: "2026-08-10" },
+      hoyISO: HOY,
+    });
+    expect(u).toEqual({ estado: "sin-uso", terminoLaRelacion: "2026-08-20", ultimo: { uso: 41, fecha: "2026-08-10" } });
+  });
+
+  it("gestionada y sin puntaje: sin uso, sin decir que terminó", () => {
+    expect(usoDeHubspot({ partner: partner({ uso: null }), hoyISO: HOY })).toEqual({ estado: "sin-uso", terminoLaRelacion: null, ultimo: null });
+  });
+
+  it("la tendencia usa el umbral de «uso cayendo» de Éxito del cliente (5 %)", () => {
+    expect(tendenciaDeLaFraccion(-0.06)).toBe("baja");
+    expect(tendenciaDeLaFraccion(-0.05)).toBe("igual");
+    expect(tendenciaDeLaFraccion(0.06)).toBe("sube");
+    expect(tendenciaDeLaFraccion(null)).toBeNull();
   });
 });

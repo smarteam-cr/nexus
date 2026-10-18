@@ -32,7 +32,8 @@ import { hubspotProjectUrl } from "@/lib/hubspot/urls";
 import { tienePermiso, type Alcance } from "@/lib/para-ti/alcance-server";
 import { cuentasDelPedido, lecturasDelPedido } from "./lecturas-server";
 import { servicioDeLasCuentas, type ServicioDeLaCuenta } from "./servicio-server";
-import { negociosDeLaEmpresa, saludDeCs, type EmpresaDeCs, type PipelineDeCs, type ProyectoDeCs } from "./cartera-cs";
+import type { SemanaDeUso } from "@/lib/cs/adopcion";
+import { negociosDeLaEmpresa, saludDeCs, usoDeHubspot, type EmpresaDeCs, type PipelineDeCs, type ProyectoDeCs } from "./cartera-cs";
 import type { VarianteDelInicio } from "./inicio";
 
 export interface CarteraDeCs {
@@ -41,6 +42,8 @@ export interface CarteraDeCs {
   lider: boolean;
   /** Ve el monto de los negocios abiertos. */
   veMontos: boolean;
+  /** El correo de quien mira: «Planificar acción» arma el evento en su calendario. */
+  correo: string;
 }
 
 const PIPELINES: ReadonlyArray<readonly [string, PipelineDeCs]> = (["customer-success", "smartloop", "development"] as const).map(
@@ -52,6 +55,32 @@ const IDS_DE_PIPELINE = PIPELINES.map(([id]) => id);
 /** Un tope de cordura: la cartera entera tiene ~100 proyectos abiertos. */
 const MAX_PROYECTOS = 2000;
 const MAX_NEGOCIOS = 2000;
+/** La copia semanal de uso que se lee: 6 semanas alcanzan para comparar con hace 4. */
+const DIAS_DE_HISTORIAL = 42;
+const MAX_SEMANAS = 4000;
+
+/**
+ * La copia semanal de uso de HubSpot Partner (`PartnerUsageSnapshot`) de esas empresas, de las últimas 6 semanas. Una
+ * semana por empresa (si una empresa tiene dos registros de Partner, la primera que llega).
+ */
+async function historialDeUso(clientIds: readonly string[], ahora: Date): Promise<Map<string, SemanaDeUso[]>> {
+  const out = new Map<string, SemanaDeUso[]>();
+  if (clientIds.length === 0) return out;
+  const filas = await prisma.partnerUsageSnapshot.findMany({
+    where: { clientId: { in: [...clientIds] }, capturedAt: { gte: new Date(ahora.getTime() - DIAS_DE_HISTORIAL * 86_400_000) } },
+    orderBy: { weekKey: "desc" },
+    select: { clientId: true, weekKey: true, uusScore: true, marketingScore: true, salesScore: true, serviceScore: true },
+    take: MAX_SEMANAS,
+  });
+  for (const f of filas) {
+    if (!f.clientId) continue;
+    const l = out.get(f.clientId) ?? [];
+    if (l.some((x) => x.semana === f.weekKey)) continue;
+    l.push({ semana: f.weekKey, uso: f.uusScore, porHub: { marketing: f.marketingScore, sales: f.salesScore, service: f.serviceScore } });
+    out.set(f.clientId, l);
+  }
+  return out;
+}
 
 /** La variante de «Para ti» que tiene esta cartera. */
 export function tieneCarteraDeCs(variante: VarianteDelInicio): variante is "cse" | "csl" {
@@ -117,11 +146,12 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
   const lider = veTodaLaCarteraDeCs(variante, a);
   const veMontos = tienePermiso(a, "ventas", "read");
   const propias = lider ? null : [...new Set(a.proyectos.map((p) => p.clientId))];
-  if (propias && propias.length === 0) return { empresas: [], lider, veMontos };
+  const correo = a.email;
+  if (propias && propias.length === 0) return { empresas: [], lider, veMontos, correo };
 
   const proyectos = await proyectosDeLaCartera(propias);
   const ids = [...new Set(proyectos.map((p) => p.clientId))];
-  if (ids.length === 0) return { empresas: [], lider, veMontos };
+  if (ids.length === 0) return { empresas: [], lider, veMontos, correo };
 
   // Las que lleva el CSE (es el encargado en HubSpot): de esas ve el color. Las compartidas, sin color.
   const lasQueLlevo = new Set(a.proyectos.filter((p) => p.encargado).map((p) => p.clientId));
@@ -129,7 +159,7 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
   const sinColor = lider ? [] : ids.filter((id) => !lasQueLlevo.has(id));
   const hoy = hoyEnCostaRica(o.ahora);
 
-  const [cuentasConColor, cuentasSinColor, lecturas, negocios, contactos, portal] = await Promise.all([
+  const [cuentasConColor, cuentasSinColor, lecturas, negocios, contactos, portal, historial] = await Promise.all([
     cuentasDelPedido(conColor).catch(() => [] as CuentaDeCartera[]),
     cuentasDelPedido(sinColor).catch(() => [] as CuentaDeCartera[]),
     conColor.length ? lecturasDelPedido(conColor, { sinPlata: !lider, ahora: o.ahora }).catch(() => null) : Promise.resolve(null),
@@ -142,7 +172,10 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
       .groupBy({ by: ["clientId"], where: { clientId: { in: ids }, vigente: true }, _count: { _all: true } })
       .catch(() => null),
     portalDelSistema().catch(() => null),
+    // El uso de HubSpot, de las que ve el color: es dato de partner (como en Adopción, solo quien lleva la cuenta).
+    historialDeUso(conColor, o.ahora).catch(() => new Map<string, SemanaDeUso[]>()),
   ]);
+  const veElUso = new Set(conColor);
   const cuentaDe = new Map([...cuentasConColor, ...cuentasSinColor].map((c) => [c.clientId, c]));
 
   // Quién lleva cada proyecto (el encargado en HubSpot), con su nombre en Nexus y si está de baja.
@@ -237,8 +270,12 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
       contactos: contactosDe ? (contactosDe.get(id) ?? 0) : null,
       ticketsAbiertos: c?.ticketsAbiertos ?? null,
       negocios: veMontos ? negociosDeLaEmpresa(negociosDe.get(id) ?? []) : null,
+      uso: veElUso.has(id)
+        ? usoDeHubspot({ partner: c?.partner ?? null, usoAnterior: c?.usoAnterior ?? null, historial: historial.get(id) ?? [], hoyISO: hoy })
+        : null,
+      invitados: s?.invitados ?? [],
     };
   });
 
-  return { empresas: empresas.sort((x, y) => x.nombre.localeCompare(y.nombre, "es")), lider, veMontos };
+  return { empresas: empresas.sort((x, y) => x.nombre.localeCompare(y.nombre, "es")), lider, veMontos, correo };
 }

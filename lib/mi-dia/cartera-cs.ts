@@ -24,6 +24,8 @@
  * lidera Customer Success. Lo decide el servidor (lib/mi-dia/cartera-cs-server.ts): acá llegan en null.
  */
 import { DIAS_SIN_CONTACTO, VENTANA_DE_RENOVACION } from "@/lib/cs/cartera-reglas";
+import { usoHaceSemanas, type SemanaDeUso } from "@/lib/cs/adopcion";
+import { relacionTerminada, UMBRALES, type HubDePartner, type LecturaDePartner } from "@/lib/cs/lectura-partner";
 
 export type PipelineDeCs = "customer-success" | "smartloop" | "development";
 
@@ -111,6 +113,10 @@ export interface EmpresaDeCs {
   ticketsAbiertos: number | null;
   /** Los negocios abiertos de la empresa (solo quien ve Ventas). */
   negocios: NegociosDeLaEmpresa | null;
+  /** El uso de HubSpot (`usoDeHubspot`). null = quien mira no lo ve (una cuenta compartida que no lleva). */
+  uso: UsoDeHubspot | null;
+  /** Los correos del cliente de la última reunión: con ellos «Planificar acción» arma el evento. */
+  invitados: string[];
 }
 
 // ── Fechas ────────────────────────────────────────────────────────────────────────────────────
@@ -328,6 +334,87 @@ export function opcionesDeFiltros(empresas: readonly EmpresaDeCs[]): {
     haySinCse,
     pipelines: ordenPipeline.filter((p) => pipelines.has(p)),
     etapas: [...etapas].sort((a, b) => a.localeCompare(b, "es")),
+  };
+}
+
+// ── Uso de HubSpot ────────────────────────────────────────────────────────────────────────────
+
+export type TendenciaDeUso = "sube" | "baja" | "igual";
+
+/** Los hubs que tienen puntaje propio en HubSpot Partner (los demás no lo dan). */
+export const HUBS_CON_PUNTAJE = ["marketing", "sales", "service"] as const;
+type HubConPuntaje = (typeof HUBS_CON_PUNTAJE)[number];
+
+export const NOMBRE_CORTO_DEL_HUB: Record<HubConPuntaje, string> = { marketing: "Marketing", sales: "Sales", service: "Service" };
+
+export interface UsoDeUnHub {
+  hub: HubConPuntaje;
+  uso: number;
+  /** null = la copia semanal no llega a hace 4 semanas: no se aproxima. */
+  tendencia: TendenciaDeUso | null;
+}
+
+export type UsoDeHubspot =
+  | {
+      estado: "con-uso";
+      /** El Unified User Score de HubSpot (0–100). */
+      uso: number;
+      /** La de las últimas 4 semanas, según HubSpot. null = no la dio. */
+      tendencia: TendenciaDeUso | null;
+      /** Los hubs que compró, cuando alguno baja. Vacío = ninguno baja (con el UUS alcanza). */
+      hubs: UsoDeUnHub[];
+    }
+  | {
+      estado: "sin-uso";
+      /** AAAA-MM-DD en que terminó la relación gestionada: desde entonces HubSpot no comparte el uso. */
+      terminoLaRelacion: string | null;
+      /** El último puntaje que dio HubSpot, de la copia semanal. */
+      ultimo: { uso: number; fecha: string } | null;
+    };
+
+/** Una variación como fracción (−0,12 = cayó 12 %) en palabras, con el umbral de «uso cayendo» de Éxito del cliente. */
+export function tendenciaDeLaFraccion(f: number | null): TendenciaDeUso | null {
+  if (f === null || !Number.isFinite(f)) return null;
+  if (f < UMBRALES.tendenciaCaida) return "baja";
+  if (f > -UMBRALES.tendenciaCaida) return "sube";
+  return "igual";
+}
+
+function tendenciaEntre(antes: number | null, ahora: number): TendenciaDeUso | null {
+  if (antes === null) return null;
+  if (antes === 0) return ahora > 0 ? "sube" : "igual";
+  return tendenciaDeLaFraccion((ahora - antes) / antes);
+}
+
+/**
+ * El uso de HubSpot de una cuenta, de la copia de HubSpot Partner (nunca en vivo):
+ *   · con puntaje, el Unified User Score y su tendencia; si alguno de los hubs que compró (Marketing, Sales, Service)
+ *     baja, todos los que compró, cada uno con la suya, contra la copia semanal de hace 4 semanas;
+ *   · sin puntaje, si la relación gestionada terminó (HubSpot solo comparte el uso de las cuentas que gestiona
+ *     Smarteam) y el último puntaje conocido, como dice `porQueNoHayUso` en la ficha.
+ */
+export function usoDeHubspot(o: {
+  partner: Pick<LecturaDePartner, "uso" | "tendencia" | "hubs" | "gestionada" | "relacionGestionadaTermino"> | null;
+  usoAnterior?: { uso: number; fecha: string } | null;
+  historial?: readonly SemanaDeUso[];
+  hoyISO: string;
+}): UsoDeHubspot {
+  const p = o.partner;
+  if (!p || p.uso === null) {
+    return { estado: "sin-uso", terminoLaRelacion: p ? relacionTerminada(p, o.hoyISO) : null, ultimo: p ? (o.usoAnterior ?? null) : null };
+  }
+  const historial = [...(o.historial ?? [])];
+  const hubs: UsoDeUnHub[] = [];
+  for (const hub of HUBS_CON_PUNTAJE) {
+    const h = p.hubs.find((x) => x.hub === (hub as HubDePartner));
+    if (!h || h.uso === null) continue;
+    hubs.push({ hub, uso: Math.round(h.uso), tendencia: tendenciaEntre(usoHaceSemanas(historial, hub), h.uso) });
+  }
+  return {
+    estado: "con-uso",
+    uso: Math.round(p.uso),
+    tendencia: tendenciaDeLaFraccion(p.tendencia),
+    hubs: hubs.some((h) => h.tendencia === "baja") ? hubs : [],
   };
 }
 
