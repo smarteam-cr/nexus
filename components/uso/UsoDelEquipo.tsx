@@ -11,6 +11,7 @@ import { useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { UsoDelEquipo as Datos, UsoDeLaPersona } from "@/lib/uso/lectura-server";
+import { usoPorEquipo } from "@/lib/uso/por-equipo";
 
 const DIAS_DE_LA_SEMANA = ["L", "M", "M", "J", "V", "S", "D"];
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -135,30 +136,7 @@ export default function UsoDelEquipo({ datos }: { datos: Datos }) {
 
       {persona && <DetalleDeLaPersona p={persona} />}
 
-      {datos.porSeccion.length > 0 && (
-        <section className="space-y-2" aria-labelledby="por-seccion">
-          <h2 id="por-seccion" className="text-sm font-semibold text-fg">
-            Qué se abre, en las últimas 4 semanas
-          </h2>
-          <div className="divide-y divide-line rounded-xl border border-line bg-surface">
-            {datos.porSeccion.map((s) => (
-              <div key={s.clave} className="flex items-center gap-4 px-4 py-2.5 text-[13px]">
-                <span className="w-48 truncate text-fg">{s.nombre}</span>
-                <span className="relative h-2 flex-1 overflow-hidden rounded-full bg-surface-muted">
-                  <span
-                    className="absolute inset-y-0 left-0 rounded-full bg-brand"
-                    style={{ width: `${Math.round((s.personas / Math.max(1, datos.personas.length)) * 100)}%` }}
-                  />
-                </span>
-                <span className="w-28 text-right tabular-nums text-fg-secondary">
-                  {s.personas} {s.personas === 1 ? "persona" : "personas"}
-                </span>
-                <span className="w-28 text-right tabular-nums text-fg-muted">{s.aperturas} aperturas</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      {datos.porSeccion.length > 0 && <QueUsaCadaEquipo personas={datos.personas} />}
     </div>
   );
 }
@@ -192,6 +170,58 @@ function DetalleDeLaPersona({ p }: { p: UsoDeLaPersona }) {
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * Qué secciones abre cada equipo: cuántas personas del equipo la abrieron en las 4 semanas. Una celda vacía es una
+ * sección que nadie del equipo abrió.
+ */
+function QueUsaCadaEquipo({ personas }: { personas: readonly UsoDeLaPersona[] }) {
+  const { secciones, equipos } = useMemo(() => usoPorEquipo(personas), [personas]);
+  const columnas = { gridTemplateColumns: `180px repeat(${secciones.length}, minmax(76px, 1fr))` };
+  return (
+    <section className="space-y-2" aria-labelledby="que-usa-cada-equipo">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="que-usa-cada-equipo" className="text-sm font-semibold text-fg">
+          Qué usa cada equipo, en las últimas 4 semanas
+        </h2>
+        <span className="text-xs text-fg-muted">Personas del equipo que abrieron cada sección. Vacío: nadie del equipo la abrió.</span>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+        <div style={{ minWidth: 180 + secciones.length * 80 }}>
+          <div className="grid gap-px border-b border-line px-4 py-2 text-[11px] text-fg-muted" style={columnas}>
+            <span>Equipo</span>
+            {secciones.map((s) => (
+              <span key={s.clave} className="truncate text-center" title={s.nombre}>
+                {s.nombre}
+              </span>
+            ))}
+          </div>
+          {equipos.map((e) => (
+            <div key={e.equipo} className="grid items-center gap-px border-t border-line px-4 py-1.5 text-[13px] first:border-t-0" style={columnas}>
+              <span className="truncate text-fg">
+                {e.equipo} <span className="text-xs text-fg-muted">· {e.personas}</span>
+              </span>
+              {secciones.map((s) => {
+                const c = e.porSeccion[s.clave];
+                const parte = c ? c.personas / e.personas : 0;
+                return (
+                  <span
+                    key={s.clave}
+                    className={cn("rounded-[3px] py-1 text-center tabular-nums", c ? "text-fg" : "text-fg-muted")}
+                    style={c ? { backgroundColor: `color-mix(in srgb, var(--color-brand) ${Math.round(12 + parte * 45)}%, transparent)` } : undefined}
+                    title={c ? `${e.equipo} · ${s.nombre}: ${c.personas} de ${e.personas} · ${c.dias} ${c.dias === 1 ? "día" : "días"} de uso` : `Nadie de ${e.equipo} abrió ${s.nombre}`}
+                  >
+                    {c ? `${c.personas}/${e.personas}` : "—"}
+                  </span>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }

@@ -36,7 +36,13 @@ export interface Ventana {
   hasta: Date;
 }
 
-export type ItemParaContar = EstadoCalculado & { nacioEn: string };
+export type ItemParaContar = EstadoCalculado & {
+  nacioEn: string;
+  /** El cliente de la propuesta, cuando su tipo lo guarda. Sirve para contar por cuenta («Uso de Nexus» › IA por cliente). */
+  clientId?: string | null;
+  /** De dónde salió, cuando el tipo tiene más de un origen (una tarea: «reunion», «notas» o «chat»). */
+  fuente?: string | null;
+};
 
 const enLaVentana = (isoFecha: string | null, v: Ventana): boolean => {
   if (!isoFecha) return false;
