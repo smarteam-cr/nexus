@@ -17,10 +17,10 @@ está haciendo con él.
 | Qué | Cómo está |
 |---|---|
 | Producción | Corre la versión del 16 oct a las 16:10 (`918e2fdb`). Sana. |
-| Por desplegar | 31 cambios en `main`: las fases 0 y 1 del sistema de trabajo, Odoo y Mercury, y las dos tandas (las fichas A a H). |
+| Por desplegar | 46 cambios en `main`: las fases 0 y 1 del sistema de trabajo, Odoo y Mercury, las fichas A a H, la revisión de código y la tercera tanda (la semana, Uso de Nexus, el IVA, SmartLoop, la foto del margen y los entregables con plantilla). |
 | La base | Tiene todo lo que necesita lo que está en `main`: los SQL ya se aplicaron. |
 | En rojo en producción | Un proyecto en un pipeline sin declarar, un cliente apuntando a una empresa fusionada en HubSpot y el corte de cobranza, que nunca corrió. |
-| Revisión de código | Hecha el 17 oct sobre los 31 cambios: 57 problemas encontrados, unos 50 corregidos (sin commitear). Ninguno mezclaba clientes. |
+| Revisión de código | Hecha el 17 oct sobre los 31 cambios de entonces: 57 problemas encontrados, unos 50 corregidos y en `main`. Ninguno mezclaba clientes. |
 
 **Lo siguiente en todo Nexus:** probar en el 3004 y desplegar lo que está en `main`. Los SQL ya están en producción. Prender la lectura de hechos y el corte de cobranza. Después del deploy yo cierro las alertas sueltas, limpio las reuniones con texto de otra y rescato las transcripciones.
 
@@ -35,7 +35,7 @@ Todo lo que Smarteam tiene que hacer con un cliente, de cualquier equipo, es una
 1. [hecho] En la ficha de cada cliente, todas las tareas de Smarteam con esa cuenta, por equipo: qué es, para cuándo y de dónde viene.
 2. [hecho] Que cada equipo configure su sprint: Customer Success, Marketing y Desarrollo eligen su reunión de sprint y quiénes están.
 3. [hecho] De cada reunión, Nexus propone hasta 5 tareas por persona, y cada tarea dice de dónde viene: una reunión con el cliente o el sprint interno.
-4. «Planifica tu semana», la pantalla de los viernes.
+4. [hecho] «Planifica tu semana», la pantalla de los viernes: la acción y la reunión de la semana por cuenta.
 
 ### Inicio («Para ti») <span class="estado">Por desplegar</span>
 
@@ -45,8 +45,8 @@ Lo primero que ve cada persona al entrar: lo que importa hoy, sus cuentas y sus 
 2. [hecho] El inicio de los demás: la CSL ve toda la cartera, Desarrollo los clientes con proyecto de desarrollo activo y Marketing sus tareas internas (Smarteam y SmartAgro).
 3. [hecho] Crear eventos desde la agenda: tocar una hora arma un evento de una hora con su contacto y abre Google Calendar ya lleno; «Agendar» lo pone en la agenda primero; los huecos, solo de lunes a viernes de 8 a 5.
 4. [hecho] La cartera de Customer Success como la de Ventas, por proyectos (implementación, SmartLoop y desarrollo): el cliente grande, quién lo lleva, el estado de la cuenta, la última comunicación y el monto solo si hay un negocio abierto.
-5. Que Nexus sugiera con qué avanzar en los huecos de la agenda, con las tareas pendientes, para ponerlo en la agenda.
-6. Medir la adopción: qué usa cada equipo y qué se desestima, en «Uso de Nexus».
+5. [hecho] Que Nexus sugiera con qué avanzar en los huecos de la agenda, con las tareas pendientes, para ponerlo en la agenda.
+6. [hecho] Medir la adopción: qué usa cada equipo y qué se desestima, en «Uso de Nexus».
 7. El correo de la mañana con lo mismo, bien probado antes de mandarlo (espera decidir Gmail o un proveedor).
 
 ### Reuniones y memoria <span class="estado">Por desplegar</span>
@@ -56,7 +56,7 @@ Cada reunión se lee una vez y queda como memoria de la cuenta: la usan la ficha
 1. Prender la lectura de hechos de cada reunión (va con el deploy).
 2. [hecho] Que no falte ninguna transcripción: que Google Workspace las cree solas en todas las reuniones, también las de Desarrollo.
 3. [hecho] Arreglar las reuniones que quedaron con texto de otra reunión, y regenerar los handoffs de RC Inmobiliaria, AMC, DISTELSA y Grupo Printer.
-4. La agenda de cada cuenta: qué clientes tienen reunión y planear una desde Nexus.
+4. [hecho] La agenda de cada cuenta: qué clientes tienen reunión y planear una desde Nexus.
 5. [hecho] Cada reunión con su página: su agenda, sus avisos y sus tareas con responsable.
 6. [hecho] Después de cada reunión con un cliente: el correo de seguimiento y la próxima reunión sugerida.
 
@@ -79,7 +79,7 @@ Un solo chat que hace lo mismo que las pantallas, sobre la cuenta en la que est�
 1. [hecho] El chat sobre la memoria y las tareas de la cuenta, dentro de Nexus y con su costo controlado.
 2. [hecho] Contarle lo que pasó por WhatsApp o una llamada y que sugiera lo que hay que cambiar, para aplicarlo de una vez.
 3. [hecho] Acciones sugeridas a cada persona según sus cuentas y sus tareas, con el mensaje de WhatsApp listo.
-4. Que genere los documentos con su plantilla.
+4. [hecho] Que genere los documentos con su plantilla.
 
 ## Por equipo
 
@@ -90,7 +90,7 @@ La preventa, las propuestas y los negocios. Usa el inicio, la escala y la memori
 1. [hecho] Armar la propuesta desde la preventa, con una sección de casos de uso.
 2. [hecho] Esa sección también en una propuesta sin preventa: casos de uso inspirados en la biblioteca, con el contexto del prospecto o cliente.
 3. [hecho] Que la preventa sugiera el siguiente paso: agendar la próxima sesión de exploración y, si ya está agendada, planificarla.
-4. En la propuesta, «+IVA» o «IVA incluido» para clientes de Costa Rica, con los cálculos de ahí.
+4. [hecho] En la propuesta, «+IVA» o «IVA incluido» para clientes de Costa Rica, con los cálculos de ahí.
 
 ### Customer Success <span class="estado">Por desplegar</span>
 
@@ -100,9 +100,10 @@ Los proyectos, los documentos, la cartera y el servicio recurrente. Usa las tare
 2. [hecho] SmartLoop: cargar el plan de FACO en el proyecto de prueba.
 3. [hecho] SmartLoop: el cronograma del ciclo.
 4. [hecho] SmartLoop: aprendizaje y cierre del ciclo (comprometido para el 6 nov).
-5. SmartLoop: recomendar recurrencia, el Gantt de la cuenta para el cliente y pasar los recurrentes de hoy.
-6. Los documentos del proyecto con plantillas, sin tocar los kickoffs y diagnósticos que ya existen.
-7. La foto del margen de cada mes, en carga y rentabilidad.
+5. [hecho] SmartLoop: recomendar la recurrencia al llegar a la entrega y la ruta del servicio para el cliente.
+6. SmartLoop: pasar los recurrentes de hoy (el script ya está; la etapa de cada uno la confirma Customer Success).
+7. [hecho] Los documentos del proyecto con plantillas (la primera: «Diagnóstico estratégico»), sin tocar los kickoffs y diagnósticos que ya existen.
+8. [hecho] La foto del margen de cada mes, en carga y rentabilidad.
 
 ### Finanzas <span class="estado">Por desplegar</span>
 
@@ -163,59 +164,84 @@ otra persona: Equipo › la persona › «Ver como»; «Volver a mi usuario» te
 | 4 | ✓ Probado | «Para ti» de alguien de Marketing | Con «Ver como» alguien de Marketing, abre «Para ti». | Sus tareas internas, ordenadas por ámbito (Smarteam, SmartAgro). |
 | 5 | Por probar | «Lo que importa hoy», con tu usuario | Abre «Para ti» y mira la primera tarjeta. Si una cuenta tiene varias cosas, abre su «+N». | Como mucho 5 cosas, una por cuenta. Lo demás de esa cuenta queda plegado en «+N en esta cuenta», y lo que no entra va a «También para hoy». |
 | 6 | Por probar | La agenda › crear un evento | Toca una hora vacía de hoy (por ejemplo, las 10). En el cuadro escribe un título, busca un contacto por su nombre o su empresa, elígelo y toca «Abrir en Google Calendar». | Al tocar, aparece un bloque azul «borrador» de una hora. Al elegir el contacto, la cuenta se llena sola. Google Calendar se abre con el título, la hora, el invitado y, en la descripción, el enlace a la cuenta en Nexus. En la agenda, el bloque queda «abierto en Calendar, sin guardar», con «Ya lo guardé». |
-| 7 | Por probar | «Lo que importa hoy» › «Agendar» | Con «Ver como» el CSE del punto 3, toca «Agendar» en «Sin acción ni reunión». | El borrador aparece en la agenda en tu primera hora libre de trabajo, con la cuenta y su contacto, y Google Calendar se abre con ese evento listo para guardar. |
-| 8 | Por probar | Los huecos de la agenda | Mira la agenda después de las 16:00 o en fin de semana. En un día con espacio, toca el «Hueco libre» punteado. | Fuera de horario no aparece ningún «Hueco libre», y «Agendar» propone el siguiente día hábil a las 8:00. Al tocar el hueco, el panel dice «Tienes libre de X a Y», con «Crear un evento aquí», sin sugerir una tarea. |
-| 9 | Por probar | «Tu cartera» de un CSE | Con «Ver como» un CSE, toca «Tu cartera» arriba a la derecha. Prueba la vista «Todos los proyectos», el buscador y una cuenta que le compartieron. | Sus empresas en «Para atender», cada una con el nombre grande, sus proyectos con su etapa, el último contacto, la próxima reunión y su acción de la semana (✓ u ○). Una cuenta compartida dice «Compartida», sin color ni monto. |
-| 10 | Por probar | «La cartera» de Alex Vanegas | Con «Ver como» Alex, abre «Para ti» › «La cartera». Abre «Por CSE»; después filtra «Pipeline» › Desarrollo. | Ya no aparece la cartera de Ventas ni «Negocios traídos de HubSpot». «Por CSE» trae un bloque por CSE, en orden alfabético, con cuántas cuentas tiene en riesgo, sin acción y sin contacto, y «Sin CSE» al final. Con el filtro quedan solo las empresas con un proyecto de desarrollo. |
-| 11 | Por probar | El monto en la cartera | Con tu usuario, busca en la cartera una empresa con un negocio abierto; después mira la misma con «Ver como» un CSE. | «N negocios abiertos · US$ …» en la fila. El CSE no ve el monto. |
+| 7 | Por probar | «Lo que importa hoy» › «Agendar» | Con «Ver como» el CSE del punto 3, toca «Agendar» en «Sin acción ni reunión». Después abre «Agendar» desde la lista entera de «Para ti». | El borrador aparece en la agenda en tu primera hora libre de trabajo, con la cuenta y su contacto, y Google Calendar se abre con ese evento listo para guardar. Desde la lista entera también abre con la hora puesta, y cada cuenta con una hora distinta. |
+| 8 | Por probar | Los huecos de la agenda | Mira la agenda después de las 16:00 o en fin de semana. En un día con espacio, toca el «Hueco libre» punteado en azul y después «Ponerla en la agenda». | Fuera de horario no aparece ningún «Hueco libre», y «Agendar» propone el siguiente día hábil a las 8:00. Al tocar el hueco: «Con qué avanzar: T-… », la tarea más importante que cabe; «Ponerla en la agenda» deja el borrador en esa hora. |
+| 9 | Por probar | «Para ti» un viernes | Un viernes, abre «Para ti» como CSE, CSL o alguien de Desarrollo. | Debajo de «Lo que importa hoy», «Es viernes: planifica la semana que viene», que lleva a «Planifica tu semana» (prueba 20). |
+| 10 | Por probar | «Tu cartera» de un CSE | Con «Ver como» un CSE, toca «Tu cartera» arriba a la derecha. Prueba la vista «Todos los proyectos», el buscador y una cuenta que le compartieron. | Sus empresas en «Para atender», cada una con el nombre grande, sus proyectos con su etapa, el último contacto, la próxima reunión y su acción de la semana (✓ u ○). Una cuenta compartida dice «Compartida», sin color ni monto. |
+| 11 | Por probar | «La cartera» de Alex Vanegas | Con «Ver como» Alex, abre «Para ti» › «La cartera». Abre «Por CSE»; después filtra «Pipeline» › Desarrollo. | Ya no aparece la cartera de Ventas ni «Negocios traídos de HubSpot». «Por CSE» trae un bloque por CSE, en orden alfabético, con cuántas cuentas tiene en riesgo, sin acción y sin contacto, y «Sin CSE» al final. Con el filtro quedan solo las empresas con un proyecto de desarrollo. |
+| 12 | Por probar | El monto en la cartera | Con tu usuario, busca en la cartera una empresa con un negocio abierto; después mira la misma con «Ver como» un CSE. | «N negocios abiertos · US$ …» en la fila. El CSE no ve el monto. |
 
 ### 2 · La ficha del cliente
 
 | # | Estado | Dónde | Cómo probarlo | Qué deberías ver |
 |---|---|---|---|---|
-| 12 | Por probar | La cuenta › Tareas | Abre un cliente activo › La cuenta › Tareas. | Las tareas agrupadas por equipo (Customer Success primero): abiertas, por decidir y hechas en los últimos 30 días. Cada una dice quién la tiene, para cuándo y de dónde viene (reunión con el cliente, sprint interno, HubSpot, chat…). Lo «Solo para mí» de otras personas no aparece. |
-| 13 | Por probar | El chip «Cómo está la cuenta» | Con «Ver como» Alex, abre una cuenta en rojo o en amarillo y pasa el mouse por el chip. Repite con «Ver como» el CSE de esa cuenta. | El color y hasta tres motivos, en vez de alertas sueltas. El CSE ve lo mismo, pero sin montos. |
-| 14 | Por probar | El chat «Nexus» | En la ficha, toca «Nexus». Pregunta «¿Qué está pendiente con esta cuenta?». Después escribe «Por WhatsApp me dijeron que mandan la base el viernes», revisa la lista y toca «Aplicar». Prueba tocar «Aplicar» dos veces seguidas. | Contesta solo con lo de esa cuenta. Arma una lista con casillas, y al aplicar, la tarea aparece en La cuenta › Tareas como «Chat de Nexus». El segundo clic no la crea dos veces. |
-| 15 | Por probar | El botón «Sugerencias» | En la ficha, toca «Sugerencias». | Hasta 5 cosas que te tocan en esa cuenta, cada una con el mensaje de WhatsApp listo para copiar. |
-| 16 | Por probar | La cuenta › La escala | Abre un cliente con una exploración que tenga niveles confirmados › La cuenta › La escala. Toca «Regenerar con el agente». | Cada nivel con de dónde sale (la fuente y la frase). «La escala en el tiempo» con sus versiones fechadas. El agente solo propone: no cambia los niveles confirmados. Abajo, el camino de crecimiento con casos sugeridos. |
+| 13 | Por probar | El riel de un proyecto de implementación | Abre un cliente › un proyecto de implementación y mira la columna de la izquierda. Después abre un proyecto SmartLoop. | Arriba, «Herramientas del proyecto» (Resumen, Cronograma, Cuestionarios, Exploración, Ejecución); debajo, «Entregables» (Kickoff, Diagnóstico, Planificación, Integraciones, Entrega). En el SmartLoop, igual que antes: el grupo «Ciclo · etapa». |
+| 14 | Por probar | Generar un Diagnóstico y un Kickoff | En un proyecto con handoff, toca «Generar» en el Diagnóstico y después en el Kickoff. | Se generan y se ven igual que siempre; el kickoff con sus secciones de equipo y horarios intactas. |
+| 15 | Por probar | La cuenta › Tareas | Abre un cliente activo › La cuenta › Tareas. | Arriba, «Próximas reuniones» con el día, la hora y quién de Smarteam va. Debajo, las tareas agrupadas por equipo (Customer Success primero): abiertas, por decidir y hechas en los últimos 30 días, cada una con quién la tiene, para cuándo y de dónde viene. Lo «Solo para mí» de otras personas no aparece. |
+| 16 | Por probar | El chip «Cómo está la cuenta» | Con «Ver como» Alex, abre una cuenta en rojo o en amarillo y pasa el mouse por el chip. Repite con «Ver como» el CSE de esa cuenta. | El color y hasta tres motivos, en vez de alertas sueltas. El CSE ve lo mismo, pero sin montos. |
+| 17 | Por probar | El chat «Nexus» | En la ficha, toca «Nexus». Pregunta «¿Qué está pendiente con esta cuenta?». Escribe «Por WhatsApp me dijeron que mandan la base el viernes», revisa la lista y toca «Aplicar» dos veces seguidas. Después pide «Genera el diagnóstico del proyecto X» y aplícalo. | Contesta solo con lo de esa cuenta. La tarea aparece en La cuenta › Tareas como «Chat de Nexus» y el segundo clic no la duplica. El diagnóstico queda en la lista como «Generar Diagnóstico de «X» con la plantilla «Diagnóstico estratégico»» y, al aplicarlo, aparece en el proyecto en unos minutos. En un proyecto sin handoff, el kickoff no se ofrece y dice por qué. |
+| 18 | Por probar | El botón «Sugerencias» | En la ficha, toca «Sugerencias». | Hasta 5 cosas que te tocan en esa cuenta, cada una con el mensaje de WhatsApp listo para copiar. |
+| 19 | Por probar | La cuenta › La escala | Abre un cliente con una exploración que tenga niveles confirmados › La cuenta › La escala. Toca «Regenerar con el agente». | Cada nivel con de dónde sale (la fuente y la frase). «La escala en el tiempo» con sus versiones fechadas. El agente solo propone: no cambia los niveles confirmados. Abajo, el camino de crecimiento con casos sugeridos. |
 
 ### 3 · Tareas y reuniones
 
 | # | Estado | Dónde | Cómo probarlo | Qué deberías ver |
 |---|---|---|---|---|
-| 17 | Por probar | Configurar el sprint | Tareas › Semana del equipo › «La reunión del sprint» › Configurar. Elige la reunión semanal del equipo, deja «Quiénes están» vacío y guarda. | Solo te ofrece reuniones recurrentes de puertas adentro en las que estuviste. Con la lista vacía cuentan los del área más quien lidera. La próxima reunión de esa serie deja como mucho 5 tareas por persona, marcadas «Sprint interno». |
-| 18 | Por probar | La página de una reunión | Sesiones › una reunión con un cliente de esta semana. Toca «Armar el correo». Abre la misma reunión en otra pestaña, cambia el correo en las dos y guarda. | La agenda (de la invitación o escrita), los avisos y las tareas con su responsable. «Armar el correo» deja un borrador que no se envía. La próxima reunión sugerida, con su enlace a Google Calendar. La segunda pestaña avisa «El correo cambió: recarga la página». |
+| 20 | Por probar | Tareas › «Planifica tu semana» (arriba a la derecha) | Ábrelo como un CSE. En una cuenta, cambia el día de la reunión sugerida, toca «Agendar», guárdala en Calendar y toca «Ya lo guardé». En otra, toca «Usar» o «Crear la acción». | Una fila por cuenta con «La acción de la semana» y «La reunión de la semana»; lo que sugiere Nexus, en azul con la chispa y «De dónde sale». Google Calendar se abre con el título, la hora, los invitados y el objetivo. Después de guardarla: «Quedó en tus tareas como reunión con la cuenta». La acción queda con su T- y el día. |
+| 21 | Por probar | Configurar el sprint | Tareas › Semana del equipo › «La reunión del sprint» › Configurar. Elige la reunión semanal del equipo, deja «Quiénes están» vacío y guarda. | Solo te ofrece reuniones recurrentes de puertas adentro en las que estuviste. Con la lista vacía cuentan los del área más quien lidera. La próxima reunión de esa serie deja como mucho 5 tareas por persona, marcadas «Sprint interno». |
+| 22 | Por probar | La página de una reunión | Sesiones › una reunión con un cliente de esta semana. Toca «Armar el correo». Abre la misma reunión en otra pestaña, cambia el correo en las dos y guarda. | La agenda (de la invitación o escrita), los avisos y las tareas con su responsable. «Armar el correo» deja un borrador que no se envía. La próxima reunión sugerida, con su enlace a Google Calendar. La segunda pestaña avisa «El correo cambió: recarga la página». |
 
 ### 4 · Ventas
 
 | # | Estado | Dónde | Cómo probarlo | Qué deberías ver |
 |---|---|---|---|---|
-| 19 | Por probar | La escala de una preventa | Ventas › Preventa › una con reuniones leídas › La escala. | «De dónde sale cada nivel» y «Qué explorar en la próxima sesión». |
-| 20 | Por probar | Casos de uso en una propuesta | Propuestas › Nueva, con una empresa que tenga preventa › Generar. Repite con una empresa sin preventa. | La sección «Casos de uso incluidos». Sin preventa, los sugeridos de la biblioteca, sin precio. |
+| 23 | Por probar | La escala de una preventa | Ventas › Preventa › una con reuniones leídas › La escala. | «De dónde sale cada nivel» y «Qué explorar en la próxima sesión». |
+| 24 | Por probar | Casos de uso en una propuesta | Propuestas › Nueva, con una empresa que tenga preventa › Generar. Repite con una empresa sin preventa. | La sección «Casos de uso incluidos». Sin preventa, los sugeridos de la biblioteca, sin precio. |
+| 25 | Por probar | El IVA en la Inversión | En una propuesta de un cliente de Costa Rica, en la Inversión pon una línea de $10.000 y elige «+ IVA (13%)»; después cambia la línea a $11.300 y elige «IVA incluido (13%)». | Al lado de «Montos en», el selector «IVA» sin aviso. Con «+ IVA»: «IVA (13%) $1,300» y «Total con IVA $11,300». Con «IVA incluido»: «Monto sin IVA $10,000» e «IVA (13%) $1,300», y el total no cambia. |
+| 26 | Por probar | El IVA con licencias mensuales | En una propuesta con una implementación y una licencia mensual, elige «+ IVA». Mira también «Forma de pago». | «Pago único + IVA» y «Por mes + IVA», cada uno con su IVA y su total con IVA. En «Forma de pago», «Inversión total + IVA». |
+| 27 | Por probar | El IVA sin país y lo ya publicado | Abre la Inversión de una propuesta de un cliente sin país conocido. Después abre por su link una propuesta ya publicada y descarga el PDF; publica la de la prueba 25 y haz lo mismo. | Sin país: el selector está, con «⚠ No sabemos si el cliente es de Costa Rica…». La publicada de antes se ve igual, sin nada de IVA. La de la prueba 25 trae arriba «Montos sin IVA (+ 13%)» y el mismo desglose, en el link y en el PDF. |
 
-### 5 · SmartLoop (FACO, proyecto de prueba)
+### 5 · SmartLoop
 
 | # | Estado | Dónde | Cómo probarlo | Qué deberías ver |
 |---|---|---|---|---|
-| 21 | Por probar | El cronograma del ciclo | Abre FACO › el proyecto de prueba › Cronograma › «Armar las fases». Confirma la fecha de arranque y toca «Aprobar esta versión». | Sin fecha de arranque, primero pregunta «El cronograma arranca el … ¿Lo confirmas?». El cronograma del ciclo queda arriba del Gantt con su versión aprobada. |
-| 22 | Por probar | Cerrar el ciclo | En Aprendizaje, marca un caso de uso «no cumplido» y toca «Cerrar el ciclo». Después, en una pestaña que tenía el ciclo abierto, cambia la meta. | El ciclo queda en «Ciclos anteriores», y la fase de ese caso queda suspendida (ya no aparece atrasada en el Gantt). La pestaña vieja avisa «Este ciclo ya se cerró: recarga la página». |
+| 28 | Por probar | El cronograma del ciclo (FACO, proyecto de prueba) | Abre FACO › el proyecto de prueba › Cronograma › «Armar las fases». Confirma la fecha de arranque y toca «Aprobar esta versión». | Sin fecha de arranque, primero pregunta «El cronograma arranca el … ¿Lo confirmas?». El cronograma del ciclo queda arriba del Gantt con su versión aprobada. |
+| 29 | Por probar | Cerrar el ciclo (FACO, proyecto de prueba) | En Aprendizaje, marca un caso de uso «no cumplido» y toca «Cerrar el ciclo». Después, en una pestaña que tenía el ciclo abierto, cambia la meta. | El ciclo queda en «Ciclos anteriores», y la fase de ese caso queda suspendida (ya no aparece atrasada en el Gantt). La pestaña vieja avisa «Este ciclo ya se cerró: recarga la página». |
+| 30 | Por probar | Recomendar SmartLoop | Abre un proyecto de implementación en «Entrega» › Resumen. Toca «Dejar la tarea». En otro proyecto en «Entrega», toca «Abrir el alta». Mira «Para ti» del CSE encargado. | En «Qué sigue»: «El proyecto llegó a su entrega: propónle a … seguir con SmartLoop», con el porqué y los botones «Dejar la tarea», «Abrir el alta» y «Descartar». «Dejar la tarea» crea «Proponerle SmartLoop a …» en Tareas y la recomendación desaparece. «Abrir el alta» abre Nuevo proyecto con la empresa y «SmartLoop» elegido. En «Para ti» del CSE, en «Esta semana», la misma recomendación. |
+| 31 | Por probar | La ruta del servicio para el cliente | En un proyecto SmartLoop con ciclo › Resumen, panel derecho, toca «Subir al cliente» en «Ruta del servicio para el cliente». Abre el enlace del cliente con `?next=ciclos` y entra con la contraseña. En un proyecto que no es SmartLoop, abre «Acceso». | «Compartida desde el …» y «Volver a subir». El cliente ve «Ruta del servicio · …»: cada ciclo con sus fechas y su meta, los casos como barras, la línea de hoy y «De tu parte: …», sin notas ni montos. En el proyecto que no es SmartLoop, la fila «Ruta del servicio» no aparece. |
 
 ### 6 · Finanzas
 
 | # | Estado | Dónde | Cómo probarlo | Qué deberías ver |
 |---|---|---|---|---|
-| 23 | Por probar | Conciliación › «Lo pagado» | Finanzas › Conciliación › «Lo pagado». Desmarca una cuota y confirma con tu firma. | Las cuotas que Odoo y Mercury dan por pagadas, con el día del pago. Las de Mercury sin entrada de plata quedan en «Pagadas sin el día del pago» y no se cobran. Solo se cobran las marcadas. Si Odoo no contesta, aparece el aviso «Odoo no contestó» y lo de Mercury sigue. |
-| 24 | Por probar | Punto de equilibrio › «Licencias revendidas» | Abre kölbi › Editar y escribe «70.000» en «Lo que se le paga». Mira «Para decidir». | kölbi con su parte de servicio y el mismo margen que antes. Debajo del campo, «Se guarda: 70.000». En «Para decidir», cómo cuentan las licencias. |
-| 25 | Por probar | Conciliación › Gastos y Mercury › «Gastos financieros» | Abre la pestaña y confirma una comisión. | Las comisiones de Stripe y de las transferencias, para confirmar una por una. Lo confirmado suma al punto de equilibrio como gasto financiero. |
-| 26 | Por probar | Cobranza › Odoo › Facturación por cliente | Busca un cliente de Mercury y toca «Ver el detalle» en una factura. | Los clientes de Mercury junto a los de Odoo. El detalle de la factura se lee del sistema al abrirlo. |
-| 27 | Por probar | Cobranza › Odoo | Abre la lista de facturas. | Las facturas que Odoo da por emitidas ya están pegadas a su cuota, sin hacer nada. |
+| 32 | Por probar | Conciliación › «Lo pagado» | Finanzas › Conciliación › «Lo pagado». Desmarca una cuota y confirma con tu firma. | Las cuotas que Odoo y Mercury dan por pagadas, con el día del pago. Las de Mercury sin entrada de plata quedan en «Pagadas sin el día del pago» y no se cobran. Solo se cobran las marcadas. Si Odoo no contesta, aparece el aviso «Odoo no contestó» y lo de Mercury sigue. |
+| 33 | Por probar | Punto de equilibrio › «Licencias revendidas» | Abre kölbi › Editar y escribe «70.000» en «Lo que se le paga». Mira «Para decidir». | kölbi con su parte de servicio y el mismo margen que antes. Debajo del campo, «Se guarda: 70.000». En «Para decidir», cómo cuentan las licencias. |
+| 34 | Por probar | Conciliación › Gastos y Mercury › «Gastos financieros» | Abre la pestaña y confirma una comisión. | Las comisiones de Stripe y de las transferencias, para confirmar una por una. Lo confirmado suma al punto de equilibrio como gasto financiero. |
+| 35 | Por probar | Cobranza › Odoo › Facturación por cliente | Busca un cliente de Mercury y toca «Ver el detalle» en una factura. | Los clientes de Mercury junto a los de Odoo. El detalle de la factura se lee del sistema al abrirlo. |
+| 36 | Por probar | Cobranza › Odoo | Abre la lista de facturas. | Las facturas que Odoo da por emitidas ya están pegadas a su cuota, sin hacer nada. |
 
-### 7 · Éxito del cliente y Equipo
+### 7 · Dirección: Rentabilidad y Uso de Nexus
 
 | # | Estado | Dónde | Cómo probarlo | Qué deberías ver |
 |---|---|---|---|---|
-| 28 | Por probar | Éxito del cliente › «Limpieza de HubSpot» | Abre la pestaña como Alex o con tu usuario. | Lo que hay que poner al día en HubSpot, agrupado por responsable, cada cosa con su enlace a HubSpot. |
-| 29 | Por probar | «Ver como» | Equipo › una persona › «Ver como»; navega un poco y toca «Volver a mi usuario». | Nexus como lo ve esa persona, sin poder escribir como ella. «Volver a mi usuario» te devuelve. |
+| 37 | Por probar | Rentabilidad › «De dónde salen los números» | Abre Éxito del cliente › Rentabilidad. En un mes, toca «Tomar la foto». Después elige «Trimestre». | Antes de tomar fotos, cada mes dice «En vivo». Al tomarla: «Foto tomada: N cuentas» y el mes pasa a «Desde su foto», con la fecha y tu nombre. En el trimestre: «1 de 3 meses desde su foto; el resto, en vivo». |
+| 38 | Por probar | Volver a tomar la foto y el mes a mes de una cuenta | En un mes con foto, toca «Volver a tomar» sin motivo y después con motivo. Abre una cuenta y mira «Mes a mes». | Sin motivo no deja; con motivo, «Tomada el… · tu motivo». En la cuenta, la columna «De dónde sale» dice «Foto del …» o «En vivo». |
+| 39 | Por probar | «Uso de Nexus» › Equipo y Para qué se usa | Para ti › «Uso de Nexus». Baja hasta el final de «Equipo» y después abre «Para qué se usa». | Seis pestañas. En Equipo, «Qué usa cada equipo» con «3/7» en cada cruce y «—» donde nadie entró. En Para qué se usa, «Qué usa y qué desestima cada equipo» y «Quién decide» por nombre, agrupado por equipo. |
+| 40 | Por probar | «Uso de Nexus» › IA por cliente, Procesos de IA y Conclusiones | Abre «IA por cliente» y cambia entre 30 y 90 días; abre «Procesos de IA» y «Conclusiones». | IA por cliente: el gasto, cuánto se sabe de qué empresa es y la lista de empresas con lo que se usó. Procesos de IA: barras por semana y una fila por proceso con gasto, errores y «% usado». Conclusiones: frases cortas «Para mirar», «Para saber» o «Va bien», cada una con su enlace. |
+
+### 8 · Éxito del cliente y Equipo
+
+| # | Estado | Dónde | Cómo probarlo | Qué deberías ver |
+|---|---|---|---|---|
+| 41 | Por probar | Éxito del cliente › «Limpieza de HubSpot» | Abre la pestaña como Alex o con tu usuario. | Lo que hay que poner al día en HubSpot, agrupado por responsable, cada cosa con su enlace a HubSpot. |
+| 42 | Por probar | «Ver como» | Equipo › una persona › «Ver como»; navega un poco y toca «Volver a mi usuario». | Nexus como lo ve esa persona, sin poder escribir como ella. «Volver a mi usuario» te devuelve. |
+
+### Desde la terminal (opcional)
+
+| # | Estado | Dónde | Cómo probarlo | Qué deberías ver |
+|---|---|---|---|---|
+| 43 | Por probar | La foto de los meses pasados | `npx tsx scripts/fotografiar-meses-del-margen.ts` | Por cada mes del año, «se tomaría» con lo cobrado, la planilla y las horas, y al final «Simulacro: no se escribió nada». |
+| 44 | Por probar | Pasar los de «Continuidad» a SmartLoop | `npx tsx scripts/migrar-continuidad-a-smartloop.ts` | La lista de proyectos de «Continuidad» con la etapa del ciclo que deduce Nexus y por qué. No escribe nada. |
 
 Si algo de esto no aparece como dice la tabla, mándame una captura.
 

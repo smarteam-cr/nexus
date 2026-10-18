@@ -29,14 +29,14 @@ anota como una etapa chica de su iniciativa, no se arregla en la conversación d
 ## Dónde estamos hoy (17 oct)
 
 - **Producción** corre `918e2fdb` (16 oct, 16:10). La base tiene todos los SQL que necesita `main` (`npm run check:esquema` en verde).
-- **31 commits sin desplegar** en `main` (`918e2fdb..09567bd4`): el plan del sistema de trabajo y sus fases 0, 0.4, 0.5, 1 y 1.2, Odoo y Mercury mandan (`d2d33746`), las series del gráfico del equilibrio y las dos tandas (fichas A a H con sus mezclas e integraciones). Sus SQL ya están aplicados (`npm run check:esquema` en verde el 17 oct).
+- **46 commits sin desplegar** en `main` (`918e2fdb..e9eb60cd` más el roadmap): el plan del sistema de trabajo y sus fases 0, 0.4, 0.5, 1 y 1.2, Odoo y Mercury mandan (`d2d33746`), las series del gráfico del equilibrio y las dos tandas (fichas A a H con sus mezclas e integraciones). Sus SQL ya están aplicados (`npm run check:esquema` en verde el 17 oct).
 - **Invariantes en rojo en producción** (17 oct): INV11 (un proyecto activo en un pipeline que `lib/projects/kind.ts` no declara), INV13 (un cliente apunta a una empresa fusionada en HubSpot) e INV32 (el último corte de cobranza es del 24 jul: `cobranza-quincenal` nunca corrió).
 - **Jobs que nunca corrieron:** `cobranza-quincenal` (falta `COBRANZA_CRON_ENABLED`) y `cs-watchdog-daily` (falta `CS_WATCHDOG_ENABLED`). La copia de Partner sí corre.
 - **Código sin commitear:** solo «Reuniones con texto ajeno», en el worktree `elegant-rhodes-995841`, sobre una base del 5 oct.
 
 ## Lo que sigue, en orden
 
-1. **Desplegar los 31 commits** (lo hace Elías, después de probar en el 3004).
+1. **Desplegar los 46 commits** (lo hace Elías, después de probar en el 3004).
 2. **Inmediatamente después del deploy:** `scripts/cerrar-alertas-sueltas.ts` (hoy hay 154 alertas abiertas; el simulacro cerraba 131) y «Ya se subió» en Feedback.
 3. **Poner en verde los invariantes:** declarar el pipeline del INV11, reapuntar el cliente del INV13 y decidir si se prende `COBRANZA_CRON_ENABLED`.
 4. **Recorrer la cola de validación** (abajo), de arriba hacia abajo.
@@ -486,6 +486,25 @@ Pendiente de decidir (lo dejaron las fichas):
   forma del detalle de factura de Mercury y los tipos de sus comisiones.
 - G: una mutación en `lib/tareas` para crear la tarea de clase «reunion» al agendar la próxima.
 - H: probar el chat con la IA de verdad y medir el costo por turno.
+
+### Tercera tanda: integrada (17 oct)
+
+Antes, la revisión de buenas prácticas de los 31 cambios sin desplegar (57 hallazgos, unos 50 corregidos) y el feedback
+de Elías al probar «Para ti» (crear eventos en la agenda, huecos laborales, la cartera de Customer Success), en `16e9a7de`.
+
+Seis sesiones en worktrees desde `16e9a7de`, mezcladas sin conflictos: la semana (`2db75236`), Uso de Nexus
+(`7494b91b`, `9dbce236`), el IVA en la propuesta (`3f9419b4`), SmartLoop etapas 6 y 7 (`a8f6043a`), la foto del margen
+(`beed4fd8`) y los entregables con plantilla (`d30f5a1a`). Integración en `e9eb60cd`: DECISIONS (seis secciones),
+RUNBOOK (el job `rentabilidad-foto-mensual`), el contador de tests (704), `prisma/policies.sql` y dos censos.
+SQL aplicados en producción: `2026-10-17-foto-del-margen.sql` y `2026-10-17-smartloop-recurrencia-y-ruta.sql`
+(`check:esquema` en verde, 190 tablas). tsc en 0, 11.694 tests unit y 182 de integración.
+
+Queda para decidir: la regla estricta para abrir el ciclo siguiente (hoy se abre solo al cambiar algo sin ciclo
+abierto); ajustar «Planifica tu semana» por chat; un selector de plantilla cuando haya más de una por entregable.
+
+Quedó fuera porque necesita algo de Elías: el correo de la mañana (lo pidió así), licencias y precio de los casos de
+uso (los precios), el test de marketing (dónde vive), el lugar de Desarrollo (qué estimaciones y en qué propiedades de
+HubSpot), cargar el plan de FACO (el plan en un archivo) y pagar comisiones (las respuestas de Marco).
 
 ### Después de la primera tanda
 
