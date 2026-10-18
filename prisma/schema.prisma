@@ -1703,6 +1703,7 @@ model BusinessCase {
   sessions    BusinessCaseSession[] // sesiones de contexto incluidas/excluidas
   transcripts BusinessCaseTranscript[]
   useCases    BusinessCaseUseCase[] // checklist del catálogo de casos de uso
+  modulosGuardados ModuloDePropuesta[] // módulos de la biblioteca que salieron de esta propuesta
   access      BusinessCaseExternalAccess?
   agentRuns   AgentRun[]
 
@@ -7631,4 +7632,37 @@ model GastoFinanciero {
   updatedAt           DateTime @updatedAt
 
   @@index([fecha])
+}
+
+/// Un MÓDULO de la biblioteca de propuestas: una sección personalizada (`custom:*`) que alguien de
+/// Ventas guardó para usarla en otra propuesta. «Agregar módulo» inserta una COPIA (la sección de la
+/// otra propuesta no se entera de cambios posteriores, y al revés). Lo escriben solo las rutas de
+/// app/api/business-cases/modulos. Interno: el cliente no lo ve. Ver DECISIONS «La biblioteca de
+/// módulos de las propuestas».
+model ModuloDePropuesta {
+  id                   String        @id @default(cuid())
+  nombre               String
+  descripcion          String?       @db.Text
+  /// El tipo del catálogo de secciones creables (lib/landing/catalogo-de-secciones.ts): `html`, `tabla`…
+  tipo                 String
+  /// La data de la sección, copiada tal cual al guardar (sin las claves `__*`).
+  data                 Json
+  /// nullable porque el módulo sobrevive a que se borre la propuesta de la que salió.
+  origenBusinessCaseId String?
+  origenBusinessCase   BusinessCase? @relation(fields: [origenBusinessCaseId], references: [id], onDelete: SetNull)
+  /// La empresa para la que se armó, congelada: es lo que «Adaptar a esta empresa» reemplaza.
+  origenClienteNombre  String?
+  /// Lo que se encontró de esa empresa al guardarlo (`Hallazgo[]`, lib/landing/modulos-biblioteca.ts).
+  /// Se muestra cada vez que alguien lo inserta: un módulo no lleva datos de otro cliente sin avisar.
+  avisos               Json
+  /// Cuántas veces se insertó en otra propuesta.
+  usos                 Int           @default(0)
+  creadoPorEmail       String
+  /// Archivado = deja de ofrecerse. No se borra: las copias ya insertadas no dependen de él.
+  archivadoAt          DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([archivadoAt, updatedAt])
+  @@index([origenBusinessCaseId])
 }

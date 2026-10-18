@@ -25,7 +25,9 @@
  *   2. **No estructural** — no es la portada ni el cierre ni la identidad del documento. Un
  *      documento con dos portadas no es más libre: está roto.
  *   3. **Sin plata y sin catálogo** — deja afuera la inversión (los totales se calculan y los
- *      precios los escribe Ventas) y los casos de uso (salen del checklist, con precios exactos).
+ *      precios los escribe Ventas) y los casos de uso CON PRECIO (salen del checklist, con precios
+ *      exactos). ⚠ «Casos de uso por proyecto» (2026-10-18) sí entra: es el alcance funcional, sin
+ *      un solo monto, y se puede llenar desde el catálogo de casos de Smarteam.
  *   4. **Genérico** — su schema no está soldado a una plantilla. Es lo que
  *      `shared-sections.defs.ts` ya venía haciendo con sus builders.
  *
@@ -43,6 +45,17 @@ import {
   DIAGRAM_ARCHITECTURE_SCHEMA,
   DIAGRAM_ARCHITECTURE_EMPTY,
 } from "@/components/landing/configs/shared-sections.defs";
+import {
+  CASOS_POR_PROYECTO_EMPTY,
+  CASOS_POR_PROYECTO_SCHEMA,
+  CASOS_POR_PROYECTO_TYPE,
+  COMPARACION_LICENCIAS_EMPTY,
+  COMPARACION_LICENCIAS_SCHEMA,
+  COMPARACION_LICENCIAS_TYPE,
+  FASES_U_OPCIONES_EMPTY,
+  FASES_U_OPCIONES_SCHEMA,
+  FASES_U_OPCIONES_TYPE,
+} from "./modulos-nativos";
 import {
   CUSTOM_SECTION_EMPTY,
   CUSTOM_SECTION_LABEL,
@@ -182,8 +195,10 @@ export const CATALOGO_DE_SECCIONES: readonly TipoCreable[] = [
       "De 2 a 4 métricas. `value` es el número tal como se lee (40%, 3x, 12 h); `label` dice qué mejora, en pocas palabras. ⛔ Solo cifras que estén en el contexto: no se inventa una métrica.",
   },
   {
+    /* ⚠ El nombre cambió el 2026-10-18 («Comparación a dos columnas» → «Antes y después»): es lo
+       que Ventas armaba en HTML con ese título. El TIPO no cambia — vive en las keys ya creadas. */
     tipo: "comparacion",
-    nombre: "Comparación a dos columnas",
+    nombre: "Antes y después",
     queEs: "Dos listas enfrentadas — cómo es hoy y cómo va a ser.",
     sectionType: "kickoff_compara",
     schema: {
@@ -207,15 +222,51 @@ export const CATALOGO_DE_SECCIONES: readonly TipoCreable[] = [
       "Los procesos operativos que cambian. Por proceso: `comoEsHoy` con la fricción real, `comoSera` con lo que queda resuelto, y los `sistemas` involucrados. Solo procesos descritos con sustancia en el contexto.",
   },
   {
+    /* El nombre dice «arquitectura» desde el 2026-10-18: 16 de las 66 secciones en HTML eran
+       arquitecturas y flujos de datos, y con «Diagrama» a secas nadie lo encontraba. */
     tipo: "diagrama",
-    nombre: "Diagrama",
+    nombre: "Arquitectura (diagrama)",
     queEs:
-      "Un mapa de sistemas conectados por flechas, con zoom y pantalla completa. En el PDF sale estático.",
+      "La arquitectura o el flujo de datos: sistemas conectados por flechas, con zoom y pantalla completa. En el PDF sale estático.",
     sectionType: "diagram",
     schema: DIAGRAM_ARCHITECTURE_SCHEMA as unknown as Record<string, unknown>,
     empty: DIAGRAM_ARCHITECTURE_EMPTY,
     brief:
       "Mapa de sistemas: `sistemas` son las cajas (solo herramientas con login o API propia) y `conexiones` las flechas, cada una con el dato que viaja y qué la dispara. El diagrama se dibuja solo desde eso.",
+  },
+  /* ── Los tres que eran HTML a mano (2026-10-18, lib/landing/modulos-nativos.ts) ──────────── */
+  {
+    tipo: "casos_por_proyecto",
+    nombre: "Casos de uso por proyecto",
+    queEs:
+      "Pestañas por proyecto o por área y, en cada una, los casos de uso: qué hace, qué obtiene el cliente y con qué herramientas. Sin precios.",
+    sectionType: CASOS_POR_PROYECTO_TYPE,
+    schema: CASOS_POR_PROYECTO_SCHEMA as unknown as Record<string, unknown>,
+    empty: CASOS_POR_PROYECTO_EMPTY,
+    brief:
+      "Alcance funcional por proyecto. `grupos`: de 1 a 5 — cada uno es un proyecto cotizado o un área (Operación, Comercial, Datos); `nombre` corto, porque es el rótulo de la pestaña, y `descripcion` en una frase. En cada grupo, de 1 a 4 `casos`: `titulo` es el resultado en pocas palabras, `detalle` qué hace (qué lo dispara y qué se automatiza) en una o dos frases, `resultado` lo que obtiene el cliente y `herramientas` con qué se hace, separado por comas (Sales Hub, Data Hub, el ERP del cliente). Si un caso es uno del catálogo de casos de uso de Smarteam, usa su título tal cual. ⛔ Sin precios ni montos: la plata vive en la Inversión. Solo casos que estén en el contexto: no se inventa alcance.",
+  },
+  {
+    tipo: "licencias",
+    nombre: "Comparación de licencias",
+    queEs:
+      "Una tabla que enfrenta planes (Starter contra Professional): una fila por necesidad del cliente, con lo que cubre cada plan y la recomendación.",
+    sectionType: COMPARACION_LICENCIAS_TYPE,
+    schema: COMPARACION_LICENCIAS_SCHEMA as unknown as Record<string, unknown>,
+    empty: COMPARACION_LICENCIAS_EMPTY,
+    brief:
+      "Comparación de licencias. `planes`: de 2 a 4 columnas (Starter, Professional…), con `nota` de una línea y `recomendado` en \"si\" SOLO en el que se recomienda. `filas`: de 4 a 10 necesidades del cliente; en `valores`, uno por plan y en el mismo orden: \"si\", \"no\", \"parcial\" o un texto muy corto (\"Hasta 5 usuarios\"). `impacto`: por qué esa fila le importa a ESTE cliente, en una frase (opcional). `recomendacion`: el plan o la combinación que se recomienda, en una línea. ⛔ Sin precios: el precio de cada licencia va en la Inversión. Solo lo que HubSpot efectivamente incluye en cada edición; si no lo sabes con certeza, no lo afirmes.",
+  },
+  {
+    tipo: "fases",
+    nombre: "Fases u opciones",
+    queEs:
+      "Tarjetas numeradas: las fases de una ruta (01, 02…) o los caminos para elegir (A, B…), cada una con su objetivo, lo que incluye y su plazo.",
+    sectionType: FASES_U_OPCIONES_TYPE,
+    schema: FASES_U_OPCIONES_SCHEMA as unknown as Record<string, unknown>,
+    empty: FASES_U_OPCIONES_EMPTY,
+    brief:
+      "Fases u opciones. `modo`: \"fases\" si se hacen una después de la otra, \"opciones\" si el cliente elige un camino. `items`: de 2 a 4; `nombre` corto, `etiqueta` opcional (\"Recomendada\", \"Sugerida\"), `objetivo` en una frase, `incluye` de 2 a 5 renglones, `resultado` lo que deja y `plazo` (\"4 semanas\"). `destacada` en \"si\" solo en la recomendada. ⛔ Sin montos: la plata vive en la Inversión. Solo lo que esté en el contexto.",
   },
   {
     tipo: "html",

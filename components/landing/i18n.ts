@@ -176,6 +176,24 @@ const STRINGS = {
   escalaBrecha: { es: "La brecha", en: "The gap" },
   escalaMeta: { es: "Meta con este proyecto", en: "Target with this project" },
   escalaRemedicion: { es: "Cuándo se vuelve a medir", en: "When we measure again" },
+  // Los módulos que eran HTML a mano (2026-10-18, components/landing/sections-modulos.tsx).
+  modProyectos: { es: "proyectos", en: "projects" },
+  modProyecto: { es: "proyecto", en: "project" },
+  modCasosDeUso: { es: "casos de uso", en: "use cases" },
+  modCasoDeUso: { es: "caso de uso", en: "use case" },
+  modConQue: { es: "Con", en: "With" },
+  modRecomendacion: { es: "Recomendación", en: "Recommendation" },
+  modRecomendado: { es: "Recomendado", en: "Recommended" },
+  modRecomendada: { es: "Recomendada", en: "Recommended" },
+  modNecesidad: { es: "Necesidad", en: "Need" },
+  modImpacto: { es: "Por qué importa", en: "Why it matters" },
+  modIncluido: { es: "Incluido", en: "Included" },
+  modNoIncluido: { es: "No incluido", en: "Not included" },
+  modParcial: { es: "Parcial", en: "Partial" },
+  modIncluye: { es: "Incluye", en: "Includes" },
+  modPlazo: { es: "Plazo", en: "Timeframe" },
+  modOpcion: { es: "Opción", en: "Option" },
+  modFase: { es: "Fase", en: "Phase" },
 } as const;
 
 export type LandingStringKey = keyof typeof STRINGS;
