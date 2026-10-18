@@ -11,6 +11,7 @@ import { prisma } from "@/lib/db/prisma";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { proyectosAbiertos } from "@/lib/clients/resumen-proyectos";
 import { esProyectoDePipelineCS, PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
+import { resolvePipeline } from "@/lib/projects/kind";
 import { RECURRENTE_TAG } from "@/lib/tags/catalog";
 import { displayedEnd, projectedEnd } from "@/lib/timeline/weeks";
 import { fechaLocalDeLaReunion } from "@/lib/sessions/compromisos-y-alcance";
@@ -78,7 +79,11 @@ export async function correrRecordatoriosDeAdopcion(ahora: Date): Promise<{ reco
         nombre: p.name,
         inicio: anchor ?? ymd(p.hubspotCreatedAt),
         entrega: ymd(fin?.date ?? null),
-        recurrente: p.tags.includes(RECURRENTE_TAG) || p.hubspotPipelineStageId === ETAPA_CONTINUIDAD,
+        // Un servicio recurrente: la etiqueta, la etapa «Continuidad» o un pipeline que avanza por ciclos (SmartLoop).
+        recurrente:
+          p.tags.includes(RECURRENTE_TAG) ||
+          p.hubspotPipelineStageId === ETAPA_CONTINUIDAD ||
+          !!resolvePipeline(p.hubspotPipelineId)?.servicioRecurrente,
         cse: cseVigente(null, p.hubspotOwnerEmail, deBaja).cseEmail,
       });
     }

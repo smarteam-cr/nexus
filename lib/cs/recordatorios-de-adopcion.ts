@@ -7,8 +7,8 @@
  *      HubSpot).
  *   2. Una semana antes de la entrega (el cierre que muestra el cronograma: el fijado a mano o el
  *      proyectado). Si la entrega se mueve, el recordatorio vale para la fecha nueva.
- *   3. Una vez al mes en las cuentas con servicio recurrente (tag `recurrente` o la etapa
- *      Continuidad), en la primera semana del mes.
+ *   3. Una vez al mes en las cuentas con servicio recurrente (tag `recurrente`, la etapa
+ *      Continuidad o un proyecto de SmartLoop), en la primera semana del mes.
  *
  * No es retroactivo: cada momento tiene una ventana de siete días. Un proyecto que cumplió los 30 días
  * hace dos meses no recibe el recordatorio el día que esto llegó a producción.

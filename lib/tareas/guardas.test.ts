@@ -201,6 +201,8 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       // El chat de Nexus (2026-10-17, ficha H): lee por la puerta de la capa y escribe por la capa de operaciones.
       "lib/nexus-chat/herramientas-server.ts": "el chat de Nexus: verifica que una tarea nombrada por su número sea de la cuenta del chat, SOLO por lib/tareas/para-operaciones.ts (tareaVisiblePorNumero); escribe por lib/operaciones",
       "lib/nexus-chat/acciones-server.ts": "las acciones sugeridas de una persona en una cuenta: sus tareas SOLO por lib/tareas/para-operaciones.ts (sin la cita, el contexto ni las notas) y los sprints que lidera (equipos.ts, puro); no escribe",
+      // SmartLoop, etapa 6 (2026-10-17): recomendar la recurrencia deja una tarea al CSE.
+      "lib/servicios/recurrencia-server.ts": "«Dejar la tarea» de la recomendación de pasar a SmartLoop: crea UNA tarea por el escritor único (crearTarea, con origenId); no lee tareas",
       // Las tareas de HubSpot (2026-10-15, etapa 3 de docs/mi-dia-plan.md).
       "lib/tareas-hubspot/reglas.ts": "las tareas de HubSpot: solo los tipos de prioridad (puro)",
       "lib/tareas-hubspot/sync-server.ts": "la copia de las tareas de HubSpot: escribe Tareas SOLO por el escritor único (crearTareaDeHubspot, aplicarDesdeHubspot, anotarSincronizacionConHubspot); lo que va a HubSpot lo escribe acá, nunca lib/tareas",

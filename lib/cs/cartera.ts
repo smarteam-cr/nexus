@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { loadPortfolio, type PortfolioRow } from "@/lib/portfolio/load";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
+import { resolvePipeline } from "@/lib/projects/kind";
 import { etapaDeNexusPorNombre } from "@/lib/clients/que-sigue-del-proyecto";
 import { belongsToClient, whereBelongsToClient } from "@/lib/sessions/project-sources";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
@@ -103,7 +104,9 @@ export async function cseDeBajaPorCorreo(): Promise<Map<string, string>> {
 
 function proyectoDesdeFila(
   r: PortfolioRow,
-  ops: { hubspotStatus: string | null; hubspotBlockReason: string | null; hubspotBlockDetail: string | null } | undefined,
+  ops:
+    | { hubspotStatus: string | null; hubspotBlockReason: string | null; hubspotBlockDetail: string | null; hubspotPipelineId?: string | null }
+    | undefined,
   deBaja: ReadonlyMap<string, string>,
 ): ProyectoDeCuenta {
   const s = r.summary;
@@ -114,7 +117,12 @@ function proyectoDesdeFila(
     etapa: r.stageLabel ?? s.stage?.label ?? null,
     // La etapa que el equipo mueve en HubSpot manda: «Continuidad» es un servicio recurrente y «Adopción» es
     // adopción aunque Nexus infiera otra. Sin una que se reconozca (Bloqueado), la que infiere Nexus.
-    etapaClave: etapaDeNexusPorNombre(r.stageLabel) ?? s.stage?.effective ?? null,
+    /* Un servicio recurrente (SmartLoop, 2026-10-17) está en operación continua aunque su etapa se llame
+       «Implementación» o «Adopción»: esas son las etapas de su CICLO, no las de una implementación. Sin esto la
+       clasificación lo leía como «proyecto en curso» y no como «servicio recurrente». */
+    etapaClave: resolvePipeline(ops?.hubspotPipelineId ?? null)?.servicioRecurrente
+      ? "OPERACION_CONTINUA"
+      : (etapaDeNexusPorNombre(r.stageLabel) ?? s.stage?.effective ?? null),
     ...cseVigente(r.cseName, r.cseEmail, deBaja),
     activo: true,
     bloqueado: esBloqueado(ops?.hubspotStatus ?? null, r.stageLabel),
@@ -212,7 +220,7 @@ export async function cargarCuentas(
     prisma.client.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, company: true, tamUsd: true } }),
     prisma.project.findMany({
       where: { id: { in: filas.map((r) => r.projectId) } },
-      select: { id: true, hubspotStatus: true, hubspotBlockReason: true, hubspotBlockDetail: true },
+      select: { id: true, hubspotStatus: true, hubspotBlockReason: true, hubspotBlockDetail: true, hubspotPipelineId: true },
     }),
     // Los proyectos de CS cerrados hace poco: solo para el cruce «el uso cae desde que se cerró».
     // Nexus no guarda la fecha de cierre: la del último cambio es la aproximación (lo dice la UI).

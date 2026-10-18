@@ -32,10 +32,11 @@ import { UnreviewedSessionsChip } from "@/components/clients/ProjectSessionsRevi
 import {
   PROJECT_PIPELINES,
   exigeTratoGanado,
+  parseProjectPipeline,
   pipelineByKey,
   resolvePipeline,
+  type ProjectPipelineKey,
 } from "@/lib/projects/kind";
-import type { ProjectPipelineKey } from "@/lib/projects/kind";
 import { etiquetarAmbiguos, nombreYaUsado, rotuloDeHubspot } from "@/lib/projects/lista-de-empresa";
 import { armarCuerpoDelAlta } from "@/lib/projects/alta";
 import { urlDeProyecto } from "@/lib/agents/run-url";
@@ -204,6 +205,32 @@ export default function NuevoProyectoStepper() {
     const t = setTimeout(() => buscar(dominio), 1000);
     return () => clearTimeout(t);
   }, [dominio, ocupado, buscar]);
+
+  /* `?alta=<tipo>&dominio=<dominio>` (2026-10-17): lo manda «Abrir el alta» de la recomendación de pasar a SmartLoop
+     (lib/servicios/recurrencia.ts). Abre el formulario con el tipo elegido y la empresa ya buscada, una vez, y saca los
+     parámetros para que recargar no lo vuelva a abrir. El tipo se valida contra la tabla: un valor raro se ignora. */
+  const tipoPedido = useRef<ProjectPipelineKey | null>(null);
+  useEffect(() => {
+    if (!puedeCrear) return;
+    const url = new URL(window.location.href);
+    const pedido = parseProjectPipeline(url.searchParams.get("alta"));
+    if (!pedido) return;
+    const dom = url.searchParams.get("dominio")?.trim() ?? "";
+    url.searchParams.delete("alta");
+    url.searchParams.delete("dominio");
+    window.history.replaceState(window.history.state, "", url.toString());
+    setAbierto(true);
+    if (dom) setDominio(dom);
+    tipoPedido.current = pedido.key;
+  }, [puedeCrear]);
+
+  /* El tipo pedido por el enlace se aplica cuando la búsqueda pasa al paso del proyecto (`buscar` no toca el tipo,
+     pero `limpiar` sí, y abrir el formulario de nuevo no tiene que heredarlo). */
+  useEffect(() => {
+    if (paso !== "proyecto" || !tipoPedido.current) return;
+    setTipo(tipoPedido.current);
+    tipoPedido.current = null;
+  }, [paso]);
 
   if (!puedeCrear) return null;
 
@@ -664,9 +691,9 @@ export default function NuevoProyectoStepper() {
                   <p className="text-2xs font-medium text-fg-muted uppercase tracking-wider">
                     Tipo de proyecto
                   </p>
-                  {/* SmartLoop (servicio recurrente) todavía no se da de alta desde acá: los proyectos reales
-                      llegan con la migración desde «Continuidad» (docs/smartloop-plan.md). */}
-                  {PROJECT_PIPELINES.filter((p) => !p.servicioRecurrente).map((p) => (
+                  {/* Los cuatro tipos, también SmartLoop (servicio recurrente) desde el 2026-10-17: nace en Diagnóstico
+                      y su ciclo 1 se abre solo (docs/smartloop-plan.md, «Para cuando lleguen los proyectos reales»). */}
+                  {PROJECT_PIPELINES.map((p) => (
                     <label
                       key={p.key}
                       className="flex items-start gap-2 px-3 py-2 rounded-lg border border-line hover:bg-surface-hover cursor-pointer"

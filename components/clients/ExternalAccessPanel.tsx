@@ -45,6 +45,8 @@ interface EstadoDeLaParte {
 
 interface AccessState {
   exists: boolean;
+  /** Las partes que ni se ofrecen en este proyecto (la ruta del servicio fuera de un servicio recurrente). */
+  noAplican?: PublishSurfaceKey[];
   proyecto?: string;
   cliente?: string;
   accessToken?: string;
@@ -330,7 +332,7 @@ function SinAcceso({ state, working, onGenerate }: { state: AccessState; working
       <div className="flex flex-col gap-2 rounded-xl border border-dashed border-line bg-surface-muted px-3.5 py-3">
         <span className={ROTULO_DEL_SISTEMA}>Lo que podrá abrir</span>
         <div className="flex flex-wrap gap-1.5">
-          {PUBLISH_SURFACES.map((s) => (
+          {PUBLISH_SURFACES.filter((s) => !state.noAplican?.includes(s.key)).map((s) => (
             <span key={s.key} className="rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs text-fg-secondary">
               {s.nombre}
             </span>
@@ -383,7 +385,10 @@ function Activo({
 }) {
   const toast = useToast();
   const urlBase = state.url ?? "";
-  const partes = PUBLISH_SURFACES.map((s) => ({ s, e: state.partes?.[s.key] ?? { publicadaEl: null, motivo: null } }));
+  const partes = PUBLISH_SURFACES.filter((s) => !state.noAplican?.includes(s.key)).map((s) => ({
+    s,
+    e: state.partes?.[s.key] ?? { publicadaEl: null, motivo: null },
+  }));
   const publicadas = new Set(partes.filter((p) => p.e.publicadaEl).map((p) => p.s.key));
   const sinPublicar = partes.length - publicadas.size;
   const mensaje = mensajeParaElCliente({ proyecto: state.proyecto ?? "el proyecto", urlBase, publicadas });

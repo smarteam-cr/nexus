@@ -223,6 +223,23 @@ export function estadoDeNotaParaHubspot(
   return sinDecidir(fechaDeLaReunion, hoyISO);
 }
 
+// ── Recomendación de recurrencia (SmartLoop, etapa 6 de docs/smartloop-plan.md) ──────────────────
+
+/**
+ * Pasar un servicio temporal a SmartLoop: usada (dejó la tarea o abrió el alta) o descartada, con quién y cuándo; sin
+ * decidir, pendiente por 30 días desde que el proyecto llegó a su entrega (o cerró). `nacio` null = no se sabe cuándo
+ * llegó: no vence.
+ */
+export function estadoDeRecomendacionDeRecurrencia(
+  decision: { estado: "usada" | "descartada"; por: string; en: Date | string } | null,
+  nacio: Date | string | null,
+  hoyISO: string,
+): EstadoCalculado {
+  if (decision) return decidido(decision.estado === "usada" ? "usado" : "desestimado", decision.por, decision.en);
+  if (!nacio) return { estado: "pendiente", sinFirma: false, decididoPor: null, decididoEn: null };
+  return sinDecidir(nacio, hoyISO);
+}
+
 export function estadoDeSugerenciaDelHandoff(bloque: { status: string } | null, nacio: Date | string, hoyISO: string): EstadoCalculado {
   if (!bloque) return { estado: "desestimado", sinFirma: true, decididoPor: null, decididoEn: null };
   if (bloque.status === "DRAFT") return sinDecidir(nacio, hoyISO);

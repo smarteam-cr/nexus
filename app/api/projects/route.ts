@@ -41,7 +41,7 @@ interface Body {
   domain?: string;
   /** Nombre del proyecto. Sin default: un «Onboarding» genérico hace que dos altas se mezclen. */
   nombre?: string;
-  /** Clave del pipeline: "customer-success" | "development" | "web". */
+  /** Clave del pipeline: "customer-success" | "development" | "web" | "smartloop". */
   pipeline?: string;
   interno?: boolean;
   /** Id de HubSpot de la implementación de la que cuelga, si es un hermano. */
@@ -72,8 +72,9 @@ export async function POST(req: NextRequest) {
 
   const pipeline = parseProjectPipeline(body.pipeline);
   if (!pipeline) return malo("Elegí de qué tipo es el proyecto.");
-  // SmartLoop todavía no se da de alta desde Nexus: los proyectos reales llegan con la migración (docs/smartloop-plan.md).
-  if (pipeline.servicioRecurrente) return malo("Un servicio recurrente todavía no se da de alta desde Nexus.");
+  /* Un servicio recurrente (SmartLoop) se da de alta como cualquier otro tipo desde el 2026-10-17 (docs/smartloop-plan.md,
+     «Para cuando lleguen los proyectos reales»): nace en la primera etapa de su pipeline (Diagnóstico) y su ciclo 1 se
+     abre solo al cambiar algo del ciclo. */
 
   const interno = body.interno === true;
   const hermanoHsId = body.hermanoHsId?.trim() || null;

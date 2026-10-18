@@ -44,7 +44,8 @@ export type ClaveDeTipo =
   | "novedad"
   | "hecho"
   | "sugerencia-del-handoff"
-  | "nota-para-hubspot";
+  | "nota-para-hubspot"
+  | "recomendacion-de-recurrencia";
 
 export const TIPOS_DE_LO_PROPUESTO: readonly ClaveDeTipo[] = [
   "minuta",
@@ -60,6 +61,7 @@ export const TIPOS_DE_LO_PROPUESTO: readonly ClaveDeTipo[] = [
   "hecho",
   "sugerencia-del-handoff",
   "nota-para-hubspot",
+  "recomendacion-de-recurrencia",
 ];
 
 export const NOMBRE_DEL_TIPO: Record<ClaveDeTipo, string> = {
@@ -76,6 +78,7 @@ export const NOMBRE_DEL_TIPO: Record<ClaveDeTipo, string> = {
   hecho: "Hecho de una reunión para Procesos",
   "sugerencia-del-handoff": "Sugerencia sobre el handoff congelado",
   "nota-para-hubspot": "Nota para HubSpot después de una reunión",
+  "recomendacion-de-recurrencia": "Pasar el servicio a SmartLoop",
 };
 
 export const MODULO_DEL_TIPO: Record<ClaveDeTipo, ModuloDeLoPropuesto> = {
@@ -92,6 +95,7 @@ export const MODULO_DEL_TIPO: Record<ClaveDeTipo, ModuloDeLoPropuesto> = {
   hecho: "clientes",
   "sugerencia-del-handoff": "clientes",
   "nota-para-hubspot": "reuniones",
+  "recomendacion-de-recurrencia": "clientes",
 };
 
 /**
@@ -119,6 +123,7 @@ export const GUARDA: Record<ClaveDeTipo, { quien: boolean; descarte: boolean }> 
   hecho: { quien: true, descarte: false },
   "sugerencia-del-handoff": { quien: false, descarte: false },
   "nota-para-hubspot": { quien: true, descarte: true },
+  "recomendacion-de-recurrencia": { quien: true, descarte: true },
 };
 
 /** Cuántos días pide revisión lo propuesto (y la tarjeta de una reunión, desde la fecha de la reunión). */

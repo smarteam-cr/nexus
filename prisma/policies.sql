@@ -402,7 +402,7 @@ BEGIN
     'CorreccionDeSalud', 'EncuestaDeCuenta', 'EncuestaDeTiempo', 'EspacioDeTareas', 'FeedbackMensaje', 'FeedbackPedido',
     'FeedbackReporte', 'FeedbackTema', 'FuenteDeTareas', 'HechoDeReunion', 'HitoDeDocumento', 'LecturaDeReunion',
     'MetaComercial', 'MiembroDeEspacio', 'NegocioAbierto', 'NotaDeLaCuenta', 'PlantillaDeTareas', 'PreguntaDeTiempo',
-    'PresentacionDeDocumento', 'ProyectoDeTareas', 'RespuestaDeCuenta', 'ResultadoDeSemana', 'ReunionIndexada',
+    'PresentacionDeDocumento', 'ProyectoDeTareas', 'RecomendacionDeRecurrencia', 'RespuestaDeCuenta', 'ResultadoDeSemana', 'ReunionIndexada',
     'SiguientePaso', 'Tarea', 'TareaComentario', 'TareaEvento', 'TareaRelacion', 'TareaVinculo', 'TicketDeHubspot',
     'TurnoDeReunion', 'UsoDeNexus', 'VistaDeCartera'
   ]

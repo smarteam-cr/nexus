@@ -27,6 +27,7 @@ import { resolvePipeline } from "@/lib/projects/kind";
 import { DESTINOS, destinoPorClave } from "@/lib/seguimiento/destinos";
 import { leerDestinos } from "@/lib/seguimiento/hechos/estado";
 import { notaSugeridaDeLaMinuta, reunionConNotaSugerida, textosDeLaMinuta } from "@/lib/notas/reglas";
+import { itemsParaContar as recomendacionesDeRecurrencia } from "@/lib/servicios/recurrencia-server";
 import {
   diaCR,
   estadoDeAlerta,
@@ -403,7 +404,15 @@ const notasParaHubspot: Lector = async ({ db, ahora, ...v }, hoyISO) => {
   return { "nota-para-hubspot": items };
 };
 
-const LECTORES: readonly Lector[] = [minutas, pedidos, tareas, alertas, camposDeFicha, etapasYFechas, compromisosLegacy, hechos, sugerenciasDelHandoff, notasParaHubspot];
+/**
+ * La recomendación de pasar un servicio temporal a SmartLoop (etapa 6 de docs/smartloop-plan.md). Nace el día que el
+ * proyecto llegó a su entrega (o cerró); decidida = una fila de `RecomendacionDeRecurrencia`, con quién y cuándo.
+ */
+const recurrencia: Lector = async ({ db, desde, hasta }, hoyISO) => ({
+  "recomendacion-de-recurrencia": await seguro(recomendacionesDeRecurrencia(db, { desde, hasta }, hoyISO), []),
+});
+
+const LECTORES: readonly Lector[] = [minutas, pedidos, tareas, alertas, camposDeFicha, etapasYFechas, compromisosLegacy, hechos, sugerenciasDelHandoff, notasParaHubspot, recurrencia];
 
 /**
  * Cada propuesta de la ventana con su estado, por tipo: lo NACIDO en ella y lo DECIDIDO en ella de algo anterior. Lo

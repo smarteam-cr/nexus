@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { PanelDelServicio as Datos } from "@/lib/servicios/panel-del-servicio-server";
+import SubirRutaDelServicio from "./SubirRutaDelServicio";
 
 const DIA = new Intl.DateTimeFormat("es-CR", { day: "numeric", month: "short", timeZone: "America/Costa_Rica" });
 const DIA_Y_HORA = new Intl.DateTimeFormat("es-CR", {
@@ -138,6 +139,8 @@ export default function PanelDelServicio({ projectId, refresco, onAbrirCronogram
         )}
         <span className="text-[11px] text-fg-muted">Leídas de las series de Google Calendar.</span>
       </section>
+
+      <SubirRutaDelServicio projectId={projectId} refresco={refresco} />
     </>
   );
 }
