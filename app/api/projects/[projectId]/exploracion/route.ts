@@ -2,7 +2,7 @@
  * /api/projects/[projectId]/exploracion — la exploración del PROYECTO (2026-10-07): el lienzo de la
  * preventa con las preguntas de Customer Success (lib/exploraciones/marco.ts).
  *
- *   GET  → { exploracion, escala, puedeEditar } — la viva del proyecto, como la pinta el lienzo; sin
+ *   GET  → { exploracion, escala, puedeEditar, conAsistente } — la viva del proyecto, como la pinta el lienzo; sin
  *          exploración todavía, `exploracion: null` (la abre quien puede trabajarla, con el POST).
  *   POST → la crea si no hay (con lo que dejó la preventa) y devuelve lo mismo que el GET.
  *
@@ -21,7 +21,8 @@ import { escalaDeLaExploracion, escalaParaExplorar, leerExploracion } from "@/li
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
-async function respuesta(id: string | null, puedeEditar: boolean) {
+/** `conAsistente`: quien pide puede conversar con el chat de la cuenta (el de la ficha): «Mejorar con el asistente». */
+async function respuesta(id: string | null, puedeEditar: boolean, conAsistente = false) {
   const escala = await escalaParaExplorar();
   if (escala.estado !== "ok") {
     return NextResponse.json({ error: "La escala no está publicada en Nexus: sin ella no se puede explorar." }, { status: 503 });
@@ -34,6 +35,7 @@ async function respuesta(id: string | null, puedeEditar: boolean) {
     exploracion,
     escala: escalaDeLaExploracion(escala.general, exploracion.estado),
     puedeEditar: puedeEditar && !exploracion.estado.archivada,
+    conAsistente,
   });
 }
 
@@ -46,9 +48,10 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   }
   const tm = guard.user.teamMember;
   const puedeEditar = tm ? await can(tm, "exploracion", "generate") : false;
+  const conAsistente = tm ? await can(tm, "asistente", "read") : false;
   try {
     const viva = await prisma.exploracionDeVenta.findFirst({ where: { projectId, archivadaEn: null }, select: { id: true } });
-    return respuesta(viva?.id ?? null, puedeEditar);
+    return respuesta(viva?.id ?? null, puedeEditar, conAsistente);
   } catch (e) {
     if (esquemaDesactualizado(e)) {
       return NextResponse.json({ error: `Falta aplicar ${SQL_DE_LA_EXPLORACION_DEL_PROYECTO} y reiniciar.` }, { status: 503 });
@@ -64,5 +67,5 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
   const email = guard.teamMember?.email ?? guard.user.email ?? "";
   const r = await asegurarExploracionDelProyecto(projectId, email);
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
-  return respuesta(r.id, true);
+  return respuesta(r.id, true, guard.teamMember ? await can(guard.teamMember, "asistente", "read") : false);
 }

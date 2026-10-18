@@ -84,6 +84,7 @@ import {
   type PreguntaParaMostrar,
 } from "./guia";
 import type { SaberDelCliente } from "./lo-que-ya-sabemos";
+import { aplicarAjustes, apuntaDelTema } from "./ajustes-de-la-guia";
 import { contextoDelPlan, type PreguntaPlaneada } from "./plan-de-la-guia";
 import { leerEmpresa } from "./hubspot";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
@@ -822,6 +823,42 @@ export async function armarLaGuiaSinGuardar(
   exploracionId: string,
   opts: Pick<OpcionesDeLaCorrida, "triggeredByEmail">,
 ): Promise<{ guia: GuiaDeLaSesion; ctx: ReturnType<typeof contextoDeLaGuia>; preguntas: PreguntaParaMostrar[] } | null> {
+  const { fila, estado, escala, posiciones, loLeido, marco, ctx, ahora } = await contextoParaLaGuia(exploracionId);
+  const pedir = (aviso = "") =>
+    conContextoDeIA(
+      {
+        agentSlug: AGENTE_DE_LA_EXPLORACION,
+        agentRunId: runId,
+        clientId: fila.clientId,
+        triggeredByEmail: opts.triggeredByEmail,
+        origen: "exploraciones/agente:guia",
+      },
+      () => {
+        const pedido = pedidoDeLaGuia(ctx);
+        return getAnthropic().messages.create(aviso ? { ...pedido, system: `${pedido.system as string}${aviso}` } : pedido);
+      },
+    );
+  let guia = leerLaGuiaDelAgente(await pedir(), ctx, runId, ahora);
+  if (!guia) return null;
+  /* El vendedor lee la guía en voz alta: tiene que estar en tuteo. La de CreditForce (2026-10-01) salió
+     en voseo («vivís», «podés») porque las fuentes lo estaban: si pasa, se pide una vez más avisándolo. */
+  const voseo = voseoEnLaGuia(guia);
+  if (voseo.length) {
+    const otra = leerLaGuiaDelAgente(await pedir(avisoDeVoseo(voseo)), ctx, runId, ahora);
+    if (otra && voseoEnLaGuia(otra).length < voseo.length) guia = otra;
+  }
+  // Lo que va a ver el vendedor: las preguntas del plan, con la de respaldo donde el agente repitió lo sabido.
+  const plan = ctx.saber ? planDeLaGuiaDeLaPreventa(estado, loLeido.tests, escala, posiciones, ctx.proxima.sesionId ?? null) : null;
+  const preguntas = preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco, plan ?? undefined);
+  return { guia, ctx, preguntas };
+}
+
+/**
+ * Todo lo que necesita la guía de la PRÓXIMA sesión, leído de la base: la fila, su estado, la escala con su edición, dónde
+ * parece estar cada dimensión y el contexto del pedido (con lo que ya sabemos y el plan, en la preventa). Lo usan armar la
+ * guía, «Regenerar» una pregunta y el asistente (lib/exploraciones/guia-ajustes-server.ts): tienen que decir lo mismo.
+ */
+export async function contextoParaLaGuia(exploracionId: string) {
   const escalaVig = await escalaParaExplorar();
   if (escalaVig.estado !== "ok") throw new FalloDeLaExploracion("La escala no está publicada en Nexus.");
   const lectura = await leerExploracion(exploracionId);
@@ -883,37 +920,11 @@ export async function armarLaGuiaSinGuardar(
     tests: loLeido.tests,
     ...(marco.clave === "venta" ? { faltanParaProponer: listaParaProponer(estado, chequeoDe(escala, estado), hoyEnCostaRica(ahora)) } : {}),
   });
-  const pedir = (aviso = "") =>
-    conContextoDeIA(
-      {
-        agentSlug: AGENTE_DE_LA_EXPLORACION,
-        agentRunId: runId,
-        clientId: fila.clientId,
-        triggeredByEmail: opts.triggeredByEmail,
-        origen: "exploraciones/agente:guia",
-      },
-      () => {
-        const pedido = pedidoDeLaGuia(ctx);
-        return getAnthropic().messages.create(aviso ? { ...pedido, system: `${pedido.system as string}${aviso}` } : pedido);
-      },
-    );
-  let guia = leerLaGuiaDelAgente(await pedir(), ctx, runId, ahora);
-  if (!guia) return null;
-  /* El vendedor lee la guía en voz alta: tiene que estar en tuteo. La de CreditForce (2026-10-01) salió
-     en voseo («vivís», «podés») porque las fuentes lo estaban: si pasa, se pide una vez más avisándolo. */
-  const voseo = voseoEnLaGuia(guia);
-  if (voseo.length) {
-    const otra = leerLaGuiaDelAgente(await pedir(avisoDeVoseo(voseo)), ctx, runId, ahora);
-    if (otra && voseoEnLaGuia(otra).length < voseo.length) guia = otra;
-  }
-  // Lo que va a ver el vendedor: las preguntas del plan, con la de respaldo donde el agente repitió lo sabido.
-  const plan = ctx.saber ? planDeLaGuiaDeLaPreventa(estado, loLeido.tests, escala, posiciones, ctx.proxima.sesionId ?? null) : null;
-  const preguntas = preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco, plan ?? undefined);
-  return { guia, ctx, preguntas };
+  return { fila, estado, escala, general: escalaVig.general, posiciones, pendientes, loLeido, marco, ctx, ahora };
 }
 
 /** El plan de la guía de la preventa y lo que ya se sabe, como lo arma la pantalla (piezas-de-la-sesion.tsx). */
-function planDeLaGuiaDeLaPreventa(
+export function planDeLaGuiaDeLaPreventa(
   estado: EstadoDeExploracion,
   tests: LoLeidoDeHubspot["tests"],
   escala: EscalaDelLienzo,
@@ -944,12 +955,11 @@ function planDeLaLectura(
   const comoReunion = { id: ultima.id, titulo: ultima.titulo, fecha: ultima.fecha, origen: ultima.origen, leida: true };
   const sesion = estado.contenido.sesiones.find((s) => reunionDeLaSesion(s, [comoReunion]) !== null) ?? null;
   const guia = guiaDeAntesDeLaReunion(estado.propuesta, sesion?.id ?? null, ultima.fecha);
-  const preguntas = guia
-    ? preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco)
-        .filter((p) => p.tipo !== "abierto")
-        .slice(0, 16)
-        .map((p) => ({ para: p.para, pregunta: (p.tema ? `${p.tema}: ${p.pregunta}` : p.pregunta).slice(0, 400) }))
-    : [];
+  // Con lo que decidió el vendedor sobre esa guía (sus preguntas, las cambiadas, las quitadas): lo que se llevó a la reunión.
+  const preguntas = aplicarAjustes(guia ? preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco) : [], sesion?.ajustesDeLaGuia, apuntaDelTema(escala))
+    .filter((p) => p.tipo !== "abierto")
+    .slice(0, 16)
+    .map((p) => ({ para: p.para, pregunta: (p.tema ? `${p.tema}: ${p.pregunta}` : p.pregunta).slice(0, 400) }));
   return {
     reuniones: reuniones.map((r) => ({ fuente: r.fuente, etiqueta: r.etiqueta })),
     planeado: { objetivo: sesion?.objetivo ?? guia?.objetivo ?? null, preguntas },

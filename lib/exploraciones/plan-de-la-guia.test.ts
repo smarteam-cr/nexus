@@ -94,11 +94,12 @@ describe("lo que repite lo que el cliente ya dijo", () => {
     expect(repiteLoSabido("¿Qué pasa cuando un deal se queda quieto?", { para: "1.7", paso: "situacion" }, saber)).toBe(false);
   });
 
-  it("la de respaldo parte de sus palabras y pregunta el paso que toca", () => {
+  it("la de respaldo pregunta el paso que toca, sin la cita adelante (validación 69): la cita va en el ⓘ", () => {
     const { plan } = planDe(LARCE_AL_ARMAR_LA_GUIA);
     const p = preguntaDeRespaldo(plan[0], "¿Cómo va 1.7?");
-    expect(p).toMatch(/^En el diagnóstico dijeron: «Cuando un deal se enfría/);
-    expect(p).toContain("¿Cuánto les ha costado eso");
+    expect(p).toBe("¿Cuánto les ha costado esto en los últimos meses: en negocios, en horas o en clientes?");
+    expect(p).not.toContain("«");
+    expect(plan[0].motivo?.texto).toContain("Cuando un deal se enfría");
     expect(preguntaDeRespaldo({ para: "tiempos", tipo: "tarjeta", paso: "cuando", motivo: null }, "¿Para cuándo?")).toBe("¿Para cuándo?");
   });
 });
@@ -108,10 +109,11 @@ describe("la guía vieja de Larce, mostrada con el plan", () => {
   const foco = focoDeLaGuia(LARCE_AL_ARMAR_LA_GUIA.contenido.casillas, ESCALA_DE_PRUEBA, ["1"], POSICIONES_DE_LARCE, {}, undefined, ctx);
   const preguntas = preguntasParaMostrar(GUIA_VIEJA_DE_LARCE, foco.huecos, foco.enfoque, ESCALA_DE_PRUEBA, SIN_PROCEDENCIAS, undefined, { plan: foco.plan!, saber: ctx.saber });
 
-  it("ya no muestra «¿Qué pasa cuando un deal se queda quieto?»: en su lugar, cuánto les ha costado, con sus palabras", () => {
+  it("ya no muestra «¿Qué pasa cuando un deal se queda quieto?»: en su lugar, cuánto les ha costado; sus palabras, en el ⓘ", () => {
     expect(preguntas.map((p) => p.pregunta).join(" ")).not.toContain("deal se queda quieto");
     expect(preguntas[0]).toMatchObject({ para: "1.7", paso: "impacto" });
-    expect(preguntas[0].pregunta).toContain("¿Cuánto les ha costado eso");
+    expect(preguntas[0].pregunta).toMatch(/^¿Cuánto les ha costado esto/);
+    expect(preguntas[0].motivo?.texto).toBeTruthy();
     expect(preguntas[0].motivo?.de).toContain("Nota del 14 oct");
   });
 

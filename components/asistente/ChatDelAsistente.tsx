@@ -149,7 +149,8 @@ export interface RotulosDelChat {
 
 /** 1B: lo que señala la persona en el chat de tareas. Viaja en el pedido de ESTE turno, no en el texto. */
 export interface ChipDelChat {
-  tipo: "tarea" | "proyecto" | "cliente" | "reunion";
+  /** «guia»: el chat de la cuenta abierto desde la guía de una exploración (validación 71); `id` = la exploración. */
+  tipo: "tarea" | "proyecto" | "cliente" | "reunion" | "guia";
   id: string;
   etiqueta: string;
 }

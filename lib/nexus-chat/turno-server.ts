@@ -30,6 +30,8 @@ import { costoDeLaCorrida } from "./uso-server";
 import { avisoDeRechazos, sinMarcadores } from "./textos";
 import { tomarHilo } from "./candado-server";
 import { ErrorDelChat } from "./aplicar-server";
+import { comoInformacion } from "./bucle";
+import { guiaParaElChat } from "@/lib/operaciones/guia-server";
 
 /** El presupuesto de salida de cada llamada (el razonamiento sale de acá). */
 const MAX_TOKENS_DE_RESPUESTA = 8_000;
@@ -51,17 +53,37 @@ export function ventanaDelHilo(turnos: HiloConTurnos["turnos"], tope = TOPES_DEL
  * El turno con el candado del hilo, el MISMO que toma aplicar (./candado-server.ts): un clic en «Aplicar» mientras corre
  * el turno no puede dejar que el turno vuelva a proponer lo que se acaba de aplicar. El hilo se relee CON el candado.
  */
+/**
+ * Lo que la persona señaló al abrir el chat (validación 71): la guía de la próxima sesión de una exploración. Su texto va
+ * en el mensaje de ESTE turno (no en `system`: no rompe la caché), como información de la cuenta.
+ */
+export interface FocoDelChat {
+  tipo: "guia";
+  exploracionId: string;
+}
+
+/** El bloque de la guía para el mensaje, si la exploración es de esta cuenta. null = nada que sumar. */
+async function bloqueDelFoco(foco: FocoDelChat | undefined, clientId: string): Promise<string> {
+  if (!foco) return "";
+  const f = await prisma.exploracionDeVenta.findUnique({ where: { id: foco.exploracionId }, select: { clientId: true } });
+  if (!f || f.clientId !== clientId) return "";
+  const guia = await guiaParaElChat(foco.exploracionId).catch(() => null);
+  if (!guia) return "";
+  return `[LA PERSONA ABRIÓ EL CHAT DESDE LA GUÍA — lo escribe Nexus, no la persona]\n${comoInformacion(guia)}\n\n`;
+}
+
 export async function correrTurnoDeNexus(
   hilo: HiloConTurnos,
   mensajeCrudo: string,
   quien: { persona: TeamMember; clientId: string; veMontos: boolean },
   ahora: Date = new Date(),
+  foco?: FocoDelChat,
 ): Promise<ResultadoDelTurnoDeNexus> {
   const soltar = tomarHilo(hilo.id);
   if (!soltar) throw new ErrorDelChat(409, "Nexus está terminando algo en esta conversación: espera un momento y vuelve a escribir.");
   try {
     const fresco = (await leerHilo(hilo.id, { clientId: quien.clientId }, hilo.usuarioEmail)) ?? hilo;
-    return await correrTurno(fresco, mensajeCrudo, quien, ahora);
+    return await correrTurno(fresco, mensajeCrudo, quien, ahora, foco);
   } finally {
     soltar();
   }
@@ -72,6 +94,7 @@ async function correrTurno(
   mensajeCrudo: string,
   quien: { persona: TeamMember; clientId: string; veMontos: boolean },
   ahora: Date,
+  foco?: FocoDelChat,
 ): Promise<ResultadoDelTurnoDeNexus> {
   const mensaje = sinMarcadores(mensajeCrudo).trim();
   const { persona, clientId } = quien;
@@ -108,7 +131,8 @@ async function correrTurno(
     const historia: Anthropic.Messages.MessageParam[] = ventana.map((t, i) =>
       i === ventana.length - 1 ? { role: t.rol, content: [{ type: "text" as const, text: t.texto, cache_control: { type: "ephemeral" as const } }] } : { role: t.rol, content: t.texto },
     );
-    const messages: Anthropic.Messages.MessageParam[] = [...historia, { role: "user", content: `${bloqueDeLoPendiente(vivas.map((v) => v.linea))}${mensaje}` }];
+    const guia = await bloqueDelFoco(foco, clientId);
+    const messages: Anthropic.Messages.MessageParam[] = [...historia, { role: "user", content: `${bloqueDeLoPendiente(vivas.map((v) => v.linea))}${guia}${mensaje}` }];
     const tools = herramientasDelChat();
     const llamar = (msgs: Anthropic.Messages.MessageParam[], o: { sinHerramientas: boolean }) =>
       conContextoDeIA({ agentSlug: SLUG_DEL_CHAT_DE_NEXUS, agentRunId: run.id, clientId, triggeredByEmail: hilo.usuarioEmail, origen: origenDelHilo(hilo.id) }, () =>

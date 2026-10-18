@@ -20,7 +20,8 @@
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { listaParaProponer, puntoQueSePregunta, type PasoDeQueSigue } from "@/lib/exploraciones/calidad";
+import { listaParaProponer, type PasoDeQueSigue } from "@/lib/exploraciones/calidad";
+import { temaDeLaPregunta } from "@/lib/exploraciones/guia";
 import { ETIQUETA_DE_LA_OBJECION, type Objecion } from "@/lib/exploraciones/casillas";
 import { avanceDeLaEstrategia, escalaConEvidencia } from "@/lib/exploraciones/avance-del-proyecto";
 import { conteoDeLasSesiones } from "@/lib/exploraciones/inicio";
@@ -39,12 +40,8 @@ function useLoQueSePreguntaEnLaProxima() {
   const { todas, claveDeLaProxima } = useSesiones();
   const proxima = todas.find((p) => p.clave === claveDeLaProxima) ?? todas[todas.length - 1];
   const { preguntas } = useGuiaDeLaSesion(proxima, true);
-  return {
-    paras: new Set(preguntas.map((p) => p.para)),
-    hayDimensiones: preguntas.some((p) => p.tipo === "dimension"),
-    // Un dolor que se pregunta en impacto cubre «qué pasa si no actúa» (plan-de-la-guia.ts).
-    hayImpacto: preguntas.some((p) => p.tipo === "dimension" && p.paso === "impacto"),
-  };
+  // Con las preguntas ajustadas (las tuyas, las del asistente): el tema de cada una.
+  return { paras: new Set(preguntas.map(temaDeLaPregunta).filter((t): t is string => !!t)) };
 }
 
 function Bloque({ titulo, accion, children }: { titulo: string; accion?: React.ReactNode; children: React.ReactNode }) {
@@ -112,50 +109,27 @@ function Arquitectura() {
 }
 
 /**
- * Lo que falta para proponer el land, en siete trazos y siete chips: verde lo listo, azul lo que
- * pregunta la guía de la próxima sesión, punteado lo que ninguna sesión planeada pregunta.
+ * Lo que falta para proponer el land, en lo mínimo: siete trazos (verde lo listo) y cuántos van. Qué cubre la guía de la
+ * próxima sesión se ve pegado a ella, en la Preparación (validación 73, 2026-10-18: «Lo que cubre la guía»).
  */
 function ParaProponer() {
   const { exp, chequeo, irA } = useLienzo();
-  const { paras, hayDimensiones, hayImpacto } = useLoQueSePreguntaEnLaProxima();
   const puntos = listaParaProponer(exp.estado, chequeo);
   const listos = puntos.filter((p) => p.cumplido).length;
-  const estado = (p: (typeof puntos)[number]) => (p.cumplido ? "listo" : puntoQueSePregunta(p.id, paras, hayDimensiones, hayImpacto) ? "hoy" : "falta");
   return (
     <Bloque
       titulo="Para proponer"
       accion={
         <button type="button" className="text-[11px] text-fg-muted hover:text-fg" onClick={() => irA("propuesta")}>
-          {listos} de {puntos.length}
+          {listos} de {puntos.length} listos
         </button>
       }
     >
-      <div className="grid grid-cols-7 gap-[3px]" aria-hidden="true">
+      <div className="grid grid-cols-7 gap-[3px]">
         {puntos.map((p) => (
-          <span key={p.id} className={cn("h-[5px] rounded-[3px]", { listo: "bg-success", hoy: "bg-info-line", falta: "bg-line" }[estado(p)])} />
+          <span key={p.id} title={`${p.titulo}: ${p.cumplido ? "listo" : "falta"}`} className={cn("h-[5px] rounded-[3px]", p.cumplido ? "bg-success" : "bg-line")} />
         ))}
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {puntos.map((p) => {
-          const e = estado(p);
-          return (
-            <span
-              key={p.id}
-              title={p.titulo}
-              className={cn(
-                "rounded-full border px-2 py-0.5 text-[11.5px]",
-                e === "listo" && "border-success-line bg-success-surface text-success-ink",
-                e === "hoy" && "border-info-line bg-info-surface text-brand",
-                e === "falta" && "border-dashed border-line text-fg-muted",
-              )}
-            >
-              {e === "listo" && "✓ "}
-              {p.corto}
-            </span>
-          );
-        })}
-      </div>
-      <p className="text-[11px] text-fg-muted">Verde: listo · azul: se pregunta en la próxima sesión</p>
     </Bloque>
   );
 }

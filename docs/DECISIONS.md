@@ -9068,9 +9068,9 @@ guardados, pero el pedido de la guía no los leía. El plan está en `docs/preve
   pregunta con su tema, su paso y las palabras del cliente de las que parte. El prompt usa frases del test (opciones del
   diagnóstico, no datos de un cliente) para mostrar el tono de la nota de HubSpot: corta, con sus palabras, directa a lo
   que duele. `repiteLoSabido` descarta la pregunta que vuelve a pedir que cuente la situación de algo ya dicho. En su
-  lugar va `preguntaDeRespaldo`, armada con la cita: «En el diagnóstico dijeron: «…». ¿Cuánto les ha costado eso…?». El
-  mismo filtro corre al mostrar una guía de antes (sin `paso`): la de Larce del 16 oct deja de mostrar «¿Qué pasa cuando
-  un deal se queda quieto?» y queda en 5.
+  lugar va `preguntaDeRespaldo`. El mismo filtro corre al mostrar una guía de antes (sin `paso`): la de Larce del 16 oct
+  deja de mostrar «¿Qué pasa cuando un deal se queda quieto?» y queda en 5. ⚠ **Enmendado el mismo día** (ver «La guía de
+  la preventa, segunda vuelta»): la pregunta va sin la cita adelante; lo que dijo el cliente, en el ⓘ.
 - **Siempre cierra** con «¿Hay algo que no hayamos hablado y que deba saber para proponerte el primer paso?», el cierre
   del agente (sin espacios por completar: si trae uno, va el de base) y «Si no salió en la conversación, pregunta: …» con
   lo que falta para proponer y ninguna pregunta cubre (`faltanAlCerrar`, calidad.ts).
@@ -9081,6 +9081,59 @@ guardados, pero el pedido de la guía no los leía. El plan está en `docs/preve
   que el cliente ya dijo.
 - **Pendiente:** los correos y el timeline de HubSpot (iniciativa B) suman lo que el cliente dijo por correo como una
   fuente más de «Lo que ya sabemos» cuando entren a la memoria de la cuenta.
+## La guía de la preventa, segunda vuelta: corta, ajustable y con su asistente (2026-10-18)
+
+**Contexto.** Elías validó la guía nueva con Distribuidora Larce (validaciones 69, 71 y 73 del roadmap) y pidió preguntas
+concisas con su fuente aparte, cambiar una sola pregunta, sumar las suyas, un asistente para ajustar la guía y sus
+repreguntas, y lo que cubre la guía pegado a ella. El plan está en `docs/preventa-guia-2-plan.md`.
+
+- **Cada pregunta es solo la pregunta.** El prompt de la venta la pide sin repetir lo que dijo el cliente ni decir de dónde
+  sale (los ejemplos «bien» pasaron a ser preguntas sin cita), `preguntaDeRespaldo` devuelve solo la pregunta del paso
+  (`PREGUNTA_DEL_PASO`), y `sinCitaAdelante` (ajustes-de-la-guia.ts) saca al leer y al mostrar la oración que repite lo
+  dicho antes del «¿» en las guías ya armadas. Lo que dijo el cliente, con sus palabras y su fuente, va en un ⓘ (el `title`
+  que pinta la capa de Tooltip). «Lo que ya sabemos» no cambia: ahí siguen sus palabras.
+- **Lo que decide el vendedor sobre la guía de una sesión vive en la sesión, no en la guía**
+  (`SesionPlaneada.ajustesDeLaGuia`, en `contenido`): sus preguntas (`propias`, «tuya» o «asistente»), las de la guía que
+  reescribió o regeneró (`cambios`, por la clave `tema:paso`) y las que quitó (`quitadas`). *Por qué:* el agente escribe
+  solo `propuesta`, así que lo del vendedor sobrevive a «Actualizar la guía» sin ninguna mezcla al rearmar; y una pregunta
+  de la guía de base (sin agente) también se puede cambiar. `aplicarAjustes` es lo único que los junta con la guía: la
+  pantalla, el panel, «En vivo», lo que planeó la sesión para el agente que la lee, «Lo que cubre la guía» y el asistente
+  ven las mismas preguntas. Una pregunta cambiada se devuelve a la de la guía («Volver a la de la guía»); las quitadas, con
+  «Devolverlas». Una sola operación, `ajustarGuia` (contenido.ts, con su zod), con la versión y el bloqueo de siempre; si
+  la próxima todavía no es sesión, la crea. Sin SQL.
+- **«Regenerar pregunta» cambia solo esa**, con otra del mismo tema y paso (`POST …/guia/pregunta`, guarda de escritura de
+  la exploración). Usa el mismo contexto que la guía (`contextoParaLaGuia`, extraído de `armarLaGuiaSinGuardar`) y un
+  pedido corto (`pedidoDeUnaPregunta`, el modelo de la guía). Si sale en voseo, repite lo sabido o es la misma, se pide una
+  vez más con el aviso. Lo nuevo queda como un cambio de la sesión, marcado «Regenerada». Medido en `LlmCall` con el agente
+  de la exploración y `origen = exploraciones/guia:regenerar-pregunta`.
+- **«Mejorar con el asistente» es el chat de Nexus de la cuenta, no un chat nuevo.** *Por qué:* ese chat ya tiene el hilo
+  por cuenta y persona, la memoria de la cuenta, la búsqueda en las reuniones, la lista de cambios y el aplicar con un clic
+  por la capa de operaciones; otro chat duplicaría todo eso. Se suman cinco operaciones a la capa (lib/operaciones/
+  guia-server.ts): `guia.leer`, `guia.pregunta.agregar`, `guia.pregunta.cambiar`, `guia.pregunta.quitar` y
+  `guia.repregunta.cambiar`.
+  · Llevan `clientId` (`COMO_SE_ACOTA` = «cuenta»: el chat pone el de su hilo) y se verifica que la exploración sea de esa
+    empresa. Escribir pide lo mismo que la pantalla: `preventa.write`, o `exploracion.generate` en un proyecto.
+  · Validan al preparar lo que el prompt pide (tuteo, corta, sin la cita adelante, sin repetir lo sabido); lo que no cumple
+    vuelve al modelo con su motivo. Escriben con `ajustarLaGuia`, la misma operación de la pantalla.
+  · Una repregunta se arma al APLICAR, sobre las de ese momento: dos cambios de repregunta de la misma pregunta en una
+    lista se preparan antes de aplicar el primero.
+  · El botón abre el cajón del chat de la cuenta con el chip «la guía de la sesión N» (un evento del navegador,
+    `abrirElChatDeNexus`); con el chip, el turno suma la guía de la próxima sesión al mensaje (no al `system`: no rompe la
+    caché), como información de la cuenta. En la preventa el chat se monta en la cabecera sin «Sugerencias»; en la ficha
+    del cliente ya estaba. El botón aparece solo a quien puede editar y conversar (`asistente.read`).
+  · El prompt de Nexus suma cómo se ajusta una guía. Medido como cualquier turno del chat (`AgentRun` «nexus-chat»).
+- **«Lo que cubre la guía»** va pegado a ella, arriba de «Retos de su industria»: los puntos para proponer (verde listo,
+  azul lo pregunta la guía, punteado no) y las dimensiones que pregunta, con dónde parece estar cada una
+  (`queCubreLaGuia`, puro). Sale de las preguntas ya ajustadas: cambia al instante. En el panel de la derecha, «Para
+  proponer» queda en lo mínimo: los siete trazos verdes y «N de 7 listos».
+- **Lo que no cambió:** el plan (qué temas y en qué paso), «Lo que ya sabemos», la escala y la regla «sin una pista del
+  cliente no hay nivel» (el asistente no confirma niveles), las guías por sesión y el marco de Customer Success (que
+  también acepta ajustes y lleva la ⓘ).
+- **Medido con Larce** (`scripts/medir-guia-2.ts`, sin escribir la exploración ni el hilo): «Regenerar pregunta» cuesta
+  unos US$0,015 por llamada (unos 4.100 tokens de entrada y 150 de salida; el doble si reintenta). Un turno del asistente
+  que agrega dos preguntas y acorta otra son dos llamadas: unos US$0,11 el primero (escribe la caché del prompt y de la
+  cuenta) y menos los siguientes, que la leen.
+
 ## La rentabilidad, conectada con las agendas y las tareas (2026-10-18)
 
 **Contexto.** Iniciativa C de docs/roadmap.md (lo que dejó la reunión con Marco del 17 oct): saber con datos cuánto deja

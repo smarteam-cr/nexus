@@ -39,7 +39,8 @@ export const PREVENTA: Recorrido = {
   // 4 (2026-10-07): las pestañas de la sesión se llaman Preparación, En vivo y Análisis; la guía dice si está al día.
   // 5 (2026-10-09): Exploración abre en su página de inicio (las sesiones, cada una con su reunión; «+ Agregar sesión»).
   // 6 (2026-10-18): «Lo que ya sabemos» arriba de la guía, que trae unas 5 preguntas desde lo que el cliente ya respondió.
-  version: 6,
+  // 7 (2026-10-18): preguntas cortas con su ⓘ, «Regenerar pregunta», preguntas tuyas, el asistente y lo que cubre la guía.
+  version: 7,
   titulo: "Una preventa",
   descripcion: "Todas sus piezas, de la preparación a la propuesta",
   rotulo: "Recorrido · Preventa",
@@ -163,7 +164,21 @@ export const PREVENTA: Recorrido = {
     {
       ancla: "preventa.sesion.preguntas",
       titulo: "Preparación: la guía de la sesión",
-      texto: "Unas 5 preguntas que siguen desde lo que ya dijo: cuánto le cuesta, cómo lo quiere resolver, para cuándo y con qué. Las repreguntas se abren con un clic. Siempre cierra con el siguiente paso.",
+      texto: "Unas 5 preguntas cortas; en la ⓘ, de dónde sale cada una. «Regenerar pregunta» cambia solo esa, en «⋯» la editas o la quitas, y abajo sumas las tuyas: se quedan aunque actualices la guía.",
+      lado: "top",
+      accion: momento("antes"),
+    },
+    {
+      ancla: "preventa.sesion.asistente",
+      titulo: "Mejorar con el asistente",
+      texto: "Pídele «más preguntas de presupuesto» o «profundiza en sistemas»: propone cambios a la guía y sus repreguntas, y los aplicas con un clic.",
+      lado: "bottom-end",
+      accion: momento("antes"),
+    },
+    {
+      ancla: "preventa.sesion.cubre",
+      titulo: "Lo que cubre la guía",
+      texto: "Qué de lo que falta para proponer pregunta la guía, y qué dimensiones de la escala. Cambia apenas cambias una pregunta.",
       lado: "top",
       accion: momento("antes"),
     },
