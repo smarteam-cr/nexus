@@ -979,7 +979,8 @@
 .stl .stl-inv-row-main--adorno > .stl-inv-concept,
 .stl .stl-inv-row-main--adorno > .stl-inv-detail,
 .stl .stl-inv-row-main--adorno > .stl-inv-calc,
-.stl .stl-inv-row-main--adorno > .stl-inv-aviso { grid-column: 2; }
+.stl .stl-inv-row-main--adorno > .stl-inv-aviso,
+.stl .stl-inv-row-main--adorno > .stl-inv-costo { grid-column: 2; }
 /* El adorno (check + ícono) es UN solo hijo de la rejilla: así el número de controles no
    cambia cuántas celdas ocupa la fila. */
 .stl .stl-inv-adorno {
@@ -1003,6 +1004,21 @@
   display: block; margin-top: 4px;
   font-size: 11.5px; font-weight: 600; color: #B45309;
 }
+/* Lo INTERNO de una licencia (precio de lista del proveedor, quién la factura, margen): chrome de EDICIÓN,
+   punteado y gris, para que no se lea como parte del documento. Nunca se pinta fuera del editor. */
+.stl .stl-inv-costo {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-top: 8px; padding: 6px 10px; border-radius: 8px;
+  border: 1px dashed var(--border); background: var(--bg-soft);
+  font-size: 12px; line-height: 1.4; color: var(--text-2);
+}
+.stl .stl-inv-costo-rot {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted);
+}
+.stl .stl-inv-costo-campos { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.stl .stl-inv-costo-margen { font-weight: 600; }
+.stl .stl-inv-costo-margen--ok { color: #047857; }
+.stl .stl-inv-costo-margen--neg { color: #B45309; }
 /* Asistente de licencias: chrome de EDICIÓN. Punteado + azul de sistema para que no se lea
    como parte del documento (mismo criterio que `.stl-inv-eco`). */
 .stl .stl-inv-asist {

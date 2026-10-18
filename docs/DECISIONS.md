@@ -8844,3 +8844,49 @@ HubSpot, contenido; después SEO, AEO, redes, IA en marketing, rediseño web).
   recurrente NUEVA e interna por cliente («… · interna», nunca se publica) que copia los casos de uso y la inversión de la
   firmada, sin tocarla, y le asigna el servicio a su proyecto recurrente. Colby va con SmartLoop hasta confirmar. ⛔ Nunca
   Wherex.
+## Licencias y servicios separados, y lo vendido llega a Finanzas (2026-10-18)
+
+> «La siguiente serie», iniciativa 3, pasos 3 y 4. Decisiones de Elías (2026-10-17): el costo de las licencias lo anota
+> Ventas en la propuesta; ese costo es público (el precio de lista del proveedor), y si al cliente se le cobra más la
+> diferencia tiene que llegar a Finanzas; Finanzas tiene que poder volver a leer las propuestas ya ganadas.
+
+- **El precio de lista vive en la línea de licencia, en el mismo `CanvasBlock.data`, sin SQL**
+  (`lib/landing/inversion-costo.ts`): `costoLista` (lo que se le paga al proveedor por toda la línea), `costoMoneda`
+  (vacío = la de la sección), `costoCada` (mensual · anual · una vez; vacío = sigue a la línea) y `quienFactura`
+  (`smarteam` = reventa · `proveedor` = el cliente le paga directo · vacío = sin decir). El editor los muestra en un
+  renglón punteado debajo de cada licencia, con el margen (lo cobrado − el costo, en el mismo período). *Por qué
+  `quienFactura`:* una licencia de la propuesta no siempre pasa por Smarteam (en Cemaco el cliente le paga directo a
+  HubSpot y Smarteam cobra la comisión de aliado); solo una reventa entra en los cobros y su costo es un gasto.
+- **⛔ Lo interno nunca cruza al cliente, y se hace cumplir en código:** `sinLoInterno` saca las cuatro claves del
+  snapshot que congela «Subir al cliente», de la lectura de la propuesta publicada (otra vez, por si acaso) y del PDF.
+  Los agentes no las ven por construcción: la inversión es `agentGenerated:false` y su schema no declara propiedades.
+  Lo vigila `lib/landing/inversion-costo.test.ts` (escaneo estructural de los tres caminos + el schema).
+- **El margen no compara monedas distintas ni períodos distintos.** Un costo anual se lleva a mes dividiendo por 12
+  (eso no es convertir moneda); un costo en colones de una propuesta en dólares, o un costo mensual de una línea de
+  cobro único, dicen «no se compara». Los motores siguen sin convertir.
+- **Un solo lector de lo vendido para Finanzas** (`lib/finanzas/lo-vendido.ts`, puro; carga en `lo-vendido-server.ts`).
+  Ganada = el trato de HubSpot de la propuesta está en `VentaGanada` como GANADA, no excluido y de venta propia. Se lee
+  la versión ACTIVA (no el snapshot, que ya va sin lo interno); con dos propuestas en el mismo trato, la publicada más
+  reciente. Sin moneda en la propuesta se usa la del trato de HubSpot, y lo dice.
+- **Una propuesta ganada reemplaza a la carga a mano de `LicenciaRevendida` solo si trae el dato completo:** Smarteam
+  factura al menos una licencia, de ninguna falta decir quién la factura, cada una tiene su precio de lista comparable,
+  todo se pudo leer, la moneda es USD o CRC y el cliente tiene cuenta de cobro. Si falta algo, `porQueNoEntra` lo dice y
+  no se inventa: sigue rigiendo lo cargado a mano. *Cómo reemplaza:* sus contratos van PRIMERO en la lista
+  (`combinarLicencias`) y `parteDeServicio` y `egresosDeLicencias` toman el primero que rige cada mes para esa cuenta y
+  moneda; fuera de sus meses sigue la carga a mano. `egresosDeLicencias` aprendió esa regla para no contar el costo dos
+  veces (con la carga a mano sola no pasaba: la base impide dos vivos por cuenta y moneda).
+- **No cambia qué cuenta como ingreso.** El contrato que sale de una propuesta pasa por la misma regla ya decidida
+  (`SOLO_SERVICIO` mientras dirección no decida otra cosa en «Para decidir»), igual que uno cargado a mano. El punto de
+  equilibrio muestra, dentro de «Licencias revendidas», «Lo vendido según las propuestas ganadas»: servicio, licencias,
+  margen y si entra o por qué no. El vendido del año (`VentaGanada.monto`) no se toca.
+- **El recálculo retroactivo es en vivo**: el equilibrio vuelve a leer las propuestas ganadas cada vez que se abre.
+  `scripts/recalcular-lo-vendido.ts` (simulacro por defecto, conexión de solo lectura) lo muestra antes, propuesta por
+  propuesta y mes a mes (lo facturado, cada moneda aparte, sin convertir), con la cobertura. Con `--apply` solo archiva
+  los contratos a mano que una propuesta reemplaza enteros. Medido el 2026-10-18: 6 propuestas ganadas, 3 venden
+  licencias, ninguna trae el precio de lista ⇒ el equilibrio queda exactamente igual hasta que Ventas lo anote.
+- **Pendiente de Elías (no frena nada):**
+  1. *Cuánto dura el contrato que sale de una propuesta.* Se supone `MESES_DEL_CONTRATO = 12` desde el cierre (la
+     propuesta no dice la duración; 12 es lo habitual en HubSpot). Cambiarlo es una constante.
+  2. *Si una licencia con precio de lista pero sin decir quién la factura cuenta.* Hoy no (fail-closed).
+  3. *Si «Lo vendido según las propuestas» debería sumar al vendido del año o compararse con él.* Hoy es solo
+     información: el vendido sigue saliendo de HubSpot.

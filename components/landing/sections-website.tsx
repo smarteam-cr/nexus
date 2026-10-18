@@ -26,6 +26,7 @@ import type {
 } from "./types";
 import { formatRango, montoParaLectura, parseMonto } from "@/lib/landing/money";
 import { hubVisual } from "@/lib/landing/hubs-solucion";
+import { CostoDeLicencia } from "./inversion-costo";
 import { labelForTag, normalizeTag } from "@/lib/tags/catalog";
 import {
   adoptarRecurrentes,
@@ -593,6 +594,12 @@ function GrupoTabla({
                   {/* Solo-editor, igual que "⚠ no suma": el cliente ve la línea tal cual la
                       dejó Ventas, no nuestra opinión sobre ella. */}
                   {aviso && <span className="stl-inv-aviso">⚠ {aviso}</span>}
+                  {/* INTERNO: lo que se le paga al proveedor y el margen. Solo en edición y solo en licencias;
+                      lo que guarda lo saca `sinLoInterno` de todo lo que ve el cliente. */}
+                  {editable && grupo.clave === "licencias" && (
+                    <CostoDeLicencia linea={l} moneda={moneda} contrato={contrato}
+                      onCambio={(next) => set(replaceAt(lineas, i, { ...l, ...next }))} />
+                  )}
                 </div>
 
                 <div className="stl-inv-cell">

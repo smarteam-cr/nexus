@@ -23,12 +23,15 @@ import {
   type ModoLicencias,
   type ResumenDeLicencia,
 } from "@/lib/finanzas/licencias";
+import { MESES_DEL_CONTRATO, type ResumenDeLoVendido } from "@/lib/finanzas/lo-vendido";
 
 export interface LicenciasDelReporte {
   modo: ModoLicencias;
   decision: { modo: ModoLicencias; decididoPor: string; decididoEn: string } | null;
   contratos: ResumenDeLicencia[];
   sinCosto: number;
+  /** Lo vendido según las propuestas ganadas. Opcional: un reporte armado antes de 2026-10-18 no lo trae. */
+  dePropuestas?: ResumenDeLoVendido;
 }
 
 const BOTON = "shrink-0 rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] font-semibold text-fg-secondary hover:bg-surface-hover";
@@ -107,6 +110,7 @@ export default function LicenciasRevendidas({
           </Alert>
         </div>
       )}
+      {licencias.dePropuestas && licencias.dePropuestas.ganadas > 0 && <LoVendidoDeLasPropuestas resumen={licencias.dePropuestas} />}
       {pagosAHubspot && pagosAHubspot.total > 0 && (
         <p className="border-t border-line px-5 py-2.5 text-xs text-fg-muted">
           En {anio} salieron de Mercury {fmtMontoLibro(pagosAHubspot.total, "USD")} a HubSpot en{" "}
@@ -133,6 +137,55 @@ export default function LicenciasRevendidas({
         />
       )}
     </section>
+  );
+}
+
+/**
+ * Lo vendido según las propuestas ganadas (lib/finanzas/lo-vendido.ts): cuánto es servicio, cuánto licencia y el margen
+ * de las que factura Smarteam. Las que traen el dato completo ya están en la lista de contratos de arriba (dicen
+ * «Propuesta…» como fuente); las demás dicen por qué no entran, y siguen con la carga a mano.
+ */
+function LoVendidoDeLasPropuestas({ resumen }: { resumen: ResumenDeLoVendido }) {
+  const [abierto, setAbierto] = useState(false);
+  return (
+    <div className="border-t border-line px-5 py-3">
+      <button
+        type="button"
+        className="flex w-full flex-wrap items-baseline gap-x-2 text-left text-[13px]"
+        aria-expanded={abierto}
+        onClick={() => setAbierto((v) => !v)}
+      >
+        <span className="font-semibold text-fg">Lo vendido según las propuestas ganadas</span>
+        <span className="text-xs text-fg-muted">
+          {resumen.ganadas === 1 ? "1 ganada" : `${resumen.ganadas} ganadas`} · {resumen.conLicencias} con licencias ·{" "}
+          {resumen.entran === 1 ? "1 entra" : `${resumen.entran} entran`} como contrato
+        </span>
+        <span className="ml-auto text-xs font-semibold text-brand">{abierto ? "Ocultar" : "Ver"}</span>
+      </button>
+      {abierto && (
+        <ul className="mt-2 flex flex-col">
+          {resumen.propuestas.map((p) => (
+            <li key={p.businessCaseId} className="flex flex-wrap items-baseline gap-x-3.5 gap-y-0.5 border-t border-line py-2 text-[13px]">
+              <span className="min-w-0 flex-[1_1_220px]">
+                <span className="font-semibold text-fg">{p.clienteNombre}</span>
+                <span className="text-fg-muted"> · {p.nombre} · ganada el {p.fechaCierre}</span>
+              </span>
+              <span className="text-fg-secondary">Servicio {fmtMontoLibro(p.servicioEnElContrato, p.moneda)}</span>
+              <span className="text-fg-secondary">Licencias {fmtMontoLibro(p.licenciasEnElContrato, p.moneda)}</span>
+              {p.margenEnElContrato !== null && (
+                <span className="text-fg-secondary">Margen {fmtMontoLibro(p.margenEnElContrato, p.moneda)}</span>
+              )}
+              <span className={cn("basis-full text-xs", p.entra ? "text-fg-muted" : "text-warn-ink")}>
+                {p.entra ? "Entra como contrato: reemplaza a la carga a mano en sus meses." : p.porQueNoEntra}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-1 text-xs text-fg-muted">
+        Cuenta {MESES_DEL_CONTRATO} meses desde el cierre. Una propuesta entra solo si Ventas anotó el precio de lista de cada licencia que factura Smarteam.
+      </p>
+    </div>
   );
 }
 

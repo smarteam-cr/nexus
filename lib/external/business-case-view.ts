@@ -24,6 +24,7 @@
  * que se filtra es "este link existió", a quien ya tenía el link.
  */
 import { prisma } from "@/lib/db/prisma";
+import { seccionesSinLoInterno } from "@/lib/landing/inversion-costo";
 
 export const BC_TOKEN_RE = /^[a-f0-9]{64}$/i;
 
@@ -149,7 +150,9 @@ export async function resolveBusinessCaseAccess(token: string): Promise<Business
       clientLogoDarkUrl: snap.clientLogoDarkUrl ?? bc.client.logoDarkUrl,
       clientLogoScale: snap.clientLogoScale ?? bc.client.logoScale,
       templateId: typeof snap.templateId === "string" ? snap.templateId : undefined,
-      sections: snap.sections,
+      /* ⛔ Fail-closed: el snapshot se congela ya sin lo interno de las líneas (publish), y se vuelve a limpiar al leer
+         por si una propuesta se publicó por otro camino. lib/landing/inversion-costo.ts. */
+      sections: seccionesSinLoInterno(snap.sections),
     },
   };
 }
