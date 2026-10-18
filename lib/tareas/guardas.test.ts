@@ -198,6 +198,11 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "lib/operaciones/contexto-server.ts": "la persona explícita de una operación: su visibilidad en Tareas (contextoDeTareas) y los clientes que ve; no lee tareas",
       "lib/operaciones/tareas-server.ts": "las operaciones de Tareas: leen SOLO por lib/tareas/para-operaciones.ts (sin la cita, el contexto ni las notas) y escriben SOLO por el escritor único (crearTarea, cambiarEstado, moverDeSemana)",
       "lib/operaciones/siguiente-paso-server.ts": "fijar el siguiente paso: solo los sprints que lidera la persona (equipos.ts, puro); escribe por lib/siguiente-paso",
+      // La semana (2026-10-17, fase 2 de docs/nexus-sistema-de-trabajo-plan.md).
+      "lib/mi-dia/planificar-server.ts": "«Planifica tu semana»: las tareas abiertas de tus cuentas (título, fecha, prioridad, lado; sin la cita, el contexto, las notas ni lo privado) y la próxima sugerida de la última reunión",
+      "lib/mi-dia/proximas-server.ts": "las próximas reuniones de la ficha: las reuniones planeadas de la cuenta (título, hora, responsable e invitados; nunca lo privado) y quién tiene tareas abiertas con ella (para leer su calendario)",
+      "lib/sessions/reanalizar.ts": "una reunión cuyo texto cambió: sus propuestas sin decidir quedan vencidas por el único escritor (retirarPropuestasDeLaReunion); no lee tareas",
+      "app/api/sessions/[id]/seguimiento/route.ts": "«Ya la agendé» de la página de una reunión: deja la reunión planeada por el único escritor (planearReunion); no lee tareas",
       // El chat de Nexus (2026-10-17, ficha H): lee por la puerta de la capa y escribe por la capa de operaciones.
       "lib/nexus-chat/herramientas-server.ts": "el chat de Nexus: verifica que una tarea nombrada por su número sea de la cuenta del chat, SOLO por lib/tareas/para-operaciones.ts (tareaVisiblePorNumero); escribe por lib/operaciones",
       "lib/nexus-chat/acciones-server.ts": "las acciones sugeridas de una persona en una cuenta: sus tareas SOLO por lib/tareas/para-operaciones.ts (sin la cita, el contexto ni las notas) y los sprints que lidera (equipos.ts, puro); no escribe",

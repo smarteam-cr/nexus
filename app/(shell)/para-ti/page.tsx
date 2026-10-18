@@ -21,7 +21,7 @@ import { ENLACE_BLANCO } from "@/components/carga/piezas";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { equipoDeRol, veLaAgenda } from "@/lib/equipos/registro";
 import { agendaDeLaSemana, agendaDelDiaDe } from "@/lib/mi-dia/agenda-server";
-import { cuentasDelInicio, tareasDeHoy, tareasInternas } from "@/lib/mi-dia/inicio-server";
+import { cuentasDelInicio, tareasDeHoy, tareasInternas, tareasParaLosHuecos } from "@/lib/mi-dia/inicio-server";
 import { horaCR, huecoLibre, resumenDelDia, varianteDelInicio } from "@/lib/mi-dia/inicio";
 import { cifrasDelInicio, siguienteMovimiento } from "@/lib/mi-dia/cifras";
 import { accesoParaFrentes, alcanceDe, tienePermiso } from "@/lib/para-ti/alcance-server";
@@ -104,7 +104,7 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
   };
 
   const enLaCarteraDeCs = carteraDeCs && modo === "cartera";
-  const [medicion, avisos, agenda, cuentas, hoy, internas, cartera, empresasDeCs] = await Promise.all([
+  const [medicion, avisos, agenda, cuentas, hoy, internas, cartera, empresasDeCs, paraLosHuecos] = await Promise.all([
     medirParaTi(alcance, ahora),
     avisosDe(alcance.email),
     veAgenda && modo === "dia"
@@ -117,6 +117,8 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
     enLaCarteraDeCs ? cargarCarteraDeCs(carteraDeCs, alcance, { ahora, hoyISO }).catch(() => null) : Promise.resolve(null),
     // El número del selector en «Tu día», sin cargar la cartera entera.
     carteraDeCs && !enLaCarteraDeCs ? cuantasEmpresasDeCs(carteraDeCs, alcance).catch(() => null) : Promise.resolve(null),
+    // «Con qué avanzar» en los huecos libres de hoy: solo si la agenda muestra hoy.
+    veAgenda && modo === "dia" && !semana && dia === hoyISO ? tareasParaLosHuecos(alcance.email, hoyISO).catch(() => []) : Promise.resolve([]),
   ]);
 
   // Un frente que llevas sin el permiso para abrirlo se calla (lib/para-ti/frentes.ts): se dice, para que no parezca
@@ -247,6 +249,7 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
                 ? { ...siguienteMovimiento(vistaDeVentas.negocios, hoyISO, ahora), verPipeline: "/para-ti?vista=cartera&cartera=pipeline" }
                 : null,
               abrirDeEntrada: mostrandoHoy ? (proxima?.id ?? null) : null,
+              paraLosHuecos,
             }}
           />
         )}

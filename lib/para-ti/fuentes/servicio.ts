@@ -6,10 +6,16 @@
  * cuenta que solo le compartieron no es suya para esto). Por cada cuenta suya sin acción esta semana o sin reunión en
  * los próximos 8 días, una línea en «Lo que importa hoy» (peso 80, lib/para-ti/importa.ts). La regla es la de
  * lib/mi-dia/servicio.ts; los datos, lib/mi-dia/servicio-server.ts.
+ *
+ * «Agendar» lleva hora (fase 2, 2026-10-17): la primera hora libre en horario laboral del calendario de quien la lleva,
+ * una por cuenta y sin pisarse entre ellas (cada una ocupa la suya). Así abre Google Calendar con la hora también desde
+ * la lista entera y desde el correo de la mañana. Sin el calendario, abre sin hora, como antes.
  */
 import "server-only";
 import { servicioDeLasCuentas } from "@/lib/mi-dia/servicio-server";
 import { pendienteDeCuentaSinAccion } from "@/lib/mi-dia/servicio";
+import { calendarioDeLosProximosDias } from "@/lib/mi-dia/calendario-server";
+import { primerHuecoLaboral, type EventoParaLaGrilla } from "@/lib/mi-dia/inicio";
 import type { Fuente } from "../fuente";
 import type { Pendiente } from "../tipos";
 
@@ -27,12 +33,20 @@ export const CUENTAS_SIN_ACCION: Fuente = {
       { ahora: c.ahora, hoyISO: c.hoyISO, quienMira: { email: a.email, esSuperAdmin: a.rol === "SUPER_ADMIN" } },
     );
     const out: Pendiente[] = [];
-    for (const s of servicio.values()) {
+    const cal = [...servicio.values()].some((s) => s.falta.includes("reunion")) ? await calendarioDeLosProximosDias(a.email, c.ahora) : null;
+    const ocupado: EventoParaLaGrilla[] = cal ? [...cal.ocupado] : [];
+    for (const s of [...servicio.values()].sort((x, y) => x.empresa.localeCompare(y.empresa, "es"))) {
+      let hueco: { inicio: string; fin: string } | null = null;
+      if (cal && s.falta.includes("reunion")) {
+        hueco = primerHuecoLaboral(ocupado, c.ahora);
+        ocupado.push({ id: `agendar:${s.clientId}`, inicio: hueco.inicio, fin: hueco.fin });
+      }
       const p = pendienteDeCuentaSinAccion({ clientId: s.clientId, empresa: s.empresa }, s, {
         ultimaReunion: s.ultimaReunion,
         invitados: s.invitados,
         hoyISO: c.hoyISO,
         correo: a.email,
+        hueco,
       });
       if (p) out.push(p);
     }

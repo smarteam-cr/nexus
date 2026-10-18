@@ -7,14 +7,15 @@
  * viernes). Cada reunión es un botón: tocarla abre su panel al costado. Tocar una hora libre (o «+ Crear evento», que
  * busca la primera hora libre en horario laboral) deja ahí un borrador de una hora, con su cuadro para el título, los
  * invitados y la cuenta; «Abrir en Google Calendar» lo abre configurado y la persona lo guarda allá. Nexus no escribe en
- * el calendario. El hueco libre de hoy (una hora o más, en horario laboral) va punteado en azul.
+ * el calendario. Los huecos libres de hoy (una hora o más, en horario laboral) van punteados en azul, cada uno con la
+ * tarea tuya más importante que cabe ahí («Con qué avanzar», lib/mi-dia/inicio.ts › conQueAvanzar).
  */
 import Link from "next/link";
 import { useEffect, useMemo, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Segmentado } from "@/components/ui";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
-import { grillaDelDia, horaCR, instante, lineaDeAhora, minutoDelDia, type EventoEnLaGrilla } from "@/lib/mi-dia/inicio";
+import { grillaDelDia, horaCR, instante, lineaDeAhora, minutoDelDia, type ConQueAvanzar, type EventoEnLaGrilla } from "@/lib/mi-dia/inicio";
 import { MINUTOS_DEL_BORRADOR, sePisan, tituloDelBorrador, type BorradorDeEvento } from "@/lib/mi-dia/agenda-borrador";
 import type { AgendaDeHoy, ReunionDeLaAgenda } from "@/lib/mi-dia/agenda-server";
 import { ENLACE_BOTON, TARJETA, TITULO } from "./piezas";
@@ -39,6 +40,14 @@ const fechaLarga = (ymd: string) => `${DIAS[diaDeLaSemana(ymd)]} ${Number(ymd.sl
 const fechaCorta = (ymd: string) => `${Number(ymd.slice(8, 10))} ${MESES_CORTOS[Number(ymd.slice(5, 7)) - 1]}`;
 
 export type ReunionElegible = ReunionDeLaAgenda;
+
+/** Un hueco libre de hoy, con su id en la grilla y la tarea con que avanzar (si alguna cabe). */
+export interface HuecoDeLaAgenda {
+  id: string;
+  inicio: string;
+  fin: string;
+  avanzar: ConQueAvanzar | null;
+}
 
 const SIN_AGENDA: Record<Exclude<AgendaDeHoy["estado"], "ok">, string> = {
   "sin-google": "La agenda de Google no está configurada en este servidor.",
@@ -69,7 +78,7 @@ export default function AgendaDelInicio({
   correo,
   seleccion,
   onElegir,
-  hueco,
+  huecos,
   enlaces,
 }: {
   agenda: AgendaDeHoy;
@@ -81,7 +90,7 @@ export default function AgendaDelInicio({
   correo: string;
   seleccion: string | null;
   onElegir: (id: string) => void;
-  hueco: { inicio: string; fin: string } | null;
+  huecos: readonly HuecoDeLaAgenda[];
   enlaces: { hoy: string; anterior: string; siguiente: string; dia: string; semana: string };
 }) {
   const router = useRouter();
@@ -92,10 +101,11 @@ export default function AgendaDelInicio({
   // «Agendar» y «+ Crear evento» buscan la primera hora libre sin pisar lo que la agenda tiene cargado.
   useEffect(() => fijarEventosDeLaAgenda(eventos), [eventos]);
   // Un borrador tapa el hueco libre que se pisa con él (ya se está usando).
-  const huecoVisible = hueco && vista === "dia" && !borradores.lista.some((b) => sePisan(b, hueco)) ? hueco : null;
+  const huecosVisibles = vista === "dia" ? huecos.filter((h) => !borradores.lista.some((b) => sePisan(b, h))) : [];
+  const huecoPorId = new Map(huecosVisibles.map((h) => [h.id, h]));
   const conBorradores = [
     ...eventos,
-    ...(huecoVisible ? [{ id: "__hueco__", inicio: huecoVisible.inicio, fin: huecoVisible.fin }] : []),
+    ...huecosVisibles.map((h) => ({ id: h.id, inicio: h.inicio, fin: h.fin })),
     ...borradores.lista.map((b) => ({ id: ID_DEL_BORRADOR + b.id, inicio: b.inicio, fin: b.fin })),
   ];
   const grillas = dias.map((d) => grillaDelDia(conBorradores, d));
@@ -239,8 +249,7 @@ export default function AgendaDelInicio({
                       e={e}
                       desplazamiento={(g.desdeHora - desdeHora) * ALTO_HORA}
                       reunion={porId.get(e.id) ?? null}
-                      esHueco={e.id === "__hueco__"}
-                      hueco={huecoVisible}
+                      hueco={huecoPorId.get(e.id) ?? null}
                       elegida={seleccion === e.id}
                       hoyISO={hoyISO}
                       ahora={ahora}
@@ -272,7 +281,6 @@ function Evento({
   e,
   desplazamiento,
   reunion,
-  esHueco,
   hueco,
   elegida,
   hoyISO,
@@ -283,23 +291,25 @@ function Evento({
   e: EventoEnLaGrilla;
   desplazamiento: number;
   reunion: ReunionDeLaAgenda | null;
-  esHueco: boolean;
-  hueco: { inicio: string; fin: string } | null;
+  hueco: HuecoDeLaAgenda | null;
   elegida: boolean;
   hoyISO: string;
   ahora: Date;
   angosto: boolean;
   onElegir: () => void;
 }) {
-  if (!reunion && !esHueco) return null;
+  const esHueco = !!hueco;
+  if (!reunion && !hueco) return null;
   const pasada = reunion ? Date.parse(reunion.fin ?? reunion.inicio) < ahora.getTime() : false;
   const interna = !!reunion && reunion.empresas.length === 0;
-  const titulo = esHueco
-    ? "Hueco libre"
+  const titulo = hueco
+    ? hueco.avanzar
+      ? `Avanza T-${hueco.avanzar.tarea.numero} · ${hueco.avanzar.tarea.titulo}`
+      : "Hueco libre"
     : reunion!.empresas.length === 1
       ? `${reunion!.titulo} · ${reunion!.nombres[reunion!.empresas[0]]}`
       : reunion!.titulo;
-  const linea = esHueco && hueco ? `${horaCR(hueco.inicio)}–${horaCR(hueco.fin)}` : lineaDeLaReunion(reunion!, hoyISO, ahora);
+  const linea = hueco ? `Libre ${horaCR(hueco.inicio)}–${horaCR(hueco.fin)}` : lineaDeLaReunion(reunion!, hoyISO, ahora);
   const corto = e.alto < 40;
   const ancho = 100 / e.columnas;
   return (
@@ -327,8 +337,9 @@ function Evento({
         width: `calc(${ancho}% - ${angosto ? 4 : 16}px)`,
       }}
     >
-      <span className={cn("truncate text-[12.5px] font-semibold leading-[17px]", esHueco ? "text-brand" : pasada ? "text-fg-muted" : interna ? "text-fg-secondary" : "text-fg")}>
-        {titulo}
+      <span className={cn("flex min-w-0 items-center gap-1 text-[12.5px] font-semibold leading-[17px]", esHueco ? "text-brand" : pasada ? "text-fg-muted" : interna ? "text-fg-secondary" : "text-fg")}>
+        {hueco?.avanzar && <IconoDeSugerencia className="h-3 w-3 flex-none" />}
+        <span className="truncate">{titulo}</span>
       </span>
       <span className={cn("whitespace-nowrap text-[11.5px] leading-[15px]", esHueco ? "text-brand" : pasada || interna ? "text-fg-muted" : "text-fg-secondary")}>{linea}</span>
     </button>

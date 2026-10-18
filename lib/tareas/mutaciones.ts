@@ -1962,7 +1962,14 @@ export async function escribirPropuestasDeLectura(
   const yaTiene = duenos.length
     ? await tx.tarea.groupBy({
         by: ["responsableEmail"],
-        where: { lecturaId: lectura.id, creadaPorEmail: null, origen: { in: ["reunion", "notas"] }, responsableEmail: { in: duenos } },
+        // Lo que se retiró porque el texto de la reunión cambió (retirarPropuestasDeLaReunion) no ocupa el cupo de la relectura.
+        where: {
+          lecturaId: lectura.id,
+          creadaPorEmail: null,
+          origen: { in: ["reunion", "notas"] },
+          responsableEmail: { in: duenos },
+          OR: [{ origenId: null }, { NOT: { origenId: { contains: ":retirada:" } } }],
+        },
         _count: { _all: true },
       })
     : [];
@@ -2842,4 +2849,146 @@ export async function cambiarFilaDeFuente(id: string, c: { activa?: boolean; pau
 /** Lo que ya se leyó queda: las lecturas pierden la referencia (SET NULL), no las tareas. */
 export async function borrarFuente(id: string): Promise<void> {
   await prisma.fuenteDeTareas.delete({ where: { id } });
+}
+
+/* ── La semana (fase 2 de docs/nexus-sistema-de-trabajo-plan.md, 2026-10-17) ─────── */
+
+const CORREO_DE_INVITADO = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/** Cuántos invitados guarda una reunión planeada. */
+const MAX_INVITADOS_DE_LA_REUNION = 20;
+/** Hasta cuándo se puede planear una reunión (más allá, no es la semana de nadie). */
+const DIAS_PARA_PLANEAR_UNA_REUNION = 120;
+
+export interface ReunionPlaneadaNueva {
+  clientId: string;
+  titulo: string;
+  /** ISO: cuándo es. */
+  inicio: string;
+  invitados?: readonly string[];
+  /** Para qué es la reunión (va a las notas). */
+  objetivo?: string | null;
+  /** La reunión de la que es la próxima (la página de una reunión): agendarla otra vez mueve la misma tarea. */
+  deLaReunion?: string | null;
+}
+
+/**
+ * La reunión planeada (`clase = "reunion"`, fase 0.2) que deja «Agendar»: la persona guardó el evento en Google Calendar
+ * (Nexus no lo escribe) y dice «Ya lo guardé»; acá queda la tarea suya, con la cuenta, la hora y los invitados, en la
+ * semana de esa reunión. Con eso la cuenta cuenta como con reunión (lib/mi-dia/servicio.ts) aunque su calendario no se
+ * pueda leer, y la reunión aparece en sus tareas.
+ *
+ * Repetir no duplica: la clave es la próxima de esa reunión (`proxima:<reunión>`) o la cuenta con la hora
+ * (`agenda:<cuenta>:<inicio>`). Agendar otra vez la próxima de la misma reunión, con otra hora, mueve la tarea si sigue
+ * abierta.
+ */
+export async function planearReunion(
+  ctx: ContextoDeTareas,
+  clientes: ClientesQueVes,
+  n: ReunionPlaneadaNueva,
+  ahora = new Date(),
+): Promise<{ id: string; numero: number; yaExistia: boolean }> {
+  const titulo = n.titulo.trim().slice(0, 200);
+  if (!titulo) throw new ErrorDeTareas(400, "La reunión necesita un título.");
+  if (!clientes.todos && !clientes.ids.has(n.clientId)) throw new ErrorDeTareas(404, "No puedes elegir esa empresa.");
+  const inicio = new Date(n.inicio);
+  if (Number.isNaN(inicio.getTime())) throw new ErrorDeTareas(400, "La hora de la reunión no es válida.");
+  if (inicio.getTime() < ahora.getTime() - 86_400_000) throw new ErrorDeTareas(400, "Esa reunión ya pasó.");
+  if (inicio.getTime() > ahora.getTime() + DIAS_PARA_PLANEAR_UNA_REUNION * 86_400_000) throw new ErrorDeTareas(400, "Esa reunión está demasiado lejos para planearla.");
+  const yo = ctx.email;
+  const equipo = equipoDe(yo, ctx.miembros);
+  if (!equipo) throw new ErrorDeTareas(400, "Tu cuenta no está en el equipo.");
+  const invitados = [...new Set((n.invitados ?? []).map((x) => x.trim().toLowerCase()).filter((x) => CORREO_DE_INVITADO.test(x)))].slice(0, MAX_INVITADOS_DE_LA_REUNION);
+  const semana = await semanaDestino(prisma, yo, lunesDeFecha(hoyEnCostaRica(inicio)), true, ahora);
+  const origenId = n.deLaReunion ? `proxima:${n.deLaReunion}` : `agenda:${n.clientId}:${inicio.toISOString().slice(0, 16)}`;
+  const notas = n.objetivo?.trim() ? `Objetivo: ${n.objetivo.trim()}`.slice(0, 2_000) : null;
+
+  const existe = await prisma.tarea.findUnique({ where: { origenId }, select: { id: true, numero: true, version: true, estado: true, reunionInicio: true, responsableEmail: true } });
+  if (existe) {
+    const abierta = existe.estado === "pendiente" || existe.estado === "en_curso";
+    if (abierta && existe.responsableEmail === yo && existe.reunionInicio?.getTime() !== inicio.getTime()) {
+      await prisma.$transaction(async (tx) => {
+        await actualizar(tx, existe, {}, { reunionInicio: inicio, semana: aDate(semana), titulo, huella: huellaDeTexto(titulo), invitados });
+        await evento(tx, { tareaId: existe.id, tipo: "editada", porEmail: yo, datos: { reunion: { desde: existe.reunionInicio?.toISOString() ?? null, hacia: inicio.toISOString() } } });
+      }, OPCIONES_DE_TX);
+      olvidarMedicion(yo);
+    }
+    return { id: existe.id, numero: existe.numero, yaExistia: true };
+  }
+
+  try {
+    const creada = await prisma.$transaction(async (tx) => {
+      const t = await tx.tarea.create({
+        data: {
+          titulo,
+          huella: huellaDeTexto(titulo),
+          notas,
+          estado: "pendiente",
+          prioridad: "media",
+          tipo: "puesto",
+          equipo,
+          responsableEmail: yo,
+          semana: aDate(semana),
+          clientId: n.clientId,
+          lado: "smarteam",
+          clase: "reunion",
+          invitados,
+          reunionInicio: inicio,
+          origen: "mano",
+          origenId,
+          creadaPorEmail: yo,
+        },
+        select: { id: true, numero: true },
+      });
+      await evento(tx, { tareaId: t.id, tipo: "creada", porEmail: yo, datos: { reunion: inicio.toISOString(), equipo } });
+      return t;
+    }, OPCIONES_DE_TX);
+    olvidarMedicion(yo);
+    return { ...creada, yaExistia: false };
+  } catch (e) {
+    if (!esUnicoDuplicado(e)) throw e;
+    const misma = await prisma.tarea.findUnique({ where: { origenId }, select: { id: true, numero: true } });
+    if (!misma) throw e;
+    return { ...misma, yaExistia: true };
+  }
+}
+
+/** El motivo con que quedan las propuestas de una reunión cuyo texto cambió. */
+export const MOTIVO_TEXTO_CAMBIO = "El texto de la reunión cambió: se vuelve a leer con el nuevo y lo que siga valiendo se vuelve a proponer.";
+
+/**
+ * Las propuestas que dejó la lectura de una reunión (`origenId` «l:…») y nadie decidió, cuando el texto de la reunión
+ * cambió y se vuelve a leer (lib/sessions/reanalizar.ts). Quedan vencidas, firmadas por el sistema y con su motivo; no
+ * son lápidas. Su clave se libera (se le suma «:retirada:<hora>») para que la lectura nueva pueda volver a proponer la
+ * misma línea si sigue en el texto nuevo. Lo que una persona ya decidió no se toca. Devuelve cuántas quedaron vencidas.
+ */
+export async function retirarPropuestasDeLaReunion(sessionId: string, motivo = MOTIVO_TEXTO_CAMBIO, ahora = new Date()): Promise<number> {
+  const responsables = new Set<string>();
+  const n = await prisma.$transaction(async (tx) => {
+    const filas = await tx.tarea.findMany({
+      where: { sessionId, estado: "propuesta", decididaAt: null, archivadaAt: null, origenId: { startsWith: "l:" } },
+      select: { id: true, version: true, origenId: true, responsableEmail: true },
+    });
+    let vencidas = 0;
+    for (const t of filas) {
+      const r = await tx.tarea.updateMany({
+        where: { id: t.id, version: t.version, estado: "propuesta", decididaAt: null },
+        data: {
+          estado: "vencida",
+          decision: "vencida",
+          decididaPorEmail: SISTEMA,
+          decididaAt: ahora,
+          motivo,
+          origenId: `${t.origenId}:retirada:${ahora.getTime()}`,
+          version: { increment: 1 },
+        },
+      });
+      if (!r.count) continue;
+      vencidas++;
+      if (t.responsableEmail) responsables.add(t.responsableEmail);
+      await evento(tx, { tareaId: t.id, tipo: "decidida", porEmail: SISTEMA, datos: { decision: "vencida", porTextoNuevo: true } });
+    }
+    return vencidas;
+  }, OPCIONES_DE_TX);
+  for (const email of responsables) olvidarMedicion(email);
+  return n;
 }

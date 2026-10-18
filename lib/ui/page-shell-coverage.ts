@@ -28,6 +28,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   tareas: { shell: "SHELL_DEFAULT" },
   "tareas/equipo": { shell: "SHELL_DEFAULT" },
   "tareas/delegadas": { shell: "SHELL_DEFAULT" },
+  "tareas/planificar": { shell: "SHELL_DEFAULT" },
   "tareas/por-cliente": { shell: "SHELL_DEFAULT" },
   "tareas/proyectos/[id]": { shell: "SHELL_DEFAULT" },
   "tareas/espacios/[id]": { shell: "SHELL_DEFAULT" },

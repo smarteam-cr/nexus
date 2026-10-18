@@ -8,7 +8,8 @@
  * datos de la cuenta sin IA. «Editar» deja escribir TU objetivo, que manda. Abajo, los hechos: quién viene, la última
  * vez, lo pendiente de los dos lados, el negocio y tus notas (las ves solo tú). Una reunión que ya pasó muestra lo que
  * dejó, con «Usar todo». El hueco libre dice de cuándo a cuándo está libre, con «Crear un evento aquí» (el borrador de la
- * agenda) y «Bloquear en Calendar». Todavía no sugiere qué tarea poner ahí.
+ * agenda), «Bloquear en Calendar» y, si alguna cabe, la tarea tuya con que avanzar ahí («Ponerla en la agenda»: el
+ * mismo borrador, con la tarea en la descripción del evento).
  *
  * Los datos los trae GET /api/para-ti/reunion/[evento] (pide acceso al cliente); TU objetivo y tus notas se guardan con
  * PUT en el mismo lugar.
@@ -20,7 +21,7 @@ import { Skeleton } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { useToast } from "@/components/ui/Toast";
 import { enlaceAlDia, enlaceParaAgendarEnCalendar } from "@/lib/mi-dia/calendario";
-import { horaCR, minutoDelDia } from "@/lib/mi-dia/inicio";
+import { horaCR, minutoDelDia, type ConQueAvanzar } from "@/lib/mi-dia/inicio";
 import type { PanelDeLaReunion as Panel } from "@/lib/mi-dia/panel-server";
 import type { ReunionDeLaAgenda } from "@/lib/mi-dia/agenda-server";
 import { ReunionDespues } from "../DespuesDeTusReuniones";
@@ -38,7 +39,7 @@ function cuandoEs(r: { inicio: string; fin: string | null }, hoyISO: string, aho
   return `${nombre} · ${lineaDeLaReunion(r, hoyISO, ahora)}`;
 }
 
-export type LoElegido = { tipo: "reunion"; reunion: ReunionDeLaAgenda } | { tipo: "hueco"; inicio: string; fin: string; sugerencia: { titulo: string; href: string } | null };
+export type LoElegido = { tipo: "reunion"; reunion: ReunionDeLaAgenda } | { tipo: "hueco"; inicio: string; fin: string; avanzar: ConQueAvanzar | null };
 
 export default function PanelDeLaReunion({
   elegido,
@@ -179,8 +180,47 @@ export default function PanelDeLaReunion({
 }
 
 function Hueco({ elegido, correo, onCerrar, onDescartar }: { elegido: Extract<LoElegido, { tipo: "hueco" }>; correo: string; onCerrar: () => void; onDescartar: () => void }) {
+  const a = elegido.avanzar;
   return (
     <div className="flex flex-col gap-2.5 rounded-xl border border-info-line bg-info-surface p-3.5">
+      {a && (
+        <div className="flex flex-col gap-1.5 border-b border-info-line pb-2.5">
+          <p className={cn(ROTULO_DEL_SISTEMA, "flex items-center gap-1.5 text-brand")}>
+            <IconoDeSugerencia className="h-[13px] w-[13px]" />
+            Con qué avanzar
+          </p>
+          <p className="text-sm leading-[21px] text-fg">
+            <strong className="font-semibold">T-{a.tarea.numero}</strong> {a.tarea.titulo}
+            {a.tarea.empresa ? <span className="text-fg-secondary"> · {a.tarea.empresa}</span> : null}
+          </p>
+          <p className="text-xs text-fg-secondary">
+            Es la más importante de tus tareas que cabe en este hueco: {a.porque}.{" "}
+            {a.tarea.minutosEstimados != null ? `Estimaste ${a.minutos} min.` : "Sin estimar: se propone una hora."}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <BotonAzul
+              onClick={() => {
+                crearBorrador({
+                  correo,
+                  inicio: elegido.inicio,
+                  fin: new Date(Date.parse(elegido.inicio) + a.minutos * 60_000).toISOString(),
+                  titulo: `T-${a.tarea.numero} · ${a.tarea.titulo}`,
+                  cuenta: a.tarea.clientId && a.tarea.empresa ? { id: a.tarea.clientId, nombre: a.tarea.empresa } : null,
+                  tarea: { id: a.tarea.id, numero: a.tarea.numero },
+                  origen: "agendar",
+                  enfocar: true,
+                });
+                onCerrar();
+              }}
+            >
+              Ponerla en la agenda
+            </BotonAzul>
+            <Link href={`/tareas?t=${encodeURIComponent(a.tarea.id)}`} className={ENLACE_BOTON}>
+              Ver la tarea
+            </Link>
+          </div>
+        </div>
+      )}
       <p className={cn(ROTULO_DEL_SISTEMA, "flex items-center gap-1.5 text-brand")}>
         <IconoDeSugerencia className="h-[13px] w-[13px]" />
         Hueco libre
