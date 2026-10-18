@@ -101,6 +101,15 @@ const STRINGS = {
   pagoUnico: { es: "Pago único", en: "One-time payment" },
   porMes: { es: "Por mes", en: "Per month" },
   porAno: { es: "Por año", en: "Per year" },
+  // El IVA de Costa Rica en el cierre de la Inversión (lib/landing/iva.ts). Los lee el cliente en
+  // la propuesta publicada y en el PDF: un literal saldría en español en una propuesta en inglés.
+  masIva: { es: "+ IVA", en: "+ VAT" },
+  ivaIncluido: { es: "IVA incluido", en: "VAT included" },
+  iva: { es: "IVA", en: "VAT" },
+  montoSinIva: { es: "Monto sin IVA", en: "Amount before VAT" },
+  totalConIva: { es: "Total con IVA", en: "Total incl. VAT" },
+  montosMasIva: { es: "Montos sin IVA", en: "Amounts exclude VAT" },
+  montosIvaIncluido: { es: "Montos con IVA incluido", en: "Amounts include VAT" },
   // La pista de recurrencia bajo el concepto de la línea.
   alMes: { es: "al mes", en: "per month" },
   alAno: { es: "al año", en: "per year" },

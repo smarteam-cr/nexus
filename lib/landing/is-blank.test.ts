@@ -70,7 +70,7 @@ describe("el vocabulario de lo que no es contenido", () => {
   it("está declarado y es corto — agregar una clave es una decisión, no un atajo", () => {
     expect([...NO_CONTENIDO].sort()).toEqual([
       "__lang", "activa", "altoEmbed", "anchoRecurrente", "avisoFase1", "buttonTarget",
-      "contrato", "hub", "kpisPropuestos", "logoScale", "moneda", "objetivosPropuestos", "recurrencia",
+      "contrato", "hub", "iva", "kpisPropuestos", "logoScale", "moneda", "objetivosPropuestos", "recurrencia",
     ]);
   });
 
