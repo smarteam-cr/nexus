@@ -18,7 +18,7 @@ está haciendo con él.
 |---|---|
 | Producción | Corre `7d7e92df` desde el 17 oct a las 22:02, hora de Costa Rica. Sana, con el esquema al día. |
 | Por desplegar | En `main` y sin desplegar: la escala (ediciones Turismo y Automotriz sin publicar, «Actualizar escala»), las propuestas (proyecto o recurrente, licencias con su margen, módulos y biblioteca), el servicio recurrente en la ficha, el gasto de la IA por mes con su proyección y los arreglos de «Para ti» (agenda, cartera del CSE, exclientes). 714 pruebas en verde y tsc en 0. |
-| En curso | Nada construyéndose. Finanzas ya tiene tus decisiones; su construcción espera que la arranques (tarjeta propuesta). |
+| En curso | Cinco sesiones en paralelo: A (la guía de la preventa), B (los correos y el timeline de HubSpot), C (la rentabilidad con agendas y tareas), D (las comisiones) y Finanzas (cobro automático, cuadre del año y menú). |
 | La base | Tiene todo lo que necesita lo que está en `main`: los SQL del 18 oct ya se aplicaron (biblioteca de módulos, escala ligada a la venta, servicio recurrente y gasto de IA). |
 | En rojo en producción | Un proyecto en un pipeline sin declarar, un cliente apuntando a una empresa fusionada en HubSpot y el corte de cobranza, que nunca corrió. |
 | Revisión de código | Hecha el 17 oct sobre los 31 cambios de entonces: 57 problemas encontrados, unos 50 corregidos y en `main`. Ninguno mezclaba clientes. |
@@ -44,45 +44,45 @@ los correos ni el timeline de HubSpot, así que no podía avisar.
 
 Estas cuatro van antes que el resto de la serie. La preventa es la primera.
 
-### A · La preventa lleva a la siguiente pregunta lógica <span class="estado">Propuesta</span>
+### A · La preventa lleva a la siguiente pregunta lógica <span class="estado">En curso</span>
 
 Si el cliente ya hizo el diagnóstico, Nexus le dice al vendedor qué le falta preguntar, y nada más.
 
-1. Arriba de la guía, «Lo que ya sabemos»: en 3 a 5 líneas, lo que el cliente respondió en el diagnóstico y en las reuniones, con sus palabras, para no volver a preguntarlo.
-2. Lo que ya respondió no se vuelve a preguntar: la guía salta a la siguiente pregunta lógica, que es cuánto le afecta, cuánto le cuesta, cómo lo quiere resolver, cuándo y con qué. Si dijo que le duele la duplicidad de datos, se profundiza en sistemas; si dijo que no hace seguimiento, se pregunta cuánto le baja la tasa de cierre.
-3. Solo lo que falta, unas 5 preguntas: si un dato ya está (los tiempos, por ejemplo), no hay más preguntas de ese tema. Las repreguntas no se muestran; se abren si hacen falta.
-4. Siempre cierra con la pregunta de cierre y el siguiente paso, según lo que falta para proponer.
-5. Escrita como la nota de HubSpot que le sirvió a Marco: corta, en el lenguaje del cliente y directa a lo que le duele.
-6. Probada con casos reales antes de soltarla: la sesión 2 de Larce y los prospectos que lleguen por el diagnóstico.
+1. [en curso] Arriba de la guía, «Lo que ya sabemos»: en 3 a 5 líneas, lo que el cliente respondió en el diagnóstico y en las reuniones, con sus palabras, para no volver a preguntarlo.
+2. [en curso] Lo que ya respondió no se vuelve a preguntar: la guía salta a la siguiente pregunta lógica, que es cuánto le afecta, cuánto le cuesta, cómo lo quiere resolver, cuándo y con qué. Si dijo que le duele la duplicidad de datos, se profundiza en sistemas; si dijo que no hace seguimiento, se pregunta cuánto le baja la tasa de cierre.
+3. [en curso] Solo lo que falta, unas 5 preguntas: si un dato ya está (los tiempos, por ejemplo), no hay más preguntas de ese tema. Las repreguntas no se muestran; se abren si hacen falta.
+4. [en curso] Siempre cierra con la pregunta de cierre y el siguiente paso, según lo que falta para proponer.
+5. [en curso] Escrita como la nota de HubSpot que le sirvió a Marco: corta, en el lenguaje del cliente y directa a lo que le duele.
+6. [en curso] Probada con casos reales antes de soltarla: la sesión 2 de Larce y los prospectos que lleguen por el diagnóstico.
 
-### B · Los correos y el timeline de HubSpot, en el contexto de la cuenta <span class="estado">Propuesta</span>
+### B · Los correos y el timeline de HubSpot, en el contexto de la cuenta <span class="estado">En curso</span>
 
 Todo conectado: las reuniones, los correos, el timeline de HubSpot y lo que se ingresa a mano, para que no se pase un seguimiento.
 
-1. Los correos con el cliente y el timeline de la empresa y sus contactos en HubSpot entran a la memoria de la cuenta y a la lectura de cada reunión. Hoy solo el vigía mira algunos correos.
-2. Lo que se le prometió al cliente por correo (una reunión, una entrega, una fecha) queda como compromiso, igual que lo que sale de una reunión.
-3. Si un compromiso con fecha no está en el calendario ni en Tareas a las 48 horas, avisa al CSE y a quien lidera Customer Success.
-4. Las notas y los acuerdos que se ingresan a mano entran al mismo contexto que leen los agentes, la preventa y el chat.
+1. [en curso] Los correos con el cliente y el timeline de la empresa y sus contactos en HubSpot entran a la memoria de la cuenta y a la lectura de cada reunión. Hoy solo el vigía mira algunos correos.
+2. [en curso] Lo que se le prometió al cliente por correo (una reunión, una entrega, una fecha) queda como compromiso, igual que lo que sale de una reunión.
+3. [en curso] Si un compromiso con fecha no está en el calendario ni en Tareas a las 48 horas, avisa al CSE y a quien lidera Customer Success.
+4. [en curso] Las notas y los acuerdos que se ingresan a mano entran al mismo contexto que leen los agentes, la preventa y el chat.
 
-### C · La rentabilidad, conectada con las agendas y las tareas <span class="estado">Propuesta</span>
+### C · La rentabilidad, conectada con las agendas y las tareas <span class="estado">En curso</span>
 
 Nexus ya sabe, sin que nadie marque tiempo, qué reuniones tiene cada persona y con qué cliente. Esa es la base del margen.
 
-1. Las horas por cuenta salen solas del calendario y de las tareas (lo hecho y cuánto tomó), y con eso el margen por cuenta y por persona.
-2. La meta del año como barra (US$2,3 millones en 2027), contra lo facturado en los años anteriores, con lo que haya.
-3. La línea de «por facturar» del punto de equilibrio, la que sube al final: qué recurrencia y qué expansiones faltan para que suba, y cuánto.
-4. Una lectura de los números: Nexus detecta lo que no progresa y propone qué hacer y cuánto invertir; una persona valida.
+1. [en curso] Las horas por cuenta salen solas del calendario y de las tareas (lo hecho y cuánto tomó), y con eso el margen por cuenta y por persona.
+2. [en curso] La meta del año como barra (US$2,3 millones en 2027), contra lo facturado en los años anteriores, con lo que haya.
+3. [en curso] La línea de «por facturar» del punto de equilibrio, la que sube al final: qué recurrencia y qué expansiones faltan para que suba, y cuánto.
+4. [en curso] Una lectura de los números: Nexus detecta lo que no progresa y propone qué hacer y cuánto invertir; una persona valida.
 
-### D · Comisiones que cuiden el valor de la cuenta <span class="estado">Propuesta</span>
+### D · Comisiones que cuiden el valor de la cuenta <span class="estado">En curso</span>
 
 El caso de Marco: bajar una recurrencia de US$3.000 a US$2.800 al mes regala US$2.400 al año, y hoy igual se paga el
 100 % de la comisión. Mi propuesta, para validar con Marco:
 
-1. La comisión de un contrato recurrente se calcula sobre su valor de 12 meses, y **el descuento sale de la base**: base = lo cerrado − lo descontado. En el caso de Marco: 12 × US$2.800 = US$33.600, menos los US$2.400 descontados = US$31.200. Al 5 % son US$1.560 en vez de US$1.680. El vendedor también pone parte del descuento.
-2. Un descuento de más del 10 % lo aprueba Marco en la propuesta, y queda escrito quién lo aprobó.
-3. La recurrencia pesa más en la meta que un proyecto único (por ejemplo, 1,2 veces), porque es lo que hace crecer la cuenta.
-4. Una expansión grande cuenta por su tamaño total, para no empujar a vender recurrencia chica en vez de una expansión grande.
-5. Cerrarlo con Marco y construir el módulo de comisiones en Nexus.
+1. [en curso] La comisión de un contrato recurrente se calcula sobre su valor de 12 meses, y **el descuento sale de la base**: base = lo cerrado − lo descontado. En el caso de Marco: 12 × US$2.800 = US$33.600, menos los US$2.400 descontados = US$31.200. Al 5 % son US$1.560 en vez de US$1.680. El vendedor también pone parte del descuento.
+2. [en curso] Un descuento de más del 10 % lo aprueba Marco en la propuesta, y queda escrito quién lo aprobó.
+3. [en curso] La recurrencia pesa más en la meta que un proyecto único (por ejemplo, 1,2 veces), porque es lo que hace crecer la cuenta.
+4. [en curso] Una expansión grande cuenta por su tamaño total, para no empujar a vender recurrencia chica en vez de una expansión grande.
+5. Cerrarlo con Marco y construir el módulo de comisiones en Nexus (el paso 1 a 4 queda en la página del modelo, para revisarlo con él).
 
 ## La siguiente serie
 
@@ -143,7 +143,7 @@ No un sistema para manejar ciclos: una guía para que el CSE entienda un servici
 6. Pasar los recurrentes de hoy uno por uno con su CSE: Continuidad, administración de sitio web y contenido.
 7. Definir contigo la cadencia y las rutinas de cada servicio del catálogo.
 
-### 5 · Finanzas: terminar de simplificar <span class="estado">Por empezar</span>
+### 5 · Finanzas: terminar de simplificar <span class="estado">En curso</span>
 
 **Decidiste el 18 oct:** cobrar solo, cada día, lo que Odoo y Mercury dan por pagado y conciliado; el menú de los Super Admin sin lo de quien registra; María José concilia cada mañana (con una cuenta nueva que das de alta tú); y primero el libro, después el menú. Caja neta lo decide Alex. La construcción espera que arranques su tarjeta.
 
@@ -154,13 +154,13 @@ No encontré en ningún plan la frase «simplificar demasiado». Lo más cercano
 **Lo que se deshizo a propósito:** el 8 oct pediste que los Super Admin vean todo. Desde entonces la vista solo cambia la pantalla de entrada, y tu menú de Finanzas tiene 20 entradas.
 
 1. [hecho] El documento para decidir y validar: `docs/finanzas-simplificacion.md`, con lo planeado, lo hecho, lo que dijeron Marco y Alex, 8 decisiones y 18 pasos para el 3004.
-2. Retirar las páginas viejas de Costos (Costos, Fijos, Herramientas y la segunda página de Tarjetas): llevan a su página nueva.
-3. Cobranza › Odoo, Mercury e Importar dentro de Conciliación, o fuera si ya no se usan.
-4. Reportes de seis entradas a tres: Rentabilidad vive en Éxito del cliente, y Tipo de cambio e Integraciones van dentro de otra página.
-5. Comisiones de vendedor y Aguinaldo dentro de Planilla.
-6. Decidir contigo si la vista vuelve a recortar el menú de los Super Admin, ahora con la Planilla en Dirección.
-7. Cobrar solo lo que Odoo y Mercury dan por pagado y conciliado con el banco, cada día, firmado por el sistema.
-8. Que el punto de equilibrio cuente solo lo del año, y explicar la diferencia de ventas sin cobranza (US$218.000 en Nexus contra los ~US$90.000 que esperaba Marco).
+2. [en curso] Retirar las páginas viejas de Costos (Costos, Fijos, Herramientas y la segunda página de Tarjetas): llevan a su página nueva.
+3. [en curso] Cobranza › Odoo, Mercury e Importar dentro de Conciliación, o fuera si ya no se usan.
+4. [en curso] Reportes de seis entradas a tres: Rentabilidad vive en Éxito del cliente, y Tipo de cambio e Integraciones van dentro de otra página.
+5. [en curso] Comisiones de vendedor y Aguinaldo dentro de Planilla.
+6. [hecho] Decidido: el menú de los Super Admin queda sin lo de quien registra (Pendientes, Comisiones de vendedor y Aguinaldo sueltos).
+7. [en curso] Cobrar solo lo que Odoo y Mercury dan por pagado y conciliado con el banco, cada día, firmado por el sistema.
+8. [en curso] Que el punto de equilibrio cuente solo lo del año, y explicar la diferencia de ventas sin cobranza (US$218.000 en Nexus contra los ~US$90.000 que esperaba Marco).
 9. Dar de alta a María José (tú, en Equipo) con lo que necesita para conciliar.
 
 ### 6 · El gasto de la IA: verlo, proyectarlo y bajarlo <span class="estado">Por desplegar</span>
