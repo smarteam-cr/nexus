@@ -211,7 +211,17 @@
 - **De dónde viene** (una tarea, `lib/tareas/origen.ts`): reunión con el cliente, sprint interno, HubSpot, el chat, un
   siguiente paso, una plantilla o a mano. Lo decide la sala de la reunión, no el cliente de la tarea.
 - **Versión de la escala** (`VersionDeLaEscala`): la foto de dónde está una empresa en la escala en un día, con de
-  dónde sale cada nivel. Se ve en La cuenta › La escala, «La escala en el tiempo». Interna.
+  dónde sale cada nivel. Se ve en La cuenta › La escala, «La escala en el tiempo». Interna. Desde el 2026-10-18 dice de
+  qué venta y de qué propuesta sale, y su **momento**: «al vender» (el día en que se ganó la venta), «al arrancar» (el
+  arranque del proyecto) u «hoy».
+- **Actualizar escala** (La cuenta › La escala, modo `posicionar` del agente): el agente lee todo lo que Nexus sabe de la
+  empresa (lo vendido, las reuniones en resumen, las tareas, el cronograma, la memoria, HubSpot) y propone el nivel de
+  cada dimensión con la frase del cliente. Lo dispara una persona; lo propuesto se usa ahí mismo. No marca nada como
+  leído.
+- **Escala de la cuenta**: la de una empresa sin un proyecto en particular; vive en la exploración del proyecto
+  «Información del cliente».
+- **Se mide con** (el modelo de negocio): la edición de la escala y el perfil (cómo vende, qué pasa después de la venta)
+  con que se lee una empresa, por qué y qué cambia frente a la general.
 - **Camino de crecimiento**: qué sigue en la escala de cada área y por qué, con los casos de la biblioteca que lo
   mueven. Sale de reglas, sin IA.
 - **Cuenta sin acción** («Para ti»): una cuenta con servicio activo sin una tarea con fecha esa semana o sin reunión

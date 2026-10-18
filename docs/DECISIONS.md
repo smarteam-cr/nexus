@@ -8477,7 +8477,9 @@ misma con su histórico.
   y porqué). Lo que propone el agente no posiciona a la empresa. Se guarda al confirmar un nivel (una por día), al
   presentar el diagnóstico con el ciclo abierto y con «Guardar esta versión»; una foto igual a la anterior no se guarda.
   Es interna: el cliente no la ve.
-- **«Regenerar con el agente» desde la ficha solo propone**: los niveles se confirman en la exploración. El modo
+- **SUPERSEDED 2026-10-18** (ver «Actualizar escala: la escala de cada empresa con todo lo que Nexus sabe»): el botón es
+  «Actualizar escala», lee todo por su propio modo y lo propuesto se usa en la misma ficha.
+  **«Regenerar con el agente» desde la ficha solo propone**: los niveles se confirman en la exploración. El modo
   `posicionar` lee el handoff, los cuestionarios, el test y HubSpot aunque no haya una reunión nueva (antes, en un
   proyecto el agente no ubicaba nada sin una sesión).
 - **El camino de crecimiento y los casos sugeridos salen de reglas, sin IA**: un caso de la biblioteca calza si mueve
@@ -8691,3 +8693,51 @@ que tener su acción de la semana y su reunión agendada.
 - **El chat genera un entregable** con la operación «documento.generar»: queda en la lista y corre solo al aplicarla,
   con el proyecto verificado contra la cuenta del hilo y el mismo permiso que el botón. Las instrucciones del chat valen
   solo para esa generación: no pisan las «Instrucciones adicionales» del documento.
+
+## Actualizar escala: la escala de cada empresa con todo lo que Nexus sabe (2026-10-18)
+
+**Contexto.** Iniciativas 1 (pasos 2 y 3) y 2 de «La siguiente serie» (docs/roadmap.md). Elías: ubicar a cualquier cliente
+en la escala de forma retroactiva, con todo el contexto (lo vendido, las reuniones, las tareas, el handoff), con un
+botón por cliente que nunca corre solo ni para todos, y la historia amarrada a la venta. La auditoría del 17 oct
+encontró que «Regenerar» leía en modo `leer` (marcaba lo leído y rearmaba la guía), no leía lo vendido, las minutas, las
+tareas, el cronograma ni la memoria, y que un cliente sin proyecto ni preventa no tenía botón. Medido el 18 oct: 93 de
+165 clientes no tienen ningún proyecto en Nexus (69 de ellos con ventas ganadas) y 52 tienen varios proyectos activos.
+
+- **«Actualizar escala» es un modo propio del agente, `posicionar`** (lib/exploraciones/agente.ts ›
+  `posicionarLaEscala`). Propone SOLO niveles, cada uno con la frase del cliente verificada (`leerLaRespuesta` en modo
+  «leer»). No marca nada como leído, no toca la guía ni la foto de HubSpot, y deja su corrida en la historia del lienzo.
+  Lo dispara una persona desde La cuenta › La escala (POST `/api/clients/[id]/escala` `actualizar`): nunca corre solo.
+- **Lee todo por puertas que ya existen** (lib/exploraciones/posicionar-fuentes.ts): la memoria de la cuenta y del
+  proyecto por el cargador (lector nuevo `escala`, interno), las tareas por lib/tareas/para-agentes.ts
+  (`tareasDeLaCuentaParaAgentes`), las reuniones ya leídas en resumen por el chokepoint (`reunionesEnResumen`, sin las
+  de puertas adentro), HubSpot sin marcar (`fuentesDeHubspotSinMarcar`), el handoff, los cuestionarios, el kickoff y la
+  preventa (`fuentesDelProyecto`), las ventas ganadas, las propuestas con su inversión (servicios y licencias aparte) y
+  el cronograma.
+- **Sin una pista del cliente no hay nivel, igual que siempre**: las fuentes nuevas (G ventas, B propuestas, J0 tareas,
+  R0 cronograma, A0 y A1 la memoria) no cuentan en `esFuenteDelCliente`. Comprar algo no es usarlo, e implementarlo no es
+  que ya funcione. Sin ninguna fuente del cliente, el agente no llama al modelo y lo dice.
+- **Sobre qué se ubica, y con qué venta** (`objetivosParaUbicar`, puro): cada proyecto (vivos primero, después los
+  terminados), la preventa viva y siempre «La cuenta entera». La venta sugerida de un proyecto es la de su mismo trato de
+  HubSpot; de la preventa y la cuenta, la más reciente. Se cambia en la pantalla.
+- **La cuenta entera se ubica en la exploración del proyecto «Información del cliente»** (el contenedor de cada empresa,
+  `ensureClientInfoProject`). *Por qué:* es la forma más simple que reusa todo (la exploración de proyecto, su guarda,
+  «una viva por proyecto»), sin SQL. *Se descartó* una exploración sin proyecto con un marco nuevo: chocaba con «una
+  preventa viva por empresa» (índice parcial sobre `projectId IS NULL`) y se colaba en las 23 lecturas de preventas
+  (`DE_LA_PREVENTA`). *Y* abrir una preventa: aparecería en el listado y en «Para ti» sin que haya una venta en curso.
+- **Lo propuesto se usa en la misma ficha** (`nivelesPropuestos`, con su porqué, su frase y su fuente), uno por uno o
+  todos, por el PATCH de la exploración: el mismo escritor que La escala de la exploración, que sube la versión y deja la
+  versión del día. Lo propuesto nunca entra a la historia; lo confirmado, sí.
+- **La versión de la escala sabe de qué venta y de qué momento es** (SQL `2026-10-18-escala-ligada-a-la-venta.sql`):
+  `ventaGanadaId`, `businessCaseId`, `hubspotDealId`, `momento` («al-vender», «al-arrancar», «hoy») y `diaDeLaPosicion`.
+  Sin elegir la venta, sale sola del trato de HubSpot del proyecto, y la propuesta, de esa venta. «Al vender» fecha la
+  posición el día en que se ganó; «al arrancar», con el arranque del cronograma (o el alta del proyecto); sin el dato,
+  no se inventa (`fechaDelMomento`). Una versión de un momento del pasado se guarda aunque los niveles sean los mismos.
+  La historia se ordena por el día de la posición (`ordenarVersiones`).
+- **«Se mide con…»** (`modeloDeNegocio`, puro): la edición, el perfil (cómo vende y qué pasa después de la venta), por
+  qué (la razón guardada, o la industria de HubSpot) y lo que cambia frente a la general, sacado de la edición misma
+  (sus palabras, las dimensiones dichas con su lenguaje, los criterios propios y los que no aplican). Toma cualquier
+  edición publicada sin nombrarlas. «Corregir» va por el mismo PATCH (`edicion`, `perfil`), y desde ahí el agente ya no
+  la cambia. Las preguntas de la exploración, la lectura de cada nivel y el pedido de «posicionar» ya usaban la escala
+  con la edición y el perfil de la exploración (`escalaDeLaExploracion`).
+- **Costo**: una llamada a Sonnet 4.6 por corrida, sin búsqueda web. Estimado con los topes de las fuentes: entre 15.000
+  y 45.000 tokens de entrada y 1.000 a 3.000 de salida: unos US$0,05 a US$0,20. No se midió con una corrida real.

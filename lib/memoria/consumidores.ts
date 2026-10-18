@@ -28,7 +28,8 @@ export type LectorDeMemoria =
   | "pase-de-cuenta"
   | "lo-que-sabe-la-ia"
   | "vigia"
-  | "nexus-chat";
+  | "nexus-chat"
+  | "escala";
 
 export interface ConsumidorDeLaMemoria {
   /** El slug de la pieza (lib/pieces/registry.ts) que escribe, o null si no escribe una pieza. */
@@ -231,6 +232,16 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     archivos: ["lib/nexus-chat/lecturas-server.ts"],
     motivo:
       "El chat de Nexus (2026-10-17, ficha H): lo que Nexus ya sabe de la cuenta (en el contexto de cada turno y con la herramienta «cuenta.memoria») y de un proyecto («proyecto.memoria»), para contestar y proponer cambios.",
+  },
+  escala: {
+    pieza: null,
+    // La lee el equipo en La cuenta › La escala: interno. El cliente no ve la escala de la empresa.
+    alcance: "interno",
+    // Lo que propuso la exploración a la ficha sale de las mismas reuniones que ya lee: no se cuenta dos veces.
+    excluirOrigenes: ["Exploración"],
+    archivos: ["lib/exploraciones/posicionar-fuentes.ts"],
+    motivo:
+      "«Actualizar escala» (2026-10-18): lo que Nexus ya sabe de la cuenta y del proyecto, para entender a la empresa al ubicarla. No respalda un nivel (A0 y A1 no son lo que dijo el cliente).",
   },
 };
 

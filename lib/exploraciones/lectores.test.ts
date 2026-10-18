@@ -278,7 +278,7 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|textoDeLaExploracionDelProyecto/,
   },
   "escala-de-la-empresa": {
-    permitidas: /\bescalaDeLaEmpresa\b|EscalaDeLaEmpresa\b|\bagendadasConLaEmpresa\b|\bguardarVersionDelDiagnostico\b|\bescalaParaLaPropuesta\b/,
+    permitidas: /\bescalaDeLaEmpresa\b|EscalaDeLaEmpresa\b|\bagendadasConLaEmpresa\b|\bguardarVersionDelDiagnostico\b|\bescalaParaLaPropuesta\b|\bdiaDelMomento\b/,
     // Solo los niveles confirmados y las reuniones agendadas: ni la propuesta, ni el handoff, ni lo interno de la preventa.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b/,
   },

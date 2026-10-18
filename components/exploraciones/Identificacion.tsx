@@ -18,12 +18,11 @@ import { Badge, Input, Segmentado, Select } from "@/components/ui";
 import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/documento/tipos";
 import { industriaDelVendedor, normalizarTexto, type EscalaSugerida, type Medicion } from "@/lib/exploraciones/contenido";
 import { industriaLegible, sugerirEdicion } from "@/lib/exploraciones/industria";
+// Los nombres del perfil viven en un solo lugar (también los usa La cuenta › La escala).
+import { NOMBRE_DEL_CIERRE, NOMBRE_DEL_DESPUES } from "@/lib/exploraciones/posicionar";
 import { useLienzo } from "./contexto";
 import { BotonBlanco } from "./FranjaDeSugerencias";
 import { useCorrida } from "./useCorrida";
-
-const NOMBRE_DEL_CIERRE: Record<Cierre, string> = { "con equipo": "Con equipo", transaccional: "Transaccional", mixta: "Mixta" };
-const NOMBRE_DEL_DESPUES: Record<Despues, string> = { única: "Relación única", recompra: "Recompra", continua: "Relación continua" };
 
 /** El rótulo chico de cada filtro. */
 function Rotulo({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
