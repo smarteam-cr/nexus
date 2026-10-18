@@ -54,6 +54,10 @@ Si el cliente ya hizo el diagnóstico, Nexus le dice al vendedor qué le falta p
 4. [hecho] Siempre cierra con la pregunta de cierre y el siguiente paso, según lo que falta para proponer.
 5. [hecho] Escrita como la nota de HubSpot que le sirvió a Marco: corta, en el lenguaje del cliente y directa a lo que le duele.
 6. [hecho] Probada con casos reales antes de soltarla: la sesión 2 de Larce y los prospectos que lleguen por el diagnóstico.
+7. [en curso] Preguntas cortas: cada una es solo la pregunta, sin «Dijiste que…»; de dónde sale y lo que dijo el cliente, en un ⓘ. Las palabras del cliente quedan en «Lo que ya sabemos».
+8. [en curso] «Regenerar pregunta» en cada pregunta, sin rearmar la guía, y agregar preguntas a mano, que sobreviven a «Actualizar la guía».
+9. [en curso] «Mejorar con el asistente»: pedirle con el contexto del cliente «más preguntas de la escala», «profundiza en sistemas», o mejorar las repreguntas, y aplicar lo que propone con un clic.
+10. [en curso] Lo que cubre la guía, pegado a la guía (arriba de «Retos de su industria») en vez del panel derecho, y que se actualice con cada cambio.
 
 ### B · Los correos y el timeline de HubSpot, en el contexto de la cuenta <span class="estado">Por desplegar</span>
 
@@ -319,13 +323,13 @@ devuelve.
 
 | # | Estado | Qué validas | Pasos | Resultado esperado |
 |---|---|---|---|---|
-| 68 | Por validar | Que la guía arranque con lo que el cliente ya dijo | Ventas › Preventa › Distribuidora Larce › Exploración › la próxima sesión (si no hay: «+ Agregar sesión» › una sin reunión todavía) › Preparación. | Arriba de «La guía», «Lo que ya sabemos» con 5 líneas en palabras del cliente. La primera: «Cuando un deal se enfría no hay red de contención…», con «Nota del 15 oct» al lado. |
-| 69 | Por validar | Que ya no pregunte lo que el cliente contestó | La misma pantalla, sin tocar nada, en «La guía». | Ya no está «¿Qué pasa… cuando un deal se queda quieto?». Arriba dice «45 min · 5 preguntas». |
-| 70 | Por validar | Que la guía nueva lleve a la siguiente pregunta lógica | El aviso de arriba › «Actualizar la guía». Espera unos segundos. | 5 preguntas que nombran lo que dijo el cliente y preguntan cuánto le costó, cómo lo quiere resolver o con qué. Ninguna de «Para cuándo», porque ya se sabe. |
-| 71 | Por validar | Que las repreguntas no estorben | Toca «3 repreguntas» en cualquier pregunta. | Las repreguntas aparecen solo al tocar ese enlace. |
-| 72 | Por validar | Que siempre cierre | Baja a «Cerrar», al final de la guía. | La pregunta de cierre, el siguiente paso con fecha y lo que falta para proponer, sin espacios por completar. |
-| 73 | Por validar | Que el panel diga qué cubre la guía | Panel derecho › «Para proponer». | «Qué pasa si no actúa» aparece como «se pregunta hoy». |
-| 74 | Por validar | Que funcione igual en otras preventas | Ventas › Preventa › CreditForce (o Cicadex) › Exploración › Preparación › «Actualizar la guía». | «Lo que ya sabemos» con frases del test y 4 o 5 preguntas que parten de ahí. |
+| 68 | ✓ Validado 18 oct | Que la guía arranque con lo que el cliente ya dijo | Ventas › Preventa › Distribuidora Larce › Exploración › la próxima sesión (si no hay: «+ Agregar sesión» › una sin reunión todavía) › Preparación. | Arriba de «La guía», «Lo que ya sabemos» con 5 líneas en palabras del cliente. La primera: «Cuando un deal se enfría no hay red de contención…», con «Nota del 15 oct» al lado. |
+| 69 | ⏳ En arreglo | Que ya no pregunte lo que el cliente contestó | La misma pantalla, sin tocar nada, en «La guía». | Ya no está «¿Qué pasa… cuando un deal se queda quieto?». Arriba dice «45 min · 5 preguntas». |
+| 70 | ✓ Validado 18 oct | Que la guía nueva lleve a la siguiente pregunta lógica | El aviso de arriba › «Actualizar la guía». Espera unos segundos. | 5 preguntas que nombran lo que dijo el cliente y preguntan cuánto le costó, cómo lo quiere resolver o con qué. Ninguna de «Para cuándo», porque ya se sabe. |
+| 71 | ⏳ En arreglo | Que las repreguntas no estorben | Toca «3 repreguntas» en cualquier pregunta. | Las repreguntas aparecen solo al tocar ese enlace. |
+| 72 | ✓ Validado 18 oct | Que siempre cierre | Baja a «Cerrar», al final de la guía. | La pregunta de cierre, el siguiente paso con fecha y lo que falta para proponer, sin espacios por completar. |
+| 73 | ⏳ En arreglo | Que el panel diga qué cubre la guía | Panel derecho › «Para proponer». | «Qué pasa si no actúa» aparece como «se pregunta hoy». |
+| 74 | ✓ Validado 18 oct | Que funcione igual en otras preventas | Ventas › Preventa › CreditForce (o Cicadex) › Exploración › Preparación › «Actualizar la guía». | «Lo que ya sabemos» con frases del test y 4 o 5 preguntas que parten de ahí. (Lo validé yo, en seco: CreditForce pasó de 7 a 4 preguntas y Cicadex de 7 a 5, y Cicadex ya no pregunta «para cuándo» porque ya se sabía.) |
 
 ### 2 · Comunicaciones de HubSpot y compromisos
 
