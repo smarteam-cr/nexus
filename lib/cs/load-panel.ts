@@ -10,6 +10,7 @@ import { loadPortfolio, type PortfolioRow } from "@/lib/portfolio/load";
 // El orden de triage vive con los demás diccionarios de presentación, para que el feed y el
 // panel no puedan divergir en cómo priorizan.
 import { SEV_ORDER } from "@/lib/cs/alert-labels";
+import { CLIENTE_NO_EXCLIENTE_WHERE } from "@/lib/cs/exclientes";
 
 export interface CsAlertRow {
   id: string;
@@ -115,7 +116,9 @@ export async function loadCsPanel(
   const [rows, alerts, signals] = await Promise.all([
     portfolioRows ? Promise.resolve(portfolioRows) : loadPortfolio(clientWhere),
     prisma.csAlert.findMany({
-      where: { status: { in: ["OPEN", "SEEN"] }, ...(clientWhere ? { client: clientWhere } : {}) },
+      // Sin las de un excliente (lib/cs/exclientes.ts).
+      where: { status: { in: ["OPEN", "SEEN"] }, client: clientWhere ? { AND: [clientWhere, CLIENTE_NO_EXCLIENTE_WHERE] } : CLIENTE_NO_EXCLIENTE_WHERE },
+
       include: { client: { select: { name: true } }, project: { select: { name: true } } },
       orderBy: { lastDetectedAt: "desc" },
       take: 200,

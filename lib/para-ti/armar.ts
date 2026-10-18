@@ -9,7 +9,7 @@
  * · Desde el 2026-10-16 (fase 1.1): de lo de hoy y lo del agente, «Lo que importa hoy» (como mucho 5, una por cuenta,
  *   lib/para-ti/importa.ts); lo que no entra va a «También para hoy».
  */
-import { elegirLoQueImporta } from "./importa";
+import { elegirLoQueImporta, type OpcionesDeLoQueImporta } from "./importa";
 import type { ParaTi, Pendiente, ResultadoDeFuente } from "./tipos";
 
 function ordenar(items: readonly Pendiente[]): Pendiente[] {
@@ -23,7 +23,7 @@ function ordenar(items: readonly Pendiente[]): Pendiente[] {
   });
 }
 
-export function armarParaTi(resultados: readonly ResultadoDeFuente[]): ParaTi {
+export function armarParaTi(resultados: readonly ResultadoDeFuente[], opciones: OpcionesDeLoQueImporta = {}): ParaTi {
   const vistos = new Set<string>();
   const todos: Pendiente[] = [];
   const alDia: string[] = [];
@@ -45,7 +45,8 @@ export function armarParaTi(resultados: readonly ResultadoDeFuente[]): ParaTi {
   }
   const agente = ordenar(todos.filter((p) => p.delAgente));
   const hoy = ordenar(todos.filter((p) => !p.delAgente && p.cuando === "hoy"));
-  const { importa, tambien } = elegirLoQueImporta([...agente, ...hoy]);
+  const { importa, tambien } = elegirLoQueImporta([...agente, ...hoy], undefined, opciones);
+
   return {
     importa,
     tambien: ordenar(tambien),

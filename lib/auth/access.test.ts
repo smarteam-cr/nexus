@@ -69,8 +69,11 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: async ({ where }: { where: { id?: { notIn?: string[] } } }) =>
         base.clientes.filter((c) => !(where.id?.notIn ?? []).includes(c.id)),
     },
+    // Los exclientes (lib/cs/exclientes-server.ts): ninguno en esta base.
+    clasificacionDeCuenta: { findMany: async () => [] },
   },
 }));
+
 
 /** Blanquea comentarios: mencionar la regla en un docblock no es lo mismo que aplicarla. */
 function soloCodigo(src: string): string {

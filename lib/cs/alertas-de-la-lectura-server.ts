@@ -12,6 +12,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { CIERRE_DEL_SISTEMA, juntarEvidencia, mismaCitaVerificada, queHacerConLaRedeteccion } from "./alertas-reglas";
 import { alertaDesdeHecho, retiroDeLaAlerta, type QuejaDeLaLectura, type ReunionDeLaQueja } from "./alertas-de-la-lectura";
+import { esCuentaExcliente } from "./exclientes-server";
+
 
 const RANGO: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
 
@@ -32,6 +34,8 @@ export async function levantarQuejaDeLaLectura(o: {
   try {
     const a = alertaDesdeHecho(o.hecho, o.clientId, o.reunion);
     if (!a) return { estado: "no_corresponde" };
+    // Un excliente confirmado no recibe alertas (lib/cs/exclientes.ts); el hecho queda igual en la memoria.
+    if (await esCuentaExcliente(o.clientId)) return { estado: "no_corresponde" };
     const ahora = o.ahora ?? new Date();
 
     const existente = await prisma.csAlert.findFirst({ where: { dedupeKey: a.dedupeKey }, orderBy: { lastDetectedAt: "desc" } });

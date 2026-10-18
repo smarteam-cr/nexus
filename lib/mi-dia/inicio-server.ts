@@ -11,6 +11,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { proyectosAbiertos } from "@/lib/clients/resumen-proyectos";
+import { CLIENTE_NO_EXCLIENTE_WHERE } from "@/lib/cs/exclientes";
 import { esProyectoDePipelineCS } from "@/lib/projects/scope";
 import { pipelineByKey } from "@/lib/projects/kind";
 import { lecturasDelPedido } from "./lecturas-server";
@@ -62,7 +63,7 @@ const SELECT_PROYECTO = {
 /** Las cuentas de la cartera con un proyecto de Customer Success abierto, con su encargado. */
 async function cuentasDeLaCartera(): Promise<{ clientId: string; empresa: string; llevaEmail: string | null; proyectos: string[] }[]> {
   const clientes = await prisma.client.findMany({
-    where: { ...CS_CLIENT_WHERE, projects: { some: { status: "active" } } },
+    where: { ...CS_CLIENT_WHERE, ...CLIENTE_NO_EXCLIENTE_WHERE, projects: { some: { status: "active" } } },
     select: { id: true, name: true, projects: { select: SELECT_PROYECTO } },
   });
   return clientes.flatMap((c) => {
@@ -77,7 +78,8 @@ async function cuentasDeLaCartera(): Promise<{ clientId: string; empresa: string
 async function cuentasDeDesarrollo(): Promise<{ clientId: string; empresa: string; llevaEmail: string | null; proyectos: string[] }[]> {
   const desarrollo = pipelineByKey("development").hubspotPipelineId;
   const clientes = await prisma.client.findMany({
-    where: { kind: { in: ["CLIENTE", "PROSPECTO"] }, projects: { some: { status: "active", hubspotPipelineId: desarrollo } } },
+    where: { kind: { in: ["CLIENTE", "PROSPECTO"] }, ...CLIENTE_NO_EXCLIENTE_WHERE, projects: { some: { status: "active", hubspotPipelineId: desarrollo } } },
+
     select: { id: true, name: true, projects: { select: SELECT_PROYECTO } },
   });
   return clientes.flatMap((c) => {

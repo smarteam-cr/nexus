@@ -21,7 +21,8 @@ import { LO_QUE_DEJARON_TUS_REUNIONES } from "./fuentes/reuniones";
 import { TIEMPOS_SIN_ANOTAR } from "./fuentes/tiempos";
 import { TAREAS } from "./fuentes/tareas";
 import { FINANZAS_DEVUELTO, FINANZAS_REGISTRAR, FINANZAS_SUPERVISAR } from "./fuentes/finanzas";
-import { CRONOGRAMAS_TRABADOS, SIN_ENCARGADO, VIGIA } from "./fuentes/cs";
+import { CRONOGRAMAS_TRABADOS, CSE_CON_CUENTAS_QUE_PIDEN_ATENCION, SIN_ENCARGADO, VIGIA } from "./fuentes/cs";
+
 import { CORRECCION_QUE_CADUCO, RELACION_CON_HUBSPOT, RELACIONES_DE_LA_CARTERA } from "./fuentes/cartera-de-la-csl";
 import { TUS_CUENTAS_EN_RIESGO } from "./fuentes/tus-cuentas";
 import { CUENTAS_SIN_ACCION } from "./fuentes/servicio";
@@ -59,7 +60,9 @@ export const FUENTES: readonly Fuente[] = [
   VIGIA,
   RELACIONES_DE_LA_CARTERA,
   CRONOGRAMAS_TRABADOS,
+  CSE_CON_CUENTAS_QUE_PIDEN_ATENCION,
   SIN_ENCARGADO,
+
   PEDIDOS_PARA_VENTAS,
   FINANZAS_REGISTRAR,
   FINANZAS_SUPERVISAR,

@@ -53,6 +53,9 @@ import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { riesgosRecientes } from "@/lib/seguimiento/hechos-server";
 import { hablanteDelEquipo } from "@/lib/seguimiento/hechos/salida";
+import { CLIENTE_NO_EXCLIENTE_WHERE } from "./exclientes";
+import { esCuentaExcliente } from "./exclientes-server";
+
 
 const AGENT_ID = "agent-cs-watchdog";
 const AGENT_SLUG = "cs-watchdog";
@@ -271,6 +274,8 @@ async function runForProjectInner(
     select: { id: true },
   });
   if (!esCartera) return { status: "skipped", reason: "no_es_cartera_cs", projectId };
+  // Un excliente confirmado no recibe alertas (lib/cs/exclientes.ts), venga de donde venga la corrida.
+  if (await esCuentaExcliente(project.clientId)) return { status: "skipped", reason: "excliente", projectId };
 
   const agent = await prisma.agent.findUnique({ where: { id: AGENT_ID }, select: { systemPrompt: true } });
   if (!agent) return { status: "skipped", reason: "agent_not_seeded", projectId };
@@ -642,7 +647,9 @@ export async function runWatchdogDebounceTick(now: Date): Promise<void> {
     where: {
       processedAt: null,
       processedByRunId: null,
-      project: PROYECTO_DE_CARTERA_WHERE,
+      // Sin los exclientes (lib/cs/exclientes.ts): saltearlos adentro dejaría sus eventos sin procesar y volverían en
+      // cada tick, ocupando un lugar, como los proyectos que no son cartera.
+      project: { AND: [PROYECTO_DE_CARTERA_WHERE, { client: CLIENTE_NO_EXCLIENTE_WHERE }] },
     },
     _max: { createdAt: true },
   });
@@ -665,7 +672,9 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
   // Mismo criterio que el panel (accessibleClientWhere de roles see-all): los
   // prospectos de Ventas no son clientes reales — sin esto el sweep les crearía
   // alertas que la cartera nunca muestra.
-  const rows = await loadPortfolio({ ...CS_CLIENT_WHERE });
+  // Sin los exclientes confirmados (lib/cs/exclientes.ts): no reciben alertas aunque les quede un proyecto activo.
+  const rows = await loadPortfolio({ AND: [CS_CLIENT_WHERE, CLIENTE_NO_EXCLIENTE_WHERE] });
+
 
   // Señales por cliente (para candidatos por frialdad/renovación/tickets).
   const signals = await prisma.clientCsSignals.findMany({

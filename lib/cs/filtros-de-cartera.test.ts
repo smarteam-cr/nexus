@@ -55,8 +55,10 @@ const fila = (o: Partial<FilaDeLaCartera> & { relacionVigente?: string; momento?
     correccion: null,
     nexusDiria: null,
     espera: null,
+    excliente: null,
     esperaPropuesta: null,
-    clasificacion: { relacion: estado(relacionVigente), momento: estado(momento), potencial: estado(potencial) },
+    clasificacion: { relacion: estado(relacionVigente)
+, momento: estado(momento), potencial: estado(potencial) },
     ...resto,
   };
 };

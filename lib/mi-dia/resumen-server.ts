@@ -28,6 +28,7 @@ import { invitadosDe, personasYTicketsDe, type TicketDeLaCuenta } from "@/lib/co
 import type { Invitado } from "@/lib/contactos/reglas";
 import { loQueSeDijoDe, type ResultadoDeBusqueda } from "@/lib/busqueda/buscar-server";
 import { palabrasDelTitulo } from "@/lib/busqueda/turnos";
+import { CLIENTE_NO_EXCLIENTE_WHERE } from "@/lib/cs/exclientes";
 
 /** Cuántas reuniones se miran hacia atrás para encontrar la última con algo que leer. */
 const REUNIONES_A_MIRAR = 12;
@@ -166,7 +167,8 @@ export async function resumenParaLaReunion(o: {
     pasosDeLaCuenta(o.clientId).catch(() => null),
     personasYTicketsDe(o.clientId, ahora).catch(() => null),
     o.veAlertas
-      ? prisma.csAlert.findMany({ where: { clientId: o.clientId, status: "OPEN" }, orderBy: { createdAt: "desc" }, take: 8, select: { title: true, reason: true, severity: true } })
+      ? prisma.csAlert.findMany({ where: { clientId: o.clientId, status: "OPEN", client: CLIENTE_NO_EXCLIENTE_WHERE }, orderBy
+: { createdAt: "desc" }, take: 8, select: { title: true, reason: true, severity: true } })
       : Promise.resolve(null),
     modeloDisponible(prisma.negocioAbierto)
       ? prisma.negocioAbierto

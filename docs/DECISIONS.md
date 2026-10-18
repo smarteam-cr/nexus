@@ -8712,3 +8712,38 @@ que tener su acción de la semana y su reunión agendada.
 - **El chat genera un entregable** con la operación «documento.generar»: queda en la lista y corre solo al aplicarla,
   con el proyecto verificado contra la cuenta del hilo y el mismo permiso que el botón. Las instrucciones del chat valen
   solo para esa generación: no pisan las «Instrucciones adicionales» del documento.
+
+## Un excliente sale de todo, y «Lo que importa hoy» no deja nada fuera sin decirlo (2026-10-17)
+
+> Elías, validando «Para ti» en producción: Wherex ya no es cliente y seguía en las alertas y en las carteras (le
+> quedó un proyecto activo en HubSpot). Y en «Lo que importa hoy», lo que no entra en las cinco no puede quedar abajo
+> como si fuera lo de menos.
+
+- **La relación CONFIRMADA «excliente» manda sobre los proyectos activos y las suscripciones** (lib/cs/exclientes.ts).
+  Lo propuesto por Nexus no alcanza: confirma la CSL. La cuenta sale de la cartera (`enCartera: false`), de «A quién
+  llamar», de las lecturas de la cuenta, de las carteras del CSE y de la CSL, de «Para ti» (`alcanceDe` la saca de tus
+  cuentas, así que tampoco hay «Cuenta sin acción» ni nada de lo que se mide con tus proyectos) y de los recordatorios
+  de adopción. Sus alertas no se crean (vigía, avisos de renovación, lectura de reuniones) ni se muestran. Se ve solo
+  en Éxito del cliente › Cartera › «Fuera de la cartera», marcada «Excliente», con lo que le sigue activo.
+- **Un solo punto.** Las consultas usan `CLIENTE_NO_EXCLIENTE_WHERE` (o `CLIENTE_DE_CS_SIN_EXCLIENTES_WHERE`), los que
+  arman en memoria `cuentasExcliente()` (lib/cs/exclientes-server.ts) y los que ya tienen la clasificación a mano,
+  `esExcliente()`. Nadie escribe `relacion: "excliente"` en una consulta, y `lib/cs/exclientes.test.ts` vigila que
+  cada lector siga aplicando la exclusión.
+- **Nexus no contradice al excliente confirmado**: no le propone «Proyecto en curso» por el proyecto que quedó abierto.
+  Si el cliente volvió, la CSL cambia su relación. Nexus propone «excliente» cuando no queda nada activo hace más de un
+  año, o cuando la cancelación de HubSpot ya corrió y no queda nada activo.
+- **Lo que sigue activo se pide cerrar en la lista de limpieza** (motivo `excliente-activo`, el primero de la lista):
+  el proyecto abierto en HubSpot, a su encargado; el servicio recurrente en Cobranza, a quien lidera Customer Success.
+  Es el único lugar que todavía nombra a la cuenta, a propósito.
+- **Las alertas que ya estaban abiertas** quedan escondidas; las cierra `scripts/cerrar-alertas-de-exclientes.ts`
+  (simulacro por defecto, `--apply` con respaldo), que con `--marcar <clientId> --por <correo>` también confirma la
+  relación. El job de renovaciones no las toca: cerrarlas con «la renovación ya pasó» diría algo falso.
+- **«Estabilizar N cuentas»** (lib/para-ti/importa.ts): si las cuentas QUE LLEVA una persona (el encargado en HubSpot)
+  que quedan fuera de sus cinco llegan a `UMBRAL_PARA_ESTABILIZAR` (3), la quinta cosa pasa a ser «Estabilizar N
+  cuentas», con el enlace a cada una; lo demás sigue en «También para hoy». *Por qué 3:* una o dos que no entran se
+  leen justo debajo y es cuestión de orden; con tres o más es carga. Solo cuentan las suyas: a quien lidera le llegan
+  alertas de cuentas que no lleva. El correo de la mañana no cambia.
+- **A quien lidera Customer Success: «<CSE> tiene N cuentas que piden atención»** (fuente `cs-estabilizar`), una línea
+  por CSE con al menos `MIN_CUENTAS_PARA_ESTABILIZAR` (7 = las 4 que le entran más el umbral). Cuenta las dos señales
+  que llenan primero los cinco de un CSE: la cuenta en riesgo y la cuenta sin su acción o su reunión de la semana. Se
+  calcula al leer, sin tabla nueva.

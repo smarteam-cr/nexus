@@ -9,6 +9,8 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import { CLIENTE_NO_EXCLIENTE_WHERE } from "./exclientes";
+
 import { proyectosAbiertos } from "@/lib/clients/resumen-proyectos";
 import { esProyectoDePipelineCS, PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 import { resolvePipeline } from "@/lib/projects/kind";
@@ -33,7 +35,8 @@ export async function correrRecordatoriosDeAdopcion(ahora: Date): Promise<{ reco
   const hoy = fechaLocalDeLaReunion(ahora);
   const [clientes, deBajaFilas] = await Promise.all([
     prisma.client.findMany({
-      where: { ...CS_CLIENT_WHERE, projects: { some: PROYECTO_DE_PIPELINE_CS_WHERE } },
+      // Sin los exclientes confirmados (lib/cs/exclientes.ts): no hay adopción que revisar.
+      where: { ...CS_CLIENT_WHERE, ...CLIENTE_NO_EXCLIENTE_WHERE, projects: { some: PROYECTO_DE_PIPELINE_CS_WHERE } },
       select: {
         id: true,
         name: true,

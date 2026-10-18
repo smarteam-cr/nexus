@@ -58,6 +58,9 @@ import { leerVistas } from "./vistas-de-cartera-server";
 import { cargarConfigCarga } from "@/lib/carga/queries";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
 import { DE_LA_PREVENTA } from "@/lib/exploraciones/marco";
+import { esExcliente } from "./exclientes";
+import { cuentasExcliente } from "./exclientes-server";
+
 import { cuentasSinCse, DIAS_DE_REUNIONES_PARA_PROPONER, type CseDelEquipo, type CuentaSinCse } from "./sin-cse";
 
 const DIA_MS = 86_400_000;
@@ -202,10 +205,14 @@ export async function cargarCuentas(
   const partnerPorCliente = new Map(conPartner.map((s) => [s.clientId as string, leerPartner(s.properties)]));
   const registroPorCliente = new Map(conPartner.map((s) => [s.clientId as string, s.hubspotPartnerClientId]));
 
-  const deLaCartera = new Set([
+  const conAlgoActivo = [
     ...filas.map((r) => r.clientId),
     ...conPartner.filter((s) => partnerPorCliente.get(s.clientId as string)?.activa).map((s) => s.clientId as string),
-  ]);
+  ];
+  // Un excliente confirmado no está en la cartera aunque le quede un proyecto o una suscripción activa (2026-10-17,
+  // lib/cs/exclientes.ts): sale de «A quién llamar», de las lecturas y de las alertas. Se ve en «Fuera de la cartera».
+  const exclientes = await cuentasExcliente([...new Set(conAlgoActivo)]);
+  const deLaCartera = new Set(conAlgoActivo.filter((id) => !exclientes.has(id)));
   const sinServicio = opciones.incluirSinServicio
     ? (await prisma.client.findMany({ where: filtroCliente, select: { id: true } })).map((c) => c.id)
     : [];
@@ -329,8 +336,9 @@ export async function cargarCuentas(
         proyectos,
         ultimoContacto,
         ticketsAbiertos: senal?.ticketsSupported ? senal.openTicketCount : null,
+        // Las alertas de un excliente no se muestran (lib/cs/exclientes.ts).
         alertas: alertas
-          .filter((a) => a.clientId === cl.id)
+          .filter((a) => a.clientId === cl.id && !esExcliente(clasificaciones.porCliente.get(cl.id)))
           .map((a) => ({ ...alertaDeLaCuenta(a), antes: cierreAnterior.get(a.dedupeKey) ?? null })),
         facturacion: resumirFacturacion(cobros, hoy, fin?.creditoDias ?? null),
         licenciasManuales: manuales
@@ -475,7 +483,8 @@ export async function cargarCarteraDeLaCsl(clientWhere: Prisma.ClientWhereInput 
     /** Las abiertas, por cuenta: la vista «Alertas» de «A quién llamar». */
     alertasAbiertas: alertasParaRevisar(todas, hoy),
     /** Las cerradas de los últimos `DIAS_DE_CERRADAS` días: salen de la lista, pero se consultan. */
-    alertasCerradas: await alertasCerradas(todas.map((c) => c.clientId)),
+    alertasCerradas: await alertasCerradas(todas.filter((c) => !esExcliente(c.clasificacion)).map((c) => c.clientId)),
+
   };
 }
 

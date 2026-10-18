@@ -7,7 +7,9 @@ import {
   DIAS_DE_ETAPA_QUIETA,
   DIAS_SIN_ACTIVIDAD,
   arregloDelServicio,
+  arregloDelServicioDeExcliente,
   arreglosDelProyecto,
+
   porResponsable,
   type EquipoParaLimpiar,
   type ProyectoParaLimpiar,
@@ -104,5 +106,38 @@ describe("por responsable", () => {
     ];
     const g = porResponsable(lista);
     expect(g.map((x) => x.responsable.nombre)).toEqual(["Alexander Vanegas", "Ana Mora", null]);
+  });
+});
+
+describe("⭐ una cuenta marcada excliente con algo activo (2026-10-17)", () => {
+  it("el proyecto lleva solo «excliente-activo», aunque además esté quieto o sin actividad", () => {
+    const x = p({ excliente: true, etapaDesde: haceDias(DIAS_DE_ETAPA_QUIETA + 10), ultimaActividad: haceDias(DIAS_SIN_ACTIVIDAD + 10) });
+    const [a, ...resto] = arreglosDelProyecto(x, equipo, hoy);
+    expect(resto).toEqual([]);
+    expect(a.motivo).toBe("excliente-activo");
+    expect(a.texto).toBe("Proyecto activo en una cuenta marcada excliente: ciérralo en HubSpot.");
+    expect(a.responsable).toEqual({ email: "ana@smarteamcr.com", nombre: "Ana Mora", porQue: "encargado" });
+  });
+
+  it("con el encargado de baja, lo cierra quien lidera el sprint", () => {
+    const [a] = arreglosDelProyecto(p({ excliente: true, encargadoEmail: "lorena@smarteamcr.com" }), equipo, hoy);
+    expect(a.motivo).toBe("excliente-activo");
+    expect(a.responsable.porQue).toBe("lider");
+  });
+
+  it("el servicio recurrente en Cobranza se pide finalizar, a quien lidera Customer Success", () => {
+    const a = arregloDelServicioDeExcliente({ clientId: "c1", cliente: "Wherex", servicios: 2 }, equipo);
+    expect(a.motivo).toBe("excliente-activo");
+    expect(a.texto).toBe("2 servicios recurrentes activos en Cobranza en una cuenta marcada excliente.");
+    expect(a.queHacer).toMatch(/^Finalízalo en Cobranza/);
+    expect(a.responsable.email).toBe("avanegas@smarteamcr.com");
+  });
+
+  it("va primero en la lista de su responsable", () => {
+    const [g] = porResponsable([
+      ...arreglosDelProyecto(p({ id: "p2", encargadoEmail: null, cliente: "Acme" }), { ...equipo, lideres: { cs: { email: "ana@smarteamcr.com", nombre: "Ana Mora" } } }, hoy),
+      ...arreglosDelProyecto(p({ excliente: true, cliente: "Zeta" }), equipo, hoy),
+    ]);
+    expect(g.arreglos[0].motivo).toBe("excliente-activo");
   });
 });

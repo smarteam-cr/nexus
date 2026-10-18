@@ -11,6 +11,8 @@ import { cn } from "@/lib/cn";
 import type { ArregloDeLimpieza, ListaDeUnResponsable, MotivoDeLimpieza } from "@/lib/limpieza/reglas";
 
 const NOMBRE_DEL_MOTIVO: Record<MotivoDeLimpieza, string> = {
+  "excliente-activo": "Excliente con algo activo",
+
   "encargado-de-baja": "Encargado que ya no está",
   "sin-encargado": "Sin encargado",
   "servicio-sin-registrar": "Servicio sin proyecto",

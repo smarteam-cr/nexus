@@ -15,6 +15,9 @@
  *   · `sin-actividad`: ninguna actividad en el proyecto de HubSpot en `DIAS_SIN_ACTIVIDAD`;
  *   · `servicio-sin-registrar`: la empresa tiene un servicio recurrente activo en Cobranza y ningún proyecto abierto en
  *     HubSpot.
+ *   · `excliente-activo` (2026-10-17): la CSL marcó la cuenta como excliente y le sigue algo activo (un proyecto en
+ *     HubSpot, un servicio recurrente en Cobranza). La cuenta ya no aparece en ninguna cartera ni alerta
+ *     (lib/cs/exclientes.ts): esta lista es el único lugar que pide cerrarlo. Un proyecto así lleva solo este motivo.
  * Quién lo arregla: el encargado del proyecto si está en el equipo; si no (o no hay proyecto), quien lidera el sprint del
  * proyecto (Customer Success o Desarrollo).
  */
@@ -22,7 +25,13 @@
 /** La pantalla de la lista, en Éxito del cliente (la CSL y dirección). */
 export const RUTA_DE_LA_LIMPIEZA = "/customer-success/limpieza";
 
-export type MotivoDeLimpieza = "encargado-de-baja" | "sin-encargado" | "etapa-quieta" | "sin-actividad" | "servicio-sin-registrar";
+export type MotivoDeLimpieza =
+  | "excliente-activo"
+  | "encargado-de-baja"
+  | "sin-encargado"
+  | "etapa-quieta"
+  | "sin-actividad"
+  | "servicio-sin-registrar";
 
 /** Seis semanas en la misma etapa. */
 export const DIAS_DE_ETAPA_QUIETA = 42;
@@ -37,6 +46,7 @@ export const DIAS_SIN_ACTIVIDAD = 30;
 const ETAPAS_QUE_DURAN = /continuidad/i;
 
 export const QUE_HACER: Record<MotivoDeLimpieza, string> = {
+  "excliente-activo": "Ciérralo en HubSpot. Si el cliente volvió, cambia su relación en Éxito del cliente › Cartera.",
   "encargado-de-baja": "Pásalo a alguien del equipo en «CSE Encargado».",
   "sin-encargado": "Ponle encargado en HubSpot («CSE Encargado»).",
   "etapa-quieta": "Muévelo a la etapa en la que está de verdad, o anota por qué sigue ahí.",
@@ -53,6 +63,8 @@ export interface ProyectoParaLimpiar {
   sprint: "cs" | "desarrollo";
   /** Su pipeline es de un servicio recurrente (SmartLoop, lib/projects/kind.ts): un ciclo largo no es una etapa quieta. */
   servicioRecurrente: boolean;
+  /** La cuenta está confirmada como excliente (lib/cs/exclientes.ts): lo único que falta es cerrarlo. */
+  excliente?: boolean;
   etapa: string | null;
   encargadoEmail: string | null;
   encargadoNombre: string | null;
@@ -125,6 +137,12 @@ export function arreglosDelProyecto(p: ProyectoParaLimpiar, e: EquipoParaLimpiar
   const agregar = (motivo: MotivoDeLimpieza, texto: string) =>
     out.push({ clave: `${motivo}:${p.id}`, motivo, texto, queHacer: QUE_HACER[motivo], ...base });
 
+  // Un excliente con el proyecto abierto: cerrarlo resuelve todo lo demás (la etapa, la actividad, el encargado).
+  if (p.excliente) {
+    agregar("excliente-activo", "Proyecto activo en una cuenta marcada excliente: ciérralo en HubSpot.");
+    return out;
+  }
+
   if (deBaja || (correo && !activo)) agregar("encargado-de-baja", `Está a nombre de ${deBaja ?? p.encargadoNombre ?? correo}, que ya no está en el equipo.`);
   else if (!correo) agregar("sin-encargado", "Nadie lo tiene en HubSpot.");
 
@@ -159,8 +177,29 @@ export function arregloDelServicio(s: ServicioParaLimpiar, e: EquipoParaLimpiar)
   };
 }
 
-/** El orden: lo que deja a un cliente sin dueño primero; después lo quieto. */
+/** Un servicio recurrente que sigue activo en Cobranza en una cuenta marcada excliente: lo cierra quien lidera CS. */
+export function arregloDelServicioDeExcliente(s: ServicioParaLimpiar, e: EquipoParaLimpiar): ArregloDeLimpieza {
+  return {
+    clave: `excliente-activo:servicio:${s.clientId}`,
+    motivo: "excliente-activo",
+    texto:
+      s.servicios === 1
+        ? "Servicio recurrente activo en Cobranza en una cuenta marcada excliente."
+        : `${s.servicios} servicios recurrentes activos en Cobranza en una cuenta marcada excliente.`,
+    queHacer: "Finalízalo en Cobranza. Si el cliente volvió, cambia su relación en Éxito del cliente › Cartera.",
+    clientId: s.clientId,
+    cliente: s.cliente,
+    proyectoId: null,
+    proyecto: null,
+    hubspotUrl: null,
+    responsable: lider(e, "cs"),
+  };
+}
+
+/** El orden: lo de un excliente primero (no lo ve nadie más); después lo que deja a un cliente sin dueño; al final lo quieto. */
 const ORDEN: Record<MotivoDeLimpieza, number> = {
+  "excliente-activo": -1,
+
   "encargado-de-baja": 0,
   "sin-encargado": 1,
   "servicio-sin-registrar": 2,

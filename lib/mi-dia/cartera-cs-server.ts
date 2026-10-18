@@ -19,7 +19,7 @@
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
-import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import { CLIENTE_DE_CS_SIN_EXCLIENTES_WHERE } from "@/lib/cs/exclientes";
 import { proyectosAbiertos } from "@/lib/clients/resumen-proyectos";
 import { proyectoNavegableWhere } from "@/lib/projects/scope";
 import { pipelineByKey } from "@/lib/projects/kind";
@@ -118,7 +118,7 @@ async function proyectosDeLaCartera(clientIds: readonly string[] | null) {
       hubspotPipelineId: { in: IDS_DE_PIPELINE },
       esPrueba: false,
       proyectoInterno: false,
-      client: CS_CLIENT_WHERE,
+      client: CLIENTE_DE_CS_SIN_EXCLIENTES_WHERE,
       ...(clientIds ? { clientId: { in: [...clientIds] } } : {}),
     }),
     select: SELECT_PROYECTO,
@@ -135,7 +135,7 @@ async function proyectosDeLaCartera(clientIds: readonly string[] | null) {
 export async function cuantasEmpresasDeCs(variante: "cse" | "csl", a: Alcance): Promise<number> {
   if (!veTodaLaCarteraDeCs(variante, a)) return new Set(a.proyectos.map((p) => p.clientId)).size;
   const filas = await prisma.project.findMany({
-    where: proyectoNavegableWhere({ hubspotPipelineId: { in: IDS_DE_PIPELINE }, esPrueba: false, proyectoInterno: false, client: CS_CLIENT_WHERE }),
+    where: proyectoNavegableWhere({ hubspotPipelineId: { in: IDS_DE_PIPELINE }, esPrueba: false, proyectoInterno: false, client: CLIENTE_DE_CS_SIN_EXCLIENTES_WHERE }),
     select: { clientId: true, status: true, serviceType: true, hubspotServiceId: true, hubspotPipelineId: true, proyectoInterno: true, hermanoCsProjectId: true, altaEstado: true, esPrueba: true },
     take: MAX_PROYECTOS,
   });

@@ -25,6 +25,8 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import { CLIENTE_NO_EXCLIENTE_WHERE } from "./exclientes";
+
 import { proyectoDeCarteraWhere } from "@/lib/projects/scope";
 import { MS_SIN_LATIDO_PARA_COLGADA } from "@/lib/agents/run-colgada";
 import type { DisparoDelVigia, WatchdogRunResult } from "./watchdog";
@@ -85,7 +87,8 @@ const DEPS_REALES: DepsDelVigia = {
   proyectosDeCartera: async (clientId) =>
     (
       await prisma.project.findMany({
-        where: proyectoDeCarteraWhere({ clientId, client: CS_CLIENT_WHERE }),
+        // Un excliente confirmado no tiene proyectos para el vigía (lib/cs/exclientes.ts): queda en «sin_proyectos».
+        where: proyectoDeCarteraWhere({ clientId, client: { AND: [CS_CLIENT_WHERE, CLIENTE_NO_EXCLIENTE_WHERE] } }),
         select: { id: true },
       })
     ).map((p) => p.id),

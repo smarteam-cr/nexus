@@ -20,6 +20,8 @@ import { guardLiderDeCs } from "@/lib/auth/api-guards";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { serializeAlert } from "@/lib/cs/load-panel";
+import { CLIENTE_NO_EXCLIENTE_WHERE } from "@/lib/cs/exclientes";
+
 import type { CsAlertStatus, CsAlertSeverity, Prisma } from "@prisma/client";
 
 const STATUSES = ["OPEN", "SEEN", "RESOLVED", "DISMISSED"] as const;
@@ -40,6 +42,9 @@ export async function GET(req: NextRequest) {
   const clientWhere = await accessibleClientWhere(guard.user);
 
   const where: Prisma.CsAlertWhereInput = clientWhere ? { client: clientWhere } : {};
+  // Las alertas de un excliente no se muestran (lib/cs/exclientes.ts).
+  where.AND = [{ client: CLIENTE_NO_EXCLIENTE_WHERE }];
+
   if (status && (STATUSES as readonly string[]).includes(status)) where.status = status as CsAlertStatus;
   if (severity && (SEVERITIES as readonly string[]).includes(severity)) where.severity = severity as CsAlertSeverity;
   if (clientId) where.clientId = clientId;

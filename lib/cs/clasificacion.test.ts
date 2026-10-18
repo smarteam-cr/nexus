@@ -5,6 +5,8 @@ import {
   RELACIONES,
   clasificarCuenta,
   estadoDelDato,
+  filasDeLaCartera,
+
   leerDescartes,
   pendientesDeConfirmar,
   proponerMomento,
@@ -218,5 +220,49 @@ describe("⭐ lo confirmado contra lo propuesto", () => {
 
   it("cada valor tiene un nombre distinto", () => {
     expect(new Set(RELACIONES.map((r) => r.nombre)).size).toBe(RELACIONES.length);
+  });
+});
+
+describe("⭐ un excliente confirmado manda sobre lo que sigue activo (2026-10-17)", () => {
+  const confirmadaExcliente: ClasificacionGuardada = {
+    relacion: "excliente",
+    relacionPor: "avanegas@smarteamcr.com",
+    relacionEn: "2026-10-17T15:00:00Z",
+    potencial: null,
+    potencialPor: null,
+    potencialEn: null,
+    momento: null,
+    momentoPor: null,
+    momentoEn: null,
+    descartes: {},
+  };
+
+  it("con un proyecto activo, Nexus no le propone «Proyecto en curso»", () => {
+    const c = cuenta({ proyectos: [proyecto()], clasificacion: confirmadaExcliente });
+    const cl = clasificarCuenta(c, HOY);
+    expect(cl.relacion.propuesta.valor).toBe("proyecto");
+    expect(cl.relacion.sugerir).toBe(false);
+    expect(cl.relacion.vigente).toBe("excliente");
+  });
+
+  it("en la cartera sale marcada, con lo que sigue activo para cerrarlo", () => {
+    const [f] = filasDeLaCartera([cuenta({ proyectos: [proyecto()], serviciosRecurrentes: 1, clasificacion: confirmadaExcliente, enCartera: false })], HOY);
+    expect(f.excliente).toEqual({ sigueActivo: "Sigue con 1 proyecto activo en HubSpot, 1 servicio recurrente activo en Cobranza, licencias activas en HubSpot" });
+    expect(f.enCartera).toBe(false);
+  });
+
+  it("lo propuesto no cuenta: sin confirmar, no hay marca", () => {
+    const [f] = filasDeLaCartera([cuenta({ crudo: null })], HOY);
+    expect(f.excliente).toBeNull();
+  });
+
+  it("Nexus propone «excliente» cuando la cancelación de HubSpot ya corrió y no queda nada activo", () => {
+    const c = cuenta({
+      crudo: { hs_is_active: "false", hs_cancellation_products: "sales", hs_next_cancellation_date: "2026-09-30" },
+      facturacion: pago("2026-09-15"),
+    });
+    const p = proponerRelacion(c, HOY);
+    expect(p.valor).toBe("excliente");
+    expect(p.razon).toMatch(/^HubSpot registró la cancelación el /);
   });
 });

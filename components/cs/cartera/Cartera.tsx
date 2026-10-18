@@ -512,8 +512,19 @@ function FilaDeCartera({
         <Link href={`/customer-success/${f.clientId}`} className="truncate text-sm font-semibold hover:text-brand">
           {f.nombre}
         </Link>
+        {f.excliente && (
+          <span className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="rounded-full border border-line bg-surface-muted px-2 py-0.5 font-semibold text-fg-secondary">Excliente</span>
+            {f.excliente.sigueActivo && (
+              <span className="text-warn-ink" title="Ciérralo para que la cuenta quede al día: aparece en la lista de limpieza de HubSpot.">
+                {f.excliente.sigueActivo}
+              </span>
+            )}
+          </span>
+        )}
         {f.espera && (
           <span className="truncate text-xs text-fg-secondary" title={`Lo marcó ${f.espera.quien}`}>
+
             Espera: {f.espera.nota}
           </span>
         )}
