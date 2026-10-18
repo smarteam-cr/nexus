@@ -21,11 +21,13 @@ import {
   MAX_INVITADOS_DEL_BORRADOR,
   moverBorrador,
   tituloDelBorrador,
+  dejaReunionPlaneada,
   type BorradorDeEvento,
   type ContactoParaAgendar,
   type ResultadoParaAgendar,
 } from "@/lib/mi-dia/agenda-borrador";
-import { cambiarBorrador, editarBorrador, quitarBorrador } from "./borradores";
+import { cambiarBorrador, editarBorrador, quitarBorrador, yaLoGuarde } from "./borradores";
+import { useToast } from "@/components/ui/Toast";
 
 const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -42,7 +44,16 @@ function horasDelDia(dia: string, actual: number): number[] {
   return out.sort((a, b) => a - b);
 }
 
-export default function BorradorDelEvento({ b, className }: { b: BorradorDeEvento; className?: string }) {
+export default function BorradorDelEvento({
+  b,
+  className,
+  onGuardado,
+}: {
+  b: BorradorDeEvento;
+  className?: string;
+  /** Después de «Ya lo guardé» (ya se quitó el borrador): «Planifica tu semana» lo usa para mostrarla agendada. */
+  onGuardado?: (b: BorradorDeEvento) => void;
+}) {
   const titulo = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState("");
   const [resultado, setResultado] = useState<{ q: string; r: ResultadoParaAgendar | null } | null>(null);
@@ -51,6 +62,9 @@ export default function BorradorDelEvento({ b, className }: { b: BorradorDeEvent
   const duracion = duracionDelBorrador(b);
   const origen = typeof window === "undefined" ? "" : window.location.origin;
   const enlace = useMemo(() => enlaceDelBorrador(b, origen), [b, origen]);
+  const toast = useToast();
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!b.abierto) titulo.current?.focus();
@@ -288,9 +302,28 @@ export default function BorradorDelEvento({ b, className }: { b: BorradorDeEvent
 
       {b.abierto ? (
         <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2.5">
-          <p className="text-xs leading-[17px] text-fg-secondary">Lo abriste en Google Calendar. Guárdalo allá: al recargar, aparece en tu agenda como reunión.</p>
+          <p className="text-xs leading-[17px] text-fg-secondary">
+            {dejaReunionPlaneada(b)
+              ? "Lo abriste en Google Calendar. Guárdalo allá y dale «Ya lo guardé»: queda en tus tareas como reunión con la cuenta."
+              : "Lo abriste en Google Calendar. Guárdalo allá: al recargar, aparece en tu agenda."}
+          </p>
+          {error && <p className="text-xs text-danger-ink">{error}</p>}
           <div className="flex flex-wrap items-center gap-2">
-            <BotonBlanco onClick={() => quitarBorrador(b.id)}>Ya lo guardé</BotonBlanco>
+            <BotonBlanco
+              disabled={guardando}
+              onClick={async () => {
+                setGuardando(true);
+                const r = await yaLoGuarde(b);
+                setGuardando(false);
+                if (!r.ok) setError(r.error);
+                else {
+                  if (r.planeada) toast.success("Quedó en tus tareas como reunión con la cuenta.");
+                  onGuardado?.(b);
+                }
+              }}
+            >
+              {guardando ? "Guardando…" : "Ya lo guardé"}
+            </BotonBlanco>
             <a href={enlace} target="_blank" rel="noreferrer" className="rounded px-1.5 py-[5px] text-xs font-medium text-brand transition-colors hover:text-brand-light">
               Abrir de nuevo
             </a>

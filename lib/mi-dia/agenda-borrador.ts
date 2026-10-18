@@ -37,6 +37,15 @@ export interface BorradorDeEvento {
   origen: "agenda" | "agendar";
   /** Ya se abrió en Google Calendar: falta que la persona lo guarde allá. */
   abierto: boolean;
+  /** Para qué es la reunión (lo sugiere «Planifica tu semana»): va a la descripción del evento. */
+  objetivo?: string | null;
+  /**
+   * El bloque para avanzar una tarea (el hueco libre del inicio): no es una reunión con la cuenta, así que «Ya lo
+   * guardé» no deja una reunión planeada. `numero` es su T-.
+   */
+  tarea?: { id: string; numero: number } | null;
+  /** La reunión cuya próxima es (la que dejó sugerida): la reunión planeada queda atada a ella y no se repite. */
+  deLaReunion?: string | null;
 }
 
 /** Un contacto de HubSpot para invitar (lo devuelve /api/para-ti/contactos). */
@@ -71,9 +80,12 @@ export function tituloDelBorrador(b: Pick<BorradorDeEvento, "titulo" | "cuenta">
 }
 
 /** La descripción del evento: el enlace a la cuenta en Nexus, si hay cuenta. `origen` = `https://nexus…` (sin barra final). */
-export function detalleDelBorrador(b: Pick<BorradorDeEvento, "cuenta">, origen: string): string {
+export function detalleDelBorrador(b: Pick<BorradorDeEvento, "cuenta" | "objetivo" | "tarea">, origen: string): string {
   const lineas: string[] = [];
-  if (b.cuenta) lineas.push(`La cuenta en Nexus: ${origen.replace(/\/+$/, "")}/clients/${encodeURIComponent(b.cuenta.id)}`);
+  const base = origen.replace(/\/+$/, "");
+  if (b.objetivo?.trim()) lineas.push(`Objetivo: ${b.objetivo.trim()}`);
+  if (b.tarea) lineas.push(`La tarea en Nexus (T-${b.tarea.numero}): ${base}/tareas?t=${encodeURIComponent(b.tarea.id)}`);
+  if (b.cuenta) lineas.push(`La cuenta en Nexus: ${base}/clients/${encodeURIComponent(b.cuenta.id)}`);
   lineas.push("Creado desde Nexus.");
   return lineas.join("\n");
 }
@@ -141,6 +153,29 @@ export function datosDelEnlaceDeAgendar(href: string): { titulo: string; invitad
       .map((x) => x.trim().toLowerCase())
       .filter((x) => CORREO.test(x)),
     correo: q.get("authuser"),
+  };
+}
+
+/**
+ * ¿«Ya lo guardé» deja una reunión planeada en Tareas? Solo un evento con cuenta que no es el bloque de una tarea: esa
+ * reunión hace que la cuenta cuente como con reunión (lib/mi-dia/servicio.ts).
+ */
+export function dejaReunionPlaneada(b: Pick<BorradorDeEvento, "cuenta" | "tarea">): boolean {
+  return !!b.cuenta && !b.tarea;
+}
+
+/** Lo que se manda a /api/tareas/reuniones-planeadas. */
+export function reunionPlaneadaDelBorrador(
+  b: BorradorDeEvento,
+): { clientId: string; titulo: string; inicio: string; invitados: string[]; objetivo: string | null; deLaReunion: string | null } | null {
+  if (!dejaReunionPlaneada(b) || !b.cuenta) return null;
+  return {
+    clientId: b.cuenta.id,
+    titulo: tituloDelBorrador(b),
+    inicio: b.inicio,
+    invitados: b.invitados.map((i) => i.correo),
+    objetivo: b.objetivo?.trim() || null,
+    deLaReunion: b.deLaReunion ?? null,
   };
 }
 

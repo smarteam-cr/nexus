@@ -254,6 +254,7 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
             <div className="flex flex-wrap items-center gap-2">
               <BotonTexto onClick={() => setVerInicio((x) => !x)}>Cómo funciona</BotonTexto>
               <BotonBlanco onClick={() => router.push("/tareas/equipo")}>Semana del equipo</BotonBlanco>
+              <BotonBlanco onClick={() => router.push("/tareas/planificar")}>Planifica tu semana</BotonBlanco>
               <span data-recorrido="tareas.leer">
                 <BotonBlanco onClick={() => setLeer(true)}>Leer una reunión</BotonBlanco>
               </span>

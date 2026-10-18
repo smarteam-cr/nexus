@@ -20,7 +20,7 @@ import { ABIERTAS_WHERE, PROPUESTAS_WHERE } from "@/lib/tareas/donde";
 import { ambitoConDatos, datosDeAmbito } from "@/lib/tareas/ambito-server";
 import type { Alcance } from "@/lib/para-ti/alcance-server";
 import { servicioDeLasCuentas, type ServicioDeLaCuenta } from "./servicio-server";
-import type { VarianteDelInicio } from "./inicio";
+import type { TareaParaUnHueco, VarianteDelInicio } from "./inicio";
 
 export type SaludVista = "riesgo" | "senales" | "bien" | "espera" | "sin-datos";
 
@@ -87,12 +87,20 @@ async function cuentasDeDesarrollo(): Promise<{ clientId: string; empresa: strin
   });
 }
 
+export interface CuentaBase {
+  clientId: string;
+  empresa: string;
+  llevaEmail: string | null;
+  proyectos: string[];
+}
+
 /**
- * Las cuentas del inicio de esa persona. CSE: las de sus proyectos (las que lleva, con el color); CSL: toda la cartera
- * (con quién la lleva); Desarrollo: los clientes con proyecto de desarrollo activo. Los demás, ninguna.
+ * Las cuentas de esa persona, sin más datos. CSE: las de sus proyectos; CSL: toda la cartera (con quién la lleva);
+ * Desarrollo: los clientes con proyecto de desarrollo activo. Los demás, ninguna. Lo usan el inicio y «Planifica tu
+ * semana».
  */
-export async function cuentasDelInicio(variante: VarianteDelInicio, a: Alcance, o: { ahora: Date; hoyISO: string }): Promise<CuentaDelInicio[]> {
-  let base: { clientId: string; empresa: string; llevaEmail: string | null; proyectos: string[] }[] = [];
+export async function cuentasBase(variante: VarianteDelInicio, a: Alcance): Promise<CuentaBase[]> {
+  let base: CuentaBase[] = [];
   if (variante === "cse") {
     const por = new Map<string, { clientId: string; empresa: string; llevaEmail: string | null; proyectos: string[] }>();
     for (const p of a.proyectos) {
@@ -106,6 +114,15 @@ export async function cuentasDelInicio(variante: VarianteDelInicio, a: Alcance, 
   } else if (variante === "dev") {
     base = await cuentasDeDesarrollo();
   }
+  return base;
+}
+
+/**
+ * Las cuentas del inicio de esa persona. CSE: las de sus proyectos (las que lleva, con el color); CSL: toda la cartera
+ * (con quién la lleva); Desarrollo: los clientes con proyecto de desarrollo activo. Los demás, ninguna.
+ */
+export async function cuentasDelInicio(variante: VarianteDelInicio, a: Alcance, o: { ahora: Date; hoyISO: string }): Promise<CuentaDelInicio[]> {
+  const base = await cuentasBase(variante, a);
   if (base.length === 0) return [];
 
   // El color: la CSL ve toda la cartera; el CSE, solo las cuentas que lleva (sin lo que habla de plata).
@@ -183,6 +200,35 @@ export async function tareasDeHoy(email: string, hoyISO: string): Promise<{ tare
     prisma.tarea.count({ where }),
   ]);
   return { tareas: filas.map((t) => aVista(t, null)), total };
+}
+
+/**
+ * Las tareas que pueden ir a un hueco libre de hoy («Con qué avanzar», fase 2, 2026-10-17): las tuyas abiertas, que no
+ * son una reunión planeada ni «Por asignar», de esta semana o de antes, o que vencen hasta el viernes. Como mucho 40;
+ * cuál va a cada hueco lo decide lib/mi-dia/inicio.ts › conQueAvanzar.
+ */
+export async function tareasParaLosHuecos(email: string, hoyISO: string): Promise<TareaParaUnHueco[]> {
+  if (!(await tareasDisponible())) return [];
+  const dia = (new Date(`${hoyISO}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const lunes = new Date(Date.parse(`${hoyISO}T00:00:00Z`) - dia * 86_400_000);
+  const viernes = new Date(lunes.getTime() + 4 * 86_400_000);
+  const filas = await prisma.tarea.findMany({
+    where: { ...ABIERTAS_WHERE, responsableEmail: email.toLowerCase(), clase: "accion", OR: [{ semana: { lte: lunes } }, { venceEl: { lte: viernes } }] },
+    orderBy: [{ venceEl: { sort: "asc", nulls: "last" } }, { numero: "asc" }],
+    take: 40,
+    select: { id: true, numero: true, titulo: true, prioridad: true, venceEl: true, semana: true, minutosEstimados: true, clientId: true, client: { select: { name: true } } },
+  });
+  return filas.map((t) => ({
+    id: t.id,
+    numero: t.numero,
+    titulo: t.titulo,
+    prioridad: t.prioridad,
+    venceEl: comoDia(t.venceEl),
+    semana: comoDia(t.semana),
+    minutosEstimados: t.minutosEstimados,
+    clientId: t.clientId,
+    empresa: t.client?.name ?? null,
+  }));
 }
 
 /**

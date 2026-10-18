@@ -6,6 +6,12 @@
  * dominio registrado de la empresa (nunca uno de correo personal). Un invitado que es de VARIAS empresas (alguien de
  * HubSpot, de una agencia) no decide nada si hay otro invitado que sí es de una sola: así una reunión con un cliente
  * y alguien de HubSpot es de ese cliente, no de todos los clientes de HubSpot (invariante 1).
+ *
+ * ⛔ EL resolvedor de evento → cuenta (fase 2.2 de docs/nexus-sistema-de-trabajo-plan.md, 2026-10-17): un evento CUENTA
+ * para una cuenta solo si es de UNA empresa (`cuentaDelEvento`). Lo usan la agenda de «Para ti», la regla de servicio
+ * («¿la cuenta tiene reunión en los próximos 8 días?»), «Planifica tu semana» y las próximas reuniones de la ficha: no
+ * se vuelve a escribir en otro lado. La exploración (lib/exploraciones/agendadas.ts) pregunta otra cosa —¿este evento
+ * es con ESTA empresa?, con la gente de sus reuniones pasadas— para unir una sesión a su evento, y sigue con lo suyo.
  */
 import { DOMINIOS_GENERICOS, invitadosDelEvento, isoDelEvento, type EventoDelCalendario } from "@/lib/exploraciones/agendadas";
 import { esBloqueDeTarea } from "@/lib/google/meet-sync-cambios";
@@ -26,6 +32,8 @@ export interface ReunionDeHoy {
   /** Los invitados de afuera (sin Smarteam, sin salas ni calendarios). */
   externos: number;
   internos: number;
+  /** Los correos de Smarteam invitados (quién va de la casa). */
+  deSmarteam: string[];
 }
 
 /** Un evento del calendario con sus enlaces (Meet y la página del evento). */
@@ -96,7 +104,36 @@ export function agendaDelDia(
       empresas: empresasDeLaReunion(externos, o.porCorreo, o.porDominio),
       externos: externos.length,
       internos: gente.length - externos.length,
+      deSmarteam: gente.filter((c) => o.internos.has(dominioDe(c))),
     });
+  }
+  return out.sort((a, b) => a.inicio.localeCompare(b.inicio));
+}
+
+/** La cuenta de una reunión: la empresa, si es de UNA. Con varias (o ninguna) no cuenta para nadie (invariante 1). */
+export function cuentaDelEvento(r: Pick<ReunionDeHoy, "empresas">): string | null {
+  return r.empresas.length === 1 ? r.empresas[0] : null;
+}
+
+/** Un rato ocupado del calendario. */
+export interface RatoOcupado {
+  id: string;
+  inicio: string;
+  fin: string | null;
+}
+
+/**
+ * Lo ocupado de un calendario: todo evento con hora (no de todo el día), no cancelado ni rechazado, aunque no sea una
+ * reunión (un bloque de trabajo, un evento sin invitados). Es lo que no pisa un hueco que sugiere Nexus.
+ */
+export function ocupadoDelCalendario(eventos: readonly EventoConEnlaces[]): RatoOcupado[] {
+  const out: RatoOcupado[] = [];
+  for (const e of eventos) {
+    if (!e.id || e.status === "cancelled" || !e.start?.dateTime) continue;
+    if (e.attendees?.some((a) => a.self && a.responseStatus === "declined")) continue;
+    const inicio = isoDelEvento(e.start);
+    if (!inicio) continue;
+    out.push({ id: e.id, inicio, fin: isoDelEvento(e.end) });
   }
   return out.sort((a, b) => a.inicio.localeCompare(b.inicio));
 }

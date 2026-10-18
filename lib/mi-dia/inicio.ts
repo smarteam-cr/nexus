@@ -160,6 +160,97 @@ export function huecoLibre(eventos: readonly EventoParaLaGrilla[], dia: string, 
   return h ? { inicio: instante(dia, h.desde), fin: instante(dia, h.hasta) } : null;
 }
 
+/** Cuántos huecos libres de hoy se pintan, como mucho. */
+export const MAX_HUECOS_DEL_DIA = 4;
+
+/**
+ * Todos los huecos libres de hoy de al menos una hora, en horario laboral, desde ahora (al cuarto siguiente). Como
+ * mucho `MAX_HUECOS_DEL_DIA`. El primero es el de `huecoLibre`.
+ */
+export function huecosLibres(eventos: readonly EventoParaLaGrilla[], dia: string, ahora: Date): { inicio: string; fin: string }[] {
+  const hoy = minutoDelDia(ahora.toISOString());
+  if (hoy.dia !== dia) return [];
+  const out: { inicio: string; fin: string }[] = [];
+  let desde = cuartoSiguiente(hoy.minuto);
+  while (out.length < MAX_HUECOS_DEL_DIA) {
+    const h = huecoDelDia(eventos, dia, desde, MINUTOS_DE_UN_HUECO);
+    if (!h) break;
+    out.push({ inicio: instante(dia, h.desde), fin: instante(dia, h.hasta) });
+    desde = h.hasta;
+  }
+  return out;
+}
+
+// ── Con qué avanzar en un hueco ──────────────────────────────────────────────────────────────
+
+/** Una tarea tuya abierta que puede ir a un hueco. Fechas `AAAA-MM-DD`. */
+export interface TareaParaUnHueco {
+  id: string;
+  numero: number;
+  titulo: string;
+  prioridad: string;
+  venceEl: string | null;
+  semana: string | null;
+  /** null = sin estimar: cabe en cualquier hueco y se agenda una hora. */
+  minutosEstimados: number | null;
+  clientId: string | null;
+  empresa: string | null;
+}
+
+export interface ConQueAvanzar {
+  tarea: TareaParaUnHueco;
+  /** Cuánto dura el bloque que se propone (lo estimado, o una hora; nunca más que el hueco). */
+  minutos: number;
+  /** Por qué es esa: «vencida», «vence hoy», «prioridad alta», «de esta semana». */
+  porque: string;
+}
+
+const PESO_DE_PRIORIDAD: Record<string, number> = { alta: 0, media: 1, baja: 2 };
+
+/** Lo más importante primero: lo vencido, lo que vence hoy, la prioridad, lo que vence antes y lo más viejo. */
+export function ordenarParaAvanzar(tareas: readonly TareaParaUnHueco[], hoyISO: string): TareaParaUnHueco[] {
+  const grado = (t: TareaParaUnHueco) => (t.venceEl && t.venceEl < hoyISO ? 0 : t.venceEl === hoyISO ? 1 : 2);
+  return [...tareas].sort(
+    (a, b) =>
+      grado(a) - grado(b) ||
+      (PESO_DE_PRIORIDAD[a.prioridad] ?? 1) - (PESO_DE_PRIORIDAD[b.prioridad] ?? 1) ||
+      (a.venceEl ?? "9999").localeCompare(b.venceEl ?? "9999") ||
+      (a.semana ?? "9999").localeCompare(b.semana ?? "9999") ||
+      a.numero - b.numero,
+  );
+}
+
+function porqueAvanzar(t: TareaParaUnHueco, hoyISO: string): string {
+  if (t.venceEl && t.venceEl < hoyISO) return "está vencida";
+  if (t.venceEl === hoyISO) return "vence hoy";
+  if (t.prioridad === "alta") return "es de prioridad alta";
+  if (t.venceEl) return "es la que vence antes";
+  return "es de tu semana";
+}
+
+/**
+ * Con qué avanzar en cada hueco: a cada uno (en orden de hora) la tarea más importante que todavía no se sugirió y que
+ * CABE (lo estimado no pasa del hueco; sin estimar, cabe). Sin IA: el orden es el de `ordenarParaAvanzar`. Devuelve
+ * por el inicio del hueco; un hueco sin tarea que quepa no tiene entrada.
+ */
+export function conQueAvanzar(
+  tareas: readonly TareaParaUnHueco[],
+  huecos: readonly { inicio: string; fin: string }[],
+  hoyISO: string,
+): Map<string, ConQueAvanzar> {
+  const out = new Map<string, ConQueAvanzar>();
+  const libres = ordenarParaAvanzar(tareas, hoyISO);
+  const usadas = new Set<string>();
+  for (const h of [...huecos].sort((a, b) => a.inicio.localeCompare(b.inicio))) {
+    const largo = Math.round((Date.parse(h.fin) - Date.parse(h.inicio)) / 60_000);
+    const t = libres.find((x) => !usadas.has(x.id) && (x.minutosEstimados == null || x.minutosEstimados <= largo));
+    if (!t) continue;
+    usadas.add(t.id);
+    out.set(h.inicio, { tarea: t, minutos: Math.min(largo, t.minutosEstimados ?? MINUTOS_DE_UN_HUECO), porque: porqueAvanzar(t, hoyISO) });
+  }
+  return out;
+}
+
 /** Cuántos días hacia adelante busca Nexus un hueco para «Agendar» o «+ Crear evento». */
 export const DIAS_PARA_BUSCAR_UN_HUECO = 14;
 

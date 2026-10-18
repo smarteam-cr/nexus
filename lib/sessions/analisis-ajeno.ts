@@ -20,8 +20,9 @@
  *   · la reunión es vieja → nada (la lectura automática no corre sobre reuniones viejas: se rehace a mano).
  *
  * ⚠ Las propuestas de Tarea no decididas NO se borran desde acá: las escribe un solo módulo (lib/tareas, su guarda lo
- * vigila) y hoy no tiene cómo retirar las de una reunión. Se cuentan (`propuestasSinDecidir`) y vencen solas a los 14
- * días; la lectura nueva las recibe como «YA SON TAREAS» y no las repite.
+ * vigila). Se cuentan (`propuestasSinDecidir`) y, al rehacer, lib/sessions/reanalizar.ts las deja vencidas con su motivo
+ * por `retirarPropuestasDeLaReunion` (lib/tareas/mutaciones.ts, 2026-10-17); la lectura nueva vuelve a proponer lo que
+ * siga valiendo.
  */
 import { createHash } from "node:crypto";
 import { DIAS_DE_FRESCURA } from "@/lib/lecturas/reglas";
@@ -80,7 +81,7 @@ export interface PlanDeLimpieza {
   pedidosABorrar: string[];
   /** Los hechos pendientes: se retiran (quedan desestimados con su nota), no se borran. */
   hechosARetirar: string[];
-  /** Las propuestas de la lectura que nadie decidió: no se tocan desde acá (ver el encabezado). */
+  /** Las propuestas de la lectura que nadie decidió: al rehacer quedan vencidas por lib/tareas (ver el encabezado). */
   propuestasSinDecidir: TareaGuardada[];
   /** Lo que una persona ya trabajó: se queda, y se lista para que decida. */
   tareasDecididas: TareaGuardada[];

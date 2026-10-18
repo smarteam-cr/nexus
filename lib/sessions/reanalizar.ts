@@ -12,7 +12,9 @@
  *     leyendo, en la misma transacción queda marcada para releerse al terminar;
  *   · avisar (alguien ya trabajó algo): no pisa nada y le avisa a quien lo trabajó y al encargado del proyecto;
  *   · nada (reunión vieja): se rehace a mano desde la reunión.
- * Las propuestas de Tarea que nadie decidió no se tocan desde acá (las escribe solo lib/tareas): vencen solas.
+ * Al rehacer, las propuestas de Tarea que nadie decidió quedan vencidas con su motivo, por el único escritor de Tareas
+ * (`retirarPropuestasDeLaReunion`, lib/tareas/mutaciones.ts, 2026-10-17): salieron del texto viejo, y la lectura nueva
+ * vuelve a proponer lo que siga valiendo. Lo que una persona ya decidió no se toca.
  * NUNCA lanza: un error se loguea y la reunión queda como estaba.
  */
 import "server-only";
@@ -52,6 +54,15 @@ export async function alCambiarElTexto(sessionId: string, huellaNueva: string, a
             return 0;
           });
         }
+        // Las propuestas de Tarea del texto viejo que nadie decidió: vencidas con su motivo (las escribe solo lib/tareas).
+        let retiradas = 0;
+        if (plan.propuestasSinDecidir.length) {
+          const { retirarPropuestasDeLaReunion } = await import("@/lib/tareas/mutaciones");
+          retiradas = await retirarPropuestasDeLaReunion(sessionId, undefined, ahora).catch((e) => {
+            console.error(`[reanalizar] «${sesion.title}»: no se pudieron retirar las tareas propuestas:`, e instanceof Error ? e.message : e);
+            return 0;
+          });
+        }
         // Las corridas de hechos del texto viejo se archivan: si no, la lectura de hechos respondería «ya leída».
         const superadas = await superarLasLecturasDeHechos(sessionId).catch((e) => {
           console.error(`[reanalizar] «${sesion.title}»: no se pudieron archivar las lecturas de hechos viejas:`, e instanceof Error ? e.message : e);
@@ -59,7 +70,7 @@ export async function alCambiarElTexto(sessionId: string, huellaNueva: string, a
         });
         console.log(
           `[reanalizar] «${sesion.title}»: se borraron ${plan.minutaABorrar ? "la minuta" : "0 minutas"} y ${plan.pedidosABorrar.length} pedido(s); ` +
-            `se retiraron ${hechos} hecho(s) y se archivaron ${superadas} lectura(s) de hechos; quedan ${plan.propuestasSinDecidir.length} tarea(s) propuesta(s) sin decidir (vencen solas)`,
+            `se retiraron ${hechos} hecho(s) y ${retiradas} de ${plan.propuestasSinDecidir.length} tarea(s) propuesta(s) sin decidir, y se archivaron ${superadas} lectura(s) de hechos`,
         );
       }
       if (cola.fila === "leyendo") {

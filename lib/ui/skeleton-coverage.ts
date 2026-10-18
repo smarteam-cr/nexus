@@ -29,6 +29,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   tareas: { modo: "own" },
   "tareas/equipo": { modo: "own" },
   "tareas/delegadas": { modo: "own" },
+  "tareas/planificar": { modo: "own" },
   "tareas/por-cliente": { modo: "own" },
   "tareas/proyectos/[id]": { modo: "own" },
   "tareas/espacios/[id]": { modo: "own" },

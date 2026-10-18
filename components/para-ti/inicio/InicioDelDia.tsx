@@ -13,7 +13,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
-import { huecoLibre, type PedazoDeFrase, type VarianteDelInicio } from "@/lib/mi-dia/inicio";
+import { conQueAvanzar, huecosLibres, type PedazoDeFrase, type TareaParaUnHueco, type VarianteDelInicio } from "@/lib/mi-dia/inicio";
 import type { Cifra, MovimientoDeVentas } from "@/lib/mi-dia/cifras";
 import type { AgendaDeHoy } from "@/lib/mi-dia/agenda-server";
 import type { CuentaDelInicio, TareaDelInicio } from "@/lib/mi-dia/inicio-server";
@@ -44,25 +44,32 @@ export interface DatosDelInicio {
   movimiento: { lista: MovimientoDeVentas[]; total: number; verPipeline: string } | null;
   /** La reunión que se abre sola (la próxima con un cliente), o null. */
   abrirDeEntrada: string | null;
+  /** Tus tareas abiertas que pueden ir a un hueco libre de hoy («Con qué avanzar»). */
+  paraLosHuecos: TareaParaUnHueco[];
 }
+
+/** El id de un hueco en la agenda: no choca con el de una reunión de Google. */
+export const ID_DEL_HUECO = "__hueco__:";
 
 export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
   const ahora = useMemo(() => new Date(d.ahoraISO), [d.ahoraISO]);
   const [elegida, setElegida] = useState<string | null>(d.abrirDeEntrada);
-  const [sinHueco, setSinHueco] = useState(false);
+  const [descartados, setDescartados] = useState<ReadonlySet<string>>(() => new Set());
   const [sinResumen, setSinResumen] = useState(false);
 
   const agenda = d.agenda;
   const reuniones = useMemo(() => (agenda?.datos.estado === "ok" ? agenda.datos.reuniones : []), [agenda]);
-  const hueco = useMemo(
-    () => (agenda && agenda.vista === "dia" && agenda.dia === d.hoyISO && !sinHueco ? huecoLibre(reuniones, d.hoyISO, ahora) : null),
-    [agenda, reuniones, d.hoyISO, ahora, sinHueco],
-  );
-  const primero = d.medicion.importa[0] ?? null;
-  const loElegido: LoElegido | null =
-    elegida === "__hueco__" && hueco
-      ? { tipo: "hueco", inicio: hueco.inicio, fin: hueco.fin, sugerencia: primero ? { titulo: primero.titulo, href: primero.href } : null }
-      : (() => {
+  // Los huecos libres de hoy (una hora o más, en horario laboral), cada uno con la tarea más importante que cabe.
+  const huecos = useMemo(() => {
+    if (!agenda || agenda.vista !== "dia" || agenda.dia !== d.hoyISO) return [];
+    const libres = huecosLibres(reuniones, d.hoyISO, ahora).filter((h) => !descartados.has(h.inicio));
+    const avanzar = conQueAvanzar(d.paraLosHuecos, libres, d.hoyISO);
+    return libres.map((h) => ({ ...h, id: ID_DEL_HUECO + h.inicio, avanzar: avanzar.get(h.inicio) ?? null }));
+  }, [agenda, reuniones, d.hoyISO, ahora, descartados, d.paraLosHuecos]);
+  const huecoElegido = huecos.find((h) => h.id === elegida) ?? null;
+  const loElegido: LoElegido | null = huecoElegido
+    ? { tipo: "hueco", inicio: huecoElegido.inicio, fin: huecoElegido.fin, avanzar: huecoElegido.avanzar }
+    : (() => {
           const r = reuniones.find((x) => x.id === elegida);
           return r ? { tipo: "reunion" as const, reunion: r } : null;
         })();
@@ -117,19 +124,20 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
                 correo={d.correo}
                 seleccion={elegida}
                 onElegir={setElegida}
-                hueco={hueco}
+                huecos={huecos}
                 enlaces={agenda.enlaces}
               />
             )}
             <LoQueImportaHoy medicion={d.medicion} />
-            {d.variante === "cse" && esViernes && d.cuentas.length > 0 && (
+            {conCuentas && esViernes && d.cuentas.length > 0 && (
               <section className={cn(TARJETA, "flex flex-wrap items-center gap-4 px-5 py-4")} aria-labelledby="semana-t">
                 <div className="flex min-w-[260px] flex-1 flex-col gap-[3px]">
                   <h2 id="semana-t" className={TITULO}>
                     Es viernes: planifica la semana que viene
                   </h2>
                   <p className="text-[13px] leading-[19px] text-fg-secondary">
-                    Deja una acción con fecha y una reunión para cada cuenta. «Agendar» abre Google Calendar con el título y los invitados.
+                    Nexus arma la semana por cuenta: la acción con fecha y la reunión en tu primer hueco libre, con su objetivo. La ajustas y «Agendar» abre
+                    Google Calendar lleno.
                   </p>
                 </div>
                 <div className="flex gap-4 text-[13px] text-fg-secondary">
@@ -140,7 +148,7 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
                   {sinReunion > 0 && <span className="font-semibold text-warn-ink">{sinReunion} sin reunión</span>}
                 </div>
                 <Link
-                  href="/tareas?vista=calendario"
+                  href="/tareas/planificar"
                   className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-line bg-surface px-2.5 py-[5px] text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg"
                 >
                   Planificar la semana
@@ -187,7 +195,7 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
           correo={d.correo}
           onCerrar={() => setElegida(null)}
           onDescartarHueco={() => {
-            setSinHueco(true);
+            if (huecoElegido) setDescartados((s) => new Set([...s, huecoElegido.inicio]));
             setElegida(null);
           }}
         />

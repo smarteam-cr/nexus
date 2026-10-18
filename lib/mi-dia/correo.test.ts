@@ -43,7 +43,7 @@ describe("el correo de la mañana", () => {
       base: "https://nexus.smarteamcr.com/",
       paraTi: { agente: [], hoy: [p("tareas:1")] },
       reuniones: [
-        { id: "ev1", titulo: "Seguimiento", inicio: "2026-10-16T15:00:00Z", fin: null, conMeet: true, meetUrl: null, calendarUrl: null, empresas: ["c1"], externos: 1, internos: 1, nombres: { c1: "Acme" } },
+        { id: "ev1", titulo: "Seguimiento", inicio: "2026-10-16T15:00:00Z", fin: null, conMeet: true, meetUrl: null, calendarUrl: null, empresas: ["c1"], externos: 1, internos: 1, deSmarteam: [], nombres: { c1: "Acme" } },
       ],
     });
     expect(c.asunto).toBe("Tu día: 1 reunión y 1 cosa para hoy");

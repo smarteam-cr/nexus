@@ -163,13 +163,20 @@ export function marcasDeServicio(e: EstadoDeServicio, hoyISO: string): { accion:
 
 /**
  * El pendiente «Cuenta sin acción» de una cuenta, o null si está al día. Con lo que falta en la línea chica y qué
- * hacer en el botón: sin reunión → «Agendar» (abre Google Calendar con todo lleno); con reunión y sin acción → crear
- * la tarea en la ficha de la cuenta.
+ * hacer en el botón: sin reunión → «Agendar» (abre Google Calendar con todo lleno: título, invitados y, si se sabe, la
+ * primera hora libre en horario laboral, `hueco`); con reunión y sin acción → crear la tarea en la ficha de la cuenta.
  */
 export function pendienteDeCuentaSinAccion(
   cuenta: { clientId: string; empresa: string },
   e: EstadoDeServicio,
-  o: { ultimaReunion: string | null; invitados?: readonly string[]; hoyISO: string; correo?: string | null },
+  o: {
+    ultimaReunion: string | null;
+    invitados?: readonly string[];
+    hoyISO: string;
+    correo?: string | null;
+    /** La primera hora libre en horario laboral de quien la lleva (lib/mi-dia/inicio.ts › primerHuecoLaboral). */
+    hueco?: { inicio: string; fin: string } | null;
+  },
 ): Pendiente | null {
   if (e.falta.length === 0) return null;
   const sinAccion = e.falta.includes("accion");
@@ -188,6 +195,8 @@ export function pendienteDeCuentaSinAccion(
     ? enlaceParaAgendarEnCalendar({
         titulo: `Reunión con ${cuenta.empresa}`,
         detalle: `Seguimiento de la cuenta ${cuenta.empresa}.`,
+        inicio: o.hueco?.inicio ?? null,
+        fin: o.hueco?.fin ?? null,
         invitados: o.invitados ?? [],
         correo: o.correo ?? null,
       })

@@ -9,7 +9,8 @@
  * Tareas, sin salir de la ficha.
  *
  * Datos: GET /api/tareas/del-cliente/[clientId] (lib/tareas/consultas.ts › cargarTareasDeLaCuenta), con la regla de
- * visibilidad de todas las listas: nunca lo «Solo para mí» de otros.
+ * visibilidad de todas las listas: nunca lo «Solo para mí» de otros. Arriba, «Próximas reuniones» (fase 2.2): las de los
+ * próximos 8 días con quién de Smarteam va (./ProximasReunionesDeLaCuenta.tsx).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, EmptyState, Segmentado } from "@/components/ui";
@@ -25,6 +26,7 @@ import { apiTareas, EVENTO_TAREAS_CAMBIARON } from "./api";
 import { Chip } from "./chips";
 import { CajonDeTarea } from "./CajonDeTarea";
 import { Agendar } from "./Agendar";
+import ProximasReunionesDeLaCuenta from "./ProximasReunionesDeLaCuenta";
 
 type FiltroDeOrigen = "todas" | ClaveDeOrigen;
 
@@ -118,6 +120,7 @@ export default function TareasDeLaCuenta({ clientId }: { clientId: string }) {
   return (
     <div className="space-y-6 px-8 pb-10 pt-6">
       {encabezado}
+      <ProximasReunionesDeLaCuenta clientId={clientId} />
 
       {datos.tareas.length === 0 ? (
         <EmptyState

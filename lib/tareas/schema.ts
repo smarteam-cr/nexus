@@ -28,6 +28,17 @@ export const CrearTarea = z.object({
   etiquetas: etiquetas.optional(),
 });
 
+/** «Ya lo guardé» de un evento con cuenta (fase 2, 2026-10-17): la reunión planeada de la persona. */
+export const PlanearReunion = z.object({
+  clientId: id,
+  titulo: z.string().trim().min(1, "La reunión necesita un título.").max(200),
+  inicio: z.string().datetime({ offset: true, message: "La hora de la reunión no es válida." }),
+  invitados: z.array(z.string().trim().max(200)).max(30).optional(),
+  objetivo: z.string().trim().max(1_000).nullish(),
+  /** La reunión cuya próxima es: la tarea queda atada a ella (`proxima:<reunión>`). */
+  deLaReunion: z.string().min(1).max(200).nullish(),
+});
+
 const Cambios = z.object({
   titulo: z.string().trim().min(1).max(MAX_TITULO).optional(),
   notas: z.string().max(MAX_NOTAS).nullish(),

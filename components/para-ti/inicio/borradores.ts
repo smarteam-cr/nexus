@@ -9,7 +9,7 @@
  */
 import { useSyncExternalStore } from "react";
 import { primerHuecoLaboral, type EventoParaLaGrilla } from "@/lib/mi-dia/inicio";
-import { MINUTOS_DEL_BORRADOR, type BorradorDeEvento, type CuentaDelBorrador, type InvitadoDelBorrador } from "@/lib/mi-dia/agenda-borrador";
+import { MINUTOS_DEL_BORRADOR, reunionPlaneadaDelBorrador, type BorradorDeEvento, type CuentaDelBorrador, type InvitadoDelBorrador } from "@/lib/mi-dia/agenda-borrador";
 
 interface Estado {
   lista: BorradorDeEvento[];
@@ -66,6 +66,9 @@ export function crearBorrador(b: {
   origen: BorradorDeEvento["origen"];
   abierto?: boolean;
   enfocar?: boolean;
+  objetivo?: string | null;
+  tarea?: BorradorDeEvento["tarea"];
+  deLaReunion?: string | null;
 }): BorradorDeEvento {
   const nuevo: BorradorDeEvento = {
     id: nuevoId(),
@@ -77,6 +80,9 @@ export function crearBorrador(b: {
     cuenta: b.cuenta ?? null,
     origen: b.origen,
     abierto: b.abierto ?? false,
+    objetivo: b.objetivo ?? null,
+    tarea: b.tarea ?? null,
+    deLaReunion: b.deLaReunion ?? null,
   };
   // Un borrador sin tocar (sin título, invitados ni cuenta) se reemplaza: tocar otra hora no deja basura.
   const lista = estado.lista.filter((x) => x.abierto || x.titulo.trim() || x.invitados.length || x.cuenta);
@@ -90,6 +96,30 @@ export function cambiarBorrador(id: string, cambios: Partial<Omit<BorradorDeEven
 
 export function quitarBorrador(id: string) {
   cambiar({ lista: estado.lista.filter((b) => b.id !== id), editando: estado.editando === id ? null : estado.editando });
+}
+
+/**
+ * «Ya lo guardé»: la persona guardó el evento en Google Calendar. Con una cuenta (y sin ser el bloque de una tarea),
+ * queda la reunión planeada en Tareas (/api/tareas/reuniones-planeadas) y la cuenta cuenta como con reunión. El borrador
+ * se quita si salió bien; si no, queda para reintentar y devuelve el mensaje.
+ */
+export async function yaLoGuarde(b: BorradorDeEvento): Promise<{ ok: true; planeada: boolean } | { ok: false; error: string }> {
+  const cuerpo = reunionPlaneadaDelBorrador(b);
+  if (!cuerpo) {
+    quitarBorrador(b.id);
+    return { ok: true, planeada: false };
+  }
+  try {
+    const r = await fetch("/api/tareas/reuniones-planeadas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
+    if (!r.ok) {
+      const j = (await r.json().catch(() => null)) as { error?: string } | null;
+      return { ok: false, error: j?.error ?? "No se pudo dejar la reunión en tus tareas." };
+    }
+  } catch {
+    return { ok: false, error: "No se pudo dejar la reunión en tus tareas. Revisa tu conexión." };
+  }
+  quitarBorrador(b.id);
+  return { ok: true, planeada: true };
 }
 
 export function editarBorrador(id: string | null) {

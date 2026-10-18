@@ -5,17 +5,17 @@
  * próximos 8 días (el calendario de quien la lleva y las reuniones planeadas en Tareas), su última reunión con el
  * cliente y quiénes del cliente estuvieron (para «Agendar» con los invitados). La regla es pura: lib/mi-dia/servicio.ts.
  *
- * ⚠ El calendario se lee con el permiso de siempre (`calendar.readonly`). Una reunión cuenta para una cuenta solo si el
- * evento es de UNA empresa: con alguien de varias empresas (HubSpot, una agencia) no se sabe de cuál es, y contarla
- * para todas diría que tienen reunión cuando no (la misma regla de la agenda, invariante 1). Se guarda dos minutos por
- * persona: lo pide el inicio en cada visita y el número del menú cada minuto y medio.
+ * ⚠ El calendario se lee con el permiso de siempre (`calendar.readonly`), una vez por persona y guardado dos minutos
+ * (lib/mi-dia/calendario-server.ts). Una reunión cuenta para una cuenta solo si el evento es de UNA empresa: con alguien
+ * de varias empresas (HubSpot, una agencia) no se sabe de cuál es, y contarla para todas diría que tienen reunión cuando
+ * no (el resolvedor único, `cuentaDelEvento` de lib/mi-dia/agenda.ts; invariante 1).
  */
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { eventosProximos } from "@/lib/google/agenda-de-la-empresa";
 import { tareasDisponible } from "@/lib/tareas/servidor";
-import { agendaDelDia, type EventoConEnlaces } from "./agenda";
+import { cuentaDelEvento } from "./agenda";
+import { calendarioDeLosProximosDias } from "./calendario-server";
 import { mapasDeEmpresas } from "./empresas-server";
 import { DIAS_PARA_LA_REUNION } from "./constantes";
 import { estadoDeServicio, ventanaDeLaSemana, type EstadoDeServicio, type ReunionDeLaCuenta, type TareaDeLaCuenta } from "./servicio";
@@ -45,51 +45,26 @@ export interface QuienMiraElServicio {
   esSuperAdmin: boolean;
 }
 
-const VIDA_MS = 2 * 60_000;
 const DIA_MS = 86_400_000;
-const calendarios = new Map<string, { at: number; reuniones: ReunionDeLaCuenta[] | null }>();
-/**
- * La lectura en curso de cada calendario. «Para ti» mide (`medirParaTi`) y arma las cuentas del inicio
- * (`cuentasDelInicio`) en paralelo sobre la misma persona: sin esto, eran dos llamadas a Google Calendar por visita.
- * Mismo patrón que `mapasDeEmpresas` (./empresas-server.ts).
- */
-const enVuelo = new Map<string, Promise<ReunionDeLaCuenta[] | null>>();
 
 const diaCR = (d: Date) => new Date(d.getTime() - 6 * 3_600_000).toISOString().slice(0, 10);
 const comoDia = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 
-async function leerCalendario(k: string, ahora: Date): Promise<ReunionDeLaCuenta[] | null> {
-  const eventos = await eventosProximos(k, { semanas: DIAS_PARA_LA_REUNION / 7, ahora });
-  let reuniones: ReunionDeLaCuenta[] | null = null;
-  if (eventos.ok) {
-    const mapas = await mapasDeEmpresas(ahora);
-    reuniones = agendaDelDia(eventos.datos as EventoConEnlaces[], mapas)
-      .filter((r) => r.empresas.length === 1)
-      .map((r) => ({ clientId: r.empresas[0], titulo: r.titulo, inicio: r.inicio, fuente: "calendario" as const }));
-  }
-  calendarios.set(k, { at: ahora.getTime(), reuniones });
-  return reuniones;
-}
-
 /** Las reuniones con una sola empresa en los próximos 8 días del calendario de `email`. null = no se pudo leer. */
-function reunionesDelCalendario(email: string, ahora: Date): Promise<ReunionDeLaCuenta[] | null> {
-  const k = email.toLowerCase();
-  const g = calendarios.get(k);
-  if (g && ahora.getTime() - g.at < VIDA_MS) return Promise.resolve(g.reuniones);
-  const enCurso = enVuelo.get(k);
-  if (enCurso) return enCurso;
-  const p = leerCalendario(k, ahora).finally(() => {
-    enVuelo.delete(k);
+async function reunionesDelCalendario(email: string, ahora: Date): Promise<ReunionDeLaCuenta[] | null> {
+  const cal = await calendarioDeLosProximosDias(email, ahora);
+  if (!cal) return null;
+  return cal.reuniones.flatMap((r) => {
+    const clientId = cuentaDelEvento(r);
+    return clientId ? [{ clientId, titulo: r.titulo, inicio: r.inicio, fuente: "calendario" as const }] : [];
   });
-  enVuelo.set(k, p);
-  return p;
 }
 
 /**
  * Una tarea de un proyecto de un espacio LIBRE de «solo miembros» donde quien mira no está. Es el mismo criterio que
  * `deEspacioPrivadoAjeno` de lib/tareas/visibilidad.ts (no está exportado): si cambia allá, cambia acá.
  */
-function deEspacioPrivadoAjeno(yo: string): Prisma.TareaWhereInput {
+export function deEspacioPrivadoAjeno(yo: string): Prisma.TareaWhereInput {
   return {
     proyecto: {
       espacio: { tipo: "libre", visibilidad: "miembros", miembros: { none: { email: yo } } },
@@ -118,7 +93,7 @@ function enLaVentana(hoyISO: string, ahora: Date, hasta: Date): Prisma.TareaWher
 }
 
 /** La última reunión que ya ocurrió de cada cuenta, con quiénes estuvieron. */
-async function ultimasReuniones(ids: readonly string[], ahora: Date): Promise<{ resolvedClientId: string | null; date: Date; participants: string[] }[]> {
+export async function ultimasReuniones(ids: readonly string[], ahora: Date): Promise<{ resolvedClientId: string | null; date: Date; participants: string[] }[]> {
   const maximos = await prisma.firefliesSession.groupBy({
     by: ["resolvedClientId"],
     where: { resolvedClientId: { in: [...ids] }, date: { lte: ahora } },
