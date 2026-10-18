@@ -29,42 +29,63 @@ En cada paso: **[hecho]** está hecho (en producción si la tarjeta lo dice); **
 
 ## La siguiente serie (propuesta)
 
-Lo que pediste el 17 oct, analizado contra el código. Primero se construye todo y después lo validas: cada iniciativa
-suma sus validaciones a «Lo que validas» cuando queda en producción. El orden de abajo es el que propongo; tú decides.
+Lo que pediste el 17 oct, analizado contra el código y contra las propuestas reales. Primero se construye todo y después
+lo validas: cada iniciativa suma sus validaciones a «Lo que validas» cuando queda en producción. El orden es el que
+propongo: primero la escala, porque las propuestas y el servicio recurrente se apoyan en ella. Tú decides.
 
-**Cómo se construye** (vale para las cuatro):
+**Cómo se construye** (vale para todas):
 
-- **Una sola puerta por cosa.** El contexto de la escala sale de un solo cargador, el mismo que ya usan los agentes (la memoria de la cuenta); SmartLoop se describe como configuración del servicio, así otro servicio recurrente es una entrada más y no código nuevo.
+- **Lo que cambia seguido es configuración, no código.** Los servicios recurrentes (SmartLoop, administración de sitio web, soporte de HubSpot, contenido mensual y los que vengan: SEO, AEO, redes, IA en marketing) son un catálogo: nombre, qué incluye, su cadencia y sus rutinas. Sumar uno es una entrada nueva, no una pantalla nueva.
+- **Una sola puerta por cosa.** El contexto de la escala sale del mismo cargador que ya usan los agentes; lo vendido (servicio y licencias) sale de la propuesta y Finanzas lo lee de ahí, sin copiarlo a mano.
 - **Nada corre solo ni para todos.** Lo que usa IA lo dispara una persona por cliente; lo masivo es un script en simulacro que te muestro antes de aplicar.
-- **SQL solo aditivo, antes del deploy.** Cada tabla o columna nueva con su seguridad, y el chequeo del esquema en verde antes de desplegar.
-- **Cada regla, una función pura con su prueba**, y una guarda que frena el merge si alguien la saltea (como las de clientes mezclados).
-- **Cada agente nuevo, medido**: su costo queda por cliente y por proceso en «Uso de Nexus» desde el primer día.
+- **SQL solo aditivo, antes del deploy**, cada tabla nueva con su seguridad y el chequeo del esquema en verde.
+- **Cada regla, una función pura con su prueba**, y una guarda que frena el merge si alguien la saltea.
+- **Cada agente nuevo, medido**: su costo por cliente y por proceso en «Uso de Nexus» desde el primer día.
+- **Sin sobreingeniería**: si algo se resuelve con lo que ya existe (las tareas, la agenda por enlace, el motor de las propuestas), se usa eso.
 
-### 1 · La escala de cada empresa: «Actualizar escala» con todo el contexto <span class="estado">Propuesta</span>
+### 1 · La escala que entiende el negocio del cliente <span class="estado">Propuesta</span>
+
+Hoy hay cuatro ediciones (ecommerce y retail, banca, educación, inmobiliaria) y la edición y el perfil se eligen solos, pero no queda claro por qué ni qué cambian. Para que la escala le sirva a quien explora y a quien posiciona, tiene que representar el modelo de negocio de cada cliente.
+
+1. Dos ediciones nuevas: turismo y venta de automóviles. Las escribo como borrador con las reglas de la escala, pasan sus pruebas y tú las revisas antes de publicarlas.
+2. Que se entienda cómo se elige: en la escala de cada empresa, «Se mide con la edición X y el perfil Y, porque…» (su industria, cómo vende, si recompra, si la relación es continua), con lo que cambia de la general y un clic para corregirlo.
+3. Que el modelo de negocio guíe a quien explora (las preguntas de la sesión salen de su edición y su perfil) y a quien posiciona (cada nivel se lee con las palabras de su industria).
+
+### 2 · La escala de cada empresa: «Actualizar escala» con todo el contexto <span class="estado">Propuesta</span>
 
 Hoy el agente lee menos de lo que dice: en un proyecto no lee lo vendido, las minutas, las tareas, el cronograma ni HubSpot; no vuelve a leer las reuniones ya leídas; y un cliente sin proyecto activo ni preventa no tiene botón. La historia guarda el proyecto y el ciclo, pero no la venta, y siempre con la fecha de hoy.
 
 1. Un botón «Actualizar escala» en La cuenta › La escala para todo cliente: con proyecto, con preventa o solo con negocios ganados. Lo toca una persona por cliente; nunca corre solo ni para todos.
-2. Que lea todo lo que Nexus sabe de la cuenta: lo vendido (los negocios ganados, la propuesta comercial y el handoff), la memoria (minutas, hechos, notas del equipo y la ficha), las tareas, el cronograma, los cuestionarios, el test y la actividad de HubSpot, con las reuniones ya leídas en resumen. Sin marcar nada como leído ni cambiar la guía de la exploración.
+2. Que lea todo lo que Nexus sabe de la cuenta: lo vendido (negocios ganados, propuesta comercial y handoff), la memoria (minutas, hechos, notas del equipo y la ficha), las tareas, el cronograma, los cuestionarios, el test y HubSpot, con las reuniones ya leídas en resumen. Sin marcar nada como leído ni cambiar la guía de la exploración.
 3. Confirmar en la misma pantalla: cada nivel propuesto con su porqué y su fuente, «Usar» uno por uno o «Usar todos». Lo propuesto nunca entra a la historia; lo confirmado, sí.
-4. La historia amarrada a la venta: cada versión dice de qué venta, preventa, proyecto o ciclo sale, y se puede fechar en su momento («al vender», «al arrancar», «hoy»), para ver cuánto se movió la empresa desde que nos compró.
+4. La historia amarrada a la venta: cada versión dice de qué venta, preventa, proyecto o servicio sale, y se puede fechar en su momento («al vender», «al arrancar», «hoy»), para ver cuánto se movió la empresa desde que nos compró.
 5. Con varios proyectos o ventas, elegir sobre cuál se ubica.
 
-### 2 · SmartLoop como un ciclo fácil de usar <span class="estado">Propuesta</span>
+### 3 · Propuestas: proyecto o recurrente, licencias aparte y módulos que se reusan <span class="estado">Propuesta</span>
 
-Hoy el ciclo existe de punta a punta, pero se ve como una barra, meter un cliente existente depende de scripts y de mover HubSpot a mano, no hay una guía de lo que pasa antes del primer ciclo y la guía de cada etapa solo sale en dos de las cinco. La idea: que se use como hoy se usa la parte de clientes, una guía en orden, pero dando la vuelta.
+Revisé las propuestas: hay 66 secciones personalizadas en 23 empresas, armadas a mano por Andrés y Marco. Se repiten: casos de uso a implementar (7), arquitectura y diagramas (16), qué contiene el acuerdo y SLA (8), antes y después, comparación de licencias (Starter contra Pro) y forma de pago. Cayalá y Grupo Inve ya se vendieron como servicio recurrente con SmartLoop, todo en HTML hecho a mano.
 
-1. El ciclo como ciclo: las cinco etapas en un círculo, «Ciclo N», dónde está la cuenta, qué falta para pasar a la siguiente y la vuelta a Diagnóstico al cerrar.
-2. «Pasar a SmartLoop» desde la ficha, sin scripts: eliges el proyecto (Continuidad o una implementación terminada), Nexus propone la etapa con lo que ya hay, el CSE la confirma y queda la tarea de mover el pipeline en HubSpot.
-3. Antes del ciclo 1, una guía de arranque: lo que la cuenta ya tiene (handoff, implementación, escala, reuniones) queda como «Historia», sin mezclarse con el ciclo; el cronograma del ciclo arranca limpio.
-4. Cargar una propuesta desde la pantalla: pegas o subes el documento, Nexus propone los ciclos, los tramos y los casos de uso, y el CSE confirma. También en un proyecto con historia. FACO (su propuesta de RevOps) es el primero.
-5. La guía del CSE en las cinco etapas: qué haces, qué tiene que quedar y la señal de que se saltó.
-6. Que el ciclo avance con lo que ya pasa: las reuniones y las tareas sugieren el avance de cada caso de uso y de la etapa; el CSE solo confirma. Menos pantallas que llenar.
-7. Al cerrar: la escala del ciclo (con la iniciativa 1, paso 4), lo aprendido y el ciclo siguiente abierto con lo que pasa. Durante el ciclo, sugerencias de nuevos casos y de apertura a la consultoría para extender la cuenta.
-8. El Resumen del recurrente: la escala de partida y la meta, los casos de uso y la ruta del año.
-9. Pasar los recurrentes de hoy con el paso 2, uno por uno con su CSE.
+1. Al crear una propuesta se elige: proyecto (se hace una vez) o servicio recurrente, y cuál servicio del catálogo.
+2. La plantilla de servicio recurrente, con lo que ya vendieron a mano: qué contiene el acuerdo, cómo opera (cadencia y rutinas), el ciclo (para SmartLoop, con tu diseño), el nivel de servicio, antes y después, y la inversión mensual. La de proyecto queda como hoy.
+3. Licencias y servicios siempre separados: cada licencia con su precio de lista, que es público, y lo que se le cobra al cliente. Si cobramos más, la diferencia queda a la vista para Ventas y Finanzas; el cliente nunca la ve.
+4. Al ganarse, lo vendido llega solo a Finanzas: cuánto es servicio, cuánto es licencia y qué margen deja cada licencia. Finanzas puede volver a leer las propuestas ya ganadas y recalcular los ingresos de meses pasados (hoy eso se carga a mano, como con kölbi).
+5. Los módulos que más se repiten pasan a ser secciones de Nexus que se agregan, se quitan y se mueven con un clic, que la IA llena y que salen bien en el PDF: casos de uso, arquitectura, comparación de licencias, fases u opciones, forma de pago, antes y después, nivel de servicio, qué contiene el acuerdo y el ciclo SmartLoop.
+6. Una biblioteca para lo demás: cualquier sección personalizada se guarda como módulo y se usa en otra propuesta, con «Adaptar a esta empresa» (la IA cambia los textos sin tocar el diseño). Sin código a la medida.
+7. FACO, Colby, Cayalá y Grupo Inve: lo que ya se les vendió se arma como una propuesta recurrente nueva, interna, sin tocar la que firmaron. De ahí sale su servicio en Nexus.
 
-### 3 · Finanzas: terminar de simplificar <span class="estado">Propuesta</span>
+### 4 · El servicio recurrente, dentro de la ficha del cliente <span class="estado">Propuesta</span>
+
+No un sistema para manejar ciclos: una guía para que el CSE entienda un servicio recurrente y lo lleve con cadencia. La ficha del cliente sigue igual (escala, exploración, encuestas); solo cambia un poco si el servicio es recurrente y cuál es.
+
+1. Cada proyecto dice si es recurrente y de qué servicio del catálogo. Con eso cambian el Resumen y la guía; lo demás de la ficha queda igual.
+2. La guía del servicio en el Resumen: qué se entrega, con qué cadencia y qué toca ahora. En SmartLoop, las cinco etapas como un ciclo, con dónde va la cuenta y qué falta para pasar a la siguiente.
+3. Las rutinas: al arrancar, Nexus propone las reuniones fijas del servicio, para guardarlas en Google Calendar por enlace, y las tareas que se repiten para el CSE.
+4. Al ganarse una propuesta recurrente, el proyecto nace con su servicio, su cadencia y sus casos de uso. Reemplaza los scripts de hoy.
+5. Pasar un cliente actual a recurrente desde la ficha: eliges el servicio, Nexus propone dónde va y arma las rutinas; lo de antes queda como historia, sin mezclarse.
+6. Pasar los recurrentes de hoy uno por uno con su CSE: Continuidad, administración de sitio web y contenido.
+7. Definir contigo la cadencia y las rutinas de cada servicio del catálogo.
+
+### 5 · Finanzas: terminar de simplificar <span class="estado">Propuesta</span>
 
 No encontré en ningún plan la frase «simplificar demasiado». Lo más cercano es el rediseño de Finanzas del 3 oct: un solo menú que cambia según quién entra (registra, supervisa o dirección).
 
@@ -78,12 +99,12 @@ No encontré en ningún plan la frase «simplificar demasiado». Lo más cercano
 4. Comisiones de vendedor y Aguinaldo dentro de Planilla.
 5. Decidir contigo si la vista vuelve a recortar el menú de los Super Admin, ahora con la Planilla en Dirección.
 
-### 4 · El gasto de la IA: verlo, proyectarlo y bajarlo <span class="estado">Propuesta</span>
+### 6 · El gasto de la IA: verlo, proyectarlo y bajarlo <span class="estado">Propuesta</span>
 
 Hoy el gasto se anota completo, llamada por llamada, y se ve por agente, cliente y proceso en 30 o 90 días. Falta verlo por mes, contra el tope y hacia adelante. El tope diario ($15 para lo automático y $60 para lo que pide una persona) solo avisa: no frena.
 
 1. El panel por mes: la tendencia, el tope a la vista, cuánto ahorra la caché y lo que cuesta cada reunión, cada cliente y cada proceso.
-2. La proyección de los próximos meses: el costo de cada cosa (una reunión leída, una corrida del vigía, un turno de chat) por el volumen que viene, con escenarios según el enfoque (más clientes, más reuniones, SmartLoop).
+2. La proyección de los próximos meses: el costo de cada cosa (una reunión leída, una corrida del vigía, un turno de chat) por el volumen que viene, con escenarios según el enfoque (más clientes, más reuniones, servicios recurrentes).
 3. Bajarlo sin perder calidad: que la lectura de cada reunión y sus hechos compartan la caché; lo que no apura (avance, ficha, marketing, el barrido del vigía) por lotes, a mitad de precio; modelos más baratos donde alcanza (etapa, ficha, clasificador); el vigía sin repetir lo que no cambió; y no pagar dos veces una respuesta cortada.
 4. Que el tope frene de verdad, ya calibrado con lo que se gasta.
 5. Cada mes, el gasto de Nexus contra la factura de Anthropic.
@@ -163,11 +184,11 @@ La preventa, las propuestas y los negocios. Usa el inicio, la escala y la memori
 Los proyectos, los documentos, la cartera y el servicio recurrente. Usa las tareas, el inicio, la escala y la memoria.
 
 1. [hecho] Cada cuenta con su acción de la semana y su reunión agendada; si falta, aparece en el inicio.
-2. SmartLoop: cargar el plan de FACO en el proyecto de prueba (va con la siguiente serie, iniciativa 2, paso 4).
+2. SmartLoop: cargar el plan de FACO en el proyecto de prueba (va con la siguiente serie, iniciativa 3, paso 7).
 3. [hecho] SmartLoop: el cronograma del ciclo.
 4. [hecho] SmartLoop: aprendizaje y cierre del ciclo (comprometido para el 6 nov).
 5. [hecho] SmartLoop: recomendar la recurrencia al llegar a la entrega y la ruta del servicio para el cliente.
-6. SmartLoop: pasar los recurrentes de hoy (va con la siguiente serie, iniciativa 2, pasos 2 y 9).
+6. SmartLoop: pasar los recurrentes de hoy (va con la siguiente serie, iniciativa 4, pasos 5 y 6).
 7. [hecho] Los documentos del proyecto con plantillas (la primera: «Diagnóstico estratégico»), sin tocar los kickoffs y diagnósticos que ya existen.
 8. [hecho] La foto del margen de cada mes, en carga y rentabilidad.
 9. [en curso] Un excliente (Wherex) fuera de toda alerta y cartera: la CSL lo confirma como «Excliente» y solo se ve en «Fuera de la cartera», marcado. Mientras siga un proyecto activo en HubSpot, la lista de limpieza le pide cerrarlo.
