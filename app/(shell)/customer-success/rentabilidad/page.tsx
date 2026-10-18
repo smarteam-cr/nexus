@@ -4,7 +4,7 @@ import { veRentabilidad, veSuCarga } from "@/lib/rentabilidad/acceso";
 import { RUTA_DE_TU_CARGA } from "@/lib/carga/rutas";
 import { cargarCargaDelEquipo } from "@/lib/carga/queries";
 import { sinReunionesRecientes } from "@/lib/carga/senales";
-import { cargarPipelineParaContratar, cargarRentabilidad } from "@/lib/rentabilidad/queries";
+import { cargarPipelineParaContratar, cargarRentabilidadConFotos } from "@/lib/rentabilidad/queries";
 import { leerDecisionesDeContratacion } from "@/lib/rentabilidad/decisiones";
 import type { Periodo } from "@/lib/rentabilidad/margen";
 import Rentabilidad from "@/components/rentabilidad/Rentabilidad";
@@ -26,7 +26,7 @@ export default async function RentabilidadPage({ searchParams }: { searchParams:
   const periodo = PERIODOS.includes(sp.periodo as Periodo) ? (sp.periodo as Periodo) : "trimestre";
   const ahora = new Date();
   const [datos, carga, pipeline, decisiones] = await Promise.all([
-    cargarRentabilidad(periodo, ahora),
+    cargarRentabilidadConFotos(periodo, ahora),
     cargarCargaDelEquipo(ahora),
     cargarPipelineParaContratar(),
     leerDecisionesDeContratacion(),
