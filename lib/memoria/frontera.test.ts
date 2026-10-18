@@ -66,6 +66,9 @@ const cuenta: DatosDeLaCuenta = {
   tickets: [{ asunto: S("ticket-abierto"), etapa: "Nuevo", prioridad: "HIGH", desde: "2026-10-01T15:00:00.000Z" }],
   // Las notas del equipo (etapa 5): solo el alcance interno.
   notasDelEquipo: [{ canal: "WhatsApp", fecha: "2026-10-01", texto: S("nota-del-equipo"), autor: "Ana" }],
+  // Las comunicaciones de HubSpot y los compromisos de la cuenta (iniciativa B): solo el alcance interno.
+  comunicaciones: [{ rotulo: "Correo enviado", fecha: "2026-10-16", autor: "Marco", asunto: S("asunto-del-correo"), texto: S("texto-del-correo") }],
+  compromisosDeLaCuenta: [{ titulo: S("compromiso-de-la-cuenta"), venceEl: "2026-10-21", estado: "sin decidir", lado: "smarteam" }],
 };
 
 const proyecto: DatosDelProyecto = {
@@ -136,6 +139,9 @@ describe("⛔ la frontera de la memoria", () => {
       "persona-de-hubspot",
       "ticket-abierto",
       "nota-del-equipo",
+      "asunto-del-correo",
+      "texto-del-correo",
+      "compromiso-de-la-cuenta",
     ]) {
       expect(t, s).not.toContain(S(s));
     }
@@ -148,7 +154,7 @@ describe("⛔ la frontera de la memoria", () => {
   it("interno: entra todo (la prueba de que los centinelas están donde deben)", () => {
     // (Los riesgos de la minuta van adentro del resumen de la reunión, que arma `resumenDeReunion` en el cargador.)
     const t = textoDe("interno");
-    for (const s of ["postura", "motivacion", "oportunidades", "preventa-interna", "fuera-de-alcance", "hallazgo", "compromiso", "notas-de-la-reunion", "puertas-adentro", "desviacion-no-visible", "party", "hecho-de-la-cuenta", "hecho-del-proyecto", "persona-de-hubspot", "ticket-abierto", "nota-del-equipo"]) {
+    for (const s of ["postura", "motivacion", "oportunidades", "preventa-interna", "fuera-de-alcance", "hallazgo", "compromiso", "notas-de-la-reunion", "puertas-adentro", "desviacion-no-visible", "party", "hecho-de-la-cuenta", "hecho-del-proyecto", "persona-de-hubspot", "ticket-abierto", "nota-del-equipo", "asunto-del-correo", "texto-del-correo", "compromiso-de-la-cuenta"]) {
       expect(t, s).toContain(S(s));
     }
     // Un hecho pendiente va rotulado como propuesto por la lectura y sin revisar; uno usado, tal cual.

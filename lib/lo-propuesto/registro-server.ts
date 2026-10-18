@@ -109,7 +109,7 @@ const tareas: Lector = async ({ db, ...v }) => {
   const filas = await seguro(
     db.tarea.findMany({
       where: {
-        origen: { in: ["reunion", "notas", "chat"] },
+        origen: { in: ["reunion", "notas", "chat", "correo"] },
         AND: [
           { OR: [{ decision: { not: null } }, { estado: { in: ["propuesta", "vencida"] } }] },
           { OR: [{ createdAt: rango(v) }, { decididaAt: rango(v) }] },

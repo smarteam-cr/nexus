@@ -25,6 +25,7 @@ import { recortarTranscripcion } from "@/lib/sessions/recortar-transcripcion";
 import { resumenDeReunion } from "@/lib/contexto/material-cronograma";
 import { buscarEnReunionesDe } from "@/lib/busqueda/buscar-server";
 import { personasYTicketsDe } from "@/lib/contactos/lectura-server";
+import { comunicacionesDeLaCuenta, unaComunicacion } from "@/lib/comunicaciones/lectura-server";
 import { proyectoNavegableWhere } from "@/lib/projects/scope";
 import { exigirCliente, type ContextoDeNexus, type ExtrasDeNexus } from "@/lib/operaciones/contexto-server";
 import type { ContextoDeOperacion, OperacionQueLee } from "@/lib/operaciones/tipos";
@@ -191,6 +192,26 @@ export const LEER_PERSONAS: OperacionQueLee<{ clientId: string }, unknown, Conte
   },
 };
 
+export const LEER_COMUNICACIONES: OperacionQueLee<{ clientId: string; id?: string; tipo?: "correo" | "nota" | "llamada" }, unknown, ContextoDeNexus> = {
+  nombre: "comunicaciones.recientes",
+  paraQue:
+    "Lista los correos (enviados y recibidos), las notas y las llamadas con la empresa que quedaron en HubSpot, los más nuevos primero: id, qué es, día, quién lo escribió, asunto y el comienzo del texto. Con el id, lee uno entero. Úsala para saber qué se le prometió o se le dijo al cliente fuera de las reuniones.",
+  clase: "lee",
+  pide: z.object({ clientId: idDeCliente, id: z.string().min(1).max(60).optional(), tipo: z.enum(["correo", "nota", "llamada"]).optional() }).strict(),
+  async leer(ctx, e) {
+    await exigirCliente(ctx, e.clientId);
+    if (e.id) {
+      const c = await unaComunicacion(e.clientId, e.id);
+      if (!c) return "Esa comunicación no es de esta empresa o no existe.";
+      const cabeza = `${c.rotulo} · ${fmtDia(c.ocurrioAt.slice(0, 10))}${c.autor ? ` · ${c.autor}` : ""}`;
+      return [cabeza, c.asunto ? `«${c.asunto}»` : null, "", c.texto || "Sin texto."].filter((x) => x !== null).join("\n");
+    }
+    const lista = await comunicacionesDeLaCuenta(e.clientId, { tipo: e.tipo });
+    if (!lista.length) return "No hay correos, notas ni llamadas de esta empresa en HubSpot (o la copia todavía no corrió).";
+    return lista.map((c) => ({ id: c.id, que: c.rotulo, dia: c.ocurrioAt.slice(0, 10), quien: c.autor, asunto: c.asunto, comienzo: c.texto.slice(0, 300) }));
+  },
+};
+
 /** Las lecturas propias del chat, en el orden en que se le ofrecen al modelo. */
 export const LECTURAS_DEL_CHAT: readonly OperacionQueLee<never, unknown, ContextoDelChat>[] = [
   LEER_MEMORIA_DE_LA_CUENTA,
@@ -200,6 +221,7 @@ export const LECTURAS_DEL_CHAT: readonly OperacionQueLee<never, unknown, Context
   LEER_UNA_REUNION,
   LEER_NEGOCIOS,
   LEER_PERSONAS,
+  LEER_COMUNICACIONES,
 ] as unknown as readonly OperacionQueLee<never, unknown, ContextoDelChat>[];
 
 /** Lo que se carga una vez por turno y va en el contexto cacheado: la empresa, sus proyectos y su memoria. */

@@ -37,7 +37,7 @@ import { ErrorDeTareas, contextoDeTareas, lideresDe, miembrosActivos, type Conte
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { seguimientoPrendido } from "@/lib/lecturas/reglas";
 import { clientesQueVesParaTareas, type ClientesQueVes } from "./clientes";
-import { asegurarEspacio, escribirPropuestasDeLectura, escribirProyectoSugerido, escribirSugerenciaDeCierre, urlDeLaTarea, type PropuestaDeLectura } from "./mutaciones";
+import { asegurarEspacio, escribirPropuestasDeComunicacion, escribirPropuestasDeLectura, escribirProyectoSugerido, escribirSugerenciaDeCierre, urlDeLaTarea, type PropuestaDeLectura } from "./mutaciones";
 import { esLapida } from "./estados";
 import { personasPorDefecto } from "./fuentes";
 import { ABIERTAS_WHERE, candidatasWhere } from "./donde";
@@ -970,6 +970,29 @@ async function sinLasLapidas(propuestas: readonly PropuestaDeLectura[], ahora: D
   const lapidas = new Set(filas.filter(esLapida).map((f) => `${f.huella}|${f.responsableEmail ?? ""}|${f.clientId ?? ""}`));
   const quedan = propuestas.filter((p) => !lapidas.has(`${huellaDeTexto(p.titulo)}|${p.porAsignar ? "" : (p.responsableEmail ?? "")}|${p.clientId ?? ""}`));
   return { propuestas: quedan, omitidas: propuestas.length - quedan.length };
+}
+
+/**
+ * Escribe las propuestas que salen de un CORREO enviado por Smarteam (iniciativa B, lib/comunicaciones/compromisos-server.ts),
+ * con las mismas lápidas que las de una reunión, por el único escritor (`escribirPropuestasDeComunicacion`). Sin aviso:
+ * lo propuesto ya es un pendiente en «Para ti». Releer el correo no duplica (`origenId` `cor:<correo>:<línea>`).
+ */
+export async function escribirSalidaDeUnCorreo(
+  correo: { id: string; titulo: string },
+  propuestas: readonly PropuestaDeLectura[],
+  ahora = new Date(),
+): Promise<{ propuestas: number; porAsignar: number; yaEstaban: number; sumadas: number; omitidas: number; sinLugar: number }> {
+  const { propuestas: quedan, omitidas } = await sinLasLapidas(propuestas, ahora);
+  const r = await prisma.$transaction((tx) => escribirPropuestasDeComunicacion(tx, correo, quedan), { timeout: 30_000 });
+  for (const email of new Set(r.creadas.flatMap((c) => (c.responsableEmail ? [c.responsableEmail] : [])))) olvidarMedicion(email);
+  return {
+    propuestas: r.creadas.filter((c) => c.responsableEmail).length,
+    porAsignar: r.creadas.filter((c) => !c.responsableEmail).length,
+    yaEstaban: r.yaEstaban,
+    sumadas: r.sumadas,
+    omitidas,
+    sinLugar: totalSinLugar(r.sinLugar),
+  };
 }
 
 export interface SalidaDeSeguimientoEscrita {

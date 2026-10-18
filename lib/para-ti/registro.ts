@@ -26,6 +26,7 @@ import { CRONOGRAMAS_TRABADOS, CSE_CON_CUENTAS_QUE_PIDEN_ATENCION, SIN_ENCARGADO
 import { CORRECCION_QUE_CADUCO, RELACION_CON_HUBSPOT, RELACIONES_DE_LA_CARTERA } from "./fuentes/cartera-de-la-csl";
 import { TUS_CUENTAS_EN_RIESGO } from "./fuentes/tus-cuentas";
 import { CUENTAS_SIN_ACCION } from "./fuentes/servicio";
+import { COMPROMISOS_SIN_AGENDAR, COMPROMISOS_SIN_AGENDAR_CS } from "./fuentes/compromisos";
 import { RECURRENCIA_SUGERIDA } from "./fuentes/recurrencia";
 import { LIMPIEZA_DE_HUBSPOT } from "./fuentes/limpieza";
 import {
@@ -54,6 +55,7 @@ export const FUENTES: readonly Fuente[] = [
   CORRECCION_QUE_CADUCO,
   TUS_CUENTAS_EN_RIESGO,
   CUENTAS_SIN_ACCION,
+  COMPROMISOS_SIN_AGENDAR,
   RECURRENCIA_SUGERIDA,
   LIMPIEZA_DE_HUBSPOT,
   // Por frente: lo que es tuyo porque lo llevas.
@@ -62,6 +64,7 @@ export const FUENTES: readonly Fuente[] = [
   CRONOGRAMAS_TRABADOS,
   CSE_CON_CUENTAS_QUE_PIDEN_ATENCION,
   SIN_ENCARGADO,
+  COMPROMISOS_SIN_AGENDAR_CS,
 
   PEDIDOS_PARA_VENTAS,
   FINANZAS_REGISTRAR,

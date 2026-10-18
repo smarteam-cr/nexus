@@ -22,6 +22,9 @@
  *     muestra los cierres más cerca y la cartera desde esta copia.
  *   - contactos-y-tickets → la copia de los contactos y los tickets de HubSpot de las empresas de Nexus
  *     (lib/contactos/copia-server.ts), cada hora de 6:00 a 20:00 CR, todos los días (etapa 6a de docs/mi-dia-plan.md).
+ *   - comunicaciones-hubspot → la copia de los correos, las notas y las llamadas de HubSpot de las empresas de Nexus
+ *     (lib/comunicaciones/copia-server.ts), cada hora de 6:00 a 20:00 CR, y después la lectura de los compromisos de los
+ *     correos enviados (lib/comunicaciones/compromisos-server.ts, contra el presupuesto automático). Iniciativa B.
  *   - indice-de-reuniones → parte en turnos las transcripciones nuevas de las reuniones con clientes y prospectos, para
  *     la búsqueda (lib/busqueda/indexar-server.ts), cada hora, de a 60 (etapa 4c de docs/mi-dia-plan.md).
  *   - seguimiento-reuniones → la lectura de cada reunión con un cliente o un prospecto, por la cola
@@ -758,6 +761,48 @@ const contactosYTickets: JobDef = {
   },
 };
 
+/**
+ * Las comunicaciones de HubSpot (iniciativa B, docs/correos-en-el-contexto-plan.md): la copia de los correos, las notas
+ * y las llamadas (solo lee HubSpot) y, si queda presupuesto automático, los compromisos de hasta 10 correos enviados. Una
+ * corrida por hora; con el candado ajeno, suelta el turno. Sin el SQL, lo dice y no falla.
+ */
+const comunicacionesHubspot: JobDef = {
+  key: "comunicaciones-hubspot",
+  shouldRun: (_now, parts) => encendido("comunicaciones-hubspot") && parts.hour >= 6 && parts.hour <= 20,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const p = crDateParts(now);
+    const turno = `${p.dateKey}T${String(p.hour).padStart(2, "0")}`;
+    if (!(await claimDateKey("comunicaciones-hubspot", turno, now))) return SIN_TURNO;
+    const { copiarComunicaciones } = await import("@/lib/comunicaciones/copia-server");
+    let r: Awaited<ReturnType<typeof copiarComunicaciones>>;
+    try {
+      r = await copiarComunicaciones();
+    } catch (e) {
+      if (esquemaDesactualizado(e)) {
+        console.log(`[jobs/comunicaciones-hubspot] ${turno} — falta el SQL 2026-10-18-comunicaciones-de-hubspot.sql`);
+        return;
+      }
+      throw e;
+    }
+    if (r.locked) {
+      await prisma.cronJobState
+        .updateMany({ where: { id: "comunicaciones-hubspot", lastRunDateKey: turno }, data: { lastRunDateKey: null } })
+        .catch(() => {});
+      console.log(`[jobs/comunicaciones-hubspot] ${turno} — lock ajeno; turno liberado para reintentar`);
+      return;
+    }
+    const linea = (n: string, x: (typeof r.porTipo)["correo"]) =>
+      x.sinPermiso ? `${n}: sin permiso en HubSpot` : `${n}: ${x.creados} nuevos, ${x.actualizados} con cambios${x.ambiguas ? `, ${x.ambiguas} de dos clientes (no se guardan)` : ""}`;
+    console.log(`[jobs/comunicaciones-hubspot] ${turno} — ${linea("correos", r.porTipo.correo)} · ${linea("notas", r.porTipo.nota)} · ${linea("llamadas", r.porTipo.llamada)}`);
+    const { compromisosPrendidos } = await import("@/lib/comunicaciones/banderas");
+    if (!compromisosPrendidos(process.env) || !(await quedaPresupuesto(now))) return;
+    const { leerCompromisosDeCorreos } = await import("@/lib/comunicaciones/compromisos-server");
+    const c = await leerCompromisosDeCorreos({ ahora: now });
+    if (c.leidos || c.errores) console.log(`[jobs/comunicaciones-hubspot] compromisos: ${c.leidos} correos leídos, ${c.propuestas} propuestas, ${c.porAsignar} por asignar, ${c.errores} con error`);
+  },
+};
+
 /** La búsqueda en las reuniones (etapa 4c): parte en turnos las transcripciones nuevas o que cambiaron. Una corrida por hora. */
 const indiceDeReuniones: JobDef = {
   key: "indice-de-reuniones",
@@ -804,5 +849,5 @@ const iaLotes: JobDef = {
 };
 
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, iaLotes, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, iaLotes, invariantsDaily];
 }

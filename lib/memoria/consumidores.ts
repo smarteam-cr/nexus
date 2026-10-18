@@ -274,5 +274,7 @@ export function queCargar(alcance: AlcanceDeMemoria): QueCargar {
     hechos: interno,
     personasYTickets: interno,
     notasDelEquipo: interno,
+    comunicaciones: interno,
+    compromisosDeLaCuenta: interno,
   };
 }

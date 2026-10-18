@@ -146,6 +146,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "El chat de Nexus (ficha H) le describe al MODELO las reuniones recientes de la cuenta y le lee una entera: solo las " +
       "que ya ocurrieron (una agendada no tiene nada que leer), siempre por whereBelongsToClient.",
   },
+  "lib/comunicaciones/sin-agendar-server.ts": {
+    clase: "contexto",
+    motivo:
+      "El aviso de las 48 horas (iniciativa B) AFIRMA que una reunión prometida no ocurrió: solo cuenta las que ya " +
+      "ocurrieron (`date` hasta ahora), siempre por whereBelongsToClient.",
+  },
   "lib/mi-dia/resumen-server.ts": {
     clase: "contexto",
     motivo:

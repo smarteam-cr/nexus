@@ -36,6 +36,7 @@ import type {
   PersonaDeLaMemoria,
   TicketDeLaMemoria,
   NotaDelEquipoDeLaMemoria,
+  ComunicacionDeLaMemoria,
   MemoriaArmada,
   MinutaDeLaMemoria,
   ParteDeLaMemoria,
@@ -54,7 +55,8 @@ export const TOPES_DE_LA_MEMORIA = {
   // + `partes.hechos` en cada uno (memoria de la cuenta, etapa 6): los hechos solo existen en el alcance interno.
   // + `partes.personas` y `partes.tickets` (etapa 6a de docs/mi-dia-plan.md), también solo del alcance interno.
   // + `partes.notasDelEquipo` (etapa 5), también solo del alcance interno.
-  cuenta: 9000,
+  // + `partes.comunicaciones` y `partes.compromisosDeLaCuenta` (iniciativa B, 2026-10-18), también solo del interno.
+  cuenta: 11_200,
   proyecto: 8900,
   partes: {
     ficha: 2000,
@@ -71,6 +73,8 @@ export const TOPES_DE_LA_MEMORIA = {
     personas: 700,
     tickets: 500,
     notasDelEquipo: 900,
+    comunicaciones: 1500,
+    compromisosDeLaCuenta: 700,
   } satisfies Record<ClaveDeParte, number>,
   /** Cuántas reuniones del proyecto, como mucho (las más nuevas con contenido). */
   reuniones: 8,
@@ -88,6 +92,10 @@ export const TOPES_DE_LA_MEMORIA = {
   notasDelEquipo: 8,
   /** Cuánto de cada nota. */
   porNota: 280,
+  comunicaciones: 12,
+  /** Cuánto de cada comunicación. */
+  porComunicacion: 260,
+  compromisosDeLaCuenta: 8,
 } as const;
 
 const TITULOS: Record<ClaveDeParte, string> = {
@@ -105,10 +113,23 @@ const TITULOS: Record<ClaveDeParte, string> = {
   personas: "Personas del cliente en HubSpot (INTERNO)",
   tickets: "Tickets abiertos en HubSpot (INTERNO)",
   notasDelEquipo: "Notas del equipo: WhatsApp, llamadas, correos (INTERNO)",
+  comunicaciones: "Comunicaciones con el cliente en HubSpot: correos, notas y llamadas (INTERNO)",
+  compromisosDeLaCuenta: "Compromisos abiertos de la cuenta, sin proyecto (INTERNO)",
 };
 
 /** Las partes que solo existen en el alcance interno. */
-const SOLO_INTERNAS: ReadonlySet<ClaveDeParte> = new Set(["fueraDeAlcance", "preventa", "auditoria", "compromisos", "hechos", "personas", "tickets", "notasDelEquipo"]);
+const SOLO_INTERNAS: ReadonlySet<ClaveDeParte> = new Set([
+  "fueraDeAlcance",
+  "preventa",
+  "auditoria",
+  "compromisos",
+  "hechos",
+  "personas",
+  "tickets",
+  "notasDelEquipo",
+  "comunicaciones",
+  "compromisosDeLaCuenta",
+]);
 
 /**
  * La IA como borrador (2026-10-15): lo que escribió la IA se usa desde el primer momento, pero lo que confirmó una
@@ -327,6 +348,30 @@ export function parteDeNotasDelEquipo(notas: readonly NotaDelEquipoDeLaMemoria[]
     .join("\n");
 }
 
+/**
+ * Las comunicaciones de HubSpot (iniciativa B): de qué tipo, cuándo, quién la escribió y lo esencial del texto. Son
+ * lo que pasó con el cliente: sirven para no repreguntar y para ver lo que se prometió, nunca para citarlas al cliente.
+ */
+export function parteDeComunicaciones(lista: readonly ComunicacionDeLaMemoria[]): string {
+  return lista
+    .slice(0, TOPES_DE_LA_MEMORIA.comunicaciones)
+    .map((c) => {
+      const texto = c.texto.replace(/\s+/g, " ").trim();
+      const corto = texto.length > TOPES_DE_LA_MEMORIA.porComunicacion ? `${texto.slice(0, TOPES_DE_LA_MEMORIA.porComunicacion - 1).trimEnd()}…` : texto;
+      const asunto = c.asunto ? ` «${c.asunto}»` : "";
+      return `- [${c.rotulo} · ${c.fecha}${c.autor ? ` · ${c.autor}` : ""}]${asunto} ${corto}`.trimEnd();
+    })
+    .join("\n");
+}
+
+/** Los compromisos abiertos de la cuenta sin proyecto: lo prometido por correo o en una reunión sin proyecto. */
+export function parteDeCompromisosDeLaCuenta(lista: readonly CompromisoDeLaMemoria[]): string {
+  return lista
+    .slice(0, TOPES_DE_LA_MEMORIA.compromisosDeLaCuenta)
+    .map((c) => `- ${c.venceEl ? `[vence ${c.venceEl}] ` : ""}${c.titulo} (${c.lado === "cliente" ? "lo prometió el cliente" : "de Smarteam"} · ${c.estado})`)
+    .join("\n");
+}
+
 export interface OpcionesDeLaCuenta {
   alcance: AlcanceDeMemoria;
   /** Los orígenes de la ficha que este lector no lee como propuesta (los suyos). */
@@ -363,6 +408,11 @@ export function armarMemoriaDeLaCuenta(datos: DatosDeLaCuenta, opts: OpcionesDeL
     { clave: "personas", cuerpo: q.personasYTickets ? recortarAlTope(parteDePersonas(datos.personas ?? []), T.personas) : "" },
     { clave: "tickets", cuerpo: q.personasYTickets ? recortarAlTope(parteDeTickets(datos.tickets ?? []), T.tickets) : "" },
     { clave: "notasDelEquipo", cuerpo: q.notasDelEquipo ? recortarAlTope(parteDeNotasDelEquipo(datos.notasDelEquipo ?? []), T.notasDelEquipo) : "" },
+    { clave: "comunicaciones", cuerpo: q.comunicaciones ? recortarAlTope(parteDeComunicaciones(datos.comunicaciones ?? []), T.comunicaciones) : "" },
+    {
+      clave: "compromisosDeLaCuenta",
+      cuerpo: q.compromisosDeLaCuenta ? recortarAlTope(parteDeCompromisosDeLaCuenta(datos.compromisosDeLaCuenta ?? []), T.compromisosDeLaCuenta) : "",
+    },
   ];
   const partes = todas.filter((p) => !sin.has(p.clave));
   return juntar(encabezado(opts.alcance, `De la cuenta «${datos.cliente.nombre}».`, opts.pieza), partes, TOPES_DE_LA_MEMORIA.cuenta);

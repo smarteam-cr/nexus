@@ -27,6 +27,16 @@
   de los contactos y los tickets de HubSpot de cada empresa de Nexus (`ContactoDeHubspot`, `TicketDeHubspot`), cada hora.
   Cada persona dice cuándo estuvo por última vez en una reunión con el cliente (cruzando el correo de los invitados), y
   la página de una reunión muestra a sus invitados con nombre y cargo. Se cambian en HubSpot, nunca en Nexus.
+- **Comunicaciones de HubSpot** (`ComunicacionDeHubspot`, `lib/comunicaciones`, desde el 2026-10-18): la copia de solo
+  lectura de los correos (enviados y recibidos), las notas y las llamadas del timeline de HubSpot de una empresa de Nexus
+  y de sus contactos, cada hora. Cada una es de UN cliente; una de dos no se guarda. Entra a la memoria interna de la
+  cuenta y al chat; nunca a lo que ve el cliente. Sin el permiso de correos de HubSpot, solo las notas y las llamadas.
+- **Compromiso de un correo** (`Tarea.origen = "correo"`): lo que Smarteam le prometió al cliente en un correo enviado
+  (una reunión, una entrega, una fecha), leído una vez por la IA y propuesto como tarea con la cita del correo, por la
+  misma salida que los compromisos de una reunión.
+- **Compromiso sin agendar** («Para ti», lib/comunicaciones/sin-agendar.ts): un compromiso con el cliente (de un correo o
+  de una reunión) con fecha, o una reunión prometida, que a las 48 horas nadie tomó y, si es una reunión, no está en el
+  calendario, ni en Tareas, ni ocurrió. Le llega al CSE de la cuenta y a quien lidera Customer Success.
 - **Uso de Nexus** (`/para-ti/uso`, `lib/uso`, desde el 2026-10-16): cómo se usa Nexus, por equipo y por persona; solo
   dirección. Cuenta **aperturas**: entrar a una sección del menú, o volver a ella después de 30 minutos (`UsoDeNexus`,
   una fila por persona, sección y día). No guarda qué cliente ni qué documento se miró, ni minutos.

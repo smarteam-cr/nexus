@@ -59,6 +59,10 @@ export const PESO_DE_LA_FUENTE: Record<string, number> = {
   "cs-relacion-hubspot": PESOS.riesgo - 5,
   // Cuenta sin acción o sin reunión (las reglas de servicio, fase 2.1).
   "cuenta-sin-accion": PESOS.servicio,
+  // Lo prometido al cliente (una reunión, una entrega) que a las 48 horas nadie agendó ni tomó (iniciativa B): entre el
+  // riesgo y la cuenta sin acción, porque es justo lo que hace que el cliente le escriba a dirección.
+  "compromisos-sin-agendar": PESOS.servicio + 5,
+  "compromisos-sin-agendar-cs": PESOS.servicio + 5,
   // Un CSE con más cuentas que piden atención de las que entran en sus cinco (a quien lidera, 2026-10-17).
   "cs-estabilizar": PESOS.servicio + 5,
   "cs-sin-encargado": PESOS.servicio - 5,

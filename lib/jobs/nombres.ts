@@ -24,6 +24,7 @@ export const NOMBRE_DE_JOB: Readonly<Record<string, string>> = {
   "ventas-ganadas-daily": "La copia de ventas ganadas",
   "negocios-abiertos": "La copia de los negocios abiertos",
   "contactos-y-tickets": "La copia de los contactos y tickets de HubSpot",
+  "comunicaciones-hubspot": "La copia de los correos, notas y llamadas de HubSpot",
   "indice-de-reuniones": "La búsqueda en las reuniones",
   "tareas-hubspot": "Las tareas de HubSpot",
   "tareas-sprint": "Las reuniones de sprint de cada equipo",

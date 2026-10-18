@@ -57,9 +57,9 @@ export const PROCESOS: readonly DefinicionDeProceso[] = [
   {
     clave: "tareas",
     nombre: "Tareas de las reuniones",
-    queHace: "Saca de cada reunión lo que alguien se comprometió a hacer y lo propone como tarea, con su contexto.",
+    queHace: "Saca de cada reunión, y de cada correo que Smarteam le manda al cliente, lo que alguien se comprometió a hacer y lo propone como tarea, con su contexto.",
     disparo: "Solo, y con «¿Faltó algo?»",
-    propone: [{ tipo: "tarea-propuesta", fuentes: ["reunion", "notas"] }],
+    propone: [{ tipo: "tarea-propuesta", fuentes: ["reunion", "notas", "correo"] }],
   },
   {
     clave: "hechos",
@@ -177,7 +177,7 @@ const ORIGEN_DEL_AVANCE_SOLO = "post-process › avance";
 const REGLAS: readonly [RegExp, ClaveDeProceso][] = [
   [/^agent-timeline-progress$/, "avance"],
   [/^agent-(post-session|session-processor|session-project-classifier|participants-analyzer)$/, "lectura"],
-  [/^tareas-(lectura|conversacion|contexto)$/, "tareas"],
+  [/^tareas-(lectura|conversacion|contexto|correo)$/, "tareas"],
   [/^(seguimiento-hechos|sondeo-de-hechos)$/, "hechos"],
   [/^(agent-)?cs-(watchdog|account-brief)$/, "vigia"],
   [/^(asistente-chat|asistente-tareas|nexus-chat)$/, "chat"],

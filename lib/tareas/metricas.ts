@@ -38,6 +38,7 @@ export const NOMBRE_DEL_ORIGEN_EN_METRICAS: Readonly<Record<string, string>> = {
   pedido: "Pedida por otra persona",
   reunion: "De una reunión",
   notas: "De notas",
+  correo: "De un correo",
   chat: "Del asistente",
   plantilla: "De una plantilla",
 };

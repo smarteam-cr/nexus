@@ -361,7 +361,8 @@ describe("⛔ cada operación que llega al chat declara cómo se acota a la cuen
   it("las lecturas del chat: todas piden clientId y se acotan por la cuenta", () => {
     const src = leer("lib/nexus-chat/lecturas-server.ts");
     const nombres = [...src.matchAll(/^\s{2}nombre: "([^"]+)",$/gm)].map((m) => m[1]);
-    expect(nombres.length).toBe(7);
+    // 8 desde el 2026-10-18: las comunicaciones de HubSpot (iniciativa B).
+    expect(nombres.length).toBe(8);
     for (const n of nombres) expect(COMO_SE_ACOTA[n], n).toBe("cuenta");
     const pides = [...src.matchAll(/pide: z\.object\(\{([^}]*)\}\)/g)].map((m) => m[1]);
     expect(pides).toHaveLength(nombres.length);

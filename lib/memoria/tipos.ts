@@ -38,7 +38,9 @@ export type ClaveDeParte =
   | "hechos"
   | "personas"
   | "tickets"
-  | "notasDelEquipo";
+  | "notasDelEquipo"
+  | "comunicaciones"
+  | "compromisosDeLaCuenta";
 
 export interface ParteDeLaMemoria {
   clave: ClaveDeParte;
@@ -106,6 +108,16 @@ export interface QueCargar {
    * alcance interno: las escribe el equipo para el equipo, sin la frontera de lo que ve el cliente.
    */
   notasDelEquipo: boolean;
+  /**
+   * Las comunicaciones de HubSpot (iniciativa B, 2026-10-18): los correos, las notas y las llamadas con la empresa. Solo
+   * el alcance interno: son conversaciones con el cliente tal cual, sin la frontera de lo que él ve.
+   */
+  comunicaciones: boolean;
+  /**
+   * Los compromisos abiertos de la CUENTA sin proyecto (de un correo, de una reunión sin proyecto), por la puerta de
+   * Tareas para agentes. Solo el alcance interno, como los del proyecto.
+   */
+  compromisosDeLaCuenta: boolean;
 }
 
 // ── Lo que recibe el armador de la cuenta ───────────────────────────────────────────────────
@@ -190,6 +202,22 @@ export interface DatosDeLaCuenta {
   tickets?: TicketDeLaMemoria[];
   /** Las notas del equipo, las más nuevas primero. Solo el alcance interno. */
   notasDelEquipo?: NotaDelEquipoDeLaMemoria[];
+  /** Las comunicaciones de HubSpot de los últimos 60 días, las más nuevas primero. Solo el alcance interno. */
+  comunicaciones?: ComunicacionDeLaMemoria[];
+  /** Los compromisos abiertos de la cuenta que no son de un proyecto. Solo el alcance interno. */
+  compromisosDeLaCuenta?: CompromisoDeLaMemoria[];
+}
+
+/** Un correo, una nota o una llamada de HubSpot (lib/comunicaciones), para la memoria interna. Sin destinatarios. */
+export interface ComunicacionDeLaMemoria {
+  /** «Correo enviado», «Correo recibido», «Nota», «Llamada». */
+  rotulo: string;
+  /** AAAA-MM-DD. */
+  fecha: string;
+  /** Quién la escribió (nombre o correo), si se sabe. */
+  autor: string | null;
+  asunto: string | null;
+  texto: string;
 }
 
 export interface NotaDelEquipoDeLaMemoria {
