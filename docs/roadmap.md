@@ -406,7 +406,7 @@ confirmados: CreditForce, Grupo Servica, Quálitas, Tecnosagot, Grupo Monge, Cem
 | 41 | Por validar | Que la lista de limpieza de HubSpot diga quién arregla qué | Éxito del cliente › «Limpieza de HubSpot», como Alex o con tu usuario. | Lo que hay que poner al día en HubSpot, por responsable, cada cosa con su enlace. |
 | 42 | Por validar | Que «Ver como» no deje escribir como otra persona | Equipo › una persona › «Ver como»; navega un poco y toca «Volver a mi usuario». | Nexus como lo ve esa persona, sin poder escribir como ella. «Volver a mi usuario» te devuelve. |
 
-### 10 · La siguiente serie (funciona después del próximo deploy)
+### 10 · Lo nuevo (después del deploy)
 
 | # | Estado | Qué validas | Pasos | Resultado esperado |
 |---|---|---|---|---|
