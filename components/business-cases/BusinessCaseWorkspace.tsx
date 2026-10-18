@@ -35,6 +35,7 @@ import { configForCanvas } from "@/components/landing/configs/templates";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
 import { inversionDelDocumento } from "@/lib/landing/forma-de-pago";
 import type { PaisDelCliente } from "@/lib/business-cases/pais-del-cliente";
+import type { AprobacionDeDescuento } from "@/lib/business-cases/descuento";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
@@ -75,6 +76,7 @@ export default function BusinessCaseWorkspace({
   puedeEditar,
   tratoUrl,
   paisDelCliente,
+  descuento,
 }: {
   bcId: string;
   /** Para subir el logo del cliente desde el hero (POST /api/clients/[id]/logo). */
@@ -107,6 +109,8 @@ export default function BusinessCaseWorkspace({
   tratoUrl: string | null;
   /** ¿El cliente es de Costa Rica? Lo usa el control del IVA de la Inversión. */
   paisDelCliente?: PaisDelCliente | null;
+  /** Las aprobaciones de un descuento grande y si quien mira puede aprobar (lib/business-cases/descuento.ts). */
+  descuento?: { aprobaciones: AprobacionDeDescuento[]; puedeAprobar: boolean };
 }) {
   const toast = useToast();
   const [paso, setPasoState] = useState<PasoDeLaPropuesta>(pasoInicial);
@@ -127,6 +131,7 @@ export default function BusinessCaseWorkspace({
   const [preventa, setPreventa] = useState<PreventaDeLaPropuesta | null>(null);
   const [preventaOcupada, setPreventaOcupada] = useState(false);
   const { acceso, linkVivo, ajustar, revocar } = useAccesoDeLaPropuesta(bcId, accessNonce);
+  const [aprobaciones, setAprobaciones] = useState<AprobacionDeDescuento[]>(descuento?.aprobaciones ?? []);
 
   const setPaso = useCallback((p: PasoDeLaPropuesta) => {
     setPasoState(p);
@@ -166,6 +171,21 @@ export default function BusinessCaseWorkspace({
   useEffect(() => {
     void cargarPreventa();
   }, [cargarPreventa]);
+
+  /** Aprueba el descuento de la versión que se está viendo. El porcentaje lo calcula el servidor con lo guardado. */
+  const aprobarDescuento = useCallback(async () => {
+    try {
+      const r = await fetchJson<{ aprobaciones: AprobacionDeDescuento[] }>(`/api/business-cases/${bcId}/descuento`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(canvasId ? { canvasId } : {}),
+      });
+      setAprobaciones(r.aprobaciones);
+      toast.success("Descuento aprobado.");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo aprobar el descuento.");
+    }
+  }, [bcId, canvasId, toast]);
 
   const usarPreventa = useCallback(
     async (exploracionId: string | null) => {
@@ -743,7 +763,12 @@ export default function BusinessCaseWorkspace({
                   ctx={{
                     clientName,
                     lang: proposalLang,
-                    propuesta: { hubsVendidos, inversion: inversionDelDocumento(sectionsData), pais: paisDelCliente ?? null },
+                    propuesta: {
+                      hubsVendidos,
+                      inversion: inversionDelDocumento(sectionsData),
+                      pais: paisDelCliente ?? null,
+                      descuento: descuento ? { aprobaciones, puedeAprobar: descuento.puedeAprobar, aprobar: aprobarDescuento } : undefined,
+                    },
                     clientLogoUrl: clientLogo,
                     clientLogoDarkUrl,
                     clientLogoScale,

@@ -46,6 +46,7 @@ import {
 } from "@/lib/landing/inversion";
 import { ivaDelCierre, modoIvaDe, TASA_IVA_CR, type DesgloseIva, type ModoIva } from "@/lib/landing/iva";
 import { NOMBRE_DE_LA_FUENTE, type PaisDelCliente } from "@/lib/business-cases/pais-del-cliente";
+import { UMBRAL_DE_APROBACION, descuentoDeServicios, estadoDeLaAprobacion, textoPorcentaje } from "@/lib/business-cases/descuento";
 
 /** El rótulo de un total con su IVA: «Total servicios + IVA» · «Pago único · IVA incluido». */
 function conIva(rotulo: string, modo: ModoIva, lang: LandingLang): string {
@@ -687,6 +688,57 @@ function GrupoTabla({
   );
 }
 
+/**
+ * La franja que pide aprobar un descuento grande en los servicios (2026-10-18, lib/business-cases/descuento.ts). Chrome
+ * del editor: solo existe cuando el editor arma el canal (`ctx.propuesta.descuento`), así que no llega a la propuesta
+ * publicada ni al PDF. Solo AVISA: no frena «Subir al cliente».
+ */
+function AprobacionDelDescuento({ data, canal }: { data: WebInvestmentData; canal: NonNullable<SectionProps<WebInvestmentData>["ctx"]["propuesta"]>["descuento"] }) {
+  const [ocupado, setOcupado] = useState(false);
+  if (!canal) return null;
+  const desc = descuentoDeServicios(data);
+  if (desc.porcentaje <= UMBRAL_DE_APROBACION) return null;
+  const estado = estadoDeLaAprobacion(desc.porcentaje, canal.aprobaciones);
+  const cuanto = `Descuento del ${textoPorcentaje(desc.porcentaje)} en los servicios (${formatRango({ min: desc.descontado, max: desc.descontado }, desc.moneda)} en 12 meses)`;
+  if (estado.estado === "aprobado") {
+    // La fecha en Costa Rica (UTC-6, sin horario de verano), armada a mano: `toLocale…` escribe distinto en Node y el navegador.
+    const dia = new Date(+new Date(estado.aprobacion.en) - 6 * 3_600_000);
+    const fecha = `${dia.getUTCDate()}/${dia.getUTCMonth() + 1}/${dia.getUTCFullYear()}`;
+    return (
+      <div className="stl-inv-asist">
+        <span>{`${cuanto}: lo aprobó ${estado.aprobacion.porNombre} el ${fecha}, hasta el ${textoPorcentaje(estado.aprobacion.porcentaje)}.`}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="stl-inv-asist">
+      <span className="stl-inv-asist-warn">
+        {`${cuanto}: pasa el ${UMBRAL_DE_APROBACION} % y lo aprueba Marco antes de enviarla.`}
+        {estado.estado === "falta" && estado.anterior ? ` Lo aprobado antes llegaba al ${textoPorcentaje(estado.anterior.porcentaje)}.` : ""}
+      </span>
+      {canal.puedeAprobar ? (
+        <button
+          type="button"
+          className="stl-add"
+          disabled={ocupado}
+          onClick={async () => {
+            setOcupado(true);
+            try {
+              await canal.aprobar();
+            } finally {
+              setOcupado(false);
+            }
+          }}
+        >
+          {ocupado ? "Aprobando…" : "Aprobar el descuento"}
+        </button>
+      ) : (
+        <span>Pídele a Marco que lo apruebe en esta propuesta.</span>
+      )}
+    </div>
+  );
+}
+
 export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) => {
   const { data, ctx, editable, onChange, sectionInvest } = props;
   const lang = landingLang(ctx.lang);
@@ -879,6 +931,8 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
         onToggle={(i, prender) => toggle("lineas", i, prender)}
         onSet={set}
       />
+
+      {editable && <AprobacionDelDescuento data={d} canal={ctx.propuesta?.descuento} />}
 
       {(hayLicencias || editable) && (
         <GrupoTabla
