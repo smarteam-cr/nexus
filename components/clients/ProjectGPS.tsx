@@ -26,6 +26,9 @@ import { useMe } from "@/hooks/useMe";
 import EncuestaDeEtapa from "./EncuestaDeEtapa";
 import { CambiarEtapaDelCiclo, EditarElCiclo, SugerenciaDeEtapaDelCiclo } from "@/components/ciclos/ControlesDelCiclo";
 import PanelDelServicio from "@/components/ciclos/PanelDelServicio";
+import GuiaDelServicio, { BotonPasarARecurrente, useServicioDelProyecto } from "@/components/servicios/GuiaDelServicio";
+import CicloEnCirculo from "@/components/servicios/CicloEnCirculo";
+import { ETAPAS_DEL_CICLO, ETIQUETA_DE_ETAPA, esEtapaDelCiclo } from "@/lib/servicios/ciclo";
 import type { TareasDelProyectoDatos, TareaVista } from "@/lib/tareas/tipos";
 
 
@@ -606,6 +609,8 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
 
   /* Land and Expand (SmartLoop, etapa 6): al llegar a la entrega, Nexus propone seguir con un servicio recurrente. */
   const { rec: recurrencia, recargar: recargarRecurrencia } = useRecomendacionDeRecurrencia(projectId, gpsRefreshSignal);
+  // El servicio recurrente del proyecto (iniciativa 4): la guía del Resumen y «Pasar a recurrente».
+  const { datos: servicio, recargar: recargarServicio } = useServicioDelProyecto(projectId, gpsRefreshSignal);
   const recurrenciaPendiente = recurrencia && !recurrencia.decision && recurrencia.estado.estado === "pendiente" ? recurrencia : null;
 
   const queSigue = useMemo(
@@ -1060,6 +1065,14 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
               <CambiarEtapaDelCiclo projectId={projectId} cicloId={ciclo.id ?? null} etapa={ciclo.etapa} onCambio={cicloCambio} />
             )}
             {ciclo && <EditarElCiclo projectId={projectId} onCambio={cicloCambio} />}
+            <BotonPasarARecurrente
+              projectId={projectId}
+              datos={servicio}
+              onCambio={() => {
+                recargarServicio();
+                cicloCambio();
+              }}
+            />
             {/* Nexus → HubSpot: solo por la encuesta. HubSpot → Nexus: el espejo, como siempre. */}
             {encuesta && !encuesta.bloqueo && encuesta.opciones.length > 0 && (
               <BotonEnlace onClick={() => setEncuestaAbierta(true)}>Cambiar etapa</BotonEnlace>
@@ -1089,7 +1102,16 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             onResponder={encuesta && !encuesta.bloqueo ? () => setEncuestaAbierta(true) : undefined}
           />
         )}
-        {etapa && etapa.linea.length > 0 && etapa.posicion && (
+        {/* SmartLoop (iniciativa 4, paso 2): las cinco etapas como un ciclo, no como una barra que termina. */}
+        {ciclo && esEtapaDelCiclo(ciclo.etapa) ? (
+          <div className="flex justify-center">
+            <CicloEnCirculo
+              etapas={ETAPAS_DEL_CICLO.map((e) => ETIQUETA_DE_ETAPA[e])}
+              actual={ETAPAS_DEL_CICLO.indexOf(ciclo.etapa)}
+              centro={`Ciclo ${ciclo.numero}`}
+            />
+          </div>
+        ) : etapa && etapa.linea.length > 0 && etapa.posicion && (
           <ol className="grid gap-1" style={{ gridTemplateColumns: `repeat(${etapa.linea.length}, minmax(0, 1fr))` }}>
             {etapa.linea.map((s, k) => {
               const i = etapa.posicion!.index - 1;
@@ -1117,6 +1139,17 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
           </div>
         )}
       </section>
+
+      {/* La guía del servicio recurrente: qué se entrega, la cadencia, qué toca y las rutinas. Sin servicio no pinta nada. */}
+      <GuiaDelServicio
+        projectId={projectId}
+        datos={servicio}
+        mostrarCiclo={!ciclo}
+        onCambio={() => {
+          recargarServicio();
+          cicloCambio();
+        }}
+      />
 
       {/* El resumen del proyecto: la respuesta a «cómo va esto». `undefined` (respuesta cacheada
           vieja) no pinta nada; `null` sí, porque «no hay resumen» es información y trae su CTA. */}

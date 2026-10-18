@@ -8691,3 +8691,52 @@ que tener su acción de la semana y su reunión agendada.
 - **El chat genera un entregable** con la operación «documento.generar»: queda en la lista y corre solo al aplicarla,
   con el proyecto verificado contra la cuenta del hilo y el mismo permiso que el botón. Las instrucciones del chat valen
   solo para esa generación: no pisan las «Instrucciones adicionales» del documento.
+
+
+## El servicio recurrente, dentro de la ficha del cliente (2026-10-18)
+
+**Contexto.** Roadmap «La siguiente serie», iniciativa 4 y pasos 1, 2 y 7 de la 3. Elías pidió algo simple: que el CSE
+entienda un servicio recurrente y lo lleve con cadencia, rutinas y tareas, sin un sistema de ciclos nuevo. Y que las
+propuestas distingan proyecto de servicio recurrente, porque hay más recurrentes que SmartLoop (sitio web, soporte de
+HubSpot, contenido; después SEO, AEO, redes, IA en marketing, rediseño web).
+
+- **Un catálogo, no pantallas por servicio** (`lib/servicios/catalogo.ts`): cada servicio declara nombre, qué incluye,
+  cadencia, reuniones fijas, tareas que se repiten, nivel de servicio, dónde vive en HubSpot y, si avanza por ciclos, su
+  guía y sus etapas. Hoy: SmartLoop, Administración de sitio web, Soporte y continuidad de HubSpot, Contenido y marketing
+  mensual. Sumar uno es una entrada; la propuesta, la guía del Resumen, las rutinas y «Pasar a recurrente» salen de ahí.
+  ⚠ La cadencia y las rutinas de los cuatro están **a validar con Elías** (`validado: false`, paso 7 de la iniciativa
+  4), y la guía lo dice.
+- **Ser recurrente no es avanzar por ciclos.** Solo SmartLoop tiene ciclo; los demás se llevan con su cadencia y sus
+  rutinas. Los ciclos (`CicloDeProyecto`, `CasoDeUso`, cronograma y cierre) no cambian.
+- **El servicio de un proyecto** es `Project.servicioRecurrente` (texto, clave del catálogo) y, si no hay, el del
+  pipeline (SmartLoop). `servicioDesde` marca desde cuándo corre: lo de antes queda como historia. SQL aditivo
+  `scripts/sql/2026-10-18-servicio-recurrente.sql`, antes del deploy.
+- **La guía en el Resumen** (`components/servicios/GuiaDelServicio.tsx`): qué se entrega, cadencia, qué toca ahora y las
+  rutinas. En SmartLoop, la tarjeta de la etapa dibuja las cinco etapas como un **círculo** en vez de una barra
+  (`CicloEnCirculo`, geometría pura en `lib/servicios/circulo.ts`), con lo que falta para pasar de etapa debajo, como
+  siempre. Mientras el proyecto no está en el pipeline de SmartLoop, el círculo va en la guía.
+- **Las rutinas** (`lib/servicios/rutinas.ts`): las reuniones fijas se proponen como un enlace de Google Calendar ya
+  armado como serie (RRULE), y la persona dice «Ya la agendé». ⛔ Nexus nunca escribe en el calendario. Las tareas que se
+  repiten se crean por el escritor único de Tareas (`origen = "plantilla"`), de a dos meses, con una clave por semana
+  (`servicio:<proyecto>:<rutina>:<lunes>`), así la ventana siguiente nunca duplica. Tareas no tiene tareas que se repitan
+  solas y no hizo falta: la guía avisa cuando la ventana se está terminando. Lo hecho vive en `Project.servicioRutinas`.
+- **«Pasar a recurrente» desde la ficha** (botón en la tarjeta de la etapa, CSE, CSL y dirección): reemplaza el uso de
+  `scripts/migrar-continuidad-a-smartloop.ts`. Nexus propone la etapa del ciclo (la misma `etapaAlMigrar`) y, si el
+  proyecto no está en el pipeline y la etapa del servicio, deja una **tarea** para que una persona lo mueva en HubSpot.
+  ⛔ Nexus no mueve el pipeline. Si el servicio tiene ciclo, abre el ciclo 1 en la etapa confirmada; `ciclos-server` ya
+  reconoce el servicio elegido en Nexus mientras el pipeline no se mueve.
+- **La propuesta: proyecto o servicio recurrente.** Al crearla se elige primero la modalidad; el tipo
+  `servicio_recurrente` tiene un subtipo por servicio del catálogo (`caseSubtype` = la clave, sin SQL) y siembra el tag
+  `recurrente`. Su plantilla `recurrente_v1` nace de lo que Ventas vendió a mano a Cayalá y a Grupo Inve: qué contiene
+  el acuerdo, cómo opera, cómo trabajamos (el ciclo como ciclo), casos de uso, nivel de servicio, antes y después e
+  inversión mensual. Las tres secciones que son **compromiso** (cómo opera, el ciclo, el nivel de servicio) las escribe
+  Nexus desde el catálogo (`agentGenerated: false`, sembradas solo si están vacías), nunca el agente; Ventas las ajusta.
+  Las propuestas ya publicadas no cambian: es una plantilla nueva.
+- **Al ganarse, el proyecto nace con su servicio** (`servicioQueTraeLaPropuestaEnTx`, en el alta): por el enlace
+  «Dar de alta el servicio» de la propuesta aprobada o por el trato, siempre en el mismo cliente. Queda con el servicio,
+  desde hoy, y con los casos de uso de la propuesta en su plan (origen «propuesta»). Reemplaza a
+  `scripts/cargar-propuesta-en-ciclo.ts` para lo nuevo; ⛔ la propuesta no se toca.
+- **FACO, Colby, Cayalá y Grupo Inve** (`scripts/propuestas-recurrentes-internas.ts`, en simulacro): una propuesta
+  recurrente NUEVA e interna por cliente («… · interna», nunca se publica) que copia los casos de uso y la inversión de la
+  firmada, sin tocarla, y le asigna el servicio a su proyecto recurrente. Colby va con SmartLoop hasta confirmar. ⛔ Nunca
+  Wherex.

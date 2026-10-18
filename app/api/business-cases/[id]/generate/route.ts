@@ -42,6 +42,11 @@ import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucio
 import { MONEY_RULE_BRIEF } from "@/lib/business-cases/money-brief";
 import { leerFicha } from "@/lib/clients/ficha";
 import { memoriaDeLaCuenta } from "@/lib/memoria";
+import { esTipoRecurrente } from "@/lib/business-cases/case-types";
+import { servicioDelCatalogo, servicioParaLaPropuesta } from "@/lib/servicios/catalogo";
+import { seccionesDelServicio } from "@/lib/servicios/propuesta";
+import { KEYS_DEL_CATALOGO } from "@/components/landing/configs/recurrente.defs";
+import { isBlank } from "@/lib/landing/is-blank";
 import {
   INVERSION_SECTION_KEY,
   sembrarLicenciasIniciales,
@@ -251,6 +256,10 @@ export async function POST(
   if (bc.client.industry?.trim()) {
     preamble.push(`# Industria del cliente\n${bc.client.industry.trim()}`);
   }
+  /* Un SERVICIO RECURRENTE (2026-10-18): el catálogo dice qué incluye, su cadencia y sus rutinas. Es la única forma en
+     que el catálogo llega al agente: así la propuesta describe ESTE servicio y no otro que se le parezca. */
+  const servicioRecurrente = esTipoRecurrente(resolved.typeDef) ? servicioDelCatalogo(resolved.caseSubtype) : null;
+  if (servicioRecurrente) preamble.push(servicioParaLaPropuesta(servicioRecurrente));
   /* LO QUE NEXUS YA SABE DE LA EMPRESA (lib/memoria, etapa 3), con el alcance del CLIENTE: la ficha confirmada (sin lo
      interno ni la postura de las personas), los procesos validados y la historia de sus proyectos. Solo si la empresa
      ya es cliente (una expansión) o tiene la ficha confirmada: de un prospecto Nexus todavía no sabe nada propio. Va
@@ -487,6 +496,19 @@ export async function POST(
       if (generated.some((g) => g.key === key)) continue;
       const prev = prevDataByKey.get(key);
       if (prev != null) generated.push({ key, data: prev });
+    }
+    /* Lo que es COMPROMISO en la propuesta de un servicio recurrente (cómo opera, el ciclo y el nivel de servicio) lo
+       escribe Nexus desde el catálogo, nunca el agente — y solo cuando la sección está vacía: lo que Ventas ajustó para
+       este cliente viajó arriba por el carry-forward de las curadas y no se pisa. */
+    if (servicioRecurrente) {
+      const delCatalogo = seccionesDelServicio(servicioRecurrente);
+      for (const key of KEYS_DEL_CATALOGO) {
+        if (!defsByKey[key] || skipKeys.has(key)) continue;
+        const ya = generated.find((g) => g.key === key);
+        if (ya && !isBlank(ya.data)) continue;
+        if (ya) ya.data = delCatalogo[key];
+        else generated.push({ key, data: delCatalogo[key] });
+      }
     }
     // Idioma de ESTA corrida (`__lang`, key no-schema del hero): SIEMPRE se re-escribe
     // — nunca por carry-forward, que arrastraría el idioma de la versión anterior.

@@ -100,3 +100,19 @@ export const actualizarCasoDeLaEmpresaSchema = z
     ...datosDeCaso,
   })
   .strict();
+
+/**
+ * La guía del servicio recurrente de un proyecto (POST /api/projects/[id]/servicio, iniciativa 4): pasar a recurrente,
+ * crear las tareas de la rutina o decir que una reunión fija ya se agendó.
+ */
+export const accionDelServicioSchema = z.discriminatedUnion("accion", [
+  z
+    .object({
+      accion: z.literal("pasar"),
+      servicio: z.string().trim().min(1).max(60),
+      etapa: z.enum(ETAPAS_DEL_CICLO).nullable().optional(),
+    })
+    .strict(),
+  z.object({ accion: z.literal("tareas") }).strict(),
+  z.object({ accion: z.literal("agendada"), clave: z.string().trim().min(1).max(60) }).strict(),
+]);

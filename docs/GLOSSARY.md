@@ -414,13 +414,27 @@
 - **Proyecto de prueba** (`Project.esPrueba`): un proyecto colgado de un cliente real para probar un módulo nuevo con sus
   datos. No existe en HubSpot, no cuenta en la cartera ni en Cobranza, el clasificador no le cuelga reuniones y el
   cliente no lo ve. En la ficha lleva la marca «Proyecto de prueba». Se crea con `scripts/crear-proyecto-de-prueba.ts`.
-- **Servicio recurrente** (`PipelineDef.servicioRecurrente`, `lib/servicios`): un servicio que avanza por ciclos, hoy
-  SmartLoop. En el riel, el Cronograma va junto al Resumen y el ciclo es un grupo «Ciclo · <etapa>» con los documentos de
+- **Servicio con ciclo** (`PipelineDef.servicioRecurrente`, `lib/servicios`): un servicio recurrente que además avanza por ciclos, hoy
+  solo SmartLoop. En el riel, el Cronograma va junto al Resumen y el ciclo es un grupo «Ciclo · <etapa>» con los documentos de
   siempre más Adopción y Aprendizaje; su etapa es la del ciclo abierto. Ver `docs/smartloop-plan.md`.
 - **Pieza oculta** (`Project.piezasOcultas`): una pieza del riel que el equipo ocultó en ese proyecto; queda en «Ver N
   piezas más», no se borra ni se apaga.
 - **La escala de la empresa** (La cuenta › La escala): dónde está la empresa en cada área de la escala, con la fecha y de
   dónde sale (las exploraciones con niveles confirmados). Sirve venga o no de una preventa.
+- **Servicio recurrente** (`lib/servicios/catalogo.ts`, desde el 2026-10-18): lo que Smarteam hace todos los meses para
+  un cliente, declarado una vez en el catálogo: qué incluye, su **cadencia**, sus **rutinas** (reuniones fijas y tareas
+  que se repiten), su nivel de servicio y, si lo tiene, su ciclo. Hoy: SmartLoop, Administración de sitio web, Soporte y
+  continuidad de HubSpot, Contenido y marketing mensual. El de un proyecto es `Project.servicioRecurrente` (o el de su
+  pipeline). Solo SmartLoop avanza por ciclos (ver **Servicio con ciclo**).
+- **Rutinas** (de un servicio recurrente): las reuniones fijas, que Nexus propone como un enlace de Google Calendar
+  armado como serie, y las tareas que se repiten, que Nexus crea en Tareas de a dos meses. Se ven en la guía del servicio.
+- **Guía del servicio** (Resumen del proyecto): qué se entrega, la cadencia, qué toca ahora y las rutinas de un proyecto
+  recurrente. En SmartLoop, el ciclo como círculo.
+- **Pasar a recurrente** (tarjeta de la etapa del Resumen): elegir el servicio del catálogo para un proyecto que ya
+  existe; Nexus propone la etapa del ciclo y deja la tarea de moverlo en HubSpot. Lo de antes queda como historia.
+- **Propuesta recurrente** (tipo `servicio_recurrente`, plantilla `recurrente_v1`): la propuesta de un servicio recurrente;
+  su subtipo es el servicio del catálogo. **Propuesta interna**: una propuesta recurrente que refleja lo que ya se vendió a
+  mano y nunca se publica («… · interna»).
 - **Ciclo** (`CicloDeProyecto`): un tramo con fechas de un servicio recurrente que pasa por las cinco etapas del método
   (Diagnóstico, Planificación, Implementación, Adopción, Aprendizaje). Abre con un diagnóstico y cierra con la sesión de
   aprendizaje; uno abierto por proyecto, y los cerrados se conservan.

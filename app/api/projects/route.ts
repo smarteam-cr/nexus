@@ -13,6 +13,7 @@ import { hasProjectsWriteScope } from "@/lib/hubspot/project-record";
 import { avanzarAlta } from "@/lib/projects/alta-runner";
 import { exigeTratoGanado, parseProjectPipeline, resolvePipeline } from "@/lib/projects/kind";
 import { sanitizeTags } from "@/lib/tags/catalog";
+import { servicioQueTraeLaPropuestaEnTx } from "@/lib/servicios/servicio-server";
 
 /**
  * POST /api/projects — EL ALTA ÚNICA (Tanda C).
@@ -51,6 +52,8 @@ interface Body {
   sinTratoMotivo?: string;
   /** ADJUNTAR: el record ya existe en HubSpot y se elige del picker. */
   hubspotServiceId?: string;
+  /** La propuesta recurrente de la que nace el servicio («Dar de alta el servicio» de la propuesta). Opcional. */
+  businessCaseId?: string;
 }
 
 const malo = (error: string, status = 400) => NextResponse.json({ error }, { status });
@@ -321,6 +324,17 @@ export async function POST(req: NextRequest) {
         await tx.project.update({ where: { id: proyecto.id }, data: { tags: sanitizeTags(bc.tags) } });
       }
     }
+
+    /* Una PROPUESTA RECURRENTE ganada (iniciativa 4, paso 4): el proyecto nace con su servicio, desde hoy, y con los
+       casos de uso que vendió. Por el enlace de la propuesta o por el trato, escopado por cliente. Sin propuesta
+       recurrente no hace nada. */
+    await servicioQueTraeLaPropuestaEnTx(tx, {
+      clientId,
+      projectId: proyecto.id,
+      dealId,
+      businessCaseId: typeof body.businessCaseId === "string" && body.businessCaseId.trim() ? body.businessCaseId.trim() : null,
+      por: guard.user.email ?? "alta",
+    });
 
     // Las piezas del TIPO elegido, no las de Customer Success por descarte.
     await createDefaultCanvases(proyecto.id, pipeline.hubspotPipelineId, tx);

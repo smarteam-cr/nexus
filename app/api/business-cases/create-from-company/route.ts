@@ -63,6 +63,10 @@ export async function POST(req: NextRequest) {
   if (rawSubtype && !caseSubtype) {
     return NextResponse.json({ error: "Sub-tipo desconocido para ese tipo de caso." }, { status: 400 });
   }
+  // Un servicio recurrente sin servicio no tiene plantilla que sembrar (cadencia, ciclo, nivel de servicio).
+  if (typeDef.modalidad === "recurrente" && !caseSubtype) {
+    return NextResponse.json({ error: "Elige qué servicio recurrente se propone." }, { status: 400 });
+  }
 
   /* find-or-create Client — prospecto si es nuevo (no ensucia los listados de CS). La puerta es
      compartida con la exploración de venta: resuelve empresas fusionadas, nunca cambia el `kind`

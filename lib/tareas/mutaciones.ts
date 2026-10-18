@@ -221,8 +221,9 @@ export interface NuevaTarea {
   /** Quién se comprometió. Sin esto, Smarteam. */
   lado?: "smarteam" | "cliente";
   /** «paso» = la escribió alguien como el siguiente paso de su equipo (lib/siguiente-paso); «chat» = la propuso el chat
-   *  de Nexus sobre la cuenta y la aplicó una persona. */
-  origen?: "paso" | "chat";
+   *  de Nexus sobre la cuenta y la aplicó una persona; «plantilla» = una rutina de un servicio recurrente
+   *  (lib/servicios/rutinas.ts), que la persona pidió crear desde la guía del servicio. */
+  origen?: "paso" | "chat" | "plantilla";
   /** Clave para no crearla dos veces (el chat de la cuenta: `n:<turno>:<i>`). Si ya existe, se devuelve esa. */
   origenId?: string | null;
 }
