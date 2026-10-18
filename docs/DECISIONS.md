@@ -8538,6 +8538,7 @@ que tener su acción de la semana y su reunión agendada.
   (`lib/mi-dia/agenda-borrador.ts`). Sigue valiendo «Calendario por enlace»: Nexus no escribe en el calendario. El
   borrador vive solo en la pantalla y se pierde al recargar. «Agendar» de una cuenta sin acción hace lo mismo en el
   primer hueco laboral, invitando a quien estuvo en la última reunión o, si no, al contacto con más actividad.
+  ⚠ Desde la segunda vuelta (abajo), «Agendar» ya no abre Calendar: deja el borrador con su cuadro abierto.
 - **Los huecos y lo que propone Nexus, solo en horario laboral**: lunes a viernes de 8:00 a 17:00, hora de Costa Rica
   (`lib/mi-dia/constantes.ts`, `primerHuecoLaboral`). El hueco ya no promete con qué avanzar: sugerir la tarea para el
   hueco queda para más adelante.
@@ -8547,6 +8548,26 @@ que tener su acción de la semana y su reunión agendada.
   la próxima reunión, la renovación y la acción de la semana. El monto aparece solo con un negocio abierto y solo para
   quien tiene `ventas.read`. Vistas: Para atender, Todos los proyectos, Por CSE (solo la CSL, sin ranking), Sin
   contacto y Renuevan pronto. La CSL ya no ve la cartera de Ventas.
+
+### La agenda, segunda vuelta (2026-10-17, noche, validaciones 2 y 8)
+
+- **Moverse por la agenda no vuelve a pedir la página.** ‹ ›, «Hoy» y Día ↔ Semana eran enlaces que rearmaban «Para ti»
+  entero (medido con Liliana: ~6 s, casi todo la medición y las cuentas). Ahora la agenda pide solo lo suyo a
+  `/api/para-ti/agenda` (`components/para-ti/inicio/agenda-navegable.ts`) y la dirección se actualiza con
+  `history.replaceState`. El servidor guarda lo leído del calendario un minuto por persona y rango; la página entera lee
+  siempre fresco, así un evento recién guardado en Calendar aparece al recargar. El cliente de Google se reusa por
+  persona (`getImpersonatedAuth`): la lectura de una semana bajó de ~0,5 s a ~0,2 s. El panel de una reunión hace todo
+  en paralelo: de ~1,9 s a ~1 s.
+- **La agenda es de lunes a viernes**: un sábado o un domingo abre en la semana que viene (en «Día», el lunes), y ‹ › en
+  «Día» salta el fin de semana (`lib/mi-dia/agenda-dias.ts`).
+- **Soltar un borrador lo borra**: tocar afuera, la X o Escape lo quitan y el hueco queda como estaba. El que ya se abrió
+  en Calendar solo se cierra (espera «Ya lo guardé» o «Descartar»).
+- **«Agendar» y «Planificar acción» siempre muestran el borrador antes**: dejan el borrador en la agenda con el cuadro de
+  «+ Crear evento» abierto (título, hora propuesta, cuenta y contacto, todo editable); recién «Abrir en Google Calendar»
+  abre el enlace. La cartera lo llama con `usePlanificarAccion()` (`AgendarEnLaAgenda.tsx`); si la agenda no está en
+  pantalla, la hora sale del calendario entero (`/api/para-ti/agenda?hueco=1`) y lleva al día del borrador.
+- **«Tus notas» también en una reunión que ya pasó.** Siguen siendo de cada persona: con «Ver como», el panel dice que no
+  se ven ni se escriben.
 
 ## El cronograma y el cierre del ciclo de SmartLoop (2026-10-17, ficha E)
 

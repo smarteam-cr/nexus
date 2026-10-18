@@ -19,6 +19,7 @@ import type { AgendaDeHoy } from "@/lib/mi-dia/agenda-server";
 import type { CuentaDelInicio, TareaDelInicio } from "@/lib/mi-dia/inicio-server";
 import type { AvisoVisto, ParaTi } from "@/lib/para-ti/tipos";
 import AgendaDelInicio from "./AgendaDelInicio";
+import { useAgendaNavegable } from "./agenda-navegable";
 import PanelDeLaReunion, { type LoElegido } from "./PanelDeLaReunion";
 import LoQueImportaHoy from "./LoQueImportaHoy";
 import AvisosDelInicio from "./AvisosDelInicio";
@@ -35,7 +36,8 @@ export interface DatosDelInicio {
   resumen: PedazoDeFrase[][];
   medicion: ParaTi;
   avisos: AvisoVisto[];
-  agenda: { datos: AgendaDeHoy; vista: "dia" | "semana"; dia: string; enlaces: { hoy: string; anterior: string; siguiente: string; dia: string; semana: string } } | null;
+  /** Lo que la agenda muestra al entrar; después se mueve sola (agenda-navegable.ts). */
+  agenda: { datos: AgendaDeHoy; vista: "dia" | "semana"; dia: string } | null;
   cuentas: CuentaDelInicio[];
   /** La pestaña con todas las cuentas (`?vista=cuentas`). */
   verLasCuentas: string | null;
@@ -57,7 +59,7 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
   const [descartados, setDescartados] = useState<ReadonlySet<string>>(() => new Set());
   const [sinResumen, setSinResumen] = useState(false);
 
-  const agenda = d.agenda;
+  const { agenda, cargando, ir, precargar } = useAgendaNavegable(d.agenda, d.correo);
   const reuniones = useMemo(() => (agenda?.datos.estado === "ok" ? agenda.datos.reuniones : []), [agenda]);
   // Los huecos libres de hoy (una hora o más, en horario laboral), cada uno con la tarea más importante que cabe.
   const huecos = useMemo(() => {
@@ -116,16 +118,16 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
           <main className="flex min-w-0 flex-[999_1_640px] flex-col gap-6">
             {agenda && (
               <AgendaDelInicio
-                agenda={agenda.datos}
-                vista={agenda.vista}
-                dia={agenda.dia}
+                agenda={agenda}
+                cargando={cargando}
+                onIr={ir}
+                onPrecargar={precargar}
                 hoyISO={d.hoyISO}
                 ahora={ahora}
                 correo={d.correo}
                 seleccion={elegida}
                 onElegir={setElegida}
                 huecos={huecos}
-                enlaces={agenda.enlaces}
               />
             )}
             <LoQueImportaHoy medicion={d.medicion} />

@@ -20,7 +20,8 @@ import { Alert, EmptyState, PageHeader } from "@/components/ui";
 import { ENLACE_BLANCO } from "@/components/carga/piezas";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { equipoDeRol, veLaAgenda } from "@/lib/equipos/registro";
-import { agendaDeLaSemana, agendaDelDiaDe } from "@/lib/mi-dia/agenda-server";
+import { agendaDeLaVista, agendaDelDiaDe } from "@/lib/mi-dia/agenda-server";
+import { diaDeEntradaDeLaAgenda, diaQueSeVe } from "@/lib/mi-dia/agenda-dias";
 import { cuentasDelInicio, tareasDeHoy, tareasInternas, tareasParaLosHuecos } from "@/lib/mi-dia/inicio-server";
 import { horaCR, huecoLibre, resumenDelDia, varianteDelInicio } from "@/lib/mi-dia/inicio";
 import { cifrasDelInicio, siguienteMovimiento } from "@/lib/mi-dia/cifras";
@@ -28,7 +29,6 @@ import { accesoParaFrentes, alcanceDe, tienePermiso } from "@/lib/para-ti/alcanc
 import { medirParaTi } from "@/lib/para-ti/medir-server";
 import { avisosDe } from "@/lib/para-ti/avisos-server";
 import { frente, puedeLlevar } from "@/lib/para-ti/frentes";
-import { lunesDeFecha } from "@/lib/carga/semana";
 import VentasDeParaTi from "@/components/para-ti/VentasDeParaTi";
 import InicioDelDia from "@/components/para-ti/inicio/InicioDelDia";
 import SelectorDelInicio from "@/components/para-ti/inicio/SelectorDelInicio";
@@ -42,7 +42,6 @@ import { fechaLarga, saludo } from "@/lib/ventas/negocios";
 export const dynamic = "force-dynamic";
 
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
-const sumarDias = (ymd: string, n: number) => new Date(Date.parse(`${ymd}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 export default async function ParaTiPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
@@ -83,12 +82,14 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
           ? "cuentas"
           : "dia";
 
-  // La agenda: el día (o la semana) de `?dia=`, hoy por defecto.
+  // La agenda: el día (o la semana) de `?dia=`, hoy por defecto. Es de lunes a viernes: un sábado o un domingo abre en
+  // el lunes que viene (lib/mi-dia/agenda-dias.ts). Moverse por la agenda ya no vuelve a pedir esta página: lo hace la
+  // agenda con /api/para-ti/agenda.
   const veAgenda = veLaAgenda(alcance.rol);
   const semana = uno(sp.agenda) === "semana";
+  const vistaDeLaAgenda: "dia" | "semana" = semana ? "semana" : "dia";
   const diaPedido = uno(sp.dia);
-  const dia = diaPedido && DIA.test(diaPedido) ? diaPedido : hoyISO;
-  const lunes = lunesDeFecha(dia);
+  const diaVisto = diaPedido && DIA.test(diaPedido) ? diaQueSeVe(vistaDeLaAgenda, diaPedido) : diaDeEntradaDeLaAgenda(hoyISO, vistaDeLaAgenda);
   const enlace = (cambios: Record<string, string | null>) => {
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries(sp)) {
@@ -104,11 +105,14 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
   };
 
   const enLaCarteraDeCs = carteraDeCs && modo === "cartera";
-  const [medicion, avisos, agenda, cuentas, hoy, internas, cartera, empresasDeCs, paraLosHuecos] = await Promise.all([
+  // Lo de hoy (los números, el resumen y la reunión que se abre sola). Si la agenda muestra otro día o la semana, la de
+  // hoy se pide aparte, en paralelo con lo demás.
+  const mostrandoHoy = !semana && diaVisto === hoyISO;
+  const [medicion, avisos, agenda, cuentas, hoy, internas, cartera, empresasDeCs, paraLosHuecos, otraAgendaDeHoy] = await Promise.all([
     medirParaTi(alcance, ahora),
     avisosDe(alcance.email),
     veAgenda && modo === "dia"
-      ? (semana ? agendaDeLaSemana(alcance.email, lunes) : agendaDelDiaDe(alcance.email, dia)).catch(() => null)
+      ? agendaDeLaVista(alcance.email, vistaDeLaAgenda, diaVisto, { fresco: true }).catch(() => null)
       : Promise.resolve(null),
     // En la cartera de CS, las cuentas del inicio no se usan: la cartera trae lo suyo.
     conCuentas && !enLaCarteraDeCs ? cuentasDelInicio(variante, alcance, { ahora, hoyISO }).catch(() => []) : Promise.resolve([]),
@@ -117,8 +121,10 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
     enLaCarteraDeCs ? cargarCarteraDeCs(carteraDeCs, alcance, { ahora, hoyISO }).catch(() => null) : Promise.resolve(null),
     // El número del selector en «Tu día», sin cargar la cartera entera.
     carteraDeCs && !enLaCarteraDeCs ? cuantasEmpresasDeCs(carteraDeCs, alcance).catch(() => null) : Promise.resolve(null),
-    // «Con qué avanzar» en los huecos libres de hoy: solo si la agenda muestra hoy.
-    veAgenda && modo === "dia" && !semana && dia === hoyISO ? tareasParaLosHuecos(alcance.email, hoyISO).catch(() => []) : Promise.resolve([]),
+    // «Con qué avanzar» en los huecos libres de hoy: también si la agenda abre en otro día, porque se puede volver a hoy
+    // sin recargar la página.
+    veAgenda && modo === "dia" ? tareasParaLosHuecos(alcance.email, hoyISO).catch(() => []) : Promise.resolve([]),
+    veAgenda && modo === "dia" && !mostrandoHoy ? agendaDelDiaDe(alcance.email, hoyISO, { fresco: true }).catch(() => null) : Promise.resolve(null),
   ]);
 
   // Un frente que llevas sin el permiso para abrirlo se calla (lib/para-ti/frentes.ts): se dice, para que no parezca
@@ -126,10 +132,7 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
   const acceso = accesoParaFrentes(alcance);
   const callados = alcance.frentes.filter((f) => !puedeLlevar(frente(f), acceso));
 
-  // Lo de hoy (los números, el resumen y la reunión que se abre sola). Si la agenda muestra otro día o la semana, la de
-  // hoy se pide aparte.
-  const mostrandoHoy = !semana && dia === hoyISO;
-  const agendaDeHoy = !veAgenda || modo !== "dia" ? null : mostrandoHoy ? agenda : await agendaDelDiaDe(alcance.email, hoyISO).catch(() => null);
+  const agendaDeHoy = !veAgenda || modo !== "dia" ? null : mostrandoHoy ? agenda : otraAgendaDeHoy;
   const reunionesDeHoy = agendaDeHoy?.estado === "ok" ? agendaDeHoy.reuniones : [];
   const proxima = reunionesDeHoy.find((r) => r.empresas.length > 0 && Date.parse(r.inicio) > ahora.getTime()) ?? null;
   const hueco = agendaDeHoy?.estado === "ok" ? huecoLibre(reunionesDeHoy, hoyISO, ahora) : null;
@@ -230,15 +233,8 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
                 veAgenda && agenda
                   ? {
                       datos: agenda,
-                      vista: semana ? "semana" : "dia",
-                      dia: semana ? lunes : dia,
-                      enlaces: {
-                        hoy: enlace({ dia: null }),
-                        anterior: enlace({ dia: sumarDias(semana ? lunes : dia, semana ? -7 : -1) }),
-                        siguiente: enlace({ dia: sumarDias(semana ? lunes : dia, semana ? 7 : 1) }),
-                        dia: enlace({ agenda: null }),
-                        semana: enlace({ agenda: "semana" }),
-                      },
+                      vista: vistaDeLaAgenda,
+                      dia: diaVisto,
                     }
                   : null,
               cuentas,

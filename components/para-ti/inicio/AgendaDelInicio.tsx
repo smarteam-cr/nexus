@@ -9,19 +9,32 @@
  * invitados y la cuenta; «Abrir en Google Calendar» lo abre configurado y la persona lo guarda allá. Nexus no escribe en
  * el calendario. Los huecos libres de hoy (una hora o más, en horario laboral) van punteados en azul, cada uno con la
  * tarea tuya más importante que cabe ahí («Con qué avanzar», lib/mi-dia/inicio.ts › conQueAvanzar).
+ *
+ * Segunda vuelta (2026-10-17, noche): ‹ ›, «Hoy» y Día ↔ Semana se mueven sin volver a pedir la página
+ * (agenda-navegable.ts); la agenda es de lunes a viernes (lib/mi-dia/agenda-dias.ts); tocar afuera, la X o Escape suelta
+ * el borrador (se borra y el hueco queda como estaba).
  */
-import Link from "next/link";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Segmentado } from "@/components/ui";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
 import { grillaDelDia, horaCR, instante, lineaDeAhora, minutoDelDia, type ConQueAvanzar, type EventoEnLaGrilla } from "@/lib/mi-dia/inicio";
 import { MINUTOS_DEL_BORRADOR, sePisan, tituloDelBorrador, type BorradorDeEvento } from "@/lib/mi-dia/agenda-borrador";
 import type { AgendaDeHoy, ReunionDeLaAgenda } from "@/lib/mi-dia/agenda-server";
+import { diaDeEntradaDeLaAgenda, diaQueSeVe, diasDeLaGrilla, esFinDeSemana, pasoDeLaAgenda, type VistaDeLaAgenda } from "@/lib/mi-dia/agenda-dias";
 import { ENLACE_BOTON, TARJETA, TITULO } from "./piezas";
-import { useRouter } from "next/navigation";
 import BorradorDelEvento from "./BorradorDelEvento";
-import { crearBorrador, editarBorrador, fijarEventosDeLaAgenda, primeraHoraLibre, useBorradores, yaEnfocado } from "./borradores";
+import type { AgendaQueSeVe } from "./agenda-navegable";
+import {
+  anunciarAgenda,
+  crearBorrador,
+  editarBorrador,
+  fijarEventosDeLaAgenda,
+  primeraHoraLibre,
+  soltarBorrador,
+  useBorradores,
+  yaEnfocado,
+} from "./borradores";
 
 const ALTO_HORA = 60;
 /** Al tocar una hora libre, el borrador arranca en la media hora que se tocó. */
@@ -70,67 +83,83 @@ export function lineaDeLaReunion(r: { inicio: string; fin: string | null }, hoyI
 }
 
 export default function AgendaDelInicio({
-  agenda,
-  vista,
-  dia,
+  agenda: vistaActual,
+  cargando,
+  onIr,
+  onPrecargar,
   hoyISO,
   ahora,
   correo,
   seleccion,
   onElegir,
   huecos,
-  enlaces,
 }: {
-  agenda: AgendaDeHoy;
-  vista: "dia" | "semana";
-  /** El día que se ve, o el lunes en la semana. */
-  dia: string;
+  agenda: AgendaQueSeVe;
+  /** Se está leyendo el calendario del día (o la semana) nuevo. */
+  cargando: boolean;
+  /** Ir a otro día o vista, sin volver a pedir la página (agenda-navegable.ts). */
+  onIr: (vista: VistaDeLaAgenda, dia: string) => void;
+  onPrecargar: (vista: VistaDeLaAgenda, dia: string) => void;
   hoyISO: string;
   ahora: Date;
   correo: string;
   seleccion: string | null;
   onElegir: (id: string) => void;
   huecos: readonly HuecoDeLaAgenda[];
-  enlaces: { hoy: string; anterior: string; siguiente: string; dia: string; semana: string };
 }) {
-  const router = useRouter();
+  const { vista, dia, datos: agenda } = vistaActual;
   const borradores = useBorradores(correo);
-  const dias = useMemo(() => (vista === "semana" ? [0, 1, 2, 3, 4].map((i) => sumarDias(dia, i)) : [dia]), [vista, dia]);
+  const dias = useMemo(() => diasDeLaGrilla(vista, dia), [vista, dia]);
   const titulo = vista === "semana" ? `Semana del ${fechaCorta(dia)} al ${fechaCorta(sumarDias(dia, 4))}` : fechaLarga(dia);
   const eventos = useMemo(() => agenda.reuniones.map((r) => ({ id: r.id, inicio: r.inicio, fin: r.fin })), [agenda.reuniones]);
   // «Agendar» y «+ Crear evento» buscan la primera hora libre sin pisar lo que la agenda tiene cargado.
   useEffect(() => fijarEventosDeLaAgenda(eventos), [eventos]);
+  // «Planificar acción» (la cartera) sabe si hay una agenda donde mostrar el borrador.
+  useEffect(() => anunciarAgenda(), []);
   // Un borrador tapa el hueco libre que se pisa con él (ya se está usando).
-  const huecosVisibles = vista === "dia" ? huecos.filter((h) => !borradores.lista.some((b) => sePisan(b, h))) : [];
-  const huecoPorId = new Map(huecosVisibles.map((h) => [h.id, h]));
-  const conBorradores = [
-    ...eventos,
-    ...huecosVisibles.map((h) => ({ id: h.id, inicio: h.inicio, fin: h.fin })),
-    ...borradores.lista.map((b) => ({ id: ID_DEL_BORRADOR + b.id, inicio: b.inicio, fin: b.fin })),
-  ];
-  const grillas = dias.map((d) => grillaDelDia(conBorradores, d));
+  const huecosVisibles = useMemo(
+    () => (vista === "dia" ? huecos.filter((h) => !borradores.lista.some((b) => sePisan(b, h))) : []),
+    [vista, huecos, borradores.lista],
+  );
+  const huecoPorId = useMemo(() => new Map(huecosVisibles.map((h) => [h.id, h])), [huecosVisibles]);
+  // La grilla se calcula una vez por cambio de lo que se ve (no en cada render del inicio).
+  const grillas = useMemo(() => {
+    const todos = [
+      ...eventos,
+      ...huecosVisibles.map((h) => ({ id: h.id, inicio: h.inicio, fin: h.fin })),
+      ...borradores.lista.map((b) => ({ id: ID_DEL_BORRADOR + b.id, inicio: b.inicio, fin: b.fin })),
+    ];
+    return dias.map((d) => grillaDelDia(todos, d));
+  }, [eventos, huecosVisibles, borradores.lista, dias]);
   const desdeHora = Math.min(...grillas.map((g) => g.desdeHora));
   const hastaHora = Math.max(...grillas.map((g) => g.hastaHora));
   const horas = Array.from({ length: hastaHora - desdeHora }, (_, i) => desdeHora + i);
-  const porId = new Map(agenda.reuniones.map((r) => [r.id, r]));
+  const porId = useMemo(() => new Map(agenda.reuniones.map((r) => [r.id, r])), [agenda.reuniones]);
   const borradorPorId = new Map(borradores.lista.map((b) => [ID_DEL_BORRADOR + b.id, b]));
+  const editando = borradores.editando ? (borradores.lista.find((b) => b.id === borradores.editando) ?? null) : null;
 
-  // «Agendar» (en «Lo que importa hoy») o «+ Crear evento» pueden dejar el borrador en otro día: se va a ese día y se
-  // lleva el borrador a la vista.
+  // ‹ ›, «Hoy» y la vista: a dónde lleva cada uno (para ir y para adelantar la lectura al pasar el mouse).
+  const anterior = pasoDeLaAgenda(vista, dia, -1);
+  const siguiente = pasoDeLaAgenda(vista, dia, 1);
+  const entrada = diaDeEntradaDeLaAgenda(hoyISO, vista);
+  const hoyDeTrabajo = diaDeEntradaDeLaAgenda(hoyISO, "dia");
+  // De la semana al día: hoy si cae en esa semana; si no, su lunes.
+  const diaDesdeLaSemana = vista === "semana" && dias.includes(hoyDeTrabajo) ? hoyDeTrabajo : dia;
+
+  // «Agendar» (en «Lo que importa hoy» o la cartera) o «+ Crear evento» pueden dejar el borrador en otro día: se va a
+  // ese día (o a su semana) y se lleva el borrador a la vista.
   const enfocar = borradores.enfocar ? (borradores.lista.find((b) => b.id === borradores.enfocar) ?? null) : null;
   useEffect(() => {
     if (!enfocar) return;
     const suDia = minutoDelDia(enfocar.inicio).dia;
-    if (!dias.includes(suDia)) {
-      const u = new URL(enlaces.dia, window.location.origin);
-      u.searchParams.set("dia", suDia);
-      u.searchParams.delete("agenda");
-      router.push(`${u.pathname}${u.search}`, { scroll: false });
+    // Un borrador en un día que la agenda no muestra (un fin de semana) no la hace ir y venir: se da por mostrado.
+    if (!dias.includes(suDia) && diaQueSeVe(vista, suDia) !== dia) {
+      onIr(vista, suDia);
       return;
     }
     document.getElementById(`borrador-${enfocar.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
     yaEnfocado();
-  }, [enfocar, dias, enlaces.dia, router]);
+  }, [enfocar, dias, vista, dia, onIr]);
 
   const nuevoEnLaHora = (d: string, minuto: number) => {
     crearBorrador({ correo, inicio: instante(d, minuto), fin: instante(d, minuto + MINUTOS_DEL_BORRADOR), origen: "agenda" });
@@ -150,20 +179,43 @@ export default function AgendaDelInicio({
           <h2 id="agenda-t" className={TITULO}>
             Agenda
           </h2>
-          <Link href={enlaces.hoy} className={ENLACE_BOTON} scroll={false}>
+          <button
+            type="button"
+            className={ENLACE_BOTON}
+            onClick={() => onIr(vista, entrada)}
+            onPointerEnter={() => onPrecargar(vista, entrada)}
+            title={esFinDeSemana(hoyISO) ? "Es fin de semana: la agenda muestra el lunes que viene" : undefined}
+          >
             Hoy
-          </Link>
+          </button>
           <div className="flex gap-0.5">
-            <Link href={enlaces.anterior} scroll={false} aria-label={vista === "semana" ? "Semana anterior" : "Día anterior"} className="rounded px-2 py-0.5 text-[15px] text-fg-muted transition-colors hover:text-fg">
+            <button
+              type="button"
+              onClick={() => onIr(vista, anterior)}
+              onPointerEnter={() => onPrecargar(vista, anterior)}
+              aria-label={vista === "semana" ? "Semana anterior" : "Día anterior"}
+              className="rounded px-2 py-0.5 text-[15px] text-fg-muted transition-colors hover:text-fg"
+            >
               ‹
-            </Link>
-            <Link href={enlaces.siguiente} scroll={false} aria-label={vista === "semana" ? "Semana siguiente" : "Día siguiente"} className="rounded px-2 py-0.5 text-[15px] text-fg-muted transition-colors hover:text-fg">
+            </button>
+            <button
+              type="button"
+              onClick={() => onIr(vista, siguiente)}
+              onPointerEnter={() => onPrecargar(vista, siguiente)}
+              aria-label={vista === "semana" ? "Semana siguiente" : "Día siguiente"}
+              className="rounded px-2 py-0.5 text-[15px] text-fg-muted transition-colors hover:text-fg"
+            >
               ›
-            </Link>
+            </button>
           </div>
           <span className="text-sm font-medium text-fg">{titulo}</span>
+          {cargando && (
+            <span role="status" className="text-xs text-fg-muted">
+              Leyendo tu calendario…
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5" onPointerEnter={() => onPrecargar(vista === "semana" ? "dia" : "semana", vista === "semana" ? diaDesdeLaSemana : dia)}>
           <Segmentado
             etiqueta="Vista del calendario"
             opciones={[
@@ -171,7 +223,7 @@ export default function AgendaDelInicio({
               { clave: "semana", etiqueta: "Semana" },
             ]}
             valor={vista}
-            onCambio={(k) => router.replace(k === "semana" ? enlaces.semana : enlaces.dia, { scroll: false })}
+            onCambio={(k) => onIr(k === "semana" ? "semana" : "dia", k === "semana" ? dia : diaDesdeLaSemana)}
           />
           <button type="button" className={ENLACE_BOTON} onClick={crearEnLaPrimeraHora} title="Deja un borrador en tu primera hora libre de trabajo">
             + Crear evento
@@ -180,9 +232,13 @@ export default function AgendaDelInicio({
       </div>
 
       {agenda.estado !== "ok" ? (
-        <p className="text-[13px] text-fg-muted">{SIN_AGENDA[agenda.estado]}</p>
+        <>
+          <p className="text-[13px] text-fg-muted">{SIN_AGENDA[agenda.estado]}</p>
+          {/* Sin la grilla, el borrador que dejó «Agendar» se ve igual: nunca se abre Calendar sin verlo antes. */}
+          {editando && <BorradorDelEvento b={editando} onCerrar={() => soltarBorrador(editando.id)} />}
+        </>
       ) : (
-        <div className="relative pt-2">
+        <div className={cn("relative pt-2 transition-opacity", cargando && "opacity-60")} aria-busy={cargando}>
           {vista === "semana" && (
             <div className="grid pb-1.5 pl-[56px]" style={{ gridTemplateColumns: `repeat(${dias.length}, minmax(0, 1fr))` }}>
               {dias.map((d) => (
@@ -237,7 +293,11 @@ export default function AgendaDelInicio({
                         topDelCuadro={Math.max(0, Math.min(arriba + (vista === "semana" ? 0 : e.alto + 4), altoDeLaGrilla - ALTO_DEL_CUADRO))}
                         cuadro={
                           editando ? (
-                            <BorradorDelEvento b={b} className={cn("absolute", vista === "semana" ? (i >= 3 ? "right-full mr-1.5" : "left-full ml-1.5") : "right-2")} />
+                            <BorradorDelEvento
+                              b={b}
+                              onCerrar={() => soltarBorrador(b.id)}
+                              className={cn("absolute", vista === "semana" ? (i >= 3 ? "right-full mr-1.5" : "left-full ml-1.5") : "right-2")}
+                            />
                           ) : null
                         }
                       />
@@ -368,9 +428,24 @@ function BloqueDelBorrador({
   const titulo = tituloDelBorrador(b);
   const linea = `${horaCR(b.inicio)}–${horaCR(b.fin)} · ${b.abierto ? "abierto en Calendar, sin guardar" : "borrador"}`;
   const corto = e.alto < 40;
+  const bloque = useRef<HTMLButtonElement>(null);
+  const caja = useRef<HTMLDivElement>(null);
+  // Tocar afuera suelta el borrador: se borra y el hueco queda como estaba (soltarBorrador).
+  const conCuadro = !!cuadro;
+  useEffect(() => {
+    if (!conCuadro) return;
+    const alTocar = (ev: PointerEvent) => {
+      const t = ev.target as Node | null;
+      if (t && (bloque.current?.contains(t) || caja.current?.contains(t))) return;
+      soltarBorrador(b.id);
+    };
+    document.addEventListener("pointerdown", alTocar);
+    return () => document.removeEventListener("pointerdown", alTocar);
+  }, [conCuadro, b.id]);
   return (
     <>
       <button
+        ref={bloque}
         id={`borrador-${b.id}`}
         type="button"
         onClick={() => editarBorrador(abierto ? null : b.id)}
@@ -395,7 +470,7 @@ function BloqueDelBorrador({
         <span className="whitespace-nowrap text-[11.5px] leading-[15px] text-brand">{linea}</span>
       </button>
       {cuadro && (
-        <div className="absolute inset-x-0 z-20" style={{ top: topDelCuadro }}>
+        <div ref={caja} className="absolute inset-x-0 z-20" style={{ top: topDelCuadro }}>
           <div className="relative">{cuadro}</div>
         </div>
       )}
