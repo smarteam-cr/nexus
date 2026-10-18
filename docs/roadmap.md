@@ -23,7 +23,7 @@ está haciendo con él.
 | En rojo en producción | Un proyecto en un pipeline sin declarar, un cliente apuntando a una empresa fusionada en HubSpot y el corte de cobranza, que nunca corrió. |
 | Revisión de código | Hecha el 17 oct sobre los 31 cambios de entonces: 57 problemas encontrados, unos 50 corregidos y en `main`. Ninguno mezclaba clientes. |
 
-**Lo siguiente en todo Nexus:** validar en producción (pestaña «Lo que validas»). Yo corro lo que va después del deploy: cerrar las alertas sueltas, limpiar las reuniones con texto de otra, rescatar las transcripciones y guardar la primera versión de la escala.
+**Lo siguiente en todo Nexus:** validar en producción (pestaña «Lo que validas»). Yo corro lo que va después del deploy: cerrar las alertas sueltas, limpiar las reuniones con texto de otra, rescatar las transcripciones (la primera versión de la escala ya quedó guardada).
 
 En cada paso: **[hecho]** está hecho (en producción si la tarjeta lo dice); **[en curso]** lo está construyendo una sesión ahora.
 
@@ -74,7 +74,8 @@ Dónde está cada cliente y qué lo mueve. Es lo que une a Ventas con Customer S
 4. [hecho] La misma escala en la ficha del cliente, con su histórico: verla, regenerarla y activar el agente desde ahí. El diagnóstico de cada ciclo también la actualiza.
 5. [hecho] El camino de crecimiento de cada cliente: qué sigue en la escala y por qué.
 6. [hecho] Casos de uso sugeridos, inspirados en la biblioteca de casos de uso (con tu lista de títulos).
-7. Licencias y precio de cada caso de uso.
+7. [hecho] La escala de cada empresa en La cuenta › La escala, aunque no haya preventa: el agente la arma con el handoff, los cuestionarios y HubSpot. La primera versión de las 7 empresas con niveles confirmados quedó guardada el 17 oct.
+8. Licencias y precio de cada caso de uso.
 
 ### El chat de Nexus <span class="estado">En producción</span>
 
@@ -188,7 +189,6 @@ devuelve.
 | 16 | Por validar | Que el chip diga cómo está la cuenta, sin plata para el CSE | Con «Ver como» Alex, abre una cuenta en rojo o amarillo y pasa el mouse por el chip. Repite con «Ver como» el CSE de esa cuenta. | El color y hasta tres motivos. El CSE ve lo mismo, pero sin montos. |
 | 17 | Por validar | Que el chat trabaje solo sobre esa cuenta y genere un entregable | En la ficha, toca «Nexus». Pregunta «¿Qué está pendiente con esta cuenta?». Escribe «Por WhatsApp me dijeron que mandan la base el viernes» y toca «Aplicar» dos veces seguidas. Después pide «Genera el diagnóstico del proyecto X» y aplícalo. | Contesta solo con lo de esa cuenta. La tarea aparece en La cuenta › Tareas como «Chat de Nexus», una sola vez. El diagnóstico queda en la lista con la plantilla «Diagnóstico estratégico» y aparece en el proyecto en unos minutos. En un proyecto sin handoff, el kickoff no se ofrece y dice por qué. |
 | 18 | Por validar | Que «Sugerencias» diga qué hacer, con el mensaje listo | En la ficha, toca «Sugerencias». | Hasta 5 cosas que te tocan en esa cuenta, cada una con el mensaje de WhatsApp listo para copiar. |
-| 19 | Por validar | Que la escala de la cuenta muestre su evidencia y su historia | Abre un cliente con una exploración con niveles confirmados › La cuenta › La escala. Toca «Regenerar con el agente». | Cada nivel con de dónde sale (la fuente y la frase). «La escala en el tiempo» con sus versiones fechadas. El agente solo propone: no cambia los niveles confirmados. Abajo, el camino de crecimiento con casos sugeridos. |
 
 ### 3 · Tareas y reuniones
 
@@ -202,13 +202,26 @@ devuelve.
 
 | # | Estado | Qué validas | Pasos | Resultado esperado |
 |---|---|---|---|---|
-| 23 | Por validar | Que la escala de la preventa diga de dónde sale y qué explorar | Ventas › Preventa › una con reuniones leídas › La escala. | «De dónde sale cada nivel» y «Qué explorar en la próxima sesión». |
-| 24 | Por validar | Que la propuesta traiga los casos de uso | Propuestas › Nueva, con una empresa que tenga preventa › Generar. Repite con una sin preventa. | La sección «Casos de uso incluidos». Sin preventa, los sugeridos de la biblioteca, sin precio. |
 | 25 | Por validar | Que el IVA se calcule bien en los dos sentidos | En una propuesta de un cliente de Costa Rica, en la Inversión pon una línea de $10.000 y elige «+ IVA (13%)»; después cambia la línea a $11.300 y elige «IVA incluido (13%)». | Con «+ IVA»: «IVA (13%) $1,300» y «Total con IVA $11,300». Con «IVA incluido»: «Monto sin IVA $10,000» e «IVA (13%) $1,300», y el total no cambia. |
 | 26 | Por validar | Que el IVA también vaya en lo mensual y en la forma de pago | En una propuesta con una implementación y una licencia mensual, elige «+ IVA» y mira «Forma de pago». | «Pago único + IVA» y «Por mes + IVA», cada uno con su IVA y su total. En «Forma de pago», «Inversión total + IVA». |
 | 27 | Por validar | Que lo publicado no cambie y el PDF lleve el IVA | Abre la Inversión de un cliente sin país conocido. Después abre por su link una propuesta ya publicada y baja el PDF; publica la de la validación 25 y haz lo mismo. | Sin país: el selector está, con «⚠ No sabemos si el cliente es de Costa Rica…». La publicada de antes se ve igual, sin IVA. La de la validación 25 trae «Montos sin IVA (+ 13%)» y el mismo desglose, en el link y en el PDF. |
 
-### 5 · SmartLoop
+### 5 · La escala de cada empresa
+
+La escala ya no es solo de la preventa: cada empresa tiene la suya en La cuenta › La escala, se arma con lo que Nexus
+ya sabe (también sin preventa) y guarda su historia. El 17 oct guardé la primera versión de las 7 empresas con niveles
+confirmados: CreditForce, Grupo Servica, Quálitas, Tecnosagot, Grupo Monge, Cemaco Internacional y Distribuidora Larce.
+
+| # | Estado | Qué validas | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 19 | Por validar | Que la escala de la cuenta muestre su evidencia y su historia | Abre Cemaco Internacional › La cuenta › La escala. Toca «Regenerar con el agente». | Cada nivel con de dónde sale (la fuente y la frase). «La escala en el tiempo» con sus versiones fechadas. El agente solo propone: no cambia los niveles confirmados. Abajo, el camino de crecimiento con casos sugeridos. |
+| 45 | Por validar | Que la escala se arme desde el contexto de un cliente, sin preventa | Abre un cliente con un proyecto con handoff y sin exploración (no Wherex) › La cuenta › La escala. Toca «Activar el agente en «…»» y espera unos minutos sin salir. | Sin posición, «La empresa todavía no está posicionada en la escala» con el botón. Al tocarlo, «El agente está leyendo todo lo que Nexus sabe de la empresa…» y la fase en curso. Al terminar, niveles propuestos (en azul) con su porqué, sacados del handoff, los cuestionarios y HubSpot; se confirman en La escala de la Exploración del proyecto. |
+| 46 | Por validar | Que la escala guarde su historia | En Cemaco › La cuenta › La escala, mira «La escala en el tiempo». Confirma un nivel en La escala de su Exploración, vuelve y toca «Guardar esta versión»; tócalo otra vez. | La versión del 17 oct ya está. Después de confirmar, «Qué cambió desde el 17 oct» dice qué dimensión subió o bajó. La segunda vez: «Esta versión ya estaba guardada: nada cambió desde la última». |
+| 47 | Por validar | Que el camino de crecimiento proponga casos de uso | En Cemaco › La cuenta › La escala, baja a «El camino de crecimiento» y toca «Sumar a los sugeridos» en un caso. Abre La cuenta › Casos de uso. | Qué sigue en cada área y por qué, con los casos de la biblioteca que lo mueven. «Quedó como sugerido en La cuenta › Casos de uso», y ahí aparece como sugerido. |
+| 23 | Por validar | Que la escala de la preventa diga de dónde sale y qué explorar | Ventas › Preventa › una con reuniones leídas › La escala. | «De dónde sale cada nivel» y «Qué explorar en la próxima sesión». |
+| 24 | Por validar | Que la propuesta traiga los casos de uso | Propuestas › Nueva, con una empresa que tenga preventa › Generar. Repite con una sin preventa. | La sección «Casos de uso incluidos». Sin preventa, los sugeridos de la biblioteca, sin precio. |
+
+### 6 · SmartLoop
 
 | # | Estado | Qué validas | Pasos | Resultado esperado |
 |---|---|---|---|---|
@@ -217,7 +230,7 @@ devuelve.
 | 30 | Por validar | Que Nexus recomiende SmartLoop al llegar a la entrega | Abre un proyecto de implementación en «Entrega» › Resumen y toca «Dejar la tarea». En otro en «Entrega», toca «Abrir el alta». Mira «Para ti» del CSE encargado. | En «Qué sigue»: «propónle a … seguir con SmartLoop», con el porqué y los botones. «Dejar la tarea» crea la tarea y la recomendación desaparece. «Abrir el alta» abre Nuevo proyecto con «SmartLoop» elegido. En «Para ti» del CSE, la misma recomendación. |
 | 31 | Por validar | Que el cliente vea la ruta del servicio, sin datos internos | En un SmartLoop con ciclo › Resumen, toca «Subir al cliente» en «Ruta del servicio para el cliente». Abre el enlace del cliente con `?next=ciclos` y entra con la contraseña. En un proyecto que no es SmartLoop, abre «Acceso». | «Compartida desde el …» y «Volver a subir». El cliente ve cada ciclo con sus fechas y su meta, los casos como barras y «De tu parte: …», sin notas ni montos. En el que no es SmartLoop, la fila «Ruta del servicio» no aparece. |
 
-### 6 · Finanzas
+### 7 · Finanzas
 
 | # | Estado | Qué validas | Pasos | Resultado esperado |
 |---|---|---|---|---|
@@ -227,7 +240,7 @@ devuelve.
 | 35 | Por validar | Que Mercury esté en la facturación por cliente | Cobranza › Odoo › Facturación por cliente. Busca un cliente de Mercury y toca «Ver el detalle» en una factura. | Los clientes de Mercury junto a los de Odoo, y el detalle de cada factura. |
 | 36 | Por validar | Que las facturas de Odoo se peguen solas | Abre Cobranza › Odoo. | Las facturas que Odoo da por emitidas ya están pegadas a su cuota, sin hacer nada. |
 
-### 7 · Dirección: Rentabilidad y Uso de Nexus
+### 8 · Dirección: Rentabilidad y Uso de Nexus
 
 | # | Estado | Qué validas | Pasos | Resultado esperado |
 |---|---|---|---|---|
@@ -236,7 +249,7 @@ devuelve.
 | 39 | Por validar | Que se vea qué usa y qué desestima cada equipo | Para ti › «Uso de Nexus». Baja hasta el final de «Equipo» y abre «Para qué se usa». | Seis pestañas. «Qué usa cada equipo» con «3/7» en cada cruce. «Qué usa y qué desestima cada equipo» y «Quién decide» por nombre, agrupado por equipo. |
 | 40 | Por validar | Que se vea cuánto cuesta la IA y si sirve | Abre «IA por cliente» (cambia entre 30 y 90 días), «Procesos de IA» y «Conclusiones». | El gasto de IA por empresa con lo que se usó; por proceso, con errores y «% usado»; y conclusiones cortas «Para mirar», «Para saber» o «Va bien», cada una con su enlace. |
 
-### 8 · Éxito del cliente y Equipo
+### 9 · Éxito del cliente y Equipo
 
 | # | Estado | Qué validas | Pasos | Resultado esperado |
 |---|---|---|---|---|
