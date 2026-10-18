@@ -64,15 +64,28 @@ function getServiceAccountKey(): {
 /**
  * Crea un cliente JWT con DWD impersonando al usuario dado.
  * Útil para acceder a Calendar, Drive y Docs de ese usuario.
+ *
+ * Se reusa el MISMO cliente por persona (2026-10-17): el JWT guarda su token de acceso (una hora) y lo renueva solo, así
+ * que cada lectura del calendario no paga otro intercambio de token con Google. Medido en la agenda del inicio: la
+ * primera lectura con un cliente nuevo tardó ~1 s; con el token ya en mano, ~0,4 s.
  */
+const CLIENTES_IMPERSONADOS = new Map<string, JWT>();
+const MAX_CLIENTES_IMPERSONADOS = 200;
+
 export function getImpersonatedAuth(userEmail: string): JWT {
+  const k = userEmail.trim().toLowerCase();
+  const ya = CLIENTES_IMPERSONADOS.get(k);
+  if (ya) return ya;
   const { client_email, private_key } = getServiceAccountKey();
-  return new JWT({
+  const nuevo = new JWT({
     email: client_email,
     key: private_key,
     scopes: SCOPES_IMPERSONATE,
     subject: userEmail,
   });
+  if (CLIENTES_IMPERSONADOS.size >= MAX_CLIENTES_IMPERSONADOS) CLIENTES_IMPERSONADOS.delete(CLIENTES_IMPERSONADOS.keys().next().value!);
+  CLIENTES_IMPERSONADOS.set(k, nuevo);
+  return nuevo;
 }
 
 // ── getAgendaWriteAuth ────────────────────────────────────────────────────────

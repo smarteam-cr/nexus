@@ -133,11 +133,22 @@ export function conInvitado(invitados: readonly InvitadoDelBorrador[], nuevo: In
   return [...invitados, { ...nuevo, correo }];
 }
 
+/** `20261017T150000Z` (el formato del parámetro `dates` de Google Calendar) a ISO. null = no se entiende. */
+function desdeFormatoDeGoogle(v: string): string | null {
+  const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(v);
+  if (!m) return null;
+  const ms = Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`);
+  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+}
+
 /**
- * Lo que trae el enlace de «Agendar» que arma el servidor (lib/mi-dia/servicio.ts): el título, los invitados y la
- * cuenta de Google. null = no es un enlace de Google Calendar.
+ * Lo que trae el enlace de «Agendar» que arma el servidor (lib/mi-dia/servicio.ts): el título, los invitados, la
+ * cuenta de Google y la hora propuesta (el primer hueco libre de los próximos 8 días, si el servidor lo encontró).
+ * null = no es un enlace de Google Calendar.
  */
-export function datosDelEnlaceDeAgendar(href: string): { titulo: string; invitados: string[]; correo: string | null } | null {
+export function datosDelEnlaceDeAgendar(
+  href: string,
+): { titulo: string; invitados: string[]; correo: string | null; inicio: string | null; fin: string | null } | null {
   let u: URL;
   try {
     u = new URL(href);
@@ -153,7 +164,15 @@ export function datosDelEnlaceDeAgendar(href: string): { titulo: string; invitad
       .map((x) => x.trim().toLowerCase())
       .filter((x) => CORREO.test(x)),
     correo: q.get("authuser"),
+    ...horaDelEnlace(q.get("dates")),
   };
+}
+
+function horaDelEnlace(dates: string | null): { inicio: string | null; fin: string | null } {
+  const [a, b] = (dates ?? "").split("/");
+  const inicio = a ? desdeFormatoDeGoogle(a) : null;
+  const fin = b ? desdeFormatoDeGoogle(b) : null;
+  return inicio && fin && Date.parse(fin) > Date.parse(inicio) ? { inicio, fin } : { inicio: null, fin: null };
 }
 
 /**

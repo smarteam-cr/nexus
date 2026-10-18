@@ -74,7 +74,16 @@ describe("el borrador de un evento", () => {
   });
   it("lee el enlace de «Agendar» que arma el servidor", () => {
     const href = enlaceParaAgendarEnCalendar({ titulo: "Reunión con Wherex", detalle: "x", invitados: ["jorge@wherex.com", "ana@wherex.com"], correo: "ana@smarteamcr.com" });
-    expect(datosDelEnlaceDeAgendar(href)).toEqual({ titulo: "Reunión con Wherex", invitados: ["jorge@wherex.com", "ana@wherex.com"], correo: "ana@smarteamcr.com" });
+    expect(datosDelEnlaceDeAgendar(href)).toEqual({
+      titulo: "Reunión con Wherex",
+      invitados: ["jorge@wherex.com", "ana@wherex.com"],
+      correo: "ana@smarteamcr.com",
+      inicio: null,
+      fin: null,
+    });
+    // Con la hora que propone el servidor (el primer hueco libre), «Agendar» la usa en el borrador.
+    const conHora = enlaceParaAgendarEnCalendar({ titulo: "Reunión con Wherex", inicio: a(10), fin: a(11), correo: "ana@smarteamcr.com" });
+    expect(datosDelEnlaceDeAgendar(conHora)).toMatchObject({ inicio: a(10), fin: a(11) });
     expect(datosDelEnlaceDeAgendar("/clients/c1?tab=__tareas__")).toBeNull();
     expect(datosDelEnlaceDeAgendar("https://ejemplo.com/?add=a@b.com")).toBeNull();
   });

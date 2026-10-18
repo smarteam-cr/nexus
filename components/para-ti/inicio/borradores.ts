@@ -53,6 +53,21 @@ export function fijarEventosDeLaAgenda(eventos: readonly EventoParaLaGrilla[]) {
   eventosDeLaAgenda = [...eventos];
 }
 
+/** Cuántas agendas hay en pantalla: «Planificar acción» lleva al inicio si no hay ninguna donde mostrar el borrador. */
+let agendasEnPantalla = 0;
+
+/** La agenda se anuncia al montarse; devuelve la función para cuando se va. */
+export function anunciarAgenda(): () => void {
+  agendasEnPantalla++;
+  return () => {
+    agendasEnPantalla--;
+  };
+}
+
+export function hayAgendaEnPantalla(): boolean {
+  return agendasEnPantalla > 0;
+}
+
 let contador = 0;
 const nuevoId = () => `b${Date.now().toString(36)}${(contador++).toString(36)}`;
 
@@ -90,8 +105,11 @@ export function crearBorrador(b: {
   return nuevo;
 }
 
-export function cambiarBorrador(id: string, cambios: Partial<Omit<BorradorDeEvento, "id" | "correo">>) {
-  cambiar({ lista: estado.lista.map((b) => (b.id === id ? { ...b, ...cambios } : b)) });
+type CambiosDelBorrador = Partial<Omit<BorradorDeEvento, "id" | "correo">>;
+
+/** Cambia un borrador. Con una función, los cambios se calculan sobre cómo está AHORA (no sobre una copia vieja). */
+export function cambiarBorrador(id: string, cambios: CambiosDelBorrador | ((b: BorradorDeEvento) => CambiosDelBorrador)) {
+  cambiar({ lista: estado.lista.map((b) => (b.id === id ? { ...b, ...(typeof cambios === "function" ? cambios(b) : cambios) } : b)) });
 }
 
 export function quitarBorrador(id: string) {
@@ -120,6 +138,17 @@ export async function yaLoGuarde(b: BorradorDeEvento): Promise<{ ok: true; plane
   }
   quitarBorrador(b.id);
   return { ok: true, planeada: true };
+}
+
+/**
+ * Soltar el borrador (tocar afuera, la X o Escape): se borra y el hueco queda como estaba. El que ya se abrió en Google
+ * Calendar solo se cierra: espera su «Ya lo guardé» (o «Descartar»).
+ */
+export function soltarBorrador(id: string) {
+  const b = estado.lista.find((x) => x.id === id);
+  if (!b) return;
+  if (b.abierto) editarBorrador(null);
+  else quitarBorrador(id);
 }
 
 export function editarBorrador(id: string | null) {

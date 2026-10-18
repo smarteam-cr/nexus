@@ -96,11 +96,55 @@ export async function resumenParaLaReunion(o: {
   ahora?: Date;
 }): Promise<ResumenDeLaReunion | null> {
   const ahora = o.ahora ?? new Date();
-  const cliente = await prisma.client.findUnique({ where: { id: o.clientId }, select: { id: true, name: true } });
-  if (!cliente) return null;
+  // Todo lo que no depende de otra lectura va en paralelo, y lo que depende (quién viene y lo que se dijo dependen del
+  // evento; lo pendiente, de los proyectos) arranca apenas llega lo suyo (2026-10-17: antes eran cuatro tandas en fila).
+  const clienteP = prisma.client.findUnique({ where: { id: o.clientId }, select: { id: true, name: true } });
+  const eventoP = o.eventoId ? releerEventos(o.email, [o.eventoId]) : Promise.resolve(null);
+  const proyectosP = prisma.project.findMany({
+    where: proyectoClasificableWhere({ clientId: o.clientId }),
+    select: { id: true, name: true },
+    orderBy: { createdAt: "desc" },
+    take: PROYECTOS_A_MIRAR,
+  });
+  // Lo pendiente de los dos lados, por proyecto.
+  const pendientesP: Promise<PendienteDelResumen[]> = proyectosP.then(async (proyectos) =>
+    (
+      await Promise.all(
+        proyectos.map(async (p) => (await compromisosAbiertosParaAgentes(p.id, 8).catch(() => [])).map((t) => ({ ...t, proyecto: p.name }))),
+      )
+    ).flat(),
+  );
+  // El evento, en una forma: lo que se muestra y sus invitados.
+  const leidoP = eventoP.then((evento) => {
+    let reunion: ResumenDeLaReunion["reunion"] = null;
+    let reunionNoLeida: string | null = o.eventoId ? null : "sin-evento";
+    let correos: string[] = [];
+    if (evento) {
+      if (!evento.ok) reunionNoLeida = evento.motivo;
+      else {
+        const e = evento.datos[0];
+        if (!e || e.estado !== "ok") reunionNoLeida = e?.estado ?? "noExiste";
+        else {
+          reunion = { id: e.id, titulo: e.titulo, inicio: e.inicio, fin: e.fin };
+          correos = e.invitados;
+        }
+      }
+    }
+    return { reunion, reunionNoLeida, correos };
+  });
+  const invitadosP = leidoP.then((l) => invitadosDe(l.correos, o.clientId).catch(() => []));
+  // Lo que se dijo antes de lo que dice el título (la frase tal cual, de la transcripción).
+  const loQueSeDijoP = Promise.all([leidoP, clienteP]).then(async ([l, c]) => {
+    const palabras = l.reunion?.titulo && c ? palabrasDelTitulo(l.reunion.titulo, c.name) : [];
+    return { palabras, frases: palabras.length ? await loQueSeDijoDe(o.clientId, palabras, 3).catch(() => []) : [] };
+  });
 
-  const [evento, reuniones, dominios, proyectos, pasos, personas, alertas, negocios] = await Promise.all([
-    o.eventoId ? releerEventos(o.email, [o.eventoId]) : Promise.resolve(null),
+  const [cliente, leido, invitadosCrudos, loQueSeDijo, pendientes, reuniones, dominios, pasos, personas, alertas, negocios] = await Promise.all([
+    clienteP,
+    leidoP,
+    invitadosP,
+    loQueSeDijoP,
+    pendientesP,
     // Solo las que ya ocurrieron: una agendada no es «la última vez».
     prisma.firefliesSession.findMany({
       where: { ...whereBelongsToClient(o.clientId), date: { lte: ahora } },
@@ -119,7 +163,6 @@ export async function resumenParaLaReunion(o: {
       },
     }),
     dominiosDeLaCasa(),
-    prisma.project.findMany({ where: proyectoClasificableWhere({ clientId: o.clientId }), select: { id: true, name: true }, orderBy: { createdAt: "desc" }, take: PROYECTOS_A_MIRAR }),
     pasosDeLaCuenta(o.clientId).catch(() => null),
     personasYTicketsDe(o.clientId, ahora).catch(() => null),
     o.veAlertas
@@ -135,25 +178,12 @@ export async function resumenParaLaReunion(o: {
       : Promise.resolve([]),
   ]);
 
-  // El evento.
-  let reunion: ResumenDeLaReunion["reunion"] = null;
-  let reunionNoLeida: string | null = o.eventoId ? null : "sin-evento";
-  let correosDelEvento: string[] = [];
-  if (evento) {
-    if (!evento.ok) reunionNoLeida = evento.motivo;
-    else {
-      const e = evento.datos[0];
-      if (!e || e.estado !== "ok") reunionNoLeida = e?.estado ?? "noExiste";
-      else {
-        reunion = { id: e.id, titulo: e.titulo, inicio: e.inicio, fin: e.fin };
-        correosDelEvento = e.invitados;
-      }
-    }
-  }
+  if (!cliente) return null;
+  const { reunion, reunionNoLeida } = leido;
 
   // Quién viene, con su última reunión.
   const ultimaPorCorreo = new Map((personas?.personas ?? []).flatMap((p) => (p.email ? [[p.email, p.ultimaReunion] as const] : [])));
-  const invitados: InvitadoDelResumen[] = (await invitadosDe(correosDelEvento, o.clientId).catch(() => [])).map((i) => ({
+  const invitados: InvitadoDelResumen[] = invitadosCrudos.map((i) => ({
     ...i,
     ultimaReunion: i.lado === "cliente" ? (ultimaPorCorreo.get(i.email) ?? null) : null,
   }));
@@ -180,17 +210,6 @@ export async function resumenParaLaReunion(o: {
     break;
   }
 
-  // Lo que se dijo antes de lo que dice el título (la frase tal cual, de la transcripción).
-  const palabras = reunion?.titulo ? palabrasDelTitulo(reunion.titulo, cliente.name) : [];
-  const frases = await loQueSeDijoDe(o.clientId, palabras, 3).catch(() => []);
-
-  // Lo pendiente de los dos lados, por proyecto.
-  const pendientes: PendienteDelResumen[] = (
-    await Promise.all(
-      proyectos.map(async (p) => (await compromisosAbiertosParaAgentes(p.id, 8).catch(() => [])).map((t) => ({ ...t, proyecto: p.name }))),
-    )
-  ).flat();
-
   return {
     cliente: { id: cliente.id, nombre: cliente.name },
     reunion,
@@ -207,6 +226,6 @@ export async function resumenParaLaReunion(o: {
       cierre: n.fechaCierre ? fechaCorta(n.fechaCierre) : null,
       monto: o.veMontos ? montoLegible(n.monto, n.moneda) : null,
     })),
-    loQueSeDijo: { palabras, frases },
+    loQueSeDijo,
   };
 }

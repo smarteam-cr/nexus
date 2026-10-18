@@ -38,8 +38,10 @@ export interface PanelDeLaReunion {
   cliente: { id: string; nombre: string; tipo: string | null } | null;
   guia: GuiaDeLaReunion;
   preparacion: PreparacionGuardada;
-  /** false = falta aplicar el SQL de la preparación: el objetivo y las notas no se pueden guardar. */
+  /** false = falta aplicar el SQL de la preparación, o es «Ver como»: el objetivo y las notas no se pueden guardar. */
   sePuedeGuardar: boolean;
+  /** Es «Ver como»: las notas son de la persona mirada y no se muestran (el panel lo dice en vez de esconderlas). */
+  verComo: boolean;
   vienen: PersonaQueViene[];
   ultima: { sessionId: string; fecha: string; resumen: string | null; fuente: string } | null;
   pendientes: PendienteDelPanel[];
@@ -72,6 +74,7 @@ export async function panelDeLaReunion(o: {
     guia: { objetivo: null, puntos: [] },
     preparacion,
     sePuedeGuardar: !verComo && preparacionDisponible(),
+    verComo,
     vienen: [],
     ultima: null,
     pendientes: [],
@@ -80,7 +83,9 @@ export async function panelDeLaReunion(o: {
   };
   if (!o.clientId) return base;
 
-  const [cliente, resumen, servicio] = await Promise.all([
+  // Todo en paralelo (2026-10-17): «lo que dejó» ya no espera al resumen. Medido: el panel bajó de ~1,9 s a ~1,1 s.
+  const yaPaso = o.inicio ? Date.parse(o.inicio) < o.ahora.getTime() : false;
+  const [cliente, resumen, servicio, loQueDejo] = await Promise.all([
     prisma.client.findUnique({ where: { id: o.clientId }, select: { id: true, name: true, kind: true } }),
     resumenParaLaReunion({ clientId: o.clientId, eventoId: o.eventoId, email: o.email, veAlertas: o.veAlertas, veMontos: o.veMontos, ahora: o.ahora }),
     servicioDeLasCuentas([{ clientId: o.clientId, empresa: "", llevaEmail: o.email }], {
@@ -88,16 +93,15 @@ export async function panelDeLaReunion(o: {
       hoyISO: o.hoyISO,
       quienMira: { email: o.email, esSuperAdmin: o.rol === "SUPER_ADMIN" },
     }).catch(() => null),
+    yaPaso ? loQueDejoElEvento(o.eventoId, o.clientId, o.user, o.rol, o.ahora).catch(() => null) : Promise.resolve(null),
   ]);
   if (!cliente || !resumen) return null;
 
-  const yaPaso = o.inicio ? Date.parse(o.inicio) < o.ahora.getTime() : false;
   // Otra reunión con la cuenta DESPUÉS de esta (no la primera de la lista: esa suele ser esta misma).
   const proximas = servicio?.get(o.clientId)?.proximas ?? [];
   const hayReunionDespues = o.inicio
     ? proximas.some((r) => Date.parse(r.inicio) > Date.parse(o.inicio!) + 60_000)
     : proximas.length > 0;
-  const loQueDejo = yaPaso ? await loQueDejoElEvento(o.eventoId, o.clientId, o.user, o.rol, o.ahora).catch(() => null) : null;
 
   const n = resumen.negocios[0];
   return {

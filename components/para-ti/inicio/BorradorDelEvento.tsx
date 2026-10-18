@@ -48,9 +48,12 @@ export default function BorradorDelEvento({
   b,
   className,
   onGuardado,
+  onCerrar,
 }: {
   b: BorradorDeEvento;
   className?: string;
+  /** La X y Escape. Sin esto, solo se cierra el cuadro; la agenda lo usa para soltar el borrador (borrarlo). */
+  onCerrar?: () => void;
   /** Después de «Ya lo guardé» (ya se quitó el borrador): «Planifica tu semana» lo usa para mostrarla agendada. */
   onGuardado?: (b: BorradorDeEvento) => void;
 }) {
@@ -65,6 +68,7 @@ export default function BorradorDelEvento({
   const toast = useToast();
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cerrar = onCerrar ?? (() => editarBorrador(null));
 
   useEffect(() => {
     if (!b.abierto) titulo.current?.focus();
@@ -133,7 +137,7 @@ export default function BorradorDelEvento({
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.stopPropagation();
-          editarBorrador(null);
+          cerrar();
         }
       }}
       className={cn("flex w-[340px] max-w-[calc(100vw-48px)] flex-col gap-3 rounded-xl border border-line bg-surface p-3.5 shadow-segment", className)}
@@ -148,7 +152,7 @@ export default function BorradorDelEvento({
             </p>
           )}
         </div>
-        <button type="button" aria-label="Cerrar el cuadro" onClick={() => editarBorrador(null)} className="rounded px-1.5 text-base leading-5 text-fg-muted transition-colors hover:text-fg">
+        <button type="button" aria-label="Cerrar" onClick={cerrar} className="rounded px-1.5 text-base leading-5 text-fg-muted transition-colors hover:text-fg">
           ×
         </button>
       </div>

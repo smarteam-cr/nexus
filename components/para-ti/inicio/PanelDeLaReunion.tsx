@@ -158,7 +158,7 @@ export default function PanelDeLaReunion({
                   Reunión interna. Si es la reunión de tu sprint, Nexus propone en Tareas lo que se comprometió cada uno.
                 </p>
                 {/* Una por reunión: lo escrito antes de que lleguen tus notas guardadas no se pierde (ver `Notas`). */}
-                <Notas key={r.id} eventoId={r.id} panel={datos?.panel ?? null} />
+                <Notas key={r.id} eventoId={r.id} panel={datos?.panel ?? null} futura={futura} />
               </>
             ) : !empresa ? null : !datos ? (
               <div className="flex flex-col gap-2.5 rounded-xl border border-line px-4 py-3.5">
@@ -306,7 +306,8 @@ function Contenido({ panel, futura, hoyISO }: { panel: Panel; futura: boolean; h
           <p className="text-[13px] leading-[19px] text-fg-secondary">{panel.negocio}</p>
         </div>
       )}
-      {futura && <Notas key={panel.eventoId} eventoId={panel.eventoId} panel={panel} />}
+      {/* También en una reunión que ya pasó: la nota sirve igual después (2026-10-17). */}
+      <Notas key={panel.eventoId} eventoId={panel.eventoId} panel={panel} futura={futura} />
     </>
   );
 }
@@ -428,7 +429,7 @@ function Guia({ panel }: { panel: Panel }) {
  * guardadas solo llenan el campo si no tocaste nada). Y al cerrarse (otra reunión, cerrar el panel) guarda lo que
  * quedó sin guardar, en vez de perderlo con el temporizador.
  */
-function Notas({ eventoId, panel }: { eventoId: string; panel: Panel | null }) {
+function Notas({ eventoId, panel, futura }: { eventoId: string; panel: Panel | null; futura: boolean }) {
   const toast = useToast();
   const [texto, setTexto] = useState(panel?.preparacion.notas ?? "");
   const [estado, setEstado] = useState<"" | "guardando" | "guardado">("");
@@ -495,6 +496,14 @@ function Notas({ eventoId, panel }: { eventoId: string; panel: Panel | null }) {
     [eventoId],
   );
 
+  if (panel?.verComo) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <p className={ROTULO_DEL_SISTEMA}>Tus notas</p>
+        <p className="text-xs text-fg-muted">Las notas son de cada persona: mientras ves Nexus como otra persona no se ven ni se escriben.</p>
+      </div>
+    );
+  }
   if (panel && !panel.sePuedeGuardar) return null;
   return (
     <div className="flex flex-col gap-1.5">
@@ -509,7 +518,7 @@ function Notas({ eventoId, panel }: { eventoId: string; panel: Panel | null }) {
         rows={4}
         maxLength={5000}
         value={texto}
-        placeholder="Lo que quieres preguntar o recordar. Solo lo ves tú."
+        placeholder={futura ? "Lo que quieres preguntar o recordar. Solo lo ves tú." : "Lo que pasó o lo que quieres recordar de esta reunión. Solo lo ves tú."}
         onChange={(e) => {
           const v = e.target.value;
           setTexto(v);
