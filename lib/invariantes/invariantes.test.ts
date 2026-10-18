@@ -222,6 +222,33 @@ describe("cobranza: INV3, INV5, INV18, INV20, INV25, INV26, INV27, INV28", () =>
     expect((await INV25.correr(baseFalsa({ cobro: [] }), AHORA)).ok).toBe(true);
   });
 
+  it("INV25 · el cobro solo (sistema:odoo / sistema:mercury) cumple SOLO con su factura pagada en la copia (2026-10-18)", async () => {
+    const solo = (id: string, firma: string, numero: string) => ({ id, monto: 500, moneda: "USD", estado: "COBRADO", confirmadoPor: firma, numeroFactura: numero, ...conCliente });
+    const conEvidencia = await INV25.correr(
+      baseFalsa({
+        cobro: [solo("k1", "sistema:odoo", "FAC/2026/0010"), solo("k2", "sistema:mercury", "INV-7")],
+        facturaOdoo: [{ numero: "FAC/2026/0010", paymentState: "paid" }],
+        facturaMercury: [{ numero: "INV-7", estado: "Paid" }],
+      }),
+      AHORA,
+    );
+    expect(conEvidencia.ok).toBe(true);
+    // La factura dejó de estar pagada en Odoo, o la firma no es una de las dos: viola.
+    const sinEvidencia = await INV25.correr(
+      baseFalsa({
+        cobro: [solo("k1", "sistema:odoo", "FAC/2026/0010"), solo("k3", "sistema:otro", "FAC/2026/0011")],
+        facturaOdoo: [{ numero: "FAC/2026/0010", paymentState: "not_paid" }],
+        facturaMercury: [],
+      }),
+      AHORA,
+    );
+    expect(sinEvidencia.ok).toBe(false);
+    expect(sinEvidencia.lineas[0]).toContain("2 cobro(s)");
+    // Ya sacado de Cobrado: la firma vieja no confirma nada.
+    const revertido = await INV25.correr(baseFalsa({ cobro: [{ ...solo("k1", "sistema:odoo", "FAC/2026/0010"), estado: "POR_COBRAR" }], facturaOdoo: [], facturaMercury: [] }), AHORA);
+    expect(revertido.ok).toBe(true);
+  });
+
   it("INV26 · una alerta viva cuyo cobro ya no existe viola; una que apunta a un cobro vivo no", async () => {
     const alerta = { id: "a1", cobroId: "k-borrado", tipo: "VENCIDO", estado: "ABIERTA", ...conCliente };
     const r = await INV26.correr(baseFalsa({ alertaCobro: [alerta], cobro: [{ id: "k-vivo" }] }), AHORA);

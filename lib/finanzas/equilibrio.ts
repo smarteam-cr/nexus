@@ -178,6 +178,23 @@ export interface ImputacionDeCobro {
   enPlazo: boolean;
   /** Solo COBRADO: no dice cuándo entró la plata y se imputó por su período. */
   sinFechaDeCobro: boolean;
+  /**
+   * Solo COBRADO con `anioDeLaFactura`: la factura se emitió en un año anterior al del pago, y por eso queda en el mes de
+   * EMISIÓN (su año). En el año del pago no es facturado: el reporte lo declara aparte (`cobradoDeAniosAnteriores`).
+   */
+  deFacturaDeOtroAnio?: boolean;
+}
+
+/** Cómo imputa `tipoIngresoDeCobro`. */
+export interface OpcionesDeImputacion {
+  /**
+   * Lo facturado del año son las facturas EMITIDAS en el año (2026-10-18, pedido de Elías del 16-oct: «que Nexus lea
+   * solo las ventas de este año y los facturados de este año»). Sin esto, una factura de diciembre que se cobra en
+   * enero pasa de «por cobrar de años anteriores» a facturado del año nuevo, y el año cerrado cambia después de
+   * cerrarlo. Con esto, lo cobrado de una factura de otro año se queda en el mes de emisión. Lo pide el reporte de
+   * equilibrio y su auditor; Rentabilidad no (mide lo que entró, mes a mes, por la caja).
+   */
+  anioDeLaFactura?: boolean;
 }
 
 /**
@@ -195,12 +212,16 @@ export interface ImputacionDeCobro {
  * `enPlazo` sale de `claseDeCobranza`, o sea de `semaforoCobro`: una promesa de pago no saca una
  * factura del vencido.
  */
-export function tipoIngresoDeCobro(c: CobroParaImputar, hoyISO: string): ImputacionDeCobro {
+export function tipoIngresoDeCobro(c: CobroParaImputar, hoyISO: string, opciones: OpcionesDeImputacion = {}): ImputacionDeCobro {
   const clase = claseDeCobranza(c, hoyISO, c.creditoDias ?? DEFAULT_CREDITO_DIAS);
   if (clase === "COBRADO") {
+    const periodo = c.fechaCobroISO ? periodoDe(c.fechaCobroISO) : c.periodo;
+    if (opciones.anioDeLaFactura && c.fechaEmisionISO && c.fechaEmisionISO.slice(0, 4) < periodo.slice(0, 4)) {
+      return { tipo: "COBRADO", periodo: periodoDe(c.fechaEmisionISO), enPlazo: false, sinFechaDeCobro: !c.fechaCobroISO, deFacturaDeOtroAnio: true };
+    }
     return {
       tipo: "COBRADO",
-      periodo: c.fechaCobroISO ? periodoDe(c.fechaCobroISO) : c.periodo,
+      periodo,
       enPlazo: false,
       sinFechaDeCobro: !c.fechaCobroISO,
     };
@@ -346,7 +367,8 @@ export type CodigoAviso =
   | "SIN_MESES_ELEGIBLES"
   | "COMISIONES_ESTIMADAS"
   | "PARTNERSHIP_NO_CUBRE_EL_PISO"
-  | "INGRESOS_NO_VENTA";
+  | "INGRESOS_NO_VENTA"
+  | "COBRADO_DE_FACTURAS_ANTERIORES";
 
 export interface AvisoCalidad {
   codigo: CodigoAviso;
@@ -477,6 +499,12 @@ export interface ReporteEquilibrio {
    * todavía está en la calle. Sin convertir porque la tasa de ese mes no es del año del reporte.
    */
   porCobrarDeAniosAnteriores: Record<string, { porCobrar: number; vencido: number; facturas: number }>;
+  /**
+   * Lo que entró en el año por facturas emitidas en años ANTERIORES, por moneda nativa y sin convertir (2026-10-18). Es
+   * la otra mitad de `porCobrarDeAniosAnteriores`: esa factura ya contó como facturada en su año, así que acá no suma a
+   * lo facturado, a los ingresos, a la brecha ni al % de cobranza. Es caja de este año por una venta de otro.
+   */
+  cobradoDeAniosAnteriores: Record<string, { cobrado: number; facturas: number }>;
   /** Con qué criterios se armó. Viaja para que la pantalla lo diga en vez de suponerlo. */
   criterios: { partnershipCubreElPiso: boolean };
 }
@@ -1047,6 +1075,7 @@ export function calcularEquilibrio(
   /** La cobranza en moneda nativa. Se anota ANTES de convertir: lo que no tiene tasa existe igual. */
   const cobranzaNativa: Array<{ moneda: string; clase: ClaseDeCobranza; monto: number }> = [];
   const deAniosAnteriores: ReporteEquilibrio["porCobrarDeAniosAnteriores"] = {};
+  const cobradoDeAniosAnteriores: ReporteEquilibrio["cobradoDeAniosAnteriores"] = {};
 
   for (const i of ingresos) {
     const acc = ingMes.get(i.periodo);
@@ -1056,6 +1085,12 @@ export function calcularEquilibrio(
         const a = (deAniosAnteriores[i.moneda] ??= { porCobrar: 0, vencido: 0, facturas: 0 });
         a.porCobrar = round2(a.porCobrar + i.monto);
         if (!i.enPlazo) a.vencido = round2(a.vencido + i.monto);
+        a.facturas++;
+      }
+      // Cobrado en el año por una factura de otro año: ya contó en su año. Se declara, no se suma (`anioDeLaFactura`).
+      if (i.tipo === "COBRADO" && periodos.length > 0 && i.periodo < periodos[0]! && !!i.fechaISO && i.fechaISO.slice(0, 7) >= periodos[0]!) {
+        const a = (cobradoDeAniosAnteriores[i.moneda] ??= { cobrado: 0, facturas: 0 });
+        a.cobrado = round2(a.cobrado + i.monto);
         a.facturas++;
       }
       continue;
@@ -1280,6 +1315,16 @@ export function calcularEquilibrio(
       conceptos: [],
     });
   }
+  const deOtrosAnios = Object.entries(cobradoDeAniosAnteriores).filter(([, a]) => a.cobrado > 0);
+  if (deOtrosAnios.length > 0) {
+    avisos.push({
+      codigo: "COBRADO_DE_FACTURAS_ANTERIORES",
+      severidad: "BAJA",
+      mensaje: `${deOtrosAnios.map(([m, a]) => `${m} ${a.cobrado.toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${a.facturas} cuota${a.facturas === 1 ? "" : "s"})`).join(" y ")} entraron este año por facturas emitidas en años anteriores: cuentan como facturado en el año de la factura, no en este.`,
+      periodos: [],
+      conceptos: [],
+    });
+  }
   if (noVentaTotal > 0) {
     avisos.push({
       codigo: "INGRESOS_NO_VENTA",
@@ -1394,6 +1439,7 @@ export function calcularEquilibrio(
     },
     cobranzaPorMoneda: cobranzaPorMoneda(cobranzaNativa),
     porCobrarDeAniosAnteriores: deAniosAnteriores,
+    cobradoDeAniosAnteriores,
     criterios: { partnershipCubreElPiso: cubreElPiso },
   };
 }

@@ -66,7 +66,7 @@ type ReglaForm = {
   notas: string;
 };
 
-export default function ComisionesVendedorPanel({ initial, personas, clientes, volverA = "/finanzas/costos" }: Props) {
+export default function ComisionesVendedorPanel({ initial, personas, clientes, volverA = "/finanzas/costos/planillas/calendario" }: Props) {
   const toast = useToast();
   const [data, setData] = useState(initial);
   const [form, setForm] = useState<ReglaForm | null>(null);

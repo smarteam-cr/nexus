@@ -11,6 +11,13 @@
  * tiene $4.560 cargados— caía entero en la columna "con cobranza", escondiendo $21.640.
  * El hueco medido así daba $71.066 cuando el real es ≥ $102.240. Un booleano por cliente
  * no puede contestar una pregunta de plata.
+ *
+ * ⚠ LO CARGADO SIN FACTURAR TAMBIÉN RESPALDA (2026-10-18). Hasta ese día una venta con su plan de
+ * cobro ya cargado —las cuotas en Cobranza, esperando su fecha para facturarse— contaba como
+ * «sin respaldo en cobranza». Medido ese día: de US$239.386 «sin cobranza», US$69.009 eran
+ * cuotas que ya estaban cargadas (FACO, Kaizen Kapital, Areyá, Almotec…). Marco esperaba unos
+ * US$90.000 y Nexus decía US$218.000 el 16-oct. Ahora esas cuotas cubren la venta y la venta
+ * queda «en el plan» (`EN_PLAN`): está en cobranza, le falta facturarse. No es un hueco.
  */
 
 /** Una venta ganada, en la forma mínima que hace falta para clasificar. */
@@ -32,10 +39,16 @@ export interface CobranzaDeCliente {
   clientId: string;
   /** Suma de lo facturado (cobrado + por cobrar) de ese cliente en el año. */
   facturado: number;
+  /**
+   * Las cuotas cargadas que todavía no tienen factura, del año en adelante. Respaldan la venta
+   * DESPUÉS de lo facturado: primero se usa la plata que ya se facturó. Ausente = 0.
+   */
+  programado?: number;
 }
 
 export type ClaseHueco =
   | "CON_COBRANZA" // la venta está cubierta por facturación de ese cliente
+  | "EN_PLAN" // cubierta, pero en parte por cuotas cargadas que todavía no se facturan
   | "PARCIAL" // el cliente factura, pero menos de lo que vendió
   | "SIN_COBRANZA" // el cliente existe y no tiene nada cargado
   | "SIN_CLIENTE" // la venta no resuelve a ningún cliente de Nexus
@@ -44,8 +57,10 @@ export type ClaseHueco =
 
 export interface VentaClasificada extends VentaParaClasificar {
   clase: ClaseHueco;
-  /** Cuánto de esta venta NO está respaldado por facturación. 0 si está cubierta. */
+  /** Cuánto de esta venta NO está respaldado por facturación ni por cuotas cargadas. 0 si está cubierta. */
   descubierto: number;
+  /** Cuánto la cubren cuotas cargadas que todavía no se facturan (lo que falta facturar). */
+  enPlan: number;
 }
 
 export interface ResumenVentas {
@@ -64,6 +79,8 @@ export interface ResumenVentas {
   sinConvertir: { cuantas: number; monto: number };
   /** El hueco, medido por MONTO. */
   hueco: number;
+  /** Lo que respaldan cuotas cargadas que todavía no se facturan, en todas las ventas. No es hueco. */
+  enPlan: number;
   porClase: Record<ClaseHueco, { cuantas: number; monto: number; descubierto: number }>;
   ventas: VentaClasificada[];
   porMes: Array<{ periodo: string; vendido: number; cuantas: number }>;
@@ -73,6 +90,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 const CLASES: ClaseHueco[] = [
   "CON_COBRANZA",
+  "EN_PLAN",
   "PARCIAL",
   "SIN_COBRANZA",
   "SIN_CLIENTE",
@@ -98,6 +116,9 @@ export function clasificarVentas(
   // queda, no con la total — si no, dos ventas del mismo cliente se cubrirían las dos
   // con la misma plata.
   const restante = new Map(cobranza.map((c) => [c.clientId, c.facturado]));
+  /* Lo cargado sin facturar, con la misma regla: dos ventas no se cubren con las mismas cuotas. */
+  const programadoDe = new Map(cobranza.map((c) => [c.clientId, c.programado ?? 0]));
+  const restanteProgramado = new Map(cobranza.map((c) => [c.clientId, c.programado ?? 0]));
 
   const cuentan = new Set(opciones.pipelinesQueCuentan);
   const clasificadas: VentaClasificada[] = [];
@@ -118,7 +139,7 @@ export function clasificarVentas(
     if (v.excluida) {
       excluidas.cuantas++;
       excluidas.monto = round2(excluidas.monto + (v.monto ?? 0));
-      clasificadas.push({ ...v, clase: "EXCLUIDA", descubierto: 0 });
+      clasificadas.push({ ...v, clase: "EXCLUIDA", descubierto: 0, enPlan: 0 });
       continue;
     }
     if (!cuentan.has(v.pipelineId)) {
@@ -129,7 +150,7 @@ export function clasificarVentas(
     }
     if (v.monto === null) {
       sinConvertir.cuantas++;
-      clasificadas.push({ ...v, clase: "SIN_CONVERTIR", descubierto: 0 });
+      clasificadas.push({ ...v, clase: "SIN_CONVERTIR", descubierto: 0, enPlan: 0 });
       continue;
     }
 
@@ -140,23 +161,21 @@ export function clasificarVentas(
     porMes.set(mes, { vendido: round2(g.vendido + v.monto), cuantas: g.cuantas + 1 });
 
     if (!v.clientId) {
-      clasificadas.push({ ...v, clase: "SIN_CLIENTE", descubierto: v.monto });
+      clasificadas.push({ ...v, clase: "SIN_CLIENTE", descubierto: v.monto, enPlan: 0 });
       continue;
     }
-    const disponible = restante.get(v.clientId) ?? 0;
-    if (disponible <= 0) {
-      const clase: ClaseHueco = (facturadoDe.get(v.clientId) ?? 0) > 0 ? "PARCIAL" : "SIN_COBRANZA";
-      clasificadas.push({ ...v, clase, descubierto: v.monto });
-      continue;
-    }
+    // Primero lo facturado; lo que falta, con las cuotas cargadas que todavía no se facturan.
+    const disponible = Math.max(0, restante.get(v.clientId) ?? 0);
     const cubierto = Math.min(disponible, v.monto);
     restante.set(v.clientId, round2(disponible - cubierto));
-    const descubierto = round2(v.monto - cubierto);
-    clasificadas.push({
-      ...v,
-      clase: descubierto > 0 ? "PARCIAL" : "CON_COBRANZA",
-      descubierto,
-    });
+    const enPlanDisponible = Math.max(0, restanteProgramado.get(v.clientId) ?? 0);
+    const enPlan = round2(Math.min(enPlanDisponible, v.monto - cubierto));
+    restanteProgramado.set(v.clientId, round2(enPlanDisponible - enPlan));
+    const descubierto = round2(v.monto - cubierto - enPlan);
+    const tieneAlgoCargado = (facturadoDe.get(v.clientId) ?? 0) > 0 || (programadoDe.get(v.clientId) ?? 0) > 0;
+    const clase: ClaseHueco =
+      descubierto > 0 ? (tieneAlgoCargado ? "PARCIAL" : "SIN_COBRANZA") : enPlan > 0 ? "EN_PLAN" : "CON_COBRANZA";
+    clasificadas.push({ ...v, clase, descubierto, enPlan });
   }
 
   const porClase = Object.fromEntries(
@@ -177,6 +196,7 @@ export function clasificarVentas(
     excluidas,
     sinConvertir,
     hueco: round2(clasificadas.reduce((n, v) => n + v.descubierto, 0)),
+    enPlan: round2(clasificadas.reduce((n, v) => n + v.enPlan, 0)),
     porClase,
     ventas: clasificadas,
     porMes: [...porMes.entries()]

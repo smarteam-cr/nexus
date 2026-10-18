@@ -8589,7 +8589,8 @@ que tener su acción de la semana y su reunión agendada.
 
 - **«Lo pagado»** (Conciliación): la lista de lo que Odoo y Mercury dan por pagado se confirma desde la pantalla con la
   firma de quien la aprueba. Se escribe solo lo que la persona marcó y el servidor vuelve a decidir; si el día del pago
-  cambió desde que lo vio, esa cuota se pega a su factura pero no se cobra. INV3 e INV25 no cambian.
+  cambió desde que lo vio, esa cuota se pega a su factura pero no se cobra. ⚠ Desde el 2026-10-18 lo seguro se cobra
+  solo cada mañana y esta lista queda para lo que necesita a una persona (ver «Lo pagado se cobra solo»).
 - **Licencias revendidas** (`LicenciaRevendida`, una viva por cuenta y moneda): el porcentaje de servicio de cada
   contrato. Reemplaza el parche de kölbi con los mismos números. Por defecto el punto de equilibrio cuenta solo el
   servicio (`SOLO_SERVICIO`); si dirección decide en «Para decidir» que la licencia cuenta como ingreso completo, su
@@ -8990,3 +8991,54 @@ de reuniones a proyectos (US$8,5, 365 llamadas). El panel leía 20.000 filas y n
   solo su id, así un deploy antes del SQL pierde las filas de los lotes y no las de todas las llamadas.
 - **Pendiente:** 263 llamadas de 30 días (US$13,8, todas automáticas) no tienen agente ni origen: van a «No se sabe de qué
   proceso es». Están cerca en el tiempo de la lectura, el resumen del proyecto y la propuesta; atribuirlas es lo próximo.
+
+## Lo pagado se cobra solo, y el menú de Finanzas sin el doble libro (2026-10-18)
+
+**Contexto.** Iniciativa 5 de «La siguiente serie». Elías decidió el 18 oct sobre `docs/finanzas-simplificacion.md`: cobrar
+sin firma lo que Odoo y Mercury dan por pagado (Alex, 16 oct: «definitivo»), primero el libro y después el menú, y que
+concilie cada mañana María José. El análisis, la evidencia y lo que quedó hecho están en ese documento.
+
+- **Lo pagado y conciliado con el banco se cobra solo, cada mañana** (job `lo-pagado-daily`, ≥ 7:00 CR, después de las
+  copias de las 6:00). Va por `cambiarEstadoCobroTx`, una transacción por cuota con la cuota bloqueada, y deja su
+  bitácora. La firma es del sistema y dice de dónde salió: `sistema:odoo` o `sistema:mercury`
+  (`lib/cobranza/firma-del-sistema.ts`). La regla es pura: `paraCobrarSolo` y `dudaDelCobro` en `lib/cobranza/libro/hechos.ts`.
+- **Qué es seguro.** Odoo `paid` (el contador la concilió con el estado de cuenta) o Mercury `Paid` con su entrada de
+  plata atada por el nombre de quien pagó, y un día del pago que cuadra (no posterior a hoy, no más de 3 días antes de la
+  factura). Lo demás espera a una persona en Conciliación › «Lo pagado», con su porqué: Odoo «en proceso de pago» (pagada
+  pero sin conciliar con el banco), una entrada de Mercury encontrada solo por el monto, un día del pago raro. *Por qué no
+  «en proceso de pago»:* Elías pidió «pagado y conciliado con el banco»; el 16 oct «en proceso de pago» se dio por pagado
+  para la lista que confirma una persona, y ahí sigue.
+- **Nunca se cobra solo** lo de «Pagadas sin el día del pago» (la fecha decide el mes del gráfico), un choque, ni lo que
+  solo se pega a su factura sin estar pagado: eso lo sigue confirmando quien concilia.
+- **Se deshace con «Sacar de Cobrado»**, con el mismo motivo de siempre. La bitácora de la reversión dice que el sistema no
+  la vuelve a cobrar sola, y el job salta toda cuota con una reversión en su bitácora (`TEXTO_DE_LA_REVERSION`), también
+  adentro del candado. Si después entra de verdad, se confirma a mano en «Lo pagado». Sin SQL: la marca es la bitácora.
+- **Espera a las copias.** Una copia encendida que no corrió bien hoy hace esperar al job hasta las 10:00
+  (`decidirElTurno`, `lib/cobranza/libro/turno.ts`); pasada esa hora cobra con la que está al día y el job queda en rojo
+  diciendo cuál faltó. Una copia apagada en el servidor no hace esperar. Si Odoo no dice el día de los pagos, o una cuota
+  no se pudo escribir, también queda en rojo: lo que falta espera a mañana.
+- **INV25 cambia.** Ya no es «una máquina nunca confirma plata»: una máquina confirma SOLO con `sistema:odoo` o
+  `sistema:mercury` y con la factura de ese número pagada en la copia. Cualquier otra firma de máquina (`odoo`, `sync`,
+  `cron`, otro `sistema:`) sigue violándolo. INV3 no cambia: todo COBRADO tiene firma.
+- **Se apaga con `COBRO_SOLO_ENABLED=0`** en el `.env`; lo pagado vuelve a confirmarse a mano.
+- **El punto de equilibrio cuenta solo las facturas del año** (`tipoIngresoDeCobro` con `anioDeLaFactura`): lo cobrado de
+  una factura emitida en un año anterior se queda en el año de la factura, y en el año del pago se declara aparte
+  (`cobradoDeAniosAnteriores`, aviso «COBRADO_DE_FACTURAS_ANTERIORES»). Es la otra mitad de `porCobrarDeAniosAnteriores`:
+  sin esto, una factura de diciembre cobrada en enero pasaba a ser facturado del año nuevo y el año cerrado cambiaba
+  después de cerrarlo. Rentabilidad no lo usa: mide lo que entró mes a mes. Al 2026-10-18 no mueve ningún número (todos
+  los cobros de Nexus son de 2026).
+- **Lo cargado sin facturar respalda una venta** (`clasificarVentas`, clase `EN_PLAN`): una venta con sus cuotas en
+  Cobranza esperando su fecha ya no cuenta como «sin respaldo en cobranza». Medido el 18 oct: el hueco baja de
+  US$239.386 a US$171.060 y US$68.326 quedan «en el plan». El resto es real: ventas sin plan cargado.
+- **El menú de un Super Admin** ve todo Finanzas menos lo de quien registra (`soloQuienRegistra`): Pendientes, y Comisiones
+  de vendedor y Aguinaldo como entradas sueltas (están dentro de Planilla). Corrige al 2026-10-08 («ve todo»).
+- **Odoo, Mercury, el libro de Alex e Integraciones son pestañas de Conciliación** (`PestanasDeConciliacion`): las rutas no
+  cambian (son identidad) y el menú las ilumina como Conciliación. Cobranza pasa a `exact`.
+- **Reportes son tres** —Punto de equilibrio (con Tipo de cambio adentro), Reportes de cobranza y el modelo de Comisiones—
+  más Caja neta, que queda como está hasta que decida Alex. Rentabilidad sale del menú de Finanzas y queda en Éxito del
+  cliente.
+- **Las hojas viejas de Costos llevan a su página nueva**: Costos, Fijos y Herramientas a Recurrentes; Tarjetas a Tarjetas.
+  Siguen con su gate de costos antes del redirect (P4 de costos-privacy).
+- **Quien concilia cada mañana es María José**, con el rol de Dinia («Asistente administrativo», ADMIN): `cobranza` leer y
+  escribir, `gastos` leer y escribir, y el frente «Finanzas: registrar». No hizo falta un permiso nuevo. Nexus no crea la
+  cuenta: la da de alta Elías en Equipo.

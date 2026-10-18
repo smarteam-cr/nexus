@@ -28,6 +28,9 @@
  *     `LecturaDeReunion` (memoria de la cuenta, etapa 2). Cada tick. Gated por SEGUIMIENTO_REUNIONES_ENABLED≠0.
  *   - rentabilidad-foto-mensual → la foto del margen del mes que cerró (lib/rentabilidad/foto-server.ts), el día 3
  *     desde las 7:00 CR; una vez por mes y sin pisar una foto que ya está.
+ *   - lo-pagado-daily → cobra solo lo que Odoo y Mercury dan por pagado y conciliado con el banco, firmado por el sistema
+ *     (lib/cobranza/libro, decisión de Elías del 2026-10-18). Diario ≥ 7:00 CR, después de las dos copias de las 6:00;
+ *     espera a una copia atrasada hasta las 10:00. Gated por COBRO_SOLO_ENABLED≠0 y alguna de las dos credenciales.
  *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
  *     ≥ 7:00 CR, después de los espejos. Si alguno está en rojo el job LANZA: semáforo rojo
  *     en Integraciones + Sentry con tags.job. Solo lecturas. (B-08)
@@ -606,6 +609,54 @@ const tipoCambioDaily: JobDef = {
 };
 
 /**
+ * Lo pagado se cobra solo (2026-10-18). Una vez al día, después de las copias de Odoo y Mercury: lo que dan por pagado y
+ * conciliado con el banco pasa a COBRADO con el día real del pago, firmado `sistema:odoo` o `sistema:mercury`, con su
+ * bitácora (lib/cobranza/libro/aplicar.ts › `cobrarLoPagadoSolo`). Lo que no es seguro queda en Conciliación › «Lo
+ * pagado» para una persona.
+ *
+ * El turno se toma recién cuando toca (`decidirElTurno`): mientras una copia encendida no corrió bien hoy, espera hasta
+ * las 10:00 sin anotar nada. Pasada esa hora cobra con la que está al día y LANZA diciendo cuál faltó (semáforo rojo).
+ * También lanza si alguna cuota no se pudo escribir o si Odoo no dijo el día de los pagos: esas esperan a mañana.
+ */
+const loPagadoDaily: JobDef = {
+  key: "lo-pagado-daily",
+  shouldRun: (_now, parts) => encendido("lo-pagado-daily") && parts.hour >= 7,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const { dateKey } = crDateParts(now);
+    const { correrElCobroDelDia } = await import("@/lib/cobranza/libro/servicio");
+    if (!(await claimDateKey("lo-pagado-daily", dateKey, now))) return SIN_TURNO;
+    const { turno, resultado } = await correrElCobroDelDia(now, { aplicar: true });
+    if (!resultado) {
+      /* Todavía no toca: se suelta el turno y el tick siguiente vuelve a mirar las copias. */
+      await prisma.cronJobState
+        .updateMany({ where: { id: "lo-pagado-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
+        .catch(() => {});
+      return SIN_TURNO;
+    }
+    const plata = (xs: ReadonlyArray<{ monto: number; moneda: string }>) => {
+      const t = new Map<string, number>();
+      for (const x of xs) t.set(x.moneda, Math.round(((t.get(x.moneda) ?? 0) + x.monto) * 100) / 100);
+      return [...t].map(([m, v]) => `${m} ${v}`).join(" + ") || "nada";
+    };
+    console.log(
+      `[jobs/lo-pagado] ${dateKey} — cobradas solas: ${resultado.cobradas.length} (${plata(resultado.cobradas)}) · ` +
+        `quedan para una persona: ${resultado.quedan.length} · sin el día del pago: ${resultado.pagadasSinFecha}`,
+    );
+    const problemas = [
+      ...turno.atrasadas.map((f) => `la copia de ${f === "ODOO" ? "Odoo" : "Mercury"} no corrió bien hoy: lo suyo no se cobró`),
+      ...(resultado.avisoOdoo ? [resultado.avisoOdoo] : []),
+      ...resultado.saltadas.map((s) => `${s.cuenta}: ${s.motivo}`),
+    ];
+    if (problemas.length) {
+      const fallo = new Error(`cobró ${resultado.cobradas.length}, pero: ${problemas.join(" · ")}. Turno RETENIDO: mañana vuelve a mirar.`);
+      fallo.name = "CobroSoloIncompleto";
+      throw fallo;
+    }
+  },
+};
+
+/**
  * Los invariantes que solo miran la base (`lib/invariantes/`), una vez al día ≥ 7:00 CR — después
  * de los espejos de las 6 (ventas, Odoo), para que INV23/INV24 vean la corrida de hoy. Si alguno
  * está en rojo el job LANZA a propósito: el scheduler lo anota en `lastResult` (semáforo rojo en
@@ -804,5 +855,5 @@ const iaLotes: JobDef = {
 };
 
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, iaLotes, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, iaLotes, loPagadoDaily, invariantsDaily];
 }

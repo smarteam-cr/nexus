@@ -57,7 +57,8 @@ export default async function FinanzasComisionesVendedorPage() {
         initial={data}
         personas={personas}
         clientes={clientes}
-        volverA={isCostosRole(ctx.role) ? "/finanzas/costos" : "/finanzas/pendientes"}
+        /* Super Admin llega desde la Planilla: vuelve ahí (la hoja vieja de Costos se retiró el 2026-10-18). */
+        volverA={isCostosRole(ctx.role) ? "/finanzas/costos/planillas/calendario" : "/finanzas/pendientes"}
       />
       <div className="mt-6">
         <HistorialComisiones

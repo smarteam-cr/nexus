@@ -580,6 +580,17 @@ describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
   const SIN_DATOS_TODAVIA: Record<string, string> = {
   };
 
+  /**
+   * Hojas viejas de Costos que solo redirigen a su página nueva (2026-10-18). No cargan nada, pero el gate sigue ANTES
+   * del redirect: quien no es de costos no se entera ni de adónde iba.
+   */
+  const SOLO_REDIRIGEN: Record<string, string> = {
+    costos: "/finanzas/recurrentes",
+    "costos/fijos": "/finanzas/recurrentes",
+    "costos/herramientas": "/finanzas/recurrentes",
+    "costos/tarjetas": "/finanzas/tarjetas",
+  };
+
   it("el escaneo encuentra las páginas de Finanzas (guard del propio test)", () => {
     // Si alguien mueve o borra la carpeta, el test avisa en vez de pasar vacío.
     expect(rutas.length, "no se encontró ninguna page.tsx bajo finanzas/").toBeGreaterThanOrEqual(5);
@@ -603,6 +614,12 @@ describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
       // (2026-10-03) también cuentan los `cargar…`/`contar…`/`medir…` y las lecturas
       // directas `prisma.…`: una página puede leer datos sin llamarlos «load».
       const llamadasLoad = [...src.matchAll(/\b(?:load|cargar|contar|medir)[A-Z]\w*\(|\bprisma\./g)];
+      if (rel in SOLO_REDIRIGEN) {
+        expect(llamadasLoad.length, `finanzas/${rel} solo redirige: no carga datos`).toBe(0);
+        const original = fs.readFileSync(abs, "utf8");
+        expect(original.indexOf(`redirect("${SOLO_REDIRIGEN[rel]}")`), `finanzas/${rel} redirige después del gate`).toBeGreaterThan(original.indexOf("isCostosRole("));
+        return;
+      }
       if (rel in SIN_DATOS_TODAVIA) {
         expect(llamadasLoad.length, `finanzas/${rel} ya carga datos: sácala de SIN_DATOS_TODAVIA`).toBe(0);
         return;

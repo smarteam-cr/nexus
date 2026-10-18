@@ -41,6 +41,7 @@
  *    saca de Cobrado un cobro mal confirmado—, es una alerta nueva y tiene que salir. Por eso
  *    estos cierres se firman con `RESUELTA_POR_SISTEMA`, y la supresión no los cuenta.
  */
+import { nombreDeLaFirma } from "./firma-del-sistema";
 import { esAlertaDeRecurrencia, type AlertaDraft, type CarteraEngineInput } from "./engine";
 import {
   esDeLaFamiliaDelCobro,
@@ -119,7 +120,7 @@ export function mensajeDeCierre(motivo: MotivoDeCierre, anterior: string): strin
 
 /** El texto de las alertas de un cobro que se acaba de confirmar como cobrado. */
 export function mensajeCobroConfirmado(confirmadoPor: string): string {
-  return `${CERRO_SOLA} ${confirmadoPor} confirmó que el cobro entró.`;
+  return `${CERRO_SOLA} ${nombreDeLaFirma(confirmadoPor)} confirmó que el cobro entró.`;
 }
 
 /**

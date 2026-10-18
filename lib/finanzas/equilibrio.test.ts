@@ -26,7 +26,7 @@
  *   P. el hueco de ventas con la tasa de cada mes
  *   Q. la plata que no es venta: a la caja y a nada más
  *   R. el margen a la fecha no cuenta meses con el gasto a medias
- *   S. lo facturado en años anteriores y sin cobrar sigue en la calle
+ *   S. lo facturado en años anteriores y sin cobrar sigue en la calle; lo cobrado de esas facturas, en su año
  *   T. el piso de hoy son los recurrentes de Nexus, sin la tarjeta del Excel (D8, 2026-10-05)
  */
 import { readFileSync } from "node:fs";
@@ -1164,6 +1164,39 @@ describe("S · lo facturado en años anteriores y sin cobrar sigue en la calle",
       { anio: 2026, hoyISO: "2026-12-31" },
     );
     expect(r.porCobrarDeAniosAnteriores).toEqual({});
+    expect(r.cobradoDeAniosAnteriores).toEqual({});
+  });
+
+  it("S4 una factura de diciembre cobrada en enero cuenta como facturado de DICIEMBRE, no del año nuevo", () => {
+    // Pedido de Elías (16-oct): «que Nexus lea solo las ventas de este año y los facturados de este año».
+    const c = { estado: "COBRADO", periodo: "2025-12", fechaProgramadaISO: "2025-12-15", fechaEmisionISO: "2025-12-10", fechaCobroISO: "2026-01-08" };
+    // Sin la opción, la regla de siempre (Rentabilidad la usa así): al mes en que entró la plata.
+    expect(tipoIngresoDeCobro(c, "2026-01-20")).toMatchObject({ tipo: "COBRADO", periodo: "2026-01" });
+    const t = tipoIngresoDeCobro(c, "2026-01-20", { anioDeLaFactura: true });
+    expect(t).toMatchObject({ tipo: "COBRADO", periodo: "2025-12", deFacturaDeOtroAnio: true });
+
+    const del2026 = calcularEquilibrio([], [ing(t.periodo, t.tipo, 2975, { fechaISO: "2026-01-08" }), ing("2026-01", "COBRADO", 1000, { fechaISO: "2026-01-09" })], {
+      anio: 2026,
+      hoyISO: "2026-01-20",
+    });
+    expect(del2026.indicadores.facturadoTotal).toBe(1000);
+    expect(del2026.indicadores.cobradoTotal).toBe(1000);
+    expect(del2026.cobradoDeAniosAnteriores).toEqual({ USD: { cobrado: 2975, facturas: 1 } });
+    expect(del2026.calidad.avisos.map((a) => a.codigo)).toContain("COBRADO_DE_FACTURAS_ANTERIORES");
+
+    // Y en el año de la factura sigue siendo facturado (y cobrado): el año cerrado no cambia al cobrarse.
+    const del2025 = calcularEquilibrio([], [ing(t.periodo, t.tipo, 2975, { fechaISO: "2026-01-08" })], { anio: 2025, hoyISO: "2026-01-20" });
+    expect(del2025.indicadores.facturadoTotal).toBe(2975);
+  });
+
+  it("S5 dentro del mismo año, lo cobrado sigue yendo al mes en que entró la plata", () => {
+    const t = tipoIngresoDeCobro(
+      { estado: "COBRADO", periodo: "2026-03", fechaProgramadaISO: "2026-03-15", fechaEmisionISO: "2026-03-10", fechaCobroISO: "2026-04-02" },
+      "2026-05-01",
+      { anioDeLaFactura: true },
+    );
+    expect(t).toMatchObject({ tipo: "COBRADO", periodo: "2026-04" });
+    expect(t.deFacturaDeOtroAnio).toBeUndefined();
   });
 });
 

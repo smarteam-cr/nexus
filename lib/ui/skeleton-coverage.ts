@@ -60,17 +60,12 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "finanzas/cierre": { modo: "own" },
   "finanzas/recurrentes": { modo: "own" },
   "finanzas/tarjetas": { modo: "own" },
-  "finanzas/costos": { modo: "own" },
-  // Las 3 hojas por categoría comparten el MISMO skeleton (CostosCategoriaSkeleton),
-  // pero se declaran `own` y no `inherits`: su forma NO es la del Resumen (que
-  // promete pills + gastos + movimientos), y heredarlo sería prometer otra pantalla.
-  "finanzas/costos/herramientas": { modo: "own" },
+  // Las hojas viejas de Costos (Resumen, Fijos, Herramientas, Tarjetas) son redirects desde el 2026-10-18.
+  "finanzas/costos": { modo: "exempt", razon: "redirect a /finanzas/recurrentes (hoja vieja de Costos, 2026-10-18)" },
+  "finanzas/costos/herramientas": { modo: "exempt", razon: "redirect a /finanzas/recurrentes (hoja vieja de Costos, 2026-10-18)" },
   "finanzas/costos/planillas": { modo: "own" },
-  "finanzas/costos/fijos": { modo: "own" },
-  // La hoja de tarjetas tiene forma PROPIA (tarjetas apiladas con tres datos
-  // cada una, no una lista de costos): heredar el skeleton de categoría
-  // prometería una pantalla que no llega.
-  "finanzas/costos/tarjetas": { modo: "own" },
+  "finanzas/costos/fijos": { modo: "exempt", razon: "redirect a /finanzas/recurrentes (hoja vieja de Costos, 2026-10-18)" },
+  "finanzas/costos/tarjetas": { modo: "exempt", razon: "redirect a /finanzas/tarjetas (hoja vieja de Costos, 2026-10-18)" },
   // El historial se agrupa por mes con dos bloques de quincena: su forma no es la
   // de ninguna de las hojas de categoría, ni la de su propia madre (Planillas).
   "finanzas/costos/planillas/historial": { modo: "own" },

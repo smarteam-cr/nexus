@@ -190,10 +190,6 @@ export default function RecurrentesClient({
           <Link href="/finanzas/costos/planillas" className="font-semibold text-brand hover:text-brand-light">
             Planilla
           </Link>
-          ; el resumen con todo junto, en{" "}
-          <Link href="/finanzas/costos" className="font-semibold text-brand hover:text-brand-light">
-            Costos y gastos
-          </Link>
           .
         </p>
       )}

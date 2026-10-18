@@ -4,7 +4,19 @@
 import { describe, it, expect } from "vitest";
 import type { FacturaParaCruzar } from "@/lib/cobranza/odoo/diferencias";
 import type { FacturaMercuryParaCruzar } from "@/lib/cobranza/mercury/diferencias";
-import { accionesElegidas, decidir, facturasOdooParaFechar, pegaPorMontoSinDudas, pegarMercury, pegarOdoo, type Accion, type CobroDelLibro, type EntradaDelLibro } from "./hechos";
+import {
+  accionesElegidas,
+  decidir,
+  dudaDelCobro,
+  facturasOdooParaFechar,
+  paraCobrarSolo,
+  pegaPorMontoSinDudas,
+  pegarMercury,
+  pegarOdoo,
+  type Accion,
+  type CobroDelLibro,
+  type EntradaDelLibro,
+} from "./hechos";
 
 const cobro = (id: string, o: Partial<CobroDelLibro> = {}): CobroDelLibro => ({
   id,
@@ -148,7 +160,15 @@ describe("qué se escribe", () => {
     expect(facturasOdooParaFechar(e, pegados)).toEqual(["f1"]);
     const d = decidir(e, pegados, new Map([["f1", "2026-08-28"]]));
     expect(d.acciones).toEqual([
-      { fuente: "ODOO", cobroId: "c1", numero: "FAC/2026/0001", fechaEmision: "2026-08-03", numeroFactura: "FAC/2026/0001", cobrar: { fechaCobro: "2026-08-28", deDonde: "el pago con que Odoo concilió la factura" } },
+      {
+        fuente: "ODOO",
+        cobroId: "c1",
+        numero: "FAC/2026/0001",
+        fechaEmision: "2026-08-03",
+        numeroFactura: "FAC/2026/0001",
+        // «En proceso de pago»: se puede cobrar a mano, pero no solo (no está conciliada con el banco).
+        cobrar: { fechaCobro: "2026-08-28", deDonde: "el pago con que Odoo concilió la factura", porQueNoSolo: "Odoo la da «en proceso de pago»: todavía no está conciliada con el banco." },
+      },
     ]);
   });
 
@@ -173,7 +193,7 @@ describe("qué se escribe", () => {
     expect(sinEntrada.acciones).toEqual([]);
     expect(sinEntrada.pagadasSinFecha.map((p) => p.cobroId)).toEqual(["c1"]);
     const e = entrada({ cobros: cs, facturasMercury: [f], entradasMercury: [{ id: "t1", monto: 1000, fecha: "2026-08-12", quien: "Client Inc" }] });
-    expect(decidir(e, pegarMercury(e), new Map()).acciones[0]!.cobrar).toEqual({ fechaCobro: "2026-08-12", deDonde: "la entrada de plata en Mercury" });
+    expect(decidir(e, pegarMercury(e), new Map()).acciones[0]!.cobrar).toEqual({ fechaCobro: "2026-08-12", deDonde: "la entrada de plata en Mercury", porQueNoSolo: null });
   });
 
   it("lo ya pegado y cobrado no vuelve a salir: correrlo dos veces no cambia nada", () => {
@@ -193,9 +213,9 @@ describe("pegaPorMontoSinDudas", () => {
 
 describe("lo que eligió quien confirma (la pantalla de cada mañana)", () => {
   const acciones: Accion[] = [
-    { fuente: "ODOO", cobroId: "a", numero: "FAC/2026/0001", fechaEmision: "2026-08-03", numeroFactura: "FAC/2026/0001", cobrar: { fechaCobro: "2026-08-20", deDonde: "x" } },
+    { fuente: "ODOO", cobroId: "a", numero: "FAC/2026/0001", fechaEmision: "2026-08-03", numeroFactura: "FAC/2026/0001", cobrar: { fechaCobro: "2026-08-20", deDonde: "x", porQueNoSolo: null } },
     { fuente: "ODOO", cobroId: "b", numero: "FAC/2026/0002", fechaEmision: "2026-08-03", numeroFactura: "FAC/2026/0002" },
-    { fuente: "MERCURY", cobroId: "c", numero: "INV-3", cobrar: { fechaCobro: "2026-08-21", deDonde: "y" } },
+    { fuente: "MERCURY", cobroId: "c", numero: "INV-3", cobrar: { fechaCobro: "2026-08-21", deDonde: "y", porQueNoSolo: null } },
   ];
 
   it("se escribe solo lo marcado: lo que no se marcó no se toca aunque la lista lo traiga", () => {
@@ -232,5 +252,64 @@ describe("lo que eligió quien confirma (la pantalla de cada mañana)", () => {
   it("una pagada que ya tenía factura y número: cobrarla escribe solo el cobro", () => {
     const r = accionesElegidas(acciones, { pegar: [], cobrar: [{ cobroId: "c", fechaCobro: "2026-08-21" }] });
     expect(r.acciones).toEqual([acciones[2]]);
+  });
+});
+
+describe("lo que se cobra solo cada día (2026-10-18)", () => {
+  it("Odoo «pagada» (conciliada con el banco) con el día del pago se cobra sola", () => {
+    const e = entrada({ cobros: [cobro("c1")], facturasOdoo: [odoo("f1", { paymentState: "paid", montoResidual: 0 })] });
+    const d = decidir(e, pegarOdoo(e), new Map([["f1", "2026-08-28"]]));
+    const solo = paraCobrarSolo(d.acciones, new Set());
+    expect(solo.acciones.map((a) => [a.cobroId, a.cobrar?.fechaCobro, a.fechaEmision, a.numeroFactura])).toEqual([["c1", "2026-08-28", "2026-08-03", "FAC/2026/0001"]]);
+    expect(solo.quedan).toEqual([]);
+  });
+
+  it("⛔ Odoo «en proceso de pago» no se cobra sola: queda para una persona, con el porqué", () => {
+    const e = entrada({ cobros: [cobro("c1")], facturasOdoo: [odoo("f1", { paymentState: "in_payment", montoResidual: 0 })] });
+    const solo = paraCobrarSolo(decidir(e, pegarOdoo(e), new Map([["f1", "2026-08-28"]])).acciones, new Set());
+    expect(solo.acciones).toEqual([]);
+    expect(solo.quedan[0]!.motivo).toMatch(/en proceso de pago/);
+  });
+
+  it("⛔ Mercury con la entrada encontrada solo por el monto no se cobra sola", () => {
+    const cs = [cobro("c1", { plataforma: "MERCURY", numeroFactura: "INV-1", fechaEmision: "2026-08-03" })];
+    const f = mercury("m1", { estado: "Paid", clienteNombre: "Client Inc" });
+    const e = entrada({ cobros: cs, facturasMercury: [f], entradasMercury: [{ id: "t1", monto: 1000, fecha: "2026-08-12", quien: "Otra Empresa SA" }] });
+    const solo = paraCobrarSolo(decidir(e, pegarMercury(e), new Map()).acciones, new Set());
+    expect(solo.acciones).toEqual([]);
+    expect(solo.quedan[0]!.motivo).toMatch(/solo por el monto/);
+  });
+
+  it("⛔ lo de «pagadas sin el día del pago» y los choques nunca entran", () => {
+    const e = entrada({
+      cobros: [cobro("c1", { numeroFactura: "FAC/2026/0001", fechaEmision: "2026-08-03" }), cobro("c2", { estado: "COBRADO", numeroFactura: "FAC/2026/0002", fechaEmision: "2026-08-03" })],
+      facturasOdoo: [odoo("f1", { paymentState: "paid", montoResidual: 0 }), odoo("f2")],
+    });
+    const d = decidir(e, pegarOdoo(e), new Map());
+    expect(d.pagadasSinFecha.map((p) => p.cobroId)).toEqual(["c1"]);
+    expect(d.choques.map((p) => p.cobroId)).toEqual(["c2"]);
+    expect(paraCobrarSolo(d.acciones, new Set())).toEqual({ acciones: [], quedan: [] });
+  });
+
+  it("⛔ una cuota que una persona sacó de Cobrado no se vuelve a cobrar sola", () => {
+    const e = entrada({ cobros: [cobro("c1")], facturasOdoo: [odoo("f1", { paymentState: "paid", montoResidual: 0 })] });
+    const solo = paraCobrarSolo(decidir(e, pegarOdoo(e), new Map([["f1", "2026-08-28"]])).acciones, new Set(["c1"]));
+    expect(solo.acciones).toEqual([]);
+    expect(solo.quedan[0]!.motivo).toMatch(/sacó de Cobrado/);
+  });
+
+  it("lo que solo se pega a su factura (sin pagar) no lo toca el job", () => {
+    const e = entrada({ cobros: [cobro("c1")], facturasOdoo: [odoo("f1")] });
+    const d = decidir(e, pegarOdoo(e), new Map());
+    expect(d.acciones).toHaveLength(1);
+    expect(paraCobrarSolo(d.acciones, new Set())).toEqual({ acciones: [], quedan: [] });
+  });
+
+  it("dudaDelCobro: un día del pago posterior a hoy o muy anterior a la factura queda para una persona", () => {
+    const p = { fuente: "ODOO" as const, conciliada: true, fechaFactura: "2026-08-10" };
+    expect(dudaDelCobro(p, "2026-08-20", "2026-10-18", false)).toBeNull();
+    expect(dudaDelCobro(p, "2026-08-07", "2026-10-18", false)).toBeNull();
+    expect(dudaDelCobro(p, "2026-10-19", "2026-10-18", false)).toMatch(/posterior a hoy/);
+    expect(dudaDelCobro(p, "2026-07-01", "2026-10-18", false)).toMatch(/anterior a la factura/);
   });
 });

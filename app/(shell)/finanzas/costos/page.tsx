@@ -1,31 +1,18 @@
 /**
- * /finanzas/costos — costos fijos + gastos puntuales, SOLO SUPER_ADMIN.
- * Gate AUTÓNOMO: isCostosRole(role), sin depender de cobranza.read (COSTOS_ROLES
- * es subconjunto estricto y SUPER_ADMIN es all-true en el engine de permisos —
- * desacoplar no mueve a nadie de acceso real). El redirect corta ANTES de
- * ejecutar cualquier query — ni un byte de costos entra al payload RSC de un
- * no-SUPER_ADMIN.
+ * /finanzas/costos — el resumen de costos fijos y gastos puntuales, retirada el 2026-10-18 (decisión de Elías sobre docs/finanzas-simplificacion.md): ya no
+ * está en el menú desde el 2026-10-03 y su contenido vive en /finanzas/recurrentes. Lleva ahí a quien llegue por un enlace viejo.
+ *
+ * ⚠ Sigue siendo de costos: el gate `isCostosRole` va ANTES del redirect (P4 de lib/cobranza/costos-privacy.test.ts),
+ * aunque no cargue nada. Los salarios se ven en Planilla › Salarios.
  */
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
-import { loadCostos, loadGastos } from "@/lib/cobranza";
-import { crDateParts } from "@/lib/jobs/time";
-import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
-import FinanzasCostosClient from "@/components/finanzas/FinanzasCostosClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function FinanzasCostosPage() {
+export default async function Page() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !isCostosRole(ctx.role)) redirect("/clients");
-
-  const todayISO = crDateParts(new Date()).dateKey;
-  const [costos, gastos] = await Promise.all([loadCostos(), loadGastos()]);
-
-  return (
-    <div className={SHELL_DEFAULT}>
-      <FinanzasCostosClient initialCostos={costos} initialGastos={gastos} todayISO={todayISO} />
-    </div>
-  );
+  redirect("/finanzas/recurrentes");
 }

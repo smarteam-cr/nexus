@@ -11,7 +11,10 @@ describe("la sección de una ruta", () => {
   });
 
   it("un hijo con ruta de otro módulo cuenta para el ítem del menú que lo lleva (el prefijo más largo)", () => {
-    expect(seccionDeLaRuta("/customer-success/rentabilidad")).toBe("finanzas");
+    // Odoo y Mercury viven en /cobranza y son pestañas de Conciliación, un hijo de Finanzas (2026-10-18).
+    expect(seccionDeLaRuta("/cobranza/odoo")).toBe("finanzas");
+    // Rentabilidad salió del menú de Finanzas el 2026-10-18: cuenta para Éxito del cliente, donde vive.
+    expect(seccionDeLaRuta("/customer-success/rentabilidad")).toBe("customer-success");
     expect(seccionDeLaRuta("/customer-success/abc")).toBe("customer-success");
   });
 

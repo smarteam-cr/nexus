@@ -1,36 +1,18 @@
 /**
- * /finanzas/costos/herramientas — hoja de la categoría HERRAMIENTA, SOLO SUPER_ADMIN.
- * Gate AUTÓNOMO isCostosRole(role) — el redirect corta ANTES de cualquier query,
- * así ni un byte de costos entra al payload RSC de un no-SUPER_ADMIN. El filtro
- * por categoría se hace acá para no mandar salarios a una hoja de herramientas.
+ * /finanzas/costos/herramientas — la hoja de herramientas, retirada el 2026-10-18 (decisión de Elías sobre docs/finanzas-simplificacion.md): ya no
+ * está en el menú desde el 2026-10-03 y su contenido vive en /finanzas/recurrentes. Lleva ahí a quien llegue por un enlace viejo.
+ *
+ * ⚠ Sigue siendo de costos: el gate `isCostosRole` va ANTES del redirect (P4 de lib/cobranza/costos-privacy.test.ts),
+ * aunque no cargue nada. Los salarios se ven en Planilla › Salarios.
  */
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
-import { loadCostos } from "@/lib/cobranza";
-import { crDateParts } from "@/lib/jobs/time";
-import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
-import FinanzasCostosCategoriaClient from "@/components/finanzas/FinanzasCostosCategoriaClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function FinanzasCostosHerramientasPage() {
+export default async function Page() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !isCostosRole(ctx.role)) redirect("/clients");
-
-  const todayISO = crDateParts(new Date()).dateKey;
-  const costos = await loadCostos();
-
-  return (
-    <div className={SHELL_DEFAULT}>
-      <FinanzasCostosCategoriaClient
-        categoria="HERRAMIENTA"
-        titulo="Herramientas"
-        descripcion="Suscripciones y software del negocio — estimados de referencia, no contabilidad."
-        leyenda="Lo que se paga por herramientas y suscripciones, mes a mes."
-        initialCostos={costos.filter((c) => c.categoria === "HERRAMIENTA")}
-        todayISO={todayISO}
-      />
-    </div>
-  );
+  redirect("/finanzas/recurrentes");
 }

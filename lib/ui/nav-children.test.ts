@@ -28,9 +28,31 @@ describe("visibleNavChildren — el filtro costosOnly del Sidebar", () => {
     expect((finanzas.children ?? []).length).toBeGreaterThan(0);
   });
 
-  it("un rol de Costos ve TODOS los hijos, en el orden de la config", () => {
+  it("un rol de Costos ve todos los hijos menos los de quien registra, en el orden de la config", () => {
     const visibles = visibleNavChildren(finanzas, { isCostos: true });
-    expect(visibles.map((c) => c.href)).toEqual((finanzas.children ?? []).map((c) => c.href));
+    expect(visibles.map((c) => c.href)).toEqual((finanzas.children ?? []).filter((c) => !c.soloQuienRegistra).map((c) => c.href));
+  });
+
+  it("2026-10-18: Super Admin no ve Pendientes, ni Comisiones de vendedor ni Aguinaldo sueltos (están en Planilla)", () => {
+    const hrefs = visibleNavChildren(finanzas, { isCostos: true }).map((c) => c.href);
+    expect(hrefs).not.toContain("/finanzas/pendientes");
+    expect(hrefs).not.toContain("/finanzas/costos/comisiones-vendedor");
+    expect(hrefs).not.toContain("/finanzas/costos/aguinaldo");
+    expect(hrefs).toContain("/finanzas/costos/planillas/calendario");
+    // Reportes en tres (más Caja neta): sin Rentabilidad, Tipo de cambio ni Integraciones sueltos.
+    expect(hrefs).not.toContain("/customer-success/rentabilidad");
+    expect(hrefs).not.toContain("/finanzas/tipo-de-cambio");
+    expect(hrefs).not.toContain("/finanzas/integraciones");
+  });
+
+  it("2026-10-18: Odoo, Mercury, el libro de Alex e Integraciones iluminan Conciliación; Tipo de cambio, el Punto de equilibrio", () => {
+    const hijo = (href: string) => (finanzas.children ?? []).find((c) => c.href === href)!;
+    for (const ruta of ["/cobranza/odoo", "/cobranza/mercury", "/cobranza/importar", "/finanzas/integraciones"]) {
+      expect(isChildActive(hijo("/finanzas/conciliacion"), ruta), ruta).toBe(true);
+      expect(isChildActive(hijo("/cobranza"), ruta), ruta).toBe(false);
+    }
+    expect(isChildActive(hijo("/finanzas/equilibrio"), "/finanzas/tipo-de-cambio")).toBe(true);
+    expect(isChildActive(hijo("/cobranza"), "/cobranza")).toBe(true);
   });
 
   it("sin rol de Costos NO se filtra ningún hijo marcado costosOnly", () => {
@@ -153,15 +175,15 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
     expect(hrefs).not.toContain("/finanzas/costos/planillas/calendario");
   });
 
-  it("Super Admin ve TODO Finanzas, en las dos vistas (Elías, 2026-10-08: «los super admins deberían poder ver todo»)", () => {
-    // La vista elige adónde entra «Finanzas»; ya no esconde áreas del menú a un Super Admin.
-    const todos = (finanzas.children ?? []).map((c) => c.href);
+  it("Super Admin ve todo Finanzas menos lo de quien registra, en las dos vistas (2026-10-08 y 2026-10-18)", () => {
+    // La vista elige adónde entra «Finanzas»; no esconde áreas del menú a un Super Admin. Desde el 2026-10-18 solo le
+    // saca lo que es de quien registra (`soloQuienRegistra`), que para él ya está dentro de Planilla.
+    const todos = (finanzas.children ?? []).filter((c) => !c.soloQuienRegistra).map((c) => c.href);
     for (const vista of ["SUPERVISA", "DIRECCION"] as const) {
       expect(panel(vista, true).flatMap((b) => b.items.map((i) => i.href)), vista).toEqual(todos);
     }
-    // Lo que antes escondía: la Planilla en Dirección, y Pendientes en Supervisión.
+    // Lo que antes escondía la vista: la Planilla en Dirección.
     expect(panel("DIRECCION", true).flatMap((b) => b.items.map((i) => i.href))).toContain("/finanzas/costos/planillas/calendario");
-    expect(panel("SUPERVISA", true).flatMap((b) => b.items.map((i) => i.href))).toContain("/finanzas/pendientes");
   });
 
   it("todo hijo de Finanzas dice en qué vistas va (un hijo sin `vistas` aparecería en las tres)", () => {

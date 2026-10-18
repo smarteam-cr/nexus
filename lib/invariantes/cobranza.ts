@@ -6,6 +6,9 @@ import { cumple, viola, type Invariante } from "./contrato";
 import { corteVencido, DIAS_MAXIMOS_ENTRE_CORTES } from "@/lib/cobranza/antiguedad";
 import { diffDays } from "@/lib/cobranza/engine";
 import { crDateParts } from "@/lib/jobs/time";
+import { FIRMA_DEL_SISTEMA, fuenteDeLaFirma } from "@/lib/cobranza/firma-del-sistema";
+import { normalizarNumeroFactura } from "@/lib/cobranza/numero-factura";
+import { PAGADA_EN_ODOO } from "@/lib/cobranza/libro/hechos";
 
 /**
  * INV32 · El último corte de cartera tiene como mucho 17 días (lo máximo que hay entre dos cortes).
@@ -119,18 +122,21 @@ export const INV20: Invariante = {
 };
 
 /**
- * INV25 · Odoo nunca confirma plata. El espejo PROPONE que un cobro pasó a verde; confirmarlo
- * sigue siendo de una persona con nombre. Misma doctrina que INV3 y que el importador de
- * comisiones.
+ * INV25 · Una máquina confirma plata SOLO como el cobro solo, y con evidencia. Hasta el 2026-10-18 ninguna podía: el
+ * espejo PROPONÍA y una persona confirmaba. Desde ese día (decisión de Elías) lo pagado y conciliado con el banco se
+ * cobra solo, firmado `sistema:odoo` o `sistema:mercury` (lib/cobranza/firma-del-sistema.ts). Viola:
+ *  · cualquier otra firma de máquina (`odoo…`, `sync…`, `cron…`, otro `sistema:…`): es la forma de un UPDATE a mano;
+ *  · una firma del sistema cuya factura (por su número) no está pagada en la copia de esa fuente: el sistema no tenía
+ *    con qué, o la copia cambió después (Odoo deshizo el pago). Las dos cosas las tiene que mirar una persona.
  *
- * ⚠ Se vigila el DATO y no el código —eso lo hace guardas.test.ts—: un script suelto o una
- * consulta a mano pueden escribir lo que el código no escribe. Y el modo en que esto se rompería
- * de verdad es alguien "destrabando" 176 cobros de un saque con un UPDATE.
- * Remedio: revertir esos cobros a POR_COBRAR y confirmarlos uno por uno desde la UI.
+ * ⚠ Se vigila el DATO y no el código —eso lo hace guardas.test.ts—: un script suelto o una consulta a mano pueden
+ * escribir lo que el código no escribe. Y el modo en que esto se rompería de verdad es alguien "destrabando" 176 cobros
+ * de un saque con un UPDATE.
+ * Remedio: abrir el cobro en Cobranza y sacarlo de Cobrado con su motivo si no entró; si entró, confirmarlo una persona.
  */
 export const INV25: Invariante = {
   id: "25",
-  nombre: "ningún cobro fue confirmado por el sync",
+  nombre: "una máquina solo confirma un cobro con la factura pagada en la copia",
   async correr(db) {
     const confirmadosPorMaquina = await db.cobro.findMany({
       where: {
@@ -138,22 +144,49 @@ export const INV25: Invariante = {
           { confirmadoPor: { startsWith: "odoo", mode: "insensitive" } },
           { confirmadoPor: { startsWith: "sync", mode: "insensitive" } },
           { confirmadoPor: { startsWith: "cron", mode: "insensitive" } },
+          { confirmadoPor: { startsWith: "sistema", mode: "insensitive" } },
         ],
       },
-      select: { id: true, monto: true, moneda: true, confirmadoPor: true, cuenta: { select: { client: { select: { name: true } } } } },
+      select: {
+        id: true, monto: true, moneda: true, estado: true, confirmadoPor: true, numeroFactura: true,
+        cuenta: { select: { client: { select: { name: true } } } },
+      },
     });
-    if (confirmadosPorMaquina.length > 0) {
-      const plata = confirmadosPorMaquina.reduce((a, c) => a + Number(c.monto), 0);
+    const delSistema = confirmadosPorMaquina.filter((c) => c.estado === "COBRADO" && fuenteDeLaFirma(c.confirmadoPor) !== null);
+    const numeros = [...new Set(delSistema.map((c) => normalizarNumeroFactura(c.numeroFactura)).filter((n): n is string => !!n))];
+    const [odoo, mercury] = numeros.length
+      ? await Promise.all([
+          db.facturaOdoo.findMany({ where: { estadoEspejo: "VIGENTE", numero: { in: numeros } }, select: { numero: true, paymentState: true } }),
+          db.facturaMercury.findMany({ where: { estadoEspejo: "VIGENTE", numero: { in: numeros } }, select: { numero: true, estado: true } }),
+        ])
+      : [[], []];
+    const pagadas = {
+      ODOO: new Set(odoo.filter((f) => PAGADA_EN_ODOO.includes(f.paymentState)).map((f) => normalizarNumeroFactura(f.numero))),
+      MERCURY: new Set(mercury.filter((f) => f.estado === "Paid").map((f) => normalizarNumeroFactura(f.numero))),
+    };
+    const sinEvidencia = confirmadosPorMaquina.filter((c) => {
+      const fuente = fuenteDeLaFirma(c.confirmadoPor);
+      if (!fuente) return true; // otra firma de máquina: nunca vale
+      if (c.estado !== "COBRADO") return false; // ya lo sacaron de Cobrado: la firma vieja no confirma nada
+      const numero = normalizarNumeroFactura(c.numeroFactura);
+      return !numero || !pagadas[fuente].has(numero);
+    });
+    if (sinEvidencia.length > 0) {
+      const plata = sinEvidencia.reduce((a, c) => a + Number(c.monto), 0);
       return viola(
-        `✗ INV25 VIOLADO: ${confirmadosPorMaquina.length} cobro(s) por ${plata.toFixed(2)} los confirmó una máquina, no una persona:\n` +
-          confirmadosPorMaquina
+        `✗ INV25 VIOLADO: ${sinEvidencia.length} cobro(s) por ${plata.toFixed(2)} los confirmó una máquina sin una factura pagada en la copia que lo respalde:\n` +
+          sinEvidencia
             .slice(0, 20)
-            .map((c) => `    · ${c.cuenta.client.name}: ${c.moneda} ${Number(c.monto).toFixed(2)} — confirmadoPor="${c.confirmadoPor}"`)
+            .map((c) => `    · ${c.cuenta.client.name}: ${c.moneda} ${Number(c.monto).toFixed(2)} — confirmadoPor="${c.confirmadoPor}"${c.numeroFactura ? ` · ${c.numeroFactura}` : ""}`)
             .join("\n") +
-          `\n    Remedio: revertirlos a POR_COBRAR y confirmarlos uno por uno desde /cobranza.`,
+          `\n    Remedio: abrir el cobro en /cobranza; si no entró, «Sacar de Cobrado» con su motivo (las firmas válidas son ${FIRMA_DEL_SISTEMA.ODOO} y ${FIRMA_DEL_SISTEMA.MERCURY}, solo con la factura pagada).`,
       );
     }
-    return cumple("✓ INV25: ningún cobro fue confirmado por el sync — la plata la sigue confirmando una persona.");
+    return cumple(
+      delSistema.length > 0
+        ? `✓ INV25: los ${delSistema.length} cobro(s) que el sistema cobró solo tienen su factura pagada en Odoo o Mercury.`
+        : "✓ INV25: ningún cobro lo confirmó una máquina.",
+    );
   },
 };
 

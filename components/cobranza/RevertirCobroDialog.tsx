@@ -15,6 +15,7 @@
  * ⚠ La fecha de emisión viene precargada con la que tiene el cobro, que en los importados es la
  * QUINCENA del libro y no la de la factura. Por eso se pide mirarla, no se da por buena.
  */
+import { esFirmaDelSistema, nombreDeLaFirma } from "@/lib/cobranza/firma-del-sistema";
 import { useState } from "react";
 import { Alert, Modal } from "@/components/ui";
 import { esFirmaDeImportacion, MOTIVO_REVERSION_MIN } from "@/lib/cobranza/reversion-cobro";
@@ -123,11 +124,13 @@ export default function RevertirCobroDialog({
       <div className="space-y-3">
         <Alert variant={confirmadoPorImportacion ? "warning" : "info"}>
           <p className="text-xs">
-            Lo confirmó <span className="font-medium">{cobro.confirmadoPor ?? "nadie"}</span>
+            Lo confirmó <span className="font-medium">{cobro.confirmadoPor ? nombreDeLaFirma(cobro.confirmadoPor) : "nadie"}</span>
             {cobro.confirmadoEn ? ` el ${fmtFecha(cobro.confirmadoEn)}` : ""}
             {cobro.fechaCobro ? `, con el pago fechado el ${fmtFecha(cobro.fechaCobro)}` : ""}.
             {confirmadoPorImportacion &&
               " Esa firma es de la importación del libro: el verde salió del color de una celda, no de un depósito."}
+            {esFirmaDelSistema(cobro.confirmadoPor) &&
+              " Lo cobró el sistema solo. Si lo sacas de Cobrado, no lo vuelve a cobrar solo: si después entra, se confirma a mano en «Lo pagado»."}
           </p>
         </Alert>
 

@@ -139,7 +139,19 @@ export function entradasDeFacturas(
   facturas: readonly FacturaMercuryParaCruzar[],
   entradas: readonly EntradaParaCruzar[],
 ): Map<string, EntradaParaCruzar> {
-  const out = new Map<string, EntradaParaCruzar>();
+  return new Map([...entradasDeFacturasConDetalle(facturas, entradas)].map(([id, x]) => [id, x.entrada]));
+}
+
+/**
+ * Lo mismo que `entradasDeFacturas`, diciendo además CÓMO se ató cada entrada: por el nombre de quien pagó (`porNombre`)
+ * o solo por el monto y la fecha. El cobro automático (lib/cobranza/libro/hechos.ts) solo confía en la primera: con el
+ * monto solo, dos clientes que pagan lo mismo la misma semana se pueden cruzar (2026-10-18).
+ */
+export function entradasDeFacturasConDetalle(
+  facturas: readonly FacturaMercuryParaCruzar[],
+  entradas: readonly EntradaParaCruzar[],
+): Map<string, { entrada: EntradaParaCruzar; porNombre: boolean }> {
+  const out = new Map<string, { entrada: EntradaParaCruzar; porNombre: boolean }>();
   const usadas = new Set<string>();
   const pagadas = [...facturas].filter((f) => f.estado === "Paid").sort((a, b) => a.invoiceDate.localeCompare(b.invoiceDate));
   for (const conNombre of [true, false]) {
@@ -156,7 +168,7 @@ export function entradasDeFacturas(
         )
         .sort((a, b) => Math.abs(a.monto - f.monto) - Math.abs(b.monto - f.monto) || a.fecha.localeCompare(b.fecha))[0];
       if (candidata) {
-        out.set(f.id, candidata);
+        out.set(f.id, { entrada: candidata, porNombre: conNombre });
         usadas.add(candidata.id);
       }
     }

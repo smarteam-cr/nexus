@@ -72,7 +72,8 @@ export function armarPendientes(d: DatosDePendientes): TareaPendiente[] {
       clave: "pagos",
       cuando: "hoy",
       titulo: `Cobrar ${plural(d.pagosDetectados.n, "pago que Odoo o Mercury ya dan por pagado", "pagos que Odoo o Mercury ya dan por pagados")}`,
-      detalle: "En Nexus siguen por cobrar. Revisa la lista con el día real de cada pago y confírmala con tu firma.",
+      detalle:
+        "En Nexus siguen por cobrar. Lo pagado y conciliado con el banco se cobra solo cada mañana; lo que queda en la lista dice por qué espera tu mirada.",
       plata: textoDeMontos(d.pagosDetectados.montos),
       accion: "Revisar y cobrar",
       href: "/finanzas/conciliacion?ver=pagados",
