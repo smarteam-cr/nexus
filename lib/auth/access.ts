@@ -240,6 +240,42 @@ export async function clientesRevocadosPara(tm: Pick<TeamMember, "id" | "roleEnu
 }
 
 /**
+ * La regla de `requireAccessToClient`, por LOTE y para una persona explícita (no la sesión): de esas cuentas, las que
+ * NO puede abrir. La usa «Para ti» para no nombrar la reunión de una cuenta ajena. Ve toda la cartera → ninguna; si no,
+ * un REVOKE corta, y abren un GRANT, ser el encargado de un proyecto de Customer Success o un prospecto en preventa con
+ * `preventa.read`. ⚠ Si cambia la regla de arriba, cambia acá.
+ */
+export async function clientesQueNoAbre(teamMemberId: string, clientIds: readonly string[]): Promise<Set<string>> {
+  const ids = [...new Set(clientIds)];
+  if (ids.length === 0) return new Set();
+  const tm = await prisma.teamMember.findUnique({
+    where: { id: teamMemberId },
+    select: { id: true, email: true, roleEnum: true, permissionOverrides: true, canViewAllClients: true, canViewAllExpiresAt: true, deactivatedAt: true },
+  });
+  // Sin la persona (o dada de baja) no se sabe: ninguna se abre.
+  if (!tm || tm.deactivatedAt) return new Set(ids);
+  if (await veTodaLaCartera(tm)) return new Set();
+  const [revocadas, grants, propios, enPreventa] = await Promise.all([
+    clientesRevocadosPara(tm),
+    prisma.clientAssignment.findMany({
+      where: { kind: "GRANT", clientId: { in: ids }, OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
+      select: { clientId: true },
+    }),
+    prisma.project.findMany({ where: { clientId: { in: ids }, hubspotOwnerEmail: tm.email, ...PROYECTO_DE_PIPELINE_CS_WHERE }, select: { clientId: true } }),
+    can(tm, "preventa", "read").then((puede) =>
+      puede
+        ? prisma.exploracionDeVenta.findMany({
+            where: { clientId: { in: ids }, archivadaEn: null, projectId: null, client: { kind: "PROSPECTO" } },
+            select: { clientId: true },
+          })
+        : [],
+    ),
+  ]);
+  const abre = new Set([...grants, ...propios, ...enPreventa].map((x) => x.clientId).filter((id) => !revocadas.has(id)));
+  return new Set(ids.filter((id) => !abre.has(id)));
+}
+
+/**
  * ¿El usuario (por email) es OWNER de este cliente — owner HubSpot de algún proyecto DEL
  * PIPELINE DE CUSTOMER SUCCESS? Igual criterio que `requireAccessToClient`: un desarrollador
  * dueño de un proyecto "development"/"sitios-web" no es owner de la cuenta.

@@ -42,6 +42,16 @@ export function esResultadoDeMeta(v: unknown): v is ResultadoDeMeta {
 /** Las decisiones que piden el criterio medido: un caso que se cierra en este ciclo se mide. */
 export const PIDEN_MEDICION: readonly DecisionAlCerrar[] = ["cumplido", "no_cumplido"];
 
+/**
+ * Si la fase del caso sale del cronograma al cerrar (queda SUSPENDED, con sus tareas sin terminar): todo lo que no se
+ * cumplió. Si no, quedaría pendiente para siempre, sus tareas del cliente seguirían en «Lo que debe el cliente» como
+ * atrasadas y, con «pasa», el ciclo siguiente armaría otra fase con el mismo nombre al lado de la vieja (el traductor
+ * ni siquiera crea la fase de lo que «pasa» en un tramo cerrado: lib/servicios/traductor-server.ts).
+ */
+export function saleDelCronogramaAlCerrar(d: DecisionAlCerrar): boolean {
+  return d !== "cumplido";
+}
+
 /** El estado del caso de uso tras la decisión, y si vuelve al plan del proyecto (sin ciclo). */
 export function estadoTrasLaDecision(d: DecisionAlCerrar): { estado: string; alPlan: boolean } {
   switch (d) {

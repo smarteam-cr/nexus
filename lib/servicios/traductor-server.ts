@@ -18,6 +18,26 @@ import { armarCierre } from "./cierre";
 import { ErrorDelCiclo } from "./ciclos-server";
 import { traducirPropuesta, type PlanTraducido, type Propuesta } from "./traductor";
 
+type Db = Pick<Prisma.TransactionClient, "cicloDeProyecto" | "casoDeUso">;
+
+/**
+ * La regla de «sin historia», una sola vez para la revisión de afuera y la de adentro de la transacción: ni casos de
+ * uso, ni ciclos cerrados, ni más de un ciclo, ni una carga anterior del traductor. Lanza ErrorDelCiclo si no se cumple;
+ * si se cumple, devuelve el único ciclo (el vacío que se abrió solo) o null.
+ */
+async function cicloSinHistoria(db: Db, projectId: string): Promise<{ id: string; numero: number } | null> {
+  const [ciclos, casos] = await Promise.all([
+    db.cicloDeProyecto.findMany({ where: { projectId }, select: { id: true, numero: true, estado: true, creadoPor: true } }),
+    db.casoDeUso.count({ where: { projectId } }),
+  ]);
+  if (ciclos.some((c) => c.creadoPor?.startsWith("traductor:"))) throw new ErrorDelCiclo("Esta propuesta (u otra) ya se cargó en el proyecto.", 409);
+  if (casos > 0 || ciclos.some((c) => c.estado !== "abierto") || ciclos.length > 1) {
+    throw new ErrorDelCiclo("El proyecto ya tiene ciclos o casos de uso: el traductor solo carga en un proyecto sin historia.", 409);
+  }
+  const vacio = ciclos[0] ?? null;
+  return vacio ? { id: vacio.id, numero: vacio.numero } : null;
+}
+
 export interface ProyectoParaTraducir {
   id: string;
   nombre: string;
@@ -41,15 +61,7 @@ export async function proyectoParaTraducir(projectId: string): Promise<ProyectoP
   });
   if (!p) throw new ErrorDelCiclo("El proyecto no existe.", 404);
   if (!resolvePipeline(p.hubspotPipelineId)?.servicioRecurrente) throw new ErrorDelCiclo("El proyecto no es de un servicio recurrente.", 409);
-  const [ciclos, casos] = await Promise.all([
-    prisma.cicloDeProyecto.findMany({ where: { projectId }, select: { id: true, numero: true, estado: true, creadoPor: true } }),
-    prisma.casoDeUso.count({ where: { projectId } }),
-  ]);
-  if (ciclos.some((c) => c.creadoPor?.startsWith("traductor:"))) throw new ErrorDelCiclo("Esta propuesta (u otra) ya se cargó en el proyecto.", 409);
-  if (casos > 0 || ciclos.some((c) => c.estado !== "abierto") || ciclos.length > 1) {
-    throw new ErrorDelCiclo("El proyecto ya tiene ciclos o casos de uso: el traductor solo carga en un proyecto sin historia.", 409);
-  }
-  const vacio = ciclos[0] ?? null;
+  const vacio = await cicloSinHistoria(prisma, projectId);
   return {
     id: p.id,
     nombre: p.name,
@@ -67,6 +79,14 @@ export function planParaElProyecto(propuesta: Propuesta, proyecto: ProyectoParaT
 
 const fecha = (s: string) => new Date(`${s}T00:00:00.000Z`);
 
+/**
+ * Las fechas reales de lo importado como hecho o en curso: las del tramo, pero solo lo que ya pasó (un tramo abierto
+ * todavía no terminó: su «hasta» es el plan, no un dato). Sin dato, null.
+ */
+function tramoReal(desde: string, hasta: string, hoy: string): { desde: string | null; hasta: string | null } {
+  return { desde: desde <= hoy ? desde : null, hasta: hasta <= hoy ? hasta : null };
+}
+
 export interface ResultadoDeLaCarga {
   ciclos: Array<{ numero: number; estado: "cerrado" | "abierto"; casos: number; fases: number; dependencias: number }>;
   plan: number;
@@ -77,10 +97,17 @@ export async function cargarPlanTraducido(proyecto: ProyectoParaTraducir, plan: 
   const marca = `traductor:${por}`;
   return prisma.$transaction(
     async (tx) => {
-      // Releer dentro de la transacción: otra corrida pudo cargar a la vez.
-      const ya = await tx.cicloDeProyecto.count({ where: { projectId: proyecto.id, creadoPor: { startsWith: "traductor:" } } });
-      if (ya > 0) throw new ErrorDelCiclo("Esta propuesta (u otra) ya se cargó en el proyecto.", 409);
+      /* Releer dentro de la transacción, con la fila del proyecto bloqueada: otra corrida pudo cargar a la vez, alguien
+         pudo sumar un caso o cerrar el ciclo, o abrirse el primero solo. La misma regla que proyectoParaTraducir; y el
+         ciclo vacío tiene que ser el mismo que se revisó (si no, el plan se armó sobre otro proyecto). */
+      await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${proyecto.id} FOR UPDATE`;
+      const vacioAhora = await cicloSinHistoria(tx, proyecto.id);
+      if ((vacioAhora?.id ?? null) !== (proyecto.cicloVacio?.id ?? null)) {
+        throw new ErrorDelCiclo("El proyecto cambió mientras se revisaba: vuelve a correr la carga.", 409);
+      }
+      // El ancla la confirma quien corre la carga con --apply (lib/timeline/ciclo-server.ts › asegurarCronograma).
       const { timelineId } = await asegurarCronograma(tx, proyecto.id, plan.ancla);
+      const hoy = new Date().toISOString().slice(0, 10);
       const resultado: ResultadoDeLaCarga = { ciclos: [], plan: 0 };
       let orden = 0;
       let reusado = false;
@@ -111,6 +138,7 @@ export async function cargarPlanTraducido(proyecto: ProyectoParaTraducir, plan: 
 
         let fases = 0;
         let dependencias = 0;
+        const tramo = tramoReal(c.desde, c.hasta, hoy);
         const casosCerrados: Array<{ id: string; titulo: string; criterio: string | null; criterioMedido: string | null; decisionAlCerrar: string }> = [];
         for (const [k, caso] of c.casos.entries()) {
           const decision = c.estado === "cerrado" ? c.decisiones[k] : null;
@@ -122,12 +150,19 @@ export async function cargarPlanTraducido(proyecto: ProyectoParaTraducir, plan: 
           const faseId = await crearFaseDelCaso(
             tx,
             timelineId,
-            { nombre: caso.titulo, notas: notasDeLaFase(caso), startWeek: caso.startWeek, durationWeeks: caso.durationWeeks, estado: caso.estadoDeLaFase },
+            {
+              nombre: caso.titulo,
+              notas: notasDeLaFase(caso),
+              startWeek: caso.startWeek,
+              durationWeeks: caso.durationWeeks,
+              estado: caso.estadoDeLaFase,
+              tramo,
+            },
             por,
           );
           fases++;
           for (const d of caso.dependencias) {
-            await crearDependenciaDelCliente(tx, faseId, { titulo: d.titulo, weekIndex: d.weekIndex, hecha: d.hecha }, por);
+            await crearDependenciaDelCliente(tx, faseId, { titulo: d.titulo, weekIndex: d.weekIndex, hecha: d.hecha, tramo }, por);
             dependencias++;
           }
           const fila = await tx.casoDeUso.create({

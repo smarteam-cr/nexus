@@ -63,6 +63,7 @@ export function FilaDeTarea({
           <ChipsDeTarea t={t} sinPedida={sinPedida} />
           {conAgenda && <ChipDeAgenda t={t} />}
         </span>
+        {t.contexto && !hecha && <span className="mt-1 block truncate text-[12.5px] text-fg-muted">{t.contexto}</span>}
       </button>
       <span className="mt-[2px] flex-shrink-0 text-xs tabular-nums text-fg-muted">{t.minutosEstimados ? horas(t.minutosEstimados) : ""}</span>
     </li>

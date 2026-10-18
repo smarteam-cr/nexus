@@ -18,7 +18,7 @@ import type { TeamMember } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getAnthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
-import { agregarTurno, huellaDeContexto, type HiloConTurnos } from "@/lib/asistente/hilo";
+import { agregarTurno, huellaDeContexto, leerHilo, type HiloConTurnos } from "@/lib/asistente/hilo";
 import { marcaDeAcuerdo, textoVisible, type CambioAcordado } from "@/lib/asistente/acuerdo";
 import { SLUG_DEL_CHAT_DE_NEXUS, TOPES_DEL_CHAT, origenDelHilo } from "./constantes";
 import { correrBucle, type CambioPropuesto } from "./bucle";
@@ -28,6 +28,8 @@ import { contextoDelChat, ejecutorDelChat, herramientasDelChat, prepararParaLaCu
 import { loQueSeSabeDeLaCuenta } from "./lecturas-server";
 import { costoDeLaCorrida } from "./uso-server";
 import { avisoDeRechazos, sinMarcadores } from "./textos";
+import { tomarHilo } from "./candado-server";
+import { ErrorDelChat } from "./aplicar-server";
 
 /** El presupuesto de salida de cada llamada (el razonamiento sale de acá). */
 const MAX_TOKENS_DE_RESPUESTA = 8_000;
@@ -45,11 +47,31 @@ export function ventanaDelHilo(turnos: HiloConTurnos["turnos"], tope = TOPES_DEL
   return (desde < 0 ? [] : ultimos.slice(desde)).filter((t) => t.texto);
 }
 
+/**
+ * El turno con el candado del hilo, el MISMO que toma aplicar (./candado-server.ts): un clic en «Aplicar» mientras corre
+ * el turno no puede dejar que el turno vuelva a proponer lo que se acaba de aplicar. El hilo se relee CON el candado.
+ */
 export async function correrTurnoDeNexus(
   hilo: HiloConTurnos,
   mensajeCrudo: string,
   quien: { persona: TeamMember; clientId: string; veMontos: boolean },
   ahora: Date = new Date(),
+): Promise<ResultadoDelTurnoDeNexus> {
+  const soltar = tomarHilo(hilo.id);
+  if (!soltar) throw new ErrorDelChat(409, "Nexus está terminando algo en esta conversación: espera un momento y vuelve a escribir.");
+  try {
+    const fresco = (await leerHilo(hilo.id, { clientId: quien.clientId }, hilo.usuarioEmail)) ?? hilo;
+    return await correrTurno(fresco, mensajeCrudo, quien, ahora);
+  } finally {
+    soltar();
+  }
+}
+
+async function correrTurno(
+  hilo: HiloConTurnos,
+  mensajeCrudo: string,
+  quien: { persona: TeamMember; clientId: string; veMontos: boolean },
+  ahora: Date,
 ): Promise<ResultadoDelTurnoDeNexus> {
   const mensaje = sinMarcadores(mensajeCrudo).trim();
   const { persona, clientId } = quien;

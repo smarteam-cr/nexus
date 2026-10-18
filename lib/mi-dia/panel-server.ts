@@ -62,13 +62,16 @@ export async function panelDeLaReunion(o: {
   /** ISO del inicio del evento (lo manda la agenda): para saber si ya pasó y si hay otra reunión después. */
   inicio: string | null;
 }): Promise<PanelDeLaReunion | null> {
-  const preparacion = await leerPreparacion(o.email, o.eventoId);
+  // Con «Ver como», quien mira de verdad es dirección: el objetivo y las notas son de la persona (las ve solo ella), así
+  // que no se leen ni se dejan escribir.
+  const verComo = !!o.user.verComoDe;
+  const preparacion = verComo ? { objetivo: null, notas: null, actualizadaAt: null } : await leerPreparacion(o.email, o.eventoId);
   const base: PanelDeLaReunion = {
     eventoId: o.eventoId,
     cliente: null,
     guia: { objetivo: null, puntos: [] },
     preparacion,
-    sePuedeGuardar: preparacionDisponible(),
+    sePuedeGuardar: !verComo && preparacionDisponible(),
     vienen: [],
     ultima: null,
     pendientes: [],
@@ -80,13 +83,20 @@ export async function panelDeLaReunion(o: {
   const [cliente, resumen, servicio] = await Promise.all([
     prisma.client.findUnique({ where: { id: o.clientId }, select: { id: true, name: true, kind: true } }),
     resumenParaLaReunion({ clientId: o.clientId, eventoId: o.eventoId, email: o.email, veAlertas: o.veAlertas, veMontos: o.veMontos, ahora: o.ahora }),
-    servicioDeLasCuentas([{ clientId: o.clientId, empresa: "", llevaEmail: o.email }], { ahora: o.ahora, hoyISO: o.hoyISO }).catch(() => null),
+    servicioDeLasCuentas([{ clientId: o.clientId, empresa: "", llevaEmail: o.email }], {
+      ahora: o.ahora,
+      hoyISO: o.hoyISO,
+      quienMira: { email: o.email, esSuperAdmin: o.rol === "SUPER_ADMIN" },
+    }).catch(() => null),
   ]);
   if (!cliente || !resumen) return null;
 
   const yaPaso = o.inicio ? Date.parse(o.inicio) < o.ahora.getTime() : false;
-  const despues = servicio?.get(o.clientId)?.reunion;
-  const hayReunionDespues = !!despues && (!o.inicio || Date.parse(despues.inicio) > Date.parse(o.inicio) + 60_000);
+  // Otra reunión con la cuenta DESPUÉS de esta (no la primera de la lista: esa suele ser esta misma).
+  const proximas = servicio?.get(o.clientId)?.proximas ?? [];
+  const hayReunionDespues = o.inicio
+    ? proximas.some((r) => Date.parse(r.inicio) > Date.parse(o.inicio!) + 60_000)
+    : proximas.length > 0;
   const loQueDejo = yaPaso ? await loQueDejoElEvento(o.eventoId, o.clientId, o.user, o.rol, o.ahora).catch(() => null) : null;
 
   const n = resumen.negocios[0];

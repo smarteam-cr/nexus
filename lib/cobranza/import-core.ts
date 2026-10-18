@@ -7,6 +7,7 @@
  * El Zod que valida el payload canónico vive en schema.ts (importFilaCanonicaSchema);
  * acá se produce ese payload desde la fila cruda + el mapeo.
  */
+import { parseMontoLocal } from "./montos";
 import { IMPORT_CAMPOS_CANONICOS, type ImportCampoCanonico } from "./schema";
 
 // ── Skip-list y dominios compartidos ────────────────────────────────────────────
@@ -93,46 +94,8 @@ export function normalizarDominio(raw: string | null | undefined): string | null
   return /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/.test(d) ? d : null;
 }
 
-/**
- * Parsea un monto con formato local a number (2 decimales). Acepta "₡1.500.000,00",
- * "$1,200.50", "1200", "1.200,50", "USD 800". null si no hay número reconocible.
- * Regla del separador decimal: si aparecen "." y "," el ÚLTIMO es el decimal; si
- * aparece uno solo, es decimal únicamente cuando le siguen exactamente 1-2 dígitos
- * al final (si no, es separador de miles).
- */
-export function parseMontoLocal(raw: string | number | null | undefined): number | null {
-  if (raw == null) return null;
-  if (typeof raw === "number") return Number.isFinite(raw) ? Math.round(raw * 100) / 100 : null;
-  const limpio = raw.replace(/[^\d.,-]/g, ""); // fuera símbolos de moneda/espacios/letras
-  if (!limpio || !/\d/.test(limpio)) return null;
-
-  const lastDot = limpio.lastIndexOf(".");
-  const lastComma = limpio.lastIndexOf(",");
-  let normalizado: string;
-  if (lastDot >= 0 && lastComma >= 0) {
-    // Ambos presentes: el último es el decimal, el otro son miles.
-    const decimalSep = lastDot > lastComma ? "." : ",";
-    const milesSep = decimalSep === "." ? "," : ".";
-    normalizado = limpio.split(milesSep).join("");
-    if (decimalSep === ",") normalizado = normalizado.replace(",", ".");
-  } else if (lastComma >= 0 || lastDot >= 0) {
-    const sep = lastComma >= 0 ? "," : ".";
-    const idx = lastComma >= 0 ? lastComma : lastDot;
-    const tras = limpio.length - idx - 1;
-    const unicaAparicion = limpio.indexOf(sep) === idx;
-    if (unicaAparicion && tras >= 1 && tras <= 2) {
-      normalizado = limpio.replace(sep, "."); // decimal
-    } else {
-      normalizado = limpio.split(sep).join(""); // miles (repetido o con 3 dígitos)
-    }
-  } else {
-    normalizado = limpio;
-  }
-
-  const n = Number(normalizado);
-  if (!Number.isFinite(n)) return null;
-  return Math.round(n * 100) / 100;
-}
+/** Vive en montos.ts (client-safe, sin zod): lo usa también el formulario de licencias revendidas. */
+export { parseMontoLocal };
 
 /**
  * Parsea una fecha local a ISO "YYYY-MM-DD". Acepta "2026-03-15", "15/03/2026",

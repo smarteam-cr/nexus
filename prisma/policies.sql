@@ -388,3 +388,31 @@ CREATE POLICY deny_all_non_superuser ON "GastoFinanciero"
   TO PUBLIC
   USING (false);
 
+-- Las tablas nuevas desde el 2026-10-05 que sus scripts/sql/ ya tapan con la RESTRICTIVE (Tareas, Feedback, «Para ti»,
+-- la cartera, la carga, las reuniones indexadas, los contactos y tickets de HubSpot, las notas, el siguiente paso, los
+-- negocios abiertos, los ciclos de SmartLoop…). Faltaban acá, así que reconstruir el proyecto desde cero las habría
+-- dejado sin la policy explícita. Mismo patrón (DROP + CREATE, idempotente), dentro de un bucle que salta la tabla que
+-- todavía no existe: el bootstrap local corre este archivo ANTES de los scripts/sql posteriores al baseline.
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'CasoDeUso', 'CicloDeProyecto', 'CierreDeSemana', 'ClasificacionDeCuenta', 'ConfigCarga', 'ContactoDeHubspot',
+    'CorreccionDeSalud', 'EncuestaDeCuenta', 'EncuestaDeTiempo', 'EspacioDeTareas', 'FeedbackMensaje', 'FeedbackPedido',
+    'FeedbackReporte', 'FeedbackTema', 'FuenteDeTareas', 'HechoDeReunion', 'HitoDeDocumento', 'LecturaDeReunion',
+    'MetaComercial', 'MiembroDeEspacio', 'NegocioAbierto', 'NotaDeLaCuenta', 'PlantillaDeTareas', 'PreguntaDeTiempo',
+    'PresentacionDeDocumento', 'ProyectoDeTareas', 'RespuestaDeCuenta', 'ResultadoDeSemana', 'ReunionIndexada',
+    'SiguientePaso', 'Tarea', 'TareaComentario', 'TareaEvento', 'TareaRelacion', 'TareaVinculo', 'TicketDeHubspot',
+    'TurnoDeReunion', 'UsoDeNexus', 'VistaDeCartera'
+  ]
+  LOOP
+    IF to_regclass(format('public.%I', t)) IS NULL THEN
+      RAISE NOTICE 'policies.sql: la tabla % todavía no existe, se salta', t;
+      CONTINUE;
+    END IF;
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('DROP POLICY IF EXISTS deny_all_non_superuser ON public.%I', t);
+    EXECUTE format('CREATE POLICY deny_all_non_superuser ON public.%I AS RESTRICTIVE FOR ALL TO PUBLIC USING (false)', t);
+  END LOOP;
+END $$;

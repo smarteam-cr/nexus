@@ -7,7 +7,8 @@
  * Arriba, lo de Nexus una sola vez (la guía, en azul con la chispa): el objetivo y tres o cuatro puntos, sacados de los
  * datos de la cuenta sin IA. «Editar» deja escribir TU objetivo, que manda. Abajo, los hechos: quién viene, la última
  * vez, lo pendiente de los dos lados, el negocio y tus notas (las ves solo tú). Una reunión que ya pasó muestra lo que
- * dejó, con «Usar todo». El hueco libre muestra lo que Nexus sugiere hacer en él, con «Bloquear en Calendar».
+ * dejó, con «Usar todo». El hueco libre dice de cuándo a cuándo está libre, con «Crear un evento aquí» (el borrador de la
+ * agenda) y «Bloquear en Calendar». Todavía no sugiere qué tarea poner ahí.
  *
  * Los datos los trae GET /api/para-ti/reunion/[evento] (pide acceso al cliente); TU objetivo y tus notas se guardan con
  * PUT en el mismo lugar.
@@ -25,6 +26,8 @@ import type { ReunionDeLaAgenda } from "@/lib/mi-dia/agenda-server";
 import { ReunionDespues } from "../DespuesDeTusReuniones";
 import { lineaDeLaReunion } from "./AgendaDelInicio";
 import { ENLACE_BOTON, Punto } from "./piezas";
+import { MINUTOS_DEL_BORRADOR } from "@/lib/mi-dia/agenda-borrador";
+import { crearBorrador } from "./borradores";
 
 const DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -113,7 +116,7 @@ export default function PanelDeLaReunion({
           </button>
         </div>
 
-        {elegido.tipo === "hueco" && <Hueco elegido={elegido} correo={correo} onDescartar={onDescartarHueco} />}
+        {elegido.tipo === "hueco" && <Hueco elegido={elegido} correo={correo} onCerrar={onCerrar} onDescartar={onDescartarHueco} />}
 
         {r && r.empresas.length > 1 && !empresa && (
           <div className="flex flex-col gap-2">
@@ -153,8 +156,8 @@ export default function PanelDeLaReunion({
                 <p className="text-[13px] leading-[19px] text-fg-secondary">
                   Reunión interna. Si es la reunión de tu sprint, Nexus propone en Tareas lo que se comprometió cada uno.
                 </p>
-                {/* Se monta de nuevo cuando llegan tus notas guardadas. */}
-                <Notas key={datos ? "con-datos" : "sin-datos"} eventoId={r.id} panel={datos?.panel ?? null} />
+                {/* Una por reunión: lo escrito antes de que lleguen tus notas guardadas no se pierde (ver `Notas`). */}
+                <Notas key={r.id} eventoId={r.id} panel={datos?.panel ?? null} />
               </>
             ) : !empresa ? null : !datos ? (
               <div className="flex flex-col gap-2.5 rounded-xl border border-line px-4 py-3.5">
@@ -175,37 +178,34 @@ export default function PanelDeLaReunion({
   );
 }
 
-function Hueco({ elegido, correo, onDescartar }: { elegido: Extract<LoElegido, { tipo: "hueco" }>; correo: string; onDescartar: () => void }) {
-  const titulo = elegido.sugerencia ? `Avanzar: ${elegido.sugerencia.titulo}` : "Tiempo para avanzar";
+function Hueco({ elegido, correo, onCerrar, onDescartar }: { elegido: Extract<LoElegido, { tipo: "hueco" }>; correo: string; onCerrar: () => void; onDescartar: () => void }) {
   return (
     <div className="flex flex-col gap-2.5 rounded-xl border border-info-line bg-info-surface p-3.5">
       <p className={cn(ROTULO_DEL_SISTEMA, "flex items-center gap-1.5 text-brand")}>
         <IconoDeSugerencia className="h-[13px] w-[13px]" />
-        Nexus sugiere
+        Hueco libre
       </p>
       <p className="text-sm leading-[21px] text-fg">
-        {elegido.sugerencia ? (
-          <>
-            Usar este hueco para <strong className="font-semibold">{elegido.sugerencia.titulo.replace(/[.\s]+$/, "")}</strong>.
-          </>
-        ) : (
-          "Usar este hueco para avanzar lo que tienes de esta semana."
-        )}
+        Tienes libre de <strong className="font-semibold">{horaCR(elegido.inicio)}</strong> a <strong className="font-semibold">{horaCR(elegido.fin)}</strong>. Puedes poner un
+        evento ahí o bloquear el tiempo en tu calendario.
       </p>
       <div className="flex flex-wrap gap-2">
+        <BotonBlanco
+          onClick={() => {
+            crearBorrador({ correo, inicio: elegido.inicio, fin: new Date(Date.parse(elegido.inicio) + MINUTOS_DEL_BORRADOR * 60_000).toISOString(), origen: "agenda" });
+            onCerrar();
+          }}
+        >
+          Crear un evento aquí
+        </BotonBlanco>
         <a
           className={ENLACE_BOTON}
           target="_blank"
           rel="noreferrer"
-          href={enlaceParaAgendarEnCalendar({ titulo, detalle: elegido.sugerencia ? `Desde Nexus: ${elegido.sugerencia.titulo}` : "Desde Nexus", inicio: elegido.inicio, fin: elegido.fin, correo })}
+          href={enlaceParaAgendarEnCalendar({ titulo: "Tiempo de trabajo", detalle: "Bloqueado desde Nexus.", inicio: elegido.inicio, fin: elegido.fin, correo })}
         >
           Bloquear en Calendar
         </a>
-        {elegido.sugerencia && (
-          <Link href={elegido.sugerencia.href} className={ENLACE_BOTON}>
-            Ir a hacerlo
-          </Link>
-        )}
         <BotonTexto onClick={onDescartar}>Descartar</BotonTexto>
       </div>
     </div>
@@ -266,7 +266,7 @@ function Contenido({ panel, futura, hoyISO }: { panel: Panel; futura: boolean; h
           <p className="text-[13px] leading-[19px] text-fg-secondary">{panel.negocio}</p>
         </div>
       )}
-      {futura && <Notas eventoId={panel.eventoId} panel={panel} />}
+      {futura && <Notas key={panel.eventoId} eventoId={panel.eventoId} panel={panel} />}
     </>
   );
 }
@@ -381,13 +381,36 @@ function Guia({ panel }: { panel: Panel }) {
   );
 }
 
-/** Tus notas de la reunión: se guardan solas al dejar de escribir. Las ves solo tú. */
+/**
+ * Tus notas de la reunión: se guardan solas al dejar de escribir. Las ves solo tú.
+ *
+ * ⚠ No se vuelve a montar cuando llegan tus notas guardadas: lo que escribiste mientras cargaban se queda (las
+ * guardadas solo llenan el campo si no tocaste nada). Y al cerrarse (otra reunión, cerrar el panel) guarda lo que
+ * quedó sin guardar, en vez de perderlo con el temporizador.
+ */
 function Notas({ eventoId, panel }: { eventoId: string; panel: Panel | null }) {
   const toast = useToast();
   const [texto, setTexto] = useState(panel?.preparacion.notas ?? "");
   const [estado, setEstado] = useState<"" | "guardando" | "guardado">("");
+  const [tocado, setTocado] = useState(false);
   const guardado = useRef(panel?.preparacion.notas ?? "");
+  const ultimo = useRef(texto);
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Llegan tus notas guardadas: llenan el campo si no escribiste nada todavía (se ajusta en el render, sin efecto).
+  const [conLoGuardado, setConLoGuardado] = useState(panel !== null);
+  if (panel && !conLoGuardado) {
+    setConLoGuardado(true);
+    if (!tocado) setTexto(panel.preparacion.notas ?? "");
+  }
+  // Lo guardado del servidor, una vez al llegar (después lo lleva `guardar`): así no se vuelve a mandar lo mismo.
+  const tomoLoGuardado = useRef(panel !== null);
+  useEffect(() => {
+    if (!panel || tomoLoGuardado.current) return;
+    tomoLoGuardado.current = true;
+    guardado.current = panel.preparacion.notas ?? "";
+    if (!tocado) ultimo.current = guardado.current;
+  }, [panel, tocado]);
 
   const guardar = useCallback(
     async (valor: string) => {
@@ -410,11 +433,26 @@ function Notas({ eventoId, panel }: { eventoId: string; panel: Panel | null }) {
     [eventoId, toast],
   );
 
+  // Con «Ver como» (o sin la tabla) no se guarda nada, tampoco al cerrarse.
+  const noSeGuarda = useRef(false);
+  useEffect(() => {
+    noSeGuarda.current = !!panel && !panel.sePuedeGuardar;
+  }, [panel]);
+
+  // Al cerrarse, lo que quedó sin guardar se manda igual (`keepalive`: sobrevive a cambiar de página). Sin avisos: el
+  // panel ya no está.
   useEffect(
     () => () => {
       if (temporizador.current) clearTimeout(temporizador.current);
+      if (noSeGuarda.current || ultimo.current === guardado.current) return;
+      void fetch(`/api/para-ti/reunion/${encodeURIComponent(eventoId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notas: ultimo.current }),
+        keepalive: true,
+      }).catch(() => null);
     },
-    [],
+    [eventoId],
   );
 
   if (panel && !panel.sePuedeGuardar) return null;
@@ -435,6 +473,8 @@ function Notas({ eventoId, panel }: { eventoId: string; panel: Panel | null }) {
         onChange={(e) => {
           const v = e.target.value;
           setTexto(v);
+          setTocado(true);
+          ultimo.current = v;
           setEstado("");
           if (temporizador.current) clearTimeout(temporizador.current);
           temporizador.current = setTimeout(() => guardar(v), 900);

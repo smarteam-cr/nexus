@@ -29,9 +29,9 @@ export type LecturaDoc =
     }
   | { ok: false; error: string; status: number | null };
 
-/** Lo que se escribe en la fila. `transcript`/`summary` en `undefined` = NO tocar lo que hay. */
+/** Lo que se escribe en la fila. `transcript`/`summary` en `undefined` = NO tocar lo que hay; `transcript: null` = vaciarla. */
 export interface DatosDeEscritura {
-  transcript?: string;
+  transcript?: string | null;
   summary?: { overview: string };
   enrichedAt?: Date;
   enrichAttempts: number;
@@ -53,7 +53,8 @@ export function datosDeEscritura(
   summaryFinal: { overview: string } | null,
   attemptsPrevios: number,
   now: Date,
-  opts: { esperarMaterial?: boolean } = {},
+  /** `vaciarTranscripcion`: el documento del EVENTO trae solo notas y la transcripción guardada es de otra reunión. */
+  opts: { esperarMaterial?: boolean; vaciarTranscripcion?: boolean } = {},
 ): DatosDeEscritura {
   if (!lectura.ok) {
     /* Un fallo DETERMINÍSTICO no se reintenta: reintentar 5 veces algo que no puede cambiar
@@ -87,7 +88,8 @@ export function datosDeEscritura(
   }
 
   return {
-    transcript: lectura.transcript ?? undefined,
+    // Sin transcripción en lo leído, la guardada no se toca, salvo que sea de OTRA reunión (`vaciarTranscripcion`).
+    transcript: lectura.transcript ?? (opts.vaciarTranscripcion ? null : undefined),
     summary: summaryFinal ?? undefined,
     enrichedAt: now,
     enrichAttempts: 0,

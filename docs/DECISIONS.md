@@ -8356,8 +8356,11 @@ hacerlo**. El plan, por fases, está en `docs/nexus-sistema-de-trabajo-plan.md`.
   inicio y la reunión que se hizo). La reunión planeada todavía no tiene pantalla: llega con la fase 2.
 - **El siguiente paso es la próxima tarea abierta con fecha del sprint del equipo** (`lib/siguiente-paso/desde-tareas.ts`):
   la fecha es el día de la reunión, el vencimiento o su semana; «Por asignar» del sprint cuenta; una propuesta no.
-  Fijarlo desde el diálogo CAMBIA la tarea que hoy es el siguiente paso (qué, fecha y quién, por el escritor único de
-  Tareas) o crea una (`origen = "paso"`); lo lleva alguien del sprint del equipo. «Ya se hizo» la termina. Para otra
+  Fijarlo desde el diálogo cambia la tarea que hoy es el siguiente paso solo si nació como paso (`origen = "paso"`) y
+  la lleva quien lo fija; si no, crea una tarea de paso nueva (`tareaQueSeCambiaAlFijar`, corregido el 2026-10-17:
+  antes se reescribía la tarea de otra persona, y a quien no podía editarla le respondía 403). Lo lleva alguien del
+  sprint del equipo. ⚠ Si el sprint tiene una tarea con fecha más temprana, la nueva no es el siguiente paso hasta que
+  esa se cierre. «Ya se hizo» la termina. Para otra
   persona, sigue las reglas de Tareas: le llega como sugerencia y no es el siguiente paso hasta que la tome.
 - **HubSpot sale de la tarea.** Al guardar, y cada hora para las cuentas cuyas tareas cambiaron (job
   `negocios-abiertos`), se compara la tarea con la copia y se escribe solo lo distinto. Si alguien lo borra en HubSpot y
@@ -8527,6 +8530,24 @@ que tener su acción de la semana y su reunión agendada.
   Nexus todavía no los lee.
 - **Cada equipo tiene su inicio** (`varianteDelInicio`, del registro de equipos): el CSE sus cuentas, la CSL toda la
   cartera, Desarrollo los clientes con proyecto de desarrollo activo y Marketing sus tareas internas.
+
+### Lo que cambió al probarlo (2026-10-17, feedback de Elías)
+
+- **Un evento se arma en la agenda y se guarda en Google Calendar.** Tocar una hora libre (o «+ Crear evento») deja un
+  BORRADOR de una hora con título, invitados (los contactos de HubSpot de las cuentas que ves, `/api/para-ti/contactos`)
+  y la cuenta; «Abrir en Google Calendar» lo abre ya lleno, con el enlace a la cuenta en la descripción
+  (`lib/mi-dia/agenda-borrador.ts`). Sigue valiendo «Calendario por enlace»: Nexus no escribe en el calendario. El
+  borrador vive solo en la pantalla y se pierde al recargar. «Agendar» de una cuenta sin acción hace lo mismo en el
+  primer hueco laboral, invitando a quien estuvo en la última reunión o, si no, al contacto con más actividad.
+- **Los huecos y lo que propone Nexus, solo en horario laboral**: lunes a viernes de 8:00 a 17:00, hora de Costa Rica
+  (`lib/mi-dia/constantes.ts`, `primerHuecoLaboral`). El hueco ya no promete con qué avanzar: sugerir la tarea para el
+  hueco queda para más adelante.
+- **Customer Success tiene su cartera, aparte de la de Ventas** (`lib/mi-dia/cartera-cs.ts`, «Tu cartera» del CSE y «La
+  cartera» de la CSL). La unidad son los proyectos de HubSpot de implementación, SmartLoop y desarrollo, juntos por
+  empresa: el nombre grande, el CSE y el encargado de cada proyecto, el color y su porqué, la etapa, el último contacto,
+  la próxima reunión, la renovación y la acción de la semana. El monto aparece solo con un negocio abierto y solo para
+  quien tiene `ventas.read`. Vistas: Para atender, Todos los proyectos, Por CSE (solo la CSL, sin ranking), Sin
+  contacto y Renuevan pronto. La CSL ya no ve la cartera de Ventas.
 
 ## El cronograma y el cierre del ciclo de SmartLoop (2026-10-17, ficha E)
 

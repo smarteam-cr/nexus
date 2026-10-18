@@ -29,16 +29,16 @@ anota como una etapa chica de su iniciativa, no se arregla en la conversación d
 ## Dónde estamos hoy (17 oct)
 
 - **Producción** corre `918e2fdb` (16 oct, 16:10). La base tiene todos los SQL que necesita `main` (`npm run check:esquema` en verde).
-- **8 commits sin desplegar** en `main`: el plan del sistema de trabajo y sus fases 0, 0.4, 0.5, 1 y 1.2 (`700abcf1`, `8b64e65b`, `c8f60230`, `160318a6`, `0baf7b15`, `13866439`), Odoo y Mercury mandan (`d2d33746`) y las series del gráfico del equilibrio (`ea3cf26b`). No necesitan SQL.
-- **Invariantes en rojo en producción:** INV11 (un proyecto activo en un pipeline que `lib/projects/kind.ts` no declara) e INV32 (el último corte de cobranza tiene más de 17 días: `cobranza-quincenal` nunca corrió).
+- **31 commits sin desplegar** en `main` (`918e2fdb..09567bd4`): el plan del sistema de trabajo y sus fases 0, 0.4, 0.5, 1 y 1.2, Odoo y Mercury mandan (`d2d33746`), las series del gráfico del equilibrio y las dos tandas (fichas A a H con sus mezclas e integraciones). Sus SQL ya están aplicados (`npm run check:esquema` en verde el 17 oct).
+- **Invariantes en rojo en producción** (17 oct): INV11 (un proyecto activo en un pipeline que `lib/projects/kind.ts` no declara), INV13 (un cliente apunta a una empresa fusionada en HubSpot) e INV32 (el último corte de cobranza es del 24 jul: `cobranza-quincenal` nunca corrió).
 - **Jobs que nunca corrieron:** `cobranza-quincenal` (falta `COBRANZA_CRON_ENABLED`) y `cs-watchdog-daily` (falta `CS_WATCHDOG_ENABLED`). La copia de Partner sí corre.
 - **Código sin commitear:** solo «Reuniones con texto ajeno», en el worktree `elegant-rhodes-995841`, sobre una base del 5 oct.
 
 ## Lo que sigue, en orden
 
-1. **Desplegar los 8 commits** (lo hace Elías, después de probar en el 3004).
+1. **Desplegar los 31 commits** (lo hace Elías, después de probar en el 3004).
 2. **Inmediatamente después del deploy:** `scripts/cerrar-alertas-sueltas.ts` (hoy hay 154 alertas abiertas; el simulacro cerraba 131) y «Ya se subió» en Feedback.
-3. **Poner en verde los invariantes:** declarar el pipeline del INV11 y decidir si se prende `COBRANZA_CRON_ENABLED`.
+3. **Poner en verde los invariantes:** declarar el pipeline del INV11, reapuntar el cliente del INV13 y decidir si se prende `COBRANZA_CRON_ENABLED`.
 4. **Recorrer la cola de validación** (abajo), de arriba hacia abajo.
 5. **Decidir lo que espera una respuesta tuya** (abajo): cada decisión destraba una etapa.
 6. **Recién ahí, construir lo nuevo**, por zonas y en paralelo: la fase 2 del sistema de trabajo y las etapas 3 y 4 de SmartLoop (estas dos van antes del 6 nov).

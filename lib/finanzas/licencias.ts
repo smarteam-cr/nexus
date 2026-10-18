@@ -159,11 +159,14 @@ export interface DatosDeLicencia {
 export function problemasDeLicencia(d: DatosDeLicencia): string[] {
   const out: string[] = [];
   if (!(d.montoContrato > 0)) out.push("El monto del contrato tiene que ser mayor que cero.");
+  if (!Number.isFinite(d.montoServicio)) out.push("La parte de servicio no es un número.");
   if (d.montoServicio < 0) out.push("La parte de servicio no puede ser negativa.");
   if (d.montoServicio > d.montoContrato) out.push("La parte de servicio no puede ser mayor que el contrato.");
   const conCosto = [d.costoMonto, d.costoMoneda, d.costoCadaMeses].filter((x) => x !== null && x !== "").length;
   if (conCosto > 0 && conCosto < 3) out.push("El costo va completo: cuánto, en qué moneda y cada cuántos meses.");
+  if (d.costoMonto !== null && !Number.isFinite(d.costoMonto)) out.push("Lo que se le paga no es un número.");
   if (d.costoMonto !== null && d.costoMonto < 0) out.push("El costo no puede ser negativo.");
+  if (d.costoCadaMeses !== null && !Number.isFinite(d.costoCadaMeses)) out.push("Cada cuántos meses no es un número.");
   if (d.costoCadaMeses !== null && (d.costoCadaMeses < 1 || d.costoCadaMeses > 36)) out.push("Cada cuántos meses: de 1 a 36.");
   if (d.desde && d.hasta && d.desde > d.hasta) out.push("«Desde» va antes de «hasta».");
   if (!d.fuente.trim()) out.push("Di de dónde salen los números (el anexo, la propuesta).");

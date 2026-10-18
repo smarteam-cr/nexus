@@ -15,6 +15,7 @@
  * la tarea no se toca: la próxima vez que la tarea cambie, se vuelve a escribir.
  */
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { EQUIPOS_DEL_SIGUIENTE_PASO } from "./propiedades";
@@ -154,8 +155,12 @@ export async function copiarPasosDeHubspot(
             hubspotEscritoAt: leidoAt,
           },
         })
-        // Otro escritor llegó primero (el índice de un solo vigente): la tarea queda, y la próxima copia vuelve a mirar.
-        .catch(() => undefined);
+        .catch((err) => {
+          // Otro escritor llegó primero (el índice de un solo vigente): la tarea queda, y la próxima copia vuelve a mirar.
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
+          // Cualquier otro error no se calla: la tarea ya se creó y la copia quedó sin escribir.
+          console.error(`[siguiente-paso] no se pudo guardar la copia de ${e.objeto} ${e.objetoId} (${equipo}) con la tarea ${tarea.id}:`, err instanceof Error ? err.message : err);
+        });
     }
   }
   return res;

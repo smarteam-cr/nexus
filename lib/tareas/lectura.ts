@@ -29,7 +29,7 @@ import { itemsDeActionItems, itemsDeProximosPasos, parrafosDeDetalles, resumenDe
 import { armarPropuestas, armarPropuestasDeLaConversacion, claveDeTareaDeConversacion, necesitaModelo, prepararLineas, type Candidata, type Refs } from "./lectura-armar";
 import { pedidoDeLectura } from "./ia/pedido";
 import { leerContextos, LINEAS_POR_LLAMADA, pedidoDeContextos, SEGUNDOS_DEL_CONTEXTO } from "./ia/contexto";
-import { contextoDeRespaldo } from "./contexto-de-tarea";
+import { contextoDeLaReunion, contextoDeRespaldo } from "./contexto-de-tarea";
 import { leerSalida, type SalidaDeLaLectura } from "./ia/salida";
 import { MODELO_DE_LA_CONVERSACION, SEGUNDOS_DE_LA_CONVERSACION, leerSalidaDeConversacion, pedidoDeConversacion, type SalidaDeLaConversacion } from "./ia/conversacion";
 import { huellaDeTexto } from "./texto";
@@ -39,6 +39,7 @@ import { seguimientoPrendido } from "@/lib/lecturas/reglas";
 import { clientesQueVesParaTareas, type ClientesQueVes } from "./clientes";
 import { asegurarEspacio, escribirPropuestasDeLectura, escribirProyectoSugerido, escribirSugerenciaDeCierre, urlDeLaTarea, type PropuestaDeLectura } from "./mutaciones";
 import { esLapida } from "./estados";
+import { personasPorDefecto } from "./fuentes";
 import { ABIERTAS_WHERE, candidatasWhere } from "./donde";
 
 export const SLUG_DE_LA_LECTURA = "tareas-lectura";
@@ -302,14 +303,23 @@ export async function procesarLectura(lecturaId: string, ahora = new Date()): Pr
   }
 }
 
+/**
+ * Quiénes están en el sprint de la serie que pidió la lectura. «Quiénes están» vacío = los del área y quienes lo
+ * lideran (`personasPorDefecto`), igual que en la pantalla del sprint. Una lectura que no viene de una serie: nadie.
+ */
+function personasDeLaFuente(fuente: { personas: string[]; equipo: string | null } | null, equipoDeLaLectura: string, ctx: ContextoDeTareas): string[] {
+  if (!fuente) return [];
+  return fuente.personas.length ? fuente.personas : personasPorDefecto(fuente.equipo ?? equipoDeLaLectura, ctx.miembros);
+}
+
 async function procesar(lecturaId: string, ahora: Date) {
-  const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, include: { fuente: { select: { personas: true } } } });
+  const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, include: { fuente: { select: { personas: true, equipo: true } } } });
   if (!l || l.estado !== "leyendo" || !l.sessionId || !l.pedidaPorEmail) return;
-  const enElSprint = l.fuente?.personas ?? [];
-  const tm = await prisma.teamMember.findUnique({ where: { email: l.pedidaPorEmail } });
+  const tm = await prisma.teamMember.findFirst({ where: { email: { equals: l.pedidaPorEmail, mode: "insensitive" } } });
   if (!tm) throw new Error("Quien pidió la lectura ya no está en el equipo.");
   const ctx = await contextoDeTareas({ teamMember: tm });
   const clientes = await clientesQueVesParaTareas(tm);
+  const enElSprint = personasDeLaFuente(l.fuente, l.equipo, ctx);
   const [reunion] = await getReunionesParaTareas({ quien: quienLee(ctx, clientes), ids: [l.sessionId] });
   if (!reunion) throw new Error("La reunión ya no se puede leer.");
   // Releer (llegaron las notas, o un reintento) no borra lo que ya salió de la conversación.
@@ -451,7 +461,8 @@ async function procesar(lecturaId: string, ahora: Date) {
 
   // El contexto de cada propuesta (2026-10-09): Haiku con el resumen y los detalles, o el de respaldo si no se puede.
   const ctxDeLasPropuestas = await contextosDeLasNotas(armado.propuestas, lineas, reunion, l.pedidaPorEmail, clientes, ahora);
-  for (const p of armado.propuestas) p.contexto = ctxDeLasPropuestas.porLinea.get(p.lineaId) ?? null;
+  const ubicacion = contextoDeLaReunion({ reunion: reunion.titulo, fecha: diaCortoConSemana(horaDeCostaRica(reunion.inicio).fecha) });
+  for (const p of armado.propuestas) p.contexto = ctxDeLasPropuestas.porLinea.get(p.lineaId) ?? ubicacion;
   if (ctxDeLasPropuestas.costo) {
     costo = { entrada: (costo?.entrada ?? 0) + ctxDeLasPropuestas.costo.entrada, salida: (costo?.salida ?? 0) + ctxDeLasPropuestas.costo.salida };
   }
@@ -678,15 +689,15 @@ export async function pedirConversacion(ctx: ContextoDeTareas, clientes: Cliente
 /** Lee la conversación pedida con «¿Faltó algo?». NUNCA lanza: un error queda en `resumen.conversacion`. */
 export async function procesarConversacion(lecturaId: string, ahora = new Date()): Promise<void> {
   try {
-    const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, include: { fuente: { select: { personas: true } } } });
+    const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, include: { fuente: { select: { personas: true, equipo: true } } } });
     const conv = ((l?.resumen ?? null) as ResumenDeLectura | null)?.conversacion;
     if (!l || !l.sessionId || conv?.estado !== "leyendo" || !conv.pedidaPorEmail) return;
-    const tm = await prisma.teamMember.findUnique({ where: { email: conv.pedidaPorEmail } });
+    const tm = await prisma.teamMember.findFirst({ where: { email: { equals: conv.pedidaPorEmail, mode: "insensitive" } } });
     if (!tm) throw new Error("Quien pidió la lectura ya no está en el equipo.");
     const ctx = await contextoDeTareas({ teamMember: tm });
     const clientes = await clientesQueVesParaTareas(tm);
     const leida = await leerLaConversacion(
-      { id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint: l.fuente?.personas ?? [] },
+      { id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint: personasDeLaFuente(l.fuente, l.equipo, ctx) },
       ctx,
       clientes,
       "pedida",
@@ -842,6 +853,9 @@ async function leerLaConversacion(
     },
     refs,
   );
+  // Lo que el modelo y la línea no explican: al menos de qué conversación salió.
+  const ubicacionConv = contextoDeLaReunion({ reunion: reunion.titulo, fecha: diaCortoConSemana(horaDeCostaRica(reunion.inicio).fecha), deLaConversacion: true });
+  for (const p of armado.propuestas) p.contexto ??= ubicacionConv;
 
   const espacio = await asegurarEspacio(prisma, l.equipo);
   const conv = await prisma.$transaction(
@@ -1084,6 +1098,59 @@ export async function crearFilaDelSeguimiento(
     },
     select: { id: true },
   });
+}
+
+/**
+ * El TEXTO de la reunión cambió (llegó su documento después de uno ajeno, o se vació el ajeno: DECISIONS «El texto de
+ * una reunión tiene que ser el de ESA reunión»). La huella guardada era la del texto viejo, y con ella la fila pudo
+ * quedar como COPIA de otra reunión: así nunca se volvía a leer. Acá se recalcula la huella y:
+ *   · si la fila no es copia, solo se le pone la huella nueva (para que otra reunión no quede como copia de un texto ajeno);
+ *   · si la huella nueva es la de otra fila que se lee, sigue siendo copia, de esa (`"copia"`);
+ *   · si no, deja de ser copia y vuelve a esperar al seguimiento, como una fila que creó la cola (`"soltada"`): sin
+ *     resumen, sin `leidaAt` y sin `pedidaPorEmail` (si no, la salida de Tareas no se escribiría nunca).
+ * Escribe las columnas de Tareas (este archivo es su escritor); las `seguimiento*` las mueve la cola después
+ * (lib/lecturas/cola.ts). `huellaNueva` null = el texto se vació.
+ */
+export async function soltarLaCopiaPorTextoNuevo(lecturaId: string, huellaNueva: string | null): Promise<"soltada" | "copia" | "sin_cambio"> {
+  const fila = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, select: { id: true, estado: true, copiaDeId: true, huellaTexto: true } });
+  if (!fila) return "sin_cambio";
+  if (fila.estado !== "copia") {
+    if (fila.huellaTexto !== huellaNueva) {
+      await prisma.lecturaDeReunion.updateMany({ where: { id: fila.id, estado: { not: "copia" } }, data: { huellaTexto: huellaNueva } });
+    }
+    return "sin_cambio";
+  }
+  const gemela = huellaNueva
+    ? await prisma.lecturaDeReunion.findFirst({ where: { huellaTexto: huellaNueva, estado: { not: "copia" }, id: { not: fila.id } }, select: { id: true } })
+    : null;
+  if (gemela) {
+    if (gemela.id !== fila.copiaDeId || fila.huellaTexto !== huellaNueva) {
+      await prisma.lecturaDeReunion.updateMany({
+        where: { id: fila.id, estado: "copia" },
+        data: { copiaDeId: gemela.id, huellaTexto: huellaNueva, resumen: { copiaDe: gemela.id } as Prisma.InputJsonValue },
+      });
+    }
+    return "copia";
+  }
+  // `Prisma` está importado solo como tipo arriba; el valor (DbNull) se pide acá.
+  const { Prisma: P } = await import("@prisma/client");
+  const r = await prisma.lecturaDeReunion.updateMany({
+    where: { id: fila.id, estado: "copia" },
+    data: {
+      copiaDeId: null,
+      huellaTexto: huellaNueva,
+      estado: "en_espera",
+      pedidaPorEmail: null,
+      resumen: P.DbNull,
+      leidaAt: null,
+      leyendoDesde: null,
+      procesarDesde: null,
+      intentos: 0,
+      modo: null,
+      error: null,
+    },
+  });
+  return r.count > 0 ? "soltada" : "sin_cambio";
 }
 
 export type { ReunionParaTareas };

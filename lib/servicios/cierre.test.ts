@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { armarCierre, comprobacionesDelAprendizaje, estadoTrasLaDecision, faltaParaCerrar, leerCierre, type BorradorDelCierre } from "./cierre";
+import {
+  armarCierre,
+  comprobacionesDelAprendizaje,
+  estadoTrasLaDecision,
+  faltaParaCerrar,
+  leerCierre,
+  saleDelCronogramaAlCerrar,
+  type BorradorDelCierre,
+} from "./cierre";
 import { guiaDelCiclo } from "./guia";
 import { GUIA_SMARTLOOP } from "./smartloop";
 
@@ -47,6 +55,13 @@ describe("la regla de cierre", () => {
     expect(estadoTrasLaDecision("pasa")).toEqual({ estado: "en_plan", alPlan: true });
     expect(estadoTrasLaDecision("cumplido")).toEqual({ estado: "cumplido", alPlan: false });
     expect(estadoTrasLaDecision("descartado")).toEqual({ estado: "descartado", alPlan: false });
+  });
+
+  it("al cerrar, solo la fase de lo cumplido se queda en el cronograma: lo demás se suspende", () => {
+    expect(saleDelCronogramaAlCerrar("cumplido")).toBe(false);
+    expect(saleDelCronogramaAlCerrar("no_cumplido")).toBe(true);
+    expect(saleDelCronogramaAlCerrar("pasa")).toBe(true);
+    expect(saleDelCronogramaAlCerrar("descartado")).toBe(true);
   });
 });
 

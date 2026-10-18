@@ -198,7 +198,8 @@
   `propuesta`, con las tareas adentro sin responsable ni semana; **Activar** las reparte (lo tuyo pendiente, lo de
   otros como sugerencia) y nadie recibe nada antes.
 - **Contexto de una tarea** (`Tarea.contexto`): lo que escribe Nexus al generar una tarea (de una reunión, de la
-  conversación o del chat): para qué es, para quién y qué se espera. No se edita; lo de la persona va en «notas». El de
+  conversación o del chat): para qué es, para quién y qué se espera; si las notas no dicen más que el título, al menos de
+  qué reunión salió y cuándo. Se ve en las listas, debajo del título. No se edita; lo de la persona va en «notas». El de
   una reunión con cliente lo ve quien estuvo, y quien la hace o la pidió si ve al cliente.
 - **Lo que delegaste** (`/tareas/delegadas`): lo que le pediste o asignaste a otras personas o equipos, y cómo va
   (atrasadas, sin decidir, en curso, pendientes y cerradas de 30 días, con el último movimiento).

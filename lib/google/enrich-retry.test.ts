@@ -418,6 +418,16 @@ describe("cuándo se lee una reunión y cuándo se espera (2026-10-17)", () => {
     expect(d.summary).toEqual({ overview: "notas" });
   });
 
+  it("el documento del evento trae solo notas: la transcripción guardada se vacía solo si se pide (era de otra reunión)", () => {
+    expect(datosDeEscritura(EXITO_SIN_NADA, { overview: "notas" }, 0, AHORA).transcript, "sin pedirlo, la guardada no se toca").toBeUndefined();
+    const d = datosDeEscritura(EXITO_SIN_NADA, { overview: "notas" }, 0, AHORA, { vaciarTranscripcion: true });
+    expect(d.transcript).toBeNull();
+    expect(d.summary).toEqual({ overview: "notas" });
+    // Con transcripción leída, se escribe la nueva aunque se pida vaciar.
+    const conTexto = datosDeEscritura(EXITO_CON_TRANSCRIPT, null, 0, AHORA, { vaciarTranscripcion: true });
+    expect(conTexto.transcript).toBe(EXITO_CON_TRANSCRIPT.ok ? EXITO_CON_TRANSCRIPT.transcript : null);
+  });
+
   it("pasadas 48 horas del fin ya no se espera", () => {
     expect(debeEsperarMaterial(reunion, mas(60 + 48 * 60))).toBe(false);
   });

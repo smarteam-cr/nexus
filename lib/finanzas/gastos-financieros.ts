@@ -217,3 +217,15 @@ export function egresosFinancieros(decididos: readonly GastoFinancieroDecidido[]
       fechaISO: d.fecha,
     }));
 }
+
+/**
+ * Desde cuándo se revisa: doce meses para atrás desde hoy (`YYYY-MM-DD`). Si el día no existe en ese mes (el 29 de
+ * febrero de un año que no es bisiesto), el último día del mes: restarle 1 al año del texto daba «2025-02-29».
+ */
+export function desdeParaRevisar(hoy: string): string {
+  const anio = Number(hoy.slice(0, 4)) - 1;
+  const mes = Number(hoy.slice(5, 7));
+  const ultimo = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+  const dia = Math.min(Number(hoy.slice(8, 10)), ultimo);
+  return `${String(anio).padStart(4, "0")}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+}

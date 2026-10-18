@@ -264,7 +264,7 @@ async function mirar(ahora: Date): Promise<ResultadoDeLaMirada> {
   let pausadas = 0;
   const activos = await miembrosActivos();
   for (const f of fuentes) {
-    const tm = activos.some((m) => m.email === f.duenoEmail.toLowerCase()) ? await prisma.teamMember.findUnique({ where: { email: f.duenoEmail } }) : null;
+    const tm = activos.some((m) => m.email === f.duenoEmail.toLowerCase()) ? await prisma.teamMember.findFirst({ where: { email: { equals: f.duenoEmail, mode: "insensitive" } } }) : null;
     if (!tm) {
       // Quien la configuró ya no está: nadie puede leerla a su nombre.
       await cambiarFilaDeFuente(f.id, { activa: false, pausadaMotivo: "Quien la configuró ya no está en el equipo. La configura de nuevo quien lidera el sprint." });

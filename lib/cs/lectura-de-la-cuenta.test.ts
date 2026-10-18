@@ -86,6 +86,35 @@ describe("⛔ para el CSE, nada que hable de plata", () => {
     expect(l.motivos.map((m) => m.alertaId)).toEqual(["ren"]);
     expect(l.motivos[0].detalle).toBeNull();
   });
+
+  it("el porqué se arma con las razones que ve: sin la que trae un monto", () => {
+    const conMonto: SaludConPorque = {
+      salud: "en-riesgo",
+      porque: "Facturas vencidas por US$4.000 · y 1 señal más.",
+      razones: [
+        { clave: "cancelacion", texto: "Facturas vencidas por US$4.000.", roja: true },
+        { clave: "uso", texto: "Uso bajo: 30 de 100" },
+      ],
+    };
+    expect(lecturaDeLaCuenta(conMonto, [], { sinPlata: true }).porque).toBe("Uso bajo: 30 de 100.");
+    expect(lecturaDeLaCuenta(conMonto, []).porque).toBe(conMonto.porque);
+    const soloMonto = { ...conMonto, razones: [conMonto.razones[0]] };
+    expect(lecturaDeLaCuenta(soloMonto, [], { sinPlata: true }).porque).not.toMatch(/US\$/);
+  });
+
+  it("la nota de la corrección que habla de plata no se dice; la que no, sí", () => {
+    const corr = { id: "c", salud: "en-riesgo" as const, porEmail: "avanegas@smarteamcr.com", porNombre: "Alex Vanegas", en: "", vence: "2026-11-01", saludDeNexus: null, razonesDeNexus: [] };
+    const base: SaludConPorque = {
+      salud: "en-riesgo",
+      porque: "Corregido por Alex: debe US$9.000 de comisión. Nexus diría: va bien.",
+      razones: [],
+      nexus: { salud: "saludable", porque: "Va bien." },
+      correccion: { ...corr, nota: "Debe US$9.000 de comisión" },
+    };
+    expect(lecturaDeLaCuenta(base, [], { sinPlata: true }).porque).toBe("Corregido por Alex. Nexus diría: va bien.");
+    const limpia = { ...base, porque: "Corregido por Alex: no contesta. Nexus diría: va bien.", correccion: { ...corr, nota: "No contesta" } };
+    expect(lecturaDeLaCuenta(limpia, [], { sinPlata: true }).porque).toBe(limpia.porque);
+  });
 });
 
 describe("pide atención hoy solo en rojo", () => {

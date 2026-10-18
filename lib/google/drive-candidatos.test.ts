@@ -48,10 +48,11 @@ describe("leerNombreDeArchivo", () => {
     expect(l?.momento?.toISOString()).toBe("2026-08-28T15:00:00.000Z");
   });
 
-  it("las notas que se abren desde el evento no traen hora", () => {
+  it("las notas que se abren desde el evento no traen hora, pero sí el día", () => {
     expect(leerNombreDeArchivo("2026-10-01 - Recurrente Tecnica - CAV")).toEqual({
       titulo: "Recurrente Tecnica - CAV",
       momento: null,
+      dia: "2026-10-01",
       clase: "notas-calendario",
     });
   });
@@ -163,6 +164,23 @@ describe("elegirArchivosDeLaReunion", () => {
     const e = elegirArchivosDeLaReunion({ titulo: "Llantas del pacífico: Caso de negocio", fecha, otrasFechas: [] }, archivos);
     expect(e.elegidos.map((x) => x.clase)).toEqual(["notas-gemini", "transcripcion", "notas-calendario"]);
     expect(e.descartados.map((d) => d.motivo)).toEqual(["no es un archivo de una reunión"]);
+  });
+});
+
+describe("las notas del calendario: el día del nombre, en hora de Costa Rica", () => {
+  it("unas notas de otro día no se aceptan aunque se hayan creado cerca de la reunión", () => {
+    const archivos = [archivo("2026-09-29 - Recurrente - CAV", "2026-09-30T14:58:55Z")];
+    const e = elegirArchivosDeLaReunion({ titulo: "Recurrente - CAV", fecha: new Date("2026-09-30T20:00:00Z"), otrasFechas: [] }, archivos);
+    expect(e.elegidos).toEqual([]);
+    expect(e.descartados[0].motivo).toBe("es de otro día");
+  });
+
+  it("una reunión a las 20:00 de Costa Rica es de ese día, aunque en UTC ya sea el siguiente", () => {
+    const fecha = new Date("2026-10-02T02:00:00Z"); // 2026-10-01 20:00 en Costa Rica
+    const propias = elegirArchivosDeLaReunion({ titulo: "Cierre - CAV", fecha, otrasFechas: [] }, [archivo("2026-10-01 - Cierre - CAV", "2026-10-02T01:58:00Z")]);
+    expect(propias.elegidos.map((x) => x.clase)).toEqual(["notas-calendario"]);
+    const ajenas = elegirArchivosDeLaReunion({ titulo: "Cierre - CAV", fecha, otrasFechas: [] }, [archivo("2026-10-02 - Cierre - CAV", "2026-10-02T01:58:00Z")]);
+    expect(ajenas.elegidos).toEqual([]);
   });
 });
 

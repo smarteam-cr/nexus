@@ -7,7 +7,9 @@
  *
  * Con el texto cambiado aplica la regla de lib/sessions/analisis-ajeno.ts:
  *   · rehacer (nadie tocó nada y es reciente): borra la minuta en borrador y los pedidos de esa corrida, retira los
- *     hechos pendientes (lib/seguimiento) y vuelve a encolar la lectura aunque estuviera lista (lib/lecturas);
+ *     hechos pendientes y archiva sus corridas de hechos (lib/seguimiento: así se vuelven a pedir), y vuelve a encolar
+ *     la lectura aunque estuviera lista o fuera copia por la huella del texto viejo (lib/lecturas). Si se estaba
+ *     leyendo, en la misma transacción queda marcada para releerse al terminar;
  *   · avisar (alguien ya trabajó algo): no pisa nada y le avisa a quien lo trabajó y al encargado del proyecto;
  *   · nada (reunión vieja): se rehace a mano desde la reunión.
  * Las propuestas de Tarea que nadie decidió no se tocan desde acá (las escribe solo lib/tareas): vencen solas.
@@ -32,20 +34,43 @@ export async function alCambiarElTexto(sessionId: string, huellaNueva: string, a
     console.log(`[reanalizar] «${sesion.title}» cambió de texto → ${d.accion}: ${d.motivo}`);
 
     if (d.accion === "leer" || d.accion === "rehacer") {
+      const { prepararParaReleerEnTx, reencolarPorTextoNuevo } = await import("@/lib/lecturas/cola");
+      const cola: { fila: Awaited<ReturnType<typeof prepararParaReleerEnTx>> | null } = { fila: null };
       if (d.accion === "rehacer") {
-        const plan = await limpiarAnalisis(prisma, sessionId);
+        // En la MISMA transacción que borra, la fila de la cola queda lista para releerse: si se estaba leyendo con el
+        // texto viejo, se marca y `terminar` la vuelve a la cola (si no, dejaría su minuta del texto ajeno).
+        const plan = await limpiarAnalisis(prisma, sessionId, {
+          enLaMismaTransaccion: async (tx) => {
+            cola.fila = await prepararParaReleerEnTx(tx, sessionId, ahora);
+          },
+        });
+        const { retirarHechos, superarLasLecturasDeHechos } = await import("@/lib/seguimiento/hechos-server");
         let hechos = 0;
         if (plan.hechosARetirar.length) {
-          const { retirarHechos } = await import("@/lib/seguimiento/hechos-server");
-          hechos = await retirarHechos(plan.hechosARetirar, NOTA_TEXTO_NUEVO, ahora).catch(() => 0);
+          hechos = await retirarHechos(plan.hechosARetirar, NOTA_TEXTO_NUEVO, ahora).catch((e) => {
+            console.error(`[reanalizar] «${sesion.title}»: no se pudieron retirar los hechos:`, e instanceof Error ? e.message : e);
+            return 0;
+          });
         }
+        // Las corridas de hechos del texto viejo se archivan: si no, la lectura de hechos respondería «ya leída».
+        const superadas = await superarLasLecturasDeHechos(sessionId).catch((e) => {
+          console.error(`[reanalizar] «${sesion.title}»: no se pudieron archivar las lecturas de hechos viejas:`, e instanceof Error ? e.message : e);
+          return 0;
+        });
         console.log(
           `[reanalizar] «${sesion.title}»: se borraron ${plan.minutaABorrar ? "la minuta" : "0 minutas"} y ${plan.pedidosABorrar.length} pedido(s); ` +
-            `se retiraron ${hechos} hecho(s); quedan ${plan.propuestasSinDecidir.length} tarea(s) propuesta(s) sin decidir (vencen solas)`,
+            `se retiraron ${hechos} hecho(s) y se archivaron ${superadas} lectura(s) de hechos; quedan ${plan.propuestasSinDecidir.length} tarea(s) propuesta(s) sin decidir (vencen solas)`,
         );
       }
-      const { reencolarPorTextoNuevo } = await import("@/lib/lecturas/cola");
-      await reencolarPorTextoNuevo(sessionId, ahora);
+      if (cola.fila === "leyendo") {
+        console.log(`[reanalizar] «${sesion.title}» se estaba leyendo con el texto viejo: se vuelve a leer cuando termine`);
+      } else {
+        const r = await reencolarPorTextoNuevo(sessionId, ahora);
+        // «copia»: la misma reunión en otra fila, que es la que se lee. Lo demás deja la reunión sin su lectura.
+        if (!r.encolada && r.motivo !== "ya_en_espera" && r.motivo !== "ya_leyendo" && r.motivo !== "copia") {
+          console.error(`[reanalizar] «${sesion.title}» cambió de texto y no se pudo volver a encolar su lectura (${r.motivo ?? "sin motivo"})`);
+        }
+      }
     } else if (d.accion === "avisar") {
       await avisarCambioDeTexto(sessionId, sesion.title, analisis, huellaNueva);
     }

@@ -3,7 +3,8 @@
  *
  * Desde el 2026-10-16 (fase 0.2 de docs/nexus-sistema-de-trabajo-plan.md) el siguiente paso de un equipo ES UNA TAREA:
  * la próxima abierta con fecha de su sprint (desde-tareas.ts). Por eso:
- *   · fijarlo crea la tarea (o cambia la que hoy es el siguiente paso), por el escritor único de Tareas;
+ *   · fijarlo crea una tarea de paso (o cambia la que hoy es el siguiente paso, si es una tarea de paso de quien lo
+ *     fija), por el escritor único de Tareas;
  *   · darlo por hecho marca la tarea como hecha;
  *   · lo que va a HubSpot (`siguiente_paso_<equipo>`, su fecha y su responsable) sale de la tarea: `SiguientePaso` es la
  *     COPIA de lo que está escrito allá, con la tarea de la que salió. La escribe solo este archivo (y la copia que
@@ -34,7 +35,7 @@ import { asignar, cambiarEstado, crearTarea, editarTarea, moverDeSemana } from "
 import { lunesDeFecha } from "@/lib/tareas/semana";
 import { cuentasConTareasCambiadas, tareaDelPaso } from "@/lib/tareas/siguiente-paso";
 import { EQUIPOS_DEL_SIGUIENTE_PASO, type EquipoDelSiguientePaso } from "./propiedades";
-import { esDelObjeto, fechaDelPaso, mismoQueLaTarea, siguientePasoDe, SPRINT_DEL_PASO, type TareaDelPaso } from "./desde-tareas";
+import { esDelObjeto, fechaDelPaso, mismoQueLaTarea, siguientePasoDe, SPRINT_DEL_PASO, tareaQueSeCambiaAlFijar, type TareaDelPaso } from "./desde-tareas";
 import { copiasEnHubspot, resolverParaBuscar, tareasDeLosObjetos, type ObjetoParaBuscar } from "./lectura-server";
 import { MAX_INTENTOS_EN_HUBSPOT, OBJETO_EN_HUBSPOT, equiposQueEscribe, valoresParaHubspot, type ObjetoDelPaso } from "./reglas";
 
@@ -127,8 +128,10 @@ export interface PasoFijado {
 }
 
 /**
- * Fija el siguiente paso de un equipo: si el equipo ya tiene uno en ese objeto, cambia ESA tarea (qué, fecha y quién);
- * si no, crea una. Después pone al día lo que está escrito en HubSpot.
+ * Fija el siguiente paso de un equipo. Si el siguiente paso de hoy en ese objeto es una tarea de paso (`origen = "paso"`)
+ * de quien lo fija, cambia ESA tarea (qué, fecha y quién); en cualquier otro caso crea una tarea de paso nueva: la tarea
+ * de otra persona (o la que nació en una reunión, el chat o HubSpot) no se reescribe desde acá. Después pone al día lo
+ * que está escrito en HubSpot.
  */
 export async function fijarSiguientePaso(persona: TeamMember, n: NuevoPaso): Promise<PasoFijado> {
   if (!equiposQueEscribe(persona.roleEnum, equiposQueLidera(persona)).includes(n.equipo)) {
@@ -158,13 +161,16 @@ export async function fijarSiguientePaso(persona: TeamMember, n: NuevoPaso): Pro
   let tareaId: string;
   let numero: number;
   let estado: string;
-  if (actual) {
-    // El equipo ya tiene siguiente paso en este objeto: lo que se guarda lo cambia.
-    await cambiarLaTarea(ctx, clientes, actual, { que, fecha: n.fecha, responsable });
-    const despues = await tareaDelPaso(actual.id);
-    tareaId = actual.id;
-    numero = actual.numero;
-    estado = despues?.estado ?? actual.estado;
+  // Solo se reescribe una tarea de paso de quien lo fija: si no, a quien no es su dueño le respondería 403 sin salida, y
+  // quien lidera le pisaría el título a la tarea de otra persona.
+  const propia = tareaQueSeCambiaAlFijar(actual, persona.email);
+  if (propia) {
+    // El siguiente paso de hoy es una tarea de paso tuya: lo que se guarda la cambia.
+    await cambiarLaTarea(ctx, clientes, propia, { que, fecha: n.fecha, responsable });
+    const despues = await tareaDelPaso(propia.id);
+    tareaId = propia.id;
+    numero = propia.numero;
+    estado = despues?.estado ?? propia.estado;
   } else {
     const creada = await comoPaso(() =>
       crearTarea(ctx, clientes, {
@@ -369,7 +375,10 @@ export async function sincronizarCuentasCambiadas(desde: Date, limite = 40): Pro
   const cuentas = await cuentasConTareasCambiadas(desde, limite);
   let escritos = 0;
   for (const clientId of cuentas) {
-    const r = await sincronizarCuenta(clientId).catch(() => []);
+    const r = await sincronizarCuenta(clientId).catch((e) => {
+      console.error(`[siguiente-paso] no se pudo poner al día HubSpot para la cuenta ${clientId}:`, e instanceof Error ? e.message : e);
+      return [] as CopiaPuestaAlDia[];
+    });
     escritos += r.filter((c) => c.hubspotEstado === "escrito").length;
   }
   return { cuentas: cuentas.length, escritos };

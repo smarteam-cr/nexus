@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { equipoDelPasoDeSprint, esDelObjeto, fechaDelPaso, fuenteDeLaTarea, mismoQueLaTarea, siguientePasoDe, type TareaDelPaso } from "./desde-tareas";
+import { equipoDelPasoDeSprint, esDelObjeto, fechaDelPaso, fuenteDeLaTarea, mismoQueLaTarea, siguientePasoDe, tareaQueSeCambiaAlFijar, type TareaDelPaso } from "./desde-tareas";
 import { equiposQueEscribe } from "./reglas";
 
 const t = (o: Partial<TareaDelPaso> = {}): TareaDelPaso => ({
@@ -97,5 +97,18 @@ describe("equipos", () => {
     expect(equiposQueEscribe("CSL")).toEqual(["cs"]);
     expect(equiposQueEscribe("CSL", ["cs", "desarrollo"])).toEqual(["cs", "dev"]);
     expect(equiposQueEscribe("MARKETING", ["marketing"])).toEqual([]);
+  });
+});
+
+describe("fijar el siguiente paso", () => {
+  it("cambia solo una tarea de paso de quien lo fija", () => {
+    const propia = t({ origen: "paso", responsableEmail: "ana@smarteamcr.com" });
+    expect(tareaQueSeCambiaAlFijar(propia, "Ana@smarteamcr.com")).toBe(propia);
+  });
+  it("la de otra persona, o la que no nació como paso, no se reescribe: se crea otra", () => {
+    expect(tareaQueSeCambiaAlFijar(t({ origen: "paso", responsableEmail: "luis@smarteamcr.com" }), "ana@smarteamcr.com")).toBeNull();
+    expect(tareaQueSeCambiaAlFijar(t({ origen: "reunion", responsableEmail: "ana@smarteamcr.com" }), "ana@smarteamcr.com")).toBeNull();
+    expect(tareaQueSeCambiaAlFijar(t({ origen: "paso", responsableEmail: null }), "ana@smarteamcr.com")).toBeNull();
+    expect(tareaQueSeCambiaAlFijar(null, "ana@smarteamcr.com")).toBeNull();
   });
 });

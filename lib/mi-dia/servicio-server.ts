@@ -11,13 +11,14 @@
  * persona: lo pide el inicio en cada visita y el número del menú cada minuto y medio.
  */
 import "server-only";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { eventosProximos } from "@/lib/google/agenda-de-la-empresa";
 import { tareasDisponible } from "@/lib/tareas/servidor";
 import { agendaDelDia, type EventoConEnlaces } from "./agenda";
 import { mapasDeEmpresas } from "./empresas-server";
 import { DIAS_PARA_LA_REUNION } from "./constantes";
-import { estadoDeServicio, type EstadoDeServicio, type ReunionDeLaCuenta, type TareaDeLaCuenta } from "./servicio";
+import { estadoDeServicio, ventanaDeLaSemana, type EstadoDeServicio, type ReunionDeLaCuenta, type TareaDeLaCuenta } from "./servicio";
 
 export interface CuentaConServicio {
   clientId: string;
@@ -34,20 +35,30 @@ export interface ServicioDeLaCuenta extends EstadoDeServicio {
   invitados: string[];
   /** false = el calendario de quien la lleva no se pudo leer: «sin reunión» puede no ser cierto. */
   calendarioLeido: boolean;
+  /** Todas las reuniones con la cuenta de los próximos 8 días, en orden (la primera es `reunion`). */
+  proximas: ReunionDeLaCuenta[];
+}
+
+/** Quien mira: las tareas de un espacio privado donde no está no cuentan ni se nombran (lib/tareas/visibilidad.ts). */
+export interface QuienMiraElServicio {
+  email: string;
+  esSuperAdmin: boolean;
 }
 
 const VIDA_MS = 2 * 60_000;
 const DIA_MS = 86_400_000;
 const calendarios = new Map<string, { at: number; reuniones: ReunionDeLaCuenta[] | null }>();
+/**
+ * La lectura en curso de cada calendario. «Para ti» mide (`medirParaTi`) y arma las cuentas del inicio
+ * (`cuentasDelInicio`) en paralelo sobre la misma persona: sin esto, eran dos llamadas a Google Calendar por visita.
+ * Mismo patrón que `mapasDeEmpresas` (./empresas-server.ts).
+ */
+const enVuelo = new Map<string, Promise<ReunionDeLaCuenta[] | null>>();
 
 const diaCR = (d: Date) => new Date(d.getTime() - 6 * 3_600_000).toISOString().slice(0, 10);
 const comoDia = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 
-/** Las reuniones con una sola empresa en los próximos 8 días del calendario de `email`. null = no se pudo leer. */
-async function reunionesDelCalendario(email: string, ahora: Date): Promise<ReunionDeLaCuenta[] | null> {
-  const k = email.toLowerCase();
-  const g = calendarios.get(k);
-  if (g && ahora.getTime() - g.at < VIDA_MS) return g.reuniones;
+async function leerCalendario(k: string, ahora: Date): Promise<ReunionDeLaCuenta[] | null> {
   const eventos = await eventosProximos(k, { semanas: DIAS_PARA_LA_REUNION / 7, ahora });
   let reuniones: ReunionDeLaCuenta[] | null = null;
   if (eventos.ok) {
@@ -58,6 +69,52 @@ async function reunionesDelCalendario(email: string, ahora: Date): Promise<Reuni
   }
   calendarios.set(k, { at: ahora.getTime(), reuniones });
   return reuniones;
+}
+
+/** Las reuniones con una sola empresa en los próximos 8 días del calendario de `email`. null = no se pudo leer. */
+function reunionesDelCalendario(email: string, ahora: Date): Promise<ReunionDeLaCuenta[] | null> {
+  const k = email.toLowerCase();
+  const g = calendarios.get(k);
+  if (g && ahora.getTime() - g.at < VIDA_MS) return Promise.resolve(g.reuniones);
+  const enCurso = enVuelo.get(k);
+  if (enCurso) return enCurso;
+  const p = leerCalendario(k, ahora).finally(() => {
+    enVuelo.delete(k);
+  });
+  enVuelo.set(k, p);
+  return p;
+}
+
+/**
+ * Una tarea de un proyecto de un espacio LIBRE de «solo miembros» donde quien mira no está. Es el mismo criterio que
+ * `deEspacioPrivadoAjeno` de lib/tareas/visibilidad.ts (no está exportado): si cambia allá, cambia acá.
+ */
+function deEspacioPrivadoAjeno(yo: string): Prisma.TareaWhereInput {
+  return {
+    proyecto: {
+      espacio: { tipo: "libre", visibilidad: "miembros", miembros: { none: { email: yo } } },
+    },
+  };
+}
+
+/**
+ * Las tareas que pueden ser la acción de la semana o una reunión planeada que viene: con su reunión, su vencimiento o
+ * su semana dentro de la ventana. Es un SUPERCONJUNTO (con un día de margen a cada lado por la hora de Costa Rica): la
+ * regla pura (`accionDeLaSemana`) decide igual que antes; acá solo se deja de traer lo que no puede entrar.
+ */
+function enLaVentana(hoyISO: string, ahora: Date, hasta: Date): Prisma.TareaWhereInput {
+  const v = ventanaDeLaSemana(hoyISO);
+  const desde = new Date(Date.parse(`${v.desde}T00:00:00Z`) - DIA_MS);
+  const finSemana = new Date(Date.parse(`${v.hasta}T00:00:00Z`) + 2 * DIA_MS);
+  const finReuniones = new Date(Math.max(finSemana.getTime(), hasta.getTime() + DIA_MS));
+  const inicioReuniones = new Date(Math.min(desde.getTime(), ahora.getTime()));
+  return {
+    OR: [
+      { reunionInicio: { gte: inicioReuniones, lt: finReuniones } },
+      { venceEl: { gte: desde, lt: finSemana } },
+      { semana: { gte: desde, lt: finSemana } },
+    ],
+  };
 }
 
 /** La última reunión que ya ocurrió de cada cuenta, con quiénes estuvieron. */
@@ -78,7 +135,7 @@ async function ultimasReuniones(ids: readonly string[], ahora: Date): Promise<{ 
 /** El estado de servicio de esas cuentas, por id. */
 export async function servicioDeLasCuentas(
   cuentas: readonly CuentaConServicio[],
-  o: { ahora: Date; hoyISO: string },
+  o: { ahora: Date; hoyISO: string; quienMira: QuienMiraElServicio },
 ): Promise<Map<string, ServicioDeLaCuenta>> {
   const out = new Map<string, ServicioDeLaCuenta>();
   const ahora = o.ahora;
@@ -86,11 +143,18 @@ export async function servicioDeLasCuentas(
   if (ids.length === 0) return out;
   const hasta = new Date(o.ahora.getTime() + DIAS_PARA_LA_REUNION * DIA_MS);
   const personas = [...new Set(cuentas.flatMap((c) => (c.llevaEmail ? [c.llevaEmail.toLowerCase()] : [])))];
+  const yo = o.quienMira.email.toLowerCase();
 
   const [filas, calendariosLeidos, ultimas, internos] = await Promise.all([
     (await tareasDisponible())
       ? prisma.tarea.findMany({
-          where: { archivadaAt: null, estado: { in: ["pendiente", "en_curso"] }, privada: false, clientId: { in: ids } },
+          where: {
+            archivadaAt: null,
+            estado: { in: ["pendiente", "en_curso"] },
+            privada: false,
+            clientId: { in: ids },
+            AND: [enLaVentana(o.hoyISO, ahora, hasta), ...(o.quienMira.esSuperAdmin ? [] : [{ NOT: deEspacioPrivadoAjeno(yo) }])],
+          },
           select: {
             id: true,
             numero: true,
@@ -105,7 +169,9 @@ export async function servicioDeLasCuentas(
             equipo: true,
             responsableEmail: true,
           },
-          take: 3000,
+          // Con la ventana, son pocas por cuenta; el orden hace que un recorte (si alguna vez llega) sea estable.
+          orderBy: [{ numero: "asc" }],
+          take: 10_000,
         })
       : Promise.resolve([]),
     Promise.all(personas.map(async (p) => [p, await reunionesDelCalendario(p, o.ahora).catch(() => null)] as const)),
@@ -160,6 +226,12 @@ export async function servicioDeLasCuentas(
       ultimaReunion: u ? u.date.toISOString() : null,
       invitados: (u?.participants ?? []).map((p) => p.trim().toLowerCase()).filter((p) => p.includes("@") && !internos.has(p.split("@")[1] ?? "")),
       calendarioLeido,
+      proximas: reuniones
+        .filter((r) => {
+          const t = Date.parse(r.inicio);
+          return r.clientId === c.clientId && Number.isFinite(t) && t >= ahora.getTime() && t <= hasta.getTime();
+        })
+        .sort((a, b) => a.inicio.localeCompare(b.inicio)),
     });
   }
   return out;

@@ -7,8 +7,8 @@
  * las pagadas solo si quien firma lo pide (`cobrar`), después de ver la lista.
  *
  * Una transacción por cuota: una que falla (un número que ya está en otra cuenta, INV33) no frena a las demás y queda
- * en el resultado. ⚠ Antes de escribir vuelve a leer la cuota dentro de la transacción: si alguien la tocó entre la
- * lectura y la escritura, manda lo que hizo la persona y esta cuota se salta.
+ * en el resultado. ⚠ Antes de escribir bloquea la cuota (`FOR UPDATE`) y la vuelve a leer dentro de la transacción: si
+ * alguien la tocó entre la lectura y la escritura, manda lo que hizo la persona y esta cuota se salta.
  *
  * Sin `server-only`, como `odoo/sync.ts`: lo corre un script.
  */
@@ -17,6 +17,7 @@ import { cambiarEstadoCobroTx, CobranzaError } from "@/lib/cobranza/mutations";
 import { esEntradaDeCliente } from "@/lib/cobranza/mercury/espejo";
 import type { OdooTransport } from "@/lib/cobranza/odoo/transporte";
 import { fechasDePagoEnOdoo } from "@/lib/cobranza/odoo/fechas-de-pago";
+import { crDateParts } from "@/lib/jobs/time";
 import {
   accionesElegidas,
   decidir,
@@ -30,7 +31,10 @@ import {
   type SeleccionDelLibro,
 } from "./hechos";
 
+/** Una columna `@db.Date` (fecha sin hora): su día es el de UTC. */
 const iso = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
+/** Un INSTANTE (cuándo se posteó un movimiento): su día es el de Costa Rica, no el de UTC (de 18:00 a 24:00 serían otro día). */
+const diaCR = (d: Date) => crDateParts(d).dateKey;
 
 interface DeLaCuota {
   cuentaId: string;
@@ -48,6 +52,8 @@ export interface ResultadoDelLibro {
   choques: Array<Pegado & DeLaCuota>;
   escritas: number;
   saltadas: Array<{ cobroId: string; cuenta: string; motivo: string }>;
+  /** Odoo no contestó al pedirle el día de los pagos: sus pagadas quedaron en `pagadasSinFecha`. null = contestó (o no se le pidió). */
+  avisoOdoo: string | null;
 }
 
 /** Todo lo que hace falta para decidir, leído de la base. */
@@ -107,12 +113,12 @@ export async function cargarEntradaDelLibro(hoy: string): Promise<EntradaDelLibr
     })),
     facturasMercury: facturasMercuryDb.map((f) => ({
       id: f.id, numero: f.numero, invoiceDate: iso(f.invoiceDate)!, dueDate: iso(f.dueDate), monto: Number(f.monto), moneda: f.moneda, estado: f.estado,
-      mercuryCustomerId: f.mercuryCustomerId, clienteNombre: f.clienteNombre, actualizadaEn: iso(f.actualizadaEnMercury)!,
+      mercuryCustomerId: f.mercuryCustomerId, clienteNombre: f.clienteNombre, actualizadaEn: diaCR(f.actualizadaEnMercury),
     })),
     cuentaDeClienteMercury: new Map(clientesDb.map((c) => [c.mercuryCustomerId, c.cuentaId!])),
     entradasMercury: movimientosDb
       .filter((m) => esEntradaDeCliente({ monto: Number(m.monto), estado: m.estado, tipo: m.tipo, contraparteNombre: m.contraparteNombre, conTarjeta: m.conTarjeta }))
-      .map((m) => ({ id: m.id, monto: Number(m.monto), fecha: iso(m.posteadoEn ?? m.creadoEnMercury)!, quien: m.contraparteNombre ?? "" })),
+      .map((m) => ({ id: m.id, monto: Number(m.monto), fecha: diaCR(m.posteadoEn ?? m.creadoEnMercury), quien: m.contraparteNombre ?? "" })),
     datos: new Map(cobros.map((c) => [c.id, { cuentaId: c.cuentaId, cuenta: c.cuentaNombre, periodo: c.periodo, monto: c.monto, moneda: c.moneda }])),
   };
 }
@@ -138,7 +144,17 @@ export async function aplicarLoQueDicenOdooYMercury(opts: {
   const pegados = [...pegarOdoo(entrada), ...pegarMercury(entrada)];
   const paraFechar = facturasOdooParaFechar(entrada, pegados);
   const moveDe = new Map(entrada.facturasOdoo.map((f) => [f.id, f.odooMoveId]));
-  const porMove = opts.odoo && paraFechar.length ? await fechasDePagoEnOdoo(opts.odoo, paraFechar.map((id) => moveDe.get(id)!)) : new Map<number, string>();
+  /* ⚠ Si Odoo falla, la lista igual se arma (lo de Mercury no depende de Odoo): las pagadas de Odoo quedan sin el día del
+     pago y la pantalla lo avisa. Nunca se cobran con otra fecha. */
+  let porMove = new Map<number, string>();
+  let avisoOdoo: string | null = null;
+  if (opts.odoo && paraFechar.length) {
+    try {
+      porMove = await fechasDePagoEnOdoo(opts.odoo, paraFechar.map((id) => moveDe.get(id)!));
+    } catch (e) {
+      avisoOdoo = `Odoo no contestó al pedirle el día de los pagos (${e instanceof Error ? e.message : String(e)}): sus facturas pagadas quedan sin el día del pago.`;
+    }
+  }
   const fechas = new Map<string, string>();
   for (const id of paraFechar) {
     const f = porMove.get(moveDe.get(id)!);
@@ -154,6 +170,7 @@ export async function aplicarLoQueDicenOdooYMercury(opts: {
     choques: d.choques.map((p) => ({ ...p, ...de(p.cobroId) })),
     escritas: 0,
     saltadas: [],
+    avisoOdoo,
   };
   if (!opts.aplicar) return r;
 
@@ -168,6 +185,10 @@ export async function aplicarLoQueDicenOdooYMercury(opts: {
     if (!a.fechaEmision && !a.numeroFactura && !cobrar) continue;
     try {
       const salto = await prisma.$transaction(async (tx) => {
+        /* ⚠ La cuota se bloquea ANTES de releerla: sin el candado, dos confirmaciones a la vez leían las dos «sin cobrar»
+           y escribían las dos (dos líneas de bitácora, dos firmas). La segunda espera acá y, al releer, ve lo que dejó la
+           primera y se salta. */
+        await tx.$queryRaw`SELECT id FROM "Cobro" WHERE id = ${a.cobroId} FOR UPDATE`;
         const c = await tx.cobro.findUnique({ where: { id: a.cobroId }, select: { estado: true, fechaEmision: true, numeroFactura: true, cuentaId: true } });
         if (!c || c.estado === "COBRADO") return "ya estaba cobrada";
         if (a.numeroFactura && c.numeroFactura) return "alguien le anotó un número entretanto";

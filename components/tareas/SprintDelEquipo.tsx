@@ -305,8 +305,8 @@ function ConfigurarSprint({
             )}
           </div>
           <p className="text-xs text-fg-muted">
-            Lo que la reunión le propone a alguien de esta lista queda en tu sprint, aunque sea de otra área. A quien no está
-            le llega como un pedido de tu equipo.
+            Lo que la reunión le propone a alguien de esta lista no le llega como pedido de otro equipo; la tarea queda en
+            el sprint de su área. A quien no está le llega como un pedido de tu equipo.
           </p>
           <input
             value={busca}

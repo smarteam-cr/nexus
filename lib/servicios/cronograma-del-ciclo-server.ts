@@ -92,9 +92,13 @@ export async function cargarCronogramaDelCiclo(projectId: string, ahora = new Da
 
 /**
  * «Armar las fases»: cada caso del ciclo sin fase pasa a ser una fase que ocupa el ciclo entero. Pide las fechas del
- * ciclo. Sin ancla, el cronograma toma como ancla el inicio del ciclo (lo puso una persona en la tarjeta de la etapa).
+ * ciclo.
+ *
+ * Sin ancla en el cronograma, NO la pone sola (docs/KNOWN-ERRORS.md: `anchorStartDate` se escribe solo con un clic que
+ * lo diga): responde 409 con el código `SIN_ARRANQUE` y la fecha propuesta (el inicio del ciclo). La pantalla pregunta
+ * «El cronograma arranca el …. ¿Lo confirmas?» y reintenta con `fijarArranque: true`; solo ahí se escribe.
  */
-export async function armarFasesDelCiclo(projectId: string, por: string): Promise<{ creadas: number }> {
+export async function armarFasesDelCiclo(projectId: string, por: string, opciones: { fijarArranque?: boolean } = {}): Promise<{ creadas: number }> {
   const c = await cicloAbierto(projectId);
   const desde = dia(c.desde);
   const hasta = dia(c.hasta);
@@ -102,7 +106,14 @@ export async function armarFasesDelCiclo(projectId: string, por: string): Promis
   const sinFase = c.casosDeUso.filter((x) => !x.faseId);
   if (sinFase.length === 0) return { creadas: 0 };
   return prisma.$transaction(async (tx) => {
-    const { timelineId, anchor } = await asegurarCronograma(tx, projectId, desde);
+    const { timelineId, anchor } = await asegurarCronograma(tx, projectId, opciones.fijarArranque ? desde : null);
+    if (!anchor) {
+      // La transacción se deshace: ni el cronograma vacío que se haya creado queda.
+      throw new ErrorDelCiclo(`El cronograma todavía no tiene fecha de arranque: confirma que arranca el ${desde}.`, 409, {
+        codigo: "SIN_ARRANQUE",
+        fecha: desde,
+      });
+    }
     const inicio = semanaDelCiclo(anchor ?? desde, desde);
     const semanas = semanasDelCiclo(desde, hasta) ?? 2;
     let creadas = 0;

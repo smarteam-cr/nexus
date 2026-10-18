@@ -7,19 +7,29 @@
  * van por las rutas de siempre (`/api/tareas/[id]`), por el único escritor.
  */
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { guardInternalUser } from "@/lib/auth/api-guards";
-import { prepararTareas, respuestaDeError } from "@/lib/tareas/http";
+import { prisma } from "@/lib/db/prisma";
+import { errorDeValidacion, prepararTareas, respuestaDeError } from "@/lib/tareas/http";
 import { cargarTareasDeLaCuenta } from "@/lib/tareas/consultas";
 
 type Params = { params: Promise<{ clientId: string }> };
 
+const ClientIdParam = z.string().trim().min(1, "Falta el id.").max(64, "Ese id no es válido.");
+
 export async function GET(_req: Request, { params }: Params) {
   const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
-  const { clientId } = await params;
+  const parsed = ClientIdParam.safeParse((await params).clientId);
+  if (!parsed.success) return errorDeValidacion(parsed.error.issues);
+  const clientId = parsed.data;
   try {
     const p = await prepararTareas(guard);
     if (p instanceof NextResponse) return p;
+    // Quien ve toda la cartera pasa el filtro de acceso con cualquier id: un cliente que no existe es 404, no una lista vacía.
+    if (p.clientes.todos && !(await prisma.client.findUnique({ where: { id: clientId }, select: { id: true } }))) {
+      return NextResponse.json({ error: "Ese cliente no existe." }, { status: 404 });
+    }
     return NextResponse.json(await cargarTareasDeLaCuenta(p.ctx, p.clientes, clientId));
   } catch (e) {
     return respuestaDeError(e);

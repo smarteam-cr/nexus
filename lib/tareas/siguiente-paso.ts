@@ -118,6 +118,8 @@ export async function cuentasConTareasCambiadas(desde: Date, limite = 60): Promi
     where: { updatedAt: { gte: desde }, clientId: { not: null }, equipo: { in: [...SPRINTS_CON_PASO] } },
     select: { clientId: true },
     distinct: ["clientId"],
+    // Las que cambiaron primero, primero: así el recorte es siempre el mismo y lo más viejo no espera otra hora.
+    orderBy: { updatedAt: "asc" },
     take: limite,
   });
   return filas.flatMap((f) => (f.clientId ? [f.clientId] : []));

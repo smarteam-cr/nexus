@@ -850,7 +850,7 @@ describe("la ficha del cliente › Tareas (ficha A, 2026-10-17)", () => {
     await prisma.tarea.createMany({
       data: [
         { ...base, titulo: "Campaña de Wherex", huella: "campana", equipo: "marketing", responsableEmail: LIDIA, clientId: cliente.id, creadaPorEmail: LIDIA },
-        { ...base, titulo: "Revisar el pipeline", huella: "pipeline", equipo: "cs", responsableEmail: CSE, clientId: cliente.id, creadaPorEmail: CSE, origen: "hubspot" },
+        { ...base, titulo: "Revisar el pipeline", huella: "pipeline", equipo: "cs", responsableEmail: CSE, clientId: cliente.id, creadaPorEmail: CSE, origen: "hubspot", hubspotTaskId: "hs-1" },
         { ...base, titulo: "Lo mío de Wherex", huella: "mio", equipo: "marketing", responsableEmail: ALE, clientId: cliente.id, creadaPorEmail: ALE, privada: true },
         { ...base, titulo: "De otra empresa", huella: "otra", equipo: "marketing", responsableEmail: LIDIA, clientId: otro.id, creadaPorEmail: LIDIA },
       ],

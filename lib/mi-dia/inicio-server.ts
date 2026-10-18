@@ -13,7 +13,7 @@ import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { proyectosAbiertos } from "@/lib/clients/resumen-proyectos";
 import { esProyectoDePipelineCS } from "@/lib/projects/scope";
 import { pipelineByKey } from "@/lib/projects/kind";
-import { cargarLecturas } from "@/lib/cs/lectura-de-la-cuenta-server";
+import { lecturasDelPedido } from "./lecturas-server";
 import { esLiderDeCs } from "@/lib/cs/acceso";
 import { tareasDisponible } from "@/lib/tareas/servidor";
 import { ABIERTAS_WHERE, PROPUESTAS_WHERE } from "@/lib/tareas/donde";
@@ -117,8 +117,8 @@ export async function cuentasDelInicio(variante: VarianteDelInicio, a: Alcance, 
         : [];
   const correos = [...new Set(base.flatMap((c) => (c.llevaEmail ? [c.llevaEmail] : [])))];
   const [servicio, lecturas, personas] = await Promise.all([
-    servicioDeLasCuentas(base, o).catch(() => new Map<string, ServicioDeLaCuenta>()),
-    conColor.length ? cargarLecturas(conColor, { sinPlata: !esLiderDeCs(a.rol), ahora: o.ahora }).catch(() => null) : Promise.resolve(null),
+    servicioDeLasCuentas(base, { ...o, quienMira: { email: a.email, esSuperAdmin: a.rol === "SUPER_ADMIN" } }).catch(() => new Map<string, ServicioDeLaCuenta>()),
+    conColor.length ? lecturasDelPedido(conColor, { sinPlata: !esLiderDeCs(a.rol), ahora: o.ahora }).catch(() => null) : Promise.resolve(null),
     correos.length ? prisma.teamMember.findMany({ where: { email: { in: correos, mode: "insensitive" } }, select: { email: true, name: true } }) : Promise.resolve([]),
   ]);
   const nombreDe = new Map(personas.map((p) => [p.email.toLowerCase(), p.name]));

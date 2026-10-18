@@ -9,7 +9,9 @@ import "server-only";
  *     exploración y por día: la del día se actualiza, así una tarde de trabajo no deja veinte versiones.
  *   · `diagnostico`: se presentó el diagnóstico de un proyecto; con el ciclo abierto, si es un servicio recurrente.
  *   · `manual`: «Guardar esta versión», en la ficha del cliente.
- * Una foto igual a la última de esa exploración no se guarda, y una sin ningún nivel tampoco.
+ * Una foto igual a la última de esa exploración no se guarda (salvo el diagnóstico, o «Guardar esta versión» con una
+ * nota), y una sin ningún nivel tampoco. Se decide con un candado por exploración (`pg_advisory_xact_lock`), leyendo la
+ * exploración y la última versión dentro de la misma transacción.
  *
  * Nunca rompe a quien la llama: sin la tabla (falta el SQL) dice `sin-tabla` y sigue.
  */
@@ -18,7 +20,7 @@ import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
 import { hoyEnCostaRica } from "./fechas";
 import { fotoDeLaExploracion, huellaDeLaFoto, leerFoto, type FotoDeLaEscala, type OrigenDeLaVersion } from "./foto-de-la-escala";
-import { escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
+import { escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila } from "./servidor";
 
 export const SQL_DE_LAS_VERSIONES = "scripts/sql/2026-10-17-ficha-b-versiones-de-la-escala.sql";
 
@@ -38,52 +40,78 @@ export async function guardarVersionDeLaEscala(
   if (!hayTabla()) return { estado: "sin-tabla" };
   const general = await escalaParaExplorar();
   if (general.estado !== "ok") return { estado: "sin-nivel" };
-  const lectura = await leerExploracion(exploracionId);
-  if (lectura.estado !== "ok") return { estado: "no-existe" };
-  const fila = lectura.fila;
-  const estado = estadoDesdeFila(fila);
-  const foto = fotoDeLaExploracion(escalaDeLaExploracion(general.general, estado), estado);
-  if (!foto.areas.length) return { estado: "sin-nivel" };
-  const huella = huellaDeLaFoto(foto);
+  if (!modeloDisponible(prisma.exploracionDeVenta)) return { estado: "no-existe" };
   const dia = o.hoy ?? hoyEnCostaRica();
+  const nota = o.nota?.trim() ? o.nota.trim().slice(0, 500) : null;
   try {
-    const ultima = await prisma.versionDeLaEscala.findFirst({
-      where: { exploracionId },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, huella: true, dia: true, origen: true },
-    });
-    // La misma foto no se guarda dos veces; el diagnóstico sí deja la suya aunque nada haya cambiado (marca el ciclo).
-    if (ultima && ultima.huella === huella && o.origen !== "diagnostico") return { estado: "igual", id: ultima.id };
-    const datos = {
-      foto: foto as unknown as Prisma.InputJsonValue,
-      huella,
-      escalaVersion: foto.escalaVersion,
-      edicion: foto.edicion,
-    };
-    if (ultima && o.origen === "cambio" && ultima.origen === "cambio" && ultima.dia === dia) {
-      await prisma.versionDeLaEscala.update({ where: { id: ultima.id }, data: { ...datos, creadoPorEmail: o.email } });
-      return { estado: "guardada", id: ultima.id, nueva: false };
-    }
-    const creada = await prisma.versionDeLaEscala.create({
-      data: {
-        ...datos,
-        clientId: fila.clientId,
-        exploracionId,
-        projectId: fila.projectId,
-        cicloId: o.cicloId ?? null,
-        origen: o.origen,
-        dia,
-        creadoPorEmail: o.email,
-        nota: o.nota?.trim() ? o.nota.trim().slice(0, 500) : null,
+    return await prisma.$transaction(
+      async (tx) => {
+        // Una a la vez por exploración: dos confirmaciones seguidas (o una llamada lenta) leían la misma «última» y
+        // dejaban dos versiones del mismo día, o una foto vieja encima de una nueva. El candado vive lo que la transacción.
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`versiones-de-la-escala:${exploracionId}`}::text))::text AS ok`;
+        // La exploración y la última versión se leen ADENTRO, con el candado tomado: la foto es la de este momento.
+        const fila = await tx.exploracionDeVenta.findUnique({ where: { id: exploracionId }, select: SELECT_PARA_LA_FOTO });
+        if (!fila) return { estado: "no-existe" } as const;
+        const estado = estadoDesdeFila(fila);
+        const foto = fotoDeLaExploracion(escalaDeLaExploracion(general.general, estado), estado);
+        if (!foto.areas.length) return { estado: "sin-nivel" } as const;
+        const huella = huellaDeLaFoto(foto);
+        const ultima = await tx.versionDeLaEscala.findFirst({
+          where: { exploracionId },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, huella: true, dia: true, origen: true },
+        });
+        // La misma foto no se guarda dos veces; el diagnóstico sí deja la suya aunque nada haya cambiado (marca el ciclo),
+        // y «Guardar esta versión» con una nota también: la nota es lo que se quería guardar.
+        const dejaLaSuya = o.origen === "diagnostico" || (o.origen === "manual" && !!nota);
+        if (ultima && ultima.huella === huella && !dejaLaSuya) return { estado: "igual", id: ultima.id } as const;
+        const datos = {
+          foto: foto as unknown as Prisma.InputJsonValue,
+          huella,
+          escalaVersion: foto.escalaVersion,
+          edicion: foto.edicion,
+        };
+        if (ultima && o.origen === "cambio" && ultima.origen === "cambio" && ultima.dia === dia) {
+          await tx.versionDeLaEscala.update({ where: { id: ultima.id }, data: { ...datos, creadoPorEmail: o.email } });
+          return { estado: "guardada", id: ultima.id, nueva: false } as const;
+        }
+        const creada = await tx.versionDeLaEscala.create({
+          data: {
+            ...datos,
+            clientId: fila.clientId,
+            exploracionId,
+            projectId: fila.projectId,
+            cicloId: o.cicloId ?? null,
+            origen: o.origen,
+            dia,
+            creadoPorEmail: o.email,
+            nota,
+          },
+          select: { id: true },
+        });
+        return { estado: "guardada", id: creada.id, nueva: true } as const;
       },
-      select: { id: true },
-    });
-    return { estado: "guardada", id: creada.id, nueva: true };
+      { timeout: 15_000, maxWait: 10_000 },
+    );
   } catch (e) {
     if (esquemaDesactualizado(e)) return { estado: "sin-tabla" };
     throw e;
   }
 }
+
+/** Lo que la foto necesita de la exploración (lo que lee `estadoDesdeFila`) y a quién se cuelga la versión. */
+const SELECT_PARA_LA_FOTO = {
+  clientId: true,
+  projectId: true,
+  contenido: true,
+  propuesta: true,
+  areas: true,
+  edicion: true,
+  perfilCierre: true,
+  perfilDespues: true,
+  responsableEmail: true,
+  archivadaEn: true,
+} satisfies Prisma.ExploracionDeVentaSelect;
 
 /** Después de guardar un cambio confirmado: deja la versión del día, sin frenar ni romper la respuesta. */
 export function anotarVersionDelCambio(exploracionId: string, email: string | null): void {

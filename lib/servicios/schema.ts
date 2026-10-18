@@ -18,6 +18,11 @@ export const abrirCicloSchema = z.object({
 
 export const actualizarCicloSchema = z
   .object({
+    /**
+     * El ciclo que la pantalla tiene enfrente (null = no veía ninguno abierto). Si ya no es el abierto, 409: una
+     * pestaña vieja no edita ni abre otro ciclo. Sin él, solo se abre solo el primer ciclo del proyecto.
+     */
+    cicloId: z.string().min(1).max(60).nullable().optional(),
     nombre: textoCorto.optional(),
     desde: dia.optional(),
     hasta: dia.optional(),
@@ -61,7 +66,8 @@ export const actualizarCasoSchema = z
 
 /** El cronograma del ciclo (etapa 3, ficha E). */
 export const accionDelCronogramaSchema = z.discriminatedUnion("accion", [
-  z.object({ accion: z.literal("armar") }).strict(),
+  /** `fijarArranque`: la persona confirmó que el cronograma arranca el día que empieza el ciclo (sin ancla, 409). */
+  z.object({ accion: z.literal("armar"), fijarArranque: z.literal(true).optional() }).strict(),
   z.object({ accion: z.literal("aprobar") }).strict(),
   z
     .object({

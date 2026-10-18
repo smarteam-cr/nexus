@@ -22,9 +22,8 @@ import { conLaReunion } from "@/lib/ai/contexto-de-corrida";
 import { memoriaDeLaCuenta } from "@/lib/memoria";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { recortarTranscripcion } from "@/lib/sessions/recortar-transcripcion";
-import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { etiquetaDeSala } from "@/lib/sessions/etiqueta-de-sala";
-import { dominiosDeLaCasa, reunionParaLaTarjeta } from "@/lib/sessions/reuniones-para-seguimiento";
+import { dominiosDeLaCasa, esDePuertasAdentro, reunionParaLaTarjeta } from "@/lib/sessions/reuniones-para-seguimiento";
 import { reunionParaElCorreo } from "@/lib/sessions/reunion-para-su-pagina";
 import { paraDeLaReunion, MAX_ASUNTO_DEL_CORREO, MAX_CUERPO_DEL_CORREO, type InsumosDelCorreo } from "@/lib/exploraciones/correo-de-seguimiento";
 import type { ContextoDelCorreo } from "@/lib/exploraciones/correo-de-seguimiento-pedido";
@@ -53,7 +52,8 @@ export async function armarCorreoDeLaReunion(o: { sessionId: string; dueno: stri
   if (!reunion) return { ok: false, status: 404, error: "No encuentro esa reunión." };
 
   const dominios = await dominiosDeLaCasa();
-  if (esReunionDePuertasAdentro({ participants: reunion.participantes }, dominios)) {
+  // La misma regla que la página de la reunión (con el organizador): si la página no ofrece correo, acá tampoco.
+  if (await esDePuertasAdentro({ participants: reunion.participantes, organizerEmail: reunion.organizador }, dominios)) {
     return { ok: false, status: 409, error: "Esta reunión fue solo con gente de Smarteam: no hay un correo que mandarle al cliente." };
   }
   const notas = await fetchTranscriptContent(reunion.id, reunion.titulo, { maxChars: 14_000 });
@@ -126,12 +126,20 @@ export async function armarCorreoDeLaReunion(o: { sessionId: string; dueno: stri
       }),
     );
     if (escrito === "sin-conversacion") {
-      await guardarCorreo(reunion.id, null);
+      // Solo si nadie lo cambió mientras se armaba: lo editado a mano no se borra.
+      await guardarCorreo(reunion.id, null, guardado.correo);
       await prisma.agentRun.update({ where: { id: run.id }, data: { status: "DONE", currentPhase: null, output: JSON.stringify({ sinConversacion: true }) } });
       return { ok: false, status: 409, error: SIN_CONVERSACION_EN_LA_REUNION };
     }
     const correo: CorreoDeLaReunion = { asunto: escrito.armado.asunto, cuerpo: escrito.armado.cuerpo, para, en: new Date().toISOString(), corridaId: run.id };
-    await guardarCorreo(reunion.id, correo);
+    if (!(await guardarCorreo(reunion.id, correo, guardado.correo))) {
+      // Alguien cambió el correo mientras se armaba: lo suyo gana; lo armado queda solo en la corrida.
+      await prisma.agentRun.update({
+        where: { id: run.id },
+        data: { status: "DONE", currentPhase: null, output: JSON.stringify({ asunto: correo.asunto, noGuardado: "el correo cambió mientras se armaba" }) },
+      });
+      return { ok: false, status: 409, error: "El correo cambió mientras se armaba: recarga la página para ver el de ahora." };
+    }
     const proxima = proximaDelAgente(escrito.entrada);
     if (proxima) await guardarProximaDelAgente(reunion.id, proxima);
     await prisma.agentRun.update({

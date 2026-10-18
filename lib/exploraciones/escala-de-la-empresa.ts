@@ -128,7 +128,12 @@ export async function escalaDeLaEmpresa(clientId: string): Promise<EscalaDeLaEmp
 export async function escalaParaLaPropuesta(clientId: string): Promise<AreaDeLaFoto[] | null> {
   const r = await escalaDeLaEmpresa(clientId);
   if (r.estado !== "ok") return null;
-  const areas = r.posiciones[0]?.areas ?? r.versiones[0]?.foto.areas ?? null;
+  // Solo de una exploración viva: una archivada (una preventa vieja, un proyecto que se cerró) no dice dónde está hoy.
+  const vivas = new Set(r.exploraciones.map((e) => e.id));
+  const areas =
+    r.posiciones.find((p) => vivas.has(p.exploracionId))?.areas ??
+    r.versiones.find((v) => !v.exploracionId || vivas.has(v.exploracionId))?.foto.areas ??
+    null;
   if (!areas?.length) return null;
   return areas.map((a) => ({ ...a, dimensiones: a.dimensiones.map((d) => ({ ...d, cita: null, porQue: null })) }));
 }

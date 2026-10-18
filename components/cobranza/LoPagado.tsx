@@ -43,11 +43,14 @@ interface Lista {
   pagadasSinFecha: PegadoVisto[];
   choques: PegadoVisto[];
   conOdoo: boolean;
+  /** Odoo no contestó al pedirle el día de los pagos: sus pagadas quedaron en «Sin el día del pago». */
+  avisoOdoo: string | null;
   firma: string;
 }
 interface Confirmado {
   resultado: { escritas: number; saltadas: Array<{ cobroId: string; cuenta: string; motivo: string }> };
-  queda: Lista;
+  /** null = se escribió, pero la lista no se pudo releer: se vuelve a pedir. */
+  queda: Lista | null;
 }
 
 /** Los montos por moneda, nunca sumados entre monedas. */
@@ -98,7 +101,8 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
     setLista(l);
     // Todo arranca marcado: es lo que Odoo y Mercury ya dicen. La persona desmarca lo que no ve bien.
     setCobrar(new Set(l.acciones.filter((a) => a.cobrar).map((a) => a.cobroId)));
-    setPegar(new Set(l.acciones.filter((a) => !a.cobrar).map((a) => a.cobroId)));
+    const sinFecha = new Set(l.pagadasSinFecha.map((p) => p.cobroId));
+    setPegar(new Set(l.acciones.filter((a) => !a.cobrar && !sinFecha.has(a.cobroId)).map((a) => a.cobroId)));
   }, []);
 
   const cargar = useCallback(async () => {
@@ -118,7 +122,13 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
   }, [cargar]);
 
   const paraCobrar = useMemo(() => lista?.acciones.filter((a) => a.cobrar) ?? [], [lista]);
-  const soloPegar = useMemo(() => lista?.acciones.filter((a) => !a.cobrar) ?? [], [lista]);
+  /* ⚠ Una pagada sin el día del pago también viene como acción (para pegarla a su factura), pero no va en «Se pegan a su
+     factura»: ese texto dice que todavía no están pagadas. Se ve solo en «Sin el día del pago». */
+  const soloPegar = useMemo(() => {
+    if (!lista) return [];
+    const sinFecha = new Set(lista.pagadasSinFecha.map((p) => p.cobroId));
+    return lista.acciones.filter((a) => !a.cobrar && !sinFecha.has(a.cobroId));
+  }, [lista]);
   const marcadasCobrar = paraCobrar.filter((a) => cobrar.has(a.cobroId));
   const marcadasPegar = soloPegar.filter((a) => pegar.has(a.cobroId));
   const nada = marcadasCobrar.length + marcadasPegar.length === 0;
@@ -141,7 +151,8 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
       });
       setConfirmando(false);
       setSaltadas(r.resultado.saltadas);
-      tomar({ ...r.queda, firma: lista?.firma ?? "" });
+      if (r.queda) tomar({ ...r.queda, firma: lista?.firma ?? "" });
+      else void cargar();
       if (r.resultado.saltadas.length === 0) toast.success(`Listo: ${r.resultado.escritas} ${r.resultado.escritas === 1 ? "cuota quedó" : "cuotas quedaron"} al día, con tu firma.`);
       else toast.error(`Se escribieron ${r.resultado.escritas}; ${r.resultado.saltadas.length} no, y abajo dice por qué.`);
     } catch (e) {
@@ -189,6 +200,12 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
       {!lista.conOdoo && (
         <Alert variant="warning" title="Sin la clave de Odoo">
           Este servidor no puede pedirle a Odoo el día de cada pago: las facturas pagadas de Odoo quedan en «Sin el día del pago».
+        </Alert>
+      )}
+
+      {lista.avisoOdoo && (
+        <Alert variant="warning" title="Odoo no contestó">
+          {lista.avisoOdoo} Lo de Mercury se ve igual. Vuelve a mirar en un rato.
         </Alert>
       )}
 

@@ -13,7 +13,7 @@ import { Alert, Button, Drawer, Input, ListSkeleton, Modal, Select, Textarea } f
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
-import { fmtMontoLibro } from "@/lib/cobranza/montos";
+import { fmtMontoLibro, parseMontoLocal } from "@/lib/cobranza/montos";
 import {
   parteDeServicioDe,
   problemasDeLicencia,
@@ -214,11 +214,15 @@ const VACIO: Formulario = {
   notas: "",
 };
 
-/** «161.700,50» (con coma decimal) o «161700.50»: con coma, los puntos son de miles. Vacío = null. */
+/**
+ * «70.000», «161.700,50» o «161700.50», con la regla del importador (`parseMontoLocal`): un separador solo seguido de
+ * exactamente 3 dígitos es de miles; con 1-2, decimal; con los dos, el último es el decimal. Vacío = null. Un texto
+ * que no es un número da NaN, para que `problemasDeLicencia` lo marque y no se guarde un 0 en silencio.
+ */
 const numero = (s: string) => {
   const t = s.trim();
   if (t === "") return null;
-  return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
+  return parseMontoLocal(t) ?? Number.NaN;
 };
 
 function aDatos(f: Formulario): DatosDeLicencia {
@@ -283,7 +287,7 @@ function EditorDeContratos({ onClose, onCambio }: { onClose: () => void; onCambi
   const problemas = abierto ? problemasDeLicencia(aDatos(f)) : [];
   const pct = (() => {
     const d = aDatos(f);
-    return d.montoContrato > 0 ? Math.round(parteDeServicioDe(d) * 1000) / 10 : null;
+    return d.montoContrato > 0 && Number.isFinite(d.montoServicio) ? Math.round(parteDeServicioDe(d) * 1000) / 10 : null;
   })();
 
   const guardar = async () => {
@@ -322,13 +326,22 @@ function EditorDeContratos({ onClose, onCambio }: { onClose: () => void; onCambi
     }
   };
 
-  const campo = (k: keyof Formulario, etiqueta: string, ayuda?: string, tipo = "text") => (
-    <label className="flex flex-col gap-1">
-      <span className="text-[13px] font-medium text-fg">{etiqueta}</span>
-      <Input type={tipo} value={f[k]} onChange={(e) => setF((x) => ({ ...x, [k]: e.target.value }))} />
-      {ayuda && <span className="text-xs text-fg-muted">{ayuda}</span>}
-    </label>
-  );
+  /** Con `monedaDelMonto`, debajo del campo va el número que se va a guardar: «70.000» no puede leerse como 70 sin que se vea. */
+  const campo = (k: keyof Formulario, etiqueta: string, ayuda?: string, tipo = "text", monedaDelMonto?: string) => {
+    const leido = monedaDelMonto !== undefined && f[k].trim() !== "" ? numero(f[k]) : null;
+    return (
+      <label className="flex flex-col gap-1">
+        <span className="text-[13px] font-medium text-fg">{etiqueta}</span>
+        <Input type={tipo} value={f[k]} onChange={(e) => setF((x) => ({ ...x, [k]: e.target.value }))} />
+        {leido !== null && (
+          <span className={cn("text-xs", Number.isFinite(leido) ? "text-fg-secondary" : "text-danger-ink")}>
+            {Number.isFinite(leido) ? `Se guarda: ${fmtMontoLibro(leido, monedaDelMonto ?? null)}` : "No se entiende el número."}
+          </span>
+        )}
+        {ayuda && <span className="text-xs text-fg-muted">{ayuda}</span>}
+      </label>
+    );
+  };
 
   return (
     <Drawer open onClose={onClose} size="lg" title="Contratos con licencias revendidas">
@@ -386,8 +399,8 @@ function EditorDeContratos({ onClose, onCambio }: { onClose: () => void; onCambi
             </Select>
           </label>
           <div className="grid grid-cols-2 gap-3">
-            {campo("montoContrato", "Total del contrato", "Sin IVA.")}
-            {campo("montoServicio", "De eso, servicio de Smarteam", pct === null ? undefined : `${pct.toLocaleString("es-CR")} % del contrato.`)}
+            {campo("montoContrato", "Total del contrato", "Sin IVA.", "text", f.moneda)}
+            {campo("montoServicio", "De eso, servicio de Smarteam", pct === null ? undefined : `${pct.toLocaleString("es-CR")} % del contrato.`, "text", f.moneda)}
           </div>
           <label className="flex flex-col gap-1">
             <span className="text-[13px] font-medium text-fg">Proveedor de la licencia</span>
@@ -399,7 +412,7 @@ function EditorDeContratos({ onClose, onCambio }: { onClose: () => void; onCambi
             </datalist>
           </label>
           <div className="grid grid-cols-3 gap-3">
-            {campo("costoMonto", "Lo que se le paga", "Vacío si no se sabe.")}
+            {campo("costoMonto", "Lo que se le paga", "Vacío si no se sabe.", "text", f.costoMoneda || f.moneda)}
             <label className="flex flex-col gap-1">
               <span className="text-[13px] font-medium text-fg">Moneda</span>
               <Select value={f.costoMoneda} onChange={(e) => setF((x) => ({ ...x, costoMoneda: e.target.value as Formulario["costoMoneda"] }))}>

@@ -11,6 +11,7 @@ import { PROYECTO_CLASIFICABLE_WHERE, PROYECTO_DE_PIPELINE_CS_WHERE } from "@/li
 import { portalDelSistema } from "@/lib/hubspot/registro-para-vincular";
 import { hubspotProjectUrl } from "@/lib/hubspot/urls";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
+import { resolvePipeline } from "@/lib/projects/kind";
 import { arregloDelServicio, arreglosDelProyecto, type ArregloDeLimpieza, type EquipoParaLimpiar } from "./reglas";
 
 /** Quién está, quién se fue y quién lidera cada sprint. */
@@ -48,6 +49,7 @@ export async function cargarListaDeLimpieza(ahora = new Date()): Promise<Arreglo
         name: true,
         clientId: true,
         hubspotServiceId: true,
+        hubspotPipelineId: true,
         hubspotPipelineStageLabel: true,
         hubspotOwnerEmail: true,
         hubspotOwnerName: true,
@@ -82,6 +84,7 @@ export async function cargarListaDeLimpieza(ahora = new Date()): Promise<Arreglo
           clientId: p.clientId,
           cliente: p.client.name,
           sprint: esDeCs.has(p.id) ? "cs" : "desarrollo",
+          servicioRecurrente: !!resolvePipeline(p.hubspotPipelineId)?.servicioRecurrente,
           etapa: p.hubspotPipelineStageLabel,
           encargadoEmail: p.hubspotOwnerEmail,
           encargadoNombre: p.hubspotOwnerName,

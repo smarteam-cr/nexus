@@ -71,6 +71,8 @@ const Guardar = z
 export async function PUT(req: NextRequest, { params }: Params) {
   const g = await guardInternalUser();
   if (g instanceof NextResponse) return g;
+  // Con «Ver como», el objetivo y las notas son de la persona mirada: nadie más los escribe (el GET tampoco los lee).
+  if (g.user.verComoDe) return NextResponse.json({ error: "Mientras ves Nexus como otra persona no se guarda su preparación." }, { status: 403 });
   const evento = EVENTO.safeParse(decodeURIComponent((await params).eventoId));
   if (!evento.success) return NextResponse.json({ error: "El evento no es válido." }, { status: 400 });
   const body = Guardar.safeParse(await req.json().catch(() => null));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { grillaDelDia, horaCR, huecoLibre, instante, lineaDeAhora, resumenDelDia, varianteDelInicio } from "./inicio";
+import { esDiaLaboral, grillaDelDia, horaCR, huecoLibre, instante, lineaDeAhora, primerHuecoLaboral, resumenDelDia, varianteDelInicio } from "./inicio";
 import { cifrasDelInicio, siguienteMovimiento, type ReunionParaCifras } from "./cifras";
 import { guiaDeLaReunion, type DatosParaLaGuia } from "./guia";
 import { equipoDeRol, EQUIPOS_DE_NEXUS } from "@/lib/equipos/registro";
@@ -90,6 +90,53 @@ describe("el hueco libre de hoy", () => {
     expect(huecoLibre([{ id: "1", inicio: a(8), fin: a(18) }], DIA, new Date(a(8)))).toBeNull();
     expect(huecoLibre(reuniones, "2026-10-17", new Date(a(11)))).toBeNull();
   });
+  it("solo en horario laboral: nunca después de las 17:00 ni en fin de semana", () => {
+    // La última reunión termina a las 16:00: el hueco va de 16:00 a 17:00, no hasta las 18:00.
+    expect(huecoLibre(reuniones, DIA, new Date(a(15, 30)))).toEqual({ inicio: a(16), fin: a(17) });
+    expect(huecoLibre([], DIA, new Date(a(13)))).toEqual({ inicio: a(13), fin: a(17) });
+    // A las 16:10 queda menos de una hora hasta las 17:00: nada.
+    expect(huecoLibre([], DIA, new Date(a(16, 10)))).toBeNull();
+    expect(huecoLibre([], DIA, new Date(a(18)))).toBeNull();
+    // Antes de las 8:00 arranca a las 8:00.
+    expect(huecoLibre([], DIA, new Date(a(6, 40)))).toEqual({ inicio: a(8), fin: a(17) });
+    // Sábado y domingo, nunca.
+    const sab = "2026-10-17";
+    expect(huecoLibre([], sab, new Date(instante(sab, 10 * 60)))).toBeNull();
+    const dom = "2026-10-18";
+    expect(huecoLibre([], dom, new Date(instante(dom, 10 * 60)))).toBeNull();
+  });
+  it("los días de trabajo son de lunes a viernes", () => {
+    expect(["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16"].every(esDiaLaboral)).toBe(true);
+    expect(esDiaLaboral("2026-10-17")).toBe(false);
+    expect(esDiaLaboral("2026-10-18")).toBe(false);
+  });
+});
+
+describe("la primera hora libre para «Agendar»", () => {
+  const lunes = "2026-10-19";
+  const l = (h: number, m = 0) => instante(lunes, h * 60 + m);
+  it("hoy, si queda una hora antes de las 17:00, y dura una hora", () => {
+    expect(primerHuecoLaboral([{ id: "1", inicio: a(10), fin: a(11, 30) }], new Date(a(9, 50)))).toEqual({ inicio: a(11, 30), fin: a(12, 30) });
+    expect(primerHuecoLaboral([], new Date(a(15, 55)))).toEqual({ inicio: a(16), fin: a(17) });
+  });
+  it("el viernes tarde, el sábado o el domingo: el lunes a las 8:00", () => {
+    expect(primerHuecoLaboral([], new Date(a(16, 20)))).toEqual({ inicio: l(8), fin: l(9) });
+    expect(primerHuecoLaboral([], new Date(instante("2026-10-17", 11 * 60)))).toEqual({ inicio: l(8), fin: l(9) });
+    expect(primerHuecoLaboral([], new Date(instante("2026-10-18", 7 * 60)))).toEqual({ inicio: l(8), fin: l(9) });
+  });
+  it("salta lo ocupado del día que viene y respeta la duración pedida", () => {
+    const ev = [
+      { id: "1", inicio: l(8), fin: l(10) },
+      { id: "2", inicio: l(10, 30), fin: l(11) },
+    ];
+    expect(primerHuecoLaboral(ev, new Date(a(17)))).toEqual({ inicio: l(11), fin: l(12) });
+    expect(primerHuecoLaboral(ev, new Date(a(17)), { minutos: 30 })).toEqual({ inicio: l(10), fin: l(10, 30) });
+  });
+  it("nunca termina después de las 17:00", () => {
+    const ev = [{ id: "1", inicio: l(8), fin: l(16, 30) }];
+    const h = primerHuecoLaboral(ev, new Date(a(17)));
+    expect(h.inicio).toBe(instante("2026-10-20", 8 * 60));
+  });
 });
 
 describe("«Tu día, según Nexus»", () => {
@@ -110,7 +157,7 @@ describe("«Tu día, según Nexus»", () => {
   it("sin nada que decir, vacío; muchas cuentas se cuentan", () => {
     expect(resumenDelDia({ proxima: null, primero: null, delAgente: 0, cuentasSinAccion: [], hueco: null })).toEqual([]);
     const f = resumenDelDia({ proxima: null, primero: null, delAgente: 0, cuentasSinAccion: ["A", "B", "C", "D", "E"], hueco: { hora: "9:00" } });
-    expect(f.map((x) => x.map((p) => p.t).join(""))).toEqual(["A, B, C y 2 más no tienen su acción o su reunión de la semana.", "Tienes un hueco libre a las 9:00 para avanzar."]);
+    expect(f.map((x) => x.map((p) => p.t).join(""))).toEqual(["A, B, C y 2 más no tienen su acción o su reunión de la semana.", "Tienes libre desde las 9:00."]);
   });
 });
 

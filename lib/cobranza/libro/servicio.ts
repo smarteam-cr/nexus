@@ -40,11 +40,22 @@ export async function cargarLoPagado(hoy: string): Promise<LoPagado> {
 
 /**
  * Escribe lo marcado, firmado por `firma` (un miembro del equipo: lo verifica `aplicarLoQueDicenOdooYMercury`).
- * Devuelve lo escrito, lo saltado con su porqué y la lista que queda después.
+ * Devuelve lo escrito, lo saltado con su porqué y la lista que queda después (null si no se pudo releer).
  */
-export async function confirmarLoPagado(firma: string, seleccion: SeleccionDelLibro, hoy: string): Promise<{ resultado: ResultadoDelLibro; queda: LoPagado }> {
+export async function confirmarLoPagado(
+  firma: string,
+  seleccion: SeleccionDelLibro,
+  hoy: string,
+): Promise<{ resultado: ResultadoDelLibro; queda: LoPagado | null }> {
   const odoo = transporteOdoo();
   const resultado = await aplicarLoQueDicenOdooYMercury({ aplicar: true, cobrar: true, firma, hoy, odoo, seleccion });
-  const queda = await cargarLoPagado(hoy);
+  /* ⚠ Lo escrito ya quedó: si falla la relectura de la lista, se devuelve el resultado igual (con `queda` en null) y la
+     pantalla la vuelve a pedir. Un error acá haría creer que no se escribió nada. */
+  let queda: LoPagado | null = null;
+  try {
+    queda = await cargarLoPagado(hoy);
+  } catch {
+    console.error("[cobranza/libro] se escribió, pero no se pudo releer la lista (detalle omitido a propósito)");
+  }
   return { resultado, queda };
 }

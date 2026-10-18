@@ -41,6 +41,7 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/sessions/reunion-a-mano-server.ts": { modo: "criterio", criterio: "navegable" },
   // El resumen antes de una reunión (etapa 4c): lo pendiente de los proyectos del cliente que cuentan.
   "lib/mi-dia/resumen-server.ts": { modo: "criterio", criterio: "clasificable" },
+  "lib/mi-dia/cartera-cs-server.ts": { modo: "criterio", criterio: "navegable" },
   // El chat de Nexus (ficha H): los proyectos de la cuenta que se le nombran al modelo son los que se ven en la ficha.
   "lib/nexus-chat/lecturas-server.ts": { modo: "criterio", criterio: "navegable" },
   "lib/portfolio/load.ts": { modo: "criterio", criterio: "cartera" },

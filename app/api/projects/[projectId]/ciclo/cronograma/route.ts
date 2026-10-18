@@ -3,7 +3,10 @@
  *
  * GET  → cada caso de uso del ciclo como fase: sus semanas, su avance, sus dependencias del cliente, la propuesta si una
  *        dependencia se atrasó, y la versión aprobada con lo que cambió desde ahí.
- * POST → { accion: "armar" }                       cada caso sin fase pasa a ser una fase que ocupa el ciclo.
+ * POST → { accion: "armar" }                       cada caso sin fase pasa a ser una fase que ocupa el ciclo. Sin
+ *                                                  fecha de arranque en el cronograma, 409 `SIN_ARRANQUE` con la
+ *                                                  fecha propuesta; con `fijarArranque: true` (la persona confirmó)
+ *                                                  se escribe esa fecha y se arma.
  *        { accion: "dependencia", casoId, titulo }  suma una dependencia del cliente al caso (sin crear tareas).
  *        { accion: "correr", casoId }               aplica la propuesta por una dependencia atrasada (un clic).
  *        { accion: "aprobar" }                      guarda la versión aprobada: lo que se le presentó al cliente.
@@ -25,7 +28,7 @@ import { accionDelCronogramaSchema } from "@/lib/servicios/schema";
 type Ctx = { params: Promise<{ projectId: string }> };
 
 function error(e: unknown) {
-  if (e instanceof ErrorDelCiclo) return NextResponse.json({ error: e.message }, { status: e.status });
+  if (e instanceof ErrorDelCiclo) return NextResponse.json({ error: e.message, ...(e.datos ?? {}) }, { status: e.status });
   console.error("[ciclo/cronograma]", e);
   return NextResponse.json({ error: "No se pudo guardar el cronograma del ciclo." }, { status: 500 });
 }
@@ -54,7 +57,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     const d = body.data;
     switch (d.accion) {
       case "armar":
-        return NextResponse.json({ ok: true, ...(await armarFasesDelCiclo(projectId, por)) });
+        return NextResponse.json({ ok: true, ...(await armarFasesDelCiclo(projectId, por, { fijarArranque: d.fijarArranque === true })) });
       case "dependencia":
         return NextResponse.json({ ok: true, ...(await agregarDependencia(projectId, d.casoId, { titulo: d.titulo, semana: d.semana }, por)) });
       case "correr":

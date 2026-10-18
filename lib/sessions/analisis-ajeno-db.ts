@@ -12,6 +12,7 @@
  *   · la cola: la vuelve a encolar lib/lecturas/cola.ts (`reencolarPorTextoNuevo`).
  */
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { planDeLimpieza, type AnalisisGuardado, type PlanDeLimpieza } from "./analisis-ajeno";
 
 type Db = Prisma.TransactionClient | PrismaClient;
@@ -42,7 +43,12 @@ export async function cargarAnalisis(db: Db, sessionId: string): Promise<Analisi
       select: { id: true, estado: true, decididoAt: true, createdAt: true },
     }),
     hayHechos(db)
-      ? db.hechoDeReunion.findMany({ where: { sessionId }, select: { id: true, estado: true, decididoPorEmail: true } }).catch(() => [])
+      ? db.hechoDeReunion.findMany({ where: { sessionId }, select: { id: true, estado: true, decididoPorEmail: true } }).catch((e) => {
+          // Solo se tolera que falte la tabla (su SQL): cualquier otro error cambiaría la decisión en silencio (sin hechos
+          // usados, se rehace lo que alguien ya trabajó).
+          if (esquemaDesactualizado(e)) return [];
+          throw e;
+        })
       : Promise.resolve([]),
   ]);
   const corrida = minuta?.generatedByAgentRunId
@@ -65,6 +71,12 @@ export interface OpcionesDeLimpieza {
   vaciarTexto?: boolean;
   /** Volver a encolar el enriquecimiento: la próxima pasada relee el material de Google. */
   reencolarEnriquecimiento?: boolean;
+  /**
+   * Corre DENTRO de la misma transacción, después de borrar: lib/sessions/reanalizar.ts deja ahí la fila de la cola
+   * lista para releerse (lib/lecturas/cola.ts `prepararParaReleerEnTx`, su escritor). Así una lectura que se estaba
+   * haciendo con el texto viejo no deja su minuta sin que nadie la vuelva a leer.
+   */
+  enLaMismaTransaccion?: (tx: Prisma.TransactionClient) => Promise<unknown>;
 }
 
 /**
@@ -92,6 +104,7 @@ export async function limpiarAnalisis(db: PrismaClient, sessionId: string, opts:
         select: { id: true },
       });
     }
+    if (opts.enLaMismaTransaccion) await opts.enLaMismaTransaccion(tx);
     return plan;
   });
 }

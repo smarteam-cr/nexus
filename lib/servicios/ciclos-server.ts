@@ -32,6 +32,8 @@ export class ErrorDelCiclo extends Error {
   constructor(
     message: string,
     readonly status: 400 | 404 | 409,
+    /** Lo que la pantalla necesita para responder, además del mensaje (p. ej. `{ codigo: "SIN_ARRANQUE", fecha }`). */
+    readonly datos?: { codigo: string } & Record<string, unknown>,
   ) {
     super(message);
   }
@@ -202,6 +204,8 @@ export async function cargarEstadoDelCiclo(projectId: string): Promise<EstadoDel
 /** Lo que el riel y el «Qué sigue» necesitan del ciclo, sin cargar la página entera. */
 export interface CicloParaElRiel {
   abierto: boolean;
+  /** El id del ciclo abierto (null sin ciclo abierto): lo mandan los cambios del ciclo para no editar otro. */
+  id: string | null;
   /** El número del ciclo abierto, o el del siguiente si no hay ninguno abierto. */
   numero: number;
   nombre: string | null;
@@ -232,7 +236,7 @@ export async function estadoDelCicloParaElRiel(projectId: string): Promise<Ciclo
   const c = await prisma.cicloDeProyecto.findFirst({
     where: { projectId, estado: "abierto" },
     select: {
-      numero: true, nombre: true, etapa: true, meta: true, desde: true, hasta: true,
+      id: true, numero: true, nombre: true, etapa: true, meta: true, desde: true, hasta: true,
       versionAprobada: true, metaResultado: true, siguienteCiclo: true,
       casosDeUso: {
         where: { estado: { not: "descartado" } },
@@ -246,7 +250,7 @@ export async function estadoDelCicloParaElRiel(projectId: string): Promise<Ciclo
     const ultimo = await prisma.cicloDeProyecto.findFirst({ where: { projectId }, orderBy: { numero: "desc" }, select: { numero: true } });
     const g0 = guiaDelCiclo(guiaServicio, { etapa: "diagnostico", meta: null, desde: null, hasta: null, casos: [] });
     return {
-      abierto: false, numero: (ultimo?.numero ?? 0) + 1, nombre: null, desde: null, hasta: null, etapa: "diagnostico",
+      abierto: false, id: null, numero: (ultimo?.numero ?? 0) + 1, nombre: null, desde: null, hasta: null, etapa: "diagnostico",
       corto: ETIQUETA_DE_ETAPA.diagnostico, falta: null, piezaDeLaEtapa: PIEZA_DE_LA_ETAPA.diagnostico, planListo: false,
       producido: g0.producido, enHubspot: !!p.hubspotServiceId,
     };
@@ -267,6 +271,7 @@ export async function estadoDelCicloParaElRiel(projectId: string): Promise<Ciclo
   const faltaDelPlan = plan.producido.some((x) => (x.clave === "meta" || x.clave === "casos-con-criterio") && x.hecho === false);
   return {
     abierto: true,
+    id: c.id,
     numero: c.numero,
     nombre: c.nombre,
     desde: estado.desde,
@@ -290,6 +295,24 @@ export async function abrirCiclo(
 ) {
   const p = await proyectoRecurrente(projectId);
   if (!p.servicio) throw new ErrorDelCiclo("Este proyecto no es de un servicio recurrente.", 409);
+  /* Leer y crear va sin bloqueo: dos pedidos a la vez (dos pestañas, el GET que abre el primero) pueden pasar la
+     lectura los dos. El índice parcial CicloDeProyecto_uno_abierto frena al segundo con P2002: ahí se relee el ciclo
+     que abrió el otro y se devuelve ese, en vez de terminar en 500. */
+  try {
+    return await abrirCicloEnTx(projectId, datos, por);
+  } catch (e) {
+    if ((e as { code?: string }).code !== "P2002") throw e;
+    const abierto = await prisma.cicloDeProyecto.findFirst({ where: { projectId, estado: "abierto" }, select: { id: true, numero: true } });
+    if (!abierto) throw e;
+    return abierto;
+  }
+}
+
+function abrirCicloEnTx(
+  projectId: string,
+  datos: { nombre?: string | null; desde?: string | null; hasta?: string | null; meta?: string | null },
+  por: string,
+) {
   return prisma.$transaction(async (tx) => {
     const abierto = await tx.cicloDeProyecto.findFirst({ where: { projectId, estado: "abierto" }, select: { numero: true } });
     if (abierto) throw new ErrorDelCiclo(`El ciclo ${abierto.numero} sigue abierto: se cierra con la sesión de aprendizaje.`, 409);
@@ -329,14 +352,34 @@ export async function actualizarCiclo(
     siguienteCiclo?: string | null;
   },
   por?: string,
+  /**
+   * El ciclo que la pantalla tiene enfrente: su id, o null si la pantalla no veía ninguno abierto. Si ya no es el
+   * abierto, 409: una pestaña vieja no edita (ni abre) otro ciclo con lo que tenía escrito. `undefined` = quien llama
+   * no lo sabe: edita el abierto, y sin abierto solo abre si el proyecto nunca tuvo un ciclo.
+   */
+  cicloId?: string | null,
 ) {
   const p = await proyectoRecurrente(projectId);
   let abierto = await prisma.cicloDeProyecto.findFirst({ where: { projectId, estado: "abierto" }, select: { id: true } });
+  if (typeof cicloId === "string" && abierto?.id !== cicloId) {
+    const ese = await prisma.cicloDeProyecto.findFirst({ where: { id: cicloId, projectId }, select: { estado: true } });
+    throw new ErrorDelCiclo(
+      ese?.estado === "cerrado" ? "Este ciclo ya se cerró: recarga la página." : "El ciclo cambió: recarga la página.",
+      409,
+    );
+  }
+  if (cicloId === null && abierto) throw new ErrorDelCiclo("Ya hay un ciclo abierto: recarga la página.", 409);
   /* Sin ciclo abierto el proyecto está en Diagnóstico (estadoDelCicloParaElRiel): el ciclo se abre solo al cambiar algo.
      Vale para el primero y, desde la ficha E, para el siguiente a uno cerrado (al cerrar, el proyecto vuelve a
-     Diagnóstico). Lo de la sesión de aprendizaje es del ciclo abierto: no abre uno nuevo. */
+     Diagnóstico): solo si la pantalla tampoco veía uno abierto (`cicloId: null`). Sin saber qué veía la pantalla, abre
+     solo el primero. Lo de la sesión de aprendizaje es del ciclo abierto: no abre uno nuevo. */
   const delAprendizaje = cambios.metaResultado !== undefined || cambios.metaEvaluada !== undefined || cambios.siguienteCiclo !== undefined;
-  if (!abierto && por && !delAprendizaje) abierto = await abrirCiclo(projectId, {}, por).then((c) => ({ id: c.id }));
+  if (!abierto && por && !delAprendizaje) {
+    const puedeAbrir =
+      cicloId === null || (await prisma.cicloDeProyecto.count({ where: { projectId } })) === 0;
+    if (!puedeAbrir) throw new ErrorDelCiclo("Este ciclo ya se cerró: recarga la página.", 409);
+    abierto = await abrirCiclo(projectId, {}, por).then((c) => ({ id: c.id }));
+  }
   if (!abierto) throw new ErrorDelCiclo("No hay un ciclo abierto.", 409);
   if (cambios.etapa && p.hubspotServiceId) {
     throw new ErrorDelCiclo("En un proyecto que está en HubSpot la etapa la mueve el equipo allá.", 409);
@@ -344,8 +387,9 @@ export async function actualizarCiclo(
   if (cambios.desde !== undefined && cambios.hasta !== undefined && cambios.desde && cambios.hasta && cambios.desde > cambios.hasta) {
     throw new ErrorDelCiclo("El ciclo no puede terminar antes de empezar.", 400);
   }
-  await prisma.cicloDeProyecto.update({
-    where: { id: abierto.id },
+  // Solo si sigue abierto: si se cerró entre la lectura y acá, no se le escribe nada.
+  const escrito = await prisma.cicloDeProyecto.updateMany({
+    where: { id: abierto.id, estado: "abierto" },
     data: {
       ...(cambios.nombre !== undefined ? { nombre: cambios.nombre?.trim() || null } : {}),
       ...(cambios.desde !== undefined ? { desde: fecha(cambios.desde) } : {}),
@@ -357,6 +401,7 @@ export async function actualizarCiclo(
       ...(cambios.siguienteCiclo !== undefined ? { siguienteCiclo: cambios.siguienteCiclo?.trim() || null } : {}),
     },
   });
+  if (escrito.count === 0) throw new ErrorDelCiclo("Este ciclo ya se cerró: recarga la página.", 409);
 }
 
 export async function cambiarCompromiso(projectId: string, compromiso: Compromiso | null) {

@@ -9,16 +9,19 @@
  * El desenlace se escribe en el hilo (`agregarTurno`, el único escritor de mensajes): con algo aplicado, el desenlace es
  * OK y la lista se cierra (lo que falló se pide de nuevo: volver a aplicar duplicaría lo que ya entró).
  *
- * ⚠ Dos clics a la vez: el candado es EN MEMORIA, por hilo (la app corre en una sola instancia, docs/RUNBOOK.md
- * invariante #1). Los escritores abren su propia transacción y no se pueden juntar en una sola con el desenlace.
+ * ⚠ Dos clics a la vez, o un clic mientras corre un turno: el candado es EN MEMORIA, por hilo, y lo comparte con el
+ * turno (./candado-server.ts; la app corre en una sola instancia, docs/RUNBOOK.md invariante #1). El hilo se VUELVE A
+ * LEER después de tomarlo: el segundo clic ve el desenlace del primero y responde «Ya estaba aplicado». Los escritores
+ * abren su propia transacción y no se pueden juntar en una sola con el desenlace.
  */
 import "server-only";
 import type { TeamMember } from "@prisma/client";
-import { agregarTurno, hiloVivo } from "@/lib/asistente/hilo";
+import { agregarTurno, hiloVivo, leerHilo } from "@/lib/asistente/hilo";
 import { marcaDeDesenlace } from "@/lib/asistente/acuerdo";
 import { estadosDeAcuerdo } from "@/lib/asistente/acuerdo-vivo";
 import { aplicarOperaciones, type OperacionPreparada } from "@/lib/operaciones/ejecutar";
 import { PIEZA_NEXUS } from "./constantes";
+import { tomarHilo } from "./candado-server";
 import { cambiosDelAcuerdo } from "./libro";
 import { contextoDelChat, operacionesDelChat, prepararParaLaCuenta } from "./herramientas-server";
 import { textoDelDesenlace } from "./textos";
@@ -40,8 +43,6 @@ export interface ResultadoDeAplicar {
   desenlace: string;
 }
 
-const aplicando = new Set<string>();
-
 export async function aplicarListaDeNexus(o: {
   persona: TeamMember;
   veMontos: boolean;
@@ -51,13 +52,16 @@ export async function aplicarListaDeNexus(o: {
   desmarcadas: readonly number[];
   ahora?: Date;
 }): Promise<ResultadoDeAplicar> {
-  const hilo = await hiloVivo({ dueno: { clientId: o.clientId }, pieza: PIEZA_NEXUS, usuarioEmail: o.usuarioEmail });
-  const i = hilo ? hilo.turnos.findIndex((t) => t.id === o.turnoId) : -1;
-  // Solo un mensaje del asistente trae una lista: uno de la persona nunca se aplica, aunque traiga el marcador.
-  if (!hilo || i < 0 || hilo.turnos[i].rol !== "ASISTENTE") throw new ErrorDelChat(404, "Esa lista no es de tu conversación sobre esta cuenta.");
-  if (aplicando.has(hilo.id)) throw new ErrorDelChat(409, "Ya se está aplicando: espera un momento.");
-  aplicando.add(hilo.id);
+  const vivo = await hiloVivo({ dueno: { clientId: o.clientId }, pieza: PIEZA_NEXUS, usuarioEmail: o.usuarioEmail });
+  if (!vivo) throw new ErrorDelChat(404, "Esa lista no es de tu conversación sobre esta cuenta.");
+  const soltar = tomarHilo(vivo.id);
+  if (!soltar) throw new ErrorDelChat(409, "Nexus está terminando algo en esta conversación: espera un momento y vuelve a aplicar.");
   try {
+    // Releído CON el candado: lo leído antes pudo cambiar (otro clic ya aplicó, un turno dejó otra lista).
+    const hilo = await leerHilo(vivo.id, { clientId: o.clientId }, o.usuarioEmail);
+    const i = hilo ? hilo.turnos.findIndex((t) => t.id === o.turnoId) : -1;
+    // Solo un mensaje del asistente trae una lista: uno de la persona nunca se aplica, aunque traiga el marcador.
+    if (!hilo || i < 0 || hilo.turnos[i].rol !== "ASISTENTE") throw new ErrorDelChat(404, "Esa lista no es de tu conversación sobre esta cuenta.");
     const estado = estadosDeAcuerdo(hilo.turnos)[i];
     if (estado === "aplicado") return { yaEstaba: true, aplicadas: 0, fallo: null, sinIntentar: 0, desenlace: "" };
     if (estado !== "vivo") throw new ErrorDelChat(409, "Esa lista ya no está vigente: mira la más reciente.");
@@ -74,7 +78,10 @@ export async function aplicarListaDeNexus(o: {
     const problemas: string[] = [];
     for (const c of marcados) {
       const r = await prepararParaLaCuenta(ctx, o.clientId, c.nombre, c.entrada);
-      if (r.ok) preparadas.push({ nombre: c.nombre, datos: r.datos, linea: r.cambio.linea });
+      // Una tarea creada desde el chat lleva su clave (el turno y su lugar en la lista): aplicar dos veces no la duplica.
+      const k = leido.cambios.indexOf(c);
+      const datos = r.ok && c.nombre === "tarea.crear" ? { ...(r.datos as object), origenId: `n:${o.turnoId}:${k}`, origen: "chat" } : r.ok ? r.datos : null;
+      if (r.ok) preparadas.push({ nombre: c.nombre, datos, linea: r.cambio.linea });
       else problemas.push(r.motivo);
     }
     if (problemas.length) {
@@ -88,6 +95,6 @@ export async function aplicarListaDeNexus(o: {
     await agregarTurno(hilo.id, { rol: "ASISTENTE", contenido: `${marcaDeDesenlace({ ok })}\n\n${desenlace}`, shaDeContexto: null });
     return { yaEstaba: false, aplicadas: a.aplicadas.length, fallo: a.fallo ? { linea: a.fallo.linea, motivo: a.fallo.motivo } : null, sinIntentar: a.sinIntentar, desenlace };
   } finally {
-    aplicando.delete(hilo.id);
+    soltar();
   }
 }

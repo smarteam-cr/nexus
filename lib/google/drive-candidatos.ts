@@ -40,6 +40,8 @@ export interface NombreLeido {
   titulo: string;
   /** El instante que dice el nombre, en UTC; null si el nombre no trae hora o la zona no se conoce. */
   momento: Date | null;
+  /** Solo las notas del calendario: el día que dice el nombre («2026-10-01»), sin hora. */
+  dia?: string;
   clase: ClaseDeArchivo;
 }
 
@@ -114,7 +116,7 @@ export function leerNombreDeArchivo(nombre: string): NombreLeido | null {
   m = RE_TRANSCRIPCION.exec(n);
   if (m) return { titulo: m[1], momento: instante(m[2], m[3], m[4], m[5], m[6], m[7]), clase: "transcripcion" };
   m = RE_NOTAS_CALENDARIO.exec(n);
-  if (m) return { titulo: m[4], momento: null, clase: "notas-calendario" };
+  if (m) return { titulo: m[4], momento: null, dia: `${m[1]}-${m[2]}-${m[3]}`, clase: "notas-calendario" };
   return null;
 }
 
@@ -143,6 +145,14 @@ function fechaCorta(d: Date): string {
   return d.toISOString().slice(0, 16).replace("T", " ");
 }
 
+/** Costa Rica no tiene horario de verano: UTC-6 todo el año. */
+const DESFASE_COSTA_RICA_MS = 6 * 3_600_000;
+
+/** El día de un instante en hora de Costa Rica («2026-10-01»). */
+export function diaEnCostaRica(d: Date): string {
+  return new Date(d.getTime() - DESFASE_COSTA_RICA_MS).toISOString().slice(0, 10);
+}
+
 /** Los archivos de Drive que son de esta reunión, en el orden en que conviene leerlos. */
 export function elegirArchivosDeLaReunion(
   reunion: ReunionABuscar,
@@ -162,9 +172,16 @@ export function elegirArchivosDeLaReunion(
       descartados.push({ nombre: archivo.name, motivo: "es de otra reunión (otro título)" });
       continue;
     }
-    // La hora del nombre manda; si no la trae (o la zona no se conoce), cuándo se creó el archivo.
+    // Las notas del calendario traen el día en el nombre (sin hora): tiene que ser el de la reunión, en hora de Costa
+    // Rica. Antes se usaba solo cuándo se creó el archivo, y unas notas abiertas el día antes pasaban.
+    if (leido.dia && leido.dia !== diaEnCostaRica(reunion.fecha)) {
+      descartados.push({ nombre: archivo.name, motivo: "es de otro día" });
+      continue;
+    }
+    // La hora del nombre manda; si no la trae (o la zona no se conoce), cuándo se creó el archivo. Unas notas del
+    // calendario del día de la reunión sin fecha de creación se miden contra la reunión misma.
     const creado = archivo.createdTime ? Date.parse(archivo.createdTime) : NaN;
-    const momento = leido.momento?.getTime() ?? (Number.isNaN(creado) ? null : creado);
+    const momento = leido.momento?.getTime() ?? (Number.isNaN(creado) ? (leido.dia ? fecha : null) : creado);
     if (momento === null) {
       descartados.push({ nombre: archivo.name, motivo: "no se sabe de cuándo es" });
       continue;

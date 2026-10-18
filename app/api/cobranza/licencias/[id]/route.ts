@@ -3,10 +3,10 @@
  *   PATCH  → reemplaza sus datos (la cuenta no cambia: para otra cuenta, otro contrato).
  *   DELETE → lo archiva (no lo borra: lo que ya se leyó con él se puede explicar después).
  *
- * Acceso: guardCobranzaEditor (`cobranza.write`).
+ * Acceso: guardCostosAccess (SOLO dirección): es una pieza del punto de equilibrio, como /api/cobranza/licencias.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardCobranzaEditor } from "@/lib/auth/api-guards";
+import { guardCostosAccess } from "@/lib/auth/api-guards";
 import { actualizarLicencia, archivarLicencia } from "@/lib/finanzas/licencias-escritura-server";
 import { licenciaSchema } from "@/lib/finanzas/licencias-esquema";
 import { leerCuerpo, responderError } from "@/lib/finanzas/rutas";
@@ -14,7 +14,7 @@ import { leerCuerpo, responderError } from "@/lib/finanzas/rutas";
 export const dynamic = "force-dynamic";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardCobranzaEditor();
+  const guard = await guardCostosAccess();
   if (guard instanceof NextResponse) return guard;
   const { id } = await params;
   const data = await leerCuerpo(req, licenciaSchema.omit({ cuentaId: true }));
@@ -28,7 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardCobranzaEditor();
+  const guard = await guardCostosAccess();
   if (guard instanceof NextResponse) return guard;
   const { id } = await params;
   try {

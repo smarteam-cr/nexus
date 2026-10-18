@@ -31,6 +31,7 @@ const p = (o: Partial<ProyectoParaLimpiar> = {}): ProyectoParaLimpiar => ({
   clientId: "c1",
   cliente: "Wherex",
   sprint: "cs",
+  servicioRecurrente: false,
   etapa: "Configuración técnica",
   encargadoEmail: "ana@smarteamcr.com",
   encargadoNombre: "Ana Mora",
@@ -67,6 +68,12 @@ describe("⭐ lo que hay que poner al día", () => {
     expect(motivos(p({ etapaDesde: haceDias(DIAS_DE_ETAPA_QUIETA + 1) }))).toEqual(["etapa-quieta"]);
     expect(motivos(p({ etapaDesde: haceDias(DIAS_DE_ETAPA_QUIETA) }))).toEqual([]);
     expect(motivos(p({ etapa: "Continuidad", etapaDesde: haceDias(200) }))).toEqual([]);
+  });
+
+  it("un ciclo largo de un servicio recurrente (SmartLoop) no es una etapa quieta: se reconoce por el pipeline", () => {
+    // Las etapas de SmartLoop se llaman como las de una implementación: el nombre no alcanza.
+    expect(motivos(p({ etapa: "Implementación", etapaDesde: haceDias(120) }))).toEqual(["etapa-quieta"]);
+    expect(motivos(p({ servicioRecurrente: true, etapa: "Implementación", etapaDesde: haceDias(120) }))).toEqual([]);
   });
 
   it("sin actividad: desde la última, o desde que se creó si nunca tuvo", () => {

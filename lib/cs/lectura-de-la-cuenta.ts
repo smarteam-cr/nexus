@@ -114,12 +114,38 @@ export function lecturaDeLaCuenta(
   return {
     salud: salud.salud,
     nombre: NOMBRE_DE_LA_SALUD[salud.salud],
-    porque: salud.porque,
+    porque: opciones.sinPlata ? porqueSinPlata(salud, salud.razones.filter((r) => !conPlata(r.texto))) : salud.porque,
     motivos: todos.slice(0, MAX_MOTIVOS),
     mas: Math.max(0, todos.length - MAX_MOTIVOS),
     sugerencias: alertas.filter((a) => SUGERENCIAS.has(a.categoria)).length,
     corregidoPor: salud.correccion ? quienCorrigio(salud.correccion) : null,
   };
+}
+
+const sinPunto = (t: string) => t.trim().replace(/[.\s]+$/, "");
+const habla = (t: string | null | undefined) => !!t && HABLA_DE_PLATA.test(t);
+const masSenales = (n: number) => (n > 0 ? ` · y ${n} ${n === 1 ? "señal más" : "señales más"}` : "");
+
+/**
+ * El porqué para el CSE: el de `saludDeLaCuenta` puede traer una razón con un monto (la primera razón) o la nota de la
+ * corrección de la CSL, que es texto libre. Se arma con las razones que el CSE sí ve, y la nota de la corrección o del
+ * «en espera» se omite si habla de plata.
+ */
+function porqueSinPlata(salud: SaludConPorque, razones: readonly { texto: string }[]): string {
+  if (salud.correccion) {
+    if (!habla(salud.correccion.nota)) return salud.porque;
+    const nexus = salud.nexus ? ` Nexus diría: ${NOMBRE_DE_LA_SALUD[salud.nexus.salud].toLowerCase()}.` : "";
+    return `Corregido por ${quienCorrigio(salud.correccion)}.${nexus}`;
+  }
+  // Nada se quitó y la línea no habla de plata: es la misma.
+  if (razones.length === salud.razones.length && !habla(salud.porque)) return salud.porque;
+  if (salud.salud === "en-espera") {
+    const nota = salud.espera?.nota && !habla(salud.espera.nota) ? `: ${sinPunto(salud.espera.nota)}` : "";
+    return `En espera del cliente${nota}${masSenales(razones.length)}.`;
+  }
+  const [primera, ...resto] = razones;
+  if (primera) return `${sinPunto(primera.texto)}${masSenales(resto.length)}${salud.espera ? " · y en espera del cliente" : ""}.`;
+  return `${NOMBRE_DE_LA_SALUD[salud.salud]}: el detalle lo ve quien lidera Customer Success.`;
 }
 
 /** La lectura pide atención hoy: la cuenta está en rojo. */

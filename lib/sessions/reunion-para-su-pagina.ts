@@ -16,7 +16,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { esReunionDePuertasAdentro } from "./candidatas-internas";
 import { dominiosDeLaCasa } from "./reuniones-para-seguimiento";
-import { getClientSessions } from "./project-sources";
+import { duenoDeLaSesion, getClientSessions } from "./project-sources";
 
 /** Cuánto se acepta entre la hora con que se agendó una reunión y la hora en que de verdad empezó. */
 export const VENTANA_DE_LA_PLANEADA_MS = 3 * 3_600_000;
@@ -27,9 +27,12 @@ export interface AlrededorDeLaReunion {
   lectura: { estado: string | null; error: string | null } | null;
 }
 
-/** Las reuniones de un dueño: la misma precedencia que `duenoDeLaSesion` (el manual solo si no hay resuelto). */
-function delDueno(dueno: string) {
-  return { OR: [{ resolvedClientId: dueno }, { resolvedClientId: null, manualClientId: dueno }] };
+/**
+ * Las reuniones que PUEDEN ser de un dueño (el resuelto o el manual): solo achica la consulta. Quién es el dueño lo
+ * decide después `duenoDeLaSesion`, la regla única (el manual solo si no hay resuelto): acá no se repite.
+ */
+function candidatasDelDueno(dueno: string) {
+  return { OR: [{ resolvedClientId: dueno }, { manualClientId: dueno }] };
 }
 
 export async function alrededorDeLaReunion(o: { sessionId: string; dueno: string | null; fecha: Date; duracionMin: number }): Promise<AlrededorDeLaReunion> {
@@ -40,10 +43,10 @@ export async function alrededorDeLaReunion(o: { sessionId: string; dueno: string
       .catch(() => null),
     o.dueno
       ? prisma.firefliesSession.findMany({
-          where: { AND: [delDueno(o.dueno), { id: { not: o.sessionId } }, { date: { gte: fin } }] },
+          where: { AND: [candidatasDelDueno(o.dueno), { id: { not: o.sessionId } }, { date: { gte: fin } }] },
           orderBy: { date: "asc" },
-          take: 5,
-          select: { id: true, title: true, date: true, participants: true, organizerEmail: true },
+          take: 10,
+          select: { id: true, title: true, date: true, participants: true, organizerEmail: true, resolvedClientId: true, manualClientId: true },
         })
       : Promise.resolve([]),
     o.dueno
@@ -53,20 +56,30 @@ export async function alrededorDeLaReunion(o: { sessionId: string; dueno: string
               proximaEstado: "agendada",
               sessionId: { not: o.sessionId },
               proximaInicio: { gte: new Date(o.fecha.getTime() - VENTANA_DE_LA_PLANEADA_MS), lte: new Date(o.fecha.getTime() + VENTANA_DE_LA_PLANEADA_MS) },
-              session: { ...delDueno(o.dueno), date: { lt: o.fecha } },
+              session: { ...candidatasDelDueno(o.dueno), date: { lt: o.fecha } },
             },
-            take: 5,
-            select: { proximaTitulo: true, proximaObjetivo: true, proximaInicio: true, session: { select: { id: true, title: true, date: true } } },
+            take: 10,
+            select: {
+              proximaTitulo: true,
+              proximaObjetivo: true,
+              proximaInicio: true,
+              session: { select: { id: true, title: true, date: true, resolvedClientId: true, manualClientId: true } },
+            },
           })
           .catch(() => [])
       : Promise.resolve([]),
     dominiosDeLaCasa(),
   ]);
 
-  const siguiente = siguientes.find((s) => !esReunionDePuertasAdentro({ participants: s.participants, organizerEmail: s.organizerEmail }, dominios)) ?? null;
-  // La más cercana a la hora de esta reunión.
+  const siguiente =
+    siguientes.find(
+      (s) => duenoDeLaSesion(s) === o.dueno && !esReunionDePuertasAdentro({ participants: s.participants, organizerEmail: s.organizerEmail }, dominios),
+    ) ?? null;
+  // La más cercana a la hora de esta reunión, entre las que de verdad son del mismo dueño.
   const planeada =
-    [...planeadas].sort(
+    planeadas
+      .filter((p) => duenoDeLaSesion(p.session) === o.dueno)
+      .sort(
       (a, b) => Math.abs((a.proximaInicio?.getTime() ?? 0) - o.fecha.getTime()) - Math.abs((b.proximaInicio?.getTime() ?? 0) - o.fecha.getTime()),
     )[0] ?? null;
 
@@ -92,16 +105,26 @@ export async function alrededorDeLaReunion(o: { sessionId: string; dueno: string
 export async function reunionParaElCorreo(
   sessionId: string,
   dueno: string,
-): Promise<{ id: string; titulo: string; fecha: Date; duracionMin: number; participantes: string[]; transcripcion: string | null } | null> {
+): Promise<{
+  id: string;
+  titulo: string;
+  fecha: Date;
+  duracionMin: number;
+  participantes: string[];
+  organizador: string | null;
+  transcripcion: string | null;
+} | null> {
   const [s] = await getClientSessions(dueno, { ids: [sessionId] });
   if (!s) return null;
-  const fila = await prisma.firefliesSession.findUnique({ where: { id: s.id }, select: { duration: true, transcript: true } });
+  const fila = await prisma.firefliesSession.findUnique({ where: { id: s.id }, select: { duration: true, transcript: true, organizerEmail: true } });
   return {
     id: s.id,
     titulo: s.title,
     fecha: new Date(s.date),
     duracionMin: Math.round(fila?.duration ?? 0),
     participantes: s.participants,
+    // Para juzgar «de puertas adentro» igual que la página de la reunión (con el organizador).
+    organizador: fila?.organizerEmail ?? null,
     transcripcion: fila?.transcript ?? null,
   };
 }

@@ -12,7 +12,7 @@ import { guardAccessToClient, guardPermission } from "@/lib/auth/api-guards";
 import { can } from "@/lib/auth/permissions/engine";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { ErrorDelChat } from "./aplicar-server";
-import { esErrorConMotivo } from "@/lib/operaciones/tipos";
+import { esErrorPropio } from "@/lib/operaciones/contexto-server";
 import { PresupuestoDeIaAgotado } from "@/lib/ai/presupuesto";
 
 export interface QuienPide {
@@ -31,9 +31,13 @@ export async function quienPide(clientId: string): Promise<QuienPide | NextRespo
   return { persona: g.teamMember, usuarioEmail, veMontos: await can(g.teamMember, "ventas", "read"), clientId };
 }
 
-/** Un error para la persona: el del chat o de un escritor con su estado; la base atrasada, 503; lo demás, 500. */
+/**
+ * Un error para la persona: el del chat o de un escritor de la capa (por CLASE) con su estado; el presupuesto, 429; la
+ * base atrasada, 503; lo demás —también un error de la API de Anthropic, que trae su propio `status` y su JSON crudo—,
+ * 502 con un texto genérico, y el detalle al log.
+ */
 export function respuestaDeError(e: unknown, donde: string): NextResponse {
-  if (e instanceof ErrorDelChat || esErrorConMotivo(e)) return NextResponse.json({ error: e.message }, { status: e.status });
+  if (e instanceof ErrorDelChat || esErrorPropio(e)) return NextResponse.json({ error: e.message }, { status: e.status });
   // El presupuesto de IA de todo Nexus (lib/ai/presupuesto.ts), aparte del tope de la persona.
   if (e instanceof PresupuestoDeIaAgotado) return NextResponse.json({ error: "Nexus ya usó el presupuesto de IA de hoy. Mañana sigues." }, { status: 429 });
   if (esquemaDesactualizado(e)) {

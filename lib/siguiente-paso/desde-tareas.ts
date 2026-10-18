@@ -83,6 +83,16 @@ export function siguientePasoDe(tareas: readonly TareaDelPaso[], equipo: EquipoD
   return (actualTareaId && delEquipo.find((t) => t.id === actualTareaId)) || null;
 }
 
+/**
+ * Al fijar el siguiente paso: ¿se cambia la tarea que hoy lo es, o se crea otra? Solo se cambia una tarea de paso
+ * (`origen = "paso"`) de quien lo fija. La de otra persona, o la que nació en una reunión, el chat o HubSpot, no se
+ * reescribe desde el diálogo: se crea una tarea de paso nueva.
+ */
+export function tareaQueSeCambiaAlFijar(actual: TareaDelPaso | null, quienFija: string): TareaDelPaso | null {
+  if (!actual || actual.origen !== "paso") return null;
+  return (actual.responsableEmail ?? "").toLowerCase() === quienFija.trim().toLowerCase() ? actual : null;
+}
+
 /** De dónde salió la tarea, como lo dice la pantalla del siguiente paso. */
 export function fuenteDeLaTarea(t: Pick<TareaDelPaso, "origen" | "creadaPorEmail">): "persona" | "chat" | "reunion" | "hubspot" {
   if (t.origen === "chat") return "chat";

@@ -8,6 +8,7 @@ import { describe, it, expect } from "vitest";
 import {
   candidatosDeGastoFinanciero,
   comisionStripeEstimada,
+  desdeParaRevisar,
   egresosFinancieros,
   esCargoDeComision,
   revisionFinanciera,
@@ -118,5 +119,16 @@ describe("la revisión y el punto de equilibrio", () => {
     expect(egresosFinancieros([decidido({}), decidido({ decision: "NO_ES", monto: 0 })])).toEqual([
       { periodo: "2026-09", concepto: "Comisión de Stripe", conceptoClave: "financiero-stripe", monto: 29.3, moneda: "USD", fechaISO: "2026-09-10" },
     ]);
+  });
+});
+
+describe("desdeParaRevisar", () => {
+  it("doce meses para atrás, con el mismo día", () => {
+    expect(desdeParaRevisar("2026-10-17")).toBe("2025-10-17");
+    expect(desdeParaRevisar("2026-01-01")).toBe("2025-01-01");
+  });
+  it("el 29 de febrero da el último día de febrero del año anterior, nunca una fecha que no existe", () => {
+    expect(desdeParaRevisar("2028-02-29")).toBe("2027-02-28");
+    expect(desdeParaRevisar("2029-02-28")).toBe("2028-02-28");
   });
 });

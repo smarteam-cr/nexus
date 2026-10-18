@@ -271,6 +271,7 @@ function FilaDeLaCuenta({ t, onAbrir }: { t: TareaVista; onAbrir: (t: TareaVista
             {t.proyectoHubspot && <Chip title="Proyecto">{t.proyectoHubspot.nombre}</Chip>}
             {t.estado === "propuesta" && <Chip tono="ambar">Por decidir</Chip>}
           </span>
+          {t.contexto && <span className="mt-1 block line-clamp-2 text-[12.5px] leading-snug text-fg-secondary">{t.contexto}</span>}
           {t.salioDe?.visible && t.salioDe.titulo && <span className="mt-0.5 block truncate text-[11px] text-fg-muted">De «{t.salioDe.titulo}»</span>}
         </span>
       </button>

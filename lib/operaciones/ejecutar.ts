@@ -27,9 +27,13 @@ function motivoDeZod(issues: ReadonlyArray<{ path: PropertyKey[]; message: strin
   return campo ? `${campo}: ${i.message}` : i.message;
 }
 
-/** El motivo de un error para la persona: el del escritor si lo trae; si no, uno genérico (y se anota en el log). */
-export function motivoDelError(e: unknown, quehacia: string): string {
-  if (esErrorConMotivo(e)) return e.message;
+/**
+ * El motivo de un error para la persona: el del escritor si es uno de los nuestros (`ctx.esErrorPropio`, por clase); si
+ * no —un error de la API de Anthropic, de la base, cualquier otro—, uno genérico (y se anota en el log).
+ */
+export function motivoDelError(e: unknown, quehacia: string, ctx?: Pick<ContextoDeOperacion, "esErrorPropio">): string {
+  const propio = ctx?.esErrorPropio ?? esErrorConMotivo;
+  if (propio(e)) return e.message;
   console.error(`[operaciones] ${quehacia} falló:`, e instanceof Error ? e.message : e);
   return "No se pudo hacer. Inténtalo de nuevo en un momento.";
 }
@@ -47,7 +51,7 @@ export async function leerOperacion<C extends ContextoDeOperacion>(registro: rea
   try {
     return { ok: true, valor: await op.leer(ctx, e.data) };
   } catch (err) {
-    return { ok: false, motivo: motivoDelError(err, op.nombre) };
+    return { ok: false, motivo: motivoDelError(err, op.nombre, ctx) };
   }
 }
 
@@ -88,7 +92,7 @@ export async function prepararOperaciones<C extends ContextoDeOperacion>(
       if (r.ok) out.preparadas.push({ nombre: op.nombre, datos: r.datos, linea: r.linea });
       else out.rechazadas.push({ nombre: op.nombre, motivo: r.motivo });
     } catch (err) {
-      out.rechazadas.push({ nombre: op.nombre, motivo: motivoDelError(err, `preparar ${op.nombre}`) });
+      out.rechazadas.push({ nombre: op.nombre, motivo: motivoDelError(err, `preparar ${op.nombre}`, ctx) });
     }
   }
   return out;
@@ -119,7 +123,7 @@ export async function aplicarOperaciones<C extends ContextoDeOperacion>(
       const resultado = await (op as OperacionQuePropone<unknown, unknown, unknown, C>).aplicar(ctx, p.datos);
       out.aplicadas.push({ nombre: p.nombre, linea: p.linea, resultado });
     } catch (err) {
-      out.fallo = { nombre: p.nombre, linea: p.linea, motivo: motivoDelError(err, `aplicar ${p.nombre}`) };
+      out.fallo = { nombre: p.nombre, linea: p.linea, motivo: motivoDelError(err, `aplicar ${p.nombre}`, ctx) };
       out.sinIntentar = preparadas.length - i - 1;
       break;
     }

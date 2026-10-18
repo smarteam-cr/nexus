@@ -14,6 +14,8 @@ import type { GuardadoDeLaProxima } from "./proxima";
 import { leerCorreoGuardado, type CorreoDeLaReunion } from "./correo";
 
 export interface SeguimientoGuardado {
+  /** La versión de la fila (0 = todavía no hay): editar el correo la manda y, si cambió, 409 (no se pisa nada). */
+  version: number;
   agenda: { texto: string; porEmail: string | null; porNombre: string | null; en: string | null } | null;
   correo: CorreoDeLaReunion | null;
   proxima: GuardadoDeLaProxima | null;
@@ -28,11 +30,12 @@ async function nombres(emails: (string | null | undefined)[]): Promise<Map<strin
 
 export async function leerSeguimiento(sessionId: string): Promise<SeguimientoGuardado> {
   const f = await prisma.seguimientoDeReunion.findUnique({ where: { sessionId } });
-  if (!f) return { agenda: null, correo: null, proxima: null };
+  if (!f) return { version: 0, agenda: null, correo: null, proxima: null };
   const n = await nombres([f.agendaPorEmail, f.proximaPorEmail]);
   const nombreDe = (e: string | null) => (e ? (n.get(e.toLowerCase()) ?? e) : null);
   const tieneProxima = f.proximaTitulo || f.proximaObjetivo || f.proximaInicio || f.proximaEstado;
   return {
+    version: f.version,
     agenda: f.agenda?.trim() ? { texto: f.agenda, porEmail: f.agendaPorEmail, porNombre: nombreDe(f.agendaPorEmail), en: f.agendaEn?.toISOString() ?? null } : null,
     correo: leerCorreoGuardado(f.correo),
     proxima: tieneProxima
@@ -68,24 +71,63 @@ export async function guardarAgenda(sessionId: string, texto: string, email: str
   await escribir(sessionId, { agenda: t || null, agendaPorEmail: t ? email.toLowerCase() : null, agendaEn: t ? new Date() : null });
 }
 
-/** El correo que armó el agente (o null para borrarlo: la reunión no tiene la conversación). */
-export async function guardarCorreo(sessionId: string, correo: CorreoDeLaReunion | null): Promise<void> {
-  await escribir(sessionId, { correo: correo ? (correo as unknown as Prisma.InputJsonValue) : Prisma.DbNull });
+const mismoCorreo = (a: CorreoDeLaReunion | null, b: CorreoDeLaReunion | null) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * El correo que armó el agente (o null para borrarlo: la reunión no tiene la conversación). Armarlo tarda: si mientras
+ * tanto una persona cambió el correo (ya no es `antes`, el que había al empezar), no se pisa y devuelve false. Escribe
+ * con la versión que leyó: otro cambio de la fila (la agenda, la próxima) no se pierde: se relee y se reintenta.
+ */
+export async function guardarCorreo(sessionId: string, correo: CorreoDeLaReunion | null, antes: CorreoDeLaReunion | null): Promise<boolean> {
+  const valor = correo ? (correo as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
+  for (let intento = 0; intento < 3; intento++) {
+    const f = await prisma.seguimientoDeReunion.findUnique({ where: { sessionId }, select: { version: true, correo: true } });
+    if (!mismoCorreo(leerCorreoGuardado(f?.correo ?? null), antes)) return false;
+    if (!f) {
+      try {
+        await prisma.seguimientoDeReunion.create({ data: { sessionId, correo: valor }, select: { id: true } });
+        return true;
+      } catch (e) {
+        if ((e as { code?: string }).code !== "P2002") throw e;
+        continue; // otro pedido la creó a la vez: se relee
+      }
+    }
+    const r = await prisma.seguimientoDeReunion.updateMany({
+      where: { sessionId, version: f.version },
+      data: { correo: valor, version: { increment: 1 } },
+    });
+    if (r.count > 0) return true;
+  }
+  return false;
 }
 
-/** Lo que cambió una persona en el correo: el asunto o el texto. 404 si todavía no hay correo. */
-export async function editarCorreo(sessionId: string, cambio: { asunto?: string; cuerpo?: string }): Promise<boolean> {
-  const f = await prisma.seguimientoDeReunion.findUnique({ where: { sessionId }, select: { correo: true } });
+export type ResultadoDeEditarElCorreo = { ok: true; version: number } | { ok: false; motivo: "sin-correo" | "cambio" };
+
+/**
+ * Lo que cambió una persona en el correo: el asunto o el texto. `version` es la de la fila que tiene la pantalla: si ya
+ * no es la de la base (el correo se regeneró, u otra pestaña lo cambió), no escribe nada y devuelve «cambio».
+ */
+export async function editarCorreo(
+  sessionId: string,
+  cambio: { asunto?: string; cuerpo?: string },
+  version: number,
+): Promise<ResultadoDeEditarElCorreo> {
+  const f = await prisma.seguimientoDeReunion.findUnique({ where: { sessionId }, select: { correo: true, version: true } });
   const actual = leerCorreoGuardado(f?.correo ?? null);
-  if (!actual) return false;
+  if (!f || !actual) return { ok: false, motivo: "sin-correo" };
+  if (f.version !== version) return { ok: false, motivo: "cambio" };
   const nuevo: CorreoDeLaReunion = {
     ...actual,
     ...(cambio.asunto !== undefined ? { asunto: cambio.asunto } : {}),
     ...(cambio.cuerpo !== undefined ? { cuerpo: cambio.cuerpo } : {}),
     editado: true,
   };
-  await escribir(sessionId, { correo: nuevo as unknown as Prisma.InputJsonValue });
-  return true;
+  // Condicional: si otro escribió entre la lectura y acá, no se pisa.
+  const r = await prisma.seguimientoDeReunion.updateMany({
+    where: { sessionId, version },
+    data: { correo: nuevo as unknown as Prisma.InputJsonValue, version: { increment: 1 } },
+  });
+  return r.count > 0 ? { ok: true, version: version + 1 } : { ok: false, motivo: "cambio" };
 }
 
 /**

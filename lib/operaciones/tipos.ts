@@ -24,6 +24,12 @@ export interface ContextoDeOperacion<Persona = unknown, Extras = unknown> {
   ahora: Date;
   /** Lo que se calcula una vez por pedido (la visibilidad de Tareas, los clientes que ve…). */
   extras: Extras;
+  /**
+   * Reconoce, POR CLASE, los errores de los escritores que traen un mensaje para la persona (ErrorDeTareas,
+   * ErrorDeLaNota, ErrorDelPaso…). Lo pone lib/operaciones/contexto-server.ts. Sin él (las pruebas puras) se mira solo
+   * la forma, con `esErrorConMotivo`.
+   */
+  esErrorPropio?: (e: unknown) => e is ErrorConMotivo;
 }
 
 /** Lo que devuelve `preparar`: lo que se va a hacer, ya validado, con la línea que lo dice. */
@@ -57,6 +63,11 @@ export interface ErrorConMotivo {
   message: string;
 }
 
+/**
+ * ⚠ Mira solo la FORMA (un `status` numérico y un `message`), y esa forma la cumple también el `APIError` del SDK de
+ * Anthropic: un 401/429/529 de la API saldría con su estado y su texto crudo. Por eso en el servidor manda
+ * `ContextoDeOperacion.esErrorPropio`, que distingue por clase; esto queda para las pruebas puras.
+ */
 export function esErrorConMotivo(e: unknown): e is ErrorConMotivo {
   return !!e && typeof e === "object" && typeof (e as { status?: unknown }).status === "number" && typeof (e as { message?: unknown }).message === "string";
 }

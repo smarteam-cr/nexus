@@ -17,6 +17,8 @@ export const CambioDelSeguimiento = z.union([
         .object({ asunto: z.string().max(MAX_ASUNTO_DEL_CORREO).optional(), cuerpo: z.string().max(MAX_CUERPO_DEL_CORREO).optional() })
         .strict()
         .refine((c) => c.asunto !== undefined || c.cuerpo !== undefined, "Falta el asunto o el texto."),
+      /** La versión de lo guardado que tiene la pantalla: si ya no es la de la base, 409 y no se pisa. */
+      version: z.number().int().min(0),
     })
     .strict(),
   z

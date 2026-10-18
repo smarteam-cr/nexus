@@ -220,8 +220,11 @@ export interface NuevaTarea {
   hubspotContactId?: string | null;
   /** Quién se comprometió. Sin esto, Smarteam. */
   lado?: "smarteam" | "cliente";
-  /** «paso» = la escribió alguien como el siguiente paso de su equipo (lib/siguiente-paso). */
-  origen?: "paso";
+  /** «paso» = la escribió alguien como el siguiente paso de su equipo (lib/siguiente-paso); «chat» = la propuso el chat
+   *  de Nexus sobre la cuenta y la aplicó una persona. */
+  origen?: "paso" | "chat";
+  /** Clave para no crearla dos veces (el chat de la cuenta: `n:<turno>:<i>`). Si ya existe, se devuelve esa. */
+  origenId?: string | null;
 }
 
 export interface TareaCreada {
@@ -309,6 +312,7 @@ export async function crearTarea(ctx: ContextoDeTareas, clientes: ClientesQueVes
     hubspotContactId: n.hubspotContactId?.trim() || null,
     lado: n.lado ?? "smarteam",
     origen: n.origen ?? (deOtraPersona || n.paraEquipo ? "pedido" : "mano"),
+    origenId: n.origenId ?? null,
     creadaPorEmail: yo,
     pedidaPorEmail: deOtraPersona || n.paraEquipo ? yo : null,
     pedidaPorEquipo: deOtroEquipo ? ctx.equipo : null,
@@ -340,6 +344,11 @@ export async function crearTarea(ctx: ContextoDeTareas, clientes: ClientesQueVes
     return { ...creada, yaExistia: false };
   } catch (e) {
     if (!esUnicoDuplicado(e)) throw e;
+    // Ya se creó con esta clave (el mismo cambio aplicado dos veces): es esa, sin otra mención.
+    if (n.origenId) {
+      const misma = await prisma.tarea.findUnique({ where: { origenId: n.origenId }, select: { id: true, numero: true, estado: true } });
+      if (misma) return { ...misma, yaExistia: true };
+    }
     // Ya hay una propuesta idéntica para esa persona, del mismo cliente y del mismo pedido: se le suma la mención.
     const existente = await prisma.tarea.findFirst({
       where: { estado: "propuesta", huella: data.huella, responsableEmail: responsable, clientId: para.clientId, pedidaPorEmail: data.pedidaPorEmail ?? null },

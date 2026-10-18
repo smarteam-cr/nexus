@@ -760,6 +760,20 @@ export async function retirarHechos(ids: readonly string[], nota: string, ahora 
   return retirarFilas(filas, nota, ahora);
 }
 
+/**
+ * El TEXTO de la reunión cambió y lo que dejó la lectura vieja ya se retiró (lib/sessions/reanalizar.ts): las corridas
+ * de hechos que terminaron con el texto viejo se archivan (ARCHIVED), así `leer` no responde «ya leída» y los hechos se
+ * vuelven a pedir con el texto nuevo (la próxima lectura de la reunión, o el reintento del job). Una corrida viva no se
+ * toca. Devuelve cuántas archivó. Lanza si la base falla: quien llama decide.
+ */
+export async function superarLasLecturasDeHechos(sessionId: string): Promise<number> {
+  const r = await prisma.agentRun.updateMany({
+    where: { agentSlug: AGENT_SLUG_DE_HECHOS, status: "DONE", sourceSessionIds: { has: sessionId } },
+    data: { status: "ARCHIVED" },
+  });
+  return r.count;
+}
+
 /** Escribe un cambio de estado, solo si la fila sigue como se leyó (`updatedAt`: otro escritor pudo cambiarla mientras tanto). */
 async function escribirCambio(hechoId: string, c: CambioDelHecho, leidaEn: Date, reemplazaAId: string | null = null): Promise<boolean> {
   const r = await prisma.hechoDeReunion.updateMany({

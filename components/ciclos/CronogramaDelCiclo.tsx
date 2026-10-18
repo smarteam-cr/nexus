@@ -5,7 +5,9 @@
  * la pieza Cronograma: cada caso de uso del ciclo es una fase, con su criterio de aceptación, sus semanas, su avance y
  * sus dependencias del cliente. Debajo, las sesiones fijas (las series del calendario con la empresa).
  *
- *  · «Armar las fases»: los casos de uso sin fase pasan a ser fases que ocupan el ciclo; se ajustan en el Gantt.
+ *  · «Armar las fases»: los casos de uso sin fase pasan a ser fases que ocupan el ciclo; se ajustan en el Gantt. Si el
+ *    cronograma no tiene fecha de arranque, el servidor responde `SIN_ARRANQUE` y acá se pregunta «El cronograma arranca
+ *    el …. ¿Lo confirmas?»: la fecha se escribe solo con ese clic (docs/KNOWN-ERRORS.md).
  *  · «Aprobar esta versión»: lo que se le presentó al cliente queda como versión aprobada; lo que cambie después se dice.
  *  · Una dependencia del cliente atrasada: Nexus propone correr lo que destraba, con un clic. No lo mueve solo.
  *
@@ -13,7 +15,7 @@
  * Gantt de abajo se vuelva a montar.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Field, Input, Select } from "@/components/ui";
+import { Alert, ConfirmDialog, Field, Input, Select } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { BotonAzul, BotonBlanco, BotonTexto, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
@@ -46,6 +48,8 @@ export default function CronogramaDelCiclo({ projectId, onCambio }: { projectId:
   const [error, setError] = useState<string | null>(null);
   const [sesiones, setSesiones] = useState<PanelDelServicio["sesiones"] | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
+  /** La fecha de arranque que propone el servidor al armar las fases sin ancla: espera el «sí» de la persona. */
+  const [arranque, setArranque] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const r = await fetch(`/api/projects/${projectId}/ciclo/cronograma`, { cache: "no-store" }).catch(() => null);
@@ -83,6 +87,11 @@ export default function CronogramaDelCiclo({ projectId, onCambio }: { projectId:
       });
       const j = await r.json().catch(() => null);
       if (!r.ok) {
+        // Sin fecha de arranque, no se pone sola: se pregunta antes (y se reintenta con `fijarArranque`).
+        if (j?.codigo === "SIN_ARRANQUE" && typeof j.fecha === "string") {
+          setArranque(j.fecha);
+          return false;
+        }
         toast.error(j?.error ?? "No se pudo guardar.");
         return false;
       }
@@ -206,6 +215,21 @@ export default function CronogramaDelCiclo({ projectId, onCambio }: { projectId:
           ))}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={!!arranque}
+        title="Fecha de arranque del cronograma"
+        description={arranque ? `El cronograma arranca el ${FECHA.format(new Date(`${arranque}T12:00:00Z`))}. ¿Lo confirmas?` : undefined}
+        confirmLabel="Sí, arranca ese día"
+        cancelLabel="Todavía no"
+        variant="default"
+        loading={ocupado === "armar"}
+        onCancel={() => setArranque(null)}
+        onConfirm={async () => {
+          await accion("armar", { accion: "armar", fijarArranque: true }, "Los casos de uso ya son fases del cronograma.");
+          setArranque(null);
+        }}
+      />
 
       <div className="space-y-1.5">
         <p className={ROTULO_DEL_SISTEMA}>Sesiones fijas</p>

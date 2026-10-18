@@ -5,8 +5,9 @@
  * Sin gate: es de todo el equipo interno, y no muestra nada que la persona no pueda abrir. Cada equipo ve su inicio
  * (lib/mi-dia/inicio.ts, del registro de equipos):
  *   · Ventas: la agenda, lo que importa hoy, su meta y su pipeline, y «Tu cartera».
- *   · CSE: la agenda, lo que importa hoy y sus cuentas con su acción de la semana y su reunión de los próximos 8 días.
- *   · CSL: lo mismo, con toda la cartera.
+ *   · CSE: la agenda, lo que importa hoy y sus cuentas con su acción de la semana y su reunión de los próximos 8 días;
+ *     en «Tu cartera», sus empresas con sus proyectos de HubSpot (components/para-ti/CarteraDeCustomerSuccess.tsx).
+ *   · CSL: lo mismo, con toda la cartera («La cartera»). Customer Success no ve la cartera de Ventas (2026-10-17).
  *   · Desarrollo: los clientes con proyecto de desarrollo activo.
  *   · Marketing: sus tareas internas (Smarteam, SmartAgro).
  *   · Los demás (dirección, Finanzas): la agenda, lo que importa hoy, las tareas de hoy y los avisos.
@@ -32,6 +33,8 @@ import VentasDeParaTi from "@/components/para-ti/VentasDeParaTi";
 import InicioDelDia from "@/components/para-ti/inicio/InicioDelDia";
 import SelectorDelInicio from "@/components/para-ti/inicio/SelectorDelInicio";
 import TusCuentasDelInicio from "@/components/para-ti/inicio/TusCuentasDelInicio";
+import CarteraDeCustomerSuccess from "@/components/para-ti/CarteraDeCustomerSuccess";
+import { cargarCarteraDeCs, cuantasEmpresasDeCs, tieneCarteraDeCs } from "@/lib/mi-dia/cartera-cs-server";
 import { crDateParts } from "@/lib/jobs/time";
 import { vistaDeVentasDelPedido } from "@/lib/ventas/vista-del-pedido";
 import { fechaLarga, saludo } from "@/lib/ventas/negocios";
@@ -58,15 +61,27 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
   const ahora = new Date();
   const reloj = crDateParts(ahora);
   const hoyISO = reloj.dateKey;
+  // Customer Success (el CSE y la CSL) tiene su propia cartera (2026-10-17): no ve la de Ventas aunque tenga el
+  // permiso. Si su inicio no depende de tener ventas (lo dice su rol), ni se piden.
+  const varianteSin = varianteDelInicio({ rol: alcance.rol, frentes: alcance.frentes, tieneVentas: false });
+  const esDeCs = tieneCarteraDeCs(varianteSin) && varianteDelInicio({ rol: alcance.rol, frentes: alcance.frentes, tieneVentas: true }) === varianteSin;
   // Lo de Ventas (2026-10-14, docs/mi-dia-plan.md): a quien tiene negocios abiertos, empresas a su nombre o una meta.
-  const ventas = tienePermiso(alcance, "ventas", "read")
+  const ventas = !esDeCs && tienePermiso(alcance, "ventas", "read")
     ? await vistaDeVentasDelPedido(alcance.teamMemberId, alcance.email, hoyISO, ahora)
     : null;
   const vistaDeVentas = ventas?.estado === "ok" ? ventas.vista : null;
   const variante = varianteDelInicio({ rol: alcance.rol, frentes: alcance.frentes, tieneVentas: !!vistaDeVentas });
   const conCuentas = variante === "cse" || variante === "csl" || variante === "dev";
+  const carteraDeCs = tieneCarteraDeCs(variante) ? variante : null;
   const pedida = uno(sp.vista);
-  const modo: "dia" | "cartera" | "cuentas" = vistaDeVentas && pedida === "cartera" ? "cartera" : conCuentas && pedida === "cuentas" ? "cuentas" : "dia";
+  const modo: "dia" | "cartera" | "cuentas" =
+    vistaDeVentas && pedida === "cartera"
+      ? "cartera"
+      : carteraDeCs && (pedida === "cartera" || pedida === "cuentas")
+        ? "cartera"
+        : conCuentas && !carteraDeCs && pedida === "cuentas"
+          ? "cuentas"
+          : "dia";
 
   // La agenda: el día (o la semana) de `?dia=`, hoy por defecto.
   const veAgenda = veLaAgenda(alcance.rol);
@@ -88,15 +103,20 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
     return q ? `/para-ti?${q}` : "/para-ti";
   };
 
-  const [medicion, avisos, agenda, cuentas, hoy, internas] = await Promise.all([
+  const enLaCarteraDeCs = carteraDeCs && modo === "cartera";
+  const [medicion, avisos, agenda, cuentas, hoy, internas, cartera, empresasDeCs] = await Promise.all([
     medirParaTi(alcance, ahora),
     avisosDe(alcance.email),
     veAgenda && modo === "dia"
       ? (semana ? agendaDeLaSemana(alcance.email, lunes) : agendaDelDiaDe(alcance.email, dia)).catch(() => null)
       : Promise.resolve(null),
-    conCuentas ? cuentasDelInicio(variante, alcance, { ahora, hoyISO }).catch(() => []) : Promise.resolve([]),
+    // En la cartera de CS, las cuentas del inicio no se usan: la cartera trae lo suyo.
+    conCuentas && !enLaCarteraDeCs ? cuentasDelInicio(variante, alcance, { ahora, hoyISO }).catch(() => []) : Promise.resolve([]),
     tareasDeHoy(alcance.email, hoyISO).catch(() => ({ tareas: [], total: 0 })),
     variante === "marketing" ? tareasInternas(alcance.email, equipoDeRol(alcance.rol)?.sprint ?? null).catch(() => null) : Promise.resolve(null),
+    enLaCarteraDeCs ? cargarCarteraDeCs(carteraDeCs, alcance, { ahora, hoyISO }).catch(() => null) : Promise.resolve(null),
+    // El número del selector en «Tu día», sin cargar la cartera entera.
+    carteraDeCs && !enLaCarteraDeCs ? cuantasEmpresasDeCs(carteraDeCs, alcance).catch(() => null) : Promise.resolve(null),
   ]);
 
   // Un frente que llevas sin el permiso para abrirlo se calla (lib/para-ti/frentes.ts): se dice, para que no parezca
@@ -136,7 +156,9 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
   const nombre = alcance.nombre.trim().split(/\s+/)[0] ?? alcance.nombre;
   const otra = vistaDeVentas
     ? { clave: "cartera", etiqueta: "Tu cartera", cuenta: vistaDeVentas.empresas.length }
-    : conCuentas
+    : carteraDeCs
+      ? { clave: "cartera", etiqueta: carteraDeCs === "csl" ? "La cartera" : "Tu cartera", cuenta: cartera?.empresas.length ?? empresasDeCs ?? cuentas.length }
+      : conCuentas
       ? { clave: "cuentas", etiqueta: variante === "csl" ? "La cartera" : variante === "dev" ? "Clientes con desarrollo" : "Tus cuentas", cuenta: cuentas.length }
       : null;
 
@@ -172,6 +194,13 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
         {vistaDeVentas && (
           <VentasDeParaTi vista={vistaDeVentas} modo={modo === "cartera" ? "cartera" : "dia"} hoyISO={hoyISO} ahoraISO={ahora.toISOString()} negocioAbierto={uno(sp.negocio)} />
         )}
+
+        {enLaCarteraDeCs &&
+          (cartera ? (
+            <CarteraDeCustomerSuccess cartera={cartera} hoyISO={hoyISO} />
+          ) : (
+            <Alert variant="danger">No se pudo cargar la cartera. Vuelve a intentarlo en un momento.</Alert>
+          ))}
 
         {modo === "cuentas" && (
           <TusCuentasDelInicio
@@ -211,7 +240,7 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
                     }
                   : null,
               cuentas,
-              verLasCuentas: conCuentas ? enlace({ vista: "cuentas", dia: null, agenda: null }) : null,
+              verLasCuentas: conCuentas ? enlace({ vista: carteraDeCs ? "cartera" : "cuentas", dia: null, agenda: null }) : null,
               tareasDeHoy: hoy,
               tareasInternas: internas?.tareas ?? null,
               movimiento: vistaDeVentas

@@ -90,6 +90,37 @@ describe("⭐ el orquestador", () => {
     expect(a.fallo).toEqual({ nombre: "prueba.escribir", linea: "B", motivo: "Otra persona cambió esto." });
     expect(a.sinIntentar).toBe(1);
   });
+
+  it("⛔ con `esErrorPropio` el motivo sale solo de las clases propias: un error de la API (con status) no llega crudo", async () => {
+    // La forma del APIError del SDK de Anthropic: un `status` y un `message` con el JSON de la API.
+    class ErrorDeLaApi extends Error {
+      status = 529;
+    }
+    const ops: Operacion[] = [
+      {
+        nombre: "prueba.api",
+        paraQue: "Falla como la API.",
+        clase: "propone",
+        pide: z.object({ x: z.string() }).strict(),
+        preparar: async () => ({ ok: true, datos: null, linea: "X" }),
+        aplicar: async () => {
+          throw new ErrorDeLaApi('{"type":"error","error":{"type":"overloaded_error"}}');
+        },
+      },
+      OPS[1],
+    ];
+    const conClases: ContextoDeOperacion = { ...ctx, esErrorPropio: (e): e is { status: number; message: string } => e instanceof ErrorDePrueba };
+    const errorDeConsola = console.error;
+    console.error = () => {};
+    try {
+      const a = await aplicarOperaciones(ops, conClases, [{ nombre: "prueba.api", datos: null, linea: "X" }]);
+      expect(a.fallo?.motivo).toBe("No se pudo hacer. Inténtalo de nuevo en un momento.");
+      const b = await aplicarOperaciones(ops, conClases, [{ nombre: "prueba.escribir", datos: "falla", linea: "B" }]);
+      expect(b.fallo?.motivo).toBe("Otra persona cambió esto.");
+    } finally {
+      console.error = errorDeConsola;
+    }
+  });
 });
 
 describe("las herramientas salen del zod", () => {

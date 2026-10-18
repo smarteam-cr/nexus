@@ -1048,7 +1048,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
           </div>
           <div className="flex items-baseline gap-3">
             {ciclo && !ciclo.enHubspot && ciclo.puedeEditar && (
-              <CambiarEtapaDelCiclo projectId={projectId} etapa={ciclo.etapa} onCambio={cicloCambio} />
+              <CambiarEtapaDelCiclo projectId={projectId} cicloId={ciclo.id ?? null} etapa={ciclo.etapa} onCambio={cicloCambio} />
             )}
             {ciclo && <EditarElCiclo projectId={projectId} onCambio={cicloCambio} />}
             {/* Nexus → HubSpot: solo por la encuesta. HubSpot → Nexus: el espejo, como siempre. */}
@@ -1072,6 +1072,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
         {ciclo && !encuesta?.sugerencia && (ciclo.puedeEditar || ciclo.enHubspot) && (
           <SugerenciaDeEtapaDelCiclo
             projectId={projectId}
+            cicloId={ciclo.id ?? null}
             etapa={ciclo.etapa}
             piezasConContenido={resumenCtx.piezas.filter((x) => x.estado === "generada").map((x) => x.slug)}
             enHubspot={ciclo.enHubspot}

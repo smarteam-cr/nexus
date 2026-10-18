@@ -166,11 +166,12 @@ describe("qué se escribe", () => {
     expect(d.choques.map((p) => p.cobroId)).toEqual(["c1"]);
   });
 
-  it("Mercury: el día del cobro es el de la entrada de plata; sin ella, el día en que Mercury la marcó pagada", () => {
+  it("Mercury: el día del cobro es el de la entrada de plata; ⛔ sin ella va a «pagadas sin fecha», nunca con una aproximada", () => {
     const cs = [cobro("c1", { plataforma: "MERCURY", numeroFactura: "INV-1", fechaEmision: "2026-08-03" })];
     const f = mercury("m1", { estado: "Paid", clienteNombre: "Client Inc" });
     const sinEntrada = decidir(entrada({ cobros: cs, facturasMercury: [f] }), pegarMercury(entrada({ cobros: cs, facturasMercury: [f] })), new Map());
-    expect(sinEntrada.acciones[0]!.cobrar).toEqual({ fechaCobro: "2026-08-20", deDonde: "el día en que Mercury la marcó pagada" });
+    expect(sinEntrada.acciones).toEqual([]);
+    expect(sinEntrada.pagadasSinFecha.map((p) => p.cobroId)).toEqual(["c1"]);
     const e = entrada({ cobros: cs, facturasMercury: [f], entradasMercury: [{ id: "t1", monto: 1000, fecha: "2026-08-12", quien: "Client Inc" }] });
     expect(decidir(e, pegarMercury(e), new Map()).acciones[0]!.cobrar).toEqual({ fechaCobro: "2026-08-12", deDonde: "la entrada de plata en Mercury" });
   });

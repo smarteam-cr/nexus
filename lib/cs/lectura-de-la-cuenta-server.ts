@@ -10,7 +10,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { cargarCuentas, hoyEnCostaRica } from "./cartera";
-import { saludDeLaCuenta } from "./cartera-reglas";
+import { saludDeLaCuenta, type CuentaDeCartera } from "./cartera-reglas";
 import { esLiderDeCs } from "./acceso";
 import { esCseDeLaCuenta } from "./adopcion-del-cse-server";
 import { lecturaDeLaCuenta, type LecturaDeLaCuenta } from "./lectura-de-la-cuenta";
@@ -36,7 +36,19 @@ export async function cargarLecturas(
     // El nombre del cliente, no el de la cartera (que puede ser su dominio): es lo que se lee en «Para ti».
     prisma.client.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
   ]);
-  const nombrePorId = new Map(nombres.map((n) => [n.id, n.name]));
+  return lecturasDesdeCuentas(cuentas, new Map(nombres.map((n) => [n.id, n.name])), opciones);
+}
+
+/**
+ * Las lecturas de cuentas YA armadas con `cargarCuentas`. La usa «Para ti» (lib/mi-dia/lecturas-server.ts) para no
+ * cargar la cartera dos veces en un mismo pedido. La regla es la misma de `cargarLecturas`.
+ */
+export function lecturasDesdeCuentas(
+  cuentas: readonly CuentaDeCartera[],
+  nombrePorId: ReadonlyMap<string, string>,
+  opciones: { sinPlata?: boolean; ahora?: Date } = {},
+): Map<string, LecturaConCuenta> {
+  const out = new Map<string, LecturaConCuenta>();
   const hoy = hoyEnCostaRica(opciones.ahora ?? new Date());
   for (const c of cuentas) {
     const lectura = lecturaDeLaCuenta(saludDeLaCuenta(c, hoy), c.alertas, { sinPlata: opciones.sinPlata });

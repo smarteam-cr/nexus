@@ -66,7 +66,8 @@ export default function CierreDelCiclo({ ciclo, puedeEditar, enviar }: { ciclo: 
     casos: ciclo.casos,
   });
   const caso = (id: string, datos: object) => void enviar("/casos", "PATCH", { id, ...datos });
-  const delCiclo = (datos: object) => void enviar("", "PATCH", datos);
+  // Con el id del ciclo: si otra pestaña ya lo cerró, el servidor responde 409 en vez de escribirle al siguiente.
+  const delCiclo = (datos: object) => void enviar("", "PATCH", { cicloId: ciclo.id, ...datos });
 
   return (
     <section className="space-y-5 rounded-xl border border-line bg-surface p-5" data-recorrido="ciclo.cierre">

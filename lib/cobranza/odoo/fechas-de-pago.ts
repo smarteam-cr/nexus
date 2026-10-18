@@ -13,29 +13,54 @@
  */
 import type { OdooTransport } from "./transporte";
 
-/** odooMoveId → `YYYY-MM-DD`. Una factura sin pago encontrado no está en el mapa. */
+/** De a cuántas facturas se pide (cada pedido es un `id in [...]`: un dominio enorme no lo acepta cualquier servidor). */
+const LOTE = 200;
+
+const idDe = (v: unknown): number => (Array.isArray(v) ? Number(v[0]) : Number(v));
+
+/**
+ * odooMoveId → `YYYY-MM-DD`. Una factura sin pago encontrado no está en el mapa.
+ * En lote: tres pedidos por cada `LOTE` facturas (las líneas por cobrar, sus conciliaciones, las líneas del pago), en
+ * vez de tres por factura. Si Odoo falla, lanza: quien llama decide qué hacer con las facturas sin día.
+ */
 export async function fechasDePagoEnOdoo(t: OdooTransport, odooMoveIds: readonly number[]): Promise<Map<number, string>> {
   const out = new Map<number, string>();
-  for (const moveId of odooMoveIds) {
+  const ids = [...new Set(odooMoveIds)];
+  for (let i = 0; i < ids.length; i += LOTE) {
+    const lote = ids.slice(i, i + LOTE);
     const lineas = await t.buscarYLeer(
       "account.move.line",
-      [["move_id", "=", moveId], ["account_id.account_type", "=", "asset_receivable"]],
-      ["id", "matched_credit_ids"],
+      [["move_id", "in", lote], ["account_id.account_type", "=", "asset_receivable"]],
+      ["id", "move_id", "matched_credit_ids"],
       {},
     );
-    const parciales = lineas.flatMap((l) => (Array.isArray(l.matched_credit_ids) ? (l.matched_credit_ids as number[]) : []));
-    if (!parciales.length) continue;
-    const recs = await t.buscarYLeer("account.partial.reconcile", [["id", "in", parciales]], ["id", "credit_amount_currency", "credit_move_id"], {});
-    const contrapartes = recs
-      .filter((r) => Number(r.credit_amount_currency) > 0 && Array.isArray(r.credit_move_id))
-      .map((r) => Number((r.credit_move_id as unknown[])[0]));
-    if (!contrapartes.length) continue;
-    const pagos = await t.buscarYLeer("account.move.line", [["id", "in", contrapartes]], ["id", "date"], {});
-    const fechas = pagos
-      .map((p) => String(p.date).slice(0, 10))
-      .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
-      .sort();
-    if (fechas.length) out.set(moveId, fechas[fechas.length - 1]!);
+    /** parcial → la factura a la que pertenece. */
+    const facturaDelParcial = new Map<number, number>();
+    for (const l of lineas) {
+      const moveId = idDe(l.move_id);
+      for (const p of Array.isArray(l.matched_credit_ids) ? (l.matched_credit_ids as number[]) : []) facturaDelParcial.set(Number(p), moveId);
+    }
+    if (!facturaDelParcial.size) continue;
+    const recs = await t.buscarYLeer("account.partial.reconcile", [["id", "in", [...facturaDelParcial.keys()]]], ["id", "credit_amount_currency", "credit_move_id"], {});
+    /** línea del pago → las facturas que paga. */
+    const facturasDelPago = new Map<number, number[]>();
+    for (const r of recs) {
+      if (!(Number(r.credit_amount_currency) > 0) || !Array.isArray(r.credit_move_id)) continue;
+      const moveId = facturaDelParcial.get(Number(r.id));
+      if (moveId === undefined) continue;
+      const pago = idDe(r.credit_move_id);
+      facturasDelPago.set(pago, [...(facturasDelPago.get(pago) ?? []), moveId]);
+    }
+    if (!facturasDelPago.size) continue;
+    const pagos = await t.buscarYLeer("account.move.line", [["id", "in", [...facturasDelPago.keys()]]], ["id", "date"], {});
+    for (const p of pagos) {
+      const d = String(p.date).slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+      for (const moveId of facturasDelPago.get(Number(p.id)) ?? []) {
+        const antes = out.get(moveId);
+        if (!antes || d > antes) out.set(moveId, d);
+      }
+    }
   }
   return out;
 }

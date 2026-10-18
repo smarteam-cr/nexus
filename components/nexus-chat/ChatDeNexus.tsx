@@ -18,6 +18,9 @@ import type { AcuerdoDelChat, ResultadoDeAplicar, RotulosDelChat } from "@/compo
 import { useFeedback } from "@/components/feedback/FeedbackProvider";
 import { usePanelFlotante } from "@/components/ui/usePanelFlotante";
 import { useToast } from "@/components/ui/Toast";
+import { Button } from "@/components/ui/Button";
+import { SkeletonText } from "@/components/ui/Skeleton";
+import { zClass } from "@/lib/ui/z";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
 import { PIEZA_NEXUS } from "@/lib/nexus-chat/constantes";
 import { avisoDelChat, textoDelBoton } from "@/lib/nexus-chat/textos";
@@ -126,30 +129,37 @@ export function ChatDeNexus({ clientId, nombre }: { clientId: string; nombre: st
   return (
     <>
       <div ref={rootRef} className="flex-shrink-0">
-        <button
+        <Button
           ref={btnRef}
           type="button"
+          variant="secondary"
+          size="xs"
           onClick={alternarPanel}
           aria-expanded={panelAbierto}
           aria-haspopup="dialog"
           title="Lo que Nexus te sugiere en esta cuenta"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-fg hover:bg-surface-hover"
+          className="gap-1.5 rounded-lg bg-surface text-fg hover:bg-surface-hover"
         >
           <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
           Sugerencias
           {acciones.length > 0 && <span className="rounded-full bg-info-surface px-1.5 text-2xs font-semibold text-brand">{acciones.length}</span>}
-        </button>
+        </Button>
+        {/* ⚠ Sin portal, como los demás paneles de usePanelFlotante (Menu, CeldaSelect, LecturaDeLaCuenta): el hook
+            cierra el panel con un clic o un scroll fuera de `rootRef`, y un panel portaleado a document.body quedaría
+            «afuera» y se cerraría al scrollearlo por dentro. La capa sí es la de la escala (POPOVER). */}
         {panelAbierto && pos && (
           <div
             ref={panelRef}
             role="dialog"
             aria-label="Lo que Nexus te sugiere"
-            className="fixed z-50 flex max-h-[70vh] w-[380px] max-w-[calc(100vw-24px)] flex-col gap-3 overflow-y-auto rounded-xl border border-line bg-surface p-4 text-[13px] leading-[19px] shadow-xl"
+            className={`fixed ${zClass("POPOVER")} flex max-h-[70vh] w-[380px] max-w-[calc(100vw-24px)] flex-col gap-3 overflow-y-auto rounded-xl border border-line bg-surface p-4 text-[13px] leading-[19px] shadow-xl`}
             style={pos}
           >
             <p className="text-xs font-semibold text-fg">Lo que Nexus te sugiere en {nombre}</p>
             {!resumen ? (
-              <p className="text-xs text-fg-muted">Cargando…</p>
+              <div aria-busy="true" aria-label="Cargando las sugerencias" className="flex min-h-[96px] flex-col gap-2 rounded-lg border border-line bg-surface-muted p-2.5">
+                <SkeletonText lines={3} />
+              </div>
             ) : acciones.length === 0 ? (
               <p className="text-fg-secondary">Nada pendiente de tu lado en esta cuenta. Si pasó algo por WhatsApp o una llamada, cuéntaselo a Nexus.</p>
             ) : (
@@ -162,25 +172,27 @@ export function ChatDeNexus({ clientId, nombre }: { clientId: string; nombre: st
                     <div className="flex flex-wrap gap-2">
                       {a.whatsapp && (
                         <>
-                          <button type="button" onClick={() => void copiar(a.whatsapp!.texto)} className="text-xs font-medium text-brand hover:underline">
+                          <Button type="button" variant="link" size="xs" onClick={() => void copiar(a.whatsapp!.texto)} className="p-0 text-brand">
                             Copiar mensaje
-                          </button>
+                          </Button>
                           <a href={a.whatsapp.enlace} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-brand hover:underline">
                             Abrir WhatsApp
                           </a>
                         </>
                       )}
                       {a.pedirAlChat && (
-                        <button
+                        <Button
                           type="button"
+                          variant="link"
+                          size="xs"
                           onClick={() => {
                             alternarPanel();
                             abrir(a.pedirAlChat);
                           }}
-                          className="text-xs font-medium text-brand hover:underline"
+                          className="p-0 text-brand"
                         >
                           Pedírselo a Nexus
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </li>

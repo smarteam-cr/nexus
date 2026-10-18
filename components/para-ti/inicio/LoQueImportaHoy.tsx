@@ -6,7 +6,8 @@
  *
  * Como mucho cinco, una por cuenta, numeradas: el riesgo en rojo, lo que dejó un agente en azul con la chispa, el resto
  * neutro. Lo demás de esa cuenta va plegado («+N en esta cuenta»). Abajo, «También para hoy», «Esta semana» y «Cuando
- * puedas», que se abren ahí mismo.
+ * puedas», que se abren ahí mismo. «Agendar» de una cuenta sin reunión deja el evento en la agenda, en la primera hora
+ * libre, y abre Google Calendar para guardarlo (AgendarEnLaAgenda.tsx).
  */
 import { useState } from "react";
 import { cn } from "@/lib/cn";
@@ -16,6 +17,7 @@ import { PENDIENTE_DE_TIEMPOS } from "@/lib/tiempos/reglas";
 import { MAX_LO_QUE_IMPORTA, pesoDe, PESOS } from "@/lib/para-ti/importa";
 import type { ParaTi, Pendiente } from "@/lib/para-ti/tipos";
 import { ENLACE_BOTON, EnlaceDelInicio, TARJETA, TITULO } from "./piezas";
+import { AccionDelPendiente } from "./AgendarEnLaAgenda";
 
 export default function LoQueImportaHoy({ medicion }: { medicion: ParaTi }) {
   const [abierta, setAbierta] = useState<"tambien" | "semana" | "luego" | null>(null);
@@ -128,9 +130,7 @@ function FilaQueImporta({ it, numero, ultima }: { it: Pendiente; numero: number;
           <Enlaces it={it} />
         </div>
         {it.plata && <span className="flex-none text-[13px] tabular-nums text-fg-secondary">{it.plata}</span>}
-        <EnlaceDelInicio href={it.href} className={ENLACE_BOTON}>
-          {it.accion}
-        </EnlaceDelInicio>
+        <AccionDelPendiente it={it} className={ENLACE_BOTON} />
       </div>
       {abierto && (
         <div className="mb-2 flex flex-col rounded-lg border border-line bg-surface-muted">
@@ -177,9 +177,7 @@ export function FilaDePendiente({ it }: { it: Pendiente }) {
         <span className={cn("text-xs leading-4", it.error ? "text-danger-ink" : it.delAgente ? "text-brand" : "text-fg-muted")}>{it.meta}</span>
       </div>
       {it.plata && <span className="flex-none text-[13px] tabular-nums text-fg-secondary">{it.plata}</span>}
-      <EnlaceDelInicio href={it.href} className={ENLACE_BOTON}>
-        {it.accion}
-      </EnlaceDelInicio>
+      <AccionDelPendiente it={it} className={ENLACE_BOTON} />
     </div>
   );
 }

@@ -56,6 +56,7 @@ async function main() {
 
   const pegar = r.acciones.filter((a) => a.fechaEmision || a.numeroFactura);
   const cobrar = r.acciones.filter((a) => a.cobrar);
+  if (r.avisoOdoo) console.log(`⚠ ${r.avisoOdoo}`);
   console.log(`\n1 · Se pegan a su factura: ${pegar.length} cuotas · ${plata(pegar)}`);
   for (const a of pegar) console.log(`   ${a.cuenta} · ${a.periodo} · ${a.moneda} ${a.monto} → ${a.numero}${a.fechaEmision ? " (queda facturada)" : ""}`);
   console.log(`\n2 · Pagadas allá, para cobrar: ${cobrar.length} cuotas · ${plata(cobrar)}${COBRAR ? "" : "  (sin --cobrar no se cobran)"}`);

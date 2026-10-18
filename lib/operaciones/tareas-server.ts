@@ -55,17 +55,29 @@ interface DatosDeCrear {
   cuando: string;
   clientId: string | null;
   prioridad: Prioridad | null;
+  lado: "cliente" | "smarteam" | null;
+  /** Lo pone quien aplica, no el modelo: la clave para no crearla dos veces y de dónde viene (lib/nexus-chat/aplicar-server.ts). */
+  origenId?: string;
+  origen?: "chat";
 }
 
 export const CREAR_TAREA: OperacionQuePropone<
-  { titulo: string; clientId?: string | null; para?: string | null; vence?: string | null; cuando?: "esta_semana" | "proxima_semana" | "sin_semana"; prioridad?: Prioridad },
+  {
+    titulo: string;
+    clientId?: string | null;
+    para?: string | null;
+    vence?: string | null;
+    cuando?: "esta_semana" | "proxima_semana" | "sin_semana";
+    prioridad?: Prioridad;
+    lado?: "cliente" | "smarteam";
+  },
   DatosDeCrear,
   { numero: number; estado: string },
   ContextoDeNexus
 > = {
   nombre: "tarea.crear",
   paraQue:
-    "Crea una tarea: el título, de qué empresa es, para quién (su correo; sin él, para ti), cuándo vence o en qué semana va. Para otra persona le llega como sugerencia, salvo que la puedas asignar.",
+    "Crea una tarea: el título, de qué empresa es, para quién (su correo; sin él, para ti), cuándo vence o en qué semana va, y de qué lado es (`cliente` si lo tiene que hacer el cliente; sin él, Smarteam). Para otra persona le llega como sugerencia, salvo que la puedas asignar.",
   clase: "propone",
   pide: z
     .object({
@@ -75,6 +87,7 @@ export const CREAR_TAREA: OperacionQuePropone<
       vence: dia.nullable().optional(),
       cuando: z.enum(["esta_semana", "proxima_semana", "sin_semana"]).optional(),
       prioridad: z.enum(PRIORIDADES).optional(),
+      lado: z.enum(["cliente", "smarteam"]).optional(),
     })
     .strict(),
   async preparar(ctx, e) {
@@ -87,15 +100,25 @@ export const CREAR_TAREA: OperacionQuePropone<
     const vence = e.vence ? `, vence el ${fmtDia(e.vence)}` : e.cuando === "proxima_semana" ? ", la semana que viene" : e.cuando === "sin_semana" ? ", más adelante" : "";
     return {
       ok: true,
-      datos: { titulo: e.titulo, para, vence: e.vence ?? null, cuando, clientId: e.clientId ?? null, prioridad: e.prioridad ?? null },
-      linea: `Crear «${e.titulo}»${paraOtra}${vence}${empresa ? ` · ${empresa.nombre}` : ""}`,
+      datos: { titulo: e.titulo, para, vence: e.vence ?? null, cuando, clientId: e.clientId ?? null, prioridad: e.prioridad ?? null, lado: e.lado ?? null },
+      linea: `Crear «${e.titulo}»${paraOtra}${vence}${e.lado === "cliente" ? " · lo hace el cliente" : ""}${empresa ? ` · ${empresa.nombre}` : ""}`,
     };
   },
   async aplicar(ctx, d) {
     const creada = await crearTarea(
       await ctx.extras.tareas(),
       await ctx.extras.clientes(),
-      { titulo: d.titulo, para: d.para, cuando: d.cuando, venceEl: d.vence, clientId: d.clientId, ...(d.prioridad ? { prioridad: d.prioridad } : {}) },
+      {
+        titulo: d.titulo,
+        para: d.para,
+        cuando: d.cuando,
+        venceEl: d.vence,
+        clientId: d.clientId,
+        ...(d.prioridad ? { prioridad: d.prioridad } : {}),
+        ...(d.lado ? { lado: d.lado } : {}),
+        ...(d.origenId ? { origenId: d.origenId } : {}),
+        ...(d.origen ? { origen: d.origen } : {}),
+      },
       ctx.ahora,
     );
     return { numero: creada.numero, estado: creada.estado };

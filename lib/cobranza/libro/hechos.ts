@@ -218,12 +218,11 @@ export interface Decision {
 
 /**
  * Qué escribir. `fechasDePagoOdoo` (facturaId → `YYYY-MM-DD`) la arma quien habla con Odoo: el día del movimiento del
- * banco con que se concilió. Para Mercury el día sale de su entrada de plata y, si no se encuentra, del día en que la
- * factura cambió en Mercury por última vez (para una pagada, casi siempre el día en que se marcó pagada).
+ * banco con que se concilió. Para Mercury el día sale de su entrada de plata; si no se encuentra, la factura va a
+ * `pagadasSinFecha` (no se cobra con una fecha aproximada).
  */
 export function decidir(e: EntradaDelLibro, pegados: readonly Pegado[], fechasDePagoOdoo: ReadonlyMap<string, string>): Decision {
   const cobros = new Map(e.cobros.map((c) => [c.id, c]));
-  const facturasMercury = new Map(e.facturasMercury.map((f) => [f.id, f]));
   const entradas = entradasDeFacturas(e.facturasMercury, e.entradasMercury);
   const out: Decision = { acciones: [], pagadasSinFecha: [], choques: [] };
   for (const p of pegados) {
@@ -243,9 +242,10 @@ export function decidir(e: EntradaDelLibro, pegados: readonly Pegado[], fechasDe
         fecha = fechasDePagoOdoo.get(p.facturaId) ?? null;
         deDonde = "el pago con que Odoo concilió la factura";
       } else {
-        const entrada = entradas.get(p.facturaId);
-        fecha = entrada?.fecha ?? facturasMercury.get(p.facturaId)?.actualizadaEn ?? null;
-        deDonde = entrada ? "la entrada de plata en Mercury" : "el día en que Mercury la marcó pagada";
+        // ⚠ Sin la entrada de plata no hay día del pago: el día en que la factura cambió en Mercury es una aproximación
+        // y DECISIONS prohíbe aproximar la fecha de pago (decide el mes del gráfico). Va a `pagadasSinFecha`.
+        fecha = entradas.get(p.facturaId)?.fecha ?? null;
+        deDonde = "la entrada de plata en Mercury";
       }
       if (!fecha) {
         out.pagadasSinFecha.push(p);

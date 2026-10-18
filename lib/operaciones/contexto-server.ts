@@ -7,9 +7,11 @@
  */
 import "server-only";
 import type { TeamMember } from "@prisma/client";
-import { contextoDeTareas, type ContextoDeTareas } from "@/lib/tareas/servidor";
+import { contextoDeTareas, ErrorDeTareas, type ContextoDeTareas } from "@/lib/tareas/servidor";
 import { clientesQueVesParaTareas, type ClientesQueVes } from "@/lib/tareas/clientes";
-import type { ContextoDeOperacion } from "./tipos";
+import { ErrorDeLaNota } from "@/lib/notas/escritura-server";
+import { ErrorDelPaso } from "@/lib/siguiente-paso/escritura-server";
+import type { ContextoDeOperacion, ErrorConMotivo } from "./tipos";
 
 export interface ExtrasDeNexus {
   /** La visibilidad y el equipo de la persona en Tareas. */
@@ -30,6 +32,17 @@ export class ErrorDeOperacion extends Error {
   }
 }
 
+/**
+ * Los errores de los escritores que usan las operaciones, con su estado y un mensaje para la persona. Se reconocen por
+ * CLASE, no por la forma: el `APIError` del SDK de Anthropic también trae `status` y `message`, y un 401/429/529 de la
+ * API no puede salir al navegador con su estado y su texto crudo. Un escritor nuevo de la capa suma su clase acá.
+ */
+const ERRORES_PROPIOS = [ErrorDeOperacion, ErrorDeTareas, ErrorDeLaNota, ErrorDelPaso] as const;
+
+export function esErrorPropio(e: unknown): e is ErrorConMotivo {
+  return ERRORES_PROPIOS.some((C) => e instanceof C) && typeof (e as { status?: unknown }).status === "number";
+}
+
 function unaVez<T>(f: () => Promise<T>): () => Promise<T> {
   let p: Promise<T> | null = null;
   return () => (p ??= f());
@@ -39,6 +52,7 @@ export function contextoDeOperacion(persona: TeamMember, ahora = new Date()): Co
   return {
     persona,
     ahora,
+    esErrorPropio,
     extras: {
       tareas: unaVez(() => contextoDeTareas({ teamMember: persona })),
       clientes: unaVez(() => clientesQueVesParaTareas(persona)),

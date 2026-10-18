@@ -7,6 +7,7 @@
  */
 import "server-only";
 import { z } from "zod";
+import { prisma } from "@/lib/db/prisma";
 import { crearNota } from "@/lib/notas/escritura-server";
 import { notasParaLaMemoria } from "@/lib/notas/lectura-server";
 import { ETIQUETA_DEL_CANAL, diaDeCostaRica } from "@/lib/notas/reglas";
@@ -44,6 +45,16 @@ export const CREAR_NOTA: OperacionQuePropone<NuevaNota & { clientId: string }, D
   async preparar(ctx, e) {
     const empresa = await exigirCliente(ctx, e.clientId);
     if (e.fecha > diaDeCostaRica(ctx.ahora)) return { ok: false, motivo: "La nota cuenta lo que ya pasó: la fecha no puede ser de más adelante." };
+    // El proyecto y el negocio, con las mismas consultas que crearNota: si no son de la cuenta, se dice AHORA y no al
+    // aplicar (ahí cortaría la lista a medias).
+    if (e.projectId) {
+      const p = await prisma.project.findUnique({ where: { id: e.projectId }, select: { clientId: true } });
+      if (!p || p.clientId !== e.clientId) return { ok: false, motivo: "Ese proyecto no es de esta empresa." };
+    }
+    if (e.negocioId) {
+      const neg = await prisma.negocioAbierto.findUnique({ where: { id: e.negocioId }, select: { clientId: true } });
+      if (!neg || neg.clientId !== e.clientId) return { ok: false, motivo: "Ese negocio no es de esta empresa." };
+    }
     const { clientId, ...nota } = e;
     return {
       ok: true,

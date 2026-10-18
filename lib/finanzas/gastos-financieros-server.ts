@@ -7,11 +7,13 @@
  * ⛔ No toca Mercury ni la copia: guarda solo la decisión (`GastoFinanciero`).
  */
 import { prisma } from "@/lib/db/prisma";
+import { crDateParts } from "@/lib/jobs/time";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { esEntradaDeCliente } from "@/lib/cobranza/mercury/espejo";
 import { entradasDeFacturas } from "@/lib/cobranza/mercury/diferencias";
 import {
   candidatosDeGastoFinanciero,
+  desdeParaRevisar,
   egresosFinancieros,
   revisionFinanciera,
   type CandidatoFinanciero,
@@ -30,12 +32,12 @@ export class GastoFinancieroError extends Error {
   }
 }
 
+/** Una columna `@db.Date` (fecha sin hora): su día es el de UTC. */
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+/** Un INSTANTE (cuándo se creó o posteó un movimiento): su día es el de Costa Rica, no el de UTC. */
+const diaCR = (d: Date) => crDateParts(d).dateKey;
 
-/** Desde cuándo se revisa: doce meses para atrás desde hoy (`YYYY-MM-DD`). */
-export function desdeParaRevisar(hoy: string): string {
-  return `${Number(hoy.slice(0, 4)) - 1}${hoy.slice(4)}`;
-}
+export { desdeParaRevisar };
 
 /** Los candidatos de la copia de Mercury desde `desde`. */
 async function candidatos(desde: string): Promise<CandidatoFinanciero[]> {
@@ -61,7 +63,7 @@ async function candidatos(desde: string): Promise<CandidatoFinanciero[]> {
     descripcionBanco: m.descripcionBanco,
     nota: m.nota,
     conTarjeta: m.conTarjeta,
-    fecha: iso(m.posteadoEn ?? m.creadoEnMercury),
+    fecha: diaCR(m.posteadoEn ?? m.creadoEnMercury),
   }));
   /* Las entradas atadas a sus facturas pagadas, con la misma regla que «Lo que no cuadra» y que «Lo pagado». */
   const entradas = movimientos
@@ -70,7 +72,7 @@ async function candidatos(desde: string): Promise<CandidatoFinanciero[]> {
   const porFactura = entradasDeFacturas(
     facturas.map((f) => ({
       id: f.id, numero: f.numero, invoiceDate: iso(f.invoiceDate), dueDate: f.dueDate ? iso(f.dueDate) : null, monto: Number(f.monto), moneda: f.moneda,
-      estado: f.estado, mercuryCustomerId: f.mercuryCustomerId, clienteNombre: f.clienteNombre, actualizadaEn: iso(f.actualizadaEnMercury),
+      estado: f.estado, mercuryCustomerId: f.mercuryCustomerId, clienteNombre: f.clienteNombre, actualizadaEn: diaCR(f.actualizadaEnMercury),
     })),
     entradas,
   );

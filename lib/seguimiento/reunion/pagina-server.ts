@@ -27,6 +27,8 @@ import type { CorreoDeLaReunion } from "./correo";
 export interface DespuesDeLaReunion {
   empresa: string;
   correo: CorreoDeLaReunion | null;
+  /** La versión de lo guardado de la reunión: la manda la pantalla al editar el correo (409 si cambió). */
+  version: number;
   proxima: ProximaSugerida;
   /** La reunión con el cliente que ya existe después de esta, si hay. */
   siguiente: { id: string; titulo: string; fecha: string } | null;
@@ -44,7 +46,7 @@ export interface PaginaDeLaReunion {
 const CON_CORREO = new Set(["CLIENTE", "PROSPECTO"]);
 const DIAS_DE_AVISOS = 60;
 
-const VACIO: SeguimientoGuardado = { agenda: null, correo: null, proxima: null };
+const VACIO: SeguimientoGuardado = { version: 0, agenda: null, correo: null, proxima: null };
 
 /** Una lectura que depende de un SQL que quizá falta: sin la tabla o la columna, esa parte sale vacía. */
 async function seguro<T>(p: Promise<T>, siFalta: T): Promise<T> {
@@ -121,6 +123,7 @@ export async function cargarPaginaDeLaReunion(o: {
       ? {
           empresa: o.dueno.nombre,
           correo: guardado.correo,
+          version: guardado.version,
           proxima: sugerirProxima({
             reunion: { titulo: o.reunion.titulo, fecha: o.reunion.fecha.toISOString(), duracionMin: o.reunion.duracionMin, participantes: o.reunion.participantes },
             empresa: o.dueno.nombre,

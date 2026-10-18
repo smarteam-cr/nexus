@@ -11,7 +11,7 @@
  */
 import "server-only";
 import { esLiderDeCs } from "@/lib/cs/acceso";
-import { cargarLecturas } from "@/lib/cs/lectura-de-la-cuenta-server";
+import { lecturasDelPedido } from "@/lib/mi-dia/lecturas-server";
 import { pideAtencion } from "@/lib/cs/lectura-de-la-cuenta";
 import type { Fuente } from "../fuente";
 import type { Pendiente } from "../tipos";
@@ -22,10 +22,12 @@ export const TUS_CUENTAS_EN_RIESGO: Fuente = {
   clave: "cs-tus-cuentas",
   frente: null,
   alDia: "Cómo están tus cuentas",
-  aplica: (a) => a.proyectos.length > 0,
+  // Solo las que lleva (el encargado en HubSpot), como «Cuenta sin acción»: una cuenta que le compartieron no es suya.
+  aplica: (a) => a.proyectos.some((p) => p.encargado),
   async medir(a, c) {
-    const cuentas = [...new Set(a.proyectos.map((p) => p.clientId))];
-    const lecturas = await cargarLecturas(cuentas, { sinPlata: !esLiderDeCs(a.rol), ahora: c.ahora });
+    const cuentas = [...new Set(a.proyectos.filter((p) => p.encargado).map((p) => p.clientId))];
+    // La misma lectura que las cuentas del inicio (lib/mi-dia/inicio-server.ts): se comparte en el pedido.
+    const lecturas = await lecturasDelPedido(cuentas, { sinPlata: !esLiderDeCs(a.rol), ahora: c.ahora });
     const out: Pendiente[] = [];
     for (const l of lecturas.values()) {
       if (!pideAtencion(l)) continue;

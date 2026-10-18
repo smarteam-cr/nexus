@@ -49,6 +49,7 @@ import { parseDocTabs, parseDocBody, MAX_TRANSCRIPT_CHARS, MIN_TRANSCRIPT_CHARS,
 import { candidatosImpersonables } from "./elegir-impersonado";
 import { consultaDeDrive, elegirArchivosDeLaReunion, VENTANA_DRIVE_MS, type ArchivoDeDrive } from "./drive-candidatos";
 import { huellaDeTexto, textoCambio } from "@/lib/sessions/analisis-ajeno";
+import { procedenciaDelTexto } from "@/lib/sessions/texto-de-otra-reunion";
 import {
   datosDeEscritura,
   debeEsperarMaterial,
@@ -390,9 +391,16 @@ async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProce
   // viaja) contra la del texto leído. Volver a leer lo mismo no es un cambio.
   const huellaAntes = lectura.transcript ? await huellaDeLoGuardado(s.id) : null;
   const cambioElTexto = textoCambio(huellaAntes, lectura.transcript);
+  // El documento del EVENTO (el correcto) trae solo notas de Gemini y la transcripción guardada es de OTRA reunión (la
+  // búsqueda vieja en Drive): se vacía y la lectura se rehace con lo que hay. Una transcripción de esta misma reunión
+  // (la de Meet, en otro archivo) no se toca: lo decide su primera línea (lib/sessions/texto-de-otra-reunion.ts).
+  const vaciarTranscripcion = !!s.googleDocId && !lectura.transcript && !!lectura.summary && (await transcripcionGuardadaAjena(s));
 
   const ahora = new Date();
-  const datos = datosDeEscritura(lectura, finalSummary ?? null, s.enrichAttempts, ahora, { esperarMaterial: debeEsperarMaterial(s, ahora) });
+  const datos = datosDeEscritura(lectura, finalSummary ?? null, s.enrichAttempts, ahora, {
+    esperarMaterial: debeEsperarMaterial(s, ahora),
+    vaciarTranscripcion,
+  });
   await prisma.firefliesSession.update({
     where: { id: s.id },
     data: datos,
@@ -416,7 +424,16 @@ async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProce
   const esReciente = Date.now() - s.date.getTime() <= DIAS_DE_FRESCURA * 86_400_000;
   const conTranscripcion = !!lectura.transcript && lectura.transcript.trim().length >= MIN_TRANSCRIPT_CHARS;
   const soloNotas = !conTranscripcion && hechosPrendidos(process.env) && largoDeLasNotas(finalSummary) >= MIN_NOTAS_PARA_LEER;
-  if (esReciente && (conTranscripcion || soloNotas)) {
+  if (datos.transcript === null) {
+    // Se vació la transcripción ajena: lo que dejó la lectura salió de ella. Rehacer o avisar (lib/sessions/reanalizar.ts,
+    // que mira si es reciente y si alguien ya trabajó algo).
+    console.log(`[google/enrich] «${s.title}»: el documento del evento trae solo notas — se vació la transcripción de otra reunión`);
+    const { seguimientoDisponible } = await import("@/lib/lecturas/cola");
+    if (seguimientoPrendido(process.env) && (await seguimientoDisponible())) {
+      const { alCambiarElTexto } = await import("@/lib/sessions/reanalizar");
+      await alCambiarElTexto(s.id, huellaDeTexto(""));
+    }
+  } else if (esReciente && (conTranscripcion || soloNotas)) {
     const { encolarSeguimiento, seguimientoDisponible } = await import("@/lib/lecturas/cola");
     if (seguimientoPrendido(process.env) && (await seguimientoDisponible())) {
       if (cambioElTexto && lectura.transcript) {
@@ -447,6 +464,15 @@ async function huellaDeLoGuardado(sessionId: string): Promise<string | null> {
   const filas = await prisma.$queryRaw<Array<{ h: string | null }>>`
     SELECT md5(transcript) AS h FROM "FirefliesSession" WHERE id = ${sessionId}`;
   return filas[0]?.h ?? null;
+}
+
+/** ¿La transcripción guardada es de OTRA reunión (o no es de una reunión)? Por su primera línea; false si no hay. */
+async function transcripcionGuardadaAjena(s: SesionAEnriquecer): Promise<boolean> {
+  const filas = await prisma.$queryRaw<Array<{ l1: string | null }>>`
+    SELECT left(transcript, 400) AS l1 FROM "FirefliesSession" WHERE id = ${s.id}`;
+  const l1 = filas[0]?.l1;
+  if (!l1?.trim()) return false;
+  return procedenciaDelTexto(s.title, l1).tipo !== "propia";
 }
 
 /** El largo de las notas de Gemini (`summary.overview`): con la lectura de hechos prendida, alcanzan para encolar. */

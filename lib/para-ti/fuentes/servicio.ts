@@ -24,7 +24,7 @@ export const CUENTAS_SIN_ACCION: Fuente = {
     for (const p of a.proyectos) if (p.encargado) cuentas.set(p.clientId, p.empresa);
     const servicio = await servicioDeLasCuentas(
       [...cuentas].map(([clientId, empresa]) => ({ clientId, empresa, llevaEmail: a.email })),
-      { ahora: c.ahora, hoyISO: c.hoyISO },
+      { ahora: c.ahora, hoyISO: c.hoyISO, quienMira: { email: a.email, esSuperAdmin: a.rol === "SUPER_ADMIN" } },
     );
     const out: Pendiente[] = [];
     for (const s of servicio.values()) {

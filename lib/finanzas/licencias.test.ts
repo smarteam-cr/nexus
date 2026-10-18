@@ -98,6 +98,8 @@ describe("lo que se puede guardar", () => {
     expect(problemasDeLicencia({ ...base, montoServicio: 200 })).toHaveLength(1);
     expect(problemasDeLicencia({ ...base, costoMonto: 50 })).toEqual(["El costo va completo: cuánto, en qué moneda y cada cuántos meses."]);
     expect(problemasDeLicencia({ ...base, fuente: "  " })).toHaveLength(1);
+    // Un texto que no es número llega como NaN desde el formulario: se dice, no se guarda un null.
+    expect(problemasDeLicencia({ ...base, montoServicio: Number.NaN })).toEqual(["La parte de servicio no es un número."]);
     expect(problemasDeLicencia({ ...base, desde: "2026-12-01", hasta: "2026-01-01" })).toHaveLength(1);
   });
 });

@@ -10,7 +10,8 @@
  * Cinco motivos:
  *   · `encargado-de-baja`: el proyecto está a nombre de alguien que ya no está en el equipo;
  *   · `sin-encargado`: nadie lo tiene en HubSpot;
- *   · `etapa-quieta`: lleva más de `DIAS_DE_ETAPA_QUIETA` en la misma etapa (salvo las que duran por diseño: Continuidad);
+ *   · `etapa-quieta`: lleva más de `DIAS_DE_ETAPA_QUIETA` en la misma etapa (salvo las que duran por diseño:
+ *     Continuidad, y cualquier etapa de un servicio recurrente como SmartLoop, que vive meses en un ciclo);
  *   · `sin-actividad`: ninguna actividad en el proyecto de HubSpot en `DIAS_SIN_ACTIVIDAD`;
  *   · `servicio-sin-registrar`: la empresa tiene un servicio recurrente activo en Cobranza y ningún proyecto abierto en
  *     HubSpot.
@@ -28,8 +29,12 @@ export const DIAS_DE_ETAPA_QUIETA = 42;
 /** Un mes sin actividad en el proyecto. */
 export const DIAS_SIN_ACTIVIDAD = 30;
 
-/** Las etapas que duran por diseño (un servicio recurrente vive meses en Continuidad). */
-const ETAPAS_QUE_DURAN = /continuidad|smartloop|recurrente/i;
+/**
+ * Las etapas que duran por diseño (un servicio recurrente vive meses en Continuidad). ⚠ Las etapas de SmartLoop se llaman
+ * Diagnóstico, Implementación…: un servicio recurrente se reconoce por su PIPELINE (`servicioRecurrente`), no por el
+ * nombre de la etapa.
+ */
+const ETAPAS_QUE_DURAN = /continuidad/i;
 
 export const QUE_HACER: Record<MotivoDeLimpieza, string> = {
   "encargado-de-baja": "Pásalo a alguien del equipo en «CSE Encargado».",
@@ -46,6 +51,8 @@ export interface ProyectoParaLimpiar {
   cliente: string;
   /** El sprint que lo lleva: «cs» (Implementación y servicios) o «desarrollo» (Desarrollo y Web). */
   sprint: "cs" | "desarrollo";
+  /** Su pipeline es de un servicio recurrente (SmartLoop, lib/projects/kind.ts): un ciclo largo no es una etapa quieta. */
+  servicioRecurrente: boolean;
   etapa: string | null;
   encargadoEmail: string | null;
   encargadoNombre: string | null;
@@ -122,7 +129,8 @@ export function arreglosDelProyecto(p: ProyectoParaLimpiar, e: EquipoParaLimpiar
   else if (!correo) agregar("sin-encargado", "Nadie lo tiene en HubSpot.");
 
   const enEtapa = diasDesde(p.etapaDesde, hoy);
-  if (enEtapa !== null && enEtapa > DIAS_DE_ETAPA_QUIETA && !(p.etapa && ETAPAS_QUE_DURAN.test(p.etapa))) {
+  const etapaQueDura = p.servicioRecurrente || !!(p.etapa && ETAPAS_QUE_DURAN.test(p.etapa));
+  if (enEtapa !== null && enEtapa > DIAS_DE_ETAPA_QUIETA && !etapaQueDura) {
     agregar("etapa-quieta", `Lleva ${enSemanas(enEtapa)} en «${p.etapa ?? "la misma etapa"}».`);
   }
 

@@ -120,3 +120,13 @@ export function contextoDeRespaldo(
   if (parrafo) partes.push(limpiarParrafo(parrafo));
   return partes.length ? recortarContexto(partes.join(" ")) : null;
 }
+
+/**
+ * El último respaldo, cuando ni el modelo ni las notas dicen nada más que el título: de qué reunión salió y cuándo.
+ * Así ninguna tarea de una reunión queda sin una línea que la ubique. Se ve con la regla de la cita, como el resto.
+ */
+export function contextoDeLaReunion(o: { reunion: string; fecha: string; deLaConversacion?: boolean }): string {
+  const reunion = o.reunion.replace(/\s+/g, " ").trim() || "una reunión";
+  const de = o.deLaConversacion ? "Se dijo en la conversación de" : "Quedó como próximo paso en";
+  return recortarContexto(`${de} «${reunion}», el ${o.fecha}. Abre la tarea para ver la línea de la reunión.`);
+}

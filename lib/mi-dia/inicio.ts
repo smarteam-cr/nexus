@@ -4,11 +4,11 @@
  *
  *   · qué inicio ve cada persona (`varianteDelInicio`, del registro de equipos);
  *   · la agenda como Google Calendar: dónde cae cada reunión en la cuadrícula y en qué columna si se pisan;
- *   · el hueco libre que Nexus sugiere para avanzar algo;
+ *   · el hueco libre de hoy y la primera hora libre para «Agendar», siempre en horario laboral;
  *   · «Tu día, según Nexus»: dos o tres frases armadas con los datos, sin IA (cada dato es el de su lugar).
  */
 import { equipoDeRol } from "@/lib/equipos/registro";
-import { HORA_FIN_DE_LA_AGENDA, HORA_INICIO_DE_LA_AGENDA, MINUTOS_DE_UN_HUECO } from "./constantes";
+import { HORA_FIN_DE_LA_AGENDA, HORA_FIN_LABORAL, HORA_INICIO_DE_LA_AGENDA, HORA_INICIO_LABORAL, MINUTOS_DE_UN_HUECO } from "./constantes";
 
 export type VarianteDelInicio = "ventas" | "cse" | "csl" | "dev" | "marketing" | "general";
 
@@ -113,15 +113,20 @@ export function lineaDeAhora(grilla: Pick<Grilla, "desdeHora" | "hastaHora">, di
   return m < 0 || m > (grilla.hastaHora - grilla.desdeHora) * 60 ? null : m;
 }
 
+/** ¿Es un día de trabajo? De lunes a viernes (`AAAA-MM-DD`). */
+export function esDiaLaboral(dia: string): boolean {
+  const d = new Date(`${dia}T00:00:00Z`).getUTCDay();
+  return d >= 1 && d <= 5;
+}
+
 /**
- * El primer hueco libre de hoy, de al menos una hora, entre ahora (redondeado al cuarto de hora siguiente) y el fin del
- * día de trabajo. null = no hay. Las reuniones son de UN día; las que ya terminaron no importan.
+ * El primer hueco de un día, de al menos `minimo` minutos, desde el minuto `desde` y dentro del horario laboral (8:00 a
+ * 17:00, de lunes a viernes). null = no hay. Las reuniones de otros días no importan.
  */
-export function huecoLibre(eventos: readonly EventoParaLaGrilla[], dia: string, ahora: Date): { inicio: string; fin: string } | null {
-  const hoy = minutoDelDia(ahora.toISOString());
-  if (hoy.dia !== dia) return null;
-  const desde = Math.max(HORA_INICIO_DE_LA_AGENDA * 60, Math.ceil(hoy.minuto / 15) * 15);
-  const hasta = HORA_FIN_DE_LA_AGENDA * 60;
+function huecoDelDia(eventos: readonly EventoParaLaGrilla[], dia: string, desdeMinuto: number, minimo: number): { desde: number; hasta: number } | null {
+  if (!esDiaLaboral(dia)) return null;
+  const desde = Math.max(HORA_INICIO_LABORAL * 60, desdeMinuto);
+  const hasta = HORA_FIN_LABORAL * 60;
   const ocupado = eventos
     .map((e) => {
       const a = minutoDelDia(e.inicio);
@@ -132,14 +137,56 @@ export function huecoLibre(eventos: readonly EventoParaLaGrilla[], dia: string, 
     .sort((a, b) => a.desde - b.desde);
   let cursor = desde;
   for (const o of [...ocupado, { desde: hasta, hasta }]) {
-    if (o.desde - cursor >= MINUTOS_DE_UN_HUECO && cursor < hasta) {
-      const fin = Math.min(o.desde, hasta);
-      if (fin - cursor >= MINUTOS_DE_UN_HUECO) return { inicio: instante(dia, cursor), fin: instante(dia, fin) };
-    }
+    if (cursor >= hasta) break;
+    const fin = Math.min(o.desde, hasta);
+    if (fin - cursor >= minimo) return { desde: cursor, hasta: fin };
     cursor = Math.max(cursor, o.hasta);
   }
   return null;
 }
+
+/** «Ahora» redondeado al cuarto de hora siguiente, en minutos del día. */
+const cuartoSiguiente = (minuto: number) => Math.ceil(minuto / 15) * 15;
+
+/**
+ * El primer hueco libre de hoy, de al menos una hora, entre ahora (redondeado al cuarto de hora siguiente) y el fin del
+ * día de trabajo (17:00). Nunca en sábado ni domingo. null = no hay. Las reuniones son de UN día; las que ya terminaron
+ * no importan.
+ */
+export function huecoLibre(eventos: readonly EventoParaLaGrilla[], dia: string, ahora: Date): { inicio: string; fin: string } | null {
+  const hoy = minutoDelDia(ahora.toISOString());
+  if (hoy.dia !== dia) return null;
+  const h = huecoDelDia(eventos, dia, cuartoSiguiente(hoy.minuto), MINUTOS_DE_UN_HUECO);
+  return h ? { inicio: instante(dia, h.desde), fin: instante(dia, h.hasta) } : null;
+}
+
+/** Cuántos días hacia adelante busca Nexus un hueco para «Agendar» o «+ Crear evento». */
+export const DIAS_PARA_BUSCAR_UN_HUECO = 14;
+
+/**
+ * La primera hora libre en horario laboral para un evento de `minutos`: hoy desde ahora (al cuarto siguiente) y, si no
+ * hay, los días de trabajo que siguen desde las 8:00. Las reuniones que se pasan son las que se conocen (la agenda
+ * cargada y los borradores); un día que no está cargado se toma libre. El evento dura `minutos`, no el hueco entero.
+ */
+export function primerHuecoLaboral(
+  eventos: readonly EventoParaLaGrilla[],
+  ahora: Date,
+  o: { minutos?: number; dias?: number } = {},
+): { inicio: string; fin: string } {
+  const minutos = o.minutos ?? MINUTOS_DE_UN_HUECO;
+  const hoy = minutoDelDia(ahora.toISOString());
+  for (let i = 0; i < (o.dias ?? DIAS_PARA_BUSCAR_UN_HUECO); i++) {
+    const dia = sumarDiasISO(hoy.dia, i);
+    const h = huecoDelDia(eventos, dia, i === 0 ? cuartoSiguiente(hoy.minuto) : 0, minutos);
+    if (h) return { inicio: instante(dia, h.desde), fin: instante(dia, h.desde + minutos) };
+  }
+  // Sin lugar en dos semanas (no pasa con una agenda real): el próximo día de trabajo a las 8:00.
+  let dia = sumarDiasISO(hoy.dia, 1);
+  while (!esDiaLaboral(dia)) dia = sumarDiasISO(dia, 1);
+  return { inicio: instante(dia, HORA_INICIO_LABORAL * 60), fin: instante(dia, HORA_INICIO_LABORAL * 60 + minutos) };
+}
+
+const sumarDiasISO = (dia: string, n: number) => new Date(Date.parse(`${dia}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 /** El instante UTC de un minuto del día en Costa Rica. */
 export function instante(dia: string, minuto: number): string {
@@ -191,7 +238,7 @@ export function resumenDelDia(d: DatosParaElResumen): PedazoDeFrase[][] {
   } else if (d.delAgente > 0) {
     frases.push([{ t: "Nexus dejó " }, { t: d.delAgente === 1 ? "1 cosa" : `${d.delAgente} cosas`, fuerte: true }, { t: " para que decidas." }]);
   }
-  if (d.hueco && frases.length < 3) frases.push([{ t: `Tienes un hueco libre a las ${d.hueco.hora} para avanzar.` }]);
+  if (d.hueco && frases.length < 3) frases.push([{ t: `Tienes libre desde las ${d.hueco.hora}.` }]);
   return frases.slice(0, 3);
 }
 

@@ -227,13 +227,37 @@ export default function EscalaDeLaCuenta({
   useEffect(() => {
     if (!corrida) return;
     let parar = false;
+    const desde = Date.now();
+    let fallos = 0;
+    // Si la consulta falla 5 veces seguidas, o pasan 10 minutos, se deja de mirar y se avisa: no se pregunta para siempre.
+    const rendirse = (mensaje: string) => {
+      parar = true;
+      setFase(null);
+      setCorrida(null);
+      toast.error(mensaje);
+    };
     const vuelta = async () => {
       while (!parar && vivo.current) {
         await new Promise((r) => setTimeout(r, 3000));
+        if (parar || !vivo.current) break;
+        if (Date.now() - desde > 10 * 60_000) {
+          rendirse("El agente sigue sin terminar después de 10 minutos. Recarga la página en un rato para ver lo que propuso.");
+          break;
+        }
         const r = await fetch(`/api/sales/exploraciones/${corrida.exploracionId}/agente`, { cache: "no-store" }).catch(() => null);
-        const j = (await r?.json().catch(() => null)) as { corrida?: { estado: string; fase: string | null; propuestos: number | null; error: string | null } | null } | null;
+        const j = r?.ok
+          ? ((await r.json().catch(() => null)) as { corrida?: { estado: string; fase: string | null; propuestos: number | null; error: string | null } | null } | null)
+          : null;
         const c = j?.corrida;
-        if (!c) continue;
+        if (!c) {
+          fallos += 1;
+          if (fallos >= 5) {
+            rendirse("No se pudo saber cómo va el agente. Recarga la página en un rato para ver lo que propuso.");
+            break;
+          }
+          continue;
+        }
+        fallos = 0;
         if (c.estado === "RUNNING") {
           setFase(c.fase);
           continue;

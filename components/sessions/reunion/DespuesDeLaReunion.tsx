@@ -10,7 +10,7 @@
  *     correo (o uno de Nexus). «Agendar en Google Calendar» abre el evento con todo lleno; la persona lo guarda y Google
  *     manda la invitación. Nexus no escribe en el calendario. Después: «Ya la agendé» o «No hace falta».
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, Input, Select, Textarea, useToast } from "@/components/ui";
@@ -29,17 +29,24 @@ import {
 import type { DespuesDeLaReunion as Despues } from "@/lib/seguimiento/reunion/pagina-server";
 
 async function patch(sessionId: string, body: unknown): Promise<string | null> {
+  const r = await patchConVersion(sessionId, body);
+  return r.error;
+}
+
+/** El PATCH, con la versión nueva de lo guardado si salió bien (la usa el correo para el siguiente cambio). */
+async function patchConVersion(sessionId: string, body: unknown): Promise<{ error: string | null; version?: number }> {
   try {
     const r = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/seguimiento`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (r.ok) return null;
-    const d = (await r.json().catch(() => ({}))) as { error?: string };
-    return d.error ?? "No se pudo guardar.";
+    const d = (await r.json().catch(() => ({}))) as { error?: string; version?: number };
+    if (r.ok) return { error: null, version: typeof d.version === "number" ? d.version : undefined };
+    // 409: el correo cambió (se regeneró u otra pestaña lo editó). El servidor dice «recarga».
+    return { error: d.error ?? (r.status === 409 ? "El correo cambió: recarga la página." : "No se pudo guardar.") };
   } catch {
-    return "No se pudo guardar: revisa la conexión.";
+    return { error: "No se pudo guardar: revisa la conexión." };
   }
 }
 
@@ -51,6 +58,12 @@ function CorreoDeLaReunion({ sessionId, despues, puedeEscribir }: { sessionId: s
   // Por qué no se armó (la reunión no tiene la conversación): se dice ahí mismo, no en un aviso que se va.
   const [aviso, setAviso] = useState<string | null>(null);
   const correo = despues.correo;
+  /* La versión de lo guardado que tiene esta pantalla: va con cada cambio del correo; si en la base ya es otra, 409 y no
+     se pisa. Sube con cada guardado propio y se pone al día cuando la página se recarga. */
+  const version = useRef(despues.version);
+  useEffect(() => {
+    version.current = despues.version;
+  }, [despues.version]);
 
   const armar = async () => {
     setConfirmar(false);
@@ -105,9 +118,10 @@ function CorreoDeLaReunion({ sessionId, despues, puedeEscribir }: { sessionId: s
           correo={correo}
           puedeEditar={puedeEscribir}
           guardar={async (c) => {
-            const error = await patch(sessionId, { correo: c });
-            if (error) toast.error(error);
-            return !error;
+            const r = await patchConVersion(sessionId, { correo: c, version: version.current });
+            if (r.error) toast.error(r.error);
+            else if (r.version !== undefined) version.current = r.version;
+            return !r.error;
           }}
         />
       ) : (

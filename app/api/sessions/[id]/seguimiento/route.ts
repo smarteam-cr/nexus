@@ -2,7 +2,8 @@
  * PATCH /api/sessions/[id]/seguimiento — lo que una persona cambia en la página de una reunión (ficha G, 2026-10-17):
  *
  *   { agenda }   → lo que se iba a tratar, escrito a mano ("" lo borra: vuelve a mandar la invitación)
- *   { correo }   → el asunto o el texto del correo de seguimiento (solo si ya está armado)
+ *   { correo, version } → el asunto o el texto del correo de seguimiento (solo si ya está armado). `version` es la de
+ *                  lo guardado que tiene la pantalla: si cambió (se regeneró, otra pestaña lo editó), 409 y no se pisa
  *   { proxima }  → el título, el objetivo, la hora o la duración de la próxima reunión sugerida, o lo que se decidió
  *                  («agendada»: la guardó en su calendario; «descartada»: no hace falta; null: vuelve a pendiente)
  *
@@ -36,9 +37,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
     if (!acceso.dueno) return NextResponse.json({ error: "Esta reunión no tiene cliente: no lleva correo ni próxima reunión." }, { status: 409 });
     if ("correo" in c) {
-      const ok = await editarCorreo(id, c.correo);
-      if (!ok) return NextResponse.json({ error: "Todavía no hay un correo armado para esta reunión." }, { status: 404 });
-      return NextResponse.json({ ok: true });
+      const r = await editarCorreo(id, c.correo, c.version);
+      if (!r.ok && r.motivo === "sin-correo") return NextResponse.json({ error: "Todavía no hay un correo armado para esta reunión." }, { status: 404 });
+      if (!r.ok) return NextResponse.json({ error: "El correo cambió: recarga la página para ver el de ahora." }, { status: 409 });
+      return NextResponse.json({ ok: true, version: r.version });
     }
     await guardarProxima(id, c.proxima, acceso.user.email);
     return NextResponse.json({ ok: true });

@@ -4,7 +4,8 @@
  * GET   → el estado: el ciclo abierto con sus casos de uso, la guía del CSE y los ciclos cerrados. Si el proyecto
  *         nunca tuvo un ciclo, abre el primero (sin formulario).
  * POST  → abre el ciclo siguiente (409 si hay uno abierto).
- * PATCH → cambia el ciclo abierto (tramo, fechas, meta, etapa) o el compromiso del servicio.
+ * PATCH → cambia el ciclo abierto (tramo, fechas, meta, etapa) o el compromiso del servicio. Lleva `cicloId`, el ciclo
+ *         que la pantalla tiene enfrente: si ya no es el abierto, 409 («Este ciclo ya se cerró: recarga la página.»).
  *
  * Leer pide acceso al proyecto; escribir, además, poder editar el cronograma (`guardTimelineEdit`): el
  * ciclo es la planificación del servicio, la misma vara que el plan.
@@ -73,9 +74,9 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const body = actualizarCicloSchema.safeParse(await req.json().catch(() => ({})));
   if (!body.success) return NextResponse.json({ error: body.error.issues[0]?.message ?? "Datos inválidos" }, { status: 400 });
   try {
-    const { compromiso, ...cambios } = body.data;
+    const { compromiso, cicloId, ...cambios } = body.data;
     if (compromiso !== undefined) await cambiarCompromiso(projectId, compromiso);
-    if (Object.keys(cambios).length > 0) await actualizarCiclo(projectId, cambios, correoDe(guard));
+    if (Object.keys(cambios).length > 0) await actualizarCiclo(projectId, cambios, correoDe(guard), cicloId);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return error(e);

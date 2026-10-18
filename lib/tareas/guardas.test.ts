@@ -183,6 +183,7 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       // El inicio de cada equipo (ficha D, 2026-10-17).
       "lib/mi-dia/servicio-server.ts": "la regla de servicio del inicio: la acción de la semana de cada cuenta (título, fecha y estado; sin la cita, el contexto, las notas ni lo privado)",
       "lib/mi-dia/inicio-server.ts": "el inicio: TUS tareas de hoy y tus tareas internas (las tuyas y las de tu sprint sin dueño), con su ámbito (no serializa la cita ni el contexto)",
+      "lib/mi-dia/agenda-contactos-server.ts": "a quién invitar al borrador de un evento de la agenda del inicio: solo QUÉ cuentas ves (clientesQueVesParaTareas, el acceso de requireAccessToClient); no lee tareas",
       "lib/mi-dia/resumen-server.ts": "el resumen antes de una reunión (etapa 4c): lo pendiente de los dos lados SOLO por lib/tareas/para-agentes.ts (sin la cita, el contexto, las notas ni lo privado)",
       "lib/uso/lectura-server.ts": "«Uso de Nexus» (etapa 4a): solo el nombre del equipo de cada persona (equipos.ts, puro); no lee tareas",
       // La acción única (2026-10-16, fase 0.2 de docs/nexus-sistema-de-trabajo-plan.md): el siguiente paso es una tarea.

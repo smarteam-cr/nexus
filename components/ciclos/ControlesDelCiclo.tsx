@@ -9,7 +9,9 @@
  *  · «Editar el ciclo»: el tramo, las fechas, la meta y el compromiso del servicio.
  *  · La sugerencia de la etapa que muestran los documentos (el Diagnóstico escrito → Planificación).
  *
- * El primer ciclo se abre solo al guardar cualquiera de estos cambios (lib/servicios/ciclos-server.ts).
+ * El primer ciclo se abre solo al guardar cualquiera de estos cambios (lib/servicios/ciclos-server.ts). Cada cambio
+ * lleva el ciclo que la pantalla tiene enfrente (`cicloId`): si otra pestaña ya lo cerró, el servidor responde 409
+ * («Este ciclo ya se cerró: recarga la página.») y no toca el ciclo siguiente.
  */
 import { useState } from "react";
 import { Field, Input, Modal, Select, Textarea } from "@/components/ui";
@@ -28,11 +30,12 @@ import {
 } from "@/lib/servicios/ciclo";
 import { useCiclo } from "./useCiclo";
 
-async function patchCiclo(projectId: string, body: unknown): Promise<string | null> {
+/** `cicloId`: el ciclo abierto que ve la pantalla (null = ninguno; undefined = no lo sabe quien llama). */
+async function patchCiclo(projectId: string, body: object, cicloId?: string | null): Promise<string | null> {
   const r = await fetch(`/api/projects/${projectId}/ciclo`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(cicloId === undefined ? body : { ...body, cicloId }),
   });
   if (r.ok) return null;
   const j = await r.json().catch(() => null);
@@ -42,17 +45,20 @@ async function patchCiclo(projectId: string, body: unknown): Promise<string | nu
 /** «Cambiar etapa» del ciclo: las cinco etapas, la actual marcada. */
 export function CambiarEtapaDelCiclo({
   projectId,
+  cicloId,
   etapa,
   onCambio,
 }: {
   projectId: string;
+  /** El ciclo abierto que ve la pantalla (`CicloParaElRiel.id`). */
+  cicloId?: string | null;
   etapa: EtapaDelCiclo | null;
   onCambio: () => void;
 }) {
   const toast = useToast();
   const mover = async (e: EtapaDelCiclo) => {
     if (e === etapa) return;
-    const err = await patchCiclo(projectId, { etapa: e });
+    const err = await patchCiclo(projectId, { etapa: e }, cicloId);
     if (err) toast.error(err);
     else {
       toast.success(`El ciclo pasó a ${ETIQUETA_DE_ETAPA[e]}.`);
@@ -81,6 +87,7 @@ export function CambiarEtapaDelCiclo({
  */
 export function SugerenciaDeEtapaDelCiclo({
   projectId,
+  cicloId,
   etapa,
   piezasConContenido,
   enHubspot,
@@ -88,6 +95,8 @@ export function SugerenciaDeEtapaDelCiclo({
   onResponder,
 }: {
   projectId: string;
+  /** El ciclo abierto que ve la pantalla (`CicloParaElRiel.id`). */
+  cicloId?: string | null;
   etapa: EtapaDelCiclo | null;
   piezasConContenido: readonly string[];
   enHubspot: boolean;
@@ -109,7 +118,7 @@ export function SugerenciaDeEtapaDelCiclo({
             disabled={usando}
             onClick={async () => {
               setUsando(true);
-              const err = await patchCiclo(projectId, { etapa: sugerida });
+              const err = await patchCiclo(projectId, { etapa: sugerida }, cicloId);
               setUsando(false);
               if (err) toast.error(err);
               else {
@@ -167,6 +176,7 @@ function VentanaDelCiclo({ projectId, onCerrar, onCambio }: { projectId: string;
               "",
               "PATCH",
               {
+                cicloId: estado.abierto?.id ?? null,
                 nombre: v.nombre || null,
                 desde: v.desde || null,
                 hasta: v.hasta || null,

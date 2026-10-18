@@ -1278,11 +1278,6 @@ export interface FacturacionPorCliente extends FacturacionDelAnio {
 }
 
 /**
- * Lo facturado y lo cobrado de cada cliente en un año, de la copia de Odoo, al lado de las ventas cerradas en HubSpot
- * (punto 8 de la revisión con Alex, 2026-09-30). La regla es `facturacionPorCliente` (pura). ⛔ No llama al ERP: sale de
- * la copia, igual que «Emparejar». Sin `anio`, el año anterior al de hoy en Costa Rica: el último año completo.
- */
-/**
  * El detalle de una factura de la copia (sus líneas y su nota), leído de Odoo a pedido (2026-10-17). null = la factura no
  * está en la copia. ⛔ Solo lee Odoo. Lanza `OdooError` si Odoo no contesta: la ruta lo dice tal cual.
  */
@@ -1293,6 +1288,11 @@ export async function cargarDetalleDeFacturaOdoo(facturaId: string): Promise<Det
   return detalleDeFacturaOdoo(t, { odooMoveId: f.odooMoveId, numero: f.numero, fecha: f.invoiceDate ? f.invoiceDate.toISOString().slice(0, 10) : null, moneda: f.moneda });
 }
 
+/**
+ * Lo facturado y lo cobrado de cada cliente en un año, de la copia de Odoo, al lado de las ventas cerradas en HubSpot
+ * (punto 8 de la revisión con Alex, 2026-09-30). La regla es `facturacionPorCliente` (pura). ⛔ No llama al ERP: sale de
+ * la copia, igual que «Emparejar». Sin `anio`, el año anterior al de hoy en Costa Rica: el último año completo.
+ */
 export async function cargarFacturacionPorCliente(opts: {
   anio?: number | null;
   /** El permiso de Ventas de quien mira: lo decide la ruta. */

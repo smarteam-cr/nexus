@@ -23,6 +23,7 @@ import { PLAZO_PARA_REVISAR_DIAS } from "@/lib/lo-propuesto/tipos";
 import { DESTINOS } from "@/lib/seguimiento/destinos";
 import { novedadesPorDecidirPorReunion } from "@/lib/seguimiento/novedades-server";
 import { loQuePideDecision } from "@/lib/seguimiento/tarjeta";
+import { clientesQueNoAbre } from "@/lib/auth/access";
 import { plural } from "../armar";
 import type { Alcance } from "../alcance-server";
 import type { Fuente } from "../fuente";
@@ -88,10 +89,18 @@ export const LO_QUE_DEJARON_TUS_REUNIONES: Fuente = {
           .map((id) => reunionParaLaTarjeta(id).catch(() => null)),
       )
     ).flatMap((r) => (r && !vencioSinRevisar(r.fecha, c.hoyISO) ? [{ sessionId: r.id, projectId: r.proyectos[0]?.id ?? "", clientId: r.clientId, titulo: r.titulo, fecha: r.fecha, empresa: r.empresa.nombre }] : []));
-    const reuniones = [...deProyectos.map((r) => ({ ...r, empresa: null as string | null })), ...otras];
+    // ⛔ Una tarea te puede llegar de la reunión de una cuenta que no puedes abrir (alguien te la propuso). De esa reunión
+    // no se nombra nada (ni el título ni la empresa) ni se cuenta lo que se decide en su tarjeta: solo tus tareas, que se
+    // deciden en Mis tareas. El acceso es el de `requireAccessToClient`, el mismo que usa Tareas.
+    const sinAcceso = otras.length ? await clientesQueNoAbre(a.teamMemberId, otras.map((r) => r.clientId)) : new Set<string>();
+    const reuniones = [
+      ...deProyectos.map((r) => ({ ...r, empresa: null as string | null, conAcceso: true })),
+      ...otras.map((r) => ({ ...r, conAcceso: !sinAcceso.has(r.clientId) })),
+    ];
     if (reuniones.length === 0) return [];
-    const ids = reuniones.map((r) => r.sessionId);
-    const clientes = [...new Set(reuniones.map((r) => r.clientId))];
+    const abiertas = reuniones.filter((r) => r.conAcceso);
+    const ids = abiertas.map((r) => r.sessionId);
+    const clientes = [...new Set(abiertas.map((r) => r.clientId))];
     const [minutas, pedidos, fichas, novedades] = await Promise.all([
       prisma.sessionMinute.findMany({ where: { sessionId: { in: ids }, status: "DRAFT" }, select: { sessionId: true } }),
       prisma.pedidoFueraDeAlcance
@@ -101,7 +110,7 @@ export const LO_QUE_DEJARON_TUS_REUNIONES: Fuente = {
           throw e;
         }),
       prisma.client.findMany({ where: { id: { in: clientes } }, select: { id: true, ficha: true } }),
-      novedadesPorDecidirPorReunion(reuniones, piezasQueDecide(a.permisos), c.ahora),
+      novedadesPorDecidirPorReunion(abiertas, piezasQueDecide(a.permisos), c.ahora),
     ]);
     const conMinuta = new Set(minutas.map((m) => m.sessionId));
     const fichaDe = new Map(fichas.map((f) => [f.id, leerFicha(f.ficha)]));
@@ -111,7 +120,11 @@ export const LO_QUE_DEJARON_TUS_REUNIONES: Fuente = {
     const conAlgo = reuniones
       .filter((r) => (vistas.has(r.sessionId) ? false : (vistas.add(r.sessionId), true)))
       .map((r) => {
-        const ficha = fichaDe.get(r.clientId);
+        const ficha = r.conAcceso ? fichaDe.get(r.clientId) : undefined;
+        if (!r.conAcceso) {
+          const partes = { minuta: false, pedidos: 0, campos: 0, novedades: 0, tareas: tareasDe.get(r.sessionId) ?? 0 };
+          return { r, partes, n: loQuePideDecision(partes), empresa: "" };
+        }
         const partes = {
           minuta: conMinuta.has(r.sessionId),
           pedidos: pedidos.filter((p) => p.sessionId === r.sessionId && p.clientId === r.clientId).length,
@@ -127,6 +140,21 @@ export const LO_QUE_DEJARON_TUS_REUNIONES: Fuente = {
     if (conAlgo.length === 0) return [];
 
     return conAlgo.map(({ r, partes, n, empresa }): Pendiente => {
+      if (!r.conAcceso) {
+        return {
+          clave: `reuniones-por-revisar-lo-que-dejaron:${r.sessionId}`,
+          fuente: "reuniones-por-revisar-lo-que-dejaron",
+          cuando: "semana",
+          delAgente: true,
+          clientId: null,
+          titulo: "Revisa lo que dejó una reunión con un cliente",
+          detalle: `Nexus te propuso ${plural(partes.tareas, "tarea", "tareas")} al leerla. Se deciden en Mis tareas.`,
+          meta: "Reuniones",
+          accion: "Ir a Mis tareas",
+          href: "/tareas",
+          desde: r.fecha,
+        };
+      }
       const que: string[] = [];
       if (partes.tareas) que.push(plural(partes.tareas, "tarea para ti", "tareas para ti"));
       if (partes.minuta) que.push("la minuta");

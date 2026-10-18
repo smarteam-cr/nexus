@@ -25,9 +25,17 @@ export async function usoDeHoy(usuarioEmail: string, ahora = new Date()): Promis
   return { mensajes, usd: gasto._sum.costUsd ?? 0 };
 }
 
-/** Lo que costó un hilo entero (todas sus llamadas). */
+/**
+ * Lo que costó un hilo entero (todas sus llamadas). Va por el agente y desde que nació el hilo para usar el índice
+ * `[agentSlug, at]` de `LlmCall`: el `origen` solo (un `startsWith` sin fecha) recorría la tabla entera.
+ */
 export async function costoDelHilo(hiloId: string): Promise<number> {
-  const r = await prisma.llmCall.aggregate({ _sum: { costUsd: true }, where: { origen: { startsWith: origenDelHilo(hiloId) } } });
+  const hilo = await prisma.hiloDeChat.findUnique({ where: { id: hiloId }, select: { createdAt: true } });
+  if (!hilo) return 0;
+  const r = await prisma.llmCall.aggregate({
+    _sum: { costUsd: true },
+    where: { agentSlug: SLUG_DEL_CHAT_DE_NEXUS, at: { gte: hilo.createdAt }, origen: { startsWith: origenDelHilo(hiloId) } },
+  });
   return r._sum.costUsd ?? 0;
 }
 
