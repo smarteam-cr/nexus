@@ -426,6 +426,12 @@ describe("un renderer, un contrato de datos", () => {
     /* La posición en la Escala de Rendimiento (2026-09-12): el mismo dato en cuatro momentos
        —Propuesta, Kickoff, Diagnóstico, Entrega—, así que un solo esquema para los cuatro. */
     escala_posicion: "generico",
+    /* La propuesta de servicio recurrente (2026-10-18) reusa las MISMAS defs de la propuesta de HubSpot para el antes y
+       después, los casos de uso, el partner y el cierre: mismo esquema en los dos documentos. */
+    antes_despues: "generico",
+    use_cases: "generico",
+    partner: "generico",
+    cta: "generico",
     // ── Módulos de canvas: propios de UNA pieza.
     kickoff_equipo: "modulo",
     kickoff_horarios: "modulo",
@@ -444,11 +450,7 @@ describe("un renderer, un contrato de datos", () => {
     entrega_objetivos: "modulo",
     prompts_breeze: "modulo",
     cronograma_gantt: "modulo",
-    antes_despues: "modulo",
     cronograma: "modulo",
-    cta: "modulo",
-    partner: "modulo",
-    use_cases: "modulo",
     // El HILO del diagnóstico (2026-09-28): los códigos S / F / OBJ son propios de ese documento.
     diagnostico_objetivos: "modulo",
     diagnostico_problema: "modulo",
@@ -475,6 +477,13 @@ describe("un renderer, un contrato de datos", () => {
     web_methodology: "modulo",
     web_scope: "modulo",
     why_us: "modulo",
+    /* La propuesta de un SERVICIO RECURRENTE (2026-10-18): cómo opera, el ciclo como ciclo y el nivel de servicio son
+       propios de esa plantilla; «qué contiene el acuerdo» es la grilla de tarjetas con ícono de las secciones creables,
+       que solo esta plantilla declara. */
+    operacion_servicio: "modulo",
+    ciclo_servicio: "modulo",
+    nivel_servicio: "modulo",
+    cards_icono: "modulo",
   };
 
   it("⭐ nada queda sin clasificar, y nada cambia de clase en silencio", () => {
@@ -577,8 +586,13 @@ describe("BC_TEMPLATES: toda def resuelve renderer y las keys están congeladas"
       "hero", "diagnostico", "posicion_escala", "arquitectura_sitio", "arquitectura_conexion",
       "alcance", "metodologia", "inversion", "forma_de_pago", "por_que_smarteam",
     ]);
+    // `recurrente_v1` (2026-10-18): la propuesta de un servicio recurrente, con lo que se vendió a mano a Cayalá y Grupo Inve.
+    expect(BC_TEMPLATES.recurrente_v1.sections.map((d) => d.key)).toEqual([
+      "hero", "antes_despues", "acuerdo", "operacion", "metodologia", "casos_de_uso", "nivel_servicio", "inversion",
+      "forma_de_pago", "partner", "cta",
+    ]);
     // Un template nuevo declara acá su snapshot al nacer.
-    expect(Object.keys(BC_TEMPLATES).sort()).toEqual(["hubspot_v1", "website_v1"]);
+    expect(Object.keys(BC_TEMPLATES).sort()).toEqual(["hubspot_v1", "recurrente_v1", "website_v1"]);
   });
 
   it("hero abre cada template", () => {

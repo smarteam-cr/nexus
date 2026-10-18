@@ -210,14 +210,19 @@ export default function NuevoProyectoStepper() {
      (lib/servicios/recurrencia.ts). Abre el formulario con el tipo elegido y la empresa ya buscada, una vez, y saca los
      parámetros para que recargar no lo vuelva a abrir. El tipo se valida contra la tabla: un valor raro se ignora. */
   const tipoPedido = useRef<ProjectPipelineKey | null>(null);
+  /* `&propuesta=<id>` (2026-10-18): lo manda «Dar de alta el servicio» de una propuesta recurrente. Viaja en el alta y
+     el proyecto nace con su servicio y sus casos de uso (lib/servicios/servicio-server.ts). */
+  const propuestaPedida = useRef<string | null>(null);
   useEffect(() => {
     if (!puedeCrear) return;
     const url = new URL(window.location.href);
     const pedido = parseProjectPipeline(url.searchParams.get("alta"));
     if (!pedido) return;
     const dom = url.searchParams.get("dominio")?.trim() ?? "";
+    propuestaPedida.current = url.searchParams.get("propuesta")?.trim() || null;
     url.searchParams.delete("alta");
     url.searchParams.delete("dominio");
+    url.searchParams.delete("propuesta");
     window.history.replaceState(window.history.state, "", url.toString());
     setAbierto(true);
     if (dom) setDominio(dom);
@@ -345,7 +350,7 @@ export default function NuevoProyectoStepper() {
       const res = await fetch(RUTAS_DEL_ALTA.crear, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cuerpo),
+        body: JSON.stringify(propuestaPedida.current ? { ...cuerpo, businessCaseId: propuestaPedida.current } : cuerpo),
       });
       const data = (await res.json()) as {
         projectId?: string;

@@ -17,6 +17,9 @@ import PropuestaConChat from "@/components/business-cases/PropuestaConChat";
 import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
 import { AccionDeCabecera, CabeceraDeFicha } from "@/components/layout/CabeceraDeFicha";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
+import { esTipoRecurrente } from "@/lib/business-cases/case-types";
+import { servicioDelCatalogo } from "@/lib/servicios/catalogo";
+import { urlDelAltaDelServicio } from "@/lib/servicios/propuesta";
 import { getBrandLogos, brandLogoMap } from "@/lib/external/smarteam-logo";
 import { hubspotCompanyUrl, hubspotDealUrl } from "@/lib/hubspot/urls";
 import { cargarPaisDelCliente } from "@/lib/business-cases/pais-del-cliente-server";
@@ -55,7 +58,8 @@ export default async function PropuestaPage({
       caseSubtype: true,
       language: true,
       exploracionId: true,
-      client: { select: { id: true, name: true, kind: true, logoUrl: true, logoDarkUrl: true, logoScale: true, hubspotCompanyId: true } },
+      approvedAt: true,
+      client: { select: { id: true, name: true, kind: true, emailDomains: true, logoUrl: true, logoDarkUrl: true, logoScale: true, hubspotCompanyId: true } },
     },
   });
   if (!bc) notFound();
@@ -81,6 +85,13 @@ export default async function PropuestaPage({
       : "contexto";
   const empresaUrl = hubspotCompanyUrl(portal?.hubspotPortalId, bc.hubspotCompanyId ?? bc.client.hubspotCompanyId);
   const tratoUrl = hubspotDealUrl(portal?.hubspotPortalId, bc.hubspotDealId);
+  /* Una propuesta RECURRENTE aprobada (iniciativa 4, paso 4): el alta del servicio, para que el proyecto nazca con su
+     servicio y sus casos de uso. Lleva a «Nuevo proyecto»; la propuesta no se toca. */
+  const servicioVendido = esTipoRecurrente(resolved.typeDef) ? servicioDelCatalogo(resolved.caseSubtype) : null;
+  const altaDelServicio =
+    servicioVendido && bc.approvedAt
+      ? urlDelAltaDelServicio({ servicio: servicioVendido, dominio: bc.client.emailDomains[0] ?? null, propuestaId: bc.id })
+      : null;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -101,6 +112,11 @@ export default async function PropuestaPage({
         }
         acciones={
           <>
+            {altaDelServicio && (
+              <AccionDeCabecera href={altaDelServicio} title="El proyecto nace con el servicio y los casos de uso de esta propuesta">
+                Dar de alta el servicio
+              </AccionDeCabecera>
+            )}
             {bc.client.kind === "CLIENTE" && (
               <AccionDeCabecera href={`/clients/${bc.client.id}`} title="La ficha del cliente">
                 Ver ficha del cliente

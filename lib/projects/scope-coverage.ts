@@ -80,6 +80,12 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "ya tiene un servicio recurrente vivo usa `proyectosAbiertos` (el criterio clasificable, en memoria). Filtrar con " +
       "`clasificable` en la consulta dejaría afuera justo a los proyectos que cerraron, que también se recomiendan.",
   },
+  "lib/servicios/servicio-server.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: lee UN proyecto por su id (la guía del servicio, «Pasar a recurrente», sus " +
+      "rutinas) y, en el alta, la propuesta recurrente del mismo cliente por su id o por el trato. Nunca lista proyectos.",
+  },
   "lib/lo-propuesto/registro-server.ts": {
     modo: "exento",
     razon:

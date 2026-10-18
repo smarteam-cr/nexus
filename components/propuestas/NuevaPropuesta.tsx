@@ -5,7 +5,9 @@
  *
  * Tres pasos en una columna, cada uno se cierra en una línea al completarse:
  *   1. Empresa      — el dominio → la empresa en HubSpot y sus tratos (GET /api/business-cases/lookup).
- *   2. Qué se cotiza — el tipo (BC_TYPE_CATALOG): decide la plantilla y las etiquetas iniciales.
+ *   2. Qué se cotiza — primero si es un PROYECTO (se hace una vez) o un SERVICIO RECURRENTE (todos los meses); después
+ *      el tipo (BC_TYPE_CATALOG) o el servicio del catálogo (lib/servicios/catalogo.ts). Decide la plantilla y las
+ *      etiquetas iniciales.
  *   3. Trato y nombre — el trato es opcional; el nombre sale del trato si se elige uno.
  *
  * CON O SIN PREVENTA: si la empresa ya está en Nexus y pasó por Preventa, se ofrece al elegirla
@@ -18,7 +20,8 @@ import { useRouter } from "next/navigation";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
-import { BC_TYPE_CATALOG, DEFAULT_BC_TYPE_ID, resolveBcType } from "@/lib/business-cases/case-types";
+import { BC_TYPE_CATALOG, DEFAULT_BC_TYPE_ID, esTipoRecurrente, resolveBcType, SERVICIO_RECURRENTE_TYPE_ID } from "@/lib/business-cases/case-types";
+import { CATALOGO_DE_SERVICIOS } from "@/lib/servicios/catalogo";
 import { fechaDeVentas } from "@/lib/business-cases/estado-de-la-propuesta";
 
 type Deal = {
@@ -79,11 +82,14 @@ export default function NuevaPropuesta() {
   // Última sugerencia automática de nombre: si nadie la tocó, se recalcula por tipo y por trato.
   const suggestedNameRef = useRef("");
 
-  const suggestName = useCallback((data: Lookup, typeId: string): string => {
+  const suggestName = useCallback((data: Lookup, typeId: string, subtipo?: string): string => {
     const won = data.deals.find((x) => x.isWon);
     if (won?.name) return won.name;
     const company = data.company?.name ?? "";
-    return typeId === DEFAULT_BC_TYPE_ID ? company : `${resolveBcType(typeId).shortLabel} — ${company}`;
+    if (typeId === DEFAULT_BC_TYPE_ID) return company;
+    // Un servicio recurrente se nombra por su servicio («SmartLoop — Acme»), no por la modalidad.
+    const servicio = typeId === SERVICIO_RECURRENTE_TYPE_ID ? CATALOGO_DE_SERVICIOS.find((s) => s.clave === subtipo)?.nombre : null;
+    return `${servicio ?? resolveBcType(typeId).shortLabel} — ${company}`;
   }, []);
 
   const runSearch = useCallback(
@@ -133,11 +139,18 @@ export default function NuevaPropuesta() {
   }, [domain, busy, paso, runSearch]);
 
   const selectedType = resolveBcType(caseTypeId);
+  const esRecurrente = esTipoRecurrente(selectedType);
+  const tiposDeProyecto = BC_TYPE_CATALOG.filter((t) => !esTipoRecurrente(t));
+  const elegirModalidad = (recurrente: boolean) => {
+    if (recurrente === esRecurrente) return;
+    setCaseTypeId(recurrente ? SERVICIO_RECURRENTE_TYPE_ID : DEFAULT_BC_TYPE_ID);
+    setSubtypeId(recurrente ? CATALOGO_DE_SERVICIOS[0].clave : "");
+  };
 
   const seguirAlTrato = () => {
     if (!lookup) return;
     if (name === suggestedNameRef.current) {
-      const suggestion = suggestName(lookup, caseTypeId);
+      const suggestion = suggestName(lookup, caseTypeId, subtypeId);
       suggestedNameRef.current = suggestion;
       setName(suggestion);
     }
@@ -148,7 +161,7 @@ export default function NuevaPropuesta() {
   const elegirTrato = (d: Deal | null) => {
     setDealId(d?.id ?? "");
     if (!lookup || name !== suggestedNameRef.current) return;
-    const suggestion = d ? d.name : suggestName(lookup, caseTypeId);
+    const suggestion = d ? d.name : suggestName(lookup, caseTypeId, subtypeId);
     suggestedNameRef.current = suggestion;
     setName(suggestion);
   };
@@ -306,8 +319,58 @@ export default function NuevaPropuesta() {
           </div>
           {paso === "tipo" && (
             <div className="mt-3.5 flex flex-col gap-3.5">
+              <div role="radiogroup" aria-label="Proyecto o servicio recurrente" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {[
+                  { recurrente: false, titulo: "Un proyecto", texto: "Se hace una vez y se entrega: una implementación, un sitio, una integración." },
+                  { recurrente: true, titulo: "Un servicio recurrente", texto: "Se hace todos los meses, con su cadencia, sus rutinas y su nivel de servicio." },
+                ].map((m) => (
+                  <button
+                    key={m.titulo}
+                    type="button"
+                    role="radio"
+                    aria-checked={esRecurrente === m.recurrente}
+                    onClick={() => elegirModalidad(m.recurrente)}
+                    className={cn(
+                      "flex flex-col gap-0.5 rounded-lg border p-3 text-left transition-colors",
+                      esRecurrente === m.recurrente ? "border-brand bg-info-surface" : "border-line bg-surface hover:bg-surface-hover",
+                    )}
+                  >
+                    <span className="text-sm font-semibold text-fg">{m.titulo}</span>
+                    <span className="text-xs leading-[17px] text-fg-muted">{m.texto}</span>
+                  </button>
+                ))}
+              </div>
+              {esRecurrente ? (
+                <div role="radiogroup" aria-label="Qué servicio" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {CATALOGO_DE_SERVICIOS.map((s) => {
+                    const elegido = subtypeId === s.clave;
+                    return (
+                      <button
+                        key={s.clave}
+                        type="button"
+                        role="radio"
+                        aria-checked={elegido}
+                        onClick={() => setSubtypeId(s.clave)}
+                        className={cn(
+                          "flex items-start gap-2.5 rounded-lg border p-3 text-left transition-colors",
+                          elegido ? "border-brand bg-info-surface" : "border-line bg-surface hover:bg-surface-hover",
+                        )}
+                      >
+                        <span
+                          aria-hidden
+                          className={cn("mt-[3px] h-3.5 w-3.5 flex-shrink-0 rounded-full bg-surface", elegido ? "border-4 border-brand" : "border border-line")}
+                        />
+                        <span className="flex flex-col gap-0.5">
+                          <span className="text-sm font-semibold text-fg">{s.nombre}</span>
+                          <span className="text-xs leading-[17px] text-fg-muted">{s.descripcion}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
               <div role="radiogroup" aria-label="Qué se cotiza" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {BC_TYPE_CATALOG.map((t) => {
+                {tiposDeProyecto.map((t) => {
                   const elegido = caseTypeId === t.id;
                   return (
                     <button
@@ -343,7 +406,8 @@ export default function NuevaPropuesta() {
                   );
                 })}
               </div>
-              {selectedType.subtypes?.length ? (
+              )}
+              {!esRecurrente && selectedType.subtypes?.length ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[13px] font-semibold text-fg">Tipo de sitio</span>
                   {selectedType.subtypes.map((s) => (

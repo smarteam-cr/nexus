@@ -9,7 +9,14 @@
  * agregar un tipo futuro = 1 línea acá, sin migración; un valor desconocido en DB
  * nunca rompe porque resolveBcType() degrada al default). `null` = implementación
  * de HubSpot (todos los BCs legacy y el default del stepper).
+ *
+ * PROYECTO O SERVICIO RECURRENTE (2026-10-18, roadmap «La siguiente serie», iniciativa 3): al crear una propuesta se
+ * elige primero si es algo que se hace UNA vez (los tipos de siempre) o un servicio que se hace todos los meses
+ * (`servicio_recurrente`). En ese caso el SUBTIPO es la clave del servicio del catálogo (lib/servicios/catalogo.ts):
+ * sumar un servicio al catálogo lo suma acá sin tocar este archivo.
  */
+import { CATALOGO_DE_SERVICIOS } from "@/lib/servicios/catalogo";
+import { RECURRENTE_TAG } from "@/lib/tags/catalog";
 
 /**
  * Color del tag del tipo en los listados. Son nombres de variante de `components/ui/Badge`
@@ -19,7 +26,7 @@
  * propuesta no es un problema. Los tonos son CATEGÓRICOS (distinguir uno de otro), no de estado:
  * que "Integración" sea verde no dice que esté bien.
  */
-export type BcTypeTone = "warning" | "info" | "success" | "purple" | "primary";
+export type BcTypeTone = "warning" | "info" | "success" | "purple" | "primary" | "default";
 
 export interface BcTypeDef {
   id: string;
@@ -47,10 +54,14 @@ export interface BcTypeDef {
   subtypes?: { id: string; label: string; extraTags?: string[] }[];
   /** false = visible pero deshabilitado en el stepper ("próximamente"). */
   enabled: boolean;
+  /** "recurrente" = un servicio que se hace todos los meses; ausente = se hace una vez (un proyecto). */
+  modalidad?: "recurrente";
 }
 
 export const HUBSPOT_TEMPLATE_ID = "hubspot_v1";
 export const WEBSITE_TEMPLATE_ID = "website_v1";
+export const RECURRENTE_TEMPLATE_ID = "recurrente_v1";
+export const SERVICIO_RECURRENTE_TYPE_ID = "servicio_recurrente";
 
 export const DEFAULT_BC_TYPE_ID = "hubspot_implementation";
 
@@ -116,7 +127,27 @@ export const BC_TYPE_CATALOG: BcTypeDef[] = [
     defaultTags: ["custom_dev"],
     enabled: true,
   },
+  {
+    id: SERVICIO_RECURRENTE_TYPE_ID,
+    label: "Servicio recurrente",
+    shortLabel: "Recurrente",
+    tone: "default", // el único neutro: no es una plataforma ni un alcance, es la modalidad
+    description: "Un servicio que se hace todos los meses, con su cadencia, sus rutinas y su nivel de servicio.",
+    templateId: RECURRENTE_TEMPLATE_ID,
+    /* Lo único que elegir este tipo vuelve CIERTO: que el servicio es recurrente (grupo `modalidad`). Qué plataforma o
+       qué Hubs, no: eso lo agrega el CSE en la tira de tags. */
+    defaultTags: [RECURRENTE_TAG],
+    /* El subtipo ES el servicio del catálogo. No siembra tags: el nombre del servicio no afirma una plataforma. */
+    subtypes: CATALOGO_DE_SERVICIOS.map((s) => ({ id: s.clave, label: s.nombre })),
+    enabled: true,
+    modalidad: "recurrente",
+  },
 ];
+
+/** ¿El tipo es un servicio recurrente? (el selector de «Proyecto o servicio recurrente» y la plantilla recurrente). */
+export function esTipoRecurrente(t: Pick<BcTypeDef, "modalidad"> | null | undefined): boolean {
+  return t?.modalidad === "recurrente";
+}
 
 const BY_ID: Record<string, BcTypeDef> = Object.fromEntries(BC_TYPE_CATALOG.map((t) => [t.id, t]));
 

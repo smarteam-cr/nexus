@@ -24,7 +24,8 @@ import {
   USE_CASES_DEF,
 } from "./shared-sections.defs";
 import { WEBSITE_SECTION_DEFS } from "./website.defs";
-import { HUBSPOT_TEMPLATE_ID, WEBSITE_TEMPLATE_ID } from "@/lib/business-cases/case-types";
+import { RECURRENTE_SECTION_DEFS } from "./recurrente.defs";
+import { HUBSPOT_TEMPLATE_ID, RECURRENTE_TEMPLATE_ID, WEBSITE_TEMPLATE_ID } from "@/lib/business-cases/case-types";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { customDef } from "@/lib/landing/catalogo-de-secciones";
 
@@ -102,6 +103,17 @@ export const BC_TEMPLATES: Record<string, BcTemplateDef> = {
     maxTokens: 12000, // 8 secciones más ricas que las del BC clásico
     features: { useCaseChecklist: false }, // sin sección de materialización en las 8 (F7)
     sections: despuesDeLaInversion(WEBSITE_SECTION_DEFS),
+  },
+  /* El SERVICIO RECURRENTE (2026-10-18, roadmap «La siguiente serie», iniciativa 3): lo que Ventas ya vendió a mano a
+     Cayalá y a Grupo Inve, como secciones del motor. Lo que es compromiso (cadencia, ciclo, nivel de servicio) lo siembra
+     Nexus desde el catálogo de servicios (lib/servicios/propuesta.ts); el agente escribe el resto. */
+  [RECURRENTE_TEMPLATE_ID]: {
+    id: RECURRENTE_TEMPLATE_ID,
+    caseLabel: "Propuesta",
+    agentIntro:
+      "Eres un consultor de Smarteam (Elite HubSpot Partner · Partner de Insider, LATAM) que arma la PROPUESTA DE UN SERVICIO RECURRENTE para una empresa: un servicio que se hace todos los meses, con su cadencia, sus reuniones fijas y su nivel de servicio, no un proyecto que se entrega una vez. Posicionamiento de la marca: Smarteam no vende software — lo pone a producir.\n\nESTA PROPUESTA SE PRESENTA EN PANTALLA, EN VIVO: escribe en estilo ejecutivo y ESCUETO, en tuteo. Frases cortas; ningún campo de más de 2 líneas; títulos de 3 a 6 palabras. La cadencia, el ciclo y el nivel de servicio los escribe Nexus: no los repitas ni les cambies los tiempos en otras secciones.",
+    maxTokens: 8000,
+    sections: despuesDeLaInversion(RECURRENTE_SECTION_DEFS),
   },
 };
 

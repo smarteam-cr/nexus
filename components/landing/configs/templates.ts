@@ -34,6 +34,8 @@ import { DiagramSection } from "../sections-diagram";
 import { HubsClienteSection } from "../sections-hubs";
 import { EscalaPosicionSection } from "../sections-escala";
 import { FormaDePagoSection } from "../sections-forma-de-pago";
+import { CicloDelServicioSection, NivelDeServicioSection, OperacionDelServicioSection } from "../sections-recurrente";
+import { CICLO_TYPE, NIVEL_TYPE, OPERACION_TYPE } from "./recurrente.defs";
 import {
   WebDiagnosisSection,
   SiteArchitectureSection,
@@ -84,6 +86,10 @@ export const SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
   web_methodology: WebMethodologySection,
   web_investment: InvestmentSection,
   why_us: WhyUsSection,
+  // Template servicio recurrente (2026-10-18): cómo opera, el ciclo como ciclo y el nivel de servicio.
+  [OPERACION_TYPE]: OperacionDelServicioSection,
+  [CICLO_TYPE]: CicloDelServicioSection,
+  [NIVEL_TYPE]: NivelDeServicioSection,
   // Sección personalizada: NINGÚN template la declara — la crea el vendedor en runtime y
   // el resolver la sintetiza desde la key (`custom:*`). Por eso `registry.test.ts` la
   // excluye del chequeo de huérfanos con un set aparte.

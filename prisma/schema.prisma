@@ -419,6 +419,19 @@ model Project {
   // "mensual" | "semestral" | "anual"—, o null si no se definió. NO es requerido: un cliente puede
   // ir mes a mes. Texto y no enum, como el resto de los valores de negocio que pueden crecer.
   compromiso               String?
+  // El SERVICIO RECURRENTE del proyecto (2026-10-18, roadmap «La siguiente serie», iniciativa 4): la clave del catálogo
+  // (lib/servicios/catalogo.ts: smartloop, sitio-web, soporte-hubspot, contenido…). Lo elige una persona al «Pasar a
+  // recurrente» o nace de una propuesta recurrente ganada. null = se hace una vez (o lo dice su pipeline: SmartLoop).
+  // Texto y no enum: sumar un servicio es una entrada del catálogo, sin SQL.
+  servicioRecurrente       String?
+  // Desde cuándo corre el servicio: lo de antes queda como historia y la guía y las rutinas cuentan desde acá.
+  servicioDesde            DateTime?
+  // Lo que la persona hizo con las rutinas del servicio (lib/servicios/rutinas.ts › EstadoDeLasRutinas): qué reuniones
+  // fijas dijo que agendó y hasta qué semana creó las tareas que se repiten. null = todavía nada.
+  servicioRutinas          Json?
+  // La propuesta recurrente de la que nació el servicio, si nació de una. Escalar sin FK, como `pruebaDeProjectId`:
+  // borrar la propuesta no rompe el proyecto.
+  servicioPropuestaId      String?
   // Las piezas que el equipo ocultó del riel de este proyecto (2026-10-12, pedido de Elías): sus slugs. No
   // borra nada ni apaga la pieza: quedan en «Ver N piezas más». Es del proyecto, no de una persona.
   piezasOcultas            String[] @default([])

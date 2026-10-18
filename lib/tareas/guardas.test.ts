@@ -208,6 +208,8 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "lib/nexus-chat/acciones-server.ts": "las acciones sugeridas de una persona en una cuenta: sus tareas SOLO por lib/tareas/para-operaciones.ts (sin la cita, el contexto ni las notas) y los sprints que lidera (equipos.ts, puro); no escribe",
       // SmartLoop, etapa 6 (2026-10-17): recomendar la recurrencia deja una tarea al CSE.
       "lib/servicios/recurrencia-server.ts": "«Dejar la tarea» de la recomendación de pasar a SmartLoop: crea UNA tarea por el escritor único (crearTarea, con origenId); no lee tareas",
+      // El servicio recurrente (2026-10-18, iniciativa 4): las rutinas y la tarea de mover el proyecto en HubSpot.
+      "lib/servicios/servicio-server.ts": "las tareas que se repiten de un servicio recurrente y la de mover el proyecto en HubSpot: las crea por el escritor único (crearTarea, origen «plantilla», con origenId por semana); no lee tareas",
       // Las tareas de HubSpot (2026-10-15, etapa 3 de docs/mi-dia-plan.md).
       "lib/tareas-hubspot/reglas.ts": "las tareas de HubSpot: solo los tipos de prioridad (puro)",
       // «Actualizar escala» (2026-10-18): el agente que ubica la escala lee qué se está haciendo en la cuenta.

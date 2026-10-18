@@ -12,6 +12,7 @@
  *  · Quitar un caso de uso lo deja «descartado», no lo borra: el historial del ciclo se conserva.
  */
 import "server-only";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { guiaDeServicio, type ClaveDeServicio } from "@/lib/servicios";
@@ -27,6 +28,7 @@ import {
   type MovimientoEnLaEscala,
 } from "@/lib/servicios/ciclo";
 import { leerCierre, type CierreGuardado } from "@/lib/servicios/cierre";
+import { servicioDelCatalogo } from "@/lib/servicios/catalogo";
 
 export class ErrorDelCiclo extends Error {
   constructor(
@@ -127,11 +129,14 @@ async function proyectoRecurrente(projectId: string) {
     where: { id: projectId },
     select: {
       id: true, clientId: true, hubspotPipelineId: true, hubspotServiceId: true, hubspotPipelineStageLabel: true,
-      esPrueba: true, compromiso: true,
+      esPrueba: true, compromiso: true, servicioRecurrente: true,
     },
   });
   if (!p) throw new ErrorDelCiclo("El proyecto no existe.", 404);
-  const servicio = resolvePipeline(p.hubspotPipelineId)?.servicioRecurrente ?? null;
+  /* El pipeline manda (un proyecto en el pipeline de SmartLoop es SmartLoop); si no, el servicio que se le eligió en Nexus
+     al «Pasar a recurrente» (2026-10-18), mientras una persona lo mueve en HubSpot. Solo si ese servicio avanza por ciclos. */
+  const servicio =
+    resolvePipeline(p.hubspotPipelineId)?.servicioRecurrente ?? servicioDelCatalogo(p.servicioRecurrente)?.ciclo?.servicio ?? null;
   return { ...p, servicio };
 }
 
@@ -290,7 +295,7 @@ const fecha = (s: string | null | undefined) => (s ? new Date(`${s}T00:00:00.000
 
 export async function abrirCiclo(
   projectId: string,
-  datos: { nombre?: string | null; desde?: string | null; hasta?: string | null; meta?: string | null },
+  datos: { nombre?: string | null; desde?: string | null; hasta?: string | null; meta?: string | null; etapa?: EtapaDelCiclo },
   por: string,
 ) {
   const p = await proyectoRecurrente(projectId);
@@ -310,7 +315,7 @@ export async function abrirCiclo(
 
 function abrirCicloEnTx(
   projectId: string,
-  datos: { nombre?: string | null; desde?: string | null; hasta?: string | null; meta?: string | null },
+  datos: { nombre?: string | null; desde?: string | null; hasta?: string | null; meta?: string | null; etapa?: EtapaDelCiclo },
   por: string,
 ) {
   return prisma.$transaction(async (tx) => {
@@ -325,6 +330,8 @@ function abrirCicloEnTx(
         desde: fecha(datos.desde),
         hasta: fecha(datos.hasta),
         meta: datos.meta?.trim() || null,
+        // «Pasar a recurrente» abre el ciclo 1 en la etapa que propuso Nexus y confirmó la persona.
+        ...(datos.etapa ? { etapa: datos.etapa } : {}),
         creadoPor: por,
       },
       select: { id: true, numero: true },
@@ -591,4 +598,34 @@ export async function actualizarCasoDeLaEmpresa(
               : {}),
         },
   });
+}
+
+/**
+ * Los casos de uso que vendió una propuesta recurrente, en el plan del proyecto que nace de ella (iniciativa 4, paso 4):
+ * origen «propuesta», sin ciclo todavía (entran al ciclo cuando se planifica). Dentro de la transacción del alta. No
+ * duplica: un título que el proyecto ya tiene no se vuelve a crear.
+ */
+export async function sumarCasosDeLaPropuestaEnTx(
+  tx: Prisma.TransactionClient,
+  d: { clientId: string; projectId: string; propuesta: string; casos: ReadonlyArray<{ titulo: string; resultado: string | null }>; por: string },
+): Promise<number> {
+  if (!d.casos.length) return 0;
+  const ya = await tx.casoDeUso.findMany({ where: { projectId: d.projectId }, select: { titulo: true } });
+  const vistos = new Set(ya.map((c) => c.titulo.trim().toLowerCase()));
+  const nuevos = d.casos.filter((c) => !vistos.has(c.titulo.trim().toLowerCase()));
+  if (!nuevos.length) return 0;
+  await tx.casoDeUso.createMany({
+    data: nuevos.map((c, i) => ({
+      clientId: d.clientId,
+      projectId: d.projectId,
+      titulo: c.titulo,
+      resultado: c.resultado,
+      porque: `Vendido en la propuesta «${d.propuesta}».`,
+      origen: "propuesta",
+      estado: "en_plan",
+      orden: i,
+      creadoPor: d.por,
+    })),
+  });
+  return nuevos.length;
 }
