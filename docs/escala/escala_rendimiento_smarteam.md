@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 8.8.0
-fecha: 2026-10-09
+version: 8.9.0
+fecha: 2026-10-18
 estado: En revisión: cambia con el criterio de su responsable y con el feedback que el equipo manda desde Nexus; cada feedback lo decide un super admin
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
 ---
@@ -1635,6 +1635,8 @@ Términos que aparecen en la escala, la especificación o el manual, o que el eq
 
 ## Historial de versiones
 
+**8.9.0 (2026-10-18).** Dos ediciones nuevas, con sus tres áreas enteras: Turismo y Automotriz. Turismo es para hoteles, operadores, agencias de viaje y empresas de experiencias que venden por reserva directa y por intermediarios, con temporadas; en Ventas sus dimensiones de producción son Oferta y tarifas, Priorización de consultas, Seguimiento de cotizaciones y reservas, y Reservas ganadas, perdidas y canceladas; en Marketing, Marca y reputación; y en Servicio, Consistencia de la experiencia, Priorización de viajeros, Acompañamiento del viajero y Autoservicio del viajero. Pide, entre otras cosas, que una reserva descuente el cupo en todos los canales a la vez, las mismas tarifas y condiciones en el sitio y en las OTAs, las fechas de corte de cada bloqueo de grupo, la razón de cada cancelación, los perfiles en los sitios de reseñas al día, lo que cuesta una reserva directa frente a la comisión, el cambio de turno registrado y la queja atendida antes de que el viajero se vaya. Automotriz es para el concesionario que vende vehículos nuevos y usados y atiende su posventa en el taller; en Ventas sus dimensiones de producción son Modelos y cotización, Priorización de interesados, Seguimiento de pruebas y cotizaciones, y Ventas ganadas y perdidas; y en Servicio, Consistencia del taller, Priorización de clientes del taller, Seguimiento del vehículo y Escalabilidad del taller. Pide, entre otras cosas, que cada prueba de manejo deje su siguiente paso, un proceso escrito para recibir el usado, que apartar un vehículo lo marque en el inventario, una sola lista de precios y bonos, la orden de trabajo con el presupuesto aprobado antes de reparar, el estado del vehículo avisado sin que el cliente llame, el recordatorio del mantenimiento y el aviso de cada llamado a revisión. En Automotriz, recordarle al dueño su mantenimiento es de Servicio, y ofrecerle cambiar de vehículo, de Ventas. No cambia ningún criterio de la matriz ni su cálculo.
+
 **8.8.0 (2026-10-09).** Limpieza de la revisión de la 8.7, para que el consultor ubique a cada empresa en un nivel que la empresa reconozca: no entra ni sale ningún criterio y ningún identificador cambia. Las 24 preguntas se reescriben para que pregunten lo que decide Funcional en su dimensión, con las palabras del cliente y para contestarse describiendo, no con sí o no. Las frases de Deficiente e Inicial y sus señales siguen una sola regla, que ahora también dice Cómo se evalúa cada dimensión: Deficiente es que lo que pide Funcional no existe; Inicial, que existe a medias: sin regularidad, sin escribir, fuera del sistema o dependiendo de una persona. Ya no castigan que no se use IA ni niegan lo que recién pide Eficiente, y Deficiente e Inicial dicen cosas distintas; como esos dos niveles se asignan por el que mejor calza, leyendo la frase y sus señales en conjunto y no por cumplir cada señal, las señales conservan su identificador aunque cambie su redacción. Lo que no todas las empresas tienen abre con una condición: los canales que la empresa eligió en su plan, y no los cuatro; el canal conversacional, si se atiende por él; la agencia, que ya no cuenta en contra si el equipo es dueño del calendario, del brief, de la aprobación y de los accesos; y lo que no siempre existe —un ERP, un comité de compra, formularios en el sitio, más de un canal escrito, más de un agente, que se pidan calificaciones, un producto que se usa de forma continua, que Marketing le pase leads a Ventas o que entre alguien nuevo al equipo— cuenta solo donde existe. Las palabras que deciden tienen valor: el pronóstico confiable cae dentro de ±10 % en la mayoría de los meses, un negocio estancado es el que pasó el plazo que el proceso define para su etapa, «todo negocio» es desde la puesta en marcha y los duplicados se revisan cada trimestre. Óptimo dice qué hace la IA, quién valida y qué se ve en el sistema. Los resultados y los costos de quedarse prometen solo lo que entrega su nivel, y los mensajes de riesgo se reescriben para decir qué le pasa al cliente: reportes inflados, mensajes repetidos o un equipo que trabaja con información vieja. La escala dice vendedor, negocio, caso, cliente ideal, tablero, nutrición, fuga, pronóstico, puntaje de leads, indicador de salud, respuestas guardadas, material de venta, traspaso y revisión del pipeline, y Tracción del Deal pasa a llamarse Tracción del Negocio. Servicio deja de pedir en Funcional lo que ha pagado el cliente, que Ventas pide en Eficiente; los clientes clave los define cada empresa en su documento de tipos de cliente, y los criterios que los nombran lo requieren. Cambia a qué perfiles aplican seis criterios: las alertas tempranas de fuga o de oportunidad de crecer (3.7.E1) y medir al equipo de Servicio por la retención (3.4.O3) pasan de cliente recurrente a relación continua; el acuerdo de Marketing con Ventas (2.4.E3) y dos señales de Ventas pasan a venta con equipo, y una señal de Tecnología de Ventas, a venta sin vendedor. Catorce criterios pasan a ser hábito —se confirman en la remedición—, nueve cambian cómo se verifican y unos veinte suman lo que requieren. La regla de asignación suma la calidad de los datos, dónde vive la información, la protección contra la suplantación y los avisos automáticos al cliente. El glosario suma, entre otras, cliente clave, caso, caso de éxito, ficha del cliente, autoservicio y CSE; las entradas en inglés de lo que la escala ya dice en español —deal, ICP, churn, dashboard, nurturing, forecast, lead scoring, health score, macros, asset, journey, handoff, pipeline review y test A/B— pasan a la palabra en español, y la de rep sale. Entra el feedback del equipo: los datos que viven en otro sistema sin conectar, la regla de quién mantiene los datos y la confianza del cliente en Banca. Lo que el equipo dice de la escala se manda como feedback desde Nexus y lo decide un super admin, como dice Cómo leer este documento. En las ediciones, la tienda solo física y las aseguradoras se miden con la escala general, e Inmobiliaria cubre también corredoras y alquileres, con lo de proyecto propio bajo condición; cada edición dice con sus palabras lo que cambió en la general. Cambia cómo se lee cada dimensión, y lo que piden los niveles solo se precisa o se acota.
 
 **8.7.0 (2026-10-01).** Óptimo dice qué se ve cuando la IA decide sola, sin nombrar herramientas. En Marketing, la IA decide qué mensaje recibe cada persona, por qué canal y en qué momento, y predice quién va a comprar y quién se va a ir; la personalización uno a uno llega también a la app. En Ventas, el canal y el momento de cada seguimiento se ajustan solos según cómo responde cada persona. En las tres áreas, lo que la IA puede decidir sola queda por escrito, y lo que decide se mide contra un grupo de control. Entran siete criterios: en Ventas, quién valida lo que hace la IA (1.4.O3) y medir sus seguimientos contra un grupo de control (1.8.O4); en Marketing, que lo que alguien hizo antes de dejar sus datos quede en su ficha (2.3.E4), una sola ficha por persona que se arma al momento (2.3.O5), las notificaciones de la app como parte de las campañas, si hay app (2.7.E5), y el grupo de control de los mensajes (2.8.O3); y en Servicio, el de los avisos (3.8.O4). La regla de automatización dice que, cuando la IA decide sola, el equipo fija las metas y los límites en vez de aprobar cada envío; la de asignación dice dónde va lo que la IA decide enviar y la predicción por persona, y el glosario suma «Grupo de control». Las ediciones deciden los criterios nuevos: casi todos se leen igual; Educación dice el de gobierno con «admisiones», Ecommerce y retail mide sus recordatorios, y en Banca no aplica el de la app, que ya pide como canal en Funcional. Cambia lo que piden Eficiente y Óptimo.
@@ -1715,7 +1717,7 @@ Términos que aparecen en la escala, la especificación o el manual, o que el eq
 
 Una edición es la misma escala dicha para una industria: comparte las áreas, las ocho preguntas de fondo de cada área, los cinco niveles, las reglas y el cálculo, y cambia lo que ve quien la lee.
 
-La matriz de la Parte 3 es la escala general, escrita para cualquier empresa. Una tienda, un banco, una universidad o una inmobiliaria se reconocen mejor en una escala que habla de lo suyo: por eso cada edición les pone a las dimensiones de producción el nombre que tienen en esa industria, hace las preguntas y dice los costos con sus palabras, y suma los criterios que solo tienen sentido ahí.
+La matriz de la Parte 3 es la escala general, escrita para cualquier empresa. Una tienda, un banco, una universidad, una inmobiliaria, un hotel o un concesionario se reconocen mejor en una escala que habla de lo suyo: por eso cada edición les pone a las dimensiones de producción el nombre que tienen en esa industria, hace las preguntas y dice los costos con sus palabras, y suma los criterios que solo tienen sentido ahí.
 
 ## Qué cambia una edición y qué no
 
@@ -1732,7 +1734,7 @@ Una unidad se mide con la escala general o con una sola edición, la de su indus
 
 Una edición puede darle criterios a una dimensión que en la escala general no aplica a un perfil. Pasa en la de ecommerce y retail: en la venta transaccional, la dimensión de personalización de Ventas no aplica en la escala general, y en la edición mide la oferta que la tienda le hace a cada comprador. Y pasa en la de banca, donde esa dimensión mide también a quién se le ofrece cada producto cuando el cliente lo contrata solo.
 
-Una edición se escribe por áreas, y un área que la edición no escribe se mide con la escala general. Las cuatro ediciones de hoy —Ecommerce y retail, Banca y servicios financieros, Educación e Inmobiliaria— traen las tres áreas enteras.
+Una edición se escribe por áreas, y un área que la edición no escribe se mide con la escala general. Las seis ediciones de hoy —Ecommerce y retail, Banca y servicios financieros, Educación, Inmobiliaria, Turismo y Automotriz— traen las tres áreas enteras.
 
 ## Cómo se escribe una edición
 
@@ -5520,3 +5522,1235 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 - La IA aplica lo que aprende de los casos de los compradores a las respuestas guardadas, a la atención de cada tipo de comprador y a los avisos que reciben sin pedirlos, y el líder valida cada cambio; en el sistema queda qué cambió y de dónde salió. `[3.8.O3]`
 
 *Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O2`, `3.8.O4`.
+
+## Edición — Turismo
+
+Para quien vende estancias, paquetes y experiencias al viajero: hoteles y resorts, operadores turísticos, agencias de viaje y empresas de tours y experiencias. Vende por dos vías a la vez —la reserva directa, en su sitio, por teléfono, por WhatsApp o en su mostrador, y la que llega por intermediarios, como las agencias de viaje en línea (OTAs), las agencias y los mayoristas— y con temporadas, alta y baja, que mueven sus tarifas y su ocupación. La reserva que el viajero hace solo se lee como venta sin vendedor; lo que trabaja un equipo —grupos, eventos, bodas, empresas y agencias—, como venta con equipo. Donde la empresa no tiene hospedaje, «habitación» se lee como el cupo de la experiencia o del paquete, y «estancia», como el viaje o la experiencia. Una aerolínea, una empresa de transporte o un restaurante sin hospedaje ni experiencias se miden con la escala general.
+
+*Clave:* turismo
+
+*Perfil habitual:* mixta · recompra.
+
+*Criterios propios:* desde el 501.
+
+### Palabras de esta edición
+
+| En la escala general | En esta edición |
+|:--|:--|
+| Negocio | Reserva o cotización: la estancia, el paquete o la experiencia, de la primera consulta a la llegada del viajero |
+| Prospecto | Viajero, agencia o empresa que consulta por fechas, un paquete o un grupo |
+| Lead | Viajero, agencia o empresa que consulta por fechas, un paquete o un grupo |
+| Pipeline | El recorrido de la reserva: consulta, cotización, reserva, pago y llegada |
+| Revisión del pipeline | Reunión de reservas y ocupación |
+| Vendedor | Ejecutivo de reservas o de ventas: de grupos, eventos, empresas o agencias |
+| Propuesta | La cotización: tarifas, fechas, qué incluye y condiciones de pago y de cancelación |
+| Material de venta | Fotos, videos, fichas de habitaciones y de experiencias, y propuestas para grupos y eventos |
+| Razón de pérdida | Por qué el viajero no reservó, o por qué canceló su reserva |
+| Cliente ideal | El viajero, la agencia o la empresa objetivo de cada temporada y de cada producto |
+| Pronóstico | Proyección de ocupación y de ingresos por temporada |
+| Cliente | El viajero o huésped, y la agencia o la empresa que reserva por él |
+| Caso | Caso de servicio: una consulta, un cambio de reserva, una solicitud durante la estancia o una queja |
+| Buyer persona | Perfil de viajero: quién viaja, con quién, qué busca y cómo reserva, como la familia de vacaciones o quien viaja por trabajo |
+| Traspaso | El de una consulta de Marketing a reservas, o el de una reserva confirmada al equipo que recibe al viajero |
+
+### Área 1 — Ventas
+
+Mide el rendimiento de la venta de la empresa turística: cómo está montada por dentro y qué produce en reservas, ocupación y viajeros que vuelven. Vale igual si la reserva la hace el viajero solo, en el sitio o en una OTA, o si la trabaja un equipo de reservas o de ventas de grupos.
+
+**Deficiente.** Tus reservas dependen de quién conteste. Las consultas llegan al teléfono o al WhatsApp de cada persona, cada canal tiene su tarifa y su disponibilidad, y te enteras de que vendiste dos veces la misma habitación cuando el viajero ya llegó.
+
+**Inicial.** Tienes un sistema de reservas y estás en las OTAs, pero cada canal va por su cuenta. Las cotizaciones de grupos se arman a mano, las tarifas se cambian canal por canal y nadie sabe cuántas consultas se quedaron sin respuesta.
+
+**Funcional.** Tu venta opera como una maquinaria base. Cada reserva, directa o de un intermediario, entra al sistema con su canal y su monto; la disponibilidad y las condiciones son las mismas en todos los canales y ningún cupo se vende dos veces; cada cotización de grupo tiene su responsable y su fecha, y quien ya viajó contigo recibe una invitación a volver.
+
+**Eficiente.** La venta deja de depender del empuje de cada persona. Sabes cuánto te deja cada canal después de su comisión, las tarifas cambian por temporada con reglas escritas, compruebas que un grupo te conviene antes de bloquearle el cupo y proyectas la ocupación con confianza.
+
+**Óptimo.** La IA hace el trabajo pesado y tu equipo valida donde importa. Si atiendes por WhatsApp o chat, agentes de IA responden, cotizan y reservan a toda hora; los modelos dicen qué consulta va a reservar y qué ofrecerle a cada viajero, y el sistema detecta la reserva de grupo que se va a caer antes de que pase.
+
+#### 1.1 Procesos y Rutinas
+
+¿Qué tan parecido trabaja tu equipo cada cotización y cada reserva, desde la primera consulta hasta la llegada del viajero?
+
+*Descripción:* Mide si la venta sigue un proceso escrito, de la consulta a la llegada, que no depende de quien conteste.
+
+*Costo de quedarse:* Si se va quien lleva los grupos, se lleva las cotizaciones en su correo: nadie sabe a quién se le cotizó, qué bloqueo estaba por confirmarse ni qué condiciones se le prometieron a cada agencia.
+
+**Funcional.** Todo el equipo sigue el mismo recorrido escrito en el CRM, de la consulta a la llegada, con una cadencia de contacto, un proceso escrito para cotizar grupos y una revisión fija de las reservas.
+
+*Resultado:* Si rota una persona del equipo, la siguiente sabe en qué va cada cotización, porque todos trabajan la venta igual en el CRM: las reservas avanzan con los mismos criterios, cada grupo se cotiza de la misma forma, cada consulta se contacta con la cadencia acordada y las reservas se repasan en cada reunión de reservas y ocupación.
+
+- Cualquier persona del equipo explica igual las etapas de la reserva —consulta, cotización, reserva, pago y llegada— y qué tiene que cumplirse para avanzar. `[1.1.F1]`
+- Cada tipo de venta —la reserva individual, los grupos, los eventos y las agencias o empresas— tiene su propio recorrido en el CRM, con lo que tiene que cumplir para pasar de cada etapa a la siguiente. `[1.1.F2]`
+- El proceso para cotizar grupos y eventos está escrito: qué se cotiza, quién aprueba la tarifa, cuántos días vale la oferta, cuándo se pide el depósito y cuándo se libera lo que no se confirma. `[1.1.F501 · declarado · venta con equipo]`
+
+**Eficiente.**
+
+- Existen guías de indagación, cotización de grupos y manejo de objeciones —el precio frente a una OTA, las fechas, la política de cancelación— que el equipo usa. `[1.1.E2]`
+
+*Se leen igual:* `1.1.D1`, `1.1.D2`, `1.1.D3`, `1.1.D4`, `1.1.I1`, `1.1.I2`, `1.1.I3`, `1.1.I4`, `1.1.F4`, `1.1.F5`, `1.1.F6`, `1.1.E1`, `1.1.E3`, `1.1.O1`, `1.1.O2`, `1.1.O3`.
+
+#### 1.2 Tecnología y Automatización
+
+¿Qué pasa en tu sistema, sin que nadie lo haga a mano, cuando entra una consulta o se hace una reserva en cualquier canal?
+
+*Descripción:* Mide cuánto del trabajo repetitivo hace el sistema —repartir las consultas, registrar las reservas de todos los canales, descontar el cupo en todos a la vez y avisar qué toca— y cómo usa el equipo la automatización y la IA.
+
+*Costo de quedarse:* Tu equipo copia a mano las reservas de cada OTA, cambia la tarifa canal por canal y descubre que la habitación ya estaba vendida cuando el viajero ya pagó.
+
+**Funcional.** Lo básico pasa solo —las reservas de todos los canales entran al sistema, una reserva descuenta el cupo en todos a la vez, las consultas se reparten por una regla y el sistema avisa qué toca— y, si se usa IA, trabaja con los datos de cada viajero.
+
+*Resultado:* Ninguna reserva hay que pasarla a mano y ningún cupo se vende dos veces: la reserva que llega por el sitio o por una OTA entra sola al sistema, la consulta de un grupo le llega a quien le toca, y quien vende ve qué está disponible antes de ofrecerlo.
+
+- Las consultas que entran —del sitio, el teléfono, WhatsApp, el correo y las agencias— llegan a una bandeja o cola y se asignan por una regla simple: por turnos, por tipo de venta o según la fuente de donde llegan. `[1.2.F2]`
+- Las reservas sin vendedor —en el motor de reservas del sitio, en una OTA o con un mayorista— entran solas al sistema como negocios, con su monto, su canal y sus fechas, y con su viajero cuando se identifica. `[1.2.F6]`
+- Quien vende puede ver qué habitaciones o cupos están disponibles en cada fecha antes de ofrecerlos, en el CRM o en el sistema de reservas, sin preguntarle a otra persona. `[1.2.F8]`
+- La disponibilidad y las tarifas de todos los canales salen de un mismo sistema, y una reserva hecha en cualquiera de ellos descuenta el cupo en todos en el momento: no se vende dos veces la misma habitación o el mismo cupo. `[1.2.F501 · comprobable]`
+
+**Eficiente.** Las cotizaciones salen del sistema, el CRM se conecta con el sistema de reservas y el equipo usa la IA en su trabajo diario.
+
+*Resultado:* El equipo recupera el tiempo que se le iba en tareas repetitivas, y el líder ve en tiempo real en qué etapa se caen las reservas y qué canal vende.
+
+- Las cotizaciones de grupos y eventos se generan desde el sistema, con las tarifas y la disponibilidad vigentes, no como documentos sueltos. `[1.2.E1]`
+- Si la empresa lleva sus reservas, su ocupación o su facturación en otro sistema —el sistema de gestión del hotel (PMS), el de su operación o un ERP—, el CRM está conectado con él. `[1.2.E3]`
+
+**Óptimo.** La IA responde, cotiza, reserva y calcula qué consultas van a reservar; el equipo valida y se queda con los grupos y las conversaciones que deciden la venta.
+
+- Si el equipo atiende por un canal conversacional, agentes de IA responden ahí, califican las consultas con la definición de consulta calificada y cotizan o reservan a cualquier hora; le pasan a una persona, con el contexto, a quien pide un grupo o algo que no pueden resolver, y el equipo revisa en el CRM lo que atendieron. `[1.2.O2]`
+
+*Se leen igual:* `1.2.D1`, `1.2.D2`, `1.2.I1`, `1.2.I2`, `1.2.F3`, `1.2.F4`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O1`, `1.2.O3`.
+
+#### 1.3 Datos
+
+¿Qué tienes que hacer con el reporte de tus reservas antes de usarlo para decidir?
+
+*Descripción:* Mide si los datos de ventas son confiables para decidir: reservas completas, el canal de cada una y reportes que salen del sistema sin armarlos a mano.
+
+*Costo de quedarse:* Decides con números que no cuadran: el reporte de reservas se arma a mano cruzando el sistema de reservas con lo que manda cada OTA, y no sabes qué canal te trae viajeros ni cuánto te cuesta cada uno.
+
+**Funcional.** El reporte de reservas y cotizaciones sale del sistema, sin armarlo a mano, y dice por qué canal llegó cada una: se le puede creer.
+
+*Resultado:* El líder ve el estado real de las reservas y de las cotizaciones cuando lo necesita, sin armar el reporte a mano, y sabe por qué canal llegó cada viajero.
+
+- Toda reserva y toda cotización creada desde la puesta en marcha del recorrido actual tiene las fechas del viaje, la fecha esperada de confirmación, el monto y el responsable. `[1.3.F1]`
+- Toda reserva creada desde la puesta en marcha del recorrido actual dice por dónde llegó el viajero: el sitio, el teléfono, WhatsApp, una OTA, una agencia, un mayorista o un referido. `[1.3.F3]`
+- El reporte de reservas y cotizaciones se genera del sistema sin reconstruir números, y refleja el estado actual, no un pronóstico. `[1.3.F4]`
+- La documentación sobre el viajero objetivo de cada temporada y de cada producto no se deja envejecer. `[1.3.F5]`
+- La definición de consulta calificada no se deja envejecer. `[1.3.F6]`
+- La documentación de lo que se ofrece —qué incluye cada habitación, paquete o experiencia y para quién es— no se deja envejecer. `[1.3.F7]`
+
+**Eficiente.** Aparece una proyección de ocupación confiable, se sabe cuánto deja cada canal después de su comisión y la ficha del viajero reúne sus estancias y sus conversaciones.
+
+*Resultado:* La empresa puede comprometer una ocupación y unos ingresos por temporada con confianza, y planear con ese número sus tarifas, su personal y sus compras.
+
+- Hay una proyección de ocupación e ingresos que se actualiza cada semana o cada quince días, y en al menos cinco de los últimos seis meses lo reservado quedó dentro de ±10% de lo proyectado. `[1.3.E1]`
+- La ficha de cada viajero reúne lo comercial con su historial de conversaciones y, si la empresa lleva sus estancias o sus pagos en otro sistema, con lo que viene de él: la vista 360° empieza a tomar forma. `[1.3.E3]`
+- Se sabe qué parte de las reservas llega directa y qué parte por intermediarios, y cuánto se paga de comisión en cada canal, y ese número se revisa cada mes. `[1.3.E501 · comprobable · hábito]`
+
+*Se leen igual:* `1.3.D1`, `1.3.D2`, `1.3.D3`, `1.3.D4`, `1.3.I1`, `1.3.I2`, `1.3.I3`, `1.3.F2`, `1.3.F8`, `1.3.E2`, `1.3.E4`, `1.3.O1`, `1.3.O2`, `1.3.O3`, `1.3.O4`, `1.3.O5`.
+
+#### 1.4 Equipo y Gobierno
+
+¿Cómo sabe el líder, cada semana, cómo va la temporada y quién del equipo necesita ayuda?
+
+*Descripción:* Mide si cada persona del equipo tiene un rol y una meta por escrito, y si el líder sigue los números de reservas y ocupación y pide cuentas con datos.
+
+*Costo de quedarse:* El líder se entera al final de la temporada de que no se llenó: no vio antes qué canal se cayó ni qué cotizaciones de grupo no se cerraron.
+
+**Funcional.** Cada persona tiene un rol y una meta por escrito, está claro quién atiende cada tipo de venta, el líder sigue un tablero cada semana y en la reunión de reservas cada quien rinde cuentas.
+
+*Resultado:* Cada persona sabe qué se espera de ella y quién atiende cada grupo o cada agencia, y el líder sabe cada semana cómo va la ocupación de la temporada y quién necesita ayuda, antes de que termine el mes.
+
+- El líder tiene un tablero con 4 a 6 métricas clave —consultas, cotizaciones, reservas, ocupación, cancelaciones e ingreso por canal— y lo consulta al menos una vez por semana. `[1.4.F2]`
+- Cada persona del equipo —o cada canal, donde se reserva sin vendedor— tiene una meta escrita, con un monto, una ocupación o una cantidad de reservas y un plazo, y su avance se reporta en una fecha fija, al menos una vez al mes. `[1.4.F4]`
+- Está escrito quién atiende cada tipo de venta —la reserva individual, los grupos, los eventos, las agencias y las empresas— y a quién le corresponde un cliente que llega por dos vías. `[1.4.F501 · declarado · venta con equipo]`
+
+**Eficiente.**
+
+- Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales —los productos, las tarifas, las condiciones de cada canal y los sistemas—; no se le entrena de memoria. `[1.4.E2]`
+
+**Óptimo.**
+
+*Resultado:* La dirección decide dónde invertir con números de fondo: qué canal y qué temporada dejan más margen, qué tipo de viajero vuelve más y qué persona del equipo aporta más.
+
+- Las decisiones de la dirección usan números de fondo: cuánto deja cada viajero en el tiempo, cuánto margen deja cada canal después de su comisión y cuánto aporta cada persona del equipo. `[1.4.O1]`
+
+*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
+
+#### 1.5 Oferta y tarifas
+
+¿Cómo sabe una persona que entra a tu equipo qué vende, a quién y con qué tarifas y condiciones?
+
+*Descripción:* Mide si el equipo sabe para quién es cada producto, si la cotización llega igual con cualquier persona y si las tarifas y las condiciones son coherentes en todos los canales: el sitio, el teléfono, las OTAs y las agencias.
+
+*Costo de quedarse:* El viajero ve una tarifa en tu sitio, otra en una OTA y una tercera por WhatsApp, desconfía y reserva donde tu empresa paga comisión, o en otro lado.
+
+**Deficiente.** Nadie puede decir con claridad para quién es cada producto, las tarifas cambian según quién conteste o en qué canal se mire, y las condiciones de cancelación se explican de memoria.
+
+- Hay más de una tarifa circulando para la misma fecha y el mismo producto, y no se sabe cuál es la vigente. `[1.5.D501 · comprobable]`
+
+**Funcional.** El viajero objetivo de cada producto está escrito, y todos venden con las mismas tarifas, las mismas condiciones y la misma cotización, en todos los canales.
+
+*Resultado:* Dos viajeros parecidos reciben la misma tarifa y las mismas condiciones, pregunten por el canal que pregunten, y una cotización de grupo igual de clara —fechas, qué incluye, cómo se paga y qué pasa si se cancela—, sin importar quién la arme.
+
+- Existe un documento con el viajero objetivo de cada producto —a quién va dirigido, qué busca y en qué temporada viaja—, consultable por cualquier persona del equipo. `[1.5.F1]`
+- Las cotizaciones de grupos y eventos están estandarizadas: toda cotización muestra lo mismo —fechas, tarifas, qué incluye, cómo se paga y la política de cancelación—, no armada desde cero cada vez. `[1.5.F4]`
+- Si se vende por más de un canal —el sitio, el teléfono, las OTAs y las agencias—, las tarifas, las promociones y las condiciones son las mismas en todos, o la diferencia es a propósito y está escrita, como la tarifa neta de un mayorista. `[1.5.F5]`
+- Las condiciones de cada tarifa —qué incluye, la política de cancelación y de cambios, el depósito y los cargos que se suman— están escritas y el viajero las ve antes de reservar, en cualquier canal. `[1.5.F501 · comprobable]`
+
+**Eficiente.** La oferta se distingue de la de otros destinos y otros lugares, las tarifas siguen la temporada con reglas escritas y solo se promete lo que se va a entregar.
+
+*Resultado:* Los viajeros ven qué distingue a la empresa, lo que se les prometió —la habitación, la experiencia, lo que incluye— es lo que reciben, y las tarifas siguen la demanda de cada temporada en todos los canales a la vez.
+
+- Las cotizaciones solo prometen lo que la operación puede entregar: lo que se dice de la habitación, los servicios, los horarios y lo que incluye un paquete se valida antes de enviarlas. `[1.5.E3]`
+- Las tarifas cambian por temporada y por demanda con reglas escritas —cuándo suben, cuándo bajan, cuándo se abre o se cierra una oferta—, y cada cambio llega el mismo día a todos los canales. `[1.5.E501 · comprobable · hábito]`
+
+**Óptimo.**
+
+- La IA revisa en tiempo real, contra las tarifas, las condiciones y la oferta vigentes, lo que se les dice a los viajeros, lo escriba ella o el equipo; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
+
+*Se leen igual:* `1.5.D1`, `1.5.D2`, `1.5.I1`, `1.5.I2`, `1.5.F2`, `1.5.F3`, `1.5.E2`.
+
+#### 1.6 Priorización de consultas
+
+¿Cómo decide tu equipo a qué consultas dedicarles tiempo primero, entre la reserva de un viajero, un grupo, un evento o una agencia?
+
+*Descripción:* Mide si el equipo decide a qué consultas dedicar su tiempo con criterios escritos, según el viajero objetivo y lo que deja cada venta en cada temporada.
+
+*Costo de quedarse:* Tu equipo le dedica la misma tarde a quien pregunta por una noche que a la empresa que busca un evento, y le da el cupo de temporada alta a un grupo con tarifa de temporada baja.
+
+**Funcional.** Las consultas se separan por los rasgos del viajero objetivo y hay una definición escrita de consulta calificada que el equipo aplica.
+
+*Resultado:* El equipo deja de perder tiempo cotizando a quien no encaja y concentra el esfuerzo en los grupos, los eventos y los viajeros que sí encajan y cumplen la definición de consulta calificada.
+
+- El equipo segmenta las consultas por los atributos del viajero objetivo antes de trabajarlas: las fechas, la cantidad de personas, el presupuesto, el motivo del viaje o si es una empresa o una agencia. `[1.6.F1]`
+- Hay una definición escrita de consulta calificada —los criterios para dedicarle una cotización: fechas, cantidad de personas, presupuesto y si hay cupo— y se aplica de forma consistente. `[1.6.F2]`
+- Los rasgos del viajero objetivo —fechas, cantidad de personas, motivo del viaje y presupuesto— son campos del CRM y de los formularios de consulta. `[1.6.F4]`
+- Las consultas que el viajero puede resolver solo —una reserva individual con fechas y cupo— se llevan al motor de reservas, y el equipo dedica su tiempo a los grupos, los eventos, las agencias y las empresas. `[1.6.F501 · evaluado · venta con equipo]`
+
+**Eficiente.**
+
+- Las agencias, las empresas y los segmentos de viajero prioritarios de cada temporada están en una lista escrita. `[1.6.E2]`
+- Antes de confirmar un grupo o un evento en fechas de alta demanda, se compara lo que deja con lo que dejarían esos mismos cupos vendidos por separado, y queda registrado en la cotización. `[1.6.E501 · comprobable · venta con equipo]`
+- A quien ya reservó se le ofrece, antes de llegar, lo que puede sumar —un traslado, una experiencia, una mejor habitación— según lo que reservó, y se mide cuánto se suma. `[1.6.E502 · comprobable]`
+
+**Óptimo.**
+
+- La IA detecta en cada viajero, agencia o empresa el riesgo de perderlo y el potencial de venderle más, como otra estancia o un evento, lo marca en el CRM y el equipo decide qué hacer. `[1.6.O2]`
+
+*Se leen igual:* `1.6.D1`, `1.6.I1`, `1.6.I2`, `1.6.F3`, `1.6.E1`, `1.6.E3`, `1.6.O1`, `1.6.O3`, `1.6.O4`.
+
+#### 1.7 Seguimiento de cotizaciones y reservas
+
+¿Qué pasa con la cotización que nadie contesta, la reserva que no se paga o el grupo que no confirma su lista?
+
+*Descripción:* Mide si alguien detecta cuando una cotización o una reserva deja de avanzar —la cotización sin respuesta, la reserva sin pago, el bloqueo de un grupo que no se confirma— y si hay un paso acordado para retomarlas antes de que se pierdan; donde el viajero vuelve, también si se le busca cuando ya le toca volver.
+
+*Costo de quedarse:* Las cotizaciones se enfrían sin que nadie llame y los bloqueos de grupo ocupan cupo hasta el último día: cuando se liberan, ya no hay tiempo de venderlos.
+
+**Deficiente.** Las cotizaciones se envían y nadie vuelve a llamar, y las reservas sin pago y los bloqueos de grupo se vencen sin que nadie lo note.
+
+- No hay material de venta —fotos, videos, fichas de habitaciones y de experiencias, propuestas para grupos— para mostrarles a los interesados. `[1.7.D4]`
+- Las reservas sin pago y los bloqueos de grupo se vencen sin que nadie se dé cuenta, o siguen ocupando cupo después de su fecha. `[1.7.D501 · comprobable]`
+
+**Funcional.** Ninguna cotización se enfría en silencio y ningún bloqueo se vence sin aviso: se detectan antes de que se pierdan y hay un paso acordado para retomarlos.
+
+*Resultado:* Las cotizaciones que se traban se detectan y se retoman por más de un canal; donde se vende con equipo, con material de venta común y con el líder actuando mientras todavía hay margen. Cada bloqueo de grupo tiene sus fechas y su responsable hasta que se confirma o se libera, y quien ya viajó con la empresa recibe la invitación a volver cuando le toca.
+
+- Hay material de venta estandarizado —fotos, videos, fichas de habitaciones y de experiencias, propuestas para grupos y eventos— que ayuda a cerrar la venta. `[1.7.F4]`
+- Los viajeros identificados que ya deberían haber vuelto, según el plazo de regreso que define el proceso —por ejemplo, la misma temporada del año siguiente—, se reconocen a tiempo y reciben una invitación o un beneficio para volver, sin esperar a que reserven solos. `[1.7.F5]`
+- Toda cotización enviada tiene una fecha de vencimiento y un responsable, y antes de que venza se contacta al cliente. `[1.7.F501 · comprobable · hábito · venta con equipo]`
+- Cada bloqueo de cupos para un grupo tiene escritas sus fechas de corte —cuándo se confirma la lista, cuándo se paga y cuándo se libera lo que no se usa—, y antes de cada una se contacta al cliente. `[1.7.F502 · comprobable · hábito · venta con equipo · requiere 1.1.F501]`
+
+**Eficiente.**
+
+- Los viajeros y las empresas que todavía no están listos para reservar no se abandonan: pasan a nutrición —la de Marketing o una secuencia del propio equipo— y vuelven a una persona del equipo cuando muestran interés o se abre una fecha que les sirve. `[1.7.E2]`
+- Se mide cuántas cotizaciones vencidas, cuántas reservas sin pago y cuántos bloqueos en riesgo se recuperan. `[1.7.E501 · comprobable]`
+
+*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I1`, `1.7.I2`, `1.7.I3`, `1.7.I4`, `1.7.F1`, `1.7.F2`, `1.7.F3`, `1.7.E1`, `1.7.E3`, `1.7.E4`, `1.7.O1`, `1.7.O2`.
+
+#### 1.8 Reservas ganadas, perdidas y canceladas
+
+¿Qué queda registrado cuando un viajero no reserva o cancela su reserva?
+
+*Descripción:* Mide si queda registrado por qué no reserva un viajero o por qué se cancela una reserva, y si el equipo revisa lo que gana, lo que pierde y lo que se cancela para mejorar su proceso.
+
+*Costo de quedarse:* No sabes por qué pierdes reservas ni por qué se cancelan —la tarifa, las fechas, una OTA más barata, la política de cancelación—: cada quien tiene su explicación, y sin un registro no hay cómo ver qué se repite.
+
+**Funcional.** Cada cotización perdida y cada reserva cancelada quedan con su razón, elegida de una lista fija, y el líder saca del sistema el reporte del trimestre.
+
+*Resultado:* El líder sabe por qué no reservan los viajeros y por qué se cancelan las reservas, con datos del trimestre y no con impresiones.
+
+- Toda cotización o reserva creada desde la puesta en marcha del recorrido actual que se dio por perdida tiene registrada su razón. `[1.8.F1]`
+- Cada reserva que se cancela —por el viajero, por la agencia o por falta de pago— deja registrada su razón, y la que no se presenta queda marcada como tal. `[1.8.F501 · comprobable]`
+
+**Eficiente.**
+
+- Al menos una vez por trimestre se revisan las reservas ganadas, las cotizaciones perdidas y las reservas canceladas para encontrar lo que se repite. `[1.8.E1]`
+- Se mide cuántas reservas se cancelan y cuántas no se presentan, por canal y por temporada, y la política de cancelación y de depósitos se revisa con ese dato. `[1.8.E501 · comprobable · hábito]`
+
+*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`, `1.8.O4`.
+
+### Área 2 — Marketing
+
+Mide el rendimiento del área de marketing de la empresa turística: cómo está montada por dentro y qué produce en presencia, consultas y reservas directas en cada temporada. Vale igual si el marketing lo hace un equipo propio, una sola persona o una agencia que la empresa dirige.
+
+**Deficiente.** A tu empresa la presentan otros. Las OTAs y los sitios de reseñas la cuentan a su manera, cada anuncio dice algo distinto y la pauta sale cuando hay habitaciones vacías, sin que nadie mida qué dejó. Las reservas directas llegan por accidente.
+
+**Inicial.** Tienes logo, fotos y redes, pero no hay una estrategia detrás. Publicas cuando se acerca una temporada, respondes las reseñas cuando alguien se acuerda y los resultados de cada campaña se miden tarde y a mano. Llegan consultas, pero no siempre sabes de dónde vienen.
+
+**Funcional.** Tu marketing dejó de depender de una persona. La marca y los perfiles de viajero están escritos, cada temporada tiene su campaña planeada, tus perfiles en Google, en los sitios de reseñas y en las OTAs dicen lo mismo que tu sitio, y los canales que elegiste en tu plan salen con regularidad, coordinados bajo un mismo calendario. Sabes de dónde llega cada consulta y cuánto te cuesta en cada canal.
+
+**Eficiente.** Probar y ajustar ya es rutina, y lo que aprendes de una temporada cambia cómo armas la siguiente. Sabes qué aportó cada canal a cada reserva y cuánto te cuesta una reserva directa frente a la comisión de una OTA, el mensaje se adapta solo a cada tipo de viajero, la IA asiste a tu equipo en su trabajo diario y tu empresa aparece cuando alguien busca dónde quedarse o qué hacer, en buscadores y en asistentes de IA. Cada reseña recibe respuesta y quienes ya viajaron recomiendan con un programa de referidos.
+
+**Óptimo.** La IA produce y ajusta; tu equipo dirige. El contenido de cada temporada se genera y se ajusta de forma continua; la IA adapta el mensaje a lo que hizo cada viajero y mueve la pauta entre canales dentro de los límites que fija el equipo; y los viajeros satisfechos que identifica Servicio traen viajeros nuevos. El equipo define la estrategia y valida lo que sale.
+
+#### 2.1 Procesos y Rutinas
+
+¿Cómo se arma una campaña en tu equipo, desde que se decide hasta que sale en tus canales y en las OTAs?
+
+*Descripción:* Mide si la promoción de cada temporada sale de un plan y un calendario compartidos, sin depender de nadie.
+
+*Costo de quedarse:* Cada temporada depende de quien la arma: si esa persona se va, la campaña de temporada alta sale tarde, cuando los viajeros ya reservaron en otro lado.
+
+**Deficiente.**
+
+- No hay calendario de campañas: cada temporada y cada promoción se improvisan cuando ya se ven las habitaciones vacías. `[2.1.D1]`
+
+**Funcional.** Las campañas salen con un calendario y un proceso que el equipo sigue, sin depender de una persona, y cada temporada tiene su campaña planeada con anticipación.
+
+*Resultado:* Todo el equipo trabaja en el mismo sistema, y la promoción de cada temporada sigue saliendo aunque cambie una persona: el calendario y el proceso no viven en la cabeza de nadie, y el líder sabe en qué va cada campaña sin tener que preguntar.
+
+- Existe un calendario de campañas visible para el equipo con horizonte de al menos un trimestre, que sigue las temporadas del negocio. `[2.1.F1]`
+- Si una agencia —o quien produce las fotos y los videos— ejecuta todo o parte del trabajo, el equipo es dueño del calendario, del brief, de la aprobación y de los accesos, y las campañas no se detienen si cambia ese proveedor. `[2.1.F5]`
+- Cada temporada alta y baja, y cada fecha que mueve viajeros —feriados, vacaciones escolares, eventos de la zona—, tiene su campaña planeada con al menos la anticipación con que reservan sus viajeros. `[2.1.F501 · declarado]`
+
+*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I1`, `2.1.I2`, `2.1.I3`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F6`, `2.1.E2`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
+
+#### 2.2 Tecnología y Automatización
+
+¿Qué pasa en tu sistema, sin que nadie lo haga a mano, cuando alguien deja sus datos en tu sitio o te escribe por WhatsApp o el chat para preguntar por fechas?
+
+*Descripción:* Mide si las herramientas que se pagan se usan, si cada viajero que deja sus datos o escribe llega solo al sistema y cuánto trabajo repetitivo hacen las automatizaciones y la IA.
+
+*Costo de quedarse:* Quien te escribe por WhatsApp para preguntar por fechas espera a que alguien le conteste, o reserva en una OTA mientras tanto, y si pagas herramientas, parte de lo que pagas no se usa.
+
+**Funcional.**
+
+*Resultado:* Todo lo que entra por el sitio y, si se usa, por WhatsApp o el chat llega al sistema y recibe respuesta, y no se paga por herramientas que nadie usa.
+
+- Si el sitio tiene formularios, cuando un viajero envía uno el sistema le responde automáticamente —por ejemplo, con las tarifas de la temporada o el enlace para reservar— y le avisa a quien corresponde. `[2.2.F5]`
+- Si el equipo usa IA, esta tiene como contexto la voz de marca y los perfiles de viajero. `[2.2.F9]`
+
+**Eficiente.**
+
+- Hay secuencias de nutrición de varios pasos, con tiempos de espera y caminos distintos según quién es o lo que hace cada viajero, que lo acompañan desde que mira fechas hasta que reserva. `[2.2.E1]`
+
+**Óptimo.**
+
+- Si la empresa atiende por un canal conversacional, como WhatsApp, agentes de IA responden lo que generan las campañas y mantienen la conversación con quien todavía no está listo para reservar; lo que no pueden resolver pasa a una persona con la conversación completa, y en el sistema queda cada conversación que atendió la IA. `[2.2.O2]`
+
+*Se leen igual:* `2.2.D1`, `2.2.D2`, `2.2.D3`, `2.2.I1`, `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F3`, `2.2.F4`, `2.2.E2`, `2.2.E3`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`, `2.2.O3`.
+
+#### 2.3 Datos
+
+¿Cómo sabes cuántas consultas entran, de dónde vienen y cuántas terminan en una reserva directa?
+
+*Descripción:* Mide si los datos de marketing son confiables: de dónde llega cada viajero, en qué etapa está y si los reportes salen del sistema sin rehacerlos.
+
+*Costo de quedarse:* No sabes qué campaña te trajo cada reserva directa ni cuántas consultas terminan reservando en una OTA: cada reporte hay que rehacerlo o revisarlo a mano antes de creerle.
+
+**Funcional.**
+
+*Resultado:* El líder sabe de dónde llega cada viajero —la pauta, las redes, un buscador, una feria o un referido— y cuántas consultas terminan en una reserva, con reportes que salen del sistema.
+
+- Cada contacto creado desde la puesta en marcha del sistema —entre por un formulario, una conversación, el motor de reservas, una OTA o una feria— tiene su etapa del ciclo de vida y su origen. `[2.3.F1]`
+- Los reportes básicos —cuántas consultas entran, de dónde vienen y cuántas terminan en una reserva— salen del sistema sin armarlos a mano. `[2.3.F5]`
+- Cuando se pide un teléfono u otro dato de contacto —al reservar, al llegar o en un formulario—, se pregunta si la persona acepta que le escriban por ese canal, y su respuesta queda registrada. `[2.3.F7]`
+
+**Eficiente.**
+
+- Lo que alguien hizo antes de dejar sus datos —qué fechas buscó, qué habitaciones o experiencias miró— queda en su ficha cuando se identifica. `[2.3.E4]`
+
+*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F2`, `2.3.F3`, `2.3.F6`, `2.3.E1`, `2.3.E2`, `2.3.E3`, `2.3.O1`, `2.3.O3`, `2.3.O4`, `2.3.O5`.
+
+#### 2.4 Equipo y Gobierno
+
+¿Cómo rinde cuentas tu equipo de marketing por las consultas y las reservas directas de cada temporada?
+
+*Descripción:* Mide si cada persona sabe qué le toca en la promoción de cada temporada, si el equipo tiene metas y si decide y rinde cuentas con números del sistema.
+
+*Costo de quedarse:* Qué se promociona en cada temporada se decide por costumbre o por quien insiste más, y nadie responde por una meta de reservas directas: el equipo no sabe qué se espera de él.
+
+**Funcional.**
+
+- El líder tiene un tablero con 4 a 6 métricas clave —consultas nuevas, de dónde llegan, cuántas terminan en una reserva directa y cuánto cuesta cada una— y lo consulta al menos una vez por semana. `[2.4.F2]`
+- Las decisiones sobre qué promocionar y en qué enfocarse —qué temporada, qué producto, qué tipo de viajero— citan datos del sistema, no opiniones. `[2.4.F4]`
+
+**Óptimo.**
+
+- Las decisiones se toman con lo que deja cada canal a lo largo del tiempo —el valor de los viajeros que trae y cuántos vuelven— frente a lo que cuesta, también frente a la comisión de las OTAs. `[2.4.O4]`
+
+*Se leen igual:* `2.4.D1`, `2.4.D2`, `2.4.D3`, `2.4.I1`, `2.4.I2`, `2.4.F1`, `2.4.F3`, `2.4.F5`, `2.4.F6`, `2.4.E2`, `2.4.E3`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
+
+#### 2.5 Marca y reputación
+
+¿Qué guía a tu equipo cuando arma una pieza para publicar, y qué encuentra un viajero cuando busca tu empresa en Google, en los sitios de reseñas o en una OTA?
+
+*Descripción:* Mide si la marca se ve y suena igual en todo lo que sale, si está escrito a qué viajero le habla, si el sitio aparece en buscadores y si los perfiles en los sitios de reseñas y en las OTAs dicen lo mismo que el sitio propio.
+
+*Costo de quedarse:* El viajero encuentra fotos viejas en una OTA, otra descripción en Google y reseñas sin respuesta, y elige el lugar de al lado.
+
+**Funcional.** La marca, la voz y los perfiles de viajero están escritos y se usan, el sitio cumple lo básico para buscadores, los perfiles en los sitios de reseñas y en las OTAs están al día, y se publica contenido propio cada mes.
+
+*Resultado:* La marca se ve y suena igual en todo lo que sale, el viajero encuentra la misma información en tu sitio, en Google y en las OTAs, y el sitio es encontrable en buscadores con lo básico bien resuelto.
+
+- Hay 2 o 3 perfiles de viajero escritos —por ejemplo, la familia de vacaciones, la pareja que celebra algo o quien viaja por trabajo—, cada uno con su recorrido de compra básico, etapa por etapa. `[2.5.F3]`
+- Se publica contenido propio al menos una vez por mes, con cadencia previsible: guías del destino, videos de las experiencias, qué hacer en cada temporada o artículos del blog. `[2.5.F5]`
+- Los perfiles de la empresa en los sitios donde los viajeros eligen —Google, los sitios de reseñas y las OTAs donde vende— tienen las mismas fotos, la misma descripción y las mismas condiciones que el sitio propio, y se revisan antes de cada temporada. `[2.5.F501 · comprobable · hábito]`
+
+**Eficiente.**
+
+*Resultado:* La empresa aparece cuando alguien busca dónde quedarse o qué hacer en su destino, tanto en buscadores como en asistentes de IA, con contenido pensado para cada tipo de viajero que importa, y cada reseña de quienes ya viajaron, buena o mala, recibe respuesta.
+
+- El recorrido de compra está dibujado de punta a punta, con los puntos de contacto de cada etapa: la búsqueda del destino, las OTAs, el sitio, las reseñas, la reserva y la llegada. `[2.5.E4]`
+- Se les pide una reseña pública a los viajeros después de su estancia o su experiencia —en Google, en los sitios de reseñas o en la OTA por la que reservaron—, y cada reseña, buena o mala, se responde dentro del plazo que fijó el equipo. `[2.5.E5]`
+
+*Se leen igual:* `2.5.D1`, `2.5.D2`, `2.5.D3`, `2.5.I1`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F4`, `2.5.E1`, `2.5.E2`, `2.5.E3`, `2.5.O1`, `2.5.O2`.
+
+#### 2.6 Segmentación
+
+¿Qué cambia en lo que recibe un viajero según su tipo de viaje y la temporada en que viaja?
+
+*Descripción:* Mide si cada viajero recibe un mensaje pensado para su tipo de viaje, y no la misma promoción que todos.
+
+*Costo de quedarse:* Le mandas la misma promoción a todos: la familia recibe la oferta pensada para el evento de una empresa, y ninguno de los dos se siente hablado.
+
+**Funcional.**
+
+- Existen al menos 2 segmentos con criterios escritos según qué busca o cómo viaja cada grupo, no solo según de dónde viene: por ejemplo, la familia, la pareja, quien viaja por trabajo o el grupo de una empresa. `[2.6.F1]`
+- La mayoría de las campañas del último trimestre tienen piezas distintas para cada segmento: no le hablan igual a la familia de vacaciones que a quien viaja por trabajo. `[2.6.F3]`
+
+**Eficiente.**
+
+- La segmentación usa datos de comportamiento —qué fechas buscó, qué habitación o experiencia miró, qué reservó antes—, no solo lo que la persona declaró. `[2.6.E4]`
+
+*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.I2`, `2.6.F4`, `2.6.E1`, `2.6.E2`, `2.6.E3`, `2.6.O1`, `2.6.O3`.
+
+#### 2.7 Canales y Alcance
+
+¿Cómo salen tus campañas por los canales que usas, y cómo conviven con lo que vendes por las OTAs?
+
+*Descripción:* Mide si los canales que la empresa eligió salen con regularidad y bajo un mismo plan, y si se conoce lo que cuesta cada reserva directa frente a lo que se paga de comisión.
+
+*Costo de quedarse:* Llegas al mercado solo cuando ves habitaciones vacías, sin un plan que coordine tus canales, y no sabes si una reserva directa te cuesta más o menos que la comisión de una OTA.
+
+**Funcional.**
+
+- Si la pauta pagada es parte del plan de canales, hay al menos una campaña corriendo con presupuesto definido: en buscadores, en redes o en los metabuscadores de viaje. `[2.7.F3]`
+- Los canales que la empresa eligió en su plan siguen el mismo calendario y la misma campaña: cada temporada o promoción sale coordinada en todos ellos, también en lo que se publica en las OTAs, no como esfuerzos sueltos. `[2.7.F5]`
+- En el sistema se ve cuánto costó cada consulta —o cada reserva, donde se reserva sin vendedor— el último mes, al menos por canal. `[2.7.F6]`
+
+**Eficiente.**
+
+- Si las ferias de turismo, los viajes de familiarización con agencias o los eventos son parte del plan de canales, se hacen como un canal recurrente, con fechas en el calendario. `[2.7.E2]`
+- Hay un programa de referidos activo: quienes ya viajaron saben cómo recomendar a un conocido, y cada referido queda registrado con quién lo trajo. `[2.7.E4]`
+- En el sistema se ve cuánto cuesta cada reserva directa frente a lo que se paga de comisión por una reserva de intermediario, y el presupuesto de pauta se revisa con ese dato. `[2.7.E501 · comprobable · requiere 2.7.F6]`
+
+*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.I3`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.E1`, `2.7.E3`, `2.7.E5`, `2.7.O1`, `2.7.O2`, `2.7.O4`.
+
+#### 2.8 Medición y Aprendizaje
+
+¿Qué te queda de cada temporada y de cada campaña cuando termina?
+
+*Descripción:* Mide si cada campaña se evalúa por las consultas y las reservas que trajo, y deja un aprendizaje para la temporada siguiente.
+
+*Costo de quedarse:* Repites cada temporada la pauta y los mensajes de siempre porque nadie anota cuáles trajeron reservas: cada temporada empieza de cero.
+
+**Funcional.**
+
+- Cada campaña del calendario —una temporada, una promoción o una feria, no cada publicación suelta— cierra con una revisión escrita de qué funcionó y qué no. `[2.8.F3]`
+- Los resultados de cada campaña —las consultas o las reservas que trajo, no solo los clics— se ven en el sistema sin armarlos a mano. `[2.8.F5]`
+
+**Eficiente.**
+
+- El proceso de campaña y la planificación de las campañas siguientes —también la de la próxima temporada— se refinan con base en lo aprendido. `[2.8.E3]`
+
+*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.E1`, `2.8.E2`, `2.8.O2`, `2.8.O3`.
+
+### Área 3 — Servicio
+
+Mide el rendimiento del servicio de la empresa turística, que acompaña al viajero desde que reserva hasta después de su viaje: lo que necesita antes de llegar, sus solicitudes durante la estancia o la experiencia, sus quejas y lo que lo hace volver. Mira cómo está montado por dentro y qué produce en viajeros bien atendidos, quejas resueltas antes de que se vayan y viajeros que recomiendan.
+
+**Deficiente.** El servicio se improvisa viajero por viajero. Las solicitudes llegan a la recepción, al WhatsApp de alguien o al guía de turno y no quedan en ningún lado, y de las quejas te enteras cuando ya están publicadas en una reseña.
+
+**Inicial.** Lo que pasa con cada viajero lo sabe la persona que lo atendió. Hay un sistema para registrar los casos, pero pocos lo usan; cada turno tiene sus propias respuestas y una forma de recibir al viajero que nadie escribió.
+
+**Funcional.** Tu servicio es consistente y ya no depende de quién esté de turno. Sabes qué tipos de viajero atiendes y qué espera cada uno. Cada caso —una consulta, un cambio de reserva, una solicitud o una queja— entra al mismo sistema y sigue las mismas etapas; la llegada sigue un proceso escrito, atiendes primero lo urgente, tienes respuestas guardadas para lo repetitivo y atiendes cada queja antes de que el viajero se vaya.
+
+**Eficiente.** El servicio empieza a adelantarse al viajero. Tienes plazos por tipo de caso que se vigilan solos, el viajero resuelve solo lo más común antes y durante su viaje, y la IA asiste a tu equipo en su trabajo diario; mides tiempos de respuesta y satisfacción. Ningún caso se pierde entre la recepción, limpieza, mantenimiento o el operador de una experiencia, y el viajero recibe lo que necesita saber antes de pedirlo.
+
+**Óptimo.** Un agente de IA resuelve las consultas de los viajeros a toda hora, en todos los canales donde atiendes, y le pasa a una persona, con todo el contexto, lo que no puede resolver. Las rutinas corren solas mientras el equipo supervisa y atiende las excepciones; casi todos los problemas que detecta el sistema se resuelven antes de que el viajero los note, y cada viajero se atiende sabiendo lo que reservó y lo que prefiere, y recibe detalles pensados para él.
+
+#### 3.1 Procesos y Rutinas
+
+¿Cómo se atiende en tu equipo una solicitud o una queja de un viajero, desde que entra hasta que se cierra?
+
+*Descripción:* Mide si la atención al viajero sigue un proceso y rutinas definidas, para que no dependa de quién esté de turno.
+
+*Costo de quedarse:* El servicio depende de quién esté de turno: si esa persona no está, la solicitud se pierde entre turnos y el viajero tiene que pedirla dos veces.
+
+**Funcional.**
+
+- El recorrido de los casos de servicio está configurado en el sistema con sus etapas y cubre la atención de cada caso —una consulta, un cambio de reserva, una solicitud durante la estancia o una queja—, de la recepción al cierre. `[3.1.F1]`
+- Existe un proceso escrito para escalar las quejas graves y los casos que quien atiende no puede resolver —por ejemplo, un viajero que se queda sin habitación al llegar o un traslado que no llega—: dice cuáles se escalan y a quién. `[3.1.F4]`
+- Cualquier persona que atiende al viajero —en la recepción, en reservas o en la operación de una experiencia— trabaja en el sistema central, no por fuera: es su herramienta de trabajo, no algo que se llena después de resolver por WhatsApp o de palabra. `[3.1.F6]`
+- Cada cambio de turno deja registrado qué casos siguen abiertos y qué se le prometió a cada viajero, y el turno siguiente los toma desde el sistema. `[3.1.F501 · comprobable · hábito]`
+
+**Eficiente.**
+
+- El recorrido del viajero está definido de punta a punta, con sus momentos clave —la confirmación, la llegada, la estancia o la experiencia, la salida y, si vuelve, su próxima reserva— y un responsable y un estándar para cada uno. `[3.1.E4]`
+- Hay guías escritas para lo que más se complica en la operación —una reserva que no tiene cupo al llegar, un traslado que no llega o una experiencia que se cancela por el clima—: qué se le ofrece al viajero y quién lo decide. `[3.1.E501 · declarado]`
+
+*Se leen igual:* `3.1.D1`, `3.1.D2`, `3.1.I1`, `3.1.I2`, `3.1.I3`, `3.1.F2`, `3.1.F3`, `3.1.F5`, `3.1.E1`, `3.1.E3`, `3.1.E5`, `3.1.O1`, `3.1.O3`, `3.1.O4`.
+
+#### 3.2 Tecnología y Automatización
+
+¿Cómo llega una solicitud del viajero al sistema y a quien la tiene que resolver, sea antes de llegar o durante su estancia?
+
+*Descripción:* Mide si cada caso del viajero llega solo al sistema y a quien lo atiende, y cuánto del servicio se automatiza.
+
+*Costo de quedarse:* Las solicitudes se pierden entre el teléfono de la recepción, el WhatsApp del guía y el correo de reservas, y el viajero tiene que insistir para que lo atiendan.
+
+**Funcional.**
+
+- Al entrar un caso, el sistema lo asigna automáticamente según una regla simple —por tipo de solicitud o por el área que la resuelve, como limpieza, mantenimiento o el operador de una experiencia—; las notificaciones de cambio de estado llegan a quien las necesita. `[3.2.F5]`
+
+**Eficiente.**
+
+- Hay un portal o una app donde el viajero ve su reserva y abre sus solicitudes, y una base de conocimiento interna y pública. `[3.2.E2]`
+- El viajero puede hacer solo lo más común antes y durante su viaje —registrarse antes de llegar, cambiar su hora de llegada, pedir un traslado o reservar una experiencia— sin esperar a una persona. `[3.2.E501 · comprobable]`
+
+*Se leen igual:* `3.2.D1`, `3.2.D2`, `3.2.I2`, `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.E1`, `3.2.E3`, `3.2.E4`, `3.2.E5`, `3.2.O1`, `3.2.O4`.
+
+#### 3.3 Datos
+
+¿De dónde sacas qué solicitudes y quejas te llegan, cuántas y de qué viajeros?
+
+*Descripción:* Mide si los datos de cada viajero —sus reservas, sus estancias y sus casos— están completos y ordenados para atender y decidir sin reconstruirlos.
+
+*Costo de quedarse:* Cada vez que el viajero escribe tiene que repetir su número de reserva y volver a explicar lo que pidió, porque nadie ve su historia completa.
+
+**Funcional.**
+
+- La ficha del viajero muestra lo que reservó —sus fechas, su habitación o su experiencia— y su valor, no solo sus casos. `[3.3.F2]`
+- Los datos clave del viajero —qué reservó, cuándo viaja y si ya había viajado con la empresa— están poblados en la mayoría de los registros. `[3.3.F3]`
+- Cada caso tiene su tipo y su motivo, elegidos de una lista definida: por ejemplo, una queja por limpieza, por ruido o por una experiencia que no cumplió lo prometido. `[3.3.F4]`
+
+**Eficiente.**
+
+- Se mide la satisfacción del viajero —con el NPS o el CSAT— con una cadencia definida, por ejemplo al salir o al terminar su experiencia. `[3.3.E2]`
+- La ficha del viajero guarda sus preferencias y lo que pidió en estancias anteriores —el tipo de habitación, una alergia, una celebración—, y quien lo atiende las ve. `[3.3.E501 · comprobable]`
+
+*Se leen igual:* `3.3.D1`, `3.3.D2`, `3.3.I1`, `3.3.I2`, `3.3.F1`, `3.3.F5`, `3.3.F6`, `3.3.E1`, `3.3.E3`, `3.3.E4`, `3.3.E5`, `3.3.O1`, `3.3.O2`, `3.3.O3`, `3.3.O4`.
+
+#### 3.4 Equipo y Gobierno
+
+¿Cómo sabe el líder si el servicio va al día con las solicitudes y las quejas de los viajeros?
+
+*Descripción:* Mide si cada persona sabe qué le toca en cada turno, y si el líder sigue el avance con datos y pide cuentas.
+
+*Costo de quedarse:* Nadie sabe bien a quién le toca una solicitud que pasa de un turno a otro, y el líder se entera de los atrasos cuando el viajero ya dejó una mala reseña.
+
+**Funcional.**
+
+- El líder tiene un tablero con 4 a 6 métricas clave —casos abiertos, solicitudes pendientes, quejas por tipo y calificación de los viajeros— y lo consulta al menos una vez por semana. `[3.4.F2]`
+
+**Eficiente.**
+
+- El acuerdo con las áreas que operan la estancia o la experiencia —recepción, limpieza, mantenimiento, alimentos, guías y proveedores de traslados— está escrito y se mide: en cuánto tiempo resuelve cada una lo que le pasa Servicio. `[3.4.E501 · comprobable]`
+
+*Se leen igual:* `3.4.D1`, `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.E2`, `3.4.E4`, `3.4.O1`, `3.4.O2`, `3.4.O3`, `3.4.O4`.
+
+#### 3.5 Consistencia de la experiencia
+
+¿En qué se apoya tu equipo para que la llegada y la atención no cambien según quién esté de turno?
+
+*Descripción:* Mide si el equipo conoce a sus tipos de viajero y si cada viajero recibe la misma información y la misma llegada, lo atienda quien lo atienda.
+
+*Costo de quedarse:* El mismo viajero recibe un horario distinto según a quién le pregunte, y cada turno recibe a los viajeros a su manera: el viajero lo nota y lo cuenta en su reseña.
+
+**Funcional.** Los tipos de viajero están escritos, cada viajero llega con un proceso definido y el equipo tiene respuestas guardadas para lo frecuente.
+
+*Resultado:* El equipo sabe qué tipos de viajero atiende y qué espera cada uno, cada llegada sigue el mismo proceso y todo el equipo tiene a mano las mismas respuestas para lo frecuente.
+
+- Existe un proceso escrito de llegada del viajero —la bienvenida, el registro, lo que se le explica y lo que se le entrega, o el inicio de su experiencia—, con un resultado definido que el viajero debe alcanzar al terminarlo: saber todo lo que necesita para su estancia. `[3.5.F2]`
+- Existe un documento simple con los tipos de viajero que atiende el área —por ejemplo, la familia, quien viaja por trabajo o el grupo de un evento—, qué necesita cada uno, qué espera del servicio y cuáles se consideran viajeros clave, consultable por cualquiera del equipo. `[3.5.F4]`
+
+**Eficiente.**
+
+- Quien atiende usa en su día a día las respuestas guardadas para los casos frecuentes —los horarios, cómo llegar, qué incluye la tarifa—, no solo las tiene cargadas. `[3.5.E1]`
+
+*Se leen igual:* `3.5.D1`, `3.5.I1`, `3.5.F1`, `3.5.F3`, `3.5.E2`, `3.5.E3`, `3.5.O1`.
+
+#### 3.6 Priorización de viajeros
+
+¿Cómo decide tu equipo qué solicitud de un viajero se atiende primero?
+
+*Descripción:* Mide si los casos se atienden según su gravedad y el tipo de viajero, y no según quién insiste más.
+
+*Costo de quedarse:* El viajero que se quedó sin agua caliente espera en la misma fila que quien pregunta por el horario del desayuno, y la empresa que te trae un grupo cada año recibe la misma atención que todos.
+
+**Funcional.**
+
+- Cada caso tiene una prioridad asignada —urgente, alta, normal o baja— y el equipo la respeta: un viajero sin habitación o varado en un traslado va antes que una consulta. `[3.6.F1]`
+- Está escrito qué atención recibe cada tipo de viajero —por ejemplo, quien vuelve, el grupo de un evento o el cliente de una agencia clave—, y el equipo la aplica. `[3.6.F2]`
+
+**Eficiente.**
+
+- Los viajeros se segmentan para acciones diferenciadas según el momento de su viaje: por llegar, en su estancia, recién salidos o listos para recomendar; donde el viajero vuelve, sanos, en riesgo o con potencial de volver más. `[3.6.E2]`
+
+*Se leen igual:* `3.6.D1`, `3.6.I1`, `3.6.F3`, `3.6.E1`, `3.6.O1`, `3.6.O2`, `3.6.O3`.
+
+#### 3.7 Acompañamiento del viajero
+
+¿Cómo te enteras de que un viajero tiene un problema, antes, durante o después de su viaje?
+
+*Descripción:* Mide si el viajero sabe lo que necesita antes de pedirlo, y si los problemas y las quejas se atienden mientras todavía está.
+
+*Costo de quedarse:* Te enteras de que un viajero quedó mal cuando lo publica en una reseña, días después de que se fue, cuando ya no hay nada que arreglar.
+
+**Funcional.** Las quejas y los problemas que se repiten se detectan, aunque sea a mano, cada queja se atiende antes de que el viajero se vaya y los viajeros clave reciben contacto antes de sus fechas.
+
+*Resultado:* Las quejas, los problemas que se repiten y las fechas de los viajeros clave ya no toman al equipo por sorpresa: se actúa mientras el viajero todavía está y antes de que el problema llegue a una reseña.
+
+- Un viajero con solicitudes repetidas por el mismo problema, una queja sin resolver o, si se piden calificaciones, una mala calificación se identifica, y alguien lo contacta antes de que el problema crezca. `[3.7.F1]`
+- Los viajeros clave —por ejemplo, la empresa que trae un grupo cada año o la agencia que más vende— reciben contacto antes de sus fechas críticas —la llegada de un grupo, el fin de un convenio de tarifas o, si la hay, una renovación—, no después. `[3.7.F2]`
+- Una queja durante la estancia o la experiencia se atiende antes de que el viajero se vaya: queda registrada, se le responde mientras está y se le pregunta al salir si quedó resuelta. `[3.7.F501 · comprobable · hábito]`
+
+**Eficiente.**
+
+- Ningún caso del viajero se pierde entre áreas: si lo resuelve otra área —limpieza, mantenimiento, el operador de una experiencia o un proveedor de traslados—, también queda en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —una llegada, un traslado, una experiencia— o, si se piden calificaciones, cuando un viajero califica mal. `[3.7.E4]`
+- Cada viajero recibe, sin tener que pedirla, la información que necesita antes de los momentos clave de su viaje —la confirmación, cómo llegar, la hora de registro, qué llevar a una experiencia—, y sale de forma automática, no cuando alguien se acuerda. `[3.7.E5]`
+- Si el clima, un cierre de carretera o un cambio de un proveedor afecta un viaje ya reservado, el viajero recibe el aviso y sus opciones antes de salir hacia el destino, no al llegar. `[3.7.E501 · comprobable · hábito]`
+
+**Óptimo.**
+
+- Los viajeros reciben, sin pedirlos, detalles pensados para deleitarlos —algo en su aniversario o su cumpleaños, una mejor habitación, una experiencia de regalo—, elegidos según la historia de cada viajero y el momento de su viaje, y en el sistema queda qué recibió cada uno. `[3.7.O4]`
+
+*Se leen igual:* `3.7.D1`, `3.7.D2`, `3.7.I1`, `3.7.F3`, `3.7.E1`, `3.7.E2`, `3.7.E3`, `3.7.O1`, `3.7.O2`, `3.7.O3`.
+
+#### 3.8 Autoservicio del viajero
+
+¿Qué pasa con las preguntas que tus viajeros hacen una y otra vez, como la hora de registro, cómo llegar o qué incluye su tarifa?
+
+*Descripción:* Mide si el servicio puede atender a más viajeros sin crecer al mismo ritmo, gracias al autoservicio y al conocimiento documentado.
+
+*Costo de quedarse:* Tu equipo responde a mano las mismas preguntas en cada temporada, y cada temporada alta suma más de esas preguntas a la fila.
+
+**Funcional.**
+
+- Las diez preguntas que más repitieron los viajeros en el último trimestre —o todas, si son menos—, por ejemplo la hora de registro y de salida, cómo llegar, qué incluye la tarifa o cómo cancelar, tienen una respuesta publicada que el viajero puede consultar por su cuenta. `[3.8.F1]`
+
+**Eficiente.**
+
+- El autoservicio funciona: se mide cuántos viajeros resuelven sin abrir un caso, y el equipo no crece al mismo ritmo que la ocupación en temporada alta. `[3.8.E3]`
+
+*Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E2`, `3.8.O1`, `3.8.O2`, `3.8.O3`, `3.8.O4`.
+
+## Edición — Automotriz
+
+Para el concesionario o el distribuidor que vende vehículos nuevos y usados a personas y empresas, y que atiende su posventa en el taller: un asesor trabaja cada venta, de la primera consulta a la prueba de manejo, la cotización, el financiamiento, el recibo del usado como parte de pago y la entrega, y el taller recibe al cliente después para el mantenimiento, las reparaciones, la garantía y los repuestos que instala. La venta del vehículo se mide en Ventas; el taller y la garantía, en Servicio. Recordarle al dueño su mantenimiento es de Servicio; ofrecerle cambiar de vehículo, de Ventas. Donde el concesionario vende solo usados, lo que toca a la marca —sus campañas, sus llamados a revisión, sus garantías— no aplica. La venta de repuestos al público en mostrador o en línea, la importadora que no le vende al cliente final y la empresa que solo alquila vehículos se miden con la escala general.
+
+*Clave:* automotriz
+
+*Perfil habitual:* con equipo · recompra.
+
+*Criterios propios:* desde el 601.
+
+### Palabras de esta edición
+
+| En la escala general | En esta edición |
+|:--|:--|
+| Prospecto | Interesado en un vehículo |
+| Negocio | Negocio: la venta de un vehículo, de la primera consulta a la entrega |
+| Lead | Interesado en un vehículo |
+| Pipeline | El recorrido de la venta: consulta, visita o prueba de manejo, cotización, financiamiento, cierre y entrega |
+| Revisión del pipeline | Reunión de seguimiento de ventas |
+| Vendedor | Asesor de ventas |
+| Propuesta | La cotización del vehículo: versión, precio, accesorios, bonos, valor del usado que se recibe, financiamiento y fecha de entrega |
+| Material de venta | Fichas técnicas, comparativos de versiones, fotos y videos de cada modelo |
+| Razón de pérdida | Por qué el interesado no compró: el precio, el financiamiento que no salió, el valor de su usado o porque compró otra marca |
+| Cliente ideal | El comprador objetivo de cada modelo o línea de vehículos |
+| Pronóstico | Proyección de ventas por modelo |
+| Cliente | El dueño del vehículo: una persona o una empresa con su flota |
+| Caso | Caso de posventa: una cita de taller, una reparación, un reclamo de garantía o una consulta |
+| Agente | Asesor de servicio del taller |
+| Buyer persona | Perfil de comprador: quién es, qué busca y cómo decide, como la familia que cambia de vehículo o la empresa que renueva su flota |
+| Traspaso | El de un interesado de Marketing a un asesor, o el de un comprador de Ventas al taller |
+
+### Área 1 — Ventas
+
+Mide el rendimiento de la venta de vehículos del concesionario: cómo está montada por dentro y qué produce en pruebas de manejo, ventas y entregas, y en dueños que vuelven a cambiar de vehículo. Vale igual si la venta la trabaja un equipo de asesores o uno solo.
+
+**Deficiente.** Tus ventas dependen de quién atienda. Cada asesor lleva a sus interesados en su teléfono, los precios y los bonos viven en una hoja que no siempre está al día, y nadie sabe cuántas consultas y cuántas pruebas de manejo se quedaron sin seguimiento.
+
+**Inicial.** Tienes un CRM y un proceso a medias. Los interesados se registran cuando el asesor se acuerda, cada quien cotiza a su manera y el financiamiento y el usado se negocian por fuera del sistema.
+
+**Funcional.** Tu equipo comercial opera como una maquinaria base. Cada interesado entra al mismo recorrido, todos venden con la misma lista de precios y bonos y el mismo inventario, cada prueba de manejo deja su siguiente paso y ninguna cotización se enfría sin que alguien reaccione.
+
+**Eficiente.** La venta deja de depender del empuje de cada asesor. Mides cuántas consultas llegan a prueba de manejo y cuántas pruebas a una venta, conoces la capacidad de pago antes de apartar un vehículo, acompañas cada venta hasta la entrega y proyectas las ventas de cada modelo con confianza.
+
+**Óptimo.** La IA hace el trabajo pesado y tu equipo valida donde importa. Si atiendes por WhatsApp o chat, agentes de IA responden, califican y agendan pruebas de manejo a toda hora; los modelos dicen qué interesado está listo, qué vehículo ofrecerle y qué dueño ya está por cambiar el suyo.
+
+#### 1.1 Procesos y Rutinas
+
+¿Qué tan parecido trabajan tus asesores cada venta, desde la primera consulta hasta la entrega del vehículo?
+
+*Descripción:* Mide si la venta sigue un proceso escrito, de la consulta a la entrega, que no depende de cada asesor.
+
+*Costo de quedarse:* Si se va un asesor, se lleva a sus interesados en el teléfono: nadie sabe quién ya hizo la prueba de manejo, a quién se le cotizó ni qué usado se le avaluó.
+
+**Funcional.** Todo el equipo sigue el mismo recorrido escrito en el CRM, de la consulta a la entrega, con una cadencia de contacto, un proceso escrito para recibir el usado y una revisión fija de los negocios.
+
+*Resultado:* Si rota un asesor, el siguiente sabe en qué va cada cliente, porque todo el equipo trabaja la venta igual en el CRM: los negocios avanzan con los mismos criterios, cada prueba de manejo deja su siguiente paso, el usado se recibe siempre de la misma forma, cada interesado se contacta con la cadencia acordada y los negocios se repasan en cada reunión de seguimiento.
+
+- Cualquier asesor explica igual las etapas de la venta —consulta, prueba de manejo, cotización, financiamiento, cierre y entrega— y qué tiene que cumplirse para avanzar. `[1.1.F1]`
+- Cada tipo de venta —vehículos nuevos, usados y flotas para empresas— tiene su propio recorrido en el CRM, con lo que el negocio tiene que cumplir para pasar de cada etapa a la siguiente. `[1.1.F2]`
+- Toda prueba de manejo queda registrada con el vehículo que se probó, su resultado y el siguiente paso acordado. `[1.1.F601 · comprobable · hábito · venta con equipo]`
+- El proceso para recibir un usado como parte de pago está escrito: quién lo avalúa, con qué criterios, cuánto tiempo vale la oferta y cómo se le explica al cliente. `[1.1.F602 · declarado]`
+
+**Eficiente.**
+
+- Existen guías de indagación, prueba de manejo y manejo de objeciones —el precio, el valor del usado, el financiamiento, la comparación con otra marca— que el equipo usa. `[1.1.E2]`
+
+*Se leen igual:* `1.1.D1`, `1.1.D2`, `1.1.D3`, `1.1.D4`, `1.1.I1`, `1.1.I2`, `1.1.I3`, `1.1.I4`, `1.1.F4`, `1.1.F5`, `1.1.F6`, `1.1.E1`, `1.1.E3`, `1.1.O1`, `1.1.O2`, `1.1.O3`.
+
+#### 1.2 Tecnología y Automatización
+
+¿Qué pasa en tu sistema, sin que nadie lo haga a mano, cuando entra una consulta o se aparta un vehículo?
+
+*Descripción:* Mide cuánto del trabajo repetitivo hace el sistema —repartir las consultas, avisar qué toca, mostrar el inventario, apartar el vehículo que se vende y registrar las conversaciones— y cómo usa el equipo la automatización y la IA.
+
+*Costo de quedarse:* Tus asesores copian a mano las consultas de los portales y de la marca, dependen de su memoria para dar seguimiento y descubren que el vehículo ya estaba apartado cuando el cliente ya se había decidido.
+
+**Funcional.** Lo básico pasa solo —las consultas de todos los canales entran al sistema y se reparten por una regla, el sistema avisa qué toca y el vehículo que se aparta queda marcado— y, si se usa IA, trabaja con los datos de cada cliente.
+
+*Resultado:* Ninguna consulta se pierde por no saber a quién le toca: la que llega por un portal, por la marca o por la web entra sola, el asesor recibe el aviso y deja de depender de su memoria, ve qué vehículos están disponibles antes de ofrecerlos, y uno que ya se apartó no se le ofrece a nadie más.
+
+- Las consultas que entran —de los portales, la web, la marca, las redes y la sala de exhibición— llegan a una bandeja o cola y se asignan por una regla simple: por turnos, por marca o según la fuente de donde llegan. `[1.2.F2]`
+- El asesor puede ver qué vehículos están en inventario, en tránsito o por pedir, con su versión y su color, antes de ofrecer uno, en el CRM o en el sistema donde se lleva el inventario, sin preguntarle a otra persona. `[1.2.F8]`
+- Apartar o vender un vehículo lo marca en el inventario en el momento: no se le ofrece a otro cliente ni se aparta dos veces. `[1.2.F601 · comprobable]`
+
+**Eficiente.** Las cotizaciones salen del sistema, la solicitud de financiamiento viaja sola a las financieras, el CRM se conecta con el sistema del concesionario y el equipo usa la IA en su trabajo diario.
+
+*Resultado:* El asesor recupera el tiempo que se le iba en tareas repetitivas, y el líder ve en tiempo real en qué etapa se caen los negocios.
+
+- Las cotizaciones se generan desde el sistema, con la versión, el precio, los bonos y el inventario vigentes, no como documentos sueltos. `[1.2.E1]`
+- Si el concesionario lleva su inventario, sus pedidos a la marca, su facturación o su taller en otro sistema —el sistema de gestión del concesionario (DMS) o un ERP—, el CRM está conectado con él. `[1.2.E3]`
+- La solicitud de financiamiento sale del sistema hacia las financieras con los datos del cliente, y su respuesta vuelve al negocio, sin pasarla a mano. `[1.2.E601 · comprobable · venta con equipo]`
+
+**Óptimo.** La IA responde, califica, agenda pruebas de manejo y calcula qué negocios van a cerrar; el asesor valida y se queda con las conversaciones que deciden la venta.
+
+- Si el equipo atiende por un canal conversacional, agentes de IA califican ahí a los interesados con la definición de interesado calificado y agendan pruebas de manejo a cualquier hora; le pasan al asesor, con el contexto, a quien está listo, y el equipo revisa en el CRM lo que calificaron. `[1.2.O2]`
+
+*Se leen igual:* `1.2.D1`, `1.2.D2`, `1.2.I1`, `1.2.I2`, `1.2.F3`, `1.2.F4`, `1.2.F6`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O1`, `1.2.O3`.
+
+#### 1.3 Datos
+
+¿Qué tienes que hacer con el reporte de tus negocios y de tu inventario antes de usarlo para decidir?
+
+*Descripción:* Mide si los datos de ventas son confiables para decidir: negocios completos, el origen de cada uno, el inventario al día y reportes que salen del sistema sin armarlos a mano.
+
+*Costo de quedarse:* Decides con números que no cuadran: el reporte de ventas se arma a mano cruzando el CRM con el inventario, y no sabes qué portal o qué campaña te trae compradores y cuál solo consultas.
+
+**Funcional.** El reporte de negocios sale del sistema, sin armarlo a mano, y el estado de cada vehículo está al día: a los dos se les puede creer.
+
+*Resultado:* El líder ve el estado real de los negocios y del inventario cuando lo necesita, sin armar el reporte a mano, y sabe de dónde llegó cada interesado.
+
+- Todo negocio creado desde la puesta en marcha del recorrido actual tiene el modelo o el vehículo de interés, el monto, la fecha esperada de cierre y el asesor responsable. `[1.3.F1]`
+- Todo negocio creado desde la puesta en marcha del recorrido actual dice por dónde llegó el interesado: la sala de exhibición, la web, un portal, la marca, las redes, una feria o un referido. `[1.3.F3]`
+- La documentación sobre el comprador objetivo de cada modelo no se deja envejecer. `[1.3.F5]`
+- La definición de interesado calificado no se deja envejecer. `[1.3.F6]`
+- La documentación de lo que se ofrece —las versiones de cada modelo, su equipamiento y para quién es cada una— no se deja envejecer. `[1.3.F7]`
+- El estado de cada vehículo del inventario —disponible, apartado, vendido o entregado— está al día en el sistema y coincide con lo que se facturó. `[1.3.F601 · comprobable · requiere 1.2.F8]`
+
+**Eficiente.** Aparece una proyección de ventas confiable por modelo, se mide cuánto tarda en venderse cada vehículo y la ficha del cliente reúne su compra, su financiamiento y sus visitas al taller.
+
+*Resultado:* El concesionario puede comprometer un número de ventas por modelo con confianza y planear con ese número sus pedidos a la marca y su inventario de usados.
+
+- Hay una proyección de ventas por modelo que se actualiza cada semana o cada quince días, y en al menos cinco de los últimos seis meses lo vendido quedó dentro de ±10% de lo proyectado. `[1.3.E1]`
+- La ficha de cada cliente reúne lo comercial con su historial de conversaciones y, si el concesionario lleva en otros sistemas la facturación, el financiamiento o el taller, con lo que viene de ellos: la vista 360° empieza a tomar forma. `[1.3.E3]`
+- Se mide cuánto tarda en venderse cada modelo nuevo y cada vehículo usado en inventario, y ese número se revisa cada mes. `[1.3.E601 · comprobable · hábito]`
+
+*Se leen igual:* `1.3.D1`, `1.3.D2`, `1.3.D3`, `1.3.D4`, `1.3.I1`, `1.3.I2`, `1.3.I3`, `1.3.F2`, `1.3.F4`, `1.3.F8`, `1.3.E2`, `1.3.E4`, `1.3.O1`, `1.3.O2`, `1.3.O3`, `1.3.O4`, `1.3.O5`.
+
+#### 1.4 Equipo y Gobierno
+
+¿Cómo sabe el líder, cada semana, qué asesores van bien y cuáles necesitan ayuda?
+
+*Descripción:* Mide si cada asesor tiene un rol y una meta por escrito, y si el líder sigue los números de la venta y pide cuentas con datos.
+
+*Costo de quedarse:* El líder se entera al cierre del mes de que no llegó a la meta de la marca: no vio antes qué asesor se quedó atrás ni en qué etapa se cayeron los negocios.
+
+**Funcional.**
+
+- El líder tiene un tablero con 4 a 6 métricas clave —consultas, pruebas de manejo, cotizaciones, ventas, entregas y vehículos en inventario— y lo consulta al menos una vez por semana. `[1.4.F2]`
+- Cada asesor —y, si el concesionario tiene metas de la marca, cada modelo— tiene una meta escrita, con un monto o una cantidad de vehículos y un plazo, y su avance se reporta en una fecha fija, al menos una vez al mes. `[1.4.F4]`
+
+**Eficiente.** El líder prepara a quien entra, escucha al equipo y acuerda reglas con las áreas que cierran la venta y, si Marketing pasa interesados, también las del traspaso.
+
+*Resultado:* Un asesor nuevo produce más rápido, el financiamiento, el avalúo del usado y la entrega no se traban entre áreas, lo que el equipo ve que no funciona llega a quien puede cambiarlo y, si Marketing pasa interesados, el traspaso tiene reglas que se cumplen.
+
+- Cuando entra un asesor nuevo, hay un plan de inducción con sus pasos y materiales —los modelos, los precios, el financiamiento y los sistemas—; no se le entrena de memoria. `[1.4.E2]`
+- El acuerdo con las áreas que cierran la venta —financiamiento y seguros, el avalúo de usados y la preparación y entrega del vehículo— está escrito y se mide: qué recibe cada una y en cuánto tiempo responde. `[1.4.E601 · comprobable]`
+
+**Óptimo.**
+
+*Resultado:* La dirección decide dónde invertir con números de fondo: qué modelo y qué canal dejan más margen, qué vehículo se vende más rápido y cuánto deja cada cliente entre su compra y el taller.
+
+- Las decisiones de la dirección usan números de fondo: cuánto deja cada cliente en el tiempo —su compra, su financiamiento y su taller—, cuánto margen deja cada canal y cada modelo y cuánto aporta cada asesor. `[1.4.O1]`
+
+*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
+
+#### 1.5 Modelos y cotización
+
+¿Cómo sabe un asesor que entra a tu equipo a quién le vende cada modelo y con qué precios, bonos y condiciones?
+
+*Descripción:* Mide si el equipo sabe para quién es cada modelo, si la cotización llega igual con cualquier asesor y, si se vende por más de un canal, si los precios y las condiciones son coherentes en todos.
+
+*Costo de quedarse:* Cada asesor cotiza con su propia hoja y su propio bono: el cliente recibe dos precios para el mismo vehículo, desconfía y se va a cotizar a otro concesionario.
+
+**Deficiente.** Nadie puede decir con claridad para quién es cada modelo, no hay una lista de precios y bonos que todos usen y cada asesor cotiza a su manera: el cliente recibe precios distintos según quién lo atienda.
+
+- Hay más de una lista de precios o de bonos circulando, y no se sabe cuál es la vigente. `[1.5.D601 · comprobable]`
+
+**Inicial.** Hay una lista de precios y fichas de cada modelo, pero cada asesor arma la cotización por su cuenta.
+
+**Funcional.** El comprador objetivo de cada modelo está escrito, y todos venden con los mismos precios, los mismos bonos y la misma cotización.
+
+*Resultado:* Dos clientes parecidos reciben la misma información del modelo y una cotización igual de clara —versión, precio, bonos, financiamiento, valor del usado y fecha de entrega—, sin importar qué asesor los atienda.
+
+- Existe un documento con el comprador objetivo de cada modelo —a quién va dirigido, qué busca y cómo paga—, consultable por cualquier asesor. `[1.5.F1]`
+- El líder puede explicar quién es el comprador objetivo de cada modelo sin consultar su documentación. `[1.5.F2]`
+- Las cotizaciones están estandarizadas: toda cotización muestra lo mismo —versión, precio, accesorios, bonos, financiamiento, valor del usado y fecha de entrega—, no armada desde cero cada vez. `[1.5.F4]`
+- Hay una sola lista vigente de precios, bonos y promociones por modelo y versión, y todas las cotizaciones salen de ella. `[1.5.F601 · comprobable]`
+
+**Eficiente.** La propuesta se distingue de la de otros concesionarios y otras marcas, y solo promete lo que se va a entregar.
+
+*Resultado:* Los interesados ven qué distingue al concesionario: la propuesta dice lo mismo en el sitio, en la sala y en boca de cada asesor, y lo que se le prometió al cliente —la fecha de entrega, los accesorios, las condiciones del financiamiento— es lo que recibe.
+
+- Las cotizaciones solo prometen lo que se va a entregar: la fecha de entrega, los accesorios y las condiciones del financiamiento se validan antes de enviarlas. `[1.5.E3]`
+- Los cambios de precio, de bonos y de promociones les llegan el mismo día a todos los asesores y a todos los canales. `[1.5.E601 · comprobable · hábito]`
+
+*Se leen igual:* `1.5.D1`, `1.5.D2`, `1.5.I1`, `1.5.I2`, `1.5.F3`, `1.5.F5`, `1.5.E2`, `1.5.O1`.
+
+#### 1.6 Priorización de interesados
+
+¿Cómo decide tu equipo a qué interesados dedicarles tiempo y pruebas de manejo primero?
+
+*Descripción:* Mide si el equipo decide a qué interesados dedicar su tiempo con criterios escritos, según el comprador objetivo de cada modelo.
+
+*Costo de quedarse:* Tus asesores le dan prueba de manejo a todo el que pasa por la sala: pasan la tarde con quien no puede financiar el vehículo, y los compradores listos esperan su turno.
+
+**Funcional.** Los interesados se separan por los rasgos del comprador objetivo —modelo, presupuesto, forma de pago, si trae un usado— y hay una definición escrita de interesado calificado que el equipo aplica.
+
+*Resultado:* El equipo deja de dedicarle pruebas de manejo a quien no encaja con el comprador objetivo y concentra el esfuerzo en quien sí encaja y cumple la definición de interesado calificado, con su presupuesto, su forma de pago y su plazo de compra.
+
+- El equipo segmenta a los interesados por los atributos del comprador objetivo antes de trabajarlos: el modelo que busca, el presupuesto, la forma de pago, si trae un usado o si compra para una flota. `[1.6.F1]`
+- Hay una definición escrita de interesado calificado —los criterios para dedicarle una prueba de manejo y una cotización: modelo de interés, forma de pago y plazo de compra— y se aplica de forma consistente. `[1.6.F2]`
+- Los rasgos del comprador objetivo —modelo de interés, presupuesto, forma de pago y si trae un usado— son campos del CRM y de los formularios de consulta. `[1.6.F4]`
+
+**Eficiente.**
+
+- Los segmentos de compradores prioritarios —las empresas que renuevan su flota, los dueños que ya compraron antes, quienes buscan un modelo con inventario disponible— están en una lista escrita. `[1.6.E2]`
+- La capacidad de pago del interesado o la precalificación de su financiamiento se conoce antes de apartar un vehículo o de pedirlo a la marca. `[1.6.E601 · comprobable · venta con equipo]`
+
+**Óptimo.**
+
+- La IA detecta en cada cliente el riesgo de perderlo y el potencial de venderle más, como un segundo vehículo o el cambio del que tiene, lo marca en el CRM y el asesor decide qué hacer. `[1.6.O2]`
+
+*Se leen igual:* `1.6.D1`, `1.6.I1`, `1.6.I2`, `1.6.F3`, `1.6.E1`, `1.6.E3`, `1.6.O1`, `1.6.O3`, `1.6.O4`.
+
+#### 1.7 Seguimiento de pruebas y cotizaciones
+
+¿Qué pasa con quien hizo la prueba de manejo y no volvió a contestar, o con la venta que no avanza hacia la entrega?
+
+*Descripción:* Mide si alguien detecta cuando un negocio deja de avanzar —después de la prueba de manejo, de la cotización o mientras se espera el financiamiento— y si hay un paso acordado para retomarlo; y, donde el dueño vuelve a comprar, si se le busca cuando ya le toca cambiar de vehículo.
+
+*Costo de quedarse:* Los interesados se enfrían después de la prueba de manejo y las cotizaciones quedan sin respuesta sin que nadie llame: el cliente termina comprando en el concesionario de otra marca que sí lo llamó.
+
+**Deficiente.** El asesor está solo con sus clientes: después de la prueba de manejo o de la cotización, nadie da seguimiento.
+
+- No hay material de venta —fichas técnicas, comparativos de versiones, fotos o videos— para mostrarles a los interesados. `[1.7.D4]`
+
+**Funcional.** Ningún negocio se enfría en silencio después de la prueba de manejo o de la cotización: se detecta y hay un paso acordado para retomarlo.
+
+*Resultado:* Los negocios que se traban se detectan y se retoman por más de un canal; donde se vende con equipo, con material de venta común y con el líder actuando mientras todavía hay margen. Cada prueba de manejo y cada cotización reciben su seguimiento, y el dueño que ya debería cambiar de vehículo no se deja al azar.
+
+- Hay material de venta estandarizado —fichas técnicas, comparativos de versiones, fotos y videos de cada modelo— que ayuda a cerrar la venta. `[1.7.F4]`
+- Los dueños que ya deberían estar cambiando de vehículo, según el plazo de cambio que define el proceso —por ejemplo, cuando termina su financiamiento o su vehículo llega a cierta edad o kilometraje—, se reconocen a tiempo y reciben una propuesta de cambio, sin esperar a que vuelvan solos. `[1.7.F5]`
+- Toda prueba de manejo y toda cotización reciben seguimiento dentro del plazo acordado. `[1.7.F601 · comprobable · hábito · venta con equipo · requiere 1.1.F601]`
+
+**Eficiente.**
+
+- Los interesados que todavía no están listos para comprar no se abandonan: pasan a nutrición —la de Marketing o una secuencia del propio equipo— y vuelven a un asesor cuando muestran interés o llega el modelo que buscaban. `[1.7.E2]`
+- Entre el cierre y la entrega, el comprador recibe cómo va su vehículo —el pedido a la marca, la aprobación del financiamiento, la inscripción y la preparación— sin tener que pedirlo. `[1.7.E601 · comprobable · hábito]`
+
+*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I1`, `1.7.I2`, `1.7.I3`, `1.7.I4`, `1.7.F1`, `1.7.F2`, `1.7.F3`, `1.7.E1`, `1.7.E3`, `1.7.E4`, `1.7.O1`, `1.7.O2`.
+
+#### 1.8 Ventas ganadas y perdidas
+
+¿Qué queda registrado cuando un interesado no compra o una venta se cae antes de la entrega?
+
+*Descripción:* Mide si queda registrado por qué no compra un interesado o por qué se cae una venta antes de la entrega, y si el equipo revisa lo que gana y lo que pierde para mejorar su proceso.
+
+*Costo de quedarse:* No sabes por qué pierdes ventas —el precio, el financiamiento que no salió, el valor del usado, la otra marca—: cada asesor tiene su explicación, y sin un registro no hay cómo ver qué se repite.
+
+**Funcional.** Cada negocio perdido y cada venta que se cae quedan con su razón, elegida de una lista fija, y el líder saca del sistema el reporte del trimestre.
+
+*Resultado:* El líder sabe por qué no compran los interesados y por qué se caen las ventas antes de la entrega, con datos del trimestre y no con impresiones.
+
+- Todo negocio creado desde la puesta en marcha del recorrido actual que se dio por perdido tiene registrada su razón. `[1.8.F1]`
+- Cada venta que se cae después del cierre —porque no salió el financiamiento, el cliente desistió o el vehículo no llegó— deja registrada su razón. `[1.8.F601 · comprobable]`
+
+**Eficiente.**
+
+- Al menos una vez por trimestre se revisan las ventas ganadas, los negocios perdidos y las ventas que se cayeron para encontrar lo que se repite. `[1.8.E1]`
+- Cuando el cliente compró otra marca o en otro concesionario, queda registrado cuál y por qué. `[1.8.E601 · comprobable]`
+
+*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`, `1.8.O4`.
+
+### Área 2 — Marketing
+
+Mide el rendimiento del área de marketing del concesionario: cómo está montada por dentro y qué produce en presencia, interesados y pruebas de manejo para cada modelo, y en clientes que vuelven al taller. Vale igual si el marketing lo hace un equipo propio, una sola persona o una agencia que el concesionario dirige, también cuando parte de las campañas las pone la marca.
+
+**Deficiente.** Tus modelos no los presentas tú: los presenta la marca o el portal. Cada anuncio dice algo distinto, las herramientas están sueltas y la pauta corre hasta agotar el presupuesto sin que nadie mida qué dejó. Los interesados llegan por accidente.
+
+**Inicial.** Tienes logo, fotos de los modelos y redes, pero no hay una estrategia detrás. Publicas cuando llega un modelo o una promoción de la marca, y los resultados de cada campaña se miden tarde y a mano. Llegan consultas, pero no siempre sabes de dónde vienen.
+
+**Funcional.** Tu marketing dejó de depender de una persona. La marca y los perfiles de comprador están escritos, cada modelo tiene su página, el calendario sigue los lanzamientos y las campañas de la marca, y los canales que elegiste en tu plan salen con regularidad y anuncian solo lo que está disponible. Sabes de dónde llega cada interesado y cuánto te cuesta en cada canal.
+
+**Eficiente.** Probar y ajustar ya es rutina. Sabes qué aportó cada canal a cada venta y cuánto te cuesta cada prueba de manejo y cada venta en cada canal y en cada modelo, el mensaje se adapta solo a cada tipo de comprador, la IA asiste a tu equipo en su trabajo diario y tu concesionario aparece cuando alguien busca un vehículo en su zona, en buscadores y en asistentes de IA.
+
+**Óptimo.** La IA produce y ajusta; tu equipo dirige. El contenido de cada modelo se genera y se ajusta de forma continua; la IA adapta el mensaje a lo que hizo cada interesado y mueve la pauta entre canales dentro de los límites que fija el equipo; y los clientes satisfechos que identifica Servicio traen compradores nuevos. El equipo define la estrategia y valida lo que sale.
+
+#### 2.1 Procesos y Rutinas
+
+¿Cómo se arma una campaña en tu equipo, desde que se decide hasta que sale en los portales, en la pauta y en las redes?
+
+*Descripción:* Mide si la promoción de cada modelo y del taller sale de un plan y un calendario compartidos, sin depender de nadie.
+
+*Costo de quedarse:* Cada lanzamiento depende de quien lo arma: si esa persona se va, la campaña del modelo nuevo o del cierre de mes sale tarde o sin plan.
+
+**Deficiente.**
+
+- No hay calendario de campañas: cada lanzamiento y cada promoción se improvisan. `[2.1.D1]`
+
+**Funcional.** Las campañas salen con un calendario y un proceso que el equipo sigue, sin depender de una persona, y el calendario sigue el año del concesionario.
+
+*Resultado:* Todo el equipo trabaja en el mismo sistema, y la promoción de cada modelo sigue saliendo aunque cambie una persona: el calendario y el proceso no viven en la cabeza de nadie, y el líder sabe en qué va cada campaña sin tener que preguntar.
+
+- Si una agencia —o la marca, con sus campañas— ejecuta todo o parte del trabajo, el equipo es dueño del calendario, del brief, de la aprobación y de los accesos, y las campañas no se detienen si cambia la agencia. `[2.1.F5]`
+- El calendario de campañas sigue el año del concesionario: el lanzamiento de cada modelo, las ferias y exhibiciones, los cierres de mes y las campañas de la marca y del taller. `[2.1.F601 · declarado]`
+
+*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I1`, `2.1.I2`, `2.1.I3`, `2.1.F1`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F6`, `2.1.E2`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
+
+#### 2.2 Tecnología y Automatización
+
+¿Qué pasa en tu sistema, sin que nadie lo haga a mano, cuando alguien pide una cotización o una prueba de manejo en tu sitio, o te escribe por WhatsApp?
+
+*Descripción:* Mide si las herramientas que se pagan se usan, si cada interesado que deja sus datos o escribe llega solo al sistema y cuánto trabajo repetitivo hacen las automatizaciones y la IA.
+
+*Costo de quedarse:* Quien pide una cotización en tu sitio o te escribe por WhatsApp espera a que alguien lo cargue y le conteste, o se va a otro concesionario, y si pagas herramientas, parte de lo que pagas no se usa.
+
+**Funcional.**
+
+*Resultado:* Todo lo que entra por el sitio, por la marca y, si se usa, por WhatsApp o el chat llega al sistema y recibe respuesta, y no se paga por herramientas que nadie usa.
+
+- Si el sitio tiene formularios para pedir una cotización o una prueba de manejo, están conectados al CRM: lo que una persona llena entra solo como contacto. `[2.2.F3]`
+- Si el sitio tiene formularios, cuando un interesado envía uno el sistema le responde automáticamente —por ejemplo, con la ficha del modelo o la confirmación de su prueba de manejo— y le avisa a quien corresponde. `[2.2.F5]`
+
+**Eficiente.**
+
+- El traspaso de interesados a los asesores es automático: cuando un interesado cumple los criterios para pasar a un asesor, le llega con su historial al asesor que corresponde, sin que nadie lo pase a mano. `[2.2.E3]`
+
+*Se leen igual:* `2.2.D1`, `2.2.D2`, `2.2.D3`, `2.2.I1`, `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F4`, `2.2.F9`, `2.2.E1`, `2.2.E2`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`, `2.2.O2`, `2.2.O3`.
+
+#### 2.3 Datos
+
+¿Cómo sabes cuántos interesados entran, de dónde vienen y cuántos llegan a una prueba de manejo?
+
+*Descripción:* Mide si los datos de marketing son confiables: de dónde llega cada interesado, en qué etapa está y si los reportes salen del sistema sin rehacerlos.
+
+*Costo de quedarse:* No sabes de qué portal o de qué anuncio llega cada interesado ni cuántos terminan en una prueba de manejo: cada reporte hay que rehacerlo o revisarlo a mano antes de creerle.
+
+**Funcional.**
+
+*Resultado:* El líder sabe de dónde llega cada interesado —un portal, la pauta, las redes, la marca, una feria o un referido—, con reportes que salen del sistema y no de una hoja de cálculo armada a mano.
+
+- Cada contacto creado desde la puesta en marcha del sistema —entre por un formulario, WhatsApp, un portal, la marca o la sala de exhibición— tiene su etapa del ciclo de vida y su origen. `[2.3.F1]`
+- Los reportes básicos —cuántos interesados entran por modelo, de dónde vienen y cuántos llegan a una prueba de manejo— salen del sistema sin armarlos a mano. `[2.3.F5]`
+
+*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F2`, `2.3.F3`, `2.3.F6`, `2.3.F7`, `2.3.E1`, `2.3.E2`, `2.3.E3`, `2.3.E4`, `2.3.O1`, `2.3.O3`, `2.3.O4`, `2.3.O5`.
+
+#### 2.4 Equipo y Gobierno
+
+¿Cómo rinde cuentas tu equipo de marketing por los interesados y las pruebas de manejo de cada modelo?
+
+*Descripción:* Mide si cada persona sabe qué le toca en la promoción de los modelos y del taller, si el equipo tiene metas y si decide y rinde cuentas con números del sistema.
+
+*Costo de quedarse:* Qué modelo se promociona se decide por costumbre, por lo que pide la marca o por quien insiste más, y nadie responde por una meta: el equipo no sabe qué se espera de él.
+
+**Funcional.**
+
+- El líder tiene un tablero con 4 a 6 métricas clave —interesados nuevos por modelo, de dónde llegan, cuántos pasan a un asesor y cuántos llegan a una prueba de manejo— y lo consulta al menos una vez por semana. `[2.4.F2]`
+- Las decisiones sobre qué promocionar y en qué enfocarse —qué modelo, qué usados, qué servicio del taller— citan datos del sistema, no opiniones. `[2.4.F4]`
+
+*Se leen igual:* `2.4.D1`, `2.4.D2`, `2.4.D3`, `2.4.I1`, `2.4.I2`, `2.4.F1`, `2.4.F3`, `2.4.F5`, `2.4.F6`, `2.4.E2`, `2.4.E3`, `2.4.E4`, `2.4.O1`, `2.4.O2`, `2.4.O4`.
+
+#### 2.5 Marca y Presencia
+
+¿Qué guía a tu equipo cuando arma una pieza para publicar, y qué encuentra un interesado cuando busca un modelo en tu sitio?
+
+*Descripción:* Mide si la marca del concesionario se ve y suena igual en todo lo que sale, si está escrito a qué comprador le habla, si cada modelo tiene dónde mostrarse completo y si el sitio aparece en buscadores.
+
+*Costo de quedarse:* Cada anuncio se ve distinto al anterior y, cuando alguien busca un modelo en tu zona, encuentra el sitio de otro concesionario, o encuentra el tuyo sin precio ni forma de agendar una prueba.
+
+**Funcional.** La marca, la voz y los perfiles de comprador están escritos y se usan, cada modelo tiene su página, el sitio cumple lo básico para buscadores y se publica contenido propio cada mes.
+
+*Resultado:* La marca se ve y suena igual en todo lo que sale, cada modelo tiene dónde mostrarse completo, y el sitio es encontrable en buscadores con lo básico bien resuelto.
+
+- Hay 2 o 3 perfiles de comprador escritos —por ejemplo, la familia que cambia de vehículo, quien compra su primer vehículo o la empresa que renueva su flota—, cada uno con su recorrido de compra básico, etapa por etapa. `[2.5.F3]`
+- Se publica contenido propio al menos una vez por mes, con cadencia previsible: videos de los modelos, comparativos, consejos de mantenimiento o artículos del blog. `[2.5.F5]`
+- Cada modelo en venta tiene su página en el sitio, con sus versiones, el precio desde, la ficha técnica, fotos y cómo pedir una prueba de manejo. `[2.5.F601 · comprobable]`
+
+**Eficiente.**
+
+- Se les pide una reseña pública a los clientes después de la entrega de su vehículo o de su visita al taller, y cada reseña, buena o mala, se responde dentro del plazo que fijó el equipo. `[2.5.E5]`
+
+*Se leen igual:* `2.5.D1`, `2.5.D2`, `2.5.D3`, `2.5.I1`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F4`, `2.5.E1`, `2.5.E2`, `2.5.E3`, `2.5.E4`, `2.5.O1`, `2.5.O2`.
+
+#### 2.6 Segmentación
+
+¿Qué cambia en lo que recibe un interesado según el tipo de comprador que es y el modelo que busca?
+
+*Descripción:* Mide si cada interesado recibe un mensaje pensado para su tipo de comprador y el modelo que busca, y si cada dueño recibe lo que corresponde a su vehículo.
+
+*Costo de quedarse:* Le mandas la misma promoción a todos: la empresa que busca una flota recibe la oferta pensada para la familia, y quien acaba de comprar recibe la publicidad del modelo que ya tiene.
+
+**Funcional.**
+
+- Existen al menos 2 segmentos con criterios escritos según qué busca o cómo decide cada grupo de compradores, no solo según dónde está: por ejemplo, quien compra con financiamiento y quien paga de contado, o la persona y la empresa con flota. `[2.6.F1]`
+- La mayoría de las campañas del último trimestre tienen piezas distintas para cada segmento: no le hablan igual a la familia que cambia de vehículo que a la empresa que renueva su flota. `[2.6.F3]`
+
+**Eficiente.**
+
+- La segmentación usa datos de comportamiento —qué modelo miró, qué versión cotizó, qué vehículo tiene y cuándo lo llevó al taller—, no solo lo que la persona declaró. `[2.6.E4]`
+
+*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.I2`, `2.6.F4`, `2.6.E1`, `2.6.E2`, `2.6.E3`, `2.6.O1`, `2.6.O3`.
+
+#### 2.7 Canales y Alcance
+
+¿Cómo salen tus campañas por los canales que usas, como los portales, la pauta, las redes, el correo o WhatsApp?
+
+*Descripción:* Mide si los canales que el concesionario eligió salen con regularidad y bajo un mismo plan, si anuncian solo lo que está disponible y si se conoce lo que cuesta cada interesado.
+
+*Costo de quedarse:* Tus modelos llegan al mercado a ratos, o no llegan, sin un plan que coordine tus canales; cuando anuncias, ofreces usados que ya se vendieron, y no sabes cuánto te cuesta cada interesado.
+
+**Funcional.** Los canales que el concesionario eligió salen con regularidad y bajo un mismo plan, y anuncian solo lo que está disponible.
+
+*Resultado:* Una campaña sale coordinada por todos los canales del plan en vez de esfuerzos sueltos, lo que se anuncia está disponible, y el líder ve cuánto le cuesta cada interesado según el canal del que venga.
+
+- Si la pauta pagada es parte del plan de canales, hay al menos una campaña corriendo con presupuesto definido: en buscadores, en redes o en los portales de vehículos. `[2.7.F3]`
+- Los portales, la pauta y el sitio anuncian solo los vehículos disponibles y las promociones vigentes: el usado que se aparta o se vende deja de promocionarse dentro del plazo acordado. `[2.7.F601 · comprobable · hábito]`
+
+**Eficiente.**
+
+- Si las ferias, las exhibiciones o los eventos de lanzamiento son parte del plan de canales, se hacen como un canal recurrente, con fechas en el calendario. `[2.7.E2]`
+- En el sistema se ve cuánto cuesta cada prueba de manejo y cada venta en cada canal y en cada modelo, no solo cada interesado. `[2.7.E601 · comprobable · requiere 1.3.F3]`
+
+*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.I3`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.F5`, `2.7.F6`, `2.7.E1`, `2.7.E3`, `2.7.E4`, `2.7.E5`, `2.7.O1`, `2.7.O2`, `2.7.O4`.
+
+#### 2.8 Medición y Aprendizaje
+
+¿Qué te queda de cada lanzamiento o de cada campaña cuando termina?
+
+*Descripción:* Mide si cada campaña se evalúa por los interesados, las pruebas de manejo y las ventas que trajo, y deja un aprendizaje.
+
+*Costo de quedarse:* Repites la pauta y los mensajes de siempre porque nadie anota cuáles trajeron pruebas de manejo y ventas: cada lanzamiento empieza de cero.
+
+**Funcional.**
+
+- Los resultados de cada campaña —los interesados, las pruebas de manejo o las ventas que trajo, no solo los clics— se ven en el sistema sin armarlos a mano. `[2.8.F5]`
+
+*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.F3`, `2.8.E1`, `2.8.E2`, `2.8.E3`, `2.8.O2`, `2.8.O3`.
+
+### Área 3 — Servicio
+
+Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde la entrega de su vehículo y lo atiende en el taller: el mantenimiento, las reparaciones, la garantía y los repuestos que se instalan. Mira cómo está montada por dentro y qué produce en vehículos entregados en el plazo prometido, reclamos resueltos y dueños que vuelven al taller y recomiendan.
+
+**Deficiente.** El taller se improvisa vehículo por vehículo. Las citas se dan por teléfono y quedan en un cuaderno, cada asesor de servicio presupuesta a su manera y el cliente se entera de que su vehículo no estará listo cuando llega a recogerlo.
+
+**Inicial.** Lo que pasa con cada vehículo lo sabe el asesor que lo recibió. Hay un sistema de órdenes de trabajo, pero el cliente tiene que llamar para saber cómo va, y nadie le recuerda su próximo mantenimiento.
+
+**Funcional.** Tu taller es consistente y ya no depende de una persona. Sabes qué tipos de cliente atiendes y qué espera cada uno. Cada vehículo entra con su orden y sigue las mismas etapas, del recibo a la entrega; el cliente aprueba el presupuesto antes de que se repare, recibe cada cambio de estado sin llamar y recibe el recordatorio de su próximo mantenimiento. Atiendes primero lo urgente y tienes respuestas guardadas para lo repetitivo.
+
+**Eficiente.** El taller empieza a adelantarse al cliente. Tienes plazos por tipo de servicio que se vigilan solos, el cliente agenda y aprueba en línea, y la IA asiste a tu equipo en su trabajo diario; mides tiempos, satisfacción y los vehículos que vuelven por la misma falla. Ningún caso se pierde entre el taller, repuestos y la marca, y cada dueño recibe el aviso de un llamado a revisión sin buscarlo.
+
+**Óptimo.** Un agente de IA atiende a los dueños a toda hora —agenda, responde y da el estado de su vehículo— y le pasa a una persona, con todo el contexto, lo que no puede resolver. Las rutinas corren solas mientras el equipo supervisa y atiende las excepciones; casi todos los problemas que detecta el sistema se resuelven antes de que el dueño los note, y cada cliente se atiende sabiendo lo que compró y lo que se le prometió.
+
+#### 3.1 Procesos y Rutinas
+
+¿Cómo se atiende un vehículo en tu taller, desde que entra hasta que se entrega?
+
+*Descripción:* Mide si el taller sigue un proceso y rutinas definidas, para que la atención del vehículo no dependa de quién lo recibe.
+
+*Costo de quedarse:* El taller depende del asesor de servicio que conoce cada caso: si esa persona falta, nadie sabe qué se le prometió al cliente ni cuándo estará listo su vehículo.
+
+**Funcional.**
+
+- El recorrido de las órdenes del taller está configurado en el sistema con sus etapas y cubre la atención de cada vehículo —una cita, una reparación o un reclamo de garantía—, del recibo a la entrega. `[3.1.F1]`
+- Existe un proceso escrito para escalar los reclamos graves y los casos que el asesor de servicio no puede resolver —por ejemplo, un vehículo que vuelve por la misma falla o una garantía que la marca rechaza—: dice cuáles se escalan y a quién. `[3.1.F4]`
+- Toda orden de trabajo sigue un proceso escrito: el recibo del vehículo con su inspección y la firma del cliente, el diagnóstico, la aprobación del presupuesto antes de reparar, el control de calidad y la entrega. `[3.1.F601 · declarado]`
+
+**Eficiente.**
+
+- Hay guías escritas para los momentos difíciles del taller: un vehículo que vuelve por la misma falla, un repuesto que no llega o un reclamo de garantía que la marca rechaza. `[3.1.E601 · declarado]`
+
+*Se leen igual:* `3.1.D1`, `3.1.D2`, `3.1.I1`, `3.1.I2`, `3.1.I3`, `3.1.F2`, `3.1.F3`, `3.1.F5`, `3.1.F6`, `3.1.E1`, `3.1.E3`, `3.1.E4`, `3.1.E5`, `3.1.O1`, `3.1.O3`, `3.1.O4`.
+
+#### 3.2 Tecnología y Automatización
+
+¿Cómo llega una cita o un reclamo al sistema y al asesor de servicio que lo tiene que atender?
+
+*Descripción:* Mide si cada cita y cada caso llegan solos al sistema y a quien los atiende, y cuánto del taller se automatiza.
+
+*Costo de quedarse:* Las citas se pierden entre el teléfono del taller y el WhatsApp de cada asesor, y el cliente tiene que llamar varias veces para saber si su vehículo ya está listo.
+
+**Funcional.**
+
+- Al entrar un caso, el sistema lo asigna automáticamente según una regla simple —por tipo de servicio o por asesor de servicio—; las notificaciones de cambio de estado llegan a quien las necesita. `[3.2.F5]`
+- Las citas del taller se agendan en el sistema con el vehículo, el servicio y la hora, y el cliente recibe, sin que nadie lo escriba a mano, la confirmación de su cita y cada cambio en el estado de su vehículo: en diagnóstico, con presupuesto por aprobar o listo para recoger. `[3.2.F601 · comprobable]`
+
+**Eficiente.**
+
+- El cliente puede agendar su cita, aprobar el presupuesto y ver el estado de su vehículo en línea, sin llamar al taller. `[3.2.E601 · comprobable]`
+
+*Se leen igual:* `3.2.D1`, `3.2.D2`, `3.2.I2`, `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.E1`, `3.2.E2`, `3.2.E3`, `3.2.E4`, `3.2.E5`, `3.2.O1`, `3.2.O4`.
+
+#### 3.3 Datos
+
+¿De dónde sacas qué trabajos y reclamos te llegan, cuántos y de qué vehículos?
+
+*Descripción:* Mide si los datos de cada cliente —sus vehículos, sus servicios y sus casos— están completos y ordenados para atender y decidir sin reconstruirlos.
+
+*Costo de quedarse:* Cada vez que el cliente llega al taller tiene que decir qué le hicieron la última vez, porque nadie ve la historia de su vehículo.
+
+**Funcional.**
+
+- La ficha del cliente muestra sus vehículos —con la placa, el número de serie y el kilometraje— y su valor, no solo sus casos. `[3.3.F2]`
+- Los datos clave del vehículo —el modelo, el año, cuándo se vendió y si sigue en garantía— están poblados en la mayoría de los registros. `[3.3.F3]`
+- Cada caso tiene su tipo y su motivo, elegidos de una lista definida: por ejemplo, un mantenimiento, una reparación por una falla o un reclamo de garantía. `[3.3.F4]`
+
+**Eficiente.**
+
+- Se mide la satisfacción del cliente —con el NPS o el CSAT— con una cadencia definida, por ejemplo después de cada visita al taller y después de la entrega de un vehículo. `[3.3.E2]`
+- Se mide cuántos vehículos vuelven al taller por la misma falla dentro del plazo que fija el proceso, y ese número se revisa cada mes. `[3.3.E601 · comprobable · hábito]`
+
+*Se leen igual:* `3.3.D1`, `3.3.D2`, `3.3.I1`, `3.3.I2`, `3.3.F1`, `3.3.F5`, `3.3.F6`, `3.3.E1`, `3.3.E3`, `3.3.E4`, `3.3.E5`, `3.3.O1`, `3.3.O2`, `3.3.O3`, `3.3.O4`.
+
+#### 3.4 Equipo y Gobierno
+
+¿Cómo sabe el líder si el taller va al día con sus vehículos y sus clientes?
+
+*Descripción:* Mide si cada persona del taller sabe qué le toca, y si el líder sigue el avance con datos y pide cuentas.
+
+*Costo de quedarse:* Nadie sabe bien a quién le toca avisarle al cliente o pedir el repuesto, y el líder se entera de los atrasos cuando el cliente ya llegó a recoger un vehículo que no está listo.
+
+**Funcional.**
+
+- El líder tiene un tablero con 4 a 6 métricas clave —vehículos en el taller, órdenes abiertas, trabajos atrasados, reclamos de garantía y casos por tipo— y lo consulta al menos una vez por semana. `[3.4.F2]`
+
+**Eficiente.**
+
+- El acuerdo con repuestos, con la marca —por las garantías— y con los talleres externos que se subcontratan está escrito y se mide: qué recibe cada uno y en cuánto tiempo responde. `[3.4.E601 · comprobable]`
+
+*Se leen igual:* `3.4.D1`, `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.E2`, `3.4.E4`, `3.4.O1`, `3.4.O2`, `3.4.O3`, `3.4.O4`.
+
+#### 3.5 Consistencia del taller
+
+¿En qué se apoya tu equipo para que el presupuesto, la explicación y la entrega no cambien según quién atienda al cliente?
+
+*Descripción:* Mide si el equipo conoce a sus tipos de cliente y si cada cliente recibe las mismas respuestas, el mismo precio y la misma entrega, lo atienda quien lo atienda.
+
+*Costo de quedarse:* El mismo trabajo cuesta distinto según el asesor de servicio que te toque, y el cliente lo nota y se va al taller de la esquina.
+
+**Funcional.** Los tipos de cliente están escritos, cada vehículo nuevo se entrega con un proceso definido, el mismo trabajo cuesta lo mismo y el equipo tiene respuestas guardadas para lo frecuente.
+
+*Resultado:* El equipo sabe qué tipos de cliente atiende y qué espera cada uno, cada vehículo se entrega con el mismo proceso, el mismo trabajo cuesta lo mismo con cualquier asesor de servicio y todo el equipo tiene a mano las mismas respuestas para lo frecuente.
+
+- Existe un proceso escrito de entrega del vehículo nuevo —su revisión previa, la explicación de la garantía y del plan de mantenimiento y la primera cita en el taller—, con un resultado definido que el dueño debe alcanzar al terminarlo: saber cómo cuidar su vehículo y a quién acudir. `[3.5.F2]`
+- Existe un documento simple con los tipos de cliente que atiende el taller —por ejemplo, el dueño particular y la empresa con flota—, qué necesita cada uno, qué espera del servicio y cuáles se consideran clientes clave, consultable por cualquier asesor de servicio. `[3.5.F4]`
+- Los presupuestos del taller salen de una lista vigente de precios de mano de obra y repuestos: el mismo trabajo cuesta lo mismo con cualquier asesor de servicio. `[3.5.F601 · comprobable]`
+
+*Se leen igual:* `3.5.D1`, `3.5.I1`, `3.5.F1`, `3.5.F3`, `3.5.E1`, `3.5.E2`, `3.5.E3`, `3.5.O1`.
+
+#### 3.6 Priorización de clientes del taller
+
+¿Cómo decide tu taller qué vehículo o qué caso se atiende primero?
+
+*Descripción:* Mide si los casos se atienden según su gravedad y el tipo de cliente, y no según quién insiste más.
+
+*Costo de quedarse:* El vehículo varado en la carretera espera en la misma fila que un cambio de aceite, y la empresa que te trae su flota recibe la misma atención que todos.
+
+**Funcional.**
+
+- Cada caso tiene una prioridad asignada —urgente, alta, normal o baja— y el equipo la respeta: un vehículo varado o con una falla de seguridad va antes que un mantenimiento. `[3.6.F1]`
+- Está escrito qué atención recibe cada tipo de cliente —por ejemplo, la empresa con flota, el dueño con un vehículo en garantía o quien compró en el concesionario—, y el equipo la aplica. `[3.6.F2]`
+
+**Eficiente.**
+
+- Los clientes se segmentan para acciones diferenciadas según el momento de su vehículo: recién entregado, en garantía, fuera de garantía o listo para cambiarlo; donde el cliente vuelve, sanos, en riesgo o con potencial de crecer. `[3.6.E2]`
+
+*Se leen igual:* `3.6.D1`, `3.6.I1`, `3.6.F3`, `3.6.E1`, `3.6.O1`, `3.6.O2`, `3.6.O3`.
+
+#### 3.7 Seguimiento del vehículo
+
+¿Cómo te enteras de que un cliente tiene un problema con su vehículo, o de que le toca volver al taller?
+
+*Descripción:* Mide si el taller se adelanta a lo que necesita cada vehículo —el mantenimiento, la garantía, un llamado a revisión— o solo reacciona cuando el cliente llama.
+
+*Costo de quedarse:* El cliente se acuerda de su mantenimiento cuando ya pasó el kilometraje, lo hace en otro taller y pierde la garantía, y te enteras de que quedó mal cuando lo publica en redes.
+
+**Funcional.** Los reclamos que se repiten y las quejas se detectan, aunque sea a mano, los clientes clave reciben contacto antes de sus fechas críticas y cada dueño recibe el recordatorio de su próximo mantenimiento.
+
+*Resultado:* Los reclamos que se repiten, las quejas y las fechas críticas de cada vehículo ya no toman al taller por sorpresa: el dueño vuelve a su mantenimiento cuando le toca y los problemas se atienden antes de que crezcan.
+
+- Los clientes clave —por ejemplo, la empresa con flota— reciben contacto antes de sus fechas críticas —el fin de la garantía, el vencimiento de un contrato de mantenimiento o, si la hay, una renovación—, no después. `[3.7.F2]`
+- Cada dueño recibe el recordatorio de su próximo mantenimiento según la fecha o el kilometraje que fija el plan de su vehículo, sin tener que acordarse él. `[3.7.F601 · comprobable · hábito]`
+
+**Eficiente.**
+
+- Ningún caso del cliente se pierde entre áreas: si lo resuelve otra área —repuestos, la marca o un taller externo—, también queda en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —una entrega, el fin de la garantía, un mantenimiento— o, si se piden calificaciones, cuando un cliente califica mal. `[3.7.E4]`
+- Cuando la marca anuncia un llamado a revisión que afecta a un vehículo vendido o atendido, su dueño recibe el aviso y una cita propuesta sin tener que buscarla. `[3.7.E601 · comprobable · hábito]`
+
+*Se leen igual:* `3.7.D1`, `3.7.D2`, `3.7.I1`, `3.7.F1`, `3.7.F3`, `3.7.E1`, `3.7.E2`, `3.7.E3`, `3.7.E5`, `3.7.O1`, `3.7.O2`, `3.7.O3`, `3.7.O4`.
+
+#### 3.8 Escalabilidad del taller
+
+¿Qué pasa con las preguntas que tus clientes hacen una y otra vez sobre la garantía, el mantenimiento o lo que cuesta un servicio?
+
+*Descripción:* Mide si el taller puede atender a más vehículos sin crecer al mismo ritmo, gracias al autoservicio y al conocimiento documentado.
+
+*Costo de quedarse:* Tu equipo responde a mano las mismas preguntas cada día, y cada vehículo que vendes suma más de esas preguntas a la fila del taller.
+
+**Funcional.**
+
+- Las diez preguntas que más repitieron los clientes en el último trimestre —o todas, si son menos—, por ejemplo qué cubre la garantía, cada cuánto se hace el mantenimiento o cuánto cuesta un servicio, tienen una respuesta publicada que el cliente puede consultar por su cuenta. `[3.8.F1]`
+
+**Eficiente.**
+
+- Al menos una vez por trimestre se revisan los casos que se repiten —por ejemplo, la misma falla en varios vehículos de un modelo— y, donde la relación es continua, las razones por las que se van los clientes, para encontrar patrones y mejorar. `[3.8.E2]`
+- Los patrones de las fallas que se repiten en un modelo se comparten con la marca y con el equipo del taller, para atenderlas antes y documentar su solución. `[3.8.E601 · declarado · hábito]`
+
+*Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O2`, `3.8.O3`, `3.8.O4`.
