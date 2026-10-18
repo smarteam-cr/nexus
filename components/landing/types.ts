@@ -462,6 +462,16 @@ export interface LandingContext {
      * en el PDF el control no existe y el modo viaja dentro del `data` (`iva`).
      */
     pais?: import("@/lib/business-cases/pais-del-cliente").PaisDelCliente | null;
+    /**
+     * La aprobación de un descuento grande (2026-10-18, lib/business-cases/descuento.ts). SOLO lo arma el editor: la
+     * franja que la pide es chrome de edición y no existe en la propuesta publicada ni en el PDF.
+     */
+    descuento?: {
+      aprobaciones: import("@/lib/business-cases/descuento").AprobacionDeDescuento[];
+      /** Quien mira tiene el rol que aprueba (dirección). */
+      puedeAprobar: boolean;
+      aprobar: () => Promise<void>;
+    };
   };
   /**
    * Solo el DIAGNÓSTICO (2026-10-02): lo que una sección necesita de OTRA del mismo documento, o de

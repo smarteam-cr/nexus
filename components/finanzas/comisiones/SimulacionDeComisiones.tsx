@@ -3,7 +3,11 @@
 /**
  * «Simulación» — se elige un vendedor y Nexus calcula lo que generaría con la propuesta: sus ventas ganadas del año
  * (`VentaGanada`), su meta de HubSpot tramo por tramo y, si lidera el equipo de ventas, el bono trimestral por las
- * personas que lidera. Lo que falta decidir y se puede probar (el tope del bono, la meta de alguien nuevo) son controles.
+ * personas que lidera. Lo que falta decidir y se puede probar (el tope del bono, la meta de alguien nuevo, el factor de
+ * la recurrencia y cuánto del descuento sale de la base) son controles.
+ *
+ * «Descuento y valor de 12 meses» compara cada venta de servicios con la propuesta del 15 de octubre (sin cuidar el
+ * valor de la cuenta): las dos salen de `simularVendedor`, con `sinCuidarElValor` para el antes.
  *
  * Nada se guarda: corregir si una venta es licencia, escribir el valor mensual o cambiar una decisión vive en esta
  * pantalla y se pierde al recargar. El cálculo es lib/finanzas/modelo-comisiones/reglas.ts.
@@ -15,17 +19,23 @@ import { BotonBlanco, BotonEnlace, ROTULO_DEL_SISTEMA } from "@/components/ui/si
 import {
   BONO_DEL_LIDER,
   DECISIONES_DE_LA_PROPUESTA,
+  FACTOR_DE_RECURRENCIA,
   LICENCIA,
+  MESES_DEL_VALOR,
   MESES_DE_VENTAS,
   PORCENTAJE_DE_HOY,
+  UMBRAL_DE_APROBACION,
   baseDelBono,
   bonoDelLider,
   bonoTrimestral,
   metaDelMes,
   simularVendedor,
+  sinCuidarElValor,
   type AjusteDeVenta,
+  type AprobacionDeLaVenta,
   type AQuienLeCuenta,
   type Decisiones,
+  type DescuentoFuera,
   type ServicioSimulado,
 } from "@/lib/finanzas/modelo-comisiones/reglas";
 import type { DatosDeLaSimulacion } from "@/lib/finanzas/modelo-comisiones/cargar";
@@ -43,6 +53,14 @@ export default function SimulacionDeComisiones({ datos }: { datos: DatosDeLaSimu
     () => (vendedor ? simularVendedor({ anio: datos.anio, mesActual: datos.mesActual, ventas: vendedor.ventas, tramos: vendedor.tramos, decisiones, ajustes, moneda: vendedor.moneda }) : null),
     [vendedor, datos.anio, datos.mesActual, decisiones, ajustes],
   );
+  // El antes: la propuesta del 15 de octubre, sin lo que cuida el valor de la cuenta.
+  const simAntes = useMemo(
+    () =>
+      vendedor
+        ? simularVendedor({ anio: datos.anio, mesActual: datos.mesActual, ventas: vendedor.ventas, tramos: vendedor.tramos, decisiones: sinCuidarElValor(decisiones), ajustes, moneda: vendedor.moneda })
+        : null,
+    [vendedor, datos.anio, datos.mesActual, decisiones, ajustes],
+  );
   // Quien lidera cobra bono por las personas que lidera: sus propias ventas no cuentan.
   const lideradas = useMemo(() => (vendedor?.lidera ? datos.equipoDeVentas.filter((p) => p.id !== vendedor.id) : []), [vendedor, datos.equipoDeVentas]);
   const bono = useMemo(
@@ -58,7 +76,7 @@ export default function SimulacionDeComisiones({ datos }: { datos: DatosDeLaSimu
     [vendedor, datos, lideradas, tope],
   );
 
-  if (!vendedor || !sim) {
+  if (!vendedor || !sim || !simAntes) {
     return (
       <EmptyState
         variant="dashed"
@@ -82,6 +100,9 @@ export default function SimulacionDeComisiones({ datos }: { datos: DatosDeLaSimu
   const lideradasSinMeta = lideradas.filter((p) => !p.tieneMeta);
   const pagado = total;
   const sobreLoVendido = sim.vendidoEnServicios > 0 ? ` · el ${String(Math.round((pagado / sim.vendidoEnServicios) * 1000) / 10).replace(".", ",")} % de lo vendido` : "";
+  const comisionAntesDe = new Map(simAntes.servicios.map((x) => [x.venta.id, x.comision ?? 0]));
+  const conValor = servicios.filter((x) => x.valor && x.partes);
+  const diferencia = sim.totalPorVentas - simAntes.totalPorVentas;
   const metaDelAnio = vendedor.tramos.filter((t) => t.desde.startsWith(`${datos.anio}-`)).reduce((a, t) => a + t.monto, 0);
 
   return (
@@ -118,7 +139,11 @@ export default function SimulacionDeComisiones({ datos }: { datos: DatosDeLaSimu
       <div className="flex flex-wrap items-start gap-6">
         <div className="flex min-w-0 flex-[999_1_720px] flex-col gap-4">
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <Cifra rotulo="Por sus ventas" valor={usd(sim.totalPorVentas)} nota={`Servicios, con el porcentaje de cada ${porTrimestre ? "trimestre" : "mes"}`} />
+            <Cifra
+              rotulo="Por sus ventas"
+              valor={usd(sim.totalPorVentas)}
+              nota={`Servicios, con el porcentaje de cada ${porTrimestre ? "trimestre" : "mes"}${diferencia !== 0 ? ` · ${diferencia > 0 ? "+" : "−"}${usd(Math.abs(diferencia)).replace("−", "")} por el valor de la cuenta` : ""}`}
+            />
             <Cifra
               rotulo="Por licencias"
               valor={usd(sim.totalPorLicencias)}
@@ -229,6 +254,58 @@ export default function SimulacionDeComisiones({ datos }: { datos: DatosDeLaSimu
                 ))}
               </tbody>
             </table>
+          </Caja>
+
+          <Caja
+            titulo="Descuento y valor de 12 meses"
+            detalle={`Lo recurrente vale ${MESES_DEL_VALOR} meses y pesa ${String(decisiones.factorRecurrencia).replace(".", ",")} en la meta; el descuento sale de lo que comisiona. Con propuesta, sus servicios dicen qué es al mes y cuánto se descontó; sin ella, cámbialo acá.`}
+          >
+            <table className="w-full min-w-[1040px] border-collapse text-[13px] leading-[19px]">
+              <thead>
+                <tr>
+                  <Th>Venta</Th>
+                  <Th>Tipo</Th>
+                  <Th derecha>Al mes</Th>
+                  <Th derecha>Valor 12 meses</Th>
+                  <Th derecha>Descuento 12 meses</Th>
+                  <Th derecha>Para la meta</Th>
+                  <Th derecha>Comisión antes → ahora</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {conValor.length === 0 && (
+                  <tr>
+                    <Td className="text-fg-muted">Sin ventas de servicios en este período.</Td>
+                    <Td />
+                    <Td />
+                    <Td />
+                    <Td />
+                    <Td />
+                    <Td />
+                  </tr>
+                )}
+                {conValor.map((x) => (
+                  <FilaDeValor key={x.venta.id} s={x} antes={comisionAntesDe.get(x.venta.id) ?? 0} ajuste={ajustes[x.venta.id]} onAjustar={(c) => ajustar(x.venta.id, c)} />
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-surface-muted font-semibold">
+                  <Td pie>{elegido ? etiquetaDe(elegido.numero, false) : "Año"}</Td>
+                  <Td pie />
+                  <Td pie />
+                  <Td pie derecha>{usd(conValor.reduce((a, x) => a + x.valor!.valor, 0))}</Td>
+                  <Td pie derecha>{usd(conValor.reduce((a, x) => a + x.partes!.descontado, 0))}</Td>
+                  <Td pie derecha>{usd(conValor.reduce((a, x) => a + x.valor!.paraLaMeta, 0))}</Td>
+                  <Td pie derecha>
+                    {usd2(conValor.reduce((a, x) => a + (comisionAntesDe.get(x.venta.id) ?? 0), 0))} → {usd2(conValor.reduce((a, x) => a + (x.comision ?? 0), 0))}
+                  </Td>
+                </tr>
+              </tfoot>
+            </table>
+            <p className="px-4 py-3 text-xs leading-4 text-fg-muted">
+              «Antes» es la propuesta del 15 de octubre: el descuento dentro de la base y lo recurrente como cualquier venta. Un cambio en una venta puede mover el porcentaje de
+              todo su {porTrimestre ? "trimestre" : "mes"}.
+            </p>
           </Caja>
 
           <Caja
@@ -395,6 +472,32 @@ export default function SimulacionDeComisiones({ datos }: { datos: DatosDeLaSimu
                   ]}
                 />
               </Decision>
+              <Decision
+                pregunta={`¿Lo recurrente pesa ${String(FACTOR_DE_RECURRENCIA).replace(".", ",")} veces en la meta?`}
+                efecto="Solo mueve el cumplimiento, y con él el porcentaje. La comisión se calcula sobre lo cerrado, sin el factor."
+              >
+                <Segmentado
+                  etiqueta="Factor de la recurrencia"
+                  valor={decisiones.factorRecurrencia === 1 ? "1" : "factor"}
+                  onCambio={(k) => setDecisiones((d) => ({ ...d, factorRecurrencia: k === "1" ? 1 : FACTOR_DE_RECURRENCIA }))}
+                  opciones={[
+                    { clave: "factor", etiqueta: `${String(FACTOR_DE_RECURRENCIA).replace(".", ",")} veces` },
+                    { clave: "1", etiqueta: "Como cualquier venta" },
+                  ]}
+                />
+              </Decision>
+              <Decision pregunta="¿El descuento sale entero de la base, o solo una parte?" efecto="La meta no cambia: cuenta lo que se cerró. El descuento solo baja lo que comisiona.">
+                <Segmentado
+                  etiqueta="Descuento fuera de la base"
+                  valor={decisiones.descuentoFuera}
+                  onCambio={(k: DescuentoFuera) => setDecisiones((d) => ({ ...d, descuentoFuera: k }))}
+                  opciones={[
+                    { clave: "entero", etiqueta: "Entero" },
+                    { clave: "mitad", etiqueta: "La mitad" },
+                    { clave: "nada", etiqueta: "Nada" },
+                  ]}
+                />
+              </Decision>
             </div>
             <BotonBlanco
               className="self-start"
@@ -419,6 +522,8 @@ export default function SimulacionDeComisiones({ datos }: { datos: DatosDeLaSimu
               <li>○ Una venta en otra moneda no se suma.</li>
               <li>○ La meta del mes es la del trimestre de HubSpot repartida por días, como su desglose mensual.</li>
               <li>○ Una licencia del pipeline «HubSpot Shared Selling» la refirió HubSpot.</li>
+              <li>○ Una venta sin propuesta ni cambio es de una vez y vale su monto de HubSpot. Marcada recurrente, supone que el monto es el año.</li>
+              <li>○ El descuento de una propuesta es el de sus servicios, contra su precio de lista. El de las licencias no cuenta.</li>
               <li>○ El equipo de ventas es quien tiene el rol de Ventas en Nexus. Lo lidera quien lleva más tiempo en él, y su bono sale de las metas de los demás.</li>
             </ul>
           </div>
@@ -430,6 +535,11 @@ export default function SimulacionDeComisiones({ datos }: { datos: DatosDeLaSimu
               <span className="font-semibold tabular-nums">{usd(sim.conElPorcentajeDeHoy)}</span>
             </div>
             <span className="text-xs leading-4 text-fg-muted">Las mismas ventas de servicios, con el {PORCENTAJE_DE_HOY} % parejo que se usa hoy.</span>
+            <div className="flex justify-between gap-3 text-[13px] leading-[19px]">
+              <span>Sin cuidar el valor de la cuenta</span>
+              <span className="font-semibold tabular-nums">{usd(simAntes.totalPorVentas)}</span>
+            </div>
+            <span className="text-xs leading-4 text-fg-muted">La propuesta del 15 de octubre: el descuento dentro de la base y lo recurrente como cualquier venta.</span>
             {vendedor.pagadoEnElAnio > 0 && (
               <div className="flex justify-between gap-3 text-[13px] leading-[19px]">
                 <span>Se le pagó en {datos.anio}</span>
@@ -715,5 +825,117 @@ function MetasEnHubspot({ datos }: { datos: DatosDeLaSimulacion }) {
         {nombreMes}.
       </p>
     </section>
+  );
+}
+
+/** Cómo está el descuento de una venta: no hace falta aprobarlo, está aprobado, falta, o se escribió a mano. */
+function PildoraDeAprobacion({ a }: { a: AprobacionDeLaVenta }) {
+  if (a.estado === "no-hace-falta") return null;
+  if (a.estado === "aprobado") {
+    return (
+      <span className={cn(CLASE_DE_PILDORA, PILDORA.bien)} title={`Lo aprobó ${a.porNombre} el ${fechaCorta(a.en)}`}>
+        Aprobado · {a.porNombre.split(" ")[0]}
+      </span>
+    );
+  }
+  if (a.estado === "falta") return <span className={cn(CLASE_DE_PILDORA, PILDORA.atencion)}>Sin aprobar</span>;
+  return (
+    <span className={cn(CLASE_DE_PILDORA, PILDORA.neutra)} title={`Pasa el ${UMBRAL_DE_APROBACION} %: en la propuesta lo aprueba Marco`}>
+      No se sabe si se aprobó
+    </span>
+  );
+}
+
+const INPUT_CHICO = "h-[30px] w-24 px-2 py-0 text-right text-[13px] tabular-nums";
+
+/** Una venta de servicios con su valor de 12 meses, su descuento y la comisión antes y ahora. */
+function FilaDeValor({ s, antes, ajuste, onAjustar }: { s: ServicioSimulado; antes: number; ajuste: AjusteDeVenta | undefined; onAjustar: (c: AjusteDeVenta) => void }) {
+  const p = s.partes!;
+  const v = s.valor!;
+  const venta = s.venta;
+  const origen =
+    p.origen === "propuesta" && venta.propuesta
+      ? `De la propuesta «${venta.propuesta.nombre}»${venta.propuesta.incompleto ? " · una línea no se pudo leer" : ""}`
+      : p.origen === "escrito"
+        ? "Lo cambiaste tú"
+        : "Monto de HubSpot";
+  const origenDescuento = p.origenDelDescuento === "propuesta" ? "De la propuesta" : p.origenDelDescuento === "escrito" ? "Lo escribiste tú" : "Sin descuento";
+  const pctDescuento = v.porcentajeDeDescuento > 0 ? ` · ${String(Math.round(v.porcentajeDeDescuento * 10) / 10).replace(".", ",")} %` : "";
+  return (
+    <tr>
+      <Td className="max-w-[260px]">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="font-semibold text-fg">{venta.nombre}</span>
+          <span className="text-xs leading-4 text-fg-muted">
+            {fechaCorta(venta.fecha)} · {origen}
+          </span>
+        </div>
+      </Td>
+      <Td>
+        <Segmentado
+          etiqueta={`Tipo de ${venta.nombre}`}
+          valor={p.recurrente ? "recurrente" : "unica"}
+          onCambio={(k) => onAjustar({ recurrente: k === "recurrente", mensual: undefined })}
+          opciones={[
+            { clave: "unica", etiqueta: "Una vez" },
+            { clave: "recurrente", etiqueta: "Al mes" },
+          ]}
+        />
+      </Td>
+      <Td derecha>
+        {p.recurrente ? (
+          <div className="flex flex-col items-end gap-0.5">
+            <Input
+              type="number"
+              min={0}
+              step={50}
+              inputMode="numeric"
+              aria-label={`Lo que se cobra al mes de ${venta.nombre}`}
+              value={(ajuste?.mensual ?? p.mensual) || ""}
+              placeholder="0"
+              onChange={(e) => onAjustar({ recurrente: true, mensual: Math.max(0, Number(e.target.value) || 0) })}
+              className={INPUT_CHICO}
+            />
+            {p.mensualSupuesto && <span className="text-xs leading-4 text-fg-muted">Supone que el monto es el año</span>}
+            {p.unico > 0 && <span className="text-xs leading-4 text-fg-muted">+ {usd(p.unico)} de una vez</span>}
+          </div>
+        ) : (
+          <span className="text-fg-muted">—</span>
+        )}
+      </Td>
+      <Td derecha>{usd(v.valor)}</Td>
+      <Td derecha>
+        <div className="flex flex-col items-end gap-0.5">
+          <Input
+            type="number"
+            min={0}
+            step={100}
+            inputMode="numeric"
+            aria-label={`Lo descontado en 12 meses de ${venta.nombre}`}
+            value={p.descontado || ""}
+            placeholder="0"
+            onChange={(e) => onAjustar({ descuento: Math.max(0, Number(e.target.value) || 0) })}
+            className={INPUT_CHICO}
+          />
+          <span className="text-xs leading-4 text-fg-muted">
+            {origenDescuento}
+            {pctDescuento}
+          </span>
+          {s.aprobacion && <PildoraDeAprobacion a={s.aprobacion} />}
+        </div>
+      </Td>
+      <Td derecha>{usd(v.paraLaMeta)}</Td>
+      <Td derecha>
+        <div className="flex flex-col items-end gap-0.5">
+          <span className="font-semibold text-fg">
+            <span className="font-normal text-fg-muted">{usd2(antes)}</span> → {usd2(s.comision ?? 0)}
+          </span>
+          <span className="text-xs leading-4 text-fg-muted">
+            {s.porcentaje} % de {usd(v.base)}
+            {s.aQuien && s.aQuien.parte < 1 ? " × ½" : ""}
+          </span>
+        </div>
+      </Td>
+    </tr>
   );
 }

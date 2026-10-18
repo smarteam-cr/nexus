@@ -8114,6 +8114,41 @@ propuesta en dos pestañas: «Cómo funciona» y «Simulación». Las reglas sal
 - **Lo que falta decidir con Marco** está en la página, cada pregunta con su contexto, y se cierra antes de construir
   el pago.
 
+## Comisiones que cuidan el valor de la cuenta (2026-10-18)
+
+**Contexto.** Marco mostró que el esquema premia vender con descuento: un vendedor bajó una recurrencia de US$ 3.000 a
+US$ 2.800 al mes, regaló US$ 2.400 al año y cobró el 100 % de la comisión. Iniciativa D del roadmap, pasos 1 a 4, en la
+misma página del modelo (se explica y se simula, no se paga). Plan: `docs/comisiones-descuento-plan.md`.
+
+- **Una venta vale lo único más 12 meses de lo recurrente, y el descuento sale de la base**: base = lo cerrado − lo
+  descontado. El caso de Marco: 12 × 2.800 = 33.600, menos 2.400 = 31.200; al 5 %, US$ 1.560 en vez de US$ 1.680. Es la
+  prueba central (`lib/finanzas/modelo-comisiones/valor-de-la-cuenta.test.ts`). Cuánto del descuento sale (entero, la
+  mitad o nada) es una decisión de la simulación; la propuesta dice entero.
+- **El descuento no baja lo que cuenta para la meta**: la meta mide lo que se cerró; el descuento solo baja lo que
+  comisiona. **Lo recurrente pesa `FACTOR_DE_RECURRENCIA` (1,2) veces en la meta**, y la comisión se calcula sobre la
+  base, sin el factor: el factor solo ayuda a llegar al porcentaje más alto.
+- **Una venta única cuenta completa en el mes en que se firma**, aunque se cobre en partes: una expansión de US$ 20.000
+  cuenta 20.000 y una recurrencia de US$ 1.000 al mes cuenta 14.400. Así el factor no hace que convenga más una
+  recurrencia chica que una expansión grande.
+- **Sin propuesta ni cambio, una venta es única y vale su monto de HubSpot**: el cálculo de antes no se mueve. Con una
+  propuesta en el mismo trato, sus servicios dicen qué es único, qué es al mes y cuánto se descontó contra el precio de
+  lista (`descuentoDeServicios`, `lib/business-cases/descuento.ts`, con las cuentas del motor de la Inversión). Las
+  licencias no cuentan: pagan su propia comisión y su descuento lo da HubSpot. Una propuesta en otra moneda no se usa.
+- **«Antes» y «ahora» salen de la misma función** (`simularVendedor`, con `sinCuidarElValor` para el antes): «antes» es
+  la propuesta del 15 de octubre, así la diferencia que se ve es solo la de esta iniciativa.
+- **Un descuento de más del `UMBRAL_DE_APROBACION` (10 %) lo aprueba dirección en la propuesta**, sobre el precio de
+  lista de 12 meses de los servicios. Lo aprueba un ROL (`ROLES_QUE_APRUEBAN_DESCUENTOS`, Super Admin), no un correo; el
+  texto dice «Marco». La franja vive en el editor de la Inversión (no llega al cliente ni al PDF) y **solo avisa: no
+  frena «Subir al cliente»**.
+- **La aprobación vive en la entry `__descuento` del Json de secciones del canvas v0, sin SQL**: el v0 no se regenera,
+  así una versión nueva no la pierde. La escribe solo `POST /api/business-cases/[id]/descuento`, que calcula el
+  porcentaje en el servidor con lo guardado (lo que dice el navegador no se aprueba). Guarda quién, cuándo y hasta qué
+  porcentaje; vale mientras el descuento no suba por encima de lo aprobado. Quedan las últimas 10.
+- **La simulación marca** «Sin aprobar» una venta cuya propuesta pasa el umbral sin aprobación, y «No se sabe si se
+  aprobó» cuando el descuento se escribió a mano.
+- **Lo que falta decidir con Marco**: el umbral del 10 %, el factor 1,2 y cuánto del descuento sale de la base. Están en
+  «Decisiones pendientes», y las dos últimas se prueban en la simulación.
+
 ## Agregar una reunión a mano: la transcripción o lo que se recuerda (2026-10-15)
 
 **Contexto.** Etapa 4f del roadmap de «Para ti» (`docs/mi-dia-plan.md`). De 378 reuniones con clientes del último mes,

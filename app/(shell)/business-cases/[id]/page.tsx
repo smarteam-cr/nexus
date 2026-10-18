@@ -10,6 +10,7 @@
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { requireInternalUser } from "@/lib/auth/supabase";
+import { aprobacionesDe, puedeAprobarDescuentos } from "@/lib/business-cases/descuento";
 import { can } from "@/lib/auth/permissions/engine";
 /* El envoltorio y no el workspace: el proveedor del aplicador del chat tiene que ser ANCESTRO del
    editor, y esta página es de servidor. Ver `PropuestaConChat`. */
@@ -154,6 +155,7 @@ export default async function PropuestaPage({
         puedeEditar={puedeEditar}
         tratoUrl={tratoUrl}
         paisDelCliente={paisDelCliente}
+        descuento={{ aprobaciones: aprobacionesDe(v0?.sections), puedeAprobar: puedeAprobarDescuentos(ctx.role) }}
       />
     </div>
   );

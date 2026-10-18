@@ -12,19 +12,30 @@ import { BotonEnlace, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components
 import {
   BONO_DEL_LIDER,
   BONO_DE_CUSTOMER_SUCCESS,
+  FACTOR_DE_RECURRENCIA,
   LICENCIA,
+  MESES_DEL_VALOR,
   MESES_DE_VENTAS,
   PORCENTAJE_DE_CUSTOMER_SUCCESS,
   TRAMOS_DE_VENTA,
+  UMBRAL_DE_APROBACION,
   baseDelBono,
   bonoDeCustomerSuccessAlCien,
   bonoTrimestral,
   comisionDeLicencia,
   porcentajeDelCumplimiento,
+  valorDeLaVenta,
 } from "@/lib/finanzas/modelo-comisiones/reglas";
 import { CLASE_DE_PILDORA, PILDORA, usd, usd2 } from "./formato";
 
 const META_DE_EJEMPLO = 30000;
+
+/** El caso de Marco (2026-10-17): una recurrencia de US$ 3.000 al mes que se cerró en US$ 2.800. */
+const MARCO = { lista: 3000, cerrado: 2800 };
+/** El factor de la recurrencia escrito para leer: «1,2». */
+const FACTOR = String(FACTOR_DE_RECURRENCIA).replace(".", ",");
+/** Lo que cuenta para la meta una recurrencia de US$ 1.000 al mes. */
+const RECURRENCIA_DE_MIL = usd(1000 * MESES_DEL_VALOR * FACTOR_DE_RECURRENCIA);
 
 /** Lo que le cuesta a Smarteam con todos en la meta: la comisión más alta y el bono del líder sobre esa meta. */
 const COSTO_EN_VENTAS = TRAMOS_DE_VENTA[TRAMOS_DE_VENTA.length - 1].porcentaje + (BONO_DEL_LIDER.porPersonaAlMes / META_DE_EJEMPLO) * 100;
@@ -42,6 +53,42 @@ function pct1(n: number): string {
  * servicios B2B: por eso va marcado). Lo que ya se decidió en la reunión del 2026-10-15 va en su propio bloque.
  */
 const DECISIONES: { pregunta: string; contexto: string[]; recomendacion: { que: string; porque: string }; enLaSimulacion?: boolean }[] = [
+  {
+    pregunta: `¿Un descuento de más del ${UMBRAL_DE_APROBACION} % lo aprueba Marco?`,
+    contexto: [
+      `El ${UMBRAL_DE_APROBACION} % se mide sobre el precio de lista de ${MESES_DEL_VALOR} meses de los servicios: las licencias tienen su propio descuento, que da HubSpot.`,
+      "En la propuesta, si el descuento pasa ese umbral, aparece un aviso en la Inversión y Marco lo aprueba ahí; queda quién y cuándo. Si después alguien sube el descuento, hay que volver a aprobarlo.",
+      "El caso que lo disparó (de US$ 3.000 a US$ 2.800 al mes) es un 6,7 %: no habría pedido aprobación. Lo que lo cuida es que el descuento sale de la comisión.",
+    ],
+    recomendacion: {
+      que: `${UMBRAL_DE_APROBACION} %, y que solo avise: que no frene el envío de la propuesta.`,
+      porque: "Un umbral bajo llena a Marco de aprobaciones chicas; uno alto deja pasar las que importan. Con el descuento fuera de la comisión, quien vende ya tiene una razón para no regalar: la aprobación queda para los casos grandes.",
+    },
+  },
+  {
+    pregunta: `¿Lo recurrente pesa ${FACTOR} veces en la meta?`,
+    contexto: [
+      `Una recurrencia de US$ 1.000 al mes cuenta ${RECURRENCIA_DE_MIL} para la meta en vez de ${usd(1000 * MESES_DEL_VALOR)}. La comisión se sigue calculando sobre los ${usd(1000 * MESES_DEL_VALOR)}: el factor solo ayuda a llegar al porcentaje más alto.`,
+      "Una expansión grande de una vez cuenta completa: US$ 20.000 cuentan US$ 20.000. Así no conviene vender una recurrencia chica en vez de una expansión grande.",
+    ],
+    recomendacion: {
+      que: `${FACTOR}, y revisarlo en un año con lo que pasó.`,
+      porque: "Lo recurrente es lo que hace crecer la cuenta y cuesta más venderlo que un proyecto. Un factor chico lo premia sin que la meta se llene sola con recurrencias.",
+    },
+    enLaSimulacion: true,
+  },
+  {
+    pregunta: "¿El descuento sale entero de la base de la comisión, o solo una parte?",
+    contexto: [
+      "Entero: en el caso de Marco, la comisión pasa de US$ 1.680 a US$ 1.560. La mitad: US$ 1.620.",
+      "La meta no cambia: cuenta lo que se cerró. El descuento solo baja lo que comisiona.",
+    ],
+    recomendacion: {
+      que: "Entero.",
+      porque: "Es la regla más fácil de explicar: lo que se descuenta no entra a la comisión. Con la mitad, el descuento se siente casi gratis.",
+    },
+    enLaSimulacion: true,
+  },
   {
     pregunta: "¿El 3 % corre por debajo del 50 % de la meta o por debajo del 60 %?",
     contexto: [
@@ -198,6 +245,15 @@ export default function ComoFunciona({ onSimular }: { onSimular: () => void }) {
 
       <Seccion
         numero={2}
+        titulo="Descuentos y recurrencia"
+        bajada={`Lo recurrente vale ${MESES_DEL_VALOR} meses y el descuento sale de la comisión`}
+        texto={<ValorDeLaCuentaTexto />}
+      >
+        <CalculadoraDelDescuento />
+      </Seccion>
+
+      <Seccion
+        numero={3}
         titulo="Comisión por licencias"
         bajada={`${LICENCIA.porcentaje} % del valor mensual, por ${LICENCIA.meses} meses`}
         texto={
@@ -215,7 +271,7 @@ export default function ComoFunciona({ onSimular }: { onSimular: () => void }) {
       </Seccion>
 
       <Seccion
-        numero={3}
+        numero={4}
         titulo="Asignación de ventas"
         bajada={`Ventas los primeros ${MESES_DE_VENTAS} meses; después, quien crea el negocio`}
         texto={<AQuienTexto />}
@@ -224,7 +280,7 @@ export default function ComoFunciona({ onSimular }: { onSimular: () => void }) {
       </Seccion>
 
       <Seccion
-        numero={4}
+        numero={5}
         titulo="Comisión de Customer Success"
         bajada={`${PORCENTAJE_DE_CUSTOMER_SUCCESS} % fijo de la expansión, sin meta individual`}
         texto={<CustomerSuccessTexto />}
@@ -232,12 +288,12 @@ export default function ComoFunciona({ onSimular }: { onSimular: () => void }) {
         <CalculadoraDeCustomerSuccess />
       </Seccion>
 
-      <Seccion numero={5} titulo="Bono de liderazgo" bajada="Por el cumplimiento del equipo, no por las ventas propias" texto={<BonoTexto />}>
+      <Seccion numero={6} titulo="Bono de liderazgo" bajada="Por el cumplimiento del equipo, no por las ventas propias" texto={<BonoTexto />}>
         <CalculadoraDeBono />
       </Seccion>
 
       <section aria-labelledby="como-se-paga" className="space-y-3.5 rounded-xl border border-line bg-surface p-5">
-        <TituloNumerado numero={6} id="como-se-paga" bajada="La comisión se paga cuando el cliente paga">
+        <TituloNumerado numero={7} id="como-se-paga" bajada="La comisión se paga cuando el cliente paga">
           Calendario de pago
         </TituloNumerado>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -776,5 +832,95 @@ function GraficoDeLaComision({ ventas, comision }: { ventas: number; comision: n
         </span>
       </figcaption>
     </figure>
+  );
+}
+
+// ── 2 · Descuentos y recurrencia ───────────────────────────────────────────────
+
+function ValorDeLaCuentaTexto() {
+  const regalado = (MARCO.lista - MARCO.cerrado) * MESES_DEL_VALOR;
+  const valor = MARCO.cerrado * MESES_DEL_VALOR;
+  return (
+    <>
+      <Parrafo>
+        Un contrato que se cobra todos los meses vale lo que cobra en {MESES_DEL_VALOR} meses. Si se vende con descuento, lo descontado sale de lo que
+        comisiona: quien vende también pone parte del descuento.
+      </Parrafo>
+      <Parrafo>De cada US$ 100 que se descuentan, la comisión baja US$ 5 si estás en el 5 %.</Parrafo>
+      <div className="mt-1 flex flex-col gap-1.5 rounded-[10px] border border-line bg-surface-muted p-4">
+        <span className={ROTULO_DEL_SISTEMA}>El caso de Marco</span>
+        <p className="text-[13px] leading-[19px] text-fg-secondary">
+          Una recurrencia de {usd(MARCO.lista)} al mes se cerró en {usd(MARCO.cerrado)}: se regalaron {usd(regalado)} al año.
+        </p>
+        <ul className="flex flex-col gap-1 text-[13px] leading-[19px] text-fg-secondary">
+          <li>
+            · Vale {MESES_DEL_VALOR} × {usd(MARCO.cerrado)} = {usd(valor)}.
+          </li>
+          <li>
+            · Menos lo descontado: {usd(valor)} − {usd(regalado)} = {usd(valor - regalado)}.
+          </li>
+          <li>
+            · Al 5 %: <strong className="font-semibold text-fg">{usd2(((valor - regalado) * 5) / 100)}</strong> en vez de {usd2((valor * 5) / 100)}.
+          </li>
+        </ul>
+      </div>
+      <Parrafo>
+        Lo recurrente pesa {FACTOR} veces en la meta: una recurrencia de US$ 1.000 al mes cuenta {RECURRENCIA_DE_MIL} para tu meta. Una venta de una vez cuenta
+        completa en el mes en que se firma, aunque se cobre en partes: una expansión de US$ 20.000 cuenta US$ 20.000.
+      </Parrafo>
+      <Parrafo>Un descuento de más del {UMBRAL_DE_APROBACION} % lo aprueba Marco en la propuesta, y queda quién y cuándo lo aprobó.</Parrafo>
+    </>
+  );
+}
+
+function CalculadoraDelDescuento() {
+  const [lista, setLista] = useState(MARCO.lista);
+  const [cerrado, setCerrado] = useState(MARCO.cerrado);
+  const [tasa, setTasa] = useState<"3" | "4" | "5">("5");
+  const cerradoReal = Math.min(cerrado, lista);
+  const partes = { unico: 0, mensual: cerradoReal, descontado: (lista - cerradoReal) * MESES_DEL_VALOR };
+  const porcentaje = Number(tasa);
+  const antes = valorDeLaVenta(partes, 1, "nada");
+  const ahora = valorDeLaVenta(partes, FACTOR_DE_RECURRENCIA, "entero");
+  const pideAprobacion = ahora.porcentajeDeDescuento > UMBRAL_DE_APROBACION;
+  return (
+    <>
+      <Deslizador id="precio-de-lista" etiqueta="Precio de lista al mes" valor={lista} texto={usd(lista)} min={500} max={10000} step={100} onCambio={setLista} />
+      <Deslizador id="lo-cerrado" etiqueta="Lo que se cerró al mes" valor={cerradoReal} texto={usd(cerradoReal)} min={0} max={lista} step={50} onCambio={setCerrado} />
+      <Segmentado
+        etiqueta="Tasa del mes"
+        valor={tasa}
+        onCambio={setTasa}
+        opciones={TRAMOS_DE_VENTA.map((t) => ({ clave: String(t.porcentaje) as "3" | "4" | "5", etiqueta: `${t.porcentaje} %` }))}
+      />
+      <div className="grid grid-cols-3 gap-3">
+        <Cifra rotulo={`Valor de ${MESES_DEL_VALOR} meses`} valor={usd(ahora.valor)} />
+        <Cifra rotulo="Descontado" valor={usd(partes.descontado)} />
+        <Cifra rotulo="Cuenta para la meta" valor={usd(ahora.paraLaMeta)} />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1 rounded-lg border border-line bg-surface px-3.5 py-3">
+          <span className={ROTULO_DEL_SISTEMA}>Hoy</span>
+          <span className="text-[22px] font-bold leading-7 tabular-nums text-fg-muted">{usd2((antes.base * porcentaje) / 100)}</span>
+          <span className="text-xs leading-4 text-fg-muted">
+            {porcentaje} % de {usd(antes.base)}: el descuento no se nota en la comisión.
+          </span>
+        </div>
+        <div className="flex flex-col gap-1 rounded-lg border border-info-line bg-surface px-3.5 py-3">
+          <span className={ROTULO_DEL_SISTEMA}>Con la propuesta</span>
+          <span className="text-[22px] font-bold leading-7 tabular-nums text-fg">{usd2((ahora.base * porcentaje) / 100)}</span>
+          <span className="text-xs leading-4 text-fg-muted">
+            {porcentaje} % de {usd(ahora.base)}: {usd(ahora.valor)} menos los {usd(partes.descontado)} descontados.
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Pildora tono={pideAprobacion ? "atencion" : "neutra"}>{pideAprobacion ? "Lo aprueba Marco" : "Sin aprobación"}</Pildora>
+        <span className="text-[13px] text-fg-secondary">
+          {`Un descuento del ${String(Math.round(ahora.porcentajeDeDescuento * 10) / 10).replace(".", ",")} % del precio de lista. `}
+          {pideAprobacion ? `Pasa el ${UMBRAL_DE_APROBACION} %: lo aprueba Marco en la propuesta.` : `Hasta el ${UMBRAL_DE_APROBACION} % no hace falta aprobarlo.`}
+        </span>
+      </div>
+    </>
   );
 }

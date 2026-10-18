@@ -17,8 +17,22 @@
  *    sube por escalones. Los CSE no tienen meta propia: la meta es una sola, del área.
  *  · La meta es mensual. HubSpot la guarda por trimestre y la reparte entre los meses por días: así la mostramos.
  *
+ * Y lo que cuida el valor de la cuenta (iniciativa D, 2026-10-18, docs/comisiones-descuento-plan.md), para cerrar con
+ * Marco. El caso que lo disparó: bajar una recurrencia de US$ 3.000 a US$ 2.800 al mes regaló US$ 2.400 al año y la
+ * comisión se pagó entera.
+ *  · Una venta vale lo único más 12 meses de lo recurrente (`MESES_DEL_VALOR`).
+ *  · El descuento sale de la base: base = lo cerrado − lo descontado (entero, la mitad o nada: `descuentoFuera`).
+ *  · Lo recurrente pesa `FACTOR_DE_RECURRENCIA` veces en la meta; la comisión se calcula sobre la base, sin el factor.
+ *  · Una venta única cuenta completa en el mes en que se firma, aunque se cobre en partes: una expansión grande
+ *    cuenta por su tamaño total y el factor no hace que convenga más una recurrencia chica.
+ *  · Un descuento de más del `UMBRAL_DE_APROBACION` lo aprueba dirección en la propuesta (lib/business-cases/descuento.ts).
+ *
  * Es una SIMULACIÓN: dice lo que generaría cada venta. Nada de acá se paga ni se guarda.
  */
+
+import { MESES_DEL_VALOR, UMBRAL_DE_APROBACION } from "@/lib/business-cases/descuento";
+
+export { MESES_DEL_VALOR, UMBRAL_DE_APROBACION };
 
 /** Los tramos de la comisión por venta: desde qué parte de la meta corre cada porcentaje. */
 export const TRAMOS_DE_VENTA = [
@@ -102,6 +116,56 @@ export function comisionDeLicencia(valorMensual: number): number {
 
 const redondear = (x: number) => Math.round(x * 100) / 100;
 
+// ── El valor de la cuenta (iniciativa D) ────────────────────────────────────────
+
+/** Cuántas veces pesa lo recurrente en el cumplimiento de la meta. Configurable: a validar con Marco. */
+export const FACTOR_DE_RECURRENCIA = 1.2;
+
+/** Cuánto del descuento sale de la base de la comisión: entero, la mitad o nada (como hoy). */
+export type DescuentoFuera = "entero" | "mitad" | "nada";
+export const PARTE_DEL_DESCUENTO_FUERA: Record<DescuentoFuera, number> = { entero: 1, mitad: 0.5, nada: 0 };
+
+/** Lo que tiene una venta: una parte única, una parte al mes y lo descontado en 12 meses. Todo en la moneda de la meta. */
+export interface PartesDeLaVenta {
+  unico: number;
+  mensual: number;
+  descontado: number;
+}
+
+export interface ValorDeLaVenta {
+  /** Lo cerrado en 12 meses: único + 12 × mensual. */
+  valor: number;
+  /** Lo que cuenta para la meta: único + 12 × mensual × el factor de la recurrencia. El descuento no lo baja. */
+  paraLaMeta: number;
+  /** Sobre lo que se calcula la comisión: lo cerrado menos la parte del descuento que sale. */
+  base: number;
+  /** Lo descontado sobre el precio de lista de 12 meses, en por ciento. */
+  porcentajeDeDescuento: number;
+}
+
+/**
+ * El valor de una venta para la comisión. El caso de Marco: 2.800 al mes con 2.400 descontados al año valen 33.600,
+ * cuentan 40.320 para la meta con el factor 1,2 y comisionan sobre 31.200. Una venta única cuenta completa en el mes
+ * en que se firma, aunque se cobre en partes: una expansión grande cuenta por su tamaño total.
+ */
+export function valorDeLaVenta(p: PartesDeLaVenta, factorRecurrencia: number, descuentoFuera: DescuentoFuera): ValorDeLaVenta {
+  const unico = Math.max(0, p.unico);
+  const mensual = Math.max(0, p.mensual);
+  const descontado = Math.max(0, p.descontado);
+  const valor = unico + MESES_DEL_VALOR * mensual;
+  return {
+    valor: redondear(valor),
+    paraLaMeta: redondear(unico + MESES_DEL_VALOR * mensual * factorRecurrencia),
+    base: redondear(Math.max(0, valor - descontado * PARTE_DEL_DESCUENTO_FUERA[descuentoFuera])),
+    porcentajeDeDescuento: valor + descontado > 0 ? redondear((descontado / (valor + descontado)) * 100) : 0,
+  };
+}
+
+/** La comisión de una venta con un porcentaje: sobre la base, nunca sobre lo que cuenta para la meta. */
+export function comisionSobreLaBase(p: PartesDeLaVenta, porcentaje: number, factorRecurrencia: number, descuentoFuera: DescuentoFuera): number {
+  return redondear((valorDeLaVenta(p, factorRecurrencia, descuentoFuera).base * porcentaje) / 100);
+}
+
 // ── Las ventas ─────────────────────────────────────────────────────────────────
 
 /** Un negocio ganado, tal como lo necesita la simulación. Fechas en «YYYY-MM-DD» (hora de Costa Rica). */
@@ -117,7 +181,31 @@ export interface VentaParaSimular {
   refiereHubspot: boolean;
   /** La primera venta ganada de ese cliente (de cualquier vendedor y de cualquier año), o null sin cliente. */
   primeraVenta: string | null;
+  /** La propuesta del mismo trato de HubSpot, con lo que dice de sus servicios. Ausente sin propuesta legible. */
+  propuesta?: PropuestaDeLaVenta | null;
 }
+
+/** Lo que dice de sus servicios la propuesta de una venta (lib/business-cases/descuento.ts), en la moneda de la venta. */
+export interface PropuestaDeLaVenta {
+  id: string;
+  nombre: string;
+  unico: number;
+  mensual: number;
+  /** Lo descontado en 12 meses. */
+  descontado: number;
+  /** Lo descontado sobre el precio de lista de 12 meses, en por ciento. */
+  porcentaje: number;
+  /** Alguna línea no se pudo leer: los números se quedan cortos. */
+  incompleto: boolean;
+  aprobacion: AprobacionDeLaVenta;
+}
+
+export type AprobacionDeLaVenta =
+  | { estado: "no-hace-falta" }
+  | { estado: "aprobado"; porNombre: string; en: string }
+  | { estado: "falta" }
+  /** El descuento lo escribió alguien en la simulación: no se sabe si se aprobó. */
+  | { estado: "sin-saber" };
 
 export type TipoDeVenta = "servicio" | "licencia" | "sinMonto" | "otraMoneda";
 
@@ -214,18 +302,78 @@ export type MedidaDelCumplimiento = "mes" | "trimestre";
 export interface Decisiones {
   expansion: ExpansionDeVentas;
   medida: MedidaDelCumplimiento;
+  /** Cuántas veces pesa lo recurrente en la meta (1 = como cualquier venta). */
+  factorRecurrencia: number;
+  descuentoFuera: DescuentoFuera;
 }
 
 export const DECISIONES_DE_LA_PROPUESTA: Decisiones = {
   expansion: "completa",
   medida: "mes",
+  factorRecurrencia: FACTOR_DE_RECURRENCIA,
+  descuentoFuera: "entero",
 };
+
+/** Las mismas decisiones sin lo que cuida el valor de la cuenta: la propuesta del 15 de octubre, para comparar. */
+export function sinCuidarElValor(d: Decisiones): Decisiones {
+  return { ...d, factorRecurrencia: 1, descuentoFuera: "nada" };
+}
 
 /** Lo que la persona corrigió de una venta en la pantalla. */
 export interface AjusteDeVenta {
   tipo?: "servicio" | "licencia";
   valorMensual?: number;
   laTrajoSmarteam?: boolean;
+  /** Si el servicio es recurrente. Tocarlo deja de leer las partes de la propuesta. */
+  recurrente?: boolean;
+  /** Lo que se cobra al mes, si es recurrente. Tocarlo deja de leer las partes de la propuesta. */
+  mensual?: number;
+  /** Lo descontado en 12 meses, escrito a mano. */
+  descuento?: number;
+}
+
+export type OrigenDeLasPartes = "propuesta" | "hubspot" | "escrito";
+export type OrigenDelDescuento = "propuesta" | "escrito" | "ninguno";
+
+export interface PartesResueltas extends PartesDeLaVenta {
+  recurrente: boolean;
+  origen: OrigenDeLasPartes;
+  origenDelDescuento: OrigenDelDescuento;
+  /** El valor al mes salió de suponer que el monto de HubSpot es el año. */
+  mensualSupuesto: boolean;
+}
+
+/**
+ * Las partes de una venta de servicios. Sin propuesta ni ajuste, toda la venta es única y vale su monto de HubSpot: el
+ * cálculo de antes no se mueve. Con propuesta, sus servicios dicen qué es único, qué es al mes y cuánto se descontó.
+ * Si alguien cambia el tipo o el valor al mes, se deja de leer la propuesta y se parte del monto de HubSpot.
+ */
+export function partesDeLaVenta(v: VentaParaSimular, a: AjusteDeVenta = {}): PartesResueltas {
+  const p = v.propuesta ?? null;
+  const monto = Math.max(0, v.monto ?? 0);
+  const descuento =
+    a.descuento != null
+      ? { descontado: Math.max(0, a.descuento), origenDelDescuento: "escrito" as const }
+      : p && p.descontado > 0
+        ? { descontado: p.descontado, origenDelDescuento: "propuesta" as const }
+        : { descontado: 0, origenDelDescuento: "ninguno" as const };
+  if (p && a.recurrente == null && a.mensual == null) {
+    return { unico: p.unico, mensual: p.mensual, recurrente: p.mensual > 0, origen: "propuesta", mensualSupuesto: false, ...descuento };
+  }
+  const recurrente = a.recurrente ?? a.mensual != null;
+  if (!recurrente) {
+    return { unico: monto, mensual: 0, recurrente: false, origen: a.recurrente == null ? "hubspot" : "escrito", mensualSupuesto: false, ...descuento };
+  }
+  const mensualSupuesto = a.mensual == null;
+  const mensual = mensualSupuesto ? Math.round(monto / MESES_DEL_VALOR) : Math.max(0, a.mensual!);
+  return { unico: 0, mensual, recurrente: true, origen: "escrito", mensualSupuesto, ...descuento };
+}
+
+/** Si el descuento de una venta está aprobado. Uno escrito a mano de más del umbral no se sabe. */
+export function aprobacionDeLaVenta(v: VentaParaSimular, partes: PartesResueltas, porcentajeDeDescuento: number): AprobacionDeLaVenta {
+  if (partes.origenDelDescuento === "propuesta" && v.propuesta) return v.propuesta.aprobacion;
+  if (porcentajeDeDescuento <= UMBRAL_DE_APROBACION) return { estado: "no-hace-falta" };
+  return { estado: "sin-saber" };
 }
 
 export interface PeriodoSimulado {
@@ -235,7 +383,7 @@ export interface PeriodoSimulado {
   numero: number;
   enCurso: boolean;
   meta: number | null;
-  /** Lo que cuenta para la meta: solo los servicios. */
+  /** Lo que cuenta para la meta: solo los servicios, con lo recurrente pesado por el factor. */
   vendido: number;
   cumplimiento: number | null;
   porcentaje: number;
@@ -249,6 +397,10 @@ export interface ServicioSimulado {
   aQuien: AQuienLeCuenta | null;
   porcentaje: number | null;
   comision: number | null;
+  /** Las partes de la venta y su valor: null si la venta no comisiona (sin monto u otra moneda). */
+  partes: PartesResueltas | null;
+  valor: ValorDeLaVenta | null;
+  aprobacion: AprobacionDeLaVenta | null;
 }
 
 export interface LicenciaSimulada {
@@ -266,8 +418,10 @@ export interface SimulacionDeVendedor {
   licencias: LicenciaSimulada[];
   totalPorVentas: number;
   totalPorLicencias: number;
-  /** Lo vendido en servicios en el año (la moneda de la meta). */
+  /** Lo cerrado en servicios en el año (la moneda de la meta), con lo recurrente a 12 meses. */
   vendidoEnServicios: number;
+  /** Lo descontado en servicios en el año, a 12 meses. */
+  descontadoEnServicios: number;
   /** Las mismas ventas de servicios con el 5 % fijo de hoy. */
   conElPorcentajeDeHoy: number;
 }
@@ -297,7 +451,13 @@ export function simularVendedor(e: EntradaDeSimulacion): SimulacionDeVendedor {
   };
 
   const delAnio = e.ventas.filter((v) => v.fecha.startsWith(`${anio}-`) && Number(v.fecha.slice(5, 7)) <= mesActual);
-  const clasificadas = delAnio.map((v) => ({ v, tipo: tipoDeVenta(v, ajustes[v.id]?.tipo, moneda), periodo: periodoDe(v.fecha) }));
+  const clasificadas = delAnio.map((v) => {
+    const tipo = tipoDeVenta(v, ajustes[v.id]?.tipo, moneda);
+    const partes = tipo === "servicio" ? partesDeLaVenta(v, ajustes[v.id]) : null;
+    const valor = partes ? valorDeLaVenta(partes, d.factorRecurrencia, d.descuentoFuera) : null;
+    // Una venta cuenta completa en el período en que se firma: una venta única no se reparte entre los meses que se cobra.
+    return { v, tipo, periodo: periodoDe(v.fecha), partes, valor };
+  });
 
   const licencias: LicenciaSimulada[] = clasificadas
     .filter((c) => c.tipo === "licencia")
@@ -322,7 +482,7 @@ export function simularVendedor(e: EntradaDeSimulacion): SimulacionDeVendedor {
     }
     // La meta es solo de servicios: las licencias no suman (decidido el 2026-10-15).
     let vendido = 0;
-    for (const c of clasificadas) if (c.periodo === clave && c.tipo === "servicio") vendido += c.v.monto!;
+    for (const c of clasificadas) if (c.periodo === clave && c.valor) vendido += c.valor.paraLaMeta;
     const cumplimiento = meta && meta > 0 ? vendido / meta : null;
     const enCurso = porTrimestre ? numero === trimestreDe(mesActual) : numero === mesActual;
     return { clave, numero, enCurso, meta: meta == null ? null : redondear(meta), vendido: redondear(vendido), cumplimiento, porcentaje: porcentajeDelCumplimiento(cumplimiento ?? 0), comision: 0 };
@@ -331,16 +491,20 @@ export function simularVendedor(e: EntradaDeSimulacion): SimulacionDeVendedor {
 
   const servicios: ServicioSimulado[] = clasificadas
     .filter((c) => c.tipo !== "licencia")
-    .map(({ v, tipo, periodo }) => {
-      if (tipo !== "servicio") return { venta: v, tipo: tipo as ServicioSimulado["tipo"], periodo, aQuien: null, porcentaje: null, comision: null };
+    .map(({ v, tipo, periodo, partes, valor }) => {
+      if (tipo !== "servicio" || !partes || !valor) {
+        return { venta: v, tipo: tipo as ServicioSimulado["tipo"], periodo, aQuien: null, porcentaje: null, comision: null, partes: null, valor: null, aprobacion: null };
+      }
       const p = porClave.get(periodo)!;
       const aQuien = aQuienLeCuenta(v, d.expansion);
-      const comision = redondear(((v.monto! * p.porcentaje) / 100) * aQuien.parte);
+      const comision = redondear(((valor.base * p.porcentaje) / 100) * aQuien.parte);
       p.comision = redondear(p.comision + comision);
-      return { venta: v, tipo: "servicio", periodo, aQuien, porcentaje: p.porcentaje, comision };
+      const aprobacion = aprobacionDeLaVenta(v, partes, valor.porcentajeDeDescuento);
+      return { venta: v, tipo: "servicio", periodo, aQuien, porcentaje: p.porcentaje, comision, partes, valor, aprobacion };
     });
 
-  const vendidoEnServicios = servicios.reduce((a, s) => a + (s.tipo === "servicio" ? s.venta.monto! : 0), 0);
+  const vendidoEnServicios = servicios.reduce((a, s) => a + (s.valor?.valor ?? 0), 0);
+  const descontadoEnServicios = servicios.reduce((a, s) => a + (s.partes?.descontado ?? 0), 0);
   return {
     periodos,
     servicios,
@@ -348,6 +512,7 @@ export function simularVendedor(e: EntradaDeSimulacion): SimulacionDeVendedor {
     totalPorVentas: redondear(periodos.reduce((a, p) => a + p.comision, 0)),
     totalPorLicencias: redondear(licencias.reduce((a, l) => a + l.comision, 0)),
     vendidoEnServicios: redondear(vendidoEnServicios),
+    descontadoEnServicios: redondear(descontadoEnServicios),
     conElPorcentajeDeHoy: redondear((vendidoEnServicios * PORCENTAJE_DE_HOY) / 100),
   };
 }
