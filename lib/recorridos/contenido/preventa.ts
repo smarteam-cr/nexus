@@ -38,7 +38,8 @@ export const PREVENTA: Recorrido = {
   // 3 (2026-10-07): las sesiones rediseñadas (objetivo, guía en tramos, Durante con preguntas, lo que leyó el agente).
   // 4 (2026-10-07): las pestañas de la sesión se llaman Preparación, En vivo y Análisis; la guía dice si está al día.
   // 5 (2026-10-09): Exploración abre en su página de inicio (las sesiones, cada una con su reunión; «+ Agregar sesión»).
-  version: 5,
+  // 6 (2026-10-18): «Lo que ya sabemos» arriba de la guía, que trae unas 5 preguntas desde lo que el cliente ya respondió.
+  version: 6,
   titulo: "Una preventa",
   descripcion: "Todas sus piezas, de la preparación a la propuesta",
   rotulo: "Recorrido · Preventa",
@@ -153,9 +154,16 @@ export const PREVENTA: Recorrido = {
       accion: enLaSesion,
     },
     {
+      ancla: "preventa.sesion.sabemos",
+      titulo: "Lo que ya sabemos",
+      texto: "Lo que el cliente ya respondió en el diagnóstico y en las reuniones, con sus palabras y de dónde sale. No lo vuelvas a preguntar: la guía parte de acá.",
+      lado: "top",
+      accion: momento("antes"),
+    },
+    {
       ancla: "preventa.sesion.preguntas",
       titulo: "Preparación: la guía de la sesión",
-      texto: "Arriba dice si la guía está al día y qué cambió. Abrir, preguntar y cerrar: «En orden» sigue la conversación; «Por sección» separa la arquitectura de la venta y la escala.",
+      texto: "Unas 5 preguntas que siguen desde lo que ya dijo: cuánto le cuesta, cómo lo quiere resolver, para cuándo y con qué. Las repreguntas se abren con un clic. Siempre cierra con el siguiente paso.",
       lado: "top",
       accion: momento("antes"),
     },

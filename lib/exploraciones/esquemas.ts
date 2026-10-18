@@ -76,6 +76,7 @@ import {
   type GuiaDeLaSesion,
   type SesionPlaneada,
 } from "./guia";
+import { PASOS_DE_LA_PREGUNTA } from "./plan-de-la-guia";
 import { MAX_CLAVE_DE_NOTA } from "./notas-de-sesion";
 import { MAX_ASUNTO_DEL_CORREO, MAX_CUERPO_DEL_CORREO, MAX_DESTINATARIOS } from "./correo-de-seguimiento";
 
@@ -429,6 +430,7 @@ const PreguntaDeLaGuiaSchema = z.object({
   pregunta: textoDeGuia(400),
   repreguntas: z.array(textoDeGuia(300)).max(REPREGUNTAS_POR_PREGUNTA),
   abierto: z.string().min(1).max(600).optional(),
+  paso: z.enum(PASOS_DE_LA_PREGUNTA).optional(),
 });
 const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
   en: z.string().max(40),

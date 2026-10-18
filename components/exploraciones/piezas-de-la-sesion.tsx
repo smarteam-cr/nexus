@@ -26,6 +26,7 @@ import {
   type SesionPlaneada,
 } from "@/lib/exploraciones/guia";
 import type { EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
+import { contextoDelPlan, QUE_BUSCA_CADA_PASO } from "@/lib/exploraciones/plan-de-la-guia";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
 import { NivelChip } from "./QueVaPrimero";
 import { nuevoIdDeSesion, useSesiones } from "./useSesiones";
@@ -84,23 +85,38 @@ export function nombreDelPara(para: string, escala: EscalaDelLienzo, marco: Marc
 }
 
 /**
+ * Qué cubre la próxima sesión, con lo que ya se sabe del cliente. En la preventa lo decide el plan (plan-de-la-guia.ts:
+ * unas 5 preguntas que parten de lo que el cliente ya respondió); en un proyecto, las tarjetas y dimensiones que faltan.
+ * Es lo mismo que recibe el agente al armar la guía (guia-pedido.ts › `contextoDeLaGuia`).
+ */
+export function useFocoDeLaGuia(sesionId: string | null) {
+  const { exp, escala, mapa, marco } = useLienzo();
+  const e = exp.estado;
+  const delPlan =
+    marco.clave === "venta" ? contextoDelPlan({ estado: e, tests: exp.leido.tests, escala, posiciones: mapa.posiciones, sesionId }) : null;
+  const foco = focoDeLaGuia(e.contenido.casillas, escala, e.areas, mapa.posiciones, e.contenido.aExplorar, marco, delPlan ?? undefined);
+  return { foco, saber: delPlan?.saber ?? null };
+}
+
+/**
  * La guía de una sesión, con de dónde viene cada pregunta. La próxima usa la guía viva (o la guardada
  * para ella) sobre lo que falta HOY; una que ya pasó, la que se guardó para ella, tal como se armó.
  */
 export function useGuiaDeLaSesion(pestana: PestanaDeSesion, esLaProxima: boolean) {
-  const { exp, escala, mapa, marco } = useLienzo();
+  const { exp, escala, marco } = useLienzo();
   const { todas } = useSesiones();
   const e = exp.estado;
   const guardada = pestana.sesion ? (e.propuesta.guias[pestana.sesion.id] ?? null) : null;
   const guia = guardada ?? (esLaProxima ? e.propuesta.guia : null);
-  const foco = focoDeLaGuia(e.contenido.casillas, escala, e.areas, mapa.posiciones, e.contenido.aExplorar, marco);
+  const { foco, saber } = useFocoDeLaGuia(pestana.sesion?.id ?? null);
   const procedencias = procedenciasDeLaSesion(pestana, todas);
+  const conPlan = foco.plan && saber ? { plan: foco.plan, saber } : undefined;
   const preguntas: PreguntaParaMostrar[] = esLaProxima
-    ? preguntasParaMostrar(guia, foco.huecos, foco.enfoque, escala, procedencias, marco)
+    ? preguntasParaMostrar(guia, foco.huecos, foco.enfoque, escala, procedencias, marco, conPlan)
     : guia
       ? preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, procedencias, marco)
       : [];
-  return { guia, foco, procedencias, preguntas, enOrden: ordenDeLaConversacion(preguntas) };
+  return { guia, foco, saber, procedencias, preguntas, enOrden: ordenDeLaConversacion(preguntas) };
 }
 
 /**
@@ -183,7 +199,9 @@ export function DeQueEs({ p, corta = false, conProcedencia = true }: { p: Pregun
   return (
     <div className="mt-[5px] flex flex-wrap items-center gap-1.5">
       {que}
+      {p.paso && p.paso !== "situacion" && <span className="text-xs text-fg-muted">· {QUE_BUSCA_CADA_PASO[p.paso]}</span>}
       {conProcedencia && p.procedencia && <ChipDeProcedencia procedencia={p.procedencia} />}
+      {p.motivo && !corta && <span className="basis-full text-xs text-fg-muted">Parte de lo que ya dijo: {p.motivo.de}</span>}
       {p.tipo === "abierto" && p.contexto && <span className="basis-full text-xs text-fg-muted">Se dijo: {p.contexto}</span>}
     </div>
   );

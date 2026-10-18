@@ -39,6 +39,17 @@ import {
 import { diaConAnio, diaYHora } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import type { PosicionEnElMapa } from "./mapa";
+import type { LoLeidoDeHubspot } from "./lo-leido";
+import { faltanAlCerrar, type PuntoDeCalidad } from "./calidad";
+import { saberParaElPedido, type SaberDelCliente } from "./lo-que-ya-sabemos";
+import {
+  contextoDelPlan,
+  MAX_PREGUNTAS_DE_LA_GUIA,
+  QUE_BUSCA_CADA_PASO,
+  repiteLoSabido,
+  type PasoDeLaPregunta,
+  type PreguntaPlaneada,
+} from "./plan-de-la-guia";
 
 export const MODELO_DE_LA_GUIA = "claude-sonnet-4-6";
 export const HERRAMIENTA_DE_LA_GUIA = "armar_guia";
@@ -104,6 +115,17 @@ export interface ContextoDeLaGuia {
   anteriores?: string[];
   /** Las instrucciones adicionales del vendedor (contexto de la preventa), ya como bloque, o "". */
   instrucciones?: string;
+  /**
+   * Solo en la preventa (iniciativa A, 2026-10-18): lo que el cliente ya respondió, tema por tema, con sus palabras y
+   * de dónde sale (lo-que-ya-sabemos.ts). No se vuelve a preguntar.
+   */
+  loQueYaSabemos?: string[];
+  /** Solo en la preventa: cada pregunta de la guía en orden, con su tema, su paso y de qué dicho del cliente parte. */
+  plan?: { para: string; paso: PasoDeLaPregunta; motivo: string | null }[];
+  /** Solo en la preventa: lo que falta para proponer y ninguna pregunta cubre (el cierre lo pide). */
+  faltanAlCerrar?: string[];
+  /** Para filtrar lo que devuelve el agente: lo que ya se sabe de cada tema (no viaja al pedido como objeto). */
+  saber?: SaberDelCliente;
 }
 
 const ESQUEMA_LAER = Object.fromEntries(PASOS_LAER.map((p) => [p.clave, { type: "string" }]));
@@ -143,15 +165,24 @@ export function herramientaDeLaGuia(ctx: ContextoDeLaGuia): Anthropic.Messages.T
           : {}),
         preguntas: {
           type: "array",
-          description: `UNA pregunta por cada cosa en «para», con ${REPREGUNTAS_POR_PREGUNTA} repreguntas.`,
+          description: ctx.plan
+            ? `UNA pregunta por cada cosa en «para», en el PASO que se indica, con ${REPREGUNTAS_POR_PREGUNTA} repreguntas por si responde rápido.`
+            : `UNA pregunta por cada cosa en «para», con ${REPREGUNTAS_POR_PREGUNTA} repreguntas.`,
           items: {
             type: "object",
             properties: {
               para: { type: "string", enum: para.length ? para : [cs ? "retos" : "metas"] },
-              pregunta: { type: "string", description: "Abierta, en lenguaje llano, tuteando al cliente." },
+              pregunta: {
+                type: "string",
+                description: ctx.plan
+                  ? "Corta (25 palabras como mucho), tuteando al cliente, en el paso que se indica. Si parte de algo que el cliente ya dijo, nombra ESO con sus palabras y pregunta lo que sigue; nunca le pidas que lo vuelva a contar."
+                  : "Abierta, en lenguaje llano, tuteando al cliente.",
+              },
               repreguntas: {
                 type: "array",
-                description: "La siguiente pregunta lógica, tres veces: 1) el último caso real, 2) la causa o el dolor de fondo, 3) cuánto le cuesta (en tiempo, plata o clientes).",
+                description: ctx.plan
+                  ? "Tres repreguntas cortas, cada una un paso más hondo que la pregunta (cuánto le cuesta, cómo lo quiere resolver, para cuándo, con qué). Ninguna vuelve a preguntar lo que ya se sabe."
+                  : "La siguiente pregunta lógica, tres veces: 1) el último caso real, 2) la causa o el dolor de fondo, 3) cuánto le cuesta (en tiempo, plata o clientes).",
                 items: { type: "string" },
               },
               ...(abiertos.length
@@ -207,7 +238,12 @@ export function herramientaDeLaGuia(ctx: ContextoDeLaGuia): Anthropic.Messages.T
                 description: "Cómo se nota en ESTA empresa que no deja explorar, y qué hacer: descartarla o venderle un caso concreto para el resultado que pide.",
               },
             }),
-        cierre: { type: "string", description: cs ? "Cómo cerrar esta sesión: qué se confirma y el siguiente paso, con fecha y con quién." : "Cómo cerrar esta reunión: el siguiente paso, con fecha y con quién." },
+        cierre: {
+          type: "string",
+          description: cs
+            ? "Cómo cerrar esta sesión: qué se confirma y el siguiente paso, con fecha y con quién."
+            : `Cómo cerrar esta reunión, en dos frases y 45 palabras como mucho, sin espacios por completar («[fecha]»): resume en una línea lo que entendiste y pide el siguiente paso, con fecha y con quién.${ctx.faltanAlCerrar?.length ? ` Si en la conversación no salió, pide también: ${ctx.faltanAlCerrar.join(", ")}.` : ""}`,
+        },
         ...(ctx.suIndustria
           ? {
               retosDeLaIndustria: {
@@ -272,9 +308,15 @@ function sistemaDeLaGuia(marco: ClaveDeMarco = "venta"): string {
 Reglas:
 - El vendedor le habla al cliente de TÚ (tuteo). Nunca voseo (las formas del Río de la Plata) ni «usted». Se escribe así: «tú vives», «puedes», «cuentas», «dices», «crees», «llegas», «quieres», «tienes», «cuéntame», «para ti». Aunque las fuentes estén en voseo, tú escribes en tuteo.
 - Primero lo que viene de antes: lo que el vendedor se llevó de una sesión anterior (A1, A2…) y lo que quedó sin preguntar porque una sesión se cortó. Cada punto llevado va en una pregunta (la de la tarjeta o la dimensión a la que apunta) con su «abierto», y en «ubicacion» dices a qué tarjeta o dimensión apunta cada uno, aunque ninguna pregunta lo retome; si la sesión anterior se cortó, la apertura lo dice en una frase.
-- Preguntas abiertas, cortas y en lenguaje llano. Nada de licencias, usuarios, precios, demos ni funciones de HubSpot: eso es vender antes de diagnosticar.
-- Una pregunta por cada cosa en «para», y nada más. No preguntes lo que ya está confirmado.
-- Las repreguntas siguen el método de la siguiente pregunta lógica: cada una parte de lo que el cliente acaba de decir y va un paso más hondo. Primero el último caso real («¿me cuentas la última vez que pasó?»), después la causa o el dolor de fondo, y al final cuánto le cuesta (horas, plata, clientes perdidos), para cuantificarlo.
+- LO QUE YA SABEMOS es lo que el cliente ya respondió (en el diagnóstico, en una nota, en una reunión). NUNCA lo vuelvas a preguntar ni le pidas que lo cuente de nuevo: parte de ahí y pregunta lo que sigue. Si un tema ya tiene dato (por ejemplo, para cuándo lo necesita), no hay pregunta de ese tema.
+- Cada pregunta tiene su PASO de la siguiente pregunta lógica: situación (cómo pasa hoy), impacto (cuánto le afecta y le cuesta), solución (cómo lo quiere resolver, qué ya intentó), cuándo, con qué (quién decide y con qué presupuesto). Escribe la del paso que se indica, y nada más.
+- Escribe como la nota del diagnóstico que deja HubSpot: corta, con las palabras del cliente y directo a lo que le duele. Así:
+  · Lo que marcó: «El vendedor está solo: el seguimiento es de un solo canal y los deals que se enfrían mueren sin que nadie reaccione.» Paso impacto. Bien: «Dijiste que los deals que se enfrían mueren sin que nadie reaccione. ¿Cuántos se les fueron así este año, más o menos?» Mal: «¿Qué pasa cuando un deal se queda quieto?» (ya lo dijo).
+  · Lo que marcó: «El CRM se usa en lo básico con carga manual y adopción desigual: unos lo usan y otros siguen con sus hojas.» Paso impacto. Bien: «Si unos llevan el CRM y otros sus hojas, ¿cuántas horas a la semana se van en juntar y validar los números?» Mal: «¿Cómo usa el equipo el CRM hoy?»
+  · Lo que marcó: «Priorizamos por intuición o listas estáticas.» Paso solución. Bien: «¿Cómo te gustaría decidir a qué oportunidad dedicarle el tiempo?»
+- Nada de licencias, usuarios, precios, demos ni funciones de HubSpot: eso es vender antes de diagnosticar.
+- Una pregunta por cada cosa en «para», en ese orden, y nada más.
+- Las repreguntas se muestran solo si el cliente responde rápido: cada una va un paso más hondo (cuánto le cuesta en horas, plata o clientes; cómo lo quiere resolver; para cuándo). Ninguna vuelve a preguntar lo que ya se sabe.
 - Para una dimensión de la escala, parte de su pregunta y de lo que hoy se cree de ella; nunca escribas identificadores de la escala ni nombres de niveles en las preguntas.
 - Las objeciones van con LAER: escuchar (qué hacer mientras habla), reconocer (una frase que valida sin ceder), explorar (una o dos preguntas para entender la objeción de fondo) y responder (cómo volver a su meta y a lo que le cuesta no actuar). Adáptalas a esta empresa, cortas.
 - La apertura sale de algo real de la empresa que digan las fuentes. Si no hay nada, una frase simple sobre por qué se reúnen. Nunca inventes datos, cifras ni nombres.
@@ -311,6 +353,9 @@ function cuerpoDeLaGuia(ctx: ContextoDeLaGuia): string {
   if (ctx.hubspotActual) lineas.push("", "=== SU HUBSPOT HOY ===", ctx.hubspotActual);
   if (ctx.suIndustria) lineas.push("", "=== SU INDUSTRIA (investigación en internet: NO lo dijo el cliente; solo para «retosDeLaIndustria») ===", ctx.suIndustria);
   lineas.push("", "=== LO QUE YA ESTÁ CONFIRMADO (no lo preguntes) ===", ...(ctx.confirmado.length ? ctx.confirmado : ["(todavía nada)"]));
+  if (ctx.loQueYaSabemos?.length) {
+    lineas.push("", "=== LO QUE YA SABEMOS: lo que respondió el cliente, con sus palabras (NO lo vuelvas a preguntar: parte de ahí) ===", ...ctx.loQueYaSabemos.map((t) => `- ${t}`));
+  }
   if (ctx.anteriores?.length) lineas.push("", "=== LO QUE PASÓ EN LAS SESIONES ANTERIORES ===", ...ctx.anteriores.map((t) => `- ${t}`));
   if (ctx.paraExplorar.length) {
     lineas.push(
@@ -336,10 +381,17 @@ function cuerpoDeLaGuia(ctx: ContextoDeLaGuia): string {
       ...ctx.objecionesDichas.map((t) => `- ${t}`),
     );
   }
-  lineas.push("", cs ? "=== PARA: LAS TARJETAS QUE FALTAN DE LA ESTRATEGIA ===" : "=== PARA: LAS TARJETAS QUE FALTAN DEL MARCO ===");
+  if (ctx.plan) {
+    lineas.push("", `=== LAS PREGUNTAS DE ESTA SESIÓN: una por línea, en este orden (${ctx.plan.length} en total) ===`);
+    for (const pl of ctx.plan) {
+      const nombre = ctx.huecos.find((h) => h.clave === pl.para)?.etiqueta ?? ctx.enfoque.find((d) => d.id === pl.para)?.nombre ?? pl.para;
+      lineas.push(`- ${pl.para} («${nombre}») · paso: ${pl.paso} (${QUE_BUSCA_CADA_PASO[pl.paso]})${pl.motivo ? ` · parte de: ${pl.motivo}` : " · el cliente todavía no dijo nada de esto"}`);
+    }
+  }
+  lineas.push("", cs ? "=== PARA: LAS TARJETAS QUE FALTAN DE LA ESTRATEGIA ===" : ctx.plan ? "=== LAS TARJETAS DE ESTA SESIÓN ===" : "=== PARA: LAS TARJETAS QUE FALTAN DEL MARCO ===");
   for (const h of ctx.huecos) lineas.push(`- ${h.clave} («${h.etiqueta}»: ${h.ayuda}) · pregunta de base: ${h.base}`);
   if (!ctx.huecos.length) lineas.push("(ninguna: están todas)");
-  lineas.push("", "=== PARA: LAS DIMENSIONES EN FOCO ===");
+  lineas.push("", ctx.plan ? "=== LAS DIMENSIONES DE ESTA SESIÓN ===" : "=== PARA: LAS DIMENSIONES EN FOCO ===");
   for (const d of ctx.enfoque) {
     lineas.push(
       `### ${d.id} · ${d.nombre} (${d.area})`,
@@ -384,6 +436,7 @@ export function leerLaGuiaDelAgente(respuesta: Anthropic.Messages.Message, ctx: 
   if (!bloque || bloque.type !== "tool_use" || !esObjeto(bloque.input)) return null;
   const input = bloque.input;
   const permitidos = new Set([...ctx.huecos.map((h) => h.clave), ...ctx.enfoque.map((d) => d.id)]);
+  const pasoDe = new Map((ctx.plan ?? []).map((pl) => [pl.para, pl.paso] as const));
 
   const vistos = new Set<string>();
   const preguntas: PreguntaDeLaGuia[] = [];
@@ -395,9 +448,13 @@ export function leerLaGuiaDelAgente(respuesta: Anthropic.Messages.Message, ctx: 
       .map((r) => textoLimpio(r, 300))
       .filter((r): r is string => !!r)
       .slice(0, REPREGUNTAS_POR_PREGUNTA);
+    /* En la preventa, el código decide el paso; si la pregunta igual vuelve a preguntar lo que el cliente ya contó, se
+       cae y la pantalla pone la de respaldo, con sus palabras (plan-de-la-guia.ts). */
+    const paso = pasoDe.get(p.para);
+    if (paso && ctx.saber && repiteLoSabido(pregunta, { para: p.para, paso }, ctx.saber)) continue;
     vistos.add(p.para);
     const abierto = abiertoDe(p.abierto, ctx);
-    preguntas.push({ para: p.para, pregunta, repreguntas, ...(abierto ? { abierto } : {}) });
+    preguntas.push({ para: p.para, pregunta, repreguntas, ...(abierto ? { abierto } : {}), ...(paso ? { paso } : {}) });
   }
 
   /* Dónde va cada punto llevado: lo que dice «ubicacion» y, si no lo dice, la pregunta que lo retoma.
@@ -465,10 +522,11 @@ export function leerLaGuiaDelAgente(respuesta: Anthropic.Messages.Message, ctx: 
     ...(loVendido.length ? { loVendido } : {}),
     apertura,
     escalaEnSimple: ctx.desdeCero ? textoLimpio(input.escalaEnSimple, 800) : null,
-    preguntas: preguntas.slice(0, MAX_PREGUNTAS_EN_LA_GUIA),
+    preguntas: preguntas.slice(0, ctx.plan ? MAX_PREGUNTAS_DE_LA_GUIA : MAX_PREGUNTAS_EN_LA_GUIA),
     objeciones,
     pocaApertura: textoLimpio(input.pocaApertura, 600),
-    cierre: textoLimpio(input.cierre, 400),
+    // Un cierre con un espacio por completar («[fecha acordada]») no se puede decir tal cual: queda el de base.
+    cierre: ((c) => (c && /\[[^\]]*\]/.test(c) ? null : c))(textoLimpio(input.cierre, 400)),
   });
 }
 
@@ -544,13 +602,25 @@ export function contextoDeLaGuia(o: {
   automaticas?: boolean;
   /** En un prospecto, las sesiones que entraron solas y ya pasaron: cuentan para el número de la próxima. */
   pasadasSinSesion?: number;
+  /** Las respuestas del test (la columna `test`): lo que el cliente ya respondió en el diagnóstico. */
+  tests?: LoLeidoDeHubspot["tests"];
+  /** Lo que falta para proponer (calidad.ts › `listaParaProponer`): lo que el cierre pide si ninguna pregunta lo cubre. */
+  faltanParaProponer?: readonly PuntoDeCalidad[];
 }): ContextoDeLaGuia {
   const { estado, escala, posiciones } = o;
   const marco = o.marco ?? MARCO_DE_VENTA;
   const cs = marco.clave === "cs";
   const c = estado.contenido;
   const nombreDeNivel = (l: string) => escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
-  const { huecos, enfoque } = focoDeLaGuia(c.casillas, escala, estado.areas, posiciones, c.aExplorar, marco);
+  const proximaId = proximaReunion(c.sesiones, o.agenda, o.hoy, { pasadasSinSesion: o.pasadasSinSesion ?? 0 }).sesionId;
+  const sesionProxima = c.sesiones.find((x) => x.id === proximaId);
+  // En la preventa, la guía parte de lo que el cliente ya respondió (iniciativa A, 2026-10-18).
+  const delPlan = cs ? null : contextoDelPlan({ estado, tests: o.tests ?? [], escala, posiciones, sesionId: proximaId });
+  const saber = delPlan?.saber ?? null;
+  const pasaronIds = [...new Set(c.sesiones.filter((s) => s.resultado === "cortada").flatMap((s) => s.pasaron ?? []))];
+  const { huecos, enfoque, plan } = focoDeLaGuia(c.casillas, escala, estado.areas, posiciones, c.aExplorar, marco, delPlan ?? undefined);
+  const nombreDelTema = (para: string) =>
+    esTarjeta(para) ? definicionEnElMarco(para, marco).etiqueta : (escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === para)?.nombre ?? para);
   const conEvidencia = Object.values(c.chequeo).some((e) => !esFuenteDeHipotesis(e.fuente)) || estado.propuesta.leidas.sesiones.length > 0;
   return {
     marco: marco.clave,
@@ -597,8 +667,7 @@ export function contextoDeLaGuia(o: {
     noExplorado: textoDe("noExplorado", estado, o.pendientes).slice(0, 8),
     objecionesDichas: cs ? [] : objecionesDichas(estado, o.pendientes).slice(0, 8),
     ...(() => {
-      const id = proximaReunion(c.sesiones, o.agenda, o.hoy, { pasadasSinSesion: o.pasadasSinSesion ?? 0 }).sesionId;
-      const s = c.sesiones.find((x) => x.id === id);
+      const s = sesionProxima;
       const paraExplorar = (s?.explorar ?? []).slice(0, 10);
       if (!paraExplorar.length) return { paraExplorar };
       // Dónde puede ir cada uno: las tarjetas del marco y las dimensiones de las áreas en juego.
@@ -617,7 +686,7 @@ export function contextoDeLaGuia(o: {
       const faltan = new Set<string>([...huecos, ...enfoque]);
       const nombre = (para: string) =>
         esTarjeta(para) ? definicionEnElMarco(para, marco).etiqueta : (escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === para)?.nombre ?? para);
-      const ids = [...new Set(c.sesiones.filter((s) => s.resultado === "cortada").flatMap((s) => s.pasaron ?? []))].filter((x) => faltan.has(x));
+      const ids = pasaronIds.filter((x) => faltan.has(x));
       return ids.map((x) => `${x} («${nombre(x)}»)`);
     })(),
     // Solo lo leído de las sesiones (etapa A): lo de una reunión que no es sesión no llega a la guía.
@@ -625,6 +694,17 @@ export function contextoDeLaGuia(o: {
       .sort((a, b) => a.en.localeCompare(b.en))
       .slice(-3)
       .map((l) => `${l.etiqueta}: ${l.resumen}`),
+    ...(saber && plan
+      ? {
+          saber,
+          loQueYaSabemos: saberParaElPedido(saber, nombreDelTema),
+          plan: plan.map((pl: PreguntaPlaneada) => ({ para: pl.para, paso: pl.paso, motivo: pl.motivo ? `«${pl.motivo.texto}» (${pl.motivo.de})` : null })),
+          faltanAlCerrar: faltanAlCerrar(o.faltanParaProponer ?? [], new Set(plan.map((pl) => pl.para)), {
+            hayDimensiones: plan.some((pl) => pl.tipo === "dimension"),
+            hayImpacto: plan.some((pl) => pl.tipo === "dimension" && pl.paso === "impacto"),
+          }).map((f) => f.corto.toLowerCase()),
+        }
+      : {}),
   };
 }
 

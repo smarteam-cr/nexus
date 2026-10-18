@@ -70,8 +70,9 @@ export function listaParaProponer(estado: EstadoDeExploracion, chequeo: Resultad
 /**
  * ¿La guía de una sesión pregunta por este punto? (el panel lo pinta en azul: «se pregunta en la
  * próxima sesión»). `paras` son a qué apuntan sus preguntas; el siguiente paso se pide siempre al cerrar.
+ * `hayImpacto`: un dolor que se pregunta en impacto (plan-de-la-guia.ts) cubre «qué pasa si no actúa».
  */
-export function puntoQueSePregunta(id: PuntoDeCalidad["id"], paras: ReadonlySet<string>, hayDimensiones: boolean): boolean {
+export function puntoQueSePregunta(id: PuntoDeCalidad["id"], paras: ReadonlySet<string>, hayDimensiones: boolean, hayImpacto = false): boolean {
   switch (id) {
     case "frena":
       return hayDimensiones;
@@ -84,10 +85,18 @@ export function puntoQueSePregunta(id: PuntoDeCalidad["id"], paras: ReadonlySet<
     case "autoridad":
       return paras.has("autoridad");
     case "consecuencia":
-      return paras.has("consecuencias");
+      return paras.has("consecuencias") || hayImpacto;
     case "siguientePaso":
       return true;
   }
+}
+
+/**
+ * Lo que falta para proponer y ninguna pregunta de la guía cubre: lo que el cierre pide «si no salió» (iniciativa A,
+ * 2026-10-18). El siguiente paso no está: el cierre lo pide siempre.
+ */
+export function faltanAlCerrar(puntos: readonly PuntoDeCalidad[], paras: ReadonlySet<string>, o: { hayDimensiones: boolean; hayImpacto: boolean }): PuntoDeCalidad[] {
+  return puntos.filter((p) => !p.cumplido && p.id !== "siguientePaso" && !puntoQueSePregunta(p.id, paras, o.hayDimensiones, o.hayImpacto));
 }
 
 /**

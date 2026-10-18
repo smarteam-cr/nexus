@@ -73,6 +73,7 @@ import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia, voseoEnLaGuia } from "./guia-pedido";
 import {
+  focoDeLaGuia,
   guiaDeAntesDeLaReunion,
   MAX_SESIONES,
   opcionesDeLasPestanas,
@@ -80,7 +81,10 @@ import {
   preguntasParaMostrar,
   reunionDeLaSesion,
   type GuiaDeLaSesion,
+  type PreguntaParaMostrar,
 } from "./guia";
+import type { SaberDelCliente } from "./lo-que-ya-sabemos";
+import { contextoDelPlan, type PreguntaPlaneada } from "./plan-de-la-guia";
 import { leerEmpresa } from "./hubspot";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
 import { leerLaRadiografia, pedidoDeLaRadiografia } from "./radiografia-pedido";
@@ -801,6 +805,23 @@ async function escribirLoQueVaSolo(
  * Devuelve cuántas preguntas armó (0 si el agente no devolvió nada que sirva: queda la de base).
  */
 async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeLaCorrida, registrar: boolean): Promise<number> {
+  const armada = await armarLaGuiaSinGuardar(runId, exploracionId, opts);
+  if (!armada) return 0;
+  // Se guarda como la de su sesión, si la próxima está planeada: así su «antes» queda aunque pase.
+  await guardarGuia(exploracionId, armada.guia, registrar ? { runId, automatica: opts.automatica === true } : null, armada.ctx.proxima.sesionId ?? null);
+  return armada.guia.preguntas.length;
+}
+
+/**
+ * Arma la guía de la próxima sesión SIN guardarla: el contexto (con lo que ya sabemos y el plan en la preventa), el
+ * pedido al agente y la lectura, con el reintento en tuteo. Lo usan `armarGuia` y el script que mide la guía nueva
+ * contra la vieja (scripts/medir-guia-de-preventa.ts). Solo lee la base; la llamada queda en el medidor.
+ */
+export async function armarLaGuiaSinGuardar(
+  runId: string | null,
+  exploracionId: string,
+  opts: Pick<OpcionesDeLaCorrida, "triggeredByEmail">,
+): Promise<{ guia: GuiaDeLaSesion; ctx: ReturnType<typeof contextoDeLaGuia>; preguntas: PreguntaParaMostrar[] } | null> {
   const escalaVig = await escalaParaExplorar();
   if (escalaVig.estado !== "ok") throw new FalloDeLaExploracion("La escala no está publicada en Nexus.");
   const lectura = await leerExploracion(exploracionId);
@@ -842,6 +863,7 @@ async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeL
         )
         .catch(() => 0)
     : 0;
+  const posiciones = posicionesDelMapa(estado, pendientes);
   const ctx = contextoDeLaGuia({
     marco,
     proyecto,
@@ -852,11 +874,14 @@ async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeL
     industria: fila.client.industry,
     estado,
     escala,
-    posiciones: posicionesDelMapa(estado, pendientes),
+    posiciones,
     pendientes,
     agenda: loLeido.agenda.filter((a) => Date.parse(a.inicio) > ahora.getTime()),
     conTest: loLeido.tests.length > 0,
     hoy: hoyEnCostaRica(ahora),
+    // La preventa parte de lo que el cliente ya respondió y cierra con lo que falta para proponer (iniciativa A).
+    tests: loLeido.tests,
+    ...(marco.clave === "venta" ? { faltanParaProponer: listaParaProponer(estado, chequeoDe(escala, estado), hoyEnCostaRica(ahora)) } : {}),
   });
   const pedir = (aviso = "") =>
     conContextoDeIA(
@@ -873,7 +898,7 @@ async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeL
       },
     );
   let guia = leerLaGuiaDelAgente(await pedir(), ctx, runId, ahora);
-  if (!guia) return 0;
+  if (!guia) return null;
   /* El vendedor lee la guía en voz alta: tiene que estar en tuteo. La de CreditForce (2026-10-01) salió
      en voseo («vivís», «podés») porque las fuentes lo estaban: si pasa, se pide una vez más avisándolo. */
   const voseo = voseoEnLaGuia(guia);
@@ -881,9 +906,23 @@ async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeL
     const otra = leerLaGuiaDelAgente(await pedir(avisoDeVoseo(voseo)), ctx, runId, ahora);
     if (otra && voseoEnLaGuia(otra).length < voseo.length) guia = otra;
   }
-  // Se guarda como la de su sesión, si la próxima está planeada: así su «antes» queda aunque pase.
-  await guardarGuia(exploracionId, guia, registrar ? { runId, automatica: opts.automatica === true } : null, ctx.proxima.sesionId ?? null);
-  return guia.preguntas.length;
+  // Lo que va a ver el vendedor: las preguntas del plan, con la de respaldo donde el agente repitió lo sabido.
+  const plan = ctx.saber ? planDeLaGuiaDeLaPreventa(estado, loLeido.tests, escala, posiciones, ctx.proxima.sesionId ?? null) : null;
+  const preguntas = preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco, plan ?? undefined);
+  return { guia, ctx, preguntas };
+}
+
+/** El plan de la guía de la preventa y lo que ya se sabe, como lo arma la pantalla (piezas-de-la-sesion.tsx). */
+function planDeLaGuiaDeLaPreventa(
+  estado: EstadoDeExploracion,
+  tests: LoLeidoDeHubspot["tests"],
+  escala: EscalaDelLienzo,
+  posiciones: ReturnType<typeof posicionesDelMapa>,
+  sesionId: string | null,
+): { plan: PreguntaPlaneada[]; saber: SaberDelCliente } | null {
+  const delPlan = contextoDelPlan({ estado, tests, escala, posiciones, sesionId });
+  const foco = focoDeLaGuia(estado.contenido.casillas, escala, estado.areas, posiciones, estado.contenido.aExplorar, marcoDe("venta"), delPlan);
+  return foco.plan ? { plan: foco.plan, saber: delPlan.saber } : null;
 }
 
 /**
