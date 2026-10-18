@@ -1050,3 +1050,10 @@
   el equipo y recibe lo que le piden al equipo. Puede liderar más de un sprint (Alex Vanegas: CS y Desarrollo).
 - **Reunión planeada** (`Tarea.clase = "reunion"`): una tarea con sus invitados y su hora propuesta; cuando ocurre,
   queda unida a la reunión que se hizo (`reunionHechaId`).
+- **Precio de lista del proveedor** (`costoLista` en una línea de licencia de la Inversión, `lib/landing/inversion-costo.ts`):
+  lo que Smarteam le paga al proveedor (HubSpot, Insider) por esa licencia. Lo anota Ventas y es interno: nunca llega al
+  cliente. Con lo que se le cobra al cliente da el **margen de la licencia**. **Quién la factura** (`quienFactura`):
+  Smarteam (reventa) o el proveedor directo.
+- **Lo vendido** (`lib/finanzas/lo-vendido.ts`): lo que dice la Inversión de una propuesta ganada, leído para Finanzas:
+  cuánto es servicio, cuánto licencia y el margen de cada licencia. Con el dato completo se vuelve un contrato con
+  licencias para el punto de equilibrio y reemplaza a la carga a mano en sus meses.

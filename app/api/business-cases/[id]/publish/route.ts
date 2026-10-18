@@ -17,6 +17,7 @@ import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { isBlank } from "@/lib/landing/is-blank";
 import { INVERSION_SECTION_KEY, licenciasDeHubSinMonto } from "@/lib/landing/inversion";
+import { sinLoInterno } from "@/lib/landing/inversion-costo";
 
 /* El predicado de "sección en blanco" es `lib/landing/is-blank.ts`, el MISMO que usa el
    render. Acá vivía una copia sin `NO_CONTENIDO`, y esa divergencia hacía que una sección
@@ -154,7 +155,9 @@ export async function POST(
         label: s.label,
         titleOverride: s.titleOverride,
         eyebrowOverride: s.eyebrowOverride,
-        blocks: s.blocks,
+        /* ⛔ Sin lo interno de las líneas (el precio de lista que se le paga al proveedor y quién factura la
+           licencia, lib/landing/inversion-costo.ts): el snapshot es lo que abre el prospecto. */
+        blocks: s.blocks.map((b) => ({ ...b, data: sinLoInterno(b.data) })),
         // Presentación congelada (robustez histórica):
         sectionType: def?.sectionType ?? s.key,
         theme: def?.theme ?? null,

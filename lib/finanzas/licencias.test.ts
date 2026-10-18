@@ -83,6 +83,16 @@ describe("el costo de la licencia, como gasto (con INGRESO_Y_COSTO)", () => {
     ]);
   });
 
+  it("si dos contratos rigen el mismo mes para la misma cuenta y moneda, el costo lo pone el primero (no se cuenta dos veces)", () => {
+    const propuesta = lic({ id: "propuesta:bc1", costoMonto: 1200, costoMoneda: "USD", costoCadaMeses: 12, desde: "2026-10-01", hasta: "2027-09-30" });
+    const aMano = lic({ costoMonto: 6000, costoMoneda: "USD", costoCadaMeses: 3, desde: "2026-08-01" });
+    const e = egresosDeLicencias([propuesta, aMano], ["2026-09", "2026-10"]);
+    expect(e.map((x) => [x.periodo, x.conceptoClave, x.monto])).toEqual([
+      ["2026-10", "licencia-propuesta:bc1", 100],
+      ["2026-09", "licencia-l1", 2000],
+    ]);
+  });
+
   it("el resumen dice el porcentaje de servicio con un decimal", () => {
     expect(resumenDeLicencias([lic({})])[0]!.pctServicio).toBe(16.5);
   });

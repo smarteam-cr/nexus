@@ -91,11 +91,19 @@ export interface EgresoDeLicencia {
  */
 export function egresosDeLicencias(licencias: readonly LicenciaDeContrato[], periodos: readonly string[]): EgresoDeLicencia[] {
   const out: EgresoDeLicencia[] = [];
-  for (const l of licencias) {
+  for (const [i, l] of licencias.entries()) {
     const mensual = costoMensual(l);
     if (mensual === null || mensual <= 0 || !l.costoMoneda) continue;
     for (const periodo of periodos) {
       if (!rigeEn(l, periodo)) continue;
+      /* El mismo «manda el primero» que `parteDeServicio`: si un contrato anterior de la lista rige ese mes para esa
+         cuenta y moneda, éste no aporta costo. Con la carga a mano sola no pasa (la base impide dos vivos por cuenta y
+         moneda); pasa cuando una propuesta ganada reemplaza a un contrato a mano (lib/finanzas/lo-vendido.ts). Sin
+         esto, el costo de la licencia se contaría dos veces. */
+      const tapado = licencias
+        .slice(0, i)
+        .some((x) => x.cuentaId === l.cuentaId && x.moneda === l.moneda && rigeEn(x, periodo));
+      if (tapado) continue;
       out.push({
         periodo,
         concepto: `Licencias ${l.proveedor} · ${l.cuentaNombre}`,

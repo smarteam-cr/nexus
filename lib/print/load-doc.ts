@@ -24,6 +24,7 @@ import { can } from "@/lib/auth/permissions/engine";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { getBrandLogos, brandLogoMap } from "@/lib/external/smarteam-logo";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
+import { sinLoInterno } from "@/lib/landing/inversion-costo";
 import {
   kickoffHiddenKey,
   comparaSectionHasContent,
@@ -501,7 +502,8 @@ async function cargarCasoDeNegocio(
       key: s.key,
       titleOverride: s.titleOverride,
       eyebrowOverride: s.eyebrowOverride,
-      blocks: s.blocks.map((b) => ({ blockType: b.blockType, content: b.content, data: b.data })),
+      // ⛔ Sin lo interno de las líneas: el PDF lo recibe el cliente (lib/landing/inversion-costo.ts).
+      blocks: s.blocks.map((b) => ({ blockType: b.blockType, content: b.content, data: sinLoInterno(b.data) })),
     }));
 
   // Idioma: la columna persistente primero; si no, el `__lang` fuera de schema del hero

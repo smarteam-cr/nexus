@@ -52,6 +52,8 @@ import {
   type ResumenDeLicencia,
 } from "@/lib/finanzas/licencias";
 import { cargarLicencias } from "@/lib/finanzas/licencias-server";
+import { combinarLicencias, contratosDeLasPropuestas, resumenDeLoVendido, type ResumenDeLoVendido } from "@/lib/finanzas/lo-vendido";
+import { cargarLoVendido } from "@/lib/finanzas/lo-vendido-server";
 import { cargarGastosFinancierosDelAnio } from "@/lib/finanzas/gastos-financieros-server";
 import {
   detectarInconsistencias,
@@ -2457,6 +2459,8 @@ export interface ReporteAnualDTO extends ReporteEquilibrio {
     decision: DecisionLicencias | null;
     contratos: ResumenDeLicencia[];
     sinCosto: number;
+    /** Lo vendido según las propuestas ganadas (lib/finanzas/lo-vendido.ts): cuáles entran como contrato y por qué no. */
+    dePropuestas: ResumenDeLoVendido;
   };
 }
 
@@ -2659,8 +2663,9 @@ export async function loadReporteAnual(
     filasNoVenta,
     filasCierre,
     decisionAliados,
-    licencias,
+    licenciasAMano,
     decisionLicencias,
+    loVendido,
   ] = await Promise.all([
     cargarEgresosDelAnio(anio, hoyISO, divisor),
     prisma.cobro.findMany({
@@ -2734,7 +2739,13 @@ export async function loadReporteAnual(
     // Las licencias revendidas por contrato y cómo se cuentan (2026-10-17).
     cargarLicencias(),
     leerDecisionLicencias(),
+    // Lo vendido según las propuestas ganadas (2026-10-18, lib/finanzas/lo-vendido.ts). Sin filtro de año: un contrato
+    // ganado el año pasado puede seguir rigiendo en éste.
+    cargarLoVendido(),
   ]);
+  /* Las propuestas ganadas con el dato completo reemplazan a la carga a mano en los meses que cubren; lo demás sigue con
+     la carga a mano. No cambia qué cuenta como ingreso: aplica la misma regla (`modoLicencias`). */
+  const licencias = combinarLicencias(licenciasAMano, contratosDeLasPropuestas(loVendido));
   const modoLicencias: ModoLicencias = decisionLicencias?.modo ?? MODO_LICENCIAS_POR_DEFECTO;
 
   // ── Ingresos ────────────────────────────────────────────────────────────────
@@ -2909,6 +2920,7 @@ export async function loadReporteAnual(
       decision: decisionLicencias,
       contratos: resumenDeLicencias(licencias),
       sinCosto: licencias.filter((l) => l.costoMonto === null).length,
+      dePropuestas: resumenDeLoVendido(loVendido),
     },
     cierres: filasCierre.map((c) => {
       const guardados = c.numeros as unknown as NumerosDelCierre | null;
