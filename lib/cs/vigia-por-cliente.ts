@@ -64,6 +64,8 @@ export interface DepsDelVigia {
   correr(projectId: string, trigger: DisparoDelVigia, quien: string | null): Promise<WatchdogRunResult>;
   ahora(): Date;
   estado: EstadoDelVigia;
+  /** ¿Queda presupuesto automático hoy? (lib/ai/guardia-de-presupuesto.ts). Sin la función, no se mira. */
+  quedaPresupuesto?(): Promise<boolean>;
 }
 
 export type MotivoSinCorrer =
@@ -72,7 +74,8 @@ export type MotivoSinCorrer =
   | "reciente"
   | "espera_tras_fallo"
   | "sin_proyectos"
-  | "no_es_de_la_cartera";
+  | "no_es_de_la_cartera"
+  | "sin_presupuesto";
 
 export type ResultadoDelVigia =
   | { corrio: true; resultados: WatchdogRunResult[] }
@@ -100,6 +103,7 @@ const DEPS_REALES: DepsDelVigia = {
   correr: async (projectId, trigger, quien) => (await import("./watchdog")).runWatchdogForProject(projectId, trigger, { quien }),
   ahora: () => new Date(),
   estado: ESTADO,
+  quedaPresupuesto: async () => (await import("@/lib/ai/guardia-de-presupuesto")).quedaPresupuestoAutomatico(),
 };
 
 const minutos = (ms: number) => Math.max(1, Math.ceil(ms / MIN_MS));
@@ -118,6 +122,7 @@ const MENSAJE: Record<MotivoSinCorrer, string> = {
   espera_tras_fallo: "La última revisión del agente vigía falló hace poco; vuelve a intentarlo en un rato.",
   sin_proyectos: "Este cliente no tiene proyectos activos de la cartera de Éxito del cliente: el agente vigía no tiene qué revisar.",
   no_es_de_la_cartera: "Ese proyecto no es de la cartera de Éxito del cliente: el agente vigía no lo revisa.",
+  sin_presupuesto: "El presupuesto de IA automático de hoy se agotó: el agente vigía vuelve a revisar mañana.",
 };
 
 const sinCorrer = (motivo: MotivoSinCorrer, mensaje = MENSAJE[motivo]): ResultadoDelVigia => ({ corrio: false, motivo, mensaje });
@@ -155,6 +160,8 @@ export async function vigiaAlEntrar(clientId: string, deps: DepsDelVigia = DEPS_
 
   try {
     if (!(await deps.encendido())) return sinCorrer("apagado");
+    // Al entrar es automático (nadie lo pidió): con el presupuesto del día agotado no corre. A mano sí (vigiaAMano).
+    if (deps.quedaPresupuesto && !(await deps.quedaPresupuesto())) return sinCorrer("sin_presupuesto");
     const proyectos = await deps.proyectosDeCartera(clientId);
     if (proyectos.length === 0) {
       estado.noAntesDe.set(clientId, inicio + ESPERA_TRAS_FALLO_MS);

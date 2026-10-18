@@ -17,6 +17,11 @@
  *   npx tsx scripts/comparar-lectura-de-reuniones.ts               # las 20 más recientes
  *   npx tsx scripts/comparar-lectura-de-reuniones.ts --max 5
  *   npx tsx scripts/comparar-lectura-de-reuniones.ts --sesion <id> # una sola reunión (de cualquier cliente o prospecto)
+ *   npx tsx scripts/comparar-lectura-de-reuniones.ts --prefijo     # además, la misma reunión con el prefijo compartido
+ *
+ * `--prefijo` (2026-10-18, lib/ai/ahorro.ts `LECTURA_Y_HECHOS_COMPARTEN_PREFIJO`): lee cada reunión DOS veces, con el
+ * pedido de siempre y con la reunión en el `system` cacheado (la conversación comprimida que leen los hechos), y pone
+ * las dos al lado: acuerdos, compromisos, citas descartadas. Duplica el costo (≈US$0,16 por reunión).
  */
 import "dotenv/config";
 import "./lib/permitir-server-only";
@@ -36,6 +41,7 @@ const MODELO = "claude-sonnet-4-6";
 async function main() {
   const max = Math.max(1, Number(arg("--max") ?? 20));
   const sola = arg("--sesion");
+  const conPrefijo = process.argv.includes("--prefijo");
   console.log(`Base: ${describirDestino(process.env.DATABASE_URL ?? "")} (solo lectura)\n`);
   const { prisma: db, close } = createScriptDb();
   try {
@@ -64,7 +70,7 @@ async function main() {
       if (!cliente) continue;
       if (!sola && (cliente.kind !== "CLIENTE" || /wherex/i.test(cliente.name))) continue;
 
-      const r = await leerReunionDeSeguimiento(f.id, { soloLeer: true });
+      const r = await leerReunionDeSeguimiento(f.id, { soloLeer: true, formaDelPedido: "propia" });
       if (r.status === "sin_texto" || r.status === "omitida") {
         if (sola) console.log(`«${f.title}»: ${r.reason}`);
         continue;
@@ -93,6 +99,20 @@ async function main() {
           `citas: ${s.compromisos.length + s.fueraDeAlcance.length} verificadas, ${(r.descartadosPorCita?.compromisos ?? 0) + (r.descartadosPorCita?.pedidos ?? 0)} descartadas · ` +
           `${s.fueraDeAlcance.length} pedido(s) fuera de alcance · ${r.tokens?.entrada ?? 0}+${r.tokens?.salida ?? 0} tokens (≈US$${usd.toFixed(3)})`,
       );
+      if (conPrefijo) {
+        const c = await leerReunionDeSeguimiento(f.id, { soloLeer: true, formaDelPedido: "compartida" });
+        if (c.status !== "ok" || !c.salida) console.log(`   COMPARTIDA · ✗ ${c.status}: ${"reason" in c ? c.reason : ""}`);
+        else {
+          const sc = c.salida;
+          const usdC = c.tokens ? (costoDeLlamada(MODELO, { inputTokens: c.tokens.entrada, outputTokens: c.tokens.salida }) ?? 0) : 0;
+          costo += usdC;
+          console.log(
+            `   COMPARTIDA · resumen ${sc.minuta.summary.length} caracteres · ${sc.minuta.agreements.length} acuerdos · ${sc.minuta.decisions.length} decisiones · ` +
+              `compromisos ${sc.compromisos.filter((x) => x.quien === "CLIENTE").length} del cliente y ${sc.compromisos.filter((x) => x.quien === "SMARTEAM").length} de Smarteam · ` +
+              `${(c.descartadosPorCita?.compromisos ?? 0) + (c.descartadosPorCita?.pedidos ?? 0)} descartadas por la cita · ${sc.fueraDeAlcance.length} pedido(s) · ${c.tokens?.entrada ?? 0}+${c.tokens?.salida ?? 0} tokens sin caché`,
+          );
+        }
+      }
       for (const c of s.compromisos.slice(0, 6)) {
         console.log(`          · [${c.quien}${c.frenaElPlan ? ", frena" : ""}${c.fecha ? `, ${c.fecha}` : ""}] ${c.quien === "CLIENTE" ? (c.tituloDeSeguimiento ?? `Seguimiento: ${c.que}`) : c.que}`);
       }

@@ -90,7 +90,8 @@ describe("la lectura de seguimiento los detecta y los guarda", () => {
   });
 
   it("la cita se verifica y los compromisos van a propuestas de Tarea, nunca a ActionItem", () => {
-    expect(src).toContain("verificarCitas(salidaCruda, fuenteDeLasCitas(transcript, overview))");
+    // Con el prefijo compartido (lib/ai/ahorro.ts) la fuente suma la conversación comprimida que se mandó.
+    expect(src).toMatch(/verificarCitas\(\s*salidaCruda,[\s\S]{0,200}fuenteDeLasCitas\(transcript, overview\)/);
     expect(src).toContain("escribirSalidaDeSeguimiento(");
     expect(src).not.toMatch(/\.actionItem\.(create|createMany|upsert)\(/);
   });

@@ -32,6 +32,7 @@ const ESTADO_DEL_RECHAZO: Record<MotivoSinCorrer, number> = {
   espera_tras_fallo: 429,
   sin_proyectos: 409,
   no_es_de_la_cartera: 409,
+  sin_presupuesto: 429,
 };
 
 export async function POST(req: NextRequest) {

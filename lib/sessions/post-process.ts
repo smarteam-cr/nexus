@@ -62,6 +62,10 @@ import { escribirSalidaDeSeguimiento } from "@/lib/tareas/lectura";
 import { titulosParaLaLectura } from "@/lib/tareas/para-agentes";
 import { miembrosActivos } from "@/lib/tareas/servidor";
 import { esDePuertasAdentro } from "@/lib/sessions/reuniones-para-seguimiento";
+import type Anthropic from "@anthropic-ai/sdk";
+import { LECTURA_Y_HECHOS_COMPARTEN_PREFIJO } from "@/lib/ai/ahorro";
+import { herramientaDeHechos, prefijoDeLaReunion } from "@/lib/seguimiento/hechos/pedido";
+import { armarTextoDeLaReunion, textoParaElModelo } from "@/lib/seguimiento/hechos/texto";
 
 const AGENT_ID_POST_SESSION = "agent-post-session";
 
@@ -108,6 +112,19 @@ export interface OpcionesDeLaLectura {
    * primera escritura de la salida, la lectura termina en error sin escribir nada.
    */
   signal?: AbortSignal;
+  /**
+   * La forma del pedido (lib/ai/ahorro.ts, `LECTURA_Y_HECHOS_COMPARTEN_PREFIJO`): «compartida» = la reunión en el
+   * `system` cacheado, la misma que leen los hechos; «propia» = la de siempre. Sin decir, compartida solo si la palanca
+   * está prendida y los hechos están activos. La fuerza el script de comparación.
+   */
+  formaDelPedido?: "compartida" | "propia";
+}
+
+/** El prefijo que la lectura dejó en la caché, para que los hechos lo lean (lib/seguimiento/hechos-server.ts). */
+export interface PrefijoDeLaLectura {
+  herramienta: Anthropic.Messages.Tool;
+  /** El bloque de la reunión tal cual se mandó: los hechos lo comparan con el suyo antes de usarlo. */
+  bloque: string;
 }
 
 /**
@@ -260,6 +277,32 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
     (pidePresentacion ? ADENDA_PRESENTACION_DEL_DIAGNOSTICO : "");
   const herramienta = herramientaDeLaLectura({ pideFueraDeAlcance, pidePresentacion, emailsDelEquipo: miembros.map((m) => m.email) });
 
+  /* El prefijo compartido con los hechos (lib/ai/ahorro.ts): la reunión va en el `system` con `cache_control`, con las
+     dos herramientas en `tools`, y lo que pide la lectura (su prompt y su contexto) va en el mensaje. Así los hechos,
+     que corren enseguida, leen la reunión a 0,1. Solo con los hechos activos: si no, la caché la paga la lectura y no la
+     lee nadie. Un recuerdo escrito a mano va siempre por el pedido propio. */
+  const quiereCompartir =
+    opts.formaDelPedido === "compartida" ||
+    (opts.formaDelPedido !== "propia" && LECTURA_Y_HECHOS_COMPARTEN_PREFIJO && !opts.soloLeer && hechosPrendidos(process.env) &&
+      (await import("@/lib/seguimiento/hechos-server").then((m) => m.hechosActivos()).catch(() => false)));
+  const textoCompartido = quiereCompartir && !leeElRecuerdo ? armarTextoDeLaReunion({ transcript: session.transcript, summary: session.summary }) : null;
+  const prefijoCompartido = textoCompartido
+    ? prefijoDeLaReunion({
+        reunion: { titulo: session.title ?? "", fecha: fechaLocalDeLaReunion(session.date), texto: textoCompartido },
+        herramientas: [herramienta, herramientaDeHechos()],
+        conCache: true,
+      })
+    : null;
+  const mensajeCompartido = prefijoCompartido
+    ? [
+        system,
+        "",
+        userMessage.slice(0, userMessage.indexOf(`=== TRANSCRIPT`) >= 0 ? userMessage.indexOf(`=== TRANSCRIPT`) : userMessage.length).trimEnd(),
+        "",
+        `(La reunión —su transcripción, numerada por turno— está arriba, en el sistema. Llama a la herramienta ${HERRAMIENTA_DE_LA_LECTURA}.)`,
+      ].join("\n")
+    : null;
+
   // 7. La llamada. Sin una persona detrás, cobra contra el presupuesto automático (C-01).
   const run = opts.soloLeer
     ? null
@@ -287,14 +330,22 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
       { agentSlug: AGENT_ID_POST_SESSION, agentRunId: run?.id ?? null, clientId: client.id, projectId: project?.id ?? null, triggeredByEmail: opts.pedidaPorEmail ?? null, origen: "sessions/post-process" },
       () =>
         anthropic.messages.create(
-          {
-            model: "claude-sonnet-4-6",
-            max_tokens: maxTokens,
-            system,
-            tools: [herramienta],
-            tool_choice: { type: "tool", name: HERRAMIENTA_DE_LA_LECTURA },
-            messages: [{ role: "user", content: userMessage }],
-          },
+          prefijoCompartido && mensajeCompartido
+            ? {
+                model: "claude-sonnet-4-6",
+                max_tokens: maxTokens,
+                ...prefijoCompartido,
+                tool_choice: { type: "tool", name: HERRAMIENTA_DE_LA_LECTURA },
+                messages: [{ role: "user", content: mensajeCompartido }],
+              }
+            : {
+                model: "claude-sonnet-4-6",
+                max_tokens: maxTokens,
+                system,
+                tools: [herramienta],
+                tool_choice: { type: "tool", name: HERRAMIENTA_DE_LA_LECTURA },
+                messages: [{ role: "user", content: userMessage }],
+              },
           opts.signal ? { signal: opts.signal } : undefined,
         ),
     );
@@ -313,14 +364,18 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
   } catch (e) {
     return await marcarError(opts.signal?.aborted ? cortada() : `Claude: ${(e as Error).message}`);
   }
-  if (!salidaCruda) return await marcarError(`La respuesta se cortó dos veces (tope de ${TOPE_DE_TOKENS[TOPE_DE_TOKENS.length - 1]} tokens).`);
+  if (!salidaCruda) return await marcarError(`La respuesta se cortó (tope de ${TOPE_DE_TOKENS[TOPE_DE_TOKENS.length - 1]} tokens).`);
   // El corte llegó mientras respondía el modelo (o justo después): no se empieza a escribir. Una vez que se empieza,
   // se termina (son escrituras cortas), así nunca queda una lectura a medias.
   if (opts.signal?.aborted) return await marcarError(cortada());
 
   // 8. Las citas: lo que no aparece TAL CUAL en lo que se mandó, se descarta.
   if (!pideFueraDeAlcance) salidaCruda = { ...salidaCruda, fueraDeAlcance: [] };
-  const { validos: salida, descartadosPorCita } = verificarCitas(salidaCruda, fuenteDeLasCitas(transcript, overview));
+  // Con el prefijo compartido, el modelo copió las citas de la conversación comprimida: también valen las de ahí.
+  const { validos: salida, descartadosPorCita } = verificarCitas(
+    salidaCruda,
+    textoCompartido ? `${fuenteDeLasCitas(transcript, overview)}\n${textoParaElModelo(textoCompartido)}` : fuenteDeLasCitas(transcript, overview),
+  );
 
   if (opts.soloLeer) return { status: "ok", sessionId, clientId: client.id, ruta, salida, descartadosPorCita, tokens, pedidos: salida.fueraDeAlcance.length };
 
@@ -409,6 +464,7 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
         presentacion: salida.presentacionDiagnostico,
         lecturaId: opts.lecturaId ?? null,
         quien: opts.pedidaPorEmail ?? null,
+        prefijo: prefijoCompartido ? { herramienta, bloque: prefijoCompartido.system[1].text } : null,
       }),
     );
 
@@ -469,6 +525,8 @@ async function loQueSigue(c: {
   presentacion: unknown;
   lecturaId: string | null;
   quien: string | null;
+  /** El prefijo que la lectura dejó en la caché, si lo compartió: los hechos lo leen de ahí. */
+  prefijo?: PrefijoDeLaLectura | null;
 }): Promise<void> {
   // Memoria de la cuenta, etapa 6: con los hechos prendidos, el avance, la ficha y la etapa salen de ellos, PERO solo si
   // la lectura de hechos los aplicó (quedó lista en esta pasada), ya los había aplicado con la transcripción (`ya_leida`),
@@ -480,7 +538,7 @@ async function loQueSigue(c: {
     try {
       const { hechosActivos, leerHechosDeLaReunion } = await import("@/lib/seguimiento/hechos-server");
       if (await hechosActivos()) {
-        const r = await leerHechosDeLaReunion(c.sessionId, { lecturaId: c.lecturaId, quien: c.quien });
+        const r = await leerHechosDeLaReunion(c.sessionId, { lecturaId: c.lecturaId, quien: c.quien, prefijoDeLaLectura: c.prefijo ?? null });
         conHechos = r.estado === "lista" || r.estado === "ya_leida" || r.estado === "ocupada";
         if (r.estado === "error") console.error(`[lectura] los hechos de la reunión fallaron (no bloqueante; corre el camino de siempre): ${r.error}`);
       }

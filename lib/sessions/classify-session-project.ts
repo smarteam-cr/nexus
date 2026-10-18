@@ -24,6 +24,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
+import { MODELO_DEL_CLASIFICADOR } from "@/lib/ai/ahorro";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { isLockedLink, WHERE_VINCULO_VIRGEN } from "@/lib/sessions/session-project-locks";
@@ -67,7 +68,8 @@ export async function classifySessionToProjects(
   sessionId: string,
   clientId: string,
   /** `signal`: el corte del tope de la lectura de seguimiento (lib/lecturas/leer.ts); corta la llamada al modelo. */
-  opts: { dryRun?: boolean; signal?: AbortSignal } = {},
+  /** `modelo`: solo para scripts/comparar-modelo-del-clasificador.ts (en simulacro, con `dryRun`). */
+  opts: { dryRun?: boolean; signal?: AbortSignal; modelo?: string } = {},
 ): Promise<ClassifyResult> {
   const dryRun = opts.dryRun === true;
   // 1. Cargar los proyectos a los que se le puede colgar una sesión. El criterio es el
@@ -261,8 +263,9 @@ export async function classifySessionToProjects(
       triggeredByEmail: null,
       origen: "sessions/classify-session-project",
     };
+    // El modelo es una palanca de lib/ai/ahorro.ts: se cambia ahí, después de scripts/comparar-modelo-del-clasificador.ts.
     const msg = await conContextoDeIA(ctxDeGasto, () => anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model: opts.modelo ?? MODELO_DEL_CLASIFICADOR,
       max_tokens: 1200,
       system: agent.systemPrompt,
       messages: [{ role: "user", content: userMessage }],

@@ -25,10 +25,15 @@
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import type { CsAlertCategory, CsAlertSeverity } from "@prisma/client";
+import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/lib/anthropic";
+import type { ManejadorDeLote } from "@/lib/ai/lotes-manejadores";
+import { DIAS_PARA_VOLVER_A_TRIAR, VIGIA_BARRIDO_POR_LOTE, VIGIA_CACHEA_EL_PROMPT, VIGIA_NO_REPITE_SIN_CAMBIOS } from "@/lib/ai/ahorro";
+import { debeVolverATriar, huellaDeLaCorrida, huellaDelBarrido, type MotivosDelBarrido } from "./vigia-barrido";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
+import { quedaPresupuestoAutomatico } from "@/lib/ai/guardia-de-presupuesto";
 import { MS_SIN_LATIDO_PARA_COLGADA } from "@/lib/agents/run-colgada";
-import { buildWatchdogContext } from "./watchdog-context";
+import { buildWatchdogContext, type WatchdogContext } from "./watchdog-context";
 import { claimDateKey, SIN_TURNO } from "@/lib/jobs/registry";
 import { crDateParts, WEEKDAYS_MON_FRI } from "@/lib/jobs/time";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
@@ -230,14 +235,16 @@ export type DisparoDelVigia = "debounce" | "sweep" | "manual" | "entrada";
  *  solapados corren uno tras otro, así el segundo VE las alertas del primero
  *  y el dedup mergea en vez de duplicar.
  *  `quien` = el correo de la persona que la pidió a mano: su gasto va al presupuesto
- *  HUMANO (lib/ai/presupuesto.ts). Sin él (automática), al automático. */
+ *  HUMANO (lib/ai/presupuesto.ts). Sin él (automática), al automático.
+ *  `huellaDelBarrido` = la de los motivos con que entró al barrido (lib/cs/vigia-barrido.ts): queda en el output para
+ *  no volver a triarlo mañana si nada cambió. */
 export async function runWatchdogForProject(
   projectId: string,
   trigger: DisparoDelVigia,
-  opciones: { quien?: string | null } = {},
+  opciones: { quien?: string | null; huellaDelBarrido?: string | null } = {},
 ): Promise<WatchdogRunResult> {
   const prev = projectLocks.get(projectId) ?? Promise.resolve();
-  const next = prev.catch(() => {}).then(() => runForProjectInner(projectId, trigger, opciones.quien ?? null));
+  const next = prev.catch(() => {}).then(() => runForProjectInner(projectId, trigger, opciones.quien ?? null, opciones.huellaDelBarrido ?? null));
   projectLocks.set(projectId, next);
   try {
     return await next;
@@ -246,22 +253,22 @@ export async function runWatchdogForProject(
   }
 }
 
-async function runForProjectInner(
-  projectId: string,
-  trigger: DisparoDelVigia,
-  quien: string | null,
-): Promise<WatchdogRunResult> {
+/** Lo que tiene que estar para triar un proyecto: el vigía prendido, el proyecto de cartera y el agente sembrado. */
+async function prepararElTriaje(projectId: string): Promise<
+  | { ok: true; project: { id: string; clientId: string; healthStatusOverride: unknown; healthProposed: unknown }; systemPrompt: string }
+  | { ok: false; reason: string }
+> {
   /* El interruptor de la base, ANTES de leer nada (D14, Elías 2026-10-05: «sigue frenando TODO»).
      Hasta entonces lo miraban el debounce, el sweep y la ruta del sweep, y la corrida manual por
      proyecto lo salteaba a propósito. Acá, donde convergen las cuatro vías, ninguna lo puede
      olvidar; y una corrida que esperaba turno en el mutex lo vuelve a mirar al arrancar. */
-  if (!(await watchdogEnabled())) return { status: "skipped", reason: "vigia_apagado", projectId };
+  if (!(await watchdogEnabled())) return { ok: false, reason: "vigia_apagado" };
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: { id: true, clientId: true, healthStatusOverride: true, healthProposed: true },
   });
-  if (!project) return { status: "skipped", reason: "no_project", projectId };
+  if (!project) return { ok: false, reason: "no_project" };
 
   /* ¿Este proyecto es cartera de Customer Success?
      El gate va ACÁ y no en cada disparador porque las tres vías (debounce, sweep, manual)
@@ -273,12 +280,88 @@ async function runForProjectInner(
     where: proyectoDeCarteraWhere({ id: projectId }),
     select: { id: true },
   });
-  if (!esCartera) return { status: "skipped", reason: "no_es_cartera_cs", projectId };
+  if (!esCartera) return { ok: false, reason: "no_es_cartera_cs" };
   // Un excliente confirmado no recibe alertas (lib/cs/exclientes.ts), venga de donde venga la corrida.
-  if (await esCuentaExcliente(project.clientId)) return { status: "skipped", reason: "excliente", projectId };
+  if (await esCuentaExcliente(project.clientId)) return { ok: false, reason: "excliente" };
 
   const agent = await prisma.agent.findUnique({ where: { id: AGENT_ID }, select: { systemPrompt: true } });
-  if (!agent) return { status: "skipped", reason: "agent_not_seeded", projectId };
+  if (!agent) return { ok: false, reason: "agent_not_seeded" };
+  return { ok: true, project, systemPrompt: agent.systemPrompt };
+}
+
+/**
+ * El pedido al agente. El prompt (~2.000 tokens, el mismo para todos los proyectos) va con `cache_control`
+ * (`VIGIA_CACHEA_EL_PROMPT`, lib/ai/ahorro.ts): en el barrido, el primer proyecto lo escribe y los demás lo leen a 0,1.
+ */
+export function pedidoDelVigia(systemPrompt: string, serialized: string): Anthropic.Messages.MessageCreateParamsNonStreaming {
+  return {
+    model: "claude-sonnet-4-6",
+    max_tokens: 2500,
+    system: VIGIA_CACHEA_EL_PROMPT ? [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }] : systemPrompt,
+    messages: [
+      {
+        role: "user",
+        content: `${serialized}\n\nTría este proyecto según tus instrucciones. Devuelve SOLO el JSON.`,
+      },
+    ],
+  };
+}
+
+/** El texto de la respuesta del agente. LANZA si se cortó: una alerta a medias no se guarda. */
+function textoDeLaRespuesta(msg: Anthropic.Messages.Message): string {
+  if (msg.stop_reason === "max_tokens") throw new Error("output del agente truncado (max_tokens)");
+  return msg.content
+    .map((b) => (b.type === "text" ? (b as { text: string }).text : ""))
+    .join("")
+    .trim();
+}
+
+/**
+ * EN_RIESGO propuesto→confirmado (determinista, NO lo decide el LLM).
+ * riskCandidate = las señales duras que antes derivaban EN_RIESGO directo
+ * (fases vencidas / estancado, con las alarmas de cronograma APLICANDO).
+ * El sistema PROPONE (Project.healthProposed) y el CSE confirma/descarta en
+ * /health-proposal. Si la señal desaparece, la propuesta caduca sola acá.
+ */
+async function ponerAlDiaElRiesgoPropuesto(
+  project: { id: string; healthStatusOverride: unknown; healthProposed: unknown },
+  s: WatchdogContext["summary"],
+  runId: string,
+): Promise<void> {
+  if (!s) return;
+  if (s.riskCandidate && !project.healthStatusOverride && !project.healthProposed) {
+    const parts = [
+      s.overduePhases > 0
+        ? `${s.overduePhases} fase(s) vencida(s)${s.worstOverduePhase ? ` — peor: "${s.worstOverduePhase.name}" (+${s.worstOverduePhase.daysLate}d)` : ""}`
+        : null,
+      s.stalled ? `sin avance hace ${s.daysSinceActivity ?? "?"} días` : null,
+    ].filter(Boolean);
+    await prisma.project.update({
+      where: { id: project.id },
+      data: {
+        healthProposed: "EN_RIESGO",
+        healthProposedReason: parts.join(" · ") || "señales duras del cronograma",
+        healthProposedAt: new Date(),
+        healthProposedByRunId: runId,
+      },
+    });
+  } else if (!s.riskCandidate && project.healthProposed) {
+    await prisma.project.update({
+      where: { id: project.id },
+      data: { healthProposed: null, healthProposedReason: null, healthProposedAt: null, healthProposedByRunId: null },
+    });
+  }
+}
+
+async function runForProjectInner(
+  projectId: string,
+  trigger: DisparoDelVigia,
+  quien: string | null,
+  huellaDelBarrido: string | null,
+): Promise<WatchdogRunResult> {
+  const prep = await prepararElTriaje(projectId);
+  if (!prep.ok) return { status: "skipped", reason: prep.reason, projectId };
+  const { project, systemPrompt } = prep;
 
   // AgentRun primero: su id es el token del claim de eventos.
   const run = await prisma.agentRun.create({
@@ -320,37 +403,7 @@ async function runForProjectInner(
   try {
     const ctx = await buildWatchdogContext(projectId, events);
     if (!ctx) throw new Error("no se pudo armar el contexto");
-
-    // ── EN_RIESGO propuesto→confirmado (determinista, NO lo decide el LLM) ────
-    // riskCandidate = las señales duras que antes derivaban EN_RIESGO directo
-    // (fases vencidas / estancado, con las alarmas de cronograma APLICANDO).
-    // El sistema PROPONE (Project.healthProposed) y el CSE confirma/descarta en
-    // /health-proposal. Si la señal desaparece, la propuesta caduca sola acá.
-    const s = ctx.summary;
-    if (s) {
-      if (s.riskCandidate && !project.healthStatusOverride && !project.healthProposed) {
-        const parts = [
-          s.overduePhases > 0
-            ? `${s.overduePhases} fase(s) vencida(s)${s.worstOverduePhase ? ` — peor: "${s.worstOverduePhase.name}" (+${s.worstOverduePhase.daysLate}d)` : ""}`
-            : null,
-          s.stalled ? `sin avance hace ${s.daysSinceActivity ?? "?"} días` : null,
-        ].filter(Boolean);
-        await prisma.project.update({
-          where: { id: projectId },
-          data: {
-            healthProposed: "EN_RIESGO",
-            healthProposedReason: parts.join(" · ") || "señales duras del cronograma",
-            healthProposedAt: new Date(),
-            healthProposedByRunId: run.id,
-          },
-        });
-      } else if (!s.riskCandidate && project.healthProposed) {
-        await prisma.project.update({
-          where: { id: projectId },
-          data: { healthProposed: null, healthProposedReason: null, healthProposedAt: null, healthProposedByRunId: null },
-        });
-      }
-    }
+    await ponerAlDiaElRiesgoPropuesto(project, ctx.summary, run.id);
 
     // Atribuida (C-01): el vigilante que corre solo → presupuesto automático; el que pidió una
     // persona a mano → el humano, con su correo (D14). No se realimenta con el tope (ver
@@ -363,183 +416,20 @@ async function runForProjectInner(
       triggeredByEmail: quien,
       origen: "cs/watchdog",
     };
-    const msg = await conContextoDeIA(ctxDeGasto, () => anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2500,
-      system: agent.systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: `${ctx.serialized}\n\nTría este proyecto según tus instrucciones. Devuelve SOLO el JSON.`,
-        },
-      ],
-    }));
-    if (msg.stop_reason === "max_tokens") throw new Error("output del agente truncado (max_tokens)");
-    const rawText = msg.content
-      .map((b) => (b.type === "text" ? (b as { text: string }).text : ""))
-      .join("")
-      .trim();
-    const alerts = await verificarCitas(parseAlerts(rawText), { clientId: project.clientId, correos: ctx.correos });
-
-    // ── Dedup + persistencia (el runner es el único escritor de CsAlert) ──────
-    const now = new Date();
-    let created = 0;
-    let merged = 0;
-    let suppressed = 0;
-    for (const a of alerts) {
-      // Hechos de CUENTA dedupean por cliente (multi-proyecto no duplica);
-      // hechos de PROYECTO (cronograma/tareas/pipeline) por proyecto.
-      const deLaCuenta = ACCOUNT_CATEGORIES.has(a.category);
-      const scopeId = deLaCuenta ? project.clientId : projectId;
-      // Una por cuenta (o proyecto) y categoría (2026-10-16, fase 1.2): la huella del agente ya no va en la llave.
-      const dedupeKey = llaveDelVigia(scopeId, a.category, a.fingerprint);
-
-      // La que ya está abierta sobre lo mismo se actualiza con lo último que vio el agente, tenga la llave que tenga:
-      // también las de antes del 2026-10-16, que llevaban la huella. La renovación se junta con el aviso de la regla.
-      // La queja no: sigue una por cita (abajo, con su gemela).
-      if (a.category !== "QUEJA") {
-        const sobreLoMismo: Prisma.CsAlertWhereInput = {
-          clientId: project.clientId,
-          category: a.category,
-          status: { in: ["OPEN", "SEEN"] },
-          ...(deLaCuenta ? {} : { projectId }),
-          NOT: { dedupeKey: { startsWith: PREFIJO_DE_LA_LECTURA } },
-        };
-        // Con un aviso de renovación de la regla abierto, la renovación del vigía va ahí (el más cercano primero).
-        const abierta =
-          (a.category === "RENEWAL_RISK"
-            ? await prisma.csAlert.findFirst({
-                where: { AND: [sobreLoMismo, { dedupeKey: { startsWith: PREFIJO_DE_RENOVACION } }] },
-                orderBy: [{ severity: "desc" }, { lastDetectedAt: "desc" }],
-              })
-            : null) ?? (await prisma.csAlert.findFirst({ where: sobreLoMismo, orderBy: { lastDetectedAt: "desc" } }));
-        if (abierta) {
-          const severity = sevRank(a.severity) > sevRank(abierta.severity) ? a.severity : abierta.severity;
-          if (esAvisoDeRenovacion(abierta)) {
-            // El aviso de la regla conserva su llave y su título (la regla lo cierra sola cuando deja de corresponder);
-            // suma lo que vio el agente.
-            const linea = ((abierta.evidence as { lineaDeLaRegla?: unknown } | null)?.lineaDeLaRegla as string | undefined) ?? abierta.reason;
-            await prisma.csAlert.update({
-              where: { id: abierta.id },
-              data: {
-                occurrences: { increment: 1 },
-                lastDetectedAt: now,
-                reason: razonJuntoALaRegla(linea, a.reason),
-                suggestedAction: a.suggestedAction ?? abierta.suggestedAction,
-                severity,
-                evidence: evidenciaJuntoALaRegla(abierta.evidence, a.evidence, linea) as Prisma.InputJsonValue,
-                agentRunId: run.id,
-              },
-            });
-          } else {
-            await prisma.csAlert.update({
-              where: { id: abierta.id },
-              data: {
-                dedupeKey,
-                occurrences: { increment: 1 },
-                lastDetectedAt: now,
-                title: a.title,
-                reason: a.reason,
-                suggestedAction: a.suggestedAction,
-                severity,
-                evidence: juntarEvidencia(abierta.evidence, a.evidence) as Prisma.InputJsonValue,
-                agentRunId: run.id,
-              },
-            });
-          }
-          merged++;
-          continue;
-        }
-      }
-
-      const existing = await prisma.csAlert.findFirst({
-        where: { dedupeKey },
-        orderBy: { lastDetectedAt: "desc" },
-      });
-      const queHacer = queHacerConLaRedeteccion(existing, { severity: a.severity, evidence: a.evidence });
-      if (existing && queHacer === "actualizar") {
-        // Re-detección del mismo hecho → actualizar, no duplicar. La severidad
-        // solo ESCALA (nunca baja sola); razón/acción se refrescan a lo último.
-        await prisma.csAlert.update({
-          where: { id: existing.id },
-          data: {
-            occurrences: { increment: 1 },
-            lastDetectedAt: now,
-            reason: a.reason,
-            suggestedAction: a.suggestedAction,
-            severity: sevRank(a.severity) > sevRank(existing.severity) ? a.severity : existing.severity,
-            evidence: juntarEvidencia(existing.evidence, a.evidence) as Prisma.InputJsonValue,
-            agentRunId: run.id,
-          },
-        });
-        merged++;
-        continue;
-      }
-      if (queHacer === "suprimir") {
-        // Cerrada por la líder y sin señal nueva (ni más grave ni evidencia nueva) → no vuelve.
-        // Antes volvía sola a los 7 días aunque nada hubiera cambiado (lib/cs/alertas-reglas.ts).
-        suppressed++;
-        continue;
-      }
-      // Una alerta por cita (memoria de la cuenta, etapa 6): si la lectura de la reunión ya levantó la MISMA queja (la
-      // misma frase de la misma reunión, `mismaCitaVerificada`) y sigue abierta, se actualiza esa en vez de duplicarla
-      // con otra llave. SOLO la queja: es la única que levantan los dos detectores, y es de la cuenta. Un retraso es de
-      // su proyecto: el de otro proyecto que cita la misma reunión es otra alerta.
-      if (a.category === "QUEJA") {
-        const gemelas = await prisma.csAlert.findMany({
-          where: { clientId: project.clientId, category: a.category, status: { in: ["OPEN", "SEEN"] } },
-          orderBy: { lastDetectedAt: "desc" },
-          take: 50,
-          select: { id: true, clientId: true, category: true, evidence: true, severity: true },
-        });
-        const gemela = gemelas.find((g) => mismaCitaVerificada(g, { clientId: project.clientId, category: a.category, evidence: a.evidence }));
-        if (gemela) {
-          await prisma.csAlert.update({
-            where: { id: gemela.id },
-            data: {
-              occurrences: { increment: 1 },
-              lastDetectedAt: now,
-              reason: a.reason,
-              suggestedAction: a.suggestedAction,
-              severity: sevRank(a.severity) > sevRank(gemela.severity) ? a.severity : gemela.severity,
-              evidence: juntarEvidencia(gemela.evidence, a.evidence) as Prisma.InputJsonValue,
-              agentRunId: run.id,
-            },
-          });
-          merged++;
-          continue;
-        }
-      }
-      await prisma.csAlert.create({
-        data: {
-          clientId: project.clientId,
-          projectId,
-          severity: a.severity,
-          category: a.category,
-          title: a.title,
-          reason: a.reason,
-          suggestedAction: a.suggestedAction,
-          evidence: a.evidence as Prisma.InputJsonValue,
-          dedupeKey,
-          agentRunId: run.id,
-        },
-      });
-      created++;
-    }
-
-    // Cerrar: eventos procesados + run DONE.
-    await prisma.timelineEvent.updateMany({
-      where: { processedByRunId: run.id, processedAt: null },
-      data: { processedAt: now },
-    });
-    await prisma.agentRun.update({
-      where: { id: run.id },
-      data: { status: "DONE", output: JSON.stringify({ alerts, created, merged, suppressed, correosConPermiso: ctx.correosConPermiso }) },
+    const msg = await conContextoDeIA(ctxDeGasto, () => anthropic.messages.create(pedidoDelVigia(systemPrompt, ctx.serialized)));
+    const r = await guardarLasAlertas({
+      projectId,
+      clientId: project.clientId,
+      runId: run.id,
+      rawText: textoDeLaRespuesta(msg),
+      correos: ctx.correos,
+      correosConPermiso: ctx.correosConPermiso,
+      huellaDelBarrido,
     });
     console.log(
-      `[cs-watchdog] ✓ project ${projectId} (${trigger}): ${events.length} eventos → ${created} alertas nuevas, ${merged} actualizadas, ${suppressed} suprimidas (run ${run.id})`,
+      `[cs-watchdog] ✓ project ${projectId} (${trigger}): ${events.length} eventos → ${r.created} alertas nuevas, ${r.merged} actualizadas, ${r.suppressed} suprimidas (run ${run.id})`,
     );
-    return { status: "ok", projectId, runId: run.id, created, merged, suppressed };
+    return { status: "ok", projectId, runId: run.id, ...r };
   } catch (e) {
     // Liberar el claim (los eventos vuelven a la cola) y dejar el error trazado.
     await prisma.timelineEvent
@@ -552,6 +442,261 @@ async function runForProjectInner(
     return { status: "error", reason: e instanceof Error ? e.message : "error", projectId, runId: run.id };
   }
 }
+
+/**
+ * Lo que el vigía hace con su respuesta: verifica las citas, junta con lo que ya está abierto (el runner es el único
+ * escritor de CsAlert), marca los eventos procesados y cierra la corrida en DONE. Lo usan la corrida en el momento y la
+ * respuesta que llega por lote (`manejadorDelVigiaEnLote`). LANZA si la respuesta no se puede leer.
+ */
+async function guardarLasAlertas(p: {
+  projectId: string;
+  clientId: string;
+  runId: string;
+  rawText: string;
+  correos: Map<string, CorreoLeido>;
+  correosConPermiso: boolean | null;
+  huellaDelBarrido: string | null;
+}): Promise<{ created: number; merged: number; suppressed: number }> {
+  const { projectId, runId: runIdDeLaCorrida } = p;
+  const project = { clientId: p.clientId };
+  const run = { id: runIdDeLaCorrida };
+  const alerts = await verificarCitas(parseAlerts(p.rawText), { clientId: project.clientId, correos: p.correos });
+
+  // ── Dedup + persistencia (el runner es el único escritor de CsAlert) ──────
+  const now = new Date();
+  let created = 0;
+  let merged = 0;
+  let suppressed = 0;
+  for (const a of alerts) {
+    // Hechos de CUENTA dedupean por cliente (multi-proyecto no duplica);
+    // hechos de PROYECTO (cronograma/tareas/pipeline) por proyecto.
+    const deLaCuenta = ACCOUNT_CATEGORIES.has(a.category);
+    const scopeId = deLaCuenta ? project.clientId : projectId;
+    // Una por cuenta (o proyecto) y categoría (2026-10-16, fase 1.2): la huella del agente ya no va en la llave.
+    const dedupeKey = llaveDelVigia(scopeId, a.category, a.fingerprint);
+
+    // La que ya está abierta sobre lo mismo se actualiza con lo último que vio el agente, tenga la llave que tenga:
+    // también las de antes del 2026-10-16, que llevaban la huella. La renovación se junta con el aviso de la regla.
+    // La queja no: sigue una por cita (abajo, con su gemela).
+    if (a.category !== "QUEJA") {
+      const sobreLoMismo: Prisma.CsAlertWhereInput = {
+        clientId: project.clientId,
+        category: a.category,
+        status: { in: ["OPEN", "SEEN"] },
+        ...(deLaCuenta ? {} : { projectId }),
+        NOT: { dedupeKey: { startsWith: PREFIJO_DE_LA_LECTURA } },
+      };
+      // Con un aviso de renovación de la regla abierto, la renovación del vigía va ahí (el más cercano primero).
+      const abierta =
+        (a.category === "RENEWAL_RISK"
+          ? await prisma.csAlert.findFirst({
+              where: { AND: [sobreLoMismo, { dedupeKey: { startsWith: PREFIJO_DE_RENOVACION } }] },
+              orderBy: [{ severity: "desc" }, { lastDetectedAt: "desc" }],
+            })
+          : null) ?? (await prisma.csAlert.findFirst({ where: sobreLoMismo, orderBy: { lastDetectedAt: "desc" } }));
+      if (abierta) {
+        const severity = sevRank(a.severity) > sevRank(abierta.severity) ? a.severity : abierta.severity;
+        if (esAvisoDeRenovacion(abierta)) {
+          // El aviso de la regla conserva su llave y su título (la regla lo cierra sola cuando deja de corresponder);
+          // suma lo que vio el agente.
+          const linea = ((abierta.evidence as { lineaDeLaRegla?: unknown } | null)?.lineaDeLaRegla as string | undefined) ?? abierta.reason;
+          await prisma.csAlert.update({
+            where: { id: abierta.id },
+            data: {
+              occurrences: { increment: 1 },
+              lastDetectedAt: now,
+              reason: razonJuntoALaRegla(linea, a.reason),
+              suggestedAction: a.suggestedAction ?? abierta.suggestedAction,
+              severity,
+              evidence: evidenciaJuntoALaRegla(abierta.evidence, a.evidence, linea) as Prisma.InputJsonValue,
+              agentRunId: run.id,
+            },
+          });
+        } else {
+          await prisma.csAlert.update({
+            where: { id: abierta.id },
+            data: {
+              dedupeKey,
+              occurrences: { increment: 1 },
+              lastDetectedAt: now,
+              title: a.title,
+              reason: a.reason,
+              suggestedAction: a.suggestedAction,
+              severity,
+              evidence: juntarEvidencia(abierta.evidence, a.evidence) as Prisma.InputJsonValue,
+              agentRunId: run.id,
+            },
+          });
+        }
+        merged++;
+        continue;
+      }
+    }
+
+    const existing = await prisma.csAlert.findFirst({
+      where: { dedupeKey },
+      orderBy: { lastDetectedAt: "desc" },
+    });
+    const queHacer = queHacerConLaRedeteccion(existing, { severity: a.severity, evidence: a.evidence });
+    if (existing && queHacer === "actualizar") {
+      // Re-detección del mismo hecho → actualizar, no duplicar. La severidad
+      // solo ESCALA (nunca baja sola); razón/acción se refrescan a lo último.
+      await prisma.csAlert.update({
+        where: { id: existing.id },
+        data: {
+          occurrences: { increment: 1 },
+          lastDetectedAt: now,
+          reason: a.reason,
+          suggestedAction: a.suggestedAction,
+          severity: sevRank(a.severity) > sevRank(existing.severity) ? a.severity : existing.severity,
+          evidence: juntarEvidencia(existing.evidence, a.evidence) as Prisma.InputJsonValue,
+          agentRunId: run.id,
+        },
+      });
+      merged++;
+      continue;
+    }
+    if (queHacer === "suprimir") {
+      // Cerrada por la líder y sin señal nueva (ni más grave ni evidencia nueva) → no vuelve.
+      // Antes volvía sola a los 7 días aunque nada hubiera cambiado (lib/cs/alertas-reglas.ts).
+      suppressed++;
+      continue;
+    }
+    // Una alerta por cita (memoria de la cuenta, etapa 6): si la lectura de la reunión ya levantó la MISMA queja (la
+    // misma frase de la misma reunión, `mismaCitaVerificada`) y sigue abierta, se actualiza esa en vez de duplicarla
+    // con otra llave. SOLO la queja: es la única que levantan los dos detectores, y es de la cuenta. Un retraso es de
+    // su proyecto: el de otro proyecto que cita la misma reunión es otra alerta.
+    if (a.category === "QUEJA") {
+      const gemelas = await prisma.csAlert.findMany({
+        where: { clientId: project.clientId, category: a.category, status: { in: ["OPEN", "SEEN"] } },
+        orderBy: { lastDetectedAt: "desc" },
+        take: 50,
+        select: { id: true, clientId: true, category: true, evidence: true, severity: true },
+      });
+      const gemela = gemelas.find((g) => mismaCitaVerificada(g, { clientId: project.clientId, category: a.category, evidence: a.evidence }));
+      if (gemela) {
+        await prisma.csAlert.update({
+          where: { id: gemela.id },
+          data: {
+            occurrences: { increment: 1 },
+            lastDetectedAt: now,
+            reason: a.reason,
+            suggestedAction: a.suggestedAction,
+            severity: sevRank(a.severity) > sevRank(gemela.severity) ? a.severity : gemela.severity,
+            evidence: juntarEvidencia(gemela.evidence, a.evidence) as Prisma.InputJsonValue,
+            agentRunId: run.id,
+          },
+        });
+        merged++;
+        continue;
+      }
+    }
+    await prisma.csAlert.create({
+      data: {
+        clientId: project.clientId,
+        projectId,
+        severity: a.severity,
+        category: a.category,
+        title: a.title,
+        reason: a.reason,
+        suggestedAction: a.suggestedAction,
+        evidence: a.evidence as Prisma.InputJsonValue,
+        dedupeKey,
+        agentRunId: run.id,
+      },
+    });
+    created++;
+  }
+
+  // Cerrar: eventos procesados + run DONE.
+  await prisma.timelineEvent.updateMany({
+    where: { processedByRunId: run.id, processedAt: null },
+    data: { processedAt: now },
+  });
+  await prisma.agentRun.update({
+    where: { id: run.id },
+    data: {
+      status: "DONE",
+      output: JSON.stringify({ alerts, created, merged, suppressed, correosConPermiso: p.correosConPermiso, ...(p.huellaDelBarrido ? { huellaDelBarrido: p.huellaDelBarrido } : {}) }),
+    },
+  });
+  return { created, merged, suppressed };
+}
+
+/* ── El barrido por lote (VIGIA_BARRIDO_POR_LOTE, lib/ai/ahorro.ts) ─────────────────────────── */
+
+/** Lo que el manejador del lote necesita para guardar la respuesta: el proyecto, los correos que leyó y la huella. */
+interface ContextoDelVigiaEnLote {
+  projectId: string;
+  clientId: string;
+  correos: [string, CorreoLeido][];
+  correosConPermiso: boolean | null;
+  huellaDelBarrido: string | null;
+}
+
+/**
+ * Encola el triaje de un proyecto del barrido que entra SOLO por un riesgo persistente (sin eventos ni riesgos nuevos de
+ * una reunión): nadie espera esa respuesta, y por lote cuesta la mitad. No reclama eventos (no los hay) y no crea la
+ * corrida: la crea la respuesta, así ningún reaper la mata mientras espera. «en_el_momento» = no se pudo encolar (sin
+ * el SQL): el llamador lo tría como siempre.
+ */
+async function encolarElTriaje(projectId: string, huellaDelBarrido: string, now: Date): Promise<"encolado" | "ya_estaba" | "salteado" | "en_el_momento"> {
+  const { encolarEnLote, lotesDisponible } = await import("@/lib/ai/lotes-server");
+  if (!(await lotesDisponible())) return "en_el_momento";
+  const prep = await prepararElTriaje(projectId);
+  if (!prep.ok) return "salteado";
+  const ctx = await buildWatchdogContext(projectId, []);
+  if (!ctx) return "salteado";
+  const contexto: ContextoDelVigiaEnLote = {
+    projectId,
+    clientId: prep.project.clientId,
+    correos: [...ctx.correos.entries()],
+    correosConPermiso: ctx.correosConPermiso,
+    huellaDelBarrido,
+  };
+  const r = await encolarEnLote({
+    tipo: "vigia-barrido",
+    claveUnica: `vigia:${projectId}:${crDateParts(now).dateKey}`,
+    pedido: pedidoDelVigia(prep.systemPrompt, ctx.serialized),
+    contexto,
+    agentSlug: AGENT_ID,
+    clientId: prep.project.clientId,
+    projectId,
+  });
+  return r === "sin_tabla" ? "en_el_momento" : r;
+}
+
+/** Lo que hace el job «ia-lotes» con la respuesta del vigía (lib/ai/lotes-manejadores.ts). */
+export const manejadorDelVigiaEnLote: ManejadorDeLote = {
+  async aplicar({ contexto, mensaje }) {
+    const c = contexto as ContextoDelVigiaEnLote;
+    const prep = await prepararElTriaje(c.projectId);
+    if (!prep.ok) return { agentRunId: null };
+    const run = await prisma.agentRun.create({
+      data: { agentId: AGENT_ID, agentSlug: AGENT_SLUG, clientId: c.clientId, projectId: c.projectId, status: "RUNNING", stepLabel: "Watchdog CS (sweep)", currentPhase: "Llegó por lote" },
+      select: { id: true },
+    });
+    try {
+      // El riesgo propuesto se mira con el cronograma de AHORA, no con el de cuando se encoló.
+      const ctx = await buildWatchdogContext(c.projectId, []);
+      if (ctx) await ponerAlDiaElRiesgoPropuesto(prep.project, ctx.summary, run.id);
+      const r = await guardarLasAlertas({
+        projectId: c.projectId,
+        clientId: c.clientId,
+        runId: run.id,
+        rawText: textoDeLaRespuesta(mensaje),
+        correos: new Map(c.correos),
+        correosConPermiso: c.correosConPermiso,
+        huellaDelBarrido: c.huellaDelBarrido,
+      });
+      console.log(`[cs-watchdog] ✓ project ${c.projectId} (sweep · lote): ${r.created} alertas nuevas, ${r.merged} actualizadas, ${r.suppressed} suprimidas (run ${run.id})`);
+      return { agentRunId: run.id };
+    } catch (e) {
+      await prisma.agentRun.update({ where: { id: run.id }, data: { status: "ERROR", output: e instanceof Error ? e.message : "error", currentPhase: null } }).catch(() => {});
+      throw e;
+    }
+  },
+};
 
 /** Kill-switch en DB (CsSettings.watchdogEnabled) — frena TODAS las vías (D14): automáticas, al
  *  entrar y a mano. Es la palanca para cortar el gasto sin deploy. El barrido por cron además
@@ -667,7 +812,7 @@ export async function runWatchdogDebounceTick(now: Date): Promise<void> {
 
 /** SWEEP diario (L–V 7:00 CR): pre-filtro DETERMINÍSTICO para no quemar tokens —
  *  solo van al agente los proyectos con algo nuevo que triar. */
-export async function runWatchdogSweep(now: Date): Promise<{ candidates: number; ran: number }> {
+export async function runWatchdogSweep(now: Date): Promise<{ candidates: number; ran: number; enLote: number; sinCambios: number }> {
   const { loadPortfolio } = await import("@/lib/portfolio/load");
   // Mismo criterio que el panel (accessibleClientWhere de roles see-all): los
   // prospectos de Ventas no son clientes reales — sin esto el sweep les crearía
@@ -776,6 +921,8 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
     );
 
   const candidates: string[] = [];
+  const conNovedad = new Set<string>();
+  const huellas = new Map<string, string>();
   for (const row of rows) {
     if (row.status !== "active") continue;
     const s = row.summary;
@@ -837,24 +984,85 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
       (sig?.openTicketCount ?? 0) > 0 || renewalSoon || partnerRisk;
     // Un riesgo nuevo de la lectura de una reunión ya es novedad (posterior a la última corrida del vigía para ese
     // proyecto): entra como los eventos pendientes, aunque el proyecto tenga una alerta abierta.
-    const hasNews =
-      withEvents.has(row.projectId) ||
-      riesgoDeReunion(row.projectId, row.clientId) ||
-      (hasRisk && !alerted.has(row.projectId) && !triagedToday.has(row.projectId));
-    if (hasNews) candidates.push(row.projectId);
+    const novedad = withEvents.has(row.projectId) || riesgoDeReunion(row.projectId, row.clientId);
+    const porRiesgo = hasRisk && !alerted.has(row.projectId) && !triagedToday.has(row.projectId);
+    if (!novedad && !porRiesgo) continue;
+    candidates.push(row.projectId);
+    if (novedad) conNovedad.add(row.projectId);
+    const motivos: MotivosDelBarrido = {
+      cronograma: !!scheduleRisk,
+      fasesVencidas: s.overduePhases,
+      tareasVencidas: s.overdueTasks,
+      estancado: !!s.stalled,
+      alarmasDeEtapa: s.stageAlarms.map((x) => x.key),
+      alcanceExcedido: !!s.scope.exceeded,
+      frio: coldDays !== null && coldDays > COLD_DAYS_THRESHOLD,
+      ticketsAbiertos: sig?.openTicketCount ?? 0,
+      renovacionCerca: renewalSoon,
+      relacionPorVencer,
+      deuda: conDeuda.has(row.clientId),
+      bloqueadoEnHubspot: hsBlocked,
+      estadoEnHubspot: ops?.hubspotStatus ?? null,
+      cancelacion: !!partner?.cancellationHubs,
+      senalDeIngresos: !!partner?.revenueSignal,
+      usoBajoConRenovacion: uusLowOrFalling && renewalSoon,
+      licenciasSinUsarConRenovacion: hasUnusedSeats && partnerRenewalSoon,
+    };
+    huellas.set(row.projectId, huellaDelBarrido(motivos));
+  }
+
+  /* Lo que entra SOLO por un riesgo que sigue igual (VIGIA_NO_REPITE_SIN_CAMBIOS, lib/ai/ahorro.ts): si la última vez
+     que se trió en el barrido tenía la misma huella y fue hace menos de DIAS_PARA_VOLVER_A_TRIAR, no se repite. */
+  let sinCambios = 0;
+  let porTriar = candidates;
+  const soloPorRiesgo = candidates.filter((id) => !conNovedad.has(id));
+  if (VIGIA_NO_REPITE_SIN_CAMBIOS && soloPorRiesgo.length) {
+    const anteriores = await prisma.agentRun.findMany({
+      where: {
+        agentSlug: AGENT_SLUG,
+        status: "DONE",
+        stepLabel: "Watchdog CS (sweep)",
+        projectId: { in: soloPorRiesgo },
+        createdAt: { gt: new Date(now.getTime() - DIAS_PARA_VOLVER_A_TRIAR * DAY_MS) },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { projectId: true, output: true, createdAt: true },
+    });
+    const ultima = new Map<string, { huella: string | null; at: Date }>();
+    for (const a of anteriores) if (a.projectId && !ultima.has(a.projectId)) ultima.set(a.projectId, { huella: huellaDeLaCorrida(a.output), at: a.createdAt });
+    porTriar = candidates.filter((id) => {
+      if (conNovedad.has(id)) return true;
+      const sigue = debeVolverATriar({ huella: huellas.get(id) ?? "", anterior: ultima.get(id) ?? null, ahora: now, dias: DIAS_PARA_VOLVER_A_TRIAR });
+      if (!sigue) sinCambios++;
+      return sigue;
+    });
   }
 
   // Con eventos primero (lo más fresco), después los de riesgo.
-  const toRun = candidates
+  const toRun = porTriar
     .sort((a, b) => Number(withEvents.has(b)) - Number(withEvents.has(a)))
     .slice(0, MAX_PROJECTS_PER_SWEEP);
+  let enLote = 0;
   for (const projectId of toRun) {
-    await runWatchdogForProject(projectId, "sweep");
+    const huella = huellas.get(projectId) ?? null;
+    // Lo que entra solo por riesgo no apura: va por lote, a mitad de precio (VIGIA_BARRIDO_POR_LOTE).
+    if (VIGIA_BARRIDO_POR_LOTE && !conNovedad.has(projectId) && huella) {
+      const r = await encolarElTriaje(projectId, huella, now).catch((e) => {
+        console.error(`[cs-watchdog] no se pudo encolar ${projectId} (se tría en el momento):`, e instanceof Error ? e.message : e);
+        return "en_el_momento" as const;
+      });
+      if (r !== "en_el_momento") {
+        if (r === "encolado") enLote++;
+        continue;
+      }
+    }
+    await runWatchdogForProject(projectId, "sweep", { huellaDelBarrido: huella });
   }
-  if (candidates.length > toRun.length) {
-    console.log(`[cs-watchdog] sweep: ${candidates.length - toRun.length} candidatos quedaron fuera del cap (${MAX_PROJECTS_PER_SWEEP}) — entran en el próximo sweep`);
+  if (porTriar.length > toRun.length) {
+    console.log(`[cs-watchdog] sweep: ${porTriar.length - toRun.length} candidatos quedaron fuera del cap (${MAX_PROJECTS_PER_SWEEP}) — entran en el próximo sweep`);
   }
-  return { candidates: candidates.length, ran: toRun.length };
+  if (sinCambios) console.log(`[cs-watchdog] sweep: ${sinCambios} proyecto(s) sin cambios desde su último triaje — no se repiten`);
+  return { candidates: candidates.length, ran: toRun.length - enLote, enLote, sinCambios };
 }
 
 /** Jobs del scheduler (se registran en lib/jobs/defs.ts). */
@@ -866,15 +1074,26 @@ export const watchdogJobs = {
     run: async (now: Date) => {
       // SIN_TURNO: ni apagado desde CsSettings ni sin el claim del día corrió; el scheduler no anota «ok».
       if (!(await watchdogEnabled())) return SIN_TURNO;
+      // Sin presupuesto automático hoy, el barrido no arranca (antes salía y cada llamada fallaba una por una): el turno
+      // queda libre y lo toma el tick de mañana, o el de hoy si alguien sube el tope.
+      if (!(await quedaPresupuestoAutomatico(now))) return SIN_TURNO;
       const { dateKey } = crDateParts(now);
       if (!(await claimDateKey("cs-watchdog-daily", dateKey, now))) return SIN_TURNO;
       const r = await runWatchdogSweep(now);
-      console.log(`[jobs/cs-watchdog] sweep ${dateKey}: ${r.ran}/${r.candidates} proyectos triados`);
+      console.log(
+        `[jobs/cs-watchdog] sweep ${dateKey}: ${r.ran}/${r.candidates} proyectos triados` +
+          (r.enLote ? `, ${r.enLote} por lote` : "") +
+          (r.sinCambios ? `, ${r.sinCambios} sin cambios` : ""),
+      );
     },
   },
   debounce: {
     key: "cs-watchdog-debounce",
     shouldRun: () => true, // el claim real es por-eventos (updateMany) dentro del tick
-    run: runWatchdogDebounceTick,
+    run: async (now: Date) => {
+      // Los eventos esperan sin perderse: el tick siguiente con presupuesto los tría.
+      if (!(await quedaPresupuestoAutomatico(now))) return SIN_TURNO;
+      await runWatchdogDebounceTick(now);
+    },
   },
 };
