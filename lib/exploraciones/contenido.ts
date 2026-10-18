@@ -294,8 +294,11 @@ export interface ItemPropuesto {
   en: string;
 }
 
-/** Los tres momentos del agente: preparar la primera reunión, leer las reuniones, proponer los casos de uso. */
-export const MODOS_DE_LA_CORRIDA = ["preparar", "leer", "casos", "guia"] as const;
+/**
+ * Los momentos del agente: preparar la primera reunión, leer las reuniones, proponer los casos de uso, armar la guía y
+ * «posicionar» (2026-10-18): ubicar la escala con todo lo que Nexus sabe, desde La cuenta › La escala.
+ */
+export const MODOS_DE_LA_CORRIDA = ["preparar", "leer", "casos", "guia", "posicionar"] as const;
 export type ModoDeLaCorrida = (typeof MODOS_DE_LA_CORRIDA)[number];
 
 /** Una corrida del agente sobre esta exploración: qué hizo y cuándo (para la historia del lienzo). */

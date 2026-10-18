@@ -29,6 +29,7 @@ import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { queTieneSinTranscripcion } from "@/lib/sessions/reunion-a-mano";
 import { salesPresenceEmails } from "@/lib/handoff/sales-presence";
+import { resumenDeReunion } from "@/lib/contexto/material-cronograma";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import type { PropuestaDeExploracion } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
@@ -877,4 +878,85 @@ export async function reunionesDeLaEmpresaParaElegir(clientId: string, ahora = n
       conMinuta: !!f?.minuta,
     };
   });
+}
+
+// ── «Actualizar escala» (2026-10-18): lo mismo, sin marcar nada como leído ────
+
+/**
+ * Lo de HubSpot que lee «Actualizar escala» (lib/exploraciones/posicionar-fuentes.ts): la empresa (E0), sus contactos
+ * (C0), sus negocios (D0), el test (T) y la actividad reciente (H), con los mismos ids y los mismos textos que la
+ * preventa. NO marca nada como leído: ubicar la escala no es leer una reunión, y la próxima lectura tiene que encontrar
+ * lo nuevo. Sin empresa de HubSpot, vacío.
+ */
+export async function fuentesDeHubspotSinMarcar(o: { clientId: string; companyId: string | null; escala: EscalaDelLienzo }): Promise<Fuente[]> {
+  if (!o.companyId) return [];
+  const nombreDeNivel = (l: Letra) => o.escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
+  const [empresa, contactos, partner] = await Promise.all([
+    leerEmpresa(o.companyId).catch(() => null),
+    leerContactos(o.companyId).catch(() => [] as ContactoDeHubspot[]),
+    prisma.clientPartnerSnapshot
+      .findUnique({ where: { clientId: o.clientId }, select: { hubEditions: true, seats: true, nextRenewalAt: true, activeProducts: true } })
+      .catch(() => null),
+  ]);
+  const [actividad, negocios] = await Promise.all([
+    leerActividad(o.companyId, contactos, new Date(), { transcripciones: 0 }).catch((): ActividadDeLaEmpresa => ({ material: [], agenda: [], correosSinPermiso: 0 })),
+    getSystemHubspotClient()
+      .then((hs) => fetchCompanyDeals(hs, o.companyId!))
+      .catch(() => []),
+  ]);
+  const fuentes: Fuente[] = [];
+  const textoEmpresa = textoDeLaEmpresa(empresa, partner);
+  if (textoEmpresa) fuentes.push({ id: "E0", etiqueta: "La empresa en HubSpot", texto: textoEmpresa });
+  if (contactos.length) fuentes.push({ id: "C0", etiqueta: "Contactos en HubSpot", texto: textoDeLosContactos(contactos) });
+  if (negocios.length) {
+    fuentes.push({
+      id: "D0",
+      etiqueta: "Negocios en HubSpot",
+      texto: negocios
+        .slice(0, 10)
+        .map((n) => [n.name, n.stage, n.amount && `monto ${n.amount}`, n.closedate && `cierre ${fecha(n.closedate)}`].filter(Boolean).join(" · "))
+        .join("\n"),
+    });
+  }
+  const tests = testsDeLosEnlaces([...enlacesDeLosContactos(contactos.filter((c) => !c.empresaId || c.empresaId === o.companyId)), ...(actividad.enlacesDelTest ?? [])]);
+  tests.forEach((t, i) => {
+    const area = o.escala.areas.find((a) => a.id === t.resultado.areaId)?.nombre ?? t.resultado.areaId;
+    fuentes.push({ id: `T${i + 1}`, etiqueta: `Test de ${area}${t.resultado.fecha ? ` del ${fecha(t.resultado.fecha)}` : ""}`, texto: textoDelTest(t.resultado, t.contacto, o.escala, nombreDeNivel) });
+  });
+  actividad.material.slice(0, 15).forEach((a, i) => {
+    const etiqueta = `${NOMBRE_DEL_TIPO[a.tipo]}${a.ts ? ` del ${fecha(a.ts)}` : ""}${a.resultado ? ` (${QUE_PASO[a.resultado]})` : ""}${a.titulo ? `: ${a.titulo}` : ""}`;
+    fuentes.push({ id: `H${i + 1}`, etiqueta, texto: a.texto.slice(0, 2_000) });
+  });
+  return fuentes;
+}
+
+/**
+ * Las reuniones con el cliente que YA se leyeron, en resumen (su minuta y sus notas, nunca la transcripción), la más
+ * nueva primero, por el chokepoint (invariante #1): solo las de esta empresa y que ya ocurrieron. Las de puertas adentro
+ * no van: lo dicho entre el equipo no es palabra del cliente. Van como S1…Sn: cuentan como lo que dijo el cliente.
+ */
+export async function reunionesEnResumen(clientId: string, o: { cuantas?: number; caracteres?: number } = {}): Promise<{ fuentes: Fuente[]; sesiones: string[] }> {
+  const cuantas = o.cuantas ?? 8;
+  const caracteres = o.caracteres ?? 3_000;
+  const candidatas = await getClientSessions(clientId, { take: 40 });
+  if (!candidatas.length) return { fuentes: [], sesiones: [] };
+  const internos = await dominiosInternos();
+  const deAfuera = candidatas.filter((s) => !esReunionDePuertasAdentro({ participants: s.participants }, internos));
+  if (!deAfuera.length) return { fuentes: [], sesiones: [] };
+  const filas = await prisma.firefliesSession.findMany({
+    // Ids que el chokepoint ya filtró por dueño y por fecha.
+    where: { id: { in: deAfuera.map((s) => s.id) } },
+    select: { id: true, title: true, date: true, summary: true, minute: { select: { summary: true, decisions: true, agreements: true, risks: true, status: true } } },
+    orderBy: { date: "desc" },
+  });
+  const fuentes: Fuente[] = [];
+  const sesiones: string[] = [];
+  for (const f of filas) {
+    if (fuentes.length >= cuantas) break;
+    const texto = resumenDeReunion({ title: f.title, summary: f.summary, minuta: f.minute }).texto.trim();
+    if (!texto) continue;
+    fuentes.push({ id: `S${fuentes.length + 1}`, etiqueta: `Reunión del ${fecha(f.date)} (resumen): ${f.title}`, texto: texto.slice(0, caracteres) });
+    sesiones.push(f.id);
+  }
+  return { fuentes, sesiones };
 }

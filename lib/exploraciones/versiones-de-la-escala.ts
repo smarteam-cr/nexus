@@ -9,8 +9,12 @@ import "server-only";
  *     exploración y por día: la del día se actualiza, así una tarde de trabajo no deja veinte versiones.
  *   · `diagnostico`: se presentó el diagnóstico de un proyecto; con el ciclo abierto, si es un servicio recurrente.
  *   · `manual`: «Guardar esta versión», en la ficha del cliente.
- * Una foto igual a la última de esa exploración no se guarda (salvo el diagnóstico, o «Guardar esta versión» con una
- * nota), y una sin ningún nivel tampoco. Se decide con un candado por exploración (`pg_advisory_xact_lock`), leyendo la
+ * Una foto igual a la última de esa exploración no se guarda (salvo el diagnóstico, «Guardar esta versión» con una nota
+ * o con un momento del pasado), y una sin ningún nivel tampoco.
+ *
+ * Desde el 2026-10-18 («Actualizar escala»), cada versión dice también de qué VENTA y de qué PROPUESTA sale, y de qué
+ * MOMENTO es la posición («al vender», «al arrancar», «hoy», con su día: `diaDeLaPosicion`). Sin decirlo, la venta sale
+ * sola del proyecto (su trato de HubSpot) y la propuesta, de la venta. Ver DECISIONS «Actualizar escala». Se decide con un candado por exploración (`pg_advisory_xact_lock`), leyendo la
  * exploración y la última versión dentro de la misma transacción.
  *
  * Nunca rompe a quien la llama: sin la tabla (falta el SQL) dice `sin-tabla` y sigue.
@@ -19,10 +23,13 @@ import type { Prisma } from "@prisma/client";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
 import { hoyEnCostaRica } from "./fechas";
+import { ordenarVersiones, type MomentoDeLaVersion } from "./posicionar";
 import { fotoDeLaExploracion, huellaDeLaFoto, leerFoto, type FotoDeLaEscala, type OrigenDeLaVersion } from "./foto-de-la-escala";
 import { escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila } from "./servidor";
 
 export const SQL_DE_LAS_VERSIONES = "scripts/sql/2026-10-17-ficha-b-versiones-de-la-escala.sql";
+/** Las columnas de la venta y el momento (2026-10-18). */
+export const SQL_DE_LA_VENTA = "scripts/sql/2026-10-18-escala-ligada-a-la-venta.sql";
 
 export type ResultadoDeGuardar =
   | { estado: "guardada"; id: string; nueva: boolean }
@@ -35,7 +42,18 @@ const hayTabla = () => modeloDisponible(prisma.versionDeLaEscala);
 
 export async function guardarVersionDeLaEscala(
   exploracionId: string,
-  o: { origen: OrigenDeLaVersion; email: string | null; cicloId?: string | null; nota?: string | null; hoy?: string },
+  o: {
+    origen: OrigenDeLaVersion;
+    email: string | null;
+    cicloId?: string | null;
+    nota?: string | null;
+    hoy?: string;
+    /** La venta (VentaGanada) de la que sale. Sin decirlo, la del trato de HubSpot del proyecto, si la hay. */
+    ventaGanadaId?: string | null;
+    /** De qué momento es la posición y su día (AAAA-MM-DD). Sin decirlo, «hoy». */
+    momento?: MomentoDeLaVersion | null;
+    diaDeLaPosicion?: string | null;
+  },
 ): Promise<ResultadoDeGuardar> {
   if (!hayTabla()) return { estado: "sin-tabla" };
   const general = await escalaParaExplorar();
@@ -63,13 +81,19 @@ export async function guardarVersionDeLaEscala(
         });
         // La misma foto no se guarda dos veces; el diagnóstico sí deja la suya aunque nada haya cambiado (marca el ciclo),
         // y «Guardar esta versión» con una nota también: la nota es lo que se quería guardar.
-        const dejaLaSuya = o.origen === "diagnostico" || (o.origen === "manual" && !!nota);
+        // Un momento del pasado («al vender», «al arrancar») también: es otra posición, aunque los niveles sean los mismos.
+        const delPasado = !!o.momento && o.momento !== "hoy";
+        const dejaLaSuya = o.origen === "diagnostico" || (o.origen === "manual" && (!!nota || delPasado));
         if (ultima && ultima.huella === huella && !dejaLaSuya) return { estado: "igual", id: ultima.id } as const;
+        const venta = await ventaDeLaVersion(tx, { clientId: fila.clientId, projectId: fila.projectId, ventaGanadaId: o.ventaGanadaId });
         const datos = {
           foto: foto as unknown as Prisma.InputJsonValue,
           huella,
           escalaVersion: foto.escalaVersion,
           edicion: foto.edicion,
+          ventaGanadaId: venta.ventaGanadaId,
+          hubspotDealId: venta.hubspotDealId,
+          businessCaseId: venta.businessCaseId,
         };
         if (ultima && o.origen === "cambio" && ultima.origen === "cambio" && ultima.dia === dia) {
           await tx.versionDeLaEscala.update({ where: { id: ultima.id }, data: { ...datos, creadoPorEmail: o.email } });
@@ -84,6 +108,8 @@ export async function guardarVersionDeLaEscala(
             cicloId: o.cicloId ?? null,
             origen: o.origen,
             dia,
+            momento: o.momento ?? null,
+            diaDeLaPosicion: o.diaDeLaPosicion ?? (o.momento ? dia : null),
             creadoPorEmail: o.email,
             nota,
           },
@@ -97,6 +123,29 @@ export async function guardarVersionDeLaEscala(
     if (esquemaDesactualizado(e)) return { estado: "sin-tabla" };
     throw e;
   }
+}
+
+/**
+ * De qué venta sale una versión: la que se eligió o, sin elegir, la del trato de HubSpot del proyecto. La propuesta
+ * comercial sale de esa venta (mismo trato y misma empresa). Todo null si no hay. Nunca una venta de otra empresa.
+ */
+async function ventaDeLaVersion(
+  tx: Prisma.TransactionClient,
+  o: { clientId: string; projectId: string | null; ventaGanadaId?: string | null },
+): Promise<{ ventaGanadaId: string | null; hubspotDealId: string | null; businessCaseId: string | null }> {
+  let venta: { id: string; hubspotDealId: string } | null = null;
+  let dealId: string | null = null;
+  if (o.ventaGanadaId) {
+    venta = await tx.ventaGanada.findFirst({ where: { id: o.ventaGanadaId, clientId: o.clientId }, select: { id: true, hubspotDealId: true } });
+  } else if (o.ventaGanadaId === undefined && o.projectId) {
+    dealId = (await tx.project.findUnique({ where: { id: o.projectId }, select: { hubspotDealId: true } }))?.hubspotDealId ?? null;
+    if (dealId) venta = await tx.ventaGanada.findFirst({ where: { hubspotDealId: dealId, clientId: o.clientId }, select: { id: true, hubspotDealId: true } });
+  }
+  const trato = venta?.hubspotDealId ?? dealId;
+  const propuesta = trato
+    ? await tx.businessCase.findFirst({ where: { hubspotDealId: trato, clientId: o.clientId }, orderBy: { updatedAt: "desc" }, select: { id: true } })
+    : null;
+  return { ventaGanadaId: venta?.id ?? null, hubspotDealId: trato, businessCaseId: propuesta?.id ?? null };
 }
 
 /** Lo que la foto necesita de la exploración (lo que lee `estadoDesdeFila`) y a quién se cuelga la versión. */
@@ -151,7 +200,15 @@ export interface VersionGuardada {
   creadoPorEmail: string | null;
   nota: string | null;
   foto: FotoDeLaEscala;
+  /** De qué venta y de qué propuesta sale (2026-10-18). null en las de antes. */
+  venta: { id: string; nombre: string; fechaCierre: string } | null;
+  propuesta: { id: string; nombre: string } | null;
+  /** De qué momento es la posición y su día. null en las de antes (= el día en que se guardó). */
+  momento: MomentoDeLaVersion | null;
+  diaDeLaPosicion: string | null;
 }
+
+const MOMENTOS: readonly string[] = ["al-vender", "al-arrancar", "hoy"];
 
 const ORIGENES: readonly string[] = ["cambio", "diagnostico", "manual"];
 
@@ -174,9 +231,13 @@ export async function versionesDeLaEmpresa(clientId: string, take = 40): Promise
         foto: true,
         project: { select: { id: true, name: true } },
         ciclo: { select: { id: true, numero: true } },
+        momento: true,
+        diaDeLaPosicion: true,
+        ventaGanada: { select: { id: true, nombre: true, fechaCierre: true } },
+        businessCase: { select: { id: true, name: true } },
       },
     });
-    return filas.flatMap((f) => {
+    const versiones = filas.flatMap((f): VersionGuardada[] => {
       const foto = leerFoto(f.foto);
       if (!foto) return [];
       return [
@@ -191,9 +252,15 @@ export async function versionesDeLaEmpresa(clientId: string, take = 40): Promise
           creadoPorEmail: f.creadoPorEmail,
           nota: f.nota,
           foto,
+          venta: f.ventaGanada ? { id: f.ventaGanada.id, nombre: f.ventaGanada.nombre, fechaCierre: f.ventaGanada.fechaCierre.toISOString().slice(0, 10) } : null,
+          propuesta: f.businessCase ? { id: f.businessCase.id, nombre: f.businessCase.name } : null,
+          momento: f.momento && MOMENTOS.includes(f.momento) ? (f.momento as MomentoDeLaVersion) : null,
+          diaDeLaPosicion: f.diaDeLaPosicion,
         },
       ];
     });
+    // La más nueva POSICIÓN primero: una versión «al vender» de hoy va donde le toca en el tiempo.
+    return ordenarVersiones(versiones);
   } catch (e) {
     if (esquemaDesactualizado(e)) return [];
     throw e;

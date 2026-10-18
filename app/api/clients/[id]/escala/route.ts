@@ -1,28 +1,37 @@
 /**
  * La cuenta › La escala (2026-10-12): dónde está la empresa en cada área, con la fecha y de dónde sale. Ver
- * lib/exploraciones/escala-de-la-empresa.ts.
+ * lib/exploraciones/escala-de-la-empresa.ts y lib/exploraciones/posicionar.ts.
  *
- *   GET  → la escala de hoy de cada exploración, las versiones guardadas (la escala en el tiempo), las exploraciones
- *          vivas desde donde se regenera y `puede` (trabajar la preventa / la exploración de un proyecto). Pide acceso
- *          al cliente.
- *   POST → (ficha B, 2026-10-17)
- *          { accion: "guardar", exploracionId, nota? } — guarda esta versión (origen «manual»).
- *          { accion: "regenerar", exploracionId }      — el agente lee todo lo que Nexus sabe y PROPONE niveles; nada
- *                                                        se confirma solo: se usan en La escala de la exploración.
- *          { accion: "activar", projectId }            — abre la exploración del proyecto si no hay y lanza el agente.
- *          Pide acceso al cliente y poder trabajar esa exploración (la preventa: `preventa`; la de un proyecto: la
- *          celda de generar la exploración), igual que /api/sales/exploraciones/[id]/*.
+ *   GET  → la escala de hoy de cada exploración, las versiones guardadas (la escala en el tiempo), sobre qué se puede
+ *          ubicar (cada proyecto, la preventa o la cuenta entera), las ventas ganadas, lo que propuso el agente en cada
+ *          exploración y con qué edición y perfil se mide. `puede` dice qué botones pintar. Pide acceso al cliente.
+ *   POST →
+ *          { accion: "actualizar", objetivo, ventaId? } — «Actualizar escala» (2026-10-18): el agente lee TODO lo que
+ *              Nexus sabe de la cuenta y PROPONE niveles (modo «posicionar»): nada se confirma solo, y nada se marca
+ *              como leído. `objetivo`: `proyecto:<id>` (abre su exploración si no tiene), `preventa:<id>` o `cuenta`
+ *              (la exploración de «Información del cliente», que se crea si no existe). Lo dispara una persona, por
+ *              cliente: nunca corre solo ni para todos.
+ *          { accion: "guardar", exploracionId, nota?, momento?, ventaId? } — guarda esta versión (origen «manual»),
+ *              con su venta y su momento («al vender», «al arrancar» u «hoy»).
+ *          Usar lo propuesto y corregir la edición o el perfil van por el PATCH de la exploración
+ *          (/api/sales/exploraciones/[id]): el mismo escritor de siempre, que deja la versión del día.
+ *          Pide acceso al cliente y poder trabajar esa exploración (la preventa: `preventa`; la de un proyecto o la de la
+ *          cuenta: la celda de generar la exploración), igual que /api/sales/exploraciones/[id]/*.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
-import { guardAccessToClient, guardContextoDelDocumento } from "@/lib/auth/api-guards";
+import { guardAccessToClient, guardContextoDelDocumento, guardPermission } from "@/lib/auth/api-guards";
 import { can } from "@/lib/auth/permissions/engine";
+import { ensureClientInfoProject } from "@/lib/canvas/strategy-project";
+import { prisma } from "@/lib/db/prisma";
 import { lanzarCorrida } from "@/lib/exploraciones/agente";
 import { asegurarExploracionDelProyecto } from "@/lib/exploraciones/del-proyecto";
-import { escalaDeLaEmpresa, esDeLaEmpresa } from "@/lib/exploraciones/escala-de-la-empresa";
+import { diaDelMomento, escalaDeLaEmpresa, esDeLaEmpresa } from "@/lib/exploraciones/escala-de-la-empresa";
 import { guardDeLaExploracion } from "@/lib/exploraciones/guardia";
-import { guardarVersionDeLaEscala, SQL_DE_LAS_VERSIONES } from "@/lib/exploraciones/versiones-de-la-escala";
+import { CLAVE_DE_LA_CUENTA, MOMENTOS_DE_LA_VERSION } from "@/lib/exploraciones/posicionar";
+import { ventasDeLaEmpresa } from "@/lib/exploraciones/posicionar-fuentes";
+import { guardarVersionDeLaEscala, SQL_DE_LA_VENTA, SQL_DE_LAS_VERSIONES } from "@/lib/exploraciones/versiones-de-la-escala";
 
 type Params = Promise<{ id: string }>;
 
@@ -43,11 +52,24 @@ export async function GET(_req: NextRequest, { params }: { params: Params }) {
   }
 }
 
+const Id = z.string().min(1).max(64);
 const Cuerpo = z.discriminatedUnion("accion", [
-  z.object({ accion: z.literal("guardar"), exploracionId: z.string().min(1).max(64), nota: z.string().max(500).optional() }),
-  z.object({ accion: z.literal("regenerar"), exploracionId: z.string().min(1).max(64) }),
-  z.object({ accion: z.literal("activar"), projectId: z.string().min(1).max(64) }),
+  z.object({
+    accion: z.literal("guardar"),
+    exploracionId: Id,
+    nota: z.string().max(500).optional(),
+    momento: z.enum(MOMENTOS_DE_LA_VERSION).optional(),
+    ventaId: Id.nullable().optional(),
+  }),
+  z.object({ accion: z.literal("actualizar"), objetivo: z.string().min(1).max(80), ventaId: Id.nullable().optional() }),
 ]);
+
+/** La venta tiene que ser de esta empresa: una de otra no se usa ni para leer ni para amarrar una versión. */
+async function ventaDeLaEmpresa(clientId: string, ventaId: string | null | undefined) {
+  if (!ventaId) return { ok: true as const, venta: null };
+  const venta = (await ventasDeLaEmpresa(clientId)).find((v) => v.id === ventaId) ?? null;
+  return venta ? { ok: true as const, venta } : { ok: false as const };
+}
 
 export async function POST(req: NextRequest, { params }: { params: Params }) {
   const { id } = await params;
@@ -58,29 +80,67 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const c = cuerpo.data;
 
   try {
-    if (c.accion === "activar") {
-      if (!(await esDeLaEmpresa(id, { projectId: c.projectId }))) return NextResponse.json({ error: "Ese proyecto no es de esta empresa." }, { status: 404 });
-      const g = await guardContextoDelDocumento(c.projectId, "exploracion");
-      if (g instanceof NextResponse) return g;
-      const email = g.teamMember?.email ?? g.user.email ?? "desconocido";
-      const r = await asegurarExploracionDelProyecto(c.projectId, email);
-      if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
-      const corrida = await lanzarCorrida(r.id, "leer", { triggeredByEmail: email, posicionar: true });
+    const v = await ventaDeLaEmpresa(id, c.ventaId);
+    if (!v.ok) return NextResponse.json({ error: "Esa venta no es de esta empresa." }, { status: 404 });
+
+    if (c.accion === "actualizar") {
+      let exploracionId: string;
+      let email: string;
+      let objetivo: string;
+      if (c.objetivo.startsWith("preventa:")) {
+        exploracionId = c.objetivo.slice("preventa:".length);
+        if (!(await esDeLaEmpresa(id, { exploracionId }))) return NextResponse.json({ error: "Esa preventa no es de esta empresa." }, { status: 404 });
+        const g = await guardDeLaExploracion(exploracionId, "write");
+        if (g instanceof NextResponse) return g;
+        email = g.email ?? "desconocido";
+        objetivo = "la preventa";
+      } else {
+        let projectId: string;
+        if (c.objetivo === CLAVE_DE_LA_CUENTA) {
+          // Primero el permiso: sin él no se crea nada.
+          const g = await guardPermission("exploracion", "generate");
+          if (g instanceof NextResponse) return g;
+          projectId = (await ensureClientInfoProject(id)).projectId;
+          objetivo = "la cuenta entera (sin un proyecto en particular)";
+        } else if (c.objetivo.startsWith("proyecto:")) {
+          projectId = c.objetivo.slice("proyecto:".length);
+          if (!(await esDeLaEmpresa(id, { projectId }))) return NextResponse.json({ error: "Ese proyecto no es de esta empresa." }, { status: 404 });
+          const p = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } });
+          objetivo = `el proyecto «${p?.name ?? "sin nombre"}»`;
+        } else {
+          return NextResponse.json({ error: "No se entiende sobre qué ubicar la escala." }, { status: 400 });
+        }
+        const g = await guardContextoDelDocumento(projectId, "exploracion");
+        if (g instanceof NextResponse) return g;
+        email = g.teamMember?.email ?? g.user.email ?? "desconocido";
+        const r = await asegurarExploracionDelProyecto(projectId, email);
+        if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+        exploracionId = r.id;
+      }
+      if (v.venta) objetivo += `, vendida en «${v.venta.nombre}» (ganada el ${v.venta.fechaCierre})`;
+      const corrida = await lanzarCorrida(exploracionId, "posicionar", { triggeredByEmail: email, ventaId: v.venta?.id ?? null, objetivo });
       if (!corrida.ok) return NextResponse.json({ error: corrida.error }, { status: corrida.status });
-      return NextResponse.json({ exploracionId: r.id, runId: corrida.runId, yaCorria: corrida.yaCorria }, { status: 202 });
+      return NextResponse.json({ exploracionId, runId: corrida.runId, yaCorria: corrida.yaCorria }, { status: 202 });
     }
 
     if (!(await esDeLaEmpresa(id, { exploracionId: c.exploracionId }))) return NextResponse.json({ error: "Esa exploración no es de esta empresa." }, { status: 404 });
     const g = await guardDeLaExploracion(c.exploracionId, "write");
     if (g instanceof NextResponse) return g;
 
-    if (c.accion === "regenerar") {
-      const corrida = await lanzarCorrida(c.exploracionId, "leer", { triggeredByEmail: g.email, posicionar: true });
-      if (!corrida.ok) return NextResponse.json({ error: corrida.error }, { status: corrida.status });
-      return NextResponse.json({ exploracionId: c.exploracionId, runId: corrida.runId, yaCorria: corrida.yaCorria }, { status: 202 });
+    // El día de la posición: hoy, el día en que se ganó la venta, o el arranque del proyecto (sin él, su alta).
+    let dia: string | null = null;
+    if (c.momento) {
+      const m = await diaDelMomento(id, c.exploracionId, c.momento, { venta: v.venta, elegida: c.ventaId !== undefined });
+      if (!m.ok) return NextResponse.json({ error: m.error }, { status: 400 });
+      dia = m.dia;
     }
-
-    const r = await guardarVersionDeLaEscala(c.exploracionId, { origen: "manual", email: g.email, nota: c.nota ?? null });
+    const r = await guardarVersionDeLaEscala(c.exploracionId, {
+      origen: "manual",
+      email: g.email,
+      nota: c.nota ?? null,
+      ...(c.ventaId !== undefined ? { ventaGanadaId: v.venta?.id ?? null } : {}),
+      ...(c.momento ? { momento: c.momento, diaDeLaPosicion: dia } : {}),
+    });
     switch (r.estado) {
       case "guardada":
         return NextResponse.json({ ok: true, id: r.id });
@@ -89,7 +149,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       case "sin-nivel":
         return NextResponse.json({ error: "Esa exploración todavía no tiene ningún nivel confirmado: no hay qué guardar." }, { status: 409 });
       case "sin-tabla":
-        return NextResponse.json({ error: `Falta aplicar ${SQL_DE_LAS_VERSIONES} y reiniciar.` }, { status: 503 });
+        return NextResponse.json({ error: `Falta aplicar ${SQL_DE_LAS_VERSIONES} y ${SQL_DE_LA_VENTA}, y reiniciar.` }, { status: 503 });
       case "no-existe":
         return NextResponse.json({ error: "Esa exploración no existe." }, { status: 404 });
     }

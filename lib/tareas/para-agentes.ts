@@ -143,6 +143,23 @@ export async function compromisosAbiertosParaAgentes(projectId: string, tope = T
 }
 
 /**
+ * Las tareas ABIERTAS de una CUENTA (de cualquier proyecto o sin proyecto), para «Actualizar escala» (La cuenta › La
+ * escala, lib/exploraciones/posicionar-fuentes.ts): qué se está haciendo y qué prometió el cliente. La que vence antes
+ * primero, hasta `tope` (como mucho 30). Con las mismas exclusiones que el resto de la puerta.
+ */
+export async function tareasDeLaCuentaParaAgentes(clientId: string, tope = 20): Promise<TareaParaAgente[]> {
+  const filas = await seguro(() =>
+    prisma.tarea.findMany({
+      where: { ...ABIERTAS_PARA_AGENTES, clientId },
+      orderBy: [{ venceEl: { sort: "asc", nulls: "last" } }, { numero: "asc" }],
+      take: Math.min(Math.max(1, tope), 30),
+      select: SELECT_PARA_AGENTES,
+    }),
+  );
+  return filas.map(aTareaParaAgente);
+}
+
+/**
  * Los TÍTULOS que la lectura de seguimiento de una reunión manda al modelo como «YA SON TAREAS», para no proponer lo
  * mismo otra vez (lib/sessions/post-process.ts): lo de esta reunión (cualquier estado: lo descartado tampoco se vuelve
  * a proponer) y lo abierto con el cliente. Solo el título, recortado; con las mismas exclusiones que el resto de la

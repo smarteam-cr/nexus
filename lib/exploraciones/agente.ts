@@ -37,6 +37,7 @@ import {
   leerLosResumenes,
   pedidoDeCasos,
   pedidoDeLaExploracion,
+  pedidoDePosicionar,
   pedidoDeLaIndustria,
   pedidoDeLosResumenes,
   propuestasDelTest,
@@ -51,6 +52,7 @@ import { listaParaProponer } from "./calidad";
 import {
   cambioLoConfirmado,
   claveDelDestino,
+  esFuenteDelCliente,
   destinoValido,
   fusionarPropuestas,
   industriaDelVendedor,
@@ -86,6 +88,8 @@ import { posicionesDelMapa } from "./mapa";
 import { DE_LA_PREVENTA, marcoDe, type Marco } from "./marco";
 import { avanceDeLaEstrategia } from "./avance-del-proyecto";
 import { fuentesDelProyecto, loVendidoDelProyecto } from "./fuentes-del-proyecto";
+import { fuentesParaPosicionar } from "./posicionar-fuentes";
+import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import {
   bloquearFila,
   chequeoDe,
@@ -109,12 +113,14 @@ const ETIQUETA: Record<ModoDelAgente, string> = {
   leer: "Preventa: leer la reunión",
   casos: "Preventa: proponer casos de uso",
   guia: "Preventa: armar la guía de la próxima reunión",
+  posicionar: "Escala: ubicar la empresa",
 };
 
-/** En la exploración de un proyecto (lib/exploraciones/marco.ts) solo se lee y se arma la guía. */
+/** En la exploración de un proyecto (lib/exploraciones/marco.ts) solo se lee, se arma la guía y se ubica la escala. */
 const ETIQUETA_DEL_PROYECTO: Partial<Record<ModoDelAgente, string>> = {
   leer: "Exploración: leer la sesión",
   guia: "Exploración: armar la guía de la próxima sesión",
+  posicionar: "Escala: ubicar la empresa",
 };
 
 /** Lo que una corrida leyó, para guardarlo con lo propuesto. */
@@ -161,12 +167,11 @@ interface OpcionesDeLaCorrida {
    */
   completa?: boolean;
   /**
-   * Para «leer»: UBICAR la escala con todo lo que Nexus sabe aunque no haya una reunión nueva (ficha B, 2026-10-17:
-   * «Regenerar» y «Activar el agente» desde La cuenta › La escala). Sin esto, en la exploración de un proyecto el agente
-   * solo llamaba al modelo con una sesión (S/H/M) y nunca ubicaba nada con el handoff (V0) ni los cuestionarios (Q0),
-   * que cuentan como lo que dijo el cliente. Lo pide siempre una persona.
+   * Para «posicionar» (2026-10-18, «Actualizar escala» en La cuenta › La escala): la venta sobre la que se ubica y cómo
+   * se llama lo que se ubica («Implementación de Sales Hub», «La cuenta entera»). Lo pide siempre una persona.
    */
-  posicionar?: boolean;
+  ventaId?: string | null;
+  objetivo?: string | null;
 }
 
 /**
@@ -218,7 +223,7 @@ export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, 
           opts.releer && !opts.completa ? "Preventa: resumir las reuniones ya leídas" : ((delProyecto ? ETIQUETA_DEL_PROYECTO[modo] : null) ?? ETIQUETA[modo]),
         currentPhase: "Empezando…",
         triggeredByEmail: opts.triggeredByEmail,
-        filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}), ...(opts.releer && !opts.completa ? { soloResumen: true } : {}), ...(opts.posicionar ? { posicionar: true } : {}) } as Prisma.InputJsonValue,
+        filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}), ...(opts.releer && !opts.completa ? { soloResumen: true } : {}), ...(modo === "posicionar" ? { ventaId: opts.ventaId ?? null } : {}) } as Prisma.InputJsonValue,
       },
       select: { id: true },
     });
@@ -247,6 +252,10 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
 
     if (modo === "casos") {
       await proponerCasos(runId, exploracionId, { fila, estado, escala, general: escalaVig.general }, opts);
+      return;
+    }
+    if (modo === "posicionar") {
+      await posicionarLaEscala(runId, exploracionId, { fila, estado, escala }, opts);
       return;
     }
     if (modo === "guia") {
@@ -334,13 +343,8 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     let descartadas = 0;
     let tecnica: Lectura["tecnica"];
     let lecturas: Record<string, LecturaDeReunion> | undefined;
-    /* «leer» llama al modelo con algo nuevo de una reunión (S/H/M); con `posicionar`, también con lo que el cliente dijo
-       por otro lado (el test T, su actividad en HubSpot H, el handoff V0 o los cuestionarios Q0): lo pide una persona
-       para ubicar la escala. */
-    const hayQueLeer =
-      modo === "preparar"
-        ? leido.fuentes.length > 0
-        : leido.fuentes.some((f) => /^[SHM]\d/.test(f.id)) || (!!opts.posicionar && leido.fuentes.some((f) => /^(T|H|V0|Q0|S|M)/.test(f.id)));
+    // «leer» llama al modelo con algo nuevo de una reunión (S/H/M). Ubicar la escala con todo lo demás es «posicionar».
+    const hayQueLeer = modo === "preparar" ? leido.fuentes.length > 0 : leido.fuentes.some((f) => /^[SHM]\d/.test(f.id));
     if (hayQueLeer) {
       await fase(runId, "Pensando qué proponer…");
       const respuesta = await conContextoDeIA(
@@ -423,6 +427,82 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       })
       .catch(() => {});
   }
+}
+
+/**
+ * «Actualizar escala» (2026-10-18): el agente lee TODO lo que Nexus sabe de la cuenta (posicionar-fuentes.ts) y propone
+ * SOLO niveles, cada uno con la frase del cliente que lo respalda. No marca nada como leído, no toca la guía y no lee
+ * una reunión: lo propuesto queda para usar en La cuenta › La escala (o en La escala de la exploración). Sin nada que el
+ * cliente haya dicho o hecho, no llama al modelo: sin una pista del cliente no hay nivel.
+ */
+async function posicionarLaEscala(
+  runId: string,
+  exploracionId: string,
+  d: { fila: Extract<Awaited<ReturnType<typeof leerExploracion>>, { estado: "ok" }>["fila"]; estado: EstadoDeExploracion; escala: EscalaDelLienzo },
+  opts: OpcionesDeLaCorrida,
+) {
+  const { fila, estado, escala } = d;
+  await fase(runId, "Leyendo todo lo que Nexus sabe de la cuenta…");
+  const esContenedor = fila.projectId
+    ? (await prisma.project.findUnique({ where: { id: fila.projectId }, select: { serviceType: true } }))?.serviceType === SENTINEL_SERVICE_TYPE
+    : false;
+  const leido = await fuentesParaPosicionar({
+    clientId: fila.clientId,
+    projectId: fila.projectId,
+    esContenedor,
+    companyId: fila.client.hubspotCompanyId,
+    ventaId: opts.ventaId ?? null,
+    escala,
+  });
+  const ctx: ContextoDelPedido = {
+    modo: "leer",
+    marco: marcoDe(fila.marco).clave,
+    empresa: fila.client.name,
+    industria: fila.client.industry,
+    escala,
+    areas: estado.areas,
+    perfil: estado.perfilCierre && estado.perfilDespues ? `venta ${estado.perfilCierre} · relación ${estado.perfilDespues}` : null,
+    contenido: estado.contenido,
+    fuentes: leido.fuentes,
+    hoy: new Date().toISOString(),
+    equipo: await nombresDelEquipo(),
+  };
+  const hayDelCliente = leido.fuentes.some((f) => esFuenteDelCliente(f.id));
+  let items: ItemPropuesto[] = [];
+  let descartadas = 0;
+  if (hayDelCliente) {
+    await fase(runId, "Ubicando cada dimensión…");
+    const respuesta = await conContextoDeIA(
+      {
+        agentSlug: AGENTE_DE_LA_EXPLORACION,
+        agentRunId: runId,
+        clientId: fila.clientId,
+        triggeredByEmail: opts.triggeredByEmail,
+        origen: "exploraciones/agente:posicionar",
+      },
+      () => getAnthropic().messages.create(pedidoDePosicionar({ ...ctx, objetivo: opts.objetivo ?? (fila.projectId ? "el proyecto" : "la preventa") })),
+    );
+    const r = leerLaRespuesta(respuesta, ctx, runId);
+    // Solo niveles: el pedido no pide otra cosa, y si llega, no se guarda.
+    items = r.items.filter((it) => it.destino.tipo === "nivel");
+    descartadas = r.descartadas + (r.items.length - items.length);
+  }
+  await fase(runId, "Guardando lo propuesto…");
+  const propuestos = await guardar(
+    exploracionId,
+    items,
+    { leyo: leido.fuentes.map((f) => f.etiqueta), leidas: { sesiones: [], hubspot: [], documentos: [] }, foto: null },
+    { runId, modo: "posicionar", automatica: false },
+  );
+  await prisma.agentRun.update({
+    where: { id: runId },
+    data: {
+      status: "DONE",
+      currentPhase: null,
+      sourceSessionIds: leido.sesionesUsadas,
+      output: JSON.stringify({ propuestos, descartadas, fuentes: leido.fuentes.length, sinPistaDelCliente: !hayDelCliente, nadaNuevo: !hayDelCliente }),
+    },
+  });
 }
 
 /** Los nombres del equipo de Smarteam, de alta o de baja: el agente no los pone como gente del cliente. */

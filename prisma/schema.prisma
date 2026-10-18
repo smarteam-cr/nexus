@@ -1712,6 +1712,8 @@ model BusinessCase {
 
   @@index([clientId])
   @@index([exploracionId])
+  /// Las fotos de la escala que se amarraron a esta propuesta (VersionDeLaEscala, 2026-10-18).
+  versionesDeLaEscala VersionDeLaEscala[]
 }
 
 // ─── Exploraciones de venta (2026-10-01) ──────────────────────────────────────
@@ -4967,6 +4969,8 @@ model VentaGanada {
   updatedAt      DateTime @updatedAt
 
   cambios VentaGanadaCambio[] @relation("CambiosDeVenta")
+  /// Las fotos de la escala que se amarraron a esta venta (VersionDeLaEscala, 2026-10-18).
+  versionesDeLaEscala VersionDeLaEscala[]
 
   @@index([fechaCierre])
   @@index([clientId])
@@ -7545,6 +7549,18 @@ model VersionDeLaEscala {
   /// nullable porque solo la foto que deja el diagnóstico de un ciclo lo lleva.
   cicloId       String?
   ciclo         CicloDeProyecto? @relation(fields: [cicloId], references: [id], onDelete: SetNull)
+  /// nullable porque no toda empresa tiene una venta ganada en Nexus (2026-10-18, «Actualizar escala»): de qué venta sale.
+  ventaGanadaId String?
+  ventaGanada   VentaGanada? @relation(fields: [ventaGanadaId], references: [id], onDelete: SetNull)
+  /// nullable porque no toda venta tiene una propuesta comercial en Nexus: de qué propuesta sale.
+  businessCaseId String?
+  businessCase   BusinessCase? @relation(fields: [businessCaseId], references: [id], onDelete: SetNull)
+  /// El trato de HubSpot, aunque no esté en VentaGanada (ID externo, sin FK).
+  hubspotDealId String?
+  /// al-vender | al-arrancar | hoy (lib/exploraciones/posicionar.ts › MOMENTOS_DE_LA_VERSION). null = las de antes.
+  momento        String?
+  /// El día de la POSICIÓN (AAAA-MM-DD), que puede ser del pasado («al vender»). `dia` es el día en que se guardó.
+  diaDeLaPosicion String?
   /// cambio | diagnostico | manual (lib/exploraciones/foto-de-la-escala.ts › ORIGENES_DE_LA_VERSION).
   origen        String
   /// El día de la foto en Costa Rica (AAAA-MM-DD): una por exploración y por día con origen `cambio`.
@@ -7563,6 +7579,7 @@ model VersionDeLaEscala {
 
   @@index([clientId, createdAt])
   @@index([exploracionId, createdAt])
+  @@index([ventaGanadaId])
 }
 
 // ─── Un solo libro financiero · ficha F (2026-10-17) ───────────────────────────
