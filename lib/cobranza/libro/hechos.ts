@@ -10,9 +10,10 @@
  *  · LO PAGADO ALLÁ SE COBRA ACÁ. Odoo: «pagada» o «en proceso de pago» (Alex: ya tiene la referencia y la fecha de
  *    la transferencia; conciliar contra el estado de cuenta es el segundo paso del contador). Mercury: «Paid». La fecha
  *    del cobro es la del pago real, nunca la del día en que corre esto.
- *    ⚠ Lo confirma una PERSONA, en lote y con su nombre (INV3/INV25 siguen como estaban). El 16-oct se decidió «sin
- *    otra firma»; quitar la firma de una persona quedó pendiente de autorizar, y hasta entonces este módulo prepara la
- *    lista y quien firma la confirma de una vez.
+ *    Desde el 2026-10-18 (decisión de Elías) lo pagado Y conciliado con el banco se cobra SOLO, cada día, firmado por
+ *    el sistema (`sistema:odoo`, `sistema:mercury`): ver `paraCobrarSolo`. Lo que no es seguro (Odoo «en proceso de
+ *    pago», una entrada de Mercury encontrada solo por el monto, un día del pago raro) sigue en «Lo pagado» para que lo
+ *    confirme una persona, con su nombre.
  *  · LOS CHOQUES NO SE TOCAN. Cobrada en Nexus e impaga allá: no se revierte sola. Queda en «Lo que no cuadra» para que
  *    María José lo resuelva en Odoo o en Mercury (la recomendación aprobada el 16-oct).
  *
@@ -24,7 +25,7 @@
  * de noviembre y diciembre se pegaban a dos facturas de junio por el mismo monto.
  */
 import { cruzar, esDocumentoVivo, type CobroParaCruzar, type FacturaParaCruzar } from "@/lib/cobranza/odoo/diferencias";
-import { entradasDeFacturas, type EntradaParaCruzar, type FacturaMercuryParaCruzar } from "@/lib/cobranza/mercury/diferencias";
+import { entradasDeFacturasConDetalle, type EntradaParaCruzar, type FacturaMercuryParaCruzar } from "@/lib/cobranza/mercury/diferencias";
 import { numeroDeMercury } from "@/lib/cobranza/mercury/espejo";
 import { normalizarNumeroFactura, plataformaDelNumero } from "@/lib/cobranza/numero-factura";
 
@@ -57,6 +58,11 @@ export interface Pegado {
   cuotas: number;
   pagada: boolean;
   impaga: boolean;
+  /**
+   * Pagada Y conciliada con el banco: en Odoo, `paid` (el contador la concilió con el estado de cuenta); en Mercury,
+   * `Paid` (Mercury es el banco). «En proceso de pago» de Odoo está pagada pero no conciliada.
+   */
+  conciliada: boolean;
 }
 
 export interface EntradaDelLibro {
@@ -136,6 +142,7 @@ export function pegarOdoo(e: EntradaDelLibro): Pegado[] {
       cuotas: p.cuotas,
       pagada: PAGADA_EN_ODOO.includes(f.paymentState) && f.montoResidual <= 0.005,
       impaga: f.paymentState === "not_paid" || f.paymentState === "partial",
+      conciliada: f.paymentState === "paid" && f.montoResidual <= 0.005,
     });
   }
   return out;
@@ -156,7 +163,11 @@ export function pegarMercury(e: EntradaDelLibro): Pegado[] {
     const x = c.numeroFactura ? porNumero.get(numeroDeMercury(c.numeroFactura)) : undefined;
     if (x) reservadas.add(x.f.id);
   }
-  const estado = (f: FacturaMercuryParaCruzar) => ({ pagada: f.estado === "Paid", impaga: f.estado === "Unpaid" || f.estado === "Processing" });
+  const estado = (f: FacturaMercuryParaCruzar) => ({
+    pagada: f.estado === "Paid",
+    impaga: f.estado === "Unpaid" || f.estado === "Processing",
+    conciliada: f.estado === "Paid",
+  });
   const out: Pegado[] = [];
 
   // 1 · Por número, en la misma cuenta; una compartida solo si sus cuotas suman la factura.
@@ -204,8 +215,35 @@ export interface Accion {
   fechaEmision?: string;
   /** Anotar el número (la cuota no lo tenía). */
   numeroFactura?: string;
-  /** Pasar a cobrado, con el día del pago. */
-  cobrar?: { fechaCobro: string; deDonde: string };
+  /**
+   * Pasar a cobrado, con el día del pago. `porQueNoSolo`: por qué este cobro NO se cobra solo cada día y espera a que
+   * lo confirme una persona en «Lo pagado» (null = es seguro: pagado, conciliado con el banco y con un día del pago que
+   * cuadra). Lo decide `dudaDelCobro`.
+   */
+  cobrar?: { fechaCobro: string; deDonde: string; porQueNoSolo: string | null };
+}
+
+/** Días que una entrada de plata puede ir ANTES de su factura (la misma regla de `entradasDeFacturas`). */
+const DIAS_ANTES_DE_LA_FACTURA = 3;
+
+/**
+ * Por qué un pago no es seguro para cobrarse solo, o null si lo es (2026-10-18). Las cuatro dudas, en este orden:
+ *  · Odoo «en proceso de pago»: el asistente registró el depósito, pero el contador todavía no lo concilió con el banco.
+ *  · Mercury, la entrada de plata se ató a la factura solo por el monto: el nombre de quien pagó no se parece al cliente.
+ *  · El día del pago es posterior a hoy: no pasó todavía.
+ *  · El día del pago es muy anterior a la factura: un anticipo o un pago mal conciliado; lo mira una persona.
+ */
+export function dudaDelCobro(
+  p: { fuente: Fuente; conciliada: boolean; fechaFactura: string },
+  fechaCobro: string,
+  hoy: string,
+  mercuryPorNombre: boolean,
+): string | null {
+  if (p.fuente === "ODOO" && !p.conciliada) return "Odoo la da «en proceso de pago»: todavía no está conciliada con el banco.";
+  if (p.fuente === "MERCURY" && !mercuryPorNombre) return "La entrada de plata en Mercury se encontró solo por el monto, no por el nombre de quien pagó.";
+  if (fechaCobro > hoy) return `El día del pago (${fechaCobro}) es posterior a hoy.`;
+  if (dias(p.fechaFactura, fechaCobro) > DIAS_ANTES_DE_LA_FACTURA) return `El día del pago (${fechaCobro}) es anterior a la factura (${p.fechaFactura}).`;
+  return null;
 }
 
 export interface Decision {
@@ -223,7 +261,7 @@ export interface Decision {
  */
 export function decidir(e: EntradaDelLibro, pegados: readonly Pegado[], fechasDePagoOdoo: ReadonlyMap<string, string>): Decision {
   const cobros = new Map(e.cobros.map((c) => [c.id, c]));
-  const entradas = entradasDeFacturas(e.facturasMercury, e.entradasMercury);
+  const entradas = entradasDeFacturasConDetalle(e.facturasMercury, e.entradasMercury);
   const out: Decision = { acciones: [], pagadasSinFecha: [], choques: [] };
   for (const p of pegados) {
     const c = cobros.get(p.cobroId);
@@ -238,22 +276,57 @@ export function decidir(e: EntradaDelLibro, pegados: readonly Pegado[], fechasDe
     if (p.pagada) {
       let fecha: string | null = null;
       let deDonde = "";
+      let porNombre = false;
       if (p.fuente === "ODOO") {
         fecha = fechasDePagoOdoo.get(p.facturaId) ?? null;
         deDonde = "el pago con que Odoo concilió la factura";
       } else {
         // ⚠ Sin la entrada de plata no hay día del pago: el día en que la factura cambió en Mercury es una aproximación
         // y DECISIONS prohíbe aproximar la fecha de pago (decide el mes del gráfico). Va a `pagadasSinFecha`.
-        fecha = entradas.get(p.facturaId)?.fecha ?? null;
+        const x = entradas.get(p.facturaId);
+        fecha = x?.entrada.fecha ?? null;
+        porNombre = x?.porNombre ?? false;
         deDonde = "la entrada de plata en Mercury";
       }
       if (!fecha) {
         out.pagadasSinFecha.push(p);
       } else {
-        a.cobrar = { fechaCobro: fecha, deDonde };
+        a.cobrar = { fechaCobro: fecha, deDonde, porQueNoSolo: dudaDelCobro(p, fecha, e.hoy, porNombre) };
       }
     }
     if (a.fechaEmision || a.numeroFactura || a.cobrar) out.acciones.push(a);
+  }
+  return out;
+}
+
+/* ── Lo que se cobra solo (2026-10-18, decisión de Elías: «cobrar sin firma, cada día y solo») ───────────────────── */
+
+export interface CobroSolo {
+  /** Lo que se escribe solo: cobrar, y pegar la factura si la cuota no la tenía. */
+  acciones: Accion[];
+  /** Lo pagado que NO se cobra solo, con el porqué. Espera en «Lo pagado» a que lo confirme una persona. */
+  quedan: Array<{ accion: Accion; motivo: string }>;
+}
+
+/**
+ * De lo decidido, lo que el job diario cobra sin una persona. Entra SOLO lo que tiene `cobrar` sin dudas
+ * (`dudaDelCobro`). Lo que solo se pega a su factura no lo toca el job: eso lo confirma quien concilia.
+ *
+ * `retiradas`: cuotas que una persona sacó de Cobrado alguna vez. El job no las vuelve a cobrar aunque Odoo o Mercury
+ * sigan diciendo «pagada»: si alguien dijo que no entró, manda lo que dijo (se cobran a mano en «Lo pagado»).
+ * ⛔ Nunca entra lo de `pagadasSinFecha` ni un choque: `decidir` no les pone `cobrar`.
+ */
+export function paraCobrarSolo(acciones: readonly Accion[], retiradas: ReadonlySet<string>): CobroSolo {
+  const out: CobroSolo = { acciones: [], quedan: [] };
+  for (const a of acciones) {
+    if (!a.cobrar) continue;
+    if (retiradas.has(a.cobroId)) {
+      out.quedan.push({ accion: a, motivo: "Una persona la sacó de Cobrado: el sistema no la vuelve a cobrar sola." });
+    } else if (a.cobrar.porQueNoSolo) {
+      out.quedan.push({ accion: a, motivo: a.cobrar.porQueNoSolo });
+    } else {
+      out.acciones.push(a);
+    }
   }
   return out;
 }

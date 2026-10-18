@@ -307,6 +307,7 @@ toma el turno del día no anota nada, así que un rojo queda rojo hasta la corri
 | `adopcion-recordatorios-daily` | ≥ 7:00 CR, una vez al día | — | recuerda revisar la adopción: a los 30 días del inicio de un proyecto de CS, en la semana antes de su entrega y en la primera semana de cada mes en las cuentas recurrentes. Un aviso de «Para ti» al CSE del proyecto y a quien lleva el frente de Customer Success, que lleva a la pestaña Adopción. Cada momento tiene una ventana de 7 días: no es retroactivo. Sin IA (`lib/cs/recordatorios-de-adopcion.ts`) |
 | `tareas-semana-lunes` | lunes ≥ 6:00 CR | — | Tareas internas: vence las propuestas (tareas y proyectos) que nadie decidió en 14 días, pasa a «Por asignar» lo abierto de quien se dio de baja (lo privado no) y muda al sprint de casa lo de quien cambió de área. Todo como `sistema`, con su evento; correrlo dos veces no cambia nada. Con `TAREAS_CIERRE_AUTOMATICO=1` en el `.env` (apagado por defecto), antes revisa como `sistema` la semana pasada de quien no la revisó: lo abierto pasa a esta semana y la persona lo corrige desde Mis tareas (`cerrarSemanaPasadaComoSistema`) |
 | `ia-lotes` | cada tick (manda cada 5 min, mira los lotes cada 3) | el SQL `2026-10-18-gasto-de-ia.sql` | los pedidos a Claude que van por la API Batch, a mitad de precio (`lib/ai/lotes-server.ts`, tabla `PedidoEnLote`): hoy, el barrido del vigía para los proyectos que entran solo por riesgo. Junta los pendientes y los manda en un lote si queda presupuesto automático; cuando el lote termina, anota cada llamada en `LlmCall` con `lote = true` y le pasa la respuesta a su manejador. Un pedido sin respuesta en 26 h queda vencido. Una respuesta que no se pudo aplicar, o un vencido, hace FALLAR el job (rojo + Sentry). Volver atrás: `VIGIA_BARRIDO_POR_LOTE = false` en `lib/ai/ahorro.ts` |
+| `lo-pagado-daily` | ≥ 7:00 CR, una vez al día, después de las dos copias; espera a una copia atrasada hasta las 10:00 | `COBRO_SOLO_ENABLED` ≠ `0` y `ODOO_PASSWORD` o `MERCURY_API_TOKEN` | cobra solo lo que Odoo (`paid`) y Mercury (`Paid`, con su entrada de plata atada por el nombre) dan por pagado y conciliado con el banco, con el día real del pago, firmado `sistema:odoo` o `sistema:mercury` y con su bitácora (`lib/cobranza/libro`). Lo que no es seguro queda en Conciliación › «Lo pagado» con su porqué. FALLA (rojo + Sentry) si una copia no corrió bien hoy, si Odoo no dijo el día de los pagos o si una cuota no se pudo escribir; retiene el turno (ver «Lo pagado no se cobró solo») |
 | `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 35 invariantes solo-base (`lib/invariantes/`, B-07; INV38–43 son de Tareas internas; INV44, la lectura de cada reunión; INV45, los hechos de las reuniones; INV46, los pedidos fuera de alcance de una reunión de otro cliente); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
 
 ⚠ Sin `CS_WATCHDOG_ENABLED` y `COBRANZA_CRON_ENABLED` en el `.env` cinco de estos no corren, y sin
@@ -672,6 +673,22 @@ Cobranza › Mercury lo dice arriba, con el botón «Actualizar desde Mercury».
 4. **Parcial, `PERMISO` o `PROTOCOLO`**: retiene el turno; el error de la corrida dice qué mirar.
 
 A mano, desde una PC con el token en su `.env` (la base es la de producción): `npx tsx scripts/mercury-sync-manual.ts`.
+
+### Lo pagado no se cobró solo
+
+Desde el 2026-10-18 el job `lo-pagado-daily` cobra cada mañana lo pagado y conciliado (DECISIONS «Lo pagado se cobra
+solo»). Integraciones › Jobs del servidor dice si está **apagado** o si **falló**, con el motivo.
+
+1. **«la copia de Odoo (o Mercury) no corrió bien hoy»**: lo de esa copia no se cobró. Arreglar la copia (ver arriba);
+   mañana el job lo cobra. Para no esperar, después de «Actualizar desde Odoo» confirmarlo a mano en «Lo pagado».
+2. **«Odoo no contestó al pedirle el día de los pagos»**: lo de Odoo queda para mañana; lo de Mercury se cobró.
+3. **Una cuota «no se pudo escribir»**: el motivo lo dice (un número de factura que ya está en otra cuenta, INV33). Se
+   arregla en Cobranza y se confirma a mano en «Lo pagado».
+4. **Para ver qué cobraría hoy, sin escribir:** `npx tsx scripts/cobrar-lo-pagado.ts` (simulacro, solo lectura).
+5. **Para apagarlo:** `COBRO_SOLO_ENABLED=0` en el `.env` del VPS y `bash scripts/deploy.sh`. Lo pagado vuelve a
+   confirmarse a mano.
+6. **Si cobró algo que no entró:** abrir el cobro en Cobranza y «Sacar de Cobrado» con el motivo. El sistema no lo vuelve
+   a cobrar solo. INV25 avisa si un cobro firmado por el sistema ya no tiene su factura pagada en la copia.
 
 ## Cobranza
 

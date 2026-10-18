@@ -42,6 +42,9 @@ vi.mock("@/lib/cobranza/odoo/sync", () => ({ sincronizarOdoo }));
 vi.mock("@/lib/cobranza/mercury/sync", () => ({ sincronizarMercury }));
 vi.mock("@/lib/cobranza/alertas-refresco", () => ({ refrescarAlertasDeCobranza }));
 vi.mock("@/lib/marketing/cron", () => ({ tickMarketingCron }));
+// El cobro solo (2026-10-18): la regla y la base viven en lib/cobranza/libro; acá se prueba qué hace el job con lo que devuelve.
+const correrElCobroDelDia = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/cobranza/libro/servicio", () => ({ correrElCobroDelDia }));
 // «Para ti»: el mantenimiento borra los avisos viejos (la base acá está simulada).
 const borrarAvisosViejos = vi.hoisted(() => vi.fn(async () => 0));
 vi.mock("@/lib/para-ti/avisos-server", () => ({ borrarAvisosViejos }));
@@ -418,5 +421,51 @@ describe("tipo-cambio-daily", () => {
       silencio.mockRestore();
     }
     expect(claimDateKey).toHaveBeenCalledWith("tipo-cambio-daily", HOY, AHORA);
+  });
+});
+
+describe("lo-pagado-daily", () => {
+  const MANANA = new Date("2026-09-12T13:05:00Z"); // 7:05 en Costa Rica
+  const resultado = (cambios: Record<string, unknown> = {}) => ({
+    aplicado: true,
+    cobradas: [{ cobroId: "c1", monto: 500, moneda: "USD" }],
+    quedan: [],
+    pagadasSinFecha: 0,
+    saltadas: [],
+    avisoOdoo: null,
+    ...cambios,
+  });
+
+  it("mientras una copia no corrió bien hoy, suelta el turno y no anota nada", async () => {
+    correrElCobroDelDia.mockReset().mockResolvedValue({ turno: { correr: false, fuentes: ["MERCURY"], atrasadas: ["ODOO"] }, resultado: null });
+    await expect(job("lo-pagado-daily").run(MANANA)).resolves.toBe(SIN_TURNO);
+    expect(liberarTurno).toHaveBeenCalledWith({ where: { id: "lo-pagado-daily", lastRunDateKey: HOY }, data: { lastRunDateKey: null } });
+  });
+
+  it("cobra y termina sin lanzar cuando todo salió bien", async () => {
+    correrElCobroDelDia.mockReset().mockResolvedValue({ turno: { correr: true, fuentes: ["ODOO", "MERCURY"], atrasadas: [] }, resultado: resultado() });
+    const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await expect(job("lo-pagado-daily").run(MANANA)).resolves.not.toBe(SIN_TURNO);
+    } finally {
+      silencio.mockRestore();
+    }
+    expect(correrElCobroDelDia).toHaveBeenCalledWith(MANANA, { aplicar: true });
+  });
+
+  it("LANZA (rojo) si cobró sin una copia o si una cuota no se pudo escribir, y retiene el turno", async () => {
+    correrElCobroDelDia.mockReset().mockResolvedValue({
+      turno: { correr: true, fuentes: ["MERCURY"], atrasadas: ["ODOO"] },
+      resultado: resultado({ saltadas: [{ cobroId: "c2", cuenta: "Acme", motivo: "número en otra cuenta" }] }),
+    });
+    const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const run = job("lo-pagado-daily").run(MANANA);
+      await expect(run).rejects.toThrow(/la copia de Odoo no corrió bien hoy.*Acme: número en otra cuenta.*Turno RETENIDO/);
+      await expect(run).rejects.toMatchObject({ name: "CobroSoloIncompleto" });
+    } finally {
+      silencio.mockRestore();
+    }
+    expect(liberarTurno).not.toHaveBeenCalled();
   });
 });

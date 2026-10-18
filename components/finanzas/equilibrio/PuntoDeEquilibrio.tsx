@@ -14,6 +14,7 @@
  * detalle de cada punto.
  */
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Alert, Button, EmptyState, PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
@@ -143,15 +144,25 @@ export default function PuntoDeEquilibrio({
         title={`Punto de equilibrio · ${r.anio}`}
         description="Si lo que se factura alcanza para lo que cuesta operar, cómo se convierte la venta en plata y qué tan firmes son los números. Para revisarlo entre RevOps, el CFO y el CEO."
         action={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void actualizar()}
-            disabled={actualizando}
-            title="Vuelve a traer ahora las ventas ganadas de HubSpot, las facturas de Odoo y lo de Mercury, que normalmente se copian una vez por día. Los cobros, el gasto y la planilla ya se leen al abrir."
-          >
-            {actualizando ? "Actualizando…" : "Actualizar"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* El Tipo de cambio vive dentro del Punto de equilibrio desde el 2026-10-18: es con lo que se convierte todo acá. */}
+            <Link
+              href="/finanzas/tipo-de-cambio"
+              className="inline-flex rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] font-semibold text-fg-secondary hover:bg-surface-hover"
+              title="La venta del BCCR día por día, con la que se pasan los colones a dólares en este reporte."
+            >
+              Tipo de cambio
+            </Link>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void actualizar()}
+              disabled={actualizando}
+              title="Vuelve a traer ahora las ventas ganadas de HubSpot, las facturas de Odoo y lo de Mercury, que normalmente se copian una vez por día. Los cobros, el gasto y la planilla ya se leen al abrir."
+            >
+              {actualizando ? "Actualizando…" : "Actualizar"}
+            </Button>
+          </div>
         }
       />
 

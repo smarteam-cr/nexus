@@ -11,6 +11,7 @@
  *   B. el hueco se mide por MONTO, no por cliente
  *   C. varias ventas del mismo cliente no se cubren con la misma plata
  *   D. bordes: sin cliente, sin convertir, excluidas
+ *   E. lo cargado sin facturar respalda la venta (2026-10-18)
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -205,6 +206,7 @@ describe("D · bordes", () => {
     const r = clasificarVentas([v("sola", 100)], [], OPTS);
     expect(Object.keys(r.porClase).sort()).toEqual([
       "CON_COBRANZA",
+      "EN_PLAN",
       "EXCLUIDA",
       "PARCIAL",
       "SIN_CLIENTE",
@@ -226,6 +228,47 @@ describe("D · bordes", () => {
     );
     expect(r.vendido).toBe(1500);
     expect(r.hueco).toBe(500);
+  });
+});
+
+// ── E ───────────────────────────────────────────────────────────────────────────
+
+describe("E · lo cargado sin facturar respalda la venta", () => {
+  const conPlan = (clientId: string, facturado: number, programado: number): CobranzaDeCliente => ({ clientId, facturado, programado });
+
+  it("E1 una venta con todas sus cuotas cargadas y sin facturar NO es un hueco: queda EN_PLAN", () => {
+    // FACO, 2026-10-18: US$18.000 vendidos el 16-sep, las cuotas en Cobranza, ninguna facturada todavía.
+    const r = clasificarVentas([v("faco", 18000, { clientId: "faco" })], [conPlan("faco", 0, 18000)], OPTS);
+    expect(r.ventas[0]).toMatchObject({ clase: "EN_PLAN", descubierto: 0, enPlan: 18000 });
+    expect(r.hueco).toBe(0);
+    expect(r.enPlan).toBe(18000);
+  });
+
+  it("E2 primero cubre lo facturado y después lo cargado: el resto sigue siendo hueco", () => {
+    const r = clasificarVentas([v("a", 10000, { clientId: "c1" })], [conPlan("c1", 3000, 4000)], OPTS);
+    expect(r.ventas[0]).toMatchObject({ clase: "PARCIAL", descubierto: 3000, enPlan: 4000 });
+    expect(r.hueco).toBe(3000);
+  });
+
+  it("E3 dos ventas no se cubren con las mismas cuotas cargadas", () => {
+    const r = clasificarVentas(
+      [v("grande", 5000, { clientId: "c1" }), v("chica", 2000, { clientId: "c1" })],
+      [conPlan("c1", 0, 5000)],
+      OPTS,
+    );
+    const porNombre = new Map(r.ventas.map((x) => [x.nombre, x]));
+    expect(porNombre.get("grande")).toMatchObject({ clase: "EN_PLAN", descubierto: 0 });
+    expect(porNombre.get("chica")).toMatchObject({ clase: "PARCIAL", descubierto: 2000, enPlan: 0 });
+  });
+
+  it("E4 cubierta entera por lo facturado sigue siendo CON_COBRANZA, aunque haya cuotas cargadas", () => {
+    const r = clasificarVentas([v("a", 1000, { clientId: "c1" })], [conPlan("c1", 1000, 9000)], OPTS);
+    expect(r.ventas[0]).toMatchObject({ clase: "CON_COBRANZA", descubierto: 0, enPlan: 0 });
+  });
+
+  it("E5 sin `programado` se comporta como antes", () => {
+    const r = clasificarVentas([v("a", 1000, { clientId: "c1" })], [cob("c1", 400)], OPTS);
+    expect(r.ventas[0]).toMatchObject({ clase: "PARCIAL", descubierto: 600, enPlan: 0 });
   });
 });
 

@@ -2768,12 +2768,14 @@ export async function loadReporteAnual(
         creditoDias: c.cuenta.creditoDias,
       },
       hoyISO,
+      { anioDeLaFactura: true },
     );
-    // Facturado o cobrado en otro año: es plata de ese año, no de este. Salvo lo facturado ANTES y sin
-    // cobrar, que el motor junta aparte, sin sumarlo al año (`porCobrarDeAniosAnteriores`).
+    // Facturado o cobrado en otro año: es plata de ese año, no de este. Salvo lo facturado ANTES, que el motor junta
+    // aparte sin sumarlo al año: sin cobrar (`porCobrarDeAniosAnteriores`) o cobrado este año (`cobradoDeAniosAnteriores`).
     const deAntesSinCobrar = t.tipo === "POR_COBRAR" && t.periodo < periodos[0]!;
-    if (!periodos.includes(t.periodo) && !deAntesSinCobrar) continue;
-    if (t.tipo === "COBRADO") {
+    const deAntesCobradoEsteAnio = !!t.deFacturaDeOtroAnio && t.periodo < periodos[0]! && (isoDay(c.fechaCobro) ?? "") >= `${anio}-01-01`;
+    if (!periodos.includes(t.periodo) && !deAntesSinCobrar && !deAntesCobradoEsteAnio) continue;
+    if (t.tipo === "COBRADO" && periodos.includes(t.periodo)) {
       cobradosTotales++;
       if (t.sinFechaDeCobro) cobradosSinFecha++;
     }
@@ -3017,6 +3019,8 @@ async function armarEstadoParaAuditar(
           { periodo: { startsWith: `${anio}-` } },
           { fechaEmision: { gte: desde, lt: inicioDelOtroAnio } },
           { fechaCobro: { gte: desde, lt: inicioDelOtroAnio } },
+          /* Las cuotas cargadas de los años que vienen: respaldan una venta de este año aunque se facturen después. */
+          { periodo: { gte: `${anio + 1}-01` }, estado: { not: "COBRADO" }, fechaEmision: null },
         ],
       },
       select: {
@@ -3055,6 +3059,12 @@ async function armarEstadoParaAuditar(
   const portalId = portal?.hubspotPortalId ?? null;
   const money = (n: number) => "$" + n.toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cobrosDeCliente: CobroDeCliente[] = [];
+  /* Lo cargado sin facturar, del año en adelante, por cliente (2026-10-18): respalda la venta, no es un hueco. Cada
+     cuota con la tasa de SU mes; un mes por venir, con la última conocida (la regla del tipo de cambio). Sin tasa no
+     se suma: la venta queda descubierta, que es el lado seguro. */
+  const tasaDelPeriodo = new Map(reporte.fx.tasas.map((t) => [t.periodo, t]));
+  const ultimaTasaConocida = reporte.fx.tasas[reporte.fx.tasas.length - 1] ?? null;
+  const programadoPorCliente = new Map<string, number>();
   for (const c of cobrosDelAnio) {
     const cli = clienteDeCuenta.get(c.cuentaId);
     if (!cli) continue;
@@ -3068,7 +3078,14 @@ async function armarEstadoParaAuditar(
         fechaCobroISO: isoDay(c.fechaCobro),
       },
       hoyISO,
+      { anioDeLaFactura: true },
     );
+    if (t.tipo === "PROGRAMADO" && t.periodo >= `${anio}-01`) {
+      const tasa = tasaDelPeriodo.get(t.periodo) ?? (t.periodo > hoyISO.slice(0, 7) ? ultimaTasaConocida : null);
+      const enPresentacion = convertir(num(c.monto)!, c.moneda as MonedaEq, reporte.monedaPresentacion, tasa)?.monto;
+      if (enPresentacion !== undefined) programadoPorCliente.set(cli, Math.round(((programadoPorCliente.get(cli) ?? 0) + enPresentacion) * 100) / 100);
+      continue;
+    }
     if (!t.periodo.startsWith(`${anio}-`)) continue;
     cobrosDeCliente.push({
       clave: cli,
@@ -3122,7 +3139,11 @@ async function armarEstadoParaAuditar(
       excluida: v.excluida,
       sospechaPrueba: false,
     })),
-    [...facturadoPorCliente.entries()].map(([clientId, facturado]) => ({ clientId, facturado })),
+    [...new Set([...facturadoPorCliente.keys(), ...programadoPorCliente.keys()])].map((clientId) => ({
+      clientId,
+      facturado: facturadoPorCliente.get(clientId) ?? 0,
+      programado: programadoPorCliente.get(clientId) ?? 0,
+    })),
     { anio, pipelinesQueCuentan: [...PIPELINES_VENTA_PROPIA] },
   );
 
@@ -3281,6 +3302,7 @@ async function armarEstadoParaAuditar(
       .map((m) => ({ periodo: m.periodo, faltantes: m.faltantes, futuro: m.futuro })),
     ventas: {
       vendido: resumen.vendido,
+      enPlan: { cuantas: resumen.porClase.EN_PLAN.cuantas, monto: resumen.enPlan },
       sinCobranza: { cuantas: resumen.porClase.SIN_COBRANZA.cuantas, monto: resumen.porClase.SIN_COBRANZA.descubierto },
       parcial: { cuantas: resumen.porClase.PARCIAL.cuantas, monto: resumen.porClase.PARCIAL.descubierto },
       sinCliente: {

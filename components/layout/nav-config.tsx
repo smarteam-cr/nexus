@@ -58,6 +58,12 @@ export interface NavChildConfig {
   /** Además de lo anterior, el hijo pide este permiso (p. ej. `gastos.read` para lo de gastos sin salarios). */
   permiso?: { section: string; action: string };
   /**
+   * Hoja de quien REGISTRA que Super Admin no ve en el menú (2026-10-18, decisión de Elías): Pendientes, y Comisiones de
+   * vendedor y Aguinaldo como entradas sueltas, porque para Super Admin ya están dentro de Planilla. Solo el menú: la
+   * página sigue abierta para quien llegue.
+   */
+  soloQuienRegistra?: boolean;
+  /**
    * Activo por igualdad EXACTA en vez de prefijo. Lo necesita una hoja que es
    * PADRE de otras: sin esto, `/finanzas/costos` se marcaría activo también en
    * `/finanzas/costos/herramientas` y compañía.
@@ -144,6 +150,7 @@ export function visibleNavChildren(
   return (item.children ?? []).filter(
     (c) =>
       (!c.costosOnly || ctx.isCostos) &&
+      (!c.soloQuienRegistra || !ctx.isCostos) &&
       // Super Admin ve TODO Finanzas en cualquier vista (Elías, 2026-10-08): la vista elige adónde entra, no qué ve.
       (!c.vistas || !ctx.vista || ctx.isCostos || c.vistas.includes(ctx.vista)) &&
       (!c.permiso || ctx.isCostos || sections[c.permiso.section]?.[c.permiso.action] === true),
@@ -310,6 +317,7 @@ export const APP_NAV: readonly NavItemConfig[] = [
     //   · REGISTRA (Dinia): Mi día · Ingresos · Costos y gastos sin salarios · Cuadre.
     //   · SUPERVISA (Alex): Mi área · Ingresos · Costos y gastos con planilla · Cuadre · Reportes.
     //   · DIRECCION: Reportes.
+    // Super Admin ve todo menos lo de quien registra (`soloQuienRegistra`, 2026-10-18): unas 15 entradas en vez de 20.
     // ⚠ La vista decide el menú, no la seguridad: cada página sigue con su guarda. `costosOnly` y `permiso` filtran
     // además, para que nadie vea en el menú algo que la página le va a negar.
     key: "finanzas",
@@ -321,11 +329,12 @@ export const APP_NAV: readonly NavItemConfig[] = [
     children: [
       // Una hoja se agrega acá en la MISMA tanda que crea su ruta: hasta que exista su page.tsx, el menú prometería
       // un 404.
-      { href: "/finanzas/pendientes", label: "Pendientes", section: "Mi día", vistas: ["REGISTRA"] },
+      { href: "/finanzas/pendientes", label: "Pendientes", section: "Mi día", vistas: ["REGISTRA"], soloQuienRegistra: true },
       // Lo de quien supervisa: decidir, revisar el trabajo del equipo y cerrar el mes.
       { href: "/finanzas/supervision", label: "Supervisión", section: "Mi área", costosOnly: true, vistas: ["SUPERVISA"] },
       { href: "/finanzas/cierre", label: "Cierre del mes", section: "Mi área", costosOnly: true, vistas: ["SUPERVISA"] },
-      { href: "/cobranza", label: "Cobranza", section: "Ingresos", vistas: ["REGISTRA", "SUPERVISA"] },
+      // `exact`: Odoo, Mercury y el libro de Alex (/cobranza/odoo, /mercury, /importar) son pestañas de Conciliación.
+      { href: "/cobranza", label: "Cobranza", section: "Ingresos", vistas: ["REGISTRA", "SUPERVISA"], exact: true },
       // Las de PARTNER son un ingreso y van en este bloque, visibles para ADMIN. Las de VENDEDOR son remuneración y
       // viven con la planilla, con otro gate: nunca se juntan.
       { href: "/finanzas/comisiones-partner", label: "Comisiones de aliados", section: "Ingresos", vistas: ["REGISTRA", "SUPERVISA"] },
@@ -338,8 +347,8 @@ export const APP_NAV: readonly NavItemConfig[] = [
       { href: "/finanzas/tarjetas", label: "Tarjetas", section: "Costos y gastos", vistas: ["REGISTRA", "SUPERVISA"], permiso: { section: "gastos", action: "read" } },
       // Comisiones de vendedor y aguinaldo para quien registra, SOLO si su override de /team se las da (2026-10-06, Dinia):
       // son remuneración (lib/auth/salarios-por-persona.ts). Super Admin llega desde la planilla, como siempre.
-      { href: "/finanzas/costos/comisiones-vendedor", label: "Comisiones de vendedor", section: "Costos y gastos", vistas: ["REGISTRA"], permiso: { section: "comisionesVendedor", action: "read" } },
-      { href: "/finanzas/costos/aguinaldo", label: "Aguinaldo", section: "Costos y gastos", vistas: ["REGISTRA"], permiso: { section: "aguinaldo", action: "read" } },
+      { href: "/finanzas/costos/comisiones-vendedor", label: "Comisiones de vendedor", section: "Costos y gastos", vistas: ["REGISTRA"], permiso: { section: "comisionesVendedor", action: "read" }, soloQuienRegistra: true },
+      { href: "/finanzas/costos/aguinaldo", label: "Aguinaldo", section: "Costos y gastos", vistas: ["REGISTRA"], permiso: { section: "aguinaldo", action: "read" }, soloQuienRegistra: true },
       // ⚠ UNA sola entrada de planilla, solo para Super Admin. Abre en el CALENDARIO (2026-10-06, pedido de Alex: la tabla
       // donde ve las quincenas que faltan y las llena). Adentro conviven lo que cuesta por mes (`planillas`, «Salarios»), lo
       // que se pagó de verdad (`planillas/historial`, botón «Historial»), y desde ahí se llega al aguinaldo y a las
@@ -358,17 +367,26 @@ export const APP_NAV: readonly NavItemConfig[] = [
         match: ["/finanzas/costos/planillas"],
       },
       // Lo que no cuadra con Odoo y Mercury, en una sola lista. Lo trabaja quien registra; quien supervisa decide lo que
-      // es de negocio.
-      { href: "/finanzas/conciliacion", label: "Conciliación", section: "Cuadre", vistas: ["REGISTRA", "SUPERVISA"] },
-      // Los reportes: la síntesis de los dos lados (entra − sale). Son de dirección y de quien supervisa.
-      { href: "/finanzas/equilibrio", label: "Punto de equilibrio", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
+      // es de negocio. Odoo, Mercury, el libro de Alex e Integraciones son pestañas suyas (2026-10-18).
+      {
+        href: "/finanzas/conciliacion",
+        label: "Conciliación",
+        section: "Cuadre",
+        vistas: ["REGISTRA", "SUPERVISA"],
+        match: ["/finanzas/conciliacion", "/cobranza/odoo", "/cobranza/mercury", "/cobranza/importar", "/finanzas/integraciones"],
+      },
+      // Los reportes: la síntesis de los dos lados (entra − sale). Son de dirección y de quien supervisa. Desde el
+      // 2026-10-18 son tres (más Caja neta, que decide Alex): el Tipo de cambio vive dentro del Punto de equilibrio y
+      // Rentabilidad solo en Éxito del cliente.
+      {
+        href: "/finanzas/equilibrio",
+        label: "Punto de equilibrio",
+        section: "Reportes",
+        costosOnly: true,
+        vistas: ["SUPERVISA", "DIRECCION"],
+        match: ["/finanzas/equilibrio", "/finanzas/tipo-de-cambio"],
+      },
       { href: "/finanzas/caja-neta", label: "Caja neta", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
-      // El margen de cada cuenta con sus horas reales y cuándo contratar (2026-10-06). Vive en Éxito del cliente porque
-      // es de la CSL y de dirección; este acceso es el de dirección, que la busca entre los reportes.
-      { href: "/customer-success/rentabilidad", label: "Rentabilidad", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
-      // El tipo de cambio del BCCR día por día (2026-10-05). Sin `costosOnly`: una tasa publicada no es sensible.
-      { href: "/finanzas/tipo-de-cambio", label: "Tipo de cambio", section: "Reportes", vistas: ["SUPERVISA", "DIRECCION"] },
-      { href: "/finanzas/integraciones", label: "Integraciones", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
       // Proyección, reportes de cobranza y el corte quincenal: se mudaron de las pestañas de Cobranza.
       { href: "/finanzas/reportes", label: "Reportes de cobranza", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA"] },
       // El MODELO de comisiones (2026-10-07): porcentajes, cuándo aplican y sus topes. Solo Super Admin, en sus dos vistas.

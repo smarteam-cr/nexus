@@ -14,6 +14,7 @@
  * NOTA: `semaforoCobro` se importa de lib/cobranza/engine (motor puro, sin
  * Prisma) y NO del barrel lib/cobranza, que re-exporta módulos `server-only`.
  */
+import { nombreDeLaFirma } from "@/lib/cobranza/firma-del-sistema";
 import { useState } from "react";
 import { IconCheck } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
@@ -347,7 +348,7 @@ export default function CronogramaCobros({
               {c.estado === "COBRADO" && c.confirmadoPor && (
                 <p className="mt-1 text-[10px] text-emerald-600">
                   <IconCheck className="w-3 h-3 mr-1 align-middle" />
-                  Confirmado por {c.confirmadoPor}
+                  Confirmado por {nombreDeLaFirma(c.confirmadoPor)}
                   {c.referenciaExterna && (
                     <span className="text-fg-muted"> · ref. {c.referenciaExterna}</span>
                   )}

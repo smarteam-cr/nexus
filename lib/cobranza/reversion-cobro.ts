@@ -24,7 +24,21 @@
  * confirmado, cuándo, y quién lo revierte — en la misma transacción que el cambio.
  *
  * ⛔ Nada de acá pone un cobro en COBRADO. Solo describe la salida (INV3, INV25).
+ *
+ * Desde el 2026-10-18 el sistema cobra solo lo que Odoo y Mercury dan por pagado y conciliado (lib/cobranza/libro). Lo
+ * cobrado así se deshace por acá, con el mismo motivo, y la bitácora deja dicho que el sistema no lo vuelve a cobrar
+ * solo: `TEXTO_DE_LA_REVERSION` es lo que busca el job para saltarse esas cuotas.
  */
+import { esFirmaDelSistema, nombreDeLaFirma } from "./firma-del-sistema";
+
+/**
+ * Lo que dice SIEMPRE la primera línea de la bitácora de una reversión («<quién> sacó este cobro de Cobrado…»). El job
+ * del cobro automático la busca: una cuota que una persona sacó de Cobrado no se vuelve a cobrar sola.
+ */
+export const TEXTO_DE_LA_REVERSION = "sacó este cobro de Cobrado";
+
+/** La línea que lo dice en palabras, para quien lee la bitácora. */
+export const LINEA_NO_SE_COBRA_SOLA = "El sistema no lo vuelve a cobrar solo, aunque Odoo o Mercury lo den por pagado: si entra, se confirma a mano en «Lo pagado».";
 
 /**
  * Mínimo de caracteres del motivo. Bajo a propósito: la barrera es que haya que escribir algo
@@ -167,7 +181,7 @@ export function decidirReversion(
     `Motivo: ${motivo}`,
   ];
 
-  let confirmacion = `Lo había confirmado ${antes.confirmadoPor ?? "nadie (no tenía firma)"}`;
+  let confirmacion = `Lo había confirmado ${antes.confirmadoPor ? nombreDeLaFirma(antes.confirmadoPor) : "nadie (no tenía firma)"}`;
   if (antes.confirmadoEnISO) confirmacion += ` el ${antes.confirmadoEnISO}`;
   if (antes.fechaCobroISO) confirmacion += `, con el pago fechado el ${antes.fechaCobroISO}`;
   if (antes.referenciaExterna) confirmacion += ` y la referencia ${antes.referenciaExterna}`;
@@ -175,7 +189,11 @@ export function decidirReversion(
   if (esFirmaDeImportacion(antes.confirmadoPor)) {
     confirmacion += " Esa firma es de una importación, no de una persona: el verde salió del archivo.";
   }
+  if (esFirmaDelSistema(antes.confirmadoPor)) {
+    confirmacion += " Lo cobró solo, no una persona.";
+  }
   lineas.push(confirmacion);
+  lineas.push(LINEA_NO_SE_COBRA_SOLA);
 
   if (fechaDespues !== antes.fechaEmisionISO) {
     if (antes.fechaEmisionISO === null) lineas.push(`Fecha de emisión de la factura: ${fechaDespues}.`);

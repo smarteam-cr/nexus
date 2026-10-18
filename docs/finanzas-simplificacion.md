@@ -1,6 +1,8 @@
 # Finanzas: terminar de simplificar — validación (18 oct 2026)
 
-Para decidir la iniciativa 5 de «La siguiente serie» (`docs/roadmap.md`). Es análisis: no se construyó nada.
+Para decidir la iniciativa 5 de «La siguiente serie» (`docs/roadmap.md`). Las decisiones de Elías del 18 oct y lo que
+quedó construido están en la sección 7; la regla, en DECISIONS «Lo pagado se cobra solo, y el menú de Finanzas sin el
+doble libro». Las secciones 1 a 6 son el análisis previo, tal como se escribió.
 
 **En una línea:** el menú se simplificó a medias y se deshizo en parte el 8 oct, pero lo que de verdad pidieron Alex y
 Marco no es un menú más corto: es dejar de llevar dos libros. El 16 oct se decidió que Odoo y Mercury mandan y que Nexus
@@ -159,3 +161,67 @@ En el 3004, entrando como tú (Super Admin, vista Dirección). Nada de Wherex.
 | 18 | Pídele a Dinia que entre a Finanzas | Entra a Pendientes y su menú no tiene Planilla salvo que se la hayas dado en Equipo |
 
 Si algo de esto no aparece como dice la tabla, mándame una captura.
+
+## 7. Qué quedó hecho (18 oct, sin desplegar)
+
+Elías decidió: 1a, 2b, 3a, 4a, 5a, 6 (Caja neta queda como está: la decide Alex), 7b y 8a. Primero el libro, después el
+menú.
+
+**El libro (puntos 1, 9 y 10)**
+
+- **Lo pagado se cobra solo cada mañana** (job `lo-pagado-daily`, ≥ 7:00 CR, después de las copias). Solo lo pagado y
+  conciliado con el banco: Odoo `paid` y Mercury `Paid` con su entrada de plata atada por el nombre de quien pagó, con el
+  día real del pago. Firma `sistema:odoo` o `sistema:mercury`, con su bitácora, por el chokepoint de siempre. Lo que no
+  es seguro queda en «Lo pagado», y cada fila dice por qué. Se deshace con «Sacar de Cobrado» y no se vuelve a cobrar
+  solo. INV25 acepta esa firma solo con la factura pagada en la copia.
+- **Cuánto habría cobrado solo con los datos de hoy (simulacro, 18 oct a las 4:00):** nada. El 17 oct se aplicó en lote,
+  con firma de una persona, todo lo pagado que había (8 cuotas), así que hoy no queda nada pagado sin cobrar; y la copia
+  de hoy todavía no había corrido. Con ese mismo lote, la regla nueva habría cobrado sola **4 cuotas, US$6.456** (Grupo
+  Servica, Global Supply, Amvac Latam y Areyá) y habría dejado **3, US$1.915**, para una persona: Forestales
+  Latinoamericanos (el pago es anterior a la factura), APRECAP (Odoo «en proceso de pago») y Teamnet (la entrada de
+  Mercury se encontró solo por el monto). La octava ya no figura pagada en la copia. Sin colones en ninguno de los dos.
+- **El punto de equilibrio cuenta solo las facturas del año.** Medido: todos los cobros de Nexus son de 2026 (ninguno
+  emitido ni cobrado antes), así que hoy no cambia ningún número. Lo que sí se arregló es la regla: una factura de
+  diciembre cobrada en enero cuenta en diciembre, y en enero se declara aparte («entraron este año por facturas de años
+  anteriores»). Antes pasaba a ser facturado del año nuevo y el año cerrado cambiaba.
+- ⚠ **Lo que Elías vio el 16 oct (US$600.000 facturado contra US$400.000 vendido) no se puede «arreglar» contando solo las
+  facturas de las ventas del año:** es facturación real de 2026 de contratos vendidos antes (recurrentes, cuotas de
+  implementaciones de 2025), y el 98 % de lo facturado no está atado a su venta en Nexus (medido: 218 de 223 cobros
+  facturados en 2026 no tienen trato de HubSpot por su proyecto). Sacarlo del año dejaría el punto de equilibrio sin la
+  mitad de sus ingresos. Al 18 oct el reporte dice US$416.497 facturado y US$527.706 vendido (con Shared Selling).
+
+**Ventas sin cobranza: por qué Nexus decía US$218.000 y Marco esperaba unos US$90.000**
+
+Medido el 18 oct en solo lectura (ese día el número ya era US$239.386):
+
+| Qué | Monto | Qué es |
+|---|---|---|
+| Cuotas cargadas que todavía no se facturan | US$68.326 | **Error, corregido.** La venta tiene su plan en Cobranza y espera la fecha de cada cuota (FACO US$18.000, Kaizen Kapital US$15.500, Areyá, Almotec…). Se contaba como «sin respaldo». Ahora queda «en el plan» y no es hueco |
+| Clientes que facturan menos de lo que vendieron | US$104.025 (25 ventas) | Real: falta cargar el plan del resto de la venta |
+| Clientes sin nada cargado | US$55.075 (15 ventas) | Real: la venta no tiene cuenta ni plan en Cobranza |
+| Empresas que no existen en Nexus | US$11.960 (4 ventas) | Real: AMVAC Crecimiento web, Grupo HL, Don Juan Tour, Sotheby's |
+
+Con la corrección el número baja a **US$171.060**. Lo que queda es trabajo de Cobranza, no un error de cuenta: lo más
+grande son los tres tratos de RC Inmobiliaria (unos US$44.700, entre ellos el Acuerdo Macro de US$30.480 cerrado el
+16 oct), el contrato 2026 de ACCCSA (unos US$20.600, una renovación: si no genera facturación nueva se marca así en la
+venta), O4BI (US$10.000), AE (US$8.100) y RCI (US$7.760). Marco hablaba de lo que hay pendiente de cobrar; Nexus mide lo
+vendido este año que todavía no tiene su facturación cargada. Para que los dos números se acerquen hay que cargar los
+planes de esas ventas o excluir las renovaciones.
+
+**El menú (puntos 2, 3, 5, 7 y 8)**
+
+- Un Super Admin ve todo Finanzas menos Pendientes, Comisiones de vendedor y Aguinaldo sueltos (están dentro de
+  Planilla): de 20 entradas a 14.
+- Odoo, Mercury e Integraciones son pestañas de Conciliación (arriba de las cuatro páginas); el libro de Alex sigue en
+  su pestaña. El menú las ilumina como Conciliación.
+- Reportes: Punto de equilibrio (con el botón «Tipo de cambio»), Caja neta (como está), Reportes de cobranza y el modelo
+  de Comisiones. Rentabilidad queda solo en Éxito del cliente.
+- Las hojas viejas de Costos llevan a Recurrentes (Costos, Fijos, Herramientas) y a Tarjetas. «Volver» de Comisiones de
+  vendedor lleva a Planilla y Recurrentes ya no manda a la hoja vieja.
+
+**Quien concilia: María José (punto 10)**
+
+No hizo falta un permiso nuevo: necesita lo mismo que Dinia, que es el rol «Asistente administrativo» (ADMIN):
+Cobranza leer y escribir, Gastos leer y escribir, y el frente «Finanzas: registrar». Con eso entra a Pendientes y a
+Conciliación, confirma «Lo pagado» y marca «Está bien así». Nexus no crea la cuenta: los pasos están en el mensaje de
+cierre de la sesión que construyó esto.

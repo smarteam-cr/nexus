@@ -21,6 +21,7 @@ import { resumenDeDiferencias, textoDeMontos, type DiferenciaOdoo } from "@/lib/
 import { filasPorQuien } from "@/lib/finanzas/conciliacion";
 import { PageHeader } from "@/components/ui";
 import ActualizarTodo from "@/components/finanzas/ActualizarTodo";
+import PestanasDeConciliacion from "@/components/finanzas/PestanasDeConciliacion";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 
 export const dynamic = "force-dynamic";
@@ -145,6 +146,7 @@ export default async function IntegracionesFinanzasPage() {
 
   return (
     <div className={`${SHELL_DEFAULT} space-y-5`}>
+      <PestanasDeConciliacion conIntegraciones />
       <PageHeader recorrido="finanzas-integraciones"
         title="Integraciones"
         description="Si las copias de Odoo, Mercury y HubSpot están al día, y cuánto falta conciliar de cada una. Nexus solo las lee: nunca escribe en ellas ni mueve un cobro solo."

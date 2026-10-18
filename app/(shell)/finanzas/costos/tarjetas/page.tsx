@@ -1,33 +1,18 @@
 /**
- * /finanzas/costos/tarjetas — las tarjetas de crédito de la empresa y su
- * capacidad disponible, SOLO SUPER_ADMIN.
- * Gate AUTÓNOMO isCostosRole(role) — el redirect corta ANTES de cualquier query,
- * así ni un byte de costos entra al payload RSC de un no-SUPER_ADMIN.
+ * /finanzas/costos/tarjetas — la hoja de tarjetas, retirada el 2026-10-18 (decisión de Elías sobre docs/finanzas-simplificacion.md): ya no
+ * está en el menú desde el 2026-10-03 y su contenido vive en /finanzas/tarjetas. Lleva ahí a quien llegue por un enlace viejo.
  *
- * Trae también los costos recurrentes: son lo que se asigna a cada tarjeta para
- * calcular el cargo mensual de REFERENCIA (nunca el saldo, ver lib/cobranza/tarjetas.ts).
+ * ⚠ Sigue siendo de costos: el gate `isCostosRole` va ANTES del redirect (P4 de lib/cobranza/costos-privacy.test.ts),
+ * aunque no cargue nada. Los salarios se ven en Planilla › Salarios.
  */
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
-import { loadTarjetas, loadCostos } from "@/lib/cobranza";
-import { crDateParts } from "@/lib/jobs/time";
-import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
-import TarjetasPanel from "@/components/finanzas/TarjetasPanel";
 
 export const dynamic = "force-dynamic";
 
-export default async function FinanzasTarjetasPage() {
+export default async function Page() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !isCostosRole(ctx.role)) redirect("/clients");
-
-  const todayISO = crDateParts(new Date()).dateKey;
-  const [tarjetas, costos] = await Promise.all([loadTarjetas(todayISO, { conCortes: true }), loadCostos()]);
-
-  return (
-    <div className={SHELL_DEFAULT}>
-      {/* Solo Super Admin llega acá: es quien supervisa Finanzas, y puede eliminar una tarjeta. */}
-      <TarjetasPanel initialTarjetas={tarjetas} costos={costos} todayISO={todayISO} puedeEliminar />
-    </div>
-  );
+  redirect("/finanzas/tarjetas");
 }

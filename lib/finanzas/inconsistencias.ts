@@ -157,6 +157,11 @@ export interface EstadoParaAuditar {
   /** Ventas ganadas sin respaldo completo en cobranza, por clase. */
   ventas: {
     vendido: number;
+    /**
+     * Lo que respaldan cuotas ya cargadas que todavía no se facturan (2026-10-18). NO es hueco: está en cobranza y le
+     * falta facturarse. Se dice para que el número se entienda. Ausente = no se midió.
+     */
+    enPlan?: { cuantas: number; monto: number };
     sinCobranza: { cuantas: number; monto: number };
     parcial: { cuantas: number; monto: number };
     /** Las ventas cuya empresa no existe en Nexus, CON nombre y enlace al trato. */
@@ -263,7 +268,10 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
         `(${money(e.ventas.sinCobranza.monto)}), ${e.ventas.parcial.cuantas} de clientes que facturan menos de lo ` +
         `que vendieron (${money(e.ventas.parcial.monto)}) y ${e.ventas.sinCliente.cuantas} de empresas que ni ` +
         `existen en Nexus (${money(e.ventas.sinCliente.monto)}). Las tres se listan abajo por separado; el monto ` +
-        `de acá ya las incluye a las tres.`,
+        `de acá ya las incluye a las tres.` +
+        (e.ventas.enPlan && e.ventas.enPlan.monto > 0
+          ? ` Aparte, ${money(e.ventas.enPlan.monto)} de lo vendido ya está cargado en cuotas que todavía no se facturan: eso no es hueco.`
+          : ""),
       montoEnJuego: descubierto,
       queHacer:
         "Revisar una por una: cargar la cuenta y el plan de cobro donde falte, o marcar la venta como que no genera facturación (continuidad, add-on, renovación).",

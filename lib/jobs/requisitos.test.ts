@@ -90,8 +90,9 @@ describe("defs.ts decide con esta regla y no con una copia", () => {
 
   it("cada job con requisito consulta la regla en su shouldRun", () => {
     /* 9 desde el 2026-10-05: el tipo de cambio del BCCR. 10 desde el 2026-10-10: la lectura de cada reunión. 11 desde el
-       2026-10-15: las tareas de HubSpot. 12 desde el 2026-10-18: las comunicaciones de HubSpot. */
-    expect(JOBS_CON_REQUISITO.length).toBe(12);
+       2026-10-15: las tareas de HubSpot. 12 desde el 2026-10-18: las comunicaciones de HubSpot. 13 desde el 2026-10-18:
+       el cobro solo de lo pagado. */
+    expect(JOBS_CON_REQUISITO.length).toBe(13);
     for (const key of JOBS_CON_REQUISITO) expect(defs, key).toContain(`encendido("${key}")`);
     expect(defs).toContain("motivoApagado(jobKey, process.env) === null");
   });

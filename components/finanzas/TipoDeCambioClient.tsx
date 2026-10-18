@@ -89,6 +89,8 @@ export default function TipoDeCambioClient({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        backHref="/finanzas/equilibrio"
+        backLabel="Punto de equilibrio"
         title="Tipo de cambio"
         description="La venta de referencia del Banco Central de Costa Rica, día por día: la que pide Hacienda y la que Nexus usa para pasar colones a dólares. Cada cobro y cada pago con fecha se convierte con la tasa de su día; lo que es de un mes entero, con el promedio del mes."
         action={

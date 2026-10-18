@@ -7,8 +7,10 @@
  * real del pago) y cuotas que se pegan a su factura. Quien concilia marca lo que ve bien y lo confirma de una vez, con su
  * firma. La lista la arma lib/cobranza/libro/hechos.ts, la misma regla que el script `aplicar-odoo-y-mercury.ts`.
  *
- * ⛔ Nada se cobra sin que una persona lo confirme (INV3, INV25). Los choques (cobrada en Nexus, impaga allá) solo se
- * muestran: se arreglan en Odoo o en Mercury, desde «Lo que no cuadra». ⛔ Nada de esto escribe en Odoo ni en Mercury.
+ * Desde el 2026-10-18 lo pagado y conciliado con el banco se cobra SOLO cada mañana, después de las copias (job
+ * `lo-pagado-daily`, firmado por el sistema). Acá queda lo que necesita a una persona —cada fila dice por qué— y lo que
+ * todavía no cobró la vuelta de la mañana. Los choques (cobrada en Nexus, impaga allá) solo se muestran: se arreglan en
+ * Odoo o en Mercury, desde «Lo que no cuadra». ⛔ Nada de esto escribe en Odoo ni en Mercury.
  */
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -30,7 +32,8 @@ interface AccionVista extends DeLaCuota {
   numero: string;
   fechaEmision?: string;
   numeroFactura?: string;
-  cobrar?: { fechaCobro: string; deDonde: string };
+  /** `porQueNoSolo` null = el sistema la cobra solo en la vuelta de la mañana; si no, por qué espera a una persona. */
+  cobrar?: { fechaCobro: string; deDonde: string; porQueNoSolo: string | null };
 }
 interface PegadoVisto extends DeLaCuota {
   fuente: "ODOO" | "MERCURY";
@@ -182,8 +185,9 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start gap-3">
         <p className="min-w-0 max-w-3xl flex-[1_1_420px] text-sm text-fg-secondary">
-          Lo que Odoo y Mercury ya dan por facturado o pagado y en Nexus todavía no. Marca lo que ves bien y confírmalo: queda a
-          tu nombre en la bitácora de cada cuenta. Nada se cobra sin tu confirmación, y nada se escribe en Odoo ni en Mercury.
+          Lo que Odoo y Mercury ya dan por facturado o pagado y en Nexus todavía no. Lo pagado y conciliado con el banco se
+          cobra solo cada mañana, después de las copias de las 6:00; acá queda lo que necesita tu mirada, y cada fila dice por
+          qué. Lo que confirmas queda a tu nombre en la bitácora de cada cuenta, y nada se escribe en Odoo ni en Mercury.
         </p>
         <div className="flex shrink-0 items-center gap-2">
           <Button variant="secondary" size="sm" onClick={() => void cargar()} disabled={cargando} title="Vuelve a leer la copia de Odoo y Mercury y el día de cada pago.">
@@ -227,7 +231,7 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
         <>
           <Seccion
             titulo={`Pagadas allá, listas para cobrar · ${paraCobrar.length} · ${plata(paraCobrar)}`}
-            detalle="Odoo las da por pagadas («en proceso de pago» cuenta) o Mercury por «Paid». Quedan cobradas con el día real del pago, nunca con el de hoy. Cobrar también pega la cuota a su factura."
+            detalle="Odoo las da por pagadas («en proceso de pago» cuenta) o Mercury por «Paid». Quedan cobradas con el día real del pago, nunca con el de hoy. Cobrar también pega la cuota a su factura. Las que no dicen por qué esperan, las cobra el sistema en la próxima vuelta de la mañana."
           >
             {paraCobrar.length === 0 ? (
               <p className="px-4 py-3 text-xs text-fg-muted">No hay cuotas pagadas allá que sigan por cobrar.</p>
@@ -239,8 +243,11 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
                 onMarcar={(id, v) => alternar(cobrar, setCobrar, id, v)}
                 onTodas={(v) => setCobrar(v ? new Set(paraCobrar.map((a) => a.cobroId)) : new Set())}
                 ultima={(a) => (
-                  <span title={a.cobrar!.deDonde}>
-                    Cobrada el {fmtFecha(a.cobrar!.fechaCobro)}
+                  <span className="flex flex-col" title={a.cobrar!.deDonde}>
+                    <span>Cobrada el {fmtFecha(a.cobrar!.fechaCobro)}</span>
+                    <span className={`text-xs ${a.cobrar!.porQueNoSolo ? "text-warn-ink" : "text-fg-muted"}`}>
+                      {a.cobrar!.porQueNoSolo ?? "La cobra el sistema en la próxima vuelta de la mañana."}
+                    </span>
                   </span>
                 )}
               />

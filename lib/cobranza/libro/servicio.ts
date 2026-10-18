@@ -6,16 +6,21 @@
  * Odoo y Mercury ya dicen (cuotas que se pegan a su factura, cuotas pagadas allá listas para cobrar, choques) y quien
  * concilia lo confirma con un clic, con SU firma.
  *
- * ⛔ El cobro sin firma de una persona no está autorizado (INV3, INV25): esto nunca corre solo. La firma es el correo de
- * quien aprieta el botón (sale del guard de la ruta, no del cuerpo del pedido), y se escribe SOLO lo que esa persona
- * marcó, con el día del pago que vio (`accionesElegidas`, lib/cobranza/libro/hechos.ts).
+ * Desde el 2026-10-18 lo pagado y conciliado con el banco se cobra SOLO cada mañana (`correrElCobroDelDia`, job
+ * `lo-pagado-daily`), firmado por el sistema. Esta lista queda para lo que no es seguro (Odoo «en proceso de pago», una
+ * entrada de Mercury encontrada solo por el monto…) y para pegar facturas: eso lo confirma una persona, con SU firma, que
+ * sale del guard de la ruta y no del cuerpo del pedido, y se escribe SOLO lo que marcó (`accionesElegidas`).
  * ⛔ Nada de esto escribe en Odoo ni en Mercury: Odoo se lee para saber el día de cada pago.
  */
 import "server-only";
-import { aplicarLoQueDicenOdooYMercury, type ResultadoDelLibro } from "./aplicar";
+import { aplicarLoQueDicenOdooYMercury, cobrarLoPagadoSolo, type ResultadoDelCobroSolo, type ResultadoDelLibro } from "./aplicar";
 import type { SeleccionDelLibro } from "./hechos";
+import { decidirElTurno, estadoDeLaCopia, type Turno } from "./turno";
 import { crearTransporteXmlRpc, configDesdeEntorno } from "@/lib/cobranza/odoo/transporte-xmlrpc";
 import type { OdooTransport } from "@/lib/cobranza/odoo/transporte";
+import { prisma } from "@/lib/db/prisma";
+import { crDateParts } from "@/lib/jobs/time";
+import { motivoApagado } from "@/lib/jobs/requisitos";
 
 /** Cuánto se espera cada respuesta de Odoo cuando la pide una persona (como «Actualizar desde Odoo»). */
 const ESPERA_ODOO_MS = 20_000;
@@ -24,6 +29,31 @@ const ESPERA_ODOO_MS = 20_000;
 function transporteOdoo(): OdooTransport | null {
   if (!process.env.ODOO_PASSWORD) return null;
   return crearTransporteXmlRpc({ ...configDesdeEntorno(), timeoutMs: ESPERA_ODOO_MS });
+}
+
+/**
+ * El cobro solo del día (job `lo-pagado-daily`). Mira si las copias de Odoo y Mercury corrieron bien hoy
+ * (`decidirElTurno`) y, si toca, cobra con las que están al día. `aplicar: false` = el simulacro del mismo cálculo.
+ * Devuelve `resultado: null` si todavía no toca (hay que esperar a una copia).
+ */
+export async function correrElCobroDelDia(
+  now: Date,
+  opciones: { aplicar: boolean; ignorarLaHora?: boolean },
+): Promise<{ turno: Turno; resultado: ResultadoDelCobroSolo | null }> {
+  const { dateKey: hoy, hour } = crDateParts(now);
+  const [odooBuena, mercuryBuena] = await Promise.all([
+    prisma.syncOdooCorrida.findFirst({ where: { ok: true }, orderBy: { iniciadaEn: "desc" }, select: { iniciadaEn: true } }),
+    prisma.syncMercuryCorrida.findFirst({ where: { ok: true }, orderBy: { iniciadaEn: "desc" }, select: { iniciadaEn: true } }),
+  ]);
+  const diaDe = (x: { iniciadaEn: Date } | null) => (x ? crDateParts(x.iniciadaEn).dateKey : null);
+  const turno = decidirElTurno(opciones.ignorarLaHora ? 23 : hour, {
+    ODOO: estadoDeLaCopia(motivoApagado("odoo-espejo-daily", process.env) === null, diaDe(odooBuena), hoy),
+    MERCURY: estadoDeLaCopia(motivoApagado("mercury-espejo-daily", process.env) === null, diaDe(mercuryBuena), hoy),
+  });
+  if (!turno.correr) return { turno, resultado: null };
+  const odoo = turno.fuentes.includes("ODOO") && process.env.ODOO_PASSWORD ? crearTransporteXmlRpc(configDesdeEntorno()) : null;
+  const resultado = await cobrarLoPagadoSolo({ aplicar: opciones.aplicar, hoy, odoo, fuentes: turno.fuentes });
+  return { turno, resultado };
 }
 
 export interface LoPagado extends ResultadoDelLibro {

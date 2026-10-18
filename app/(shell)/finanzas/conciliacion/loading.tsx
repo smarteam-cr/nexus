@@ -10,6 +10,8 @@ import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 export default function ConciliacionLoading() {
   return (
     <div className={`${SHELL_DEFAULT} space-y-4`}>
+      {/* Las pestañas de Conciliación: Conciliación · Odoo · Mercury · Integraciones (2026-10-18). */}
+      <SkeletonTabs count={4} variant="pill" />
       <PageHeaderSkeleton titleWidth="w-40" descWidth="w-[28rem] max-w-full" action />
       <SkeletonTabs count={3} />
       <div className="flex flex-wrap gap-3">
