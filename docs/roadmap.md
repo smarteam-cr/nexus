@@ -16,19 +16,19 @@ está haciendo con él.
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre la versión del 16 oct a las 16:10 (`918e2fdb`). Sana. |
-| Por desplegar | 46 cambios en `main`: las fases 0 y 1 del sistema de trabajo, Odoo y Mercury, las fichas A a H, la revisión de código y la tercera tanda (la semana, Uso de Nexus, el IVA, SmartLoop, la foto del margen y los entregables con plantilla). |
+| Producción | Corre `7d7e92df` desde el 17 oct a las 22:02, hora de Costa Rica. Sana, con el esquema al día. |
+| Por desplegar | Nada: todo lo de `main` está en producción. La lectura de hechos y el corte de cobranza, prendidos. |
 | La base | Tiene todo lo que necesita lo que está en `main`: los SQL ya se aplicaron. |
 | En rojo en producción | Un proyecto en un pipeline sin declarar, un cliente apuntando a una empresa fusionada en HubSpot y el corte de cobranza, que nunca corrió. |
 | Revisión de código | Hecha el 17 oct sobre los 31 cambios de entonces: 57 problemas encontrados, unos 50 corregidos y en `main`. Ninguno mezclaba clientes. |
 
-**Lo siguiente en todo Nexus:** probar en el 3004 y desplegar lo que está en `main`. Los SQL ya están en producción. Prender la lectura de hechos y el corte de cobranza. Después del deploy yo cierro las alertas sueltas, limpio las reuniones con texto de otra y rescato las transcripciones.
+**Lo siguiente en todo Nexus:** validar en producción (pestaña «Lo que validas»). Yo corro lo que va después del deploy: cerrar las alertas sueltas, limpiar las reuniones con texto de otra, rescatar las transcripciones y guardar la primera versión de la escala.
 
 En cada paso: **[hecho]** está en `main`, falta desplegar; **[en curso]** lo está construyendo una sesión ahora.
 
 ## Lo que conecta a los equipos
 
-### Tareas <span class="estado">Por desplegar</span>
+### Tareas <span class="estado">En producción</span>
 
 Todo lo que Smarteam tiene que hacer con un cliente, de cualquier equipo, es una tarea con su cuenta. Por ahora, las tareas de seguimiento de la cuenta; las de configuración (propiedades, pipelines) quedan para después.
 
@@ -37,7 +37,7 @@ Todo lo que Smarteam tiene que hacer con un cliente, de cualquier equipo, es una
 3. [hecho] De cada reunión, Nexus propone hasta 5 tareas por persona, y cada tarea dice de dónde viene: una reunión con el cliente o el sprint interno.
 4. [hecho] «Planifica tu semana», la pantalla de los viernes: la acción y la reunión de la semana por cuenta.
 
-### Inicio («Para ti») <span class="estado">Por desplegar</span>
+### Inicio («Para ti») <span class="estado">En producción</span>
 
 Lo primero que ve cada persona al entrar: lo que importa hoy, sus cuentas y sus reuniones. Un mismo módulo, una página por equipo.
 
@@ -49,7 +49,7 @@ Lo primero que ve cada persona al entrar: lo que importa hoy, sus cuentas y sus 
 6. [hecho] Medir la adopción: qué usa cada equipo y qué se desestima, en «Uso de Nexus».
 7. El correo de la mañana con lo mismo, bien probado antes de mandarlo (espera decidir Gmail o un proveedor).
 
-### Reuniones y memoria <span class="estado">Por desplegar</span>
+### Reuniones y memoria <span class="estado">En producción</span>
 
 Cada reunión se lee una vez y queda como memoria de la cuenta: la usan la ficha, las tareas, los documentos y los agentes.
 
@@ -60,7 +60,7 @@ Cada reunión se lee una vez y queda como memoria de la cuenta: la usan la ficha
 5. [hecho] Cada reunión con su página: su agenda, sus avisos y sus tareas con responsable.
 6. [hecho] Después de cada reunión con un cliente: el correo de seguimiento y la próxima reunión sugerida.
 
-### La escala y los casos de uso <span class="estado">Por desplegar</span>
+### La escala y los casos de uso <span class="estado">En producción</span>
 
 Dónde está cada cliente y qué lo mueve. Es lo que une a Ventas con Customer Success: Ventas la usa para vender y Customer Success para planear cada ciclo.
 
@@ -72,7 +72,7 @@ Dónde está cada cliente y qué lo mueve. Es lo que une a Ventas con Customer S
 6. [hecho] Casos de uso sugeridos, inspirados en la biblioteca de casos de uso (con tu lista de títulos).
 7. Licencias y precio de cada caso de uso.
 
-### El chat de Nexus <span class="estado">Por desplegar</span>
+### El chat de Nexus <span class="estado">En producción</span>
 
 Un solo chat que hace lo mismo que las pantallas, sobre la cuenta en la que estás.
 
@@ -83,7 +83,7 @@ Un solo chat que hace lo mismo que las pantallas, sobre la cuenta en la que est�
 
 ## Por equipo
 
-### Ventas <span class="estado">Por desplegar</span>
+### Ventas <span class="estado">En producción</span>
 
 La preventa, las propuestas y los negocios. Usa el inicio, la escala y la memoria de las reuniones.
 
@@ -92,7 +92,7 @@ La preventa, las propuestas y los negocios. Usa el inicio, la escala y la memori
 3. [hecho] Que la preventa sugiera el siguiente paso: agendar la próxima sesión de exploración y, si ya está agendada, planificarla.
 4. [hecho] En la propuesta, «+IVA» o «IVA incluido» para clientes de Costa Rica, con los cálculos de ahí.
 
-### Customer Success <span class="estado">Por desplegar</span>
+### Customer Success <span class="estado">En producción</span>
 
 Los proyectos, los documentos, la cartera y el servicio recurrente. Usa las tareas, el inicio, la escala y la memoria.
 
@@ -105,7 +105,7 @@ Los proyectos, los documentos, la cartera y el servicio recurrente. Usa las tare
 7. [hecho] Los documentos del proyecto con plantillas (la primera: «Diagnóstico estratégico»), sin tocar los kickoffs y diagnósticos que ya existen.
 8. [hecho] La foto del margen de cada mes, en carga y rentabilidad.
 
-### Finanzas <span class="estado">Por desplegar</span>
+### Finanzas <span class="estado">En producción</span>
 
 Cobranza, planilla, punto de equilibrio y comisiones, cruzados con Odoo y Mercury. Plan: [«Un solo libro financiero»](https://claude.ai/artifact/Gbo7THjPG4GZTa5J8ChQzd).
 
@@ -117,7 +117,7 @@ Cobranza, planilla, punto de equilibrio y comisiones, cruzados con Odoo y Mercur
 6. [hecho] Mercury en la facturación por cliente.
 7. Pagar comisiones con el modelo nuevo (espera las respuestas de Marco).
 
-### Marketing y Desarrollo <span class="estado">Por desplegar</span>
+### Marketing y Desarrollo <span class="estado">En producción</span>
 
 Equipos más internos: trabajan con sus sprints. Usan las tareas y su página de inicio.
 
