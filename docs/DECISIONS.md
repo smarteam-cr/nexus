@@ -5712,9 +5712,8 @@ Design), con la pestaña rehecha para mostrar primero si ya alcanza para calibra
   para contestar): el tiempo lo dice quien lo sabe.
 - **La decisión de contratar queda escrita** (`DecisionFinanzas`, clave `contratacion-AAAA-MM`, una por mes): dirección
   confirma o descarta la propuesta de Nexus, con su motivo (obligatorio para descartar). Sin tabla nueva.
-- **La foto del mes NO se construyó todavía.** Pide una tabla nueva (`FotoMargenCuenta`) y, al aplicarlo,
-  `prisma/schema.prisma` tenía cambios sin subir de otras sesiones: con el modelo adentro, su deploy se revertiría
-  por la salud del esquema. Mientras tanto, el mes a mes de una cuenta se calcula en vivo y lo dice.
+- ~~**La foto del mes NO se construyó todavía.**~~ **Se construyó el 2026-10-17**: ver «La foto del margen de cada
+  mes». Los meses cerrados con foto salen de ella; los que no la tienen se calculan en vivo y lo dicen.
 - **Sin «Lectura del agente»** arriba de cada pantalla: pide un agente con su corrida y su costo (fase 5).
 
 ## Las sesiones de la preventa se encadenan: antes, durante y después (2026-10-07)
@@ -8599,3 +8598,96 @@ que tener su acción de la semana y su reunión agendada.
 - **Costo y topes:** cada turno deja su `AgentRun` y cada llamada su `LlmCall` con `origen = "nexus-chat:<hiloId>"`. 40
   mensajes y US$3 por persona por día, 6 vueltas por turno y 15 cambios por lista.
 - **«Sugerencias» sin IA**: como mucho 5 por cuenta, con el mensaje de WhatsApp listo para copiar. Nexus no envía nada.
+
+## La semana: agenda por cuenta y «Planifica tu semana» (2026-10-17, fase 2)
+
+- **Un solo resolvedor de evento → cuenta** (`cuentaDelEvento`, lib/mi-dia/agenda.ts): un evento cuenta para una cuenta
+  solo si es de UNA empresa (invariante 1). El calendario de cada persona para los próximos 8 días se lee una vez y se
+  guarda dos minutos (lib/mi-dia/calendario-server.ts). Lo usan la regla de servicio, «Próximas reuniones» de la ficha,
+  «Planifica tu semana» y «Agendar». La exploración (lib/exploraciones/agendadas.ts) sigue con su propia regla: pregunta
+  otra cosa (si un evento es con ESTA empresa, por la gente de sus reuniones pasadas).
+- **«Planifica tu semana» va en Tareas** (`/tareas/planificar`), no en «Para ti»: lo que deja son tareas, y es el par de
+  «Revisa tu semana». «Para ti» la ofrece los viernes a CSE, CSL y Desarrollo. Desde el viernes planifica la semana que
+  viene; de lunes a jueves, lo que queda de la actual. Por cuenta: la acción con fecha (la que hay, darle fecha a una
+  abierta o una nueva) y la reunión sugerida en el primer hueco laboral, con su objetivo. Sin IA. La CSL planifica las
+  cuentas que lleva y las que no lleva nadie, como mucho 40. Ajustarla por chat queda para después.
+- **Cada hueco de hoy sugiere con qué avanzar**: la tarea más importante que cabe, con «Ponerla en la agenda».
+- **«Agendar» propone hora en todas las listas**, y si hay varias cuentas, cada una recibe una hora distinta.
+- **Guardar la reunión en Calendar crea la tarea de clase «reunion»** (`planearReunion`, sin duplicar), así la cuenta
+  cuenta como con reunión.
+- **Una reunión cuyo texto cambió retira sus propuestas sin decidir** (`retirarPropuestasDeLaReunion`): quedan vencidas
+  con su motivo, no cuentan para el tope de 5 por persona y liberan su clave (`:retirada:<hora>`) para que la lectura
+  nueva pueda volver a proponerlas. Cierra el pendiente de la ficha C.
+
+## Uso de Nexus: las seis pestañas (2026-10-17)
+
+- **Se suman IA por cliente, Procesos de IA y Conclusiones** a Equipo, Para qué se usa y Reuniones sin grabar. Solo
+  dirección. El gasto de IA se muestra por proceso y por empresa, nunca por persona. Una llamada sin empresa toma la de
+  su corrida o la de la reunión que la disparó; si no, queda en «Sin empresa».
+- **El avance del cronograma que corre después de cada reunión cuenta como «corre solo»**, aunque la lectura la haya
+  pedido una persona.
+- **Un agente sin familia va a «Otros» con su nombre técnico**; una llamada sin agente, a «No se sabe de qué proceso
+  es». Ninguna de las dos se reparte entre los procesos.
+- **Las conclusiones salen de reglas fijas** (`UMBRALES`, lib/uso/conclusiones.ts), sin IA, y con pocos casos no
+  concluyen nada.
+- **Equipo y Para qué se usa dicen qué usa y qué desestima cada equipo**, con «Quién decide» por nombre y por equipo.
+
+## El IVA en la propuesta comercial (2026-10-17)
+
+- **Tres formas, elegidas en la Inversión**: sin IVA (como siempre), «+ IVA (13%)» (los montos van sin impuesto: se
+  suma el IVA y el total con IVA) o «IVA incluido (13%)» (se desglosa la base y el IVA; el total no cambia). La cuenta
+  es pura (lib/landing/iva.ts): 2 decimales, base + IVA = total al centavo, una moneda a la vez; si las monedas se
+  contradicen, no hay total ni IVA.
+- **El IVA va solo en el cierre**, sobre los números que se firman (pago único, por mes, gran total o el subtotal cuando
+  hay un solo grupo). Los renglones siguen diciendo lo que escribió Ventas, y un subtotal que no es el total no lleva
+  desglose: sumar dos desgloses no daría el del total al centavo.
+- **Se ofrece en Costa Rica**: el país sale primero de la cuenta de cobro si alguien la configuró (nace «nacional» por
+  defecto), después de la copia de Partner, después de la preventa (lib/business-cases/pais-del-cliente.ts). Sin saberlo,
+  Ventas lo puede elegir igual, con un aviso. Manda la cuenta de cobro porque es Finanzas quien factura con IVA.
+- **Lo publicado no cambia**: `iva` es presentación (entra a `NO_CONTENIDO`, como `contrato`), y «Sin IVA» lo borra.
+
+## SmartLoop: recomendar la recurrencia y la ruta del servicio (2026-10-17, etapas 6 y 7)
+
+- **La recomendación de pasar a SmartLoop es un tipo más de lo propuesto** (`recomendacion-de-recurrencia`, 30 días):
+  una implementación de CS en «Entrega», o en «Finalizado» hace 60 días o menos, en una cuenta sin un servicio
+  recurrente vivo. Sale en el «Qué sigue» del proyecto y en «Para ti» del CSE encargado. El porqué se arma sin IA (la
+  escala, lo fuera de alcance, los casos de uso y el uso de HubSpot, este último solo para la CSL, dirección y el CSE de
+  la cuenta), y por eso va sin la chispa. La deciden el CSE, la CSL y dirección; lo decidido vive en
+  `RecomendacionDeRecurrencia` (solo `projectId`). Ningún botón escribe en HubSpot.
+- **La ruta del servicio para el cliente es por proyecto** (`/external/ciclos/[acceso]`): con el mismo acceso y
+  contraseña que las otras páginas del cliente y una foto congelada al subirla, como la Entrega. Sin el porqué de los
+  casos, notas, citas ni montos. Por proyecto y no por cuenta: así la dirección nunca muestra otro proyecto.
+- **SmartLoop se da de alta desde Nexus**, y los recordatorios de adopción y la clasificación de la cartera lo cuentan
+  como recurrente. `scripts/migrar-continuidad-a-smartloop.ts` (simulacro por defecto) lista los de «Continuidad» con la
+  etapa que deduce Nexus; la etapa la confirma Customer Success y el cambio de pipeline en HubSpot lo hace una persona.
+
+## La foto del margen de cada mes (2026-10-17, E6)
+
+- **Dos tablas**: `FotoMargenMes` (por mes: la planilla, las horas, el costo de la hora, la versión de los supuestos y
+  el tipo de cambio) y `FotoMargenCuenta` (por cuenta y mes: lo cobrado, las horas por origen, el costo con los tres
+  modos y el margen), todo en dólares. Escritor único: lib/rentabilidad/foto-server.ts, con el mismo cálculo de la
+  pantalla (`cargarRentabilidadDelRango`); escribir el mismo mes dos veces deja lo mismo.
+- **El job `rentabilidad-foto-mensual`** (día 3 ≥ 7:00 CR) no pisa una foto que existe; «Volver a tomar» pide motivo.
+- **Un período de varios meses es la suma de sus meses**: cada mes va al costo de la hora de ese mes. Si ningún mes del
+  período tiene foto, se calcula en vivo en una sola pasada, así que cuando aparece la primera foto los números de un
+  trimestre pueden moverse unos centavos. Rentabilidad sigue sin mostrar el mes en curso.
+- **`FotoMargenCuenta.clientId` va sin FK, a propósito**: es una foto del pasado, como `ResultadoDeSemana`
+  (`SE_QUEDAN_A_PROPOSITO` en la fusión de empresas). Solo dirección (`guardCostosAccess`).
+
+## Entregables con plantilla (2026-10-17, fase 5)
+
+- **El riel en dos grupos**, desde el registro de piezas (`PieceDefinition.clase`): «Herramientas del proyecto»
+  (Resumen arriba, Cronograma, Cuestionarios, Exploración, Ejecución y los canvas que crea el CSE) y «Entregables»
+  (Kickoff, Diagnóstico, Planificación, Integraciones, Entrega). Las herramientas van primero porque el Resumen lo
+  encabeza. En un SmartLoop no cambia: sigue el grupo del ciclo.
+- **El registro de entregables** (lib/entregables/registro.ts, congelado por test) dice qué agente escribe cada uno y
+  qué plantillas tiene. El diagnóstico de hoy es la plantilla «Diagnóstico estratégico»; el documento se sigue llamando
+  Diagnóstico. La plantilla usada queda en el Json del canvas (`__plantilla`), sin columna nueva; sin ella, se lee con
+  la de siempre, así los kickoffs y diagnósticos que existen no se tocan. Sin selector todavía: hoy hay una por
+  entregable.
+- **Una sola función genera cualquier entregable** (`generarEntregable`), con la misma corrida, medidor y permiso que
+  /analyze, que la usa. El kickoff salió de /analyze a lib/canvas/kickoff-generate.ts con el mismo mensaje y la misma
+  forma de guardar.
+- **El chat genera un entregable** con la operación «documento.generar»: queda en la lista y corre solo al aplicarla,
+  con el proyecto verificado contra la cuenta del hilo y el mismo permiso que el botón. Las instrucciones del chat valen
+  solo para esa generación: no pisan las «Instrucciones adicionales» del documento.

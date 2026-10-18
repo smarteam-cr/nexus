@@ -139,6 +139,10 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "ventas",
     motivo: "«Para ti» (interno): cuántas sugerencias esperan y la próxima reunión de las preventas que lleva cada persona.",
   },
+  "lib/business-cases/pais-del-cliente-server.ts": {
+    destino: "ventas",
+    motivo: "La propuesta (interna, el editor de la Inversión): el país que anotó la preventa, para ofrecer el IVA de Costa Rica. Solo lee el país.",
+  },
   "lib/business-cases/mutations.ts": {
     destino: "ventas",
     motivo: "«Para ti»: avisarle a quien lleva la preventa que el cliente aprobó la propuesta. Solo lee el responsable.",

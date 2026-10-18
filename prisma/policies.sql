@@ -400,7 +400,7 @@ BEGIN
   FOREACH t IN ARRAY ARRAY[
     'CasoDeUso', 'CicloDeProyecto', 'CierreDeSemana', 'ClasificacionDeCuenta', 'ConfigCarga', 'ContactoDeHubspot',
     'CorreccionDeSalud', 'EncuestaDeCuenta', 'EncuestaDeTiempo', 'EspacioDeTareas', 'FeedbackMensaje', 'FeedbackPedido',
-    'FeedbackReporte', 'FeedbackTema', 'FuenteDeTareas', 'HechoDeReunion', 'HitoDeDocumento', 'LecturaDeReunion',
+    'FeedbackReporte', 'FeedbackTema', 'FotoMargenCuenta', 'FotoMargenMes', 'FuenteDeTareas', 'HechoDeReunion', 'HitoDeDocumento', 'LecturaDeReunion',
     'MetaComercial', 'MiembroDeEspacio', 'NegocioAbierto', 'NotaDeLaCuenta', 'PlantillaDeTareas', 'PreguntaDeTiempo',
     'PresentacionDeDocumento', 'ProyectoDeTareas', 'RecomendacionDeRecurrencia', 'RespuestaDeCuenta', 'ResultadoDeSemana', 'ReunionIndexada',
     'SiguientePaso', 'Tarea', 'TareaComentario', 'TareaEvento', 'TareaRelacion', 'TareaVinculo', 'TicketDeHubspot',

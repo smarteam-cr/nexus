@@ -151,6 +151,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     motivo:
       "El resumen antes de una reunión AFIRMA cuál fue «la última vez» con el cliente: solo las que ya ocurrieron.",
   },
+  "lib/uso/ia-server.ts": {
+    clase: "plomeria",
+    motivo:
+      "«Uso de Nexus» › IA por cliente: de las reuniones que dispararon una llamada a la IA, solo su dueño " +
+      "(resolvedClientId / manualClientId), para saber de qué empresa fue el gasto. No describe ninguna reunión.",
+  },
   "lib/uso/lectura-server.ts": {
     clase: "contexto",
     motivo:
