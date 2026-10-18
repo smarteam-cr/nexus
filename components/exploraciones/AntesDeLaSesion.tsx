@@ -36,7 +36,10 @@ import { esTarjeta } from "@/lib/exploraciones/marco";
 import { PREGUNTA_DE_CIERRE, siNoSalio } from "@/lib/exploraciones/plan-de-la-guia";
 import { REUNIONES } from "@/lib/exploraciones/sesion";
 import { useLienzo } from "./contexto";
-import { DeQueEs, diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
+import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
+import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
+import { LoQueCubreLaGuia } from "./LoQueCubreLaGuia";
+import { abrirElChatDeNexus } from "@/lib/nexus-chat/constantes";
 import { QueVaPrimero } from "./QueVaPrimero";
 import Segmentos from "./Segmentos";
 import { lineasDe } from "./Resumen";
@@ -465,38 +468,22 @@ function Tramo({ nombre, minutos, children, className }: { nombre: string; minut
   );
 }
 
-function Pregunta({ p, corta, borde }: { p: PreguntaParaMostrar; corta?: boolean; borde?: boolean }) {
-  const [abierta, setAbierta] = useState(false);
-  return (
-    <li className={cn("flex gap-3 py-3.5 first:pt-0 last:pb-0", borde && "border-b border-surface-hover last:border-b-0")}>
-      <EtiquetaDePregunta p={p} />
-      <div className="min-w-0 flex-1">
-        <p className="text-[14.5px] font-semibold leading-[21px] text-fg">{p.pregunta}</p>
-        <DeQueEs p={p} corta={corta} />
-        {p.repreguntas.length > 0 && (
-          <>
-            {abierta && (
-              <div className="mt-2 flex flex-col gap-1 border-l-2 border-line pl-3">
-                <span className="text-xs text-fg-muted">Si responde rápido, profundiza:</span>
-                {p.repreguntas.map((r, i) => (
-                  <span key={i} className="text-[13px] text-fg-secondary">
-                    {r}
-                  </span>
-                ))}
-              </div>
-            )}
-            <button type="button" aria-expanded={abierta} onClick={() => setAbierta((x) => !x)} className="mt-1.5 text-[12.5px] text-brand hover:underline">
-              {abierta ? "Ocultar repreguntas" : `${p.repreguntas.length} ${p.repreguntas.length === 1 ? "repregunta" : "repreguntas"}`}
-            </button>
-          </>
-        )}
-      </div>
-    </li>
-  );
-}
-
 /** Una de las dos columnas de «Por sección». */
-function Columna({ titulo, detalle, preguntas, vacio }: { titulo: string; detalle: string; preguntas: PreguntaParaMostrar[]; vacio: string }) {
+function Columna({
+  titulo,
+  detalle,
+  preguntas,
+  vacio,
+  pestana,
+  editable,
+}: {
+  titulo: string;
+  detalle: string;
+  preguntas: PreguntaParaMostrar[];
+  vacio: string;
+  pestana: PestanaDeSesion;
+  editable: boolean;
+}) {
   return (
     <div className="min-w-0 overflow-hidden rounded-xl border border-line">
       <div className="flex items-baseline gap-2 border-b border-line px-4 py-3">
@@ -506,7 +493,7 @@ function Columna({ titulo, detalle, preguntas, vacio }: { titulo: string; detall
       {preguntas.length ? (
         <ul className="px-4 py-3">
           {preguntas.map((p) => (
-            <Pregunta key={`${p.para}-${p.pregunta}`} p={p} corta borde />
+            <PreguntaDeLaGuia key={p.para} p={p} pestana={pestana} corta borde editable={editable} />
           ))}
         </ul>
       ) : (
@@ -517,7 +504,10 @@ function Columna({ titulo, detalle, preguntas, vacio }: { titulo: string; detall
 }
 
 function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
-  const { exp, escala, marco, chequeo } = useLienzo();
+  const { exp, escala, marco, chequeo, puedeEditar, conAsistente } = useLienzo();
+  const temas = useTemasDeLaGuia();
+  // Cambiar la guía (regenerar, editar, quitar, sumar) es de la próxima sesión: la de una que ya pasó queda como se armó.
+  const editable = esLaProxima && puedeEditar;
   const enProyecto = marco.clave === "cs";
   const { guia, preguntas, enOrden } = useGuiaDeLaSesion(pestana, esLaProxima);
   const [vista, setVista] = useState<Vista>("orden");
@@ -531,8 +521,9 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
   const deDimensiones = preguntas.filter((p) => ladoDeLaPregunta(p) === "dimension");
   // Lo vendido (solo en un proyecto): sus preguntas las escribe el agente al armar la guía.
   const deLoVendido = preguntas.filter((p) => ladoDeLaPregunta(p) === "vendido");
-  // Solo lo llevado que todavía no se sabe a qué apunta (se llevó después de armar la guía).
-  const sueltas = preguntas.filter((p) => ladoDeLaPregunta(p) === null);
+  // Solo lo llevado que todavía no se sabe a qué apunta (se llevó después de armar la guía), y las tuyas sin tema.
+  const sueltas = preguntas.filter((p) => ladoDeLaPregunta(p) === null && p.tipo !== "propia");
+  const tuyasSinTema = preguntas.filter((p) => ladoDeLaPregunta(p) === null && p.tipo === "propia");
   const faltan = marco.tarjetas.filter((c) => lineasDe(c, e.contenido.casillas[c]).length === 0).length;
   const donde = enProyecto ? "en el panel de la derecha" : "en «La escala»";
   // Siempre cierra con la pregunta de cierre y el siguiente paso, y pide lo que falta para proponer que no salió.
@@ -554,6 +545,22 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
           {DURACION_DE_LA_SESION} min · {preguntas.length} {preguntas.length === 1 ? "pregunta" : "preguntas"}
         </span>
         <span className="flex-1" />
+        {editable && conAsistente && (
+          <button
+            type="button"
+            data-recorrido="preventa.sesion.asistente"
+            onClick={() =>
+              abrirElChatDeNexus({
+                chip: { tipo: "guia", id: exp.id, etiqueta: `la guía de la sesión ${pestana.numero}` },
+                texto: "",
+              })
+            }
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-fg hover:bg-surface-hover"
+          >
+            <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
+            Mejorar con el asistente
+          </button>
+        )}
         <Segmentos
           etiqueta="Cómo ver las preguntas"
           opciones={[
@@ -595,7 +602,7 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
           {enOrden.length ? (
             <ol>
               {enOrden.map((p) => (
-                <Pregunta key={`${p.para}-${p.pregunta}`} p={p} borde />
+                <PreguntaDeLaGuia key={p.para} p={p} pestana={pestana} borde editable={editable} />
               ))}
             </ol>
           ) : (
@@ -605,6 +612,8 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
                 : `${enProyecto ? "La estrategia está completa" : "El marco está completo"} y las dimensiones en juego tienen evidencia: esta sesión confirma y profundiza.`}
             </p>
           )}
+          {editable && <AgregarPregunta pestana={pestana} temas={temas} />}
+          {editable && <Quitadas pestana={pestana} />}
         </Tramo>
       ) : (
         <div className="space-y-4 px-[18px] py-4">
@@ -614,7 +623,17 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
               <p className="mb-2 text-xs text-fg-muted">Lo llevaste de otra sesión después de armar la guía: al actualizarla, cada punto va a su sección.</p>
               <ul>
                 {sueltas.map((p) => (
-                  <Pregunta key={p.para} p={p} borde />
+                  <PreguntaDeLaGuia key={p.para} p={p} pestana={pestana} borde editable={editable} />
+                ))}
+              </ul>
+            </div>
+          )}
+          {tuyasSinTema.length > 0 && (
+            <div className="rounded-xl border border-line px-4 py-3">
+              <p className="mb-2 text-[13px] font-semibold text-fg">Tuyas, sin tema</p>
+              <ul>
+                {tuyasSinTema.map((p) => (
+                  <PreguntaDeLaGuia key={p.para} p={p} pestana={pestana} borde editable={editable} />
                 ))}
               </ul>
             </div>
@@ -624,12 +643,16 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
               titulo={marco.nombre}
               detalle={faltan > 0 ? `faltan ${faltan} de ${marco.tarjetas.length}` : "completa"}
               preguntas={deTarjetas}
+              pestana={pestana}
+              editable={editable}
               vacio={enProyecto ? "La estrategia está completa: no falta nada por preguntar." : "El marco está completo: no falta nada por preguntar."}
             />
             <Columna
               titulo="Escala de rendimiento"
               detalle={[areasEnJuego.join(" · "), deDimensiones.length ? `${deDimensiones.length} sin evidencia` : ""].filter(Boolean).join(" · ")}
               preguntas={deDimensiones}
+              pestana={pestana}
+              editable={editable}
               vacio={e.areas.length === 0 ? `Elige las áreas en juego ${donde} para saber qué dimensiones preguntar.` : "Todas las dimensiones en juego ya tienen evidencia."}
             />
             {enProyecto && (
@@ -637,10 +660,14 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
                 titulo="Lo vendido"
                 detalle={deLoVendido.length ? `${deLoVendido.length} ${deLoVendido.length === 1 ? "pieza" : "piezas"} del alcance` : ""}
                 preguntas={deLoVendido}
+                pestana={pestana}
+                editable={editable}
                 vacio={guia ? "La guía no trajo preguntas de lo vendido: actualízala para que las arme desde el handoff." : "Arma la guía: pregunta por cada pieza de lo vendido, desde el handoff."}
               />
             )}
           </div>
+          {editable && <AgregarPregunta pestana={pestana} temas={temas} />}
+          {editable && <Quitadas pestana={pestana} />}
         </div>
       )}
 
@@ -720,6 +747,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
       {esLaProxima && <LoQueTraes pestana={pestana} />}
       {esLaProxima && <LoQueYaSabemos pestana={pestana} />}
       <LaGuia pestana={pestana} esLaProxima={esLaProxima} />
+      <LoQueCubreLaGuia pestana={pestana} esLaProxima={esLaProxima} />
       <RetosDeLaIndustria pestana={pestana} esLaProxima={esLaProxima} />
       {conTest && pestana.numero === 1 && (
         <details className="rounded-xl border border-line bg-surface">

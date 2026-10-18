@@ -124,6 +124,7 @@ export default function LienzoDeExploracion({
   infoDeLaEmpresa,
   piezaInicial,
   proyecto,
+  conAsistente = false,
 }: {
   inicial: ExploracionParaLaPantalla;
   escala: EscalaDelLienzo;
@@ -135,6 +136,8 @@ export default function LienzoDeExploracion({
   piezaInicial?: string | null;
   /** La exploración de un proyecto, dentro de la ficha del cliente (ver arriba). */
   proyecto?: EnElProyecto;
+  /** El chat de la cuenta está en la pantalla: la guía ofrece «Mejorar con el asistente» (validación 71). */
+  conAsistente?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -361,6 +364,7 @@ export default function LienzoDeExploracion({
     escalaAnterior,
     puedeEditar,
     puedeProponer: puedeEditar && puedeProponer,
+    conAsistente: puedeEditar && conAsistente,
     guardando,
     cambiar,
     recargar,

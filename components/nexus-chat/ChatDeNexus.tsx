@@ -14,7 +14,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { AcuerdoDelChat, ResultadoDeAplicar, RotulosDelChat } from "@/components/asistente/ChatDelAsistente";
+import type { AcuerdoDelChat, ChipDelChat, ResultadoDeAplicar, RotulosDelChat } from "@/components/asistente/ChatDelAsistente";
 import { useFeedback } from "@/components/feedback/FeedbackProvider";
 import { usePanelFlotante } from "@/components/ui/usePanelFlotante";
 import { useToast } from "@/components/ui/Toast";
@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/Button";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { zClass } from "@/lib/ui/z";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
-import { PIEZA_NEXUS } from "@/lib/nexus-chat/constantes";
+import { EVENTO_ABRIR_EL_CHAT, PIEZA_NEXUS, type PedidoDeAbrirElChat } from "@/lib/nexus-chat/constantes";
 import { avisoDelChat, textoDelBoton } from "@/lib/nexus-chat/textos";
 import type { AccionSugerida } from "@/lib/nexus-chat/acciones";
 
@@ -43,7 +43,11 @@ interface Resumen {
   uso: { linea: string };
 }
 
-export function ChatDeNexus({ clientId, nombre }: { clientId: string; nombre: string }) {
+/**
+ * `sinSugerencias`: en la preventa (validación 71) el chat se monta para «Mejorar con el asistente» de la guía, sin el
+ * botón «Sugerencias» (lo que te toca en la cuenta se ve en su ficha).
+ */
+export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clientId: string; nombre: string; sinSugerencias?: boolean }) {
   const router = useRouter();
   const feedback = useFeedback();
   const toast = useToast();
@@ -54,6 +58,7 @@ export function ChatDeNexus({ clientId, nombre }: { clientId: string; nombre: st
   const [pedidoDeFoco, setPedidoDeFoco] = useState(0);
   const [ancho, setAncho] = useState<"normal" | "amplio">("normal");
   const [resumen, setResumen] = useState<Resumen | null>(null);
+  const [chip, setChip] = useState<ChipDelChat | null>(null);
   const { abierto: panelAbierto, alternar: alternarPanel, pos, rootRef, btnRef, panelRef } = usePanelFlotante({ side: "bottom", align: "end", selectorDeItems: "button, a" });
 
   const cargarResumen = useCallback(async () => {
@@ -62,6 +67,7 @@ export function ChatDeNexus({ clientId, nombre }: { clientId: string; nombre: st
   }, [base]);
 
   useEffect(() => {
+    if (sinSugerencias) return;
     let vivo = true;
     fetch(`${base}/resumen`)
       .then((r) => (r.ok ? (r.json() as Promise<Resumen>) : null))
@@ -72,7 +78,7 @@ export function ChatDeNexus({ clientId, nombre }: { clientId: string; nombre: st
     return () => {
       vivo = false;
     };
-  }, [base]);
+  }, [base, sinSugerencias]);
 
   const abrir = useCallback(
     (texto?: string) => {
@@ -86,6 +92,17 @@ export function ChatDeNexus({ clientId, nombre }: { clientId: string; nombre: st
     },
     [feedback, cargarResumen],
   );
+
+  // Abrir desde otra parte de la pantalla (la guía de una exploración: «Mejorar con el asistente»).
+  useEffect(() => {
+    const alPedir = (e: Event) => {
+      const p = (e as CustomEvent<PedidoDeAbrirElChat>).detail ?? {};
+      setChip(p.chip ? { tipo: p.chip.tipo, id: p.chip.id, etiqueta: p.chip.etiqueta } : null);
+      abrir(p.texto);
+    };
+    window.addEventListener(EVENTO_ABRIR_EL_CHAT, alPedir);
+    return () => window.removeEventListener(EVENTO_ABRIR_EL_CHAT, alPedir);
+  }, [abrir]);
 
   // Y al revés: abrir el Feedback cierra el chat (se mira el cambio durante el render, sin un efecto).
   const feedbackAbierto = feedback?.abierto ?? false;
@@ -128,7 +145,7 @@ export function ChatDeNexus({ clientId, nombre }: { clientId: string; nombre: st
 
   return (
     <>
-      <div ref={rootRef} className="flex-shrink-0">
+      {!sinSugerencias && <div ref={rootRef} className="flex-shrink-0">
         <Button
           ref={btnRef}
           type="button"
@@ -202,7 +219,7 @@ export function ChatDeNexus({ clientId, nombre }: { clientId: string; nombre: st
             <p className="text-2xs text-fg-muted">Nexus no envía mensajes: los copias y los mandas tú.</p>
           </div>
         )}
-      </div>
+      </div>}
       <button
         type="button"
         onClick={() => (abierto ? setAbierto(false) : abrir())}
@@ -233,6 +250,8 @@ export function ChatDeNexus({ clientId, nombre }: { clientId: string; nombre: st
           onAncho={() => setAncho((a) => (a === "amplio" ? "normal" : "amplio"))}
           borrador={borrador}
           pedidoDeFoco={pedidoDeFoco}
+          chip={chip}
+          onSoltarChip={() => setChip(null)}
         />
       ) : null}
     </>

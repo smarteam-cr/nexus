@@ -22,6 +22,8 @@ interface Respuesta {
   exploracion: ExploracionParaLaPantalla | null;
   escala: EscalaDelLienzo | null;
   puedeEditar: boolean;
+  /** Puede conversar con el chat de la cuenta: la guía ofrece «Mejorar con el asistente». */
+  conAsistente?: boolean;
   error?: string;
 }
 
@@ -88,6 +90,7 @@ export default function ExploracionDelProyecto({
       escala={r.escala}
       puedeEditar={r.puedeEditar}
       puedeProponer={false}
+      conAsistente={!!r.conAsistente}
       proyecto={{
         slotDelPanel,
         slotDeSesiones,

@@ -122,6 +122,22 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   },
   "app/api/clients/[id]/analyze/route.ts": { destino: "handoff-interno", motivo: "El bloque de la exploración en el handoff de Customer Success." },
   "app/api/projects/[projectId]/exploracion-de-venta/route.ts": { destino: "handoff-interno", motivo: "La cuarta columna del contexto del handoff." },
+  "app/api/sales/exploraciones/[id]/guia/pregunta/route.ts": {
+    destino: "ventas",
+    motivo: "«Regenerar» una pregunta de la guía de la próxima sesión (validación 69): pantalla interna del vendedor.",
+  },
+  "lib/operaciones/guia-server.ts": {
+    destino: "ventas",
+    motivo: "El asistente de la guía (validación 71): leer la guía de la próxima sesión y proponer cambios. Chat interno; nada llega al cliente.",
+  },
+  "lib/operaciones/contexto-server.ts": {
+    destino: "ventas",
+    motivo: "Reconoce el error de un cambio a la guía (ErrorDeLaGuia) para darle su mensaje a la persona. No lee ninguna exploración.",
+  },
+  "lib/nexus-chat/turno-server.ts": {
+    destino: "ventas",
+    motivo: "El chat de la cuenta abierto desde la guía: suma la guía de la próxima sesión al mensaje de ese turno. Chat interno.",
+  },
   "lib/sessions/post-process.ts": { destino: "disparo", motivo: "Lanza la lectura automática de una reunión; no lee contenido." },
   "lib/sessions/post-process-viejo.ts": {
     destino: "disparo",

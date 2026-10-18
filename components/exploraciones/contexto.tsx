@@ -62,6 +62,8 @@ export interface Lienzo {
   puedeEditar: boolean;
   /** Armar y enlazar la propuesta comercial es de Ventas (`ventas.write`); Customer Success trabaja la preventa sin eso. */
   puedeProponer: boolean;
+  /** El chat de la cuenta está en la pantalla y quien mira puede usarlo: «Mejorar con el asistente» en la guía. */
+  conAsistente: boolean;
   guardando: boolean;
   cambiar: (ops: Operacion[], opciones?: OpcionesDeCambio) => Promise<boolean>;
   /** Vuelve a pedir la exploración (el agente terminó y dejó propuestas nuevas). Sale en la misma

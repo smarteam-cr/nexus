@@ -17,6 +17,7 @@ import { definicionEnElMarco, esTarjeta, MARCO_DE_VENTA, type ClaveDeMarco, type
 import { esFuenteDeHipotesis, type EstadoDeExploracion, type ItemPropuesto } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { leerGuia } from "./esquemas";
+import { sinCitaAdelante } from "./ajustes-de-la-guia";
 import {
   focoDeLaGuia,
   huecosDelResumen,
@@ -175,7 +176,7 @@ export function herramientaDeLaGuia(ctx: ContextoDeLaGuia): Anthropic.Messages.T
               pregunta: {
                 type: "string",
                 description: ctx.plan
-                  ? "Corta (25 palabras como mucho), tuteando al cliente, en el paso que se indica. Si parte de algo que el cliente ya dijo, nombra ESO con sus palabras y pregunta lo que sigue; nunca le pidas que lo vuelva a contar."
+                  ? "SOLO la pregunta: corta (20 palabras como mucho), tuteando al cliente, en el paso que se indica. Sin repetir lo que dijo el cliente ni decir de dónde sale (eso lo ve el vendedor aparte): nada de «Dijiste que…», «En el diagnóstico…» ni citas. Nunca le pidas que lo vuelva a contar."
                   : "Abierta, en lenguaje llano, tuteando al cliente.",
               },
               repreguntas: {
@@ -310,9 +311,9 @@ Reglas:
 - Primero lo que viene de antes: lo que el vendedor se llevó de una sesión anterior (A1, A2…) y lo que quedó sin preguntar porque una sesión se cortó. Cada punto llevado va en una pregunta (la de la tarjeta o la dimensión a la que apunta) con su «abierto», y en «ubicacion» dices a qué tarjeta o dimensión apunta cada uno, aunque ninguna pregunta lo retome; si la sesión anterior se cortó, la apertura lo dice en una frase.
 - LO QUE YA SABEMOS es lo que el cliente ya respondió (en el diagnóstico, en una nota, en una reunión). NUNCA lo vuelvas a preguntar ni le pidas que lo cuente de nuevo: parte de ahí y pregunta lo que sigue. Si un tema ya tiene dato (por ejemplo, para cuándo lo necesita), no hay pregunta de ese tema.
 - Cada pregunta tiene su PASO de la siguiente pregunta lógica: situación (cómo pasa hoy), impacto (cuánto le afecta y le cuesta), solución (cómo lo quiere resolver, qué ya intentó), cuándo, con qué (quién decide y con qué presupuesto). Escribe la del paso que se indica, y nada más.
-- Escribe como la nota del diagnóstico que deja HubSpot: corta, con las palabras del cliente y directo a lo que le duele. Así:
-  · Lo que marcó: «El vendedor está solo: el seguimiento es de un solo canal y los deals que se enfrían mueren sin que nadie reaccione.» Paso impacto. Bien: «Dijiste que los deals que se enfrían mueren sin que nadie reaccione. ¿Cuántos se les fueron así este año, más o menos?» Mal: «¿Qué pasa cuando un deal se queda quieto?» (ya lo dijo).
-  · Lo que marcó: «El CRM se usa en lo básico con carga manual y adopción desigual: unos lo usan y otros siguen con sus hojas.» Paso impacto. Bien: «Si unos llevan el CRM y otros sus hojas, ¿cuántas horas a la semana se van en juntar y validar los números?» Mal: «¿Cómo usa el equipo el CRM hoy?»
+- Cada pregunta es SOLO la pregunta: corta, directa a lo que le duele, sin repetir lo que dijo el cliente ni decir de dónde sale. Lo que dijo el vendedor ya lo tiene a la vista, al lado de la pregunta. Así:
+  · Lo que marcó: «El vendedor está solo: el seguimiento es de un solo canal y los deals que se enfrían mueren sin que nadie reaccione.» Paso impacto. Bien: «¿Cuántos negocios se les fueron así este año, más o menos?» Mal: «Dijiste que los deals que se enfrían mueren… ¿Cuántos…?» (repite lo que dijo) y «¿Qué pasa cuando un deal se queda quieto?» (ya lo dijo).
+  · Lo que marcó: «El CRM se usa en lo básico con carga manual y adopción desigual: unos lo usan y otros siguen con sus hojas.» Paso impacto. Bien: «¿Cuántas horas a la semana se van en juntar y validar los números?» Mal: «¿Cómo usa el equipo el CRM hoy?»
   · Lo que marcó: «Priorizamos por intuición o listas estáticas.» Paso solución. Bien: «¿Cómo te gustaría decidir a qué oportunidad dedicarle el tiempo?»
 - Nada de licencias, usuarios, precios, demos ni funciones de HubSpot: eso es vender antes de diagnosticar.
 - Una pregunta por cada cosa en «para», en ese orden, y nada más.
@@ -442,7 +443,9 @@ export function leerLaGuiaDelAgente(respuesta: Anthropic.Messages.Message, ctx: 
   const preguntas: PreguntaDeLaGuia[] = [];
   for (const p of Array.isArray(input.preguntas) ? input.preguntas : []) {
     if (!esObjeto(p) || typeof p.para !== "string" || !permitidos.has(p.para) || vistos.has(p.para)) continue;
-    const pregunta = textoLimpio(p.pregunta, 400);
+    // Sin la cita adelante (validación 69): lo que dijo el cliente se ve en el ⓘ de la pregunta, con su fuente.
+    const leida = textoLimpio(p.pregunta, 400);
+    const pregunta = leida ? sinCitaAdelante(leida) : null;
     if (!pregunta) continue;
     const repreguntas = (Array.isArray(p.repreguntas) ? p.repreguntas : [])
       .map((r) => textoLimpio(r, 300))

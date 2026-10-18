@@ -91,6 +91,8 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
     case "agregarSesion":
     case "quitarSesiones":
     case "fuera":
+    // Un cambio a la guía de una sesión se aplica sobre sus ajustes de ahora (suma, cambia o quita UNA pregunta).
+    case "ajustarGuia":
       // Agregan, quitan o sacan una por una (la repetida no se agrega dos veces): no pisan lo que hizo otro.
       return true;
     case "evento":

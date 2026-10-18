@@ -77,6 +77,17 @@ import {
   type SesionPlaneada,
 } from "./guia";
 import { PASOS_DE_LA_PREGUNTA } from "./plan-de-la-guia";
+import {
+  LARGO_DE_UNA_CLAVE,
+  LARGO_DE_UNA_PREGUNTA,
+  LARGO_DE_UNA_REPREGUNTA,
+  MAX_CAMBIOS_DE_LA_GUIA,
+  MAX_PREGUNTAS_PROPIAS,
+  MAX_REPREGUNTAS,
+  ORIGENES_DEL_AJUSTE,
+  type AjustesDeLaGuia,
+  type CambioDeLaGuia,
+} from "./ajustes-de-la-guia";
 import { MAX_CLAVE_DE_NOTA } from "./notas-de-sesion";
 import { MAX_ASUNTO_DEL_CORREO, MAX_CUERPO_DEL_CORREO, MAX_DESTINATARIOS } from "./correo-de-seguimiento";
 
@@ -322,6 +333,44 @@ export const EventoDeLaSesionSchema: z.ZodType<EventoDeLaSesion> = z.object({
   revisadoEn: FECHA_ISO.optional(),
 });
 
+// ── Los ajustes de la guía de una sesión (ajustes-de-la-guia.ts) ──────────────
+
+const PREGUNTA_DEL_AJUSTE = z.string().trim().min(1).max(LARGO_DE_UNA_PREGUNTA);
+const REPREGUNTAS_DEL_AJUSTE = z.array(z.string().trim().min(1).max(LARGO_DE_UNA_REPREGUNTA)).max(MAX_REPREGUNTAS);
+const CLAVE_DE_PREGUNTA = z.string().min(1).max(LARGO_DE_UNA_CLAVE);
+const TEMA_DE_PREGUNTA = z.string().min(1).max(40);
+const PreguntaPropiaSchema = z.object({
+  id: z.string().regex(/^p[a-z0-9]{1,24}$/),
+  pregunta: PREGUNTA_DEL_AJUSTE,
+  repreguntas: REPREGUNTAS_DEL_AJUSTE,
+  para: TEMA_DE_PREGUNTA.optional(),
+  origen: z.enum(["tuya", "asistente"]),
+});
+export const AjustesDeLaGuiaSchema: z.ZodType<AjustesDeLaGuia> = z.object({
+  propias: z.array(PreguntaPropiaSchema).max(MAX_PREGUNTAS_PROPIAS).optional(),
+  cambios: z
+    .record(
+      CLAVE_DE_PREGUNTA,
+      z.object({ pregunta: PREGUNTA_DEL_AJUSTE.optional(), repreguntas: REPREGUNTAS_DEL_AJUSTE.optional(), origen: z.enum(ORIGENES_DEL_AJUSTE) }),
+    )
+    .refine((r) => Object.keys(r).length <= MAX_CAMBIOS_DE_LA_GUIA)
+    .optional(),
+  quitadas: z.array(CLAVE_DE_PREGUNTA).max(MAX_CAMBIOS_DE_LA_GUIA).optional(),
+});
+export const CambioDeLaGuiaSchema: z.ZodType<CambioDeLaGuia> = z.discriminatedUnion("tipo", [
+  z.object({ tipo: z.literal("agregar"), pregunta: PreguntaPropiaSchema }),
+  z.object({
+    tipo: z.literal("cambiar"),
+    clave: CLAVE_DE_PREGUNTA,
+    pregunta: PREGUNTA_DEL_AJUSTE.optional(),
+    repreguntas: REPREGUNTAS_DEL_AJUSTE.optional(),
+    origen: z.enum(ORIGENES_DEL_AJUSTE),
+    para: TEMA_DE_PREGUNTA.nullable().optional(),
+  }),
+  z.object({ tipo: z.literal("quitar"), clave: CLAVE_DE_PREGUNTA }),
+  z.object({ tipo: z.literal("restaurar"), clave: CLAVE_DE_PREGUNTA }),
+]);
+
 /** Una sesión planeada por el vendedor (lib/exploraciones/guia.ts). */
 export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
   id: z.string().regex(/^s-[a-z0-9]{1,24}$/),
@@ -347,6 +396,7 @@ export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
   resultado: z.enum(RESULTADOS_DE_LA_SESION).optional(),
   pasaron: z.array(z.string().min(1).max(40)).max(20).optional(),
   hechas: z.array(z.string().min(1).max(40)).max(30).optional(),
+  ajustesDeLaGuia: AjustesDeLaGuiaSchema.optional(),
 });
 
 export const OperacionSchema = z.discriminatedUnion("op", [
@@ -361,6 +411,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("nota"), paso: z.string().min(1).max(MAX_CLAVE_DE_NOTA), texto: z.string().max(4000) }),
   z.object({ op: z.literal("sesiones"), sesiones: z.array(SesionPlaneadaSchema).max(MAX_SESIONES) }),
   z.object({ op: z.literal("agregarSesion"), sesion: SesionPlaneadaSchema }),
+  z.object({ op: z.literal("ajustarGuia"), sesionId: z.string().regex(/^s-[a-z0-9]{1,24}$/), cambio: CambioDeLaGuiaSchema }),
   z.object({ op: z.literal("quitarSesiones"), ids: z.array(z.string().regex(/^s-[a-z0-9]{1,24}$/)).min(1).max(MAX_SESIONES) }),
   z.object({ op: z.literal("fuera"), claves: z.array(CLAVE_DE_REUNION).min(1).max(50), fuera: z.boolean() }),
   z.object({
@@ -500,17 +551,19 @@ const listaDeTextos = (raw: unknown, max: number): string[] =>
   Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string" && x.length <= 200).slice(-max) : [];
 
 /**
- * Una sesión guardada. Si lo único que no tiene la forma es su evento del calendario, se pierde solo el
- * evento (antes la sesión desaparecía entera, con su objetivo y lo que se llevó).
+ * Una sesión guardada. Si lo que no tiene la forma es su evento del calendario o los ajustes de su guía, se pierde solo
+ * eso (antes la sesión desaparecía entera, con su objetivo y lo que se llevó).
  */
 function leerSesion(raw: unknown): SesionPlaneada | null {
   const r = SesionPlaneadaSchema.safeParse(raw);
   if (r.success) return r.data;
-  if (!esObjeto(raw) || raw.evento === undefined) return null;
-  const { evento: _evento, ...sinEvento } = raw;
-  void _evento;
-  const sin = SesionPlaneadaSchema.safeParse(sinEvento);
-  return sin.success ? sin.data : null;
+  if (!esObjeto(raw)) return null;
+  for (const sacar of [["evento"], ["ajustesDeLaGuia"], ["evento", "ajustesDeLaGuia"]] as const) {
+    if (!sacar.every((k) => raw[k] !== undefined)) continue;
+    const sin = SesionPlaneadaSchema.safeParse(Object.fromEntries(Object.entries(raw).filter(([k]) => !(sacar as readonly string[]).includes(k))));
+    if (sin.success) return sin.data;
+  }
+  return null;
 }
 
 /** Lee el JSON guardado. Lo que no tiene la forma queda afuera; nunca tira. */

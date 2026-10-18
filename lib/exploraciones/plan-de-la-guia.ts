@@ -18,7 +18,7 @@ import { LETRAS } from "@/lib/escala/documento/tipos";
 import { metaEnCifras, type ClaveDeCasilla, type Meta, type Persona } from "./casillas";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import type { ContextoDelPlan, GuiaDeLaSesion, PosicionParaLaGuia, SesionPlaneada } from "./guia";
-import { fuentesDistintas, loQueYaSabemos, type DatoDelCliente, type EntradaDelSaber, type OrigenDelDato, type SaberDelCliente } from "./lo-que-ya-sabemos";
+import { fuentesDistintas, loQueYaSabemos, type DatoDelCliente, type EntradaDelSaber, type SaberDelCliente } from "./lo-que-ya-sabemos";
 
 export const PASOS_DE_LA_PREGUNTA = ["situacion", "impacto", "solucion", "cuando", "conQue"] as const;
 export type PasoDeLaPregunta = (typeof PASOS_DE_LA_PREGUNTA)[number];
@@ -259,37 +259,24 @@ export function repiteLoSabido(pregunta: string, p: Pick<PreguntaPlaneada, "para
   return comparte;
 }
 
-/** Cómo se presenta lo que ya dijo, según de dónde salió. */
-const COMO_LO_DIJO: Record<OrigenDelDato, string> = {
-  test: "En el diagnóstico marcaron",
-  nota: "En el diagnóstico dijeron",
-  reunion: "En la reunión dijeron",
-  documento: "Quedó anotado",
-  proyecto: "Ya nos contaron",
-  portal: "En su HubSpot se ve",
-  resumen: "Ya nos contaron",
-};
-
-/** La pregunta de cada paso, cuando parte de lo que dijo el cliente. */
-const PREGUNTA_DEL_PASO: Record<Exclude<PasoDeLaPregunta, "situacion">, string> = {
-  impacto: "¿Cuánto les ha costado eso en los últimos meses: en negocios, en horas o en clientes?",
+/**
+ * La pregunta de cada paso, cuando parte de lo que dijo el cliente. Corta y sin su cita (validación 69, 2026-10-18): lo
+ * que dijo va en el ⓘ de la pregunta, con su fuente, y el tema en la línea de abajo.
+ */
+export const PREGUNTA_DEL_PASO: Record<Exclude<PasoDeLaPregunta, "situacion">, string> = {
+  impacto: "¿Cuánto les ha costado esto en los últimos meses: en negocios, en horas o en clientes?",
   solucion: "¿Cómo te gustaría que funcione, y qué han intentado hasta ahora?",
   cuando: "¿Para cuándo necesitan tenerlo resuelto?",
   conQue: "¿Con qué cuentan para resolverlo: quién decide y con qué presupuesto?",
 };
 
-const LARGO_DE_LA_CITA = 160;
-
 /**
- * La pregunta que arma el código cuando el agente no escribió una que sirva: parte de las palabras del cliente y
- * pregunta el paso que toca («En el diagnóstico marcaron: «…». ¿Cuánto les ha costado eso…?»). Sin nada dicho, la
- * pregunta de base del tema.
+ * La pregunta que arma el código cuando el agente no escribió una que sirva: la del paso que toca, sin repetir lo que
+ * dijo el cliente (eso va en el ⓘ). Sin nada dicho, o en situación, la pregunta de base del tema.
  */
 export function preguntaDeRespaldo(p: PreguntaPlaneada, base: string): string {
   if (!p.motivo || p.paso === "situacion") return base;
-  const cita = p.motivo.texto.replace(/[.\s]+$/, "");
-  const corta = cita.length > LARGO_DE_LA_CITA ? `${cita.slice(0, LARGO_DE_LA_CITA - 1).trimEnd()}…` : cita;
-  return `${COMO_LO_DIJO[p.motivo.origen]}: «${corta}». ${PREGUNTA_DEL_PASO[p.paso]}`;
+  return PREGUNTA_DEL_PASO[p.paso];
 }
 
 // ── El cierre ─────────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import { notFound, redirect } from "next/navigation";
 import { Alert } from "@/components/ui";
 import ElegirResponsable from "@/components/exploraciones/ElegirResponsable";
 import LienzoDeExploracion from "@/components/exploraciones/LienzoDeExploracion";
+import { ChatDeNexus } from "@/components/nexus-chat/ChatDeNexus";
 import { AccionDeCabecera, CabeceraDeFicha, ChipHubspot } from "@/components/layout/CabeceraDeFicha";
 import { can } from "@/lib/auth/permissions/engine";
 import { requireInternalUser } from "@/lib/auth/supabase";
@@ -54,6 +55,8 @@ export default async function ExploracionPage({
   const puedeEditar = await can(ctx.teamMember, "preventa", "write");
   // Customer Success trabaja la preventa; armar la propuesta comercial sigue siendo de Ventas.
   const puedeProponer = await can(ctx.teamMember, "ventas", "write");
+  // «Mejorar con el asistente» de la guía es el chat de la cuenta (validación 71): se monta acá, sin «Sugerencias».
+  const puedeChat = await can(ctx.teamMember, "asistente", "read").catch(() => false);
 
   const lectura = await leerExploracion(id);
   if (lectura.estado === "no-existe") notFound();
@@ -112,6 +115,7 @@ export default async function ExploracionPage({
                 />
               </span>
             </span>
+            {puedeChat && <ChatDeNexus clientId={exp.empresa.clientId} nombre={exp.empresa.nombre} sinSugerencias />}
             {exp.empresa.kind === "CLIENTE" && (
               <AccionDeCabecera href={`/clients/${exp.empresa.clientId}`} title="La ficha del cliente, con sus proyectos">
                 Ver ficha del cliente
@@ -145,6 +149,7 @@ export default async function ExploracionPage({
             escala={escalaDeLaExploracion(escala.general, exp.estado)}
             puedeEditar={puedeEditar && !exp.estado.archivada}
             puedeProponer={puedeProponer}
+            conAsistente={puedeChat}
             infoDeLaEmpresa={infoDeLaEmpresa}
             piezaInicial={pieza ?? null}
           />

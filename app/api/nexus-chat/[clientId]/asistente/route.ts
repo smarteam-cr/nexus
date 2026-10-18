@@ -21,9 +21,11 @@ import { usoDeHoy } from "@/lib/nexus-chat/uso-server";
 import { decidirTope, textoDelTope } from "@/lib/nexus-chat/textos";
 
 const piezaSchema = z.literal(PIEZA_NEXUS).optional();
-/* El cajón también manda `seccion` y `chip` (los otros chats los usan): acá se ignoran. */
+/* El cajón también manda `seccion` (los otros chats la usan): acá se ignora. El `chip` de tipo «guia» (validación 71,
+   2026-10-18) dice que la persona abrió el chat desde la guía de una exploración: el turno suma esa guía al mensaje. */
+const chipSchema = z.object({ tipo: z.string().max(20), id: z.string().max(60) }).optional();
 const bodySchema = z.union([
-  z.object({ pieza: piezaSchema, mensaje: z.string().trim().min(1).max(4_000) }).passthrough(),
+  z.object({ pieza: piezaSchema, mensaje: z.string().trim().min(1).max(4_000), chip: chipSchema }).passthrough(),
   z.object({ pieza: piezaSchema, empezarDeCero: z.literal(true) }),
 ]);
 
@@ -67,7 +69,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cli
     if (tope) return NextResponse.json({ error: textoDelTope(tope) }, { status: 429 });
 
     const hilo = await abrirHilo(pedido);
-    const { acuerdo, costoUsd } = await correrTurnoDeNexus(hilo, parsed.data.mensaje, q);
+    const chip = "chip" in parsed.data ? parsed.data.chip : undefined;
+    const foco = chip?.tipo === "guia" ? { tipo: "guia" as const, exploracionId: chip.id } : undefined;
+    const { acuerdo, costoUsd } = await correrTurnoDeNexus(hilo, parsed.data.mensaje, q, new Date(), foco);
     return NextResponse.json({ ...vista(await hiloVivo(pedido)), acuerdo, costoUsd });
   } catch (e) {
     /* El turno de la persona no se guarda si el modelo falló: un turno colgado se reenviaría como contexto. */

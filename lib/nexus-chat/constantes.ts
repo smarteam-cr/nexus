@@ -9,6 +9,24 @@
  */
 export const PIEZA_NEXUS = "nexus";
 
+/**
+ * Abrir el chat de la cuenta desde otra parte de la pantalla (la guía de una exploración: «Mejorar con el asistente»,
+ * validación 71). Se manda como evento del navegador para no atar la guía al cajón; lo escucha components/nexus-chat.
+ */
+export const EVENTO_ABRIR_EL_CHAT = "nexus-chat:abrir";
+
+export interface PedidoDeAbrirElChat {
+  /** Lo que se señala: la guía de una exploración (`id` = la exploración). */
+  chip?: { tipo: "guia"; id: string; etiqueta: string };
+  /** Llena el campo sin mandarlo. */
+  texto?: string;
+}
+
+/** Abre el chat de la cuenta (si está montado en la pantalla). */
+export function abrirElChatDeNexus(p: PedidoDeAbrirElChat): void {
+  window.dispatchEvent(new CustomEvent<PedidoDeAbrirElChat>(EVENTO_ABRIR_EL_CHAT, { detail: p }));
+}
+
 /** El agente, para verlo aparte en /integrations/gasto-ia. Cada turno deja su `AgentRun` con este slug. */
 export const SLUG_DEL_CHAT_DE_NEXUS = "nexus-chat";
 

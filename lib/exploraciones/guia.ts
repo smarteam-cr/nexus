@@ -32,6 +32,7 @@ import { aFecha, hoyEnCostaRica } from "./fechas";
 import { coincideConElEvento, HORAS_ESPERANDO_LA_TRANSCRIPCION, mismaReunion } from "./lectura";
 import type { SaberDelCliente } from "./lo-que-ya-sabemos";
 import { planDeLaGuia, preguntaDeRespaldo, repiteLoSabido, type PasoDeLaPregunta, type PreguntaPlaneada } from "./plan-de-la-guia";
+import { sinCitaAdelante, type AjustesDeLaGuia, type OrigenDelAjuste } from "./ajustes-de-la-guia";
 
 // ── Las sesiones ──────────────────────────────────────────────────────────────
 
@@ -109,6 +110,11 @@ export interface SesionPlaneada {
   pasaron?: string[];
   /** Las preguntas que el vendedor marcó hechas durante la reunión (a qué apuntan: `metas`, `1.3`). */
   hechas?: string[];
+  /**
+   * Lo que el vendedor decidió sobre la guía de esta sesión (2026-10-18, ajustes-de-la-guia.ts): sus preguntas, las de
+   * la guía que reescribió o sacó. Vive acá (lo de las personas) y no en la guía: sobrevive a «Actualizar la guía».
+   */
+  ajustesDeLaGuia?: AjustesDeLaGuia;
 }
 
 /** Hasta cuántas sesiones tiene una exploración (subió de 12 a 20 en la etapa A: ahora se materializan más). */
@@ -938,9 +944,12 @@ export function textoDeLaProcedencia(p: Procedencia): string {
 }
 
 export interface PreguntaParaMostrar {
-  /** A qué apunta: una tarjeta, una dimensión o, para un punto llevado que ninguna pregunta retoma, `abierto:<n>`. */
+  /**
+   * A qué apunta: una tarjeta, una dimensión, para un punto llevado que ninguna pregunta retoma `abierto:<n>`, y para una
+   * pregunta que sumó el vendedor `propia:<id>`.
+   */
   para: string;
-  tipo: "tarjeta" | "dimension" | "vendido" | "abierto";
+  tipo: "tarjeta" | "dimension" | "vendido" | "abierto" | "propia";
   pregunta: string;
   /** Para una pregunta de lo vendido: la pieza del alcance a la que apunta. */
   tema?: string;
@@ -955,13 +964,22 @@ export interface PreguntaParaMostrar {
   apunta?: { tipo: "tarjeta" | "dimension"; para: string };
   /** El paso que pregunta (solo en la guía de la preventa con plan). */
   paso?: PasoDeLaPregunta;
-  /** Lo que ya dijo el cliente y de donde parte la pregunta. */
+  /** Lo que ya dijo el cliente y de donde parte la pregunta (va en el ⓘ, no en la pregunta). */
   motivo?: { texto: string; de: string };
+  /** Quién la escribió, si no es la guía: una propia («tuya», «asistente») o una de la guía cambiada. */
+  marca?: OrigenDelAjuste;
+  /** Es una pregunta de la guía que el vendedor cambió: se puede devolver a la de la guía. */
+  cambiada?: boolean;
 }
 
 /** De qué lado está una pregunta: el marco, la escala, lo vendido o ninguno (un punto llevado sin ubicar). */
 export function ladoDeLaPregunta(p: Pick<PreguntaParaMostrar, "tipo" | "apunta">): "tarjeta" | "dimension" | "vendido" | null {
-  return p.tipo === "abierto" ? (p.apunta?.tipo ?? null) : p.tipo;
+  return p.tipo === "abierto" || p.tipo === "propia" ? (p.apunta?.tipo ?? null) : p.tipo;
+}
+
+/** El tema de una pregunta (`metas`, `1.7`) o null si no tiene uno: un punto llevado sin ubicar o una propia sin tema. */
+export function temaDeLaPregunta(p: Pick<PreguntaParaMostrar, "tipo" | "para" | "apunta">): string | null {
+  return p.tipo === "abierto" || p.tipo === "propia" ? (p.apunta?.para ?? null) : p.para;
 }
 
 /**
@@ -1046,7 +1064,7 @@ export function preguntasParaMostrar(
           : pasoDe
             ? { tipo: "paso", numero: pasoDe }
             : undefined;
-        out.push({ para, tipo, pregunta: p.pregunta, repreguntas: p.repreguntas, ...(procedencia ? { procedencia } : {}) });
+        out.push({ para, tipo, pregunta: sinCitaAdelante(p.pregunta), repreguntas: p.repreguntas, ...(procedencia ? { procedencia } : {}) });
       }
     } else if (base) {
       out.push({ para, tipo, pregunta: base, repreguntas: [], ...(pasoDe ? { procedencia: { tipo: "paso" as const, numero: pasoDe } } : {}) });
@@ -1065,7 +1083,8 @@ export function preguntasParaMostrar(
         : pasoDe
           ? { tipo: "paso", numero: pasoDe }
           : undefined;
-      const pregunta = delAgente?.pregunta ?? preguntaDeRespaldo(pl, base);
+      // Sin la cita adelante (validación 69): lo que dijo el cliente va en el ⓘ, con su fuente.
+      const pregunta = delAgente ? sinCitaAdelante(delAgente.pregunta) : preguntaDeRespaldo(pl, base);
       if (!pregunta) continue;
       out.push({
         para: pl.para,
@@ -1082,7 +1101,7 @@ export function preguntasParaMostrar(
     for (const d of enfoque) armar(d, "dimension", preguntaDeLaDimension(d));
   }
   // Lo vendido (solo en un proyecto): una pregunta por pieza del alcance, como la escribió el agente.
-  for (const v of guia?.loVendido ?? []) out.push({ para: v.id, tipo: "vendido", pregunta: v.pregunta, repreguntas: v.repreguntas, tema: v.tema });
+  for (const v of guia?.loVendido ?? []) out.push({ para: v.id, tipo: "vendido", pregunta: sinCitaAdelante(v.pregunta), repreguntas: v.repreguntas, tema: v.tema });
   // Lo llevado que ninguna pregunta retoma va igual, como su propia pregunta: no se pierde.
   for (const [t, numero] of procedencias.abiertos) {
     if (retomados.has(t)) continue;
@@ -1138,7 +1157,8 @@ export function ordenDeLaConversacion(preguntas: readonly PreguntaParaMostrar[])
       if (vendido[i]) out.push(vendido[i]);
       if (dimensiones[i]) out.push(dimensiones[i]);
     }
-    return out;
+    // Las que sumó el vendedor, al final de su grupo.
+    return [...out, ...lista.filter((p) => p.tipo === "propia")];
   };
   const medio = preguntas.filter((p) => !alFinal(p));
   return [...intercalar(medio.filter((p) => p.procedencia)), ...intercalar(medio.filter((p) => !p.procedencia)), ...preguntas.filter(alFinal)];

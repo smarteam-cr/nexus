@@ -34,6 +34,12 @@ export const COMO_SE_ACOTA: Readonly<Record<string, ComoSeAcota>> = {
   "siguiente-paso.fijar": "objeto",
   // Lleva `clientId` y el proyecto se verifica contra él al preparar y al aplicar (lib/operaciones/documentos-server.ts).
   "documento.generar": "cuenta",
+  // La guía de la próxima sesión: llevan `clientId` y la exploración se verifica contra él (lib/operaciones/guia-server.ts).
+  "guia.leer": "cuenta",
+  "guia.pregunta.agregar": "cuenta",
+  "guia.pregunta.cambiar": "cuenta",
+  "guia.pregunta.quitar": "cuenta",
+  "guia.repregunta.cambiar": "cuenta",
   // Las lecturas propias del chat (./lecturas-server.ts).
   "cuenta.memoria": "cuenta",
   "proyecto.memoria": "cuenta",

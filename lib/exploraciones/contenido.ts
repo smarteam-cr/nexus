@@ -20,6 +20,7 @@
 import type { Cierre, Despues, Letra } from "@/lib/escala/documento/tipos";
 import { aFecha, hoyEnCostaRica } from "./fechas";
 import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
+import { aplicarCambioDeLaGuia, hayAjustes, type CambioDeLaGuia } from "./ajustes-de-la-guia";
 import {
   definicionDe,
   esDeLista,
@@ -810,6 +811,11 @@ export type Operacion =
    * Si su reunión estaba en «Fuera de la exploración», sale de ahí.
    */
   | { op: "agregarSesion"; sesion: SesionPlaneada }
+  /**
+   * Cambiar la guía de una sesión (2026-10-18, ajustes-de-la-guia.ts): sumar, cambiar, quitar o devolver una pregunta.
+   * Si la sesión todavía no existe (la próxima sin planear), se crea con ese id, como al escribir su objetivo.
+   */
+  | { op: "ajustarGuia"; sesionId: string; cambio: CambioDeLaGuia }
   /** Quitar sesiones por su id. En un prospecto, la pantalla suma `fuera` con su reunión en el mismo pedido. */
   | { op: "quitarSesiones"; ids: string[] }
   /** Sacar (o devolver) reuniones de la exploración de un prospecto, por su clave `origen:id`. */
@@ -1020,6 +1026,18 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       // Su reunión deja de estar «Fuera de la exploración»: ahora es una sesión.
       const sale = new Set([s.reunion ? `${s.reunion.origen}:${s.reunion.id}` : "", s.evento ? `meet:gmeet_${s.evento.id}` : ""].filter(Boolean));
       return { ok: true, estado: { ...estado, contenido: { ...c, sesiones: [...c.sesiones, s], fuera: c.fuera.filter((k) => !sale.has(k)) } } };
+    }
+    case "ajustarGuia": {
+      const i = c.sesiones.findIndex((s) => s.id === op.sesionId);
+      if (i < 0 && c.sesiones.length >= MAX_SESIONES) return { ok: false, error: `Ya hay ${MAX_SESIONES} sesiones: quita una antes de agregar otra.` };
+      const sesion: SesionPlaneada = i < 0 ? { id: op.sesionId } : c.sesiones[i];
+      const r = aplicarCambioDeLaGuia(sesion.ajustesDeLaGuia, op.cambio);
+      if (!r.ok) return { ok: false, error: r.error };
+      const { ajustesDeLaGuia: _antes, ...sinAjustes } = sesion;
+      void _antes;
+      const nueva: SesionPlaneada = hayAjustes(r.ajustes) ? { ...sinAjustes, ajustesDeLaGuia: r.ajustes } : sinAjustes;
+      const sesiones = i < 0 ? [...c.sesiones, nueva] : c.sesiones.map((s, k) => (k === i ? nueva : s));
+      return { ok: true, estado: { ...estado, contenido: { ...c, sesiones } } };
     }
     case "quitarSesiones": {
       const ids = new Set(op.ids);

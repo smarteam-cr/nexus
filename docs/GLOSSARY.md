@@ -331,6 +331,13 @@
   (el vendedor la marcó para llevar) o **«Pasó de la sesión N»** (esa sesión se cortó). Una sesión sin
   conversación pregunta qué pasó: otro canal, se cortó o no se hizo. Ver DECISIONS §Las sesiones de la preventa y
   §La exploración son sus sesiones.
+- **Ajustes de la guía** (`SesionPlaneada.ajustesDeLaGuia`, lib/exploraciones/ajustes-de-la-guia.ts, desde el
+  2026-10-18): lo que el vendedor decidió sobre la guía de una sesión: sus preguntas (**tuyas** o del asistente), las de
+  la guía que cambió o regeneró y las que quitó. Viven en la sesión y se quedan aunque se actualice la guía. **Regenerar
+  pregunta** cambia solo una, por otra del mismo tema y paso. **Mejorar con el asistente** abre el chat de Nexus de la
+  cuenta con la guía de la sesión: propone cambios a la guía y se aplican con un clic.
+- **Lo que cubre la guía** (Preparación de una sesión, desde el 2026-10-18): qué de lo que falta para proponer pregunta
+  la guía, y qué dimensiones de la escala; cambia al instante con cada ajuste.
 - **Fuera de la exploración**: lo que se sacó de las sesiones (en un prospecto) o lo que se leyó o se eligió antes y no
   es sesión (en un cliente o un proyecto). Va plegado en la página de inicio. No se borra, y se vuelve sesión con un
   clic.

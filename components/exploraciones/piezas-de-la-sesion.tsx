@@ -27,6 +27,7 @@ import {
 } from "@/lib/exploraciones/guia";
 import type { EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { contextoDelPlan, QUE_BUSCA_CADA_PASO } from "@/lib/exploraciones/plan-de-la-guia";
+import { aplicarAjustes, apuntaDelTema } from "@/lib/exploraciones/ajustes-de-la-guia";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
 import { NivelChip } from "./QueVaPrimero";
 import { nuevoIdDeSesion, useSesiones } from "./useSesiones";
@@ -111,11 +112,13 @@ export function useGuiaDeLaSesion(pestana: PestanaDeSesion, esLaProxima: boolean
   const { foco, saber } = useFocoDeLaGuia(pestana.sesion?.id ?? null);
   const procedencias = procedenciasDeLaSesion(pestana, todas);
   const conPlan = foco.plan && saber ? { plan: foco.plan, saber } : undefined;
-  const preguntas: PreguntaParaMostrar[] = esLaProxima
+  const deLaGuia: PreguntaParaMostrar[] = esLaProxima
     ? preguntasParaMostrar(guia, foco.huecos, foco.enfoque, escala, procedencias, marco, conPlan)
     : guia
       ? preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, procedencias, marco)
       : [];
+  // Lo que decidió el vendedor sobre la guía de esta sesión (sus preguntas, las cambiadas, las quitadas): validación 71.
+  const preguntas = aplicarAjustes(deLaGuia, pestana.sesion?.ajustesDeLaGuia, apuntaDelTema(escala));
   return { guia, foco, saber, procedencias, preguntas, enOrden: ordenDeLaConversacion(preguntas) };
 }
 
@@ -130,6 +133,14 @@ export function EtiquetaDePregunta({ p }: { p: PreguntaParaMostrar }) {
   const lado = ladoDeLaPregunta(p);
   const para = p.apunta?.para ?? p.para;
   const base = "flex h-[26px] min-w-[26px] flex-none items-center justify-center rounded-[7px] px-1 text-[11px] font-bold";
+  // Una pregunta tuya sin tema: un «+» neutro.
+  if (!lado && p.tipo === "propia") {
+    return (
+      <span className={cn(base, "bg-surface-hover text-fg-secondary")} title="Pregunta que sumaste, sin tema" aria-hidden="true">
+        +
+      </span>
+    );
+  }
   if (!lado) {
     return (
       <span className={cn(base, "bg-surface-hover text-fg-secondary")} title="Viene de una sesión anterior: actualiza la guía para ubicarla" aria-hidden="true">
@@ -153,6 +164,12 @@ export function EtiquetaDePregunta({ p }: { p: PreguntaParaMostrar }) {
       {letra}
     </span>
   );
+}
+
+/** Quién escribió una pregunta que no es la de la guía: «Tuya», «Del asistente» o «Regenerada» (neutro: no pide nada). */
+export function ChipDeLaMarca({ marca, cambiada }: { marca: NonNullable<PreguntaParaMostrar["marca"]>; cambiada: boolean }) {
+  const texto = marca === "tuya" ? (cambiada ? "Editada por ti" : "Tuya") : marca === "asistente" ? (cambiada ? "Cambiada por el asistente" : "Del asistente") : "Regenerada";
+  return <span className="rounded-full border border-line bg-surface-muted px-2 py-px text-[11.5px] text-fg-secondary">{texto}</span>;
 }
 
 /** «Quedó abierto en la sesión 1» / «Pasó de la sesión 2»: ámbar, porque pide atención. */
@@ -201,7 +218,7 @@ export function DeQueEs({ p, corta = false, conProcedencia = true }: { p: Pregun
       {que}
       {p.paso && p.paso !== "situacion" && <span className="text-xs text-fg-muted">· {QUE_BUSCA_CADA_PASO[p.paso]}</span>}
       {conProcedencia && p.procedencia && <ChipDeProcedencia procedencia={p.procedencia} />}
-      {p.motivo && !corta && <span className="basis-full text-xs text-fg-muted">Parte de lo que ya dijo: {p.motivo.de}</span>}
+      {p.marca && <ChipDeLaMarca marca={p.marca} cambiada={!!p.cambiada} />}
       {p.tipo === "abierto" && p.contexto && <span className="basis-full text-xs text-fg-muted">Se dijo: {p.contexto}</span>}
     </div>
   );

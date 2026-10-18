@@ -7,7 +7,8 @@
  * persona antes de aplicarse.
  *
  * Primera tanda: Tareas, las notas de la cuenta y el siguiente paso. Desde el 2026-10-17, generar un entregable del
- * proyecto con su plantilla (./documentos-server.ts).
+ * proyecto con su plantilla (./documentos-server.ts). Desde el 2026-10-18, la guía de la próxima sesión de una
+ * exploración (./guia-server.ts: leerla y agregar, cambiar o quitar preguntas y repreguntas).
  */
 import "server-only";
 import type { TeamMember } from "@prisma/client";
@@ -16,6 +17,7 @@ import { aplicarOperaciones, leerOperacion, prepararOperaciones, type OperacionP
 import { herramientaDe } from "./herramientas";
 import { CREAR_NOTA, LEER_NOTAS_DE_LA_CUENTA } from "./notas-server";
 import { GENERAR_DOCUMENTO } from "./documentos-server";
+import { AGREGAR_PREGUNTA, CAMBIAR_PREGUNTA, CAMBIAR_REPREGUNTA, LEER_GUIA, QUITAR_PREGUNTA } from "./guia-server";
 import { FIJAR_SIGUIENTE_PASO, LEER_SIGUIENTES_PASOS } from "./siguiente-paso-server";
 import { CAMBIAR_ESTADO_DE_TAREA, CREAR_TAREA, LEER_TAREAS_DE_LA_CUENTA, MOVER_TAREA_DE_SEMANA } from "./tareas-server";
 import type { Operacion } from "./tipos";
@@ -25,6 +27,7 @@ export const OPERACIONES: readonly Operacion<ContextoDeNexus>[] = [
   LEER_TAREAS_DE_LA_CUENTA,
   LEER_NOTAS_DE_LA_CUENTA,
   LEER_SIGUIENTES_PASOS,
+  LEER_GUIA,
   // Proponen.
   CREAR_TAREA,
   CAMBIAR_ESTADO_DE_TAREA,
@@ -32,6 +35,11 @@ export const OPERACIONES: readonly Operacion<ContextoDeNexus>[] = [
   CREAR_NOTA,
   FIJAR_SIGUIENTE_PASO,
   GENERAR_DOCUMENTO,
+  // La guía de la próxima sesión de una exploración (validación 71, 2026-10-18): ./guia-server.ts.
+  AGREGAR_PREGUNTA,
+  CAMBIAR_PREGUNTA,
+  QUITAR_PREGUNTA,
+  CAMBIAR_REPREGUNTA,
 ];
 
 /** Las herramientas para el modelo (fase 4). */
