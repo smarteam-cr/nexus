@@ -316,6 +316,9 @@ export interface WebInvestmentData {
   nota: string; // exclusiones ("impuestos no contemplados") — badge arriba
   /** "anual" = las líneas recurrentes se cotizan por año (switch de la tabla). */
   contrato?: string;
+  /** IVA de Costa Rica: "mas" = los montos son sin impuesto · "incluido" = ya lo traen ·
+   *  ausente = no se dice nada (lib/landing/iva.ts). Presentación, como `contrato`. */
+  iva?: string;
   /** Ancho de la card de recurrente mensual — "ancho" ocupa 2 columnas del grid. */
   anchoRecurrente?: "normal" | "ancho";
   // ── Shape v1 de HubSpot: se LEE para la rama legacy y nunca se escribe (patrón
@@ -453,6 +456,12 @@ export interface LandingContext {
      * el cliente.
      */
     inversion?: import("@/lib/landing/inversion").InversionData | null;
+    /**
+     * ¿El cliente es de Costa Rica? (2026-10-17, lib/business-cases/pais-del-cliente.ts). Decide si
+     * el editor de la Inversión ofrece el IVA. SOLO lo arma el editor: en la propuesta publicada y
+     * en el PDF el control no existe y el modo viaja dentro del `data` (`iva`).
+     */
+    pais?: import("@/lib/business-cases/pais-del-cliente").PaisDelCliente | null;
   };
   /**
    * Solo el DIAGNÓSTICO (2026-10-02): lo que una sección necesita de OTRA del mismo documento, o de

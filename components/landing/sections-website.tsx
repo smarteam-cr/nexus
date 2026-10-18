@@ -43,6 +43,57 @@ import {
   montoDeLinea,
   type Contrato,
 } from "@/lib/landing/inversion";
+import { ivaDelCierre, modoIvaDe, TASA_IVA_CR, type DesgloseIva, type ModoIva } from "@/lib/landing/iva";
+import { NOMBRE_DE_LA_FUENTE, type PaisDelCliente } from "@/lib/business-cases/pais-del-cliente";
+
+/** El rótulo de un total con su IVA: «Total servicios + IVA» · «Pago único · IVA incluido». */
+function conIva(rotulo: string, modo: ModoIva, lang: LandingLang): string {
+  if (modo === "mas") return `${rotulo} ${t(lang, "masIva")}`;
+  if (modo === "incluido") return `${rotulo} · ${t(lang, "ivaIncluido")}`;
+  return rotulo;
+}
+
+/**
+ * El desglose del IVA debajo de un total que se firma (lib/landing/iva.ts). Va como una fila que
+ * ocupa las DOS columnas de la rejilla del total (`grid-column: 1 / -1`): como tercer hijo suelto
+ * se llevaría una celda y descentraría la píldora. Lo mismo en pantalla, en el link del cliente y
+ * en el PDF: no tiene un solo control.
+ */
+function DesgloseDelIva({ desglose, lang, moneda }: { desglose: DesgloseIva; lang: LandingLang; moneda: string }) {
+  const ivaRotulo = `${t(lang, "iva")} (${desglose.tasa}%)`;
+  const filas: Array<[string, string, boolean]> =
+    desglose.modo === "mas"
+      ? [
+          [ivaRotulo, formatRango(desglose.iva, moneda), false],
+          [t(lang, "totalConIva"), formatRango(desglose.total, moneda), true],
+        ]
+      : [
+          [t(lang, "montoSinIva"), formatRango(desglose.base, moneda), false],
+          [ivaRotulo, formatRango(desglose.iva, moneda), false],
+        ];
+  return (
+    <div className="stl-inv-iva">
+      {filas.map(([rotulo, monto, fuerte]) => (
+        <div key={rotulo} className={`stl-inv-iva-fila${fuerte ? " stl-inv-iva-fila--total" : ""}`}>
+          <span>{rotulo}</span>
+          <span className="stl-inv-iva-monto">{monto}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** El aviso del editor sobre el país del cliente, o null si no hay nada que decir. */
+function avisoDelPais(pais: PaisDelCliente | null | undefined, modo: ModoIva): string | null {
+  if (!pais || pais.costaRica === null) {
+    return "No sabemos si el cliente es de Costa Rica: el IVA del 13% aplica solo allá. Revísalo antes de elegirlo.";
+  }
+  if (pais.costaRica === false && modo !== "sin") {
+    const fuente = pais.fuente ? NOMBRE_DE_LA_FUENTE[pais.fuente] : "Nexus";
+    return `Según ${fuente}, el cliente no es de Costa Rica${pais.pais ? ` (${pais.pais})` : ""}: revisa si lleva IVA.`;
+  }
+  return null;
+}
 
 /* ── 2) Dos columnas: una lista a la izquierda + un panel oscuro de consecuencias ──────
    Nació para la propuesta de sitio web —izquierda "Retos actuales", derecha "Por qué
@@ -344,7 +395,7 @@ const CURRENCIES = ["USD", "CRC", "MXN", "COP", "PEN", "CLP", "GTQ", "DOP", "EUR
 /** Una tabla de líneas con su cierre. La usan los DOS grupos — servicios y licencias. */
 function GrupoTabla({
   grupo, lang, moneda, editable, chip, rotuloTotal, destacado, pendientes, asistente, avisoLinea, onSet,
-  contrato, pdf, onToggle,
+  contrato, pdf, onToggle, desglose,
 }: {
   grupo: GrupoInversion;
   lang: LandingLang;
@@ -359,6 +410,8 @@ function GrupoTabla({
   onToggle?: (i: number, prender: boolean) => void;
   chip: string;
   rotuloTotal: string;
+  /** El IVA de este subtotal, cuando ES el total de la sección (`ivaDelCierre`). */
+  desglose?: DesgloseIva | null;
   /** true = este subtotal ES el total de la sección (un solo grupo) → píldora. */
   destacado: boolean;
   /** Cuántas líneas quedaron FUERA del número que este bloque muestra. Con `destacado` son
@@ -617,6 +670,7 @@ function GrupoTabla({
             <div className="stl-inv-sum-amount">
               <span className="stl-inv-total-pill">{formatRango(grupo.total, moneda)}</span>
             </div>
+            {desglose && <DesgloseDelIva desglose={desglose} lang={lang} moneda={moneda} />}
           </div>
         )}
       </div>
@@ -682,6 +736,24 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
   const rot = (k: keyof InvestLabels, fallback: LandingStringKey) => t(lang, sectionInvest?.[k] ?? fallback);
   const hayLicencias = (d.licencias ?? []).length > 0;
 
+  /* El IVA de Costa Rica (lib/landing/iva.ts). Sin la key `iva` —todo lo publicado— el modo es
+     `sin` y nada de lo de abajo cambia un píxel. El modo viaja en el `data`, así que el link del
+     cliente y el PDF lo leen igual que el editor; el PAÍS solo lo tiene el editor. */
+  const modoIva = modoIvaDe(d);
+  const cierreIva = ivaDelCierre(g, modoIva);
+  const rotIva = (r: string) => conIva(r, modoIva, lang);
+  const pais = ctx.propuesta?.pais;
+  // Se ofrece salvo que se SEPA que el cliente no es de Costa Rica; si ya se eligió, sigue a la
+  // vista para poder sacarlo.
+  const ofrecerIva = editable && (pais?.costaRica !== false || modoIva !== "sin");
+  const avisoIva = editable ? avisoDelPais(pais, modoIva) : null;
+  const leyendaIva =
+    modoIva === "mas"
+      ? `${t(lang, "montosMasIva")} (+ ${TASA_IVA_CR}%)`
+      : modoIva === "incluido"
+        ? `${t(lang, "montosIvaIncluido")} (${TASA_IVA_CR}%)`
+        : "";
+
   /* Los Hubs vendidos llegan por el canal del documento y SOLO existen en el editor
      (`BusinessCaseWorkspace` los arma leyendo la sección `solucion` del mismo canvas). En las
      otras 3 superficies el array es vacío ⇒ nada de esto se pinta ni se calcula: no es un flag
@@ -725,7 +797,7 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
 
   return (
     <div className="stl-inv">
-      {(d.moneda || editable) && (
+      {(d.moneda || editable || leyendaIva) && (
         <div className="stl-inv-bar">
           {editable ? (
             <label className="stl-inv-currency stl-inv-currency--edit">
@@ -742,8 +814,25 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
               </select>
             </label>
           ) : (
-            <span className="stl-inv-currency">{`${t(lang, "montosEn")} ${d.moneda}`}</span>
+            d.moneda && <span className="stl-inv-currency">{`${t(lang, "montosEn")} ${d.moneda}`}</span>
           )}
+          {/* El control del IVA, solo en el editor. "Sin IVA" BORRA la key: lo que no la trae se
+              ve exactamente como antes de que existiera este control. */}
+          {ofrecerIva && (
+            <label className="stl-inv-currency stl-inv-currency--edit">
+              IVA
+              <select
+                value={modoIva}
+                onChange={(e) => set({ iva: e.target.value === "sin" ? undefined : e.target.value })}
+              >
+                <option value="sin">Sin IVA</option>
+                <option value="mas">{`+ IVA (${TASA_IVA_CR}%): los montos no lo traen`}</option>
+                <option value="incluido">{`IVA incluido (${TASA_IVA_CR}%): los montos ya lo traen`}</option>
+              </select>
+            </label>
+          )}
+          {!editable && leyendaIva && <span className="stl-inv-currency">{leyendaIva}</span>}
+          {avisoIva && <span className="stl-inv-iva-aviso">⚠ {avisoIva}</span>}
         </div>
       )}
 
@@ -774,7 +863,8 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
       <GrupoTabla
         grupo={g.servicios} lang={lang} moneda={moneda} editable={editable}
         chip={rot("servicios", "inversionServicios")}
-        rotuloTotal={rot("totalServicios", "totalServicios")}
+        rotuloTotal={rotIva(rot("totalServicios", "totalServicios"))}
+        desglose={cierreIva.lineas}
         destacado={unSoloGrupo}
         pendientes={unSoloGrupo ? g.pendientesTotales : g.servicios.pendientes}
         contrato={contrato}
@@ -787,7 +877,8 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
         <GrupoTabla
           grupo={g.licencias} lang={lang} moneda={moneda} editable={editable}
           chip={rot("licencias", "inversionLicencias")}
-          rotuloTotal={rot("totalLicencias", "totalLicencias")}
+          rotuloTotal={rotIva(rot("totalLicencias", "totalLicencias"))}
+          desglose={cierreIva.licencias}
           destacado={unSoloGrupo}
           pendientes={unSoloGrupo ? g.pendientesTotales : g.licencias.pendientes}
           contrato={contrato}
@@ -822,16 +913,17 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
               texto pelado al lado de una píldora, y eso lo leía como un dato secundario. */}
           {g.unico && (
             <div className="stl-inv-sum stl-inv-sum--total stl-inv-sum--par">
-              <div className="stl-inv-sum-label">{t(lang, "pagoUnico")}</div>
+              <div className="stl-inv-sum-label">{rotIva(t(lang, "pagoUnico"))}</div>
               <div className="stl-inv-sum-amount">
                 <span className="stl-inv-total-pill">{formatRango(g.unico, moneda)}</span>
               </div>
+              {cierreIva.unico && <DesgloseDelIva desglose={cierreIva.unico} lang={lang} moneda={moneda} />}
             </div>
           )}
           {g.recurrente && (
             <div className="stl-inv-sum stl-inv-sum--total stl-inv-sum--par">
               <div className="stl-inv-sum-label">
-                {t(lang, contrato === "anual" ? "porAno" : "porMes")}
+                {rotIva(t(lang, contrato === "anual" ? "porAno" : "porMes"))}
                 {g.pendientesTotales > 0 && (
                   <span className="stl-inv-sum-note">
                     {`+${g.pendientesTotales} ${t(lang, "montoPorDefinir")} · ${t(lang, "noSuman")}`}
@@ -841,6 +933,7 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
               <div className="stl-inv-sum-amount">
                 <span className="stl-inv-total-pill">{formatRango(g.recurrente, moneda)}</span>
               </div>
+              {cierreIva.recurrente && <DesgloseDelIva desglose={cierreIva.recurrente} lang={lang} moneda={moneda} />}
             </div>
           )}
         </div>
@@ -852,7 +945,7 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
       {g.granTotal && (
         <div className="stl-inv-sum stl-inv-sum--total stl-inv-sum--gran">
           <div className="stl-inv-sum-label">
-            {rot("granTotal", "inversionTotal")}
+            {rotIva(rot("granTotal", "inversionTotal"))}
             {g.pendientesTotales > 0 && (
               <span className="stl-inv-sum-note">
                 {`+${g.pendientesTotales} ${t(lang, "montoPorDefinir")} · ${t(lang, "noSuman")}`}
@@ -862,6 +955,7 @@ export const InvestmentSection: FC<SectionProps<WebInvestmentData>> = (props) =>
           <div className="stl-inv-sum-amount">
             <span className="stl-inv-total-pill">{formatRango(g.granTotal, moneda)}</span>
           </div>
+          {cierreIva.granTotal && <DesgloseDelIva desglose={cierreIva.granTotal} lang={lang} moneda={moneda} />}
         </div>
       )}
 

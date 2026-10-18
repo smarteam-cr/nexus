@@ -58,6 +58,10 @@ export const NO_CONTENIDO = new Set([
   "activa",
   "recurrencia",
   "contrato",
+  // Cómo se presentan los montos ante el IVA de Costa Rica (`sin` · `mas` · `incluido`,
+  // lib/landing/iva.ts). Es el mismo tipo de dato que `contrato`: dice CÓMO se leen los montos,
+  // no QUÉ se cobra. Una sección donde solo se eligió el IVA no tiene nada que mostrar.
+  "iva",
   // Apagador del aviso de la primera fase del cronograma ("puede ajustar el plan"). Una
   // sección donde SOLO se apagó el aviso no tiene una palabra que mostrarle a nadie: sin
   // esta entrada se publicaría el encabezado del plan sin una sola fase, y "Limpiar" volvería

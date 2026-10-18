@@ -15,6 +15,7 @@ import { Editable } from "./inline";
 import { landingLang, t } from "./i18n";
 import type { SectionProps } from "./types";
 import { formatRango } from "@/lib/landing/money";
+import { modoIvaDe } from "@/lib/landing/iva";
 import { cuotasDe, MAX_CUOTAS, planDePago, type FormaDePagoData, type PagoDeLaForma } from "@/lib/landing/forma-de-pago";
 
 const dosDigitos = (n: number) => String(n).padStart(2, "0");
@@ -26,6 +27,11 @@ export const FormaDePagoSection: FC<SectionProps<FormaDePagoData>> = ({ data, ct
   const plan = planDePago(d, ctx.propuesta?.inversion ?? null, lang);
   const dinero = (r: { min: number; max: number }) => formatRango(r, plan.moneda);
   const set = (next: Partial<FormaDePagoData>) => onChange?.({ ...d, ...next });
+  /* Los pagos se reparten con los montos TAL COMO los escribió Ventas en la Inversión. Si allá van
+     «+ IVA», acá también: el rótulo lo dice para que el total no se lea como el que se paga. */
+  const modoIva = modoIvaDe(ctx.propuesta?.inversion);
+  const sufijoIva =
+    modoIva === "mas" ? ` ${t(lang, "masIva")}` : modoIva === "incluido" ? ` · ${t(lang, "ivaIncluido")}` : "";
 
   /** Escribe UN campo de UN pago, completando los anteriores para que el índice no se corra. */
   const setPago = (i: number, campo: keyof PagoDeLaForma, valor: string) => {
@@ -73,7 +79,7 @@ export const FormaDePagoSection: FC<SectionProps<FormaDePagoData>> = ({ data, ct
       <div className="stl-fp-resumen">
         {plan.total && (
           <div className="stl-fp-card is-total">
-            <span className="stl-fp-card-label">{t(lang, "fpInversionTotal")}</span>
+            <span className="stl-fp-card-label">{`${t(lang, "fpInversionTotal")}${sufijoIva}`}</span>
             <span className="stl-fp-card-value">
               {dinero(plan.total)}
               {plan.moneda && <span className="stl-fp-card-moneda"> {plan.moneda}</span>}
@@ -180,7 +186,7 @@ export const FormaDePagoSection: FC<SectionProps<FormaDePagoData>> = ({ data, ct
         {plan.total && (
           <div className="stl-fp-fila is-total" role="row">
             <span className="stl-fp-total-texto" role="cell">
-              <b>{t(lang, "fpTotalImplementacion")}</b>
+              <b>{`${t(lang, "fpTotalImplementacion")}${sufijoIva}`}</b>
               <span>{t(lang, "fpTotalNota")}</span>
             </span>
             <span role="cell" />

@@ -19,6 +19,7 @@ import { AccionDeCabecera, CabeceraDeFicha } from "@/components/layout/CabeceraD
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { getBrandLogos, brandLogoMap } from "@/lib/external/smarteam-logo";
 import { hubspotCompanyUrl, hubspotDealUrl } from "@/lib/hubspot/urls";
+import { cargarPaisDelCliente } from "@/lib/business-cases/pais-del-cliente-server";
 import type { PasoDeLaPropuesta } from "@/components/propuestas/PasosDeLaPropuesta";
 
 export const dynamic = "force-dynamic";
@@ -53,18 +54,21 @@ export default async function PropuestaPage({
       caseType: true,
       caseSubtype: true,
       language: true,
+      exploracionId: true,
       client: { select: { id: true, name: true, kind: true, logoUrl: true, logoDarkUrl: true, logoScale: true, hubspotCompanyId: true } },
     },
   });
   if (!bc) notFound();
 
-  const [brandLogos, v0, generadas, portal] = await Promise.all([
+  const [brandLogos, v0, generadas, portal, paisDelCliente] = await Promise.all([
     // Logos de marca (Smarteam + HubSpot + Insider One): el hero los pinta en la fila de marcas.
     getBrandLogos(),
     // Tipo y plantilla (columna → __meta del v0 → hubspot por defecto).
     prisma.projectCanvas.findFirst({ where: { businessCaseId: id, version: 0 }, select: { sections: true } }),
     prisma.projectCanvas.count({ where: { businessCaseId: id, version: { gt: 0 } } }),
     prisma.hubspotAccount.findFirst({ where: { isSystem: true }, select: { hubspotPortalId: true } }),
+    // El país del cliente, para el IVA de Costa Rica de la Inversión (lib/landing/iva.ts).
+    cargarPaisDelCliente(bc.client.id, bc.exploracionId),
   ]);
   const resolved = resolveCaseTypeFor(bc, v0?.sections);
   const subtipo = resolved.caseSubtype
@@ -133,6 +137,7 @@ export default async function PropuestaPage({
         pasoInicial={pasoInicial}
         puedeEditar={puedeEditar}
         tratoUrl={tratoUrl}
+        paisDelCliente={paisDelCliente}
       />
     </div>
   );

@@ -33,6 +33,7 @@ import { catalogoLegible, TIPO_POR_DEFECTO } from "@/lib/landing/catalogo-de-sec
 import { configForCanvas } from "@/components/landing/configs/templates";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
 import { inversionDelDocumento } from "@/lib/landing/forma-de-pago";
+import type { PaisDelCliente } from "@/lib/business-cases/pais-del-cliente";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
@@ -72,6 +73,7 @@ export default function BusinessCaseWorkspace({
   pasoInicial,
   puedeEditar,
   tratoUrl,
+  paisDelCliente,
 }: {
   bcId: string;
   /** Para subir el logo del cliente desde el hero (POST /api/clients/[id]/logo). */
@@ -102,6 +104,8 @@ export default function BusinessCaseWorkspace({
   puedeEditar: boolean;
   /** El trato de HubSpot de la propuesta, si tiene. */
   tratoUrl: string | null;
+  /** ¿El cliente es de Costa Rica? Lo usa el control del IVA de la Inversión. */
+  paisDelCliente?: PaisDelCliente | null;
 }) {
   const toast = useToast();
   const [paso, setPasoState] = useState<PasoDeLaPropuesta>(pasoInicial);
@@ -738,7 +742,7 @@ export default function BusinessCaseWorkspace({
                   ctx={{
                     clientName,
                     lang: proposalLang,
-                    propuesta: { hubsVendidos, inversion: inversionDelDocumento(sectionsData) },
+                    propuesta: { hubsVendidos, inversion: inversionDelDocumento(sectionsData), pais: paisDelCliente ?? null },
                     clientLogoUrl: clientLogo,
                     clientLogoDarkUrl,
                     clientLogoScale,

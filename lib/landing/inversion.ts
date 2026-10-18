@@ -105,6 +105,9 @@ export interface InversionData {
    *  switch lo escribe apenas alguien lo toca, y una sección donde SOLO se eligió el plazo no
    *  tiene nada que decirle a nadie. Ausente = "mensual". */
   contrato?: string;
+  /** Cómo se presentan los montos ante el IVA de Costa Rica: `mas` · `incluido` · ausente = como
+   *  siempre (lib/landing/iva.ts). PRESENTACIÓN (`NO_CONTENIDO`), igual que `contrato`. */
+  iva?: string;
   // Shape viejo de HubSpot — solo lectura, para la rama legacy.
   licenciasHubspot?: { monto?: string; detalle?: string };
   implementacion?: { monto?: string; detalle?: string };
