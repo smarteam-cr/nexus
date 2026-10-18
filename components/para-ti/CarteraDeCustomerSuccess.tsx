@@ -6,7 +6,11 @@
  *
  * Una fila por empresa: el nombre grande, quién la lleva (el CSE de la cuenta y el encargado de cada proyecto), el color
  * de Éxito del cliente y su porqué, cada proyecto de HubSpot con su etapa, el último contacto y la próxima reunión, la
- * renovación, la acción de la semana y, a quien ve Ventas, el monto de sus negocios abiertos.
+ * renovación, el uso de HubSpot, la acción de la semana y, a quien ve Ventas, el monto de sus negocios abiertos.
+ *
+ * Sin acción esta semana, «Planificar acción» usa el «Agendar» del inicio (components/para-ti/inicio/AgendarEnLaAgenda):
+ * deja el borrador del evento en la agenda, abre Google Calendar para guardarlo y lleva a «Tu día», donde está el
+ * borrador. El nombre de la empresa lleva a su ficha.
  *
  * Las vistas viven en `?cartera=` (lo que se comparte es la vista); el buscador y los filtros, en la pantalla. Qué es
  * cada vista y por qué está en lib/mi-dia/cartera-cs.ts.
@@ -17,7 +21,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SearchFilterBar, Segmentado, Select } from "@/components/ui";
 import { BotonTexto } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
-import { cuandoEsLaReunion, DIAS_PARA_LA_REUNION } from "@/lib/mi-dia/servicio";
+import { cuandoEsLaReunion, DIAS_PARA_LA_REUNION, FUENTE_CUENTA_SIN_ACCION } from "@/lib/mi-dia/servicio";
 import { DIAS_SIN_CONTACTO } from "@/lib/cs/cartera-reglas";
 import {
   diasHastaElDia,
@@ -25,6 +29,7 @@ import {
   filtrarEmpresas,
   hayFiltros,
   montoUsd,
+  NOMBRE_CORTO_DEL_HUB,
   NOMBRE_DEL_PIPELINE,
   opcionesDeFiltros,
   paraAtender,
@@ -38,9 +43,14 @@ import {
   type MotivoDeAtencion,
   type PipelineDeCs,
   type SaludDeCs,
+  type TendenciaDeUso,
+  type UsoDeHubspot,
 } from "@/lib/mi-dia/cartera-cs";
 import type { CarteraDeCs } from "@/lib/mi-dia/cartera-cs-server";
 import { NOMBRE_DE_SALUD, Punto, PUNTO_DE_SALUD } from "./inicio/piezas";
+import { AccionDelPendiente } from "./inicio/AgendarEnLaAgenda";
+import { enlaceParaAgendarEnCalendar } from "@/lib/mi-dia/calendario";
+import type { Pendiente } from "@/lib/para-ti/tipos";
 
 type Vista = "atender" | "todos" | "por-cse" | "sin-contacto" | "renuevan";
 const VISTAS: readonly Vista[] = ["atender", "todos", "por-cse", "sin-contacto", "renuevan"];
@@ -54,7 +64,8 @@ const CHIP_DE_PIPELINE: Record<PipelineDeCs, string> = {
   smartloop: "border-success-line bg-success-surface text-success-ink",
   development: CHIP_NEUTRO,
 };
-const ENLACE = "text-xs font-medium text-brand transition-colors hover:text-brand-light";
+const BOTON_PLANIFICAR =
+  "inline-flex items-center rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg";
 const FILTRO = "w-auto";
 
 const QUE_ES_LA_VISTA: Record<Vista, string> = {
@@ -276,7 +287,11 @@ function FilaDeEmpresa({
               <Punto className="border-[1.5px] border-line bg-transparent" />
             </span>
           )}
-          <Link href={`/clients/${encodeURIComponent(e.clientId)}`} className="min-w-0 truncate text-[15px] font-semibold leading-5 text-fg transition-colors hover:text-brand" title={e.nombre}>
+          <Link
+            href={`/clients/${encodeURIComponent(e.clientId)}`}
+            className="min-w-0 truncate text-[15px] font-semibold leading-5 text-fg transition-colors hover:text-brand"
+            title={`${e.nombre} · ver la cuenta`}
+          >
             {e.nombre}
           </Link>
         </div>
@@ -336,6 +351,7 @@ function FilaDeEmpresa({
             </span>
           )}
         </p>
+        {e.uso && <LineaDeUso uso={e.uso} hoyISO={hoyISO} />}
         {e.negocios && (
           <p className="text-xs leading-4 text-fg-secondary">
             {plural(e.negocios.cantidad, "negocio abierto", "negocios abiertos")}
@@ -352,17 +368,95 @@ function FilaDeEmpresa({
             ✓ <span className="text-fg-secondary">T-{e.accion.numero} · {e.accion.titulo}</span>
           </span>
         ) : (
-          <span className="font-medium text-warn-ink">○ Sin acción esta semana</span>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 lg:justify-end">
+            <span className="font-medium text-warn-ink">○ Sin acción esta semana</span>
+            <PlanificarAccion e={e} correo={cartera.correo} />
+          </div>
         )}
         {e.proxima && (
           <span className="truncate text-fg-muted" title={e.proxima.titulo}>
             {cuandoEsLaReunion(e.proxima.inicio, hoyISO)} · {e.proxima.titulo}
           </span>
         )}
-        <Link href={`/clients/${encodeURIComponent(e.clientId)}`} className={ENLACE}>
-          Abrir la cuenta
-        </Link>
       </div>
     </div>
+  );
+}
+
+const FLECHA: Record<TendenciaDeUso, string> = { sube: "↑", baja: "↓", igual: "→" };
+const PALABRA: Record<TendenciaDeUso, string> = { sube: "sube", baja: "baja", igual: "igual" };
+
+function Tendencia({ t }: { t: TendenciaDeUso | null }) {
+  if (!t) return null;
+  return (
+    <span className={cn(t === "baja" ? "text-warn-ink" : t === "sube" ? "text-success-ink" : "text-fg-muted")} title={`En 4 semanas: ${PALABRA[t]}`}>
+      {" "}
+      {FLECHA[t]} {PALABRA[t]}
+    </span>
+  );
+}
+
+/** El uso de HubSpot en una línea (lib/mi-dia/cartera-cs.ts › usoDeHubspot). Sin montos. */
+function LineaDeUso({ uso, hoyISO }: { uso: UsoDeHubspot; hoyISO: string }) {
+  if (uso.estado === "sin-uso") {
+    const ultimo = uso.ultimo ? ` · el último fue ${uso.ultimo.uso} de 100, el ${fechaCorta(uso.ultimo.fecha)}` : "";
+    if (uso.terminoLaRelacion) {
+      return (
+        <p className="text-xs leading-4 text-warn-ink">
+          Sin uso de HubSpot: la relación gestionada terminó el {fechaCorta(uso.terminoLaRelacion)}
+          {uso.terminoLaRelacion.slice(0, 4) !== hoyISO.slice(0, 4) ? ` de ${uso.terminoLaRelacion.slice(0, 4)}` : ""}
+          <span className="text-fg-muted">{ultimo}</span>
+        </p>
+      );
+    }
+    return <p className="text-xs leading-4 text-fg-muted">Sin uso de HubSpot{ultimo}</p>;
+  }
+  return (
+    <p className="text-xs leading-4 text-fg-secondary" title="Unified User Score de HubSpot Partner (0 a 100), comparado con hace 4 semanas">
+      Uso de HubSpot <span className="font-medium text-fg">{uso.uso}</span> de 100
+      <Tendencia t={uso.tendencia} />
+      {uso.hubs.map((h) => (
+        <span key={h.hub}>
+          {" · "}
+          {NOMBRE_CORTO_DEL_HUB[h.hub]} <span className="font-medium text-fg">{h.uso}</span>
+          <Tendencia t={h.tendencia} />
+        </span>
+      ))}
+    </p>
+  );
+}
+
+/**
+ * «Planificar acción»: el «Agendar» del inicio con esta cuenta. El botón deja el borrador en la agenda y abre Google
+ * Calendar; después se va a «Tu día» (sin `?vista`), donde la agenda muestra el borrador.
+ */
+function PlanificarAccion({ e, correo }: { e: EmpresaDeCs; correo: string }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const pendiente: Pendiente = {
+    clave: `${FUENTE_CUENTA_SIN_ACCION}:${e.clientId}`,
+    fuente: FUENTE_CUENTA_SIN_ACCION,
+    cuando: "hoy",
+    delAgente: false,
+    clientId: e.clientId,
+    titulo: `Planificar la acción de ${e.nombre}`,
+    detalle: "",
+    meta: `${e.nombre} · Sin acción esta semana`,
+    accion: "Planificar acción",
+    href: enlaceParaAgendarEnCalendar({ titulo: `Reunión con ${e.nombre}`, detalle: `Seguimiento de la cuenta ${e.nombre}.`, invitados: e.invitados, correo }),
+  };
+  const irATuDia = () => {
+    const p = new URLSearchParams(params.toString());
+    p.delete("vista");
+    p.delete("cartera");
+    const q = p.toString();
+    router.push(q ? `${pathname}?${q}` : pathname, { scroll: false });
+  };
+  // El clic del botón (deja el borrador y abre Calendar) corre primero; después sube hasta acá y se va a «Tu día».
+  return (
+    <span onClick={irATuDia} className="contents">
+      <AccionDelPendiente it={pendiente} className={BOTON_PLANIFICAR} />
+    </span>
   );
 }
