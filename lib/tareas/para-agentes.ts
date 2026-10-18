@@ -143,6 +143,24 @@ export async function compromisosAbiertosParaAgentes(projectId: string, tope = T
 }
 
 /**
+ * Los compromisos ABIERTOS de una CUENTA que no son de un proyecto (iniciativa B, 2026-10-18): lo que se prometió por
+ * correo o en una reunión sin proyecto, para la memoria interna de la cuenta. Los de un proyecto ya van en la memoria
+ * del proyecto. Solo los que salieron de lo prometido al cliente (`origen = "correo"` o la lectura de seguimiento de una
+ * reunión, `:seg-`). La que vence antes primero, hasta `tope` (como mucho 30).
+ */
+export async function compromisosDeLaCuentaParaAgentes(clientId: string, tope = TOPE_DE_TAREAS): Promise<TareaParaAgente[]> {
+  const filas = await seguro(() =>
+    prisma.tarea.findMany({
+      where: { ...ABIERTAS_PARA_AGENTES, clientId, projectId: null, AND: [{ OR: [{ origen: "correo" }, { origenId: { contains: ":seg-" } }] }] },
+      orderBy: [{ venceEl: { sort: "asc", nulls: "last" } }, { numero: "asc" }],
+      take: Math.min(Math.max(1, tope), 30),
+      select: SELECT_PARA_AGENTES,
+    }),
+  );
+  return filas.map(aTareaParaAgente);
+}
+
+/**
  * Las tareas ABIERTAS de una CUENTA (de cualquier proyecto o sin proyecto), para «Actualizar escala» (La cuenta › La
  * escala, lib/exploraciones/posicionar-fuentes.ts): qué se está haciendo y qué prometió el cliente. La que vence antes
  * primero, hasta `tope` (como mucho 30). Con las mismas exclusiones que el resto de la puerta.

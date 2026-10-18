@@ -45,7 +45,15 @@ export interface EntradaDeSeguimiento {
   clientId: string;
   projectId: string | null;
   ruta: "completa" | "prospecto";
+  /**
+   * De dónde salió: una reunión (lo de siempre) o un correo que mandó Smarteam (iniciativa B, lib/comunicaciones). En un
+   * correo, `reunion` es el correo (su id, su fecha y quien lo mandó) y lo que se comprometió Smarteam sin decir quién lo
+   * lleva va a quien lo mandó.
+   */
+  fuente?: FuenteDelCompromiso;
 }
+
+export type FuenteDelCompromiso = { tipo: "reunion" } | { tipo: "correo"; asunto: string | null; autorEmail: string | null };
 
 export interface ArmadoDeSeguimiento {
   propuestas: PropuestaDeLectura[];
@@ -70,17 +78,18 @@ export function tituloDelCompromiso(c: Pick<CompromisoDetectado, "quien" | "que"
 }
 
 /** Lo escribe el código (no el modelo): para qué es, de quién vino y si frena el plan. Tuteo. */
-export function contextoDelCompromiso(c: CompromisoDetectado, inicio: Date): string {
+export function contextoDelCompromiso(c: CompromisoDetectado, inicio: Date, fuente: FuenteDelCompromiso = { tipo: "reunion" }): string {
   const dia = diaCortoConSemana(horaDeCostaRica(inicio).fecha);
   const para = c.fecha ? ` Para el ${diaCortoConSemana(c.fecha)}.` : "";
   const que = c.que.trim().replace(/[.;]+$/, "");
+  const donde = fuente.tipo === "correo" ? `en el correo del ${dia}${fuente.asunto ? ` «${fuente.asunto}»` : ""}` : `en la reunión del ${dia}`;
   if (c.quien === "CLIENTE") {
     const quien = c.responsable ? `${c.responsable} (del cliente)` : "el cliente";
     const frena = c.frenaElPlan ? " Frena el plan: sin esto, el proyecto no avanza." : "";
-    return `Lo prometió ${quien} en la reunión del ${dia}: ${que}.${para}${frena}`;
+    return `Lo prometió ${quien} ${donde}: ${que}.${para}${frena}`;
   }
   const quien = c.responsable ? `, lo dijo ${c.responsable}` : "";
-  return `Compromiso de Smarteam en la reunión del ${dia}${quien}: ${que}.${para}`;
+  return `Compromiso de Smarteam ${donde}${quien}: ${que}.${para}`;
 }
 
 export function armarPropuestasDeSeguimiento(e: EntradaDeSeguimiento): ArmadoDeSeguimiento {
@@ -98,13 +107,21 @@ export function armarPropuestasDeSeguimiento(e: EntradaDeSeguimiento): ArmadoDeS
     // ¿A quién le llega? `null` = «Por asignar» del equipo `equipoSinResponsable`.
     let responsable: MiembroDelEquipo | null = null;
     let equipoSinResponsable = e.lectura.equipo;
-    const sugerido: PropuestaDeLectura["sugerido"] = { lado: c.quien === "CLIENTE" ? "cliente" : "smarteam", tipo: c.tipo, frenaElPlan: c.frenaElPlan, seguimiento: true };
+    const sugerido: PropuestaDeLectura["sugerido"] = {
+      lado: c.quien === "CLIENTE" ? "cliente" : "smarteam",
+      tipo: c.tipo,
+      frenaElPlan: c.frenaElPlan,
+      seguimiento: true,
+      ...(e.fuente?.tipo === "correo" ? { deUnCorreo: true } : {}),
+    };
 
     if (c.quien === "SMARTEAM") {
       // El nombre que se dijo manda sobre el correo que eligió el modelo, si los dos apuntan a personas distintas.
       const porNombre = c.responsable ? resolverPersona(c.responsable, [...activos.values()], e.reunion.participantes) : null;
       const delNombre = porNombre?.tipo === "seguro" ? activo(porNombre.email) : null;
       responsable = delNombre ?? activo(c.ownerEmail);
+      // En un correo, sin saber quién lo lleva, es de quien lo mandó: escribió «te envío…».
+      if (!responsable && e.fuente?.tipo === "correo") responsable = activo(e.fuente.autorEmail);
       if (!responsable && c.responsable) sugerido.responsableDicho = c.responsable;
     } else if (e.ruta === "completa") {
       responsable = activo(e.cseDelProyecto) ?? (e.cseDelProyecto ? null : activo(e.cseDeLaCuenta));
@@ -132,7 +149,7 @@ export function armarPropuestasDeSeguimiento(e: EntradaDeSeguimiento): ArmadoDeS
       titulo: tituloDelCompromiso(c),
       // El detalle es texto de la reunión: vive en la cita, que se sirve con su regla. Las notas arrancan vacías.
       notas: null,
-      contexto: contextoDelCompromiso(c, e.reunion.inicio),
+      contexto: contextoDelCompromiso(c, e.reunion.inicio, e.fuente),
       cita: c.cita,
       responsableEmail: responsable ? responsable.email.toLowerCase() : null,
       equipo: responsable ? claveDeEquipo(responsable.area, responsable.email) : equipoSinResponsable,

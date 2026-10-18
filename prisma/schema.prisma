@@ -230,6 +230,7 @@ model Client {
   siguientesPasos          SiguientePaso[]           @relation("SiguientesPasosDelCliente") // el siguiente paso de cada equipo (2026-10-15)
   contactosDeHubspot       ContactoDeHubspot[]       @relation("ContactosDeHubspot") // la copia de sus contactos de HubSpot (2026-10-16)
   ticketsDeHubspot         TicketDeHubspot[]         @relation("TicketsDeHubspot") // la copia de sus tickets de HubSpot (2026-10-16)
+  comunicacionesDeHubspot  ComunicacionDeHubspot[]   @relation("ComunicacionesDeHubspot") // correos, notas y llamadas de HubSpot (2026-10-18)
   notasDeLaCuenta          NotaDeLaCuenta[]          @relation("NotasDeLaCuenta") // lo que pasó por WhatsApp, una llamada o un correo (2026-10-16)
   reglasComisionVendedor   ReglaComisionVendedor[]   @relation("ReglasDeComisionVendedor") // ⚠ SUPER_ADMIN-only
   importFilasAplicadas     ImportacionFila[] // Cobranza: trazabilidad del importador
@@ -7589,6 +7590,48 @@ model TicketDeHubspot {
 
   @@unique([clientId, hubspotId])
   @@index([clientId, abierto])
+}
+
+// ─── Las comunicaciones de HubSpot (iniciativa B de docs/roadmap.md, 2026-10-18) ───
+
+/// La copia de SOLO LECTURA de un correo (enviado o recibido), una nota o una llamada del timeline de HubSpot de una
+/// empresa de Nexus o de sus contactos (job `comunicaciones-hubspot`). Es de UN cliente: una que es de dos no se guarda
+/// (lib/comunicaciones/reglas.ts › `clienteDeLaComunicacion`). La lee la memoria interna y el chat; nunca el cliente.
+model ComunicacionDeHubspot {
+  id                  String    @id @default(cuid())
+  clientId            String
+  client              Client    @relation("ComunicacionesDeHubspot", fields: [clientId], references: [id], onDelete: Cascade)
+  /// correo | nota | llamada
+  tipo                String
+  hubspotId           String
+  /// Solo un correo: enviado | recibido. null en una nota o una llamada.
+  direccion           String?
+  /// Cuándo pasó (hs_timestamp)
+  ocurrioAt           DateTime
+  /// El asunto de un correo o el título de una llamada (300 caracteres)
+  asunto              String?
+  /// El texto en limpio, sin HTML ni la cita del hilo (4.000 caracteres)
+  texto               String?   @db.Text
+  /// Quién la escribió: el dueño de HubSpot (en un correo enviado, una nota o una llamada)
+  autorEmail          String?
+  /// Solo un correo recibido: el remitente
+  deEmail             String?
+  /// Del asunto, el texto, la dirección y la fecha: si cambia, se vuelve a escribir la fila
+  huella              String
+  modificadoEnHubspot DateTime?
+  /// false = HubSpot ya no la devuelve o dejó de ser de este cliente. La fila no se borra.
+  vigente             Boolean   @default(true)
+  /// Sus compromisos (solo un correo enviado): null = sin decidir · no_aplica · pendiente · leyendo · leido · error
+  compromisosEstado   String?
+  compromisosIntentos Int       @default(0)
+  compromisosLeidoAt  DateTime?
+  compromisosError    String?
+  copiadoAt           DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+
+  @@unique([tipo, hubspotId])
+  @@index([clientId, ocurrioAt])
+  @@index([compromisosEstado])
 }
 
 // ─── Notas de la cuenta (etapa 5 de docs/mi-dia-plan.md) ───

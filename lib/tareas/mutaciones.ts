@@ -2035,6 +2035,89 @@ export async function escribirPropuestasDeLectura(
   return { creadas, yaEstaban, sumadas, sinLugar: cupo.sinLugar() };
 }
 
+/** El `origenId` de lo que sale de un correo: `cor:<comunicación>:<línea>`. Releer el correo no duplica. */
+export function origenIdDeUnCorreo(comunicacionId: string, lineaId: string): string {
+  return `cor:${comunicacionId}:${lineaId}`;
+}
+
+/**
+ * Escribe las propuestas que salen de un CORREO que mandó Smarteam (iniciativa B, lib/comunicaciones/compromisos-server.ts):
+ * las mismas reglas que las de una reunión (`escribirPropuestasDeLectura`), sin reunión ni lectura. `origen = "correo"`;
+ * el título del correo va en `pedidaPorTexto` («Correo del jue 16 oct «Minuta…»»), que se ve con la fila: un correo con
+ * el cliente lo ve quien ve la cuenta. Como mucho 5 por persona por correo, y entran al tope de sugerencias abiertas.
+ */
+export async function escribirPropuestasDeComunicacion(
+  tx: Tx,
+  correo: { id: string; titulo: string },
+  propuestas: readonly PropuestaDeLectura[],
+): Promise<{ creadas: { id: string; responsableEmail: string | null }[]; yaEstaban: number; sumadas: number; sinLugar: Map<string, number> }> {
+  const creadas: { id: string; responsableEmail: string | null }[] = [];
+  let yaEstaban = 0;
+  let sumadas = 0;
+  const duenos = [...new Set(propuestas.flatMap((p) => (!p.porAsignar && p.responsableEmail ? [p.responsableEmail.toLowerCase()] : [])))];
+  const yaTiene = duenos.length
+    ? await tx.tarea.groupBy({
+        by: ["responsableEmail"],
+        where: { origen: "correo", creadaPorEmail: null, responsableEmail: { in: duenos }, origenId: { startsWith: `cor:${correo.id}:` } },
+        _count: { _all: true },
+      })
+    : [];
+  const cupo = cupoPorPersona(new Map(yaTiene.flatMap((g) => (g.responsableEmail ? [[g.responsableEmail, g._count._all] as const] : []))));
+  for (const p of propuestas) {
+    const origenId = origenIdDeUnCorreo(correo.id, p.lineaId);
+    const existe = await tx.tarea.findUnique({ where: { origenId }, select: { id: true } });
+    if (existe) {
+      yaEstaban++;
+      continue;
+    }
+    const huella = huellaDeTexto(p.titulo);
+    const estado = p.porAsignar ? "pendiente" : "propuesta";
+    if (estado === "propuesta") {
+      const igual = await tx.tarea.findFirst({
+        where: { estado: "propuesta", huella, responsableEmail: p.responsableEmail, equipo: p.responsableEmail ? undefined : p.equipo, clientId: p.clientId, pedidaPorEmail: p.pedidaPorEmail },
+        select: { id: true },
+      });
+      if (igual) {
+        await evento(tx, { tareaId: igual.id, tipo: "mencionada", porEmail: "agente", cita: p.cita, datos: { correo: correo.id } });
+        sumadas++;
+        continue;
+      }
+    }
+    if (!p.porAsignar && p.responsableEmail && !cupo.tomar(p.responsableEmail)) continue;
+    const t = await tx.tarea.create({
+      data: {
+        titulo: p.titulo,
+        huella,
+        notas: p.notas,
+        contexto: p.contexto,
+        estado,
+        equipo: p.equipo,
+        responsableEmail: p.porAsignar ? null : p.responsableEmail,
+        semana: !p.porAsignar && p.responsableEmail && p.semana ? aDate(p.semana) : null,
+        venceEl: p.venceEl ? aDate(p.venceEl) : null,
+        clientId: p.clientId,
+        projectId: p.projectId,
+        proyectoId: p.proyectoId,
+        lado: p.sugerido.lado === "cliente" ? "cliente" : "smarteam",
+        origen: "correo",
+        creadaPorEmail: null,
+        pedidaPorEmail: p.pedidaPorEmail,
+        pedidaPorEquipo: p.pedidaPorEquipo,
+        pedidaPorTexto: correo.titulo,
+        tipo: p.pedidaPorEquipo ? "apoyo" : "puesto",
+        cita: p.cita,
+        origenId,
+        mismaQueId: p.mismaQueId,
+      },
+      select: { id: true },
+    });
+    await evento(tx, { tareaId: t.id, tipo: p.porAsignar ? "creada" : "propuesta", porEmail: "agente", datos: { correo: correo.id, ...p.sugerido } });
+    creadas.push({ id: t.id, responsableEmail: p.porAsignar ? null : p.responsableEmail });
+  }
+  for (const email of new Set(creadas.flatMap((c) => (c.responsableEmail ? [c.responsableEmail] : [])))) await podarSugerencias(tx, email);
+  return { creadas, yaEstaban, sumadas, sinLugar: cupo.sinLugar() };
+}
+
 /**
  * Con más de `MAX_SUGERENCIAS_POR_PERSONA` sugerencias de las reuniones sin decidir, las más viejas vencen solas (fase
  * 1.4): quedan las más nuevas. Solo lo que propuso Nexus de una reunión; lo que pidió una persona no se toca. Vencer no
@@ -2042,7 +2125,7 @@ export async function escribirPropuestasDeLectura(
  */
 async function podarSugerencias(tx: Tx, email: string): Promise<number> {
   const sobran = await tx.tarea.findMany({
-    where: { estado: "propuesta", archivadaAt: null, responsableEmail: email, creadaPorEmail: null, origen: { in: ["reunion", "notas"] } },
+    where: { estado: "propuesta", archivadaAt: null, responsableEmail: email, creadaPorEmail: null, origen: { in: ["reunion", "notas", "correo"] } },
     orderBy: [{ createdAt: "desc" }, { numero: "desc" }],
     skip: MAX_SUGERENCIAS_POR_PERSONA,
     select: { id: true, version: true },

@@ -42,6 +42,7 @@ export const COMO_SE_ACOTA: Readonly<Record<string, ComoSeAcota>> = {
   "reunion.leer": "cuenta",
   "cuenta.negocios": "cuenta",
   "cuenta.personas": "cuenta",
+  "comunicaciones.recientes": "cuenta",
 };
 
 /** ¿Llega esta operación al chat? Solo si alguien declaró cómo se acota a la cuenta. */

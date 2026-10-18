@@ -8,7 +8,7 @@
  * revela nada que la tarjeta de la cita no diga ya («Salió de una reunión con un cliente» / «… del equipo»).
  */
 
-export type ClaveDeOrigen = "reunion_cliente" | "sprint" | "reunion" | "hubspot" | "chat" | "paso" | "plantilla" | "mano";
+export type ClaveDeOrigen = "reunion_cliente" | "sprint" | "reunion" | "correo" | "hubspot" | "chat" | "paso" | "plantilla" | "mano";
 
 export interface OrigenVisible {
   clave: ClaveDeOrigen;
@@ -19,6 +19,7 @@ const ETIQUETA: Record<ClaveDeOrigen, string> = {
   reunion_cliente: "Reunión con el cliente",
   sprint: "Sprint interno",
   reunion: "Notas de una reunión",
+  correo: "Correo con el cliente",
   hubspot: "HubSpot",
   chat: "Chat de Nexus",
   paso: "Siguiente paso",
@@ -27,7 +28,7 @@ const ETIQUETA: Record<ClaveDeOrigen, string> = {
 };
 
 /** El orden en que se agrupan los orígenes (lo que viene del cliente primero). */
-export const ORDEN_DE_ORIGEN: readonly ClaveDeOrigen[] = ["reunion_cliente", "sprint", "reunion", "hubspot", "paso", "chat", "plantilla", "mano"];
+export const ORDEN_DE_ORIGEN: readonly ClaveDeOrigen[] = ["reunion_cliente", "correo", "sprint", "reunion", "hubspot", "paso", "chat", "plantilla", "mano"];
 
 export function etiquetaDeOrigen(clave: ClaveDeOrigen): string {
   return ETIQUETA[clave];
@@ -35,7 +36,7 @@ export function etiquetaDeOrigen(clave: ClaveDeOrigen): string {
 
 /**
  * De dónde viene una tarea. `origen` es la columna (`mano | pedido | reunion | notas | chat | plantilla | hubspot |
- * paso`); `sala` es la de su reunión, si la tiene y se pudo leer.
+ * paso | correo`); `sala` es la de su reunión, si la tiene y se pudo leer.
  */
 export function origenDeLaTarea(t: { origen: string; sessionId: string | null }, sala: { puertasAdentro: boolean } | null | undefined): OrigenVisible {
   const clave = claveDeOrigen(t, sala);
@@ -48,6 +49,8 @@ function claveDeOrigen(t: { origen: string; sessionId: string | null }, sala: { 
     case "notas":
       if (sala) return sala.puertasAdentro ? "sprint" : "reunion_cliente";
       return "reunion";
+    case "correo":
+      return "correo";
     case "hubspot":
       return "hubspot";
     case "chat":

@@ -72,6 +72,10 @@ export const SE_MUDAN = [
   ["siguientePaso", "clientId"],
   /* Las notas de la cuenta (2026-10-16, etapa 5): `onDelete: Cascade`, así que sin mudarlas se borrarían con la ficha. */
   ["notaDeLaCuenta", "clientId"],
+  /* Los correos, las notas y las llamadas de HubSpot (iniciativa B, 2026-10-18): `onDelete: Cascade`, así que sin mudarlos
+     se borrarían con la ficha. Su único es (tipo, hubspotId), sin la ficha: no chocan. La copia de la hora siguiente los
+     vuelve a resolver por la empresa de HubSpot viva. */
+  ["comunicacionDeHubspot", "clientId"],
   ["importacionFila", "aplicadoClientId"],
   ["escalaComentario", "clienteId"],
   /* Tareas internas (2026-10-09): `onDelete: SetNull`, así que sin mudarlas perderían el cliente en silencio. */

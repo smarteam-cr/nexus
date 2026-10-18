@@ -172,6 +172,8 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       // La memoria de la cuenta, etapa 2 (DECISIONS «La lectura de cada reunión es durable…»).
       "lib/lecturas/cola.ts": "la cola de la lectura de seguimiento: la fila nueva la crea lectura.ts (crearFilaDelSeguimiento), y la suelta para Tareas (lectura.ts)",
       "lib/sessions/post-process.ts": "la lectura de seguimiento: los compromisos a propuestas por escribirSalidaDeSeguimiento (el único escritor); los títulos para no repetirlos, SOLO por lib/tareas/para-agentes.ts",
+      // Iniciativa B (2026-10-18): lo que Smarteam prometió por CORREO, por la misma salida que la lectura de cada reunión.
+      "lib/comunicaciones/compromisos-server.ts": "los compromisos de un correo enviado a propuestas por armarPropuestasDeSeguimiento y escribirSalidaDeUnCorreo (el único escritor); el equipo activo por miembrosActivos",
       "lib/cs/watchdog-context.ts": "el vigía: los compromisos vencidos SOLO por lib/tareas/para-agentes.ts (la puerta de los agentes: sin la cita, el contexto, las notas ni lo privado)",
       // La memoria de la cuenta, etapa 3 (DECISIONS «La memoria de la cuenta y del proyecto: un solo cargador»).
       "lib/memoria/cargar.ts": "la memoria INTERNA del proyecto: los compromisos abiertos SOLO por lib/tareas/para-agentes.ts (compromisosAbiertosParaAgentes), y solo en el alcance interno (queCargar): ni el handoff ni lo que ve el cliente leen tareas",

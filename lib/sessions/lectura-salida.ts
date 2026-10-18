@@ -41,12 +41,43 @@ export interface PedidoDeLaHerramienta {
 const TEXTO = { type: "string" } as const;
 const conTexto = (description: string) => ({ type: "string", description }) as const;
 
-/** La herramienta, con solo lo que se pide en esta reunión (sin fuera de alcance en un prospecto, por ejemplo). */
-export function herramientaDeLaLectura(p: PedidoDeLaHerramienta): Anthropic.Messages.Tool {
-  const emails = [...new Set(p.emailsDelEquipo.map((e) => e.toLowerCase()))];
+/**
+ * El esquema de los COMPROMISOS, el mismo para una reunión y para un correo (iniciativa B: lo que Smarteam promete por
+ * correo va por la misma salida estándar, lib/tareas/seguimiento.ts). Solo cambia de dónde sale la fecha y la cita.
+ */
+export function esquemaDeLosCompromisos(emailsDelEquipo: readonly string[], fuente: "reunion" | "correo" = "reunion"): Record<string, unknown> {
+  const emails = [...new Set(emailsDelEquipo.map((e) => e.toLowerCase()))];
   const ownerEmail = emails.length
     ? { type: ["string", "null"], enum: [...emails, null], description: "Solo si quien es SMARTEAM: el correo de quien se comprometió, de la lista del equipo interno. Si no estás seguro, null." }
     : { type: "null" };
+  const de = fuente === "correo" ? "del correo" : "de la reunión";
+  const textoFuente = fuente === "correo" ? "del texto del correo" : "de la transcripción o del resumen de Gemini";
+  return {
+    type: "array",
+    description: `Cada compromiso EXPLÍCITO ${de}, de cualquiera de los dos lados, con fecha o sin ella. Como mucho ${MAX_COMPROMISOS}; la lista vacía es correcta.`,
+    items: {
+      type: "object",
+      properties: {
+        quien: { type: "string", enum: ["CLIENTE", "SMARTEAM"] },
+        responsable: conTexto("El nombre de la persona que se comprometió, si se dijo."),
+        ownerEmail,
+        que: conTexto("Qué se comprometió, en una frase concreta."),
+        tituloDeSeguimiento: {
+          type: ["string", "null"],
+          description: "Solo si quien es CLIENTE: lo que tiene que hacer el CSE para que se cumpla, en imperativo y en tuteo, nombrando a la persona («Recordarle a Ana que envíe la base de datos»). Si quien es SMARTEAM, null.",
+        },
+        fecha: { type: ["string", "null"], description: `AAAA-MM-DD calculada con el calendario desde la fecha ${de}; null si no se dijo.` },
+        tipo: { type: "string", enum: ["PLAN", "INSUMO", "ACCION"] },
+        frenaElPlan: { type: "boolean", description: "true solo si, sin esto, el proyecto no puede avanzar." },
+        cita: conTexto(`La frase que lo respalda, copiada TEXTUAL ${textoFuente}: 12 caracteres o más, sin puntos suspensivos y sin cambiarle una palabra.`),
+      },
+      required: ["quien", "que", "tipo", "frenaElPlan", "cita"],
+    },
+  };
+}
+
+/** La herramienta, con solo lo que se pide en esta reunión (sin fuera de alcance en un prospecto, por ejemplo). */
+export function herramientaDeLaLectura(p: PedidoDeLaHerramienta): Anthropic.Messages.Tool {
   const propiedades: Record<string, unknown> = {
     minuta: {
       type: "object",
@@ -62,28 +93,7 @@ export function herramientaDeLaLectura(p: PedidoDeLaHerramienta): Anthropic.Mess
       },
       required: ["summary"],
     },
-    compromisos: {
-      type: "array",
-      description: `Cada compromiso EXPLÍCITO de la reunión, de cualquiera de los dos lados, con fecha o sin ella. Como mucho ${MAX_COMPROMISOS}; la lista vacía es correcta.`,
-      items: {
-        type: "object",
-        properties: {
-          quien: { type: "string", enum: ["CLIENTE", "SMARTEAM"] },
-          responsable: conTexto("El nombre de la persona que se comprometió, si se dijo."),
-          ownerEmail,
-          que: conTexto("Qué se comprometió, en una frase concreta."),
-          tituloDeSeguimiento: {
-            type: ["string", "null"],
-            description: "Solo si quien es CLIENTE: lo que tiene que hacer el CSE para que se cumpla, en imperativo y en tuteo, nombrando a la persona («Recordarle a Ana que envíe la base de datos»). Si quien es SMARTEAM, null.",
-          },
-          fecha: { type: ["string", "null"], description: "AAAA-MM-DD calculada con el calendario desde la fecha de la reunión; null si no se dijo." },
-          tipo: { type: "string", enum: ["PLAN", "INSUMO", "ACCION"] },
-          frenaElPlan: { type: "boolean", description: "true solo si, sin esto, el proyecto no puede avanzar." },
-          cita: conTexto("La frase que lo respalda, copiada TEXTUAL de la transcripción o del resumen de Gemini: 12 caracteres o más, sin puntos suspensivos y sin cambiarle una palabra."),
-        },
-        required: ["quien", "que", "tipo", "frenaElPlan", "cita"],
-      },
-    },
+    compromisos: esquemaDeLosCompromisos(p.emailsDelEquipo),
     detectedTopics: { type: "array", items: TEXTO, description: "De 1 a 5 temas del vocabulario del prompt, en minúsculas y con guiones." },
   };
   if (p.pideFueraDeAlcance) {

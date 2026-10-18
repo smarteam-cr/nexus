@@ -20,6 +20,7 @@
  */
 
 import { MOTIVO_APAGADO as MOTIVO_APAGADO_DEL_SEGUIMIENTO, seguimientoPrendido } from "@/lib/lecturas/reglas";
+import { copiaPrendida, MOTIVO_COPIA_APAGADA } from "@/lib/comunicaciones/banderas";
 
 export type Entorno = Readonly<Record<string, string | undefined>>;
 
@@ -88,6 +89,9 @@ const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
   "seguimiento-reuniones": (env) => (seguimientoPrendido({ SEGUIMIENTO_REUNIONES_ENABLED: env.SEGUIMIENTO_REUNIONES_ENABLED }) ? null : MOTIVO_APAGADO_DEL_SEGUIMIENTO),
   /* Las tareas de HubSpot en Tareas internas (2026-10-15, etapa 3 de docs/mi-dia-plan.md). Prendida por defecto: solo se
      apaga a propósito (y apagada, lo que cambie en Nexus se sigue escribiendo en HubSpot al guardar cada tarea). */
+  /* Los correos, las notas y las llamadas de HubSpot (iniciativa B, 2026-10-18). Prendida por defecto: solo se apaga a
+     propósito. La lectura de sus compromisos se apaga aparte (COMPROMISOS_DE_CORREOS_ENABLED=0) y no apaga la copia. */
+  "comunicaciones-hubspot": (env) => (copiaPrendida(env) ? null : MOTIVO_COPIA_APAGADA),
   "tareas-hubspot": (env) =>
     env.TAREAS_HUBSPOT_ENABLED === "0" ? "Apagado a propósito: TAREAS_HUBSPOT_ENABLED=0 en el .env del servidor." : null,
 };

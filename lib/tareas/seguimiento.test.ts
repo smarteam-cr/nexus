@@ -157,3 +157,30 @@ describe("el id de la línea y lo que viaja al evento", () => {
     expect(t).toBe("Compromiso de Smarteam en la reunión del jue 8 oct, lo dijo Lidia: Mandar el tablero de ventas. Para el vie 9 oct.");
   });
 });
+
+describe("lo que sale de un CORREO que mandó Smarteam (iniciativa B)", () => {
+  const delCorreo: Partial<EntradaDeSeguimiento> = {
+    reunion: { id: "com-1", inicio: INICIO, participantes: ["marco@smarteamcr.com"] },
+    cseDelProyecto: null,
+    cseDeLaCuenta: "marco@smarteamcr.com",
+    projectId: null,
+    fuente: { tipo: "correo", asunto: "Minuta de la sesión 1", autorEmail: "marco@smarteamcr.com" },
+  };
+
+  it("lo de Smarteam sin quién lo lleva es de quien mandó el correo", () => {
+    const [p] = armarPropuestasDeSeguimiento(entrada([compromiso({ que: "Agendar la sesión 2" })], delCorreo)).propuestas;
+    expect(p.responsableEmail).toBe("marco@smarteamcr.com");
+    expect(p.sugerido).toMatchObject({ seguimiento: true, deUnCorreo: true });
+  });
+
+  it("el contexto dice que salió del correo, con su asunto", () => {
+    expect(contextoDelCompromiso(compromiso({ que: "Agendar la sesión 2", fecha: "2026-10-13" }), INICIO, delCorreo.fuente)).toBe(
+      "Compromiso de Smarteam en el correo del jue 8 oct «Minuta de la sesión 1»: Agendar la sesión 2. Para el mar 13 oct.",
+    );
+  });
+
+  it("lo que prometió el cliente va al CSE de la cuenta como seguimiento", () => {
+    const [p] = armarPropuestasDeSeguimiento(entrada([compromiso({ quien: "CLIENTE", responsable: "Ana", que: "Enviar la base", tituloDeSeguimiento: "Recordarle a Ana que envíe la base" })], delCorreo)).propuestas;
+    expect(p).toMatchObject({ responsableEmail: "marco@smarteamcr.com", titulo: "Recordarle a Ana que envíe la base", projectId: null });
+  });
+});

@@ -294,6 +294,7 @@ toma el turno del día no anota nada, así que un rojo queda rojo hasta la corri
 | `tareas-hubspot` | cada 15 minutos de 6:00 a 21:00 CR | `TAREAS_HUBSPOT_ENABLED` ≠ `0` (prendido por defecto) | las tareas de HubSpot del equipo en Tareas internas, en los dos sentidos (`lib/tareas-hubspot`): trae las abiertas de cada persona del equipo (también las de secuencias) y las completadas esta semana; lo que cambió en HubSpot se aplica en Nexus y lo que cambió en Nexus se escribe en HubSpot (título, estado, vencimiento, prioridad, responsable; si los dos cambiaron, gana el último). Una tarea borrada en HubSpot o que pasó a alguien de afuera queda «Ya no se hará». Un candado: una copia a la vez. Carga inicial: `scripts/sync-tareas-de-hubspot.ts` (simulacro primero) |
 | `tareas-sprint` | cada tick (con 10 minutos de espera por proceso) | — | las reuniones de sprint de cada equipo (`lib/tareas/fuentes-server.ts`): mira las series que configuró quien lidera cada sprint y pide la lectura de cada reunión nueva que terminó hace entre 15 minutos y 24 horas. Lee lo que ya sincronizó Meet; nunca corre la sync. La misma mirada corre al abrir Tareas. Sin nada que pedir no anota |
 | `contactos-y-tickets` | cada hora de 6:00 a 20:00 CR, todos los días | — | copia los contactos y los tickets de HubSpot de las empresas de Nexus (clientes y prospectos con su empresa de HubSpot) a `ContactoDeHubspot` y `TicketDeHubspot` (`lib/contactos/copia-server.ts`). Solo lee HubSpot. Nunca borra: lo que la empresa deja de tener asociado queda `vigente = false`, y solo en un cliente que se leyó entero. Sin permiso (403), esa mitad no se toca. Un turno por hora; con el candado tomado, suelta el turno y reintenta. Después reintenta las notas de la cuenta que quedaron sin escribir en HubSpot (`lib/notas/escritura-server.ts`, hasta 25 por corrida y 5 intentos cada una). Carga inicial: `scripts/sync-contactos-y-tickets.ts` (simulacro primero) |
+| `comunicaciones-hubspot` | cada hora de 6:00 a 20:00 CR, todos los días | `COMUNICACIONES_HUBSPOT_ENABLED` ≠ `0` (prendido por defecto) y el SQL `2026-10-18-comunicaciones-de-hubspot.sql` | copia los correos, las notas y las llamadas de HubSpot de las empresas de Nexus (clientes y prospectos) y de sus contactos a `ComunicacionDeHubspot` (`lib/comunicaciones/copia-server.ts`), por la búsqueda de lo modificado y las asociaciones en lote, 120 días. Solo lee HubSpot. Una comunicación es de UN cliente: la de dos no se guarda. Nunca borra (`vigente = false`). Sin el permiso de correos, los correos dicen «sin permiso» y sigue con lo demás. Después, si queda presupuesto automático y `COMPROMISOS_DE_CORREOS_ENABLED` ≠ `0`, lee los compromisos de hasta 10 correos enviados (Haiku 4.5) y los deja como propuestas de tarea (`lib/comunicaciones/compromisos-server.ts`). Un turno por hora; con el candado tomado, suelta el turno. Carga inicial: `scripts/sync-comunicaciones-de-hubspot.ts` (simulacro primero). Ver «Los correos, las notas y las llamadas de HubSpot» |
 | `indice-de-reuniones` | cada hora, todos los días | — | parte en turnos las transcripciones de las reuniones con clientes y prospectos de los últimos 180 días que todavía no se partieron o cambiaron (`lib/busqueda/indexar-server.ts`), de a 60, para la búsqueda en las reuniones y el resumen antes de cada reunión. Solo escribe `TurnoDeReunion` y `ReunionIndexada`. Carga inicial: `scripts/indexar-reuniones.ts` (simulacro primero) |
 | `negocios-abiertos` | cada hora de 6:00 a 20:00 CR, todos los días | — | copia los negocios ABIERTOS de los tres pipelines de venta propia a `NegocioAbierto` (dueño, empresa, fecha de cierre, monto, probabilidad, siguiente paso y actividad de HubSpot) y el dueño de cada empresa de Nexus a `Client.hubspotOwnerEmail`. «Para ti» de Ventas sale de esta copia. Lee además el siguiente paso de cada equipo (`siguiente_paso_*`) de los negocios y las empresas: lo que alguien escribió en HubSpot entra como tarea del sprint de ese equipo (desde el 2026-10-16 el siguiente paso es una tarea). Lo único que escribe en HubSpot es el siguiente paso: el de las cuentas cuyas tareas cambiaron en las últimas dos horas (hasta 40 cuentas) y lo que quedó sin escribirse (hasta 25 por corrida, 5 intentos cada uno; `lib/siguiente-paso/escritura-server.ts`). Un turno por hora; si otra corrida tiene el candado o la búsqueda trae menos de la mitad de lo conocido, suelta el turno y reintenta. Carga inicial: `scripts/sync-negocios-abiertos.ts` (simulacro primero) |
 | `odoo-espejo-daily` | ≥ 6:00 CR, una vez al día | `ODOO_PASSWORD` (contraseña o clave de API), `ODOO_LOGIN` si la clave no es de `direct`, y `ODOO_SYNC_ENABLED` ≠ `0` | espeja las facturas de Odoo (Nexus solo lee). Si la corrida falla, el job FALLA (rojo + Sentry); un rechazo de credenciales retiene el turno hasta mañana (ver «El espejo de Odoo no corre»). INV31 da rojo si la última corrida buena tiene más de 20 h |
@@ -458,6 +459,32 @@ la cola.
 - **Para apagarla otra vez:** sacar la variable (o `SEGUIMIENTO_HECHOS=0`) y `bash scripts/deploy.sh`. Los hechos que ya
   se escribieron quedan en la base, pero dejan de verse y de llegarle a los agentes (la memoria y el vigía); nada nuevo
   los escribe. Un cambio de dueño los sigue corrigiendo aunque la bandera esté apagada.
+
+### Los correos, las notas y las llamadas de HubSpot (iniciativa B, 2026-10-18)
+
+La copia de solo lectura de los correos, las notas y las llamadas de las empresas de Nexus (`ComunicacionDeHubspot`,
+job `comunicaciones-hubspot`) y la lectura de los compromisos de los correos enviados (DECISIONS «Los correos y el
+timeline de HubSpot, en el contexto de la cuenta»; plan en docs/correos-en-el-contexto-plan.md).
+
+1. **Antes del deploy**, desde una PC: `$env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-10-18-comunicaciones-de-hubspot.sql; Remove-Item Env:ALLOW_PROD_WRITE`
+   y `npm run check:esquema` en verde. Sin el SQL, `/api/health` responde 503 y el deploy se revierte solo.
+2. **Simulacro** (solo lee, no necesita el SQL): `npx tsx scripts/sync-comunicaciones-de-hubspot.ts`. Dice cuántas
+   comunicaciones quedarían por cliente (sin Wherex), cuántas son de dos clientes (no se guardan) y cuánto costaría leer
+   los compromisos al mes.
+3. **Carga inicial** (después del SQL): `$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/sync-comunicaciones-de-hubspot.ts --apply; Remove-Item Env:ALLOW_PROD_WRITE`.
+   Respalda `ComunicacionDeHubspot` y `CronJobState`. De ahí en adelante, el job cada hora.
+4. **Los correos dicen «sin permiso»**: la app de HubSpot no tiene `sales-email-read`. Para leerlos: declarar
+   `sales-email-read` y `crm.objects.emails.read` como «Opcional» en la app pública, sumarlos a
+   `HUBSPOT_SCOPES_OPCIONALES_EXTRA` en el `.env`, `bash scripts/deploy.sh` y reconectar HubSpot desde Integraciones. La
+   corrida siguiente trae los correos de 120 días.
+5. **Apagar**: `COMUNICACIONES_HUBSPOT_ENABLED=0` apaga la copia (y con ella todo); `COMPROMISOS_DE_CORREOS_ENABLED=0`
+   apaga solo la lectura de compromisos (sin IA). Las dos piden `bash scripts/deploy.sh` para que el contenedor lea el
+   `.env` nuevo.
+6. **Un correo en `error`**: el job lo reintenta hasta 3 veces (`ComunicacionDeHubspot.compromisosError` dice por qué).
+   Para volver a leerlo: `compromisosEstado = 'pendiente'` y `compromisosIntentos = 0` en esa fila (escritura a
+   producción: la hace una persona). Una lectura colgada más de 15 minutos vuelve sola a la cola.
+7. **El punto de partida** vive en `CronJobState` («comunicaciones-hubspot-cursor», ms por tipo). Para releer los 120
+   días: borrar esa fila (la corrida siguiente vuelve a leer todo; no duplica nada: el único es por tipo e id de HubSpot).
 
 ### Prender la copia diaria de Éxito del cliente
 

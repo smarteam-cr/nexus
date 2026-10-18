@@ -39,7 +39,7 @@ import { etiquetaDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { soloOcurridas } from "@/lib/sessions/ocurridas";
 import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
 import { COLUMNA_DEL_DESTINO, type DestinoSugerido } from "@/lib/sessions/destinos-de-contexto";
-import { compromisosAbiertosParaAgentes } from "@/lib/tareas/para-agentes";
+import { compromisosAbiertosParaAgentes, compromisosDeLaCuentaParaAgentes } from "@/lib/tareas/para-agentes";
 import { esCerrada } from "@/lib/timeline/particularidad-state";
 import { armarLoEsencial, armarMemoriaDeLaCuenta, armarMemoriaDelProyecto, resumirMapa, TOPES_DE_LA_MEMORIA } from "./armar";
 import { consumidorDeLaMemoria, queCargar, type LectorDeMemoria } from "./consumidores";
@@ -52,6 +52,7 @@ import type {
   PersonaDeLaMemoria,
   TicketDeLaMemoria,
   NotaDelEquipoDeLaMemoria,
+  ComunicacionDeLaMemoria,
   LoQueSabeLaIADeLaMemoria,
   MemoriaArmada,
   PedidoDeLaMemoria,
@@ -184,7 +185,7 @@ async function cargarDatosDeLaCuenta(
   q: QueCargar,
   opts: { proyectoActualId: string | null; sinPartes: ReadonlySet<ClaveDeParte> },
 ): Promise<DatosDeLaCuenta | null> {
-  const [cliente, procesos, entrega, fueraDeAlcance, preventa, auditoria, hechos, personasYTickets, notasDelEquipo] = await Promise.all([
+  const [cliente, procesos, entrega, fueraDeAlcance, preventa, auditoria, hechos, personasYTickets, notasDelEquipo, comunicaciones, compromisosDeLaCuenta] = await Promise.all([
     seguro(
       "el cliente",
       () =>
@@ -215,6 +216,10 @@ async function cargarDatosDeLaCuenta(
       ? seguro("las personas y los tickets de HubSpot", () => leerPersonasYTickets(clientId), null)
       : Promise.resolve(null),
     q.notasDelEquipo && !opts.sinPartes.has("notasDelEquipo") ? seguro("las notas del equipo", () => leerNotasDelEquipo(clientId), []) : Promise.resolve([]),
+    q.comunicaciones && !opts.sinPartes.has("comunicaciones") ? seguro("las comunicaciones de HubSpot", () => leerComunicaciones(clientId), []) : Promise.resolve([]),
+    q.compromisosDeLaCuenta && !opts.sinPartes.has("compromisosDeLaCuenta")
+      ? seguro("los compromisos de la cuenta", () => compromisosDeLaCuentaParaAgentes(clientId, TOPES_DE_LA_MEMORIA.compromisosDeLaCuenta), [])
+      : Promise.resolve([]),
   ]);
   if (!cliente) return null;
   return {
@@ -237,7 +242,18 @@ async function cargarDatosDeLaCuenta(
     personas: personasYTickets?.personas ?? [],
     tickets: personasYTickets?.tickets ?? [],
     notasDelEquipo,
+    comunicaciones,
+    compromisosDeLaCuenta,
   };
+}
+
+/**
+ * Las comunicaciones de HubSpot (iniciativa B), por su única puerta de lectura (lib/comunicaciones/lectura-server.ts).
+ * Import dinámico: los alcances que no lo cargan ni lo importan. Sin la tabla, vacío.
+ */
+async function leerComunicaciones(clientId: string): Promise<ComunicacionDeLaMemoria[]> {
+  const { comunicacionesParaLaMemoria } = await import("@/lib/comunicaciones/lectura-server");
+  return comunicacionesParaLaMemoria(clientId);
 }
 
 /**

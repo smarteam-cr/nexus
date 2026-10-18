@@ -6692,6 +6692,10 @@ plan; las reglas de cada una, en las secciones que siguen.
 - **Fuera por ahora:** las reuniones grabadas en HubSpot, los correos y las notas pegadas como fuentes de la lectura
   única. Entran cuando tengan un disparo definido y medido, y la deduplicación contra Meet. *Por qué:* la caída del
   21-sep se sospechó de un disparo sin freno.
+  ⚠ **Enmendado el 2026-10-18** (iniciativa B): los correos, las notas y las llamadas de HubSpot entran, pero como una
+  fuente APARTE (`ComunicacionDeHubspot`, un job cada hora), no como una fuente más de la lectura de cada reunión. Los
+  compromisos de un correo enviado van por la misma salida estándar (lib/tareas/seguimiento.ts). Ver «Los correos y el
+  timeline de HubSpot, en el contexto de la cuenta».
 
 ## Memoria de la cuenta · Etapa 0: arreglos y limpieza (2026-10-09)
 
@@ -9125,3 +9129,61 @@ clientes fuera de Meet sumaron 38,5 h; 27 no eran de una sola empresa de la cart
 - **Pendiente:** «¿Cuánto te tomó?» no pregunta por las tareas internas (solo por las del cronograma); hoy una tarea
   interna sin bloque ni estimado no suma. Del 1 al 18 de octubre hubo 3 hechas con una cuenta, y ninguna tenía bloque ni
   estimado.
+## Los correos y el timeline de HubSpot, en el contexto de la cuenta (2026-10-18)
+
+**Contexto.** Iniciativa B de docs/roadmap.md (la reunión con Marco del 17 oct); el plan, en
+docs/correos-en-el-contexto-plan.md. Una minuta con fechas se le mandó al cliente por correo, la reunión que prometía
+nunca se agendó, nadie le dio seguimiento y el cliente le escribió a Marco. Nexus leía las reuniones, pero no los correos
+ni el timeline de HubSpot. Enmienda el «Fuera por ahora» de «La memoria de la cuenta: una sola lectura por reunión, en
+cinco piezas»: los correos entran, como una fuente aparte, no como una fuente más de la lectura de cada reunión.
+
+- **Una copia de solo lectura, `ComunicacionDeHubspot`**, con su único escritor (lib/comunicaciones/copia-server.ts) y un
+  job (`comunicaciones-hubspot`, cada hora de 6:00 a 20:00). Lee los correos (enviados y recibidos), las notas y las
+  llamadas de 120 días por la BÚSQUEDA de HubSpot (lo modificado desde la corrida anterior) y las asociaciones v4 en
+  lote. *Por qué no el timeline de cada empresa:* serían más de 1.500 pedidos por corrida; así son unos pocos. Medido el
+  2026-10-18: 1.631 notas y 306 llamadas en el portal; quedan 256 notas y 6 llamadas de 73 clientes y prospectos.
+- **Una comunicación es de UN cliente** (`clienteDeLaComunicacion`, puro): primero las empresas de HubSpot asociadas que
+  son de clientes de Nexus; sin ninguna, los contactos asociados (la copia de contactos). Dos o más clientes → no se
+  guarda y se cuenta (3 el 2026-10-18). Los aliados y Smarteam no cuentan. Nunca se borra una fila: la que pasa a ser de
+  dos clientes queda `vigente = false`.
+- **Se guarda lo necesario**: tipo, dirección (enviado o recibido), fecha, asunto (300), texto en limpio sin HTML ni la
+  cita del hilo (4.000), el autor (el dueño de HubSpot) y el remitente de un correo recibido. Sin destinatarios ni
+  adjuntos. Una llamada o una nota sin texto no se guarda (las llamadas sin cuerpo son reuniones de Meet registradas
+  como llamada), ni la nota de la ficha.
+- **Sin el permiso de correos no hay correos.** La app de HubSpot no tiene `sales-email-read` ni
+  `crm.objects.emails.read`: la búsqueda responde 403 y la API v1 los devuelve sin asunto ni texto. La copia lo dice
+  (`correos: sin permiso`) y sigue con las notas y las llamadas. No se guardan correos «tapados»: sin texto no dicen
+  nada. Concederlo es decisión de Elías (por entorno, `HUBSPOT_SCOPES_OPCIONALES_EXTRA`, después de declararlo
+  «Opcional» en la app pública); la primera corrida con el permiso trae los 120 días.
+- **Lo que Smarteam prometió por correo va por la MISMA salida que una reunión.** De un correo enviado, de 14 días o
+  menos, con una fecha o un compromiso (el filtro en código, `motivoDeLaLectura`, antes de gastar), Haiku 4.5 lee sus
+  compromisos con el mismo esquema (`esquemaDeLosCompromisos`, lib/sessions/lectura-salida.ts), la cita se verifica tal
+  cual contra el correo, y `armarPropuestasDeSeguimiento` (lib/tareas/seguimiento.ts) decide a quién le llega cada uno:
+  lo de Smarteam a quien lo dijo o, sin saberlo, a quien mandó el correo; lo que el correo recapitula del cliente, al CSE
+  de la cuenta como seguimiento. Lo escribe el único escritor de Tareas (`escribirPropuestasDeComunicacion`), con
+  `origen = "correo"` y `origenId = cor:<comunicación>:<línea>`. *Por qué no otro lector:* un compromiso es un compromiso,
+  venga de donde venga; dos lectores darían dos reglas de a quién le llega.
+- **Cada correo se lee una vez** (su estado vive en la fila: `pendiente`, `leyendo`, `leido`, `no_aplica`, `error`, hasta
+  3 reintentos). Contra el presupuesto automático. Se apaga con `COMPROMISOS_DE_CORREOS_ENABLED=0`; la copia, con
+  `COMUNICACIONES_HUBSPOT_ENABLED=0`. Su costo queda en `LlmCall` con `agentSlug = "tareas-correo"` (familia «Tareas»).
+  Estimado: US$0,003 por correo.
+- **El aviso de las 48 horas** (`compromisoSinAgendar`, lib/comunicaciones/sin-agendar.ts, puro): un compromiso con el
+  cliente (de un correo o de la lectura de seguimiento de una reunión) con fecha, o una reunión prometida, que a las 48
+  horas nadie tomó (sigue propuesto, o «Por asignar»), y si es una reunión, que no está en el calendario del CSE, ni
+  planeada en Tareas, ni ocurrió. Rechazarlo es una decisión: no avisa. Deja de avisar a los 21 días. Le llega al CSE de
+  la cuenta (una línea por compromiso; en un prospecto, a quien tiene la propuesta) y a quien lidera Customer Success
+  (una línea por cuenta), con peso 85 en «Lo que importa hoy». *Supuesto aceptado:* cualquier evento próximo con la cuenta
+  cuenta como «está en el calendario», aunque sea otra reunión: si se van a ver pronto, la promesa se puede cubrir ahí.
+- **La memoria interna de la cuenta suma dos partes**: «Comunicaciones con el cliente en HubSpot» (las 12 más recientes
+  de 60 días, con su fecha y quién la escribió, sin las notas que escribió Nexus, que ya están en «Notas del equipo») y
+  «Compromisos abiertos de la cuenta, sin proyecto» (los de un correo o una reunión sin proyecto, por la puerta de Tareas
+  para agentes). Solo el alcance interno: son conversaciones con el cliente tal cual. Las leen el vigía, el chat de Nexus,
+  la preventa de una empresa que ya es cliente (A0), la exploración del proyecto (F0) y «Actualizar escala». El chat
+  suma la lectura «comunicaciones.recientes» (la lista, o una entera por su id).
+- **Lo que se ingresa a mano ya estaba conectado**, y se verificó: las notas de la cuenta entran a la memoria interna
+  («Notas del equipo») y se escriben en HubSpot como nota (así la preventa de un prospecto, que lee el timeline de
+  HubSpot, también las ve); las reuniones agregadas a mano son reuniones (las lee la lectura de cada reunión y el chat las
+  lista); los acuerdos viven en la minuta de cada reunión. El lector de fuentes de la preventa no se tocó.
+- **Fuera por ahora:** pedir el permiso de correos (decisión de Elías); leer compromisos de los correos recibidos, de las
+  notas o de las llamadas; copiar las reuniones de HubSpot; que la lectura de cada reunión lea las comunicaciones; una
+  pantalla propia.
