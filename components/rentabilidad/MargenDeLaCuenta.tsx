@@ -2,7 +2,7 @@
  * components/rentabilidad/MargenDeLaCuenta.tsx — Rentabilidad › una cuenta (2026-10-07, tablero «Cuenta» de
  * «Rentabilidad · diseño»). SOLO DIRECCIÓN: la página corta antes de cargar (`veRentabilidad`).
  *
- * El último trimestre cerrado mes a mes (en vivo: la foto de cada mes llega con E6), quién la atendió con su costo por
+ * El último trimestre cerrado mes a mes (cada mes desde su foto o, sin ella, en vivo, y lo dice), quién la atendió con su costo por
  * hora, por qué su factor es el que es y lo que respondió el equipo en «¿cuánto te tomó?» (sin nombres: el rol).
  */
 import Link from "next/link";
@@ -14,6 +14,7 @@ import { ROLE_LABEL } from "@/lib/auth/roles";
 import { RUTA_DE_LA_RENTABILIDAD } from "@/lib/carga/rutas";
 import { formatoMinutos } from "@/lib/tiempos/reglas";
 import type { MargenDeLaCuenta as Datos } from "@/lib/rentabilidad/queries";
+import OrigenDeLosMeses from "./OrigenDeLosMeses";
 
 const miles = (n: number) => String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 const usd = (x: number) => `${x < 0 ? "−" : ""}US$ ${miles(x)}`;
@@ -100,16 +101,20 @@ export default function MargenDeLaCuenta({ datos, contenedor }: { datos: Datos; 
                           Sin horas ni cobros ese mes
                         </td>
                       )}
-                      <td className="px-4 py-2.5 text-xs text-fg-muted">En vivo</td>
+                      <td className={cn("px-4 py-2.5 text-xs", m.origen.origen === "foto" ? "text-fg-muted" : "text-warn-ink")}>
+                        {m.origen.origen === "foto" && m.origen.tomadaAt ? `Foto del ${fecha(m.origen.tomadaAt)}` : "En vivo"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
             <p className="px-4 text-xs text-fg-muted">
-              «En vivo»: se calcula con los datos de hoy. Cuando exista la foto del mes, el mes cerrado queda con lo que se midió al cerrarlo.
+              «Foto»: lo que el cálculo decía del mes al cerrarlo. «En vivo»: el mes no tiene foto y se calcula con los datos de hoy.
             </p>
           </section>
+
+          <OrigenDeLosMeses origenes={datos.origenDeLosMeses} />
 
           <div className="grid items-start gap-4 lg:grid-cols-2">
             <section className="space-y-2 rounded-xl border border-line bg-surface py-4">

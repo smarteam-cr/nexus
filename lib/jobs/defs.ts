@@ -26,6 +26,8 @@
  *     la búsqueda (lib/busqueda/indexar-server.ts), cada hora, de a 60 (etapa 4c de docs/mi-dia-plan.md).
  *   - seguimiento-reuniones → la lectura de cada reunión con un cliente o un prospecto, por la cola
  *     `LecturaDeReunion` (memoria de la cuenta, etapa 2). Cada tick. Gated por SEGUIMIENTO_REUNIONES_ENABLED≠0.
+ *   - rentabilidad-foto-mensual → la foto del margen del mes que cerró (lib/rentabilidad/foto-server.ts), el día 3
+ *     desde las 7:00 CR; una vez por mes y sin pisar una foto que ya está.
  *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
  *     ≥ 7:00 CR, después de los espejos. Si alguno está en rojo el job LANZA: semáforo rojo
  *     en Integraciones + Sentry con tags.job. Solo lecturas. (B-08)
@@ -47,6 +49,7 @@ import { claimDateKey, correrPasosAislados, SIN_TURNO, type JobDef } from "./reg
 import { motivoApagado, partnerCreaClientes } from "./requisitos";
 import { WEEKDAYS_MON_FRI } from "./time";
 import { esDiaDeCorte } from "@/lib/cobranza/antiguedad";
+import { mesQueTocaFotografiar } from "@/lib/rentabilidad/foto";
 
 /** ¿La configuración de este servidor deja correr el job? Si no, Integraciones dice por qué. */
 const encendido = (jobKey: string): boolean => motivoApagado(jobKey, process.env) === null;
@@ -668,6 +671,44 @@ const tareasSemanaLunes: JobDef = {
   },
 };
 
+/**
+ * La foto del margen del mes que cerró (Rentabilidad, E6 de docs/rentabilidad-y-carga-plan.md, 2026-10-17): desde el día
+ * 3 a las 7:00 CR (los cobros y el tipo de cambio del mes ya están), guarda lo que el cálculo en vivo dice de ese mes
+ * (lib/rentabilidad/foto-server.ts). El turno es del MES: corre una vez por mes. No pisa una foto que ya está. Si falla,
+ * suelta el turno y vuelve a probar pasada una hora (cada intento lee medio Nexus: no cada minuto).
+ */
+const ESPERA_TRAS_FALLO_FOTO_MS = 60 * 60_000;
+const rentabilidadFotoMensual: JobDef = {
+  key: "rentabilidad-foto-mensual",
+  shouldRun: (now) => mesQueTocaFotografiar(now) !== null,
+  run: async (now) => {
+    const mes = mesQueTocaFotografiar(now);
+    if (!mes) return SIN_TURNO;
+    const previo = await prisma.cronJobState.findUnique({
+      where: { id: "rentabilidad-foto-mensual" },
+      select: { lastRunDateKey: true, lastRunAt: true },
+    });
+    if (previo?.lastRunDateKey === null && previo.lastRunAt && now.getTime() - previo.lastRunAt.getTime() < ESPERA_TRAS_FALLO_FOTO_MS) {
+      return SIN_TURNO;
+    }
+    if (!(await claimDateKey("rentabilidad-foto-mensual", mes, now))) return SIN_TURNO;
+    const { tomarFotoDelMes } = await import("@/lib/rentabilidad/foto-server");
+    try {
+      const r = await tomarFotoDelMes(mes, { por: "sistema", ahora: now });
+      console.log(
+        r.estado === "ya-estaba"
+          ? `[jobs/rentabilidad-foto] ${mes} — ya tenía foto (${r.tomadaPor}, ${r.tomadaAt.toISOString().slice(0, 10)}): no se tocó`
+          : `[jobs/rentabilidad-foto] ${mes} — foto tomada: ${r.cuentas} cuenta(s)`,
+      );
+    } catch (e) {
+      await prisma.cronJobState
+        .updateMany({ where: { id: "rentabilidad-foto-mensual", lastRunDateKey: mes }, data: { lastRunDateKey: null } })
+        .catch(() => {});
+      throw e;
+    }
+  },
+};
+
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 /**
  * La copia de los contactos y los tickets de HubSpot (etapa 6a de docs/mi-dia-plan.md). Solo lee HubSpot. Una corrida por
@@ -723,5 +764,5 @@ const indiceDeReuniones: JobDef = {
 };
 
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, invariantsDaily];
 }

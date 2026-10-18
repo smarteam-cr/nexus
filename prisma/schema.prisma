@@ -3222,6 +3222,86 @@ model ConfigCarga {
   @@index([createdAt])
 }
 
+// La FOTO del margen de cada mes cerrado (Rentabilidad, E6 de docs/rentabilidad-y-carga-plan.md, 2026-10-17). Lo que el
+// cálculo en vivo decía de ese mes, el día que se tomó: Rentabilidad la lee para los meses cerrados (el vivo cambia con
+// cada cobro tardío o supuesto recalibrado). La escribe SOLO lib/rentabilidad/foto-server.ts, con las mismas funciones
+// de la pantalla (lib/rentabilidad/foto.ts). Una por mes; volver a tomarla reemplaza el mes entero. Todo en dólares.
+// ⛔ Lleva planilla y el costo de la hora de cada persona: solo dirección (SUPER_ADMIN).
+// SQL: scripts/sql/2026-10-17-foto-del-margen.sql (RLS + deny).
+model FotoMargenMes {
+  id               String             @id @default(cuid())
+  /// «2026-09»: el mes (hora de Costa Rica).
+  mes              String             @unique
+  /// La forma de lo guardado (VERSION_DE_LA_FOTO).
+  version          Int                @default(1)
+  /// correo | "sistema"
+  tomadaPor        String
+  tomadaAt         DateTime           @default(now())
+  /// nullable porque solo volver a tomarla pide un motivo.
+  motivo           String?
+  planilla         Decimal            @db.Decimal(12, 2)
+  ingreso          Decimal            @db.Decimal(12, 2)
+  horasPagadas     Decimal            @db.Decimal(10, 2)
+  horasConClientes Decimal            @db.Decimal(10, 2)
+  horasCalendario  Decimal            @db.Decimal(10, 2)
+  horasRespondidas Decimal            @db.Decimal(10, 2)
+  horasEstimadas   Decimal            @db.Decimal(10, 2)
+  horasPorSesion   Decimal            @db.Decimal(10, 4)
+  // nullable porque sin horas pagadas (o sin horas con clientes) no hay costo de la hora.
+  costoHoraDirecto Decimal?           @db.Decimal(12, 2)
+  costoHoraCargado Decimal?           @db.Decimal(12, 2)
+  preparacionMin   Int
+  /// { id, guardadaEn, guardadaPor }: la fila de ConfigCarga que rigió.
+  supuestos        Json
+  /// { crcPorUsd, fuente } del mes, o null.
+  tasa             Json?
+  /// { personas: CostoDeUnaPersona[], equipos: CostoDeUnEquipo[] } (lib/rentabilidad/tipos.ts).
+  costos           Json
+  /// { conCosto, sinCosto, fuentes }
+  personas         Json
+  avisos           Json
+  cuentas          FotoMargenCuenta[]
+  updatedAt        DateTime           @updatedAt
+}
+
+/// Una cuenta en la foto de un mes. `clientId` SIN FK a propósito: es la foto del pasado y no cambia si la ficha se
+/// fusiona o se borra (el nombre queda congelado). Lo declara lib/clients/fusion-de-empresas.ts › SE_QUEDAN_A_PROPOSITO.
+model FotoMargenCuenta {
+  id               String        @id @default(cuid())
+  fotoId           String
+  foto             FotoMargenMes @relation(fields: [fotoId], references: [id], onDelete: Cascade)
+  mes              String
+  clientId         String
+  nombre           String
+  // nullable porque una cuenta puede no tener CSE.
+  cse              String?
+  ingreso          Decimal       @db.Decimal(12, 2)
+  /// Cobranza | Odoo | null
+  fuenteIngreso    String?
+  horasCalendario  Decimal       @db.Decimal(10, 2)
+  horasPreparacion Decimal       @db.Decimal(10, 2)
+  horasEntrega     Decimal       @db.Decimal(10, 2)
+  horasRespondidas Decimal       @db.Decimal(10, 2)
+  horasEstimadas   Decimal       @db.Decimal(10, 2)
+  reuniones        Int
+  // nullable porque una cuenta sin cronograma en el mes no tiene plan.
+  planSesiones     Decimal?      @db.Decimal(10, 2)
+  planHorasTareas  Decimal?      @db.Decimal(10, 2)
+  costoPersona     Decimal       @db.Decimal(12, 2)
+  costoEquipo      Decimal       @db.Decimal(12, 2)
+  costoCargado     Decimal       @db.Decimal(12, 2)
+  margenPersona    Decimal       @db.Decimal(12, 2)
+  margenEquipo     Decimal       @db.Decimal(12, 2)
+  margenCargado    Decimal       @db.Decimal(12, 2)
+  factor           Decimal       @db.Decimal(5, 2)
+  /// [{ email, horas }]
+  porPersona       Json
+
+  @@unique([mes, clientId])
+  @@index([clientId, mes])
+  @@index([fotoId])
+}
+
 // Cómo clasifica la CSL cada cuenta de la cartera (2026-10-07): tipo de relación, potencial y momento. Guarda solo lo
 // CONFIRMADO (quién y cuándo) y lo DESCARTADO; la propuesta de Nexus se calcula al leer (lib/cs/clasificacion.ts). Los
 // valores son texto y no enum: sumar uno no pide ALTER TYPE. El CSE responsable no va acá: es el de HubSpot.

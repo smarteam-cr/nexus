@@ -163,6 +163,8 @@ export const SE_BORRAN_A_PROPOSITO: Readonly<Record<string, string>> = {};
 export const SE_QUEDAN_A_PROPOSITO: Readonly<Record<string, string>> = {
   "resultadoDeSemana.fotoCliente":
     "es la FOTO de cada semana de Tareas: el pasado no cambia (sin FK a propósito), y solo anotarResultado() escribe esa tabla. ⚠ Lo hecho de la absorbida no aparece en «Tareas internas por cliente» de la que sigue: el script lo cuenta y lo avisa",
+  "fotoMargenCuenta.clientId":
+    "es la FOTO del margen de un mes cerrado (Rentabilidad, 2026-10-17): el pasado no cambia (sin FK a propósito) y el nombre de la cuenta queda congelado en la fila. ⚠ En los meses con foto, la absorbida sigue apareciendo como su propia fila; volver a tomar la foto de ese mes la junta con la que sigue",
 };
 
 /** El nombre de la tabla de un delegado: `stageNote` → `StageNote`. */

@@ -118,7 +118,7 @@
 
 - Tabla `FotoMargenCuenta` (`scripts/sql/2026-10-08-foto-margen-cuenta.sql`, aditiva, RLS + RESTRICTIVE): una fila
   por mes y cuenta con lo real, lo estimado, los costos de la hora y la versión de los supuestos.
-- Job `rentabilidad-foto-mensual` (día 1, ≥ 6:00 CR): fotografía el mes que cerró. «Volver a fotografiar» con
+- Job `rentabilidad-foto-mensual` (día 3, ≥ 7:00 CR): fotografía el mes que cerró. «Volver a fotografiar» con
   motivo, desde la página de la cuenta.
 - La tabla de margen y la cuenta usan la foto de los meses cerrados que la tengan; sin foto, en vivo, y lo dicen.
 - Sin la tabla (SQL sin correr), todo sigue en vivo: no se cae nada.
@@ -155,7 +155,7 @@
 - **Una tarea cae en UNA sola tarea clave** (el tablero decía que podía caer en dos): así cada respuesta calibra un solo
   número. Con un solo conteo por tarea, la tabla de Feedback suma distinto que el tablero.
 - **La señal de contratación en Carga del equipo** es en horas y sin la propuesta del pipeline (esa es de dirección).
-- **El mes a mes de una cuenta se calcula en vivo** hasta que exista la foto del mes (E6).
+- **El mes a mes de una cuenta sale de la foto de cada mes** (E6); sin foto, en vivo, y lo dice.
 
 ## Para retomar
 
@@ -170,11 +170,11 @@ compartido con otras sesiones (`prisma/schema.prisma`, `components/layout/nav-co
 - [x] E3 · La carga lee lo respondido; Carga del equipo y Tu carga
 - [x] E4 · Ajustar el cálculo: la calibración
 - [x] E5 · Rentabilidad
-- [ ] E6 · La foto del mes — **en espera, a propósito.** Pide una tabla nueva (`FotoMargenCuenta`) y, al aplicar el
-  plan (2026-10-07), `prisma/schema.prisma` tenía cambios sin subir de otras sesiones (5 SQL pendientes): si el modelo
-  viaja en su commit sin su SQL, su deploy se revierte por la salud del esquema. Hacerla cuando esos cambios estén
-  subidos: SQL aditivo con RLS + RESTRICTIVE, modelo, job `rentabilidad-foto-mensual` (día 1, ≥ 6:00 CR), «Volver a
-  fotografiar» con motivo en la página de la cuenta, y que la tabla de margen y la cuenta usen la foto de los meses
-  cerrados (hoy dicen «En vivo»).
+- [x] E6 · La foto del mes (2026-10-17, sin deploy). Tablas `FotoMargenMes` y `FotoMargenCuenta`
+  (`scripts/sql/2026-10-17-foto-del-margen.sql`, RLS + RESTRICTIVE). Escritor único `lib/rentabilidad/foto-server.ts`
+  con el mismo cálculo de la pantalla (`armarFoto`, lib/rentabilidad/foto.ts). Job `rentabilidad-foto-mensual` el día
+  3 desde las 7:00 CR (no el día 1: los cobros y el tipo de cambio del mes ya están). «Tomar la foto» y «Volver a tomar»
+  (con motivo) en Rentabilidad y en la página de la cuenta. Un período de varios meses es la suma de sus meses; sin
+  ninguna foto, el cálculo en vivo de siempre. Para los meses que ya pasaron: `scripts/fotografiar-meses-del-margen.ts`.
 - [x] E7 · Documentación y cierre (DECISIONS, GLOSSARY, el conteo de pruebas de ARCHITECTURE; sin recorridos: la carga
   y la rentabilidad no tenían)

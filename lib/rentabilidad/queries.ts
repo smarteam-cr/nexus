@@ -51,61 +51,16 @@ import {
   rangoDelPeriodo,
   type FilaDeMargen,
   type ModoDeCosto,
-  type CostoDeLaHora,
   type RangoDelPeriodo,
   type CuentaParaMargen,
   type FuenteDelCosto,
   type Periodo,
   type TotalesDelPeriodo,
 } from "./margen";
-
-export interface CostoDeUnaPersona {
-  id: string;
-  email: string;
-  nombre: string;
-  equipo: string;
-  /** Planilla de la persona en el período, en dólares, con la reserva de aguinaldo. */
-  planilla: number;
-  horasPagadas: number;
-  /** planilla ÷ horas pagadas. null sin planilla ni salario en el período. */
-  costoHora: number | null;
-  horasConClientes: number;
-  fuente: FuenteDelCosto | null;
-}
-
-export interface CostoDeUnEquipo {
-  equipo: string;
-  personas: number;
-  planilla: number;
-  horasPagadas: number;
-  costoHora: number | null;
-  horasConClientes: number;
-  /** horas con clientes ÷ horas pagadas, de 0 a 1. */
-  parteConClientes: number | null;
-}
-
-export interface HorasPorOrigen {
-  /** Reuniones del calendario (lo agendado, hasta tener la asistencia de Meet). */
-  calendario: number;
-  /** Entrega respondida en «¿cuánto te tomó?». */
-  declaradas: number;
-  /** Preparación y entrega sin respuesta. */
-  estimadas: number;
-}
-
-export interface DatosDeRentabilidad {
-  rango: { periodo: Periodo; meses: string[]; etiqueta: string };
-  totales: TotalesDelPeriodo;
-  costoDeLaHora: CostoDeLaHora;
-  cuentas: CuentaParaMargen[];
-  personas: { conCosto: number; sinCosto: string[]; fuentes: Record<FuenteDelCosto, number> };
-  /** El costo de la hora de cada persona y de cada equipo. ⛔ Solo dirección: esta página ya lo es. */
-  costos: { personas: CostoDeUnaPersona[]; equipos: CostoDeUnEquipo[] };
-  horasPorOrigen: HorasPorOrigen;
-  /** Lo que no se pudo medir o convertir, dicho. */
-  avisos: string[];
-  preparacionMin: number;
-}
+import { datosDesdeLaFoto, juntarMeses } from "./foto";
+import { leerFotos } from "./foto-lectura-server";
+import type { CostoDeUnaPersona, CostoDeUnEquipo, DatosDeRentabilidad, FuenteDeUnMes, HorasPorOrigen, OrigenDelMes } from "./tipos";
+export type { CostoDeUnaPersona, CostoDeUnEquipo, DatosDeRentabilidad, FuenteDeUnMes, HorasPorOrigen, OrigenDelMes } from "./tipos";
 
 const norm = (e: string | null | undefined) => (e ?? "").trim().toLowerCase();
 const periodoCr = (d: Date) => {
@@ -116,6 +71,52 @@ const diaCr = (d: Date) => new Date(+d - 6 * 3_600_000).toISOString().slice(0, 1
 
 export async function cargarRentabilidad(periodo: Periodo, ahora = new Date()): Promise<DatosDeRentabilidad> {
   return cargarRentabilidadDelRango(rangoDelPeriodo(periodo, ahora), ahora);
+}
+
+interface MesCalculado {
+  mes: string;
+  datos: DatosDeRentabilidad;
+  origen: OrigenDelMes;
+}
+
+/**
+ * Cada mes del rango desde su foto o, sin ella, en vivo (de a uno: cada cálculo en vivo pide varias consultas y el pool
+ * es chico). Null si ningún mes tiene foto: ahí conviene UN cálculo en vivo del rango entero.
+ */
+async function mesesDelRango(rango: RangoDelPeriodo, ahora: Date): Promise<MesCalculado[] | null> {
+  const fotos = await leerFotos(rango.meses);
+  if (fotos.size === 0) return null;
+  const out: MesCalculado[] = [];
+  for (const mes of rango.meses) {
+    const r = rangoDelMes(mes);
+    const f = fotos.get(mes);
+    if (f) {
+      out.push({
+        mes,
+        datos: datosDesdeLaFoto(r, f.mes, f.cuentas),
+        origen: { mes, etiqueta: r.etiqueta, origen: "foto", tomadaAt: f.tomadaAt.toISOString(), tomadaPor: f.tomadaPor, motivo: f.motivo },
+      });
+    } else {
+      out.push({ mes, datos: await cargarRentabilidadDelRango(r, ahora), origen: { mes, etiqueta: r.etiqueta, origen: "vivo", tomadaAt: null, tomadaPor: null, motivo: null } });
+    }
+  }
+  return out;
+}
+
+const enVivo = (meses: string[]): OrigenDelMes[] =>
+  meses.map((mes) => ({ mes, etiqueta: rangoDelMes(mes).etiqueta, origen: "vivo", tomadaAt: null, tomadaPor: null, motivo: null }));
+
+/**
+ * Rentabilidad con la foto de cada mes cerrado (E6, 2026-10-17). Los meses con foto salen de la foto; los que no la
+ * tienen se calculan en vivo, y `origenDeLosMeses` dice cuál es cuál. Un período de varios meses es la suma de sus
+ * meses (`juntarMeses`). Si NINGÚN mes tiene foto (o falta el SQL), es el cálculo en vivo de siempre, de una vez.
+ * Rentabilidad solo mira meses cerrados: el mes en curso nunca entra.
+ */
+export async function cargarRentabilidadConFotos(periodo: Periodo, ahora = new Date()): Promise<DatosDeRentabilidad> {
+  const rango = rangoDelPeriodo(periodo, ahora);
+  const meses = await mesesDelRango(rango, ahora);
+  if (!meses) return { ...(await cargarRentabilidadDelRango(rango, ahora)), origenDeLosMeses: enVivo(rango.meses) };
+  return juntarMeses(rango, meses.map((m) => m.datos), meses.map((m) => m.origen));
 }
 
 /**
@@ -443,6 +444,16 @@ export async function cargarRentabilidadDelRango(rango: RangoDelPeriodo, ahora =
     }))
     .sort((a, b) => a.equipo.localeCompare(b.equipo, "es"));
 
+  const supuestos = {
+    id: configuracion.historia[0]?.id ?? null,
+    guardadaEn: configuracion.guardadaEn,
+    guardadaPor: configuracion.guardadaPor,
+  };
+  const fuentesDelCalculo: FuenteDeUnMes[] = rango.meses.map((mes) => {
+    const t = tasaDe.get(mes);
+    return { mes, supuestos, tasa: t ? { crcPorUsd: t.crcPorUsd, fuente: t.fuente } : null };
+  });
+
   return {
     rango: { periodo, meses: rango.meses, etiqueta: rango.etiqueta },
     totales,
@@ -453,6 +464,7 @@ export async function cargarRentabilidadDelRango(rango: RangoDelPeriodo, ahora =
     horasPorOrigen: origen,
     avisos,
     preparacionMin: config.preparacionMin,
+    fuentes: fuentesDelCalculo,
   };
 }
 
@@ -492,6 +504,8 @@ export interface MesDeLaCuenta {
   etiqueta: string;
   /** null = la cuenta no tuvo horas ni cobros ese mes. */
   fila: FilaDeMargen | null;
+  /** Si el mes sale de su foto o en vivo. */
+  origen: OrigenDelMes;
 }
 
 export interface MargenDeLaCuenta {
@@ -508,6 +522,8 @@ export interface MargenDeLaCuenta {
   /** Lo que respondió el equipo en «¿cuánto te tomó?» para esta cuenta. Sin nombres: el rol. */
   respuestas: Array<{ fecha: string; titulo: string; tipo: string; minutos: number; estimado: number | null; rol: string | null }>;
   avisos: string[];
+  /** De dónde sale cada mes del trimestre: su foto o en vivo. */
+  origenDeLosMeses: OrigenDelMes[];
 }
 
 /** El margen de una cuenta en el último trimestre cerrado, mes a mes, y quién la atendió. Null si la cuenta no existe. */
@@ -515,9 +531,21 @@ export async function cargarMargenDeLaCuenta(clienteId: string, ahora = new Date
   const cliente = await prisma.client.findUnique({ where: { id: clienteId }, select: { id: true, name: true } });
   if (!cliente) return null;
   const rango = rangoDelPeriodo("trimestre", ahora);
-  const [total, porMes, configuracion, respuestas] = await Promise.all([
-    cargarRentabilidadDelRango(rango, ahora),
-    Promise.all(rango.meses.map((m) => cargarRentabilidadDelRango(rangoDelMes(m), ahora))),
+  // Con alguna foto, cada mes sale de la suya (o en vivo) y el trimestre es su suma; sin ninguna, todo en vivo.
+  const calcularMeses = async (): Promise<{ total: DatosDeRentabilidad; porMes: DatosDeRentabilidad[]; origenes: OrigenDelMes[] }> => {
+    const meses = await mesesDelRango(rango, ahora);
+    if (meses) {
+      const origenes = meses.map((m) => m.origen);
+      return { total: juntarMeses(rango, meses.map((m) => m.datos), origenes), porMes: meses.map((m) => m.datos), origenes };
+    }
+    const [total, porMes] = await Promise.all([
+      cargarRentabilidadDelRango(rango, ahora),
+      Promise.all(rango.meses.map((m) => cargarRentabilidadDelRango(rangoDelMes(m), ahora))),
+    ]);
+    return { total, porMes, origenes: enVivo(rango.meses) };
+  };
+  const [{ total, porMes, origenes }, configuracion, respuestas] = await Promise.all([
+    calcularMeses(),
     cargarConfigCarga(),
     modeloDisponible(prisma.preguntaDeTiempo)
       ? prisma.preguntaDeTiempo.findMany({
@@ -542,7 +570,7 @@ export async function cargarMargenDeLaCuenta(clienteId: string, ahora = new Date
     etiqueta: total.rango.etiqueta,
     total: fila(total, "persona"),
     totalCargado: fila(total, "cargado"),
-    meses: porMes.map((d, i) => ({ mes: rango.meses[i], etiqueta: d.rango.etiqueta, fila: fila(d, "persona") })),
+    meses: porMes.map((d, i) => ({ mes: rango.meses[i], etiqueta: d.rango.etiqueta, fila: fila(d, "persona"), origen: origenes[i] })),
     atendidaPor: (cuenta?.porPersona ?? []).map((x) => {
       const p = personaDe.get(x.email);
       const costoHora = p?.costoHora ?? null;
@@ -558,5 +586,6 @@ export async function cargarMargenDeLaCuenta(clienteId: string, ahora = new Date
       rol: r.rol,
     })),
     avisos: total.avisos,
+    origenDeLosMeses: origenes,
   };
 }

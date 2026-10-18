@@ -23,6 +23,7 @@ import { RUTA_DE_LA_CARGA, RUTA_DE_LA_RENTABILIDAD, RUTA_DE_LOS_SUPUESTOS, RUTA_
 import { ETIQUETA_DEL_MODO, ETIQUETA_DEL_PERIODO, tablaDeMargen, type FilaDeMargen, type ModoDeCosto, type Periodo } from "@/lib/rentabilidad/margen";
 import type { DatosDeRentabilidad } from "@/lib/rentabilidad/queries";
 import type { DecisionDeContratacion } from "@/lib/rentabilidad/decisiones";
+import OrigenDeLosMeses from "./OrigenDeLosMeses";
 
 export interface DatosDeContratacion {
   /** Horas comprometidas por semana del equipo que lleva cuentas, más las de cuentas sin CSE vigente. */
@@ -137,6 +138,8 @@ export default function Rentabilidad({
           </ul>
         </Alert>
       )}
+
+      {pestana !== "contratacion" && datos.origenDeLosMeses && <OrigenDeLosMeses origenes={datos.origenDeLosMeses} />}
 
       {pestana === "margen" ? (
         <>
