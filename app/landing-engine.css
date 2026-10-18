@@ -2789,3 +2789,111 @@
   .stl .stl-fp-linea { flex-wrap: wrap; justify-content: flex-start; gap: 14px 18px; }
   .stl .stl-fp-linea::before { display: none; }
 }
+
+/* ── Módulos que eran HTML a mano (2026-10-18, components/landing/sections-modulos.tsx) ─────
+   Casos de uso por proyecto · Comparación de licencias · Fases u opciones. Solo variables de
+   la paleta del motor: estas secciones se publican al cliente y salen en el PDF. */
+.stl .stl-mod-rotulo {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;
+}
+.stl .stl-mod-acciones { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+.stl .stl-mod-select {
+  font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 10px;
+  border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); max-width: 100%;
+}
+.stl .stl-mod-mini {
+  margin-top: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text-2); font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.stl .stl-mod-mini:hover { border-color: var(--blue); color: var(--blue); }
+.stl .stl-mod-nota { margin-top: 14px; font-size: 13px; color: var(--text-muted); }
+
+/* Casos de uso por proyecto */
+.stl .stl-mod-resumen { margin-top: 18px; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.stl .stl-mod-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.stl .stl-mod-tab {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text-2);
+  font-family: var(--font-jakarta), system-ui, sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.stl .stl-mod-tab:hover { border-color: var(--border-strong); color: var(--text); }
+.stl .stl-mod-tab.is-on { background: var(--text); border-color: var(--text); color: #fff; }
+.stl .stl-mod-tab:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.stl .stl-mod-tab-n { font-size: 11px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+.stl .stl-mod-tab-cuenta {
+  min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--bg-soft);
+  color: var(--text-2); font-size: 11px; text-align: center;
+}
+.stl .stl-mod-tab.is-on .stl-mod-tab-cuenta { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.stl .stl-mod-tab--nuevo { border-style: dashed; color: var(--text-muted); }
+.stl .stl-mod-grupo { margin-top: 22px; }
+.stl .stl-mod-grupo + .stl-mod-grupo { margin-top: 34px; }
+.stl .stl-mod-grupo-head { max-width: var(--stl-w-prosa); }
+.stl .stl-mod-grupo-nombre {
+  font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 700; font-size: 19px;
+  color: var(--text); margin: 0 0 6px;
+}
+.stl .stl-mod-casos { margin-top: 16px; }
+.stl .stl-mod-caso { display: flex; flex-direction: column; gap: 10px; break-inside: avoid; }
+.stl .stl-mod-caso .stl-card-title { margin: 0; }
+.stl .stl-mod-resultado { font-size: 14px; line-height: 1.55; color: var(--text); }
+.stl .stl-mod-herramientas { font-size: 13px; color: var(--text-2); }
+.stl .stl-mod-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.stl .stl-mod-chip {
+  padding: 3px 10px; border-radius: 999px; background: var(--blue-soft); color: var(--blue);
+  font-size: 12px; font-weight: 600;
+}
+
+/* Comparación de licencias: reusa la tabla del motor (.stl-props) con un ancho mínimo menor —
+   tres o cuatro columnas cortas entran sin el scroll de las 8 columnas de propiedades. */
+.stl .stl-mod-recomendacion {
+  margin-top: 20px; padding: 14px 18px; border-radius: 14px;
+  background: var(--teal-soft); border: 1px solid var(--cream-line); max-width: var(--stl-w-prosa);
+}
+.stl .stl-mod-recomendacion-texto { font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 700; font-size: 16px; color: var(--text); }
+.stl .stl-props.stl-mod-lic-tabla { min-width: 560px; }
+.stl .stl-mod-lic-tabla th { vertical-align: bottom; white-space: normal; }
+.stl .stl-mod-lic-tabla th.is-rec, .stl .stl-mod-lic-tabla td.is-rec { background: var(--blue-soft); }
+.stl .stl-mod-plan { font-family: var(--font-jakarta), system-ui, sans-serif; font-size: 14px; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--text); }
+.stl .stl-mod-plan-nota { font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--text-muted); margin-top: 2px; }
+.stl .stl-mod-plan-acciones { display: flex; align-items: center; gap: 6px; }
+.stl .stl-mod-plan-acciones .stl-mod-mini { margin-top: 6px; text-transform: none; letter-spacing: 0; }
+.stl .stl-mod-plan-acciones .stl-remove { position: static; opacity: 1; margin-top: 6px; }
+.stl .stl-mod-lic-chip {
+  display: inline-block; margin-bottom: 6px; padding: 2px 8px; border-radius: 999px;
+  background: var(--blue); color: #fff; font-size: 10px; letter-spacing: 0.04em;
+}
+.stl .stl-mod-necesidad { color: var(--text); font-weight: 600; }
+.stl .stl-mod-lic { display: inline-flex; align-items: center; gap: 6px; }
+.stl .stl-mod-lic--si { color: var(--teal-dark); font-weight: 600; }
+.stl .stl-mod-lic--no { color: var(--text-muted); }
+.stl .stl-mod-lic--parcial { color: var(--text-2); }
+.stl .stl-mod-lic--vacio { color: var(--text-muted); }
+
+/* Fases u opciones */
+.stl .stl-mod-fases.stl-grid-1 { grid-template-columns: 1fr; max-width: var(--stl-w-prosa); }
+.stl .stl-mod-fase { display: flex; flex-direction: column; gap: 12px; break-inside: avoid; }
+.stl .stl-mod-fase .stl-card-title { margin: 0; }
+.stl .stl-mod-fase.is-destacada { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue), 0 14px 30px -14px rgba(5, 24, 73, 0.16); }
+.stl .stl-mod-fase-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.stl .stl-mod-fase-n {
+  font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 800; font-size: 26px;
+  line-height: 1; color: var(--blue); font-variant-numeric: tabular-nums;
+}
+.stl .stl-mod-fase-etiqueta {
+  padding: 3px 10px; border-radius: 999px; background: var(--blue-soft); color: var(--blue);
+  font-size: 12px; font-weight: 700;
+}
+.stl .stl-mod-fase.is-destacada .stl-mod-fase-etiqueta { background: var(--blue); color: #fff; }
+.stl .stl-mod-lista { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.55; color: var(--text-2); }
+.stl .stl-mod-lista li + li { margin-top: 4px; }
+.stl .stl-mod-fase-pie {
+  display: grid; grid-template-columns: 1fr auto; gap: 12px; margin-top: auto; padding-top: 12px;
+  border-top: 1px solid var(--border); font-size: 14px; color: var(--text);
+}
+.stl .stl-mod-modo { margin-bottom: 4px; }
+
+/* En el PDF nada scrollea: la tabla de licencias se imprime entera. */
+.stl-pdf-mode .stl-mod-lic-scroll { overflow: visible !important; }
+.stl-pdf-mode .stl-props.stl-mod-lic-tabla { min-width: 0 !important; }

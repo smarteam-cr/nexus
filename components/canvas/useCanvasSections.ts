@@ -746,13 +746,18 @@ export function useCanvasSections(
      * la misma transacción, así que pasarle `null` a `upsertCardData` crearía un SEGUNDO bloque
      * CARD y el motor leería el equivocado.
      */
-    async (label: string, tipo?: string): Promise<{ id: string; key: string; cardBlockId: string | null } | null> => {
+    async (
+      label: string,
+      tipo?: string,
+      /** Un módulo de la biblioteca (solo propuestas): la sección nace con una copia de su data. */
+      moduloId?: string,
+    ): Promise<{ id: string; key: string; cardBlockId: string | null } | null> => {
       pendingWrites.current++;
       try {
         const res = await fetch(`${basePath}/canvas-sections`, {
           method: "POST",
           headers: JSON_HEADERS,
-          body: JSON.stringify({ canvasId, label, tipo }),
+          body: JSON.stringify({ canvasId, label, tipo, moduloId }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));

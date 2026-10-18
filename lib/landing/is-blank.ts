@@ -38,6 +38,10 @@ export const NO_CONTENIDO = new Set([
   // en la lista porque el dato sobrevive en secciones viejas y sigue sin ser contenido.
   "buttonTarget", // en qué pestaña abre el CTA
   "__lang", // idioma del documento
+  // De qué módulo de la biblioteca salió una sección insertada (solo el id, lib/landing/modulos-biblioteca.ts).
+  // Sobrevive a «Limpiar» porque está fuera del schema: sin esta entrada, una sección vaciada quedaría
+  // no-blank solo por la marca y se publicaría como un hueco con título.
+  "__moduloId",
   // Moneda de la sección de inversión. El `<select>` la escribe apenas el CSE lo toca, así
   // que una sección donde SOLO eligió la moneda quedaría no-blank y se publicaría diciendo
   // "Montos en CRC" y nada más. Describe CÓMO se muestran los montos, no QUÉ dice.

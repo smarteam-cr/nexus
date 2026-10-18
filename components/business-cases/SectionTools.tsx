@@ -6,6 +6,9 @@ import { templateDefsByKey } from "@/components/landing/configs/templates.defs";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { customDef } from "@/lib/landing/catalogo-de-secciones";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
+import { useState } from "react";
+import { tipoGuardable } from "@/lib/landing/modulos-biblioteca";
+import { AdaptarAEstaEmpresa, GuardarComoModulo } from "./BibliotecaDeModulos";
 
 /** Defs mínimas que necesita el overlay: el `empty` para "Limpiar" y `agentGenerated`
  *  para decidir si se ofrece ✨IA. El BC pasa `templateDefsByKey(templateId)`; el
@@ -33,6 +36,7 @@ export default function SectionTools({
   isTemplate,
   templateId,
   defsByKey,
+  businessCaseId,
 }: {
   section: SectionWithBlocks | undefined;
   hook: ReturnType<typeof useCanvasSections>;
@@ -41,8 +45,12 @@ export default function SectionTools({
   templateId?: string | null;
   /** Kickoff (u otro canvas): defs explícitas. Tiene prioridad sobre `templateId`. */
   defsByKey?: SectionToolsDefs;
+  /** Solo la propuesta comercial: habilita «Guardar como módulo» y «Adaptar a esta empresa». */
+  businessCaseId?: string;
 }) {
   const toast = useToast();
+  // ⚠ Los hooks van ANTES del return temprano de abajo: un hook no puede ser condicional.
+  const [dialogo, setDialogo] = useState<"guardar" | "adaptar" | null>(null);
   const defs: SectionToolsDefs = defsByKey ?? templateDefsByKey(templateId);
   // El bloque TIPADO de la sección. El kickoff puede tener bloques TEXT legacy
   // delante del CARD → preferir siempre el CARD.
@@ -56,6 +64,9 @@ export default function SectionTools({
      una sección que el server rechaza), y "Limpiar" escribiría `{}` en vez del `empty`
      real — dejando la sección con un shape que el componente no espera. */
   const def = defs[section.key] ?? (esCustomKey(section.key) ? customDef(section.key, section.label) : undefined);
+  const tipoModulo = tipoGuardable(section.key);
+  const datos = (block.data && typeof block.data === "object" ? block.data : {}) as Record<string, unknown>;
+  const htmlDeLaSeccion = typeof datos.html === "string" ? datos.html : "";
 
   // Borrar la sección personalizada. Sin undo (la fila desaparece, no hay `previousData`
   // que restaurar), así que la confirmación explícita ES el mecanismo de seguridad.
@@ -101,6 +112,17 @@ export default function SectionTools({
         {/* Borrar SOLO para las personalizadas: las de la plantilla se ocultan (el server
             también lo rechaza). Sin undo → confirmación explícita, y el copy dice qué
             alcance tiene: esta versión, no las anteriores ni lo ya publicado. */}
+        {/* La biblioteca de módulos (2026-10-18): solo en la propuesta, solo en las personalizadas. */}
+        {businessCaseId && tipoModulo && (
+          <button style={pill} onClick={() => setDialogo("guardar")} title="Guardar esta sección en la biblioteca para usarla en otra propuesta">
+            ⧉ Guardar como módulo
+          </button>
+        )}
+        {businessCaseId && tipoModulo === "html" && htmlDeLaSeccion.trim() && (
+          <button style={{ ...pill, color: "#0B58D3" }} onClick={() => setDialogo("adaptar")} title="La IA cambia los textos para esta empresa, sin tocar el diseño">
+            ✨ Adaptar a esta empresa
+          </button>
+        )}
         {esCustomKey(section.key) && (
           <button
             style={{ ...pill, color: "#b91c1c" }}
@@ -112,6 +134,25 @@ export default function SectionTools({
           </button>
         )}
       </div>
+      {businessCaseId && dialogo === "guardar" && (
+        <GuardarComoModulo
+          open
+          onClose={() => setDialogo(null)}
+          businessCaseId={businessCaseId}
+          sectionId={section.id}
+          nombreInicial={section.titleOverride?.trim() || section.label}
+        />
+      )}
+      {businessCaseId && dialogo === "adaptar" && (
+        <AdaptarAEstaEmpresa
+          open
+          onClose={() => setDialogo(null)}
+          businessCaseId={businessCaseId}
+          sectionId={section.id}
+          html={htmlDeLaSeccion}
+          onAplicar={(htmlNuevo) => hook.saveBlock(section.id, block.id, { data: { ...datos, html: htmlNuevo } })}
+        />
+      )}
     </div>
   );
 }

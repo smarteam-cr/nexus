@@ -8890,3 +8890,47 @@ HubSpot, contenido; después SEO, AEO, redes, IA en marketing, rediseño web).
   2. *Si una licencia con precio de lista pero sin decir quién la factura cuenta.* Hoy no (fail-closed).
   3. *Si «Lo vendido según las propuestas» debería sumar al vendido del año o compararse con él.* Hoy es solo
      información: el vendido sigue saliendo de HubSpot.
+## Los módulos de las propuestas: nativos lo que se repite, biblioteca para lo demás (2026-10-18)
+
+**Contexto.** Pasos 5 y 6 de la iniciativa 3 de «La siguiente serie» (docs/roadmap.md). Se revisaron las 66 secciones
+personalizadas (HTML a mano) que Andrés Pinzón y Marco Salas armaron en 23 propuestas. Las del acuerdo recurrente (qué
+contiene, SLA, cómo opera, SmartLoop) van en la plantilla recurrente, en otra tanda.
+
+- **Un módulo nativo es un tipo más del catálogo de secciones creables** (`lib/landing/catalogo-de-secciones.ts`), no
+  una sección de la plantilla. *Por qué:* el catálogo ya es lo que se agrega, se quita y se mueve con un clic (el
+  editor y el chat ofrecen la misma lista), y la key `custom:<tipo>:<uuid>` lleva su tipo sin SQL. Agregarlas a la
+  plantilla habría metido secciones en las propuestas ya publicadas, que se resuelven por key contra la config viva.
+  Con el catálogo, una propuesta publicada no cambia: los tipos nuevos no existen en ella.
+- **Tres tipos nuevos** (`lib/landing/modulos-nativos.ts`, renderers en `components/landing/sections-modulos.tsx`):
+  «Casos de uso por proyecto» (pestañas por proyecto o área, cada caso con qué hace, qué obtiene el cliente y con qué
+  herramientas; en el editor se puede traer un caso del catálogo de casos de Smarteam, `lib/casos-de-uso`),
+  «Comparación de licencias» (planes enfrentados por necesidad, con el recomendado) y «Fases u opciones» (01, 02 para
+  una ruta; A, B para elegir; la recomendada destacada). Ninguno lleva precios: la plata vive en la Inversión.
+- **Lo demás que se repite ya era nativo** y no se duplicó: la arquitectura es el tipo «diagrama» (el motor de
+  diagramas, ahora con el nombre «Arquitectura (diagrama)»), el antes y después es «comparación» (ahora «Antes y
+  después»; el tipo en la key no cambia), la forma de pago es la sección de la plantilla debajo de la Inversión y el
+  plan con Gantt es el cronograma. La calculadora de ROI apareció una vez: va por la biblioteca.
+- **«Casos de uso por proyecto» no es la sección `use_cases`**: aquella sale del checklist con precios y sigue fuera del
+  catálogo; ésta es el alcance funcional, sin un monto. Se enmendó el criterio 3 del catálogo para decirlo.
+- **En el PDF no hay pestañas**: los grupos salen todos, uno debajo del otro, y la tabla de licencias no scrollea.
+- **La biblioteca** (`ModuloDePropuesta`, SQL `scripts/sql/2026-10-18-biblioteca-de-modulos.sql`): «Guardar como
+  módulo» en una sección personalizada guarda su tipo y una copia de su data; «Agregar módulo de la biblioteca» inserta
+  otra copia en otra propuesta, con el id del módulo fuera del schema (`__moduloId`, en `NO_CONTENIDO`). Copia y no
+  referencia: cambiar el módulo no cambia las propuestas donde ya se usó, y una propuesta firmada no se mueve sola. La
+  ve y la usa todo Ventas (`guardSalesAccess`); archivar o renombrar, quien lo guardó o dirección. Archivar no borra.
+- **⛔ Un módulo no lleva datos del cliente original sin avisar.** Al guardarlo se buscan en sus textos el nombre de la
+  empresa (por palabras distintivas, sin tildes), sus dominios, correos, teléfonos y montos
+  (`hallazgosDelCliente`). Si hay algo, el guardado responde 409 con la lista y quien guarda decide «Guardar igual»; lo
+  encontrado queda en el módulo y se muestra cada vez que alguien lo va a insertar. No se limpia solo: borrar sin mirar
+  rompe frases y no deja ver qué cambió.
+- **«Adaptar a esta empresa» cambia textos, nunca el diseño** (`lib/landing/html-textos.ts`). El HTML se parte en
+  segmentos de texto con su rango exacto (texto entre etiquetas, los atributos que se leen y las cadenas del script que
+  son prosa: los tabs se arman casi siempre desde un `CONFIG` en JavaScript). La IA recibe solo la lista numerada y
+  devuelve los que cambian; el HTML se rearma reemplazando esos rangos, así que una clase, un estilo o una línea de
+  código no pueden cambiar. Una cadena con `<` o con `${` no se toca. Es una propuesta (`<AgentProposal>`): cada
+  cambio con su antes y su después, se desmarca lo que no va y se aplica por el guardado de siempre. Si el HTML cambió
+  desde que se pidió, no se aplica. La IA no cambia montos ni inventa datos: los anota para Ventas. Lo dispara una
+  persona por sección (corrida `AgentRun` «Adaptar un módulo», agentSlug `business-case`, familia «venta» en Uso de
+  Nexus). Mismo sandbox y misma CSP que cualquier sección personalizada: el HTML sigue corriendo en el iframe aislado.
+- **En espera**: adaptar con IA las secciones estructuradas (hoy se adaptan con el chat de la sección), y los módulos
+  del acuerdo recurrente (los hace la plantilla recurrente).

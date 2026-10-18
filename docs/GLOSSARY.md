@@ -860,6 +860,16 @@
   listo para copiar. La CSP y los topes se interpolan de las constantes reales, así que el texto
   no puede quedar viejo; el resto lo ata un guard contra el componente y el CSS. Ver DECISIONS
   §"Copiar instrucciones para tu IA".
+- **módulo de la biblioteca** (`ModuloDePropuesta`, desde el 2026-10-18): una sección personalizada que alguien de Ventas
+  guardó con «Guardar como módulo» para usarla en otra propuesta. «Agregar módulo de la biblioteca» inserta una COPIA.
+  Si al guardarlo sus textos nombraban a la empresa (o traían correos, teléfonos o montos), lo encontrado queda con el
+  módulo y se muestra cada vez que alguien lo va a insertar. Archivarlo no lo borra.
+- **Adaptar a esta empresa** (botón de una sección de HTML pegado, `lib/landing/html-textos.ts`): la IA propone cambiar
+  los TEXTOS del HTML para el cliente de la propuesta, sin tocar el diseño ni el código; cada cambio se revisa antes de
+  aplicarlo.
+- **módulo nativo** (desde el 2026-10-18): lo que Ventas armaba en HTML y pasó a ser un tipo del catálogo de secciones
+  creables: «Casos de uso por proyecto», «Comparación de licencias» y «Fases u opciones», además de los que ya existían
+  («Arquitectura (diagrama)», «Antes y después», «Tabla»…).
 - **texto de reemplazo** (`notaPdf` de una sección personalizada): lo que se imprime en el PDF en
   lugar del embebido. Un iframe muere en el PDF por cuatro vías distintas (la señal de "listo" no
   ve adentro, la medición de alto lo recorta, la animación se congela, Chrome imprime frames

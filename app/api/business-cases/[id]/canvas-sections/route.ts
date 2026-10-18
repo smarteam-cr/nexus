@@ -2,7 +2,8 @@
  * /api/business-cases/[id]/canvas-sections
  *   GET ?canvasId=       → secciones + bloques del canvas (contrato del hook
  *                          useCanvasSections; espejo de projects/canvas-sections)
- *   POST { canvasId, label } → crea una sección PERSONALIZADA (`custom:*`) al final
+ *   POST { canvasId, label, tipo?, moduloId? } → crea una sección PERSONALIZADA (`custom:*`) al
+ *                          final; con `moduloId`, una copia de un módulo de la biblioteca
  *   PATCH { canvasId, orderedIds } → reordena las SECCIONES (drag & drop):
  *                          order = índice en orderedIds
  *
@@ -22,6 +23,8 @@ import {
   nuevaCustomKey,
 } from "@/lib/landing/custom-sections";
 import { tipoCreable, TIPO_POR_DEFECTO } from "@/lib/landing/catalogo-de-secciones";
+import { CLAVE_DEL_MODULO, dataParaCopiar } from "@/lib/landing/modulos-biblioteca";
+import { esquemaDesactualizado } from "@/lib/db/esquema";
 import type { Prisma } from "@prisma/client";
 
 export async function GET(
@@ -94,6 +97,9 @@ const createSchema = z.object({
   /* QUÉ clase de sección se crea. Opcional: sin él sale un embebido de HTML, que es lo único que
      se podía crear antes del 2026-08-21 y lo que sigue devolviendo el catálogo por defecto. */
   tipo: z.string().trim().optional(),
+  /* Insertar un módulo de la biblioteca (2026-10-18): la sección nace con el TIPO y una COPIA de la
+     data del módulo. `tipo` se ignora: manda el del módulo. */
+  moduloId: z.string().trim().min(1).optional(),
 });
 
 /**
@@ -119,7 +125,7 @@ export async function POST(
   if (!parsed.success) {
     return NextResponse.json({ error: "canvasId y un nombre (1-60 caracteres) requeridos" }, { status: 400 });
   }
-  const { canvasId, label, tipo } = parsed.data;
+  const { canvasId, label, tipo, moduloId } = parsed.data;
 
   const canvas = await prisma.projectCanvas.findUnique({
     where: { id: canvasId },
@@ -151,7 +157,23 @@ export async function POST(
   /* ⛔ El tipo se valida contra el CATÁLOGO, no contra una expresión regular. Una key con un
      tipo que nadie programó produce una def que no resuelve renderer, y entonces la sección
      desaparece sin error — mejor rechazar el pedido que crear una sección invisible. */
-  const creable = tipo ? tipoCreable(tipo) : tipoCreable(TIPO_POR_DEFECTO);
+  /* ⭐ Un módulo de la biblioteca: la sección es una COPIA (la del módulo no se entera de cambios
+     posteriores, y al revés). Lleva el id del módulo fuera del schema (`__moduloId`) para que
+     «Adaptar a esta empresa» sepa para quién se armó. */
+  let delModulo: { id: string; data: Record<string, unknown> } | null = null;
+  let tipoPedido = tipo;
+  if (moduloId) {
+    const modulo = await prisma.moduloDePropuesta
+      .findFirst({ where: { id: moduloId, archivadoAt: null }, select: { id: true, tipo: true, data: true } })
+      .catch((e: unknown) => {
+        if (esquemaDesactualizado(e)) return null;
+        throw e;
+      });
+    if (!modulo) return NextResponse.json({ error: "Ese módulo ya no está en la biblioteca." }, { status: 404 });
+    tipoPedido = modulo.tipo;
+    delModulo = { id: modulo.id, data: { ...dataParaCopiar(modulo.data), [CLAVE_DEL_MODULO]: modulo.id } };
+  }
+  const creable = tipoPedido ? tipoCreable(tipoPedido) : tipoCreable(TIPO_POR_DEFECTO);
   if (!creable) {
     return NextResponse.json(
       { error: `No existe una sección de tipo «${tipo}».` },
@@ -177,7 +199,7 @@ export async function POST(
       data: {
         sectionId: created.id,
         blockType: "CARD",
-        data: structuredClone(creable.empty) as Prisma.InputJsonValue,
+        data: (delModulo ? delModulo.data : structuredClone(creable.empty)) as Prisma.InputJsonValue,
         order: 0,
         source: "HUMAN",
         status: "CONFIRMED",
@@ -189,6 +211,9 @@ export async function POST(
         sections: patchSectionEntry(canvas.sections, key, { label }) as unknown as Prisma.InputJsonValue,
       },
     });
+    if (delModulo) {
+      await tx.moduloDePropuesta.update({ where: { id: delModulo.id }, data: { usos: { increment: 1 } } });
+    }
     return created;
   });
 

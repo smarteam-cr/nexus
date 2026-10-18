@@ -30,6 +30,7 @@ import { MarcoDelDocumento } from "@/components/clients/MarcoDelDocumento";
 import type { VersionMeta } from "@/components/business-cases/bc-workspace-shared";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import { catalogoLegible, TIPO_POR_DEFECTO } from "@/lib/landing/catalogo-de-secciones";
+import { ElegirModulo } from "./BibliotecaDeModulos";
 import { configForCanvas } from "@/components/landing/configs/templates";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
 import { inversionDelDocumento } from "@/lib/landing/forma-de-pago";
@@ -774,14 +775,14 @@ export default function BusinessCaseWorkspace({
                       setDirty(true);
                     }
                   }}
-                  renderOverlay={(key) => <SectionTools section={sectionByKey.get(key)} hook={hook} isTemplate={isTemplate} templateId={templateId} />}
+                  renderOverlay={(key) => <SectionTools section={sectionByKey.get(key)} hook={hook} isTemplate={isTemplate} templateId={templateId} businessCaseId={bcId} />}
                 />
               )}
               {/* Agregar una sección propia, al pie del documento (nace al final). En la Plantilla no. */}
               {hasCanvas && !hook.loading && !isTemplate && puedeEditar && (
                 <AgregarSeccion
-                  onAdd={(label, tipo) =>
-                    void hook.addSection(label, tipo).then((ok) => {
+                  onAdd={(label, tipo, moduloId) =>
+                    void hook.addSection(label, tipo, moduloId).then((ok) => {
                       if (ok) setDirty(true);
                     })
                   }
@@ -826,9 +827,13 @@ export default function BusinessCaseWorkspace({
  * Agregar una sección propia: un botón que se abre a un nombre y un TIPO. Los tipos salen del
  * catálogo —el MISMO conjunto que puede crear el chat—: si el menú y el chat ofrecieran cosas
  * distintas, «crea una tabla» significaría dos cosas según por dónde lo pidas.
+ *
+ * O un MÓDULO de la biblioteca (2026-10-18): una sección que alguien guardó de otra propuesta. Se
+ * inserta una copia con su nombre; lo que traiga del cliente original se ve antes de elegirlo.
  */
-function AgregarSeccion({ onAdd }: { onAdd: (label: string, tipo: string) => void }) {
+function AgregarSeccion({ onAdd }: { onAdd: (label: string, tipo: string, moduloId?: string) => void }) {
   const [abierto, setAbierto] = useState(false);
+  const [biblioteca, setBiblioteca] = useState(false);
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState(TIPO_POR_DEFECTO);
   const tipos = catalogoLegible();
@@ -841,6 +846,22 @@ function AgregarSeccion({ onAdd }: { onAdd: (label: string, tipo: string) => voi
     setTipo(TIPO_POR_DEFECTO);
     setAbierto(false);
   };
+
+  if (biblioteca) {
+    return (
+      <div className="border-t border-line px-6 pb-6 pt-4">
+        <div className="rounded-xl border border-line bg-surface p-3">
+          <ElegirModulo
+            onCancelar={() => setBiblioteca(false)}
+            onElegir={(m) => {
+              onAdd(m.nombre.slice(0, 60), m.tipo, m.id);
+              setBiblioteca(false);
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="border-t border-line px-6 pb-6 pt-4">
@@ -879,13 +900,22 @@ function AgregarSeccion({ onAdd }: { onAdd: (label: string, tipo: string) => voi
           </Button>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => setAbierto(true)}
-          className="w-full rounded-xl border border-dashed border-line py-3 text-sm text-fg-muted transition-colors hover:border-brand hover:text-brand"
-        >
-          + Agregar una sección propia
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setAbierto(true)}
+            className="flex-1 rounded-xl border border-dashed border-line py-3 text-sm text-fg-muted transition-colors hover:border-brand hover:text-brand"
+          >
+            + Agregar una sección propia
+          </button>
+          <button
+            type="button"
+            onClick={() => setBiblioteca(true)}
+            className="rounded-xl border border-dashed border-line px-5 py-3 text-sm text-fg-muted transition-colors hover:border-brand hover:text-brand"
+          >
+            ⧉ Agregar módulo de la biblioteca
+          </button>
+        </div>
       )}
     </div>
   );

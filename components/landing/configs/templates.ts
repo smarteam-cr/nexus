@@ -14,6 +14,16 @@ import { BC_TEMPLATES, templateById } from "./templates.defs";
 import { esCustomKey, HTML_EMBED_TYPE } from "@/lib/landing/custom-sections";
 import { customDef, TABLA_TYPE, TARJETAS_TYPE } from "@/lib/landing/catalogo-de-secciones";
 import { TablaSection } from "../sections-tabla";
+import {
+  CasosPorProyectoSection,
+  ComparacionLicenciasSection,
+  FasesUOpcionesSection,
+} from "../sections-modulos";
+import {
+  CASOS_POR_PROYECTO_TYPE,
+  COMPARACION_LICENCIAS_TYPE,
+  FASES_U_OPCIONES_TYPE,
+} from "@/lib/landing/modulos-nativos";
 import { TarjetasSection } from "../sections-tarjetas";
 import {
   KickoffProseSection,
@@ -99,6 +109,10 @@ export const SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
      en una propuesta se vería en el editor y desaparecería en la que abre el prospecto. */
   [TABLA_TYPE]: TablaSection,
   [TARJETAS_TYPE]: TarjetasSection,
+  // Los módulos que eran HTML a mano (2026-10-18): mismo motivo que la tabla, el snapshot publicado.
+  [CASOS_POR_PROYECTO_TYPE]: CasosPorProyectoSection,
+  [COMPARACION_LICENCIAS_TYPE]: ComparacionLicenciasSection,
+  [FASES_U_OPCIONES_TYPE]: FasesUOpcionesSection,
 };
 
 /** Convierte una def server-safe a SectionDef (con Component) usando un registro de
@@ -174,6 +188,10 @@ export const COMPONENTES_CREABLES: Record<string, FC<SectionProps<any>>> = {
   roi: RoiSection,
   process_mapping: ProcessMappingSection,
   diagram: DiagramSection,
+  /* Los módulos que Ventas armaba en HTML a mano (2026-10-18, lib/landing/modulos-nativos.ts). */
+  [CASOS_POR_PROYECTO_TYPE]: CasosPorProyectoSection,
+  [COMPARACION_LICENCIAS_TYPE]: ComparacionLicenciasSection,
+  [FASES_U_OPCIONES_TYPE]: FasesUOpcionesSection,
 };
 
 /**

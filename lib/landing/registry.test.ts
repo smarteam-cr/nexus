@@ -59,6 +59,11 @@ import {
   TIPO_POR_DEFECTO,
 } from "@/lib/landing/catalogo-de-secciones";
 import { COMPONENTES_CREABLES } from "@/components/landing/configs/templates";
+import {
+  CASOS_POR_PROYECTO_TYPE,
+  COMPARACION_LICENCIAS_TYPE,
+  FASES_U_OPCIONES_TYPE,
+} from "@/lib/landing/modulos-nativos";
 /* ⚠ `PROCESS_MAPPING_SCHEMA` ya no se importa acá: desde el 2026-08-23 los asserts recorren las
    defs REALES de los cinco documentos en vez de dos constantes. Probar la constante daba verde
    mientras cuatro documentos pintaban campos que su propio schema no declaraba. */
@@ -558,7 +563,15 @@ const LEGACY_SNAPSHOT_TYPES = new Set(["tech_architecture"]);
    `kickoff_prose`. Ninguna plantilla la declara —solo se alcanza creándola desde el chat o desde
    «Agregar sección»— así que es huérfana por diseño, igual que la tabla. Comparte el esquema de
    prosa a propósito: migrar entre con-ícono y sin-ícono no cuesta reescribir el contenido. */
-const RUNTIME_SECTION_TYPES = new Set([HTML_EMBED_TYPE, TABLA_TYPE, TARJETAS_TYPE]);
+const RUNTIME_SECTION_TYPES = new Set([
+  HTML_EMBED_TYPE,
+  TABLA_TYPE,
+  TARJETAS_TYPE,
+  // Los módulos que eran HTML a mano (2026-10-18): ninguna plantilla los declara, se crean.
+  CASOS_POR_PROYECTO_TYPE,
+  COMPARACION_LICENCIAS_TYPE,
+  FASES_U_OPCIONES_TYPE,
+]);
 
 describe("BC_TEMPLATES: toda def resuelve renderer y las keys están congeladas", () => {
   it("cada sectionType de cada template tiene componente registrado", () => {
