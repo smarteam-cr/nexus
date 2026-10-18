@@ -23,9 +23,66 @@ está haciendo con él.
 | En rojo en producción | Un proyecto en un pipeline sin declarar, un cliente apuntando a una empresa fusionada en HubSpot y el corte de cobranza, que nunca corrió. |
 | Revisión de código | Hecha el 17 oct sobre los 31 cambios de entonces: 57 problemas encontrados, unos 50 corregidos y en `main`. Ninguno mezclaba clientes. |
 
-**Lo siguiente en todo Nexus:** desplegar `main` (tú), y después validar en producción (pestaña «Lo que validas», sección 10 para lo nuevo). Después del deploy armo las propuestas recurrentes internas de Cayalá, Grupo Inve, FACO (Honda Costa Rica) y kölbi. Yo corro lo que va después del deploy: cerrar las alertas sueltas, limpiar las reuniones con texto de otra, rescatar las transcripciones (la primera versión de la escala ya quedó guardada).
+**Lo siguiente en todo Nexus:** lo que dejó la reunión con Marco (abajo, A a D), empezando por la guía de la preventa. Después, desplegar `main` (tú) y validar con el equipo (pestaña «Lo que validas», sección 10 para lo nuevo). Después del deploy armo las propuestas recurrentes internas de Cayalá, Grupo Inve, FACO (Honda Costa Rica) y kölbi. Yo corro lo que va después del deploy: cerrar las alertas sueltas, limpiar las reuniones con texto de otra, rescatar las transcripciones (la primera versión de la escala ya quedó guardada).
 
 En cada paso: **[hecho]** está hecho (en producción si la tarjeta lo dice); **[en curso]** lo está construyendo una sesión ahora.
+
+## Lo próximo: lo que dejó la reunión con Marco (17 oct)
+
+**El diagnóstico.** Nexus se construyó por piezas que no se hablan entre sí, y el lugar donde más se nota es la preventa.
+Marco preparó la sesión con Distribuidora Larce y la guía le pareció bien, pero en vivo le hizo repetir lo que el cliente
+ya había respondido en el diagnóstico. Lo que encontré en esa preventa:
+
+- La guía traía **8 preguntas con 3 repreguntas cada una (32)** para una sesión de 45 minutos.
+- Las preguntas salen de lo que **le falta al marco de la venta** (tiempos, consecuencias, presupuesto…) y de las dimensiones de la escala, **no de lo que el cliente ya respondió**. Nexus leyó el test y su nota en HubSpot, pero los usó como pistas para ubicar la escala, no como respuestas.
+- Ejemplo: el test decía «cuando un deal se enfría, el vendedor lo deja morir y nadie lo detecta». La primera pregunta de la guía fue «¿Qué pasa cuando un deal se queda quieto?». La pregunta que valía («¿cuánto les ha costado?») quedó escondida como tercera repregunta.
+- La nota que le sirvió a Marco es la que deja el test en HubSpot: corta, con las palabras del cliente y directa a lo que le duele.
+
+El otro hueco es el mismo de fondo: **lo que se habla por correo no está en el contexto**. La minuta que prometió una
+reunión iba en un correo al cliente; nadie la agendó y el cliente le escribió a Marco. Nexus lee las reuniones, pero no
+los correos ni el timeline de HubSpot, así que no podía avisar.
+
+Estas cuatro van antes que el resto de la serie. La preventa es la primera.
+
+### A · La preventa lleva a la siguiente pregunta lógica <span class="estado">Propuesta</span>
+
+Si el cliente ya hizo el diagnóstico, Nexus le dice al vendedor qué le falta preguntar, y nada más.
+
+1. Arriba de la guía, «Lo que ya sabemos»: en 3 a 5 líneas, lo que el cliente respondió en el diagnóstico y en las reuniones, con sus palabras, para no volver a preguntarlo.
+2. Lo que ya respondió no se vuelve a preguntar: la guía salta a la siguiente pregunta lógica, que es cuánto le afecta, cuánto le cuesta, cómo lo quiere resolver, cuándo y con qué. Si dijo que le duele la duplicidad de datos, se profundiza en sistemas; si dijo que no hace seguimiento, se pregunta cuánto le baja la tasa de cierre.
+3. Solo lo que falta, unas 5 preguntas: si un dato ya está (los tiempos, por ejemplo), no hay más preguntas de ese tema. Las repreguntas no se muestran; se abren si hacen falta.
+4. Siempre cierra con la pregunta de cierre y el siguiente paso, según lo que falta para proponer.
+5. Escrita como la nota de HubSpot que le sirvió a Marco: corta, en el lenguaje del cliente y directa a lo que le duele.
+6. Probada con casos reales antes de soltarla: la sesión 2 de Larce y los prospectos que lleguen por el diagnóstico.
+
+### B · Los correos y el timeline de HubSpot, en el contexto de la cuenta <span class="estado">Propuesta</span>
+
+Todo conectado: las reuniones, los correos, el timeline de HubSpot y lo que se ingresa a mano, para que no se pase un seguimiento.
+
+1. Los correos con el cliente y el timeline de la empresa y sus contactos en HubSpot entran a la memoria de la cuenta y a la lectura de cada reunión. Hoy solo el vigía mira algunos correos.
+2. Lo que se le prometió al cliente por correo (una reunión, una entrega, una fecha) queda como compromiso, igual que lo que sale de una reunión.
+3. Si un compromiso con fecha no está en el calendario ni en Tareas a las 48 horas, avisa al CSE y a quien lidera Customer Success.
+4. Las notas y los acuerdos que se ingresan a mano entran al mismo contexto que leen los agentes, la preventa y el chat.
+
+### C · La rentabilidad, conectada con las agendas y las tareas <span class="estado">Propuesta</span>
+
+Nexus ya sabe, sin que nadie marque tiempo, qué reuniones tiene cada persona y con qué cliente. Esa es la base del margen.
+
+1. Las horas por cuenta salen solas del calendario y de las tareas (lo hecho y cuánto tomó), y con eso el margen por cuenta y por persona.
+2. La meta del año como barra (US$2,3 millones en 2027), contra lo facturado en los años anteriores, con lo que haya.
+3. La línea de «por facturar» del punto de equilibrio, la que sube al final: qué recurrencia y qué expansiones faltan para que suba, y cuánto.
+4. Una lectura de los números: Nexus detecta lo que no progresa y propone qué hacer y cuánto invertir; una persona valida.
+
+### D · Comisiones que cuiden el valor de la cuenta <span class="estado">Propuesta</span>
+
+El caso de Marco: bajar una recurrencia de US$3.000 a US$2.800 al mes regala US$2.400 al año, y hoy igual se paga el
+100 % de la comisión. Mi propuesta, para validar con Marco:
+
+1. La comisión de un contrato recurrente se calcula sobre su valor de 12 meses, y **el descuento sale de la base**: base = lo cerrado − lo descontado. En el caso de Marco: 12 × US$2.800 = US$33.600, menos los US$2.400 descontados = US$31.200. Al 5 % son US$1.560 en vez de US$1.680. El vendedor también pone parte del descuento.
+2. Un descuento de más del 10 % lo aprueba Marco en la propuesta, y queda escrito quién lo aprobó.
+3. La recurrencia pesa más en la meta que un proyecto único (por ejemplo, 1,2 veces), porque es lo que hace crecer la cuenta.
+4. Una expansión grande cuenta por su tamaño total, para no empujar a vender recurrencia chica en vez de una expansión grande.
+5. Cerrarlo con Marco y construir el módulo de comisiones en Nexus.
 
 ## La siguiente serie
 
