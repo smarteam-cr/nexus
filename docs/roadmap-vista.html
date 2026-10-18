@@ -69,6 +69,13 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 .ini { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 0 0 12px; }
 .ini h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 16px; font-weight: 650; margin: 0 0 4px; color: var(--fg); }
 .ini > p { margin: 0 0 10px; color: var(--fg-muted); font-size: 14px; }
+.ini h3.plegable { cursor: pointer; user-select: none; margin: 0; }
+.ini h3.plegable::before { content: "B8"; color: var(--fg-muted); font-size: 12px; width: 12px; transition: transform .15s; }
+.ini.abierta h3.plegable::before { transform: rotate(90deg); }
+.ini.abierta h3.plegable { margin-bottom: 4px; }
+.ini h3 .resumen { font-size: 12.5px; font-weight: 500; color: var(--fg-muted); }
+.ini:not(.abierta) > .cuerpo { display: none; }
+.ini:not(.abierta) { padding-top: 12px; padding-bottom: 12px; }
 .ini ol { margin: 0; padding-left: 0; list-style: none; counter-reset: paso; }
 .ini ol li { counter-increment: paso; position: relative; margin: 0; padding: 7px 0 7px 28px; border-top: 1px solid var(--line); }
 .ini ol li::before { content: attr(data-n); position: absolute; left: 0; top: 8px; color: var(--fg-muted); font-variant-numeric: tabular-nums; font-size: 13px; }
@@ -105,7 +112,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   var corte = md.match(/\*\*Corte:\*\*\s*([0-9-]+)/);
   if (corte) document.getElementById('meta').textContent = 'Al ' + corte[1];
 
-  var TONOS = { 'Validado': 's-ok', 'En producción': 's-info', 'Por desplegar': 's-warn', 'Por empezar': 's-idle' };
+  var TONOS = { 'Validado': 's-ok', 'En producción': 's-info', 'Por desplegar': 's-warn', 'Por empezar': 's-idle', 'Propuesta': 's-warn' };
   doc.querySelectorAll('span.estado').forEach(function (sp) {
     var e = sp.textContent.trim(); sp.className = 'chip ' + (TONOS[e] || 's-idle');
   });
@@ -159,6 +166,30 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       if (/^\s*\[en curso\]\s*/.test(h)) { li.innerHTML = h.replace(/^\s*\[en curso\]\s*/, '<span class="marca curso">En curso</span>'); return; }
       if (!marcado) { li.classList.add('sigue'); marcado = true; }
     });
+  });
+
+  // Plegables: se abre solo lo que pide revisión (un paso en curso, algo que no está en producción o validaciones
+  // pendientes); lo que está en producción y sin nada que hacer queda cerrado, con su resumen al lado del título.
+  doc.querySelectorAll('.ini').forEach(function (card) {
+    var h = card.querySelector('h3'); if (!h) return;
+    var cuerpo = document.createElement('div'); cuerpo.className = 'cuerpo';
+    while (h.nextSibling) cuerpo.appendChild(h.nextSibling);
+    card.appendChild(cuerpo);
+    var chip = h.querySelector('.chip'), estado = chip ? chip.textContent.trim() : '';
+    var pasos = cuerpo.querySelectorAll('ol > li'), hechos = cuerpo.querySelectorAll('ol > li.hecho').length;
+    var enCurso = cuerpo.querySelectorAll('ol > li .marca.curso').length;
+    var pruebas = cuerpo.querySelectorAll('table.pruebas tbody tr'), pendientes = cuerpo.querySelectorAll('table.pruebas tbody tr:not(.listo)').length;
+    var revisar = enCurso > 0 || pendientes > 0 || (estado && !/^(En producción|Validado)$/.test(estado)) || (!estado && !pruebas.length);
+    var r = document.createElement('span'); r.className = 'resumen';
+    if (pruebas.length) r.textContent = pendientes ? pendientes + ' por revisar' : 'todo validado';
+    else if (pasos.length) r.textContent = (hechos ? hechos + ' de ' + pasos.length + ' hechos' : pasos.length + ' pasos') + (enCurso ? ' · ' + enCurso + ' en curso' : '');
+    if (r.textContent) h.appendChild(r);
+    h.classList.add('plegable'); h.setAttribute('role', 'button'); h.tabIndex = 0;
+    if (revisar) card.classList.add('abierta');
+    h.setAttribute('aria-expanded', String(revisar));
+    function cambiar() { var a = card.classList.toggle('abierta'); h.setAttribute('aria-expanded', String(a)); }
+    h.addEventListener('click', function (e) { if (e.target.closest('a')) return; cambiar(); });
+    h.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cambiar(); } });
   });
 
   // Tres pestañas: el roadmap, lo que le pides al equipo y lo que validas tú. Cada «##» va a la suya.
