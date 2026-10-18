@@ -39,7 +39,12 @@ function useLoQueSePreguntaEnLaProxima() {
   const { todas, claveDeLaProxima } = useSesiones();
   const proxima = todas.find((p) => p.clave === claveDeLaProxima) ?? todas[todas.length - 1];
   const { preguntas } = useGuiaDeLaSesion(proxima, true);
-  return { paras: new Set(preguntas.map((p) => p.para)), hayDimensiones: preguntas.some((p) => p.tipo === "dimension") };
+  return {
+    paras: new Set(preguntas.map((p) => p.para)),
+    hayDimensiones: preguntas.some((p) => p.tipo === "dimension"),
+    // Un dolor que se pregunta en impacto cubre «qué pasa si no actúa» (plan-de-la-guia.ts).
+    hayImpacto: preguntas.some((p) => p.tipo === "dimension" && p.paso === "impacto"),
+  };
 }
 
 function Bloque({ titulo, accion, children }: { titulo: string; accion?: React.ReactNode; children: React.ReactNode }) {
@@ -112,10 +117,10 @@ function Arquitectura() {
  */
 function ParaProponer() {
   const { exp, chequeo, irA } = useLienzo();
-  const { paras, hayDimensiones } = useLoQueSePreguntaEnLaProxima();
+  const { paras, hayDimensiones, hayImpacto } = useLoQueSePreguntaEnLaProxima();
   const puntos = listaParaProponer(exp.estado, chequeo);
   const listos = puntos.filter((p) => p.cumplido).length;
-  const estado = (p: (typeof puntos)[number]) => (p.cumplido ? "listo" : puntoQueSePregunta(p.id, paras, hayDimensiones) ? "hoy" : "falta");
+  const estado = (p: (typeof puntos)[number]) => (p.cumplido ? "listo" : puntoQueSePregunta(p.id, paras, hayDimensiones, hayImpacto) ? "hoy" : "falta");
   return (
     <Bloque
       titulo="Para proponer"

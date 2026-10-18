@@ -357,8 +357,10 @@ describe("el contexto de la guía", () => {
     const c = ctx();
     expect(c.desdeCero).toBe(true);
     expect(c.proxima).toMatchObject({ numero: 1, titulo: "Comenzando el camino" });
-    expect(c.huecos.map((h) => h.clave)).toEqual(PRIORIDAD_DE_LAS_TARJETAS.slice(0, 5));
-    expect(c.enfoque).toHaveLength(3);
+    // La preventa sin nada dicho (iniciativa A): retos, la meta, qué pasa si no actúa, una dimensión y para cuándo.
+    expect(c.huecos.map((h) => h.clave)).toEqual(["retos", "metas", "consecuencias", "tiempos"]);
+    expect(c.enfoque).toHaveLength(1);
+    expect(c.plan).toHaveLength(5);
     expect(String(pedidoDeLaGuia(c).system)).toMatch(/Nunca inventes casos de otros clientes/);
   });
 
@@ -419,10 +421,10 @@ describe("leer la guía del agente", () => {
       new Date("2026-10-01T16:00:00.000Z"),
     );
     expect(g).not.toBeNull();
-    expect(g!.preguntas).toEqual([{ para: "metas", pregunta: "¿Cuántas solicitudes quieren aprobar al mes?", repreguntas: ["¿La última?", "¿Por qué?", "¿Cuánto cuesta?"] }]);
+    expect(g!.preguntas).toEqual([{ para: "metas", pregunta: "¿Cuántas solicitudes quieren aprobar al mes?", repreguntas: ["¿La última?", "¿Por qué?", "¿Cuánto cuesta?"], paso: "impacto" }]);
     expect(g!.objeciones.map((o) => o.tipo)).toEqual(["precio"]);
     expect(g!.escalaEnSimple).toBe("Mide cómo trabaja tu equipo, en cinco niveles.");
-    expect(g!.huecos).toEqual(PRIORIDAD_DE_LAS_TARJETAS.slice(0, 5));
+    expect(g!.huecos).toEqual(["retos", "metas", "consecuencias", "tiempos"]);
     expect(g!.corridaId).toBe("run-1");
     // Se guarda y se vuelve a leer igual.
     expect(leerPropuesta({ ...propuestaVacia(), guia: g }).guia).toEqual(g);

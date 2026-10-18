@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
-import { puntoQueSePregunta, listaParaProponer } from "@/lib/exploraciones/calidad";
+import { faltanAlCerrar, puntoQueSePregunta, listaParaProponer } from "@/lib/exploraciones/calidad";
 import { ETIQUETA_DEL_ROL, type Persona, type SiguientePaso } from "@/lib/exploraciones/casillas";
 import { avanceDeLaEstrategia } from "@/lib/exploraciones/avance-del-proyecto";
 import { esFuenteDeHipotesis } from "@/lib/exploraciones/contenido";
@@ -32,6 +32,8 @@ import {
   type PestanaDeSesion,
   type PreguntaParaMostrar,
 } from "@/lib/exploraciones/guia";
+import { esTarjeta } from "@/lib/exploraciones/marco";
+import { PREGUNTA_DE_CIERRE, siNoSalio } from "@/lib/exploraciones/plan-de-la-guia";
 import { REUNIONES } from "@/lib/exploraciones/sesion";
 import { useLienzo } from "./contexto";
 import { DeQueEs, diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
@@ -153,8 +155,9 @@ function Objetivo({ pestana, esLaProxima, sugerido, preguntas }: { pestana: Pest
   const puntos = enProyecto ? [] : listaParaProponer(exp.estado, chequeo);
   const paras = new Set(preguntas.map((p) => p.apunta?.para ?? p.para));
   const hayDimensiones = preguntas.some((p) => ladoDeLaPregunta(p) === "dimension");
+  const hayImpacto = preguntas.some((p) => p.tipo === "dimension" && p.paso === "impacto");
   const faltan = puntos.filter((p) => !p.cumplido);
-  const cubre = faltan.filter((p) => puntoQueSePregunta(p.id, paras, hayDimensiones)).length;
+  const cubre = faltan.filter((p) => puntoQueSePregunta(p.id, paras, hayDimensiones, hayImpacto)).length;
   const faltanDelProyecto = enProyecto ? avanceDeLaEstrategia(exp.estado).filter((p) => !p.cumplido) : [];
   const cubreDelProyecto = faltanDelProyecto.filter((p) => paras.has(p.id)).length;
   const saleBien = enProyecto ? siSaleBienEnElProyecto(faltanDelProyecto.length, cubreDelProyecto) : siSaleBien(faltan.length, cubre);
@@ -326,7 +329,8 @@ function LoQueTraes({ pestana }: { pestana: PestanaDeSesion }) {
   const { exp, escala, marco, sesion: seleccion } = useLienzo();
   const { todas } = useSesiones();
   const filas = loQueTraes(pestana, todas, { nombreDe: (para) => nombreDelPara(para, escala, marco), tecnica: exp.estado.propuesta.alertaTecnica });
-  const respondidas = marco.tarjetas.filter((c) => lineasDe(c, exp.estado.contenido.casillas[c]).length > 0);
+  // En la preventa, lo que ya se sabe va en «Lo que ya sabemos», con sus palabras: acá no se repite.
+  const respondidas = marco.clave === "venta" ? [] : marco.tarjetas.filter((c) => lineasDe(c, exp.estado.contenido.casillas[c]).length > 0);
   const hayAnteriores = todas.slice(0, Math.max(0, todas.findIndex((p) => p.clave === pestana.clave))).some((p) => p.hecha && !p.noSeHizo);
   if (!filas.length && !(hayAnteriores && respondidas.length)) return null;
   const ir = (clave: string) => {
@@ -371,6 +375,41 @@ function LoQueTraes({ pestana }: { pestana: PestanaDeSesion }) {
           </p>
         </div>
       )}
+    </section>
+  );
+}
+
+// ── Lo que ya sabemos ─────────────────────────────────────────────────────────
+
+/**
+ * Lo que el cliente ya respondió, en 3 a 5 líneas, con sus palabras y de dónde sale cada una (iniciativa A, 2026-10-18:
+ * Marco abrió el diagnóstico y la nota de HubSpot porque la guía le hacía repetir lo que el cliente ya había dicho). Lo
+ * arma lib/exploraciones/lo-que-ya-sabemos.ts; la guía de abajo parte de acá y no lo vuelve a preguntar.
+ */
+function LoQueYaSabemos({ pestana }: { pestana: PestanaDeSesion }) {
+  const { escala, marco } = useLienzo();
+  const { saber } = useGuiaDeLaSesion(pestana, true);
+  const lineas = saber?.lineas ?? [];
+  if (!lineas.length) return null;
+  return (
+    <section data-recorrido="preventa.sesion.sabemos" className="overflow-hidden rounded-xl border border-line bg-surface">
+      <header className="border-b border-line px-[18px] py-3.5">
+        <h3 className="text-[15px] font-semibold text-fg">Lo que ya sabemos</h3>
+        <p className="mt-0.5 text-[12.5px] text-fg-muted">Lo que el cliente ya respondió. La guía parte de acá: no lo vuelvas a preguntar.</p>
+      </header>
+      <ul>
+        {lineas.map((l) => (
+          <li key={l.para} className="flex gap-3 border-b border-surface-hover px-[18px] py-3 last:border-b-0">
+            <EtiquetaDePregunta p={{ para: l.para, tipo: esTarjeta(l.para) ? "tarjeta" : "dimension", pregunta: "", repreguntas: [] }} />
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] leading-[20px] text-fg">{l.origen === "resumen" ? l.texto : `«${l.texto}»`}</p>
+              <p className="mt-0.5 text-xs text-fg-muted">
+                {nombreDelPara(l.para, escala, marco)} · {l.de}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -478,7 +517,7 @@ function Columna({ titulo, detalle, preguntas, vacio }: { titulo: string; detall
 }
 
 function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
-  const { exp, escala, marco } = useLienzo();
+  const { exp, escala, marco, chequeo } = useLienzo();
   const enProyecto = marco.clave === "cs";
   const { guia, preguntas, enOrden } = useGuiaDeLaSesion(pestana, esLaProxima);
   const [vista, setVista] = useState<Vista>("orden");
@@ -496,6 +535,15 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
   const sueltas = preguntas.filter((p) => ladoDeLaPregunta(p) === null);
   const faltan = marco.tarjetas.filter((c) => lineasDe(c, e.contenido.casillas[c]).length === 0).length;
   const donde = enProyecto ? "en el panel de la derecha" : "en «La escala»";
+  // Siempre cierra con la pregunta de cierre y el siguiente paso, y pide lo que falta para proponer que no salió.
+  const sinPreguntar =
+    enProyecto || !esLaProxima
+      ? []
+      : faltanAlCerrar(listaParaProponer(e, chequeo), new Set(preguntas.map((p) => p.apunta?.para ?? p.para)), {
+          hayDimensiones: deDimensiones.length > 0,
+          hayImpacto: preguntas.some((p) => p.tipo === "dimension" && p.paso === "impacto"),
+        }).map((p) => p.corto);
+  const siNo = siNoSalio(sinPreguntar);
   const areasEnJuego = escala.areas.filter((a) => e.areas.includes(a.id)).map((a) => a.nombre);
 
   return (
@@ -600,7 +648,9 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
         <p className="text-[14.5px] font-semibold leading-[21px] text-fg">
           {enProyecto ? "Confirma lo que entendiste y acuerda el siguiente paso, con fecha y con quién." : "Pide el siguiente paso con fecha y con quién."}
         </p>
+        {!enProyecto && <p className="mt-1 text-[14.5px] leading-[21px] text-fg">«{PREGUNTA_DE_CIERRE}»</p>}
         <p className="mt-1 text-[13px] leading-[19px] text-fg-secondary">{guia?.cierre ?? CIERRE_DE_BASE}</p>
+        {siNo && <p className="mt-1 text-[13px] leading-[19px] text-fg-secondary">{siNo}</p>}
       </Tramo>
     </section>
   );
@@ -668,6 +718,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
       <Objetivo pestana={pestana} esLaProxima={esLaProxima} sugerido={guia?.objetivo ?? null} preguntas={preguntas} />
       {esLaProxima && <CuandoYConQuien pestana={pestana} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}
+      {esLaProxima && <LoQueYaSabemos pestana={pestana} />}
       <LaGuia pestana={pestana} esLaProxima={esLaProxima} />
       <RetosDeLaIndustria pestana={pestana} esLaProxima={esLaProxima} />
       {conTest && pestana.numero === 1 && (

@@ -4259,7 +4259,10 @@ objeciones, y ver de un vistazo qué le falta para proponer.
   hipótesis de nivel siguen siendo el mapa.
 - **Las sesiones son las que hagan falta** (supera «dos reuniones, por decisión de Elías» del
   2026-09-30): el vendedor las agrega en `contenido.sesiones`, y la guía es siempre la de la PRÓXIMA.
-- **La guía de la próxima reunión: el código elige qué cubre, el agente escribe** (`lib/exploraciones/guia.ts`,
+- **SUPERSEDED 2026-10-18 en la preventa** (ver «La preventa lleva a la siguiente pregunta lógica»): la guía parte de lo
+  que el cliente ya respondió, son unas 5 preguntas y cada una tiene su paso. Sigue valiendo para la exploración de un
+  proyecto.
+  **La guía de la próxima reunión: el código elige qué cubre, el agente escribe** (`lib/exploraciones/guia.ts`,
   `guia-pedido.ts`). Hasta 5 tarjetas vacías, en el orden `PRIORIDAD_DE_LAS_TARJETAS` (metas primero, el
   presupuesto al final: hablar de plata antes de la meta es vender antes de diagnosticar), y hasta 8
   preguntas en total con las dimensiones sin evidencia que más importan. Cada pregunta trae tres
@@ -9025,3 +9028,51 @@ de reuniones a proyectos (US$8,5, 365 llamadas). El panel leía 20.000 filas y n
   solo su id, así un deploy antes del SQL pierde las filas de los lotes y no las de todas las llamadas.
 - **Pendiente:** 263 llamadas de 30 días (US$13,8, todas automáticas) no tienen agente ni origen: van a «No se sabe de qué
   proceso es». Están cerca en el tiempo de la lectura, el resumen del proyecto y la propuesta; atribuirlas es lo próximo.
+
+## La preventa lleva a la siguiente pregunta lógica (2026-10-18)
+
+**Contexto.** Iniciativa A del roadmap. El 17 oct Marco usó la preventa con Distribuidora Larce y la guía le hizo repetir
+lo que el cliente ya había respondido en el diagnóstico: 8 preguntas con 3 repreguntas cada una, y la primera fue «¿Qué
+pasa cuando un deal se queda quieto?», cuando el test decía que los deals que se enfrían mueren sin que nadie reaccione.
+Las preguntas salían de las casillas vacías y de las dimensiones sin evidencia. El test y su nota de HubSpot estaban
+guardados, pero el pedido de la guía no los leía. El plan está en `docs/preventa-guia-plan.md`.
+
+- **«Lo que ya sabemos» arriba de la guía** (`lib/exploraciones/lo-que-ya-sabemos.ts`, puro): de 3 a 5 líneas con lo que el
+  cliente ya respondió, con sus palabras y de dónde sale cada una. Entran las respuestas del test, las citas verificadas
+  de cada dimensión (test, HubSpot, reunión, lo sumado a mano, el handoff, un cuestionario), la evidencia de un nivel
+  confirmado en una reunión o en su portal, y las casillas confirmadas que dice el cliente (metas, retos, planes, tiempos,
+  consecuencias, implicaciones). Una reunión pesa más que la nota, la nota más que el test y el test más que el Resumen.
+  Nunca entran el presupuesto, quién decide, las objeciones, el contexto ni las notas del vendedor (N). De una tarjeta
+  solo cuenta lo confirmado: una propuesta sin usar no la da por sabida. *Por qué:* si «Lo que ya sabemos» mostrara un
+  tiempo propuesto y la guía igual preguntara los tiempos, la pantalla se contradiría.
+- **El código decide qué se pregunta y en qué paso** (`lib/exploraciones/plan-de-la-guia.ts`, puro). Los pasos son
+  situación → impacto (cuánto le afecta y le cuesta) → solución (cómo lo quiere resolver, qué intentó) → cuándo → con
+  qué. Orden de las preguntas:
+  1. Lo que viene de antes: lo llevado ocupa lugar, y lo de una sesión cortada va primero si todavía falta.
+  2. Los dos dolores que el cliente ya dijo (debajo de Funcional), en impacto. Primero el nivel más bajo, después el
+     reto confirmado en el Resumen y después el que más fuentes dicen.
+  3. Lo que falta para proponer: la meta en cifras, para cuándo, quién firma y el presupuesto, que va al final.
+  4. Si sobra lugar, más dolores, planes, implicaciones y dimensiones sin dato.
+  Sin ningún dolor dicho, arranca por los retos y una dimensión en situación. Una tarjeta con dato no se pregunta. Un
+  dolor cuyo impacto ya se preguntó y se marcó hecho en una sesión anterior pasa a solución (`pasosYaPreguntados`, de las
+  guías guardadas). Con un dolor en impacto, «qué pasa si no actúa» no se pregunta aparte. *Por qué en código:* con el
+  prompt solo, el agente seguía partiendo de lo que faltaba en el marco.
+- **Unas 5 preguntas** (`MAX_PREGUNTAS_DE_LA_GUIA`), contando lo llevado, y al menos 2 propias. Las repreguntas siguen
+  detrás de un clic.
+- **El agente escribe la pregunta del paso que le toca; el código filtra.** El pedido lleva «Lo que ya sabemos» y cada
+  pregunta con su tema, su paso y las palabras del cliente de las que parte. El prompt usa frases del test (opciones del
+  diagnóstico, no datos de un cliente) para mostrar el tono de la nota de HubSpot: corta, con sus palabras, directa a lo
+  que duele. `repiteLoSabido` descarta la pregunta que vuelve a pedir que cuente la situación de algo ya dicho. En su
+  lugar va `preguntaDeRespaldo`, armada con la cita: «En el diagnóstico dijeron: «…». ¿Cuánto les ha costado eso…?». El
+  mismo filtro corre al mostrar una guía de antes (sin `paso`): la de Larce del 16 oct deja de mostrar «¿Qué pasa cuando
+  un deal se queda quieto?» y queda en 5.
+- **Siempre cierra** con «¿Hay algo que no hayamos hablado y que deba saber para proponerte el primer paso?», el cierre
+  del agente (sin espacios por completar: si trae uno, va el de base) y «Si no salió en la conversación, pregunta: …» con
+  lo que falta para proponer y ninguna pregunta cubre (`faltanAlCerrar`, calidad.ts).
+- **Sin SQL.** El paso va en la pregunta guardada (`PreguntaDeLaGuia.paso`, en el Json de la propuesta); «Lo que ya
+  sabemos» se calcula al leer. La exploración de un proyecto (Customer Success) no cambia.
+- **Medido antes de entregar** (`scripts/medir-guia-de-preventa.ts`, en seco, contra el presupuesto humano): Larce,
+  CreditForce, Universidad Monterrey y Cicadex pasaron de 7 u 8 preguntas a entre 4 y 5. Ninguna vuelve a preguntar lo
+  que el cliente ya dijo.
+- **Pendiente:** los correos y el timeline de HubSpot (iniciativa B) suman lo que el cliente dijo por correo como una
+  fuente más de «Lo que ya sabemos» cuando entren a la memoria de la cuenta.

@@ -30,6 +30,8 @@ import { esTarjeta, MARCO_DE_VENTA, type Marco } from "./marco";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { aFecha, hoyEnCostaRica } from "./fechas";
 import { coincideConElEvento, HORAS_ESPERANDO_LA_TRANSCRIPCION, mismaReunion } from "./lectura";
+import type { SaberDelCliente } from "./lo-que-ya-sabemos";
+import { planDeLaGuia, preguntaDeRespaldo, repiteLoSabido, type PasoDeLaPregunta, type PreguntaPlaneada } from "./plan-de-la-guia";
 
 // ── Las sesiones ──────────────────────────────────────────────────────────────
 
@@ -620,8 +622,8 @@ export const MAX_DIMENSIONES_EN_FOCO = 4;
 /** Hasta cuántas tarjetas vacías pregunta una reunión. */
 export const MAX_TARJETAS_EN_LA_GUIA = 5;
 /**
- * Cuántas preguntas tiene una guía, entre tarjetas y dimensiones. Probado contra la API: con las ocho
- * tarjetas y cuatro dimensiones salían doce preguntas, demasiadas para una reunión.
+ * Cuántas preguntas tiene la guía de un PROYECTO (Customer Success), entre tarjetas y dimensiones. La de la preventa
+ * tiene 5 (plan-de-la-guia.ts › `MAX_PREGUNTAS_DE_LA_GUIA`, iniciativa A del 2026-10-18).
  */
 export const MAX_PREGUNTAS_POR_REUNION = 8;
 
@@ -684,10 +686,22 @@ export function enfoqueDeLaGuia(
 }
 
 /**
- * Qué cubre la próxima reunión: las tarjetas vacías (hasta 5 en la venta, las 3 de la estrategia en un
- * proyecto) y, con lo que queda hasta 8 preguntas, las dimensiones sin evidencia (hasta 4 en la venta,
- * 5 en un proyecto: Customer Success explora más la escala). Lo usan la pantalla y el pedido al agente:
- * tienen que decir lo mismo.
+ * Lo que la guía de la preventa sabe del cliente para armar su plan (plan-de-la-guia.ts): lo que ya respondió, lo que
+ * ya se preguntó en sesiones anteriores, cuántos puntos se llevó el vendedor y lo que pasó de una sesión cortada.
+ */
+export interface ContextoDelPlan {
+  saber: SaberDelCliente;
+  yaPreguntado?: ReadonlyMap<string, ReadonlySet<PasoDeLaPregunta>>;
+  llevados?: number;
+  pasaron?: readonly string[];
+}
+
+/**
+ * Qué cubre la próxima reunión. En la PREVENTA, con lo que ya se sabe (`contexto`), lo decide el plan
+ * (plan-de-la-guia.ts): unas 5 preguntas que parten de lo que el cliente ya respondió, cada una en su paso. Sin ese
+ * contexto, y en un PROYECTO, las tarjetas vacías (las 3 de la estrategia) y, con lo que queda hasta 8 preguntas, las
+ * dimensiones sin evidencia (5 en un proyecto: Customer Success explora más la escala). Lo usan la pantalla y el
+ * pedido al agente: tienen que decir lo mismo.
  */
 export function focoDeLaGuia(
   casillas: Partial<Record<ClaveDeCasilla, unknown>>,
@@ -696,10 +710,19 @@ export function focoDeLaGuia(
   posiciones: Readonly<Record<string, PosicionParaLaGuia | undefined>>,
   aExplorar: Readonly<Record<string, unknown>>,
   marco: Marco = MARCO_DE_VENTA,
-): { huecos: ClaveDeCasilla[]; enfoque: string[] } {
+  contexto?: ContextoDelPlan,
+): { huecos: ClaveDeCasilla[]; enfoque: string[]; plan: PreguntaPlaneada[] | null } {
+  if (marco.clave === "venta" && contexto) {
+    const plan = planDeLaGuia({ ...contexto, casillas, escala, areas, posiciones, aExplorar });
+    return {
+      huecos: plan.filter((p) => p.tipo === "tarjeta").map((p) => p.para as ClaveDeCasilla),
+      enfoque: plan.filter((p) => p.tipo === "dimension").map((p) => p.para),
+      plan,
+    };
+  }
   const huecos = huecosDelResumen(casillas, marco).slice(0, marco.maxTarjetas);
   const enfoque = enfoqueDeLaGuia(escala, areas, posiciones, aExplorar, Math.min(marco.maxDimensiones, MAX_PREGUNTAS_POR_REUNION - huecos.length));
-  return { huecos, enfoque };
+  return { huecos, enfoque, plan: null };
 }
 
 // ── Lo de base: lo que la guía muestra aunque el agente no la haya armado ─────
@@ -781,6 +804,8 @@ export interface PreguntaDeLaGuia {
   repreguntas: string[];
   /** El punto de una sesión anterior que esta pregunta retoma (el texto de `explorar`), si retoma uno. */
   abierto?: string;
+  /** El paso de la siguiente pregunta lógica que pregunta (plan-de-la-guia.ts). Sin él, una guía de antes del 2026-10-18. */
+  paso?: PasoDeLaPregunta;
 }
 
 export interface GuiaDeLaSesion {
@@ -928,6 +953,10 @@ export interface PreguntaParaMostrar {
    * se sabe (al llevarlo, o porque el agente lo ubicó al armar la guía). Sin esto se muestra aparte.
    */
   apunta?: { tipo: "tarjeta" | "dimension"; para: string };
+  /** El paso que pregunta (solo en la guía de la preventa con plan). */
+  paso?: PasoDeLaPregunta;
+  /** Lo que ya dijo el cliente y de donde parte la pregunta. */
+  motivo?: { texto: string; de: string };
 }
 
 /** De qué lado está una pregunta: el marco, la escala, lo vendido o ninguno (un punto llevado sin ubicar). */
@@ -990,6 +1019,12 @@ export function preguntasParaMostrar(
     pasaron: new Map(),
   },
   marco: Marco = MARCO_DE_VENTA,
+  /**
+   * El plan de la guía de la preventa (focoDeLaGuia con contexto) y lo que ya se sabe. Con él, las preguntas van en
+   * el orden del plan, cada una en su paso; la del agente que repite lo que el cliente ya contó (o es de una guía de
+   * antes y pregunta otro paso) se cambia por la de respaldo, armada con las palabras del cliente.
+   */
+  conPlan?: { plan: readonly PreguntaPlaneada[]; saber: SaberDelCliente },
 ): PreguntaParaMostrar[] {
   const preguntaDeLaDimension = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.pregunta ?? null;
   const ladoDelPara = (para: string | undefined): PreguntaParaMostrar["apunta"] => {
@@ -1017,8 +1052,35 @@ export function preguntasParaMostrar(
       out.push({ para, tipo, pregunta: base, repreguntas: [], ...(pasoDe ? { procedencia: { tipo: "paso" as const, numero: pasoDe } } : {}) });
     }
   };
-  for (const h of huecos) armar(h, "tarjeta", marco.preguntaDeBase[h as ClaveDeCasilla] ?? null);
-  for (const d of enfoque) armar(d, "dimension", preguntaDeLaDimension(d));
+  if (conPlan) {
+    for (const pl of conPlan.plan) {
+      const base = (pl.tipo === "tarjeta" ? marco.preguntaDeBase[pl.para as ClaveDeCasilla] : preguntaDeLaDimension(pl.para)) ?? "";
+      // La del agente vale si es del paso que toca; una de antes del plan (sin paso), si no repite lo que ya dijo.
+      const delAgente = guia?.preguntas.find((p) => p.para === pl.para && (p.paso ? p.paso === pl.paso : !repiteLoSabido(p.pregunta, pl, conPlan.saber)));
+      const abierto = delAgente?.abierto && procedencias.abiertos.has(delAgente.abierto) ? delAgente.abierto : null;
+      if (abierto) retomados.add(abierto);
+      const pasoDe = procedencias.pasaron.get(pl.para);
+      const procedencia: Procedencia | undefined = abierto
+        ? { tipo: "abierto", numero: procedencias.abiertos.get(abierto)! }
+        : pasoDe
+          ? { tipo: "paso", numero: pasoDe }
+          : undefined;
+      const pregunta = delAgente?.pregunta ?? preguntaDeRespaldo(pl, base);
+      if (!pregunta) continue;
+      out.push({
+        para: pl.para,
+        tipo: pl.tipo,
+        pregunta,
+        repreguntas: delAgente?.repreguntas ?? [],
+        paso: pl.paso,
+        ...(pl.motivo ? { motivo: { texto: pl.motivo.texto, de: pl.motivo.de } } : {}),
+        ...(procedencia ? { procedencia } : {}),
+      });
+    }
+  } else {
+    for (const h of huecos) armar(h, "tarjeta", marco.preguntaDeBase[h as ClaveDeCasilla] ?? null);
+    for (const d of enfoque) armar(d, "dimension", preguntaDeLaDimension(d));
+  }
   // Lo vendido (solo en un proyecto): una pregunta por pieza del alcance, como la escribió el agente.
   for (const v of guia?.loVendido ?? []) out.push({ para: v.id, tipo: "vendido", pregunta: v.pregunta, repreguntas: v.repreguntas, tema: v.tema });
   // Lo llevado que ninguna pregunta retoma va igual, como su propia pregunta: no se pierde.
@@ -1060,6 +1122,12 @@ export const APERTURA_DE_BASE = "Recuerda por qué se reúnen, confirma cuánto 
  */
 export function ordenDeLaConversacion(preguntas: readonly PreguntaParaMostrar[]): PreguntaParaMostrar[] {
   const alFinal = (p: PreguntaParaMostrar) => p.para === "presupuesto";
+  // Con plan (la preventa, desde el 2026-10-18), el orden ya es el de la conversación: lo de antes, los dolores, lo que falta.
+  if (preguntas.some((p) => p.paso)) {
+    const medio = preguntas.filter((p) => !alFinal(p));
+    const deAntes = (p: PreguntaParaMostrar) => !!p.procedencia || p.tipo === "abierto";
+    return [...medio.filter(deAntes), ...medio.filter((p) => !deAntes(p)), ...preguntas.filter(alFinal)];
+  }
   const intercalar = (lista: readonly PreguntaParaMostrar[]) => {
     const tarjetas = lista.filter((p) => p.tipo === "tarjeta");
     const dimensiones = lista.filter((p) => p.tipo === "dimension");

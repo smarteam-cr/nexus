@@ -22,13 +22,13 @@ import { type SiguientePaso } from "@/lib/exploraciones/casillas";
 import { avanceDeLaEstrategia, escalaConEvidencia } from "@/lib/exploraciones/avance-del-proyecto";
 import { definicionEnElMarco, type Marco } from "@/lib/exploraciones/marco";
 import { claveDeLaReunion, type DestinoDePropuesta, type ItemPropuesto, type LecturaDeReunion } from "@/lib/exploraciones/contenido";
-import { focoDeLaGuia, MAX_SESIONES, separarPregunta, type PestanaDeSesion, type PreguntaParaMostrar, type ResultadoDeLaSesion } from "@/lib/exploraciones/guia";
+import { MAX_SESIONES, separarPregunta, type PestanaDeSesion, type PreguntaParaMostrar, type ResultadoDeLaSesion } from "@/lib/exploraciones/guia";
 import { claveDeNotaDeSesion } from "@/lib/exploraciones/notas-de-sesion";
 import { Casilla } from "./Casilla";
 import { CorreoDeSeguimiento } from "./CorreoDeSeguimiento";
 import { useLienzo } from "./contexto";
 import SumarAMano from "./SumarAMano";
-import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion } from "./piezas-de-la-sesion";
+import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion, useFocoDeLaGuia } from "./piezas-de-la-sesion";
 import { FilaSugerida } from "./Propuestas";
 import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
@@ -447,8 +447,10 @@ function QuePaso({
   minutaAbierta: boolean;
   onMinuta: (sesionId: string) => void;
 }) {
-  const { exp, escala, mapa, marco, puedeEditar, guardando, sesion: seleccion } = useLienzo();
+  const { exp, escala, marco, puedeEditar, guardando, sesion: seleccion } = useLienzo();
   const editar = useEditarLaSesion(pestana, "despues");
+  // Lo que tenía preparado, si no se armó su guía: lo que falta hoy (en la preventa, el plan de la guía).
+  const { foco } = useFocoDeLaGuia(pestana.sesion?.id ?? null);
   /* «Sumar la minuta»: el formulario, con la sesión de la que es. Si era una reunión suelta, se vuelve
      sesión primero (cambia de pestaña: por eso lo abierto vive en SesionesDeExploracion). */
   const minutaDe = minutaAbierta ? (pestana.sesion?.id ?? null) : null;
@@ -467,7 +469,6 @@ function QuePaso({
       if (clave !== "cortada") return { ...x, resultado: clave, pasaron: undefined };
       // Lo que tenía preparado: su guía o, si no se armó, lo que faltaba al cortarse.
       const guia = e.propuesta.guias[x.id] ?? null;
-      const foco = focoDeLaGuia(e.contenido.casillas, escala, e.areas, mapa.posiciones, e.contenido.aExplorar, marco);
       const pasaron = guia ? [...guia.huecos, ...guia.enfoque] : [...foco.huecos, ...foco.enfoque];
       return { ...x, resultado: clave, pasaron: pasaron.slice(0, 20) };
     }).then((id) => {
