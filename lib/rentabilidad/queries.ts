@@ -46,6 +46,7 @@ import {
   costoDelMes,
   EQUIPO_DEL_ROL,
   filaDeMargen,
+  horasDeLaCuenta,
   horasPagadas,
   rangoDelMes,
   rangoDelPeriodo,
@@ -58,8 +59,9 @@ import {
   type TotalesDelPeriodo,
 } from "./margen";
 import { datosDesdeLaFoto, juntarMeses } from "./foto";
+import { leerHorasDeTareas, leerReunionesDelCalendario } from "./fuentes-de-horas-server";
 import { leerFotos } from "./foto-lectura-server";
-import type { CostoDeUnaPersona, CostoDeUnEquipo, DatosDeRentabilidad, FuenteDeUnMes, HorasPorOrigen, OrigenDelMes } from "./tipos";
+import type { CostoDeUnaPersona, CostoDeUnEquipo, DatosDeRentabilidad, FuenteDeUnMes, HorasPorOrigen, LecturaDeFuentes, OrigenDelMes } from "./tipos";
 export type { CostoDeUnaPersona, CostoDeUnEquipo, DatosDeRentabilidad, FuenteDeUnMes, HorasPorOrigen, OrigenDelMes } from "./tipos";
 
 const norm = (e: string | null | undefined) => (e ?? "").trim().toLowerCase();
@@ -230,12 +232,32 @@ export async function cargarRentabilidadDelRango(rango: RangoDelPeriodo, ahora =
     .map((m) => m.name);
 
   // ── Las horas con clientes ──
+  // Las reuniones de Meet, más las del calendario que no están en Meet (presenciales, Zoom, llamadas) y las tareas
+  // internas hechas: docs/rentabilidad-conectada-plan.md. Las reglas que evitan contar dos veces viven en los módulos
+  // puros (horas-del-calendario.ts, horas-de-tareas.ts).
+  const [delCalendario, deTareas] = await Promise.all([
+    leerReunionesDelCalendario(
+      miembros.map((m) => ({ email: m.email, nombre: m.name, createdAt: m.createdAt, deactivatedAt: m.deactivatedAt })),
+      rango,
+    ),
+    leerHorasDeTareas(rango),
+  ]);
   const csEmails = miembros.filter((m) => m.roleEnum === "CSE" || m.roleEnum === "CSL").map((m) => m.email);
-  const tiempo = tiempoEnReuniones(
-    reuniones,
-    miembros.map((m) => ({ email: norm(m.email), nombre: m.name, baja: m.deactivatedAt })),
-    csEmails,
-  );
+  const personasDeLaCarga = miembros.map((m) => ({ email: norm(m.email), nombre: m.name, baja: m.deactivatedAt }));
+  const tiempo = tiempoEnReuniones([...reuniones, ...delCalendario.lectura.reuniones], personasDeLaCarga, csEmails);
+  // La parte del calendario, para decir de dónde salió cada hora.
+  const tiempoSinMeet = tiempoEnReuniones(delCalendario.lectura.reuniones, personasDeLaCarga, csEmails);
+  if (delCalendario.estado === "sin-google") avisos.push("Sin Google Calendar en este entorno: las reuniones que no son de Meet no se leyeron.");
+  if (delCalendario.personasSinLeer.length) {
+    avisos.push(`No se pudo leer el calendario de ${delCalendario.personasSinLeer.join(", ")}: sus reuniones fuera de Meet no entran.`);
+  }
+  if (deTareas.cuenta.sinTiempo) {
+    avisos.push(
+      deTareas.cuenta.sinTiempo === 1
+        ? "1 tarea interna hecha no tiene bloque en la agenda ni estimado: no suma horas."
+        : `${deTareas.cuenta.sinTiempo} tareas internas hechas no tienen bloque en la agenda ni estimado: no suman horas.`,
+    );
+  }
   const [ultimaPorCliente, niveles] = await Promise.all([
     ultimaReunionPorCliente(cuentasDb.map((c) => c.id), ahora),
     nivelesDeEscala(cuentasDb.map((c) => c.id)),
@@ -337,12 +359,18 @@ export async function cargarRentabilidadDelRango(rango: RangoDelPeriodo, ahora =
   for (const [id, v] of tiempo.porCuenta) if (!nombreDe.has(id)) nombreDe.set(id, v.nombre);
   // Con la entrega: una cuenta sin reuniones ni cobros en el período igual pidió trabajo, y sin ella sus horas no
   // entraban a «horas con clientes» (el costo cargado salía más alto de lo que es).
-  const ids = new Set([...tiempo.porCuenta.keys(), ...ingresoCobranza.keys(), ...ingresoOdoo.keys(), ...entregaPorCliente.keys()]);
+  const ids = new Set([
+    ...tiempo.porCuenta.keys(),
+    ...ingresoCobranza.keys(),
+    ...ingresoOdoo.keys(),
+    ...entregaPorCliente.keys(),
+    ...deTareas.porCuenta.keys(),
+  ]);
   let horasDeReunion = 0;
   let reunionesTotal = 0;
   const horasConClientesDe = new Map<string, number>();
   const sumarPersona = (email: string, h: number) => horasConClientesDe.set(email, (horasConClientesDe.get(email) ?? 0) + h);
-  const origen: HorasPorOrigen = { calendario: 0, declaradas: 0, estimadas: 0 };
+  const origen: HorasPorOrigen = { calendario: 0, declaradas: 0, estimadas: 0, calendarioSinMeet: 0, tareas: 0, tareasEstimadas: 0 };
   const cuentas: CuentaParaMargen[] = [...ids].map((id) => {
     const vista = tiempo.porCuenta.get(id);
     let reunionesH = 0;
@@ -371,11 +399,26 @@ export async function cargarRentabilidadDelRango(rango: RangoDelPeriodo, ahora =
       costoPersona += x.horas * (costoHoraDe.get(email) ?? directoPromedio);
       costoEquipo += x.horas * costoHoraDelEquipo(equipoDe(email));
     }
+    let tareasH = 0;
+    let tareasAgenda = 0;
+    for (const [email, x] of deTareas.porCuenta.get(id) ?? []) {
+      const h = x.agenda + x.estimadas;
+      tareasH += h;
+      tareasAgenda += x.agenda;
+      sumarPersona(email, h);
+      sumarAca(email, h);
+      costoPersona += h * (costoHoraDe.get(email) ?? directoPromedio);
+      costoEquipo += h * costoHoraDelEquipo(equipoDe(email));
+    }
+    const sinMeet = [...(tiempoSinMeet.porCuenta.get(id)?.porPersona.values() ?? [])].reduce((a, pp) => a + pp.minutos / 60, 0);
     horasDeReunion += reunionesH + preparacion;
     reunionesTotal += vista?.reuniones ?? 0;
     origen.calendario += reunionesH;
+    origen.calendarioSinMeet = (origen.calendarioSinMeet ?? 0) + sinMeet;
     origen.declaradas += declarada;
-    origen.estimadas += preparacion + entregaH - declarada;
+    origen.tareas = (origen.tareas ?? 0) + tareasAgenda;
+    origen.tareasEstimadas = (origen.tareasEstimadas ?? 0) + (tareasH - tareasAgenda);
+    origen.estimadas += preparacion + entregaH - declarada + (tareasH - tareasAgenda);
     const db = cuentaDb.get(id);
     const cse = db ? cseDeLaCuenta(db, deBaja) : null;
     const p = plan.get(id);
@@ -386,7 +429,7 @@ export async function cargarRentabilidadDelRango(rango: RangoDelPeriodo, ahora =
       cse: cse?.nombre ?? (cse?.deBaja ? `Sin CSE (era de ${cse.deBaja})` : null),
       ingreso,
       fuenteDelIngreso: ingresoCobranza.has(id) ? "Cobranza" : ingresoOdoo.has(id) ? "Odoo" : null,
-      horas: { reuniones: reunionesH, preparacion, entrega: entregaH, declarada },
+      horas: { reuniones: reunionesH, preparacion, entrega: entregaH, declarada, reunionesSinMeet: sinMeet, tareas: tareasH, tareasAgenda },
       reuniones: vista?.reuniones ?? 0,
       plan: p && (p.sesiones > 0 || p.horasTareas > 0) ? p : null,
       costos: { persona: costoPersona, equipo: costoEquipo },
@@ -394,7 +437,7 @@ export async function cargarRentabilidadDelRango(rango: RangoDelPeriodo, ahora =
       porPersona: [...deEsta.entries()].map(([email, horas]) => ({ email, horas })).sort((a, b) => b.horas - a.horas),
     };
   });
-  const horasConClientes = cuentas.reduce((a, c) => a + c.horas.reuniones + c.horas.preparacion + c.horas.entrega, 0);
+  const horasConClientes = cuentas.reduce((a, c) => a + horasDeLaCuenta(c.horas), 0);
   const totales: TotalesDelPeriodo = {
     planilla,
     horasPagadas: horasPagadasTotal,
@@ -465,6 +508,20 @@ export async function cargarRentabilidadDelRango(rango: RangoDelPeriodo, ahora =
     avisos,
     preparacionMin: config.preparacionMin,
     fuentes: fuentesDelCalculo,
+    fuentesDeHoras: {
+      calendario: {
+        estado: delCalendario.estado,
+        personasLeidas: delCalendario.personasLeidas,
+        personasSinLeer: delCalendario.personasSinLeer,
+        leidos: delCalendario.lectura.cuenta.leidos,
+        contados: delCalendario.lectura.cuenta.contados,
+        conMeet: delCalendario.lectura.cuenta.conMeet,
+        yaEnUnaSesion: delCalendario.lectura.cuenta.yaEnUnaSesion,
+        agregadasAMano: delCalendario.lectura.cuenta.agregadasAMano,
+        sinUnaEmpresa: delCalendario.lectura.cuenta.sinUnaEmpresa,
+      },
+      tareas: deTareas.cuenta,
+    } satisfies LecturaDeFuentes,
   };
 }
 

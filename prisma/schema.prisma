@@ -198,50 +198,51 @@ model Client {
   // estaban vacías en prod (0/188 al 2026-09-27). Nullable = todavía sin ficha.
   ficha            Json?
 
-  hubspotAccount         HubspotAccount?
-  audits                 Audit[]
-  knowledge              Knowledge[]
-  documents              ClientDocument[]
-  stageNotes             StageNote[]
-  agentRuns              AgentRun[]
-  contextCards           ClientContextCard[]
-  projects               Project[]
-  casosDeUso             CasoDeUso[] // el camino de crecimiento de la empresa (docs/smartloop-plan.md)
-  versionesDeLaEscala    VersionDeLaEscala[] // la escala de la empresa en el tiempo (ficha B, 2026-10-17)
-  canvasSuggestions      CanvasSuggestion[]
-  actionItems            ActionItem[]
-  pedidosFueraDeAlcance  PedidoFueraDeAlcance[]
-  licencias              LicenciaCliente[]
-  appUsers               AppUser[] // F2: usuarios externos vinculados (kind=EXTERNAL)
-  assignments            ClientAssignment[] // F2: overrides manuales CSE↔Cliente
-  handoffs               Handoff[] // entidad Handoff (1:N por cliente, ver model Handoff)
-  businessCases          BusinessCase[] // Ventas: casos de negocio (1:N por cliente)
-  csAlerts               CsAlert[] // Éxito del cliente: alertas del watchdog
-  csSignals              ClientCsSignals? // Éxito del cliente: snapshot de señales HubSpot
-  partnerSnapshot        ClientPartnerSnapshot? // CS360: snapshot del objeto Partner Clients de HubSpot
-  clasificacion          ClasificacionDeCuenta? // Éxito del cliente: relación, potencial y momento confirmados por la CSL
-  correccionesDeSalud    CorreccionDeSalud[] // Éxito del cliente: el color corregido a mano y el «en espera del cliente»
-  accountBrief           CsAccountBrief? // CS360: resumen ejecutivo citado (agente)
-  cuentaFinanciera       CuentaFinanciera? // Cobranza: perfil de cobro 1:1 (ver sección Cobranza)
-  ingresosVariables      IngresoVariable[]       @relation("IngresosVariablesDeCliente") // Finanzas: entradas fuera del ciclo
-  comisionesPartner      ComisionPartner[]       @relation("ComisionesDePartner") // lo que Smarteam GANA de este aliado
-  ventasGanadas          VentaGanada[]           @relation("VentasDelCliente") // los tratos ganados en HubSpot (el espejo de lo VENDIDO)
-  negociosAbiertos       NegocioAbierto[]        @relation("NegociosDelCliente") // los tratos ABIERTOS en HubSpot (2026-10-14)
-  siguientesPasos        SiguientePaso[]         @relation("SiguientesPasosDelCliente") // el siguiente paso de cada equipo (2026-10-15)
-  contactosDeHubspot     ContactoDeHubspot[]     @relation("ContactosDeHubspot") // la copia de sus contactos de HubSpot (2026-10-16)
-  ticketsDeHubspot       TicketDeHubspot[]       @relation("TicketsDeHubspot") // la copia de sus tickets de HubSpot (2026-10-16)
-  notasDeLaCuenta        NotaDeLaCuenta[]        @relation("NotasDeLaCuenta") // lo que pasó por WhatsApp, una llamada o un correo (2026-10-16)
-  reglasComisionVendedor ReglaComisionVendedor[] @relation("ReglasDeComisionVendedor") // ⚠ SUPER_ADMIN-only
-  importFilasAplicadas   ImportacionFila[] // Cobranza: trazabilidad del importador
-  escalaComentarios      EscalaComentario[] // Escala: comentarios «no calza con este cliente» (SET NULL)
-  exploracionesDeVenta   ExploracionDeVenta[] // Ventas: el lienzo de la exploración (una VIVA por empresa)
-  preguntasDeTiempo      PreguntaDeTiempo[] // Tiempos: «¿cuánto te tomó?» de su trabajo (SET NULL)
-  respuestasDeCuenta     RespuestaDeCuenta[] // Preguntas sobre la cuenta: lo que Customer Success sabe de ella (SET NULL)
-  tareas                 Tarea[]                 @relation("TareasDelCliente") // Tareas internas: para quién (SET NULL)
-  proyectosDeTareas      ProyectoDeTareas[]      @relation("ProyectosDeTareasDelCliente")
-  vinculosDeTareas       TareaVinculo[]          @relation("VinculosDeTareasDelCliente")
-  hechosDeReuniones      HechoDeReunion[]        @relation("HechosDelCliente") // memoria de la cuenta: los hechos de sus reuniones (CASCADE)
-  hilosDeChat            HiloDeChat[]            @relation("HilosDeChatDeLaCuenta") // el chat de Nexus sobre la cuenta (2026-10-17, CASCADE)
+  hubspotAccount           HubspotAccount?
+  audits                   Audit[]
+  knowledge                Knowledge[]
+  documents                ClientDocument[]
+  stageNotes               StageNote[]
+  agentRuns                AgentRun[]
+  contextCards             ClientContextCard[]
+  projects                 Project[]
+  casosDeUso               CasoDeUso[] // el camino de crecimiento de la empresa (docs/smartloop-plan.md)
+  versionesDeLaEscala      VersionDeLaEscala[] // la escala de la empresa en el tiempo (ficha B, 2026-10-17)
+  canvasSuggestions        CanvasSuggestion[]
+  actionItems              ActionItem[]
+  pedidosFueraDeAlcance    PedidoFueraDeAlcance[]
+  licencias                LicenciaCliente[]
+  appUsers                 AppUser[] // F2: usuarios externos vinculados (kind=EXTERNAL)
+  assignments              ClientAssignment[] // F2: overrides manuales CSE↔Cliente
+  handoffs                 Handoff[] // entidad Handoff (1:N por cliente, ver model Handoff)
+  businessCases            BusinessCase[] // Ventas: casos de negocio (1:N por cliente)
+  csAlerts                 CsAlert[] // Éxito del cliente: alertas del watchdog
+  csSignals                ClientCsSignals? // Éxito del cliente: snapshot de señales HubSpot
+  partnerSnapshot          ClientPartnerSnapshot? // CS360: snapshot del objeto Partner Clients de HubSpot
+  clasificacion            ClasificacionDeCuenta? // Éxito del cliente: relación, potencial y momento confirmados por la CSL
+  correccionesDeSalud      CorreccionDeSalud[] // Éxito del cliente: el color corregido a mano y el «en espera del cliente»
+  accountBrief             CsAccountBrief? // CS360: resumen ejecutivo citado (agente)
+  cuentaFinanciera         CuentaFinanciera? // Cobranza: perfil de cobro 1:1 (ver sección Cobranza)
+  ingresosVariables        IngresoVariable[]         @relation("IngresosVariablesDeCliente") // Finanzas: entradas fuera del ciclo
+  comisionesPartner        ComisionPartner[]         @relation("ComisionesDePartner") // lo que Smarteam GANA de este aliado
+  ventasGanadas            VentaGanada[]             @relation("VentasDelCliente") // los tratos ganados en HubSpot (el espejo de lo VENDIDO)
+  negociosAbiertos         NegocioAbierto[]          @relation("NegociosDelCliente") // los tratos ABIERTOS en HubSpot (2026-10-14)
+  siguientesPasos          SiguientePaso[]           @relation("SiguientesPasosDelCliente") // el siguiente paso de cada equipo (2026-10-15)
+  contactosDeHubspot       ContactoDeHubspot[]       @relation("ContactosDeHubspot") // la copia de sus contactos de HubSpot (2026-10-16)
+  ticketsDeHubspot         TicketDeHubspot[]         @relation("TicketsDeHubspot") // la copia de sus tickets de HubSpot (2026-10-16)
+  notasDeLaCuenta          NotaDeLaCuenta[]          @relation("NotasDeLaCuenta") // lo que pasó por WhatsApp, una llamada o un correo (2026-10-16)
+  reglasComisionVendedor   ReglaComisionVendedor[]   @relation("ReglasDeComisionVendedor") // ⚠ SUPER_ADMIN-only
+  importFilasAplicadas     ImportacionFila[] // Cobranza: trazabilidad del importador
+  escalaComentarios        EscalaComentario[] // Escala: comentarios «no calza con este cliente» (SET NULL)
+  exploracionesDeVenta     ExploracionDeVenta[] // Ventas: el lienzo de la exploración (una VIVA por empresa)
+  preguntasDeTiempo        PreguntaDeTiempo[] // Tiempos: «¿cuánto te tomó?» de su trabajo (SET NULL)
+  respuestasDeCuenta       RespuestaDeCuenta[] // Preguntas sobre la cuenta: lo que Customer Success sabe de ella (SET NULL)
+  tareas                   Tarea[]                   @relation("TareasDelCliente") // Tareas internas: para quién (SET NULL)
+  proyectosDeTareas        ProyectoDeTareas[]        @relation("ProyectosDeTareasDelCliente")
+  vinculosDeTareas         TareaVinculo[]            @relation("VinculosDeTareasDelCliente")
+  hechosDeReuniones        HechoDeReunion[]          @relation("HechosDelCliente") // memoria de la cuenta: los hechos de sus reuniones (CASCADE)
+  hilosDeChat              HiloDeChat[]              @relation("HilosDeChatDeLaCuenta") // el chat de Nexus sobre la cuenta (2026-10-17, CASCADE)
+  propuestasDeRentabilidad PropuestaDeRentabilidad[] @relation("PropuestasDeRentabilidad")
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
 }
@@ -1583,10 +1584,11 @@ model AgentRun {
   cards                    ClientContextCard[]
   blocks                   CanvasBlock[]
   generatedTimelines       ProjectTimeline[]
-  detailGeneratedTimelines ProjectTimeline[]   @relation("TimelineDetailGenerator")
+  detailGeneratedTimelines ProjectTimeline[]         @relation("TimelineDetailGenerator")
   csAlerts                 CsAlert[] // Éxito del cliente: alertas emitidas por esta corrida
-  lecturasDeTareas         LecturaDeReunion[]  @relation("LecturasDeTareasDelAgente") // Tareas internas: la lectura de una reunión
-  hechos                   HechoDeReunion[]    @relation("HechosDelAgente") // memoria de la cuenta: los hechos de la lectura (SET NULL)
+  lecturasDeTareas         LecturaDeReunion[]        @relation("LecturasDeTareasDelAgente") // Tareas internas: la lectura de una reunión
+  hechos                   HechoDeReunion[]          @relation("HechosDelAgente") // memoria de la cuenta: los hechos de la lectura (SET NULL)
+  propuestasDeRentabilidad PropuestaDeRentabilidad[] @relation("PropuestasDeRentabilidad") // la lectura de los números (SET NULL)
 
   @@index([status])
   @@index([clientId, agentSlug, createdAt])
@@ -3298,77 +3300,148 @@ model ConfigCarga {
 // ⛔ Lleva planilla y el costo de la hora de cada persona: solo dirección (SUPER_ADMIN).
 // SQL: scripts/sql/2026-10-17-foto-del-margen.sql (RLS + deny).
 model FotoMargenMes {
-  id               String             @id @default(cuid())
+  id                   String             @id @default(cuid())
   /// «2026-09»: el mes (hora de Costa Rica).
-  mes              String             @unique
+  mes                  String             @unique
   /// La forma de lo guardado (VERSION_DE_LA_FOTO).
-  version          Int                @default(1)
+  version              Int                @default(1)
   /// correo | "sistema"
-  tomadaPor        String
-  tomadaAt         DateTime           @default(now())
+  tomadaPor            String
+  tomadaAt             DateTime           @default(now())
   /// nullable porque solo volver a tomarla pide un motivo.
-  motivo           String?
-  planilla         Decimal            @db.Decimal(12, 2)
-  ingreso          Decimal            @db.Decimal(12, 2)
-  horasPagadas     Decimal            @db.Decimal(10, 2)
-  horasConClientes Decimal            @db.Decimal(10, 2)
-  horasCalendario  Decimal            @db.Decimal(10, 2)
-  horasRespondidas Decimal            @db.Decimal(10, 2)
-  horasEstimadas   Decimal            @db.Decimal(10, 2)
-  horasPorSesion   Decimal            @db.Decimal(10, 4)
+  motivo               String?
+  planilla             Decimal            @db.Decimal(12, 2)
+  ingreso              Decimal            @db.Decimal(12, 2)
+  horasPagadas         Decimal            @db.Decimal(10, 2)
+  horasConClientes     Decimal            @db.Decimal(10, 2)
+  horasCalendario      Decimal            @db.Decimal(10, 2)
+  horasRespondidas     Decimal            @db.Decimal(10, 2)
+  horasEstimadas       Decimal            @db.Decimal(10, 2)
+  /// v2 (2026-10-18, docs/rentabilidad-conectada-plan.md): la parte de horasCalendario que no es de Meet.
+  horasSinMeet         Decimal            @default(0) @db.Decimal(10, 2)
+  /// v2: tareas internas por sus bloques en la agenda.
+  horasTareas          Decimal            @default(0) @db.Decimal(10, 2)
+  /// v2: la parte de horasEstimadas que es el estimado de una tarea interna sin bloque.
+  horasTareasEstimadas Decimal            @default(0) @db.Decimal(10, 2)
+  horasPorSesion       Decimal            @db.Decimal(10, 4)
   // nullable porque sin horas pagadas (o sin horas con clientes) no hay costo de la hora.
-  costoHoraDirecto Decimal?           @db.Decimal(12, 2)
-  costoHoraCargado Decimal?           @db.Decimal(12, 2)
-  preparacionMin   Int
+  costoHoraDirecto     Decimal?           @db.Decimal(12, 2)
+  costoHoraCargado     Decimal?           @db.Decimal(12, 2)
+  preparacionMin       Int
   /// { id, guardadaEn, guardadaPor }: la fila de ConfigCarga que rigió.
-  supuestos        Json
+  supuestos            Json
   /// { crcPorUsd, fuente } del mes, o null.
-  tasa             Json?
+  tasa                 Json?
   /// { personas: CostoDeUnaPersona[], equipos: CostoDeUnEquipo[] } (lib/rentabilidad/tipos.ts).
-  costos           Json
+  costos               Json
   /// { conCosto, sinCosto, fuentes }
-  personas         Json
-  avisos           Json
-  cuentas          FotoMargenCuenta[]
-  updatedAt        DateTime           @updatedAt
+  personas             Json
+  avisos               Json
+  cuentas              FotoMargenCuenta[]
+  updatedAt            DateTime           @updatedAt
 }
 
 /// Una cuenta en la foto de un mes. `clientId` SIN FK a propósito: es la foto del pasado y no cambia si la ficha se
 /// fusiona o se borra (el nombre queda congelado). Lo declara lib/clients/fusion-de-empresas.ts › SE_QUEDAN_A_PROPOSITO.
 model FotoMargenCuenta {
-  id               String        @id @default(cuid())
-  fotoId           String
-  foto             FotoMargenMes @relation(fields: [fotoId], references: [id], onDelete: Cascade)
-  mes              String
-  clientId         String
-  nombre           String
+  id                String        @id @default(cuid())
+  fotoId            String
+  foto              FotoMargenMes @relation(fields: [fotoId], references: [id], onDelete: Cascade)
+  mes               String
+  clientId          String
+  nombre            String
   // nullable porque una cuenta puede no tener CSE.
-  cse              String?
-  ingreso          Decimal       @db.Decimal(12, 2)
+  cse               String?
+  ingreso           Decimal       @db.Decimal(12, 2)
   /// Cobranza | Odoo | null
-  fuenteIngreso    String?
-  horasCalendario  Decimal       @db.Decimal(10, 2)
-  horasPreparacion Decimal       @db.Decimal(10, 2)
-  horasEntrega     Decimal       @db.Decimal(10, 2)
-  horasRespondidas Decimal       @db.Decimal(10, 2)
-  horasEstimadas   Decimal       @db.Decimal(10, 2)
-  reuniones        Int
+  fuenteIngreso     String?
+  horasCalendario   Decimal       @db.Decimal(10, 2)
+  horasPreparacion  Decimal       @db.Decimal(10, 2)
+  horasEntrega      Decimal       @db.Decimal(10, 2)
+  horasRespondidas  Decimal       @db.Decimal(10, 2)
+  horasEstimadas    Decimal       @db.Decimal(10, 2)
+  /// v2 (2026-10-18): la parte de horasCalendario que no es de Meet, y las tareas internas (las de la agenda y en total).
+  horasSinMeet      Decimal       @default(0) @db.Decimal(10, 2)
+  horasTareas       Decimal       @default(0) @db.Decimal(10, 2)
+  horasTareasAgenda Decimal       @default(0) @db.Decimal(10, 2)
+  reuniones         Int
   // nullable porque una cuenta sin cronograma en el mes no tiene plan.
-  planSesiones     Decimal?      @db.Decimal(10, 2)
-  planHorasTareas  Decimal?      @db.Decimal(10, 2)
-  costoPersona     Decimal       @db.Decimal(12, 2)
-  costoEquipo      Decimal       @db.Decimal(12, 2)
-  costoCargado     Decimal       @db.Decimal(12, 2)
-  margenPersona    Decimal       @db.Decimal(12, 2)
-  margenEquipo     Decimal       @db.Decimal(12, 2)
-  margenCargado    Decimal       @db.Decimal(12, 2)
-  factor           Decimal       @db.Decimal(5, 2)
+  planSesiones      Decimal?      @db.Decimal(10, 2)
+  planHorasTareas   Decimal?      @db.Decimal(10, 2)
+  costoPersona      Decimal       @db.Decimal(12, 2)
+  costoEquipo       Decimal       @db.Decimal(12, 2)
+  costoCargado      Decimal       @db.Decimal(12, 2)
+  margenPersona     Decimal       @db.Decimal(12, 2)
+  margenEquipo      Decimal       @db.Decimal(12, 2)
+  margenCargado     Decimal       @db.Decimal(12, 2)
+  factor            Decimal       @db.Decimal(5, 2)
   /// [{ email, horas }]
-  porPersona       Json
+  porPersona        Json
 
   @@unique([mes, clientId])
   @@index([clientId, mes])
   @@index([fotoId])
+}
+
+// ─── La rentabilidad conectada: la meta del año y la lectura de los números (2026-10-18) ──────────────────────────
+// Iniciativa C de docs/roadmap.md; plan en docs/rentabilidad-conectada-plan.md. SQL:
+// scripts/sql/2026-10-18-rentabilidad-conectada.sql (RLS + RESTRICTIVE). Solo dirección (guardCostosAccess).
+
+/// La meta de facturación de un año. APPEND-ONLY: cada vez que dirección la define es una fila; la vigente es la última
+/// de su año. La edita dirección desde la pantalla (lib/finanzas/meta-server.ts): cambiarla no pide código.
+model MetaDeFacturacion {
+  id          String   @id @default(cuid())
+  anio        Int
+  /// En dólares: la meta se dice en dólares («US$2,3 millones en 2027»). Lo facturado se lee por moneda y se convierte
+  /// solo para dibujar la barra (convertir, lib/finanzas/equilibrio.ts).
+  montoUsd    Decimal  @db.Decimal(14, 2)
+  // nullable porque la nota es opcional.
+  nota        String?  @db.Text
+  definidaPor String
+  definidaAt  DateTime @default(now())
+
+  @@index([anio, definidaAt])
+}
+
+/// Lo que propone la lectura de los números de Rentabilidad (lib/rentabilidad/lectura): una fila por propuesta. Nexus
+/// detecta y propone; una persona la usa o la desestima. Solo lo usado vale. Vence a los 30 días (se calcula al leer).
+model PropuestaDeRentabilidad {
+  id            String    @id @default(cuid())
+  // nullable porque la propuesta sobrevive a que se borre la corrida (el historial de corridas se limpia).
+  agentRunId    String?
+  agentRun      AgentRun? @relation("PropuestasDeRentabilidad", fields: [agentRunId], references: [id], onDelete: SetNull)
+  /// El último mes cerrado que se leyó («2026-09»).
+  mes           String
+  /// solvencia | margen-cuenta | horas-sin-facturar | meta (texto: sumar un tipo no toca la base)
+  tipo          String
+  /// La huella de la señal que la originó: con una pendiente igual no se crea otra.
+  clave         String
+  // nullable porque la mayoría de las señales son de toda la empresa, no de una cuenta.
+  clientId      String?
+  client        Client?   @relation("PropuestasDeRentabilidad", fields: [clientId], references: [id], onDelete: SetNull)
+  titulo        String
+  /// Lo que detectó, con sus números.
+  queVe         String    @db.Text
+  /// Qué hacer.
+  propuesta     String    @db.Text
+  // nullable porque no toda propuesta pide plata.
+  inversionUsd  Decimal?  @db.Decimal(12, 2)
+  inversionNota String?   @db.Text
+  /// La señal del código (lib/rentabilidad/lectura/senales.ts) con los números que vio el modelo.
+  senal         Json
+  /// pendiente | usado | desestimado (CHECK en el SQL). «vencido» = pendiente de más de 30 días: se deriva.
+  estado        String    @default("pendiente")
+  // nullable hasta que alguien decide.
+  decididaPor   String?
+  decididaAt    DateTime?
+  motivo        String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([estado, createdAt])
+  @@index([agentRunId])
+  @@index([clientId])
+  @@index([clave])
 }
 
 // Cómo clasifica la CSL cada cuenta de la cartera (2026-10-07): tipo de relación, potencial y momento. Guarda solo lo

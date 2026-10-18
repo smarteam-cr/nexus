@@ -225,6 +225,10 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "sugerencias-del-documento",
     motivo: "Arma las sugerencias del panel: las sesiones de la exploración del proyecto por su puerta (sesionesDeLaExploracionDelProyecto).",
   },
+  "lib/rentabilidad/horas-del-calendario.ts": {
+    destino: "agenda-interna",
+    motivo: "Las horas de Rentabilidad que salen del calendario (iniciativa C): los ayudantes del calendario (invitados, fechas). No lee exploraciones.",
+  },
   "lib/mi-dia/agenda.ts": {
     destino: "agenda-interna",
     motivo: "La agenda de hoy de «Para ti»: los ayudantes del calendario (invitados, fechas, dominios genéricos). No lee exploraciones.",

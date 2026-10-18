@@ -26,7 +26,11 @@ import { costoDeLaHora, filaDeMargen, type CuentaParaMargen, type FuenteDelCosto
 import type { CostoDeUnaPersona, CostoDeUnEquipo, DatosDeRentabilidad, FuenteDeUnMes, OrigenDelMes } from "./tipos";
 
 /** La forma de lo guardado. Subirla si cambia lo que significa una columna o un JSON. */
-export const VERSION_DE_LA_FOTO = 1;
+/**
+ * v2 (2026-10-18): las reuniones del calendario que no son de Meet y las tareas internas (docs/rentabilidad-conectada-plan.md).
+ * Una foto v1 se lee con esas horas en cero: no las tenía.
+ */
+export const VERSION_DE_LA_FOTO = 2;
 
 /** El día del mes (hora de Costa Rica) desde el que se toma la foto del mes que cerró, y la hora. */
 export const DIA_DE_LA_FOTO = 3;
@@ -42,6 +46,12 @@ export interface FotoDelMes {
   horasCalendario: number;
   horasRespondidas: number;
   horasEstimadas: number;
+  /** La parte de `horasCalendario` que no es de Meet (v2). */
+  horasSinMeet: number;
+  /** Tareas internas por sus bloques en la agenda (v2). */
+  horasTareas: number;
+  /** La parte de `horasEstimadas` que es el estimado de una tarea interna sin bloque (v2). */
+  horasTareasEstimadas: number;
   horasPorSesion: number;
   costoHoraDirecto: number | null;
   costoHoraCargado: number | null;
@@ -66,8 +76,13 @@ export interface FotoDeCuenta {
   horasEntrega: number;
   /** La parte de la entrega que respondió quien hizo la tarea. */
   horasRespondidas: number;
-  /** Preparación + la entrega sin respuesta. */
+  /** Preparación + la entrega sin respuesta + el estimado de las tareas internas sin bloque. */
   horasEstimadas: number;
+  /** La parte de `horasCalendario` que no es de Meet (v2). */
+  horasSinMeet: number;
+  /** Todas las horas de tareas internas (v2): `horasTareasAgenda` + su estimado. */
+  horasTareas: number;
+  horasTareasAgenda: number;
   reuniones: number;
   planSesiones: number | null;
   planHorasTareas: number | null;
@@ -141,6 +156,8 @@ export function armarFoto(mes: string, datos: DatosDeRentabilidad): { mes: FotoD
       const equipo = filaDeMargen(c, tarifa, hs, "equipo");
       const cargado = filaDeMargen(c, tarifa, hs, "cargado");
       const declarada = c.horas.declarada ?? 0;
+      const tareas = c.horas.tareas ?? 0;
+      const tareasAgenda = c.horas.tareasAgenda ?? 0;
       return {
         mes,
         clientId: c.clienteId,
@@ -152,7 +169,10 @@ export function armarFoto(mes: string, datos: DatosDeRentabilidad): { mes: FotoD
         horasPreparacion: r2(c.horas.preparacion),
         horasEntrega: r2(c.horas.entrega),
         horasRespondidas: r2(declarada),
-        horasEstimadas: r2(c.horas.preparacion + c.horas.entrega - declarada),
+        horasEstimadas: r2(c.horas.preparacion + c.horas.entrega - declarada + tareas - tareasAgenda),
+        horasSinMeet: r2(c.horas.reunionesSinMeet ?? 0),
+        horasTareas: r2(tareas),
+        horasTareasAgenda: r2(tareasAgenda),
         reuniones: c.reuniones,
         planSesiones: c.plan ? r2(c.plan.sesiones) : null,
         planHorasTareas: c.plan ? r2(c.plan.horasTareas) : null,
@@ -193,6 +213,9 @@ export function armarFoto(mes: string, datos: DatosDeRentabilidad): { mes: FotoD
       horasCalendario: r2(datos.horasPorOrigen.calendario),
       horasRespondidas: r2(datos.horasPorOrigen.declaradas),
       horasEstimadas: r2(datos.horasPorOrigen.estimadas),
+      horasSinMeet: r2(datos.horasPorOrigen.calendarioSinMeet ?? 0),
+      horasTareas: r2(datos.horasPorOrigen.tareas ?? 0),
+      horasTareasEstimadas: r2(datos.horasPorOrigen.tareasEstimadas ?? 0),
       horasPorSesion: r4(hs),
       costoHoraDirecto: r2n(datos.costoDeLaHora.directo),
       costoHoraCargado: r2n(datos.costoDeLaHora.cargado),
@@ -227,7 +250,15 @@ export function datosDesdeLaFoto(rango: RangoDelPeriodo, mes: FotoDelMes, cuenta
         cse: c.cse,
         ingreso: c.ingreso,
         fuenteDelIngreso: c.fuenteIngreso,
-        horas: { reuniones: c.horasCalendario, preparacion: c.horasPreparacion, entrega: c.horasEntrega, declarada: c.horasRespondidas },
+        horas: {
+          reuniones: c.horasCalendario,
+          preparacion: c.horasPreparacion,
+          entrega: c.horasEntrega,
+          declarada: c.horasRespondidas,
+          reunionesSinMeet: c.horasSinMeet,
+          tareas: c.horasTareas,
+          tareasAgenda: c.horasTareasAgenda,
+        },
         reuniones: c.reuniones,
         plan: c.planSesiones === null && c.planHorasTareas === null ? null : { sesiones: c.planSesiones ?? 0, horasTareas: c.planHorasTareas ?? 0 },
         costos: { persona: c.costoPersona, equipo: c.costoEquipo },
@@ -237,8 +268,19 @@ export function datosDesdeLaFoto(rango: RangoDelPeriodo, mes: FotoDelMes, cuenta
     ),
     personas: mes.personas,
     costos: mes.costos,
-    horasPorOrigen: { calendario: mes.horasCalendario, declaradas: mes.horasRespondidas, estimadas: mes.horasEstimadas },
-    avisos: mes.avisos,
+    horasPorOrigen: {
+      calendario: mes.horasCalendario,
+      declaradas: mes.horasRespondidas,
+      estimadas: mes.horasEstimadas,
+      calendarioSinMeet: mes.horasSinMeet,
+      tareas: mes.horasTareas,
+      tareasEstimadas: mes.horasTareasEstimadas,
+    },
+    // Una foto v1 no contaba las reuniones fuera de Meet ni las tareas internas: se dice, no se completa sola.
+    avisos:
+      mes.version < 2
+        ? [...mes.avisos, "Esta foto es de antes de contar las reuniones fuera de Meet y las tareas internas: «Volver a tomar» las suma."]
+        : mes.avisos,
     preparacionMin: mes.preparacionMin,
     fuentes: [{ mes: mes.mes, supuestos: mes.supuestos, tasa: mes.tasa }],
   };
@@ -258,7 +300,13 @@ export function juntarMeses(rango: RangoDelPeriodo, meses: DatosDeRentabilidad[]
       if (!x) {
         cuentas.set(c.clienteId, {
           ...c,
-          horas: { ...c.horas, declarada: c.horas.declarada ?? 0 },
+          horas: {
+            ...c.horas,
+            declarada: c.horas.declarada ?? 0,
+            reunionesSinMeet: c.horas.reunionesSinMeet ?? 0,
+            tareas: c.horas.tareas ?? 0,
+            tareasAgenda: c.horas.tareasAgenda ?? 0,
+          },
           plan: c.plan ? { ...c.plan } : null,
           costos: c.costos ? { ...c.costos } : undefined,
           porPersonaMapa: new Map((c.porPersona ?? []).map((p) => [p.email, p.horas])),
@@ -274,6 +322,9 @@ export function juntarMeses(rango: RangoDelPeriodo, meses: DatosDeRentabilidad[]
       x.horas.preparacion += c.horas.preparacion;
       x.horas.entrega += c.horas.entrega;
       x.horas.declarada = (x.horas.declarada ?? 0) + (c.horas.declarada ?? 0);
+      x.horas.reunionesSinMeet = (x.horas.reunionesSinMeet ?? 0) + (c.horas.reunionesSinMeet ?? 0);
+      x.horas.tareas = (x.horas.tareas ?? 0) + (c.horas.tareas ?? 0);
+      x.horas.tareasAgenda = (x.horas.tareasAgenda ?? 0) + (c.horas.tareasAgenda ?? 0);
       x.reuniones += c.reuniones;
       if (c.plan) x.plan = x.plan ? { sesiones: x.plan.sesiones + c.plan.sesiones, horasTareas: x.plan.horasTareas + c.plan.horasTareas } : { ...c.plan };
       if (c.costos) x.costos = x.costos ? { persona: x.costos.persona + c.costos.persona, equipo: x.costos.equipo + c.costos.equipo } : { ...c.costos };
@@ -361,7 +412,11 @@ export function juntarMeses(rango: RangoDelPeriodo, meses: DatosDeRentabilidad[]
       calendario: suma((d) => d.horasPorOrigen.calendario),
       declaradas: suma((d) => d.horasPorOrigen.declaradas),
       estimadas: suma((d) => d.horasPorOrigen.estimadas),
+      calendarioSinMeet: suma((d) => d.horasPorOrigen.calendarioSinMeet ?? 0),
+      tareas: suma((d) => d.horasPorOrigen.tareas ?? 0),
+      tareasEstimadas: suma((d) => d.horasPorOrigen.tareasEstimadas ?? 0),
     },
+    fuentesDeHoras: meses.length === 1 ? meses[0].fuentesDeHoras : undefined,
     avisos,
     preparacionMin: meses.at(-1)?.preparacionMin ?? 0,
     fuentes: meses.flatMap((d) => d.fuentes),

@@ -45,7 +45,7 @@ import {
   vencioSinRevisar,
 } from "./ciclo";
 import { contarTipo, conteoVacio, type ConteoDeTipo, type ItemParaContar, type Ventana } from "./conteo";
-import { TIPOS_DE_LO_PROPUESTO, type ClaveDeTipo } from "./tipos";
+import { PLAZO_PARA_REVISAR_DIAS, TIPOS_DE_LO_PROPUESTO, type ClaveDeTipo } from "./tipos";
 
 export interface OpcionesDeConteo extends Ventana {
   ahora?: Date;
@@ -412,7 +412,36 @@ const recurrencia: Lector = async ({ db, desde, hasta }, hoyISO) => ({
   "recomendacion-de-recurrencia": await seguro(recomendacionesDeRecurrencia(db, { desde, hasta }, hoyISO), []),
 });
 
-const LECTORES: readonly Lector[] = [minutas, pedidos, tareas, alertas, camposDeFicha, etapasYFechas, compromisosLegacy, hechos, sugerenciasDelHandoff, notasParaHubspot, recurrencia];
+/**
+ * Lo que propone la lectura de los números de Rentabilidad (iniciativa C, 2026-10-18; lib/rentabilidad/lectura): nace
+ * cuando corre la lectura y la decide dirección (usar o desestimar, con quién y cuándo). Vence a los 30 días.
+ */
+const lecturaDeRentabilidad: Lector = async ({ db, ...v }) => {
+  if (!modeloDisponible(db.propuestaDeRentabilidad)) return {};
+  const filas = await seguro(
+    db.propuestaDeRentabilidad.findMany({
+      where: { OR: [{ createdAt: rango(v) }, { decididaAt: rango(v) }] },
+      select: { estado: true, decididaPor: true, decididaAt: true, createdAt: true, clientId: true },
+    }),
+    [],
+  );
+  return {
+    "lectura-de-rentabilidad": filas.map((f) => {
+      const decidida = f.estado === "usado" || f.estado === "desestimado";
+      const vencida = !decidida && v.ahora.getTime() - f.createdAt.getTime() > PLAZO_PARA_REVISAR_DIAS * 86_400_000;
+      return {
+        estado: decidida ? (f.estado as "usado" | "desestimado") : vencida ? "vencido" : "pendiente",
+        sinFirma: decidida && !f.decididaPor,
+        decididoPor: decidida ? f.decididaPor : null,
+        decididoEn: decidida ? iso(f.decididaAt) : null,
+        nacioEn: f.createdAt.toISOString(),
+        clientId: f.clientId,
+      };
+    }),
+  };
+};
+
+const LECTORES: readonly Lector[] = [minutas, pedidos, tareas, alertas, camposDeFicha, etapasYFechas, compromisosLegacy, hechos, sugerenciasDelHandoff, notasParaHubspot, recurrencia, lecturaDeRentabilidad];
 
 /**
  * Cada propuesta de la ventana con su estado, por tipo: lo NACIDO en ella y lo DECIDIDO en ella de algo anterior. Lo

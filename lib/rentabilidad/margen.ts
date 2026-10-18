@@ -151,6 +151,19 @@ export function horasPagadas(horasPorSemana: number, rango: { desde: Date; hasta
 
 // ── El margen de las cuentas ─────────────────────────────────────────────────
 
+export interface HorasDeUnaCuenta {
+  reuniones: number;
+  preparacion: number;
+  entrega: number;
+  declarada?: number;
+  reunionesSinMeet?: number;
+  tareas?: number;
+  tareasAgenda?: number;
+}
+
+/** Todas las horas de una cuenta: reuniones + preparación + entrega del cronograma + tareas internas. */
+export const horasDeLaCuenta = (h: HorasDeUnaCuenta) => h.reuniones + h.preparacion + h.entrega + (h.tareas ?? 0);
+
 export interface CuentaParaMargen {
   clienteId: string;
   nombre: string;
@@ -158,8 +171,13 @@ export interface CuentaParaMargen {
   /** Cobrado o facturado en el período, en dólares. */
   ingreso: number;
   fuenteDelIngreso: "Cobranza" | "Odoo" | null;
-  /** `declarada` es la parte de `entrega` que respondió quien hizo la tarea (el resto de la entrega es estimado). */
-  horas: { reuniones: number; preparacion: number; entrega: number; declarada?: number };
+  /**
+   * `declarada` es la parte de `entrega` que respondió quien hizo la tarea (el resto de la entrega es estimado).
+   * `reunionesSinMeet` es la parte de `reuniones` que salió del calendario y no de Meet. `tareas` son las tareas internas
+   * hechas (lib/rentabilidad/horas-de-tareas.ts) y `tareasAgenda`, la parte que salió de sus bloques en la agenda (el
+   * resto es su estimado). Los tres son opcionales: la foto de un mes de antes (v1) no los tenía.
+   */
+  horas: HorasDeUnaCuenta;
   reuniones: number;
   /** Lo que el cronograma ponía en el período, o null si no tenía nada. */
   plan: { sesiones: number; horasTareas: number } | null;
@@ -212,7 +230,7 @@ export interface FilaDeMargen {
   ingreso: number;
   fuenteDelIngreso: "Cobranza" | "Odoo" | null;
   horas: number;
-  desglose: { reuniones: number; preparacion: number; entrega: number; declarada?: number };
+  desglose: HorasDeUnaCuenta;
   /** Lo que costó una hora de esta cuenta con el modo elegido (costo ÷ horas). */
   tarifa: number;
   /** Cobrado por cada hora usada. */
@@ -226,7 +244,7 @@ export interface FilaDeMargen {
   realContraPlan: RealContraPlan;
   /** horas reales ÷ planeadas. */
   razonContraPlan: number | null;
-  /** La cuenta no tiene tareas en el período: su trabajo fuera de reunión no se ve y sus horas salen bajas. */
+  /** La cuenta no tiene tareas (del cronograma ni internas) en el período: su trabajo fuera de reunión no se ve. */
   sinEntregaEstimada: boolean;
 }
 
@@ -235,7 +253,7 @@ export interface FilaDeMargen {
  * cuenta no trae sus costos por persona y por equipo).
  */
 export function costoDeLaCuenta(c: CuentaParaMargen, modo: ModoDeCosto, tarifa: number): number {
-  const horas = c.horas.reuniones + c.horas.preparacion + c.horas.entrega;
+  const horas = horasDeLaCuenta(c.horas);
   if (modo === "persona" && c.costos) return c.costos.persona;
   if (modo === "equipo" && c.costos) return c.costos.equipo;
   return horas * tarifa;
@@ -246,7 +264,7 @@ export function costoDeLaCuenta(c: CuentaParaMargen, modo: ModoDeCosto, tarifa: 
  * lo que costó una hora REAL de esta cuenta con el mismo modo (o a la tarifa, si no usó horas).
  */
 export function filaDeMargen(c: CuentaParaMargen, tarifa: number, horasPorSesion: number, modo: ModoDeCosto = "cargado"): FilaDeMargen {
-  const horas = c.horas.reuniones + c.horas.preparacion + c.horas.entrega;
+  const horas = horasDeLaCuenta(c.horas);
   const costo = costoDeLaCuenta(c, modo, tarifa);
   const tarifaDeLaCuenta = horas > 0 ? costo / horas : tarifa;
   const margen = c.ingreso - costo;
@@ -270,7 +288,7 @@ export function filaDeMargen(c: CuentaParaMargen, tarifa: number, horasPorSesion
     margenPlaneado: horasPlaneadas !== null && c.ingreso > 0 ? c.ingreso - horasPlaneadas * tarifaDeLaCuenta : null,
     realContraPlan,
     razonContraPlan: razon,
-    sinEntregaEstimada: c.horas.entrega === 0,
+    sinEntregaEstimada: c.horas.entrega === 0 && (c.horas.tareas ?? 0) === 0,
   };
 }
 
@@ -286,4 +304,42 @@ export function tablaDeMargen(
     conIngreso: filas.filter((f) => f.ingreso > 0).sort((a, b) => b.ingreso - a.ingreso),
     sinIngreso: filas.filter((f) => f.ingreso <= 0 && f.horas >= 1).sort((a, b) => b.horas - a.horas),
   };
+}
+
+// ── El margen por persona ────────────────────────────────────────────────────
+
+export interface MargenDeUnaPersona {
+  email: string;
+  horas: number;
+  /** Lo que generaron sus horas: el ingreso de cada cuenta, por la parte de horas que puso esta persona. */
+  ingreso: number;
+  /** Sus horas al costo de su hora (o al de una hora pagada promedio, si no tiene costo). */
+  costo: number;
+  margen: number;
+  /** En cuántas cuentas trabajó. */
+  cuentas: number;
+}
+
+/**
+ * El margen de cada persona: lo que generaron sus horas menos lo que costaron. El ingreso de una cuenta se reparte por
+ * la parte de sus horas que puso cada persona; una cuenta sin ingreso no le suma nada a nadie (y sus horas sí cuestan).
+ * No es productividad: dice cuánto dejaron las cuentas en las que trabajó. ⛔ Sin ranking: la pantalla lo ordena por
+ * nombre.
+ */
+export function margenPorPersona(cuentas: readonly CuentaParaMargen[], costoHoraDe: (email: string) => number): MargenDeUnaPersona[] {
+  const porPersona = new Map<string, MargenDeUnaPersona>();
+  for (const c of cuentas) {
+    const total = (c.porPersona ?? []).reduce((a, p) => a + p.horas, 0);
+    if (total <= 0) continue;
+    for (const p of c.porPersona ?? []) {
+      if (p.horas <= 0) continue;
+      const x = porPersona.get(p.email) ?? { email: p.email, horas: 0, ingreso: 0, costo: 0, margen: 0, cuentas: 0 };
+      x.horas += p.horas;
+      x.ingreso += c.ingreso > 0 ? (c.ingreso * p.horas) / total : 0;
+      x.costo += p.horas * costoHoraDe(p.email);
+      x.cuentas++;
+      porPersona.set(p.email, x);
+    }
+  }
+  return [...porPersona.values()].map((x) => ({ ...x, margen: x.ingreso - x.costo }));
 }

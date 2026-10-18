@@ -140,7 +140,8 @@ describe("juntarMeses: un período es la suma de sus meses", () => {
     expect(junto.costoDeLaHora.cargado).toBeCloseTo((5000.555 * 3) / 300, 6);
     const a = junto.cuentas.find((c) => c.clienteId === "a")!;
     expect(a.ingreso).toBe(3000);
-    expect(a.horas).toEqual({ reuniones: 12, preparacion: 3, entrega: 15, declarada: 6 });
+    // v2 (2026-10-18): las horas fuera de Meet y las tareas internas viajan en cero cuando los meses no las tienen.
+    expect(a.horas).toEqual({ reuniones: 12, preparacion: 3, entrega: 15, declarada: 6, reunionesSinMeet: 0, tareas: 0, tareasAgenda: 0 });
     expect(a.costos?.persona).toBeCloseTo(630.369, 6);
     expect(a.plan).toEqual({ sesiones: 6, horasTareas: 12 });
     expect(a.porPersona).toEqual([{ email: "ana@x.com", horas: 30 }]);

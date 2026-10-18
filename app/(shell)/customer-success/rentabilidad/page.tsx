@@ -6,6 +6,8 @@ import { cargarCargaDelEquipo } from "@/lib/carga/queries";
 import { sinReunionesRecientes } from "@/lib/carga/senales";
 import { cargarPipelineParaContratar, cargarRentabilidadConFotos } from "@/lib/rentabilidad/queries";
 import { leerDecisionesDeContratacion } from "@/lib/rentabilidad/decisiones";
+import { cargarMetaYPorFacturar } from "@/lib/finanzas/meta-server";
+import { cargarLecturaDeLosNumeros } from "@/lib/rentabilidad/lectura/servidor";
 import type { Periodo } from "@/lib/rentabilidad/margen";
 import Rentabilidad from "@/components/rentabilidad/Rentabilidad";
 // Mismo contenedor que loading.tsx — la fuente única evita que page y skeleton deriven.
@@ -25,11 +27,14 @@ export default async function RentabilidadPage({ searchParams }: { searchParams:
   const sp = await searchParams;
   const periodo = PERIODOS.includes(sp.periodo as Periodo) ? (sp.periodo as Periodo) : "trimestre";
   const ahora = new Date();
-  const [datos, carga, pipeline, decisiones] = await Promise.all([
+  const hoyISO = new Date(+ahora - 6 * 3_600_000).toISOString().slice(0, 10);
+  const [datos, carga, pipeline, decisiones, meta, lectura] = await Promise.all([
     cargarRentabilidadConFotos(periodo, ahora),
     cargarCargaDelEquipo(ahora),
     cargarPipelineParaContratar(),
     leerDecisionesDeContratacion(),
+    cargarMetaYPorFacturar(hoyISO),
+    cargarLecturaDeLosNumeros(ahora),
   ]);
   const config = carga.configuracion.config;
   // La capacidad es la de quien está trabajando cuentas: quien no aparece en el calendario hace semanas (otra tarea,
@@ -54,8 +59,10 @@ export default async function RentabilidadPage({ searchParams }: { searchParams:
         decisiones,
       }}
       config={config}
-      hoyISO={new Date(+ahora - 6 * 3_600_000).toISOString().slice(0, 10)}
-      pestanaInicial={sp.vista === "contratacion" ? "contratacion" : sp.vista === "costo" ? "costo" : "margen"}
+      hoyISO={hoyISO}
+      meta={meta}
+      lectura={lectura}
+      pestanaInicial={sp.vista === "contratacion" ? "contratacion" : sp.vista === "costo" ? "costo" : sp.vista === "lectura" ? "lectura" : "margen"}
       contenedor={SHELL_DEFAULT}
     />
   );

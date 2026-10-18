@@ -16,6 +16,8 @@ import { crDateParts } from "@/lib/jobs/time";
 import { pagosGrandesAHubspot } from "@/lib/finanzas/licencias-server";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import PuntoDeEquilibrio from "@/components/finanzas/equilibrio/PuntoDeEquilibrio";
+import MetaDelAnio from "@/components/finanzas/MetaDelAnio";
+import { cargarMetaYPorFacturar } from "@/lib/finanzas/meta-server";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,8 @@ export default async function FinanzasEquilibrioPage() {
   const todayISO = crDateParts(new Date()).dateKey;
   const anio = Number(todayISO.slice(0, 4));
   const [reporte, pagosAHubspot] = await Promise.all([loadReporteAnual(anio, todayISO), pagosGrandesAHubspot(anio)]);
+  // La meta del año y de qué está hecha la línea de «por facturar» (iniciativa C de docs/roadmap.md): lee el reporte.
+  const meta = await cargarMetaYPorFacturar(todayISO, reporte);
 
   // Quién firmó la decisión de los aliados, por su nombre de pila.
   const firmante = reporte.decisionAliados?.decididoPor;
@@ -45,6 +49,9 @@ export default async function FinanzasEquilibrioPage() {
         nombres={nombres}
         pagosAHubspot={pagosAHubspot}
       />
+      <div className="mt-6">
+        <MetaDelAnio datos={meta} conLinea />
+      </div>
     </div>
   );
 }

@@ -20,10 +20,14 @@ import { cn } from "@/lib/cn";
 import { ETIQUETA_DE_TRATO, type ConfigCarga } from "@/lib/carga/config";
 import { ETIQUETA_DE_ESCENARIO, PROBABILIDAD_MINIMA, proyectarDemanda, type Escenario, type TratoParaProyectar } from "@/lib/carga/contratacion";
 import { RUTA_DE_LA_CARGA, RUTA_DE_LA_RENTABILIDAD, RUTA_DE_LOS_SUPUESTOS, RUTA_DE_TU_CARGA, rutaDelMargenDeLaCuenta } from "@/lib/carga/rutas";
-import { ETIQUETA_DEL_MODO, ETIQUETA_DEL_PERIODO, tablaDeMargen, type FilaDeMargen, type ModoDeCosto, type Periodo } from "@/lib/rentabilidad/margen";
+import { ETIQUETA_DEL_MODO, ETIQUETA_DEL_PERIODO, margenPorPersona, tablaDeMargen, type FilaDeMargen, type ModoDeCosto, type Periodo } from "@/lib/rentabilidad/margen";
 import type { DatosDeRentabilidad } from "@/lib/rentabilidad/queries";
 import type { DecisionDeContratacion } from "@/lib/rentabilidad/decisiones";
 import OrigenDeLosMeses from "./OrigenDeLosMeses";
+import LecturaDeLosNumeros from "./LecturaDeLosNumeros";
+import MetaDelAnio from "@/components/finanzas/MetaDelAnio";
+import type { MetaYPorFacturar } from "@/lib/finanzas/meta";
+import type { LecturaDeLosNumeros as DatosDeLaLectura } from "@/lib/rentabilidad/lectura/servidor";
 
 export interface DatosDeContratacion {
   /** Horas comprometidas por semana del equipo que lleva cuentas, más las de cuentas sin CSE vigente. */
@@ -43,7 +47,7 @@ export interface DatosDeContratacion {
   decisiones: DecisionDeContratacion[];
 }
 
-export type Pestana = "margen" | "costo" | "contratacion";
+export type Pestana = "margen" | "costo" | "contratacion" | "lectura";
 /** Las cuentas sin cobros que se muestran en filas; el resto va en una línea. */
 const SIN_COBRO_A_LA_VISTA = 12;
 
@@ -63,9 +67,15 @@ export default function Rentabilidad({
   contratacion,
   config,
   hoyISO,
+  meta,
+  lectura,
   pestanaInicial = "margen",
   contenedor,
 }: {
+  /** La meta del año contra lo facturado (iniciativa C de docs/roadmap.md). */
+  meta: MetaYPorFacturar;
+  /** Lo que propone la lectura de los números. */
+  lectura: DatosDeLaLectura;
   /** «?vista=contratacion» abre directo la contratación. */
   pestanaInicial?: Pestana;
   datos: DatosDeRentabilidad;
@@ -117,6 +127,8 @@ export default function Rentabilidad({
         }
       />
 
+      <MetaDelAnio datos={meta} />
+
       <Tabs<Pestana | "tu-carga">
         aria-label="Secciones de Rentabilidad"
         value={pestana}
@@ -125,6 +137,12 @@ export default function Rentabilidad({
           { key: "margen", label: "Margen por cuenta" },
           { key: "costo", label: "Costo de la hora" },
           { key: "contratacion", label: "Contratación" },
+          {
+            key: "lectura",
+            label: lectura.propuestas.some((p) => p.estado === "pendiente")
+              ? `Lectura de los números · ${lectura.propuestas.filter((p) => p.estado === "pendiente").length}`
+              : "Lectura de los números",
+          },
           { key: "tu-carga", label: "Tu carga" },
         ]}
       />
@@ -139,7 +157,7 @@ export default function Rentabilidad({
         </Alert>
       )}
 
-      {pestana !== "contratacion" && datos.origenDeLosMeses && <OrigenDeLosMeses origenes={datos.origenDeLosMeses} />}
+      {pestana !== "contratacion" && pestana !== "lectura" && datos.origenDeLosMeses && <OrigenDeLosMeses origenes={datos.origenDeLosMeses} />}
 
       {pestana === "margen" ? (
         <>
@@ -157,6 +175,8 @@ export default function Rentabilidad({
         </>
       ) : pestana === "costo" ? (
         <CostoDeLaHora datos={datos} />
+      ) : pestana === "lectura" ? (
+        <LecturaDeLosNumeros datos={lectura} />
       ) : (
         <Contratacion contratacion={contratacion} config={config} hoyISO={hoyISO} />
       )}
@@ -166,13 +186,27 @@ export default function Rentabilidad({
 
 function OrigenDeLasHoras({ datos }: { datos: DatosDeRentabilidad }) {
   const o = datos.horasPorOrigen;
-  const total = o.calendario + o.declaradas + o.estimadas;
+  const tareas = o.tareas ?? 0;
+  const total = o.calendario + tareas + o.declaradas + o.estimadas;
   if (total <= 0) return null;
+  const sinMeet = o.calendarioSinMeet ?? 0;
   const partes = [
-    { clave: "calendario", texto: "Del calendario (agendadas)", h: o.calendario, clase: "bg-fg border-fg" },
+    {
+      clave: "calendario",
+      texto: sinMeet >= 0.5 ? `Del calendario (${miles(sinMeet)} h fuera de Meet)` : "Del calendario",
+      h: o.calendario,
+      clase: "bg-fg border-fg",
+    },
+    { clave: "tareas", texto: "Tareas con su bloque en la agenda", h: tareas, clase: "bg-fg-secondary border-fg-secondary" },
     { clave: "declaradas", texto: "Respondidas por el equipo", h: o.declaradas, clase: "bg-fg-muted border-fg-muted" },
-    { clave: "estimadas", texto: "Estimadas (preparación y entrega sin respuesta)", h: o.estimadas, clase: "bg-surface-muted border-dashed border-fg-muted" },
+    {
+      clave: "estimadas",
+      texto: (o.tareasEstimadas ?? 0) >= 0.5 ? "Estimadas (preparación, entrega y tareas sin bloque)" : "Estimadas (preparación y entrega sin respuesta)",
+      h: o.estimadas,
+      clase: "bg-surface-muted border-dashed border-fg-muted",
+    },
   ];
+  const f = datos.fuentesDeHoras;
   return (
     <div className="space-y-1.5 px-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">De dónde salen las horas</p>
@@ -187,8 +221,27 @@ function OrigenDeLasHoras({ datos }: { datos: DatosDeRentabilidad }) {
           </span>
         ))}
       </span>
+      {f && <p className="text-xs text-fg-muted">{lecturaDeLasFuentes(f)}</p>}
     </div>
   );
+}
+
+/** Qué se leyó del calendario y de las tareas, en una línea. */
+function lecturaDeLasFuentes(f: NonNullable<DatosDeRentabilidad["fuentesDeHoras"]>): string {
+  const c = f.calendario;
+  const cal =
+    c.estado === "leido"
+      ? `Calendario de ${c.personasLeidas} personas: ${c.contados} reuniones con clientes fuera de Meet. No entraron ${c.conMeet} con Meet (ya cuentan por Meet), ${c.yaEnUnaSesion + c.agregadasAMano} que ya eran una reunión de Nexus y ${c.sinUnaEmpresa} sin una empresa de la cartera sola.`
+      : c.estado === "sin-google"
+        ? "Sin Google Calendar en este entorno: las reuniones fuera de Meet no se leyeron."
+        : "";
+  const t = f.tareas;
+  const tar =
+    t.hechas > 0
+      ? `Tareas internas hechas: ${t.hechas} (${t.conBloque} con bloque en la agenda, ${t.conEstimado} con su estimado, ${t.sinTiempo} sin tiempo).`
+      : "Ninguna tarea interna hecha con una cuenta en el período.";
+  const reun = t.reuniones > 0 ? ` Las ${t.reuniones} tareas de reunión no suman: cuentan por su reunión.` : "";
+  return [cal, tar + reun].filter(Boolean).join(" ");
 }
 
 const NOTA_DEL_MODO: Record<ModoDeCosto, string> = {
@@ -262,14 +315,15 @@ function MargenPorCuenta({ datos }: { datos: DatosDeRentabilidad }) {
       </div>
       <div className="space-y-1 px-4 text-xs text-fg-muted">
         <p>
-          <b className="text-fg-secondary">Horas reales</b> = reuniones del calendario (cada persona invitada × la duración, hasta tener la asistencia de Meet) +{" "}
-          {datos.preparacionMin} min de preparación por persona y reunión + entrega del cronograma (lo respondido en «¿Cuánto te tomó?»; si no, lo estimado).
+          <b className="text-fg-secondary">Horas reales</b> = reuniones del calendario, con y sin Meet (cada persona invitada que no la rechazó × la duración) +{" "}
+          {datos.preparacionMin} min de preparación por persona y reunión + entrega del cronograma (lo respondido en «¿Cuánto te tomó?»; si no, lo estimado) +
+          tareas internas hechas (lo que duraron sus bloques en la agenda; sin bloque, su estimado). Una tarea de reunión no suma: cuenta su reunión.
         </p>
         <p>
           <b className="text-fg-secondary">Horas planeadas</b> = lo que el cronograma ponía en el período: sus sesiones (a {coma(datos.totales.horasPorSesion, 1)} h-persona cada
           una, el promedio de una reunión con un cliente) + sus tareas. No son horas vendidas: hasta guardarlas al aprobar la propuesta, es lo más parecido que hay.
         </p>
-        <p>«Sin entrega estimada»: la cuenta no tiene tareas en el período, así que el trabajo fuera de reunión no se ve y sus horas reales salen bajas.</p>
+        <p>«Sin entrega»: la cuenta no tiene tareas del cronograma ni internas en el período, así que el trabajo fuera de reunión no se ve y sus horas reales salen bajas.</p>
       </div>
     </section>
   );
@@ -296,8 +350,12 @@ function Fila({ f }: { f: FilaDeMargen }) {
           <>
             <span className="block whitespace-nowrap">{miles(f.horas)} h</span>
             <span className="block text-xs text-fg-muted">
-              {miles(f.desglose.reuniones)} reun. · {miles(f.desglose.preparacion)} prep. · {f.sinEntregaEstimada ? "sin entrega" : `${miles(f.desglose.entrega)} entrega`}
+              {miles(f.desglose.reuniones)} reun.
+              {(f.desglose.reunionesSinMeet ?? 0) >= 0.5 && ` (${miles(f.desglose.reunionesSinMeet ?? 0)} fuera de Meet)`} · {miles(f.desglose.preparacion)} prep. ·{" "}
+              {f.sinEntregaEstimada ? "sin entrega" : `${miles(f.desglose.entrega)} entrega`}
               {(f.desglose.declarada ?? 0) >= 0.5 && ` (${miles(f.desglose.declarada ?? 0)} respondidas)`}
+              {(f.desglose.tareas ?? 0) >= 0.5 &&
+                ` · ${miles(f.desglose.tareas ?? 0)} tareas${(f.desglose.tareasAgenda ?? 0) >= 0.5 ? ` (${miles(f.desglose.tareasAgenda ?? 0)} de la agenda)` : ""}`}
             </span>
           </>
         )}
@@ -606,6 +664,11 @@ function CostoDeLaHora({ datos }: { datos: DatosDeRentabilidad }) {
   const equipos = datos.costos.equipos;
   const [equipo, setEquipo] = useState<string>("todos");
   const personas = datos.costos.personas.filter((p) => equipo === "todos" || p.equipo === equipo);
+  const margenDe = useMemo(() => {
+    const costoHora = new Map(datos.costos.personas.map((p) => [p.email, p.costoHora]));
+    const directo = datos.costoDeLaHora.directo ?? 0;
+    return new Map(margenPorPersona(datos.cuentas, (e) => costoHora.get(e) ?? directo).map((m) => [m.email, m]));
+  }, [datos]);
   const pctTexto = (x: number | null) => (x === null ? "—" : `${Math.round(x * 100)} %`);
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -679,6 +742,8 @@ function CostoDeLaHora({ datos }: { datos: DatosDeRentabilidad }) {
                   <th className="px-3 py-2 text-right">Horas pagadas</th>
                   <th className="px-3 py-2 text-right">Costo de la hora</th>
                   <th className="px-3 py-2 text-right">Horas con clientes</th>
+                  <th className="px-3 py-2 text-right">Generado</th>
+                  <th className="px-3 py-2 text-right">Margen</th>
                   <th className="px-4 py-2">De dónde sale</th>
                 </tr>
               </thead>
@@ -690,6 +755,7 @@ function CostoDeLaHora({ datos }: { datos: DatosDeRentabilidad }) {
                     <td className="px-3 py-2.5 text-right tabular-nums">{miles(p.horasPagadas)} h</td>
                     <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{p.costoHora !== null ? usd1(p.costoHora) : <span className="font-normal text-warn-ink">Sin planilla</span>}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{miles(p.horasConClientes)} h</td>
+                    <MargenDeLaPersona m={margenDe.get(p.email)} />
                     <td className="px-4 py-2.5 text-xs text-fg-muted">
                       {p.fuente === "libro" ? "Libro de planilla" : p.fuente === "libro-media" ? "Libro (una quincena, la otra por pagarse)" : p.fuente === "costo-recurrente" ? "Salario registrado en Costos" : "—"}
                     </td>
@@ -715,7 +781,11 @@ function CostoDeLaHora({ datos }: { datos: DatosDeRentabilidad }) {
             <b className="text-fg">Costo de la hora:</b> planilla ÷ horas pagadas. Con eso se valora cada hora en el margen «por persona».
           </p>
           <p>
-            <b className="text-fg">Horas con clientes:</b> reuniones del calendario, preparación y entrega en las cuentas.
+            <b className="text-fg">Horas con clientes:</b> reuniones del calendario (con y sin Meet), preparación, entrega del cronograma y tareas internas en las cuentas.
+          </p>
+          <p>
+            <b className="text-fg">Generado y margen:</b> el cobro de cada cuenta repartido por la parte de horas que puso cada persona, menos lo que costaron sus
+            horas. No mide a nadie: dice cuánto dejaron las cuentas en las que trabajó. Por nombre, sin ranking.
           </p>
         </section>
         <section className="space-y-2 rounded-xl bg-surface-muted p-4 text-[13px] leading-[19px] text-fg-secondary">
@@ -727,5 +797,23 @@ function CostoDeLaHora({ datos }: { datos: DatosDeRentabilidad }) {
         </section>
       </aside>
     </div>
+  );
+}
+
+/** Lo que generaron las horas de una persona y su margen (lib/rentabilidad/margen.ts › margenPorPersona). */
+function MargenDeLaPersona({ m }: { m: ReturnType<typeof margenPorPersona>[number] | undefined }) {
+  if (!m) {
+    return (
+      <>
+        <td className="px-3 py-2.5 text-right text-fg-muted">—</td>
+        <td className="px-3 py-2.5 text-right text-fg-muted">—</td>
+      </>
+    );
+  }
+  return (
+    <>
+      <td className="px-3 py-2.5 text-right tabular-nums">{usd(m.ingreso)}</td>
+      <td className={cn("px-3 py-2.5 text-right tabular-nums", m.margen < 0 && "text-danger-ink")}>{usd(m.margen)}</td>
+    </>
   );
 }

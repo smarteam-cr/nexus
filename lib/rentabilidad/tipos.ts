@@ -34,12 +34,35 @@ export interface CostoDeUnEquipo {
 }
 
 export interface HorasPorOrigen {
-  /** Reuniones del calendario (lo agendado, hasta tener la asistencia de Meet). */
+  /** Reuniones del calendario (lo agendado, hasta tener la asistencia de Meet): las de Meet y las que no. */
   calendario: number;
   /** Entrega respondida en «¿cuánto te tomó?». */
   declaradas: number;
-  /** Preparación y entrega sin respuesta. */
+  /** Preparación, entrega sin respuesta y tareas internas sin bloque (su estimado). */
   estimadas: number;
+  /** La parte de `calendario` que salió del calendario y no de Meet (presenciales, Zoom, llamadas). */
+  calendarioSinMeet?: number;
+  /** Tareas internas hechas, por lo que duraron sus bloques en la agenda. */
+  tareas?: number;
+  /** La parte de `estimadas` que es el estimado de una tarea interna sin bloque. */
+  tareasEstimadas?: number;
+}
+
+/** Lo que se leyó de las dos fuentes nuevas de horas, para decirlo en la pantalla (docs/rentabilidad-conectada-plan.md). */
+export interface LecturaDeFuentes {
+  calendario: {
+    /** sin-google = local o sin la cuenta de servicio; sin-foto = el rango salió todo de fotos. */
+    estado: "leido" | "sin-google" | "sin-foto";
+    personasLeidas: number;
+    personasSinLeer: string[];
+    leidos: number;
+    contados: number;
+    conMeet: number;
+    yaEnUnaSesion: number;
+    agregadasAMano: number;
+    sinUnaEmpresa: number;
+  };
+  tareas: { hechas: number; conBloque: number; conEstimado: number; sinTiempo: number; reuniones: number };
 }
 
 /** De dónde salieron los números de un mes: la versión de los supuestos de la carga y el tipo de cambio del mes. */
@@ -78,4 +101,6 @@ export interface DatosDeRentabilidad {
   fuentes: FuenteDeUnMes[];
   /** Cuáles meses salen de su foto y cuáles en vivo. Sin el campo: todo en vivo. */
   origenDeLosMeses?: OrigenDelMes[];
+  /** Qué se leyó del calendario y de las tareas (solo en lo calculado en vivo). */
+  fuentesDeHoras?: LecturaDeFuentes;
 }
