@@ -17,9 +17,9 @@ está haciendo con él.
 | Qué | Cómo está |
 |---|---|
 | Producción | Corre `7d7e92df` desde el 17 oct a las 22:02, hora de Costa Rica. Sana, con el esquema al día. |
-| Por desplegar | En `main` y sin desplegar: la escala (ediciones Turismo y Automotriz sin publicar, «Actualizar escala»), las propuestas (proyecto o recurrente, licencias con su margen, módulos y biblioteca), el servicio recurrente en la ficha y los arreglos de «Para ti» (agenda, cartera del CSE, exclientes). 714 pruebas en verde y tsc en 0. |
-| En curso | El gasto de la IA (una sesión). Finanzas ya tiene tus decisiones; su construcción espera que la arranques (tarjeta propuesta). |
-| La base | Tiene todo lo que necesita lo que está en `main`: los SQL del 18 oct ya se aplicaron (biblioteca de módulos, escala ligada a la venta y servicio recurrente). |
+| Por desplegar | En `main` y sin desplegar: la escala (ediciones Turismo y Automotriz sin publicar, «Actualizar escala»), las propuestas (proyecto o recurrente, licencias con su margen, módulos y biblioteca), el servicio recurrente en la ficha, el gasto de la IA por mes con su proyección y los arreglos de «Para ti» (agenda, cartera del CSE, exclientes). 714 pruebas en verde y tsc en 0. |
+| En curso | Nada construyéndose. Finanzas ya tiene tus decisiones; su construcción espera que la arranques (tarjeta propuesta). |
+| La base | Tiene todo lo que necesita lo que está en `main`: los SQL del 18 oct ya se aplicaron (biblioteca de módulos, escala ligada a la venta, servicio recurrente y gasto de IA). |
 | En rojo en producción | Un proyecto en un pipeline sin declarar, un cliente apuntando a una empresa fusionada en HubSpot y el corte de cobranza, que nunca corrió. |
 | Revisión de código | Hecha el 17 oct sobre los 31 cambios de entonces: 57 problemas encontrados, unos 50 corregidos y en `main`. Ninguno mezclaba clientes. |
 
@@ -106,15 +106,16 @@ No encontré en ningún plan la frase «simplificar demasiado». Lo más cercano
 8. Que el punto de equilibrio cuente solo lo del año, y explicar la diferencia de ventas sin cobranza (US$218.000 en Nexus contra los ~US$90.000 que esperaba Marco).
 9. Dar de alta a María José (tú, en Equipo) con lo que necesita para conciliar.
 
-### 6 · El gasto de la IA: verlo, proyectarlo y bajarlo <span class="estado">En curso</span>
+### 6 · El gasto de la IA: verlo, proyectarlo y bajarlo <span class="estado">Por desplegar</span>
 
 Hoy el gasto se anota completo, llamada por llamada, y se ve por agente, cliente y proceso en 30 o 90 días. Falta verlo por mes, contra el tope y hacia adelante. El tope diario ($15 para lo automático y $60 para lo que pide una persona) solo avisa: no frena.
 
-1. [en curso] El panel por mes: la tendencia, el tope a la vista, cuánto ahorra la caché y lo que cuesta cada reunión, cada cliente y cada proceso.
-2. [en curso] La proyección de los próximos meses: el costo de cada cosa (una reunión leída, una corrida del vigía, un turno de chat) por el volumen que viene, con escenarios según el enfoque (más clientes, más reuniones, servicios recurrentes).
-3. [en curso] Bajarlo sin perder calidad: que la lectura de cada reunión y sus hechos compartan la caché; lo que no apura (avance, ficha, marketing, el barrido del vigía) por lotes, a mitad de precio; modelos más baratos donde alcanza (etapa, ficha, clasificador); el vigía sin repetir lo que no cambió; y no pagar dos veces una respuesta cortada.
-4. [en curso] Que el tope frene de verdad, ya calibrado con lo que se gasta.
-5. [en curso] Cada mes, el gasto de Nexus contra la factura de Anthropic.
+1. [hecho] El panel por mes: la tendencia, el tope a la vista, cuánto ahorra la caché y lo que cuesta cada reunión, cada cliente y cada proceso.
+2. [hecho] La proyección de los próximos meses: el costo de cada cosa (una reunión leída, una corrida del vigía, un turno de chat) por el volumen que viene, con escenarios según el enfoque (más clientes, más reuniones, servicios recurrentes).
+3. [hecho] Bajarlo sin perder calidad: que la lectura de cada reunión y sus hechos compartan la caché; lo que no apura (avance, ficha, marketing, el barrido del vigía) por lotes, a mitad de precio; modelos más baratos donde alcanza (etapa, ficha, clasificador); el vigía sin repetir lo que no cambió; y no pagar dos veces una respuesta cortada.
+4. [hecho] Que el tope frene de verdad, ya calibrado con lo que se gasta.
+5. [hecho] Cada mes, el gasto de Nexus contra la factura de Anthropic.
+6. Pasar el clasificador a Haiku después de comparar los dos modelos (`scripts/comparar-modelo-del-clasificador.ts`), y conectar el avance y la ficha a los lotes.
 
 ## Lo que conecta a los equipos
 
@@ -365,6 +366,10 @@ confirmados: CreditForce, Grupo Servica, Quálitas, Tecnosagot, Grupo Monge, Cem
 | 61 | Por validar | Que lo vendido llegue a Finanzas | Finanzas › Punto de equilibrio › «Licencias revendidas». | «Lo vendido según las propuestas ganadas», con cada propuesta, su servicio, sus licencias y por qué entra o no entra. |
 | 62 | Por validar | Que los módulos se agreguen con un clic | Una propuesta › «+ Agregar una sección propia». Agrega «Casos de uso por proyecto», «Comparación de licencias» y «Fases u opciones», y exporta el PDF. | Pestañas por proyecto con «Desde el catálogo de casos»; la tabla de planes con el recomendado; tarjetas 01, 02 o A, B. En el PDF salen todos los casos y la tabla entera. |
 | 63 | Por validar | Que un módulo hecho a mano se reuse en otra propuesta | Sobre una sección de HTML pegado › «Guardar como módulo». En otra propuesta › «Agregar módulo de la biblioteca» › «Adaptar a esta empresa». | Aviso en ámbar si el HTML nombra a la otra empresa. «Adaptar» muestra cada texto antes y después, y al aplicar cambia solo los textos; el diseño queda igual. |
+| 64 | Por validar | Que el gasto de la IA se vea por mes | Integraciones › Gasto en IA › «Por mes». | Este mes con lo que daría al ritmo de hoy, el mes pasado, lo que ahorró la caché y cuánto cuesta cada reunión leída. Agosto, septiembre y octubre en el gráfico, con lo automático y lo que pidió una persona en colores distintos. |
+| 65 | Por validar | Que el tope diario esté a la vista | La misma pestaña, «El tope diario». | Automático US$10 y humano US$20, «solo avisa», cuántos días lo pasaron y el tope sugerido. |
+| 66 | Por validar | Que se proyecte el gasto de los próximos meses | Pestaña «Proyección»: prende y apaga los escenarios. | Unos US$86 al mes; con los hechos prendidos sube a unos US$98, y con las tres palancas de ahorro baja a unos US$85. Nada se guarda al recargar. |
+| 67 | Por validar | Que la factura de Anthropic se compare con lo medido | Pestaña «Factura»: anota un mes con su monto. | Aparece en la tabla al lado de lo medido; una diferencia grande sale con ⚠. |
 
 ### Desde la terminal (opcional)
 
