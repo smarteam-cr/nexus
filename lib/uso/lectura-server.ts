@@ -255,3 +255,23 @@ export async function reunionesSinGrabar(ahora = new Date()): Promise<ReunionesS
       .sort((a, b) => Number(!a.nombre) - Number(!b.nombre) || (a.nombre ?? a.email).localeCompare(b.nombre ?? b.email)),
   };
 }
+
+export interface QuienEsQuien {
+  /** Por correo (en minúscula): el nombre y el nombre del equipo. Incluye a quien ya no está, para lo decidido antes. */
+  porCorreo: Map<string, { nombre: string; equipo: string; activo: boolean }>;
+  /** Los nombres de los equipos, en el orden de siempre. */
+  orden: string[];
+}
+
+/** El equipo de cada persona de Smarteam, para agrupar por equipo sin ranking. Sin las cuentas de prueba. */
+export async function quienEsQuien(): Promise<QuienEsQuien> {
+  const miembros = await prisma.teamMember.findMany({ select: { email: true, name: true, area: true, deactivatedAt: true } });
+  const porCorreo = new Map<string, { nombre: string; equipo: string; activo: boolean }>();
+  for (const m of miembros) {
+    if (esCuentaDePrueba(m.name)) continue;
+    const email = m.email.toLowerCase();
+    const clave = claveDeEquipo(m.area, email);
+    porCorreo.set(email, { nombre: m.name, equipo: EQUIPOS.find((e) => e.clave === clave)?.nombre ?? "Sin equipo", activo: !m.deactivatedAt });
+  }
+  return { porCorreo, orden: [...EQUIPOS.map((e) => e.nombre), "Sin equipo"] };
+}

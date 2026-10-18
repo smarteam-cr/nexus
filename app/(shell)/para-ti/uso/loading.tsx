@@ -14,7 +14,10 @@ export default function UsoDeNexusLoading() {
       <div className="flex gap-4 border-b border-line pb-2">
         <Skeleton className="h-4 w-16" />
         <Skeleton className="h-4 w-28" delay={40} />
-        <Skeleton className="h-4 w-36" delay={80} />
+        <Skeleton className="h-4 w-24" delay={80} />
+        <Skeleton className="h-4 w-28" delay={120} />
+        <Skeleton className="h-4 w-24" delay={160} />
+        <Skeleton className="h-4 w-36" delay={200} />
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         {[0, 1, 2].map((i) => (

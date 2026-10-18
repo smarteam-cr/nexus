@@ -71,23 +71,35 @@ async function seguro<T>(p: Promise<T>, siFalta: T): Promise<T> {
 const minutas: Lector = async ({ db, ...v }, hoyISO) => {
   const filas = await db.sessionMinute.findMany({
     where: { OR: [{ createdAt: rango(v) }, { reviewedAt: rango(v) }] },
-    select: { status: true, reviewedByEmail: true, reviewedAt: true, createdAt: true },
+    select: {
+      status: true,
+      reviewedByEmail: true,
+      reviewedAt: true,
+      createdAt: true,
+      session: { select: { resolvedClientId: true, manualClientId: true } },
+    },
   });
-  return { minuta: filas.map((m) => ({ ...estadoDeMinuta(m, hoyISO), nacioEn: m.createdAt.toISOString() })) };
+  return {
+    minuta: filas.map((m) => ({
+      ...estadoDeMinuta(m, hoyISO),
+      nacioEn: m.createdAt.toISOString(),
+      clientId: m.session.resolvedClientId ?? m.session.manualClientId,
+    })),
+  };
 };
 
 const pedidos: Lector = async ({ db, ...v }, hoyISO) => {
   const filas = await seguro(
     db.pedidoFueraDeAlcance.findMany({
       where: { creadoPor: null, OR: [{ createdAt: rango(v) }, { decididoAt: rango(v) }] },
-      select: { estado: true, decididoPor: true, decididoAt: true, creadoPor: true, createdAt: true },
+      select: { estado: true, decididoPor: true, decididoAt: true, creadoPor: true, createdAt: true, clientId: true },
     }),
     [],
   );
   return {
     "pedido-fuera-de-alcance": filas.flatMap((p) => {
       const e = estadoDePedido(p, hoyISO);
-      return e ? [{ ...e, nacioEn: p.createdAt.toISOString() }] : [];
+      return e ? [{ ...e, nacioEn: p.createdAt.toISOString(), clientId: p.clientId }] : [];
     }),
   };
 };
@@ -102,14 +114,14 @@ const tareas: Lector = async ({ db, ...v }) => {
           { OR: [{ createdAt: rango(v) }, { decididaAt: rango(v) }] },
         ],
       },
-      select: { estado: true, decision: true, decididaPorEmail: true, decididaAt: true, createdAt: true },
+      select: { estado: true, decision: true, decididaPorEmail: true, decididaAt: true, createdAt: true, clientId: true, origen: true },
     }),
     [],
   );
   return {
     "tarea-propuesta": filas.flatMap((t) => {
       const e = estadoDeTarea(t);
-      return e ? [{ ...e, nacioEn: t.createdAt.toISOString() }] : [];
+      return e ? [{ ...e, nacioEn: t.createdAt.toISOString(), clientId: t.clientId, fuente: t.origen }] : [];
     }),
   };
 };
@@ -117,23 +129,25 @@ const tareas: Lector = async ({ db, ...v }) => {
 const alertas: Lector = async ({ db, ...v }) => {
   const filas = await db.csAlert.findMany({
     where: { OR: [{ createdAt: rango(v) }, { resolvedAt: rango(v) }] },
-    select: { status: true, resolvedByEmail: true, resolvedAt: true, createdAt: true, agentRunId: true },
+    select: { status: true, resolvedByEmail: true, resolvedAt: true, createdAt: true, agentRunId: true, clientId: true },
   });
   const vigia: ItemParaContar[] = [];
   const regla: ItemParaContar[] = [];
-  for (const a of filas) (a.agentRunId ? vigia : regla).push({ ...estadoDeAlerta(a), nacioEn: a.createdAt.toISOString() });
+  for (const a of filas) {
+    (a.agentRunId ? vigia : regla).push({ ...estadoDeAlerta(a), nacioEn: a.createdAt.toISOString(), clientId: a.clientId });
+  }
   return { "alerta-del-vigia": vigia, "alerta-de-regla": regla };
 };
 
 const camposDeFicha: Lector = async ({ db }, hoyISO) => {
-  const filas = await db.client.findMany({ where: { ficha: { not: Prisma.DbNull } }, select: { ficha: true } });
+  const filas = await db.client.findMany({ where: { ficha: { not: Prisma.DbNull } }, select: { id: true, ficha: true } });
   const items: ItemParaContar[] = [];
   for (const f of filas) {
     const ficha = leerFicha(f.ficha);
     const at = ficha.propuesta?.at;
     const propuestos = at ? camposPropuestos(ficha).length : 0;
-    for (let i = 0; i < propuestos; i++) items.push({ ...estadoDeCampoPendiente(at!, hoyISO), nacioEn: at! });
-    for (const d of ficha.decisiones ?? []) items.push({ ...estadoDeDecisionDeCampo(d), nacioEn: d.propuestaAt ?? d.en });
+    for (let i = 0; i < propuestos; i++) items.push({ ...estadoDeCampoPendiente(at!, hoyISO), nacioEn: at!, clientId: f.id });
+    for (const d of ficha.decisiones ?? []) items.push({ ...estadoDeDecisionDeCampo(d), nacioEn: d.propuestaAt ?? d.en, clientId: f.id });
   }
   return { "campo-de-ficha": items };
 };
@@ -144,6 +158,7 @@ const etapasYFechas: Lector = async ({ db }, hoyISO) => {
       db.project.findMany({
         where: { etapaPropuestaStageId: { not: null } },
         select: {
+          clientId: true,
           hubspotPipelineId: true,
           hubspotPipelineStageId: true,
           etapaPropuestaStageId: true,
@@ -175,17 +190,31 @@ const etapasYFechas: Lector = async ({ db }, hoyISO) => {
           at: p.etapaPropuestaAt,
         })
       : null;
-    if (s?.at) etapa.push({ ...estadoDeEtapa(s.at, hoyISO), nacioEn: s.at });
+    if (s?.at) etapa.push({ ...estadoDeEtapa(s.at, hoyISO), nacioEn: s.at, clientId: p.clientId });
   }
   const porProyecto = new Map<string, FilaDePresentacion[]>();
   for (const f of presentaciones) {
     if (!f.projectId) continue;
     porProyecto.set(f.projectId, [...(porProyecto.get(f.projectId) ?? []), f]);
   }
-  for (const filasDelProyecto of porProyecto.values()) {
+  const clienteDelProyecto = new Map<string, string>(
+    porProyecto.size
+      ? (await db.project.findMany({ where: { id: { in: [...porProyecto.keys()] } }, select: { id: true, clientId: true } })).map(
+          (p) => [p.id, p.clientId] as [string, string],
+        )
+      : [],
+  );
+  for (const [projectId, filasDelProyecto] of porProyecto) {
+    const clientId = clienteDelProyecto.get(projectId) ?? null;
     for (const d of decisionesDeLasPropuestas(filasDelProyecto)) {
-      if (d.estado === "pendiente") fecha.push({ ...estadoDePropuestaDeFecha(d.nacioEn, hoyISO), nacioEn: d.nacioEn });
-      else fecha.push({ ...estadoDeFechaDecidida({ usada: d.estado === "usado", por: d.por ?? "", en: d.en ?? d.nacioEn }), nacioEn: d.nacioEn });
+      if (d.estado === "pendiente") fecha.push({ ...estadoDePropuestaDeFecha(d.nacioEn, hoyISO), nacioEn: d.nacioEn, clientId });
+      else {
+        fecha.push({
+          ...estadoDeFechaDecidida({ usada: d.estado === "usado", por: d.por ?? "", en: d.en ?? d.nacioEn }),
+          nacioEn: d.nacioEn,
+          clientId,
+        });
+      }
     }
   }
   return { "etapa-sugerida": etapa, "fecha-del-diagnostico": fecha };
@@ -195,14 +224,22 @@ const etapasYFechas: Lector = async ({ db }, hoyISO) => {
 const compromisosLegacy: Lector = async ({ db, ...v }, hoyISO) => {
   const filas = await db.actionItem.findMany({
     where: { source: { startsWith: "agent:" }, createdAt: rango(v) },
-    select: { done: true, status: true, deletedAt: true, createdAt: true, updatedAt: true },
+    select: { done: true, status: true, deletedAt: true, createdAt: true, updatedAt: true, clientId: true },
   });
   return {
     "compromiso-legacy": filas.map((a): ItemParaContar => {
       const nacioEn = a.createdAt.toISOString();
-      if (a.done || a.status === "DONE") return { estado: "usado", sinFirma: true, decididoPor: null, decididoEn: iso(a.updatedAt), nacioEn };
-      if (a.deletedAt) return { estado: "desestimado", sinFirma: true, decididoPor: null, decididoEn: iso(a.deletedAt), nacioEn };
-      return { estado: vencioSinRevisar(a.createdAt, hoyISO) ? "vencido" : "pendiente", sinFirma: false, decididoPor: null, decididoEn: null, nacioEn };
+      const clientId = a.clientId;
+      if (a.done || a.status === "DONE") return { estado: "usado", sinFirma: true, decididoPor: null, decididoEn: iso(a.updatedAt), nacioEn, clientId };
+      if (a.deletedAt) return { estado: "desestimado", sinFirma: true, decididoPor: null, decididoEn: iso(a.deletedAt), nacioEn, clientId };
+      return {
+        estado: vencioSinRevisar(a.createdAt, hoyISO) ? "vencido" : "pendiente",
+        sinFirma: false,
+        decididoPor: null,
+        decididoEn: null,
+        nacioEn,
+        clientId,
+      };
     }),
   };
 };
@@ -225,7 +262,7 @@ const hechos: Lector = async ({ db, ahora, ...v }) => {
     db.hechoDeReunion.findMany({
       // Lo NACIDO en la ventana, o con una decisión en ella (decidir un destino toca `updatedAt`).
       where: { tipo: { in: TIPOS_CON_NOVEDAD_O_PROCESOS }, OR: [{ createdAt: rango(v) }, { updatedAt: rango(v) }] },
-      select: { tipo: true, citaFuente: true, destinos: true, createdAt: true },
+      select: { tipo: true, citaFuente: true, destinos: true, createdAt: true, clientId: true },
     }),
     [],
   );
@@ -238,7 +275,7 @@ const hechos: Lector = async ({ db, ahora, ...v }) => {
       if (salida !== "novedad" && !esProcesos) continue;
       const e = estadoDeDestinoDeHecho(d, h.createdAt, ahora);
       if (!e) continue;
-      (esProcesos ? hecho : novedad).push({ ...e, nacioEn: h.createdAt.toISOString() });
+      (esProcesos ? hecho : novedad).push({ ...e, nacioEn: h.createdAt.toISOString(), clientId: h.clientId });
     }
   }
   return { novedad, hecho };
@@ -254,7 +291,7 @@ const sugerenciasDelHandoff: Lector = async ({ db, hasta }, hoyISO) => {
   const corridas = await db.agentRun.findMany({
     where: { stepLabel: PASO_DE_LAS_SUGERENCIAS, status: "DONE", projectId: { not: null }, createdAt: { lt: hasta } },
     orderBy: { createdAt: "asc" },
-    select: { id: true, projectId: true, createdAt: true, output: true },
+    select: { id: true, projectId: true, clientId: true, createdAt: true, output: true },
   });
   if (!corridas.length) return {};
   const proyectoDe = new Map(corridas.map((c) => [c.id, c.projectId ?? ""]));
@@ -277,7 +314,11 @@ const sugerenciasDelHandoff: Lector = async ({ db, hasta }, hoyISO) => {
       const clave = `${c.projectId}|${huellaDeLaSugerencia(cita)}`;
       if (vistas.has(clave)) continue;
       vistas.add(clave);
-      items.push({ ...estadoDeSugerenciaDelHandoff(vivas.get(clave) ?? null, c.createdAt, hoyISO), nacioEn: c.createdAt.toISOString() });
+      items.push({
+        ...estadoDeSugerenciaDelHandoff(vivas.get(clave) ?? null, c.createdAt, hoyISO),
+        nacioEn: c.createdAt.toISOString(),
+        clientId: c.clientId,
+      });
     }
   }
   return { "sugerencia-del-handoff": items };
@@ -305,7 +346,7 @@ const notasParaHubspot: Lector = async ({ db, ahora, ...v }, hoyISO) => {
   const decididas = await seguro(
     db.notaDeLaCuenta.findMany({
       where: { origen: "reunion", OR: [{ createdAt: rango(v) }, { session: { date: rango(v) } }] },
-      select: { estado: true, autorEmail: true, createdAt: true, sessionId: true, session: { select: { date: true } } },
+      select: { estado: true, autorEmail: true, createdAt: true, sessionId: true, clientId: true, session: { select: { date: true } } },
     }),
     [],
   );
@@ -347,6 +388,7 @@ const notasParaHubspot: Lector = async ({ db, ahora, ...v }, hoyISO) => {
         hoyISO,
       ),
       nacioEn: m.session.date.toISOString(),
+      clientId: dueno,
     });
   }
   // Lo decidido en la ventana de una reunión de antes.
@@ -355,6 +397,7 @@ const notasParaHubspot: Lector = async ({ db, ahora, ...v }, hoyISO) => {
     items.push({
       ...estadoDeNotaParaHubspot({ estado: d.estado === "descartada" ? "descartada" : "usada", por: d.autorEmail, en: d.createdAt }, d.session.date, hoyISO),
       nacioEn: d.session.date.toISOString(),
+      clientId: d.clientId,
     });
   }
   return { "nota-para-hubspot": items };
@@ -362,8 +405,12 @@ const notasParaHubspot: Lector = async ({ db, ahora, ...v }, hoyISO) => {
 
 const LECTORES: readonly Lector[] = [minutas, pedidos, tareas, alertas, camposDeFicha, etapasYFechas, compromisosLegacy, hechos, sugerenciasDelHandoff, notasParaHubspot];
 
-/** Lo propuesto de la ventana, contado por tipo (todos los tipos, aunque salgan en cero). */
-export async function contar(o: OpcionesDeConteo): Promise<ConteoDeTipo[]> {
+/**
+ * Cada propuesta de la ventana con su estado, por tipo: lo NACIDO en ella y lo DECIDIDO en ella de algo anterior. Lo
+ * leen `contar` y las cuentas por cliente, por equipo y por proceso de «Uso de Nexus» (lib/lo-propuesto/uso-server.ts):
+ * una sola lectura de la base sirve para todas.
+ */
+export async function itemsDeLoPropuesto(o: OpcionesDeConteo): Promise<Map<ClaveDeTipo, ItemParaContar[]>> {
   const ahora = o.ahora ?? new Date();
   const db = o.db ?? prismaDeLaApp;
   const hoyISO = diaCR(ahora);
@@ -375,8 +422,18 @@ export async function contar(o: OpcionesDeConteo): Promise<ConteoDeTipo[]> {
       porTipo.set(tipo, [...(porTipo.get(tipo) ?? []), ...items]);
     }
   }
+  return porTipo;
+}
+
+/** Cuenta los items ya leídos, por tipo (todos los tipos, aunque salgan en cero). PURO. */
+export function contarItems(porTipo: ReadonlyMap<ClaveDeTipo, readonly ItemParaContar[]>, ventana: Ventana): ConteoDeTipo[] {
   return TIPOS_DE_LO_PROPUESTO.map((tipo) => {
     const items = porTipo.get(tipo);
     return items ? contarTipo(tipo, items, ventana) : conteoVacio(tipo);
   });
+}
+
+/** Lo propuesto de la ventana, contado por tipo (todos los tipos, aunque salgan en cero). */
+export async function contar(o: OpcionesDeConteo): Promise<ConteoDeTipo[]> {
+  return contarItems(await itemsDeLoPropuesto(o), { desde: o.desde, hasta: o.hasta });
 }
