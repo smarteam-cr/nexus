@@ -112,7 +112,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   var corte = md.match(/\*\*Corte:\*\*\s*([0-9-]+)/);
   if (corte) document.getElementById('meta').textContent = 'Al ' + corte[1];
 
-  var TONOS = { 'Validado': 's-ok', 'En producción': 's-info', 'Por desplegar': 's-warn', 'Por empezar': 's-idle', 'Propuesta': 's-warn' };
+  var TONOS = { 'Validado': 's-ok', 'En producción': 's-info', 'Por desplegar': 's-warn', 'Por empezar': 's-idle', 'Propuesta': 's-warn', 'En curso': 's-warn', 'Por decidir': 's-idle' };
   doc.querySelectorAll('span.estado').forEach(function (sp) {
     var e = sp.textContent.trim(); sp.className = 'chip ' + (TONOS[e] || 's-idle');
   });
