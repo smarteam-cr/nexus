@@ -350,7 +350,7 @@ const leer = (rel: string) => readFileSync(join(RAIZ, rel), "utf8");
 
 describe("⛔ cada operación que llega al chat declara cómo se acota a la cuenta", () => {
   it("las del registro: una nueva sin declarar se pone roja acá (decide si llega al chat y cómo)", () => {
-    const fuentes = ["tareas-server.ts", "notas-server.ts", "siguiente-paso-server.ts"].map((f) => leer(`lib/operaciones/${f}`)).join("\n");
+    const fuentes = ["tareas-server.ts", "notas-server.ts", "siguiente-paso-server.ts", "documentos-server.ts"].map((f) => leer(`lib/operaciones/${f}`)).join("\n");
     const nombres = [...fuentes.matchAll(/^\s{2}nombre: "([^"]+)",$/gm)].map((m) => m[1]);
     expect(nombres.length).toBeGreaterThanOrEqual(8);
     for (const n of nombres) expect(COMO_SE_ACOTA, `${n} no declara cómo se acota a la cuenta (lib/nexus-chat/alcance.ts)`).toHaveProperty([n]);

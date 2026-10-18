@@ -207,8 +207,14 @@ export function PiezasDelRiel({
   onActivar,
   onOcultar,
   slotDeSesiones,
+  grupoDelResumen,
 }: {
   resumen: { activa: boolean; meta?: string | null; onClick: () => void };
+  /**
+   * El grupo al que pertenece el Resumen (2026-10-17: «Herramientas del proyecto»). Su rótulo va arriba del Resumen, y
+   * las filas que siguen del mismo grupo no lo repiten. Sin él (un servicio recurrente), el Resumen va sin rótulo.
+   */
+  grupoDelResumen?: { id: string; titulo: string; detalle?: string | null };
   filas: FilaDelRielDePiezas[];
   porActivarAbiertas: boolean;
   onAlternarPorActivar: () => void;
@@ -232,9 +238,18 @@ export function PiezasDelRiel({
       "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors",
       activa ? "bg-info-surface font-semibold text-brand" : "text-fg-secondary hover:bg-surface-hover hover:text-fg",
     );
+  const rotuloDeGrupo = (g: { titulo: string; detalle?: string | null }) => (
+    <p className="flex items-baseline justify-between gap-2 px-2.5 pb-0.5 pt-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-muted">
+      <span className="min-w-0 truncate" title={g.titulo}>
+        {g.titulo}
+      </span>
+      {g.detalle && <span className="flex-shrink-0 font-normal normal-case tracking-normal">{g.detalle}</span>}
+    </p>
+  );
   return (
     <ul className="mb-1.5 ml-[18px] space-y-0.5 border-l border-line pl-2">
       <li>
+        {grupoDelResumen && rotuloDeGrupo(grupoDelResumen)}
         <button type="button" onClick={resumen.onClick} aria-current={resumen.activa ? "page" : undefined} className={clase(resumen.activa)}>
           <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", resumen.activa ? "bg-brand" : "bg-transparent")} aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate">Resumen</span>
@@ -243,14 +258,7 @@ export function PiezasDelRiel({
       </li>
       {existentes.map((f, k) => (
         <li key={f.slug}>
-          {f.grupo && f.grupo.id !== existentes[k - 1]?.grupo?.id && (
-            <p className="flex items-baseline justify-between gap-2 px-2.5 pb-0.5 pt-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-muted">
-              <span className="min-w-0 truncate" title={f.grupo.titulo}>
-                {f.grupo.titulo}
-              </span>
-              {f.grupo.detalle && <span className="flex-shrink-0 font-normal normal-case tracking-normal">{f.grupo.detalle}</span>}
-            </p>
-          )}
+          {f.grupo && f.grupo.id !== (k === 0 ? grupoDelResumen : existentes[k - 1]?.grupo)?.id && rotuloDeGrupo(f.grupo)}
           <div className="group/fila relative flex items-center">
           <button
             type="button"

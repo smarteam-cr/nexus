@@ -11,6 +11,7 @@ import { contextoDeTareas, ErrorDeTareas, type ContextoDeTareas } from "@/lib/ta
 import { clientesQueVesParaTareas, type ClientesQueVes } from "@/lib/tareas/clientes";
 import { ErrorDeLaNota } from "@/lib/notas/escritura-server";
 import { ErrorDelPaso } from "@/lib/siguiente-paso/escritura-server";
+import { ErrorDelEntregable } from "@/lib/entregables/generar-server";
 import type { ContextoDeOperacion, ErrorConMotivo } from "./tipos";
 
 export interface ExtrasDeNexus {
@@ -37,7 +38,7 @@ export class ErrorDeOperacion extends Error {
  * CLASE, no por la forma: el `APIError` del SDK de Anthropic también trae `status` y `message`, y un 401/429/529 de la
  * API no puede salir al navegador con su estado y su texto crudo. Un escritor nuevo de la capa suma su clase acá.
  */
-const ERRORES_PROPIOS = [ErrorDeOperacion, ErrorDeTareas, ErrorDeLaNota, ErrorDelPaso] as const;
+const ERRORES_PROPIOS = [ErrorDeOperacion, ErrorDeTareas, ErrorDeLaNota, ErrorDelPaso, ErrorDelEntregable] as const;
 
 export function esErrorPropio(e: unknown): e is ErrorConMotivo {
   return ERRORES_PROPIOS.some((C) => e instanceof C) && typeof (e as { status?: unknown }).status === "number";

@@ -32,6 +32,8 @@ export const COMO_SE_ACOTA: Readonly<Record<string, ComoSeAcota>> = {
   "tarea.mover-semana": "tarea",
   "nota.crear": "cuenta",
   "siguiente-paso.fijar": "objeto",
+  // Lleva `clientId` y el proyecto se verifica contra él al preparar y al aplicar (lib/operaciones/documentos-server.ts).
+  "documento.generar": "cuenta",
   // Las lecturas propias del chat (./lecturas-server.ts).
   "cuenta.memoria": "cuenta",
   "proyecto.memoria": "cuenta",

@@ -20,6 +20,8 @@ import { DESARROLLO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { createDesarrolloCanvas, reconcileDesarrolloCanvasSections } from "@/lib/canvas/default-canvases";
 import { loadHandoffContext } from "@/lib/canvas/load-canvas-context";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
+import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
+import { bloqueDeInstruccionesDelPedido } from "@/lib/entregables/registro";
 import { specToDiagram, relacionToDiagram } from "@/lib/flowchart/spec-to-diagram";
 import { DESARROLLO_TEMPLATE, DESARROLLO_HANDOFF_KEYS } from "@/components/landing/configs/desarrollo.defs";
 import { tagLabels } from "@/lib/tags/catalog";
@@ -53,6 +55,10 @@ export async function runDesarrolloGeneration(opts: {
   projectId: string;
   agentRunId?: string | null;
   canvasId?: string;
+  /** La plantilla con que se genera (lib/entregables/plantillas.ts). Sin ella, la de siempre. */
+  plantilla?: BcTemplateDef;
+  /** Lo que pidió quien genera, para esta corrida (el chat de Nexus). Sin ellas, el mensaje es el de siempre. */
+  instrucciones?: string | null;
 }): Promise<{ canvasId: string; sectionCount: number }> {
   const { projectId } = opts;
 
@@ -97,7 +103,7 @@ export async function runDesarrolloGeneration(opts: {
   const memoriaCtx = memoria.texto ? `\n${memoria.texto}\n(Lo de la memoria precisa el contexto; nada de acá agranda el alcance vendido.)\n` : "";
   // La regla otra vez, justo antes de la instrucción: el bloque de reuniones puede ser largo.
   const cierreCtx = material.cierreDeFrontera ? `\n${material.cierreDeFrontera}\n` : "";
-  const userMessage = `${material.instrucciones}Empresa: ${companyName}
+  const userMessage = `${bloqueDeInstruccionesDelPedido(opts.instrucciones)}${material.instrucciones}Empresa: ${companyName}
 Industria: ${project?.client?.industry ?? "No especificada"}
 ${tagsLabel ? `Alcance etiquetado (tags del proyecto): ${tagsLabel}\n` : ""}
 === HANDOFF DEL PROYECTO — DESARROLLO Y ALCANCE (TU FUENTE ANCLA) ===
@@ -118,7 +124,7 @@ Generá el requerimiento técnico siguiendo tus instrucciones: preciso y técnic
     if (d && typeof d === "object") prevDataByKey[s.key] = d;
   }
 
-  const gen = await generateSectionsForTemplate(DESARROLLO_TEMPLATE, userMessage, undefined, undefined, prevDataByKey);
+  const gen = await generateSectionsForTemplate(opts.plantilla ?? DESARROLLO_TEMPLATE, userMessage, undefined, undefined, prevDataByKey);
 
   // La foto ANTES de escribir (lib/canvas/versiones.ts): la IA ya respondió y todavía no se tocó nada.
   await guardarVersionDelDocumento(canvasId, { origen: "Antes de regenerar" });

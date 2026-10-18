@@ -40,6 +40,8 @@ import {
   reconcileOnDemandCanvasSections,
 } from "@/lib/canvas/default-canvases";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
+import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
+import { bloqueDeInstruccionesDelPedido } from "@/lib/entregables/registro";
 import {
   DIAGNOSTICO_TEMPLATE,
   POLITICA_RECTORA_KEY,
@@ -79,6 +81,10 @@ export async function runDiagnosticoGeneration(opts: {
   projectId: string;
   agentRunId?: string | null;
   canvasId?: string;
+  /** La plantilla con que se genera (lib/entregables/plantillas.ts). Sin ella, la de siempre. */
+  plantilla?: BcTemplateDef;
+  /** Lo que pidió quien genera, para esta corrida (el chat de Nexus). Sin ellas, el mensaje es el de siempre. */
+  instrucciones?: string | null;
 }): Promise<{ canvasId: string; sectionCount: number }> {
   const { projectId } = opts;
   /* Los objetivos cuantitativos apuntan a los resultados medibles del handoff (2026-10-02). Un
@@ -95,7 +101,7 @@ export async function runDiagnosticoGeneration(opts: {
   if (await documentoAprobado(canvasId).catch(() => false)) throw new Error(MENSAJE_APROBADO);
   // Las MISMAS fuentes que lee «Mejorar el diagnóstico con IA» (lib/canvas/diagnostico-fuentes.ts).
   const userMessage = [
-    fuentes,
+    `${bloqueDeInstruccionesDelPedido(opts.instrucciones)}${fuentes}`,
     "",
     "Escribe el informe siguiendo tus instrucciones: el hilo completo con sus códigos (S, F, OBJ, AC) — toda causa con al menos una acción, toda acción con causas y objetivos —, la política rectora como sugerencia, cómo va a operar sin detalle de configuración, y sin escala de madurez.",
   ].join("\n");
@@ -117,7 +123,7 @@ export async function runDiagnosticoGeneration(opts: {
      algo en la presentación— no puede devolverla a la sugerencia de la IA. */
   const politicaRevisada = estaRevisada(prevDataByKey[POLITICA_RECTORA_KEY]);
   const generado = await generateSectionsForTemplate(
-    DIAGNOSTICO_TEMPLATE,
+    opts.plantilla ?? DIAGNOSTICO_TEMPLATE,
     userMessage,
     undefined,
     politicaRevisada ? new Set([POLITICA_RECTORA_KEY]) : undefined,
