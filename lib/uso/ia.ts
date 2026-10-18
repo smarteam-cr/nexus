@@ -148,9 +148,9 @@ export const PROCESOS: readonly DefinicionDeProceso[] = [
   {
     clave: "finanzas",
     nombre: "Finanzas",
-    queHace: "Los borradores de cobro y el reporte de finanzas.",
-    disparo: "Lo pide una persona",
-    propone: [],
+    queHace: "Los borradores de cobro, el reporte de finanzas y la lectura de los números de Rentabilidad.",
+    disparo: "Lo pide una persona; la lectura de los números, también una vez por mes",
+    propone: [{ tipo: "lectura-de-rentabilidad" }],
   },
   {
     clave: "otros",
@@ -190,6 +190,7 @@ const REGLAS: readonly [RegExp, ClaveDeProceso][] = [
   [/^(agent-)?project-brief$/, "resumenes"],
   [/^agent-(marketing|analisis-funnel|diagnostico-marketing)/, "marketing"],
   [/^agent-(cobranza-borrador|finanzas-reporter)$/, "finanzas"],
+  [/^rentabilidad-lectura$/, "finanzas"],
 ];
 
 /** El proceso de una llamada, por su slug y, sin slug, por su origen. */

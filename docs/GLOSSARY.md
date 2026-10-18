@@ -1091,3 +1091,12 @@
 - **Lo vendido** (`lib/finanzas/lo-vendido.ts`): lo que dice la Inversión de una propuesta ganada, leído para Finanzas:
   cuánto es servicio, cuánto licencia y el margen de cada licencia. Con el dato completo se vuelve un contrato con
   licencias para el punto de equilibrio y reemplaza a la carga a mano en sus meses.
+
+- **Meta del año** (`MetaDeFacturacion`, desde el 2026-10-18): cuánto quiere facturar Smarteam en un año, en dólares, entre
+  facturación y comisiones (la de 2027: US$2,3 millones). Se dibuja como barra contra lo facturado de cada año (Odoo,
+  Mercury y comisiones de aliados) en Rentabilidad y en el punto de equilibrio. La define dirección; cada cambio queda.
+- **Horas fuera de Meet** (Rentabilidad): las reuniones con clientes del calendario que no tienen Meet (presenciales,
+  Zoom, Teams, llamadas). Se leen del calendario de cada persona y se suman al margen como «del calendario».
+- **Lectura de los números** (Rentabilidad › Lectura de los números, `lib/rentabilidad/lectura`): Nexus detecta lo que no
+  progresa (la solvencia, el margen de una cuenta, las horas sin facturar, la meta) y propone qué hacer y cuánto invertir.
+  Una persona la usa o la desestima; solo lo usado vale. Corre a mano o una vez por mes.

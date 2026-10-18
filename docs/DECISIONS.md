@@ -8990,3 +8990,53 @@ de reuniones a proyectos (US$8,5, 365 llamadas). El panel leía 20.000 filas y n
   solo su id, así un deploy antes del SQL pierde las filas de los lotes y no las de todas las llamadas.
 - **Pendiente:** 263 llamadas de 30 días (US$13,8, todas automáticas) no tienen agente ni origen: van a «No se sabe de qué
   proceso es». Están cerca en el tiempo de la lectura, el resumen del proyecto y la propuesta; atribuirlas es lo próximo.
+
+## La rentabilidad, conectada con las agendas y las tareas (2026-10-18)
+
+**Contexto.** Iniciativa C de docs/roadmap.md (lo que dejó la reunión con Marco del 17 oct): saber con datos cuánto deja
+cada cuenta y cómo produce cada persona, y llegar a US$2,3 millones en 2027. Plan en `docs/rentabilidad-conectada-plan.md`.
+Medido el 18 oct sobre octubre: 515 eventos con hora en 16 calendarios; 452 tenían Meet (ya contaban); 34 reuniones con
+clientes fuera de Meet sumaron 38,5 h; 27 no eran de una sola empresa de la cartera.
+
+- **Dos fuentes nuevas de horas, sin que nadie marque tiempo.** Las reuniones del calendario SIN Meet (presenciales,
+  Zoom, Teams, llamadas), leídas mes por mes del calendario de cada persona y resueltas con el resolvedor único
+  (`cuentaDelEvento`), y las tareas internas hechas de una cuenta (lo que duraron sus bloques en la agenda; sin bloque, su
+  estimado). Las reglas viven puras en `lib/rentabilidad/horas-del-calendario.ts` y `horas-de-tareas.ts`.
+- **Lo que evita contar dos veces:** un evento con Meet no entra por el calendario (ya está en `FirefliesSession`); uno
+  cuyo id ya es una sesión, tampoco; una reunión agregada a mano del mismo cliente a ±30 minutos es la misma; un bloque de
+  tarea nunca es una reunión; una tarea de clase «reunion» nunca suma (cuenta su reunión); el mismo evento en dos
+  calendarios es una reunión con dos personas. ⚠ Lo que NO se separa: una tarea interna que repite una del cronograma; se
+  muestran en columnas distintas.
+- **El calendario se lee solo para meses sin foto**, con 15 minutos de memoria por persona y mes. La foto del margen
+  pasa a la versión 2 y guarda las horas nuevas (columnas aditivas con 0 por defecto): una foto v1 se lee con ellas en
+  cero, y «Volver a tomar» la completa. La carga del equipo (lib/carga) no cambia: sigue solo con Meet.
+- **El margen por persona** es el ingreso de cada cuenta repartido por la parte de horas que puso cada persona, menos lo
+  que costaron sus horas. Va en «Costo de la hora», por nombre, sin ranking: dice cuánto dejaron las cuentas en las que
+  trabajó, no mide a nadie.
+- **La meta vive en `MetaDeFacturacion`, append-only**: la vigente es la última de su año y la cambia dirección desde la
+  pantalla («Cambiar la meta»), con su nota; el SQL deja la de 2027 en US$2.300.000. Se eligió una tabla y no
+  `DecisionFinanzas` porque una meta tiene historia (quién la cambió y de cuánto a cuánto).
+- **Lo facturado de cada año sale de los libros** (Odoo: publicadas menos notas de crédito; Mercury: no canceladas) más
+  las comisiones de aliados confirmadas. Los cobros de Cobranza no se suman: son las mismas facturas. Por moneda en el
+  motor (`lib/finanzas/meta.ts`); para la barra se convierte con la tasa de cada mes (`convertir`), y lo que no tiene tasa
+  queda aparte, dicho. Un año sin documentos se dice, no se dibuja en cero.
+- **La línea de «por facturar» se parte en recurrencia y proyectos** escalando la proporción de las cuotas crudas al
+  número del reporte de cada mes (así la suma es la línea del gráfico); las expansiones y los negocios nuevos del pipeline
+  van al lado, ponderados, porque todavía no son por facturar. «Falta» = la meta del año ÷ 12 (o el piso, si el año no
+  tiene meta) menos lo facturado y lo programado. El camino a la meta de 2027 es una cuenta: la recurrencia de hoy × 12 más
+  el pipeline ponderado; no supone que la recurrencia crezca.
+- **La lectura de los números: el código detecta, el modelo propone, una persona valida.** Las señales salen de reglas
+  fijas (`lib/rentabilidad/lectura/senales.ts`: solvencia, margen de una cuenta bajo el 15 %, cuentas con 10 h o más sin
+  cobro, lo que falta para la meta); sin señales no se llama al modelo. Lo que propone queda en `PropuestaDeRentabilidad`
+  (pendiente, usado, desestimado; vence a los 30 días) y solo lo usado vale. Corre a mano o una vez por mes (job
+  `rentabilidad-lectura-mensual`, día 4), nunca cada día; medido con `AgentRun` y `LlmCall` (agentSlug
+  `rentabilidad-lectura`, familia «Finanzas» en Uso de Nexus). El prompt vive en el código (ARCHITECTURE §6.2).
+- **⛔ Lo que nunca entra al prompt:** el costo, la planilla, el nombre o el correo de una persona, el CSE de una cuenta y
+  quién la atendió. Entra el costo cargado de la hora del equipo, como en pantalla. Una sola puerta
+  (`entradaDesdeLosDatos`) y una prueba que la arma con marcas en todos esos campos (`lectura.test.ts`).
+- **Todo es de dirección**: las rutas viven bajo `/api/cobranza/costos/` (meta y lectura) para que el escaneo de
+  privacidad exija `guardCostosAccess` en cada handler. `lib/finanzas/equilibrio.ts` no se tocó: se usan `convertir` y
+  el reporte que ya arma.
+- **Pendiente:** «¿Cuánto te tomó?» no pregunta por las tareas internas (solo por las del cronograma); hoy una tarea
+  interna sin bloque ni estimado no suma. Del 1 al 18 de octubre hubo 3 hechas con una cuenta, y ninguna tenía bloque ni
+  estimado.

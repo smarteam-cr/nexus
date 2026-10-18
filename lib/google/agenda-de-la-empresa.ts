@@ -94,6 +94,42 @@ export async function eventosEntre(
   }
 }
 
+/** Hasta cuántos eventos se leen de un calendario en un mes (8 páginas de 250). Más que eso no es una agenda. */
+export const MAX_EVENTOS_DEL_MES = 2000;
+
+/**
+ * Los eventos del calendario principal de `email` de un mes que YA PASÓ (las horas de Rentabilidad, iniciativa C de
+ * docs/roadmap.md). Solo lee, con el mismo permiso; pagina hasta `MAX_EVENTOS_DEL_MES`. Como mucho 31 días: quien llama
+ * lee mes por mes.
+ */
+export async function eventosDelMes(email: string, desde: Date, hasta: Date): Promise<ResultadoDeLaAgenda<calendar_v3.Schema$Event[]>> {
+  if (!agendaDisponible()) return { ok: false, motivo: "sin-google" };
+  const tope = new Date(Math.min(hasta.getTime(), desde.getTime() + 31 * 24 * 60 * 60 * 1000));
+  try {
+    const cal = apiCalendar({ version: "v3", auth: getImpersonatedAuth(email) });
+    const datos: calendar_v3.Schema$Event[] = [];
+    let pageToken: string | undefined;
+    do {
+      const res = await cal.events.list({
+        calendarId: "primary",
+        timeMin: desde.toISOString(),
+        timeMax: tope.toISOString(),
+        singleEvents: true,
+        orderBy: "startTime",
+        maxResults: 250,
+        pageToken,
+        fields: `nextPageToken,items(${CAMPOS_DEL_EVENTO})`,
+      });
+      datos.push(...((res.data.items ?? []) as calendar_v3.Schema$Event[]));
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken && datos.length < MAX_EVENTOS_DEL_MES);
+    return { ok: true, datos };
+  } catch (e) {
+    console.error(`[google/agenda-de-la-empresa] no se pudo leer el mes del calendario de ${email}`, e instanceof Error ? e.message : e);
+    return { ok: false, motivo: motivoDelError(e) };
+  }
+}
+
 /** Lo que dice el calendario hoy de un evento que ya se unió a una sesión. */
 export type EstadoDelEvento =
   /** `invitados`: los correos de quienes están invitados (con quien lo organiza), para mirar que siga siendo con la empresa. */

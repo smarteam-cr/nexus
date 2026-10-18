@@ -35,6 +35,7 @@ export const NOMBRE_DE_JOB: Readonly<Record<string, string>> = {
   "adopcion-recordatorios-daily": "El recordatorio de revisar la adopción",
   "tareas-semana-lunes": "El mantenimiento de las tareas del lunes",
   "rentabilidad-foto-mensual": "La foto del margen del mes",
+  "rentabilidad-lectura-mensual": "La lectura de los números del mes",
   "invariants-daily": "La revisión diaria de la base",
   "ia-lotes": "Los pedidos a Claude por lote",
 };

@@ -45,6 +45,8 @@ import type { DatoDeClasificacion } from "@/lib/cs/clasificacion";
 /** Se mudan cambiando UNA columna: [modelo de Prisma, columna que apunta a la ficha]. Sin únicos que choquen. */
 export const SE_MUDAN = [
   ["project", "clientId"],
+  /* La lectura de los números de Rentabilidad (2026-10-18): una propuesta sobre una cuenta sigue a la cuenta. */
+  ["propuestaDeRentabilidad", "clientId"],
   ["handoff", "clientId"],
   ["clientDocument", "clientId"],
   ["clientContextCard", "clientId"],

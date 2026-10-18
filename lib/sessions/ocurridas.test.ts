@@ -110,6 +110,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "La carga de CS y la rentabilidad AFIRMAN horas en reuniones: solo leen semanas o meses que ya cerraron (el techo es " +
       "el lunes de esta semana o el 1 del mes) y la última reunión de cada cuenta corta en `ahora`. Lo que viene se proyecta, no se lee.",
   },
+  "lib/rentabilidad/fuentes-de-horas-server.ts": {
+    clase: "plomeria",
+    motivo:
+      "Las horas del calendario fuera de Meet (iniciativa C): de las sesiones solo lee el `googleEventId` y las agregadas a mano, para no " +
+      "contar dos veces un evento. Solo meses que ya cerraron (rangoDelPeriodo); nada de esto va a un modelo.",
+  },
   "lib/cs/cartera.ts": {
     clase: "contexto",
     motivo:
