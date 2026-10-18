@@ -1,12 +1,12 @@
 /**
  * lib/lo-propuesto/uso-server.ts — los datos de «Uso de Nexus»: cuánto de lo que propone Nexus se usó, se desestimó o
- * venció, por tipo, por módulo y por persona. SERVIDOR, sin ruta ni pantalla.
+ * venció, por tipo, por módulo y por persona. SERVIDOR.
  *
  * Lo muestra «Uso de Nexus» (/para-ti/uso, solo dirección). También
  * lo imprime `scripts/uso-de-nexus.ts`, de solo lectura y sin correos.
  *
- * ⚠ Por persona es dato sensible: sale SOLO con `conPersonas: true`, para quien vea el uso del equipo (todavía sin
- * construir: solo SUPER_ADMIN), sin ranking y en orden alfabético (DECISIONS, «Uso de Nexus»).
+ * ⚠ Por persona es dato sensible: sale SOLO con `conPersonas: true`, para quien vea el uso del equipo (solo
+ * SUPER_ADMIN), sin ranking y en orden alfabético (DECISIONS, «Uso de Nexus»).
  */
 import "server-only";
 import type { PrismaClient } from "@prisma/client";
