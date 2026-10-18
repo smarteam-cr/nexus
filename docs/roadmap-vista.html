@@ -55,8 +55,14 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 #doc table.pruebas td { font-size: 14px; }
 #doc table.pruebas td:first-child { color: var(--fg-muted); font-variant-numeric: tabular-nums; width: 1%; }
 #doc table.pruebas td:nth-child(2) { width: 1%; white-space: nowrap; }
-#doc table.pruebas td:nth-child(3) { color: var(--fg); font-weight: 600; width: 18%; }
+#doc table.pruebas td:nth-child(3) { color: var(--fg); font-weight: 600; width: 20%; }
 #doc table.pruebas td:nth-child(4) { width: 34%; }
+.tabs { display: flex; gap: 4px; margin: 20px 0 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tabs button { font: inherit; font-size: 14px; font-weight: 600; color: var(--fg-muted); background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; cursor: pointer; white-space: nowrap; }
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--brand); }
+.tabs button .n { display: inline-block; margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--info-ink); background: var(--info-bg); border: 1px solid var(--info-line); border-radius: 999px; padding: 0 7px; }
+.panel[hidden] { display: none; }
+#doc .panel > h2:first-child { margin-top: 20px; }
 #doc table.pruebas tr.listo td:not(:nth-child(2)) { color: var(--fg-muted); }
 #doc .tw + p { margin-top: 10px; font-size: 13.5px; }
 #doc > ul li { margin: 8px 0; }
@@ -65,7 +71,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 .ini > p { margin: 0 0 10px; color: var(--fg-muted); font-size: 14px; }
 .ini ol { margin: 0; padding-left: 0; list-style: none; counter-reset: paso; }
 .ini ol li { counter-increment: paso; position: relative; margin: 0; padding: 7px 0 7px 28px; border-top: 1px solid var(--line); }
-.ini ol li::before { content: counter(paso); position: absolute; left: 0; top: 8px; color: var(--fg-muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+.ini ol li::before { content: attr(data-n); position: absolute; left: 0; top: 8px; color: var(--fg-muted); font-variant-numeric: tabular-nums; font-size: 13px; }
 .ini ol li.sigue { color: var(--fg); font-weight: 600; }
 .ini ol li.hecho { color: var(--fg-muted); }
 .ini ol li .marca { display: inline-block; margin-right: 6px; font-size: 11.5px; font-weight: 600; border: 1px solid; border-radius: 999px; padding: 0 8px; vertical-align: 1px; }
@@ -84,6 +90,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 
 <main>
   <div class="head"><h1>Roadmap de Nexus</h1><span class="meta" id="meta"></span></div>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
   <article id="doc"></article>
 </main>
 
@@ -116,6 +123,18 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
         td.innerHTML = '<span class="chip ' + tono + '">' + td.innerHTML + '</span>';
         if (tono === 's-ok') tr.classList.add('listo');
       });
+      // Orden: lo que hay que volver a validar, lo que falta, y lo validado al final, por fecha.
+      var MESES = { ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, sep: 9, oct: 10, nov: 11, dic: 12 };
+      var tb = t.querySelector('tbody');
+      var filas = Array.prototype.slice.call(tb.children).map(function (tr, i) {
+        var e = tr.children[1] ? tr.children[1].textContent.trim() : '';
+        var g = /^↻/.test(e) ? 0 : /^✓/.test(e) ? 2 : 1;
+        var f = e.match(/(\d{1,2})\s+([a-z]{3})/);
+        var dia = f ? (MESES[f[2]] || 0) * 100 + Number(f[1]) : 0;
+        return { tr: tr, g: g, dia: dia, i: i };
+      });
+      filas.sort(function (a, b) { return a.g - b.g || (a.g === 2 ? a.dia - b.dia : 0) || a.i - b.i; });
+      filas.forEach(function (x) { tb.appendChild(x.tr); });
     } else t.classList.add(primera === '#' ? 'validar' : 'lista');
   });
   // Cada iniciativa (h3 y lo que sigue hasta el próximo encabezado) en su tarjeta.
@@ -128,6 +147,12 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   // Marcas de cada paso: [hecho] y [en curso]; «Lo siguiente» va en el primero que falta.
   doc.querySelectorAll('.ini ol').forEach(function (ol) {
     var marcado = false;
+    var items = Array.prototype.slice.call(ol.querySelectorAll(':scope > li'));
+    items.forEach(function (li, i) { li.setAttribute('data-n', String(i + 1)); });
+    // Lo que falta primero, en su orden; lo hecho al final, en el orden en que se hizo.
+    items.filter(function (li) { return !/^\s*\[hecho\]/.test(li.innerHTML); })
+      .concat(items.filter(function (li) { return /^\s*\[hecho\]/.test(li.innerHTML); }))
+      .forEach(function (li) { ol.appendChild(li); });
     ol.querySelectorAll(':scope > li').forEach(function (li) {
       var h = li.innerHTML;
       if (/^\s*\[hecho\]\s*/.test(h)) { li.innerHTML = h.replace(/^\s*\[hecho\]\s*/, '<span class="marca hecho">Hecho</span>'); li.classList.add('hecho'); return; }
@@ -135,5 +160,42 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       if (!marcado) { li.classList.add('sigue'); marcado = true; }
     });
   });
+
+  // Tres pestañas: el roadmap, lo que le pides al equipo y lo que validas tú. Cada «##» va a la suya.
+  var PESTANAS = [
+    { id: 'roadmap', nombre: 'Roadmap' },
+    { id: 'equipo', nombre: 'Lo que pides al equipo', h2: /pides al equipo/i },
+    { id: 'validar', nombre: 'Lo que validas', h2: /validas t/i },
+  ];
+  var paneles = {};
+  PESTANAS.forEach(function (p) { var d = document.createElement('div'); d.className = 'panel'; d.id = 'panel-' + p.id; paneles[p.id] = d; });
+  var actual = 'roadmap';
+  Array.prototype.slice.call(doc.children).forEach(function (el) {
+    if (el.tagName === 'H2') {
+      var p = PESTANAS.filter(function (x) { return x.h2 && x.h2.test(el.textContent); })[0];
+      actual = p ? p.id : 'roadmap';
+    }
+    paneles[actual].appendChild(el);
+  });
+  PESTANAS.forEach(function (p) { doc.appendChild(paneles[p.id]); });
+  var faltan = paneles.validar.querySelectorAll('table.pruebas tbody tr:not(.listo)').length;
+  var tabs = document.getElementById('tabs');
+  function elegir(id, guardar) {
+    PESTANAS.forEach(function (p) {
+      paneles[p.id].hidden = p.id !== id;
+      var b = document.getElementById('tab-' + p.id); if (b) b.setAttribute('aria-selected', String(p.id === id));
+    });
+    if (guardar) { try { history.replaceState(null, '', '#' + id); } catch (e) {} }
+  }
+  PESTANAS.forEach(function (p) {
+    var b = document.createElement('button');
+    b.id = 'tab-' + p.id; b.type = 'button'; b.setAttribute('role', 'tab');
+    b.textContent = p.nombre;
+    if (p.id === 'validar' && faltan) { var n = document.createElement('span'); n.className = 'n'; n.textContent = faltan + ' por validar'; b.appendChild(n); }
+    b.addEventListener('click', function () { elegir(p.id, true); window.scrollTo(0, 0); });
+    tabs.appendChild(b);
+  });
+  var inicial = (location.hash || '').slice(1);
+  elegir(PESTANAS.some(function (p) { return p.id === inicial; }) ? inicial : 'roadmap', false);
 })();
 </script>
