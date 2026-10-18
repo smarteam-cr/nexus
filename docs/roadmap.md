@@ -17,13 +17,13 @@ está haciendo con él.
 | Qué | Cómo está |
 |---|---|
 | Producción | Corre `7d7e92df` desde el 17 oct a las 22:02, hora de Costa Rica. Sana, con el esquema al día. |
-| Por desplegar | Nada: todo lo de `main` está en producción. La lectura de hechos y el corte de cobranza, prendidos. |
-| En curso | La siguiente serie, en seis sesiones en paralelo: la escala (ediciones y «Actualizar escala»), las propuestas (recurrente, licencias, módulos), el servicio recurrente, el gasto de IA y el documento de Finanzas. Lo que encontraste al validar «Para ti» (agenda, cartera del CSE y exclientes) ya está hecho en tres ramas, esperando que lo juntemos. |
-| La base | Tiene todo lo que necesita lo que está en `main`: los SQL ya se aplicaron. |
+| Por desplegar | En `main` y sin desplegar: la escala (ediciones Turismo y Automotriz sin publicar, «Actualizar escala»), las propuestas (proyecto o recurrente, licencias con su margen, módulos y biblioteca), el servicio recurrente en la ficha y los arreglos de «Para ti» (agenda, cartera del CSE, exclientes). 714 pruebas en verde y tsc en 0. |
+| En curso | El gasto de la IA (una sesión). Finanzas ya tiene tus decisiones; su construcción espera que la arranques (tarjeta propuesta). |
+| La base | Tiene todo lo que necesita lo que está en `main`: los SQL del 18 oct ya se aplicaron (biblioteca de módulos, escala ligada a la venta y servicio recurrente). |
 | En rojo en producción | Un proyecto en un pipeline sin declarar, un cliente apuntando a una empresa fusionada en HubSpot y el corte de cobranza, que nunca corrió. |
 | Revisión de código | Hecha el 17 oct sobre los 31 cambios de entonces: 57 problemas encontrados, unos 50 corregidos y en `main`. Ninguno mezclaba clientes. |
 
-**Lo siguiente en todo Nexus:** validar en producción (pestaña «Lo que validas»). La siguiente serie se está construyendo en seis sesiones en paralelo; Finanzas espera tu decisión. Yo corro lo que va después del deploy: cerrar las alertas sueltas, limpiar las reuniones con texto de otra, rescatar las transcripciones (la primera versión de la escala ya quedó guardada).
+**Lo siguiente en todo Nexus:** desplegar `main` (tú), y después validar en producción (pestaña «Lo que validas», sección 10 para lo nuevo). Después del deploy armo las propuestas recurrentes internas de Cayalá, Grupo Inve, FACO (Honda Costa Rica) y kölbi. Yo corro lo que va después del deploy: cerrar las alertas sueltas, limpiar las reuniones con texto de otra, rescatar las transcripciones (la primera versión de la escala ya quedó guardada).
 
 En cada paso: **[hecho]** está hecho (en producción si la tarjeta lo dice); **[en curso]** lo está construyendo una sesión ahora.
 
@@ -43,51 +43,52 @@ propongo: primero la escala, porque las propuestas y el servicio recurrente se a
 - **Cada agente nuevo, medido**: su costo por cliente y por proceso en «Uso de Nexus» desde el primer día.
 - **Sin sobreingeniería**: si algo se resuelve con lo que ya existe (las tareas, la agenda por enlace, el motor de las propuestas), se usa eso.
 
-### 1 · La escala que entiende el negocio del cliente <span class="estado">En curso</span>
+### 1 · La escala que entiende el negocio del cliente <span class="estado">Por desplegar</span>
 
 Hoy hay cuatro ediciones (ecommerce y retail, banca, educación, inmobiliaria) y la edición y el perfil se eligen solos, pero no queda claro por qué ni qué cambian. Para que la escala le sirva a quien explora y a quien posiciona, tiene que representar el modelo de negocio de cada cliente.
 
-1. [en curso] Dos ediciones nuevas: Turismo y Automotriz. Las escribo como borrador con las reglas de la escala, pasan sus pruebas y tú las revisas antes de publicarlas.
-2. [en curso] Que se entienda cómo se elige: en la escala de cada empresa, «Se mide con la edición X y el perfil Y, porque…» (su industria, cómo vende, si recompra, si la relación es continua), con lo que cambia de la general y un clic para corregirlo.
-3. [en curso] Que el modelo de negocio guíe a quien explora (las preguntas de la sesión salen de su edición y su perfil) y a quien posiciona (cada nivel se lee con las palabras de su industria).
+1. [hecho] Dos ediciones nuevas: Turismo y Automotriz. Las escribo como borrador con las reglas de la escala, pasan sus pruebas y tú las revisas antes de publicarlas.
+2. [hecho] Que se entienda cómo se elige: en la escala de cada empresa, «Se mide con la edición X y el perfil Y, porque…» (su industria, cómo vende, si recompra, si la relación es continua), con lo que cambia de la general y un clic para corregirlo.
+3. [hecho] Que el modelo de negocio guíe a quien explora (las preguntas de la sesión salen de su edición y su perfil) y a quien posiciona (cada nivel se lee con las palabras de su industria).
+4. Revisar y publicar la 8.9.0 (tú): el resumen está en `docs/escala/ediciones-turismo-automotriz.md`, con el perfil habitual de cada edición y tres criterios que piden más en Funcional.
 
-### 2 · La escala de cada empresa: «Actualizar escala» con todo el contexto <span class="estado">En curso</span>
+### 2 · La escala de cada empresa: «Actualizar escala» con todo el contexto <span class="estado">Por desplegar</span>
 
 Hoy el agente lee menos de lo que dice: en un proyecto no lee lo vendido, las minutas, las tareas, el cronograma ni HubSpot; no vuelve a leer las reuniones ya leídas; y un cliente sin proyecto activo ni preventa no tiene botón. La historia guarda el proyecto y el ciclo, pero no la venta, y siempre con la fecha de hoy.
 
-1. [en curso] Un botón «Actualizar escala» en La cuenta › La escala para todo cliente: con proyecto, con preventa o solo con negocios ganados. Lo toca una persona por cliente; nunca corre solo ni para todos.
-2. [en curso] Que lea todo lo que Nexus sabe de la cuenta: lo vendido (negocios ganados, propuesta comercial y handoff), la memoria (minutas, hechos, notas del equipo y la ficha), las tareas, el cronograma, los cuestionarios, el test y HubSpot, con las reuniones ya leídas en resumen. Sin marcar nada como leído ni cambiar la guía de la exploración.
-3. [en curso] Confirmar en la misma pantalla: cada nivel propuesto con su porqué y su fuente, «Usar» uno por uno o «Usar todos». Lo propuesto nunca entra a la historia; lo confirmado, sí.
-4. [en curso] La historia amarrada a la venta: cada versión dice de qué venta, preventa, proyecto o servicio sale, y se puede fechar en su momento («al vender», «al arrancar», «hoy»), para ver cuánto se movió la empresa desde que nos compró.
-5. [en curso] Con varios proyectos o ventas, elegir sobre cuál se ubica.
+1. [hecho] Un botón «Actualizar escala» en La cuenta › La escala para todo cliente: con proyecto, con preventa o solo con negocios ganados. Lo toca una persona por cliente; nunca corre solo ni para todos.
+2. [hecho] Que lea todo lo que Nexus sabe de la cuenta: lo vendido (negocios ganados, propuesta comercial y handoff), la memoria (minutas, hechos, notas del equipo y la ficha), las tareas, el cronograma, los cuestionarios, el test y HubSpot, con las reuniones ya leídas en resumen. Sin marcar nada como leído ni cambiar la guía de la exploración.
+3. [hecho] Confirmar en la misma pantalla: cada nivel propuesto con su porqué y su fuente, «Usar» uno por uno o «Usar todos». Lo propuesto nunca entra a la historia; lo confirmado, sí.
+4. [hecho] La historia amarrada a la venta: cada versión dice de qué venta, preventa, proyecto o servicio sale, y se puede fechar en su momento («al vender», «al arrancar», «hoy»), para ver cuánto se movió la empresa desde que nos compró.
+5. [hecho] Con varios proyectos o ventas, elegir sobre cuál se ubica.
 
-### 3 · Propuestas: proyecto o recurrente, licencias aparte y módulos que se reusan <span class="estado">En curso</span>
+### 3 · Propuestas: proyecto o recurrente, licencias aparte y módulos que se reusan <span class="estado">Por desplegar</span>
 
 Revisé las propuestas: hay 66 secciones personalizadas en 23 empresas, armadas a mano por Andrés y Marco. Se repiten: casos de uso a implementar (7), arquitectura y diagramas (16), qué contiene el acuerdo y SLA (8), antes y después, comparación de licencias (Starter contra Pro) y forma de pago. Cayalá y Grupo Inve ya se vendieron como servicio recurrente con SmartLoop, todo en HTML hecho a mano.
 
-1. [en curso] Al crear una propuesta se elige: proyecto (se hace una vez) o servicio recurrente, y cuál servicio del catálogo.
-2. [en curso] La plantilla de servicio recurrente, con lo que ya vendieron a mano: qué contiene el acuerdo, cómo opera (cadencia y rutinas), el ciclo (para SmartLoop, con tu diseño), el nivel de servicio, antes y después, y la inversión mensual. La de proyecto queda como hoy.
-3. [en curso] Licencias y servicios siempre separados: cada licencia con su precio de lista, que es público, y lo que se le cobra al cliente. Si cobramos más, la diferencia queda a la vista para Ventas y Finanzas; el cliente nunca la ve.
-4. [en curso] Al ganarse, lo vendido llega solo a Finanzas: cuánto es servicio, cuánto es licencia y qué margen deja cada licencia. Finanzas puede volver a leer las propuestas ya ganadas y recalcular los ingresos de meses pasados (hoy eso se carga a mano, como con kölbi).
-5. [en curso] Los módulos que más se repiten pasan a ser secciones de Nexus que se agregan, se quitan y se mueven con un clic, que la IA llena y que salen bien en el PDF: casos de uso, arquitectura, comparación de licencias, fases u opciones, forma de pago, antes y después, nivel de servicio, qué contiene el acuerdo y el ciclo SmartLoop.
-6. [en curso] Una biblioteca para lo demás: cualquier sección personalizada se guarda como módulo y se usa en otra propuesta, con «Adaptar a esta empresa» (la IA cambia los textos sin tocar el diseño). Sin código a la medida.
-7. [en curso] FACO, Colby, Cayalá y Grupo Inve: lo que ya se les vendió se arma como una propuesta recurrente nueva, interna, sin tocar la que firmaron. De ahí sale su servicio en Nexus.
+1. [hecho] Al crear una propuesta se elige: proyecto (se hace una vez) o servicio recurrente, y cuál servicio del catálogo.
+2. [hecho] La plantilla de servicio recurrente, con lo que ya vendieron a mano: qué contiene el acuerdo, cómo opera (cadencia y rutinas), el ciclo (para SmartLoop, con tu diseño), el nivel de servicio, antes y después, y la inversión mensual. La de proyecto queda como hoy.
+3. [hecho] Licencias y servicios siempre separados: cada licencia con su precio de lista, que es público, y lo que se le cobra al cliente. Si cobramos más, la diferencia queda a la vista para Ventas y Finanzas; el cliente nunca la ve.
+4. [hecho] Al ganarse, lo vendido llega solo a Finanzas: cuánto es servicio, cuánto es licencia y qué margen deja cada licencia. Finanzas puede volver a leer las propuestas ya ganadas y recalcular los ingresos de meses pasados (hoy eso se carga a mano, como con kölbi).
+5. [hecho] Los módulos que más se repiten pasan a ser secciones de Nexus que se agregan, se quitan y se mueven con un clic, que la IA llena y que salen bien en el PDF: casos de uso, arquitectura, comparación de licencias, fases u opciones, forma de pago, antes y después, nivel de servicio, qué contiene el acuerdo y el ciclo SmartLoop.
+6. [hecho] Una biblioteca para lo demás: cualquier sección personalizada se guarda como módulo y se usa en otra propuesta, con «Adaptar a esta empresa» (la IA cambia los textos sin tocar el diseño). Sin código a la medida.
+7. FACO, Colby, Cayalá y Grupo Inve: lo que ya se les vendió se arma como una propuesta recurrente nueva, interna, sin tocar la que firmaron. De ahí sale su servicio en Nexus. El script ya está y corrió en simulacro; lo aplico después del deploy (FACO es Honda Costa Rica; falta confirmar que «Colby» es kölbi).
 
-### 4 · El servicio recurrente, dentro de la ficha del cliente <span class="estado">En curso</span>
+### 4 · El servicio recurrente, dentro de la ficha del cliente <span class="estado">Por desplegar</span>
 
 No un sistema para manejar ciclos: una guía para que el CSE entienda un servicio recurrente y lo lleve con cadencia. La ficha del cliente sigue igual (escala, exploración, encuestas); solo cambia un poco si el servicio es recurrente y cuál es.
 
-1. [en curso] Cada proyecto dice si es recurrente y de qué servicio del catálogo. Con eso cambian el Resumen y la guía; lo demás de la ficha queda igual.
-2. [en curso] La guía del servicio en el Resumen: qué se entrega, con qué cadencia y qué toca ahora. En SmartLoop, las cinco etapas como un ciclo, con dónde va la cuenta y qué falta para pasar a la siguiente.
-3. [en curso] Las rutinas: al arrancar, Nexus propone las reuniones fijas del servicio, para guardarlas en Google Calendar por enlace, y las tareas que se repiten para el CSE.
-4. [en curso] Al ganarse una propuesta recurrente, el proyecto nace con su servicio, su cadencia y sus casos de uso. Reemplaza los scripts de hoy.
-5. [en curso] Pasar un cliente actual a recurrente desde la ficha: eliges el servicio, Nexus propone dónde va y arma las rutinas; lo de antes queda como historia, sin mezclarse.
-6. [en curso] Pasar los recurrentes de hoy uno por uno con su CSE: Continuidad, administración de sitio web y contenido.
+1. [hecho] Cada proyecto dice si es recurrente y de qué servicio del catálogo. Con eso cambian el Resumen y la guía; lo demás de la ficha queda igual.
+2. [hecho] La guía del servicio en el Resumen: qué se entrega, con qué cadencia y qué toca ahora. En SmartLoop, las cinco etapas como un ciclo, con dónde va la cuenta y qué falta para pasar a la siguiente.
+3. [hecho] Las rutinas: al arrancar, Nexus propone las reuniones fijas del servicio, para guardarlas en Google Calendar por enlace, y las tareas que se repiten para el CSE.
+4. [hecho] Al ganarse una propuesta recurrente, el proyecto nace con su servicio, su cadencia y sus casos de uso. Reemplaza los scripts de hoy.
+5. [hecho] Pasar un cliente actual a recurrente desde la ficha: eliges el servicio, Nexus propone dónde va y arma las rutinas; lo de antes queda como historia, sin mezclarse.
+6. Pasar los recurrentes de hoy uno por uno con su CSE: Continuidad, administración de sitio web y contenido.
 7. Definir contigo la cadencia y las rutinas de cada servicio del catálogo.
 
-### 5 · Finanzas: terminar de simplificar <span class="estado">Por decidir</span>
+### 5 · Finanzas: terminar de simplificar <span class="estado">Por empezar</span>
 
-**Espera tu decisión.** Preparo un documento con lo que se planeó, lo que se hizo y lo que dijeron Marco y Alex Arrieta en sus reuniones, y una tabla para validar que Finanzas funciona; con eso decides qué sigue.
+**Decidiste el 18 oct:** cobrar solo, cada día, lo que Odoo y Mercury dan por pagado y conciliado; el menú de los Super Admin sin lo de quien registra; María José concilia cada mañana (con una cuenta nueva que das de alta tú); y primero el libro, después el menú. Caja neta lo decide Alex. La construcción espera que arranques su tarjeta.
 
 No encontré en ningún plan la frase «simplificar demasiado». Lo más cercano es el rediseño de Finanzas del 3 oct: un solo menú que cambia según quién entra (registra, supervisa o dirección).
 
@@ -95,12 +96,15 @@ No encontré en ningún plan la frase «simplificar demasiado». Lo más cercano
 
 **Lo que se deshizo a propósito:** el 8 oct pediste que los Super Admin vean todo. Desde entonces la vista solo cambia la pantalla de entrada, y tu menú de Finanzas tiene 20 entradas.
 
-1. [en curso] El documento para decidir y validar: lo planeado, lo hecho y lo dicho por Marco y Alex.
+1. [hecho] El documento para decidir y validar: `docs/finanzas-simplificacion.md`, con lo planeado, lo hecho, lo que dijeron Marco y Alex, 8 decisiones y 18 pasos para el 3004.
 2. Retirar las páginas viejas de Costos (Costos, Fijos, Herramientas y la segunda página de Tarjetas): llevan a su página nueva.
 3. Cobranza › Odoo, Mercury e Importar dentro de Conciliación, o fuera si ya no se usan.
 4. Reportes de seis entradas a tres: Rentabilidad vive en Éxito del cliente, y Tipo de cambio e Integraciones van dentro de otra página.
 5. Comisiones de vendedor y Aguinaldo dentro de Planilla.
 6. Decidir contigo si la vista vuelve a recortar el menú de los Super Admin, ahora con la Planilla en Dirección.
+7. Cobrar solo lo que Odoo y Mercury dan por pagado y conciliado con el banco, cada día, firmado por el sistema.
+8. Que el punto de equilibrio cuente solo lo del año, y explicar la diferencia de ventas sin cobranza (US$218.000 en Nexus contra los ~US$90.000 que esperaba Marco).
+9. Dar de alta a María José (tú, en Equipo) con lo que necesita para conciliar.
 
 ### 6 · El gasto de la IA: verlo, proyectarlo y bajarlo <span class="estado">En curso</span>
 
@@ -134,9 +138,9 @@ Lo primero que ve cada persona al entrar: lo que importa hoy, sus cuentas y sus 
 5. [hecho] Que Nexus sugiera con qué avanzar en los huecos de la agenda, con las tareas pendientes, para ponerlo en la agenda.
 6. [hecho] Medir la adopción: qué usa cada equipo y qué se desestima, en «Uso de Nexus».
 7. El correo de la mañana con lo mismo, bien probado antes de mandarlo (espera decidir Gmail o un proveedor).
-8. [en curso] La agenda, con lo que encontraste al validar: más rápida; un sábado o un domingo muestra la semana siguiente; un hueco elegido se suelta tocando afuera o la X; «Agendar» arma la reunión en Nexus antes de abrir Calendar; «Tus notas» también en las reuniones que ya pasaron.
-9. [en curso] La cartera del CSE: «Planificar acción» en las cuentas sin acción, que la pone en la agenda; el uso de HubSpot de cada cuenta (si sube o baja, por los hubs que compró); y un botón con nombre claro en vez de «Abrir cuenta».
-10. [en curso] Que nada quede fuera de «Lo que importa hoy»: si a un CSE le piden atención más cuentas de las que entran, «Estabilizar N cuentas», y a la CSL le llega para repartir o acompañar.
+8. [hecho] La agenda, con lo que encontraste al validar: más rápida; un sábado o un domingo muestra la semana siguiente; un hueco elegido se suelta tocando afuera o la X; «Agendar» arma la reunión en Nexus antes de abrir Calendar; «Tus notas» también en las reuniones que ya pasaron.
+9. [hecho] La cartera del CSE: «Planificar acción» en las cuentas sin acción, que la pone en la agenda; el uso de HubSpot de cada cuenta (si sube o baja, por los hubs que compró); y un botón con nombre claro en vez de «Abrir cuenta».
+10. [hecho] Que nada quede fuera de «Lo que importa hoy»: si a un CSE le piden atención más cuentas de las que entran, «Estabilizar N cuentas», y a la CSL le llega para repartir o acompañar.
 
 ### Reuniones y memoria <span class="estado">En producción</span>
 
@@ -194,7 +198,7 @@ Los proyectos, los documentos, la cartera y el servicio recurrente. Usa las tare
 6. SmartLoop: pasar los recurrentes de hoy (va con la siguiente serie, iniciativa 4, pasos 5 y 6).
 7. [hecho] Los documentos del proyecto con plantillas (la primera: «Diagnóstico estratégico»), sin tocar los kickoffs y diagnósticos que ya existen.
 8. [hecho] La foto del margen de cada mes, en carga y rentabilidad.
-9. [en curso] Un excliente (Wherex) fuera de toda alerta y cartera: la CSL lo confirma como «Excliente» y solo se ve en «Fuera de la cartera», marcado. Mientras siga un proyecto activo en HubSpot, la lista de limpieza le pide cerrarlo.
+9. [hecho] Un excliente (Wherex) fuera de toda alerta y cartera: la CSL lo confirma como «Excliente» y solo se ve en «Fuera de la cartera», marcado. Mientras siga un proyecto activo en HubSpot, la lista de limpieza le pide cerrarlo.
 
 ### Finanzas <span class="estado">En producción</span>
 
@@ -263,6 +267,9 @@ devuelve.
 | 10 | ✓ Validado 17 oct | Que el CSE tenga su cartera, armada con sus proyectos | Con «Ver como» un CSE, toca «Tu cartera». Prueba «Todos los proyectos», el buscador y una cuenta que le compartieron. | Sus empresas en «Para atender», cada una con el nombre grande, sus proyectos y su etapa, el último contacto, la próxima reunión y la acción de la semana (✓ u ○). Una compartida dice «Compartida», sin color ni monto. |
 | 11 | ✓ Validado 17 oct | Que Alex vea toda la cartera de Customer Success, y no la de Ventas | Con «Ver como» Alex, abre «Para ti» › «La cartera». Abre «Por CSE»; después filtra «Pipeline» › Desarrollo. | No aparece la cartera de Ventas ni «Negocios traídos de HubSpot». «Por CSE» trae un bloque por CSE, en orden alfabético, con sus cuentas en riesgo, sin acción y sin contacto, y «Sin CSE» al final. Con el filtro, solo las empresas con un proyecto de desarrollo. |
 | 12 | Por validar | Que el monto solo lo vea quien vende | Con «Ver como» Andrés, abre «Para ti» › «Tu cartera» y busca una empresa con un negocio abierto. Después, con «Ver como» un CSE que lleve esa empresa, mírala en su cartera. | Andrés ve «N negocios abiertos · US$ …» en la fila. El CSE ve la misma empresa sin el monto. (Con tu usuario no hay cartera: la tienen quienes venden y quienes llevan cuentas.) |
+| 48 | Por validar | Que nada quede fuera de «Lo que importa hoy» | Con «Ver como» un CSE con muchas cuentas en riesgo o sin acción, abre «Para ti». Después, con «Ver como» Alex. | Si no caben, una línea «Estabilizar N cuentas» que abre la lista entera. A Alex le llega para repartir o acompañar. |
+| 49 | Por validar | Que el CSE planifique la acción desde su cartera y vea el uso de HubSpot | Con «Ver como» un CSE, «Tu cartera» › una cuenta sin acción › «Planificar acción». | La acción queda en la agenda. Cada cuenta dice si el uso de HubSpot sube o baja, por los hubs que compró, y el botón dice qué hace en vez de «Abrir cuenta». |
+| 50 | Por validar | Que un excliente salga de todo | Cuando Alex marque Wherex como «Excliente»: Éxito del cliente › Cartera › «Fuera de la cartera». | Wherex aparece ahí, marcado «Excliente», y no está en ninguna alerta, cartera ni en «Lo que importa hoy». |
 
 ### 2 · La ficha del cliente
 
@@ -340,6 +347,24 @@ confirmados: CreditForce, Grupo Servica, Quálitas, Tecnosagot, Grupo Monge, Cem
 |---|---|---|---|---|
 | 41 | Por validar | Que la lista de limpieza de HubSpot diga quién arregla qué | Éxito del cliente › «Limpieza de HubSpot», como Alex o con tu usuario. | Lo que hay que poner al día en HubSpot, por responsable, cada cosa con su enlace. |
 | 42 | Por validar | Que «Ver como» no deje escribir como otra persona | Equipo › una persona › «Ver como»; navega un poco y toca «Volver a mi usuario». | Nexus como lo ve esa persona, sin poder escribir como ella. «Volver a mi usuario» te devuelve. |
+
+### 10 · La siguiente serie (funciona después del próximo deploy)
+
+| # | Estado | Qué validas | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 51 | Por validar | Que las ediciones Turismo y Automotriz digan lo que pasa en esas industrias | Lee `docs/escala/ediciones-turismo-automotriz.md` y decide el perfil habitual y los tres criterios que piden más en Funcional. | Si te calza, la publico (8.9.0); si no, me dices qué cambiar. |
+| 52 | Por validar | Que «Actualizar escala» funcione en un cliente sin proyecto ni preventa | Un cliente sin proyectos (no Wherex) › La cuenta › La escala › «Actualizar escala». | «Sobre qué se ubica: La cuenta entera» y la lista de sus ventas. Al tocar «Actualizar», «Leyendo todo lo que Nexus sabe de la cuenta…» y después cuántos niveles propuso. |
+| 53 | Por validar | Que con varios proyectos se elija sobre cuál se ubica | Un cliente con varios proyectos › La escala › «Actualizar escala». | Todos sus proyectos en la lista, los terminados al final; al elegir uno, la venta de ese trato ya viene marcada. |
+| 54 | Por validar | Que lo propuesto se confirme en la misma pantalla y quede en la historia | En el recuadro azul «El agente propone N niveles», toca «Usar» en uno y «Usar los N». | Cada nivel con su porqué y «De dónde sale». Lo usado baja al área y en «La escala en el tiempo» queda una versión de hoy. Lo propuesto no entra a la historia. |
+| 55 | Por validar | Que se entienda con qué edición y perfil se mide | En La escala, el recuadro «Se mide con…» › «Corregir». | La edición y el perfil, el porqué, lo que cambia frente a la general, y al corregir se guarda. |
+| 56 | Por validar | Que la historia se ate a la venta | «Guardar esta versión» › «De qué momento es: Al vender». | En «La escala en el tiempo», una fila con la fecha en que se ganó la venta: «Al vender · venta «…»». |
+| 57 | Por validar | Que una propuesta sea proyecto o servicio recurrente | Ventas › Propuestas › «Nueva propuesta» › «Un servicio recurrente» › SmartLoop › «Generar». | Las secciones «Cómo opera el servicio», «Cómo trabajamos» (el ciclo de 5 etapas en círculo) y «Nivel de servicio» ya llenas, y la inversión mensual aparte de las licencias. |
+| 58 | Por validar | Que un proyecto pase a recurrente desde la ficha | Ficha de un proyecto de implementación › Resumen › tarjeta «Etapa» › «Pasar a recurrente». | Eliges el servicio, Nexus propone la etapa y la tarea de HubSpot. Después, la tarjeta «Servicio recurrente» con «Qué toca ahora», «Agendar en Calendar ↗» y «Crear las N de los próximos dos meses». |
+| 59 | Por validar | Que una propuesta recurrente ganada dé de alta el servicio | Una propuesta recurrente aprobada › «Dar de alta el servicio». | Abre «Nuevo proyecto» con la empresa y el servicio ya puestos, y el proyecto nace con sus casos de uso. |
+| 60 | Por validar | Que cada licencia tenga su precio de lista y su margen, sin que el cliente lo vea | Una propuesta con licencias (Cemaco o Spectrum) › Inversión, editando: anota el precio de lista y quién la factura. Después ábrela como cliente y baja el PDF. | En el editor, «Margen: $… al mes (… %)» en verde, o «Pierdes: …» en ámbar. En el enlace del cliente y en el PDF no aparece nada de eso. |
+| 61 | Por validar | Que lo vendido llegue a Finanzas | Finanzas › Punto de equilibrio › «Licencias revendidas». | «Lo vendido según las propuestas ganadas», con cada propuesta, su servicio, sus licencias y por qué entra o no entra. |
+| 62 | Por validar | Que los módulos se agreguen con un clic | Una propuesta › «+ Agregar una sección propia». Agrega «Casos de uso por proyecto», «Comparación de licencias» y «Fases u opciones», y exporta el PDF. | Pestañas por proyecto con «Desde el catálogo de casos»; la tabla de planes con el recomendado; tarjetas 01, 02 o A, B. En el PDF salen todos los casos y la tabla entera. |
+| 63 | Por validar | Que un módulo hecho a mano se reuse en otra propuesta | Sobre una sección de HTML pegado › «Guardar como módulo». En otra propuesta › «Agregar módulo de la biblioteca» › «Adaptar a esta empresa». | Aviso en ámbar si el HTML nombra a la otra empresa. «Adaptar» muestra cada texto antes y después, y al aplicar cambia solo los textos; el diseño queda igual. |
 
 ### Desde la terminal (opcional)
 
