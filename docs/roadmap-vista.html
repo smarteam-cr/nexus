@@ -114,26 +114,26 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     var th = t.querySelector('thead th'), primera = th ? th.textContent.trim() : '';
     var cabeza = Array.prototype.map.call(t.querySelectorAll('thead th'), function (x) { return x.textContent.trim(); });
     if (cabeza.indexOf('Estado') >= 0) {
-      // Las pruebas: el estado como chip (✓ Probado · ↻ Otra vez · Por probar); lo probado, en gris.
+      // Las validaciones: el estado como chip (✓ Validado · ↻ Otra vez · ⏳ En arreglo · Por validar); lo validado, en gris.
       t.classList.add('pruebas');
       t.querySelectorAll('tbody tr').forEach(function (tr) {
         var td = tr.children[1]; if (!td) return;
         var e = td.textContent.trim();
-        var tono = /^✓/.test(e) ? 's-ok' : /^↻/.test(e) ? 's-warn' : 's-idle';
+        var tono = /^✓/.test(e) ? 's-ok' : /^↻/.test(e) ? 's-warn' : /^⏳/.test(e) ? 's-info' : 's-idle';
         td.innerHTML = '<span class="chip ' + tono + '">' + td.innerHTML + '</span>';
-        if (tono === 's-ok') tr.classList.add('listo');
+        if (tono === 's-ok') tr.classList.add('listo'); else if (tono === 's-info') tr.classList.add('arreglo');
       });
-      // Orden: lo que hay que volver a validar, lo que falta, y lo validado al final, por fecha.
+      // Orden: lo que hay que volver a validar, lo que falta, lo que estoy arreglando, y lo validado al final, por fecha.
       var MESES = { ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, sep: 9, oct: 10, nov: 11, dic: 12 };
       var tb = t.querySelector('tbody');
       var filas = Array.prototype.slice.call(tb.children).map(function (tr, i) {
         var e = tr.children[1] ? tr.children[1].textContent.trim() : '';
-        var g = /^↻/.test(e) ? 0 : /^✓/.test(e) ? 2 : 1;
+        var g = /^↻/.test(e) ? 0 : /^✓/.test(e) ? 3 : /^⏳/.test(e) ? 2 : 1;
         var f = e.match(/(\d{1,2})\s+([a-z]{3})/);
         var dia = f ? (MESES[f[2]] || 0) * 100 + Number(f[1]) : 0;
         return { tr: tr, g: g, dia: dia, i: i };
       });
-      filas.sort(function (a, b) { return a.g - b.g || (a.g === 2 ? a.dia - b.dia : 0) || a.i - b.i; });
+      filas.sort(function (a, b) { return a.g - b.g || (a.g === 3 ? a.dia - b.dia : 0) || a.i - b.i; });
       filas.forEach(function (x) { tb.appendChild(x.tr); });
     } else t.classList.add(primera === '#' ? 'validar' : 'lista');
   });
@@ -178,7 +178,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     paneles[actual].appendChild(el);
   });
   PESTANAS.forEach(function (p) { doc.appendChild(paneles[p.id]); });
-  var faltan = paneles.validar.querySelectorAll('table.pruebas tbody tr:not(.listo)').length;
+  var faltan = paneles.validar.querySelectorAll('table.pruebas tbody tr:not(.listo):not(.arreglo)').length;
   var tabs = document.getElementById('tabs');
   function elegir(id, guardar) {
     PESTANAS.forEach(function (p) {

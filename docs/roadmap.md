@@ -18,13 +18,14 @@ está haciendo con él.
 |---|---|
 | Producción | Corre `7d7e92df` desde el 17 oct a las 22:02, hora de Costa Rica. Sana, con el esquema al día. |
 | Por desplegar | Nada: todo lo de `main` está en producción. La lectura de hechos y el corte de cobranza, prendidos. |
+| En curso | Lo que encontraste al validar «Para ti»: la agenda, la cartera del CSE y los exclientes (Inicio, pasos 8 a 10; Customer Success, paso 9). Tres sesiones en paralelo. |
 | La base | Tiene todo lo que necesita lo que está en `main`: los SQL ya se aplicaron. |
 | En rojo en producción | Un proyecto en un pipeline sin declarar, un cliente apuntando a una empresa fusionada en HubSpot y el corte de cobranza, que nunca corrió. |
 | Revisión de código | Hecha el 17 oct sobre los 31 cambios de entonces: 57 problemas encontrados, unos 50 corregidos y en `main`. Ninguno mezclaba clientes. |
 
 **Lo siguiente en todo Nexus:** validar en producción (pestaña «Lo que validas»). Yo corro lo que va después del deploy: cerrar las alertas sueltas, limpiar las reuniones con texto de otra, rescatar las transcripciones y guardar la primera versión de la escala.
 
-En cada paso: **[hecho]** está en `main`, falta desplegar; **[en curso]** lo está construyendo una sesión ahora.
+En cada paso: **[hecho]** está hecho (en producción si la tarjeta lo dice); **[en curso]** lo está construyendo una sesión ahora.
 
 ## Lo que conecta a los equipos
 
@@ -48,12 +49,15 @@ Lo primero que ve cada persona al entrar: lo que importa hoy, sus cuentas y sus 
 5. [hecho] Que Nexus sugiera con qué avanzar en los huecos de la agenda, con las tareas pendientes, para ponerlo en la agenda.
 6. [hecho] Medir la adopción: qué usa cada equipo y qué se desestima, en «Uso de Nexus».
 7. El correo de la mañana con lo mismo, bien probado antes de mandarlo (espera decidir Gmail o un proveedor).
+8. [en curso] La agenda, con lo que encontraste al validar: más rápida; un sábado o un domingo muestra la semana siguiente; un hueco elegido se suelta tocando afuera o la X; «Agendar» arma la reunión en Nexus antes de abrir Calendar; «Tus notas» también en las reuniones que ya pasaron.
+9. [en curso] La cartera del CSE: «Planificar acción» en las cuentas sin acción, que la pone en la agenda; el uso de HubSpot de cada cuenta (si sube o baja, por los hubs que compró); y un botón con nombre claro en vez de «Abrir cuenta».
+10. [en curso] Que nada quede fuera de «Lo que importa hoy»: si a un CSE le piden atención más cuentas de las que entran, «Estabilizar N cuentas», y a la CSL le llega para repartir o acompañar.
 
 ### Reuniones y memoria <span class="estado">En producción</span>
 
 Cada reunión se lee una vez y queda como memoria de la cuenta: la usan la ficha, las tareas, los documentos y los agentes.
 
-1. Prender la lectura de hechos de cada reunión (va con el deploy).
+1. [hecho] Prender la lectura de hechos de cada reunión (prendida desde el deploy del 17 oct).
 2. [hecho] Que no falte ninguna transcripción: que Google Workspace las cree solas en todas las reuniones, también las de Desarrollo.
 3. [hecho] Arreglar las reuniones que quedaron con texto de otra reunión, y regenerar los handoffs de RC Inmobiliaria, AMC, DISTELSA y Grupo Printer.
 4. [hecho] La agenda de cada cuenta: qué clientes tienen reunión y planear una desde Nexus.
@@ -104,6 +108,7 @@ Los proyectos, los documentos, la cartera y el servicio recurrente. Usa las tare
 6. SmartLoop: pasar los recurrentes de hoy (el script ya está; la etapa de cada uno la confirma Customer Success).
 7. [hecho] Los documentos del proyecto con plantillas (la primera: «Diagnóstico estratégico»), sin tocar los kickoffs y diagnósticos que ya existen.
 8. [hecho] La foto del margen de cada mes, en carga y rentabilidad.
+9. [en curso] Un excliente (Wherex) fuera de toda alerta y cartera: la CSL lo confirma como «Excliente» y solo se ve en «Fuera de la cartera», marcado. Mientras siga un proyecto activo en HubSpot, la lista de limpieza le pide cerrarlo.
 
 ### Finanzas <span class="estado">En producción</span>
 
@@ -138,6 +143,7 @@ Lo que ya está en producción y les toca revisar a ellos, no a ti.
 | 4 | Alex Vanegas | La cartera de Éxito del cliente: el color de cada cuenta y su porqué |
 | 5 | Alex Arrieta | El punto de equilibrio: lo facturado y cobrado de cada mes |
 | 6 | Customer Success | Usar la escala con 5 a 8 clientes y decir dónde no calza |
+| 7 | Alex Vanegas | Cerrar en HubSpot el proyecto «Wherex - Migración CRM + integraciones operativas» (sigue activo, a nombre de hgomez) y marcar a Wherex como «Excliente» en Éxito del cliente › Cartera |
 
 ## Lo que configuras tú en Google Workspace
 
@@ -151,7 +157,7 @@ consola de Google:
 ## Lo que validas tú
 
 Cada validación dice qué tiene que funcionar, cómo comprobarlo y qué tiene que pasar, todo en el 3004. Dime el número y
-cómo te fue, y lo marco: **↻ Otra vez** (cambió después de que lo validaste: va primero), **Por validar**, o **✓ Validado**
+cómo te fue, y lo marco: **↻ Otra vez** (cambió después de que lo validaste: va primero), **⏳ En arreglo** (lo estoy corrigiendo: espera), **Por validar**, o **✓ Validado**
 con la fecha (va al final). Para entrar como otra persona: Equipo › la persona › «Ver como»; «Volver a mi usuario» te
 devuelve.
 
@@ -160,17 +166,17 @@ devuelve.
 | # | Estado | Qué validas | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 1 | ✓ Validado 17 oct | Que cada persona vea su propio inicio | Con «Ver como» Andrés, abre «Para ti»; después repite con un CSE. | Arriba, los números del día; al centro, la agenda como Google Calendar; a la derecha, «Tu cartera» (Andrés) o «Tus cuentas» (el CSE). |
-| 2 | ↻ Otra vez | Que las notas de una reunión no se pierdan y sean privadas | Como un CSE, toca en la agenda de hoy una reunión con un cliente. Escribe algo en «Tus notas», cierra el panel y vuelve a abrirlo. Después, con «Ver como» otra persona, abre una reunión suya. | El panel trae la guía, el objetivo, quién viene, la última vez y lo pendiente. La nota sigue ahí al volver a abrir. Con «Ver como» otra persona, sus notas no aparecen ni se puede escribir. |
+| 2 | ⏳ En arreglo | Que las notas de una reunión no se pierdan y sean privadas | Con tu usuario, toca en la agenda una reunión tuya con un cliente: una de hoy y una que ya pasó. Escribe algo en «Tus notas», cierra el panel y vuelve a abrirlo. Después, con «Ver como» Liliana, abre una reunión de ella. | En las dos (la de hoy y la pasada) aparece «Tus notas», y la nota sigue ahí al volver a abrir. Con «Ver como» Liliana, el panel trae su guía y lo pendiente, pero no tus notas ni las de ella, y no deja escribir: «Ver como» es solo lectura. |
 | 3 | ✓ Validado 17 oct | Que una cuenta sin acción ni reunión aparezca | Con «Ver como» un CSE que tenga una cuenta sin tarea esta semana, mira la primera tarjeta de «Para ti». | La línea «Sin acción ni reunión» con esa cuenta y el botón «Agendar». |
 | 4 | ✓ Validado 17 oct | Que Marketing vea sus tareas internas | Con «Ver como» alguien de Marketing, abre «Para ti». | Sus tareas internas, ordenadas por ámbito (Smarteam, SmartAgro). |
-| 5 | Por validar | Que «Lo que importa hoy» tenga como mucho 5 cosas | Abre «Para ti» con tu usuario y mira la primera tarjeta. Si una cuenta tiene varias cosas, abre su «+N». | Como mucho 5 cosas, una por cuenta. Lo demás de esa cuenta queda plegado en «+N en esta cuenta», y lo que no entra va a «También para hoy». |
-| 6 | Por validar | Que se pueda crear un evento desde la agenda | Toca una hora vacía de hoy (por ejemplo, las 10). Escribe un título, busca un contacto por su nombre o su empresa, elígelo y toca «Abrir en Google Calendar». | Aparece un bloque azul «borrador» de una hora. Al elegir el contacto, la cuenta se llena sola. Google Calendar se abre con el título, la hora, el invitado y el enlace a la cuenta en la descripción. El bloque queda «abierto en Calendar, sin guardar», con «Ya lo guardé». |
-| 7 | Por validar | Que «Agendar» proponga una hora y la ponga en la agenda | Con «Ver como» el CSE de la validación 3, toca «Agendar» en «Sin acción ni reunión». Después abre «Agendar» desde la lista entera de «Para ti». | El borrador aparece en la primera hora libre de trabajo, con la cuenta y su contacto, y Google Calendar se abre listo para guardar. Desde la lista entera también trae la hora, y cada cuenta una distinta. |
-| 8 | Por validar | Que los huecos respeten el horario y sugieran con qué avanzar | Mira la agenda después de las 16:00 o en fin de semana. En un día con espacio, toca el «Hueco libre» punteado y después «Ponerla en la agenda». | Fuera de lunes a viernes de 8 a 5 no aparece ningún hueco, y «Agendar» propone el siguiente día hábil a las 8:00. Al tocar un hueco: «Con qué avanzar: T-…», y «Ponerla en la agenda» deja el borrador en esa hora. |
+| 5 | ✓ Validado 17 oct | Que «Lo que importa hoy» tenga como mucho 5 cosas | Abre «Para ti» con tu usuario y mira la primera tarjeta. Si una cuenta tiene varias cosas, abre su «+N». | Como mucho 5 cosas, una por cuenta. Lo demás de esa cuenta queda plegado en «+N en esta cuenta», y lo que no entra va a «También para hoy». |
+| 6 | ✓ Validado 17 oct | Que se pueda crear un evento desde la agenda | Toca una hora vacía de hoy (por ejemplo, las 10). Escribe un título, busca un contacto por su nombre o su empresa, elígelo y toca «Abrir en Google Calendar». | Aparece un bloque azul «borrador» de una hora. Al elegir el contacto, la cuenta se llena sola. Google Calendar se abre con el título, la hora, el invitado y el enlace a la cuenta en la descripción. El bloque queda «abierto en Calendar, sin guardar», con «Ya lo guardé». |
+| 7 | ⏳ En arreglo | Que «Agendar» arme la reunión en Nexus antes de abrir Calendar | Con «Ver como» el CSE de la validación 3, toca «Agendar» en «Sin acción ni reunión». Revisa el borrador y toca «Abrir en Google Calendar». Repite desde la lista entera de «Para ti». | El borrador aparece en la agenda en la primera hora libre de trabajo, con el mismo formulario de «Crear evento»: título, hora, cuenta y contacto, todo editable. Google Calendar se abre solo al tocar «Abrir en Google Calendar». Desde la lista entera, cada cuenta trae una hora distinta. |
+| 8 | ⏳ En arreglo | Que los huecos respeten el horario, sugieran con qué avanzar y se puedan soltar | Mira la agenda después de las 16:00 o en fin de semana. En un día con espacio, toca el «Hueco libre» punteado; toca afuera; vuelve a tocarlo y toca la X; tócalo otra vez y toca «Ponerla en la agenda». | Un sábado o un domingo la agenda muestra la semana siguiente. Fuera de lunes a viernes de 8 a 5 no aparece ningún hueco. Al tocar un hueco: «Con qué avanzar: T-…». Tocar afuera o la X lo suelta y el hueco vuelve a como estaba. «Ponerla en la agenda» deja el borrador en esa hora. |
 | 9 | Por validar | Que los viernes invite a planificar la semana | Un viernes, abre «Para ti» como CSE, CSL o alguien de Desarrollo. | Debajo de «Lo que importa hoy», «Es viernes: planifica la semana que viene», que lleva a «Planifica tu semana» (validación 20). |
-| 10 | Por validar | Que el CSE tenga su cartera, armada con sus proyectos | Con «Ver como» un CSE, toca «Tu cartera». Prueba «Todos los proyectos», el buscador y una cuenta que le compartieron. | Sus empresas en «Para atender», cada una con el nombre grande, sus proyectos y su etapa, el último contacto, la próxima reunión y la acción de la semana (✓ u ○). Una compartida dice «Compartida», sin color ni monto. |
-| 11 | Por validar | Que Alex vea toda la cartera de Customer Success, y no la de Ventas | Con «Ver como» Alex, abre «Para ti» › «La cartera». Abre «Por CSE»; después filtra «Pipeline» › Desarrollo. | No aparece la cartera de Ventas ni «Negocios traídos de HubSpot». «Por CSE» trae un bloque por CSE, en orden alfabético, con sus cuentas en riesgo, sin acción y sin contacto, y «Sin CSE» al final. Con el filtro, solo las empresas con un proyecto de desarrollo. |
-| 12 | Por validar | Que el monto solo lo vea quien vende | Con tu usuario, busca en la cartera una empresa con un negocio abierto; después mírala con «Ver como» un CSE. | «N negocios abiertos · US$ …» en la fila. El CSE no ve el monto. |
+| 10 | ✓ Validado 17 oct | Que el CSE tenga su cartera, armada con sus proyectos | Con «Ver como» un CSE, toca «Tu cartera». Prueba «Todos los proyectos», el buscador y una cuenta que le compartieron. | Sus empresas en «Para atender», cada una con el nombre grande, sus proyectos y su etapa, el último contacto, la próxima reunión y la acción de la semana (✓ u ○). Una compartida dice «Compartida», sin color ni monto. |
+| 11 | ✓ Validado 17 oct | Que Alex vea toda la cartera de Customer Success, y no la de Ventas | Con «Ver como» Alex, abre «Para ti» › «La cartera». Abre «Por CSE»; después filtra «Pipeline» › Desarrollo. | No aparece la cartera de Ventas ni «Negocios traídos de HubSpot». «Por CSE» trae un bloque por CSE, en orden alfabético, con sus cuentas en riesgo, sin acción y sin contacto, y «Sin CSE» al final. Con el filtro, solo las empresas con un proyecto de desarrollo. |
+| 12 | Por validar | Que el monto solo lo vea quien vende | Con «Ver como» Andrés, abre «Para ti» › «Tu cartera» y busca una empresa con un negocio abierto. Después, con «Ver como» un CSE que lleve esa empresa, mírala en su cartera. | Andrés ve «N negocios abiertos · US$ …» en la fila. El CSE ve la misma empresa sin el monto. (Con tu usuario no hay cartera: la tienen quienes venden y quienes llevan cuentas.) |
 
 ### 2 · La ficha del cliente
 
@@ -241,8 +247,8 @@ devuelve.
 
 | # | Estado | Qué validas | Pasos | Resultado esperado |
 |---|---|---|---|---|
-| 43 | ✓ Validado 18 oct | Que la foto de los meses pasados se pueda armar | `npx tsx scripts/fotografiar-meses-del-margen.ts` (lo corrí yo, en simulacro) | Nueve meses, de enero a septiembre, cada uno con lo cobrado y facturado, la planilla y las horas, y «Simulacro: no se escribió nada». |
-| 44 | ✓ Validado 18 oct | Que el paso de «Continuidad» a SmartLoop encuentre los proyectos | `npx tsx scripts/migrar-continuidad-a-smartloop.ts` (lo corrí yo, en simulacro) | Ministerio de Economía y TEC, los dos en Diagnóstico, a confirmar con Customer Success. No escribe nada. |
+| 43 | ✓ Validado 17 oct | Que la foto de los meses pasados se pueda armar | `npx tsx scripts/fotografiar-meses-del-margen.ts` (lo corrí yo, en simulacro) | Nueve meses, de enero a septiembre, cada uno con lo cobrado y facturado, la planilla y las horas, y «Simulacro: no se escribió nada». |
+| 44 | ✓ Validado 17 oct | Que el paso de «Continuidad» a SmartLoop encuentre los proyectos | `npx tsx scripts/migrar-continuidad-a-smartloop.ts` (lo corrí yo, en simulacro) | Ministerio de Economía y TEC, los dos en Diagnóstico, a confirmar con Customer Success. No escribe nada. |
 
 Si algo no aparece como dice la tabla, mándame una captura.
 
