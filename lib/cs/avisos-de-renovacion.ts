@@ -27,6 +27,8 @@ import {
   razonJuntoALaRegla,
 } from "./alertas-reglas";
 import { PREFIJO_DE_LA_LECTURA } from "./alertas-de-la-lectura";
+import { CLIENTE_NO_EXCLIENTE_WHERE } from "./exclientes";
+
 import { avisosDelCliente, combinarLicencias, licenciasDesdePartner, lineaDelAvisoDeLaFecha, severidadDelAviso, type LicenciaDeHub } from "./licencias";
 
 const RANGO: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
@@ -63,7 +65,8 @@ export async function correrAvisosDeRenovacion(
 ): Promise<{ creados: number; juntados: number; cerrados: number; revisados: number }> {
   const hoy = fechaLocalDeLaReunion(ahora);
   const clientes = await prisma.client.findMany({
-    where: { OR: [{ partnerSnapshot: { isNot: null } }, { licencias: { some: {} } }] },
+    // Un excliente confirmado no recibe avisos de renovación (lib/cs/exclientes.ts).
+    where: { AND: [{ OR: [{ partnerSnapshot: { isNot: null } }, { licencias: { some: {} } }] }, CLIENTE_NO_EXCLIENTE_WHERE] },
     select: { id: true, name: true },
   });
   let creados = 0;
@@ -143,8 +146,11 @@ export async function correrAvisosDeRenovacion(
 
   // Los abiertos que hoy ya no tocan se cierran solos, firmados por el sistema y con su porqué.
   const abiertos = await prisma.csAlert.findMany({
-    where: { dedupeKey: { startsWith: PREFIJO_DE_RENOVACION }, status: { in: ["OPEN", "SEEN"] } },
+    // Los de un excliente no se tocan acá: no se muestran, y cerrarlos con «la renovación ya pasó» diría algo falso. Los
+    // cierra scripts/cerrar-alertas-de-exclientes.ts, con su nota.
+    where: { dedupeKey: { startsWith: PREFIJO_DE_RENOVACION }, status: { in: ["OPEN", "SEEN"] }, client: CLIENTE_NO_EXCLIENTE_WHERE },
     select: { id: true, dedupeKey: true },
+
   });
   const sobran = new Set(avisosQueYaNoCorresponden(abiertos, llavesDeHoy));
   const viejos = abiertos.filter((a) => sobran.has(a.id) && esLlaveViejaDelAviso(a.dedupeKey)).map((a) => a.id);

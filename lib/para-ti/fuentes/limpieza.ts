@@ -34,6 +34,8 @@ async function lista(ahora: Date): Promise<ArregloDeLimpieza[]> {
 }
 
 const CORTO: Record<MotivoDeLimpieza, string> = {
+  "excliente-activo": "abierto en una cuenta excliente",
+
   "encargado-de-baja": "encargado que ya no está",
   "sin-encargado": "sin encargado",
   "servicio-sin-registrar": "servicio sin proyecto",

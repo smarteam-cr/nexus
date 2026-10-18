@@ -35,6 +35,7 @@ import { propuestaDeEspera, sugerirEspera, SIN_AJUSTES, type PropuestaDeEspera }
 import { leerPartner } from "./lectura-partner";
 import { leerResultadosDelHandoff, porValidar, sinConfirmar, sinDato } from "@/lib/handoff/resultados-medibles";
 import type { SemanaDeUso } from "./adopcion";
+import { CLIENTE_NO_EXCLIENTE_WHERE } from "@/lib/cs/exclientes";
 
 export interface AccountMinute {
   sessionId: string;
@@ -201,10 +202,12 @@ export async function loadCsAccount(
   const [projects, alerts, partner, brief, csSignals, anySnapshotCount, syncStatusRow, minuteSessions, historial] = await Promise.all([
     loadPortfolio({ id: clientId }),
     prisma.csAlert.findMany({
-      where: { clientId, status: { in: ["OPEN", "SEEN"] } },
+      // Las de un excliente no se muestran (lib/cs/exclientes.ts).
+      where: { clientId, status: { in: ["OPEN", "SEEN"] }, client: CLIENTE_NO_EXCLIENTE_WHERE },
       include: { client: { select: { name: true } }, project: { select: { name: true } } },
       orderBy: { lastDetectedAt: "desc" },
       take: 50,
+
     }),
     includePartner ? prisma.clientPartnerSnapshot.findUnique({ where: { clientId } }) : Promise.resolve(null),
     prisma.csAccountBrief.findUnique({ where: { clientId } }),

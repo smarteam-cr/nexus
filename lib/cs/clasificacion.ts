@@ -20,6 +20,7 @@ import { diasEntre, fmtDia, fmtMonto, plural } from "./formato";
 import { relacionTerminada } from "./lectura-partner";
 import { relacionConHubspot, type RelacionConHubspot } from "./relacion-gestionada";
 import { SIN_AJUSTES, propuestaDeEspera, sugerirEspera, type PropuestaDeEspera } from "./ajustes-de-salud";
+import { EXCLIENTE, esExcliente } from "./exclientes";
 import {
   VENTANA_DE_RENOVACION,
   VENTANA_TRAS_CIERRE,
@@ -205,8 +206,14 @@ export function proponerRelacion(c: CuentaDeCartera, hoy: string): Propuesta {
   if (rastro && diasEntre(rastro, hoy) > DIAS_PARA_EXCLIENTE) {
     return { valor: "excliente", razon: `Nada activo desde el ${fmtDia(rastro, hoy)}`, huella: `excliente:${rastro}` };
   }
-  if (!rastro && p?.cancelacion) {
-    return { valor: "excliente", razon: "HubSpot registró la cancelación y no queda nada activo", huella: "excliente:cancelacion" };
+  // La cancelación ya corrió y no queda nada activo: es un excliente aunque el último rastro sea reciente (2026-10-17).
+  const cancelada = p?.cancelacion?.fecha && p.cancelacion.fecha.slice(0, 10) <= hoy ? p.cancelacion.fecha.slice(0, 10) : null;
+  if (p?.cancelacion && (!rastro || cancelada)) {
+    return {
+      valor: "excliente",
+      razon: `HubSpot registró la cancelación${cancelada ? ` el ${fmtDia(cancelada, hoy)}` : ""} y no queda nada activo`,
+      huella: cancelada ? `excliente:cancelacion:${cancelada}` : "excliente:cancelacion",
+    };
   }
   return {
     valor: "sin-servicio",
@@ -326,7 +333,9 @@ export function estadoDelDato(dato: DatoDeClasificacion, propuesta: Propuesta, g
     confirmadoPor: g?.[POR[dato]] ?? null,
     confirmadoEn: g?.[EN[dato]] ?? null,
     propuesta,
-    sugerir: confirmado === null || (propuesta.valor !== confirmado && !descartada),
+    // Un excliente confirmado manda sobre los proyectos activos (lib/cs/exclientes.ts): Nexus no lo contradice. Si el
+    // cliente volvió, lo cambia la CSL; mientras tanto, la lista de limpieza pide cerrar lo que sigue activo.
+    sugerir: confirmado === null || (propuesta.valor !== confirmado && !descartada && !(dato === "relacion" && confirmado === EXCLIENTE)),
     vigente: confirmado ?? propuesta.valor,
   };
 }
@@ -375,6 +384,11 @@ export interface FilaDeLaCartera {
   nexusDiria: SaludDeCuenta | null;
   /** «En espera del cliente» marcado. */
   espera: { quien: string; nota: string } | null;
+  /**
+   * La CSL la confirmó como excliente (lib/cs/exclientes.ts): está fuera de la cartera. `sigueActivo` dice qué quedó
+   * abierto (un proyecto en HubSpot, un servicio en Cobranza) para cerrarlo; null = nada.
+   */
+  excliente: { sigueActivo: string | null } | null;
   /** Nexus propone «en espera del cliente» (un proyecto dice que el freno es del cliente). */
   esperaPropuesta: PropuestaDeEspera | null;
   clasificacion: ClasificacionDeLaCuenta;
@@ -401,6 +415,7 @@ export function filasDeLaCartera(cuentas: readonly CuentaDeCartera[], hoy: strin
         correccion: salud.correccion ? { quien: quienCorrigio(salud.correccion), nota: salud.correccion.nota, vence: salud.correccion.vence } : null,
         nexusDiria: salud.nexus?.salud ?? null,
         espera: c.ajustes?.espera ? { quien: quienCorrigio(c.ajustes.espera), nota: c.ajustes.espera.nota } : null,
+        excliente: esExcliente(c.clasificacion) ? { sigueActivo: loQueSigueActivo(c) } : null,
         esperaPropuesta: esperaQuePropone(c),
         clasificacion: clasificarCuenta(c, hoy),
       };
@@ -408,7 +423,20 @@ export function filasDeLaCartera(cuentas: readonly CuentaDeCartera[], hoy: strin
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 }
 
+/** Lo que le queda activo a una cuenta (para un excliente: lo que hay que cerrar). null = nada. */
+export function loQueSigueActivo(c: Pick<CuentaDeCartera, "proyectos" | "serviciosRecurrentes" | "partner">): string | null {
+  const proyectos = c.proyectos.filter((p) => p.activo).length;
+  const servicios = c.serviciosRecurrentes ?? 0;
+  const partes = [
+    proyectos > 0 ? `${plural(proyectos, "proyecto activo", "proyectos activos")} en HubSpot` : null,
+    servicios > 0 ? `${plural(servicios, "servicio recurrente activo", "servicios recurrentes activos")} en Cobranza` : null,
+    c.partner?.activa ? "licencias activas en HubSpot" : null,
+  ].filter(Boolean);
+  return partes.length ? `Sigue con ${partes.join(", ")}` : null;
+}
+
 /** Lo que propone Nexus de «en espera del cliente», si no está marcado ni descartado. */
+
 export function esperaQuePropone(c: Pick<CuentaDeCartera, "proyectos" | "ajustes">): PropuestaDeEspera | null {
   const p = propuestaDeEspera(c.proyectos);
   return sugerirEspera(p, c.ajustes ?? SIN_AJUSTES) ? p : null;

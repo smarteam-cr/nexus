@@ -16,6 +16,8 @@ import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { leerPartner } from "@/lib/cs/lectura-partner";
 import { pideTrabajoEnElPortal, relacionConHubspot, type RelacionConHubspot } from "@/lib/cs/relacion-gestionada";
 import { leerAjustes } from "@/lib/cs/ajustes-de-salud-server";
+import { cuentasExcliente } from "@/lib/cs/exclientes-server";
+
 import { NOMBRE_DE_LA_SALUD } from "@/lib/cs/cartera-reglas";
 import { fmtDia } from "@/lib/cs/formato";
 import { plural } from "../armar";
@@ -33,9 +35,11 @@ async function relacionesQuePidenTrabajo(
     where: { clientId: clientIds ? { in: [...clientIds] } : { not: null }, client: CS_CLIENT_WHERE },
     select: { clientId: true, properties: true, client: { select: { name: true, company: true } } },
   });
+  // Un excliente no pide trabajo en su portal (lib/cs/exclientes.ts).
+  const exclientes = await cuentasExcliente(snaps.flatMap((s) => (s.clientId ? [s.clientId] : [])));
   const out: Array<{ clientId: string; nombre: string; r: RelacionConHubspot }> = [];
   for (const s of snaps) {
-    if (!s.clientId || !s.client) continue;
+    if (!s.clientId || !s.client || exclientes.has(s.clientId)) continue;
     const r = relacionConHubspot(leerPartner(s.properties), hoyISO);
     if (pideTrabajoEnElPortal(r)) out.push({ clientId: s.clientId, nombre: s.client.company || s.client.name, r });
   }

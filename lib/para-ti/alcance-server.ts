@@ -30,6 +30,8 @@ import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
 import { clientesRevocadosPara, veTodaLaCartera } from "@/lib/auth/access";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import { esResponsable } from "@/lib/escala/responsable";
+import { cuentasExcliente } from "@/lib/cs/exclientes-server";
+
 import { frentesDe, type AccesoParaFrentes, type ClaveDeFrente } from "./frentes";
 
 export interface ProyectoPropio {
@@ -140,9 +142,13 @@ export async function alcanceDe(tm: MiembroParaAlcance): Promise<Alcance> {
     },
   });
 
+  // Un excliente confirmado no es tuyo para «Para ti» aunque le quede un proyecto abierto (lib/cs/exclientes.ts): sale de
+  // tus cuentas, de «Cuenta sin acción», de «Lo que importa hoy» y de todo lo que se mide con estos proyectos. Lo que
+  // quedó abierto en HubSpot te lo pide la lista de limpieza.
+  const exclientes = await cuentasExcliente(clientes.map((c) => c.id));
   const proyectos: ProyectoPropio[] = [];
   for (const c of clientes) {
-    if (revocadas.has(c.id)) continue;
+    if (revocadas.has(c.id) || exclientes.has(c.id)) continue;
     const abiertos = proyectosAbiertos(c.projects);
     const compartida = compartidas.has(c.id);
     for (const p of abiertos) {

@@ -44,6 +44,7 @@ import { hechosDeLaReunion, piezasConContenidoDelProyecto } from "./novedades-se
 import { decisionDeLaSugerencia } from "@/lib/notas/lectura-server";
 import { notaSugeridaDeLaMinuta, reunionConNotaSugerida } from "@/lib/notas/reglas";
 import { armarTarjeta, type EntradaDeLaTarjeta, type Tarjeta } from "./tarjeta";
+import { CLIENTE_NO_EXCLIENTE_WHERE } from "@/lib/cs/exclientes";
 
 /** Una lectura que depende de un SQL que quizá falta: sin la columna o la tabla, la tarjeta sale sin esa parte. */
 async function seguro<T>(p: Promise<T>, siFalta: T): Promise<T> {
@@ -154,9 +155,10 @@ export async function cargarTarjeta(sessionId: string, user: AppUserWithTeamMemb
     seguro(tusTareasDeLaReunion(sessionId, user, ahora), []),
     esLider
       ? prisma.csAlert.findMany({
-          where: { clientId, status: { in: ["OPEN", "SEEN"] } },
+          where: { clientId, status: { in: ["OPEN", "SEEN"] }, client: CLIENTE_NO_EXCLIENTE_WHERE },
           orderBy: { lastDetectedAt: "desc" },
           take: 200,
+
           select: { id: true, title: true, reason: true, severity: true, evidence: true, status: true, resolvedByEmail: true, resolvedAt: true, agentRunId: true },
         })
       : Promise.resolve([]),

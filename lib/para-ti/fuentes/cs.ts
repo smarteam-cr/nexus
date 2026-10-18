@@ -22,7 +22,15 @@ import { urlDeProyecto } from "@/lib/agents/run-url";
 import { hayPropuestaParaRevisar } from "@/lib/timeline/borrador";
 import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
 import type { PestanaDeCuenta } from "@/lib/cs/pestanas-de-la-cuenta";
+import { sinExclientes } from "@/lib/cs/exclientes";
+import { cuentasExcliente } from "@/lib/cs/exclientes-server";
+
+import { lecturasDelPedido } from "@/lib/mi-dia/lecturas-server";
+import { pideAtencion } from "@/lib/cs/lectura-de-la-cuenta";
+import { servicioDeLasCuentas } from "@/lib/mi-dia/servicio-server";
 import { haceCuanto, plural } from "../armar";
+import { MAX_LO_QUE_IMPORTA, necesitaEstabilizar } from "../importa";
+
 import type { Fuente } from "../fuente";
 import type { EnlaceDePendiente, Pendiente } from "../tipos";
 
@@ -46,10 +54,15 @@ const SELECT_PROYECTO = {
  * cliente», el mismo criterio de la línea del índice de clientes) y del pipeline de Customer Success.
  */
 async function implementacionesAbiertas(extra: Prisma.ProjectWhereInput = {}) {
-  return prisma.project.findMany({
-    where: { AND: [PROYECTO_CLASIFICABLE_WHERE, PROYECTO_DE_PIPELINE_CS_WHERE, { client: CS_CLIENT_WHERE }, extra] },
-    select: SELECT_PROYECTO,
-  });
+  const [proyectos, exclientes] = await Promise.all([
+    prisma.project.findMany({
+      where: { AND: [PROYECTO_CLASIFICABLE_WHERE, PROYECTO_DE_PIPELINE_CS_WHERE, { client: CS_CLIENT_WHERE }, extra] },
+      select: SELECT_PROYECTO,
+    }),
+    cuentasExcliente(),
+  ]);
+  // Lo de un excliente no le llega a quien lidera (lib/cs/exclientes.ts): lo abierto lo pide la lista de limpieza.
+  return sinExclientes(proyectos, exclientes, (p) => p.clientId);
 }
 
 /**
@@ -82,7 +95,7 @@ export const VIGIA: Fuente = {
   frente: "LIDERAR_CS",
   alDia: "Las alertas del vigía",
   async medir() {
-    const [alertas, propuestas] = await Promise.all([
+    const [todasLasAlertas, todasLasPropuestas, exclientes] = await Promise.all([
       prisma.csAlert.findMany({
         where: { status: "OPEN", severity: "HIGH" },
         select: { id: true, clientId: true, title: true, firstDetectedAt: true, client: { select: { name: true } } },
@@ -95,7 +108,11 @@ export const VIGIA: Fuente = {
         orderBy: { healthProposedAt: "asc" },
         take: 50,
       }),
+      cuentasExcliente(),
     ]);
+    // Las alertas de un excliente no se muestran (lib/cs/exclientes.ts).
+    const alertas = sinExclientes(todasLasAlertas, exclientes, (a) => a.clientId);
+    const propuestas = sinExclientes(todasLasPropuestas, exclientes, (p) => p.clientId);
     const out: Pendiente[] = [];
     if (alertas.length) {
       // Las alertas se ven en la ficha de su cuenta, en «Alertas» (a la derecha, en cualquier pestaña).
@@ -239,6 +256,79 @@ export const CRONOGRAMAS_TRABADOS: Fuente = {
         desde: trabadas[0].cuando,
       },
     ];
+  },
+};
+
+/**
+ * Los CSE con más cuentas que piden atención de las que entran en sus cinco (2026-10-17, lib/para-ti/importa.ts): a
+ * quien lidera Customer Success, una línea por CSE, para repartir o acompañar. «Piden atención» = las dos señales que
+ * llenan primero los cinco de un CSE: la cuenta en riesgo (la lectura de la cuenta) y la cuenta sin su acción o su
+ * reunión de la semana (las reglas de servicio). El umbral es el mismo del «Estabilizar N cuentas» del CSE
+ * (`necesitaEstabilizar`). Solo las cuentas que lleva (el encargado en HubSpot), sin los exclientes.
+ */
+export const CSE_CON_CUENTAS_QUE_PIDEN_ATENCION: Fuente = {
+  clave: "cs-estabilizar",
+  frente: "LIDERAR_CS",
+  alDia: "Las cuentas de cada CSE",
+  async medir(a, c) {
+    const [proyectos, cses] = await Promise.all([
+      implementacionesAbiertas({ hubspotOwnerEmail: { not: null } }),
+      prisma.teamMember.findMany({ where: { deactivatedAt: null, roleEnum: "CSE" }, select: { email: true, name: true } }),
+    ]);
+    const nombreDe = new Map(cses.map((m) => [m.email.toLowerCase(), m.name]));
+    const porCse = new Map<string, Map<string, string>>();
+    for (const p of proyectos) {
+      const email = p.hubspotOwnerEmail?.toLowerCase();
+      if (!email || !nombreDe.has(email)) continue;
+      const cuentas = porCse.get(email) ?? new Map<string, string>();
+      cuentas.set(p.clientId, p.client.name);
+      porCse.set(email, cuentas);
+    }
+    // Sin cuentas suficientes ni para el umbral, no hace falta leer nada.
+    const candidatos = [...porCse].filter(([, cuentas]) => necesitaEstabilizar(cuentas.size));
+    if (candidatos.length === 0) return [];
+    const todas = [...new Set(candidatos.flatMap(([, cuentas]) => [...cuentas.keys()]))];
+    const [lecturas, servicio] = await Promise.all([
+      lecturasDelPedido(todas, { sinPlata: true, ahora: c.ahora }),
+      servicioDeLasCuentas(
+        candidatos.flatMap(([email, cuentas]) => [...cuentas].map(([clientId, empresa]) => ({ clientId, empresa, llevaEmail: email }))),
+        { ahora: c.ahora, hoyISO: c.hoyISO, quienMira: { email: a.email, esSuperAdmin: a.rol === "SUPER_ADMIN" } },
+      ),
+    ]);
+    const out: Pendiente[] = [];
+    for (const [email, cuentas] of candidatos.sort(([x], [y]) => (nombreDe.get(x) ?? x).localeCompare(nombreDe.get(y) ?? y, "es"))) {
+      const piden = [...cuentas].flatMap(([clientId, empresa]) => {
+        const l = lecturas.get(clientId);
+        const enRiesgo = !!l && pideAtencion(l);
+        const sinAccion = (servicio.get(clientId)?.falta.length ?? 0) > 0;
+        return enRiesgo || sinAccion ? [{ clientId, empresa, enRiesgo, sinAccion }] : [];
+      });
+      if (!necesitaEstabilizar(piden.length)) continue;
+      const nombre = nombreDe.get(email) ?? email;
+      const enRiesgo = piden.filter((x) => x.enRiesgo).length;
+      const sinAccion = piden.filter((x) => x.sinAccion && !x.enRiesgo).length;
+      out.push({
+        clave: `cs-estabilizar:${email}`,
+        fuente: "cs-estabilizar",
+        cuando: "hoy",
+        delAgente: false,
+        clientId: null,
+        titulo: `${nombre} tiene ${piden.length} cuentas que piden atención`,
+        detalle: [
+          [enRiesgo > 0 ? `${enRiesgo} en riesgo` : null, sinAccion > 0 ? `${sinAccion} sin su acción o su reunión de la semana` : null]
+            .filter(Boolean)
+            .join(" y ")
+            .replace(/^./, (l) => l.toUpperCase()),
+          `En «Lo que importa hoy» le entran ${MAX_LO_QUE_IMPORTA - 1}. Reparte algunas o acompaña a ${nombre.split(" ")[0]}.`,
+        ].join(". "),
+        meta: "Customer Success · el equipo",
+        accion: "Abrir la primera",
+        href: fichaDeLaCuenta(piden[0].clientId),
+        enlaces: piden.map((x) => ({ texto: `${x.empresa} · ${x.enRiesgo ? "en riesgo" : "sin acción o reunión"}`, href: fichaDeLaCuenta(x.clientId) })),
+        desde: null,
+      });
+    }
+    return out;
   },
 };
 

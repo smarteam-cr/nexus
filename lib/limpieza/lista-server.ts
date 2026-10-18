@@ -12,7 +12,8 @@ import { portalDelSistema } from "@/lib/hubspot/registro-para-vincular";
 import { hubspotProjectUrl } from "@/lib/hubspot/urls";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
 import { resolvePipeline } from "@/lib/projects/kind";
-import { arregloDelServicio, arreglosDelProyecto, type ArregloDeLimpieza, type EquipoParaLimpiar } from "./reglas";
+import { cuentasExcliente } from "@/lib/cs/exclientes-server";
+import { arregloDelServicio, arregloDelServicioDeExcliente, arreglosDelProyecto, type ArregloDeLimpieza, type EquipoParaLimpiar } from "./reglas";
 
 /** Quién está, quién se fue y quién lidera cada sprint. */
 export async function equipoParaLimpiar(): Promise<EquipoParaLimpiar> {
@@ -41,7 +42,7 @@ export async function equipoParaLimpiar(): Promise<EquipoParaLimpiar> {
 /** Todo lo que hay que poner al día en HubSpot. */
 export async function cargarListaDeLimpieza(ahora = new Date()): Promise<ArregloDeLimpieza[]> {
   const deHubspot = { hubspotServiceId: { not: null } };
-  const [proyectos, deCs, equipo, portal, cuentas] = await Promise.all([
+  const [proyectos, deCs, equipo, portal, cuentas, exclientes] = await Promise.all([
     prisma.project.findMany({
       where: { AND: [PROYECTO_CLASIFICABLE_WHERE, deHubspot] },
       select: {
@@ -70,6 +71,8 @@ export async function cargarListaDeLimpieza(ahora = new Date()): Promise<Arreglo
         _count: { select: { servicios: { where: { modalidad: "RECURRENTE", estado: "ACTIVO" } } } },
       },
     }),
+    // Lo que sigue activo en una cuenta marcada excliente se pide cerrar (lib/cs/exclientes.ts).
+    cuentasExcliente(),
   ]);
   const esDeCs = new Set(deCs.map((p) => p.id));
   const iso = (d: Date | null) => d?.toISOString() ?? null;
@@ -85,6 +88,7 @@ export async function cargarListaDeLimpieza(ahora = new Date()): Promise<Arreglo
           cliente: p.client.name,
           sprint: esDeCs.has(p.id) ? "cs" : "desarrollo",
           servicioRecurrente: !!resolvePipeline(p.hubspotPipelineId)?.servicioRecurrente,
+          excliente: exclientes.has(p.clientId),
           etapa: p.hubspotPipelineStageLabel,
           encargadoEmail: p.hubspotOwnerEmail,
           encargadoNombre: p.hubspotOwnerName,
@@ -100,8 +104,10 @@ export async function cargarListaDeLimpieza(ahora = new Date()): Promise<Arreglo
   }
   const conProyecto = new Set(proyectos.map((p) => p.clientId));
   for (const c of cuentas) {
-    if (conProyecto.has(c.clientId)) continue;
-    out.push(arregloDelServicio({ clientId: c.clientId, cliente: c.client.name, servicios: c._count.servicios }, equipo));
+    const s = { clientId: c.clientId, cliente: c.client.name, servicios: c._count.servicios };
+    if (exclientes.has(c.clientId)) out.push(arregloDelServicioDeExcliente(s, equipo));
+    else if (!conProyecto.has(c.clientId)) out.push(arregloDelServicio(s, equipo));
   }
+
   return out;
 }

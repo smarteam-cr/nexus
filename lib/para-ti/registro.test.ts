@@ -25,7 +25,10 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     csAlert: { findMany: async () => base.alertas },
     project: { findMany: async () => base.propuestas },
+    // Los exclientes (lib/cs/exclientes-server.ts): ninguno en esta base.
+    clasificacionDeCuenta: { findMany: async () => [] },
   },
+
 }));
 
 const RAIZ = join(__dirname, "..", "..");
