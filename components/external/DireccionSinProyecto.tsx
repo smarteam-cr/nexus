@@ -32,6 +32,7 @@ const QUE_ES: Record<PublishSurfaceKey, string> = {
   entrega: "la entrega",
   diagnostico: "el diagnóstico",
   planificacion: "la planificación",
+  ciclos: "la ruta del servicio",
 };
 
 const TEXTO = { fontSize: 14, lineHeight: 1.6, color: "#6b7280" } as const;

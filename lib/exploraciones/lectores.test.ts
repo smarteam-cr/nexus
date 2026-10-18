@@ -193,6 +193,12 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "escala-de-la-empresa",
     motivo: "La pantalla de La escala de la cuenta (solo los tipos de escalaDeLaEmpresa).",
   },
+  "lib/servicios/recurrencia-server.ts": {
+    destino: "escala-de-la-empresa",
+    motivo:
+      "El porqué de recomendar SmartLoop en el «Qué sigue» (pantalla interna): los niveles confirmados de la escala de la " +
+      "empresa (escalaParaLaPropuesta, sin frases ni porqué) para el camino de crecimiento. No lee la propuesta ni lo interno.",
+  },
   "lib/servicios/panel-del-servicio-server.ts": {
     destino: "escala-de-la-empresa",
     motivo: "Las sesiones fijas del Resumen de un servicio recurrente: las reuniones de una serie con la empresa en el calendario. No lee ninguna exploración.",
@@ -268,7 +274,7 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|textoDeLaExploracionDelProyecto/,
   },
   "escala-de-la-empresa": {
-    permitidas: /\bescalaDeLaEmpresa\b|EscalaDeLaEmpresa\b|\bagendadasConLaEmpresa\b|\bguardarVersionDelDiagnostico\b/,
+    permitidas: /\bescalaDeLaEmpresa\b|EscalaDeLaEmpresa\b|\bagendadasConLaEmpresa\b|\bguardarVersionDelDiagnostico\b|\bescalaParaLaPropuesta\b/,
     // Solo los niveles confirmados y las reuniones agendadas: ni la propuesta, ni el handoff, ni lo interno de la preventa.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b/,
   },

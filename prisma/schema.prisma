@@ -360,6 +360,12 @@ model Project {
   // (append-only); lo que quedó acá lo pasa scripts/migrar-presentacion-del-diagnostico.ts. Sin lectores.
   diagnosticoPresentacion  Json?
   planificacionPublishedAt DateTime?
+  // La RUTA DEL SERVICIO para el cliente (SmartLoop, etapa 7 de docs/smartloop-plan.md): los ciclos del servicio y
+  // sus casos de uso como Gantt, en /external/ciclos/[acceso]. Mismo mecanismo que la Entrega: el chokepoint
+  // (lib/external/ciclos-view.ts) exige NO-null en cada lectura y sirve la FOTO congelada al «Subir al cliente»
+  // (lib/servicios/ruta-del-servicio.ts › RutaDelServicio, sin citas, notas internas ni montos).
+  ciclosPublishedAt DateTime?
+  ciclosPublicados  Json?
 
   // #3 — visibilidad de secciones/procesos en el kickoff del cliente, por proyecto.
   // hiddenKickoffKeys = claves OCULTAS del kickoff. Una clave puede ser:
@@ -554,6 +560,7 @@ model Project {
   guiaDeExploracion  GuiaDeExploracion?
   timeline            ProjectTimeline?
   ciclos              CicloDeProyecto[] // servicio recurrente: un tramo con fechas, de diagnóstico a aprendizaje
+  recomendacionDeRecurrencia RecomendacionDeRecurrencia? // etapa 6: pasar este servicio temporal a SmartLoop
   casosDeUso          CasoDeUso[]
   hilosDeChat         HiloDeChat[] // el asistente que conversa, un hilo por documento
   handoff             Handoff?
@@ -7250,6 +7257,30 @@ model CasoDeUso {
   @@index([projectId])
   @@index([cicloId])
   @@index([faseId])
+}
+
+/// La RECOMENDACIÓN de pasar un servicio temporal a un servicio recurrente (SmartLoop, etapa 6 de
+/// docs/smartloop-plan.md). Solo se guarda lo que decidió una persona: sin fila y con el proyecto en su entrega o
+/// recién cerrado, la recomendación está PENDIENTE (lib/servicios/recurrencia.ts). Usarla no escribe en HubSpot:
+/// deja una tarea al CSE o abre el alta del servicio.
+model RecomendacionDeRecurrencia {
+  id          String   @id @default(cuid())
+  projectId   String   @unique
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// La clave del servicio que se recomendó (lib/servicios › ClaveDeServicio).
+  servicio    String   @default("smartloop")
+  /// usada | descartada
+  estado      String
+  /// Con «usada»: tarea | alta. null al descartar.
+  accion      String?
+  /// Por qué se descartó (opcional).
+  motivo      String?  @db.Text
+  /// La tarea que dejó «Dejar la tarea» (sin FK: una tarea se archiva, no se borra).
+  tareaId     String?
+  /// El porqué que vio la persona al decidir (lib/servicios/recurrencia.ts › PorqueDeRecurrencia).
+  porque      Json?
+  decididoPor String
+  decididoEn  DateTime @default(now())
 }
 
 // ─── Uso de Nexus (etapa 4a del roadmap de «Para ti», docs/mi-dia-plan.md) ───

@@ -125,6 +125,24 @@ Continuidad, CSE Carolina Bersot). Se prueba con un **proyecto de prueba** en pr
   - Traductor: `scripts/cargar-propuesta-en-ciclo.ts` con la propuesta en JSON (forma en
     `scripts/data/propuesta-smartloop.ejemplo.json`). Falta pasar el plan de 60 días de FACO a esa forma.
 
+- **Etapas 6 y 7 y la preparación de la migración (2026-10-17):** en el código, sin desplegar. SQL
+  `2026-10-17-smartloop-recurrencia-y-ruta.sql` antes del deploy.
+  - Recomendar la recurrencia: una implementación de CS en «Entrega» (o cerrada en «Finalizado» hace 60 días o menos),
+    en una cuenta sin servicio recurrente vivo, propone seguir con SmartLoop en el «Qué sigue» del Resumen y en «Para ti»
+    del CSE encargado. El porqué sale de datos, sin IA: la escala de la empresa (lo que la frena y lo que sigue), lo fuera
+    de alcance abierto, los casos de uso (de la cuenta y del catálogo) y el uso de HubSpot Partner (solo para la CSL,
+    dirección y el CSE de la cuenta). «Dejar la tarea» crea una tarea al CSE; «Abrir el alta» lleva a Clientes › Nuevo
+    proyecto con SmartLoop elegido; «Descartar» la cierra. Nada escribe en HubSpot. Es un tipo de lo propuesto
+    (`recomendacion-de-recurrencia`, 30 días) y la decisión vive en `RecomendacionDeRecurrencia`.
+  - La ruta del servicio para el cliente: `/external/ciclos/[acceso]`, una superficie más del acceso externo («Ruta del
+    servicio»). Muestra los ciclos y sus casos de uso como Gantt, con lo que debe el cliente; sin el porqué, notas,
+    citas ni montos. Se sube desde el panel del Resumen («Subir al cliente») o desde «Acceso», y se congela como la
+    Entrega (`Project.ciclosPublicados`).
+  - La migración: SmartLoop se da de alta desde Nexus (formulario y `POST /api/projects`); los recordatorios de adopción
+    y la clasificación de la cartera cuentan SmartLoop como recurrente; `scripts/migrar-continuidad-a-smartloop.ts`
+    lista los proyectos de «Continuidad» con la etapa del ciclo que les deduce Nexus (a confirmar con Customer Success)
+    y con `--apply` les abre el ciclo 1. El paso del pipeline en HubSpot lo hace una persona.
+
 ## Orden desde el 2026-10-12
 
 1. ~~Arreglos del ciclo~~ y ~~la escala y los casos de uso como secciones de la cuenta~~ (en el código).

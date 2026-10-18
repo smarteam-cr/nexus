@@ -45,6 +45,8 @@ export const PESO_DE_LA_FUENTE: Record<string, number> = {
   "reuniones-por-revisar-lo-que-dejaron": PESOS.reunion,
   "reuniones-sin-revisar": PESOS.reunion,
   "pedidos-fuera-de-alcance": PESOS.reunion,
+  // Land and Expand: después de una entrega, seguir con un servicio recurrente (SmartLoop, etapa 6).
+  "recurrencia-sugerida": PESOS.reunion - 5,
   // Lo interno.
   tareas: PESOS.interno + 5,
   preventa: PESOS.interno + 5,

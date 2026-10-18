@@ -31,6 +31,7 @@ export interface ProyectoAbierto {
     entregaPublishedAt: Date | null;
     diagnosticoPublishedAt: Date | null;
     planificacionPublishedAt: Date | null;
+    ciclosPublishedAt: Date | null;
     client: { name: string };
   };
 }
@@ -48,6 +49,7 @@ const ETIQUETA: Record<PublishSurfaceKey, string> = {
   entrega: "Entrega",
   diagnostico: "Diagnóstico",
   planificacion: "Planificación",
+  ciclos: "Ruta del servicio",
 };
 
 const publicada = (a: ProyectoAbierto, superficie: PublishSurfaceKey): boolean =>

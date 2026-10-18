@@ -72,6 +72,14 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   // Cuándo se presenta cada documento (2026-10-14): lo que le toca responder a cada persona de Customer Success, en los
   // proyectos abiertos de implementación (la misma línea que el índice de clientes y «Para ti»).
   "lib/presentaciones/servidor.ts": { modo: "criterio", criterio: "clasificable" },
+  "lib/servicios/recurrencia-server.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: busca las implementaciones de Customer Success en su ENTREGA o recién " +
+      "cerradas en Finalizado (por su etapa de HubSpot, que incluye a las cerradas a propósito), y para saber si la cuenta " +
+      "ya tiene un servicio recurrente vivo usa `proyectosAbiertos` (el criterio clasificable, en memoria). Filtrar con " +
+      "`clasificable` en la consulta dejaría afuera justo a los proyectos que cerraron, que también se recomiendan.",
+  },
   "lib/lo-propuesto/registro-server.ts": {
     modo: "exento",
     razon:

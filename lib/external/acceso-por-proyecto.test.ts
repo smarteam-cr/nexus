@@ -129,6 +129,7 @@ function fila(id: string, token: string, passwordHash: string, extra: Record<str
       entregaPublishedAt: null,
       diagnosticoPublishedAt: null,
       planificacionPublishedAt: null,
+      ciclosPublishedAt: null,
       hubspotPipelineId: null,
       proyectoInterno: false,
       hermanoCsProjectId: null,
@@ -281,6 +282,7 @@ describe("4 · ningún nombre de otro cliente a la vista sin pedirlo", () => {
       entregaPublishedAt: null,
       diagnosticoPublishedAt: null,
       planificacionPublishedAt: null,
+      ciclosPublishedAt: null,
       client: { name: cliente },
     },
   });
@@ -436,6 +438,7 @@ describe("6 · cada superficie tiene su página por proyecto, y la franja se esc
     entrega: "getEntregaForToken",
     diagnostico: "getDiagnosticoForToken",
     planificacion: "getPlanificacionForToken",
+    ciclos: "getCiclosForToken",
   };
 
   it("hay un chokepoint por superficie declarada", () => {
@@ -468,13 +471,14 @@ describe("6 · cada superficie tiene su página por proyecto, y la franja se esc
       "lib/external/entrega-view.ts",
       "lib/external/diagnostico-view.ts",
       "lib/external/planificacion-view.ts",
+      "lib/external/ciclos-view.ts",
     ]) {
       expect(sinComentarios(leer(f)), f).toContain("resolveActiveAccess(credencial, accesoId)");
     }
     expect(sinComentarios(leer("lib/external/access.ts"))).toContain("if (access.id !== accesoId) return null");
   });
 
-  it.each(["diagnostico", "planificacion"] as const)("el chokepoint de %s exige su flag de publicación", (key) => {
+  it.each(["diagnostico", "planificacion", "ciclos"] as const)("el chokepoint de %s exige su flag de publicación", (key) => {
     /* La edición que lo pone en rojo: sacar el chequeo del flag. El token se comparte entre todas
        las superficies del proyecto: sin el flag, el cliente leería un borrador nunca compartido. */
     const flag = PUBLISH_SURFACES.find((s) => s.key === key)!.flag;

@@ -17,7 +17,7 @@
  */
 export interface PublishSurface {
   /** La key que usa la UI. */
-  key: "kickoff" | "cronograma" | "desarrollo" | "entrega" | "diagnostico" | "planificacion";
+  key: "kickoff" | "cronograma" | "desarrollo" | "entrega" | "diagnostico" | "planificacion" | "ciclos";
   /** Cómo se llama en el panel de acceso («Kickoff», «Cronograma»…). */
   nombre: string;
   /** Directorio del endpoint bajo `app/api/projects/[projectId]/`. SIEMPRE `publish-*`. */
@@ -29,7 +29,8 @@ export interface PublishSurface {
     | "desarrolloPublishedAt"
     | "entregaPublishedAt"
     | "diagnosticoPublishedAt"
-    | "planificacionPublishedAt";
+    | "planificacionPublishedAt"
+    | "ciclosPublishedAt";
   /** Valor de `?next=` en el link de verificación. `null` = el kickoff, que es el default. */
   next: string | null;
 }
@@ -60,6 +61,9 @@ export const PUBLISH_SURFACES: readonly PublishSurface[] = [
     flag: "planificacionPublishedAt",
     next: "planificacion",
   },
+  /* La ruta de un servicio recurrente (SmartLoop, 2026-10-17, etapa 7): sus ciclos y casos de uso como Gantt. Solo
+     aplica a un proyecto de un pipeline con `servicioRecurrente`; en los demás el panel no la muestra. */
+  { key: "ciclos", nombre: "Ruta del servicio", endpoint: "publish-ciclos", flag: "ciclosPublishedAt", next: "ciclos" },
 ] as const;
 
 export type PublishSurfaceKey = PublishSurface["key"];

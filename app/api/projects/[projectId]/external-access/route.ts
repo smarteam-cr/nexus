@@ -21,7 +21,7 @@ import bcrypt from "bcrypt";
 import { evaluarContrasena } from "@/lib/external/politica-de-contrasena";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { motivosParaNoPublicar } from "@/lib/projects/motivos-para-no-publicar";
+import { motivosParaNoPublicar, partesQueNoAplican } from "@/lib/projects/motivos-para-no-publicar";
 import { PUBLISH_SURFACES } from "@/lib/projects/publish-surfaces";
 
 // ── Generación de credenciales ───────────────────────────────────────────────
@@ -228,14 +228,21 @@ export async function GET(
           entregaPublishedAt: true,
           diagnosticoPublishedAt: true,
           planificacionPublishedAt: true,
+          ciclosPublishedAt: true,
         },
       },
     },
     }),
     // El encabezado del pop-up («Proyecto · Cliente») y el mensaje para el cliente.
-    prisma.project.findUnique({ where: { id: projectId }, select: { name: true, client: { select: { name: true } } } }),
+    prisma.project.findUnique({ where: { id: projectId }, select: { name: true, hubspotPipelineId: true, client: { select: { name: true } } } }),
   ]);
-  const nombres = { proyecto: proyecto?.name ?? "", cliente: proyecto?.client?.name ?? "" };
+  /* Las partes que ni se ofrecen en este proyecto (la ruta del servicio solo existe en un servicio recurrente). Van
+     también en la rama "sin acceso", para que la lista de «Lo que podrá abrir» no prometa lo que no hay. */
+  const nombres = {
+    proyecto: proyecto?.name ?? "",
+    cliente: proyecto?.client?.name ?? "",
+    noAplican: partesQueNoAplican(proyecto?.hubspotPipelineId ?? null),
+  };
 
   /* ¿Este proyecto ADMITE publicación externa? Sale del guard, que ya lo resolvió con el
      mismo row que usó para el permiso. Va también en la rama "sin acceso" para que el panel

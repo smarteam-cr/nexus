@@ -20,6 +20,7 @@ import ProjectBriefSection, { type BriefDeProyecto } from "@/components/projects
 import ProjectSessionsReview from "./ProjectSessionsReview";
 import { useContextoDelResumen, type AvisoDePieza } from "./contexto-del-resumen";
 import { porQueEstaAca, queSigueDelProyecto, restoDeLosPendientes } from "@/lib/clients/que-sigue-del-proyecto";
+import { AccionDeRecurrencia, useRecomendacionDeRecurrencia } from "@/components/ciclos/RecomendacionDeRecurrencia";
 import type { EtapaEnHubspot } from "@/lib/projects/etapa-sugerida";
 import { useMe } from "@/hooks/useMe";
 import EncuestaDeEtapa from "./EncuestaDeEtapa";
@@ -603,6 +604,10 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     return fechas.sort()[0] ?? null;
   }, [data]);
 
+  /* Land and Expand (SmartLoop, etapa 6): al llegar a la entrega, Nexus propone seguir con un servicio recurrente. */
+  const { rec: recurrencia, recargar: recargarRecurrencia } = useRecomendacionDeRecurrencia(projectId, gpsRefreshSignal);
+  const recurrenciaPendiente = recurrencia && !recurrencia.decision && recurrencia.estado.estado === "pendiente" ? recurrencia : null;
+
   const queSigue = useMemo(
     () =>
       data
@@ -616,9 +621,10 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             etapaSugerida: data.etapaHubspot?.sugerencia ? { hasta: data.etapaHubspot.sugerencia.hasta } : null,
             cuestionarios: resumenCtx.cuestionarios ?? null,
             ciclo: resumenCtx.ciclo ?? null,
+            recurrencia: recurrenciaPendiente ? { texto: recurrenciaPendiente.texto } : null,
           })
         : null,
-    [data, resumenCtx.piezas, resumenCtx.cuestionarios, resumenCtx.ciclo, sinRevisar, proximaDeCualquierFrente],
+    [data, resumenCtx.piezas, resumenCtx.cuestionarios, resumenCtx.ciclo, sinRevisar, proximaDeCualquierFrente, recurrenciaPendiente],
   );
   useEffect(() => {
     onQueSigue(queSigue);
@@ -837,6 +843,9 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     if (a.tipo === "etapa") return <BotonAzul onClick={() => setEncuestaAbierta(true)}>Responder la pregunta</BotonAzul>;
     if (a.tipo === "novedades") {
       return <BotonAzul onClick={() => (resumenCtx.abrirNovedades ?? resumenCtx.abrirPieza)(a.slug)}>Revisar las novedades de «{a.etiqueta}» →</BotonAzul>;
+    }
+    if (a.tipo === "recurrencia") {
+      return recurrenciaPendiente ? <AccionDeRecurrencia projectId={projectId} rec={recurrenciaPendiente} onDecidido={recargarRecurrencia} /> : undefined;
     }
     if (a.tipo === "cuestionarios") {
       // Recomendado: se abre la pieza o se deja para después. «Ahora no» no vuelve a sugerirlo.

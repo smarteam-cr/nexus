@@ -47,7 +47,9 @@ export type AccionDeQueSigue =
   | { tipo: "etapa" }
   | { tipo: "novedades"; slug: string; etiqueta: string; n: number }
   /** Mandar los cuestionarios (recomendado): «Abrir «Cuestionarios»» y «Ahora no». */
-  | { tipo: "cuestionarios"; slug: string; etiqueta: string };
+  | { tipo: "cuestionarios"; slug: string; etiqueta: string }
+  /** Seguir con un servicio recurrente después de la entrega (lib/servicios/recurrencia.ts): se usa o se descarta. */
+  | { tipo: "recurrencia" };
 
 export interface QueSigueDelProyecto {
   texto: string;
@@ -126,6 +128,11 @@ export function queSigueDelProyecto(i: {
    * que falta en su etapa (si Nexus lo puede comprobar) y, si no, el artefacto de la etapa todavía sin escribir.
    */
   ciclo?: { corto: string; abierto: boolean; falta: string | null; numero: number; piezaDeLaEtapa?: string | null } | null;
+  /**
+   * La recomendación de pasar a un servicio recurrente (SmartLoop, etapa 6 de docs/smartloop-plan.md), solo mientras
+   * está PENDIENTE (lib/lo-propuesto). null = el proyecto no califica, ya se decidió o venció.
+   */
+  recurrencia?: { texto: string } | null;
 }): QueSigueDelProyecto {
   if (i.sesionesSinRevisar > 0) {
     const n = i.sesionesSinRevisar;
@@ -209,6 +216,10 @@ export function queSigueDelProyecto(i: {
     if (sugerirCuestionarios) return sugerirCuestionarios;
     if (pieza && !generada) return generarla(pieza);
   }
+
+  /* Land and Expand: con la entrega al día (o el proyecto cerrado), lo que sigue es el siguiente servicio. Va después
+     del documento de la etapa —no se propone seguir sobre una entrega sin escribir— y antes de lo de rutina. */
+  if (i.recurrencia) return { texto: i.recurrencia.texto, accion: { tipo: "recurrencia" } };
 
   if (i.resumenPendiente) {
     return {

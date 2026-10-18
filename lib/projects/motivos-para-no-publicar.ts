@@ -19,6 +19,15 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import type { PublishSurfaceKey } from "./publish-surfaces";
+import { resolvePipeline } from "./kind";
+
+/**
+ * Las partes que ni se OFRECEN en este proyecto: el panel no las pinta. Hoy, la ruta del servicio (SmartLoop, etapa 7)
+ * fuera de un servicio recurrente. Puro (recibe el pipeline): lo llama la ruta de external-access en las dos ramas.
+ */
+export function partesQueNoAplican(hubspotPipelineId: string | null): PublishSurfaceKey[] {
+  return resolvePipeline(hubspotPipelineId)?.servicioRecurrente ? [] : ["ciclos"];
+}
 
 async function bloquesConfirmados(slug: string, projectId: string): Promise<number | null> {
   const canvas = await prisma.projectCanvas.findFirst({ where: canvasOfNested(slug, { projectId }), select: { id: true } });
@@ -28,11 +37,13 @@ async function bloquesConfirmados(slug: string, projectId: string): Promise<numb
 
 /** Un motivo por parte que no se puede publicar hoy; las que sí se pueden no aparecen. */
 export async function motivosParaNoPublicar(projectId: string): Promise<Partial<Record<PublishSurfaceKey, string>>> {
-  const [cronograma, entrega, planificacion, diagnostico] = await Promise.all([
+  const [cronograma, entrega, planificacion, diagnostico, ciclos] = await Promise.all([
     prisma.projectTimeline.findUnique({ where: { projectId }, select: { anchorStartDate: true, _count: { select: { phases: true } } } }),
     bloquesConfirmados("delivery", projectId),
     bloquesConfirmados("planning", projectId),
     prisma.projectCanvas.findFirst({ where: canvasOfNested("diagnosis", { projectId }), select: { id: true } }),
+    // La misma condición que publish-ciclos: al menos un ciclo.
+    prisma.cicloDeProyecto.count({ where: { projectId } }),
   ]);
   const motivos: Partial<Record<PublishSurfaceKey, string>> = {};
 
@@ -44,6 +55,8 @@ export async function motivosParaNoPublicar(projectId: string): Promise<Partial<
 
   if (planificacion === null) motivos.planificacion = "Todavía no tiene la Planificación.";
   else if (planificacion === 0) motivos.planificacion = "La Planificación está vacía.";
+
+  if (ciclos === 0) motivos.ciclos = "Todavía no hay ciclos: abre el primero antes de subir la ruta del servicio.";
 
   if (!diagnostico) motivos.diagnostico = "Todavía no tiene el Diagnóstico.";
   // La misma condición que `ultimaVersionPresentada` (lib/external/diagnostico-view.ts), contada
