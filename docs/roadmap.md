@@ -54,10 +54,10 @@ Si el cliente ya hizo el diagnóstico, Nexus le dice al vendedor qué le falta p
 4. [hecho] Siempre cierra con la pregunta de cierre y el siguiente paso, según lo que falta para proponer.
 5. [hecho] Escrita como la nota de HubSpot que le sirvió a Marco: corta, en el lenguaje del cliente y directa a lo que le duele.
 6. [hecho] Probada con casos reales antes de soltarla: la sesión 2 de Larce y los prospectos que lleguen por el diagnóstico.
-7. [en curso] Preguntas cortas: cada una es solo la pregunta, sin «Dijiste que…»; de dónde sale y lo que dijo el cliente, en un ⓘ. Las palabras del cliente quedan en «Lo que ya sabemos».
-8. [en curso] «Regenerar pregunta» en cada pregunta, sin rearmar la guía, y agregar preguntas a mano, que sobreviven a «Actualizar la guía».
-9. [en curso] «Mejorar con el asistente»: pedirle con el contexto del cliente «más preguntas de la escala», «profundiza en sistemas», o mejorar las repreguntas, y aplicar lo que propone con un clic.
-10. [en curso] Lo que cubre la guía, pegado a la guía (arriba de «Retos de su industria») en vez del panel derecho, y que se actualice con cada cambio.
+7. [hecho] Preguntas cortas: cada una es solo la pregunta, sin «Dijiste que…»; de dónde sale y lo que dijo el cliente, en un ⓘ. Las palabras del cliente quedan en «Lo que ya sabemos».
+8. [hecho] «Regenerar pregunta» en cada pregunta, sin rearmar la guía, y agregar preguntas a mano, que sobreviven a «Actualizar la guía».
+9. [hecho] «Mejorar con el asistente»: pedirle con el contexto del cliente «más preguntas de la escala», «profundiza en sistemas», o mejorar las repreguntas, y aplicar lo que propone con un clic.
+10. [hecho] Lo que cubre la guía, pegado a la guía (arriba de «Retos de su industria») en vez del panel derecho, y que se actualice con cada cambio.
 
 ### B · Los correos y el timeline de HubSpot, en el contexto de la cuenta <span class="estado">Por desplegar</span>
 
@@ -324,12 +324,16 @@ devuelve.
 | # | Estado | Qué validas | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 68 | ✓ Validado 18 oct | Que la guía arranque con lo que el cliente ya dijo | Ventas › Preventa › Distribuidora Larce › Exploración › la próxima sesión (si no hay: «+ Agregar sesión» › una sin reunión todavía) › Preparación. | Arriba de «La guía», «Lo que ya sabemos» con 5 líneas en palabras del cliente. La primera: «Cuando un deal se enfría no hay red de contención…», con «Nota del 15 oct» al lado. |
-| 69 | ⏳ En arreglo | Que ya no pregunte lo que el cliente contestó | La misma pantalla, sin tocar nada, en «La guía». | Ya no está «¿Qué pasa… cuando un deal se queda quieto?». Arriba dice «45 min · 5 preguntas». |
+| 69 | ↻ Otra vez | Que las preguntas sean cortas, con su fuente en un ⓘ | Larce › Exploración › la próxima sesión › Preparación › «La guía» › «Preguntar». Pasa el mouse por el ⓘ de una pregunta. | Cada pregunta es solo la pregunta, corta, sin «Dijiste que…» ni «En el diagnóstico dijeron…». El ⓘ muestra lo que dijo el cliente, con sus palabras, y de dónde sale. «Lo que ya sabemos» sigue con las palabras del cliente. |
 | 70 | ✓ Validado 18 oct | Que la guía nueva lleve a la siguiente pregunta lógica | El aviso de arriba › «Actualizar la guía». Espera unos segundos. | 5 preguntas que nombran lo que dijo el cliente y preguntan cuánto le costó, cómo lo quiere resolver o con qué. Ninguna de «Para cuándo», porque ya se sabe. |
-| 71 | ⏳ En arreglo | Que las repreguntas no estorben | Toca «3 repreguntas» en cualquier pregunta. | Las repreguntas aparecen solo al tocar ese enlace. |
+| 71 | ↻ Otra vez | Que las repreguntas se mejoren con el asistente | En la guía › «Mejorar con el asistente» › escribe: «Mejora las repreguntas de la pregunta 2 para que bajen a números» › Aplicar. | El chat de la cuenta abre con la guía en foco y propone las repreguntas nuevas en una lista; al aplicar, la pregunta 2 trae esas repreguntas. |
 | 72 | ✓ Validado 18 oct | Que siempre cierre | Baja a «Cerrar», al final de la guía. | La pregunta de cierre, el siguiente paso con fecha y lo que falta para proponer, sin espacios por completar. |
-| 73 | ⏳ En arreglo | Que el panel diga qué cubre la guía | Panel derecho › «Para proponer». | «Qué pasa si no actúa» aparece como «se pregunta hoy». |
+| 73 | ↻ Otra vez | Que lo que cubre la guía vaya pegado a ella | Larce › Preparación, arriba de «Retos de su industria». Después quita una pregunta. | «Lo que cubre la guía»: los siete puntos para proponer (verde listo, azul lo cubre la guía, punteado no) y las dimensiones que pregunta. Al quitar la pregunta, cambia al instante. En el panel derecho queda solo «N de 7 listos». |
 | 74 | ✓ Validado 18 oct | Que funcione igual en otras preventas | Ventas › Preventa › CreditForce (o Cicadex) › Exploración › Preparación › «Actualizar la guía». | «Lo que ya sabemos» con frases del test y 4 o 5 preguntas que parten de ahí. (Lo validé yo, en seco: CreditForce pasó de 7 a 4 preguntas y Cicadex de 7 a 5, y Cicadex ya no pregunta «para cuándo» porque ya se sabía.) |
+| 104 | Por validar | Que se pueda regenerar una sola pregunta | En la guía de Larce, en una pregunta › «Regenerar pregunta». | Esa pregunta cambia por otra del mismo tema, marcada «Regenerada»; las demás quedan igual. Se puede devolver a la de la guía. |
+| 105 | Por validar | Que se puedan agregar preguntas a mano | En la guía › «+ Agregar pregunta»: escribe una, guárdala, edítala. Después toca «Actualizar la guía». | La pregunta aparece al final marcada «Tuya» y sigue ahí después de actualizar la guía. Se puede quitar. |
+| 106 | Por validar | Que el asistente arme la guía con lo que pides | En la guía › «Mejorar con el asistente» › «Agrega dos preguntas de la escala sobre cómo miden el pipeline» › Aplicar. | Dos preguntas nuevas, cortas, marcadas «Del asistente», y «Lo que cubre la guía» suma esas dimensiones. Ninguna repite lo que ya dijo el cliente. |
+| 107 | Por validar | Que el asistente no invente lo interno | En el mismo chat: «Agrega una pregunta sobre el presupuesto que nos dijeron». | No pone montos ni lo interno como si lo hubiera dicho el cliente: pregunta el rango o contra qué lo comparan. |
 
 ### 2 · Comunicaciones de HubSpot y compromisos
 
