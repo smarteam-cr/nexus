@@ -51,6 +51,16 @@ import { WEEKDAYS_MON_FRI } from "./time";
 import { esDiaDeCorte } from "@/lib/cobranza/antiguedad";
 import { mesQueTocaFotografiar } from "@/lib/rentabilidad/foto";
 
+/**
+ * ¿Queda presupuesto de IA automático hoy? Los jobs que gastan Claude lo miran ANTES de arrancar (2026-10-18): antes,
+ * con el tope agotado y el bloqueo prendido, cada llamada fallaba una por una en el chokepoint. Sin presupuesto el job
+ * devuelve SIN_TURNO y lo intenta el tick siguiente (lo del día no se pierde: espera). Lo no sabido no frena.
+ */
+async function quedaPresupuesto(now: Date): Promise<boolean> {
+  const { quedaPresupuestoAutomatico } = await import("@/lib/ai/guardia-de-presupuesto");
+  return quedaPresupuestoAutomatico(now);
+}
+
 /** ¿La configuración de este servidor deja correr el job? Si no, Integraciones dice por qué. */
 const encendido = (jobKey: string): boolean => motivoApagado(jobKey, process.env) === null;
 
@@ -65,6 +75,7 @@ const marketingWeekly: JobDef = {
   // La ventana y el claim viven DENTRO de tickMarketingCron — correr cada tick.
   shouldRun: () => true,
   run: async (now) => {
+    if (!(await quedaPresupuesto(now))) return SIN_TURNO;
     /* Fuera del viernes, o ya disparado hoy, no corrió nada: sin esto el semáforo anotaba «ok»
        cada diez minutos toda la semana y un viernes fallido quedaba tapado al tick siguiente. */
     const decision = await tickMarketingCron(now);
@@ -220,7 +231,9 @@ const cobranzaQuincenal: JobDef = {
 const googleEnrichRetry: JobDef = {
   key: "google-enrich-retry",
   shouldRun: () => encendido("google-enrich-retry"),
-  run: async () => {
+  run: async (now) => {
+    // Recuperar una reunión dispara su lectura (Claude): sin presupuesto automático, espera al tick siguiente.
+    if (!(await quedaPresupuesto(now))) return SIN_TURNO;
     const { drenarReintentos } = await import("@/lib/google/meet-enrichment");
     const r = await drenarReintentos(20);
     if (r.enriched + r.skipped + r.errors > 0) {
@@ -241,6 +254,7 @@ const tareasSprint: JobDef = {
   key: "tareas-sprint",
   shouldRun: () => true,
   run: async (now) => {
+    if (!(await quedaPresupuesto(now))) return SIN_TURNO;
     const { mirarLasSeriesDelSprint } = await import("@/lib/tareas/fuentes-server");
     const r = await mirarLasSeriesDelSprint(now);
     if (r.omitida || (r.pedidas === 0 && r.pausadas === 0)) return SIN_TURNO;
@@ -763,6 +777,32 @@ const indiceDeReuniones: JobDef = {
   },
 };
 
+/**
+ * Los pedidos a Claude que van por la API Batch (lib/ai/lotes-server.ts; DECISIONS «El gasto de la IA»). Cada tick:
+ * manda los pendientes en un lote cuando se juntaron o esperaron 5 minutos (si queda presupuesto automático), mira los
+ * lotes enviados cada 3 minutos y, cuando terminan, le pasa cada respuesta al manejador de su tipo. Sin la tabla
+ * (scripts/sql/2026-10-18-gasto-de-ia.sql) o sin nada que hacer devuelve SIN_TURNO. Una respuesta que no se pudo
+ * aplicar, o un pedido vencido, LANZA (semáforo rojo + Sentry).
+ */
+const iaLotes: JobDef = {
+  key: "ia-lotes",
+  shouldRun: () => true,
+  run: async (now) => {
+    const { correrTickDeLotes } = await import("@/lib/ai/lotes-server");
+    const r = await correrTickDeLotes(now);
+    if (!r || r.enviados + r.aplicados + r.fallidos + r.vencidos === 0) {
+      if (r?.errores.length) console.log(`[jobs/ia-lotes] ${r.errores.join(" · ")}`);
+      return SIN_TURNO;
+    }
+    console.log(`[jobs/ia-lotes] ${r.enviados} enviados, ${r.lotesMirados} lotes mirados, ${r.aplicados} aplicados${r.fallidos ? `, ${r.fallidos} con error` : ""}${r.vencidos ? `, ${r.vencidos} vencidos` : ""}`);
+    if (r.fallidos + r.vencidos > 0) {
+      const fallo = new Error(`${r.fallidos + r.vencidos} pedido(s) por lote no se aplicaron: ${r.errores.slice(0, 5).join("; ")}`);
+      fallo.name = "PedidoEnLoteFallido";
+      throw fallo;
+    }
+  },
+};
+
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, iaLotes, invariantsDaily];
 }

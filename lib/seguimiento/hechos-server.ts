@@ -53,7 +53,7 @@ import {
   type DestinoDelHecho,
   type RefDelDestino,
 } from "./hechos/estado";
-import { MODELO_DE_HECHOS, TOPE_LO_VENDIDO, pedidoDeHechos, type ProyectoDelPedido } from "./hechos/pedido";
+import { MODELO_DE_HECHOS, TOPE_LO_VENDIDO, bloqueDeLaReunion, pedidoDeHechos, type ProyectoDelPedido } from "./hechos/pedido";
 import {
   AGENT_SLUG_DE_HECHOS,
   DECIDE_EL_SISTEMA,
@@ -67,12 +67,12 @@ import { textoParaHechos } from "./hechos/texto-de-la-reunion";
 import type { TipoDeHecho } from "./hechos/tipos";
 
 /**
- * La variante de la llamada de hechos, hasta que el sondeo (etapa 5) decida: aparte, con la reunión cacheada. ⚠ La
- * lectura de seguimiento de hoy (lib/sessions/post-process.ts) todavía no arma su pedido con `prefijoDeLaReunion`: hasta
- * que lo haga, la caché se escribe y no se comparte (un recargo de escritura sobre la reunión). Si el sondeo elige «sin
- * caché», es esta línea.
+ * La variante de la llamada de hechos (2026-10-18, lib/ai/ahorro.ts): aparte, y con la reunión cacheada SOLO cuando la
+ * lectura de seguimiento acaba de dejar ese mismo prefijo en la caché (`prefijoDeLaLectura`, con el bloque de la reunión
+ * idéntico). Sin él —un reintento del job, una reunión con solo notas— va sin caché: escribirla cuesta 1,25× y nadie la
+ * leería. Hasta ese día iba siempre con caché, y era un recargo del 25 % sobre la reunión.
  */
-export const VARIANTE_DE_HECHOS: "aparte-con-cache" | "aparte-sin-cache" = "aparte-con-cache";
+export const VARIANTE_DE_HECHOS: "aparte-con-cache" | "aparte-sin-cache" = "aparte-sin-cache";
 
 /* ── ¿Está el SQL? ─────────────────────────────────────────────────────────────────── */
 
@@ -205,6 +205,12 @@ export interface OpcionesDeLosHechos {
   quien?: string | null;
   signal?: AbortSignal;
   ahora?: Date;
+  /**
+   * El prefijo que la lectura de seguimiento acaba de dejar en la caché (lib/sessions/post-process.ts): su herramienta y
+   * el bloque de la reunión tal cual lo mandó. Si el bloque es el mismo que arman los hechos, el pedido usa las mismas
+   * `tools` y `system` y lee la reunión de la caché.
+   */
+  prefijoDeLaLectura?: { herramienta: Anthropic.Messages.Tool; bloque: string } | null;
 }
 
 /**
@@ -292,13 +298,17 @@ async function leer(sessionId: string, opts: OpcionesDeLosHechos): Promise<Resul
       })),
     );
     const equipo = (await prisma.teamMember.findMany({ select: { name: true } })).map((t) => t.name).filter((n): n is string => !!n?.trim());
+    const reunionDelPedido = { titulo: reunion.titulo, fecha: reunion.fecha, texto: reunion.texto };
+    // El prefijo de la lectura sirve solo si su bloque de la reunión es, letra por letra, el que arman los hechos.
+    const compartido = opts.prefijoDeLaLectura && opts.prefijoDeLaLectura.bloque === bloqueDeLaReunion(reunionDelPedido) ? opts.prefijoDeLaLectura : null;
     const pedido = pedidoDeHechos({
       cliente: { name: client.name, industry: client.industry, kind: client.kind },
       proyectos,
       equipoSmarteam: equipo,
-      reunion: { titulo: reunion.titulo, fecha: reunion.fecha, texto: reunion.texto },
+      reunion: reunionDelPedido,
       modelo: MODELO_DE_HECHOS,
-      conCache: VARIANTE_DE_HECHOS === "aparte-con-cache",
+      lectura: compartido ? { herramienta: compartido.herramienta } : null,
+      conCache: !!compartido || VARIANTE_DE_HECHOS === "aparte-con-cache",
     });
 
     // 5. La llamada.

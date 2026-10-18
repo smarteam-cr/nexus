@@ -120,18 +120,42 @@ export function precioDe(model: string): PrecioDeModelo | null {
  * ruido a un total y lo deja mintiendo; `null` obliga a que quien agregue decida qué hacer con lo
  * que no sabe cuánto costó.
  */
-export function costoDeLlamada(model: string, uso: UsoDeTokens): number | null {
+export function costoDeLlamada(model: string, uso: UsoDeTokens, opciones?: { lote?: boolean }): number | null {
   const p = precioDe(model);
   if (!p) return null;
 
   const porMillon = (tokens: number, usdPorMillon: number) => (tokens / 1_000_000) * usdPorMillon;
 
-  return (
+  const lista =
     porMillon(uso.inputTokens, p.entrada) +
     porMillon(uso.outputTokens, p.salida) +
     porMillon(uso.cacheReadTokens ?? 0, p.entrada * p.factorLecturaCache) +
-    porMillon(uso.cacheCreationTokens ?? 0, p.entrada * p.factorEscrituraCache)
-  );
+    porMillon(uso.cacheCreationTokens ?? 0, p.entrada * p.factorEscrituraCache);
+  return opciones?.lote ? lista * FACTOR_LOTE : lista;
+}
+
+/**
+ * La API Batch (Message Batches) cobra la MITAD de todo: entrada, salida y las dos clases de caché (los multiplicadores
+ * de la caché se aplican encima del 50 %). Tarifa de la documentación de Anthropic, 2026-10-18. La usa la única puerta de
+ * los lotes (`lib/ai/lotes-server.ts`).
+ */
+export const FACTOR_LOTE = 0.5;
+
+/**
+ * Cuánto se ahorró gracias a la caché: lo que habría costado leer como entrada normal los tokens que salieron de la
+ * caché, menos el recargo que se pagó por escribirla. Sirve para una llamada o para una suma del mismo modelo.
+ *
+ * ⚠ Puede dar NEGATIVO, y es a propósito: una caché que se escribe y nadie lee es un recargo del 25 % sobre ese tramo,
+ * no un ahorro. Es lo que hay que ver (los hechos escribían la reunión en la caché y nadie la leía). null sin tarifa.
+ */
+export function ahorroDeLaCache(model: string, uso: { cacheReadTokens: number; cacheCreationTokens: number }, opciones?: { lote?: boolean }): number | null {
+  const p = precioDe(model);
+  if (!p) return null;
+  const porMillon = (tokens: number, usdPorMillon: number) => (tokens / 1_000_000) * usdPorMillon;
+  const bruto =
+    porMillon(uso.cacheReadTokens, p.entrada * (1 - p.factorLecturaCache)) -
+    porMillon(uso.cacheCreationTokens, p.entrada * (p.factorEscrituraCache - 1));
+  return opciones?.lote ? bruto * FACTOR_LOTE : bruto;
 }
 
 /**

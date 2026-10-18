@@ -147,7 +147,8 @@ describe("la bandera y el tope", () => {
   it("el tope de tokens nunca pasa 21.333 (sin streaming, una llamada más grande lanza)", () => {
     expect(TOPE_SIN_STREAMING).toBe(21_333);
     for (const t of TOPE_DE_TOKENS) expect(t).toBeLessThanOrEqual(TOPE_SIN_STREAMING);
-    expect(TOPE_DE_TOKENS[1]).toBeGreaterThan(TOPE_DE_TOKENS[0]);
+    // Un solo intento: un reintento después de un corte pagaba la respuesta dos veces (2026-10-18).
+    expect(TOPE_DE_TOKENS).toHaveLength(1);
   });
 });
 

@@ -1617,10 +1617,56 @@ model LlmCall {
   projectId        String?
   triggeredByEmail String?
   origen           String?
+  /// La respondió la API Batch (lib/ai/lotes-server.ts): costó la mitad. SQL: scripts/sql/2026-10-18-gasto-de-ia.sql.
+  lote             Boolean @default(false)
 
   @@index([at])
   @@index([agentSlug, at])
   @@index([triggeredByEmail, at])
+}
+
+// Un pedido a Claude que no apura y va por la API Batch (la mitad del precio, respuesta en minutos u horas). La única
+// puerta es lib/ai/lotes-server.ts: encola, envía los pendientes en un lote, mira los enviados y, cuando terminan, le
+// pasa cada respuesta al manejador de su `tipo` (lib/ai/lotes-manejadores.ts). Interna: RLS + deny.
+// SQL: scripts/sql/2026-10-18-gasto-de-ia.sql.
+model PedidoEnLote {
+  id          String    @id @default(cuid())
+  /// Qué manejador recibe la respuesta («vigia-barrido»…). Texto, no enum: sumar uno no pide ALTER TYPE.
+  tipo        String
+  /// Lo mismo no se encola dos veces («vigia:<proyecto>:<día>»).
+  claveUnica  String    @unique
+  /// Los parámetros de messages.create, tal cual se mandan.
+  pedido      Json
+  /// Lo que el manejador necesita para aplicar la respuesta.
+  contexto    Json
+  /// en_espera | enviado | listo | error | vencido
+  estado      String    @default("en_espera")
+  /// El id del lote en Anthropic, una vez enviado.
+  loteId      String?
+  enviadoAt   DateTime?
+  terminadoAt DateTime?
+  error       String?
+  agentSlug   String?
+  clientId    String?
+  projectId   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([estado, createdAt])
+  @@index([loteId])
+}
+
+// Lo que facturó Anthropic cada mes, anotado a mano desde la consola, para compararlo con lo que midió Nexus
+// (/integrations/gasto-ia › Factura). Una fila por mes. Solo dirección. SQL: scripts/sql/2026-10-18-gasto-de-ia.sql.
+model FacturaDeAnthropic {
+  id              String   @id @default(cuid())
+  /// «2026-09»: el mes de la factura.
+  mes             String   @unique
+  montoUsd        Decimal  @db.Decimal(12, 2)
+  notas           String?
+  anotadaPorEmail String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // ─── Business Cases (Ventas) — generador de casos de negocio ─────────────────

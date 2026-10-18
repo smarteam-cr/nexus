@@ -69,10 +69,13 @@ if (MINUTOS_COLGADA * 60 <= SEGUNDOS_POR_LECTURA + SEGUNDOS_DE_GRACIA) {
 }
 
 /**
- * El tope de tokens de la respuesta: el primer intento y el reintento si se cortó. Nunca más de 21.333: con más, una
+ * El tope de tokens de la respuesta: UN intento, con el tope alto (2026-10-18). Hasta entonces eran dos (6.000 y, si se
+ * cortaba, 12.000), y una respuesta cortada se pagaba dos veces: la salida que se tiraba y la entrada entera otra vez. El
+ * tope no se cobra (se cobra lo que el modelo escribe), así que arrancar en 12.000 cuesta lo mismo cuando no se corta.
+ * Medido del 17-sep al 17-oct: ninguna lectura pasó de 4.502 tokens de salida. Nunca más de 21.333: con más, una
  * llamada sin streaming lanza «Streaming is required» (DECISIONS, el arreglo del streaming del cronograma).
  */
-export const TOPE_DE_TOKENS = [6_000, 12_000] as const;
+export const TOPE_DE_TOKENS = [12_000] as const;
 export const TOPE_SIN_STREAMING = 21_333;
 if (TOPE_DE_TOKENS.some((t) => t > TOPE_SIN_STREAMING)) {
   throw new Error(`lib/lecturas/reglas.ts: un tope de la lectura pasa de ${TOPE_SIN_STREAMING} tokens (pediría streaming).`);

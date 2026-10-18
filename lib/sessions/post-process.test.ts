@@ -187,19 +187,17 @@ describe("la ruta según la empresa", () => {
 });
 
 describe("la llamada y la salida", () => {
-  it("⭐ cortada, se reintenta UNA vez con más tope", async () => {
-    crear.mockResolvedValueOnce(respuesta({}, "max_tokens"));
-    const r = await leerReunionDeSeguimiento("s1", { lecturaId: "lec1" });
-    expect(r.status).toBe("ok");
-    expect(crear.mock.calls.map((c) => (c[0] as { max_tokens: number }).max_tokens)).toEqual([6_000, 12_000]);
-    expect(r.tokens).toEqual({ entrada: 2_000, salida: 400 });
+  it("⭐ un solo intento, con el tope alto: una respuesta cortada no se paga dos veces (2026-10-18)", async () => {
+    await leerReunionDeSeguimiento("s1", { lecturaId: "lec1" });
+    expect(crear.mock.calls.map((c) => (c[0] as { max_tokens: number }).max_tokens)).toEqual([12_000]);
   });
 
-  it("⭐ cortada dos veces: error, la corrida en ERROR y SIN minuta ni propuestas", async () => {
+  it("⭐ cortada: error, la corrida en ERROR y SIN minuta ni propuestas, y sin reintento", async () => {
     crear.mockResolvedValue(respuesta({}, "max_tokens"));
     const r = await leerReunionDeSeguimiento("s1", { lecturaId: "lec1" });
     expect(r.status).toBe("error");
-    expect(r.reason).toContain("se cortó dos veces");
+    expect(r.reason).toContain("se cortó");
+    expect(crear).toHaveBeenCalledTimes(1);
     expect(db.agentRun.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "ERROR" }) }));
     expect(db.sessionMinute.upsert).not.toHaveBeenCalled();
     expect(escribirSalidaDeSeguimiento).not.toHaveBeenCalled();

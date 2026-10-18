@@ -6,6 +6,7 @@ import {
   limitesDelEntorno,
   PresupuestoDeIaAgotado,
   PRESUPUESTO_DIARIO_USD,
+  topeSugerido,
   type LimitesDePresupuesto,
 } from "./presupuesto";
 
@@ -140,5 +141,30 @@ describe("⭐ el día es el de Costa Rica", () => {
   it("a las 06:00 UTC arranca el día nuevo, no antes", () => {
     expect(inicioDelDiaCr(new Date("2026-08-17T05:59:00Z")).toISOString()).toBe("2026-08-16T06:00:00.000Z");
     expect(inicioDelDiaCr(new Date("2026-08-17T06:01:00Z")).toISOString()).toBe("2026-08-17T06:00:00.000Z");
+  });
+});
+
+describe("⭐ el tope sugerido sale de lo gastado", () => {
+  const dia = (automatico: number, humano = 0) => ({ costoAutomatico: automatico, costoHumano: humano });
+
+  it("con lo medido del 3-sep al 16-oct sugiere 10 y 20 (los valores de hoy)", () => {
+    /* 37 días con gasto automático entre 0,06 y 3,81; humano hasta 15,01. */
+    const auto = [1.69, 0.85, 2.07, 0.87, 1.97, 1.22, 1.44, 0.3, 1.06, 1.83, 0.98, 1.38, 0.83, 0.74, 1.43, 0.62, 1.08, 0.06, 0.08, 0.72, 1.1, 1.58, 1.7, 1.85, 2.84, 2.87, 3.06, 3.0, 3.81, 1.62, 0.82, 0.26, 3.33, 0.94, 2.61, 2.69, 3.21];
+    const hum = [0, 0, 1.12, 0.3, 0.39, 0.23, 0, 0.07, 0, 0.09, 0.06, 0, 0, 0.53, 0.81, 0.89, 0.72, 0.21, 0, 0.71, 0.4, 0.25, 0.94, 0.24, 1.27, 0.79, 15.01, 3.1, 4.8, 5.88, 0, 0, 1.21, 0, 0.74, 6.33, 1.91];
+    expect(topeSugerido(auto.map((a, i) => dia(a, hum[i])))).toEqual(PRESUPUESTO_DIARIO_USD);
+  });
+
+  it("un solo día caro sube el sugerido a 1,25× ese día", () => {
+    expect(topeSugerido([...Array.from({ length: 20 }, () => dia(1)), dia(30)])?.automatico).toBe(40);
+  });
+
+  it("los días sin gasto no bajan el sugerido, y sin datos no se inventa", () => {
+    expect(topeSugerido([dia(0), dia(0), dia(4)])?.automatico).toBe(10);
+    expect(topeSugerido([])).toBeNull();
+    expect(topeSugerido([dia(0)])).toBeNull();
+  });
+
+  it("nunca sugiere menos de US$5", () => {
+    expect(topeSugerido([dia(0.1)])?.automatico).toBe(5);
   });
 });

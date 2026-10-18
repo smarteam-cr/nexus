@@ -38,6 +38,12 @@ export interface LlamadaMedida {
   errorType?: string | null;
   /** Contexto explícito; si no viene, se toma el de `AsyncLocalStorage`. */
   ctx?: ContextoDeCorrida;
+  /**
+   * La respondió la API Batch (`lib/ai/lotes-server.ts`): cuesta la mitad y queda marcada en `LlmCall.lote`. ⚠ La
+   * columna solo se escribe en `true` y la fila se crea pidiendo solo su id: si el deploy llegara antes que su SQL, lo
+   * único que se pierde son las filas de los lotes, no las de todas las llamadas.
+   */
+  lote?: boolean;
 }
 
 /**
@@ -57,12 +63,11 @@ export function registrarLlamada(datos: LlamadaMedida): void {
     const cacheReadTokens = num(u.cache_read_input_tokens);
     const cacheCreationTokens = num(u.cache_creation_input_tokens);
 
-    const costUsd = costoDeLlamada(datos.model, {
-      inputTokens,
-      outputTokens,
-      cacheReadTokens,
-      cacheCreationTokens,
-    });
+    const costUsd = costoDeLlamada(
+      datos.model,
+      { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens },
+      { lote: datos.lote },
+    );
 
     void prisma.llmCall
       .create({
@@ -83,7 +88,9 @@ export function registrarLlamada(datos: LlamadaMedida): void {
           triggeredByEmail: ctx.triggeredByEmail ?? null,
           // Con la reunión que la disparó, si la hay: «reunion:<sessionId> › <sitio>» (contexto-de-corrida.ts).
           origen: origenDeLaFila(ctx),
+          ...(datos.lote ? { lote: true } : {}),
         },
+        select: { id: true },
       })
       .catch((e) => {
         // A propósito `console.error` y no `report-error`: si la base está caída, el reporte de

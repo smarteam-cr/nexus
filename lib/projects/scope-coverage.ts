@@ -46,6 +46,7 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/nexus-chat/lecturas-server.ts": { modo: "criterio", criterio: "navegable" },
   "lib/portfolio/load.ts": { modo: "criterio", criterio: "cartera" },
   "lib/cs/watchdog.ts": { modo: "criterio", criterio: "cartera" },
+  "lib/ai/proyeccion-server.ts": { modo: "criterio", criterio: "cartera" },
   // El vigía de UN cliente (al entrar y a mano, D14): corre para sus proyectos de cartera.
   "lib/cs/vigia-por-cliente.ts": { modo: "criterio", criterio: "cartera" },
   // La carga de CS (2026-10-06): los cronogramas y las cuentas de la cartera, como Éxito del cliente.

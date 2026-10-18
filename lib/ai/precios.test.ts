@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { costoDeLlamada, formatearUsd, precioDe, PRECIOS } from "./precios";
+import { ahorroDeLaCache, costoDeLlamada, formatearUsd, precioDe, PRECIOS } from "./precios";
 
 /**
  * lib/ai/precios.test.ts — QUE EL MEDIDOR NO SUBESTIME.
@@ -172,5 +172,31 @@ describe("los caminos que gastaban sin dueño salen atribuidos (C-01 y Etapa 0 d
       expect(envueltas, `${rel}: llamadas a Claude sin atribuir`).toBe(llamadas);
       expect(src, `${rel}: el contexto tiene que decir quién apretó el botón (o null a propósito)`).toContain("triggeredByEmail:");
     }
+  });
+});
+
+describe("⭐ la API Batch cobra la mitad, y la caché se mide en dinero", () => {
+  it("un lote cuesta exactamente la mitad, con las cuatro clases de token", () => {
+    const uso = { inputTokens: 10_000, outputTokens: 2_000, cacheReadTokens: 40_000, cacheCreationTokens: 5_000 };
+    const normal = costoDeLlamada("claude-sonnet-4-6", uso)!;
+    const lote = costoDeLlamada("claude-sonnet-4-6", uso, { lote: true })!;
+    expect(lote).toBeCloseTo(normal / 2, 10);
+  });
+
+  it("leer 1M de la caché en Sonnet ahorra US$2,70 (3 − 0,30)", () => {
+    expect(ahorroDeLaCache("claude-sonnet-4-6", { cacheReadTokens: 1_000_000, cacheCreationTokens: 0 })).toBeCloseTo(2.7, 10);
+  });
+
+  it("⛔ escribir la caché sin leerla es un recargo: el ahorro da negativo", () => {
+    /* 1M escrito y nadie lo lee: se pagó 1,25× en vez de 1× → US$0,75 de más. */
+    expect(ahorroDeLaCache("claude-sonnet-4-6", { cacheReadTokens: 0, cacheCreationTokens: 1_000_000 })).toBeCloseTo(-0.75, 10);
+  });
+
+  it("Opus 5.5 lee la caché a 0,05: ahorra el 95 % de la entrada", () => {
+    expect(ahorroDeLaCache("claude-opus-5-5", { cacheReadTokens: 1_000_000, cacheCreationTokens: 0 })).toBeCloseTo(3.8, 10);
+  });
+
+  it("un modelo sin tarifa no inventa un ahorro", () => {
+    expect(ahorroDeLaCache("modelo-inventado", { cacheReadTokens: 1_000, cacheCreationTokens: 0 })).toBeNull();
   });
 });

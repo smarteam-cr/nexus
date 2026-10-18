@@ -35,11 +35,37 @@
 import { crDateParts } from "@/lib/jobs/time";
 import type { ClaseDeGasto } from "./contexto-de-corrida";
 
-/** Provisorios — a calibrar con la primera semana de medición. Ver el docblock. */
+/**
+ * Calibrados el 2026-10-18 con lo gastado del 3-sep al 16-oct (`topeSugerido`, abajo): lo automático nunca pasó de
+ * US$3,81 en un día (el 95 % de los días, de US$3,33) y lo humano llegó a US$15,01 una vez (el 6-oct, el mapeo de
+ * procesos con Opus). Antes eran 15 y 60, provisorios. /integrations/gasto-ia muestra el sugerido con lo de los últimos
+ * 60 días: si se aleja de esto, se cambia acá o con PRESUPUESTO_IA_*_USD_DIA. ⚠ Lo automático frena aunque el bloqueo
+ * esté apagado: los jobs que gastan IA miran `quedaPresupuestoAutomatico` antes de arrancar (lib/jobs/defs.ts).
+ */
 export const PRESUPUESTO_DIARIO_USD: Record<ClaseDeGasto, number> = {
-  automatico: 15,
-  humano: 60,
+  automatico: 10,
+  humano: 20,
 };
+
+/**
+ * El tope que sugiere lo gastado, por clase: el doble del día del percentil 95 o 1,25× el día más caro, lo que sea más,
+ * redondeado hacia arriba a US$5 (y nunca menos de US$5). Se miran solo los días con gasto: un fin de semana sin nada no
+ * es un día normal. Sin días medidos, null (no se sugiere un número sin datos).
+ */
+export function topeSugerido(dias: readonly { costoHumano: number; costoAutomatico: number }[]): Record<ClaseDeGasto, number> | null {
+  const sugerir = (valores: number[]): number | null => {
+    const conGasto = valores.filter((v) => v > 0).sort((a, b) => a - b);
+    if (!conGasto.length) return null;
+    const p95 = conGasto[Math.min(conGasto.length - 1, Math.ceil(conGasto.length * 0.95) - 1)];
+    const maximo = conGasto[conGasto.length - 1];
+    const crudo = Math.max(p95 * 2, maximo * 1.25);
+    return Math.max(5, Math.ceil(crudo / 5) * 5);
+  };
+  const automatico = sugerir(dias.map((d) => d.costoAutomatico));
+  const humano = sugerir(dias.map((d) => d.costoHumano));
+  if (automatico === null && humano === null) return null;
+  return { automatico: automatico ?? PRESUPUESTO_DIARIO_USD.automatico, humano: humano ?? PRESUPUESTO_DIARIO_USD.humano };
+}
 
 /**
  * Costa Rica es UTC-6 TODO el año (no hay horario de verano), así que el arranque del día es la

@@ -8691,3 +8691,60 @@ que tener su acción de la semana y su reunión agendada.
 - **El chat genera un entregable** con la operación «documento.generar»: queda en la lista y corre solo al aplicarla,
   con el proyecto verificado contra la cuenta del hilo y el mismo permiso que el botón. Las instrucciones del chat valen
   solo para esa generación: no pisan las «Instrucciones adicionales» del documento.
+
+## El gasto de la IA, por mes (2026-10-18)
+
+**Contexto.** Iniciativa 6 de «La siguiente serie». Medido ese día: US$26 en agosto (desde el 17), US$33 en septiembre y
+US$77 en octubre hasta el 17 (~US$140 al mes al ritmo de hoy). Lo que más gasta: la preventa (US$21 en 30 días), la
+lectura de cada reunión (US$14), el mapeo de procesos con Opus (US$14), llamadas sin agente (US$13) y el clasificador
+de reuniones a proyectos (US$8,5, 365 llamadas). El panel leía 20.000 filas y no tenía meses, tope ni proyección.
+
+- **El panel por mes vive en /integrations/gasto-ia y no en «Uso de Nexus»**: esto es plata, para decidir el gasto y
+  cruzar la factura; Uso de Nexus mira para qué se usa la IA. Cuatro pestañas: Por mes, Proyección, Factura y Últimos 30
+  días (la pantalla de antes). Solo dirección (`isCostosRole`, el mismo gate).
+- **La base suma, sin tope de filas** (`lib/ai/gasto-mensual-server.ts`): por mes y modelo, por agente, por día, por
+  reunión leída (`origen = "reunion:<id> › …"`) y por empresa (la de la llamada, la de su corrida o la dueña de su
+  reunión, como en Uso de Nexus). La cuenta es pura y probada (`lib/ai/gasto-mensual.ts`). El mes y el día son de Costa
+  Rica. **El ahorro de la caché** sale de la tarifa de cada modelo (`ahorroDeLaCache`) y puede ser negativo: escribir una
+  caché que nadie lee es un recargo del 25 %, y se pinta así.
+- **La proyección es una cuenta, no una predicción** (`lib/ai/proyeccion.ts`, `proyeccion-base.ts`): el costo unitario
+  medido en 30 días (una reunión leída con todo lo que dispara su lectura, una corrida del vigía, un turno del chat, un
+  mapeo de procesos) por el volumen esperado. Los escenarios (clientes, reuniones, servicios recurrentes, los hechos y
+  las tres palancas de ahorro) se mueven en pantalla y no se guardan. Cada palanca usa la fracción MEDIDA sobre el
+  componente que toca, y se componen sin sumarse dos veces.
+- **La factura se anota a mano** (`FacturaDeAnthropic`, una fila por mes) y se compara con lo medido: más del 10 % y
+  más de US$5 de diferencia piden revisar los precios de lib/ai/precios.ts o filas que el medidor perdió.
+- **El tope, calibrado con lo gastado**: 10 USD por día lo automático y 20 lo humano (eran 15 y 60, provisorios).
+  `topeSugerido` (el doble del día del percentil 95 o 1,25× el día más caro, redondeado a US$5) da esos mismos números
+  con lo medido del 3-sep al 16-oct, y el panel lo recalcula con los últimos 60 días. **El bloqueo sigue apagado**
+  (`PRESUPUESTO_IA_BLOQUEA`): lo que frena son los jobs.
+- **Los jobs automáticos miran el presupuesto antes de arrancar** (`quedaPresupuestoAutomatico`): el barrido y el
+  debounce del vigía, el vigía al entrar a un cliente (motivo «sin_presupuesto»), marketing, el reintento de Meet, las
+  reuniones de sprint, la lectura de cada reunión (ya lo hacía) y el envío de los lotes. Sin presupuesto devuelven
+  SIN_TURNO y lo del día espera, no se pierde. Lo que pide una persona no frena (solo avisa).
+- **Las palancas del ahorro viven en `lib/ai/ahorro.ts`**, una constante cada una, con su ahorro medido y cómo volver
+  atrás. Ahorro estimado por mes con el volumen de hoy (la proyección lo recalcula):
+  · *Lectura y hechos comparten el prefijo* (~US$5,7 con los hechos prendidos; hoy US$0): la reunión va en el `system`
+    con `cache_control` y las dos herramientas en `tools`; los hechos la leen a 0,1. Solo con los hechos activos. Los
+    hechos verifican que el bloque de la reunión sea idéntico letra por letra antes de usarlo; sin el prefijo de la
+    lectura (un reintento del job) van sin caché (`VARIANTE_DE_HECHOS = "aparte-sin-cache"`): antes escribían una caché
+    que nadie leía. ⚠ La lectura pasa a leer la conversación comprimida; la compara
+    `scripts/comparar-lectura-de-reuniones.ts --prefijo`.
+  · *El clasificador con Haiku* (~US$5,6): **sigue en Sonnet** (`MODELO_DEL_CLASIFICADOR`) hasta que una persona mire
+    `scripts/comparar-modelo-del-clasificador.ts` (simulacro, sin Wherex). Criterio: el mismo proyecto principal en el
+    95 % o más y ninguna reunión que Haiku deje sin proyecto.
+  · *El vigía cachea su prompt* (~2.000 tokens; centavos al mes: hoy corre al entrar a un cliente, de a uno o dos
+    proyectos) y *no repite lo que no cambió*: un proyecto que entra al barrido solo por riesgo, con la misma huella de
+    motivos que su último triaje de hace menos de 7 días, no se vuelve a triar (`lib/cs/vigia-barrido.ts`).
+  · *La API Batch* (la mitad del precio): una sola puerta, `lib/ai/lotes-server.ts` (`PedidoEnLote`, job «ia-lotes»),
+    con un manejador por tipo en `lib/ai/lotes-manejadores.ts`. Hoy la usa el barrido del vigía para lo que entra solo
+    por riesgo (`VIGIA_BARRIDO_POR_LOTE`): la corrida se crea cuando llega la respuesta, así ningún reaper la mata
+    mientras espera. ⚠ El barrido no corre en producción (las 70 corridas de 30 días fueron al entrar): el ahorro llega
+    cuando se prenda `CS_WATCHDOG_ENABLED`. Los candidatos siguientes (~US$1,4: el avance y la ficha después de cada
+    reunión; los reintentos de los hechos; marketing) se suman con una línea en `TIPOS_DE_LOTE` y su manejador.
+  · *Una respuesta cortada no se paga dos veces*: la lectura va en un solo intento con 12.000 tokens de tope (el tope no
+    se cobra; antes eran 6.000 y, si se cortaba, otra llamada entera con 12.000). Ninguna lectura de 30 días pasó de 4.502.
+- **`LlmCall.lote`** marca lo que respondió la API Batch; el medidor la escribe solo en `true` y crea la fila pidiendo
+  solo su id, así un deploy antes del SQL pierde las filas de los lotes y no las de todas las llamadas.
+- **Pendiente:** 263 llamadas de 30 días (US$13,8, todas automáticas) no tienen agente ni origen: van a «No se sabe de qué
+  proceso es». Están cerca en el tiempo de la lectura, el resumen del proyecto y la propuesta; atribuirlas es lo próximo.
