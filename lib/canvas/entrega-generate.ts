@@ -33,6 +33,8 @@ import { createOnDemandCanvas, reconcileOnDemandCanvasSections } from "@/lib/can
 import { loadCanvasContext, loadHandoffContext } from "@/lib/canvas/load-canvas-context";
 import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
+import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
+import { bloqueDeInstruccionesDelPedido } from "@/lib/entregables/registro";
 import { ENTREGA_TEMPLATE, ENTREGA_HANDOFF_KEYS } from "@/components/landing/configs/entrega.defs";
 import { tagLabels, usaEscala } from "@/lib/tags/catalog";
 import { posicionDelDiagnostico } from "@/lib/escala/contexto";
@@ -110,6 +112,10 @@ export async function runEntregaGeneration(opts: {
   projectId: string;
   agentRunId?: string | null;
   canvasId?: string;
+  /** La plantilla con que se genera (lib/entregables/plantillas.ts). Sin ella, la de siempre. */
+  plantilla?: BcTemplateDef;
+  /** Lo que pidió quien genera, para esta corrida (el chat de Nexus). Sin ellas, el mensaje es el de siempre. */
+  instrucciones?: string | null;
 }): Promise<{ canvasId: string; sectionCount: number }> {
   const { projectId } = opts;
 
@@ -184,6 +190,8 @@ export async function runEntregaGeneration(opts: {
   const hubs = tagLabels(project?.tags ?? []);
 
   const userMessage = [
+    // Lo que pidió quien genera ESTA corrida (el chat de Nexus); "" sin ellas y el filtro lo saca.
+    bloqueDeInstruccionesDelPedido(opts.instrucciones),
     // Las «Instrucciones adicionales» de la Entrega (2026-10-07): primero, porque mandan sobre todo.
     material.instrucciones,
     `Empresa: ${companyName}`,
@@ -236,7 +244,7 @@ export async function runEntregaGeneration(opts: {
     if (d && typeof d === "object") prevDataByKey[s.key] = d;
   }
 
-  const gen = await generateSectionsForTemplate(ENTREGA_TEMPLATE, userMessage, undefined, undefined, prevDataByKey);
+  const gen = await generateSectionsForTemplate(opts.plantilla ?? ENTREGA_TEMPLATE, userMessage, undefined, undefined, prevDataByKey);
 
   // La foto ANTES de escribir (lib/canvas/versiones.ts): la IA ya respondió y todavía no se tocó nada.
   await guardarVersionDelDocumento(canvasId, { origen: "Antes de regenerar" });

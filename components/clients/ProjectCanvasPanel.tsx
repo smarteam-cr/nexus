@@ -55,6 +55,7 @@ import { urlDeDocumentoEnManual } from "@/lib/manual/anclas";
 import ChatDelDocumento from "@/components/asistente/ChatDelDocumento";
 import { puedeConversar, PIEZA_CRONOGRAMA } from "@/lib/asistente/piezas";
 import { buildPieceRows } from "@/lib/flow/dropdown-rows";
+import { GRUPO_HERRAMIENTAS, grupoDelRiel, ordenarPorGrupo } from "@/lib/flow/grupos-del-riel";
 import { AVISO_DESACTUALIZADA_LARGO } from "@/lib/pieces/piece-staleness";
 import { pieceReadiness } from "@/lib/flow/piece-readiness";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
@@ -325,7 +326,10 @@ export default function ProjectCanvasPanel({
   };
   /* El grupo del ciclo en el riel: importa la ETAPA en que está, no el número del ciclo (Elías, 2026-10-12). */
   const grupoDe = (slug: string): FilaDelRielDePiezas["grupo"] => {
-    if (!esRecurrente || !(PIEZAS_DEL_CICLO as readonly string[]).includes(slug)) return undefined;
+    /* Fuera de un servicio recurrente, el riel va en dos grupos: las herramientas del proyecto y los entregables
+       (decisión 11, lib/flow/grupos-del-riel.ts). El ciclo de un recurrente sigue con su propio grupo. */
+    if (!esRecurrente) return grupoDelRiel(slug);
+    if (!(PIEZAS_DEL_CICLO as readonly string[]).includes(slug)) return undefined;
     const [, mh, dh] = estadoCiclo?.hasta?.split("-") ?? [];
     return {
       id: "ciclo",
@@ -807,7 +811,8 @@ export default function ProjectCanvasPanel({
               meta: etapaMeta,
               onClick: () => (visible ? irAlResumen() : onAbrirDesdeOculto?.(null)),
             }}
-            filas={pieceRows.map((row): FilaDelRielDePiezas => {
+            grupoDelResumen={esRecurrente ? undefined : GRUPO_HERRAMIENTAS}
+            filas={(esRecurrente ? pieceRows : ordenarPorGrupo(pieceRows)).map((row): FilaDelRielDePiezas => {
               // ¿Esta pieza le corresponde a este proyecto, y están sus pasos previos?
               // Nunca bloquea: informa (lib/flow/piece-readiness).
               const readiness = pieceReadiness(row.slug, {

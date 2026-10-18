@@ -77,7 +77,8 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     alcance: alcanceDeLaPieza("kickoff"),
     excluirOrigenes: [],
     destino: "kickoff",
-    archivos: ["app/api/clients/[id]/analyze/route.ts"],
+    // Desde el 2026-10-17 el kickoff se genera en su runner (lib/entregables/generar-server.ts lo llama).
+    archivos: ["lib/canvas/kickoff-generate.ts"],
     motivo: "Las personas de la ficha y los acuerdos posteriores a la venta, recortados para el cliente.",
   },
   diagnosis: {

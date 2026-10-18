@@ -45,6 +45,8 @@ import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadPortalLifecycleContext } from "@/lib/hubspot/lifecycle-context";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
+import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
+import { bloqueDeInstruccionesDelPedido } from "@/lib/entregables/registro";
 import {
   PLANIFICACION_TEMPLATE,
   PLANIFICACION_HANDOFF_KEYS,
@@ -107,6 +109,10 @@ export async function runPlanificacionGeneration(opts: {
   projectId: string;
   agentRunId?: string | null;
   canvasId?: string;
+  /** La plantilla con que se genera (lib/entregables/plantillas.ts). Sin ella, la de siempre. */
+  plantilla?: BcTemplateDef;
+  /** Lo que pidió quien genera, para esta corrida (el chat de Nexus). Sin ellas, el mensaje es el de siempre. */
+  instrucciones?: string | null;
 }): Promise<{ canvasId: string; sectionCount: number }> {
   const { projectId } = opts;
 
@@ -158,6 +164,8 @@ export async function runPlanificacionGeneration(opts: {
   const hubs = tagLabels(project?.tags ?? []);
 
   const userMessage = [
+    // Lo que pidió quien genera ESTA corrida (el chat de Nexus); "" sin ellas y el filtro lo saca.
+    bloqueDeInstruccionesDelPedido(opts.instrucciones),
     // Las «Instrucciones adicionales» de la planificación (2026-10-07): primero, porque mandan sobre todo.
     material.instrucciones,
     `Empresa: ${companyName}`,
@@ -208,7 +216,7 @@ export async function runPlanificacionGeneration(opts: {
   }
 
   const gen = await generateSectionsForTemplate(
-    PLANIFICACION_TEMPLATE,
+    opts.plantilla ?? PLANIFICACION_TEMPLATE,
     userMessage,
     undefined,
     undefined,

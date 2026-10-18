@@ -74,8 +74,8 @@ interface Lector {
  */
 const LECTORES: Lector[] = [
   {
-    archivo: "app/api/clients/[id]/analyze/route.ts",
-    ancla: "loadTimelineContext(bodyProjectId)",
+    // Hasta el 2026-10-17 vivía adentro de analyze/route.ts; se mudó a su runner (lo llama `generarEntregable`).
+    archivo: "lib/canvas/kickoff-generate.ts",
     pieza: "kickoff",
     exposicion: "directo",
     porque: "la generación completa del kickoff, que el cliente abre con enlace y contraseña",

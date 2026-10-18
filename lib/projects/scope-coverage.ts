@@ -94,6 +94,14 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "persona (`a.proyectos`), que ya salieron de `proyectosAbiertos` en alcance-server.ts. Volver a " +
       "filtrar con otro criterio podría dejar una pregunta sin responder fuera de «Para ti».",
   },
+  // Generar un entregable desde el chat de Nexus (fase 5, 2026-10-17).
+  "lib/operaciones/documentos-server.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: lee el nombre de UN proyecto por su id, verificado contra la empresa del " +
+      "hilo (`clientId`), para la línea que se lee antes de aplicar. El id lo da la lista de proyectos del contexto del " +
+      "chat, que ya sale con el criterio navegable (lib/nexus-chat/lecturas-server.ts).",
+  },
   "lib/projects/etapa-desde-reunion-server.ts": {
     modo: "exento",
     razon:

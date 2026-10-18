@@ -21,7 +21,7 @@ import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { extractTitleTerms } from "@/lib/utils/matching";
 // La memoria de la cuenta y del proyecto (lib/memoria): reemplaza al canvas de empresa en el handoff y suma lo que se
 // sabe en el kickoff (DECISIONS «La memoria de la cuenta y del proyecto: un solo cargador»).
-import { memoriaDeLaCuenta, memoriaDelDocumento } from "@/lib/memoria";
+import { memoriaDeLaCuenta } from "@/lib/memoria";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import { getOutputFormatInstructions, getBlockOutputFormatInstructions } from "@/lib/canvas/agent-output-schema";
@@ -30,6 +30,8 @@ import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
+import { generarEntregable } from "@/lib/entregables/generar-server";
+import { entregablePorAgente, plantillaDe } from "@/lib/entregables/registro";
 import { generarResumenDeHandoff } from "@/lib/handoff/resumen";
 import { leerOProponerResultados } from "@/lib/handoff/proponer-resultados";
 import { proponerFichaDesdeHandoff } from "@/lib/clients/ficha-propuesta";
@@ -37,11 +39,8 @@ import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { DESARROLLO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
-import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
-import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { runImplementacionGeneration } from "@/lib/canvas/implementacion-generate";
-import { runEntregaGeneration } from "@/lib/canvas/entrega-generate";
-import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadTimelineContext, loadPriorRelationshipContext, loadCiclosAnterioresContext } from "@/lib/canvas/load-canvas-context";
+import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadPriorRelationshipContext, loadCiclosAnterioresContext } from "@/lib/canvas/load-canvas-context";
 import { cargarContextoDelDetalle } from "@/lib/contexto/cargar";
 import { renderDetalleDeCronograma, renderLoQueYaHay, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
 import { huellasDeFrontera, type HuellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
@@ -71,16 +70,7 @@ import { explicarConLasFuentesNuevas } from "@/lib/timeline/fuentes-de-la-explic
 import { ubicarHechas } from "@/lib/timeline/hechas-fuera-de-lugar";
 import { MENSAJE_PROPUESTA_CAMBIO } from "@/lib/timeline/escribir-estructura";
 import type { EstructuraSupuesta } from "@/lib/contexto/cronograma-para-agentes";
-import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
-import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
 import { PLANIFICACION_HANDOFF_KEYS } from "@/components/landing/configs/planificacion.defs";
-import {
-  escalaParaPosicionar,
-  posicionDeLaPropuesta,
-  SECCION_DE_ESCALA,
-  type BloqueDeEscala,
-} from "@/lib/escala/contexto";
-import { syncHorariosSessionsFromHubs } from "@/lib/canvas/kickoff-hubs";
 import { syncFlowchartsToProcesos } from "@/lib/canvas/sync-procesos-blocks";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { getKickoffSessionDate } from "@/lib/sessions/project-sessions";
@@ -104,8 +94,7 @@ import {
   hasTechnicalScope,
 } from "@/lib/tags/catalog";
 import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
-import { cargarMaterialDelDocumento, instruccionesDelDocumento } from "@/lib/contexto/material-del-documento";
-import { documentoConContexto } from "@/lib/contexto/documento";
+import { instruccionesDelDocumento } from "@/lib/contexto/material-del-documento";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
 import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
 
@@ -168,6 +157,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     preview?: boolean;
     /** El CSE ya vio el aviso de "esta pieza no le corresponde al proyecto" y sigue igual. */
     forzar?: boolean;
+    /** La plantilla de un ENTREGABLE (lib/entregables/registro.ts). Sin ella, la de siempre; una que no es de ese
+     *  entregable responde 400 antes de crear la corrida. */
+    plantilla?: string;
     /** E2a: el paso 2 de «Regenerar todo» / «Generar cronograma» completa el BORRADOR del cronograma
      *  (lib/timeline/borrador-del-detalle.ts): el que el CSE tiene enfrente (`token` + `version`), o
      *  uno nuevo si no había propuesta de fases (`token` null). Desde E2b también «Regenerar» de una
@@ -408,36 +400,23 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     }
   }
 
-  // El agente de Desarrollo (requerimiento técnico) NO consume las fuentes crudas ni el
-  // flujo de cards/block-format de este handler: delega en el runner self-contained
-  // `runDesarrolloGeneration` (asegura el canvas + arma el input del handoff + genera +
-  // persiste). Se resuelve por id para no tocar a ningún otro agente.
-  const isDesarrolloAgent = agent.id === "agent-desarrollo-canvas";
+  /* Los ENTREGABLES (lib/entregables/registro.ts) no consumen las fuentes crudas ni el flujo de cards/block-format de
+     este handler: delegan en `generarEntregable` (lib/entregables/generar-server.ts), que corre el runner self-contained
+     de cada uno —desde el 2026-10-17 también el del kickoff (lib/canvas/kickoff-generate.ts)—. Se resuelve por id para
+     no tocar a ningún otro agente: los agentes dormidos de esos grupos siguen por el camino genérico. */
+  const entregableDelAgente = entregablePorAgente(agent.id);
 
-  // Ídem el agente de Exploración (guía interna de descubrimiento): delega en
-  // `runExploracionGeneration`, que arma su propio input (handoff ancla + historial del
-  // cliente + tags + canvases del proyecto) y persiste. Resuelto por id.
+  // Ídem el agente de Exploración (guía interna de descubrimiento, una HERRAMIENTA del proyecto: sin plantilla): delega
+  // en `runExploracionGeneration`, que arma su propio input (handoff ancla + historial del cliente + tags + canvases del
+  // proyecto) y persiste. Resuelto por id.
   const isExploracionAgent = agent.id === "agent-exploracion-canvas";
 
-  // Ídem el agente de Diagnóstico (informe de rendimiento para el cliente): delega en
-  // `runDiagnosticoGeneration` — motor de landings con el contrato de FUNDAUNA (sin escala desde el
-  // 2026-09-28), procesos serializados. Resuelto por id. El camino legacy de bloques markdown queda
-  // muerto para este agente sin tocar BLOCK_FORMAT_GROUPS (los agentes dormidos del
-  // grupo "diagnostico" lo siguen usando).
-  const isDiagnosticoAgent = agent.id === "agent-diagnostico-canvas";
-
-  // Ídem Planificación: delega en `runPlanificacionGeneration`. Con el short-circuit
-  // muere también su herencia de escribir el esqueleto del cronograma — el prompt ya
-  // tenía la regla "sin fechas"; ahora el código la acompaña.
+  // La planificación principal es un entregable (arriba); este id sigue para separar los agentes LEGACY del grupo.
   const isPlanificacionAgent = agent.id === "agent-planificacion-canvas";
 
   // Ídem Implementación (guía de construcción + prompts de Breeze).
   const isImplementacionAgent = agent.id === "agent-implementacion-canvas";
 
-  /* Ídem Entrega (el documento de cierre). Su runner hace algo que ningún otro hace: además
-     de generar la prosa, ESCRIBE ÉL las dos secciones con cifras desde el cronograma, y esas
-     keys ni siquiera viajan al modelo. Ver lib/canvas/entrega-generate.ts. */
-  const isEntregaAgent = agent.id === "agent-entrega-canvas";
 
   // ── D.1: fail-fast del agente de detalle de cronograma ──────────────────────
   // Este agente DETALLA un esqueleto existente (fases con ids). Sin proyecto o
@@ -649,6 +628,14 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     }
   }
 
+  // ── La plantilla de un entregable (2026-10-17): se valida ANTES de crear la corrida ─────────────────────────────────
+  const plantillaPedida = typeof body?.plantilla === "string" && body.plantilla ? body.plantilla : null;
+  if (plantillaPedida && (!entregableDelAgente || !plantillaDe(entregableDelAgente.slug, plantillaPedida))) {
+    return apiError(`La plantilla «${plantillaPedida}» no es de este documento.`, 400);
+  }
+  // Quién pide la generación de un entregable: queda con la plantilla anotada en el documento.
+  const quienPideElEntregable = entregableDelAgente ? await triggeredByEmail() : null;
+
   // ── A2: el trabajo real (contexto → LLM → persistencia) va en un closure para
   // poder ejecutarlo síncrono (modo normal) o detached (modo async). Captura todo
   // el scope de arriba (body, agent, client, etc.) — sin threading de variables.
@@ -671,8 +658,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // decía "Listo — sin resultados" con el canvas COMPLETO en pantalla. Dejamos en el
   // output cuántas secciones se escribieron —única señal contable de estos runners, que
   // persisten CanvasBlocks, no cards— para que el resumen del toast diga la verdad.
-  const finishRunnerShortCircuit = async (r: { canvasId: string; sectionCount: number }) => {
-    if (existingRunId) {
+  const finishRunnerShortCircuit = async (r: { canvasId: string; sectionCount: number; salidaEnLaCorrida?: unknown }) => {
+    // El kickoff deja en la corrida su salida entera (la lee el visor del historial): esa no se pisa con el conteo.
+    if (existingRunId && r.salidaEnLaCorrida === undefined) {
       await prisma.agentRun
         .update({ where: { id: existingRunId }, data: { output: JSON.stringify({ sectionCount: r.sectionCount }) } })
         .catch(() => {}); // el output es señal, no dato: si falla no se tumba la generación
@@ -700,13 +688,20 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     });
   }
 
-  // ── Desarrollo: short-circuit al runner self-contained ────────────────────────
-  // El requerimiento técnico no necesita cards/docs/deal ni el path de block-format;
-  // el runner asegura el canvas, arma su input desde el handoff y persiste. El gating
-  // (artifact-gate) ya corrió arriba; acá solo se ejecuta el trabajo.
-  if (isDesarrolloAgent && bodyProjectId) {
+  // ── Los ENTREGABLES (kickoff, diagnóstico, planificación, integraciones, entrega): la función única ───────────────
+  // (lib/entregables/generar-server.ts, 2026-10-17). La misma que usa el chat de Nexus: asegura el canvas, arma el input,
+  // genera con la plantilla, persiste y anota la plantilla en el documento. El gating (artifact-gate) ya corrió arriba;
+  // acá solo se ejecuta el trabajo, atribuido a esta corrida.
+  if (entregableDelAgente && bodyProjectId) {
     return finishRunnerShortCircuit(
-      await runDesarrolloGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
+      await generarEntregable({
+        projectId: bodyProjectId,
+        slug: entregableDelAgente.slug,
+        plantillaId: plantillaPedida,
+        agentRunId: existingRunId,
+        porEmail: quienPideElEntregable,
+        alFase: setPhase,
+      }),
     );
   }
 
@@ -720,35 +715,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     );
   }
 
-  // ── Diagnóstico: short-circuit al runner self-contained ───────────────────────
-  if (isDiagnosticoAgent && bodyProjectId) {
-    setPhase("Escribiendo el diagnóstico…");
-    return finishRunnerShortCircuit(
-      await runDiagnosticoGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
-    );
-  }
-
-  // ── Planificación: short-circuit al runner self-contained ─────────────────────
-  if (isPlanificacionAgent && bodyProjectId) {
-    setPhase("Armando el plan…");
-    return finishRunnerShortCircuit(
-      await runPlanificacionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
-    );
-  }
-
   // ── Implementación: short-circuit al runner self-contained ────────────────────
   if (isImplementacionAgent && bodyProjectId) {
     setPhase("Derivando la construcción…");
     return finishRunnerShortCircuit(
       await runImplementacionGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
-    );
-  }
-
-  // ── Entrega: short-circuit al runner self-contained ───────────────────────────
-  if (isEntregaAgent && bodyProjectId) {
-    setPhase("Armando el cierre…");
-    return finishRunnerShortCircuit(
-      await runEntregaGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
     );
   }
 
@@ -1948,86 +1919,9 @@ ${[
 ` : ""}${hubspotTimelineBlock}${hubspotPrevTimelineBlock}${handoffDelMayorBlock}${modalidadRegistradaBlock}${docsContent ? `=== DOCUMENTOS ADJUNTOS (propuestas, archivos del cliente, páginas web) ===\n${docsContent.slice(0, isHandoffAgent ? 12000 : 3000)}\n\n` : ""}${salesSessionsBlock}${manualSourcesContent}${firefliesContent ? `=== TRANSCRIPCIONES DE CS/KICKOFF (sesiones de implementación) ===\n${firefliesContent.slice(0, CTX.csBlockCap)}\n\n` : ""}${knowledgeBaseContent ? `=== BASE DE CONOCIMIENTO ===\n${knowledgeBaseContent.slice(0, 4000)}\n\n` : ""}${cseExclusionsBlock ? `RECORDATORIO FINAL (regla dura): antes de escribir cada sección, verifica que NO incluya los temas de las EXCLUSIONES DEL CSE declaradas al inicio de este mensaje. Si una fuente los menciona, omítelos.\n` : ""}
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
-  // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────
-  // El Kickoff NO consume las fuentes crudas del handoff (transcripts de venta/docs/deal): su input
-  // es el HANDOFF ya curado + el cronograma + (desde el 2026-10-07) su propio «Contexto adicional»
-  // (reuniones con el cliente, notas e instrucciones; ver más abajo) + (desde la etapa 3 de la memoria)
-  // la memoria de la cuenta y del proyecto con el alcance del cliente. Gateado por id para no afectar
-  // a ningún otro agente (diagnóstico, handoff, etc. quedan intactos). `isKickoffAgent` se define
-  // arriba, con `armaElMensajeBase`: por eso el kickoff no arma el mensaje base que acá reemplaza.
+  // ── 10b. El input del agente Kickoff se mudó a su runner (lib/canvas/kickoff-generate.ts, 2026-10-17): el kickoff
+  // es un entregable y lo genera `generarEntregable`, arriba. Acá no llega.
   let userMessage = baseUserMessage;
-  /* La Escala del Kickoff (2026-09-12): el resumen para posicionar + el estimado que dejó la
-     propuesta del trato. Se guarda afuera del `if` porque la generación, más abajo, necesita saber
-     si el trato va «Sin Escala» para no generar la sección. */
-  let escalaDelKickoff: BloqueDeEscala | null = null;
-  if (isKickoffAgent && bodyProjectId) {
-    // El kickoff es interno: usa el handoff GENERADO aunque esté en borrador (no se
-    // exige aceptación). El guard de arriba ya cortó si no hay handoff, así que el
-    // fallback de abajo es una red de seguridad inalcanzable en la práctica.
-    //
-    // ALLOWLIST: el kickoff lo lee el CLIENTE. Las secciones internas del handoff
-    // (riesgos_banderas, motivacion_decision "por qué vendimos", acuerdos_promesas
-    // comerciales, estado_en_flight) NO se le mandan al modelo — ni siquiera para que
-    // las "ignore". El prompt además se lo prohíbe, pero la fuente es el gate real.
-    const handoffCtx = await loadHandoffContext(bodyProjectId, {
-      onlyConfirmed: false,
-      includeKeys: KICKOFF_HANDOFF_KEYS,
-    });
-    const timelineCtx = await loadTimelineContext(bodyProjectId);
-    // Los TAGS son la fuente de los hubs del titular ("implementación de HubSpot…") y
-    // de los chips del hero; el handoff aporta las integraciones por nombre (Aircall…).
-    const tagsLabel = tagLabels(dealProject?.tags ?? []).join(", ");
-    escalaDelKickoff = await escalaParaPosicionar(dealProject?.tags ?? [], {
-      titulo: "EL ESTIMADO QUE DEJÓ LA PROPUESTA (un antecedente de la venta, no una medición)",
-      posicion: await posicionDeLaPropuesta(bodyProjectId),
-    });
-    /* El «Contexto adicional» del kickoff (2026-10-07, «el contexto adicional es de cada
-       artefacto»): las reuniones que eligió el equipo (desde la etapa 7, solo esas, enteras), sus
-       notas y sus instrucciones. El handoff sigue siendo el ancla; las reuniones completan lo que se
-       acordó después (nombres, fechas, quién participa). Sin elegidas, la línea lo dice. Sin nada de
-       eso —ni la memoria de abajo—, el handoff es la «ÚNICA FUENTE», como antes. */
-    const materialDelKickoff = await cargarMaterialDelDocumento(bodyProjectId, documentoConContexto("kickoff")!);
-    const conMaterial = !!(materialDelKickoff.reuniones || materialDelKickoff.notas);
-    const reunionesDelKickoff = materialDelKickoff.reuniones
-      ? `=== LAS REUNIONES ELEGIDAS POR EL EQUIPO PARA EL KICKOFF (completan el handoff: quién participa, qué se acordó después, fechas dichas por el cliente. Nada de precios, descuentos ni negociación; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente; y nada de acá agranda el alcance vendido) ===
-${materialDelKickoff.reuniones}
-
-`
-      : materialDelKickoff.avisoSinReuniones
-        ? `${materialDelKickoff.avisoSinReuniones}
-
-`
-        : "";
-    const notasDelKickoff = materialDelKickoff.notas
-      ? `=== NOTAS DEL EQUIPO PARA EL KICKOFF ===
-${materialDelKickoff.notas}
-
-`
-      : "";
-    /* La memoria de la cuenta y del proyecto (lib/memoria, etapa 3), con el alcance del cliente: la ficha confirmada
-       (las personas, sin su postura), los procesos validados y, de las reuniones con el cliente que su material NO lee
-       (`yaLeidas`), solo los acuerdos y las decisiones. Va después del handoff, que sigue siendo el ancla. Sin nada
-       que decir es "" y el mensaje es el de siempre. Con memoria, el handoff deja de ser la «ÚNICA FUENTE» (es el
-       ancla): decir «única» y sumar otra fuente justo debajo eran dos instrucciones que se contradecían. */
-    const memoriaDelKickoff = (
-      await memoriaDelDocumento(bodyProjectId, { lector: "kickoff", clientId, yaLeidas: materialDelKickoff.sesionesUsadas })
-    ).texto;
-    const bloqueDeMemoriaDelKickoff = memoriaDelKickoff
-      ? `=== PARA LAS PERSONAS Y LOS ACUERDOS POSTERIORES A LA VENTA (úsalo para personas y acuerdos posteriores a la venta; nada de acá agranda el alcance vendido) ===
-${memoriaDelKickoff}
-
-`
-      : "";
-    userMessage = `${materialDelKickoff.instrucciones}Empresa: ${companyName}
-Industria: ${client.industry ?? "No especificada"}
-${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}${tagsLabel ? `Alcance etiquetado (tags del proyecto): ${tagsLabel}\n` : ""}
-=== HANDOFF DEL PROYECTO (${conMaterial || memoriaDelKickoff ? "TU FUENTE ANCLA" : "ESTA ES TU ÚNICA FUENTE"}) ===
-${handoffCtx || "(Sin handoff todavía. Dejá vacías las secciones sin respaldo; no inventes contenido.)"}
-
-${bloqueDeMemoriaDelKickoff}${reunionesDelKickoff}${notasDelKickoff}${timelineCtx ? `${timelineCtx}\n\n` : ""}${escalaDelKickoff.texto}
-${materialDelKickoff.cierreDeFrontera ? `\n${materialDelKickoff.cierreDeFrontera}\n` : ""}
-Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: es una PRESENTACIÓN (poco texto, cards con título corto y detalle de una línea), tono post-venta, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
-  }
 
   // ── 10b''. Input LEGACY del grupo planificacion ──────────────────────────────
   // agent-planificacion-canvas ya NO pasa por acá (short-circuit por id al runner del
@@ -2209,64 +2103,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   } | null = null;
 
   try {
-    // ── Kickoff: generación TIPADA (motor de secciones, igual que los Business Cases) ──
-    // En vez del LLM markdown genérico, el kickoff usa generateSectionsForTemplate con
-    // KICKOFF_TEMPLATE → data estructurada por sección. Se envuelve como 1 bloque "card"
-    // por sección para que la persistencia isBlockFormat de abajo lo guarde como CARD
-    // con `data` (born-CONFIRMED). Solo las 6 secciones de prosa (agentGenerated) — las
-    // curadas equipo/horarios/canales (HUMAN) sobreviven al deleteMany source:AGENT.
-    //
-    // FLIP: el kickoff SIEMPRE genera tipado (data estructurada → 1 CARD/sección). El
-    // render es el motor LandingView; los kickoffs viejos (markdown) se siguen viendo
-    // por el fallback tolerante del adaptador. (El renderer legacy y sus escapes
-    // ?kve=old/?engine=old se borraron en la Ola 4 del plan de puestos.)
-    if (isKickoffAgent) {
-      // CARRY-FORWARD (load-bearing): la generación del kickoff sobreescribe los bloques
-      // EN EL LUGAR (borra y recrea). Sin pasar la data previa, `coerceToSchema` dejaría
-      // solo las keys del schema y se perderían `hero.coverImageUrl`, `hero.brands` y
-      // `hero.eyebrow` — todo lo que cura el CSE y el agente nunca genera.
-      const prevDataByKey: Record<string, unknown> = {};
-      if (targetCanvasId) {
-        const prevSecs = await prisma.canvasSection.findMany({
-          where: { canvasId: targetCanvasId },
-          select: { key: true, blocks: { where: { blockType: "CARD" }, select: { data: true }, take: 1 } },
-        });
-        for (const s of prevSecs) {
-          const d = s.blocks[0]?.data;
-          if (d && typeof d === "object") prevDataByKey[s.key] = d;
-        }
-        // NO purgar acá el `compara` legacy de la prosa (la comparación vivía dentro de
-        // `objetivos` antes de tener sección propia). Si el handoff no trae el contraste, el
-        // agente deja `hoy_vs_sistema` VACÍA — y sin el carry-forward el kickoff se quedaría
-        // sin comparación. La de-duplicación la hace el RENDER (`buildKickoffSections`), que
-        // descarta el `compara` de la prosa solo cuando la sección propia tiene contenido.
-      }
-      const sinEscala = !!escalaDelKickoff && !escalaDelKickoff.usa;
-      const gen = await generateSectionsForTemplate(
-        KICKOFF_TEMPLATE,
-        userMessage,
-        undefined,
-        sinEscala ? new Set([SECCION_DE_ESCALA.kickoff]) : undefined,
-        prevDataByKey,
-      );
-      // La foto del kickoff ANTES de tocar nada (lib/canvas/versiones.ts): acá la IA ya respondió, y
-      // lo de abajo —vaciar la Escala, sincronizar horarios, reescribir bloques— ya cambia el documento.
-      if (targetCanvasId) await guardarVersionDelDocumento(targetCanvasId, { origen: "Antes de regenerar" });
-      /* La persistencia de abajo solo reescribe las secciones que el agente devolvió: la de la
-         Escala, salteada con el trato «Sin Escala», conservaría lo de una corrida anterior. Se
-         vacía acá — un kickoff sin Escala que muestra niveles se contradice solo. */
-      if (sinEscala && targetCanvasId) {
-        await prisma.canvasBlock.deleteMany({
-          where: { section: { canvasId: targetCanvasId, key: SECCION_DE_ESCALA.kickoff } },
-        });
-      }
-      analysisJson = {
-        sections: gen.sections.map((s) => ({ key: s.key, blocks: [{ type: "card", data: s.data }] })),
-      };
-      // Auto-poblar las sesiones de "horarios" desde los hubs del handoff (Marketing/Sales
-      // Hub…). Best-effort, no bloquea la generación; preserva sesiones/asignaciones previas.
-      if (targetCanvasId) await syncHorariosSessionsFromHubs(targetCanvasId, dealProject?.tags);
-    } else {
+    // La generación TIPADA del kickoff se mudó a su runner (lib/canvas/kickoff-generate.ts, 2026-10-17).
     // CARDS_AND_FLOWCHARTS usa max_tokens alto (32k) → el SDK de Anthropic EXIGE
     // streaming para requests que podrían tardar >10 min en no-streaming ("Streaming
     // is required for operations that may take longer than 10 minutes"). .stream()
@@ -2392,7 +2229,6 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
         }
       }
     }
-    } // ── fin del else (agentes no-kickoff) ──
   } catch (e: unknown) {
     console.error("[analyze] Claude error:", e);
     const msg = e instanceof Error ? e.message : String(e);
@@ -2680,9 +2516,9 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // ── 13a2. Si es block format, guardar CanvasBlock records ─────────────────────
   const isBlockFormat = useBlockFormat && analysisJson?.sections && Array.isArray(analysisJson.sections);
   if (isBlockFormat && targetCanvasId) {
-    // La foto ANTES de reescribir (el handoff y cualquier otro grupo de bloques). El kickoff ya la
-    // tomó arriba, antes de sus propios cambios; repetirla acá fotografiaría un documento a medias.
-    if (!isKickoffAgent) await guardarVersionDelDocumento(targetCanvasId, { origen: "Antes de regenerar" });
+    // La foto ANTES de reescribir (el handoff y cualquier otro grupo de bloques). El kickoff principal la toma en su
+    // runner (lib/canvas/kickoff-generate.ts), antes de sus propios cambios.
+    await guardarVersionDelDocumento(targetCanvasId, { origen: "Antes de regenerar" });
     // Resolve CanvasSection IDs
     const dbSections = await prisma.canvasSection.findMany({
       where: { canvasId: targetCanvasId },

@@ -93,7 +93,21 @@ export interface PieceDefinition {
    * nadie escribe, y el punto del riel mediría esa fila y no lo que la pieza tiene de verdad.
    */
   hasCanvas: boolean;
+  /**
+   * Qué es la pieza para el proyecto (decisión 11 de docs/nexus-sistema-de-trabajo-plan.md, 2026-10-17):
+   *   · `entregable`  — lo ve el cliente y se genera con una PLANTILLA (lib/entregables/registro.ts): Kickoff,
+   *                     Diagnóstico, Planificación, Integraciones y Entrega;
+   *   · `herramienta` — interna, sin plantilla: Cronograma, Cuestionarios, Exploración, Handoff, Ejecución y los
+   *                     artefactos del ciclo de un servicio recurrente;
+   *   · `null`        — no es de un proyecto (Información del cliente, la propuesta comercial).
+   * El riel de la ficha agrupa por acá (lib/flow/grupos-del-riel.ts). Un entregable sin su entrada en
+   * lib/entregables/registro.ts pone en rojo lib/entregables/registro.test.ts.
+   */
+  clase: ClaseDePieza | null;
 }
+
+/** Ver `PieceDefinition.clase`. */
+export type ClaseDePieza = "entregable" | "herramienta";
 
 /**
  * ⚠ El `label` es el nombre VISIBLE y se cambia acá, en una línea, sin tocar nada más: la
@@ -116,6 +130,7 @@ export const PIECES: PieceDefinition[] = [
     ownRenderer: true, // ProjectHandoffSection (sección propia arriba del panel)
     clientFacing: false,
     hasCanvas: true,
+    clase: "herramienta",
   },
   {
     slug: "kickoff",
@@ -141,6 +156,7 @@ export const PIECES: PieceDefinition[] = [
     ownRenderer: true, // KickoffWorkspace (motor de landings)
     clientFacing: true,
     hasCanvas: true,
+    clase: "entregable",
   },
   {
     slug: "questionnaires",
@@ -163,6 +179,7 @@ export const PIECES: PieceDefinition[] = [
     clientFacing: true, // cada persona del cliente lo abre con su enlace
     // Vive en sus tablas (Cuestionario, CuestionarioPestana…), no en un canvas.
     hasCanvas: false,
+    clase: "herramienta",
   },
   {
     slug: "cycle-adoption",
@@ -183,6 +200,7 @@ export const PIECES: PieceDefinition[] = [
     clientFacing: false,
     // Vive en las tablas del ciclo, no en un canvas.
     hasCanvas: false,
+    clase: "herramienta",
   },
   {
     slug: "cycle-learning",
@@ -203,6 +221,7 @@ export const PIECES: PieceDefinition[] = [
     clientFacing: false,
     // Vive en las tablas del ciclo (CicloDeProyecto, CasoDeUso), no en un canvas.
     hasCanvas: false,
+    clase: "herramienta",
   },
   {
     slug: "timeline",
@@ -219,6 +238,7 @@ export const PIECES: PieceDefinition[] = [
     ownRenderer: true,
     clientFacing: true,
     hasCanvas: true,
+    clase: "herramienta",
   },
   {
     slug: "exploration",
@@ -234,6 +254,7 @@ export const PIECES: PieceDefinition[] = [
     ownRenderer: true, // ExploracionWorkspace (motor de landings)
     clientFacing: false, // documento INTERNO de descubrimiento
     hasCanvas: true,
+    clase: "herramienta",
   },
   {
     slug: "diagnosis",
@@ -256,6 +277,7 @@ export const PIECES: PieceDefinition[] = [
     // se comparte por enlace: publish-diagnostico).
     clientFacing: true,
     hasCanvas: true,
+    clase: "entregable",
   },
   {
     slug: "planning",
@@ -277,6 +299,7 @@ export const PIECES: PieceDefinition[] = [
     // el censo de lib/canvas/handoff-al-cliente.test.ts exige allowlist en cada lectura del handoff.
     clientFacing: true,
     hasCanvas: true,
+    clase: "entregable",
   },
   {
     slug: "tech-requirements",
@@ -300,6 +323,7 @@ export const PIECES: PieceDefinition[] = [
     ownRenderer: true, // DesarrolloWorkspace
     clientFacing: true, // vista del dev externo
     hasCanvas: true,
+    clase: "entregable",
   },
   {
     slug: "implementation",
@@ -322,6 +346,7 @@ export const PIECES: PieceDefinition[] = [
     ownRenderer: true, // ImplementacionWorkspace (motor de landings)
     clientFacing: false, // es la guía de trabajo del CSE, no un entregable
     hasCanvas: true,
+    clase: "herramienta",
   },
   {
     slug: "delivery",
@@ -343,6 +368,7 @@ export const PIECES: PieceDefinition[] = [
     ownRenderer: true, // EntregaWorkspace (motor de landings)
     clientFacing: true, // se comparte al cliente, como el kickoff
     hasCanvas: true,
+    clase: "entregable",
   },
   {
     slug: "client-info",
@@ -360,6 +386,7 @@ export const PIECES: PieceDefinition[] = [
     ownRenderer: true,
     clientFacing: false,
     hasCanvas: true,
+    clase: null,
   },
   {
     slug: "business-case",
@@ -378,6 +405,7 @@ export const PIECES: PieceDefinition[] = [
     ownRenderer: true, // motor de landings
     clientFacing: true,
     hasCanvas: true,
+    clase: null,
   },
 ];
 
@@ -468,3 +496,8 @@ export function piecesEnabledByTags(tags: string[]): PieceDefinition[] {
  * ⚠ Sin imports a propósito: lo lee un componente de cliente (la cartera).
  */
 export const PIEZAS_NO_REQUERIDAS: ReadonlySet<string> = new Set(["kickoff"]);
+
+/** Las piezas de una clase, en el orden del registro. */
+export function piezasDeLaClase(clase: ClaseDePieza): PieceDefinition[] {
+  return PIECES.filter((p) => p.clase === clase);
+}

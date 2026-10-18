@@ -6,7 +6,8 @@
  * fase 4 (el chat de Nexus) toma de acá sus herramientas: las que leen las usa sola; las que proponen pasan por una
  * persona antes de aplicarse.
  *
- * Primera tanda: Tareas, las notas de la cuenta y el siguiente paso.
+ * Primera tanda: Tareas, las notas de la cuenta y el siguiente paso. Desde el 2026-10-17, generar un entregable del
+ * proyecto con su plantilla (./documentos-server.ts).
  */
 import "server-only";
 import type { TeamMember } from "@prisma/client";
@@ -14,6 +15,7 @@ import { contextoDeOperacion, type ContextoDeNexus } from "./contexto-server";
 import { aplicarOperaciones, leerOperacion, prepararOperaciones, type OperacionPreparada, type PedidoDeOperacion } from "./ejecutar";
 import { herramientaDe } from "./herramientas";
 import { CREAR_NOTA, LEER_NOTAS_DE_LA_CUENTA } from "./notas-server";
+import { GENERAR_DOCUMENTO } from "./documentos-server";
 import { FIJAR_SIGUIENTE_PASO, LEER_SIGUIENTES_PASOS } from "./siguiente-paso-server";
 import { CAMBIAR_ESTADO_DE_TAREA, CREAR_TAREA, LEER_TAREAS_DE_LA_CUENTA, MOVER_TAREA_DE_SEMANA } from "./tareas-server";
 import type { Operacion } from "./tipos";
@@ -29,6 +31,7 @@ export const OPERACIONES: readonly Operacion<ContextoDeNexus>[] = [
   MOVER_TAREA_DE_SEMANA,
   CREAR_NOTA,
   FIJAR_SIGUIENTE_PASO,
+  GENERAR_DOCUMENTO,
 ];
 
 /** Las herramientas para el modelo (fase 4). */

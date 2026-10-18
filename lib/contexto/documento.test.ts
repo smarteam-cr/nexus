@@ -114,7 +114,7 @@ describe("cada runner lee las instrucciones de SU documento", () => {
     { archivo: "lib/canvas/entrega-generate.ts", lee: "material.instrucciones" },
     { archivo: "lib/canvas/desarrollo-generate.ts", lee: "material.instrucciones" },
     { archivo: "lib/guia-exploracion/agente.ts", lee: "instrucciones +" },
-    { archivo: "app/api/clients/[id]/analyze/route.ts", lee: "materialDelKickoff.instrucciones" },
+    { archivo: "lib/canvas/kickoff-generate.ts", lee: "materialDelKickoff.instrucciones" },
   ];
 
   it("cada uno carga el material de su pieza y pone las instrucciones en el mensaje", () => {
@@ -129,8 +129,9 @@ describe("cada runner lee las instrucciones de SU documento", () => {
     expect(leer("lib/canvas/desarrollo-generate.ts")).toContain('documentoConContexto("tech-requirements")');
     expect(leer("lib/guia-exploracion/agente.ts")).toContain('documentoConContexto("exploration")');
     expect(leer("lib/guia-exploracion/agente.ts")).toContain('instruccionesDelDocumento(projectId, "exploration")');
+    // El kickoff salió de analyze el 2026-10-17: su material lo carga su runner.
+    expect(leer("lib/canvas/kickoff-generate.ts")).toContain('documentoConContexto("kickoff")');
     const analyze = leer("app/api/clients/[id]/analyze/route.ts");
-    expect(analyze).toContain('documentoConContexto("kickoff")');
     expect(analyze).toContain('instruccionesDelDocumento(bodyProjectId, "handoff")');
     expect(analyze).toContain("${instruccionesDelHandoff}${cseExclusionsBlock}");
   });
@@ -212,7 +213,7 @@ describe("⭐ la frontera viaja DENTRO del material de los documentos (etapa 4)"
     { archivo: "lib/canvas/entrega-generate.ts", material: "material" },
     { archivo: "lib/canvas/desarrollo-generate.ts", material: "material" },
     { archivo: "lib/guia-exploracion/agente.ts", material: "material" },
-    { archivo: "app/api/clients/[id]/analyze/route.ts", material: "materialDelKickoff" },
+    { archivo: "lib/canvas/kickoff-generate.ts", material: "materialDelKickoff" },
   ];
 
   it("los siete lectores usan los bloques enteros, sin recortarles la cabeza", () => {
@@ -469,7 +470,7 @@ describe("⭐ los seis documentos leen SOLO LAS ELEGIDAS, enteras (etapa 7)", ()
     { archivo: "lib/canvas/implementacion-generate.ts", material: "material" },
     { archivo: "lib/canvas/entrega-generate.ts", material: "material" },
     { archivo: "lib/canvas/desarrollo-generate.ts", material: "material" },
-    { archivo: "app/api/clients/[id]/analyze/route.ts", material: "materialDelKickoff" },
+    { archivo: "lib/canvas/kickoff-generate.ts", material: "materialDelKickoff" },
   ];
 
   it("cada lector rotula las reuniones como ELEGIDAS por el equipo y, sin ellas, pone `avisoSinReuniones`", () => {

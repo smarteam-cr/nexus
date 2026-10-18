@@ -44,6 +44,8 @@ describe("⭐ todo documento que la IA reescribe guarda la foto ANTES de escribi
     "lib/canvas/implementacion-generate.ts",
     "lib/canvas/entrega-generate.ts",
     "lib/canvas/desarrollo-generate.ts",
+    // El kickoff salió de analyze el 2026-10-17 (lib/entregables/generar-server.ts lo llama).
+    "lib/canvas/kickoff-generate.ts",
   ];
 
   it("cada runner llama a la foto antes de su primer borrado de bloques", () => {
@@ -56,9 +58,9 @@ describe("⭐ todo documento que la IA reescribe guarda la foto ANTES de escribi
     }
   });
 
-  it("el kickoff y el handoff (en analyze) también", () => {
+  it("el handoff (en analyze) también; el kickoff, en su runner (arriba)", () => {
     const src = leer("app/api/clients/[id]/analyze/route.ts");
-    expect((src.match(/await guardarVersionDelDocumento\(targetCanvasId/g) ?? []).length).toBe(2);
+    expect((src.match(/await guardarVersionDelDocumento\(targetCanvasId/g) ?? []).length).toBe(1);
   });
 
   it("⛔ el diagnóstico ya no BORRA sus secciones retiradas: las oculta (la Entrega lee la Escala)", () => {
