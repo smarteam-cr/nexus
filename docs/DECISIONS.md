@@ -9287,6 +9287,12 @@ concilie cada mañana María José. El análisis, la evidencia y lo que quedó h
   para la lista que confirma una persona, y ahí sigue.
 - **Nunca se cobra solo** lo de «Pagadas sin el día del pago» (la fecha decide el mes del gráfico), un choque, ni lo que
   solo se pega a su factura sin estar pagado: eso lo sigue confirmando quien concilia.
+- **Una cuota ya cobrada sin número recibe el de su factura si la factura está pagada allá** (`decidir`, acción
+  `yaCobrada`, prueba 36). Hasta el 18 oct `decidir` saltaba toda cuota cobrada, y una cuota cobrada nunca recibía su
+  número (Corrugando 0221, Servica 0268). Se pega con las mismas reglas que las demás (número, o monto exacto sin
+  dudas) y la confirma quien concilia, en «Se pegan a su factura»: el job no la toca. ⛔ Con la factura impaga no: es
+  un choque, y anotarle el número fijaría un pareo por monto que puede ser de otra factura (Juanva 0197 y 0230).
+  `scripts/medir-numero-en-cuotas-cobradas.ts` lo mide en solo lectura: el 18 oct, 13 cuotas (4 de Odoo, 9 de Mercury).
 - **Se deshace con «Sacar de Cobrado»**, con el mismo motivo de siempre. La bitácora de la reversión dice que el sistema no
   la vuelve a cobrar sola, y el job salta toda cuota con una reversión en su bitácora (`TEXTO_DE_LA_REVERSION`), también
   adentro del candado. Si después entra de verdad, se confirma a mano en «Lo pagado». Sin SQL: la marca es la bitácora.

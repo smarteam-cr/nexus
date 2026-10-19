@@ -196,6 +196,71 @@ describe("qué se escribe", () => {
     expect(decidir(e, pegarMercury(e), new Map()).acciones[0]!.cobrar).toEqual({ fechaCobro: "2026-08-12", deDonde: "la entrada de plata en Mercury", porQueNoSolo: null });
   });
 
+  it("una cuota ya cobrada sin número recibe el de su factura pagada, sin volver a cobrarla (Corrugando 0221, 2026-10-18)", () => {
+    const e = entrada({
+      cobros: [cobro("c1", { estado: "COBRADO", fechaEmision: "2026-08-01" })],
+      facturasOdoo: [odoo("f1", { paymentState: "paid", montoResidual: 0 })],
+    });
+    const pegados = pegarOdoo(e);
+    expect(pegados.map((p) => p.via)).toEqual(["monto"]);
+    // Ya cobrada: no hay que pedirle a Odoo el día del pago.
+    expect(facturasOdooParaFechar(e, pegados)).toEqual([]);
+    const d = decidir(e, pegados, new Map());
+    expect(d.acciones).toEqual([{ fuente: "ODOO", cobroId: "c1", numero: "FAC/2026/0001", numeroFactura: "FAC/2026/0001", yaCobrada: true }]);
+    expect(d.choques).toEqual([]);
+    // El job diario no la toca: no tiene nada que cobrar.
+    expect(paraCobrarSolo(d.acciones, new Set()).acciones).toEqual([]);
+  });
+
+  it("una cuota cobrada sin factura marcada recibe la fecha y el número; «en proceso de pago» también cuenta", () => {
+    const e = entrada({
+      cobros: [cobro("c1", { estado: "COBRADO" })],
+      facturasOdoo: [odoo("f1", { paymentState: "in_payment", montoResidual: 0 })],
+    });
+    expect(decidir(e, pegarOdoo(e), new Map()).acciones).toEqual([
+      { fuente: "ODOO", cobroId: "c1", numero: "FAC/2026/0001", fechaEmision: "2026-08-03", numeroFactura: "FAC/2026/0001", yaCobrada: true },
+    ]);
+  });
+
+  it("⛔ cobrada acá con la factura pegada por monto e impaga allá es un choque: no recibe el número (Juanva 0197)", () => {
+    const e = entrada({ cobros: [cobro("c1", { estado: "COBRADO", fechaEmision: "2026-08-01" })], facturasOdoo: [odoo("f1")] });
+    const d = decidir(e, pegarOdoo(e), new Map());
+    expect(d.acciones).toEqual([]);
+    expect(d.choques.map((p) => [p.cobroId, p.via])).toEqual([["c1", "monto"]]);
+  });
+
+  it("⛔ una cuota cobrada no recibe el número de una factura dudosa: dos igual de cerca, ninguna", () => {
+    const e = entrada({
+      cobros: [cobro("c1", { estado: "COBRADO", fechaEmision: "2026-08-01" })],
+      facturasOdoo: [
+        odoo("f1", { invoiceDate: "2026-08-04", paymentState: "paid", montoResidual: 0 }),
+        odoo("f2", { invoiceDate: "2026-07-29", paymentState: "paid", montoResidual: 0 }),
+      ],
+    });
+    expect(decidir(e, pegarOdoo(e), new Map()).acciones).toEqual([]);
+  });
+
+  it("⛔ una cuota cobrada con «pagada» y saldo pendiente no recibe el número: Odoo todavía no la da pagada", () => {
+    const e = entrada({
+      cobros: [cobro("c1", { estado: "COBRADO", fechaEmision: "2026-08-01" })],
+      facturasOdoo: [odoo("f1", { paymentState: "in_payment", montoResidual: 500 })],
+    });
+    expect(decidir(e, pegarOdoo(e), new Map()).acciones).toEqual([]);
+  });
+
+  it("Mercury: una cuota cobrada recibe el número de su factura «Paid»", () => {
+    const cs = [cobro("c1", { plataforma: "MERCURY", estado: "COBRADO", fechaEmision: "2026-08-01" })];
+    const e = entrada({ cobros: cs, facturasMercury: [mercury("m1", { estado: "Paid" })] });
+    expect(decidir(e, pegarMercury(e), new Map()).acciones).toEqual([
+      { fuente: "MERCURY", cobroId: "c1", numero: "INV-1", numeroFactura: "INV-1", yaCobrada: true },
+    ]);
+  });
+
+  it("lo marcado para pegar de una cuota ya cobrada conserva la marca", () => {
+    const a: Accion = { fuente: "ODOO", cobroId: "c1", numero: "FAC/2026/0001", numeroFactura: "FAC/2026/0001", yaCobrada: true };
+    expect(accionesElegidas([a], { pegar: ["c1"], cobrar: [] }).acciones).toEqual([a]);
+  });
+
   it("lo ya pegado y cobrado no vuelve a salir: correrlo dos veces no cambia nada", () => {
     const e = entrada({ cobros: [cobro("c1", { estado: "COBRADO", numeroFactura: "FAC/2026/0001", fechaEmision: "2026-08-03" })], facturasOdoo: [odoo("f1", { paymentState: "paid", montoResidual: 0 })] });
     expect(decidir(e, pegarOdoo(e), new Map()).acciones).toEqual([]);

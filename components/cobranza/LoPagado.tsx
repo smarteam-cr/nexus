@@ -34,6 +34,8 @@ interface AccionVista extends DeLaCuota {
   numeroFactura?: string;
   /** `porQueNoSolo` null = el sistema la cobra solo en la vuelta de la mañana; si no, por qué espera a una persona. */
   cobrar?: { fechaCobro: string; deDonde: string; porQueNoSolo: string | null };
+  /** Ya estaba cobrada en Nexus y su factura está pagada allá: solo le falta el número. */
+  yaCobrada?: true;
 }
 interface PegadoVisto extends DeLaCuota {
   fuente: "ODOO" | "MERCURY";
@@ -256,7 +258,7 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
 
           <Seccion
             titulo={`Se pegan a su factura · ${soloPegar.length} · ${plata(soloPegar)}`}
-            detalle="Tienen su factura en Odoo o en Mercury (por número, o por el monto exacto si es la única que calza) y todavía no están pagadas. Quedan facturadas con la fecha y el número de esa factura."
+            detalle="Tienen su factura en Odoo o en Mercury (por número, o por el monto exacto si es la única que calza) y no hay que cobrarlas: todavía no están pagadas, o ya están cobradas acá y su factura está pagada allá. Quedan con la fecha y el número de esa factura."
           >
             {soloPegar.length === 0 ? (
               <p className="px-4 py-3 text-xs text-fg-muted">Ninguna cuota espera su factura.</p>
@@ -267,7 +269,12 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
                 puedeEditar={puedeEditar}
                 onMarcar={(id, v) => alternar(pegar, setPegar, id, v)}
                 onTodas={(v) => setPegar(v ? new Set(soloPegar.map((a) => a.cobroId)) : new Set())}
-                ultima={(a) => <span>{a.fechaEmision ? `Facturada el ${fmtFecha(a.fechaEmision)}` : "Solo el número"}</span>}
+                ultima={(a) => (
+                  <span>
+                    {a.yaCobrada ? "Ya cobrada · " : ""}
+                    {a.fechaEmision ? `Facturada el ${fmtFecha(a.fechaEmision)}` : "Solo el número"}
+                  </span>
+                )}
               />
             )}
           </Seccion>

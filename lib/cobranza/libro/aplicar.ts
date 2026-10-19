@@ -175,7 +175,11 @@ async function escribirUnaCuota(
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Cobro" WHERE id = ${a.cobroId} FOR UPDATE`;
     const c = await tx.cobro.findUnique({ where: { id: a.cobroId }, select: { estado: true, fechaEmision: true, numeroFactura: true, cuentaId: true } });
-    if (!c || c.estado === "COBRADO") return "ya estaba cobrada";
+    if (!c) return "ya no existe";
+    /* Una cuota ya cobrada solo recibe su número (`yaCobrada`): el resto de lo que escribe esto la quiere sin cobrar. */
+    if (a.yaCobrada ? c.estado !== "COBRADO" : c.estado === "COBRADO") {
+      return a.yaCobrada ? "alguien la sacó de Cobrado entretanto" : "ya estaba cobrada";
+    }
     if (a.numeroFactura && c.numeroFactura) return "alguien le anotó un número entretanto";
     if (a.fechaEmision && c.fechaEmision) return "alguien la marcó facturada entretanto";
     /* El cobro solo vuelve a mirar, adentro del candado, si alguien la sacó de Cobrado: una reversión que llegó entre la
