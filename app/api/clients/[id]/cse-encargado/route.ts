@@ -7,7 +7,9 @@ import { escribirEncargadosEnLaEmpresa, laCsl } from "@/lib/hubspot/encargados-d
 import { cargarCuentas, hoyEnCostaRica } from "@/lib/cs/cartera";
 import { lineaDeLoEsencial, resumenDelPase } from "@/lib/cs/pase-de-cuenta";
 import { loEsencialDeLaCuenta } from "@/lib/memoria";
-import { syncProjectsForClient } from "@/lib/hubspot/sync-projects";
+import { espejarProyectoRecienCreado, syncProjectsForClient } from "@/lib/hubspot/sync-projects";
+import { hayQueReleerLosProyectos } from "@/lib/hubspot/proyecto-fusionado";
+import { olvidarMedicion } from "@/lib/para-ti/medir-server";
 import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 import { avisar } from "@/lib/para-ti/avisos-server";
 
@@ -156,6 +158,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   /* Un solo sync por cliente al final, no uno por proyecto: el espejo trae TODOS los proyectos
      de la empresa en la misma corrida, así que llamarlo N veces sería pagar lo mismo N veces. */
   const espejo = await syncProjectsForClient(clientId, { force: true });
+  /* ⚠ Si la corrida no corrió DESPUÉS de escribir (el piso de 60 s, porque la ficha se sincronizó sola al abrirse, o
+     una corrida en curso que empezó antes), Nexus seguía con el encargado viejo y la celda volvía a él (2026-10-19).
+     Se releen uno por uno los proyectos escritos con el espejo dirigido, que no pasa por el piso. */
+  if (hayQueReleerLosProyectos(espejo)) {
+    for (const p of proyectos) {
+      const uno = await espejarProyectoRecienCreado(clientId, p.hubspotServiceId!);
+      espejo.errors.push(...uno.errors);
+    }
+  }
   if (espejo.errors.length > 0) {
     return NextResponse.json(
       {
@@ -168,6 +179,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       { status: 502 },
     );
   }
+
+  /* Lo que sale del encargado (la cartera, «Para ti», las cuentas sin acción) se vuelve a medir enseguida, sin esperar
+     los dos minutos de la medición guardada: de quien la recibe, de quien la tenía y de quien hizo el pase. */
+  olvidarMedicion(destino.email);
+  for (const anterior of anteriores) olvidarMedicion(anterior);
+  if (guard.user.email) olvidarMedicion(guard.user.email);
 
   // «Para ti» (2026-10-04): a quien queda como encargado le llega el aviso (salvo que se lo haya asignado a sí mismo).
   // Desde el 2026-10-09 trae el resumen de la cuenta (lib/cs/pase-de-cuenta.ts); si no se puede armar, los proyectos.
