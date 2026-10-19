@@ -33,11 +33,15 @@ const ChatDelAsistente = dynamic(() => import("@/components/asistente/ChatDelAsi
  * Los rótulos del cajón. La caja de la lista dice «N cambios para aplicar» y, aplicada, «Aplicado» (el desenlace de
  * abajo dice «Listo: …»): un solo resumen, no tres (validación 104). Desde la guía, el estado vacío habla de la guía.
  */
-function rotulosDelChat(desdeLaGuia: boolean): RotulosDelChat {
+function rotulosDelChat(desdeLaGuia: boolean, conSugerencias: boolean): RotulosDelChat {
   return {
     alDestino: "a esta cuenta",
     vacio: {
-      intro: desdeLaGuia ? "Pídele lo que quieras cambiar en la guía. Por ejemplo:" : "Pregúntale lo que Nexus sabe de esta cuenta, o cuéntale lo que pasó. Por ejemplo:",
+      intro: desdeLaGuia
+        ? conSugerencias
+          ? "Pídele lo que quieras cambiar en la guía, o toca uno de los pedidos de abajo: llena el campo y lo mandas tú."
+          : "Pídele lo que quieras cambiar en la guía. Por ejemplo:"
+        : "Pregúntale lo que Nexus sabe de esta cuenta, o cuéntale lo que pasó. Por ejemplo:",
       cierre: "Lo que propone queda en una lista: nada se cambia hasta que la apliques.",
     },
     boton: (a, desmarcadas) => textoDelBoton((a.operaciones?.length ?? 0) - desmarcadas.size),
@@ -66,6 +70,8 @@ export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clie
   const [ancho, setAncho] = useState<"normal" | "amplio">("normal");
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [chip, setChip] = useState<ChipDelChat | null>(null);
+  // Lo que se le puede pedir sobre la guía, en botones (solo con el chip de la guía).
+  const [sugerencias, setSugerencias] = useState<string[]>([]);
   const { abierto: panelAbierto, alternar: alternarPanel, pos, rootRef, btnRef, panelRef } = usePanelFlotante({ side: "bottom", align: "end", selectorDeItems: "button, a" });
 
   const cargarResumen = useCallback(async () => {
@@ -105,6 +111,7 @@ export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clie
     const alPedir = (e: Event) => {
       const p = (e as CustomEvent<PedidoDeAbrirElChat>).detail ?? {};
       setChip(p.chip ? { tipo: p.chip.tipo, id: p.chip.id, etiqueta: p.chip.etiqueta } : null);
+      setSugerencias(p.chip?.tipo === "guia" ? (p.sugerencias ?? []) : []);
       abrir(p.texto);
     };
     window.addEventListener(EVENTO_ABRIR_EL_CHAT, alPedir);
@@ -150,7 +157,8 @@ export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clie
 
   const acciones = resumen?.acciones ?? [];
   const desdeLaGuia = chip?.tipo === "guia";
-  const rotulos = useMemo(() => rotulosDelChat(desdeLaGuia), [desdeLaGuia]);
+  const conSugerencias = desdeLaGuia && sugerencias.length > 0;
+  const rotulos = useMemo(() => rotulosDelChat(desdeLaGuia, conSugerencias), [desdeLaGuia, conSugerencias]);
 
   return (
     <>
@@ -260,7 +268,11 @@ export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clie
           borrador={borrador}
           pedidoDeFoco={pedidoDeFoco}
           chip={chip}
-          onSoltarChip={() => setChip(null)}
+          onSoltarChip={() => {
+            setChip(null);
+            setSugerencias([]);
+          }}
+          sugerencias={desdeLaGuia ? sugerencias : undefined}
         />
       ) : null}
     </>

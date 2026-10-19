@@ -148,6 +148,36 @@ describe("repreguntas, borrar y la línea del chat (validación 104)", () => {
     expect(deshacerElBorrado(p0)).toEqual({ tipo: "restaurar", clave: claveDePregunta(p0) });
   });
 
+  it("regenerar marca la pregunta «Regenerada», también una del asistente; volver a la de la guía la quita (prueba 104)", () => {
+    const preguntas = preguntasDeLarce();
+    const p1 = preguntas[1];
+    const clave = claveDePregunta(p1);
+    // Una de la guía que antes cambió el asistente (como la 1.1 de Larce) y después se regenera.
+    const regenerada = aplicar(
+      undefined,
+      { tipo: "cambiar", clave, repreguntas: ["¿Cuántos negocios se perdieron?"], origen: "asistente" },
+      { tipo: "cambiar", clave, pregunta: "¿Qué pasa con un negocio cuando nadie lo mueve?", repreguntas: ["¿Cuántos?"], origen: "regenerada" },
+    );
+    const vista = aplicarAjustes(preguntas, regenerada, apuntaA)[1];
+    expect(vista).toMatchObject({ marca: "regenerada", cambiada: true, pregunta: "¿Qué pasa con un negocio cuando nadie lo mueve?" });
+    expect(aplicarAjustes(preguntas, aplicar(regenerada, { tipo: "restaurar", clave }), apuntaA)[1]).toEqual(p1);
+
+    // Una que sumó el asistente: regenerada deja de decir «Del asistente»; editada por ti, «Editada por ti».
+    const delAsistente = aplicar(undefined, { tipo: "agregar", pregunta: { id: "pa", pregunta: "¿Cuánto cuesta?", repreguntas: [], para: "1.2", origen: "asistente" } });
+    const otra = aplicar(delAsistente, { tipo: "cambiar", clave: "propia:pa", pregunta: "¿Cuántas horas se pierden?", origen: "regenerada" });
+    const ultima = (a: AjustesDeLaGuia) => aplicarAjustes(preguntas, a, apuntaA).at(-1)!;
+    expect(ultima(delAsistente)).toMatchObject({ marca: "asistente" });
+    expect(ultima(delAsistente).cambiada).toBeUndefined();
+    expect(ultima(otra)).toMatchObject({ marca: "regenerada", cambiada: true, pregunta: "¿Cuántas horas se pierden?" });
+    expect(ultima(aplicar(otra, { tipo: "cambiar", clave: "propia:pa", pregunta: "¿Cuántas horas?", origen: "tuya" }))).toMatchObject({ marca: "tuya", cambiada: true });
+    // Una tuya editada por ti sigue siendo «Tuya»; borrarla y deshacer la devuelve con su marca.
+    const tuya = aplicar(undefined, { tipo: "agregar", pregunta: { id: "pt", pregunta: "¿Uno?", repreguntas: [], origen: "tuya" } }, { tipo: "cambiar", clave: "propia:pt", pregunta: "¿Dos?", origen: "tuya" });
+    expect(tuya.propias?.[0].cambio).toBeUndefined();
+    const vistaOtra = ultima(otra);
+    const devuelta = aplicar(aplicar(otra, { tipo: "quitar", clave: "propia:pa" }), deshacerElBorrado(vistaOtra, otra.propias![0]));
+    expect(ultima(devuelta)).toEqual(vistaOtra);
+  });
+
   it("la línea del cambio muestra las repreguntas nuevas con sus palabras", () => {
     expect(lineaDelCambio({ sesion: 2, numero: 2, tema: "Procesos y Rutinas", repreguntas: ["¿Cuántos?", "¿Cuánto en plata?"] })).toBe(
       "Guía de la sesión 2: en la 2 (Procesos y Rutinas), las repreguntas «¿Cuántos?» · «¿Cuánto en plata?»",

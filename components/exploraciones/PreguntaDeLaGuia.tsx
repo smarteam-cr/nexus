@@ -19,7 +19,9 @@ import {
   LARGO_DE_UNA_REPREGUNTA,
   MAX_REPREGUNTAS,
   deshacerElBorrado,
+  esPropia,
   nuevoIdDePropia,
+  PREFIJO_PROPIA,
   type CambioDeLaGuia,
 } from "@/lib/exploraciones/ajustes-de-la-guia";
 import type { PestanaDeSesion, PreguntaParaMostrar } from "@/lib/exploraciones/guia";
@@ -121,7 +123,8 @@ export function PreguntaDeLaGuia({ p, pestana, corta, borde, editable }: { p: Pr
 
   /* Borrar, con «Deshacer» (validación 104): una de la guía se devuelve; una propia se vuelve a agregar igual. */
   const borrar = async () => {
-    const deshacer = deshacerElBorrado(p);
+    const propia = esPropia(p.para) ? pestana.sesion?.ajustesDeLaGuia?.propias?.find((x) => `${PREFIJO_PROPIA}${x.id}` === p.para) : undefined;
+    const deshacer = deshacerElBorrado(p, propia);
     if (!(await ajustar({ tipo: "quitar", clave }))) return;
     toast.success("Pregunta borrada de esta sesión.", { action: { label: "Deshacer", onClick: () => void ajustar(deshacer) } });
   };
@@ -130,7 +133,8 @@ export function PreguntaDeLaGuia({ p, pestana, corta, borde, editable }: { p: Pr
   const items = [
     ...(sePuedeRegenerar ? [{ key: "regenerar", label: regenerando ? "Regenerando…" : "Regenerar", disabled: regenerando, onSelect: () => void regenerar() }] : []),
     { key: "editar", label: "Editar", onSelect: () => setEditando(true) },
-    ...(p.cambiada ? [{ key: "volver", label: "Volver a la de la guía", onSelect: () => void ajustar({ tipo: "restaurar", clave }) }] : []),
+    // Volver a la de la guía es de una pregunta de la guía cambiada: una propia no tiene a qué volver.
+    ...(p.cambiada && !esPropia(p.para) ? [{ key: "volver", label: "Volver a la de la guía", onSelect: () => void ajustar({ tipo: "restaurar", clave }) }] : []),
     { key: "borrar", label: "Borrar", danger: true, separatorBefore: true, onSelect: () => void borrar() },
   ];
 

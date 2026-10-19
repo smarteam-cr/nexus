@@ -9161,6 +9161,14 @@ repreguntas, y lo que cubre la guía pegado a ella. El plan está en `docs/preve
   unos US$0,015 por llamada (unos 4.100 tokens de entrada y 150 de salida; el doble si reintenta). Un turno del asistente
   que agrega dos preguntas y acorta otra son dos llamadas: unos US$0,11 el primero (escribe la caché del prompt y de la
   cuenta) y menos los siguientes, que la leen.
+- **Una pregunta propia guarda quién la sumó y quién la cambió** (`PreguntaPropia.cambio`, 2026-10-19, prueba 104).
+  Regenerar una que había sumado el asistente seguía diciendo «Del asistente»: el cambio de una propia no guardaba su
+  origen. Ahora «Regenerar» marca «Regenerada» a cualquier pregunta, y una tuya editada por ti sigue siendo «Tuya».
+  «Volver a la de la guía» es solo de una pregunta de la guía: una propia no tiene a qué volver.
+- **Al abrir el asistente desde la guía, de 3 a 4 pedidos en botones** (`sugerenciasDelAsistente`, puro y sin IA): la
+  pregunta con menos repreguntas, las dimensiones en juego que la guía no pregunta y no tienen evidencia, y lo primero
+  que falta para proponer. Nombran la pregunta por su tema, no por su número (la pantalla no numera). Un clic llena el
+  campo; lo manda la persona. Se ven arriba del campo mientras está vacío, también con conversación anterior.
 
 ## La rentabilidad, conectada con las agendas y las tareas (2026-10-18)
 

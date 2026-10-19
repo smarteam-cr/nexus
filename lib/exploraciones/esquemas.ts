@@ -345,6 +345,7 @@ const PreguntaPropiaSchema = z.object({
   repreguntas: REPREGUNTAS_DEL_AJUSTE,
   para: TEMA_DE_PREGUNTA.optional(),
   origen: z.enum(["tuya", "asistente"]),
+  cambio: z.enum(ORIGENES_DEL_AJUSTE).optional(),
 });
 export const AjustesDeLaGuiaSchema: z.ZodType<AjustesDeLaGuia> = z.object({
   propias: z.array(PreguntaPropiaSchema).max(MAX_PREGUNTAS_PROPIAS).optional(),

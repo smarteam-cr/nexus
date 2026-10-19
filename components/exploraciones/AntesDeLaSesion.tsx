@@ -40,6 +40,8 @@ import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion,
 import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
 import { LoQueCubreLaGuia } from "./LoQueCubreLaGuia";
 import { abrirElChatDeNexus } from "@/lib/nexus-chat/constantes";
+import { queCubreLaGuia } from "@/lib/exploraciones/que-cubre-la-guia";
+import { sugerenciasDelAsistente } from "@/lib/exploraciones/sugerencias-del-asistente";
 import { QueVaPrimero } from "./QueVaPrimero";
 import Segmentos from "./Segmentos";
 import { lineasDe } from "./Resumen";
@@ -504,7 +506,7 @@ function Columna({
 }
 
 function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
-  const { exp, escala, marco, chequeo, puedeEditar, conAsistente } = useLienzo();
+  const { exp, escala, marco, chequeo, mapa, puedeEditar, conAsistente } = useLienzo();
   const temas = useTemasDeLaGuia();
   // Cambiar la guía (regenerar, editar, quitar, sumar) es de la próxima sesión: la de una que ya pasó queda como se armó.
   const editable = esLaProxima && puedeEditar;
@@ -553,6 +555,20 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
               abrirElChatDeNexus({
                 chip: { tipo: "guia", id: exp.id, etiqueta: `la guía de la sesión ${pestana.numero}` },
                 texto: "",
+                // Lo que se le puede pedir sobre ESTA guía, en botones (sin IA): ver sugerencias-del-asistente.ts.
+                sugerencias: sugerenciasDelAsistente({
+                  preguntas,
+                  cubre: queCubreLaGuia({
+                    preguntas,
+                    puntos: enProyecto ? avanceDeLaEstrategia(e) : listaParaProponer(e, chequeo),
+                    escala,
+                    posiciones: mapa.posiciones,
+                    marco: enProyecto ? "cs" : "venta",
+                  }),
+                  dimensiones: escala.areas.filter((a) => e.areas.includes(a.id)).flatMap((a) => a.dimensiones.filter((d) => d.aplica)),
+                  posiciones: mapa.posiciones,
+                  nombreDe: (tema) => nombreDelPara(tema, escala, marco),
+                }),
               })
             }
             className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-fg hover:bg-surface-hover"

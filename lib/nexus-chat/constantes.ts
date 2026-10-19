@@ -20,6 +20,11 @@ export interface PedidoDeAbrirElChat {
   chip?: { tipo: "guia"; id: string; etiqueta: string };
   /** Llena el campo sin mandarlo. */
   texto?: string;
+  /**
+   * Pedidos listos para mandar, en botones arriba del campo (con el chip de la guía: los arma la guía real, sin IA, en
+   * lib/exploraciones/sugerencias-del-asistente.ts). Un clic llena el campo; no lo manda.
+   */
+  sugerencias?: string[];
 }
 
 /** Abre el chat de la cuenta (si está montado en la pantalla). */

@@ -21,7 +21,6 @@ import { ajustarLaGuia, ErrorDeLaGuia, preguntasDeLaProxima } from "@/lib/explor
 import { repiteLoSabido, QUE_BUSCA_CADA_PASO } from "@/lib/exploraciones/plan-de-la-guia";
 import {
   claveDePregunta,
-  esPropia,
   lineaDelCambio,
   LARGO_DE_UNA_PREGUNTA,
   LARGO_DE_UNA_REPREGUNTA,
@@ -253,7 +252,7 @@ export const CAMBIAR_PREGUNTA: OperacionQuePropone<
       }
       return {
         ok: true,
-        datos: { exploracionId: e.exploracionId, cambio: { tipo: "cambiar", clave: e.clave, ...(e.pregunta ? { pregunta: e.pregunta } : {}), ...(e.repreguntas ? { repreguntas: e.repreguntas } : {}), origen: esPropia(e.clave) ? "tuya" : "asistente" } },
+        datos: { exploracionId: e.exploracionId, cambio: { tipo: "cambiar", clave: e.clave, ...(e.pregunta ? { pregunta: e.pregunta } : {}), ...(e.repreguntas ? { repreguntas: e.repreguntas } : {}), origen: "asistente" } },
         linea: lineaDelCambio({ sesion: base.ctx.proxima.numero, numero, tema: tema ? nombreDelTema(base, tema) : null, pregunta: e.pregunta, repreguntas: e.repreguntas }),
       };
     });
@@ -323,7 +322,7 @@ export const CAMBIAR_REPREGUNTA: OperacionQuePropone<
     if (!p) throw new ErrorDeLaGuia(409, "Esa pregunta ya no está en la guía.");
     const repreguntas = [...p.repreguntas];
     repreguntas[Math.min(d.numero, repreguntas.length + 1) - 1] = d.texto;
-    await ajustarLaGuia(d.exploracionId, { tipo: "cambiar", clave: d.clave, repreguntas, origen: esPropia(d.clave) ? "tuya" : "asistente" }, ctx.persona.email, base);
+    await ajustarLaGuia(d.exploracionId, { tipo: "cambiar", clave: d.clave, repreguntas, origen: "asistente" }, ctx.persona.email, base);
     return { ok: true };
   },
 };
