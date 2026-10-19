@@ -362,3 +362,26 @@ export function facturacionPorCliente(
     anios,
   };
 }
+
+/** Por qué sistema se le facturó: todos, solo con facturas de Odoo o solo con facturas de Mercury. */
+export type SistemaDeFacturacion = "TODOS" | "ODOO" | "MERCURY";
+
+const sinTildes = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+/**
+ * Las filas que se ven con el buscador y el filtro por sistema (prueba 35, 2026-10-19: «busca un cliente de Mercury»).
+ * El texto mira el nombre de la fila y las razones sociales de Odoo, sin tildes ni mayúsculas. «Mercury» deja las filas
+ * con alguna factura de Mercury; «Odoo», las que tienen alguna de Odoo.
+ */
+export function filtrarFilas<F extends Pick<FilaDeFacturacion, "nombre" | "clientesDeOdoo" | "facturas" | "deMercury">>(
+  filas: readonly F[],
+  filtro: { texto: string; sistema: SistemaDeFacturacion },
+): F[] {
+  const texto = sinTildes(filtro.texto.trim());
+  return filas.filter((f) => {
+    if (filtro.sistema === "MERCURY" && f.deMercury === 0) return false;
+    if (filtro.sistema === "ODOO" && f.deMercury >= f.facturas) return false;
+    if (!texto) return true;
+    return [f.nombre, ...f.clientesDeOdoo].some((n) => sinTildes(n).includes(texto));
+  });
+}

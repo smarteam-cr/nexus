@@ -13,16 +13,24 @@ import { Alert, Button, Drawer, Input, ListSkeleton, Modal, Select, Textarea } f
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
-import { fmtMontoLibro, parseMontoLocal } from "@/lib/cobranza/montos";
+import { fmtMontoLibro } from "@/lib/cobranza/montos";
 import {
   parteDeServicioDe,
   problemasDeLicencia,
   PROVEEDORES_SUGERIDOS,
-  type DatosDeLicencia,
   type LicenciaDeContrato,
   type ModoLicencias,
   type ResumenDeLicencia,
 } from "@/lib/finanzas/licencias";
+import {
+  datosDelFormulario,
+  FORMULARIO_VACIO,
+  formularioDeContrato,
+  FRECUENCIAS_DEL_COSTO,
+  monedaDelCosto,
+  numeroDelCampo,
+  type FormularioDeLicencia,
+} from "@/lib/finanzas/licencias-formulario";
 import { MESES_DEL_CONTRATO, type ResumenDeLoVendido } from "@/lib/finanzas/lo-vendido";
 
 export interface LicenciasDelReporte {
@@ -56,7 +64,8 @@ export default function LicenciasRevendidas({
   /** Se cargó, editó o decidió algo: el reporte se vuelve a armar. */
   onCambio: () => void;
 }) {
-  const [editando, setEditando] = useState(false);
+  /** null = cerrado; "" = la lista de contratos; un id = ese contrato abierto para editar. */
+  const [editando, setEditando] = useState<string | null>(null);
   const [decidiendo, setDecidiendo] = useState(false);
   const firmo = licencias.decision ? (nombres[licencias.decision.decididoPor.toLowerCase()] ?? licencias.decision.decididoPor) : null;
 
@@ -73,7 +82,7 @@ export default function LicenciasRevendidas({
         <button type="button" className={BOTON} onClick={() => setDecidiendo(true)}>
           {licencias.decision ? "Cambiar cómo cuentan" : "Decidir cómo cuentan"}
         </button>
-        <button type="button" className={BOTON} onClick={() => setEditando(true)}>
+        <button type="button" className={BOTON} onClick={() => setEditando("")}>
           Contratos
         </button>
       </div>
@@ -98,6 +107,12 @@ export default function LicenciasRevendidas({
                 )}
               </span>
               <span className="text-xs text-fg-muted">{c.fuente}</span>
+              {/* Los que salen de una propuesta ganada no se editan acá: se corrigen en la Inversión de la propuesta. */}
+              {!c.id.startsWith("propuesta:") && (
+                <button type="button" className={cn(BOTON, "ml-auto")} onClick={() => setEditando(c.id)}>
+                  Editar
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -118,9 +133,10 @@ export default function LicenciasRevendidas({
         </p>
       )}
 
-      {editando && (
+      {editando !== null && (
         <EditorDeContratos
-          onClose={() => setEditando(false)}
+          abrirCon={editando || null}
+          onClose={() => setEditando(null)}
           onCambio={() => {
             onCambio();
           }}
@@ -250,75 +266,13 @@ export function DecidirLicencias({ actual, onClose, onDecidido }: { actual: Modo
 
 /* ── El editor de contratos ─────────────────────────────────────────────────────────────────────────────────────── */
 
-type Formulario = Record<keyof Omit<DatosDeLicencia, "costoMoneda" | "moneda">, string> & { moneda: "USD" | "CRC"; costoMoneda: "" | "USD" | "CRC" };
-
-const VACIO: Formulario = {
-  cuentaId: "",
-  moneda: "USD",
-  montoContrato: "",
-  montoServicio: "",
-  proveedor: "HubSpot",
-  costoMonto: "",
-  costoMoneda: "",
-  costoCadaMeses: "",
-  desde: "",
-  hasta: "",
-  fuente: "",
-  notas: "",
-};
-
-/**
- * «70.000», «161.700,50» o «161700.50», con la regla del importador (`parseMontoLocal`): un separador solo seguido de
- * exactamente 3 dígitos es de miles; con 1-2, decimal; con los dos, el último es el decimal. Vacío = null. Un texto
- * que no es un número da NaN, para que `problemasDeLicencia` lo marque y no se guarde un 0 en silencio.
- */
-const numero = (s: string) => {
-  const t = s.trim();
-  if (t === "") return null;
-  return parseMontoLocal(t) ?? Number.NaN;
-};
-
-function aDatos(f: Formulario): DatosDeLicencia {
-  return {
-    cuentaId: f.cuentaId,
-    moneda: f.moneda,
-    montoContrato: numero(f.montoContrato) ?? 0,
-    montoServicio: numero(f.montoServicio) ?? 0,
-    proveedor: f.proveedor,
-    costoMonto: numero(f.costoMonto),
-    costoMoneda: f.costoMoneda || null,
-    costoCadaMeses: numero(f.costoCadaMeses),
-    desde: f.desde || null,
-    hasta: f.hasta || null,
-    fuente: f.fuente,
-    notas: f.notas || null,
-  };
-}
-
-function deContrato(l: LicenciaDeContrato): Formulario {
-  return {
-    cuentaId: l.cuentaId,
-    moneda: l.moneda === "CRC" ? "CRC" : "USD",
-    montoContrato: String(l.montoContrato),
-    montoServicio: String(l.montoServicio),
-    proveedor: l.proveedor,
-    costoMonto: l.costoMonto === null ? "" : String(l.costoMonto),
-    costoMoneda: l.costoMoneda === "CRC" || l.costoMoneda === "USD" ? l.costoMoneda : "",
-    costoCadaMeses: l.costoCadaMeses === null ? "" : String(l.costoCadaMeses),
-    desde: l.desde ?? "",
-    hasta: l.hasta ?? "",
-    fuente: l.fuente,
-    notas: l.notas ?? "",
-  };
-}
-
-function EditorDeContratos({ onClose, onCambio }: { onClose: () => void; onCambio: () => void }) {
+function EditorDeContratos({ abrirCon, onClose, onCambio }: { abrirCon: string | null; onClose: () => void; onCambio: () => void }) {
   const toast = useToast();
   const [datos, setDatos] = useState<{ contratos: LicenciaDeContrato[]; cuentas: Array<{ cuentaId: string; nombre: string }> } | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** null = la lista; "nuevo" = un contrato nuevo; un id = editar ese. */
   const [abierto, setAbierto] = useState<string | null>(null);
-  const [f, setF] = useState<Formulario>(VACIO);
+  const [f, setF] = useState<FormularioDeLicencia>(FORMULARIO_VACIO);
   const [guardando, setGuardando] = useState(false);
 
   const cargar = async () => {
@@ -334,12 +288,21 @@ function EditorDeContratos({ onClose, onCambio }: { onClose: () => void; onCambi
 
   const abrir = (l: LicenciaDeContrato | null) => {
     setAbierto(l ? l.id : "nuevo");
-    setF(l ? deContrato(l) : VACIO);
+    setF(l ? formularioDeContrato(l) : FORMULARIO_VACIO);
   };
 
-  const problemas = abierto ? problemasDeLicencia(aDatos(f)) : [];
+  // «Editar» desde la fila del contrato: al llegar la lista, se abre ese contrato (una vez).
+  const [yaAbrio, setYaAbrio] = useState(false);
+  useEffect(() => {
+    if (yaAbrio || !abrirCon || !datos) return;
+    setYaAbrio(true);
+    const l = datos.contratos.find((x) => x.id === abrirCon);
+    if (l) abrir(l);
+  }, [abrirCon, datos, yaAbrio]);
+
+  const problemas = abierto ? problemasDeLicencia(datosDelFormulario(f)) : [];
   const pct = (() => {
-    const d = aDatos(f);
+    const d = datosDelFormulario(f);
     return d.montoContrato > 0 && Number.isFinite(d.montoServicio) ? Math.round(parteDeServicioDe(d) * 1000) / 10 : null;
   })();
 
@@ -350,7 +313,7 @@ function EditorDeContratos({ onClose, onCambio }: { onClose: () => void; onCambi
     }
     setGuardando(true);
     try {
-      const d = aDatos(f);
+      const d = datosDelFormulario(f);
       if (abierto === "nuevo") await fetchJson("/api/cobranza/licencias", { method: "POST", body: JSON.stringify(d) });
       else {
         const { cuentaId: _cuenta, ...resto } = d;
@@ -380,8 +343,8 @@ function EditorDeContratos({ onClose, onCambio }: { onClose: () => void; onCambi
   };
 
   /** Con `monedaDelMonto`, debajo del campo va el número que se va a guardar: «70.000» no puede leerse como 70 sin que se vea. */
-  const campo = (k: keyof Formulario, etiqueta: string, ayuda?: string, tipo = "text", monedaDelMonto?: string) => {
-    const leido = monedaDelMonto !== undefined && f[k].trim() !== "" ? numero(f[k]) : null;
+  const campo = (k: keyof FormularioDeLicencia, etiqueta: string, ayuda?: string, tipo = "text", monedaDelMonto?: string) => {
+    const leido = monedaDelMonto !== undefined && f[k].trim() !== "" ? numeroDelCampo(f[k]) : null;
     return (
       <label className="flex flex-col gap-1">
         <span className="text-[13px] font-medium text-fg">{etiqueta}</span>
@@ -446,7 +409,11 @@ function EditorDeContratos({ onClose, onCambio }: { onClose: () => void; onCambi
           )}
           <label className="flex flex-col gap-1">
             <span className="text-[13px] font-medium text-fg">Moneda en que se le factura</span>
-            <Select value={f.moneda} onChange={(e) => setF((x) => ({ ...x, moneda: e.target.value as "USD" | "CRC" }))}>
+            <Select value={f.moneda} onChange={(e) => {
+                const moneda = e.target.value as "USD" | "CRC";
+                // Un costo «en la otra moneda» que pasa a ser la del contrato vuelve a «la del contrato».
+                setF((x) => ({ ...x, moneda, costoMoneda: x.costoMoneda === moneda ? "" : x.costoMoneda }));
+              }}>
               <option value="USD">Dólares</option>
               <option value="CRC">Colones</option>
             </Select>
@@ -465,16 +432,27 @@ function EditorDeContratos({ onClose, onCambio }: { onClose: () => void; onCambi
             </datalist>
           </label>
           <div className="grid grid-cols-3 gap-3">
-            {campo("costoMonto", "Lo que se le paga", "Vacío si no se sabe.", "text", f.costoMoneda || f.moneda)}
+            {campo("costoMonto", "Lo que se le paga", "Vacío si no se sabe.", "text", monedaDelCosto(f))}
             <label className="flex flex-col gap-1">
               <span className="text-[13px] font-medium text-fg">Moneda</span>
-              <Select value={f.costoMoneda} onChange={(e) => setF((x) => ({ ...x, costoMoneda: e.target.value as Formulario["costoMoneda"] }))}>
-                <option value="">—</option>
-                <option value="USD">Dólares</option>
-                <option value="CRC">Colones</option>
+              <Select value={f.costoMoneda} onChange={(e) => setF((x) => ({ ...x, costoMoneda: e.target.value as FormularioDeLicencia["costoMoneda"] }))}>
+                <option value="">La del contrato ({f.moneda === "CRC" ? "colones" : "dólares"})</option>
+                <option value={f.moneda === "CRC" ? "USD" : "CRC"}>{f.moneda === "CRC" ? "Dólares" : "Colones"}</option>
               </Select>
             </label>
-            {campo("costoCadaMeses", "Cada cuántos meses", "3 = trimestral.")}
+            <label className="flex flex-col gap-1">
+              <span className="text-[13px] font-medium text-fg">Cada cuánto</span>
+              <Select value={f.costoCadaMeses} onChange={(e) => setF((x) => ({ ...x, costoCadaMeses: e.target.value }))}>
+                {FRECUENCIAS_DEL_COSTO.map((o) => (
+                  <option key={o.meses} value={String(o.meses)}>
+                    {o.etiqueta}
+                  </option>
+                ))}
+                {!FRECUENCIAS_DEL_COSTO.some((o) => String(o.meses) === f.costoCadaMeses) && (
+                  <option value={f.costoCadaMeses}>Cada {f.costoCadaMeses} meses</option>
+                )}
+              </Select>
+            </label>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {campo("desde", "Rige desde", "Vacío = desde siempre.", "date")}
