@@ -8716,8 +8716,9 @@ que tener su acción de la semana y su reunión agendada.
   cuentas que lleva y las que no lleva nadie, como mucho 40. Ajustarla por chat queda para después.
 - **La agenda de «Para ti» abre en la semana** (2026-10-18, validación 9; `vistaPedidaDeLaAgenda`): sin `?agenda`, la
   semana; `?agenda=dia`, el día. No se guarda por persona: la vista va en la dirección. En fin de semana abre la semana
-  que viene. Con la semana de hoy en pantalla, lo de hoy (los números, el resumen, la reunión que se abre sola) sale de
-  esa misma semana (`reunionesDelDia`): el calendario no se lee dos veces por visita.
+  que viene. Con la semana de hoy en pantalla, lo de hoy (los números y el resumen) sale de esa misma semana
+  (`reunionesDelDia`): el calendario no se lee dos veces por visita. (Hasta el 2026-10-19 también abría sola la próxima
+  reunión: ver «La agenda de «Para ti» es la de Google Calendar».)
 - **Cada hueco de hoy sugiere con qué avanzar**: la tarea más importante que cabe, con «Ponerla en la agenda». Se ve en el
   día y en la columna de hoy de la semana.
 - **«Agendar» propone hora en todas las listas**, y si hay varias cuentas, cada una recibe una hora distinta.
@@ -9414,3 +9415,35 @@ reunión del calendario y la página de la sesión mostraban lo mismo con piezas
   El botón de la línea de una reunión dice «Revisar sesión».
 - **Lo que no cambió:** el aviso de una reunión prometida no sale si la reunión ya está en el calendario de quien lleva
   la cuenta (Accesos Automáticos: la demo del 21 oct está agendada), y una reunión interna no avisa (desde el 18 oct).
+
+## La agenda de «Para ti» es la de Google Calendar (2026-10-19)
+
+**Contexto.** Elías comparó la semana del 19 al 23 oct de Andrés Pinzón en Google Calendar con la de «Para ti»: faltaban
+eventos y Nexus sugería espacio libre encima de ellos (lunes de 13:00 a 14:00, donde estaba «Convocatoria ICB»). Leído
+su calendario en solo lectura, faltaban los 7 eventos SIN otros invitados de la semana: «Tenis» (lun y jue), «Convocatoria
+ICB», «Preparar demo para Accesos Automáticos», «Cita Médica», «Sale Juan del colegio» y «Entrega de notas». La agenda
+pintaba solo las reuniones (`agendaDelDia` pide dos personas) y los espacios libres se calculaban con eso. Lo demás
+coincidía: «Crunchyroll» y «6 tareas pendientes» son tareas de Google (no vienen en el calendario), «Casa» es la ubicación
+de trabajo y el otro calendario que tiene compartido no está a la vista en su Google Calendar.
+
+- **Todo evento con hora se ve** (`eventosPropios`, lib/mi-dia/agenda.ts): lo de la persona sola y el bloque de una
+  tarea de Nexus, que lleva a la tarea. No tiene panel: abre en Google Calendar. Las reuniones siguen siendo
+  `agendaDelDia`, lo único que leen la regla de servicio, las cifras y el panel.
+- **Qué ocupa el tiempo** (`ocupaSuTiempo`): todo evento con hora, salvo el rechazado y el que la persona marcó
+  «disponible». Los de todo el día, la ubicación de trabajo y las tareas de Google no ocupan horas. «Quizás» y opcional
+  sí ocupan (es común estar invitado a dos a la vez e ir a uno) y se ven más claros. Lo ocupado de la agenda
+  (`ocupadoDeLaAgenda`, lib/mi-dia/inicio.ts) es lo que no pisan los espacios libres, el resumen y «Agendar».
+- **Los de todo el día van arriba de cada columna**, sin la ubicación de trabajo.
+- **Los que se pisan van lado a lado**, como ya hacía la grilla; en uno corto, lo que se achica primero es la hora y no el
+  título (antes, «SPRINT COMERCIAL» se leía solo como «8:00–8:30»).
+- **El almuerzo** (supuesto declarado, lib/mi-dia/constantes.ts): si la persona marcó un evento «Almuerzo», «Lunch» o
+  «Comida» ese día, ese es; si no, Nexus no sugiere nada de 12:00 a 13:00. Vale para el espacio libre, el resumen,
+  «Agendar» y «Planifica tu semana». Tocar esa hora para crear un evento a mano sigue funcionando. La ubicación de
+  trabajo no dice nada del almuerzo y no se usa.
+- **Lo que sugiere Nexus son bloques del tamaño de cada tarea** (`bloquesSugeridos`): en cada espacio libre, la tarea
+  más importante que cabe en lo que queda, en un bloque de su tamaño (lo estimado o una hora), una detrás de otra y como
+  mucho dos por espacio. Nunca el espacio entero: Elías vio «Avanza T-100 · Libre 12:00–16:00», cuatro horas para una
+  tarea de una. Sin ninguna tarea que quepa, la primera hora del espacio dice «Espacio libre» y el panel dice el espacio
+  entero.
+- **Al entrar no se abre nada solo.** Antes se abría el panel de la próxima reunión con un cliente; ahora el panel lo
+  abre la persona al tocar un evento o un espacio.

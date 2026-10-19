@@ -91,11 +91,11 @@ export function useAgendaNavegable(inicial: AgendaQueSeVe | null, correo: string
         return;
       }
       // Mientras llega, la grilla ya muestra el día nuevo (sin reuniones) y dice que está leyendo.
-      setEstado({ vista, dia, datos: { estado: "ok", dia, reuniones: [] } });
+      setEstado({ vista, dia, datos: { estado: "ok", dia, reuniones: [], propios: [], todoElDia: [] } });
       setCargando(true);
       void pedir(correo, vista, dia).then((datos) => {
         if (n !== ultimo.current) return;
-        setEstado({ vista, dia, datos: datos ?? { estado: "error", dia, reuniones: [] } });
+        setEstado({ vista, dia, datos: datos ?? { estado: "error", dia, reuniones: [], propios: [], todoElDia: [] } });
         setCargando(false);
       });
     },

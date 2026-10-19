@@ -9,7 +9,16 @@
  */
 import "server-only";
 import { eventosEntre, type MotivoSinAgenda } from "@/lib/google/agenda-de-la-empresa";
-import { agendaDelDia, limitesDelDiaCR, type EventoConEnlaces, type ReunionDeHoy } from "./agenda";
+import {
+  agendaDelDia,
+  eventosDeTodoElDia,
+  eventosPropios,
+  limitesDelDiaCR,
+  type EventoConEnlaces,
+  type EventoDeTodoElDia,
+  type EventoPropio,
+  type ReunionDeHoy,
+} from "./agenda";
 import { mapasDeEmpresas } from "./empresas-server";
 
 export interface ReunionDeLaAgenda extends ReunionDeHoy {
@@ -22,6 +31,15 @@ export interface AgendaDeHoy {
   /** El día (o el lunes, en la semana), `AAAA-MM-DD`. */
   dia: string;
   reuniones: ReunionDeLaAgenda[];
+  /** Lo demás con hora («Tenis», «Cita Médica», el bloque de una tarea): se pinta y ocupa, como en Google Calendar. */
+  propios: EventoPropio[];
+  /** Los de todo el día (no ocupan horas). */
+  todoElDia: EventoDeTodoElDia[];
+}
+
+/** Una agenda sin nada (mientras se lee, o cuando no se pudo leer). */
+export function agendaVacia(estado: AgendaDeHoy["estado"], dia: string): AgendaDeHoy {
+  return { estado, dia, reuniones: [], propios: [], todoElDia: [] };
 }
 
 const DIA_MS = 86_400_000;
@@ -64,13 +82,14 @@ export async function agendaEntre(email: string, desde: Date, hasta: Date, dia: 
 async function leerAgenda(email: string, desde: Date, hasta: Date, dia: string): Promise<AgendaDeHoy> {
   const dias = Math.ceil((hasta.getTime() - desde.getTime()) / DIA_MS);
   const eventos = await eventosEntre(email, desde, hasta, { maxDias: dias });
-  if (!eventos.ok) return { estado: eventos.motivo, dia, reuniones: [] };
+  if (!eventos.ok) return agendaVacia(eventos.motivo, dia);
   const { porCorreo, porDominio, internos, nombreDe } = await mapasDeEmpresas();
-  const reuniones = agendaDelDia(eventos.datos as EventoConEnlaces[], { porCorreo, porDominio, internos }).map((r) => ({
+  const datos = eventos.datos as EventoConEnlaces[];
+  const reuniones = agendaDelDia(datos, { porCorreo, porDominio, internos }).map((r) => ({
     ...r,
     nombres: Object.fromEntries(r.empresas.map((id) => [id, nombreDe.get(id) ?? "Empresa"])),
   }));
-  return { estado: "ok", dia, reuniones };
+  return { estado: "ok", dia, reuniones, propios: eventosPropios(datos), todoElDia: eventosDeTodoElDia(datos) };
 }
 
 /** La agenda de hoy (el correo de la mañana la sigue usando así). */

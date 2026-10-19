@@ -16,3 +16,14 @@ export const MINUTOS_DE_UN_HUECO = 60;
  */
 export const HORA_INICIO_LABORAL = 8;
 export const HORA_FIN_LABORAL = 17;
+
+/**
+ * El almuerzo (2026-10-19, supuesto declarado). Si la persona marcó su almuerzo en el calendario (un evento «Almuerzo»,
+ * «Lunch», «Comida»…), ese es: Nexus no sugiere nada encima. Si no lo marcó, Nexus no sugiere nada de 12:00 a 13:00.
+ * Tocar esa hora para crear un evento a mano sigue funcionando: esto es solo para lo que propone Nexus.
+ */
+export const HORA_DEL_ALMUERZO = 12;
+export const MINUTOS_DEL_ALMUERZO = 60;
+
+/** Cuántos bloques sugiere Nexus en un mismo espacio libre, como mucho (uno por tarea, del tamaño de la tarea). */
+export const MAX_BLOQUES_POR_ESPACIO = 2;

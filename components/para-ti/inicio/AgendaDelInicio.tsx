@@ -13,6 +13,11 @@
  * espacio» (lib/mi-dia/espacio-libre.ts): tus tareas que caben, la reunión con una cuenta sin reunión y el siguiente
  * paso, que lo llenan con un clic.
  *
+ * La agenda es la de Google Calendar (2026-10-19): además de las reuniones, pinta los eventos propios («Tenis», «Cita
+ * Médica», el bloque de una tarea), que ocupan el tiempo y abren en Calendar; los de todo el día van arriba de cada
+ * columna; los que se pisan van lado a lado; uno donde la persona es opcional o respondió «quizás» se ve más claro. Lo
+ * que sugiere Nexus son bloques del tamaño de cada tarea, nunca el espacio entero, y nunca encima del almuerzo.
+ *
  * Segunda vuelta (2026-10-17, noche): ‹ ›, «Hoy» y Día ↔ Semana se mueven sin volver a pedir la página
  * (agenda-navegable.ts); la agenda es de lunes a viernes (lib/mi-dia/agenda-dias.ts); tocar afuera, la X o Escape suelta
  * el borrador (se borra y el hueco queda como estaba).
@@ -21,7 +26,8 @@ import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Segmentado } from "@/components/ui";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
-import { grillaDelDia, horaCR, instante, lineaDeAhora, minutoDelDia, type ConQueAvanzar, type EventoEnLaGrilla } from "@/lib/mi-dia/inicio";
+import { grillaDelDia, horaCR, instante, lineaDeAhora, minutoDelDia, ocupadoDeLaAgenda, type ConQueAvanzar, type EventoEnLaGrilla } from "@/lib/mi-dia/inicio";
+import { deTodoElDiaEn, type EventoPropio } from "@/lib/mi-dia/agenda";
 import { MINUTOS_DEL_BORRADOR, sePisan, tituloDelBorrador, type BorradorDeEvento } from "@/lib/mi-dia/agenda-borrador";
 import { finDelEspacio, sugerenciasParaElEspacio, type ParaSugerirEnElEspacio } from "@/lib/mi-dia/espacio-libre";
 import type { AgendaDeHoy, ReunionDeLaAgenda } from "@/lib/mi-dia/agenda-server";
@@ -58,11 +64,15 @@ const fechaCorta = (ymd: string) => `${Number(ymd.slice(8, 10))} ${MESES_CORTOS[
 
 export type ReunionElegible = ReunionDeLaAgenda;
 
-/** Un espacio libre, con su id en la grilla y la tarea con que avanzar (si alguna cabe). */
+/**
+ * Un bloque que sugiere Nexus en un espacio libre, con su id en la grilla: del tamaño de la tarea con que avanzar, o la
+ * primera hora del espacio si no cabe ninguna. `espacio` es el espacio libre entero.
+ */
 export interface HuecoDeLaAgenda {
   id: string;
   inicio: string;
   fin: string;
+  espacio: { inicio: string; fin: string };
   avanzar: ConQueAvanzar | null;
 }
 
@@ -118,7 +128,13 @@ export default function AgendaDelInicio({
   const borradores = useBorradores(correo);
   const dias = useMemo(() => diasDeLaGrilla(vista, dia), [vista, dia]);
   const titulo = vista === "semana" ? `Semana del ${fechaCorta(dia)} al ${fechaCorta(sumarDias(dia, 4))}` : fechaLarga(dia);
-  const eventos = useMemo(() => agenda.reuniones.map((r) => ({ id: r.id, inicio: r.inicio, fin: r.fin })), [agenda.reuniones]);
+  // Lo que ocupa el tiempo (las reuniones y los eventos propios): no lo pisan «Agendar» ni lo que sugiere Nexus.
+  const eventos = useMemo(() => ocupadoDeLaAgenda(agenda), [agenda]);
+  // Lo que se pinta: todo evento con hora, también lo que la persona marcó «disponible».
+  const pintados = useMemo(
+    () => [...agenda.reuniones, ...agenda.propios].map((r) => ({ id: r.id, inicio: r.inicio, fin: r.fin })),
+    [agenda.reuniones, agenda.propios],
+  );
   // «Agendar» y «+ Crear evento» buscan la primera hora libre sin pisar lo que la agenda tiene cargado.
   useEffect(() => fijarEventosDeLaAgenda(eventos), [eventos]);
   // «Planificar acción» (la cartera) sabe si hay una agenda donde mostrar el borrador.
@@ -129,16 +145,18 @@ export default function AgendaDelInicio({
   // La grilla se calcula una vez por cambio de lo que se ve (no en cada render del inicio).
   const grillas = useMemo(() => {
     const todos = [
-      ...eventos,
+      ...pintados,
       ...huecosVisibles.map((h) => ({ id: h.id, inicio: h.inicio, fin: h.fin })),
       ...borradores.lista.map((b) => ({ id: ID_DEL_BORRADOR + b.id, inicio: b.inicio, fin: b.fin })),
     ];
     return dias.map((d) => grillaDelDia(todos, d));
-  }, [eventos, huecosVisibles, borradores.lista, dias]);
+  }, [pintados, huecosVisibles, borradores.lista, dias]);
   const desdeHora = Math.min(...grillas.map((g) => g.desdeHora));
   const hastaHora = Math.max(...grillas.map((g) => g.hastaHora));
   const horas = Array.from({ length: hastaHora - desdeHora }, (_, i) => desdeHora + i);
   const porId = useMemo(() => new Map(agenda.reuniones.map((r) => [r.id, r])), [agenda.reuniones]);
+  const propioPorId = useMemo(() => new Map(agenda.propios.map((p) => [p.id, p])), [agenda.propios]);
+  const conTodoElDia = dias.some((d) => deTodoElDiaEn(agenda.todoElDia, d).length > 0);
   const borradorPorId = new Map(borradores.lista.map((b) => [ID_DEL_BORRADOR + b.id, b]));
   const editando = borradores.editando ? (borradores.lista.find((b) => b.id === borradores.editando) ?? null) : null;
   // Las sugerencias del borrador que se está editando, para el espacio donde quedó (hasta la próxima reunión de ese día).
@@ -257,90 +275,106 @@ export default function AgendaDelInicio({
               ))}
             </div>
           )}
-          <div className="relative" aria-hidden>
-            {horas.map((h) => (
-              <div key={h} className="relative border-t border-surface-hover" style={{ height: ALTO_HORA }}>
-                <span className="absolute -top-2 left-0 w-[50px] bg-surface pr-1.5 text-right text-[11px] text-fg-muted">{h}:00</span>
-              </div>
-            ))}
-          </div>
-          <div className="absolute inset-x-0 bottom-0 grid pl-[56px]" style={{ top: vista === "semana" ? 30 : 8, gridTemplateColumns: `repeat(${dias.length}, minmax(0, 1fr))` }}>
-            {dias.map((d, i) => {
-              const g = grillas[i];
-              const ahoraM = lineaDeAhora({ desdeHora, hastaHora }, d, ahora);
-              const altoDeLaGrilla = (hastaHora - desdeHora) * ALTO_HORA;
-              return (
-                <div
-                  key={d}
-                  onClick={(ev) => {
-                    // Solo lo libre: tocar una reunión o un borrador hace lo suyo.
-                    if (ev.target !== ev.currentTarget) return;
-                    const y = ev.clientY - ev.currentTarget.getBoundingClientRect().top;
-                    const minuto = desdeHora * 60 + Math.floor(Math.max(0, y) / ((ALTO_HORA / 60) * PASO_AL_TOCAR)) * PASO_AL_TOCAR;
-                    nuevoEnLaHora(d, Math.min(minuto, hastaHora * 60 - PASO_AL_TOCAR));
-                  }}
-                  className={cn("relative cursor-pointer", vista === "semana" && "border-l border-surface-hover")}
-                >
-                  {ahoraM != null && (
-                    <div aria-hidden className="absolute inset-x-0 z-[1] h-0.5 bg-fg" style={{ top: ahoraM }}>
-                      <span className="absolute -left-[5px] -top-1 h-2.5 w-2.5 rounded-full bg-fg" />
-                    </div>
-                  )}
-                  {g.eventos.map((e) => {
-                    const b = borradorPorId.get(e.id);
-                    if (!b) return null;
-                    const arriba = e.arriba + (g.desdeHora - desdeHora) * ALTO_HORA;
-                    const editando = borradores.editando === b.id;
-                    return (
-                      <BloqueDelBorrador
-                        key={e.id}
-                        b={b}
-                        e={e}
-                        arriba={arriba}
-                        angosto={vista === "semana"}
-                        abierto={editando}
-                        topDelCuadro={Math.max(0, Math.min(arriba + (vista === "semana" ? 0 : e.alto + 4), altoDeLaGrilla - ALTO_DEL_CUADRO))}
-                        cuadro={
-                          editando ? (
-                            <BorradorDelEvento
-                              b={b}
-                              sugerencias={sugerencias}
-                              onCerrar={() => soltarBorrador(b.id)}
-                              className={cn("absolute", vista === "semana" ? (i >= 3 ? "right-full mr-1.5" : "left-full ml-1.5") : "right-2")}
-                            />
-                          ) : null
-                        }
-                      />
-                    );
-                  })}
-                  {g.eventos.filter((e) => !borradorPorId.has(e.id)).map((e) => (
-                    <Evento
-                      key={e.id}
-                      e={e}
-                      desplazamiento={(g.desdeHora - desdeHora) * ALTO_HORA}
-                      reunion={porId.get(e.id) ?? null}
-                      hueco={huecoPorId.get(e.id) ?? null}
-                      elegida={seleccion === e.id}
-                      hoyISO={hoyISO}
-                      ahora={ahora}
-                      angosto={vista === "semana"}
-                      onElegir={() => {
-                        editarBorrador(null);
-                        onElegir(e.id);
-                      }}
-                    />
+          {conTodoElDia && (
+            <div className="grid gap-y-0.5 pb-1.5 pl-[56px]" style={{ gridTemplateColumns: `repeat(${dias.length}, minmax(0, 1fr))` }} aria-label="Todo el día">
+              {dias.map((d) => (
+                <div key={d} className="flex min-w-0 flex-col gap-0.5 px-0.5">
+                  {deTodoElDiaEn(agenda.todoElDia, d).map((e) => (
+                    <span key={e.id} title={`${e.titulo} · todo el día`} className="truncate rounded bg-surface-hover px-1.5 py-px text-[11.5px] leading-4 text-fg-secondary">
+                      {e.titulo}
+                    </span>
                   ))}
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          )}
+          <div className="relative">
+            <div aria-hidden>
+              {horas.map((h) => (
+                <div key={h} className="relative border-t border-surface-hover" style={{ height: ALTO_HORA }}>
+                  <span className="absolute -top-2 left-0 w-[50px] bg-surface pr-1.5 text-right text-[11px] text-fg-muted">{h}:00</span>
+                </div>
+              ))}
+            </div>
+            <div className="absolute inset-0 grid pl-[56px]" style={{ gridTemplateColumns: `repeat(${dias.length}, minmax(0, 1fr))` }}>
+              {dias.map((d, i) => {
+                const g = grillas[i];
+                const ahoraM = lineaDeAhora({ desdeHora, hastaHora }, d, ahora);
+                const altoDeLaGrilla = (hastaHora - desdeHora) * ALTO_HORA;
+                return (
+                  <div
+                    key={d}
+                    onClick={(ev) => {
+                      // Solo lo libre: tocar una reunión o un borrador hace lo suyo.
+                      if (ev.target !== ev.currentTarget) return;
+                      const y = ev.clientY - ev.currentTarget.getBoundingClientRect().top;
+                      const minuto = desdeHora * 60 + Math.floor(Math.max(0, y) / ((ALTO_HORA / 60) * PASO_AL_TOCAR)) * PASO_AL_TOCAR;
+                      nuevoEnLaHora(d, Math.min(minuto, hastaHora * 60 - PASO_AL_TOCAR));
+                    }}
+                    className={cn("relative cursor-pointer", vista === "semana" && "border-l border-surface-hover")}
+                  >
+                    {ahoraM != null && (
+                      <div aria-hidden className="absolute inset-x-0 z-[1] h-0.5 bg-fg" style={{ top: ahoraM }}>
+                        <span className="absolute -left-[5px] -top-1 h-2.5 w-2.5 rounded-full bg-fg" />
+                      </div>
+                    )}
+                    {g.eventos.map((e) => {
+                      const b = borradorPorId.get(e.id);
+                      if (!b) return null;
+                      const arriba = e.arriba + (g.desdeHora - desdeHora) * ALTO_HORA;
+                      const editando = borradores.editando === b.id;
+                      return (
+                        <BloqueDelBorrador
+                          key={e.id}
+                          b={b}
+                          e={e}
+                          arriba={arriba}
+                          angosto={vista === "semana"}
+                          abierto={editando}
+                          topDelCuadro={Math.max(0, Math.min(arriba + (vista === "semana" ? 0 : e.alto + 4), altoDeLaGrilla - ALTO_DEL_CUADRO))}
+                          cuadro={
+                            editando ? (
+                              <BorradorDelEvento
+                                b={b}
+                                sugerencias={sugerencias}
+                                onCerrar={() => soltarBorrador(b.id)}
+                                className={cn("absolute", vista === "semana" ? (i >= 3 ? "right-full mr-1.5" : "left-full ml-1.5") : "right-2")}
+                              />
+                            ) : null
+                          }
+                        />
+                      );
+                    })}
+                    {g.eventos.filter((e) => !borradorPorId.has(e.id)).map((e) => (
+                      <Evento
+                        key={e.id}
+                        e={e}
+                        desplazamiento={(g.desdeHora - desdeHora) * ALTO_HORA}
+                        reunion={porId.get(e.id) ?? null}
+                        propio={propioPorId.get(e.id) ?? null}
+                        hueco={huecoPorId.get(e.id) ?? null}
+                        elegida={seleccion === e.id}
+                        hoyISO={hoyISO}
+                        ahora={ahora}
+                        angosto={vista === "semana"}
+                        onElegir={() => {
+                          editarBorrador(null);
+                          onElegir(e.id);
+                        }}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
       <p className="text-xs text-fg-muted">
-        {agenda.estado === "ok" && agenda.reuniones.length === 0
+        {agenda.estado === "ok" && agenda.reuniones.length === 0 && agenda.propios.length === 0
           ? vista === "semana"
-            ? "No tienes reuniones esta semana. Toca una hora para crear un evento: se guarda en Google Calendar."
-            : "No tienes reuniones este día. Toca una hora para crear un evento: se guarda en Google Calendar."
+            ? "No tienes nada en tu calendario esta semana. Toca una hora para crear un evento: se guarda en Google Calendar."
+            : "No tienes nada en tu calendario este día. Toca una hora para crear un evento: se guarda en Google Calendar."
           : "Toca una reunión para ver su guía, o un espacio libre para ver con qué usarlo y crear un evento. Se guarda y se mueve en Google Calendar."}
       </p>
     </section>
@@ -351,6 +385,7 @@ function Evento({
   e,
   desplazamiento,
   reunion,
+  propio,
   hueco,
   elegida,
   hoyISO,
@@ -361,6 +396,7 @@ function Evento({
   e: EventoEnLaGrilla;
   desplazamiento: number;
   reunion: ReunionDeLaAgenda | null;
+  propio: EventoPropio | null;
   hueco: HuecoDeLaAgenda | null;
   elegida: boolean;
   hoyISO: string;
@@ -369,49 +405,96 @@ function Evento({
   onElegir: () => void;
 }) {
   const esHueco = !!hueco;
-  if (!reunion && !hueco) return null;
-  const pasada = reunion ? Date.parse(reunion.fin ?? reunion.inicio) < ahora.getTime() : false;
-  const interna = !!reunion && reunion.empresas.length === 0;
+  const evento = reunion ?? propio;
+  if (!evento && !hueco) return null;
+  const pasada = evento ? Date.parse(evento.fin ?? evento.inicio) < ahora.getTime() : false;
+  // Lo de la persona sola («Tenis», el bloque de una tarea) se ve como una reunión interna.
+  const interna = !!propio || (!!reunion && reunion.empresas.length === 0);
+  // Opcional o «quizás»: más claro, pero igual ocupa. Lo marcado «disponible», también más claro.
+  const tenue = !!evento && (evento.tenue === true || evento.ocupa === false);
   const titulo = hueco
     ? hueco.avanzar
       ? `Avanza T-${hueco.avanzar.tarea.numero} · ${hueco.avanzar.tarea.titulo}`
       : "Espacio libre"
-    : reunion!.empresas.length === 1
-      ? `${reunion!.titulo} · ${reunion!.nombres[reunion!.empresas[0]]}`
-      : reunion!.titulo;
-  const linea = hueco ? `Libre ${horaCR(hueco.inicio)}–${horaCR(hueco.fin)}` : lineaDeLaReunion(reunion!, hoyISO, ahora);
+    : reunion
+      ? reunion.empresas.length === 1
+        ? `${reunion.titulo} · ${reunion.nombres[reunion.empresas[0]]}`
+        : reunion.titulo
+      : propio!.titulo;
+  const linea = hueco
+    ? hueco.avanzar
+      ? `Sugerido ${horaCR(hueco.inicio)}–${horaCR(hueco.fin)}`
+      : `Libre ${horaCR(hueco.espacio.inicio)}–${horaCR(hueco.espacio.fin)}`
+    : `${lineaDeLaReunion(evento!, hoyISO, ahora)}${evento!.ocupa === false ? " · disponible" : ""}`;
+  const aviso = evento?.tenue ? "Eres opcional o respondiste «quizás»: igual ocupa tu tiempo." : evento?.ocupa === false ? "Lo marcaste «disponible»." : undefined;
   const corto = e.alto < 40;
   const ancho = 100 / e.columnas;
-  return (
-    <button
-      type="button"
-      onClick={onElegir}
-      aria-label={`${titulo}, ${linea}`}
-      aria-pressed={elegida}
-      className={cn(
-        "absolute overflow-hidden rounded-md px-2 py-1 text-left transition hover:brightness-[0.98]",
-        corto ? "flex flex-row items-center gap-2" : "flex flex-col gap-px",
-        esHueco
-          ? "border border-dashed border-brand-light bg-info-surface"
-          : pasada
-            ? "border border-line bg-surface-muted"
-            : interna
-              ? "border border-line bg-surface-hover"
-              : "border border-fg-muted/35 bg-surface",
-        elegida && "border-2 border-solid border-brand",
-      )}
-      style={{
-        top: e.arriba + desplazamiento + 1,
-        height: e.alto - 3,
-        left: `calc(${angosto ? 2 : 6}px + ${ancho * e.columna}%)`,
-        width: `calc(${ancho}% - ${angosto ? 4 : 16}px)`,
-      }}
-    >
-      <span className={cn("flex min-w-0 items-center gap-1 text-[12.5px] font-semibold leading-[17px]", esHueco ? "text-brand" : pasada ? "text-fg-muted" : interna ? "text-fg-secondary" : "text-fg")}>
+  const clase = cn(
+    "absolute overflow-hidden rounded-md px-2 py-1 text-left transition hover:brightness-[0.98]",
+    corto ? "flex flex-row items-center gap-1.5" : "flex flex-col gap-px",
+    esHueco
+      ? "border border-dashed border-brand-light bg-info-surface"
+      : pasada
+        ? "border border-line bg-surface-muted"
+        : interna
+          ? "border border-line bg-surface-hover"
+          : "border border-fg-muted/35 bg-surface",
+    tenue && "opacity-60",
+    elegida && "border-2 border-solid border-brand",
+  );
+  const estilo = {
+    top: e.arriba + desplazamiento + 1,
+    height: e.alto - 3,
+    left: `calc(${angosto ? 2 : 6}px + ${ancho * e.columna}%)`,
+    width: `calc(${ancho}% - ${angosto ? 4 : 16}px)`,
+  };
+  const contenido = (
+    <>
+      {/* En un evento corto, la hora se achica primero: el título es lo que se tiene que leer. */}
+      <span
+        className={cn(
+          "flex min-w-0 shrink items-center gap-1 text-[12.5px] font-semibold leading-[17px]",
+          esHueco ? "text-brand" : pasada ? "text-fg-muted" : interna ? "text-fg-secondary" : "text-fg",
+        )}
+      >
         {hueco?.avanzar && <IconoDeSugerencia className="h-3 w-3 flex-none" />}
         <span className="truncate">{titulo}</span>
       </span>
-      <span className={cn("whitespace-nowrap text-[11.5px] leading-[15px]", esHueco ? "text-brand" : pasada || interna ? "text-fg-muted" : "text-fg-secondary")}>{linea}</span>
+      <span
+        className={cn(
+          "min-w-0 truncate whitespace-nowrap text-[11.5px] leading-[15px]",
+          corto && "shrink-[100]",
+          esHueco ? "text-brand" : pasada || interna ? "text-fg-muted" : "text-fg-secondary",
+        )}
+      >
+        {linea}
+      </span>
+    </>
+  );
+  // Un evento propio no tiene panel: abre en Google Calendar (o su tarea, si es el bloque de una tarea de Nexus).
+  if (propio && !reunion) {
+    const href = propio.tareaId ? `/tareas?t=${encodeURIComponent(propio.tareaId)}` : propio.calendarUrl;
+    return href ? (
+      <a
+        href={href}
+        target={propio.tareaId ? undefined : "_blank"}
+        rel="noreferrer"
+        aria-label={`${titulo}, ${linea}`}
+        title={aviso ?? (propio.tareaId ? "Abrir la tarea" : "Abrir en Google Calendar")}
+        className={clase}
+        style={estilo}
+      >
+        {contenido}
+      </a>
+    ) : (
+      <div aria-label={`${titulo}, ${linea}`} title={aviso} className={clase} style={estilo}>
+        {contenido}
+      </div>
+    );
+  }
+  return (
+    <button type="button" onClick={onElegir} aria-label={`${titulo}, ${linea}`} aria-pressed={elegida} title={aviso} className={clase} style={estilo}>
+      {contenido}
     </button>
   );
 }

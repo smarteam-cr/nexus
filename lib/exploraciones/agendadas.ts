@@ -25,8 +25,12 @@ export interface EventoDelCalendario {
   recurringEventId?: string | null;
   extendedProperties?: { private?: Record<string, string> | null } | null;
   conferenceData?: { conferenceSolution?: { key?: { type?: string | null } | null } | null } | null;
-  attendees?: { email?: string | null; self?: boolean | null; responseStatus?: string | null; resource?: boolean | null }[] | null;
+  attendees?: { email?: string | null; self?: boolean | null; responseStatus?: string | null; resource?: boolean | null; optional?: boolean | null }[] | null;
   organizer?: { email?: string | null } | null;
+  /** «default», «workingLocation» (la ubicación de trabajo), «outOfOffice», «focusTime», «birthday»… */
+  eventType?: string | null;
+  /** «transparent» = la persona lo marcó como «disponible»: no bloquea su tiempo. */
+  transparency?: string | null;
 }
 
 /** Una reunión agendada con la empresa, lista para unirla a una sesión. */
