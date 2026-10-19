@@ -382,8 +382,11 @@ export async function cargarTarea(ctx: ContextoDeTareas, clientes: ClientesQueVe
   if (!f) throw new ErrorDeTareas(404, "Esa tarea no existe.");
   const espacio = f.proyecto?.espacio ? { ...f.proyecto.espacio, miembros: f.proyecto.espacio.miembros.map((m) => m.email) } : null;
   if (!veLaTarea({ ...f, espacio }, ctx)) throw new ErrorDeTareas(404, "Esa tarea no existe.");
-  const [tarea] = await serializarTareas([f], ctx, clientes, ahora);
-  const eventos = await prisma.tareaEvento.findMany({ where: { tareaId: id }, orderBy: { createdAt: "desc" }, take: 40, select: { id: true, tipo: true, porEmail: true, createdAt: true, datos: true } });
+  // A la vez: la historia no depende de la tarea serializada (es lo que devuelve cada PATCH, que la pantalla espera).
+  const [[tarea], eventos] = await Promise.all([
+    serializarTareas([f], ctx, clientes, ahora),
+    prisma.tareaEvento.findMany({ where: { tareaId: id }, orderBy: { createdAt: "desc" }, take: 40, select: { id: true, tipo: true, porEmail: true, createdAt: true, datos: true } }),
+  ]);
   const historia = eventos.map((e) => ({ id: e.id, tipo: e.tipo, ...textoDelEvento(e, ctx) }));
   return { tarea, historia };
 }

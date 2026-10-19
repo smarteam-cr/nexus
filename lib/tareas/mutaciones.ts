@@ -761,6 +761,12 @@ export async function editarTarea(ctx: ContextoDeTareas, clientes: ClientesQueVe
 
 /* ── Estado ──────────────────────────────────────────────────────────────────────── */
 
+/**
+ * Lo que corre después de escribir y no hace falta para responder (los avisos). La ruta pasa `after()` de Next, así la
+ * casilla no espera a nadie; sin `diferir` corre enseguida, como antes (scripts, chat, pruebas).
+ */
+export type Diferir = (fn: () => Promise<void>) => void;
+
 export async function cambiarEstado(
   ctx: ContextoDeTareas,
   id: string,
@@ -768,6 +774,7 @@ export async function cambiarEstado(
   hacia: "pendiente" | "en_curso" | "hecha" | "no_se_hara",
   motivo?: string | null,
   ahora = new Date(),
+  opciones: { diferir?: Diferir } = {},
 ) {
   const t = await cargar(prisma, id, ctx);
   if (t.version !== version) throw new ErrorDeTareas(409, "Otra persona cambió esta tarea. Recarga para ver lo último.");
@@ -818,19 +825,25 @@ export async function cambiarEstado(
       await anotarResultado(tx, t, semana, hacia, ctx.email, ahora);
     }
   });
-  if (t.pedidaPorEmail && t.pedidaPorEmail !== ctx.email && hacia === "hecha") {
-    await avisar({
-      para: t.pedidaPorEmail,
-      tipo: "tareas.respuesta",
-      titulo: `${ctx.nombre} terminó «${t.titulo}»`,
-      href: urlDeLaTarea(t.id),
-      actorEmail: ctx.email,
-      dedupeKey: `tareas.respuesta:${t.id}:hecha`,
-    });
-    olvidarMedicion(t.pedidaPorEmail);
-  }
-  if (hacia === "hecha") await avisarDesbloqueadas(ctx, t.id);
   olvidarMedicion(ctx.email);
+  if (t.pedidaPorEmail && t.pedidaPorEmail !== ctx.email && hacia === "hecha") olvidarMedicion(t.pedidaPorEmail);
+  if (hacia !== "hecha") return;
+  const avisos = async () => {
+    if (t.pedidaPorEmail && t.pedidaPorEmail !== ctx.email) {
+      await avisar({
+        para: t.pedidaPorEmail,
+        tipo: "tareas.respuesta",
+        titulo: `${ctx.nombre} terminó «${t.titulo}»`,
+        href: urlDeLaTarea(t.id),
+        actorEmail: ctx.email,
+        dedupeKey: `tareas.respuesta:${t.id}:hecha`,
+      });
+      olvidarMedicion(t.pedidaPorEmail);
+    }
+    await avisarDesbloqueadas(ctx, t.id);
+  };
+  if (opciones.diferir) opciones.diferir(avisos);
+  else await avisos();
 }
 
 /* ── Semana ──────────────────────────────────────────────────────────────────────── */

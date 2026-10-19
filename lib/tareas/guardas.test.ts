@@ -168,6 +168,7 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "scripts/configurar-serie-del-sprint.ts": "configura la reunión de un sprint por el único escritor (escribirFuente); no lee tareas",
       "scripts/agrupar-seguimientos-propuestos.ts": "junta en un seguimiento por reunión lo que ya estaba propuesto: lee las propuestas sueltas y escribe por el único escritor (agruparSeguimientosPropuestos)",
       "scripts/medir-tareas-por-persona.ts": "mide cuántas tareas tiene cada persona de CS y Ventas: solo lectura, sin IA, sin títulos de clientes",
+      "scripts/medir-cambio-de-tarea.ts": "mide cuánto tarda marcar una tarea como hecha: solo lectura, no imprime títulos",
       "scripts/aligerar-tareas.ts": "cierra lo que ya pasó a nombre de quien firma y junta los seguimientos de «Por asignar»: simulacro por defecto, escribe por el único escritor (cambiarEstado, decidirTarea, agruparSeguimientosPorAsignar)",
       "lib/jobs/defs.ts": "el job del lunes (mantenimientoDelLunes, por el único escritor)",
       "lib/seguimiento/tarjeta-server.ts": "«Lo que dejó esta reunión»: las tareas propuestas de una reunión, para quien las recibe (serializa por serializar.ts)",

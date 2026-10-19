@@ -18,6 +18,7 @@ import DatePickerField from "@/components/ui/DatePickerField";
 import { cn } from "@/lib/cn";
 import { DURACIONES_DE_AGENDA } from "@/lib/tareas/reglas";
 import { ESPERA_AL_ESCRIBIR_MS, TEXTO_DEL_GUARDADO, estadoDelGuardado } from "@/lib/tareas/guardado";
+import { conEstadoAlInstante } from "@/lib/tareas/fila-de-cambios";
 import { NOMBRE_DEL_ESTADO, NOMBRE_DEL_ORIGEN, type OrigenDeTarea } from "@/lib/tareas/estados";
 import { diaYHora, rangoDeLaSemana, sumarSemanas } from "@/lib/tareas/semana";
 import type { OpcionesDeTareas, TareaVista } from "@/lib/tareas/tipos";
@@ -64,6 +65,8 @@ export function CajonDeTarea({
   const [guardadoAlguna, setGuardadoAlguna] = useState(false);
   const tareaRef = useRef<TareaVista | null>(null);
   const cola = useRef<Promise<unknown>>(Promise.resolve());
+  // Cuántos cambios del cajón esperan su turno: la respuesta de uno que tiene otro detrás no se pinta (taparía al de atrás).
+  const enCola = useRef(0);
   const ultimoFallido = useRef<Record<string, unknown> | null>(null);
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Lo último que se mandó del título y las notas: salir del campo justo después de la espera no lo manda dos veces.
@@ -121,15 +124,20 @@ export function CajonDeTarea({
   function cambiar(body: Record<string, unknown>): Promise<void> {
     const objetivo = tareaRef.current ? { id: tareaRef.current.id, version: tareaRef.current.version } : null;
     if (!objetivo) return Promise.resolve();
+    // El estado cambia al instante (el Segmentado no espera al servidor); si el servidor dice que no, se vuelve a cargar.
+    const hacia = body.accion === "estado" && (body.hacia === "pendiente" || body.hacia === "en_curso" || body.hacia === "hecha") ? body.hacia : null;
+    if (hacia && tareaRef.current) ponerTarea(conEstadoAlInstante(tareaRef.current, hacia));
+    enCola.current++;
     const correr = async () => {
       const version = tareaRef.current?.id === objetivo.id ? tareaRef.current.version : objetivo.version;
       setEnVuelo((n) => n + 1);
       try {
         const r = await apiTareas.cambiar(objetivo.id, { ...body, version });
         objetivo.version = r.tarea.version;
-        // Solo si el cajón sigue en esta tarea: otra abierta mientras tanto no se pisa.
+        // Solo si el cajón sigue en esta tarea (otra abierta mientras tanto no se pisa) y no hay otro cambio detrás.
         if (tareaRef.current?.id === objetivo.id) {
-          ponerTarea(r.tarea);
+          if (enCola.current === 1) ponerTarea(r.tarea);
+          else ponerTarea({ ...tareaRef.current, version: Math.max(tareaRef.current.version, r.tarea.version) });
           setGuardadoAlguna(true);
           setFallo(false);
         }
@@ -140,10 +148,11 @@ export function CajonDeTarea({
         if (tareaRef.current?.id === objetivo.id) {
           setFallo(true);
           ultimoFallido.current = body;
-          if (e instanceof ErrorDeApi && e.status === 409) await cargar();
+          if ((e instanceof ErrorDeApi && e.status === 409) || hacia) await cargar();
         }
         throw e;
       } finally {
+        enCola.current--;
         setEnVuelo((n) => n - 1);
       }
     };

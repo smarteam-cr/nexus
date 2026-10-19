@@ -9,7 +9,7 @@
  *
  * El cajón de una tarea va en `?t=<id>`, el de un proyecto en `?p=<id>`, y `?revisar=AAAA-MM-DD` abre la revisión.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { EmptyState, PageHeader, Segmentado } from "@/components/ui";
 import PanelLateral from "@/components/ui/PanelLateral";
@@ -22,7 +22,8 @@ import { NOMBRE_DEL_AMBITO, type Ambito } from "@/lib/tareas/ambito";
 import { rangoDeLaSemana } from "@/lib/tareas/semana";
 import type { EspacioEnLista, MisTareasDatos, OpcionesDeTareas, ProyectoVista, TareaVista } from "@/lib/tareas/tipos";
 import Link from "next/link";
-import { apiTareas, EVENTO_TAREAS_CAMBIARON } from "./api";
+import { apiTareas, EVENTO_TAREAS_CAMBIARON, filaDeTareas } from "./api";
+import { conEstadoAlInstante, haciaDelCirculo, type EstadoQueSeMarca } from "@/lib/tareas/fila-de-cambios";
 import { horas } from "./chips";
 import { FilaDeTarea } from "./FilaDeTarea";
 import { PropuestasPorReunion, type DecisionEnPantalla } from "./PropuestaDeTarea";
@@ -109,13 +110,37 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
     [params, pathname, router],
   );
 
+  // Cuántos cambios al instante se hicieron: una carga que salió antes de uno de ellos trae la lista vieja y no se pinta.
+  const generacion = useRef(0);
+  const esperaParaRecargar = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const refrescar = useCallback(async () => {
+    const g = generacion.current;
     try {
-      setDatos(await apiTareas.mias());
+      const d = await apiTareas.mias();
+      // Si mientras tanto se marcó otra tarea, esta carga ya no es lo último: la próxima la reemplaza.
+      if (g === generacion.current && filaDeTareas.pendientes() === 0) setDatos(d);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo actualizar.");
     }
   }, [toast]);
+
+  /** La lista entera se vuelve a pedir cuando no queda ningún cambio en fila (un clic detrás de otro no la recarga dos veces). */
+  const recargarCuandoQuede = useCallback(() => {
+    if (esperaParaRecargar.current) clearTimeout(esperaParaRecargar.current);
+    esperaParaRecargar.current = setTimeout(() => {
+      esperaParaRecargar.current = null;
+      if (filaDeTareas.pendientes() === 0) void refrescar();
+      else recargarCuandoQuede();
+    }, 600);
+  }, [refrescar]);
+
+  useEffect(
+    () => () => {
+      if (esperaParaRecargar.current) clearTimeout(esperaParaRecargar.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     apiTareas.opciones().then(setOpciones).catch(() => undefined);
@@ -163,16 +188,39 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
     }
   }
 
-  async function terminar(t: TareaVista) {
-    const hacia = t.estado === "hecha" ? "pendiente" : "hecha";
-    const ok = await conTarea(t.id, () => apiTareas.cambiar(t.id, { accion: "estado", hacia, version: t.version }));
-    if (ok) await refrescar();
+  /**
+   * Marcar o desmarcar: la casilla cambia al instante y el cambio va en fila con la versión que dejó el anterior
+   * (lib/tareas/fila-de-cambios.ts). Si el servidor dice que no, la tarea vuelve a como estaba y se dice por qué.
+   */
+  function marcarAlInstante(t: TareaVista, hacia: EstadoQueSeMarca) {
+    if (t.estado === hacia) return;
+    generacion.current++;
+    if (esperaParaRecargar.current) clearTimeout(esperaParaRecargar.current);
+    const pintar = (f: (x: TareaVista) => TareaVista) =>
+      setDatos((d) => {
+        const m = (xs: TareaVista[]) => xs.map((x) => (x.id === t.id ? f(x) : x));
+        return { ...d, porDecidir: m(d.porDecidir), estaSemana: m(d.estaSemana), masAdelante: m(d.masAdelante), loQuePediste: m(d.loQuePediste), hechas: m(d.hechas), porAsignar: m(d.porAsignar) };
+      });
+    pintar((x) => conEstadoAlInstante(x, hacia));
+    apiTareas
+      .cambiar(t.id, { accion: "estado", hacia, version: t.version })
+      .then(() => recargarCuandoQuede())
+      .catch((e: unknown) => {
+        const motivo = e instanceof Error ? e.message : "No se pudo guardar.";
+        toast.error(`T-${t.numero} volvió a como estaba. ${motivo}`);
+        generacion.current++;
+        // Lo que esté en fila detrás se resuelve con la recarga: vuelve a lo que dice la base.
+        void refrescar();
+      });
   }
 
-  /** Tablero: arrastrar cambia el estado; si el servidor dice que no, vuelve y lo dice. */
-  async function moverDeEstado(t: TareaVista, hacia: "pendiente" | "en_curso" | "hecha") {
-    const ok = await conTarea(t.id, () => apiTareas.cambiar(t.id, { accion: "estado", hacia, version: t.version }));
-    if (ok) await refrescar();
+  function terminar(t: TareaVista) {
+    marcarAlInstante(t, haciaDelCirculo(t.estado));
+  }
+
+  /** Tablero: arrastrar cambia el estado al instante; si el servidor dice que no, vuelve y lo dice. */
+  function moverDeEstado(t: TareaVista, hacia: EstadoQueSeMarca) {
+    marcarAlInstante(t, hacia);
   }
 
   async function crear(n: NuevaDesdeLaLinea) {

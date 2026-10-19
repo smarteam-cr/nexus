@@ -5,6 +5,7 @@
  * pantalla lo muestre con un toast.
  */
 import type { MetricasDeLaSemana } from "@/lib/tareas/metricas";
+import { crearFilaDeCambios } from "@/lib/tareas/fila-de-cambios";
 import type { ComentarioVista, DatosDelEspacio, DuenoDelVinculo, EspacioEnLista, LoQueDelegasteDatos, MisTareasDatos, RegistroParaVincular, VinculoVista, OpcionesDeTareas, SemanaDelEquipoDatos, SprintDelEquipoDatos, TareasDeLaCuentaDatos, TareaVista, ProyectoVista } from "@/lib/tareas/tipos";
 
 export class ErrorDeApi extends Error {
@@ -37,16 +38,41 @@ function rutaDeVinculos(d: DuenoDelVinculo): string {
   return d.tipo === "tarea" ? `/api/tareas/${encodeURIComponent(d.id)}/vinculos` : `/api/tareas/proyectos/${encodeURIComponent(d.id)}/vinculos`;
 }
 
+/**
+ * Los cambios de una tarea, de todas las pantallas a la vez (Mis tareas, el cajón, «Para ti»): en fila por tarea y con la
+ * versión que dejó el anterior (lib/tareas/fila-de-cambios.ts). Sin esto, deshacer antes de la recarga salía con la
+ * versión vieja y decía «Otra persona cambió esta tarea» aunque nadie más la había tocado.
+ */
+export const filaDeTareas = crearFilaDeCambios();
+
+/** Un cambio que devuelve la tarea: anota su versión nueva. */
+async function conVersion<T extends { tarea: TareaVista }>(id: string, p: Promise<T>): Promise<T> {
+  const r = await p;
+  filaDeTareas.anotar(id, r.tarea.version);
+  return r;
+}
+
 export const apiTareas = {
   mias: () => pedir<MisTareasDatos>("/api/tareas"),
   delegadas: () => pedir<LoQueDelegasteDatos>("/api/tareas/delegadas"),
   deLaCuenta: (clientId: string) => pedir<TareasDeLaCuentaDatos>(`/api/tareas/del-cliente/${encodeURIComponent(clientId)}`),
   crear: (body: Record<string, unknown>) => pedir<{ id: string; numero: number; estado: string; yaExistia: boolean }>("/api/tareas", json(body)),
-  una: (id: string) => pedir<{ tarea: TareaVista; historia: { id: string; tipo: string; texto: string; quien: string; cuando: string; detalle: string | null }[] }>(`/api/tareas/${id}`),
+  una: (id: string) =>
+    conVersion(id, pedir<{ tarea: TareaVista; historia: { id: string; tipo: string; texto: string; quien: string; cuando: string; detalle: string | null }[] }>(`/api/tareas/${id}`)),
+  /** En fila detrás de los otros cambios de esa tarea, y con la versión más nueva que se conozca. */
   cambiar: (id: string, body: Record<string, unknown>) =>
-    pedir<{ tarea: TareaVista }>(`/api/tareas/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  decidir: (id: string, version: number, decision: Record<string, unknown>) => pedir<{ ok: true }>(`/api/tareas/${id}/decision`, json({ version, decision })),
-  agendar: (id: string, body: Record<string, unknown>) => pedir<{ tarea: TareaVista }>(`/api/tareas/${id}/agenda`, json(body)),
+    filaDeTareas.enFila(id, () => {
+      const cuerpo = typeof body.version === "number" ? { ...body, version: filaDeTareas.version(id, body.version) } : body;
+      return conVersion(id, pedir<{ tarea: TareaVista }>(`/api/tareas/${id}`, { method: "PATCH", body: JSON.stringify(cuerpo) }));
+    }),
+  // Decidir no devuelve la tarea: la versión sale de la próxima carga.
+  decidir: (id: string, version: number, decision: Record<string, unknown>) =>
+    filaDeTareas.enFila(id, async () => {
+      const r = await pedir<{ ok: true }>(`/api/tareas/${id}/decision`, json({ version: filaDeTareas.version(id, version), decision }));
+      filaDeTareas.olvidar(id);
+      return r;
+    }),
+  agendar: (id: string, body: Record<string, unknown>) => filaDeTareas.enFila(id, () => conVersion(id, pedir<{ tarea: TareaVista }>(`/api/tareas/${id}/agenda`, json(body)))),
   comentarios: (id: string) => pedir<{ comentarios: ComentarioVista[] }>(`/api/tareas/${id}/comentarios`),
   comentar: (id: string, cuerpo: string) => pedir<{ id: string }>(`/api/tareas/${id}/comentarios`, json({ cuerpo })),
   cambiarComentario: (id: string, body: { accion: "editar"; cuerpo: string } | { accion: "archivar" }) =>

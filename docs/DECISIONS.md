@@ -9578,3 +9578,29 @@ derecha, con lo que se sepa de él.
   la guía de una reunión ni quién viene: no es una reunión. Lo trae la misma ruta con `propio=1`
   (`/api/para-ti/reunion/[evento]`), que no lee el evento ni lo que dejó, y que sin acceso a esa cuenta responde lo tuyo
   (tus notas) en vez de 404.
+
+## Marcar hecha al instante (2026-10-19)
+
+**Contexto.** Elías marcó T-162 como hecha, la deshizo y le salió «Otra persona cambió esta tarea. Recarga para ver lo
+último.» sin que nadie más la tocara; y cada clic tardaba varios segundos en verse. Medido ese día contra la base real
+(`scripts/medir-cambio-de-tarea.ts`, solo lectura): el PATCH respondía en unos 2 s (cargar la tarea, la transacción, los
+avisos y devolver la tarea, ~0,85 s), más 1 a 3 s de HubSpot en una tarea de HubSpot; después la pantalla volvía a pedir
+«Mis tareas» entero (~2,5 s) y recién ahí cambiaba la casilla.
+
+- **El falso «otra persona cambió» era la versión vieja.** Entre que el PATCH respondía y llegaba esa recarga, la fila
+  seguía habilitada con la versión de antes (en «Hechas» nunca se deshabilitaba): el segundo clic, deshacer o volver a
+  marcar porque no se veía el cambio, la mandaba y chocaba. Ahora todos los cambios de una tarea, de cualquier pantalla
+  (Mis tareas, el cajón, «Para ti», los pendientes del proyecto, la semana del equipo), pasan por una sola fila
+  (`filaDeTareas` en components/tareas/api.ts, lib/tareas/fila-de-cambios.ts): cada respuesta anota la versión nueva y el
+  próximo cambio sale con la más nueva que se conoce; dos cambios sobre la misma tarea van uno detrás del otro. *Por qué
+  no esconde un cambio ajeno:* la versión anotada salió de la base después de un cambio nuestro; si otra persona la
+  cambió después, la base igual va adelante y el 409 sale como debe.
+- **La casilla cambia al instante** (`conEstadoAlInstante`), también en el cajón y en «Para ti», donde ahora se puede
+  desmarcar mientras la fila está a la vista. Si el servidor dice que no, la tarea vuelve a como estaba y un aviso dice
+  por qué. La lista entera se vuelve a pedir cuando no queda ningún cambio en fila (Mis tareas a los 0,6 s; «Para ti» a
+  los 3 s, para que desmarcar enseguida no encuentre la fila ya quitada), y una carga que salió antes de otro clic no se
+  pinta.
+- **El escritor único no cambió; lo que no hace falta para responder va después** (`after()` en la ruta): escribir en
+  HubSpot y los avisos de marcarla hecha (`cambiarEstado(…, { diferir })`; sin `diferir` corren enseguida, como antes).
+  La escritura a HubSpot va en fila por tarea (`reflejarTareaEnHubspot`): con dos cambios seguidos, la última escritura
+  es la del último cambio.
