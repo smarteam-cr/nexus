@@ -5,7 +5,7 @@
  * pantalla lo muestre con un toast.
  */
 import type { MetricasDeLaSemana } from "@/lib/tareas/metricas";
-import type { ComentarioVista, DatosDelEspacio, DuenoDelVinculo, EspacioEnLista, LoQueDelegasteDatos, MisTareasDatos, RegistroParaVincular, VinculoVista, OpcionesDeTareas, SemanaDelEquipoDatos, SprintDelEquipoDatos, TareasDeLaCuentaDatos, TareaVista, ProyectoVista } from "@/lib/tareas/tipos";
+import type { ComentarioVista, DatosDelEspacio, DuenoDelVinculo, EspacioEnLista, FueraDelTope, LoQueDelegasteDatos, MisTareasDatos, RegistroParaVincular, VinculoVista, OpcionesDeTareas, SemanaDelEquipoDatos, SprintDelEquipoDatos, TareasDeLaCuentaDatos, TareaVista, ProyectoVista } from "@/lib/tareas/tipos";
 
 export class ErrorDeApi extends Error {
   constructor(
@@ -101,6 +101,9 @@ export const apiTareas = {
   quitarSerie: (id: string) => pedir<{ ok: true }>(`/api/tareas/fuentes/${encodeURIComponent(id)}`, { method: "DELETE" }),
   /** Que Nexus mire las series de los sprints (corre después de responder; como mucho cada 10 minutos). */
   mirarSeries: () => pedir<{ ok: true }>("/api/tareas/fuentes/mirar", { method: "POST" }),
+  /** Lo que el tope de 5 por persona por reunión te dejó fuera, y «Proponérmelas». */
+  fueraDelTope: () => pedir<{ reuniones: FueraDelTope[] }>("/api/tareas/fuera-del-tope"),
+  proponerLoDeFuera: (lecturaId: string) => pedir<{ creadas: number }>("/api/tareas/fuera-del-tope", json({ lecturaId })),
 };
 
 export interface ReunionParaLeer {

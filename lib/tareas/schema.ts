@@ -184,3 +184,6 @@ export const CambiarFuente = z
     personas: z.array(correo).max(40).optional(),
   })
   .refine((c) => c.activa !== undefined || c.rol !== undefined || c.personas !== undefined, "No hay nada que cambiar.");
+
+/** «Proponérmelas»: lo que el tope de 5 por persona dejó fuera de una lectura (lib/tareas/lectura.ts). */
+export const ProponerLoDeFuera = z.object({ lecturaId: z.string().min(1).max(60) });

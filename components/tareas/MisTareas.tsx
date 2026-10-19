@@ -37,6 +37,7 @@ import { CalendarioDeLaSemana, TableroDeLaSemana } from "./VistasDeLaSemana";
 import { Agendar } from "./Agendar";
 import { ListaAligerada } from "./ListaAligerada";
 import { CerrarLoQuePaso } from "./CerrarLoQuePaso";
+import { FueraDelTope } from "./FueraDelTope";
 import { BotonDelAsistente } from "./AsistenteDeTareas";
 
 type FiltroPara = "todos" | Ambito;
@@ -163,16 +164,22 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
     }
   }
 
+  // La tarea sigue ocupada hasta que llega la lista nueva: un segundo clic antes llevaba la versión vieja y el
+  // servidor contestaba «Otra persona cambió esta tarea» (Lidia, 2026-10-19, marcando y desmarcando T-162).
   async function terminar(t: TareaVista) {
     const hacia = t.estado === "hecha" ? "pendiente" : "hecha";
-    const ok = await conTarea(t.id, () => apiTareas.cambiar(t.id, { accion: "estado", hacia, version: t.version }));
-    if (ok) await refrescar();
+    await conTarea(t.id, async () => {
+      await apiTareas.cambiar(t.id, { accion: "estado", hacia, version: t.version });
+      await refrescar();
+    });
   }
 
   /** Tablero: arrastrar cambia el estado; si el servidor dice que no, vuelve y lo dice. */
   async function moverDeEstado(t: TareaVista, hacia: "pendiente" | "en_curso" | "hecha") {
-    const ok = await conTarea(t.id, () => apiTareas.cambiar(t.id, { accion: "estado", hacia, version: t.version }));
-    if (ok) await refrescar();
+    await conTarea(t.id, async () => {
+      await apiTareas.cambiar(t.id, { accion: "estado", hacia, version: t.version });
+      await refrescar();
+    });
   }
 
   async function crear(n: NuevaDesdeLaLinea) {
@@ -293,6 +300,8 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
         )}
 
         <CerrarLoQuePaso tareas={[...porDecidir, ...datos.estaSemana, ...datos.masAdelante, ...datos.porAsignar]} onAbrir={(x) => ponerParametro("t", x.id)} onCerradas={() => void refrescar()} />
+
+        <FueraDelTope revision={datos} onPropuestas={() => void refrescar()} />
 
         {(porDecidir.length > 0 || datos.proyectosPorDecidir.length > 0) && (
           <section className="space-y-2" data-recorrido="tareas.por-decidir">

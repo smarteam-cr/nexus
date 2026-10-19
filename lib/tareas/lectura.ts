@@ -41,6 +41,8 @@ import { asegurarEspacio, escribirPropuestasDeComunicacion, escribirPropuestasDe
 import { esLapida } from "./estados";
 import { personasPorDefecto } from "./fuentes";
 import { ABIERTAS_WHERE, candidatasWhere } from "./donde";
+import { lasQueQuedaronFuera } from "./cupo";
+import type { FueraDelTope } from "./tipos";
 
 export const SLUG_DE_LA_LECTURA = "tareas-lectura";
 
@@ -633,6 +635,95 @@ async function avisarDeLasPropuestas(
   const porEquipo = porAsignarPorEquipo ?? new Map(r.porAsignar > 0 ? [[l.equipo, r.porAsignar]] : []);
   for (const [equipo, cuantas] of porEquipo) if (cuantas > 0) for (const lider of lideresDe(equipo, ctx.miembros)) olvidarMedicion(lider.email);
   if (l.pedidaPorEmail) olvidarMedicion(l.pedidaPorEmail);
+}
+
+/* ── Lo que el tope dejó fuera (2026-10-19) ──────────────────────────────────────── */
+
+/** Lo que se puede recuperar de una lectura: solo de las de los últimos 14 días. */
+const DIAS_PARA_RECUPERAR_LO_DE_FUERA = 14;
+
+const SELECT_LECTURA_FUERA = { id: true, sessionId: true, equipo: true, semana: true, pedidaPorEmail: true, estado: true, modo: true, fuente: { select: { personas: true, equipo: true } } } as const;
+type LecturaFuera = Prisma.LecturaDeReunionGetPayload<{ select: typeof SELECT_LECTURA_FUERA }>;
+
+/**
+ * Lo que la lectura de las notas le habría propuesto a quien mira y que el tope dejó fuera: se arma de nuevo con las
+ * mismas reglas, sin IA (`armarPropuestas` sin salida), y quedan las líneas suyas sin tarea escrita
+ * (`lasQueQuedaronFuera`). Solo si estuvo en la reunión (el chokepoint lo decide). Lo que dejó fuera la conversación
+ * («¿Faltó algo?») no se recupera: salió de la IA y no se puede volver a armar igual.
+ */
+async function armarLoQueQuedoFuera(l: LecturaFuera, ctx: ContextoDeTareas, clientes: ClientesQueVes, ahora: Date) {
+  if (!l.sessionId || !["lista", "sin_ia"].includes(l.estado) || !["codigo", "haiku", "sin_ia"].includes(l.modo ?? "")) return null;
+  const [reunion] = await getReunionesParaTareas({ quien: quienLee(ctx, clientes), ids: [l.sessionId] });
+  if (!reunion) return null;
+  const lineas = reunion.actionItems.length ? itemsDeActionItems(reunion.actionItems) : itemsDeProximosPasos(reunion.notas ?? "");
+  if (!lineas.length) return null;
+  const clienteDeLaReunion = reunion.duenoClienteId && !reunion.puertasAdentro ? reunion.duenoClienteId : null;
+  const { por, lapidas } = await candidatasPara([ctx.email], l.equipo, clienteDeLaReunion, ahora);
+  const ctxArmado = {
+    lectura: { id: l.id, equipo: l.equipo, semana: comoFecha(l.semana)!, pedidaPorEmail: l.pedidaPorEmail, inicio: reunion.inicio, enElSprint: personasDeLaFuente(l.fuente, l.equipo, ctx) },
+    miembros: ctx.miembros,
+    participantes: reunion.participantes,
+    clienteDeLaReunion,
+    clientesPorLinea: clienteDeLaReunion ? new Map<string, ClientesDeUnTexto>() : await clientesDeLasLineas(lineas, clientes),
+    candidatasPorDueno: por,
+    lapidas,
+  };
+  const armado = armarPropuestas(prepararLineas(lineas, ctxArmado), ctxArmado, null, { M: new Map(), T: new Map(), R: new Map(), C: new Map() });
+  const mias = armado.propuestas.filter((p) => !p.porAsignar && p.responsableEmail === ctx.email);
+  if (!mias.length) return null;
+  const [escritas, propuestasMias] = await Promise.all([
+    prisma.tarea.findMany({ where: { origenId: { in: mias.map((p) => `l:${l.id}:${p.lineaId}`) } }, select: { origenId: true } }),
+    prisma.tarea.findMany({ where: { estado: "propuesta", responsableEmail: ctx.email, huella: { in: mias.map((p) => huellaDeTexto(p.titulo)) } }, select: { huella: true } }),
+  ]);
+  const yaEscritas = new Set(escritas.map((t) => t.origenId!.split(":").pop()!));
+  const fuera = lasQueQuedaronFuera(mias, ctx.email, yaEscritas, new Set(propuestasMias.map((t) => t.huella)));
+  return fuera.length ? { reunion, lineas, fuera } : null;
+}
+
+/** Las reuniones de los últimos 14 días que dejaron fuera líneas de quien mira. */
+export async function loQueQuedoFueraDelTope(ctx: ContextoDeTareas, clientes: ClientesQueVes, ahora = new Date()): Promise<FueraDelTope[]> {
+  const lecturas = await prisma.lecturaDeReunion.findMany({
+    where: { leidaAt: { gte: new Date(+ahora - DIAS_PARA_RECUPERAR_LO_DE_FUERA * 86_400_000) }, resumen: { path: ["sinLugar"], gt: 0 } },
+    select: SELECT_LECTURA_FUERA,
+    orderBy: { leidaAt: "desc" },
+    take: 10,
+  });
+  const salida: FueraDelTope[] = [];
+  for (const l of lecturas) {
+    const a = await armarLoQueQuedoFuera(l, ctx, clientes, ahora);
+    if (a) salida.push({ lecturaId: l.id, sessionId: a.reunion.id, reunion: a.reunion.titulo, fecha: a.reunion.inicio.toISOString(), titulos: a.fuera.map((p) => p.titulo) });
+  }
+  return salida;
+}
+
+/**
+ * «Proponérmelas»: escribe como propuestas tuyas las líneas que el tope dejó fuera de una reunión, con su cita y su
+ * contexto, como las demás. Las pide su dueña, así que el tope no las frena. Siguen siendo propuestas: decides tú.
+ */
+export async function proponerLasQueQuedaronFuera(ctx: ContextoDeTareas, clientes: ClientesQueVes, lecturaId: string, ahora = new Date()): Promise<{ creadas: number }> {
+  const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, select: SELECT_LECTURA_FUERA });
+  if (!l) throw new ErrorDeTareas(404, "Esa lectura no existe.");
+  const a = await armarLoQueQuedoFuera(l, ctx, clientes, ahora);
+  if (!a) return { creadas: 0 };
+  const contextos = await contextosDeLasNotas(a.fuera, a.lineas, a.reunion, ctx.email, clientes, ahora);
+  const ubicacion = contextoDeLaReunion({ reunion: a.reunion.titulo, fecha: diaCortoConSemana(horaDeCostaRica(a.reunion.inicio).fecha) });
+  const propuestas = a.fuera.map((p) => ({ ...p, contexto: contextos.porLinea.get(p.lineaId) ?? ubicacion }));
+  const escritas = await prisma.$transaction(
+    async (tx) => {
+      const e = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: a.reunion.id, tituloReunion: a.reunion.titulo, pedidaPorEmail: l.pedidaPorEmail }, propuestas, { sinTope: true });
+      // El resumen deja de contarlas como fuera: ya son propuestas.
+      const fila = await tx.lecturaDeReunion.findUnique({ where: { id: l.id }, select: { resumen: true } });
+      const r = (fila?.resumen ?? null) as ResumenDeLectura | null;
+      if (r && e.creadas.length) {
+        const nuevo: ResumenDeLectura = { ...r, sinLugar: Math.max(0, (r.sinLugar ?? 0) - e.creadas.length), propuestas: r.propuestas + e.creadas.length };
+        await tx.lecturaDeReunion.update({ where: { id: l.id }, data: { resumen: nuevo as unknown as Prisma.InputJsonValue } });
+      }
+      return e;
+    },
+    { timeout: 30_000, maxWait: 10_000 },
+  );
+  olvidarMedicion(ctx.email);
+  return { creadas: escritas.creadas.length };
 }
 
 /* ── Nivel 2: la conversación (docs/tareas-plan.md §7.3) ────────────────────────────── */
