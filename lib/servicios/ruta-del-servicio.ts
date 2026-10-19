@@ -255,6 +255,17 @@ export function hoyEnElEje(eje: EjeDeLaRuta, hoyISO: string): number | null {
   return x >= 0 && x <= 1 ? x : null;
 }
 
+/**
+ * Por qué todavía no se puede subir la ruta del servicio, en palabras de la pantalla, o null si se puede. Un proyecto de
+ * prueba nunca se comparte (no tiene «Acceso»): mandarlo a «Acceso» era mandarlo a un botón que ahí no existe
+ * (auditoría del 19 oct, prueba 31).
+ */
+export function porQueNoSeSubeLaRuta(o: { esPrueba: boolean; hasAccess: boolean }): string | null {
+  if (o.esPrueba) return "Es un proyecto de prueba: no se comparte con el cliente. La ruta del servicio se sube desde el proyecto real.";
+  if (!o.hasAccess) return "Primero genera el acceso del cliente en «Acceso», arriba del proyecto.";
+  return null;
+}
+
 export const ROTULO_DEL_ESTADO: Record<EstadoDelCasoEnLaRuta, string> = {
   sin_fechas: "Por agendar",
   pendiente: "Por empezar",

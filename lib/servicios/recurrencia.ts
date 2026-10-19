@@ -200,6 +200,27 @@ export function puedeDecidirRecurrencia(rol: string | null | undefined): boolean
   return !!rol && (ROLES_QUE_DECIDEN as readonly string[]).includes(rol);
 }
 
+/**
+ * A quién le llega la recomendación en «Para ti»: al encargado del proyecto en HubSpot si sigue en el equipo; si el
+ * proyecto no tiene encargado o el encargado ya se fue (Ferretería Noelito y Cicadex, auditoría del 19 oct), a quien
+ * lidera Customer Success. `null` = a esta persona no le llega.
+ */
+export function aQuienLeLlegaLaRecomendacion(o: {
+  /** El encargado en HubSpot del proyecto. */
+  encargado: string | null;
+  /** Quien abre «Para ti». */
+  persona: string;
+  /** Los correos de quienes siguen en el equipo (en minúscula). */
+  activos: ReadonlySet<string>;
+  /** Quien abre «Para ti» lleva el frente «Liderar Customer Success». */
+  lideraCs: boolean;
+}): "encargado" | "lider" | null {
+  const encargado = o.encargado?.trim().toLowerCase() || null;
+  const persona = o.persona.trim().toLowerCase();
+  if (encargado && o.activos.has(encargado)) return encargado === persona ? "encargado" : null;
+  return o.lideraCs ? "lider" : null;
+}
+
 export type AccionDeRecurrencia = "tarea" | "alta" | "descartar";
 
 export function esAccionDeRecurrencia(v: unknown): v is AccionDeRecurrencia {

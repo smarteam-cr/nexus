@@ -11,12 +11,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { BotonBlanco, BotonTexto } from "@/components/ui/sistema";
+import { porQueNoSeSubeLaRuta } from "@/lib/servicios/ruta-del-servicio";
 
 interface Estado {
   published: boolean;
   publishedAt: string | null;
   clientUrl: string | null;
   hasAccess: boolean;
+  /** Un proyecto de prueba nunca se comparte: no tiene «Acceso». */
+  esPrueba?: boolean;
 }
 
 const DIA = new Intl.DateTimeFormat("es-CR", { day: "numeric", month: "short", timeZone: "America/Costa_Rica" });
@@ -52,6 +55,7 @@ export default function SubirRutaDelServicio({ projectId, refresco }: { projectI
   };
 
   if (!estado) return null;
+  const noSeSube = porQueNoSeSubeLaRuta({ esPrueba: !!estado.esPrueba, hasAccess: estado.hasAccess });
   return (
     <section className="flex flex-col gap-2">
       <span className={ROTULO}>Ruta del servicio para el cliente</span>
@@ -60,8 +64,8 @@ export default function SubirRutaDelServicio({ projectId, refresco }: { projectI
           ? `Compartida desde el ${DIA.format(new Date(estado.publishedAt))}. Lo que cambie después lo ve cuando la vuelvas a subir.`
           : "Los ciclos y sus casos de uso como Gantt, sin notas internas ni montos. Todavía no la compartiste."}
       </p>
-      {!estado.hasAccess ? (
-        <p className="text-xs text-fg-muted">Primero genera el acceso del cliente en «Acceso», arriba del proyecto.</p>
+      {noSeSube ? (
+        <p className="text-xs text-fg-muted">{noSeSube}</p>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <BotonBlanco onClick={() => void cambiar(true)} disabled={ocupado}>

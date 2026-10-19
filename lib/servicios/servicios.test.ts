@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ETAPAS_DEL_CICLO, etapaPorNombre, etapaPosterior, etapaQueMuestranLasPiezas, etapaSiguiente, etapaDelProyecto, etapasDeLaPieza, leerMueve, nombreDelCiclo, PIEZA_DE_LA_ETAPA, PIEZAS_DE_UN_SERVICIO_RECURRENTE } from "./ciclo";
+import { ETAPAS_DEL_CICLO, etapaPorNombre, etapaQueMuestraElCiclo, etapaPosterior, etapaQueMuestranLasPiezas, etapaSiguiente, etapaDelProyecto, etapasDeLaPieza, leerMueve, nombreDelCiclo, PIEZA_DE_LA_ETAPA, PIEZAS_DE_UN_SERVICIO_RECURRENTE } from "./ciclo";
 import { guiaDelCiclo } from "./guia";
 import { SERVICIOS_RECURRENTES } from "./index";
 import { GUIA_SMARTLOOP } from "./smartloop";
@@ -149,5 +149,19 @@ describe("las piezas de un servicio recurrente", () => {
     expect(sl.servicioRecurrente).toBe("smartloop");
     expect(sl.seedPieces).not.toContain("kickoff");
     expect(sl.closedStageIds).toEqual(sl.stages.filter((s) => s.terminal).map((s) => s.id));
+  });
+});
+
+describe("la etapa que muestra el ciclo (prueba 30)", () => {
+  it("sin ciclo abierto, en un proyecto de HubSpot manda la etapa de allá", () => {
+    expect(etapaQueMuestraElCiclo({ enHubspot: true, rotuloDeHubspot: "Implementación", etapaGuardada: null })).toBe("implementacion");
+  });
+  it("sin ciclo abierto y sin HubSpot (la prueba), Diagnóstico", () => {
+    expect(etapaQueMuestraElCiclo({ enHubspot: false, rotuloDeHubspot: "Implementación", etapaGuardada: null })).toBe("diagnostico");
+  });
+  it("con ciclo abierto, HubSpot manda; si HubSpot dice algo que no es del ciclo, la guardada", () => {
+    expect(etapaQueMuestraElCiclo({ enHubspot: true, rotuloDeHubspot: "Adopción", etapaGuardada: "planificacion" })).toBe("adopcion");
+    expect(etapaQueMuestraElCiclo({ enHubspot: true, rotuloDeHubspot: "Cancelado", etapaGuardada: "planificacion" })).toBe("planificacion");
+    expect(etapaQueMuestraElCiclo({ enHubspot: false, rotuloDeHubspot: null, etapaGuardada: "otra" })).toBe("diagnostico");
   });
 });

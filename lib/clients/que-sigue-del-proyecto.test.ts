@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { etapaDeNexus, porQueEstaAca, queSigueDelProyecto, restoDeLosPendientes, type PiezaParaQueSigue } from "./que-sigue-del-proyecto";
+import { etapaDeNexus, porQueEstaAca, queSigueDelProyecto, recurrenciaAparte, restoDeLosPendientes, type PiezaParaQueSigue } from "./que-sigue-del-proyecto";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 
 const etapa = (id: string, label: string, razones: string[] = []): EtapaParaLaUI => ({
@@ -233,5 +233,32 @@ describe("qué sigue en un servicio recurrente (2026-10-12)", () => {
   it("las reuniones sin revisar le ganan al ciclo", () => {
     const q = queSigueDelProyecto({ ...base, piezas: conCiclo, etapa: null, sesionesSinRevisar: 1, ciclo: { corto: "sin abrir", abierto: false, falta: null, numero: 1 } });
     expect(q.accion).toEqual({ tipo: "sesiones" });
+  });
+});
+
+describe("la recomendación de seguir con SmartLoop se ve siempre (prueba 13)", () => {
+  const entrega: PiezaParaQueSigue[] = [{ slug: "delivery", etiqueta: "Entrega", estado: "por_activar", stale: false }];
+  const recurrencia = { texto: "Propónle a Honda seguir con SmartLoop." };
+  it("con reuniones sin revisar, «Qué sigue» las pide y la recomendación va en su propio bloque", () => {
+    const q = queSigueDelProyecto({ ...base, etapa: etapa("x", "Entrega"), sesionesSinRevisar: 3, recurrencia });
+    expect(q.accion).toEqual({ tipo: "sesiones" });
+    expect(recurrenciaAparte({ hayRecurrencia: true, queSigue: q, queSigueVisible: true })).toBe(true);
+  });
+  it("con «activa Entrega» delante, también va aparte", () => {
+    const q = queSigueDelProyecto({ ...base, piezas: entrega, etapa: etapa("x", "Entrega"), recurrencia });
+    expect(q.accion).toEqual({ tipo: "pieza", slug: "delivery", etiqueta: "Entrega" });
+    expect(recurrenciaAparte({ hayRecurrencia: true, queSigue: q, queSigueVisible: true })).toBe(true);
+  });
+  it("cuando «Qué sigue» ya la muestra, no se repite", () => {
+    const q = queSigueDelProyecto({ ...base, piezas: [], etapa: etapa("x", "Entrega"), recurrencia });
+    expect(q.accion).toEqual({ tipo: "recurrencia" });
+    expect(recurrenciaAparte({ hayRecurrencia: true, queSigue: q, queSigueVisible: true })).toBe(false);
+  });
+  it("si la ficha tapa «Qué sigue» con un cartel propio, va aparte", () => {
+    const q = queSigueDelProyecto({ ...base, piezas: [], etapa: etapa("x", "Entrega"), recurrencia });
+    expect(recurrenciaAparte({ hayRecurrencia: true, queSigue: q, queSigueVisible: false })).toBe(true);
+  });
+  it("sin recomendación pendiente, no hay bloque", () => {
+    expect(recurrenciaAparte({ hayRecurrencia: false, queSigue: null, queSigueVisible: true })).toBe(false);
   });
 });

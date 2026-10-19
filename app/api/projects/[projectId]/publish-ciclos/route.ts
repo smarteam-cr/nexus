@@ -5,7 +5,7 @@
  * (SmartLoop, docs/smartloop-plan.md, etapa 7). Mismo acceso y misma contraseña que las otras superficies; el
  * `?next=ciclos` decide dónde aterriza.
  *
- *   GET    → { published, publishedAt, clientUrl, hasAccess }
+ *   GET    → { published, publishedAt, clientUrl, hasAccess, esPrueba }
  *   POST   → compartir       (congela la foto + ciclosPublishedAt = now)
  *   DELETE → dejar de compartir (ciclosPublishedAt = null)
  *
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ proj
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { ciclosPublishedAt: true, externalAccess: { select: { accessToken: true, revokedAt: true } } },
+    select: { ciclosPublishedAt: true, esPrueba: true, externalAccess: { select: { accessToken: true, revokedAt: true } } },
   });
   if (!project) return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
 
@@ -45,6 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ proj
     publishedAt: project.ciclosPublishedAt?.toISOString() ?? null,
     clientUrl,
     hasAccess: !!access && !access.revokedAt,
+    esPrueba: project.esPrueba,
   });
 }
 
