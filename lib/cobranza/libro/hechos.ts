@@ -6,7 +6,8 @@
  *
  *  · LA FACTURA SE PEGA SOLA. La cuota que tiene anotado el número de su factura se queda con esa. La que no lo tiene
  *    se queda con la factura de su misma cuenta, moneda y monto exacto, si es la única que calza y está cerca en la
- *    fecha. Si se pega, la cuota queda facturada con ese número (firma del sistema).
+ *    fecha. Si se pega, la cuota queda facturada con ese número (firma del sistema). Una cuota YA COBRADA también
+ *    recibe su número, pero solo si la factura está pagada allá (2026-10-18): impaga es un choque y no se toca.
  *  · LO PAGADO ALLÁ SE COBRA ACÁ. Odoo: «pagada» o «en proceso de pago» (Alex: ya tiene la referencia y la fecha de
  *    la transferencia; conciliar contra el estado de cuenta es el segundo paso del contador). Mercury: «Paid». La fecha
  *    del cobro es la del pago real, nunca la del día en que corre esto.
@@ -221,6 +222,11 @@ export interface Accion {
    * cuadra). Lo decide `dudaDelCobro`.
    */
   cobrar?: { fechaCobro: string; deDonde: string; porQueNoSolo: string | null };
+  /**
+   * La cuota ya estaba cobrada en Nexus y su factura está pagada allá: solo le falta el número (o la fecha de la
+   * factura). Nunca lleva `cobrar`. Si al escribir ya no está cobrada, no se toca: alguien la sacó de Cobrado.
+   */
+  yaCobrada?: true;
 }
 
 /** Días que una entrada de plata puede ir ANTES de su factura (la misma regla de `entradasDeFacturas`). */
@@ -267,7 +273,18 @@ export function decidir(e: EntradaDelLibro, pegados: readonly Pegado[], fechasDe
     const c = cobros.get(p.cobroId);
     if (!c) continue;
     if (c.estado === "COBRADO") {
-      if (p.impaga) out.choques.push(p);
+      if (p.impaga) {
+        out.choques.push(p);
+      } else if (p.pagada && (!c.numeroFactura || !c.fechaEmision)) {
+        /* Cobrada acá y pagada allá: los dos dicen lo mismo, así que la cuota recibe el número de su factura (2026-10-18,
+           prueba 36). Antes se saltaba y una cuota cobrada nunca recibía su número: Corrugando 0221, Servica 0268.
+           ⛔ Con la factura impaga NO: es un choque, y anotarle el número fijaría un pareo por monto que puede ser de
+           otra factura (Juanva 0197 y 0230, con dos facturas de diciembre del mismo monto). */
+        const a: Accion = { fuente: p.fuente, cobroId: c.id, numero: p.numero, yaCobrada: true };
+        if (!c.fechaEmision) a.fechaEmision = p.fechaFactura;
+        if (!c.numeroFactura) a.numeroFactura = p.numero;
+        out.acciones.push(a);
+      }
       continue;
     }
     const a: Accion = { fuente: p.fuente, cobroId: c.id, numero: p.numero };
@@ -379,6 +396,7 @@ export function accionesElegidas(acciones: readonly Accion[], sel: SeleccionDelL
     const elegida: Accion = { fuente: a.fuente, cobroId: a.cobroId, numero: a.numero };
     if (a.fechaEmision) elegida.fechaEmision = a.fechaEmision;
     if (a.numeroFactura) elegida.numeroFactura = a.numeroFactura;
+    if (a.yaCobrada) elegida.yaCobrada = true;
     if (quiereCobrar) {
       const vista = cobrar.get(a.cobroId)!;
       if (!a.cobrar) out.cambiaron.push({ cobroId: a.cobroId, motivo: "ya no figura pagada allá: no se cobró" });
