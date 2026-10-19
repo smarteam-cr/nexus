@@ -1,5 +1,6 @@
 import { requireAccessToClient } from "@/lib/auth/access";
 import { UnauthorizedError, ForbiddenError, requireInternalUser } from "@/lib/auth/supabase";
+import { proyectoQueAbreLaFicha } from "@/lib/clients/proyecto-inicial";
 import { can } from "@/lib/auth/permissions/engine";
 import { espacioDe } from "@/lib/clients/kind";
 import EspacioPropuestas from "@/components/clients/EspacioPropuestas";
@@ -130,6 +131,8 @@ export default async function ClientPage({
         // caso que en el 99% de las filas no dispara nada.
         altaEstado: true,
         esPrueba: true,
+        // El encargado: con varios proyectos, la ficha abre en el de quien mira (lib/clients/proyecto-inicial.ts).
+        hubspotOwnerEmail: true,
         altaError: true,
         altaUltimoIntentoAt: true,
         altaActorEmail: true,
@@ -190,10 +193,8 @@ export default async function ClientPage({
   const initialProjectId =
     tabParam && visibleProjects.some((p) => p.id === tabParam)
       ? tabParam
-      : /* Un proyecto de prueba no cuenta para abrir solo: con un real y su prueba, abre el real. */
-        visibleProjects.filter((p) => !p.esPrueba).length === 1
-        ? visibleProjects.filter((p) => !p.esPrueba)[0].id
-        : null;
+      : /* El mismo criterio que el layout: con uno real, ése; con varios, el de quien mira (lib/clients/proyecto-inicial.ts). */
+        proyectoQueAbreLaFicha(visibleProjects, (await requireInternalUser().catch(() => null))?.teamMember.email);
   const initialCanvases = initialProjectId ? await seedCanvases(initialProjectId) : null;
 
   return (

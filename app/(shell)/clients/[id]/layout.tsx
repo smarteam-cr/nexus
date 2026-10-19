@@ -1,5 +1,6 @@
 import { requireAccessToClient } from "@/lib/auth/access";
 import { UnauthorizedError, ForbiddenError, requireInternalUser } from "@/lib/auth/supabase";
+import { proyectoQueAbreLaFicha } from "@/lib/clients/proyecto-inicial";
 import { esLiderDeCs } from "@/lib/cs/acceso";
 import { esCseDeLaCuenta } from "@/lib/cs/adopcion-del-cse-server";
 import { LecturaDeLaCuenta } from "@/components/cs/LecturaDeLaCuenta";
@@ -93,14 +94,15 @@ export default async function ClientLayout({
   const activeProjects = enProyectos
     ? await prisma.project.findMany({
         where: proyectoNavegableWhere({ clientId: id }),
-        select: { id: true, esPrueba: true },
+        select: { id: true, esPrueba: true, hubspotOwnerEmail: true },
         orderBy: { createdAt: "asc" },
       })
     : [];
-  // Un proyecto de prueba (2026-10-11) no cuenta para abrir solo: con un real y su prueba, abre el real.
-  const proyectosReales = activeProjects.filter((p) => !p.esPrueba);
+  /* Con uno real abre en él; con varios, en el de quien mira si lleva uno solo (lib/clients/proyecto-inicial.ts,
+     Cemaco 2026-10-19). Un proyecto de prueba no cuenta para abrir solo. */
+  const quienMira = enProyectos ? await requireInternalUser().catch(() => null) : null;
   const initialProjectId =
-    proyectosReales.length === 1 ? proyectosReales[0].id : SENTINEL_SERVICE_TYPE;
+    proyectoQueAbreLaFicha(activeProjects, quienMira?.teamMember.email) ?? SENTINEL_SERVICE_TYPE;
 
   // Nombre de empresa live desde HubSpot. Es una llamada de RED en el camino crítico del
   // header: solo se paga en el espacio de proyectos, donde el nombre de HubSpot es el que
