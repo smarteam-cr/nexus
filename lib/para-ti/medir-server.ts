@@ -67,7 +67,10 @@ export async function medirParaTi(a: Alcance, ahora = new Date()): Promise<ParaT
   );
   // Las cuentas que lleva (el encargado en HubSpot): si las que no entran en sus cinco llegan al umbral, la quinta es
   // «Estabilizar N cuentas» (lib/para-ti/importa.ts).
-  const medicion = armarParaTi(resultados, { cuentasQueLleva: new Set(a.proyectos.filter((p) => p.encargado).map((p) => p.clientId)) });
+  const medicion = armarParaTi(resultados, {
+    cuentasQueLleva: new Set(a.proyectos.filter((p) => p.encargado).map((p) => p.clientId)),
+    nombresDeLasCuentas: new Map(a.proyectos.map((p) => [p.clientId, p.empresa])),
+  });
 
   guardadas.set(a.email, { at: ahora.getTime(), medicion });
   return medicion;
