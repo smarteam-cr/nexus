@@ -1963,11 +1963,16 @@ export interface PropuestaDeLectura {
   porAsignar: boolean;
 }
 
-/** Escribe las propuestas de una lectura. Las que ya existen (mismo `origenId`) no se tocan: releer no pisa lo decidido. */
+/**
+ * Escribe las propuestas de una lectura. Las que ya existen (mismo `origenId`) no se tocan: releer no pisa lo decidido.
+ * `sinTope`: las pidió su propia dueña («Proponérmelas», lib/tareas/lectura.ts › `proponerLasQueQuedaronFuera`): el
+ * cupo de 5 por persona por reunión no las frena.
+ */
 export async function escribirPropuestasDeLectura(
   tx: Tx,
   lectura: { id: string; sessionId: string | null; tituloReunion: string; pedidaPorEmail: string | null },
   propuestas: readonly PropuestaDeLectura[],
+  o: { sinTope?: boolean } = {},
 ): Promise<{ creadas: { id: string; responsableEmail: string | null }[]; yaEstaban: number; sumadas: number; sinLugar: Map<string, number> }> {
   const creadas: { id: string; responsableEmail: string | null }[] = [];
   let yaEstaban = 0;
@@ -2010,7 +2015,7 @@ export async function escribirPropuestasDeLectura(
         continue;
       }
     }
-    if (!p.porAsignar && p.responsableEmail && !cupo.tomar(p.responsableEmail)) continue;
+    if (!o.sinTope && !p.porAsignar && p.responsableEmail && !cupo.tomar(p.responsableEmail)) continue;
     const t = await tx.tarea.create({
       data: {
         titulo: p.titulo,

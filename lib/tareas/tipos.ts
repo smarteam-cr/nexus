@@ -423,3 +423,12 @@ export interface SprintDelEquipoDatos {
   candidatas: SerieCandidata[];
   maxSeries: number;
 }
+
+/** Una reunión con líneas tuyas que el tope de 5 dejó fuera (lib/tareas/lectura.ts). Solo títulos: la cita se ve en la tarea, con su regla. */
+export interface FueraDelTope {
+  lecturaId: string;
+  sessionId: string;
+  reunion: string;
+  fecha: string;
+  titulos: string[];
+}

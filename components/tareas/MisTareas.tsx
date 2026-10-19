@@ -38,6 +38,7 @@ import { CalendarioDeLaSemana, TableroDeLaSemana } from "./VistasDeLaSemana";
 import { Agendar } from "./Agendar";
 import { ListaAligerada } from "./ListaAligerada";
 import { CerrarLoQuePaso } from "./CerrarLoQuePaso";
+import { FueraDelTope } from "./FueraDelTope";
 import { BotonDelAsistente } from "./AsistenteDeTareas";
 
 type FiltroPara = "todos" | Ambito;
@@ -341,6 +342,8 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
         )}
 
         <CerrarLoQuePaso tareas={[...porDecidir, ...datos.estaSemana, ...datos.masAdelante, ...datos.porAsignar]} onAbrir={(x) => ponerParametro("t", x.id)} onCerradas={() => void refrescar()} />
+
+        <FueraDelTope revision={datos} onPropuestas={() => void refrescar()} />
 
         {(porDecidir.length > 0 || datos.proyectosPorDecidir.length > 0) && (
           <section className="space-y-2" data-recorrido="tareas.por-decidir">

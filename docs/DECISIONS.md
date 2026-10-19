@@ -8535,6 +8535,13 @@ pocas, diciendo si vienen de una reunión con el cliente o del sprint interno.
   único escritor de propuestas y contando todo lo que esa reunión ya le dejó (notas, «¿Faltó algo?» y seguimiento), en
   el orden de las líneas. «Por asignar» no cuenta. Lo que no entra no se crea y se cuenta en la lectura. Convive con el
   tope de 10 sugerencias abiertas por persona.
+- **Lo que el tope deja fuera se ve y se recupera** (2026-10-19). En la reunión del sprint de marketing del lun 19 oct
+  el tope cortó 5 de las 16 líneas de «Próximos pasos» (4 de Alejandra Ortega, 1 de Lidia Flores) y nadie podía ver
+  cuáles. Ahora Mis tareas muestra, por reunión de los últimos 14 días, las líneas TUYAS que no se propusieron, con
+  «Proponérmelas»: quedan como propuestas tuyas, con su cita y su contexto, y decides tú. No se guarda nada: se arman
+  de nuevo con las mismas reglas, sin IA (`loQueQuedoFueraDelTope` en lib/tareas/lectura.ts, `lasQueQuedaronFuera` en
+  lib/tareas/cupo.ts). Solo las de las notas: lo que dejó fuera la conversación salió de la IA y no se vuelve a armar
+  igual. El tope sigue igual: subirlo en la reunión del sprint, o leer también la conversación, es una decisión aparte.
 - **El sprint lo configura quien lo lidera o dirección**, en Semana del equipo › «La reunión del sprint»: hasta 4
   series por sprint, solo reuniones recurrentes y de puertas adentro en las que estuvo quien la elige (se leen a su
   nombre). Cada reunión nueva se lee sola entre 15 minutos y 24 horas después de terminar, solo desde el día antes de
