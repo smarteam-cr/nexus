@@ -19,6 +19,7 @@ import { definicionEnElMarco, esTarjeta, DE_LA_PREVENTA } from "@/lib/exploracio
 import { contextoParaLaGuia } from "@/lib/exploraciones/agente";
 import { ajustarLaGuia, ErrorDeLaGuia, preguntasDeLaProxima } from "@/lib/exploraciones/guia-ajustes-server";
 import { repiteLoSabido, QUE_BUSCA_CADA_PASO } from "@/lib/exploraciones/plan-de-la-guia";
+import { normalizarPregunta, problemaAlAgregar } from "@/lib/exploraciones/agregar-a-la-guia";
 import {
   claveDePregunta,
   lineaDelCambio,
@@ -29,7 +30,7 @@ import {
   sinCitaAdelante,
   type CambioDeLaGuia,
 } from "@/lib/exploraciones/ajustes-de-la-guia";
-import type { PreguntaParaMostrar } from "@/lib/exploraciones/guia";
+import { ordenDeLaConversacion, type PreguntaParaMostrar } from "@/lib/exploraciones/guia";
 import { exigirCliente, type ContextoDeNexus } from "./contexto-server";
 import type { OperacionQueLee, OperacionQuePropone, Preparada } from "./tipos";
 
@@ -61,6 +62,29 @@ export function baseDeLaGuia(ctx: object, exploracionId: string): Promise<Base> 
   // Si falla, no se guarda: el próximo intento vuelve a leer.
   b.catch(() => porId.delete(exploracionId));
   return b;
+}
+
+/**
+ * Las preguntas que ya se sumaron en la lista de este contexto (un turno o un «Aplicar»), por exploración: así el tope de
+ * sumadas y las repetidas se revisan al preparar, contando la lista entera, y no recién al aplicar (auditoría del
+ * 2026-10-19: la caja prometía «2 cambios» y entraba uno).
+ */
+const sumadasDelContexto = new WeakMap<object, Map<string, Set<string>>>();
+function sumadasEnLaLista(ctx: object, exploracionId: string): Set<string> {
+  let porId = sumadasDelContexto.get(ctx);
+  if (!porId) sumadasDelContexto.set(ctx, (porId = new Map()));
+  let s = porId.get(exploracionId);
+  if (!s) porId.set(exploracionId, (s = new Set()));
+  return s;
+}
+
+/**
+ * Las preguntas de la próxima sesión EN EL ORDEN DE LA PANTALLA («En orden», `ordenDeLaConversacion`): el número que lee
+ * la persona y el que usa el chat son el mismo (auditoría del 2026-10-19: «quita la 5» quitaba el Presupuesto, que en
+ * pantalla va último).
+ */
+function preguntasEnOrden(base: Base): PreguntaParaMostrar[] {
+  return ordenDeLaConversacion(preguntasDeLaProxima(base).preguntas);
 }
 
 /** La exploración, si es de esta empresa y quien pide puede cambiarla. */
@@ -104,7 +128,7 @@ function temasPosibles(base: Base): { id: string; nombre: string }[] {
  */
 export async function guiaParaElChat(exploracionId: string, yaArmada?: Base): Promise<string> {
   const base = yaArmada ?? (await contextoParaLaGuia(exploracionId));
-  const { preguntas } = preguntasDeLaProxima(base);
+  const preguntas = preguntasEnOrden(base);
   const { ctx } = base;
   const nivel = (l: string) => base.escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
   const l: string[] = [
@@ -162,7 +186,7 @@ async function conLaPregunta(
   const ok = await exigirLaExploracion(ctx, e.clientId, e.exploracionId, true);
   if (!ok.ok) return ok;
   const base = await baseDeLaGuia(ctx, e.exploracionId);
-  const { preguntas } = preguntasDeLaProxima(base);
+  const preguntas = preguntasEnOrden(base);
   const i = preguntas.findIndex((p) => claveDePregunta(p) === e.clave);
   if (i < 0) return { ok: false, motivo: `La guía no tiene la pregunta [${e.clave}]: léela otra vez con guia_leer.` };
   return armar(base, preguntas[i], i + 1);
@@ -210,8 +234,11 @@ export const AGREGAR_PREGUNTA: OperacionQuePropone<
     const base = await baseDeLaGuia(ctx, e.exploracionId);
     if (e.tema && !temasPosibles(base).some((t) => t.id === e.tema)) return { ok: false, motivo: `«${e.tema}» no es un tema de esta guía: usa uno de la lista de temas.` };
     // La pregunta es la misma en la lista y al aplicar: el id lo pone el aplicar (dos aplicaciones no la duplican: va en la lista una vez).
-    const { preguntas } = preguntasDeLaProxima(base);
-    if (preguntas.some((p) => p.pregunta.trim().toLowerCase() === e.pregunta.trim().toLowerCase())) return { ok: false, motivo: "Esa pregunta ya está en la guía." };
+    // Ya en la guía o en esta lista, el tope de sumadas contando la lista y lo que el cliente ya dijo: al preparar, no al aplicar.
+    const enLaLista = sumadasEnLaLista(ctx, e.exploracionId);
+    const motivo = problemaAlAgregar({ pregunta: e.pregunta, tema: e.tema, preguntas: preguntasDeLaProxima(base).preguntas, enLaLista, saber: base.ctx.saber });
+    if (motivo) return { ok: false, motivo };
+    enLaLista.add(normalizarPregunta(e.pregunta));
     return {
       ok: true,
       datos: {

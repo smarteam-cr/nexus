@@ -60,6 +60,8 @@ export interface AjustesDeLaGuia {
 }
 
 export const MAX_PREGUNTAS_PROPIAS = 8;
+/** El tope cuenta las sumadas por ti y por el asistente: decir «tuyas» confundía (2026-10-19). */
+export const AVISO_DEL_TOPE_DE_SUMADAS = `La guía ya tiene ${MAX_PREGUNTAS_PROPIAS} preguntas sumadas (tuyas o del asistente): quita una antes de sumar otra.`;
 export const MAX_CAMBIOS_DE_LA_GUIA = 20;
 export const LARGO_DE_UNA_PREGUNTA = 400;
 export const LARGO_DE_UNA_REPREGUNTA = 300;
@@ -177,7 +179,7 @@ export function aplicarCambioDeLaGuia(antes: AjustesDeLaGuia | undefined, cambio
     case "agregar": {
       const pregunta = limpio(cambio.pregunta.pregunta, LARGO_DE_UNA_PREGUNTA);
       if (!pregunta) return { ok: false, error: "Escribe la pregunta." };
-      if (a.propias!.length >= MAX_PREGUNTAS_PROPIAS) return { ok: false, error: `La guía ya tiene ${MAX_PREGUNTAS_PROPIAS} preguntas tuyas: quita una antes de sumar otra.` };
+      if (a.propias!.length >= MAX_PREGUNTAS_PROPIAS) return { ok: false, error: AVISO_DEL_TOPE_DE_SUMADAS };
       if (a.propias!.some((p) => p.id === cambio.pregunta.id)) return { ok: false, error: "Esa pregunta ya está." };
       a.propias!.push({ ...cambio.pregunta, pregunta, repreguntas: limpias(cambio.pregunta.repreguntas) });
       return { ok: true, ajustes: compacto(a) };
