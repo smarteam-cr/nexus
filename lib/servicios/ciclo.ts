@@ -98,6 +98,23 @@ export function etapaPorNombre(label: string | null | undefined): EtapaDelCiclo 
   return ETAPAS_DEL_CICLO.find((e) => e === n) ?? null;
 }
 
+/**
+ * La etapa que muestra el ciclo (el riel, el «Qué sigue»): en un proyecto que existe en HubSpot, la de allá, por
+ * nombre; si no (la prueba) o si HubSpot dice una etapa que no es del ciclo, la guardada en el ciclo abierto; sin ciclo
+ * abierto, Diagnóstico. Antes, sin ciclo abierto, era siempre Diagnóstico aunque HubSpot dijera otra («PLAN DE
+ * CONTINUIDAD | HONDA FACO» en Implementación; auditoría del 19 oct, prueba 30).
+ */
+export function etapaQueMuestraElCiclo(o: {
+  enHubspot: boolean;
+  rotuloDeHubspot: string | null | undefined;
+  /** La etapa guardada en el ciclo abierto; null sin ciclo abierto. */
+  etapaGuardada: string | null;
+}): EtapaDelCiclo {
+  const deHubspot = o.enHubspot ? etapaPorNombre(o.rotuloDeHubspot) : null;
+  if (deHubspot) return deHubspot;
+  return esEtapaDelCiclo(o.etapaGuardada) ? o.etapaGuardada : "diagnostico";
+}
+
 export const COMPROMISOS = ["mensual", "semestral", "anual"] as const;
 export type Compromiso = (typeof COMPROMISOS)[number];
 export const ETIQUETA_DE_COMPROMISO: Record<Compromiso, string> = {

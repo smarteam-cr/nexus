@@ -4,7 +4,8 @@
  *
  * Tres lectores y un escritor:
  *  · `recomendacionDelProyecto`: la del «Qué sigue» del proyecto, con el porqué entero.
- *  · `recomendacionesPendientesPara`: las del CSE para «Para ti» (solo lo que sigue pendiente, sin el porqué caro).
+ *  · `recomendacionesPendientesPara`: las del CSE para «Para ti» (solo lo que sigue pendiente, sin el porqué caro); las
+ *    de un proyecto sin encargado vigente, a quien lidera Customer Success.
  *  · `itemsParaContar`: lo que mide «Uso de Nexus» (lib/lo-propuesto/registro-server.ts).
  *  · `decidirRecomendacion`: usar (dejar la tarea o abrir el alta) o descartar. ⛔ Nunca escribe en HubSpot.
  */
@@ -26,6 +27,7 @@ import { clientesQueVesParaTareas } from "@/lib/tareas/clientes";
 import { crearTarea, urlDeLaTarea } from "@/lib/tareas/mutaciones";
 import { guiaDeServicio } from "./index";
 import {
+  aQuienLeLlegaLaRecomendacion,
   calificaParaRecurrencia,
   ETAPA_DE_ENTREGA,
   ETAPA_FINALIZADO,
@@ -264,19 +266,42 @@ export interface RecomendacionPendiente {
   motivo: Calificacion["motivo"];
   nacio: string | null;
   servicio: string;
+  /**
+   * Le llega a quien lidera Customer Success porque el proyecto no tiene encargado vigente: el nombre de quien era el
+   * encargado y ya se fue (o su correo), o "" si el proyecto no tiene encargado. null = le llega a su encargado.
+   */
+  sinEncargado: string | null;
 }
 
-/** Las recomendaciones pendientes de los proyectos donde `email` es el encargado en HubSpot. */
-export async function recomendacionesPendientesPara(email: string, ahora = new Date()): Promise<RecomendacionPendiente[]> {
+/**
+ * Las recomendaciones pendientes de los proyectos donde `email` es el encargado en HubSpot. Con `lideraCs`, también las
+ * de los proyectos sin encargado o con un encargado que ya no está en el equipo: si no, no le llegan a nadie.
+ */
+export async function recomendacionesPendientesPara(
+  email: string,
+  ahora = new Date(),
+  o: { lideraCs?: boolean } = {},
+): Promise<RecomendacionPendiente[]> {
   const correo = email.trim().toLowerCase();
   if (!correo || !ETAPA_DE_ENTREGA) return [];
+  const lideraCs = !!o.lideraCs;
   const etapas = [ETAPA_DE_ENTREGA, ETAPA_FINALIZADO].filter((x): x is string => !!x);
-  const candidatos = await prisma.project.findMany({
-    where: { hubspotOwnerEmail: { equals: correo, mode: "insensitive" }, hubspotPipelineStageId: { in: etapas }, esPrueba: false },
-    select: { ...SELECT_PROYECTO, client: { select: { name: true, kind: true, projects: { select: SELECT_PROYECTO } } } },
-    take: 50,
-  });
+  const [candidatos, equipo] = await Promise.all([
+    prisma.project.findMany({
+      where: {
+        ...(lideraCs ? {} : { hubspotOwnerEmail: { equals: correo, mode: "insensitive" as const } }),
+        hubspotPipelineStageId: { in: etapas },
+        esPrueba: false,
+      },
+      select: { ...SELECT_PROYECTO, client: { select: { name: true, kind: true, projects: { select: SELECT_PROYECTO } } } },
+      take: lideraCs ? 200 : 50,
+    }),
+    lideraCs ? prisma.teamMember.findMany({ select: { email: true, name: true, deactivatedAt: true } }) : Promise.resolve(null),
+  ]);
   if (!candidatos.length) return [];
+  // Sin el equipo a mano (no lidera CS), quien pregunta es el encargado de todos los candidatos y sigue en el equipo.
+  const activos = new Set(equipo ? equipo.filter((m) => !m.deactivatedAt).map((m) => m.email.toLowerCase()) : [correo]);
+  const nombres = new Map((equipo ?? []).map((m) => [m.email.toLowerCase(), m.name]));
   const decididos = hayTabla()
     ? new Set(
         (
@@ -294,10 +319,22 @@ export async function recomendacionesPendientesPara(email: string, ahora = new D
   const out: RecomendacionPendiente[] = [];
   for (const p of candidatos) {
     if (p.client.kind !== "CLIENTE" || decididos.has(p.id)) continue;
+    const llega = aQuienLeLlegaLaRecomendacion({ encargado: p.hubspotOwnerEmail, persona: correo, activos, lideraCs });
+    if (!llega) continue;
     const cal = calificar(p, p.client.projects, hoyISO);
     if (!cal) continue;
     if (estadoDeRecomendacionDeRecurrencia(null, cal.nacio, hoyISO).estado !== "pendiente") continue;
-    out.push({ projectId: p.id, proyecto: p.name, clientId: p.clientId, empresa: p.client.name, motivo: cal.motivo, nacio: cal.nacio, servicio });
+    const anterior = p.hubspotOwnerEmail?.trim().toLowerCase() || null;
+    out.push({
+      projectId: p.id,
+      proyecto: p.name,
+      clientId: p.clientId,
+      empresa: p.client.name,
+      motivo: cal.motivo,
+      nacio: cal.nacio,
+      servicio,
+      sinEncargado: llega === "lider" ? (anterior ? (nombres.get(anterior) ?? anterior) : "") : null,
+    });
   }
   return out;
 }

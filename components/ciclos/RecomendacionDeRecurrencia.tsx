@@ -36,8 +36,11 @@ export function useRecomendacionDeRecurrencia(projectId: string, refresco: unkno
   return { rec, recargar };
 }
 
-/** El porqué y las tres salidas, debajo del texto del «Qué sigue». */
-export function AccionDeRecurrencia({
+/**
+ * La recomendación en su PROPIO bloque del panel del Resumen, cuando «Qué sigue» dice otra cosa (lib/clients/
+ * que-sigue-del-proyecto.ts › recurrenciaAparte). «Para ti» manda acá: tiene que verse siempre que esté pendiente.
+ */
+export function BloqueDeRecurrencia({
   projectId,
   rec,
   onDecidido,
@@ -46,6 +49,31 @@ export function AccionDeRecurrencia({
   rec: RecomendacionDelProyecto;
   onDecidido: () => void;
 }) {
+  return (
+    <section id="recomendacion-de-recurrencia" className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-3.5">
+      <p className="text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-fg-muted">Después de la entrega</p>
+      <p className="text-sm leading-[1.4] text-fg">{rec.texto}</p>
+      <AccionDeRecurrencia projectId={projectId} rec={rec} onDecidido={onDecidido} principal={false} />
+    </section>
+  );
+}
+
+/**
+ * El porqué y las tres salidas, debajo del texto del «Qué sigue» o en su propio bloque del panel (`principal` false:
+ * ahí la acción azul es la del «Qué sigue», y «Dejar la tarea» va en blanco).
+ */
+export function AccionDeRecurrencia({
+  projectId,
+  rec,
+  onDecidido,
+  principal = true,
+}: {
+  projectId: string;
+  rec: RecomendacionDelProyecto;
+  onDecidido: () => void;
+  principal?: boolean;
+}) {
+  const BotonDeLaTarea = principal ? BotonAzul : BotonBlanco;
   const toast = useToast();
   const router = useRouter();
   const [ocupado, setOcupado] = useState(false);
@@ -115,9 +143,9 @@ export function AccionDeRecurrencia({
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <BotonAzul onClick={() => void decidir("tarea")} disabled={ocupado} title="Te deja una tarea esta semana para proponérselo al cliente">
+          <BotonDeLaTarea onClick={() => void decidir("tarea")} disabled={ocupado} title="Te deja una tarea esta semana para proponérselo al cliente">
             Dejar la tarea
-          </BotonAzul>
+          </BotonDeLaTarea>
           <BotonBlanco onClick={() => void decidir("alta")} disabled={ocupado} title={`Abre Clientes › Nuevo proyecto con ${rec.servicio} elegido`}>
             Abrir el alta
           </BotonBlanco>

@@ -21,6 +21,7 @@ import {
   esEtapaDelCiclo,
   ETIQUETA_DE_ETAPA,
   etapaPorNombre,
+  etapaQueMuestraElCiclo,
   leerMueve,
   PIEZA_DE_LA_ETAPA,
   type Compromiso,
@@ -250,18 +251,18 @@ export async function estadoDelCicloParaElRiel(projectId: string): Promise<Ciclo
     },
   });
   if (!c) {
-    /* Sin ciclo abierto el proyecto está en Diagnóstico: el ciclo se abre solo cuando alguien cambia la etapa o
-       pone sus datos (2026-10-12). Antes decía «Sin ciclo abierto» y contradecía al «Qué sigue». */
+    /* Sin ciclo abierto el proyecto está en Diagnóstico, salvo que HubSpot diga otra etapa: ahí manda HubSpot, por
+       nombre (2026-10-19). El ciclo se abre solo cuando alguien cambia la etapa o pone sus datos (2026-10-12). */
     const ultimo = await prisma.cicloDeProyecto.findFirst({ where: { projectId }, orderBy: { numero: "desc" }, select: { numero: true } });
-    const g0 = guiaDelCiclo(guiaServicio, { etapa: "diagnostico", meta: null, desde: null, hasta: null, casos: [] });
+    const etapa0 = etapaQueMuestraElCiclo({ enHubspot: !!p.hubspotServiceId, rotuloDeHubspot: p.hubspotPipelineStageLabel, etapaGuardada: null });
+    const g0 = guiaDelCiclo(guiaServicio, { etapa: etapa0, meta: null, desde: null, hasta: null, casos: [] });
     return {
-      abierto: false, id: null, numero: (ultimo?.numero ?? 0) + 1, nombre: null, desde: null, hasta: null, etapa: "diagnostico",
-      corto: ETIQUETA_DE_ETAPA.diagnostico, falta: null, piezaDeLaEtapa: PIEZA_DE_LA_ETAPA.diagnostico, planListo: false,
+      abierto: false, id: null, numero: (ultimo?.numero ?? 0) + 1, nombre: null, desde: null, hasta: null, etapa: etapa0,
+      corto: ETIQUETA_DE_ETAPA[etapa0], falta: null, piezaDeLaEtapa: PIEZA_DE_LA_ETAPA[etapa0], planListo: false,
       producido: g0.producido, enHubspot: !!p.hubspotServiceId,
     };
   }
-  const etapaLeida = p.hubspotServiceId ? (etapaPorNombre(p.hubspotPipelineStageLabel) ?? c.etapa) : c.etapa;
-  const etapa = esEtapaDelCiclo(etapaLeida) ? etapaLeida : "diagnostico";
+  const etapa = etapaQueMuestraElCiclo({ enHubspot: !!p.hubspotServiceId, rotuloDeHubspot: p.hubspotPipelineStageLabel, etapaGuardada: c.etapa });
   const estado = {
     etapa,
     meta: c.meta,

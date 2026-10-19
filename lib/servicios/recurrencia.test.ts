@@ -9,6 +9,7 @@ import { pipelineByKey } from "@/lib/projects/kind";
 import { estadoDeRecomendacionDeRecurrencia } from "@/lib/lo-propuesto/ciclo";
 import { queSigueDelProyecto } from "@/lib/clients/que-sigue-del-proyecto";
 import {
+  aQuienLeLlegaLaRecomendacion,
   calificaParaRecurrencia,
   DIAS_DESPUES_DEL_CIERRE,
   ETAPA_CONTINUIDAD,
@@ -22,7 +23,7 @@ import {
   type ProyectoDeLaCuenta,
   type ProyectoParaRecurrencia,
 } from "./recurrencia";
-import { ejeDeLaRuta, hoyEnElEje, leerRuta, posicionEnElEje, rutaDelServicio, sinMontos, type CicloParaLaRuta } from "./ruta-del-servicio";
+import { ejeDeLaRuta, hoyEnElEje, leerRuta, porQueNoSeSubeLaRuta, posicionEnElEje, rutaDelServicio, sinMontos, type CicloParaLaRuta } from "./ruta-del-servicio";
 import { etapaAlMigrar, etapaDeLaFase } from "./migracion";
 
 const CS = pipelineByKey("customer-success").hubspotPipelineId;
@@ -266,5 +267,33 @@ describe("guardas", () => {
     const vista = leer("lib/external/ciclos-view.ts");
     expect(vista).toContain("leerRuta(");
     expect(vista).not.toMatch(/casoDeUso|cicloDeProyecto/);
+  });
+});
+
+describe("a quién le llega la recomendación en «Para ti» (prueba 13)", () => {
+  const activos = new Set(["hgomez@smarteamcr.com", "avanegas@smarteamcr.com"]);
+  it("al encargado en HubSpot si sigue en el equipo, y a nadie más", () => {
+    expect(aQuienLeLlegaLaRecomendacion({ encargado: "HGomez@smarteamcr.com", persona: "hgomez@smarteamcr.com", activos, lideraCs: false })).toBe("encargado");
+    expect(aQuienLeLlegaLaRecomendacion({ encargado: "hgomez@smarteamcr.com", persona: "avanegas@smarteamcr.com", activos, lideraCs: true })).toBeNull();
+  });
+  it("si el encargado ya se fue (Felipe Sepúlveda, Brandon Centeno), a quien lidera Customer Success", () => {
+    expect(aQuienLeLlegaLaRecomendacion({ encargado: "fsepulveda@smarteamcr.com", persona: "avanegas@smarteamcr.com", activos, lideraCs: true })).toBe("lider");
+    expect(aQuienLeLlegaLaRecomendacion({ encargado: "fsepulveda@smarteamcr.com", persona: "hgomez@smarteamcr.com", activos, lideraCs: false })).toBeNull();
+  });
+  it("sin encargado, también a quien lidera Customer Success", () => {
+    expect(aQuienLeLlegaLaRecomendacion({ encargado: null, persona: "avanegas@smarteamcr.com", activos, lideraCs: true })).toBe("lider");
+    expect(aQuienLeLlegaLaRecomendacion({ encargado: "  ", persona: "hgomez@smarteamcr.com", activos, lideraCs: false })).toBeNull();
+  });
+});
+
+describe("por qué no se sube la ruta del servicio (prueba 31)", () => {
+  it("en un proyecto de prueba dice que no se comparte, no manda a «Acceso»", () => {
+    const t = porQueNoSeSubeLaRuta({ esPrueba: true, hasAccess: false });
+    expect(t).toMatch(/proyecto de prueba/);
+    expect(t).not.toMatch(/Acceso/);
+  });
+  it("sin acceso en un proyecto real, manda a «Acceso»; con acceso, se puede subir", () => {
+    expect(porQueNoSeSubeLaRuta({ esPrueba: false, hasAccess: false })).toMatch(/«Acceso»/);
+    expect(porQueNoSeSubeLaRuta({ esPrueba: false, hasAccess: true })).toBeNull();
   });
 });

@@ -150,7 +150,7 @@ export function queSigueDelProyecto(i: {
   }
 
   /* Un servicio recurrente no recorre el flujo de una implementación: lo que sigue sale de su ciclo. Sin ciclo
-     abierto el proyecto está en Diagnóstico (el ciclo se abre solo al cambiar la etapa). */
+     abierto el proyecto está en Diagnóstico, o en la etapa que dice HubSpot (el ciclo se abre solo al cambiar la etapa). */
   if (i.ciclo) {
     const slug = i.ciclo.piezaDeLaEtapa ?? "diagnosis";
     const pieza = i.piezas.find((p) => p.slug === slug);
@@ -235,6 +235,18 @@ export function queSigueDelProyecto(i: {
   }
 
   return { texto: "El proyecto está al día: no hay nada esperando tu decisión.", accion: null };
+}
+
+/**
+ * ¿La recomendación de seguir con un servicio recurrente va en su PROPIO bloque del panel? «Para ti» le dice al CSE
+ * «Ver la recomendación» y lo manda al proyecto, así que la recomendación tiene que estar a la vista siempre que esté
+ * pendiente, no solo cuando le toca el turno en «Qué sigue» (las reuniones sin revisar, la etapa o «activa Entrega» van
+ * antes). Va aparte cuando «Qué sigue» no la está mostrando: porque dice otra cosa o porque la ficha lo tapa con un
+ * cartel propio (`queSigueVisible` false). Auditoría del 19 oct, prueba 13.
+ */
+export function recurrenciaAparte(i: { hayRecurrencia: boolean; queSigue: QueSigueDelProyecto | null; queSigueVisible: boolean }): boolean {
+  if (!i.hayRecurrencia) return false;
+  return !(i.queSigueVisible && i.queSigue?.accion?.tipo === "recurrencia");
 }
 
 /**

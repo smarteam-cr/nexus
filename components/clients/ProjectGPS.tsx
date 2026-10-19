@@ -19,8 +19,8 @@ import StageBadge from "@/components/lifecycle/StageBadge";
 import ProjectBriefSection, { type BriefDeProyecto } from "@/components/projects/ProjectBriefSection";
 import ProjectSessionsReview from "./ProjectSessionsReview";
 import { useContextoDelResumen, type AvisoDePieza } from "./contexto-del-resumen";
-import { porQueEstaAca, queSigueDelProyecto, restoDeLosPendientes } from "@/lib/clients/que-sigue-del-proyecto";
-import { AccionDeRecurrencia, useRecomendacionDeRecurrencia } from "@/components/ciclos/RecomendacionDeRecurrencia";
+import { porQueEstaAca, queSigueDelProyecto, recurrenciaAparte, restoDeLosPendientes } from "@/lib/clients/que-sigue-del-proyecto";
+import { AccionDeRecurrencia, BloqueDeRecurrencia, useRecomendacionDeRecurrencia } from "@/components/ciclos/RecomendacionDeRecurrencia";
 import type { EtapaEnHubspot } from "@/lib/projects/etapa-sugerida";
 import { useMe } from "@/hooks/useMe";
 import EncuestaDeEtapa from "./EncuestaDeEtapa";
@@ -867,6 +867,12 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   const panel = (
     <>
       {!resumenCtx.queSigueOcupado && queSigue && <QueSigue accion={accionDeQueSigue}>{queSigue.texto}</QueSigue>}
+
+      {/* La recomendación de seguir con SmartLoop, aparte cuando «Qué sigue» dice otra cosa: «Para ti» manda acá. */}
+      {recurrenciaPendiente &&
+        recurrenciaAparte({ hayRecurrencia: true, queSigue, queSigueVisible: !resumenCtx.queSigueOcupado }) && (
+          <BloqueDeRecurrencia projectId={projectId} rec={recurrenciaPendiente} onDecidido={recargarRecurrencia} />
+        )}
 
       {/* Un servicio recurrente (2026-10-12): lo que debe el cliente, los hitos y las sesiones fijas. */}
       {resumenCtx.ciclo && (
