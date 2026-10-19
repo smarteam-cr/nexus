@@ -3,12 +3,13 @@
 /**
  * AgendaDelInicio — la agenda del inicio, como Google Calendar (ficha D, 2026-10-17; diseño «Para ti · Ventas y CSE»).
  *
- * Vista de día (una columna de 8:00 a 18:00, que se estira si hay reuniones antes o después) o de semana (lunes a
- * viernes). Cada reunión es un botón: tocarla abre su panel al costado. Tocar una hora libre (o «+ Crear evento», que
+ * Vista de semana (lunes a viernes; la de entrada desde el 2026-10-18) o de día (una columna de 8:00 a 18:00, que se
+ * estira si hay reuniones antes o después). Cada reunión es un botón: tocarla abre su panel al costado. Tocar una hora libre (o «+ Crear evento», que
  * busca la primera hora libre en horario laboral) deja ahí un borrador de una hora, con su cuadro para el título, los
  * invitados y la cuenta; «Abrir en Google Calendar» lo abre configurado y la persona lo guarda allá. Nexus no escribe en
  * el calendario. Los huecos libres de hoy (una hora o más, en horario laboral) van punteados en azul, cada uno con la
- * tarea tuya más importante que cabe ahí («Con qué avanzar», lib/mi-dia/inicio.ts › conQueAvanzar).
+ * tarea tuya más importante que cabe ahí («Con qué avanzar», lib/mi-dia/inicio.ts › conQueAvanzar), en el día y en
+ * la columna de hoy de la semana.
  *
  * Segunda vuelta (2026-10-17, noche): ‹ ›, «Hoy» y Día ↔ Semana se mueven sin volver a pedir la página
  * (agenda-navegable.ts); la agenda es de lunes a viernes (lib/mi-dia/agenda-dias.ts); tocar afuera, la X o Escape suelta
@@ -116,11 +117,9 @@ export default function AgendaDelInicio({
   useEffect(() => fijarEventosDeLaAgenda(eventos), [eventos]);
   // «Planificar acción» (la cartera) sabe si hay una agenda donde mostrar el borrador.
   useEffect(() => anunciarAgenda(), []);
-  // Un borrador tapa el hueco libre que se pisa con él (ya se está usando).
-  const huecosVisibles = useMemo(
-    () => (vista === "dia" ? huecos.filter((h) => !borradores.lista.some((b) => sePisan(b, h))) : []),
-    [vista, huecos, borradores.lista],
-  );
+  // Un borrador tapa el hueco libre que se pisa con él (ya se está usando). Los huecos son de hoy: en la semana van en
+  // su columna.
+  const huecosVisibles = useMemo(() => huecos.filter((h) => !borradores.lista.some((b) => sePisan(b, h))), [huecos, borradores.lista]);
   const huecoPorId = useMemo(() => new Map(huecosVisibles.map((h) => [h.id, h])), [huecosVisibles]);
   // La grilla se calcula una vez por cambio de lo que se ve (no en cada render del inicio).
   const grillas = useMemo(() => {

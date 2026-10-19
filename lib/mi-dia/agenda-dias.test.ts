@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { diaDeEntradaDeLaAgenda, diaDeTrabajo, diaQueSeVe, diasDeLaGrilla, pasoDeLaAgenda } from "./agenda-dias";
+import { diaDeEntradaDeLaAgenda, diaDeTrabajo, diaQueSeVe, diasDeLaGrilla, pasoDeLaAgenda, vistaPedidaDeLaAgenda } from "./agenda-dias";
 
 // 2026-10-16 es viernes; 17 sábado; 18 domingo; 19 lunes.
+describe("la vista con que abre la agenda", () => {
+  it("abre en la semana; el día solo si se pide", () => {
+    expect(vistaPedidaDeLaAgenda(undefined)).toBe("semana");
+    expect(vistaPedidaDeLaAgenda(null)).toBe("semana");
+    expect(vistaPedidaDeLaAgenda("semana")).toBe("semana");
+    expect(vistaPedidaDeLaAgenda("otra")).toBe("semana");
+    expect(vistaPedidaDeLaAgenda("dia")).toBe("dia");
+  });
+});
+
 describe("la agenda en fin de semana", () => {
   it("de lunes a viernes, la agenda abre en hoy y en su semana", () => {
     expect(diaDeEntradaDeLaAgenda("2026-10-15", "dia")).toBe("2026-10-15");

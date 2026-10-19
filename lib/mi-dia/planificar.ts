@@ -47,6 +47,23 @@ export function semanaAPlanificar(hoyISO: string): SemanaAPlanificar {
   return { desde: lunes, hasta: sumarDias(lunes, 6), viernes, dias, cual: proxima ? "proxima" : "esta" };
 }
 
+/**
+ * La invitación de «Para ti» a planificar (2026-10-18): de viernes a domingo, que es cuando se planifica la semana que
+ * viene (`semanaAPlanificar`). De lunes a jueves, null. `hoyISO` es el día de Costa Rica.
+ */
+export function invitacionAPlanificar(hoyISO: string): string | null {
+  switch (diaDeLaSemana(hoyISO)) {
+    case 4:
+      return "Es viernes: planifica la semana que viene";
+    case 5:
+      return "Es sábado: planifica la semana que viene";
+    case 6:
+      return "Mañana empieza la semana: planifícala";
+    default:
+      return null;
+  }
+}
+
 /** Una tarea de la cuenta con lo que el plan necesita (la versión, para darle fecha). */
 export type TareaDelPlan = TareaDeLaCuenta & { prioridad: string; clase: string; lado: string; version: number };
 

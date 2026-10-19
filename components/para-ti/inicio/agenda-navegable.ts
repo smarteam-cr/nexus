@@ -54,11 +54,11 @@ function pedir(correo: string, vista: VistaDeLaAgenda, dia: string): Promise<Age
   return p;
 }
 
-/** Deja la dirección en el día y la vista que se ven, sin pedir la página. */
+/** Deja la dirección en el día y la vista que se ven, sin pedir la página. La semana es la de entrada: solo el día va. */
 function fijarDireccion(vista: VistaDeLaAgenda, dia: string) {
   const u = new URL(window.location.href);
   u.searchParams.set("dia", dia);
-  if (vista === "semana") u.searchParams.set("agenda", "semana");
+  if (vista === "dia") u.searchParams.set("agenda", "dia");
   else u.searchParams.delete("agenda");
   u.searchParams.delete("vista");
   window.history.replaceState(null, "", `${u.pathname}${u.search}`);

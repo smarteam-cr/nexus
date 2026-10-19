@@ -8673,11 +8673,17 @@ que tener su acción de la semana y su reunión agendada.
   «Planifica tu semana» y «Agendar». La exploración (lib/exploraciones/agendadas.ts) sigue con su propia regla: pregunta
   otra cosa (si un evento es con ESTA empresa, por la gente de sus reuniones pasadas).
 - **«Planifica tu semana» va en Tareas** (`/tareas/planificar`), no en «Para ti»: lo que deja son tareas, y es el par de
-  «Revisa tu semana». «Para ti» la ofrece los viernes a CSE, CSL y Desarrollo. Desde el viernes planifica la semana que
+  «Revisa tu semana». «Para ti» la ofrece de viernes a domingo a CSE, CSL y Desarrollo (`invitacionAPlanificar`,
+  lib/mi-dia/planificar.ts; hasta el 2026-10-18, solo el viernes). Desde el viernes planifica la semana que
   viene; de lunes a jueves, lo que queda de la actual. Por cuenta: la acción con fecha (la que hay, darle fecha a una
   abierta o una nueva) y la reunión sugerida en el primer hueco laboral, con su objetivo. Sin IA. La CSL planifica las
   cuentas que lleva y las que no lleva nadie, como mucho 40. Ajustarla por chat queda para después.
-- **Cada hueco de hoy sugiere con qué avanzar**: la tarea más importante que cabe, con «Ponerla en la agenda».
+- **La agenda de «Para ti» abre en la semana** (2026-10-18, validación 9; `vistaPedidaDeLaAgenda`): sin `?agenda`, la
+  semana; `?agenda=dia`, el día. No se guarda por persona: la vista va en la dirección. En fin de semana abre la semana
+  que viene. Con la semana de hoy en pantalla, lo de hoy (los números, el resumen, la reunión que se abre sola) sale de
+  esa misma semana (`reunionesDelDia`): el calendario no se lee dos veces por visita.
+- **Cada hueco de hoy sugiere con qué avanzar**: la tarea más importante que cabe, con «Ponerla en la agenda». Se ve en el
+  día y en la columna de hoy de la semana.
 - **«Agendar» propone hora en todas las listas**, y si hay varias cuentas, cada una recibe una hora distinta.
 - **Guardar la reunión en Calendar crea la tarea de clase «reunion»** (`planearReunion`, sin duplicar), así la cuenta
   cuenta como con reunión.
