@@ -261,6 +261,23 @@ describe("las cifras del inicio", () => {
     expect(c[2]).toMatchObject({ valor: "56 %", barra: 56 });
     expect(c[3].sub).toBe("31 activos · 10 sin monto");
   });
+  it("Ventas sin meta de ventas en HubSpot: no se pinta la tarjeta de la meta, ni una que diga que falta", () => {
+    const c = cifrasDelInicio("ventas", {
+      ...comun,
+      cuentas: [],
+      ventas: { meta: null, anio: 2026, ponderado: { usd: 12000, activos: 4, sinMonto: 0 } },
+    });
+    expect(c.map((x) => x.clave)).toEqual(["reuniones", "importa", "ponderado"]);
+    expect(JSON.stringify(c)).not.toMatch(/meta/i);
+  });
+  it("Ventas con la meta de Liz (Q1–Q3 en 0 y Q4 en 30.000): la tarjeta sale con 0 de 30.000", () => {
+    const c = cifrasDelInicio("ventas", {
+      ...comun,
+      cuentas: [],
+      ventas: { meta: { avance: 0, monto: 30000, moneda: "USD", cumplimiento: 0 }, anio: 2026, ponderado: { usd: 0, activos: 0, sinMonto: 0 } },
+    });
+    expect(c.find((x) => x.clave === "meta")).toMatchObject({ rotulo: "Tu meta 2026", valor: "0 %", barra: 0 });
+  });
   it("CSE: la acción, la reunión y cómo están sus cuentas, con lo que falta en ámbar", () => {
     const servicio = (falta: string[]) => ({ falta, calendarioLeido: true });
     const c = cifrasDelInicio("cse", {

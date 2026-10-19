@@ -311,10 +311,18 @@ const negociosAbiertos: JobDef = {
       console.error("[jobs/negocios-abiertos] reintento de siguientes pasos:", e);
       return null;
     });
+    // Las metas comerciales, cada hora (2026-10-19): una meta creada en HubSpot a media mañana llegaba a «Para ti» recién
+    // al día siguiente, con la copia de las 6:00. Solo lee HubSpot; si falla, no tumba la copia de los negocios.
+    const { syncMetasComerciales } = await import("@/lib/ventas/metas-sync");
+    const metas = await syncMetasComerciales().catch((e) => {
+      console.error("[jobs/negocios-abiertos] metas:", e);
+      return null;
+    });
     console.log(
       `[jobs/negocios-abiertos] ${turno} — ${r.traidos} abiertos: ${r.altas} nuevos, ${r.actualizados} con cambios, ${r.cerrados} cerrados, ${r.duenosActualizados} dueños de empresa` +
         ` · siguientes pasos: ${r.pasos.nuevos} desde HubSpot, ${r.pasos.cerrados} borrados allá${puestas?.cuentas ? `, ${puestas.escritos} escritos de ${puestas.cuentas} cuentas con tareas cambiadas` : ""}${pasos?.intentados ? `, ${pasos.escritos} de ${pasos.intentados} reescritos` : ""}` +
-        `${r.errores.length ? `, ${r.errores.length} errores` : ""}`,
+        `${r.errores.length ? `, ${r.errores.length} errores` : ""}` +
+        (metas ? (metas.sinPermiso ? " · metas: sin el permiso de HubSpot" : ` · metas: ${metas.guardadas} tramos${metas.sinPersona ? `, ${metas.sinPersona} sin persona` : ""}`) : ""),
     );
   },
 };

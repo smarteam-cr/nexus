@@ -134,10 +134,10 @@ export default function VentasDeParaTi({
   const actualizar = useCallback(async () => {
     setActualizando(true);
     try {
-      const r = await fetchJson<{ omitido?: string; traidos?: number }>("/api/sales/negocios/actualizar", { method: "POST" });
+      const r = await fetchJson<{ omitido?: string; traidos?: number; metas?: number | null }>("/api/sales/negocios/actualizar", { method: "POST" });
       if (r.omitido === "reciente") toast.info("Los negocios se trajeron de HubSpot hace menos de 2 minutos.");
       else if (r.omitido === "en-curso") toast.info("Ya se están trayendo los negocios de HubSpot.");
-      else toast.success(`Se trajeron ${plural(r.traidos ?? 0, "negocio abierto", "negocios abiertos")} de HubSpot.`);
+      else toast.success(`Se trajeron ${plural(r.traidos ?? 0, "negocio abierto", "negocios abiertos")}${r.metas != null ? " y las metas" : ""} de HubSpot.`);
       avisarCambioDeParaTi();
       router.refresh();
     } catch (e) {
@@ -220,26 +220,23 @@ function Cifras({ vista }: { vista: VistaDeVentas }) {
   const { meta, ponderado } = vista;
   const pct = meta?.cumplimiento != null ? Math.round(meta.cumplimiento * 100) : null;
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      <div className="rounded-xl border border-line bg-surface p-4">
-        <div className={ROTULO_DEL_SISTEMA}>Tu meta {vista.anio}</div>
-        {meta ? (
-          <>
-            <div className="mt-1 text-xl font-semibold tabular-nums text-fg">
-              {meta.avance != null ? montoCorto(meta.avance, meta.moneda) : "—"}
-              <span className="text-sm font-normal text-fg-muted"> de {montoCorto(meta.monto, meta.moneda)}</span>
+    // Sin meta de ventas en HubSpot no se pinta su tarjeta (Elías, 2026-10-19): quedan dos columnas.
+    <div className={`grid gap-3 ${meta ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+      {meta && (
+        <div className="rounded-xl border border-line bg-surface p-4">
+          <div className={ROTULO_DEL_SISTEMA}>Tu meta {vista.anio}</div>
+          <div className="mt-1 text-xl font-semibold tabular-nums text-fg">
+            {meta.avance != null ? montoCorto(meta.avance, meta.moneda) : "—"}
+            <span className="text-sm font-normal text-fg-muted"> de {montoCorto(meta.monto, meta.moneda)}</span>
+          </div>
+          {pct != null && (
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted" aria-hidden>
+              <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, pct)}%` }} />
             </div>
-            {pct != null && (
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted" aria-hidden>
-                <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, pct)}%` }} />
-              </div>
-            )}
-            <div className="mt-1.5 text-xs text-fg-muted">{pct != null ? `${pct} % según HubSpot` : "HubSpot no dio el avance"}</div>
-          </>
-        ) : (
-          <div className="mt-1 text-sm text-fg-muted">No tienes una meta de ventas en HubSpot.</div>
-        )}
-      </div>
+          )}
+          <div className="mt-1.5 text-xs text-fg-muted">{pct != null ? `${pct} % según HubSpot` : "HubSpot no dio el avance"}</div>
+        </div>
+      )}
       <div className="rounded-xl border border-line bg-surface p-4">
         <div className={ROTULO_DEL_SISTEMA}>Ponderado {vista.anio}</div>
         <div className="mt-1 text-xl font-semibold tabular-nums text-fg">{montoCorto(ponderado.usd, "USD")}</div>

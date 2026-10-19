@@ -125,16 +125,21 @@ export function cifrasDeVentas(o: {
   ponderado: { usd: number; activos: number; sinMonto: number };
 }): Cifra[] {
   const pct = o.meta?.cumplimiento != null ? Math.round(o.meta.cumplimiento * 100) : null;
-  return [
-    o.meta
-      ? {
+  // La meta se pinta SOLO si la persona tiene una meta de ventas asociada a su usuario en HubSpot (Elías, 2026-10-19):
+  // sin meta no hay tarjeta, tampoco una que diga que falta.
+  const meta: Cifra[] = o.meta
+    ? [
+        {
           clave: "meta",
           rotulo: `Tu meta ${o.anio}`,
           valor: pct != null ? `${pct} %` : "—",
           unidad: `${o.meta.avance != null ? montoCorto(o.meta.avance, o.meta.moneda) : "—"} de ${montoCorto(o.meta.monto, o.meta.moneda).replace(/^US\$/, "")}`,
           barra: pct,
-        }
-      : { clave: "meta", rotulo: `Tu meta ${o.anio}`, valor: "—", sub: "No tienes una meta de ventas en HubSpot" },
+        },
+      ]
+    : [];
+  return [
+    ...meta,
     {
       clave: "ponderado",
       rotulo: `Ponderado ${o.anio}`,
