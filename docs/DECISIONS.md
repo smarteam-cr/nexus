@@ -9508,3 +9508,44 @@ de trabajo y el otro calendario que tiene compartido no está a la vista en su G
   entero.
 - **Al entrar no se abre nada solo.** Antes se abría el panel de la próxima reunión con un cliente; ahora el panel lo
   abre la persona al tocar un evento o un espacio.
+
+## Menos tareas a la vista, sin perder ninguna (2026-10-19)
+
+**Contexto.** Elías y Alex Vanegas (CSL): cada CSE ve unas 20 tareas y es difícil de llevar. Medido ese día en solo
+lectura (`scripts/medir-tareas-por-persona.ts`): cada CSE tenía entre 3 y 10 tareas suyas, todas por decidir, pero
+«Mis tareas» le sumaba **21 de «Por asignar · Customer Success»** —recordatorios al cliente sin CSE— que veían todos los
+CSE (de 24 a 31 en pantalla). Andrés Pinzón (Ventas): 29 (11 abiertas, 18 por decidir; 11 de HubSpot). De las 74 tareas
+de CS y Ventas, 25 eran rápidas o de seguimiento y 17 de los 21 «Por asignar» eran seguimientos sueltos de la misma
+reunión y cuenta.
+
+- **Tres clases, solo por el título** (`claseDeTrabajo`, lib/tareas/aligerar.ts): trabajo, **rápida** (se hace en
+  minutos: enviar, compartir, agendar, confirmar; o estimada en 15 minutos o menos) y **seguimiento** (empujar al
+  cliente: recordarle, confirmar con, retomar, «Seguimiento con…»). Si el título dice que hay algo que armar
+  (propuesta, informe, configurar, crear…), es trabajo aunque empiece con «Enviar». Ante la duda, trabajo: se ve entero.
+- **Lo rápido va plegado al final de cada lista, agrupado por cuenta** («Rápidas y seguimientos · 6 en 3 cuentas»), en
+  «Esta semana», «Más adelante» y «Por asignar» (`agruparRapidas`, components/tareas/ListaAligerada.tsx). Es solo la
+  vista: cada tarea sigue con su fila y su casilla. Con una sola no se pliega nada.
+- **«Por asignar» va plegado para quien no lidera un sprint.** Es de todo el equipo y lo reparte quien lo lidera; sigue a
+  un clic, con su número.
+- **Lo que ya pasó se PROPONE cerrar, nunca se cierra solo** (`sugerenciaDeCierre`). Una rápida cuya fecha pasó hace 3
+  días o más, o un seguimiento hace 7, que ninguna persona tocó desde esa fecha; una de trabajo abierta vencida hace 14
+  días y sin tocar en 14; una de una semana de hace 21 días sin tocar en 21; una sin semana ni fecha que nadie tomó en
+  28. *Por qué el seguimiento espera más:* que el cliente se atrase es justo cuando hay que empujar. *Por qué el trabajo
+  con fecha pasada no se propone antes:* está atrasado, no sobra (una propuesta de trabajo la vence el job del lunes a
+  los 14 días). «Tocar» es un evento de una persona: lo que hacen Nexus, el sistema o HubSpot no cuenta
+  (lib/tareas/toques.ts). Nunca una tarea de HubSpot: «Ya no se hará» no existe allá.
+- **Se ve una vez, arriba, y solo a quien la puede cerrar** (su responsable, quien lidera el sprint, dirección): la
+  franja «Nexus sugiere cerrar N tareas que ya pasaron» abre la lista con el motivo de cada una, todas marcadas; la
+  persona desmarca lo que sigue y confirma. Una abierta pasa a «Ya no se hará» y una propuesta se descarta, con el motivo
+  escrito, por el escritor de siempre. El cajón de la tarea lo repite en su recuadro de Nexus.
+- **Los seguimientos sueltos de «Por asignar» se juntan como las propuestas**, uno por reunión y cuenta, solo si ninguna
+  persona los tocó (sin eventos, comentarios, dependencias ni vínculos): `agruparSeguimientosPorAsignar`, por el
+  escritor único. Lo corre una persona con `scripts/aligerar-tareas.ts`, en simulacro por defecto (el 2026-10-19 juntaría
+  16 en 6; cerraría 5 si cada responsable lo confirma). Ese script cierra lo que ya pasó solo a nombre de quien firma
+  (`--firma`) y solo lo que esa persona podría cerrar en la pantalla. Nada se borra: lo juntado queda «Era otra tarea».
+- **El cajón de una tarea guarda solo y lo dice** (lib/tareas/guardado.ts). El pie muestra «Los cambios se guardan
+  solos», «Sin guardar…» mientras escribes, «Guardando…», «Guardado» o «No se pudo guardar · Reintentar». El título y
+  las notas se mandan a los 0,9 s de dejar de escribir, al salir del campo y al cerrar el cajón; lo demás, al elegirlo.
+  Los pedidos van en fila para que cada uno lleve la versión que dejó el anterior, y los campos ya no se deshabilitan
+  mientras guarda. *Por qué no un botón «Guardar»:* casi todo el cajón (estado, semana, responsable, prioridad) ya se
+  guarda al tocarlo; un botón obligaba a acordarse de apretarlo y mezclaba dos formas de guardar en el mismo panel.

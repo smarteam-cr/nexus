@@ -68,7 +68,7 @@ const TEXTO_DEL_ESTADO: Record<EstadoDeReunion["tono"], string> = {
  * defecto. El input va encima, transparente (la opacidad no la pisa nadie) y recibe el clic y el foco;
  * el `span` copia su estado y su foco con `peer`.
  */
-function Casilla({
+export function Casilla({
   marcada,
   parcial = false,
   onCambiar,

@@ -35,6 +35,8 @@ import { RevisaTuSemana } from "./RevisaTuSemana";
 import { NuevoEspacio } from "./NuevoEspacio";
 import { CalendarioDeLaSemana, TableroDeLaSemana } from "./VistasDeLaSemana";
 import { Agendar } from "./Agendar";
+import { ListaAligerada } from "./ListaAligerada";
+import { CerrarLoQuePaso } from "./CerrarLoQuePaso";
 import { BotonDelAsistente } from "./AsistenteDeTareas";
 
 type FiltroPara = "todos" | Ambito;
@@ -290,6 +292,8 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
           </div>
         )}
 
+        <CerrarLoQuePaso tareas={[...porDecidir, ...datos.estaSemana, ...datos.masAdelante, ...datos.porAsignar]} onAbrir={(x) => ponerParametro("t", x.id)} onCerradas={() => void refrescar()} />
+
         {(porDecidir.length > 0 || datos.proyectosPorDecidir.length > 0) && (
           <section className="space-y-2" data-recorrido="tareas.por-decidir">
             <FranjaDeSugerencias>
@@ -368,39 +372,28 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
             ) : undefined
           }
         >
-          {estaSemana.length === 0 ? (
-            <p className="px-4 py-4 text-[13px] text-fg-muted">Nada para esta semana todavía.</p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {estaSemana.map((t) => (
-                <FilaDeTarea key={t.id} t={t} conAgenda ocupada={ocupadas.has(t.id)} onAbrir={(x) => ponerParametro("t", x.id)} onTerminar={terminar} onAgendar={(x) => setAgendar([x])} />
-              ))}
-            </ul>
-          )}
+          <ListaAligerada
+            tareas={estaSemana}
+            vacio="Nada para esta semana todavía."
+            fila={(t) => <FilaDeTarea key={t.id} t={t} conAgenda ocupada={ocupadas.has(t.id)} onAbrir={(x) => ponerParametro("t", x.id)} onTerminar={terminar} onAgendar={(x) => setAgendar([x])} />}
+          />
         </Seccion>
         </div>
         )}
 
         {datos.porAsignar.length > 0 && (
-          <Seccion titulo={`Por asignar · ${datos.yo.equipoNombre}`} cuenta={datos.porAsignar.length}>
-            <ul className="divide-y divide-line">
-              {datos.porAsignar.filter(pasaFiltro).map((t) => (
-                <FilaDeTarea key={t.id} t={t} ocupada={ocupadas.has(t.id)} onAbrir={(x) => ponerParametro("t", x.id)} />
-              ))}
-            </ul>
+          // Plegada para quien no lidera un sprint: es de todo el equipo y la reparte quien lo lidera.
+          <Seccion titulo={`Por asignar · ${datos.yo.equipoNombre}`} cuenta={datos.porAsignar.length} plegada={!datos.yo.lidera.length}>
+            <ListaAligerada tareas={datos.porAsignar.filter(pasaFiltro)} fila={(t) => <FilaDeTarea key={t.id} t={t} ocupada={ocupadas.has(t.id)} onAbrir={(x) => ponerParametro("t", x.id)} />} />
           </Seccion>
         )}
 
         <Seccion titulo="Más adelante" cuenta={datos.masAdelante.filter(pasaFiltro).length} plegada={datos.masAdelante.length > 8}>
-          {datos.masAdelante.length === 0 ? (
-            <p className="px-4 py-4 text-[13px] text-fg-muted">Nada para más adelante.</p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {datos.masAdelante.filter(pasaFiltro).map((t) => (
-                <FilaDeTarea key={t.id} t={t} ocupada={ocupadas.has(t.id)} onAbrir={(x) => ponerParametro("t", x.id)} onTerminar={terminar} />
-              ))}
-            </ul>
-          )}
+          <ListaAligerada
+            tareas={datos.masAdelante.filter(pasaFiltro)}
+            vacio="Nada para más adelante."
+            fila={(t) => <FilaDeTarea key={t.id} t={t} ocupada={ocupadas.has(t.id)} onAbrir={(x) => ponerParametro("t", x.id)} onTerminar={terminar} />}
+          />
         </Seccion>
 
         {datos.loQuePediste.length > 0 && (

@@ -13,6 +13,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { salasDeReuniones, type SalaDeLaReunion } from "@/lib/sessions/reuniones-para-tareas";
 import { origenDeLaTarea } from "./origen";
+import { sugerenciaDeCierre } from "./aligerar";
+import { ultimosToquesDePersonas } from "./toques";
 import { accionesDe, leerBloques, leerEstado, leerEstadoDeAgenda, leerEstadoDeProyecto, leerPrioridad, estaAbierta } from "./estados";
 import { comoFecha, hoyEnCostaRica, lunesDeHoy, viernesDe, estaAtrasada } from "./semana";
 import { claveDeEquipo, nombreDelEquipo } from "./equipos";
@@ -127,19 +129,23 @@ export interface ContextoDeSerializar {
   ahora: Date;
   /** El portal de HubSpot del sistema, para los enlaces de las tareas de HubSpot (null si no hay ninguna). */
   portal?: string | null;
+  /** La última vez que una persona tocó cada tarea abierta o propuesta (lib/tareas/toques.ts): para `sugerenciaDeCierre`. */
+  toques?: Map<string, Date>;
 }
 
 /** Arma todo lo que el serializador necesita para un lote de filas, en pocas consultas. */
 export async function prepararSerializacion(ctx: ContextoDeTareas, clientes: ClientesQueVes, filas: readonly FilaDeTarea[], ahora = new Date()): Promise<ContextoDeSerializar> {
   const propuestas = filas.filter((f) => f.estado === "propuesta").map((f) => f.id);
   const abiertasPasadas = filas.filter((f) => estaAbierta(f.estado) && f.semana && comoFecha(f.semana)! <= lunesDeHoy(ahora)).map((f) => f.id);
-  const [ambito, salas, eventos, cierres] = await Promise.all([
+  const vivas = filas.filter((f) => (f.estado === "propuesta" || estaAbierta(f.estado)) && f.origen !== "hubspot").map((f) => f.id);
+  const [ambito, salas, eventos, cierres, toques] = await Promise.all([
     datosDeAmbito(filas.map((f) => f.clientId), filas.map((f) => f.projectId)),
     salasDeReuniones({ email: ctx.email, esSuperAdmin: ctx.esSuperAdmin, clientes }, filas.map((f) => f.sessionId).filter((x): x is string => !!x)),
     propuestas.length ? prisma.tareaEvento.findMany({ where: { tareaId: { in: propuestas }, tipo: "propuesta" }, select: { tareaId: true, datos: true } }) : [],
     abiertasPasadas.length
       ? prisma.tareaEvento.findMany({ where: { tareaId: { in: abiertasPasadas }, tipo: "sugerido_cierre" }, select: { tareaId: true, datos: true, cita: true, sessionId: true }, orderBy: { createdAt: "desc" } })
       : [],
+    ultimosToquesDePersonas(vivas),
   ]);
   const sugeridos = new Map<string, Record<string, unknown>>();
   for (const e of eventos) if (e.tareaId) sugeridos.set(e.tareaId, (e.datos ?? {}) as Record<string, unknown>);
@@ -182,7 +188,7 @@ export async function prepararSerializacion(ctx: ContextoDeTareas, clientes: Cli
   if (faltan.length) for (const [k, v] of await salasDeReuniones({ email: ctx.email, esSuperAdmin: ctx.esSuperAdmin, clientes }, faltan)) salas.set(k, v);
 
   const portal = filas.some((f) => f.hubspotTaskId) ? await portalDelSistema().catch(() => null) : null;
-  return { ctx, clientes, ambito, salas, sugeridos, cierres: porTarea, candidatas, ahora, portal };
+  return { ctx, clientes, ambito, salas, sugeridos, cierres: porTarea, candidatas, ahora, portal, toques };
 }
 
 const NOMBRE_DEL_REGISTRO = { deal: "el negocio", company: "la empresa", "0-970": "el proyecto" } as const;
@@ -353,6 +359,16 @@ export function serializarTarea(f: FilaDeTarea, s: ContextoDeSerializar): TareaV
     sugeridoCierre = { resultado: cierre.resultado, semana: cierre.semana, cita: sala && veLaCita(sala, f, s) ? cierre.cita : null };
   }
 
+  const acciones = accionesDe({ ...f, semana }, ctx, { lunesDeHoy: lunesDeHoy(s.ahora), esMiembroDelEspacioLibre: espacioLibreMio });
+  // «Ya pasó»: solo a quien la puede cerrar (su responsable, quien lidera el sprint, dirección). Nunca se cierra sola.
+  const cerrar = s.toques
+    ? sugerenciaDeCierre(
+        { titulo: f.titulo, minutosEstimados: f.minutosEstimados, estado, origen: f.origen, venceEl, semana, creadaAt: f.createdAt.toISOString(), ultimoToque: s.toques.get(f.id)?.toISOString() ?? null },
+        hoyEnCostaRica(s.ahora),
+      )
+    : null;
+  const puedeCerrar = !!cerrar && (cerrar.accion === "descartar" ? acciones.decidir : acciones.noSeHara);
+
   return {
     id: f.id,
     numero: f.numero,
@@ -395,7 +411,8 @@ export function serializarTarea(f: FilaDeTarea, s: ContextoDeSerializar): TareaV
     esperando,
     laEsperan,
     version: f.version,
-    acciones: accionesDe({ ...f, semana }, ctx, { lunesDeHoy: lunesDeHoy(s.ahora), esMiembroDelEspacioLibre: espacioLibreMio }),
+    acciones,
+    ...(cerrar && puedeCerrar ? { cerrar } : {}),
     ...(sugerencias && Object.keys(sugerencias).length ? { sugerencias } : {}),
     ...(sugeridoCierre ? { sugeridoCierre } : {}),
     hubspot: hubspotDe(f, s),

@@ -270,6 +270,11 @@
   va a quien lleva la preventa; sin preventa viva, no se propone. Vence a los 14 días, como toda propuesta de Tareas
   (`lib/tareas/seguimiento.ts`). Desde el 2026-10-19, lo de una misma reunión para la misma persona es UNA tarea
   («Seguimiento con Honda Costa Rica: 3 cosas que prometió Randall (lun 12 oct)») con la lista adentro.
+- **Rápidas y seguimientos** (`claseDeTrabajo`, lib/tareas/aligerar.ts, desde el 2026-10-19): lo que se hace en minutos
+  (enviar, confirmar, agendar) y lo que es empujar al cliente (recordarle, retomar). En las listas de Tareas van plegadas
+  al final, agrupadas por cuenta; el resto es **trabajo** y se ve entero.
+- **Ya pasó** (`sugerenciaDeCierre`): una tarea que Nexus propone cerrar porque su fecha pasó y nadie la tocó, o nadie la
+  tomó en semanas. La cierra quien la mira («Ya no se hará» o «Descartar», con el motivo escrito); nunca se cierra sola.
 - **pendiente histórico** (`ActionItem`): los pendientes que dejaba el post-proceso. DEPRECATED desde la etapa 2 de la
   memoria de la cuenta: no se crea más y lo existente queda sin borrar. Los próximos pasos viven en Tareas.
 - **Recorrido** (`lib/recorridos/`): un tour guiado de una pantalla. Oscurece la pantalla, deja a la vista una
