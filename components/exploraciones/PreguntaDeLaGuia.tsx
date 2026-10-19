@@ -4,8 +4,8 @@
  * PreguntaDeLaGuia — una pregunta de la guía de una sesión, en la Preparación (validaciones 69 y 71, 2026-10-18).
  *
  * Solo la pregunta, corta: de dónde sale (lo que dijo el cliente, con sus palabras, y la fuente) va en un ⓘ, que pinta
- * la capa de Tooltip con el `title`. En la próxima sesión, quien puede editar tiene «Regenerar» (otra del mismo tema y
- * paso, sin rearmar la guía), y en «⋯» editarla, quitarla o devolverla a la de la guía. Lo que cambia queda en la sesión
+ * la capa de Tooltip con el `title`. En la próxima sesión, quien puede editar tiene todo en su «⋯» (validación 104):
+ * Regenerar (otra del mismo tema y paso, sin rearmar la guía), Editar, Volver a la de la guía y Borrar (con «Deshacer»). Lo que cambia queda en la sesión
  * (`ajustesDeLaGuia`): sobrevive a «Actualizar la guía». Abajo de la lista, «+ Agregar pregunta».
  */
 import { useState } from "react";
@@ -18,6 +18,7 @@ import {
   LARGO_DE_UNA_PREGUNTA,
   LARGO_DE_UNA_REPREGUNTA,
   MAX_REPREGUNTAS,
+  deshacerElBorrado,
   nuevoIdDePropia,
   type CambioDeLaGuia,
 } from "@/lib/exploraciones/ajustes-de-la-guia";
@@ -99,7 +100,6 @@ export function PreguntaDeLaGuia({ p, pestana, corta, borde, editable }: { p: Pr
   const [editando, setEditando] = useState(false);
   const [regenerando, setRegenerando] = useState(false);
   const clave = claveDePregunta(p);
-  const propia = p.tipo === "propia";
   // Un punto llevado de otra sesión es texto del vendedor: se edita o se quita, no se regenera.
   const sePuedeRegenerar = editable && p.tipo !== "abierto";
 
@@ -119,10 +119,19 @@ export function PreguntaDeLaGuia({ p, pestana, corta, borde, editable }: { p: Pr
     }
   };
 
+  /* Borrar, con «Deshacer» (validación 104): una de la guía se devuelve; una propia se vuelve a agregar igual. */
+  const borrar = async () => {
+    const deshacer = deshacerElBorrado(p);
+    if (!(await ajustar({ tipo: "quitar", clave }))) return;
+    toast.success("Pregunta borrada de esta sesión.", { action: { label: "Deshacer", onClick: () => void ajustar(deshacer) } });
+  };
+
+  // Todo lo que se hace con una pregunta, en su ⋯ (validación 104): Regenerar, Editar, Volver a la de la guía y Borrar.
   const items = [
+    ...(sePuedeRegenerar ? [{ key: "regenerar", label: regenerando ? "Regenerando…" : "Regenerar", disabled: regenerando, onSelect: () => void regenerar() }] : []),
     { key: "editar", label: "Editar", onSelect: () => setEditando(true) },
     ...(p.cambiada ? [{ key: "volver", label: "Volver a la de la guía", onSelect: () => void ajustar({ tipo: "restaurar", clave }) }] : []),
-    { key: "quitar", label: propia ? "Quitar" : "Quitar de esta sesión", danger: true, separatorBefore: true, onSelect: () => void ajustar({ tipo: "quitar", clave }) },
+    { key: "borrar", label: "Borrar", danger: true, separatorBefore: true, onSelect: () => void borrar() },
   ];
 
   return (
@@ -162,11 +171,7 @@ export function PreguntaDeLaGuia({ p, pestana, corta, borde, editable }: { p: Pr
                   {abierta ? "Ocultar repreguntas" : `${p.repreguntas.length} ${p.repreguntas.length === 1 ? "repregunta" : "repreguntas"}`}
                 </button>
               )}
-              {sePuedeRegenerar && (
-                <button type="button" disabled={regenerando} onClick={() => void regenerar()} className="text-[12.5px] text-fg-muted hover:text-brand hover:underline disabled:opacity-60">
-                  {regenerando ? "Regenerando…" : "Regenerar pregunta"}
-                </button>
-              )}
+              {regenerando && <span className="text-[12.5px] text-fg-muted">Regenerando…</span>}
             </div>
             {abierta && p.repreguntas.length > 0 && (
               <div className="mt-2 flex flex-col gap-1 border-l-2 border-line pl-3">

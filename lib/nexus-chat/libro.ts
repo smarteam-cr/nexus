@@ -13,7 +13,7 @@
  * su línea en castellano. Al aplicar se vuelve a preparar: lo guardado nunca se aplica tal cual.
  */
 import type { CambioAcordado } from "@/lib/asistente/acuerdo";
-import { leerAcuerdo } from "@/lib/asistente/acuerdo";
+import { leerAcuerdo, textoVisible } from "@/lib/asistente/acuerdo";
 import { acuerdoPendienteDelHilo, type TurnoDelLibro } from "@/lib/asistente/acuerdo-vivo";
 import { COMO_SE_ACOTA } from "./alcance";
 import type { CambioPropuesto } from "./bucle";
@@ -78,6 +78,22 @@ export function componerAcuerdo(o: {
   }
   if (soltadas.length) return { resumen: RESUMEN_DEL_CIERRE_DE_NEXUS, operaciones: [], descartadas: soltadas };
   return null;
+}
+
+/**
+ * Los turnos que ve el modelo: los últimos, con el primero de la persona (la API pide empezar por «user»). Un turno del
+ * asistente con una lista lleva sus líneas al final: el texto ya no las repite (validación 104) y el modelo tiene que
+ * saber qué propuso para no volver a proponerlo ni contradecirlo.
+ */
+export function ventanaDelHilo(turnos: readonly TurnoDelLibro[], tope: number): Array<{ rol: "user" | "assistant"; texto: string }> {
+  const ultimos = turnos.slice(-tope).map((t) => {
+    const rol = (t.rol === "CSE" ? "user" : "assistant") as "user" | "assistant";
+    const visible = (textoVisible(t.contenido) || t.contenido).trim();
+    const lineas = rol === "assistant" ? leerAcuerdo(t.contenido).acuerdo?.lineas : undefined;
+    return { rol, texto: lineas?.length ? `${visible}\n\n[La lista que propuse: ${lineas.join(" · ")}]`.trim() : visible };
+  });
+  const desde = ultimos.findIndex((t) => t.rol === "user");
+  return (desde < 0 ? [] : ultimos.slice(desde)).filter((t) => t.texto);
 }
 
 /** Los cambios de un acuerdo guardado, o null si no es del chat de Nexus. */

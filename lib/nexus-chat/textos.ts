@@ -39,14 +39,53 @@ export function avisoDeRechazos(rechazados: ReadonlyArray<{ motivo: string }>): 
   return motivos.length ? `⚠ No quedó en la lista: ${motivos.join(" · ")}` : "";
 }
 
-/** El desenlace que escribe el SERVIDOR al aplicar. El modelo lo relee en el turno siguiente. */
-export function textoDelDesenlace(r: { aplicadas: readonly string[]; fallo: { linea: string; motivo: string } | null; sinIntentar: number; desmarcadas: number }): string {
+/**
+ * Cómo se dice lo aplicado de cada operación, en singular y en plural («4 preguntas en la guía»). Una operación nueva
+ * que no esté acá se cuenta como «cambio».
+ */
+const LO_APLICADO: Readonly<Record<string, readonly [string, string]>> = {
+  "guia.pregunta.agregar": ["pregunta en la guía", "preguntas en la guía"],
+  "guia.pregunta.cambiar": ["pregunta cambiada", "preguntas cambiadas"],
+  "guia.pregunta.quitar": ["pregunta quitada", "preguntas quitadas"],
+  "guia.repregunta.cambiar": ["repregunta cambiada", "repreguntas cambiadas"],
+  "tarea.crear": ["tarea creada", "tareas creadas"],
+  "tarea.cambiar-estado": ["tarea actualizada", "tareas actualizadas"],
+  "tarea.mover-semana": ["tarea actualizada", "tareas actualizadas"],
+  "nota.crear": ["nota en la cuenta", "notas en la cuenta"],
+  "siguiente-paso.fijar": ["siguiente paso fijado", "siguientes pasos fijados"],
+  "documento.generar": ["documento generándose", "documentos generándose"],
+};
+
+const enLista = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
+
+/** Lo aplicado en pocas palabras, agrupado por clase y en el orden en que aparece: «4 preguntas en la guía y 1 nota en la cuenta». */
+export function resumenDeLoAplicado(nombres: readonly string[]): string {
+  const cuentas = new Map<string, { n: number; formas: readonly [string, string] }>();
+  for (const nombre of nombres) {
+    const formas = LO_APLICADO[nombre] ?? (["cambio", "cambios"] as const);
+    const c = cuentas.get(formas[1]) ?? { n: 0, formas };
+    c.n++;
+    cuentas.set(formas[1], c);
+  }
+  return enLista([...cuentas.values()].map((c) => `${c.n} ${c.n === 1 ? c.formas[0] : c.formas[1]}`));
+}
+
+/**
+ * El desenlace que escribe el SERVIDOR al aplicar: UNA línea («Listo: 4 preguntas en la guía.»), sin repetir cada cambio
+ * (validación 104: la lista ya los mostró). Lo que falló o no se intentó se dice aparte. El modelo relee lo que se
+ * propuso por la ventana del hilo (turno-server.ts › `ventanaDelHilo`), así que no le hace falta el detalle acá.
+ */
+export function textoDelDesenlace(r: { /** Los nombres de las operaciones aplicadas, en orden. */ aplicadas: readonly string[]; fallo: { linea: string; motivo: string } | null; sinIntentar: number }): string {
   const lineas: string[] = [];
-  if (r.aplicadas.length) lineas.push(`✅ Se aplicó: ${r.aplicadas.join(" · ")}.`);
+  if (r.aplicadas.length) lineas.push(`Listo: ${resumenDeLoAplicado(r.aplicadas)}.`);
   if (r.fallo) lineas.push(`⚠ No se aplicó «${r.fallo.linea}»: ${r.fallo.motivo}.`);
   if (r.sinIntentar) lineas.push(`${r.sinIntentar === 1 ? "Un cambio no se intentó" : `${r.sinIntentar} cambios no se intentaron`} después de ese: pídemelos de nuevo si siguen.`);
-  if (r.desmarcadas) lineas.push(`${r.desmarcadas === 1 ? "Uno quedó afuera" : `${r.desmarcadas} quedaron afuera`} porque los desmarcaste.`);
   return lineas.join("\n");
+}
+
+/** Lo que dice el turno cuando el modelo solo propuso y no escribió nada: la lista es la respuesta. */
+export function lineaDeLaLista(cambios: number): string {
+  return cambios === 1 ? "Te dejé el cambio en la lista." : `Te dejé ${cambios} cambios en la lista.`;
 }
 
 /** El botón de la lista: «Aplicar 3 cambios». */
@@ -54,20 +93,38 @@ export function textoDelBoton(marcados: number): string {
   return marcados === 1 ? "Aplicar el cambio" : `Aplicar ${marcados} cambios`;
 }
 
-/** Para el cajón: de qué se habla y los ejemplos del estado vacío. */
-export function avisoDelChat(nombreDeLaCuenta: string, uso: string | null) {
+/** El título de la caja de la lista: «4 cambios para aplicar». */
+export function tituloDeLaLista(cambios: number): string {
+  return cambios === 1 ? "1 cambio para aplicar" : `${cambios} cambios para aplicar`;
+}
+
+/** Los ejemplos del estado vacío cuando la persona abrió el chat desde la guía de una sesión. */
+export const EJEMPLOS_DE_LA_GUIA = [
+  "¿Qué otras preguntas agregarías?",
+  "Mejora las repreguntas de la 2 para que bajen a números",
+  "Haz más cortas las preguntas",
+  "Agrega una pregunta sobre el presupuesto",
+] as const;
+
+/**
+ * Para el cajón: de qué se habla y los ejemplos del estado vacío. Sin aviso fijo (validación 104): lo que hace la lista
+ * lo dice una vez el estado vacío, y la caja de la lista dice «N cambios para aplicar».
+ */
+export function avisoDelChat(nombreDeLaCuenta: string, uso: string | null, desdeLaGuia = false) {
   return {
     variante: "sin-propuesta" as const,
     subtitulo: `Sobre ${nombreDeLaCuenta}${uso ? ` · ${uso}` : ""}`,
-    aviso: "Lee lo que Nexus sabe de esta cuenta. Lo que propone queda en una lista: nada se cambia hasta que lo apliques.",
-    placeholder: "Pregúntale algo o cuéntale lo que pasó…",
+    aviso: "",
+    placeholder: desdeLaGuia ? "Pídele un cambio a la guía…" : "Pregúntale algo o cuéntale lo que pasó…",
     tono: "neutro" as const,
     bienvenida: null,
-    ejemplos: [
-      "¿Qué quedó pendiente de la última reunión?",
-      "Por WhatsApp hoy me dijeron que mandan la base de contactos el lunes",
-      "¿Qué se dijo del pipeline de ventas?",
-      "Escríbeme un WhatsApp para recordarles lo que nos deben",
-    ],
+    ejemplos: desdeLaGuia
+      ? [...EJEMPLOS_DE_LA_GUIA]
+      : [
+          "¿Qué quedó pendiente de la última reunión?",
+          "Por WhatsApp hoy me dijeron que mandan la base de contactos el lunes",
+          "¿Qué se dijo del pipeline de ventas?",
+          "Escríbeme un WhatsApp para recordarles lo que nos deben",
+        ],
   };
 }

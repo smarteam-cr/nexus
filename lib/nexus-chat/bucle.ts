@@ -69,6 +69,19 @@ export interface ResultadoDelBucle {
   herramientas: string[];
   /** Por qué terminó la última llamada. */
   stop: string | null;
+  /**
+   * El turno terminó en la vuelta que propuso: todo lo que pidió fue a la lista, sin leer nada ni rechazos. No hace
+   * falta otra llamada solo para escribir el resumen (validación 106): la lista ES la respuesta.
+   */
+  cerroAlProponer: boolean;
+}
+
+/**
+ * ¿Termina el turno en esta vuelta? Sí, si el modelo solo propuso (o soltó lo pendiente): ninguna herramienta leyó y
+ * ninguna se rechazó. Con una lectura, el modelo todavía tiene que ver lo que leyó; con un rechazo, que lo arregle.
+ */
+export function terminaAlProponer(vuelta: { lecturas: number; rechazos: number; propuestas: number; descartes: number }): boolean {
+  return vuelta.lecturas === 0 && vuelta.rechazos === 0 && vuelta.propuestas + vuelta.descartes > 0;
 }
 
 function aTexto(v: unknown): string {
@@ -105,6 +118,7 @@ export async function correrBucle(o: {
   let vueltas = 0;
   let stop: string | null = null;
   let ultimoTexto = "";
+  let cerroAlProponer = false;
 
   while (vueltas < o.maxVueltas) {
     vueltas++;
@@ -117,9 +131,11 @@ export async function correrBucle(o: {
 
     // Todos los resultados de una vuelta van en UN solo mensaje (si no, el modelo deja de pedir en paralelo).
     const resultados: Anthropic.Messages.ToolResultBlockParam[] = [];
+    const vuelta = { lecturas: 0, rechazos: 0, propuestas: 0, descartes: 0 };
     for (const u of usos) {
       herramientas.push(u.name);
       if (u.name === HERRAMIENTA_DESCARTAR) {
+        vuelta.descartes++;
         const etiquetas = Array.isArray((u.input as { etiquetas?: unknown })?.etiquetas) ? ((u.input as { etiquetas: unknown[] }).etiquetas) : [];
         const ids = etiquetas.map(indiceDeP).filter((i): i is number => i !== null);
         ids.forEach((i) => descartar.add(i));
@@ -127,22 +143,26 @@ export async function correrBucle(o: {
         continue;
       }
       if (o.ejecutor.esLectura(u.name)) {
+        vuelta.lecturas++;
         const r = await o.ejecutor.leer(u.name, u.input);
         resultados.push(r.ok ? { type: "tool_result", tool_use_id: u.id, content: aTexto(r.valor) } : { type: "tool_result", tool_use_id: u.id, content: r.motivo, is_error: true });
         continue;
       }
       if ((o.yaPendientes ?? 0) + propuestos.length >= o.maxCambios) {
         const motivo = `Ya hay ${o.maxCambios} cambios en la lista: que la persona aplique estos primero.`;
+        vuelta.rechazos++;
         rechazados.push({ herramienta: u.name, motivo });
         resultados.push({ type: "tool_result", tool_use_id: u.id, content: motivo, is_error: true });
         continue;
       }
       const r = await o.ejecutor.preparar(u.name, u.input);
       if (!r.ok) {
+        vuelta.rechazos++;
         rechazados.push({ herramienta: u.name, motivo: r.motivo });
         resultados.push({ type: "tool_result", tool_use_id: u.id, content: `No se puede: ${r.motivo}`, is_error: true });
         continue;
       }
+      vuelta.propuestas++;
       const clave = claveDe(r.cambio);
       if (!vistos.has(clave)) {
         vistos.add(clave);
@@ -153,6 +173,10 @@ export async function correrBucle(o: {
         tool_use_id: u.id,
         content: `Queda en la lista para que la persona lo aplique (NO está aplicado): ${r.cambio.linea}`,
       });
+    }
+    if (terminaAlProponer(vuelta)) {
+      cerroAlProponer = true;
+      break;
     }
     msgs.push({ role: "assistant", content: msg.content }, { role: "user", content: resultados });
   }
@@ -166,5 +190,6 @@ export async function correrBucle(o: {
     vueltas,
     herramientas,
     stop,
+    cerroAlProponer,
   };
 }

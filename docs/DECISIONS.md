@@ -9291,3 +9291,35 @@ concilie cada mañana María José. El análisis, la evidencia y lo que quedó h
 - **Quien concilia cada mañana es María José**, con el rol de Dinia («Asistente administrativo», ADMIN): `cobranza` leer y
   escribir, `gastos` leer y escribir, y el frente «Finanzas: registrar». No hizo falta un permiso nuevo. Nexus no crea la
   cuenta: la da de alta Elías en Equipo.
+
+## El chat de Nexus sobre la guía, fluido (2026-10-18)
+
+**Contexto.** Validaciones 71, 104, 106 y 107 del roadmap: Elías probó «Mejorar con el asistente» con Distribuidora Larce
+y lo sintió repetitivo y lento. Pedía permiso en texto («¿Las agrego las cuatro?»), después mostraba la lista con el mismo
+resumen, y al aplicar repetía cada línea. Plan: `docs/chat-fluido-plan.md`.
+
+- **La lista ES la confirmación.** Con el pedido claro, el chat propone directo con las herramientas y escribe UNA línea
+  que no repite la lista. Pregunta solo si falta un dato sin el cual el cambio sale mal. Todo lo pedido va en la misma
+  lista: nunca «aplica esto y seguimos». La lista la sigue aplicando la persona; nada cambia solo.
+- **Si una vuelta solo propuso, el turno termina ahí** (`terminaAlProponer`, lib/nexus-chat/bucle.ts): ninguna lectura y
+  ningún rechazo. No se hace otra llamada solo para escribir el resumen. Con una lectura o un rechazo, sigue.
+- **El chat piensa poco** (`ESFUERZO_DEL_CHAT = "low"`, lib/nexus-chat/constantes.ts). Lo que tiene que cumplir una
+  pregunta de la guía (tuteo, largo, no repetir lo sabido) lo revisa el código al preparar, no el modelo.
+- **Un solo resumen.** La caja dice «N cambios para aplicar» (`RotulosDelChat.lista`) y, aplicada, «Aplicado»; el
+  desenlace es una línea agrupada por clase («Listo: 4 preguntas en la guía.», `resumenDeLoAplicado`). Como el texto ya
+  no repite la lista, la ventana del hilo le pasa al modelo las líneas de lo que propuso (`ventanaDelHilo`, libro.ts).
+  Sin aviso fijo en el cajón: lo dice una vez el estado vacío.
+- **Varias repreguntas en un paso.** `guia.pregunta.cambiar` con `repreguntas` las reemplaza todas, también en una
+  pregunta sin repreguntas, y la línea las muestra con sus palabras (`lineaDelCambio`). `guia.repregunta.cambiar` ya no
+  se rechaza por las repreguntas de hoy: se ubica al aplicar.
+- **La pregunta de respaldo trae repreguntas** (`REPREGUNTAS_DEL_PASO`, plan-de-la-guia.ts). Era la causa de que la 2 de
+  Larce (1.1) tuviera 0: el agente no había escrito una del paso que tocaba.
+- **Todo lo de una pregunta va en su ⋯** (`Menu`): Regenerar, Editar, Volver a la de la guía y Borrar, con «Deshacer»
+  (`deshacerElBorrado`: una propia vuelve con su id, una cambiada con su cambio, una de la guía a la de la guía).
+- **La guía se arma una vez por turno y por «Aplicar»** (`baseDeLaGuia`, lib/operaciones/guia-server.ts), y el contexto
+  de la cuenta y la guía se arman en paralelo. Lo que aplica arma la suya de nuevo: nunca se escribe sobre una vieja.
+- **Medido** con `scripts/medir-turno-de-la-guia.ts` (Larce, sin escribir): «¿Qué otras preguntas agregarías?» de 34,4 s
+  a 10,4 s; «Mejora las repreguntas de la 2 para que bajen a números» de 21,0 s a 4,8 s. Cada turno guarda sus tiempos en
+  su `AgentRun` (`tiempos`).
+- **Sin streaming, por ahora.** En el caso común el turno es una sola llamada; el streaming pide cambiar la ruta y el
+  cajón que comparten los tres chats. Es lo siguiente si sigue sintiéndose lento.

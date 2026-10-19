@@ -89,7 +89,7 @@ export async function aplicarListaDeNexus(o: {
     }
 
     const a = await aplicarOperaciones(operacionesDelChat(), ctx, preparadas);
-    const desenlace = textoDelDesenlace({ aplicadas: a.aplicadas.map((x) => x.linea), fallo: a.fallo, sinIntentar: a.sinIntentar, desmarcadas: fuera.size });
+    const desenlace = textoDelDesenlace({ aplicadas: a.aplicadas.map((x) => x.nombre), fallo: a.fallo, sinIntentar: a.sinIntentar });
     // Con algo aplicado, la lista se cierra (OK). Sin nada, sigue viva para reintentar.
     const ok = a.aplicadas.length > 0;
     await agregarTurno(hilo.id, { rol: "ASISTENTE", contenido: `${marcaDeDesenlace({ ok })}\n\n${desenlace}`, shaDeContexto: null });
