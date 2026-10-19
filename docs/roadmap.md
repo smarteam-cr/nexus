@@ -18,12 +18,12 @@ está haciendo con él.
 |---|---|
 | Producción | Corre `7d7e92df` desde el 17 oct a las 22:02, hora de Costa Rica. Sana, con el esquema al día. |
 | Por desplegar | En `main` y sin desplegar: la escala (ediciones Turismo y Automotriz sin publicar, «Actualizar escala»), las propuestas (proyecto o recurrente, licencias con su margen, módulos y biblioteca), el servicio recurrente en la ficha, el gasto de la IA por mes con su proyección, la guía nueva de la preventa, las comunicaciones de HubSpot en el contexto, la rentabilidad con la meta, la propuesta de comisiones, el cobro automático y el menú de Finanzas, y los arreglos de «Para ti» (agenda, cartera del CSE, exclientes). 714 pruebas en verde y tsc en 0. |
-| En curso | Nada construyéndose: A, B, C, D y Finanzas ya están en `main` (12.083 pruebas en verde, tsc en 0). |
+| En curso | Nada construyéndose: A, B, C, D y Finanzas ya están en `main` (12.118 pruebas en verde, tsc en 0). |
 | La base | Tiene todo lo que necesita lo que está en `main`: los SQL del 18 oct ya se aplicaron (biblioteca de módulos, escala ligada a la venta, servicio recurrente, gasto de IA, rentabilidad conectada y comunicaciones de HubSpot). La copia de comunicaciones ya corrió: 256 notas y 6 llamadas. |
 | En rojo en producción | Un proyecto en un pipeline sin declarar, un cliente apuntando a una empresa fusionada en HubSpot y el corte de cobranza, que nunca corrió. |
 | Revisión de código | Hecha el 17 oct sobre los 31 cambios de entonces: 57 problemas encontrados, unos 50 corregidos y en `main`. Ninguno mezclaba clientes. |
 
-**Lo siguiente en todo Nexus:** que valides en el 3004 lo nuevo (pestaña «Lo que validas», las primeras seis áreas), y después desplegar `main` (tú). Tres cosas que son tuyas: el permiso de correos de HubSpot (abajo, en «Lo que configuras tú»), dar de alta a María José y revisar la escala 8.9.0. Después del deploy armo las propuestas recurrentes internas de Cayalá, Grupo Inve, FACO (Honda Costa Rica) y kölbi. Yo corro lo que va después del deploy: cerrar las alertas sueltas, limpiar las reuniones con texto de otra, rescatar las transcripciones (la primera versión de la escala ya quedó guardada).
+**Lo siguiente en todo Nexus:** que valides en el 3004 lo nuevo (pestaña «Pruebas», empezando por las de prioridad alta), y después desplegar `main` (tú). Tres cosas que son tuyas: el permiso de correos de HubSpot (abajo, en «Lo que configuras tú»), dar de alta a María José y revisar la escala 8.9.1 para publicarla. Después del deploy armo las propuestas recurrentes internas de Cayalá, Grupo Inve, FACO (Honda Costa Rica) y kölbi. Yo corro lo que va después del deploy: cerrar las alertas sueltas, limpiar las reuniones con texto de otra, rescatar las transcripciones (la primera versión de la escala ya quedó guardada).
 
 En cada paso: **[hecho]** está hecho (en producción si la tarjeta lo dice); **[en curso]** lo está construyendo una sesión ahora.
 
@@ -93,7 +93,7 @@ El caso de Marco: bajar una recurrencia de US$3.000 a US$2.800 al mes regala US$
 ## La siguiente serie
 
 Lo que pediste el 17 oct, analizado contra el código y contra las propuestas reales. Primero se construye todo y después
-lo validas: cada iniciativa suma sus validaciones a «Lo que validas» cuando queda en producción. El orden es el que
+lo validas: cada iniciativa suma sus pruebas a «Pruebas» cuando queda en producción. El orden es el que
 propongo: primero la escala, porque las propuestas y el servicio recurrente se apoyan en ella. Tú decides.
 
 **Cómo se construye** (vale para todas):
@@ -114,7 +114,7 @@ Hoy hay cuatro ediciones (ecommerce y retail, banca, educación, inmobiliaria) y
 2. [hecho] Que se entienda cómo se elige: en la escala de cada empresa, «Se mide con la edición X y el perfil Y, porque…» (su industria, cómo vende, si recompra, si la relación es continua), con lo que cambia de la general y un clic para corregirlo.
 3. [hecho] Que el modelo de negocio guíe a quien explora (las preguntas de la sesión salen de su edición y su perfil) y a quien posiciona (cada nivel se lee con las palabras de su industria).
 4. [hecho] Publicada la 8.9.0 el 18 oct, con Turismo y Automotriz: se ven en la sección de la escala. El resumen está en `docs/escala/ediciones-turismo-automotriz.md`.
-5. [en curso] Que cada edición esté personalizada de verdad: en cada dimensión y nivel, al menos un criterio con las palabras de su industria (en Turismo, «Seguimiento de cotizaciones y reservas» en Inicial salía con los criterios generales). Se mide en las seis ediciones y se corrige lo que se pueda.
+5. [hecho] Que cada edición esté personalizada de verdad: cada nivel de cada dimensión dice al menos un criterio con las palabras de su industria. 322 criterios reescritos en las seis ediciones, sin criterios nuevos. En `main` como 8.9.1, sin publicar: la publico cuando la revises (prueba 108).
 
 ### 2 · La escala de cada empresa: «Actualizar escala» con todo el contexto <span class="estado">Por desplegar</span>
 
@@ -314,70 +314,22 @@ consola de Google:
 2. Que las notas se compartan con todos los invitados de la organización, no solo con quien las tomó.
 3. En las reuniones que organiza un cliente, que alguien del equipo active las notas al entrar.
 
-## Lo que validas tú
+## Pruebas
 
-Cada validación dice qué tiene que funcionar, cómo comprobarlo y qué tiene que pasar, todo en el 3004. Dime el número y
-cómo te fue, y lo marco: **↻ Otra vez** (cambió después de que lo validaste: va primero), **⏳ En arreglo** (lo estoy corrigiendo: espera), **Por validar**, o **✓ Validado**
-con la fecha (va al final). Para entrar como otra persona: Equipo › la persona › «Ver como»; «Volver a mi usuario» te
-devuelve.
+Cada prueba dice qué tiene que funcionar, cómo comprobarlo y qué tiene que pasar, todo en el 3004. Dime el número y cómo te fue, y lo marco. Los estados, en el orden en que van:
 
-**De la 1 a la 6 ya se puede probar en el 3004**, porque los SQL ya están aplicados: reinicia el `dev:prod` antes, porque cambió el schema. Lo que dice «al día siguiente del deploy» solo se ve en producción.
+- **↻ Validar otra vez**: lo corregí, o cambió después de que lo validaste. Ya está en `main`: pruébalo de nuevo.
+- **Por validar**: nadie lo probó todavía.
+- **⏳ No probar todavía**: lo estoy corrigiendo en otra sesión; cuando esté en `main` pasa a «Validar otra vez».
+- **✓ Validado**, con la fecha: va al final.
 
-### 1 · Preventa: la guía nueva
+Las áreas van por prioridad: **Alta** antes del deploy (toca plata, la usa todo el equipo cada día o la ve el cliente), **Media** lo que se usa todos los días sin ese riesgo, y **Baja** lo que es solo de dirección, una simulación o un piloto. Para entrar como otra persona: Equipo › la persona › «Ver como»; «Volver a mi usuario» te devuelve.
 
-| # | Estado | Qué validas | Pasos | Resultado esperado |
-|---|---|---|---|---|
-| 68 | ✓ Validado 18 oct | Que la guía arranque con lo que el cliente ya dijo | Ventas › Preventa › Distribuidora Larce › Exploración › la próxima sesión (si no hay: «+ Agregar sesión» › una sin reunión todavía) › Preparación. | Arriba de «La guía», «Lo que ya sabemos» con 5 líneas en palabras del cliente. La primera: «Cuando un deal se enfría no hay red de contención…», con «Nota del 15 oct» al lado. |
-| 69 | ✓ Validado 18 oct | Que las preguntas sean cortas, con su fuente en un ⓘ | Larce › Exploración › la próxima sesión › Preparación › «La guía» › «Preguntar». Pasa el mouse por el ⓘ de una pregunta. | Cada pregunta es solo la pregunta, corta, sin «Dijiste que…» ni «En el diagnóstico dijeron…». El ⓘ muestra lo que dijo el cliente, con sus palabras, y de dónde sale. «Lo que ya sabemos» sigue con las palabras del cliente. |
-| 70 | ✓ Validado 18 oct | Que la guía nueva lleve a la siguiente pregunta lógica | El aviso de arriba › «Actualizar la guía». Espera unos segundos. | 5 preguntas que nombran lo que dijo el cliente y preguntan cuánto le costó, cómo lo quiere resolver o con qué. Ninguna de «Para cuándo», porque ya se sabe. |
-| 71 | ⏳ En arreglo | Que las repreguntas se mejoren con el asistente | En la guía › «Mejorar con el asistente» › escribe: «Mejora las repreguntas de la pregunta 2 para que bajen a números» › Aplicar. | El chat de la cuenta abre con la guía en foco y propone las repreguntas nuevas en una lista; al aplicar, la pregunta 2 trae esas repreguntas. |
-| 72 | ✓ Validado 18 oct | Que siempre cierre | Baja a «Cerrar», al final de la guía. | La pregunta de cierre, el siguiente paso con fecha y lo que falta para proponer, sin espacios por completar. |
-| 73 | ✓ Validado 18 oct | Que lo que cubre la guía vaya pegado a ella | Larce › Preparación, arriba de «Retos de su industria». Después quita una pregunta. | «Lo que cubre la guía»: los siete puntos para proponer (verde listo, azul lo cubre la guía, punteado no) y las dimensiones que pregunta. Al quitar la pregunta, cambia al instante. En el panel derecho queda solo «N de 7 listos». |
-| 74 | ✓ Validado 18 oct | Que funcione igual en otras preventas | Ventas › Preventa › CreditForce (o Cicadex) › Exploración › Preparación › «Actualizar la guía». | «Lo que ya sabemos» con frases del test y 4 o 5 preguntas que parten de ahí. (Lo validé yo, en seco: CreditForce pasó de 7 a 4 preguntas y Cicadex de 7 a 5, y Cicadex ya no pregunta «para cuándo» porque ya se sabía.) |
-| 104 | ⏳ En arreglo | Que se pueda regenerar una sola pregunta | En la guía de Larce, en una pregunta › «Regenerar pregunta». | Esa pregunta cambia por otra del mismo tema, marcada «Regenerada»; las demás quedan igual. Se puede devolver a la de la guía. |
-| 105 | Por validar | Que se puedan agregar preguntas a mano | En la guía › «+ Agregar pregunta»: escribe una, guárdala, edítala. Después toca «Actualizar la guía». | La pregunta aparece al final marcada «Tuya» y sigue ahí después de actualizar la guía. Se puede quitar. |
-| 106 | ⏳ En arreglo | Que el asistente arme la guía con lo que pides | En la guía › «Mejorar con el asistente» › «Agrega dos preguntas de la escala sobre cómo miden el pipeline» › Aplicar. | Dos preguntas nuevas, cortas, marcadas «Del asistente», y «Lo que cubre la guía» suma esas dimensiones. Ninguna repite lo que ya dijo el cliente. |
-| 107 | ✓ Validado 18 oct | Que el asistente no invente lo interno | En el mismo chat: «Agrega una pregunta sobre el presupuesto que nos dijeron». | No pone montos ni lo interno como si lo hubiera dicho el cliente: pregunta el rango o contra qué lo comparan. |
+Los SQL ya están aplicados: reinicia el `dev:prod` antes, porque cambió el schema. Lo que dice «al día siguiente del deploy» solo se ve en producción.
 
-### 2 · Comunicaciones de HubSpot y compromisos
+### 1 · Finanzas: cobro automático y menú <span class="prioridad">Alta</span>
 
-| # | Estado | Qué validas | Pasos | Resultado esperado |
-|---|---|---|---|---|
-| 75 | Por validar | Que el chat lea las notas de HubSpot | Clientes › RC Inmobiliaria › botón «Nexus». Pregunta: «¿Qué notas y llamadas hay de esta empresa en HubSpot?». | Sus notas de HubSpot, la más nueva primero, cada una con su día, quién la escribió y el comienzo del texto. |
-| 76 | Por validar | Que lea una nota entera | El mismo chat: «Lee la primera entera». | La nota completa, con su fecha y su autor. |
-| 77 | Por validar | Que conteste lo prometido sin mezclar empresas | Clientes › kölbi › chat: «¿Qué le prometimos al cliente que sigue abierto?». | Los compromisos abiertos de kölbi, nada de otra empresa. |
-| 78 | Por validar | Que avise de una reunión prometida sin agendar | Con «Ver como» el CSE de Accesos Automáticos, Honda Costa Rica o Distribuidora Larce, abre «Para ti». | En «Lo que importa hoy»: «… se prometió una reunión y no está agendada», con «Agendar o decidir», que abre la tarea. |
-| 79 | Por validar | Que el líder vea lo que no se tomó | Con «Ver como» Alex Vanegas, abre «Para ti». | Una línea por cuenta: «Larce: N compromisos sin tomar hace más de 48 horas», con el enlace a cada tarea. |
-| 80 | Por validar | Que el aviso se vaya al resolverlo | Tareas › una de esas tareas › «Usar». Vuelve a «Para ti». | El aviso ya no aparece. |
-| 81 | Por validar | Que la copia corra sola | Integraciones › Jobs del servidor, al día siguiente del deploy (desde las 6:00). | «La copia de los correos, notas y llamadas de HubSpot» en verde. |
-
-### 3 · Rentabilidad con agendas, tareas y la meta
-
-| # | Estado | Qué validas | Pasos | Resultado esperado |
-|---|---|---|---|---|
-| 82 | Por validar | Que la meta se vea contra lo facturado | Éxito del cliente › Rentabilidad, arriba de las pestañas. | «La meta del año: US$ 2,3 M en 2027», una barra por año desde 2021 con lo facturado, y «Qué falta para la meta de 2027». |
-| 83 | Por validar | Que la meta se cambie desde la pantalla | La misma tarjeta › «Cambiar la meta»: un monto y una nota › Guardar › «Ver la historia». | La barra cambia y la historia muestra las dos metas. |
-| 84 | Por validar | Que las horas salgan solas, también fuera de Meet | Rentabilidad › Margen por cuenta › kölbi o Club de Amantes del Vino. | Debajo de las horas, «x fuera de Meet» y de dónde sale cada hora; la línea «Calendario de N personas…». |
-| 85 | Por validar | Que se vea el margen por persona | Rentabilidad › Costo de la hora › Por persona. | Las columnas «Generado» y «Margen», por nombre, en orden alfabético. |
-| 86 | Por validar | Que Nexus lea los números y proponga | Rentabilidad › Lectura de los números › «Leer los números». Espera un minuto. | Propuestas con qué hacer y cuánto invertir, cada una con «Usar» y «Desestimar» (que pide el porqué). |
-| 87 | Por validar | Que el punto de equilibrio muestre la meta y lo que falta | Finanzas › Punto de equilibrio, al final. | La misma barra de la meta y una tabla mes a mes: Por facturar, Recurrencia, Proyectos, Expansiones y Falta. |
-
-### 4 · Comisiones: el descuento y la recurrencia
-
-| # | Estado | Qué validas | Pasos | Resultado esperado |
-|---|---|---|---|---|
-| 88 | Por validar | Que el caso de Marco se entienda | Finanzas › Modelos › Comisiones › «Cómo funciona» › «Descuentos y recurrencia». | 33.600 − 2.400 = 31.200, y al 5 %: US$1.560 en vez de US$1.680. |
-| 89 | Por validar | Que la calculadora reaccione | La misma sección, a la derecha: deja 3.000 y 2.800; después baja «Lo que se cerró al mes» de 2.700. | «Hoy» US$1.680 y «Con la propuesta» US$1.560. Bajo 2.700 aparece «Lo aprueba Marco». |
-| 90 | Por validar | Que estén las preguntas para Marco | «Cómo funciona», al final, «Decisiones pendientes». | Arriba de todo: el umbral del 10 %, el factor 1,2 y si el descuento sale entero o en parte. |
-| 91 | Por validar | Que la simulación muestre cada venta | «Simulación» › caja «Descuento y valor de 12 meses». | Cada venta con Tipo, Al mes, Valor 12 meses, Descuento, Para la meta y «antes → ahora». |
-| 92 | Por validar | Que un descuento baje la comisión | En una venta de esa caja: «Al mes», 2.800 al mes y 2.400 de descuento. | La comisión baja y la diferencia aparece en «Por sus ventas». |
-| 93 | Por validar | Que las decisiones se puedan probar | «Simulación», panel «Lo que falta decidir»: cambia el factor y cómo sale el descuento. | Los números se rehacen con cada opción. |
-| 94 | Por validar | Que un descuento grande pida aprobación | Una propuesta › Inversión, editando: un servicio con más del 10 % de descuento; espera que se guarde. | «Descuento del N %… lo aprueba Marco antes de enviarla» y el botón «Aprobar el descuento». |
-| 95 | Por validar | Que la aprobación quede y el cliente no la vea | Toca «Aprobar el descuento». Después abre el enlace del cliente y el PDF. | «Lo aprobó [tu nombre] el [fecha], hasta el N %». En el enlace y en el PDF no aparece nada de eso. |
-
-### 5 · Finanzas: cobro automático y menú
-
-| # | Estado | Qué validas | Pasos | Resultado esperado |
+| # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 96 | Por validar | Que el menú quede en lo que usas | Menú › Finanzas. | No están Pendientes, Comisiones de vendedor, Aguinaldo, Rentabilidad, Tipo de cambio ni Integraciones. Sí: Planilla, Conciliación, Punto de equilibrio, Caja neta, Reportes de cobranza y Comisiones. |
 | 97 | Por validar | Que Odoo y Mercury estén dentro de Conciliación | Finanzas › Conciliación › toca Odoo y después Mercury. | Arriba, «Conciliación · Odoo · Mercury · Integraciones»; el menú sigue marcando Conciliación. |
@@ -388,11 +340,48 @@ devuelve.
 | 102 | Por validar | Que «Volver» no lleve a una hoja vieja | Planilla › Comisiones de vendedor › «Volver». | Vuelve a la Planilla. |
 | 103 | Por validar | Que el cobro automático corra cada mañana | Integraciones › Jobs del servidor, el día siguiente del deploy (desde las 7:00). | «El cobro de lo pagado en Odoo y Mercury» en verde. |
 
-### 6 · La serie: escala, propuestas, servicio y gasto de IA
+### 2 · «Para ti»: Ventas y Customer Success <span class="prioridad">Alta</span>
 
-| # | Estado | Qué validas | Pasos | Resultado esperado |
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 1 | ✓ Validado 17 oct | Que cada persona vea su propio inicio | Con «Ver como» Andrés, abre «Para ti»; después repite con un CSE. | Arriba, los números del día; al centro, la agenda como Google Calendar; a la derecha, «Tu cartera» (Andrés) o «Tus cuentas» (el CSE). |
+| 2 | ↻ Validar otra vez | Que las notas de una reunión no se pierdan y sean privadas | Con tu usuario, toca en la agenda una reunión tuya con un cliente: una de hoy y una que ya pasó. Escribe algo en «Tus notas», cierra el panel y vuelve a abrirlo. Después, con «Ver como» Liliana, abre una reunión de ella. | En las dos (la de hoy y la pasada) aparece «Tus notas», y la nota sigue ahí al volver a abrir. Con «Ver como» Liliana, el panel trae su guía y lo pendiente, pero no tus notas ni las de ella, y no deja escribir: «Ver como» es solo lectura. |
+| 3 | ✓ Validado 17 oct | Que una cuenta sin acción ni reunión aparezca | Con «Ver como» un CSE que tenga una cuenta sin tarea esta semana, mira la primera tarjeta de «Para ti». | La línea «Sin acción ni reunión» con esa cuenta y el botón «Agendar». |
+| 4 | ✓ Validado 17 oct | Que Marketing vea sus tareas internas | Con «Ver como» alguien de Marketing, abre «Para ti». | Sus tareas internas, ordenadas por ámbito (Smarteam, SmartAgro). |
+| 5 | ✓ Validado 17 oct | Que «Lo que importa hoy» tenga como mucho 5 cosas | Abre «Para ti» con tu usuario y mira la primera tarjeta. Si una cuenta tiene varias cosas, abre su «+N». | Como mucho 5 cosas, una por cuenta. Lo demás de esa cuenta queda plegado en «+N en esta cuenta», y lo que no entra va a «También para hoy». |
+| 6 | ✓ Validado 17 oct | Que se pueda crear un evento desde la agenda | Toca una hora vacía de hoy (por ejemplo, las 10). Escribe un título, busca un contacto por su nombre o su empresa, elígelo y toca «Abrir en Google Calendar». | Aparece un bloque azul «borrador» de una hora. Al elegir el contacto, la cuenta se llena sola. Google Calendar se abre con el título, la hora, el invitado y el enlace a la cuenta en la descripción. El bloque queda «abierto en Calendar, sin guardar», con «Ya lo guardé». |
+| 7 | ↻ Validar otra vez | Que «Agendar» arme la reunión en Nexus antes de abrir Calendar | Con «Ver como» el CSE de la validación 3, toca «Agendar» en «Sin acción ni reunión». Revisa el borrador y toca «Abrir en Google Calendar». Repite desde la lista entera de «Para ti». | El borrador aparece en la agenda en la primera hora libre de trabajo, con el mismo formulario de «Crear evento»: título, hora, cuenta y contacto, todo editable. Google Calendar se abre solo al tocar «Abrir en Google Calendar». Desde la lista entera, cada cuenta trae una hora distinta. |
+| 8 | ↻ Validar otra vez | Que los huecos respeten el horario, sugieran con qué avanzar y se puedan soltar | Mira la agenda después de las 16:00 o en fin de semana. En un día con espacio, toca el «Hueco libre» punteado; toca afuera; vuelve a tocarlo y toca la X; tócalo otra vez y toca «Ponerla en la agenda». | Un sábado o un domingo la agenda muestra la semana siguiente. Fuera de lunes a viernes de 8 a 5 no aparece ningún hueco. Al tocar un hueco: «Con qué avanzar: T-…». Tocar afuera o la X lo suelta y el hueco vuelve a como estaba. «Ponerla en la agenda» deja el borrador en esa hora. |
+| 9 | ↻ Validar otra vez | Que de viernes a domingo invite a planificar la semana | Un viernes, sábado o domingo, abre «Para ti» como CSE, CSL o alguien de Desarrollo. | Debajo de «Lo que importa hoy»: el viernes «Es viernes: planifica la semana que viene», el sábado «Es sábado: planifica la semana que viene» y el domingo «Mañana empieza la semana: planifícala». Lleva a «Planifica tu semana» (prueba 20). La agenda abre en la semana. |
+| 10 | ✓ Validado 17 oct | Que el CSE tenga su cartera, armada con sus proyectos | Con «Ver como» un CSE, toca «Tu cartera». Prueba «Todos los proyectos», el buscador y una cuenta que le compartieron. | Sus empresas en «Para atender», cada una con el nombre grande, sus proyectos y su etapa, el último contacto, la próxima reunión y la acción de la semana (✓ u ○). Una compartida dice «Compartida», sin color ni monto. |
+| 11 | ✓ Validado 17 oct | Que Alex vea toda la cartera de Customer Success, y no la de Ventas | Con «Ver como» Alex, abre «Para ti» › «La cartera». Abre «Por CSE»; después filtra «Pipeline» › Desarrollo. | No aparece la cartera de Ventas ni «Negocios traídos de HubSpot». «Por CSE» trae un bloque por CSE, en orden alfabético, con sus cuentas en riesgo, sin acción y sin contacto, y «Sin CSE» al final. Con el filtro, solo las empresas con un proyecto de desarrollo. |
+| 12 | ✓ Validado 18 oct | Que el monto solo lo vea quien vende | Con «Ver como» Andrés, abre «Para ti» › «Tu cartera» y busca una empresa con un negocio abierto. Después, con «Ver como» un CSE que lleve esa empresa, mírala en su cartera. | Andrés ve «N negocios abiertos · US$ …» en la fila. El CSE ve la misma empresa sin el monto. (Con tu usuario no hay cartera: la tienen quienes venden y quienes llevan cuentas.) |
+| 48 | Por validar | Que nada quede fuera de «Lo que importa hoy» | Con «Ver como» un CSE con muchas cuentas en riesgo o sin acción, abre «Para ti». Después, con «Ver como» Alex. | Si no caben, una línea «Estabilizar N cuentas» que abre la lista entera. A Alex le llega para repartir o acompañar. |
+| 49 | Por validar | Que el CSE planifique la acción desde su cartera y vea el uso de HubSpot | Con «Ver como» un CSE, «Tu cartera» › una cuenta sin acción › «Planificar acción». | La acción queda en la agenda. Cada cuenta dice si el uso de HubSpot sube o baja, por los hubs que compró, y el botón dice qué hace en vez de «Abrir cuenta». |
+| 50 | Por validar | Que un excliente salga de todo | Cuando Alex marque Wherex como «Excliente»: Éxito del cliente › Cartera › «Fuera de la cartera». | Wherex aparece ahí, marcado «Excliente», y no está en ninguna alerta, cartera ni en «Lo que importa hoy». |
+
+### 3 · Preventa: la guía nueva <span class="prioridad">Alta</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 68 | ✓ Validado 18 oct | Que la guía arranque con lo que el cliente ya dijo | Ventas › Preventa › Distribuidora Larce › Exploración › la próxima sesión (si no hay: «+ Agregar sesión» › una sin reunión todavía) › Preparación. | Arriba de «La guía», «Lo que ya sabemos» con 5 líneas en palabras del cliente. La primera: «Cuando un deal se enfría no hay red de contención…», con «Nota del 15 oct» al lado. |
+| 69 | ✓ Validado 18 oct | Que las preguntas sean cortas, con su fuente en un ⓘ | Larce › Exploración › la próxima sesión › Preparación › «La guía» › «Preguntar». Pasa el mouse por el ⓘ de una pregunta. | Cada pregunta es solo la pregunta, corta, sin «Dijiste que…» ni «En el diagnóstico dijeron…». El ⓘ muestra lo que dijo el cliente, con sus palabras, y de dónde sale. «Lo que ya sabemos» sigue con las palabras del cliente. |
+| 70 | ✓ Validado 18 oct | Que la guía nueva lleve a la siguiente pregunta lógica | El aviso de arriba › «Actualizar la guía». Espera unos segundos. | 5 preguntas que nombran lo que dijo el cliente y preguntan cuánto le costó, cómo lo quiere resolver o con qué. Ninguna de «Para cuándo», porque ya se sabe. |
+| 71 | ↻ Validar otra vez | Que las repreguntas se mejoren con el asistente | En la guía › «Mejorar con el asistente» › escribe: «Mejora las repreguntas de la pregunta 2 para que bajen a números» › Aplicar. | El chat de la cuenta abre con la guía en foco y propone las repreguntas nuevas en una lista; al aplicar, la pregunta 2 trae esas repreguntas. |
+| 72 | ✓ Validado 18 oct | Que siempre cierre | Baja a «Cerrar», al final de la guía. | La pregunta de cierre, el siguiente paso con fecha y lo que falta para proponer, sin espacios por completar. |
+| 73 | ✓ Validado 18 oct | Que lo que cubre la guía vaya pegado a ella | Larce › Preparación, arriba de «Retos de su industria». Después quita una pregunta. | «Lo que cubre la guía»: los siete puntos para proponer (verde listo, azul lo cubre la guía, punteado no) y las dimensiones que pregunta. Al quitar la pregunta, cambia al instante. En el panel derecho queda solo «N de 7 listos». |
+| 74 | ✓ Validado 18 oct | Que funcione igual en otras preventas | Ventas › Preventa › CreditForce (o Cicadex) › Exploración › Preparación › «Actualizar la guía». | «Lo que ya sabemos» con frases del test y 4 o 5 preguntas que parten de ahí. (Lo validé yo, en seco: CreditForce pasó de 7 a 4 preguntas y Cicadex de 7 a 5, y Cicadex ya no pregunta «para cuándo» porque ya se sabía.) |
+| 104 | ↻ Validar otra vez | Que se pueda regenerar una sola pregunta | En la guía de Larce, en una pregunta › su menú ⋯ › «Regenerar». | Esa pregunta cambia por otra del mismo tema, marcada «Regenerada»; las demás quedan igual. En el mismo menú: «Editar», «Volver a la de la guía» y «Borrar» (con «Deshacer»). |
+| 105 | Por validar | Que se puedan agregar preguntas a mano | En la guía › «+ Agregar pregunta»: escribe una, guárdala, edítala. Después toca «Actualizar la guía». | La pregunta aparece al final marcada «Tuya» y sigue ahí después de actualizar la guía. Se puede quitar. |
+| 106 | ↻ Validar otra vez | Que el asistente arme la guía con lo que pides | En la guía › «Mejorar con el asistente» › «Agrega dos preguntas de la escala sobre cómo miden el pipeline» › Aplicar. | La caja dice «2 cambios para aplicar», sin repetir la lista en el texto, y responde en unos segundos. Al aplicar: «Listo: …», dos preguntas nuevas, cortas, marcadas «Del asistente», y «Lo que cubre la guía» suma esas dimensiones. Ninguna repite lo que ya dijo el cliente. |
+| 107 | ↻ Validar otra vez | Que el asistente no invente lo interno | En el mismo chat: «Agrega una pregunta sobre el presupuesto que nos dijeron». | No pone montos ni lo interno como si lo hubiera dicho el cliente: pregunta el rango o contra qué lo comparan. (Validada el 18 oct; el chat cambió después.) |
+
+### 4 · La serie: escala, propuestas, servicio y gasto de IA <span class="prioridad">Alta</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 51 | Por validar | Que las ediciones Turismo y Automotriz digan lo que pasa en esas industrias | Lee `docs/escala/ediciones-turismo-automotriz.md` y decide el perfil habitual y los tres criterios que piden más en Funcional. | Si te calza, la publico (8.9.0); si no, me dices qué cambiar. |
+| 108 | Por validar | Que cada nivel de cada edición hable de su industria | Lee `docs/escala/personalizacion-de-las-ediciones.md` (el resumen de la 8.9.1). | Si te calza, la publico (8.9.1) y en la escala, con Turismo o Automotriz elegida, cada nivel de cada dimensión trae al menos un criterio con palabras de esa industria; si no, me dices qué cambiar. |
 | 52 | Por validar | Que «Actualizar escala» funcione en un cliente sin proyecto ni preventa | Un cliente sin proyectos (no Wherex) › La cuenta › La escala › «Actualizar escala». | «Sobre qué se ubica: La cuenta entera» y la lista de sus ventas. Al tocar «Actualizar», «Leyendo todo lo que Nexus sabe de la cuenta…» y después cuántos niveles propuso. |
 | 53 | Por validar | Que con varios proyectos se elija sobre cuál se ubica | Un cliente con varios proyectos › La escala › «Actualizar escala». | Todos sus proyectos en la lista, los terminados al final; al elegir uno, la venta de ese trato ya viene marcada. |
 | 54 | Por validar | Que lo propuesto se confirme en la misma pantalla y quede en la historia | En el recuadro azul «El agente propone N niveles», toca «Usar» en uno y «Usar los N». | Cada nivel con su porqué y «De dónde sale». Lo usado baja al área y en «La escala en el tiempo» queda una versión de hoy. Lo propuesto no entra a la historia. |
@@ -410,29 +399,21 @@ devuelve.
 | 66 | Por validar | Que se proyecte el gasto de los próximos meses | Pestaña «Proyección»: prende y apaga los escenarios. | Unos US$86 al mes; con los hechos prendidos sube a unos US$98, y con las tres palancas de ahorro baja a unos US$85. Nada se guarda al recargar. |
 | 67 | Por validar | Que la factura de Anthropic se compare con lo medido | Pestaña «Factura»: anota un mes con su monto. | Aparece en la tabla al lado de lo medido; una diferencia grande sale con ⚠. |
 
-### 7 · «Para ti»: Ventas y Customer Success
+### 5 · Comunicaciones de HubSpot y compromisos <span class="prioridad">Media</span>
 
-| # | Estado | Qué validas | Pasos | Resultado esperado |
+| # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
-| 1 | ✓ Validado 17 oct | Que cada persona vea su propio inicio | Con «Ver como» Andrés, abre «Para ti»; después repite con un CSE. | Arriba, los números del día; al centro, la agenda como Google Calendar; a la derecha, «Tu cartera» (Andrés) o «Tus cuentas» (el CSE). |
-| 2 | ⏳ En arreglo | Que las notas de una reunión no se pierdan y sean privadas | Con tu usuario, toca en la agenda una reunión tuya con un cliente: una de hoy y una que ya pasó. Escribe algo en «Tus notas», cierra el panel y vuelve a abrirlo. Después, con «Ver como» Liliana, abre una reunión de ella. | En las dos (la de hoy y la pasada) aparece «Tus notas», y la nota sigue ahí al volver a abrir. Con «Ver como» Liliana, el panel trae su guía y lo pendiente, pero no tus notas ni las de ella, y no deja escribir: «Ver como» es solo lectura. |
-| 3 | ✓ Validado 17 oct | Que una cuenta sin acción ni reunión aparezca | Con «Ver como» un CSE que tenga una cuenta sin tarea esta semana, mira la primera tarjeta de «Para ti». | La línea «Sin acción ni reunión» con esa cuenta y el botón «Agendar». |
-| 4 | ✓ Validado 17 oct | Que Marketing vea sus tareas internas | Con «Ver como» alguien de Marketing, abre «Para ti». | Sus tareas internas, ordenadas por ámbito (Smarteam, SmartAgro). |
-| 5 | ✓ Validado 17 oct | Que «Lo que importa hoy» tenga como mucho 5 cosas | Abre «Para ti» con tu usuario y mira la primera tarjeta. Si una cuenta tiene varias cosas, abre su «+N». | Como mucho 5 cosas, una por cuenta. Lo demás de esa cuenta queda plegado en «+N en esta cuenta», y lo que no entra va a «También para hoy». |
-| 6 | ✓ Validado 17 oct | Que se pueda crear un evento desde la agenda | Toca una hora vacía de hoy (por ejemplo, las 10). Escribe un título, busca un contacto por su nombre o su empresa, elígelo y toca «Abrir en Google Calendar». | Aparece un bloque azul «borrador» de una hora. Al elegir el contacto, la cuenta se llena sola. Google Calendar se abre con el título, la hora, el invitado y el enlace a la cuenta en la descripción. El bloque queda «abierto en Calendar, sin guardar», con «Ya lo guardé». |
-| 7 | ⏳ En arreglo | Que «Agendar» arme la reunión en Nexus antes de abrir Calendar | Con «Ver como» el CSE de la validación 3, toca «Agendar» en «Sin acción ni reunión». Revisa el borrador y toca «Abrir en Google Calendar». Repite desde la lista entera de «Para ti». | El borrador aparece en la agenda en la primera hora libre de trabajo, con el mismo formulario de «Crear evento»: título, hora, cuenta y contacto, todo editable. Google Calendar se abre solo al tocar «Abrir en Google Calendar». Desde la lista entera, cada cuenta trae una hora distinta. |
-| 8 | ⏳ En arreglo | Que los huecos respeten el horario, sugieran con qué avanzar y se puedan soltar | Mira la agenda después de las 16:00 o en fin de semana. En un día con espacio, toca el «Hueco libre» punteado; toca afuera; vuelve a tocarlo y toca la X; tócalo otra vez y toca «Ponerla en la agenda». | Un sábado o un domingo la agenda muestra la semana siguiente. Fuera de lunes a viernes de 8 a 5 no aparece ningún hueco. Al tocar un hueco: «Con qué avanzar: T-…». Tocar afuera o la X lo suelta y el hueco vuelve a como estaba. «Ponerla en la agenda» deja el borrador en esa hora. |
-| 9 | ⏳ En arreglo | Que los viernes invite a planificar la semana | Un viernes, abre «Para ti» como CSE, CSL o alguien de Desarrollo. | Debajo de «Lo que importa hoy», «Es viernes: planifica la semana que viene», que lleva a «Planifica tu semana» (validación 20). |
-| 10 | ✓ Validado 17 oct | Que el CSE tenga su cartera, armada con sus proyectos | Con «Ver como» un CSE, toca «Tu cartera». Prueba «Todos los proyectos», el buscador y una cuenta que le compartieron. | Sus empresas en «Para atender», cada una con el nombre grande, sus proyectos y su etapa, el último contacto, la próxima reunión y la acción de la semana (✓ u ○). Una compartida dice «Compartida», sin color ni monto. |
-| 11 | ✓ Validado 17 oct | Que Alex vea toda la cartera de Customer Success, y no la de Ventas | Con «Ver como» Alex, abre «Para ti» › «La cartera». Abre «Por CSE»; después filtra «Pipeline» › Desarrollo. | No aparece la cartera de Ventas ni «Negocios traídos de HubSpot». «Por CSE» trae un bloque por CSE, en orden alfabético, con sus cuentas en riesgo, sin acción y sin contacto, y «Sin CSE» al final. Con el filtro, solo las empresas con un proyecto de desarrollo. |
-| 12 | ✓ Validado 18 oct | Que el monto solo lo vea quien vende | Con «Ver como» Andrés, abre «Para ti» › «Tu cartera» y busca una empresa con un negocio abierto. Después, con «Ver como» un CSE que lleve esa empresa, mírala en su cartera. | Andrés ve «N negocios abiertos · US$ …» en la fila. El CSE ve la misma empresa sin el monto. (Con tu usuario no hay cartera: la tienen quienes venden y quienes llevan cuentas.) |
-| 48 | Por validar | Que nada quede fuera de «Lo que importa hoy» | Con «Ver como» un CSE con muchas cuentas en riesgo o sin acción, abre «Para ti». Después, con «Ver como» Alex. | Si no caben, una línea «Estabilizar N cuentas» que abre la lista entera. A Alex le llega para repartir o acompañar. |
-| 49 | Por validar | Que el CSE planifique la acción desde su cartera y vea el uso de HubSpot | Con «Ver como» un CSE, «Tu cartera» › una cuenta sin acción › «Planificar acción». | La acción queda en la agenda. Cada cuenta dice si el uso de HubSpot sube o baja, por los hubs que compró, y el botón dice qué hace en vez de «Abrir cuenta». |
-| 50 | Por validar | Que un excliente salga de todo | Cuando Alex marque Wherex como «Excliente»: Éxito del cliente › Cartera › «Fuera de la cartera». | Wherex aparece ahí, marcado «Excliente», y no está en ninguna alerta, cartera ni en «Lo que importa hoy». |
+| 75 | Por validar | Que el chat lea las notas de HubSpot | Clientes › RC Inmobiliaria › botón «Nexus». Pregunta: «¿Qué notas y llamadas hay de esta empresa en HubSpot?». | Sus notas de HubSpot, la más nueva primero, cada una con su día, quién la escribió y el comienzo del texto. |
+| 76 | Por validar | Que lea una nota entera | El mismo chat: «Lee la primera entera». | La nota completa, con su fecha y su autor. |
+| 77 | Por validar | Que conteste lo prometido sin mezclar empresas | Clientes › kölbi › chat: «¿Qué le prometimos al cliente que sigue abierto?». | Los compromisos abiertos de kölbi, nada de otra empresa. |
+| 78 | Por validar | Que avise de una reunión prometida sin agendar | Con «Ver como» el CSE de Accesos Automáticos, Honda Costa Rica o Distribuidora Larce, abre «Para ti». | En «Lo que importa hoy»: «… se prometió una reunión y no está agendada», con «Agendar o decidir», que abre la tarea. |
+| 79 | Por validar | Que el líder vea lo que no se tomó | Con «Ver como» Alex Vanegas, abre «Para ti». | Una línea por cuenta: «Larce: N compromisos sin tomar hace más de 48 horas», con el enlace a cada tarea. |
+| 80 | Por validar | Que el aviso se vaya al resolverlo | Tareas › una de esas tareas › «Usar». Vuelve a «Para ti». | El aviso ya no aparece. |
+| 81 | Por validar | Que la copia corra sola | Integraciones › Jobs del servidor, al día siguiente del deploy (desde las 6:00). | «La copia de los correos, notas y llamadas de HubSpot» en verde. |
 
-### 8 · La ficha del cliente
+### 6 · La ficha del cliente <span class="prioridad">Media</span>
 
-| # | Estado | Qué validas | Pasos | Resultado esperado |
+| # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 13 | Por validar | Que el riel separe herramientas y entregables | Abre un cliente › un proyecto de implementación y mira la columna de la izquierda. Después abre un proyecto SmartLoop. | Arriba, «Herramientas del proyecto» (Resumen, Cronograma, Cuestionarios, Exploración, Ejecución); debajo, «Entregables» (Kickoff, Diagnóstico, Planificación, Integraciones, Entrega). En el SmartLoop, igual que antes: el grupo «Ciclo · etapa». |
 | 14 | Por validar | Que generar un Diagnóstico y un Kickoff siga igual | En un proyecto con handoff, toca «Generar» en el Diagnóstico y después en el Kickoff. | Se generan y se ven igual que siempre; el kickoff con sus secciones de equipo y horarios intactas. |
@@ -441,29 +422,29 @@ devuelve.
 | 17 | Por validar | Que el chat trabaje solo sobre esa cuenta y genere un entregable | En la ficha, toca «Nexus». Pregunta «¿Qué está pendiente con esta cuenta?». Escribe «Por WhatsApp me dijeron que mandan la base el viernes» y toca «Aplicar» dos veces seguidas. Después pide «Genera el diagnóstico del proyecto X» y aplícalo. | Contesta solo con lo de esa cuenta. La tarea aparece en La cuenta › Tareas como «Chat de Nexus», una sola vez. El diagnóstico queda en la lista con la plantilla «Diagnóstico estratégico» y aparece en el proyecto en unos minutos. En un proyecto sin handoff, el kickoff no se ofrece y dice por qué. |
 | 18 | Por validar | Que «Sugerencias» diga qué hacer, con el mensaje listo | En la ficha, toca «Sugerencias». | Hasta 5 cosas que te tocan en esa cuenta, cada una con el mensaje de WhatsApp listo para copiar. |
 
-### 9 · Tareas y reuniones
+### 7 · Tareas y reuniones <span class="prioridad">Media</span>
 
-| # | Estado | Qué validas | Pasos | Resultado esperado |
+| # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 20 | Por validar | Que «Planifica tu semana» arme la semana por cuenta | Tareas › «Planifica tu semana» como un CSE. En una cuenta, cambia el día de la reunión sugerida, toca «Agendar», guárdala en Calendar y toca «Ya lo guardé». En otra, toca «Usar» o «Crear la acción». | Una fila por cuenta con la acción y la reunión de la semana; lo que sugiere Nexus en azul, con «De dónde sale». Google Calendar se abre con título, hora, invitados y objetivo. Después de guardarla: «Quedó en tus tareas como reunión con la cuenta». La acción queda con su T- y el día. |
 | 21 | Por validar | Que un líder configure la reunión de su sprint | Tareas › Semana del equipo › «La reunión del sprint» › Configurar. Elige la reunión semanal, deja «Quiénes están» vacío y guarda. | Solo ofrece reuniones recurrentes de puertas adentro en las que estuviste. La próxima reunión de esa serie deja como mucho 5 tareas por persona, marcadas «Sprint interno». |
 | 22 | Por validar | Que cada reunión tenga su página y su correo de seguimiento | Sesiones › una reunión con un cliente de esta semana. Toca «Armar el correo». Abre la misma reunión en otra pestaña, cambia el correo en las dos y guarda. | La agenda, los avisos y las tareas con su responsable. «Armar el correo» deja un borrador que no se envía. La próxima reunión sugerida, con su enlace a Google Calendar. La segunda pestaña avisa «El correo cambió: recarga la página». |
 
-### 10 · Ventas
+### 8 · Ventas <span class="prioridad">Media</span>
 
-| # | Estado | Qué validas | Pasos | Resultado esperado |
+| # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 25 | Por validar | Que el IVA se calcule bien en los dos sentidos | En una propuesta de un cliente de Costa Rica, en la Inversión pon una línea de $10.000 y elige «+ IVA (13%)»; después cambia la línea a $11.300 y elige «IVA incluido (13%)». | Con «+ IVA»: «IVA (13%) $1,300» y «Total con IVA $11,300». Con «IVA incluido»: «Monto sin IVA $10,000» e «IVA (13%) $1,300», y el total no cambia. |
 | 26 | Por validar | Que el IVA también vaya en lo mensual y en la forma de pago | En una propuesta con una implementación y una licencia mensual, elige «+ IVA» y mira «Forma de pago». | «Pago único + IVA» y «Por mes + IVA», cada uno con su IVA y su total. En «Forma de pago», «Inversión total + IVA». |
 | 27 | Por validar | Que lo publicado no cambie y el PDF lleve el IVA | Abre la Inversión de un cliente sin país conocido. Después abre por su link una propuesta ya publicada y baja el PDF; publica la de la validación 25 y haz lo mismo. | Sin país: el selector está, con «⚠ No sabemos si el cliente es de Costa Rica…». La publicada de antes se ve igual, sin IVA. La de la validación 25 trae «Montos sin IVA (+ 13%)» y el mismo desglose, en el link y en el PDF. |
 
-### 11 · La escala de cada empresa
+### 9 · La escala de cada empresa <span class="prioridad">Media</span>
 
 La escala ya no es solo de la preventa: cada empresa tiene la suya en La cuenta › La escala, se arma con lo que Nexus
 ya sabe (también sin preventa) y guarda su historia. El 17 oct guardé la primera versión de las 7 empresas con niveles
 confirmados: CreditForce, Grupo Servica, Quálitas, Tecnosagot, Grupo Monge, Cemaco Internacional y Distribuidora Larce.
 
-| # | Estado | Qué validas | Pasos | Resultado esperado |
+| # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 19 | Por validar | Que la escala de la cuenta muestre su evidencia y su historia | Abre Cemaco Internacional › La cuenta › La escala. Toca «Regenerar con el agente». | Cada nivel con de dónde sale (la fuente y la frase). «La escala en el tiempo» con sus versiones fechadas. El agente solo propone: no cambia los niveles confirmados. Abajo, el camino de crecimiento con casos sugeridos. |
 | 45 | Por validar | Que la escala se arme desde el contexto de un cliente, sin preventa | Abre un cliente con un proyecto con handoff y sin exploración (no Wherex) › La cuenta › La escala. Toca «Activar el agente en «…»» y espera unos minutos sin salir. | Sin posición, «La empresa todavía no está posicionada en la escala» con el botón. Al tocarlo, «El agente está leyendo todo lo que Nexus sabe de la empresa…» y la fase en curso. Al terminar, niveles propuestos (en azul) con su porqué, sacados del handoff, los cuestionarios y HubSpot; se confirman en La escala de la Exploración del proyecto. |
@@ -472,18 +453,9 @@ confirmados: CreditForce, Grupo Servica, Quálitas, Tecnosagot, Grupo Monge, Cem
 | 23 | Por validar | Que la escala de la preventa diga de dónde sale y qué explorar | Ventas › Preventa › una con reuniones leídas › La escala. | «De dónde sale cada nivel» y «Qué explorar en la próxima sesión». |
 | 24 | Por validar | Que la propuesta traiga los casos de uso | Propuestas › Nueva, con una empresa que tenga preventa › Generar. Repite con una sin preventa. | La sección «Casos de uso incluidos». Sin preventa, los sugeridos de la biblioteca, sin precio. |
 
-### 12 · SmartLoop
+### 10 · Finanzas <span class="prioridad">Media</span>
 
-| # | Estado | Qué validas | Pasos | Resultado esperado |
-|---|---|---|---|---|
-| 28 | Por validar | Que el cronograma del ciclo pida confirmar el arranque | FACO › el proyecto de prueba › Cronograma › «Armar las fases». Confirma la fecha de arranque y toca «Aprobar esta versión». | Sin fecha de arranque, primero pregunta «El cronograma arranca el … ¿Lo confirmas?». El cronograma del ciclo queda arriba del Gantt con su versión aprobada. |
-| 29 | Por validar | Que cerrar el ciclo saque lo que no se cumplió | En Aprendizaje, marca un caso «no cumplido» y toca «Cerrar el ciclo». Después, en una pestaña que tenía el ciclo abierto, cambia la meta. | El ciclo queda en «Ciclos anteriores» y la fase de ese caso queda suspendida (ya no sale atrasada). La pestaña vieja avisa «Este ciclo ya se cerró: recarga la página». |
-| 30 | Por validar | Que Nexus recomiende SmartLoop al llegar a la entrega | Abre un proyecto de implementación en «Entrega» › Resumen y toca «Dejar la tarea». En otro en «Entrega», toca «Abrir el alta». Mira «Para ti» del CSE encargado. | En «Qué sigue»: «propónle a … seguir con SmartLoop», con el porqué y los botones. «Dejar la tarea» crea la tarea y la recomendación desaparece. «Abrir el alta» abre Nuevo proyecto con «SmartLoop» elegido. En «Para ti» del CSE, la misma recomendación. |
-| 31 | Por validar | Que el cliente vea la ruta del servicio, sin datos internos | En un SmartLoop con ciclo › Resumen, toca «Subir al cliente» en «Ruta del servicio para el cliente». Abre el enlace del cliente con `?next=ciclos` y entra con la contraseña. En un proyecto que no es SmartLoop, abre «Acceso». | «Compartida desde el …» y «Volver a subir». El cliente ve cada ciclo con sus fechas y su meta, los casos como barras y «De tu parte: …», sin notas ni montos. En el que no es SmartLoop, la fila «Ruta del servicio» no aparece. |
-
-### 13 · Finanzas
-
-| # | Estado | Qué validas | Pasos | Resultado esperado |
+| # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 32 | Por validar | Que solo se cobre lo pagado que confirmas | Finanzas › Conciliación › «Lo pagado». Desmarca una cuota y confirma con tu firma. | Las cuotas que Odoo y Mercury dan por pagadas, con el día del pago. Las de Mercury sin entrada de plata van a «Pagadas sin el día del pago» y no se cobran. Solo se cobran las marcadas. |
 | 33 | Por validar | Que los montos de las licencias se lean bien | Punto de equilibrio › «Licencias revendidas» › kölbi › Editar. Escribe «70.000» en «Lo que se le paga» y mira «Para decidir». | kölbi con su parte de servicio y el mismo margen. Debajo del campo, «Se guarda: 70.000». En «Para decidir», cómo cuentan las licencias. |
@@ -491,25 +463,58 @@ confirmados: CreditForce, Grupo Servica, Quálitas, Tecnosagot, Grupo Monge, Cem
 | 35 | Por validar | Que Mercury esté en la facturación por cliente | Cobranza › Odoo › Facturación por cliente. Busca un cliente de Mercury y toca «Ver el detalle» en una factura. | Los clientes de Mercury junto a los de Odoo, y el detalle de cada factura. |
 | 36 | Por validar | Que las facturas de Odoo se peguen solas | Abre Cobranza › Odoo. | Las facturas que Odoo da por emitidas ya están pegadas a su cuota, sin hacer nada. |
 
-### 14 · Dirección: Rentabilidad y Uso de Nexus
+### 11 · Rentabilidad con agendas, tareas y la meta <span class="prioridad">Baja</span>
 
-| # | Estado | Qué validas | Pasos | Resultado esperado |
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 82 | Por validar | Que la meta se vea contra lo facturado | Éxito del cliente › Rentabilidad, arriba de las pestañas. | «La meta del año: US$ 2,3 M en 2027», una barra por año desde 2021 con lo facturado, y «Qué falta para la meta de 2027». |
+| 83 | Por validar | Que la meta se cambie desde la pantalla | La misma tarjeta › «Cambiar la meta»: un monto y una nota › Guardar › «Ver la historia». | La barra cambia y la historia muestra las dos metas. |
+| 84 | Por validar | Que las horas salgan solas, también fuera de Meet | Rentabilidad › Margen por cuenta › kölbi o Club de Amantes del Vino. | Debajo de las horas, «x fuera de Meet» y de dónde sale cada hora; la línea «Calendario de N personas…». |
+| 85 | Por validar | Que se vea el margen por persona | Rentabilidad › Costo de la hora › Por persona. | Las columnas «Generado» y «Margen», por nombre, en orden alfabético. |
+| 86 | Por validar | Que Nexus lea los números y proponga | Rentabilidad › Lectura de los números › «Leer los números». Espera un minuto. | Propuestas con qué hacer y cuánto invertir, cada una con «Usar» y «Desestimar» (que pide el porqué). |
+| 87 | Por validar | Que el punto de equilibrio muestre la meta y lo que falta | Finanzas › Punto de equilibrio, al final. | La misma barra de la meta y una tabla mes a mes: Por facturar, Recurrencia, Proyectos, Expansiones y Falta. |
+
+### 12 · Dirección: Rentabilidad y Uso de Nexus <span class="prioridad">Baja</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 37 | Por validar | Que la foto del margen quede guardada por mes | Éxito del cliente › Rentabilidad › «De dónde salen los números». En un mes, toca «Tomar la foto». Después elige «Trimestre». | Antes de tomarla, cada mes dice «En vivo». Al tomarla: «Foto tomada: N cuentas» y el mes pasa a «Desde su foto», con la fecha y tu nombre. En el trimestre: «1 de 3 meses desde su foto; el resto, en vivo». |
 | 38 | Por validar | Que rehacer una foto pida motivo y la cuenta diga de dónde sale | En un mes con foto, toca «Volver a tomar» sin motivo y después con motivo. Abre una cuenta y mira «Mes a mes». | Sin motivo no deja; con motivo, «Tomada el… · tu motivo». En la cuenta, «De dónde sale» dice «Foto del …» o «En vivo». |
 | 39 | Por validar | Que se vea qué usa y qué desestima cada equipo | Para ti › «Uso de Nexus». Baja hasta el final de «Equipo» y abre «Para qué se usa». | Seis pestañas. «Qué usa cada equipo» con «3/7» en cada cruce. «Qué usa y qué desestima cada equipo» y «Quién decide» por nombre, agrupado por equipo. |
 | 40 | Por validar | Que se vea cuánto cuesta la IA y si sirve | Abre «IA por cliente» (cambia entre 30 y 90 días), «Procesos de IA» y «Conclusiones». | El gasto de IA por empresa con lo que se usó; por proceso, con errores y «% usado»; y conclusiones cortas «Para mirar», «Para saber» o «Va bien», cada una con su enlace. |
 
-### 15 · Éxito del cliente y Equipo
+### 13 · Comisiones: el descuento y la recurrencia <span class="prioridad">Baja</span>
 
-| # | Estado | Qué validas | Pasos | Resultado esperado |
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 88 | Por validar | Que el caso de Marco se entienda | Finanzas › Modelos › Comisiones › «Cómo funciona» › «Descuentos y recurrencia». | 33.600 − 2.400 = 31.200, y al 5 %: US$1.560 en vez de US$1.680. |
+| 89 | Por validar | Que la calculadora reaccione | La misma sección, a la derecha: deja 3.000 y 2.800; después baja «Lo que se cerró al mes» de 2.700. | «Hoy» US$1.680 y «Con la propuesta» US$1.560. Bajo 2.700 aparece «Lo aprueba Marco». |
+| 90 | Por validar | Que estén las preguntas para Marco | «Cómo funciona», al final, «Decisiones pendientes». | Arriba de todo: el umbral del 10 %, el factor 1,2 y si el descuento sale entero o en parte. |
+| 91 | Por validar | Que la simulación muestre cada venta | «Simulación» › caja «Descuento y valor de 12 meses». | Cada venta con Tipo, Al mes, Valor 12 meses, Descuento, Para la meta y «antes → ahora». |
+| 92 | Por validar | Que un descuento baje la comisión | En una venta de esa caja: «Al mes», 2.800 al mes y 2.400 de descuento. | La comisión baja y la diferencia aparece en «Por sus ventas». |
+| 93 | Por validar | Que las decisiones se puedan probar | «Simulación», panel «Lo que falta decidir»: cambia el factor y cómo sale el descuento. | Los números se rehacen con cada opción. |
+| 94 | Por validar | Que un descuento grande pida aprobación | Una propuesta › Inversión, editando: un servicio con más del 10 % de descuento; espera que se guarde. | «Descuento del N %… lo aprueba Marco antes de enviarla» y el botón «Aprobar el descuento». |
+| 95 | Por validar | Que la aprobación quede y el cliente no la vea | Toca «Aprobar el descuento». Después abre el enlace del cliente y el PDF. | «Lo aprobó [tu nombre] el [fecha], hasta el N %». En el enlace y en el PDF no aparece nada de eso. |
+
+### 14 · SmartLoop <span class="prioridad">Baja</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 28 | Por validar | Que el cronograma del ciclo pida confirmar el arranque | FACO › el proyecto de prueba › Cronograma › «Armar las fases». Confirma la fecha de arranque y toca «Aprobar esta versión». | Sin fecha de arranque, primero pregunta «El cronograma arranca el … ¿Lo confirmas?». El cronograma del ciclo queda arriba del Gantt con su versión aprobada. |
+| 29 | Por validar | Que cerrar el ciclo saque lo que no se cumplió | En Aprendizaje, marca un caso «no cumplido» y toca «Cerrar el ciclo». Después, en una pestaña que tenía el ciclo abierto, cambia la meta. | El ciclo queda en «Ciclos anteriores» y la fase de ese caso queda suspendida (ya no sale atrasada). La pestaña vieja avisa «Este ciclo ya se cerró: recarga la página». |
+| 30 | Por validar | Que Nexus recomiende SmartLoop al llegar a la entrega | Abre un proyecto de implementación en «Entrega» › Resumen y toca «Dejar la tarea». En otro en «Entrega», toca «Abrir el alta». Mira «Para ti» del CSE encargado. | En «Qué sigue»: «propónle a … seguir con SmartLoop», con el porqué y los botones. «Dejar la tarea» crea la tarea y la recomendación desaparece. «Abrir el alta» abre Nuevo proyecto con «SmartLoop» elegido. En «Para ti» del CSE, la misma recomendación. |
+| 31 | Por validar | Que el cliente vea la ruta del servicio, sin datos internos | En un SmartLoop con ciclo › Resumen, toca «Subir al cliente» en «Ruta del servicio para el cliente». Abre el enlace del cliente con `?next=ciclos` y entra con la contraseña. En un proyecto que no es SmartLoop, abre «Acceso». | «Compartida desde el …» y «Volver a subir». El cliente ve cada ciclo con sus fechas y su meta, los casos como barras y «De tu parte: …», sin notas ni montos. En el que no es SmartLoop, la fila «Ruta del servicio» no aparece. |
+
+### 15 · Éxito del cliente y Equipo <span class="prioridad">Baja</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 41 | Por validar | Que la lista de limpieza de HubSpot diga quién arregla qué | Éxito del cliente › «Limpieza de HubSpot», como Alex o con tu usuario. | Lo que hay que poner al día en HubSpot, por responsable, cada cosa con su enlace. |
 | 42 | Por validar | Que «Ver como» no deje escribir como otra persona | Equipo › una persona › «Ver como»; navega un poco y toca «Volver a mi usuario». | Nexus como lo ve esa persona, sin poder escribir como ella. «Volver a mi usuario» te devuelve. |
 
 ### Desde la terminal (opcional)
 
-| # | Estado | Qué validas | Pasos | Resultado esperado |
+| # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 43 | ✓ Validado 17 oct | Que la foto de los meses pasados se pueda armar | `npx tsx scripts/fotografiar-meses-del-margen.ts` (lo corrí yo, en simulacro) | Nueve meses, de enero a septiembre, cada uno con lo cobrado y facturado, la planilla y las horas, y «Simulacro: no se escribió nada». |
 | 44 | ✓ Validado 17 oct | Que el paso de «Continuidad» a SmartLoop encuentre los proyectos | `npx tsx scripts/migrar-continuidad-a-smartloop.ts` (lo corrí yo, en simulacro) | Ministerio de Economía y TEC, los dos en Diagnóstico, a confirmar con Customer Success. No escribe nada. |

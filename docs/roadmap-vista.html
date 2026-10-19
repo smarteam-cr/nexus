@@ -10,6 +10,7 @@
   --info-bg: #eff6ff; --info-line: #bfdbfe; --info-ink: #1e40af;
   --warn-bg: #fffbeb; --warn-line: #fde68a; --warn-ink: #92400e;
   --idle-bg: #f3f4f6; --idle-line: #e5e7eb; --idle-ink: #4b5563;
+  --hi-bg: #fef2f2; --hi-line: #fecaca; --hi-ink: #b91c1c;
   --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
@@ -19,6 +20,7 @@
   --info-bg: #1e3a8a40; --info-line: #1d4ed880; --info-ink: #93c5fd;
   --warn-bg: #78350f40; --warn-line: #b4530980; --warn-ink: #fcd34d;
   --idle-bg: #1f2937; --idle-line: #374151; --idle-ink: #d1d5db;
+  --hi-bg: #7f1d1d40; --hi-line: #b91c1c80; --hi-ink: #fca5a5;
   color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #0b1220; --surface: #111827; --surface-muted: #1f2937; --line: #1f2937;
@@ -27,6 +29,7 @@
   --info-bg: #1e3a8a40; --info-line: #1d4ed880; --info-ink: #93c5fd;
   --warn-bg: #78350f40; --warn-line: #b4530980; --warn-ink: #fcd34d;
   --idle-bg: #1f2937; --idle-line: #374151; --idle-ink: #d1d5db;
+  --hi-bg: #7f1d1d40; --hi-line: #b91c1c80; --hi-ink: #fca5a5;
   color-scheme: dark }
 
 * { box-sizing: border-box; }
@@ -99,6 +102,13 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 .s-info { background: var(--info-bg); border-color: var(--info-line); color: var(--info-ink); }
 .s-warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
 .s-idle { background: var(--idle-bg); border-color: var(--idle-line); color: var(--idle-ink); }
+/* Prioridad de un área de pruebas: alta en rojo, media en azul, baja en gris. */
+.prio-alta { background: var(--hi-bg); border-color: var(--hi-line); color: var(--hi-ink); }
+.prio-media { background: var(--info-bg); border-color: var(--info-line); color: var(--info-ink); }
+.prio-baja { background: var(--idle-bg); border-color: var(--idle-line); color: var(--idle-ink); }
+.subtabs button .p { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; background: currentColor; }
+.subtabs .grupo { flex-basis: 100%; font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-muted); margin: 6px 0 0; }
+.subtabs .grupo:first-child { margin-top: 0; }
 </style>
 
 <main>
@@ -120,14 +130,18 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 
   var TONOS = { 'Validado': 's-ok', 'En producción': 's-info', 'Por desplegar': 's-warn', 'Por empezar': 's-idle', 'Propuesta': 's-warn', 'En curso': 's-warn', 'Por decidir': 's-idle' };
   doc.querySelectorAll('span.estado').forEach(function (sp) {
-    var e = sp.textContent.trim(); sp.className = 'chip ' + (TONOS[e] || 's-idle');
+    var e = sp.textContent.trim(); sp.className = 'chip estado ' + (TONOS[e] || 's-idle');
+  });
+  // La prioridad de un área de pruebas (Alta · Media · Baja), como chip al lado del título.
+  doc.querySelectorAll('span.prioridad').forEach(function (sp) {
+    var p = sp.textContent.trim().toLowerCase(); sp.className = 'chip prio prio-' + p; sp.setAttribute('data-prio', p); sp.textContent = 'Prioridad ' + p;
   });
   doc.querySelectorAll('table').forEach(function (t) {
     var w = document.createElement('div'); w.className = 'tw'; t.parentNode.insertBefore(w, t); w.appendChild(t);
     var th = t.querySelector('thead th'), primera = th ? th.textContent.trim() : '';
     var cabeza = Array.prototype.map.call(t.querySelectorAll('thead th'), function (x) { return x.textContent.trim(); });
     if (cabeza.indexOf('Estado') >= 0) {
-      // Las validaciones: el estado como chip (✓ Validado · ↻ Otra vez · ⏳ En arreglo · Por validar); lo validado, en gris.
+      // Las pruebas: el estado como chip (↻ Validar otra vez · Por validar · ⏳ No probar todavía · ✓ Validado); lo validado, en gris.
       t.classList.add('pruebas');
       t.querySelectorAll('tbody tr').forEach(function (tr) {
         var td = tr.children[1]; if (!td) return;
@@ -181,7 +195,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     var cuerpo = document.createElement('div'); cuerpo.className = 'cuerpo';
     while (h.nextSibling) cuerpo.appendChild(h.nextSibling);
     card.appendChild(cuerpo);
-    var chip = h.querySelector('.chip'), estado = chip ? chip.textContent.trim() : '';
+    var chip = h.querySelector('.chip.estado'), estado = chip ? chip.textContent.trim() : '';
     var pasos = cuerpo.querySelectorAll('ol > li'), hechos = cuerpo.querySelectorAll('ol > li.hecho').length;
     var enCurso = cuerpo.querySelectorAll('ol > li .marca.curso').length;
     var pruebas = cuerpo.querySelectorAll('table.pruebas tbody tr'), pendientes = cuerpo.querySelectorAll('table.pruebas tbody tr:not(.listo)').length;
@@ -198,11 +212,11 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     h.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cambiar(); } });
   });
 
-  // Tres pestañas: el roadmap, lo que le pides al equipo y lo que validas tú. Cada «##» va a la suya.
+  // Tres pestañas: el roadmap, lo que le pides al equipo y las pruebas. Cada «##» va a la suya.
   var PESTANAS = [
     { id: 'roadmap', nombre: 'Roadmap' },
     { id: 'equipo', nombre: 'Lo que pides al equipo', h2: /pides al equipo/i },
-    { id: 'validar', nombre: 'Lo que validas', h2: /validas t/i },
+    { id: 'validar', nombre: 'Pruebas', h2: /^\s*Pruebas$/i },
   ];
   var paneles = {};
   PESTANAS.forEach(function (p) { var d = document.createElement('div'); d.className = 'panel'; d.id = 'panel-' + p.id; paneles[p.id] = d; });
@@ -216,18 +230,23 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   });
   PESTANAS.forEach(function (p) { doc.appendChild(paneles[p.id]); });
   var faltan = paneles.validar.querySelectorAll('table.pruebas tbody tr:not(.listo):not(.arreglo)').length;
-  // «Lo que validas» va en pestañas por área: una tarjeta a la vez, con cuántas faltan; abre en la primera con algo pendiente.
+  // «Pruebas» va en pestañas por área, agrupadas por prioridad: una tarjeta a la vez, con cuántas faltan; abre en la primera con algo pendiente.
   (function () {
     var cards = Array.prototype.slice.call(paneles.validar.querySelectorAll('.ini'));
     if (cards.length < 2) return;
     var nav = document.createElement('nav'); nav.className = 'subtabs'; nav.setAttribute('role', 'tablist');
     cards[0].parentNode.insertBefore(nav, cards[0]);
+    var ultimaPrio = '';
     var botones = cards.map(function (card, i) {
       card.classList.add('abierta');
       var h = card.querySelector('h3');
       var nombre = (h.firstChild && h.firstChild.textContent ? h.firstChild.textContent : h.textContent).replace(/^\s*\d+\s*·\s*/, '').trim();
       var pend = card.querySelectorAll('table.pruebas tbody tr:not(.listo):not(.arreglo)').length;
-      var b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.textContent = nombre;
+      var pr = card.querySelector('.prio'), prio = pr ? pr.getAttribute('data-prio') : '';
+      if (prio && prio !== ultimaPrio) { var g = document.createElement('div'); g.className = 'grupo'; g.textContent = 'Prioridad ' + prio; nav.appendChild(g); ultimaPrio = prio; }
+      var b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'tab');
+      if (prio) { var d = document.createElement('span'); d.className = 'p prio-' + prio; b.appendChild(d); }
+      b.appendChild(document.createTextNode(nombre));
       var m = document.createElement('span'); m.className = pend ? 'n' : 'ok'; m.textContent = pend ? String(pend) : '✓'; b.appendChild(m);
       b.addEventListener('click', function () { mostrar(i); });
       nav.appendChild(b);
