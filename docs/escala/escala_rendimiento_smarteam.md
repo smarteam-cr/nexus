@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 8.9.0
+version: 8.9.1
 fecha: 2026-10-18
 estado: En revisión: cambia con el criterio de su responsable y con el feedback que el equipo manda desde Nexus; cada feedback lo decide un super admin
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -1635,6 +1635,8 @@ Términos que aparecen en la escala, la especificación o el manual, o que el eq
 
 ## Historial de versiones
 
+**8.9.1 (2026-10-18).** Las seis ediciones dicen cada nivel de cada dimensión con las palabras de su industria: en cada uno, al menos un criterio de la matriz va reescrito. Hasta esta versión, 244 niveles se leían enteros con el texto general —71 en Automotriz, 64 en Turismo, 47 en Banca, 44 en Inmobiliaria, 10 en Educación y 8 en Ecommerce y retail—, como Inicial de Seguimiento de cotizaciones y reservas en Turismo. Se reescriben 322 criterios: ninguno cambia lo que mide, sus marcas ni lo que requiere, y no entra ningún criterio propio. Cómo se escribe una edición lo dice. No cambia ningún criterio de la matriz ni su cálculo.
+
 **8.9.0 (2026-10-18).** Dos ediciones nuevas, con sus tres áreas enteras: Turismo y Automotriz. Turismo es para hoteles, operadores, agencias de viaje y empresas de experiencias que venden por reserva directa y por intermediarios, con temporadas; en Ventas sus dimensiones de producción son Oferta y tarifas, Priorización de consultas, Seguimiento de cotizaciones y reservas, y Reservas ganadas, perdidas y canceladas; en Marketing, Marca y reputación; y en Servicio, Consistencia de la experiencia, Priorización de viajeros, Acompañamiento del viajero y Autoservicio del viajero. Pide, entre otras cosas, que una reserva descuente el cupo en todos los canales a la vez, las mismas tarifas y condiciones en el sitio y en las OTAs, las fechas de corte de cada bloqueo de grupo, la razón de cada cancelación, los perfiles en los sitios de reseñas al día, lo que cuesta una reserva directa frente a la comisión, el cambio de turno registrado y la queja atendida antes de que el viajero se vaya. Automotriz es para el concesionario que vende vehículos nuevos y usados y atiende su posventa en el taller; en Ventas sus dimensiones de producción son Modelos y cotización, Priorización de interesados, Seguimiento de pruebas y cotizaciones, y Ventas ganadas y perdidas; y en Servicio, Consistencia del taller, Priorización de clientes del taller, Seguimiento del vehículo y Escalabilidad del taller. Pide, entre otras cosas, que cada prueba de manejo deje su siguiente paso, un proceso escrito para recibir el usado, que apartar un vehículo lo marque en el inventario, una sola lista de precios y bonos, la orden de trabajo con el presupuesto aprobado antes de reparar, el estado del vehículo avisado sin que el cliente llame, el recordatorio del mantenimiento y el aviso de cada llamado a revisión. En Automotriz, recordarle al dueño su mantenimiento es de Servicio, y ofrecerle cambiar de vehículo, de Ventas. No cambia ningún criterio de la matriz ni su cálculo.
 
 **8.8.0 (2026-10-09).** Limpieza de la revisión de la 8.7, para que el consultor ubique a cada empresa en un nivel que la empresa reconozca: no entra ni sale ningún criterio y ningún identificador cambia. Las 24 preguntas se reescriben para que pregunten lo que decide Funcional en su dimensión, con las palabras del cliente y para contestarse describiendo, no con sí o no. Las frases de Deficiente e Inicial y sus señales siguen una sola regla, que ahora también dice Cómo se evalúa cada dimensión: Deficiente es que lo que pide Funcional no existe; Inicial, que existe a medias: sin regularidad, sin escribir, fuera del sistema o dependiendo de una persona. Ya no castigan que no se use IA ni niegan lo que recién pide Eficiente, y Deficiente e Inicial dicen cosas distintas; como esos dos niveles se asignan por el que mejor calza, leyendo la frase y sus señales en conjunto y no por cumplir cada señal, las señales conservan su identificador aunque cambie su redacción. Lo que no todas las empresas tienen abre con una condición: los canales que la empresa eligió en su plan, y no los cuatro; el canal conversacional, si se atiende por él; la agencia, que ya no cuenta en contra si el equipo es dueño del calendario, del brief, de la aprobación y de los accesos; y lo que no siempre existe —un ERP, un comité de compra, formularios en el sitio, más de un canal escrito, más de un agente, que se pidan calificaciones, un producto que se usa de forma continua, que Marketing le pase leads a Ventas o que entre alguien nuevo al equipo— cuenta solo donde existe. Las palabras que deciden tienen valor: el pronóstico confiable cae dentro de ±10 % en la mayoría de los meses, un negocio estancado es el que pasó el plazo que el proceso define para su etapa, «todo negocio» es desde la puesta en marcha y los duplicados se revisan cada trimestre. Óptimo dice qué hace la IA, quién valida y qué se ve en el sistema. Los resultados y los costos de quedarse prometen solo lo que entrega su nivel, y los mensajes de riesgo se reescriben para decir qué le pasa al cliente: reportes inflados, mensajes repetidos o un equipo que trabaja con información vieja. La escala dice vendedor, negocio, caso, cliente ideal, tablero, nutrición, fuga, pronóstico, puntaje de leads, indicador de salud, respuestas guardadas, material de venta, traspaso y revisión del pipeline, y Tracción del Deal pasa a llamarse Tracción del Negocio. Servicio deja de pedir en Funcional lo que ha pagado el cliente, que Ventas pide en Eficiente; los clientes clave los define cada empresa en su documento de tipos de cliente, y los criterios que los nombran lo requieren. Cambia a qué perfiles aplican seis criterios: las alertas tempranas de fuga o de oportunidad de crecer (3.7.E1) y medir al equipo de Servicio por la retención (3.4.O3) pasan de cliente recurrente a relación continua; el acuerdo de Marketing con Ventas (2.4.E3) y dos señales de Ventas pasan a venta con equipo, y una señal de Tecnología de Ventas, a venta sin vendedor. Catorce criterios pasan a ser hábito —se confirman en la remedición—, nueve cambian cómo se verifican y unos veinte suman lo que requieren. La regla de asignación suma la calidad de los datos, dónde vive la información, la protección contra la suplantación y los avisos automáticos al cliente. El glosario suma, entre otras, cliente clave, caso, caso de éxito, ficha del cliente, autoservicio y CSE; las entradas en inglés de lo que la escala ya dice en español —deal, ICP, churn, dashboard, nurturing, forecast, lead scoring, health score, macros, asset, journey, handoff, pipeline review y test A/B— pasan a la palabra en español, y la de rep sale. Entra el feedback del equipo: los datos que viven en otro sistema sin conectar, la regla de quién mantiene los datos y la confianza del cliente en Banca. Lo que el equipo dice de la escala se manda como feedback desde Nexus y lo decide un super admin, como dice Cómo leer este documento. En las ediciones, la tienda solo física y las aseguradoras se miden con la escala general, e Inmobiliaria cubre también corredoras y alquileres, con lo de proyecto propio bajo condición; cada edición dice con sus palabras lo que cambió en la general. Cambia cómo se lee cada dimensión, y lo que piden los niveles solo se precisa o se acota.
@@ -1738,7 +1740,7 @@ Una edición se escribe por áreas, y un área que la edición no escribe se mid
 
 ## Cómo se escribe una edición
 
-Igual que la matriz, y solo lo que cambia. Abre con para quién es, su clave —que no cambia aunque la edición cambie de nombre—, su perfil habitual y desde qué número van sus criterios propios. Siguen la tabla de palabras y, después, cada área y cada dimensión que cambia. Un criterio reescrito lleva en la etiqueta solo su identificador, y conserva lo que requiere en la matriz; uno propio lleva la etiqueta completa, con lo que requiere si no se puede cumplir sin otro. Al final de cada dimensión van los criterios de la matriz que no aplican y los que se leen igual.
+Igual que la matriz, y solo lo que cambia. Abre con para quién es, su clave —que no cambia aunque la edición cambie de nombre—, su perfil habitual y desde qué número van sus criterios propios. Siguen la tabla de palabras y, después, cada área y cada dimensión que cambia. Un criterio reescrito lleva en la etiqueta solo su identificador, y conserva lo que requiere en la matriz; uno propio lleva la etiqueta completa, con lo que requiere si no se puede cumplir sin otro. Al final de cada dimensión van los criterios de la matriz que no aplican y los que se leen igual. Cada nivel de cada dimensión dice al menos un criterio con las palabras de la industria, reescrito o propio: si un nivel se lee entero con el texto general, la empresa de esa industria no se reconoce en él.
 
 ## Edición — Ecommerce y retail
 
@@ -1924,6 +1926,11 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 
 - Quienes llevan la tienda operan sobre la marcha, sin un rol ni responsabilidades claras. `[1.4.D1]`
 
+**Inicial.**
+
+- El líder revisa algunos números de la tienda —las ventas, los pedidos— en hojas de cálculo, cuando tiene tiempo. `[1.4.I1]`
+- Los reportes de cómo opera el equipo de la tienda —ventas y pedidos de cada canal— se arman a mano. `[1.4.I2]`
+
 **Funcional.** Cada persona tiene su rol por escrito y cada canal su meta, el líder sigue un tablero cada semana y en la revisión de ventas cada quien rinde cuentas.
 
 *Resultado:* Cada persona sabe qué parte de la tienda le toca, y el líder sabe cada semana qué canal va bien y cuál necesita ayuda, antes de que termine el mes.
@@ -1944,7 +1951,7 @@ Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y q
 
 - Las decisiones de la dirección usan números de fondo: cuánto deja cada cliente en el tiempo y cuánto margen deja cada canal y cada producto. `[1.4.O1]`
 
-*Se leen igual:* `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F5`, `1.4.E2`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
+*Se leen igual:* `1.4.D2`, `1.4.F1`, `1.4.F5`, `1.4.E2`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
 
 #### 1.5 Catálogo y oferta
 
@@ -2162,7 +2169,12 @@ Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y
 
 - Cada pieza —un correo, un anuncio, una publicación— pasa por una revisión de calidad y una aprobación antes de publicarse. `[2.1.E2]`
 
-*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I2`, `2.1.I3`, `2.1.F4`, `2.1.F5`, `2.1.F6`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
+**Óptimo.**
+
+- La IA hace las tareas repetitivas de cada promoción —como preparar el brief, adaptar cada pieza a su canal, sea el correo, la pauta o las redes, o cargar la promoción en el calendario de campañas—, el responsable de la campaña valida lo que hizo, y en el sistema se ve qué tareas hizo la IA. `[2.1.O1]`
+- El sistema detecta por sí mismo cuando una promoción se sale del proceso —un paso que se saltó, una fecha que venció, como la de una temporada— y se lo avisa al líder y al responsable; el líder decide el ajuste, y cada aviso queda en el sistema. `[2.1.O4]`
+
+*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I2`, `2.1.I3`, `2.1.F4`, `2.1.F5`, `2.1.F6`, `2.1.E4`, `2.1.O5`.
 
 #### 2.2 Tecnología y Automatización
 
@@ -2580,6 +2592,11 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 
 - Es imposible reconstruir qué pasó con un comprador: qué pidió, qué le llegó y qué reclamó. `[3.3.D2]`
 
+**Inicial.**
+
+- Los casos de posventa están en un solo sistema, pero la ficha del comprador sale incompleta: sus pedidos y lo que compró hay que buscarlos en la plataforma de la tienda. `[3.3.I1]`
+- Los números de casos —cuántos llegan y de qué tipo: consultas, cambios, devoluciones— se arman a mano, fuera del sistema. `[3.3.I2]`
+
 **Funcional.** La ficha y la historia de cada comprador están a la vista, y cada caso queda ligado a su pedido, con su tipo y su motivo.
 
 *Resultado:* El líder sabe qué tipo de casos llegan y cuántos, y cualquiera del equipo ve en segundos la historia del comprador y en qué va el pedido del que habla.
@@ -2608,7 +2625,7 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 - Un modelo predictivo de salud calcula para cada cliente si puede dejar de comprar y si lo que compra le está sirviendo, a partir de su experiencia con la tienda —entregas, casos y devoluciones— y de cómo viene comprando; el puntaje se ve en su ficha y quien responde por cada cliente revisa a los que el modelo marca. `[3.3.O1]`
 - Modelos con IA predicen lo que viene —por ejemplo, cuántos casos traerá la próxima promoción y cuánta gente hará falta para atenderlos— y proponen qué hacer; lo que predicen se ve en los tableros de la posventa y el líder decide con eso. `[3.3.O3]`
 
-*Se leen igual:* `3.3.D1`, `3.3.I1`, `3.3.I2`, `3.3.F6`, `3.3.O2`, `3.3.O4`.
+*Se leen igual:* `3.3.D1`, `3.3.F6`, `3.3.O2`, `3.3.O4`.
 
 #### 3.4 Equipo y Gobierno
 
@@ -2623,6 +2640,9 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 - Nadie tiene claro qué le toca: entre las consultas, los cambios, las devoluciones y los reclamos, las tareas se pisan o quedan sin dueño. `[3.4.D1]`
 
 **Inicial.** Cada quien sabe a grandes rasgos qué le toca y el líder mira algunos números de la posventa, pero sin una cadencia fija.
+
+- Se siguen algunos números de la posventa —casos abiertos, cambios, devoluciones—, pero sin un tablero ni una cadencia fija. `[3.4.I1]`
+- El líder mira los números de la posventa de vez en cuando, sobre todo cuando algo sale mal, como un pedido que no llegó o un comprador que reclama. `[3.4.I2]`
 
 **Funcional.**
 
@@ -2645,7 +2665,7 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 - El equipo de posventa se mide por cuántos suscriptores retiene y cuánto crecen sus compras, no solo por los casos que cierra. `[3.4.O3]`
 - El sistema calcula cuánto cuesta atender a cada tipo de cliente —sus consultas, sus cambios, sus devoluciones— frente a lo que deja, y el líder usa ese dato para decidir cómo atenderlo. `[3.4.O4]`
 
-*Se leen igual:* `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.O1`, `3.4.O2`.
+*Se leen igual:* `3.4.D2`, `3.4.F1`, `3.4.F3`, `3.4.O1`, `3.4.O2`.
 
 #### 3.5 Consistencia de Atención
 
@@ -2678,7 +2698,11 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 
 - Las respuestas suenan a la tienda —su tono y su voz—, no al estilo de cada persona. `[3.5.E2]`
 
-*Se leen igual:* `3.5.F3`, `3.5.E1`, `3.5.E3`, `3.5.O1`.
+**Óptimo.**
+
+- Lo que la IA responde o escribe sola a los compradores —el estado de un pedido, un cambio, un reembolso— sigue la guía de tono y estilo de la tienda; el equipo revisa una muestra de sus respuestas y corrige a la IA cuando se sale de la guía, y cada respuesta queda en el sistema. `[3.5.O1]`
+
+*Se leen igual:* `3.5.F3`, `3.5.E1`, `3.5.E3`.
 
 #### 3.6 Priorización de Clientes
 
@@ -2691,6 +2715,10 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 **Deficiente.**
 
 - Los casos se atienden por orden de llegada o como le parezca a quien atiende, sin mirar qué pedido está en juego ni quién es el comprador. `[3.6.D1]`
+
+**Inicial.**
+
+- Se intenta atender primero lo urgente, pero los casos no tienen una prioridad asignada: cada agente decide a ojo si va antes un pedido que no llegó o una consulta de talla, o se adelanta el comprador que más insiste. `[3.6.I1]`
 
 **Funcional.**
 
@@ -2716,8 +2744,6 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 
 *No aplican:* `3.6.E1`.
 
-*Se leen igual:* `3.6.I1`.
-
 #### 3.7 Seguimiento del pedido
 
 ¿Cómo te enteras de que un pedido viene con problemas: un atraso, un producto dañado, un comprador molesto?
@@ -2732,6 +2758,8 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 - La posventa nunca le escribe al comprador por iniciativa propia: siempre espera a que él escriba. `[3.7.D2]`
 
 **Inicial.** A veces alguien avisa de un atraso o llama a un comprador molesto, pero depende de quién lo note.
+
+- Cuando un comprador tiene problemas repetidos con sus pedidos, a veces alguien lo contacta, pero depende de que lo note. `[3.7.I1]`
 
 **Funcional.** Los atrasos, los problemas que se repiten y los reclamos se detectan, aunque sea a mano, y los clientes clave reciben contacto antes de sus fechas críticas.
 
@@ -2762,8 +2790,6 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 
 *No aplican:* `3.7.E2`, `3.7.E3`, `3.7.O1`.
 
-*Se leen igual:* `3.7.I1`.
-
 #### 3.8 Autoservicio
 
 ¿Qué pasa con las preguntas que tus compradores hacen una y otra vez, como dónde está su pedido o cuánto cuesta el envío?
@@ -2778,6 +2804,9 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 - Hasta las preguntas que más se repiten —dónde está mi pedido, cuánto cuesta el envío, cómo pido un cambio— se responden a mano, una por una, cada vez que llegan. `[3.8.D2]`
 
 **Inicial.** Hay preguntas frecuentes sueltas o un chatbot de menú, pero lo que más se consulta —dónde está mi pedido— todavía necesita a una persona.
+
+- Hay un chatbot de menú fijo, pero no responde las preguntas que más se repiten, como dónde está mi pedido o cuánto cuesta el envío. `[3.8.I1]`
+- Hay algunas preguntas frecuentes publicadas, pero sueltas: no cubren lo que más preguntan los compradores, que se sigue respondiendo a mano. `[3.8.I2]`
 
 **Funcional.** El comprador ve solo en qué va su pedido, y las preguntas más frecuentes tienen respuesta publicada.
 
@@ -2802,7 +2831,7 @@ Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa desp
 - Los picos de demanda —la temporada alta, una promoción grande— los absorben la IA y el autoservicio: el equipo no crece cuando crecen los pedidos, y el líder ve en los tableros del área qué parte de los casos resolvieron la IA y el autoservicio y qué pasó a alguien del equipo. `[3.8.O2]`
 - La IA aplica lo que aprende de los casos a las respuestas guardadas, a la atención de cada tipo de cliente y a los avisos al comprador, y el líder valida cada cambio; en el sistema queda qué cambió y de dónde salió. `[3.8.O3]`
 
-*Se leen igual:* `3.8.I1`, `3.8.I2`, `3.8.O4`.
+*Se leen igual:* `3.8.O4`.
 
 ## Edición — Banca y servicios financieros
 
@@ -2854,6 +2883,20 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 *Costo de quedarse:* Si se va un ejecutivo, se lleva a sus prospectos y el estado de cada solicitud: el cliente tiene que empezar de nuevo, y muchos prefieren empezar en otra entidad.
 
+**Deficiente.**
+
+- No hay nada escrito sobre el recorrido de la solicitud ni sus etapas: cada ejecutivo usa su criterio. `[1.1.D1]`
+- Los prospectos se reparten a ojo, o se los queda el ejecutivo que los ve primero: no hay una regla que diga a quién le toca cada uno. `[1.1.D2]`
+- No hay una reunión de seguimiento de solicitudes: se habla de ellas solo cuando una se complica. `[1.1.D3]`
+- Si se van dos ejecutivos clave, nadie sabe en qué quedó cada solicitud. `[1.1.D4]`
+
+**Inicial.**
+
+- Hay etapas de la solicitud de palabra o en un borrador, pero cada ejecutivo las interpreta distinto. `[1.1.I1]`
+- Hay una cadencia de contacto sugerida con los prospectos, pero cada ejecutivo la cumple cuando puede o cuando se acuerda. `[1.1.I2]`
+- La reunión de seguimiento de solicitudes se hace cuando hay tiempo, sin una fecha fija ni un orden para repasarlas. `[1.1.I3]`
+- Que una solicitud quede bien registrada depende de la voluntad de cada ejecutivo, no de una rutina del equipo. `[1.1.I4]`
+
 **Funcional.** Todo el equipo sigue el mismo recorrido escrito de la solicitud en el CRM, con un plazo de respuesta en cada etapa comercial, una cadencia de seguimiento y una revisión fija de las solicitudes.
 
 *Resultado:* Si rota un ejecutivo, el siguiente sabe en qué va cada solicitud, porque todo el equipo las trabaja igual: avanzan con los mismos criterios, cada etapa en manos del equipo comercial tiene su plazo de respuesta y se les da seguimiento con la cadencia acordada.
@@ -2869,7 +2912,13 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 - Hay una metodología comercial formal en uso —SPIN, BANT o una de asesoría equivalente— que el ejecutivo sigue para conocer la necesidad del cliente antes de ofrecerle un producto. `[1.1.E1]`
 - Existen guías de descubrimiento de necesidades, precalificación y manejo de objeciones —tasa, requisitos, plazo— que el equipo usa. `[1.1.E2]`
 
-*Se leen igual:* `1.1.D1`, `1.1.D2`, `1.1.D3`, `1.1.D4`, `1.1.I1`, `1.1.I2`, `1.1.I3`, `1.1.I4`, `1.1.F4`, `1.1.F5`, `1.1.F6`, `1.1.E3`, `1.1.O1`, `1.1.O2`, `1.1.O3`.
+**Óptimo.**
+
+- La IA detecta las solicitudes que se salen del recorrido, las marca en el CRM y se las señala al líder y a quien corresponde; el líder decide qué se corrige. `[1.1.O1]`
+- La mayoría de las solicitudes siguen el recorrido como está escrito sin que nadie lo revise a mano, y el CRM lo muestra. `[1.1.O2]`
+- Las técnicas comerciales nuevas se prueban en pilotos de ciclo corto —por ejemplo, en una sucursal o con un producto— antes de sumarlas al proceso. `[1.1.O3]`
+
+*Se leen igual:* `1.1.F4`, `1.1.F5`, `1.1.F6`, `1.1.E3`.
 
 #### 1.2 Tecnología y Automatización
 
@@ -2878,6 +2927,11 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 *Descripción:* Mide cuánto del trabajo repetitivo hace el sistema —repartir las solicitudes, registrar lo que entra por los canales digitales, avisarle al cliente en qué va su solicitud—, si el CRM está conectado con el core bancario y cómo usa el equipo la IA.
 
 *Costo de quedarse:* Tus ejecutivos pierden horas en tareas que el sistema podría hacer: las solicitudes esperan a que alguien decida a quién le tocan, las que empiezan en la web se enfrían sin que nadie llame al cliente y el cliente tiene que llamar para saber en qué va la suya.
+
+**Deficiente.**
+
+- Los prospectos viven en listas o agendas personales de cada ejecutivo. `[1.2.D1]`
+- No hay un CRM donde montar una automatización: los prospectos y las solicitudes se pasan por correo, por chat o de palabra, y nadie recibe avisos del sistema. `[1.2.D2]`
 
 **Inicial.** Hay un CRM, pero las solicitudes se cargan y se reparten a mano, y el cliente tiene que llamar para saber en qué va la suya.
 
@@ -2910,7 +2964,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 *No aplican:* `1.2.F8`.
 
-*Se leen igual:* `1.2.D1`, `1.2.D2`, `1.2.I1`, `1.2.F3`, `1.2.F4`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O3`.
+*Se leen igual:* `1.2.I1`, `1.2.F3`, `1.2.F4`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O3`.
 
 #### 1.3 Datos
 
@@ -2924,6 +2978,12 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 - No hay un registro de los prospectos: cada vez que se necesita la lista de quiénes pidieron un producto, hay que armarla a mano con hojas de cálculo, la libreta de cada ejecutivo y lo que guarda cada sistema. `[1.3.D3]`
 - Las solicitudes que se concretan no quedan registradas en el área comercial con su producto, su monto y su fecha: lo que colocó cada ejecutivo, cada sucursal o cada canal se arma a mano con los reportes del core bancario. `[1.3.D4]`
+
+**Inicial.**
+
+- Los datos de los prospectos y las solicitudes se completan a mano de vez en cuando, o cuando alguien se acuerda, y los vacíos vuelven a aparecer. `[1.3.I1]`
+- En las solicitudes que se crean hoy, el canal por donde llegó cada una —sucursal, web, app o referido— se anota a mano, cuando alguien se acuerda, y en parte de ellas queda vacío. `[1.3.I2]`
+- Las solicitudes que se crean hoy se registran, pero a algunas les falta la fecha esperada de desembolso o de apertura, el monto o el ejecutivo responsable. `[1.3.I3]`
 
 **Funcional.** El reporte de solicitudes en curso sale del sistema, sin armarlo a mano, y la autorización de cada cliente para consultar su historial está registrada.
 
@@ -2944,9 +3004,17 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 - Hay una proyección de colocación que se actualiza cada semana o cada quince días, y en al menos cinco de los últimos seis meses lo colocado quedó dentro de ±10% de la proyección. `[1.3.E1]`
 - La ficha de cada cliente reúne lo comercial con lo que viene del core bancario —sus productos, sus saldos y cómo ha pagado— y con su historial de conversaciones: la vista 360° empieza a tomar forma. `[1.3.E3]`
 
+**Óptimo.**
+
+- Cada prospecto, cliente y solicitud se asocia solo, al entrar, con lo que ya había de esa persona o pyme; la IA resuelve los dudosos y una persona valida solo las excepciones que el CRM le marca. `[1.3.O1]`
+- Un modelo de IA calcula la proyección de colocación con la historia de las solicitudes; se ve en el sistema y el líder la revisa antes de comprometerla. `[1.3.O2]`
+- La vista 360° está operativa: la ficha de cada cliente reúne lo comercial, sus productos y saldos del core bancario, sus casos de servicio y sus conversaciones. `[1.3.O3]`
+- El área comercial se apoya en el almacén central de datos de la entidad para su proyección de colocación, cruzando lo comercial con el core bancario y el servicio. `[1.3.O4]`
+- Los datos de los prospectos y las solicitudes se mantienen al día sin depender de que alguien se acuerde de actualizarlos: se capturan y se corrigen solos, y las personas solo validan las excepciones que el CRM les marca. `[1.3.O5]`
+
 *No aplican:* `1.3.F8`, `1.3.E4`.
 
-*Se leen igual:* `1.3.D1`, `1.3.D2`, `1.3.I1`, `1.3.I2`, `1.3.I3`, `1.3.F2`, `1.3.E2`, `1.3.O1`, `1.3.O2`, `1.3.O3`, `1.3.O4`, `1.3.O5`.
+*Se leen igual:* `1.3.D1`, `1.3.D2`, `1.3.F2`, `1.3.E2`.
 
 #### 1.4 Equipo y Gobierno
 
@@ -2955,6 +3023,16 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 *Descripción:* Mide si cada ejecutivo tiene un rol y una meta por escrito, si cada sucursal y cada canal digital tienen la suya, y si el líder sigue los números y pide cuentas con datos.
 
 *Costo de quedarse:* El líder se entera al cierre del mes de que la meta no se cumplió: no vio antes qué sucursal o qué ejecutivo se quedó atrás, ni por qué.
+
+**Deficiente.**
+
+- Cada ejecutivo trabaja sobre la marcha, sin un rol ni responsabilidades claras. `[1.4.D1]`
+- El líder apaga incendios —una solicitud trabada, una sucursal que no llega a la meta—: no hay métricas ni rendición de cuentas. `[1.4.D2]`
+
+**Inicial.**
+
+- El líder revisa algunos números de colocación en hojas de cálculo, cuando tiene tiempo. `[1.4.I1]`
+- Los reportes de cómo operan los ejecutivos y las sucursales se arman a mano. `[1.4.I2]`
 
 **Funcional.**
 
@@ -2976,7 +3054,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 - Las decisiones de la dirección usan números de fondo: cuánto margen deja cada producto y cada canal, cuánto deja cada cliente en el tiempo y cuánto aporta cada ejecutivo. `[1.4.O1]`
 
-*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
+*Se leen igual:* `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
 
 #### 1.5 Oferta y condiciones
 
@@ -2991,6 +3069,9 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 - Nadie puede decir con claridad a quién va dirigido cada producto, y las condiciones que escucha el cliente cambian según quién lo atienda o por dónde pregunte. `[1.5.D1]`
 
 **Inicial.** Hay fichas de producto, pero no todos las usan: las condiciones todavía varían entre ejecutivos y entre canales.
+
+- El líder sabe quién es el cliente objetivo de cada producto y hay un mensaje común, pero solo de palabra o en un borrador: cada ejecutivo los repite a su manera. `[1.5.I1]`
+- Hay un formato de oferta del producto, pero cada ejecutivo lo cambia o lo usa a su manera. `[1.5.I2]`
 
 **Funcional.** El cliente objetivo de cada producto está escrito, y la oferta se dice igual en todos los canales.
 
@@ -3014,7 +3095,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 - La IA revisa en tiempo real, contra la oferta vigente de cada producto —su mensaje, su tasa, su plazo, sus costos y sus requisitos—, lo que se les dice a los prospectos, lo escriba ella o el equipo; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
 
-*Se leen igual:* `1.5.D2`, `1.5.I1`, `1.5.I2`, `1.5.F3`, `1.5.E2`.
+*Se leen igual:* `1.5.D2`, `1.5.F3`, `1.5.E2`.
 
 #### 1.6 Precalificación y priorización
 
@@ -3027,6 +3108,11 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 **Deficiente.** Se atiende a los prospectos por orden de llegada, y se arma el expediente antes de saber si califican.
 
 - Se arma el expediente completo antes de saber si el cliente califica. `[1.6.D201 · evaluado]`
+
+**Inicial.**
+
+- Los prospectos se separan en alguna lista o con una etiqueta, pero cada ejecutivo lo hace con su propio criterio. `[1.6.I1]`
+- El líder sabe quién es el cliente objetivo de cada producto, pero el CRM no tiene los campos para separar los prospectos que encajan. `[1.6.I2]`
 
 **Funcional.** Los prospectos se separan por los rasgos del cliente objetivo de cada producto y hay una definición escrita de quién precalifica que el equipo aplica antes de armar el expediente.
 
@@ -3052,7 +3138,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 - Un modelo de IA calcula para cada cliente qué producto le conviene y cuándo ofrecérselo, con su comportamiento y con lo que saben Servicio y Marketing de él; la sugerencia se ve en el CRM, y el ejecutivo la valida antes de ofrecerla o, en los canales digitales, se ofrece dentro de los límites que fijó la entidad. `[1.6.O201 · comprobable]`
 
-*Se leen igual:* `1.6.D1`, `1.6.I1`, `1.6.I2`, `1.6.E2`, `1.6.E3`, `1.6.O1`, `1.6.O2`, `1.6.O3`, `1.6.O4`.
+*Se leen igual:* `1.6.D1`, `1.6.E2`, `1.6.E3`, `1.6.O1`, `1.6.O2`, `1.6.O3`, `1.6.O4`.
 
 #### 1.7 Avance de la solicitud
 
@@ -3065,6 +3151,13 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 **Deficiente.** El ejecutivo está solo con sus solicitudes, y las que se abandonan en los canales digitales no las ve nadie.
 
 - Las solicitudes que el cliente deja a medias en la web o en la app no las retoma nadie. `[1.7.D201 · comprobable · venta sin vendedor]`
+
+**Inicial.**
+
+- Cuando una solicitud se detiene —esperando un documento, una firma o una respuesta—, cada ejecutivo decide si insiste y cómo: no hay un paso acordado. `[1.7.I1]`
+- El líder solo interviene cuando el ejecutivo le pide ayuda o cuando la solicitud ya está casi perdida. `[1.7.I2]`
+- Cada ejecutivo tiene su propio material para explicar los productos y lo arma a su manera. `[1.7.I3]`
+- Todos los intentos de hacer avanzar una solicitud se hacen por el mismo canal, por ejemplo solo por llamada. `[1.7.I4]`
 
 **Funcional.** Ninguna solicitud se enfría en silencio: se detecta a tiempo y hay un paso acordado para retomarla.
 
@@ -3090,7 +3183,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 - La IA detecta cuáles de las solicitudes que más importan se están trabando antes de que venza el plazo de su etapa y propone qué hacer —un recordatorio al cliente, una alerta a la gerencia o un aviso al ejecutivo—; el líder valida, y todo queda en el CRM. `[1.7.O1]`
 - La IA decide el canal y el momento de cada seguimiento, cliente por cliente y según cómo responde, dentro de los límites que fijó la entidad; el equipo revisa los resultados, y lo que decide la IA queda registrado en el CRM. `[1.7.O2]`
 
-*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.D4`, `1.7.I1`, `1.7.I2`, `1.7.I3`, `1.7.I4`, `1.7.F3`, `1.7.F4`, `1.7.F5`, `1.7.E3`.
+*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.D4`, `1.7.F3`, `1.7.F4`, `1.7.F5`, `1.7.E3`.
 
 #### 1.8 Aprobadas, rechazadas y desistidas
 
@@ -3102,7 +3195,12 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 **Deficiente.** Nadie mira por qué una solicitud no se concreta.
 
+- Cuando una solicitud no se concreta, no hay una razón en la que el equipo coincida: cada ejecutivo da su versión, de memoria. `[1.8.D1]`
+- Las solicitudes que no se concretan —rechazadas, desistidas o abandonadas— se cierran sin anotar la razón. `[1.8.D2]`
+
 **Inicial.** De las solicitudes que no se concretan se habla de vez en cuando, y la razón se anota a veces, a criterio de cada ejecutivo.
+
+- Por qué no se concretó una solicitud se anota a veces y en texto libre, a criterio de cada ejecutivo, así que no se puede sumar. `[1.8.I1]`
 
 **Funcional.** Cada solicitud que no se concreta queda con su razón, elegida de una lista fija que separa lo que rechazó la entidad de lo que dejó el cliente, y el líder saca del sistema el reporte del trimestre.
 
@@ -3124,7 +3222,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 - La IA detecta en qué etapa y por qué se caen las solicitudes y propone el cambio, que se ve en el CRM; el líder decide si se aplica. `[1.8.O201 · comprobable]`
 
-*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`, `1.8.O4`.
+*Se leen igual:* `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`, `1.8.O4`.
 
 ### Área 2 — Marketing
 
@@ -3148,6 +3246,12 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 *Costo de quedarse:* Cada campaña depende de quien la arma: si esa persona falta, la del producto se atrasa o sale sin la revisión de cumplimiento normativo, y una pieza sin revisar puede costarte una sanción.
 
+**Deficiente.**
+
+- No existe calendario editorial; las campañas de los productos se improvisan. `[2.1.D1]`
+- El equipo de marketing no se reúne: cada quien se entera de lo que hacen los demás —la campaña de un producto, una publicación— cuando ya salió. `[2.1.D2]`
+- Una agencia arma y publica las campañas de los productos, y nadie en la entidad decide qué sale ni lo revisa. `[2.1.D3]`
+
 **Inicial.** Hay un calendario y algunas reuniones, pero se cumplen cuando se puede, las campañas dependen de quien las arma y cumplimiento normativo revisa a última hora.
 
 - Cumplimiento normativo revisa las piezas sin un paso acordado en el proceso: le llegan a última hora, y la campaña se atrasa esperando su visto bueno o sale sin él. `[2.1.I201 · declarado]`
@@ -3164,7 +3268,13 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 - Cada pieza pasa por una revisión de calidad y una aprobación antes de publicarse, aparte de la revisión de cumplimiento normativo. `[2.1.E2]`
 
-*Se leen igual:* `2.1.D1`, `2.1.D2`, `2.1.D3`, `2.1.I1`, `2.1.I2`, `2.1.I3`, `2.1.F1`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F5`, `2.1.F6`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
+**Óptimo.**
+
+- La IA hace las tareas repetitivas del proceso de campaña de un producto —como preparar el brief, adaptar cada pieza a su canal, la app incluida, o cargar la campaña en el calendario—, el responsable de la campaña valida lo que hizo, y en el sistema se ve qué tareas hizo la IA. `[2.1.O1]`
+- El sistema detecta por sí mismo cuando la campaña de un producto se sale del proceso —un paso que se saltó, una fecha que venció— y se lo avisa al líder y al responsable; el líder decide el ajuste, y cada aviso queda en el sistema. `[2.1.O4]`
+- El proceso de campaña se cumple sin que nadie lo vigile a mano: en el sistema se ve que la campaña de cada producto siguió sus pasos. `[2.1.O5]`
+
+*Se leen igual:* `2.1.I1`, `2.1.I2`, `2.1.I3`, `2.1.F1`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F5`, `2.1.F6`, `2.1.E4`.
 
 #### 2.2 Tecnología y Automatización
 
@@ -3173,6 +3283,12 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 *Descripción:* Mide si las herramientas que paga la entidad se usan, si quien pide información de un producto llega solo al sistema y cuánto trabajo repetitivo hacen las automatizaciones y la IA.
 
 *Costo de quedarse:* Quien pide información de un crédito en tu sitio o por mensaje espera a que alguien lo pase al sistema y le conteste, o se pierde, y parte de las herramientas que pagas no se usa.
+
+**Deficiente.**
+
+- No hay un sistema donde registrar a los prospectos: se llevan en hojas de cálculo o en el correo. `[2.2.D1]`
+- Lo que llega por el sitio o por mensajes —un pedido de información de un producto, una consulta— cae en el correo o el teléfono de alguien, y no queda registrado en ningún lado. `[2.2.D2]`
+- Lo que entra por formularios —también los de cada producto— o por mensajes no recibe ninguna respuesta ni aviso automático: todo se hace a mano. `[2.2.D3]`
 
 **Inicial.**
 
@@ -3197,7 +3313,7 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 - Si la entidad atiende por un canal conversacional, agentes de IA responden lo que generan las campañas y mantienen la conversación con quien todavía no está listo para contratar el producto o hablar con un ejecutivo; lo que no pueden resolver pasa a una persona con la conversación completa, y en el sistema queda cada conversación que atendió la IA. `[2.2.O2]`
 - Lo que se calcula en el almacén central de datos de la entidad vuelve a las herramientas de marketing sin que nadie lo cargue y se ve en la ficha de cada contacto: la segmentación usa, por ejemplo, la rentabilidad real de cada cliente, calculada afuera. `[2.2.O3]`
 
-*Se leen igual:* `2.2.D1`, `2.2.D2`, `2.2.D3`, `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F4`, `2.2.F5`, `2.2.F9`, `2.2.E1`, `2.2.E2`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`.
+*Se leen igual:* `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F4`, `2.2.F5`, `2.2.F9`, `2.2.E1`, `2.2.E2`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`.
 
 #### 2.3 Datos
 
@@ -3206,6 +3322,16 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 *Descripción:* Mide si los datos de marketing son confiables: de dónde viene cada prospecto, en qué etapa está, si los reportes salen del sistema sin rehacerlos y si queda registrado quién aceptó recibir ofertas.
 
 *Costo de quedarse:* No sabes de dónde viene cada prospecto ni cuántos llegan a una solicitud, cada reporte hay que rehacerlo a mano antes de creerle, y no tienes registrado quién te dio permiso para escribirle ofertas: te expones a una sanción.
+
+**Deficiente.**
+
+- No se registra de dónde llegó cada prospecto: nadie sabe si vino por el sitio, una feria, la sucursal o un referido. `[2.3.D1]`
+- No hay reportes de marketing: cuando la gerencia pide un número, hay que buscarlo en correos y hojas sueltas. `[2.3.D2]`
+
+**Inicial.**
+
+- No hay una regla de cuándo se limpian los datos: se corrigen a mano cuando alguien nota un problema, y a muchos contactos les faltan los datos que describen al cliente objetivo de cada producto. `[2.3.I1]`
+- Hay reportes, pero se arman a mano en una hoja cada vez, y a una parte de los prospectos le falta el origen. `[2.3.I2]`
 
 **Funcional.**
 
@@ -3221,13 +3347,17 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 *Resultado:* Marketing puede demostrar qué canal y qué contenido contribuyeron a cada producto colocado, no solo cuál trajo el primer clic.
 
+- Los datos de cada contacto se completan solos con servicios de terceros —por ejemplo, la actividad y el tamaño de una pyme—, más allá de lo que la persona escribió. `[2.3.E1]`
+- Los duplicados —la misma persona como cliente y como prospecto, o con dos correos— se detectan y se unen solos, con reglas que definió el equipo o con la unión automática que trae el sistema. `[2.3.E3]`
+- Lo que alguien hizo antes de dejar sus datos —las páginas de productos que vio, la simulación que hizo— queda en su ficha cuando se identifica. `[2.3.E4]`
+
 **Óptimo.**
 
 *Resultado:* La atribución toma en cuenta todo lo que pasa en la entidad, no solo lo que ve Marketing, y los datos se mantienen confiables sin corregirlos a mano: el equipo solo valida las excepciones.
 
 - Marketing se apoya en el almacén central de datos de la entidad, donde se junta la información de todas las herramientas, y sus reportes de atribución salen de esa vista completa. `[2.3.O1]`
 
-*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F6`, `2.3.E1`, `2.3.E2`, `2.3.E3`, `2.3.E4`, `2.3.O3`, `2.3.O4`, `2.3.O5`.
+*Se leen igual:* `2.3.F6`, `2.3.E2`, `2.3.O3`, `2.3.O4`, `2.3.O5`.
 
 #### 2.4 Equipo y Gobierno
 
@@ -3236,6 +3366,12 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 *Descripción:* Mide si cada persona sabe qué le toca, si el equipo tiene metas y si las decisiones —como qué producto promover— y la rendición de cuentas se apoyan en números del sistema.
 
 *Costo de quedarse:* Se promueve el producto del área que más presiona, no el que más conviene, y nadie responde por una meta: el equipo no sabe qué se espera de él.
+
+**Deficiente.**
+
+- Nadie tiene el marketing de los productos como responsabilidad propia: se hace en los ratos libres de quien pueda. `[2.4.D1]`
+- Qué producto promover y cómo hacerlo se decide sobre la marcha, sin metas ni números. `[2.4.D2]`
+- Nadie revisa los resultados de marketing: ni el equipo ni la gerencia. `[2.4.D3]`
 
 **Inicial.**
 
@@ -3259,7 +3395,7 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 - Las decisiones se toman con lo que deja cada canal a lo largo del tiempo —la rentabilidad de los clientes que trae— frente a lo que cuesta. `[2.4.O4]`
 
-*Se leen igual:* `2.4.D1`, `2.4.D2`, `2.4.D3`, `2.4.I2`, `2.4.F1`, `2.4.F3`, `2.4.F4`, `2.4.F5`, `2.4.F6`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
+*Se leen igual:* `2.4.I2`, `2.4.F1`, `2.4.F3`, `2.4.F4`, `2.4.F5`, `2.4.F6`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
 
 #### 2.5 Marca y confianza
 
@@ -3268,6 +3404,18 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 *Descripción:* Mide si la marca se ve y suena igual en todo lo que sale, si está escrito a quién le habla, si el sitio aparece en buscadores y si el cliente puede confiar: ve el costo de cada producto y sabe reconocer un fraude que imita a la entidad.
 
 *Costo de quedarse:* Cada pieza se ve y suena distinta a la anterior, tus clientes no distinguen un mensaje tuyo de un fraude que te imita, y un anuncio que esconde el costo te trae reclamos y una sanción.
+
+**Deficiente.**
+
+- No hay una guía de marca: ni logo, colores y tipografía definidos, ni una forma de escribir acordada, así que cada producto se anuncia a su manera. `[2.5.D1]`
+- No está escrito a quién le habla la entidad: no hay buyer personas. `[2.5.D2]`
+- El sitio no está preparado para buscadores: sus páginas —también las de cada producto— no tienen título ni descripción, o no hay sitio. `[2.5.D3]`
+
+**Inicial.**
+
+- Hay logo, colores y plantillas, pero el buyer persona es uno solo y tan general que sirve igual para el asalariado que para la pyme. `[2.5.I1]`
+- Solo algunas páginas del sitio —por ejemplo, las de algunos productos— tienen título y descripción, o el sitio carga mal en el celular o tiene enlaces rotos. `[2.5.I2]`
+- Se publica contenido propio —de educación financiera, de seguridad o guías de los productos— de vez en cuando, cuando alguien tiene tiempo, sin una frecuencia fija. `[2.5.I3]`
 
 **Funcional.** La marca, la voz y los buyer personas están escritos y se usan, el sitio cumple lo básico para buscadores y se publica contenido propio cada mes; cada anuncio muestra el costo y el cliente sabe reconocer un fraude que imita a la entidad.
 
@@ -3290,7 +3438,7 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 - Hay buyer personas para grupos muy chicos de clientes —o, en la banca de empresas, para cada cuenta importante—, no solo para los segmentos grandes. `[2.5.O1]`
 
-*Se leen igual:* `2.5.D1`, `2.5.D2`, `2.5.D3`, `2.5.I1`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F4`, `2.5.E3`, `2.5.E4`, `2.5.O2`.
+*Se leen igual:* `2.5.F1`, `2.5.F2`, `2.5.F4`, `2.5.E3`, `2.5.E4`, `2.5.O2`.
 
 #### 2.6 Segmentación
 
@@ -3299,6 +3447,11 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 *Descripción:* Mide si cada segmento recibe campañas del producto que le sirve, o si todos reciben la misma oferta.
 
 *Costo de quedarse:* Le ofreces la tarjeta a quien ya la tiene y el crédito de pyme a un asalariado: gastas en campañas que nadie aprovecha y cansas a tus clientes.
+
+**Deficiente.**
+
+- No hay segmentos: las campañas de cada producto salen a toda la base con el mismo mensaje. `[2.6.D1]`
+- Los correos son iguales para todos, sea una persona, una pyme o un cliente de planilla: a lo sumo cambia el nombre en el saludo. `[2.6.D2]`
 
 **Inicial.** La base se separa por datos sueltos, como la zona, el mensaje casi no cambia de un grupo a otro y las campañas le ofrecen un producto a quien ya lo tiene.
 
@@ -3319,7 +3472,11 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 - Hay un puntaje de prospectos por reglas —distinto del puntaje de crédito—: un modelo que suma puntos por varios datos de cada persona, como su perfil o lo que hizo, y la clasifica al pasar un umbral —como prospecto listo para pasar a un ejecutivo, donde la venta pasa por uno—, y ese puntaje dispara las secuencias de nutrición. No es la clasificación de Funcional, que responde al valor de una propiedad, sin modelo de puntaje detrás. `[2.6.E3]`
 - La segmentación usa datos de comportamiento —qué abrió, qué visitó, cómo usa sus productos—, no solo lo que la persona declaró. `[2.6.E4]`
 
-*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.I2`, `2.6.F3`, `2.6.E1`, `2.6.E2`, `2.6.O1`, `2.6.O3`.
+**Óptimo.**
+
+- La IA predice quién va a contratar un producto y quién va a perder interés en los mensajes, y arma los segmentos con eso; el equipo revisa los segmentos antes de usarlos en una campaña, y en la ficha de cada persona se ve su predicción. `[2.6.O1]`
+
+*Se leen igual:* `2.6.I1`, `2.6.I2`, `2.6.F3`, `2.6.E1`, `2.6.E2`, `2.6.O3`.
 
 #### 2.7 Canales y Alcance
 
@@ -3328,6 +3485,11 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 *Descripción:* Mide si los canales que la entidad eligió, también los propios, salen con regularidad, bajo un mismo plan, solo a quien dio su permiso y con un costo conocido.
 
 *Costo de quedarse:* Tus campañas salen sueltas y a veces a quien no dio permiso: no sabes cuánto te cuesta cada prospecto, y te expones a una sanción.
+
+**Deficiente.**
+
+- No hay canales activos: la entidad no promueve sus productos por ningún canal —ni redes, ni correo, ni pauta, ni mensajes, ni eventos—. `[2.7.D1]`
+- No hay un plan que diga por qué canales sale la entidad a promover sus productos. `[2.7.D2]`
 
 **Inicial.**
 
@@ -3355,9 +3517,12 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 *Resultado:* La inversión se reparte sola donde más retorna, dentro de los límites que fija el equipo; los clientes satisfechos traen clientes nuevos, y la entidad prueba canales nuevos sin esperar a ver qué hacen otras entidades.
 
+- Se prueban canales nuevos —creadores de contenido de finanzas personales, comunidades de emprendedores, formatos nuevos— en ciclos de dos meses o menos. `[2.7.O1]`
+- Los clientes que Servicio identifica como promotores se vuelven un canal de referidos —por ejemplo, para una tarjeta o una cuenta— y de casos de éxito sin pedirlos a mano: el sistema los invita solo, el equipo elige qué casos se publican, y en el sistema se ve quién trajo a quién. `[2.7.O4]`
+
 *No aplican:* `2.7.E5`.
 
-*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.E1`, `2.7.E3`, `2.7.O1`, `2.7.O2`, `2.7.O4`.
+*Se leen igual:* `2.7.I1`, `2.7.I2`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.E1`, `2.7.E3`, `2.7.O2`.
 
 #### 2.8 Medición y Aprendizaje
 
@@ -3367,11 +3532,32 @@ Mide el rendimiento del marketing de la entidad: cómo está montado por dentro 
 
 *Costo de quedarse:* Repites las campañas de siempre porque nadie anota cuáles colocaron productos: cada una empieza de cero, sin saber qué dejó la anterior.
 
+**Deficiente.**
+
+- Nadie vuelve a mirar la campaña de un producto después de lanzarla: sale y ahí queda. `[2.8.D1]`
+- No se mide qué solicitudes trajo cada campaña: solo se sabe lo que se gastó, o ni eso. `[2.8.D2]`
+- No queda registro de cómo le fue a la campaña de cada producto. `[2.8.D3]`
+
+**Inicial.**
+
+- Se miran clics, alcance y me gusta, no los prospectos ni los productos colocados que trajo cada campaña. `[2.8.I1]`
+- Para saber cómo le fue a la campaña de un producto, alguien junta los números a mano en una hoja, semanas después de que terminó. `[2.8.I2]`
+
 **Funcional.**
 
 - Los resultados de cada campaña —los prospectos, las solicitudes o los productos colocados que trajo, no solo los clics— se ven en el sistema sin armarlos a mano. `[2.8.F5]`
 
-*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.F3`, `2.8.E1`, `2.8.E2`, `2.8.E3`, `2.8.O2`, `2.8.O3`.
+**Eficiente.**
+
+- Hay pruebas A/B regulares de mensajes y ofertas de los productos (al menos una activa por mes). `[2.8.E1]`
+- Hay un proceso escrito para comparar, con los resultados de las campañas anteriores de cada producto, qué creatividades y audiencias funcionan. `[2.8.E2]`
+- El proceso de campaña y la planificación de las campañas siguientes de cada producto se refinan con base en lo aprendido. `[2.8.E3]`
+
+**Óptimo.**
+
+- La IA ajusta las campañas de los productos mientras corren —deja de mostrar la versión que no funciona y le da más espacio a la que sí—, dentro de los límites que fijó el equipo; el equipo revisa los cambios, y cada uno queda en el sistema con su razón. `[2.8.O2]`
+
+*Se leen igual:* `2.8.F3`, `2.8.O3`.
 
 ### Área 3 — Servicio
 
@@ -3421,7 +3607,13 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 - Hay playbooks de prevención —qué hacer cuando un cliente vuelve a reclamar por lo mismo— y, donde la relación es continua, también de retención y expansión: qué hacer cuando un cliente deja de usar su tarjeta o pide cancelar un producto, o cuando está listo para uno más y hay que pasárselo al área comercial. `[3.1.E3]`
 - El recorrido del cliente está definido de punta a punta, con sus momentos clave —la activación, el primer uso y, si los hay, la renovación o el vencimiento— y un responsable y un estándar para cada uno. `[3.1.E4]`
 
-*Se leen igual:* `3.1.D2`, `3.1.I2`, `3.1.I3`, `3.1.F3`, `3.1.F5`, `3.1.F6`, `3.1.E5`, `3.1.O1`, `3.1.O3`, `3.1.O4`.
+**Óptimo.**
+
+- La IA ejecuta las rutinas repetitivas del proceso de atención, como dar seguimiento a los reclamos, las consultas y las gestiones y cerrarlos; el equipo supervisa, corrige a la IA y resuelve las excepciones, y en el sistema se ve qué hizo la IA y qué revisó una persona. `[3.1.O1]`
+- El sistema detecta, sin que nadie lo revise a mano, cuando un reclamo, una consulta o una gestión se sale de las etapas o los pasos del proceso, y se lo señala al agente y al líder, que deciden cómo corregirlo; el aviso queda registrado en el caso. `[3.1.O3]`
+- Cada reclamo, consulta o gestión sigue las etapas y los pasos del proceso de atención sin que nadie lo vigile a mano. `[3.1.O4]`
+
+*Se leen igual:* `3.1.D2`, `3.1.I2`, `3.1.I3`, `3.1.F3`, `3.1.F5`, `3.1.F6`, `3.1.E5`.
 
 #### 3.2 Tecnología y Automatización
 
@@ -3430,6 +3622,15 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 *Descripción:* Mide si cada caso, venga de la sucursal, el teléfono o la app, queda en el sistema y llega solo a quien lo atiende, y cuánto de la atención se automatiza.
 
 *Costo de quedarse:* Tu equipo reparte y sigue los casos a mano, y se pierden entre la sucursal, el teléfono y WhatsApp: el cliente tiene que insistir para que lo atiendan.
+
+**Deficiente.**
+
+- No hay un sistema central donde queden los reclamos, las consultas y las gestiones. `[3.2.D1]`
+- Los casos se manejan en celulares personales, correos individuales o la libreta de cada sucursal. `[3.2.D2]`
+
+**Inicial.**
+
+- Hay un sistema de casos, pero lo que entra por la sucursal, el teléfono o la app se reparte a mano, o el equipo atiende por WhatsApp o chat y ninguno de esos canales llega al sistema. `[3.2.I2]`
 
 **Funcional.**
 
@@ -3449,7 +3650,7 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 
 - Las conclusiones que se calculan en el almacén central de datos vuelven al sistema de servicio: quien atiende ve en la ficha, por ejemplo, qué tan probable es que el cliente se vaya. `[3.2.O4]`
 
-*Se leen igual:* `3.2.D1`, `3.2.D2`, `3.2.I2`, `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.E3`, `3.2.E4`, `3.2.E5`, `3.2.O1`.
+*Se leen igual:* `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.E3`, `3.2.E4`, `3.2.E5`, `3.2.O1`.
 
 #### 3.3 Datos
 
@@ -3458,6 +3659,16 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 *Descripción:* Mide si los datos de cada cliente —sus productos y sus casos— están completos y ordenados para atender, decidir y responderle al regulador sin reconstruirlos.
 
 *Costo de quedarse:* Cada vez que el cliente llama tiene que volver a explicar qué producto tiene y qué pasó, y no puedes demostrarle al regulador cuántos reclamos respondiste dentro del plazo.
+
+**Deficiente.**
+
+- La información de los clientes y sus casos está repartida entre correos, chats, hojas, el core bancario y otros sistemas que no se conectan, y no hay un lugar donde se vea junta. `[3.3.D1]`
+- No se puede reconstruir qué le pasó a un cliente con su tarjeta, su cuenta o su crédito: su historia no queda registrada en ningún lado. `[3.3.D2]`
+
+**Inicial.**
+
+- Los casos están en un solo sistema, pero la ficha del cliente sale incompleta: los productos que tiene contratados hay que buscarlos en el core bancario. `[3.3.I1]`
+- Los números de reclamos, consultas y gestiones —cuántos llegan y de qué tipo— se arman a mano, fuera del sistema. `[3.3.I2]`
 
 **Funcional.** La historia y los productos de cada cliente están a la vista, cada caso tiene su tipo y su motivo, y se sabe cuántos reclamos se respondieron dentro del plazo del regulador.
 
@@ -3483,7 +3694,7 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 - Un modelo predictivo de salud, distinto del riesgo de crédito, calcula para cada cliente qué tan probable es que se vaya y si está logrando lo que buscaba con sus productos, a partir de su experiencia y de sus resultados; el puntaje se ve en su ficha y el responsable de cada cliente revisa a los que el modelo marca. `[3.3.O1]`
 - Servicio se apoya en el almacén central de datos de la entidad, con reglas claras de quién accede y cómo se mantiene, para anticipar qué clientes se pueden ir. `[3.3.O2]`
 
-*Se leen igual:* `3.3.D1`, `3.3.D2`, `3.3.I1`, `3.3.I2`, `3.3.F1`, `3.3.F5`, `3.3.F6`, `3.3.E1`, `3.3.E2`, `3.3.O3`, `3.3.O4`.
+*Se leen igual:* `3.3.F1`, `3.3.F5`, `3.3.F6`, `3.3.E1`, `3.3.E2`, `3.3.O3`, `3.3.O4`.
 
 #### 3.4 Equipo y Gobierno
 
@@ -3496,6 +3707,11 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 **Deficiente.**
 
 - Nadie tiene claro qué le toca: entre la bienvenida de los clientes nuevos, la atención de los casos y el acompañamiento de los clientes clave, las tareas se pisan o quedan sin dueño. `[3.4.D1]`
+
+**Inicial.**
+
+- Se siguen algunos números de la operación —casos abiertos, reclamos vencidos—, pero sin un tablero ni una cadencia fija. `[3.4.I1]`
+- El líder mira los números de vez en cuando, sobre todo cuando algo sale mal, como un reclamo que llega al regulador. `[3.4.I2]`
 
 **Funcional.**
 
@@ -3511,7 +3727,14 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 - El líder de Servicio acuerda con el área comercial qué trae cada cliente nuevo —lo que busca con su producto— y el acuerdo se cumple: cada uno llega con eso y, si el cliente vuelve a contratar sin tener un producto vigente, Servicio le avisa al área comercial cuando se puede estar yendo. `[3.4.E4]`
 - El acuerdo con las áreas que resuelven parte de los casos —tarjetas, fraude, operaciones— está escrito y se mide: qué reciben, en cuánto tiempo lo resuelven y por qué devuelven un caso. `[3.4.E201 · comprobable]`
 
-*Se leen igual:* `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.O1`, `3.4.O2`, `3.4.O3`, `3.4.O4`.
+**Óptimo.**
+
+- Hay responsables de validar lo que responde la IA y de mantener al día la base de conocimiento —productos, comisiones, procedimientos de seguridad—, y lo que la IA puede resolver sola está por escrito. `[3.4.O1]`
+- El líder ya no reparte reclamos ni apaga incendios: dedica su tiempo a decidir qué se automatiza, qué se mide y qué se mejora. `[3.4.O2]`
+- El equipo de servicio se mide por la retención de sus clientes y por los productos que suman, no solo por los casos que cierra. `[3.4.O3]`
+- El sistema calcula cuánto cuesta atender a cada tipo de cliente —personas, pymes, banca preferente— frente a lo que deja, y el líder usa ese dato para decidir cómo atenderlo. `[3.4.O4]`
+
+*Se leen igual:* `3.4.D2`, `3.4.F1`, `3.4.F3`, `3.4.E1`.
 
 #### 3.5 Consistencia de Atención
 
@@ -3521,6 +3744,14 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 
 *Costo de quedarse:* El mismo reclamo se acepta en una sucursal y se rechaza en otra: el cliente lo nota, desconfía y lo cuenta.
 
+**Deficiente.**
+
+- No hay respuestas guardadas: cada agente, en la sucursal o en el centro de contacto, escribe cada respuesta desde cero, a su manera. `[3.5.D1]`
+
+**Inicial.**
+
+- Hay algunas respuestas guardadas, pero cada agente o cada sucursal tiene las suyas: no están al alcance de todo el equipo. `[3.5.I1]`
+
 **Funcional.** Los tipos de cliente están escritos, cada cliente nuevo arranca con una bienvenida definida, el equipo tiene respuestas guardadas para lo frecuente y cada tipo de reclamo tiene escritos sus criterios de resolución.
 
 *Resultado:* El equipo sabe qué tipos de cliente atiende y qué espera cada uno, el cliente nuevo arranca con una bienvenida clara hasta activar y usar su producto, y en cualquier sucursal o canal quien atiende tiene a mano las mismas respuestas y los mismos criterios para resolver un reclamo.
@@ -3529,7 +3760,17 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 - Existe un documento simple con los tipos de cliente que atiende el área —por ejemplo, personas, pymes y banca preferente—, qué necesita cada uno, qué espera del servicio y cuáles se consideran clientes clave, consultable por cualquier agente. `[3.5.F4]`
 - Cada tipo de reclamo tiene escritos sus criterios de resolución —cuándo se devuelve un cobro, cuándo procede un cargo no reconocido—, consultables por quien atiende, en la sucursal o en el centro de contacto. `[3.5.F201 · declarado]`
 
-*Se leen igual:* `3.5.D1`, `3.5.I1`, `3.5.F1`, `3.5.F3`, `3.5.E1`, `3.5.E2`, `3.5.E3`, `3.5.O1`.
+**Eficiente.**
+
+- Los agentes usan en su día a día las respuestas guardadas para los casos frecuentes —cómo activar una tarjeta, cuánto cuesta una gestión—, no solo las tienen cargadas. `[3.5.E1]`
+- El tono y la voz de marca se aplican a las respuestas, en la sucursal y en cada canal, no cada agente con su estilo. `[3.5.E2]`
+- Existe una guía de estilo de servicio documentada para quienes atienden, en la sucursal o en el centro de contacto. `[3.5.E3]`
+
+**Óptimo.**
+
+- Lo que la IA responde o escribe sola —en la app, el chat o WhatsApp— sigue la guía de tono y estilo de la marca; el equipo revisa una muestra de sus respuestas y corrige a la IA cuando se sale de la guía, y cada respuesta queda en el sistema. `[3.5.O1]`
+
+*Se leen igual:* `3.5.F1`, `3.5.F3`.
 
 #### 3.6 Priorización de Clientes
 
@@ -3538,6 +3779,14 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 *Descripción:* Mide si un fraude se atiende antes que una consulta, y si cada cliente recibe la atención que le corresponde.
 
 *Costo de quedarse:* Tu cliente preferente espera en la misma fila que todos, y un cargo no reconocido se atiende después de una consulta simple.
+
+**Deficiente.**
+
+- Los casos se atienden por orden de llegada o como prefiere cada agente, sin mirar su gravedad —un fraude, un cargo no reconocido— ni quién es el cliente. `[3.6.D1]`
+
+**Inicial.**
+
+- Se intenta atender primero lo urgente, como un fraude, pero los casos no tienen una prioridad asignada: cada agente decide a ojo, o se adelanta el cliente que más insiste. `[3.6.I1]`
 
 **Funcional.**
 
@@ -3561,7 +3810,7 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 - En la app o la banca en línea, cada cliente ve lo que corresponde a su tipo, a sus productos y a sus casos abiertos, sin que nadie lo arme a mano; el equipo define qué corresponde a cada tipo. `[3.6.O1]`
 - Cada cliente se atiende con el contexto de cómo llegó —lo que se le ofreció al contratar y el segmento del que viene—, que quien lo atiende, persona o IA, ve en su ficha sin volver a preguntarlo. `[3.6.O3]`
 
-*Se leen igual:* `3.6.D1`, `3.6.I1`, `3.6.O2`.
+*Se leen igual:* `3.6.O2`.
 
 #### 3.7 Proactividad
 
@@ -3570,6 +3819,15 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 *Descripción:* Mide si el servicio avisa antes de cada cobro o vencimiento y actúa antes de que el cliente se vaya.
 
 *Costo de quedarse:* Te enteras de que un cliente está mal cuando el problema ya creció o cuando ya se llevó su dinero a otra entidad, y un cobro sin aviso te trae un reclamo.
+
+**Deficiente.**
+
+- Aunque un cliente acumule casos repetidos —un cargo que vuelve a aparecer— o un reclamo sin resolver, nadie lo contacta: los problemas se atienden cuando estallan. `[3.7.D1]`
+- El área nunca contacta al cliente por iniciativa propia: solo responde cuando él llama o va a la sucursal. `[3.7.D2]`
+
+**Inicial.**
+
+- Cuando un cliente tiene problemas repetidos —con su tarjeta, su cuenta o su crédito—, a veces alguien lo contacta, pero depende de que lo note. `[3.7.I1]`
 
 **Funcional.** Los problemas repetidos y los reclamos se detectan, aunque sea a mano, y los clientes clave reciben contacto antes de sus vencimientos; donde la relación es continua, el cliente recibe aviso antes de cada cobro, ayuda si no activó su producto y una razón para quedarse si pide cancelar.
 
@@ -3600,7 +3858,7 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 
 *No aplican:* `3.7.E2`.
 
-*Se leen igual:* `3.7.D1`, `3.7.D2`, `3.7.I1`, `3.7.O1`, `3.7.O2`, `3.7.O3`.
+*Se leen igual:* `3.7.O1`, `3.7.O2`, `3.7.O3`.
 
 #### 3.8 Autoservicio
 
@@ -3609,6 +3867,11 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 *Descripción:* Mide si el equipo puede atender a más clientes sin crecer al mismo ritmo, gracias a las respuestas publicadas, al bloqueo de la tarjeta sin esperar y a lo que se aprende de los casos.
 
 *Costo de quedarse:* Tu equipo responde a mano las mismas preguntas una y otra vez, y quien perdió su tarjeta tiene que esperar en la línea para bloquearla.
+
+**Deficiente.**
+
+- No hay ninguna respuesta publicada —en el sitio o en la app— que el cliente pueda consultar por su cuenta. `[3.8.D1]`
+- Hasta las preguntas que más se repiten, como qué hacer si se pierde la tarjeta, se responden a mano, una por una, cada vez que llegan. `[3.8.D2]`
 
 **Inicial.** Hay algunas respuestas publicadas o un chatbot de menú, pero lo que más preguntan los clientes todavía no tiene respuesta publicada, y para bloquear una tarjeta hay que esperar a una persona.
 
@@ -3627,7 +3890,12 @@ Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa despu
 
 - Al menos una vez por trimestre se revisan los reclamos y los demás casos que se repiten y, donde la relación es continua, las razones por las que se van los clientes, para encontrar patrones y mejorar. `[3.8.E2]`
 
-*Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O2`, `3.8.O3`, `3.8.O4`.
+**Óptimo.**
+
+- La IA detecta las preguntas nuevas que llegan —por ejemplo, sobre un producto o una comisión nueva— y redacta el artículo o la respuesta; el equipo lo revisa antes de publicarlo, y en la base de conocimiento se ve qué escribió la IA y quién lo aprobó. `[3.8.O1]`
+- Los picos de demanda —un cierre de mes, una caída de la app— los absorben la IA y el autoservicio: el equipo no crece cuando crece la cartera, y el líder ve en los tableros del área qué parte de la demanda resolvieron la IA y el autoservicio y qué pasó a una persona. `[3.8.O2]`
+
+*Se leen igual:* `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O3`, `3.8.O4`.
 
 ## Edición — Educación
 
@@ -3836,6 +4104,11 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 - Cada asesor trabaja sobre la marcha, sin un rol ni responsabilidades claras. `[1.4.D1]`
 
+**Inicial.**
+
+- El líder de admisiones revisa algunos números —interesados, solicitudes, matriculados— en hojas de cálculo, cuando tiene tiempo. `[1.4.I1]`
+- Los reportes de cómo opera el equipo de admisiones —qué asesor y qué programa van al día— se arman a mano. `[1.4.I2]`
+
 **Funcional.** Cada asesor tiene un rol por escrito, cada programa y cada asesor tienen una meta escrita, el líder sigue un tablero cada semana y en la reunión de seguimiento de admisiones cada quien rinde cuentas.
 
 *Resultado:* Cada asesor sabe qué se espera de él, y el líder sabe cada semana qué programa va bien y cuál necesita ayuda, antes de que cierre la matrícula.
@@ -3862,7 +4135,7 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 - Al menos una vez por trimestre, el líder y el equipo se reúnen a decidir qué probar en admisiones y revisan cómo les fue con lo que probaron antes. `[1.4.O2]`
 - Hay responsables de validar lo que hace la IA en admisiones, y lo que puede decidir sola está por escrito. `[1.4.O3]`
 
-*Se leen igual:* `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`.
+*Se leen igual:* `1.4.D2`, `1.4.F1`.
 
 #### 1.5 Oferta académica
 
@@ -4087,7 +4360,17 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 - Existe un calendario de campañas y contenidos visible para el equipo, con horizonte de al menos un trimestre. `[2.1.F1]`
 - La campaña de cada período se planea desde las fechas de admisión: arranca antes de que abran las solicitudes y sigue hasta que cierra la matrícula. `[2.1.F301 · declarado · hábito]`
 
-*Se leen igual:* `2.1.D2`, `2.1.I2`, `2.1.I3`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F5`, `2.1.F6`, `2.1.E2`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
+**Eficiente.**
+
+- Cada pieza —un correo, un anuncio, la página de un programa— pasa por una revisión de calidad y una aprobación antes de publicarse. `[2.1.E2]`
+- El líder revisa con datos del sistema, no de memoria, que el proceso de la campaña de admisión se cumpla. `[2.1.E4]`
+
+**Óptimo.**
+
+- La IA hace las tareas repetitivas de la campaña de admisión —como preparar el brief, adaptar cada pieza a su canal y a su programa, o cargar la campaña en el calendario del período—, el responsable de la campaña valida lo que hizo, y en el sistema se ve qué tareas hizo la IA. `[2.1.O1]`
+- El sistema detecta por sí mismo cuando una campaña de admisión se sale del proceso —un paso que se saltó, una fecha del calendario de admisión que venció— y se lo avisa al líder y al responsable; el líder decide el ajuste, y cada aviso queda en el sistema. `[2.1.O4]`
+
+*Se leen igual:* `2.1.D2`, `2.1.I2`, `2.1.I3`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F5`, `2.1.F6`, `2.1.O5`.
 
 #### 2.2 Tecnología y Automatización
 
@@ -4180,6 +4463,12 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 *Costo de quedarse:* Qué programa se empuja se decide por costumbre o por quien insiste más, y nadie responde por una meta: el equipo no sabe cuántos interesados y solicitudes se esperan de él en cada período.
 
+**Deficiente.**
+
+- Nadie tiene el marketing de la institución como responsabilidad propia: se hace, campañas de admisión incluidas, en los ratos libres de quien pueda. `[2.4.D1]`
+- Qué programa promover y cuándo se decide sobre la marcha, sin metas ni números. `[2.4.D2]`
+- Nadie revisa los resultados de marketing —cuántos interesados y solicitudes trajo cada período—: ni el equipo ni la dirección. `[2.4.D3]`
+
 **Inicial.**
 
 - Los roles no están escritos, así que hasta lo del día a día —qué publicar, qué pieza aprobar— espera a que lo resuelva la rectoría o la dirección general. `[2.4.I1]`
@@ -4203,7 +4492,7 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 - Las decisiones se toman con lo que deja cada canal a lo largo del tiempo —lo que pagan en toda su carrera los estudiantes que trae— frente a lo que cuesta. `[2.4.O4]`
 
-*Se leen igual:* `2.4.D1`, `2.4.D2`, `2.4.D3`, `2.4.I2`, `2.4.F1`, `2.4.F5`, `2.4.F6`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
+*Se leen igual:* `2.4.I2`, `2.4.F1`, `2.4.F5`, `2.4.F6`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
 
 #### 2.5 Marca y reputación
 
@@ -4256,6 +4545,11 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 *Costo de quedarse:* Le mandas la misma campaña a quien busca un técnico que a quien busca un posgrado: el mensaje no le habla a nadie, y la familia que paga nunca recibe lo que necesita saber.
 
+**Deficiente.**
+
+- No hay segmentos: las campañas salen a toda la base con el mismo mensaje, busque el interesado un técnico, una carrera o un posgrado. `[2.6.D1]`
+- Los correos son iguales para todos los interesados, sin importar el programa que buscan: a lo sumo cambia el nombre en el saludo. `[2.6.D2]`
+
 **Inicial.**
 
 - Hay listas separadas por programa o por nivel, pero casi todas las campañas salen con la misma pieza para todas. `[2.6.I2]`
@@ -4280,7 +4574,7 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 - La IA predice quién se va a matricular y quién va a perder interés en los mensajes, y arma los segmentos con eso; el equipo revisa los segmentos antes de usarlos en una campaña, y en la ficha de cada persona se ve su predicción. `[2.6.O1]`
 
-*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.F3`, `2.6.E2`, `2.6.O3`.
+*Se leen igual:* `2.6.I1`, `2.6.F3`, `2.6.E2`, `2.6.O3`.
 
 #### 2.7 Canales y captación
 
@@ -4357,7 +4651,10 @@ Mide el rendimiento del área de marketing de la institución: cómo está monta
 
 *Resultado:* Las campañas mejoran mientras están corriendo, no recién cuando cierra la matrícula.
 
-*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.I2`, `2.8.E1`, `2.8.E2`, `2.8.O2`, `2.8.O3`.
+- La IA ajusta las campañas de admisión mientras corren —deja de mostrar la versión del anuncio que no trae interesados y le da más espacio a la que sí—, dentro de los límites que fijó el equipo; el equipo revisa los cambios, y cada uno queda en el sistema con su razón. `[2.8.O2]`
+- Los mensajes que la IA decide para cada interesado se miden contra un grupo de control, y en el sistema se ve cuánto agregan; con eso el equipo revisa los límites que le fijó a la IA. `[2.8.O3]`
+
+*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.I2`, `2.8.E1`, `2.8.E2`.
 
 ### Área 3 — Servicio
 
@@ -4424,6 +4721,15 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 
 *Costo de quedarse:* Los casos se pierden entre correos, ventanillas y chats, y alguien tiene que repartirlos a mano en cada rematrícula: el estudiante tiene que insistir para que lo atiendan.
 
+**Deficiente.**
+
+- No hay un sistema central donde queden los casos de los estudiantes. `[3.2.D1]`
+- Los trámites y las consultas de los estudiantes se manejan en celulares personales o en correos individuales de cada oficina. `[3.2.D2]`
+
+**Inicial.**
+
+- Hay un sistema para los casos de los estudiantes, pero lo que entra —trámites, consultas— se reparte a mano, o el equipo atiende por WhatsApp o chat y ninguno de esos canales llega al sistema. `[3.2.I2]`
+
 **Funcional.** Los casos de los estudiantes entran al sistema y se asignan solos con una regla simple; si el equipo atiende por WhatsApp o chat, ese canal está conectado, y si usa IA, trabaja con los datos de cada estudiante.
 
 *Resultado:* Lo que el estudiante escribe por los canales conectados llega al sistema y se le asigna a alguien sin que nadie lo reparta, y quien lo necesita se entera de cada cambio.
@@ -4445,7 +4751,7 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 
 - Las conclusiones que se calculan en el almacén central de datos vuelven al sistema de servicio: quien atiende ve en la ficha, por ejemplo, el riesgo de deserción del estudiante. `[3.2.O4]`
 
-*Se leen igual:* `3.2.D1`, `3.2.D2`, `3.2.I2`, `3.2.F4`, `3.2.F5`, `3.2.F6`, `3.2.E3`, `3.2.E5`, `3.2.O1`.
+*Se leen igual:* `3.2.F4`, `3.2.F5`, `3.2.F6`, `3.2.E3`, `3.2.E5`, `3.2.O1`.
 
 #### 3.3 Datos
 
@@ -4506,6 +4812,9 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 
 **Inicial.** Hay roles de palabra entre las oficinas y el líder mira algunos números de vez en cuando, sobre todo cuando algo sale mal, pero sin una cadencia fija.
 
+- Se siguen algunos números de la atención al estudiante —trámites abiertos, consultas de la rematrícula—, pero sin un tablero ni una cadencia fija. `[3.4.I1]`
+- El líder mira los números de vez en cuando, sobre todo cuando algo sale mal, como un trámite que se traba o un estudiante que se queja. `[3.4.I2]`
+
 **Funcional.**
 
 - El líder tiene un tablero con 4 a 6 métricas clave —casos abiertos, volumen, casos pendientes acumulados, casos por tipo de trámite— y lo consulta al menos una vez por semana. `[3.4.F2]`
@@ -4525,7 +4834,7 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 - El equipo de servicio se mide por la permanencia de sus estudiantes y por cuántos siguen estudiando con la institución, no solo por los casos que cierra. `[3.4.O3]`
 - El sistema calcula cuánto cuesta atender a cada tipo de estudiante frente a lo que deja a la institución, y el líder usa ese dato para decidir cómo atenderlo. `[3.4.O4]`
 
-*Se leen igual:* `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.O1`, `3.4.O2`.
+*Se leen igual:* `3.4.D2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.O1`, `3.4.O2`.
 
 #### 3.5 Consistencia de Atención
 
@@ -4559,7 +4868,11 @@ Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que p
 - Quienes atienden usan en su día a día las respuestas guardadas para los casos frecuentes, no solo las tienen cargadas. `[3.5.E1]`
 - El tono y la voz de la institución se aplican a las respuestas, no cada persona con su estilo. `[3.5.E2]`
 
-*Se leen igual:* `3.5.E3`, `3.5.O1`.
+**Óptimo.**
+
+- Lo que la IA responde o escribe sola a los estudiantes —sobre un trámite, un pago o la rematrícula— sigue la guía de tono y estilo de la institución; el equipo revisa una muestra de sus respuestas y corrige a la IA cuando se sale de la guía, y cada respuesta queda en el sistema. `[3.5.O1]`
+
+*Se leen igual:* `3.5.E3`.
 
 #### 3.6 Priorización de estudiantes
 
@@ -4738,6 +5051,14 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 
 *Costo de quedarse:* Si se va un asesor, se lleva a sus interesados en el teléfono: nadie sabe quién ya visitó, a quién se le cotizó ni qué reserva estaba por firmarse.
 
+**Deficiente.**
+
+- Las consultas de los portales, la web y la sala de ventas se reparten a ojo, o se las queda el asesor que las ve primero: no hay una regla que diga a quién le toca cada una. `[1.1.D2]`
+
+**Inicial.**
+
+- Hay una cadencia de contacto sugerida para después de la consulta y de la visita, pero cada asesor la cumple cuando puede o cuando se acuerda. `[1.1.I2]`
+
 **Funcional.** Todo el equipo sigue el mismo recorrido escrito en el CRM, de la consulta a la firma, con una cadencia de contacto, un proceso de reserva escrito y una revisión fija de los negocios.
 
 *Resultado:* Si rota un asesor, el siguiente sabe en qué va cada cliente, porque todo el equipo trabaja la venta igual en el CRM: los negocios avanzan con los mismos criterios, cada visita deja su siguiente paso, la reserva se hace siempre de la misma forma, cada interesado se contacta con la cadencia acordada y los negocios se revisan en cada reunión de seguimiento.
@@ -4752,7 +5073,11 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 - Hay una metodología de asesoría formal en uso —SPIN, BANT o una equivalente, con pasos definidos— con la que el asesor indaga, por ejemplo, qué busca el cliente, cómo va a pagar y quién decide. `[1.1.E1]`
 - Existen guías de indagación, precalificación, visita y manejo de objeciones —precio, ubicación, plazo de entrega— que el equipo usa. `[1.1.E2]`
 
-*Se leen igual:* `1.1.D1`, `1.1.D2`, `1.1.D3`, `1.1.D4`, `1.1.I1`, `1.1.I2`, `1.1.I3`, `1.1.I4`, `1.1.F4`, `1.1.F5`, `1.1.F6`, `1.1.E3`, `1.1.O1`, `1.1.O2`, `1.1.O3`.
+**Óptimo.**
+
+- La IA detecta los negocios que se salen del proceso —una visita sin siguiente paso, una reserva sin fecha de vencimiento—, los marca en el CRM y se los señala al líder y al asesor que corresponde; el líder decide qué se corrige. `[1.1.O1]`
+
+*Se leen igual:* `1.1.D1`, `1.1.D3`, `1.1.D4`, `1.1.I1`, `1.1.I3`, `1.1.I4`, `1.1.F4`, `1.1.F5`, `1.1.F6`, `1.1.E3`, `1.1.O2`, `1.1.O3`.
 
 #### 1.2 Tecnología y Automatización
 
@@ -4761,6 +5086,14 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 *Descripción:* Mide cuánto del trabajo repetitivo hace el sistema —repartir las consultas, avisar qué toca, bloquear la unidad que se reserva y registrar las conversaciones— y cómo usa el equipo la automatización y la IA.
 
 *Costo de quedarse:* Tus asesores copian a mano las consultas de los portales, dependen de su memoria para dar seguimiento y descubren que la unidad ya estaba reservada cuando el cliente ya se había ilusionado.
+
+**Deficiente.**
+
+- Los interesados viven en listas, en el teléfono o en la agenda personal de cada asesor. `[1.2.D1]`
+
+**Inicial.**
+
+- Hay un CRM, pero nada pasa solo: los interesados se reparten a mano y cada asesor tiene que acordarse de sus seguimientos, como el de después de cada visita. `[1.2.I1]`
 
 **Funcional.** Lo básico pasa solo —las consultas de todos los canales entran al sistema y se reparten por una regla, el sistema avisa qué toca y la unidad que se reserva queda bloqueada— y, si se usa IA, trabaja con los datos de cada cliente.
 
@@ -4785,7 +5118,7 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 - La IA calcula la probabilidad de cierre de cada negocio y propone respuestas según el contexto de cada conversación con el interesado; las dos cosas se ven en el CRM y el asesor decide qué usar. `[1.2.O1]`
 - Si el equipo atiende por un canal conversacional, agentes de IA responden ahí, precalifican a los interesados con la definición de interesado calificado y agendan visitas a cualquier hora; le pasan al asesor, con el contexto, a quien está listo, y el equipo revisa en el CRM lo que precalificaron. `[1.2.O2]`
 
-*Se leen igual:* `1.2.D1`, `1.2.D2`, `1.2.I1`, `1.2.I2`, `1.2.F3`, `1.2.F4`, `1.2.F6`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O3`.
+*Se leen igual:* `1.2.D2`, `1.2.I2`, `1.2.F3`, `1.2.F4`, `1.2.F6`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O3`.
 
 #### 1.3 Datos
 
@@ -4794,6 +5127,14 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 *Descripción:* Mide si los datos de ventas son confiables para decidir: negocios completos, el origen de cada uno, el inventario al día y reportes que salen del sistema sin armarlos a mano.
 
 *Costo de quedarse:* Decides con números que no cuadran: el reporte de ventas se arma a mano cruzando el CRM con la hoja de inventario, y no sabes qué portal te trae compradores y cuál solo consultas.
+
+**Deficiente.**
+
+- No se registra por dónde llegó cada negocio —un portal, la web, una valla, un referido o la sala de ventas— ni qué asesor lo lleva: sacar un reporte confiable es imposible. `[1.3.D2]`
+
+**Inicial.**
+
+- Los negocios que se crean hoy se registran, pero a algunos les falta la fecha esperada de cierre, el monto o el asesor responsable. `[1.3.I3]`
 
 **Funcional.** El reporte de negocios y reservas sale del sistema, sin armarlo a mano, y el estado de cada unidad está al día: a los dos se les puede creer.
 
@@ -4815,7 +5156,11 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 - La ficha de cada cliente reúne lo comercial con su historial de conversaciones y, si la empresa lleva en otros sistemas la reserva, los pagos o el trámite de crédito, con lo que viene de ellos: la vista 360° empieza a tomar forma. `[1.3.E3]`
 - Se mide cuánto tarda en venderse o en alquilarse cada tipo de unidad —y, si la empresa vende proyectos propios, cada etapa del proyecto—, y ese ritmo se revisa. `[1.3.E401 · comprobable]`
 
-*Se leen igual:* `1.3.D1`, `1.3.D2`, `1.3.D3`, `1.3.D4`, `1.3.I1`, `1.3.I2`, `1.3.I3`, `1.3.F2`, `1.3.F8`, `1.3.E2`, `1.3.E4`, `1.3.O1`, `1.3.O2`, `1.3.O3`, `1.3.O4`, `1.3.O5`.
+**Óptimo.**
+
+- La vista 360° está operativa: la ficha de cada cliente reúne lo comercial, su reserva y sus pagos, sus casos de posventa y sus conversaciones. `[1.3.O3]`
+
+*Se leen igual:* `1.3.D1`, `1.3.D3`, `1.3.D4`, `1.3.I1`, `1.3.I2`, `1.3.F2`, `1.3.F8`, `1.3.E2`, `1.3.E4`, `1.3.O1`, `1.3.O2`, `1.3.O4`, `1.3.O5`.
 
 #### 1.4 Equipo y Gobierno
 
@@ -4824,6 +5169,14 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 *Descripción:* Mide si cada asesor tiene un rol y una meta por escrito, y si el líder sigue los números de la venta y pide cuentas con datos.
 
 *Costo de quedarse:* El líder se entera al cierre del mes de que el proyecto no vendió lo esperado: no vio antes qué asesor se quedó atrás ni en qué etapa se cayeron los negocios.
+
+**Deficiente.**
+
+- Cada asesor trabaja sobre la marcha —atiende la sala de ventas, responde los portales y da visitas como le van llegando—, sin un rol ni responsabilidades claras. `[1.4.D1]`
+
+**Inicial.**
+
+- El líder revisa algunos números —consultas, visitas y reservas— en hojas de cálculo, cuando tiene tiempo. `[1.4.I1]`
 
 **Funcional.** Cada asesor tiene un rol y una meta por escrito, está claro a quién le corresponde cada cliente, el líder sigue un tablero cada semana y en la reunión de seguimiento cada quien rinde cuentas.
 
@@ -4846,7 +5199,7 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 
 - Las decisiones de la dirección usan números de fondo: cuánto margen deja cada canal —y cada proyecto, si la empresa vende proyectos propios—, qué tan rápido se vende o se alquila cada tipo de unidad y cuánto aporta cada asesor. `[1.4.O1]`
 
-*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
+*Se leen igual:* `1.4.D2`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
 
 #### 1.5 Proyecto y propuesta
 
@@ -4861,6 +5214,8 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 - Hay más de una lista de precios circulando, y no se sabe cuál es la vigente. `[1.5.D401 · comprobable]`
 
 **Inicial.** Hay una lista de precios y un brochure, pero cada asesor arma la cotización por su cuenta.
+
+- El líder sabe quién es el comprador objetivo de cada proyecto y hay un mensaje común, pero solo de palabra o en un borrador: cada asesor los repite a su manera. `[1.5.I1]`
 
 **Funcional.** El comprador objetivo de cada proyecto está escrito, y todos venden con los mismos precios, las mismas condiciones y la misma propuesta.
 
@@ -4882,7 +5237,7 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 
 - La IA revisa en tiempo real, contra la información, los precios y la propuesta vigentes, lo que se les dice a los interesados, lo escriba ella o el equipo; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
 
-*Se leen igual:* `1.5.D1`, `1.5.D2`, `1.5.I1`, `1.5.I2`, `1.5.F3`, `1.5.F5`, `1.5.E2`.
+*Se leen igual:* `1.5.D1`, `1.5.D2`, `1.5.I2`, `1.5.F3`, `1.5.F5`, `1.5.E2`.
 
 #### 1.6 Priorización de interesados
 
@@ -4895,6 +5250,10 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 **Deficiente.** Se atiende a los interesados por orden de llegada, y se le da visita a todo el que pregunta.
 
 - Se le da visita a todo el que pregunta, sin saber antes si puede comprar. `[1.6.D401 · evaluado]`
+
+**Inicial.**
+
+- El líder sabe quién es el comprador objetivo de cada proyecto, pero el CRM no tiene los campos —presupuesto, forma de pago, tipo de unidad— para separar a los interesados que encajan. `[1.6.I2]`
 
 **Funcional.** Los interesados se separan por los rasgos del comprador objetivo —presupuesto, forma de pago, tipo de unidad— y hay una definición escrita de interesado calificado que el equipo aplica.
 
@@ -4918,7 +5277,7 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 - La IA detecta en cada cliente el riesgo de perderlo y el potencial de venderle más, como otra unidad, lo marca en el CRM y el asesor decide qué hacer. `[1.6.O2]`
 - Si en la decisión de compra participan varias personas —la pareja, la familia o los socios de una inversión—, la IA adapta en tiempo real el mensaje a cada una, dentro de los límites que fijó el equipo; el asesor revisa lo que se envió, y en el CRM queda qué recibió cada persona. `[1.6.O3]`
 
-*Se leen igual:* `1.6.D1`, `1.6.I1`, `1.6.I2`, `1.6.E3`, `1.6.O1`, `1.6.O4`.
+*Se leen igual:* `1.6.D1`, `1.6.I1`, `1.6.E3`, `1.6.O1`, `1.6.O4`.
 
 #### 1.7 Seguimiento de visitas y reservas
 
@@ -4932,6 +5291,11 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 
 - No hay material de venta —brochure, planos, fotos o recorrido virtual— para mostrarles a los interesados. `[1.7.D4]`
 - Las reservas se vencen sin que nadie se dé cuenta. `[1.7.D401 · comprobable]`
+
+**Inicial.**
+
+- Cuando un negocio se detiene —el cliente no vuelve a contestar después de la visita o de la cotización—, cada asesor decide si insiste y cómo: no hay un paso acordado. `[1.7.I1]`
+- Todos los intentos de hacer avanzar un negocio se hacen por el mismo canal: el asesor solo llama, o solo escribe por WhatsApp. `[1.7.I4]`
 
 **Funcional.** Ningún negocio se enfría en silencio después de la visita y ninguna reserva se vence sin aviso: se detectan a tiempo y hay un paso acordado para retomarlos.
 
@@ -4957,7 +5321,7 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 
 - La IA detecta qué negocios y qué reservas de más valor se están trabando antes de que venza su plazo y propone a quién movilizar —el asesor o la gerencia— o qué contenido enviar; el líder valida, y todo queda en el CRM. `[1.7.O1]`
 
-*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I1`, `1.7.I2`, `1.7.I3`, `1.7.I4`, `1.7.F2`, `1.7.F3`, `1.7.F5`, `1.7.E1`, `1.7.E3`, `1.7.O2`.
+*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I2`, `1.7.I3`, `1.7.F2`, `1.7.F3`, `1.7.F5`, `1.7.E1`, `1.7.E3`, `1.7.O2`.
 
 #### 1.8 Ventas, pérdidas y desistimientos
 
@@ -4966,6 +5330,14 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 *Descripción:* Mide si queda registrado por qué no compra un interesado o por qué se cae una reserva, y si el equipo revisa las ventas que cierra, las que pierde y las reservas caídas para mejorar su proceso.
 
 *Costo de quedarse:* No sabes por qué pierdes ventas ni por qué se caen las reservas —el precio, el crédito que no salió, la fecha de entrega—: cada asesor tiene su explicación, y sin un registro no hay cómo ver qué se repite.
+
+**Deficiente.**
+
+- Cuando un interesado no compra o una reserva se cae, no hay una razón en la que el equipo coincida: cada asesor da su versión, de memoria. `[1.8.D1]`
+
+**Inicial.**
+
+- La razón por la que el interesado no compró se anota a veces y en texto libre, a criterio de cada asesor, así que no se puede sumar. `[1.8.I1]`
 
 **Funcional.** Cada negocio perdido y cada reserva caída quedan con su razón, elegida de una lista fija, y el líder saca del sistema el reporte del trimestre.
 
@@ -4981,7 +5353,11 @@ Mide el rendimiento del área de ventas de la inmobiliaria: cómo está montada 
 - Al menos una vez por trimestre se revisan las ventas cerradas, los negocios perdidos y las reservas caídas para encontrar lo que se repite. `[1.8.E1]`
 - Cuando el cliente compró en otro proyecto, queda registrado en cuál y por qué. `[1.8.E401 · comprobable]`
 
-*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`, `1.8.O4`.
+**Óptimo.**
+
+- La IA analiza las llamadas con los interesados —también las de video, como un recorrido virtual guiado— y le deja a cada asesor recomendaciones que quedan registradas; el líder las revisa con él. `[1.8.O1]`
+
+*Se leen igual:* `1.8.D2`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O2`, `1.8.O3`, `1.8.O4`.
 
 ### Área 2 — Marketing
 
@@ -5009,6 +5385,10 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 - No hay calendario de campañas: cada lanzamiento y cada promoción se improvisan. `[2.1.D1]`
 
+**Inicial.**
+
+- Las campañas dependen de quien las arma —una persona del equipo, la agencia o quien produce los renders—: el calendario, los accesos y los pasos a seguir están en sus manos. `[2.1.I3]`
+
 **Funcional.** Las campañas salen con un calendario y un proceso que el equipo sigue, sin depender de una persona, y cada proyecto propio tiene su plan por etapa de venta.
 
 *Resultado:* Todo el equipo trabaja en el mismo sistema, y la promoción de cada proyecto sigue saliendo aunque cambie una persona: el plan de cada lanzamiento y el calendario no viven en la cabeza de nadie, y el líder sabe en qué va cada campaña sin tener que preguntar.
@@ -5021,7 +5401,11 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 - Cada pieza —un anuncio, un render o un video— pasa por una revisión de calidad y una aprobación antes de publicarse. `[2.1.E2]`
 
-*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I1`, `2.1.I2`, `2.1.I3`, `2.1.F1`, `2.1.F2`, `2.1.F3`, `2.1.F6`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
+**Óptimo.**
+
+- La IA hace las tareas repetitivas del proceso de campaña —como preparar el brief de un lanzamiento, adaptar cada pieza a cada portal o red, o cargar la campaña en el calendario—, el responsable de la campaña valida lo que hizo, y en el sistema se ve qué tareas hizo la IA. `[2.1.O1]`
+
+*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I1`, `2.1.I2`, `2.1.F1`, `2.1.F2`, `2.1.F3`, `2.1.F6`, `2.1.E4`, `2.1.O4`, `2.1.O5`.
 
 #### 2.2 Tecnología y Automatización
 
@@ -5030,6 +5414,10 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 *Descripción:* Mide si las herramientas que se pagan se usan, si cada interesado que deja sus datos o escribe llega solo al sistema y cuánto trabajo repetitivo del marketing inmobiliario hacen las automatizaciones y la IA.
 
 *Costo de quedarse:* Quien deja sus datos en tu sitio o te escribe por WhatsApp para preguntar por un proyecto espera a que alguien lo cargue y le conteste, o se pierde, y si pagas herramientas, como la de recorridos virtuales, parte de lo que pagas no se usa.
+
+**Deficiente.**
+
+- Lo que llega por el sitio, por la página de un proyecto o por mensajes, como WhatsApp, cae en el correo o el teléfono de alguien, y no queda registrado en ningún lado. `[2.2.D2]`
 
 **Inicial.**
 
@@ -5055,7 +5443,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 - Si la inmobiliaria atiende por un canal conversacional, como WhatsApp, agentes de IA responden lo que generan las campañas de cada proyecto y mantienen la conversación con quien todavía no está listo para hablar con un asesor; lo que no pueden resolver pasa a una persona del equipo con la conversación completa, y en el sistema queda cada conversación que atendió la IA. `[2.2.O2]`
 - Lo que se calcula en el almacén central de datos vuelve a las herramientas de marketing sin que nadie lo cargue y se ve en la ficha de cada interesado: la segmentación usa, por ejemplo, qué tan cerca de comprar está cada uno, calculado afuera. `[2.2.O3]`
 
-*Se leen igual:* `2.2.D1`, `2.2.D2`, `2.2.D3`, `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F4`, `2.2.E2`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`.
+*Se leen igual:* `2.2.D1`, `2.2.D3`, `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F4`, `2.2.E2`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`.
 
 #### 2.3 Datos
 
@@ -5064,6 +5452,14 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 *Descripción:* Mide si los datos de marketing son confiables: de dónde llega cada interesado, en qué etapa está y si los reportes salen del sistema sin rehacerlos.
 
 *Costo de quedarse:* No sabes de qué portal o de qué anuncio llega cada interesado ni cuántos terminan en una visita: cada reporte hay que rehacerlo o revisarlo a mano antes de creerle.
+
+**Deficiente.**
+
+- No se registra de dónde llegó cada interesado: nadie sabe si vino por un portal, la pauta, una feria o un referido. `[2.3.D1]`
+
+**Inicial.**
+
+- Hay reportes, pero se arman a mano en una hoja cada vez, y a una parte de los interesados le falta el origen, como el portal o el anuncio por el que llegaron. `[2.3.I2]`
 
 **Funcional.**
 
@@ -5080,7 +5476,11 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 - La atribución reparte el mérito de cada venta entre todos los puntos de contacto —portales, pauta, redes y ferias—, no solo el primero o el último, e incluye todos los canales, también el conversacional, como WhatsApp, si se usa: se sabe cuánto ingreso deja cada uno. `[2.3.E2]`
 
-*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F3`, `2.3.F6`, `2.3.E1`, `2.3.E3`, `2.3.E4`, `2.3.O1`, `2.3.O3`, `2.3.O4`, `2.3.O5`.
+**Óptimo.**
+
+- La IA completa sola los datos que faltan en cada interesado —como la zona que busca o si compra para vivir o para invertir—; el equipo revisa los que la IA marca como dudosos, y en la ficha se ve qué dato completó la IA y de dónde lo sacó. `[2.3.O3]`
+
+*Se leen igual:* `2.3.D2`, `2.3.I1`, `2.3.F3`, `2.3.F6`, `2.3.E1`, `2.3.E3`, `2.3.E4`, `2.3.O1`, `2.3.O4`, `2.3.O5`.
 
 #### 2.4 Equipo y Gobierno
 
@@ -5089,6 +5489,10 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 *Descripción:* Mide si cada persona sabe qué le toca en la promoción de los proyectos, si el equipo tiene metas y si decide y rinde cuentas con números del sistema.
 
 *Costo de quedarse:* Qué se promociona en cada proyecto se decide por costumbre o por quien insiste más, y nadie responde por una meta: el equipo no sabe qué se espera de él.
+
+**Deficiente.**
+
+- Nadie tiene la promoción de los proyectos como responsabilidad propia: se hace en los ratos libres de quien pueda, a veces un asesor entre visita y visita. `[2.4.D1]`
 
 **Inicial.**
 
@@ -5114,7 +5518,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 - Las decisiones se toman con lo que deja cada canal —el margen de las unidades que vende— frente a lo que cuesta. `[2.4.O4]`
 
-*Se leen igual:* `2.4.D1`, `2.4.D2`, `2.4.D3`, `2.4.I2`, `2.4.F1`, `2.4.F3`, `2.4.F5`, `2.4.F6`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
+*Se leen igual:* `2.4.D2`, `2.4.D3`, `2.4.I2`, `2.4.F1`, `2.4.F3`, `2.4.F5`, `2.4.F6`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
 
 #### 2.5 Marca y Presencia
 
@@ -5123,6 +5527,14 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 *Descripción:* Mide si la marca y cada proyecto se ven y suenan igual en todo lo que sale, si está escrito a qué comprador le hablan y si el sitio aparece en buscadores.
 
 *Costo de quedarse:* Cada anuncio se ve y suena distinto al anterior, tu mensaje no le habla a ningún tipo de comprador en particular y, cuando alguien busca tu marca o uno de tus proyectos, los buscadores muestran mal tu sitio, o no lo muestran.
+
+**Deficiente.**
+
+- No está escrito a quién le habla la inmobiliaria: no hay perfiles de comprador, como la familia que busca su primera vivienda o el inversionista. `[2.5.D2]`
+
+**Inicial.**
+
+- Cada proyecto tiene su logo, sus colores y su brochure, pero el perfil de comprador es uno solo y tan general que sirve para cualquiera. `[2.5.I1]`
 
 **Funcional.** La marca, la voz y los perfiles de comprador están escritos y se usan, cada proyecto propio tiene su página, el sitio cumple lo básico para buscadores y se publica contenido propio cada mes.
 
@@ -5147,7 +5559,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 - Hay perfiles de comprador para grupos muy chicos de compradores, no solo para los segmentos grandes: por ejemplo, el inversionista del exterior que compra para alquilar por temporada. `[2.5.O1]`
 
-*Se leen igual:* `2.5.D1`, `2.5.D2`, `2.5.D3`, `2.5.I1`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F4`, `2.5.E3`, `2.5.O2`.
+*Se leen igual:* `2.5.D1`, `2.5.D3`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F4`, `2.5.E3`, `2.5.O2`.
 
 #### 2.6 Segmentación
 
@@ -5156,6 +5568,14 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 *Descripción:* Mide si cada interesado recibe un mensaje pensado para su tipo de comprador y el proyecto que busca.
 
 *Costo de quedarse:* Le mandas la misma promoción a todos: el inversionista recibe el mensaje pensado para la familia que busca su primera casa, y ninguno de los dos se siente hablado.
+
+**Deficiente.**
+
+- No hay segmentos: la promoción de cada proyecto sale a toda la base con el mismo mensaje. `[2.6.D1]`
+
+**Inicial.**
+
+- La base se separa solo por datos generales —país, ciudad o edad—, no por lo que necesita cada tipo de comprador, como el tipo de unidad o la forma de pago. `[2.6.I1]`
 
 **Funcional.** Los tipos de comprador están escritos, cada uno recibe piezas pensadas para él y hay criterios escritos para pasarle un interesado a un asesor.
 
@@ -5179,7 +5599,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 - Hay personalización uno a uno: la IA cambia en tiempo real lo que ve cada interesado en los mensajes, el sitio o la app según lo que hizo antes —como los proyectos y las unidades que miró—, dentro de las reglas que fijó el equipo; el equipo revisa los resultados, y en el sistema se ve qué versión vio cada interesado. `[2.6.O3]`
 
-*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.I2`, `2.6.E2`, `2.6.O1`.
+*Se leen igual:* `2.6.D2`, `2.6.I2`, `2.6.E2`, `2.6.O1`.
 
 #### 2.7 Canales y Alcance
 
@@ -5188,6 +5608,14 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 *Descripción:* Mide si los canales que la inmobiliaria eligió salen con regularidad y bajo un mismo plan, si anuncian solo lo que está disponible y si se conoce lo que cuesta cada interesado.
 
 *Costo de quedarse:* Tus proyectos llegan al mercado a ratos, o no llegan, sin un plan que coordine tus canales; cuando anuncias, ofreces unidades que ya se vendieron o se alquilaron, y no sabes cuánto te cuesta cada interesado.
+
+**Deficiente.**
+
+- No hay un plan que diga por qué canales sale la inmobiliaria: portales, pauta, redes, vallas o ferias. `[2.7.D2]`
+
+**Inicial.**
+
+- La pauta en los portales y en redes, y los correos, salen cuando hay algo que promocionar —un lanzamiento, unidades nuevas—, sin presupuesto ni fechas fijados de antemano. `[2.7.I2]`
 
 **Funcional.** Los canales que la inmobiliaria eligió salen con regularidad y bajo un mismo plan, y anuncian solo las unidades disponibles.
 
@@ -5215,7 +5643,7 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 
 - Los compradores que Servicio identifica como promotores se vuelven un canal de referidos y de testimonios sin pedirlos a mano: el sistema los invita solo, el equipo elige qué testimonios se publican, y en el sistema se ve quién trajo a quién. `[2.7.O4]`
 
-*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.I3`, `2.7.F1`, `2.7.F2`, `2.7.E5`, `2.7.O1`, `2.7.O2`.
+*Se leen igual:* `2.7.D1`, `2.7.I1`, `2.7.I3`, `2.7.F1`, `2.7.F2`, `2.7.E5`, `2.7.O1`, `2.7.O2`.
 
 #### 2.8 Medición y Aprendizaje
 
@@ -5224,6 +5652,14 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 *Descripción:* Mide si cada campaña se evalúa por los interesados y las reservas que trajo, y deja un aprendizaje.
 
 *Costo de quedarse:* Repites en cada proyecto la pauta y los mensajes de siempre porque nadie anota cuáles trajeron interesados y reservas y cuáles no: cada lanzamiento empieza de cero, sin saber qué dejó el anterior.
+
+**Deficiente.**
+
+- No se mide qué trajo cada campaña o cada lanzamiento: solo se sabe lo que se gastó en pauta y en portales, o ni eso. `[2.8.D2]`
+
+**Inicial.**
+
+- Se miran clics, alcance y me gusta, no los interesados ni las ventas que trajo cada campaña de un proyecto. `[2.8.I1]`
 
 **Funcional.**
 
@@ -5239,7 +5675,11 @@ Mide el rendimiento del área de marketing de la inmobiliaria: cómo está monta
 - Hay pruebas A/B regulares (al menos una activa por mes): por ejemplo, dos renders o dos mensajes para el mismo proyecto. `[2.8.E1]`
 - El proceso de campaña y la planificación de las campañas siguientes —también el lanzamiento del próximo proyecto— se refinan con base en lo aprendido. `[2.8.E3]`
 
-*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.E2`, `2.8.O2`, `2.8.O3`.
+**Óptimo.**
+
+- La IA ajusta las campañas de cada proyecto mientras corren —deja de mostrar el render o el mensaje que no funciona y le da más espacio al que sí—, dentro de los límites que fijó el equipo; el equipo revisa los cambios, y cada uno queda en el sistema con su razón. `[2.8.O2]`
+
+*Se leen igual:* `2.8.D1`, `2.8.D3`, `2.8.I2`, `2.8.E2`, `2.8.O3`.
 
 ### Área 3 — Servicio
 
@@ -5309,6 +5749,10 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 
 - Los reclamos y las consultas llegan al celular de quien vendió o al correo de cada persona. `[3.2.D2]`
 
+**Inicial.**
+
+- Hay un sistema de casos, pero los casos que entran se reparten a mano, o la posventa atiende por WhatsApp o chat y ninguno de esos canales llega al sistema. `[3.2.I2]`
+
 **Funcional.**
 
 *Resultado:* Cada consulta o reclamo que llega por los canales conectados entra al sistema y se le asigna a alguien sin que nadie lo reparta, y quien lo necesita se entera de cada cambio.
@@ -5327,7 +5771,7 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 - Un agente de IA resuelve los casos de los compradores en todos los canales donde atiende la posventa, sin que intervenga una persona, y le pasa a una persona, con el contexto completo, lo que no puede resolver; el equipo revisa una muestra de sus respuestas y corrige lo que hace falta, y en el sistema se ve qué casos resolvió la IA y cuáles pasó. `[3.2.O1]`
 - Las conclusiones que se calculan en el almacén central de datos vuelven al sistema de posventa: quien atiende ve en la ficha, por ejemplo, el riesgo de que un comprador desista antes de la escritura. `[3.2.O4]`
 
-*Se leen igual:* `3.2.D1`, `3.2.I2`, `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.E3`, `3.2.E4`, `3.2.E5`.
+*Se leen igual:* `3.2.D1`, `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.E3`, `3.2.E4`, `3.2.E5`.
 
 #### 3.3 Datos
 
@@ -5336,6 +5780,14 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 *Descripción:* Mide si los datos de cada comprador —su unidad y sus casos— están completos y ordenados para atender y decidir sin reconstruirlos.
 
 *Costo de quedarse:* Cada vez que el comprador escribe tiene que decir qué unidad compró y volver a explicar su reclamo, porque nadie ve su historia completa.
+
+**Deficiente.**
+
+- La información de los compradores y sus casos —la unidad que compraron, sus reclamos de obra, sus trámites— está repartida entre correos, chats, hojas o sistemas que no se conectan, y no hay un lugar donde se vea junta. `[3.3.D1]`
+
+**Inicial.**
+
+- Los casos están en un solo sistema, pero la ficha del comprador sale incompleta: la unidad que compró o su contrato de alquiler hay que buscarlos en otro sistema. `[3.3.I1]`
 
 **Funcional.**
 
@@ -5358,7 +5810,9 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 
 *Resultado:* La empresa sabe qué compradores están en riesgo de quedar mal con su entrega antes de que lo digan y, donde el cliente vuelve, cuáles están logrando lo que buscaban, con datos que se mantienen al día solos.
 
-*Se leen igual:* `3.3.D1`, `3.3.D2`, `3.3.I1`, `3.3.I2`, `3.3.F5`, `3.3.F6`, `3.3.E3`, `3.3.E5`, `3.3.O1`, `3.3.O2`, `3.3.O3`, `3.3.O4`.
+- Modelos con IA predicen lo que viene —por ejemplo, cuántos reclamos de obra van a entrar después de cada entrega y de qué tipo— y proponen qué hacer; lo que predicen se ve en los tableros de la posventa y el líder decide con eso. `[3.3.O3]`
+
+*Se leen igual:* `3.3.D2`, `3.3.I2`, `3.3.F5`, `3.3.F6`, `3.3.E3`, `3.3.E5`, `3.3.O1`, `3.3.O2`, `3.3.O4`.
 
 #### 3.4 Equipo y Gobierno
 
@@ -5371,6 +5825,10 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 **Deficiente.**
 
 - Nadie tiene claro qué le toca: entre acompañar la escritura, hacer la entrega y atender los reclamos, las tareas se pisan o quedan sin dueño. `[3.4.D1]`
+
+**Inicial.**
+
+- Se siguen algunos números de la posventa —casos abiertos, pendientes de entrega—, pero sin un tablero ni una cadencia fija. `[3.4.I1]`
 
 **Funcional.**
 
@@ -5393,7 +5851,7 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 - El sistema calcula cuánto cuesta atender a cada tipo de comprador —la posventa y, si las hay, las garantías— frente a lo que deja, y el líder usa ese dato para decidir cómo atenderlo. `[3.4.O4]`
 - El equipo de posventa se mide por cómo reciben su unidad los compradores —entregas sin pendientes y su satisfacción— y por su disposición a recomendar, no solo por los casos que cierra. `[3.4.O401 · declarado · hábito · requiere 3.3.E2]`
 
-*Se leen igual:* `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.O1`, `3.4.O2`, `3.4.O3`.
+*Se leen igual:* `3.4.D2`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.O1`, `3.4.O2`, `3.4.O3`.
 
 #### 3.5 Consistencia de la posventa
 
@@ -5404,6 +5862,8 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 *Costo de quedarse:* El mismo reclamo se acepta o se rechaza según quién atienda, y cada entrega se hace a su manera: el comprador lo nota y se lo cuenta a sus vecinos.
 
 **Deficiente.** No hay respuestas guardadas ni una forma común de entregar: cada persona responde y entrega a su manera.
+
+- No hay respuestas guardadas: cada persona de la posventa escribe desde cero, a su manera, cada respuesta a un comprador. `[3.5.D1]`
 
 **Inicial.**
 
@@ -5425,7 +5885,11 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 - Quien atiende la posventa usa en su día a día las respuestas guardadas para los casos frecuentes —cómo reportar un pendiente, qué cubre la garantía—, no solo las tiene cargadas. `[3.5.E1]`
 - El tono y la voz de marca se aplican a las respuestas, no cada persona con su estilo. `[3.5.E2]`
 
-*Se leen igual:* `3.5.D1`, `3.5.E3`, `3.5.O1`.
+**Óptimo.**
+
+- Lo que la IA responde o escribe sola a los compradores —por ejemplo, sobre la escritura, la entrega o la garantía— sigue la guía de tono y estilo de la marca; el equipo revisa una muestra de sus respuestas y corrige a la IA cuando se sale de la guía, y cada respuesta queda en el sistema. `[3.5.O1]`
+
+*Se leen igual:* `3.5.E3`.
 
 #### 3.6 Priorización de compradores
 
@@ -5438,6 +5902,10 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 **Deficiente.**
 
 - Los casos se atienden por orden de llegada o según quién los toma, sin mirar su gravedad ni quién es el comprador. `[3.6.D1]`
+
+**Inicial.**
+
+- Se intenta atender primero lo urgente, como una filtración, pero los casos no tienen una prioridad asignada: cada persona de la posventa decide a ojo, o se adelanta el comprador que más insiste. `[3.6.I1]`
 
 **Funcional.**
 
@@ -5459,7 +5927,7 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 
 - Cada comprador se atiende con el contexto de cómo llegó —el segmento del que viene y lo que se le prometió en la venta, como los acabados, las áreas comunes y la fecha de entrega—, que quien lo atiende, persona o IA, ve en su ficha sin volver a preguntarlo. `[3.6.O3]`
 
-*Se leen igual:* `3.6.I1`, `3.6.E1`, `3.6.O1`, `3.6.O2`.
+*Se leen igual:* `3.6.E1`, `3.6.O1`, `3.6.O2`.
 
 #### 3.7 Acompañamiento del comprador
 
@@ -5468,6 +5936,14 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 *Descripción:* Mide si el comprador sabe cómo va su unidad sin preguntar y si los problemas se atienden antes del reclamo.
 
 *Costo de quedarse:* El comprador se entera del atraso de su entrega por un vecino o por la prensa, y tú te enteras de que quedó mal cuando lo publica en redes.
+
+**Deficiente.**
+
+- Aunque un comprador acumule reclamos repetidos —por ejemplo, por la misma falla de su unidad— o una queja sin resolver, nadie lo contacta: los problemas se atienden cuando estallan. `[3.7.D1]`
+
+**Inicial.**
+
+- Cuando un comprador tiene problemas repetidos, como reclamos con su unidad, a veces alguien lo contacta, pero depende de que lo note. `[3.7.I1]`
 
 **Funcional.** Los reclamos que se repiten y las quejas se detectan, aunque sea a mano, los compradores clave reciben contacto antes de sus fechas críticas y, si la empresa vende proyectos propios, cada cambio en la fecha de entrega se avisa antes de que se cumpla la anterior.
 
@@ -5492,7 +5968,7 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 - La mayoría de los problemas que detecta el sistema —de la entrega, de la garantía o de un trámite— se resuelven antes de que el comprador los note: el equipo valida la solución y en el sistema se ve que el comprador no tuvo que abrir un caso. `[3.7.O2]`
 - Los compradores reciben, sin pedirlos, detalles pensados para deleitarlos —un obsequio al recibir la unidad, un beneficio en el aniversario de la entrega—, elegidos según la historia de cada comprador y el momento de su relación, y en el sistema queda qué recibió cada uno. `[3.7.O4]`
 
-*Se leen igual:* `3.7.D1`, `3.7.D2`, `3.7.I1`, `3.7.F3`, `3.7.E1`, `3.7.E2`, `3.7.E3`, `3.7.O1`, `3.7.O3`.
+*Se leen igual:* `3.7.D2`, `3.7.F3`, `3.7.E1`, `3.7.E2`, `3.7.E3`, `3.7.O1`, `3.7.O3`.
 
 #### 3.8 Escalabilidad de la posventa
 
@@ -5503,6 +5979,12 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 *Costo de quedarse:* Tu equipo responde a mano las mismas preguntas en cada proyecto, y cada unidad que entregas suma más de esas preguntas a la fila.
 
 **Deficiente.** Las preguntas de siempre de los compradores se responden a mano, una por una: no hay nada publicado.
+
+- No hay ninguna respuesta publicada —ni un manual del propietario ni preguntas frecuentes— que el comprador pueda consultar por su cuenta. `[3.8.D1]`
+
+**Inicial.**
+
+- Hay algunas respuestas publicadas, pero sueltas: no cubren lo que más preguntan los compradores —como la escritura, la entrega o la garantía—, que se sigue respondiendo a mano. `[3.8.I2]`
 
 **Funcional.**
 
@@ -5521,7 +6003,7 @@ Cuando un comprador escribe o llama, ¿cómo llega su caso al sistema y a quien 
 
 - La IA aplica lo que aprende de los casos de los compradores a las respuestas guardadas, a la atención de cada tipo de comprador y a los avisos que reciben sin pedirlos, y el líder valida cada cambio; en el sistema queda qué cambió y de dónde salió. `[3.8.O3]`
 
-*Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O2`, `3.8.O4`.
+*Se leen igual:* `3.8.D2`, `3.8.I1`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O2`, `3.8.O4`.
 
 ## Edición — Turismo
 
@@ -5575,6 +6057,15 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 
 *Costo de quedarse:* Si se va quien lleva los grupos, se lleva las cotizaciones en su correo: nadie sabe a quién se le cotizó, qué bloqueo estaba por confirmarse ni qué condiciones se le prometieron a cada agencia.
 
+**Deficiente.**
+
+- Las consultas se reparten a ojo, o se las queda quien las ve primero —por ejemplo, en el teléfono o en el WhatsApp—: no hay una regla que diga a quién le toca cada una. `[1.1.D2]`
+- Si se van dos personas clave —por ejemplo, quien lleva los grupos y quien atiende a las agencias—, nadie sabe en qué quedó cada cotización ni cada reserva. `[1.1.D4]`
+
+**Inicial.**
+
+- La reunión de reservas y ocupación se hace cuando hay tiempo, sin una fecha fija ni un orden para repasar las cotizaciones y las reservas. `[1.1.I3]`
+
 **Funcional.** Todo el equipo sigue el mismo recorrido escrito en el CRM, de la consulta a la llegada, con una cadencia de contacto, un proceso escrito para cotizar grupos y una revisión fija de las reservas.
 
 *Resultado:* Si rota una persona del equipo, la siguiente sabe en qué va cada cotización, porque todos trabajan la venta igual en el CRM: las reservas avanzan con los mismos criterios, cada grupo se cotiza de la misma forma, cada consulta se contacta con la cadencia acordada y las reservas se repasan en cada reunión de reservas y ocupación.
@@ -5587,7 +6078,11 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 
 - Existen guías de indagación, cotización de grupos y manejo de objeciones —el precio frente a una OTA, las fechas, la política de cancelación— que el equipo usa. `[1.1.E2]`
 
-*Se leen igual:* `1.1.D1`, `1.1.D2`, `1.1.D3`, `1.1.D4`, `1.1.I1`, `1.1.I2`, `1.1.I3`, `1.1.I4`, `1.1.F4`, `1.1.F5`, `1.1.F6`, `1.1.E1`, `1.1.E3`, `1.1.O1`, `1.1.O2`, `1.1.O3`.
+**Óptimo.**
+
+- La IA detecta las cotizaciones y las reservas que se salen del proceso —un grupo sin depósito, una cotización sin fecha de vencimiento—, las marca en el CRM y se las señala al líder y a quien corresponde; el líder decide qué se corrige. `[1.1.O1]`
+
+*Se leen igual:* `1.1.D1`, `1.1.D3`, `1.1.I1`, `1.1.I2`, `1.1.I4`, `1.1.F4`, `1.1.F5`, `1.1.F6`, `1.1.E1`, `1.1.E3`, `1.1.O2`, `1.1.O3`.
 
 #### 1.2 Tecnología y Automatización
 
@@ -5596,6 +6091,14 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 *Descripción:* Mide cuánto del trabajo repetitivo hace el sistema —repartir las consultas, registrar las reservas de todos los canales, descontar el cupo en todos a la vez y avisar qué toca— y cómo usa el equipo la automatización y la IA.
 
 *Costo de quedarse:* Tu equipo copia a mano las reservas de cada OTA, cambia la tarifa canal por canal y descubre que la habitación ya estaba vendida cuando el viajero ya pagó.
+
+**Deficiente.**
+
+- Las consultas de los viajeros viven en listas, en el WhatsApp o en la agenda de cada persona. `[1.2.D1]`
+
+**Inicial.**
+
+- Las reservas que llegan sin vendedor —en el motor de reservas del sitio o en una OTA— se pasan a mano al sistema, cuando alguien tiene tiempo. `[1.2.I2]`
 
 **Funcional.** Lo básico pasa solo —las reservas de todos los canales entran al sistema, una reserva descuenta el cupo en todos a la vez, las consultas se reparten por una regla y el sistema avisa qué toca— y, si se usa IA, trabaja con los datos de cada viajero.
 
@@ -5617,7 +6120,7 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 
 - Si el equipo atiende por un canal conversacional, agentes de IA responden ahí, califican las consultas con la definición de consulta calificada y cotizan o reservan a cualquier hora; le pasan a una persona, con el contexto, a quien pide un grupo o algo que no pueden resolver, y el equipo revisa en el CRM lo que atendieron. `[1.2.O2]`
 
-*Se leen igual:* `1.2.D1`, `1.2.D2`, `1.2.I1`, `1.2.I2`, `1.2.F3`, `1.2.F4`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O1`, `1.2.O3`.
+*Se leen igual:* `1.2.D2`, `1.2.I1`, `1.2.F3`, `1.2.F4`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O1`, `1.2.O3`.
 
 #### 1.3 Datos
 
@@ -5626,6 +6129,14 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 *Descripción:* Mide si los datos de ventas son confiables para decidir: reservas completas, el canal de cada una y reportes que salen del sistema sin armarlos a mano.
 
 *Costo de quedarse:* Decides con números que no cuadran: el reporte de reservas se arma a mano cruzando el sistema de reservas con lo que manda cada OTA, y no sabes qué canal te trae viajeros ni cuánto te cuesta cada uno.
+
+**Deficiente.**
+
+- No se registra por qué canal llegó cada reserva —el sitio, una OTA, una agencia o un mayorista— ni quién la lleva: sacar un reporte confiable es imposible. `[1.3.D2]`
+
+**Inicial.**
+
+- Las reservas y las cotizaciones que se crean hoy se registran, pero a algunas les falta la fecha esperada de confirmación, el monto o el responsable. `[1.3.I3]`
 
 **Funcional.** El reporte de reservas y cotizaciones sale del sistema, sin armarlo a mano, y dice por qué canal llegó cada una: se le puede creer.
 
@@ -5646,7 +6157,11 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 - La ficha de cada viajero reúne lo comercial con su historial de conversaciones y, si la empresa lleva sus estancias o sus pagos en otro sistema, con lo que viene de él: la vista 360° empieza a tomar forma. `[1.3.E3]`
 - Se sabe qué parte de las reservas llega directa y qué parte por intermediarios, y cuánto se paga de comisión en cada canal, y ese número se revisa cada mes. `[1.3.E501 · comprobable · hábito]`
 
-*Se leen igual:* `1.3.D1`, `1.3.D2`, `1.3.D3`, `1.3.D4`, `1.3.I1`, `1.3.I2`, `1.3.I3`, `1.3.F2`, `1.3.F8`, `1.3.E2`, `1.3.E4`, `1.3.O1`, `1.3.O2`, `1.3.O3`, `1.3.O4`, `1.3.O5`.
+**Óptimo.**
+
+- Un modelo de IA calcula la proyección de ocupación e ingresos con la historia de las reservas; se ve en el sistema y el líder la revisa antes de comprometerla. `[1.3.O2]`
+
+*Se leen igual:* `1.3.D1`, `1.3.D3`, `1.3.D4`, `1.3.I1`, `1.3.I2`, `1.3.F2`, `1.3.F8`, `1.3.E2`, `1.3.E4`, `1.3.O1`, `1.3.O3`, `1.3.O4`, `1.3.O5`.
 
 #### 1.4 Equipo y Gobierno
 
@@ -5655,6 +6170,14 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 *Descripción:* Mide si cada persona del equipo tiene un rol y una meta por escrito, y si el líder sigue los números de reservas y ocupación y pide cuentas con datos.
 
 *Costo de quedarse:* El líder se entera al final de la temporada de que no se llenó: no vio antes qué canal se cayó ni qué cotizaciones de grupo no se cerraron.
+
+**Deficiente.**
+
+- El líder apaga incendios —el grupo que llega sin habitaciones, la OTA que vendió de más—: no hay métricas ni rendición de cuentas. `[1.4.D2]`
+
+**Inicial.**
+
+- Los reportes de cómo opera el equipo —consultas atendidas, cotizaciones, reservas y ocupación— se arman a mano. `[1.4.I2]`
 
 **Funcional.** Cada persona tiene un rol y una meta por escrito, está claro quién atiende cada tipo de venta, el líder sigue un tablero cada semana y en la reunión de reservas cada quien rinde cuentas.
 
@@ -5674,7 +6197,7 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 
 - Las decisiones de la dirección usan números de fondo: cuánto deja cada viajero en el tiempo, cuánto margen deja cada canal después de su comisión y cuánto aporta cada persona del equipo. `[1.4.O1]`
 
-*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
+*Se leen igual:* `1.4.D1`, `1.4.I1`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
 
 #### 1.5 Oferta y tarifas
 
@@ -5687,6 +6210,10 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 **Deficiente.** Nadie puede decir con claridad para quién es cada producto, las tarifas cambian según quién conteste o en qué canal se mire, y las condiciones de cancelación se explican de memoria.
 
 - Hay más de una tarifa circulando para la misma fecha y el mismo producto, y no se sabe cuál es la vigente. `[1.5.D501 · comprobable]`
+
+**Inicial.**
+
+- Hay una plantilla de cotización —por ejemplo, la de grupos y eventos—, pero cada ejecutivo de reservas o de ventas la cambia o la usa a su manera. `[1.5.I2]`
 
 **Funcional.** El viajero objetivo de cada producto está escrito, y todos venden con las mismas tarifas, las mismas condiciones y la misma cotización, en todos los canales.
 
@@ -5708,7 +6235,7 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 
 - La IA revisa en tiempo real, contra las tarifas, las condiciones y la oferta vigentes, lo que se les dice a los viajeros, lo escriba ella o el equipo; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
 
-*Se leen igual:* `1.5.D1`, `1.5.D2`, `1.5.I1`, `1.5.I2`, `1.5.F2`, `1.5.F3`, `1.5.E2`.
+*Se leen igual:* `1.5.D1`, `1.5.D2`, `1.5.I1`, `1.5.F2`, `1.5.F3`, `1.5.E2`.
 
 #### 1.6 Priorización de consultas
 
@@ -5717,6 +6244,14 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 *Descripción:* Mide si el equipo decide a qué consultas dedicar su tiempo con criterios escritos, según el viajero objetivo y lo que deja cada venta en cada temporada.
 
 *Costo de quedarse:* Tu equipo le dedica la misma tarde a quien pregunta por una noche que a la empresa que busca un evento, y le da el cupo de temporada alta a un grupo con tarifa de temporada baja.
+
+**Deficiente.**
+
+- No hay criterios para distinguir una consulta buena de una mala: se pierde tiempo cotizando a quien nunca va a reservar. `[1.6.D1]`
+
+**Inicial.**
+
+- El líder sabe cuál es el viajero objetivo de cada temporada, pero el CRM no tiene los campos —fechas, cantidad de personas, motivo del viaje— para separar las consultas que encajan. `[1.6.I2]`
 
 **Funcional.** Las consultas se separan por los rasgos del viajero objetivo y hay una definición escrita de consulta calificada que el equipo aplica.
 
@@ -5737,7 +6272,7 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 
 - La IA detecta en cada viajero, agencia o empresa el riesgo de perderlo y el potencial de venderle más, como otra estancia o un evento, lo marca en el CRM y el equipo decide qué hacer. `[1.6.O2]`
 
-*Se leen igual:* `1.6.D1`, `1.6.I1`, `1.6.I2`, `1.6.F3`, `1.6.E1`, `1.6.E3`, `1.6.O1`, `1.6.O3`, `1.6.O4`.
+*Se leen igual:* `1.6.I1`, `1.6.F3`, `1.6.E1`, `1.6.E3`, `1.6.O1`, `1.6.O3`, `1.6.O4`.
 
 #### 1.7 Seguimiento de cotizaciones y reservas
 
@@ -5751,6 +6286,10 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 
 - No hay material de venta —fotos, videos, fichas de habitaciones y de experiencias, propuestas para grupos— para mostrarles a los interesados. `[1.7.D4]`
 - Las reservas sin pago y los bloqueos de grupo se vencen sin que nadie se dé cuenta, o siguen ocupando cupo después de su fecha. `[1.7.D501 · comprobable]`
+
+**Inicial.**
+
+- Cuando una cotización no se contesta o una reserva no se paga, cada persona del equipo decide si insiste y cómo: no hay un paso acordado. `[1.7.I1]`
 
 **Funcional.** Ninguna cotización se enfría en silencio y ningún bloqueo se vence sin aviso: se detectan antes de que se pierdan y hay un paso acordado para retomarlos.
 
@@ -5766,7 +6305,11 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 - Los viajeros y las empresas que todavía no están listos para reservar no se abandonan: pasan a nutrición —la de Marketing o una secuencia del propio equipo— y vuelven a una persona del equipo cuando muestran interés o se abre una fecha que les sirve. `[1.7.E2]`
 - Se mide cuántas cotizaciones vencidas, cuántas reservas sin pago y cuántos bloqueos en riesgo se recuperan. `[1.7.E501 · comprobable]`
 
-*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I1`, `1.7.I2`, `1.7.I3`, `1.7.I4`, `1.7.F1`, `1.7.F2`, `1.7.F3`, `1.7.E1`, `1.7.E3`, `1.7.E4`, `1.7.O1`, `1.7.O2`.
+**Óptimo.**
+
+- La IA detecta qué cotizaciones y bloqueos de grupo de más valor se están trabando antes de que venza su plazo y propone a quién movilizar o qué contenido enviar —otras fechas, otra tarifa, las fotos del lugar—; el líder valida, y todo queda en el CRM. `[1.7.O1]`
+
+*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I2`, `1.7.I3`, `1.7.I4`, `1.7.F1`, `1.7.F2`, `1.7.F3`, `1.7.E1`, `1.7.E3`, `1.7.E4`, `1.7.O2`.
 
 #### 1.8 Reservas ganadas, perdidas y canceladas
 
@@ -5775,6 +6318,14 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 *Descripción:* Mide si queda registrado por qué no reserva un viajero o por qué se cancela una reserva, y si el equipo revisa lo que gana, lo que pierde y lo que se cancela para mejorar su proceso.
 
 *Costo de quedarse:* No sabes por qué pierdes reservas ni por qué se cancelan —la tarifa, las fechas, una OTA más barata, la política de cancelación—: cada quien tiene su explicación, y sin un registro no hay cómo ver qué se repite.
+
+**Deficiente.**
+
+- Las cotizaciones que no terminan en reserva se cierran sin anotar por qué el viajero no reservó. `[1.8.D2]`
+
+**Inicial.**
+
+- Por qué no reservó el viajero se anota a veces y en texto libre —«estaba caro», «eligió otras fechas»—, a criterio de cada persona, así que no se puede sumar. `[1.8.I1]`
 
 **Funcional.** Cada cotización perdida y cada reserva cancelada quedan con su razón, elegida de una lista fija, y el líder saca del sistema el reporte del trimestre.
 
@@ -5788,7 +6339,11 @@ Mide el rendimiento de la venta de la empresa turística: cómo está montada po
 - Al menos una vez por trimestre se revisan las reservas ganadas, las cotizaciones perdidas y las reservas canceladas para encontrar lo que se repite. `[1.8.E1]`
 - Se mide cuántas reservas se cancelan y cuántas no se presentan, por canal y por temporada, y la política de cancelación y de depósitos se revisa con ese dato. `[1.8.E501 · comprobable · hábito]`
 
-*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`, `1.8.O4`.
+**Óptimo.**
+
+- La IA analiza las llamadas con los viajeros, las agencias y las empresas —también las de video— y le deja a cada ejecutivo de reservas o de ventas recomendaciones que quedan registradas; el líder las revisa con él. `[1.8.O1]`
+
+*Se leen igual:* `1.8.D1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O2`, `1.8.O3`, `1.8.O4`.
 
 ### Área 2 — Marketing
 
@@ -5816,6 +6371,10 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 
 - No hay calendario de campañas: cada temporada y cada promoción se improvisan cuando ya se ven las habitaciones vacías. `[2.1.D1]`
 
+**Inicial.**
+
+- Las campañas dependen de quien las arma —una persona del equipo o la agencia—: el calendario, los accesos, como los de las redes y los perfiles en las OTAs, y los pasos a seguir están en sus manos. `[2.1.I3]`
+
 **Funcional.** Las campañas salen con un calendario y un proceso que el equipo sigue, sin depender de una persona, y cada temporada tiene su campaña planeada con anticipación.
 
 *Resultado:* Todo el equipo trabaja en el mismo sistema, y la promoción de cada temporada sigue saliendo aunque cambie una persona: el calendario y el proceso no viven en la cabeza de nadie, y el líder sabe en qué va cada campaña sin tener que preguntar.
@@ -5824,7 +6383,15 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 - Si una agencia —o quien produce las fotos y los videos— ejecuta todo o parte del trabajo, el equipo es dueño del calendario, del brief, de la aprobación y de los accesos, y las campañas no se detienen si cambia ese proveedor. `[2.1.F5]`
 - Cada temporada alta y baja, y cada fecha que mueve viajeros —feriados, vacaciones escolares, eventos de la zona—, tiene su campaña planeada con al menos la anticipación con que reservan sus viajeros. `[2.1.F501 · declarado]`
 
-*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I1`, `2.1.I2`, `2.1.I3`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F6`, `2.1.E2`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
+**Eficiente.**
+
+- Cada pieza —una foto, un video, un anuncio o lo que se publica en una OTA— pasa por una revisión de calidad y una aprobación antes de publicarse. `[2.1.E2]`
+
+**Óptimo.**
+
+- La IA hace las tareas repetitivas del proceso de campaña —como preparar el brief de la temporada, adaptar cada pieza a su canal y a cada OTA o cargar la campaña en el calendario—, el responsable de la campaña valida lo que hizo, y en el sistema se ve qué tareas hizo la IA. `[2.1.O1]`
+
+*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I1`, `2.1.I2`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F6`, `2.1.E4`, `2.1.O4`, `2.1.O5`.
 
 #### 2.2 Tecnología y Automatización
 
@@ -5833,6 +6400,14 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 *Descripción:* Mide si las herramientas que se pagan se usan, si cada viajero que deja sus datos o escribe llega solo al sistema y cuánto trabajo repetitivo hacen las automatizaciones y la IA.
 
 *Costo de quedarse:* Quien te escribe por WhatsApp para preguntar por fechas espera a que alguien le conteste, o reserva en una OTA mientras tanto, y si pagas herramientas, parte de lo que pagas no se usa.
+
+**Deficiente.**
+
+- Lo que llega por el sitio, el WhatsApp o el chat —la consulta por fechas, la pregunta por una tarifa— cae en el correo o el teléfono de alguien, y no queda registrado en ningún lado. `[2.2.D2]`
+
+**Inicial.**
+
+- Algunos formularios del sitio —el de consultas, el de grupos o el de eventos— no están conectados al sistema, o ninguno de los canales conversacionales por los que se atiende, como WhatsApp, lo está: lo que entra por ahí se pasa a mano o se pierde. `[2.2.I2]`
 
 **Funcional.**
 
@@ -5849,7 +6424,7 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 
 - Si la empresa atiende por un canal conversacional, como WhatsApp, agentes de IA responden lo que generan las campañas y mantienen la conversación con quien todavía no está listo para reservar; lo que no pueden resolver pasa a una persona con la conversación completa, y en el sistema queda cada conversación que atendió la IA. `[2.2.O2]`
 
-*Se leen igual:* `2.2.D1`, `2.2.D2`, `2.2.D3`, `2.2.I1`, `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F3`, `2.2.F4`, `2.2.E2`, `2.2.E3`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`, `2.2.O3`.
+*Se leen igual:* `2.2.D1`, `2.2.D3`, `2.2.I1`, `2.2.I3`, `2.2.F2`, `2.2.F3`, `2.2.F4`, `2.2.E2`, `2.2.E3`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`, `2.2.O3`.
 
 #### 2.3 Datos
 
@@ -5858,6 +6433,14 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 *Descripción:* Mide si los datos de marketing son confiables: de dónde llega cada viajero, en qué etapa está y si los reportes salen del sistema sin rehacerlos.
 
 *Costo de quedarse:* No sabes qué campaña te trajo cada reserva directa ni cuántas consultas terminan reservando en una OTA: cada reporte hay que rehacerlo o revisarlo a mano antes de creerle.
+
+**Deficiente.**
+
+- No se registra de dónde llegó cada viajero: nadie sabe si vino por el sitio, una feria de turismo, una OTA o una recomendación. `[2.3.D1]`
+
+**Inicial.**
+
+- Hay reportes, pero se arman a mano en una hoja cada vez, y a una parte de las consultas le falta el origen. `[2.3.I2]`
 
 **Funcional.**
 
@@ -5871,7 +6454,11 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 
 - Lo que alguien hizo antes de dejar sus datos —qué fechas buscó, qué habitaciones o experiencias miró— queda en su ficha cuando se identifica. `[2.3.E4]`
 
-*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F2`, `2.3.F3`, `2.3.F6`, `2.3.E1`, `2.3.E2`, `2.3.E3`, `2.3.O1`, `2.3.O3`, `2.3.O4`, `2.3.O5`.
+**Óptimo.**
+
+- La IA completa sola los datos que faltan en la ficha de cada viajero —el motivo del viaje, con quién viaja—; el equipo revisa los que la IA marca como dudosos, y en la ficha se ve qué dato completó la IA y de dónde lo sacó. `[2.3.O3]`
+
+*Se leen igual:* `2.3.D2`, `2.3.I1`, `2.3.F2`, `2.3.F3`, `2.3.F6`, `2.3.E1`, `2.3.E2`, `2.3.E3`, `2.3.O1`, `2.3.O4`, `2.3.O5`.
 
 #### 2.4 Equipo y Gobierno
 
@@ -5881,16 +6468,28 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 
 *Costo de quedarse:* Qué se promociona en cada temporada se decide por costumbre o por quien insiste más, y nadie responde por una meta de reservas directas: el equipo no sabe qué se espera de él.
 
+**Deficiente.**
+
+- Qué hacer —como qué promocionar en cada temporada— se decide sobre la marcha, sin metas ni números. `[2.4.D2]`
+
+**Inicial.**
+
+- Los roles no están escritos, así que hasta lo del día a día —qué publicar, qué foto subir a una OTA, qué pieza aprobar— espera a que lo resuelva la dirección general. `[2.4.I1]`
+
 **Funcional.**
 
 - El líder tiene un tablero con 4 a 6 métricas clave —consultas nuevas, de dónde llegan, cuántas terminan en una reserva directa y cuánto cuesta cada una— y lo consulta al menos una vez por semana. `[2.4.F2]`
 - Las decisiones sobre qué promocionar y en qué enfocarse —qué temporada, qué producto, qué tipo de viajero— citan datos del sistema, no opiniones. `[2.4.F4]`
 
+**Eficiente.**
+
+- El liderazgo coordina con Ventas —el traspaso de las consultas al equipo de reservas, los SLA y una reunión conjunta con fecha fija— y con Servicio. `[2.4.E3]`
+
 **Óptimo.**
 
 - Las decisiones se toman con lo que deja cada canal a lo largo del tiempo —el valor de los viajeros que trae y cuántos vuelven— frente a lo que cuesta, también frente a la comisión de las OTAs. `[2.4.O4]`
 
-*Se leen igual:* `2.4.D1`, `2.4.D2`, `2.4.D3`, `2.4.I1`, `2.4.I2`, `2.4.F1`, `2.4.F3`, `2.4.F5`, `2.4.F6`, `2.4.E2`, `2.4.E3`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
+*Se leen igual:* `2.4.D1`, `2.4.D3`, `2.4.I2`, `2.4.F1`, `2.4.F3`, `2.4.F5`, `2.4.F6`, `2.4.E2`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
 
 #### 2.5 Marca y reputación
 
@@ -5899,6 +6498,14 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 *Descripción:* Mide si la marca se ve y suena igual en todo lo que sale, si está escrito a qué viajero le habla, si el sitio aparece en buscadores y si los perfiles en los sitios de reseñas y en las OTAs dicen lo mismo que el sitio propio.
 
 *Costo de quedarse:* El viajero encuentra fotos viejas en una OTA, otra descripción en Google y reseñas sin respuesta, y elige el lugar de al lado.
+
+**Deficiente.**
+
+- No está escrito a quién le habla la empresa: no hay perfiles de viajero. `[2.5.D2]`
+
+**Inicial.**
+
+- Hay logo, colores y plantillas, pero el perfil de viajero es uno solo y tan general que sirve para cualquiera: «el turista». `[2.5.I1]`
 
 **Funcional.** La marca, la voz y los perfiles de viajero están escritos y se usan, el sitio cumple lo básico para buscadores, los perfiles en los sitios de reseñas y en las OTAs están al día, y se publica contenido propio cada mes.
 
@@ -5915,7 +6522,11 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 - El recorrido de compra está dibujado de punta a punta, con los puntos de contacto de cada etapa: la búsqueda del destino, las OTAs, el sitio, las reseñas, la reserva y la llegada. `[2.5.E4]`
 - Se les pide una reseña pública a los viajeros después de su estancia o su experiencia —en Google, en los sitios de reseñas o en la OTA por la que reservaron—, y cada reseña, buena o mala, se responde dentro del plazo que fijó el equipo. `[2.5.E5]`
 
-*Se leen igual:* `2.5.D1`, `2.5.D2`, `2.5.D3`, `2.5.I1`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F4`, `2.5.E1`, `2.5.E2`, `2.5.E3`, `2.5.O1`, `2.5.O2`.
+**Óptimo.**
+
+- Hay perfiles de viajero para grupos muy chicos —como la pareja que celebra su aniversario o quien viaja con su mascota— o, cuando se vende a empresas y agencias, para cada cuenta importante, no solo para los segmentos grandes. `[2.5.O1]`
+
+*Se leen igual:* `2.5.D1`, `2.5.D3`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F4`, `2.5.E1`, `2.5.E2`, `2.5.E3`, `2.5.O2`.
 
 #### 2.6 Segmentación
 
@@ -5924,6 +6535,14 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 *Descripción:* Mide si cada viajero recibe un mensaje pensado para su tipo de viaje, y no la misma promoción que todos.
 
 *Costo de quedarse:* Le mandas la misma promoción a todos: la familia recibe la oferta pensada para el evento de una empresa, y ninguno de los dos se siente hablado.
+
+**Deficiente.**
+
+- No hay segmentos: las campañas, como la promoción de cada temporada, salen a toda la base con el mismo mensaje. `[2.6.D1]`
+
+**Inicial.**
+
+- La base se separa solo por datos generales —país, ciudad o edad—, no por cómo viaja cada grupo ni qué busca. `[2.6.I1]`
 
 **Funcional.**
 
@@ -5934,7 +6553,11 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 
 - La segmentación usa datos de comportamiento —qué fechas buscó, qué habitación o experiencia miró, qué reservó antes—, no solo lo que la persona declaró. `[2.6.E4]`
 
-*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.I2`, `2.6.F4`, `2.6.E1`, `2.6.E2`, `2.6.E3`, `2.6.O1`, `2.6.O3`.
+**Óptimo.**
+
+- La IA predice qué viajero va a reservar y quién va a perder interés en los mensajes, y arma los segmentos con eso; el equipo revisa los segmentos antes de usarlos en una campaña, y en la ficha de cada viajero se ve su predicción. `[2.6.O1]`
+
+*Se leen igual:* `2.6.D2`, `2.6.I2`, `2.6.F4`, `2.6.E1`, `2.6.E2`, `2.6.E3`, `2.6.O3`.
 
 #### 2.7 Canales y Alcance
 
@@ -5943,6 +6566,14 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 *Descripción:* Mide si los canales que la empresa eligió salen con regularidad y bajo un mismo plan, y si se conoce lo que cuesta cada reserva directa frente a lo que se paga de comisión.
 
 *Costo de quedarse:* Llegas al mercado solo cuando ves habitaciones vacías, sin un plan que coordine tus canales, y no sabes si una reserva directa te cuesta más o menos que la comisión de una OTA.
+
+**Deficiente.**
+
+- No hay un plan que diga por qué canales sale la empresa a buscar viajeros. `[2.7.D2]`
+
+**Inicial.**
+
+- La pauta y los correos salen cuando hay algo que promocionar —por ejemplo, habitaciones vacías que llenar—, sin presupuesto ni fechas fijados de antemano. `[2.7.I2]`
 
 **Funcional.**
 
@@ -5956,7 +6587,11 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 - Hay un programa de referidos activo: quienes ya viajaron saben cómo recomendar a un conocido, y cada referido queda registrado con quién lo trajo. `[2.7.E4]`
 - En el sistema se ve cuánto cuesta cada reserva directa frente a lo que se paga de comisión por una reserva de intermediario, y el presupuesto de pauta se revisa con ese dato. `[2.7.E501 · comprobable · requiere 2.7.F6]`
 
-*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.I3`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.E1`, `2.7.E3`, `2.7.E5`, `2.7.O1`, `2.7.O2`, `2.7.O4`.
+**Óptimo.**
+
+- Los viajeros que Servicio identifica como promotores se vuelven un canal de referidos y de historias de viaje sin pedirlas a mano: el sistema los invita solo, el equipo elige qué historias se publican, y en el sistema se ve quién trajo a quién. `[2.7.O4]`
+
+*Se leen igual:* `2.7.D1`, `2.7.I1`, `2.7.I3`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.E1`, `2.7.E3`, `2.7.E5`, `2.7.O1`, `2.7.O2`.
 
 #### 2.8 Medición y Aprendizaje
 
@@ -5965,6 +6600,14 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 *Descripción:* Mide si cada campaña se evalúa por las consultas y las reservas que trajo, y deja un aprendizaje para la temporada siguiente.
 
 *Costo de quedarse:* Repites cada temporada la pauta y los mensajes de siempre porque nadie anota cuáles trajeron reservas: cada temporada empieza de cero.
+
+**Deficiente.**
+
+- No se mide qué trajo cada campaña, como la de cada temporada: solo se sabe lo que se gastó, o ni eso. `[2.8.D2]`
+
+**Inicial.**
+
+- Se miran clics, alcance y me gusta, no las consultas ni las reservas que trajo cada campaña. `[2.8.I1]`
 
 **Funcional.**
 
@@ -5975,7 +6618,11 @@ Mide el rendimiento del área de marketing de la empresa turística: cómo está
 
 - El proceso de campaña y la planificación de las campañas siguientes —también la de la próxima temporada— se refinan con base en lo aprendido. `[2.8.E3]`
 
-*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.E1`, `2.8.E2`, `2.8.O2`, `2.8.O3`.
+**Óptimo.**
+
+- La IA ajusta las campañas mientras corren —deja de mostrar la versión del anuncio que no funciona, con otra foto, otro destino u otra oferta, y le da más espacio a la que sí—, dentro de los límites que fijó el equipo; el equipo revisa los cambios, y cada uno queda en el sistema con su razón. `[2.8.O2]`
+
+*Se leen igual:* `2.8.D1`, `2.8.D3`, `2.8.I2`, `2.8.E1`, `2.8.E2`, `2.8.O3`.
 
 ### Área 3 — Servicio
 
@@ -5999,6 +6646,14 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 
 *Costo de quedarse:* El servicio depende de quién esté de turno: si esa persona no está, la solicitud se pierde entre turnos y el viajero tiene que pedirla dos veces.
 
+**Deficiente.**
+
+- Cada persona de la recepción o de reservas atiende las solicitudes de los viajeros a su manera. `[3.1.D1]`
+
+**Inicial.**
+
+- Unos atienden en el sistema; otros —el guía de turno, la recepción de noche— siguen con su WhatsApp o su teléfono personal. `[3.1.I3]`
+
 **Funcional.**
 
 - El recorrido de los casos de servicio está configurado en el sistema con sus etapas y cubre la atención de cada caso —una consulta, un cambio de reserva, una solicitud durante la estancia o una queja—, de la recepción al cierre. `[3.1.F1]`
@@ -6011,7 +6666,11 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 - El recorrido del viajero está definido de punta a punta, con sus momentos clave —la confirmación, la llegada, la estancia o la experiencia, la salida y, si vuelve, su próxima reserva— y un responsable y un estándar para cada uno. `[3.1.E4]`
 - Hay guías escritas para lo que más se complica en la operación —una reserva que no tiene cupo al llegar, un traslado que no llega o una experiencia que se cancela por el clima—: qué se le ofrece al viajero y quién lo decide. `[3.1.E501 · declarado]`
 
-*Se leen igual:* `3.1.D1`, `3.1.D2`, `3.1.I1`, `3.1.I2`, `3.1.I3`, `3.1.F2`, `3.1.F3`, `3.1.F5`, `3.1.E1`, `3.1.E3`, `3.1.E5`, `3.1.O1`, `3.1.O3`, `3.1.O4`.
+**Óptimo.**
+
+- La IA ejecuta las rutinas repetitivas del proceso de atención, como darle seguimiento a cada solicitud del viajero —un traslado, una cama extra, un cambio de hora— y cerrarla; el equipo supervisa, corrige a la IA y resuelve las excepciones, y en el sistema se ve qué hizo la IA y qué revisó una persona. `[3.1.O1]`
+
+*Se leen igual:* `3.1.D2`, `3.1.I1`, `3.1.I2`, `3.1.F2`, `3.1.F3`, `3.1.F5`, `3.1.E1`, `3.1.E3`, `3.1.E5`, `3.1.O3`, `3.1.O4`.
 
 #### 3.2 Tecnología y Automatización
 
@@ -6020,6 +6679,14 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 *Descripción:* Mide si cada caso del viajero llega solo al sistema y a quien lo atiende, y cuánto del servicio se automatiza.
 
 *Costo de quedarse:* Las solicitudes se pierden entre el teléfono de la recepción, el WhatsApp del guía y el correo de reservas, y el viajero tiene que insistir para que lo atiendan.
+
+**Deficiente.**
+
+- Las solicitudes de los viajeros se manejan en el celular del guía, el WhatsApp personal de quien está de turno o el correo de cada persona. `[3.2.D2]`
+
+**Inicial.**
+
+- Hay un sistema de casos, pero lo que entra se reparte a mano entre la recepción, limpieza y mantenimiento, o el equipo atiende por WhatsApp o chat y ninguno de esos canales llega al sistema. `[3.2.I2]`
 
 **Funcional.**
 
@@ -6030,7 +6697,11 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 - Hay un portal o una app donde el viajero ve su reserva y abre sus solicitudes, y una base de conocimiento interna y pública. `[3.2.E2]`
 - El viajero puede hacer solo lo más común antes y durante su viaje —registrarse antes de llegar, cambiar su hora de llegada, pedir un traslado o reservar una experiencia— sin esperar a una persona. `[3.2.E501 · comprobable]`
 
-*Se leen igual:* `3.2.D1`, `3.2.D2`, `3.2.I2`, `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.E1`, `3.2.E3`, `3.2.E4`, `3.2.E5`, `3.2.O1`, `3.2.O4`.
+**Óptimo.**
+
+- Un agente de IA resuelve las solicitudes de los viajeros —la hora de registro, un traslado, cómo llegar— en todos los canales donde atiende el equipo, sin que intervenga una persona, y le pasa a una persona, con el contexto completo, lo que no puede resolver; el equipo revisa una muestra de sus respuestas y corrige lo que hace falta, y en el sistema se ve qué casos resolvió la IA y cuáles pasó. `[3.2.O1]`
+
+*Se leen igual:* `3.2.D1`, `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.E1`, `3.2.E3`, `3.2.E4`, `3.2.E5`, `3.2.O4`.
 
 #### 3.3 Datos
 
@@ -6039,6 +6710,14 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 *Descripción:* Mide si los datos de cada viajero —sus reservas, sus estancias y sus casos— están completos y ordenados para atender y decidir sin reconstruirlos.
 
 *Costo de quedarse:* Cada vez que el viajero escribe tiene que repetir su número de reserva y volver a explicar lo que pidió, porque nadie ve su historia completa.
+
+**Deficiente.**
+
+- La información de los viajeros y sus solicitudes está repartida entre el sistema de reservas, los correos, los chats y las hojas de la recepción, que no se conectan, y no hay un lugar donde se vea junta. `[3.3.D1]`
+
+**Inicial.**
+
+- Los casos están en un solo sistema, pero la ficha del viajero sale incompleta: lo que reservó —sus fechas, su habitación o su experiencia— hay que buscarlo en el sistema de reservas. `[3.3.I1]`
 
 **Funcional.**
 
@@ -6051,7 +6730,11 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 - Se mide la satisfacción del viajero —con el NPS o el CSAT— con una cadencia definida, por ejemplo al salir o al terminar su experiencia. `[3.3.E2]`
 - La ficha del viajero guarda sus preferencias y lo que pidió en estancias anteriores —el tipo de habitación, una alergia, una celebración—, y quien lo atiende las ve. `[3.3.E501 · comprobable]`
 
-*Se leen igual:* `3.3.D1`, `3.3.D2`, `3.3.I1`, `3.3.I2`, `3.3.F1`, `3.3.F5`, `3.3.F6`, `3.3.E1`, `3.3.E3`, `3.3.E4`, `3.3.E5`, `3.3.O1`, `3.3.O2`, `3.3.O3`, `3.3.O4`.
+**Óptimo.**
+
+- Modelos con IA predicen lo que viene —por ejemplo, cuántas solicitudes van a entrar en temporada alta y de qué tipo— y proponen qué hacer; lo que predicen se ve en los tableros del área y el líder decide con eso. `[3.3.O3]`
+
+*Se leen igual:* `3.3.D2`, `3.3.I2`, `3.3.F1`, `3.3.F5`, `3.3.F6`, `3.3.E1`, `3.3.E3`, `3.3.E4`, `3.3.E5`, `3.3.O1`, `3.3.O2`, `3.3.O4`.
 
 #### 3.4 Equipo y Gobierno
 
@@ -6061,6 +6744,14 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 
 *Costo de quedarse:* Nadie sabe bien a quién le toca una solicitud que pasa de un turno a otro, y el líder se entera de los atrasos cuando el viajero ya dejó una mala reseña.
 
+**Deficiente.**
+
+- Nadie tiene claro qué le toca: entre la recepción, reservas y la operación de las experiencias, las solicitudes de los viajeros se pisan o quedan sin dueño. `[3.4.D1]`
+
+**Inicial.**
+
+- Se siguen algunos números de la operación —las quejas, las solicitudes pendientes—, pero sin un tablero ni una cadencia fija. `[3.4.I1]`
+
 **Funcional.**
 
 - El líder tiene un tablero con 4 a 6 métricas clave —casos abiertos, solicitudes pendientes, quejas por tipo y calificación de los viajeros— y lo consulta al menos una vez por semana. `[3.4.F2]`
@@ -6069,7 +6760,11 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 
 - El acuerdo con las áreas que operan la estancia o la experiencia —recepción, limpieza, mantenimiento, alimentos, guías y proveedores de traslados— está escrito y se mide: en cuánto tiempo resuelve cada una lo que le pasa Servicio. `[3.4.E501 · comprobable]`
 
-*Se leen igual:* `3.4.D1`, `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.E2`, `3.4.E4`, `3.4.O1`, `3.4.O2`, `3.4.O3`, `3.4.O4`.
+**Óptimo.**
+
+- El sistema calcula cuánto cuesta atender a cada tipo de viajero —la familia, el grupo de un evento, el cliente de una agencia— frente a lo que deja, y el líder usa ese dato para decidir cómo atenderlo. `[3.4.O4]`
+
+*Se leen igual:* `3.4.D2`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.E2`, `3.4.E4`, `3.4.O1`, `3.4.O2`, `3.4.O3`.
 
 #### 3.5 Consistencia de la experiencia
 
@@ -6078,6 +6773,14 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 *Descripción:* Mide si el equipo conoce a sus tipos de viajero y si cada viajero recibe la misma información y la misma llegada, lo atienda quien lo atienda.
 
 *Costo de quedarse:* El mismo viajero recibe un horario distinto según a quién le pregunte, y cada turno recibe a los viajeros a su manera: el viajero lo nota y lo cuenta en su reseña.
+
+**Deficiente.**
+
+- No hay respuestas guardadas: cada persona que atiende escribe cada respuesta desde cero, a su manera, hasta la de la hora de registro o la de cómo llegar. `[3.5.D1]`
+
+**Inicial.**
+
+- Hay algunas respuestas guardadas, pero cada turno o cada persona tiene las suyas: no están al alcance de todo el equipo. `[3.5.I1]`
 
 **Funcional.** Los tipos de viajero están escritos, cada viajero llega con un proceso definido y el equipo tiene respuestas guardadas para lo frecuente.
 
@@ -6090,7 +6793,11 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 
 - Quien atiende usa en su día a día las respuestas guardadas para los casos frecuentes —los horarios, cómo llegar, qué incluye la tarifa—, no solo las tiene cargadas. `[3.5.E1]`
 
-*Se leen igual:* `3.5.D1`, `3.5.I1`, `3.5.F1`, `3.5.F3`, `3.5.E2`, `3.5.E3`, `3.5.O1`.
+**Óptimo.**
+
+- Lo que la IA les responde o les escribe sola a los viajeros —antes de su llegada, durante su estancia o después— sigue la guía de tono y estilo de la marca; el equipo revisa una muestra de sus respuestas y corrige a la IA cuando se sale de la guía, y cada respuesta queda en el sistema. `[3.5.O1]`
+
+*Se leen igual:* `3.5.F1`, `3.5.F3`, `3.5.E2`, `3.5.E3`.
 
 #### 3.6 Priorización de viajeros
 
@@ -6099,6 +6806,14 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 *Descripción:* Mide si los casos se atienden según su gravedad y el tipo de viajero, y no según quién insiste más.
 
 *Costo de quedarse:* El viajero que se quedó sin agua caliente espera en la misma fila que quien pregunta por el horario del desayuno, y la empresa que te trae un grupo cada año recibe la misma atención que todos.
+
+**Deficiente.**
+
+- Las solicitudes se atienden por orden de llegada o como prefiere quien está de turno, sin mirar su gravedad ni quién es el viajero. `[3.6.D1]`
+
+**Inicial.**
+
+- Se intenta atender primero lo urgente, pero las solicitudes no tienen una prioridad asignada: cada persona decide a ojo, o se adelanta el viajero que más insiste. `[3.6.I1]`
 
 **Funcional.**
 
@@ -6109,7 +6824,11 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 
 - Los viajeros se segmentan para acciones diferenciadas según el momento de su viaje: por llegar, en su estancia, recién salidos o listos para recomendar; donde el viajero vuelve, sanos, en riesgo o con potencial de volver más. `[3.6.E2]`
 
-*Se leen igual:* `3.6.D1`, `3.6.I1`, `3.6.F3`, `3.6.E1`, `3.6.O1`, `3.6.O2`, `3.6.O3`.
+**Óptimo.**
+
+- Cada viajero se atiende con el contexto de cómo llegó —lo que se le prometió al reservar y el tipo de viajero que es—, que quien lo atiende, persona o IA, ve en su ficha sin volver a preguntarlo. `[3.6.O3]`
+
+*Se leen igual:* `3.6.F3`, `3.6.E1`, `3.6.O1`, `3.6.O2`.
 
 #### 3.7 Acompañamiento del viajero
 
@@ -6118,6 +6837,14 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 *Descripción:* Mide si el viajero sabe lo que necesita antes de pedirlo, y si los problemas y las quejas se atienden mientras todavía está.
 
 *Costo de quedarse:* Te enteras de que un viajero quedó mal cuando lo publica en una reseña, días después de que se fue, cuando ya no hay nada que arreglar.
+
+**Deficiente.**
+
+- Aunque un viajero acumule solicitudes repetidas o una queja sin resolver, nadie lo contacta: los problemas se atienden cuando estallan, muchas veces en una reseña. `[3.7.D1]`
+
+**Inicial.**
+
+- Cuando un viajero tiene problemas repetidos —por ejemplo, la misma falla en la habitación, un traslado que se atrasa—, a veces alguien lo contacta, pero depende de que lo note. `[3.7.I1]`
 
 **Funcional.** Las quejas y los problemas que se repiten se detectan, aunque sea a mano, cada queja se atiende antes de que el viajero se vaya y los viajeros clave reciben contacto antes de sus fechas.
 
@@ -6137,7 +6864,7 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 
 - Los viajeros reciben, sin pedirlos, detalles pensados para deleitarlos —algo en su aniversario o su cumpleaños, una mejor habitación, una experiencia de regalo—, elegidos según la historia de cada viajero y el momento de su viaje, y en el sistema queda qué recibió cada uno. `[3.7.O4]`
 
-*Se leen igual:* `3.7.D1`, `3.7.D2`, `3.7.I1`, `3.7.F3`, `3.7.E1`, `3.7.E2`, `3.7.E3`, `3.7.O1`, `3.7.O2`, `3.7.O3`.
+*Se leen igual:* `3.7.D2`, `3.7.F3`, `3.7.E1`, `3.7.E2`, `3.7.E3`, `3.7.O1`, `3.7.O2`, `3.7.O3`.
 
 #### 3.8 Autoservicio del viajero
 
@@ -6147,6 +6874,14 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 
 *Costo de quedarse:* Tu equipo responde a mano las mismas preguntas en cada temporada, y cada temporada alta suma más de esas preguntas a la fila.
 
+**Deficiente.**
+
+- Hasta las preguntas que más se repiten —la hora de registro, cómo llegar, qué incluye la tarifa— se responden a mano, una por una, cada vez que llegan. `[3.8.D2]`
+
+**Inicial.**
+
+- Hay un chatbot de menú fijo en el sitio o en WhatsApp, pero no responde las preguntas que más se repiten, como la hora de registro o cómo llegar. `[3.8.I1]`
+
 **Funcional.**
 
 - Las diez preguntas que más repitieron los viajeros en el último trimestre —o todas, si son menos—, por ejemplo la hora de registro y de salida, cómo llegar, qué incluye la tarifa o cómo cancelar, tienen una respuesta publicada que el viajero puede consultar por su cuenta. `[3.8.F1]`
@@ -6155,7 +6890,11 @@ Mide el rendimiento del servicio de la empresa turística, que acompaña al viaj
 
 - El autoservicio funciona: se mide cuántos viajeros resuelven sin abrir un caso, y el equipo no crece al mismo ritmo que la ocupación en temporada alta. `[3.8.E3]`
 
-*Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E2`, `3.8.O1`, `3.8.O2`, `3.8.O3`, `3.8.O4`.
+**Óptimo.**
+
+- Los picos de la temporada alta los absorben la IA y el autoservicio: el equipo no crece cuando crece la ocupación, y el líder ve en los tableros del área qué parte de la demanda resolvieron la IA y el autoservicio y qué pasó a una persona. `[3.8.O2]`
+
+*Se leen igual:* `3.8.D1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E2`, `3.8.O1`, `3.8.O3`, `3.8.O4`.
 
 ## Edición — Automotriz
 
@@ -6210,6 +6949,14 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 
 *Costo de quedarse:* Si se va un asesor, se lleva a sus interesados en el teléfono: nadie sabe quién ya hizo la prueba de manejo, a quién se le cotizó ni qué usado se le avaluó.
 
+**Deficiente.**
+
+- No hay nada escrito sobre el recorrido de la venta ni sus etapas —consulta, prueba de manejo, cotización, financiamiento, cierre y entrega—: cada asesor usa su criterio. `[1.1.D1]`
+
+**Inicial.**
+
+- Las etapas de la venta —consulta, prueba de manejo, cotización, cierre y entrega— existen de palabra o en un borrador, pero cada asesor las interpreta distinto. `[1.1.I1]`
+
 **Funcional.** Todo el equipo sigue el mismo recorrido escrito en el CRM, de la consulta a la entrega, con una cadencia de contacto, un proceso escrito para recibir el usado y una revisión fija de los negocios.
 
 *Resultado:* Si rota un asesor, el siguiente sabe en qué va cada cliente, porque todo el equipo trabaja la venta igual en el CRM: los negocios avanzan con los mismos criterios, cada prueba de manejo deja su siguiente paso, el usado se recibe siempre de la misma forma, cada interesado se contacta con la cadencia acordada y los negocios se repasan en cada reunión de seguimiento.
@@ -6223,7 +6970,11 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 
 - Existen guías de indagación, prueba de manejo y manejo de objeciones —el precio, el valor del usado, el financiamiento, la comparación con otra marca— que el equipo usa. `[1.1.E2]`
 
-*Se leen igual:* `1.1.D1`, `1.1.D2`, `1.1.D3`, `1.1.D4`, `1.1.I1`, `1.1.I2`, `1.1.I3`, `1.1.I4`, `1.1.F4`, `1.1.F5`, `1.1.F6`, `1.1.E1`, `1.1.E3`, `1.1.O1`, `1.1.O2`, `1.1.O3`.
+**Óptimo.**
+
+- La IA detecta los negocios que se salen del recorrido de la venta —una prueba de manejo sin siguiente paso, una cotización sin seguimiento—, los marca en el CRM y se los señala al líder y al asesor que corresponde; el líder decide qué se corrige. `[1.1.O1]`
+
+*Se leen igual:* `1.1.D2`, `1.1.D3`, `1.1.D4`, `1.1.I2`, `1.1.I3`, `1.1.I4`, `1.1.F4`, `1.1.F5`, `1.1.F6`, `1.1.E1`, `1.1.E3`, `1.1.O2`, `1.1.O3`.
 
 #### 1.2 Tecnología y Automatización
 
@@ -6232,6 +6983,14 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 *Descripción:* Mide cuánto del trabajo repetitivo hace el sistema —repartir las consultas, avisar qué toca, mostrar el inventario, apartar el vehículo que se vende y registrar las conversaciones— y cómo usa el equipo la automatización y la IA.
 
 *Costo de quedarse:* Tus asesores copian a mano las consultas de los portales y de la marca, dependen de su memoria para dar seguimiento y descubren que el vehículo ya estaba apartado cuando el cliente ya se había decidido.
+
+**Deficiente.**
+
+- No hay un CRM donde montar una automatización: las consultas y las ventas de vehículos se pasan por correo, por chat o WhatsApp o de palabra, y ningún asesor recibe avisos del sistema. `[1.2.D2]`
+
+**Inicial.**
+
+- Hay un CRM, pero nada pasa solo: las consultas de los portales, la web y la sala se reparten a mano y cada asesor tiene que acordarse de sus seguimientos, como el de cada prueba de manejo y cada cotización. `[1.2.I1]`
 
 **Funcional.** Lo básico pasa solo —las consultas de todos los canales entran al sistema y se reparten por una regla, el sistema avisa qué toca y el vehículo que se aparta queda marcado— y, si se usa IA, trabaja con los datos de cada cliente.
 
@@ -6253,7 +7012,7 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 
 - Si el equipo atiende por un canal conversacional, agentes de IA califican ahí a los interesados con la definición de interesado calificado y agendan pruebas de manejo a cualquier hora; le pasan al asesor, con el contexto, a quien está listo, y el equipo revisa en el CRM lo que calificaron. `[1.2.O2]`
 
-*Se leen igual:* `1.2.D1`, `1.2.D2`, `1.2.I1`, `1.2.I2`, `1.2.F3`, `1.2.F4`, `1.2.F6`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O1`, `1.2.O3`.
+*Se leen igual:* `1.2.D1`, `1.2.I2`, `1.2.F3`, `1.2.F4`, `1.2.F6`, `1.2.F7`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.O1`, `1.2.O3`.
 
 #### 1.3 Datos
 
@@ -6262,6 +7021,14 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 *Descripción:* Mide si los datos de ventas son confiables para decidir: negocios completos, el origen de cada uno, el inventario al día y reportes que salen del sistema sin armarlos a mano.
 
 *Costo de quedarse:* Decides con números que no cuadran: el reporte de ventas se arma a mano cruzando el CRM con el inventario, y no sabes qué portal o qué campaña te trae compradores y cuál solo consultas.
+
+**Deficiente.**
+
+- Las ventas de vehículos no quedan registradas con su monto y su fecha: no se sabe cuántos vehículos se vendieron, por cuánto ni cuándo. `[1.3.D4]`
+
+**Inicial.**
+
+- Los negocios que se crean hoy se registran, pero a algunos les falta la fecha esperada de cierre, el monto o el asesor responsable. `[1.3.I3]`
 
 **Funcional.** El reporte de negocios sale del sistema, sin armarlo a mano, y el estado de cada vehículo está al día: a los dos se les puede creer.
 
@@ -6282,7 +7049,11 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 - La ficha de cada cliente reúne lo comercial con su historial de conversaciones y, si el concesionario lleva en otros sistemas la facturación, el financiamiento o el taller, con lo que viene de ellos: la vista 360° empieza a tomar forma. `[1.3.E3]`
 - Se mide cuánto tarda en venderse cada modelo nuevo y cada vehículo usado en inventario, y ese número se revisa cada mes. `[1.3.E601 · comprobable · hábito]`
 
-*Se leen igual:* `1.3.D1`, `1.3.D2`, `1.3.D3`, `1.3.D4`, `1.3.I1`, `1.3.I2`, `1.3.I3`, `1.3.F2`, `1.3.F4`, `1.3.F8`, `1.3.E2`, `1.3.E4`, `1.3.O1`, `1.3.O2`, `1.3.O3`, `1.3.O4`, `1.3.O5`.
+**Óptimo.**
+
+- La vista 360° está operativa: la ficha de cada cliente reúne lo comercial, la facturación, sus visitas y reclamos en el taller y las conversaciones. `[1.3.O3]`
+
+*Se leen igual:* `1.3.D1`, `1.3.D2`, `1.3.D3`, `1.3.I1`, `1.3.I2`, `1.3.F2`, `1.3.F4`, `1.3.F8`, `1.3.E2`, `1.3.E4`, `1.3.O1`, `1.3.O2`, `1.3.O4`, `1.3.O5`.
 
 #### 1.4 Equipo y Gobierno
 
@@ -6291,6 +7062,14 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 *Descripción:* Mide si cada asesor tiene un rol y una meta por escrito, y si el líder sigue los números de la venta y pide cuentas con datos.
 
 *Costo de quedarse:* El líder se entera al cierre del mes de que no llegó a la meta de la marca: no vio antes qué asesor se quedó atrás ni en qué etapa se cayeron los negocios.
+
+**Deficiente.**
+
+- El líder apaga incendios: no hay métricas —ni de consultas, ni de pruebas de manejo, ni de ventas— ni rendición de cuentas. `[1.4.D2]`
+
+**Inicial.**
+
+- El líder revisa algunos números —las ventas del mes, los vehículos en inventario— en hojas de cálculo, cuando tiene tiempo. `[1.4.I1]`
 
 **Funcional.**
 
@@ -6310,7 +7089,7 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 
 - Las decisiones de la dirección usan números de fondo: cuánto deja cada cliente en el tiempo —su compra, su financiamiento y su taller—, cuánto margen deja cada canal y cada modelo y cuánto aporta cada asesor. `[1.4.O1]`
 
-*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
+*Se leen igual:* `1.4.D1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
 
 #### 1.5 Modelos y cotización
 
@@ -6325,6 +7104,8 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 - Hay más de una lista de precios o de bonos circulando, y no se sabe cuál es la vigente. `[1.5.D601 · comprobable]`
 
 **Inicial.** Hay una lista de precios y fichas de cada modelo, pero cada asesor arma la cotización por su cuenta.
+
+- Hay una plantilla de cotización, pero cada asesor la cambia o la usa a su manera. `[1.5.I2]`
 
 **Funcional.** El comprador objetivo de cada modelo está escrito, y todos venden con los mismos precios, los mismos bonos y la misma cotización.
 
@@ -6342,7 +7123,11 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 - Las cotizaciones solo prometen lo que se va a entregar: la fecha de entrega, los accesorios y las condiciones del financiamiento se validan antes de enviarlas. `[1.5.E3]`
 - Los cambios de precio, de bonos y de promociones les llegan el mismo día a todos los asesores y a todos los canales. `[1.5.E601 · comprobable · hábito]`
 
-*Se leen igual:* `1.5.D1`, `1.5.D2`, `1.5.I1`, `1.5.I2`, `1.5.F3`, `1.5.F5`, `1.5.E2`, `1.5.O1`.
+**Óptimo.**
+
+- La IA revisa en tiempo real, contra la propuesta de valor vigente del concesionario, lo que se les dice a los interesados —en la sala, por WhatsApp o en la cotización—, lo escriba ella o el asesor; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
+
+*Se leen igual:* `1.5.D1`, `1.5.D2`, `1.5.I1`, `1.5.F3`, `1.5.F5`, `1.5.E2`.
 
 #### 1.6 Priorización de interesados
 
@@ -6351,6 +7136,14 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 *Descripción:* Mide si el equipo decide a qué interesados dedicar su tiempo con criterios escritos, según el comprador objetivo de cada modelo.
 
 *Costo de quedarse:* Tus asesores le dan prueba de manejo a todo el que pasa por la sala: pasan la tarde con quien no puede financiar el vehículo, y los compradores listos esperan su turno.
+
+**Deficiente.**
+
+- No hay criterios para distinguir a un interesado que va a comprar de uno que solo pasa a mirar: se pierden tiempo y pruebas de manejo con interesados que nunca van a comprar. `[1.6.D1]`
+
+**Inicial.**
+
+- El líder sabe quién es el comprador objetivo de cada modelo, pero el CRM no tiene los campos —modelo de interés, presupuesto, forma de pago— para separar a los interesados que encajan. `[1.6.I2]`
 
 **Funcional.** Los interesados se separan por los rasgos del comprador objetivo —modelo, presupuesto, forma de pago, si trae un usado— y hay una definición escrita de interesado calificado que el equipo aplica.
 
@@ -6369,7 +7162,7 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 
 - La IA detecta en cada cliente el riesgo de perderlo y el potencial de venderle más, como un segundo vehículo o el cambio del que tiene, lo marca en el CRM y el asesor decide qué hacer. `[1.6.O2]`
 
-*Se leen igual:* `1.6.D1`, `1.6.I1`, `1.6.I2`, `1.6.F3`, `1.6.E1`, `1.6.E3`, `1.6.O1`, `1.6.O3`, `1.6.O4`.
+*Se leen igual:* `1.6.I1`, `1.6.F3`, `1.6.E1`, `1.6.E3`, `1.6.O1`, `1.6.O3`, `1.6.O4`.
 
 #### 1.7 Seguimiento de pruebas y cotizaciones
 
@@ -6382,6 +7175,11 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 **Deficiente.** El asesor está solo con sus clientes: después de la prueba de manejo o de la cotización, nadie da seguimiento.
 
 - No hay material de venta —fichas técnicas, comparativos de versiones, fotos o videos— para mostrarles a los interesados. `[1.7.D4]`
+
+**Inicial.**
+
+- Cuando un negocio se detiene —por ejemplo, después de la prueba de manejo o de la cotización—, cada asesor decide si insiste y cómo: no hay un paso acordado. `[1.7.I1]`
+- Todos los intentos de hacer avanzar un negocio se hacen por el mismo canal: por ejemplo, el asesor solo llama, o solo escribe por WhatsApp. `[1.7.I4]`
 
 **Funcional.** Ningún negocio se enfría en silencio después de la prueba de manejo o de la cotización: se detecta y hay un paso acordado para retomarlo.
 
@@ -6396,7 +7194,11 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 - Los interesados que todavía no están listos para comprar no se abandonan: pasan a nutrición —la de Marketing o una secuencia del propio equipo— y vuelven a un asesor cuando muestran interés o llega el modelo que buscaban. `[1.7.E2]`
 - Entre el cierre y la entrega, el comprador recibe cómo va su vehículo —el pedido a la marca, la aprobación del financiamiento, la inscripción y la preparación— sin tener que pedirlo. `[1.7.E601 · comprobable · hábito]`
 
-*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I1`, `1.7.I2`, `1.7.I3`, `1.7.I4`, `1.7.F1`, `1.7.F2`, `1.7.F3`, `1.7.E1`, `1.7.E3`, `1.7.E4`, `1.7.O1`, `1.7.O2`.
+**Óptimo.**
+
+- La IA detecta qué negocios de más valor —una flota, un vehículo de gama alta— se están trabando antes de que venza su plazo y propone a quién movilizar o qué contenido enviar, como el comparativo de versiones; el líder valida, y todo queda en el CRM. `[1.7.O1]`
+
+*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I2`, `1.7.I3`, `1.7.F1`, `1.7.F2`, `1.7.F3`, `1.7.E1`, `1.7.E3`, `1.7.E4`, `1.7.O2`.
 
 #### 1.8 Ventas ganadas y perdidas
 
@@ -6405,6 +7207,14 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 *Descripción:* Mide si queda registrado por qué no compra un interesado o por qué se cae una venta antes de la entrega, y si el equipo revisa lo que gana y lo que pierde para mejorar su proceso.
 
 *Costo de quedarse:* No sabes por qué pierdes ventas —el precio, el financiamiento que no salió, el valor del usado, la otra marca—: cada asesor tiene su explicación, y sin un registro no hay cómo ver qué se repite.
+
+**Deficiente.**
+
+- Los negocios perdidos se cierran sin anotar por qué el interesado no compró: ni el precio, ni el financiamiento, ni el valor de su usado, ni la otra marca. `[1.8.D2]`
+
+**Inicial.**
+
+- Por qué el interesado no compró se anota a veces y en texto libre, a criterio de cada asesor, así que no se puede sumar. `[1.8.I1]`
 
 **Funcional.** Cada negocio perdido y cada venta que se cae quedan con su razón, elegida de una lista fija, y el líder saca del sistema el reporte del trimestre.
 
@@ -6418,7 +7228,11 @@ Mide el rendimiento de la venta de vehículos del concesionario: cómo está mon
 - Al menos una vez por trimestre se revisan las ventas ganadas, los negocios perdidos y las ventas que se cayeron para encontrar lo que se repite. `[1.8.E1]`
 - Cuando el cliente compró otra marca o en otro concesionario, queda registrado cuál y por qué. `[1.8.E601 · comprobable]`
 
-*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`, `1.8.O4`.
+**Óptimo.**
+
+- La dirección ajusta la estrategia comercial —qué modelos empujar, qué bonos dar, por qué canales vender— con lo que muestran los datos de qué funciona. `[1.8.O3]`
+
+*Se leen igual:* `1.8.D1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O4`.
 
 ### Área 2 — Marketing
 
@@ -6446,6 +7260,10 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 
 - No hay calendario de campañas: cada lanzamiento y cada promoción se improvisan. `[2.1.D1]`
 
+**Inicial.**
+
+- Las campañas dependen de quien las arma —una persona del equipo, la agencia o la marca—: el calendario, los accesos a los portales, a la pauta y a las redes y los pasos a seguir están en sus manos. `[2.1.I3]`
+
 **Funcional.** Las campañas salen con un calendario y un proceso que el equipo sigue, sin depender de una persona, y el calendario sigue el año del concesionario.
 
 *Resultado:* Todo el equipo trabaja en el mismo sistema, y la promoción de cada modelo sigue saliendo aunque cambie una persona: el calendario y el proceso no viven en la cabeza de nadie, y el líder sabe en qué va cada campaña sin tener que preguntar.
@@ -6453,7 +7271,15 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 - Si una agencia —o la marca, con sus campañas— ejecuta todo o parte del trabajo, el equipo es dueño del calendario, del brief, de la aprobación y de los accesos, y las campañas no se detienen si cambia la agencia. `[2.1.F5]`
 - El calendario de campañas sigue el año del concesionario: el lanzamiento de cada modelo, las ferias y exhibiciones, los cierres de mes y las campañas de la marca y del taller. `[2.1.F601 · declarado]`
 
-*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I1`, `2.1.I2`, `2.1.I3`, `2.1.F1`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F6`, `2.1.E2`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
+**Eficiente.**
+
+- Cada pieza —el anuncio de un modelo, la publicación de un usado, una promoción del taller— pasa por una revisión de calidad y una aprobación antes de publicarse. `[2.1.E2]`
+
+**Óptimo.**
+
+- La IA hace las tareas repetitivas del proceso de campaña —como preparar el brief del lanzamiento de un modelo, adaptar cada pieza a su canal o a su portal, o cargar la campaña en el calendario—, el responsable de la campaña valida lo que hizo, y en el sistema se ve qué tareas hizo la IA. `[2.1.O1]`
+
+*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I1`, `2.1.I2`, `2.1.F1`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F6`, `2.1.E4`, `2.1.O4`, `2.1.O5`.
 
 #### 2.2 Tecnología y Automatización
 
@@ -6462,6 +7288,14 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 *Descripción:* Mide si las herramientas que se pagan se usan, si cada interesado que deja sus datos o escribe llega solo al sistema y cuánto trabajo repetitivo hacen las automatizaciones y la IA.
 
 *Costo de quedarse:* Quien pide una cotización en tu sitio o te escribe por WhatsApp espera a que alguien lo cargue y le conteste, o se va a otro concesionario, y si pagas herramientas, parte de lo que pagas no se usa.
+
+**Deficiente.**
+
+- Lo que llega por el sitio, los portales o WhatsApp —una solicitud de cotización, una pregunta por un usado— cae en el correo o el teléfono de alguien, y no queda registrado en ningún lado. `[2.2.D2]`
+
+**Inicial.**
+
+- Hay alguna automatización, pero quedó a medias: por ejemplo, el formulario de prueba de manejo responde solo y el de cotización no le avisa a nadie. `[2.2.I3]`
 
 **Funcional.**
 
@@ -6474,7 +7308,11 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 
 - El traspaso de interesados a los asesores es automático: cuando un interesado cumple los criterios para pasar a un asesor, le llega con su historial al asesor que corresponde, sin que nadie lo pase a mano. `[2.2.E3]`
 
-*Se leen igual:* `2.2.D1`, `2.2.D2`, `2.2.D3`, `2.2.I1`, `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F4`, `2.2.F9`, `2.2.E1`, `2.2.E2`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`, `2.2.O2`, `2.2.O3`.
+**Óptimo.**
+
+- Si el concesionario atiende por un canal conversacional, agentes de IA responden lo que generan las campañas y mantienen la conversación con quien todavía no está listo para comprar un vehículo —o para hablar con un asesor, donde los hay—; lo que no pueden resolver pasa a una persona con la conversación completa, y en el sistema queda cada conversación que atendió la IA. `[2.2.O2]`
+
+*Se leen igual:* `2.2.D1`, `2.2.D3`, `2.2.I1`, `2.2.I2`, `2.2.F2`, `2.2.F4`, `2.2.F9`, `2.2.E1`, `2.2.E2`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`, `2.2.O3`.
 
 #### 2.3 Datos
 
@@ -6484,6 +7322,14 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 
 *Costo de quedarse:* No sabes de qué portal o de qué anuncio llega cada interesado ni cuántos terminan en una prueba de manejo: cada reporte hay que rehacerlo o revisarlo a mano antes de creerle.
 
+**Deficiente.**
+
+- No se registra de dónde llegó cada interesado: nadie sabe si vino por el sitio, un portal, una feria o una recomendación. `[2.3.D1]`
+
+**Inicial.**
+
+- Hay reportes, pero se arman a mano en una hoja cada vez, y a una parte de los interesados le falta el origen, como el portal, la pauta o la marca de donde llegaron. `[2.3.I2]`
+
 **Funcional.**
 
 *Resultado:* El líder sabe de dónde llega cada interesado —un portal, la pauta, las redes, la marca, una feria o un referido—, con reportes que salen del sistema y no de una hoja de cálculo armada a mano.
@@ -6491,7 +7337,15 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 - Cada contacto creado desde la puesta en marcha del sistema —entre por un formulario, WhatsApp, un portal, la marca o la sala de exhibición— tiene su etapa del ciclo de vida y su origen. `[2.3.F1]`
 - Los reportes básicos —cuántos interesados entran por modelo, de dónde vienen y cuántos llegan a una prueba de manejo— salen del sistema sin armarlos a mano. `[2.3.F5]`
 
-*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F2`, `2.3.F3`, `2.3.F6`, `2.3.F7`, `2.3.E1`, `2.3.E2`, `2.3.E3`, `2.3.E4`, `2.3.O1`, `2.3.O3`, `2.3.O4`, `2.3.O5`.
+**Eficiente.**
+
+- Lo que alguien hizo antes de dejar sus datos —qué modelos miró en el sitio, qué versión configuró— queda en su ficha cuando se identifica. `[2.3.E4]`
+
+**Óptimo.**
+
+- La IA completa sola los datos que faltan en cada contacto —por ejemplo, el vehículo que tiene o el modelo que le interesa—; el equipo revisa los que la IA marca como dudosos, y en la ficha se ve qué dato completó la IA y de dónde lo sacó. `[2.3.O3]`
+
+*Se leen igual:* `2.3.D2`, `2.3.I1`, `2.3.F2`, `2.3.F3`, `2.3.F6`, `2.3.F7`, `2.3.E1`, `2.3.E2`, `2.3.E3`, `2.3.O1`, `2.3.O4`, `2.3.O5`.
 
 #### 2.4 Equipo y Gobierno
 
@@ -6501,12 +7355,28 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 
 *Costo de quedarse:* Qué modelo se promociona se decide por costumbre, por lo que pide la marca o por quien insiste más, y nadie responde por una meta: el equipo no sabe qué se espera de él.
 
+**Deficiente.**
+
+- Nadie revisa los resultados de marketing —lo que dejan las campañas de los modelos y del taller—: ni el equipo ni la dirección. `[2.4.D3]`
+
+**Inicial.**
+
+- Los roles no están escritos, así que hasta lo del día a día —qué usado publicar, qué anuncio de un modelo aprobar— espera a que lo resuelva la gerencia general del concesionario. `[2.4.I1]`
+
 **Funcional.**
 
 - El líder tiene un tablero con 4 a 6 métricas clave —interesados nuevos por modelo, de dónde llegan, cuántos pasan a un asesor y cuántos llegan a una prueba de manejo— y lo consulta al menos una vez por semana. `[2.4.F2]`
 - Las decisiones sobre qué promocionar y en qué enfocarse —qué modelo, qué usados, qué servicio del taller— citan datos del sistema, no opiniones. `[2.4.F4]`
 
-*Se leen igual:* `2.4.D1`, `2.4.D2`, `2.4.D3`, `2.4.I1`, `2.4.I2`, `2.4.F1`, `2.4.F3`, `2.4.F5`, `2.4.F6`, `2.4.E2`, `2.4.E3`, `2.4.E4`, `2.4.O1`, `2.4.O2`, `2.4.O4`.
+**Eficiente.**
+
+- El liderazgo coordina con Ventas —el traspaso de interesados a los asesores, los SLA y una reunión conjunta con fecha fija— y con la posventa del taller. `[2.4.E3]`
+
+**Óptimo.**
+
+- Las decisiones se toman con lo que deja cada canal a lo largo del tiempo —el valor de vida de los clientes que trae, entre la compra de su vehículo y sus visitas al taller— frente a lo que cuesta. `[2.4.O4]`
+
+*Se leen igual:* `2.4.D1`, `2.4.D2`, `2.4.I2`, `2.4.F1`, `2.4.F3`, `2.4.F5`, `2.4.F6`, `2.4.E2`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
 
 #### 2.5 Marca y Presencia
 
@@ -6515,6 +7385,14 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 *Descripción:* Mide si la marca del concesionario se ve y suena igual en todo lo que sale, si está escrito a qué comprador le habla, si cada modelo tiene dónde mostrarse completo y si el sitio aparece en buscadores.
 
 *Costo de quedarse:* Cada anuncio se ve distinto al anterior y, cuando alguien busca un modelo en tu zona, encuentra el sitio de otro concesionario, o encuentra el tuyo sin precio ni forma de agendar una prueba.
+
+**Deficiente.**
+
+- No está escrito a quién le habla el concesionario: no hay perfiles de comprador. `[2.5.D2]`
+
+**Inicial.**
+
+- Hay logo, colores y plantillas, pero el perfil de comprador es uno solo y tan general que sirve para cualquiera: no distingue a la familia que cambia de vehículo de la empresa que renueva su flota. `[2.5.I1]`
 
 **Funcional.** La marca, la voz y los perfiles de comprador están escritos y se usan, cada modelo tiene su página, el sitio cumple lo básico para buscadores y se publica contenido propio cada mes.
 
@@ -6528,7 +7406,11 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 
 - Se les pide una reseña pública a los clientes después de la entrega de su vehículo o de su visita al taller, y cada reseña, buena o mala, se responde dentro del plazo que fijó el equipo. `[2.5.E5]`
 
-*Se leen igual:* `2.5.D1`, `2.5.D2`, `2.5.D3`, `2.5.I1`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F4`, `2.5.E1`, `2.5.E2`, `2.5.E3`, `2.5.E4`, `2.5.O1`, `2.5.O2`.
+**Óptimo.**
+
+- Hay perfiles de comprador para grupos muy chicos de clientes —como quien busca su primer vehículo eléctrico— o, cuando se vende a empresas, para cada flota importante, no solo para los segmentos grandes. `[2.5.O1]`
+
+*Se leen igual:* `2.5.D1`, `2.5.D3`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F4`, `2.5.E1`, `2.5.E2`, `2.5.E3`, `2.5.E4`, `2.5.O2`.
 
 #### 2.6 Segmentación
 
@@ -6537,6 +7419,14 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 *Descripción:* Mide si cada interesado recibe un mensaje pensado para su tipo de comprador y el modelo que busca, y si cada dueño recibe lo que corresponde a su vehículo.
 
 *Costo de quedarse:* Le mandas la misma promoción a todos: la empresa que busca una flota recibe la oferta pensada para la familia, y quien acaba de comprar recibe la publicidad del modelo que ya tiene.
+
+**Deficiente.**
+
+- No hay segmentos: las campañas salen a toda la base con el mismo mensaje, a quien busca su primer vehículo igual que al dueño que acaba de comprar. `[2.6.D1]`
+
+**Inicial.**
+
+- La base se separa solo por datos generales —país, ciudad o edad—, no por lo que cada grupo necesita, como el modelo que busca o el vehículo que ya tiene. `[2.6.I1]`
 
 **Funcional.**
 
@@ -6547,7 +7437,11 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 
 - La segmentación usa datos de comportamiento —qué modelo miró, qué versión cotizó, qué vehículo tiene y cuándo lo llevó al taller—, no solo lo que la persona declaró. `[2.6.E4]`
 
-*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.I2`, `2.6.F4`, `2.6.E1`, `2.6.E2`, `2.6.E3`, `2.6.O1`, `2.6.O3`.
+**Óptimo.**
+
+- La IA predice quién va a comprar un vehículo —o cambiar el que tiene— y quién va a perder interés en los mensajes, y arma los segmentos con eso; el equipo revisa los segmentos antes de usarlos en una campaña, y en la ficha de cada persona se ve su predicción. `[2.6.O1]`
+
+*Se leen igual:* `2.6.D2`, `2.6.I2`, `2.6.F4`, `2.6.E1`, `2.6.E2`, `2.6.E3`, `2.6.O3`.
 
 #### 2.7 Canales y Alcance
 
@@ -6556,6 +7450,14 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 *Descripción:* Mide si los canales que el concesionario eligió salen con regularidad y bajo un mismo plan, si anuncian solo lo que está disponible y si se conoce lo que cuesta cada interesado.
 
 *Costo de quedarse:* Tus modelos llegan al mercado a ratos, o no llegan, sin un plan que coordine tus canales; cuando anuncias, ofreces usados que ya se vendieron, y no sabes cuánto te cuesta cada interesado.
+
+**Deficiente.**
+
+- No hay un plan que diga por qué canales sale el concesionario: los portales, la pauta, las redes o las ferias. `[2.7.D2]`
+
+**Inicial.**
+
+- La pauta y los correos salen cuando hay algo que promocionar —un modelo que llega, una promoción de la marca—, sin presupuesto ni fechas fijados de antemano. `[2.7.I2]`
 
 **Funcional.** Los canales que el concesionario eligió salen con regularidad y bajo un mismo plan, y anuncian solo lo que está disponible.
 
@@ -6569,7 +7471,11 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 - Si las ferias, las exhibiciones o los eventos de lanzamiento son parte del plan de canales, se hacen como un canal recurrente, con fechas en el calendario. `[2.7.E2]`
 - En el sistema se ve cuánto cuesta cada prueba de manejo y cada venta en cada canal y en cada modelo, no solo cada interesado. `[2.7.E601 · comprobable · requiere 1.3.F3]`
 
-*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.I3`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.F5`, `2.7.F6`, `2.7.E1`, `2.7.E3`, `2.7.E4`, `2.7.E5`, `2.7.O1`, `2.7.O2`, `2.7.O4`.
+**Óptimo.**
+
+- Los dueños que Servicio identifica como promotores —por ejemplo, después de una buena entrega o una buena visita al taller— se vuelven un canal de referidos y casos de éxito sin pedirlos a mano: el sistema los invita solo, el equipo elige qué casos se publican, y en el sistema se ve quién trajo a quién. `[2.7.O4]`
+
+*Se leen igual:* `2.7.D1`, `2.7.I1`, `2.7.I3`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.F5`, `2.7.F6`, `2.7.E1`, `2.7.E3`, `2.7.E4`, `2.7.E5`, `2.7.O1`, `2.7.O2`.
 
 #### 2.8 Medición y Aprendizaje
 
@@ -6579,11 +7485,27 @@ Mide el rendimiento del área de marketing del concesionario: cómo está montad
 
 *Costo de quedarse:* Repites la pauta y los mensajes de siempre porque nadie anota cuáles trajeron pruebas de manejo y ventas: cada lanzamiento empieza de cero.
 
+**Deficiente.**
+
+- No se mide qué trajo cada campaña —consultas, pruebas de manejo o ventas—: solo se sabe lo que se gastó, o ni eso. `[2.8.D2]`
+
+**Inicial.**
+
+- Se miran clics, alcance y me gusta, no los interesados ni las ventas de vehículos que trajo cada campaña. `[2.8.I1]`
+
 **Funcional.**
 
 - Los resultados de cada campaña —los interesados, las pruebas de manejo o las ventas que trajo, no solo los clics— se ven en el sistema sin armarlos a mano. `[2.8.F5]`
 
-*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.F3`, `2.8.E1`, `2.8.E2`, `2.8.E3`, `2.8.O2`, `2.8.O3`.
+**Eficiente.**
+
+- Hay pruebas A/B regulares (al menos una activa por mes): por ejemplo, dos fotos o dos mensajes para el anuncio del mismo modelo. `[2.8.E1]`
+
+**Óptimo.**
+
+- La IA ajusta las campañas mientras corren —deja de mostrar la versión del anuncio que no funciona y le da más espacio a la que sí—, dentro de los límites que fijó el equipo; el equipo revisa los cambios, y cada uno queda en el sistema con su razón. `[2.8.O2]`
+
+*Se leen igual:* `2.8.D1`, `2.8.D3`, `2.8.I2`, `2.8.F3`, `2.8.E2`, `2.8.E3`, `2.8.O3`.
 
 ### Área 3 — Servicio
 
@@ -6607,6 +7529,14 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 
 *Costo de quedarse:* El taller depende del asesor de servicio que conoce cada caso: si esa persona falta, nadie sabe qué se le prometió al cliente ni cuándo estará listo su vehículo.
 
+**Deficiente.**
+
+- Cada asesor de servicio recibe y atiende cada vehículo y cada reclamo a su manera. `[3.1.D1]`
+
+**Inicial.**
+
+- Todavía se depende de héroes: cuando falta el asesor de servicio o el jefe de taller que sabe, los vehículos y los reclamos se traban. `[3.1.I2]`
+
 **Funcional.**
 
 - El recorrido de las órdenes del taller está configurado en el sistema con sus etapas y cubre la atención de cada vehículo —una cita, una reparación o un reclamo de garantía—, del recibo a la entrega. `[3.1.F1]`
@@ -6617,7 +7547,11 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 
 - Hay guías escritas para los momentos difíciles del taller: un vehículo que vuelve por la misma falla, un repuesto que no llega o un reclamo de garantía que la marca rechaza. `[3.1.E601 · declarado]`
 
-*Se leen igual:* `3.1.D1`, `3.1.D2`, `3.1.I1`, `3.1.I2`, `3.1.I3`, `3.1.F2`, `3.1.F3`, `3.1.F5`, `3.1.F6`, `3.1.E1`, `3.1.E3`, `3.1.E4`, `3.1.E5`, `3.1.O1`, `3.1.O3`, `3.1.O4`.
+**Óptimo.**
+
+- La IA ejecuta las rutinas repetitivas del proceso de atención del taller, como dar seguimiento a las citas, las órdenes de trabajo y los reclamos, y cerrarlos; el equipo supervisa, corrige a la IA y resuelve las excepciones, y en el sistema se ve qué hizo la IA y qué revisó una persona. `[3.1.O1]`
+
+*Se leen igual:* `3.1.D2`, `3.1.I1`, `3.1.I3`, `3.1.F2`, `3.1.F3`, `3.1.F5`, `3.1.F6`, `3.1.E1`, `3.1.E3`, `3.1.E4`, `3.1.E5`, `3.1.O3`, `3.1.O4`.
 
 #### 3.2 Tecnología y Automatización
 
@@ -6626,6 +7560,14 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 *Descripción:* Mide si cada cita y cada caso llegan solos al sistema y a quien los atiende, y cuánto del taller se automatiza.
 
 *Costo de quedarse:* Las citas se pierden entre el teléfono del taller y el WhatsApp de cada asesor, y el cliente tiene que llamar varias veces para saber si su vehículo ya está listo.
+
+**Deficiente.**
+
+- Las citas y los reclamos se manejan en los celulares personales o el WhatsApp de cada asesor de servicio, o en correos individuales. `[3.2.D2]`
+
+**Inicial.**
+
+- Hay un sistema de casos del taller, pero lo que entra se reparte a mano, o el taller atiende por WhatsApp o chat y ninguno de esos canales llega al sistema. `[3.2.I2]`
 
 **Funcional.**
 
@@ -6636,7 +7578,11 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 
 - El cliente puede agendar su cita, aprobar el presupuesto y ver el estado de su vehículo en línea, sin llamar al taller. `[3.2.E601 · comprobable]`
 
-*Se leen igual:* `3.2.D1`, `3.2.D2`, `3.2.I2`, `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.E1`, `3.2.E2`, `3.2.E3`, `3.2.E4`, `3.2.E5`, `3.2.O1`, `3.2.O4`.
+**Óptimo.**
+
+- Un agente de IA resuelve casos de posventa —agenda citas, da el estado del vehículo, responde sobre la garantía— en todos los canales donde atiende el taller, sin que intervenga una persona, y le pasa a un asesor de servicio, con el contexto completo, lo que no puede resolver; el equipo revisa una muestra de sus respuestas y corrige lo que hace falta, y en el sistema se ve qué casos resolvió la IA y cuáles pasó. `[3.2.O1]`
+
+*Se leen igual:* `3.2.D1`, `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.E1`, `3.2.E2`, `3.2.E3`, `3.2.E4`, `3.2.E5`, `3.2.O4`.
 
 #### 3.3 Datos
 
@@ -6645,6 +7591,14 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 *Descripción:* Mide si los datos de cada cliente —sus vehículos, sus servicios y sus casos— están completos y ordenados para atender y decidir sin reconstruirlos.
 
 *Costo de quedarse:* Cada vez que el cliente llega al taller tiene que decir qué le hicieron la última vez, porque nadie ve la historia de su vehículo.
+
+**Deficiente.**
+
+- No se puede reconstruir qué le pasó a un cliente ni qué se le hizo a su vehículo: su historia no queda registrada en ningún lado. `[3.3.D2]`
+
+**Inicial.**
+
+- Las órdenes y los casos están en un solo sistema, pero la ficha del cliente sale incompleta: el vehículo que compró, su garantía o su contrato de mantenimiento hay que buscarlos en otro sistema. `[3.3.I1]`
 
 **Funcional.**
 
@@ -6657,7 +7611,11 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 - Se mide la satisfacción del cliente —con el NPS o el CSAT— con una cadencia definida, por ejemplo después de cada visita al taller y después de la entrega de un vehículo. `[3.3.E2]`
 - Se mide cuántos vehículos vuelven al taller por la misma falla dentro del plazo que fija el proceso, y ese número se revisa cada mes. `[3.3.E601 · comprobable · hábito]`
 
-*Se leen igual:* `3.3.D1`, `3.3.D2`, `3.3.I1`, `3.3.I2`, `3.3.F1`, `3.3.F5`, `3.3.F6`, `3.3.E1`, `3.3.E3`, `3.3.E4`, `3.3.E5`, `3.3.O1`, `3.3.O2`, `3.3.O3`, `3.3.O4`.
+**Óptimo.**
+
+- Modelos con IA predicen lo que viene —por ejemplo, cuántos vehículos van a entrar al taller y para qué servicio— y proponen qué hacer; lo que predicen se ve en los tableros del área y el líder decide con eso. `[3.3.O3]`
+
+*Se leen igual:* `3.3.D1`, `3.3.I2`, `3.3.F1`, `3.3.F5`, `3.3.F6`, `3.3.E1`, `3.3.E3`, `3.3.E4`, `3.3.E5`, `3.3.O1`, `3.3.O2`, `3.3.O4`.
 
 #### 3.4 Equipo y Gobierno
 
@@ -6667,6 +7625,14 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 
 *Costo de quedarse:* Nadie sabe bien a quién le toca avisarle al cliente o pedir el repuesto, y el líder se entera de los atrasos cuando el cliente ya llegó a recoger un vehículo que no está listo.
 
+**Deficiente.**
+
+- Nadie tiene claro qué le toca: entre la entrega del vehículo, la recepción en el taller y el seguimiento al dueño, las tareas se pisan o quedan sin responsable. `[3.4.D1]`
+
+**Inicial.**
+
+- El líder mira los números del taller de vez en cuando, sobre todo cuando algo sale mal, como un vehículo que no está listo cuando el dueño llega a recogerlo. `[3.4.I2]`
+
 **Funcional.**
 
 - El líder tiene un tablero con 4 a 6 métricas clave —vehículos en el taller, órdenes abiertas, trabajos atrasados, reclamos de garantía y casos por tipo— y lo consulta al menos una vez por semana. `[3.4.F2]`
@@ -6675,7 +7641,11 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 
 - El acuerdo con repuestos, con la marca —por las garantías— y con los talleres externos que se subcontratan está escrito y se mide: qué recibe cada uno y en cuánto tiempo responde. `[3.4.E601 · comprobable]`
 
-*Se leen igual:* `3.4.D1`, `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.E2`, `3.4.E4`, `3.4.O1`, `3.4.O2`, `3.4.O3`, `3.4.O4`.
+**Óptimo.**
+
+- El sistema calcula cuánto cuesta atender a cada tipo de cliente —el dueño particular, la empresa con flota— frente a lo que deja en el taller, y el líder usa ese dato para decidir cómo atenderlo. `[3.4.O4]`
+
+*Se leen igual:* `3.4.D2`, `3.4.I1`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.E2`, `3.4.E4`, `3.4.O1`, `3.4.O2`, `3.4.O3`.
 
 #### 3.5 Consistencia del taller
 
@@ -6685,6 +7655,14 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 
 *Costo de quedarse:* El mismo trabajo cuesta distinto según el asesor de servicio que te toque, y el cliente lo nota y se va al taller de la esquina.
 
+**Deficiente.**
+
+- No hay respuestas guardadas: cada asesor de servicio escribe desde cero, a su manera, cada respuesta, como la de la garantía, el presupuesto o el estado del vehículo. `[3.5.D1]`
+
+**Inicial.**
+
+- Hay algunas respuestas guardadas —sobre la garantía o el mantenimiento—, pero cada asesor de servicio tiene las suyas: no están al alcance de todo el equipo. `[3.5.I1]`
+
 **Funcional.** Los tipos de cliente están escritos, cada vehículo nuevo se entrega con un proceso definido, el mismo trabajo cuesta lo mismo y el equipo tiene respuestas guardadas para lo frecuente.
 
 *Resultado:* El equipo sabe qué tipos de cliente atiende y qué espera cada uno, cada vehículo se entrega con el mismo proceso, el mismo trabajo cuesta lo mismo con cualquier asesor de servicio y todo el equipo tiene a mano las mismas respuestas para lo frecuente.
@@ -6693,7 +7671,15 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 - Existe un documento simple con los tipos de cliente que atiende el taller —por ejemplo, el dueño particular y la empresa con flota—, qué necesita cada uno, qué espera del servicio y cuáles se consideran clientes clave, consultable por cualquier asesor de servicio. `[3.5.F4]`
 - Los presupuestos del taller salen de una lista vigente de precios de mano de obra y repuestos: el mismo trabajo cuesta lo mismo con cualquier asesor de servicio. `[3.5.F601 · comprobable]`
 
-*Se leen igual:* `3.5.D1`, `3.5.I1`, `3.5.F1`, `3.5.F3`, `3.5.E1`, `3.5.E2`, `3.5.E3`, `3.5.O1`.
+**Eficiente.**
+
+- Los asesores de servicio usan en su día a día las respuestas guardadas para los casos frecuentes —qué cubre la garantía, cuándo toca el mantenimiento—, no solo las tienen cargadas. `[3.5.E1]`
+
+**Óptimo.**
+
+- Lo que la IA responde o escribe sola a los dueños —la confirmación de una cita, el estado de su vehículo— sigue la guía de tono y estilo de la marca; el equipo revisa una muestra de sus respuestas y corrige a la IA cuando se sale de la guía, y cada respuesta queda en el sistema. `[3.5.O1]`
+
+*Se leen igual:* `3.5.F1`, `3.5.F3`, `3.5.E2`, `3.5.E3`.
 
 #### 3.6 Priorización de clientes del taller
 
@@ -6702,6 +7688,14 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 *Descripción:* Mide si los casos se atienden según su gravedad y el tipo de cliente, y no según quién insiste más.
 
 *Costo de quedarse:* El vehículo varado en la carretera espera en la misma fila que un cambio de aceite, y la empresa que te trae su flota recibe la misma atención que todos.
+
+**Deficiente.**
+
+- Los vehículos y los casos se atienden por orden de llegada o como prefiere cada asesor de servicio, sin mirar su gravedad ni quién es el cliente. `[3.6.D1]`
+
+**Inicial.**
+
+- Se intenta atender primero lo urgente —un vehículo varado, una falla de seguridad—, pero los casos no tienen una prioridad asignada: cada asesor de servicio decide a ojo, o se adelanta el dueño que más insiste. `[3.6.I1]`
 
 **Funcional.**
 
@@ -6712,7 +7706,11 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 
 - Los clientes se segmentan para acciones diferenciadas según el momento de su vehículo: recién entregado, en garantía, fuera de garantía o listo para cambiarlo; donde el cliente vuelve, sanos, en riesgo o con potencial de crecer. `[3.6.E2]`
 
-*Se leen igual:* `3.6.D1`, `3.6.I1`, `3.6.F3`, `3.6.E1`, `3.6.O1`, `3.6.O2`, `3.6.O3`.
+**Óptimo.**
+
+- Cada cliente se atiende con el contexto de cómo llegó —lo que se le prometió en la venta del vehículo, como un mantenimiento incluido, y el segmento del que viene—, que quien lo atiende, asesor de servicio o IA, ve en su ficha sin volver a preguntarlo. `[3.6.O3]`
+
+*Se leen igual:* `3.6.F3`, `3.6.E1`, `3.6.O1`, `3.6.O2`.
 
 #### 3.7 Seguimiento del vehículo
 
@@ -6721,6 +7719,14 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 *Descripción:* Mide si el taller se adelanta a lo que necesita cada vehículo —el mantenimiento, la garantía, un llamado a revisión— o solo reacciona cuando el cliente llama.
 
 *Costo de quedarse:* El cliente se acuerda de su mantenimiento cuando ya pasó el kilometraje, lo hace en otro taller y pierde la garantía, y te enteras de que quedó mal cuando lo publica en redes.
+
+**Deficiente.**
+
+- El taller nunca contacta al dueño por iniciativa propia: ni para su mantenimiento ni para avisarle de un llamado a revisión. `[3.7.D2]`
+
+**Inicial.**
+
+- Cuando un dueño tiene problemas repetidos con su vehículo —por ejemplo, vuelve una y otra vez al taller por la misma falla—, a veces alguien lo contacta, pero depende de que lo note. `[3.7.I1]`
 
 **Funcional.** Los reclamos que se repiten y las quejas se detectan, aunque sea a mano, los clientes clave reciben contacto antes de sus fechas críticas y cada dueño recibe el recordatorio de su próximo mantenimiento.
 
@@ -6734,7 +7740,11 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 - Ningún caso del cliente se pierde entre áreas: si lo resuelve otra área —repuestos, la marca o un taller externo—, también queda en el sistema; y hay alertas automáticas, que le llegan a quien tiene que actuar, cuando un caso se atrasa, cuando se acerca una fecha crítica —una entrega, el fin de la garantía, un mantenimiento— o, si se piden calificaciones, cuando un cliente califica mal. `[3.7.E4]`
 - Cuando la marca anuncia un llamado a revisión que afecta a un vehículo vendido o atendido, su dueño recibe el aviso y una cita propuesta sin tener que buscarla. `[3.7.E601 · comprobable · hábito]`
 
-*Se leen igual:* `3.7.D1`, `3.7.D2`, `3.7.I1`, `3.7.F1`, `3.7.F3`, `3.7.E1`, `3.7.E2`, `3.7.E3`, `3.7.E5`, `3.7.O1`, `3.7.O2`, `3.7.O3`, `3.7.O4`.
+**Óptimo.**
+
+- Los dueños reciben, sin pedirlos, detalles pensados para deleitarlos —un lavado de cortesía, un descuento en su próximo mantenimiento, un obsequio al cumplir un año con su vehículo—, elegidos según la historia de cada cliente y el momento de su relación, y en el sistema queda qué recibió cada uno. `[3.7.O4]`
+
+*Se leen igual:* `3.7.D1`, `3.7.F1`, `3.7.F3`, `3.7.E1`, `3.7.E2`, `3.7.E3`, `3.7.E5`, `3.7.O1`, `3.7.O2`, `3.7.O3`.
 
 #### 3.8 Escalabilidad del taller
 
@@ -6743,6 +7753,14 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 *Descripción:* Mide si el taller puede atender a más vehículos sin crecer al mismo ritmo, gracias al autoservicio y al conocimiento documentado.
 
 *Costo de quedarse:* Tu equipo responde a mano las mismas preguntas cada día, y cada vehículo que vendes suma más de esas preguntas a la fila del taller.
+
+**Deficiente.**
+
+- Hasta las preguntas que más se repiten —qué cubre la garantía, cuánto cuesta un mantenimiento— se responden a mano, una por una, cada vez que llegan. `[3.8.D2]`
+
+**Inicial.**
+
+- Hay algunas respuestas publicadas, pero sueltas: no cubren lo que más preguntan los dueños —la garantía, el plan de mantenimiento, el costo de un servicio—, que se sigue respondiendo a mano. `[3.8.I2]`
 
 **Funcional.**
 
@@ -6753,4 +7771,8 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 - Al menos una vez por trimestre se revisan los casos que se repiten —por ejemplo, la misma falla en varios vehículos de un modelo— y, donde la relación es continua, las razones por las que se van los clientes, para encontrar patrones y mejorar. `[3.8.E2]`
 - Los patrones de las fallas que se repiten en un modelo se comparten con la marca y con el equipo del taller, para atenderlas antes y documentar su solución. `[3.8.E601 · declarado · hábito]`
 
-*Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O2`, `3.8.O3`, `3.8.O4`.
+**Óptimo.**
+
+- Los picos de demanda —como la temporada de mantenimientos o un llamado a revisión— los absorben la IA y el autoservicio: el equipo no crece cuando crece la cartera de vehículos que atiende, y el líder ve en los tableros del área qué parte de la demanda resolvieron la IA y el autoservicio y qué pasó a una persona. `[3.8.O2]`
+
+*Se leen igual:* `3.8.D1`, `3.8.I1`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O3`, `3.8.O4`.
