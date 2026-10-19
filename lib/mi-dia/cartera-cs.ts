@@ -19,6 +19,9 @@
  *   · «Sin contacto»: 21 días o más sin una reunión con el cliente ni actividad en HubSpot (la regla de Éxito del
  *     cliente). La relación se enfría sin avisar: la más vieja primero.
  *   · «Renuevan pronto»: la renovación de licencias en los próximos 90 días, la más cercana primero.
+ *   · «Sin acción o reunión» (2026-10-19): TODAS las cuentas a las que la regla de servicio les pide algo (sin acción
+ *     esta semana o sin reunión en 8 días), sin tope. Es a donde lleva «Ver las N sin acción o reunión» del inicio: ahí
+ *     tienen que estar todas, también las que solo están sin reunión (que «Para atender» deja fuera a propósito).
  *
  * ⛔ Plata: el monto de los negocios abiertos llega solo a quien ve Ventas, y la relación con HubSpot solo a quien
  * lidera Customer Success. Lo decide el servidor (lib/mi-dia/cartera-cs-server.ts): acá llegan en null.
@@ -104,6 +107,13 @@ export interface EmpresaDeCs {
   calendarioLeido: boolean;
   /** La acción de la semana (una tarea con fecha esta semana). */
   accion: { numero: number; titulo: string } | null;
+  /**
+   * Le falta la reunión de los próximos 8 días (la regla de servicio, lib/mi-dia/servicio.ts). false también cuando el
+   * calendario no se pudo leer: no se sabe, y no se dice que falta.
+   */
+  faltaReunion: boolean;
+  /** El siguiente paso que sugiere Nexus con la reunión de esta semana, cuando falta la acción. */
+  siguientePaso: { eventoId: string; titulo: string; fecha: string; inicio: string; llevaEmail: string | null } | null;
   /** AAAA-MM-DD de la próxima renovación de licencias. */
   renovacion: string | null;
   /** La relación con HubSpot (solo quien lidera Customer Success). */
@@ -203,6 +213,21 @@ export function paraAtender(empresas: readonly EmpresaDeCs[], hoyISO: string): E
         b.motivos.length - a.motivos.length ||
         a.empresa.nombre.localeCompare(b.empresa.nombre, "es"),
     );
+}
+
+/** ¿La regla de servicio le pide algo a esta cuenta? Sin acción esta semana o sin reunión en los próximos 8 días. */
+export function faltaServicio(e: Pick<EmpresaDeCs, "accion" | "faltaReunion">): boolean {
+  return !e.accion || e.faltaReunion;
+}
+
+/**
+ * «Sin acción o reunión»: todas las que la regla de servicio marca, sin tope. Primero las que no tienen ninguna de las
+ * dos, después las que tienen reunión y les falta el siguiente paso, después las que solo están sin reunión; dentro, por
+ * color y nombre.
+ */
+export function cuentasSinServicio(empresas: readonly EmpresaDeCs[]): EmpresaDeCs[] {
+  const grupo = (e: EmpresaDeCs) => (!e.accion && e.faltaReunion ? 0 : !e.accion ? 1 : 2);
+  return empresas.filter(faltaServicio).sort((a, b) => grupo(a) - grupo(b) || ordenDeTodos(a, b));
 }
 
 /** Sin contacto en 21 días o más: primero las que nunca tuvieron uno, después la más vieja. */

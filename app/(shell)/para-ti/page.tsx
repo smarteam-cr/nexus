@@ -252,7 +252,14 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
                     }
                   : null,
               cuentas,
-              verLasCuentas: conCuentas ? enlace({ vista: carteraDeCs ? "cartera" : "cuentas", dia: null, agenda: null }) : null,
+              // «Ver las N» lleva a TODAS (en la cartera de CS, la vista «Todos los proyectos»), y «Ver las M sin acción o
+              // reunión», a todas las que la regla marca (2026-10-19: «Para atender» dejaba fuera las que solo están sin
+              // reunión, y «Ver más» tiene que mostrarlas todas).
+              verLasCuentas: conCuentas ? enlace({ vista: carteraDeCs ? "cartera" : "cuentas", cartera: carteraDeCs ? "todos" : null, dia: null, agenda: null }) : null,
+              verSinServicio: carteraDeCs ? enlace({ vista: "cartera", cartera: "sin-accion", dia: null, agenda: null }) : null,
+              // Cuántas empresas tiene la cartera a la que llevan los enlaces (la de la CSL suma las que solo tienen
+              // desarrollo): el número del enlace es el de la lista a la que lleva.
+              cuentasEnLaCartera: empresasDeCs,
               tareasDeHoy: hoy,
               tareasInternas: internas?.tareas ?? null,
               movimiento: vistaDeVentas

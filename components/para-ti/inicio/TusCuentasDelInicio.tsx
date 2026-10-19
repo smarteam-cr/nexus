@@ -5,6 +5,9 @@
  * Una fila por cuenta: el color (a quien lo puede ver), el nombre, por qué tiene ese color o qué se hace con ella, y
  * dos marcas: ✓ si tiene su acción esta semana y ✓ con el día si tiene reunión; ○ en ámbar si falta. Primero las que
  * les falta algo. La CSL ve además quién la lleva.
+ *
+ * Abajo, «Ver las N» lleva a TODAS las cuentas y «Ver las M sin acción o reunión», a todas las que la regla marca, sin
+ * tope (2026-10-19): la tarjeta muestra cinco, y lo que no entra tiene que poder verse entero.
  */
 import Link from "next/link";
 import { cn } from "@/lib/cn";
@@ -28,6 +31,8 @@ export default function TusCuentasDelInicio({
   titulo,
   max,
   verTodas,
+  verSinServicio = null,
+  enElDestino = null,
   conQuienLaLleva,
   hoyISO,
 }: {
@@ -36,11 +41,23 @@ export default function TusCuentasDelInicio({
   /** Cuántas se ven; null = todas. */
   max: number | null;
   verTodas: string | null;
+  /** Todas las que la regla de servicio marca. */
+  verSinServicio?: string | null;
+  /**
+   * Cuántas cuentas hay en la lista a la que lleva «Ver las N» (la cartera de Customer Success, que en la CSL suma las que
+   * solo tienen desarrollo). Si no coincide con las de la tarjeta, el enlace de las que faltan no dice un número que la
+   * lista de destino no va a mostrar.
+   */
+  enElDestino?: number | null;
   conQuienLaLleva: boolean;
   hoyISO: string;
 }) {
   const orden = ordenarCuentas(cuentas);
   const vista = max == null ? orden : orden.slice(0, max);
+  const faltan = cuentas.filter((c) => (c.servicio?.falta.length ?? 0) > 0).length;
+  const faltanFuera = orden.slice(vista.length).some((c) => (c.servicio?.falta.length ?? 0) > 0);
+  const total = enElDestino ?? cuentas.length;
+  const mismaLista = total === cuentas.length;
   return (
     <section className={cn(TARJETA, "flex flex-col gap-3 p-5")} aria-labelledby="cuentas-t">
       <div className="flex items-baseline justify-between gap-2">
@@ -87,10 +104,19 @@ export default function TusCuentasDelInicio({
           })}
         </ul>
       )}
-      {verTodas && max != null && cuentas.length > max && (
-        <Link href={verTodas} className="text-[13px] font-medium text-brand transition-colors hover:text-brand-light">
-          Ver las {cuentas.length}
-        </Link>
+      {max != null && cuentas.length > max && (verTodas || (verSinServicio && faltanFuera)) && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {verSinServicio && faltanFuera && (
+            <Link href={verSinServicio} className="text-[13px] font-medium text-brand transition-colors hover:text-brand-light">
+              {mismaLista ? `Ver las ${faltan} sin acción o reunión` : "Ver las que no tienen acción o reunión"}
+            </Link>
+          )}
+          {verTodas && (
+            <Link href={verTodas} className="text-[13px] font-medium text-brand transition-colors hover:text-brand-light">
+              Ver las {total}
+            </Link>
+          )}
+        </div>
       )}
     </section>
   );

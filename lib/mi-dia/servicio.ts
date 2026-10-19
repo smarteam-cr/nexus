@@ -49,6 +49,8 @@ export interface ReunionDeLaCuenta {
   inicio: string;
   /** De dónde salió: el calendario de quien la lleva o una reunión planeada en Tareas. */
   fuente: "calendario" | "tarea";
+  /** El id del evento en Google Calendar (solo las del calendario): la clave de la sugerencia del siguiente paso. */
+  eventoId?: string;
 }
 
 export interface VentanaDeLaSemana {
@@ -153,6 +155,82 @@ export function cuandoEsLaReunion(iso: string, hoyISO: string): string {
   return dia <= sumarDias(hoyISO, 6) ? nombre : `${nombre} ${d.getUTCDate()}`;
 }
 
+/** «hoy», «mañana» o «el jue 22» de un instante, mirado desde hoy (Costa Rica): para escribir «tiene reunión …». */
+export function elDiaDeLaReunion(iso: string, hoyISO: string): string {
+  const d = new Date(Date.parse(iso) - 6 * 3_600_000);
+  const dia = d.toISOString().slice(0, 10);
+  if (dia === hoyISO) return "hoy";
+  if (dia === sumarDias(hoyISO, 1)) return "mañana";
+  return `el ${DIAS[(d.getUTCDay() + 6) % 7]} ${d.getUTCDate()}`;
+}
+
+/** El día en Costa Rica (`AAAA-MM-DD`) de un instante. */
+export function diaEnCostaRica(iso: string): string {
+  return new Date(Date.parse(iso) - 6 * 3_600_000).toISOString().slice(0, 10);
+}
+
+// ── El siguiente paso que sugiere Nexus con la reunión (2026-10-19) ──────────────────────────────────────────────
+
+/**
+ * Es común que una cuenta tenga su reunión de la semana en el calendario y no tenga el siguiente paso puesto: casi
+ * siempre es un problema de seteo (el paso existe, es esa reunión). Para esa cuenta, Nexus sugiere el siguiente paso
+ * armado con la reunión (su título, la fecha de la reunión, para el equipo de quien la lleva) y la persona lo usa o lo
+ * descarta. Sin IA: lo arma el código.
+ *
+ * Solo con una reunión del CALENDARIO de quien la lleva que cae DENTRO de la semana de la regla: una reunión planeada en
+ * Tareas ya es una tarea (si cae en la semana, la cuenta ya tiene su acción), y una que cae la semana que viene no
+ * resolvería la acción de esta semana. Una descartada (por esa persona, para ese evento) no se vuelve a sugerir.
+ */
+export interface SiguientePasoSugerido {
+  /** El evento de Google Calendar del que sale. */
+  eventoId: string;
+  /** Lo que queda como siguiente paso: el título de la reunión. */
+  titulo: string;
+  /** `AAAA-MM-DD`: el día de la reunión en Costa Rica (vencimiento y semana de la tarea). */
+  fecha: string;
+  /** ISO: cuándo es la reunión. */
+  inicio: string;
+}
+
+/** El tipo con que se guarda el «Descartar» de esta sugerencia (`SugerenciaDescartada.tipo`). */
+export const TIPO_DESCARTE_DEL_PASO = "siguiente-paso-de-la-reunion";
+/** Cuánto, como mucho, mide el título de la tarea que deja «Usar». */
+export const MAX_TITULO_DEL_PASO = 200;
+
+/** La clave de la sugerencia: la cuenta y el evento. Un evento nuevo es otra sugerencia. */
+export function claveDelPasoSugerido(clientId: string, eventoId: string): string {
+  return `${clientId}:${eventoId}`;
+}
+
+/** La clave con que «Usar» crea la tarea: dos clics no crean dos (`Tarea.origenId` es único). */
+export function origenDelPasoSugerido(clientId: string, eventoId: string): string {
+  return `paso-reunion:${clientId}:${eventoId}`;
+}
+
+/**
+ * El siguiente paso que Nexus sugiere para una cuenta con reunión y sin acción, o null. `proximas` son todas las reuniones
+ * con la cuenta de los próximos 8 días (la primera del calendario dentro de la semana es la que se sugiere).
+ */
+export function siguientePasoDeLaReunion(
+  e: Pick<EstadoDeServicio, "clientId" | "falta" | "reunion">,
+  proximas: readonly ReunionDeLaCuenta[],
+  hoyISO: string,
+  descartadas: ReadonlySet<string> = new Set(),
+): SiguientePasoSugerido | null {
+  if (!e.falta.includes("accion")) return null;
+  const v = ventanaDeLaSemana(hoyISO);
+  const r = [...proximas]
+    .filter((x) => x.clientId === e.clientId && x.fuente === "calendario" && !!x.eventoId && x.titulo.trim())
+    .sort((a, b) => a.inicio.localeCompare(b.inicio))
+    .find((x) => {
+      const dia = diaEnCostaRica(x.inicio);
+      return dia >= v.desde && dia <= v.hasta;
+    });
+  if (!r?.eventoId) return null;
+  if (descartadas.has(claveDelPasoSugerido(e.clientId, r.eventoId))) return null;
+  return { eventoId: r.eventoId, titulo: r.titulo.trim().slice(0, MAX_TITULO_DEL_PASO), fecha: diaEnCostaRica(r.inicio), inicio: r.inicio };
+}
+
 /** Lo que dice una fila de «Tus cuentas» sobre la acción y la reunión. */
 export function marcasDeServicio(e: EstadoDeServicio, hoyISO: string): { accion: string | null; reunion: string | null } {
   return {
@@ -162,9 +240,14 @@ export function marcasDeServicio(e: EstadoDeServicio, hoyISO: string): { accion:
 }
 
 /**
- * El pendiente «Cuenta sin acción» de una cuenta, o null si está al día. Con lo que falta en el título y qué
- * hacer en el botón: sin reunión → «Agendar» (abre Google Calendar con todo lleno: título, invitados y, si se sabe, la
- * primera hora libre en horario laboral, `hueco`); con reunión y sin acción → crear la tarea en la ficha de la cuenta.
+ * El pendiente «Cuenta sin acción» de una cuenta, o null si está al día. Con lo que falta en el título y qué hacer en el
+ * botón:
+ *   · sin acción ni reunión → «Agendar» (abre Google Calendar con todo lleno: título, invitados y, si se sabe, la primera
+ *     hora libre en horario laboral, `hueco`);
+ *   · con reunión esta semana y sin acción → «tiene reunión el jue 22, falta el siguiente paso», con el siguiente paso que
+ *     sugiere Nexus (`siguientePaso`: la reunión misma) para usar o descartar ahí mismo;
+ *   · con reunión la semana que viene y sin acción → «falta la acción de esta semana» (la reunión no la resuelve);
+ *   · con acción y sin reunión → «Agendar».
  */
 export function pendienteDeCuentaSinAccion(
   cuenta: { clientId: string; empresa: string },
@@ -176,6 +259,10 @@ export function pendienteDeCuentaSinAccion(
     correo?: string | null;
     /** La primera hora libre en horario laboral de quien la lleva (lib/mi-dia/inicio.ts › primerHuecoLaboral). */
     hueco?: { inicio: string; fin: string } | null;
+    /** El siguiente paso que sugiere Nexus con la reunión (`siguientePasoDeLaReunion`). */
+    siguientePaso?: SiguientePasoSugerido | null;
+    /** De quién es la reunión que se sugiere (quien la lleva): «Usar» crea la tarea para esa persona. */
+    llevaEmail?: string | null;
   },
 ): Pendiente | null {
   if (e.falta.length === 0) return null;
@@ -183,18 +270,37 @@ export function pendienteDeCuentaSinAccion(
   const sinReunion = e.falta.includes("reunion");
   const ultima = o.ultimaReunion ? `la última reunión fue el ${diaCorto(o.ultimaReunion)}` : "no hay reuniones registradas con la cuenta";
   // Lo que falta va en el título, con la empresa adelante, como lo demás de «Lo que importa hoy»: en la línea gris de
-  // arriba no se encontraba (Elías, 2026-10-19). Debajo, por qué y qué hacer.
-  const que = sinAccion && sinReunion ? "sin acción ni reunión" : sinAccion ? "sin acción esta semana" : `sin reunión en ${DIAS_PARA_LA_REUNION} días`;
+  // arriba no se encontraba (Elías, 2026-10-19). Debajo, por qué y qué hacer. Con reunión y sin acción, el título dice
+  // cuándo es la reunión: no es lo mismo que no tener ni acción ni reunión (2026-10-19).
+  const v = ventanaDeLaSemana(o.hoyISO);
+  const reunionEnLaSemana = !!e.reunion && diaEnCostaRica(e.reunion.inicio) <= v.hasta;
+  const paso = sinAccion && !sinReunion ? (o.siguientePaso ?? null) : null;
+  const que =
+    sinAccion && sinReunion
+      ? "sin acción ni reunión"
+      : sinAccion && e.reunion
+        ? reunionEnLaSemana
+          ? `tiene reunión ${elDiaDeLaReunion(e.reunion.inicio, o.hoyISO)}, falta el siguiente paso`
+          : `tiene reunión ${elDiaDeLaReunion(e.reunion.inicio, o.hoyISO)}, falta la acción de esta semana`
+        : sinAccion
+          ? "sin acción esta semana"
+          : `sin reunión en ${DIAS_PARA_LA_REUNION} días`;
   const titulo = `${cuenta.empresa}: ${que}`;
   const porque = sinReunion
     ? `Nada agendado en los próximos ${DIAS_PARA_LA_REUNION} días; ${ultima}.`
-    : `Tiene reunión ${cuandoEsLaReunion(e.reunion!.inicio, o.hoyISO)}, pero ninguna tarea con fecha esta semana.`;
+    : paso
+      ? `Nexus sugiere dejar esa reunión como el siguiente paso: «${paso.titulo}», ${elDiaDeLaReunion(paso.inicio, o.hoyISO)}.`
+      : reunionEnLaSemana
+        ? `Tiene reunión ${elDiaDeLaReunion(e.reunion!.inicio, o.hoyISO)}, pero ninguna tarea con fecha esta semana.`
+        : `La reunión es la semana que viene y esta semana no tiene ninguna tarea con fecha.`;
   const queHacer =
     sinAccion && sinReunion
       ? "Agenda la próxima reunión y deja una tarea con fecha esta semana."
-      : sinAccion
-        ? "Deja una tarea con fecha esta semana: lo que vas a hacer con la cuenta."
-        : "Agenda la próxima reunión: Nexus la arma en tu agenda y la abres en Google Calendar.";
+      : paso
+        ? "Úsalo si el siguiente paso es esa reunión; si no, descártalo y deja otra tarea con fecha esta semana."
+        : sinAccion
+          ? "Deja una tarea con fecha esta semana: lo que vas a hacer con la cuenta."
+          : "Agenda la próxima reunión: Nexus la arma en tu agenda y la abres en Google Calendar.";
   const detalle = `${porque} ${queHacer}`;
   const href = sinReunion
     ? enlaceParaAgendarEnCalendar({
@@ -215,8 +321,19 @@ export function pendienteDeCuentaSinAccion(
     titulo,
     detalle,
     meta: `${cuenta.empresa} · Cuenta sin acción`,
-    accion: sinReunion ? "Agendar" : "Crear la acción",
+    accion: sinReunion ? "Agendar" : paso ? "Crear otra acción" : "Crear la acción",
     href,
     desde: o.ultimaReunion,
+    ...(paso
+      ? {
+          siguientePaso: {
+            eventoId: paso.eventoId,
+            titulo: paso.titulo,
+            fecha: paso.fecha,
+            cuando: elDiaDeLaReunion(paso.inicio, o.hoyISO),
+            llevaEmail: o.llevaEmail ?? null,
+          },
+        }
+      : {}),
   };
 }

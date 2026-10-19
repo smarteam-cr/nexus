@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   accionDeLaSemana,
+  claveDelPasoSugerido,
   cuandoEsLaReunion,
+  elDiaDeLaReunion,
   estadoDeServicio,
   FUENTE_CUENTA_SIN_ACCION,
   pendienteDeCuentaSinAccion,
+  origenDelPasoSugerido,
   reunionEnLosProximosDias,
+  siguientePasoDeLaReunion,
   ventanaDeLaSemana,
+  type ReunionDeLaCuenta,
   type TareaDeLaCuenta,
 } from "./servicio";
 import { pesoDe, PESOS } from "@/lib/para-ti/importa";
@@ -106,14 +111,81 @@ describe("el estado de servicio y «Cuenta sin acción»", () => {
     expect(pesoDe(p)).toBe(PESOS.servicio);
   });
 
-  it("con reunión y sin acción: crear la tarea en la ficha de la cuenta", () => {
+  it("con reunión la semana que viene y sin acción: falta la acción de esta semana, crear la tarea en la ficha", () => {
     const e = estadoDeServicio("c1", [], [{ clientId: "c1", titulo: "x", inicio: "2026-10-19T15:00:00Z", fuente: "calendario" }], { hoyISO: HOY, ahora: AHORA });
     const p = pendienteDeCuentaSinAccion({ clientId: "c1", empresa: "Honda" }, e, { ultimaReunion: null, hoyISO: HOY })!;
     expect(p.meta).toBe("Honda · Cuenta sin acción");
-    expect(p.titulo).toBe("Honda: sin acción esta semana");
+    expect(p.titulo).toBe("Honda: tiene reunión el lun 19, falta la acción de esta semana");
     expect(p.accion).toBe("Crear la acción");
     expect(p.href).toBe("/clients/c1?tab=__tareas__");
-    expect(p.detalle).toContain("lun");
+    expect(p.siguientePaso).toBeUndefined();
+  });
+
+  it("con reunión esta semana y sin acción: la línea dice cuándo es y trae el siguiente paso sugerido", () => {
+    // Lunes 19 de octubre, 9:00 en Costa Rica; la reunión es el jueves 22 a las 11:00.
+    const lunes = new Date("2026-10-19T15:00:00Z");
+    const reunion: ReunionDeLaCuenta = { clientId: "c1", titulo: "Cicadex: Diagnóstico de mercadeo | Smarteam", inicio: "2026-10-22T17:00:00Z", fuente: "calendario", eventoId: "ev1" };
+    const e = estadoDeServicio("c1", [], [reunion], { hoyISO: "2026-10-19", ahora: lunes });
+    expect(e.falta).toEqual(["accion"]);
+    const paso = siguientePasoDeLaReunion(e, [reunion], "2026-10-19");
+    expect(paso).toEqual({ eventoId: "ev1", titulo: "Cicadex: Diagnóstico de mercadeo | Smarteam", fecha: "2026-10-22", inicio: "2026-10-22T17:00:00Z" });
+    const p = pendienteDeCuentaSinAccion({ clientId: "c1", empresa: "Cicadex" }, e, { ultimaReunion: null, hoyISO: "2026-10-19", siguientePaso: paso, llevaEmail: "heiver@smarteamcr.com" })!;
+    expect(p.titulo).toBe("Cicadex: tiene reunión el jue 22, falta el siguiente paso");
+    expect(p.detalle).toBe(
+      "Nexus sugiere dejar esa reunión como el siguiente paso: «Cicadex: Diagnóstico de mercadeo | Smarteam», el jue 22. Úsalo si el siguiente paso es esa reunión; si no, descártalo y deja otra tarea con fecha esta semana.",
+    );
+    expect(p.siguientePaso).toEqual({ eventoId: "ev1", titulo: "Cicadex: Diagnóstico de mercadeo | Smarteam", fecha: "2026-10-22", cuando: "el jue 22", llevaEmail: "heiver@smarteamcr.com" });
+    expect(p.accion).toBe("Crear otra acción");
+    expect(pesoDe(p)).toBe(PESOS.servicio);
+  });
+
+  it("sin acción ni reunión no lleva sugerencia, aunque se la pasen", () => {
+    const e = estadoDeServicio("c1", [], [], { hoyISO: HOY, ahora: AHORA });
+    const p = pendienteDeCuentaSinAccion({ clientId: "c1", empresa: "Cemaco" }, e, {
+      ultimaReunion: null,
+      hoyISO: HOY,
+      siguientePaso: { eventoId: "x", titulo: "x", fecha: HOY, inicio: AHORA.toISOString() },
+    })!;
+    expect(p.titulo).toBe("Cemaco: sin acción ni reunión");
+    expect(p.siguientePaso).toBeUndefined();
+  });
+});
+
+describe("el siguiente paso que sugiere Nexus con la reunión", () => {
+  const HOY_LUNES = "2026-10-19";
+  const r = (o: Partial<ReunionDeLaCuenta> = {}): ReunionDeLaCuenta => ({ clientId: "c1", titulo: "Seguimiento", inicio: "2026-10-21T16:00:00Z", fuente: "calendario", eventoId: "ev1", ...o });
+  const sinAccion = { clientId: "c1", falta: ["accion" as const], reunion: r() };
+
+  it("con la acción puesta no sugiere nada", () => {
+    expect(siguientePasoDeLaReunion({ ...sinAccion, falta: [] }, [r()], HOY_LUNES)).toBeNull();
+  });
+  it("solo una reunión del calendario: una planeada en Tareas ya es una tarea", () => {
+    expect(siguientePasoDeLaReunion(sinAccion, [r({ fuente: "tarea", eventoId: undefined })], HOY_LUNES)).toBeNull();
+  });
+  it("solo dentro de la semana de la regla: la de la semana que viene no resuelve la acción de esta", () => {
+    expect(siguientePasoDeLaReunion(sinAccion, [r({ inicio: "2026-10-26T16:00:00Z" })], HOY_LUNES)).toBeNull();
+    // El domingo 25 a las 23:00 en Costa Rica sigue siendo de esta semana (en UTC ya es lunes).
+    expect(siguientePasoDeLaReunion(sinAccion, [r({ inicio: "2026-10-26T05:00:00Z" })], HOY_LUNES)?.fecha).toBe("2026-10-25");
+  });
+  it("solo de esa cuenta (invariante 1: la reunión es de la cuenta solo si el evento es de una empresa)", () => {
+    expect(siguientePasoDeLaReunion(sinAccion, [r({ clientId: "otra" })], HOY_LUNES)).toBeNull();
+  });
+  it("de varias, la primera de la semana", () => {
+    const paso = siguientePasoDeLaReunion(sinAccion, [r({ eventoId: "ev2", inicio: "2026-10-23T16:00:00Z" }), r()], HOY_LUNES);
+    expect(paso?.eventoId).toBe("ev1");
+  });
+  it("una descartada no vuelve; otro evento sí", () => {
+    const descartadas = new Set([claveDelPasoSugerido("c1", "ev1")]);
+    expect(siguientePasoDeLaReunion(sinAccion, [r()], HOY_LUNES, descartadas)).toBeNull();
+    expect(siguientePasoDeLaReunion(sinAccion, [r({ eventoId: "ev2" })], HOY_LUNES, descartadas)?.eventoId).toBe("ev2");
+  });
+  it("«Usar» dos veces no crea dos tareas: la clave es la cuenta y el evento", () => {
+    expect(origenDelPasoSugerido("c1", "ev1")).toBe("paso-reunion:c1:ev1");
+  });
+  it("el día de la reunión, en palabras", () => {
+    expect(elDiaDeLaReunion("2026-10-19T20:00:00Z", HOY_LUNES)).toBe("hoy");
+    expect(elDiaDeLaReunion("2026-10-20T15:00:00Z", HOY_LUNES)).toBe("mañana");
+    expect(elDiaDeLaReunion("2026-10-22T17:00:00Z", HOY_LUNES)).toBe("el jue 22");
   });
 });
 

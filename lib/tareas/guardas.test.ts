@@ -204,6 +204,7 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "lib/operaciones/siguiente-paso-server.ts": "fijar el siguiente paso: solo los sprints que lidera la persona (equipos.ts, puro); escribe por lib/siguiente-paso",
       // La semana (2026-10-17, fase 2 de docs/nexus-sistema-de-trabajo-plan.md).
       "lib/mi-dia/planificar-server.ts": "«Planifica tu semana»: las tareas abiertas de tus cuentas (título, fecha, prioridad, lado; sin la cita, el contexto, las notas ni lo privado) y la próxima sugerida de la última reunión",
+      "lib/mi-dia/paso-sugerido-server.ts": "«Usar» el siguiente paso que Nexus sugiere con la reunión de una cuenta sin acción: crea la tarea SIEMPRE por el escritor único (crearTarea, origen «paso»); no lee tareas",
       "lib/mi-dia/proximas-server.ts": "las próximas reuniones de la ficha: las reuniones planeadas de la cuenta (título, hora, responsable e invitados; nunca lo privado) y quién tiene tareas abiertas con ella (para leer su calendario)",
       "lib/sessions/reanalizar.ts": "una reunión cuyo texto cambió: sus propuestas sin decidir quedan vencidas por el único escritor (retirarPropuestasDeLaReunion); no lee tareas",
       "app/api/sessions/[id]/seguimiento/route.ts": "«Ya la agendé» de la página de una reunión: deja la reunión planeada por el único escritor (planearReunion); no lee tareas",

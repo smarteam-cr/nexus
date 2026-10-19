@@ -8649,6 +8649,39 @@ que tener su acción de la semana y su reunión agendada.
 - **«Tus notas» también en una reunión que ya pasó.** Siguen siendo de cada persona: con «Ver como», el panel dice que no
   se ven ni se escriben.
 
+### Ver todas, y el siguiente paso con la reunión (2026-10-19)
+
+- **«Ver más» lleva a TODAS las cuentas que la regla marca, sin tope.** La tarjeta «Tus cuentas» (o «La cartera») muestra
+  cinco; abajo, «Ver las M sin acción o reunión» abre la cartera de Customer Success en la vista nueva **«Sin acción o
+  reunión»** (`cuentasSinServicio`, lib/mi-dia/cartera-cs.ts) y «Ver las N», en «Todos los proyectos». Antes «Ver las N»
+  abría «Para atender», que deja fuera a propósito las que solo están sin reunión: en cuanto una cuenta tiene su acción y
+  le falta la reunión, de las que «Para ti» marcaba ahí no estaban todas (medido el lunes 19 no faltaba ninguna, porque
+  todas estaban además sin acción; el hueco se abre a mitad de semana). En la CSL la cartera suma las que solo tienen desarrollo, así que el enlace de las que faltan no
+  lleva número cuando la lista de destino tiene otras cuentas (el número está en la pestaña). «Para atender» no cambió.
+- **Con reunión esta semana y sin acción, la línea lo dice distinto**: «X: tiene reunión el jue 22, falta el siguiente
+  paso», no «sin acción ni reunión». Con la reunión la semana que viene: «…falta la acción de esta semana» (la reunión
+  no resuelve la de esta).
+- **Nexus sugiere el siguiente paso con esa reunión** (`siguientePasoDeLaReunion`, lib/mi-dia/servicio.ts, sin IA): el
+  título de la reunión, con la fecha de la reunión, para quien lleva la cuenta. Casi siempre es un problema de seteo: el
+  paso existe y es esa reunión. Va debajo de la línea, en azul con la chispa, con «Usar» y «Descartar», en «Lo que importa
+  hoy», «También para hoy» y la cartera. Solo con una reunión del CALENDARIO dentro de la semana de la regla: una
+  planeada en Tareas ya es una tarea, y una de la semana que viene no resolvería la acción de esta. La reunión es de la
+  cuenta solo si `cuentaDelEvento` la resuelve a UNA empresa (invariante 1).
+- **«Usar» crea la tarea por el escritor único** (`crearTarea`, `origen = "paso"`, `origenId = paso-reunion:<cuenta>:<evento>`:
+  dos clics no crean dos) y pone al día HubSpot (`sincronizarCuenta`). No reescribe otra tarea: un siguiente paso más
+  lejano queda como está, y la nueva, que es más temprana, pasa a ser el siguiente paso. Lo decide quien lleva la cuenta
+  (el encargado de un proyecto abierto de CS) o quien lidera Customer Success; para otra persona, la tarea es de quien
+  lleva la cuenta. ⛔ Lo que dice el navegador no se usa: el servidor vuelve a calcular la sugerencia con el calendario de
+  quien la lleva y tiene que ser el mismo evento (lib/mi-dia/paso-sugerido-server.ts). Con «Ver como», no se escribe.
+- **«Descartar» se guarda por persona y evento** (`SugerenciaDescartada`, SQL `2026-10-19-sugerencias-descartadas.sql`,
+  aplicado el 2026-10-19): no vuelve; una reunión nueva es otra sugerencia. Se lee y se escribe con SQL parametrizado, así
+  el módulo no depende de regenerar el cliente; el modelo está en el schema y la salud del esquema lo vigila.
+- **Medido el 2026-10-19 (lunes, solo lectura, `scripts/medir-cuentas-sin-accion.ts`)**: Juan Carlos Armijos, 16 cuentas
+  en la regla (12 sin ninguna de las dos, 4 con la sugerencia; en su cartera, 19 en «Sin acción o reunión»); Heiver Gomez,
+  13 (7, 5 y 1 solo sin reunión; 13 en la vista); Caroline Bersot, 4 (2 y 2; 4); Alexander Vanegas (CSL), ninguna propia, «Juan Carlos
+  Armijos tiene 16 cuentas que piden atención» y «Heiver Gomez tiene 13…», cada una con todos sus enlaces, y 47 de 48
+  empresas en la vista. En las cuatro, todas las de la regla están en la vista nueva.
+
 ## El cronograma y el cierre del ciclo de SmartLoop (2026-10-17, ficha E)
 
 - **El cronograma del ciclo es el `ProjectTimeline` del proyecto**, no otro modelo: cada caso de uso es una fase

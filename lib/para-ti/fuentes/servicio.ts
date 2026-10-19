@@ -10,10 +10,14 @@
  * «Agendar» lleva hora (fase 2, 2026-10-17): la primera hora libre en horario laboral del calendario de quien la lleva,
  * una por cuenta y sin pisarse entre ellas (cada una ocupa la suya). Así abre Google Calendar con la hora también desde
  * la lista entera y desde el correo de la mañana. Sin el calendario, abre sin hora, como antes.
+ *
+ * Con reunión esta semana y sin acción (2026-10-19), la línea dice cuándo es la reunión y trae el siguiente paso que
+ * sugiere Nexus: la reunión misma, para usar o descartar ahí mismo (lib/mi-dia/paso-sugerido-server.ts).
  */
 import "server-only";
 import { servicioDeLasCuentas } from "@/lib/mi-dia/servicio-server";
-import { pendienteDeCuentaSinAccion } from "@/lib/mi-dia/servicio";
+import { pendienteDeCuentaSinAccion, siguientePasoDeLaReunion } from "@/lib/mi-dia/servicio";
+import { pasosDescartados } from "@/lib/mi-dia/paso-sugerido-server";
 import { calendarioDeLosProximosDias } from "@/lib/mi-dia/calendario-server";
 import { primerHuecoLaboral, type EventoParaLaGrilla } from "@/lib/mi-dia/inicio";
 import type { Fuente } from "../fuente";
@@ -28,10 +32,13 @@ export const CUENTAS_SIN_ACCION: Fuente = {
   async medir(a, c) {
     const cuentas = new Map<string, string>();
     for (const p of a.proyectos) if (p.encargado) cuentas.set(p.clientId, p.empresa);
-    const servicio = await servicioDeLasCuentas(
-      [...cuentas].map(([clientId, empresa]) => ({ clientId, empresa, llevaEmail: a.email })),
-      { ahora: c.ahora, hoyISO: c.hoyISO, quienMira: { email: a.email, esSuperAdmin: a.rol === "SUPER_ADMIN" } },
-    );
+    const [servicio, descartados] = await Promise.all([
+      servicioDeLasCuentas(
+        [...cuentas].map(([clientId, empresa]) => ({ clientId, empresa, llevaEmail: a.email })),
+        { ahora: c.ahora, hoyISO: c.hoyISO, quienMira: { email: a.email, esSuperAdmin: a.rol === "SUPER_ADMIN" } },
+      ),
+      pasosDescartados(a.email),
+    ]);
     const out: Pendiente[] = [];
     const cal = [...servicio.values()].some((s) => s.falta.includes("reunion")) ? await calendarioDeLosProximosDias(a.email, c.ahora) : null;
     const ocupado: EventoParaLaGrilla[] = cal ? [...cal.ocupado] : [];
@@ -47,6 +54,8 @@ export const CUENTAS_SIN_ACCION: Fuente = {
         hoyISO: c.hoyISO,
         correo: a.email,
         hueco,
+        siguientePaso: siguientePasoDeLaReunion(s, s.proximas, c.hoyISO, descartados),
+        llevaEmail: a.email,
       });
       if (p) out.push(p);
     }

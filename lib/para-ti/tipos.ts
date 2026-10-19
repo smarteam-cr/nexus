@@ -42,6 +42,23 @@ export interface Pendiente {
   clientId?: string | null;
   /** Solo en «Lo que importa hoy»: lo demás de esta cuenta («+N en esta cuenta»). */
   otrosEnLaCuenta?: Pendiente[];
+  /**
+   * El siguiente paso que sugiere Nexus para una cuenta con reunión esta semana y sin acción: la reunión misma
+   * (lib/mi-dia/servicio.ts › siguientePasoDeLaReunion). Se usa o se descarta ahí mismo.
+   */
+  siguientePaso?: SiguientePasoDelPendiente;
+}
+
+/** Lo que necesita la pantalla para «Usar» o «Descartar» la sugerencia del siguiente paso. */
+export interface SiguientePasoDelPendiente {
+  eventoId: string;
+  titulo: string;
+  /** `AAAA-MM-DD`. */
+  fecha: string;
+  /** «hoy», «mañana» o «el jue 22». */
+  cuando: string;
+  /** Quien lleva la cuenta (de su calendario sale la reunión). null = quien mira. */
+  llevaEmail: string | null;
 }
 
 /** Uno de los lugares de un pendiente que junta varios: «Wherex (2)» → la ficha de Wherex. */

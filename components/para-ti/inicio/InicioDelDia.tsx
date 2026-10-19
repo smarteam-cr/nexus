@@ -42,8 +42,12 @@ export interface DatosDelInicio {
   /** Lo que la agenda muestra al entrar; después se mueve sola (agenda-navegable.ts). */
   agenda: { datos: AgendaDeHoy; vista: "dia" | "semana"; dia: string } | null;
   cuentas: CuentaDelInicio[];
-  /** La pestaña con todas las cuentas (`?vista=cuentas`). */
+  /** Todas las cuentas (en Customer Success, la cartera en «Todos los proyectos»; en Desarrollo, `?vista=cuentas`). */
   verLasCuentas: string | null;
+  /** Todas las que la regla de servicio marca (en Customer Success, la cartera en «Sin acción o reunión»). */
+  verSinServicio: string | null;
+  /** Cuántas empresas tiene la cartera a la que llevan esos enlaces. null = no es la de Customer Success. */
+  cuentasEnLaCartera: number | null;
   tareasDeHoy: { tareas: TareaDelInicio[]; total: number };
   tareasInternas: TareaDelInicio[] | null;
   movimiento: { lista: MovimientoDeVentas[]; total: number; verPipeline: string } | null;
@@ -194,6 +198,8 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
                 titulo={d.variante === "csl" ? "La cartera" : d.variante === "dev" ? "Clientes con desarrollo" : "Tus cuentas"}
                 max={5}
                 verTodas={d.verLasCuentas}
+                verSinServicio={d.verSinServicio}
+                enElDestino={d.cuentasEnLaCartera}
                 conQuienLaLleva={d.variante !== "cse"}
                 hoyISO={d.hoyISO}
               />

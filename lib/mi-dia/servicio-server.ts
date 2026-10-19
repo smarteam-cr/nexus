@@ -56,7 +56,7 @@ async function reunionesDelCalendario(email: string, ahora: Date): Promise<Reuni
   if (!cal) return null;
   return cal.reuniones.flatMap((r) => {
     const clientId = cuentaDelEvento(r);
-    return clientId ? [{ clientId, titulo: r.titulo, inicio: r.inicio, fuente: "calendario" as const }] : [];
+    return clientId ? [{ clientId, titulo: r.titulo, inicio: r.inicio, fuente: "calendario" as const, eventoId: r.id }] : [];
   });
 }
 
