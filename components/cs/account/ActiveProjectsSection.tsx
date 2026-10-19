@@ -5,8 +5,8 @@
  *
  * Proyectos activos de la cuenta, como filas de una tabla (rediseño 2026-10-04): etapa, salud, qué
  * pasa (bloqueo de HubSpot, atraso del cronograma, alarmas de etapa), el cierre prometido contra el
- * proyectado, el CSE y el avance. Dentro de «Qué pasa» viven los dos chips que resuelven cosas:
- * la propuesta de salud del agente vigía y el estado sugerido por el motivo de bloqueo.
+ * proyectado, el CSE y el avance. Dentro de «Qué pasa» viven la propuesta de SALUD del vigía (que se decide
+ * en «Propuestas del vigía») y el ESTADO de HubSpot con su sugerencia por el motivo de bloqueo.
  */
 import Link from "next/link";
 import HealthProposalChip from "@/components/lifecycle/HealthProposalChip";
@@ -16,6 +16,7 @@ import type { PortfolioRow } from "@/lib/portfolio/load";
 // solo puede venir el TIPO (que se borra en compilación), nunca una función.
 import { etapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import { HS_STATUS_LABEL } from "@/components/cs/dashboard/chart-theme";
+import { estadoDeLaPropuesta, razonDelRiesgo } from "@/lib/cs/propuestas-del-vigia";
 import type { AccountProjectOps } from "@/lib/cs/load-account";
 import { cn } from "@/lib/cn";
 import { fmtDia } from "@/lib/cs/formato";
@@ -34,7 +35,6 @@ export default function ActiveProjectsSection({
   projects,
   projectOps,
   csePorProyecto,
-  puedeCurar,
 }: {
   projects: PortfolioRow[];
   projectOps: Record<string, AccountProjectOps>;
@@ -43,11 +43,6 @@ export default function ActiveProjectsSection({
    * Nexus no cuenta como CSE aunque HubSpot lo siga teniendo como dueño.
    */
   csePorProyecto: Record<string, { nombre: string | null; deBaja: string | null }>;
-  /**
-   * ⚠ Si puede RESOLVER la propuesta de salud del watchdog (`clientes.viewAll`). Con `false` el
-   * chip se sigue viendo —es información útil— pero sin Confirmar/Descartar, que darían 403.
-   */
-  puedeCurar: boolean;
 }) {
   if (projects.length === 0) {
     return (
@@ -111,12 +106,19 @@ export default function ActiveProjectsSection({
               </span>
               {ops?.hubspotBlockDetail && <span className="line-clamp-2 text-xs text-fg-muted">{ops.hubspotBlockDetail}</span>}
               <span className="flex flex-wrap gap-1.5">
-                {p.healthProposed && (
-                  <HealthProposalChip projectId={p.projectId} reason={p.healthProposedReason} proposedAt={p.healthProposedAt} puedeResolver={puedeCurar} />
+                {/* La SALUD que propone el vigía, solo si sigue pidiendo decisión (la misma regla que la lista y
+                    «Para ti»). Se decide en «Propuestas del vigía», no acá. */}
+                {estadoDeLaPropuesta({ propuesta: p.healthProposed, saludFijada: s.health.override, riskCandidate: s.riskCandidate }) === "vigente" && p.healthProposed && (
+                  <HealthProposalChip
+                    projectId={p.projectId}
+                    actual={s.health.resolved}
+                    propuesta={p.healthProposed}
+                    reason={razonDelRiesgo(s)}
+                  />
                 )}
-                {/* El estado que dice HubSpot, y JUNTO a él el chip que avisa si el motivo cargado lo
-                    contradice: separarlos obligaría a acordarse de qué decía el otro. */}
-                {ops?.hubspotStatus && <Chip>HubSpot: {HS_STATUS_LABEL[ops.hubspotStatus] ?? ops.hubspotStatus}</Chip>}
+                {/* El ESTADO que dice HubSpot (otro dato que la salud de Nexus), y JUNTO a él el chip que avisa si
+                    el motivo cargado lo contradice: separarlos obligaría a acordarse de qué decía el otro. */}
+                {ops?.hubspotStatus && <Chip>Estado en HubSpot: {HS_STATUS_LABEL[ops.hubspotStatus] ?? ops.hubspotStatus}</Chip>}
                 <EstadoSugeridoChip projectId={p.projectId} estadoActual={ops?.hubspotStatus ?? null} motivo={ops?.hubspotBlockReason ?? null} />
               </span>
             </span>

@@ -1,86 +1,39 @@
-"use client";
-
 /**
  * components/lifecycle/HealthProposalChip.tsx
  *
- * Propuesta "EN RIESGO" pendiente (el watchdog propone por señales duras, el CSE
- * decide): chip rojo con Confirmar (escribe healthStatusOverride=EN_RIESGO) /
- * Descartar. PATCH /api/projects/[id]/health-proposal + refresh.
+ * La propuesta de SALUD del vigía sobre un proyecto, en la pestaña «Proyectos» de la cuenta: «Salud: de «En fricción»
+ * a «En riesgo» · lo propone el vigía · Decidir».
+ *
+ * Desde el 2026-10-19 NO decide acá: «Decidir» lleva a Éxito del cliente › «Propuestas del vigía», abierta en esta
+ * propuesta, que es el único lugar donde se confirma o se descarta (lib/cs/propuestas-del-vigia.ts). Antes tenía
+ * «Confirmar · Descartar» sueltos al lado del estado de HubSpot y de otro chip que proponía «Pasar a Retrasado» en
+ * HubSpot: no se entendía qué se proponía ni de qué a qué.
  */
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { fetchJson, ApiError } from "@/lib/api/fetch-json";
-import { useToast } from "@/components/ui/Toast";
+import Link from "next/link";
+import { IconoDeSugerencia } from "@/components/ui/sistema";
+import { NOMBRE_DE_LA_SALUD, rutaDeLaPropuesta, type Salud } from "@/lib/cs/propuestas-del-vigia";
 
 export default function HealthProposalChip({
   projectId,
+  actual,
+  propuesta,
   reason,
-  proposedAt,
-  puedeResolver,
 }: {
   projectId: string;
+  actual: Salud;
+  propuesta: Salud;
   reason: string | null;
-  proposedAt: string | null;
-  /**
-   * ⚠ El PATCH exige `clientes.viewAll`. Desde que Exito del cliente tiene celda propia
-   * (`customerSuccess.read`, 2026-08-16) hay gente que VE este chip sobre un proyecto suyo
-   * y no lo puede resolver: con `false` el chip informa (que es lo valioso) y no ofrece los
-   * dos botones que darian 403.
-   *
-   * REQUERIDO y sin default: si el default fuera `true`, un call site nuevo heredaria los
-   * botones muertos en silencio, que es exactamente el defecto que este prop vino a matar.
-   */
-  puedeResolver: boolean;
 }) {
-  const router = useRouter();
-  const toast = useToast();
-  const [busy, setBusy] = useState<"confirm" | "dismiss" | null>(null);
-  const [resolved, setResolved] = useState(false);
-  if (resolved) return null;
-
-  const act = async (action: "confirm" | "dismiss") => {
-    setBusy(action);
-    try {
-      await fetchJson(`/api/projects/${projectId}/health-proposal`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      setResolved(true);
-      toast.success(action === "confirm" ? "Proyecto marcado En riesgo (curado)." : "Propuesta descartada.");
-      router.refresh();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo resolver la propuesta.");
-    } finally {
-      setBusy(null);
-    }
-  };
-
   return (
     <span
-      className="inline-flex items-center gap-1.5 text-[10px] font-medium px-1.5 py-0.5 rounded border text-red-600 bg-red-500/10 border-red-500/30"
-      title={`${reason ?? "Señales duras del cronograma"}${proposedAt ? ` · propuesto el ${new Date(proposedAt).toLocaleDateString("es-CR", { day: "numeric", month: "short" })}` : ""}`}
+      className="inline-flex items-center gap-1.5 rounded border border-info-line bg-info-surface px-1.5 py-0.5 text-[11px] font-medium text-brand"
+      title={reason ? `Por qué: ${reason}` : undefined}
     >
-      En riesgo (propuesto por el agente)
-      {!puedeResolver && <span className="text-fg-muted">· lo confirma el liderazgo de CS</span>}
-      {puedeResolver && (
-        <>
-      <button
-        onClick={() => act("confirm")}
-        disabled={busy !== null}
-        className="underline decoration-dotted hover:text-red-700 disabled:opacity-50"
-      >
-        {busy === "confirm" ? "…" : "Confirmar"}
-      </button>
-      <button
-        onClick={() => act("dismiss")}
-        disabled={busy !== null}
-        className="text-fg-muted underline decoration-dotted hover:text-fg disabled:opacity-50"
-      >
-        {busy === "dismiss" ? "…" : "Descartar"}
-      </button>
-        </>
-      )}
+      <IconoDeSugerencia className="h-3 w-3" />
+      Salud: de «{NOMBRE_DE_LA_SALUD[actual]}» a «{NOMBRE_DE_LA_SALUD[propuesta]}» · lo propone el vigía
+      <Link href={rutaDeLaPropuesta(projectId)} className="underline decoration-dotted hover:text-fg">
+        Decidir
+      </Link>
     </span>
   );
 }

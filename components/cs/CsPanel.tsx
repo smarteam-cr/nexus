@@ -20,6 +20,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Alert, PageHeader, Tabs } from "@/components/ui";
 import { BOTON_DE_HERRAMIENTA, BotonBlanco, QueSigue, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { RUTA_DE_LA_LIMPIEZA } from "@/lib/limpieza/reglas";
+import { RUTA_DE_LAS_PROPUESTAS } from "@/lib/cs/propuestas-del-vigia";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { cn } from "@/lib/cn";
 import { diasEntre, fmtDia, fmtMonto, haceCuanto, plural } from "@/lib/cs/formato";
@@ -125,9 +126,14 @@ export default function CsPanel({
           recorrido="exito-listado"
           description={`${plural(data.conProyecto, "cuenta con proyecto activo", "cuentas con proyecto activo")} · ${plural(data.gestionadas, "gestionada", "gestionadas")} en HubSpot.`}
           action={
-            <Link href={RUTA_DE_LA_LIMPIEZA} className={BOTON_DE_HERRAMIENTA}>
-              Limpieza de HubSpot
-            </Link>
+            <span className="flex flex-wrap items-center gap-2">
+              <Link href={RUTA_DE_LAS_PROPUESTAS} className={BOTON_DE_HERRAMIENTA}>
+                Propuestas del vigía
+              </Link>
+              <Link href={RUTA_DE_LA_LIMPIEZA} className={BOTON_DE_HERRAMIENTA}>
+                Limpieza de HubSpot
+              </Link>
+            </span>
           }
         />
 

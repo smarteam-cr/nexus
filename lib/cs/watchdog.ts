@@ -60,6 +60,7 @@ import { riesgosRecientes } from "@/lib/seguimiento/hechos-server";
 import { hablanteDelEquipo } from "@/lib/seguimiento/hechos/salida";
 import { CLIENTE_NO_EXCLIENTE_WHERE } from "./exclientes";
 import { esCuentaExcliente } from "./exclientes-server";
+import { razonDelRiesgo } from "./propuestas-del-vigia";
 
 
 const AGENT_ID = "agent-cs-watchdog";
@@ -330,17 +331,12 @@ async function ponerAlDiaElRiesgoPropuesto(
 ): Promise<void> {
   if (!s) return;
   if (s.riskCandidate && !project.healthStatusOverride && !project.healthProposed) {
-    const parts = [
-      s.overduePhases > 0
-        ? `${s.overduePhases} fase(s) vencida(s)${s.worstOverduePhase ? ` — peor: "${s.worstOverduePhase.name}" (+${s.worstOverduePhase.daysLate}d)` : ""}`
-        : null,
-      s.stalled ? `sin avance hace ${s.daysSinceActivity ?? "?"} días` : null,
-    ].filter(Boolean);
     await prisma.project.update({
       where: { id: project.id },
       data: {
         healthProposed: "EN_RIESGO",
-        healthProposedReason: parts.join(" · ") || "señales duras del cronograma",
+        // La misma frase que muestra la lista de «Propuestas del vigía» (que la vuelve a armar con las señales de hoy).
+        healthProposedReason: razonDelRiesgo(s),
         healthProposedAt: new Date(),
         healthProposedByRunId: runId,
       },

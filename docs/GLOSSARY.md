@@ -980,6 +980,9 @@
   lecturas de la ficha); al pasar el mouse dice por qué en una línea. Las alertas del agente y la deuda no pintan. La
   relación cuenta solo donde Smarteam **acompaña** la cuenta (proyecto activo o relación gestionada en HubSpot).
   Ver DECISIONS §El color de cada cuenta.
+- **Propuestas del vigía** (Éxito del cliente › Propuestas del vigía, `/customer-success/propuestas`, desde el
+  2026-10-19): la lista donde se confirma o se descarta, una por una, la propuesta del vigía de cambiar la SALUD de un
+  proyecto («de «En fricción» a «En riesgo»»), con el porqué de hoy. La salud es de Nexus; el estado es de HubSpot.
 - **Lista de limpieza de HubSpot** (`lib/limpieza`, Éxito del cliente › Limpieza de HubSpot, desde el 2026-10-16): lo
   que hay que poner al día en HubSpot, por responsable: proyectos a nombre de alguien que se fue o sin encargado,
   quietos en su etapa más de seis semanas, sin actividad en un mes, y servicios que se cobran sin proyecto. Cada persona

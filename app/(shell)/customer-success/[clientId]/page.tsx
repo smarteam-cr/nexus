@@ -36,9 +36,8 @@ export default async function CustomerSuccessAccountPage({
   if (!lider && !suCse) redirect("/clients");
 
   const where = await accessibleClientWhere(ctx.user);
-  // Resolver la propuesta de salud del watchdog (Confirmar / Descartar) sigue exigiendo
-  // `clientes.viewAll`. Sin la bandera, el chip se pintaría con botones que dan 403.
-  const puedeCurar = await can(ctx.teamMember, "clientes", "viewAll");
+  // La propuesta de salud del vigía ya no se decide en la ficha (2026-10-19): se decide en «Propuestas del vigía»
+  // (/customer-success/propuestas), que pide `clientes.viewAll`.
   // El pase de cuenta (2026-10-09) pide lo mismo que reasignar el CSE en el listado de clientes.
   const puedeReasignar = await can(ctx.teamMember, "proyectos", "reasignarEncargado");
   const data = await loadCsAccount(clientId, where, true);
@@ -47,7 +46,7 @@ export default async function CustomerSuccessAccountPage({
   if (suCse) {
     return (
       <div className={SHELL_FULL}>
-        <AccountView data={soloLaAdopcion(data)} puedeCurar={false} soloAdopcion />
+        <AccountView data={soloLaAdopcion(data)} soloAdopcion />
       </div>
     );
   }
@@ -58,7 +57,7 @@ export default async function CustomerSuccessAccountPage({
     <div className={SHELL_FULL}>
       {/* El agente vigía, en segundo plano, si hace más de 48 h que no revisa este cliente (D14). */}
       <DisparoDelVigia clientId={data.clientId} />
-      <AccountView data={data} puedeCurar={puedeCurar} />
+      <AccountView data={data} />
     </div>
   );
 }

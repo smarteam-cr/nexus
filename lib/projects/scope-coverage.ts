@@ -55,6 +55,12 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/lecturas/personas.ts": { modo: "criterio", criterio: "cartera" },
   // La lista de limpieza de HubSpot (2026-10-16, fase 0.5): los proyectos abiertos de HubSpot, de cualquier pipeline.
   "lib/limpieza/lista-server.ts": { modo: "criterio", criterio: "clasificable" },
+  // Las propuestas de salud del vigía (2026-10-19): solo busca QUÉ CLIENTES tienen una propuesta guardada; la cartera
+  // la aplica `loadPortfolio` (lib/portfolio/load.ts) sobre esos clientes.
+  "lib/cs/propuestas-del-vigia-server.ts": {
+    modo: "exento",
+    razon: "Solo junta los clientes con una propuesta guardada; el criterio de cartera lo aplica loadPortfolio sobre ellos.",
+  },
   // «Para ti» (2026-10-04): las implementaciones abiertas, con el criterio de la línea del índice de clientes.
   "lib/para-ti/fuentes/cs.ts": { modo: "criterio", criterio: "clasificable" },
   // El siguiente paso de cada equipo (2026-10-15, etapa 2 de docs/mi-dia-plan.md): los proyectos abiertos de la cuenta.
