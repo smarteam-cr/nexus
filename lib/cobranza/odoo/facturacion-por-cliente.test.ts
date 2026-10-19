@@ -10,6 +10,7 @@
 import { describe, it, expect } from "vitest";
 import {
   facturacionPorCliente,
+  filtrarFilas,
   notasDeReversion,
   type CuentaParaHistorial,
   type DocumentoParaHistorial,
@@ -244,5 +245,25 @@ describe("Mercury en la facturación por cliente (2026-10-17)", () => {
     const r = facturacionPorCliente([], CUENTAS, [], 2025, [merc({ estado: "Processing" })]);
     expect(r.filas[0]!.porCobrar).toEqual([{ monto: 2000, moneda: "USD" }]);
     expect(r.filas[0]!.documentos[0]!.estado).toBe("en proceso de pago");
+  });
+});
+
+describe("filtrarFilas: el buscador y el filtro por sistema de «Facturación por cliente»", () => {
+  const filas = [
+    { nombre: "Ferretería Noelito", clientesDeOdoo: [], facturas: 4, deMercury: 1 },
+    { nombre: "kölbi", clientesDeOdoo: ["Instituto Costarricense de Electricidad"], facturas: 16, deMercury: 0 },
+    { nombre: "Visual Branding", clientesDeOdoo: [], facturas: 2, deMercury: 2 },
+  ];
+
+  it("busca sin tildes ni mayúsculas, también por la razón social de Odoo", () => {
+    expect(filtrarFilas(filas, { texto: "ferreteria", sistema: "TODOS" }).map((f) => f.nombre)).toEqual(["Ferretería Noelito"]);
+    expect(filtrarFilas(filas, { texto: "KOLBI", sistema: "TODOS" }).map((f) => f.nombre)).toEqual(["kölbi"]);
+    expect(filtrarFilas(filas, { texto: "electricidad", sistema: "TODOS" }).map((f) => f.nombre)).toEqual(["kölbi"]);
+  });
+
+  it("«Mercury» deja las que tienen alguna factura de Mercury; «Odoo», las que tienen alguna de Odoo", () => {
+    expect(filtrarFilas(filas, { texto: "", sistema: "MERCURY" }).map((f) => f.nombre)).toEqual(["Ferretería Noelito", "Visual Branding"]);
+    expect(filtrarFilas(filas, { texto: "", sistema: "ODOO" }).map((f) => f.nombre)).toEqual(["Ferretería Noelito", "kölbi"]);
+    expect(filtrarFilas(filas, { texto: " ", sistema: "TODOS" })).toHaveLength(3);
   });
 });

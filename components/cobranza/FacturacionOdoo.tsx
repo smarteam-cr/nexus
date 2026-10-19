@@ -11,14 +11,21 @@
  * y por cobrar, y qué ventas cuentan— vive en lib/cobranza/odoo/facturacion-por-cliente.ts, con sus pruebas.
  * Desde el 2026-10-17 suma también las facturas de Mercury, y cada cliente abre sus facturas, cada una con su detalle
  * (sus líneas y su nota, leídas del sistema al abrirlas).
+ * Desde el 2026-10-19 (prueba 35) se busca un cliente y se filtra por sistema, y la columna «Facturas» abre las
+ * facturas con «Ver»: «Ver el detalle» quedaba escondido detrás del triángulo junto al nombre.
  * ⛔ Solo mira: no cambia nada, ni en Nexus ni en Odoo ni en Mercury.
  */
 import { useCallback, useEffect, useState } from "react";
-import { EmptyState, Select, Spinner } from "@/components/ui";
+import { EmptyState, Input, Select, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
 import { textoDeMontos, type MontoEnMoneda } from "@/lib/cobranza/odoo/diferencias";
-import type { FacturacionDelAnio, VentasDelAnio } from "@/lib/cobranza/odoo/facturacion-por-cliente";
+import {
+  filtrarFilas,
+  type FacturacionDelAnio,
+  type SistemaDeFacturacion,
+  type VentasDelAnio,
+} from "@/lib/cobranza/odoo/facturacion-por-cliente";
 import { fmtFecha, fmtMonto } from "./format";
 import DetalleDeFactura, { type FacturaParaVer } from "./DetalleDeFactura";
 
@@ -66,6 +73,9 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
   /** La fila con sus facturas abiertas, y la factura cuyo detalle se está viendo. */
   const [abierta, setAbierta] = useState<string | null>(null);
   const [viendo, setViendo] = useState<FacturaParaVer | null>(null);
+  /** El buscador y el filtro por sistema: solo filtran la lista, los totales siguen siendo los del año. */
+  const [texto, setTexto] = useState("");
+  const [sistema, setSistema] = useState<SistemaDeFacturacion>("TODOS");
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -91,7 +101,9 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
   }
   if (!datos) return <EmptyState title="No se pudo cargar" description="Prueba de nuevo en un momento." />;
 
-  const { filas, totales, conVentas } = datos;
+  const { totales, conVentas } = datos;
+  const filas = filtrarFilas(datos.filas, { texto, sistema });
+  const filtrando = texto.trim() !== "" || sistema !== "TODOS";
   const anios = datos.anios.includes(datos.anio) ? datos.anios : [datos.anio, ...datos.anios].sort((a, b) => b - a);
 
   return (
@@ -112,9 +124,21 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
             ))}
           </Select>
         </label>
-        <div className="min-w-0 flex-1 text-sm text-fg-secondary">
+        <label className="w-56 text-xs text-fg-muted">
+          Cliente
+          <Input className="mt-1" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Busca por nombre" />
+        </label>
+        <label className="w-40 text-xs text-fg-muted">
+          Facturado por
+          <Select className="mt-1" value={sistema} onChange={(e) => setSistema(e.target.value as SistemaDeFacturacion)}>
+            <option value="TODOS">Odoo y Mercury</option>
+            <option value="ODOO">Odoo</option>
+            <option value="MERCURY">Mercury</option>
+          </Select>
+        </label>
+        <div className="min-w-0 flex-[1_1_320px] text-sm text-fg-secondary">
           <p>
-            <strong className="text-fg">{filas.length}</strong> {filas.length === 1 ? "cliente" : "clientes"} con{" "}
+            <strong className="text-fg">{datos.filas.length}</strong> {datos.filas.length === 1 ? "cliente" : "clientes"} con{" "}
             <strong className="text-fg">{totales.facturas}</strong> {totales.facturas === 1 ? "factura" : "facturas"} en {datos.anio}
             {totales.deMercury > 0 && ` (${totales.deMercury} de Mercury)`}.
             Facturado {textoDeMontos(totales.facturado) || "—"} · cobrado {textoDeMontos(totales.cobrado) || "—"}
@@ -122,15 +146,25 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
           </p>
           <p className="mt-0.5 text-xs text-fg-muted">
             Todo sin IVA y cada moneda por separado, de la copia de Odoo{datos.copiaAl ? ` del ${fmtFecha(datos.copiaAl)}` : ""} y la de
-            Mercury. La factura más reciente va arriba; abre un cliente para ver sus facturas y el detalle de cada una. Esta
-            pestaña solo mira: no cambia nada en Nexus, en Odoo ni en Mercury.
+            Mercury. La factura más reciente va arriba. Toca «Ver» en la columna «Facturas» para ver las facturas de un
+            cliente, y «Ver el detalle» en cada una. Esta pestaña solo mira: no cambia nada en Nexus, en Odoo ni en Mercury.
           </p>
         </div>
         {cargando && <Spinner />}
       </div>
 
-      {filas.length === 0 ? (
+      {filtrando && datos.filas.length > 0 && (
+        <p className="text-xs text-fg-muted">
+          {filas.length === 1 ? "Se ve 1 cliente" : `Se ven ${filas.length} clientes`} de {datos.filas.length}. El total de abajo es el del año entero.
+        </p>
+      )}
+      {datos.filas.length === 0 ? (
         <EmptyState title={`Ninguna factura de Odoo ni de Mercury en ${datos.anio}`} description="Elige otro año." />
+      ) : filas.length === 0 ? (
+        <EmptyState
+          title="Ningún cliente con esa búsqueda"
+          description={sistema === "MERCURY" ? `Ninguno con facturas de Mercury en ${datos.anio} que coincida: prueba otro año.` : "Prueba con otro nombre o con otro año."}
+        />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-line bg-surface">
           <table className="w-full text-sm">
@@ -191,7 +225,17 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
                     )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap text-fg-secondary">{fmtFecha(f.ultimaFactura)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{f.facturas}</td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => setAbierta((a) => (a === f.clave ? null : f.clave))}
+                      className="tabular-nums text-fg hover:underline"
+                      aria-expanded={abierta === f.clave}
+                      title="Ver las facturas de este cliente en el año, cada una con «Ver el detalle»"
+                    >
+                      {f.facturas} <span className="text-xs font-semibold text-brand">{abierta === f.clave ? "Ocultar" : "Ver"}</span>
+                    </button>
+                  </td>
                   <Montos ms={f.facturado} />
                   <Montos ms={f.cobrado} />
                   <Montos ms={f.porCobrar} />
@@ -228,7 +272,7 @@ export default function FacturacionOdoo({ recarga = 0 }: { recarga?: number }) {
             </tbody>
             <tfoot className="border-t border-line font-medium text-fg">
               <tr className="align-top">
-                <td className="px-3 py-2">Total</td>
+                <td className="px-3 py-2">{filtrando ? "Total del año" : "Total"}</td>
                 <td className="px-3 py-2" />
                 <td className="px-3 py-2 text-right tabular-nums">{totales.facturas}</td>
                 <Montos ms={totales.facturado} />

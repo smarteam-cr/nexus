@@ -40,11 +40,26 @@ describe("qué movimiento es una comisión", () => {
     expect(esCargoDeComision(mov({ monto: -15, tipo: "wireFee", estado: "cancelled" }))).toBe(false);
   });
 
+  it("prueba 34: la suscripción de Mercury no es comisión (ya es la herramienta «Mercury»), aunque su tipo diga «Fee»", () => {
+    const suscripcion = mov({ monto: -35, tipo: "billingEngineSubscriptionFee", contraparteNombre: "Mercury Technologies, Inc.", descripcionBanco: "Mercury subscription fee" });
+    expect(esCargoDeComision(suscripcion)).toBe(false);
+    expect(candidatosDeGastoFinanciero([suscripcion], [], "2026-01-01")).toEqual([]);
+  });
+
+  it("prueba 34: la comisión por una compra con tarjeta afuera es del banco, no una transferencia internacional", () => {
+    const m = mov({ monto: -0.51, tipo: "cardInternationalTransactionFee", contraparteNombre: "Intl. Transaction Fee" });
+    expect(tipoDe(m)).toBe("BANCO");
+    const [c] = candidatosDeGastoFinanciero([m], [], "2026-01-01");
+    expect(c).toMatchObject({ tipo: "BANCO", como: "CARGO", montoPropuesto: 0.51 });
+    expect(c.descripcion).toBe("Comisión de Mercury por una compra con tarjeta en el exterior.");
+  });
+
   it("qué es, por quién pagó", () => {
     expect(tipoDe({ tipo: "externalTransfer", contraparteNombre: "STRIPE", descripcionBanco: null })).toBe("STRIPE");
     expect(tipoDe({ tipo: "incomingInternationalWire", contraparteNombre: "Acme", descripcionBanco: null })).toBe("TRANSFERENCIA_INTERNACIONAL");
     expect(tipoDe({ tipo: "externalTransfer", contraparteNombre: "1/ACME LLC", descripcionBanco: null })).toBe("TRANSFERENCIA_INTERNACIONAL");
     expect(tipoDe({ tipo: "wireFee", contraparteNombre: "Mercury", descripcionBanco: null })).toBe("BANCO");
+    expect(tipoDe({ tipo: "wireFee", contraparteNombre: "Intl. Wire Fee", descripcionBanco: "OUR fee for international wire" })).toBe("TRANSFERENCIA_INTERNACIONAL");
   });
 });
 

@@ -15,7 +15,13 @@
  *     Stripe (2,9 % + US$0,30 sobre el bruto) y la persona la corrige con el reporte de Stripe: un depósito junta
  *     varios cobros, y la tarjeta internacional (+1,5 %) o la conversión (+1 %) la suben.
  * Qué es (Stripe, transferencia internacional o banco) lo dice quién pagó y cómo: Stripe por su nombre; internacional
- * por el tipo de Mercury o por el «1/» que ponen las transferencias internacionales delante del nombre.
+ * por el tipo de Mercury o por el «1/» que ponen las transferencias internacionales delante del nombre. La comisión de
+ * Mercury por una compra con tarjeta en el exterior (`cardInternationalTransactionFee`) es del BANCO: no es una
+ * transferencia, aunque su tipo diga «International» (prueba 34, 2026-10-19: 72 de 92 candidatos salían así).
+ *
+ * ⛔ La suscripción de Mercury (`billingEngineSubscriptionFee`, US$35 al mes) NO es candidato: es una herramienta, ya
+ * está como recurrente «Mercury» y la cruza «Gastos y Mercury» (lib/finanzas/gastos-mercury.ts). Su tipo dice «Fee», y
+ * hasta el 2026-10-19 salía también acá: confirmarla la contaba dos veces en el punto de equilibrio.
  *
  * ⛔ Nada entra solo al punto de equilibrio: una persona confirma cada uno («Es gasto financiero», con su monto) o lo
  * descarta («No es»). Solo los confirmados suman, en el rubro FINANCIERO.
@@ -32,6 +38,12 @@ export const ETIQUETA_TIPO: Readonly<Record<TipoGastoFinanciero, string>> = {
 
 /** La tarifa base de Stripe (Alex, 16-oct): 2,9 % + US$0,30 por cobro. +1,5 % con tarjeta internacional, +1 % con conversión. */
 export const TARIFA_STRIPE = { pct: 0.029, fijo: 0.3 } as const;
+
+/** Los tipos de Mercury que dicen «fee» y no son una comisión: la suscripción del banco es una herramienta. */
+const NO_SON_COMISION = new Set(["billingEngineSubscriptionFee"]);
+
+/** La comisión de Mercury por usar la tarjeta en el exterior. */
+const COMISION_DE_TARJETA_AFUERA = "cardInternationalTransactionFee";
 
 /** Los estados de un movimiento que no movieron plata. */
 const NO_MOVIERON = new Set(["failed", "cancelled", "reversed", "blocked"]);
@@ -81,11 +93,11 @@ const centavos = (n: number) => Math.round(n * 100);
 const esStripe = (m: Pick<MovimientoParaRevisar, "contraparteNombre" | "descripcionBanco">) =>
   /stripe/i.test(m.contraparteNombre ?? "") || /stripe/i.test(m.descripcionBanco ?? "");
 const esInternacional = (m: Pick<MovimientoParaRevisar, "tipo" | "contraparteNombre" | "descripcionBanco">) =>
-  /international/i.test(m.tipo) || /^\d+\//.test(m.contraparteNombre ?? "") || /internacional|international|swift/i.test(m.descripcionBanco ?? "");
+  (/international/i.test(m.tipo) && m.tipo !== COMISION_DE_TARJETA_AFUERA) || /^\d+\//.test(m.contraparteNombre ?? "") || /internacional|international|swift/i.test(m.descripcionBanco ?? "");
 
 /** Si un movimiento que sale es una comisión. Una compra con tarjeta NO, salvo el cargo por usarla afuera. */
 export function esCargoDeComision(m: MovimientoParaRevisar): boolean {
-  if (m.monto >= 0 || NO_MOVIERON.has(m.estado)) return false;
+  if (m.monto >= 0 || NO_MOVIERON.has(m.estado) || NO_SON_COMISION.has(m.tipo)) return false;
   if (/fee/i.test(m.tipo)) return true;
   if (m.conTarjeta) return false;
   const textos = [m.descripcionBanco, m.nota, m.contraparteNombre].filter(Boolean).join(" ");
@@ -127,7 +139,10 @@ export function candidatosDeGastoFinanciero(
         moneda: "USD",
         montoPropuesto: round2(-m.monto),
         como: "CARGO",
-        descripcion: `Cargo de ${quien}${m.descripcionBanco && m.descripcionBanco !== quien ? ` («${m.descripcionBanco}»)` : ""}.`,
+        descripcion:
+          m.tipo === COMISION_DE_TARJETA_AFUERA
+            ? "Comisión de Mercury por una compra con tarjeta en el exterior."
+            : `Cargo de ${quien}${m.descripcionBanco && m.descripcionBanco !== quien ? ` («${m.descripcionBanco}»)` : ""}.`,
         montoMovimiento: m.monto,
         quien,
       });
