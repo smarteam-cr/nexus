@@ -361,13 +361,31 @@ Todo `main` está en producción desde el 19 oct (`0107b2b4`). Si usas el 3004, 
 
 **Lo que encontraste con Alex Vanegas (19 oct):** en producción desde el 19 oct; sus pruebas son las del área «Lo que encontraste con Alex» (115 a 143). El CSE encargado se cambia (también desde la cartera de la CSL) y Librería Internacional pierde la fila fusionada; la agenda trae todo Google Calendar, no abre nada sola y sugiere bloques del tamaño de la tarea; las cuentas sin acción o reunión se ven todas y Nexus sugiere el siguiente paso con la reunión; «Por asignar» ya no llena las tareas de cada CSE y el panel dice si guardó; el aviso del vigía dice de qué a qué y se decide en «Propuestas del vigía». Jerson Escudero dado de baja: no tenía nada a su nombre.
 
-**Lo que encontraste en la tarde del 19 oct, en arreglo** (cada uno en su sesión):
+**Lo que encontraste en la tarde del 19 oct:** en producción; sus pruebas son las del área «Lo de la tarde del 19 oct». La meta de HubSpot se copia cada hora y con «Actualizar» (la de Liz se creó a las 10:40 y la copia corría a las 6:00); un evento propio se abre en el panel; lo que el tope de 5 dejó afuera del sprint se ve en «Mis tareas» con «Proponérmelas»; marcar y deshacer es al instante, sin el falso «Otra persona cambió»; Cemaco no perdió nada: Lili entraba al proyecto nuevo de Desarrollo, y ahora la ficha abre en el proyecto de quien lo lleva. Las fichas duplicadas de Cemaco y Total Finco (las creó Cobranza) se fusionaron.
 
-- La meta de HubSpot de Liz Navarro no aparece en su «Para ti»: tiene que aparecer cuando la persona tiene una meta asociada.  ⏳ En arreglo
-- Un evento propio de la agenda (el almuerzo, un bloque personal) se abre en el panel, no en una pestaña de Calendar, con lo que tenga de un cliente.  ⏳ En arreglo
-- El sprint de marketing: Lidia dice que se hablaron más tareas de las que quedaron en Nexus.  ⏳ En arreglo
-- Marcar una tarea como hecha y deshacerlo es lento, y al deshacer dice «Otra persona cambió esta tarea».  ⏳ En arreglo
-- Cemaco: dos fichas, y Lili no ve su cronograma ni lo que había hecho. Primero el diagnóstico, sin escribir nada.  ⏳ En arreglo
+**Para decidir (sprint de marketing):** sacar el tope de 5 por persona en la reunión del sprint, y leer también la conversación aunque las notas traigan pasos (unos US$0,014 por reunión). El segundo sirve solo con el primero.
+
+### 0 · Lo de la tarde del 19 oct <span class="prioridad">Alta</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 145 | Por validar | Que Liz vea su meta | «Ver como» Liz Navarro › «Para ti». | La tarjeta «Tu meta 2026» con «0 %» y «US$0 de 30K». En «Tu cartera», la primera tarjeta es «Tu meta 2026» con «0 % según HubSpot». |
+| 147 | Por validar | Que sin meta no aparezca la tarjeta | «Ver como» alguien de Ventas sin meta en HubSpot › «Para ti». | No aparece ninguna tarjeta de meta ni «No tienes una meta de ventas en HubSpot». En «Tu cartera» quedan «Ponderado 2026» y «Pipeline activo». |
+| 148 | Por validar | Que las metas de antes sigan igual | «Ver como» Andrés Pinzón y Marco Salas › «Para ti». | «Tu meta 2026» con su avance: Andrés unos US$220K de 335K, Marco unos US$301K de 400K. |
+| 149 | Por validar | Que una meta nueva llegue sin esperar al día siguiente | Crea o cambia una meta de ventas en HubSpot; en «Para ti» › «Tu cartera» de esa persona toca «Actualizar» y recarga. | Aviso «Se trajeron N negocios abiertos y las metas de HubSpot.» y «Tu meta» con el monto nuevo. Sin tocar el botón, aparece en menos de una hora. |
+| 150 | Por validar | Que un evento propio se abra en el panel | «Ver como» Andrés Pinzón › «Para ti» › semana del 19 al 23 oct › toca «Tenis». | El panel de la derecha con «Tenis», el día y la hora, «Evento tuyo, sin otros invitados» y «Abrir en Google Calendar» como enlace. No se abre otra pestaña. |
+| 151 | Por validar | Que un evento propio que nombra una cuenta la muestre | La misma agenda › toca «Preparar demo para Accesos Automáticos». | Debajo del título dice «Accesos Automáticos», con «Ir a la cuenta», «La próxima reunión», «Pendiente», «La última vez» y «El negocio». (Si Accesos Automáticos no está en Nexus, abre sin cuenta.) |
+| 152 | Por validar | Que un evento personal no se asigne a un cliente | La misma agenda › toca «Cita Médica». | Solo el título, la hora y el enlace a Calendar, sin cuenta. |
+| 153 | Por validar | Que las notas de un evento propio queden | Tu agenda, sin «Ver como» › un evento tuyo › escribe en «Tus notas» y vuelve a abrirlo. | Dice «Guardado» y la nota sigue ahí. |
+| 154 | Por validar | Que el bloque de una tarea siga abriendo la tarea | Tu agenda › el bloque de una tarea de Nexus («T-…»). | Abre la tarea, igual que antes. |
+| 155 | Por validar | Que Lidia recupere lo que el tope dejó afuera | Lidia Flores con su usuario › Tareas › «Mis tareas», arriba de lo que espera tu decisión. | «De «Sprint planning de marketing» · lun 19 oct: 1 tarea tuya quedó sin proponer…» con «Revisar Nexus» y «Proponérmela». |
+| 156 | Por validar | Que Alejandra recupere sus 4 | Alejandra Ortega con su usuario › el mismo lugar › «Proponérmelas». | Las 4 (Elaborar Reportes SAP · Montar Google Search · Entregar Casos Éxito · Enviar Copies Videos). Al tocar: «Te llegaron 4 propuestas más. Decide tú.» y aparecen en lo que espera su decisión, bajo la reunión. |
+| 160 | Por validar | Que marcar una tarea como hecha sea al instante | Tu usuario › Tareas › «Mis tareas» › «Esta semana» › toca el círculo de una tarea. | Se marca en el acto, sin esperar. |
+| 161 | Por validar | Que deshacer no diga que otra persona la cambió | La misma tarea: toca el círculo otra vez enseguida, varias veces rápido. También en «Hechas (2 semanas)» y en «Para ti» › «Tus tareas de hoy». | Se marca y se desmarca en el acto y nunca sale «Otra persona cambió esta tarea…». Con una tarea de HubSpot, en HubSpot queda el último estado que marcaste. |
+| 163 | Por validar | Que el estado del cajón cambie al instante | Abre una tarea (el cajón) › «Estado»: «Hecha» y enseguida «Pendiente». | El botón cambia al instante y queda en «Pendiente», sin el aviso. Al pie, «Guardado». |
+| 165 | Por validar | Que Lili entre directo a su proyecto | «Ver como» Liliana Moreno › Clientes › Cemaco Internacional. | Abre en «Cemaco Internacional - CRM», con su cronograma de 7 fases. |
+| 166 | Por validar | Que cada quien entre a su proyecto | «Ver como» Breiner › la misma ficha. Después tu usuario. | Breiner: abre en «CEMACO » (Desarrollo). Tú: abre en la cuenta, con los dos proyectos en el riel. |
+| 168 | Por validar | Que Cemaco y Total Finco queden en una sola ficha | Clientes › busca «Cemaco» y «Total Finco». Después Finanzas › Cobranza › Clientes. | Una sola «Cemaco Internacional» y una sola «Total Finco». En Cobranza, la cuenta de cobro de Cemaco con su servicio y sus 4 cobros, y la de Total Finco con la suya. |
 
 ### 0 · Lo que encontraste con Alex (19 oct) <span class="prioridad">Alta</span>
 
