@@ -8523,6 +8523,12 @@ pocas, diciendo si vienen de una reunión con el cliente o del sprint interno.
 - **«Quiénes están»** (`FuenteDeTareas.personas`): una sola lista por sprint; vacía son los del área más quienes lo
   lideran. Lo que la reunión le propone a alguien de la lista no le llega como pedido de otro equipo; la tarea sigue en
   el sprint de casa de su responsable.
+- **Si quien lidera no está invitado, la serie queda a nombre de alguien del equipo que sí está** (2026-10-18,
+  `scripts/configurar-serie-del-sprint.ts`, con las mismas validaciones de la pantalla). Nexus lee la serie a nombre de
+  quien la configuró, y Alex Vanegas, que lidera Desarrollo, no está en el planning que organiza Alejandro Salas. Así
+  quedaron las dos primeras: «Sprint planning de marketing» (lunes 9:30) a nombre de Alejandra Ortega y «SPRINT DEPT.
+  SOFTWARE» (lunes 8:00) a nombre de Alejandro Salas, las dos como planning. Las reuniones del sprint no llevan empresa:
+  son sesiones internas (categoría Interna), que es lo que lee Tareas.
 
 ## La escala en el tiempo, con su evidencia (2026-10-17, ficha B)
 

@@ -165,6 +165,7 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "app/(shell)/not-found.tsx": "el gate del menú en la página 404",
       "lib/google/agenda.ts": "esBloqueDeTarea y los bloques de la agenda",
       "scripts/tareas-ensayo.ts": "el ensayo de la lectura: solo lectura, sin IA",
+      "scripts/configurar-serie-del-sprint.ts": "configura la reunión de un sprint por el único escritor (escribirFuente); no lee tareas",
       "lib/jobs/defs.ts": "el job del lunes (mantenimientoDelLunes, por el único escritor)",
       "lib/seguimiento/tarjeta-server.ts": "«Lo que dejó esta reunión»: las tareas propuestas de una reunión, para quien las recibe (serializa por serializar.ts)",
       "lib/seguimiento/usar-todo-server.ts": "«Usar todo» de la tarjeta de una reunión: decide por decidirTarea (el único escritor)",
