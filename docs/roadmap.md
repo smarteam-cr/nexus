@@ -359,6 +359,15 @@ Todo `main` está en producción desde el 19 oct (`341ca6fe`). Si usas el 3004, 
 - Arreglado: Conciliación en una sola fila; «Espacio libre» con sugerencias para el evento; el panel de una reunión y su página dicen lo mismo («Revisar sesión»); las tareas propuestas agrupadas por reunión y un solo seguimiento por lo que prometió el cliente (las 27 que había quedaron en 8); «Regenerada» y los pedidos del asistente; licencias editables; «Ver el detalle» de una factura; las cuotas cobradas reciben su número de factura; SmartLoop (la recomendación visible y la etapa de HubSpot); la meta con puntos; Wherex como excliente.
 - Queda para después: la copia de Odoo de 2023 y 2024 parece incompleta (la barra de la meta lo muestra), Cemaco Internacional está dos veces, y la foto del margen de septiembre hay que volver a tomarla (pruebas 38 y 84).
 
+**Lo que encontraste con Alex Vanegas (19 oct), en arreglo** (cada grupo en su sesión; las pruebas entran cuando esté en `main`):
+
+- El CSE encargado no se cambia (Librería Internacional sigue con Heiver) y tiene que poder cambiarse también desde la cartera de la CSL en «Para ti».  ⏳ En arreglo
+- La agenda: no abrir sola la reunión más cercana; que traiga todos los eventos de Google Calendar (a Andrés le faltaba uno de 1 a 2); sugerencias en bloques del tamaño de la tarea, respetando el almuerzo, y varios eventos a la misma hora.  ⏳ En arreglo
+- Las cuentas sin acción ni reunión: «Ver más» despliega todas; con reunión pero sin siguiente paso, Nexus sugiere el siguiente paso para aceptarlo.  ⏳ En arreglo
+- Tareas: menos por persona (agrupar lo rápido y de seguimiento, proponer cerrar lo viejo) y el panel de una tarea que diga cómo se guarda.  ⏳ En arreglo
+- El vigía: el aviso dice qué proyecto pasa de qué estado a cuál y lleva a decidirlo en un solo lugar.  ⏳ En arreglo
+- Jerson Escudero dado de baja el 19 oct. No tenía proyectos, empresas, tareas, negocios ni costos a su nombre: no hay nada que reasignar.  ✓ Hecho
+
 ### 1 · Finanzas: conciliación, cobro y punto de equilibrio <span class="prioridad">Alta</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
