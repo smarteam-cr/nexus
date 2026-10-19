@@ -35,8 +35,8 @@ chocar:
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `0107b2b4` desde el 19 oct en la tarde, hora de Costa Rica: lo de la madrugada más los arreglos de lo que encontraste con Alex. Sana, con el esquema al día. |
-| Por desplegar | Nada: todo `main` está en producción. 12.257 pruebas en verde y tsc en 0. |
+| Producción | Corre `af896cfd` desde la noche del 19 oct, hora de Costa Rica: lo de la madrugada, lo que encontraste con Alex y lo de la tarde. Sana, con el esquema al día. Cemaco y Total Finco ya están en una sola ficha. |
+| Por desplegar | Nada: todo `main` está en producción. 12.294 pruebas en verde y tsc en 0. |
 | En curso | Nada construyéndose: los arreglos de las pruebas del 19 oct ya están en `main` (12.179 pruebas en verde, tsc en 0). |
 | La base | Tiene todo lo que necesita lo que está en `main`: los SQL del 18 oct ya se aplicaron (biblioteca de módulos, escala ligada a la venta, servicio recurrente, gasto de IA, rentabilidad conectada y comunicaciones de HubSpot). La copia de comunicaciones ya corrió: 256 notas y 6 llamadas. |
 | En rojo en producción | Un proyecto en un pipeline sin declarar, un cliente apuntando a una empresa fusionada en HubSpot y el corte de cobranza, que nunca corrió. |
@@ -351,13 +351,13 @@ Cada prueba dice qué tiene que funcionar, cómo comprobarlo y qué tiene que pa
 
 Las áreas van por prioridad: **Alta** antes del deploy (toca plata, la usa todo el equipo cada día, la ve el cliente, o es SmartLoop y comisiones), **Media** lo que se usa todos los días sin ese riesgo, y **Baja** lo que es solo de dirección. Para entrar como otra persona: Equipo › la persona › «Ver como»; «Volver a mi usuario» te devuelve.
 
-Todo `main` está en producción desde el 19 oct (`0107b2b4`). Si usas el 3004, haz `git pull` y reinícialo antes.
+Todo `main` está en producción desde el 19 oct (`af896cfd`). Si usas el 3004, haz `git pull` y reinícialo antes.
 
 **Lo que se arregló el 19 oct, con tu revisión y la mía:**
 
 - Revisé una por una las pruebas pendientes contra el código y los datos de hoy: pasos con el camino exacto y el cliente a usar, y las que se comprueban sin pantalla quedaron «✓ Validado por Claude».
 - Arreglado: Conciliación en una sola fila; «Espacio libre» con sugerencias para el evento; el panel de una reunión y su página dicen lo mismo («Revisar sesión»); las tareas propuestas agrupadas por reunión y un solo seguimiento por lo que prometió el cliente (las 27 que había quedaron en 8); «Regenerada» y los pedidos del asistente; licencias editables; «Ver el detalle» de una factura; las cuotas cobradas reciben su número de factura; SmartLoop (la recomendación visible y la etapa de HubSpot); la meta con puntos; Wherex como excliente.
-- Queda para después: la copia de Odoo de 2023 y 2024 parece incompleta (la barra de la meta lo muestra), Cemaco Internacional está dos veces, y la foto del margen de septiembre hay que volver a tomarla (pruebas 38 y 84).
+- Queda para después: la copia de Odoo de 2023 y 2024 parece incompleta (la barra de la meta lo muestra) y la foto del margen de septiembre hay que volver a tomarla (pruebas 38 y 84).
 
 **Lo que encontraste con Alex Vanegas (19 oct):** en producción desde el 19 oct; sus pruebas son las del área «Lo que encontraste con Alex» (115 a 143). El CSE encargado se cambia (también desde la cartera de la CSL) y Librería Internacional pierde la fila fusionada; la agenda trae todo Google Calendar, no abre nada sola y sugiere bloques del tamaño de la tarea; las cuentas sin acción o reunión se ven todas y Nexus sugiere el siguiente paso con la reunión; «Por asignar» ya no llena las tareas de cada CSE y el panel dice si guardó; el aviso del vigía dice de qué a qué y se decide en «Propuestas del vigía». Jerson Escudero dado de baja: no tenía nada a su nombre.
 
