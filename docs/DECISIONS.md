@@ -4081,6 +4081,22 @@ la escala 8.6.0: las cuatro ediciones traen las tres áreas enteras.
   acuerdo con las áreas que resuelven parte de los casos en Equipo de Servicio, los criterios de
   resolución escritos, y la presencia en mapas para sucursales, sedes y salas de ventas.
 
+## Cada nivel de una edición habla de su industria (2026-10-18, escala 8.9.1)
+
+**Contexto.** Elías vio, en Turismo, Inicial de «Seguimiento de cotizaciones y reservas» entero con el texto
+general. Medido sobre las seis ediciones: 244 de 720 niveles (edición × dimensión × nivel) no tenían ningún
+criterio dicho con las palabras de la industria; Automotriz y Turismo, más de la mitad.
+
+- **La regla: cada nivel de cada dimensión dice al menos un criterio con las palabras de la industria**,
+  reescrito o propio. La dice «Cómo se escribe una edición» y la vigila
+  `lib/escala/documento/personalizacion.test.ts`; lo que quede general a propósito va en su lista con el porqué
+  (`docs/escala/personalizacion-de-las-ediciones.md`). Una celda donde todos los criterios «No aplican» no
+  cuenta. *Por qué:* una edición existe para que la empresa se reconozca, y un nivel entero en el texto general
+  es justo donde deja de reconocerse.
+- **Se cumplió solo con reescrituras** (322), sin criterios propios nuevos: por eso es un parche, como la 8.4.1.
+  Un ejemplo de la industria va entre rayas y no se vuelve la única forma de cumplir el criterio; la revisión
+  corrigió 50 reescritos que acotaban o ampliaban lo que pide la general.
+
 ## La rueda de la escala: el color siempre es el nivel, y lo que no está en foco se aclara (2026-09-30)
 
 **Contexto.** Mirando la rueda, el responsable de la escala no entendía por qué, al elegir una celda,
