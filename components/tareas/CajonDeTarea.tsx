@@ -3,16 +3,21 @@
 /**
  * components/tareas/CajonDeTarea.tsx — una tarea abierta en su cajón (`?t=<id>`, Drawer lg).
  *
- * Todo se guarda al cambiarlo (con la versión: si otra persona la cambió, 409 y se recarga). Lo que la persona no
- * puede hacer no se pinta (`tarea.acciones`, calculadas en el servidor con la misma regla que exige al guardar).
+ * Todo se guarda solo (con la versión: si otra persona la cambió, 409 y se recarga) y el pie lo DICE
+ * (lib/tareas/guardado.ts): «Sin guardar…» mientras escribes, «Guardando…», «Guardado» o «No se pudo guardar ·
+ * Reintentar». El título y las notas se mandan a los 0,9 s de dejar de escribir, al salir del campo y al cerrar el
+ * cajón; lo demás, al elegirlo. Los pedidos van en fila, uno detrás del otro, para que cada uno lleve la versión que dejó
+ * el anterior. Lo que la persona no puede hacer no se pinta (`tarea.acciones`, calculadas en el servidor con la misma
+ * regla que exige al guardar).
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CeldaSelect, Drawer, Field, Input, Interruptor, Segmentado, Textarea, type OpcionDeCelda } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { useToast } from "@/components/ui/Toast";
 import DatePickerField from "@/components/ui/DatePickerField";
 import { cn } from "@/lib/cn";
 import { DURACIONES_DE_AGENDA } from "@/lib/tareas/reglas";
+import { ESPERA_AL_ESCRIBIR_MS, TEXTO_DEL_GUARDADO, estadoDelGuardado } from "@/lib/tareas/guardado";
 import { NOMBRE_DEL_ESTADO, NOMBRE_DEL_ORIGEN, type OrigenDeTarea } from "@/lib/tareas/estados";
 import { diaYHora, rangoDeLaSemana, sumarSemanas } from "@/lib/tareas/semana";
 import type { OpcionesDeTareas, TareaVista } from "@/lib/tareas/tipos";
@@ -49,17 +54,32 @@ export function CajonDeTarea({
   const [tarea, setTarea] = useState<TareaVista | null>(null);
   const [historia, setHistoria] = useState<Historia>([]);
   const [error, setError] = useState<string | null>(null);
-  const [guardando, setGuardando] = useState(false);
   const [titulo, setTitulo] = useState("");
   const [notas, setNotas] = useState("");
   const [proyectosHubspot, setProyectosHubspot] = useState<{ id: string; nombre: string; interno: boolean }[]>([]);
   const [noSeHara, setNoSeHara] = useState<string | null>(null);
+  // El guardado: cuántos pedidos esperan respuesta, si el último falló y si ya se guardó algo desde que se abrió.
+  const [enVuelo, setEnVuelo] = useState(0);
+  const [fallo, setFallo] = useState(false);
+  const [guardadoAlguna, setGuardadoAlguna] = useState(false);
+  const tareaRef = useRef<TareaVista | null>(null);
+  const cola = useRef<Promise<unknown>>(Promise.resolve());
+  const ultimoFallido = useRef<Record<string, unknown> | null>(null);
+  const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Lo último que se mandó del título y las notas: salir del campo justo después de la espera no lo manda dos veces.
+  const ultimoEnviado = useRef<{ id: string; titulo: string; notas: string } | null>(null);
+  const guardando = enVuelo > 0;
+
+  const ponerTarea = useCallback((x: TareaVista | null) => {
+    tareaRef.current = x;
+    setTarea(x);
+  }, []);
 
   const cargar = useCallback(async () => {
     if (!id) return;
     try {
       const r = await apiTareas.una(id);
-      setTarea(r.tarea);
+      ponerTarea(r.tarea);
       setHistoria(r.historia);
       setTitulo(r.tarea.titulo);
       setNotas(r.tarea.notas ?? "");
@@ -67,13 +87,16 @@ export function CajonDeTarea({
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo abrir la tarea.");
     }
-  }, [id]);
+  }, [id, ponerTarea]);
 
   useEffect(() => {
-    setTarea(null);
+    ponerTarea(null);
     setNoSeHara(null);
+    setFallo(false);
+    setGuardadoAlguna(false);
+    ultimoFallido.current = null;
     void cargar();
-  }, [cargar]);
+  }, [cargar, ponerTarea]);
 
   useEffect(() => {
     const clientId = tarea?.cliente?.id;
@@ -91,44 +114,130 @@ export function CajonDeTarea({
     };
   }, [tarea?.cliente?.id]);
 
-  async function cambiar(body: Record<string, unknown>) {
-    if (!tarea) return;
-    setGuardando(true);
-    try {
-      const r = await apiTareas.cambiar(tarea.id, { ...body, version: tarea.version });
-      setTarea(r.tarea);
-      setTitulo(r.tarea.titulo);
-      setNotas(r.tarea.notas ?? "");
-      onCambio();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
-      if (e instanceof ErrorDeApi && e.status === 409) await cargar();
-      throw e;
-    } finally {
-      setGuardando(false);
-    }
+  /**
+   * Un cambio, en fila detrás de los anteriores: cada uno toma la versión que dejó el que respondió antes. La tarea sobre
+   * la que se pidió se fija al pedirlo, así lo que queda en fila al cerrar el cajón igual se guarda.
+   */
+  function cambiar(body: Record<string, unknown>): Promise<void> {
+    const objetivo = tareaRef.current ? { id: tareaRef.current.id, version: tareaRef.current.version } : null;
+    if (!objetivo) return Promise.resolve();
+    const correr = async () => {
+      const version = tareaRef.current?.id === objetivo.id ? tareaRef.current.version : objetivo.version;
+      setEnVuelo((n) => n + 1);
+      try {
+        const r = await apiTareas.cambiar(objetivo.id, { ...body, version });
+        objetivo.version = r.tarea.version;
+        // Solo si el cajón sigue en esta tarea: otra abierta mientras tanto no se pisa.
+        if (tareaRef.current?.id === objetivo.id) {
+          ponerTarea(r.tarea);
+          setGuardadoAlguna(true);
+          setFallo(false);
+        }
+        ultimoFallido.current = null;
+        onCambio();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
+        if (tareaRef.current?.id === objetivo.id) {
+          setFallo(true);
+          ultimoFallido.current = body;
+          if (e instanceof ErrorDeApi && e.status === 409) await cargar();
+        }
+        throw e;
+      } finally {
+        setEnVuelo((n) => n - 1);
+      }
+    };
+    const p = cola.current.then(correr, correr);
+    cola.current = p.catch(() => undefined);
+    return p;
   }
   const editar = (cambios: Record<string, unknown>) => cambiar({ accion: "editar", cambios }).catch(() => undefined);
 
+  /** El título y las notas que todavía no se mandaron, en un solo pedido. */
+  function guardarTexto() {
+    if (temporizador.current) clearTimeout(temporizador.current);
+    temporizador.current = null;
+    const t0 = tareaRef.current;
+    if (!t0 || !t0.acciones.editar) return;
+    const previo = ultimoEnviado.current?.id === t0.id ? ultimoEnviado.current : { id: t0.id, titulo: t0.titulo, notas: t0.notas ?? "" };
+    const cambios: Record<string, unknown> = {};
+    if (titulo.trim() && titulo.trim() !== previo.titulo) cambios.titulo = titulo.trim();
+    if (notas !== previo.notas) cambios.notas = notas || null;
+    if (!Object.keys(cambios).length) return;
+    ultimoEnviado.current = { id: t0.id, titulo: titulo.trim() || previo.titulo, notas };
+    // Si falla, el próximo intento compara contra lo que de verdad quedó.
+    void cambiar({ accion: "editar", cambios }).catch(() => {
+      ultimoEnviado.current = null;
+    });
+  }
+
+  const pendientes = tarea?.acciones.editar ? Number(!!titulo.trim() && titulo.trim() !== tarea.titulo) + Number(notas !== (tarea.notas ?? "")) : 0;
+  const estadoGuardado = estadoDelGuardado({ pendientes, enVuelo, error: fallo, guardadoAlguna });
+
+  // Mientras escribes: se manda a los 0,9 s de la última tecla.
+  useEffect(() => {
+    if (!pendientes) return;
+    temporizador.current = setTimeout(guardarTexto, ESPERA_AL_ESCRIBIR_MS);
+    return () => {
+      if (temporizador.current) clearTimeout(temporizador.current);
+    };
+    // guardarTexto lee el texto de este render: se rearma con cada tecla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titulo, notas]);
+
+  /** Cerrar el cajón manda lo que quedó escrito. */
+  function cerrarCajon() {
+    guardarTexto();
+    onCerrar();
+  }
+
+  /** Cerrar lo que Nexus propone cerrar: «Ya no se hará» una abierta, «Descartar» una propuesta, con su motivo. */
+  async function cerrarSugerida() {
+    const t0 = tareaRef.current;
+    if (!t0?.cerrar) return;
+    if (t0.cerrar.accion === "no_se_hara") {
+      await cambiar({ accion: "estado", hacia: "no_se_hara", motivo: t0.cerrar.motivo }).catch(() => undefined);
+      return;
+    }
+    setEnVuelo((n) => n + 1);
+    try {
+      await apiTareas.decidir(t0.id, t0.version, { tipo: "rechazar", motivo: t0.cerrar.motivo });
+      toast.success("Descartada, con su motivo.");
+      onCambio();
+      onCerrar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo descartar.");
+    } finally {
+      setEnVuelo((n) => n - 1);
+    }
+  }
+
+  function reintentar() {
+    const body = ultimoFallido.current;
+    if (body) void cambiar(body).catch(() => undefined);
+    else guardarTexto();
+  }
+
   async function quitarBloque() {
     if (!tarea) return;
-    setGuardando(true);
+    setEnVuelo((n) => n + 1);
     try {
       const r = (await apiTareas.agendar(tarea.id, { modo: "quitar" })) as { tarea: TareaVista; quitados?: number; sinPermiso?: boolean };
-      setTarea(r.tarea);
+      ponerTarea(r.tarea);
       onCambio();
       if (r.sinPermiso || !r.quitados) toast.info("Lo sacamos de la tarea. Si sigue en tu calendario, bórralo a mano en Google Calendar.");
       else toast.success("Quitamos el bloque de tu calendario.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo quitar el bloque.");
     } finally {
-      setGuardando(false);
+      setEnVuelo((n) => n - 1);
     }
   }
 
   const t = tarea;
   const acc = t?.acciones;
-  const puedeEditar = !!acc?.editar && !guardando;
+  // No se deshabilita mientras guarda: los pedidos van en fila y escribir no tiene que perder el foco.
+  const puedeEditar = !!acc?.editar;
   const personas: OpcionDeCelda[] = (opciones?.personas ?? []).map((p) => ({ value: p.email, label: p.nombre, hint: p.email }));
   const empresas: OpcionDeCelda[] = [{ value: "", label: "Sin cliente" }, ...(opciones?.empresas ?? []).map((e) => ({ value: e.id, label: e.nombre, hint: e.kind === "INTERNO" ? "Interno" : e.kind === "PROSPECTO" ? "Prospecto" : e.kind === "ALIADO" ? "Aliado" : undefined }))];
   const proyectos: OpcionDeCelda[] = [{ value: "", label: "Sin proyecto" }, ...(opciones?.proyectos ?? []).map((p) => ({ value: p.id, label: p.nombre, hint: p.espacio }))];
@@ -142,20 +251,37 @@ export function CajonDeTarea({
   return (
     <Drawer
       open={!!id}
-      onClose={onCerrar}
+      onClose={cerrarCajon}
       size="lg"
       title={t ? `T-${t.numero}` : "Tarea"}
       description={t ? NOMBRE_DEL_ESTADO[t.estado] : undefined}
       footer={
-        t && asistente ? (
-          <BotonTexto
-            onClick={() => {
-              asistente.abrir({ chip: { tipo: "tarea", id: t.id, etiqueta: `T-${t.numero} «${t.titulo}»` } });
-              onCerrar();
-            }}
-          >
-            Preguntarle al asistente
-          </BotonTexto>
+        t ? (
+          <>
+            {acc?.editar || acc?.decidir || acc?.terminar || guardadoAlguna || fallo ? (
+              <p className="mr-auto flex min-w-0 items-center gap-1.5 text-xs" aria-live="polite" data-guardado={estadoGuardado}>
+                {estadoGuardado === "guardado" && (
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-success-ink" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                    <path d="M5 12l5 5L20 7" />
+                  </svg>
+                )}
+                <span className={estadoGuardado === "error" ? "text-danger-ink" : estadoGuardado === "sin_guardar" ? "text-warn-ink" : "text-fg-muted"}>{TEXTO_DEL_GUARDADO[estadoGuardado]}</span>
+                {estadoGuardado === "error" && <BotonTexto onClick={reintentar}>Reintentar</BotonTexto>}
+              </p>
+            ) : (
+              <p className="mr-auto text-xs text-fg-muted">Solo lectura: no la puedes cambiar.</p>
+            )}
+            {asistente && (
+              <BotonTexto
+                onClick={() => {
+                  asistente.abrir({ chip: { tipo: "tarea", id: t.id, etiqueta: `T-${t.numero} «${t.titulo}»` } });
+                  cerrarCajon();
+                }}
+              >
+                Preguntarle al asistente
+              </BotonTexto>
+            )}
+          </>
         ) : undefined
       }
     >
@@ -166,9 +292,29 @@ export function CajonDeTarea({
           {t.estado === "propuesta" && acc.decidir && (
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-info-line bg-info-surface px-3 py-2.5">
               <p className="min-w-0 flex-1 text-[13px] text-brand">Es una propuesta: cámbiala acá y úsala cuando esté como quieres.</p>
-              <BotonAzul disabled={guardando} onClick={() => onDecidir(t, !!t.sugerencias?.cliente)}>
+              <BotonAzul
+                disabled={guardando}
+                onClick={async () => {
+                  // Lo escrito primero: usarla con la versión de antes daría «otra persona la cambió».
+                  guardarTexto();
+                  await cola.current;
+                  const ultima = tareaRef.current;
+                  if (ultima) onDecidir(ultima, !!ultima.sugerencias?.cliente);
+                }}
+              >
                 Usar
               </BotonAzul>
+            </div>
+          )}
+
+          {/* «Ya pasó» (lib/tareas/aligerar.ts): Nexus propone cerrarla; la cierra quien la mira, con el motivo escrito. */}
+          {t.cerrar && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-info-line bg-info-surface px-3 py-2.5">
+              <IconoDeSugerencia className="h-4 w-4 flex-shrink-0 text-brand" />
+              <p className="min-w-0 flex-1 text-[13px] text-brand">Nexus sugiere cerrarla. {t.cerrar.motivo}</p>
+              <BotonBlanco disabled={guardando} onClick={() => void cerrarSugerida()}>
+                {t.cerrar.accion === "descartar" ? "Descartar" : "Ya no se hará"}
+              </BotonBlanco>
             </div>
           )}
 
@@ -214,7 +360,7 @@ export function CajonDeTarea({
               value={titulo}
               disabled={!puedeEditar}
               onChange={(e) => setTitulo(e.target.value)}
-              onBlur={() => titulo.trim() && titulo.trim() !== t.titulo && void editar({ titulo: titulo.trim() })}
+              onBlur={guardarTexto}
             />
           </Field>
 
@@ -350,7 +496,7 @@ export function CajonDeTarea({
           </div>
 
           <Field label="Notas">
-            <Textarea rows={3} value={notas} disabled={!puedeEditar} onChange={(e) => setNotas(e.target.value)} onBlur={() => notas !== (t.notas ?? "") && void editar({ notas: notas || null })} />
+            <Textarea rows={3} value={notas} disabled={!puedeEditar} onChange={(e) => setNotas(e.target.value)} onBlur={guardarTexto} />
           </Field>
 
           {(t.estado === "pendiente" || t.estado === "en_curso") && t.semana && (
@@ -414,7 +560,7 @@ export function CajonDeTarea({
             t={t}
             puedeEditar={puedeEditar}
             onCambio={(x) => {
-              setTarea(x);
+              ponerTarea(x);
               onCambio();
             }}
           />

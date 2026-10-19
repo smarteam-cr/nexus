@@ -4,6 +4,7 @@
 import type { AccionesDeTarea, BloqueDeAgenda, EstadoDeProyecto, EstadoDeTarea, Prioridad } from "./estados";
 import type { Ambito, AmbitoCalculado } from "./ambito";
 import type { OrigenVisible } from "./origen";
+import type { SugerenciaDeCierre } from "./aligerar";
 
 export interface PersonaVista {
   email: string;
@@ -103,6 +104,8 @@ export interface TareaVista {
   sugeridoCierre?: { resultado: "hecha" | "no_hecha"; cita: string | null; semana: string };
   /** Una tarea de HubSpot (etapa 3 de docs/mi-dia-plan.md): de dónde viene y dónde abrirla. */
   hubspot?: HubspotDeTarea | null;
+  /** «Ya pasó»: Nexus propone cerrarla (lib/tareas/aligerar.ts). Solo si quien mira la puede cerrar; nunca se cierra sola. */
+  cerrar?: SugerenciaDeCierre;
 }
 
 export interface HubspotDeTarea {

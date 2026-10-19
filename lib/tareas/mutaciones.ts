@@ -54,6 +54,7 @@ import { duenosDeReuniones } from "@/lib/sessions/reuniones-para-tareas";
 import { ambitoConDatos, datosDeAmbito } from "./ambito-server";
 import type { ClientesQueVes } from "./clientes";
 import { instanteCR } from "./agenda";
+import { NO_SON_PERSONAS } from "./toques";
 import { DE_LA_PREVENTA } from "@/lib/exploraciones/marco";
 import { elegirCandidato } from "@/lib/hubspot/cliente-de-la-empresa";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
@@ -3155,4 +3156,76 @@ export async function agruparSeguimientosPropuestos(g: GrupoDeSeguimientos, ahor
   }, OPCIONES_DE_TX);
   if (r?.responsable) olvidarMedicion(r.responsable);
   return r ? { id: r.id } : null;
+}
+
+/* ── Lo que prometió el cliente, en «Por asignar» (2026-10-19, «Menos tareas a la vista») ─────────────────────── */
+
+export const MOTIVO_POR_ASIGNAR_AGRUPADO = "Se juntó en un solo seguimiento de la reunión mientras esperaba en «Por asignar».";
+
+/**
+ * Lo mismo que `agruparSeguimientosPropuestos`, para los seguimientos que ya entraron a «Por asignar» de un equipo
+ * (abiertos, sin responsable ni semana): la que los junta nace también en «Por asignar» y las sueltas quedan
+ * `fusionada` en ella, firmadas por el sistema. Más frenos que con las propuestas, porque una abierta se puede haber
+ * trabajado: si alguna tiene un evento de una persona, un comentario, una dependencia o un vínculo, no hace nada.
+ */
+export async function agruparSeguimientosPorAsignar(g: GrupoDeSeguimientos, ahora = new Date()): Promise<{ id: string } | null> {
+  if (g.tareaIds.length < 2) return null;
+  return prisma.$transaction(async (tx) => {
+    const ids = [...g.tareaIds];
+    const filas = await tx.tarea.findMany({
+      where: { id: { in: ids }, estado: "pendiente", responsableEmail: null, semana: null, archivadaAt: null },
+      orderBy: { numero: "asc" },
+    });
+    if (filas.length !== ids.length) return null;
+    const base = filas[0]!;
+    const igual = (f: (typeof filas)[number]) => f.clientId === base.clientId && f.equipo === base.equipo && f.sessionId === base.sessionId && f.lecturaId === base.lecturaId;
+    if (!filas.every(igual)) return null;
+    const [toques, comentarios, relaciones, vinculos] = await Promise.all([
+      tx.tareaEvento.count({ where: { tareaId: { in: ids }, porEmail: { notIn: NO_SON_PERSONAS } } }),
+      tx.tareaComentario.count({ where: { tareaId: { in: ids } } }),
+      tx.tareaRelacion.count({ where: { OR: [{ desdeId: { in: ids } }, { haciaId: { in: ids } }] } }),
+      tx.tareaVinculo.count({ where: { tareaId: { in: ids } } }),
+    ]);
+    if (toques + comentarios + relaciones + vinculos > 0) return null;
+    if (await tx.tarea.findUnique({ where: { origenId: g.origenId }, select: { id: true } })) return null;
+    const nueva = await tx.tarea.create({
+      data: {
+        titulo: g.titulo,
+        huella: huellaDeTexto(g.titulo),
+        notas: null,
+        contexto: g.contexto,
+        estado: "pendiente",
+        prioridad: base.prioridad,
+        equipo: base.equipo,
+        responsableEmail: null,
+        semana: null,
+        venceEl: g.venceEl ? aDate(g.venceEl) : null,
+        clientId: base.clientId,
+        projectId: base.projectId,
+        lado: "cliente",
+        origen: base.origen,
+        creadaPorEmail: null,
+        pedidaPorEmail: base.pedidaPorEmail,
+        pedidaPorEquipo: base.pedidaPorEquipo,
+        pedidaPorTexto: base.pedidaPorTexto,
+        tipo: base.tipo,
+        lecturaId: base.lecturaId,
+        sessionId: base.sessionId,
+        origenTitulo: base.origenTitulo,
+        cita: g.cita,
+        origenId: g.origenId,
+      },
+      select: { id: true },
+    });
+    await evento(tx, { tareaId: nueva.id, tipo: "creada", porEmail: SISTEMA, datos: { lado: "cliente", seguimiento: true, agrupa: filas.length, desde: filas.map((f) => f.id) } });
+    for (const f of filas) {
+      const u = await tx.tarea.updateMany({
+        where: { id: f.id, version: f.version, estado: "pendiente", responsableEmail: null },
+        data: { estado: "fusionada", decision: "misma", decididaPorEmail: SISTEMA, decididaAt: ahora, mismaQueId: nueva.id, motivo: MOTIVO_POR_ASIGNAR_AGRUPADO, version: { increment: 1 } },
+      });
+      if (!u.count) throw new ErrorDeTareas(409, "Una de las tareas cambió mientras se juntaban.");
+      await evento(tx, { tareaId: f.id, tipo: "estado", porEmail: SISTEMA, datos: { desde: "pendiente", hacia: "fusionada", agrupadaEn: nueva.id } });
+    }
+    return { id: nueva.id };
+  }, OPCIONES_DE_TX);
 }
