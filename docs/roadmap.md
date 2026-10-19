@@ -361,6 +361,14 @@ Todo `main` está en producción desde el 19 oct (`0107b2b4`). Si usas el 3004, 
 
 **Lo que encontraste con Alex Vanegas (19 oct):** en producción desde el 19 oct; sus pruebas son las del área «Lo que encontraste con Alex» (115 a 143). El CSE encargado se cambia (también desde la cartera de la CSL) y Librería Internacional pierde la fila fusionada; la agenda trae todo Google Calendar, no abre nada sola y sugiere bloques del tamaño de la tarea; las cuentas sin acción o reunión se ven todas y Nexus sugiere el siguiente paso con la reunión; «Por asignar» ya no llena las tareas de cada CSE y el panel dice si guardó; el aviso del vigía dice de qué a qué y se decide en «Propuestas del vigía». Jerson Escudero dado de baja: no tenía nada a su nombre.
 
+**Lo que encontraste en la tarde del 19 oct, en arreglo** (cada uno en su sesión):
+
+- La meta de HubSpot de Liz Navarro no aparece en su «Para ti»: tiene que aparecer cuando la persona tiene una meta asociada.  ⏳ En arreglo
+- Un evento propio de la agenda (el almuerzo, un bloque personal) se abre en el panel, no en una pestaña de Calendar, con lo que tenga de un cliente.  ⏳ En arreglo
+- El sprint de marketing: Lidia dice que se hablaron más tareas de las que quedaron en Nexus.  ⏳ En arreglo
+- Marcar una tarea como hecha y deshacerlo es lento, y al deshacer dice «Otra persona cambió esta tarea».  ⏳ En arreglo
+- Cemaco: dos fichas, y Lili no ve su cronograma ni lo que había hecho. Primero el diagnóstico, sin escribir nada.  ⏳ En arreglo
+
 ### 0 · Lo que encontraste con Alex (19 oct) <span class="prioridad">Alta</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
