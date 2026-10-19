@@ -6304,8 +6304,11 @@ especificación y el manual sacan una versión nueva solo cuando cambian ellos.
 
 - **Las metas se COPIAN de HubSpot, no se cargan a mano.** `MetaComercial` es un espejo de solo lectura de los
   «goal targets» (`/crm/v3/objects/goal_targets`, permiso `crm.objects.goals.read`, opcional en la app pública). Una
-  meta trimestral son cuatro filas por persona; el total del año se suma al leer. Lo corre el job
-  `ventas-ganadas-daily`, después de los negocios ganados; si falla, no tumba el job.
+  meta trimestral son cuatro filas por persona; el total del año se suma al leer. Lo corren el job
+  `ventas-ganadas-daily`, después de los negocios ganados, y desde el 2026-10-19 también el job `negocios-abiertos`
+  (cada hora de 6:00 a 20:00) y el botón «Actualizar» de la cartera de Ventas en «Para ti»; si falla, no tumba nada.
+  *Por qué:* la meta de Liz Navarro se creó en HubSpot el 19-oct a las 10:40 y la copia de ese día había corrido a las
+  6:00, así que «Para ti» no la mostraba hasta el día siguiente.
 - **Solo cuenta la meta de ventas** (`hs_goal_type = sales_quota`). Medido el 2026-10-08: en el portal conviven
   «2026 ONFIRE | LLAMADAS PROSPECCIÓN» (llamadas, 51 tramos semanales de Andrés), «Diagnóstico | Leads» y las del
   Partner Mutual Action Plan. Sumadas, la meta de Andrés daba US$335.505 en vez de 335.000. Se copian todas (son
@@ -6320,6 +6323,9 @@ especificación y el manual sacan una versión nueva solo cuando cambian ellos.
   persona o un reporte importan de ahí; nadie lee `MetaComercial` por su cuenta.
 - **Nunca se borra**: una meta que HubSpot deja de devolver queda `vigente=false`, y solo si la lectura terminó
   entera. Sin el permiso, la copia no toca nada.
+- **«Tu meta» se pinta solo si la persona tiene una meta de ventas asociada a su usuario en HubSpot** (Elías,
+  2026-10-19): en el inicio de «Para ti» y en la cartera de Ventas. Sin meta no hay tarjeta, tampoco una que diga «No
+  tienes una meta de ventas en HubSpot».
 - ⚠ **El permiso entra por el código, no por entorno**, porque Elías ya lo declaró «Opcional» en la app pública. La
   primera vez hay que **reconectar HubSpot** desde Integraciones después del deploy; hasta entonces la copia dice
   «sin permiso».

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { aTramo, metasDelAnio, type TramoParaSumar } from "./metas-reglas";
 import { aDueno } from "@/lib/hubspot/duenos";
 
@@ -63,5 +65,30 @@ describe("aDueno — un dueño de HubSpot", () => {
   it("normaliza el correo y toma el id de usuario aunque esté inactivo", () => {
     expect(aDueno({ id: 9, userIdIncludingInactive: 55, email: " Andres@SmarteamCR.com ", firstName: "Andrés", lastName: "Pinzón" }, true))
       .toEqual({ ownerId: "9", userId: "55", email: "andres@smarteamcr.com", nombre: "Andrés Pinzón", archivado: true });
+  });
+});
+
+/*
+ * Cuándo se copian las metas de HubSpot (2026-10-19). Escaneo estructural. Una meta creada en HubSpot a las 10:40 (la de
+ * Liz Navarro) no se veía en «Para ti» hasta el día siguiente: solo la copiaba el job diario de las 6:00. Ahora también
+ * la copian el job `negocios-abiertos` (cada hora) y el botón «Actualizar» de la cartera de Ventas.
+ */
+const leer = (p: string) => readFileSync(join(process.cwd(), p), "utf8").replace(/\r\n/g, "\n");
+
+describe("las metas de HubSpot se copian sin esperar al día siguiente", () => {
+  it("el job de cada hora (negocios-abiertos) copia las metas", () => {
+    const defs = leer("lib/jobs/defs.ts");
+    const inicio = defs.indexOf('key: "negocios-abiertos"');
+    const fin = defs.indexOf("\n};", inicio);
+    expect(inicio).toBeGreaterThan(-1);
+    expect(defs.slice(inicio, fin)).toContain("syncMetasComerciales()");
+  });
+  it("«Actualizar» de la cartera de Ventas copia las metas", () => {
+    expect(leer("app/api/sales/negocios/actualizar/route.ts")).toContain("syncMetasComerciales()");
+  });
+  it("la copia de metas solo LEE HubSpot: ningún pedido que no sea GET", () => {
+    const sync = leer("lib/ventas/metas-sync.ts");
+    expect(sync).toMatch(/method: "GET"/);
+    expect(sync).not.toMatch(/method: "(POST|PATCH|PUT|DELETE)"/);
   });
 });
