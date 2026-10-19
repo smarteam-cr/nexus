@@ -131,7 +131,7 @@ export default function LecturaDeLosNumeros({ datos }: { datos: Datos }) {
               ))}
             </ul>
           )}
-          <p className="text-xs text-fg-muted">Lo que costó cada lectura está en Uso de Nexus › IA por proceso, en Finanzas.</p>
+          <p className="text-xs text-fg-muted">Lo que costó cada lectura está en Uso de Nexus › «Procesos de IA», en Finanzas.</p>
         </section>
       </aside>
     </div>

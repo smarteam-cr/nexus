@@ -16,6 +16,7 @@ import { useToast } from "@/components/ui";
 import type { ComparacionConLaFactura } from "@/lib/ai/gasto-mensual";
 import { pct, usd } from "@/lib/uso/ia";
 import { nombreDelMes } from "@/lib/ai/gasto-mensual";
+import { parseCantidad } from "@/lib/landing/money";
 
 export default function Factura({ filas, mesSugerido, faltaElSql }: { filas: ComparacionConLaFactura[]; mesSugerido: string; faltaElSql: boolean }) {
   const router = useRouter();
@@ -41,7 +42,8 @@ export default function Factura({ filas, mesSugerido, faltaElSql }: { filas: Com
     }
   }
 
-  const montoNum = Number(monto.replace(",", "."));
+  // «1.234,56», «1,234.56» y «1234.56» son lo mismo (prueba 67): el último separador es decimal si lo siguen 1 o 2 dígitos.
+  const montoNum = parseCantidad(monto) ?? Number.NaN;
   return (
     <div className="space-y-6">
       {faltaElSql && (

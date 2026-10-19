@@ -23,7 +23,7 @@ import { esLineaActiva, gruposDeInversion, type InversionData, type LineaInversi
 export interface ProyectoParaUbicar {
   id: string;
   nombre: string;
-  /** active | paused | completed */
+  /** active | paused | inactive (un proyecto cerrado en producción queda «inactive»; «completed» también es terminado) */
   status: string;
   /** El contenedor de la empresa («Información del cliente»): no es un proyecto, es la cuenta. */
   contenedor: boolean;
@@ -66,6 +66,11 @@ export const CLAVE_DE_LA_CUENTA = "cuenta";
  * Sobre qué se puede ubicar la empresa, en orden: los proyectos vivos (el más nuevo primero), los terminados, la preventa
  * viva y, siempre al final, la cuenta entera (para lo vendido sin proyecto). `porDefecto` es el primero.
  */
+/** En producción un proyecto cerrado queda `inactive` (medido el 2026-10-19: 177 active, 34 inactive, ningún completed). */
+function estaTerminado(status: string): boolean {
+  return status === "inactive" || status === "completed";
+}
+
 export function objetivosParaUbicar(i: {
   proyectos: readonly ProyectoParaUbicar[];
   preventa: { exploracionId: string } | null;
@@ -75,13 +80,13 @@ export function objetivosParaUbicar(i: {
   const masReciente = ventas[0]?.id ?? null;
   const contenedor = i.proyectos.find((p) => p.contenedor) ?? null;
   const reales = i.proyectos.filter((p) => !p.contenedor).sort((a, b) => b.creadoEn.localeCompare(a.creadoEn));
-  const vivos = reales.filter((p) => p.status !== "completed");
-  const terminados = reales.filter((p) => p.status === "completed");
+  const vivos = reales.filter((p) => !estaTerminado(p.status));
+  const terminados = reales.filter((p) => estaTerminado(p.status));
   const deProyecto = (p: ProyectoParaUbicar): ObjetivoDeUbicacion => ({
     clave: `proyecto:${p.id}`,
     tipo: "proyecto",
     etiqueta: p.nombre,
-    detalle: [p.servicio ? `Servicio ${p.servicio}` : null, p.status === "completed" ? "Terminado" : p.status === "paused" ? "En pausa" : null].filter(Boolean).join(" · ") || null,
+    detalle: [p.servicio ? `Servicio ${p.servicio}` : null, estaTerminado(p.status) ? "Terminado" : p.status === "paused" ? "En pausa" : null].filter(Boolean).join(" · ") || null,
     projectId: p.id,
     exploracionId: p.exploracionId,
     // El mismo trato de HubSpot que el proyecto; si el proyecto no lo dice, ninguna (se elige a mano).

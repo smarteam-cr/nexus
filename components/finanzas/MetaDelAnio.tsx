@@ -94,7 +94,8 @@ function Encabezado({ datos }: { datos: MetaYPorFacturar }) {
   const [verHistoria, setVerHistoria] = useState(false);
 
   const guardar = async () => {
-    const montoUsd = Number(monto.replace(/[^\d.]/g, ""));
+    // La meta es en dólares enteros: «2.500.000», «2,500,000» y «2500000» son lo mismo (prueba 83).
+    const montoUsd = Number(monto.replace(/\D/g, ""));
     if (!Number.isFinite(montoUsd) || montoUsd <= 0) return toast.error("Escribe la meta en dólares.");
     setGuardando(true);
     try {

@@ -70,6 +70,9 @@ SDK · HubSpot/Google Workspace/Apify (versiones exactas: ARCHITECTURE Parte 0 �
   siendo `npm run check:invariants` + el ojo.
 - Antes de commitear: correr **`/ship-nexus`** (invariantes + tsc/lint en lo tocado + checklist).
 - **No push hasta que el usuario lo pida.**
+- **El roadmap (`docs/roadmap.md`) lo edita solo la sesión que junta las ramas en `main`.** Una sesión de trabajo no lo
+  toca: termina con un bloque «Para el roadmap» (qué cambió y las pruebas con número, pasos exactos y resultado esperado).
+  El método completo: `docs/roadmap.md` › «Cómo se mantiene este roadmap».
 - **Cuando Elías tenga que probar algo** (en el 3004, antes o después de un deploy), la respuesta cierra con
   «**Qué probar, en simple:**»: una tabla `# · Dónde · Qué deberías ver`. Una fila por cosa visible. «Dónde» es
   el camino en la pantalla («Éxito del cliente › botón «Limpieza de HubSpot», arriba a la derecha») y «Qué

@@ -36,7 +36,7 @@ describe("objetivosParaUbicar", () => {
   it("ofrece los proyectos vivos primero, después los terminados, la preventa y siempre la cuenta al final", () => {
     const { objetivos, porDefecto } = objetivosParaUbicar({
       proyectos: [
-        proyecto({ id: "viejo", status: "completed", creadoEn: "2025-01-01T00:00:00.000Z" }),
+        proyecto({ id: "viejo", status: "inactive", creadoEn: "2025-01-01T00:00:00.000Z" }),
         proyecto({ id: "nuevo", creadoEn: "2026-05-01T00:00:00.000Z" }),
         proyecto({ id: "antes", creadoEn: "2026-02-01T00:00:00.000Z" }),
         proyecto({ id: "info", nombre: "Información del cliente", contenedor: true, exploracionId: "exp-cuenta" }),

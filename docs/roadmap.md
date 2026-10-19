@@ -12,6 +12,25 @@ está haciendo con él.
 - **Sin tiempos ni semanas.** Cada paso se hace cuando lo pones a correr.
 - **Los kickoffs y los diagnósticos no se tocan como datos.** Se pueden cambiar las pantallas, pero lo que ya existe se sigue consultando en el mismo lugar.
 
+## Cómo se mantiene este roadmap
+
+Es el punto de alineación entre tú y las sesiones que construyen Nexus. Para que varias sesiones trabajen a la vez sin
+chocar:
+
+1. **Lo edita una sola sesión: la que junta las ramas en `main`.** Las demás no tocan este archivo: terminan con un
+   bloque «Para el roadmap» (qué cambió, pruebas nuevas o corregidas con número, pasos y resultado esperado) y la que
+   junta lo copia en el mismo commit en que junta su rama.
+2. **Una prueba entra cuando su código está en `main`**, revisada contra ese código: el camino exacto con el texto de la
+   pantalla entre «», qué cliente o persona usar, y un resultado que se pueda comprobar mirando la pantalla.
+3. **Antes de pedirte una prueba, la compruebo yo** con los datos de producción (solo lectura) y las pruebas
+   automáticas. Lo que se puede comprobar sin la pantalla queda «✓ Validado por Claude», con la evidencia. A ti te
+   llegan solo las pruebas de pantalla, las de criterio y lo nuevo.
+4. **Cuando algo validado cambia, vuelve a «↻ Validar otra vez»** en el mismo commit que trae el cambio.
+5. **Los números de prueba no se reusan.** Una prueba que sale se borra con su número; una que cambia conserva el suyo.
+6. **«Lo que le pides al equipo»** tiene solo lo que el equipo puede revisar en producción (o dice «después del deploy»).
+7. **Cada vez que se junta algo:** tsc en 0, la suite en verde, «Estado hoy» al día y la vista publicada en la misma
+   dirección (`node scripts/roadmap-vista.mjs` y el artefacto).
+
 ## Estado hoy
 
 | Qué | Cómo está |
