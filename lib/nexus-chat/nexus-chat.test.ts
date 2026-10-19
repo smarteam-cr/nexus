@@ -18,11 +18,11 @@ import { leerAcuerdo, marcaDeAcuerdo, marcaDeDesenlace, MARCA_DE_ACUERDO } from 
 import { estadosDeAcuerdo } from "@/lib/asistente/acuerdo-vivo";
 import { voseoEnProsa } from "@/lib/ui/voseo-formas";
 import { COMO_SE_ACOTA, acotarALaCuenta, herramientaDeLaCuenta, seOfrece, verificarLaCuenta, type LectorDeLaCuenta } from "./alcance";
-import { comoInformacion, correrBucle, CIERRA_LO_LEIDO, FRONTERA_DE_LO_LEIDO, HERRAMIENTA_DESCARTAR, indiceDeP, type CambioPropuesto, type LlamarAlModelo } from "./bucle";
+import { comoInformacion, correrBucle, CIERRA_LO_LEIDO, FRONTERA_DE_LO_LEIDO, HERRAMIENTA_DESCARTAR, indiceDeP, terminaAlProponer, type CambioPropuesto, type LlamarAlModelo } from "./bucle";
 import { crearEjecutor, prepararCambio } from "./ejecutor";
-import { cambiosDelAcuerdo, componerAcuerdo, pendientesDeNexus, RESUMEN_DEL_CIERRE_DE_NEXUS } from "./libro";
+import { cambiosDelAcuerdo, componerAcuerdo, pendientesDeNexus, RESUMEN_DEL_CIERRE_DE_NEXUS, ventanaDelHilo } from "./libro";
 import { accionesSugeridas, mensajeDeRecordatorio, enlaceDeWhatsapp, diaCorto } from "./acciones";
-import { decidirTope, sinMarcadores, textoDelDesenlace, avisoDelChat } from "./textos";
+import { decidirTope, sinMarcadores, textoDelDesenlace, avisoDelChat, lineaDeLaLista, resumenDeLoAplicado, tituloDeLaLista } from "./textos";
 import { PROMPT_DE_NEXUS, bloqueDeLoPendiente, contextoDeLaCuenta, hoyEnCostaRica } from "./prompt";
 import { TOPES_DEL_CHAT } from "./constantes";
 
@@ -187,6 +187,23 @@ describe("⛔ el chat de una cuenta no cruza a otra", () => {
 });
 
 describe("el bucle: lee, propone y respeta los topes", () => {
+  it("⭐ si en una vuelta solo propuso, el turno termina ahí: no hay otra llamada para el resumen (validación 106)", async () => {
+    const m = modelo([[{ name: "tarea_crear", input: { titulo: "Uno" } }, { name: "tarea_crear", input: { titulo: "Dos" } }], "No debería llegar acá."]);
+    const r = await correrBucle({ llamar: m.llamar, ejecutor, mensajes: [{ role: "user", content: "hola" }], maxVueltas: 4, maxCambios: 10 });
+    expect(m.pedidos).toHaveLength(1);
+    expect(r.cerroAlProponer).toBe(true);
+    expect(r.propuestos).toHaveLength(2);
+    expect(r.texto).toBe("");
+  });
+
+  it("con una lectura o un rechazo, sigue: el modelo tiene que ver lo leído o arreglar lo rechazado", () => {
+    expect(terminaAlProponer({ lecturas: 0, rechazos: 0, propuestas: 3, descartes: 0 })).toBe(true);
+    expect(terminaAlProponer({ lecturas: 0, rechazos: 0, propuestas: 0, descartes: 1 })).toBe(true);
+    expect(terminaAlProponer({ lecturas: 1, rechazos: 0, propuestas: 1, descartes: 0 })).toBe(false);
+    expect(terminaAlProponer({ lecturas: 0, rechazos: 1, propuestas: 2, descartes: 0 })).toBe(false);
+    expect(terminaAlProponer({ lecturas: 0, rechazos: 0, propuestas: 0, descartes: 0 })).toBe(false);
+  });
+
   it("la última vuelta va sin herramientas y contesta con lo leído", async () => {
     const m = modelo([[{ name: "cuenta_tareas", input: {} }]]);
     const r = await correrBucle({ llamar: m.llamar, ejecutor, mensajes: [{ role: "user", content: "hola" }], maxVueltas: 3, maxCambios: 10 });
@@ -265,12 +282,41 @@ describe("la lista a lo largo de la conversación", () => {
     expect(bloqueDeLoPendiente([])).toBe("");
   });
 
-  it("el desenlace dice qué entró, qué falló y qué no se intentó", () => {
-    const t = textoDelDesenlace({ aplicadas: ["Crear «Uno»"], fallo: { linea: "Crear «Dos»", motivo: "Otra persona la cambió" }, sinIntentar: 2, desmarcadas: 1 });
-    expect(t).toContain("✅ Se aplicó: Crear «Uno»");
+  it("el desenlace es UNA línea con lo que entró, y dice aparte qué falló y qué no se intentó (validación 104)", () => {
+    expect(textoDelDesenlace({ aplicadas: ["guia.pregunta.agregar", "guia.pregunta.agregar", "guia.pregunta.agregar", "guia.pregunta.agregar"], fallo: null, sinIntentar: 0 })).toBe(
+      "Listo: 4 preguntas en la guía.",
+    );
+    const t = textoDelDesenlace({ aplicadas: ["tarea.crear"], fallo: { linea: "Crear «Dos»", motivo: "Otra persona la cambió" }, sinIntentar: 2 });
+    expect(t.split("\n")[0]).toBe("Listo: 1 tarea creada.");
     expect(t).toContain("No se aplicó «Crear «Dos»»: Otra persona la cambió");
     expect(t).toContain("2 cambios no se intentaron");
-    expect(t).toContain("Uno quedó afuera");
+  });
+
+  it("lo aplicado se agrupa por clase, en orden; lo desconocido es «cambio»", () => {
+    expect(resumenDeLoAplicado(["guia.pregunta.agregar", "nota.crear", "guia.pregunta.agregar", "tarea.cambiar-estado", "tarea.mover-semana"])).toBe(
+      "2 preguntas en la guía, 1 nota en la cuenta y 2 tareas actualizadas",
+    );
+    expect(resumenDeLoAplicado(["algo.nuevo"])).toBe("1 cambio");
+  });
+
+  it("sin texto del modelo, la lista es la respuesta: una línea", () => {
+    expect(lineaDeLaLista(1)).toBe("Te dejé el cambio en la lista.");
+    expect(lineaDeLaLista(4)).toBe("Te dejé 4 cambios en la lista.");
+    expect(tituloDeLaLista(4)).toBe("4 cambios para aplicar");
+  });
+
+  it("la ventana del hilo le dice al modelo qué propuso (el texto ya no repite la lista)", () => {
+    const conLista = marcaDeAcuerdo({ resumen: "x", operaciones: [{ nombre: "tarea.crear", entrada: {} }], lineas: ["Crear «Uno»"] });
+    const v = ventanaDelHilo(
+      [
+        { rol: "CSE", contenido: "agrega una tarea", shaDeContexto: "h" },
+        { rol: "ASISTENTE", contenido: `Te la dejo.\n\n${conLista}`, shaDeContexto: "h" },
+        { rol: "ASISTENTE", contenido: `${marcaDeDesenlace({ ok: true })}\n\nListo: 1 tarea creada.`, shaDeContexto: null },
+      ],
+      12,
+    );
+    expect(v[1].texto).toBe("Te la dejo.\n\n[La lista que propuse: Crear «Uno»]");
+    expect(v[2].texto).toBe("Listo: 1 tarea creada.");
   });
 });
 
@@ -338,8 +384,9 @@ describe("los topes y el texto", () => {
 
   it("lo que lee el modelo y la persona va en tuteo", () => {
     expect(voseoEnProsa(PROMPT_DE_NEXUS)).toEqual([]);
-    const aviso = avisoDelChat("Empresa A", null);
-    for (const t of [aviso.aviso, aviso.placeholder, ...aviso.ejemplos]) expect(voseoEnProsa(t), t).toEqual([]);
+    for (const aviso of [avisoDelChat("Empresa A", null), avisoDelChat("Empresa A", null, true)]) {
+      for (const t of [aviso.aviso, aviso.placeholder, ...aviso.ejemplos]) expect(voseoEnProsa(t), t).toEqual([]);
+    }
   });
 });
 

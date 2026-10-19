@@ -40,7 +40,8 @@ export const PREVENTA: Recorrido = {
   // 5 (2026-10-09): Exploración abre en su página de inicio (las sesiones, cada una con su reunión; «+ Agregar sesión»).
   // 6 (2026-10-18): «Lo que ya sabemos» arriba de la guía, que trae unas 5 preguntas desde lo que el cliente ya respondió.
   // 7 (2026-10-18): preguntas cortas con su ⓘ, «Regenerar pregunta», preguntas tuyas, el asistente y lo que cubre la guía.
-  version: 7,
+  // 8 (2026-10-18): Regenerar, Editar y Borrar pasan al «⋯» de cada pregunta.
+  version: 8,
   titulo: "Una preventa",
   descripcion: "Todas sus piezas, de la preparación a la propuesta",
   rotulo: "Recorrido · Preventa",
@@ -164,7 +165,7 @@ export const PREVENTA: Recorrido = {
     {
       ancla: "preventa.sesion.preguntas",
       titulo: "Preparación: la guía de la sesión",
-      texto: "Unas 5 preguntas cortas; en la ⓘ, de dónde sale cada una. «Regenerar pregunta» cambia solo esa, en «⋯» la editas o la quitas, y abajo sumas las tuyas: se quedan aunque actualices la guía.",
+      texto: "Unas 5 preguntas cortas; en la ⓘ, de dónde sale cada una. En su «⋯» la regeneras (cambia solo esa), la editas o la borras, y abajo sumas las tuyas: se quedan aunque actualices la guía.",
       lado: "top",
       accion: momento("antes"),
     },

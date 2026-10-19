@@ -30,6 +30,14 @@ export function abrirElChatDeNexus(p: PedidoDeAbrirElChat): void {
 /** El agente, para verlo aparte en /integrations/gasto-ia. Cada turno deja su `AgentRun` con este slug. */
 export const SLUG_DEL_CHAT_DE_NEXUS = "nexus-chat";
 
+/**
+ * Cuánto piensa el modelo en cada llamada del chat (validación 106, medido el 2026-10-18 con Distribuidora Larce y
+ * scripts/medir-turno-de-la-guia.ts). Con el de siempre (`high`), «¿Qué otras preguntas agregarías?» tardó 34 s: 28 s
+ * eran la primera llamada pensando (2.659 tokens de salida para dos preguntas). Un chat contesta corto; lo que tiene que
+ * cumplir una pregunta de la guía (tuteo, largo, no repetir lo sabido) lo revisa el código al preparar, no el modelo.
+ */
+export const ESFUERZO_DEL_CHAT = "low" as const;
+
 /** Los topes (decisión 7 del plan: «tope por persona y por vueltas, y el costo de cada hilo»). */
 export const TOPES_DEL_CHAT = {
   /** Mensajes de una persona por día, en TODAS sus cuentas. */

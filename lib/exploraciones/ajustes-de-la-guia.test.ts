@@ -12,7 +12,9 @@ import {
   aplicarAjustes,
   aplicarCambioDeLaGuia,
   claveDePregunta,
+  deshacerElBorrado,
   hayAjustes,
+  lineaDelCambio,
   MAX_PREGUNTAS_PROPIAS,
   sinCitaAdelante,
   type AjustesDeLaGuia,
@@ -119,6 +121,38 @@ describe("los ajustes de la guía de una sesión", () => {
     expect(aplicarCambioDeLaGuia({}, { tipo: "quitar", clave: "propia:nada" }).ok).toBe(false);
     expect(aplicarCambioDeLaGuia({}, { tipo: "cambiar", clave: "metas:impacto", pregunta: "   ", origen: "tuya" }).ok).toBe(false);
     expect(aplicarCambioDeLaGuia({}, { tipo: "agregar", pregunta: { id: "p", pregunta: "  ", repreguntas: [], origen: "tuya" } }).ok).toBe(false);
+  });
+});
+
+describe("repreguntas, borrar y la línea del chat (validación 104)", () => {
+  it("toda pregunta de la guía de Larce trae repreguntas: la de respaldo lleva las de su paso", () => {
+    // La 2 de Larce (1.1, Procesos y Rutinas) tenía 0: era la de respaldo, y el asistente no podía mejorarlas.
+    for (const p of preguntasDeLarce(null)) expect(p.repreguntas.length, p.pregunta).toBeGreaterThan(0);
+    for (const p of preguntasDeLarce()) expect(p.repreguntas.length, p.pregunta).toBeGreaterThan(0);
+  });
+
+  it("borrar y deshacer deja la guía como estaba: una de la guía, una cambiada y una propia", () => {
+    const preguntas = preguntasDeLarce();
+    const [p0, p1] = preguntas;
+    const conAjustes = aplicar(
+      undefined,
+      { tipo: "cambiar", clave: claveDePregunta(p1), pregunta: "¿Cuántos negocios se les fueron?", origen: "asistente" },
+      { tipo: "agregar", pregunta: { id: "p1", pregunta: "¿Con qué presupuesto cuentan?", repreguntas: ["¿Y para cuándo?"], para: "presupuesto", origen: "tuya" } },
+    );
+    const vistas = aplicarAjustes(preguntas, conAjustes, apuntaA);
+    for (const p of [vistas[0], vistas[1], vistas[vistas.length - 1]]) {
+      const sinElla = aplicar(conAjustes, { tipo: "quitar", clave: claveDePregunta(p) });
+      const devuelta = aplicar(sinElla, deshacerElBorrado(p));
+      expect(aplicarAjustes(preguntas, devuelta, apuntaA)).toEqual(vistas);
+    }
+    expect(deshacerElBorrado(p0)).toEqual({ tipo: "restaurar", clave: claveDePregunta(p0) });
+  });
+
+  it("la línea del cambio muestra las repreguntas nuevas con sus palabras", () => {
+    expect(lineaDelCambio({ sesion: 2, numero: 2, tema: "Procesos y Rutinas", repreguntas: ["¿Cuántos?", "¿Cuánto en plata?"] })).toBe(
+      "Guía de la sesión 2: en la 2 (Procesos y Rutinas), las repreguntas «¿Cuántos?» · «¿Cuánto en plata?»",
+    );
+    expect(lineaDelCambio({ sesion: 2, numero: 1, tema: null, pregunta: "¿Para cuándo?" })).toBe("Guía de la sesión 2: cambiar la 1 por «¿Para cuándo?»");
   });
 });
 

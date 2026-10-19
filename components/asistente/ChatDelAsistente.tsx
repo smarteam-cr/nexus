@@ -145,6 +145,12 @@ export interface RotulosDelChat {
   vacio?: { intro: string; cierre: string };
   /** El texto del botón sobre lo que quedó marcado («Crear 6 tareas»). null = el de siempre. */
   boton?: (acuerdo: AcuerdoDelChat, desmarcadas: ReadonlySet<number>) => string | null;
+  /**
+   * El chat de Nexus (validación 104, 2026-10-18): la caja dice su título con la cuenta («4 cambios para aplicar») en
+   * vez de «Lo que se acordó» + un contador aparte, y aplicada queda en una línea (`aplicada`), sin otro párrafo: el
+   * desenlace de abajo ya dice «Listo: …». Sin esto, la caja de siempre.
+   */
+  lista?: { titulo: (cambios: number) => string; aplicada: string };
 }
 
 /** 1B: lo que señala la persona en el chat de tareas. Viaja en el pedido de ESTE turno, no en el texto. */
@@ -866,6 +872,11 @@ export default function ChatDelAsistente({
                     : "")
                 }
               >
+                {rotulos?.lista && (t.estado === "vivo" || t.estado === "aplicado") ? (
+                  <p className="text-xs font-semibold text-info-ink">
+                    {t.estado === "aplicado" ? rotulos.lista.aplicada : rotulos.lista.titulo(t.acuerdo.lineas?.length ?? 0)}
+                  </p>
+                ) : (
                 <p className="text-xs font-semibold text-info-ink">
                   Lo que se acordó
                   {t.estado === "aplicado" ? rotuloDelAcuerdoAplicado(t.acuerdo) ?? " · ya aplicado" : null}
@@ -874,6 +885,7 @@ export default function ChatDelAsistente({
                   {/* E3 P5: lo que ya no va (la propuesta cambió, o el cronograma cambió debajo). */}
                   {t.estado === "soltado" || esAcuerdoDeCierre(t.acuerdo) ? " · ya no va" : null}
                 </p>
+                )}
                 {/**
                  * ⭐ UNA CAJA QUE YA NO ES ACCIONABLE NO REPITE TODO SU RAZONAMIENTO.
                  *
@@ -889,10 +901,14 @@ export default function ChatDelAsistente({
                  */}
                 {t.estado === "aplicado" ? (
                   <>
+                  {/* Con `rotulos.lista` (el chat de Nexus), la caja aplicada es solo su título: el desenlace de abajo
+                      ya dice «Listo: …» en una línea. */}
+                  {rotulos?.lista ? null : (
                   <p className="text-sm text-fg-secondary mt-1">
                     {/* E3 P5: lo que fue a la propuesta lo dice así («Pasado a la propuesta…»). */}
                     {textoDelAcuerdoAplicado(t.acuerdo) ?? "Aplicado. ¿Hay que cambiar algo más?"}
                   </p>
+                  )}
                   {/* 1B: lo que sigue («Agendar las 6», «Abrir el borrador»). El chat no agenda ni activa. */}
                   {accionesDe[t.id]?.length ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -972,6 +988,8 @@ export default function ChatDelAsistente({
                       const total = t.acuerdo.lineas.length;
                       const fuera = (desmarcadas[t.id] ?? EMPTY).size;
                       if (total <= 3 && fuera === 0 && !t.texto) return null;
+                      // Con `rotulos.lista` el título ya dice la cuenta: el contador solo aparece si se desmarcó algo.
+                      if (rotulos?.lista && fuera === 0) return null;
                       const plural = (n: number) => `${n} cambio${n === 1 ? "" : "s"}`;
                       return (
                         <p className="mt-3 text-xs font-semibold text-info-ink">
@@ -1219,7 +1237,7 @@ export default function ChatDelAsistente({
       <div className="px-3 py-3 border-t border-line shrink-0">
         {/* L1: el aviso FIJO, arriba del campo y con o sin historial: qué pasa con lo que se pide. Con una
             conversación vieja arriba, nada más lo decía. */}
-        {aviso ? (
+        {aviso?.aviso ? (
           <p
             role="note"
             className={

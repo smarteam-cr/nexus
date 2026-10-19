@@ -31,7 +31,7 @@ import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { aFecha, hoyEnCostaRica } from "./fechas";
 import { coincideConElEvento, HORAS_ESPERANDO_LA_TRANSCRIPCION, mismaReunion } from "./lectura";
 import type { SaberDelCliente } from "./lo-que-ya-sabemos";
-import { planDeLaGuia, preguntaDeRespaldo, repiteLoSabido, type PasoDeLaPregunta, type PreguntaPlaneada } from "./plan-de-la-guia";
+import { planDeLaGuia, preguntaDeRespaldo, REPREGUNTAS_DEL_PASO, repiteLoSabido, type PasoDeLaPregunta, type PreguntaPlaneada } from "./plan-de-la-guia";
 import { sinCitaAdelante, type AjustesDeLaGuia, type OrigenDelAjuste } from "./ajustes-de-la-guia";
 
 // ── Las sesiones ──────────────────────────────────────────────────────────────
@@ -1090,7 +1090,8 @@ export function preguntasParaMostrar(
         para: pl.para,
         tipo: pl.tipo,
         pregunta,
-        repreguntas: delAgente?.repreguntas ?? [],
+        // La de respaldo también lleva repreguntas: las del paso (validación 104).
+        repreguntas: delAgente?.repreguntas.length ? delAgente.repreguntas : [...REPREGUNTAS_DEL_PASO[pl.paso]],
         paso: pl.paso,
         ...(pl.motivo ? { motivo: { texto: pl.motivo.texto, de: pl.motivo.de } } : {}),
         ...(procedencia ? { procedencia } : {}),

@@ -22,6 +22,7 @@ import { repiteLoSabido, QUE_BUSCA_CADA_PASO } from "@/lib/exploraciones/plan-de
 import {
   claveDePregunta,
   esPropia,
+  lineaDelCambio,
   LARGO_DE_UNA_PREGUNTA,
   LARGO_DE_UNA_REPREGUNTA,
   MAX_REPREGUNTAS,
@@ -43,6 +44,25 @@ type Base = Awaited<ReturnType<typeof contextoParaLaGuia>>;
 
 /** Hasta cuántas palabras una pregunta que propone el asistente (la guía pide 20; se deja un margen). */
 const MAX_PALABRAS = 30;
+
+/**
+ * La guía de una exploración, armada UNA vez por contexto (validación 106). Armarla lee la escala, la exploración y sus
+ * reuniones (~0,4 s), y un turno que propone cuatro preguntas la armaba cinco veces (la guía del mensaje y cada cambio al
+ * prepararlo), y otras cuatro al aplicar. El contexto es de un turno o de un «Aplicar»: lo que se prepara dentro de él no
+ * escribe nada, y lo que aplica arma la suya de nuevo (`ajustarLaGuia`), así que nunca se escribe sobre una guía vieja.
+ */
+const guiasDelContexto = new WeakMap<object, Map<string, Promise<Base>>>();
+export function baseDeLaGuia(ctx: object, exploracionId: string): Promise<Base> {
+  let porId = guiasDelContexto.get(ctx);
+  if (!porId) guiasDelContexto.set(ctx, (porId = new Map()));
+  const yaPedida = porId.get(exploracionId);
+  if (yaPedida) return yaPedida;
+  const b = contextoParaLaGuia(exploracionId);
+  porId.set(exploracionId, b);
+  // Si falla, no se guarda: el próximo intento vuelve a leer.
+  b.catch(() => porId.delete(exploracionId));
+  return b;
+}
 
 /** La exploración, si es de esta empresa y quien pide puede cambiarla. */
 async function exigirLaExploracion(ctx: ContextoDeNexus, clientId: string, exploracionId: string, escribir: boolean): Promise<{ ok: true } | { ok: false; motivo: string }> {
@@ -83,8 +103,8 @@ function temasPosibles(base: Base): { id: string; nombre: string }[] {
  * para proponer y cada pregunta con su clave. La usan `guia.leer` y el turno del chat cuando la persona lo abre desde la
  * guía (lib/nexus-chat/turno-server.ts).
  */
-export async function guiaParaElChat(exploracionId: string): Promise<string> {
-  const base = await contextoParaLaGuia(exploracionId);
+export async function guiaParaElChat(exploracionId: string, yaArmada?: Base): Promise<string> {
+  const base = yaArmada ?? (await contextoParaLaGuia(exploracionId));
   const { preguntas } = preguntasDeLaProxima(base);
   const { ctx } = base;
   const nivel = (l: string) => base.escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
@@ -142,7 +162,7 @@ async function conLaPregunta(
 ): Promise<Preparada<DatosDeLaGuia>> {
   const ok = await exigirLaExploracion(ctx, e.clientId, e.exploracionId, true);
   if (!ok.ok) return ok;
-  const base = await contextoParaLaGuia(e.exploracionId);
+  const base = await baseDeLaGuia(ctx, e.exploracionId);
   const { preguntas } = preguntasDeLaProxima(base);
   const i = preguntas.findIndex((p) => claveDePregunta(p) === e.clave);
   if (i < 0) return { ok: false, motivo: `La guía no tiene la pregunta [${e.clave}]: léela otra vez con guia_leer.` };
@@ -160,7 +180,7 @@ export const LEER_GUIA: OperacionQueLee<{ clientId: string; exploracionId?: stri
     if (!id) return "Esta empresa no tiene una exploración abierta.";
     const ok = await exigirLaExploracion(ctx, e.clientId, id, false);
     if (!ok.ok) return ok.motivo;
-    return guiaParaElChat(id);
+    return guiaParaElChat(id, await baseDeLaGuia(ctx, id));
   },
 };
 
@@ -188,7 +208,7 @@ export const AGREGAR_PREGUNTA: OperacionQuePropone<
     if (!ok.ok) return ok;
     const problema = problemaDelTexto([e.pregunta, ...(e.repreguntas ?? [])], e.pregunta);
     if (problema) return { ok: false, motivo: problema };
-    const base = await contextoParaLaGuia(e.exploracionId);
+    const base = await baseDeLaGuia(ctx, e.exploracionId);
     if (e.tema && !temasPosibles(base).some((t) => t.id === e.tema)) return { ok: false, motivo: `«${e.tema}» no es un tema de esta guía: usa uno de la lista de temas.` };
     // La pregunta es la misma en la lista y al aplicar: el id lo pone el aplicar (dos aplicaciones no la duplican: va en la lista una vez).
     const { preguntas } = preguntasDeLaProxima(base);
@@ -216,7 +236,8 @@ export const CAMBIAR_PREGUNTA: OperacionQuePropone<
   ContextoDeNexus
 > = {
   nombre: "guia.pregunta.cambiar",
-  paraQue: "Cambia una pregunta de la guía de la próxima sesión (por su clave), sus repreguntas o las dos. Del mismo tema; solo la pregunta, corta y en tuteo.",
+  paraQue:
+    "Cambia una pregunta de la guía de la próxima sesión (por su clave), sus repreguntas o las dos. «repreguntas» las REEMPLAZA todas de una vez (hasta tres), también en una pregunta que no tiene: úsala para mejorar varias repreguntas en un paso. Del mismo tema; solo la pregunta, corta y en tuteo.",
   clase: "propone",
   pide: z
     .object({ clientId: idDeCliente, exploracionId: idDeExploracion, clave, pregunta: textoDePregunta.optional(), repreguntas: z.array(textoDeRepregunta).max(MAX_REPREGUNTAS).optional() })
@@ -233,7 +254,7 @@ export const CAMBIAR_PREGUNTA: OperacionQuePropone<
       return {
         ok: true,
         datos: { exploracionId: e.exploracionId, cambio: { tipo: "cambiar", clave: e.clave, ...(e.pregunta ? { pregunta: e.pregunta } : {}), ...(e.repreguntas ? { repreguntas: e.repreguntas } : {}), origen: esPropia(e.clave) ? "tuya" : "asistente" } },
-        linea: `Guía de la sesión ${base.ctx.proxima.numero}: cambiar la ${numero}${tema ? ` (${nombreDelTema(base, tema)})` : ""}${e.pregunta ? ` por «${recortar(e.pregunta)}»` : ""}${e.repreguntas ? `${e.pregunta ? " y" : ""} sus repreguntas` : ""}`,
+        linea: lineaDelCambio({ sesion: base.ctx.proxima.numero, numero, tema: tema ? nombreDelTema(base, tema) : null, pregunta: e.pregunta, repreguntas: e.repreguntas }),
       };
     });
   },
@@ -278,14 +299,14 @@ export const CAMBIAR_REPREGUNTA: OperacionQuePropone<
   ContextoDeNexus
 > = {
   nombre: "guia.repregunta.cambiar",
-  paraQue: "Cambia (o suma) UNA repregunta de una pregunta de la guía, por su clave y su número (1 a 3). Corta, en tuteo, un paso más hondo que la pregunta.",
+  paraQue:
+    "Cambia (o suma) UNA repregunta de una pregunta de la guía, por su clave y su número (1 a 3). Para cambiar varias de la misma pregunta, usa guia_pregunta_cambiar con «repreguntas». Corta, en tuteo, un paso más hondo que la pregunta.",
   clase: "propone",
   pide: z.object({ clientId: idDeCliente, exploracionId: idDeExploracion, clave, numero: z.number().int().min(1).max(MAX_REPREGUNTAS), texto: textoDeRepregunta }).strict(),
   async preparar(ctx, e) {
     const r = await conLaPregunta(ctx, e, (base, p, numero) => {
       const problema = problemaDelTexto([e.texto]);
       if (problema) return { ok: false, motivo: problema };
-      if (e.numero > p.repreguntas.length + 1) return { ok: false, motivo: `La pregunta tiene ${p.repreguntas.length} repreguntas: suma la ${p.repreguntas.length + 1}.` };
       return {
         ok: true,
         datos: { exploracionId: e.exploracionId, cambio: { tipo: "restaurar", clave: e.clave } },

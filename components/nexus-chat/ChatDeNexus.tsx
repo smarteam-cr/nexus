@@ -12,7 +12,7 @@
  * Un solo panel derecho a la vez: abrir el chat cierra el Feedback, y abrir el Feedback cierra el chat.
  */
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AcuerdoDelChat, ChipDelChat, ResultadoDeAplicar, RotulosDelChat } from "@/components/asistente/ChatDelAsistente";
 import { useFeedback } from "@/components/feedback/FeedbackProvider";
@@ -23,20 +23,27 @@ import { SkeletonText } from "@/components/ui/Skeleton";
 import { zClass } from "@/lib/ui/z";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
 import { EVENTO_ABRIR_EL_CHAT, PIEZA_NEXUS, type PedidoDeAbrirElChat } from "@/lib/nexus-chat/constantes";
-import { avisoDelChat, textoDelBoton } from "@/lib/nexus-chat/textos";
+import { avisoDelChat, textoDelBoton, tituloDeLaLista } from "@/lib/nexus-chat/textos";
 import type { AccionSugerida } from "@/lib/nexus-chat/acciones";
 
 /* El cajón se carga recién con la primera apertura. */
 const ChatDelAsistente = dynamic(() => import("@/components/asistente/ChatDelAsistente"), { ssr: false });
 
-const ROTULOS: RotulosDelChat = {
-  alDestino: "a esta cuenta",
-  vacio: {
-    intro: "Pregúntale lo que Nexus sabe de esta cuenta, o cuéntale lo que pasó. Por ejemplo:",
-    cierre: "Lo que propone queda en una lista para revisar. Nada se cambia hasta que lo apliques.",
-  },
-  boton: (a, desmarcadas) => textoDelBoton((a.operaciones?.length ?? 0) - desmarcadas.size),
-};
+/**
+ * Los rótulos del cajón. La caja de la lista dice «N cambios para aplicar» y, aplicada, «Aplicado» (el desenlace de
+ * abajo dice «Listo: …»): un solo resumen, no tres (validación 104). Desde la guía, el estado vacío habla de la guía.
+ */
+function rotulosDelChat(desdeLaGuia: boolean): RotulosDelChat {
+  return {
+    alDestino: "a esta cuenta",
+    vacio: {
+      intro: desdeLaGuia ? "Pídele lo que quieras cambiar en la guía. Por ejemplo:" : "Pregúntale lo que Nexus sabe de esta cuenta, o cuéntale lo que pasó. Por ejemplo:",
+      cierre: "Lo que propone queda en una lista: nada se cambia hasta que la apliques.",
+    },
+    boton: (a, desmarcadas) => textoDelBoton((a.operaciones?.length ?? 0) - desmarcadas.size),
+    lista: { titulo: tituloDeLaLista, aplicada: "Aplicado" },
+  };
+}
 
 interface Resumen {
   acciones: AccionSugerida[];
@@ -142,6 +149,8 @@ export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clie
   );
 
   const acciones = resumen?.acciones ?? [];
+  const desdeLaGuia = chip?.tipo === "guia";
+  const rotulos = useMemo(() => rotulosDelChat(desdeLaGuia), [desdeLaGuia]);
 
   return (
     <>
@@ -244,8 +253,8 @@ export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clie
           abierto={abierto}
           onClose={() => setAbierto(false)}
           onAplicar={onAplicar}
-          aviso={avisoDelChat(nombre, resumen?.uso.linea ?? null)}
-          rotulos={ROTULOS}
+          aviso={avisoDelChat(nombre, resumen?.uso.linea ?? null, desdeLaGuia)}
+          rotulos={rotulos}
           ancho={ancho}
           onAncho={() => setAncho((a) => (a === "amplio" ? "normal" : "amplio"))}
           borrador={borrador}

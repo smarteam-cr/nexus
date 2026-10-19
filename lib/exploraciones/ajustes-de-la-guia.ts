@@ -226,6 +226,39 @@ export function aplicarCambioDeLaGuia(antes: AjustesDeLaGuia | undefined, cambio
   }
 }
 
+/**
+ * Lo que deshace «Borrar» de una pregunta (el ⋯ de cada pregunta, validación 104). Una propia se vuelve a agregar con su
+ * mismo id (su casilla «hecha» y su nota siguen ahí); una de la guía cambiada vuelve con su cambio; una de la guía sin
+ * cambiar, a la de la guía.
+ */
+export function deshacerElBorrado(p: Pick<PreguntaParaMostrar, "para" | "paso" | "tipo" | "pregunta" | "repreguntas" | "marca" | "apunta" | "cambiada">): CambioDeLaGuia {
+  if (p.tipo === "propia" && esPropia(p.para)) {
+    const para = p.apunta?.para;
+    return {
+      tipo: "agregar",
+      pregunta: { id: p.para.slice(PREFIJO_PROPIA.length), pregunta: p.pregunta, repreguntas: [...p.repreguntas], ...(para ? { para } : {}), origen: p.marca === "asistente" ? "asistente" : "tuya" },
+    };
+  }
+  const clave = claveDePregunta(p);
+  if (p.cambiada) return { tipo: "cambiar", clave, pregunta: p.pregunta, repreguntas: [...p.repreguntas], origen: p.marca ?? "tuya" };
+  return { tipo: "restaurar", clave };
+}
+
+// ── La línea de la lista del chat ─────────────────────────────────────────────
+
+const recortado = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
+
+/**
+ * La línea que lee la persona en la lista del chat cuando el asistente cambia una pregunta: la pregunta nueva y, si
+ * cambian, las repreguntas nuevas con sus palabras (validación 104: «sus repreguntas» a secas no dejaba revisar nada).
+ */
+export function lineaDelCambio(c: { sesion: number; numero: number; tema: string | null; pregunta?: string; repreguntas?: readonly string[] }): string {
+  const cual = `la ${c.numero}${c.tema ? ` (${c.tema})` : ""}`;
+  const reps = c.repreguntas?.length ? c.repreguntas.map((r) => `«${recortado(r, 70)}»`).join(" · ") : null;
+  if (c.pregunta) return `Guía de la sesión ${c.sesion}: cambiar ${cual} por «${recortado(c.pregunta, 90)}»${reps ? `, con las repreguntas ${reps}` : ""}`;
+  return `Guía de la sesión ${c.sesion}: en ${cual}, ${reps ? `las repreguntas ${reps}` : "sin repreguntas"}`;
+}
+
 // ── Sin la cita adelante ──────────────────────────────────────────────────────
 
 /** Una oración que repite lo que dijo el cliente antes de preguntar («Dijiste que…», «En el diagnóstico marcaron…»). */

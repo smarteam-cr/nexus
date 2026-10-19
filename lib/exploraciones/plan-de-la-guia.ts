@@ -271,6 +271,19 @@ export const PREGUNTA_DEL_PASO: Record<Exclude<PasoDeLaPregunta, "situacion">, s
 };
 
 /**
+ * Las repreguntas de la pregunta de respaldo, por paso (validación 104, 2026-10-18). Antes la de respaldo iba sin
+ * repreguntas: en Distribuidora Larce la 2 (1.1, Procesos y Rutinas) tenía 0 porque el agente no había escrito una del
+ * paso que tocaba, y el asistente no podía mejorar «sus repreguntas». Cada una baja un paso más, hacia un número.
+ */
+export const REPREGUNTAS_DEL_PASO: Record<PasoDeLaPregunta, readonly string[]> = {
+  situacion: ["¿Me cuentas la última vez que pasó?", "¿Por qué crees que pasa?", "¿Cuántas veces al mes pasa, más o menos?"],
+  impacto: ["¿Cuántos negocios o clientes se perdieron por esto?", "¿Cuántas horas a la semana se van en eso?", "¿Cuánto representa en plata, más o menos?"],
+  solucion: ["¿Qué tendría que pasar para decir que quedó resuelto?", "¿Qué intentaron y por qué no funcionó?", "¿Quién más tiene que estar de acuerdo con eso?"],
+  cuando: ["¿Qué pasa si no está para esa fecha?", "¿Hay algo que marque esa fecha?", "¿Qué tendría que estar listo antes?"],
+  conQue: ["¿Quién más participa en la decisión?", "¿Contra qué lo van a comparar?", "¿Hay un monto que ya tengan en mente?"],
+};
+
+/**
  * La pregunta que arma el código cuando el agente no escribió una que sirva: la del paso que toca, sin repetir lo que
  * dijo el cliente (eso va en el ⓘ). Sin nada dicho, o en situación, la pregunta de base del tema.
  */
