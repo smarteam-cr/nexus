@@ -7,9 +7,11 @@
  * estira si hay reuniones antes o después). Cada reunión es un botón: tocarla abre su panel al costado. Tocar una hora libre (o «+ Crear evento», que
  * busca la primera hora libre en horario laboral) deja ahí un borrador de una hora, con su cuadro para el título, los
  * invitados y la cuenta; «Abrir en Google Calendar» lo abre configurado y la persona lo guarda allá. Nexus no escribe en
- * el calendario. Los huecos libres de hoy (una hora o más, en horario laboral) van punteados en azul, cada uno con la
- * tarea tuya más importante que cabe ahí («Con qué avanzar», lib/mi-dia/inicio.ts › conQueAvanzar), en el día y en
- * la columna de hoy de la semana.
+ * el calendario. Los espacios libres (una hora o más, en horario laboral) van punteados en azul, cada uno con la
+ * tarea tuya más importante que cabe ahí («Con qué avanzar», lib/mi-dia/inicio.ts › conQueAvanzar): los de hoy y, desde
+ * el 2026-10-19, los de los días que vienen en lo que se ve. Al tocar un espacio, el borrador trae «Con qué usar este
+ * espacio» (lib/mi-dia/espacio-libre.ts): tus tareas que caben, la reunión con una cuenta sin reunión y el siguiente
+ * paso, que lo llenan con un clic.
  *
  * Segunda vuelta (2026-10-17, noche): ‹ ›, «Hoy» y Día ↔ Semana se mueven sin volver a pedir la página
  * (agenda-navegable.ts); la agenda es de lunes a viernes (lib/mi-dia/agenda-dias.ts); tocar afuera, la X o Escape suelta
@@ -21,6 +23,7 @@ import { Segmentado } from "@/components/ui";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
 import { grillaDelDia, horaCR, instante, lineaDeAhora, minutoDelDia, type ConQueAvanzar, type EventoEnLaGrilla } from "@/lib/mi-dia/inicio";
 import { MINUTOS_DEL_BORRADOR, sePisan, tituloDelBorrador, type BorradorDeEvento } from "@/lib/mi-dia/agenda-borrador";
+import { finDelEspacio, sugerenciasParaElEspacio, type ParaSugerirEnElEspacio } from "@/lib/mi-dia/espacio-libre";
 import type { AgendaDeHoy, ReunionDeLaAgenda } from "@/lib/mi-dia/agenda-server";
 import { diaDeEntradaDeLaAgenda, diaQueSeVe, diasDeLaGrilla, esFinDeSemana, pasoDeLaAgenda, type VistaDeLaAgenda } from "@/lib/mi-dia/agenda-dias";
 import { ENLACE_BOTON, TARJETA, TITULO } from "./piezas";
@@ -55,7 +58,7 @@ const fechaCorta = (ymd: string) => `${Number(ymd.slice(8, 10))} ${MESES_CORTOS[
 
 export type ReunionElegible = ReunionDeLaAgenda;
 
-/** Un hueco libre de hoy, con su id en la grilla y la tarea con que avanzar (si alguna cabe). */
+/** Un espacio libre, con su id en la grilla y la tarea con que avanzar (si alguna cabe). */
 export interface HuecoDeLaAgenda {
   id: string;
   inicio: string;
@@ -94,6 +97,7 @@ export default function AgendaDelInicio({
   seleccion,
   onElegir,
   huecos,
+  paraSugerir,
 }: {
   agenda: AgendaQueSeVe;
   /** Se está leyendo el calendario del día (o la semana) nuevo. */
@@ -107,6 +111,8 @@ export default function AgendaDelInicio({
   seleccion: string | null;
   onElegir: (id: string) => void;
   huecos: readonly HuecoDeLaAgenda[];
+  /** Con qué sugerir llenar un borrador que se dejó en una hora libre. Sin esto, el borrador va sin sugerencias. */
+  paraSugerir?: ParaSugerirEnElEspacio;
 }) {
   const { vista, dia, datos: agenda } = vistaActual;
   const borradores = useBorradores(correo);
@@ -117,8 +123,7 @@ export default function AgendaDelInicio({
   useEffect(() => fijarEventosDeLaAgenda(eventos), [eventos]);
   // «Planificar acción» (la cartera) sabe si hay una agenda donde mostrar el borrador.
   useEffect(() => anunciarAgenda(), []);
-  // Un borrador tapa el hueco libre que se pisa con él (ya se está usando). Los huecos son de hoy: en la semana van en
-  // su columna.
+  // Un borrador tapa el espacio libre que se pisa con él (ya se está usando).
   const huecosVisibles = useMemo(() => huecos.filter((h) => !borradores.lista.some((b) => sePisan(b, h))), [huecos, borradores.lista]);
   const huecoPorId = useMemo(() => new Map(huecosVisibles.map((h) => [h.id, h])), [huecosVisibles]);
   // La grilla se calcula una vez por cambio de lo que se ve (no en cada render del inicio).
@@ -136,6 +141,11 @@ export default function AgendaDelInicio({
   const porId = useMemo(() => new Map(agenda.reuniones.map((r) => [r.id, r])), [agenda.reuniones]);
   const borradorPorId = new Map(borradores.lista.map((b) => [ID_DEL_BORRADOR + b.id, b]));
   const editando = borradores.editando ? (borradores.lista.find((b) => b.id === borradores.editando) ?? null) : null;
+  // Las sugerencias del borrador que se está editando, para el espacio donde quedó (hasta la próxima reunión de ese día).
+  const sugerencias = useMemo(() => {
+    if (!editando || !paraSugerir || editando.origen !== "agenda" || editando.abierto) return [];
+    return sugerenciasParaElEspacio({ inicio: editando.inicio, fin: finDelEspacio(eventos, editando.inicio, editando.fin), hoyISO, ...paraSugerir });
+  }, [editando, paraSugerir, eventos, hoyISO]);
 
   // ‹ ›, «Hoy» y la vista: a dónde lleva cada uno (para ir y para adelantar la lectura al pasar el mouse).
   const anterior = pasoDeLaAgenda(vista, dia, -1);
@@ -234,7 +244,7 @@ export default function AgendaDelInicio({
         <>
           <p className="text-[13px] text-fg-muted">{SIN_AGENDA[agenda.estado]}</p>
           {/* Sin la grilla, el borrador que dejó «Agendar» se ve igual: nunca se abre Calendar sin verlo antes. */}
-          {editando && <BorradorDelEvento b={editando} onCerrar={() => soltarBorrador(editando.id)} />}
+          {editando && <BorradorDelEvento b={editando} sugerencias={sugerencias} onCerrar={() => soltarBorrador(editando.id)} />}
         </>
       ) : (
         <div className={cn("relative pt-2 transition-opacity", cargando && "opacity-60")} aria-busy={cargando}>
@@ -294,6 +304,7 @@ export default function AgendaDelInicio({
                           editando ? (
                             <BorradorDelEvento
                               b={b}
+                              sugerencias={sugerencias}
                               onCerrar={() => soltarBorrador(b.id)}
                               className={cn("absolute", vista === "semana" ? (i >= 3 ? "right-full mr-1.5" : "left-full ml-1.5") : "right-2")}
                             />
@@ -330,7 +341,7 @@ export default function AgendaDelInicio({
           ? vista === "semana"
             ? "No tienes reuniones esta semana. Toca una hora para crear un evento: se guarda en Google Calendar."
             : "No tienes reuniones este día. Toca una hora para crear un evento: se guarda en Google Calendar."
-          : "Toca una reunión para ver su guía, o una hora libre para crear un evento. Se guarda y se mueve en Google Calendar."}
+          : "Toca una reunión para ver su guía, o un espacio libre para ver con qué usarlo y crear un evento. Se guarda y se mueve en Google Calendar."}
       </p>
     </section>
   );
@@ -364,7 +375,7 @@ function Evento({
   const titulo = hueco
     ? hueco.avanzar
       ? `Avanza T-${hueco.avanzar.tarea.numero} · ${hueco.avanzar.tarea.titulo}`
-      : "Hueco libre"
+      : "Espacio libre"
     : reunion!.empresas.length === 1
       ? `${reunion!.titulo} · ${reunion!.nombres[reunion!.empresas[0]]}`
       : reunion!.titulo;

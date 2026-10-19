@@ -6,6 +6,10 @@
  * Título, hora, duración, a quién invitar (los contactos de HubSpot de las cuentas que ves, buscando por nombre o
  * empresa) y la cuenta. «Abrir en Google Calendar» abre el evento ya configurado en la cuenta de Google de la persona:
  * ella lo guarda allá y Google manda la invitación. Nexus no escribe en el calendario.
+ *
+ * Arriba, si se dejó en una hora libre, «Con qué usar este espacio» (2026-10-19, lib/mi-dia/espacio-libre.ts): tus
+ * tareas que caben, la reunión con una cuenta que no la tiene y el siguiente paso. Una sugerencia llena el título, la
+ * cuenta, los invitados y la duración con un clic; todo sigue editable.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -26,6 +30,7 @@ import {
   type ContactoParaAgendar,
   type ResultadoParaAgendar,
 } from "@/lib/mi-dia/agenda-borrador";
+import { usaLaSugerencia, type SugerenciaDelEspacio } from "@/lib/mi-dia/espacio-libre";
 import { cambiarBorrador, editarBorrador, quitarBorrador, yaLoGuarde } from "./borradores";
 import { useToast } from "@/components/ui/Toast";
 
@@ -49,9 +54,12 @@ export default function BorradorDelEvento({
   className,
   onGuardado,
   onCerrar,
+  sugerencias = [],
 }: {
   b: BorradorDeEvento;
   className?: string;
+  /** Con qué llenar el espacio (solo para un borrador que se dejó en una hora libre). */
+  sugerencias?: readonly SugerenciaDelEspacio[];
   /** La X y Escape. Sin esto, solo se cierra el cuadro; la agenda lo usa para soltar el borrador (borrarlo). */
   onCerrar?: () => void;
   /** Después de «Ya lo guardé» (ya se quitó el borrador): «Planifica tu semana» lo usa para mostrarla agendada. */
@@ -125,6 +133,20 @@ export default function BorradorDelEvento({
     });
     setQ("");
   };
+  const usar = (s: SugerenciaDelEspacio) => {
+    cambiarBorrador(b.id, (x) => ({
+      titulo: s.titulo,
+      cuenta: s.cuenta ?? (s.tipo === "tarea" ? null : x.cuenta),
+      // La reunión con una cuenta invita a quienes estuvieron en la última; una tarea es tiempo tuyo, sin invitados.
+      invitados: s.invitados.length
+        ? s.invitados.map((correo) => ({ correo, nombre: null, clientId: s.cuenta?.id ?? null }))
+        : s.tipo === "tarea"
+          ? []
+          : x.invitados,
+      tarea: s.tarea,
+      ...(s.minutos ? { fin: conDuracion(x, s.minutos).fin } : {}),
+    }));
+  };
   const invitarCorreo = (correo: string) => {
     cambiarBorrador(b.id, { invitados: conInvitado(b.invitados, { correo, nombre: null, clientId: null }) });
     setQ("");
@@ -156,6 +178,41 @@ export default function BorradorDelEvento({
           ×
         </button>
       </div>
+
+      {sugerencias.length > 0 && !b.abierto && (
+        <div className="flex flex-col gap-1.5 rounded-lg border border-info-line bg-info-surface p-2.5">
+          <p className={cn(ROTULO_DEL_SISTEMA, "flex items-center gap-1.5 text-brand")}>
+            <IconoDeSugerencia className="h-3 w-3" />
+            Con qué usar este espacio
+          </p>
+          <ul className="flex flex-col">
+            {sugerencias.map((s) => {
+              const usada = usaLaSugerencia(b, s);
+              return (
+                <li key={s.clave} className="flex items-center gap-2 border-t border-info-line py-1.5 first:border-t-0">
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[13px] font-medium text-fg" title={s.texto}>
+                      {s.texto}
+                    </span>
+                    <span className="text-xs leading-4 text-fg-secondary">{s.porque}</span>
+                  </div>
+                  {usada ? (
+                    <span className="flex-none text-xs font-medium text-brand">✓ Usando</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => usar(s)}
+                      className="flex-none rounded-md border border-line bg-surface px-2 py-0.5 text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg"
+                    >
+                      Usar
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       <Input
         ref={titulo}

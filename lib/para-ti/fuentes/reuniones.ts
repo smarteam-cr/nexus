@@ -22,7 +22,7 @@ import { sumarDias, vencioSinRevisar } from "@/lib/lo-propuesto/ciclo";
 import { PLAZO_PARA_REVISAR_DIAS } from "@/lib/lo-propuesto/tipos";
 import { DESTINOS } from "@/lib/seguimiento/destinos";
 import { novedadesPorDecidirPorReunion } from "@/lib/seguimiento/novedades-server";
-import { loQuePideDecision } from "@/lib/seguimiento/tarjeta";
+import { loQuePideDecision, loQuePideDecisionEnPalabras } from "@/lib/seguimiento/tarjeta";
 import { clientesQueNoAbre } from "@/lib/auth/access";
 import { plural } from "../armar";
 import type { Alcance } from "../alcance-server";
@@ -155,12 +155,7 @@ export const LO_QUE_DEJARON_TUS_REUNIONES: Fuente = {
           desde: r.fecha,
         };
       }
-      const que: string[] = [];
-      if (partes.tareas) que.push(plural(partes.tareas, "tarea para ti", "tareas para ti"));
-      if (partes.minuta) que.push("la minuta");
-      if (partes.pedidos) que.push(plural(partes.pedidos, "pedido fuera de alcance", "pedidos fuera de alcance"));
-      if (partes.campos) que.push(plural(partes.campos, "dato de la información del cliente", "datos de la información del cliente"));
-      if (partes.novedades) que.push(plural(partes.novedades, "novedad para los documentos", "novedades para los documentos"));
+      const que = loQuePideDecisionEnPalabras(partes);
       return {
         clave: `reuniones-por-revisar-lo-que-dejaron:${r.sessionId}`,
         fuente: "reuniones-por-revisar-lo-que-dejaron",
@@ -168,9 +163,9 @@ export const LO_QUE_DEJARON_TUS_REUNIONES: Fuente = {
         delAgente: true,
         clientId: r.clientId,
         titulo: `Revisa lo que dejó «${r.titulo}»`,
-        detalle: `Nexus propuso ${plural(n, "cosa", "cosas")} al leerla: ${que.join(", ")}. Lo que nadie revisa en 30 días deja de pedirse.`,
+        detalle: `${plural(n, "cosa pide", "cosas piden")} tu decisión: ${que.join(", ")}. Lo que nadie revisa en 30 días deja de pedirse.`,
         meta: empresa ? `Reuniones · ${empresa}` : "Reuniones",
-        accion: "Revisarla",
+        accion: "Revisar sesión",
         href: urlDeLoQueDejo(r.sessionId),
         desde: r.fecha,
       };

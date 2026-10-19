@@ -162,7 +162,7 @@ export function marcasDeServicio(e: EstadoDeServicio, hoyISO: string): { accion:
 }
 
 /**
- * El pendiente «Cuenta sin acción» de una cuenta, o null si está al día. Con lo que falta en la línea chica y qué
+ * El pendiente «Cuenta sin acción» de una cuenta, o null si está al día. Con lo que falta en el título y qué
  * hacer en el botón: sin reunión → «Agendar» (abre Google Calendar con todo lleno: título, invitados y, si se sabe, la
  * primera hora libre en horario laboral, `hueco`); con reunión y sin acción → crear la tarea en la ficha de la cuenta.
  */
@@ -182,15 +182,20 @@ export function pendienteDeCuentaSinAccion(
   const sinAccion = e.falta.includes("accion");
   const sinReunion = e.falta.includes("reunion");
   const ultima = o.ultimaReunion ? `la última reunión fue el ${diaCorto(o.ultimaReunion)}` : "no hay reuniones registradas con la cuenta";
-  const que = sinAccion && sinReunion ? "Sin acción ni reunión" : sinAccion ? "Sin acción esta semana" : `Sin reunión en ${DIAS_PARA_LA_REUNION} días`;
-  const titulo = sinReunion
-    ? `Nada agendado en los próximos ${DIAS_PARA_LA_REUNION} días; ${ultima}`
-    : `Tiene reunión ${cuandoEsLaReunion(e.reunion!.inicio, o.hoyISO)}, pero ninguna tarea con fecha esta semana`;
-  const detalle = sinAccion && sinReunion
-    ? "Agenda la próxima reunión y deja una tarea con fecha esta semana."
-    : sinAccion
-      ? "Deja una tarea con fecha esta semana: lo que vas a hacer con la cuenta."
-      : "Agenda la próxima reunión: Google Calendar abre con el título y los invitados.";
+  // Lo que falta va en el título, con la empresa adelante, como lo demás de «Lo que importa hoy»: en la línea gris de
+  // arriba no se encontraba (Elías, 2026-10-19). Debajo, por qué y qué hacer.
+  const que = sinAccion && sinReunion ? "sin acción ni reunión" : sinAccion ? "sin acción esta semana" : `sin reunión en ${DIAS_PARA_LA_REUNION} días`;
+  const titulo = `${cuenta.empresa}: ${que}`;
+  const porque = sinReunion
+    ? `Nada agendado en los próximos ${DIAS_PARA_LA_REUNION} días; ${ultima}.`
+    : `Tiene reunión ${cuandoEsLaReunion(e.reunion!.inicio, o.hoyISO)}, pero ninguna tarea con fecha esta semana.`;
+  const queHacer =
+    sinAccion && sinReunion
+      ? "Agenda la próxima reunión y deja una tarea con fecha esta semana."
+      : sinAccion
+        ? "Deja una tarea con fecha esta semana: lo que vas a hacer con la cuenta."
+        : "Agenda la próxima reunión: Nexus la arma en tu agenda y la abres en Google Calendar.";
+  const detalle = `${porque} ${queHacer}`;
   const href = sinReunion
     ? enlaceParaAgendarEnCalendar({
         titulo: `Reunión con ${cuenta.empresa}`,
@@ -209,7 +214,7 @@ export function pendienteDeCuentaSinAccion(
     clientId: cuenta.clientId,
     titulo,
     detalle,
-    meta: `${cuenta.empresa} · ${que}`,
+    meta: `${cuenta.empresa} · Cuenta sin acción`,
     accion: sinReunion ? "Agendar" : "Crear la acción",
     href,
     desde: o.ultimaReunion,

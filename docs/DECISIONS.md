@@ -9354,3 +9354,30 @@ resumen, y al aplicar repetía cada línea. Plan: `docs/chat-fluido-plan.md`.
   su `AgentRun` (`tiempos`).
 - **Sin streaming, por ahora.** En el caso común el turno es una sola llamada; el streaming pide cambiar la ruta y el
   cajón que comparten los tres chats. Es lo siguiente si sigue sintiéndose lento.
+
+## «Para ti» después de probarlo: el espacio libre y la sesión (2026-10-19)
+
+**Contexto.** Elías probó «Para ti» (pruebas 7, 8 y 78 del roadmap): no encontró «Sin acción ni reunión», el «Hueco
+libre» no aparecía un fin de semana y, al tocar una hora libre, solo se podía crear un evento vacío. Y el panel de una
+reunión del calendario y la página de la sesión mostraban lo mismo con piezas que competían.
+
+- **Lo que falta va en el título** («Fundauna: sin acción ni reunión»), con la empresa adelante como lo demás de «Lo que
+  importa hoy»; debajo, por qué y qué hacer. Antes estaba solo en la línea gris de arriba.
+- **«Espacio libre», no «hueco libre»**, y no solo hoy: también los días que vienen de lo que muestra la agenda, desde
+  las 8:00 y como mucho dos por día (`espaciosLibres`, lib/mi-dia/inicio.ts). La agenda sigue siendo de lunes a viernes
+  («La agenda, segunda vuelta»): un fin de semana muestra la semana que viene, con sus espacios.
+- **«Con qué usar este espacio»** (lib/mi-dia/espacio-libre.ts, sin IA): al tocar un espacio libre o una hora libre,
+  Nexus sugiere hasta cinco cosas, una por cuenta: tus tareas que caben (en el orden de «Con qué avanzar»), la reunión
+  con una cuenta tuya sin reunión en 8 días (con los invitados de su última) y el siguiente paso (el de Ventas de un
+  negocio que cierra pronto, o la acción de la semana de una cuenta que no la tiene). «Usar» llena el borrador (título,
+  cuenta, invitados, duración); todo sigue editable y nada se guarda hasta Google Calendar.
+- **El panel de la reunión resume; la página de la sesión decide.** El panel dice cuántas cosas piden tu decisión y
+  cuáles, el siguiente paso de tu equipo y «Revisar sesión». Se fueron su «Usar todo», su «Usar como siguiente paso» y
+  su «Escribir en HubSpot»: la página tiene todo eso. Usar ahí una de tus tareas de la reunión la vuelve tu siguiente
+  paso (el siguiente paso es una tarea). Una reunión que ya pasó y no deja nada por decidir, o una interna, igual
+  enlaza a su sesión.
+- **Mismos números y mismas palabras** en «Lo que importa hoy», el panel y la tarjeta de la página: salen de la misma
+  tarjeta (`Tarjeta.desglose`) y de una sola redacción (`loQuePideDecisionEnPalabras`, lib/seguimiento/tarjeta.ts).
+  El botón de la línea de una reunión dice «Revisar sesión».
+- **Lo que no cambió:** el aviso de una reunión prometida no sale si la reunión ya está en el calendario de quien lleva
+  la cuenta (Accesos Automáticos: la demo del 21 oct está agendada), y una reunión interna no avisa (desde el 18 oct).

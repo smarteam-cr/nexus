@@ -11,6 +11,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import type { AppUserWithTeamMember } from "@/lib/auth/supabase";
 import { cargarTarjeta } from "@/lib/seguimiento/tarjeta-server";
+import { loQuePideDecisionEnPalabras } from "@/lib/seguimiento/tarjeta";
 import { pasosVigentes } from "@/lib/siguiente-paso/lectura-server";
 import { equipoDelRol, type SiguientePasoVisto } from "@/lib/siguiente-paso/reglas";
 import type { EquipoDelSiguientePaso } from "@/lib/siguiente-paso/propiedades";
@@ -30,6 +31,8 @@ export interface DespuesDeLaReunion {
   esProspecto: boolean;
   /** Lo que se decide en la tarjeta (la minuta, los pedidos, los campos de la ficha y tus tareas). */
   pideDecision: number;
+  /** Lo mismo en palabras («3 tareas para ti, la minuta»): la misma redacción que «Lo que importa hoy». */
+  queDejo: string[];
   minutaPorRevisar: boolean;
   tareasPropuestas: number;
   pedidos: number;
@@ -94,6 +97,7 @@ async function despuesDe(
     empresa: t.reunion.empresa.nombre,
     esProspecto: t.esProspecto,
     pideDecision: t.pideDecision,
+    queDejo: loQuePideDecisionEnPalabras(t.desglose),
     minutaPorRevisar: !!t.secciones.minuta && t.secciones.minuta.estado === "pendiente",
     tareasPropuestas: tareasPendientes.length,
     pedidos: t.secciones.fueraDeAlcance.items.filter((p) => p.estado === "pendiente").length,
@@ -106,6 +110,20 @@ async function despuesDe(
       : null,
     notaParaHubspot: t.secciones.notaParaHubspot?.estado === "pendiente" ? t.secciones.notaParaHubspot.sugerida : null,
   };
+}
+
+/**
+ * La sesión de Nexus de un evento del calendario que ya pasó (`gmeet_<evento>` o su `googleEventId`), o null si todavía
+ * no llegó. El panel de la agenda la enlaza («Revisar sesión») aunque no deje nada por decidir: ahí se leen la minuta y
+ * las tareas. La página tiene su propia regla de acceso.
+ */
+export async function sesionDelEvento(eventoId: string): Promise<string | null> {
+  const fila = await prisma.firefliesSession.findFirst({
+    where: { OR: [{ id: `gmeet_${eventoId}` }, { googleEventId: eventoId }] },
+    orderBy: { date: "desc" },
+    select: { id: true },
+  });
+  return fila?.id ?? null;
 }
 
 /**

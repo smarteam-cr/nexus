@@ -13,8 +13,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
-import { conQueAvanzar, huecosLibres, type PedazoDeFrase, type TareaParaUnHueco, type VarianteDelInicio } from "@/lib/mi-dia/inicio";
-import { lunesDeLaAgenda } from "@/lib/mi-dia/agenda-dias";
+import { conQueAvanzar, espaciosLibres, type PedazoDeFrase, type TareaParaUnHueco, type VarianteDelInicio } from "@/lib/mi-dia/inicio";
+import { diasDeLaGrilla } from "@/lib/mi-dia/agenda-dias";
+import type { ParaSugerirEnElEspacio } from "@/lib/mi-dia/espacio-libre";
 import { invitacionAPlanificar } from "@/lib/mi-dia/planificar";
 import type { Cifra, MovimientoDeVentas } from "@/lib/mi-dia/cifras";
 import type { AgendaDeHoy } from "@/lib/mi-dia/agenda-server";
@@ -48,7 +49,7 @@ export interface DatosDelInicio {
   movimiento: { lista: MovimientoDeVentas[]; total: number; verPipeline: string } | null;
   /** La reunión que se abre sola (la próxima con un cliente), o null. */
   abrirDeEntrada: string | null;
-  /** Tus tareas abiertas que pueden ir a un hueco libre de hoy («Con qué avanzar»). */
+  /** Tus tareas abiertas que pueden ir a un espacio libre («Con qué avanzar»). */
   paraLosHuecos: TareaParaUnHueco[];
 }
 
@@ -63,14 +64,32 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
 
   const { agenda, cargando, ir, precargar } = useAgendaNavegable(d.agenda, d.correo);
   const reuniones = useMemo(() => (agenda?.datos.estado === "ok" ? agenda.datos.reuniones : []), [agenda]);
-  // Los huecos libres de hoy (una hora o más, en horario laboral), cada uno con la tarea más importante que cabe. Se ven
-  // en el día de hoy y en la columna de hoy de su semana.
+  // Los espacios libres (una hora o más, en horario laboral) de hoy y de los días que vienen en lo que se ve, cada uno con
+  // la tarea más importante que cabe (2026-10-19: antes solo hoy, y un fin de semana no había ninguno que tocar).
   const huecos = useMemo(() => {
-    if (!agenda || agenda.dia !== (agenda.vista === "semana" ? lunesDeLaAgenda(d.hoyISO) : d.hoyISO)) return [];
-    const libres = huecosLibres(reuniones, d.hoyISO, ahora).filter((h) => !descartados.has(h.inicio));
+    if (!agenda) return [];
+    const libres = espaciosLibres(reuniones, diasDeLaGrilla(agenda.vista, agenda.dia), d.hoyISO, ahora).filter((h) => !descartados.has(h.inicio));
     const avanzar = conQueAvanzar(d.paraLosHuecos, libres, d.hoyISO);
     return libres.map((h) => ({ ...h, id: ID_DEL_HUECO + h.inicio, avanzar: avanzar.get(h.inicio) ?? null }));
   }, [agenda, reuniones, d.hoyISO, ahora, descartados, d.paraLosHuecos]);
+  // Con qué llenar un espacio (lib/mi-dia/espacio-libre.ts): tus tareas, la reunión con una cuenta tuya que no la tiene
+  // y el siguiente paso. La CSL ve toda la cartera: solo se le sugieren las cuentas que no lleva nadie.
+  const paraSugerir = useMemo<ParaSugerirEnElEspacio>(
+    () => ({
+      tareas: d.paraLosHuecos,
+      cuentas: d.cuentas
+        .filter((c) => c.servicio && (d.variante !== "csl" || !c.lleva))
+        .map((c) => ({
+          clientId: c.clientId,
+          empresa: c.empresa,
+          sinReunion: c.servicio!.falta.includes("reunion") && c.servicio!.calendarioLeido,
+          sinAccion: c.servicio!.falta.includes("accion"),
+          invitados: c.servicio!.invitados,
+        })),
+      negocios: (d.movimiento?.lista ?? []).map((n) => ({ clientId: n.clientId, empresa: n.empresa, paso: n.paso })),
+    }),
+    [d.paraLosHuecos, d.cuentas, d.variante, d.movimiento],
+  );
   const huecoElegido = huecos.find((h) => h.id === elegida) ?? null;
   const loElegido: LoElegido | null = huecoElegido
     ? { tipo: "hueco", inicio: huecoElegido.inicio, fin: huecoElegido.fin, avanzar: huecoElegido.avanzar }
@@ -132,6 +151,7 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
                 seleccion={elegida}
                 onElegir={setElegida}
                 huecos={huecos}
+                paraSugerir={paraSugerir}
               />
             )}
             <LoQueImportaHoy medicion={d.medicion} />
@@ -199,6 +219,7 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
           hoyISO={d.hoyISO}
           ahora={ahora}
           correo={d.correo}
+          paraSugerir={paraSugerir}
           onCerrar={() => setElegida(null)}
           onDescartarHueco={() => {
             if (huecoElegido) setDescartados((s) => new Set([...s, huecoElegido.inicio]));

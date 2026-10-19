@@ -234,6 +234,9 @@
   con que se lee una empresa, por qué y qué cambia frente a la general.
 - **Camino de crecimiento**: qué sigue en la escala de cada área y por qué, con los casos de la biblioteca que lo
   mueven. Sale de reglas, sin IA.
+- **Espacio libre** (la agenda de «Para ti», desde el 2026-10-19; antes «hueco libre»): una hora o más sin reuniones,
+  de lunes a viernes de 8:00 a 17:00, punteada en azul. Al tocarlo, «Con qué usar este espacio»: tus tareas que caben,
+  la reunión con una cuenta sin reunión y el siguiente paso, que llenan el evento con un clic.
 - **Cuenta sin acción** («Para ti»): una cuenta con servicio activo sin una tarea con fecha esa semana o sin reunión
   agendada en los próximos 8 días. Le llega a quien la lleva.
 - **Preparación de una reunión** (`PreparacionDeReunion`): el objetivo y las notas que una persona escribe para una

@@ -7,9 +7,9 @@
  * Arriba, lo de Nexus una sola vez (la guía, en azul con la chispa): el objetivo y tres o cuatro puntos, sacados de los
  * datos de la cuenta sin IA. «Editar» deja escribir TU objetivo, que manda. Abajo, los hechos: quién viene, la última
  * vez, lo pendiente de los dos lados, el negocio y tus notas (las ves solo tú). Una reunión que ya pasó muestra lo que
- * dejó, con «Usar todo». El hueco libre dice de cuándo a cuándo está libre, con «Crear un evento aquí» (el borrador de la
- * agenda), «Bloquear en Calendar» y, si alguna cabe, la tarea tuya con que avanzar ahí («Ponerla en la agenda»: el
- * mismo borrador, con la tarea en la descripción del evento).
+ * dejó, con «Usar todo». El espacio libre dice de cuándo a cuándo está libre, con «Crear un evento aquí» (el borrador de
+ * la agenda), «Bloquear en Calendar» y «Con qué usar este espacio» (lib/mi-dia/espacio-libre.ts, sin IA): tus tareas que
+ * caben, la reunión con una cuenta que no la tiene y el siguiente paso; cada una deja el borrador lleno con un clic.
  *
  * Los datos los trae GET /api/para-ti/reunion/[evento] (pide acceso al cliente); TU objetivo y tus notas se guardan con
  * PUT en el mismo lugar.
@@ -24,10 +24,11 @@ import { enlaceAlDia, enlaceParaAgendarEnCalendar } from "@/lib/mi-dia/calendari
 import { horaCR, minutoDelDia, type ConQueAvanzar } from "@/lib/mi-dia/inicio";
 import type { PanelDeLaReunion as Panel } from "@/lib/mi-dia/panel-server";
 import type { ReunionDeLaAgenda } from "@/lib/mi-dia/agenda-server";
-import { ReunionDespues } from "../DespuesDeTusReuniones";
+import { hrefDeLaSesion, ReunionDespues } from "../DespuesDeTusReuniones";
 import { lineaDeLaReunion } from "./AgendaDelInicio";
 import { ENLACE_BOTON, Punto } from "./piezas";
 import { MINUTOS_DEL_BORRADOR } from "@/lib/mi-dia/agenda-borrador";
+import { sugerenciasParaElEspacio, type ParaSugerirEnElEspacio, type SugerenciaDelEspacio } from "@/lib/mi-dia/espacio-libre";
 import { crearBorrador } from "./borradores";
 
 const DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
@@ -46,6 +47,7 @@ export default function PanelDeLaReunion({
   hoyISO,
   ahora,
   correo,
+  paraSugerir,
   onCerrar,
   onDescartarHueco,
 }: {
@@ -53,6 +55,7 @@ export default function PanelDeLaReunion({
   hoyISO: string;
   ahora: Date;
   correo: string;
+  paraSugerir?: ParaSugerirEnElEspacio;
   onCerrar: () => void;
   onDescartarHueco: () => void;
 }) {
@@ -97,9 +100,9 @@ export default function PanelDeLaReunion({
         <div className="flex items-start justify-between gap-2.5">
           <div className="flex min-w-0 flex-col gap-1">
             <p className="text-xs text-fg-muted">
-              {r ? cuandoEs(r, hoyISO, ahora) : elegido.tipo === "hueco" ? `Hoy · ${horaCR(elegido.inicio)}–${horaCR(elegido.fin)}` : ""}
+              {r ? cuandoEs(r, hoyISO, ahora) : elegido.tipo === "hueco" ? cuandoEs({ inicio: elegido.inicio, fin: elegido.fin }, hoyISO, ahora) : ""}
             </p>
-            <h2 className="text-lg font-semibold leading-6 text-fg">{r ? r.titulo : "Hueco libre"}</h2>
+            <h2 className="text-lg font-semibold leading-6 text-fg">{r ? r.titulo : "Espacio libre"}</h2>
             <p className="text-[13px] text-fg-secondary">
               {r
                 ? empresa
@@ -117,7 +120,15 @@ export default function PanelDeLaReunion({
           </button>
         </div>
 
-        {elegido.tipo === "hueco" && <Hueco elegido={elegido} correo={correo} onCerrar={onCerrar} onDescartar={onDescartarHueco} />}
+        {elegido.tipo === "hueco" && (
+          <Hueco
+            elegido={elegido}
+            correo={correo}
+            sugerencias={paraSugerir ? sugerenciasParaElEspacio({ inicio: elegido.inicio, fin: elegido.fin, hoyISO, ...paraSugerir }) : []}
+            onCerrar={onCerrar}
+            onDescartar={onDescartarHueco}
+          />
+        )}
 
         {r && r.empresas.length > 1 && !empresa && (
           <div className="flex flex-col gap-2">
@@ -157,6 +168,7 @@ export default function PanelDeLaReunion({
                 <p className="text-[13px] leading-[19px] text-fg-secondary">
                   Reunión interna. Si es la reunión de tu sprint, Nexus propone en Tareas lo que se comprometió cada uno.
                 </p>
+                {datos?.panel?.sesionId && <EnlaceALaSesion sessionId={datos.panel.sesionId} />}
                 {/* Una por reunión: lo escrito antes de que lleguen tus notas guardadas no se pierde (ver `Notas`). */}
                 <Notas key={r.id} eventoId={r.id} panel={datos?.panel ?? null} futura={futura} />
               </>
@@ -179,52 +191,65 @@ export default function PanelDeLaReunion({
   );
 }
 
-function Hueco({ elegido, correo, onCerrar, onDescartar }: { elegido: Extract<LoElegido, { tipo: "hueco" }>; correo: string; onCerrar: () => void; onDescartar: () => void }) {
-  const a = elegido.avanzar;
+function Hueco({
+  elegido,
+  correo,
+  sugerencias,
+  onCerrar,
+  onDescartar,
+}: {
+  elegido: Extract<LoElegido, { tipo: "hueco" }>;
+  correo: string;
+  sugerencias: readonly SugerenciaDelEspacio[];
+  onCerrar: () => void;
+  onDescartar: () => void;
+}) {
+  // Una sugerencia deja el borrador lleno en este espacio y lo lleva a la vista; todo sigue editable ahí.
+  const usar = (s: SugerenciaDelEspacio) => {
+    crearBorrador({
+      correo,
+      inicio: elegido.inicio,
+      fin: new Date(Date.parse(elegido.inicio) + (s.minutos ?? MINUTOS_DEL_BORRADOR) * 60_000).toISOString(),
+      titulo: s.titulo,
+      cuenta: s.cuenta,
+      invitados: s.invitados.map((c) => ({ correo: c, nombre: null, clientId: s.cuenta?.id ?? null })),
+      tarea: s.tarea,
+      origen: "agenda",
+      enfocar: true,
+    });
+    onCerrar();
+  };
   return (
     <div className="flex flex-col gap-2.5 rounded-xl border border-info-line bg-info-surface p-3.5">
-      {a && (
+      {sugerencias.length > 0 && (
         <div className="flex flex-col gap-1.5 border-b border-info-line pb-2.5">
           <p className={cn(ROTULO_DEL_SISTEMA, "flex items-center gap-1.5 text-brand")}>
             <IconoDeSugerencia className="h-[13px] w-[13px]" />
-            Con qué avanzar
+            Con qué usar este espacio
           </p>
-          <p className="text-sm leading-[21px] text-fg">
-            <strong className="font-semibold">T-{a.tarea.numero}</strong> {a.tarea.titulo}
-            {a.tarea.empresa ? <span className="text-fg-secondary"> · {a.tarea.empresa}</span> : null}
-          </p>
-          <p className="text-xs text-fg-secondary">
-            Es la más importante de tus tareas que cabe en este hueco: {a.porque}.{" "}
-            {a.tarea.minutosEstimados != null ? `Estimaste ${a.minutos} min.` : "Sin estimar: se propone una hora."}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <BotonAzul
-              onClick={() => {
-                crearBorrador({
-                  correo,
-                  inicio: elegido.inicio,
-                  fin: new Date(Date.parse(elegido.inicio) + a.minutos * 60_000).toISOString(),
-                  titulo: `T-${a.tarea.numero} · ${a.tarea.titulo}`,
-                  cuenta: a.tarea.clientId && a.tarea.empresa ? { id: a.tarea.clientId, nombre: a.tarea.empresa } : null,
-                  tarea: { id: a.tarea.id, numero: a.tarea.numero },
-                  origen: "agendar",
-                  enfocar: true,
-                });
-                onCerrar();
-              }}
-            >
-              Ponerla en la agenda
-            </BotonAzul>
-            <Link href={`/tareas?t=${encodeURIComponent(a.tarea.id)}`} className={ENLACE_BOTON}>
-              Ver la tarea
-            </Link>
-          </div>
+          <ul className="flex flex-col">
+            {sugerencias.map((s, i) => (
+              <li key={s.clave} className="flex items-start gap-2.5 border-t border-info-line py-2 first:border-t-0 first:pt-0">
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="text-[13px] font-medium leading-[19px] text-fg">{s.texto}</span>
+                  <span className="text-xs leading-4 text-fg-secondary">{s.porque}</span>
+                  {s.tarea && (
+                    <Link href={`/tareas?t=${encodeURIComponent(s.tarea.id)}`} className="text-xs text-brand hover:text-brand-light">
+                      Ver la tarea
+                    </Link>
+                  )}
+                </div>
+                {i === 0 ? (
+                  <BotonAzul onClick={() => usar(s)}>Usar</BotonAzul>
+                ) : (
+                  <BotonBlanco onClick={() => usar(s)}>Usar</BotonBlanco>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
-      <p className={cn(ROTULO_DEL_SISTEMA, "flex items-center gap-1.5 text-brand")}>
-        <IconoDeSugerencia className="h-[13px] w-[13px]" />
-        Hueco libre
-      </p>
+      <p className={cn(ROTULO_DEL_SISTEMA, "text-brand")}>Espacio libre</p>
       <p className="text-sm leading-[21px] text-fg">
         Tienes libre de <strong className="font-semibold">{horaCR(elegido.inicio)}</strong> a <strong className="font-semibold">{horaCR(elegido.fin)}</strong>. Puedes poner un
         evento ahí o bloquear el tiempo en tu calendario.
@@ -256,13 +281,15 @@ function Contenido({ panel, futura, hoyISO }: { panel: Panel; futura: boolean; h
   return (
     <>
       <Guia panel={panel} />
-      {panel.loQueDejo && (
+      {panel.loQueDejo ? (
         <div className="flex flex-col gap-2">
           <p className={ROTULO_DEL_SISTEMA}>Lo que dejó</p>
           <ul>
             <ReunionDespues r={panel.loQueDejo} hoyISO={hoyISO} />
           </ul>
         </div>
+      ) : (
+        panel.sesionId && <EnlaceALaSesion sessionId={panel.sesionId} />
       )}
       {panel.vienen.length > 0 && (
         <div className="flex flex-col gap-2">
@@ -309,6 +336,19 @@ function Contenido({ panel, futura, hoyISO }: { panel: Panel; futura: boolean; h
       {/* También en una reunión que ya pasó: la nota sirve igual después (2026-10-17). */}
       <Notas key={panel.eventoId} eventoId={panel.eventoId} panel={panel} futura={futura} />
     </>
+  );
+}
+
+/** Una reunión que ya pasó y no dejó nada por decidir (o es interna): igual se llega a su página. */
+function EnlaceALaSesion({ sessionId }: { sessionId: string }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className={ROTULO_DEL_SISTEMA}>La sesión</p>
+      <p className="text-[13px] leading-[19px] text-fg-secondary">La minuta, la transcripción y las tareas que dejó están en la página de la sesión.</p>
+      <Link href={hrefDeLaSesion(sessionId)} className={cn(ENLACE_BOTON, "self-start")}>
+        Revisar sesión
+      </Link>
+    </div>
   );
 }
 

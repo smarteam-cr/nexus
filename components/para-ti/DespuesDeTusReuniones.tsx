@@ -1,24 +1,18 @@
 "use client";
 
 /**
- * DespuesDeTusReuniones — el paso de dos minutos después de cada reunión (etapa 4d de docs/mi-dia-plan.md). Desde la
- * ficha D (2026-10-17) se muestra dentro del panel de la reunión del inicio (components/para-ti/inicio), no como tarjeta.
+ * DespuesDeTusReuniones — lo que dejó una reunión con un cliente o un prospecto, en el panel de la reunión del inicio
+ * (components/para-ti/inicio; etapa 4d de docs/mi-dia-plan.md, dentro del panel desde la ficha D, 2026-10-17).
  *
- * Por cada reunión con un cliente o un prospecto en la que estuviste y que terminó en las últimas 36 horas: lo que dejó
- * (la minuta, tus tareas propuestas, los pedidos fuera de alcance) con «Usar todo», y el siguiente paso de tu equipo
- * sobre la cuenta. Si no hay, se propone la primera de tus tareas de esa reunión. Si nadie lo mira, igual queda como
- * borrador: la IA se usa desde el primer momento (DECISIONS «La IA como borrador»).
- *
- * «Usar todo» es el de la tarjeta (POST /api/sessions/[id]/lo-que-dejo). El siguiente paso es una tarea (fase 0.2):
- * «Usar como siguiente paso» usa la tarea propuesta (POST /api/tareas/[id]/decision) y la copia de cada hora la escribe en
- * HubSpot.
+ * Desde el 2026-10-19 es un RESUMEN que lleva a la página de la sesión: cuántas cosas piden tu decisión y cuáles (los
+ * mismos números y las mismas palabras que la tarjeta «Lo que dejó esta reunión» y que «Lo que importa hoy»: salen de
+ * la misma tarjeta, lib/seguimiento/tarjeta.ts), el siguiente paso de tu equipo y «Revisar sesión». Las decisiones
+ * (las tareas, la minuta, los pedidos, la nota para HubSpot) se toman en la página: antes el panel tenía su propio
+ * «Usar todo» y su «Usar como siguiente paso», que competían con la página y decían lo mismo con otras palabras.
+ * Usar una de tus tareas propuestas de la reunión la vuelve tu siguiente paso (el siguiente paso es una tarea, fase 0.2).
  */
 import Link from "next/link";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useToast } from "@/components/ui/Toast";
-import { BotonAzul, BotonBlanco, IconoDeSugerencia } from "@/components/ui/sistema";
-import { cn } from "@/lib/cn";
+import { IconoDeSugerencia } from "@/components/ui/sistema";
 import type { DespuesDeLaReunion } from "@/lib/mi-dia/despues-server";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -30,150 +24,50 @@ const cuando = (iso: string, hoyISO: string) => {
 };
 const fecha = (ymd: string) => `${Number(ymd.slice(8, 10))} ${MESES[Number(ymd.slice(5, 7)) - 1]}`;
 
-function queDejo(r: DespuesDeLaReunion): string {
-  const partes: string[] = [];
-  if (r.minutaPorRevisar) partes.push("la minuta por revisar");
-  if (r.tareasPropuestas) partes.push(`${r.tareasPropuestas} ${r.tareasPropuestas === 1 ? "tarea propuesta" : "tareas propuestas"} para ti`);
-  if (r.pedidos) partes.push(`${r.pedidos} ${r.pedidos === 1 ? "pedido fuera de alcance" : "pedidos fuera de alcance"}`);
-  if (r.notaParaHubspot) partes.push("la nota para HubSpot");
-  return partes.length ? `Dejó ${partes.join(", ")}.` : "No dejó nada para decidir.";
-}
+/** El enlace a la tarjeta de la sesión (la misma dirección que usa «Lo que importa hoy»). */
+export const hrefDeLaSesion = (sessionId: string) => `/sessions/${encodeURIComponent(sessionId)}#lo-que-dejo`;
 
 export function ReunionDespues({ r, hoyISO }: { r: DespuesDeLaReunion; hoyISO: string }) {
-  const router = useRouter();
-  const toast = useToast();
-  const [ocupado, setOcupado] = useState<null | "todo" | "paso" | "nota">(null);
-  const [usado, setUsado] = useState(false);
-  const [notaEscrita, setNotaEscrita] = useState(false);
   const pasoVencido = !!r.paso?.fecha && r.paso.fecha < hoyISO;
-  const proponer = !!r.equipo && !!r.sugerencia && (!r.paso || pasoVencido);
-
-  async function usarTodo() {
-    setOcupado("todo");
-    try {
-      const res = await fetch(`/api/sessions/${encodeURIComponent(r.sessionId)}/lo-que-dejo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ huella: r.huella }),
-      });
-      const j = (await res.json().catch(() => null)) as { error?: string } | null;
-      if (res.status === 409) {
-        toast.info("La reunión cambió desde que abriste «Para ti». Revísala.");
-        router.refresh();
-        return;
-      }
-      if (!res.ok) {
-        toast.error(j?.error ?? "No se pudo usar todo.");
-        return;
-      }
-      setUsado(true);
-      toast.success("Listo: quedó revisada.");
-      router.refresh();
-    } finally {
-      setOcupado(null);
-    }
-  }
-
-  async function usarComoPaso() {
-    if (!r.equipo || !r.sugerencia) return;
-    setOcupado("paso");
-    try {
-      const res = await fetch(`/api/tareas/${encodeURIComponent(r.sugerencia.id)}/decision`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ version: r.sugerencia.version, decision: { tipo: "usar" } }),
-      });
-      const j = (await res.json().catch(() => null)) as { error?: string } | null;
-      if (!res.ok) {
-        toast.error(j?.error ?? "No se pudo usar la tarea.");
-        if (res.status === 409) router.refresh();
-        return;
-      }
-      toast.success(`Listo: T-${r.sugerencia.numero} es tu siguiente paso. Se escribe en HubSpot en la próxima copia.`);
-      router.refresh();
-    } finally {
-      setOcupado(null);
-    }
-  }
-
-  /** La nota para HubSpot tal cual la armó Nexus. Para cambiarla, «Revisar» (la tarjeta de la reunión). */
-  async function escribirNota() {
-    if (!r.notaParaHubspot) return;
-    setOcupado("nota");
-    try {
-      const res = await fetch(`/api/sessions/${encodeURIComponent(r.sessionId)}/nota-para-hubspot`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accion: "usar", texto: r.notaParaHubspot }),
-      });
-      const j = (await res.json().catch(() => null)) as { error?: string; hubspotEstado?: string } | null;
-      if (!res.ok) {
-        toast.error(j?.error ?? "No se pudo escribir la nota.");
-        return;
-      }
-      setNotaEscrita(true);
-      toast.success(j?.hubspotEstado === "escrita" ? "La nota quedó en HubSpot." : "Nota guardada. HubSpot no respondió: se reintenta cada hora.");
-    } finally {
-      setOcupado(null);
-    }
-  }
-
   return (
-    <li className={cn("space-y-1.5 py-2.5 text-[13px]", usado && "opacity-60")}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="min-w-0">
-          <span className="font-semibold text-fg">{r.empresa}</span>
-          <span className="text-fg-secondary"> · {r.titulo}</span>
-          <span className="text-xs text-fg-muted"> · {cuando(r.fecha, hoyISO)}</span>
-        </span>
-        <span className="flex items-center gap-2">
-          <Link
-            href={`/sessions/${encodeURIComponent(r.sessionId)}#lo-que-dejo`}
-            className="text-xs font-semibold text-brand transition-colors hover:text-brand-light"
-          >
-            Revisar
-          </Link>
-          {!r.usarTodoVacio && !usado && (
-            <BotonBlanco onClick={usarTodo} disabled={ocupado !== null} title="Revisa la minuta, confirma los pedidos y usa tus tareas propuestas de esta reunión">
-              {ocupado === "todo" ? "Usando…" : "Usar todo"}
-            </BotonBlanco>
-          )}
-        </span>
-      </div>
-      <p className="text-xs text-fg-muted">{queDejo(r)}</p>
-      {r.notaParaHubspot && !notaEscrita && (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="flex min-w-0 items-center gap-1.5 text-brand">
-            <IconoDeSugerencia className="h-3 w-3 shrink-0" />
-            <span className="line-clamp-1">Nota para HubSpot: {r.notaParaHubspot.split("\n").slice(1).join(" ").trim() || r.notaParaHubspot}</span>
-          </span>
-          <BotonBlanco onClick={escribirNota} disabled={ocupado !== null} title="La escribe en HubSpot tal cual. Para cambiarla, Revisar.">
-            {ocupado === "nota" ? "Escribiendo…" : "Escribir en HubSpot"}
-          </BotonBlanco>
-        </div>
-      )}
+    <li className="flex flex-col gap-2 py-2.5 text-[13px]">
+      <span className="min-w-0">
+        <span className="font-semibold text-fg">{r.empresa}</span>
+        <span className="text-fg-secondary"> · {r.titulo}</span>
+        <span className="text-xs text-fg-muted"> · {cuando(r.fecha, hoyISO)}</span>
+      </span>
+      <p className="leading-[19px] text-fg">
+        {r.pideDecision > 0
+          ? `${r.pideDecision} ${r.pideDecision === 1 ? "cosa pide" : "cosas piden"} tu decisión${r.queDejo.length ? `: ${r.queDejo.join(", ")}` : ""}.`
+          : "No dejó nada por decidir."}
+      </p>
       {r.equipo && (
-        <div className="text-xs">
+        <p className="text-xs leading-[17px]">
           {r.paso && !pasoVencido ? (
             <span className="text-fg-secondary">
               Siguiente paso: {r.paso.que}
               {r.paso.fecha && <span className="text-fg-muted"> · para el {fecha(r.paso.fecha)}</span>}
             </span>
-          ) : proponer ? (
-            <span className="flex flex-wrap items-center gap-2 text-brand">
-              <IconoDeSugerencia className="h-3 w-3" />
+          ) : r.sugerencia ? (
+            <span className="flex items-start gap-1.5 text-brand">
+              <IconoDeSugerencia className="mt-0.5 h-3 w-3 flex-none" />
               <span>
-                {pasoVencido ? "El siguiente paso venció. " : "Sin siguiente paso. "}Nexus propone: «{r.sugerencia!.titulo}»
+                {pasoVencido ? "El siguiente paso venció. " : "Sin siguiente paso. "}Usa en la sesión «T-{r.sugerencia.numero} · {r.sugerencia.titulo}» y queda
+                como el siguiente.
               </span>
-              <BotonAzul onClick={usarComoPaso} disabled={ocupado !== null}>
-                {ocupado === "paso" ? "Guardando…" : "Usar como siguiente paso"}
-              </BotonAzul>
             </span>
           ) : (
             <span className="text-warn-ink">{pasoVencido ? "El siguiente paso venció." : "Sin siguiente paso."} Defínelo en la ficha del cliente.</span>
           )}
-        </div>
+        </p>
       )}
+      <Link
+        href={hrefDeLaSesion(r.sessionId)}
+        className="inline-flex items-center gap-1.5 self-start whitespace-nowrap rounded-md bg-primary px-3.5 py-[7px] text-[13px] font-semibold text-primary-fg transition-colors hover:bg-primary-hover"
+      >
+        Revisar sesión
+      </Link>
+      {r.pideDecision > 0 && <p className="text-xs leading-[17px] text-fg-muted">En la sesión decides las tareas, la minuta y lo demás, una por una o con «Usar todo».</p>}
     </li>
   );
 }

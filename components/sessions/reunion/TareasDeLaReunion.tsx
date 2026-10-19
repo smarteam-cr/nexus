@@ -24,7 +24,10 @@ export function TareasDeLaReunion({ tareas, tuyasPorDecidir }: { tareas: Comprom
         <p className="mt-0.5 text-[12.5px] text-fg-muted">Lo que quedó en Tareas, con quién lo lleva. Cada persona decide las suyas.</p>
       </header>
       {tareas.length === 0 ? (
-        <p className="px-[18px] py-4 text-[13px] text-fg-muted">No dejó tareas que puedas ver.</p>
+        // Con tus propuestas sin decidir, «no dejó tareas» contradecía a la tarjeta de arriba (2026-10-19).
+        <p className="px-[18px] py-4 text-[13px] text-fg-muted">
+          {tuyasPorDecidir > 0 ? "Todavía no hay tareas decididas de esta reunión." : "No dejó tareas que puedas ver."}
+        </p>
       ) : (
         <ul className="divide-y divide-line">
           {tareas.map((t) => (
