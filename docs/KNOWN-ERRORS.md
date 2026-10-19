@@ -83,6 +83,12 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   vínculos cruzados puede borrar vínculos CORRECTOS si la reunión de verdad nombra a dos clientes en
   el título — ahí el vínculo está bien y lo que está mal es el dueño asignado; se corrige a mano en
   `/sessions`, no borrando el vínculo.
+- **Se cambia el CSE encargado y la celda vuelve al anterior.** *Causa (2026-10-19, Librería Internacional):* (1) un
+  proyecto fusionado en HubSpot responde 200 con el id y los datos del que sigue, así que la reconciliación lo daba por
+  vivo y su fila quedaba activa con el encargado viejo; (2) después de escribir, la sincronización del pase se la saltaba
+  el piso de 60 s (la ficha se sincroniza sola al abrirse). *Guarda:* `fusionadoEn` en la verificación del espejo y la
+  relectura dirigida del pase (`lib/hubspot/proyecto-fusionado.ts`); `scripts/proyectos-fusionados-en-hubspot.ts` lista
+  (y con `--apply` da de baja) los que quedaron.
 - **"Creé un proyecto en HubSpot y Nexus no lo ve."** *Causa:* la empresa se fusionó en HubSpot — el
   id viejo sigue respondiendo 200 con los datos del sobreviviente (nombre, dominio, fecha, todo
   correcto), pero las asociaciones (proyectos) se mudaron; no hay 404 ni ningún campo que lo marque.

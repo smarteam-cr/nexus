@@ -26,6 +26,7 @@ import { DIAS_SIN_CONTACTO } from "@/lib/cs/cartera-reglas";
 import {
   diasHastaElDia,
   diasSinContacto,
+  encargadosDelPase,
   filtrarEmpresas,
   hayFiltros,
   montoUsd,
@@ -37,6 +38,7 @@ import {
   renuevanPronto,
   SIN_FILTROS,
   sinContacto,
+  tieneDondeHacerElPase,
   todas,
   type EmpresaDeCs,
   type FiltrosDeCs,
@@ -47,6 +49,7 @@ import {
   type UsoDeHubspot,
 } from "@/lib/mi-dia/cartera-cs";
 import type { CarteraDeCs } from "@/lib/mi-dia/cartera-cs-server";
+import CseEncargadoSelect from "@/components/clients/CseEncargadoSelect";
 import { NOMBRE_DE_SALUD, Punto, PUNTO_DE_SALUD } from "./inicio/piezas";
 import { AccionDelPendiente } from "./inicio/AgendarEnLaAgenda";
 import { enlaceParaAgendarEnCalendar } from "@/lib/mi-dia/calendario";
@@ -301,7 +304,19 @@ function FilaDeEmpresa({
             {e.porque ? ` · ${e.porque}` : ""}
           </p>
         )}
-        {!sinCse && (
+        {cartera.equipoParaPase.length > 0 && tieneDondeHacerElPase(e) ? (
+          /* El pase de cuenta (2026-10-19): la misma celda de Éxito del cliente; escribe «CSE Encargado» en HubSpot. */
+          <div className="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-fg-muted">
+            <span className="shrink-0">CSE:</span>
+            <CseEncargadoSelect
+              clientId={e.clientId}
+              clientName={e.nombre}
+              nombres={encargadosDelPase(e)}
+              opciones={cartera.equipoParaPase}
+              puedeEditar
+            />
+          </div>
+        ) : !sinCse && (
           <p className="text-xs leading-4 text-fg-muted">
             {e.cse ? (
               <>CSE: {e.cse.nombre}</>

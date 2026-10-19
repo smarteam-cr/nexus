@@ -7,6 +7,7 @@ import { sanitizeTags, normalizeTag } from "@/lib/tags/catalog";
 import { cerradoPorEstadoCrudo, decidirCierre, estadoCrudoDeHubspot, resolvePipeline } from "@/lib/projects/kind";
 import type { Client } from "./sdk";
 import { detectarFusion, explicarFusion } from "@/lib/hubspot/empresa-fusionada";
+import { fusionadoEn } from "@/lib/hubspot/proyecto-fusionado";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
 import { encargadoDelProyecto } from "@/lib/hubspot/encargados";
 
@@ -452,6 +453,8 @@ export interface SyncResult {
   omitido?: "cooldown" | "piso" | "en_vuelo";
 }
 
+type VeredictoDelProyecto = "alive" | "closed" | "gone" | { fusionadoEn: string };
+
 /**
  * Verifica el estado REAL de un objeto proyecto en HubSpot antes de que la
  * reconciliación lo desactive. El set `projectIds` de asociaciones puede salir
@@ -460,10 +463,11 @@ export interface SyncResult {
  *   - "alive":  el objeto existe y no está cerrado → NO desactivar.
  *   - "closed": existe pero en estado cerrado/terminado → desactivar.
  *   - "gone":   confirmado 404 (borrado/desasociado) → desactivar.
+ *   - { fusionadoEn }: HubSpot devolvió OTRO id (se fusionó en ése) → desactivar.
  * Ante CUALQUIER ambigüedad (timeout, scope, error transitorio) devuelve "alive"
  * (conservador): preferimos conservar un proyecto vivo que ocultarlo por error.
  */
-async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promise<"alive" | "closed" | "gone"> {
+async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promise<VeredictoDelProyecto> {
   let confirmedNotFound = false;
   let ambiguous = false;
   /* Slugs que ni siquiera pudimos preguntar (401/403). No es lo mismo que no saber: es que esa
@@ -487,6 +491,10 @@ async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promi
       if (!res.ok) { ambiguous = true; continue; } // 429/5xx → no concluir nada
       const data = (await res.json()) as { id?: string; properties?: Record<string, string | null> };
       if (data?.id) {
+        /* ⚠ Un proyecto fusionado responde 200 con el id y los datos del que sigue (lib/hubspot/proyecto-fusionado.ts).
+           Va ANTES del cierre: con los datos del que sigue, el viejo se daba por vivo para siempre (Librería, 2026-10-19). */
+        const enOtro = fusionadoEn(objectId, data.id);
+        if (enOtro) return { fusionadoEn: enOtro };
         const p = data.properties ?? {};
         const cierre = decidirCierre({
           hubspotPipelineId: (p.hs_pipeline ?? "").trim() || null,
@@ -1442,7 +1450,8 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
       }
       await prisma.project.update({ where: { id: cand.id }, data: { status: "inactive" } });
       result.updated++; // dispara router.refresh() en WorkspaceClient
-      const porQue = verdict === "gone" ? "no existe (404)" : "en estado cerrado";
+      const porQue =
+        typeof verdict === "object" ? `se fusionó en ${verdict.fusionadoEn}` : verdict === "gone" ? "no existe (404)" : "en estado cerrado";
       result.debug!.push(
         `Reconciliación: "${cand.name}" (${cand.hubspotServiceId}) ${porQue} en HubSpot → inactive`,
       );

@@ -24,6 +24,7 @@ import { proyectosAbiertos } from "@/lib/clients/resumen-proyectos";
 import { proyectoNavegableWhere } from "@/lib/projects/scope";
 import { pipelineByKey } from "@/lib/projects/kind";
 import { esLiderDeCs } from "@/lib/cs/acceso";
+import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
 import { hoyEnCostaRica } from "@/lib/cs/cartera";
 import { cseDeLaCuenta, proximaRenovacion, type CuentaDeCartera } from "@/lib/cs/cartera-reglas";
 import { relacionConHubspot } from "@/lib/cs/relacion-gestionada";
@@ -44,6 +45,11 @@ export interface CarteraDeCs {
   veMontos: boolean;
   /** El correo de quien mira: «Planificar acción» arma el evento en su calendario. */
   correo: string;
+  /**
+   * El pase de cuenta desde «Para ti» (2026-10-19): el mismo control y el mismo permiso que en Éxito del cliente
+   * (`proyectos.reasignarEncargado`, la CSL y dirección). Vacío = no puede cambiar el encargado: se lee el CSE.
+   */
+  equipoParaPase: { email: string; name: string }[];
 }
 
 const PIPELINES: ReadonlyArray<readonly [string, PipelineDeCs]> = (["customer-success", "smartloop", "development"] as const).map(
@@ -147,11 +153,20 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
   const veMontos = tienePermiso(a, "ventas", "read");
   const propias = lider ? null : [...new Set(a.proyectos.map((p) => p.clientId))];
   const correo = a.email;
-  if (propias && propias.length === 0) return { empresas: [], lider, veMontos, correo };
+  const vacia = { empresas: [], lider, veMontos, correo, equipoParaPase: [] };
+  if (propias && propias.length === 0) return vacia;
 
   const proyectos = await proyectosDeLaCartera(propias);
   const ids = [...new Set(proyectos.map((p) => p.clientId))];
-  if (ids.length === 0) return { empresas: [], lider, veMontos, correo };
+  if (ids.length === 0) return vacia;
+  // A quién se le puede pasar una cuenta: el equipo activo sin las cuentas de prueba, como en Éxito del cliente.
+  const equipoParaPase = tienePermiso(a, "proyectos", "reasignarEncargado")
+    ? (
+        await prisma.teamMember
+          .findMany({ where: { deactivatedAt: null }, select: { email: true, name: true }, orderBy: { name: "asc" } })
+          .catch(() => [])
+      ).filter((m) => !esCuentaDePrueba(m.name))
+    : [];
 
   // Las que lleva el CSE (es el encargado en HubSpot): de esas ve el color. Las compartidas, sin color.
   const lasQueLlevo = new Set(a.proyectos.filter((p) => p.encargado).map((p) => p.clientId));
@@ -277,5 +292,5 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
     };
   });
 
-  return { empresas: empresas.sort((x, y) => x.nombre.localeCompare(y.nombre, "es")), lider, veMontos, correo };
+  return { empresas: empresas.sort((x, y) => x.nombre.localeCompare(y.nombre, "es")), lider, veMontos, correo, equipoParaPase };
 }
