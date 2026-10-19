@@ -40,7 +40,15 @@ function cuandoEs(r: { inicio: string; fin: string | null }, hoyISO: string, aho
   return `${nombre} · ${lineaDeLaReunion(r, hoyISO, ahora)}`;
 }
 
-export type LoElegido = { tipo: "reunion"; reunion: ReunionDeLaAgenda } | { tipo: "hueco"; inicio: string; fin: string; avanzar: ConQueAvanzar | null };
+export type LoElegido = { tipo: "reunion"; reunion: ReunionDeLaAgenda } | {
+      tipo: "hueco";
+      /** El bloque que se tocó (lo que sugiere Nexus, del tamaño de la tarea). */
+      inicio: string;
+      fin: string;
+      /** El espacio libre entero donde cae. */
+      espacio: { inicio: string; fin: string };
+      avanzar: ConQueAvanzar | null;
+    };
 
 export default function PanelDeLaReunion({
   elegido,
@@ -100,7 +108,7 @@ export default function PanelDeLaReunion({
         <div className="flex items-start justify-between gap-2.5">
           <div className="flex min-w-0 flex-col gap-1">
             <p className="text-xs text-fg-muted">
-              {r ? cuandoEs(r, hoyISO, ahora) : elegido.tipo === "hueco" ? cuandoEs({ inicio: elegido.inicio, fin: elegido.fin }, hoyISO, ahora) : ""}
+              {r ? cuandoEs(r, hoyISO, ahora) : elegido.tipo === "hueco" ? cuandoEs(elegido.espacio, hoyISO, ahora) : ""}
             </p>
             <h2 className="text-lg font-semibold leading-6 text-fg">{r ? r.titulo : "Espacio libre"}</h2>
             <p className="text-[13px] text-fg-secondary">
@@ -124,7 +132,7 @@ export default function PanelDeLaReunion({
           <Hueco
             elegido={elegido}
             correo={correo}
-            sugerencias={paraSugerir ? sugerenciasParaElEspacio({ inicio: elegido.inicio, fin: elegido.fin, hoyISO, ...paraSugerir }) : []}
+            sugerencias={paraSugerir ? sugerenciasParaElEspacio({ inicio: elegido.inicio, fin: elegido.espacio.fin, hoyISO, ...paraSugerir }) : []}
             onCerrar={onCerrar}
             onDescartar={onDescartarHueco}
           />
@@ -251,7 +259,7 @@ function Hueco({
       )}
       <p className={cn(ROTULO_DEL_SISTEMA, "text-brand")}>Espacio libre</p>
       <p className="text-sm leading-[21px] text-fg">
-        Tienes libre de <strong className="font-semibold">{horaCR(elegido.inicio)}</strong> a <strong className="font-semibold">{horaCR(elegido.fin)}</strong>. Puedes poner un
+        Tienes libre de <strong className="font-semibold">{horaCR(elegido.espacio.inicio)}</strong> a <strong className="font-semibold">{horaCR(elegido.espacio.fin)}</strong>. Puedes poner un
         evento ahí o bloquear el tiempo en tu calendario.
       </p>
       <div className="flex flex-wrap gap-2">
@@ -267,7 +275,13 @@ function Hueco({
           className={ENLACE_BOTON}
           target="_blank"
           rel="noreferrer"
-          href={enlaceParaAgendarEnCalendar({ titulo: "Tiempo de trabajo", detalle: "Bloqueado desde Nexus.", inicio: elegido.inicio, fin: elegido.fin, correo })}
+          href={enlaceParaAgendarEnCalendar({
+            titulo: elegido.avanzar ? `T-${elegido.avanzar.tarea.numero} · ${elegido.avanzar.tarea.titulo}` : "Tiempo de trabajo",
+            detalle: "Bloqueado desde Nexus.",
+            inicio: elegido.inicio,
+            fin: elegido.fin,
+            correo,
+          })}
         >
           Bloquear en Calendar
         </a>

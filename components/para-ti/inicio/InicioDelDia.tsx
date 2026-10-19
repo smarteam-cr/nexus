@@ -7,13 +7,13 @@
  * Arriba, los cuatro números del día y «Tu día, según Nexus» (lo de Nexus, una sola vez). A la izquierda, la agenda como
  * Google Calendar y «Lo que importa hoy»; a la derecha, lo de cada equipo (el siguiente movimiento de Ventas, las
  * cuentas del CSE con su acción y su reunión, las tareas de hoy y los avisos). Tocar una reunión la abre en un panel al
- * costado, con su guía y su objetivo.
+ * costado, con su guía y su objetivo. Al entrar no se abre nada solo (2026-10-19): el panel lo abre la persona.
  */
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
-import { conQueAvanzar, espaciosLibres, type PedazoDeFrase, type TareaParaUnHueco, type VarianteDelInicio } from "@/lib/mi-dia/inicio";
+import { bloquesSugeridos, espaciosLibres, ocupadoDeLaAgenda, type PedazoDeFrase, type TareaParaUnHueco, type VarianteDelInicio } from "@/lib/mi-dia/inicio";
 import { diasDeLaGrilla } from "@/lib/mi-dia/agenda-dias";
 import type { ParaSugerirEnElEspacio } from "@/lib/mi-dia/espacio-libre";
 import { invitacionAPlanificar } from "@/lib/mi-dia/planificar";
@@ -47,8 +47,6 @@ export interface DatosDelInicio {
   tareasDeHoy: { tareas: TareaDelInicio[]; total: number };
   tareasInternas: TareaDelInicio[] | null;
   movimiento: { lista: MovimientoDeVentas[]; total: number; verPipeline: string } | null;
-  /** La reunión que se abre sola (la próxima con un cliente), o null. */
-  abrirDeEntrada: string | null;
   /** Tus tareas abiertas que pueden ir a un espacio libre («Con qué avanzar»). */
   paraLosHuecos: TareaParaUnHueco[];
 }
@@ -58,20 +56,24 @@ export const ID_DEL_HUECO = "__hueco__:";
 
 export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
   const ahora = useMemo(() => new Date(d.ahoraISO), [d.ahoraISO]);
-  const [elegida, setElegida] = useState<string | null>(d.abrirDeEntrada);
+  // Nada se abre solo al entrar (2026-10-19): el panel lo abre la persona al tocar un evento o un espacio.
+  const [elegida, setElegida] = useState<string | null>(null);
   const [descartados, setDescartados] = useState<ReadonlySet<string>>(() => new Set());
   const [sinResumen, setSinResumen] = useState(false);
 
   const { agenda, cargando, ir, precargar } = useAgendaNavegable(d.agenda, d.correo);
   const reuniones = useMemo(() => (agenda?.datos.estado === "ok" ? agenda.datos.reuniones : []), [agenda]);
-  // Los espacios libres (una hora o más, en horario laboral) de hoy y de los días que vienen en lo que se ve, cada uno con
-  // la tarea más importante que cabe (2026-10-19: antes solo hoy, y un fin de semana no había ninguno que tocar).
+  // Lo que ocupa el tiempo: las reuniones y los eventos propios («Tenis», «Cita Médica»), como en Google Calendar.
+  const ocupado = useMemo(() => (agenda?.datos.estado === "ok" ? ocupadoDeLaAgenda(agenda.datos) : []), [agenda]);
+  // Los espacios libres (una hora o más, en horario laboral, sin el almuerzo) de hoy y de los días que vienen en lo que
+  // se ve, y en cada uno los bloques que sugiere Nexus, del tamaño de cada tarea (lib/mi-dia/inicio.ts › bloquesSugeridos).
   const huecos = useMemo(() => {
     if (!agenda) return [];
-    const libres = espaciosLibres(reuniones, diasDeLaGrilla(agenda.vista, agenda.dia), d.hoyISO, ahora).filter((h) => !descartados.has(h.inicio));
-    const avanzar = conQueAvanzar(d.paraLosHuecos, libres, d.hoyISO);
-    return libres.map((h) => ({ ...h, id: ID_DEL_HUECO + h.inicio, avanzar: avanzar.get(h.inicio) ?? null }));
-  }, [agenda, reuniones, d.hoyISO, ahora, descartados, d.paraLosHuecos]);
+    const libres = espaciosLibres(ocupado, diasDeLaGrilla(agenda.vista, agenda.dia), d.hoyISO, ahora);
+    return bloquesSugeridos(d.paraLosHuecos, libres, d.hoyISO)
+      .map((b) => ({ ...b, id: ID_DEL_HUECO + b.inicio }))
+      .filter((b) => !descartados.has(b.id));
+  }, [agenda, ocupado, d.hoyISO, ahora, descartados, d.paraLosHuecos]);
   // Con qué llenar un espacio (lib/mi-dia/espacio-libre.ts): tus tareas, la reunión con una cuenta tuya que no la tiene
   // y el siguiente paso. La CSL ve toda la cartera: solo se le sugieren las cuentas que no lleva nadie.
   const paraSugerir = useMemo<ParaSugerirEnElEspacio>(
@@ -92,7 +94,7 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
   );
   const huecoElegido = huecos.find((h) => h.id === elegida) ?? null;
   const loElegido: LoElegido | null = huecoElegido
-    ? { tipo: "hueco", inicio: huecoElegido.inicio, fin: huecoElegido.fin, avanzar: huecoElegido.avanzar }
+    ? { tipo: "hueco", inicio: huecoElegido.inicio, fin: huecoElegido.fin, espacio: huecoElegido.espacio, avanzar: huecoElegido.avanzar }
     : (() => {
           const r = reuniones.find((x) => x.id === elegida);
           return r ? { tipo: "reunion" as const, reunion: r } : null;
@@ -222,7 +224,7 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
           paraSugerir={paraSugerir}
           onCerrar={() => setElegida(null)}
           onDescartarHueco={() => {
-            if (huecoElegido) setDescartados((s) => new Set([...s, huecoElegido.inicio]));
+            if (huecoElegido) setDescartados((s) => new Set([...s, huecoElegido.id]));
             setElegida(null);
           }}
         />

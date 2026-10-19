@@ -34,7 +34,7 @@ function motivoDelError(e: unknown): MotivoSinAgenda {
 
 /** Los campos que hacen falta para decidir si un evento es una reunión con la empresa (y nada más). */
 const CAMPOS_DEL_EVENTO =
-  "id,status,summary,description,start,end,recurringEventId,extendedProperties,conferenceData(conferenceSolution(key(type))),attendees(email,self,responseStatus,resource),organizer(email),hangoutLink,htmlLink";
+  "id,status,summary,description,start,end,recurringEventId,extendedProperties,eventType,transparency,conferenceData(conferenceSolution(key(type))),attendees(email,self,responseStatus,resource,optional),organizer(email),hangoutLink,htmlLink";
 
 /**
  * Los eventos del calendario principal de `email` desde ahora hasta dentro de `semanas` semanas, una fila

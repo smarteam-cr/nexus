@@ -8,7 +8,16 @@
  *   · «Tu día, según Nexus»: dos o tres frases armadas con los datos, sin IA (cada dato es el de su lugar).
  */
 import { equipoDeRol } from "@/lib/equipos/registro";
-import { HORA_FIN_DE_LA_AGENDA, HORA_FIN_LABORAL, HORA_INICIO_DE_LA_AGENDA, HORA_INICIO_LABORAL, MINUTOS_DE_UN_HUECO } from "./constantes";
+import {
+  HORA_DEL_ALMUERZO,
+  HORA_FIN_DE_LA_AGENDA,
+  HORA_FIN_LABORAL,
+  HORA_INICIO_DE_LA_AGENDA,
+  HORA_INICIO_LABORAL,
+  MAX_BLOQUES_POR_ESPACIO,
+  MINUTOS_DE_UN_HUECO,
+  MINUTOS_DEL_ALMUERZO,
+} from "./constantes";
 
 export type VarianteDelInicio = "ventas" | "cse" | "csl" | "dev" | "marketing" | "general";
 
@@ -48,6 +57,35 @@ export interface EventoParaLaGrilla {
   id: string;
   inicio: string;
   fin: string | null;
+  /** Para reconocer el almuerzo que la persona marcó (`esAlmuerzo`). Sin título, no es el almuerzo. */
+  titulo?: string | null;
+}
+
+/**
+ * Lo que ocupa el tiempo en una agenda leída (2026-10-19): las reuniones y los eventos propios («Tenis», «Cita Médica»),
+ * salvo lo que la persona marcó «disponible». Es lo que no pisa un espacio libre ni una hora que sugiere Nexus. Antes
+ * eran solo las reuniones, y Nexus sugería espacio libre encima de los eventos sin invitados.
+ */
+export function ocupadoDeLaAgenda(a: {
+  reuniones: readonly { id: string; inicio: string; fin: string | null; titulo: string; ocupa?: boolean }[];
+  propios?: readonly { id: string; inicio: string; fin: string | null; titulo: string; ocupa: boolean }[];
+}): EventoParaLaGrilla[] {
+  return [...a.reuniones, ...(a.propios ?? [])]
+    .filter((e) => e.ocupa !== false)
+    .map((e) => ({ id: e.id, inicio: e.inicio, fin: e.fin, titulo: e.titulo }))
+    .sort((x, y) => x.inicio.localeCompare(y.inicio));
+}
+
+/** ¿Es el almuerzo que la persona marcó en su calendario? */
+export const esAlmuerzo = (titulo: string | null | undefined): boolean => /\b(almuerzo|almorzar|lunch|comida)\b/i.test(titulo ?? "");
+
+/**
+ * El almuerzo de un día, para lo que sugiere Nexus: si la persona tiene un evento de almuerzo ese día, ya está en lo
+ * ocupado y no se agrega nada; si no, de 12:00 a 13:00 (lib/mi-dia/constantes.ts). Devuelve el rato, en minutos del día.
+ */
+export function almuerzoSupuesto(eventos: readonly EventoParaLaGrilla[], dia: string): { desde: number; hasta: number } | null {
+  if (eventos.some((e) => esAlmuerzo(e.titulo) && minutoDelDia(e.inicio).dia === dia)) return null;
+  return { desde: HORA_DEL_ALMUERZO * 60, hasta: HORA_DEL_ALMUERZO * 60 + MINUTOS_DEL_ALMUERZO };
 }
 
 export interface EventoEnLaGrilla {
@@ -129,7 +167,8 @@ export function esDiaLaboral(dia: string): boolean {
 
 /**
  * El primer hueco de un día, de al menos `minimo` minutos, desde el minuto `desde` y dentro del horario laboral (8:00 a
- * 17:00, de lunes a viernes). null = no hay. Las reuniones de otros días no importan.
+ * 17:00, de lunes a viernes), sin pisar el almuerzo (`almuerzoSupuesto`). null = no hay. Las reuniones de otros días no
+ * importan.
  */
 function huecoDelDia(eventos: readonly EventoParaLaGrilla[], dia: string, desdeMinuto: number, minimo: number): { desde: number; hasta: number } | null {
   if (!esDiaLaboral(dia)) return null;
@@ -141,8 +180,10 @@ function huecoDelDia(eventos: readonly EventoParaLaGrilla[], dia: string, desdeM
       const finMs = e.fin ? Date.parse(e.fin) : Date.parse(e.inicio) + 30 * 60_000;
       return a.dia === dia ? { desde: a.minuto, hasta: a.minuto + Math.round((finMs - Date.parse(e.inicio)) / 60_000) } : null;
     })
-    .filter((x): x is { desde: number; hasta: number } => !!x)
-    .sort((a, b) => a.desde - b.desde);
+    .filter((x): x is { desde: number; hasta: number } => !!x);
+  const almuerzo = almuerzoSupuesto(eventos, dia);
+  if (almuerzo) ocupado.push(almuerzo);
+  ocupado.sort((a, b) => a.desde - b.desde);
   let cursor = desde;
   for (const o of [...ocupado, { desde: hasta, hasta }]) {
     if (cursor >= hasta) break;
@@ -282,6 +323,63 @@ export function conQueAvanzar(
     if (!t) continue;
     usadas.add(t.id);
     out.set(h.inicio, { tarea: t, minutos: Math.min(largo, t.minutosEstimados ?? MINUTOS_DE_UN_HUECO), porque: porqueAvanzar(t, hoyISO) });
+  }
+  return out;
+}
+
+/** Un bloque que Nexus sugiere en la agenda: del tamaño de la tarea, dentro de un espacio libre. */
+export interface BloqueSugerido {
+  /** El bloque que se pinta. */
+  inicio: string;
+  fin: string;
+  /** El espacio libre entero donde cae (para el panel: «Tienes libre de … a …»). */
+  espacio: { inicio: string; fin: string };
+  /** La tarea; null = ninguna cabe: el bloque es la primera hora del espacio, «Espacio libre». */
+  avanzar: ConQueAvanzar | null;
+}
+
+/**
+ * Los bloques que sugiere Nexus en los espacios libres (2026-10-19): en cada espacio, en orden de hora, la tarea más
+ * importante que todavía no se sugirió y cabe en lo que queda, en un bloque de SU tamaño (lo estimado o una hora), una
+ * detrás de otra y como mucho `MAX_BLOQUES_POR_ESPACIO`. Nunca el espacio entero como un solo bloque: Elías vio «Avanza
+ * T-100 · Libre 12:00–16:00», cuatro horas para una tarea de una. Un espacio donde no cabe ninguna tarea se pinta como
+ * «Espacio libre» en su primera hora.
+ */
+export function bloquesSugeridos(
+  tareas: readonly TareaParaUnHueco[],
+  espacios: readonly { inicio: string; fin: string }[],
+  hoyISO: string,
+  o: { maxPorEspacio?: number } = {},
+): BloqueSugerido[] {
+  const max = o.maxPorEspacio ?? MAX_BLOQUES_POR_ESPACIO;
+  const libres = ordenarParaAvanzar(tareas, hoyISO);
+  const usadas = new Set<string>();
+  const out: BloqueSugerido[] = [];
+  for (const h of [...espacios].sort((a, b) => a.inicio.localeCompare(b.inicio))) {
+    const espacio = { inicio: h.inicio, fin: h.fin };
+    const fin = Date.parse(h.fin);
+    let cursor = Date.parse(h.inicio);
+    let puestos = 0;
+    while (puestos < max) {
+      const queda = Math.round((fin - cursor) / 60_000);
+      const minutosDe = (t: TareaParaUnHueco) => t.minutosEstimados ?? Math.min(MINUTOS_DE_UN_HUECO, queda);
+      const t = libres.find((x) => !usadas.has(x.id) && minutosDe(x) > 0 && minutosDe(x) <= queda);
+      if (!t) break;
+      usadas.add(t.id);
+      const minutos = minutosDe(t);
+      out.push({
+        inicio: new Date(cursor).toISOString(),
+        fin: new Date(cursor + minutos * 60_000).toISOString(),
+        espacio,
+        avanzar: { tarea: t, minutos, porque: porqueAvanzar(t, hoyISO) },
+      });
+      cursor += minutos * 60_000;
+      puestos++;
+    }
+    if (puestos === 0) {
+      const minutos = Math.min(MINUTOS_DE_UN_HUECO, Math.round((fin - cursor) / 60_000));
+      out.push({ inicio: h.inicio, fin: new Date(Date.parse(h.inicio) + minutos * 60_000).toISOString(), espacio, avanzar: null });
+    }
   }
   return out;
 }

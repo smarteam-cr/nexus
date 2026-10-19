@@ -90,12 +90,12 @@ describe("el hueco libre de hoy", () => {
     { id: "2", inicio: a(12), fin: a(12, 15) },
     { id: "3", inicio: a(15), fin: a(16) },
   ];
-  it("el primero de una hora o más, desde ahora redondeado al cuarto", () => {
-    expect(huecoLibre(reuniones, DIA, new Date(a(11, 5)))).toEqual({ inicio: a(12, 15), fin: a(15) });
+  it("el primero de una hora o más, desde ahora redondeado al cuarto (sin el almuerzo: no lo marcó)", () => {
+    expect(huecoLibre(reuniones, DIA, new Date(a(11, 5)))).toEqual({ inicio: a(13), fin: a(15) });
     // De 9:00 (8:50 redondeado) a 10:00 es justo una hora: entra.
     expect(huecoLibre(reuniones, DIA, new Date(a(8, 50)))).toEqual({ inicio: a(9), fin: a(10) });
     // A las 9:10 ya no queda una hora antes de las 10: el siguiente.
-    expect(huecoLibre(reuniones, DIA, new Date(a(9, 10)))).toEqual({ inicio: a(12, 15), fin: a(15) });
+    expect(huecoLibre(reuniones, DIA, new Date(a(9, 10)))).toEqual({ inicio: a(13), fin: a(15) });
   });
   it("con una hora justa entra; sin hueco o en otro día, nada", () => {
     expect(huecoLibre([{ id: "1", inicio: a(9), fin: a(18) }], DIA, new Date(a(8)))).toEqual({ inicio: a(8), fin: a(9) });
@@ -109,8 +109,8 @@ describe("el hueco libre de hoy", () => {
     // A las 16:10 queda menos de una hora hasta las 17:00: nada.
     expect(huecoLibre([], DIA, new Date(a(16, 10)))).toBeNull();
     expect(huecoLibre([], DIA, new Date(a(18)))).toBeNull();
-    // Antes de las 8:00 arranca a las 8:00.
-    expect(huecoLibre([], DIA, new Date(a(6, 40)))).toEqual({ inicio: a(8), fin: a(17) });
+    // Antes de las 8:00 arranca a las 8:00 (y llega hasta el almuerzo).
+    expect(huecoLibre([], DIA, new Date(a(6, 40)))).toEqual({ inicio: a(8), fin: a(12) });
     // Sábado y domingo, nunca.
     const sab = "2026-10-17";
     expect(huecoLibre([], sab, new Date(instante(sab, 10 * 60)))).toBeNull();
@@ -128,7 +128,8 @@ describe("la primera hora libre para «Agendar»", () => {
   const lunes = "2026-10-19";
   const l = (h: number, m = 0) => instante(lunes, h * 60 + m);
   it("hoy, si queda una hora antes de las 17:00, y dura una hora", () => {
-    expect(primerHuecoLaboral([{ id: "1", inicio: a(10), fin: a(11, 30) }], new Date(a(9, 50)))).toEqual({ inicio: a(11, 30), fin: a(12, 30) });
+    // De 11:30 a 12:00 no entra una hora y de 12:00 a 13:00 es el almuerzo: a las 13:00.
+    expect(primerHuecoLaboral([{ id: "1", inicio: a(10), fin: a(11, 30) }], new Date(a(9, 50)))).toEqual({ inicio: a(13), fin: a(14) });
     expect(primerHuecoLaboral([], new Date(a(15, 55)))).toEqual({ inicio: a(16), fin: a(17) });
   });
   it("el viernes tarde, el sábado o el domingo: el lunes a las 8:00", () => {

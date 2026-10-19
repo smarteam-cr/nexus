@@ -22,6 +22,10 @@ export interface ReunionDeHoy {
   /** ISO UTC. */
   inicio: string;
   fin: string | null;
+  /** false = la persona lo marcó «disponible». Sin el dato (datos de antes), ocupa. */
+  ocupa?: boolean;
+  /** Es opcional o respondió «quizás»: se ve más claro, pero igual ocupa. */
+  tenue?: boolean;
   conMeet: boolean;
   /** El enlace de Meet del evento, si lo trae. */
   meetUrl: string | null;
@@ -70,9 +74,119 @@ export function empresasDeLaReunion(
   return [...(deUna.size ? deUna : deVarias)].sort();
 }
 
+// ── Qué es cada evento del calendario (2026-10-19) ────────────────────────────────────────────
+//
+// Elías comparó la semana de Andrés Pinzón en Google Calendar con la de «Para ti»: faltaban «Tenis», «Convocatoria
+// ICB», «Preparar demo para Accesos Automáticos», «Cita Médica», «Sale Juan del colegio» y «Entrega de notas», y donde
+// estaban Nexus sugería un espacio libre. Eran eventos SIN otros invitados: la agenda pintaba solo las reuniones. La
+// regla de ahora es la de Google: todo evento con hora se ve, y ocupa el tiempo si lo bloquea.
+
+/** Cómo va la persona a un evento, según su respuesta en Google Calendar. */
+export type Asistencia = "va" | "quizas" | "opcional" | "sin-responder" | "no-va";
+
+/** Su respuesta: sin lista de invitados (un evento suyo), va. */
+export function asistenciaPropia(e: Pick<EventoConEnlaces, "attendees">): Asistencia {
+  const yo = e.attendees?.find((a) => a.self);
+  if (!yo) return "va";
+  if (yo.responseStatus === "declined") return "no-va";
+  if (yo.responseStatus === "tentative") return "quizas";
+  if (yo.optional) return "opcional";
+  if (yo.responseStatus === "needsAction") return "sin-responder";
+  return "va";
+}
+
+/** ¿Se ve más claro? Si la persona es opcional o respondió «quizás» (igual ocupa su tiempo). */
+export const esTenue = (a: Asistencia) => a === "quizas" || a === "opcional";
+
+/** Los tipos de evento que no son tiempo de nadie: la ubicación de trabajo y los cumpleaños. */
+const SIN_HORAS = new Set(["workingLocation", "birthday"]);
+
+/** ¿Es un evento con hora que se pinta en la grilla? No cancelado, no rechazado, no de todo el día ni una ubicación. */
+export function esEventoConHora(e: EventoConEnlaces): boolean {
+  if (!e.id || e.status === "cancelled" || !e.start?.dateTime) return false;
+  if (e.eventType && SIN_HORAS.has(e.eventType)) return false;
+  return asistenciaPropia(e) !== "no-va";
+}
+
+/**
+ * ¿Bloquea el tiempo de la persona? Todo evento con hora, salvo el que marcó «disponible» (`transparent`). Los de todo
+ * el día, la ubicación de trabajo y las tareas de Google (no vienen en el calendario) no ocupan horas; uno rechazado,
+ * tampoco. «Quizás» u «opcional» sí ocupan: es común estar invitado a dos a la vez e ir a uno.
+ */
+export function ocupaSuTiempo(e: EventoConEnlaces): boolean {
+  return esEventoConHora(e) && e.transparency !== "transparent";
+}
+
+/** ¿Es una reunión? Un evento con hora con alguien más invitado, que no es el bloque de una tarea de Nexus. */
+function esReunion(e: EventoConEnlaces): boolean {
+  return esEventoConHora(e) && !esBloqueDeTarea(e) && invitadosDelEvento(e).length >= 2;
+}
+
+/** Un evento con hora que no es una reunión: algo de la persona sola («Tenis», «Cita Médica»), o el bloque de una tarea. */
+export interface EventoPropio {
+  id: string;
+  titulo: string;
+  inicio: string;
+  fin: string | null;
+  calendarUrl: string | null;
+  /** false = lo marcó «disponible»: se ve, pero Nexus puede sugerir algo ahí. */
+  ocupa: boolean;
+  tenue: boolean;
+  /** El bloque de una tarea de Nexus: lleva a la tarea. */
+  tareaId: string | null;
+}
+
+/** Los eventos con hora que no son reuniones. Por hora. */
+export function eventosPropios(eventos: readonly EventoConEnlaces[]): EventoPropio[] {
+  const out: EventoPropio[] = [];
+  for (const e of eventos) {
+    if (!esEventoConHora(e) || esReunion(e)) continue;
+    const inicio = isoDelEvento(e.start);
+    if (!inicio) continue;
+    out.push({
+      id: e.id!,
+      titulo: e.summary?.trim() || "(Sin título)",
+      inicio,
+      fin: isoDelEvento(e.end),
+      calendarUrl: e.htmlLink?.startsWith("https://") ? e.htmlLink : null,
+      ocupa: ocupaSuTiempo(e),
+      tenue: esTenue(asistenciaPropia(e)),
+      tareaId: e.extendedProperties?.private?.nexusTareaId ?? null,
+    });
+  }
+  return out.sort((a, b) => a.inicio.localeCompare(b.inicio));
+}
+
+/** Un evento de todo el día (un aniversario, un feriado, unas vacaciones). No ocupa horas. */
+export interface EventoDeTodoElDia {
+  id: string;
+  titulo: string;
+  /** El primer día y el día siguiente al último, `AAAA-MM-DD` (como los da Google). */
+  desde: string;
+  hasta: string;
+}
+
+/** Los eventos de todo el día, sin la ubicación de trabajo ni los rechazados. */
+export function eventosDeTodoElDia(eventos: readonly EventoConEnlaces[]): EventoDeTodoElDia[] {
+  const out: EventoDeTodoElDia[] = [];
+  for (const e of eventos) {
+    if (!e.id || e.status === "cancelled" || !e.start?.date || e.start.dateTime) continue;
+    if (e.eventType === "workingLocation") continue;
+    if (asistenciaPropia(e) === "no-va") continue;
+    const desde = e.start.date;
+    const hasta = e.end?.date && e.end.date > desde ? e.end.date : new Date(Date.parse(`${desde}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    out.push({ id: e.id, titulo: e.summary?.trim() || "(Sin título)", desde, hasta });
+  }
+  return out.sort((a, b) => a.desde.localeCompare(b.desde) || a.titulo.localeCompare(b.titulo));
+}
+
+/** Los de todo el día que caen en `dia`. */
+export const deTodoElDiaEn = <T extends Pick<EventoDeTodoElDia, "desde" | "hasta">>(eventos: readonly T[], dia: string): T[] =>
+  eventos.filter((e) => e.desde <= dia && dia < e.hasta);
+
 /**
  * Las reuniones del día: no canceladas, no rechazadas, que no sean el bloque de una tarea ni de todo el día, y con
- * alguien más invitado. Por hora.
+ * alguien más invitado. Por hora. Lo demás con hora lo da `eventosPropios`.
  */
 export function agendaDelDia(
   eventos: readonly EventoConEnlaces[],
@@ -85,19 +199,18 @@ export function agendaDelDia(
 ): ReunionDeHoy[] {
   const out: ReunionDeHoy[] = [];
   for (const e of eventos) {
-    if (!e.id || e.status === "cancelled" || esBloqueDeTarea(e)) continue;
-    if (!e.start?.dateTime) continue; // de todo el día
-    if (e.attendees?.some((a) => a.self && a.responseStatus === "declined")) continue;
+    if (!esReunion(e)) continue;
     const inicio = isoDelEvento(e.start);
     if (!inicio) continue;
     const gente = invitadosDelEvento(e);
-    if (gente.length < 2) continue; // sola en su calendario: no es una reunión
     const externos = gente.filter((c) => !o.internos.has(dominioDe(c)));
     out.push({
-      id: e.id,
+      id: e.id!,
       titulo: e.summary?.trim() || "(Sin título)",
       inicio,
       fin: isoDelEvento(e.end),
+      ocupa: ocupaSuTiempo(e),
+      tenue: esTenue(asistenciaPropia(e)),
       conMeet: e.conferenceData?.conferenceSolution?.key?.type === "hangoutsMeet" || !!e.hangoutLink,
       meetUrl: e.hangoutLink?.startsWith("https://") ? e.hangoutLink : null,
       calendarUrl: e.htmlLink?.startsWith("https://") ? e.htmlLink : null,
@@ -120,20 +233,21 @@ export interface RatoOcupado {
   id: string;
   inicio: string;
   fin: string | null;
+  /** Para reconocer el almuerzo que la persona marcó (lib/mi-dia/inicio.ts › esAlmuerzo). */
+  titulo: string | null;
 }
 
 /**
- * Lo ocupado de un calendario: todo evento con hora (no de todo el día), no cancelado ni rechazado, aunque no sea una
- * reunión (un bloque de trabajo, un evento sin invitados). Es lo que no pisa un hueco que sugiere Nexus.
+ * Lo ocupado de un calendario: todo evento que bloquea su tiempo (`ocupaSuTiempo`), aunque no sea una reunión (un
+ * bloque de trabajo, un evento sin invitados). Es lo que no pisa un hueco que sugiere Nexus.
  */
 export function ocupadoDelCalendario(eventos: readonly EventoConEnlaces[]): RatoOcupado[] {
   const out: RatoOcupado[] = [];
   for (const e of eventos) {
-    if (!e.id || e.status === "cancelled" || !e.start?.dateTime) continue;
-    if (e.attendees?.some((a) => a.self && a.responseStatus === "declined")) continue;
+    if (!ocupaSuTiempo(e)) continue;
     const inicio = isoDelEvento(e.start);
     if (!inicio) continue;
-    out.push({ id: e.id, inicio, fin: isoDelEvento(e.end) });
+    out.push({ id: e.id!, inicio, fin: isoDelEvento(e.end), titulo: e.summary?.trim() || null });
   }
   return out.sort((a, b) => a.inicio.localeCompare(b.inicio));
 }

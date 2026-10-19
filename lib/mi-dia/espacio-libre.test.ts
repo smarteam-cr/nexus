@@ -28,7 +28,8 @@ describe("espacios libres de los días que se ven", () => {
     const miercoles = libres.filter((e) => e.inicio >= cr("2026-10-21", "00:00"));
     expect(miercoles).toHaveLength(MAX_ESPACIOS_OTRO_DIA);
     expect(miercoles[0]).toEqual({ inicio: cr("2026-10-21", "08:00"), fin: cr("2026-10-21", "09:00") });
-    expect(miercoles[1]).toEqual({ inicio: cr("2026-10-21", "10:00"), fin: cr("2026-10-21", "17:00") });
+    // Sin almuerzo marcado, de 12:00 a 13:00 no se sugiere nada (lib/mi-dia/constantes.ts).
+    expect(miercoles[1]).toEqual({ inicio: cr("2026-10-21", "10:00"), fin: cr("2026-10-21", "12:00") });
   });
 
   it("nunca en sábado ni domingo", () => {
