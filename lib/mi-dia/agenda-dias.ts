@@ -5,10 +5,20 @@
  * domingo ve la semana que viene (y en la vista «Día», el lunes): el fin de semana no hay nada que preparar. Moverse
  * de a un día salta el fin de semana (del viernes al lunes y al revés).
  *
+ * La agenda abre en la semana; el día se elige con su botón (`vistaPedidaDeLaAgenda`).
+ *
  * Los días van como `AAAA-MM-DD` (el día de Costa Rica ya calculado, p. ej. `crDateParts(ahora).dateKey`).
  */
 
 export type VistaDeLaAgenda = "dia" | "semana";
+
+/**
+ * La vista que se pide en la dirección (`?agenda=`): la semana por defecto (2026-10-18, validación 9); el día solo con
+ * `?agenda=dia`. Un `?agenda=semana` de un enlace viejo sigue siendo la semana.
+ */
+export function vistaPedidaDeLaAgenda(param: string | null | undefined): VistaDeLaAgenda {
+  return param === "dia" ? "dia" : "semana";
+}
 
 const DIA_MS = 86_400_000;
 

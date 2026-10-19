@@ -36,6 +36,14 @@ export function minutoDelDia(iso: string): { dia: string; minuto: number } {
   return { dia: d.toISOString().slice(0, 10), minuto: d.getUTCHours() * 60 + d.getUTCMinutes() };
 }
 
+/**
+ * Las reuniones de un día sacadas de la agenda de su semana, con el mismo corte de día que la grilla (`minutoDelDia`):
+ * así «Para ti» no vuelve a leer el calendario de hoy cuando ya tiene la semana en pantalla (2026-10-18).
+ */
+export function reunionesDelDia<T extends { inicio: string }>(reuniones: readonly T[], dia: string): T[] {
+  return reuniones.filter((r) => minutoDelDia(r.inicio).dia === dia);
+}
+
 export interface EventoParaLaGrilla {
   id: string;
   inicio: string;

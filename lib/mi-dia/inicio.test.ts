@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { esDiaLaboral, grillaDelDia, horaCR, huecoLibre, instante, lineaDeAhora, primerHuecoLaboral, resumenDelDia, varianteDelInicio } from "./inicio";
+import { esDiaLaboral, grillaDelDia, horaCR, huecoLibre, instante, lineaDeAhora, primerHuecoLaboral, resumenDelDia, reunionesDelDia, varianteDelInicio } from "./inicio";
 import { cifrasDelInicio, siguienteMovimiento, type ReunionParaCifras } from "./cifras";
 import { guiaDeLaReunion, type DatosParaLaGuia } from "./guia";
 import { equipoDeRol, EQUIPOS_DE_NEXUS } from "@/lib/equipos/registro";
@@ -24,6 +24,18 @@ describe("qué inicio ve cada persona", () => {
     for (const e of EQUIPOS_DE_NEXUS) expect(["ventas", "cse", "dev", "marketing", "general"]).toContain(e.paraTi.inicio);
     expect(equipoDeRol("DEV")?.cartera).toBe("dev");
     expect(equipoDeRol("MARKETING")?.cartera).toBe("internas");
+  });
+});
+
+describe("lo de hoy sacado de la semana", () => {
+  it("toma las reuniones que empiezan hoy en hora de Costa Rica", () => {
+    const semana = [
+      { id: "a", inicio: "2026-10-19T15:00:00Z" }, // lunes 9:00 CR
+      { id: "b", inicio: "2026-10-20T05:30:00Z" }, // lunes 23:30 CR (el martes en UTC)
+      { id: "c", inicio: "2026-10-20T14:00:00Z" }, // martes 8:00 CR
+    ];
+    expect(reunionesDelDia(semana, "2026-10-19").map((r) => r.id)).toEqual(["a", "b"]);
+    expect(reunionesDelDia(semana, "2026-10-21")).toEqual([]);
   });
 });
 

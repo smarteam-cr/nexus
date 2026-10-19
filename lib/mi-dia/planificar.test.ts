@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { instante } from "./inicio";
-import { planificarLaSemana, resumenDelPlan, semanaAPlanificar, type CuentaParaPlanificar, type TareaDelPlan } from "./planificar";
+import { invitacionAPlanificar, planificarLaSemana, resumenDelPlan, semanaAPlanificar, type CuentaParaPlanificar, type TareaDelPlan } from "./planificar";
 
 // Viernes 16 de octubre de 2026, 11:00 en Costa Rica: se planifica la semana del 19 al 23.
 const AHORA = new Date("2026-10-16T17:00:00Z");
@@ -44,6 +44,20 @@ describe("la semana que se planifica", () => {
     expect(semanaAPlanificar("2026-10-16")).toMatchObject({ desde: lunes, viernes: "2026-10-23", cual: "proxima" });
     expect(semanaAPlanificar("2026-10-18").dias).toEqual(["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23"]);
     expect(semanaAPlanificar("2026-10-14")).toMatchObject({ desde: "2026-10-12", cual: "esta", dias: ["2026-10-14", "2026-10-15", "2026-10-16"] });
+  });
+});
+
+describe("la invitación a planificar", () => {
+  it("sale de viernes a domingo, cada día con lo suyo", () => {
+    // Del lunes 12 al domingo 18 de octubre de 2026.
+    expect(["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15"].map(invitacionAPlanificar)).toEqual([null, null, null, null]);
+    expect(invitacionAPlanificar("2026-10-16")).toBe("Es viernes: planifica la semana que viene");
+    expect(invitacionAPlanificar("2026-10-17")).toBe("Es sábado: planifica la semana que viene");
+    expect(invitacionAPlanificar("2026-10-18")).toBe("Mañana empieza la semana: planifícala");
+  });
+
+  it("los días que invita son los que planifican la semana que viene", () => {
+    for (const dia of ["2026-10-16", "2026-10-17", "2026-10-18"]) expect(semanaAPlanificar(dia).cual).toBe("proxima");
   });
 });
 

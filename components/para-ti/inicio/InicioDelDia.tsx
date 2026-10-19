@@ -14,6 +14,8 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { conQueAvanzar, huecosLibres, type PedazoDeFrase, type TareaParaUnHueco, type VarianteDelInicio } from "@/lib/mi-dia/inicio";
+import { lunesDeLaAgenda } from "@/lib/mi-dia/agenda-dias";
+import { invitacionAPlanificar } from "@/lib/mi-dia/planificar";
 import type { Cifra, MovimientoDeVentas } from "@/lib/mi-dia/cifras";
 import type { AgendaDeHoy } from "@/lib/mi-dia/agenda-server";
 import type { CuentaDelInicio, TareaDelInicio } from "@/lib/mi-dia/inicio-server";
@@ -61,9 +63,10 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
 
   const { agenda, cargando, ir, precargar } = useAgendaNavegable(d.agenda, d.correo);
   const reuniones = useMemo(() => (agenda?.datos.estado === "ok" ? agenda.datos.reuniones : []), [agenda]);
-  // Los huecos libres de hoy (una hora o más, en horario laboral), cada uno con la tarea más importante que cabe.
+  // Los huecos libres de hoy (una hora o más, en horario laboral), cada uno con la tarea más importante que cabe. Se ven
+  // en el día de hoy y en la columna de hoy de su semana.
   const huecos = useMemo(() => {
-    if (!agenda || agenda.vista !== "dia" || agenda.dia !== d.hoyISO) return [];
+    if (!agenda || agenda.dia !== (agenda.vista === "semana" ? lunesDeLaAgenda(d.hoyISO) : d.hoyISO)) return [];
     const libres = huecosLibres(reuniones, d.hoyISO, ahora).filter((h) => !descartados.has(h.inicio));
     const avanzar = conQueAvanzar(d.paraLosHuecos, libres, d.hoyISO);
     return libres.map((h) => ({ ...h, id: ID_DEL_HUECO + h.inicio, avanzar: avanzar.get(h.inicio) ?? null }));
@@ -77,7 +80,8 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
         })();
 
   const conCuentas = d.variante === "cse" || d.variante === "csl" || d.variante === "dev";
-  const esViernes = new Date(`${d.hoyISO}T00:00:00Z`).getUTCDay() === 5;
+  // De viernes a domingo, la invitación a planificar la semana que viene (lib/mi-dia/planificar.ts).
+  const invitacion = invitacionAPlanificar(d.hoyISO);
   const sinReunion = d.cuentas.filter((c) => c.servicio?.falta.includes("reunion")).length;
   const sinAccion = d.cuentas.filter((c) => c.servicio?.falta.includes("accion")).length;
 
@@ -131,11 +135,11 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
               />
             )}
             <LoQueImportaHoy medicion={d.medicion} />
-            {conCuentas && esViernes && d.cuentas.length > 0 && (
+            {conCuentas && invitacion && d.cuentas.length > 0 && (
               <section className={cn(TARJETA, "flex flex-wrap items-center gap-4 px-5 py-4")} aria-labelledby="semana-t">
                 <div className="flex min-w-[260px] flex-1 flex-col gap-[3px]">
                   <h2 id="semana-t" className={TITULO}>
-                    Es viernes: planifica la semana que viene
+                    {invitacion}
                   </h2>
                   <p className="text-[13px] leading-[19px] text-fg-secondary">
                     Nexus arma la semana por cuenta: la acción con fecha y la reunión en tu primer hueco libre, con su objetivo. La ajustas y «Agendar» abre
