@@ -189,6 +189,33 @@ export function huecosLibres(eventos: readonly EventoParaLaGrilla[], dia: string
   return out;
 }
 
+/** Cuántos espacios libres se pintan, como mucho, en un día que todavía no llegó (hoy van `MAX_HUECOS_DEL_DIA`). */
+export const MAX_ESPACIOS_OTRO_DIA = 2;
+
+/**
+ * Los espacios libres de los días que se ven en la agenda (2026-10-19, prueba 8): los de hoy desde ahora, y los de los
+ * días que vienen desde las 8:00, de al menos una hora y en horario laboral. Un día que ya pasó no tiene. Sin esto, el
+ * espacio libre solo existía hoy: un fin de semana (la agenda muestra la semana que viene) no había ninguno que tocar.
+ */
+export function espaciosLibres(eventos: readonly EventoParaLaGrilla[], dias: readonly string[], hoyISO: string, ahora: Date): { inicio: string; fin: string }[] {
+  const out: { inicio: string; fin: string }[] = [];
+  for (const dia of dias) {
+    if (dia < hoyISO) continue;
+    if (dia === hoyISO) {
+      out.push(...huecosLibres(eventos, dia, ahora));
+      continue;
+    }
+    let desde = HORA_INICIO_LABORAL * 60;
+    for (let n = 0; n < MAX_ESPACIOS_OTRO_DIA; n++) {
+      const h = huecoDelDia(eventos, dia, desde, MINUTOS_DE_UN_HUECO);
+      if (!h) break;
+      out.push({ inicio: instante(dia, h.desde), fin: instante(dia, h.hasta) });
+      desde = h.hasta;
+    }
+  }
+  return out;
+}
+
 // ── Con qué avanzar en un hueco ──────────────────────────────────────────────────────────────
 
 /** Una tarea tuya abierta que puede ir a un hueco. Fechas `AAAA-MM-DD`. */
@@ -228,7 +255,7 @@ export function ordenarParaAvanzar(tareas: readonly TareaParaUnHueco[], hoyISO: 
   );
 }
 
-function porqueAvanzar(t: TareaParaUnHueco, hoyISO: string): string {
+export function porqueAvanzar(t: TareaParaUnHueco, hoyISO: string): string {
   if (t.venceEl && t.venceEl < hoyISO) return "está vencida";
   if (t.venceEl === hoyISO) return "vence hoy";
   if (t.prioridad === "alta") return "es de prioridad alta";

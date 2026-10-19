@@ -11,6 +11,7 @@ import {
   MAX_LO_QUE_IMPORTA,
   MIN_CUENTAS_PARA_ESTABILIZAR,
   necesitaEstabilizar,
+  textoDelEnlaceALaCuenta,
   pesoDe,
   PESOS,
   UMBRAL_PARA_ESTABILIZAR,
@@ -118,6 +119,19 @@ describe("⭐ nada queda fuera sin decirlo: «Estabilizar N cuentas» (2026-10-1
   it("sin las cuentas que lleva (el correo de la mañana), nada cambia", () => {
     const cands = Array.from({ length: 9 }, (_, i) => enRiesgo(i));
     expect(elegirLoQueImporta(cands).importa.map((x) => x.clave)).toEqual(elegirLoQueImporta(cands, MAX_LO_QUE_IMPORTA, {}).importa.map((x) => x.clave));
+  });
+
+  it("cada enlace dice la empresa primero, salvo que el título ya la nombre (2026-10-19)", () => {
+    const sinAccion = (i: number) => p(`cuenta-sin-accion:${i}`, { titulo: "Nada agendado en los próximos 8 días", href: `/clients/${cuentaN(i)}` });
+    const cands = [...Array.from({ length: 6 }, (_, i) => enRiesgo(i)), sinAccion(6)];
+    const nombres = new Map(Array.from({ length: 7 }, (_, i) => [cuentaN(i), `Cuenta ${i}`] as const));
+    const { importa } = elegirLoQueImporta(cands, MAX_LO_QUE_IMPORTA, { cuentasQueLleva: lleva(7), nombresDeLasCuentas: nombres });
+    const textos = importa[4].enlaces?.map((e) => e.texto);
+    expect(textos).toContain("Cuenta 4 está en riesgo");
+    expect(textos).toContain("Cuenta 6: Nada agendado en los próximos 8 días");
+    expect(textoDelEnlaceALaCuenta("Revisa lo que dejó «Kickoff»", "Honda")).toBe("Honda: Revisa lo que dejó «Kickoff»");
+    expect(textoDelEnlaceALaCuenta("Honda: sin acción ni reunión", "Honda")).toBe("Honda: sin acción ni reunión");
+    expect(textoDelEnlaceALaCuenta("Algo", null)).toBe("Algo");
   });
 
   it("en «Para ti», el número del menú sigue contando cinco", () => {

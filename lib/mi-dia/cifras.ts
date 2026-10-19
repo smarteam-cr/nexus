@@ -200,6 +200,8 @@ export interface MovimientoDeVentas {
   monto: string | null;
   linea: string;
   estado: { texto: string; tono: "aviso" | "ok" };
+  /** El siguiente paso de Ventas (qué), o null si no tiene. Lo usa la sugerencia del espacio libre de la agenda. */
+  paso: string | null;
 }
 
 /** Los negocios que cierran antes (60 días), como mucho cuatro, con lo que les falta. */
@@ -221,6 +223,7 @@ export function siguienteMovimiento(negocios: readonly NegocioVisto[], hoyISO: s
       monto: n.monto != null ? montoCorto(n.monto, n.moneda) : null,
       linea: [n.nombre, n.etapa, n.fechaCierre ? (diasHasta(n.fechaCierre, hoyISO) === 0 ? "hoy" : fechaCorta(n.fechaCierre)) : null].filter(Boolean).join(" · "),
       estado,
+      paso: paso?.que ?? null,
     };
   });
   return { lista, total: negocios.filter((n) => !esPausado(n)).length };

@@ -22,7 +22,7 @@ import { Textarea, useToast } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonTexto, BotonUsar, FilaSugerida, FranjaDeSugerencias, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import type { EstadoDeLoPropuesto } from "@/lib/lo-propuesto/tipos";
-import type { Tarjeta } from "@/lib/seguimiento/tarjeta";
+import { loQuePideDecisionEnPalabras, type Tarjeta } from "@/lib/seguimiento/tarjeta";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
@@ -189,7 +189,9 @@ export default function LoQueDejoLaReunion({ inicial, sinCompromisos = false }: 
       <FranjaDeSugerencias>
         <span className="font-semibold">Lo que dejó esta reunión</span>
         {" · "}
-        {vivo.pideDecision > 0 ? `${plural(vivo.pideDecision, "cosa pide tu decisión", "cosas piden tu decisión")}.` : "Nada pide tu decisión."}{" "}
+        {vivo.pideDecision > 0
+          ? `${plural(vivo.pideDecision, "cosa pide tu decisión", "cosas piden tu decisión")}${vivo.desglose ? `: ${loQuePideDecisionEnPalabras(vivo.desglose).join(", ")}` : ""}.`
+          : "Nada pide tu decisión."}{" "}
         {vivo.vencida ? (
           <span className="rounded border border-warn-line bg-warn-surface px-1.5 py-0.5 text-xs text-warn-ink">
             Venció sin revisar el {diaCorto(vivo.venceEl)}: igual puedes decidir

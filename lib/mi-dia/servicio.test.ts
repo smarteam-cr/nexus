@@ -96,8 +96,9 @@ describe("el estado de servicio y «Cuenta sin acción»", () => {
     expect(p.fuente).toBe(FUENTE_CUENTA_SIN_ACCION);
     expect(p.clientId).toBe("c1");
     expect(p.cuando).toBe("hoy");
-    expect(p.meta).toBe("Cemaco · Sin acción ni reunión");
-    expect(p.titulo).toBe("Nada agendado en los próximos 8 días; la última reunión fue el 2 oct");
+    expect(p.meta).toBe("Cemaco · Cuenta sin acción");
+    expect(p.titulo).toBe("Cemaco: sin acción ni reunión");
+    expect(p.detalle).toBe("Nada agendado en los próximos 8 días; la última reunión fue el 2 oct. Agenda la próxima reunión y deja una tarea con fecha esta semana.");
     expect(p.accion).toBe("Agendar");
     expect(p.href.startsWith("https://calendar.google.com/calendar/render?")).toBe(true);
     expect(decodeURIComponent(p.href)).toContain("add=ana@cemaco.com");
@@ -108,10 +109,11 @@ describe("el estado de servicio y «Cuenta sin acción»", () => {
   it("con reunión y sin acción: crear la tarea en la ficha de la cuenta", () => {
     const e = estadoDeServicio("c1", [], [{ clientId: "c1", titulo: "x", inicio: "2026-10-19T15:00:00Z", fuente: "calendario" }], { hoyISO: HOY, ahora: AHORA });
     const p = pendienteDeCuentaSinAccion({ clientId: "c1", empresa: "Honda" }, e, { ultimaReunion: null, hoyISO: HOY })!;
-    expect(p.meta).toBe("Honda · Sin acción esta semana");
+    expect(p.meta).toBe("Honda · Cuenta sin acción");
+    expect(p.titulo).toBe("Honda: sin acción esta semana");
     expect(p.accion).toBe("Crear la acción");
     expect(p.href).toBe("/clients/c1?tab=__tareas__");
-    expect(p.titulo).toContain("lun");
+    expect(p.detalle).toContain("lun");
   });
 });
 

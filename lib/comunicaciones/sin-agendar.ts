@@ -19,7 +19,15 @@ export const DIAS_QUE_AVISA = 21;
 
 /** Lo que dice que el compromiso es una reunión: la reunión se agenda; lo demás se hace. */
 const UNA_REUNION =
-  /\b(reuni[oó]n|reunirnos|reunimos|sesi[oó]n|llamada|videollamada|meet|kick ?off|demo|presentaci[oó]n|agendar|agendamos|agenda(r|mos)? (una|la)|nos vemos|taller|capacitaci[oó]n|workshop)\b/i;
+  /\b(reuni[oó]n|reunirnos|reunimos|llamada|videollamada|meet|kick ?off|demo|presentaci[oó]n|agendar|agendamos|agenda(r|mos)? (una|la)|nos vemos|taller|capacitaci[oó]n|workshop)\b/i;
+
+/**
+ * «Sesión» solo cuenta como algo a agendar: con un verbo de agenda («programar una sesión», «coordinar la próxima
+ * sesión»), como la próxima, otra o una nueva, o al principio («Sesión de seguimiento con Ana»). Como mención no cuenta:
+ * «…que Mariela reenvió durante la sesión» (T-103 de Seléctrica, 2026-10-19) avisaba «se prometió una reunión».
+ */
+const UNA_SESION_A_AGENDAR =
+  /(^\s*sesi[oó]n\b|\b(agend|program|coordin|organiz|convoc|planific|reserv|fij|propon|confirm|calendariz)\w*\s+(la\s+|una\s+|otra\s+|esa\s+|esta\s+)?((pr[oó]xima|siguiente|nueva)\s+)?sesi[oó]n\b|\b(pr[oó]xima|siguiente|nueva|otra)\s+sesi[oó]n\b)/i;
 
 /**
  * Una reunión del equipo sin el cliente no es una reunión prometida al cliente: se hace, no se agenda con él. Medido el
@@ -29,7 +37,7 @@ const UNA_REUNION =
 const SIN_EL_CLIENTE = /\b(intern[ao]s?|internamente|puertas adentro|del equipo|con el equipo|entre nosotros)\b/i;
 
 export function esReunionPrometida(texto: string): boolean {
-  return UNA_REUNION.test(texto) && !SIN_EL_CLIENTE.test(texto);
+  return (UNA_REUNION.test(texto) || UNA_SESION_A_AGENDAR.test(texto)) && !SIN_EL_CLIENTE.test(texto);
 }
 
 /** ¿La tarea es un compromiso con el cliente (de un correo o de la lectura de seguimiento de una reunión)? */

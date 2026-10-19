@@ -81,6 +81,13 @@ describe("el aviso de las 48 horas", () => {
     expect(esReunionPrometida("Llamada de seguimiento con Ana")).toBe(true);
     expect(esReunionPrometida("Enviar la base de datos")).toBe(false);
     expect(esReunionPrometida("Realizar reunión interna el lunes")).toBe(false);
+    // «Sesión» solo como algo a agendar, no como mención (T-103 de Seléctrica, 2026-10-19).
+    expect(esReunionPrometida("Revisar los archivos que Mariela reenvió durante la sesión")).toBe(false);
+    expect(esReunionPrometida("Enviar el resumen de lo visto en la sesión del lunes")).toBe(false);
+    expect(esReunionPrometida("Programar una sesión con Ana para revisar el diagnóstico")).toBe(true);
+    expect(esReunionPrometida("Coordinar la próxima sesión con Ana")).toBe(true);
+    expect(esReunionPrometida("Preparar el material para la siguiente sesión")).toBe(true);
+    expect(esReunionPrometida("Sesión de seguimiento con Ana el jueves")).toBe(true);
     expect(esReunionPrometida("Reunión con el equipo para definir el plan internamente")).toBe(false);
   });
 

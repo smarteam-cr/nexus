@@ -15,7 +15,7 @@ import { equipoDelRol } from "@/lib/siguiente-paso/reglas";
 import { resumenParaLaReunion } from "./resumen-server";
 import { guiaDeLaReunion, type GuiaDeLaReunion } from "./guia";
 import { leerPreparacion, preparacionDisponible, type PreparacionGuardada } from "./preparacion-server";
-import { loQueDejoElEvento, type DespuesDeLaReunion } from "./despues-server";
+import { loQueDejoElEvento, sesionDelEvento, type DespuesDeLaReunion } from "./despues-server";
 import { servicioDeLasCuentas } from "./servicio-server";
 import { diaCorto } from "./servicio";
 
@@ -47,6 +47,8 @@ export interface PanelDeLaReunion {
   pendientes: PendienteDelPanel[];
   negocio: string | null;
   loQueDejo: DespuesDeLaReunion | null;
+  /** La sesión de Nexus de este evento, si ya pasó y llegó: «Revisar sesión» lleva a su página. */
+  sesionId: string | null;
 }
 
 const TIPO: Record<string, string> = { CLIENTE: "cliente", PROSPECTO: "prospecto", ALIADO: "aliado", INTERNO: "interna" };
@@ -67,7 +69,11 @@ export async function panelDeLaReunion(o: {
   // Con «Ver como», quien mira de verdad es dirección: el objetivo y las notas son de la persona (las ve solo ella), así
   // que no se leen ni se dejan escribir.
   const verComo = !!o.user.verComoDe;
-  const preparacion = verComo ? { objetivo: null, notas: null, actualizadaAt: null } : await leerPreparacion(o.email, o.eventoId);
+  const yaPaso = o.inicio ? Date.parse(o.inicio) < o.ahora.getTime() : false;
+  const [preparacion, sesionId] = await Promise.all([
+    verComo ? Promise.resolve({ objetivo: null, notas: null, actualizadaAt: null }) : leerPreparacion(o.email, o.eventoId),
+    yaPaso ? sesionDelEvento(o.eventoId).catch(() => null) : Promise.resolve(null),
+  ]);
   const base: PanelDeLaReunion = {
     eventoId: o.eventoId,
     cliente: null,
@@ -80,11 +86,11 @@ export async function panelDeLaReunion(o: {
     pendientes: [],
     negocio: null,
     loQueDejo: null,
+    sesionId,
   };
   if (!o.clientId) return base;
 
   // Todo en paralelo (2026-10-17): «lo que dejó» ya no espera al resumen. Medido: el panel bajó de ~1,9 s a ~1,1 s.
-  const yaPaso = o.inicio ? Date.parse(o.inicio) < o.ahora.getTime() : false;
   const [cliente, resumen, servicio, loQueDejo] = await Promise.all([
     prisma.client.findUnique({ where: { id: o.clientId }, select: { id: true, name: true, kind: true } }),
     resumenParaLaReunion({ clientId: o.clientId, eventoId: o.eventoId, email: o.email, veAlertas: o.veAlertas, veMontos: o.veMontos, ahora: o.ahora }),

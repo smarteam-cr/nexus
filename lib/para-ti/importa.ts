@@ -138,6 +138,11 @@ export interface OpcionesDeLoQueImporta {
    * esas no son carga suya. Sin esto (el correo de la mañana, quien no lleva cuentas), nada cambia.
    */
   cuentasQueLleva?: ReadonlySet<string> | null;
+  /**
+   * El nombre de cada cuenta (por su id): cada enlace de «Estabilizar» dice la empresa primero. Sin esto, la lista de
+   * Juan Carlos Armijos decía 11 veces «Nada agendado en los próximos 8 días…» sin decir de qué cuenta (2026-10-19).
+   */
+  nombresDeLasCuentas?: ReadonlyMap<string, string> | null;
 }
 
 /** Elige lo que importa entre los candidatos (lo de hoy y lo que dejó un agente). */
@@ -153,7 +158,7 @@ export function elegirLoQueImporta(
   const reducida = elegir(candidatos, max - 1);
   const fuera = cuentasFuera(reducida.tambien, lleva);
   if (fuera.length < UMBRAL_PARA_ESTABILIZAR) return normal;
-  return { importa: [...reducida.importa, pendienteDeEstabilizar(fuera)], tambien: reducida.tambien };
+  return { importa: [...reducida.importa, pendienteDeEstabilizar(fuera, opciones.nombresDeLasCuentas)], tambien: reducida.tambien };
 }
 
 /** Las cuentas (que lleva la persona) de lo que no entró, en orden de peso, con lo más pesado de cada una. */
@@ -166,8 +171,21 @@ function cuentasFuera(tambien: readonly Pendiente[], lleva: ReadonlySet<string>)
   return [...vistas].map(([clientId, p]) => ({ clientId, p }));
 }
 
-/** «Estabilizar N cuentas», con el enlace a cada una (el texto es lo más pesado que pide esa cuenta). */
-export function pendienteDeEstabilizar(fuera: ReadonlyArray<{ clientId: string; p: Pendiente }>): Pendiente {
+/**
+ * El texto del enlace a una cuenta: lo más pesado que pide, con la empresa adelante si el título no la nombra ya
+ * («Librería Internacional está en riesgo» queda igual; «Revisa lo que dejó «X»» pasa a «Honda: Revisa lo que dejó «X»»).
+ */
+export function textoDelEnlaceALaCuenta(titulo: string, empresa: string | null | undefined): string {
+  const e = empresa?.trim();
+  if (!e || titulo.toLocaleLowerCase("es").includes(e.toLocaleLowerCase("es"))) return titulo;
+  return `${e}: ${titulo}`;
+}
+
+/** «Estabilizar N cuentas», con el enlace a cada una (el texto es lo más pesado que pide esa cuenta, con la empresa). */
+export function pendienteDeEstabilizar(
+  fuera: ReadonlyArray<{ clientId: string; p: Pendiente }>,
+  nombres?: ReadonlyMap<string, string> | null,
+): Pendiente {
   const ficha = (id: string) => `/clients/${encodeURIComponent(id)}`;
   return {
     clave: `${FUENTE_ESTABILIZAR}:cuentas`,
@@ -181,7 +199,7 @@ export function pendienteDeEstabilizar(fuera: ReadonlyArray<{ clientId: string; 
     meta: "Tus cuentas",
     accion: "Abrir la primera",
     href: ficha(fuera[0].clientId),
-    enlaces: fuera.map((x) => ({ texto: x.p.titulo, href: ficha(x.clientId) })),
+    enlaces: fuera.map((x) => ({ texto: textoDelEnlaceALaCuenta(x.p.titulo, nombres?.get(x.clientId)), href: ficha(x.clientId) })),
     desde: null,
   };
 }

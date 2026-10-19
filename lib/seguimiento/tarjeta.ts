@@ -265,6 +265,8 @@ export interface Tarjeta {
   yaRevisado: YaRevisado[];
   /** Cuánto se decide EN la tarjeta: la minuta, los pedidos, los campos de la ficha y tus tareas. */
   pideDecision: number;
+  /** De qué se compone `pideDecision`: lo que dice el panel de la agenda de «Para ti», con los mismos números. */
+  desglose: DesgloseDeLaDecision;
   /** Pasaron 30 días desde la reunión: deja de pedir revisión (se puede decidir igual). */
   vencida: boolean;
   /** AAAA-MM-DD: el último día que pide revisión. */
@@ -476,14 +478,17 @@ export function armarTarjeta(e: EntradaDeLaTarjeta, opts: { hoyISO: string; quie
       notaParaHubspot,
     },
     yaRevisado,
-    pideDecision: loQuePideDecision({
-      minuta: !!minuta && pendiente(minuta.estado),
-      pedidos: pedidos.length,
-      campos: campos.length,
-      tareas: tareas.length,
-      novedades: hechos.filter((h) => h.pideDecision).length,
-      nota: !!notaParaHubspot && notaParaHubspot.estado === "pendiente",
-    }),
+    ...(() => {
+      const desglose: DesgloseDeLaDecision = {
+        minuta: !!minuta && pendiente(minuta.estado),
+        pedidos: pedidos.length,
+        campos: campos.length,
+        tareas: tareas.length,
+        novedades: hechos.filter((h) => h.pideDecision).length,
+        nota: !!notaParaHubspot && notaParaHubspot.estado === "pendiente",
+      };
+      return { pideDecision: loQuePideDecision(desglose), desglose };
+    })(),
     vencida: vencioSinRevisar(e.reunion.fecha, hoyISO),
     pideHasta: pideHastaDe(e.reunion.fecha),
     venceEl: venceElDe(e.reunion.fecha),
@@ -512,6 +517,32 @@ export function tarjetaTieneAlgo(t: Tarjeta): boolean {
  */
 export function loQuePideDecision(c: { minuta: boolean; pedidos: number; campos: number; tareas?: number; novedades?: number; nota?: boolean }): number {
   return (c.minuta ? 1 : 0) + c.pedidos + c.campos + (c.tareas ?? 0) + (c.novedades ?? 0) + (c.nota ? 1 : 0);
+}
+
+/** Lo que pide decisión en una reunión, por tipo (lo que suma `loQuePideDecision`). */
+export interface DesgloseDeLaDecision {
+  minuta: boolean;
+  pedidos: number;
+  campos: number;
+  tareas?: number;
+  novedades?: number;
+  nota?: boolean;
+}
+
+/**
+ * Lo que pide decisión, en palabras: «3 tareas para ti, la minuta». Una sola redacción para «Lo que importa hoy», el
+ * panel de la agenda y la tarjeta de la página de la reunión (2026-10-19: decían lo mismo con palabras distintas).
+ */
+export function loQuePideDecisionEnPalabras(c: DesgloseDeLaDecision): string[] {
+  const n = (k: number, uno: string, varios: string) => `${k} ${k === 1 ? uno : varios}`;
+  const que: string[] = [];
+  if (c.tareas) que.push(n(c.tareas, "tarea para ti", "tareas para ti"));
+  if (c.minuta) que.push("la minuta");
+  if (c.pedidos) que.push(n(c.pedidos, "pedido fuera de alcance", "pedidos fuera de alcance"));
+  if (c.campos) que.push(n(c.campos, "dato de la información del cliente", "datos de la información del cliente"));
+  if (c.novedades) que.push(n(c.novedades, "novedad para los documentos", "novedades para los documentos"));
+  if (c.nota) que.push("la nota para HubSpot");
+  return que;
 }
 
 /**
