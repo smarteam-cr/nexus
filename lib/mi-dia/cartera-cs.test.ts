@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  cuentasSinServicio,
+  faltaServicio,
   filtrarEmpresas,
   motivosDeAtencion,
   negociosDeLaEmpresa,
@@ -38,6 +40,8 @@ function empresa(e: Partial<EmpresaDeCs> = {}): EmpresaDeCs {
     proxima: null,
     calendarioLeido: true,
     accion: { numero: 12, titulo: "Revisar el pipeline" },
+    faltaReunion: false,
+    siguientePaso: null,
     renovacion: null,
     relacion: null,
     contactos: 3,
@@ -250,5 +254,29 @@ describe("usoDeHubspot", () => {
     expect(tendenciaDeLaFraccion(-0.05)).toBe("igual");
     expect(tendenciaDeLaFraccion(0.06)).toBe("sube");
     expect(tendenciaDeLaFraccion(null)).toBeNull();
+  });
+});
+
+describe("cuentasSinServicio (la vista «Sin acción o reunión»)", () => {
+  it("trae TODAS las que la regla marca, también las que solo están sin reunión, sin tope", () => {
+    const muchas = Array.from({ length: 40 }, (_, i) => empresa({ clientId: `s${i}`, nombre: `Sin reunión ${String(i).padStart(2, "0")}`, faltaReunion: true }));
+    const vista = cuentasSinServicio([...muchas, empresa({ clientId: "ok", nombre: "Al día" })]);
+    expect(vista).toHaveLength(40);
+    expect(vista.some((e) => e.clientId === "ok")).toBe(false);
+  });
+
+  it("primero sin ninguna de las dos, después con reunión y sin acción, después solo sin reunión", () => {
+    const vista = cuentasSinServicio([
+      empresa({ clientId: "r", nombre: "A · solo sin reunión", faltaReunion: true }),
+      empresa({ clientId: "a", nombre: "B · con reunión sin acción", accion: null }),
+      empresa({ clientId: "n", nombre: "C · sin nada", accion: null, faltaReunion: true }),
+    ]);
+    expect(vista.map((e) => e.clientId)).toEqual(["n", "a", "r"]);
+  });
+
+  it("faltaServicio: con acción y con reunión, no", () => {
+    expect(faltaServicio({ accion: { numero: 1, titulo: "x" }, faltaReunion: false })).toBe(false);
+    expect(faltaServicio({ accion: null, faltaReunion: false })).toBe(true);
+    expect(faltaServicio({ accion: { numero: 1, titulo: "x" }, faltaReunion: true })).toBe(true);
   });
 });

@@ -21,9 +21,10 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SearchFilterBar, Segmentado, Select } from "@/components/ui";
 import { BotonTexto } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
-import { cuandoEsLaReunion, DIAS_PARA_LA_REUNION, FUENTE_CUENTA_SIN_ACCION } from "@/lib/mi-dia/servicio";
+import { cuandoEsLaReunion, DIAS_PARA_LA_REUNION, elDiaDeLaReunion, FUENTE_CUENTA_SIN_ACCION } from "@/lib/mi-dia/servicio";
 import { DIAS_SIN_CONTACTO } from "@/lib/cs/cartera-reglas";
 import {
+  cuentasSinServicio,
   diasHastaElDia,
   diasSinContacto,
   filtrarEmpresas,
@@ -49,11 +50,12 @@ import {
 import type { CarteraDeCs } from "@/lib/mi-dia/cartera-cs-server";
 import { NOMBRE_DE_SALUD, Punto, PUNTO_DE_SALUD } from "./inicio/piezas";
 import { AccionDelPendiente } from "./inicio/AgendarEnLaAgenda";
+import SugerenciaDeSiguientePaso from "./inicio/SugerenciaDeSiguientePaso";
 import { enlaceParaAgendarEnCalendar } from "@/lib/mi-dia/calendario";
 import type { Pendiente } from "@/lib/para-ti/tipos";
 
-type Vista = "atender" | "todos" | "por-cse" | "sin-contacto" | "renuevan";
-const VISTAS: readonly Vista[] = ["atender", "todos", "por-cse", "sin-contacto", "renuevan"];
+type Vista = "atender" | "sin-accion" | "todos" | "por-cse" | "sin-contacto" | "renuevan";
+const VISTAS: readonly Vista[] = ["atender", "sin-accion", "todos", "por-cse", "sin-contacto", "renuevan"];
 
 const CHIP = "inline-flex items-center whitespace-nowrap rounded-full border px-2 py-px text-[11px] font-medium leading-4";
 const CHIP_NEUTRO = "border-line bg-surface-muted text-fg-muted";
@@ -70,6 +72,7 @@ const FILTRO = "w-auto";
 
 const QUE_ES_LA_VISTA: Record<Vista, string> = {
   atender: "Las cuentas que piden una decisión: en riesgo o con señales, un proyecto bloqueado, renueva en 30 días, sin contacto o sin acción esta semana.",
+  "sin-accion": `Todas las cuentas sin su acción de la semana o sin reunión en los próximos ${DIAS_PARA_LA_REUNION} días. Primero las que no tienen ninguna de las dos.`,
   todos: "Toda la cartera, con cada proyecto de HubSpot y su etapa. Lo rojo arriba.",
   "por-cse": "Cada CSE con sus cuentas y lo que pide atención, para la 1:1. En orden alfabético.",
   "sin-contacto": `${DIAS_SIN_CONTACTO} días o más sin una reunión con el cliente ni actividad en HubSpot. La más vieja primero.`,
@@ -109,6 +112,7 @@ export default function CarteraDeCustomerSuccess({ cartera, hoyISO }: { cartera:
   const opciones = useMemo(() => opcionesDeFiltros(cartera.empresas), [cartera.empresas]);
   const empresas = useMemo(() => filtrarEmpresas(cartera.empresas, f), [cartera.empresas, f]);
   const atender = useMemo(() => paraAtender(empresas, hoyISO), [empresas, hoyISO]);
+  const sinServicio = useMemo(() => cuentasSinServicio(empresas), [empresas]);
   const frias = useMemo(() => sinContacto(empresas, hoyISO), [empresas, hoyISO]);
   const renuevan = useMemo(() => renuevanPronto(empresas, hoyISO), [empresas, hoyISO]);
   const grupos = useMemo(() => (cartera.lider ? porCse(empresas, hoyISO) : []), [cartera.lider, empresas, hoyISO]);
@@ -116,6 +120,7 @@ export default function CarteraDeCustomerSuccess({ cartera, hoyISO }: { cartera:
 
   const cuenta: Record<Vista, number> = {
     atender: atender.length,
+    "sin-accion": sinServicio.length,
     todos: empresas.length,
     "por-cse": grupos.filter((g) => g.cse).length,
     "sin-contacto": frias.length,
@@ -123,6 +128,7 @@ export default function CarteraDeCustomerSuccess({ cartera, hoyISO }: { cartera:
   };
   const etiqueta: Record<Vista, string> = {
     atender: "Para atender",
+    "sin-accion": "Sin acción o reunión",
     todos: "Todos los proyectos",
     "por-cse": "Por CSE",
     "sin-contacto": "Sin contacto",
@@ -189,6 +195,14 @@ export default function CarteraDeCustomerSuccess({ cartera, hoyISO }: { cartera:
         <Lista vacia="Ninguna cuenta pide una decisión hoy: todas tienen contacto reciente y su acción de la semana.">
           {atender.map(({ empresa, motivos }) => (
             <FilaDeEmpresa key={empresa.clientId} e={empresa} motivos={motivos} hoyISO={hoyISO} cartera={cartera} />
+          ))}
+        </Lista>
+      )}
+
+      {vista === "sin-accion" && (
+        <Lista vacia={`Todas las cuentas tienen su acción de la semana y su reunión en los próximos ${DIAS_PARA_LA_REUNION} días.`}>
+          {sinServicio.map((e) => (
+            <FilaDeEmpresa key={e.clientId} e={e} motivos={null} hoyISO={hoyISO} cartera={cartera} />
           ))}
         </Lista>
       )}
@@ -367,6 +381,15 @@ function FilaDeEmpresa({
           <span className="text-success-ink" title={`T-${e.accion.numero} · ${e.accion.titulo}`}>
             ✓ <span className="text-fg-secondary">T-{e.accion.numero} · {e.accion.titulo}</span>
           </span>
+        ) : e.siguientePaso ? (
+          <div className="flex flex-col gap-1 lg:items-end">
+            <span className="font-medium text-warn-ink">○ Tiene reunión {elDiaDeLaReunion(e.siguientePaso.inicio, hoyISO)}, falta el siguiente paso</span>
+            <SugerenciaDeSiguientePaso
+              clientId={e.clientId}
+              paso={{ eventoId: e.siguientePaso.eventoId, titulo: e.siguientePaso.titulo, fecha: e.siguientePaso.fecha, cuando: elDiaDeLaReunion(e.siguientePaso.inicio, hoyISO), llevaEmail: e.siguientePaso.llevaEmail }}
+              className="text-left"
+            />
+          </div>
         ) : (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 lg:justify-end">
             <span className="font-medium text-warn-ink">○ Sin acción esta semana</span>

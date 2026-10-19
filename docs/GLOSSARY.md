@@ -239,6 +239,10 @@
   la reunión con una cuenta sin reunión y el siguiente paso, que llenan el evento con un clic.
 - **Cuenta sin acción** («Para ti»): una cuenta con servicio activo sin una tarea con fecha esa semana o sin reunión
   agendada en los próximos 8 días. Le llega a quien la lleva.
+- **Siguiente paso sugerido** («Para ti», desde el 2026-10-19): a una cuenta con reunión esta semana y sin acción, Nexus
+  le sugiere dejar esa reunión como el siguiente paso (su título y su fecha). «Usar» crea la tarea y la escribe en
+  HubSpot; «Descartar» no la vuelve a mostrar. **Sin acción o reunión**: la vista de la cartera de Customer Success con
+  todas las cuentas que la regla marca.
 - **Preparación de una reunión** (`PreparacionDeReunion`): el objetivo y las notas que una persona escribe para una
   reunión en el panel de la agenda. Solo los ve ella.
 - **Agenda de la reunión**: lo que se iba a tratar en una reunión: lo escrito por una persona, la invitación del

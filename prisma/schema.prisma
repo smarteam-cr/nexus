@@ -7539,6 +7539,19 @@ model PreparacionDeReunion {
   @@unique([personaEmail, eventoId])
 }
 
+/// Una sugerencia de Nexus que una persona descartó, para no volver a mostrársela (2026-10-19). Hoy: el siguiente paso que
+/// Nexus arma con la reunión de una cuenta sin acción (tipo «siguiente-paso-de-la-reunion», clave «<cuenta>:<evento>»).
+/// Lo escribe solo app/api/para-ti/siguiente-paso-de-la-reunion. Sin FK: la clave nombra un evento del calendario.
+model SugerenciaDescartada {
+  id           String   @id @default(cuid())
+  personaEmail String
+  tipo         String
+  clave        String
+  createdAt    DateTime @default(now())
+
+  @@unique([personaEmail, tipo, clave])
+}
+
 // ─── Contactos y tickets de HubSpot (etapa 6a de docs/mi-dia-plan.md) ───
 
 /// La copia de un contacto de HubSpot asociado a una empresa que está en Nexus. Solo lectura: la escribe la copia de
