@@ -271,8 +271,10 @@ export default function PestanaAdopcion({ data, irA }: { data: CsAccountData; ir
             ayuda="Lo que el cliente ya integró. Muchas integraciones armadas a mano suelen ser una oportunidad de Operations Hub."
           />
           <div className="flex flex-wrap gap-1.5">
-            {p.apps.map((a) => (
-              <ChipDeCabecera key={a}>{a}</ChipDeCabecera>
+            {/* HubSpot puede repetir una app (Wherex: «wherex-hubspot-jira (Aug 6)» dos veces): sin la posición en la
+                llave, React avisa y puede perder una. */}
+            {p.apps.map((a, i) => (
+              <ChipDeCabecera key={`${i}-${a}`}>{a}</ChipDeCabecera>
             ))}
           </div>
         </section>
