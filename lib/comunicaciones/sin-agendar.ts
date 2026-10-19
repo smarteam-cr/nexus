@@ -51,6 +51,8 @@ export interface CompromisoParaAvisar {
   /** AAAA-MM-DD, o null. */
   venceEl: string | null;
   clientId: string;
+  /** La reunión de la que salió (una de un correo no tiene): «Para ti» lleva a «Lo que dejó esta reunión». */
+  sessionId?: string | null;
 }
 
 export interface LoQueSabemosDeLaCuenta {

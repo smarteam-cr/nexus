@@ -401,6 +401,7 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
     cseDeLaCuenta: cseCuenta,
     ...(ruta === "prospecto" ? { responsableDeLaPreventa: preventa } : {}),
     clientId: client.id,
+    empresa: client.name,
     projectId: project?.id ?? null,
     ruta,
   });

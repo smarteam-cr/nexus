@@ -7,13 +7,14 @@
  *   2. lo del cliente va al CSE del proyecto como tarea de seguimiento; con el CSE de baja, «Por asignar» de CS; en un
  *      prospecto, a quien lleva la preventa viva, y sin preventa no se propone;
  *   3. el `lineaId` empieza con `seg-` (no choca con las líneas de Tareas) y es el mismo en dos corridas;
- *   4. «frena el plan» va en `sugerido`, y la cita NUNCA va ahí (va al evento).
+ *   4. «frena el plan» va en `sugerido`, y la cita NUNCA va ahí (va al evento);
+ *   5. lo que prometió el cliente para la misma persona en una reunión es UNA tarea de seguimiento con la lista adentro.
  *
  * Correr: `npx vitest run lib/tareas/seguimiento.test.ts --project unit`.
  */
 import { describe, expect, it } from "vitest";
 import type { CompromisoDetectado } from "@/lib/sessions/compromisos-y-alcance";
-import { armarPropuestasDeSeguimiento, contextoDelCompromiso, lineaDeSeguimiento, tituloDelCompromiso, type EntradaDeSeguimiento } from "./seguimiento";
+import { armarPropuestasDeSeguimiento, contextoDelCompromiso, lineaDeSeguimiento, esSeguimientoSueltoDelCliente, lineaDelSeguimientoAgrupado, pendienteDesdeLaTarea, seguimientoAgrupado, tituloDelCompromiso, type EntradaDeSeguimiento } from "./seguimiento";
 import { huellaDeTexto } from "./texto";
 
 const MIEMBROS = [
@@ -182,5 +183,90 @@ describe("lo que sale de un CORREO que mandó Smarteam (iniciativa B)", () => {
   it("lo que prometió el cliente va al CSE de la cuenta como seguimiento", () => {
     const [p] = armarPropuestasDeSeguimiento(entrada([compromiso({ quien: "CLIENTE", responsable: "Ana", que: "Enviar la base", tituloDeSeguimiento: "Recordarle a Ana que envíe la base" })], delCorreo)).propuestas;
     expect(p).toMatchObject({ responsableEmail: "marco@smarteamcr.com", titulo: "Recordarle a Ana que envíe la base", projectId: null });
+  });
+});
+
+describe("un seguimiento por reunión y cuenta (2026-10-19)", () => {
+  const delCliente = (que: string, c: Partial<CompromisoDetectado> = {}) =>
+    compromiso({ quien: "CLIENTE", responsable: "Randall Vega Salazar", que, tituloDeSeguimiento: `Recordarle a Randall: ${que}`, cita: `cita de ${que}`, ...c });
+
+  it("tres cosas que prometió el cliente para el CSE son UNA propuesta, con la lista en el contexto", () => {
+    const { propuestas } = armarPropuestasDeSeguimiento(
+      entrada(
+        [
+          delCliente("Enviar la decisión sobre la propuesta"),
+          delCliente("Enviar el listado de activaciones", { fecha: "2026-10-14", frenaElPlan: true }),
+          compromiso({ ownerEmail: "lidia@smarteamcr.com" }),
+          delCliente("Mandar el correo a Leo", { fecha: "2026-10-12" }),
+        ],
+        { empresa: "Honda Costa Rica" },
+      ),
+    );
+    expect(propuestas).toHaveLength(2);
+    const seg = propuestas.find((p) => p.sugerido.lado === "cliente")!;
+    expect(seg.titulo).toBe("Seguimiento con Honda Costa Rica: 3 cosas que prometió Randall (jue 8 oct)");
+    expect(seg.lineaId).toBe(lineaDelSeguimientoAgrupado("marco@smarteamcr.com"));
+    expect(seg.lineaId.startsWith("seg-")).toBe(true);
+    expect(seg.responsableEmail).toBe("marco@smarteamcr.com");
+    expect(seg.contexto).toContain("Lo que falta:");
+    expect(seg.contexto).toContain("• Enviar el listado de activaciones (para el mié 14 oct) · frena el plan");
+    expect(seg.contexto).toContain("• Mandar el correo a Leo (para el lun 12 oct)");
+    expect(seg.venceEl).toBe("2026-10-12");
+    expect(seg.sugerido).toMatchObject({ seguimiento: true, frenaElPlan: true, agrupa: 3, responsableDelCliente: "Randall Vega Salazar" });
+    expect(JSON.stringify(seg.sugerido)).not.toContain("cita de");
+    expect(seg.cita).toContain("cita de Mandar el correo a Leo");
+    // Lo de Smarteam sigue suelto.
+    expect(propuestas.find((p) => p.sugerido.lado === "smarteam")?.titulo).toBe("Mandar el tablero de ventas");
+  });
+
+  it("una sola cosa sigue como antes, con su título propio", () => {
+    const [p] = armarPropuestasDeSeguimiento(entrada([delCliente("Enviar la base")])).propuestas;
+    expect(p.titulo).toBe("Recordarle a Randall: Enviar la base");
+    expect(p.lineaId).toBe(lineaDeSeguimiento({ quien: "CLIENTE", que: "Enviar la base" }));
+  });
+
+  it("dos personas del cliente: el título dice «el cliente» y cada línea dice de quién", () => {
+    const a = seguimientoAgrupado(
+      [
+        { que: "enviar la base", quien: "Ana", fecha: null, frenaElPlan: false, cita: "x" },
+        { que: "aprobar el diseño", quien: "Luis", fecha: null, frenaElPlan: false, cita: "y" },
+      ],
+      { empresa: null, inicio: INICIO },
+    );
+    expect(a.titulo).toBe("Seguimiento: 2 cosas que prometió el cliente (jue 8 oct)");
+    expect(a.contexto).toContain("• Ana: Enviar la base");
+    expect(a.contexto).toContain("• Luis: Aprobar el diseño");
+  });
+
+  it("releer la reunión da el mismo lineaId (no duplica)", () => {
+    const cs = [delCliente("Uno"), delCliente("Dos")];
+    const a = armarPropuestasDeSeguimiento(entrada(cs)).propuestas.map((p) => p.lineaId);
+    const b = armarPropuestasDeSeguimiento(entrada([...cs].reverse())).propuestas.map((p) => p.lineaId);
+    expect(a).toEqual(b);
+  });
+
+  it("en un correo dice «en el correo del…»", () => {
+    const { propuestas } = armarPropuestasDeSeguimiento(entrada([delCliente("Uno"), delCliente("Dos")], { fuente: { tipo: "correo", asunto: "Minuta", autorEmail: "lidia@smarteamcr.com" } }));
+    expect(propuestas[0].contexto).toContain("en el correo del jue 8 oct «Minuta»");
+  });
+});
+
+describe("lo que ya estaba propuesto", () => {
+  it("lee quién y qué del contexto que escribió el código", () => {
+    const c = compromiso({ quien: "CLIENTE", responsable: "Randall Vega Salazar", que: "Enviar el listado de activaciones", fecha: "2026-10-14", frenaElPlan: true });
+    const p = pendienteDesdeLaTarea({ titulo: "Recordarle a Randall…", contexto: contextoDelCompromiso(c, INICIO), venceEl: "2026-10-14", cita: "la cita" });
+    expect(p).toEqual({ que: "Enviar el listado de activaciones", quien: "Randall Vega Salazar", fecha: "2026-10-14", frenaElPlan: true, cita: "la cita" });
+  });
+
+  it("sin contexto reconocible, el título hace de «qué»", () => {
+    expect(pendienteDesdeLaTarea({ titulo: "Recordarle algo", contexto: null, venceEl: null, cita: null })).toMatchObject({ que: "Recordarle algo", quien: null });
+  });
+
+  it("reconoce solo los seguimientos sueltos del cliente", () => {
+    expect(esSeguimientoSueltoDelCliente("l:lec:seg-c-abc")).toBe(true);
+    expect(esSeguimientoSueltoDelCliente("cor:x:seg-c-abc")).toBe(true);
+    expect(esSeguimientoSueltoDelCliente("l:lec:seg-c-g-abc")).toBe(false);
+    expect(esSeguimientoSueltoDelCliente("l:lec:seg-s-abc")).toBe(false);
+    expect(esSeguimientoSueltoDelCliente("l:lec:seg-c-abc:retirada:1")).toBe(false);
   });
 });

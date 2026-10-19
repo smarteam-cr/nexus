@@ -58,6 +58,8 @@ describe("⛔ las comunicaciones de HubSpot", () => {
       "lib/jobs/requisitos.ts",
       "lib/para-ti/fuentes/compromisos.ts",
       "scripts/sync-comunicaciones-de-hubspot.ts",
+      // Un seguimiento por reunión (2026-10-19): la fecha y el asunto de un correo, por unaComunicacion.
+      "scripts/agrupar-seguimientos-propuestos.ts",
     ]);
     const malos = TODO.filter((rel) => !rel.startsWith("lib/comunicaciones/") && /["']@\/lib\/comunicaciones\//.test(leer(rel)) && !permitidos.has(rel));
     expect(malos).toEqual([]);

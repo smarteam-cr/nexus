@@ -224,7 +224,7 @@ function salioDe(sessionId: string | null, cita: string | null, t: { responsable
   const sala = s.salas.get(sessionId);
   if (!sala) return { visible: false, texto: "Salió de una reunión" };
   if (!veLaCita(sala, t, s)) return { visible: false, texto: sala.puertasAdentro ? "Salió de una reunión del equipo" : "Salió de una reunión con un cliente" };
-  return { visible: true, titulo: sala.titulo, fecha: sala.inicio.toISOString(), cita };
+  return { visible: true, sesionId: sessionId, titulo: sala.titulo, fecha: sala.inicio.toISOString(), cita };
 }
 
 /** Quién mira, para las reglas de la cita y del contexto (la pantalla y el chat usan la misma). */

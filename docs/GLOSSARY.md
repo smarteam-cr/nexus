@@ -258,7 +258,8 @@
 - **Tarea de seguimiento**: la propuesta de Tarea para el CSE que nace de lo que prometió el cliente en una reunión
   («Recordarle a Ana que envíe la base»), con la cita verificada y, si aplica, la marca «frena el plan». En un prospecto
   va a quien lleva la preventa; sin preventa viva, no se propone. Vence a los 14 días, como toda propuesta de Tareas
-  (`lib/tareas/seguimiento.ts`).
+  (`lib/tareas/seguimiento.ts`). Desde el 2026-10-19, lo de una misma reunión para la misma persona es UNA tarea
+  («Seguimiento con Honda Costa Rica: 3 cosas que prometió Randall (lun 12 oct)») con la lista adentro.
 - **pendiente histórico** (`ActionItem`): los pendientes que dejaba el post-proceso. DEPRECATED desde la etapa 2 de la
   memoria de la cuenta: no se crea más y lo existente queda sin borrar. Los próximos pasos viven en Tareas.
 - **Recorrido** (`lib/recorridos/`): un tour guiado de una pantalla. Oscurece la pantalla, deja a la vista una

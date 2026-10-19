@@ -20,7 +20,14 @@ export interface EmpresaVista {
 
 /** De dónde salió: la reunión y su cita, o «Salió de una reunión con un cliente» si quien mira no puede verla. */
 export type SalioDe =
-  | { visible: true; titulo: string; fecha: string | null; cita: string | null }
+  | {
+      visible: true;
+      /** La reunión: se abre por su página, que tiene su propia regla de acceso. */
+      sesionId: string;
+      titulo: string;
+      fecha: string | null;
+      cita: string | null;
+    }
   | { visible: false; texto: string };
 
 export interface SugerenciasDeTarea {

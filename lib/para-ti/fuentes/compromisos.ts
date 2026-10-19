@@ -19,6 +19,15 @@ import type { Pendiente } from "../tipos";
 
 const hrefDeLaTarea = (id: string) => `/tareas?t=${encodeURIComponent(id)}`;
 
+/**
+ * «Tomarlo o decidir» (Elías, 2026-10-19): lo tuyo que salió de una reunión se decide en «Lo que dejó esta reunión»,
+ * junto con lo demás de esa reunión. Lo de un correo o «Por asignar» abre la tarea.
+ */
+function hrefDelCompromiso(c: CompromisoSinAgendar, email: string): string {
+  if (c.tarea.sessionId && c.tarea.estado === "propuesta" && c.tarea.responsableEmail === email) return `/sessions/${encodeURIComponent(c.tarea.sessionId)}#lo-que-dejo`;
+  return hrefDeLaTarea(c.tarea.tareaId);
+}
+
 function detalle(c: CompromisoSinAgendar): string {
   const partes = [`«${c.tarea.titulo}»`];
   if (c.tarea.venceEl) partes.push(`para el ${c.tarea.venceEl}`);
@@ -56,7 +65,7 @@ export const COMPROMISOS_SIN_AGENDAR: Fuente = {
           detalle: detalle(x),
           meta: x.tarea.origen === "correo" ? "Correo con el cliente" : "Reunión con el cliente",
           accion: x.aviso.motivo === "reunion_sin_agendar" ? "Agendar o decidir" : "Tomarlo o decidir",
-          href: hrefDeLaTarea(x.tarea.tareaId),
+          href: hrefDelCompromiso(x, a.email),
           desde: x.tarea.creadaAt.toISOString(),
         }),
       );

@@ -2,7 +2,8 @@
 
 /**
  * components/tareas/FilaDeTarea.tsx — una tarea en una lista: el círculo para terminarla, el título, sus chips y las
- * horas. Un clic en la fila abre su cajón (`?t=<id>`).
+ * horas. Un clic en la fila abre su cajón (`?t=<id>`). Con `onAgendar`, una tarea tuya de una semana viva sin agendar
+ * lleva «Agendar» a la vista: su bloque privado en tu calendario, sin invitados (lib/google/agenda.ts).
  */
 import { cn } from "@/lib/cn";
 import type { TareaVista } from "@/lib/tareas/tipos";
@@ -14,6 +15,7 @@ export function FilaDeTarea({
   t,
   onAbrir,
   onTerminar,
+  onAgendar,
   conAgenda = false,
   conResponsable = false,
   sinPedida = false,
@@ -22,6 +24,7 @@ export function FilaDeTarea({
   t: TareaVista;
   onAbrir: (t: TareaVista) => void;
   onTerminar?: (t: TareaVista) => void;
+  onAgendar?: (t: TareaVista) => void;
   conAgenda?: boolean;
   conResponsable?: boolean;
   /** En la lista de lo que pediste: sin el chip «Te la pidió». */
@@ -30,6 +33,7 @@ export function FilaDeTarea({
 }) {
   const hecha = t.estado === "hecha";
   const puedeTerminar = !!onTerminar && (t.acciones.terminar || (hecha && t.acciones.reabrir));
+  const puedeAgendar = !!onAgendar && !hecha && t.acciones.agendar && t.agenda.estado !== "agendada";
   return (
     <li className={cn("group flex items-start gap-3 px-4 py-2.5 transition-colors hover:bg-surface-hover", ocupada && "opacity-60")}>
       <button
@@ -65,6 +69,17 @@ export function FilaDeTarea({
         </span>
         {t.contexto && !hecha && <span className="mt-1 block truncate text-[12.5px] text-fg-muted">{t.contexto}</span>}
       </button>
+      {puedeAgendar && (
+        <button
+          type="button"
+          disabled={ocupada}
+          onClick={() => onAgendar?.(t)}
+          title="Un bloque privado en tu calendario, sin invitados"
+          className="mt-[1px] flex-shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium text-brand hover:bg-info-surface hover:underline disabled:opacity-50"
+        >
+          Agendar
+        </button>
+      )}
       <span className="mt-[2px] flex-shrink-0 text-xs tabular-nums text-fg-muted">{t.minutosEstimados ? horas(t.minutosEstimados) : ""}</span>
     </li>
   );

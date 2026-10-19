@@ -136,6 +136,7 @@ export async function leerCompromisosDeCorreos(o: { tope?: number; ahora?: Date 
           cseDeLaCuenta: cseCuenta,
           ...(ruta === "prospecto" ? { responsableDeLaPreventa: preventa } : {}),
           clientId: cliente.id,
+          empresa: cliente.name,
           projectId: null,
           ruta,
           fuente: { tipo: "correo", asunto: c.asunto, autorEmail: c.autorEmail },

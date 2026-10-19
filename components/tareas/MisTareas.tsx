@@ -25,7 +25,7 @@ import Link from "next/link";
 import { apiTareas, EVENTO_TAREAS_CAMBIARON } from "./api";
 import { horas } from "./chips";
 import { FilaDeTarea } from "./FilaDeTarea";
-import { PropuestaDeTarea, type DecisionEnPantalla } from "./PropuestaDeTarea";
+import { PropuestasPorReunion, type DecisionEnPantalla } from "./PropuestaDeTarea";
 import { CajonDeTarea } from "./CajonDeTarea";
 import { CajonDeProyecto } from "./CajonDeProyecto";
 import { LineaParaAgregar, type NuevaDesdeLaLinea } from "./LineaParaAgregar";
@@ -298,11 +298,7 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
             {datos.proyectosPorDecidir.map((p) => (
               <ProyectoPorDecidir key={p.id} p={p} onDecidido={refrescar} onAbrir={() => ponerParametro("p", p.id)} />
             ))}
-            <ul className="space-y-1.5">
-              {porDecidir.map((t) => (
-                <PropuestaDeTarea key={t.id} t={t} personas={personas} ocupada={ocupadas.has(t.id)} onDecidir={decidir} onAbrir={(x) => ponerParametro("t", x.id)} />
-              ))}
-            </ul>
+            <PropuestasPorReunion tareas={porDecidir} personas={personas} ocupadas={ocupadas} onDecidir={decidir} onAbrir={(x) => ponerParametro("t", x.id)} />
           </section>
         )}
 
@@ -377,7 +373,7 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
           ) : (
             <ul className="divide-y divide-line">
               {estaSemana.map((t) => (
-                <FilaDeTarea key={t.id} t={t} conAgenda ocupada={ocupadas.has(t.id)} onAbrir={(x) => ponerParametro("t", x.id)} onTerminar={terminar} />
+                <FilaDeTarea key={t.id} t={t} conAgenda ocupada={ocupadas.has(t.id)} onAbrir={(x) => ponerParametro("t", x.id)} onTerminar={terminar} onAgendar={(x) => setAgendar([x])} />
               ))}
             </ul>
           )}

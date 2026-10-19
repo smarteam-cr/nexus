@@ -3076,3 +3076,83 @@ export async function retirarPropuestasDeLaReunion(sessionId: string, motivo = M
   for (const email of responsables) olvidarMedicion(email);
   return n;
 }
+
+/* ── Un seguimiento por reunión y cuenta (2026-10-19) ─────────────────────────────────────────────────────────── */
+
+export interface GrupoDeSeguimientos {
+  /** Las propuestas sueltas de lo que prometió el cliente, de la misma reunión (o correo), cuenta y destino. */
+  tareaIds: readonly string[];
+  /** El `origenId` de la que las junta: `l:<lectura>:seg-c-g-…` o `cor:<correo>:seg-c-g-…`. */
+  origenId: string;
+  titulo: string;
+  contexto: string;
+  cita: string;
+  venceEl: string | null;
+}
+
+export const MOTIVO_SEGUIMIENTO_AGRUPADO = "Se juntó en un solo seguimiento de la reunión: lo que prometió el cliente va en una tarea.";
+
+/**
+ * Junta en UNA propuesta las propuestas sueltas de seguimiento de una reunión (scripts/agrupar-seguimientos-propuestos.ts).
+ * La nueva copia del primer grupo el responsable, el equipo, la semana más temprana, el cliente, el proyecto, la reunión
+ * y la lectura; las sueltas quedan `fusionada` en ella, firmadas por el sistema. Si alguna ya la decidió una persona, o
+ * la que las junta ya existe, no hace nada (devuelve null): lo decidido no se toca.
+ */
+export async function agruparSeguimientosPropuestos(g: GrupoDeSeguimientos, ahora = new Date()): Promise<{ id: string } | null> {
+  if (g.tareaIds.length < 2) return null;
+  const r = await prisma.$transaction(async (tx) => {
+    const filas = await tx.tarea.findMany({
+      where: { id: { in: [...g.tareaIds] }, estado: "propuesta", decididaAt: null, archivadaAt: null },
+      orderBy: { numero: "asc" },
+    });
+    if (filas.length !== g.tareaIds.length) return null;
+    const base = filas[0]!;
+    const igual = (f: (typeof filas)[number]) =>
+      f.clientId === base.clientId && f.responsableEmail === base.responsableEmail && f.equipo === base.equipo && f.sessionId === base.sessionId && f.lecturaId === base.lecturaId;
+    if (!filas.every(igual)) return null;
+    if (await tx.tarea.findUnique({ where: { origenId: g.origenId }, select: { id: true } })) return null;
+    const semanas = filas.flatMap((f) => (f.semana ? [f.semana] : [])).sort((a, b) => +a - +b);
+    const nueva = await tx.tarea.create({
+      data: {
+        titulo: g.titulo,
+        huella: huellaDeTexto(g.titulo),
+        notas: null,
+        contexto: g.contexto,
+        estado: "propuesta",
+        prioridad: base.prioridad,
+        equipo: base.equipo,
+        responsableEmail: base.responsableEmail,
+        semana: semanas[0] ?? null,
+        venceEl: g.venceEl ? aDate(g.venceEl) : null,
+        clientId: base.clientId,
+        projectId: base.projectId,
+        lado: "cliente",
+        origen: base.origen,
+        creadaPorEmail: null,
+        pedidaPorEmail: base.pedidaPorEmail,
+        pedidaPorEquipo: base.pedidaPorEquipo,
+        pedidaPorTexto: base.pedidaPorTexto,
+        tipo: base.tipo,
+        lecturaId: base.lecturaId,
+        sessionId: base.sessionId,
+        origenTitulo: base.origenTitulo,
+        cita: g.cita,
+        origenId: g.origenId,
+      },
+      select: { id: true },
+    });
+    await evento(tx, { tareaId: nueva.id, tipo: "propuesta", porEmail: SISTEMA, datos: { lado: "cliente", seguimiento: true, agrupa: filas.length, desde: filas.map((f) => f.id) } });
+    for (const f of filas) {
+      const u = await tx.tarea.updateMany({
+        where: { id: f.id, version: f.version, estado: "propuesta", decididaAt: null },
+        data: { estado: "fusionada", decision: "misma", decididaPorEmail: SISTEMA, decididaAt: ahora, mismaQueId: nueva.id, motivo: MOTIVO_SEGUIMIENTO_AGRUPADO, version: { increment: 1 } },
+      });
+      // Una que cambió en el medio: se deshace todo, lo decidido no se toca.
+      if (!u.count) throw new ErrorDeTareas(409, "Una de las propuestas cambió mientras se juntaban.");
+      await evento(tx, { tareaId: f.id, tipo: "decidida", porEmail: SISTEMA, datos: { decision: "misma", agrupadaEn: nueva.id } });
+    }
+    return { id: nueva.id, responsable: base.responsableEmail };
+  }, OPCIONES_DE_TX);
+  if (r?.responsable) olvidarMedicion(r.responsable);
+  return r ? { id: r.id } : null;
+}
