@@ -453,11 +453,27 @@ export async function copiarTareasDeHubspot(opciones: { dryRun?: boolean } = {},
   }
 }
 
+// Una escritura a HubSpot por tarea a la vez (instancia única, RUNBOOK invariante #1). Desde el 2026-10-19 la ruta la
+// corre después de responder (`after()`): marcar hecha y deshacer enseguida dejaba dos escrituras en carrera, y la que
+// terminaba última podía dejar en HubSpot el estado de antes.
+const enCurso = new Map<string, Promise<void>>();
+
 /**
  * Justo después de que alguien cambia una tarea de HubSpot desde Nexus: la escribe allá sin esperar la corrida. Nunca
- * lanza: si HubSpot no responde, queda el error en la tarea y la corrida de los 15 minutos lo reintenta.
+ * lanza: si HubSpot no responde, queda el error en la tarea y la corrida de los 15 minutos lo reintenta. Va en fila por
+ * tarea, y cada vuelta lee la tarea como está en ese momento: la última escritura es la del último cambio.
  */
-export async function reflejarTareaEnHubspot(tareaId: string, ahora = new Date()): Promise<void> {
+export function reflejarTareaEnHubspot(tareaId: string): Promise<void> {
+  const anterior = enCurso.get(tareaId) ?? Promise.resolve();
+  const p = anterior.then(() => reflejarUna(tareaId, new Date()));
+  enCurso.set(tareaId, p);
+  void p.then(() => {
+    if (enCurso.get(tareaId) === p) enCurso.delete(tareaId);
+  });
+  return p;
+}
+
+async function reflejarUna(tareaId: string, ahora: Date): Promise<void> {
   try {
     const t = await prisma.tarea.findUnique({ where: { id: tareaId }, select: SELECT });
     if (!t?.hubspotTaskId) return;

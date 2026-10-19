@@ -5,7 +5,9 @@
  * Ventas y CSE», la tarjeta «Tus tareas de hoy»).
  *
  * La casilla marca la tarea como hecha con las reglas de Tareas (PATCH /api/tareas/[id], con su versión: si otra
- * persona la cambió, 409 y se recarga). Una tarea de HubSpot se escribe allá enseguida.
+ * persona la cambió, 409 y se recarga). Cambia al instante y se puede desmarcar mientras la fila sigue a la vista: los
+ * dos cambios van en fila, con la versión que dejó el anterior (lib/tareas/fila-de-cambios.ts, la misma fila que Mis
+ * tareas y el cajón). Una tarea de HubSpot se escribe allá después de responder.
  */
 import Link from "next/link";
 import { useState } from "react";
@@ -13,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { useToast } from "@/components/ui/Toast";
 import { avisarCambioDeParaTi } from "../cuenta";
+import { apiTareas, ErrorDeApi, filaDeTareas } from "@/components/tareas/api";
 import type { TareaDelInicio } from "@/lib/mi-dia/inicio-server";
 import { TARJETA, TITULO } from "./piezas";
 
@@ -28,42 +31,46 @@ const DE_DONDE: Record<string, string> = {
   plantilla: "De una plantilla",
 };
 
+// «Para ti» se vuelve a pedir cuando no queda ningún cambio en fila y pasó un rato: así un desmarcar enseguida no
+// encuentra la fila ya quitada de la lista.
+const ESPERA_PARA_REFRESCAR_MS = 3000;
+let esperaParaRefrescar: ReturnType<typeof setTimeout> | null = null;
+function refrescarCuandoQuede(refrescar: () => void) {
+  if (esperaParaRefrescar) clearTimeout(esperaParaRefrescar);
+  esperaParaRefrescar = setTimeout(() => {
+    esperaParaRefrescar = null;
+    if (filaDeTareas.pendientes() === 0) refrescar();
+    else refrescarCuandoQuede(refrescar);
+  }, ESPERA_PARA_REFRESCAR_MS);
+}
+
 function Fila({ t, hoyISO, conAmbito }: { t: TareaDelInicio; hoyISO: string; conAmbito: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const [hecha, setHecha] = useState(false);
-  const [ocupada, setOcupada] = useState(false);
   const vencida = !!t.venceEl && t.venceEl < hoyISO;
-  async function marcar() {
-    setOcupada(true);
-    setHecha(true);
-    try {
-      const res = await fetch(`/api/tareas/${encodeURIComponent(t.id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accion: "estado", version: t.version, hacia: "hecha" }),
+  function marcar() {
+    const hacia = hecha ? "pendiente" : "hecha";
+    setHecha(!hecha);
+    apiTareas
+      .cambiar(t.id, { accion: "estado", version: t.version, hacia })
+      .then(() => {
+        avisarCambioDeParaTi();
+        refrescarCuandoQuede(() => router.refresh());
+      })
+      .catch((e: unknown) => {
+        setHecha(hacia !== "hecha");
+        toast.error(`«${t.titulo}» volvió a como estaba. ${e instanceof Error ? e.message : "No se pudo marcar la tarea."}`);
+        if (e instanceof ErrorDeApi && e.status === 409) router.refresh();
       });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => null)) as { error?: string } | null;
-        setHecha(false);
-        toast.error(j?.error ?? "No se pudo marcar la tarea.");
-        if (res.status === 409) router.refresh();
-        return;
-      }
-      avisarCambioDeParaTi();
-      router.refresh();
-    } finally {
-      setOcupada(false);
-    }
   }
   const meta = [t.venceEl ? (t.venceEl === hoyISO ? "Hoy" : dia(t.venceEl)) : null, conAmbito ? t.ambito : DE_DONDE[t.origen] ?? null].filter(Boolean).join(" · ");
   return (
     <li className="flex items-start gap-2.5 border-t border-line px-1 py-[9px] transition-colors hover:bg-surface-muted">
       <input
         type="checkbox"
-        aria-label={`Marcar hecha: ${t.titulo}`}
+        aria-label={hecha ? `Volver a abrir: ${t.titulo}` : `Marcar hecha: ${t.titulo}`}
         checked={hecha}
-        disabled={ocupada || hecha}
         onChange={marcar}
         className="mt-0.5 h-4 w-4 flex-none accent-primary"
       />

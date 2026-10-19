@@ -8,6 +8,7 @@ import MinuteDialog from "./MinuteDialog";
 import ActionItemsDialog from "./ActionItemsDialog";
 import { useWorkspace } from "./WorkspaceContext";
 import { useToast } from "@/components/ui/Toast";
+import { apiTareas, ErrorDeApi } from "@/components/tareas/api";
 import { readGpsCache, writeGpsCache, invalidateGps } from "@/lib/clients/gps-cache";
 import { calendarDaysFromToday } from "@/lib/utils/relative-date";
 import { ProjectGpsSkeleton } from "./skeletons";
@@ -472,18 +473,11 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   }, [pendientes]);
 
   const patchEstado = useCallback(async (item: PendingItem, hacia: "hecha" | "pendiente" | "no_se_hara", motivo?: string) => {
+    // La misma fila que Mis tareas y el cajón: deshacer enseguida sale con la versión que dejó el cambio anterior.
     try {
-      const res = await fetch(`/api/tareas/${encodeURIComponent(item.id!)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accion: "estado", version: item.version ?? 0, hacia, ...(motivo ? { motivo } : {}) }),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => null)) as { error?: string } | null;
-        toast.error(j?.error ?? "No se pudo guardar el cambio.");
-      }
-    } catch {
-      toast.error("No se pudo guardar el cambio. Revisa tu conexión.");
+      await apiTareas.cambiar(item.id!, { accion: "estado", version: item.version ?? 0, hacia, ...(motivo ? { motivo } : {}) });
+    } catch (e) {
+      toast.error(e instanceof ErrorDeApi ? e.message : "No se pudo guardar el cambio. Revisa tu conexión.");
     }
     void fetchPendientes();
   }, [fetchPendientes, toast]);
