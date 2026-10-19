@@ -9494,7 +9494,8 @@ coincidía: «Crunchyroll» y «6 tareas pendientes» son tareas de Google (no v
 de trabajo y el otro calendario que tiene compartido no está a la vista en su Google Calendar.
 
 - **Todo evento con hora se ve** (`eventosPropios`, lib/mi-dia/agenda.ts): lo de la persona sola y el bloque de una
-  tarea de Nexus, que lleva a la tarea. No tiene panel: abre en Google Calendar. Las reuniones siguen siendo
+  tarea de Nexus, que lleva a la tarea. ~~No tiene panel: abre en Google Calendar.~~ (Superado el mismo día: se abre en
+  el panel, ver «Un evento propio se abre en el panel, con su cuenta si la nombra».) Las reuniones siguen siendo
   `agendaDelDia`, lo único que leen la regla de servicio, las cifras y el panel.
 - **Qué ocupa el tiempo** (`ocupaSuTiempo`): todo evento con hora, salvo el rechazado y el que la persona marcó
   «disponible». Los de todo el día, la ubicación de trabajo y las tareas de Google no ocupan horas. «Quizás» y opcional
@@ -9555,3 +9556,25 @@ reunión y cuenta.
   Los pedidos van en fila para que cada uno lleve la versión que dejó el anterior, y los campos ya no se deshabilitan
   mientras guarda. *Por qué no un botón «Guardar»:* casi todo el cajón (estado, semana, responsable, prioridad) ya se
   guarda al tocarlo; un botón obligaba a acordarse de apretarlo y mezclaba dos formas de guardar en el mismo panel.
+
+## Un evento propio se abre en el panel, con su cuenta si la nombra (2026-10-19)
+
+**Contexto.** En la agenda de «Para ti», tocar un evento sin otros invitados (el almuerzo, «Tenis», «Preparar demo para
+Accesos Automáticos») abría Google Calendar en otra pestaña. Elías pidió que se elija como una reunión: el panel de la
+derecha, con lo que se sepa de él.
+
+- **Se abre en el mismo panel que una reunión** (`LoElegido` «propio», components/para-ti/inicio/PanelDeLaReunion.tsx):
+  título, día y hora, «Abrir en Google Calendar» como enlace (no es el clic principal) y «Tus notas», privadas como en
+  una reunión. El bloque de una tarea de Nexus sigue abriendo la tarea.
+- **La cuenta sale del nombre ENTERO de UNA empresa** en el título o, si el título no nombra ninguna, en la descripción
+  (`empresasDelEventoPropio`, lib/mi-dia/agenda.ts; `clientesNombradosEnteros`, lib/sessions/clientes-por-texto.ts).
+  Usa el MISMO match de títulos del cascade (`clientePorTitulo`, con sus stopwords, sus tokens ambiguos y las siglas
+  declaradas) y decide con `cuentaDelEvento`: con dos empresas, ninguna (invariante 1). *Por qué el nombre entero y no
+  la «mejor fracción» del cascade:* un evento personal no es de nadie; «Cita Médica» compartía «médica» con un cliente
+  y la mejor fracción se lo daba. Medio nombre («Preparar reunión Honda» con «Honda Costa Rica») no alcanza: no se
+  inventa. Solo clientes y prospectos (los mismos de `mapasDeEmpresas`).
+- **Con la cuenta, lo de la cuenta**: la próxima reunión con ella en 8 días, el siguiente paso (el de tu equipo o, si no
+  tiene, el más próximo: `siguientePasoParaElPanel`, lib/mi-dia/guia.ts), lo pendiente, la última vez y el negocio. Sin
+  la guía de una reunión ni quién viene: no es una reunión. Lo trae la misma ruta con `propio=1`
+  (`/api/para-ti/reunion/[evento]`), que no lee el evento ni lo que dejó, y que sin acceso a esa cuenta responde lo tuyo
+  (tus notas) en vez de 404.

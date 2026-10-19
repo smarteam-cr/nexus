@@ -11,6 +11,11 @@
  * la agenda), «Bloquear en Calendar» y «Con qué usar este espacio» (lib/mi-dia/espacio-libre.ts, sin IA): tus tareas que
  * caben, la reunión con una cuenta que no la tiene y el siguiente paso; cada una deja el borrador lleno con un clic.
  *
+ * Un evento propio (2026-10-19: el almuerzo, «Tenis», «Preparar demo para Accesos Automáticos») se abre igual: título,
+ * día y hora, «Abrir en Google Calendar» como enlace y tus notas. Si nombra UNA cuenta (lib/mi-dia/agenda.ts ›
+ * empresasDelEventoPropio), suma lo de esa cuenta: la próxima reunión, el siguiente paso, lo pendiente, la última vez y
+ * el negocio. Si no se sabe de qué cuenta es, no se inventa.
+ *
  * Los datos los trae GET /api/para-ti/reunion/[evento] (pide acceso al cliente); TU objetivo y tus notas se guardan con
  * PUT en el mismo lugar.
  */
@@ -23,7 +28,8 @@ import { useToast } from "@/components/ui/Toast";
 import { enlaceAlDia, enlaceParaAgendarEnCalendar } from "@/lib/mi-dia/calendario";
 import { horaCR, minutoDelDia, type ConQueAvanzar } from "@/lib/mi-dia/inicio";
 import type { PanelDeLaReunion as Panel } from "@/lib/mi-dia/panel-server";
-import type { ReunionDeLaAgenda } from "@/lib/mi-dia/agenda-server";
+import type { EventoPropioDeLaAgenda, ReunionDeLaAgenda } from "@/lib/mi-dia/agenda-server";
+import { cuentaDelEvento } from "@/lib/mi-dia/agenda";
 import { hrefDeLaSesion, ReunionDespues } from "../DespuesDeTusReuniones";
 import { lineaDeLaReunion } from "./AgendaDelInicio";
 import { ENLACE_BOTON, Punto } from "./piezas";
@@ -40,7 +46,7 @@ function cuandoEs(r: { inicio: string; fin: string | null }, hoyISO: string, aho
   return `${nombre} · ${lineaDeLaReunion(r, hoyISO, ahora)}`;
 }
 
-export type LoElegido = { tipo: "reunion"; reunion: ReunionDeLaAgenda } | {
+export type LoElegido = { tipo: "reunion"; reunion: ReunionDeLaAgenda } | { tipo: "propio"; propio: EventoPropioDeLaAgenda } | {
       tipo: "hueco";
       /** El bloque que se tocó (lo que sugiere Nexus, del tamaño de la tarea). */
       inicio: string;
@@ -68,8 +74,12 @@ export default function PanelDeLaReunion({
   onDescartarHueco: () => void;
 }) {
   const r = elegido.tipo === "reunion" ? elegido.reunion : null;
+  const p = elegido.tipo === "propio" ? elegido.propio : null;
   const [empresa, setEmpresa] = useState<string | null>(r && r.empresas.length === 1 ? r.empresas[0] : null);
-  const clave = r ? `${r.id}:${empresa ?? ""}` : "hueco";
+  // La cuenta de un evento propio: la que nombra, si es UNA (invariante 1). No se elige a mano: si no se sabe, no se inventa.
+  const cuentaPropia = p ? cuentaDelEvento(p) : null;
+  const evento = r ?? p;
+  const clave = r ? `${r.id}:${empresa ?? ""}` : p ? `${p.id}:${cuentaPropia ?? ""}` : "hueco";
   const [cargado, setCargado] = useState<{ clave: string; panel: Panel | null; error: string | null } | null>(null);
 
   // Al cambiar de reunión, la empresa vuelve a la de esa reunión (se ajusta en el render, sin efecto).
@@ -79,13 +89,16 @@ export default function PanelDeLaReunion({
     setEmpresa(r && r.empresas.length === 1 ? r.empresas[0] : null);
   }
 
-  const idDeLaReunion = r?.id ?? null;
-  const inicioDeLaReunion = r?.inicio ?? null;
+  const idDeLaReunion = evento?.id ?? null;
+  const inicioDeLaReunion = evento?.inicio ?? null;
+  const esPropio = !!p;
+  const clienteDelPanel = p ? cuentaPropia : empresa;
   useEffect(() => {
     if (!idDeLaReunion || !inicioDeLaReunion) return;
     let vivo = true;
     const q = new URLSearchParams({ inicio: inicioDeLaReunion });
-    if (empresa) q.set("cliente", empresa);
+    if (clienteDelPanel) q.set("cliente", clienteDelPanel);
+    if (esPropio) q.set("propio", "1");
     fetch(`/api/para-ti/reunion/${encodeURIComponent(idDeLaReunion)}?${q.toString()}`)
       .then(async (res) => {
         const j = await res.json().catch(() => null);
@@ -97,10 +110,10 @@ export default function PanelDeLaReunion({
     return () => {
       vivo = false;
     };
-  }, [clave, idDeLaReunion, inicioDeLaReunion, empresa]);
+  }, [clave, idDeLaReunion, inicioDeLaReunion, clienteDelPanel, esPropio]);
 
   const datos = cargado?.clave === clave ? cargado : null;
-  const futura = r ? Date.parse(r.fin ?? r.inicio) > ahora.getTime() : false;
+  const futura = evento ? Date.parse(evento.fin ?? evento.inicio) > ahora.getTime() : false;
 
   return (
     <aside aria-label="La reunión elegida" className="absolute inset-y-0 right-0 z-10 w-full max-w-[440px] border-l border-line bg-surface shadow-segment">
@@ -108,11 +121,15 @@ export default function PanelDeLaReunion({
         <div className="flex items-start justify-between gap-2.5">
           <div className="flex min-w-0 flex-col gap-1">
             <p className="text-xs text-fg-muted">
-              {r ? cuandoEs(r, hoyISO, ahora) : elegido.tipo === "hueco" ? cuandoEs(elegido.espacio, hoyISO, ahora) : ""}
+              {evento ? cuandoEs(evento, hoyISO, ahora) : elegido.tipo === "hueco" ? cuandoEs(elegido.espacio, hoyISO, ahora) : ""}
             </p>
-            <h2 className="text-lg font-semibold leading-6 text-fg">{r ? r.titulo : "Espacio libre"}</h2>
+            <h2 className="text-lg font-semibold leading-6 text-fg">{evento ? evento.titulo : "Espacio libre"}</h2>
             <p className="text-[13px] text-fg-secondary">
-              {r
+              {p
+                ? cuentaPropia
+                  ? `${p.nombres[cuentaPropia]}${datos?.panel?.cliente?.tipo ? ` · ${datos.panel.cliente.tipo}` : ""}`
+                  : "Evento tuyo, sin otros invitados"
+                : r
                 ? empresa
                   ? `${r.nombres[empresa]}${datos?.panel?.cliente?.tipo ? ` · ${datos.panel.cliente.tipo}` : ""}`
                   : r.empresas.length > 1
@@ -168,6 +185,8 @@ export default function PanelDeLaReunion({
             )}
           </div>
         )}
+
+        {p && <EventoPropio p={p} cuenta={cuentaPropia} datos={datos} futura={futura} correo={correo} />}
 
         {r && (
           <>
@@ -317,6 +336,17 @@ function Contenido({ panel, futura, hoyISO }: { panel: Panel; futura: boolean; h
           ))}
         </div>
       )}
+      <LoDeLaCuenta panel={panel} />
+      {/* También en una reunión que ya pasó: la nota sirve igual después (2026-10-17). */}
+      <Notas key={panel.eventoId} eventoId={panel.eventoId} panel={panel} futura={futura} />
+    </>
+  );
+}
+
+/** Lo de la cuenta que no es de una reunión en particular: la última vez, lo pendiente y el negocio. */
+function LoDeLaCuenta({ panel }: { panel: Panel }) {
+  return (
+    <>
       {panel.ultima && (
         <div className="flex flex-col gap-1.5">
           <p className={ROTULO_DEL_SISTEMA}>La última vez · {panel.ultima.fecha}</p>
@@ -347,8 +377,96 @@ function Contenido({ panel, futura, hoyISO }: { panel: Panel; futura: boolean; h
           <p className="text-[13px] leading-[19px] text-fg-secondary">{panel.negocio}</p>
         </div>
       )}
-      {/* También en una reunión que ya pasó: la nota sirve igual después (2026-10-17). */}
-      <Notas key={panel.eventoId} eventoId={panel.eventoId} panel={panel} futura={futura} />
+    </>
+  );
+}
+
+/**
+ * Un evento propio en el panel (2026-10-19): «Abrir en Google Calendar» como enlace (no es el clic principal), lo de su
+ * cuenta si nombra una y tus notas. Sin cuenta, solo tus notas: no se inventa de quién es.
+ */
+function EventoPropio({
+  p,
+  cuenta,
+  datos,
+  futura,
+  correo,
+}: {
+  p: EventoPropioDeLaAgenda;
+  cuenta: string | null;
+  datos: { panel: Panel | null; error: string | null } | null;
+  futura: boolean;
+  correo: string;
+}) {
+  const panel = datos?.panel ?? null;
+  const conCuenta = !!cuenta && !!panel?.cliente;
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {conCuenta && (
+          <Link href={`/clients/${encodeURIComponent(cuenta!)}`} className={ENLACE_BOTON}>
+            Ir a la cuenta
+          </Link>
+        )}
+        <a
+          href={p.calendarUrl ?? enlaceAlDia(minutoDelDia(p.inicio).dia, correo)}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs font-medium text-brand transition-colors hover:text-brand-light"
+        >
+          Abrir en Google Calendar
+        </a>
+      </div>
+      {cuenta && !datos ? (
+        <div className="flex flex-col gap-2.5 rounded-xl border border-line px-4 py-3.5">
+          <Skeleton className="h-3 w-40" />
+          <Skeleton className="h-3.5 w-full" delay={40} />
+          <Skeleton className="h-3 w-64" delay={80} />
+        </div>
+      ) : datos?.error ? (
+        <p className="text-[13px] text-danger-ink">{datos.error}</p>
+      ) : (
+        cuenta &&
+        panel &&
+        (panel.cliente ? (
+          <>
+            {panel.proxima ? (
+              <div className="flex flex-col gap-1.5">
+                <p className={ROTULO_DEL_SISTEMA}>La próxima reunión</p>
+                <p className="text-[13px] leading-[19px] text-fg">
+                  {panel.proxima.titulo} <span className="text-fg-muted">· {panel.proxima.cuando}</span>
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <p className={ROTULO_DEL_SISTEMA}>La próxima reunión</p>
+                <p className="text-[13px] leading-[19px] text-fg-muted">Sin reunión con {panel.cliente.nombre} en los próximos 8 días.</p>
+              </div>
+            )}
+            {panel.siguientePaso && (
+              <div className="flex flex-col gap-1.5">
+                <p className={ROTULO_DEL_SISTEMA}>El siguiente paso · {panel.siguientePaso.equipo}</p>
+                <p className="text-[13px] leading-[19px] text-fg">{panel.siguientePaso.que}</p>
+                {(panel.siguientePaso.cuando || panel.siguientePaso.quien) && (
+                  <p className="text-xs text-fg-muted">{[panel.siguientePaso.cuando, panel.siguientePaso.quien].filter(Boolean).join(" · ")}</p>
+                )}
+              </div>
+            )}
+            <LoDeLaCuenta panel={panel} />
+          </>
+        ) : (
+          <p className="text-[13px] leading-[19px] text-fg-muted">El evento nombra una cuenta que no está entre las que ves.</p>
+        ))
+      )}
+      {/* Tus notas, como en una reunión: las ves solo tú. */}
+      <Notas key={p.id} eventoId={p.id} panel={panel} futura={futura} />
+      {!cuenta && (
+        <p className="text-xs leading-4 text-fg-muted">
+          {p.empresas.length > 1
+            ? "El título nombra más de una cuenta: Nexus no elige cuál."
+            : "Si el título o la descripción nombran a un cliente, aquí verías lo de su cuenta."}
+        </p>
+      )}
     </>
   );
 }

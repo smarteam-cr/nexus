@@ -7,7 +7,8 @@
  * Arriba, los cuatro números del día y «Tu día, según Nexus» (lo de Nexus, una sola vez). A la izquierda, la agenda como
  * Google Calendar y «Lo que importa hoy»; a la derecha, lo de cada equipo (el siguiente movimiento de Ventas, las
  * cuentas del CSE con su acción y su reunión, las tareas de hoy y los avisos). Tocar una reunión la abre en un panel al
- * costado, con su guía y su objetivo. Al entrar no se abre nada solo (2026-10-19): el panel lo abre la persona.
+ * costado, con su guía y su objetivo; un evento propio, con lo de su cuenta si nombra una y tus notas. Al entrar no se
+ * abre nada solo (2026-10-19): el panel lo abre la persona.
  */
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -101,7 +102,10 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
     ? { tipo: "hueco", inicio: huecoElegido.inicio, fin: huecoElegido.fin, espacio: huecoElegido.espacio, avanzar: huecoElegido.avanzar }
     : (() => {
           const r = reuniones.find((x) => x.id === elegida);
-          return r ? { tipo: "reunion" as const, reunion: r } : null;
+          if (r) return { tipo: "reunion" as const, reunion: r };
+          // Un evento propio («Tenis», «Preparar demo para Accesos Automáticos») abre su panel como una reunión.
+          const p = agenda?.datos.estado === "ok" ? agenda.datos.propios.find((x) => x.id === elegida && !x.tareaId) : undefined;
+          return p ? { tipo: "propio" as const, propio: p } : null;
         })();
 
   const conCuentas = d.variante === "cse" || d.variante === "csl" || d.variante === "dev";

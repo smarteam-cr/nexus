@@ -30,6 +30,19 @@ const sinPunto = (t: string) => t.trim().replace(/[.\s]+$/, "");
 
 export type DatosParaLaGuia = Pick<ResumenDeLaReunion, "cliente" | "invitados" | "pendientes" | "pasos" | "negocios" | "tickets" | "ultimaVez">;
 
+/**
+ * El siguiente paso que muestra el panel de un evento propio (2026-10-19): el de tu equipo sobre la cuenta, el más
+ * próximo; si tu equipo no tiene, el más próximo de cualquier equipo. Sin pasos, null.
+ */
+export function siguientePasoParaElPanel<P extends { equipo: string; fecha: string | null }>(
+  pasos: readonly P[],
+  equipo: EquipoDelSiguientePaso | null,
+): P | null {
+  const porFecha = (a: P, b: P) => (a.fecha ?? "9999").localeCompare(b.fecha ?? "9999");
+  const delEquipo = equipo ? pasos.filter((p) => p.equipo === equipo).sort(porFecha)[0] : undefined;
+  return delEquipo ?? [...pasos].sort(porFecha)[0] ?? null;
+}
+
 export function guiaDeLaReunion(
   r: DatosParaLaGuia,
   o: { equipo: EquipoDelSiguientePaso | null; hoyISO: string; hayReunionDespues: boolean },
