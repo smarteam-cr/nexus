@@ -153,7 +153,7 @@ export const EXITO_CUENTA: Recorrido = {
     {
       ancla: "cs.proyectos",
       titulo: "Sus proyectos",
-      texto: "Cada proyecto con su salud y su cierre, y por qué se movió el plan. Si el vigía propone cambiar la salud de uno, la confirmas o la descartas desde su fila.",
+      texto: "Cada proyecto con su salud y su cierre, y por qué se movió el plan. Si el vigía propone cambiar la salud de uno, lo dice en su fila y «Decidir» te lleva a «Propuestas del vigía».",
       lado: "bottom-start",
     },
     {

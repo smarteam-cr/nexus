@@ -42,12 +42,9 @@ const mesYAnio = (ymd: string) => `${MESES_LARGOS[Number(ymd.slice(5, 7)) - 1]} 
 
 export default function AccountView({
   data,
-  puedeCurar,
   soloAdopcion = false,
 }: {
   data: CsAccountData;
-  /** ⚠ Resolver la propuesta de salud exige `clientes.viewAll`; abrir esta ficha, no. */
-  puedeCurar: boolean;
   /**
    * La ve el CSE de la cuenta (2026-10-07): solo la pestaña Adopción, sin el panel y sin montos. La cuenta
    * ya llega vaciada desde el servidor (`soloLaAdopcion`, lib/cs/adopcion-del-cse.ts).
@@ -181,7 +178,7 @@ export default function AccountView({
               <PestanaRenovacion data={data} irA={irA} />
             </div>
             <div hidden={pestana !== "proyectos"}>
-              <PestanaProyectos data={data} puedeCurar={puedeCurar} />
+              <PestanaProyectos data={data} />
             </div>
             <div hidden={pestana !== "resultados"}>
               <PestanaResultados data={data} />

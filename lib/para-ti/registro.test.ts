@@ -8,8 +8,8 @@
  *    hace nada.
  * 3. Cada tipo de aviso que se escribe está en el catálogo (TIPOS_DE_AVISO).
  * 4. La tabla `Aviso` solo se escribe desde lib/para-ti/avisos-server.ts.
- * 5. Lo del vigía lleva a la ficha de SU cuenta, no al índice. Esta sí carga la fuente (lib/para-ti/fuentes/cs.ts)
- *    contra una base simulada.
+ * 5. Lo del vigía lleva a la ficha de SU cuenta, no al índice; sus propuestas de salud, a la lista donde se decide
+ *    cada una. Esta sí carga la fuente (lib/para-ti/fuentes/cs.ts) contra una base simulada.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -30,6 +30,8 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 
 }));
+// Las propuestas de salud ya llegan leídas y filtradas (lib/cs/propuestas-del-vigia-server.ts).
+vi.mock("@/lib/cs/propuestas-del-vigia-server", () => ({ cargarPropuestasDelVigia: async () => base.propuestas }));
 
 const RAIZ = join(__dirname, "..", "..");
 const leer = (rel: string) => readFileSync(join(RAIZ, rel), "utf8");
@@ -104,17 +106,21 @@ describe("⛔ lo del vigía lleva a la ficha de su cuenta, no al índice (2026-1
     client: { name },
   });
   const propuesta = (id: string, clientId: string, name: string) => ({
-    id,
-    name: `Proyecto ${id}`,
+    projectId: id,
+    proyecto: `Proyecto ${id}`,
     clientId,
-    healthProposedAt: new Date("2026-10-03T12:00:00Z"),
-    client: { name },
+    cuenta: name,
+    cse: null,
+    actual: "EN_FRICCION",
+    propuesta: "EN_RIESGO",
+    razon: "1 fase vencida",
+    desde: "2026-10-03T12:00:00.000Z",
   });
   const ctx = { ahora: new Date("2026-10-05T15:00:00Z"), hoyISO: "2026-10-05" };
   const medir = async () => {
     const items = await VIGIA.medir({} as never, ctx);
     const deAlertas = items.filter((i) => i.clave.startsWith("cs-vigia:alertas"));
-    return { alertas: deAlertas[0], deAlertas, estados: items.find((i) => i.clave === "cs-vigia:estados") };
+    return { alertas: deAlertas[0], deAlertas, estados: items.find((i) => i.clave === "cs-vigia:salud") };
   };
 
   it("una cuenta: el botón abre su ficha", async () => {
@@ -123,7 +129,9 @@ describe("⛔ lo del vigía lleva a la ficha de su cuenta, no al índice (2026-1
     const { alertas, estados } = await medir();
     expect(alertas?.href).toBe("/customer-success/c-wherex");
     expect(alertas?.enlaces).toBeUndefined();
-    expect(estados?.href).toBe("/customer-success/c-wherex?pestana=proyectos");
+    // La propuesta de salud se decide en «Propuestas del vigía», abierta en ella (2026-10-19).
+    expect(estados?.href).toBe("/customer-success/propuestas?proyecto=p-1");
+    expect(estados?.titulo).toBe("Wherex · Proyecto p-1: de «En fricción» a «En riesgo»");
   });
 
   it("⭐ una línea por cuenta (2026-10-16): «Lo que importa hoy» toma una cosa por cuenta", async () => {
@@ -137,8 +145,8 @@ describe("⛔ lo del vigía lleva a la ficha de su cuenta, no al índice (2026-1
     expect(deAlertas[0].href).toBe("/customer-success/c-wherex");
     expect(estados?.clientId, "las propuestas de dos cuentas no son de una").toBeNull();
     expect(estados?.enlaces).toEqual([
-      { texto: "Kölbi", href: "/customer-success/c-kolbi?pestana=proyectos" },
-      { texto: "Wherex", href: "/customer-success/c-wherex?pestana=proyectos" },
+      { texto: "Kölbi", href: "/customer-success/propuestas?proyecto=p-1" },
+      { texto: "Wherex", href: "/customer-success/propuestas?proyecto=p-2" },
     ]);
   });
 
@@ -159,7 +167,9 @@ describe("⛔ lo del vigía lleva a la ficha de su cuenta, no al índice (2026-1
     for (const href of [alertas?.href, estados?.href, ...deAlertas.flatMap((a) => [a.href, ...(a.enlaces ?? []).map((e) => e.href)])]) {
       expect(href).toMatch(/^\/customer-success\/[^/?]+/);
     }
-    const pestana = new URL(estados!.href, "https://nexus.local").searchParams.get("pestana");
-    expect(pestanaDeLaUrl(pestana), "la ficha no reconoce el parámetro: abriría en «Estado de la cuenta»").toBe("proyectos");
+    for (const a of deAlertas) {
+      const pestana = new URL(a.href, "https://nexus.local").searchParams.get("pestana");
+      if (pestana) expect(pestanaDeLaUrl(pestana), "la ficha no reconoce el parámetro").toBe(pestana);
+    }
   });
 });

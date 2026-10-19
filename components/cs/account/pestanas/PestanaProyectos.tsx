@@ -19,7 +19,7 @@ const QUIEN: Record<string, { texto: string; atencion: boolean }> = {
   DEV: { texto: "Desarrollo", atencion: false },
 };
 
-export default function PestanaProyectos({ data, puedeCurar }: { data: CsAccountData; puedeCurar: boolean }) {
+export default function PestanaProyectos({ data }: { data: CsAccountData }) {
   const activos = data.cuenta.proyectos.filter((x) => x.activo);
   const bloqueados = activos.filter((x) => x.bloqueado).length;
   const corrimiento = Math.max(0, ...activos.map((x) => x.cierre.corrimientoDias ?? 0));
@@ -43,7 +43,6 @@ export default function PestanaProyectos({ data, puedeCurar }: { data: CsAccount
           projects={data.projects}
           projectOps={data.projectOps}
           csePorProyecto={Object.fromEntries(data.cuenta.proyectos.map((p) => [p.id, { nombre: p.cseNombre, deBaja: p.cseDeBaja ?? null }]))}
-          puedeCurar={puedeCurar}
         />
       </section>
 

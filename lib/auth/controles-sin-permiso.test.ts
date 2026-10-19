@@ -36,10 +36,11 @@ const sinComentarios = (rel: string) =>
 
 const PANEL = "app/(shell)/customer-success/page.tsx";
 const FICHA = "app/(shell)/customer-success/[clientId]/page.tsx";
+/** Desde el 2026-10-19 la propuesta de salud del vigía se decide acá, no en la ficha. */
+const PROPUESTAS = "app/(shell)/customer-success/propuestas/page.tsx";
+const LISTA = "components/cs/PropuestasDelVigia.tsx";
 const CS_PANEL = "components/cs/CsPanel.tsx";
 const GRILLA = "components/dashboard/PortfolioGrid.tsx";
-const CHIP = "components/lifecycle/HealthProposalChip.tsx";
-const ACTIVOS = "components/cs/account/ActiveProjectsSection.tsx";
 
 const ENDPOINTS_QUE_SIGUEN_EN_EL_GATE_VIEJO = [
   "app/api/cs/signals/refresh/route.ts",
@@ -61,6 +62,7 @@ describe("⭐ la premisa: esos cuatro endpoints NO son del CSE", () => {
        la pantalla y los cuatro controles darían 403. */
     expect(sinComentarios(PANEL)).toContain("esLiderDeCs(ctx.role)");
     expect(sinComentarios(FICHA)).toContain("esLiderDeCs(ctx.role)");
+    expect(sinComentarios(PROPUESTAS)).toContain("esLiderDeCs(ctx.role)");
   });
 });
 
@@ -71,7 +73,7 @@ describe("las dos pantallas calculan el permiso de ESCRITURA por separado", () =
        botones volverían, con el gate puesto y sin que nada se ponga rojo. */
     const celda = CAPABILITY_TO_PERMISSION.seeAllClients;
     const esperado = `can(ctx.teamMember, "${celda.section}", "${celda.action}")`;
-    for (const p of [PANEL, FICHA]) {
+    for (const p of [PANEL, PROPUESTAS]) {
       expect(sinComentarios(p), `${p} dejó de derivar puedeCurar de la celda del endpoint`).toContain(
         esperado,
       );
@@ -80,7 +82,7 @@ describe("las dos pantallas calculan el permiso de ESCRITURA por separado", () =
 
   it("y se lo pasan a quien pinta los controles", () => {
     expect(sinComentarios(PANEL)).toMatch(/<CsPanel[^>]*puedeCurar=\{puedeCurar\}/);
-    expect(sinComentarios(FICHA)).toMatch(/<AccountView[^>]*puedeCurar=\{puedeCurar\}/);
+    expect(sinComentarios(PROPUESTAS)).toMatch(/<PropuestasDelVigia[\s\S]*?puedeCurar=\{puedeCurar\}/);
   });
 });
 
@@ -108,15 +110,12 @@ describe("⛔ ninguno de los cuatro controles se ofrece sin el permiso", () => {
     expect(src).toMatch(/<ActionCard[^>]*puedeCurar=\{puedeCurar\}/);
   });
 
-  it("Confirmar/Descartar de la propuesta del watchdog no se ofrecen", () => {
-    const src = sinComentarios(CHIP);
-    expect(src, "el chip volvió a ofrecer los dos botones sin mirar el permiso").toContain(
-      "{puedeResolver && (",
-    );
-    /* El chip SIGUE viéndose: la información sobre un proyecto propio es útil aunque no se
-       pueda resolver. Lo que se apaga son los botones, no el aviso. */
-    expect(src).toContain("En riesgo (propuesto por el agente)");
-    expect(sinComentarios(ACTIVOS)).toMatch(/puedeResolver=\{puedeCurar\}/);
+  it("Confirmar/Descartar de la propuesta del vigía no se ofrecen", () => {
+    const src = sinComentarios(LISTA);
+    expect(src, "la lista volvió a ofrecer los dos botones sin mirar el permiso").toContain("{puedeCurar ? (");
+    /* La lista SIGUE viéndose: saber qué propone el vigía es útil aunque no se pueda decidir. Lo que se apaga son
+       los botones, no la información. */
+    expect(src).toContain("Lo confirma el liderazgo de Customer Success.");
   });
 
   it("⚠ y ninguno de los cuatro props tiene default que los resucite", () => {
@@ -124,8 +123,7 @@ describe("⛔ ninguno de los cuatro controles se ofrece sin el permiso", () => {
        muertos en silencio — exactamente el defecto que esto vino a matar. La grilla es la
        excepción declarada (la usa el /dashboard clásico, que ya vive detrás del gate). */
     expect(sinComentarios(CS_PANEL)).not.toMatch(/puedeCurar\s*=\s*(true|false)/);
-    expect(sinComentarios(CHIP)).not.toMatch(/puedeResolver\s*=\s*(true|false)/);
-    expect(sinComentarios(ACTIVOS)).not.toMatch(/puedeCurar\s*=\s*(true|false)/);
+    expect(sinComentarios(LISTA)).not.toMatch(/puedeCurar\s*=\s*(true|false)/);
   });
 });
 

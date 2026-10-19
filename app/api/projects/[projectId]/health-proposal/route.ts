@@ -7,10 +7,14 @@
  *   PATCH { action: "confirm", reason? } → escribe healthStatusOverride=EN_RIESGO
  *                                          (curado) y limpia la propuesta
  *   PATCH { action: "dismiss" }          → solo limpia la propuesta
+ *
+ * Se decide en Éxito del cliente › «Propuestas del vigía» (lib/cs/propuestas-del-vigia.ts). Al decidir se olvida la
+ * medición de «Para ti» de quien decidió: al volver, la propuesta ya no está en el número (2026-10-19).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardCapability } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { olvidarMedicion } from "@/lib/para-ti/medir-server";
 
 export async function PATCH(
   req: NextRequest,
@@ -49,6 +53,7 @@ export async function PATCH(
 
   if (body.action === "dismiss") {
     await prisma.project.update({ where: { id: projectId }, data: clearProposal });
+    if (guard.user.email) olvidarMedicion(guard.user.email);
     return NextResponse.json({ ok: true, dismissed: true });
   }
 
@@ -68,5 +73,6 @@ export async function PATCH(
       ...clearProposal,
     },
   });
+  if (guard.user.email) olvidarMedicion(guard.user.email);
   return NextResponse.json({ ok: true, confirmed: true });
 }

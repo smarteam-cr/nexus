@@ -9414,3 +9414,31 @@ reunión del calendario y la página de la sesión mostraban lo mismo con piezas
   El botón de la línea de una reunión dice «Revisar sesión».
 - **Lo que no cambió:** el aviso de una reunión prometida no sale si la reunión ya está en el calendario de quien lleva
   la cuenta (Accesos Automáticos: la demo del 21 oct está agendada), y una reunión interna no avisa (desde el 18 oct).
+
+## Las propuestas de salud del vigía se deciden en un solo lugar (2026-10-19)
+
+**Contexto.** Elías y Alex Vanegas vieron en «Para ti» «El vigía propone cambiar el estado de 9 proyectos en 9
+cuentas». El botón llevaba a la pestaña «Proyectos» de UNA cuenta, donde el chip rojo «En riesgo (propuesto por el
+agente)» estaba al lado de «HubSpot: A tiempo» y de otro chip que proponía «Pasar a Retrasado». No se entendía qué se
+proponía ni de qué a qué. Medido ese día: las 9 eran de SALUD (`Project.healthProposed` = EN_RIESGO, de «En fricción»),
+ninguna de etapa. Las de etapa («de Diagnóstico a Implementación») las deja la lectura de cada reunión, no el vigía, y le
+llegan al CSE como «Confirma si … pasó a …» (5 vivas ese día).
+
+- **Se dice «salud», no «estado»**: la salud es de Nexus; el estado es de HubSpot (`hs_status`). El aviso, la lista y el
+  chip dicen «de «En fricción» a «En riesgo»», y el chip de HubSpot pasa a «Estado en HubSpot: …» con «Pasar el estado a
+  «…» en HubSpot».
+- **Se decide en un solo lugar**: Éxito del cliente › «Propuestas del vigía» (`/customer-success/propuestas`), una fila
+  por propuesta con la cuenta, el proyecto, de qué a qué, por qué y desde cuándo, y «Confirmar» / «Descartar». El aviso
+  lleva ahí abierto en la que más espera (`?proyecto=`, resaltada, con el único botón azul) y cada cuenta del aviso
+  enlaza a su fila. El chip de la ficha ya no decide: dice lo mismo y «Decidir» lleva a la lista. Decidir sigue pidiendo
+  `clientes.viewAll`; sin ella, la lista se ve sin los botones.
+- **El porqué se arma con las señales de hoy** (`razonDelRiesgo`, lib/cs/propuestas-del-vigia.ts), la misma frase que
+  guarda el vigía al proponer: lo guardado se quedaba viejo («sin avance hace 18 días» cuando ya iban 31).
+- **Lo decidido o lo que ya no aplica no se cuenta** (`estadoDeLaPropuesta`): si alguien fijó la salud a mano, o la
+  señal desapareció (fases al día, proyecto pausado o cerrado), la propuesta sale del aviso, de la lista y del chip. El
+  vigía la borra la próxima vez que corre para ese proyecto, y hoy corre solo al entrar a la cuenta. Una sola lectura
+  (`cargarPropuestasDelVigia`) alimenta el aviso y la lista, así no cuentan distinto.
+- **Al decidir, sale del número al instante**: la fila se va de la lista y la ruta olvida la medición de «Para ti» de
+  quien decidió. A otra persona de dirección le sale en hasta dos minutos (la medición guardada).
+- **Lo que no cambió**: la propuesta la sigue haciendo el vigía por reglas del cronograma (`riskCandidate`), no la IA;
+  la de etapa sigue siendo la encuesta de la etapa, con su propia línea para el CSE.

@@ -1,6 +1,6 @@
 /**
  * lib/para-ti/fuentes/cs.ts — el frente «Liderar Customer Success». Lo que no tiene a una persona escrita en el dato:
- * las alertas del vigía (`CsAlert` no se asigna a nadie), las propuestas de estado del proyecto que dejó el vigía, los
+ * las alertas del vigía (`CsAlert` no se asigna a nadie), las propuestas de SALUD del proyecto que dejó el vigía, los
  * proyectos sin encargado y las propuestas de cronograma que llevan días esperando en el equipo.
  *
  * Todo enlaza a pantallas que solo abren la CSL y Super Admin (Éxito del cliente), que es justo el requisito del
@@ -24,6 +24,8 @@ import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
 import type { PestanaDeCuenta } from "@/lib/cs/pestanas-de-la-cuenta";
 import { sinExclientes } from "@/lib/cs/exclientes";
 import { cuentasExcliente } from "@/lib/cs/exclientes-server";
+import { cargarPropuestasDelVigia } from "@/lib/cs/propuestas-del-vigia-server";
+import { avisoDeLasPropuestas } from "@/lib/cs/propuestas-del-vigia";
 
 import { lecturasDelPedido } from "@/lib/mi-dia/lecturas-server";
 import { pideAtencion } from "@/lib/cs/lectura-de-la-cuenta";
@@ -32,7 +34,7 @@ import { haceCuanto, plural } from "../armar";
 import { MAX_LO_QUE_IMPORTA, necesitaEstabilizar } from "../importa";
 
 import type { Fuente } from "../fuente";
-import type { EnlaceDePendiente, Pendiente } from "../tipos";
+import type { Pendiente } from "../tipos";
 
 /** Cuántas cuentas del vigía van con su propia línea; las demás, juntas en una. */
 export const CUENTAS_DEL_VIGIA_POR_LINEA = 5;
@@ -85,34 +87,23 @@ function porCuenta(xs: readonly { clientId: string; client: { name: string } }[]
   return [...cuentas.values()];
 }
 
-function enlacesDe(cuentas: ReturnType<typeof porCuenta>, pestana?: PestanaDeCuenta): EnlaceDePendiente[] | undefined {
-  if (cuentas.length < 2) return undefined;
-  return cuentas.map((c) => ({ texto: c.n > 1 ? `${c.nombre} (${c.n})` : c.nombre, href: fichaDeLaCuenta(c.clientId, pestana) }));
-}
-
 export const VIGIA: Fuente = {
   clave: "cs-vigia",
   frente: "LIDERAR_CS",
   alDia: "Las alertas del vigía",
   async medir() {
-    const [todasLasAlertas, todasLasPropuestas, exclientes] = await Promise.all([
+    const [todasLasAlertas, propuestas, exclientes] = await Promise.all([
       prisma.csAlert.findMany({
         where: { status: "OPEN", severity: "HIGH" },
         select: { id: true, clientId: true, title: true, firstDetectedAt: true, client: { select: { name: true } } },
         orderBy: { firstDetectedAt: "asc" },
         take: 100,
       }),
-      prisma.project.findMany({
-        where: { healthProposed: { not: null }, esPrueba: false },
-        select: { id: true, name: true, clientId: true, healthProposedAt: true, client: { select: { name: true } } },
-        orderBy: { healthProposedAt: "asc" },
-        take: 50,
-      }),
+      cargarPropuestasDelVigia(),
       cuentasExcliente(),
     ]);
-    // Las alertas de un excliente no se muestran (lib/cs/exclientes.ts).
+    // Las alertas de un excliente no se muestran (lib/cs/exclientes.ts). Las propuestas ya vienen sin ellos.
     const alertas = sinExclientes(todasLasAlertas, exclientes, (a) => a.clientId);
-    const propuestas = sinExclientes(todasLasPropuestas, exclientes, (p) => p.clientId);
     const out: Pendiente[] = [];
     if (alertas.length) {
       // Las alertas se ven en la ficha de su cuenta, en «Alertas» (a la derecha, en cualquier pestaña).
@@ -152,30 +143,24 @@ export const VIGIA: Fuente = {
         });
       }
     }
-    if (propuestas.length) {
-      // La propuesta de estado se confirma o descarta en la pestaña «Proyectos» de la ficha.
-      const p = propuestas[0];
-      const cuentas = porCuenta(propuestas);
-      const uno = propuestas.length === 1;
+    // Las propuestas de SALUD del vigía (no de etapa: esas las propone la lectura de cada reunión y le llegan al CSE en
+    // «Confirma si … pasó a …»). Una sola línea con todas, en palabras, que lleva a la lista donde se decide cada una
+    // (lib/cs/propuestas-del-vigia.ts). Lo ya decidido o lo que ya no aplica no entra (`estadoDeLaPropuesta`).
+    const aviso = avisoDeLasPropuestas(propuestas);
+    if (aviso) {
       out.push({
-        clave: "cs-vigia:estados",
+        clave: "cs-vigia:salud",
         fuente: "cs-vigia",
         cuando: "hoy",
         delAgente: true,
-        titulo: uno
-          ? `El vigía propone cambiar el estado de «${p.name}» de ${p.client.name}`
-          : cuentas.length === 1
-            ? `El vigía propone cambiar el estado de ${propuestas.length} proyectos de ${p.client.name}`
-            : `El vigía propone cambiar el estado de ${propuestas.length} proyectos en ${cuentas.length} cuentas`,
-        detalle: uno
-          ? "Confírmalo o descártalo en «Proyectos» de la cuenta: el estado no cambia solo."
-          : "Confírmalos o descártalos en «Proyectos» de cada cuenta: el estado no cambia solo.",
-        meta: "Éxito del cliente · estado del proyecto",
-        accion: cuentas.length === 1 ? "Revisar" : "Revisar la que más espera",
-        clientId: cuentas.length === 1 ? p.clientId : null,
-        href: fichaDeLaCuenta(p.clientId, "proyectos"),
-        enlaces: enlacesDe(cuentas, "proyectos"),
-        desde: p.healthProposedAt?.toISOString() ?? null,
+        titulo: aviso.titulo,
+        detalle: aviso.detalle,
+        meta: "Éxito del cliente · salud del proyecto",
+        accion: aviso.accion,
+        clientId: aviso.clientId,
+        href: aviso.href,
+        enlaces: aviso.enlaces,
+        desde: aviso.desde,
       });
     }
     return out;

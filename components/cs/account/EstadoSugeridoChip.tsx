@@ -93,13 +93,15 @@ export default function EstadoSugeridoChip({
         `motivo: borralo en HubSpot y este aviso desaparece.`
       }
     >
-      HubSpot dice «{motivo?.trim()}» pero el estado no
+      {/* Dice qué campo de HubSpot es cada cosa: «estado» solo, al lado de la salud que propone el vigía, no se
+          entendía de qué estado se hablaba (2026-10-19). */}
+      En HubSpot el motivo es «{motivo?.trim()}» y el estado dice «{estadoActual ? (HS_STATUS_LABEL[estadoActual] ?? estadoActual) : "sin estado"}»
       <button
         onClick={aceptar}
         disabled={busy}
         className="underline decoration-dotted hover:text-fg disabled:opacity-50"
       >
-        {busy ? "…" : `Pasar a ${destino}`}
+        {busy ? "…" : `Pasar el estado a «${destino}» en HubSpot`}
       </button>
     </span>
   );
