@@ -7064,6 +7064,20 @@ vez (`LecturaDeReunion`). Elías decidió que `ActionItem` se retira y que los p
   proponen los compromisos de Smarteam. Las propuestas vencen a los 14 días, como toda propuesta de Tareas. *Por qué:*
   un próximo paso, un solo destino. El cronograma no se toca en esta etapa: el canal al cronograma de lo que frena el
   plan es de la etapa 6.
+- **Un seguimiento por reunión y cuenta** (Elías, 2026-10-19). Lo que prometió el cliente en una misma reunión (o un
+  mismo correo) para la misma persona es UNA propuesta, «Seguimiento con Honda Costa Rica: 3 cosas que prometió Randall
+  (lun 12 oct)», con la lista de lo que falta en su contexto (cada línea con su fecha y «frena el plan»). Lo junta
+  `armarPropuestasDeSeguimiento` antes del único escritor; una sola cosa sigue con su título propio. El día va en el
+  título para que dos reuniones de la misma cuenta no se junten por la huella. Lo que se comprometió Smarteam sigue una
+  por una: es trabajo distinto, a veces de personas distintas. El tope de 5 por persona por reunión cuenta la agrupada
+  como una. *Por qué:* medido ese día, 27 de las 80 propuestas vivas eran seguimientos sueltos en 15 reuniones, y en
+  «Mis tareas» de una CSE se leían como tres tareas distintas. Lo ya propuesto se junta con
+  `scripts/agrupar-seguimientos-propuestos.ts` (simulacro primero: 27 → 8 agrupadas + 7 solas); las sueltas quedan
+  «Era otra tarea» en la nueva, firmadas por el sistema, y lo que decidió una persona no se toca.
+- **Decidir lo de una reunión, en la reunión** (mismo día). En «Mis tareas» las propuestas van agrupadas por la reunión
+  de la que salieron, con «Decidir en la reunión» (`/sessions/<id>#lo-que-dejo`); cada fila es el título, para quién y
+  para cuándo, y lo demás (contexto, cita, historia) está en el cajón. «Tomarlo o decidir» de «Para ti» lleva a «Lo que
+  dejó esta reunión» si el compromiso es tuyo y salió de una reunión; lo de un correo o «Por asignar» abre la tarea.
 - **`ActionItem` queda DEPRECATED, sin DROP y sin borrar filas**, con todos sus escritores apagados: el post-proceso, la
   copia de pendientes de `/analyze` y la ruta que los creaba, que ahora responde 410. El script histórico
   `scripts/migrate-pending-items-to-action-items.ts`, que todavía los creaba con `--apply`, se retiró el 2026-10-10. Una

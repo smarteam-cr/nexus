@@ -372,6 +372,11 @@ export function CajonDeTarea({
             </div>
           )}
 
+          {/* Una tuya (`cambiarPrivada` = eres su responsable) en «Más adelante»: se agenda cuando tiene semana. */}
+          {(t.estado === "pendiente" || t.estado === "en_curso") && !t.semana && acc.cambiarPrivada && !t.agenda.tienesBloque && (
+            <p className="text-[13px] text-fg-muted">Para agendarla en tu calendario, ponla en una semana.</p>
+          )}
+
           {/* Un bloque en TU calendario se quita aunque la tarea ya no sea tuya o esté en «Más adelante». */}
           {t.agenda.tienesBloque && !((t.estado === "pendiente" || t.estado === "en_curso") && t.semana && acc.agendar) && (
             <div className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-[13px] text-fg-secondary">

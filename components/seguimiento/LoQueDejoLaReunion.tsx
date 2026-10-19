@@ -386,7 +386,7 @@ export default function LoQueDejoLaReunion({ inicial, sinCompromisos = false }: 
               return (
                 <FilaSugerida
                   key={t.id}
-                  origen={t.contexto ? <span className="line-clamp-2">{t.contexto}</span> : undefined}
+                  origen={t.contexto ? <span className="line-clamp-4 whitespace-pre-line">{t.contexto}</span> : undefined}
                   debajo={<Cita texto={t.cita} />}
                   acciones={
                     <>

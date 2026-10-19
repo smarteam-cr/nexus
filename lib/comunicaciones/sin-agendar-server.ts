@@ -55,6 +55,7 @@ export async function compromisosSinAgendar(
       createdAt: true,
       venceEl: true,
       clientId: true,
+      sessionId: true,
       client: { select: { name: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -72,6 +73,7 @@ export async function compromisosSinAgendar(
       creadaAt: f.createdAt,
       venceEl: f.venceEl ? f.venceEl.toISOString().slice(0, 10) : null,
       clientId: f.clientId!,
+      sessionId: f.sessionId,
     } satisfies CompromisoParaAvisar,
     empresa: f.client?.name ?? "La cuenta",
   }));
