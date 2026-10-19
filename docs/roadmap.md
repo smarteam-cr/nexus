@@ -35,14 +35,14 @@ chocar:
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `7d7e92df` desde el 17 oct a las 22:02, hora de Costa Rica. Sana, con el esquema al día. |
-| Por desplegar | En `main` y sin desplegar: la escala (ediciones Turismo y Automotriz sin publicar, «Actualizar escala»), las propuestas (proyecto o recurrente, licencias con su margen, módulos y biblioteca), el servicio recurrente en la ficha, el gasto de la IA por mes con su proyección, la guía nueva de la preventa, las comunicaciones de HubSpot en el contexto, la rentabilidad con la meta, la propuesta de comisiones, el cobro automático y el menú de Finanzas, y los arreglos de «Para ti» (agenda, cartera del CSE, exclientes). 714 pruebas en verde y tsc en 0. |
+| Producción | Corre `341ca6fe` desde el 19 oct a las 2:00, hora de Costa Rica. Sana, con el esquema al día. |
+| Por desplegar | Nada: todo `main` está en producción. 12.179 pruebas en verde y tsc en 0. |
 | En curso | Nada construyéndose: los arreglos de las pruebas del 19 oct ya están en `main` (12.179 pruebas en verde, tsc en 0). |
 | La base | Tiene todo lo que necesita lo que está en `main`: los SQL del 18 oct ya se aplicaron (biblioteca de módulos, escala ligada a la venta, servicio recurrente, gasto de IA, rentabilidad conectada y comunicaciones de HubSpot). La copia de comunicaciones ya corrió: 256 notas y 6 llamadas. |
 | En rojo en producción | Un proyecto en un pipeline sin declarar, un cliente apuntando a una empresa fusionada en HubSpot y el corte de cobranza, que nunca corrió. |
 | Revisión de código | Hecha el 17 oct sobre los 31 cambios de entonces: 57 problemas encontrados, unos 50 corregidos y en `main`. Ninguno mezclaba clientes. |
 
-**Lo siguiente en todo Nexus:** que valides en el 3004 lo nuevo (pestaña «Pruebas», empezando por las de prioridad alta), y después desplegar `main` (tú). Tres cosas que son tuyas: el permiso de correos de HubSpot (abajo, en «Lo que configuras tú»), dar de alta a María José y revisar la escala 8.9.1 para publicarla. Después del deploy armo las propuestas recurrentes internas de Cayalá, Grupo Inve, FACO (Honda Costa Rica) y kölbi. Yo corro lo que va después del deploy: cerrar las alertas sueltas, limpiar las reuniones con texto de otra, rescatar las transcripciones (la primera versión de la escala ya quedó guardada).
+**Lo siguiente en todo Nexus:** que sigas validando en producción lo nuevo (pestaña «Pruebas», empezando por las de prioridad alta). Tres cosas que son tuyas: el permiso de correos de HubSpot (abajo, en «Lo que configuras tú»), dar de alta a María José y revisar la escala 8.9.1 para publicarla. Lo de después del deploy ya corrió el 19 oct: 127 alertas sueltas cerradas, 189 reuniones con el texto de otra limpiadas (respaldo en `backups/2026-10-19-limpiar-analisis-de-otra-reunion/`) y 300 de 1.249 transcripciones encoladas para rescatar (el resto, en tandas, cuando el job drene). Falta volver a generar los handoffs que leyeron el texto de otra reunión (RC Inmobiliaria, AMC, DISTELSA, Grupo Printer, REMPRO, Teamnet) con «Rehacer desde cero». Después armo las propuestas recurrentes internas de Cayalá, Grupo Inve, FACO (Honda Costa Rica) y kölbi.
 
 En cada paso: **[hecho]** está hecho (en producción si la tarjeta lo dice); **[en curso]** lo está construyendo una sesión ahora.
 
@@ -63,7 +63,7 @@ los correos ni el timeline de HubSpot, así que no podía avisar.
 
 Estas cuatro van antes que el resto de la serie. La preventa es la primera.
 
-### A · La preventa lleva a la siguiente pregunta lógica <span class="estado">Por desplegar</span>
+### A · La preventa lleva a la siguiente pregunta lógica <span class="estado">En producción</span>
 
 Si el cliente ya hizo el diagnóstico, Nexus le dice al vendedor qué le falta preguntar, y nada más.
 
@@ -77,10 +77,10 @@ Si el cliente ya hizo el diagnóstico, Nexus le dice al vendedor qué le falta p
 8. [hecho] «Regenerar pregunta» en cada pregunta, sin rearmar la guía, y agregar preguntas a mano, que sobreviven a «Actualizar la guía».
 9. [hecho] «Mejorar con el asistente»: pedirle con el contexto del cliente «más preguntas de la escala», «profundiza en sistemas», o mejorar las repreguntas, y aplicar lo que propone con un clic.
 10. [hecho] Lo que cubre la guía, pegado a la guía (arriba de «Retos de su industria») en vez del panel derecho, y que se actualice con cada cambio.
-11. [en curso] El asistente, fluido como una conversación: propone los cambios directo en la lista (sin preguntar antes «¿Las agrego?»), un solo resumen y una línea al aplicar; cambia todas las repreguntas de una pregunta en un paso; y responde más rápido, con el contexto y el modelo justos.
-12. [en curso] «Regenerar pregunta», «Editar» y «Borrar» en un menú de tres puntos en cada pregunta.
+11. [hecho] El asistente, fluido como una conversación: propone los cambios directo en la lista (sin preguntar antes «¿Las agrego?»), un solo resumen y una línea al aplicar; cambia todas las repreguntas de una pregunta en un paso; y responde más rápido, con el contexto y el modelo justos.
+12. [hecho] «Regenerar pregunta», «Editar» y «Borrar» en un menú de tres puntos en cada pregunta.
 
-### B · Los correos y el timeline de HubSpot, en el contexto de la cuenta <span class="estado">Por desplegar</span>
+### B · Los correos y el timeline de HubSpot, en el contexto de la cuenta <span class="estado">En producción</span>
 
 Todo conectado: las reuniones, los correos, el timeline de HubSpot y lo que se ingresa a mano, para que no se pase un seguimiento.
 
@@ -89,7 +89,7 @@ Todo conectado: las reuniones, los correos, el timeline de HubSpot y lo que se i
 3. [hecho] Si un compromiso con fecha no está en el calendario ni en Tareas a las 48 horas, avisa al CSE y a quien lidera Customer Success.
 4. [hecho] Las notas y los acuerdos que se ingresan a mano entran al mismo contexto que leen los agentes, la preventa y el chat.
 
-### C · La rentabilidad, conectada con las agendas y las tareas <span class="estado">Por desplegar</span>
+### C · La rentabilidad, conectada con las agendas y las tareas <span class="estado">En producción</span>
 
 Nexus ya sabe, sin que nadie marque tiempo, qué reuniones tiene cada persona y con qué cliente. Esa es la base del margen.
 
@@ -98,7 +98,7 @@ Nexus ya sabe, sin que nadie marque tiempo, qué reuniones tiene cada persona y 
 3. [hecho] La línea de «por facturar» del punto de equilibrio, la que sube al final: qué recurrencia y qué expansiones faltan para que suba, y cuánto.
 4. [hecho] Una lectura de los números: Nexus detecta lo que no progresa y propone qué hacer y cuánto invertir; una persona valida.
 
-### D · Comisiones que cuiden el valor de la cuenta <span class="estado">Por desplegar</span>
+### D · Comisiones que cuiden el valor de la cuenta <span class="estado">En producción</span>
 
 El caso de Marco: bajar una recurrencia de US$3.000 a US$2.800 al mes regala US$2.400 al año, y hoy igual se paga el
 100 % de la comisión. Mi propuesta, para validar con Marco:
@@ -125,7 +125,7 @@ propongo: primero la escala, porque las propuestas y el servicio recurrente se a
 - **Cada agente nuevo, medido**: su costo por cliente y por proceso en «Uso de Nexus» desde el primer día.
 - **Sin sobreingeniería**: si algo se resuelve con lo que ya existe (las tareas, la agenda por enlace, el motor de las propuestas), se usa eso.
 
-### 1 · La escala que entiende el negocio del cliente <span class="estado">Por desplegar</span>
+### 1 · La escala que entiende el negocio del cliente <span class="estado">En producción</span>
 
 Hoy hay cuatro ediciones (ecommerce y retail, banca, educación, inmobiliaria) y la edición y el perfil se eligen solos, pero no queda claro por qué ni qué cambian. Para que la escala le sirva a quien explora y a quien posiciona, tiene que representar el modelo de negocio de cada cliente.
 
@@ -135,7 +135,7 @@ Hoy hay cuatro ediciones (ecommerce y retail, banca, educación, inmobiliaria) y
 4. [hecho] Publicada la 8.9.0 el 18 oct, con Turismo y Automotriz: se ven en la sección de la escala. El resumen está en `docs/escala/ediciones-turismo-automotriz.md`.
 5. [hecho] Que cada edición esté personalizada de verdad: cada nivel de cada dimensión dice al menos un criterio con las palabras de su industria. 322 criterios reescritos en las seis ediciones, sin criterios nuevos. En `main` como 8.9.1, sin publicar: la publico cuando la revises (prueba 108).
 
-### 2 · La escala de cada empresa: «Actualizar escala» con todo el contexto <span class="estado">Por desplegar</span>
+### 2 · La escala de cada empresa: «Actualizar escala» con todo el contexto <span class="estado">En producción</span>
 
 Hoy el agente lee menos de lo que dice: en un proyecto no lee lo vendido, las minutas, las tareas, el cronograma ni HubSpot; no vuelve a leer las reuniones ya leídas; y un cliente sin proyecto activo ni preventa no tiene botón. La historia guarda el proyecto y el ciclo, pero no la venta, y siempre con la fecha de hoy.
 
@@ -145,7 +145,7 @@ Hoy el agente lee menos de lo que dice: en un proyecto no lee lo vendido, las mi
 4. [hecho] La historia amarrada a la venta: cada versión dice de qué venta, preventa, proyecto o servicio sale, y se puede fechar en su momento («al vender», «al arrancar», «hoy»), para ver cuánto se movió la empresa desde que nos compró.
 5. [hecho] Con varios proyectos o ventas, elegir sobre cuál se ubica.
 
-### 3 · Propuestas: proyecto o recurrente, licencias aparte y módulos que se reusan <span class="estado">Por desplegar</span>
+### 3 · Propuestas: proyecto o recurrente, licencias aparte y módulos que se reusan <span class="estado">En producción</span>
 
 Revisé las propuestas: hay 66 secciones personalizadas en 23 empresas, armadas a mano por Andrés y Marco. Se repiten: casos de uso a implementar (7), arquitectura y diagramas (16), qué contiene el acuerdo y SLA (8), antes y después, comparación de licencias (Starter contra Pro) y forma de pago. Cayalá y Grupo Inve ya se vendieron como servicio recurrente con SmartLoop, todo en HTML hecho a mano.
 
@@ -157,7 +157,7 @@ Revisé las propuestas: hay 66 secciones personalizadas en 23 empresas, armadas 
 6. [hecho] Una biblioteca para lo demás: cualquier sección personalizada se guarda como módulo y se usa en otra propuesta, con «Adaptar a esta empresa» (la IA cambia los textos sin tocar el diseño). Sin código a la medida.
 7. FACO, Colby, Cayalá y Grupo Inve: lo que ya se les vendió se arma como una propuesta recurrente nueva, interna, sin tocar la que firmaron. De ahí sale su servicio en Nexus. El script ya está y corrió en simulacro; lo aplico después del deploy (FACO es Honda Costa Rica; falta confirmar que «Colby» es kölbi).
 
-### 4 · El servicio recurrente, dentro de la ficha del cliente <span class="estado">Por desplegar</span>
+### 4 · El servicio recurrente, dentro de la ficha del cliente <span class="estado">En producción</span>
 
 No un sistema para manejar ciclos: una guía para que el CSE entienda un servicio recurrente y lo lleve con cadencia. La ficha del cliente sigue igual (escala, exploración, encuestas); solo cambia un poco si el servicio es recurrente y cuál es.
 
@@ -169,7 +169,7 @@ No un sistema para manejar ciclos: una guía para que el CSE entienda un servici
 6. Pasar los recurrentes de hoy uno por uno con su CSE: Continuidad, administración de sitio web y contenido.
 7. Definir contigo la cadencia y las rutinas de cada servicio del catálogo.
 
-### 5 · Finanzas: terminar de simplificar <span class="estado">Por desplegar</span>
+### 5 · Finanzas: terminar de simplificar <span class="estado">En producción</span>
 
 **Decidiste el 18 oct:** cobrar solo, cada día, lo que Odoo y Mercury dan por pagado y conciliado; el menú de los Super Admin sin lo de quien registra; María José concilia cada mañana (con una cuenta nueva que das de alta tú); y primero el libro, después el menú. Caja neta lo decide Alex. La construcción espera que arranques su tarjeta.
 
@@ -189,7 +189,7 @@ No encontré en ningún plan la frase «simplificar demasiado». Lo más cercano
 8. [hecho] Que el punto de equilibrio cuente solo lo del año, y explicar la diferencia de ventas sin cobranza (US$218.000 en Nexus contra los ~US$90.000 que esperaba Marco).
 9. Dar de alta a María José (tú): Equipo › agregar persona con su correo de Smarteam y área «Admin», rol «Asistente administrativo». Sin Planilla, Aguinaldo ni Comisiones de vendedor.
 
-### 6 · El gasto de la IA: verlo, proyectarlo y bajarlo <span class="estado">Por desplegar</span>
+### 6 · El gasto de la IA: verlo, proyectarlo y bajarlo <span class="estado">En producción</span>
 
 Hoy el gasto se anota completo, llamada por llamada, y se ve por agente, cliente y proceso en 30 o 90 días. Falta verlo por mes, contra el tope y hacia adelante. El tope diario ($15 para lo automático y $60 para lo que pide una persona) solo avisa: no frena.
 
@@ -225,7 +225,7 @@ Lo primero que ve cada persona al entrar: lo que importa hoy, sus cuentas y sus 
 8. [hecho] La agenda, con lo que encontraste al validar: más rápida; un sábado o un domingo muestra la semana siguiente; un hueco elegido se suelta tocando afuera o la X; «Agendar» arma la reunión en Nexus antes de abrir Calendar; «Tus notas» también en las reuniones que ya pasaron.
 9. [hecho] La cartera del CSE: «Planificar acción» en las cuentas sin acción, que la pone en la agenda; el uso de HubSpot de cada cuenta (si sube o baja, por los hubs que compró); y un botón con nombre claro en vez de «Abrir cuenta».
 10. [hecho] Que nada quede fuera de «Lo que importa hoy»: si a un CSE le piden atención más cuentas de las que entran, «Estabilizar N cuentas», y a la CSL le llega para repartir o acompañar.
-11. [en curso] Planificar la semana también el viernes, el sábado y el domingo, y la agenda abierta en la vista de semana.
+11. [hecho] Planificar la semana también el viernes, el sábado y el domingo, y la agenda abierta en la vista de semana.
 
 ### Reuniones y memoria <span class="estado">En producción</span>
 
@@ -342,7 +342,7 @@ consola de Google:
 
 ## Pruebas
 
-Cada prueba dice qué tiene que funcionar, cómo comprobarlo y qué tiene que pasar, todo en el 3004. Dime el número y cómo te fue, y lo marco. Los estados, en el orden en que van:
+Cada prueba dice qué tiene que funcionar, cómo comprobarlo y qué tiene que pasar, en producción (o en el 3004, que usa la misma base). Dime el número y cómo te fue, y lo marco. Los estados, en el orden en que van:
 
 - **↻ Validar otra vez**: lo corregí, o cambió después de que lo validaste. Ya está en `main`: pruébalo de nuevo.
 - **Por validar**: te toca a ti.
@@ -351,7 +351,7 @@ Cada prueba dice qué tiene que funcionar, cómo comprobarlo y qué tiene que pa
 
 Las áreas van por prioridad: **Alta** antes del deploy (toca plata, la usa todo el equipo cada día, la ve el cliente, o es SmartLoop y comisiones), **Media** lo que se usa todos los días sin ese riesgo, y **Baja** lo que es solo de dirección. Para entrar como otra persona: Equipo › la persona › «Ver como»; «Volver a mi usuario» te devuelve.
 
-Los SQL ya están aplicados: reinicia el `dev:prod` antes, porque cambió el schema. Lo que dice «al día siguiente del deploy» solo se ve en producción.
+Todo `main` está en producción desde el 19 oct (`341ca6fe`). Si usas el 3004, haz `git pull` y reinícialo antes.
 
 **Lo que se arregló el 19 oct, con tu revisión y la mía:**
 
