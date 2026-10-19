@@ -300,6 +300,9 @@ Lo que ya está en producción y les toca revisar a ellos, no a ti.
 | 5 | Alex Arrieta | El punto de equilibrio: lo facturado y cobrado de cada mes |
 | 6 | Customer Success | Usar la escala con 5 a 8 clientes y decir dónde no calza |
 | 7 | Alex Vanegas | Cerrar en HubSpot el proyecto «Wherex - Migración CRM + integraciones operativas» (sigue activo, a nombre de hgomez) y marcar a Wherex como «Excliente» en Éxito del cliente › Cartera |
+| 8 | María José o Alex Arrieta, después del deploy | Conciliación › «Lo pagado»: que lo pagado y conciliado en Odoo y Mercury se cobre solo cada mañana, y que lo dudoso quede ahí con su porqué |
+| 9 | Alejandra Ortega, después del deploy | Tareas › Semana del equipo › «La reunión del sprint»: elegir «Sprint planning de marketing» (lunes 9:30) como planning y «Retrospectiva de marketing» (viernes) como cierre. El día siguiente, ella y Lidia ven en Mis tareas como mucho 5 propuestas cada una, marcadas «Sprint interno» |
+| 10 | Alex Vanegas, después del deploy | Lo mismo para Customer Success: «Weekly Execution Review» (lunes 8:15) y «Revisión de Resultados y Cierre Semanal» (jueves), con Gemini tomando notas. El día siguiente, cada CSE ve sus propuestas marcadas «Sprint interno» |
 
 ## Lo que configuras tú en HubSpot
 
@@ -319,28 +322,40 @@ consola de Google:
 Cada prueba dice qué tiene que funcionar, cómo comprobarlo y qué tiene que pasar, todo en el 3004. Dime el número y cómo te fue, y lo marco. Los estados, en el orden en que van:
 
 - **↻ Validar otra vez**: lo corregí, o cambió después de que lo validaste. Ya está en `main`: pruébalo de nuevo.
-- **Por validar**: nadie lo probó todavía.
-- **⏳ No probar todavía**: lo estoy corrigiendo en otra sesión; cuando esté en `main` pasa a «Validar otra vez».
-- **✓ Validado**, con la fecha: va al final.
+- **Por validar**: te toca a ti.
+- **⏳ No te toca ahora**: lo estoy arreglando, lo reviso yo después del deploy, o espera a alguien del equipo. El motivo va en el estado.
+- **✓ Validado**, con la fecha. **✓ Validado por Claude**: lo comprobé yo con los datos de producción y las pruebas automáticas; no hace falta que lo mires.
 
-Las áreas van por prioridad: **Alta** antes del deploy (toca plata, la usa todo el equipo cada día o la ve el cliente), **Media** lo que se usa todos los días sin ese riesgo, y **Baja** lo que es solo de dirección, una simulación o un piloto. Para entrar como otra persona: Equipo › la persona › «Ver como»; «Volver a mi usuario» te devuelve.
+Las áreas van por prioridad: **Alta** antes del deploy (toca plata, la usa todo el equipo cada día, la ve el cliente, o es SmartLoop y comisiones), **Media** lo que se usa todos los días sin ese riesgo, y **Baja** lo que es solo de dirección. Para entrar como otra persona: Equipo › la persona › «Ver como»; «Volver a mi usuario» te devuelve.
 
 Los SQL ya están aplicados: reinicia el `dev:prod` antes, porque cambió el schema. Lo que dice «al día siguiente del deploy» solo se ve en producción.
 
-### 1 · Finanzas: cobro automático y menú <span class="prioridad">Alta</span>
+**Lo que encontré al validar (18 oct):**
+
+- Arreglado: una reunión interna («reunión interna el lunes») avisaba en «Para ti» como reunión prometida al cliente (Seléctrica, Larce).
+- Arreglado en los sprints: se podía elegir una reunión suelta como serie (nunca leía nada), una instancia con alguien de afuera se leía igual, y «Reanudar» se pasaba del tope de 4.
+- Por arreglar: una cuota ya cobrada nunca recibe su número de factura de Odoo (Corrugando 0221, Transportes Juanva 0230 y 0197, Grupo Servica 0268), y la de Juanva quedó pegada por monto a una factura que Odoo da sin pagar (prueba 36).
+- La copia de Odoo de 2023 y 2024 parece incompleta (2023 sin facturas, 2024 con 8): la barra de la meta lo muestra así.
+- Cemaco Internacional está dos veces: una ficha del 29 sep sin HubSpot ni proyectos.
+- La foto del margen de septiembre es de la versión 1 y no trae las horas fuera de Meet: hay que volver a tomarla (pruebas 38 y 84).
+
+### 1 · Finanzas: conciliación, cobro y punto de equilibrio <span class="prioridad">Alta</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
-| 96 | Por validar | Que el menú quede en lo que usas | Menú › Finanzas. | No están Pendientes, Comisiones de vendedor, Aguinaldo, Rentabilidad, Tipo de cambio ni Integraciones. Sí: Planilla, Conciliación, Punto de equilibrio, Caja neta, Reportes de cobranza y Comisiones. |
-| 97 | Por validar | Que Odoo y Mercury estén dentro de Conciliación | Finanzas › Conciliación › toca Odoo y después Mercury. | Arriba, «Conciliación · Odoo · Mercury · Integraciones»; el menú sigue marcando Conciliación. |
-| 98 | Por validar | Que lo pagado se cobre solo | Conciliación › «Lo pagado». | Dice que lo pagado y conciliado se cobra solo cada mañana; hoy, vacío o casi. |
-| 99 | Por validar | Que el tipo de cambio esté dentro del punto de equilibrio | Punto de equilibrio › arriba a la derecha › «Tipo de cambio». | La página del tipo de cambio con «← Punto de equilibrio» para volver. |
-| 100 | Por validar | Que las ventas sin cobranza cuadren mejor | Punto de equilibrio › «Lo que no cuadra» › Ventas ganadas que no están en cobranza. | Unos US$171.060 (antes 239.386), con la frase de que unos US$68.326 ya están cargados en cuotas sin facturar. |
-| 101 | Por validar | Que las hojas viejas de Costos lleven a la nueva | Escribe `/finanzas/costos` en la barra de direcciones; después `/finanzas/costos/tarjetas`. | Te lleva a Recurrentes, y la segunda a Tarjetas. |
-| 102 | Por validar | Que «Volver» no lleve a una hoja vieja | Planilla › Comisiones de vendedor › «Volver». | Vuelve a la Planilla. |
-| 103 | Por validar | Que el cobro automático corra cada mañana | Integraciones › Jobs del servidor, el día siguiente del deploy (desde las 7:00). | «El cobro de lo pagado en Odoo y Mercury» en verde. |
+| 96 | ✓ Validado 18 oct | Que el menú quede en lo que usas | Menú › Finanzas. | No están Pendientes, Comisiones de vendedor, Aguinaldo, Rentabilidad, Tipo de cambio ni Integraciones. Sí: Planilla, Conciliación, Punto de equilibrio, Caja neta, Reportes de cobranza y Comisiones. |
+| 97 | ↻ Validar otra vez | Que Odoo y Mercury estén dentro de Conciliación | Finanzas › Conciliación › toca Odoo y después Mercury. | Una sola fila de pestañas: «Lo que no cuadra · Lo pagado · Emparejar · Libro de Alex · Gastos y Mercury». Arriba a la derecha, Odoo, Mercury e Integraciones son enlaces al lado de la fecha de su copia; al abrirlos, «← Conciliación» vuelve. El menú sigue marcando Conciliación. |
+| 99 | ✓ Validado 18 oct | Que el tipo de cambio esté dentro del punto de equilibrio | Punto de equilibrio › arriba a la derecha › «Tipo de cambio». | La página del tipo de cambio con «← Punto de equilibrio» para volver. |
+| 100 | ✓ Validado por Claude 18 oct | Que las ventas sin cobranza cuadren mejor | Punto de equilibrio › «De la venta a la caja» › «Dónde se queda la plata» › «ventas ganadas sin respaldo en cobranza» › «Ver las ventas». | US$171.059,93 en 44 ventas: 15 sin nada cargado, 25 que facturan menos de lo vendido y 4 de empresas que no están en Nexus. Aparte, US$68.321,61 ya cargados en cuotas sin facturar. (Antes se llamaba «Lo que no cuadra»; lo comprobé con los datos.) |
+| 101 | ✓ Validado 18 oct | Que las hojas viejas de Costos lleven a la nueva | Escribe `/finanzas/costos` en la barra de direcciones; después `/finanzas/costos/tarjetas`. | Te lleva a Recurrentes, y la segunda a Tarjetas. |
+| 102 | ✓ Validado 18 oct | Que «Volver» no lleve a una hoja vieja | Planilla › Comisiones de vendedor › «Volver». | Vuelve a la Planilla. |
+| 32 | Por validar | Que solo se cobre lo pagado que confirmas | Finanzas › Conciliación › «Lo pagado». Desmarca una cuota y confirma con tu firma. | Las cuotas que Odoo y Mercury dan por pagadas, con el día del pago. Las de Mercury sin entrada de plata van a «Pagadas sin el día del pago» y no se cobran. Solo se cobran las marcadas. |
+| 33 | Por validar | Que los montos de las licencias se lean bien | Punto de equilibrio › «Licencias revendidas» › kölbi › Editar. Escribe «70.000» en «Lo que se le paga» y mira «Para decidir». | kölbi con su parte de servicio y el mismo margen. Debajo del campo, «Se guarda: 70.000». En «Para decidir», cómo cuentan las licencias. |
+| 34 | Por validar | Que las comisiones de Stripe y transferencias sumen como gasto | Conciliación › Gastos y Mercury › «Gastos financieros». Confirma una. | Las comisiones para confirmar una por una. Lo confirmado suma al punto de equilibrio como gasto financiero. |
+| 35 | Por validar | Que Mercury esté en la facturación por cliente | Cobranza › Odoo › Facturación por cliente. Busca un cliente de Mercury y toca «Ver el detalle» en una factura. | Los clientes de Mercury junto a los de Odoo, y el detalle de cada factura. |
+| 36 | ⏳ Espera un arreglo | Que las facturas de Odoo se peguen solas | Abre Cobranza › Odoo. | Las facturas que Odoo da por emitidas ya están pegadas a su cuota, sin hacer nada. (Lo revisé: 33 de 121 no se pegan. 4 son un bug: una cuota ya cobrada nunca recibe su número de factura. Lo arreglo y te aviso.) |
 
-### 2 · «Para ti»: Ventas y Customer Success <span class="prioridad">Alta</span>
+### 2 · «Para ti»: la agenda, la cartera y los avisos <span class="prioridad">Alta</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
@@ -352,15 +367,18 @@ Los SQL ya están aplicados: reinicia el `dev:prod` antes, porque cambió el sch
 | 6 | ✓ Validado 17 oct | Que se pueda crear un evento desde la agenda | Toca una hora vacía de hoy (por ejemplo, las 10). Escribe un título, busca un contacto por su nombre o su empresa, elígelo y toca «Abrir en Google Calendar». | Aparece un bloque azul «borrador» de una hora. Al elegir el contacto, la cuenta se llena sola. Google Calendar se abre con el título, la hora, el invitado y el enlace a la cuenta en la descripción. El bloque queda «abierto en Calendar, sin guardar», con «Ya lo guardé». |
 | 7 | ↻ Validar otra vez | Que «Agendar» arme la reunión en Nexus antes de abrir Calendar | Con «Ver como» el CSE de la validación 3, toca «Agendar» en «Sin acción ni reunión». Revisa el borrador y toca «Abrir en Google Calendar». Repite desde la lista entera de «Para ti». | El borrador aparece en la agenda en la primera hora libre de trabajo, con el mismo formulario de «Crear evento»: título, hora, cuenta y contacto, todo editable. Google Calendar se abre solo al tocar «Abrir en Google Calendar». Desde la lista entera, cada cuenta trae una hora distinta. |
 | 8 | ↻ Validar otra vez | Que los huecos respeten el horario, sugieran con qué avanzar y se puedan soltar | Mira la agenda después de las 16:00 o en fin de semana. En un día con espacio, toca el «Hueco libre» punteado; toca afuera; vuelve a tocarlo y toca la X; tócalo otra vez y toca «Ponerla en la agenda». | Un sábado o un domingo la agenda muestra la semana siguiente. Fuera de lunes a viernes de 8 a 5 no aparece ningún hueco. Al tocar un hueco: «Con qué avanzar: T-…». Tocar afuera o la X lo suelta y el hueco vuelve a como estaba. «Ponerla en la agenda» deja el borrador en esa hora. |
-| 9 | ↻ Validar otra vez | Que de viernes a domingo invite a planificar la semana | Un viernes, sábado o domingo, abre «Para ti» como CSE, CSL o alguien de Desarrollo. | Debajo de «Lo que importa hoy»: el viernes «Es viernes: planifica la semana que viene», el sábado «Es sábado: planifica la semana que viene» y el domingo «Mañana empieza la semana: planifícala». Lleva a «Planifica tu semana» (prueba 20). La agenda abre en la semana. |
+| 9 | ✓ Validado por Claude 18 oct | Que de viernes a domingo invite a planificar la semana | Un viernes, sábado o domingo, abre «Para ti» como CSE, CSL o alguien de Desarrollo. | Debajo de «Lo que importa hoy»: el viernes «Es viernes: planifica la semana que viene», el sábado «Es sábado: planifica la semana que viene» y el domingo «Mañana empieza la semana: planifícala». Lleva a «Planifica tu semana» (prueba 20). La agenda abre en la semana. |
 | 10 | ✓ Validado 17 oct | Que el CSE tenga su cartera, armada con sus proyectos | Con «Ver como» un CSE, toca «Tu cartera». Prueba «Todos los proyectos», el buscador y una cuenta que le compartieron. | Sus empresas en «Para atender», cada una con el nombre grande, sus proyectos y su etapa, el último contacto, la próxima reunión y la acción de la semana (✓ u ○). Una compartida dice «Compartida», sin color ni monto. |
 | 11 | ✓ Validado 17 oct | Que Alex vea toda la cartera de Customer Success, y no la de Ventas | Con «Ver como» Alex, abre «Para ti» › «La cartera». Abre «Por CSE»; después filtra «Pipeline» › Desarrollo. | No aparece la cartera de Ventas ni «Negocios traídos de HubSpot». «Por CSE» trae un bloque por CSE, en orden alfabético, con sus cuentas en riesgo, sin acción y sin contacto, y «Sin CSE» al final. Con el filtro, solo las empresas con un proyecto de desarrollo. |
 | 12 | ✓ Validado 18 oct | Que el monto solo lo vea quien vende | Con «Ver como» Andrés, abre «Para ti» › «Tu cartera» y busca una empresa con un negocio abierto. Después, con «Ver como» un CSE que lleve esa empresa, mírala en su cartera. | Andrés ve «N negocios abiertos · US$ …» en la fila. El CSE ve la misma empresa sin el monto. (Con tu usuario no hay cartera: la tienen quienes venden y quienes llevan cuentas.) |
 | 48 | Por validar | Que nada quede fuera de «Lo que importa hoy» | Con «Ver como» un CSE con muchas cuentas en riesgo o sin acción, abre «Para ti». Después, con «Ver como» Alex. | Si no caben, una línea «Estabilizar N cuentas» que abre la lista entera. A Alex le llega para repartir o acompañar. |
 | 49 | Por validar | Que el CSE planifique la acción desde su cartera y vea el uso de HubSpot | Con «Ver como» un CSE, «Tu cartera» › una cuenta sin acción › «Planificar acción». | La acción queda en la agenda. Cada cuenta dice si el uso de HubSpot sube o baja, por los hubs que compró, y el botón dice qué hace en vez de «Abrir cuenta». |
-| 50 | Por validar | Que un excliente salga de todo | Cuando Alex marque Wherex como «Excliente»: Éxito del cliente › Cartera › «Fuera de la cartera». | Wherex aparece ahí, marcado «Excliente», y no está en ninguna alerta, cartera ni en «Lo que importa hoy». |
+| 50 | ⏳ Espera a Alex | Que un excliente salga de todo | Cuando Alex marque Wherex como «Excliente»: Éxito del cliente › Cartera › «Fuera de la cartera». | Wherex aparece ahí, marcado «Excliente», y no está en ninguna alerta, cartera ni en «Lo que importa hoy». |
+| 78 | Por validar | Que avise de una reunión prometida sin agendar | Con «Ver como» Andrés Pinzón, abre «Para ti». Después, con «Ver como» Caroline Bersot. | A Andrés: «Accesos Automáticos: se prometió una reunión … y no está agendada», con «Agendar o decidir», que abre la tarea. A Caroline: los compromisos de Honda Costa Rica sin tomar. Una reunión interna («reunión interna el lunes») ya no avisa. |
+| 79 | ✓ Validado por Claude 18 oct | Que el líder vea lo que no se tomó | Con «Ver como» Alex Vanegas, abre «Para ti». | Una línea por cuenta: «Larce: N compromisos sin tomar hace más de 48 horas», con el enlace a cada tarea. |
+| 80 | Por validar | Que el aviso se vaya al resolverlo | Tareas › una de esas tareas › «Usar». Vuelve a «Para ti». | El aviso ya no aparece. |
 
-### 3 · Preventa: la guía nueva <span class="prioridad">Alta</span>
+### 3 · Preventa: la guía <span class="prioridad">Alta</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
@@ -376,7 +394,54 @@ Los SQL ya están aplicados: reinicia el `dev:prod` antes, porque cambió el sch
 | 106 | ↻ Validar otra vez | Que el asistente arme la guía con lo que pides | En la guía › «Mejorar con el asistente» › «Agrega dos preguntas de la escala sobre cómo miden el pipeline» › Aplicar. | La caja dice «2 cambios para aplicar», sin repetir la lista en el texto, y responde en unos segundos. Al aplicar: «Listo: …», dos preguntas nuevas, cortas, marcadas «Del asistente», y «Lo que cubre la guía» suma esas dimensiones. Ninguna repite lo que ya dijo el cliente. |
 | 107 | ↻ Validar otra vez | Que el asistente no invente lo interno | En el mismo chat: «Agrega una pregunta sobre el presupuesto que nos dijeron». | No pone montos ni lo interno como si lo hubiera dicho el cliente: pregunta el rango o contra qué lo comparan. (Validada el 18 oct; el chat cambió después.) |
 
-### 4 · La serie: escala, propuestas, servicio y gasto de IA <span class="prioridad">Alta</span>
+### 4 · SmartLoop y el servicio recurrente <span class="prioridad">Alta</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 28 | Por validar | Que el cronograma del ciclo pida confirmar el arranque | FACO › el proyecto de prueba › Cronograma › «Armar las fases». Confirma la fecha de arranque y toca «Aprobar esta versión». | Sin fecha de arranque, primero pregunta «El cronograma arranca el … ¿Lo confirmas?». El cronograma del ciclo queda arriba del Gantt con su versión aprobada. |
+| 29 | Por validar | Que cerrar el ciclo saque lo que no se cumplió | En Aprendizaje, marca un caso «no cumplido» y toca «Cerrar el ciclo». Después, en una pestaña que tenía el ciclo abierto, cambia la meta. | El ciclo queda en «Ciclos anteriores» y la fase de ese caso queda suspendida (ya no sale atrasada). La pestaña vieja avisa «Este ciclo ya se cerró: recarga la página». |
+| 30 | Por validar | Que Nexus recomiende SmartLoop al llegar a la entrega | Abre un proyecto de implementación en «Entrega» › Resumen y toca «Dejar la tarea». En otro en «Entrega», toca «Abrir el alta». Mira «Para ti» del CSE encargado. | En «Qué sigue»: «propónle a … seguir con SmartLoop», con el porqué y los botones. «Dejar la tarea» crea la tarea y la recomendación desaparece. «Abrir el alta» abre Nuevo proyecto con «SmartLoop» elegido. En «Para ti» del CSE, la misma recomendación. |
+| 31 | Por validar | Que el cliente vea la ruta del servicio, sin datos internos | En un SmartLoop con ciclo › Resumen, toca «Subir al cliente» en «Ruta del servicio para el cliente». Abre el enlace del cliente con `?next=ciclos` y entra con la contraseña. En un proyecto que no es SmartLoop, abre «Acceso». | «Compartida desde el …» y «Volver a subir». El cliente ve cada ciclo con sus fechas y su meta, los casos como barras y «De tu parte: …», sin notas ni montos. En el que no es SmartLoop, la fila «Ruta del servicio» no aparece. |
+| 57 | Por validar | Que una propuesta sea proyecto o servicio recurrente | Ventas › Propuestas › «Nueva propuesta» › «Un servicio recurrente» › SmartLoop › «Generar». | Las secciones «Cómo opera el servicio», «Cómo trabajamos» (el ciclo de 5 etapas en círculo) y «Nivel de servicio» ya llenas, y la inversión mensual aparte de las licencias. |
+| 58 | Por validar | Que un proyecto pase a recurrente desde la ficha | Ficha de un proyecto de implementación › Resumen › tarjeta «Etapa» › «Pasar a recurrente». | Eliges el servicio, Nexus propone la etapa y la tarea de HubSpot. Después, la tarjeta «Servicio recurrente» con «Qué toca ahora», «Agendar en Calendar ↗» y «Crear las N de los próximos dos meses». |
+| 59 | Por validar | Que una propuesta recurrente ganada dé de alta el servicio | Una propuesta recurrente aprobada › «Dar de alta el servicio». | Abre «Nuevo proyecto» con la empresa y el servicio ya puestos, y el proyecto nace con sus casos de uso. |
+
+### 5 · Comisiones <span class="prioridad">Alta</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 88 | ✓ Validado por Claude 18 oct | Que el caso de Marco se entienda | Finanzas › Modelos › Comisiones › «Cómo funciona» › «Descuentos y recurrencia». | 33.600 − 2.400 = 31.200, y al 5 %: US$1.560 en vez de US$1.680. |
+| 89 | ✓ Validado por Claude 18 oct | Que la calculadora reaccione | La misma sección, a la derecha: deja 3.000 y 2.800; después baja «Lo que se cerró al mes» de 2.700. | «Hoy» US$1.680 y «Con la propuesta» US$1.560. Bajo 2.700 aparece «Lo aprueba Marco». |
+| 90 | Por validar | Que estén las preguntas para Marco | «Cómo funciona», al final, «Decisiones pendientes». | Arriba de todo: el umbral del 10 %, el factor 1,2 y si el descuento sale entero o en parte. |
+| 91 | ✓ Validado por Claude 18 oct | Que la simulación muestre cada venta | «Simulación» › caja «Descuento y valor de 12 meses». | Cada venta con Tipo, Al mes, Valor 12 meses, Descuento, Para la meta y «antes → ahora». |
+| 92 | Por validar | Que un descuento baje la comisión | En una venta de esa caja: «Al mes», 2.800 al mes y 2.400 de descuento. | La comisión baja y la diferencia aparece en «Por sus ventas». |
+| 93 | Por validar | Que las decisiones se puedan probar | «Simulación», panel «Lo que falta decidir»: cambia el factor y cómo sale el descuento. | Los números se rehacen con cada opción. |
+| 94 | Por validar | Que un descuento grande pida aprobación | Una propuesta › Inversión, editando: un servicio con más del 10 % de descuento; espera que se guarde. | «Descuento del N %… lo aprueba Marco antes de enviarla» y el botón «Aprobar el descuento». |
+| 95 | Por validar | Que la aprobación quede y el cliente no la vea | Toca «Aprobar el descuento». Después abre el enlace del cliente y el PDF. | «Lo aprobó [tu nombre] el [fecha], hasta el N %». En el enlace y en el PDF no aparece nada de eso. |
+
+### 6 · Propuestas: IVA, licencias y secciones <span class="prioridad">Alta</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 24 | Por validar | Que la propuesta traiga los casos de uso | Propuestas › Nueva, con una empresa que tenga preventa › Generar. Repite con una sin preventa. | La sección «Casos de uso incluidos». Sin preventa, los sugeridos de la biblioteca, sin precio. |
+| 25 | Por validar | Que el IVA se calcule bien en los dos sentidos | En una propuesta de un cliente de Costa Rica, en la Inversión pon una línea de $10.000 y elige «+ IVA (13%)»; después cambia la línea a $11.300 y elige «IVA incluido (13%)». | Con «+ IVA»: «IVA (13%) $1,300» y «Total con IVA $11,300». Con «IVA incluido»: «Monto sin IVA $10,000» e «IVA (13%) $1,300», y el total no cambia. |
+| 26 | Por validar | Que el IVA también vaya en lo mensual y en la forma de pago | En una propuesta con una implementación y una licencia mensual, elige «+ IVA» y mira «Forma de pago». | «Pago único + IVA» y «Por mes + IVA», cada uno con su IVA y su total. En «Forma de pago», «Inversión total + IVA». |
+| 27 | Por validar | Que lo publicado no cambie y el PDF lleve el IVA | Abre la Inversión de un cliente sin país conocido. Después abre por su link una propuesta ya publicada y baja el PDF; publica la de la validación 25 y haz lo mismo. | Sin país: el selector está, con «⚠ No sabemos si el cliente es de Costa Rica…». La publicada de antes se ve igual, sin IVA. La de la validación 25 trae «Montos sin IVA (+ 13%)» y el mismo desglose, en el link y en el PDF. |
+| 60 | Por validar | Que cada licencia tenga su precio de lista y su margen, sin que el cliente lo vea | Una propuesta con licencias (Cemaco o Spectrum) › Inversión, editando: anota el precio de lista y quién la factura. Después ábrela como cliente y baja el PDF. | En el editor, «Margen: $… al mes (… %)» en verde, o «Pierdes: …» en ámbar. En el enlace del cliente y en el PDF no aparece nada de eso. |
+| 62 | Por validar | Que los módulos se agreguen con un clic | Una propuesta › «+ Agregar una sección propia». Agrega «Casos de uso por proyecto», «Comparación de licencias» y «Fases u opciones», y exporta el PDF. | Pestañas por proyecto con «Desde el catálogo de casos»; la tabla de planes con el recomendado; tarjetas 01, 02 o A, B. En el PDF salen todos los casos y la tabla entera. |
+| 63 | Por validar | Que un módulo hecho a mano se reuse en otra propuesta | Sobre una sección de HTML pegado › «Guardar como módulo». En otra propuesta › «Agregar módulo de la biblioteca» › «Adaptar a esta empresa». | Aviso en ámbar si el HTML nombra a la otra empresa. «Adaptar» muestra cada texto antes y después, y al aplicar cambia solo los textos; el diseño queda igual. |
+
+### 7 · El chat de Nexus en la ficha <span class="prioridad">Media</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 17 | Por validar | Que el chat trabaje solo sobre esa cuenta y genere un entregable | En la ficha, toca «Nexus». Pregunta «¿Qué está pendiente con esta cuenta?». Escribe «Por WhatsApp me dijeron que mandan la base el viernes» y toca «Aplicar» dos veces seguidas. Después pide «Genera el diagnóstico del proyecto X» y aplícalo. | Contesta solo con lo de esa cuenta. La tarea aparece en La cuenta › Tareas como «Chat de Nexus», una sola vez. El diagnóstico queda en la lista con la plantilla «Diagnóstico estratégico» y aparece en el proyecto en unos minutos. En un proyecto sin handoff, el kickoff no se ofrece y dice por qué. |
+| 18 | Por validar | Que «Sugerencias» diga qué hacer, con el mensaje listo | En la ficha, toca «Sugerencias». | Hasta 5 cosas que te tocan en esa cuenta, cada una con el mensaje de WhatsApp listo para copiar. |
+| 75 | Por validar | Que el chat lea las notas de HubSpot | Clientes › RC Inmobiliaria › botón «Nexus». Pregunta: «¿Qué notas y llamadas hay de esta empresa en HubSpot?». | Sus 13 notas de HubSpot, la más nueva primero (11 sep a 1 jul), con su día, quién la escribió y el comienzo del texto. Tres del 11 sep no tienen autor en HubSpot. (Los datos ya los comprobé: valida la respuesta del chat.) |
+| 76 | ✓ Validado por Claude 18 oct | Que lea una nota entera | El mismo chat: «Lee la primera entera». | La nota completa, con su fecha y su autor. |
+| 77 | ✓ Validado por Claude 18 oct | Que conteste lo prometido sin mezclar empresas | Clientes › kölbi › chat: «¿Qué le prometimos al cliente que sigue abierto?». | Los compromisos abiertos de kölbi, nada de otra empresa. |
+
+### 8 · La escala <span class="prioridad">Media</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
@@ -387,31 +452,13 @@ Los SQL ya están aplicados: reinicia el `dev:prod` antes, porque cambió el sch
 | 54 | Por validar | Que lo propuesto se confirme en la misma pantalla y quede en la historia | En el recuadro azul «El agente propone N niveles», toca «Usar» en uno y «Usar los N». | Cada nivel con su porqué y «De dónde sale». Lo usado baja al área y en «La escala en el tiempo» queda una versión de hoy. Lo propuesto no entra a la historia. |
 | 55 | Por validar | Que se entienda con qué edición y perfil se mide | En La escala, el recuadro «Se mide con…» › «Corregir». | La edición y el perfil, el porqué, lo que cambia frente a la general, y al corregir se guarda. |
 | 56 | Por validar | Que la historia se ate a la venta | «Guardar esta versión» › «De qué momento es: Al vender». | En «La escala en el tiempo», una fila con la fecha en que se ganó la venta: «Al vender · venta «…»». |
-| 57 | Por validar | Que una propuesta sea proyecto o servicio recurrente | Ventas › Propuestas › «Nueva propuesta» › «Un servicio recurrente» › SmartLoop › «Generar». | Las secciones «Cómo opera el servicio», «Cómo trabajamos» (el ciclo de 5 etapas en círculo) y «Nivel de servicio» ya llenas, y la inversión mensual aparte de las licencias. |
-| 58 | Por validar | Que un proyecto pase a recurrente desde la ficha | Ficha de un proyecto de implementación › Resumen › tarjeta «Etapa» › «Pasar a recurrente». | Eliges el servicio, Nexus propone la etapa y la tarea de HubSpot. Después, la tarjeta «Servicio recurrente» con «Qué toca ahora», «Agendar en Calendar ↗» y «Crear las N de los próximos dos meses». |
-| 59 | Por validar | Que una propuesta recurrente ganada dé de alta el servicio | Una propuesta recurrente aprobada › «Dar de alta el servicio». | Abre «Nuevo proyecto» con la empresa y el servicio ya puestos, y el proyecto nace con sus casos de uso. |
-| 60 | Por validar | Que cada licencia tenga su precio de lista y su margen, sin que el cliente lo vea | Una propuesta con licencias (Cemaco o Spectrum) › Inversión, editando: anota el precio de lista y quién la factura. Después ábrela como cliente y baja el PDF. | En el editor, «Margen: $… al mes (… %)» en verde, o «Pierdes: …» en ámbar. En el enlace del cliente y en el PDF no aparece nada de eso. |
-| 61 | Por validar | Que lo vendido llegue a Finanzas | Finanzas › Punto de equilibrio › «Licencias revendidas». | «Lo vendido según las propuestas ganadas», con cada propuesta, su servicio, sus licencias y por qué entra o no entra. |
-| 62 | Por validar | Que los módulos se agreguen con un clic | Una propuesta › «+ Agregar una sección propia». Agrega «Casos de uso por proyecto», «Comparación de licencias» y «Fases u opciones», y exporta el PDF. | Pestañas por proyecto con «Desde el catálogo de casos»; la tabla de planes con el recomendado; tarjetas 01, 02 o A, B. En el PDF salen todos los casos y la tabla entera. |
-| 63 | Por validar | Que un módulo hecho a mano se reuse en otra propuesta | Sobre una sección de HTML pegado › «Guardar como módulo». En otra propuesta › «Agregar módulo de la biblioteca» › «Adaptar a esta empresa». | Aviso en ámbar si el HTML nombra a la otra empresa. «Adaptar» muestra cada texto antes y después, y al aplicar cambia solo los textos; el diseño queda igual. |
-| 64 | Por validar | Que el gasto de la IA se vea por mes | Integraciones › Gasto en IA › «Por mes». | Este mes con lo que daría al ritmo de hoy, el mes pasado, lo que ahorró la caché y cuánto cuesta cada reunión leída. Agosto, septiembre y octubre en el gráfico, con lo automático y lo que pidió una persona en colores distintos. |
-| 65 | Por validar | Que el tope diario esté a la vista | La misma pestaña, «El tope diario». | Automático US$10 y humano US$20, «solo avisa», cuántos días lo pasaron y el tope sugerido. |
-| 66 | Por validar | Que se proyecte el gasto de los próximos meses | Pestaña «Proyección»: prende y apaga los escenarios. | Unos US$86 al mes; con los hechos prendidos sube a unos US$98, y con las tres palancas de ahorro baja a unos US$85. Nada se guarda al recargar. |
-| 67 | Por validar | Que la factura de Anthropic se compare con lo medido | Pestaña «Factura»: anota un mes con su monto. | Aparece en la tabla al lado de lo medido; una diferencia grande sale con ⚠. |
+| 19 | Por validar | Que la escala de la cuenta muestre su evidencia y su historia | Abre Cemaco Internacional › La cuenta › La escala. Toca «Regenerar con el agente». | Cada nivel con de dónde sale (la fuente y la frase). «La escala en el tiempo» con sus versiones fechadas. El agente solo propone: no cambia los niveles confirmados. Abajo, el camino de crecimiento con casos sugeridos. |
+| 45 | Por validar | Que la escala se arme desde el contexto de un cliente, sin preventa | Abre un cliente con un proyecto con handoff y sin exploración (no Wherex) › La cuenta › La escala. Toca «Activar el agente en «…»» y espera unos minutos sin salir. | Sin posición, «La empresa todavía no está posicionada en la escala» con el botón. Al tocarlo, «El agente está leyendo todo lo que Nexus sabe de la empresa…» y la fase en curso. Al terminar, niveles propuestos (en azul) con su porqué, sacados del handoff, los cuestionarios y HubSpot; se confirman en La escala de la Exploración del proyecto. |
+| 46 | ✓ Validado por Claude 18 oct | Que la escala guarde su historia | En Cemaco › La cuenta › La escala, mira «La escala en el tiempo». Confirma un nivel en La escala de su Exploración, vuelve y toca «Guardar esta versión»; tócalo otra vez. | La versión del 17 oct ya está. Después de confirmar, «Qué cambió desde el 17 oct» dice qué dimensión subió o bajó. La segunda vez: «Esta versión ya estaba guardada: nada cambió desde la última». |
+| 47 | Por validar | Que el camino de crecimiento proponga casos de uso | En Cemaco › La cuenta › La escala, baja a «El camino de crecimiento» y toca «Sumar a los sugeridos» en un caso. Abre La cuenta › Casos de uso. | Qué sigue en cada área y por qué, con los casos de la biblioteca que lo mueven. «Quedó como sugerido en La cuenta › Casos de uso», y ahí aparece como sugerido. |
+| 23 | Por validar | Que la escala de la preventa diga de dónde sale y qué explorar | Ventas › Preventa › una con reuniones leídas › La escala. | «De dónde sale cada nivel» y «Qué explorar en la próxima sesión». |
 
-### 5 · Comunicaciones de HubSpot y compromisos <span class="prioridad">Media</span>
-
-| # | Estado | Prueba | Pasos | Resultado esperado |
-|---|---|---|---|---|
-| 75 | Por validar | Que el chat lea las notas de HubSpot | Clientes › RC Inmobiliaria › botón «Nexus». Pregunta: «¿Qué notas y llamadas hay de esta empresa en HubSpot?». | Sus notas de HubSpot, la más nueva primero, cada una con su día, quién la escribió y el comienzo del texto. |
-| 76 | Por validar | Que lea una nota entera | El mismo chat: «Lee la primera entera». | La nota completa, con su fecha y su autor. |
-| 77 | Por validar | Que conteste lo prometido sin mezclar empresas | Clientes › kölbi › chat: «¿Qué le prometimos al cliente que sigue abierto?». | Los compromisos abiertos de kölbi, nada de otra empresa. |
-| 78 | Por validar | Que avise de una reunión prometida sin agendar | Con «Ver como» el CSE de Accesos Automáticos, Honda Costa Rica o Distribuidora Larce, abre «Para ti». | En «Lo que importa hoy»: «… se prometió una reunión y no está agendada», con «Agendar o decidir», que abre la tarea. |
-| 79 | Por validar | Que el líder vea lo que no se tomó | Con «Ver como» Alex Vanegas, abre «Para ti». | Una línea por cuenta: «Larce: N compromisos sin tomar hace más de 48 horas», con el enlace a cada tarea. |
-| 80 | Por validar | Que el aviso se vaya al resolverlo | Tareas › una de esas tareas › «Usar». Vuelve a «Para ti». | El aviso ya no aparece. |
-| 81 | Por validar | Que la copia corra sola | Integraciones › Jobs del servidor, al día siguiente del deploy (desde las 6:00). | «La copia de los correos, notas y llamadas de HubSpot» en verde. |
-
-### 6 · La ficha del cliente <span class="prioridad">Media</span>
+### 9 · La ficha del cliente <span class="prioridad">Media</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
@@ -419,98 +466,53 @@ Los SQL ya están aplicados: reinicia el `dev:prod` antes, porque cambió el sch
 | 14 | Por validar | Que generar un Diagnóstico y un Kickoff siga igual | En un proyecto con handoff, toca «Generar» en el Diagnóstico y después en el Kickoff. | Se generan y se ven igual que siempre; el kickoff con sus secciones de equipo y horarios intactas. |
 | 15 | Por validar | Que la cuenta muestre sus reuniones y sus tareas por equipo | Abre un cliente activo › La cuenta › Tareas. | Arriba, «Próximas reuniones» con el día, la hora y quién de Smarteam va. Debajo, las tareas por equipo (Customer Success primero): abiertas, por decidir y hechas en 30 días, con quién la tiene, para cuándo y de dónde viene. Lo «Solo para mí» de otros no aparece. |
 | 16 | Por validar | Que el chip diga cómo está la cuenta, sin plata para el CSE | Con «Ver como» Alex, abre una cuenta en rojo o amarillo y pasa el mouse por el chip. Repite con «Ver como» el CSE de esa cuenta. | El color y hasta tres motivos. El CSE ve lo mismo, pero sin montos. |
-| 17 | Por validar | Que el chat trabaje solo sobre esa cuenta y genere un entregable | En la ficha, toca «Nexus». Pregunta «¿Qué está pendiente con esta cuenta?». Escribe «Por WhatsApp me dijeron que mandan la base el viernes» y toca «Aplicar» dos veces seguidas. Después pide «Genera el diagnóstico del proyecto X» y aplícalo. | Contesta solo con lo de esa cuenta. La tarea aparece en La cuenta › Tareas como «Chat de Nexus», una sola vez. El diagnóstico queda en la lista con la plantilla «Diagnóstico estratégico» y aparece en el proyecto en unos minutos. En un proyecto sin handoff, el kickoff no se ofrece y dice por qué. |
-| 18 | Por validar | Que «Sugerencias» diga qué hacer, con el mensaje listo | En la ficha, toca «Sugerencias». | Hasta 5 cosas que te tocan en esa cuenta, cada una con el mensaje de WhatsApp listo para copiar. |
 
-### 7 · Tareas y reuniones <span class="prioridad">Media</span>
+### 10 · Tareas, sprints y reuniones <span class="prioridad">Media</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 20 | Por validar | Que «Planifica tu semana» arme la semana por cuenta | Tareas › «Planifica tu semana» como un CSE. En una cuenta, cambia el día de la reunión sugerida, toca «Agendar», guárdala en Calendar y toca «Ya lo guardé». En otra, toca «Usar» o «Crear la acción». | Una fila por cuenta con la acción y la reunión de la semana; lo que sugiere Nexus en azul, con «De dónde sale». Google Calendar se abre con título, hora, invitados y objetivo. Después de guardarla: «Quedó en tus tareas como reunión con la cuenta». La acción queda con su T- y el día. |
-| 21 | Por validar | Que un líder configure la reunión de su sprint | Tareas › Semana del equipo › «La reunión del sprint» › Configurar. Elige la reunión semanal, deja «Quiénes están» vacío y guarda. | Solo ofrece reuniones recurrentes de puertas adentro en las que estuviste. La próxima reunión de esa serie deja como mucho 5 tareas por persona, marcadas «Sprint interno». |
+| 21 | ⏳ La valida el equipo | Que un líder configure la reunión de su sprint | Tareas › Semana del equipo › «La reunión del sprint» › Configurar. Elige la reunión semanal, deja «Quiénes están» vacío y guarda. | Solo ofrece reuniones recurrentes de puertas adentro en las que estuviste (ya no una reunión suelta). La próxima reunión de esa serie deja como mucho 5 tareas por persona, marcadas «Sprint interno». La revisé por dentro y la configura el equipo (pestaña «Lo que pides al equipo»). |
 | 22 | Por validar | Que cada reunión tenga su página y su correo de seguimiento | Sesiones › una reunión con un cliente de esta semana. Toca «Armar el correo». Abre la misma reunión en otra pestaña, cambia el correo en las dos y guarda. | La agenda, los avisos y las tareas con su responsable. «Armar el correo» deja un borrador que no se envía. La próxima reunión sugerida, con su enlace a Google Calendar. La segunda pestaña avisa «El correo cambió: recarga la página». |
 
-### 8 · Ventas <span class="prioridad">Media</span>
+### 11 · Rentabilidad, la meta y el uso de Nexus <span class="prioridad">Baja</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
-| 25 | Por validar | Que el IVA se calcule bien en los dos sentidos | En una propuesta de un cliente de Costa Rica, en la Inversión pon una línea de $10.000 y elige «+ IVA (13%)»; después cambia la línea a $11.300 y elige «IVA incluido (13%)». | Con «+ IVA»: «IVA (13%) $1,300» y «Total con IVA $11,300». Con «IVA incluido»: «Monto sin IVA $10,000» e «IVA (13%) $1,300», y el total no cambia. |
-| 26 | Por validar | Que el IVA también vaya en lo mensual y en la forma de pago | En una propuesta con una implementación y una licencia mensual, elige «+ IVA» y mira «Forma de pago». | «Pago único + IVA» y «Por mes + IVA», cada uno con su IVA y su total. En «Forma de pago», «Inversión total + IVA». |
-| 27 | Por validar | Que lo publicado no cambie y el PDF lleve el IVA | Abre la Inversión de un cliente sin país conocido. Después abre por su link una propuesta ya publicada y baja el PDF; publica la de la validación 25 y haz lo mismo. | Sin país: el selector está, con «⚠ No sabemos si el cliente es de Costa Rica…». La publicada de antes se ve igual, sin IVA. La de la validación 25 trae «Montos sin IVA (+ 13%)» y el mismo desglose, en el link y en el PDF. |
-
-### 9 · La escala de cada empresa <span class="prioridad">Media</span>
-
-La escala ya no es solo de la preventa: cada empresa tiene la suya en La cuenta › La escala, se arma con lo que Nexus
-ya sabe (también sin preventa) y guarda su historia. El 17 oct guardé la primera versión de las 7 empresas con niveles
-confirmados: CreditForce, Grupo Servica, Quálitas, Tecnosagot, Grupo Monge, Cemaco Internacional y Distribuidora Larce.
-
-| # | Estado | Prueba | Pasos | Resultado esperado |
-|---|---|---|---|---|
-| 19 | Por validar | Que la escala de la cuenta muestre su evidencia y su historia | Abre Cemaco Internacional › La cuenta › La escala. Toca «Regenerar con el agente». | Cada nivel con de dónde sale (la fuente y la frase). «La escala en el tiempo» con sus versiones fechadas. El agente solo propone: no cambia los niveles confirmados. Abajo, el camino de crecimiento con casos sugeridos. |
-| 45 | Por validar | Que la escala se arme desde el contexto de un cliente, sin preventa | Abre un cliente con un proyecto con handoff y sin exploración (no Wherex) › La cuenta › La escala. Toca «Activar el agente en «…»» y espera unos minutos sin salir. | Sin posición, «La empresa todavía no está posicionada en la escala» con el botón. Al tocarlo, «El agente está leyendo todo lo que Nexus sabe de la empresa…» y la fase en curso. Al terminar, niveles propuestos (en azul) con su porqué, sacados del handoff, los cuestionarios y HubSpot; se confirman en La escala de la Exploración del proyecto. |
-| 46 | Por validar | Que la escala guarde su historia | En Cemaco › La cuenta › La escala, mira «La escala en el tiempo». Confirma un nivel en La escala de su Exploración, vuelve y toca «Guardar esta versión»; tócalo otra vez. | La versión del 17 oct ya está. Después de confirmar, «Qué cambió desde el 17 oct» dice qué dimensión subió o bajó. La segunda vez: «Esta versión ya estaba guardada: nada cambió desde la última». |
-| 47 | Por validar | Que el camino de crecimiento proponga casos de uso | En Cemaco › La cuenta › La escala, baja a «El camino de crecimiento» y toca «Sumar a los sugeridos» en un caso. Abre La cuenta › Casos de uso. | Qué sigue en cada área y por qué, con los casos de la biblioteca que lo mueven. «Quedó como sugerido en La cuenta › Casos de uso», y ahí aparece como sugerido. |
-| 23 | Por validar | Que la escala de la preventa diga de dónde sale y qué explorar | Ventas › Preventa › una con reuniones leídas › La escala. | «De dónde sale cada nivel» y «Qué explorar en la próxima sesión». |
-| 24 | Por validar | Que la propuesta traiga los casos de uso | Propuestas › Nueva, con una empresa que tenga preventa › Generar. Repite con una sin preventa. | La sección «Casos de uso incluidos». Sin preventa, los sugeridos de la biblioteca, sin precio. |
-
-### 10 · Finanzas <span class="prioridad">Media</span>
-
-| # | Estado | Prueba | Pasos | Resultado esperado |
-|---|---|---|---|---|
-| 32 | Por validar | Que solo se cobre lo pagado que confirmas | Finanzas › Conciliación › «Lo pagado». Desmarca una cuota y confirma con tu firma. | Las cuotas que Odoo y Mercury dan por pagadas, con el día del pago. Las de Mercury sin entrada de plata van a «Pagadas sin el día del pago» y no se cobran. Solo se cobran las marcadas. |
-| 33 | Por validar | Que los montos de las licencias se lean bien | Punto de equilibrio › «Licencias revendidas» › kölbi › Editar. Escribe «70.000» en «Lo que se le paga» y mira «Para decidir». | kölbi con su parte de servicio y el mismo margen. Debajo del campo, «Se guarda: 70.000». En «Para decidir», cómo cuentan las licencias. |
-| 34 | Por validar | Que las comisiones de Stripe y transferencias sumen como gasto | Conciliación › Gastos y Mercury › «Gastos financieros». Confirma una. | Las comisiones para confirmar una por una. Lo confirmado suma al punto de equilibrio como gasto financiero. |
-| 35 | Por validar | Que Mercury esté en la facturación por cliente | Cobranza › Odoo › Facturación por cliente. Busca un cliente de Mercury y toca «Ver el detalle» en una factura. | Los clientes de Mercury junto a los de Odoo, y el detalle de cada factura. |
-| 36 | Por validar | Que las facturas de Odoo se peguen solas | Abre Cobranza › Odoo. | Las facturas que Odoo da por emitidas ya están pegadas a su cuota, sin hacer nada. |
-
-### 11 · Rentabilidad con agendas, tareas y la meta <span class="prioridad">Baja</span>
-
-| # | Estado | Prueba | Pasos | Resultado esperado |
-|---|---|---|---|---|
-| 82 | Por validar | Que la meta se vea contra lo facturado | Éxito del cliente › Rentabilidad, arriba de las pestañas. | «La meta del año: US$ 2,3 M en 2027», una barra por año desde 2021 con lo facturado, y «Qué falta para la meta de 2027». |
+| 82 | ✓ Validado por Claude 18 oct | Que la meta se vea contra lo facturado | Éxito del cliente › Rentabilidad, arriba de las pestañas. | «La meta del año: US$ 2,3 M en 2027», una barra por año desde 2021 con lo facturado y «Qué falta para la meta de 2027» (US$2.183.572). ⚠ 2023 no tiene facturas y 2024 solo 8: la copia de Odoo de esos años parece incompleta. |
 | 83 | Por validar | Que la meta se cambie desde la pantalla | La misma tarjeta › «Cambiar la meta»: un monto y una nota › Guardar › «Ver la historia». | La barra cambia y la historia muestra las dos metas. |
-| 84 | Por validar | Que las horas salgan solas, también fuera de Meet | Rentabilidad › Margen por cuenta › kölbi o Club de Amantes del Vino. | Debajo de las horas, «x fuera de Meet» y de dónde sale cada hora; la línea «Calendario de N personas…». |
-| 85 | Por validar | Que se vea el margen por persona | Rentabilidad › Costo de la hora › Por persona. | Las columnas «Generado» y «Margen», por nombre, en orden alfabético. |
-| 86 | Por validar | Que Nexus lea los números y proponga | Rentabilidad › Lectura de los números › «Leer los números». Espera un minuto. | Propuestas con qué hacer y cuánto invertir, cada una con «Usar» y «Desestimar» (que pide el porqué). |
-| 87 | Por validar | Que el punto de equilibrio muestre la meta y lo que falta | Finanzas › Punto de equilibrio, al final. | La misma barra de la meta y una tabla mes a mes: Por facturar, Recurrencia, Proyectos, Expansiones y Falta. |
-
-### 12 · Dirección: Rentabilidad y Uso de Nexus <span class="prioridad">Baja</span>
-
-| # | Estado | Prueba | Pasos | Resultado esperado |
-|---|---|---|---|---|
 | 37 | Por validar | Que la foto del margen quede guardada por mes | Éxito del cliente › Rentabilidad › «De dónde salen los números». En un mes, toca «Tomar la foto». Después elige «Trimestre». | Antes de tomarla, cada mes dice «En vivo». Al tomarla: «Foto tomada: N cuentas» y el mes pasa a «Desde su foto», con la fecha y tu nombre. En el trimestre: «1 de 3 meses desde su foto; el resto, en vivo». |
 | 38 | Por validar | Que rehacer una foto pida motivo y la cuenta diga de dónde sale | En un mes con foto, toca «Volver a tomar» sin motivo y después con motivo. Abre una cuenta y mira «Mes a mes». | Sin motivo no deja; con motivo, «Tomada el… · tu motivo». En la cuenta, «De dónde sale» dice «Foto del …» o «En vivo». |
+| 84 | Por validar | Que las horas salgan solas, también fuera de Meet | Primero rehace la foto de septiembre (prueba 38: «Volver a tomar» con el motivo «versión 2»). Después, Rentabilidad › Margen por cuenta › Librería Internacional o Teamnet. | Debajo de las horas, «x fuera de Meet» (Librería unas 24,5 h, Teamnet unas 9) y de dónde sale cada hora; la línea «Calendario de N personas…». kölbi y Club de Amantes del Vino no tienen reuniones fuera de Meet. |
+| 85 | ✓ Validado por Claude 18 oct | Que se vea el margen por persona | Rentabilidad › Costo de la hora › Por persona. | Las columnas «Generado» y «Margen», por nombre, en orden alfabético. |
+| 86 | Por validar | Que Nexus lea los números y proponga | Rentabilidad › Lectura de los números › «Leer los números». Espera un minuto. | Propuestas con qué hacer y cuánto invertir, cada una con «Usar» y «Desestimar» (que pide el porqué). |
+| 87 | ✓ Validado por Claude 18 oct | Que el punto de equilibrio muestre la meta y lo que falta | Finanzas › Punto de equilibrio, al final. | La misma barra de la meta y una tabla mes a mes: Por facturar, Recurrencia, Proyectos, Expansiones y Falta. |
 | 39 | Por validar | Que se vea qué usa y qué desestima cada equipo | Para ti › «Uso de Nexus». Baja hasta el final de «Equipo» y abre «Para qué se usa». | Seis pestañas. «Qué usa cada equipo» con «3/7» en cada cruce. «Qué usa y qué desestima cada equipo» y «Quién decide» por nombre, agrupado por equipo. |
 | 40 | Por validar | Que se vea cuánto cuesta la IA y si sirve | Abre «IA por cliente» (cambia entre 30 y 90 días), «Procesos de IA» y «Conclusiones». | El gasto de IA por empresa con lo que se usó; por proceso, con errores y «% usado»; y conclusiones cortas «Para mirar», «Para saber» o «Va bien», cada una con su enlace. |
+| 61 | ✓ Validado por Claude 18 oct | Que lo vendido llegue a Finanzas | Finanzas › Punto de equilibrio › «Licencias revendidas». | Las 6 propuestas ganadas y ninguna entra todavía, cada una con su porqué: Areyas, Cemaco y Spectrum no dicen quién factura la licencia ni su precio de lista; Multiquímica no tiene montos en la Inversión; Cayalá y RC Inmobiliaria no venden licencias. |
 
-### 13 · Comisiones: el descuento y la recurrencia <span class="prioridad">Baja</span>
-
-| # | Estado | Prueba | Pasos | Resultado esperado |
-|---|---|---|---|---|
-| 88 | Por validar | Que el caso de Marco se entienda | Finanzas › Modelos › Comisiones › «Cómo funciona» › «Descuentos y recurrencia». | 33.600 − 2.400 = 31.200, y al 5 %: US$1.560 en vez de US$1.680. |
-| 89 | Por validar | Que la calculadora reaccione | La misma sección, a la derecha: deja 3.000 y 2.800; después baja «Lo que se cerró al mes» de 2.700. | «Hoy» US$1.680 y «Con la propuesta» US$1.560. Bajo 2.700 aparece «Lo aprueba Marco». |
-| 90 | Por validar | Que estén las preguntas para Marco | «Cómo funciona», al final, «Decisiones pendientes». | Arriba de todo: el umbral del 10 %, el factor 1,2 y si el descuento sale entero o en parte. |
-| 91 | Por validar | Que la simulación muestre cada venta | «Simulación» › caja «Descuento y valor de 12 meses». | Cada venta con Tipo, Al mes, Valor 12 meses, Descuento, Para la meta y «antes → ahora». |
-| 92 | Por validar | Que un descuento baje la comisión | En una venta de esa caja: «Al mes», 2.800 al mes y 2.400 de descuento. | La comisión baja y la diferencia aparece en «Por sus ventas». |
-| 93 | Por validar | Que las decisiones se puedan probar | «Simulación», panel «Lo que falta decidir»: cambia el factor y cómo sale el descuento. | Los números se rehacen con cada opción. |
-| 94 | Por validar | Que un descuento grande pida aprobación | Una propuesta › Inversión, editando: un servicio con más del 10 % de descuento; espera que se guarde. | «Descuento del N %… lo aprueba Marco antes de enviarla» y el botón «Aprobar el descuento». |
-| 95 | Por validar | Que la aprobación quede y el cliente no la vea | Toca «Aprobar el descuento». Después abre el enlace del cliente y el PDF. | «Lo aprobó [tu nombre] el [fecha], hasta el N %». En el enlace y en el PDF no aparece nada de eso. |
-
-### 14 · SmartLoop <span class="prioridad">Baja</span>
+### 12 · El gasto de la IA <span class="prioridad">Baja</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
-| 28 | Por validar | Que el cronograma del ciclo pida confirmar el arranque | FACO › el proyecto de prueba › Cronograma › «Armar las fases». Confirma la fecha de arranque y toca «Aprobar esta versión». | Sin fecha de arranque, primero pregunta «El cronograma arranca el … ¿Lo confirmas?». El cronograma del ciclo queda arriba del Gantt con su versión aprobada. |
-| 29 | Por validar | Que cerrar el ciclo saque lo que no se cumplió | En Aprendizaje, marca un caso «no cumplido» y toca «Cerrar el ciclo». Después, en una pestaña que tenía el ciclo abierto, cambia la meta. | El ciclo queda en «Ciclos anteriores» y la fase de ese caso queda suspendida (ya no sale atrasada). La pestaña vieja avisa «Este ciclo ya se cerró: recarga la página». |
-| 30 | Por validar | Que Nexus recomiende SmartLoop al llegar a la entrega | Abre un proyecto de implementación en «Entrega» › Resumen y toca «Dejar la tarea». En otro en «Entrega», toca «Abrir el alta». Mira «Para ti» del CSE encargado. | En «Qué sigue»: «propónle a … seguir con SmartLoop», con el porqué y los botones. «Dejar la tarea» crea la tarea y la recomendación desaparece. «Abrir el alta» abre Nuevo proyecto con «SmartLoop» elegido. En «Para ti» del CSE, la misma recomendación. |
-| 31 | Por validar | Que el cliente vea la ruta del servicio, sin datos internos | En un SmartLoop con ciclo › Resumen, toca «Subir al cliente» en «Ruta del servicio para el cliente». Abre el enlace del cliente con `?next=ciclos` y entra con la contraseña. En un proyecto que no es SmartLoop, abre «Acceso». | «Compartida desde el …» y «Volver a subir». El cliente ve cada ciclo con sus fechas y su meta, los casos como barras y «De tu parte: …», sin notas ni montos. En el que no es SmartLoop, la fila «Ruta del servicio» no aparece. |
+| 64 | ✓ Validado por Claude 18 oct | Que el gasto de la IA se vea por mes | Integraciones › Gasto en IA › «Por mes». | Agosto US$26,49 (desde el 17), septiembre US$33,27 y octubre US$78,73, lo automático y lo humano por separado. (Las cifras las comprobé yo; si quieres, mira el gráfico.) |
+| 65 | ✓ Validado por Claude 18 oct | Que el tope diario esté a la vista | La misma pestaña, «El tope diario». | Automático US$10 y humano US$20, «solo avisa», cuántos días lo pasaron y el tope sugerido. |
+| 66 | ✓ Validado por Claude 18 oct | Que se proyecte el gasto de los próximos meses | Pestaña «Proyección»: prende y apaga los escenarios. | Hoy unos US$86 al mes; con los hechos prendidos, unos US$98, y con los hechos y las tres palancas de ahorro, unos US$85 (sin los hechos, las palancas lo bajan a unos US$80). Nada se guarda al recargar. |
+| 67 | Por validar | Que la factura de Anthropic se compare con lo medido | Pestaña «Factura»: anota un mes con su monto. | Aparece en la tabla al lado de lo medido; una diferencia grande sale con ⚠. |
 
-### 15 · Éxito del cliente y Equipo <span class="prioridad">Baja</span>
+### 13 · Éxito del cliente y Equipo <span class="prioridad">Baja</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
 | 41 | Por validar | Que la lista de limpieza de HubSpot diga quién arregla qué | Éxito del cliente › «Limpieza de HubSpot», como Alex o con tu usuario. | Lo que hay que poner al día en HubSpot, por responsable, cada cosa con su enlace. |
-| 42 | Por validar | Que «Ver como» no deje escribir como otra persona | Equipo › una persona › «Ver como»; navega un poco y toca «Volver a mi usuario». | Nexus como lo ve esa persona, sin poder escribir como ella. «Volver a mi usuario» te devuelve. |
+| 42 | ✓ Validado por Claude 18 oct | Que «Ver como» no deje escribir como otra persona | Equipo › una persona › «Ver como»; navega un poco y toca «Volver a mi usuario». | Nexus como lo ve esa persona, sin poder escribir como ella. «Volver a mi usuario» te devuelve. |
+
+### Lo reviso yo después del deploy
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 103 | ⏳ Lo reviso yo después del deploy | Que el cobro automático corra cada mañana | Integraciones › Jobs del servidor, el día siguiente del deploy (desde las 7:00). | «El cobro de lo pagado en Odoo y Mercury» en verde. |
+| 81 | ⏳ Lo reviso yo después del deploy | Que la copia corra sola | Integraciones › Jobs del servidor, al día siguiente del deploy (desde las 6:00). | «La copia de los correos, notas y llamadas de HubSpot» en verde. |
 
 ### Desde la terminal (opcional)
 
