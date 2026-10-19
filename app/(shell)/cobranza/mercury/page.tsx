@@ -15,8 +15,6 @@ import { cargarDiferenciasMercury, cargarEmparejadoMercury } from "@/lib/cobranz
 import { resumenDeDiferencias } from "@/lib/cobranza/odoo/diferencias";
 import { pestanaMercuryDe } from "@/lib/cobranza/mercury/pestanas";
 import MercuryClient from "@/components/cobranza/MercuryClient";
-import PestanasDeConciliacion from "@/components/finanzas/PestanasDeConciliacion";
-import { isCostosRole } from "@/lib/auth/cobranza-roles";
 
 export const dynamic = "force-dynamic";
 
@@ -35,8 +33,9 @@ export default async function MercuryPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="space-y-4 px-6 py-8">
-      <PestanasDeConciliacion conIntegraciones={isCostosRole(ctx.role)} />
       <PageHeader
+        backHref="/finanzas/conciliacion"
+        backLabel="Conciliación"
         title="Mercury"
         description="Nexus lee las facturas, los clientes y los pagos de Mercury y los pone al lado de los cobros. Solo lectura: nunca escribe en Mercury ni mueve un cobro por su cuenta."
       />

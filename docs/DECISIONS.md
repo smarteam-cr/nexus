@@ -9303,8 +9303,11 @@ concilie cada mañana María José. El análisis, la evidencia y lo que quedó h
   US$239.386 a US$171.060 y US$68.326 quedan «en el plan». El resto es real: ventas sin plan cargado.
 - **El menú de un Super Admin** ve todo Finanzas menos lo de quien registra (`soloQuienRegistra`): Pendientes, y Comisiones
   de vendedor y Aguinaldo como entradas sueltas (están dentro de Planilla). Corrige al 2026-10-08 («ve todo»).
-- **Odoo, Mercury, el libro de Alex e Integraciones son pestañas de Conciliación** (`PestanasDeConciliacion`): las rutas no
-  cambian (son identidad) y el menú las ilumina como Conciliación. Cobranza pasa a `exact`.
+- **Odoo, Mercury, el libro de Alex e Integraciones son parte de Conciliación**: las rutas no cambian (son identidad) y el
+  menú las ilumina como Conciliación. Cobranza pasa a `exact`. ⚠ Corregido el mismo día (prueba 97): la fila de píldoras
+  de arriba del título se fue, porque con las pestañas de adentro y los filtros eran tres niveles de navegación seguidos.
+  Conciliación tiene una sola fila de pestañas; Odoo, Mercury e Integraciones son enlaces al lado de la fecha de su copia,
+  y esas páginas vuelven con «← Conciliación».
 - **Reportes son tres** —Punto de equilibrio (con Tipo de cambio adentro), Reportes de cobranza y el modelo de Comisiones—
   más Caja neta, que queda como está hasta que decida Alex. Rentabilidad sale del menú de Finanzas y queda en Éxito del
   cliente.

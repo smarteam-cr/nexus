@@ -6,7 +6,7 @@ import { describe, it, expect } from "vitest";
 import { accionesDe, esLapida, leerEstado, nacePropuesta, columnaDelTablero, leerBloques, repartirBloques } from "./estados";
 import { candidatasWhere } from "./donde";
 import { origenDeLaTarea } from "./origen";
-import { cuandoEsLaSerie, diaYFinDeLaReunion, personasPorDefecto, personasValidas, puedeConfigurarElSprint, seLeeSola } from "./fuentes";
+import { cuandoEsLaSerie, diaYFinDeLaReunion, esDeUnaSerie, personasPorDefecto, personasValidas, puedeConfigurarElSprint, seLeeSola } from "./fuentes";
 import { agruparPorEquipo } from "./de-la-cuenta";
 import type { TareaVista } from "./tipos";
 import { cupoPorPersona, textoSinLugar } from "./cupo";
@@ -366,7 +366,7 @@ describe("el sprint de cada equipo (ficha A)", () => {
 
   it("se lee sola entre 15 minutos y 24 horas después de terminar, y solo lo de esa serie", () => {
     const fuente = { serie: "abc", createdAt: new Date("2026-10-10T12:00:00Z"), activa: true };
-    const r = { serie: "abc", inicio: new Date("2026-10-13T15:00:00Z"), fin: new Date("2026-10-13T15:30:00Z") };
+    const r = { serie: "abc", inicio: new Date("2026-10-13T15:00:00Z"), fin: new Date("2026-10-13T15:30:00Z"), puertasAdentro: true };
     expect(seLeeSola(r, fuente, new Date("2026-10-13T15:40:00Z"))).toBe(false);
     expect(seLeeSola(r, fuente, new Date("2026-10-13T15:46:00Z"))).toBe(true);
     expect(seLeeSola(r, fuente, new Date("2026-10-14T16:00:00Z"))).toBe(false);
@@ -374,10 +374,24 @@ describe("el sprint de cada equipo (ficha A)", () => {
     expect(seLeeSola(r, { ...fuente, activa: false }, new Date("2026-10-13T16:00:00Z"))).toBe(false);
   });
 
+  it("una instancia con alguien de afuera no se lee sola", () => {
+    const fuente = { serie: "abc", createdAt: new Date("2026-10-10T12:00:00Z"), activa: true };
+    const conInvitado = { serie: "abc", inicio: new Date("2026-10-13T15:00:00Z"), fin: new Date("2026-10-13T15:30:00Z"), puertasAdentro: false };
+    expect(seLeeSola(conInvitado, fuente, new Date("2026-10-13T16:00:00Z"))).toBe(false);
+  });
+
+  it("solo una reunión recurrente es una serie (el id de la sesión lleva el prefijo «gmeet_»)", () => {
+    // Una instancia: «gmeet_<serie>_<fecha>». Una reunión suelta: «gmeet_<serie>», que antes pasaba como serie.
+    expect(esDeUnaSerie({ id: "gmeet_07iqe725pjjuk5ar9tn8k7kfl9_20261012T153000Z", serie: "07iqe725pjjuk5ar9tn8k7kfl9" })).toBe(true);
+    expect(esDeUnaSerie({ id: "gmeet_1ur0o04i0q2tvirbpr16refcl3", serie: "1ur0o04i0q2tvirbpr16refcl3" })).toBe(false);
+    expect(esDeUnaSerie({ id: "1ur0o04i0q2tvirbpr16refcl3", serie: "1ur0o04i0q2tvirbpr16refcl3" })).toBe(false);
+    expect(esDeUnaSerie({ id: "manual_abc", serie: null })).toBe(false);
+  });
+
   it("lo de antes de configurarla no se lee solo (con un día de margen)", () => {
     const fuente = { serie: "abc", createdAt: new Date("2026-10-13T18:00:00Z"), activa: true };
-    const hoy = { serie: "abc", inicio: new Date("2026-10-13T15:00:00Z"), fin: new Date("2026-10-13T15:30:00Z") };
-    const semanaPasada = { serie: "abc", inicio: new Date("2026-10-06T15:00:00Z"), fin: new Date("2026-10-06T15:30:00Z") };
+    const hoy = { serie: "abc", inicio: new Date("2026-10-13T15:00:00Z"), fin: new Date("2026-10-13T15:30:00Z"), puertasAdentro: true };
+    const semanaPasada = { serie: "abc", inicio: new Date("2026-10-06T15:00:00Z"), fin: new Date("2026-10-06T15:30:00Z"), puertasAdentro: true };
     expect(seLeeSola(hoy, fuente, new Date("2026-10-13T18:05:00Z"))).toBe(true);
     expect(seLeeSola(semanaPasada, fuente, new Date("2026-10-07T10:00:00Z"))).toBe(false);
   });

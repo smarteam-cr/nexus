@@ -20,6 +20,7 @@ import {
   HORAS_PARA_LEERLA_SOLA,
   cuandoEsLaSerie,
   diaYFinDeLaReunion,
+  esDeUnaSerie,
   personasPorDefecto,
   personasValidas,
   puedeConfigurarElSprint,
@@ -121,11 +122,10 @@ export async function cargarSprint(ctx: ContextoDeTareas, clientes: ClientesQueV
     const porSerie = new Map<string, SerieCandidata>();
     // Las más recientes primero: de cada serie queda la última instancia.
     for (const r of reuniones) {
-      if (!r.serie || !r.puertasAdentro || porSerie.has(r.serie)) continue;
-      // Una reunión suelta (sin «_» en el id del evento) no es una serie.
-      if (r.serie === r.id) continue;
-      const lee = queLaLee.get(r.serie);
-      porSerie.set(r.serie, {
+      // Una reunión suelta (sin la fecha detrás del id del evento) no es una serie.
+      if (!esDeUnaSerie(r) || !r.puertasAdentro || porSerie.has(r.serie!)) continue;
+      const lee = queLaLee.get(r.serie!);
+      porSerie.set(r.serie!, {
         sessionId: r.id,
         titulo: r.titulo,
         inicio: r.inicio.toISOString(),
@@ -171,7 +171,7 @@ export async function crearFuente(ctx: ContextoDeTareas, clientes: ClientesQueVe
   // Solo una reunión en la que estuviste: Nexus la va a leer a tu nombre.
   const [r] = await getReunionesParaTareas({ quien: { email: ctx.email, esSuperAdmin: false, clientes }, ids: [n.sessionId] });
   if (!r) throw new ErrorDeTareas(404, "No encuentro esa reunión entre las tuyas.");
-  if (!r.serie || r.serie === r.id) throw new ErrorDeTareas(400, "Esa reunión no se repite: elige una reunión recurrente de tu calendario.");
+  if (!esDeUnaSerie(r)) throw new ErrorDeTareas(400, "Esa reunión no se repite: elige una reunión recurrente de tu calendario.");
   if (!r.puertasAdentro) throw new ErrorDeTareas(400, "Esa reunión es con un cliente: la del sprint es una reunión del equipo.");
   const activas = await prisma.fuenteDeTareas.count({ where: { equipo: n.equipo, activa: true } });
   if (activas >= MAX_SERIES_POR_SPRINT) throw new ErrorDeTareas(409, `Un sprint lee como mucho ${MAX_SERIES_POR_SPRINT} reuniones. Pausa o quita una antes.`);
@@ -181,7 +181,7 @@ export async function crearFuente(ctx: ContextoDeTareas, clientes: ClientesQueVe
   return escribirFuente({
     equipo: n.equipo,
     duenoEmail: ctx.email,
-    serie: r.serie,
+    serie: r.serie!,
     titulo: r.titulo.slice(0, 200),
     rol: n.rol ?? rolPorDefecto(r.inicio, r.titulo),
     diaSemana,
@@ -198,14 +198,22 @@ export interface CambiosDeFuente {
 }
 
 async function fuenteDelLider(ctx: ContextoDeTareas, id: string) {
-  const f = await prisma.fuenteDeTareas.findUnique({ where: { id }, select: { id: true, equipo: true, duenoEmail: true } });
+  const f = await prisma.fuenteDeTareas.findUnique({ where: { id }, select: { id: true, equipo: true, duenoEmail: true, activa: true } });
   if (!f || !f.equipo) throw new ErrorDeTareas(404, "Esa reunión del sprint no existe.");
   exigirLider(ctx, f.equipo);
   return f;
 }
 
 export async function cambiarFuente(ctx: ContextoDeTareas, id: string, c: CambiosDeFuente): Promise<void> {
-  await fuenteDelLider(ctx, id);
+  const f = await fuenteDelLider(ctx, id);
+  if (c.activa === true && !f.activa) {
+    // Reanudar no puede pasar el tope ni revivir una serie que nadie puede leer: la mirada siguiente la volvería a pausar.
+    if (!ctx.miembros.some((m) => m.email === f.duenoEmail.toLowerCase())) {
+      throw new ErrorDeTareas(409, "Quien la configuró ya no está en el equipo: quítala y súmala de nuevo desde tu calendario.");
+    }
+    const activas = await prisma.fuenteDeTareas.count({ where: { equipo: f.equipo, activa: true } });
+    if (activas >= MAX_SERIES_POR_SPRINT) throw new ErrorDeTareas(409, `Un sprint lee como mucho ${MAX_SERIES_POR_SPRINT} reuniones. Pausa o quita una antes.`);
+  }
   let personas: string[] | undefined;
   if (c.personas) {
     const { validas, desconocidas } = personasValidas(c.personas, ctx.miembros);

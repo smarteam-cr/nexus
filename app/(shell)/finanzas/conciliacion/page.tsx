@@ -19,7 +19,6 @@ import { cargarGastosContraMercury } from "@/lib/finanzas/gastos-mercury-server"
 import { crDateParts } from "@/lib/jobs/time";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import ConciliacionClient from "@/components/finanzas/ConciliacionClient";
-import PestanasDeConciliacion from "@/components/finanzas/PestanasDeConciliacion";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +45,6 @@ export default async function ConciliacionPage({ searchParams }: { searchParams:
   const porQuien = filasPorQuien(juntarDiferencias(odoo.inconsistencias, mercury.inconsistencias));
   return (
     <div className={`${SHELL_DEFAULT} space-y-4`}>
-      <PestanasDeConciliacion conIntegraciones={isCostosRole(ctx.role)} />
       <ConciliacionClient
         vista={vista}
         supervisor={supervisor}
@@ -57,6 +55,7 @@ export default async function ConciliacionPage({ searchParams }: { searchParams:
         puedeEditarGastos={puedeEditarGastos}
         gastosMercury={gastosMercury}
         puedeEditar={puedeEditar}
+        conIntegraciones={isCostosRole(ctx.role)}
         copias={{
           odoo: copiaOdoo?.ultimaOkEn ? horaDeCostaRica(copiaOdoo.ultimaOkEn) : null,
           mercury: copiaMercury?.ultimaOkEn ? horaDeCostaRica(copiaMercury.ultimaOkEn) : null,

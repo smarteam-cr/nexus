@@ -47,16 +47,26 @@ export function tituloNormalizado(titulo: string): string {
 }
 
 /**
- * ¿Esta reunión de la serie se lee sola ahora? Es de la serie, terminó hace 15 minutos o más y hace menos de 24 h, y
- * empezó después de que se configuró el sprint (con un día de margen: quien la configura justo después de la reunión
- * de hoy espera que se lea la de hoy). Lo de antes se lee a mano.
+ * ¿Es la instancia de una reunión recurrente? El evento de una instancia se llama «<serie>_<fecha>» y la sesión lleva
+ * ese id con un prefijo («gmeet_<serie>_20261012T153000Z»); una reunión suelta no tiene la fecha detrás («gmeet_<serie>»).
+ * Comparar el id con la serie no alcanza: el prefijo los hace distintos siempre.
+ */
+export function esDeUnaSerie(r: { id: string; serie: string | null }): boolean {
+  return !!r.serie && !r.id.endsWith(r.serie);
+}
+
+/**
+ * ¿Esta reunión de la serie se lee sola ahora? Es de la serie, de puertas adentro (una instancia con alguien de
+ * afuera no se lee sola: la del sprint es del equipo), terminó hace 15 minutos o más y hace menos de 24 h, y empezó
+ * después de que se configuró el sprint (con un día de margen: quien la configura justo después de la reunión de hoy
+ * espera que se lea la de hoy). Lo de antes se lee a mano.
  */
 export function seLeeSola(
-  r: { serie: string | null; inicio: Date; fin: Date },
+  r: { serie: string | null; inicio: Date; fin: Date; puertasAdentro: boolean },
   fuente: { serie: string; createdAt: Date; activa: boolean },
   ahora: Date,
 ): boolean {
-  if (!fuente.activa || !r.serie || r.serie !== fuente.serie) return false;
+  if (!fuente.activa || !r.serie || r.serie !== fuente.serie || !r.puertasAdentro) return false;
   if (+r.inicio < +fuente.createdAt - 86_400_000) return false;
   const desde = +r.fin + MINUTOS_DESPUES_DEL_FIN * 60_000;
   const hasta = +r.fin + HORAS_PARA_LEERLA_SOLA * 3_600_000;

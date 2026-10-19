@@ -80,6 +80,8 @@ describe("el aviso de las 48 horas", () => {
     expect(esReunionPrometida("Agendar la sesión de revisión")).toBe(true);
     expect(esReunionPrometida("Llamada de seguimiento con Ana")).toBe(true);
     expect(esReunionPrometida("Enviar la base de datos")).toBe(false);
+    expect(esReunionPrometida("Realizar reunión interna el lunes")).toBe(false);
+    expect(esReunionPrometida("Reunión con el equipo para definir el plan internamente")).toBe(false);
   });
 
   it("el título del aviso", () => {

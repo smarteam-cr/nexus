@@ -12,6 +12,9 @@
  *
  * Las piezas son las de Odoo y Mercury, sin copias: la lista es `DiferenciasOdoo` con las dos fuentes juntas, y Emparejar
  * son `EmparejadoOdoo` y `EmparejadoMercury`. ⛔ Nada de esto escribe en Odoo ni en Mercury.
+ *
+ * Una sola fila de pestañas (prueba 97, 2026-10-18): Odoo, Mercury e Integraciones ya no son una fila de píldoras arriba
+ * del título. Son enlaces al lado de la fecha de cada copia, y esas páginas vuelven acá con «← Conciliación».
  */
 import Link from "next/link";
 import { useCallback, useState } from "react";
@@ -41,6 +44,7 @@ export default function ConciliacionClient({
   gastosMercury = null,
   abrirEn = "no-cuadra",
   puedeEditarGastos = false,
+  conIntegraciones = false,
 }: {
   vista: VistaFinanzas;
   /** El nombre de pila de quien supervisa (lib/finanzas/vista-server.ts). */
@@ -59,6 +63,8 @@ export default function ConciliacionClient({
   abrirEn?: Pestana;
   /** `gastos.write`: decidir los gastos financieros (2026-10-17). */
   puedeEditarGastos?: boolean;
+  /** Integraciones es solo de Super Admin: a los demás no se les ofrece el enlace. */
+  conIntegraciones?: boolean;
 }) {
   const toast = useToast();
   const [tab, setTab] = useState<Pestana>(abrirEn);
@@ -107,8 +113,22 @@ export default function ConciliacionClient({
               {actualizando ? "Leyendo Odoo y Mercury…" : "Actualizar desde Odoo y Mercury"}
             </Button>
             <span className="text-xs text-fg-muted">
-              {copias.odoo ? `Odoo: copia del ${copias.odoo}` : "Odoo: sin copia"} ·{" "}
-              {copias.mercury ? `Mercury: copia del ${copias.mercury}` : "Mercury: sin copia"}
+              <Link href="/cobranza/odoo" className="font-medium text-brand hover:text-brand-light" title="La copia de Odoo: qué es, emparejar y la facturación por cliente.">
+                Odoo
+              </Link>
+              {copias.odoo ? `: copia del ${copias.odoo}` : ": sin copia"} ·{" "}
+              <Link href="/cobranza/mercury" className="font-medium text-brand hover:text-brand-light" title="La copia de Mercury: facturas, clientes y pagos.">
+                Mercury
+              </Link>
+              {copias.mercury ? `: copia del ${copias.mercury}` : ": sin copia"}
+              {conIntegraciones && (
+                <>
+                  {" · "}
+                  <Link href="/finanzas/integraciones" className="font-medium text-brand hover:text-brand-light" title="Si las copias de Odoo, Mercury y HubSpot están al día.">
+                    Integraciones
+                  </Link>
+                </>
+              )}
             </span>
           </div>
         }
@@ -134,7 +154,7 @@ export default function ConciliacionClient({
           {
             key: "emparejar",
             label: "Emparejar",
-            count: porEmparejar.odoo + porEmparejar.mercury,
+            count: porEmparejar.odoo + porEmparejar.mercury || undefined,
             title: "Decir qué cuenta de Nexus es cada cliente de Odoo y de Mercury.",
           },
           { key: "libro", label: "Libro de Alex", title: "Comparar el Excel de Alex contra Nexus, fila por fila." },

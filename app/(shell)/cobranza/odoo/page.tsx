@@ -19,7 +19,6 @@ import { cargarDiferencias, contarEmparejado } from "@/lib/cobranza/odoo/servici
 import { resumenDeDiferencias } from "@/lib/cobranza/odoo/diferencias";
 import { pestanaDe } from "@/lib/cobranza/odoo/pestanas";
 import OdooClient from "@/components/cobranza/OdooClient";
-import PestanasDeConciliacion from "@/components/finanzas/PestanasDeConciliacion";
 
 export const dynamic = "force-dynamic";
 
@@ -49,8 +48,9 @@ export default async function OdooPage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="space-y-4 px-6 py-8">
-      <PestanasDeConciliacion conIntegraciones={isCostosRole(ctx.role)} />
       <PageHeader
+        backHref="/finanzas/conciliacion"
+        backLabel="Conciliación"
         title="Odoo"
         description="Nexus lee las facturas del ERP y las pone al lado de los cobros. Solo lectura: nunca escribe en Odoo ni mueve un cobro por su cuenta."
       />

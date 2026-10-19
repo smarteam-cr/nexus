@@ -1,7 +1,7 @@
 /**
  * Loading de /finanzas/conciliacion.
  *
- * FORMA REAL: PageHeader CON acción («Actualizar desde Odoo y Mercury» + línea de copias) · pestañas subrayadas (3) ·
+ * FORMA REAL: PageHeader CON acción («Actualizar desde Odoo y Mercury» + línea de copias) · pestañas subrayadas (5; Odoo, Mercury e Integraciones son enlaces en la acción) ·
  * dos segmentados de filtro · recuadro de resumen · tarjetas de línea, una debajo de otra.
  */
 import { PageHeaderSkeleton, SkeletonPanel, SkeletonTabs, Skeleton } from "@/components/ui";
@@ -10,10 +10,8 @@ import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 export default function ConciliacionLoading() {
   return (
     <div className={`${SHELL_DEFAULT} space-y-4`}>
-      {/* Las pestañas de Conciliación: Conciliación · Odoo · Mercury · Integraciones (2026-10-18). */}
-      <SkeletonTabs count={4} variant="pill" />
       <PageHeaderSkeleton titleWidth="w-40" descWidth="w-[28rem] max-w-full" action />
-      <SkeletonTabs count={3} />
+      <SkeletonTabs count={5} />
       <div className="flex flex-wrap gap-3">
         <Skeleton className="h-8 w-80 max-w-full rounded-[10px]" />
         <Skeleton className="h-8 w-64 max-w-full rounded-[10px]" delay={40} />

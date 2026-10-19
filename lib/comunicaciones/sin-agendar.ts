@@ -21,8 +21,15 @@ export const DIAS_QUE_AVISA = 21;
 const UNA_REUNION =
   /\b(reuni[oó]n|reunirnos|reunimos|sesi[oó]n|llamada|videollamada|meet|kick ?off|demo|presentaci[oó]n|agendar|agendamos|agenda(r|mos)? (una|la)|nos vemos|taller|capacitaci[oó]n|workshop)\b/i;
 
+/**
+ * Una reunión del equipo sin el cliente no es una reunión prometida al cliente: se hace, no se agenda con él. Medido el
+ * 2026-10-18: «Reunirse internamente para definir el plan» (Seléctrica) y «Realizar reunión interna el lunes» (Larce)
+ * avisaban «se prometió una reunión y no está agendada».
+ */
+const SIN_EL_CLIENTE = /\b(intern[ao]s?|internamente|puertas adentro|del equipo|con el equipo|entre nosotros)\b/i;
+
 export function esReunionPrometida(texto: string): boolean {
-  return UNA_REUNION.test(texto);
+  return UNA_REUNION.test(texto) && !SIN_EL_CLIENTE.test(texto);
 }
 
 /** ¿La tarea es un compromiso con el cliente (de un correo o de la lectura de seguimiento de una reunión)? */
