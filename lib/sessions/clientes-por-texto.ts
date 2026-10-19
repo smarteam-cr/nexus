@@ -11,7 +11,7 @@
  * `candidatos` es más laxo (un token que empieza igual: «Ecoquinta» → «Ecoquintas»): sirve para darle opciones a la IA
  * o a la persona, nunca para elegir solo.
  */
-import { clientePorTitulo, tokensDelCliente, tokensDelTitulo, type ClienteParaMatch } from "./match-por-titulo";
+import { clientePorTitulo, tituloNombraSigla, tokensDelCliente, tokensDelTitulo, type ClienteParaMatch } from "./match-por-titulo";
 import { TITLE_MATCH_STOPWORDS, computeAmbiguousNameTokens, isTestClient, normalize } from "./categorize";
 
 export interface ClientesDeUnTexto {
@@ -42,4 +42,31 @@ export function clientesDeUnTexto(texto: string, indice: IndiceDeClientes, esLaC
   });
   const candidatos = [...new Set([...r.candidatos.map((c) => c.id), ...laxos.map((c) => c.id)])];
   return { sugerido: r.cliente?.id ?? null, candidatos };
+}
+
+/**
+ * Los clientes cuyo nombre ENTERO aparece en un texto (2026-10-19, la agenda de «Para ti»: «Preparar demo para Accesos
+ * Automáticos» → Accesos Automáticos). Más estricto que `clientesDeUnTexto`, a propósito: un evento propio de una
+ * persona («Cita Médica», «Tenis») no es de nadie, y adjudicarlo a medias le mostraría la cuenta de otro cliente.
+ *
+ * Parte de los candidatos del MISMO match del cascade (`clientePorTitulo`, mismas stopwords y tokens ambiguos) y se
+ * queda con los que nombran todas las palabras distintivas de su nombre, o una sigla declarada. Dos registros con el
+ * mismo nombre (un duplicado) cuentan una vez: el primero. Más de uno distinto = el texto no dice cuál (lo decide quien
+ * llama con `cuentaDelEvento`, que con dos no elige).
+ */
+export function clientesNombradosEnteros(textoCrudo: string, indice: IndiceDeClientes): string[] {
+  // Los signos que el corte de palabras del título no conoce («Automáticos:», «demo/ACCESOS») no pegan nada a la palabra.
+  const texto = textoCrudo.replace(/[^\p{L}\p{M}\p{N}]+/gu, " ");
+  const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || indice.ambiguos.has(w);
+  const r = clientePorTitulo(texto, indice.clientes, { modo: "una-palabra", skip, normalize, esClienteDePrueba: isTestClient });
+  const palabras = tokensDelTitulo(texto, skip, normalize);
+  const porNombre = new Map<string, string>();
+  for (const c of r.candidatos) {
+    const { delNombre } = tokensDelCliente(c, skip, normalize);
+    const entero = tituloNombraSigla(texto, c.siglas, normalize) || (delNombre.size > 0 && [...delNombre].every((t) => palabras.has(t)));
+    if (!entero) continue;
+    const k = normalize(c.name);
+    if (!porNombre.has(k)) porNombre.set(k, c.id);
+  }
+  return [...porNombre.values()];
 }

@@ -26,13 +26,18 @@ export interface ReunionDeLaAgenda extends ReunionDeHoy {
   nombres: Record<string, string>;
 }
 
+/** Un evento propio con el nombre de la empresa que nombra (si nombra una). */
+export interface EventoPropioDeLaAgenda extends EventoPropio {
+  nombres: Record<string, string>;
+}
+
 export interface AgendaDeHoy {
   estado: "ok" | MotivoSinAgenda;
   /** El día (o el lunes, en la semana), `AAAA-MM-DD`. */
   dia: string;
   reuniones: ReunionDeLaAgenda[];
   /** Lo demás con hora («Tenis», «Cita Médica», el bloque de una tarea): se pinta y ocupa, como en Google Calendar. */
-  propios: EventoPropio[];
+  propios: EventoPropioDeLaAgenda[];
   /** Los de todo el día (no ocupan horas). */
   todoElDia: EventoDeTodoElDia[];
 }
@@ -83,13 +88,18 @@ async function leerAgenda(email: string, desde: Date, hasta: Date, dia: string):
   const dias = Math.ceil((hasta.getTime() - desde.getTime()) / DIA_MS);
   const eventos = await eventosEntre(email, desde, hasta, { maxDias: dias });
   if (!eventos.ok) return agendaVacia(eventos.motivo, dia);
-  const { porCorreo, porDominio, internos, nombreDe } = await mapasDeEmpresas();
+  const { porCorreo, porDominio, internos, nombreDe, indiceDeNombres } = await mapasDeEmpresas();
   const datos = eventos.datos as EventoConEnlaces[];
   const reuniones = agendaDelDia(datos, { porCorreo, porDominio, internos }).map((r) => ({
     ...r,
     nombres: Object.fromEntries(r.empresas.map((id) => [id, nombreDe.get(id) ?? "Empresa"])),
   }));
-  return { estado: "ok", dia, reuniones, propios: eventosPropios(datos), todoElDia: eventosDeTodoElDia(datos) };
+  // Un evento propio que nombra una empresa («Preparar demo para Accesos Automáticos») lleva su nombre, como una reunión.
+  const propios = eventosPropios(datos, indiceDeNombres).map((p) => ({
+    ...p,
+    nombres: Object.fromEntries(p.empresas.map((id) => [id, nombreDe.get(id) ?? "Empresa"])),
+  }));
+  return { estado: "ok", dia, reuniones, propios, todoElDia: eventosDeTodoElDia(datos) };
 }
 
 /** La agenda de hoy (el correo de la mañana la sigue usando así). */

@@ -15,6 +15,7 @@
  */
 import { DOMINIOS_GENERICOS, invitadosDelEvento, isoDelEvento, type EventoDelCalendario } from "@/lib/exploraciones/agendadas";
 import { esBloqueDeTarea } from "@/lib/google/meet-sync-cambios";
+import { clientesNombradosEnteros, type IndiceDeClientes } from "@/lib/sessions/clientes-por-texto";
 
 export interface ReunionDeHoy {
   id: string;
@@ -134,15 +135,37 @@ export interface EventoPropio {
   tenue: boolean;
   /** El bloque de una tarea de Nexus: lleva a la tarea. */
   tareaId: string | null;
+  /**
+   * Las empresas que nombra el título o la descripción (`empresasDelEventoPropio`): una = esa es (`cuentaDelEvento`);
+   * vacío o varias = no se sabe y no se inventa. Sin el índice de clientes, vacío.
+   */
+  empresas: string[];
 }
 
-/** Los eventos con hora que no son reuniones. Por hora. */
-export function eventosPropios(eventos: readonly EventoConEnlaces[]): EventoPropio[] {
+/**
+ * Las empresas que nombra un evento propio («Preparar demo para Accesos Automáticos» → Accesos Automáticos), con su
+ * nombre ENTERO (lib/sessions/clientes-por-texto.ts › clientesNombradosEnteros, el mismo match de títulos del cascade).
+ * Primero el título; si no nombra ninguna, la descripción. Varias se devuelven todas y `cuentaDelEvento` no elige
+ * ninguna (invariante 1).
+ */
+export function empresasDelEventoPropio(e: Pick<EventoConEnlaces, "summary" | "description">, indice: IndiceDeClientes): string[] {
+  const delTitulo = e.summary?.trim() ? clientesNombradosEnteros(e.summary, indice) : [];
+  if (delTitulo.length > 0) return delTitulo;
+  const descripcion = e.description?.trim();
+  return descripcion ? clientesNombradosEnteros(descripcion.slice(0, 2_000), indice) : [];
+}
+
+/**
+ * Los eventos con hora que no son reuniones. Por hora. Con el índice de clientes, cada uno con la empresa que nombra
+ * (el bloque de una tarea no: lleva a la tarea, que ya dice para quién es).
+ */
+export function eventosPropios(eventos: readonly EventoConEnlaces[], indice?: IndiceDeClientes): EventoPropio[] {
   const out: EventoPropio[] = [];
   for (const e of eventos) {
     if (!esEventoConHora(e) || esReunion(e)) continue;
     const inicio = isoDelEvento(e.start);
     if (!inicio) continue;
+    const tareaId = e.extendedProperties?.private?.nexusTareaId ?? null;
     out.push({
       id: e.id!,
       titulo: e.summary?.trim() || "(Sin título)",
@@ -151,7 +174,8 @@ export function eventosPropios(eventos: readonly EventoConEnlaces[]): EventoProp
       calendarUrl: e.htmlLink?.startsWith("https://") ? e.htmlLink : null,
       ocupa: ocupaSuTiempo(e),
       tenue: esTenue(asistenciaPropia(e)),
-      tareaId: e.extendedProperties?.private?.nexusTareaId ?? null,
+      tareaId,
+      empresas: indice && !tareaId ? empresasDelEventoPropio(e, indice) : [],
     });
   }
   return out.sort((a, b) => a.inicio.localeCompare(b.inicio));

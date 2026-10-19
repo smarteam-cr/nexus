@@ -1,9 +1,11 @@
 /**
  * /api/para-ti/reunion/[eventoId] — el panel de una reunión de tu agenda en el inicio (ficha D, 2026-10-17).
  *
- * GET ?cliente=<id>&inicio=<ISO> → la guía con su objetivo, quién viene, la última vez, lo pendiente, el negocio y,
+ * GET ?cliente=<id>&inicio=<ISO>[&propio=1] → la guía con su objetivo, quién viene, la última vez, lo pendiente, el negocio y,
  *   si ya pasó, lo que dejó. Sin `cliente` (una reunión interna), solo lo que preparaste. Pide acceso al cliente: sin
  *   acceso, 404. El evento se lee del calendario de quien lo pide.
+ *   Con `propio=1` (un evento propio de la agenda, 2026-10-19) no se lee el evento y, sin acceso a la cuenta, se
+ *   responde lo tuyo sin la cuenta en vez de 404: el evento es tuyo aunque nombre a una empresa que no ves.
  * PUT { objetivo?, notas? } → guarda TU objetivo y TUS notas de esa reunión (las ve solo quien las escribe).
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -34,13 +36,15 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (cliente && !cliente.success) return NextResponse.json({ error: "El cliente no es válido." }, { status: 400 });
   const inicioCrudo = req.nextUrl.searchParams.get("inicio");
   const inicio = inicioCrudo && !Number.isNaN(Date.parse(inicioCrudo)) ? new Date(inicioCrudo).toISOString() : null;
-  const clientId = cliente?.success ? cliente.data : null;
+  const propio = req.nextUrl.searchParams.get("propio") === "1";
+  let clientId = cliente?.success ? cliente.data : null;
   if (clientId) {
     try {
       await requireAccessToClient(clientId);
     } catch (e) {
-      if (e instanceof ForbiddenError || e instanceof UnauthorizedError) return NextResponse.json({ error: "No encontrado." }, { status: 404 });
-      throw e;
+      if (!(e instanceof ForbiddenError || e instanceof UnauthorizedError)) throw e;
+      if (!propio) return NextResponse.json({ error: "No encontrado." }, { status: 404 });
+      clientId = null;
     }
   }
   const permisos = await getEffectivePermissions(g.teamMember);
@@ -56,6 +60,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     hoyISO: crDateParts(ahora).dateKey,
     ahora,
     inicio,
+    propio,
   });
   if (!panel) return NextResponse.json({ error: "No encontrado." }, { status: 404 });
   return NextResponse.json(panel, { headers: { "Cache-Control": "no-store" } });

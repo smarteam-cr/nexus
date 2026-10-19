@@ -11,6 +11,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { dominiosDeLaCasa } from "@/lib/sessions/reuniones-para-seguimiento";
+import { indiceDeClientes, type IndiceDeClientes } from "@/lib/sessions/clientes-por-texto";
 
 export interface MapasDeEmpresas {
   porCorreo: Map<string, string[]>;
@@ -18,6 +19,11 @@ export interface MapasDeEmpresas {
   /** Los dominios de Smarteam. */
   internos: Set<string>;
   nombreDe: Map<string, string>;
+  /**
+   * Los clientes y prospectos para reconocer una empresa NOMBRADA en un evento propio («Preparar demo para Accesos
+   * Automáticos»), con el match de títulos del cascade (lib/sessions/clientes-por-texto.ts).
+   */
+  indiceDeNombres: IndiceDeClientes;
 }
 
 const VIDA_MS = 2 * 60_000;
@@ -26,7 +32,7 @@ let enVuelo: Promise<MapasDeEmpresas> | null = null;
 
 async function leer(): Promise<MapasDeEmpresas> {
   const [clientes, contactos, internos] = await Promise.all([
-    prisma.client.findMany({ where: { kind: { in: ["CLIENTE", "PROSPECTO"] } }, select: { id: true, name: true, emailDomains: true } }),
+    prisma.client.findMany({ where: { kind: { in: ["CLIENTE", "PROSPECTO"] } }, select: { id: true, name: true, company: true, siglas: true, emailDomains: true } }),
     modeloDisponible(prisma.contactoDeHubspot)
       ? prisma.contactoDeHubspot.findMany({ where: { vigente: true, email: { not: null } }, select: { email: true, clientId: true } }).catch(() => [])
       : Promise.resolve([]),
@@ -45,7 +51,13 @@ async function leer(): Promise<MapasDeEmpresas> {
     const k = c.email.trim().toLowerCase();
     porCorreo.set(k, [...new Set([...(porCorreo.get(k) ?? []), c.clientId])]);
   }
-  return { porCorreo, porDominio, internos, nombreDe: new Map(clientes.map((c) => [c.id, c.name])) };
+  return {
+    porCorreo,
+    porDominio,
+    internos,
+    nombreDe: new Map(clientes.map((c) => [c.id, c.name])),
+    indiceDeNombres: indiceDeClientes(clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas }))),
+  };
 }
 
 export async function mapasDeEmpresas(ahora = new Date()): Promise<MapasDeEmpresas> {

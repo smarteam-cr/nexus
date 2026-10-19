@@ -14,7 +14,8 @@
  * paso, que lo llenan con un clic.
  *
  * La agenda es la de Google Calendar (2026-10-19): además de las reuniones, pinta los eventos propios («Tenis», «Cita
- * Médica», el bloque de una tarea), que ocupan el tiempo y abren en Calendar; los de todo el día van arriba de cada
+ * Médica», el bloque de una tarea), que ocupan el tiempo; tocar uno lo abre en el panel como a una reunión (el bloque de
+ * una tarea abre la tarea); los de todo el día van arriba de cada
  * columna; los que se pisan van lado a lado; uno donde la persona es opcional o respondió «quizás» se ve más claro. Lo
  * que sugiere Nexus son bloques del tamaño de cada tarea, nunca el espacio entero, y nunca encima del almuerzo.
  *
@@ -27,10 +28,10 @@ import { cn } from "@/lib/cn";
 import { Segmentado } from "@/components/ui";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
 import { grillaDelDia, horaCR, instante, lineaDeAhora, minutoDelDia, ocupadoDeLaAgenda, type ConQueAvanzar, type EventoEnLaGrilla } from "@/lib/mi-dia/inicio";
-import { deTodoElDiaEn, type EventoPropio } from "@/lib/mi-dia/agenda";
+import { deTodoElDiaEn } from "@/lib/mi-dia/agenda";
 import { MINUTOS_DEL_BORRADOR, sePisan, tituloDelBorrador, type BorradorDeEvento } from "@/lib/mi-dia/agenda-borrador";
 import { finDelEspacio, sugerenciasParaElEspacio, type ParaSugerirEnElEspacio } from "@/lib/mi-dia/espacio-libre";
-import type { AgendaDeHoy, ReunionDeLaAgenda } from "@/lib/mi-dia/agenda-server";
+import type { AgendaDeHoy, EventoPropioDeLaAgenda, ReunionDeLaAgenda } from "@/lib/mi-dia/agenda-server";
 import { diaDeEntradaDeLaAgenda, diaQueSeVe, diasDeLaGrilla, esFinDeSemana, pasoDeLaAgenda, type VistaDeLaAgenda } from "@/lib/mi-dia/agenda-dias";
 import { ENLACE_BOTON, TARJETA, TITULO } from "./piezas";
 import BorradorDelEvento from "./BorradorDelEvento";
@@ -375,7 +376,7 @@ export default function AgendaDelInicio({
           ? vista === "semana"
             ? "No tienes nada en tu calendario esta semana. Toca una hora para crear un evento: se guarda en Google Calendar."
             : "No tienes nada en tu calendario este día. Toca una hora para crear un evento: se guarda en Google Calendar."
-          : "Toca una reunión para ver su guía, o un espacio libre para ver con qué usarlo y crear un evento. Se guarda y se mueve en Google Calendar."}
+          : "Toca una reunión para ver su guía, un evento tuyo para tus notas, o un espacio libre para ver con qué usarlo y crear un evento. Se guarda y se mueve en Google Calendar."}
       </p>
     </section>
   );
@@ -396,7 +397,7 @@ function Evento({
   e: EventoEnLaGrilla;
   desplazamiento: number;
   reunion: ReunionDeLaAgenda | null;
-  propio: EventoPropio | null;
+  propio: EventoPropioDeLaAgenda | null;
   hueco: HuecoDeLaAgenda | null;
   elegida: boolean;
   hoyISO: string;
@@ -471,25 +472,13 @@ function Evento({
       </span>
     </>
   );
-  // Un evento propio no tiene panel: abre en Google Calendar (o su tarea, si es el bloque de una tarea de Nexus).
-  if (propio && !reunion) {
-    const href = propio.tareaId ? `/tareas?t=${encodeURIComponent(propio.tareaId)}` : propio.calendarUrl;
-    return href ? (
-      <a
-        href={href}
-        target={propio.tareaId ? undefined : "_blank"}
-        rel="noreferrer"
-        aria-label={`${titulo}, ${linea}`}
-        title={aviso ?? (propio.tareaId ? "Abrir la tarea" : "Abrir en Google Calendar")}
-        className={clase}
-        style={estilo}
-      >
+  // El bloque de una tarea de Nexus abre la tarea. Lo demás propio («Tenis», el almuerzo) se elige como una reunión y
+  // abre su panel (2026-10-19); «Abrir en Google Calendar» queda adentro, como enlace.
+  if (propio && !reunion && propio.tareaId) {
+    return (
+      <a href={`/tareas?t=${encodeURIComponent(propio.tareaId)}`} aria-label={`${titulo}, ${linea}`} title={aviso ?? "Abrir la tarea"} className={clase} style={estilo}>
         {contenido}
       </a>
-    ) : (
-      <div aria-label={`${titulo}, ${linea}`} title={aviso} className={clase} style={estilo}>
-        {contenido}
-      </div>
     );
   }
   return (
