@@ -19,7 +19,7 @@ import {
   procedenciasDeLaSesion,
   type PreguntaParaMostrar,
 } from "./guia";
-import { aplicarAjustes, apuntaDelTema, claveDePregunta, ErrorDeLaGuia, esPropia, type CambioDeLaGuia } from "./ajustes-de-la-guia";
+import { aplicarAjustes, apuntaDelTema, claveDePregunta, ErrorDeLaGuia, type CambioDeLaGuia } from "./ajustes-de-la-guia";
 
 export { ErrorDeLaGuia };
 import { avisoParaOtraVez, leerUnaPregunta, pedidoDeUnaPregunta, type EntradaDeUnaPregunta } from "./guia-pregunta-pedido";
@@ -112,8 +112,7 @@ export async function regenerarPregunta(exploracionId: string, clave: string, qu
   let l = leerUnaPregunta(await pedir(), entrada, base.ctx.saber);
   if (!l.ok) l = leerUnaPregunta(await pedir(avisoParaOtraVez(l)), entrada, base.ctx.saber);
   if (!l.ok) throw new ErrorDeLaGuia(502, "El agente no escribió una pregunta que sirva. Prueba de nuevo, o escríbela tú.");
-  const cambio: CambioDeLaGuia = esPropia(clave)
-    ? { tipo: "cambiar", clave, pregunta: l.pregunta, repreguntas: l.repreguntas, origen: "tuya" }
-    : { tipo: "cambiar", clave, pregunta: l.pregunta, repreguntas: l.repreguntas, origen: "regenerada" };
+  // De la guía o propia, queda marcada «Regenerada» (prueba 104: una propia regenerada seguía diciendo «Del asistente»).
+  const cambio: CambioDeLaGuia = { tipo: "cambiar", clave, pregunta: l.pregunta, repreguntas: l.repreguntas, origen: "regenerada" };
   return ajustarLaGuia(exploracionId, cambio, quienPide, base);
 }

@@ -9161,6 +9161,19 @@ repreguntas, y lo que cubre la guía pegado a ella. El plan está en `docs/preve
   unos US$0,015 por llamada (unos 4.100 tokens de entrada y 150 de salida; el doble si reintenta). Un turno del asistente
   que agrega dos preguntas y acorta otra son dos llamadas: unos US$0,11 el primero (escribe la caché del prompt y de la
   cuenta) y menos los siguientes, que la leen.
+- **Una pregunta propia guarda quién la sumó y quién la cambió** (`PreguntaPropia.cambio`, 2026-10-19, prueba 104).
+  Regenerar una que había sumado el asistente seguía diciendo «Del asistente»: el cambio de una propia no guardaba su
+  origen. Ahora «Regenerar» marca «Regenerada» a cualquier pregunta, y una tuya editada por ti sigue siendo «Tuya».
+  «Volver a la de la guía» es solo de una pregunta de la guía: una propia no tiene a qué volver.
+- **Al abrir el asistente desde la guía, de 3 a 4 pedidos en botones** (`sugerenciasDelAsistente`, puro y sin IA): la
+  pregunta con menos repreguntas, las dimensiones en juego que la guía no pregunta y no tienen evidencia, y lo primero
+  que falta para proponer. Nombran la pregunta por su tema, no por su número (la pantalla no numera). Un clic llena el
+  campo; lo manda la persona. Se ven arriba del campo mientras está vacío, también con conversación anterior.
+- **El chat numera la guía como la pantalla, y sumar se revisa al preparar** (auditoría del 2026-10-19). La guía que lee
+  el modelo y el número de cada línea («quitar la 5») van en el orden de «En orden» (`ordenDeLaConversacion`): antes el
+  Presupuesto era la 5 para el chat y la última en pantalla. Al proponer sumar una pregunta, el tope de 8 sumadas (tuyas
+  o del asistente) cuenta lo que ya está en la misma lista, no se repite una de la lista y se descarta la que vuelve a
+  preguntar lo que el cliente ya dijo (`problemaAlAgregar`): antes la caja prometía «2 cambios» y entraba uno.
 
 ## La rentabilidad, conectada con las agendas y las tareas (2026-10-18)
 

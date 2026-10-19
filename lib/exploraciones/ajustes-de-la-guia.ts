@@ -39,6 +39,11 @@ export interface PreguntaPropia {
   repreguntas: string[];
   para?: string;
   origen: Exclude<OrigenDelAjuste, "regenerada">;
+  /**
+   * Quién la cambió después, si no fue quien la sumó: «Regenerar» o el asistente sobre una tuya, tú sobre una del
+   * asistente (prueba 104, 2026-10-19: regenerar una del asistente seguía diciendo «Del asistente»).
+   */
+  cambio?: OrigenDelAjuste;
 }
 
 /** Una pregunta de la guía reescrita: lo que cambió (la pregunta, sus repreguntas o las dos) y quién. */
@@ -55,6 +60,8 @@ export interface AjustesDeLaGuia {
 }
 
 export const MAX_PREGUNTAS_PROPIAS = 8;
+/** El tope cuenta las sumadas por ti y por el asistente: decir «tuyas» confundía (2026-10-19). */
+export const AVISO_DEL_TOPE_DE_SUMADAS = `La guía ya tiene ${MAX_PREGUNTAS_PROPIAS} preguntas sumadas (tuyas o del asistente): quita una antes de sumar otra.`;
 export const MAX_CAMBIOS_DE_LA_GUIA = 20;
 export const LARGO_DE_UNA_PREGUNTA = 400;
 export const LARGO_DE_UNA_REPREGUNTA = 300;
@@ -113,7 +120,8 @@ export function aplicarAjustes(
       tipo: "propia",
       pregunta: pr.pregunta,
       repreguntas: pr.repreguntas,
-      marca: pr.origen,
+      marca: pr.cambio ?? pr.origen,
+      ...(pr.cambio ? { cambiada: true } : {}),
       ...(apunta ? { apunta } : {}),
     });
   }
@@ -171,7 +179,7 @@ export function aplicarCambioDeLaGuia(antes: AjustesDeLaGuia | undefined, cambio
     case "agregar": {
       const pregunta = limpio(cambio.pregunta.pregunta, LARGO_DE_UNA_PREGUNTA);
       if (!pregunta) return { ok: false, error: "Escribe la pregunta." };
-      if (a.propias!.length >= MAX_PREGUNTAS_PROPIAS) return { ok: false, error: `La guía ya tiene ${MAX_PREGUNTAS_PROPIAS} preguntas tuyas: quita una antes de sumar otra.` };
+      if (a.propias!.length >= MAX_PREGUNTAS_PROPIAS) return { ok: false, error: AVISO_DEL_TOPE_DE_SUMADAS };
       if (a.propias!.some((p) => p.id === cambio.pregunta.id)) return { ok: false, error: "Esa pregunta ya está." };
       a.propias!.push({ ...cambio.pregunta, pregunta, repreguntas: limpias(cambio.pregunta.repreguntas) });
       return { ok: true, ajustes: compacto(a) };
@@ -185,10 +193,19 @@ export function aplicarCambioDeLaGuia(antes: AjustesDeLaGuia | undefined, cambio
         const i = a.propias!.findIndex((p) => p.id === id);
         if (i < 0) return { ok: false, error: "Esa pregunta ya no está en la guía." };
         const p = a.propias![i];
-        const { para: _para, ...sinTema } = p;
+        const { para: _para, cambio: _cambio, ...sinTema } = p;
         void _para;
+        void _cambio;
         const tema = cambio.para === undefined ? p.para : cambio.para;
-        a.propias![i] = { ...sinTema, ...(tema ? { para: tema } : {}), ...(pregunta ? { pregunta } : {}), ...(repreguntas ? { repreguntas } : {}) };
+        // Quién la cambió queda marcado solo si no fue quien la sumó (una tuya editada por ti sigue siendo «Tuya»).
+        const quien = cambio.origen === p.origen ? undefined : cambio.origen;
+        a.propias![i] = {
+          ...sinTema,
+          ...(tema ? { para: tema } : {}),
+          ...(pregunta ? { pregunta } : {}),
+          ...(repreguntas ? { repreguntas } : {}),
+          ...(quien ? { cambio: quien } : {}),
+        };
         return { ok: true, ajustes: compacto(a) };
       }
       if (!pregunta && !repreguntas) return { ok: false, error: "No hay nada que cambiar." };
@@ -231,8 +248,13 @@ export function aplicarCambioDeLaGuia(antes: AjustesDeLaGuia | undefined, cambio
  * mismo id (su casilla «hecha» y su nota siguen ahí); una de la guía cambiada vuelve con su cambio; una de la guía sin
  * cambiar, a la de la guía.
  */
-export function deshacerElBorrado(p: Pick<PreguntaParaMostrar, "para" | "paso" | "tipo" | "pregunta" | "repreguntas" | "marca" | "apunta" | "cambiada">): CambioDeLaGuia {
+export function deshacerElBorrado(
+  p: Pick<PreguntaParaMostrar, "para" | "paso" | "tipo" | "pregunta" | "repreguntas" | "marca" | "apunta" | "cambiada">,
+  propia?: PreguntaPropia,
+): CambioDeLaGuia {
   if (p.tipo === "propia" && esPropia(p.para)) {
+    // Con la propia guardada vuelve igual (quién la sumó y quién la cambió); sin ella, desde lo que se ve.
+    if (propia) return { tipo: "agregar", pregunta: { ...propia, repreguntas: [...propia.repreguntas] } };
     const para = p.apunta?.para;
     return {
       tipo: "agregar",

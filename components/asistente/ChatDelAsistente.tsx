@@ -234,6 +234,11 @@ interface Props {
   /** 1B: llena el campo SIN mandarlo, cada vez que sube `n` («o pídeselo al asistente»). */
   borrador?: { texto: string; n: number } | null;
   /**
+   * Pedidos listos, en botones arriba del campo mientras está vacío (el chat de Nexus abierto desde la guía de una
+   * sesión, 2026-10-19). Un clic llena el campo SIN mandarlo. Con ellos, el estado vacío no repite los ejemplos.
+   */
+  sugerencias?: readonly string[];
+  /**
    * Etapa 6 (memoria de la cuenta): un acuerdo se aplicó bien y los mensajes que lo armaron llevaban NOVEDADES de
    * reuniones («Cambiar con el chat» de la franja del documento). Quien monta el chat las da por usadas.
    */
@@ -264,6 +269,7 @@ export default function ChatDelAsistente({
   chip = null,
   onSoltarChip,
   borrador = null,
+  sugerencias,
   onNovedadesAplicadas,
 }: Props) {
   const hydrated = useHydrated();
@@ -802,7 +808,7 @@ export default function ChatDelAsistente({
             <p>{rotulos?.vacio?.intro ?? "Pregúntale qué se puede cambiar y qué va a costar. Por ejemplo:"}</p>
             {/* L1: sin propuesta, los ejemplos del aviso (los de siempre, sin «Aplica la propuesta»). Lo que se le
                 pide a una propuesta va en la bienvenida, con sus números y sus fases de verdad. */}
-            {aviso?.ejemplos.length ? (
+            {sugerencias?.length ? null : aviso?.ejemplos.length ? (
               <ol className="text-xs text-fg-muted space-y-1 list-decimal pl-4">
                 {aviso.ejemplos.map((e) => (
                   <li key={e}>«{e}»</li>
@@ -1303,6 +1309,23 @@ export default function ChatDelAsistente({
                 </button>
               ) : null}
             </span>
+          </div>
+        ) : null}
+        {sugerencias?.length && !texto.trim() && !pensando ? (
+          <div className="mb-2 flex flex-wrap gap-1.5" aria-label="Pedidos para empezar">
+            {sugerencias.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  setTexto(s);
+                  composerRef.current?.focus();
+                }}
+                className="rounded-full border border-info-line bg-info-surface px-2.5 py-1 text-left text-xs text-brand hover:bg-surface-hover"
+              >
+                {s}
+              </button>
+            ))}
           </div>
         ) : null}
         <textarea
