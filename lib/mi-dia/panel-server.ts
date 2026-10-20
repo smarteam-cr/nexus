@@ -10,6 +10,11 @@
  * `propio`: no se lee el evento ni lo que dejó (no es una reunión), y suma la próxima reunión con la cuenta y su
  * siguiente paso. La cuenta la decide la agenda (lib/mi-dia/agenda.ts › empresasDelEventoPropio).
  *
+ * Una reunión INTERNA que nombra a una empresa (2026-10-19, prueba 151: «Preparar demo para Accesos Automáticos» con
+ * alguien más de la casa) usa `interna`: lo de la cuenta como un evento propio (la próxima reunión desde ahora, el
+ * siguiente paso, lo pendiente), sin la guía ni lo que dejó (no fue con el cliente), pero con su sesión si ya pasó.
+ * La cuenta la decide la agenda (lib/mi-dia/agenda.ts › empresasDeLaReunionInterna).
+ *
  * ⛔ Quien lo pide ya pasó por `requireAccessToClient` (lo exige la ruta antes de llamar acá).
  */
 import "server-only";
@@ -77,7 +82,11 @@ export async function panelDeLaReunion(o: {
   inicio: string | null;
   /** Es un evento propio, no una reunión: no se lee el evento ni lo que dejó. */
   propio?: boolean;
+  /** Es una reunión interna que nombra a la cuenta: lo de la cuenta como un evento propio, y su sesión si ya pasó. */
+  interna?: boolean;
 }): Promise<PanelDeLaReunion | null> {
+  // Lo de la cuenta sin la reunión: el evento no fue con el cliente (uno propio, o uno interno que lo nombra).
+  const soloLaCuenta = !!o.propio || !!o.interna;
   // Con «Ver como», quien mira de verdad es dirección: el objetivo y las notas son de la persona (las ve solo ella), así
   // que no se leen ni se dejan escribir.
   const verComo = !!o.user.verComoDe;
@@ -107,13 +116,13 @@ export async function panelDeLaReunion(o: {
   // Todo en paralelo (2026-10-17): «lo que dejó» ya no espera al resumen. Medido: el panel bajó de ~1,9 s a ~1,1 s.
   const [cliente, resumen, servicio, loQueDejo] = await Promise.all([
     prisma.client.findUnique({ where: { id: o.clientId }, select: { id: true, name: true, kind: true } }),
-    resumenParaLaReunion({ clientId: o.clientId, eventoId: o.propio ? null : o.eventoId, email: o.email, veAlertas: o.veAlertas, veMontos: o.veMontos, ahora: o.ahora }),
+    resumenParaLaReunion({ clientId: o.clientId, eventoId: soloLaCuenta ? null : o.eventoId, email: o.email, veAlertas: o.veAlertas, veMontos: o.veMontos, ahora: o.ahora }),
     servicioDeLasCuentas([{ clientId: o.clientId, empresa: "", llevaEmail: o.email }], {
       ahora: o.ahora,
       hoyISO: o.hoyISO,
       quienMira: { email: o.email, esSuperAdmin: o.rol === "SUPER_ADMIN" },
     }).catch(() => null),
-    yaPaso ? loQueDejoElEvento(o.eventoId, o.clientId, o.user, o.rol, o.ahora).catch(() => null) : Promise.resolve(null),
+    yaPaso && !soloLaCuenta ? loQueDejoElEvento(o.eventoId, o.clientId, o.user, o.rol, o.ahora).catch(() => null) : Promise.resolve(null),
   ]);
   if (!cliente || !resumen) return null;
 
@@ -123,8 +132,8 @@ export async function panelDeLaReunion(o: {
     ? proximas.some((r) => Date.parse(r.inicio) > Date.parse(o.inicio!) + 60_000)
     : proximas.length > 0;
 
-  // La próxima reunión con la cuenta (para un evento propio, la primera que viene desde ahora).
-  const desde = o.propio ? o.ahora.getTime() : o.inicio ? Date.parse(o.inicio) + 60_000 : o.ahora.getTime();
+  // La próxima reunión con la cuenta (para un evento propio o interno, la primera que viene desde ahora).
+  const desde = soloLaCuenta ? o.ahora.getTime() : o.inicio ? Date.parse(o.inicio) + 60_000 : o.ahora.getTime();
   const proxima = proximas.find((r) => Date.parse(r.inicio) > desde) ?? null;
   const paso = siguientePasoParaElPanel(resumen.pasos?.pasos ?? [], equipoDelRol(o.rol));
 

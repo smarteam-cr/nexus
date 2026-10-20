@@ -16,6 +16,10 @@
  * empresasDelEventoPropio), suma lo de esa cuenta: la próxima reunión, el siguiente paso, lo pendiente, la última vez y
  * el negocio. Si no se sabe de qué cuenta es, no se inventa.
  *
+ * Una reunión interna (solo gente de Smarteam) que nombra entera a UNA empresa (2026-10-19, prueba 151: «Preparar demo
+ * para Accesos Automáticos» con Andrés y Liz; lib/mi-dia/agenda.ts › empresasDeLaReunionInterna) suma lo mismo, sin
+ * perder lo de reunión interna (Meet, el texto del sprint, la sesión si ya pasó).
+ *
  * Los datos los trae GET /api/para-ti/reunion/[evento] (pide acceso al cliente); TU objetivo y tus notas se guardan con
  * PUT en el mismo lugar.
  */
@@ -78,8 +82,10 @@ export default function PanelDeLaReunion({
   const [empresa, setEmpresa] = useState<string | null>(r && r.empresas.length === 1 ? r.empresas[0] : null);
   // La cuenta de un evento propio: la que nombra, si es UNA (invariante 1). No se elige a mano: si no se sabe, no se inventa.
   const cuentaPropia = p ? cuentaDelEvento(p) : null;
+  // La cuenta de una reunión interna: la que nombra entera, si es UNA (no la de los invitados: no hay nadie de afuera).
+  const cuentaInterna = r && r.empresas.length === 0 && r.externos === 0 ? cuentaDelEvento({ empresas: r.nombradas ?? [] }) : null;
   const evento = r ?? p;
-  const clave = r ? `${r.id}:${empresa ?? ""}` : p ? `${p.id}:${cuentaPropia ?? ""}` : "hueco";
+  const clave = r ? `${r.id}:${empresa ?? cuentaInterna ?? ""}` : p ? `${p.id}:${cuentaPropia ?? ""}` : "hueco";
   const [cargado, setCargado] = useState<{ clave: string; panel: Panel | null; error: string | null } | null>(null);
 
   // Al cambiar de reunión, la empresa vuelve a la de esa reunión (se ajusta en el render, sin efecto).
@@ -92,13 +98,15 @@ export default function PanelDeLaReunion({
   const idDeLaReunion = evento?.id ?? null;
   const inicioDeLaReunion = evento?.inicio ?? null;
   const esPropio = !!p;
-  const clienteDelPanel = p ? cuentaPropia : empresa;
+  const esInterna = !!cuentaInterna;
+  const clienteDelPanel = p ? cuentaPropia : (cuentaInterna ?? empresa);
   useEffect(() => {
     if (!idDeLaReunion || !inicioDeLaReunion) return;
     let vivo = true;
     const q = new URLSearchParams({ inicio: inicioDeLaReunion });
     if (clienteDelPanel) q.set("cliente", clienteDelPanel);
     if (esPropio) q.set("propio", "1");
+    else if (esInterna) q.set("interna", "1");
     fetch(`/api/para-ti/reunion/${encodeURIComponent(idDeLaReunion)}?${q.toString()}`)
       .then(async (res) => {
         const j = await res.json().catch(() => null);
@@ -110,7 +118,7 @@ export default function PanelDeLaReunion({
     return () => {
       vivo = false;
     };
-  }, [clave, idDeLaReunion, inicioDeLaReunion, clienteDelPanel, esPropio]);
+  }, [clave, idDeLaReunion, inicioDeLaReunion, clienteDelPanel, esPropio, esInterna]);
 
   const datos = cargado?.clave === clave ? cargado : null;
   const futura = evento ? Date.parse(evento.fin ?? evento.inicio) > ahora.getTime() : false;
@@ -136,7 +144,9 @@ export default function PanelDeLaReunion({
                     ? `Puede ser de ${r.empresas.length} empresas`
                     : r.externos > 0
                       ? "Con alguien de afuera, sin empresa de Nexus"
-                      : "Interna"
+                      : cuentaInterna
+                        ? `Interna · ${r.nombres[cuentaInterna] ?? "Empresa"}${datos?.panel?.cliente?.tipo ? ` · ${datos.panel.cliente.tipo}` : ""}`
+                        : "Interna"
                 : "Tu calendario está libre"}
             </p>
           </div>
@@ -183,6 +193,11 @@ export default function PanelDeLaReunion({
                 Ir a la cuenta
               </Link>
             )}
+            {cuentaInterna && datos?.panel?.cliente && (
+              <Link href={`/clients/${encodeURIComponent(cuentaInterna)}`} className={ENLACE_BOTON}>
+                Ir a la cuenta
+              </Link>
+            )}
           </div>
         )}
 
@@ -196,6 +211,13 @@ export default function PanelDeLaReunion({
                   Reunión interna. Si es la reunión de tu sprint, Nexus propone en Tareas lo que se comprometió cada uno.
                 </p>
                 {datos?.panel?.sesionId && <EnlaceALaSesion sessionId={datos.panel.sesionId} />}
+                {/* Ya pasó: «Ir a la cuenta» no está arriba (los botones son de una reunión que viene). */}
+                {cuentaInterna && !futura && datos?.panel?.cliente && (
+                  <Link href={`/clients/${encodeURIComponent(cuentaInterna)}`} className={cn(ENLACE_BOTON, "self-start")}>
+                    Ir a la cuenta
+                  </Link>
+                )}
+                {cuentaInterna && <LaCuentaDelEvento datos={datos} />}
                 {/* Una por reunión: lo escrito antes de que lleguen tus notas guardadas no se pierde (ver `Notas`). */}
                 <Notas key={r.id} eventoId={r.id} panel={datos?.panel ?? null} futura={futura} />
               </>
@@ -417,7 +439,29 @@ function EventoPropio({
           Abrir en Google Calendar
         </a>
       </div>
-      {cuenta && !datos ? (
+      {cuenta && <LaCuentaDelEvento datos={datos} />}
+      {/* Tus notas, como en una reunión: las ves solo tú. */}
+      <Notas key={p.id} eventoId={p.id} panel={panel} futura={futura} />
+      {!cuenta && (
+        <p className="text-xs leading-4 text-fg-muted">
+          {p.empresas.length > 1
+            ? "El título nombra más de una cuenta: Nexus no elige cuál."
+            : "Si el título o la descripción nombran a un cliente, aquí verías lo de su cuenta."}
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * Lo de la cuenta de un evento que no fue con el cliente (uno propio, o uno interno que lo nombra): la próxima reunión,
+ * el siguiente paso, la última vez, lo pendiente y el negocio. Sin acceso a la cuenta, lo dice y no muestra nada de ella.
+ */
+function LaCuentaDelEvento({ datos }: { datos: { panel: Panel | null; error: string | null } | null }) {
+  const panel = datos?.panel ?? null;
+  return (
+    <>
+      {!datos ? (
         <div className="flex flex-col gap-2.5 rounded-xl border border-line px-4 py-3.5">
           <Skeleton className="h-3 w-40" />
           <Skeleton className="h-3.5 w-full" delay={40} />
@@ -426,7 +470,6 @@ function EventoPropio({
       ) : datos?.error ? (
         <p className="text-[13px] text-danger-ink">{datos.error}</p>
       ) : (
-        cuenta &&
         panel &&
         (panel.cliente ? (
           <>
@@ -457,15 +500,6 @@ function EventoPropio({
         ) : (
           <p className="text-[13px] leading-[19px] text-fg-muted">El evento nombra una cuenta que no está entre las que ves.</p>
         ))
-      )}
-      {/* Tus notas, como en una reunión: las ves solo tú. */}
-      <Notas key={p.id} eventoId={p.id} panel={panel} futura={futura} />
-      {!cuenta && (
-        <p className="text-xs leading-4 text-fg-muted">
-          {p.empresas.length > 1
-            ? "El título nombra más de una cuenta: Nexus no elige cuál."
-            : "Si el título o la descripción nombran a un cliente, aquí verías lo de su cuenta."}
-        </p>
       )}
     </>
   );

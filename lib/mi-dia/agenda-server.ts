@@ -90,9 +90,11 @@ async function leerAgenda(email: string, desde: Date, hasta: Date, dia: string):
   if (!eventos.ok) return agendaVacia(eventos.motivo, dia);
   const { porCorreo, porDominio, internos, nombreDe, indiceDeNombres } = await mapasDeEmpresas();
   const datos = eventos.datos as EventoConEnlaces[];
-  const reuniones = agendaDelDia(datos, { porCorreo, porDominio, internos }).map((r) => ({
+  // Una reunión interna que nombra una empresa («Preparar demo para Accesos Automáticos», con alguien más de la casa)
+  // lleva su nombre en `nombradas`, para el panel; no cambia de quién es la reunión.
+  const reuniones = agendaDelDia(datos, { porCorreo, porDominio, internos, nombrar: indiceDeNombres }).map((r) => ({
     ...r,
-    nombres: Object.fromEntries(r.empresas.map((id) => [id, nombreDe.get(id) ?? "Empresa"])),
+    nombres: Object.fromEntries([...r.empresas, ...(r.nombradas ?? [])].map((id) => [id, nombreDe.get(id) ?? "Empresa"])),
   }));
   // Un evento propio que nombra una empresa («Preparar demo para Accesos Automáticos») lleva su nombre, como una reunión.
   const propios = eventosPropios(datos, indiceDeNombres).map((p) => ({

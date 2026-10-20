@@ -39,6 +39,12 @@ export interface ReunionDeHoy {
   internos: number;
   /** Los correos de Smarteam invitados (quién va de la casa). */
   deSmarteam: string[];
+  /**
+   * Solo en una reunión INTERNA (nadie de afuera): las empresas que nombra entera (`empresasDeLaReunionInterna`). Las
+   * usa SOLO el panel, para mostrar lo de esa cuenta. ⛔ No es `empresas`: una reunión interna que nombra a un cliente
+   * no es una reunión con ese cliente, así que no cuenta para la regla de servicio, las cifras ni el correo.
+   */
+  nombradas?: string[];
 }
 
 /** Un evento del calendario con sus enlaces (Meet y la página del evento). */
@@ -156,6 +162,17 @@ export function empresasDelEventoPropio(e: Pick<EventoConEnlaces, "summary" | "d
 }
 
 /**
+ * Las empresas que nombra una reunión INTERNA (2026-10-19, prueba 151: «Preparar demo para Accesos Automáticos» con
+ * Andrés y Liz, con Meet, entraba como reunión interna y el panel no traía la cuenta). La misma regla que un evento
+ * propio, con una diferencia: en una serie (una reunión que se repite, como la del sprint) cuenta SOLO el título. La
+ * descripción de una serie es la agenda de siempre y nombra clientes al pasar; el título de una serie que nombra a un
+ * cliente («Seguimiento interno Cemaco») sí dice de quién es.
+ */
+export function empresasDeLaReunionInterna(e: Pick<EventoConEnlaces, "summary" | "description" | "recurringEventId">, indice: IndiceDeClientes): string[] {
+  return empresasDelEventoPropio(e.recurringEventId ? { summary: e.summary } : e, indice);
+}
+
+/**
  * Los eventos con hora que no son reuniones. Por hora. Con el índice de clientes, cada uno con la empresa que nombra
  * (el bloque de una tarea no: lleva a la tarea, que ya dice para quién es).
  */
@@ -219,6 +236,8 @@ export function agendaDelDia(
     porDominio: ReadonlyMap<string, readonly string[]>;
     /** Los dominios de Smarteam. */
     internos: ReadonlySet<string>;
+    /** Con el índice, cada reunión interna lleva las empresas que nombra (`nombradas`). Solo la agenda de «Para ti». */
+    nombrar?: IndiceDeClientes;
   },
 ): ReunionDeHoy[] {
   const out: ReunionDeHoy[] = [];
@@ -242,6 +261,7 @@ export function agendaDelDia(
       externos: externos.length,
       internos: gente.length - externos.length,
       deSmarteam: gente.filter((c) => o.internos.has(dominioDe(c))),
+      ...(o.nombrar && externos.length === 0 ? { nombradas: empresasDeLaReunionInterna(e, o.nombrar) } : {}),
     });
   }
   return out.sort((a, b) => a.inicio.localeCompare(b.inicio));

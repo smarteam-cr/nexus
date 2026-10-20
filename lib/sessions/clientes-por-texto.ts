@@ -13,6 +13,7 @@
  */
 import { clientePorTitulo, tituloNombraSigla, tokensDelCliente, tokensDelTitulo, type ClienteParaMatch } from "./match-por-titulo";
 import { TITLE_MATCH_STOPWORDS, computeAmbiguousNameTokens, isTestClient, normalize } from "./categorize";
+import { palabrasSinSufijoLegal } from "@/lib/clients/gemelas";
 
 export interface ClientesDeUnTexto {
   /** El cliente que el cascade elegiría para este texto, o null. */
@@ -53,6 +54,16 @@ export function clientesDeUnTexto(texto: string, indice: IndiceDeClientes, esLaC
  * queda con los que nombran todas las palabras distintivas de su nombre, o una sigla declarada. Dos registros con el
  * mismo nombre (un duplicado) cuentan una vez: el primero. Más de uno distinto = el texto no dice cuál (lo decide quien
  * llama con `cuentaDelEvento`, que con dos no elige).
+ *
+ * Un nombre de varias palabras al que le queda UNA sola distintiva («El Éxito», «RC Inmobiliaria», «Librería
+ * Internacional», «Cemaco Internacional») pide dos cosas más (2026-10-19, prueba 151, medido sobre las reuniones
+ * internas de octubre de todo el equipo; `nombraElNombrePropio`):
+ *  - esa palabra va con mayúscula, como un nombre propio: «el éxito del onboarding» o «Hablemos de librería» no
+ *    nombran a nadie; «Alineación CEMACO» sí es Cemaco Internacional;
+ *  - si el nombre tiene palabras cortas («El», «RC»), aparecen seguidas de la distintiva: «Sobre Casos de Éxito» no es
+ *    El Éxito y «Custom Agent - Inmobiliaria» no es RC Inmobiliaria. Las palabras largas que no distinguen («Grupo»,
+ *    «Internacional») pueden faltar, y los sufijos legales («S.A.», «SRL») no cuentan
+ *    (lib/clients/gemelas.ts › palabrasSinSufijoLegal, la misma regla de las fichas gemelas).
  */
 export function clientesNombradosEnteros(textoCrudo: string, indice: IndiceDeClientes): string[] {
   // Los signos que el corte de palabras del título no conoce («Automáticos:», «demo/ACCESOS») no pegan nada a la palabra.
@@ -62,11 +73,38 @@ export function clientesNombradosEnteros(textoCrudo: string, indice: IndiceDeCli
   const palabras = tokensDelTitulo(texto, skip, normalize);
   const porNombre = new Map<string, string>();
   for (const c of r.candidatos) {
-    const { delNombre } = tokensDelCliente(c, skip, normalize);
-    const entero = tituloNombraSigla(texto, c.siglas, normalize) || (delNombre.size > 0 && [...delNombre].every((t) => palabras.has(t)));
+    // Las palabras del nombre sin sufijo legal: «Plastimex S.A.» se nombra con «Plastimex» («s.a.» no distingue).
+    const delNombre = new Set(palabrasSinSufijoLegal(c.name).split(" ").filter((w) => w.length >= 4 && !skip(w)));
+    const entero =
+      tituloNombraSigla(texto, c.siglas, normalize) ||
+      (delNombre.size > 0 && [...delNombre].every((t) => palabras.has(t)) && (delNombre.size > 1 || nombraElNombrePropio(texto, c.name, skip)));
     if (!entero) continue;
     const k = normalize(c.name);
     if (!porNombre.has(k)) porNombre.set(k, c.id);
   }
   return [...porNombre.values()];
+}
+
+/**
+ * Un nombre con UNA sola palabra distintiva, en el texto. Sin otras palabras («Plastimex S.A.»), alcanza con la
+ * distintiva. Con otras: la distintiva con mayúscula y, si hay palabras cortas, el nombre seguido en el texto (las
+ * largas que no distinguen pueden faltar).
+ */
+function nombraElNombrePropio(texto: string, nombre: string, skip: (w: string) => boolean): boolean {
+  const delNombre = palabrasSinSufijoLegal(nombre).split(" ").filter(Boolean);
+  const distintiva = delNombre.find((w) => w.length >= 4 && !skip(w));
+  if (!distintiva || delNombre.length === 1) return true;
+  const crudas = texto.split(/[^\p{L}\p{M}\p{N}]+/u).filter(Boolean);
+  const del = crudas.map((w) => normalize(w));
+  const conMayuscula = crudas.some((w, k) => del[k] === distintiva && w[0] !== w[0].toLowerCase());
+  if (!conMayuscula) return false;
+  if (!delNombre.some((w) => w.length < 4)) return true;
+  const opcional = (w: string) => w.length >= 4 && w !== distintiva && skip(w);
+  const desde = (i: number, k: number): boolean => {
+    if (k === delNombre.length) return true;
+    if (opcional(delNombre[k]) && desde(i, k + 1)) return true;
+    return i < del.length && del[i] === delNombre[k] && desde(i + 1, k + 1);
+  };
+  for (let i = 0; i < del.length; i++) if (desde(i, 0)) return true;
+  return false;
 }
