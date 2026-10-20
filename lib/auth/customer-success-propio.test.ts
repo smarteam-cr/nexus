@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_MATRIX } from "./permissions/defaults";
 import { sectionByKey } from "./permissions/registry";
-import { ROLES_DE_EXITO_DEL_CLIENTE, esLiderDeCs } from "@/lib/cs/acceso";
+import { ENTRADA_DE_EXITO_DEL_CLIENTE, ROLES_DE_EXITO_DEL_CLIENTE, ROLES_DEL_SEGUIMIENTO, esLiderDeCs, veSeguimientoDeCuentas } from "@/lib/cs/acceso";
 
 /**
  * lib/auth/customer-success-propio.test.ts — ÉXITO DEL CLIENTE ES DE LA CSL Y DE DIRECCIÓN.
@@ -151,10 +151,13 @@ describe("el área es de la CSL y dirección, por rol", () => {
     expect(sinGuard, `estas APIs dejaron de pedir el rol:\n${sinGuard.join("\n")}`).toEqual([]);
   });
 
-  it("el ítem del sidebar también, con la MISMA lista", () => {
-    expect(sinComentarios("components/layout/nav-config.tsx")).toContain(
-      'gate: { kind: "roles", roles: ROLES_DE_EXITO_DEL_CLIENTE }',
-    );
+  it("el ítem del sidebar también: lo ven quienes ven «Seguimiento de cuentas», y el CSE entra directo ahí", () => {
+    /* 2026-10-19: el CSE ve «Éxito del cliente» en el menú, pero el clic lo lleva a «Seguimiento de cuentas» (la única
+       página del área que es suya). La cartera sigue pidiendo `esLiderDeCs` (las pantallas de arriba). */
+    const src = sinComentarios("components/layout/nav-config.tsx");
+    expect(src).toContain('gate: { kind: "roles", roles: ROLES_DEL_SEGUIMIENTO }');
+    expect(src).toContain("entradaPorRol: ENTRADA_DE_EXITO_DEL_CLIENTE");
+    expect(ENTRADA_DE_EXITO_DEL_CLIENTE).toEqual({ CSE: "/customer-success/seguimiento" });
   });
 
   it("⚠ la celda vieja quedó apagada, para que nadie crea que abre algo", () => {
@@ -203,6 +206,28 @@ describe("⭐ ninguna puerta pide «ver todos los clientes» para ENTRAR", () =>
       raras,
       `Estas puertas nombran «ver todos los clientes» de una forma que no es la pregunta:\n${raras.join("\n")}`,
     ).toEqual([]);
+  });
+});
+
+describe("⭐ «Seguimiento de cuentas» es la única página del área que también es del CSE (2026-10-19)", () => {
+  const PAGINA = "app/(shell)/customer-success/seguimiento/page.tsx";
+
+  it("la lista es la del área más el CSE, y nadie más", () => {
+    expect([...ROLES_DEL_SEGUIMIENTO]).toEqual(["CSL", "SUPER_ADMIN", "CSE"]);
+    for (const rol of ["CSL", "SUPER_ADMIN", "CSE"]) expect(veSeguimientoDeCuentas(rol), rol).toBe(true);
+    for (const rol of ["VENTAS", "DEV", "MARKETING", "ADMIN", "", null, undefined]) expect(veSeguimientoDeCuentas(rol), `${rol}`).toBe(false);
+  });
+
+  it("la página pregunta el rol antes de cargar", () => {
+    const src = sinComentarios(PAGINA);
+    const gate = src.indexOf("if (!ctx || !veSeguimientoDeCuentas(ctx.role)) redirect(");
+    const carga = src.indexOf("cargarSeguimientoDeCuentas(");
+    expect(gate).toBeGreaterThan(0);
+    expect(carga).toBeGreaterThan(gate);
+  });
+
+  it("ninguna OTRA pantalla del área se abrió al CSE", () => {
+    for (const p of PANTALLAS) expect(sinComentarios(p), p).not.toContain("veSeguimientoDeCuentas");
   });
 });
 

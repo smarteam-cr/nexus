@@ -211,6 +211,9 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       // La semana (2026-10-17, fase 2 de docs/nexus-sistema-de-trabajo-plan.md).
       "lib/mi-dia/planificar-server.ts": "«Planifica tu semana»: las tareas abiertas de tus cuentas (título, fecha, prioridad, lado; sin la cita, el contexto, las notas ni lo privado) y la próxima sugerida de la última reunión",
       "lib/mi-dia/proximas-server.ts": "las próximas reuniones de la ficha: las reuniones planeadas de la cuenta (título, hora, responsable e invitados; nunca lo privado) y quién tiene tareas abiertas con ella (para leer su calendario)",
+      // «Seguimiento de cuentas» (2026-10-19): la próxima sesión y los temas de cada cuenta.
+      "lib/mi-dia/seguimiento-server.ts": "«Seguimiento de cuentas»: las reuniones planeadas de la cuenta (título y hora) y, para los temas, los títulos de sus tareas abiertas; nunca lo privado ni lo de un espacio de «solo miembros» ajeno, sin la cita, el contexto ni las notas",
+      "lib/mi-dia/seguimiento.ts": "«Seguimiento de cuentas»: solo `mismoTema` y `temaDeLaTarea` (puro) para no repetir un tema; no lee tareas",
       "lib/sessions/reanalizar.ts": "una reunión cuyo texto cambió: sus propuestas sin decidir quedan vencidas por el único escritor (retirarPropuestasDeLaReunion); no lee tareas",
       "app/api/sessions/[id]/seguimiento/route.ts": "«Ya la agendé» de la página de una reunión: deja la reunión planeada por el único escritor (planearReunion); no lee tareas",
       // El chat de Nexus (2026-10-17, ficha H): lee por la puerta de la capa y escribe por la capa de operaciones.

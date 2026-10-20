@@ -36,9 +36,13 @@ function motivoDelError(e: unknown): MotivoSinAgenda {
 const CAMPOS_DEL_EVENTO =
   "id,status,summary,description,start,end,recurringEventId,extendedProperties,eventType,transparency,conferenceData(conferenceSolution(key(type))),attendees(email,self,responseStatus,resource,optional),organizer(email),hangoutLink,htmlLink";
 
+/** Cuántos eventos se leen como mucho en `eventosProximos` (4 páginas). Con más, la lectura no se da por completa. */
+const MAX_EVENTOS_PROXIMOS = 1000;
+
 /**
  * Los eventos del calendario principal de `email` desde ahora hasta dentro de `semanas` semanas, una fila
- * por fecha (`singleEvents`: en una serie, cada fecha es su propia instancia). Hasta 250.
+ * por fecha (`singleEvents`: en una serie, cada fecha es su propia instancia). De a 250 por página, hasta 1000: con más,
+ * la lectura no se da por completa (`ok: false`), así nadie lee «no hay reunión» de un calendario cortado.
  */
 export async function eventosProximos(email: string, o: { semanas: number; ahora?: Date }): Promise<ResultadoDeLaAgenda<calendar_v3.Schema$Event[]>> {
   if (!agendaDisponible()) return { ok: false, motivo: "sin-google" };
@@ -46,16 +50,26 @@ export async function eventosProximos(email: string, o: { semanas: number; ahora
   const hasta = new Date(ahora.getTime() + Math.max(1, Math.min(o.semanas, 8)) * 7 * 24 * 60 * 60 * 1000);
   try {
     const cal = apiCalendar({ version: "v3", auth: getImpersonatedAuth(email) });
-    const res = await cal.events.list({
-      calendarId: "primary",
-      timeMin: ahora.toISOString(),
-      timeMax: hasta.toISOString(),
-      singleEvents: true,
-      orderBy: "startTime",
-      maxResults: 250,
-      fields: `items(${CAMPOS_DEL_EVENTO})`,
-    });
-    return { ok: true, datos: (res.data.items ?? []) as calendar_v3.Schema$Event[] };
+    // De a 250 por página, hasta `MAX_EVENTOS_PROXIMOS`: con 30 días y las series expandidas, 250 se llenan, y una
+    // reunión que quedaba en la segunda página se leía como «sin sesión agendada» (2026-10-19).
+    const datos: calendar_v3.Schema$Event[] = [];
+    let pageToken: string | undefined;
+    do {
+      const res = await cal.events.list({
+        calendarId: "primary",
+        timeMin: ahora.toISOString(),
+        timeMax: hasta.toISOString(),
+        singleEvents: true,
+        orderBy: "startTime",
+        maxResults: 250,
+        pageToken,
+        fields: `nextPageToken,items(${CAMPOS_DEL_EVENTO})`,
+      });
+      datos.push(...((res.data.items ?? []) as calendar_v3.Schema$Event[]));
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken && datos.length < MAX_EVENTOS_PROXIMOS);
+    if (pageToken) return { ok: false, motivo: "error" };
+    return { ok: true, datos };
   } catch (e) {
     console.error(`[google/agenda-de-la-empresa] no se pudo leer el calendario de ${email}`, e instanceof Error ? e.message : e);
     return { ok: false, motivo: motivoDelError(e) };

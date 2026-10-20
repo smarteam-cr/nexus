@@ -17,7 +17,7 @@ import type { PermissionMap } from "@/lib/auth/permissions/types";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { esAdminDeRoles, hasSharedRoleDocs } from "@/lib/roles/access";
 import { vistaFinanzasDe } from "@/lib/finanzas/vista";
-import { APP_NAV, canSeeNavItem, visibleNavChildren } from "@/components/layout/nav-config";
+import { APP_NAV, canSeeNavItem, hrefDelItem, visibleNavChildren } from "@/components/layout/nav-config";
 import PaginaNoEncontrada, { type DestinoConIcono } from "@/components/no-encontrada/PaginaNoEncontrada";
 
 /** El menú que esta persona puede abrir, aplanado: cada ítem y sus hijos visibles (con el ícono del padre). */
@@ -39,7 +39,7 @@ async function menuQuePuedeAbrir(): Promise<DestinoConIcono[]> {
   const destinos: DestinoConIcono[] = [];
   for (const item of APP_NAV) {
     if (!canSeeNavItem(item, ctx)) continue;
-    destinos.push({ etiqueta: item.label, href: item.href, icono: item.icon });
+    destinos.push({ etiqueta: item.label, href: hrefDelItem(item, ctx), icono: item.icon });
     for (const hijo of visibleNavChildren(item, hijosCtx)) {
       destinos.push({ etiqueta: hijo.label, href: hijo.href, padre: item.label, icono: item.icon });
     }
