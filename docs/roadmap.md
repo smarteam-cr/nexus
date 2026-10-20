@@ -14,10 +14,10 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `25986aef` desde la madrugada del 20 oct (el chat del cronograma lee la memoria del proyecto). Sana, con el esquema al día. |
-| Por desplegar | Nada: todo `main` está en producción (12.464 pruebas en verde, tsc en 0). |
-| En rojo en producción | 4 invariantes, todos con su decisión abajo: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot, una reunión movida después de leerse y el corte de cobranza apagado. |
-| Pruebas | 92 para personas (pestaña «Pruebas para personas»), 61 con IA sobre los datos (pestaña «Pruebas con IA») y 31 ya validadas por ti. |
+| Producción | Corre `fd95f2f4` desde la tarde del 20 oct: lo que salió de la revisión con Valentina y Liliana (kickoff, Para ti, la guía y su asistente, el menú lateral). Sana, con el esquema al día. |
+| Por desplegar | Nada: todo `main` está en producción (12.559 pruebas en verde, tsc en 0). |
+| En rojo en producción | 3 invariantes, todos con su decisión abajo: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado. |
+| Pruebas | 113 para personas (pestaña «Pruebas para personas»), 70 con IA sobre los datos (pestaña «Pruebas con IA») y 31 ya validadas por ti. |
 
 ## Cómo va Nexus
 
@@ -503,6 +503,8 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 5. [hecho] Crear eventos y «Agendar» desde la agenda, con el borrador en Nexus antes de abrir Calendar; sugerencias del tamaño de cada tarea que respetan el almuerzo.
 6. [hecho] Un evento propio o una reunión interna que nombra una cuenta se abre en el panel con lo de esa cuenta.
 7. [hecho] La meta de HubSpot de cada vendedor, copiada cada hora, y el aviso cuando no hay meta.
+8. [hecho] Lo que sale de una reunión le llega a quien le toca: lo de venta o negociación al dueño del negocio, y el aviso de las 48 horas a quien se le propuso, no a quien lleva la cuenta.
+9. [hecho] Los menús de la barra lateral (el del avatar y los desplegables) se abren siempre encima del contenido, en todas las pantallas y temas.
 
 ### Tareas <span class="estado">En producción</span>
 
@@ -519,6 +521,8 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 2. [hecho] Regenerar, editar, borrar y agregar preguntas, y el asistente que las mejora con un clic.
 3. [hecho] La exploración de los proyectos de clientes con lo mismo, sobre la estrategia del cliente y lo vendido.
 4. [hecho] El correo de seguimiento y la próxima reunión sugerida después de cada sesión.
+5. [hecho] En la guía de una sesión (proyecto y preventa): el objetivo propone unas tres preguntas para usar o descartar, las preguntas se arrastran y la pantalla se pone al día sola cuando el asistente las cambia.
+6. [hecho] El asistente y el agente de la guía leen todas las sesiones de la exploración (lo respondido, lo acordado para la próxima), el kickoff y la memoria del proyecto; en la preventa, lo de HubSpot.
 
 ### La cuenta: encargado, proyectos y ficha <span class="estado">En producción</span>
 
@@ -554,6 +558,13 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 2. [hecho] Las propuestas del vigía se deciden en un solo lugar y dicen de qué a qué.
 3. [hecho] La lista de limpieza de HubSpot, los exclientes fuera de todo y la cartera por proyectos.
 4. [hecho] El margen por cuenta y por persona con las horas del calendario y las tareas, la meta del año y la lectura de los números.
+
+### Kickoff y cronograma <span class="estado">En producción</span>
+
+1. [hecho] La fecha de arranque del kickoff se elige en un calendario (propone la reunión de kickoff) y ya no deja años como 0026 o 1926; el servidor rechaza fechas fuera de 2000–2100.
+2. [hecho] La fila de datos de la portada se edita como las etiquetas (agregar, quitar, reordenar, editar texto y etiqueta), alineada al editar y al presentar.
+3. [hecho] Una sección oculta queda oculta aunque no se publique, y el cliente y el PDF ven lo mismo que por dentro.
+4. [hecho] El chat del cronograma lee la memoria del proyecto: sabe lo que se habló con el cliente aunque nadie haya elegido reuniones.
 
 ### Reuniones, memoria y la escala <span class="estado">En producción</span>
 
