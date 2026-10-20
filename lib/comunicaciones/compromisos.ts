@@ -28,7 +28,10 @@ Reglas:
 - Una reunión prometida o propuesta («nos reunimos el martes», «agendamos la sesión de revisión para el 20») es un compromiso de Smarteam de tipo PLAN, con su fecha.
 - La fecha va en AAAA-MM-DD, calculada con el calendario desde la fecha del correo. Si no se dijo, null.
 - La cita es una frase copiada TEXTUAL del correo, de 12 caracteres o más, sin cambiarle una palabra ni agregar puntos suspensivos.
-- En «que» y «tituloDeSeguimiento», español neutro con tuteo. Nunca voseo.
+- Pocos y esenciales: un entregable, un envío, una fecha comprometida, lo que el cliente espera de Smarteam. Lo menor (coordinación interna, un ajuste chico, lo que ya se había acordado antes) va con "esencial": false.
+- «quien» es quien tiene que HACERLO: lo que el cliente espera de Smarteam («quedamos atentos a que nos envíes el reporte») es de SMARTEAM.
+- Si quien es SMARTEAM, «titulo» en infinitivo, «Verbo + qué + a quién o la cuenta», como mucho 80 caracteres: «Enviar el reporte a CEMACO» sin la fecha ni explicaciones.
+- En «que», «titulo» y «tituloDeSeguimiento», español neutro con tuteo. Nunca voseo.
 - No inventes: si el correo no trae compromisos, la lista vacía es correcta.
 - Llama UNA vez a la herramienta ${HERRAMIENTA_DE_COMPROMISOS}.`;
 

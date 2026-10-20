@@ -22,11 +22,11 @@ import { conversacionComoTexto } from "@/lib/sessions/conversacion";
 import { costoDeLlamada } from "@/lib/ai/precios";
 import { clientesDeUnTexto, indiceDeClientes, type ClientesDeUnTexto } from "@/lib/sessions/clientes-por-texto";
 import { effectiveDomainsForClient } from "@/lib/sessions/categorize";
-import { CANDIDATAS_POR_DUENO, DIAS_DE_LAPIDA, DIAS_PARA_AVISAR_UNA_LECTURA, LECTURAS_POR_PERSONA_POR_DIA, LLAMADAS_AUTOMATICAS_POR_DIA, MIN_CARACTERES_DE_CONVERSACION, MINUTOS_PARA_DAR_POR_COLGADA } from "./reglas";
+import { CANDIDATAS_POR_DUENO, DIAS_DE_LAPIDA, DIAS_PARA_AVISAR_UNA_LECTURA, LECTURAS_POR_PERSONA_POR_DIA, LLAMADAS_AUTOMATICAS_POR_DIA, MAX_PROPUESTAS_POR_PERSONA_POR_REUNION, MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE, MIN_CARACTERES_DE_CONVERSACION, MINUTOS_PARA_DAR_POR_COLGADA } from "./reglas";
 import { aDate, comoFecha, hoyEnCostaRica, rolPorDefecto, semanaDeLaReunion, semanaQueCierra, diaCortoConSemana, horaDeCostaRica, type RolDeReunion } from "./semana";
 import { EQUIPOS, claveDeEquipo, equipoDeLaMayoria, nombreDelEquipo } from "./equipos";
 import { itemsDeActionItems, itemsDeProximosPasos, parrafosDeDetalles, resumenDeLasNotas, type LineaDeProximosPasos } from "./proximos-pasos";
-import { armarPropuestas, armarPropuestasDeLaConversacion, claveDeTareaDeConversacion, necesitaModelo, prepararLineas, type Candidata, type Refs } from "./lectura-armar";
+import { armarPropuestas, armarPropuestasDeLaConversacion, claveDeTareaDeConversacion, necesitaModelo, prepararLineas, type Candidata, type Lapida, type Refs } from "./lectura-armar";
 import { pedidoDeLectura } from "./ia/pedido";
 import { leerContextos, LINEAS_POR_LLAMADA, pedidoDeContextos, SEGUNDOS_DEL_CONTEXTO } from "./ia/contexto";
 import { contextoDeLaReunion, contextoDeRespaldo } from "./contexto-de-tarea";
@@ -38,7 +38,9 @@ import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { seguimientoPrendido } from "@/lib/lecturas/reglas";
 import { clientesQueVesParaTareas, type ClientesQueVes } from "./clientes";
 import { asegurarEspacio, escribirPropuestasDeComunicacion, escribirPropuestasDeLectura, escribirProyectoSugerido, escribirSugerenciaDeCierre, urlDeLaTarea, type PropuestaDeLectura } from "./mutaciones";
-import { esLapida } from "./estados";
+import { esLapida, SISTEMA } from "./estados";
+import { sinLoDescartado, temasDescartados } from "./descartadas";
+import type { Tema } from "./tema";
 import { personasPorDefecto } from "./fuentes";
 import { ABIERTAS_WHERE, candidatasWhere } from "./donde";
 import { lasQueQuedaronFuera } from "./cupo";
@@ -257,7 +259,10 @@ const CONVERSACION_VACIA = { propuestas: 0, porAsignar: 0, yaEstaban: 0, sumadas
 
 async function candidatasPara(duenos: readonly string[], equipoDeLaLectura: string, clienteDeLaReunion: string | null, ahora: Date) {
   const por = new Map<string, Candidata[]>();
-  if (!duenos.length) return { por, lapidas: [] as { huella: string; responsableEmail: string | null; clientId: string | null }[] };
+  // Lo que la cuenta ya descartó no vuelve, para nadie y sin plazo (lib/tareas/descartadas.ts).
+  const deLaCuenta = clienteDeLaReunion ? await descartesDeLaCuenta(clienteDeLaReunion) : { temas: [] as Tema[][], empresa: null };
+  const descartes: Lapida[] = deLaCuenta.temas.map((temas) => ({ huella: "", responsableEmail: null, clientId: clienteDeLaReunion, temas }));
+  if (!duenos.length) return { por, lapidas: descartes, empresa: deLaCuenta.empresa };
   const desdeLapida = new Date(+ahora - DIAS_DE_LAPIDA * 86_400_000);
   const [filas, lapidas] = await Promise.all([
     prisma.tarea.findMany({
@@ -276,7 +281,11 @@ async function candidatasPara(duenos: readonly string[], equipoDeLaLectura: stri
     const claves = f.responsableEmail ? [f.responsableEmail] : duenos;
     for (const k of claves) por.set(k, [...(por.get(k) ?? []), c]);
   }
-  return { por, lapidas: lapidas.filter(esLapida).map((l) => ({ huella: l.huella, responsableEmail: l.responsableEmail, clientId: l.clientId })) };
+  return {
+    por,
+    lapidas: [...lapidas.filter(esLapida).map((l): Lapida => ({ huella: l.huella, responsableEmail: l.responsableEmail, clientId: l.clientId })), ...descartes],
+    empresa: deLaCuenta.empresa,
+  };
 }
 
 /**
@@ -358,13 +367,15 @@ async function procesar(lecturaId: string, ahora: Date) {
     clienteDeLaReunion,
     clientesPorLinea,
     candidatasPorDueno: new Map<string, Candidata[]>(),
-    lapidas: [] as { huella: string; responsableEmail: string | null; clientId: string | null }[],
+    lapidas: [] as Lapida[],
+    empresaDeLaReunion: null as string | null,
   };
   const previo = prepararLineas(lineas, ctxArmado);
   const duenos = [...new Set(previo.map((p) => p.dueno).filter((d): d is string => !!d))];
-  const { por, lapidas } = await candidatasPara(duenos, l.equipo, clienteDeLaReunion, ahora);
+  const { por, lapidas, empresa } = await candidatasPara(duenos, l.equipo, clienteDeLaReunion, ahora);
   ctxArmado.candidatasPorDueno = por;
   ctxArmado.lapidas = lapidas;
+  ctxArmado.empresaDeLaReunion = empresa;
   const prep = prepararLineas(lineas, ctxArmado);
 
   // Las tareas de la semana que cierra (solo en un cierre), de quienes estuvieron.
@@ -488,7 +499,7 @@ async function procesar(lecturaId: string, ahora: Date) {
         for (const lineaId of g.lineas) proyectoDeLinea.set(lineaId, proy.id);
       }
       const propuestas = armado.propuestas.map((p) => ({ ...p, proyectoId: proyectoDeLinea.get(p.lineaId) ?? null }));
-      const escritas = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: reunion.id, tituloReunion: reunion.titulo, pedidaPorEmail: l.pedidaPorEmail }, propuestas);
+      const escritas = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: reunion.id, tituloReunion: reunion.titulo, pedidaPorEmail: l.pedidaPorEmail }, propuestas, { tope: topeDeLaReunion(clienteDeLaReunion) });
 
       let cierres = 0;
       if (salida && semanaCerrada) {
@@ -658,7 +669,7 @@ async function armarLoQueQuedoFuera(l: LecturaFuera, ctx: ContextoDeTareas, clie
   const lineas = reunion.actionItems.length ? itemsDeActionItems(reunion.actionItems) : itemsDeProximosPasos(reunion.notas ?? "");
   if (!lineas.length) return null;
   const clienteDeLaReunion = reunion.duenoClienteId && !reunion.puertasAdentro ? reunion.duenoClienteId : null;
-  const { por, lapidas } = await candidatasPara([ctx.email], l.equipo, clienteDeLaReunion, ahora);
+  const { por, lapidas, empresa } = await candidatasPara([ctx.email], l.equipo, clienteDeLaReunion, ahora);
   const ctxArmado = {
     lectura: { id: l.id, equipo: l.equipo, semana: comoFecha(l.semana)!, pedidaPorEmail: l.pedidaPorEmail, inicio: reunion.inicio, enElSprint: personasDeLaFuente(l.fuente, l.equipo, ctx) },
     miembros: ctx.miembros,
@@ -667,6 +678,7 @@ async function armarLoQueQuedoFuera(l: LecturaFuera, ctx: ContextoDeTareas, clie
     clientesPorLinea: clienteDeLaReunion ? new Map<string, ClientesDeUnTexto>() : await clientesDeLasLineas(lineas, clientes),
     candidatasPorDueno: por,
     lapidas,
+    empresaDeLaReunion: empresa,
   };
   const armado = armarPropuestas(prepararLineas(lineas, ctxArmado), ctxArmado, null, { M: new Map(), T: new Map(), R: new Map(), C: new Map() });
   const mias = armado.propuestas.filter((p) => !p.porAsignar && p.responsableEmail === ctx.email);
@@ -841,7 +853,7 @@ async function leerLaConversacion(
   const refs: Refs = { M: new Map(), T: new Map(), R: new Map(), C: new Map() };
   personas.forEach((m, i) => refs.M.set(`M${i + 1}`, m.email));
   const refDeEmail = (e: string | null) => (e ? ([...refs.M.entries()].find(([, v]) => v === e)?.[0] ?? null) : null);
-  const { por, lapidas } = await candidatasPara(personas.map((m) => m.email), l.equipo, clienteDeLaReunion, ahora);
+  const { por, lapidas, empresa } = await candidatasPara(personas.map((m) => m.email), l.equipo, clienteDeLaReunion, ahora);
   const unicas = new Map<string, Candidata>();
   for (const m of personas) for (const c of (por.get(m.email) ?? []).slice(0, CANDIDATAS_POR_DUENO)) unicas.set(c.id, c);
   const candidatas = [...unicas.values()];
@@ -941,6 +953,7 @@ async function leerLaConversacion(
       clientesPorTarea,
       candidatasPorDueno: por,
       lapidas,
+      empresaDeLaReunion: empresa,
     },
     refs,
   );
@@ -966,7 +979,7 @@ async function leerLaConversacion(
         for (const lineaId of g.lineas) proyectoDeLinea.set(lineaId, proy.id);
       }
       const propuestas = armado.propuestas.map((p) => ({ ...p, proyectoId: proyectoDeLinea.get(p.lineaId) ?? null }));
-      const escritas = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: reunion.id, tituloReunion: reunion.titulo, pedidaPorEmail: pedidaPorEmail ?? l.pedidaPorEmail }, propuestas);
+      const escritas = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: reunion.id, tituloReunion: reunion.titulo, pedidaPorEmail: pedidaPorEmail ?? l.pedidaPorEmail }, propuestas, { tope: topeDeLaReunion(clienteDeLaReunion) });
       const porPersona = new Map<string, number>();
       for (const c of escritas.creadas) if (c.responsableEmail) porPersona.set(c.responsableEmail, (porPersona.get(c.responsableEmail) ?? 0) + 1);
       const lista: ConversacionDeLaLectura = {
@@ -1050,17 +1063,52 @@ async function reunionVistaPorElSistema(sessionId: string): Promise<ReunionParaT
   return r ?? null;
 }
 
-/** Saca las que repiten una lápida (una propuesta igual que una persona rechazó hace menos de 28 días). */
+/** El tope por persona de una reunión: 3 con un cliente o un prospecto (pocos y esenciales), 5 en una del equipo. */
+function topeDeLaReunion(clienteDeLaReunion: string | null): number {
+  return clienteDeLaReunion ? MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE : MAX_PROPUESTAS_POR_PERSONA_POR_REUNION;
+}
+
+/**
+ * Lo que una cuenta ya DESCARTÓ (lib/tareas/descartadas.ts), como temas, y el nombre de la cuenta. Sin plazo: lo que una
+ * persona descartó no vuelve desde otra reunión, correo o lectura de esa cuenta. La lectura de cada reunión y la de cada
+ * correo lo pasan a `armarPropuestasDeSeguimiento`, que mira cada compromiso antes de juntar lo del cliente.
+ */
+export async function descartesDeLaCuenta(clientId: string): Promise<{ temas: Tema[][]; empresa: string | null }> {
+  const [cliente, filas] = await Promise.all([
+    prisma.client.findUnique({ where: { id: clientId }, select: { name: true } }),
+    prisma.tarea.findMany({
+      where: { clientId, estado: "rechazada", decision: "rechazada", NOT: { decididaPorEmail: SISTEMA } },
+      select: { titulo: true, contexto: true, huella: true, clientId: true, responsableEmail: true, estado: true, decision: true, decididaPorEmail: true, decididaAt: true },
+      orderBy: { decididaAt: "desc" },
+      take: 500,
+    }),
+  ]);
+  const empresa = cliente?.name ?? null;
+  return { temas: temasDescartados(filas, clientId, empresa), empresa };
+}
+
+/**
+ * Saca las que repiten una lápida (un título idéntico que una persona rechazó hace menos de 28 días) o un tema que su
+ * cuenta ya descartó (sin plazo). `omitidas` cuenta las dos.
+ */
 async function sinLasLapidas(propuestas: readonly PropuestaDeLectura[], ahora: Date): Promise<{ propuestas: PropuestaDeLectura[]; omitidas: number }> {
   const huellas = [...new Set(propuestas.map((p) => huellaDeTexto(p.titulo)))];
   if (!huellas.length) return { propuestas: [...propuestas], omitidas: 0 };
-  const filas = await prisma.tarea.findMany({
-    where: { estado: { in: ["rechazada", "fusionada"] }, decididaAt: { gte: new Date(+ahora - DIAS_DE_LAPIDA * 86_400_000) }, huella: { in: huellas } },
-    select: { huella: true, responsableEmail: true, clientId: true, estado: true, decision: true, decididaPorEmail: true },
-  });
-  const lapidas = new Set(filas.filter(esLapida).map((f) => `${f.huella}|${f.responsableEmail ?? ""}|${f.clientId ?? ""}`));
-  const quedan = propuestas.filter((p) => !lapidas.has(`${huellaDeTexto(p.titulo)}|${p.porAsignar ? "" : (p.responsableEmail ?? "")}|${p.clientId ?? ""}`));
-  return { propuestas: quedan, omitidas: propuestas.length - quedan.length };
+  const cuentas = [...new Set(propuestas.flatMap((p) => (p.clientId ? [p.clientId] : [])))];
+  const [filas, clientes] = await Promise.all([
+    prisma.tarea.findMany({
+      where: {
+        OR: [
+          { estado: { in: ["rechazada", "fusionada"] }, decididaAt: { gte: new Date(+ahora - DIAS_DE_LAPIDA * 86_400_000) }, huella: { in: huellas } },
+          ...(cuentas.length ? [{ clientId: { in: cuentas }, estado: "rechazada", decision: "rechazada", NOT: { decididaPorEmail: SISTEMA } }] : []),
+        ],
+      },
+      select: { titulo: true, contexto: true, huella: true, responsableEmail: true, clientId: true, estado: true, decision: true, decididaPorEmail: true, decididaAt: true },
+    }),
+    cuentas.length ? prisma.client.findMany({ where: { id: { in: cuentas } }, select: { id: true, name: true } }) : Promise.resolve([]),
+  ]);
+  const r = sinLoDescartado(propuestas, filas, ahora, new Map(clientes.map((c) => [c.id, c.name])));
+  return { propuestas: r.propuestas, omitidas: r.porLapida + r.porTema };
 }
 
 /**
@@ -1117,7 +1165,7 @@ export async function escribirSalidaDeSeguimiento(
 
   const resultado = await prisma.$transaction(
     async (tx) => {
-      const escritas = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: reunionId, tituloReunion: reunion.titulo, pedidaPorEmail: null }, quedan);
+      const escritas = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: reunionId, tituloReunion: reunion.titulo, pedidaPorEmail: null }, quedan, { tope: MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE });
       const porPersona = new Map<string, number>();
       for (const c of escritas.creadas) if (c.responsableEmail) porPersona.set(c.responsableEmail, (porPersona.get(c.responsableEmail) ?? 0) + 1);
       // Lo por asignar, por sprint: lo del cliente queda en Customer Success o en Ventas, no en el de la lectura. (Al

@@ -10,6 +10,7 @@ import { fechaDesdeLaReunion, venceDesdeClave } from "./fechas";
 import { mencionesEn, resolverPersona, type Mencion, type PersonaResuelta } from "./personas";
 import type { LineaDeProximosPasos } from "./proximos-pasos";
 import { cuanSeParecen, esCandidataClara, huellaDeTexto, raicesCompartidas, masParecidas } from "./texto";
+import { compartenTema, temasDeLaTarea, type Tema } from "./tema";
 import { CANDIDATAS_POR_DUENO, LINEAS_PARA_UN_PROYECTO } from "./reglas";
 import type { PropuestaDeLectura } from "./mutaciones";
 import { contextoDeRespaldo } from "./contexto-de-tarea";
@@ -31,6 +32,20 @@ export interface Lapida {
   huella: string;
   responsableEmail: string | null;
   clientId: string | null;
+  /**
+   * Solo en un DESCARTE DE LA CUENTA (lib/tareas/descartadas.ts): sus temas. Lo que habla de uno de ellos no se propone
+   * en esa cuenta, para nadie y sin plazo. Sin temas es la lápida de siempre (título idéntico, misma persona, 28 días).
+   */
+  temas?: readonly Tema[];
+}
+
+/** ¿La línea repite un tema que su cuenta ya descartó? */
+function repiteUnDescarte(titulo: string, clientId: string | null, lapidas: readonly Lapida[], empresa: string | null | undefined): boolean {
+  if (!clientId) return false;
+  const descartes = lapidas.filter((l) => l.temas?.length && l.clientId === clientId);
+  if (!descartes.length) return false;
+  const propios = temasDeLaTarea({ titulo, contexto: null }, empresa);
+  return descartes.some((l) => compartenTema(propios, l.temas!));
 }
 
 export interface LineaPreparada {
@@ -57,6 +72,8 @@ export interface ContextoDeArmado {
   /** Por dueño: sus abiertas, de más adelante y propuestas (del sprint), más el «Por asignar» del equipo. */
   candidatasPorDueno: ReadonlyMap<string, Candidata[]>;
   lapidas: readonly Lapida[];
+  /** El nombre del cliente de la reunión: no cuenta como tema (lib/tareas/tema.ts). */
+  empresaDeLaReunion?: string | null;
 }
 
 export function prepararLineas(lineas: readonly LineaDeProximosPasos[], ctx: ContextoDeArmado): LineaPreparada[] {
@@ -115,7 +132,7 @@ export function armarPropuestas(prep: readonly LineaPreparada[], ctx: ContextoDe
     const m = ctx.miembros.find((x) => x.email === email);
     return m ? claveDeEquipo(m.area, m.email) : null;
   };
-  const lapidas = new Set(ctx.lapidas.map((l) => `${l.huella}|${l.responsableEmail ?? ""}|${l.clientId ?? ""}`));
+  const lapidas = new Set(ctx.lapidas.filter((l) => !l.temas).map((l) => `${l.huella}|${l.responsableEmail ?? ""}|${l.clientId ?? ""}`));
   const propuestas: ArmadoDeLaLectura["propuestas"] = [];
   let omitidasPorLapida = 0;
 
@@ -137,7 +154,7 @@ export function armarPropuestas(prep: readonly LineaPreparada[], ctx: ContextoDe
     const clienteSugeridoId = clientId ? undefined : (clienteDeLaIa && p.clientesCandidatos.includes(clienteDeLaIa) ? clienteDeLaIa : (p.clienteSugerido ?? undefined));
 
     const huella = huellaDeTexto(p.linea.titulo);
-    if (lapidas.has(`${huella}|${dueno ?? ""}|${clientId ?? ""}`)) {
+    if (lapidas.has(`${huella}|${dueno ?? ""}|${clientId ?? ""}`) || repiteUnDescarte(p.linea.titulo, clientId, ctx.lapidas, ctx.empresaDeLaReunion)) {
       omitidasPorLapida++;
       continue;
     }
@@ -234,6 +251,7 @@ export interface ContextoDeLaConversacion {
   clientesPorTarea: ReadonlyMap<string, { candidatos: string[]; sugerido: string | null }>;
   candidatasPorDueno: ReadonlyMap<string, Candidata[]>;
   lapidas: readonly Lapida[];
+  empresaDeLaReunion?: string | null;
 }
 
 /** La clave de una tarea de la conversación: `c:<huella del título>` (hace que releer no la duplique). */
@@ -254,7 +272,7 @@ export function armarPropuestasDeLaConversacion(
     const m = ctx.miembros.find((x) => x.email === email);
     return m ? claveDeEquipo(m.area, m.email) : null;
   };
-  const lapidas = new Set(ctx.lapidas.map((l) => `${l.huella}|${l.responsableEmail ?? ""}|${l.clientId ?? ""}`));
+  const lapidas = new Set(ctx.lapidas.filter((l) => !l.temas).map((l) => `${l.huella}|${l.responsableEmail ?? ""}|${l.clientId ?? ""}`));
   const propuestas: ArmadoDeLaLectura["propuestas"] = [];
   let omitidasPorLapida = 0;
 
@@ -271,7 +289,7 @@ export function armarPropuestasDeLaConversacion(
     const clienteSugeridoId = clientId ? undefined : (cl.sugerido ?? undefined);
 
     const huella = huellaDeTexto(t.titulo);
-    if (lapidas.has(`${huella}|${dueno ?? ""}|${clientId ?? ""}`)) {
+    if (lapidas.has(`${huella}|${dueno ?? ""}|${clientId ?? ""}`) || repiteUnDescarte(t.titulo, clientId, ctx.lapidas, ctx.empresaDeLaReunion)) {
       omitidasPorLapida++;
       continue;
     }

@@ -54,14 +54,26 @@ export function esquemaDeLosCompromisos(emailsDelEquipo: readonly string[], fuen
   const textoFuente = fuente === "correo" ? "del texto del correo" : "de la transcripción o del resumen de Gemini";
   return {
     type: "array",
-    description: `Cada compromiso EXPLÍCITO ${de}, de cualquiera de los dos lados, con fecha o sin ella. Como mucho ${MAX_COMPROMISOS}; la lista vacía es correcta.`,
+    description: `Cada compromiso EXPLÍCITO ${de}, de cualquiera de los dos lados, con fecha o sin ella. Pocos y esenciales: como mucho ${MAX_COMPROMISOS}, lo que importa primero; la lista vacía es correcta.`,
     items: {
       type: "object",
       properties: {
-        quien: { type: "string", enum: ["CLIENTE", "SMARTEAM"] },
+        quien: {
+          type: "string",
+          enum: ["CLIENTE", "SMARTEAM"],
+          description: "Quién tiene que HACERLO, no quién lo dijo. «Quedamos atentos a que nos envíes el reporte», dicho por el cliente, es SMARTEAM.",
+        },
         responsable: conTexto("El nombre de la persona que se comprometió, si se dijo."),
         ownerEmail,
         que: conTexto("Qué se comprometió, en una frase concreta."),
+        titulo: {
+          type: ["string", "null"],
+          description: "Solo si quien es SMARTEAM: el título de la tarea, en infinitivo y tuteo, «Verbo + qué + a quién o la cuenta», como mucho 80 caracteres: «Enviar el reporte a CEMACO», «Preparar la propuesta de renovación para kölbi». Sin fechas ni explicaciones. Si quien es CLIENTE, null.",
+        },
+        esencial: {
+          type: "boolean",
+          description: "true solo si es un entregable, un envío, una fecha comprometida con el cliente o algo que el cliente espera de Smarteam. false si es menor: coordinación interna, estar disponible, un ajuste chico de configuración, algo que se resolvió en la misma reunión o que ya se había acordado antes.",
+        },
         tituloDeSeguimiento: {
           type: ["string", "null"],
           description: "Solo si quien es CLIENTE: lo que tiene que hacer el CSE para que se cumpla, en imperativo y en tuteo, nombrando a la persona («Recordarle a Ana que envíe la base de datos»). Si quien es SMARTEAM, null.",
@@ -71,7 +83,7 @@ export function esquemaDeLosCompromisos(emailsDelEquipo: readonly string[], fuen
         frenaElPlan: { type: "boolean", description: "true solo si, sin esto, el proyecto no puede avanzar." },
         cita: conTexto(`La frase que lo respalda, copiada TEXTUAL ${textoFuente}: 12 caracteres o más, sin puntos suspensivos y sin cambiarle una palabra.`),
       },
-      required: ["quien", "que", "tipo", "frenaElPlan", "cita"],
+      required: ["quien", "que", "tipo", "frenaElPlan", "esencial", "cita"],
     },
   };
 }
@@ -138,7 +150,10 @@ CÓMO DEVUELVES LA LECTURA (esto reemplaza el formato JSON de arriba):
 - Lo que arriba se llama "minute" va en "minuta", con los mismos campos.
 - Lo que arriba se llama "actionItems" va en "compromisos", junto con los compromisos que tienen fecha. Un compromiso sigue siendo EXPLÍCITO: alguien dijo QUÉ va a hacer y QUIÉN lo hace. La fecha puede faltar: si no se dijo, va null. Como mucho ${MAX_COMPROMISOS}, y la lista vacía es un resultado correcto.
 - No hay "stageProgress": no lo devuelvas.
-- "quien": CLIENTE si lo prometió alguien del cliente; SMARTEAM si lo prometió alguien del equipo interno.
+- POCOS Y ESENCIALES. Devuelve lo que alguien de verdad tiene que hacer después de la reunión: un entregable, un envío, una fecha comprometida, una decisión que se espera, lo que el cliente espera de Smarteam. No devuelvas lo que se resolvió en la misma reunión, la coordinación interna de Smarteam («reunirse internamente», «estar disponible», «invitar a alguien a la próxima sesión»), los pasos chicos de configuración que son parte de algo más grande (devuelve el entregable, no cada paso) ni lo que ya se había acordado en una reunión anterior. Si dudas, marca "esencial": false: lo menor no se propone.
+- "quien": quién tiene que HACERLO, no quién habló. CLIENTE si lo tiene que hacer alguien del cliente; SMARTEAM si lo tiene que hacer alguien del equipo interno. Lo que el cliente espera de Smarteam es de SMARTEAM: si el cliente dice «quedamos atentos a que nos envíes el reporte», es un compromiso de SMARTEAM (título «Enviar el reporte a CEMACO»), no un seguimiento del cliente.
+- "titulo": solo si quien es SMARTEAM. En infinitivo y en tuteo, «Verbo + qué + a quién o la cuenta», como mucho 80 caracteres: «Enviar el reporte a CEMACO», «Configurar los informes de activaciones para Honda». Sin la fecha (va en "fecha"), sin el nombre de quien lo hace y sin explicar por qué. Si quien es CLIENTE, null.
+- "esencial": true para un entregable, un envío, una fecha comprometida o lo que el cliente espera de Smarteam; false para lo menor.
 - "ownerEmail": solo si quien es SMARTEAM, el correo de quien se comprometió, de la lista del equipo interno. Si no estás seguro, null.
 - "tituloDeSeguimiento": solo si quien es CLIENTE. Es lo que tiene que hacer el CSE para que se cumpla, en imperativo y en tuteo, nombrando a la persona: «Recordarle a Ana que envíe la base de datos». Si quien es SMARTEAM, null.
 - "frenaElPlan": true solo si, sin eso, el proyecto no puede avanzar (un insumo del que depende una entrega, una aprobación). Si no, false.

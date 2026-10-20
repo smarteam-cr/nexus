@@ -59,6 +59,22 @@ export interface CompromisoDetectado {
   tituloDeSeguimiento: string | null;
   /** Sin eso, el proyecto no avanza (un insumo del que depende una entrega, una aprobación). */
   frenaElPlan: boolean;
+  /**
+   * El título de la tarea cuando la hace SMARTEAM (2026-10-19), «Verbo + qué + a quién o la cuenta» («Enviar el reporte
+   * a CEMACO»). Lo valida `tituloValido` (lib/tareas/seguimiento.ts): si no sirve, el título sale de `que`.
+   */
+  titulo?: string | null;
+  /**
+   * Pocos y esenciales (2026-10-19): true = un entregable, un envío, una fecha comprometida o algo que el cliente espera
+   * de Smarteam; false = lo menor (coordinación interna, disponibilidad, un ajuste chico, lo resuelto en la misma
+   * reunión). Sin decir (una lectura de antes), cuenta como esencial: no se pierde nada por un dato que falta.
+   */
+  esencial?: boolean;
+  /**
+   * Lo puso el código, no el modelo (`elegirLoEsencial`): lo dijo el cliente, pero lo que espera es que Smarteam lo haga.
+   * Sin un responsable claro va al CSE de la cuenta (o a quien lleva la preventa), no a «Por asignar».
+   */
+  esperaElCliente?: boolean;
 }
 
 export type EstadoDePedido = "PEDIDO" | "COTIZADO" | "APROBADO" | "DESCARTADO" | "INCLUIDO";
@@ -100,6 +116,8 @@ export function leerCompromisos(raw: unknown): CompromisoDetectado[] {
       ownerEmail: quien === "SMARTEAM" && ownerEmail.includes("@") ? ownerEmail : null,
       tituloDeSeguimiento: quien === "CLIENTE" && tituloDeSeguimiento ? tituloDeSeguimiento : null,
       frenaElPlan: c.frenaElPlan === true,
+      titulo: texto(c.titulo, 160) || null,
+      esencial: c.esencial === false ? false : true,
     });
   }
   return out.slice(0, 20);

@@ -55,7 +55,7 @@ vi.mock("@/lib/lecturas/personas", () => ({
   cseDeLaCuenta: vi.fn(async () => null),
   responsableDeLaPreventaViva: preventa,
 }));
-vi.mock("@/lib/tareas/lectura", () => ({ escribirSalidaDeSeguimiento }));
+vi.mock("@/lib/tareas/lectura", () => ({ escribirSalidaDeSeguimiento, descartesDeLaCuenta: vi.fn(async () => ({ temas: [], empresa: null })) }));
 vi.mock("@/lib/tareas/para-agentes", () => ({ titulosParaLaLectura: titulos }));
 vi.mock("@/lib/sessions/reuniones-para-seguimiento", () => ({ esDePuertasAdentro: puertasAdentro }));
 vi.mock("@/lib/tareas/servidor", () => ({ miembrosActivos: vi.fn(async () => MIEMBROS) }));
@@ -212,6 +212,21 @@ describe("la llamada y la salida", () => {
     expect(propuestas[0].sugerido.frenaElPlan).toBe(true);
     expect(db.pedidoFueraDeAlcance.create).toHaveBeenCalledTimes(1);
     expect(db.pedidoFueraDeAlcance.create.mock.calls[0][0]).toMatchObject({ data: { projectId: "p1", huella: "integracion-docusign", estado: "PEDIDO" } });
+  });
+
+  it("⭐ pocos y esenciales (2026-10-19): lo que la lectura marcó como menor no llega a Tareas; lo que frena el plan sí", async () => {
+    crear.mockImplementationOnce(async () =>
+      respuesta({
+        minuta: { summary: "x" },
+        compromisos: [
+          { ...COMPROMISOS[0], esencial: false },
+          { ...COMPROMISOS[1], esencial: false },
+        ],
+      }),
+    );
+    await leerReunionDeSeguimiento("s1", { lecturaId: "lec1" });
+    const propuestas = escribirSalidaDeSeguimiento.mock.calls[0][2] as { titulo: string }[];
+    expect(propuestas.map((p) => p.titulo)).toEqual(["Recordarle a Ana que envíe la base de datos"]);
   });
 
   it("⭐ la minuta se escribe la ÚLTIMA: después de las propuestas y de los pedidos", async () => {

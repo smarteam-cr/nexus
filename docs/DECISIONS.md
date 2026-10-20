@@ -8536,6 +8536,9 @@ pocas, diciendo si vienen de una reunión con el cliente o del sprint interno.
   único escritor de propuestas y contando todo lo que esa reunión ya le dejó (notas, «¿Faltó algo?» y seguimiento), en
   el orden de las líneas. «Por asignar» no cuenta. Lo que no entra no se crea y se cuenta en la lectura. Convive con el
   tope de 10 sugerencias abiertas por persona.
+  ⚠ **Enmendado el 2026-10-19**: en una reunión (o un correo) con un cliente o un prospecto el tope es **3**
+  (`MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE`); las del sprint siguen con 5. Ver «Pocos pendientes y
+  esenciales de las reuniones con clientes».
 - **Lo que el tope deja fuera se ve y se recupera** (2026-10-19). En la reunión del sprint de marketing del lun 19 oct
   el tope cortó 5 de las 16 líneas de «Próximos pasos» (4 de Alejandra Ortega, 1 de Lidia Flores) y nadie podía ver
   cuáles. Ahora Mis tareas muestra, por reunión de los últimos 14 días, las líneas TUYAS que no se propusieron, con
@@ -9686,3 +9689,44 @@ esta tanda lo completa para quien no lleva ninguno.
   reales con trato: al resto le alcanza con la fila del proyecto.
 - ⚠ **El desempate por actividad todavía casi no corre**: `hubspotUltimaActividad` nace vacío y se llena con la siguiente
   sincronización de cada cliente. Mientras tanto desempata el proyecto más nuevo.
+
+## Pocos pendientes y esenciales de las reuniones con clientes (2026-10-19)
+
+**Contexto.** Elías: de lo que se habló con el cliente, Tareas tiene que proponer solo los pendientes esenciales de
+Smarteam («quedamos atentos a que nos envíes el reporte» → «Enviar el reporte a CEMACO»), pocos, y lo que se descartó no
+vuelve. Medido ese día en producción, solo lectura (`scripts/medir-propuestas-de-reuniones.ts`): 40 reuniones con
+clientes y prospectos de 14 días dejaron 128 propuestas (66 de Smarteam, 62 del cliente); una persona usó 1, descartó 8 y
+dejó vencer 17; 58 seguían por decidir. Por persona y reunión: mediana 2, p90 4, máximo 6. Lo que sobraba: coordinación
+interna («Realizar reunión interna el lunes», «Confirmar internamente quién…», «Estar disponible el 20…»), ajustes chicos
+de configuración y títulos de 160 caracteres en tercera persona («Liliana agenda y conduce…»). En Secure Title una
+persona descartó 4 de 6 propuestas de la misma reunión.
+
+- **La lectura dice qué es esencial y el código saca lo demás** (`esencial` en el esquema, `elegirLoEsencial` en
+  lib/tareas/seguimiento.ts). Esencial: un entregable, un envío, una fecha comprometida o lo que el cliente espera de
+  Smarteam. Menor: coordinación interna, estar disponible, un paso chico de algo más grande, lo resuelto en la misma
+  reunión o ya acordado antes. Lo menor que frena el plan se queda. Sin el dato (una lectura de antes) cuenta como
+  esencial. *Por qué en código y no solo en el pedido:* la regla del repo es filtrar datos, no rogarle al modelo.
+- **`quien` es quien tiene que HACERLO, no quien habló.** Lo que el cliente espera de Smarteam es de Smarteam. Si la
+  lectura igual lo deja del lado del cliente, `loEsperaDeSmarteam` lo pasa (solo con «atento(s) a que…» o «espera(n)
+  que…» y Smarteam como quien lo hace) y va a quien lleva la cuenta (el CSE del proyecto o la preventa), no a «Por asignar».
+- **El título de Smarteam es «Verbo + qué + a quién o la cuenta»** (`titulo` en el esquema, `tituloValido`): infinitivo,
+  como mucho 90 caracteres, sin voseo. Si no sirve, sale de `que`, como antes.
+- **El tope de una reunión (o un correo) con un cliente o un prospecto es 3 por persona**
+  (`MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE`); las del sprint siguen con 5. Toma en orden: lo que frena el
+  plan, lo que tiene fecha, lo de Smarteam.
+- **Lo que una persona DESCARTÓ en una cuenta no vuelve, sin plazo** (lib/tareas/descartadas.ts, lib/tareas/tema.ts):
+  desde otra reunión, un correo o la lectura de Tareas, si habla del mismo TEMA (el título sin el nombre de la cuenta ni
+  el día; un seguimiento agrupado tiene un tema por línea), para cualquier persona de esa cuenta. `mismoTema` es estricto
+  a propósito: dos raíces en común, 2/3 del más corto y la mitad del más largo. Se mira cada compromiso antes de juntar
+  lo del cliente. La lápida exacta de 28 días sigue igual (y sin cuenta, es la única). *No son descartes:* lo vencido sin
+  decidir, lo retirado por el sistema o por quien lo pidió y «Era otra tarea»: si se vuelve a hablar, se vuelve a proponer.
+- **Ventas igual.** Las reuniones y los correos con un prospecto pasan por la misma lectura (`ruta: "prospecto"`), así
+  que tienen el mismo tope, la misma regla de lo esencial y los mismos descartes. La preventa no escribe tareas.
+- **Medido antes y después, en seco, sobre 9 reuniones** (`scripts/comparar-pendientes-de-reuniones.ts`: Cemaco ×2,
+  Honda ×2, Total Finco, kölbi, Secure Title, Larce, Tecnosagot; ≈US$1 cada corrida): de 31 compromisos y 21 propuestas a
+  24 y 16. Las de Smarteam, de 12 a 9, sin la coordinación interna, y con títulos como «Enviar la propuesta de renovación
+  de marketing actualizada a kölbi». Dos propuestas no salieron porque la cuenta ya las había descartado (Secure Title,
+  kölbi). ⚠ Es un modelo: dos esenciales que ya eran propuestas (el demo de Tecnosagot, la presentación a Roberto en
+  Larce) no volvieron a salir; las dos estaban en «YA SON TAREAS».
+- **Sin SQL ni re-siembra.** Lo propuesto antes no se toca: ninguna propuesta viva repetía un tema ya descartado (medido),
+  así que no hace falta limpiar.
