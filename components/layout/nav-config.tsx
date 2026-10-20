@@ -19,7 +19,7 @@
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import { MARKETING_NAV } from "@/components/marketing/nav-config";
-import { ROLES_DE_EXITO_DEL_CLIENTE } from "@/lib/cs/acceso";
+import { ROLES_DEL_SEGUIMIENTO, ENTRADA_DE_EXITO_DEL_CLIENTE } from "@/lib/cs/acceso";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -93,6 +93,12 @@ export interface NavItemConfig {
   children?: readonly NavChildConfig[];
   /** `href` es uno de los hijos: si la persona no lo ve, el clic en el ítem lleva al primer hijo que ve. */
   entradaEsHijo?: boolean;
+  /**
+   * A dónde lleva el ítem para ciertos ROLES (SUPER_ADMIN nunca se desvía). Éxito del cliente (2026-10-19): el CSE entra
+   * directo a «Seguimiento de cuentas», la única página del área que es suya. Sin desplegable a propósito: con chevron,
+   * «Éxito del cliente» se trunca (lib/ui/ancho-del-menu.test.ts).
+   */
+  entradaPorRol?: Readonly<Record<string, string>>;
   /** Hijos cargados por fetch (el flyout de Roles lista los perfiles). */
   dynamicChildren?: "roles" | "tareas";
   /** Lleva un número al lado (lo que pide atención hoy). Solo «Para ti» (components/para-ti/cuenta.ts). */
@@ -112,6 +118,12 @@ export interface NavContext {
   role?: string | null;
   /** Tareas internas en el piloto: es de Marketing o ya tiene algo en Tareas. Lo calcula AppShell. */
   enTareas?: boolean;
+}
+
+/** A dónde lleva el ítem a esta persona: su `entradaPorRol`, o su `href`. PURO. */
+export function hrefDelItem(item: Pick<NavItemConfig, "href" | "entradaPorRol">, ctx: { role?: string | null; isSuperAdmin?: boolean }): string {
+  if (ctx.isSuperAdmin || !ctx.role) return item.href;
+  return item.entradaPorRol?.[ctx.role] ?? item.href;
 }
 
 /** Espeja 1:1 los booleanos canSeeX del Sidebar pre-migración. PURO y testeable. */
@@ -271,7 +283,10 @@ export const APP_NAV: readonly NavItemConfig[] = [
     href: "/customer-success",
     // De la CSL y dirección, por rol (2026-10-04, lib/cs/acceso.ts): el índice muestra la cartera
     // entera en dinero. Hasta entonces colgaba de la celda `customerSuccess.read` (el CSE entraba).
-    gate: { kind: "roles", roles: ROLES_DE_EXITO_DEL_CLIENTE },
+    // Desde el 2026-10-19 también lo ve el CSE, que entra directo a «Seguimiento de cuentas» (sus cuentas, sin montos):
+    // la cartera sigue siendo de la CSL y dirección (la página lo redirige).
+    gate: { kind: "roles", roles: ROLES_DEL_SEGUIMIENTO },
+    entradaPorRol: ENTRADA_DE_EXITO_DEL_CLIENTE,
     group: "operacion",
     icon: icon(
       "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",

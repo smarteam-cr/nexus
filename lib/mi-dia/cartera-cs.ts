@@ -129,8 +129,10 @@ export interface EmpresaDeCs {
 
 /** El siguiente paso de una empresa de la cartera, serializable. `dia`: `AAAA-MM-DD` en Costa Rica. */
 export type PasoDeLaEmpresa =
-  | { tipo: "reunion"; dia: string; inicio: string; titulo: string }
-  | { tipo: "accion"; dia: string; numero: number; titulo: string };
+  | { tipo: "reunion"; dia: string; inicio: string; titulo: string; lleva?: string | null }
+  | { tipo: "accion"; dia: string; numero: number; titulo: string; lleva?: string | null };
+// `lleva` (2026-10-19, «Seguimiento de cuentas»): el correo de quien lleva el paso. En una acción, el responsable de la
+// tarea; en una reunión, quien la tiene en su calendario (o null si sale de una reunión planeada en Tareas).
 
 // ── Fechas ────────────────────────────────────────────────────────────────────────────────────
 

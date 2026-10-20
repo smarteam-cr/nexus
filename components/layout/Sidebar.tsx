@@ -9,7 +9,7 @@ import { useRecorridos } from "@/components/recorridos/contexto";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
-import { APP_NAV, canSeeNavItem, visibleNavChildren } from "./nav-config";
+import { APP_NAV, canSeeNavItem, hrefDelItem, visibleNavChildren } from "./nav-config";
 import NavFlyout, { RolesNavFlyout, TareasNavFlyout } from "./NavFlyout";
 import BotonDeFeedback from "@/components/feedback/BotonDeFeedback";
 import BotonDeNuevaTarea from "@/components/tareas/BotonDeNuevaTarea";
@@ -315,7 +315,7 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
                   return (
                     <NavItem
                       key={item.key}
-                      href={item.href}
+                      href={hrefDelItem(item, navCtx)}
                       active={(item.match ?? [item.href]).some((p) => pathname.startsWith(p))}
                       isOpen={isOpen}
                       label={item.label}

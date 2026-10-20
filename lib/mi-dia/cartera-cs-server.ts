@@ -286,8 +286,14 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
       paso: !s?.paso
         ? null
         : s.paso.tipo === "reunion"
-          ? { tipo: "reunion", dia: s.paso.dia, inicio: s.paso.reunion.inicio, titulo: s.paso.reunion.titulo }
-          : { tipo: "accion", dia: s.paso.dia, numero: s.paso.accion.numero, titulo: s.paso.accion.titulo },
+          ? {
+              tipo: "reunion",
+              dia: s.paso.dia,
+              inicio: s.paso.reunion.inicio,
+              titulo: s.paso.reunion.titulo,
+              lleva: s.paso.reunion.fuente === "calendario" ? llevaDe(id) : null,
+            }
+          : { tipo: "accion", dia: s.paso.dia, numero: s.paso.accion.numero, titulo: s.paso.accion.titulo, lleva: s.paso.accion.responsableEmail },
       renovacion: c ? proximaRenovacion(c, hoy) : null,
       relacion: relacion && relacion.estado !== "sin-partner" ? { corto: relacion.corto, tono: relacion.tono } : null,
       contactos: contactosDe ? (contactosDe.get(id) ?? 0) : null,

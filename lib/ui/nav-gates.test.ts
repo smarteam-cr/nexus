@@ -12,7 +12,7 @@
  * el mapa de visibilidad es un contrato, no un detalle de implementación.
  */
 import { describe, expect, it } from "vitest";
-import { APP_NAV, canSeeNavItem, visibleNavChildren, type NavContext } from "@/components/layout/nav-config";
+import { APP_NAV, canSeeNavItem, hrefDelItem, visibleNavChildren, type NavContext } from "@/components/layout/nav-config";
 import { DEFAULT_MATRIX } from "@/lib/auth/permissions/defaults";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 
@@ -108,7 +108,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
     ]);
   });
 
-  it("⭐ Éxito del cliente es por ROL: CSL y dirección, ningún permiso lo enciende", () => {
+  it("⭐ Éxito del cliente es por ROL: CSL, dirección y (desde el 2026-10-19) el CSE; ningún permiso lo enciende", () => {
     /* Desde el 2026-10-04 la pantalla muestra la cartera entera en dinero (MRR, comisión, puntos
        de partner) y es de la líder de Customer Success y de dirección. Hasta entonces colgaba de
        la celda `customerSuccess.read` y el CSE entraba a ver sus cuentas.
@@ -124,11 +124,18 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       agentes: { read: true },
       configuracion: { read: true },
     };
-    for (const rol of ["CSE", "VENTAS", "DEV", "MARKETING", "ADMIN", null]) {
+    for (const rol of ["VENTAS", "DEV", "MARKETING", "ADMIN", null]) {
       expect(visibles(ctx(false, todo, false, rol)), `${rol} ve Éxito del cliente`).not.toContain(
         "customer-success",
       );
     }
+    /* El CSE (2026-10-19, «Seguimiento de cuentas»): ve el ítem, pero el clic lo lleva a SU página, no a la cartera,
+       que sigue siendo de la CSL y dirección (la página lo redirige). */
+    const exito = APP_NAV.find((i) => i.key === "customer-success")!;
+    expect(visibles(ctx(false, {}, false, "CSE"))).toContain("customer-success");
+    expect(hrefDelItem(exito, { role: "CSE", isSuperAdmin: false })).toBe("/customer-success/seguimiento");
+    expect(hrefDelItem(exito, { role: "CSL", isSuperAdmin: false })).toBe("/customer-success");
+    expect(hrefDelItem(exito, { role: "CSE", isSuperAdmin: true })).toBe("/customer-success");
     expect(visibles(ctx(false, {}, false, "CSL"))).toEqual([
       "para-ti",
       "clients",
@@ -144,7 +151,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
   it("⭐ Tu carga no está en el menú de nadie", () => {
     /* 2026-10-15 (decisión de Elías): se sacó del menú para todos. La ruta /tu-carga sigue (dirección la abre como
        pestaña de Rentabilidad). */
-    expect(visibles(ctx(false, {}, false, "CSE"))).toEqual(["para-ti", "clients", "marketing", "sessions", "knowledge", "documentacion", "escala"]);
+    expect(visibles(ctx(false, {}, false, "CSE"))).toEqual(["para-ti", "clients", "marketing", "customer-success", "sessions", "knowledge", "documentacion", "escala"]);
     for (const rol of ["CSE", "CSL", "SUPER_ADMIN", "VENTAS", "DEV", "MARKETING", "ADMIN", null]) {
       expect(visibles(ctx(rol === "SUPER_ADMIN", { clientes: { viewAll: true }, ventas: { read: true } }, false, rol)), `${rol} ve Tu carga`).not.toContain("tu-carga");
     }

@@ -127,6 +127,9 @@ export default function CsPanel({
           description={`${plural(data.conProyecto, "cuenta con proyecto activo", "cuentas con proyecto activo")} · ${plural(data.gestionadas, "gestionada", "gestionadas")} en HubSpot.`}
           action={
             <span className="flex flex-wrap items-center gap-2">
+              <Link href="/customer-success/seguimiento" className={BOTON_DE_HERRAMIENTA}>
+                Seguimiento de cuentas
+              </Link>
               <Link href={RUTA_DE_LAS_PROPUESTAS} className={BOTON_DE_HERRAMIENTA}>
                 Propuestas del vigía
               </Link>

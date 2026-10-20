@@ -240,6 +240,10 @@
   tareas que caben, la reunión con una cuenta sin reunión y el siguiente paso, que llenan el evento con un clic.
 - **Evento propio** (la agenda de «Para ti»): un evento con hora sin otros invitados («Tenis», «Cita Médica») o el
   bloque de una tarea. Ocupa el tiempo como una reunión y abre en Google Calendar.
+- **Seguimiento de cuentas** (Éxito del cliente, `/customer-success/seguimiento`, desde el 2026-10-19): por cuenta, la
+  **próxima sesión** (la próxima reunión con la cuenta en 30 días), el siguiente paso, los **temas que se están tratando**
+  (de las minutas de las últimas reuniones, los correos y llamadas de HubSpot y, si faltan, las tareas abiertas) y la
+  última reunión con el cliente. La única página del área que ve el CSE; la CSL y dirección, con toda la cartera.
 - **Cuenta sin acción** («Para ti»): una cuenta con servicio activo sin una tarea con fecha esa semana o sin reunión
   agendada en los próximos 8 días. Le llega a quien la lleva.
 - **Siguiente paso de la cuenta** (lib/mi-dia/servicio.ts, desde el 2026-10-19): una tarea abierta con fecha esta semana

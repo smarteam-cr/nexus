@@ -41,6 +41,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "customer-success/carga": { shell: "SHELL_DEFAULT" },
   "customer-success/limpieza": { shell: "SHELL_DEFAULT" },
   "customer-success/propuestas": { shell: "SHELL_DEFAULT" },
+  "customer-success/seguimiento": { shell: "SHELL_DEFAULT" },
   "customer-success/carga/persona/[id]": { shell: "SHELL_DEFAULT" },
   "customer-success/carga/supuestos": { shell: "SHELL_DEFAULT" },
   "customer-success/carga/datos": { shell: "SHELL_DEFAULT" },

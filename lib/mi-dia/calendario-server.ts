@@ -15,6 +15,7 @@ import { eventosProximos } from "@/lib/google/agenda-de-la-empresa";
 import { agendaDelDia, ocupadoDelCalendario, type EventoConEnlaces, type RatoOcupado, type ReunionDeHoy } from "./agenda";
 import { mapasDeEmpresas } from "./empresas-server";
 import { DIAS_PARA_LA_REUNION } from "./constantes";
+import { recortarCalendario } from "./calendario";
 
 export interface CalendarioDeLosProximosDias {
   /** Desde cuándo se leyó (ISO): lo de antes no está. */
@@ -26,33 +27,40 @@ export interface CalendarioDeLosProximosDias {
 }
 
 const VIDA_MS = 2 * 60_000;
-const guardados = new Map<string, { at: number; cal: CalendarioDeLosProximosDias | null }>();
-const enVuelo = new Map<string, Promise<CalendarioDeLosProximosDias | null>>();
+/**
+ * Lo leído, por persona y por cuántos días: una lectura de 30 días («Seguimiento de cuentas») también contesta la de 8
+ * (la regla de servicio), recortada. Así la misma página no le pide a Google dos veces el calendario de la misma persona.
+ */
+const guardados = new Map<string, { at: number; dias: number; cal: CalendarioDeLosProximosDias | null }[]>();
+const enVuelo = new Map<string, { dias: number; p: Promise<CalendarioDeLosProximosDias | null> }[]>();
 
-async function leer(k: string, ahora: Date): Promise<CalendarioDeLosProximosDias | null> {
-  const eventos = await eventosProximos(k, { semanas: DIAS_PARA_LA_REUNION / 7, ahora });
+async function leer(correo: string, dias: number, ahora: Date): Promise<CalendarioDeLosProximosDias | null> {
+  const eventos = await eventosProximos(correo, { semanas: dias / 7, ahora });
   let cal: CalendarioDeLosProximosDias | null = null;
   if (eventos.ok) {
     const mapas = await mapasDeEmpresas(ahora);
     const datos = eventos.datos as EventoConEnlaces[];
     cal = { desde: ahora.toISOString(), reuniones: agendaDelDia(datos, mapas), ocupado: ocupadoDelCalendario(datos) };
   }
-  guardados.set(k, { at: ahora.getTime(), cal });
+  guardados.set(correo, [...(guardados.get(correo) ?? []).filter((g) => g.dias !== dias), { at: ahora.getTime(), dias, cal }]);
   return cal;
 }
 
-/** El calendario de `email` de los próximos 8 días. null = no se pudo leer (sin Google, sin permiso o una falla). */
-export function calendarioDeLosProximosDias(email: string, ahora = new Date()): Promise<CalendarioDeLosProximosDias | null> {
-  const k = email.trim().toLowerCase();
-  const g = guardados.get(k);
-  if (g && ahora.getTime() - g.at < VIDA_MS) return Promise.resolve(g.cal);
-  const enCurso = enVuelo.get(k);
-  if (enCurso) return enCurso;
-  const p = leer(k, ahora)
+/**
+ * El calendario de `email` de los próximos 8 días (o `dias`: «Seguimiento de cuentas» mira 30 para la próxima sesión;
+ * la lectura de Google llega como mucho a 8 semanas). null = no se pudo leer (sin Google, sin permiso o una falla).
+ */
+export function calendarioDeLosProximosDias(email: string, ahora = new Date(), dias = DIAS_PARA_LA_REUNION): Promise<CalendarioDeLosProximosDias | null> {
+  const correo = email.trim().toLowerCase();
+  const fresco = (guardados.get(correo) ?? []).filter((g) => g.dias >= dias && ahora.getTime() - g.at < VIDA_MS).sort((a, b) => a.dias - b.dias)[0];
+  if (fresco) return Promise.resolve(fresco.dias === dias ? fresco.cal : recortarCalendario(fresco.cal, ahora, dias));
+  const enCurso = (enVuelo.get(correo) ?? []).filter((v) => v.dias >= dias).sort((a, b) => a.dias - b.dias)[0];
+  if (enCurso) return enCurso.dias === dias ? enCurso.p : enCurso.p.then((c) => recortarCalendario(c, ahora, dias));
+  const p = leer(correo, dias, ahora)
     .catch(() => null)
     .finally(() => {
-      enVuelo.delete(k);
+      enVuelo.set(correo, (enVuelo.get(correo) ?? []).filter((v) => v.p !== p));
     });
-  enVuelo.set(k, p);
+  enVuelo.set(correo, [...(enVuelo.get(correo) ?? []), { dias, p }]);
   return p;
 }

@@ -23,3 +23,18 @@ export const ROLES_DE_EXITO_DEL_CLIENTE = ["CSL", "SUPER_ADMIN"] as const;
 export function esLiderDeCs(role: string | null | undefined): boolean {
   return !!role && (ROLES_DE_EXITO_DEL_CLIENTE as readonly string[]).includes(role);
 }
+
+/**
+ * «Seguimiento de cuentas» (2026-10-19, pedido de Elías): la única página de Éxito del cliente que también es del CSE.
+ * Cada CSE ve sus cuentas (próxima sesión, siguiente paso, temas y última reunión), sin montos ni datos de HubSpot
+ * Partner; la CSL y dirección, toda la cartera. El resto del área sigue siendo de `ROLES_DE_EXITO_DEL_CLIENTE`.
+ */
+export const ROLES_DEL_SEGUIMIENTO = [...ROLES_DE_EXITO_DEL_CLIENTE, "CSE"] as const;
+
+/** A dónde lleva «Éxito del cliente» en el menú a quien no entra a la cartera: el CSE, a su página. */
+export const ENTRADA_DE_EXITO_DEL_CLIENTE: Readonly<Record<string, string>> = { CSE: "/customer-success/seguimiento" };
+
+/** ¿Este rol entra a «Seguimiento de cuentas»? */
+export function veSeguimientoDeCuentas(role: string | null | undefined): boolean {
+  return !!role && (ROLES_DEL_SEGUIMIENTO as readonly string[]).includes(role);
+}

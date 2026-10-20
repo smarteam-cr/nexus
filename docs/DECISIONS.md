@@ -9802,3 +9802,50 @@ vigía y 23 más abajo.
   reuniones, 5 grupos de cuentas sin siguiente paso por 33 cuentas, 6 grupos de pendientes por 14), y «También para hoy»
   de 23 a 17. Arriba hay más líneas que antes, pero son solo de las tres preguntas; en la cartera, las cuentas con la
   reunión como siguiente paso: Juan Carlos 3, Heiver 5, Caroline 2, Liliana 2, toda la cartera 12.
+
+## Seguimiento de cuentas: la página de Éxito del cliente que también es del CSE (2026-10-19)
+
+**Contexto.** Elías: para un CSE es muy importante saber cuáles de las cuentas de su cartera no tienen sesión agendada,
+cuál es el siguiente paso de cada una y qué temas se están tratando con cada una. Medido ese día, solo lectura
+(`scripts/medir-seguimiento-de-cuentas.ts`, con sus cuentas): Juan Carlos Armijos 16 cuentas, 13 sin sesión agendada y
+13 sin siguiente paso; Heiver Gomez 12, 7 y 7; Caroline Bersot 5, 2 y 2; Liliana Moreno 1, 0 y 0; Valentina Sandoval 2,
+1 y 1; toda la cartera (la CSL) 48, 35 y 34. Ninguna con el calendario sin leer.
+
+- **Una ruta, `/customer-success/seguimiento`**, una fila por cuenta: la próxima sesión, el siguiente paso, de 2 a 4
+  temas que se están tratando y la última reunión con el cliente, con el CSE. Por lo que más pide atención: sin las dos,
+  sin paso, sin sesión; después el color y la que lleva más tiempo sin reunión. Filtros en la dirección (`?cse=`,
+  `?solo=sesion,paso`): el CSE arranca en «Las que llevas» (es el encargado en HubSpot de algún proyecto, aunque el CSE
+  de la cuenta sea otro); la CSL y dirección, en todas.
+- **Es la única página de Éxito del cliente que se le abre al CSE** (`ROLES_DEL_SEGUIMIENTO` y `veSeguimientoDeCuentas`,
+  lib/cs/acceso.ts). En el menú ve «Éxito del cliente» y el clic lo lleva directo a esta página (`entradaPorRol`); la
+  cartera, la carga y las demás siguen siendo de la CSL y dirección (lib/auth/customer-success-propio.test.ts). *Sin
+  desplegable:* con chevron, «Éxito del cliente» se trunca (lib/ui/ancho-del-menu.test.ts); la CSL entra desde un botón
+  de la cartera.
+- **Se arma sobre la cartera de Customer Success de «Para ti»** (`cargarCarteraDeCs`): las cuentas, el CSE, el color y
+  el siguiente paso salen de ahí, con sus reglas de quién ve qué (el CSE, sus cuentas y las compartidas; quien lidera,
+  toda la cartera). El siguiente paso es el de la regla única (`siguientePasoDeLaCuenta`): no se recalcula.
+- **⛔ Lo que no llega a la pantalla:** montos, uso y relación con HubSpot Partner, renovaciones, tickets, el texto de
+  una reunión, un correo o una tarea. La fila tiene una lista cerrada de campos (lib/mi-dia/seguimiento-frontera.test.ts).
+  El color de una cuenta compartida que el CSE no lleva no se ve, como en la cartera.
+- **La próxima sesión mira 30 días** (`DIAS_PARA_LA_PROXIMA_SESION`), no los 8 de la regla de servicio: una cuenta con su
+  reunión mensual en tres semanas sí tiene sesión. Sale del MISMO calendario que el siguiente paso (el de quien mira si es
+  CSE; el del CSE de cada cuenta si lidera), así la sesión y el paso no se contradicen, y de las reuniones planeadas en
+  Tareas. Una reunión cuenta solo si es de UNA empresa (`cuentaDelEvento`, invariante 1). Sin poder leer el calendario
+  no se dice «sin sesión». Una sesión en más de 8 días no es siguiente paso: la fila lo dice.
+- **Una lectura del calendario por persona, no dos.** La de 30 días se pide antes de la cartera y la regla de servicio
+  toma la de 8 recortada de esa misma lectura (`recortarCalendario`, lib/mi-dia/calendario.ts). Y `eventosProximos` lee
+  de a 250 por página, hasta 1000: con 30 días y las series expandidas se llenaban los 250 y una reunión de la segunda
+  página se leía como «sin sesión». Con más de 1000, la lectura no se da por completa.
+- **Los temas, sin IA nueva** (`elegirTemas`, lib/mi-dia/seguimiento.ts): los temas de la minuta de las últimas 3
+  reuniones con el cliente de 60 días (`SessionMinute.topics`, los escribe la lectura de cada reunión: 302 de 302 minutas
+  de 60 días los tienen), los asuntos de los correos y llamadas de HubSpot de 30 días y, solo si no llegan a 2, los
+  títulos de las tareas abiertas. Lo más reciente primero (cada lugar más abajo en la minuta pesa 3 días), sin repetir un
+  tema (`mismoTema`). Cada uno dice de qué reunión o correo sale y cuándo. *No entran:* las notas de HubSpot (casi todas
+  son el diagnóstico automático o resúmenes del equipo, no un tema con el cliente) ni los hechos de la reunión (salen de
+  la misma reunión que la minuta y repetirían su tema).
+- **La última reunión** es la más reciente cuyo dueño (`duenoDeLaSesion`) es la cuenta y no es de puertas adentro, de 90
+  días. Las reuniones se leen en lote, por la misma regla del dueño en el `where`.
+- **«Agendar»** es el del inicio (`usePlanificarAccion`): deja el borrador en la agenda de «Para ti» con la gente de
+  afuera de la última reunión CON EL CLIENTE que muestra la fila. Nexus no escribe el calendario.
+- **Sin SQL.** `calendarioDeLosProximosDias` acepta los días a leer (guardado aparte por días) y el siguiente paso de la
+  cartera dice quién lo lleva (`PasoDeLaEmpresa.lleva`).

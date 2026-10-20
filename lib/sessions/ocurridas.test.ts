@@ -158,6 +158,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "El aviso de las 48 horas (iniciativa B) AFIRMA que una reunión prometida no ocurrió: solo cuenta las que ya " +
       "ocurrieron (`date` hasta ahora), siempre por whereBelongsToClient.",
   },
+  "lib/mi-dia/seguimiento-server.ts": {
+    clase: "contexto",
+    motivo:
+      "«Seguimiento de cuentas» AFIRMA cuál fue «la última reunión» con cada cuenta y de qué se habló: solo las que ya " +
+      "ocurrieron, por el dueño único (duenoDeLaSesion) y sin las de puertas adentro.",
+  },
   "lib/mi-dia/resumen-server.ts": {
     clase: "contexto",
     motivo:
@@ -396,6 +402,7 @@ const CORTAN_POR_FECHA = [
   "lib/uso/lectura-server.ts",
   "lib/contactos/lectura-server.ts",
   "lib/mi-dia/resumen-server.ts",
+  "lib/mi-dia/seguimiento-server.ts",
   "lib/mi-dia/despues-server.ts",
   "lib/mi-dia/servicio-server.ts",
   "lib/nexus-chat/lecturas-server.ts",

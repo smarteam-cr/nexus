@@ -45,3 +45,18 @@ export function enlaceAlDia(diaISO: string, correo?: string | null): string {
   const base = `https://calendar.google.com/calendar/r/day/${a}/${Number(m)}/${Number(d)}`;
   return correo ? `${base}?authuser=${encodeURIComponent(correo)}` : base;
 }
+
+/**
+ * Una lectura del calendario de más días, recortada a `dias` desde `ahora` (lib/mi-dia/calendario-server.ts: la de 30
+ * días de «Seguimiento de cuentas» también contesta la de 8 de la regla de servicio). null sigue siendo null.
+ */
+export function recortarCalendario<T extends { reuniones: readonly { inicio: string }[]; ocupado: readonly { inicio: string }[] }>(
+  cal: T | null,
+  ahora: Date,
+  dias: number,
+): T | null {
+  if (!cal) return null;
+  const hasta = ahora.getTime() + dias * 86_400_000;
+  const antes = (iso: string) => Date.parse(iso) <= hasta;
+  return { ...cal, reuniones: cal.reuniones.filter((r) => antes(r.inicio)), ocupado: cal.ocupado.filter((o) => antes(o.inicio)) };
+}
