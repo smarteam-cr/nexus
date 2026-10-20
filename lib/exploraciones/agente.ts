@@ -77,6 +77,7 @@ import {
   guiaDeAntesDeLaReunion,
   MAX_SESIONES,
   opcionesDeLasPestanas,
+  ordenDeLaConversacion,
   pestanasDeSesiones,
   preguntasParaMostrar,
   reunionDeLaSesion,
@@ -959,8 +960,11 @@ function planDeLaLectura(
   const comoReunion = { id: ultima.id, titulo: ultima.titulo, fecha: ultima.fecha, origen: ultima.origen, leida: true };
   const sesion = estado.contenido.sesiones.find((s) => reunionDeLaSesion(s, [comoReunion]) !== null) ?? null;
   const guia = guiaDeAntesDeLaReunion(estado.propuesta, sesion?.id ?? null, ultima.fecha);
-  // Con lo que decidió el vendedor sobre esa guía (sus preguntas, las cambiadas, las quitadas): lo que se llevó a la reunión.
-  const preguntas = aplicarAjustes(guia ? preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco) : [], sesion?.ajustesDeLaGuia, apuntaDelTema(escala))
+  /* Con lo que decidió el vendedor sobre esa guía (sus preguntas, las cambiadas, las quitadas): lo que se llevó a la reunión.
+     En el orden en que pensaba hacerlas («En orden», con el que eligió arrastrando: 2026-10-20). */
+  const preguntas = ordenDeLaConversacion(
+    aplicarAjustes(guia ? preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco) : [], sesion?.ajustesDeLaGuia, apuntaDelTema(escala)),
+  )
     .filter((p) => p.tipo !== "abierto")
     .slice(0, 16)
     .map((p) => ({ para: p.para, pregunta: (p.tema ? `${p.tema}: ${p.pregunta}` : p.pregunta).slice(0, 400) }));

@@ -126,6 +126,14 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "ventas",
     motivo: "«Regenerar» una pregunta de la guía de la próxima sesión (validación 69): pantalla interna del vendedor.",
   },
+  "app/api/sales/exploraciones/[id]/guia/objetivo/route.ts": {
+    destino: "ventas",
+    motivo: "Las preguntas que propone Nexus al guardar el objetivo de la próxima sesión (CEMACO, 2026-10-20): pantalla interna; quedan como propuestas en la sesión.",
+  },
+  "components/nexus-chat/ChatDeNexus.tsx": {
+    destino: "ventas",
+    motivo: "Al aplicar una lista que toca la guía avisa a la exploración abierta que se vuelva a leer (aviso-de-la-guia.ts). No lee ninguna exploración.",
+  },
   "lib/operaciones/guia-server.ts": {
     destino: "ventas",
     motivo: "El asistente de la guía (validación 71): leer la guía de la próxima sesión y proponer cambios. Chat interno; nada llega al cliente.",

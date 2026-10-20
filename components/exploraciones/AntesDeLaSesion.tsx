@@ -37,7 +37,10 @@ import { avanceDeLaEstrategia, faltanDeLaEstrategia } from "@/lib/exploraciones/
 import { REUNIONES } from "@/lib/exploraciones/sesion";
 import { useLienzo } from "./contexto";
 import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
-import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
+import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useAjustarLaGuia, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
+import { GuiaEnOrden } from "./GuiaEnOrden";
+import { PreguntasDelObjetivo, usePedirPreguntasDelObjetivo } from "./PreguntasDelObjetivo";
+import { sugeridasVigentes } from "@/lib/exploraciones/ajustes-de-la-guia";
 import { LoQueCubreLaGuia } from "./LoQueCubreLaGuia";
 import { abrirElChatDeNexus } from "@/lib/nexus-chat/constantes";
 import { queCubreLaGuia } from "@/lib/exploraciones/que-cubre-la-guia";
@@ -152,7 +155,26 @@ function siSaleBienEnElProyecto(faltan: number, cubre: number): string {
   return `La guía cubre ${cubre} de las ${faltan} tarjetas de la estrategia que faltan.`;
 }
 
-function Objetivo({ pestana, esLaProxima, sugerido, preguntas }: { pestana: PestanaDeSesion; esLaProxima: boolean; sugerido: string | null; preguntas: PreguntaParaMostrar[] }) {
+/**
+ * El objetivo de la sesión. Al guardar uno nuevo en la próxima sesión (escrito o editado), Nexus propone preguntas para
+ * ese objetivo (`alCambiarElObjetivo`, CEMACO 2026-10-20): no con cada tecla, al guardar. «Proponer preguntas» las vuelve
+ * a pedir cuando no hay ninguna esperando.
+ */
+function Objetivo({
+  pestana,
+  esLaProxima,
+  sugerido,
+  preguntas,
+  alCambiarElObjetivo,
+  pidiendo,
+}: {
+  pestana: PestanaDeSesion;
+  esLaProxima: boolean;
+  sugerido: string | null;
+  preguntas: PreguntaParaMostrar[];
+  alCambiarElObjetivo: () => void;
+  pidiendo: boolean;
+}) {
   const { exp, chequeo, marco, puedeEditar, guardando } = useLienzo();
   const editar = useEditarLaSesion(pestana, "antes");
   const s = pestana.sesion;
@@ -172,9 +194,17 @@ function Objetivo({ pestana, esLaProxima, sugerido, preguntas }: { pestana: Pest
   const cubreDelProyecto = faltanDelProyecto.filter((p) => paras.has(p.id)).length;
   const saleBien = enProyecto ? siSaleBienEnElProyecto(faltanDelProyecto.length, cubreDelProyecto) : siSaleBien(faltan.length, cubre);
 
-  const guardar = (valor: string) => {
-    const t = valor.trim();
-    void editar((x) => ({ ...x, ...(t ? { objetivo: t.slice(0, 400) } : { objetivo: undefined }) })).then((ok) => ok && setEditando(false));
+  // Proponer preguntas es de la próxima sesión (la guía que se puede cambiar) y de un objetivo escrito por la persona.
+  const conPropuestas = esLaProxima && puedeEditar;
+  const esperando = sugeridasVigentes(s?.ajustesDeLaGuia, confirmado).length > 0;
+  const guardar = (valor: string, { proponer = true }: { proponer?: boolean } = {}) => {
+    const t = valor.trim().slice(0, 400);
+    const cambio = !!t && t !== (confirmado ?? "");
+    void editar((x) => ({ ...x, ...(t ? { objetivo: t } : { objetivo: undefined }) })).then((ok) => {
+      if (!ok) return;
+      setEditando(false);
+      if (proponer && cambio && conPropuestas) alCambiarElObjetivo();
+    });
   };
 
   if (editando) {
@@ -210,14 +240,24 @@ function Objetivo({ pestana, esLaProxima, sugerido, preguntas }: { pestana: Pest
           {esLaProxima && <p className="text-[13px] leading-[1.45] text-fg-secondary">{saleBien}</p>}
         </div>
         {puedeEditar && (
-          <BotonBlanco
-            onClick={() => {
-              setTexto(confirmado);
-              setEditando(true);
-            }}
-          >
-            Editar
-          </BotonBlanco>
+          <div className="flex flex-none flex-col items-end gap-1">
+            <BotonBlanco
+              onClick={() => {
+                setTexto(confirmado);
+                setEditando(true);
+              }}
+            >
+              Editar
+            </BotonBlanco>
+            {conPropuestas && !esperando && (
+              <BotonTexto disabled={pidiendo} onClick={alCambiarElObjetivo}>
+                <span className="inline-flex items-center gap-1 text-brand">
+                  <IconoDeSugerencia className="h-3 w-3" />
+                  Proponer preguntas
+                </span>
+              </BotonTexto>
+            )}
+          </div>
         )}
       </section>
     );
@@ -245,7 +285,8 @@ function Objetivo({ pestana, esLaProxima, sugerido, preguntas }: { pestana: Pest
             >
               Editar
             </BotonBlanco>
-            <BotonAzul disabled={guardando} onClick={() => guardar(ofrecer)}>
+            {/* El objetivo que sugiere el agente se armó con la guía: usarlo no pide preguntas nuevas. */}
+            <BotonAzul disabled={guardando} onClick={() => guardar(ofrecer, { proponer: false })}>
               Usar
             </BotonAzul>
           </div>
@@ -510,13 +551,17 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
   // En un proyecto el cliente ya compró: nunca se arranca «desde cero».
   const desdeCero = !enProyecto && esLaProxima && !conTest && !conEvidencia && pestana.numero === 1;
   const apertura = guia?.apertura ?? [];
-  const deTarjetas = preguntas.filter((p) => ladoDeLaPregunta(p) === "tarjeta");
-  const deDimensiones = preguntas.filter((p) => ladoDeLaPregunta(p) === "dimension");
+  /* «Por sección» agrupa por sección y, dentro de cada una, sigue el orden de «En orden» (el que eligió la persona
+     arrastrando, si lo eligió): arrastrar se hace solo en «En orden», donde se ve la conversación entera. */
+  const deTarjetas = enOrden.filter((p) => ladoDeLaPregunta(p) === "tarjeta");
+  const deDimensiones = enOrden.filter((p) => ladoDeLaPregunta(p) === "dimension");
   // Lo vendido (solo en un proyecto): sus preguntas las escribe el agente al armar la guía.
-  const deLoVendido = preguntas.filter((p) => ladoDeLaPregunta(p) === "vendido");
+  const deLoVendido = enOrden.filter((p) => ladoDeLaPregunta(p) === "vendido");
   // Solo lo llevado que todavía no se sabe a qué apunta (se llevó después de armar la guía), y las tuyas sin tema.
-  const sueltas = preguntas.filter((p) => ladoDeLaPregunta(p) === null && p.tipo !== "propia");
-  const tuyasSinTema = preguntas.filter((p) => ladoDeLaPregunta(p) === null && p.tipo === "propia");
+  const sueltas = enOrden.filter((p) => ladoDeLaPregunta(p) === null && p.tipo !== "propia");
+  const tuyasSinTema = enOrden.filter((p) => ladoDeLaPregunta(p) === null && p.tipo === "propia");
+  const conOrdenPropio = !!pestana.sesion?.ajustesDeLaGuia?.orden?.length;
+  const ajustar = useAjustarLaGuia(pestana);
   const faltan = marco.tarjetas.filter((c) => lineasDe(c, e.contenido.casillas[c]).length === 0).length;
   const donde = enProyecto ? "en el panel de la derecha" : "en «La escala»";
   /* Siempre cierra con la pregunta de cierre y el siguiente paso, y pide lo que falta que no salió: para proponer en la
@@ -610,12 +655,18 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
 
       {vista === "orden" ? (
         <Tramo nombre="Preguntar" minutos={TRAMOS_DE_LA_SESION.preguntar}>
+          {editable && enOrden.length > 1 && (
+            <p className="mb-3 text-xs text-fg-muted">
+              {conOrdenPropio ? "Van en el orden que elegiste. " : "Arrastra las preguntas para ponerlas en el orden en que las vas a hacer."}
+              {conOrdenPropio && (
+                <button type="button" className="text-brand hover:underline" onClick={() => void ajustar({ tipo: "ordenar", claves: [] })}>
+                  Volver al orden de la guía
+                </button>
+              )}
+            </p>
+          )}
           {enOrden.length ? (
-            <ol>
-              {enOrden.map((p) => (
-                <PreguntaDeLaGuia key={p.para} p={p} pestana={pestana} borde editable={editable} />
-              ))}
-            </ol>
+            <GuiaEnOrden preguntas={enOrden} pestana={pestana} editable={editable} />
           ) : (
             <p className="text-[13px] text-fg-muted">
               {e.areas.length === 0
@@ -628,6 +679,7 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
         </Tramo>
       ) : (
         <div className="space-y-4 px-[18px] py-4">
+          {conOrdenPropio && <p className="text-xs text-fg-muted">Cada sección sigue el orden que elegiste en «En orden».</p>}
           {sueltas.length > 0 && (
             <div className="rounded-xl border border-line px-4 py-3">
               <p className="text-[13px] font-semibold text-fg">Quedó abierto</p>
@@ -725,6 +777,7 @@ export function SiSeResiste({ pestana, esLaProxima, compacto = false }: { pestan
 export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
   const { exp } = useLienzo();
   const { guia, preguntas } = useGuiaDeLaSesion(pestana, esLaProxima);
+  const delObjetivo = usePedirPreguntasDelObjetivo();
   const traidos = pestana.sesion?.explorar ?? [];
   const conTest = exp.leido.tests.length > 0;
 
@@ -753,7 +806,15 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
   return (
     <div className="space-y-5">
       {esLaProxima && <EstadoDeLaGuia pestana={pestana} />}
-      <Objetivo pestana={pestana} esLaProxima={esLaProxima} sugerido={guia?.objetivo ?? null} preguntas={preguntas} />
+      <Objetivo
+        pestana={pestana}
+        esLaProxima={esLaProxima}
+        sugerido={guia?.objetivo ?? null}
+        preguntas={preguntas}
+        alCambiarElObjetivo={() => void delObjetivo.pedir()}
+        pidiendo={delObjetivo.pidiendo}
+      />
+      {esLaProxima && <PreguntasDelObjetivo pestana={pestana} pidiendo={delObjetivo.pidiendo} alPedirOtras={() => void delObjetivo.pedir()} />}
       {esLaProxima && <CuandoYConQuien pestana={pestana} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}
       {esLaProxima && <LoQueYaSabemos pestana={pestana} />}

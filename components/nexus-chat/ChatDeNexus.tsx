@@ -25,6 +25,7 @@ import { IconoDeSugerencia } from "@/components/ui/sistema";
 import { EVENTO_ABRIR_EL_CHAT, PIEZA_NEXUS, type PedidoDeAbrirElChat } from "@/lib/nexus-chat/constantes";
 import { avisoDelChat, textoDelBoton, tituloDeLaLista } from "@/lib/nexus-chat/textos";
 import type { AccionSugerida } from "@/lib/nexus-chat/acciones";
+import { avisarQueCambioLaGuia, exploracionesQueTocaLaLista } from "@/lib/exploraciones/aviso-de-la-guia";
 
 /* El cajón se carga recién con la primera apertura. */
 const ChatDelAsistente = dynamic(() => import("@/components/asistente/ChatDelAsistente"), { ssr: false });
@@ -127,7 +128,7 @@ export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clie
   }
 
   const onAplicar = useCallback(
-    async (_acuerdo: AcuerdoDelChat, de?: { turnoId: string; desmarcadas: readonly number[] }): Promise<ResultadoDeAplicar> => {
+    async (acuerdo: AcuerdoDelChat, de?: { turnoId: string; desmarcadas: readonly number[] }): Promise<ResultadoDeAplicar> => {
       if (!de) return { fallo: "No se pudo identificar la lista: recarga el chat.", avisos: [] };
       const r = await fetch(`${base}/aplicar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(de) }).catch(() => null);
       const j = r ? await r.json().catch(() => ({})) : {};
@@ -137,6 +138,10 @@ export function ChatDeNexus({ clientId, nombre, sinSugerencias = false }: { clie
         return { fallo: j?.error ?? "No se pudo aplicar. Prueba de nuevo.", avisos: [], ...(hilo ? { hilo } : {}) };
       }
       router.refresh();
+      /* La exploración de un proyecto se pide desde el navegador: el refresh no la trae. Si la lista tocó una guía, la
+         exploración abierta vuelve a leerse sola (CEMACO, 2026-10-20; lib/exploraciones/aviso-de-la-guia.ts). */
+      const guias = exploracionesQueTocaLaLista(acuerdo.operaciones, de.desmarcadas);
+      if (guias) avisarQueCambioLaGuia(guias);
       void cargarResumen();
       return { fallo: null, avisos: [], ...(j.hilo ? { hilo: j.hilo } : {}) };
     },

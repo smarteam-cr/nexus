@@ -94,7 +94,22 @@ function EditarPregunta({ p, alGuardar, alCancelar, guardando }: { p: PreguntaPa
 /**
  * Una pregunta de la guía. `editable`: es la próxima sesión y quien mira puede cambiarla (regenerar, editar, quitar).
  */
-export function PreguntaDeLaGuia({ p, pestana, corta, borde, editable }: { p: PreguntaParaMostrar; pestana: PestanaDeSesion; corta?: boolean; borde?: boolean; editable?: boolean }) {
+export function PreguntaDeLaGuia({
+  p,
+  pestana,
+  corta,
+  borde,
+  editable,
+  arrastre,
+}: {
+  p: PreguntaParaMostrar;
+  pestana: PestanaDeSesion;
+  corta?: boolean;
+  borde?: boolean;
+  editable?: boolean;
+  /** En «En orden», para moverla (GuiaEnOrden.tsx): el nodo, su estilo mientras se arrastra y el asa. */
+  arrastre?: { ref: (el: HTMLLIElement | null) => void; style: React.CSSProperties; asa: React.ReactNode; arrastrando: boolean };
+}) {
   const { exp, recargar, guardando } = useLienzo();
   const toast = useToast();
   const ajustar = useAjustarLaGuia(pestana);
@@ -139,7 +154,16 @@ export function PreguntaDeLaGuia({ p, pestana, corta, borde, editable }: { p: Pr
   ];
 
   return (
-    <li className={cn("flex gap-3 py-3.5 first:pt-0 last:pb-0", borde && "border-b border-surface-hover last:border-b-0")}>
+    <li
+      ref={arrastre?.ref}
+      style={arrastre?.style}
+      className={cn(
+        "flex gap-3 py-3.5 first:pt-0 last:pb-0",
+        borde && "border-b border-surface-hover last:border-b-0",
+        arrastre?.arrastrando && "relative z-10 rounded-lg bg-surface shadow-lg",
+      )}
+    >
+      {arrastre?.asa}
       <EtiquetaDePregunta p={p} />
       <div className="min-w-0 flex-1">
         {editando ? (

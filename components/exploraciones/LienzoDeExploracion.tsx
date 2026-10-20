@@ -52,6 +52,7 @@ import { estadoDeLaConexion } from "@/lib/exploraciones/senales";
 import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
 import { hoyEnCostaRica } from "@/lib/exploraciones/fechas";
 import { opcionesDeLasPestanas, pestanasDeSesiones } from "@/lib/exploraciones/guia";
+import { esParaEstaExploracion, EVENTO_GUIA_CAMBIADA, type AvisoDeLaGuia } from "@/lib/exploraciones/aviso-de-la-guia";
 import { Casilla } from "./Casilla";
 import ManejoDeObjeciones from "./ManejoDeObjeciones";
 import { LienzoContexto, type Lienzo, type ModoDelSelector, type MomentoDeLaSesion, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
@@ -415,6 +416,17 @@ export default function LienzoDeExploracion({
     window.addEventListener(EVENTO_DEL_RECORRIDO, alPedido);
     return () => window.removeEventListener(EVENTO_DEL_RECORRIDO, alPedido);
   }, [setPaso, enProyecto]);
+
+  /* El chat de Nexus aplicó una lista que cambia esta guía (CEMACO, 2026-10-20: la pantalla mostraba las preguntas viejas
+     hasta recargar): se vuelve a leer la exploración. Lo que la persona está escribiendo vive en cada campo y se queda. */
+  const expId = exp.id;
+  useEffect(() => {
+    const alCambiar = (e: Event) => {
+      if (esParaEstaExploracion((e as CustomEvent<AvisoDeLaGuia>).detail, expId)) void recargar();
+    };
+    window.addEventListener(EVENTO_GUIA_CAMBIADA, alCambiar);
+    return () => window.removeEventListener(EVENTO_GUIA_CAMBIADA, alCambiar);
+  }, [expId, recargar]);
 
   /* En la ficha del cliente, tocar «Exploración» cuando ya está abierta vuelve a la página de inicio
      (components/clients/RielDelCliente.tsx emite el evento). */
