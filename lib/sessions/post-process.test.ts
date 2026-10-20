@@ -54,6 +54,7 @@ vi.mock("@/lib/lecturas/personas", () => ({
   cseDelProyecto: vi.fn(async () => "marco@smarteamcr.com"),
   cseDeLaCuenta: vi.fn(async () => null),
   responsableDeLaPreventaViva: preventa,
+  negocioDeLaCuenta: vi.fn(async () => ({ vendedores: [], duenoDeLaEmpresa: null })),
 }));
 vi.mock("@/lib/tareas/lectura", () => ({ escribirSalidaDeSeguimiento, descartesDeLaCuenta: vi.fn(async () => ({ temas: [], empresa: null })) }));
 vi.mock("@/lib/tareas/para-agentes", () => ({ titulosParaLaLectura: titulos }));

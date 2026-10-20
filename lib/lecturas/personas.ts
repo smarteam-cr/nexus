@@ -28,6 +28,27 @@ export async function cseDeLaCuenta(clientId: string): Promise<string | null> {
 }
 
 /**
+ * Quién lleva el negocio de la cuenta en HubSpot (lo de venta o negociación es suyo, no del CSE — 2026-10-20): los
+ * vendedores de sus negocios abiertos, el más nuevo primero, y el dueño de la empresa. Solo los correos; a cuál le llega
+ * lo decide `duenoDelNegocio` (lib/tareas/seguimiento.ts, pura).
+ */
+export async function negocioDeLaCuenta(clientId: string): Promise<{ vendedores: string[]; duenoDeLaEmpresa: string | null }> {
+  const [negocios, cliente] = await Promise.all([
+    prisma.negocioAbierto.findMany({
+      where: { clientId, abierto: true, vendedorId: { not: null } },
+      select: { vendedor: { select: { email: true } } },
+      orderBy: [{ creadoEnHubspot: { sort: "desc", nulls: "last" } }],
+      take: 20,
+    }),
+    prisma.client.findUnique({ where: { id: clientId }, select: { hubspotOwnerEmail: true } }),
+  ]);
+  return {
+    vendedores: negocios.flatMap((n) => (n.vendedor?.email ? [n.vendedor.email.trim().toLowerCase()] : [])),
+    duenoDeLaEmpresa: cliente?.hubspotOwnerEmail?.trim().toLowerCase() || null,
+  };
+}
+
+/**
  * Quien lleva la preventa viva de la empresa: `undefined` si no hay ninguna, `null` si la hay sin responsable. Solo
  * el correo: nada del contenido de la preventa.
  */

@@ -25,6 +25,14 @@
  * Lo que se comprometió Smarteam sigue una por una: es trabajo distinto, a veces de personas distintas. El título lleva
  * el día para que dos reuniones de la misma cuenta no se junten por la huella del título (escribirPropuestasDeLectura).
  *
+ * DE QUIÉN ES (Elías, 2026-10-20; DECISIONS «Lo que sale de una reunión le llega a quien le toca»). Lo de Smarteam va,
+ * en este orden, a: quien se dijo que lo hace, el correo que eligió la lectura, quien dijo la cita en la reunión (su
+ * turno de la transcripción, si es del equipo y estuvo), quien mandó el correo. Si nada de eso dice quién y el tema es de
+ * venta o negociación (`esTemaDeVenta`: precio, propuesta comercial, contrato, descuento…), es del dueño del negocio en
+ * HubSpot (`duenoDelNegocio`), no del CSE; sin dueño seguro, «Por asignar» de Ventas. Quien lleva la cuenta es el último
+ * recurso, solo para lo que el cliente espera de Smarteam. Lo que prometió el cliente sobre un tema de venta también lo
+ * sigue Ventas.
+ *
  * POCOS Y ESENCIALES (Elías, 2026-10-19). Antes de armar nada, `elegirLoEsencial` deja lo que alguien de verdad tiene que
  * hacer: saca lo que la lectura marcó como menor (salvo lo que frena el plan), pasa a Smarteam lo que el cliente espera
  * de Smarteam aunque lo haya dicho el cliente («quedamos atentos a que nos envíes el reporte») y ordena lo más
@@ -41,12 +49,17 @@ import type { Tema } from "./tema";
 import { diaCortoConSemana, horaDeCostaRica, lunesDeFecha, semanaDeLaReunion } from "./semana";
 import { huellaDeTexto, normalizar } from "./texto";
 import { voseoEnProsa } from "@/lib/ui/voseo-formas";
+import { comprimirConversacion } from "@/lib/sessions/conversacion";
 
 export interface EntradaDeSeguimiento {
   /** Ya con la cita verificada (lib/sessions/lectura-salida.ts, `verificarCitas`). */
   compromisos: readonly CompromisoDetectado[];
   lectura: { id: string; equipo: string };
-  reunion: { id: string; inicio: Date; participantes: readonly string[] };
+  /**
+   * `transcripcion` (opcional): el texto de la reunión con sus turnos («Nombre: lo que dijo»). Con ella, quien dijo la
+   * cita es una señal más de quién se comprometió (`quienDijoLaCita`).
+   */
+  reunion: { id: string; inicio: Date; participantes: readonly string[]; transcripcion?: string | null };
   /** El equipo activo, sin bajas ni la cuenta de prueba (`miembrosActivos`). */
   miembros: readonly MiembroDelEquipo[];
   /** El dueño del proyecto principal en HubSpot (`Project.hubspotOwnerEmail`), si lo hay. */
@@ -58,6 +71,11 @@ export interface EntradaDeSeguimiento {
    * quien la lleva.
    */
   responsableDeLaPreventa?: string | null;
+  /**
+   * Quién lleva el negocio de la cuenta en HubSpot: el vendedor de cada negocio abierto (el más nuevo primero) y el dueño
+   * de la empresa. Lo de venta o negociación es de esa persona (`duenoDelNegocio`); sin el dato, «Por asignar» de Ventas.
+   */
+  negocio?: NegocioDeLaCuenta;
   clientId: string;
   /** El nombre de la cuenta: va en el título del seguimiento agrupado. */
   empresa?: string | null;
@@ -74,6 +92,13 @@ export interface EntradaDeSeguimiento {
    * uno de ellos no se propone, sin plazo. Se mira cada compromiso ANTES de juntar lo del cliente.
    */
   descartados?: readonly Tema[][];
+}
+
+export interface NegocioDeLaCuenta {
+  /** Los vendedores de los negocios abiertos de la cuenta, en minúsculas, el negocio más nuevo primero. */
+  vendedores: readonly string[];
+  /** El dueño de la empresa en HubSpot (`Client.hubspotOwnerEmail`), en minúsculas. */
+  duenoDeLaEmpresa: string | null;
 }
 
 export type FuenteDelCompromiso = { tipo: "reunion" } | { tipo: "correo"; asunto: string | null; autorEmail: string | null };
@@ -129,6 +154,68 @@ export function loEsperaDeSmarteam(c: Pick<CompromisoDetectado, "quien" | "que" 
   const espera = /\b(atent[oa]s? a (que|recibir)|espera[n]? (que|recibir)|esperando (que|a que|recibir))\b/.test(t);
   if (!espera) return false;
   return /\b(smarteam|el equipo de smarteam|nos (env|mand|compart|pas)|les (env|mand|compart|pas)|le (env|mand|compart|pas)|(enviemos|mandemos|compartamos|preparemos|entreguemos))/.test(t);
+}
+
+/**
+ * ¿Es de venta o negociación? Precio, tarifa, cotización, descuento, negociación, orden de compra, una propuesta
+ * comercial (económica, contractual, de precios, de inversión o de renovación), la renovación de un contrato, o firmar,
+ * aprobar o enviar un contrato. Eso lo lleva Ventas (el dueño del negocio en HubSpot), no el CSE. Conservador a
+ * propósito: «renovación» sola no cuenta (en kölbi son los paquetes de renovación de SUS clientes) y «propuesta» sola
+ * tampoco (una propuesta de diseño de un flujo es trabajo del CSE). Precio, tarifa, cotización y descuento solos no
+ * cuentan si el texto habla de configurar HubSpot: «definir el formato único de cotización para subirlo a HubSpot»
+ * (Larce, T-124) es la cotización del CLIENTE, trabajo del CSE.
+ */
+export function esTemaDeVenta(texto: string): boolean {
+  const t = ` ${normalizar(texto)} `;
+  const deConfigurar = /\b(hubspot|propiedad|propiedades|pipeline|etapa|etapas|automatizacion|flujo|workflow|formato|plantilla|objeto|campo|campos|reporte|informe|tablero)\b/.test(t);
+  if (!deConfigurar && /\b(precio|precios|tarifa|tarifas|cotizacion|cotizaciones|cotizar|descuento|descuentos)\b/.test(t)) return true;
+  return [
+    /\b(negociacion|negociar|contractual|contraoferta)\b/,
+    /\borden(es)? de compra\b/,
+    /\bpropuesta( actualizada)? (comercial|economica|de precios|de inversion|de renovacion|de contrato)\b/,
+    /\brenovacion (del|de|de los|de la) (contrato|contratos|acuerdo|servicio|licencia|licencias|suscripcion)\b/,
+    /\b(firmar|firma|aprobar|aprobacion|enviar|envio|actualizar|revisar|renovar) (el |la |del |los )?(contrato|contratos|adenda)\b/,
+    /\bcontrato (de|del) (servicio|servicios|marketing|renovacion|licencia|licencias|soporte)\b/,
+  ].some((r) => r.test(t));
+}
+
+/**
+ * El dueño del negocio de la cuenta, solo si se sabe con seguridad. De los vendedores de sus negocios abiertos, primero
+ * los de Ventas (quien lleva un negocio sin ser de Ventas solo cuenta si no hay otro); de esos, el único que estuvo en la
+ * reunión, o el único que hay. Sin negocios abiertos, el dueño de la empresa en HubSpot. Dos posibles = null («Por
+ * asignar» de Ventas): nunca una persona cualquiera.
+ */
+export function duenoDelNegocio(
+  negocio: NegocioDeLaCuenta | undefined,
+  participantes: readonly string[],
+  activo: (email: string | null | undefined) => MiembroDelEquipo | null,
+): MiembroDelEquipo | null {
+  if (!negocio) return null;
+  const vendedores = [...new Set(negocio.vendedores.map((v) => v.toLowerCase()))].flatMap((v) => {
+    const m = activo(v);
+    return m ? [m] : [];
+  });
+  if (!vendedores.length) return activo(negocio.duenoDeLaEmpresa);
+  const deVentas = vendedores.filter((m) => claveDeEquipo(m.area, m.email) === "ventas");
+  const candidatos = deVentas.length ? deVentas : vendedores;
+  const enLaSala = new Set(participantes.map((p) => p.toLowerCase()));
+  const presentes = candidatos.filter((m) => enLaSala.has(m.email.toLowerCase()));
+  if (presentes.length === 1) return presentes[0]!;
+  if (presentes.length > 1) return null;
+  return candidatos.length === 1 ? candidatos[0]! : null;
+}
+
+/**
+ * Quién dijo la cita en la reunión: el hablante del turno de la transcripción que la contiene (sin tildes ni signos).
+ * Si la cita no está entera en un solo turno (salió de las notas de Gemini, o la dijeron dos), null.
+ */
+export function quienDijoLaCita(transcripcion: string | null | undefined, cita: string): string | null {
+  if (!transcripcion) return null;
+  const buscada = normalizar(cita.split("…")[0] ?? "");
+  if (buscada.length < 20) return null;
+  const hablantes = new Set<string>();
+  for (const t of comprimirConversacion(transcripcion, Number.MAX_SAFE_INTEGER).turnos) if (normalizar(t.texto).includes(buscada)) hablantes.add(t.hablante);
+  return hablantes.size === 1 ? [...hablantes][0]! : null;
 }
 
 export interface LoEsencial {
@@ -313,15 +400,35 @@ export function armarPropuestasDeSeguimiento(e: EntradaDeSeguimiento): ArmadoDeS
       const porNombre = c.responsable ? resolverPersona(c.responsable, [...activos.values()], e.reunion.participantes) : null;
       const delNombre = porNombre?.tipo === "seguro" ? activo(porNombre.email) : null;
       responsable = delNombre ?? activo(c.ownerEmail);
+      // Sin nombre ni correo: quien dijo la cita en la reunión, si es del equipo y estuvo («yo te lo mando el viernes»).
+      if (!responsable) {
+        const hablante = quienDijoLaCita(e.reunion.transcripcion, c.cita);
+        const delTurno = hablante ? resolverPersona(hablante, [...activos.values()], e.reunion.participantes) : null;
+        if (delTurno?.tipo === "seguro" && e.reunion.participantes.some((p) => p.toLowerCase() === delTurno.email)) responsable = activo(delTurno.email);
+      }
       // En un correo, sin saber quién lo lleva, es de quien lo mandó: escribió «te envío…».
       if (!responsable && e.fuente?.tipo === "correo") responsable = activo(e.fuente.autorEmail);
-      // Lo que el cliente espera de Smarteam, sin nombre: es de quien lleva la cuenta (o la preventa).
-      if (!responsable && c.esperaElCliente) responsable = e.ruta === "completa" ? (activo(e.cseDelProyecto) ?? activo(e.cseDeLaCuenta)) : activo(e.responsableDeLaPreventa);
-      if (!responsable && c.esperaElCliente) equipoSinResponsable = e.ruta === "completa" ? "cs" : "ventas";
+      // Lo de venta o negociación sin nadie que lo haya tomado: del dueño del negocio, nunca de quien lleva la cuenta.
+      const deVenta = e.ruta === "completa" && esTemaDeVenta(`${c.que} ${c.titulo ?? ""}`);
+      if (!responsable && deVenta) {
+        responsable = duenoDelNegocio(e.negocio, e.reunion.participantes, activo);
+        if (!responsable) equipoSinResponsable = "ventas";
+        sugerido.temaDeVenta = true;
+      }
+      // Lo que el cliente espera de Smarteam, sin nombre: es de quien lleva la cuenta (o la preventa). El último recurso.
+      if (!responsable && !deVenta && c.esperaElCliente) responsable = e.ruta === "completa" ? (activo(e.cseDelProyecto) ?? activo(e.cseDeLaCuenta)) : activo(e.responsableDeLaPreventa);
+      if (!responsable && !deVenta && c.esperaElCliente) equipoSinResponsable = e.ruta === "completa" ? "cs" : "ventas";
       if (!responsable && c.responsable) sugerido.responsableDicho = c.responsable;
     } else if (e.ruta === "completa") {
-      responsable = activo(e.cseDelProyecto) ?? (e.cseDelProyecto ? null : activo(e.cseDeLaCuenta));
-      equipoSinResponsable = "cs";
+      // Lo que prometió el cliente sobre un tema de venta (aprobar la propuesta, firmar el contrato) lo sigue Ventas.
+      if (esTemaDeVenta(c.que)) {
+        responsable = duenoDelNegocio(e.negocio, e.reunion.participantes, activo);
+        equipoSinResponsable = "ventas";
+        sugerido.temaDeVenta = true;
+      } else {
+        responsable = activo(e.cseDelProyecto) ?? (e.cseDelProyecto ? null : activo(e.cseDeLaCuenta));
+        equipoSinResponsable = "cs";
+      }
       if (c.responsable) sugerido.responsableDelCliente = c.responsable;
     } else {
       // Un prospecto: el seguimiento es de quien lleva la preventa viva. Sin preventa, no hay a quién (decisión de Elías).

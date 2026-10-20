@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { CompromisoDetectado } from "@/lib/sessions/compromisos-y-alcance";
-import { armarPropuestasDeSeguimiento, contextoDelCompromiso, lineaDeSeguimiento, esSeguimientoSueltoDelCliente, lineaDelSeguimientoAgrupado, pendienteDesdeLaTarea, seguimientoAgrupado, tituloDelCompromiso, type EntradaDeSeguimiento } from "./seguimiento";
+import { armarPropuestasDeSeguimiento, contextoDelCompromiso, duenoDelNegocio, esTemaDeVenta, quienDijoLaCita, lineaDeSeguimiento, esSeguimientoSueltoDelCliente, lineaDelSeguimientoAgrupado, pendienteDesdeLaTarea, seguimientoAgrupado, tituloDelCompromiso, type EntradaDeSeguimiento } from "./seguimiento";
 import { huellaDeTexto } from "./texto";
 
 const MIEMBROS = [
@@ -268,5 +268,137 @@ describe("lo que ya estaba propuesto", () => {
     expect(esSeguimientoSueltoDelCliente("l:lec:seg-c-g-abc")).toBe(false);
     expect(esSeguimientoSueltoDelCliente("l:lec:seg-s-abc")).toBe(false);
     expect(esSeguimientoSueltoDelCliente("l:lec:seg-c-abc:retirada:1")).toBe(false);
+  });
+});
+
+describe("de quién es (2026-10-20): quien se comprometió, el dueño del negocio en lo de venta, la cuenta al final", () => {
+  /* Los de verdad de la reunión «KÖLBI + SMARTEAM | DESPEGUEMOS» (vie 16 oct): estuvieron Marco Salas (Ventas, dueño del
+     negocio «KOLBI | RENOVACIÓN MARKETING») y Alexander Vanegas (CSL, dueño del negocio «Kolbi - SmartLoop»); Valentina
+     Sandoval lleva la cuenta y no estuvo. */
+  const EQUIPO = [
+    { email: "msalas@smarteamcr.com", nombre: "Marco Salas", area: "Ventas", roleEnum: "SUPER_ADMIN" },
+    { email: "avanegas@smarteamcr.com", nombre: "Alexander Vanegas", area: "CSE", roleEnum: "CSL" },
+    { email: "vsandoval@smarteamcr.com", nombre: "Valentina Sandoval Devia", area: "CSE", roleEnum: "CSE" },
+    { email: "apinzon@smarteamcr.com", nombre: "Andrés Pinzón", area: "Ventas", roleEnum: "VENTAS" },
+  ];
+  const SALA = ["gcamacho@ice.go.cr", "avanegas@smarteamcr.com", "psanabriav@ice.go.cr", "msalas@smarteamcr.com", "bmartinez@ice.go.cr"];
+  const NEGOCIO = { vendedores: ["msalas@smarteamcr.com", "avanegas@smarteamcr.com"], duenoDeLaEmpresa: "apinzon@smarteamcr.com" };
+  const kolbi = (compromisos: CompromisoDetectado[], cambios: Partial<EntradaDeSeguimiento> = {}) =>
+    entrada(compromisos, {
+      lectura: { id: "lec-k", equipo: "cs" },
+      reunion: { id: "despeguemos", inicio: INICIO, participantes: SALA },
+      miembros: EQUIPO,
+      cseDelProyecto: "vsandoval@smarteamcr.com",
+      negocio: NEGOCIO,
+      empresa: "kölbi",
+      ...cambios,
+    });
+  const priscilla = (c: Partial<CompromisoDetectado> = {}) =>
+    compromiso({
+      que: "Preparar y enviar a Priscilla Sanabria la propuesta actualizada de renovación del contrato de marketing",
+      titulo: "Enviar la propuesta de renovación de marketing actualizada a kölbi",
+      fecha: "2026-10-21",
+      cita: "Actualizar propuesta contractual: Presentar una propuesta actualizada que detalle el alcance",
+      ...c,
+    });
+
+  it("⭐ el caso de Priscilla: lo dijo Marco, es de Marco (Ventas), no de Valentina que lleva la cuenta", () => {
+    const [p] = armarPropuestasDeSeguimiento(kolbi([priscilla({ responsable: "Marco Salas" })])).propuestas;
+    expect(p).toMatchObject({ responsableEmail: "msalas@smarteamcr.com", equipo: "ventas", porAsignar: false });
+  });
+
+  it("⭐ el caso de Priscilla sin nombre y como lo que espera el cliente: va al dueño del negocio que estuvo, no al CSE", () => {
+    const [p] = armarPropuestasDeSeguimiento(kolbi([priscilla({ esperaElCliente: true })])).propuestas;
+    expect(p).toMatchObject({ responsableEmail: "msalas@smarteamcr.com", equipo: "ventas" });
+    expect(p.sugerido.temaDeVenta).toBe(true);
+  });
+
+  it("lo de venta sin dueño seguro va a «Por asignar» de Ventas, nunca a quien lleva la cuenta", () => {
+    const dosDeVentas = { vendedores: ["msalas@smarteamcr.com", "apinzon@smarteamcr.com"], duenoDeLaEmpresa: null };
+    const sinSala = { id: "s", inicio: INICIO, participantes: [] };
+    const [p] = armarPropuestasDeSeguimiento(kolbi([priscilla({ esperaElCliente: true })], { negocio: dosDeVentas, reunion: sinSala })).propuestas;
+    expect(p).toMatchObject({ responsableEmail: null, porAsignar: true, equipo: "ventas" });
+    const [sinDato] = armarPropuestasDeSeguimiento(kolbi([priscilla({ esperaElCliente: true })], { negocio: undefined })).propuestas;
+    expect(sinDato).toMatchObject({ responsableEmail: null, equipo: "ventas" });
+  });
+
+  it("lo que no es de venta y espera el cliente sigue yendo a quien lleva la cuenta (el último recurso)", () => {
+    const [p] = armarPropuestasDeSeguimiento(kolbi([compromiso({ que: "Enviar el reporte de campañas de octubre", esperaElCliente: true })])).propuestas;
+    expect(p.responsableEmail).toBe("vsandoval@smarteamcr.com");
+  });
+
+  it("quien dijo la cita en la reunión (su turno), si es del equipo y estuvo, manda sobre la cuenta", () => {
+    const transcripcion = ["00:10:00", "", "Priscilla Sanabria: ¿y el reporte?", "Alexander Vanegas: Yo te mando el reporte de campañas el viernes sin falta."].join("\n");
+    const c = compromiso({ que: "Enviar el reporte de campañas", cita: "te mando el reporte de campañas el viernes", esperaElCliente: true });
+    const [p] = armarPropuestasDeSeguimiento(kolbi([c], { reunion: { id: "s", inicio: INICIO, participantes: SALA, transcripcion } })).propuestas;
+    expect(p.responsableEmail).toBe("avanegas@smarteamcr.com");
+    // Si quien habló no estuvo (o no es del equipo), no cuenta.
+    const deAfuera = transcripcion.replace("Alexander Vanegas:", "Andrés Pinzón:");
+    const [q] = armarPropuestasDeSeguimiento(kolbi([c], { reunion: { id: "s", inicio: INICIO, participantes: SALA, transcripcion: deAfuera } })).propuestas;
+    expect(q.responsableEmail).toBe("vsandoval@smarteamcr.com");
+  });
+
+  it("lo que prometió el cliente sobre un tema de venta lo sigue el dueño del negocio; lo demás, el CSE", () => {
+    const aprobar = compromiso({
+      quien: "CLIENTE",
+      responsable: "Priscilla Sanabria",
+      que: "Aprobar la propuesta de renovación del contrato de marketing",
+      tituloDeSeguimiento: "Recordarle a Priscilla que apruebe la renovación",
+    });
+    const ti = compromiso({
+      quien: "CLIENTE",
+      responsable: "Priscilla Sanabria",
+      que: "Gestionar internamente con TI el desbloqueo de la integración de Infoclick con HubSpot",
+      tituloDeSeguimiento: "Recordarle a Priscilla que escale con TI, requisito para aprobar la renovación",
+    });
+    const { propuestas } = armarPropuestasDeSeguimiento(kolbi([aprobar, ti]));
+    expect(propuestas.map((p) => [p.responsableEmail, p.equipo])).toEqual([
+      ["msalas@smarteamcr.com", "ventas"],
+      ["vsandoval@smarteamcr.com", "cs"],
+    ]);
+  });
+});
+
+describe("esTemaDeVenta, duenoDelNegocio y quienDijoLaCita", () => {
+  it("reconoce lo de venta o negociación, y no lo que solo se le parece", () => {
+    for (const t of [
+      "Preparar y enviar a Priscilla Sanabria la propuesta actualizada de renovación del contrato de marketing",
+      "Agendar la reunión de revisión de la propuesta contractual actualizada",
+      "Complementar la propuesta comercial con los costos de licencias de DataHub",
+      "Enviar la cotización de la bolsa de horas",
+      "Revisar el descuento por pago anticipado",
+      "Firmar el contrato de servicio",
+      "Emitir la orden de compra",
+    ])
+      expect(esTemaDeVenta(t), t).toBe(true);
+    for (const t of [
+      "Configurar los paquetes de renovación automática de sus clientes en HubSpot",
+      "Preparar la propuesta de diseño del flujo de leads",
+      "Gestionar internamente con TI el desbloqueo de la integración de Infoclick con HubSpot",
+      "Cargar la base de contactos",
+      // Larce, T-124: la cotización es la del cliente, en HubSpot (trabajo del CSE).
+      "Definir con el equipo el formato único de cotización para subirlo a HubSpot",
+      "Configurar la automatización de avance de etapa de Prospección a Cotización cuando se envía la cotización",
+    ])
+      expect(esTemaDeVenta(t), t).toBe(false);
+  });
+
+  const activo = (e: string | null | undefined) => (e ? { email: e, nombre: e, area: e.startsWith("v") ? "Ventas" : "CSE", roleEnum: "X" } : null);
+  it("el dueño del negocio: el de Ventas que estuvo, el único que hay, o nadie", () => {
+    expect(duenoDelNegocio({ vendedores: ["v1@x", "c1@x"], duenoDeLaEmpresa: null }, ["v1@x", "c1@x"], activo)?.email).toBe("v1@x");
+    expect(duenoDelNegocio({ vendedores: ["v1@x", "v2@x"], duenoDeLaEmpresa: null }, ["v2@x"], activo)?.email).toBe("v2@x");
+    expect(duenoDelNegocio({ vendedores: ["v1@x", "v2@x"], duenoDeLaEmpresa: null }, [], activo)).toBeNull();
+    expect(duenoDelNegocio({ vendedores: ["v1@x", "v2@x"], duenoDeLaEmpresa: null }, ["v1@x", "v2@x"], activo)).toBeNull();
+    expect(duenoDelNegocio({ vendedores: ["c1@x"], duenoDeLaEmpresa: null }, [], activo)?.email).toBe("c1@x");
+    expect(duenoDelNegocio({ vendedores: [], duenoDeLaEmpresa: "v9@x" }, [], activo)?.email).toBe("v9@x");
+    expect(duenoDelNegocio(undefined, [], activo)).toBeNull();
+  });
+
+  it("quien dijo la cita: el hablante del único turno que la contiene", () => {
+    const t = "Marco Salas: Entonces te preparamos la propuesta actualizada para el martes.\nPriscilla Sanabria: Perfecto, gracias.";
+    expect(quienDijoLaCita(t, "te preparamos la propuesta actualizada")).toBe("Marco Salas");
+    expect(quienDijoLaCita(t, "una frase que no está en ningún turno")).toBeNull();
+    expect(quienDijoLaCita(t, "corta")).toBeNull();
+    expect(quienDijoLaCita(null, "te preparamos la propuesta actualizada")).toBeNull();
   });
 });

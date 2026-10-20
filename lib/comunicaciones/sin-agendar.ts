@@ -12,6 +12,12 @@
  *   · y si es una reunión, no está en el calendario (un evento de la cuenta en los próximos días), no está planeada en
  *     Tareas y no ocurrió (no hubo una reunión con la cuenta desde que se prometió).
  * Rechazarlo o «Ya no se hará» es una decisión: no avisa. Deja de avisar a los 21 días: ahí ya es limpieza.
+ *
+ * A QUIÉN LE LLEGA (2026-10-20, `leTocaElAviso`): a quien se le propuso; lo que está «Por asignar» de Customer Success, a
+ * quien lleva la cuenta. Nunca lo que se le propuso a otra persona ni lo «Por asignar» de otro equipo. El caso que lo
+ * motivó: a Valentina Sandoval (CSE de kölbi) «Para ti» le pedía tomar «Preparar y enviar a Priscilla Sanabria la
+ * propuesta actualizada de renovación del contrato» (T-117), que la lectura ya le había propuesto a Marco Salas, quien lo
+ * dijo en la reunión, a la que ella no fue. Y a Marco no le llegaba: solo veía lo de sus prospectos.
  */
 
 export const HORAS_PARA_AVISAR = 48;
@@ -52,6 +58,8 @@ export interface CompromisoParaAvisar {
   titulo: string;
   estado: string;
   responsableEmail: string | null;
+  /** El equipo de la tarea: el de quien la tiene, o el de «Por asignar». */
+  equipo?: string | null;
   origen: string;
   origenId: string | null;
   /** Cuándo lo leyó Nexus (se creó la tarea). */
@@ -100,9 +108,27 @@ export function compromisoSinAgendar(t: CompromisoParaAvisar, cuenta: LoQueSabem
   return { motivo: "sin_tomar", horas: Math.floor(horas), sinCalendario: false };
 }
 
-/** El título del pendiente: lo que dice en «Para ti». */
-export function tituloDelAviso(a: AvisoDeCompromiso, t: Pick<CompromisoParaAvisar, "titulo" | "origen">, empresa: string): string {
+/**
+ * ¿A esta persona le toca el aviso? Si se le propuso a alguien, solo a esa persona: es suyo decidirlo. Si está «Por
+ * asignar», a quien lleva la cuenta solo cuando es de Customer Success; lo «Por asignar» de Ventas (un tema de venta) o de
+ * otro equipo lo ve quien lidera ese equipo en sus tareas, no el CSE.
+ */
+export function leTocaElAviso(t: Pick<CompromisoParaAvisar, "responsableEmail" | "equipo" | "clientId">, email: string, cuentasQueLleva: ReadonlySet<string>): boolean {
+  const yo = email.toLowerCase();
+  if (t.responsableEmail) return t.responsableEmail.toLowerCase() === yo;
+  return (t.equipo ?? "cs") === "cs" && cuentasQueLleva.has(t.clientId);
+}
+
+/** ¿Es de Customer Success? Lo que ve la CSL por cuenta: lo de su equipo, sin lo que se le propuso a Ventas u otro. */
+export function esDeCustomerSuccess(t: Pick<CompromisoParaAvisar, "equipo">): boolean {
+  return (t.equipo ?? "cs") === "cs";
+}
+
+/** El título del pendiente: lo que dice en «Para ti». `tuyo`: se le propuso a quien lo ve. */
+export function tituloDelAviso(a: AvisoDeCompromiso, t: Pick<CompromisoParaAvisar, "titulo" | "origen">, empresa: string, tuyo = false): string {
   const de = t.origen === "correo" ? "por correo" : "en una reunión";
   if (a.motivo === "reunion_sin_agendar") return `${empresa}: se prometió una reunión ${de} y no está agendada`;
-  return `${empresa}: un compromiso ${de} lleva ${Math.floor(a.horas / 24)} días sin que nadie lo tome`;
+  const dias = Math.floor(a.horas / 24);
+  if (tuyo) return `${empresa}: un compromiso tuyo ${de} lleva ${dias} días sin decidir`;
+  return `${empresa}: un compromiso ${de} lleva ${dias} días sin que nadie lo tome`;
 }

@@ -6,13 +6,14 @@
  * reunión, que no está en el calendario, ni planeada en Tareas, ni ocurrió. La regla es pura
  * (lib/comunicaciones/sin-agendar.ts); los datos, lib/comunicaciones/sin-agendar-server.ts.
  *
- *   · `COMPROMISOS_SIN_AGENDAR` (personal): al CSE de la cuenta (el encargado en HubSpot de un proyecto de la cuenta),
- *     una línea por compromiso, con su calendario. En un prospecto no hay CSE: le llega a quien tiene la propuesta.
- *   · `COMPROMISOS_SIN_AGENDAR_CS` (frente «Liderar Customer Success»): una línea por cuenta.
+ *   · `COMPROMISOS_SIN_AGENDAR` (personal): a quien se le propuso, en cualquier cuenta; lo «Por asignar» de Customer
+ *     Success, al CSE de la cuenta (`leTocaElAviso`, 2026-10-20). Una línea por compromiso, con su calendario. Lo que
+ *     se le propuso a otra persona (a Ventas, un tema de venta) ya no le llega al CSE por llevar la cuenta.
+ *   · `COMPROMISOS_SIN_AGENDAR_CS` (frente «Liderar Customer Success»): una línea por cuenta, solo lo de Customer Success.
  */
 import "server-only";
 import { compromisosSinAgendar, type CompromisoSinAgendar } from "@/lib/comunicaciones/sin-agendar-server";
-import { tituloDelAviso } from "@/lib/comunicaciones/sin-agendar";
+import { esDeCustomerSuccess, leTocaElAviso, tituloDelAviso } from "@/lib/comunicaciones/sin-agendar";
 import { prisma } from "@/lib/db/prisma";
 import type { Fuente } from "../fuente";
 import { cuentasDeLaCarteraConSuCse, veLaCarteraEntera } from "./servicio";
@@ -42,19 +43,19 @@ export const COMPROMISOS_SIN_AGENDAR: Fuente = {
   frente: null,
   alDia: "Lo que se le prometió al cliente está agendado o en Tareas",
   async medir(a, c) {
-    const cuentas = [...new Set(a.proyectos.filter((p) => p.encargado).map((p) => p.clientId))];
-    // Lo de un prospecto (sin CSE) le llega a quien tiene la propuesta.
-    const prospectos = await prisma.tarea.findMany({
-      where: { responsableEmail: a.email, estado: "propuesta", archivadaAt: null, client: { kind: "PROSPECTO" }, OR: [{ origen: "correo" }, { origenId: { contains: ":seg-" } }] },
+    const cuentas = new Set(a.proyectos.filter((p) => p.encargado).map((p) => p.clientId));
+    // Lo que se le propuso a esta persona, en cualquier cuenta (un cliente o un prospecto): es suyo decidirlo.
+    const suyas = await prisma.tarea.findMany({
+      where: { responsableEmail: a.email, estado: "propuesta", archivadaAt: null, clientId: { not: null }, OR: [{ origen: "correo" }, { origenId: { contains: ":seg-" } }] },
       select: { clientId: true },
       distinct: ["clientId"],
-      take: 20,
+      take: 40,
     });
-    const ids = [...new Set([...cuentas, ...prospectos.flatMap((p) => (p.clientId ? [p.clientId] : []))])];
+    const ids = [...new Set([...cuentas, ...suyas.flatMap((p) => (p.clientId ? [p.clientId] : []))])];
     if (!ids.length) return [];
     const lista = await compromisosSinAgendar({ clientIds: ids, calendarioDe: async () => a.email, ahora: c.ahora });
     return lista
-      .filter((x) => cuentas.includes(x.tarea.clientId) || x.tarea.responsableEmail === a.email)
+      .filter((x) => leTocaElAviso(x.tarea, a.email, cuentas))
       .map(
         (x): Pendiente => ({
           clave: `compromisos-sin-agendar:${x.tarea.tareaId}`,
@@ -62,7 +63,7 @@ export const COMPROMISOS_SIN_AGENDAR: Fuente = {
           cuando: "hoy",
           delAgente: false,
           clientId: x.tarea.clientId,
-          titulo: tituloDelAviso(x.aviso, x.tarea, x.empresa),
+          titulo: tituloDelAviso(x.aviso, x.tarea, x.empresa, x.tarea.responsableEmail === a.email),
           detalle: detalle(x),
           meta: x.tarea.origen === "correo" ? "Correo con el cliente" : "Reunión con el cliente",
           accion: x.aviso.motivo === "reunion_sin_agendar" ? "Agendar o decidir" : "Tomarlo o decidir",
@@ -82,7 +83,7 @@ export const COMPROMISOS_SIN_AGENDAR_CS: Fuente = {
     const [lista, cuentas] = await Promise.all([compromisosSinAgendar({ ahora: c.ahora }), veLaCarteraEntera(a) ? cuentasDeLaCarteraConSuCse(a) : Promise.resolve([])]);
     const grupoDe = new Map(cuentas.map((x) => [x.clientId, x.grupo ?? undefined]));
     const porCuenta = new Map<string, CompromisoSinAgendar[]>();
-    for (const x of lista) porCuenta.set(x.tarea.clientId, [...(porCuenta.get(x.tarea.clientId) ?? []), x]);
+    for (const x of lista.filter((x) => esDeCustomerSuccess(x.tarea))) porCuenta.set(x.tarea.clientId, [...(porCuenta.get(x.tarea.clientId) ?? []), x]);
     return [...porCuenta.entries()]
       .sort((a, b) => a[1][0]!.empresa.localeCompare(b[1][0]!.empresa, "es"))
       .map(([clientId, xs]): Pendiente => {

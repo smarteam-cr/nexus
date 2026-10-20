@@ -56,7 +56,7 @@ import {
 } from "@/lib/sessions/lectura-salida";
 import { TOPE_DE_TOKENS, rutaDeLaLectura, type RutaDeLaLectura } from "@/lib/lecturas/reglas";
 import { MIN_NOTAS_PARA_LEER, hechosPrendidos } from "@/lib/seguimiento/hechos/reglas";
-import { cseDeLaCuenta, cseDelProyecto, responsableDeLaPreventaViva } from "@/lib/lecturas/personas";
+import { cseDeLaCuenta, cseDelProyecto, negocioDeLaCuenta, responsableDeLaPreventaViva } from "@/lib/lecturas/personas";
 import { armarPropuestasDeSeguimiento, elegirLoEsencial } from "@/lib/tareas/seguimiento";
 import { descartesDeLaCuenta, escribirSalidaDeSeguimiento } from "@/lib/tareas/lectura";
 import { titulosParaLaLectura } from "@/lib/tareas/para-agentes";
@@ -387,11 +387,12 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
   // 9. Los compromisos → propuestas de Tarea, por el único escritor de Tareas.
   const lectura = await prisma.lecturaDeReunion.findUnique({ where: { id: opts.lecturaId! }, select: { id: true, equipo: true } });
   if (!lectura) return { status: "error", sessionId, clientId: client.id, ruta, reason: "La fila de la cola ya no existe." };
-  const [cseProyecto, cseCuenta, preventa, descartes] = await Promise.all([
+  const [cseProyecto, cseCuenta, preventa, descartes, negocio] = await Promise.all([
     ruta === "completa" ? cseDelProyecto(project?.id ?? null) : Promise.resolve(null),
     ruta === "completa" && !project ? cseDeLaCuenta(client.id) : Promise.resolve(null),
     ruta === "prospecto" ? responsableDeLaPreventaViva(client.id) : Promise.resolve(undefined),
     descartesDeLaCuenta(client.id),
+    ruta === "completa" ? negocioDeLaCuenta(client.id) : Promise.resolve(undefined),
   ]);
   // Pocos y esenciales (2026-10-19): lo menor no se propone, lo que el cliente espera de Smarteam es de Smarteam, y lo
   // que alguien ya descartó en la cuenta no vuelve.
@@ -400,11 +401,12 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
     compromisos: esencial.quedan,
     descartados: descartes.temas,
     lectura,
-    reunion: { id: sessionId, inicio: session.date, participantes: session.participants.map((p) => p.toLowerCase()) },
+    reunion: { id: sessionId, inicio: session.date, participantes: session.participants.map((p) => p.toLowerCase()), transcripcion: transcript },
     miembros,
     cseDelProyecto: cseProyecto,
     cseDeLaCuenta: cseCuenta,
     ...(ruta === "prospecto" ? { responsableDeLaPreventa: preventa } : {}),
+    ...(negocio ? { negocio } : {}),
     clientId: client.id,
     empresa: client.name,
     projectId: project?.id ?? null,

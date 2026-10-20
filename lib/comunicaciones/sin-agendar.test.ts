@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compromisoSinAgendar, esCompromisoConElCliente, esReunionPrometida, tituloDelAviso, type CompromisoParaAvisar, type LoQueSabemosDeLaCuenta } from "./sin-agendar";
+import { compromisoSinAgendar, esCompromisoConElCliente, esDeCustomerSuccess, leTocaElAviso, esReunionPrometida, tituloDelAviso, type CompromisoParaAvisar, type LoQueSabemosDeLaCuenta } from "./sin-agendar";
 
 const ahora = new Date("2026-10-18T15:00:00.000Z");
 const hace = (horas: number) => new Date(+ahora - horas * 3_600_000);
@@ -94,5 +94,50 @@ describe("el aviso de las 48 horas", () => {
   it("el título del aviso", () => {
     const a = compromisoSinAgendar(reunion(), nada, ahora)!;
     expect(tituloDelAviso(a, reunion(), "Larce")).toBe("Larce: se prometió una reunión por correo y no está agendada");
+  });
+});
+
+describe("a quién le llega el aviso (2026-10-20)", () => {
+  /* El caso de Priscilla (kölbi, reunión «DESPEGUEMOS» del vie 16 oct): la lectura le propuso a Marco Salas, que lo dijo,
+     «Preparar y enviar a Priscilla Sanabria la propuesta actualizada de renovación del contrato» (T-117). Valentina
+     Sandoval lleva la cuenta y no estuvo en la reunión: «Para ti» le pedía tomarlo. Y a Marco no le llegaba. */
+  const kolbi = new Set(["kolbi"]);
+  const t117 = reunion({
+    numero: 117,
+    clientId: "kolbi",
+    titulo: "Preparar y enviar a Priscilla Sanabria la propuesta actualizada de renovación del contrato de marketing",
+    responsableEmail: "msalas@smarteamcr.com",
+    equipo: "ventas",
+    origen: "reunion",
+    origenId: "l:lec:seg-s-x",
+  });
+
+  it("⭐ lo que se le propuso a Marco no le llega a la CSE que lleva la cuenta; le llega a Marco", () => {
+    expect(leTocaElAviso(t117, "vsandoval@smarteamcr.com", kolbi)).toBe(false);
+    expect(leTocaElAviso(t117, "msalas@smarteamcr.com", new Set())).toBe(true);
+  });
+
+  it("lo «Por asignar» de Customer Success le llega a quien lleva la cuenta; el de Ventas, no", () => {
+    const porAsignar = (equipo: string | null) => ({ ...t117, responsableEmail: null, equipo });
+    expect(leTocaElAviso(porAsignar("cs"), "vsandoval@smarteamcr.com", kolbi)).toBe(true);
+    expect(leTocaElAviso(porAsignar(null), "vsandoval@smarteamcr.com", kolbi)).toBe(true);
+    expect(leTocaElAviso(porAsignar("ventas"), "vsandoval@smarteamcr.com", kolbi)).toBe(false);
+    expect(leTocaElAviso(porAsignar("cs"), "hgomez@smarteamcr.com", new Set(["otra"]))).toBe(false);
+  });
+
+  it("lo propio, en mayúsculas o no, es propio", () => {
+    expect(leTocaElAviso({ ...t117, responsableEmail: "VSandoval@smarteamcr.com" }, "vsandoval@smarteamcr.com", kolbi)).toBe(true);
+  });
+
+  it("la CSL ve por cuenta solo lo de Customer Success", () => {
+    expect(esDeCustomerSuccess(t117)).toBe(false);
+    expect(esDeCustomerSuccess({ equipo: "cs" })).toBe(true);
+    expect(esDeCustomerSuccess({ equipo: null })).toBe(true);
+  });
+
+  it("a quien se le propuso, el título dice que es suyo", () => {
+    const a = { motivo: "sin_tomar" as const, horas: 80, sinCalendario: false };
+    expect(tituloDelAviso(a, t117, "kölbi", true)).toBe("kölbi: un compromiso tuyo en una reunión lleva 3 días sin decidir");
+    expect(tituloDelAviso(a, t117, "kölbi")).toBe("kölbi: un compromiso en una reunión lleva 3 días sin que nadie lo tome");
   });
 });
