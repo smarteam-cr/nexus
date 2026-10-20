@@ -14,6 +14,7 @@ import "server-only";
 import { crDateParts } from "@/lib/jobs/time";
 import { accesoParaFrentes, type Alcance } from "./alcance-server";
 import { armarParaTi } from "./armar";
+import { modoDelFoco } from "./foco";
 import { frente, puedeLlevar } from "./frentes";
 import type { Fuente } from "./fuente";
 import { FUENTES } from "./registro";
@@ -27,12 +28,13 @@ export const VIDA_DE_LA_MEDICION_MS = 2 * 60_000;
 /**
  * Las fuentes que se miden para esta persona: las personales que aplican, y las de los frentes que lleva Y PUEDE ABRIR.
  * ⛔ Un frente cuyo requisito no cumple (`puedeLlevar`) se calla entero: ni pendientes, ni montos, ni textos, hasta que
- * tenga el permiso (Elías, 2026-10-05). Ni siquiera sale en «al día»: no se mide.
+ * tenga el permiso (Elías, 2026-10-05). Ni siquiera sale en «al día»: no se mide. Una fuente de frente también puede
+ * decir que no aplica (`aplica`): la cartera del día es solo para la CSL (2026-10-19).
  */
 export function fuentesQueAplican(a: Alcance, fuentes: readonly Fuente[] = FUENTES): Fuente[] {
   const acceso = accesoParaFrentes(a);
   return fuentes.filter((f) =>
-    f.frente ? a.frentes.includes(f.frente) && puedeLlevar(frente(f.frente), acceso) : (f.aplica?.(a) ?? true),
+    (f.frente ? a.frentes.includes(f.frente) && puedeLlevar(frente(f.frente), acceso) : true) && (f.aplica?.(a) ?? true),
   );
 }
 
@@ -66,10 +68,12 @@ export async function medirParaTi(a: Alcance, ahora = new Date()): Promise<ParaT
     }),
   );
   // Las cuentas que lleva (el encargado en HubSpot): si las que no entran en sus cinco llegan al umbral, la quinta es
-  // «Estabilizar N cuentas» (lib/para-ti/importa.ts).
+  // «Estabilizar N cuentas» (lib/para-ti/importa.ts). Al CSE y a la CSL, en cambio, los tres bloques de
+  // lib/para-ti/foco.ts (2026-10-19).
   const medicion = armarParaTi(resultados, {
     cuentasQueLleva: new Set(a.proyectos.filter((p) => p.encargado).map((p) => p.clientId)),
     nombresDeLasCuentas: new Map(a.proyectos.map((p) => [p.clientId, p.empresa])),
+    foco: modoDelFoco(a.rol),
   });
 
   guardadas.set(a.email, { at: ahora.getTime(), medicion });

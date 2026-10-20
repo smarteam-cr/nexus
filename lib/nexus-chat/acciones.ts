@@ -5,7 +5,9 @@
  *   1. lo que prometió el cliente y está vencido (o vence en 3 días), cuando el seguimiento lo lleva esta persona:
  *      «Recuérdale…», con el mensaje de WhatsApp listo para copiar;
  *   2. sus tareas de Smarteam vencidas: revisarlas (cerrarlas o pasarlas de semana);
- *   3. el siguiente paso de su equipo en la cuenta, si no hay o se venció;
+ *   3. el siguiente paso de su equipo en la cuenta, si no hay o se venció, y solo si la cuenta no tiene siguiente paso
+ *      por la regla única (una tarea con fecha esta semana o una reunión en los próximos 8 días, lib/mi-dia/servicio.ts):
+ *      con una reunión agendada, esa reunión ES el siguiente paso y no se pide definirlo (2026-10-19);
  *   4. lo suyo de esta semana.
  *
  * Como mucho 5, en ese orden. ⛔ Nexus no envía nada: el mensaje se copia o abre WhatsApp con el texto, y lo manda la
@@ -93,6 +95,11 @@ export function accionesSugeridas(o: {
   /** Hoy y el lunes de esta semana, `AAAA-MM-DD` en Costa Rica. */
   hoy: string;
   lunes: string;
+  /**
+   * ¿La cuenta ya tiene siguiente paso por la regla única? (`siguientePasoDeLaCuenta`). true = no se pide fijarlo.
+   * undefined = no se sabe (se mira solo el de cada equipo, como antes).
+   */
+  cuentaConPaso?: boolean;
 }): AccionSugerida[] {
   const yo = o.persona.email.toLowerCase();
   const mias = o.tareas.filter((t) => (t.responsableEmail ?? "").toLowerCase() === yo && (t.estado === "pendiente" || t.estado === "en_curso"));
@@ -127,8 +134,8 @@ export function accionesSugeridas(o: {
     });
   }
 
-  // 3. El siguiente paso de mi equipo.
-  for (const e of o.equipos) {
+  // 3. El siguiente paso de mi equipo (si la cuenta no lo tiene ya: una reunión agendada lo es).
+  for (const e of o.cuentaConPaso ? [] : o.equipos) {
     const delEquipo = o.pasos.filter((p) => p.equipo === e.clave);
     const vigente = delEquipo.find((p) => !p.fecha || p.fecha >= o.hoy);
     if (vigente) continue;

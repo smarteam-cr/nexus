@@ -57,8 +57,12 @@ export const PESO_DE_LA_FUENTE: Record<string, number> = {
   "cs-tus-cuentas": PESOS.riesgo,
   "cs-relaciones-cartera": PESOS.riesgo,
   "cs-relacion-hubspot": PESOS.riesgo - 5,
-  // Cuenta sin acción o sin reunión (las reglas de servicio, fase 2.1).
+  // Cuenta sin siguiente paso (ni tarea con fecha esta semana ni reunión en 8 días; desde el 2026-10-19 una reunión
+  // agendada ya es el siguiente paso). Las reuniones con la cuenta y las tareas vencidas salen de la misma medición: en
+  // el inicio de Customer Success van en sus bloques (lib/para-ti/foco.ts) y estos pesos casi no se usan.
   "cuenta-sin-accion": PESOS.servicio,
+  "tareas-vencidas-de-la-cuenta": PESOS.servicio - 10,
+  "reunion-con-la-cuenta": PESOS.reunion - 10,
   // Lo prometido al cliente (una reunión, una entrega) que a las 48 horas nadie agendó ni tomó (iniciativa B): entre el
   // riesgo y la cuenta sin acción, porque es justo lo que hace que el cliente le escriba a dirección.
   "compromisos-sin-agendar": PESOS.servicio + 5,

@@ -9,6 +9,8 @@
  *     laboral libre de la semana (de lunes a viernes, de 8:00 a 17:00), con su objetivo. Cada sugerida ocupa su hueco:
  *     no se pisan entre ellas. Primero las cuentas que llevan más tiempo sin reunión.
  *   · lo que NO CABE: una reunión sugerida sin hueco libre antes del viernes a las 17:00.
+ * Una reunión que ya está en la semana ES el siguiente paso de la cuenta (2026-10-19, lib/mi-dia/servicio.ts): si no
+ * tiene una tarea con fecha, la acción es esa reunión y no se le propone una tarea de más.
  * Cada sugerencia dice de dónde sale. La persona la ajusta en la pantalla; «Agendar» abre Google Calendar lleno (Nexus no
  * escribe en el calendario) y «Ya lo guardé» deja la reunión planeada en Tareas.
  */
@@ -86,6 +88,8 @@ export interface CuentaParaPlanificar {
 
 export type AccionDelPlan =
   | { tipo: "tiene"; tarea: TareaDelPlan; dia: string }
+  /** La cuenta ya tiene una reunión esta semana: esa reunión es su siguiente paso. */
+  | { tipo: "reunion"; reunion: ReunionDeLaCuenta; dia: string }
   | { tipo: "darle-fecha"; tarea: TareaDelPlan; dia: string; porque: string }
   | { tipo: "nueva"; titulo: string; dia: string; porque: string };
 
@@ -128,10 +132,11 @@ const enLaSemana = (iso: string, s: SemanaAPlanificar) => {
 };
 const listar = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
 
-function accionDelPlan(c: CuentaParaPlanificar, s: SemanaAPlanificar, diaDeLaReunion: string | null): AccionDelPlan {
+function accionDelPlan(c: CuentaParaPlanificar, s: SemanaAPlanificar, diaDeLaReunion: string | null, yaHay: ReunionDeLaCuenta | null): AccionDelPlan {
   const id = accionDeLaSemana(c.tareas, s)?.id;
   const tiene = id ? c.tareas.find((t) => t.id === id) : undefined;
   if (tiene) return { tipo: "tiene", tarea: tiene, dia: tiene.reunionDia ?? tiene.venceEl ?? tiene.semana ?? s.desde };
+  if (yaHay && diaDeLaReunion) return { tipo: "reunion", reunion: yaHay, dia: diaDeLaReunion };
   const dia = diaDeLaReunion && s.dias.includes(diaDeLaReunion) ? diaDeLaReunion : s.dias[0];
   // La abierta más importante de la cuenta que no es una reunión ni lo que debe el cliente: darle fecha.
   const candidata = c.tareas
@@ -154,7 +159,7 @@ function objetivoDeLaReunion(c: CuentaParaPlanificar, accion: AccionDelPlan): { 
   if (delCliente.length) {
     return { objetivo: `Revisar lo que tiene pendiente el cliente: ${listar(delCliente.map((t) => `«${t.titulo}»`))}, y acordar el siguiente paso.`, objetivoDe: "las tareas del cliente en Tareas" };
   }
-  if (accion.tipo !== "nueva") return { objetivo: `Avanzar en «${accion.tarea.titulo}» y acordar el siguiente paso.`, objetivoDe: "la acción de la semana" };
+  if (accion.tipo === "tiene" || accion.tipo === "darle-fecha") return { objetivo: `Avanzar en «${accion.tarea.titulo}» y acordar el siguiente paso.`, objetivoDe: "la acción de la semana" };
   return { objetivo: "Revisar cómo va la cuenta y acordar el siguiente paso.", objetivoDe: "la regla de servicio: una reunión cada semana" };
 }
 
@@ -199,7 +204,7 @@ export function planificarLaSemana(
         sessionId: c.proximaSugerida?.sessionId ?? null,
       };
     }
-    const accion = accionDelPlan(c, semana, diaDeLaReunion);
+    const accion = accionDelPlan(c, semana, diaDeLaReunion, yaHay ?? null);
     if (reunion.tipo !== "tiene") Object.assign(reunion, objetivoDeLaReunion(c, accion));
     planes.set(c.clientId, { clientId: c.clientId, empresa: c.empresa, proyectos: c.proyectos, ultimaReunion: c.ultimaReunion, accion, reunion });
   }
@@ -208,11 +213,14 @@ export function planificarLaSemana(
   return { semana, cuentas: lista, calendarioLeido: o.ocupado !== null };
 }
 
-/** Cuántas cuentas ya tienen su acción, su reunión, y cuántas reuniones no caben. */
+/**
+ * Cuántas cuentas ya tienen su siguiente paso (una tarea con fecha o una reunión en la semana), cuántas su reunión, y
+ * cuántas reuniones no caben.
+ */
 export function resumenDelPlan(p: PlanDeLaSemana): { cuentas: number; conAccion: number; conReunion: number; noCaben: number } {
   return {
     cuentas: p.cuentas.length,
-    conAccion: p.cuentas.filter((c) => c.accion.tipo === "tiene").length,
+    conAccion: p.cuentas.filter((c) => c.accion.tipo === "tiene" || c.accion.tipo === "reunion").length,
     conReunion: p.cuentas.filter((c) => c.reunion.tipo === "tiene").length,
     noCaben: p.cuentas.filter((c) => c.reunion.tipo === "no-cabe").length,
   };

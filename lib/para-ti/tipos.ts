@@ -43,22 +43,10 @@ export interface Pendiente {
   /** Solo en «Lo que importa hoy»: lo demás de esta cuenta («+N en esta cuenta»). */
   otrosEnLaCuenta?: Pendiente[];
   /**
-   * El siguiente paso que sugiere Nexus para una cuenta con reunión esta semana y sin acción: la reunión misma
-   * (lib/mi-dia/servicio.ts › siguientePasoDeLaReunion). Se usa o se descarta ahí mismo.
+   * El grupo dentro de un bloque del inicio de Customer Success: a quien lidera, el CSE que lleva la cuenta
+   * (lib/para-ti/foco.ts). Sin esto, no se agrupa.
    */
-  siguientePaso?: SiguientePasoDelPendiente;
-}
-
-/** Lo que necesita la pantalla para «Usar» o «Descartar» la sugerencia del siguiente paso. */
-export interface SiguientePasoDelPendiente {
-  eventoId: string;
-  titulo: string;
-  /** `AAAA-MM-DD`. */
-  fecha: string;
-  /** «hoy», «mañana» o «el jue 22». */
-  cuando: string;
-  /** Quien lleva la cuenta (de su calendario sale la reunión). null = quien mira. */
-  llevaEmail: string | null;
+  grupo?: string;
 }
 
 /** Uno de los lugares de un pendiente que junta varios: «Wherex (2)» → la ficha de Wherex. */
@@ -77,8 +65,13 @@ export interface ResultadoDeFuente {
 }
 
 export interface ParaTi {
-  /** «Lo que importa hoy» (fase 1.1): como mucho 5, una por cuenta, de lo de hoy y lo que dejó un agente. */
+  /**
+   * «Lo que importa hoy» (fase 1.1): como mucho 5, una por cuenta, de lo de hoy y lo que dejó un agente. En el inicio de
+   * Customer Success (`foco`), lo que muestran sus tres bloques, en orden.
+   */
   importa: Pendiente[];
+  /** Solo CSE y CSL: los tres bloques de lo que más importa hoy de su cartera (lib/para-ti/foco.ts). */
+  foco?: FocoDelDia;
   /** Lo de hoy (y del agente) que no entró en las cinco. */
   tambien: Pendiente[];
   agente: Pendiente[];
@@ -115,4 +108,30 @@ export interface CuentaDeParaTi {
   /** El aviso sin leer más nuevo, para la notificación del navegador. `creadoAt` (ISO): se notifica solo si es posterior
    *  al último que la pestaña ya vio (`debeNotificar`, lib/para-ti/armar.ts). */
   ultimoAviso: { id: string; titulo: string; href: string; creadoAt: string } | null;
+}
+
+/** Los tres bloques del inicio de Customer Success, en orden (lib/para-ti/foco.ts). */
+export type ClaveDeBloque = "reuniones" | "sin-paso" | "sin-seguimiento";
+
+export interface BloqueDelFoco {
+  clave: ClaveDeBloque;
+  titulo: string;
+  /** Una línea: qué es y qué hacer. */
+  ayuda: string;
+  /** Lo que se ve (con su tope). */
+  items: Pendiente[];
+  /** Cuántos había en total (lo que no entra va a «También para hoy»). */
+  total: number;
+  /** El texto cuando está vacío. */
+  vacio: string;
+  /** «Ver las N en la cartera» (el bloque de cuentas sin siguiente paso). */
+  verTodas?: { texto: string; href: string } | null;
+  /** Dónde está lo que no entró: en «También para hoy» o (las reuniones) en la agenda. null = entró todo. */
+  sobranEn?: "tambien" | "agenda" | null;
+}
+
+export interface FocoDelDia {
+  /** CSE: lo suyo; CSL: toda la cartera, agrupado por CSE (`Pendiente.grupo`). */
+  modo: "cse" | "csl";
+  bloques: BloqueDelFoco[];
 }

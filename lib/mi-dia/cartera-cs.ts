@@ -108,12 +108,10 @@ export interface EmpresaDeCs {
   /** La acción de la semana (una tarea con fecha esta semana). */
   accion: { numero: number; titulo: string } | null;
   /**
-   * Le falta la reunión de los próximos 8 días (la regla de servicio, lib/mi-dia/servicio.ts). false también cuando el
-   * calendario no se pudo leer: no se sabe, y no se dice que falta.
+   * El siguiente paso de la cuenta: su tarea con fecha de la semana o su reunión de los próximos 8 días, la que va antes
+   * (la regla única, lib/mi-dia/servicio.ts › siguientePasoDeLaCuenta). null = no tiene: es lo que la cartera marca.
    */
-  faltaReunion: boolean;
-  /** El siguiente paso que sugiere Nexus con la reunión de esta semana, cuando falta la acción. */
-  siguientePaso: { eventoId: string; titulo: string; fecha: string; inicio: string; llevaEmail: string | null } | null;
+  paso: PasoDeLaEmpresa | null;
   /** AAAA-MM-DD de la próxima renovación de licencias. */
   renovacion: string | null;
   /** La relación con HubSpot (solo quien lidera Customer Success). */
@@ -128,6 +126,11 @@ export interface EmpresaDeCs {
   /** Los correos del cliente de la última reunión: con ellos «Planificar acción» arma el evento. */
   invitados: string[];
 }
+
+/** El siguiente paso de una empresa de la cartera, serializable. `dia`: `AAAA-MM-DD` en Costa Rica. */
+export type PasoDeLaEmpresa =
+  | { tipo: "reunion"; dia: string; inicio: string; titulo: string }
+  | { tipo: "accion"; dia: string; numero: number; titulo: string };
 
 // ── Fechas ────────────────────────────────────────────────────────────────────────────────────
 
@@ -160,7 +163,7 @@ export function estaSinContacto(e: Pick<EmpresaDeCs, "ultimoContacto">, hoyISO: 
 /** Una renovación a estos días o menos pide atención. */
 export const DIAS_DE_RENOVACION_CERCANA = 30;
 
-export type ClaveDeAtencion = "riesgo" | "bloqueado" | "renueva" | "relacion" | "senales" | "sin-contacto" | "sin-accion";
+export type ClaveDeAtencion = "riesgo" | "bloqueado" | "renueva" | "relacion" | "senales" | "sin-contacto" | "sin-paso";
 
 export interface MotivoDeAtencion {
   clave: ClaveDeAtencion;
@@ -193,7 +196,8 @@ export function motivosDeAtencion(e: EmpresaDeCs, hoyISO: string): MotivoDeAtenc
     const d = diasSinContacto(e, hoyISO);
     out.push({ clave: "sin-contacto", texto: d === null ? "Sin contacto registrado" : `Sin contacto hace ${d} días`, peso: 50 });
   }
-  if (!e.accion) out.push({ clave: "sin-accion", texto: "Sin acción esta semana", peso: 40 });
+  // Una reunión agendada ya es el siguiente paso (2026-10-19): pide atención la que no tiene ninguno.
+  if (!e.paso) out.push({ clave: "sin-paso", texto: "Sin siguiente paso", peso: 40 });
   return out;
 }
 
@@ -215,19 +219,14 @@ export function paraAtender(empresas: readonly EmpresaDeCs[], hoyISO: string): E
     );
 }
 
-/** ¿La regla de servicio le pide algo a esta cuenta? Sin acción esta semana o sin reunión en los próximos 8 días. */
-export function faltaServicio(e: Pick<EmpresaDeCs, "accion" | "faltaReunion">): boolean {
-  return !e.accion || e.faltaReunion;
+/** ¿La cuenta no tiene siguiente paso? (ni tarea con fecha esta semana ni reunión en 8 días). */
+export function sinSiguientePaso(e: Pick<EmpresaDeCs, "paso">): boolean {
+  return e.paso === null;
 }
 
-/**
- * «Sin acción o reunión»: todas las que la regla de servicio marca, sin tope. Primero las que no tienen ninguna de las
- * dos, después las que tienen reunión y les falta el siguiente paso, después las que solo están sin reunión; dentro, por
- * color y nombre.
- */
+/** «Sin siguiente paso»: todas las cuentas que no lo tienen, sin tope, por color y nombre. */
 export function cuentasSinServicio(empresas: readonly EmpresaDeCs[]): EmpresaDeCs[] {
-  const grupo = (e: EmpresaDeCs) => (!e.accion && e.faltaReunion ? 0 : !e.accion ? 1 : 2);
-  return empresas.filter(faltaServicio).sort((a, b) => grupo(a) - grupo(b) || ordenDeTodos(a, b));
+  return empresas.filter(sinSiguientePaso).sort(ordenDeTodos);
 }
 
 /** Sin contacto en 21 días o más: primero las que nunca tuvieron uno, después la más vieja. */
@@ -252,7 +251,8 @@ export interface GrupoDeCse {
   empresas: EmpresaDeCs[];
   proyectos: number;
   enRiesgo: number;
-  sinAccion: number;
+  /** Sin siguiente paso. */
+  sinPaso: number;
   sinContacto: number;
 }
 
@@ -277,11 +277,11 @@ export function porCse(empresas: readonly EmpresaDeCs[], hoyISO: string): GrupoD
   const grupos = new Map<string, GrupoDeCse>();
   for (const e of empresas) {
     const k = claveDeCse(e.cse);
-    const g = grupos.get(k) ?? { cse: e.cse, empresas: [], proyectos: 0, enRiesgo: 0, sinAccion: 0, sinContacto: 0 };
+    const g = grupos.get(k) ?? { cse: e.cse, empresas: [], proyectos: 0, enRiesgo: 0, sinPaso: 0, sinContacto: 0 };
     g.empresas.push(e);
     g.proyectos += e.proyectos.length;
     if (e.salud === "riesgo") g.enRiesgo++;
-    if (!e.accion) g.sinAccion++;
+    if (!e.paso) g.sinPaso++;
     if (estaSinContacto(e, hoyISO)) g.sinContacto++;
     grupos.set(k, g);
   }

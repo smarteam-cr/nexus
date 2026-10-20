@@ -24,7 +24,7 @@ export interface Fuente {
   frente: ClaveDeFrente | null;
   /** El texto de «También revisé y está al día». */
   alDia: string;
-  /** Solo las personales: ¿tiene sentido medirla para esta persona? Default: sí. */
+  /** ¿Tiene sentido medirla para esta persona? Default: sí. En una de frente, además de llevar el frente. */
   aplica?: (a: Alcance) => boolean;
   medir: (a: Alcance, c: ContextoDeMedicion) => Promise<Pendiente[]>;
 }

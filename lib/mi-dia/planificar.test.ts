@@ -81,7 +81,7 @@ describe("planificar la semana", () => {
     expect(resumenDelPlan(p)).toEqual({ cuentas: 1, conAccion: 1, conReunion: 1, noCaben: 0 });
   });
 
-  it("sin acción: darle fecha a la abierta más importante, el día de la reunión", () => {
+  it("sin tarea con fecha pero con reunión en la semana: la reunión ES el siguiente paso (2026-10-19)", () => {
     const p = planificarLaSemana(
       [
         cuenta({
@@ -91,7 +91,17 @@ describe("planificar la semana", () => {
       ],
       { hoyISO: HOY, ahora: AHORA, ocupado: [] },
     );
-    expect(p.cuentas[0].accion).toMatchObject({ tipo: "darle-fecha", dia: "2026-10-22", tarea: { id: "b", version: 3 } });
+    expect(p.cuentas[0].accion).toMatchObject({ tipo: "reunion", dia: "2026-10-22" });
+    expect(resumenDelPlan(p)).toMatchObject({ conAccion: 1, conReunion: 1 });
+  });
+
+  it("sin tarea con fecha ni reunión: darle fecha a la abierta más importante, el día de la reunión sugerida", () => {
+    const p = planificarLaSemana(
+      [cuenta({ tareas: [tarea({ id: "a", numero: 5, prioridad: "media" }), tarea({ id: "b", numero: 9, prioridad: "alta" }), tarea({ id: "c", numero: 2, lado: "cliente", titulo: "Mandar la base" })] })],
+      { hoyISO: HOY, ahora: AHORA, ocupado: [] },
+    );
+    expect(p.cuentas[0].reunion.tipo).toBe("sugerida");
+    expect(p.cuentas[0].accion).toMatchObject({ tipo: "darle-fecha", tarea: { id: "b", version: 3 } });
   });
 
   it("el objetivo sale de la próxima que dejó sugerida la última reunión, o de lo que debe el cliente", () => {

@@ -336,7 +336,7 @@ function TarjetaDeNegocio({
         {n.etapa}
         {n.probabilidad != null && ` · ${Math.round(n.probabilidad * 100)} %`} · {hace(ultima(n), ahora)}
       </div>
-      <LineaDelPaso paso={paso} hoyISO={hoyISO} sugerencia={n.siguientePasoHubspot} />
+      <LineaDelPaso paso={paso} hoyISO={hoyISO} sugerencia={n.siguientePasoHubspot} reunion={n.reunion} />
       {senales.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {senales.map((s) => (
@@ -496,7 +496,7 @@ function Cartera({
                   {m.accion.motivo}
                   {m.otros > 0 && ` · ${plural(m.otros, "negocio más pide algo", "negocios más piden algo")}`}
                 </span>
-                {m.accion.clave !== "definir" && <LineaDelPaso paso={pasoDeVentas(m.negocio)} hoyISO={hoyISO} />}
+                {m.accion.clave !== "definir" && <LineaDelPaso paso={pasoDeVentas(m.negocio)} hoyISO={hoyISO} reunion={m.negocio.reunion} />}
               </Linea>
               <div className="md:text-right">
                 <Accion accion={m.accion} negocio={m.negocio} url={urlDe.get(m.negocio.id) ?? null} onCompletar={onCompletar} onDefinir={onDefinir} />
@@ -615,7 +615,7 @@ function SeccionDePipeline({
                 <NombreDeEmpresa nombre={n.empresa} clientId={n.clientId} /> · {n.etapa}
                 {n.probabilidad != null && ` · ${Math.round(n.probabilidad * 100)} %`} · {hace(ultima(n), ahora)}
               </div>
-              <LineaDelPaso paso={pasoDeVentas(n)} hoyISO={hoyISO} sugerencia={n.siguientePasoHubspot} />
+              <LineaDelPaso paso={pasoDeVentas(n)} hoyISO={hoyISO} sugerencia={n.siguientePasoHubspot} reunion={n.reunion} />
             </div>
             <div className="flex flex-none flex-col items-end gap-0.5 text-right">
               <span className="text-sm font-semibold tabular-nums text-fg">{n.monto != null ? montoCorto(n.monto, n.moneda) : "Sin monto"}</span>

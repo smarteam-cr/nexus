@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   cuentasSinServicio,
-  faltaServicio,
+  sinSiguientePaso,
   encargadosDelPase,
   filtrarEmpresas,
   motivosDeAtencion,
@@ -42,8 +42,7 @@ function empresa(e: Partial<EmpresaDeCs> = {}): EmpresaDeCs {
     proxima: null,
     calendarioLeido: true,
     accion: { numero: 12, titulo: "Revisar el pipeline" },
-    faltaReunion: false,
-    siguientePaso: null,
+    paso: { tipo: "accion", dia: "2026-10-16", numero: 12, titulo: "Revisar el pipeline" },
     renovacion: null,
     relacion: null,
     contactos: 3,
@@ -98,10 +97,10 @@ describe("motivosDeAtencion", () => {
 
   it("junta los motivos del más urgente al menos", () => {
     const m = motivosDeAtencion(
-      empresa({ salud: "riesgo", accion: null, ultimoContacto: "2026-09-01T12:00:00.000Z", proyectos: [proyecto({ bloqueado: true, nombre: "CRM" })] }),
+      empresa({ salud: "riesgo", accion: null, paso: null, ultimoContacto: "2026-09-01T12:00:00.000Z", proyectos: [proyecto({ bloqueado: true, nombre: "CRM" })] }),
       HOY,
     );
-    expect(m.map((x) => x.clave)).toEqual(["riesgo", "bloqueado", "sin-contacto", "sin-accion"]);
+    expect(m.map((x) => x.clave)).toEqual(["riesgo", "bloqueado", "sin-contacto", "sin-paso"]);
     expect(m[1].texto).toBe("Bloqueado: CRM");
     expect(m[2].texto).toBe("Sin contacto hace 46 días");
   });
@@ -122,7 +121,7 @@ describe("motivosDeAtencion", () => {
 
 describe("las vistas", () => {
   const riesgo = empresa({ clientId: "r", nombre: "Zeta", salud: "riesgo" });
-  const senales = empresa({ clientId: "s", nombre: "Beta", salud: "senales", accion: null });
+  const senales = empresa({ clientId: "s", nombre: "Beta", salud: "senales", accion: null, paso: null });
   const bien = empresa({ clientId: "b", nombre: "Alfa" });
   const fria = empresa({ clientId: "f", nombre: "Fría", ultimoContacto: "2026-08-01" });
   const nunca = empresa({ clientId: "n", nombre: "Nunca", ultimoContacto: null, cse: null });
@@ -150,7 +149,7 @@ describe("las vistas", () => {
     const deLuis = empresa({ clientId: "l", nombre: "Luis SA", cse: { nombre: "Luis", email: "luis@x.com" }, salud: "riesgo" });
     const g = porCse([deLuis, bien, nunca, senales], HOY);
     expect(g.map((x) => x.cse?.nombre ?? null)).toEqual(["Ana", "Luis", null]);
-    expect(g[0]).toMatchObject({ proyectos: 2, enRiesgo: 0, sinAccion: 1 });
+    expect(g[0]).toMatchObject({ proyectos: 2, enRiesgo: 0, sinPaso: 1 });
     expect(g[1].enRiesgo).toBe(1);
     expect(g[2].sinContacto).toBe(1);
   });
@@ -286,26 +285,27 @@ describe("usoDeHubspot", () => {
   });
 });
 
-describe("cuentasSinServicio (la vista «Sin acción o reunión»)", () => {
-  it("trae TODAS las que la regla marca, también las que solo están sin reunión, sin tope", () => {
-    const muchas = Array.from({ length: 40 }, (_, i) => empresa({ clientId: `s${i}`, nombre: `Sin reunión ${String(i).padStart(2, "0")}`, faltaReunion: true }));
+describe("cuentasSinServicio (la vista «Sin siguiente paso»)", () => {
+  const reunion = { tipo: "reunion" as const, dia: "2026-10-22", inicio: "2026-10-22T17:00:00Z", titulo: "Seguimiento" };
+  it("trae TODAS las que no tienen siguiente paso, sin tope", () => {
+    const muchas = Array.from({ length: 40 }, (_, i) => empresa({ clientId: `s${i}`, nombre: `Sin paso ${String(i).padStart(2, "0")}`, accion: null, paso: null }));
     const vista = cuentasSinServicio([...muchas, empresa({ clientId: "ok", nombre: "Al día" })]);
     expect(vista).toHaveLength(40);
     expect(vista.some((e) => e.clientId === "ok")).toBe(false);
   });
 
-  it("primero sin ninguna de las dos, después con reunión y sin acción, después solo sin reunión", () => {
+  it("una cuenta con reunión agendada y sin tarea NO está: la reunión es su siguiente paso", () => {
     const vista = cuentasSinServicio([
-      empresa({ clientId: "r", nombre: "A · solo sin reunión", faltaReunion: true }),
-      empresa({ clientId: "a", nombre: "B · con reunión sin acción", accion: null }),
-      empresa({ clientId: "n", nombre: "C · sin nada", accion: null, faltaReunion: true }),
+      empresa({ clientId: "r", nombre: "A · con reunión", accion: null, paso: reunion }),
+      empresa({ clientId: "n", nombre: "B · sin nada", accion: null, paso: null }),
     ]);
-    expect(vista.map((e) => e.clientId)).toEqual(["n", "a", "r"]);
+    expect(vista.map((e) => e.clientId)).toEqual(["n"]);
+    expect(motivosDeAtencion(empresa({ accion: null, paso: reunion }), HOY)).toEqual([]);
   });
 
-  it("faltaServicio: con acción y con reunión, no", () => {
-    expect(faltaServicio({ accion: { numero: 1, titulo: "x" }, faltaReunion: false })).toBe(false);
-    expect(faltaServicio({ accion: null, faltaReunion: false })).toBe(true);
-    expect(faltaServicio({ accion: { numero: 1, titulo: "x" }, faltaReunion: true })).toBe(true);
+  it("sinSiguientePaso: con tarea o con reunión, no", () => {
+    expect(sinSiguientePaso({ paso: reunion })).toBe(false);
+    expect(sinSiguientePaso({ paso: { tipo: "accion", dia: "2026-10-16", numero: 1, titulo: "x" } })).toBe(false);
+    expect(sinSiguientePaso({ paso: null })).toBe(true);
   });
 });

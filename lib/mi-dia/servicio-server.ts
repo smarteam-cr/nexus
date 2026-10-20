@@ -18,7 +18,15 @@ import { cuentaDelEvento } from "./agenda";
 import { calendarioDeLosProximosDias } from "./calendario-server";
 import { mapasDeEmpresas } from "./empresas-server";
 import { DIAS_PARA_LA_REUNION } from "./constantes";
-import { estadoDeServicio, ventanaDeLaSemana, type EstadoDeServicio, type ReunionDeLaCuenta, type TareaDeLaCuenta } from "./servicio";
+import {
+  estadoDeServicio,
+  siguientePasoDeLaCuenta,
+  ventanaDeLaSemana,
+  type EstadoDeServicio,
+  type ReunionDeLaCuenta,
+  type TareaDeLaCuenta,
+  type TareaParaVencer,
+} from "./servicio";
 
 export interface CuentaConServicio {
   clientId: string;
@@ -178,7 +186,7 @@ export async function servicioDeLasCuentas(
   // Las reuniones planeadas en Tareas que vienen.
   const planeadas: ReunionDeLaCuenta[] = filas.flatMap((t) =>
     t.clase === "reunion" && t.reunionInicio && t.clientId && t.reunionInicio >= o.ahora && t.reunionInicio <= hasta
-      ? [{ clientId: t.clientId, titulo: t.titulo, inicio: t.reunionInicio.toISOString(), fuente: "tarea" as const }]
+      ? [{ clientId: t.clientId, titulo: t.titulo, inicio: t.reunionInicio.toISOString(), fuente: "tarea" as const, tareaId: t.id }]
       : [],
   );
   const delCalendario = new Map(calendariosLeidos);
@@ -191,7 +199,9 @@ export async function servicioDeLasCuentas(
     const reuniones = [...planeadas, ...(cal ?? [])];
     const estado = estadoDeServicio(c.clientId, tareas, reuniones, o);
     const calendarioLeido = !lleva || cal !== null;
-    // Sin el calendario no se sabe si hay reunión: no se dice que falta (se dice que no se pudo leer).
+    // Sin el calendario no se sabe si hay reunión: no se dice que falta (se dice que no se pudo leer). El siguiente paso
+    // sale igual de lo que sí se sabe (la tarea y las reuniones planeadas): sin ninguno, la cuenta sale como «sin
+    // siguiente paso», con la advertencia de que el calendario no se leyó.
     const falta = calendarioLeido ? estado.falta : estado.falta.filter((f) => f !== "reunion");
     const u = ultimaDe.get(c.clientId);
     out.set(c.clientId, {
@@ -210,4 +220,62 @@ export async function servicioDeLasCuentas(
     });
   }
   return out;
+}
+
+/**
+ * Las tareas abiertas de esas cuentas que ya vencieron o pueden haber vencido (con vencimiento o semana antes de hoy),
+ * de cualquier equipo, sin lo «Solo para mí» ni lo de un espacio privado donde quien mira no está. La regla de qué
+ * cuenta como vencida es pura: lib/mi-dia/servicio.ts › estaVencida.
+ */
+export async function tareasVencidasDeLasCuentas(
+  ids: readonly string[],
+  o: { hoyISO: string; quienMira: QuienMiraElServicio },
+): Promise<Map<string, TareaParaVencer[]>> {
+  const out = new Map<string, TareaParaVencer[]>();
+  if (ids.length === 0 || !(await tareasDisponible())) return out;
+  const hoy = new Date(`${o.hoyISO}T00:00:00Z`);
+  const filas = await prisma.tarea.findMany({
+    where: {
+      archivadaAt: null,
+      estado: { in: ["pendiente", "en_curso"] },
+      privada: false,
+      clase: { not: "reunion" },
+      clientId: { in: [...ids] },
+      OR: [{ venceEl: { lt: hoy } }, { venceEl: null, semana: { lt: hoy } }],
+      ...(o.quienMira.esSuperAdmin ? {} : { NOT: deEspacioPrivadoAjeno(o.quienMira.email.toLowerCase()) }),
+    },
+    select: { id: true, numero: true, titulo: true, estado: true, privada: true, clase: true, venceEl: true, semana: true, clientId: true },
+    orderBy: [{ numero: "asc" }],
+    take: 2_000,
+  });
+  for (const t of filas) {
+    if (!t.clientId) continue;
+    out.set(t.clientId, [
+      ...(out.get(t.clientId) ?? []),
+      { id: t.id, numero: t.numero, titulo: t.titulo, estado: t.estado, privada: t.privada, clase: t.clase, venceEl: comoDia(t.venceEl), semana: comoDia(t.semana) },
+    ]);
+  }
+  return out;
+}
+
+/**
+ * ¿Una cuenta tiene siguiente paso? (para «Sugerencias» del chat de Nexus): la misma regla del inicio, con las tareas de
+ * la cuenta y las reuniones de los calendarios de `correos` (quien mira y quien la lleva) más las planeadas en Tareas.
+ */
+export async function siguientePasoDeUnaCuenta(
+  clientId: string,
+  correos: readonly string[],
+  o: { ahora: Date; hoyISO: string; quienMira: QuienMiraElServicio },
+): Promise<{ paso: ReturnType<typeof siguientePasoDeLaCuenta>; calendarioLeido: boolean }> {
+  const unicos = [...new Set(correos.map((c) => c.toLowerCase()))];
+  const porCorreo = await servicioDeLasCuentasDeVarios(clientId, unicos, o);
+  // Con cualquiera de los calendarios basta: la reunión es con la cuenta, sea de quien sea.
+  const conPaso = porCorreo.find((s) => s.paso);
+  return { paso: conPaso?.paso ?? null, calendarioLeido: porCorreo.every((s) => s.calendarioLeido) };
+}
+
+async function servicioDeLasCuentasDeVarios(clientId: string, correos: readonly string[], o: { ahora: Date; hoyISO: string; quienMira: QuienMiraElServicio }) {
+  const lista = correos.length ? correos : [o.quienMira.email.toLowerCase()];
+  const out = await Promise.all(lista.map((c) => servicioDeLasCuentas([{ clientId, empresa: "", llevaEmail: c }], o).then((m) => m.get(clientId))));
+  return out.filter((x): x is ServicioDeLaCuenta => !!x);
 }

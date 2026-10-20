@@ -15,6 +15,7 @@ import { pasosDeLaCuenta } from "@/lib/siguiente-paso/lectura-server";
 import { NOMBRE_DEL_EQUIPO, equipoDelRol, equiposQueEscribe } from "@/lib/siguiente-paso/reglas";
 import { contextoDeOperacion } from "@/lib/operaciones/contexto-server";
 import { hoyEnCostaRica } from "./prompt";
+import { siguientePasoDeUnaCuenta } from "@/lib/mi-dia/servicio-server";
 import { accionesSugeridas, type AccionSugerida } from "./acciones";
 
 function lunesDe(dia: string): string {
@@ -28,11 +29,22 @@ export async function accionesDeLaPersona(persona: TeamMember, clientId: string,
   const cuenta = await prisma.client.findUnique({ where: { id: clientId }, select: { name: true } });
   if (!cuenta) return [];
   const ctx = contextoDeOperacion(persona, ahora);
-  const [tareas, pasos] = await Promise.all([
+  const hoy = hoyEnCostaRica(ahora).dia;
+  // La regla única del siguiente paso (lib/mi-dia/servicio.ts): una tarea con fecha esta semana o una reunión en 8 días,
+  // en el calendario de quien mira o de quien lleva la cuenta (el encargado en HubSpot).
+  const encargados = await prisma.project
+    .findMany({ where: { clientId, status: "active", hubspotOwnerEmail: { not: null } }, select: { hubspotOwnerEmail: true }, take: 10 })
+    .then((ps) => ps.flatMap((p) => (p.hubspotOwnerEmail ? [p.hubspotOwnerEmail] : [])))
+    .catch(() => [] as string[]);
+  const [tareas, pasos, deLaCuenta] = await Promise.all([
     tareasAbiertasDeLaCuenta(await ctx.extras.tareas(), clientId).catch(() => []),
     pasosDeLaCuenta(clientId).catch(() => null),
+    siguientePasoDeUnaCuenta(clientId, [persona.email, ...encargados], {
+      ahora,
+      hoyISO: hoy,
+      quienMira: { email: persona.email, esSuperAdmin: persona.roleEnum === "SUPER_ADMIN" },
+    }).catch(() => null),
   ]);
-  const hoy = hoyEnCostaRica(ahora).dia;
   /* El equipo de su rol y los que lidera. Dirección puede escribir los tres, pero se le sugiere solo el suyo (Ventas):
      tres «fija el siguiente paso» por cuenta serían ruido. */
   const propio = equipoDelRol(persona.roleEnum);
@@ -46,5 +58,6 @@ export async function accionesDeLaPersona(persona: TeamMember, clientId: string,
     pasos: (pasos?.pasos ?? []).map((p) => ({ equipo: p.equipo, que: p.que, fecha: p.fecha })),
     hoy,
     lunes: lunesDe(hoy),
+    cuentaConPaso: deLaCuenta ? !!deLaCuenta.paso : undefined,
   });
 }

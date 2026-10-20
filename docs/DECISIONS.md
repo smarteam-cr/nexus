@@ -8401,6 +8401,9 @@ hacerlo**. El plan, por fases, está en `docs/nexus-sistema-de-trabajo-plan.md`.
   incluido); hoy cada equipo veía solo lo suyo. La cita de una reunión no cambia de regla.
 - **Reglas de servicio.** Cada cuenta con servicio activo: una acción con fecha cada semana y una reunión agendada en
   los próximos 8 días, salvo una excepción explícita.
+  ⚠ **Enmendado el 2026-10-19 (tarde)** («Una reunión agendada es el siguiente paso»): lo que se le pide a una cuenta es
+  UN siguiente paso, la tarea con fecha de la semana O la reunión de los próximos 8 días. Una cuenta con tarea y sin
+  reunión ya no sale en «Para ti».
 - **Atención: una cosa por cuenta y como mucho 5 en «Hoy».** Las alertas sueltas se reemplazan por una lectura por
   cuenta (color y hasta 3 motivos) que también ve el CSE, y las abiertas se cierran en bloque con respaldo. Los avisos
   quedan para lo que no es un pendiente.
@@ -8621,6 +8624,9 @@ que tener su acción de la semana y su reunión agendada.
   dice eso, no que falta la reunión.
 - **«Cuenta sin acción» le llega solo a quien la lleva** (el encargado en HubSpot de un proyecto de CS abierto), con
   peso 80 en «Lo que importa hoy». Pendiente de decidir: si «En espera del cliente» la exime.
+  ⚠ **SUPERSEDED 2026-10-19 (tarde)** («Una reunión agendada es el siguiente paso»): la acción y la reunión dejaron de
+  ser dos exigencias. Ahora es «Cuentas sin siguiente paso» (ni la una ni la otra), el segundo bloque del inicio de
+  Customer Success.
 - **«Tu día, según Nexus» y la guía de cada reunión no usan IA**: los arma el código con los datos, y cada punto dice
   de dónde sale. El objetivo y las notas de una reunión son de la persona (`PreparacionDeReunion`) y solo los ve ella;
   Nexus todavía no los lee.
@@ -8675,6 +8681,10 @@ que tener su acción de la semana y su reunión agendada.
   le falta la reunión, de las que «Para ti» marcaba ahí no estaban todas (medido el lunes 19 no faltaba ninguna, porque
   todas estaban además sin acción; el hueco se abre a mitad de semana). En la CSL la cartera suma las que solo tienen desarrollo, así que el enlace de las que faltan no
   lleva número cuando la lista de destino tiene otras cuentas (el número está en la pestaña). «Para atender» no cambió.
+- ⚠ **SUPERSEDED 2026-10-19 (tarde), este bullet y los tres que siguen** («Una reunión agendada es el siguiente paso»):
+  una cuenta con reunión ya no aparece como «falta el siguiente paso» y la sugerencia de crear la tarea con la reunión
+  se retiró (su ruta, su componente y lib/mi-dia/paso-sugerido-server.ts). La vista «Sin acción o reunión» pasó a
+  llamarse «Sin siguiente paso».
 - **Con reunión esta semana y sin acción, la línea lo dice distinto**: «X: tiene reunión el jue 22, falta el siguiente
   paso», no «sin acción ni reunión». Con la reunión la semana que viene: «…falta la acción de esta semana» (la reunión
   no resuelve la de esta).
@@ -8885,6 +8895,10 @@ que tener su acción de la semana y su reunión agendada.
   por CSE con al menos `MIN_CUENTAS_PARA_ESTABILIZAR` (7 = las 4 que le entran más el umbral). Cuenta las dos señales
   que llenan primero los cinco de un CSE: la cuenta en riesgo y la cuenta sin su acción o su reunión de la semana. Se
   calcula al leer, sin tabla nueva.
+- ⚠ **Enmendado el 2026-10-19 (tarde)** («Para ti» de Customer Success: tres bloques): al CSE y a la CSL ya no les llega
+  ni «Estabilizar N cuentas» ni «<CSE> tiene N cuentas…»: sus tres bloques muestran las cuentas sin siguiente paso (la
+  CSL, una línea por CSE). Las dos siguen para quien no es CSE ni CSL (dirección con el frente). Y una cuenta con reunión
+  agendada ya no cuenta como «sin acción».
 ## Actualizar escala: la escala de cada empresa con todo lo que Nexus sabe (2026-10-18)
 
 **Contexto.** Iniciativas 1 (pasos 2 y 3) y 2 de «La siguiente serie» (docs/roadmap.md). Elías: ubicar a cualquier cliente
@@ -9730,3 +9744,61 @@ persona descartó 4 de 6 propuestas de la misma reunión.
   Larce) no volvieron a salir; las dos estaban en «YA SON TAREAS».
 - **Sin SQL ni re-siembra.** Lo propuesto antes no se toca: ninguna propuesta viva repetía un tema ya descartado (medido),
   así que no hace falta limpiar.
+
+## Una reunión agendada es el siguiente paso, y «Para ti» de Customer Success en tres bloques (2026-10-19, tarde)
+
+**Contexto.** Elías: «Para ti» tiene que ser más simple para Customer Success, y aunque una cuenta tenga una sesión
+agendada para mañana, «Para ti» y «Sugerencias» seguían pidiendo definir el siguiente paso. Medido ese lunes, antes del
+cambio (con el código de producción, `af896cfd`, solo lectura): Juan Carlos Armijos veía arriba 4 cuentas en riesgo y
+«Estabilizar 12 cuentas», con 23 más en «También para hoy»; Heiver Gomez, 3 en riesgo, un compromiso y «Estabilizar 9»;
+a Liliana Moreno, «Cemaco Internacional: tiene reunión mañana, falta el siguiente paso»; y a la CSL, cinco líneas del
+vigía y 23 más abajo.
+
+- **UNA regla pura, en un solo lugar** (`siguientePasoDeLaCuenta` y `tieneSiguientePaso`, lib/mi-dia/servicio.ts): una
+  cuenta tiene siguiente paso si tiene una tarea abierta con fecha esta semana (de cualquier equipo, sin lo «Solo para
+  mí») O una reunión con ella en los próximos 8 días (en el calendario de quien la lleva, de UNA empresa por
+  `cuentaDelEvento`, o planeada en Tareas). Con las dos, el siguiente paso es la que va antes; el mismo día, la reunión.
+  La usan el inicio, la cartera de CS («Sin siguiente paso», «Para atender», «Por CSE»), «Tus cuentas», las cifras,
+  «Sugerencias» del chat (`siguientePasoDeUnaCuenta`, con el calendario de quien mira y de los encargados), el correo de
+  la mañana (que lee el inicio), «Planifica tu semana» (con una reunión en la semana, la acción es esa reunión) y el
+  espacio libre de la agenda. La lectura de la cuenta (lib/cs/lectura-de-la-cuenta.ts) no calcula el siguiente paso: no
+  hubo nada que cambiar. *Por qué:* lo calculaban por separado y cada uno decía otra cosa sobre la misma cuenta.
+- **Una cuenta con tarea y sin reunión ya no sale.** Enmienda las «Reglas de servicio» de la fase 0: la reunión en 8 días
+  deja de ser una exigencia aparte; la cartera sigue mostrando la próxima reunión.
+- **Se retira la sugerencia de crear la tarea con la reunión** (2026-10-19, mañana; `siguientePasoDeLaReunion`, la ruta
+  `/api/para-ti/siguiente-paso-de-la-reunion`, `SugerenciaDeSiguientePaso` y lib/mi-dia/paso-sugerido-server.ts). *Por
+  qué:* ya no hay nada que pedir (la reunión cuenta) y, para HubSpot, crearla duplicaba la reunión como una tarea más en
+  Tareas. Lo que se agenda con «Agendar» de Nexus ya llega a HubSpot (deja la reunión planeada, que es una tarea con
+  fecha); lo que se agenda directo en Google Calendar no escribe el siguiente paso en HubSpot, y queda dicho.
+  `SugerenciaDescartada` queda en la base sin escritor, sin DROP.
+- **«Para ti» del CSE y de la CSL: tres bloques, en este orden** (lib/para-ti/foco.ts, `armarParaTi(…, { foco })`, por
+  rol): (1) reuniones con sus cuentas de hoy y los dos días hábiles que siguen, con «Preparar» (el resumen de la cuenta);
+  (2) cuentas sin siguiente paso, con «Agendar»; (3) pendientes sin seguimiento: lo prometido al cliente que nadie tomó
+  (el aviso de las 48 horas) y las tareas vencidas de sus cuentas (`estaVencida`: abiertas, de cualquier equipo, sin lo
+  privado ni las reuniones planeadas). Todo lo demás (las cuentas en riesgo, lo que dejó un agente, las encuestas, la
+  limpieza de HubSpot, el vigía…) baja a «También para hoy» o se queda en «Esta semana». Reemplaza, para ellos, a «como
+  mucho cinco, una por cuenta» y a «Estabilizar N cuentas».
+- **Topes, para que siga siendo simple:** el CSE ve como mucho 3 por bloque; las cuentas y los pendientes que sobran bajan
+  a «También para hoy» (y el bloque de cuentas lleva «Ver las N en la cartera»), las reuniones que sobran ya están en la
+  agenda. La CSL ve UNA línea por CSE en cada bloque («Heiver Gomez: 6 cuentas sin siguiente paso»), con el enlace a
+  cada cuenta; lo de una persona que ya no está va a «Sin CSE». *Por qué:* con una línea por cuenta, a la CSL le salían
+  34 arriba.
+- **Las tres cosas salen de una medición por persona** (`CUENTAS_SIN_ACCION`, y para la CSL `CARTERA_DEL_DIA`, frente
+  «Liderar Customer Success», que solo aplica a la CSL; las fuentes de frente ahora también pueden decir que no aplican).
+  A la CSL no se le mide lo personal: lo de la cartera ya lo incluye.
+- **Ventas, la misma regla para el negocio** (`tieneSiguientePasoDeVentas`, lib/ventas/negocios.ts): el siguiente paso de
+  Ventas vigente o una reunión con la empresa del negocio en los próximos 8 días, del calendario del vendedor (de UNA
+  empresa). Con la reunión, «Para mover hoy» no pide «Definir siguiente paso», no sale la señal «Sin siguiente paso», la
+  línea dice «Siguiente paso: reunión el jue 22», una reunión en las próximas 36 horas pide «Preparar» y cuenta como algo
+  agendado (no pide «Retomar»). **No se aplicó a Ventas, y queda para decidir:** (a) los tres bloques en «Para ti» de
+  Ventas (su inicio es otro: meta, ponderado, cierres más cerca y la cartera; meterle tres bloques es rediseñarlo);
+  (b) contar la próxima actividad de HubSpot como siguiente paso (puede ser una tarea o una llamada, no siempre una
+  reunión); (c) la empresa sin negocio («Definir siguiente paso» en «Sin negocio») sigue igual: es un botón, no un
+  pendiente.
+- **Medido el 2026-10-19 (lunes, tarde), antes → después, en lo que se ve arriba** (`scripts/medir-cuentas-sin-accion.ts`,
+  solo lectura): Juan Carlos Armijos 5 → 6 (1 reunión, 3 de 13 cuentas sin siguiente paso, 2 pendientes); Heiver Gomez
+  5 → 9 (3 de 8 reuniones, 3 de 7 cuentas, 3 de 5 pendientes); Caroline Bersot 5 → 7 (3 de 4, 2, 2); Liliana Moreno 2 → 1
+  (su reunión de mañana con Cemaco: ya no sale «falta el siguiente paso»); Alexander Vanegas (CSL) 5 → 15 (4 CSE con
+  reuniones, 5 grupos de cuentas sin siguiente paso por 33 cuentas, 6 grupos de pendientes por 14), y «También para hoy»
+  de 23 a 17. Arriba hay más líneas que antes, pero son solo de las tres preguntas; en la cartera, las cuentas con la
+  reunión como siguiente paso: Juan Carlos 3, Heiver 5, Caroline 2, Liliana 2, toda la cartera 12.

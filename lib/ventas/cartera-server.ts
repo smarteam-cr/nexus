@@ -16,6 +16,9 @@ import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { portalDelSistema } from "@/lib/hubspot/registro-para-vincular";
 import { hubspotDealUrl } from "@/lib/hubspot/urls";
 import { metasPorPersona } from "./metas";
+import { calendarioDeLosProximosDias } from "@/lib/mi-dia/calendario-server";
+import { cuentaDelEvento } from "@/lib/mi-dia/agenda";
+import { DIAS_PARA_LA_REUNION } from "@/lib/mi-dia/constantes";
 import { pasosVigentes } from "@/lib/siguiente-paso/lectura-server";
 import type { SiguientePasoVisto } from "@/lib/siguiente-paso/reglas";
 import {
@@ -129,6 +132,24 @@ async function ultimasReuniones(clientIds: string[], ahora: Date): Promise<Map<s
   );
 }
 
+/**
+ * La primera reunión de cada empresa en los próximos 8 días, en el calendario del vendedor. Solo los eventos de UNA
+ * empresa (`cuentaDelEvento`, invariante 1). Sin el calendario, ninguna: el negocio se lee como antes.
+ */
+async function reunionesConLasEmpresas(email: string, ahora: Date): Promise<Map<string, { inicio: string; titulo: string }>> {
+  const out = new Map<string, { inicio: string; titulo: string }>();
+  const cal = await calendarioDeLosProximosDias(email, ahora).catch(() => null);
+  if (!cal) return out;
+  const hasta = ahora.getTime() + DIAS_PARA_LA_REUNION * 86_400_000;
+  for (const r of [...cal.reuniones].sort((a, b) => a.inicio.localeCompare(b.inicio))) {
+    const t = Date.parse(r.inicio);
+    const clientId = cuentaDelEvento(r);
+    if (!clientId || !Number.isFinite(t) || t < ahora.getTime() || t > hasta || out.has(clientId)) continue;
+    out.set(clientId, { inicio: r.inicio, titulo: r.titulo });
+  }
+  return out;
+}
+
 export async function vistaDeVentas(
   persona: { id: string; email: string },
   ahora: Date,
@@ -160,7 +181,7 @@ export async function vistaDeVentas(
   if (filas.length === 0 && propias.length === 0 && !meta) return { estado: "nada" };
 
   const clientIds = [...new Set([...filas.map((f) => f.clientId).filter((x): x is string => !!x), ...propias.map((p) => p.id)])];
-  const [reuniones, portal, copia, pasos] = await Promise.all([
+  const [reuniones, portal, copia, pasos, proximas] = await Promise.all([
     ultimasReuniones(clientIds, ahora),
     portalDelSistema().catch(() => null),
     prisma.negocioAbierto.aggregate({ _max: { sincronizadoEn: true } }),
@@ -169,6 +190,7 @@ export async function vistaDeVentas(
       ...filas.map((f) => ({ objeto: "negocio" as const, objetoId: f.id })),
       ...clientIds.map((id) => ({ objeto: "empresa" as const, objetoId: id })),
     ]),
+    reunionesConLasEmpresas(email, ahora),
   ]);
   const pasosDe = new Map<string, SiguientePasoVisto[]>();
   for (const p of pasos) {
@@ -179,6 +201,8 @@ export async function vistaDeVentas(
   const negocios = filas.map((f) => ({
     ...aNegocioVisto(f, f.clientId ? (reuniones.get(f.clientId) ?? null) : null),
     pasos: pasosDe.get(`negocio:${f.id}`) ?? [],
+    // Una reunión agendada con la empresa ES el siguiente paso del negocio (2026-10-19, lib/ventas/negocios.ts).
+    reunion: f.clientId ? (proximas.get(f.clientId) ?? null) : null,
     hubspotUrl: hubspotDealUrl(portal, f.hubspotDealId),
   }));
   const empresas = empresasDeLaCartera(

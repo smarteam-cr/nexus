@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { conQueAvanzar, huecosLibres, instante, ordenarParaAvanzar, type TareaParaUnHueco } from "./inicio";
 import { cuentaDelEvento, ocupadoDelCalendario } from "./agenda";
-import { pendienteDeCuentaSinAccion, type EstadoDeServicio } from "./servicio";
+import { pendienteDeCuentaSinPaso, type EstadoDeServicio } from "./servicio";
 import { dejaReunionPlaneada, detalleDelBorrador, reunionPlaneadaDelBorrador, type BorradorDeEvento } from "./agenda-borrador";
 
 const DIA = "2026-10-16";
@@ -92,16 +92,16 @@ describe("el resolvedor único de evento → cuenta", () => {
 });
 
 describe("«Agendar» de una cuenta sin reunión lleva hora", () => {
-  const e: EstadoDeServicio = { clientId: "c1", accion: null, reunion: null, falta: ["accion", "reunion"] };
+  const e: EstadoDeServicio = { clientId: "c1", accion: null, reunion: null, paso: null, falta: ["accion", "reunion"] };
   it("con el hueco, Google Calendar abre con la hora; sin él, como antes", () => {
-    const con = pendienteDeCuentaSinAccion({ clientId: "c1", empresa: "Acme" }, e, {
+    const con = pendienteDeCuentaSinPaso({ clientId: "c1", empresa: "Acme" }, e, {
       ultimaReunion: null,
       hoyISO: DIA,
       correo: "ana@smarteamcr.com",
       hueco: { inicio: "2026-10-19T14:00:00Z", fin: "2026-10-19T15:00:00Z" },
     });
     expect(new URL(con!.href).searchParams.get("dates")).toBe("20261019T140000Z/20261019T150000Z");
-    const sin = pendienteDeCuentaSinAccion({ clientId: "c1", empresa: "Acme" }, e, { ultimaReunion: null, hoyISO: DIA });
+    const sin = pendienteDeCuentaSinPaso({ clientId: "c1", empresa: "Acme" }, e, { ultimaReunion: null, hoyISO: DIA });
     expect(new URL(sin!.href).searchParams.get("dates")).toBeNull();
   });
 });
