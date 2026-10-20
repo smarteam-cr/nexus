@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToClient, guardCapability, guardInternalUser, guardPermission } from "@/lib/auth/api-guards";
+import { MENSAJE_SOLO_LECTURA } from "@/lib/auth/ver-como";
 import {
   COOKIE_NONCE_OAUTH,
   PATH_COOKIE_NONCE_OAUTH,
@@ -114,6 +115,8 @@ const HUBSPOT_OPTIONAL_SCOPES = [
 export async function GET(request: NextRequest) {
   const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
+  // Con «Ver como» (lib/auth/ver-como.ts) es solo lectura: no se arranca una conexión de HubSpot a nombre de otro.
+  if (guard.user.verComoDe) return NextResponse.json({ error: MENSAJE_SOLO_LECTURA, soloLectura: true }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const clientId = searchParams.get("clientId");

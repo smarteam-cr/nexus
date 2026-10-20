@@ -41,11 +41,25 @@ interface Persona {
 }
 
 /**
- * ¿`real` puede mirar como `objetivo`? Solo un SUPER_ADMIN activo, a otra persona activa del equipo que no sea
- * SUPER_ADMIN (mirar como otro admin no muestra nada distinto y confunde quién es quién). Devuelve el motivo si no.
+ * Quién puede ver como un SUPER_ADMIN (2026-10-19, prueba 148). Solo Elías: es quien prueba Nexus como Marco Salas o
+ * Alexander Arrieta, que tienen el mismo rol pero no llevan lo mismo (su meta, su cartera, sus frentes de Finanzas).
+ * Es una lista de CORREOS a propósito, no un rol ni una celda de la matriz: no se delega desde /team y nadie la gana
+ * por cambiar de rol. El correo que se compara es el de la SESIÓN (AppUser.email, de Supabase Auth), nunca uno que
+ * mande el navegador. Sumar a alguien es una línea acá, con su razón.
+ */
+const PUEDEN_VER_COMO_A_UN_SUPER_ADMIN: ReadonlySet<string> = new Set(["egonzalez@smarteamcr.com"]);
+
+/** ¿Este correo de sesión puede ver como otro Super Admin? */
+export function puedeVerComoASuperAdmin(emailDeSesion: string | null | undefined): boolean {
+  return !!emailDeSesion && PUEDEN_VER_COMO_A_UN_SUPER_ADMIN.has(emailDeSesion.trim().toLowerCase());
+}
+
+/**
+ * ¿`real` puede mirar como `objetivo`? Solo un SUPER_ADMIN activo, a otra persona activa del equipo. A otro
+ * SUPER_ADMIN, solo quien está en la lista de arriba (`real.email` es el correo de su sesión). Devuelve el motivo si no.
  */
 export function motivoParaNoVerComo(
-  real: Persona | null | undefined,
+  real: (Persona & { email?: string | null }) | null | undefined,
   objetivo: (Persona & { kind?: string | null }) | null | undefined,
 ): string | null {
   if (!real || real.roleEnum !== "SUPER_ADMIN" || real.deactivatedAt) return "Solo un Super Admin puede ver como otra persona.";
@@ -53,6 +67,6 @@ export function motivoParaNoVerComo(
   if (objetivo.kind && objetivo.kind !== "INTERNAL") return "Solo se puede ver como alguien del equipo.";
   if (objetivo.id === real.id) return "Ya eres tú.";
   if (objetivo.deactivatedAt) return "Esa persona ya no está en el equipo.";
-  if (objetivo.roleEnum === "SUPER_ADMIN") return "Otro Super Admin ve lo mismo que tú.";
+  if (objetivo.roleEnum === "SUPER_ADMIN" && !puedeVerComoASuperAdmin(real.email)) return "Otro Super Admin ve lo mismo que tú.";
   return null;
 }

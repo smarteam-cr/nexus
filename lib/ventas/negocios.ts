@@ -566,3 +566,6 @@ export function fechaLarga(fechaISO: string): string {
 export function saludo(horaCR: number): string {
   return horaCR < 12 ? "Buenos días" : horaCR < 19 ? "Buenas tardes" : "Buenas noches";
 }
+
+/** Lo que dice la tarjeta «Tu meta» a quien tiene cartera de Ventas y no tiene una meta de ventas en HubSpot (2026-10-19). */
+export const SIN_META = "Aún no tienes una meta configurada.";

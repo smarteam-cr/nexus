@@ -67,8 +67,9 @@ async function identidadVista(real: AppUserWithTeamMember): Promise<AppUserWithT
     where: { teamMemberId: elegido },
     include: { teamMember: true },
   });
+  // El correo que decide si puede mirar a otro Super Admin es el de la SESIÓN (AppUser.email), no el del TeamMember.
   const motivo = motivoParaNoVerComo(
-    real.teamMember,
+    { ...real.teamMember, email: real.email },
     objetivo?.teamMember ? { ...objetivo.teamMember, kind: objetivo.kind } : null,
   );
   if (motivo || !objetivo) return real;

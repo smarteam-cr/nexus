@@ -40,6 +40,9 @@ export async function GET(request: NextRequest) {
   } catch {
     return salir("/?error=not_member");
   }
+  // Con «Ver como» (lib/auth/ver-como.ts) es solo lectura: el callback es un GET y conectaría HubSpot a nombre de la
+  // persona mirada. El middleware solo corta los métodos que escriben, así que se corta acá.
+  if (ctx.user.verComoDe) return salir("/integrations?error=forbidden");
 
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
