@@ -7,6 +7,7 @@
  *   - `platformLogos`   → HubSpot / Insider One según los tags (chip legacy)
  *   - `smarteamLogoUrl` → logo de Smarteam (config global)
  *   - `brandLogos`      → mapa nombre→logo para pintar marcas de texto como imagen
+ *   - `recurrent`       → la píldora «Servicio de continuidad» (misma regla que kickoff-view.ts)
  *   - `clientId` / `clientName` → subir el logo (`POST /api/clients/[id]/logo`) y
  *     derivar los defaults de la brand-row.
  *
@@ -16,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getBrandLogos, platformLogosFor } from "@/lib/external/smarteam-logo";
+import { RECURRENTE_TAG } from "@/lib/tags/catalog";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -39,6 +41,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
     logoDarkUrl: client?.logoDarkUrl ?? null,
     logoScale: client?.logoScale ?? null,
     platformLogos: platformLogosFor(project?.tags ?? [], brandLogos),
+    // La píldora «Servicio de continuidad»: el editor la muestra igual que la vista del cliente.
+    recurrent: (project?.tags ?? []).includes(RECURRENTE_TAG),
     smarteamLogoUrl: brandLogos.smarteam ?? null,
     brandLogos,
   });

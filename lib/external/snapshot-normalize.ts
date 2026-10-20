@@ -79,6 +79,9 @@ function normalizeSection(raw: unknown): SnapshotSection | null {
 export function normalizeKickoffSnapshot(raw: unknown): {
   sections: SnapshotSection[];
   procesos: Array<Record<string, unknown> & { id: string }>;
+  /** La fila de datos de la portada al «Subir» (lib/kickoff/datos-de-la-portada.ts). Sin saneo acá:
+   *  lo hace `normalizarPortadaCongelada`, que es quien sabe su forma. Ausente en snapshots viejos. */
+  portada?: unknown;
 } | null {
   if (!isObj(raw)) return null;
   const sections = Array.isArray(raw.sections)
@@ -89,7 +92,7 @@ export function normalizeKickoffSnapshot(raw: unknown): {
         (p): p is Record<string, unknown> & { id: string } => isObj(p) && typeof p.id === "string",
       )
     : [];
-  return { sections, procesos };
+  return { sections, procesos, ...(raw.portada !== undefined ? { portada: raw.portada } : {}) };
 }
 
 /**

@@ -12,17 +12,12 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { DayPicker } from "react-day-picker";
 import { es } from "react-day-picker/locale";
 import { MONTHS } from "@/lib/timeline/weeks";
+import { fechaLocalDeYmd, ymdDeFechaLocal } from "@/lib/timeline/fecha-de-arranque";
 
-function ymdToDate(ymd: string): Date | undefined {
-  if (!ymd) return undefined;
-  const [y, m, d] = ymd.split("-").map(Number);
-  if (!y || !m || !d) return undefined;
-  return new Date(y, m - 1, d); // local, sin corrimiento de zona horaria
-}
-function dateToYmd(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+/* Local, sin corrimiento de zona horaria. ⚠ NO `new Date(y, m - 1, d)`: con un año de dos cifras
+   (el 26 que dejó un tipeo a medias) da 1926 — los «años 1900» del cronograma (2026-10-20). */
+const ymdToDate = (ymd: string): Date | undefined => (ymd ? fechaLocalDeYmd(ymd) : undefined);
+const dateToYmd = ymdDeFechaLocal;
 function fmtLabel(d: Date): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }

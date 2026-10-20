@@ -26,7 +26,7 @@ import dynamic from "next/dynamic";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "@/components/landing/inline";
 import { SortableItems } from "@/components/landing/sortable";
 import { CardGrid } from "@/components/landing/card-grid";
-import { HeroUploadButtons, BrandRow, TagRow, HeroStat, HeroStatEditable, HeroStatFecha } from "@/components/landing/hero-parts";
+import { HeroUploadButtons, BrandRow, TagRow, HeroStatFecha, FilaDeDatos } from "@/components/landing/hero-parts";
 import { CtaEditor, CtaButton } from "@/components/landing/sections";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import { landingLang, t } from "@/components/landing/i18n";
@@ -36,7 +36,15 @@ import { IconCheck } from "@/components/ui/AcceptReject";
 import { DiagramStatic } from "@/components/landing/diagram-static";
 import { DiagramaResponsive } from "@/components/landing/diagram-responsive";
 import TimelineSection from "@/components/canvas/TimelineSection";
-import { timelineSpan, fmtFull } from "@/lib/timeline/weeks";
+import { fmtFull } from "@/lib/timeline/weeks";
+import { arranqueSugerido, ymdDeFechaLocal } from "@/lib/timeline/fecha-de-arranque";
+import {
+  cronogramaParaLaFila,
+  cronogramaVacio,
+  datosEfectivos,
+  plegarMetricas,
+  resolverDatos,
+} from "@/lib/kickoff/datos-de-la-portada";
 import type { FlowchartData } from "@/components/flowchart/FlowchartViewer";
 import type { KickoffProceso } from "@/lib/external/kickoff-view-types";
 import {
@@ -161,7 +169,7 @@ export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editabl
 // Compuesto con las MISMAS primitivas que el hero del Business Case
 // (`components/landing/hero-parts.tsx`): portada, logo del cliente, brand-row
 // arrastrable y chips de tags. Diferencias del kickoff: centrado, con eyebrow, y
-// con 3 stats DERIVADOS del cronograma (no editables — fuente única: ProjectTimeline).
+// con la fila de datos clave (lib/kickoff/datos-de-la-portada.ts).
 export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({
   data, ctx, editable, onChange, sectionTitle, sectionEyebrow,
 }) => {
@@ -175,15 +183,36 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({
     onChange?.({ ...clean, ...next });
   };
 
-  const phases = ctx.kickoff?.timeline?.phases ?? [];
-  const totalWeeks = timelineSpan(phases);
   const lang = landingLang(ctx.lang);
-  const startLabel = ctx.kickoff?.timeline?.anchorStartDate ? fmtFull(ctx.kickoff.timeline.anchorStartDate) : t(lang, "porDefinir");
+  /* De dónde salen los números de la fila: el cronograma que esta superficie puede ver (el vivo en el
+     editor y el PDF, el publicado en la vista del cliente) y, si ese no aporta nada, la portada que se
+     congeló al «Subir» (cronograma sin publicar u oculto del kickoff). Así el cliente ve los números
+     que el CSE vio, y no una fila vacía. */
+  const cronoVisible = cronogramaParaLaFila(ctx.kickoff?.timeline);
+  const cronoDeLaFila = cronogramaVacio(cronoVisible) && ctx.kickoff?.portada ? ctx.kickoff.portada : cronoVisible;
+  const datos = datosEfectivos(d);
+  const resueltos = resolverDatos(
+    datos,
+    cronoDeLaFila,
+    {
+      duracion: t(lang, "duracionTotal"),
+      arranque: t(lang, "arranque"),
+      fases: t(lang, "hojaDeRuta"),
+      semanas: t(lang, "semanas"),
+      fase: t(lang, "fase"),
+      fasesPlural: t(lang, "fases"),
+      porDefinir: t(lang, "porDefinir"),
+    },
+    fmtFull,
+  );
+  // Sin arranque, el calendario PROPONE la reunión de kickoff (o hoy). Proponer no escribe.
+  const sugerida = ctx.kickoff?.onSetArranque
+    ? arranqueSugerido(ctx.kickoff.arranqueDeLaReunion, ymdDeFechaLocal(new Date()))
+    : null;
 
   // El respaldo sale del documento (rótulo declarado en su definición), no de un texto
   // escrito acá: es lo que impide que una portada le preste su identidad a otra.
   const eyebrow = d.eyebrow?.trim() || (sectionEyebrow ?? "").trim();
-  const conMetricaEscrita = !!(d.metricaDuracion?.trim() || d.metricaArranque?.trim() || d.metricaFases?.trim());
   const { titulo, bajada } = resolveHeroTitle({
     escrito: d.titulo, titular: d.headline, rotulo: sectionTitle,
   });
@@ -247,65 +276,39 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({
             placeholder="Hub / integración / alcance…" />
         </div>
       )}
-      {/* ⭐ Stats HÍBRIDOS: salen del cronograma, y lo escrito a mano (o por chat) los pisa.
-          Antes eran solo derivados —para que no pudieran mentir— pero eso también hacía que
-          «poné 14 semanas en la portada» no tuviera dónde aterrizar, y el chat terminaba
-          escribiendo en el campo más parecido que sí veía.
-          ⚠ El override reemplaza el par ENTERO: con «3 meses» sobre la unidad «semanas», la
-          portada diría «3 meses semanas». Vaciarlo devuelve el número vivo del cronograma.
-          ⚠ El gate acepta que HAYA una métrica escrita: un proyecto sin cronograma todavía puede
-          querer anunciar su duración. */}
-      {/* ⭐ EDICIÓN A MANO (2026-10-02): duración y fases se escriben acá mismo (vaciarlas devuelve el
-          número del cronograma), y la fecha de arranque es un SELECTOR que mueve el ancla del
-          cronograma — una sola fecha para el kickoff, el cronograma y el enlace del cliente. Antes
-          solo el chat podía tocarlas, y escribía un texto encima de la fecha real. */}
-      {canEdit && (phases.length > 0 || ctx.kickoff?.onSetArranque) && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 32, justifyContent: "center", marginTop: 38 }}>
-          <HeroStatEditable
-            value={d.metricaDuracion ?? ""}
-            placeholder={phases.length > 0 ? `${totalWeeks} ${t(lang, "semanas")}` : "Duración"}
-            label={t(lang, "duracionTotal")}
-            onCommit={(v) => set({ metricaDuracion: v.trim() || undefined })}
-          />
-          {ctx.kickoff?.onSetArranque ? (
-            <HeroStatFecha
-              valor={ctx.kickoff.timeline?.anchorStartDate?.slice(0, 10) ?? null}
-              etiqueta={startLabel}
-              label={t(lang, "arranque")}
-              onCambiar={async (ymd) => {
-                await ctx.kickoff!.onSetArranque!(ymd);
-                // La fecha real manda: un texto escrito antes (por chat) dejaría de coincidir.
-                if (d.metricaArranque?.trim()) set({ metricaArranque: undefined });
-              }}
-            />
-          ) : (
-            <HeroStat value={d.metricaArranque?.trim() || startLabel} label={t(lang, "arranque")} />
-          )}
-          <HeroStatEditable
-            value={d.metricaFases ?? ""}
-            placeholder={phases.length > 0 ? `${phases.length} ${t(lang, phases.length === 1 ? "fase" : "fases")}` : "Fases"}
-            label={t(lang, "hojaDeRuta")}
-            onCommit={(v) => set({ metricaFases: v.trim() || undefined })}
-          />
-        </div>
-      )}
-      {!canEdit && (phases.length > 0 || conMetricaEscrita) && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 32, justifyContent: "center", marginTop: 38 }}>
-          {d.metricaDuracion?.trim() ? (
-            <HeroStat value={d.metricaDuracion} label={t(lang, "duracionTotal")} />
-          ) : (
-            phases.length > 0 && <HeroStat value={String(totalWeeks)} unit={t(lang, "semanas")} label={t(lang, "duracionTotal")} />
-          )}
-          <HeroStat value={d.metricaArranque?.trim() || startLabel} label={t(lang, "arranque")} />
-          {d.metricaFases?.trim() ? (
-            <HeroStat value={d.metricaFases} label={t(lang, "hojaDeRuta")} />
-          ) : (
-            phases.length > 0 && (
-              <HeroStat value={String(phases.length)} unit={t(lang, phases.length === 1 ? "fase" : "fases")} label={t(lang, "hojaDeRuta")} />
-            )
-          )}
-        </div>
-      )}
+      {/* ⭐ La FILA DE DATOS CLAVE (2026-10-20): una lista que se edita como las etiquetas —agregar
+          «3 integraciones», quitar el que no aplica, editar texto y rótulo, reordenar—, con los
+          tres de siempre (duración, arranque, fases) saliendo del cronograma mientras nadie los
+          pise. La lógica vive en lib/kickoff/datos-de-la-portada.ts; el número de arranque es el
+          calendario que mueve el ancla del cronograma (una sola fecha para el kickoff, el
+          cronograma y el enlace del cliente).
+          El editor, la vista del cliente y el PDF pasan por este mismo bloque: lo que cambia es de
+          dónde salen los números (`cronoDeLaFila`), no cómo se pintan. */}
+      {/* Un hero heredado (markdown) es de solo lectura, pero conserva su fila: la vista del cliente
+          de los kickoffs viejos siempre la mostró. */}
+      <FilaDeDatos
+        datos={datos}
+        resueltos={resueltos}
+        editable={canEdit}
+        onChange={(next) => set(plegarMetricas(next))}
+        fecha={
+          ctx.kickoff?.onSetArranque
+            ? (r) => (
+                <HeroStatFecha
+                  valor={ctx.kickoff?.timeline?.anchorStartDate?.slice(0, 10) ?? null}
+                  etiqueta={r.valor}
+                  sugerida={sugerida}
+                  onCambiar={async (ymd) => {
+                    await ctx.kickoff!.onSetArranque!(ymd);
+                    // La fecha real manda: un texto escrito antes (a mano o por chat) dejaría de coincidir.
+                    const conTexto = datos.some((x) => x.fuente === "arranque" && x.valor?.trim());
+                    if (conTexto) set(plegarMetricas(datos.map((x) => (x.fuente === "arranque" ? { ...x, valor: "" } : x))));
+                  }}
+                />
+              )
+            : undefined
+        }
+      />
     </div>
   );
 };

@@ -10006,3 +10006,34 @@ frentes de Finanzas), y Elías necesita probar lo que ven (prueba 148).
   de Nexus y sus avisos, como ya pasaba al mirar a cualquier otra persona. La huella es una línea en el log del servidor
   (`[ver-como] … mira Nexus como …`).
 
+
+## La portada del kickoff: fila de datos editable, fecha por calendario y el oculto en el canvas (2026-10-20)
+
+Salió de revisar el kickoff y el cronograma de Cayalá con Valentina. El código: `lib/kickoff/datos-de-la-portada.ts`,
+`lib/kickoff/ocultas-del-editor.ts`, `lib/timeline/fecha-de-arranque.ts`.
+
+- **La fecha de arranque se elige en un CALENDARIO, nunca tecleada.** El `<input type="date">` de la portada guardaba en
+  cada cambio: escribir «2026» pasaba por los años 0002, 0020 y 0026, y cada uno se guardaba en `anchorStartDate`
+  (Cemaco el 5 oct, Spectrum el 12, Cayalá el 15: dos días con el arranque en el año 26 y todas sus tareas vencidas).
+  Los «años 1900» eran la misma fecha leída con `new Date(26, 9, 19)`. El servidor rechaza todo año fuera de 2000–2100
+  (la ruta de la portada y el PUT del Gantt), y los calendarios convierten sin pasar por 19xx.
+- **Sin arranque, la portada PROPONE la reunión de kickoff (o hoy) y la escribe solo con el clic** en «Usar el …» o en
+  un día. Es la misma fecha que propone el handoff (`getKickoffSessionDate`). Sigue en pie «La fecha estimada de
+  arranque nunca se escribe en anchorStartDate» (KNOWN-ERRORS).
+- **La fila de datos clave es una lista (`data.datos` del hero), fuera del esquema del agente**: se agrega, se quita, se
+  reordena y se editan texto y rótulo. Los tres de siempre (duración, arranque, fases) llevan `fuente` y salen del
+  cronograma mientras su texto esté vacío, la misma regla híbrida de las `metrica*` (2026-08-22). El chat sigue
+  escribiendo `metrica*`: una métrica escrita gana sobre el texto del dato, y cada edición de la fila la pliega adentro
+  y la borra, así gana la última escritura. Ausente = los tres de siempre; `[]` = el CSE los quitó todos.
+- **El cliente ve en la portada los números que el CSE vio al «Subir».** El snapshot del kickoff congela `portada`
+  (semanas, fases, arranque, del cronograma vivo). La vista del cliente usa el cronograma publicado cuando aporta
+  algo y, si no (nunca se subió, u oculto del kickoff), la portada congelada. Antes, con el cronograma sin publicar, el
+  cliente no veía ninguna fecha aunque la portada interna la mostrara. Publicar el cronograma por primera vez sigue
+  siendo un acto del cronograma (congela la línea base): «Subir» el kickoff no lo hace.
+- **El ojo del kickoff guarda en el canvas en cada clic; el cliente cambia recién al «Subir».** Antes el set vivía en el
+  navegador hasta subir, y una sección oculta sin subir reaparecía al recargar. Ahora hay dos sets: `Project.
+  hiddenKickoffKeys` (lo que el cliente no ve, solo cambia al subir) y la entry reservada `__ocultas` del Json del
+  canvas (lo que el CSE tiene oculto, sin SQL, mismo contrato que `__doc` y `__cuestionarios`). La entry existe solo
+  mientras difiere de lo publicado. El PDF lee el set del editor. El chat todavía no puede ocultar en el kickoff
+  (`puedeOcultar: false`): unificarlo con el verbo genérico sigue pendiente.
+- **La píldora «Servicio de continuidad» también se ve en el editor**: antes solo la veía el cliente.

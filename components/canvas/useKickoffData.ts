@@ -11,10 +11,12 @@
  * Nació extraída del renderer legacy KickoffLandingInternal (borrado en la Ola 4
  * del plan de puestos) — hoy KickoffWorkspace es su único consumidor.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useCanvasSections } from "./useCanvasSections";
 import type { KickoffTimelineData, KickoffPhase, KickoffProceso } from "@/lib/external/kickoff-view-types";
 import { assign, type HorarioAssignments } from "@/lib/kickoff/horario-assignments";
+import { ocultasEnElEditor } from "@/lib/kickoff/ocultas-del-editor";
+import { ymdDeFechaLocal } from "@/lib/timeline/fecha-de-arranque";
 
 export function useKickoffData(projectId: string, canvasId: string) {
   // D.3 staging — contenido editado tras el último "Subir". setContentDirty(true) por el
@@ -29,14 +31,21 @@ export function useKickoffData(projectId: string, canvasId: string) {
   const [clientLogoDarkUrl, setClientLogoDarkUrl] = useState<string | null>(null);
   const [clientLogoScale, setClientLogoScale] = useState<number | null>(null);
   const [platformLogos, setPlatformLogos] = useState<string[]>([]);
+  const [recurrent, setRecurrent] = useState(false);
   // Datos de marca del hero (mismas piezas que el hero del Business Case).
   const [clientId, setClientId] = useState<string | null>(null);
   const [clientName, setClientName] = useState<string>("");
   const [smarteamLogoUrl, setSmarteamLogoUrl] = useState<string | null>(null);
   const [brandLogos, setBrandLogos] = useState<Record<string, string>>({});
   const [procesos, setProcesos] = useState<KickoffProceso[]>([]);
-  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set()); // edición LOCAL (staged)
-  const [savedHiddenKeys, setSavedHiddenKeys] = useState<Set<string>>(new Set()); // baseline persistido
+  // Lo oculto EN EL CANVAS (se guarda en cada clic) y lo oculto PARA EL CLIENTE (cambia al «Subir»).
+  // Ver lib/kickoff/ocultas-del-editor.ts: antes el primero vivía solo acá y se perdía al recargar.
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+  const [savedHiddenKeys, setSavedHiddenKeys] = useState<Set<string>>(new Set()); // lo publicado
+  const hiddenKeysRef = useRef<Set<string>>(new Set());
+  const guardadoDeOcultas = useRef<Promise<unknown>>(Promise.resolve());
+  // La reunión de kickoff (AAAA-MM-DD local): la portada la PROPONE como arranque si no hay.
+  const [arranqueDeLaReunion, setArranqueDeLaReunion] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   // Overlay VIVO de la asignación franja→sesión (lo escriben el CSE y el cliente). NO es
   // staged: se guarda al instante y no participa de "Subir al cliente". `null` = todavía
@@ -48,6 +57,7 @@ export function useKickoffData(projectId: string, canvasId: string) {
   const [cronogramaSinSubir, setCronogramaSinSubir] = useState(false);
   const [cronogramaSinPublicar, setCronogramaSinPublicar] = useState(false);
   const [avisoCronograma, setAvisoCronograma] = useState<string | null>(null);
+  const [avisoOcultas, setAvisoOcultas] = useState<string | null>(null);
 
   // Procesos del cliente (diagramas) — el preview interno los muestra todos.
   useEffect(() => {
@@ -57,11 +67,18 @@ export function useKickoffData(projectId: string, canvasId: string) {
       .catch(() => setProcesos([]));
   }, [projectId]);
 
-  // #3 — set de claves ocultas del kickoff.
+  // #3 — claves ocultas: el editor arranca de SU borrador (si lo tiene), no de lo publicado.
   useEffect(() => {
     fetch(`/api/projects/${projectId}/kickoff-visibility`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { const s = new Set<string>(d?.hiddenKeys ?? []); setHiddenKeys(s); setSavedHiddenKeys(s); })
+      .then((d) => {
+        const publicadas: string[] = Array.isArray(d?.hiddenKeys) ? d.hiddenKeys : [];
+        const borrador: string[] | null = Array.isArray(d?.borrador) ? d.borrador : null;
+        const enElEditor = new Set(ocultasEnElEditor(publicadas, borrador));
+        hiddenKeysRef.current = enElEditor;
+        setHiddenKeys(enElEditor);
+        setSavedHiddenKeys(new Set(publicadas));
+      })
       .catch(() => { setHiddenKeys(new Set()); setSavedHiddenKeys(new Set()); });
   }, [projectId]);
 
@@ -94,6 +111,7 @@ export function useKickoffData(projectId: string, canvasId: string) {
         setClientLogoDarkUrl(d?.logoDarkUrl ?? null);
         setClientLogoScale(typeof d?.logoScale === "number" ? d.logoScale : null);
         setPlatformLogos(Array.isArray(d?.platformLogos) ? d.platformLogos : []);
+        setRecurrent(d?.recurrent === true);
         setClientId(typeof d?.clientId === "string" ? d.clientId : null);
         setClientName(typeof d?.clientName === "string" ? d.clientName : "");
         setSmarteamLogoUrl(d?.smarteamLogoUrl ?? null);
@@ -109,6 +127,9 @@ export function useKickoffData(projectId: string, canvasId: string) {
     fetch(`/api/projects/${projectId}/timeline`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
+        // La reunión de kickoff viene en el mismo GET (`kickoffSessionDate`); se pasa a día LOCAL.
+        const reunion = typeof d?.kickoffSessionDate === "string" ? new Date(d.kickoffSessionDate) : null;
+        setArranqueDeLaReunion(reunion && !Number.isNaN(reunion.getTime()) ? ymdDeFechaLocal(reunion) : null);
         if (!d || !d.exists) {
           setTimeline({ exists: false, anchorStartDate: null, phases: [] });
           return;
@@ -137,16 +158,35 @@ export function useKickoffData(projectId: string, canvasId: string) {
       .catch(() => setTimeline({ exists: false, anchorStartDate: null, phases: [] }));
   }, [projectId]);
 
-  // STAGED: el toggle solo cambia el set LOCAL; se persiste al "Subir". Memoizado
-  // (es dep del ctx que consume KickoffWorkspace) → evita recrear ctx cada render.
-  const toggleHidden = useCallback((key: string, hidden: boolean) => {
-    setHiddenKeys((prev) => {
-      const n = new Set(prev);
+  /**
+   * El ojo: cambia el set del CANVAS y lo GUARDA al instante (entry `__ocultas`); el cliente sigue
+   * viendo lo publicado hasta «Subir». Los guardados van en fila: dos clics rápidos no pueden llegar
+   * al revés y dejar guardado el penúltimo. Memoizado (es dep del ctx que consume KickoffWorkspace).
+   */
+  const toggleHidden = useCallback(
+    (key: string, hidden: boolean) => {
+      const n = new Set(hiddenKeysRef.current);
       if (hidden) n.add(key);
       else n.delete(key);
-      return n;
-    });
-  }, []);
+      hiddenKeysRef.current = n;
+      setHiddenKeys(n);
+      const borrador = [...n];
+      guardadoDeOcultas.current = guardadoDeOcultas.current
+        .catch(() => {})
+        .then(() =>
+          fetch(`/api/projects/${projectId}/kickoff-visibility`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ borrador }),
+          }),
+        )
+        .then((r) => {
+          if (!r.ok) setAvisoOcultas("No se pudo guardar lo que ocultaste: recarga la página y vuelve a intentarlo.");
+        })
+        .catch(() => setAvisoOcultas("No se pudo guardar lo que ocultaste: revisa tu conexión y vuelve a intentarlo."));
+    },
+    [projectId],
+  );
 
   const visibilityDirty =
     hiddenKeys.size !== savedHiddenKeys.size || [...hiddenKeys].some((k) => !savedHiddenKeys.has(k));
@@ -222,6 +262,8 @@ export function useKickoffData(projectId: string, canvasId: string) {
       // el último `saveBlock` no está awaiteado por onSectionChange, así que publicar apenas
       // se comitea un campo congelaría un snapshot SIN ese cambio.
       await cs.flushPending();
+      // Y el último clic del ojo, si todavía viaja: «Subir» manda el set completo de todos modos.
+      await guardadoDeOcultas.current.catch(() => {});
       const drafts = procesos.filter((p) => p.status === "DRAFT");
       await Promise.all(
         drafts.map((p) =>
@@ -244,6 +286,7 @@ export function useKickoffData(projectId: string, canvasId: string) {
       if (res.ok) {
         const d = await res.json();
         const s = new Set<string>(d?.hiddenKeys ?? keys);
+        hiddenKeysRef.current = s;
         setHiddenKeys(s);
         setSavedHiddenKeys(s);
       }
@@ -280,6 +323,7 @@ export function useKickoffData(projectId: string, canvasId: string) {
     clientLogoScale,
     setClientLogoScale,
     platformLogos,
+    recurrent,
     clientId,
     clientName,
     smarteamLogoUrl,
@@ -301,11 +345,13 @@ export function useKickoffData(projectId: string, canvasId: string) {
     cronogramaSinSubir,
     cronogramaSinPublicar,
     cambiarArranque,
-    // El aviso del cronograma comparte la franja de error del documento.
-    error: cs.error ?? avisoCronograma,
+    arranqueDeLaReunion,
+    // Los avisos del cronograma y del ojo comparten la franja de error del documento.
+    error: cs.error ?? avisoCronograma ?? avisoOcultas,
     clearError: () => {
       cs.clearError();
       setAvisoCronograma(null);
+      setAvisoOcultas(null);
     },
   };
 }

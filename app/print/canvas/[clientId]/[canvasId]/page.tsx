@@ -6,6 +6,7 @@ import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { kickoffHiddenKey } from "@/components/canvas/kickoff-landing-adapter";
+import { ocultasDelBorrador, ocultasEnElEditor } from "@/lib/kickoff/ocultas-del-editor";
 import PrintClient, { type CanvasPrintData } from "./PrintClient";
 
 export const dynamic = "force-dynamic";
@@ -204,7 +205,8 @@ export default async function CanvasPrintPage({
       prisma.project.findUnique({ where: { id: projectId }, select: { hiddenKickoffKeys: true } }),
     ]);
     const ocultasPorKey = hiddenKeysFrom(canvasJson?.sections);
-    const ocultasKickoff = new Set(proyecto?.hiddenKickoffKeys ?? []);
+    // Kickoff: lo que el editor tiene oculto (su borrador `__ocultas`, o lo publicado si no hay).
+    const ocultasKickoff = new Set(ocultasEnElEditor(proyecto?.hiddenKickoffKeys ?? [], ocultasDelBorrador(canvasJson?.sections)));
 
     // Canvas custom → CanvasSection + CanvasBlock
     const dbSections = await prisma.canvasSection.findMany({

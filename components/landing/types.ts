@@ -10,7 +10,7 @@
  * matcheada por `key` contra CanvasSection.key) — NO por el enum BlockType.
  */
 import type { FC } from "react";
-import type { KickoffTimelineData, KickoffProceso } from "@/lib/external/kickoff-view-types";
+import type { KickoffTimelineData, KickoffProceso, KickoffPortadaCongelada } from "@/lib/external/kickoff-view-types";
 import type { LandingStringKey } from "./i18n";
 
 // ── Datos estructurados por sección (lo que llena el agente) ─────────────────
@@ -378,6 +378,17 @@ export interface LandingContext {
    *  `ctxDriven` (cronograma/procesos) y el hero (Stats) los leen de acá. Ausente en BC. */
   kickoff?: {
     timeline?: KickoffTimelineData | null;
+    /**
+     * La fila de datos de la portada congelada al «Subir» (snapshot del kickoff). Solo la vista del
+     * cliente: el hero la usa cuando `timeline` no aporta nada (cronograma sin publicar u oculto del
+     * kickoff), para que el cliente vea los números que el CSE vio. Ver lib/kickoff/datos-de-la-portada.ts.
+     */
+    portada?: KickoffPortadaCongelada | null;
+    /**
+     * Solo el editor: la reunión de kickoff del proyecto (AAAA-MM-DD local) — el calendario de la
+     * portada la PROPONE cuando no hay arranque. Proponer no escribe (docs/KNOWN-ERRORS.md).
+     */
+    arranqueDeLaReunion?: string | null;
     procesos?: KickoffProceso[];
     /** Logos de plataforma (HubSpot/Insider) para el chip del hero. */
     platformLogos?: string[];

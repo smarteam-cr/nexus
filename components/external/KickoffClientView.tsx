@@ -15,6 +15,7 @@
 import LandingView from "@/components/landing/LandingView";
 import { buildKickoffConfig, buildKickoffSections, missingCtxSections } from "@/components/canvas/kickoff-landing-adapter";
 import type { KickoffLandingData } from "@/lib/external/kickoff-view-types";
+import { AvisoDeContinuidad } from "@/components/canvas/kickoff-sections/AvisoDeContinuidad";
 
 export type AssignHorarioResult = { ok: true } | { ok: false; error: string };
 
@@ -52,11 +53,7 @@ export default function KickoffClientView({
     <div className="relative">
       {/* Servicio recurrente (tag `recurrente` del handoff): badge sutil client-facing.
           El CSE lo saca quitando el tag del proyecto en el editor. Texto amable — no "recurrente". */}
-      {data.recurrent && (
-        <div className="absolute top-3 right-3 z-20 rounded-full border border-teal-200 bg-teal-50/90 px-3 py-1 text-[11px] font-medium text-teal-700 shadow-sm backdrop-blur">
-          Servicio de continuidad
-        </div>
-      )}
+      {data.recurrent && <AvisoDeContinuidad />}
       <LandingView
         config={config}
         ctx={{
@@ -70,6 +67,8 @@ export default function KickoffClientView({
           // botones de Portada / Logo (solo se renderizan en modo edición).
           kickoff: {
             timeline: data.timeline,
+            // Los números de la portada al «Subir»: el hero los usa si el cronograma visible no aporta.
+            portada: data.portada ?? null,
             procesos: data.procesos,
             platformLogos: data.platformLogos,
             // Única escritura habilitada para el cliente: elegir su franja horaria.

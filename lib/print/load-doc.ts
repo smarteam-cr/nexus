@@ -34,7 +34,9 @@ import {
 import { applyAssignments, normalizeAssignments, HORARIOS_KEY } from "@/lib/kickoff/horario-assignments";
 import { readClientTimeline } from "@/lib/external/timeline-view";
 import { readClientProcesos } from "@/lib/canvas/read-procesos";
-import type { KickoffTimelineData, KickoffProceso } from "@/lib/external/kickoff-view-types";
+import type { KickoffTimelineData, KickoffProceso, KickoffPortadaCongelada } from "@/lib/external/kickoff-view-types";
+import { cronogramaParaLaFila } from "@/lib/kickoff/datos-de-la-portada";
+import { ocultasDelBorrador, ocultasEnElEditor } from "@/lib/kickoff/ocultas-del-editor";
 import type { CtxDelDiagnostico } from "@/components/landing/types";
 import { resultadosDelProyecto } from "@/lib/handoff/resultados";
 import { estadoDelDocumento } from "@/lib/canvas/estado-del-documento-servidor";
@@ -97,6 +99,8 @@ export interface PrintDocPayload {
      *  flowcharts de procesos). Ausente en los demás tipos. */
     kickoff?: {
       timeline: KickoffTimelineData | null;
+      /** La fila de datos de la portada, del cronograma vivo aunque la sección esté oculta. */
+      portada?: KickoffPortadaCongelada | null;
       procesos: KickoffProceso[];
     };
     /** Solo CRONOGRAMA: el ProjectTimeline vivo. Ausente en los demás tipos. */
@@ -221,13 +225,13 @@ export async function loadPrintDoc(
      cuya clave es el id de la sección salvo cronograma y procesos. Se leen las dos, así el
      día que un tipo estrene visibilidad no hay que acordarse de este archivo. */
   const ocultasPorKey = hiddenKeysFrom(canvas?.sections);
-  /* A lo guardado se le SUMA lo que el editor tiene oculto en pantalla y todavía no subió.
-     El ojo del kickoff es `staged`: vive en el navegador hasta "Subir al cliente", así que
-     sin esto ocultabas una sección, exportabas, y salía igual. Solo SUMA —nunca revela— y
-     por eso no abre nada: lo que el servidor ya considera oculto sigue oculto.
+  /* Lo que el EDITOR tiene oculto: su borrador guardado en el canvas (`__ocultas`, desde el
+     2026-10-20 se guarda en cada clic del ojo) o, sin borrador, lo publicado. El PDF es lo que el CSE
+     ve, no lo que el cliente ve (ARCHITECTURE §1-WEB punto 6). A eso se le SUMA lo que la pantalla
+     manda (`ocultasEnPantalla`) para el clic que todavía viaja; eso solo suma, nunca revela.
      Ver components/print/PrintStaging.tsx. */
   const ocultasKickoff = new Set([
-    ...(proyecto.hiddenKickoffKeys ?? []),
+    ...ocultasEnElEditor(proyecto.hiddenKickoffKeys ?? [], ocultasDelBorrador(canvas?.sections)),
     ...(opts?.ocultasEnPantalla ?? []),
   ]);
 
@@ -267,9 +271,14 @@ export async function loadPrintDoc(
      ⚠ El instinto para el DOCUMENTO del cronograma es usar la publicada, porque es lo que ve
      el cliente en su link. No: acá también manda el contenido vivo — el CSE descarga el PDF
      para revisarlo ANTES de subirlo, igual que con los demás documentos del motor. */
+  /* El cronograma vivo se lee UNA vez: la sección (que se apaga si está oculta) y la fila de datos de la
+     portada (que no: ocultar el cronograma del kickoff no le borra los números a la portada, igual que
+     en el editor — ARCHITECTURE §1-WEB punto 6). */
+  const cronogramaVivo = esKickoff ? await readClientTimeline(docId) : null;
   const kickoff = esKickoff
     ? {
-        timeline: ocultasKickoff.has("cronograma") ? null : await readClientTimeline(docId),
+        timeline: ocultasKickoff.has("cronograma") ? null : cronogramaVivo,
+        portada: cronogramaParaLaFila(cronogramaVivo),
         procesos: ocultasKickoff.has("procesos")
           ? []
           : (await readClientProcesos(proyecto.clientId, { onlyConfirmed: true })).filter(
