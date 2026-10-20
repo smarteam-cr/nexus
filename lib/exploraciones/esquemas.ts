@@ -78,12 +78,16 @@ import {
 } from "./guia";
 import { PASOS_DE_LA_PREGUNTA } from "./plan-de-la-guia";
 import {
+  LARGO_DE_UN_OBJETIVO,
   LARGO_DE_UNA_CLAVE,
   LARGO_DE_UNA_PREGUNTA,
   LARGO_DE_UNA_REPREGUNTA,
   MAX_CAMBIOS_DE_LA_GUIA,
+  MAX_DESCARTADAS_DEL_OBJETIVO,
+  MAX_ORDEN_DE_LA_GUIA,
   MAX_PREGUNTAS_PROPIAS,
   MAX_REPREGUNTAS,
+  MAX_SUGERIDAS_DEL_OBJETIVO,
   ORIGENES_DEL_AJUSTE,
   type AjustesDeLaGuia,
   type CambioDeLaGuia,
@@ -339,14 +343,17 @@ const PREGUNTA_DEL_AJUSTE = z.string().trim().min(1).max(LARGO_DE_UNA_PREGUNTA);
 const REPREGUNTAS_DEL_AJUSTE = z.array(z.string().trim().min(1).max(LARGO_DE_UNA_REPREGUNTA)).max(MAX_REPREGUNTAS);
 const CLAVE_DE_PREGUNTA = z.string().min(1).max(LARGO_DE_UNA_CLAVE);
 const TEMA_DE_PREGUNTA = z.string().min(1).max(40);
+const ID_DE_PROPIA = z.string().regex(/^p[a-z0-9]{1,24}$/);
 const PreguntaPropiaSchema = z.object({
-  id: z.string().regex(/^p[a-z0-9]{1,24}$/),
+  id: ID_DE_PROPIA,
   pregunta: PREGUNTA_DEL_AJUSTE,
   repreguntas: REPREGUNTAS_DEL_AJUSTE,
   para: TEMA_DE_PREGUNTA.optional(),
-  origen: z.enum(["tuya", "asistente"]),
+  origen: z.enum(["tuya", "asistente", "objetivo"]),
   cambio: z.enum(ORIGENES_DEL_AJUSTE).optional(),
 });
+const PreguntaSugeridaSchema = z.object({ id: ID_DE_PROPIA, pregunta: PREGUNTA_DEL_AJUSTE, repreguntas: REPREGUNTAS_DEL_AJUSTE, para: TEMA_DE_PREGUNTA.optional() });
+const OBJETIVO_DEL_AJUSTE = z.string().trim().min(1).max(LARGO_DE_UN_OBJETIVO);
 export const AjustesDeLaGuiaSchema: z.ZodType<AjustesDeLaGuia> = z.object({
   propias: z.array(PreguntaPropiaSchema).max(MAX_PREGUNTAS_PROPIAS).optional(),
   cambios: z
@@ -357,6 +364,14 @@ export const AjustesDeLaGuiaSchema: z.ZodType<AjustesDeLaGuia> = z.object({
     .refine((r) => Object.keys(r).length <= MAX_CAMBIOS_DE_LA_GUIA)
     .optional(),
   quitadas: z.array(CLAVE_DE_PREGUNTA).max(MAX_CAMBIOS_DE_LA_GUIA).optional(),
+  orden: z.array(CLAVE_DE_PREGUNTA).max(MAX_ORDEN_DE_LA_GUIA).optional(),
+  sugeridas: z
+    .object({
+      objetivo: OBJETIVO_DEL_AJUSTE,
+      preguntas: z.array(PreguntaSugeridaSchema).max(MAX_SUGERIDAS_DEL_OBJETIVO),
+      descartadas: z.array(PREGUNTA_DEL_AJUSTE).max(MAX_DESCARTADAS_DEL_OBJETIVO).optional(),
+    })
+    .optional(),
 });
 export const CambioDeLaGuiaSchema: z.ZodType<CambioDeLaGuia> = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("agregar"), pregunta: PreguntaPropiaSchema }),
@@ -370,6 +385,10 @@ export const CambioDeLaGuiaSchema: z.ZodType<CambioDeLaGuia> = z.discriminatedUn
   }),
   z.object({ tipo: z.literal("quitar"), clave: CLAVE_DE_PREGUNTA }),
   z.object({ tipo: z.literal("restaurar"), clave: CLAVE_DE_PREGUNTA }),
+  z.object({ tipo: z.literal("ordenar"), claves: z.array(CLAVE_DE_PREGUNTA).max(MAX_ORDEN_DE_LA_GUIA) }),
+  z.object({ tipo: z.literal("sugerir"), objetivo: OBJETIVO_DEL_AJUSTE, preguntas: z.array(PreguntaSugeridaSchema).max(MAX_SUGERIDAS_DEL_OBJETIVO) }),
+  z.object({ tipo: z.literal("usarSugerida"), id: ID_DE_PROPIA }),
+  z.object({ tipo: z.literal("descartarSugerida"), id: ID_DE_PROPIA }),
 ]);
 
 /** Una sesión planeada por el vendedor (lib/exploraciones/guia.ts). */

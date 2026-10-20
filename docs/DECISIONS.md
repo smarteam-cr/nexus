@@ -9219,7 +9219,9 @@ repreguntas, y lo que cubre la guía pegado a ella. El plan está en `docs/preve
   solo `propuesta`, así que lo del vendedor sobrevive a «Actualizar la guía» sin ninguna mezcla al rearmar; y una pregunta
   de la guía de base (sin agente) también se puede cambiar. `aplicarAjustes` es lo único que los junta con la guía: la
   pantalla, el panel, «En vivo», lo que planeó la sesión para el agente que la lee, «Lo que cubre la guía» y el asistente
-  ven las mismas preguntas. Una pregunta cambiada se devuelve a la de la guía («Volver a la de la guía»); las quitadas, con
+  ven las mismas preguntas. ⚠ **Ampliado el 2026-10-20** (ver «La guía de una sesión: preguntas para el objetivo, al día
+  con el chat y en el orden de la persona»): los ajustes guardan también el orden elegido (`orden`) y las preguntas
+  propuestas para el objetivo (`sugeridas`). Una pregunta cambiada se devuelve a la de la guía («Volver a la de la guía»); las quitadas, con
   «Devolverlas». Una sola operación, `ajustarGuia` (contenido.ts, con su zod), con la versión y el bloqueo de siempre; si
   la próxima todavía no es sesión, la crea. Sin SQL.
 - **«Regenerar pregunta» cambia solo esa**, con otra del mismo tema y paso (`POST …/guia/pregunta`, guarda de escritura de
@@ -9264,7 +9266,8 @@ repreguntas, y lo que cubre la guía pegado a ella. El plan está en `docs/preve
   campo; lo manda la persona. Se ven arriba del campo mientras está vacío, también con conversación anterior.
 - **El chat numera la guía como la pantalla, y sumar se revisa al preparar** (auditoría del 2026-10-19). La guía que lee
   el modelo y el número de cada línea («quitar la 5») van en el orden de «En orden» (`ordenDeLaConversacion`): antes el
-  Presupuesto era la 5 para el chat y la última en pantalla. Al proponer sumar una pregunta, el tope de 8 sumadas (tuyas
+  Presupuesto era la 5 para el chat y la última en pantalla. Desde el 2026-10-20 ese orden es el que eligió la persona
+  arrastrando, si lo eligió: el chat sigue numerando igual que la pantalla. Al proponer sumar una pregunta, el tope de 8 sumadas (tuyas
   o del asistente) cuenta lo que ya está en la misma lista, no se repite una de la lista y se descarta la que vuelve a
   preguntar lo que el cliente ya dijo (`problemaAlAgregar`): antes la caja prometía «2 cambios» y entraba uno.
 
@@ -9512,6 +9515,55 @@ mismo lienzo, así que la mitad ya funcionaba; la otra mitad dependía de `marco
 - **Sin SQL.** Pendiente para otra tanda: que «Lo que ya sabemos» lea directo los resultados medibles confirmados del
   handoff y las respuestas confirmadas del cuestionario de estrategia (hoy llegan solo como citas de lo que propuso el
   agente).
+
+## La guía de una sesión: preguntas para el objetivo, al día con el chat y en el orden de la persona (2026-10-20)
+
+**Contexto.** Elías revisó la exploración de Cemaco Internacional - CRM con Liliana Moreno (CSE) el 20 oct. Tres cosas de
+la guía de la sesión, que valen en el proyecto y en la preventa (es el mismo lienzo): Liliana cambió el objetivo para
+enfocarse en marketing y en lo que pidió Marco (volúmenes de leads y tasa de conversión) y las preguntas no cambiaron;
+le pidió al asistente quitar las preguntas de ventas, se aplicó y la pantalla mostró las viejas hasta que recargó; y
+quería llevar las preguntas en el orden en que las va a hacer.
+
+- **Al guardar el objetivo, Nexus propone unas tres preguntas para ese objetivo** (`proponerPreguntasDelObjetivo`,
+  lib/exploraciones/guia-ajustes-server.ts; `POST …/guia/objetivo`, con la guarda de escritura de la exploración). Se
+  piden al guardar un objetivo escrito o editado en la próxima sesión, nunca con cada tecla; no al «Usar» el que sugiere
+  el agente (ese se armó con la guía). «Proponer preguntas» (al lado de «Editar») y «Pedir otras» las vuelven a pedir.
+  Es el pedido corto de «Regenerar» (`pedidoDePreguntasDelObjetivo`, guia-pregunta-pedido.ts): el mismo modelo, el mismo
+  contexto (`contextoParaLaGuia`), el objetivo, los temas posibles, las preguntas de la guía y lo ya propuesto. Cada
+  pregunta pasa por la misma revisión que «Regenerar» (`revisarPregunta`): tuteo, sin la cita adelante, 30 palabras como
+  mucho, distinta de las de la guía y de lo ya propuesto, y sin repetir lo que el cliente ya dijo (con su tema, mirada
+  como impacto, igual que al sumar con el asistente). Con menos de dos que sirvan, se pide una vez más con el aviso.
+  *Por qué una pieza nueva y no la guía entera:* rearmar la guía cambiaría lo que la persona ya ajustó; esto solo suma.
+- **Lo propuesto vive en la sesión, como los demás ajustes** (`ajustesDeLaGuia.sugeridas`: el objetivo, las que
+  esperan y el texto de las descartadas). Se ven en azul con la chispa debajo del objetivo, y solo para ESE objetivo: si
+  el objetivo cambia, no se muestran. «Usar» la suma como pregunta propia con su tema (marca «Por el objetivo», origen
+  `objetivo`, con el tope de 8 sumadas); «Descartar» la saca y no vuelve para el mismo objetivo (un pedido nuevo no la
+  repite aunque el modelo la escriba igual). Con otro objetivo se empieza de cero. Sin SQL.
+- **«Regenerar» también rechaza una pregunta de más de 30 palabras** (motivo `larga`): la revisión es la misma para las
+  dos.
+- **Medido con Cemaco** (`scripts/medir-preguntas-del-objetivo.ts`, sin escribir la exploración): con el objetivo real de
+  Liliana, una llamada de 4.742 tokens de entrada y 466 de salida, US$0,021 y 10,7 s; con «Enfocar la sesión en marketing y
+  en lo que pidió Marco: los volúmenes de leads y la tasa de conversión», 4.704 y 435, US$0,021 y 8,5 s. Las tres de la
+  segunda: los leads que entran al mes, la tasa de conversión que maneja Marco y el volumen que pide alcanzar.
+- **Aplicar una lista del chat que toca la guía vuelve a leer la exploración abierta** (lib/exploraciones/
+  aviso-de-la-guia.ts). En un proyecto la exploración se pide desde el navegador, así que el `router.refresh()` del chat
+  no la traía. El cajón del chat (components/nexus-chat/ChatDeNexus.tsx), al aplicar, mira si quedaron marcadas
+  operaciones `guia.*` y manda un evento del navegador con sus exploraciones; el lienzo que muestra una de ellas llama a
+  `recargar` (la misma lectura de siempre, en la fila de cambios). Lo que la persona está escribiendo vive en cada campo
+  y no se pierde. *Por qué un evento y no otro `router.refresh`:* el refresh no llega a la exploración de un proyecto, y
+  el evento no ata la guía al cajón (como `abrirElChatDeNexus`, en el otro sentido).
+- **Las preguntas se arrastran en «En orden»** (components/exploraciones/GuiaEnOrden.tsx, dnd-kit con teclado: Espacio o
+  Enter levanta, flechas, Espacio o Enter suelta, Escape cancela, y los avisos al lector de pantalla en español). Lo
+  elegido queda en la sesión (`ajustesDeLaGuia.orden`, las claves en orden; operación `ordenar`) y sobrevive a «Actualizar
+  la guía» como los demás ajustes. `aplicarAjustes` le da a cada pregunta su `posicion` y `ordenDeLaConversacion` la
+  respeta: así «En orden», «En vivo», lo que planeó la sesión para el agente que la lee y la numeración del chat salen
+  iguales, sin tocar cada lector. Lo que no tiene lugar (una pregunta que trae la guía al actualizarla, una sumada después)
+  va al final, en su orden de siempre; una clave que ya no está no estorba. «Volver al orden de la guía» lo borra. El
+  presupuesto va donde lo ponga la persona: el orden de la guía lo deja al final, pero es su conversación.
+- **«Por sección» no se arrastra**: agrupa por sección y, dentro de cada una, sigue el orden de «En orden». *Por qué:*
+  mover una pregunta entre columnas no tiene sentido (la sección es su tema), y el orden se decide donde se ve la
+  conversación entera.
+- **Pendiente:** el chat no ofrece «ordénalas así» (no hay operación `guia.*` de orden); se ordena en pantalla.
 
 ## «Para ti» después de probarlo: el espacio libre y la sesión (2026-10-19)
 

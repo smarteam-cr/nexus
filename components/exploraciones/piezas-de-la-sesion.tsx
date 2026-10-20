@@ -168,9 +168,23 @@ export function EtiquetaDePregunta({ p }: { p: PreguntaParaMostrar }) {
   );
 }
 
-/** Quién escribió una pregunta que no es la de la guía: «Tuya», «Del asistente» o «Regenerada» (neutro: no pide nada). */
+/**
+ * Quién escribió una pregunta que no es la de la guía: «Tuya», «Del asistente», «Regenerada» o «Por el objetivo» (una de
+ * las que propuso Nexus al guardar el objetivo y la persona usó). Neutro: no pide nada.
+ */
 export function ChipDeLaMarca({ marca, cambiada }: { marca: NonNullable<PreguntaParaMostrar["marca"]>; cambiada: boolean }) {
-  const texto = marca === "tuya" ? (cambiada ? "Editada por ti" : "Tuya") : marca === "asistente" ? (cambiada ? "Cambiada por el asistente" : "Del asistente") : "Regenerada";
+  const texto =
+    marca === "tuya"
+      ? cambiada
+        ? "Editada por ti"
+        : "Tuya"
+      : marca === "asistente"
+        ? cambiada
+          ? "Cambiada por el asistente"
+          : "Del asistente"
+        : marca === "objetivo"
+          ? "Por el objetivo"
+          : "Regenerada";
   return <span className="rounded-full border border-line bg-surface-muted px-2 py-px text-[11.5px] text-fg-secondary">{texto}</span>;
 }
 

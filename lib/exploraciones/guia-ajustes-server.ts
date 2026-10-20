@@ -20,10 +20,27 @@ import {
   procedenciasDeLaSesion,
   type PreguntaParaMostrar,
 } from "./guia";
-import { aplicarAjustes, apuntaDelTema, claveDePregunta, ErrorDeLaGuia, type CambioDeLaGuia } from "./ajustes-de-la-guia";
+import {
+  aplicarAjustes,
+  apuntaDelTema,
+  claveDePregunta,
+  ErrorDeLaGuia,
+  MAX_SUGERIDAS_DEL_OBJETIVO,
+  nuevoIdDePropia,
+  yaPropuestasParaElObjetivo,
+  type CambioDeLaGuia,
+} from "./ajustes-de-la-guia";
 
 export { ErrorDeLaGuia };
-import { avisoParaOtraVez, leerUnaPregunta, pedidoDeUnaPregunta, type EntradaDeUnaPregunta } from "./guia-pregunta-pedido";
+import {
+  avisoParaOtraVez,
+  leerPreguntasDelObjetivo,
+  leerUnaPregunta,
+  pedidoDePreguntasDelObjetivo,
+  pedidoDeUnaPregunta,
+  type EntradaDelObjetivo,
+  type EntradaDeUnaPregunta,
+} from "./guia-pregunta-pedido";
 import { AGENTE_DE_LA_EXPLORACION, contextoParaLaGuia, planDeLaGuiaDeLaSesion } from "./agente";
 import { guiaDeAntesDelPlan } from "./plan-de-la-guia";
 import { aplicarCambios, type FilaDeExploracion } from "./servidor";
@@ -120,5 +137,66 @@ export async function regenerarPregunta(exploracionId: string, clave: string, qu
   if (!l.ok) throw new ErrorDeLaGuia(502, "El agente no escribió una pregunta que sirva. Prueba de nuevo, o escríbela tú.");
   // De la guía o propia, queda marcada «Regenerada» (prueba 104: una propia regenerada seguía diciendo «Del asistente»).
   const cambio: CambioDeLaGuia = { tipo: "cambiar", clave, pregunta: l.pregunta, repreguntas: l.repreguntas, origen: "regenerada" };
+  return ajustarLaGuia(exploracionId, cambio, quienPide, base);
+}
+
+/** El `origen` de cada llamada de las preguntas para el objetivo: así se ve aparte en el gasto de la IA. */
+export const ORIGEN_DEL_OBJETIVO = "exploraciones/guia:preguntas-del-objetivo";
+
+/** Los temas que puede llevar una pregunta nueva: las tarjetas del marco y las dimensiones de las áreas en juego. */
+function temasDeLaGuia(base: BaseDeLaGuia): { id: string; nombre: string }[] {
+  return [
+    ...base.marco.tarjetas.map((k) => ({ id: k as string, nombre: definicionEnElMarco(k, base.marco).etiqueta })),
+    ...base.escala.areas
+      .filter((a) => base.estado.areas.includes(a.id))
+      .flatMap((a) => a.dimensiones.filter((d) => d.aplica).map((d) => ({ id: d.id, nombre: `${d.nombre} (${a.nombre})` }))),
+  ];
+}
+
+/**
+ * Lo que se le pide al agente para el objetivo de la próxima sesión, armado desde la base (sin llamar a nadie). Lo usan
+ * `proponerPreguntasDelObjetivo` y la medición (scripts/medir-preguntas-del-objetivo.ts). `objetivo` reemplaza al de la
+ * sesión (para medir con otro).
+ */
+export function entradaDelObjetivo(base: BaseDeLaGuia, objetivo?: string): { sesionId: string | null; entrada: EntradaDelObjetivo | null } {
+  const { sesionId, preguntas } = preguntasDeLaProxima(base);
+  const sesion = sesionId ? base.estado.contenido.sesiones.find((s) => s.id === sesionId) : undefined;
+  const elObjetivo = (objetivo ?? sesion?.objetivo ?? "").trim();
+  if (!elObjetivo) return { sesionId, entrada: null };
+  return {
+    sesionId,
+    entrada: {
+      ctx: base.ctx,
+      objetivo: elObjetivo,
+      temas: temasDeLaGuia(base),
+      guia: preguntas.map((p) => p.pregunta),
+      yaPropuestas: yaPropuestasParaElObjetivo(sesion?.ajustesDeLaGuia, elObjetivo),
+    },
+  };
+}
+
+/**
+ * Las preguntas nuevas para el objetivo de la próxima sesión (CEMACO, 2026-10-20): al guardar el objetivo, y cuando la
+ * persona las vuelve a pedir. Una llamada corta (medida en `LlmCall` con el agente de la exploración y
+ * `ORIGEN_DEL_OBJETIVO`), y otra más si de la primera salieron menos de dos que sirvan. Quedan en la sesión como
+ * propuestas (`sugeridas`): la persona usa o descarta cada una.
+ */
+export async function proponerPreguntasDelObjetivo(exploracionId: string, quienPide: string | null): Promise<FilaDeExploracion> {
+  const base = await contextoParaLaGuia(exploracionId);
+  const { entrada } = entradaDelObjetivo(base);
+  if (!entrada) throw new ErrorDeLaGuia(400, "Escribe el objetivo de la sesión primero.");
+  const pedir = (aviso = "") =>
+    conContextoDeIA(
+      { agentSlug: AGENTE_DE_LA_EXPLORACION, agentRunId: null, clientId: base.fila.clientId, triggeredByEmail: quienPide, origen: ORIGEN_DEL_OBJETIVO },
+      () => getAnthropic().messages.create(pedidoDePreguntasDelObjetivo(entrada, aviso)),
+    );
+  let l = leerPreguntasDelObjetivo(await pedir(), entrada, base.ctx.saber);
+  if (l.preguntas.length < 2) {
+    const aviso = l.fallas.length ? l.fallas.map(avisoParaOtraVez).filter((x, i, xs) => xs.indexOf(x) === i).join("") : "";
+    const otra = leerPreguntasDelObjetivo(await pedir(aviso), { ...entrada, yaPropuestas: [...entrada.yaPropuestas, ...l.preguntas.map((p) => p.pregunta)] }, base.ctx.saber);
+    l = { preguntas: [...l.preguntas, ...otra.preguntas].slice(0, MAX_SUGERIDAS_DEL_OBJETIVO), fallas: otra.fallas };
+  }
+  if (!l.preguntas.length) throw new ErrorDeLaGuia(502, "El agente no escribió preguntas que sirvan para este objetivo. Prueba de nuevo, o súmalas tú.");
+  const cambio: CambioDeLaGuia = { tipo: "sugerir", objetivo: entrada.objetivo, preguntas: l.preguntas.map((p) => ({ id: nuevoIdDePropia(), ...p })) };
   return ajustarLaGuia(exploracionId, cambio, quienPide, base);
 }

@@ -8,7 +8,9 @@
  *
  *   · `propias`: las preguntas que agregó a mano («tuya») o con el asistente («asistente»);
  *   · `cambios`: una pregunta de la guía reescrita (a mano, regenerada o por el asistente), por su clave;
- *   · `quitadas`: las preguntas de la guía que sacó.
+ *   · `quitadas`: las preguntas de la guía que sacó;
+ *   · `orden`: el orden en que las va a hacer, arrastrándolas (2026-10-20);
+ *   · `sugeridas`: las que propuso Nexus para el objetivo de la sesión, que esperan usarse o descartarse (2026-10-20).
  *
  * Por estar en `contenido`, sobreviven a «Actualizar la guía» (el agente escribe solo `propuesta`). Una pregunta cambiada
  * se devuelve a la de la guía con «restaurar». `aplicarAjustes` es lo único que los junta con la guía: la pantalla, el
@@ -28,8 +30,11 @@ export class ErrorDeLaGuia extends Error {
   }
 }
 
-/** Quién hizo un ajuste: el vendedor a mano, el asistente (con su clic) o «Regenerar» de esa pregunta. */
-export const ORIGENES_DEL_AJUSTE = ["tuya", "asistente", "regenerada"] as const;
+/**
+ * Quién hizo un ajuste: el vendedor a mano, el asistente (con su clic), «Regenerar» de esa pregunta, o una de las que
+ * propuso Nexus al guardar el objetivo de la sesión y la persona usó (`objetivo`, 2026-10-20).
+ */
+export const ORIGENES_DEL_AJUSTE = ["tuya", "asistente", "regenerada", "objetivo"] as const;
 export type OrigenDelAjuste = (typeof ORIGENES_DEL_AJUSTE)[number];
 
 /** Una pregunta que el vendedor sumó a la guía de su sesión. `para` = el tema (una tarjeta o una dimensión), si lo tiene. */
@@ -53,10 +58,38 @@ export interface CambioDePregunta {
   origen: OrigenDelAjuste;
 }
 
+/** Una pregunta que Nexus propone para el objetivo de la sesión: espera que la persona la use o la descarte. */
+export interface PreguntaSugerida {
+  /** Con la forma del id de una propia: al usarla, entra a la guía con este mismo id. */
+  id: string;
+  pregunta: string;
+  repreguntas: string[];
+  para?: string;
+}
+
+/**
+ * Las preguntas que propuso Nexus para el objetivo de la sesión (CEMACO, 2026-10-20: Liliana cambió el objetivo para
+ * enfocarse en marketing y las preguntas no cambiaron). Valen solo para ese objetivo: si el objetivo cambia, no se
+ * muestran. Las descartadas no vuelven para el mismo objetivo.
+ */
+export interface SugeridasDelObjetivo {
+  objetivo: string;
+  preguntas: PreguntaSugerida[];
+  /** El texto de las descartadas para este objetivo: un nuevo pedido no las repite. */
+  descartadas?: string[];
+}
+
 export interface AjustesDeLaGuia {
   propias?: PreguntaPropia[];
   cambios?: Record<string, CambioDePregunta>;
   quitadas?: string[];
+  /**
+   * El orden que eligió la persona arrastrando las preguntas, por su clave (2026-10-20). Manda en «En orden», «En vivo»,
+   * lo que lee el agente que analiza la reunión y la numeración del chat (guia.ts › `ordenDeLaConversacion`). Lo que no
+   * está en la lista (una pregunta nueva al actualizar la guía, una sumada después) va al final.
+   */
+  orden?: string[];
+  sugeridas?: SugeridasDelObjetivo;
 }
 
 export const MAX_PREGUNTAS_PROPIAS = 8;
@@ -68,6 +101,14 @@ export const LARGO_DE_UNA_REPREGUNTA = 300;
 export const MAX_REPREGUNTAS = 3;
 /** Lo que mide la clave de una pregunta: el tema (hasta 40) y su paso. */
 export const LARGO_DE_UNA_CLAVE = 60;
+/** Cuántas preguntas propone Nexus para un objetivo. */
+export const MAX_SUGERIDAS_DEL_OBJETIVO = 3;
+/** Cuántas descartadas se recuerdan por objetivo (las más recientes). */
+export const MAX_DESCARTADAS_DEL_OBJETIVO = 15;
+/** Cuántas claves guarda el orden elegido: más que todas las que puede tener una guía. */
+export const MAX_ORDEN_DE_LA_GUIA = 50;
+/** El largo de un objetivo de sesión (como `SesionPlaneada.objetivo`). */
+export const LARGO_DE_UN_OBJETIVO = 400;
 
 /** El prefijo del `para` de una pregunta propia: `propia:<id>` (con él se guardan su casilla «hecha» y su nota). */
 export const PREFIJO_PROPIA = "propia:";
@@ -82,6 +123,20 @@ export const nuevoIdDePropia = (): string => `p${Date.now().toString(36)}${Math.
  */
 export function claveDePregunta(p: Pick<PreguntaParaMostrar, "para" | "paso">): string {
   return p.paso ? `${p.para}:${p.paso}` : p.para;
+}
+
+/**
+ * El orden nuevo de la guía, por clave, al soltar la pregunta `de` en el lugar de `sobre` (como `arrayMove` de dnd-kit:
+ * las del medio se corren un lugar). Null si no se movió.
+ */
+export function ordenAlSoltar(claves: readonly string[], de: string, sobre: string | null): string[] | null {
+  if (!sobre || de === sobre) return null;
+  const i = claves.indexOf(de);
+  const j = claves.indexOf(sobre);
+  if (i < 0 || j < 0) return null;
+  const out = [...claves];
+  out.splice(j, 0, out.splice(i, 1)[0]);
+  return out;
 }
 
 /** ¿Es una clave (o un `para`) de una pregunta propia? */
@@ -125,7 +180,13 @@ export function aplicarAjustes(
       ...(apunta ? { apunta } : {}),
     });
   }
-  return out;
+  // El lugar que le dio la persona al arrastrarla: lo usa `ordenDeLaConversacion` (guia.ts).
+  if (!ajustes.orden?.length) return out;
+  const lugar = new Map(ajustes.orden.map((k, i) => [k, i]));
+  return out.map((p) => {
+    const i = lugar.get(claveDePregunta(p));
+    return i === undefined ? p : { ...p, posicion: i };
+  });
 }
 
 /** A qué apunta el tema de una propia: una tarjeta del marco o una dimensión de la escala (otra cosa, a nada). */
@@ -144,7 +205,15 @@ export type CambioDeLaGuia =
   /** Quitar una pregunta: de la guía (deja de verse) o una propia (se borra). */
   | { tipo: "quitar"; clave: string }
   /** Volver a la pregunta de la guía: deshace un cambio o devuelve una quitada. */
-  | { tipo: "restaurar"; clave: string };
+  | { tipo: "restaurar"; clave: string }
+  /** El orden en que la persona va a hacer las preguntas (arrastrándolas): las claves, de la primera a la última. */
+  | { tipo: "ordenar"; claves: string[] }
+  /** Lo que propuso Nexus para el objetivo de la sesión (lo escribe el servidor: guia-ajustes-server.ts). */
+  | { tipo: "sugerir"; objetivo: string; preguntas: PreguntaSugerida[] }
+  /** Usar una de las propuestas para el objetivo: entra a la guía como pregunta propia. */
+  | { tipo: "usarSugerida"; id: string }
+  /** Descartarla: no vuelve para el mismo objetivo. */
+  | { tipo: "descartarSugerida"; id: string };
 
 export type ResultadoDelAjuste = { ok: true; ajustes: AjustesDeLaGuia } | { ok: false; error: string };
 
@@ -155,18 +224,54 @@ const limpias = (rs: readonly string[]) =>
     .filter(Boolean)
     .slice(0, MAX_REPREGUNTAS);
 
+/** Unas sugeridas que no tienen nada (ni pendientes ni descartadas) no se guardan. */
+const sugeridasConAlgo = (s: SugeridasDelObjetivo | undefined): s is SugeridasDelObjetivo => !!s && (s.preguntas.length > 0 || !!s.descartadas?.length);
+
 /** Sin listas ni registros vacíos: lo que no tiene nada no se guarda. */
 function compacto(a: AjustesDeLaGuia): AjustesDeLaGuia {
   return {
     ...(a.propias?.length ? { propias: a.propias } : {}),
     ...(a.cambios && Object.keys(a.cambios).length ? { cambios: a.cambios } : {}),
     ...(a.quitadas?.length ? { quitadas: a.quitadas } : {}),
+    ...(a.orden?.length ? { orden: a.orden } : {}),
+    ...(sugeridasConAlgo(a.sugeridas)
+      ? { sugeridas: { objetivo: a.sugeridas.objetivo, preguntas: a.sugeridas.preguntas, ...(a.sugeridas.descartadas?.length ? { descartadas: a.sugeridas.descartadas } : {}) } }
+      : {}),
   };
 }
 
 /** ¿Quedó algo? (un ajuste vacío no se guarda en la sesión) */
 export function hayAjustes(a: AjustesDeLaGuia | undefined): boolean {
-  return !!a && (!!a.propias?.length || !!(a.cambios && Object.keys(a.cambios).length) || !!a.quitadas?.length);
+  return (
+    !!a &&
+    (!!a.propias?.length || !!(a.cambios && Object.keys(a.cambios).length) || !!a.quitadas?.length || !!a.orden?.length || sugeridasConAlgo(a.sugeridas))
+  );
+}
+
+/** Cómo se comparan dos objetivos o dos preguntas: sin espacios de más, mayúsculas ni tildes. */
+export const comoTexto = (t: string): string =>
+  t
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "");
+
+/**
+ * Las preguntas que propuso Nexus para ESTE objetivo y siguen esperando, o ninguna: si la persona cambió el objetivo
+ * después, son de otro y no se muestran.
+ */
+export function sugeridasVigentes(ajustes: AjustesDeLaGuia | undefined, objetivo: string | null | undefined): PreguntaSugerida[] {
+  const s = ajustes?.sugeridas;
+  if (!s || !objetivo || comoTexto(s.objetivo) !== comoTexto(objetivo)) return [];
+  return s.preguntas;
+}
+
+/** Lo que ya no se propone para este objetivo: lo descartado y lo que espera (un pedido nuevo trae otras). */
+export function yaPropuestasParaElObjetivo(ajustes: AjustesDeLaGuia | undefined, objetivo: string): string[] {
+  const s = ajustes?.sugeridas;
+  if (!s || comoTexto(s.objetivo) !== comoTexto(objetivo)) return [];
+  return [...(s.descartadas ?? []), ...s.preguntas.map((p) => p.pregunta)];
 }
 
 /**
@@ -174,8 +279,60 @@ export function hayAjustes(a: AjustesDeLaGuia | undefined): boolean {
  * Una pregunta de la guía no se verifica acá (la guía cambia con lo que se sabe): una clave que ya no aparece no hace nada.
  */
 export function aplicarCambioDeLaGuia(antes: AjustesDeLaGuia | undefined, cambio: CambioDeLaGuia): ResultadoDelAjuste {
-  const a: AjustesDeLaGuia = { propias: [...(antes?.propias ?? [])], cambios: { ...(antes?.cambios ?? {}) }, quitadas: [...(antes?.quitadas ?? [])] };
+  const a: AjustesDeLaGuia = {
+    propias: [...(antes?.propias ?? [])],
+    cambios: { ...(antes?.cambios ?? {}) },
+    quitadas: [...(antes?.quitadas ?? [])],
+    ...(antes?.orden ? { orden: [...antes.orden] } : {}),
+    ...(antes?.sugeridas ? { sugeridas: { ...antes.sugeridas, preguntas: [...antes.sugeridas.preguntas] } } : {}),
+  };
   switch (cambio.tipo) {
+    case "ordenar": {
+      const claves = [...new Set(cambio.claves.map((k) => k.trim()).filter(Boolean))];
+      if (claves.length > MAX_ORDEN_DE_LA_GUIA) return { ok: false, error: "La guía tiene demasiadas preguntas para ordenarlas." };
+      a.orden = claves;
+      return { ok: true, ajustes: compacto(a) };
+    }
+    case "sugerir": {
+      const objetivo = limpio(cambio.objetivo, LARGO_DE_UN_OBJETIVO);
+      if (!objetivo) return { ok: false, error: "La sesión no tiene objetivo." };
+      // Mismo objetivo: lo descartado se recuerda. Otro objetivo: empieza de cero.
+      const mismo = !!a.sugeridas && comoTexto(a.sugeridas.objetivo) === comoTexto(objetivo);
+      const descartadas = mismo ? (a.sugeridas!.descartadas ?? []) : [];
+      const fuera = new Set(descartadas.map(comoTexto));
+      const vistas = new Set<string>();
+      const preguntas: PreguntaSugerida[] = [];
+      for (const p of cambio.preguntas) {
+        const pregunta = limpio(p.pregunta, LARGO_DE_UNA_PREGUNTA);
+        const k = comoTexto(pregunta);
+        if (!pregunta || fuera.has(k) || vistas.has(k)) continue;
+        vistas.add(k);
+        preguntas.push({ id: p.id, pregunta, repreguntas: limpias(p.repreguntas), ...(p.para ? { para: p.para } : {}) });
+        if (preguntas.length >= MAX_SUGERIDAS_DEL_OBJETIVO) break;
+      }
+      a.sugeridas = { objetivo, preguntas, ...(descartadas.length ? { descartadas } : {}) };
+      return { ok: true, ajustes: compacto(a) };
+    }
+    case "usarSugerida": {
+      const s = a.sugeridas;
+      const p = s?.preguntas.find((x) => x.id === cambio.id);
+      if (!s || !p) return { ok: false, error: "Esa propuesta ya no está." };
+      if (a.propias!.length >= MAX_PREGUNTAS_PROPIAS) return { ok: false, error: AVISO_DEL_TOPE_DE_SUMADAS };
+      if (!a.propias!.some((x) => x.id === p.id)) a.propias!.push({ ...p, repreguntas: [...p.repreguntas], origen: "objetivo" });
+      a.sugeridas = { ...s, preguntas: s.preguntas.filter((x) => x.id !== p.id) };
+      return { ok: true, ajustes: compacto(a) };
+    }
+    case "descartarSugerida": {
+      const s = a.sugeridas;
+      const p = s?.preguntas.find((x) => x.id === cambio.id);
+      if (!s || !p) return { ok: false, error: "Esa propuesta ya no está." };
+      a.sugeridas = {
+        ...s,
+        preguntas: s.preguntas.filter((x) => x.id !== p.id),
+        descartadas: [...(s.descartadas ?? []), p.pregunta].slice(-MAX_DESCARTADAS_DEL_OBJETIVO),
+      };
+      return { ok: true, ajustes: compacto(a) };
+    }
     case "agregar": {
       const pregunta = limpio(cambio.pregunta.pregunta, LARGO_DE_UNA_PREGUNTA);
       if (!pregunta) return { ok: false, error: "Escribe la pregunta." };
@@ -258,7 +415,13 @@ export function deshacerElBorrado(
     const para = p.apunta?.para;
     return {
       tipo: "agregar",
-      pregunta: { id: p.para.slice(PREFIJO_PROPIA.length), pregunta: p.pregunta, repreguntas: [...p.repreguntas], ...(para ? { para } : {}), origen: p.marca === "asistente" ? "asistente" : "tuya" },
+      pregunta: {
+        id: p.para.slice(PREFIJO_PROPIA.length),
+        pregunta: p.pregunta,
+        repreguntas: [...p.repreguntas],
+        ...(para ? { para } : {}),
+        origen: p.marca === "asistente" || p.marca === "objetivo" ? p.marca : "tuya",
+      },
     };
   }
   const clave = claveDePregunta(p);

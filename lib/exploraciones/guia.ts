@@ -978,6 +978,8 @@ export interface PreguntaParaMostrar {
   marca?: OrigenDelAjuste;
   /** Es una pregunta de la guía que el vendedor cambió: se puede devolver a la de la guía. */
   cambiada?: boolean;
+  /** El lugar que le dio la persona al arrastrarla (ajustes-de-la-guia.ts › `orden`): manda en `ordenDeLaConversacion`. */
+  posicion?: number;
 }
 
 /** De qué lado está una pregunta: el marco, la escala, lo vendido o ninguno (un punto llevado sin ubicar). */
@@ -1149,6 +1151,16 @@ export const APERTURA_DE_BASE = "Recuerda por qué se reúnen, confirma cuánto 
  * de diagnosticar).
  */
 export function ordenDeLaConversacion(preguntas: readonly PreguntaParaMostrar[]): PreguntaParaMostrar[] {
+  const natural = ordenNatural(preguntas);
+  /* El orden que eligió la persona arrastrando (2026-10-20, ajustes-de-la-guia.ts › `orden`, que `aplicarAjustes` deja en
+     `posicion`) manda: así numeran igual la pantalla, «En vivo», el agente que lee la reunión y el chat. Lo que no tiene
+     lugar (una pregunta que llegó después de ordenar) va al final, en su orden de siempre. */
+  if (!natural.some((p) => p.posicion !== undefined)) return natural;
+  const conLugar = natural.filter((p) => p.posicion !== undefined).sort((a, b) => a.posicion! - b.posicion!);
+  return [...conLugar, ...natural.filter((p) => p.posicion === undefined)];
+}
+
+function ordenNatural(preguntas: readonly PreguntaParaMostrar[]): PreguntaParaMostrar[] {
   const alFinal = (p: PreguntaParaMostrar) => p.para === "presupuesto";
   // Con plan (la preventa, desde el 2026-10-18), el orden ya es el de la conversación: lo de antes, los dolores, lo que falta.
   if (preguntas.some((p) => p.paso)) {
