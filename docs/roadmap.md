@@ -365,6 +365,15 @@ Todo `main` está en producción desde el 19 oct (`af896cfd`). Si usas el 3004, 
 
 **Para decidir (sprint de marketing):** sacar el tope de 5 por persona en la reunión del sprint, y leer también la conversación aunque las notas traigan pasos (unos US$0,014 por reunión). El segundo sirve solo con el primero.
 
+**Mejoras del 19 oct en la noche, en curso** (cada una en su sesión; se juntan, se suben y se despliegan al terminar):
+
+- La exploración de los proyectos de clientes con todo lo de la preventa: «Lo que ya sabemos», preguntas cortas, el menú de cada pregunta, agregar a mano y el asistente. Sin tocar lo ya generado.  ⏳ En curso
+- Una reunión agendada cuenta como el siguiente paso: «Para ti» y «Sugerencias» dejan de pedirlo.  ⏳ En curso
+- «Para ti» de cada CSE con lo que importa hoy: reuniones de los próximos días, cuentas sin siguiente paso y pendientes sin seguimiento.  ⏳ En curso
+- Tareas de lo que se habló con el cliente: pocas y esenciales («Enviar el reporte a CEMACO»), y lo descartado no vuelve.  ⏳ En curso
+- Con varios proyectos, cada quien abre en el de su equipo (Cemaco: Lili en el CRM, Breiner en Desarrollo).  ⏳ En curso
+- Lo mismo para Ventas, donde aplique (cada sesión lo revisa).  ⏳ En curso
+
 ### 0 · Lo de la tarde del 19 oct <span class="prioridad">Alta</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
