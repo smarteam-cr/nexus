@@ -18,7 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getAnthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { rutaDeLaLectura } from "@/lib/lecturas/reglas";
-import { cseDeLaCuenta, responsableDeLaPreventaViva } from "@/lib/lecturas/personas";
+import { cseDeLaCuenta, negocioDeLaCuenta, responsableDeLaPreventaViva } from "@/lib/lecturas/personas";
 import { armarPropuestasDeSeguimiento, elegirLoEsencial } from "@/lib/tareas/seguimiento";
 import { descartesDeLaCuenta, escribirSalidaDeUnCorreo } from "@/lib/tareas/lectura";
 import { miembrosActivos } from "@/lib/tareas/servidor";
@@ -123,9 +123,10 @@ export async function leerCompromisosDeCorreos(o: { tope?: number; ahora?: Date 
       let escritas = { propuestas: 0, porAsignar: 0 };
       if (leidos.compromisos.length) {
         r.conCompromisos++;
-        const [cseCuenta, preventa] = await Promise.all([
+        const [cseCuenta, preventa, negocio] = await Promise.all([
           ruta === "completa" ? cseDeLaCuenta(cliente.id) : Promise.resolve(null),
           ruta === "prospecto" ? responsableDeLaPreventaViva(cliente.id) : Promise.resolve(undefined),
+          ruta === "completa" ? negocioDeLaCuenta(cliente.id) : Promise.resolve(undefined),
         ]);
         const descartes = await descartesDeLaCuenta(cliente.id);
         const armado = armarPropuestasDeSeguimiento({
@@ -137,6 +138,7 @@ export async function leerCompromisosDeCorreos(o: { tope?: number; ahora?: Date 
           cseDelProyecto: null,
           cseDeLaCuenta: cseCuenta,
           ...(ruta === "prospecto" ? { responsableDeLaPreventa: preventa } : {}),
+          ...(negocio ? { negocio } : {}),
           clientId: cliente.id,
           empresa: cliente.name,
           projectId: null,

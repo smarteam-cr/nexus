@@ -9358,9 +9358,11 @@ cinco piezas»: los correos entran, como una fuente aparte, no como una fuente m
 - **El aviso de las 48 horas** (`compromisoSinAgendar`, lib/comunicaciones/sin-agendar.ts, puro): un compromiso con el
   cliente (de un correo o de la lectura de seguimiento de una reunión) con fecha, o una reunión prometida, que a las 48
   horas nadie tomó (sigue propuesto, o «Por asignar»), y si es una reunión, que no está en el calendario del CSE, ni
-  planeada en Tareas, ni ocurrió. Rechazarlo es una decisión: no avisa. Deja de avisar a los 21 días. Le llega al CSE de
-  la cuenta (una línea por compromiso; en un prospecto, a quien tiene la propuesta) y a quien lidera Customer Success
-  (una línea por cuenta), con peso 85 en «Lo que importa hoy». *Supuesto aceptado:* cualquier evento próximo con la cuenta
+  planeada en Tareas, ni ocurrió. Rechazarlo es una decisión: no avisa. Deja de avisar a los 21 días. Le llega a quien
+  se le propuso, en cualquier cuenta, y lo «Por asignar» de Customer Success al CSE de la cuenta (una línea por
+  compromiso), y a quien lidera Customer Success solo lo de Customer Success (una línea por cuenta), con peso 85 en «Lo
+  que importa hoy». *Corregido el 2026-10-20* (antes le llegaba al CSE todo lo de la cuenta, aunque se le hubiera
+  propuesto a otra persona): ver «Lo que sale de una reunión le llega a quien le toca». *Supuesto aceptado:* cualquier evento próximo con la cuenta
   cuenta como «está en el calendario», aunque sea otra reunión: si se van a ver pronto, la promesa se puede cubrir ahí.
 - **La memoria interna de la cuenta suma dos partes**: «Comunicaciones con el cliente en HubSpot» (las 12 más recientes
   de 60 días, con su fecha y quién la escribió, sin las notas que escribió Nexus, que ya están en «Notas del equipo») y
@@ -9763,6 +9765,8 @@ persona descartó 4 de 6 propuestas de la misma reunión.
 - **`quien` es quien tiene que HACERLO, no quien habló.** Lo que el cliente espera de Smarteam es de Smarteam. Si la
   lectura igual lo deja del lado del cliente, `loEsperaDeSmarteam` lo pasa (solo con «atento(s) a que…» o «espera(n)
   que…» y Smarteam como quien lo hace) y va a quien lleva la cuenta (el CSE del proyecto o la preventa), no a «Por asignar».
+  *Desde el 2026-10-20*, si es de venta o negociación va al dueño del negocio, no al CSE (ver «Lo que sale de una reunión
+  le llega a quien le toca»).
 - **El título de Smarteam es «Verbo + qué + a quién o la cuenta»** (`titulo` en el esquema, `tituloValido`): infinitivo,
   como mucho 90 caracteres, sin voseo. Si no sirve, sale de `que`, como antes.
 - **El tope de una reunión (o un correo) con un cliente o un prospecto es 3 por persona**
@@ -10037,3 +10041,43 @@ Salió de revisar el kickoff y el cronograma de Cayalá con Valentina. El códig
   mientras difiere de lo publicado. El PDF lee el set del editor. El chat todavía no puede ocultar en el kickoff
   (`puedeOcultar: false`): unificarlo con el verbo genérico sigue pendiente.
 - **La píldora «Servicio de continuidad» también se ve en el editor**: antes solo la veía el cliente.
+
+## Lo que sale de una reunión le llega a quien le toca (2026-10-20)
+
+**Contexto.** Elías revisó «Para ti» con Valentina Sandoval (CSE de kölbi y Cayalá): le pedía «tomar o decidir» «Preparar y
+enviar a Priscilla Sanabria la propuesta actualizada de renovación del contrato de marketing» (T-117), que es de Marco
+Salas porque ya es negociación. Medido ese día en solo lectura (`scripts/a-quien-le-llegan-las-propuestas.ts`): la tarea
+estaba bien repartida. Salió de la reunión «KÖLBI + SMARTEAM | DESPEGUEMOS» (vie 16 oct), a la que fueron Marco Salas,
+Alexander Vanegas y tres personas de kölbi, no Valentina; la lectura dijo «lo dijo Marco Salas» y se la propuso a él,
+en Ventas. Lo que fallaba era el aviso de las 48 horas: le llegaba al CSE TODO compromiso sin tomar de sus cuentas, aunque
+se le hubiera propuesto a otra persona, y a quien se le propuso no le llegaba si la cuenta era un cliente (solo en un
+prospecto). Ese lunes, de 14 avisos, 1 era de otra persona (este) y 5 propios no le llegaban a nadie (los 4 de Marco en
+Larce y kölbi, y uno de Alexander en Seléctrica). Las 92 propuestas vivas de 41 lecturas de 14 días, repartidas de nuevo
+con la regla de hoy, le llegaron a quien la regla dice: ninguna a una persona que no fuera quien lo dijo o quien quedó a
+cargo (las dos que cambiarían, de SmartAgro, son «Por asignar» de Customer Success que hoy irían a Liliana Moreno porque
+el proyecto ganó dueño después). No hubo nada que reasignar.
+
+- **El aviso de las 48 horas le llega a quien se le propuso** (`leTocaElAviso`, lib/comunicaciones/sin-agendar.ts), en
+  cualquier cuenta, con «un compromiso tuyo … sin decidir». Lo «Por asignar» de Customer Success, al CSE de la cuenta; lo
+  «Por asignar» de Ventas o de otro equipo, a nadie por llevar la cuenta (lo ve quien lidera ese equipo en sus tareas). La
+  CSL ve por cuenta solo lo de Customer Success (`esDeCustomerSuccess`).
+- **A quién va lo que se comprometió Smarteam, en orden** (`armarPropuestasDeSeguimiento`, lib/tareas/seguimiento.ts):
+  el nombre que se dijo (si es seguro), el correo que eligió la lectura, quien dijo la cita en la reunión (el hablante
+  del único turno de la transcripción que la contiene, si es del equipo y estuvo: `quienDijoLaCita`), quien mandó el
+  correo. Si nada de eso dice quién y el tema es de venta o negociación, el dueño del negocio; si no, lo que el cliente
+  espera de Smarteam va a quien lleva la cuenta (el último recurso) y lo demás a «Por asignar» del equipo de la lectura.
+  *Por qué el turno después del correo:* el turno dice quién habló, no quién lo hace («Valentina te lo manda» lo dice
+  Marco), así que solo decide cuando la lectura no dijo nada.
+- **Lo de venta o negociación es de Ventas, no del CSE** (`esTemaDeVenta`): una propuesta comercial, económica,
+  contractual, de precios, de inversión o de renovación, la renovación de un contrato, firmar, aprobar o enviar un
+  contrato, una orden de compra, negociar; y precio, tarifa, cotización o descuento si el texto no habla de configurar
+  HubSpot. Conservador a propósito: «renovación» sola no cuenta (en kölbi son los paquetes de renovación de SUS clientes),
+  «propuesta» sola tampoco, y «el formato único de cotización para subirlo a HubSpot» (Larce, T-124) es trabajo del CSE.
+  Lo que prometió el CLIENTE sobre un tema de venta («aprobar la propuesta de renovación») también lo sigue Ventas.
+- **El dueño del negocio, solo si se sabe** (`duenoDelNegocio`; los datos, `negocioDeLaCuenta` en lib/lecturas/personas.ts):
+  de los vendedores de los negocios abiertos de la cuenta, primero los de Ventas; de esos, el único que estuvo en la
+  reunión o el único que hay. Sin negocios abiertos, el dueño de la empresa en HubSpot. Dos posibles: «Por asignar» de
+  Ventas, nunca una persona cualquiera. En kölbi: Marco (Ventas, «KOLBI | RENOVACIÓN MARKETING») gana a Alexander Vanegas
+  (CSL, «Kolbi - SmartLoop»), aunque estuvieron los dos.
+- **Sin SQL ni datos que tocar.** El aviso se calcula al medir «Para ti», así que el cambio rige apenas se despliega. La
+  regla nueva de reparto solo cambia las lecturas que vengan.

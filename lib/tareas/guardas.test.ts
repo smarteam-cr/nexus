@@ -169,6 +169,7 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "scripts/agrupar-seguimientos-propuestos.ts": "junta en un seguimiento por reunión lo que ya estaba propuesto: lee las propuestas sueltas y escribe por el único escritor (agruparSeguimientosPropuestos)",
       "scripts/medir-tareas-por-persona.ts": "mide cuántas tareas tiene cada persona de CS y Ventas: solo lectura, sin IA, sin títulos de clientes",
       "scripts/validar-tareas.ts": "la pasada de validación del 2026-10-19: lee las líneas de «Próximos pasos» de cada reunión (proximos-pasos.ts) y las compara con las tareas que dejó; solo lectura, sin IA",
+      "scripts/a-quien-le-llegan-las-propuestas.ts": "mide a quién le llegan las propuestas de las reuniones y los avisos de las 48 horas, con la regla de hoy sobre la salida guardada: solo lectura, sin IA, títulos internos sin citas",
       "scripts/medir-propuestas-de-reuniones.ts": "mide qué propuestas dejaron las reuniones con clientes y cómo quedaron: solo lectura, sin IA, títulos internos sin citas",
       "scripts/comparar-pendientes-de-reuniones.ts": "compara qué pendientes propondría la lectura (antes y después de un cambio del pedido): solo lectura, llama a Claude sin escribir",
       "scripts/medir-cambio-de-tarea.ts": "mide cuánto tarda marcar una tarea como hecha: solo lectura, no imprime títulos",

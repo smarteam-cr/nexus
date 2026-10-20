@@ -62,6 +62,8 @@ describe("⛔ las comunicaciones de HubSpot", () => {
       "scripts/agrupar-seguimientos-propuestos.ts",
       // La pasada de validación (2026-10-19): cuántas hay y cuándo se copiaron, por estadoDeLasComunicaciones (solo lectura).
       "scripts/validar-datos.ts",
+      // A quién le llega el aviso de las 48 horas (2026-10-20): la regla pura y los compromisos que avisan hoy (solo lectura).
+      "scripts/a-quien-le-llegan-las-propuestas.ts",
     ]);
     const malos = TODO.filter((rel) => !rel.startsWith("lib/comunicaciones/") && /["']@\/lib\/comunicaciones\//.test(leer(rel)) && !permitidos.has(rel));
     expect(malos).toEqual([]);
