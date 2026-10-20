@@ -14,6 +14,8 @@ import { proyectosAbiertos } from "@/lib/clients/resumen-proyectos";
 import { CLIENTE_NO_EXCLIENTE_WHERE } from "@/lib/cs/exclientes";
 import { esProyectoDePipelineCS } from "@/lib/projects/scope";
 import { pipelineByKey } from "@/lib/projects/kind";
+import { encargadoDeLaCuenta, proyectoQueLleva } from "@/lib/cuentas/encargado";
+import { nombresDelEquipo } from "@/lib/cuentas/encargado-server";
 import { lecturasDelPedido } from "./lecturas-server";
 import { esLiderDeCs } from "@/lib/cs/acceso";
 import { tareasDisponible } from "@/lib/tareas/servidor";
@@ -58,18 +60,24 @@ const SELECT_PROYECTO = {
   altaEstado: true,
   esPrueba: true,
   hubspotOwnerEmail: true,
+  hubspotOwnerName: true,
+  hubspotCreatedAt: true,
 } as const;
 
 /** Las cuentas de la cartera con un proyecto de Customer Success abierto, con su encargado. */
 async function cuentasDeLaCartera(): Promise<{ clientId: string; empresa: string; llevaEmail: string | null; proyectos: string[] }[]> {
-  const clientes = await prisma.client.findMany({
-    where: { ...CS_CLIENT_WHERE, ...CLIENTE_NO_EXCLIENTE_WHERE, projects: { some: { status: "active" } } },
-    select: { id: true, name: true, projects: { select: SELECT_PROYECTO } },
-  });
+  const [clientes, equipo] = await Promise.all([
+    prisma.client.findMany({
+      where: { ...CS_CLIENT_WHERE, ...CLIENTE_NO_EXCLIENTE_WHERE, projects: { some: { status: "active" } } },
+      select: { id: true, name: true, projects: { select: SELECT_PROYECTO } },
+    }),
+    nombresDelEquipo(),
+  ]);
   return clientes.flatMap((c) => {
     const deCs = proyectosAbiertos(c.projects).filter(esProyectoDePipelineCS);
     if (!deCs.length) return [];
-    const lleva = deCs.find((p) => p.hubspotOwnerEmail)?.hubspotOwnerEmail?.toLowerCase() ?? null;
+    // Quien lleva la cuenta, con la regla única (lib/cuentas/encargado.ts): antes, el primer proyecto con dueño.
+    const lleva = encargadoDeLaCuenta(deCs.map(proyectoQueLleva), equipo.deBaja).email;
     return [{ clientId: c.id, empresa: c.name, llevaEmail: lleva, proyectos: deCs.map((p) => p.name) }];
   });
 }

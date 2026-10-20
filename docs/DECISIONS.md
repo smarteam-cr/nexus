@@ -9802,3 +9802,63 @@ vigía y 23 más abajo.
   reuniones, 5 grupos de cuentas sin siguiente paso por 33 cuentas, 6 grupos de pendientes por 14), y «También para hoy»
   de 23 a 17. Arriba hay más líneas que antes, pero son solo de las tres preguntas; en la cartera, las cuentas con la
   reunión como siguiente paso: Juan Carlos 3, Heiver 5, Caroline 2, Liliana 2, toda la cartera 12.
+
+## Quién lleva una cuenta: una sola regla, y el pase mueve lo abierto (2026-10-19)
+
+**Contexto.** Elías, en Clientes: Librería Internacional decía «Heiver Gómez» en «CSE encargado»; elegía Caroline Bersot y,
+al cerrar el desplegable, volvía a Heiver. El arreglo de la mañana (dar de baja el proyecto fusionado en HubSpot) ya estaba
+en producción y no alcanzó: el pase relee proyecto por proyecto cuando el piso de 60 s salta la corrida completa, y releer
+un id fusionado devuelve el del que sigue, así que la fila vieja seguía activa con Heiver. Y el listado mostraba el primero
+de los dueños de todos los proyectos. Medido ese día: había seis formas distintas de calcular el CSE de una cuenta.
+
+- **Quién lleva la cuenta sale de UNA regla** (`lib/cuentas/encargado.ts`, puro; `encargado-server.ts`, la base): el dueño
+  de la mayoría de los proyectos ACTIVOS del pipeline de Customer Success (implementación o servicio recurrente) con
+  registro en HubSpot; con empate, el del proyecto creado más recién en HubSpot (`hubspotCreatedAt`, un dato fijo: el
+  primer borrador desempataba por la última sincronización y el encargado cambiaba según qué proyecto se releyó último);
+  quien está de baja no lleva nada. La usan el listado de clientes, la celda
+  del pase en las cuatro pantallas, Éxito del cliente (cartera, Equipo, panel), la carga, la lectura de cada reunión (a
+  quién va el seguimiento), «Para ti» (la cartera del CSE y las cuentas sin siguiente paso) y la adopción del CSE. Un
+  proyecto de Desarrollo ya no define el CSE de la cuenta en Éxito del cliente; quien llevó un proyecto cerrado ya no ve
+  la adopción. Una cuenta que solo tiene proyectos de Desarrollo queda sin CSE en la carga y Rentabilidad, y el
+  seguimiento de una reunión suya sin proyecto va a «Por asignar · Customer Success» (antes iba al desarrollador). El
+  dueño de UN proyecto sigue siendo `Project.hubspotOwnerEmail`, y el acceso (`lib/auth/access.ts`) no cambió: sigue
+  siendo por proyecto.
+- **La celda recibe un encargado, no una lista de nombres**, por correo (no por nombre: HubSpot escribe «Heiver Gómez» y
+  Nexus puede no). La ruta del pase responde bien solo si, después de sincronizar, Nexus ya lee a la persona nueva; si no,
+  responde 409 nombrando el proyecto que sigue con otra persona. Recién ahí la celda fija lo elegido hasta que la página lo
+  traiga.
+- **El espejo dirigido da de baja la fila fusionada**: si HubSpot devuelve otro id que el pedido, la fila de ese id queda
+  inactiva (solo esa: HubSpot ya confirmó la fusión). La reconciliación de la corrida completa ya lo hacía.
+- **El pase mueve lo abierto que el anterior tenía POR LLEVAR la cuenta**, cada cosa por su escritor, con su evento
+  («pasó de X a Y por el pase de cuenta», o «cambió el encargado de la cuenta en HubSpot» si vino de allá). El evento es
+  `pase` y no `asignada`: mudar no es delegar (no entra a «Lo que delegaste») ni tocar la tarea (no frena «ya pasó»):
+  · *tareas* (`lib/tareas/pase.ts`, escritor `pasarTareasPorElPase`): el seguimiento de lo que prometió el cliente que
+    propuso Nexus (`lado = cliente`, de una reunión o un correo), el siguiente paso de CS (`origen = paso`, sprint `cs`) y
+    las rutinas del servicio (`plantilla`, `servicio:…`). Se quedan con la persona lo que se comprometió ella, lo que creó
+    a mano o con el chat, lo que le pidieron, sus tareas de HubSpot, sus reuniones planeadas y lo «Solo para mí». Solo lo
+    abierto. Van a la semana de la persona nueva (nunca una revisada) y su sprint; una propuesta igual que ya tenía se
+    junta. Una tarea de un proyecto que el anterior sigue llevando (su Desarrollo) no se mueve. El siguiente paso de CS
+    solo pasa a alguien del sprint de CS (de casa o que lo lidera) y se queda en ese sprint: pasarle la cuenta a alguien de
+    otro equipo dejaría la cuenta sin siguiente paso de CS;
+  · *avisos sin leer de la cuenta* que le llegaron por llevarla (`adopcion.revisar`, `cliente.aprobo-documento`):
+    `pasarAvisosDeLaCuenta` (nunca uno para quien hizo la acción). Los avisos y las alertas se mudan solo cuando cambia
+    quien lleva la CUENTA, no por un solo proyecto;
+  · *alertas abiertas que el anterior ya había visto* vuelven a «sin ver» (`reabrirAlertasVistasPor`). Una alerta no tiene
+    dueña: le llega a quien lleva la cuenta.
+  · lo que «Para ti» CALCULA por encargado (la cartera, cuándo presentar un documento, las cuentas sin siguiente paso) no
+    se mueve: sale solo del encargado nuevo. Las preguntas sobre la cuenta y las de tiempo son de cada persona.
+- **Dos disparadores, el mismo efecto**: la ruta del pase (firma quien lo hizo) y cada sincronización, que compara una
+  foto de los proyectos antes y después (`planDelPase`, `lib/cuentas/pase.ts`): si un proyecto cambió de dueño, sus tareas
+  van del dueño de antes al de ahora; si cambió quien lleva la cuenta y el anterior ya no lleva ningún proyecto de CS, lo
+  de la cuenta pasa al nuevo. Correrlo dos veces no mueve nada la segunda. Nunca hacia alguien de baja, que no esté en el
+  equipo de Nexus, ni hacia nadie. *Solo con un cambio de verdad* (revisión adversarial del mismo día): un correo que
+  cambió con el mismo id de dueño en HubSpot (no se pudo leer el dueño y el espejo cayó al dueño estándar) o que se perdió
+  no es un pase, y cerrar el proyecto de otra persona o sumar uno de otro CSE tampoco. Si el espejo se cae a la mitad, el
+  pase se intenta igual; si el pase falla, queda en el registro y lo de la celda tiene su propia red (la ruta).
+- **Medido el 2026-10-19 en solo lectura** (`scripts/pase-de-cuenta.ts`, la historia de HubSpot de 30 días): 3 cuentas
+  cambiaron de encargado (Secure Title, kölbi, Discover Puerto Rico) y hoy no se movería nada en ninguna: sus tareas abiertas
+  son lo que se comprometió cada persona o están en «Por asignar». Librería no tiene tareas ni avisos que mover: su
+  migración no escribió nada.
+- **Pendiente de Elías:** si el seguimiento que quedó en «Por asignar · Customer Success» de una cuenta que no tenía CSE
+  (4 en Secure Title) debe pasar solo al encargado nuevo.
+

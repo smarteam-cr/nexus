@@ -69,7 +69,7 @@ export default function PanelDeLaCuenta({ data }: { data: CsAccountData }) {
                 <CseEncargadoSelect
                   clientId={c.clientId}
                   clientName={c.nombre}
-                  nombres={[...new Set(c.proyectos.filter((x) => x.activo && x.cseNombre).map((x) => x.cseNombre as string))]}
+                  encargado={cse ?? null}
                   opciones={data.equipoParaPase}
                   puedeEditar
                 />

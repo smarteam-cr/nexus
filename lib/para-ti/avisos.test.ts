@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { destinatarios, esBuenaNoticia, esRutaInterna, textoDeAviso, TIPOS_DE_AVISO } from "./avisos";
+import { AVISOS_DEL_ENCARGADO, destinatarios, enlaceDeLaCuenta, esBuenaNoticia, esRutaInterna, textoDeAviso, TIPOS_DE_AVISO } from "./avisos";
 
 describe("destinatarios de un aviso", () => {
   it("⭐ nunca le llega a quien hizo la acción", () => {
@@ -43,5 +43,20 @@ describe("textos", () => {
 
   it("los tipos tienen la forma <módulo>.<qué pasó>", () => {
     for (const t of Object.keys(TIPOS_DE_AVISO)) expect(t).toMatch(/^[a-z]+\.[a-z-]+$/);
+  });
+});
+
+describe("los avisos que se mudan con el pase de cuenta (2026-10-19)", () => {
+  it("son del encargado: la adopción y el documento aprobado; nunca un mensaje", () => {
+    for (const t of AVISOS_DEL_ENCARGADO) expect(TIPOS_DE_AVISO).toHaveProperty(t);
+    expect(AVISOS_DEL_ENCARGADO).not.toContain("proyecto.encargado");
+  });
+  it("⛔ invariante 1: el enlace es de ESA cuenta, no de otra cuyo id empiece igual", () => {
+    expect(enlaceDeLaCuenta("/clients/abc", "abc")).toBe(true);
+    expect(enlaceDeLaCuenta("/clients/abc?tab=p1&canvas=x", "abc")).toBe(true);
+    expect(enlaceDeLaCuenta("/customer-success/abc?pestana=adopcion", "abc")).toBe(true);
+    expect(enlaceDeLaCuenta("/clients/abcd", "abc")).toBe(false);
+    expect(enlaceDeLaCuenta("/clients/abcd?tab=x", "abc")).toBe(false);
+    expect(enlaceDeLaCuenta("/para-ti", "abc")).toBe(false);
   });
 });

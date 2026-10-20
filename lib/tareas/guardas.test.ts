@@ -173,6 +173,7 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "scripts/medir-cambio-de-tarea.ts": "mide cuánto tarda marcar una tarea como hecha: solo lectura, no imprime títulos",
       "scripts/aligerar-tareas.ts": "cierra lo que ya pasó a nombre de quien firma y junta los seguimientos de «Por asignar»: simulacro por defecto, escribe por el único escritor (cambiarEstado, decidirTarea, agruparSeguimientosPorAsignar)",
       "lib/jobs/defs.ts": "el job del lunes (mantenimientoDelLunes, por el único escritor)",
+      "lib/cuentas/pase-server.ts": "el pase de cuenta: muda al encargado nuevo lo que el anterior tenía por llevarla, por el único escritor (pasarTareasPorElPase); no lee tareas por su cuenta",
       "lib/seguimiento/tarjeta-server.ts": "«Lo que dejó esta reunión»: las tareas propuestas de una reunión, para quien las recibe (serializa por serializar.ts)",
       "lib/seguimiento/usar-todo-server.ts": "«Usar todo» de la tarjeta de una reunión: decide por decidirTarea (el único escritor)",
       "lib/lo-propuesto/registro-server.ts": "«Uso de Nexus»: cuenta las tareas propuestas por su estado (no serializa)",

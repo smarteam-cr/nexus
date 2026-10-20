@@ -402,6 +402,13 @@ export const esProyectoClasificable = (p: ProyectoParaFiltro): boolean =>
 export const esProyectoDePipelineCS = (p: ProyectoParaFiltro): boolean =>
   PIPELINE_CS.every((k) => k.cumple(p));
 
+/**
+ * ¿Este id de pipeline es de Customer Success (implementación o servicio recurrente)? Para listas que ya traen el
+ * pipeline suelto y no la fila entera (la cartera de Éxito del cliente). Mismo átomo que `esProyectoDePipelineCS`.
+ */
+export const esPipelineIdDeCs = (hubspotPipelineId: string | null | undefined): boolean =>
+  pipelineNoEstaEn({ hubspotPipelineId: hubspotPipelineId ?? null } as ProyectoParaFiltro, PIPELINES_QUE_NO_SON_CS);
+
 /** Los nombres de los átomos de cada criterio — lo consume la guarda de cobertura. */
 export const ATOMOS_POR_CRITERIO = {
   navegable: NAVEGABLE.map((k) => k.nombre),

@@ -18,6 +18,7 @@
  * proyecto. Los de Desarrollo/Sitios web NO se tocan: cuelgan como hijos y tienen su propio encargado técnico.
  * Eso lo decide el endpoint; acá solo se elige. Al CSE nuevo le llega el resumen de la cuenta en «Para ti».
  */
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CeldaSelect, type OpcionDeCelda } from "@/components/ui/CeldaSelect";
 
@@ -29,15 +30,19 @@ export interface OpcionDeEncargado {
 export default function CseEncargadoSelect({
   clientId,
   clientName,
-  nombres,
+  encargado,
   opciones,
   puedeEditar,
   sugerencia,
 }: {
   clientId: string;
   clientName: string;
-  /** Los encargados de HOY, ya deduplicados y acotados al pipeline de CS por el servidor. */
-  nombres: string[];
+  /**
+   * Quien lleva la cuenta HOY, de la regla única (lib/cuentas/encargado.ts). Uno solo: antes la celda recibía los
+   * dueños de todos los proyectos y pintaba el primero, y una fila vieja dejaba a otra persona adelante (Librería,
+   * 2026-10-19). `email` null = no está en el equipo activo (se lee el nombre tal cual).
+   */
+  encargado: { nombre: string; email: string | null } | null;
   /** El equipo activo. Vacío ⇒ se pinta como texto, sin desplegable. */
   opciones: OpcionDeEncargado[];
   puedeEditar: boolean;
@@ -46,32 +51,37 @@ export default function CseEncargadoSelect({
 }) {
   const router = useRouter();
 
-  /* ⚠ El `value` es el EMAIL y no el nombre: es lo que el endpoint sabe resolver contra
-     `TeamMember`, y dos personas pueden llamarse igual. El nombre es solo lo que se lee. */
   const items: OpcionDeCelda[] = opciones.map((o) => ({
     value: o.email,
     label: o.name,
     hint: o.email,
   }));
 
-  /**
-   * La selección de hoy llega como NOMBRES (así los arma el servidor, resolviendo owners de
-   * HubSpot), y `CeldaSelect` trabaja con `value`. Se traduce nombre → email.
-   *
-   * ⚠ Lo que NO matchea se conserva TAL CUAL en vez de descartarse: un encargado que está en
-   * HubSpot pero no en el equipo de Nexus (alguien que se fue, o un owner que nunca se dio de
-   * alta acá) tiene que seguir viéndose. `CeldaSelect` cae al `value` crudo cuando no encuentra
-   * la opción, así que se lee el nombre; y el contador «+N» sigue contando bien, que es lo que
-   * se rompía al filtrarlos.
-   */
-  const seleccion = nombres.map((n) => opciones.find((o) => o.name === n)?.email ?? n);
+  /* Lo elegido, mientras el servidor no traiga otra cosa: si el pase se escribió pero la página todavía muestra al
+     anterior (la sincronización no terminó), la celda no vuelve atrás. Se suelta en cuanto los props traen a esa
+     persona, o a otra distinta de la que había al elegir (alguien la cambió después). */
+  const [elegido, setElegido] = useState<{ email: string; antes: string | null } | null>(null);
+  const deHoy = encargado?.email?.toLowerCase() ?? null;
+  const vigente = elegido && elegido.antes === deHoy && elegido.email !== deHoy ? elegido.email : null;
+  // En cuanto la página trae a la persona elegida (o a otra), lo elegido se suelta: después manda la página. Se ajusta
+  // durante el render (el patrón de React para derivar estado de las props), no en un efecto.
+  if (elegido && elegido.antes !== deHoy) setElegido(null);
+
+  /* ⚠ El `value` es el EMAIL: es lo que el endpoint sabe resolver contra `TeamMember`, y dos personas pueden llamarse
+     igual. Alguien que no está en el equipo de Nexus (se fue, o nunca se dio de alta) se ve por su nombre. */
+  const opcionDe = (email: string | null) => (email ? opciones.find((o) => o.email.toLowerCase() === email)?.email ?? null : null);
+  const seleccion = vigente
+    ? [opcionDe(vigente) ?? vigente]
+    : encargado
+      ? [opcionDe(deHoy) ?? encargado.nombre]
+      : [];
 
   return (
     <CeldaSelect
       opciones={items}
       seleccion={seleccion}
       puedeEditar={puedeEditar}
-      etiqueta={`CSE encargado de ${clientName}${nombres.length ? `: ${nombres[0]}` : ""}`}
+      etiqueta={`CSE encargado de ${clientName}${encargado ? `: ${encargado.nombre}` : ""}`}
       placeholderBusqueda="Buscar persona…"
       sugerencia={sugerencia}
       onElegir={async (email) => {
@@ -82,8 +92,10 @@ export default function CseEncargadoSelect({
         });
         const j = (await r.json().catch(() => ({}))) as { error?: string };
         if (!r.ok) throw new Error(j.error ?? "no se pudo reasignar");
-        /* El valor nuevo lo trae el servidor: la celda se repinta con lo que quedó en HubSpot,
-           no con lo que pedimos. Si el espejo trajo otra cosa, se ve esa. */
+        setElegido({ email: email.toLowerCase(), antes: deHoy });
+        /* La ruta responde bien SOLO si Nexus ya lee a esa persona como encargada (relee después de escribir); si no,
+           devuelve el error y la celda lo muestra. Recién entonces se fija lo elegido, hasta que la página traiga lo
+           nuevo: así la celda no vuelve atrás mientras `router.refresh()` no llega. */
         router.refresh();
       }}
     />

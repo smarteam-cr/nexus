@@ -312,6 +312,7 @@ const NOMBRE_DEL_EVENTO: Record<string, string> = {
   creada: "La creó",
   editada: "La editó",
   asignada: "La asignó",
+  pase: "Cambió de manos",
   no_es_mia: "Dijo que no era suya",
   estado: "Cambió el estado",
   semana: "La movió de semana",
@@ -370,6 +371,7 @@ function textoDelEvento(
     e.tipo === "estado" ? `a ${estado(d.hacia)}${typeof d.motivo === "string" && d.motivo ? ` · «${d.motivo}»` : ""}` :
     e.tipo === "decidida" ? (typeof d.decision === "string" ? (NOMBRE_DE_LA_DECISION[d.decision] ?? d.decision) : null) :
     e.tipo === "asignada" && d.motivo === "baja" ? "pasó a «Por asignar»: su responsable se dio de baja" :
+    e.tipo === "pase" && typeof d.texto === "string" ? d.texto :
     e.tipo === "revisada" ? (REVISION[String(d.resultado)] ?? null) :
     (e.tipo === "hubspot" || e.tipo === "a_hubspot") && camposDeHubspot.length ? `${camposDeHubspot.join(", ")}${conflicto}` : null;
   // «Nexus la propuso» solo si la propuso Nexus: la que sugiere una persona dice eso.

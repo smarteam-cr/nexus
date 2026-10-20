@@ -13,7 +13,7 @@ import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
 import { esResponsable } from "@/lib/escala/responsable";
 import { frentesDelMiembro } from "./alcance-server";
-import { destinatarios, esBuenaNoticia, esMensaje, esRutaInterna, textoDeAviso } from "./avisos";
+import { AVISOS_DEL_ENCARGADO, destinatarios, enlaceDeLaCuenta, esBuenaNoticia, esMensaje, esRutaInterna, textoDeAviso } from "./avisos";
 import { esClaveDeFrente, frente, puedeLlevar, type ClaveDeFrente } from "./frentes";
 import type { AvisoVisto } from "./tipos";
 
@@ -99,6 +99,37 @@ export async function avisar(a: NuevoAviso): Promise<number> {
   } catch (e) {
     if (esquemaDesactualizado(e)) return 0;
     console.error(`[para-ti] no se pudo escribir el aviso ${a.tipo} (${a.dedupeKey}): ${e instanceof Error ? e.message : String(e)}`);
+    return 0;
+  }
+}
+
+/**
+ * Muda al encargado nuevo los avisos sin leer de la cuenta que eran del anterior por llevarla: el nuevo los recibe
+ * (con la misma clave: no se repiten) y el anterior los da por leídos. Con `simular`, solo los cuenta. NUNCA lanza.
+ */
+export async function pasarAvisosDeLaCuenta(p: { clientId: string; de: readonly string[]; a: string; simular?: boolean }): Promise<number> {
+  try {
+    if (!modeloDisponible(prisma.aviso) || p.de.length === 0) return 0;
+    const filas = (
+      await prisma.aviso.findMany({
+        where: { paraEmail: { in: p.de.map((e) => e.toLowerCase()) }, leidoAt: null, frente: null, tipo: { in: [...AVISOS_DEL_ENCARGADO] } },
+        select: { id: true, tipo: true, titulo: true, detalle: true, href: true, actorEmail: true, dedupeKey: true },
+      })
+    ).filter((f) => enlaceDeLaCuenta(f.href, p.clientId));
+    if (filas.length === 0 || p.simular) return filas.length;
+    const a = p.a.toLowerCase();
+    await prisma.$transaction([
+      prisma.aviso.createMany({
+        // Nunca a quien hizo la acción (la base lo prohíbe, `Aviso_no_a_quien_lo_hizo`): esa persona ya lo sabe.
+        data: filas.filter((f) => (f.actorEmail ?? "").toLowerCase() !== a).map((f) => ({ paraEmail: a, tipo: f.tipo, titulo: f.titulo, detalle: f.detalle, href: f.href, frente: null, actorEmail: f.actorEmail, dedupeKey: f.dedupeKey })),
+        skipDuplicates: true,
+      }),
+      prisma.aviso.updateMany({ where: { id: { in: filas.map((f) => f.id) } }, data: { leidoAt: new Date() } }),
+    ]);
+    return filas.length;
+  } catch (e) {
+    if (esquemaDesactualizado(e)) return 0;
+    console.error(`[para-ti] no se pudieron mudar los avisos de la cuenta ${p.clientId}: ${e instanceof Error ? e.message : String(e)}`);
     return 0;
   }
 }

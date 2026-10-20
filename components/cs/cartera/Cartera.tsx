@@ -562,7 +562,7 @@ function FilaDeCartera({
           <CseEncargadoSelect
             clientId={f.clientId}
             clientName={f.nombre}
-            nombres={f.cses}
+            encargado={f.cse}
             opciones={puedeReasignar ? equipoParaPase : []}
             puedeEditar={puedeReasignar}
           />

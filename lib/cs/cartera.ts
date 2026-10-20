@@ -17,7 +17,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { loadPortfolio, type PortfolioRow } from "@/lib/portfolio/load";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
-import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
+import { esPipelineIdDeCs, PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { etapaDeNexusPorNombre } from "@/lib/clients/que-sigue-del-proyecto";
 import { belongsToClient, whereBelongsToClient } from "@/lib/sessions/project-sources";
@@ -108,7 +108,14 @@ export async function cseDeBajaPorCorreo(): Promise<Map<string, string>> {
 function proyectoDesdeFila(
   r: PortfolioRow,
   ops:
-    | { hubspotStatus: string | null; hubspotBlockReason: string | null; hubspotBlockDetail: string | null; hubspotPipelineId?: string | null }
+    | {
+        hubspotStatus: string | null;
+        hubspotBlockReason: string | null;
+        hubspotBlockDetail: string | null;
+        hubspotPipelineId?: string | null;
+        hubspotServiceId?: string | null;
+        hubspotCreatedAt?: Date | null;
+      }
     | undefined,
   deBaja: ReadonlyMap<string, string>,
 ): ProyectoDeCuenta {
@@ -128,6 +135,10 @@ function proyectoDesdeFila(
       : (etapaDeNexusPorNombre(r.stageLabel) ?? s.stage?.effective ?? null),
     ...cseVigente(r.cseName, r.cseEmail, deBaja),
     activo: true,
+    // Lo que mira la regla de quién lleva la cuenta (lib/cuentas/encargado.ts): un proyecto de Desarrollo no la define.
+    deCs: ops ? esPipelineIdDeCs(ops.hubspotPipelineId) : true,
+    deHubspot: ops ? !!ops.hubspotServiceId : true,
+    creadoAt: ops?.hubspotCreatedAt?.toISOString() ?? null,
     bloqueado: esBloqueado(ops?.hubspotStatus ?? null, r.stageLabel),
     motivoBloqueo: ops?.hubspotBlockReason ?? null,
     detalleBloqueo: ops?.hubspotBlockDetail ?? null,
@@ -227,7 +238,7 @@ export async function cargarCuentas(
     prisma.client.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, company: true, tamUsd: true } }),
     prisma.project.findMany({
       where: { id: { in: filas.map((r) => r.projectId) } },
-      select: { id: true, hubspotStatus: true, hubspotBlockReason: true, hubspotBlockDetail: true, hubspotPipelineId: true },
+      select: { id: true, hubspotStatus: true, hubspotBlockReason: true, hubspotBlockDetail: true, hubspotPipelineId: true, hubspotServiceId: true, hubspotCreatedAt: true },
     }),
     // Los proyectos de CS cerrados hace poco: solo para el cruce «el uso cae desde que se cerró».
     // Nexus no guarda la fecha de cierre: la del último cambio es la aproximación (lo dice la UI).

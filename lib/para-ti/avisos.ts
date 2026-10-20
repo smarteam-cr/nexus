@@ -90,3 +90,19 @@ export function textoDeAviso(t: string, max = 200): string {
   const limpio = t.replace(/\s+/g, " ").trim();
   return limpio.length <= max ? limpio : `${limpio.slice(0, max - 1).trimEnd()}…`;
 }
+
+/**
+ * Los avisos que le llegaron a alguien POR LLEVAR una cuenta y que todavía no leyó (2026-10-19, el pase de cuenta). Son
+ * de un proyecto o de la adopción de la cuenta: el cliente aprobó un documento, revisar la adopción. Los mensajes, los
+ * que llegaron por un frente y el propio aviso del pase no se mudan: son de la persona.
+ */
+export const AVISOS_DEL_ENCARGADO = ["adopcion.revisar", "cliente.aprobo-documento"] as const;
+
+/** ¿Este enlace es de esa cuenta? (la ficha o Éxito del cliente). */
+export function enlaceDeLaCuenta(href: string, clientId: string): boolean {
+  const id = encodeURIComponent(clientId);
+  // El id entero: otro cliente cuyo id empiece igual no cuenta (invariante 1).
+  return [`/clients/${id}`, `/customer-success/${id}`].some(
+    (base) => href.startsWith(base) && (href.length === base.length || "/?#".includes(href[base.length])),
+  );
+}

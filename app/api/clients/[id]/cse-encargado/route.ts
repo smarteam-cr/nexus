@@ -12,6 +12,9 @@ import { hayQueReleerLosProyectos } from "@/lib/hubspot/proyecto-fusionado";
 import { olvidarMedicion } from "@/lib/para-ti/medir-server";
 import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 import { avisar } from "@/lib/para-ti/avisos-server";
+import { encargadoDe } from "@/lib/cuentas/encargado-server";
+import { planExplicito } from "@/lib/cuentas/pase";
+import { lineaDeLoQuePaso, pasarLoDeLaCuenta, quienesSiguen } from "@/lib/cuentas/pase-server";
 
 /**
  * PATCH /api/clients/[id]/cse-encargado — reasignar el CSE encargado de una CUENTA (el «pase de cuenta»).
@@ -157,13 +160,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   /* Un solo sync por cliente al final, no uno por proyecto: el espejo trae TODOS los proyectos
      de la empresa en la misma corrida, así que llamarlo N veces sería pagar lo mismo N veces. */
-  const espejo = await syncProjectsForClient(clientId, { force: true });
+  const quienPasa = guard.user.email?.toLowerCase() ?? null;
+  const espejo = await syncProjectsForClient(clientId, { force: true, porEmail: quienPasa });
   /* ⚠ Si la corrida no corrió DESPUÉS de escribir (el piso de 60 s, porque la ficha se sincronizó sola al abrirse, o
      una corrida en curso que empezó antes), Nexus seguía con el encargado viejo y la celda volvía a él (2026-10-19).
      Se releen uno por uno los proyectos escritos con el espejo dirigido, que no pasa por el piso. */
   if (hayQueReleerLosProyectos(espejo)) {
     for (const p of proyectos) {
-      const uno = await espejarProyectoRecienCreado(clientId, p.hubspotServiceId!);
+      const uno = await espejarProyectoRecienCreado(clientId, p.hubspotServiceId!, { porEmail: quienPasa });
       espejo.errors.push(...uno.errors);
     }
   }
@@ -179,6 +183,39 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       { status: 502 },
     );
   }
+
+  /* ⭐ Antes de decir «listo», Nexus tiene que leer a esa persona como encargada (la regla única,
+     lib/cuentas/encargado.ts). Si no (una fila vieja que el espejo no pudo dar de baja), se dice cuál: la celda no
+     puede mostrar a la persona nueva y volver a la anterior al recargar (Librería, 2026-10-19). */
+  const ahora = await encargadoDe(clientId);
+  if (ahora.email !== destino.email.toLowerCase()) {
+    const quedaron = await prisma.project.findMany({
+      where: { clientId, status: "active", hubspotOwnerEmail: { not: null }, NOT: { hubspotOwnerEmail: { equals: destino.email, mode: "insensitive" } }, ...PROYECTO_DE_PIPELINE_CS_WHERE },
+      select: { name: true, hubspotServiceId: true, hubspotOwnerName: true },
+    });
+    return NextResponse.json(
+      {
+        error:
+          `En HubSpot quedó ${destino.name}, pero Nexus todavía lee a ${ahora.nombre ?? "otra persona"} como encargada` +
+          (quedaron.length ? ` por ${quedaron.map((q) => `«${q.name}» (${q.hubspotServiceId}, de ${q.hubspotOwnerName ?? "—"})`).join(", ")}` : "") +
+          `. Ábrela en HubSpot: si se fusionó o se cerró, la próxima sincronización la da de baja.`,
+      },
+      { status: 409 },
+    );
+  }
+
+  /* El pase mueve lo abierto (2026-10-19): las tareas que el anterior tenía POR LLEVAR la cuenta (seguimientos, el
+     siguiente paso de CS, las rutinas del servicio), sus avisos sin leer de la cuenta y las alertas que ya había visto.
+     La sincronización de arriba ya lo hizo si vio el cambio; esto lo asegura (correrlo de nuevo no mueve nada). */
+  const pase = await pasarLoDeLaCuenta({
+    clientId,
+    plan: planExplicito(anteriores, destino.email, await quienesSiguen(clientId)),
+    porEmail: quienPasa,
+    motivo: "pase",
+  }).catch((e) => {
+    console.error(`[cse-encargado] no se pudo pasar lo abierto de ${clientId}:`, e instanceof Error ? e.message : e);
+    return null;
+  });
 
   /* Lo que sale del encargado (la cartera, «Para ti», las cuentas sin acción) se vuelve a medir enseguida, sin esperar
      los dos minutos de la medición guardada: de quien la recibe, de quien la tenía y de quien hizo el pase. */
@@ -202,7 +239,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     para: destino.email,
     tipo: "proyecto.encargado",
     titulo: `Quedaste como encargado de ${cliente?.name ?? "una cuenta"}`,
-    detalle: cuenta ? resumenDelPase(cuenta, hoy, esencial) : [lineaDeLoEsencial(esencial), proyectosEnUnaLinea].filter(Boolean).join(" "),
+    detalle: [pase ? lineaDeLoQuePaso(pase, destino.email) : "", cuenta ? resumenDelPase(cuenta, hoy, esencial) : [lineaDeLoEsencial(esencial), proyectosEnUnaLinea].filter(Boolean).join(" ")]
+      .filter(Boolean)
+      .join(" "),
     href: `/clients/${encodeURIComponent(clientId)}`,
     actorEmail: guard.user.email,
     dedupeKey: `proyecto.encargado:${clientId}:${new Date().toISOString().slice(0, 10)}`,
@@ -226,5 +265,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     contactos: enLaEmpresa.contactos,
     contactosFallidos: enLaEmpresa.contactosFallidos,
     avisoEmpresa: enLaEmpresa.error,
+    tareas: pase?.tareas.length ?? 0,
   });
 }

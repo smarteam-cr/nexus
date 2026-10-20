@@ -26,3 +26,22 @@ export function propiedadesDeEncargados(e: Encargados): Record<string, string> {
 export function encargadoDelProyecto(props: { cse_encargado?: string | null; csl_encargado?: string | null }): string | null {
   return (props.cse_encargado ?? "").trim() || (props.csl_encargado ?? "").trim() || null;
 }
+
+/** Un valor de la historia de una propiedad en HubSpot (`propertiesWithHistory`). */
+export interface ValorEnElTiempo {
+  value: string | null;
+  timestamp: string;
+}
+
+/**
+ * El encargado que tenía el proyecto en una fecha, con la misma regla que `encargadoDelProyecto` («CSE Encargado» y, si
+ * está vacío, «CSL Encargado»), sobre la historia de las dos propiedades. Sirve para medir quién llevaba la cuenta hace
+ * N días (scripts/pase-de-cuenta.ts). Sin historia hasta esa fecha: null.
+ */
+export function encargadoEnLaFecha(historia: { cse?: readonly ValorEnElTiempo[]; csl?: readonly ValorEnElTiempo[] }, fecha: Date): string | null {
+  const valorA = (vs: readonly ValorEnElTiempo[] | undefined) => {
+    const previos = (vs ?? []).filter((v) => Date.parse(v.timestamp) <= fecha.getTime()).sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+    return previos[0]?.value ?? null;
+  };
+  return encargadoDelProyecto({ cse_encargado: valorA(historia.cse), csl_encargado: valorA(historia.csl) });
+}

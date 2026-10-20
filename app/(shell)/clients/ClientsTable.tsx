@@ -13,6 +13,8 @@ import {
 import { elegirEtapa, ordenarAvisos, type AvisoDeCartera } from "@/lib/clients/indice";
 import { listarEmpresasTraibles } from "@/lib/hubspot/empresas-con-proyecto";
 import { esProyectoDePipelineCS } from "@/lib/projects/scope";
+import { encargadoDeLaCuenta, proyectoQueLleva, quienesLlevanLaCuenta } from "@/lib/cuentas/encargado";
+import { nombresDelEquipo } from "@/lib/cuentas/encargado-server";
 import { altaEnCurso, EXPLICACION_DEL_PASO, siguientePaso } from "@/lib/projects/alta";
 import { loadLifecycleBatch } from "@/lib/lifecycle";
 import { etapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
@@ -64,7 +66,7 @@ export const consultarIndice = cache(async (
   clientWhere: ClientWhere,
   sharedIds: Set<string>,
 ): Promise<DatosDelIndice> => {
-  const [clients, teamMembers] = await Promise.all([
+  const [clients, teamMembers, equipo] = await Promise.all([
     prisma.client.findMany({
       where: clientWhere ?? undefined,
       orderBy: { createdAt: "desc" }, // fallback secundario; el orden real se aplica abajo
@@ -103,11 +105,14 @@ export const consultarIndice = cache(async (
             id: true,
             name: true,
             hubspotPipelineStageLabel: true,
+            // Desempata quién lleva la cuenta (lib/cuentas/encargado.ts): el proyecto creado más recién en HubSpot.
+            hubspotCreatedAt: true,
           },
         },
       },
     }),
     getTeamMembers(),
+    nombresDelEquipo(),
   ]);
 
   /**
@@ -170,6 +175,10 @@ export const consultarIndice = cache(async (
     contarSesionesSinRevisar(deEmpresasMultiproyecto.map((p) => ({ id: p.id, clientId: p.clientId }))),
   ]);
 
+  /* Quién está de baja y cómo se llama cada persona en Nexus: el encargado de la cuenta (lib/cuentas/encargado.ts) no
+     cuenta a quien se fue, y se nombra como en el desplegable (HubSpot escribe «Heiver Gómez», Nexus quizás no). */
+  const { deBaja, nombres: nombreEnNexus } = equipo;
+
   const rows: ClientRow[] = clients.map((c) => {
     const md = meetingDates.get(c.id);
     const activity = activityMap.get(c.id);
@@ -183,27 +192,19 @@ export const consultarIndice = cache(async (
      * owner de CUALQUIER proyecto: kölbi mostraba "Breiner Salas Salas +1" — el
      * desarrollador de su integración de Desarrollo, antepuesto al CSE real de la cuenta.
      */
-    /* Primero los ACTIVOS (2026-10-11): el espejo no actualiza el encargado de un proyecto cerrado, así que uno
-       cerrado conserva a quien lo llevaba entonces. En CAV mostraba a Lorena (de baja) después de pasar la cuenta a
-       Caroline. Solo si el cliente no tiene ninguno activo se muestra quién llevaba los cerrados. */
+    /* ⭐ QUIÉN LLEVA LA CUENTA sale de UNA regla (lib/cuentas/encargado.ts, 2026-10-19): el dueño de la mayoría de los
+       proyectos de CS ACTIVOS con registro en HubSpot, sin los de baja. Antes la columna juntaba los dueños de todos los
+       proyectos de CS activos y mostraba el primero: en Librería, una fila fusionada en HubSpot dejaba a Heiver adelante
+       de Caroline. `cseEmails` sigue siendo todos los que llevan algún proyecto de CS (es «Mis clientes»).
+       Sin ningún proyecto activo se muestra quién llevaba los cerrados (2026-10-11): el espejo ya no los relee. */
     const deCS = c.projects.filter(esProyectoDePipelineCS);
     const activosDeCS = deCS.filter((p) => p.status === "active");
-    const proyectosDeCS = activosDeCS.length > 0 ? activosDeCS : deCS;
-    const cseNames = [
-      ...new Set(
-        proyectosDeCS
-          .map((p) => p.hubspotOwnerName)
-          .filter((n): n is string => !!n && n.trim().length > 0)
-      ),
-    ];
-    const cseEmails = [
-      ...new Set(
-        proyectosDeCS
-          .map((p) => p.hubspotOwnerEmail)
-          .filter((e): e is string => !!e && e.trim().length > 0)
-          .map((e) => e.toLowerCase())
-      ),
-    ];
+    const proyectosDeCS = activosDeCS.length > 0 ? activosDeCS : deCS.map((p) => ({ ...p, status: "active" }));
+    const lleva = proyectosDeCS.map(proyectoQueLleva);
+    const encargado = encargadoDeLaCuenta(lleva, deBaja, nombreEnNexus);
+    const cseNames = encargado.nombre ? [encargado.nombre] : encargado.deBaja ? [`${encargado.deBaja} (de baja)`] : [];
+    const cseEmails = quienesLlevanLaCuenta(lleva, deBaja).map((p) => p.email);
+    const cseEmail = encargado.email;
 
     // La etapa del proyecto de implementación (con 2+, el que va más atrás: `elegirEtapa`).
     const etapa = elegirEtapa(
@@ -222,6 +223,7 @@ export const consultarIndice = cache(async (
       tamUsd: c.tamUsd === null ? null : Number(c.tamUsd),
       cseNames,
       cseEmails,
+      cseEmail,
       lastSalesMeeting: md?.sales ? md.sales.toISOString() : null,
       lastCseMeeting: md?.cse ? md.cse.toISOString() : null,
       // Última actividad pasada (sesión, nota, agent run)

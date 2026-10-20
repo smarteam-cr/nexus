@@ -10,7 +10,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { DE_LA_PREVENTA } from "@/lib/exploraciones/marco";
-import { proyectoDeCarteraWhere } from "@/lib/projects/scope";
+import { encargadoDe } from "@/lib/cuentas/encargado-server";
 
 /** El dueño en HubSpot del proyecto principal de la reunión, en minúsculas. */
 export async function cseDelProyecto(projectId: string | null): Promise<string | null> {
@@ -20,18 +20,11 @@ export async function cseDelProyecto(projectId: string | null): Promise<string |
 }
 
 /**
- * El CSE de la cuenta: quien es dueño de más proyectos de la CARTERA del cliente (activos, sin el contenedor ni los
- * internos: `proyectoDeCarteraWhere`, el mismo criterio de Éxito del cliente). Con empate, el primero por correo.
+ * El CSE de la cuenta, con la regla única (lib/cuentas/encargado.ts): quien lleva más proyectos de CS activos, sin los
+ * de baja. Hasta el 2026-10-19 contaba también los de Desarrollo (la cartera) y a quien ya no estaba.
  */
 export async function cseDeLaCuenta(clientId: string): Promise<string | null> {
-  const proyectos = await prisma.project.findMany({ where: proyectoDeCarteraWhere({ clientId, hubspotOwnerEmail: { not: null } }), select: { hubspotOwnerEmail: true } });
-  const cuenta = new Map<string, number>();
-  for (const p of proyectos) {
-    const e = p.hubspotOwnerEmail?.trim().toLowerCase();
-    if (e) cuenta.set(e, (cuenta.get(e) ?? 0) + 1);
-  }
-  const orden = [...cuenta.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  return orden[0]?.[0] ?? null;
+  return (await encargadoDe(clientId)).email;
 }
 
 /**
