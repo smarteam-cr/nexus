@@ -55,8 +55,12 @@ export function raizDeDominio(dominio: string): string {
   return punto > 0 ? d.slice(0, punto) : d;
 }
 
-/** El nombre de una empresa, comparable: sin acentos, sin puntuación, sin sufijos legales. */
-export function normalizarEtiqueta(nombre: string): string {
+/**
+ * El nombre de una empresa en palabras, sin acentos, sin puntuación, sin lo de entre paréntesis y sin sufijos legales
+ * («Plastimex S.A.» → «plastimex»). Lo usan `normalizarEtiqueta` y lib/sessions/clientes-por-texto.ts (el nombre
+ * entero que nombra un evento de la agenda): una sola regla de sufijos.
+ */
+export function palabrasSinSufijoLegal(nombre: string): string {
   let base = nombre
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
@@ -71,7 +75,12 @@ export function normalizarEtiqueta(nombre: string): string {
     previo = base;
     base = base.replace(SUFIJO_LEGAL_RE, "").trim();
   } while (base !== previo);
-  return base.replace(/\s+/g, "");
+  return base;
+}
+
+/** El nombre de una empresa, comparable: sin acentos, sin puntuación, sin sufijos legales. */
+export function normalizarEtiqueta(nombre: string): string {
+  return palabrasSinSufijoLegal(nombre).replace(/\s+/g, "");
 }
 
 /** Mínimo de caracteres para que un prefijo cuente. Debajo de esto, «dcc» matchearía cualquier cosa. */

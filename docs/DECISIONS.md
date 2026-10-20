@@ -9653,6 +9653,33 @@ derecha, con lo que se sepa de él.
   (`/api/para-ti/reunion/[evento]`), que no lee el evento ni lo que dejó, y que sin acceso a esa cuenta responde lo tuyo
   (tus notas) en vez de 404.
 
+## Una reunión interna que nombra a una cuenta también la trae (2026-10-19, prueba 151)
+
+**Contexto.** «Preparar demo para Accesos Automáticos» (mié 21 oct, 9:00–10:00, calendario de Andrés Pinzón) tiene Meet
+y a otra persona de Smarteam invitada: no es un evento propio sino una reunión interna, y la regla del nombre era solo
+de los propios. El panel decía «Interna» sin la cuenta. «Accesos Automáticos» es un prospecto con ese nombre exacto.
+
+- **Una reunión interna (nadie de afuera) que nombra entera a UNA empresa suma lo de esa cuenta**, como un evento
+  propio: «Ir a la cuenta», la próxima reunión con ella, el siguiente paso, lo pendiente, la última vez y el negocio. No
+  pierde lo de reunión interna: Meet, el texto del sprint y su sesión si ya pasó. Lo trae la misma ruta con `interna=1`
+  (sin acceso a la cuenta, lo tuyo sin ella, como `propio=1`).
+- **El dato va aparte, en `nombradas`** (`empresasDeLaReunionInterna`, lib/mi-dia/agenda.ts), solo en la agenda de
+  «Para ti» (`agendaDelDia` con `nombrar`). ⛔ No es `empresas`: una reunión interna que nombra a un cliente no es una
+  reunión con él, así que no cuenta para la regla de servicio, las cifras, el correo ni «Planifica tu semana».
+- **En una serie, solo el título.** La descripción de una serie (la reunión del sprint) es la agenda de siempre y nombra
+  clientes al pasar; el título de una serie que nombra a uno («Seguimiento interno Cemaco») sí dice de quién es. Una
+  reunión suelta usa también la descripción («Revisión Pipeline de Formalizaciones», «Caso bluesat»).
+- **El nombre entero, más estricto cuando le queda una sola palabra distintiva** (`clientesNombradosEnteros`, vale
+  también para los eventos propios). Medido sobre las 213 reuniones internas de octubre de todo el equipo: «Sobre Casos
+  de Éxito» daba El Éxito, «Custom Agent - Inmobiliaria» daba RC Inmobiliaria y «Hablemos de librería», Librería
+  Internacional. Ahora, en un nombre de varias palabras con una sola distintiva, esa palabra va con mayúscula (nombre
+  propio) y, si hay palabras cortas («El», «RC»), el nombre aparece seguido; las largas que no distinguen («Grupo»,
+  «Internacional») pueden faltar. Los sufijos legales («S.A.», «SRL») no cuentan, con la regla de las fichas gemelas
+  (lib/clients/gemelas.ts › `palabrasSinSufijoLegal`). Quedan 34 de 213, todas bien («Alineación CEMACO» sigue siendo
+  Cemaco Internacional).
+- **Pendiente:** una sigla declarada de 2 letras («CS», «TI») calzaría con títulos internos de todos los días. Hoy
+  ningún cliente tiene siglas declaradas; si alguien declara una corta, revisar esto.
+
 ## Marcar hecha al instante (2026-10-19)
 
 **Contexto.** Elías marcó T-162 como hecha, la deshizo y le salió «Otra persona cambió esta tarea. Recarga para ver lo
