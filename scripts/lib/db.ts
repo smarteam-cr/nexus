@@ -23,7 +23,7 @@
  * (transaction pooling + DDL = bugs sutiles) — siempre contra el host directo.
  */
 import { Pool } from "pg";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import "dotenv/config";
 import { imprimirDestino, describirDestino } from "./guard";
@@ -57,7 +57,7 @@ export function createScriptDb(): {
   close: () => Promise<void>;
 } {
   const { pool, close } = createScriptPool();
-  const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+  const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
   return {
     prisma,
     pool,
@@ -85,7 +85,7 @@ export function createScriptDbFor(
     max: SCRIPT_POOL_MAX,
     idleTimeoutMillis: 10_000,
   });
-  const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+  const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
   return {
     prisma,
     pool,

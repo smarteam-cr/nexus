@@ -89,10 +89,28 @@ primero `git pull --ff-only` a mano y después `bash scripts/deploy.sh`.
 
 ⚠️ **«BUILD FALLO» con «JavaScript heap out of memory» en `npm run build`**: el chequeo de tipos de
 `next build` se quedó sin heap. El tope del BUILD vive en el `Dockerfile` (`NODE_OPTIONS` de la etapa
-builder, 6 GB desde el 2026-10-16, cuando el chequeo ya pedía 4,2 GB); no es el de 2 GB del contenedor que
-corre. Medir cuánto pide hoy con `npx tsc --noEmit -p . --incremental false --extendedDiagnostics`
-(«Memory used») y, si hace falta, subirlo mirando la memoria libre del VPS (`free -m`). Mientras tanto el
-contenedor viejo sigue arriba: no hay nada que revertir.
+builder, 6 GB); no es el de 2 GB del contenedor que corre. Mientras tanto el contenedor viejo sigue arriba:
+no hay nada que revertir.
+
+- **Qué chequea el build**: `tsconfig.build.json` (`next.config.ts` › `typescript.tsconfigPath`), que es
+  `tsconfig.json` sin los tests. Next ya ignoraba en el build los errores de los tests, pero los chequeaba
+  igual. `npx tsc --noEmit` y el CI siguen chequeando todo con `tsconfig.json`.
+- **Cuánto pide hoy** (2026-10-19, medido en una PC): el build, 3,5 GB de pico; `tsc --noEmit` del
+  repo entero, 4,5 GB (entra justo en el tope de fábrica de Node, unos 4 GB, porque el GC aprieta).
+  Antes de esa fecha el build pedía 5,5 GB y en el VPS llegó a 5,7 de 6.
+- **Medirlo**: `node --max-old-space-size=12288 node_modules/typescript/bin/tsc --noEmit -p
+  tsconfig.build.json --incremental false --extendedDiagnostics`. «Memory used» sin `--expose-gc` es
+  ruidoso (no fuerza el GC); comparar «Types» e «Instantiations» entre dos commits es más fiable.
+- **Qué lo infla**: casi siempre una instancia nueva de un tipo enorme. Dos que ya pasaron: importar la
+  raíz de `googleapis` (`lib/google/googleapis-sin-raiz.test.ts`) y `new PrismaClient({ adapter })` sin
+  `<Prisma.PrismaClientOptions>` (`lib/db/tsconfig-del-build.test.ts`); las dos pruebas frenan la vuelta.
+  Para encontrar uno nuevo: `--generateTrace <carpeta>` y contar en `types.json` los tipos por
+  `firstDeclaration.path`.
+- **Si igual hace falta más**: subir el tope del Dockerfile mirando `free -m` en el VPS (el build corre
+  con el contenedor viejo arriba y unas 15 apps más), o sacar el chequeo de tipos del build
+  (`typescript.ignoreBuildErrors`) y dejarlo solo en el CI. Lo segundo se desactivó el 2026-07-07 porque
+  escondía un bug real, y el CI no frena un deploy: un error de tipos llegaría a producción. Antes de eso,
+  la primera.
 
 ⚠️ **NUNCA `docker compose up -d` a mano sin `--build` después de un pull.**
 Eso re-levanta la imagen VIEJA contra la base con schema nuevo = el "deploy

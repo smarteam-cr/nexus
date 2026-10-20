@@ -1,12 +1,12 @@
 /** Inspecciona (read-only) los tipos de nodo/edge de los procesos de un cliente. */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
 const NAME = process.argv.slice(2).find((a) => !a.startsWith("--")) ?? "wherex";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   const client = await prisma.client.findFirst({ where: { name: { contains: NAME, mode: "insensitive" } }, select: { id: true, name: true } });

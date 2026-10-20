@@ -10,7 +10,7 @@
  * Uso:
  *   npx tsx scripts/seed-participants-analyzer.ts
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { sslParaConexion } from "@/lib/db/ssl";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -20,7 +20,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
   ssl: sslParaConexion(process.env.DATABASE_URL),
 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 export const AGENT_ID_PARTICIPANTS_ANALYZER = "agent-participants-analyzer";
 

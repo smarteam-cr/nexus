@@ -5,13 +5,13 @@
  * si el agente "atina" o si echa el template-default del prompt (Kick-off 1 / Arquitectura 2 /
  * Set up 6 / Onboarding 6). No escribe nada.
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 // Firma del ejemplo-default del systemPrompt del handoff.
 const DEFAULT_SIG = "kick-off:1|arquitectura:2|set up:6|onboarding:6";

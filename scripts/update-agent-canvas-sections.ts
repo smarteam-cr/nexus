@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -8,7 +8,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter });
 
 // Instrucción que se agrega a TODOS los agentes de sección
 const CANVAS_INSTRUCTION = `

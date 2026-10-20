@@ -10,7 +10,7 @@
  * Dry-run por default. Aplicar con --apply:
  *   npx tsx scripts/delete-canvas.ts wherex test --apply
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -22,7 +22,7 @@ const CLIENT_TERM = args[0] ?? "wherex";
 const CANVAS_NAME = args[1] ?? "test";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   console.log(APPLY ? "APLICANDO borrado de canvas…\n" : "DRY-RUN (usá --apply para borrar)\n");

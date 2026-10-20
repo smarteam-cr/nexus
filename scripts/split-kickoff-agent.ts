@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -17,7 +17,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter });
 
 const PREP_PROMPT = `ROL: Eres un Consultor Estratégico Senior experto en Metodología Inbound y el Framework Loop. Tu objetivo es preparar al equipo de Customer Success para el Kick-off, generando una radiografía diagnóstica del cliente basada en la evidencia de ventas.
 

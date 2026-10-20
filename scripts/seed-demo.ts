@@ -13,7 +13,7 @@
  * Si ya existe un cliente llamado "Demo Agency" lo borra primero (limpieza total).
  */
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
@@ -22,7 +22,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter });
 
 async function main() {
   console.log("🌱 Iniciando seed de demo...");

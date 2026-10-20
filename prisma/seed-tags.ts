@@ -1,4 +1,4 @@
-import { PrismaClient, TagCategory } from "@prisma/client";
+import { PrismaClient, type Prisma, TagCategory } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import * as dotenv from "dotenv";
 
@@ -11,7 +11,7 @@ import { createScriptPool } from "../scripts/lib/db";
 assertProdWriteAllowed("prisma/seed-tags.ts");
 const { pool } = createScriptPool();
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter });
 
 const initialTags = [
   // SERVICE

@@ -42,7 +42,7 @@
  * Uso: npx tsx scripts/seed-handoff-agents-por-tipo.ts [--force]
  *      (guard: exige ALLOW_PROD_WRITE=1 contra prod)
  */
-import { PrismaClient, AgentStatus, AgentOutputType, AgentScope, AgentType } from "@prisma/client";
+import { PrismaClient, type Prisma, AgentStatus, AgentOutputType, AgentScope, AgentType } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import "dotenv/config";
 import { assertProdWriteAllowed } from "./lib/guard";
@@ -52,7 +52,7 @@ import { AGENTES_HANDOFF_POR_TIPO, SECCION_DEFAULT } from "../lib/agents/handoff
 
 assertProdWriteAllowed("scripts/seed-handoff-agents-por-tipo.ts");
 const { pool } = createScriptPool();
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   const force = process.argv.includes("--force");

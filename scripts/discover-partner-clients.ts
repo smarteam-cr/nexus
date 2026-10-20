@@ -14,14 +14,14 @@
  * ORDEN ESTRICTO: token-info PRIMERO. No escribe nada (solo lectura).
  * Uso: npx tsx scripts/discover-partner-clients.ts
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 import { tokenDeCuenta as leerTokenDeCuenta } from "@/lib/hubspot/client";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function systemToken(): Promise<string> {
   const acc = await prisma.hubspotAccount.findFirst({ where: { isSystem: true } });

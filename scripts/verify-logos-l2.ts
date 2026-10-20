@@ -11,13 +11,13 @@
  *
  * Uso: npx tsx scripts/verify-logos-l2.ts
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 const FALLBACK = "/logo-smarteam.png";
 const TEST_SMARTEAM_URL = "https://example.com/__verify__/smarteam-logo.png";

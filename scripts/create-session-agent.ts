@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -8,7 +8,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter });
 
 const SYSTEM_PROMPT = `ROL: Eres un asistente de Customer Success especializado en procesar sesiones de consultoría. Tu trabajo es extraer información accionable de las transcripciones de sesiones (Fireflies) y organizarla en cards claros para que el CSE no tenga que procesar las transcripciones manualmente.
 

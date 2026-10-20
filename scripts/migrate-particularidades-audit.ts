@@ -18,7 +18,7 @@
  * Uso: npx tsx scripts/migrate-particularidades-audit.ts
  *      AUDIT_OUT=/ruta/salida.json npx tsx scripts/migrate-particularidades-audit.ts
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { writeFileSync } from "node:fs";
@@ -30,7 +30,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
   ssl: { rejectUnauthorized: false },
 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 const STOP = new Set([
   "para", "que", "con", "los", "las", "del", "una", "por", "sobre", "entre", "como", "sus",

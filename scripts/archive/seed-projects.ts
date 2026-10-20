@@ -1,5 +1,5 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import pg from "pg";
 import * as dotenv from "dotenv";
 dotenv.config();
@@ -11,7 +11,7 @@ assertProdWriteAllowed("scripts/archive/seed-projects.ts");
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter });
 
 async function main() {
   const clients = await prisma.client.findMany({ select: { id: true, name: true } });

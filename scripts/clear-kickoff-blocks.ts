@@ -11,7 +11,7 @@
  *   npx tsx scripts/clear-kickoff-blocks.ts almotec           # dry-run
  *   npx tsx scripts/clear-kickoff-blocks.ts almotec --apply   # borra
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -21,7 +21,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
   ssl: { rejectUnauthorized: false },
 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   const args = process.argv.slice(2);

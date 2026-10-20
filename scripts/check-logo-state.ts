@@ -3,13 +3,13 @@
  * Estado de logo + publicación para proyectos que matchean un término.
  * Uso: npx tsx scripts/check-logo-state.ts sinergy
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   // Clientes que YA tienen logo cargado (responde "¿se guardó?").

@@ -16,7 +16,7 @@
  *
  * Uso: npx tsx scripts/seed-handoff-agent.ts  (guard: exige ALLOW_PROD_WRITE=1 contra prod)
  */
-import { PrismaClient, AgentStatus, AgentOutputType, AgentScope, AgentType } from "@prisma/client";
+import { PrismaClient, type Prisma, AgentStatus, AgentOutputType, AgentScope, AgentType } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import "dotenv/config";
 import { assertProdWriteAllowed } from "./lib/guard";
@@ -25,7 +25,7 @@ import { createScriptPool } from "./lib/db";
 // Este seed ESCRIBE siempre (no tiene --apply): el guard corre incondicional.
 assertProdWriteAllowed("scripts/seed-handoff-agent.ts");
 const { pool } = createScriptPool();
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 const AGENT_ID = "cmmla1g1x00005wijix3qnr7u";
 

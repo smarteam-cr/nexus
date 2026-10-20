@@ -18,14 +18,14 @@
  *   npx tsx scripts/spike-hubspot-social.ts                       # Fase A (segura)
  *   npx tsx scripts/spike-hubspot-social.ts --create-draft --channel=<key>
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 import { tokenDeCuenta as leerTokenDeCuenta } from "@/lib/hubspot/client";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 const BASE = "https://api.hubapi.com";
 

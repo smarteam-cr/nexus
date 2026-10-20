@@ -12,7 +12,7 @@
  *
  * Dry-run por default. Aplicar con: npx tsx scripts/assign-team-roles.ts --apply
  */
-import { PrismaClient, type TeamRole } from "@prisma/client";
+import { PrismaClient, type Prisma, type TeamRole } from "@prisma/client";
 import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -50,7 +50,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
   ssl: { rejectUnauthorized: false },
 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   console.log(APPLY ? "APLICANDO asignaciones de rol…\n" : "DRY-RUN (usá --apply para escribir)\n");

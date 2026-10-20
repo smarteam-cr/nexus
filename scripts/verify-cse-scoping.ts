@@ -9,14 +9,14 @@
  *
  * Uso: npx tsx scripts/verify-cse-scoping.ts
  */
-import { PrismaClient, type TeamRole } from "@prisma/client";
+import { PrismaClient, type Prisma, type TeamRole } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 const SEE_ALL: TeamRole[] = ["VENTAS", "DEV", "CSL", "MARKETING", "SUPER_ADMIN"];
 

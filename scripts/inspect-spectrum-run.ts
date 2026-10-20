@@ -4,13 +4,13 @@
  * Sirve para diagnosticar: ¿el agente corrió server-side? ¿quedó FAILED? ¿generó cards/blocks?
  * Uso: npx tsx scripts/inspect-spectrum-run.ts [filtroNombreCliente]
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   const term = process.argv[2] ?? "spectrum";

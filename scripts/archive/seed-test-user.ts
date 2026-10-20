@@ -20,7 +20,7 @@
  * Reversible: borrar el AppUser + TeamMember de info@ (y sus ClientAssignment).
  * Dry-run por default. Aplicar: npx tsx scripts/seed-test-user.ts --apply
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { resolverApply } from "../lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -32,7 +32,7 @@ const MIRROR_EMAIL = "hgomez@smarteamcr.com";
 const GRANTED_BY_EMAIL = "egonzalez@smarteamcr.com";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   console.log(APPLY ? "APLICANDO…\n" : "DRY-RUN (usá --apply para escribir)\n");

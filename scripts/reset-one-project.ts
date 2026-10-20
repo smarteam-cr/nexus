@@ -19,7 +19,7 @@ const APPLY = resolverApply();
 const name = process.argv.slice(2).find((a) => !a.startsWith("--")) || "";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   if (!name) { console.log('Pasá el nombre del proyecto, ej: "Visual Branding"'); return; }

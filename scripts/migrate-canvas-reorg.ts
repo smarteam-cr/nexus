@@ -17,7 +17,7 @@
  *   npx tsx scripts/migrate-canvas-reorg.ts           # dry-run
  *   npx tsx scripts/migrate-canvas-reorg.ts --apply   # aplica
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -27,7 +27,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
   ssl: { rejectUnauthorized: false },
 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 // name → order. isDefault = solo Kickoff (ancla estable; Handoff migra a nivel cliente).
 const TARGET_ORDER: Record<string, number> = {

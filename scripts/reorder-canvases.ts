@@ -10,7 +10,7 @@
  *
  * Dry-run por default. Aplicar con: npx tsx scripts/reorder-canvases.ts --apply
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -27,7 +27,7 @@ const ORDER_BY_NAME: Record<string, number> = {
 };
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   console.log(APPLY ? "APLICANDO reorden de canvases…\n" : "DRY-RUN (usá --apply para escribir)\n");

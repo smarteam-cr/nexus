@@ -23,7 +23,7 @@
  *   npx tsx scripts/medir-contexto-de-documentos.ts --json     # el detalle en JSON (para guardarlo)
  */
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { createScriptPool } from "./lib/db";
 import { NO_ES_CONTENEDOR_WHERE, proyectoDeCarteraWhere } from "../lib/projects/scope";
@@ -105,7 +105,7 @@ async function main(): Promise<void> {
   pool.on("connect", (c) => {
     c.query("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY").catch(() => {});
   });
-  const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+  const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
   try {
     const [{ ro }] = await prisma.$queryRaw<{ ro: string }[]>`SELECT current_setting('transaction_read_only') AS ro`;
     if (ro !== "on") throw new Error(`La conexión no quedó en solo lectura (transaction_read_only=${ro}): no se mide nada.`);

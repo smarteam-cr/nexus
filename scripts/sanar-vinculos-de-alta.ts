@@ -45,10 +45,10 @@ import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { reclassifyClientSessions } from "@/lib/sessions/reclassify";
 import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-const prisma = new PrismaClient({
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL, max: 2 }),
 });
 

@@ -10,7 +10,7 @@
  * Uso:
  *   npx tsx scripts/seed-post-session-agent.ts
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import "dotenv/config";
 import { assertProdWriteAllowed } from "./lib/guard";
@@ -22,7 +22,7 @@ import { createScriptPool } from "./lib/db";
    y una lista de seeds, no "todo lo que escribe". */
 assertProdWriteAllowed("scripts/seed-post-session-agent.ts");
 const { pool } = createScriptPool();
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 // ID estable para upsert idempotente
 export const AGENT_ID_POST_SESSION = "agent-post-session";

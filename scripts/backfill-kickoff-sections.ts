@@ -34,7 +34,7 @@ const LABEL_BY_KEY = new Map(CANON.map((s) => [s.key, s.label]));
 const DATA_BY_KEY = new Map(CANON.filter((s) => s.defaultData).map((s) => [s.key, s.defaultData!]));
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   console.log(APPLY ? "APLICANDO backfill de secciones de Kickoff…\n" : "DRY-RUN (usá --apply para escribir)\n");
