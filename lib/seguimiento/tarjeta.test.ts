@@ -93,9 +93,10 @@ describe("qué entra a la tarjeta", () => {
     expect(t.secciones.compromisos.items).toHaveLength(1);
   });
 
-  it("pideDecision cuenta la minuta, los pedidos, los campos y tus tareas: no la etapa, la fecha, las alertas ni los compromisos", () => {
+  it("pideDecision cuenta la minuta, los pedidos y los campos: no tus tareas (se deciden en Tareas), la etapa, la fecha, las alertas ni los compromisos", () => {
     const t = armarTarjeta(entrada(), { hoyISO: HOY, quienMira: CSL });
-    expect(t.pideDecision).toBe(1 + 1 + 1 + 1);
+    expect(t.pideDecision).toBe(1 + 1 + 1);
+    expect(t.desglose.tareas).toBe(0);
     expect(loQuePideDecision({ minuta: true, pedidos: 2, campos: 3 })).toBe(6);
   });
 
@@ -136,9 +137,9 @@ describe("qué entra a la tarjeta", () => {
 });
 
 describe("«Usar todo»", () => {
-  it("trae solo la minuta, los pedidos y tus tareas: nunca la ficha, la etapa, la fecha, las alertas ni los compromisos", () => {
+  it("trae solo la minuta y los pedidos: nunca tus tareas (se deciden en Tareas), la ficha, la etapa, la fecha, las alertas ni los compromisos", () => {
     const t = armarTarjeta(entrada(), { hoyISO: HOY, quienMira: CSL });
-    expect(t.planDeUsarTodo).toEqual({ minuta: "m1", pedidos: ["pe1"], tareas: [{ id: "t1", version: 3 }], novedades: [] });
+    expect(t.planDeUsarTodo).toEqual({ minuta: "m1", pedidos: ["pe1"], tareas: [], novedades: [] });
     // La forma del tipo: cuatro claves, ninguna más (etapa 6: las novedades de los documentos).
     const claves: (keyof PlanDeUsarTodo)[] = ["minuta", "pedidos", "tareas", "novedades"];
     expect(Object.keys(t.planDeUsarTodo).sort()).toEqual([...claves].sort());
@@ -234,7 +235,7 @@ describe("⭐ etapa 6: los hechos de la reunión, con su destino", () => {
 
   it("la novedad pide decisión; lo que fue a la ficha o a una alerta dice a dónde fue", () => {
     const t = armarTarjeta(conHechos(), { hoyISO: HOY, quienMira: CSE });
-    expect(t.pideDecision).toBe(1 + 1 + 1 + 1 + 1);
+    expect(t.pideDecision).toBe(1 + 1 + 1 + 1);
     const [h1, h2, h3] = t.secciones.hechos.items;
     expect(h1.pideDecision).toBe(true);
     expect(h1.destinos[0]).toMatchObject({ salida: "novedad", decidible: true, rotulo: "Planificación › Pipelines" });
@@ -247,7 +248,7 @@ describe("⭐ etapa 6: los hechos de la reunión, con su destino", () => {
     const t = armarTarjeta(conHechos([]), { hoyISO: HOY, quienMira: CSE });
     expect(t.secciones.hechos.items[0].pideDecision).toBe(false);
     expect(t.planDeUsarTodo.novedades).toEqual([]);
-    expect(t.pideDecision).toBe(4);
+    expect(t.pideDecision).toBe(3);
   });
 
   it("⛔ una novedad vencida, o de un documento sin contenido, no pide decisión ni entra a «Usar todo»", () => {

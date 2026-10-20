@@ -7027,6 +7027,12 @@ model Tarea {
   /// Lo que no se pudo escribir en HubSpot; null = al día.
   hubspotError          String?
 
+  /// El nombre corto para nombrarla fuera de Tareas («Enviar propuesta a Priscila»), lo escribe la IA (job
+  /// «titulos-cortos», lib/tareas/ia/titulo-corto-server.ts). Vale solo si `tituloCortoDe` es el título de hoy.
+  tituloCorto   String?
+  /// El título del que salió `tituloCorto`: si el título cambió, el job lo vuelve a escribir
+  tituloCortoDe String?
+
   /// PATCH con otra versión → 409
   version     Int       @default(0)
   /// Nada se borra

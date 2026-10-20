@@ -20,7 +20,8 @@
  */
 import { useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { FUENTE_CUENTA_SIN_ACCION } from "@/lib/mi-dia/servicio";
+import { FUENTE_CUENTA_SIN_ACCION, reunionDelEnlace } from "@/lib/mi-dia/servicio";
+import { pedirAbrirReunion } from "./abrir-reunion";
 import { datosDelEnlaceDeAgendar, type ResultadoParaAgendar } from "@/lib/mi-dia/agenda-borrador";
 import { minutoDelDia } from "@/lib/mi-dia/inicio";
 import type { Pendiente } from "@/lib/para-ti/tipos";
@@ -103,6 +104,21 @@ export function esAgendarDeLaCuenta(it: Pendiente): boolean {
 /** El botón de un pendiente: «Agendar» de una cuenta deja el borrador en la agenda; los demás, su enlace de siempre. */
 export function AccionDelPendiente({ it, className }: { it: Pendiente; className?: string }) {
   const planificar = usePlanificarAccion();
+  // «Preparar»: abre el panel de la reunión en la agenda que está en pantalla, sin volver a pedir la página.
+  const reunion = reunionDelEnlace(it.href);
+  if (reunion) {
+    return (
+      <EnlaceDelInicio
+        href={it.href}
+        className={className}
+        onClick={(e) => {
+          if (pedirAbrirReunion(reunion)) e.preventDefault();
+        }}
+      >
+        {it.accion}
+      </EnlaceDelInicio>
+    );
+  }
   if (!esAgendarDeLaCuenta(it)) {
     return (
       <EnlaceDelInicio href={it.href} className={className}>

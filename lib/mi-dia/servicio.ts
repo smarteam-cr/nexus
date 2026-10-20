@@ -7,7 +7,8 @@
  *   · una TAREA abierta (pendiente o en curso, no «Solo para mí») con fecha dentro de la semana. La fecha de una tarea es
  *     la de su reunión, su vencimiento o, si no, su semana (la misma regla de lib/siguiente-paso/desde-tareas.ts); o
  *   · una REUNIÓN con la cuenta en los próximos 8 días (en el calendario de quien la lleva, de UNA sola empresa por
- *     `cuentaDelEvento`, o planeada en Tareas).
+ *     `cuentaDelEvento`, o planeada en Tareas). Una que la persona eligió de su calendario con «Ya la agendé» (2026-10-20)
+ *     cuenta hasta 30 días: es una reunión planeada con `origenId` «elegida:…».
  * Una reunión agendada ES el siguiente paso (Elías, 2026-10-19): no se pide además una tarea. Sin ninguna de las dos, la
  * cuenta aparece en «Cuentas sin siguiente paso» de quien la lleva, con «Agendar». Todo lo que pregunta «¿tiene siguiente
  * paso?» (el inicio, la cartera de CS, «Sugerencias» del chat, el correo de la mañana, «Planifica tu semana») usa
@@ -17,7 +18,7 @@
  * ⚠ «La semana» es la de hoy, de lunes a domingo; desde el sábado se mira la siguiente: el fin de semana ya no se
  * hace nada de la que termina, y lo que importa es que la que viene tenga su acción.
  */
-import { DIAS_PARA_LA_REUNION } from "./constantes";
+import { DIAS_PARA_LA_REUNION, DIAS_PARA_UNA_REUNION_ELEGIDA } from "./constantes";
 import { enlaceParaAgendarEnCalendar } from "./calendario";
 import type { Pendiente } from "@/lib/para-ti/tipos";
 
@@ -61,6 +62,8 @@ export interface ReunionDeLaCuenta {
   eventoId?: string;
   /** La tarea de la reunión planeada (solo las de Tareas). */
   tareaId?: string;
+  /** La eligió la persona de su calendario con «Ya la agendé»: cuenta hasta 30 días, no solo 8. */
+  elegida?: boolean;
 }
 
 export interface VentanaDeLaSemana {
@@ -105,11 +108,12 @@ export function accionDeLaSemana(tareas: readonly TareaDeLaCuenta[], v: VentanaD
 /** La próxima reunión con la cuenta en los próximos `DIAS_PARA_LA_REUNION` días. null = no hay. */
 export function reunionEnLosProximosDias(reuniones: readonly ReunionDeLaCuenta[], ahora: Date): ReunionDeLaCuenta | null {
   const desde = ahora.getTime();
-  const hasta = desde + DIAS_PARA_LA_REUNION * DIA_MS;
   return (
     reuniones
       .filter((r) => {
         const t = Date.parse(r.inicio);
+        // La elegida con «Ya la agendé» cuenta hasta 30 días; las demás, 8.
+        const hasta = desde + (r.elegida ? DIAS_PARA_UNA_REUNION_ELEGIDA : DIAS_PARA_LA_REUNION) * DIA_MS;
         return Number.isFinite(t) && t >= desde && t <= hasta;
       })
       .sort((a, b) => a.inicio.localeCompare(b.inicio))[0] ?? null
@@ -302,11 +306,30 @@ export function reunionesDeLosProximosDias(reuniones: readonly ReunionDeLaCuenta
     .sort((a, b) => a.inicio.localeCompare(b.inicio));
 }
 
-/** Una reunión con una cuenta, como pendiente del primer bloque: «Preparar» abre el resumen de la cuenta para esa reunión. */
+/**
+ * El panel de una reunión en la agenda de «Para ti» (2026-10-20): «Preparar» lo abre ahí, con la guía y los pendientes,
+ * y no en una página aparte. `dia` lleva la agenda al día de la reunión; `reunion` abre su panel.
+ */
+export function enlaceAlPanelDeLaReunion(eventoId: string, inicioISO: string | null): string {
+  const q = new URLSearchParams();
+  if (inicioISO) q.set("dia", diaEnCostaRica(inicioISO));
+  q.set("reunion", eventoId);
+  return `/para-ti?${q.toString()}`;
+}
+
+/** La reunión que pide abrir un enlace de `enlaceAlPanelDeLaReunion`, o null si el enlace es otro. */
+export function reunionDelEnlace(href: string): { eventoId: string; dia: string | null } | null {
+  if (!href.startsWith("/para-ti?")) return null;
+  const q = new URLSearchParams(href.slice("/para-ti?".length));
+  const eventoId = q.get("reunion");
+  return eventoId ? { eventoId, dia: q.get("dia") } : null;
+}
+
+/** Una reunión con una cuenta, como pendiente del primer bloque: «Preparar» abre su panel en la agenda. */
 export function pendienteDeReunion(cuenta: { clientId: string; empresa: string }, r: ReunionDeLaCuenta, hoyISO: string, grupo?: string | null): Pendiente {
   const cuando = cuandoEsLaReunion(r.inicio, hoyISO);
   const href = r.eventoId
-    ? `/para-ti/reunion/${encodeURIComponent(r.eventoId)}?cliente=${encodeURIComponent(cuenta.clientId)}`
+    ? enlaceAlPanelDeLaReunion(r.eventoId, r.inicio)
     : r.tareaId
       ? `/tareas?t=${encodeURIComponent(r.tareaId)}`
       : `/clients/${encodeURIComponent(cuenta.clientId)}`;

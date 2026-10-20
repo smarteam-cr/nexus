@@ -25,7 +25,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "para-ti": { modo: "own" },
   "para-ti/uso": { modo: "own" },
   "para-ti/correo": { modo: "own" },
-  "para-ti/reunion/[eventoId]": { modo: "own" },
+  "para-ti/reunion/[eventoId]": { modo: "exempt", razon: "redirect al panel de la reunión en /para-ti (2026-10-20)" },
   tareas: { modo: "own" },
   "tareas/equipo": { modo: "own" },
   "tareas/delegadas": { modo: "own" },

@@ -53,7 +53,8 @@ describe("con qué usar un espacio", () => {
       ],
     });
     expect(s.map((x) => x.clave)).toEqual(["tarea:b", "tarea:c"]);
-    expect(s[0]).toMatchObject({ titulo: "T-2 · Tarea 2", minutos: 30, cuenta: { id: "c1", nombre: "Honda" }, tarea: { id: "b", numero: 2 } });
+    // Nombrada para una persona (2026-10-20): el cliente, el nombre corto y que es tiempo interno; sin el T-n.
+    expect(s[0]).toMatchObject({ titulo: "Honda – Tarea 2 | Espacio interno", texto: "Honda – Tarea 2", minutos: 30, cuenta: { id: "c1", nombre: "Honda" }, tarea: { id: "b", numero: 2 } });
     expect(s[0].porque).toContain("está vencida");
     expect(s[1].minutos).toBe(60);
   });

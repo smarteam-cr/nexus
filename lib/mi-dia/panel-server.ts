@@ -3,7 +3,8 @@
  * ti · Ventas y CSE»). SERVER-ONLY, solo lectura.
  *
  * Arma sobre el resumen antes de cada reunión (lib/mi-dia/resumen-server.ts, sin IA): la guía con su objetivo
- * (lib/mi-dia/guia.ts), quién viene, la última vez, lo pendiente de los dos lados y el negocio; para una reunión que ya
+ * (lib/mi-dia/guia.ts), quién viene, la última vez y el negocio (lo pendiente lo lee el panel de Tareas, con sus botones:
+ * components/para-ti/inicio/PendientesDelPanel.tsx, 2026-10-20); para una reunión que ya
  * pasó, lo que dejó (la tarjeta de la reunión); y lo que la persona preparó (su objetivo y sus notas).
  *
  * Un evento PROPIO (2026-10-19: «Preparar demo para Accesos Automáticos», sin otros invitados) usa el mismo panel con
@@ -37,13 +38,6 @@ export interface PersonaQueViene {
   nota: string | null;
 }
 
-export interface PendienteDelPanel {
-  titulo: string;
-  lado: "cliente" | "smarteam";
-  cuando: string;
-  vencido: boolean;
-}
-
 export interface PanelDeLaReunion {
   eventoId: string;
   cliente: { id: string; nombre: string; tipo: string | null } | null;
@@ -55,7 +49,6 @@ export interface PanelDeLaReunion {
   verComo: boolean;
   vienen: PersonaQueViene[];
   ultima: { sessionId: string; fecha: string; resumen: string | null; fuente: string } | null;
-  pendientes: PendienteDelPanel[];
   negocio: string | null;
   loQueDejo: DespuesDeLaReunion | null;
   /** La sesión de Nexus de este evento, si ya pasó y llegó: «Revisar sesión» lleva a su página. */
@@ -104,7 +97,6 @@ export async function panelDeLaReunion(o: {
     verComo,
     vienen: [],
     ultima: null,
-    pendientes: [],
     negocio: null,
     loQueDejo: null,
     sesionId,
@@ -150,12 +142,6 @@ export async function panelDeLaReunion(o: {
     ultima: resumen.ultimaVez
       ? { sessionId: resumen.ultimaVez.sessionId, fecha: diaCorto(resumen.ultimaVez.fecha), resumen: resumen.ultimaVez.resumen, fuente: resumen.ultimaVez.fuente }
       : null,
-    pendientes: resumen.pendientes.slice(0, 5).map((p) => ({
-      titulo: p.titulo,
-      lado: p.lado,
-      cuando: p.venceEl ? (p.venceEl < o.hoyISO ? `venció el ${diaYMes(p.venceEl)}` : p.venceEl === o.hoyISO ? "vence hoy" : `para el ${diaYMes(p.venceEl)}`) : "sin fecha",
-      vencido: !!p.venceEl && p.venceEl <= o.hoyISO,
-    })),
     negocio: n ? [n.nombre, n.etapa, n.monto, n.cierre ? `cierra el ${n.cierre}` : null].filter(Boolean).join(" · ") : null,
     loQueDejo,
     proxima: proxima ? { titulo: proxima.titulo, cuando: `${cuandoEsLaReunion(proxima.inicio, o.hoyISO)} · ${horaCR(proxima.inicio)}` } : null,

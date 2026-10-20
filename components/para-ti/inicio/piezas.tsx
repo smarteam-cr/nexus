@@ -3,7 +3,7 @@
  * medida del diseño «Para ti · Ventas y CSE». Solo tokens semánticos.
  */
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 /** La tarjeta blanca con borde del diseño (`.card`). */
@@ -19,13 +19,25 @@ export const ENLACE = "text-[13px] font-medium text-brand transition-colors hove
 const esExterno = (href: string) => /^https?:\/\//.test(href);
 
 /** Un enlace a Nexus o, si es de afuera (Google Calendar, HubSpot), en una pestaña nueva. */
-export function EnlaceDelInicio({ href, className, children, title }: { href: string; className?: string; children: ReactNode; title?: string }) {
+export function EnlaceDelInicio({
+  href,
+  className,
+  children,
+  title,
+  onClick,
+}: {
+  href: string;
+  className?: string;
+  children: ReactNode;
+  title?: string;
+  onClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
+}) {
   return esExterno(href) ? (
-    <a href={href} target="_blank" rel="noreferrer" className={className} title={title}>
+    <a href={href} target="_blank" rel="noreferrer" className={className} title={title} onClick={onClick}>
       {children}
     </a>
   ) : (
-    <Link href={href} className={className} title={title}>
+    <Link href={href} className={className} title={title} onClick={onClick}>
       {children}
     </Link>
   );

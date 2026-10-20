@@ -6,8 +6,9 @@
  *
  * Arriba, lo de Nexus una sola vez (la guía, en azul con la chispa): el objetivo y tres o cuatro puntos, sacados de los
  * datos de la cuenta sin IA. «Editar» deja escribir TU objetivo, que manda. Abajo, los hechos: quién viene, la última
- * vez, lo pendiente de los dos lados, el negocio y tus notas (las ves solo tú). Una reunión que ya pasó muestra lo que
- * dejó, con «Usar todo». El espacio libre dice de cuándo a cuándo está libre, con «Crear un evento aquí» (el borrador de
+ * vez, lo pendiente de los dos lados (que se marca «Hecha», se desestima o se agenda desde acá: PendientesDelPanel.tsx,
+ * 2026-10-20), el negocio, tus notas (las ves solo tú) y la búsqueda en lo que se dijo con la cuenta. «Preparar» abre
+ * este panel (2026-10-20): la página aparte de preparar se retiró. Una reunión que ya pasó muestra lo que dejó. El espacio libre dice de cuándo a cuándo está libre, con «Crear un evento aquí» (el borrador de
  * la agenda), «Bloquear en Calendar» y «Con qué usar este espacio» (lib/mi-dia/espacio-libre.ts, sin IA): tus tareas que
  * caben, la reunión con una cuenta que no la tiene y el siguiente paso; cada una deja el borrador lleno con un clic.
  *
@@ -36,10 +37,13 @@ import type { EventoPropioDeLaAgenda, ReunionDeLaAgenda } from "@/lib/mi-dia/age
 import { cuentaDelEvento } from "@/lib/mi-dia/agenda";
 import { hrefDeLaSesion, ReunionDespues } from "../DespuesDeTusReuniones";
 import { lineaDeLaReunion } from "./AgendaDelInicio";
-import { ENLACE_BOTON, Punto } from "./piezas";
+import { ENLACE_BOTON } from "./piezas";
 import { MINUTOS_DEL_BORRADOR } from "@/lib/mi-dia/agenda-borrador";
 import { sugerenciasParaElEspacio, type ParaSugerirEnElEspacio, type SugerenciaDelEspacio } from "@/lib/mi-dia/espacio-libre";
 import { crearBorrador } from "./borradores";
+import PendientesDelPanel from "./PendientesDelPanel";
+import BuscarEnReuniones from "@/components/busqueda/BuscarEnReuniones";
+import { tituloDelBloque } from "@/lib/tareas/titulo-corto";
 
 const DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -201,7 +205,7 @@ export default function PanelDeLaReunion({
           </div>
         )}
 
-        {p && <EventoPropio p={p} cuenta={cuentaPropia} datos={datos} futura={futura} correo={correo} />}
+        {p && <EventoPropio p={p} cuenta={cuentaPropia} datos={datos} futura={futura} correo={correo} onCerrar={onCerrar} />}
 
         {r && (
           <>
@@ -217,7 +221,7 @@ export default function PanelDeLaReunion({
                     Ir a la cuenta
                   </Link>
                 )}
-                {cuentaInterna && <LaCuentaDelEvento datos={datos} />}
+                {cuentaInterna && <LaCuentaDelEvento datos={datos} correo={correo} onCerrar={onCerrar} />}
                 {/* Una por reunión: lo escrito antes de que lleguen tus notas guardadas no se pierde (ver `Notas`). */}
                 <Notas key={r.id} eventoId={r.id} panel={datos?.panel ?? null} futura={futura} />
               </>
@@ -231,7 +235,7 @@ export default function PanelDeLaReunion({
             ) : datos.error || !datos.panel ? (
               <p className="text-[13px] text-danger-ink">{datos.error ?? "No se pudo abrir la reunión."}</p>
             ) : (
-              <Contenido panel={datos.panel} futura={futura} hoyISO={hoyISO} />
+              <Contenido panel={datos.panel} futura={futura} hoyISO={hoyISO} correo={correo} onCerrar={onCerrar} />
             )}
           </>
         )}
@@ -317,7 +321,7 @@ function Hueco({
           target="_blank"
           rel="noreferrer"
           href={enlaceParaAgendarEnCalendar({
-            titulo: elegido.avanzar ? `T-${elegido.avanzar.tarea.numero} · ${elegido.avanzar.tarea.titulo}` : "Tiempo de trabajo",
+            titulo: elegido.avanzar ? tituloDelBloque(elegido.avanzar.tarea) : "Tiempo de trabajo",
             detalle: "Bloqueado desde Nexus.",
             inicio: elegido.inicio,
             fin: elegido.fin,
@@ -332,7 +336,7 @@ function Hueco({
   );
 }
 
-function Contenido({ panel, futura, hoyISO }: { panel: Panel; futura: boolean; hoyISO: string }) {
+function Contenido({ panel, futura, hoyISO, correo, onCerrar }: { panel: Panel; futura: boolean; hoyISO: string; correo: string; onCerrar: () => void }) {
   return (
     <>
       <Guia panel={panel} />
@@ -358,15 +362,20 @@ function Contenido({ panel, futura, hoyISO }: { panel: Panel; futura: boolean; h
           ))}
         </div>
       )}
-      <LoDeLaCuenta panel={panel} />
+      <LoDeLaCuenta panel={panel} correo={correo} onCerrar={onCerrar} />
       {/* También en una reunión que ya pasó: la nota sirve igual después (2026-10-17). */}
       <Notas key={panel.eventoId} eventoId={panel.eventoId} panel={panel} futura={futura} />
+      {/* La búsqueda en lo que se dijo con la cuenta (vivía en la página de «Preparar», retirada el 2026-10-20). */}
+      {panel.cliente && <BuscarEnReuniones clientId={panel.cliente.id} nombre={panel.cliente.nombre} />}
     </>
   );
 }
 
-/** Lo de la cuenta que no es de una reunión en particular: la última vez, lo pendiente y el negocio. */
-function LoDeLaCuenta({ panel }: { panel: Panel }) {
+/**
+ * Lo de la cuenta que no es de una reunión en particular: la última vez, lo pendiente (que se cierra, se desestima o se
+ * agenda desde acá, 2026-10-20) y el negocio.
+ */
+function LoDeLaCuenta({ panel, correo, onCerrar }: { panel: Panel; correo: string; onCerrar: () => void }) {
   return (
     <>
       {panel.ultima && (
@@ -378,21 +387,7 @@ function LoDeLaCuenta({ panel }: { panel: Panel }) {
           </Link>
         </div>
       )}
-      {panel.pendientes.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <p className={ROTULO_DEL_SISTEMA}>Pendiente</p>
-          {panel.pendientes.map((q, i) => (
-            <div key={`${q.titulo}-${i}`} className="flex gap-2 text-[13px] leading-[19px]">
-              <Punto className={cn("mt-1.5", q.vencido ? "bg-warning" : q.lado === "cliente" ? "bg-primary" : "bg-success")} />
-              <span className="flex-1 text-fg">
-                {q.lado === "cliente" ? "El cliente: " : ""}
-                {q.titulo}
-              </span>
-              <span className={cn("whitespace-nowrap text-xs font-semibold", q.vencido ? "text-warn-ink" : "text-fg-muted")}>{q.cuando}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {panel.cliente && <PendientesDelPanel clientId={panel.cliente.id} empresa={panel.cliente.nombre} correo={correo} onAgendado={onCerrar} />}
       {panel.negocio && (
         <div className="flex flex-col gap-1.5">
           <p className={ROTULO_DEL_SISTEMA}>El negocio</p>
@@ -413,12 +408,14 @@ function EventoPropio({
   datos,
   futura,
   correo,
+  onCerrar,
 }: {
   p: EventoPropioDeLaAgenda;
   cuenta: string | null;
   datos: { panel: Panel | null; error: string | null } | null;
   futura: boolean;
   correo: string;
+  onCerrar: () => void;
 }) {
   const panel = datos?.panel ?? null;
   const conCuenta = !!cuenta && !!panel?.cliente;
@@ -439,7 +436,7 @@ function EventoPropio({
           Abrir en Google Calendar
         </a>
       </div>
-      {cuenta && <LaCuentaDelEvento datos={datos} />}
+      {cuenta && <LaCuentaDelEvento datos={datos} correo={correo} onCerrar={onCerrar} />}
       {/* Tus notas, como en una reunión: las ves solo tú. */}
       <Notas key={p.id} eventoId={p.id} panel={panel} futura={futura} />
       {!cuenta && (
@@ -457,7 +454,7 @@ function EventoPropio({
  * Lo de la cuenta de un evento que no fue con el cliente (uno propio, o uno interno que lo nombra): la próxima reunión,
  * el siguiente paso, la última vez, lo pendiente y el negocio. Sin acceso a la cuenta, lo dice y no muestra nada de ella.
  */
-function LaCuentaDelEvento({ datos }: { datos: { panel: Panel | null; error: string | null } | null }) {
+function LaCuentaDelEvento({ datos, correo, onCerrar }: { datos: { panel: Panel | null; error: string | null } | null; correo: string; onCerrar: () => void }) {
   const panel = datos?.panel ?? null;
   return (
     <>
@@ -495,7 +492,7 @@ function LaCuentaDelEvento({ datos }: { datos: { panel: Panel | null; error: str
                 )}
               </div>
             )}
-            <LoDeLaCuenta panel={panel} />
+            <LoDeLaCuenta panel={panel} correo={correo} onCerrar={onCerrar} />
           </>
         ) : (
           <p className="text-[13px] leading-[19px] text-fg-muted">El evento nombra una cuenta que no está entre las que ves.</p>

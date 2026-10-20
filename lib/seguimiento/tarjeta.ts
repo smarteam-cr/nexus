@@ -452,12 +452,12 @@ export function armarTarjeta(e: EntradaDeLaTarjeta, opts: { hoyISO: string; quie
     : null;
 
   const pedidosVisibles = pedidos.slice(0, TOPES_DE_LA_TARJETA.pedidos);
-  const tareasVisibles = tareas.slice(0, TOPES_DE_LA_TARJETA.tareas);
   const plan: PlanDeUsarTodo = {
     minuta: minuta && pendiente(minuta.estado) ? minuta.id : null,
     // Solo lo que se ve, y solo los pedidos de un cliente con proyecto (los demás se revisan solos).
     pedidos: pedidosVisibles.filter((p) => !p.nota).map((p) => p.id),
-    tareas: tareasVisibles.map((t) => ({ id: t.id, version: t.version })),
+    // Las tareas se deciden solo en Tareas (2026-10-20, decisión de Elías): la tarjeta las muestra para leer.
+    tareas: [],
     // Solo las novedades que se ven y que quien mira puede decidir. Nunca la ficha, la alerta, el avance ni la etapa.
     novedades: hechosVisibles.flatMap((h) => h.destinos.filter((d) => d.decidible && d.salida === "novedad").map((d) => ({ hechoId: h.id, clave: d.clave }))),
   };
@@ -483,7 +483,8 @@ export function armarTarjeta(e: EntradaDeLaTarjeta, opts: { hoyISO: string; quie
         minuta: !!minuta && pendiente(minuta.estado),
         pedidos: pedidos.length,
         campos: campos.length,
-        tareas: tareas.length,
+        // Las tareas no se deciden en la tarjeta (2026-10-20): «Para ti» las cuenta en su línea de Tareas.
+        tareas: 0,
         novedades: hechos.filter((h) => h.pideDecision).length,
         nota: !!notaParaHubspot && notaParaHubspot.estado === "pendiente",
       };

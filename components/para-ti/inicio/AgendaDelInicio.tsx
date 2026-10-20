@@ -35,6 +35,7 @@ import type { AgendaDeHoy, EventoPropioDeLaAgenda, ReunionDeLaAgenda } from "@/l
 import { diaDeEntradaDeLaAgenda, diaQueSeVe, diasDeLaGrilla, esFinDeSemana, pasoDeLaAgenda, type VistaDeLaAgenda } from "@/lib/mi-dia/agenda-dias";
 import { ENLACE_BOTON, TARJETA, TITULO } from "./piezas";
 import BorradorDelEvento from "./BorradorDelEvento";
+import { tareaParaUnaPersona } from "@/lib/tareas/titulo-corto";
 import type { AgendaQueSeVe } from "./agenda-navegable";
 import {
   anunciarAgenda,
@@ -415,7 +416,7 @@ function Evento({
   const tenue = !!evento && (evento.tenue === true || evento.ocupa === false);
   const titulo = hueco
     ? hueco.avanzar
-      ? `Avanza T-${hueco.avanzar.tarea.numero} · ${hueco.avanzar.tarea.titulo}`
+      ? `Avanza: ${tareaParaUnaPersona(hueco.avanzar.tarea)}`
       : "Espacio libre"
     : reunion
       ? reunion.empresas.length === 1

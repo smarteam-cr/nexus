@@ -3,6 +3,12 @@
 /** Cuántos días hacia adelante se mira si una cuenta tiene su reunión (decisión 2, 2026-10-16). */
 export const DIAS_PARA_LA_REUNION = 8;
 
+/**
+ * Hasta cuántos días hacia adelante cuenta una reunión que la persona ELIGIÓ con «Ya la agendé» (2026-10-20, decisión de
+ * Elías): la eligió de su calendario, así que Nexus la vio. Las demás siguen contando solo en los próximos 8 días.
+ */
+export const DIAS_PARA_UNA_REUNION_ELEGIDA = 30;
+
 /** La primera y la última hora de la grilla de la agenda, en Costa Rica (como Google Calendar en la vista de día). */
 export const HORA_INICIO_DE_LA_AGENDA = 8;
 export const HORA_FIN_DE_LA_AGENDA = 18;

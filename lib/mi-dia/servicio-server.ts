@@ -17,7 +17,8 @@ import { tareasDisponible } from "@/lib/tareas/servidor";
 import { cuentaDelEvento } from "./agenda";
 import { calendarioDeLosProximosDias } from "./calendario-server";
 import { mapasDeEmpresas } from "./empresas-server";
-import { DIAS_PARA_LA_REUNION } from "./constantes";
+import { DIAS_PARA_LA_REUNION, DIAS_PARA_UNA_REUNION_ELEGIDA } from "./constantes";
+import { esReunionElegida } from "@/lib/tareas/reunion-elegida";
 import {
   estadoDeServicio,
   siguientePasoDeLaCuenta,
@@ -125,6 +126,8 @@ export async function servicioDeLasCuentas(
   const ids = [...new Set(cuentas.map((c) => c.clientId))];
   if (ids.length === 0) return out;
   const hasta = new Date(o.ahora.getTime() + DIAS_PARA_LA_REUNION * DIA_MS);
+  // Una reunión elegida con «Ya la agendé» cuenta hasta 30 días (lib/mi-dia/servicio.ts › reunionEnLosProximosDias).
+  const hastaElegidas = new Date(o.ahora.getTime() + DIAS_PARA_UNA_REUNION_ELEGIDA * DIA_MS);
   const personas = [...new Set(cuentas.flatMap((c) => (c.llevaEmail ? [c.llevaEmail.toLowerCase()] : [])))];
   const yo = o.quienMira.email.toLowerCase();
 
@@ -136,7 +139,7 @@ export async function servicioDeLasCuentas(
             estado: { in: ["pendiente", "en_curso"] },
             privada: false,
             clientId: { in: ids },
-            AND: [enLaVentana(o.hoyISO, ahora, hasta), ...(o.quienMira.esSuperAdmin ? [] : [{ NOT: deEspacioPrivadoAjeno(yo) }])],
+            AND: [enLaVentana(o.hoyISO, ahora, hastaElegidas), ...(o.quienMira.esSuperAdmin ? [] : [{ NOT: deEspacioPrivadoAjeno(yo) }])],
           },
           select: {
             id: true,
@@ -149,6 +152,7 @@ export async function servicioDeLasCuentas(
             semana: true,
             clase: true,
             reunionInicio: true,
+            origenId: true,
             equipo: true,
             responsableEmail: true,
           },
@@ -184,11 +188,12 @@ export async function servicioDeLasCuentas(
       : [],
   );
   // Las reuniones planeadas en Tareas que vienen.
-  const planeadas: ReunionDeLaCuenta[] = filas.flatMap((t) =>
-    t.clase === "reunion" && t.reunionInicio && t.clientId && t.reunionInicio >= o.ahora && t.reunionInicio <= hasta
-      ? [{ clientId: t.clientId, titulo: t.titulo, inicio: t.reunionInicio.toISOString(), fuente: "tarea" as const, tareaId: t.id }]
-      : [],
-  );
+  const planeadas: ReunionDeLaCuenta[] = filas.flatMap((t) => {
+    if (t.clase !== "reunion" || !t.reunionInicio || !t.clientId || t.reunionInicio < o.ahora) return [];
+    const elegida = esReunionElegida(t.origenId);
+    if (t.reunionInicio > (elegida ? hastaElegidas : hasta)) return [];
+    return [{ clientId: t.clientId, titulo: t.titulo, inicio: t.reunionInicio.toISOString(), fuente: "tarea" as const, tareaId: t.id, ...(elegida ? { elegida } : {}) }];
+  });
   const delCalendario = new Map(calendariosLeidos);
   const ultimaDe = new Map(ultimas.map((u) => [u.resolvedClientId as string, u]));
 

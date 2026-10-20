@@ -22,7 +22,8 @@ import { PENDIENTE_DE_TIEMPOS } from "@/lib/tiempos/reglas";
 import { MAX_LO_QUE_IMPORTA, pesoDe, PESOS } from "@/lib/para-ti/importa";
 import type { ParaTi, Pendiente } from "@/lib/para-ti/tipos";
 import { ENLACE_BOTON, EnlaceDelInicio, TARJETA, TITULO } from "./piezas";
-import { AccionDelPendiente } from "./AgendarEnLaAgenda";
+import { AccionDelPendiente, esAgendarDeLaCuenta } from "./AgendarEnLaAgenda";
+import YaLaAgende, { useYaAgendada } from "./YaLaAgende";
 import { cuantosSeVen } from "@/lib/para-ti/foco";
 import { FUENTE_REUNION_CON_LA_CUENTA } from "@/lib/mi-dia/servicio";
 import type { BloqueDelFoco } from "@/lib/para-ti/tipos";
@@ -117,7 +118,9 @@ function Marca({ it, numero }: { it: Pendiente; numero: number }) {
 
 function FilaQueImporta({ it, numero, ultima }: { it: Pendiente; numero: number; ultima: boolean }) {
   const [abierto, setAbierto] = useState(false);
+  const yaAgendada = useYaAgendada(it.clave);
   const otros = it.otrosEnLaCuenta ?? [];
+  if (yaAgendada) return null;
   if (it.fuente === PENDIENTE_DE_TIEMPOS) {
     return (
       <li className={cn(!ultima && "border-b border-line")}>
@@ -127,7 +130,7 @@ function FilaQueImporta({ it, numero, ultima }: { it: Pendiente; numero: number;
   }
   return (
     <li className={cn(!ultima && "border-b border-line")}>
-      <div className="flex items-center gap-3.5 px-1 py-3 transition-colors hover:bg-surface-muted">
+      <div className="flex flex-wrap items-center gap-3.5 px-1 py-3 transition-colors hover:bg-surface-muted">
         <Marca it={it} numero={numero} />
         <div className="min-w-0 flex-1">
           <p className="text-xs text-fg-muted">
@@ -147,6 +150,7 @@ function FilaQueImporta({ it, numero, ultima }: { it: Pendiente; numero: number;
         </div>
         {it.plata && <span className="flex-none text-[13px] tabular-nums text-fg-secondary">{it.plata}</span>}
         <AccionDelPendiente it={it} className={ENLACE_BOTON} />
+        {esAgendarDeLaCuenta(it) && <YaLaAgende it={it} />}
       </div>
       {abierto && (
         <div className="mb-2 flex flex-col rounded-lg border border-line bg-surface-muted">
@@ -176,7 +180,10 @@ function Enlaces({ it }: { it: Pendiente }) {
 
 /** Una fila de las listas de abajo y de «+N en esta cuenta». */
 export function FilaDePendiente({ it }: { it: Pendiente }) {
+  const yaAgendada = useYaAgendada(it.clave);
   if (it.fuente === PENDIENTE_DE_TIEMPOS) return <PendienteDeTiempos item={it} />;
+  // «Ya la agendé» (2026-10-20): Nexus vio la reunión en el calendario; la línea se va.
+  if (yaAgendada) return null;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line px-3.5 py-2.5 first:border-t-0">
       {it.delAgente ? (
@@ -194,6 +201,7 @@ export function FilaDePendiente({ it }: { it: Pendiente }) {
       </div>
       {it.plata && <span className="flex-none text-[13px] tabular-nums text-fg-secondary">{it.plata}</span>}
       <AccionDelPendiente it={it} className={ENLACE_BOTON} />
+      {esAgendarDeLaCuenta(it) && <YaLaAgende it={it} />}
     </div>
   );
 }

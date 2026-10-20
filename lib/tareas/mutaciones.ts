@@ -67,6 +67,7 @@ import { estadosDeAcuerdo } from "@/lib/asistente/acuerdo-vivo";
 import { marcaDeDesenlace } from "@/lib/asistente/acuerdo";
 import { dependenciasDeOperacionesDeTareas, type OperacionDeTareas, type RefATarea } from "./chat/operaciones";
 import { textoDelDesenlaceDeTareas } from "./chat/textos";
+import { origenDeLaElegida } from "./reunion-elegida";
 
 type Tx = Prisma.TransactionClient;
 type Db = PrismaClient | Tx;
@@ -3115,6 +3116,8 @@ export interface ReunionPlaneadaNueva {
   objetivo?: string | null;
   /** La reunión de la que es la próxima (la página de una reunión): agendarla otra vez mueve la misma tarea. */
   deLaReunion?: string | null;
+  /** El evento del calendario que la persona eligió con «Ya la agendé» (lib/tareas/reunion-elegida.ts). */
+  eventoId?: string | null;
 }
 
 /**
@@ -3145,7 +3148,11 @@ export async function planearReunion(
   if (!equipo) throw new ErrorDeTareas(400, "Tu cuenta no está en el equipo.");
   const invitados = [...new Set((n.invitados ?? []).map((x) => x.trim().toLowerCase()).filter((x) => CORREO_DE_INVITADO.test(x)))].slice(0, MAX_INVITADOS_DE_LA_REUNION);
   const semana = await semanaDestino(prisma, yo, lunesDeFecha(hoyEnCostaRica(inicio)), true, ahora);
-  const origenId = n.deLaReunion ? `proxima:${n.deLaReunion}` : `agenda:${n.clientId}:${inicio.toISOString().slice(0, 16)}`;
+  const origenId = n.eventoId
+    ? origenDeLaElegida(n.clientId, n.eventoId)
+    : n.deLaReunion
+      ? `proxima:${n.deLaReunion}`
+      : `agenda:${n.clientId}:${inicio.toISOString().slice(0, 16)}`;
   const notas = n.objetivo?.trim() ? `Objetivo: ${n.objetivo.trim()}`.slice(0, 2_000) : null;
 
   const existe = await prisma.tarea.findUnique({ where: { origenId }, select: { id: true, numero: true, version: true, estado: true, reunionInicio: true, responsableEmail: true } });

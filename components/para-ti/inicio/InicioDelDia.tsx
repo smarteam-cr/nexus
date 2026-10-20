@@ -11,7 +11,8 @@
  * abre nada solo (2026-10-19): el panel lo abre la persona.
  */
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { bloquesSugeridos, espaciosLibres, ocupadoDeLaAgenda, type PedazoDeFrase, type TareaParaUnHueco, type VarianteDelInicio } from "@/lib/mi-dia/inicio";
@@ -30,6 +31,7 @@ import AvisosDelInicio from "./AvisosDelInicio";
 import TusCuentasDelInicio from "./TusCuentasDelInicio";
 import { TusTareasDeHoy, TusTareasInternas } from "./TareasDelInicio";
 import { Punto, TARJETA, TITULO } from "./piezas";
+import { escucharReunionesPedidas } from "./abrir-reunion";
 
 export interface DatosDelInicio {
   variante: VarianteDelInicio;
@@ -67,6 +69,24 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
   const [sinResumen, setSinResumen] = useState(false);
 
   const { agenda, cargando, ir, precargar } = useAgendaNavegable(d.agenda, d.correo);
+
+  // «Preparar» (2026-10-20) abre el panel de la reunión, no una página aparte. Desde un enlace (el correo de la mañana,
+  // otra pantalla) llega `?reunion=` con el día; la agenda ya viene en ese día y el panel se abre una vez, sin efecto.
+  const pedidaPorEnlace = useSearchParams()?.get("reunion") ?? null;
+  const [enlaceTomado, setEnlaceTomado] = useState<string | null>(null);
+  if (pedidaPorEnlace && pedidaPorEnlace !== enlaceTomado) {
+    setEnlaceTomado(pedidaPorEnlace);
+    setElegida(pedidaPorEnlace);
+  }
+  // Desde «Lo que importa hoy», en la misma página: va al día de la reunión si no se ve y abre su panel.
+  useEffect(
+    () =>
+      escucharReunionesPedidas(({ eventoId, dia }) => {
+        if (dia && agenda && !diasDeLaGrilla(agenda.vista, agenda.dia).includes(dia)) ir(agenda.vista, dia);
+        setElegida(eventoId);
+      }),
+    [agenda, ir],
+  );
   const reuniones = useMemo(() => (agenda?.datos.estado === "ok" ? agenda.datos.reuniones : []), [agenda]);
   // Lo que ocupa el tiempo: las reuniones y los eventos propios («Tenis», «Cita Médica»), como en Google Calendar.
   const ocupado = useMemo(() => (agenda?.datos.estado === "ok" ? ocupadoDeLaAgenda(agenda.datos) : []), [agenda]);

@@ -12,7 +12,6 @@
  * fila va suelta.
  */
 import { useState } from "react";
-import Link from "next/link";
 import { Menu } from "@/components/ui/Menu";
 import { BotonTexto, BotonUsar, FilaSugerida } from "@/components/ui/sistema";
 import { Chip } from "./chips";
@@ -159,9 +158,9 @@ export function PropuestaDeTarea({
 }
 
 /**
- * Las propuestas agrupadas por la reunión de la que salieron: el grupo dice la reunión una vez y lleva a «Lo que dejó
- * esta reunión», donde se decide todo lo de esa reunión junto. Lo que no salió de una reunión que ves va suelto, con su
- * origen en la fila.
+ * Las propuestas agrupadas por la reunión de la que salieron: el grupo dice la reunión una vez y, si tiene varias que
+ * puedes decidir, «Usar todas». Desde el 2026-10-20 (decisión de Elías) las tareas se deciden SOLO acá: la página de la
+ * reunión las muestra para leer. Lo que no salió de una reunión que ves va suelto, con su origen en la fila.
  */
 export function PropuestasPorReunion({
   tareas,
@@ -169,12 +168,15 @@ export function PropuestasPorReunion({
   ocupadas,
   onDecidir,
   onAbrir,
+  onUsarTodas,
 }: {
   tareas: readonly TareaVista[];
   personas: readonly PersonaVista[];
   ocupadas: ReadonlySet<string>;
   onDecidir: (t: TareaVista, d: DecisionEnPantalla) => void;
   onAbrir: (t: TareaVista) => void;
+  /** «Usar todas» de una reunión: las que puedes decidir, a tu semana. */
+  onUsarTodas?: (tareas: TareaVista[]) => void;
 }) {
   const grupos: { clave: string; salio: Extract<TareaVista["salioDe"], { visible: true }> | null; tareas: TareaVista[] }[] = [];
   for (const t of tareas) {
@@ -186,26 +188,31 @@ export function PropuestasPorReunion({
   }
   return (
     <div className="space-y-3">
-      {grupos.map((g) => (
-        <div key={g.clave || "sueltas"} className="space-y-1.5">
-          {g.salio && (
-            <div className="flex flex-wrap items-baseline gap-x-2 px-1 text-xs">
-              <span className="min-w-0 truncate font-medium text-fg-secondary">
-                De «{g.salio.titulo}»{g.salio.fecha ? ` · ${diaCortoConSemana(horaDeCostaRica(g.salio.fecha).fecha)}` : ""}
-                {g.tareas[0]?.cliente ? ` · ${g.tareas[0].cliente.nombre}` : ""}
-              </span>
-              <Link href={`/sessions/${encodeURIComponent(g.salio.sesionId)}#lo-que-dejo`} className="font-medium text-brand hover:underline">
-                Decidir en la reunión
-              </Link>
-            </div>
-          )}
-          <ul className="space-y-1.5">
-            {g.tareas.map((t) => (
-              <PropuestaDeTarea key={t.id} t={t} personas={personas} ocupada={ocupadas.has(t.id)} conOrigen={!g.salio} onDecidir={onDecidir} onAbrir={onAbrir} />
-            ))}
-          </ul>
-        </div>
-      ))}
+      {grupos.map((g) => {
+        const decidibles = g.tareas.filter((t) => t.acciones.decidir && !ocupadas.has(t.id));
+        return (
+          <div key={g.clave || "sueltas"} className="space-y-1.5">
+            {g.salio && (
+              <div className="flex flex-wrap items-baseline gap-x-2 px-1 text-xs">
+                <span className="min-w-0 truncate font-medium text-fg-secondary">
+                  De «{g.salio.titulo}»{g.salio.fecha ? ` · ${diaCortoConSemana(horaDeCostaRica(g.salio.fecha).fecha)}` : ""}
+                  {g.tareas[0]?.cliente ? ` · ${g.tareas[0].cliente.nombre}` : ""}
+                </span>
+                {onUsarTodas && decidibles.length > 1 && (
+                  <button type="button" onClick={() => onUsarTodas(decidibles)} className="font-medium text-brand hover:underline">
+                    Usar las {decidibles.length}
+                  </button>
+                )}
+              </div>
+            )}
+            <ul className="space-y-1.5">
+              {g.tareas.map((t) => (
+                <PropuestaDeTarea key={t.id} t={t} personas={personas} ocupada={ocupadas.has(t.id)} conOrigen={!g.salio} onDecidir={onDecidir} onAbrir={onAbrir} />
+              ))}
+            </ul>
+          </div>
+        );
+      })}
     </div>
   );
 }

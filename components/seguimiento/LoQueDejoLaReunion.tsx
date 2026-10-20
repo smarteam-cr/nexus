@@ -9,8 +9,9 @@
  * de alcance, la ficha, Tareas, las alertas). Lo que se decide acá queda en su lugar, sin la marca de sugerencia: no
  * se pinta de verde ni se mueve. Las reglas de qué entra: lib/seguimiento/tarjeta.ts.
  *
- * «Usar todo» revisa la minuta, confirma los pedidos fuera de alcance, usa tus tareas propuestas y da por usadas las
- * novedades de los documentos (etapa 6). Nunca toca la información del cliente, la etapa, las alertas ni el avance.
+ * «Usar todo» revisa la minuta, confirma los pedidos fuera de alcance y da por usadas las novedades de los documentos
+ * (etapa 6). Nunca toca la información del cliente, la etapa, las alertas ni el avance. Tus tareas propuestas se ven
+ * acá para leer y se deciden solo en Tareas (2026-10-20, decisión de Elías).
  *
  * Los hechos de la reunión (etapa 6) van con su destino: una novedad de un documento se decide acá o arriba del
  * documento (la misma ruta); lo que fue a la ficha, a una alerta, al vigía, al avance o a la etapa dice a dónde fue.
@@ -371,37 +372,17 @@ export default function LoQueDejoLaReunion({ inicial, sinCompromisos = false }: 
 
       {secciones.tareas.items.length > 0 && (
         <Bloque titulo="Tus tareas propuestas" mas={secciones.tareas.mas} href={secciones.tareas.href}>
-          <ul className="space-y-2">
-            {secciones.tareas.items.map((t) => {
-              const clave = `tarea:${t.id}`;
-              const quedo = yaNoPide(clave);
-              if (quedo) return <FilaNeutra key={t.id} estado={quedo}>{`T-${t.numero} · ${t.titulo}`}</FilaNeutra>;
-              const decidir = (tipo: "usar" | "rechazar", texto: string) =>
-                accion(clave, texto, () =>
-                  pedir(`/api/tareas/${encodeURIComponent(t.id)}/decision`, {
-                    method: "POST",
-                    body: JSON.stringify({ version: t.version, decision: { tipo } }),
-                  }),
-                );
-              return (
-                <FilaSugerida
-                  key={t.id}
-                  origen={t.contexto ? <span className="line-clamp-4 whitespace-pre-line">{t.contexto}</span> : undefined}
-                  debajo={<Cita texto={t.cita} />}
-                  acciones={
-                    <>
-                      <BotonTexto disabled={ocupado !== null} onClick={() => decidir("rechazar", "Desestimada")}>
-                        Desestimar
-                      </BotonTexto>
-                      <BotonUsar disabled={ocupado !== null} onClick={() => decidir("usar", "La usaste")} />
-                    </>
-                  }
-                >
-                  T-{t.numero} · {t.titulo}
-                </FilaSugerida>
-              );
-            })}
+          {/* Se deciden solo en Tareas (2026-10-20, decisión de Elías): acá, para leer. */}
+          <ul className="space-y-1.5">
+            {secciones.tareas.items.map((t) => (
+              <li key={t.id} className="text-[13px] leading-[19px] text-fg-secondary">
+                {t.titulo}
+              </li>
+            ))}
           </ul>
+          <Link href="/tareas" className="mt-2 inline-block text-xs font-medium text-brand hover:text-brand-light">
+            Decidir en Tareas
+          </Link>
         </Bloque>
       )}
 
@@ -557,7 +538,7 @@ export default function LoQueDejoLaReunion({ inicial, sinCompromisos = false }: 
           {ocupado === "usar-todo" ? "Usando…" : "Usar todo"}
         </BotonAzul>
         <p className="min-w-0 flex-1 text-xs text-fg-muted">
-          Revisa la minuta, confirma los pedidos fuera de alcance, usa tus tareas propuestas y da por usadas las novedades
+          Revisa la minuta, confirma los pedidos fuera de alcance y da por usadas las novedades
           de los documentos que ves. Confirmar un pedido les avisa a Ventas y a quien lidera Customer Success. No toca la
           información del cliente, la etapa, las alertas ni el avance: esas se confirman donde se ve su efecto.
         </p>

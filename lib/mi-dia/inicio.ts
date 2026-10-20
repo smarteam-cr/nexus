@@ -264,6 +264,10 @@ export interface TareaParaUnHueco {
   id: string;
   numero: number;
   titulo: string;
+  /** El nombre corto de la IA, si salió del título de hoy (lib/tareas/titulo-corto.ts). */
+  tituloCorto?: string | null;
+  /** De quién es una tarea sin cliente: el proyecto interno («SmartAgro»), para nombrarla. */
+  ambito?: string | null;
   prioridad: string;
   venceEl: string | null;
   semana: string | null;

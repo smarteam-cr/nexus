@@ -10,6 +10,7 @@
 import type { ParaTi, Pendiente } from "@/lib/para-ti/tipos";
 import { elegirLoQueImporta } from "@/lib/para-ti/importa";
 import type { ReunionDeLaAgenda } from "./agenda-server";
+import { enlaceAlPanelDeLaReunion } from "./servicio";
 
 export const MAX_COSAS = 5;
 export const MAX_REUNIONES = 8;
@@ -76,7 +77,8 @@ export function armarCorreoDeLaManana(o: {
       hora: hora(r.inicio),
       texto: r.titulo,
       detalle: empresa,
-      href: absoluta(o.base, r.empresas.length === 1 ? `/para-ti/reunion/${encodeURIComponent(r.id)}?cliente=${encodeURIComponent(r.empresas[0])}` : "/para-ti"),
+      // El panel de la reunión en la agenda (2026-10-20); con varias empresas, ahí se elige de cuál es.
+      href: absoluta(o.base, enlaceAlPanelDeLaReunion(r.id, r.inicio)),
     };
   });
   const { cosas, mas } = cosasDelCorreo(o.paraTi);

@@ -189,6 +189,17 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
     }
   }
 
+  /** «Usar las N» de una reunión: una por una, por la misma puerta que «Usar»; la que falla lo dice y las demás siguen. */
+  async function usarVarias(xs: readonly TareaVista[]) {
+    let usadas = 0;
+    for (const t of xs) {
+      const ok = await conTarea(t.id, () => apiTareas.decidir(t.id, t.version, { tipo: "usar" }));
+      if (ok) usadas++;
+    }
+    if (usadas > 0) toast.success(usadas === 1 ? "Quedó en tu semana." : `Quedaron ${usadas} en tu semana.`);
+    await refrescar();
+  }
+
   /**
    * Marcar o desmarcar: la casilla cambia al instante y el cambio va en fila con la versión que dejó el anterior
    * (lib/tareas/fila-de-cambios.ts). Si el servidor dice que no, la tarea vuelve a como estaba y se dice por qué.
@@ -353,7 +364,14 @@ export default function MisTareas({ inicial }: { inicial: MisTareasDatos }) {
             {datos.proyectosPorDecidir.map((p) => (
               <ProyectoPorDecidir key={p.id} p={p} onDecidido={refrescar} onAbrir={() => ponerParametro("p", p.id)} />
             ))}
-            <PropuestasPorReunion tareas={porDecidir} personas={personas} ocupadas={ocupadas} onDecidir={decidir} onAbrir={(x) => ponerParametro("t", x.id)} />
+            <PropuestasPorReunion
+              tareas={porDecidir}
+              personas={personas}
+              ocupadas={ocupadas}
+              onDecidir={decidir}
+              onAbrir={(x) => ponerParametro("t", x.id)}
+              onUsarTodas={(xs) => void usarVarias(xs)}
+            />
           </section>
         )}
 

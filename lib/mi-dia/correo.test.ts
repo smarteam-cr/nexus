@@ -48,7 +48,7 @@ describe("el correo de la mañana", () => {
     });
     expect(c.asunto).toBe("Tu día: 1 reunión y 1 cosa para hoy");
     expect(c.saludo).toBe("Buenos días, Ana. Jueves 16 de octubre.");
-    expect(c.reuniones[0]).toMatchObject({ hora: "09:00", detalle: "Acme", href: "https://nexus.smarteamcr.com/para-ti/reunion/ev1?cliente=c1" });
+    expect(c.reuniones[0]).toMatchObject({ hora: "09:00", detalle: "Acme", href: "https://nexus.smarteamcr.com/para-ti?dia=2026-10-16&reunion=ev1" });
     expect(c.cosas[0].href).toBe("https://nexus.smarteamcr.com/clients/x?tareas:1");
     expect(c.texto).toContain("- 09:00 · Seguimiento (Acme)");
   });

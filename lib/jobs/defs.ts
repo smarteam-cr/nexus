@@ -36,6 +36,8 @@
  *   - lo-pagado-daily → cobra solo lo que Odoo y Mercury dan por pagado y conciliado con el banco, firmado por el sistema
  *     (lib/cobranza/libro, decisión de Elías del 2026-10-18). Diario ≥ 7:00 CR, después de las dos copias de las 6:00;
  *     espera a una copia atrasada hasta las 10:00. Gated por COBRO_SOLO_ENABLED≠0 y alguna de las dos credenciales.
+ *   - titulos-cortos → el nombre corto de las tareas abiertas que no lo tienen o cuyo título cambió
+ *     (lib/tareas/ia/titulo-corto-server.ts), cada 10 minutos, con Haiku y si queda presupuesto automático.
  *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
  *     ≥ 7:00 CR, después de los espejos. Si alguno está en rojo el job LANZA: semáforo rojo
  *     en Integraciones + Sentry con tags.job. Solo lecturas. (B-08)
@@ -944,6 +946,33 @@ const iaLotes: JobDef = {
   },
 };
 
+/**
+ * El nombre corto de las tareas (2026-10-20, decisión de Elías; lib/tareas/ia/titulo-corto-server.ts): cada 10 minutos,
+ * las tareas abiertas sin nombre corto o cuyo título cambió, de a 40 por pedido a Haiku y como mucho 5 pedidos. Sin
+ * nada que nombrar no llama a Claude. Sin el SQL (2026-10-20-titulo-corto-de-la-tarea.sql) avisa y no hace nada; sin
+ * presupuesto automático, espera al tick siguiente.
+ */
+const titulosCortos: JobDef = {
+  key: "titulos-cortos",
+  shouldRun: () => true,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const p = crDateParts(now);
+    const turno = `${p.dateKey}T${String(p.hour).padStart(2, "0")}:${String(Math.floor(now.getUTCMinutes() / 10) * 10).padStart(2, "0")}`;
+    if (!(await quedaPresupuesto(now))) return SIN_TURNO;
+    if (!(await claimDateKey("titulos-cortos", turno, now))) return SIN_TURNO;
+    const { escribirTitulosCortos } = await import("@/lib/tareas/ia/titulo-corto-server");
+    const r = await escribirTitulosCortos();
+    if (r.sinColumna) {
+      console.log(`[jobs/titulos-cortos] ${turno} — falta el SQL 2026-10-20-titulo-corto-de-la-tarea.sql`);
+      return;
+    }
+    if (r.tandas === 0) return;
+    console.log(`[jobs/titulos-cortos] ${turno} — ${r.escritos} nombres en ${r.tandas} pedidos${r.sinNombre ? `, ${r.sinNombre} sin nombre` : ""}${r.errores ? `, ${r.errores} con error` : ""}`);
+    if (r.errores > 0 && r.escritos === 0) throw new Error("El pedido del nombre corto de las tareas falló.");
+  },
+};
+
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, loPagadoDaily, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, loPagadoDaily, invariantsDaily];
 }

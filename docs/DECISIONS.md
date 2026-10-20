@@ -6930,6 +6930,7 @@ las propuestas nuevas caerían en colas que nadie revisa.
 - **El dueño sale de `resolvedClientId`**: sin dueño no hay tarjeta, y una reunión de puertas adentro nunca la tiene (la
   lee Tareas). La página de una reunión y el PATCH de su minuta pasan a pedir acceso al cliente: sin acceso, 404. *Por
   qué:* hasta ahora cualquiera del equipo leía cualquier transcripción, y la página recalculaba el dueño por su cuenta.
+- *(Enmendado el 2026-10-20: las tareas salieron de «Usar todo» y de la tarjeta; se deciden solo en Tareas. Ver «Tres lugares para actuar».)*
 - **«Usar todo» = la minuta revisada + los pedidos confirmados + TUS tareas propuestas de esa reunión** (y, desde la
   etapa 6, las novedades de los documentos que puedes decidir: quedan usadas, como un «Listo»). Nunca la ficha, la
   etapa, la fecha del diagnóstico, las alertas ni el avance: la ficha y la etapa escriben en HubSpot o tienen su propia
@@ -8319,6 +8320,7 @@ preparado a cada reunión sin armarlo a mano. Ventas recibe lo mismo.
   empresa de cada una. La empresa sale de los invitados: el correo exacto de un contacto de HubSpot o el dominio
   registrado de la empresa (nunca uno de correo personal). Alguien que es de varias empresas (HubSpot, una agencia) no
   decide si hay otro invitado que es de una sola (invariante 1); si solo hay gente de varias, se elige al preparar.
+- *(Reemplazado el 2026-10-20: «Preparar» abre el panel de la reunión en la agenda y la página aparte se retiró. Ver «Tres lugares para actuar».)*
 - **«Preparar» abre el resumen de la cuenta para esa reunión, sin IA**: quién viene (nombre, cargo y su última reunión),
   la última vez (la minuta o las notas de la última reunión con el cliente, sin las de puertas adentro), lo que se dijo
   antes de lo que dice el título, lo pendiente de los dos lados (por la puerta de los agentes de Tareas: sin la cita,
@@ -9642,6 +9644,7 @@ reunión del calendario y la página de la sesión mostraban lo mismo con piezas
   con una cuenta tuya sin reunión en 8 días (con los invitados de su última) y el siguiente paso (el de Ventas de un
   negocio que cierra pronto, o la acción de la semana de una cuenta que no la tiene). «Usar» llena el borrador (título,
   cuenta, invitados, duración); todo sigue editable y nada se guarda hasta Google Calendar.
+- *(Reemplazado el 2026-10-20 en lo que toca a las tareas: se deciden solo en Tareas, y el panel cierra o agenda los pendientes. Ver «Tres lugares para actuar».)*
 - **El panel de la reunión resume; la página de la sesión decide.** El panel dice cuántas cosas piden tu decisión y
   cuáles, el siguiente paso de tu equipo y «Revisar sesión». Se fueron su «Usar todo», su «Usar como siguiente paso» y
   su «Escribir en HubSpot»: la página tiene todo eso. Usar ahí una de tus tareas de la reunión la vuelve tu siguiente
@@ -10192,3 +10195,44 @@ el proyecto ganó dueño después). No hubo nada que reasignar.
   (CSL, «Kolbi - SmartLoop»), aunque estuvieron los dos.
 - **Sin SQL ni datos que tocar.** El aviso se calcula al medir «Para ti», así que el cambio rige apenas se despliega. La
   regla nueva de reparto solo cambia las lecturas que vengan.
+
+## Tres lugares para actuar: «Para ti» avisa, la agenda prepara, Tareas decide (2026-10-20)
+
+**Contexto.** Elías probó «Para ti» como Caroline Bersot: la división de «Lo que importa hoy» funciona, pero «Preparar»
+llevaba a una página interna sin objetivo, «Tomarlo o decidir» llevaba a la página de la sesión, y las mismas tareas se
+decidían en dos lugares. Pidió simplificar Nexus: preparar y agendar en la agenda, decidir los pendientes en Tareas. Lo
+acordado en la conversación (tres preguntas cerradas por Elías): la página de la sesión queda para leer; «Ya la agendé»
+pide elegir la reunión del calendario; el nombre corto de la tarea lo escribe la IA.
+
+- **«Preparar» abre el panel de la reunión en la agenda** (`enlaceAlPanelDeLaReunion`, lib/mi-dia/servicio.ts:
+  `/para-ti?dia=…&reunion=…`). Desde «Lo que importa hoy» se abre en la misma página, sin volver a pedirla
+  (components/para-ti/inicio/abrir-reunion.ts); desde un enlace (el correo de la mañana) el inicio lo abre al cargar.
+  `/para-ti/reunion/[eventoId]` queda como redirección y su búsqueda en las reuniones pasó al panel.
+- **Los pendientes del panel se cierran ahí**: «✓ Hecha», «Agendar» (un borrador en la primera hora libre de la agenda,
+  con el título del bloque) y «Desestimar» con su motivo (pasa a «Ya no se hará»). Salen de las tareas de la cuenta que
+  ve quien mira (`/api/tareas/del-cliente`, con sus `acciones`, que el servidor vuelve a exigir); una reunión planeada no
+  es un pendiente. Lo que espera una decisión no se decide ahí: se cuenta y lleva a Tareas.
+- **Las tareas se deciden solo en Tareas.** Tareas ya las agrupaba por reunión; el enlace «Decidir en la reunión» se fue
+  y cada grupo con más de una lleva «Usar las N». La tarjeta «Lo que dejó esta reunión» las muestra para leer, con
+  «Decidir en Tareas», y su «Usar todo» ya no las toca (`planDeUsarTodo.tareas` va vacío; `desglose.tareas` en 0). La
+  minuta, los pedidos fuera de alcance, la ficha y las novedades se siguen decidiendo en la tarjeta: **queda por decidir**
+  si también salen de la página de la sesión.
+- **En «Para ti», una sola línea para las tareas nuevas**: «Tienes tareas nuevas de las reuniones con Cayalá, CEMACO y
+  Honda», con «Revisar en Tareas» (lib/para-ti/tareas-nuevas.ts). De una reunión que quien mira no puede abrir no se
+  nombra la cuenta («y otras»). La línea de cada reunión cuenta solo lo que se decide en su tarjeta. «Tomarlo o decidir»
+  (el aviso de las 48 horas) abre la tarea en Tareas.
+- **«Ya la agendé» en una cuenta sin siguiente paso**: la persona elige la reunión de su calendario en un buscador chico
+  (próximos 30 días, solo reuniones con alguien más, leído en ese momento sin lo guardado). El servidor la vuelve a
+  buscar en el calendario: si no está, 404; si está, queda como reunión planeada con `origenId` «elegida:<cuenta>:<evento>»
+  (lib/tareas/reunion-elegida.ts, por `planearReunion`). *Por qué:* Nexus no toma la palabra sin ver la reunión.
+- **Enmienda a la regla de servicio** («Una reunión agendada es el siguiente paso», 2026-10-19): una reunión ELEGIDA con
+  «Ya la agendé» cuenta hasta 30 días (`DIAS_PARA_UNA_REUNION_ELEGIDA`); las demás, 8 como antes. *Por qué:* el caso
+  típico es una reunión agendada para dentro de tres semanas, o con invitados que Nexus no reconoce como de la cuenta.
+- **El nombre corto de la tarea lo escribe la IA** (job «titulos-cortos», cada 10 minutos, Haiku, de a 40 por pedido):
+  `Tarea.tituloCorto` + `tituloCortoDe` (el título del que salió; si el título cambia, se vuelve a escribir sin que
+  ningún escritor se entere). Se escribe con SQL crudo y solo si el título sigue igual: no toca `updatedAt` (la
+  sincronización con HubSpot lo usa para saber qué lado cambió último) ni la `version`. Mientras no hay, se recorta el
+  título a seis palabras sin cortar una. Fuera de Tareas, una tarea se nombra «Cayalá – Enviar propuesta a Marta» y su
+  bloque en el calendario «Cayalá – Enviar propuesta a Marta | Espacio interno» (lib/tareas/titulo-corto.ts); sin
+  cliente, su proyecto interno; sin ninguno, Smarteam. El T-n queda solo dentro de Tareas.
+- **SQL:** `scripts/sql/2026-10-20-titulo-corto-de-la-tarea.sql` (aditivo, dos columnas nullable), antes del deploy.

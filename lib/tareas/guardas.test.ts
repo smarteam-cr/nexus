@@ -229,6 +229,12 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "lib/tareas-hubspot/reglas.ts": "las tareas de HubSpot: solo los tipos de prioridad (puro)",
       // «Actualizar escala» (2026-10-18): el agente que ubica la escala lee qué se está haciendo en la cuenta.
       "lib/exploraciones/posicionar-fuentes.ts": "«Actualizar escala»: las tareas abiertas de la cuenta SOLO por lib/tareas/para-agentes.ts (tareasDeLaCuentaParaAgentes: sin la cita, el contexto, las notas ni lo privado)",
+      // «Para ti» después de probarlo con Caroline (2026-10-20, decisión de Elías).
+      "lib/mi-dia/espacio-libre.ts": "«Con qué usar este espacio»: solo el nombre de la tarea para una persona (titulo-corto.ts, puro); no lee tareas",
+      "components/para-ti/inicio/AgendaDelInicio.tsx": "el bloque sugerido de un espacio libre: solo el nombre de la tarea para una persona (titulo-corto.ts, puro); no lee tareas",
+      "components/para-ti/inicio/PanelDeLaReunion.tsx": "«Bloquear en Calendar» del espacio libre: solo el título del bloque (titulo-corto.ts, puro); no lee tareas",
+      "components/para-ti/inicio/PendientesDelPanel.tsx": "lo pendiente con la cuenta en el panel de la reunión: el tipo de /api/tareas/del-cliente y el título del bloque (titulo-corto.ts); no consulta, los cambios van por las rutas de Tareas",
+      "app/api/para-ti/ya-la-agende/route.ts": "«Ya la agendé»: deja la reunión elegida del calendario como reunión planeada por el único escritor (planearReunion); no lee tareas",
       "lib/tareas-hubspot/sync-server.ts": "la copia de las tareas de HubSpot: escribe Tareas SOLO por el escritor único (crearTareaDeHubspot, aplicarDesdeHubspot, anotarSincronizacionConHubspot); lo que va a HubSpot lo escribe acá, nunca lib/tareas",
     };
     const afuera = TODO.filter((rel) => !/^(lib\/tareas|components\/tareas|app\/api\/tareas|app\/\(shell\)\/tareas)\//.test(rel)).filter((rel) => /@\/lib\/tareas\//.test(soloCodigo(leer(rel))));

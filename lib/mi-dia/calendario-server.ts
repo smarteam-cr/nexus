@@ -64,3 +64,11 @@ export function calendarioDeLosProximosDias(email: string, ahora = new Date(), d
   enVuelo.set(correo, [...(enVuelo.get(correo) ?? []), { dias, p }]);
   return p;
 }
+
+/**
+ * El calendario de `email` leído AHORA, sin lo guardado (2026-10-20, «Ya la agendé»): la persona acaba de agendar la
+ * reunión y Nexus tiene que verla. Deja lo leído guardado para los demás. null = no se pudo leer.
+ */
+export function releerCalendario(email: string, dias: number, ahora = new Date()): Promise<CalendarioDeLosProximosDias | null> {
+  return leer(email.trim().toLowerCase(), dias, ahora).catch(() => null);
+}

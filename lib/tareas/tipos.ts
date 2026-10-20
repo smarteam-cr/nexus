@@ -52,6 +52,8 @@ export interface TareaVista {
   id: string;
   numero: number;
   titulo: string;
+  /** El nombre corto que escribió la IA para nombrarla fuera de Tareas; null si todavía no hay o el título cambió. */
+  tituloCorto?: string | null;
   notas: string | null;
   /** Lo escribió Nexus al generarla: para qué es, para quién y qué se espera. Null si no hay o si quien mira no lo ve. */
   contexto: string | null;
@@ -60,6 +62,10 @@ export interface TareaVista {
   estado: EstadoDeTarea;
   prioridad: Prioridad;
   tipo: string;
+  /** Lo prometió el cliente o es de Smarteam (el panel de una reunión dice «El cliente: …»). */
+  lado?: "cliente" | "smarteam";
+  /** «accion», o «reunion» para una reunión planeada (no es un pendiente que se cierre). */
+  clase?: string;
   privada: boolean;
   seccion: string | null;
   /** Hasta 5, libres («urgente», «diseño»). Agrupan, no son estado. */

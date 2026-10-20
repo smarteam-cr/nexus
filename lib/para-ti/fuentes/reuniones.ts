@@ -11,6 +11,11 @@
  * reunión y, desde la etapa 6, los hechos con una novedad que puedes decidir (vacío con `SEGUIMIENTO_HECHOS` apagada).
  * Las tareas siguen en el renglón de Tareas, y la etapa y la fecha del diagnóstico, en los suyos: cada cosa en un solo
  * renglón. Pasados 30 días desde la reunión, deja de pedirse.
+ *
+ * Desde el 2026-10-20 (decisión de Elías) las tareas se deciden solo en Tareas: TUS tareas propuestas de todas esas
+ * reuniones van en UNA línea («Tienes tareas nuevas de las reuniones con Cayalá, CEMACO y Honda», con «Revisar en
+ * Tareas»), y la línea de cada reunión cuenta solo lo que se decide en su tarjeta (la minuta, los pedidos, la ficha,
+ * las novedades).
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
@@ -25,6 +30,7 @@ import { novedadesPorDecidirPorReunion } from "@/lib/seguimiento/novedades-serve
 import { loQuePideDecision, loQuePideDecisionEnPalabras } from "@/lib/seguimiento/tarjeta";
 import { clientesQueNoAbre } from "@/lib/auth/access";
 import { plural } from "../armar";
+import { lineaDeLasTareasNuevas } from "../tareas-nuevas";
 import type { Alcance } from "../alcance-server";
 import type { Fuente } from "../fuente";
 import type { Pendiente } from "../tipos";
@@ -139,22 +145,17 @@ export const LO_QUE_DEJARON_TUS_REUNIONES: Fuente = {
       .slice(0, MAX_REUNIONES);
     if (conAlgo.length === 0) return [];
 
-    return conAlgo.map(({ r, partes, n, empresa }): Pendiente => {
-      if (!r.conAcceso) {
-        return {
-          clave: `reuniones-por-revisar-lo-que-dejaron:${r.sessionId}`,
-          fuente: "reuniones-por-revisar-lo-que-dejaron",
-          cuando: "semana",
-          delAgente: true,
-          clientId: null,
-          titulo: "Revisa lo que dejó una reunión con un cliente",
-          detalle: `Nexus te propuso ${plural(partes.tareas, "tarea", "tareas")} al leerla. Se deciden en Mis tareas.`,
-          meta: "Reuniones",
-          accion: "Ir a Mis tareas",
-          href: "/tareas",
-          desde: r.fecha,
-        };
-      }
+    // Las tareas, en una sola línea a Tareas: de qué reuniones (por su cuenta; de una que no puedes abrir no se nombra).
+    const conTareas = conAlgo.filter((x) => x.partes.tareas > 0);
+    const lineaDeTareas: Pendiente[] = conTareas.length ? [lineaDeLasTareasNuevas(conTareas)] : [];
+    // Cada reunión, solo por lo que se decide en su tarjeta.
+    const porLaTarjeta = conAlgo
+      .filter((x) => x.r.conAcceso)
+      .map((x) => ({ ...x, partes: { ...x.partes, tareas: 0 } }))
+      .map((x) => ({ ...x, n: loQuePideDecision(x.partes) }))
+      .filter((x) => x.n > 0);
+
+    return [...lineaDeTareas, ...porLaTarjeta.map(({ r, partes, n, empresa }): Pendiente => {
       const que = loQuePideDecisionEnPalabras(partes);
       return {
         clave: `reuniones-por-revisar-lo-que-dejaron:${r.sessionId}`,
@@ -169,7 +170,6 @@ export const LO_QUE_DEJARON_TUS_REUNIONES: Fuente = {
         href: urlDeLoQueDejo(r.sessionId),
         desde: r.fecha,
       };
-    });
+    })];
   },
 };
-

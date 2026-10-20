@@ -13,6 +13,7 @@ import {
   pendienteDeTareasVencidas,
   reunionEnLosProximosDias,
   reunionesDeLosProximosDias,
+  reunionDelEnlace,
   siguientePasoDeLaCuenta,
   SIN_CSE,
   textoDelSiguientePaso,
@@ -84,6 +85,12 @@ describe("la reunión de los próximos 8 días", () => {
     expect(reunionEnLosProximosDias([r("2026-10-20T15:00:00Z")], AHORA)?.inicio).toBe("2026-10-20T15:00:00Z");
     expect(reunionEnLosProximosDias([r("2026-10-16T14:00:00Z")], AHORA)).toBeNull();
     expect(reunionEnLosProximosDias([r("2026-10-25T15:00:00Z")], AHORA)).toBeNull();
+  });
+
+  it("la que eligió la persona con «Ya la agendé» cuenta hasta 30 días (2026-10-20)", () => {
+    const elegida = (inicio: string) => ({ clientId: "c1", titulo: "Seguimiento", inicio, fuente: "tarea" as const, elegida: true });
+    expect(reunionEnLosProximosDias([elegida("2026-11-05T15:00:00Z")], AHORA)?.inicio).toBe("2026-11-05T15:00:00Z");
+    expect(reunionEnLosProximosDias([elegida("2026-12-20T15:00:00Z")], AHORA)).toBeNull();
   });
 });
 
@@ -191,7 +198,8 @@ describe("las reuniones del primer bloque", () => {
     expect(p.titulo).toBe("Honda: Revisión mensual");
     expect(p.detalle).toBe("Hoy, 14:00");
     expect(p.accion).toBe("Preparar");
-    expect(p.href).toBe("/para-ti/reunion/ev1?cliente=c1");
+    expect(p.href).toMatch(/^\/para-ti\?dia=\d{4}-\d{2}-\d{2}&reunion=ev1$/);
+    expect(reunionDelEnlace(p.href)).toMatchObject({ eventoId: "ev1" });
     const t = pendienteDeReunion({ clientId: "c1", empresa: "Honda" }, r("2026-10-20T15:00:00Z", { fuente: "tarea", eventoId: undefined, tareaId: "t9" }), "2026-10-19", "Ana");
     expect(t.accion).toBe("Abrir");
     expect(t.href).toBe("/tareas?t=t9");

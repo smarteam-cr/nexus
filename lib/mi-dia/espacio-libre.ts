@@ -12,6 +12,7 @@
  */
 import { DIAS_PARA_LA_REUNION, HORA_FIN_LABORAL, MINUTOS_DE_UN_HUECO } from "./constantes";
 import { instante, minutoDelDia, ordenarParaAvanzar, porqueAvanzar, type EventoParaLaGrilla, type TareaParaUnHueco } from "./inicio";
+import { tareaParaUnaPersona, tituloDelBloque } from "@/lib/tareas/titulo-corto";
 
 /** Lo que el inicio sabe para sugerir (lo que ya cargó para «Con qué avanzar», tus cuentas y tus negocios). */
 export interface ParaSugerirEnElEspacio {
@@ -78,9 +79,10 @@ export function sugerenciasParaElEspacio(o: {
     out.push({
       clave: `tarea:${t.id}`,
       tipo: "tarea",
-      texto: `T-${t.numero} · ${t.titulo}`,
-      porque: `Tu tarea ${porqueAvanzar(t, o.hoyISO)}${t.empresa ? ` · ${t.empresa}` : ""}.`,
-      titulo: `T-${t.numero} · ${t.titulo}`,
+      // Nombrada para una persona (2026-10-20): «Cayalá – Enviar propuesta a Priscila», sin el T-n de Tareas.
+      texto: tareaParaUnaPersona(t),
+      porque: `Tu tarea ${porqueAvanzar(t, o.hoyISO)}.`,
+      titulo: tituloDelBloque(t),
       cuenta: t.clientId && t.empresa ? { id: t.clientId, nombre: t.empresa } : null,
       invitados: [],
       tarea: { id: t.id, numero: t.numero },
