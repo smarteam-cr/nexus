@@ -23,6 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!reporte) return NextResponse.json({ error: "Ese reporte no existe." }, { status: 404 });
 
   const esAutor = reporte.autor.email === guard.user.email.toLowerCase();
-  await marcarLeido(id, esAutor ? "autor" : "revisor");
+  // Con «Ver como» (lib/auth/ver-como.ts) es solo lectura: abrir el reporte no lo deja leído a nombre de la otra persona.
+  if (!guard.user.verComoDe) await marcarLeido(id, esAutor ? "autor" : "revisor");
   return NextResponse.json({ reporte });
 }

@@ -37,6 +37,7 @@ import {
   pasoVencido,
   preguntaDelNegocio,
   senalesDelNegocio,
+  SIN_META,
   temperaturaDelNegocio,
   TEXTO_DE_SENAL,
   TEXTO_DE_TEMPERATURA,
@@ -220,9 +221,9 @@ function Cifras({ vista }: { vista: VistaDeVentas }) {
   const { meta, ponderado } = vista;
   const pct = meta?.cumplimiento != null ? Math.round(meta.cumplimiento * 100) : null;
   return (
-    // Sin meta de ventas en HubSpot no se pinta su tarjeta (Elías, 2026-10-19): quedan dos columnas.
-    <div className={`grid gap-3 ${meta ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-      {meta && (
+    // Con cartera de Ventas, la tarjeta de la meta siempre está; sin meta en HubSpot dice que falta (Elías, 2026-10-19).
+    <div className="grid gap-3 sm:grid-cols-3">
+      {meta ? (
         <div className="rounded-xl border border-line bg-surface p-4">
           <div className={ROTULO_DEL_SISTEMA}>Tu meta {vista.anio}</div>
           <div className="mt-1 text-xl font-semibold tabular-nums text-fg">
@@ -235,6 +236,12 @@ function Cifras({ vista }: { vista: VistaDeVentas }) {
             </div>
           )}
           <div className="mt-1.5 text-xs text-fg-muted">{pct != null ? `${pct} % según HubSpot` : "HubSpot no dio el avance"}</div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-line bg-surface p-4">
+          <div className={ROTULO_DEL_SISTEMA}>Tu meta {vista.anio}</div>
+          <div className="mt-1 text-xl font-semibold tabular-nums text-fg-muted">—</div>
+          <div className="mt-1.5 text-xs text-fg-muted">{SIN_META}</div>
         </div>
       )}
       <div className="rounded-xl border border-line bg-surface p-4">

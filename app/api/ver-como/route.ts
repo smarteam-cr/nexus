@@ -30,8 +30,9 @@ export async function POST(req: NextRequest) {
   const objetivo = teamMemberId
     ? await prisma.appUser.findFirst({ where: { teamMemberId }, include: { teamMember: true } })
     : null;
+  // El correo de la sesión real (AppUser.email) decide si puede mirar a otro Super Admin: nada que mande el navegador.
   const motivo = motivoParaNoVerComo(
-    real?.teamMember,
+    real?.teamMember ? { ...real.teamMember, email: real.email } : null,
     objetivo?.teamMember ? { ...objetivo.teamMember, kind: objetivo.kind } : null,
   );
   if (motivo || !objetivo?.teamMember) return NextResponse.json({ error: motivo }, { status: 403 });

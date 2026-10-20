@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { bloqueaEscritura, motivoParaNoVerComo, RUTA_VER_COMO } from "./ver-como";
+import { bloqueaEscritura, motivoParaNoVerComo, puedeVerComoASuperAdmin, RUTA_VER_COMO } from "./ver-como";
 
 const RAIZ = join(__dirname, "..", "..");
 const leer = (rel: string) => readFileSync(join(RAIZ, rel), "utf8");
@@ -49,6 +49,34 @@ describe("quién puede mirar a quién", () => {
   });
 });
 
+describe("ver como un Super Admin: solo Elías (prueba 148)", () => {
+  const elias = { ...admin, id: "e", email: "egonzalez@smarteamcr.com" };
+  const marco = { id: "m", roleEnum: "SUPER_ADMIN", deactivatedAt: null, kind: "INTERNAL" };
+  it("Elías puede ver como Marco o Alex Arrieta, y como cualquiera", () => {
+    expect(motivoParaNoVerComo(elias, marco)).toBeNull();
+    expect(motivoParaNoVerComo(elias, heiver)).toBeNull();
+    expect(motivoParaNoVerComo({ ...elias, email: "  EGonzalez@SmarteamCR.com " }, marco), "mayúsculas o espacios no lo cambian").toBeNull();
+  });
+  it("otro Super Admin no", () => {
+    expect(motivoParaNoVerComo({ ...admin, email: "marco@smarteamcr.com" }, marco)).not.toBeNull();
+    expect(motivoParaNoVerComo({ ...admin, email: null }, marco)).not.toBeNull();
+    expect(motivoParaNoVerComo(admin, marco), "sin correo de sesión, no").not.toBeNull();
+  });
+  it("estar en la lista no saca las demás reglas", () => {
+    expect(motivoParaNoVerComo({ ...elias, roleEnum: "CSL" }, marco), "deja de ser Super Admin").not.toBeNull();
+    expect(motivoParaNoVerComo({ ...elias, deactivatedAt: new Date() }, marco)).not.toBeNull();
+    expect(motivoParaNoVerComo(elias, { ...elias, kind: "INTERNAL" }), "a sí mismo no").toBe("Ya eres tú.");
+    expect(motivoParaNoVerComo(elias, { ...marco, deactivatedAt: "2026-10-01" })).not.toBeNull();
+    expect(motivoParaNoVerComo(elias, { ...marco, kind: "EXTERNAL" })).not.toBeNull();
+  });
+  it("la lista no se parece a otro correo", () => {
+    expect(puedeVerComoASuperAdmin("egonzalez@smarteamcr.com")).toBe(true);
+    for (const e of ["egonzalez@smarteamcr.com.evil.com", "xegonzalez@smarteamcr.com", "egonzalez@smarteamcr.co", "", null, undefined]) {
+      expect(puedeVerComoASuperAdmin(e), String(e)).toBe(false);
+    }
+  });
+});
+
 describe("⛔ las piezas que lo sostienen", () => {
   it("el middleware corta las escrituras ANTES de cualquier handler", () => {
     const src = leer("middleware.ts");
@@ -66,5 +94,23 @@ describe("⛔ las piezas que lo sostienen", () => {
   });
   it("la ruta de entrar usa el mismo criterio", () => {
     expect(leer("app/api/ver-como/route.ts")).toContain("motivoParaNoVerComo(");
+  });
+  it("el correo que decide la lista es el de la sesión (AppUser), en la ruta y en requireUser", () => {
+    expect(leer("app/api/ver-como/route.ts")).toContain("{ ...real.teamMember, email: real.email }");
+    expect(leer("lib/auth/supabase.ts")).toContain("{ ...real.teamMember, email: real.email }");
+    expect(leer("app/api/ver-como/route.ts"), "la ruta no lee un correo del cuerpo").not.toMatch(/body\??\.email/);
+  });
+  it("los GET que escriben no lo hacen mirando como otra persona (el middleware solo corta POST/PUT/PATCH/DELETE)", () => {
+    expect(leer("app/api/feedback/[id]/route.ts"), "abrir un reporte lo dejaría leído a nombre del otro").toMatch(
+      /if \(!guard\.user\.verComoDe\) await marcarLeido\(/,
+    );
+    expect(leer("app/api/auth/callback/route.ts"), "el callback conectaría HubSpot a nombre del otro").toContain(
+      "if (ctx.user.verComoDe) return salir(",
+    );
+    expect(leer("app/api/auth/hubspot/route.ts")).toContain("if (guard.user.verComoDe) return NextResponse.json(");
+  });
+  it("la lista vive en un solo lugar", () => {
+    const src = leer("lib/auth/ver-como.ts");
+    expect(src.match(/egonzalez@smarteamcr\.com/g)?.length).toBe(1);
   });
 });

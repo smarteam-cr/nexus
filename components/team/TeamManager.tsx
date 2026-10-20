@@ -153,10 +153,17 @@ function TeamPhotoAvatar({
 export default function TeamManager({
   canManage = false,
   canAdminPermissions = false,
+  emailReal = "",
+  verComoASuperAdmin = false,
 }: {
   canManage?: boolean;
   /** SOLO Super Admin (gate duro, no delegable): filas clickeables + pestaña Plantillas. */
   canAdminPermissions?: boolean;
+  /** El correo de quien mira DE VERDAD (no el de la persona mirada con «Ver como»): su fila no lleva el botón. */
+  emailReal?: string;
+  /** ¿Puede ver como otro Super Admin? (`puedeVerComoASuperAdmin`, lib/auth/ver-como.ts). Solo pinta el botón: la
+   *  ruta lo vuelve a decidir con el correo de la sesión. */
+  verComoASuperAdmin?: boolean;
 }) {
   const me = useMe();
   /**
@@ -244,6 +251,34 @@ export default function TeamManager({
         />
       ),
     },
+    /* «Ver como» (2026-10-13, lib/auth/ver-como.ts): un Super Admin mira Nexus como esta persona, en solo lectura.
+       Al lado del nombre (Elías, 2026-10-19). No se ofrece con uno mismo, ni en «Fuera del equipo», ni con otro Super
+       Admin salvo a quien la lista de ver-como.ts se lo permite. */
+    ...(canAdminPermissions && tab === "miembros"
+      ? [
+          {
+            key: "verComo",
+            header: "",
+            width: "w-28",
+            render: (m: TeamMember) =>
+              (m.roleEnum === "SUPER_ADMIN" && !verComoASuperAdmin) ||
+              m.email.toLowerCase() === (emailReal || miEmail).toLowerCase() ? null : (
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  disabled={entrandoComo !== null}
+                  title={`Ver Nexus exactamente como lo ve ${m.name}, en solo lectura`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void verComo(m);
+                  }}
+                >
+                  {entrandoComo === m.id ? "Entrando…" : "Ver como"}
+                </Button>
+              ),
+          } satisfies TableColumn<TeamMember>,
+        ]
+      : []),
     {
       key: "role",
       header: "Rol (permiso)",
@@ -282,32 +317,6 @@ export default function TeamManager({
                 <span className="text-xs text-fg-secondary">{fechaDeSalida(m.deactivatedAt)}</span>
               ) : (
                 <span className="text-fg-muted">—</span>
-              ),
-          } satisfies TableColumn<TeamMember>,
-        ]
-      : []),
-    /* «Ver como» (2026-10-13, lib/auth/ver-como.ts): un Super Admin mira Nexus como esta persona, en solo lectura.
-       No se ofrece con otro Super Admin (ve lo mismo que tú) ni en «Fuera del equipo». */
-    ...(canAdminPermissions && tab === "miembros"
-      ? [
-          {
-            key: "verComo",
-            header: "",
-            width: "w-28",
-            render: (m: TeamMember) =>
-              m.roleEnum === "SUPER_ADMIN" || m.email.toLowerCase() === miEmail ? null : (
-                <Button
-                  variant="secondary"
-                  size="xs"
-                  disabled={entrandoComo !== null}
-                  title={`Ver Nexus exactamente como lo ve ${m.name}, en solo lectura`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void verComo(m);
-                  }}
-                >
-                  {entrandoComo === m.id ? "Entrando…" : "Ver como"}
-                </Button>
               ),
           } satisfies TableColumn<TeamMember>,
         ]

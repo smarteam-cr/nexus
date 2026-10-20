@@ -6324,9 +6324,14 @@ especificación y el manual sacan una versión nueva solo cuando cambian ellos.
   persona o un reporte importan de ahí; nadie lee `MetaComercial` por su cuenta.
 - **Nunca se borra**: una meta que HubSpot deja de devolver queda `vigente=false`, y solo si la lectura terminó
   entera. Sin el permiso, la copia no toca nada.
-- **«Tu meta» se pinta solo si la persona tiene una meta de ventas asociada a su usuario en HubSpot** (Elías,
-  2026-10-19): en el inicio de «Para ti» y en la cartera de Ventas. Sin meta no hay tarjeta, tampoco una que diga «No
-  tienes una meta de ventas en HubSpot».
+- **«Tu meta» se pinta siempre que la persona tiene una cartera de Ventas** (Elías, 2026-10-19, prueba 147; corrige lo
+  decidido esa misma mañana, que la escondía sin meta): en el inicio de «Para ti» y en «Tu cartera». Sin meta de ventas
+  en HubSpot dice «Aún no tienes una meta configurada.» (`SIN_META`, lib/ventas/negocios.ts). Quien no tiene cartera de
+  Ventas (CS, y dirección sin negocios ni empresas a su nombre) no ve la tarjeta. ⚠ Tener empresas a tu nombre en
+  HubSpot ya es una cartera: Alexander Arrieta (4 empresas) y Elías (1) ven la tarjeta sin meta.
+- **La copia de metas corre cada hora** con la de los negocios abiertos (job `negocios-abiertos`) y con «Actualizar» de
+  la cartera, además de las 6:00. «Actualizar» no vuelve a leer nada si la copia de los negocios tiene menos de dos
+  minutos.
 - ⚠ **El permiso entra por el código, no por entorno**, porque Elías ya lo declaró «Opcional» en la app pública. La
   primera vez hay que **reconectar HubSpot** desde Integraciones después del deploy; hasta entonces la copia dice
   «sin permiso».
@@ -9945,3 +9950,26 @@ cuál es el siguiente paso de cada una y qué temas se están tratando con cada 
   afuera de la última reunión CON EL CLIENTE que muestra la fila. Nexus no escribe el calendario.
 - **Sin SQL.** `calendarioDeLosProximosDias` acepta los días a leer (guardado aparte por días) y el siguiente paso de la
   cartera dice quién lo lleva (`PasoDeLaEmpresa.lleva`).
+
+## «Ver como» a un Super Admin, solo para Elías (2026-10-19)
+
+**Contexto.** «Ver como» (lib/auth/ver-como.ts, 2026-10-13) no dejaba mirar como otro Super Admin («ve lo mismo que
+tú»). No es cierto: el rol es el mismo, pero Marco Salas y Alexander Arrieta no llevan lo mismo (su meta, su cartera, sus
+frentes de Finanzas), y Elías necesita probar lo que ven (prueba 148).
+
+- **Una lista de correos, en un solo lugar** (`PUEDEN_VER_COMO_A_UN_SUPER_ADMIN`, hoy solo egonzalez@smarteamcr.com). No
+  es un rol ni una celda de la matriz: no se delega desde /team y nadie la gana cambiando de rol. Sumar a alguien es una
+  línea, con su razón.
+- **Decide el correo de la SESIÓN** (`AppUser.email`, de Supabase Auth), nunca uno del navegador ni el del TeamMember. Lo
+  usan las dos puertas: la ruta que pone la cookie y `requireUser`, que la vuelve a validar en cada pedido.
+- **Lo demás no cambia:** hay que ser Super Admin activo, no se mira a uno mismo, ni a alguien de baja ni de afuera, y
+  sigue siendo solo lectura (el middleware corta toda escritura con la cookie puesta).
+- **En Equipo, «Ver como» va al lado del nombre**, como segunda columna (Elías, 2026-10-19).
+- **Los GET que escribían también se cortan mirando** (el middleware solo corta POST, PUT, PATCH y DELETE): abrir un
+  reporte de Feedback ya no lo deja leído a nombre de la otra persona, y el inicio y el callback de la conexión de
+  HubSpot responden que es solo lectura. Lo vigila `lib/auth/ver-como.test.ts`. Quedan dos GET que escriben sin autor
+  (`deal-line-items` guarda el trato del proyecto y `hubspot/read` la foto del portal).
+- ⚠ **Mirar como un Super Admin muestra lo suyo personal**: su calendario en la agenda de «Para ti», sus hilos del chat
+  de Nexus y sus avisos, como ya pasaba al mirar a cualquier otra persona. La huella es una línea en el log del servidor
+  (`[ver-como] … mira Nexus como …`).
+

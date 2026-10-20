@@ -4,7 +4,7 @@
  *
  * Cada número dice de qué es en una línea; lo que falta va en ámbar. Ningún número se inventa: sin el dato, «—».
  */
-import { cierresMasCerca, diasHasta, esPausado, fechaCorta, montoCorto, pasoDeVentas, pasoVencido, type NegocioVisto } from "@/lib/ventas/negocios";
+import { cierresMasCerca, diasHasta, esPausado, fechaCorta, montoCorto, pasoDeVentas, pasoVencido, SIN_META, type NegocioVisto } from "@/lib/ventas/negocios";
 import type { VarianteDelInicio } from "./inicio";
 import { horaCR } from "./inicio";
 import { DIAS_PARA_LA_REUNION } from "./constantes";
@@ -132,21 +132,19 @@ export function cifrasDeVentas(o: {
   ponderado: { usd: number; activos: number; sinMonto: number };
 }): Cifra[] {
   const pct = o.meta?.cumplimiento != null ? Math.round(o.meta.cumplimiento * 100) : null;
-  // La meta se pinta SOLO si la persona tiene una meta de ventas asociada a su usuario en HubSpot (Elías, 2026-10-19):
-  // sin meta no hay tarjeta, tampoco una que diga que falta.
-  const meta: Cifra[] = o.meta
-    ? [
-        {
-          clave: "meta",
-          rotulo: `Tu meta ${o.anio}`,
-          valor: pct != null ? `${pct} %` : "—",
-          unidad: `${o.meta.avance != null ? montoCorto(o.meta.avance, o.meta.moneda) : "—"} de ${montoCorto(o.meta.monto, o.meta.moneda).replace(/^US\$/, "")}`,
-          barra: pct,
-        },
-      ]
-    : [];
+  // La tarjeta se pinta SIEMPRE que hay cartera de Ventas (Elías, 2026-10-19, prueba 147): sin meta de ventas en
+  // HubSpot dice que falta, en vez de desaparecer (DECISIONS «Las metas comerciales…»).
+  const meta: Cifra = o.meta
+    ? {
+        clave: "meta",
+        rotulo: `Tu meta ${o.anio}`,
+        valor: pct != null ? `${pct} %` : "—",
+        unidad: `${o.meta.avance != null ? montoCorto(o.meta.avance, o.meta.moneda) : "—"} de ${montoCorto(o.meta.monto, o.meta.moneda).replace(/^US\$/, "")}`,
+        barra: pct,
+      }
+    : { clave: "meta", rotulo: `Tu meta ${o.anio}`, valor: "—", sub: SIN_META };
   return [
-    ...meta,
+    meta,
     {
       clave: "ponderado",
       rotulo: `Ponderado ${o.anio}`,

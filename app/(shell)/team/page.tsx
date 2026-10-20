@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ui";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
+import { puedeVerComoASuperAdmin } from "@/lib/auth/ver-como";
 
 export const metadata = { title: "Equipo" };
 
@@ -12,10 +13,13 @@ export default async function TeamPage() {
   // delegable ni por plantilla (los endpoints lo exigen igual — esto es cosmético).
   let canManage = false;
   let canAdminPermissions = false;
+  // «Ver como» (lib/auth/ver-como.ts): quien mira DE VERDAD, aunque esté mirando como otra persona.
+  let emailReal = "";
   try {
-    const { teamMember, role } = await requireInternalUser();
+    const { user, teamMember, role } = await requireInternalUser();
     canManage = await can(teamMember, "equipo", "manage");
     canAdminPermissions = role === "SUPER_ADMIN";
+    emailReal = (user.verComoDe?.email ?? user.email).toLowerCase();
   } catch {
     canManage = false;
   }
@@ -29,7 +33,12 @@ export default async function TeamPage() {
         title="Equipo"
         description="Quién trabaja en Nexus, qué lleva y qué puede ver."
       />
-      <TeamManager canManage={canManage} canAdminPermissions={canAdminPermissions} />
+      <TeamManager
+        canManage={canManage}
+        canAdminPermissions={canAdminPermissions}
+        emailReal={emailReal}
+        verComoASuperAdmin={puedeVerComoASuperAdmin(emailReal)}
+      />
     </div>
   );
 }
