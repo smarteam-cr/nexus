@@ -19,8 +19,8 @@ import { getAnthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { rutaDeLaLectura } from "@/lib/lecturas/reglas";
 import { cseDeLaCuenta, responsableDeLaPreventaViva } from "@/lib/lecturas/personas";
-import { armarPropuestasDeSeguimiento } from "@/lib/tareas/seguimiento";
-import { escribirSalidaDeUnCorreo } from "@/lib/tareas/lectura";
+import { armarPropuestasDeSeguimiento, elegirLoEsencial } from "@/lib/tareas/seguimiento";
+import { descartesDeLaCuenta, escribirSalidaDeUnCorreo } from "@/lib/tareas/lectura";
 import { miembrosActivos } from "@/lib/tareas/servidor";
 import { diaCortoConSemana, horaDeCostaRica } from "@/lib/tareas/semana";
 import { leerCompromisosDelCorreo, pedidoDeCompromisos, SEGUNDOS_DE_COMPROMISOS, SLUG_DE_COMPROMISOS } from "./compromisos";
@@ -127,8 +127,10 @@ export async function leerCompromisosDeCorreos(o: { tope?: number; ahora?: Date 
           ruta === "completa" ? cseDeLaCuenta(cliente.id) : Promise.resolve(null),
           ruta === "prospecto" ? responsableDeLaPreventaViva(cliente.id) : Promise.resolve(undefined),
         ]);
+        const descartes = await descartesDeLaCuenta(cliente.id);
         const armado = armarPropuestasDeSeguimiento({
-          compromisos: leidos.compromisos,
+          compromisos: elegirLoEsencial(leidos.compromisos).quedan,
+          descartados: descartes.temas,
           lectura: { id: c.id, equipo: ruta === "prospecto" ? "ventas" : "cs" },
           reunion: { id: c.id, inicio: c.ocurrioAt, participantes: c.autorEmail ? [c.autorEmail] : [] },
           miembros,

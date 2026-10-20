@@ -22,7 +22,21 @@ export const MAX_SUGERENCIAS_POR_PERSONA = 10;
  */
 export const MAX_PROPUESTAS_POR_PERSONA_POR_REUNION = 5;
 
-/** Un texto idéntico a una lápida (rechazada o fusionada por una persona) no se vuelve a proponer por 28 días. */
+/**
+ * El mismo tope, para una reunión (o un correo) con un CLIENTE o un PROSPECTO (2026-10-19, decisión de Elías: «pocos y
+ * esenciales»). Medido ese día sobre 40 reuniones de 14 días: mediana 2 por persona y reunión, p90 4, máximo 6; de las
+ * 128 propuestas una persona usó 1, descartó 8 y dejó vencer 17; 58 seguían por decidir y 24 en «Por asignar». Con 3
+ * entra lo esencial de casi todas, y lo menor (coordinación interna, un ajuste chico) ya lo saca la lectura
+ * (`elegirLoEsencial`, lib/tareas/seguimiento.ts).
+ * Las reuniones internas del sprint siguen con 5.
+ */
+export const MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE = 3;
+
+/**
+ * Un texto idéntico a una lápida (rechazada o fusionada por una persona) no se vuelve a proponer por 28 días. Lo que una
+ * persona DESCARTÓ en una cuenta, además, no vuelve nunca desde otra reunión, correo o lectura de esa cuenta si habla
+ * del mismo tema (lib/tareas/descartadas.ts, sin plazo).
+ */
 export const DIAS_DE_LAPIDA = 28;
 
 /** Desde este número de pases que cuentan, la tarea lleva el chip ámbar «Pasó N veces». */

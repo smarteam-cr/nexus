@@ -24,14 +24,23 @@
  * seguimiento en 15 reuniones; Caroline Bersot tenía tres «Recordarle / Verificar con Randall…» de la misma reunión.
  * Lo que se comprometió Smarteam sigue una por una: es trabajo distinto, a veces de personas distintas. El título lleva
  * el día para que dos reuniones de la misma cuenta no se junten por la huella del título (escribirPropuestasDeLectura).
+ *
+ * POCOS Y ESENCIALES (Elías, 2026-10-19). Antes de armar nada, `elegirLoEsencial` deja lo que alguien de verdad tiene que
+ * hacer: saca lo que la lectura marcó como menor (salvo lo que frena el plan), pasa a Smarteam lo que el cliente espera
+ * de Smarteam aunque lo haya dicho el cliente («quedamos atentos a que nos envíes el reporte») y ordena lo más
+ * importante primero, porque el tope por persona (3 en una reunión con un cliente) toma en ese orden. Y lo que una
+ * persona ya descartó en la cuenta no vuelve (`descartados`, lib/tareas/descartadas.ts).
  */
 import type { CompromisoDetectado } from "@/lib/sessions/compromisos-y-alcance";
 import type { PropuestaDeLectura } from "./mutaciones";
 import { claveDeEquipo, type MiembroDelEquipo } from "./equipos";
 import { resolverPersona } from "./personas";
+import { yaSeDescarto } from "./descartadas";
 import { MAX_TITULO } from "./reglas";
+import type { Tema } from "./tema";
 import { diaCortoConSemana, horaDeCostaRica, lunesDeFecha, semanaDeLaReunion } from "./semana";
 import { huellaDeTexto, normalizar } from "./texto";
+import { voseoEnProsa } from "@/lib/ui/voseo-formas";
 
 export interface EntradaDeSeguimiento {
   /** Ya con la cita verificada (lib/sessions/lectura-salida.ts, `verificarCitas`). */
@@ -60,6 +69,11 @@ export interface EntradaDeSeguimiento {
    * lleva va a quien lo mandó.
    */
   fuente?: FuenteDelCompromiso;
+  /**
+   * Los temas que alguien ya descartó en esta cuenta (lib/tareas/lectura.ts › `descartesDeLaCuenta`): lo que habla de
+   * uno de ellos no se propone, sin plazo. Se mira cada compromiso ANTES de juntar lo del cliente.
+   */
+  descartados?: readonly Tema[][];
 }
 
 export type FuenteDelCompromiso = { tipo: "reunion" } | { tipo: "correo"; asunto: string | null; autorEmail: string | null };
@@ -68,6 +82,8 @@ export interface ArmadoDeSeguimiento {
   propuestas: PropuestaDeLectura[];
   /** Lo que prometió un prospecto sin preventa viva: no se propone (no hay a quién). */
   sinDestino: number;
+  /** Lo que repetía un tema que alguien ya descartó en la cuenta. */
+  yaDescartados: number;
 }
 
 export const PREFIJO_DE_SEGUIMIENTO = "seg-";
@@ -80,10 +96,72 @@ export function lineaDeSeguimiento(c: Pick<CompromisoDetectado, "quien" | "que">
 const recortar = (t: string) => (t.length > MAX_TITULO ? `${t.slice(0, MAX_TITULO - 1).trimEnd()}…` : t);
 const conMayuscula = (t: string) => (t ? t[0].toUpperCase() + t.slice(1) : t);
 
+/** Tope del título de una tarea de Smarteam que escribe la lectura (la forma «Verbo + qué + a quién»). */
+export const MAX_TITULO_DEL_COMPROMISO = 90;
+
+/**
+ * ¿Sirve el título que escribió el modelo? «Verbo + qué + a quién o la cuenta»: empieza con un infinitivo (con o sin
+ * pronombre: «Enviarle»), no pasa de `MAX_TITULO_DEL_COMPROMISO` y no trae voseo. Si no sirve, el título sale de `que`.
+ */
+export function tituloValido(titulo: string | null | undefined): boolean {
+  const t = titulo?.trim() ?? "";
+  if (t.length < 8 || t.length > MAX_TITULO_DEL_COMPROMISO) return false;
+  const primera = normalizar(t).split(" ")[0] ?? "";
+  if (!/(ar|er|ir)(le|les|lo|la|los|las|nos|se|me|te)?$/.test(primera)) return false;
+  return voseoEnProsa(t).length === 0;
+}
+
 /** El título de la tarea: el que escribió el modelo, o el de respaldo (también cuando el del modelo traía voseo). */
-export function tituloDelCompromiso(c: Pick<CompromisoDetectado, "quien" | "que" | "tituloDeSeguimiento">): string {
+export function tituloDelCompromiso(c: Pick<CompromisoDetectado, "quien" | "que" | "tituloDeSeguimiento" | "titulo">): string {
   if (c.quien === "CLIENTE") return recortar(c.tituloDeSeguimiento?.trim() || `Seguimiento: ${c.que}`);
+  if (tituloValido(c.titulo)) return recortar(conMayuscula(c.titulo!.trim().replace(/[.;]+$/, "")));
   return recortar(conMayuscula(c.que.trim()));
+}
+
+/**
+ * ¿Lo que «prometió el cliente» es en realidad lo que el cliente ESPERA DE SMARTEAM? «El cliente queda atento a que
+ * Smarteam envíe el reporte», «Esperan que les enviemos la propuesta». Es un pendiente de Smarteam, no un seguimiento.
+ * Conservador: solo con «atento(s) a que» o «espera(n) que», y con Smarteam (o «nos/les/le») como quien lo hace.
+ */
+export function loEsperaDeSmarteam(c: Pick<CompromisoDetectado, "quien" | "que" | "tituloDeSeguimiento">): boolean {
+  if (c.quien !== "CLIENTE") return false;
+  const t = normalizar(`${c.que} ${c.tituloDeSeguimiento ?? ""}`);
+  const espera = /\b(atent[oa]s? a (que|recibir)|espera[n]? (que|recibir)|esperando (que|a que|recibir))\b/.test(t);
+  if (!espera) return false;
+  return /\b(smarteam|el equipo de smarteam|nos (env|mand|compart|pas)|les (env|mand|compart|pas)|le (env|mand|compart|pas)|(enviemos|mandemos|compartamos|preparemos|entreguemos))/.test(t);
+}
+
+export interface LoEsencial {
+  /** Lo que se propone, lo más importante primero. */
+  quedan: CompromisoDetectado[];
+  /** Lo que la lectura marcó como menor: no se propone. */
+  menores: CompromisoDetectado[];
+  /** Cuántos pasaron de «lo prometió el cliente» a Smarteam (`loEsperaDeSmarteam`). */
+  aSmarteam: number;
+}
+
+/** El peso para ordenar: lo que frena el plan, después lo que tiene fecha, después lo de Smarteam. Estable. */
+function peso(c: CompromisoDetectado): number {
+  return (c.frenaElPlan ? 0 : 4) + (c.fecha ? 0 : 2) + (c.quien === "SMARTEAM" ? 0 : 1);
+}
+
+/**
+ * Pocos y esenciales: saca lo menor (lo que frena el plan se queda siempre), pasa a Smarteam lo que el cliente espera de
+ * Smarteam y ordena. PURO: lo usan la lectura de cada reunión, la de cada correo y scripts/comparar-pendientes-de-reuniones.ts.
+ */
+export function elegirLoEsencial(compromisos: readonly CompromisoDetectado[]): LoEsencial {
+  let aSmarteam = 0;
+  const vistos = compromisos.map((c, i) => {
+    if (!loEsperaDeSmarteam(c)) return { c, i };
+    aSmarteam++;
+    return { c: { ...c, quien: "SMARTEAM" as const, tituloDeSeguimiento: null, ownerEmail: null, responsable: "", esperaElCliente: true }, i };
+  });
+  const menores = vistos.filter((x) => x.c.esencial === false && !x.c.frenaElPlan).map((x) => x.c);
+  const quedan = vistos
+    .filter((x) => !(x.c.esencial === false && !x.c.frenaElPlan))
+    .sort((a, b) => peso(a.c) - peso(b.c) || a.i - b.i)
+    .map((x) => x.c);
+  return { quedan, menores, aSmarteam };
 }
 
 /** Lo escribe el código (no el modelo): para qué es, de quién vino y si frena el plan. Tuteo. */
@@ -209,10 +287,15 @@ export function armarPropuestasDeSeguimiento(e: EntradaDeSeguimiento): ArmadoDeS
   const delCliente = new Map<PropuestaDeLectura, CompromisoDetectado>();
   const vistas = new Set<string>();
   let sinDestino = 0;
+  let yaDescartados = 0;
 
   for (const c of e.compromisos) {
     const lineaId = lineaDeSeguimiento(c);
     if (vistas.has(lineaId)) continue;
+    if (e.descartados?.length && yaSeDescarto([tituloDelCompromiso(c), c.que], e.descartados, e.empresa)) {
+      yaDescartados++;
+      continue;
+    }
 
     // ¿A quién le llega? `null` = «Por asignar» del equipo `equipoSinResponsable`.
     let responsable: MiembroDelEquipo | null = null;
@@ -232,6 +315,9 @@ export function armarPropuestasDeSeguimiento(e: EntradaDeSeguimiento): ArmadoDeS
       responsable = delNombre ?? activo(c.ownerEmail);
       // En un correo, sin saber quién lo lleva, es de quien lo mandó: escribió «te envío…».
       if (!responsable && e.fuente?.tipo === "correo") responsable = activo(e.fuente.autorEmail);
+      // Lo que el cliente espera de Smarteam, sin nombre: es de quien lleva la cuenta (o la preventa).
+      if (!responsable && c.esperaElCliente) responsable = e.ruta === "completa" ? (activo(e.cseDelProyecto) ?? activo(e.cseDeLaCuenta)) : activo(e.responsableDeLaPreventa);
+      if (!responsable && c.esperaElCliente) equipoSinResponsable = e.ruta === "completa" ? "cs" : "ventas";
       if (!responsable && c.responsable) sugerido.responsableDicho = c.responsable;
     } else if (e.ruta === "completa") {
       responsable = activo(e.cseDelProyecto) ?? (e.cseDelProyecto ? null : activo(e.cseDeLaCuenta));
@@ -277,7 +363,7 @@ export function armarPropuestasDeSeguimiento(e: EntradaDeSeguimiento): ArmadoDeS
     propuestas.push(propuesta);
     if (c.quien === "CLIENTE") delCliente.set(propuesta, c);
   }
-  return { propuestas: agruparLoDelCliente(propuestas, delCliente, e), sinDestino };
+  return { propuestas: agruparLoDelCliente(propuestas, delCliente, e), sinDestino, yaDescartados };
 }
 
 /* ── Lo que ya estaba propuesto (scripts/agrupar-seguimientos-propuestos.ts) ─────────────────────────────────── */

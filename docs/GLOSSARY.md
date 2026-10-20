@@ -270,6 +270,13 @@
   va a quien lleva la preventa; sin preventa viva, no se propone. Vence a los 14 días, como toda propuesta de Tareas
   (`lib/tareas/seguimiento.ts`). Desde el 2026-10-19, lo de una misma reunión para la misma persona es UNA tarea
   («Seguimiento con Honda Costa Rica: 3 cosas que prometió Randall (lun 12 oct)») con la lista adentro.
+- **Pendiente esencial** (`elegirLoEsencial`, lib/tareas/seguimiento.ts, desde el 2026-10-19): lo que una reunión o un
+  correo con un cliente le propone a Smarteam: un entregable, un envío, una fecha comprometida o lo que el cliente espera
+  de Smarteam. Lo **menor** (coordinación interna, un ajuste chico, lo resuelto en la misma reunión) no se propone. Como
+  mucho 3 por persona y reunión, con el título «Verbo + qué + a quién» («Enviar el reporte a CEMACO»).
+- **Descarte de la cuenta** (lib/tareas/descartadas.ts, desde el 2026-10-19): una propuesta que una persona descartó en
+  una cuenta. Ese tema (`lib/tareas/tema.ts`: el título sin el nombre de la cuenta ni el día) no se vuelve a proponer en
+  esa cuenta, para nadie y sin plazo. Lo vencido sin decidir no es un descarte: vuelve si se vuelve a hablar.
 - **Rápidas y seguimientos** (`claseDeTrabajo`, lib/tareas/aligerar.ts, desde el 2026-10-19): lo que se hace en minutos
   (enviar, confirmar, agendar) y lo que es empujar al cliente (recordarle, retomar). En las listas de Tareas van plegadas
   al final, agrupadas por cuenta; el resto es **trabajo** y se ve entero.

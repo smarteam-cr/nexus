@@ -70,6 +70,10 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   `newline="\r\n"` sobre una cadena que YA trae `\r\n` duplica a `\r\r\n`. *Guarda:* escribir en
   binario sin traducción (`io.open(p,"wb").write(s.encode("utf-8"))`); antes de commitear una tanda
   de ediciones por script: `for f in $(git diff --name-only); do grep -qU $'\r\r' "$f" && echo "⚠ $f"; done`.
+- **Una regex escrita a un `.ts` desde Python pierde sus `\b`, y el código compila igual.** *Causa:* en una cadena de
+  Python sin `r`, `"\b"` es un retroceso (`\x08`): la regex queda con ese carácter y nunca matchea. Pasó el 2026-10-19
+  en `loEsperaDeSmarteam`; lo cazó la prueba. *Guarda:* cadenas `r"…"` (o el Write del agente) para todo lo que lleve
+  barras; para buscar: `python -c "import glob;[print(f) for f in glob.glob('lib/**/*.ts',recursive=True) if '\x08' in open(f,encoding='utf-8').read()]"`.
 - **Re-sembrar el prompt de un agente puede borrar una edición humana irrecuperable** (sin backup).
   *Guarda:* antes de correr cualquier seed de agente, comparar el sha256 del `systemPrompt` en prod
   contra TODAS las versiones del script en git (`scripts/comparar-prompt-vivo.ts`); si no coincide

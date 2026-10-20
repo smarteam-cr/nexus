@@ -33,7 +33,7 @@ import {
   type BloqueDeAgenda,
   type Prioridad,
 } from "./estados";
-import { DIAS_PARA_CORREGIR_UNA_REVISION, DIAS_PARA_VENCER_UNA_PROPUESTA, MAX_SECCIONES, MAX_SUGERENCIAS_POR_PERSONA } from "./reglas";
+import { DIAS_PARA_CORREGIR_UNA_REVISION, DIAS_PARA_VENCER_UNA_PROPUESTA, MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE, MAX_SECCIONES, MAX_SUGERENCIAS_POR_PERSONA } from "./reglas";
 import { cupoPorPersona } from "./cupo";
 import {
   aDate,
@@ -1966,13 +1966,14 @@ export interface PropuestaDeLectura {
 /**
  * Escribe las propuestas de una lectura. Las que ya existen (mismo `origenId`) no se tocan: releer no pisa lo decidido.
  * `sinTope`: las pidió su propia dueña («Proponérmelas», lib/tareas/lectura.ts › `proponerLasQueQuedaronFuera`): el
- * cupo de 5 por persona por reunión no las frena.
+ * cupo de 5 por persona por reunión no las frena. `tope`: el de una reunión con un cliente o un prospecto
+ * (`MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE`, 3); sin decir, el de siempre (5).
  */
 export async function escribirPropuestasDeLectura(
   tx: Tx,
   lectura: { id: string; sessionId: string | null; tituloReunion: string; pedidaPorEmail: string | null },
   propuestas: readonly PropuestaDeLectura[],
-  o: { sinTope?: boolean } = {},
+  o: { sinTope?: boolean; tope?: number } = {},
 ): Promise<{ creadas: { id: string; responsableEmail: string | null }[]; yaEstaban: number; sumadas: number; sinLugar: Map<string, number> }> {
   const creadas: { id: string; responsableEmail: string | null }[] = [];
   let yaEstaban = 0;
@@ -1993,7 +1994,7 @@ export async function escribirPropuestasDeLectura(
         _count: { _all: true },
       })
     : [];
-  const cupo = cupoPorPersona(new Map(yaTiene.flatMap((g) => (g.responsableEmail ? [[g.responsableEmail, g._count._all] as const] : []))));
+  const cupo = cupoPorPersona(new Map(yaTiene.flatMap((g) => (g.responsableEmail ? [[g.responsableEmail, g._count._all] as const] : []))), o.tope);
   for (const p of propuestas) {
     const origenId = `l:${lectura.id}:${p.lineaId}`;
     const existe = await tx.tarea.findUnique({ where: { origenId }, select: { id: true } });
@@ -2063,7 +2064,7 @@ export function origenIdDeUnCorreo(comunicacionId: string, lineaId: string): str
  * Escribe las propuestas que salen de un CORREO que mandó Smarteam (iniciativa B, lib/comunicaciones/compromisos-server.ts):
  * las mismas reglas que las de una reunión (`escribirPropuestasDeLectura`), sin reunión ni lectura. `origen = "correo"`;
  * el título del correo va en `pedidaPorTexto` («Correo del jue 16 oct «Minuta…»»), que se ve con la fila: un correo con
- * el cliente lo ve quien ve la cuenta. Como mucho 5 por persona por correo, y entran al tope de sugerencias abiertas.
+ * el cliente lo ve quien ve la cuenta. Como mucho 3 por persona por correo, y entran al tope de sugerencias abiertas.
  */
 export async function escribirPropuestasDeComunicacion(
   tx: Tx,
@@ -2081,7 +2082,8 @@ export async function escribirPropuestasDeComunicacion(
         _count: { _all: true },
       })
     : [];
-  const cupo = cupoPorPersona(new Map(yaTiene.flatMap((g) => (g.responsableEmail ? [[g.responsableEmail, g._count._all] as const] : []))));
+  // Un correo es con un cliente o un prospecto: el tope de 3 (pocos y esenciales, 2026-10-19).
+  const cupo = cupoPorPersona(new Map(yaTiene.flatMap((g) => (g.responsableEmail ? [[g.responsableEmail, g._count._all] as const] : []))), MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE);
   for (const p of propuestas) {
     const origenId = origenIdDeUnCorreo(correo.id, p.lineaId);
     const existe = await tx.tarea.findUnique({ where: { origenId }, select: { id: true } });
