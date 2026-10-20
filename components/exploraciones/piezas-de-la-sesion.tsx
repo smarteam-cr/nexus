@@ -26,7 +26,7 @@ import {
   type SesionPlaneada,
 } from "@/lib/exploraciones/guia";
 import type { EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
-import { contextoDelPlan, QUE_BUSCA_CADA_PASO } from "@/lib/exploraciones/plan-de-la-guia";
+import { contextoDelPlan, guiaDeAntesDelPlan, QUE_BUSCA_CADA_PASO } from "@/lib/exploraciones/plan-de-la-guia";
 import { aplicarAjustes, apuntaDelTema } from "@/lib/exploraciones/ajustes-de-la-guia";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
 import { NivelChip } from "./QueVaPrimero";
@@ -86,17 +86,17 @@ export function nombreDelPara(para: string, escala: EscalaDelLienzo, marco: Marc
 }
 
 /**
- * Qué cubre la próxima sesión, con lo que ya se sabe del cliente. En la preventa lo decide el plan (plan-de-la-guia.ts:
- * unas 5 preguntas que parten de lo que el cliente ya respondió); en un proyecto, las tarjetas y dimensiones que faltan.
- * Es lo mismo que recibe el agente al armar la guía (guia-pedido.ts › `contextoDeLaGuia`).
+ * Qué cubre la próxima sesión, con lo que ya se sabe del cliente: lo decide el plan (plan-de-la-guia.ts: unas 5 preguntas
+ * que parten de lo que el cliente ya respondió), en la preventa y en un proyecto (con su estrategia, 2026-10-19). Es lo
+ * mismo que recibe el agente al armar la guía (guia-pedido.ts › `contextoDeLaGuia`). `sinPlan`: la guía de un proyecto
+ * armada antes del plan, que se muestra como se armó; lo que ya sabemos se calcula igual.
  */
-export function useFocoDeLaGuia(sesionId: string | null) {
+export function useFocoDeLaGuia(sesionId: string | null, opciones: { sinPlan?: boolean } = {}) {
   const { exp, escala, mapa, marco } = useLienzo();
   const e = exp.estado;
-  const delPlan =
-    marco.clave === "venta" ? contextoDelPlan({ estado: e, tests: exp.leido.tests, escala, posiciones: mapa.posiciones, sesionId }) : null;
-  const foco = focoDeLaGuia(e.contenido.casillas, escala, e.areas, mapa.posiciones, e.contenido.aExplorar, marco, delPlan ?? undefined);
-  return { foco, saber: delPlan?.saber ?? null };
+  const delPlan = contextoDelPlan({ estado: e, tests: exp.leido.tests, escala, posiciones: mapa.posiciones, sesionId, marco: marco.clave });
+  const foco = focoDeLaGuia(e.contenido.casillas, escala, e.areas, mapa.posiciones, e.contenido.aExplorar, marco, opciones.sinPlan ? undefined : delPlan);
+  return { foco, saber: delPlan.saber };
 }
 
 /**
@@ -109,7 +109,9 @@ export function useGuiaDeLaSesion(pestana: PestanaDeSesion, esLaProxima: boolean
   const e = exp.estado;
   const guardada = pestana.sesion ? (e.propuesta.guias[pestana.sesion.id] ?? null) : null;
   const guia = guardada ?? (esLaProxima ? e.propuesta.guia : null);
-  const { foco, saber } = useFocoDeLaGuia(pestana.sesion?.id ?? null);
+  // Lo ya generado no se reescribe solo: la guía de un proyecto armada antes del plan se ve como se armó.
+  const antesDelPlan = guiaDeAntesDelPlan(guia, marco.clave);
+  const { foco, saber } = useFocoDeLaGuia(pestana.sesion?.id ?? null, { sinPlan: antesDelPlan });
   const procedencias = procedenciasDeLaSesion(pestana, todas);
   const conPlan = foco.plan && saber ? { plan: foco.plan, saber } : undefined;
   const deLaGuia: PreguntaParaMostrar[] = esLaProxima
@@ -119,7 +121,7 @@ export function useGuiaDeLaSesion(pestana: PestanaDeSesion, esLaProxima: boolean
       : [];
   // Lo que decidió el vendedor sobre la guía de esta sesión (sus preguntas, las cambiadas, las quitadas): validación 71.
   const preguntas = aplicarAjustes(deLaGuia, pestana.sesion?.ajustesDeLaGuia, apuntaDelTema(escala));
-  return { guia, foco, saber, procedencias, preguntas, enOrden: ordenDeLaConversacion(preguntas) };
+  return { guia, foco, saber, antesDelPlan, procedencias, preguntas, enOrden: ordenDeLaConversacion(preguntas) };
 }
 
 /**

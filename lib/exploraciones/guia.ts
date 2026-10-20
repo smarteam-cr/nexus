@@ -26,7 +26,7 @@
  */
 import { LETRAS, type Letra } from "@/lib/escala/documento/tipos";
 import { CASILLAS_DEL_RESUMEN, type ClaveDeCasilla } from "./casillas";
-import { esTarjeta, MARCO_DE_VENTA, type Marco } from "./marco";
+import { esTarjeta, MARCO_DE_VENTA, type ClaveDeMarco, type Marco } from "./marco";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { aFecha, hoyEnCostaRica } from "./fechas";
 import { coincideConElEvento, HORAS_ESPERANDO_LA_TRANSCRIPCION, mismaReunion } from "./lectura";
@@ -628,8 +628,9 @@ export const MAX_DIMENSIONES_EN_FOCO = 4;
 /** Hasta cuántas tarjetas vacías pregunta una reunión. */
 export const MAX_TARJETAS_EN_LA_GUIA = 5;
 /**
- * Cuántas preguntas tiene la guía de un PROYECTO (Customer Success), entre tarjetas y dimensiones. La de la preventa
- * tiene 5 (plan-de-la-guia.ts › `MAX_PREGUNTAS_DE_LA_GUIA`, iniciativa A del 2026-10-18).
+ * Cuántas preguntas tenía la guía sin el plan, entre tarjetas y dimensiones. Con el plan tiene 5
+ * (plan-de-la-guia.ts › `MAX_PREGUNTAS_DE_LA_GUIA`): la preventa desde el 2026-10-18 y un proyecto desde el 2026-10-19.
+ * Queda para mostrar una guía de un proyecto armada antes del plan.
  */
 export const MAX_PREGUNTAS_POR_REUNION = 8;
 
@@ -700,14 +701,16 @@ export interface ContextoDelPlan {
   yaPreguntado?: ReadonlyMap<string, ReadonlySet<PasoDeLaPregunta>>;
   llevados?: number;
   pasaron?: readonly string[];
+  /** El marco con que se armó lo que ya se sabe: en un proyecto, sin el test. */
+  marco?: ClaveDeMarco;
 }
 
 /**
- * Qué cubre la próxima reunión. En la PREVENTA, con lo que ya se sabe (`contexto`), lo decide el plan
- * (plan-de-la-guia.ts): unas 5 preguntas que parten de lo que el cliente ya respondió, cada una en su paso. Sin ese
- * contexto, y en un PROYECTO, las tarjetas vacías (las 3 de la estrategia) y, con lo que queda hasta 8 preguntas, las
- * dimensiones sin evidencia (5 en un proyecto: Customer Success explora más la escala). Lo usan la pantalla y el
- * pedido al agente: tienen que decir lo mismo.
+ * Qué cubre la próxima reunión. Con lo que ya se sabe (`contexto`), lo decide el plan (plan-de-la-guia.ts): unas 5
+ * preguntas que parten de lo que el cliente ya respondió, cada una en su paso; en un PROYECTO, con su estrategia
+ * (2026-10-19). Sin ese contexto (una guía de un proyecto armada antes del plan), las tarjetas vacías y, con lo que
+ * queda hasta 8 preguntas, las dimensiones sin evidencia (5 en un proyecto). Lo usan la pantalla y el pedido al agente:
+ * tienen que decir lo mismo.
  */
 export function focoDeLaGuia(
   casillas: Partial<Record<ClaveDeCasilla, unknown>>,
@@ -718,8 +721,8 @@ export function focoDeLaGuia(
   marco: Marco = MARCO_DE_VENTA,
   contexto?: ContextoDelPlan,
 ): { huecos: ClaveDeCasilla[]; enfoque: string[]; plan: PreguntaPlaneada[] | null } {
-  if (marco.clave === "venta" && contexto) {
-    const plan = planDeLaGuia({ ...contexto, casillas, escala, areas, posiciones, aExplorar });
+  if (contexto) {
+    const plan = planDeLaGuia({ ...contexto, casillas, escala, areas, posiciones, aExplorar, marco: marco.clave });
     return {
       huecos: plan.filter((p) => p.tipo === "tarjeta").map((p) => p.para as ClaveDeCasilla),
       enfoque: plan.filter((p) => p.tipo === "dimension").map((p) => p.para),
@@ -891,6 +894,8 @@ export interface CambiosDesdeLaGuia {
   dimensiones: boolean;
   /** Puntos que el vendedor se llevó y la guía todavía no ubica (se llevaron después de armarla). */
   llevados: number;
+  /** La guía de un proyecto se armó antes del plan (plan-de-la-guia.ts › `guiaDeAntesDelPlan`): no parte de lo que ya se sabe. */
+  antesDelPlan?: boolean;
 }
 
 /**
@@ -903,14 +908,16 @@ export function cambiosDesdeLaGuia(
   huecos: readonly string[],
   enfoque: readonly string[],
   llevados: readonly string[] = [],
+  opciones: { antesDelPlan?: boolean } = {},
 ): CambiosDesdeLaGuia | null {
   const respondidas = guia.huecos.filter((h) => !huecos.includes(h));
   const nuevas = huecos.filter((h) => !guia.huecos.includes(h));
   const dimensiones = guia.enfoque.length !== enfoque.length || [...guia.enfoque].sort().join() !== [...enfoque].sort().join();
   const ubicados = new Set([...(guia.preguntas ?? []).flatMap((p) => (p.abierto ? [p.abierto] : [])), ...Object.keys(guia.ubicaciones ?? {})]);
   const sinUbicar = llevados.filter((t) => !ubicados.has(t)).length;
-  if (!respondidas.length && !nuevas.length && !dimensiones && !sinUbicar) return null;
-  return { respondidas, nuevas, dimensiones, llevados: sinUbicar };
+  const antesDelPlan = !!opciones.antesDelPlan;
+  if (!respondidas.length && !nuevas.length && !dimensiones && !sinUbicar && !antesDelPlan) return null;
+  return { respondidas, nuevas, dimensiones, llevados: sinUbicar, ...(antesDelPlan ? { antesDelPlan } : {}) };
 }
 
 /** ¿La guía se armó con otras tarjetas vacías, otras dimensiones en foco o sin lo que se llevó después? */
@@ -919,8 +926,9 @@ export function guiaVieja(
   huecos: readonly string[],
   enfoque: readonly string[],
   llevados: readonly string[] = [],
+  opciones: { antesDelPlan?: boolean } = {},
 ): boolean {
-  return cambiosDesdeLaGuia(guia, huecos, enfoque, llevados) !== null;
+  return cambiosDesdeLaGuia(guia, huecos, enfoque, llevados, opciones) !== null;
 }
 
 // ── Lo que se muestra ─────────────────────────────────────────────────────────

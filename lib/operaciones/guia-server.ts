@@ -144,7 +144,10 @@ export async function guiaParaElChat(exploracionId: string, yaArmada?: Base): Pr
     l.push("", "La escala de las áreas en juego (dónde parece estar cada dimensión):");
     for (const { d, a, p } of dims) l.push(`- ${d.id} ${d.nombre} (${a.nombre}): ${p ? `${p.clase === "evidencia" ? "está en" : "creemos que está en"} ${nivel(p.nivel)}` : "sin dato"}`);
   }
-  if (ctx.faltanAlCerrar?.length) l.push("", `Lo que falta para proponer y ninguna pregunta cubre: ${ctx.faltanAlCerrar.join(", ")}.`);
+  if (ctx.faltanAlCerrar?.length) {
+    const que = base.marco.clave === "cs" ? "Lo que falta de la estrategia" : "Lo que falta para proponer";
+    l.push("", `${que} y ninguna pregunta cubre: ${ctx.faltanAlCerrar.join(", ")}.`);
+  }
   l.push("", "Las preguntas, en orden (clave entre corchetes):");
   preguntas.forEach((p, i) => {
     const tema = temaDe(p);

@@ -848,7 +848,7 @@ export async function armarLaGuiaSinGuardar(
     if (otra && voseoEnLaGuia(otra).length < voseo.length) guia = otra;
   }
   // Lo que va a ver el vendedor: las preguntas del plan, con la de respaldo donde el agente repitió lo sabido.
-  const plan = ctx.saber ? planDeLaGuiaDeLaPreventa(estado, loLeido.tests, escala, posiciones, ctx.proxima.sesionId ?? null) : null;
+  const plan = ctx.saber ? planDeLaGuiaDeLaSesion(estado, loLeido.tests, escala, posiciones, ctx.proxima.sesionId ?? null, marco) : null;
   const preguntas = preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco, plan ?? undefined);
   return { guia, ctx, preguntas };
 }
@@ -923,16 +923,20 @@ export async function contextoParaLaGuia(exploracionId: string) {
   return { fila, estado, escala, general: escalaVig.general, posiciones, pendientes, loLeido, marco, ctx, ahora };
 }
 
-/** El plan de la guía de la preventa y lo que ya se sabe, como lo arma la pantalla (piezas-de-la-sesion.tsx). */
-export function planDeLaGuiaDeLaPreventa(
+/**
+ * El plan de la guía y lo que ya se sabe, como lo arma la pantalla (piezas-de-la-sesion.tsx): el de la preventa, o el de
+ * la estrategia en un proyecto (sin el test, 2026-10-19).
+ */
+export function planDeLaGuiaDeLaSesion(
   estado: EstadoDeExploracion,
   tests: LoLeidoDeHubspot["tests"],
   escala: EscalaDelLienzo,
   posiciones: ReturnType<typeof posicionesDelMapa>,
   sesionId: string | null,
+  marco: Marco = marcoDe("venta"),
 ): { plan: PreguntaPlaneada[]; saber: SaberDelCliente } | null {
-  const delPlan = contextoDelPlan({ estado, tests, escala, posiciones, sesionId });
-  const foco = focoDeLaGuia(estado.contenido.casillas, escala, estado.areas, posiciones, estado.contenido.aExplorar, marcoDe("venta"), delPlan);
+  const delPlan = contextoDelPlan({ estado, tests, escala, posiciones, sesionId, marco: marco.clave });
+  const foco = focoDeLaGuia(estado.contenido.casillas, escala, estado.areas, posiciones, estado.contenido.aExplorar, marco, delPlan);
   return foco.plan ? { plan: foco.plan, saber: delPlan.saber } : null;
 }
 

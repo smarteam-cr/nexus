@@ -141,6 +141,7 @@ const puntos = (n: number) => (n === 1 ? "1 punto" : `${n} puntos`);
 export function estadoCortoDeLaGuia(hayGuia: boolean, cambios: CambiosDesdeLaGuia | null): string {
   if (!hayGuia) return "la guía todavía es la de base";
   if (!cambios) return "la guía está al día";
+  if (cambios.antesDelPlan) return "la guía está vieja: es de antes de «Lo que ya sabemos»";
   if (cambios.respondidas.length) return `la guía está vieja: ya se ${cambios.respondidas.length === 1 ? "respondió 1 punto" : `respondieron ${cambios.respondidas.length} puntos`}`;
   if (cambios.nuevas.length) return `la guía está vieja: ahora ${cambios.nuevas.length === 1 ? "falta 1 punto" : `faltan ${cambios.nuevas.length} puntos`} más`;
   if (cambios.dimensiones) return "la guía está vieja: cambiaron las dimensiones de la escala";

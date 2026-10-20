@@ -91,8 +91,8 @@ function ProximaSesion() {
   const { todas, claveDeLaProxima, proxima, estadoDeLaReunion } = useSesiones();
   const { corrida, corriendo } = useCorrida();
   const p = todas.find((x) => x.clave === claveDeLaProxima) ?? todas[todas.length - 1];
-  const { guia, foco } = useGuiaDeLaSesion(p, true);
-  const cambios = guia ? cambiosDesdeLaGuia(guia, foco.huecos, foco.enfoque, p.sesion?.explorar ?? []) : null;
+  const { guia, foco, antesDelPlan } = useGuiaDeLaSesion(p, true);
+  const cambios = guia ? cambiosDesdeLaGuia(guia, foco.huecos, foco.enfoque, p.sesion?.explorar ?? [], { antesDelPlan }) : null;
   const estado = estadoDeLaReunion(p);
   const e = p.sesion?.evento;
   const deHubspot = !p.sesion && proxima.desde === "hubspot";
