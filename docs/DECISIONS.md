@@ -7175,7 +7175,8 @@ mostraba la pantalla y se rehacía releyendo 12 reuniones.
   alcances, el handoff recibía lo interno o lo perdía todo.
 - **Quién lee qué:** el kickoff, el diagnóstico, la planificación, integraciones, la entrega, la propuesta comercial y el
   correo de seguimiento, el alcance `cliente`; el handoff, `sin-lo-interno`; la implementación, el avance, el resumen del
-  proyecto, la exploración del proyecto, la preventa de un cliente que ya existe y el vigía, `interno`. El vigía lee la
+  proyecto, la exploración del proyecto, la guía de la exploración (desde el 2026-10-20, la del proyecto sin las reuniones
+  de sus sesiones, que van aparte), la preventa de un cliente que ya existe y el vigía, `interno`. El vigía lee la
   memoria desde el 2026-10-10 (la condición era la entrega 2 de la cartera, que ya está en el código): la cuenta y el
   proyecto, sin las reuniones, los compromisos ni los resultados, que ya lee por su lado (`lib/cs/watchdog-cuenta.ts`).
   La facturación y Partner los sigue leyendo aparte: nunca entran a la memoria.
@@ -9239,8 +9240,9 @@ repreguntas, y lo que cubre la guía pegado a ella. El plan está en `docs/preve
   · Una repregunta se arma al APLICAR, sobre las de ese momento: dos cambios de repregunta de la misma pregunta en una
     lista se preparan antes de aplicar el primero.
   · El botón abre el cajón del chat de la cuenta con el chip «la guía de la sesión N» (un evento del navegador,
-    `abrirElChatDeNexus`); con el chip, el turno suma la guía de la próxima sesión al mensaje (no al `system`: no rompe la
-    caché), como información de la cuenta. En la preventa el chat se monta en la cabecera sin «Sugerencias»; en la ficha
+    `abrirElChatDeNexus`); con el chip, el turno suma la guía de la próxima sesión como información de la cuenta. ⚠
+    Corregido el 2026-10-20 («La guía y su asistente leen toda la exploración»): lo estable de la guía va al `system`,
+    cacheado, y solo las preguntas van al mensaje; antes iba todo al mensaje y sin ninguna sesión. En la preventa el chat se monta en la cabecera sin «Sugerencias»; en la ficha
     del cliente ya estaba. El botón aparece solo a quien puede editar y conversar (`asistente.read`).
   · El prompt de Nexus suma cómo se ajusta una guía. Medido como cualquier turno del chat (`AgentRun` «nexus-chat»).
 - **«Lo que cubre la guía»** va pegado a ella, arriba de «Retos de su industria»: los puntos para proponer (verde listo,
@@ -9463,9 +9465,61 @@ resumen, y al aplicar repetía cada línea. Plan: `docs/chat-fluido-plan.md`.
   de la cuenta y la guía se arman en paralelo. Lo que aplica arma la suya de nuevo: nunca se escribe sobre una vieja.
 - **Medido** con `scripts/medir-turno-de-la-guia.ts` (Larce, sin escribir): «¿Qué otras preguntas agregarías?» de 34,4 s
   a 10,4 s; «Mejora las repreguntas de la 2 para que bajen a números» de 21,0 s a 4,8 s. Cada turno guarda sus tiempos en
-  su `AgentRun` (`tiempos`).
+  su `AgentRun` (`tiempos`). ⚠ Desde el 2026-10-20 el chat lee toda la exploración («La guía y su asistente leen toda la
+  exploración»): con CEMACO, «¿Qué otras preguntas agregarías?» tarda 18–24 s cuando busca lo pedido en la reunión.
 - **Sin streaming, por ahora.** En el caso común el turno es una sola llamada; el streaming pide cambiar la ruta y el
   cajón que comparten los tres chats. Es lo siguiente si sigue sintiéndose lento.
+
+## La guía y su asistente leen toda la exploración (2026-10-20)
+
+**Contexto.** Liliana Moreno (CSE) preparó con «Mejorar con el asistente» la sesión 5 de Cemaco Internacional - CRM (20
+oct). El asistente propuso preguntar cuántas personas coordinan con las cinco agencias (el 19 oct Noel había dicho que lo
+lleva ella al 100 %) y no tomó lo que pidió Marco Salas para esa sesión: las volumetrías de cada canal (cuántos leads
+entran y cuántos se vuelven clientes). Medido ese día con `scripts/ver-contexto-de-la-guia.ts`: el chat no recibía
+NINGUNA sesión (solo la memoria de la cuenta y la guía: lo que ya sabemos, lo confirmado, la escala y las preguntas), ni
+el objetivo de la próxima, ni el handoff, ni el kickoff, ni la memoria del proyecto. El agente que arma la guía recibía el
+resumen de las tres últimas lecturas (la del 6 oct se caía), sin lo que se cubrió, sin los acuerdos de cada minuta, sin el
+objetivo de la próxima y sin el kickoff. Lo de Marco estaba en el acuerdo de la minuta del 19 oct («La sesión del día
+siguiente se enfocará en analizar cada canal de marketing y sus volumetrías») y en la transcripción («volumetría de
+elits [leads] u oportunidades»): la memoria del proyecto recorta cada reunión a 560 caracteres y lo perdía.
+
+- **La historia de las sesiones, una sola** (`historiaDeLasSesiones`, lib/exploraciones/historia-de-las-sesiones.ts,
+  puro): cada sesión de la exploración que ya dejó algo, de la más vieja a la más nueva, con lo que leyó el agente, su
+  objetivo, «Ya respondido» (con lo que dijo), «Se llevó y no salió», los acuerdos y las decisiones de su minuta
+  (`acuerdosDeLasReuniones`, por `whereBelongsToClient`: invariante 1) y lo que anotó quien la llevó. La misma reunión por
+  Meet y por HubSpot va una vez. Hasta 10 sesiones y 14.000 caracteres: se van las más viejas. Solo las de la exploración
+  (`lecturasDeLaExploracion`): lo demás llega por la memoria.
+- **Lo acordado para la próxima va primero** (`acordadoParaLaProxima`): de la última sesión con minuta, los acuerdos que
+  hablan de la próxima sesión, del día siguiente, de mañana o de su fecha. Va arriba del objetivo que escribió quien la
+  lleva, con «si ninguna pregunta de la guía lo pregunta tal cual, falta».
+- **El agente que arma la guía** recibe la historia entera (en vez de `anteriores`), la próxima con lo acordado y su
+  objetivo, el kickoff (K0) y lo que Nexus sabe de la cuenta (F0, de `fuentesDelProyecto`), y la memoria del proyecto sin
+  las reuniones de las sesiones (lector `guia-de-la-exploracion`, interno, sin los resultados: ya están en «LO VENDIDO»).
+  Su prompt suma la regla de «Ya respondido» y de lo acordado. «Regenerar pregunta» lee la historia recortada a 5.000.
+  Lo que NO cambió: el plan (qué temas y en qué paso lo decide el código) y la regla «sin una pista del cliente no hay
+  nivel».
+- **El asistente** (el chat abierto desde la guía) lleva en el `system`, después de la cuenta, LO ESTABLE de la guía
+  (`loEstableDeLaGuia`): la próxima con lo acordado y su objetivo, la historia, lo que el cliente dijo y nadie siguió, lo
+  que ya sabemos, lo confirmado, la escala y, en un proyecto, el handoff, los cuestionarios, el kickoff y lo que estimó la
+  preventa (recortados para el chat) más la memoria del proyecto que armó la guía; en la preventa, lo de HubSpot («Para
+  conectar») y las objeciones. Solo las preguntas, que cambian al aplicar, van en el mensaje
+  (`preguntasDeLaGuiaParaElChat`). `guia.leer` devuelve las dos partes. El prompt de Nexus suma: no repreguntar lo que una
+  sesión dejó como respondido; lo pedido para la próxima va primero y, si es general, se busca en la reunión
+  (`reuniones_buscar`) y se baja a números (cuántos leads por canal, cuántos se vuelven clientes); para ideas nuevas, mirar
+  todo.
+- **Medido con conversaciones reales** (`scripts/probar-asistente-de-la-guia.ts`, hilo de prueba borrado al final):
+  · CEMACO, «¿Qué otras preguntas agregarías para la próxima sesión?»: antes, 11.400 tokens en caché + 7.500 sin caché
+    por llamada, US$0,04–0,09 por turno, 6–12 s (los turnos de Liliana). Ahora unos 26.800 en caché + 1.200 sin caché:
+    el primer turno US$0,09–0,15 (escribe la caché) y los siguientes US$0,025–0,04; 18–24 s cuando busca en la reunión
+    (dos llamadas). Propone volumetrías por canal («¿cuántos contactos maneja cada canal al mes? → ¿cuántos terminan en una
+    venta?») y no repregunta quién coordina con las agencias; con «agrega más sobre las 5 agencias», preguntas nuevas
+    (internalizar, mensajes que se contradicen) y no la de la víspera.
+  · Tecnosagot (preventa, 5 lecturas, la misma reunión por Meet y HubSpot): 7.500 tokens de contexto; retoma la meta de
+    ventas que quedó sin preguntar, los leads de ferias con su conversión, y no repregunta quién decide (Miriam).
+  · El agente de la guía de CEMACO (sin guardar): de 37.000 a 60.000 caracteres de mensaje; el objetivo sale «Entender
+    canal a canal cómo opera marketing hoy —volumetrías…» y la apertura retoma el acuerdo. Las preguntas siguen el plan.
+- **Pendiente:** la caché del chat es la de 5 minutos; con turnos espaciados se vuelve a escribir (unos US$0,10 cada vez).
+  Que lo acordado para la próxima mueva también el PLAN de la guía es de la otra tanda («el objetivo propone preguntas»).
 
 ## La guía de la exploración de un proyecto, con las mejoras de la preventa (2026-10-19)
 

@@ -31,6 +31,7 @@ import {
   type CambioDeLaGuia,
 } from "@/lib/exploraciones/ajustes-de-la-guia";
 import { ordenDeLaConversacion, type PreguntaParaMostrar } from "@/lib/exploraciones/guia";
+import { textoDeLaProxima, textoDeLasSesiones } from "@/lib/exploraciones/historia-de-las-sesiones";
 import { exigirCliente, type ContextoDeNexus } from "./contexto-server";
 import type { OperacionQueLee, OperacionQuePropone, Preparada } from "./tipos";
 
@@ -128,13 +129,37 @@ function temasPosibles(base: Base): { id: string; nombre: string }[] {
  */
 export async function guiaParaElChat(exploracionId: string, yaArmada?: Base): Promise<string> {
   const base = yaArmada ?? (await contextoParaLaGuia(exploracionId));
-  const preguntas = preguntasEnOrden(base);
+  return `${loEstableDeLaGuia(exploracionId, base)}\n\n${preguntasDeLaGuiaParaElChat(exploracionId, base)}`;
+}
+
+/**
+ * Lo vendido y lo del proyecto que lee el asistente, con su tope: el handoff, los cuestionarios, el kickoff y lo que
+ * estimó la preventa (sin F0: la cuenta ya está en su contexto). Más corto que en la guía: el chat lo lleva en cada turno.
+ */
+const FUENTES_DEL_PROYECTO_PARA_EL_CHAT: Readonly<Record<string, number>> = { V0: 5_000, Q0: 3_000, K0: 2_500, P0: 1_500 };
+/** Lo que la venta dejó en HubSpot (la casilla «Para conectar» de la preventa), recortado. */
+const TOPE_DE_LA_VENTA = 4_000;
+
+/**
+ * LO ESTABLE DE LA GUÍA (2026-10-20, caso CEMACO): lo que cambia poco entre un turno y otro —la próxima sesión con su
+ * objetivo, lo que dejó cada sesión anterior (lo que leyó el agente, lo ya respondido, los acuerdos de su minuta), lo que
+ * ya sabemos, lo confirmado, la escala, lo vendido (en un proyecto) o lo de HubSpot (en la preventa) y la memoria del
+ * proyecto—. Con el chat abierto desde la guía va en el `system`, después de la cuenta, y se cachea
+ * (lib/nexus-chat/turno-server.ts); las preguntas, que cambian al aplicar, van en el mensaje. La memoria del proyecto es
+ * la que armó la guía (lector «guia-de-la-exploracion», interno como el del chat): no se pide dos veces.
+ */
+export function loEstableDeLaGuia(exploracionId: string, base: Base): string {
   const { ctx } = base;
+  const cs = base.marco.clave === "cs";
   const nivel = (l: string) => base.escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
   const l: string[] = [
-    `LA GUÍA DE LA PRÓXIMA SESIÓN · exploración ${exploracionId} · sesión ${ctx.proxima.numero}${ctx.proxima.titulo ? ` «${ctx.proxima.titulo}»` : ""}`,
-    `Empresa: ${ctx.empresa} · ${base.marco.clave === "cs" ? "exploración de un proyecto (Customer Success)" : "preventa"} · edición de la escala: ${ctx.edicion}`,
+    `LA EXPLORACIÓN QUE SE ESTÁ PREPARANDO · exploración ${exploracionId} · ${cs ? "de un proyecto (Customer Success)" : "preventa"} · empresa ${ctx.empresa} · edición de la escala: ${ctx.edicion}`,
   ];
+  const proxima = ctx.historia ? textoDeLaProxima(ctx.historia.proxima, { conExplorar: true }) : "";
+  l.push("", `LA PRÓXIMA SESIÓN (la ${ctx.proxima.numero}${ctx.proxima.titulo ? `, «${ctx.proxima.titulo}»` : ""}):`, proxima || "(quien la lleva no le escribió objetivo)");
+  const sesiones = ctx.historia ? textoDeLasSesiones(ctx.historia) : "";
+  if (sesiones) l.push("", "LAS SESIONES ANTERIORES — lo que dejó cada una («Ya respondido» NO se vuelve a preguntar; lo acordado para la próxima va primero):", sesiones);
+  if (ctx.noExplorado.length) l.push("", "Lo que el cliente dijo y nadie siguió (de acá salen preguntas nuevas):", ...ctx.noExplorado.map((t) => `- ${t}`));
   if (ctx.loQueYaSabemos?.length) l.push("", "Lo que ya sabemos (lo que respondió el cliente; NO se vuelve a preguntar):", ...ctx.loQueYaSabemos.map((t) => `- ${t}`));
   if (ctx.confirmado.length) l.push("", "Lo confirmado del resumen:", ...ctx.confirmado.map((t) => `- ${t}`));
   const dims = base.escala.areas
@@ -144,6 +169,28 @@ export async function guiaParaElChat(exploracionId: string, yaArmada?: Base): Pr
     l.push("", "La escala de las áreas en juego (dónde parece estar cada dimensión):");
     for (const { d, a, p } of dims) l.push(`- ${d.id} ${d.nombre} (${a.nombre}): ${p ? `${p.clase === "evidencia" ? "está en" : "creemos que está en"} ${nivel(p.nivel)}` : "sin dato"}`);
   }
+  if (cs) {
+    const fuentes = base.delProyecto.filter((f) => FUENTES_DEL_PROYECTO_PARA_EL_CHAT[f.id]);
+    if (fuentes.length) {
+      l.push(
+        "",
+        "LO VENDIDO Y LO DEL PROYECTO (el handoff, los cuestionarios, el kickoff, lo que estimó la preventa):",
+        ...fuentes.map((f) => `--- ${f.etiqueta} ---\n${recortar(f.texto, FUENTES_DEL_PROYECTO_PARA_EL_CHAT[f.id])}`),
+      );
+    }
+    if (base.memoriaDelProyecto.trim()) l.push("", base.memoriaDelProyecto.trim());
+  } else {
+    if (ctx.paraConectar?.trim()) l.push("", "LO DE LA VENTA EN HUBSPOT (notas, negocios y lo que se leyó de la empresa):", recortar(ctx.paraConectar.trim(), TOPE_DE_LA_VENTA));
+    if (ctx.objecionesDichas.length) l.push("", "Las objeciones que ya puso:", ...ctx.objecionesDichas.map((t) => `- ${t}`));
+  }
+  return l.join("\n");
+}
+
+/** LAS PREGUNTAS de la guía de la próxima sesión, con su clave: lo que cambia al aplicar. Va en el mensaje de cada turno. */
+export function preguntasDeLaGuiaParaElChat(exploracionId: string, base: Base): string {
+  const preguntas = preguntasEnOrden(base);
+  const { ctx } = base;
+  const l: string[] = [`LA GUÍA DE LA PRÓXIMA SESIÓN · exploración ${exploracionId} · sesión ${ctx.proxima.numero}${ctx.proxima.titulo ? ` «${ctx.proxima.titulo}»` : ""}`];
   if (ctx.faltanAlCerrar?.length) {
     const que = base.marco.clave === "cs" ? "Lo que falta de la estrategia" : "Lo que falta para proponer";
     l.push("", `${que} y ninguna pregunta cubre: ${ctx.faltanAlCerrar.join(", ")}.`);

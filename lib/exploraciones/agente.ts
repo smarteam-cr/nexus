@@ -75,6 +75,7 @@ import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia, vo
 import {
   focoDeLaGuia,
   guiaDeAntesDeLaReunion,
+  lecturasDeLaExploracion,
   MAX_SESIONES,
   opcionesDeLasPestanas,
   pestanasDeSesiones,
@@ -93,6 +94,8 @@ import { posicionesDelMapa } from "./mapa";
 import { DE_LA_PREVENTA, marcoDe, type Marco } from "./marco";
 import { avanceDeLaEstrategia } from "./avance-del-proyecto";
 import { fuentesDelProyecto, loVendidoDelProyecto } from "./fuentes-del-proyecto";
+import { acuerdosDeLasReuniones } from "./historia-de-las-sesiones-server";
+import { memoriaDelProyecto } from "@/lib/memoria";
 import { fuentesParaPosicionar } from "./posicionar-fuentes";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import {
@@ -870,17 +873,34 @@ export async function contextoParaLaGuia(exploracionId: string) {
   const loLeido = leerLoLeido(fila.test);
   const ahora = new Date();
   const marco = marcoDe(fila.marco);
-  // En un proyecto, la guía pregunta desde lo que ya se sabe: el handoff, los cuestionarios y lo que estimó la preventa.
-  const proyecto = fila.projectId
-    ? (await fuentesDelProyecto(fila.projectId, fila.clientId).catch(() => []))
-        .filter((f) => f.id === "V0" || f.id === "Q0" || f.id === "P0")
-        .map((f) => `--- ${f.etiqueta} ---\n${f.texto.slice(0, f.id === "V0" ? 8_000 : 4_000)}`)
-        .join("\n\n")
-    : undefined;
-  const loVendido = fila.projectId ? await loVendidoDelProyecto(fila.projectId).catch(() => "") : undefined;
   /* En un prospecto, las reuniones que entraron solas como sesión y ya pasaron cuentan para el número de
      la próxima (no son `SesionPlaneada`). En un cliente o un proyecto nada entra solo. */
   const automaticas = !fila.projectId && fila.client.kind === "PROSPECTO";
+  const clavesDeLasSesiones = Object.keys(lecturasDeLaExploracion(estado.propuesta.lecturas, estado.contenido.sesiones, { automaticas, fuera: estado.contenido.fuera }));
+  /* En un proyecto, la guía pregunta desde lo que ya se sabe: el handoff, los cuestionarios, el kickoff, lo que Nexus sabe
+     de la cuenta (la ficha, lo aprendido en la preventa, las notas y los correos de HubSpot) y lo que estimó la preventa.
+     El kickoff y la cuenta entraron el 2026-10-20 (caso CEMACO): antes la guía no los leía. */
+  const TOPE_DE_LA_FUENTE: Readonly<Record<string, number>> = { V0: 8_000, F0: 6_000 };
+  const [delProyecto, loVendido, acuerdos, memoriaProyecto] = await Promise.all([
+    fila.projectId
+      ? fuentesDelProyecto(fila.projectId, fila.clientId)
+          .catch(() => [])
+          .then((fs) => fs.filter((f) => ["V0", "Q0", "K0", "F0", "P0"].includes(f.id)).map((f) => ({ ...f, texto: f.texto.slice(0, TOPE_DE_LA_FUENTE[f.id] ?? 4_000) })))
+      : Promise.resolve([]),
+    fila.projectId ? loVendidoDelProyecto(fila.projectId).catch(() => "") : Promise.resolve(undefined),
+    // Lo acordado en la minuta de cada sesión: ahí suele estar lo que alguien pidió explorar en la siguiente.
+    acuerdosDeLasReuniones(fila.clientId, clavesDeLasSesiones).catch(() => ({})),
+    // Lo del proyecto que no es de las sesiones (las demás reuniones, los compromisos): las sesiones van aparte, con más detalle.
+    fila.projectId
+      ? memoriaDelProyecto(fila.projectId, {
+          lector: "guia-de-la-exploracion",
+          yaLeidas: clavesDeLasSesiones.filter((k) => k.startsWith("meet:")).map((k) => k.slice("meet:".length)),
+        })
+          .then((m) => m.texto)
+          .catch(() => "")
+      : Promise.resolve(undefined),
+  ]);
+  const proyecto = fila.projectId ? delProyecto.map((f) => `--- ${f.etiqueta} ---\n${f.texto}`).join("\n\n") : undefined;
   const pasadasSinSesion = automaticas
     ? await reunionesDeLaExploracion({
         exploracionId,
@@ -905,6 +925,8 @@ export async function contextoParaLaGuia(exploracionId: string) {
     marco,
     proyecto,
     loVendido,
+    acuerdos,
+    memoriaDelProyecto: memoriaProyecto,
     automaticas,
     pasadasSinSesion,
     empresa: fila.client.name,
@@ -920,7 +942,9 @@ export async function contextoParaLaGuia(exploracionId: string) {
     tests: loLeido.tests,
     ...(marco.clave === "venta" ? { faltanParaProponer: listaParaProponer(estado, chequeoDe(escala, estado), hoyEnCostaRica(ahora)) } : {}),
   });
-  return { fila, estado, escala, general: escalaVig.general, posiciones, pendientes, loLeido, marco, ctx, ahora };
+  /* `delProyecto` (cada fuente con su id) y `memoriaDelProyecto` también los lee el asistente
+     (lib/operaciones/guia-server.ts › `loEstableDeLaGuia`): sin F0, que el chat ya tiene en su contexto. */
+  return { fila, estado, escala, general: escalaVig.general, posiciones, pendientes, loLeido, marco, ctx, ahora, delProyecto, memoriaDelProyecto: memoriaProyecto ?? "" };
 }
 
 /**

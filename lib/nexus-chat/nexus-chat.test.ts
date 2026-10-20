@@ -184,6 +184,24 @@ describe("⛔ el chat de una cuenta no cruza a otra", () => {
     expect(t).toContain("2026-10-17 (sábado)");
     expect(t).not.toContain(B);
   });
+
+  it("con el chat abierto desde la guía, lo estable de la exploración va al final del contexto cacheado (caso CEMACO)", () => {
+    const base = {
+      ahora: new Date("2026-10-20T15:00:00Z"),
+      persona: { nombre: "Ana", email: "ana@smarteamcr.com", rol: "CSE", equipos: [] },
+      cuenta: { id: A, nombre: "Empresa A", tipo: "CLIENTE" },
+      proyectos: [],
+      memoria: "Ficha de A",
+    };
+    const sin = contextoDeLaCuenta(base);
+    const con = contextoDeLaCuenta({ ...base, exploracion: "LA EXPLORACIÓN QUE SE ESTÁ PREPARANDO · sesiones" });
+    expect(con.startsWith(sin)).toBe(true);
+    expect(con.endsWith("LA EXPLORACIÓN QUE SE ESTÁ PREPARANDO · sesiones")).toBe(true);
+    expect(contextoDeLaCuenta({ ...base, exploracion: "  " })).toBe(sin);
+    // El prompt le dice qué hacer con eso: no repreguntar lo de una sesión y poner primero lo pedido para la próxima.
+    expect(PROMPT_DE_NEXUS).toContain("«Ya respondido»");
+    expect(PROMPT_DE_NEXUS).toContain("lo que alguien pidió para la próxima sesión");
+  });
 });
 
 describe("el bucle: lee, propone y respeta los topes", () => {

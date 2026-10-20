@@ -32,7 +32,7 @@ import { avisoDeRechazos, lineaDeLaLista, sinMarcadores } from "./textos";
 import { tomarHilo } from "./candado-server";
 import { ErrorDelChat } from "./aplicar-server";
 import { comoInformacion } from "./bucle";
-import { baseDeLaGuia, guiaParaElChat } from "@/lib/operaciones/guia-server";
+import { baseDeLaGuia, loEstableDeLaGuia, preguntasDeLaGuiaParaElChat } from "@/lib/operaciones/guia-server";
 
 /** El presupuesto de salida de cada llamada (el razonamiento sale de acá). */
 const MAX_TOKENS_DE_RESPUESTA = 8_000;
@@ -49,25 +49,29 @@ export interface ResultadoDelTurnoDeNexus {
  * el turno no puede dejar que el turno vuelva a proponer lo que se acaba de aplicar. El hilo se relee CON el candado.
  */
 /**
- * Lo que la persona señaló al abrir el chat (validación 71): la guía de la próxima sesión de una exploración. Su texto va
- * en el mensaje de ESTE turno (no en `system`: no rompe la caché), como información de la cuenta.
+ * Lo que la persona señaló al abrir el chat (validación 71): la guía de la próxima sesión de una exploración. Lo estable
+ * (la próxima sesión, lo que dejó cada sesión, lo que ya sabemos, lo vendido, la memoria del proyecto) va en el `system`,
+ * después de la cuenta, y se cachea; las preguntas, que cambian al aplicar, van en el mensaje de ESTE turno, como
+ * información de la cuenta (caso CEMACO, 2026-10-20: antes iba todo en el mensaje y sin ninguna sesión).
  */
 export interface FocoDelChat {
   tipo: "guia";
   exploracionId: string;
 }
 
-/** El bloque de la guía para el mensaje, si la exploración es de esta cuenta. null = nada que sumar. */
-async function bloqueDelFoco(foco: FocoDelChat | undefined, clientId: string, ctx: object): Promise<string> {
-  if (!foco) return "";
+/** La guía, si la exploración es de esta cuenta: lo estable para el `system` y las preguntas para el mensaje. */
+export async function bloqueDelFoco(foco: FocoDelChat | undefined, clientId: string, ctx: object): Promise<{ contexto: string; mensaje: string }> {
+  const nada = { contexto: "", mensaje: "" };
+  if (!foco) return nada;
   const f = await prisma.exploracionDeVenta.findUnique({ where: { id: foco.exploracionId }, select: { clientId: true } });
-  if (!f || f.clientId !== clientId) return "";
+  if (!f || f.clientId !== clientId) return nada;
   // La guía queda armada en el contexto del turno: los cambios que se preparen después la reusan (guia-server.ts).
-  const guia = await baseDeLaGuia(ctx, foco.exploracionId)
-    .then((b) => guiaParaElChat(foco.exploracionId, b))
-    .catch(() => null);
-  if (!guia) return "";
-  return `[LA PERSONA ABRIÓ EL CHAT DESDE LA GUÍA — lo escribe Nexus, no la persona]\n${comoInformacion(guia)}\n\n`;
+  const base = await baseDeLaGuia(ctx, foco.exploracionId).catch(() => null);
+  if (!base) return nada;
+  return {
+    contexto: loEstableDeLaGuia(foco.exploracionId, base),
+    mensaje: `[LA PERSONA ABRIÓ EL CHAT DESDE LA GUÍA — lo escribe Nexus, no la persona]\n${comoInformacion(preguntasDeLaGuiaParaElChat(foco.exploracionId, base))}\n\n`,
+  };
 }
 
 export async function correrTurnoDeNexus(
@@ -176,6 +180,7 @@ export async function pensarElTurno(o: {
     cuenta: saber.cuenta,
     proyectos: saber.proyectos,
     memoria: saber.memoria,
+    exploracion: guia.contexto,
   });
   const sha = huellaDeContexto(contexto);
 
@@ -184,7 +189,7 @@ export async function pensarElTurno(o: {
   const historia: Anthropic.Messages.MessageParam[] = ventana.map((t, i) =>
     i === ventana.length - 1 ? { role: t.rol, content: [{ type: "text" as const, text: t.texto, cache_control: { type: "ephemeral" as const } }] } : { role: t.rol, content: t.texto },
   );
-  const messages: Anthropic.Messages.MessageParam[] = [...historia, { role: "user", content: `${bloqueDeLoPendiente(vivas.map((v) => v.linea))}${guia}${mensaje}` }];
+  const messages: Anthropic.Messages.MessageParam[] = [...historia, { role: "user", content: `${bloqueDeLoPendiente(vivas.map((v) => v.linea))}${guia.mensaje}${mensaje}` }];
   const tools = herramientasDelChat();
   const llamar = async (msgs: Anthropic.Messages.MessageParam[], op: { sinHerramientas: boolean }) => {
     const tl = Date.now();

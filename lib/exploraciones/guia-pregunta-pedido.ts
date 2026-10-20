@@ -15,6 +15,10 @@ import { MODELO_DE_LA_GUIA, type ContextoDeLaGuia } from "./guia-pedido";
 import { QUE_BUSCA_CADA_PASO, repiteLoSabido, type PasoDeLaPregunta } from "./plan-de-la-guia";
 import { LARGO_DE_UNA_PREGUNTA, LARGO_DE_UNA_REPREGUNTA, MAX_REPREGUNTAS, sinCitaAdelante } from "./ajustes-de-la-guia";
 import type { SaberDelCliente } from "./lo-que-ya-sabemos";
+import { textoDeLaProxima, textoDeLasSesiones } from "./historia-de-las-sesiones";
+
+/** Lo que dejaron las sesiones anteriores, para no repreguntarlo: un recorte (la guía entera lo lee completo). */
+const TOPE_DE_LAS_SESIONES = 5_000;
 
 export const HERRAMIENTA_DE_UNA_PREGUNTA = "escribir_pregunta";
 
@@ -34,7 +38,7 @@ export interface PreguntaARegenerar {
 }
 
 export interface EntradaDeUnaPregunta {
-  ctx: Pick<ContextoDeLaGuia, "empresa" | "industria" | "marco" | "loQueYaSabemos" | "confirmado" | "paraConectar" | "instrucciones">;
+  ctx: Pick<ContextoDeLaGuia, "empresa" | "industria" | "marco" | "loQueYaSabemos" | "confirmado" | "paraConectar" | "instrucciones" | "historia">;
   objetivo: PreguntaARegenerar;
   /** Las otras preguntas de la guía: la nueva no repite ninguna. */
   otras: readonly string[];
@@ -89,6 +93,11 @@ function cuerpo(o: EntradaDeUnaPregunta): string {
   if (ctx.paraConectar) l.push("", "=== PARA CONECTAR ===", ctx.paraConectar.slice(0, 1500));
   if (ctx.confirmado.length) l.push("", "=== LO QUE YA ESTÁ CONFIRMADO (no lo preguntes) ===", ...ctx.confirmado);
   if (ctx.loQueYaSabemos?.length) l.push("", "=== LO QUE YA SABEMOS: lo que respondió el cliente (NO lo vuelvas a preguntar) ===", ...ctx.loQueYaSabemos.map((t) => `- ${t}`));
+  // Lo que dejó cada sesión y el objetivo de la próxima (2026-10-20, caso CEMACO): lo ya respondido no vuelve.
+  const sesiones = ctx.historia ? textoDeLasSesiones(ctx.historia).slice(-TOPE_DE_LAS_SESIONES) : "";
+  if (sesiones) l.push("", "=== LO QUE DEJARON LAS SESIONES ANTERIORES («Ya respondido» no se vuelve a preguntar) ===", sesiones);
+  const proxima = ctx.historia ? textoDeLaProxima(ctx.historia.proxima, { conExplorar: true }) : "";
+  if (proxima) l.push("", "=== LA PRÓXIMA SESIÓN ===", proxima);
   l.push("", "=== LA PREGUNTA QUE SE CAMBIA ===", `Tema: ${q.nombre} (${q.para})`);
   if (q.paso) l.push(`Paso: ${q.paso} (${QUE_BUSCA_CADA_PASO[q.paso]})`);
   if (q.motivo) l.push(`Parte de lo que dijo el cliente: «${q.motivo.texto}» (${q.motivo.de})`);

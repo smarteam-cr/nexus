@@ -22,7 +22,6 @@ import {
   focoDeLaGuia,
   huecosDelResumen,
   idDeLoVendido,
-  lecturasDeLaExploracion,
   MAX_PREGUNTAS_DE_LO_VENDIDO,
   MAX_PREGUNTAS_EN_LA_GUIA,
   MAX_RETOS_DE_LA_INDUSTRIA,
@@ -39,6 +38,7 @@ import {
 } from "./guia";
 import { diaConAnio, diaYHora } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
+import { historiaDeLasSesiones, textoDeLaProxima, textoDeLasSesiones, type AcuerdosDeLaReunion, type HistoriaDeLasSesiones } from "./historia-de-las-sesiones";
 import type { PosicionEnElMapa } from "./mapa";
 import type { LoLeidoDeHubspot } from "./lo-leido";
 import { faltanAlCerrar, type PuntoDeCalidad } from "./calidad";
@@ -113,8 +113,15 @@ export interface ContextoDeLaGuia {
   ubicables?: { id: string; nombre: string }[];
   /** A qué apuntaba lo que una sesión cortada tenía preparado (tarjetas y dimensiones que siguen faltando): va primero. */
   pasaron?: string[];
-  /** Lo que pasó en las sesiones anteriores, en líneas (lo que leyó el agente de cada una): la apertura lo retoma. */
-  anteriores?: string[];
+  /**
+   * Lo que dejó cada sesión de la exploración (2026-10-20, caso CEMACO): lo que leyó el agente, lo que ya se respondió, lo
+   * que se llevó y no salió, los acuerdos de su minuta y lo que anotó quien la llevó; y lo que escribió quien lleva la
+   * próxima (su objetivo). Lo leen el pedido y el asistente (lib/operaciones/guia-server.ts). Antes, solo el resumen de
+   * las tres últimas.
+   */
+  historia?: HistoriaDeLasSesiones;
+  /** En un proyecto: lo que Nexus sabe del proyecto (las demás reuniones, los compromisos, las desviaciones), sin las sesiones. */
+  memoriaDelProyecto?: string;
   /** Las instrucciones adicionales del vendedor (contexto de la preventa), ya como bloque, o "". */
   instrucciones?: string;
   /**
@@ -294,6 +301,7 @@ Reglas:
 - Primero lo que viene de antes: lo que el CSE se llevó de una sesión anterior (A1, A2…) y lo que quedó sin preguntar porque una sesión se cortó. Cada punto llevado va en una pregunta (la de la tarjeta o la dimensión a la que apunta) con su «abierto», y en «ubicacion» dices a qué tarjeta o dimensión apunta cada uno, aunque ninguna pregunta lo retome; si la sesión anterior se cortó, la apertura lo dice en una frase.
 - Parte de lo que ya se sabe: el handoff dice qué se vendió y qué resultados persigue el cliente. No los vuelvas a preguntar como si no se supieran: confírmalos, ponlos en números si les falta y busca lo que el handoff no dice (por qué ahora, qué pasa si no llegan, qué ya intentaron).
 - LO QUE YA SABEMOS es lo que el cliente ya respondió en el proyecto (en el handoff, en un cuestionario, en una reunión). NUNCA lo vuelvas a preguntar ni le pidas que lo cuente de nuevo: parte de ahí y pregunta lo que sigue.
+- LAS SESIONES ANTERIORES dicen qué dejó cada una: lo «Ya respondido» NO se vuelve a preguntar (aunque el tema siga en la guía: pregunta lo que sigue) y lo que «Se llevó y no salió» sigue abierto. Si un acuerdo de la última reunión o el objetivo de LA PRÓXIMA SESIÓN pide explorar algo (por ejemplo, poner en números un canal o un proceso), la sesión lo cubre: tu «objetivo» parte de ahí, la apertura lo nombra y las preguntas y repreguntas del tema que más se acerca lo bajan a números.
 - Cada pregunta de la estrategia y de la escala tiene su PASO de la siguiente pregunta lógica: situación (cómo pasa hoy), impacto (cuánto le afecta y le cuesta), solución (cómo lo quiere resolver, qué ya intentó). Escribe la del paso que se indica, y nada más.
 - Cada pregunta es SOLO la pregunta: corta, directa a lo que le importa, sin repetir lo que dijo el cliente ni decir de dónde sale. Lo que dijo el CSE ya lo tiene a la vista, al lado de la pregunta. Así:
   · Lo que dijo: «Cada vendedor lleva sus clientes en su Excel: nadie ve cuándo uno deja de comprar.» Paso impacto. Bien: «¿Cuántos clientes dejaron de comprar este año sin que nadie lo notara a tiempo?» Mal: «Dijiste que cada vendedor lleva su Excel… ¿Cuántos…?» (repite lo que dijo) y «¿Cómo llevan hoy a sus clientes?» (ya lo dijo).
@@ -315,6 +323,7 @@ Reglas:
 - El vendedor le habla al cliente de TÚ (tuteo). Nunca voseo (las formas del Río de la Plata) ni «usted». Se escribe así: «tú vives», «puedes», «cuentas», «dices», «crees», «llegas», «quieres», «tienes», «cuéntame», «para ti». Aunque las fuentes estén en voseo, tú escribes en tuteo.
 - Primero lo que viene de antes: lo que el vendedor se llevó de una sesión anterior (A1, A2…) y lo que quedó sin preguntar porque una sesión se cortó. Cada punto llevado va en una pregunta (la de la tarjeta o la dimensión a la que apunta) con su «abierto», y en «ubicacion» dices a qué tarjeta o dimensión apunta cada uno, aunque ninguna pregunta lo retome; si la sesión anterior se cortó, la apertura lo dice en una frase.
 - LO QUE YA SABEMOS es lo que el cliente ya respondió (en el diagnóstico, en una nota, en una reunión). NUNCA lo vuelvas a preguntar ni le pidas que lo cuente de nuevo: parte de ahí y pregunta lo que sigue. Si un tema ya tiene dato (por ejemplo, para cuándo lo necesita), no hay pregunta de ese tema.
+- LAS SESIONES ANTERIORES dicen qué dejó cada una: lo «Ya respondido» NO se vuelve a preguntar (aunque el tema siga en la guía: pregunta lo que sigue) y lo que «Se llevó y no salió» sigue abierto. Si un acuerdo de la última reunión o el objetivo de LA PRÓXIMA SESIÓN pide explorar algo (por ejemplo, poner en números un canal o un proceso), la sesión lo cubre: tu «objetivo» parte de ahí, la apertura lo nombra y las preguntas y repreguntas del tema que más se acerca lo bajan a números.
 - Cada pregunta tiene su PASO de la siguiente pregunta lógica: situación (cómo pasa hoy), impacto (cuánto le afecta y le cuesta), solución (cómo lo quiere resolver, qué ya intentó), cuándo, con qué (quién decide y con qué presupuesto). Escribe la del paso que se indica, y nada más.
 - Cada pregunta es SOLO la pregunta: corta, directa a lo que le duele, sin repetir lo que dijo el cliente ni decir de dónde sale. Lo que dijo el vendedor ya lo tiene a la vista, al lado de la pregunta. Así:
   · Lo que marcó: «El vendedor está solo: el seguimiento es de un solo canal y los deals que se enfrían mueren sin que nadie reaccione.» Paso impacto. Bien: «¿Cuántos negocios se les fueron así este año, más o menos?» Mal: «Dijiste que los deals que se enfrían mueren… ¿Cuántos…?» (repite lo que dijo) y «¿Qué pasa cuando un deal se queda quieto?» (ya lo dijo).
@@ -362,7 +371,17 @@ function cuerpoDeLaGuia(ctx: ContextoDeLaGuia): string {
   if (ctx.loQueYaSabemos?.length) {
     lineas.push("", "=== LO QUE YA SABEMOS: lo que respondió el cliente, con sus palabras (NO lo vuelvas a preguntar: parte de ahí) ===", ...ctx.loQueYaSabemos.map((t) => `- ${t}`));
   }
-  if (ctx.anteriores?.length) lineas.push("", "=== LO QUE PASÓ EN LAS SESIONES ANTERIORES ===", ...ctx.anteriores.map((t) => `- ${t}`));
+  if (ctx.memoriaDelProyecto) lineas.push("", "=== LO QUE NEXUS SABE DEL PROYECTO (las demás reuniones, los compromisos; no son las sesiones) ===", ctx.memoriaDelProyecto);
+  const sesiones = ctx.historia ? textoDeLasSesiones(ctx.historia) : "";
+  if (sesiones) {
+    lineas.push(
+      "",
+      "=== LAS SESIONES ANTERIORES DE ESTA EXPLORACIÓN: lo que dejó cada una («Ya respondido» NO se vuelve a preguntar; lo acordado para la próxima va primero) ===",
+      sesiones,
+    );
+  }
+  const proxima = ctx.historia ? textoDeLaProxima(ctx.historia.proxima, { conExplorar: false }) : "";
+  if (proxima) lineas.push("", "=== LA PRÓXIMA SESIÓN ===", proxima);
   if (ctx.paraExplorar.length) {
     lineas.push(
       "",
@@ -614,6 +633,10 @@ export function contextoDeLaGuia(o: {
   tests?: LoLeidoDeHubspot["tests"];
   /** Lo que falta para proponer (calidad.ts › `listaParaProponer`): lo que el cierre pide si ninguna pregunta lo cubre. */
   faltanParaProponer?: readonly PuntoDeCalidad[];
+  /** Los acuerdos y las decisiones de la minuta de cada reunión de la exploración, por clave de lectura. */
+  acuerdos?: Readonly<Record<string, AcuerdosDeLaReunion>>;
+  /** En un proyecto: la memoria del proyecto sin las reuniones de las sesiones (`memoriaDelProyecto`, lector «guia-de-la-exploracion»). */
+  memoriaDelProyecto?: string;
 }): ContextoDeLaGuia {
   const { estado, escala, posiciones } = o;
   const marco = o.marco ?? MARCO_DE_VENTA;
@@ -699,10 +722,16 @@ export function contextoDeLaGuia(o: {
       return ids.map((x) => `${x} («${nombre(x)}»)`);
     })(),
     // Solo lo leído de las sesiones (etapa A): lo de una reunión que no es sesión no llega a la guía.
-    anteriores: Object.values(lecturasDeLaExploracion(estado.propuesta.lecturas, c.sesiones, { automaticas: !!o.automaticas, fuera: c.fuera }))
-      .sort((a, b) => a.en.localeCompare(b.en))
-      .slice(-3)
-      .map((l) => `${l.etiqueta}: ${l.resumen}`),
+    historia: historiaDeLasSesiones({
+      lecturas: estado.propuesta.lecturas,
+      sesiones: c.sesiones,
+      automaticas: !!o.automaticas,
+      fuera: c.fuera,
+      notas: c.notas,
+      acuerdos: o.acuerdos,
+      proximaId,
+    }),
+    ...(cs && o.memoriaDelProyecto?.trim() ? { memoriaDelProyecto: o.memoriaDelProyecto.trim() } : {}),
     ...(saber && plan
       ? {
           saber,
