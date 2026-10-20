@@ -174,7 +174,7 @@ export default function PrintDocView({ doc }: { doc: PrintDocPayload }) {
            es interactiva con `editable || !!onAssign`, así que pasarlo metería dnd-kit en el
            PDF — su ausencia es lo que rinde la variante estática. */
         kickoff: doc.ctx.kickoff
-          ? { timeline: doc.ctx.kickoff.timeline, procesos: doc.ctx.kickoff.procesos }
+          ? { timeline: doc.ctx.kickoff.timeline, portada: doc.ctx.kickoff.portada ?? null, procesos: doc.ctx.kickoff.procesos }
           : undefined,
         cronograma: doc.ctx.cronograma,
         ...ctxPropio,

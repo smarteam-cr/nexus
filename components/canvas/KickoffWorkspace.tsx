@@ -42,6 +42,7 @@ import { applyAssignments, HORARIOS_KEY } from "@/lib/kickoff/horario-assignment
 import { completadorDeEquipo, completadorDeHorarios } from "@/lib/kickoff/completadores";
 import { useDirectorioDelEquipo } from "@/components/canvas/kickoff-sections/useDirectorioDelEquipo";
 import { newId } from "./kickoff-sections/types";
+import { AvisoDeContinuidad } from "./kickoff-sections/AvisoDeContinuidad";
 
 const MAXW = 760;
 
@@ -119,9 +120,9 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
     return [...real, ...synthetic, ...cierreFallback];
   }, [k.sections, k.hiddenKeys, k.horarioAssignments]);
 
-  /* El ojo de "no visible" es STAGED (vive acá hasta "Subir al cliente"), pero el PDF se arma
-     en el servidor leyendo la base. Se publica el set para que el botón de exportar lo mande
-     y el documento salga como se ve, sin obligar a publicarle nada al cliente. */
+  /* El ojo de "no visible" se guarda en el canvas en cada clic (lib/kickoff/ocultas-del-editor.ts) y el
+     PDF ya lo lee de ahí; se sigue publicando el set en pantalla para cubrir el clic que todavía viaja
+     cuando se aprieta exportar. */
   usePublicarOcultasEnPantalla(useMemo(() => [...k.hiddenKeys].sort(), [k.hiddenKeys]));
 
   // Al subir un logo nuevo el hero debe repintarlo sin recargar.
@@ -151,13 +152,15 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
         onAssignSession: k.assignSession,
         // La fecha de arranque desde la portada: mueve el ancla del cronograma.
         onSetArranque: k.cambiarArranque,
+        // Sin arranque, el calendario de la portada propone la reunión de kickoff (no la escribe).
+        arranqueDeLaReunion: k.arranqueDeLaReunion,
       },
     }),
     [
       projectId, k.clientName, k.clientLogoUrl, k.clientLogoDarkUrl, k.clientLogoScale,
       k.smarteamLogoUrl, k.brandLogos, k.clientId,
       onClientLogoChange, k.timeline, k.procesos, k.platformLogos, k.confirmProceso,
-      k.hiddenKeys, k.toggleHidden, k.assignSession, k.cambiarArranque,
+      k.hiddenKeys, k.toggleHidden, k.assignSession, k.cambiarArranque, k.arranqueDeLaReunion,
     ],
   );
 
@@ -194,7 +197,7 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
         savedMessage={
           `Cambios guardados${draftProcesos > 0 ? ` (${draftProcesos} ${draftProcesos === 1 ? "proceso sin confirmar" : "procesos sin confirmar"})` : ""} — el cliente todavía no los ve.` +
           (k.cronogramaSinSubir ? " El cronograma cambió (fecha o fases) y se sube junto con el kickoff." : "") +
-          (k.cronogramaSinPublicar ? " El cronograma todavía no está subido: el cliente ve «Por definir» en la fecha de arranque." : "")
+          (k.cronogramaSinPublicar ? " El cronograma todavía no está subido: el cliente verá la portada con su fecha de arranque, pero no el cronograma." : "")
         }
       />
       {/* Assist de documento: instrucción → propuesta → revisar → aplicar por
@@ -216,6 +219,9 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
             return k.upsertCardData(s.id, card?.id ?? null, data);
           }}
         />
+      {/* La misma píldora que ve el cliente (servicio recurrente): el CSE ve lo que se publica. */}
+      <div style={{ position: "relative" }}>
+      {k.recurrent && <AvisoDeContinuidad />}
       <LandingView
         config={config}
         ctx={ctx}
@@ -270,6 +276,7 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
           if (ordered.length) k.reorderSections(ordered);
         }}
       />
+      </div>
     </div>
   );
 }

@@ -18,7 +18,9 @@
  * `coverImageUrl` y `brands` viven FUERA del schema del agente (los cura el CSE y
  * sobreviven a las regeneraciones por carry-forward de keys no-schema).
  */
-import { Fragment, useCallback, useRef, useState } from "react";
+import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { DayPicker } from "react-day-picker";
+import { es } from "react-day-picker/locale";
 import { useToast } from "@/components/ui/Toast";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
@@ -29,6 +31,22 @@ import { LOGO_SCALE_MAX, LOGO_SCALE_MIN, LOGO_SCALE_STEP, logoScaleStyle, resolv
 import type { LandingContext } from "./types";
 import { SMARTEAM_LOGO_FONDO_OSCURO } from "@/lib/ui/smarteam-logo-oscuro";
 import { subirDirecto } from "@/lib/storage/subir-directo";
+import { fmtLocalDay } from "@/lib/timeline/weeks";
+import {
+  ANIO_MAXIMO,
+  ANIO_MINIMO,
+  esFechaDeProyecto,
+  fechaLocalDeYmd,
+  MENSAJE_FECHA_FUERA_DE_RANGO,
+  ymdDeFechaLocal,
+  type OrigenDelArranqueSugerido,
+} from "@/lib/timeline/fecha-de-arranque";
+import {
+  datosParaLeer,
+  idDeDatoNuevo,
+  type DatoDeLaPortada,
+  type DatoResuelto,
+} from "@/lib/kickoff/datos-de-la-portada";
 
 /** Píldora translúcida sobre el hero oscuro (Portada / Logo del cliente). */
 const PILL: React.CSSProperties = {
@@ -408,82 +426,213 @@ export function HeroStat({ value, unit, label }: { value: string; unit?: string;
 }
 
 /**
- * Un número de la portada que el CSE escribe A MANO (2026-10-02). Antes solo el chat podía
- * pisarlo: «la fecha de arranque solo se cambiaba pidiéndosela a la IA» (Caroline, Honda FACO;
- * Elías, CAV SHP). El placeholder muestra el valor que sale del cronograma: vaciar el campo lo
- * devuelve.
- */
-export function HeroStatEditable({
-  value,
-  placeholder,
-  label,
-  onCommit,
-}: {
-  value: string;
-  placeholder: string;
-  label: string;
-  onCommit: (next: string) => void;
-}) {
-  return (
-    <div style={{ textAlign: "center", minWidth: 90 }}>
-      <div className="font-display" style={{ color: "var(--dark-text)", fontSize: 28, lineHeight: 1 }}>
-        <Editable as="span" editable value={value} placeholder={placeholder} onCommit={onCommit} />
-      </div>
-      <div className="eyebrow" style={{ color: "var(--dark-text-muted)", marginTop: 7, fontSize: 11 }}>{label}</div>
-    </div>
-  );
-}
-
-/**
  * La FECHA de arranque en la portada, editable: escribe el ancla del cronograma (una sola fecha
  * para kickoff, cronograma y enlace del cliente), no un texto encima. `valor` en AAAA-MM-DD.
+ *
+ * ⛔ Un CALENDARIO, no un `<input type="date">` (2026-10-20). El campo nativo guardaba en cada
+ * cambio, y escribir «2026» en el año pasa por «0002», «0020», «0202»: cada tecla viajaba como una
+ * fecha válida (Cemaco, Spectrum y Cayalá quedaron con el arranque en el año 2 o 26, y con eso todas
+ * sus tareas vencidas). Con un clic en un día no hay año a medio escribir. Además el campo se
+ * encimaba debajo del número y descuadraba la fila: el calendario flota y no mueve nada.
+ *
+ * Sin fecha, el calendario abre en la SUGERIDA (la reunión de kickoff, o hoy) y la ofrece con un
+ * botón. Solo la ofrece: el ancla se escribe con el clic (docs/KNOWN-ERRORS.md).
  */
 export function HeroStatFecha({
   valor,
   etiqueta,
-  label,
+  sugerida,
   onCambiar,
 }: {
   valor: string | null;
-  /** Cómo se lee la fecha («21 de septiembre de 2026»), o «Por definir». */
+  /** Cómo se lee la fecha («21 sep 2026»), o «Por definir». */
   etiqueta: string;
-  label: string;
+  /** La fecha que se propone cuando no hay arranque (ver `arranqueSugerido`). */
+  sugerida?: { ymd: string; origen: OrigenDelArranqueSugerido } | null;
   onCambiar: (ymd: string | null) => Promise<void>;
 }) {
   const toast = useToast();
+  const [abierto, setAbierto] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const calendarioRef = useRef<HTMLSpanElement>(null);
+  usePopoverDismiss(abierto, useCallback(() => setAbierto(false), []), ref);
+
+  /* Centrado bajo la fecha, salvo que se salga de la pantalla (en un teléfono, el dato de la derecha
+     dejaba medio calendario afuera): ahí se corre lo justo para quedar a 16px del borde. */
+  useLayoutEffect(() => {
+    const el = calendarioRef.current;
+    if (!abierto || !el) return;
+    el.style.transform = "translateX(-50%)";
+    const r = el.getBoundingClientRect();
+    const margen = 16;
+    const corrimiento =
+      r.right > window.innerWidth - margen ? window.innerWidth - margen - r.right : r.left < margen ? margen - r.left : 0;
+    if (corrimiento) el.style.transform = `translateX(calc(-50% + ${Math.round(corrimiento)}px))`;
+  }, [abierto]);
+
+  const elegida = valor ? fechaLocalDeYmd(valor) : undefined;
+  const propuesta = !valor && sugerida ? fechaLocalDeYmd(sugerida.ymd) : undefined;
+
+  const elegir = async (ymd: string | null) => {
+    setAbierto(false);
+    if (ymd !== null && !esFechaDeProyecto(ymd)) {
+      toast.error(MENSAJE_FECHA_FUERA_DE_RANGO);
+      return;
+    }
+    setGuardando(true);
+    try {
+      await onCambiar(ymd);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo cambiar la fecha de arranque.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   return (
-    <div style={{ textAlign: "center" }}>
-      <div className="font-display" style={{ color: "var(--dark-text)", fontSize: 28, lineHeight: 1 }}>{etiqueta}</div>
-      <input
-        type="date"
-        aria-label="Fecha de arranque del proyecto"
+    <span ref={ref} className="stl-dato-fecha">
+      <button
+        type="button"
+        className="stl-dato-fecha-btn"
+        aria-haspopup="dialog"
+        aria-expanded={abierto}
+        aria-label={`Fecha de arranque del proyecto: ${etiqueta}. Cambiarla`}
         title="Cambia la fecha de arranque del cronograma"
-        value={valor ?? ""}
         disabled={guardando}
-        onChange={async (e) => {
-          const ymd = e.target.value || null;
-          setGuardando(true);
-          try {
-            await onCambiar(ymd);
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "No se pudo cambiar la fecha de arranque.");
-          } finally {
-            setGuardando(false);
-          }
-        }}
-        style={{
-          marginTop: 6,
-          fontSize: 12,
-          background: "transparent",
-          color: "var(--dark-text-secondary)",
-          border: "1px solid var(--dark-text-muted)",
-          borderRadius: 6,
-          padding: "2px 6px",
-          colorScheme: "dark",
-        }}
-      />
-      <div className="eyebrow" style={{ color: "var(--dark-text-muted)", marginTop: 7, fontSize: 11 }}>{label}</div>
-    </div>
+        onClick={() => setAbierto((a) => !a)}
+      >
+        {guardando ? "Guardando…" : etiqueta}
+      </button>
+      {abierto && (
+        <span ref={calendarioRef} className="stl-dato-calendario" role="dialog" aria-label="Elige la fecha de arranque">
+          {propuesta && sugerida && (
+            <button type="button" className="stl-dato-calendario-sugerida" onClick={() => void elegir(sugerida.ymd)}>
+              Usar el {fmtLocalDay(propuesta)}
+              <span>{sugerida.origen === "kickoff" ? "la reunión de kickoff" : "hoy"}</span>
+            </button>
+          )}
+          <DayPicker
+            mode="single"
+            selected={elegida}
+            defaultMonth={elegida ?? propuesta ?? new Date()}
+            startMonth={new Date(ANIO_MINIMO, 0)}
+            endMonth={new Date(ANIO_MAXIMO, 11)}
+            onSelect={(d) => {
+              if (d) void elegir(ymdDeFechaLocal(d));
+            }}
+            locale={es}
+            showOutsideDays
+          />
+          <span className="stl-dato-calendario-pie">
+            {valor ? (
+              <button type="button" onClick={() => void elegir(null)}>
+                Quitar la fecha
+              </button>
+            ) : (
+              <span />
+            )}
+            <button type="button" onClick={() => void elegir(ymdDeFechaLocal(new Date()))}>
+              Hoy
+            </button>
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * La FILA DE DATOS CLAVE de la portada («8 semanas · 26 oct 2026 · 5 fases»), editable como las
+ * etiquetas: ⠿ para moverlos, × para quitar uno, texto y rótulo editables en el lugar, y «+ Dato» al
+ * final de la misma fila. La lógica (qué sale del cronograma, qué gana) vive en
+ * `lib/kickoff/datos-de-la-portada.ts`; esto solo pinta.
+ *
+ * Mismo aspecto al editar y al presentar: número grande + rótulo chico, en las mismas medidas. Los
+ * controles de edición flotan en las esquinas (solo al pasar el mouse) y el calendario es un
+ * popover: nada empuja la fila.
+ */
+export function FilaDeDatos({
+  datos,
+  resueltos,
+  editable,
+  onChange,
+  fecha,
+}: {
+  datos: DatoDeLaPortada[];
+  /** `resolverDatos(datos, …)`, en el mismo orden. */
+  resueltos: DatoResuelto[];
+  editable?: boolean;
+  onChange: (next: DatoDeLaPortada[]) => void;
+  /** El control del dato de arranque al editar (el calendario). Sin él, se escribe como texto. */
+  fecha?: (r: DatoResuelto) => ReactNode;
+}) {
+  if (!editable) {
+    const visibles = datosParaLeer(resueltos);
+    if (visibles.length === 0) return null;
+    return (
+      <div className="stl-datos">
+        {visibles.map((r) => (
+          <HeroStat key={r.id} value={r.valor} unit={r.unidad} label={r.etiqueta} />
+        ))}
+      </div>
+    );
+  }
+
+  const cambiar = (i: number, patch: Partial<DatoDeLaPortada>) => onChange(replaceAt(datos, i, { ...datos[i], ...patch }));
+  const agregar = () =>
+    onChange(appendItem(datos, { id: idDeDatoNuevo(datos, () => Math.random().toString(36).slice(2, 8)), valor: "", etiqueta: "" }));
+
+  return (
+    <SortableItems
+      items={datos}
+      onReorder={onChange}
+      container={(nodes) => (
+        <div className="stl-datos">
+          {nodes}
+          <AddBtn label="Dato" onClick={agregar} />
+        </div>
+      )}
+    >
+      {(d, i, handle) => {
+        const r = resueltos[i];
+        return (
+          <div className="stl-item stl-dato">
+            {handle}
+            <RemoveBtn title="Quitar este dato" onClick={() => onChange(removeAt(datos, i))} />
+            <div className="stl-dato-valor font-display">
+              {/* El arranque es SIEMPRE el calendario: muestra el texto escrito, si hay, y elegir un día
+                  lo reemplaza por la fecha real. */}
+              {d.fuente === "arranque" && fecha ? (
+                fecha(r)
+              ) : (
+                <>
+                  <Editable
+                    as="span"
+                    editable
+                    value={r?.valor ?? ""}
+                    placeholder={d.fuente ? "Del cronograma" : "3 integraciones"}
+                    onCommit={(v) => {
+                      // Lo que ya salía del cronograma no se guarda como texto: así sigue vivo.
+                      const igualAlDerivado = !!r?.derivado && v.trim() === r.valor;
+                      cambiar(i, { valor: igualAlDerivado ? "" : v });
+                    }}
+                  />
+                  {r?.derivado && r.unidad && <span className="stl-dato-unidad">{r.unidad}</span>}
+                </>
+              )}
+            </div>
+            <Editable
+              as="div"
+              className="eyebrow stl-dato-etiqueta"
+              editable
+              value={r?.etiqueta ?? ""}
+              placeholder="Etiqueta"
+              onCommit={(v) => cambiar(i, { etiqueta: v })}
+            />
+          </div>
+        );
+      }}
+    </SortableItems>
   );
 }

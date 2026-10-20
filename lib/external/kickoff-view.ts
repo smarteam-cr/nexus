@@ -38,6 +38,7 @@ import { applyAssignments, normalizeAssignments, HORARIOS_KEY } from "@/lib/kick
 import { comparaSectionHasContent, stripProseCompara, COMPARA_KEY } from "@/components/canvas/kickoff-landing-adapter";
 import { normalizeKickoffSnapshot } from "./snapshot-normalize";
 import { canvasOf } from "@/lib/pieces/canvas-query";
+import { normalizarPortadaCongelada } from "@/lib/kickoff/datos-de-la-portada";
 
 /**
  * Resuelve un token de acceso externo al Kickoff publicado de SU proyecto.
@@ -116,7 +117,7 @@ export async function getPublishedKickoffForToken(
   // ahora los DATOS están garantizados en runtime (arrays presentes, ítems
   // basura descartados).
   let snap = normalizeKickoffSnapshot(canvas.publishedSnapshot) as unknown as
-    | { sections?: SectionRow[]; procesos?: ProcesoRow[] }
+    | { sections?: SectionRow[]; procesos?: ProcesoRow[]; portada?: unknown }
     | null;
 
   // Backfill perezoso (auto-migración): kickoff publicado antes de la feature →
@@ -186,6 +187,8 @@ export async function getPublishedKickoffForToken(
     platformLogos: platformLogosFor(proj?.tags ?? [], logos),
     recurrent: (proj?.tags ?? []).includes(RECURRENTE_TAG),
     procesos,
+    // Los números de la portada al «Subir»: el hero los usa si `timeline` no aporta nada.
+    portada: normalizarPortadaCongelada(snap.portada),
     sections: sections.filter((s) => !hidden.has(s.id)).map((s) => ({
       id: s.id,
       key: s.key,

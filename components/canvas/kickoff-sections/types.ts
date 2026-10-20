@@ -8,6 +8,8 @@
  * data vieja/parcial.
  */
 
+import { normalizarDatos, type DatoDeLaPortada } from "@/lib/kickoff/datos-de-la-portada";
+
 // ── Equipo ──────────────────────────────────────────────────────────────────
 export interface EquipoMember {
   /** Id del TeamMember origen (para des/seleccionar); la foto/nombre se snapshotean. */
@@ -186,6 +188,9 @@ export interface KickoffHeroData {
   metricaDuracion?: string;
   metricaArranque?: string;
   metricaFases?: string;
+  /** La fila de datos clave, cuando alguien la tocó (lib/kickoff/datos-de-la-portada.ts). FUERA del
+   *  schema del agente: `preserveNonSchemaKeys` la conserva al regenerar. Ausente = los tres de siempre. */
+  datos?: DatoDeLaPortada[];
   /** LEGADO: los kickoffs tipados hasta hoy guardan la bajada en `intro`. */
   intro?: string;
   __legacyMd?: string | null;
@@ -216,6 +221,8 @@ export function normalizeHero(data: unknown): KickoffHeroData {
     metricaDuracion: typeof d.metricaDuracion === "string" ? d.metricaDuracion : undefined,
     metricaArranque: typeof d.metricaArranque === "string" ? d.metricaArranque : undefined,
     metricaFases: typeof d.metricaFases === "string" ? d.metricaFases : undefined,
+    // ⚠ Lo mismo para la fila de datos: sin re-emitirla, se borraba al tipear el título.
+    datos: normalizarDatos(d.datos),
     __legacyMd: typeof d.__legacyMd === "string" ? d.__legacyMd : null,
   };
 }

@@ -8,6 +8,7 @@
  * E4. Server-side only.
  */
 import type { TimelineActivityType } from "@prisma/client";
+import { esInstanteDeProyecto, MENSAJE_FECHA_FUERA_DE_RANGO } from "./fecha-de-arranque";
 import {
   leerRespaldoDeFase,
   leerRespaldoDeTarea,
@@ -93,6 +94,9 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
       const d = new Date(body.anchorStartDate);
       if (isNaN(d.getTime())) {
         errors.push("anchorStartDate no es una fecha ISO válida");
+      } else if (!esInstanteDeProyecto(body.anchorStartDate)) {
+        // El año 2 o 26 de un tipeo a medias (lib/timeline/fecha-de-arranque.ts).
+        errors.push(`anchorStartDate: ${MENSAJE_FECHA_FUERA_DE_RANGO}`);
       } else {
         anchorStartDate = body.anchorStartDate;
       }
@@ -110,6 +114,8 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
       const d = new Date(body.closeDateOverride);
       if (isNaN(d.getTime())) {
         errors.push("closeDateOverride no es una fecha ISO válida");
+      } else if (!esInstanteDeProyecto(body.closeDateOverride)) {
+        errors.push(`closeDateOverride: ${MENSAJE_FECHA_FUERA_DE_RANGO}`);
       } else {
         closeDateOverride = body.closeDateOverride;
       }
@@ -272,7 +278,7 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
         const parseOverride = (v: unknown, field: string): string | null | undefined => {
           if (v === undefined) return undefined;
           if (v === null) return null;
-          if (typeof v === "string" && !Number.isNaN(Date.parse(v))) return v;
+          if (typeof v === "string" && !Number.isNaN(Date.parse(v)) && esInstanteDeProyecto(v)) return v;
           errors.push(`phases[${idx}].tasks[${tIdx}].${field} debe ser una fecha ISO o null`);
           taskError = true;
           return undefined;

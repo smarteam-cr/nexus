@@ -86,8 +86,10 @@ describe("lo que está oculto EN PANTALLA tampoco, aunque no se haya subido", ()
     );
     // ⚠ SUMA, nunca reemplaza: si pisara lo guardado, un pedido sin claves REVELARÍA todo lo
     // que el CSE había ocultado. Es la diferencia entre una comodidad y un agujero.
+    // Desde el 2026-10-20 «lo guardado» es lo que el editor tiene oculto (su borrador en el canvas, o lo
+    // publicado): lib/kickoff/ocultas-del-editor.ts. Lo de pantalla se le SUMA igual.
     expect(src, "lo de pantalla tiene que UNIRSE a lo guardado, no reemplazarlo").toMatch(
-      /new Set\(\[[\s\S]{0,80}\.\.\.\(proyecto\.hiddenKickoffKeys/,
+      /new Set\(\[\s*\.\.\.ocultasEnElEditor\(proyecto\.hiddenKickoffKeys[\s\S]{0,120}\.\.\.\(opts\?\.ocultasEnPantalla/,
     );
   });
 

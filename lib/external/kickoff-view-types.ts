@@ -61,6 +61,14 @@ export interface KickoffProceso {
   status?: string;
 }
 
+/** Los números de la fila de datos de la portada (espejo de `CronogramaParaLaFila`, sin importarlo:
+ *  este archivo es solo-tipos). */
+export interface KickoffPortadaCongelada {
+  semanas: number | null;
+  fases: number | null;
+  arranqueISO: string | null;
+}
+
 /** Lo que la ruta pública pasa como `data` a <KickoffLanding/>. */
 export interface KickoffLandingData {
   projectName: string;
@@ -83,6 +91,8 @@ export interface KickoffLandingData {
   platformLogos?: string[];
   sections: KickoffSection[];
   timeline: KickoffTimelineData;
+  /** La fila de datos de la portada congelada al «Subir»; null en un snapshot viejo. */
+  portada?: KickoffPortadaCongelada | null;
   /** Procesos del cliente (solo CONFIRMED en la vista externa). */
   procesos: KickoffProceso[];
   /** Servicio recurrente (tag `recurrente` del handoff) — badge sutil client-facing.

@@ -18,6 +18,7 @@ import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
 import { projectedEnd, describeEndShift, fmtFull } from "@/lib/timeline/weeks";
+import { esFechaDeProyecto, MENSAJE_FECHA_FUERA_DE_RANGO } from "@/lib/timeline/fecha-de-arranque";
 
 type Params = Promise<{ projectId: string }>;
 
@@ -32,6 +33,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const raw = body?.anchorStartDate;
   if (raw !== null && !(typeof raw === "string" && FECHA.test(raw))) {
     return NextResponse.json({ error: "La fecha tiene que venir como AAAA-MM-DD (o null para quitarla)." }, { status: 400 });
+  }
+  /* ⛔ Un año de tipeo a medias («0002», «0026») es AAAA-MM-DD válido y entraba: así quedaron Cemaco,
+     Spectrum y Cayalá con el arranque en el año 2 o 26 (lib/timeline/fecha-de-arranque.ts). */
+  if (raw !== null && !esFechaDeProyecto(raw)) {
+    return NextResponse.json({ error: MENSAJE_FECHA_FUERA_DE_RANGO }, { status: 400 });
   }
   const nueva = raw === null ? null : new Date(`${raw}T00:00:00.000Z`);
   if (nueva && isNaN(nueva.getTime())) {
