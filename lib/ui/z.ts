@@ -12,8 +12,11 @@
  * adentro de uno el z-index se resuelve contra ESE contexto, no contra la página.
  * Caso real (2026-07): el panel de "Corridas de agentes" era `fixed z-50` pero
  * colgaba del `<aside class="sticky">` del sidebar, así que lo tapaba cualquier
- * capa de la columna principal. La primitiva `Modal`, `Drawer` y `NavFlyout` ya
- * portalean; usar esas antes que montar una capa nueva a mano.
+ * capa de la columna principal. La primitiva `Modal`, `Drawer`, `NavFlyout` y `Menu` ya
+ * portalean; usar esas antes que montar una capa nueva a mano. `Menu` fue el último en
+ * sumarse (2026-10-20): el menú del avatar del sidebar quedaba detrás del contenido de
+ * Clientes y de Para ti por la misma razón. Todo desplegable del sidebar va en POPOVER
+ * (guarda: `lib/ui/capas-del-menu.test.ts`).
  *
  * Orden de arriba hacia abajo: lo que INTERRUMPE va encima de lo que informa.
  *

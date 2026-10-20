@@ -27,6 +27,10 @@
  *     Al abrir se mide el panel ya pintado: se corre a lo ancho hasta que entra, se da vuelta al
  *     otro lado del botón si de ese lado no cabe y del otro hay más lugar, y su `maxHeight` es el
  *     espacio que queda de su lado (lo que sobra scrollea adentro).
+ *   · **El panel puede vivir en un PORTAL** (2026-10-20, `Menu` lo hace): fuera del árbol de
+ *     `rootRef`. Por eso "adentro" es el trigger O el panel (`dentro`, abajo) — el mismo par de ramas
+ *     de `RunsIndicator`. Sin el panel en la cuenta, el `mousedown` sobre un ítem cerraba el menú
+ *     antes del clic.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
@@ -139,13 +143,16 @@ export function usePanelFlotante({
   useEffect(() => {
     if (!abierto) return;
 
+    /* Las DOS ramas: el trigger (rootRef) y el panel, que puede vivir en un portal. */
+    const dentro = (n: Node) => !!rootRef.current?.contains(n) || !!panelRef.current?.contains(n);
+
     function onClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setAbierto(false);
+      if (rootRef.current && !dentro(e.target as Node)) setAbierto(false);
     }
     function onScroll(e: Event) {
       /* Coordenadas congeladas al abrir: un scroll EXTERNO desancla el panel → cerrar. El
-         scroll de adentro (su propio `maxHeight`) es descendiente y no cuenta. */
-      if (rootRef.current && e.target instanceof Node && rootRef.current.contains(e.target)) return;
+         scroll de adentro (su propio `maxHeight`) es del panel y no cuenta. */
+      if (e.target instanceof Node && dentro(e.target)) return;
       setAbierto(false);
     }
     function onKey(e: KeyboardEvent) {
