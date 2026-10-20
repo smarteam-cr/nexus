@@ -14,7 +14,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `85f212ce` desde la noche del 19 oct. Sana, con el esquema al día. |
+| Producción | Corre `25986aef` desde la madrugada del 20 oct (el chat del cronograma lee la memoria del proyecto). Sana, con el esquema al día. |
 | Por desplegar | Nada: todo `main` está en producción (12.464 pruebas en verde, tsc en 0). |
 | En rojo en producción | 4 invariantes, todos con su decisión abajo: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot, una reunión movida después de leerse y el corte de cobranza apagado. |
 | Pruebas | 92 para ti (pestaña «Lo que validas tú»), 61 que valido yo con datos y 31 ya validadas por ti. |
