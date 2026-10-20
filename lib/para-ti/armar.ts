@@ -8,8 +8,11 @@
  * · Una fuente que no se pudo medir se nombra en `sinMedir`: callarla haría creer que está al día.
  * · Desde el 2026-10-16 (fase 1.1): de lo de hoy y lo del agente, «Lo que importa hoy» (como mucho 5, una por cuenta,
  *   lib/para-ti/importa.ts); lo que no entra va a «También para hoy».
+ * · Desde el 2026-10-19, al CSE y a la CSL (`foco`): en lugar de eso, los tres bloques de lib/para-ti/foco.ts
+ *   (reuniones, cuentas sin siguiente paso, pendientes sin seguimiento); todo lo demás va a «También para hoy».
  */
 import { elegirLoQueImporta, type OpcionesDeLoQueImporta } from "./importa";
+import { armarFoco, type ModoDelFoco } from "./foco";
 import type { ParaTi, Pendiente, ResultadoDeFuente } from "./tipos";
 
 function ordenar(items: readonly Pendiente[]): Pendiente[] {
@@ -23,7 +26,10 @@ function ordenar(items: readonly Pendiente[]): Pendiente[] {
   });
 }
 
-export function armarParaTi(resultados: readonly ResultadoDeFuente[], opciones: OpcionesDeLoQueImporta = {}): ParaTi {
+export function armarParaTi(
+  resultados: readonly ResultadoDeFuente[],
+  opciones: OpcionesDeLoQueImporta & { foco?: ModoDelFoco | null } = {},
+): ParaTi {
   const vistos = new Set<string>();
   const todos: Pendiente[] = [];
   const alDia: string[] = [];
@@ -45,6 +51,14 @@ export function armarParaTi(resultados: readonly ResultadoDeFuente[], opciones: 
   }
   const agente = ordenar(todos.filter((p) => p.delAgente));
   const hoy = ordenar(todos.filter((p) => !p.delAgente && p.cuando === "hoy"));
+  const semana = ordenar(todos.filter((p) => !p.delAgente && p.cuando === "semana"));
+  const luego = ordenar(todos.filter((p) => !p.delAgente && p.cuando === "luego"));
+
+  if (opciones.foco) {
+    const f = armarFoco([...agente, ...hoy], opciones.foco);
+    return { importa: f.enLosBloques, foco: f.foco, tambien: ordenar(f.resto), agente, hoy, semana, luego, alDia, sinMedir };
+  }
+
   const { importa, tambien } = elegirLoQueImporta([...agente, ...hoy], undefined, opciones);
 
   return {
@@ -52,15 +66,16 @@ export function armarParaTi(resultados: readonly ResultadoDeFuente[], opciones: 
     tambien: ordenar(tambien),
     agente,
     hoy,
-    semana: ordenar(todos.filter((p) => !p.delAgente && p.cuando === "semana")),
-    luego: ordenar(todos.filter((p) => !p.delAgente && p.cuando === "luego")),
+    semana,
+    luego,
     alDia,
     sinMedir,
   };
 }
 
 /**
- * El número del menú: «Lo que importa hoy» (como mucho 5) y los avisos sin leer. Lo de esta semana, lo de «cuando
+ * El número del menú: «Lo que importa hoy» (como mucho 5; en Customer Success, lo que se ve en sus tres bloques) y los
+ * avisos sin leer. Lo de esta semana, lo de «cuando
  * puedas» y lo que no entró en las cinco no suman: un número que nunca baja de 20 se deja de mirar.
  */
 export function cuentaDelMenu(p: Pick<ParaTi, "importa">, avisosNuevos: number): number {

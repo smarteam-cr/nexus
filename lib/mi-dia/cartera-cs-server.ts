@@ -33,8 +33,6 @@ import { hubspotProjectUrl } from "@/lib/hubspot/urls";
 import { tienePermiso, type Alcance } from "@/lib/para-ti/alcance-server";
 import { cuentasDelPedido, lecturasDelPedido } from "./lecturas-server";
 import { servicioDeLasCuentas, type ServicioDeLaCuenta } from "./servicio-server";
-import { siguientePasoDeLaReunion } from "./servicio";
-import { pasosDescartados } from "./paso-sugerido-server";
 import type { SemanaDeUso } from "@/lib/cs/adopcion";
 import { negociosDeLaEmpresa, saludDeCs, usoDeHubspot, type EmpresaDeCs, type PipelineDeCs, type ProyectoDeCs } from "./cartera-cs";
 import type { VarianteDelInicio } from "./inicio";
@@ -226,7 +224,7 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
   // La acción de la semana y la próxima reunión: del calendario de quien la lleva. El CSE, del suyo (como el resto de
   // «Para ti»); quien lidera, del de cada CSE.
   const llevaDe = (id: string) => (lider ? (cseDe.get(id)?.email ?? null) : a.email);
-  const [servicio, descartados] = await Promise.all([
+  const [servicio] = await Promise.all([
     servicioDeLasCuentas(
       ids.map((id) => ({
         clientId: id,
@@ -235,7 +233,6 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
       })),
       { ahora: o.ahora, hoyISO: o.hoyISO, quienMira: { email: a.email, esSuperAdmin: a.rol === "SUPER_ADMIN" } },
     ).catch(() => new Map<string, ServicioDeLaCuenta>()),
-    pasosDescartados(a.email),
   ]);
 
   const contactosDe = contactos ? new Map(contactos.map((c) => [c.clientId, c._count._all])) : null;
@@ -286,14 +283,11 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
       proxima: s?.reunion ? { titulo: s.reunion.titulo, inicio: s.reunion.inicio } : null,
       calendarioLeido: s ? s.calendarioLeido : true,
       accion: s?.accion ? { numero: s.accion.numero, titulo: s.accion.titulo } : null,
-      faltaReunion: !!s?.falta.includes("reunion"),
-      siguientePaso: (() => {
-        // Solo de las cuentas que lleva quien mira o, a quien lidera, de las que lleva alguien (del calendario de esa
-        // persona): «Usar» crea la tarea para quien la lleva.
-        const lleva = llevaDe(id);
-        const paso = s && lleva && (lider || lasQueLlevo.has(id)) ? siguientePasoDeLaReunion(s, s.proximas, o.hoyISO, descartados) : null;
-        return paso ? { ...paso, llevaEmail: lleva } : null;
-      })(),
+      paso: !s?.paso
+        ? null
+        : s.paso.tipo === "reunion"
+          ? { tipo: "reunion", dia: s.paso.dia, inicio: s.paso.reunion.inicio, titulo: s.paso.reunion.titulo }
+          : { tipo: "accion", dia: s.paso.dia, numero: s.paso.accion.numero, titulo: s.paso.accion.titulo },
       renovacion: c ? proximaRenovacion(c, hoy) : null,
       relacion: relacion && relacion.estado !== "sin-partner" ? { corto: relacion.corto, tono: relacion.tono } : null,
       contactos: contactosDe ? (contactosDe.get(id) ?? 0) : null,

@@ -366,6 +366,19 @@ describe("las acciones sugeridas", () => {
     expect(diaCorto("2026-10-17")).toBe("17 oct");
   });
 
+  it("con una reunión agendada con la cuenta, no pide fijar el siguiente paso: esa reunión lo es (2026-10-19)", () => {
+    const a = accionesSugeridas({
+      ...base,
+      tareas: [t({ numero: 7, titulo: "Revisar copies", venceEl: "2026-10-10" })],
+      pasos: [],
+      cuentaConPaso: true,
+    });
+    expect(a.map((x) => x.tipo)).toEqual(["revisar-tarea"]);
+    // Sin saberlo (undefined), como antes: el del equipo.
+    expect(accionesSugeridas({ ...base, tareas: [], pasos: [] }).map((x) => x.tipo)).toEqual(["siguiente-paso"]);
+    expect(accionesSugeridas({ ...base, tareas: [], pasos: [], cuentaConPaso: false }).map((x) => x.tipo)).toEqual(["siguiente-paso"]);
+  });
+
   it("el mensaje al cliente no lleva más que el título y la fecha", () => {
     expect(mensajeDeRecordatorio("Enviar el logo en alta", null)).toBe("Hola, te escribo por lo que quedamos: «enviar el logo en alta». ¿Cómo vas con eso? Cualquier cosa me avisas. ¡Gracias!");
   });

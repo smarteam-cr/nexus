@@ -8,6 +8,7 @@ import { cierresMasCerca, diasHasta, esPausado, fechaCorta, montoCorto, pasoDeVe
 import type { VarianteDelInicio } from "./inicio";
 import { horaCR } from "./inicio";
 import { DIAS_PARA_LA_REUNION } from "./constantes";
+import { elDiaDeLaReunion } from "./servicio";
 import { MAX_LO_QUE_IMPORTA } from "@/lib/para-ti/importa";
 
 export interface Cifra {
@@ -35,7 +36,8 @@ export interface ReunionParaCifras {
 export interface CuentaParaCifras {
   empresa: string;
   salud: string | null;
-  servicio: { falta: string[]; calendarioLeido: boolean } | null;
+  /** `paso`: el siguiente paso de la cuenta (lib/mi-dia/servicio.ts); null = no tiene. */
+  servicio: { paso: unknown; calendarioLeido: boolean } | null;
 }
 
 const plural = (n: number, uno: string, varios: string) => (n === 1 ? `1 ${uno}` : `${n} ${varios}`);
@@ -68,37 +70,42 @@ export function cifraDeLoQueImporta(importa: number, tambien: number): Cifra {
   };
 }
 
-/** La acción de la semana y la reunión de los próximos 8 días, como dos números. */
+/**
+ * Cuántas cuentas tienen su siguiente paso: una tarea con fecha esta semana o una reunión en los próximos 8 días (la
+ * regla única, lib/mi-dia/servicio.ts). Hasta el 2026-10-19 eran dos números («con acción», «con reunión»).
+ */
 export function cifrasDeServicio(cuentas: readonly CuentaParaCifras[]): Cifra[] {
   const con = cuentas.filter((c) => c.servicio);
-  const sinAccion = con.filter((c) => c.servicio!.falta.includes("accion")).map((c) => c.empresa);
-  const sinReunion = con.filter((c) => c.servicio!.falta.includes("reunion")).map((c) => c.empresa);
+  const sinPaso = con.filter((c) => !c.servicio!.paso).map((c) => c.empresa);
   const sinCalendario = con.some((c) => !c.servicio!.calendarioLeido);
   const n = con.length;
   return [
     {
-      clave: "accion",
-      rotulo: "Con acción esta semana",
-      valor: String(n - sinAccion.length),
+      clave: "paso",
+      rotulo: "Con siguiente paso",
+      valor: String(n - sinPaso.length),
       unidad: `de ${plural(n, "cuenta", "cuentas")}`,
-      sub: sinAccion.length ? (sinAccion.length <= 2 ? `Faltan ${listar(sinAccion)}` : `${sinAccion.length} sin acción`) : n ? "Todas tienen su acción" : "Sin cuentas activas",
-      subAviso: sinAccion.length > 0,
-    },
-    {
-      clave: "reunion",
-      rotulo: `Con reunión en ${DIAS_PARA_LA_REUNION} días`,
-      valor: String(n - sinReunion.length),
-      unidad: `de ${plural(n, "cuenta", "cuentas")}`,
-      sub: sinCalendario
-        ? "Un calendario no se pudo leer"
-        : sinReunion.length
-          ? `${plural(sinReunion.length, "sin reunión agendada", "sin reunión agendada")}`
-          : n
-            ? "Todas tienen su reunión"
-            : "Sin cuentas activas",
-      subAviso: sinReunion.length > 0 || sinCalendario,
+      sub: sinPaso.length
+        ? sinPaso.length <= 2
+          ? `Faltan ${listar(sinPaso)}`
+          : `${sinPaso.length} sin siguiente paso`
+        : n
+          ? `Todas con tarea o reunión en ${DIAS_PARA_LA_REUNION} días`
+          : "Sin cuentas activas",
+      subAviso: sinPaso.length > 0 || sinCalendario,
     },
   ];
+}
+
+/** Lo prometido al cliente sin tomar y las tareas vencidas de tus cuentas (el tercer bloque del inicio de CS). */
+export function cifraDeSeguimiento(n: number): Cifra {
+  return {
+    clave: "seguimiento",
+    rotulo: "Sin seguimiento",
+    valor: String(n),
+    sub: n ? "Compromisos sin tomar y tareas vencidas" : "Nada pendiente sin seguimiento",
+    subAviso: n > 0,
+  };
 }
 
 export function cifraDeColores(cuentas: readonly CuentaParaCifras[], rotulo: string): Cifra {
@@ -163,13 +170,20 @@ export function cifrasDelInicio(
     cuentas: readonly CuentaParaCifras[];
     ventas: { meta: MetaParaCifras | null; anio: number; ponderado: { usd: number; activos: number; sinMonto: number } } | null;
     tareas: { hoy: number; porDecidir: number; internas: number } | null;
+    /** El inicio de Customer Success: cuántos pendientes sin seguimiento hay (lib/para-ti/foco.ts). */
+    sinSeguimiento?: number | null;
   },
 ): Cifra[] {
   const reuniones = d.veAgenda ? [cifraDeReuniones(d.reuniones, d.ahora)] : [];
   const importa = cifraDeLoQueImporta(d.importa, d.tambien);
   if (variante === "ventas") return [...reuniones, importa, ...(d.ventas ? cifrasDeVentas(d.ventas) : [])].slice(0, 4);
   if (variante === "cse" || variante === "csl") {
-    return [...reuniones, ...cifrasDeServicio(d.cuentas), cifraDeColores(d.cuentas, variante === "csl" ? "Cómo está la cartera" : "Cómo están tus cuentas")].slice(0, 4);
+    return [
+      ...reuniones,
+      ...cifrasDeServicio(d.cuentas),
+      ...(d.sinSeguimiento != null ? [cifraDeSeguimiento(d.sinSeguimiento)] : []),
+      cifraDeColores(d.cuentas, variante === "csl" ? "Cómo está la cartera" : "Cómo están tus cuentas"),
+    ].slice(0, 4);
   }
   if (variante === "dev") {
     return [
@@ -217,7 +231,9 @@ export function siguienteMovimiento(negocios: readonly NegocioVisto[], hoyISO: s
     const ultima = [n.ultimaActividad, n.ultimaReunion].filter(Boolean).sort().at(-1) ?? null;
     const sinActividad = ultima ? Math.floor((ahora.getTime() - Date.parse(ultima)) / 86_400_000) : null;
     let estado: MovimientoDeVentas["estado"];
-    if (!paso) estado = { texto: "Sin siguiente paso", tono: "aviso" };
+    // Una reunión agendada con la empresa ya es el siguiente paso (2026-10-19).
+    if ((!paso || pasoVencido(n, hoyISO)) && n.reunion) estado = { texto: `Siguiente paso: reunión ${elDiaDeLaReunion(n.reunion.inicio, hoyISO)}`, tono: "ok" };
+    else if (!paso) estado = { texto: "Sin siguiente paso", tono: "aviso" };
     else if (pasoVencido(n, hoyISO)) estado = { texto: `El siguiente paso venció: ${paso.que}`, tono: "aviso" };
     else if (sinActividad != null && sinActividad >= 14) estado = { texto: `Sin actividad hace ${sinActividad} días`, tono: "aviso" };
     else estado = { texto: `${paso.que}${paso.fecha ? ` · ${fechaCorta(paso.fecha)}` : ""}`, tono: "ok" };

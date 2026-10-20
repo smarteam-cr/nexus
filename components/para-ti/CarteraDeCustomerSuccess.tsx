@@ -6,9 +6,10 @@
  *
  * Una fila por empresa: el nombre grande, quién la lleva (el CSE de la cuenta y el encargado de cada proyecto), el color
  * de Éxito del cliente y su porqué, cada proyecto de HubSpot con su etapa, el último contacto y la próxima reunión, la
- * renovación, el uso de HubSpot, la acción de la semana y, a quien ve Ventas, el monto de sus negocios abiertos.
+ * renovación, el uso de HubSpot, el siguiente paso (su tarea con fecha o su reunión agendada, lib/mi-dia/servicio.ts) y,
+ * a quien ve Ventas, el monto de sus negocios abiertos.
  *
- * Sin acción esta semana, «Planificar acción» usa el «Agendar» del inicio (components/para-ti/inicio/AgendarEnLaAgenda):
+ * Sin siguiente paso, «Agendar» usa el del inicio (components/para-ti/inicio/AgendarEnLaAgenda):
  * deja el borrador del evento en la agenda, abre Google Calendar para guardarlo y lleva a «Tu día», donde está el
  * borrador. El nombre de la empresa lleva a su ficha.
  *
@@ -53,7 +54,6 @@ import type { CarteraDeCs } from "@/lib/mi-dia/cartera-cs-server";
 import CseEncargadoSelect from "@/components/clients/CseEncargadoSelect";
 import { NOMBRE_DE_SALUD, Punto, PUNTO_DE_SALUD } from "./inicio/piezas";
 import { AccionDelPendiente } from "./inicio/AgendarEnLaAgenda";
-import SugerenciaDeSiguientePaso from "./inicio/SugerenciaDeSiguientePaso";
 import { enlaceParaAgendarEnCalendar } from "@/lib/mi-dia/calendario";
 import type { Pendiente } from "@/lib/para-ti/tipos";
 
@@ -74,8 +74,8 @@ const BOTON_PLANIFICAR =
 const FILTRO = "w-auto";
 
 const QUE_ES_LA_VISTA: Record<Vista, string> = {
-  atender: "Las cuentas que piden una decisión: en riesgo o con señales, un proyecto bloqueado, renueva en 30 días, sin contacto o sin acción esta semana.",
-  "sin-accion": `Todas las cuentas sin su acción de la semana o sin reunión en los próximos ${DIAS_PARA_LA_REUNION} días. Primero las que no tienen ninguna de las dos.`,
+  atender: "Las cuentas que piden una decisión: en riesgo o con señales, un proyecto bloqueado, renueva en 30 días, sin contacto o sin siguiente paso.",
+  "sin-accion": `Todas las cuentas sin siguiente paso: ni una tarea con fecha esta semana ni una reunión en los próximos ${DIAS_PARA_LA_REUNION} días. Una reunión agendada ya es el siguiente paso.`,
   todos: "Toda la cartera, con cada proyecto de HubSpot y su etapa. Lo rojo arriba.",
   "por-cse": "Cada CSE con sus cuentas y lo que pide atención, para la 1:1. En orden alfabético.",
   "sin-contacto": `${DIAS_SIN_CONTACTO} días o más sin una reunión con el cliente ni actividad en HubSpot. La más vieja primero.`,
@@ -131,7 +131,7 @@ export default function CarteraDeCustomerSuccess({ cartera, hoyISO }: { cartera:
   };
   const etiqueta: Record<Vista, string> = {
     atender: "Para atender",
-    "sin-accion": "Sin acción o reunión",
+    "sin-accion": "Sin siguiente paso",
     todos: "Todos los proyectos",
     "por-cse": "Por CSE",
     "sin-contacto": "Sin contacto",
@@ -195,7 +195,7 @@ export default function CarteraDeCustomerSuccess({ cartera, hoyISO }: { cartera:
       </SearchFilterBar>
 
       {vista === "atender" && (
-        <Lista vacia="Ninguna cuenta pide una decisión hoy: todas tienen contacto reciente y su acción de la semana.">
+        <Lista vacia="Ninguna cuenta pide una decisión hoy: todas tienen contacto reciente y su siguiente paso.">
           {atender.map(({ empresa, motivos }) => (
             <FilaDeEmpresa key={empresa.clientId} e={empresa} motivos={motivos} hoyISO={hoyISO} cartera={cartera} />
           ))}
@@ -203,7 +203,7 @@ export default function CarteraDeCustomerSuccess({ cartera, hoyISO }: { cartera:
       )}
 
       {vista === "sin-accion" && (
-        <Lista vacia={`Todas las cuentas tienen su acción de la semana y su reunión en los próximos ${DIAS_PARA_LA_REUNION} días.`}>
+        <Lista vacia="Todas las cuentas tienen su siguiente paso: una tarea con fecha esta semana o una reunión agendada.">
           {sinServicio.map((e) => (
             <FilaDeEmpresa key={e.clientId} e={e} motivos={null} hoyISO={hoyISO} cartera={cartera} />
           ))}
@@ -228,7 +228,7 @@ export default function CarteraDeCustomerSuccess({ cartera, hoyISO }: { cartera:
                 <span className="text-xs text-fg-muted">
                   {plural(g.empresas.length, "cuenta", "cuentas")} · {plural(g.proyectos, "proyecto", "proyectos")}
                   {g.enRiesgo > 0 && ` · ${g.enRiesgo} en riesgo`}
-                  {g.sinAccion > 0 && ` · ${g.sinAccion} sin acción`}
+                  {g.sinPaso > 0 && ` · ${g.sinPaso} sin siguiente paso`}
                   {g.sinContacto > 0 && ` · ${g.sinContacto} sin contacto`}
                 </span>
               </div>
@@ -392,22 +392,17 @@ function FilaDeEmpresa({
 
       {/* Lo de esta semana. */}
       <div className="flex min-w-0 flex-col gap-1 text-xs leading-4 lg:items-end lg:text-right">
-        {e.accion ? (
-          <span className="text-success-ink" title={`T-${e.accion.numero} · ${e.accion.titulo}`}>
-            ✓ <span className="text-fg-secondary">T-{e.accion.numero} · {e.accion.titulo}</span>
+        {e.paso?.tipo === "accion" ? (
+          <span className="text-success-ink" title={`T-${e.paso.numero} · ${e.paso.titulo}`}>
+            ✓ <span className="text-fg-secondary">Siguiente paso: T-{e.paso.numero} · {e.paso.titulo}</span>
           </span>
-        ) : e.siguientePaso ? (
-          <div className="flex flex-col gap-1 lg:items-end">
-            <span className="font-medium text-warn-ink">○ Tiene reunión {elDiaDeLaReunion(e.siguientePaso.inicio, hoyISO)}, falta el siguiente paso</span>
-            <SugerenciaDeSiguientePaso
-              clientId={e.clientId}
-              paso={{ eventoId: e.siguientePaso.eventoId, titulo: e.siguientePaso.titulo, fecha: e.siguientePaso.fecha, cuando: elDiaDeLaReunion(e.siguientePaso.inicio, hoyISO), llevaEmail: e.siguientePaso.llevaEmail }}
-              className="text-left"
-            />
-          </div>
+        ) : e.paso?.tipo === "reunion" ? (
+          <span className="text-success-ink" title={e.paso.titulo}>
+            ✓ <span className="text-fg-secondary">Siguiente paso: reunión {elDiaDeLaReunion(e.paso.inicio, hoyISO)}</span>
+          </span>
         ) : (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 lg:justify-end">
-            <span className="font-medium text-warn-ink">○ Sin acción esta semana</span>
+            <span className="font-medium text-warn-ink">○ Sin siguiente paso</span>
             <PlanificarAccion e={e} correo={cartera.correo} />
           </div>
         )}
@@ -465,7 +460,7 @@ function LineaDeUso({ uso, hoyISO }: { uso: UsoDeHubspot; hoyISO: string }) {
 }
 
 /**
- * «Planificar acción»: el «Agendar» del inicio con esta cuenta. El botón deja el borrador en la agenda y abre Google
+ * «Agendar»: el del inicio con esta cuenta. El botón deja el borrador en la agenda y abre Google
  * Calendar; después se va a «Tu día» (sin `?vista`), donde la agenda muestra el borrador.
  */
 function PlanificarAccion({ e, correo }: { e: EmpresaDeCs; correo: string }) {
@@ -478,10 +473,10 @@ function PlanificarAccion({ e, correo }: { e: EmpresaDeCs; correo: string }) {
     cuando: "hoy",
     delAgente: false,
     clientId: e.clientId,
-    titulo: `Planificar la acción de ${e.nombre}`,
+    titulo: `Agendar la próxima reunión con ${e.nombre}`,
     detalle: "",
-    meta: `${e.nombre} · Sin acción esta semana`,
-    accion: "Planificar acción",
+    meta: `${e.nombre} · Sin siguiente paso`,
+    accion: "Agendar",
     href: enlaceParaAgendarEnCalendar({ titulo: `Reunión con ${e.nombre}`, detalle: `Seguimiento de la cuenta ${e.nombre}.`, invitados: e.invitados, correo }),
   };
   const irATuDia = () => {

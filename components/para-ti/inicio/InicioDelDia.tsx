@@ -89,8 +89,9 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
         .map((c) => ({
           clientId: c.clientId,
           empresa: c.empresa,
-          sinReunion: c.servicio!.falta.includes("reunion") && c.servicio!.calendarioLeido,
-          sinAccion: c.servicio!.falta.includes("accion"),
+          // Una reunión agendada ya es el siguiente paso (2026-10-19): se sugiere la reunión solo a la que no tiene ninguno.
+          sinReunion: !c.servicio!.paso && c.servicio!.calendarioLeido,
+          sinAccion: !c.servicio!.paso,
           invitados: c.servicio!.invitados,
         })),
       negocios: (d.movimiento?.lista ?? []).map((n) => ({ clientId: n.clientId, empresa: n.empresa, paso: n.paso })),
@@ -111,8 +112,7 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
   const conCuentas = d.variante === "cse" || d.variante === "csl" || d.variante === "dev";
   // De viernes a domingo, la invitación a planificar la semana que viene (lib/mi-dia/planificar.ts).
   const invitacion = invitacionAPlanificar(d.hoyISO);
-  const sinReunion = d.cuentas.filter((c) => c.servicio?.falta.includes("reunion")).length;
-  const sinAccion = d.cuentas.filter((c) => c.servicio?.falta.includes("accion")).length;
+  const sinPaso = d.cuentas.filter((c) => c.servicio && !c.servicio.paso).length;
 
   return (
     <div className="relative min-h-[1200px]">
@@ -180,8 +180,7 @@ export default function InicioDelDia({ d }: { d: DatosDelInicio }) {
                   <span>
                     <strong className="font-semibold">{d.cuentas.length}</strong> {d.cuentas.length === 1 ? "cuenta" : "cuentas"}
                   </span>
-                  {sinAccion > 0 && <span className="font-semibold text-warn-ink">{sinAccion} sin acción</span>}
-                  {sinReunion > 0 && <span className="font-semibold text-warn-ink">{sinReunion} sin reunión</span>}
+                  {sinPaso > 0 && <span className="font-semibold text-warn-ink">{sinPaso} sin siguiente paso</span>}
                 </div>
                 <Link
                   href="/tareas/planificar"

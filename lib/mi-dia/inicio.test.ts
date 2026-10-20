@@ -163,14 +163,14 @@ describe("«Tu día, según Nexus»", () => {
     });
     const texto = f.map((x) => x.map((p) => p.t).join("")).join(" ");
     expect(texto).toBe(
-      "A las 15:00 tienes «Revisión de la propuesta» con BLUESAT. Lo primero de tu lista: kölbi está en riesgo. Cemaco y Honda Costa Rica no tienen su acción o su reunión de la semana.",
+      "A las 15:00 tienes «Revisión de la propuesta» con BLUESAT. Lo primero de tu lista: kölbi está en riesgo. Cemaco y Honda Costa Rica no tienen siguiente paso: ni tarea con fecha ni reunión.",
     );
     expect(f[0].find((p) => p.fuerte)?.t).toBe("BLUESAT");
   });
   it("sin nada que decir, vacío; muchas cuentas se cuentan", () => {
     expect(resumenDelDia({ proxima: null, primero: null, delAgente: 0, cuentasSinAccion: [], hueco: null })).toEqual([]);
     const f = resumenDelDia({ proxima: null, primero: null, delAgente: 0, cuentasSinAccion: ["A", "B", "C", "D", "E"], hueco: { hora: "9:00" } });
-    expect(f.map((x) => x.map((p) => p.t).join(""))).toEqual(["A, B, C y 2 más no tienen su acción o su reunión de la semana.", "Tienes libre desde las 9:00."]);
+    expect(f.map((x) => x.map((p) => p.t).join(""))).toEqual(["A, B, C y 2 más no tienen siguiente paso: ni tarea con fecha ni reunión.", "Tienes libre desde las 9:00."]);
   });
 });
 
@@ -278,26 +278,27 @@ describe("las cifras del inicio", () => {
     });
     expect(c.find((x) => x.clave === "meta")).toMatchObject({ rotulo: "Tu meta 2026", valor: "0 %", barra: 0 });
   });
-  it("CSE: la acción, la reunión y cómo están sus cuentas, con lo que falta en ámbar", () => {
-    const servicio = (falta: string[]) => ({ falta, calendarioLeido: true });
+  it("CSE: cuántas tienen siguiente paso, lo que no tiene seguimiento y cómo están sus cuentas", () => {
+    const servicio = (paso: boolean) => ({ paso: paso ? { tipo: "reunion" } : null, calendarioLeido: true });
     const c = cifrasDelInicio("cse", {
       ...comun,
       ventas: null,
+      sinSeguimiento: 3,
       cuentas: [
-        { empresa: "kölbi", salud: "riesgo", servicio: servicio([]) },
-        { empresa: "Cemaco", salud: "senales", servicio: servicio(["accion", "reunion"]) },
-        { empresa: "Honda", salud: "senales", servicio: servicio(["accion"]) },
-        { empresa: "Noelito", salud: "bien", servicio: servicio([]) },
+        { empresa: "kölbi", salud: "riesgo", servicio: servicio(true) },
+        { empresa: "Cemaco", salud: "senales", servicio: servicio(false) },
+        { empresa: "Honda", salud: "senales", servicio: servicio(false) },
+        { empresa: "Noelito", salud: "bien", servicio: servicio(true) },
       ],
     });
-    expect(c.map((x) => x.clave)).toEqual(["reuniones", "accion", "reunion", "colores"]);
-    expect(c[1]).toMatchObject({ valor: "2", unidad: "de 4 cuentas", sub: "Faltan Cemaco y Honda", subAviso: true });
-    expect(c[2]).toMatchObject({ valor: "3", sub: "1 sin reunión agendada", subAviso: true });
+    expect(c.map((x) => x.clave)).toEqual(["reuniones", "paso", "seguimiento", "colores"]);
+    expect(c[1]).toMatchObject({ rotulo: "Con siguiente paso", valor: "2", unidad: "de 4 cuentas", sub: "Faltan Cemaco y Honda", subAviso: true });
+    expect(c[2]).toMatchObject({ valor: "3", subAviso: true });
     expect(c[3].colores).toEqual({ riesgo: 1, senales: 2, bien: 1 });
   });
-  it("sin calendario no se dice que falta la reunión", () => {
-    const c = cifrasDelInicio("csl", { ...comun, ventas: null, cuentas: [{ empresa: "A", salud: null, servicio: { falta: [], calendarioLeido: false } }] });
-    expect(c.find((x) => x.clave === "reunion")?.sub).toBe("Un calendario no se pudo leer");
+  it("todas con siguiente paso: lo dice en verde", () => {
+    const c = cifrasDelInicio("csl", { ...comun, ventas: null, cuentas: [{ empresa: "A", salud: null, servicio: { paso: { tipo: "accion" }, calendarioLeido: true } }] });
+    expect(c.find((x) => x.clave === "paso")).toMatchObject({ sub: "Todas con tarea o reunión en 8 días", subAviso: false });
     expect(c.find((x) => x.clave === "colores")?.valor).toBe("—");
   });
 });

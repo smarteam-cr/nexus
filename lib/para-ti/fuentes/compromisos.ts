@@ -15,6 +15,7 @@ import { compromisosSinAgendar, type CompromisoSinAgendar } from "@/lib/comunica
 import { tituloDelAviso } from "@/lib/comunicaciones/sin-agendar";
 import { prisma } from "@/lib/db/prisma";
 import type { Fuente } from "../fuente";
+import { cuentasDeLaCarteraConSuCse, veLaCarteraEntera } from "./servicio";
 import type { Pendiente } from "../tipos";
 
 const hrefDeLaTarea = (id: string) => `/tareas?t=${encodeURIComponent(id)}`;
@@ -76,8 +77,10 @@ export const COMPROMISOS_SIN_AGENDAR_CS: Fuente = {
   clave: "compromisos-sin-agendar-cs",
   frente: "LIDERAR_CS",
   alDia: "En las cuentas, lo prometido al cliente está agendado o en Tareas",
-  async medir(_a, c) {
-    const lista = await compromisosSinAgendar({ ahora: c.ahora });
+  async medir(a, c) {
+    // A la CSL, con el CSE de cada cuenta (su inicio va por CSE, lib/para-ti/foco.ts).
+    const [lista, cuentas] = await Promise.all([compromisosSinAgendar({ ahora: c.ahora }), veLaCarteraEntera(a) ? cuentasDeLaCarteraConSuCse(a) : Promise.resolve([])]);
+    const grupoDe = new Map(cuentas.map((x) => [x.clientId, x.grupo ?? undefined]));
     const porCuenta = new Map<string, CompromisoSinAgendar[]>();
     for (const x of lista) porCuenta.set(x.tarea.clientId, [...(porCuenta.get(x.tarea.clientId) ?? []), x]);
     return [...porCuenta.entries()]
@@ -94,6 +97,7 @@ export const COMPROMISOS_SIN_AGENDAR_CS: Fuente = {
           cuando: "hoy",
           delAgente: false,
           clientId,
+          ...(grupoDe.get(clientId) ? { grupo: grupoDe.get(clientId) } : {}),
           titulo: `${xs[0]!.empresa}: ${que} hace más de 48 horas`,
           detalle: xs
             .slice(0, 3)

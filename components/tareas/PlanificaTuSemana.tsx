@@ -55,7 +55,7 @@ export default function PlanificaTuSemana({ plan, sinEntrar, correo }: { plan: P
           <strong className="font-semibold text-fg">{r.cuentas}</strong> {r.cuentas === 1 ? "cuenta" : "cuentas"}
         </span>
         <span>
-          <strong className="font-semibold text-fg">{r.conAccion}</strong> ya con acción
+          <strong className="font-semibold text-fg">{r.conAccion}</strong> ya con siguiente paso
         </span>
         <span>
           <strong className="font-semibold text-fg">{r.conReunion}</strong> ya con reunión
@@ -164,6 +164,16 @@ function AccionDeLaFila({ c, plan }: { c: PlanDeLaCuenta; plan: PlanDeLaSemana }
   const [descartada, setDescartada] = useState(false);
 
   const rotulo = <p className={ROTULO_DEL_SISTEMA}>La acción de la semana</p>;
+  if (a.tipo === "reunion") {
+    return (
+      <div className="flex flex-col gap-2">
+        {rotulo}
+        <Hecho>
+          La reunión es el siguiente paso <span className="text-fg-muted">· {diaCortoDe(a.dia)}</span>
+        </Hecho>
+      </div>
+    );
+  }
   if (a.tipo === "tiene") {
     return (
       <div className="flex flex-col gap-2">

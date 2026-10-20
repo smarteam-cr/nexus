@@ -74,6 +74,18 @@ export interface NegocioVisto {
   propuesta: PropuestaDeCierre | null;
   /** Los siguientes pasos vigentes del negocio, uno por equipo (lib/siguiente-paso). */
   pasos?: SiguientePasoVisto[];
+  /**
+   * La próxima reunión con la empresa del negocio en los próximos 8 días, en el calendario del vendedor (de UNA sola
+   * empresa, por `cuentaDelEvento`). Una reunión agendada ES el siguiente paso (2026-10-19). undefined/null = no hay.
+   */
+  reunion?: ReunionDelNegocio | null;
+}
+
+/** Una reunión agendada con la empresa de un negocio. */
+export interface ReunionDelNegocio {
+  /** ISO. */
+  inicio: string;
+  titulo: string;
 }
 
 /** El siguiente paso de Ventas del negocio (o de la empresa), si tiene. */
@@ -85,6 +97,15 @@ export function pasoDeVentas(x: { pasos?: SiguientePasoVisto[] }): SiguientePaso
 export function pasoVencido(x: { pasos?: SiguientePasoVisto[] }, hoyISO: string): boolean {
   const p = pasoDeVentas(x);
   return !!p?.fecha && diasHastaElPaso(p.fecha, hoyISO) < 0;
+}
+
+/**
+ * ¿El negocio tiene siguiente paso? La misma regla de las cuentas de Customer Success (lib/mi-dia/servicio.ts ›
+ * siguientePasoDeLaCuenta, 2026-10-19): el de Ventas vigente (una tarea con fecha que no venció) o una reunión agendada
+ * con la empresa en los próximos 8 días. Con la reunión, no se pide «Definir siguiente paso».
+ */
+export function tieneSiguientePasoDeVentas(x: { pasos?: SiguientePasoVisto[]; reunion?: ReunionDelNegocio | null }, hoyISO: string): boolean {
+  return (!!pasoDeVentas(x) && !pasoVencido(x, hoyISO)) || !!x.reunion;
 }
 
 /** Un negocio en una etapa «Pausados» no se está vendiendo: no cuenta en el pipeline ni en lo ponderado. */
@@ -152,8 +173,7 @@ export function senalesDelNegocio(n: NegocioVisto, hoyISO: string, ahora: Date):
   if (!n.fechaCierre) out.push("sin-fecha");
   else if (diasHasta(n.fechaCierre, hoyISO) < 0) out.push("cierre-vencido");
   if (n.monto === null) out.push("sin-monto");
-  if (!pasoDeVentas(n)) out.push("sin-siguiente-paso");
-  else if (pasoVencido(n, hoyISO)) out.push("siguiente-paso-vencido");
+  if (!tieneSiguientePasoDeVentas(n, hoyISO)) out.push(pasoDeVentas(n) ? "siguiente-paso-vencido" : "sin-siguiente-paso");
   const d = diasDesde(ultimaInteraccion(n), ahora);
   if (d === null || d > DIAS_SIN_ACTIVIDAD) out.push("sin-actividad");
   if (n.sinEmpresa) out.push("sin-empresa");
@@ -268,15 +288,21 @@ export function accionDelNegocio(n: NegocioVisto, hoyISO: string, ahora: Date): 
     const que = p.fecha && p.monto ? "Le faltan la fecha de cierre y el monto" : p.fecha ? (p.vencida ? "La fecha de cierre ya pasó" : "Le falta la fecha de cierre") : "Le falta el monto";
     return accion("completar", "Completar", que);
   }
+  if (n.reunion) {
+    const horas = (Date.parse(n.reunion.inicio) - ahora.getTime()) / 3_600_000;
+    if (horas >= 0 && horas <= HORAS_PARA_PREPARAR) return accion("preparar", "Preparar", `Tienes una reunión ${cuandoEs(n.reunion.inicio, hoyISO)}`);
+  }
   if (n.proximaActividad) {
     const horas = (Date.parse(n.proximaActividad) - ahora.getTime()) / 3_600_000;
     if (horas >= 0 && horas <= HORAS_PARA_PREPARAR) return accion("preparar", "Preparar", `Tienes una actividad ${cuandoEs(n.proximaActividad, hoyISO)}`);
   }
   const d = diasDesde(ultimaInteraccion(n), ahora);
-  const agendado = n.proximaActividad && Date.parse(n.proximaActividad) > ahora.getTime();
+  const agendado = (n.proximaActividad && Date.parse(n.proximaActividad) > ahora.getTime()) || !!n.reunion;
   if (!agendado && (d === null || d > DIAS_DE_INTERACCION)) {
     return accion("retomar", "Retomar", d === null ? "No tiene actividad registrada" : `Sin actividad hace ${d} días y nada agendado`);
   }
+  // Una reunión agendada con la empresa ya es el siguiente paso (2026-10-19).
+  if (tieneSiguientePasoDeVentas(n, hoyISO)) return null;
   const paso = pasoDeVentas(n);
   if (!paso) {
     const hs = n.siguientePasoHubspot?.trim();

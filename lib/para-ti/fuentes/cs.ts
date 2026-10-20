@@ -30,6 +30,7 @@ import { avisoDeLasPropuestas } from "@/lib/cs/propuestas-del-vigia";
 import { lecturasDelPedido } from "@/lib/mi-dia/lecturas-server";
 import { pideAtencion } from "@/lib/cs/lectura-de-la-cuenta";
 import { servicioDeLasCuentas } from "@/lib/mi-dia/servicio-server";
+import { veLaCarteraEntera } from "./servicio";
 import { haceCuanto, plural } from "../armar";
 import { MAX_LO_QUE_IMPORTA, necesitaEstabilizar } from "../importa";
 
@@ -255,6 +256,9 @@ export const CSE_CON_CUENTAS_QUE_PIDEN_ATENCION: Fuente = {
   clave: "cs-estabilizar",
   frente: "LIDERAR_CS",
   alDia: "Las cuentas de cada CSE",
+  // A la CSL le llega la cartera del día agrupada por CSE (lib/para-ti/fuentes/servicio.ts › CARTERA_DEL_DIA): esto
+  // queda para quien más lleva el frente (dirección), que ve «Lo que importa hoy» de siempre (2026-10-19).
+  aplica: (a) => !veLaCarteraEntera(a),
   async medir(a, c) {
     const [proyectos, cses] = await Promise.all([
       implementacionesAbiertas({ hubspotOwnerEmail: { not: null } }),
@@ -285,7 +289,8 @@ export const CSE_CON_CUENTAS_QUE_PIDEN_ATENCION: Fuente = {
       const piden = [...cuentas].flatMap(([clientId, empresa]) => {
         const l = lecturas.get(clientId);
         const enRiesgo = !!l && pideAtencion(l);
-        const sinAccion = (servicio.get(clientId)?.falta.length ?? 0) > 0;
+        // Una reunión agendada ya es el siguiente paso (2026-10-19): pide atención la que no tiene ninguno.
+        const sinAccion = !servicio.get(clientId)?.paso;
         return enRiesgo || sinAccion ? [{ clientId, empresa, enRiesgo, sinAccion }] : [];
       });
       if (!necesitaEstabilizar(piden.length)) continue;
@@ -300,7 +305,7 @@ export const CSE_CON_CUENTAS_QUE_PIDEN_ATENCION: Fuente = {
         clientId: null,
         titulo: `${nombre} tiene ${piden.length} cuentas que piden atención`,
         detalle: [
-          [enRiesgo > 0 ? `${enRiesgo} en riesgo` : null, sinAccion > 0 ? `${sinAccion} sin su acción o su reunión de la semana` : null]
+          [enRiesgo > 0 ? `${enRiesgo} en riesgo` : null, sinAccion > 0 ? `${sinAccion} sin siguiente paso` : null]
             .filter(Boolean)
             .join(" y ")
             .replace(/^./, (l) => l.toUpperCase()),
@@ -309,7 +314,7 @@ export const CSE_CON_CUENTAS_QUE_PIDEN_ATENCION: Fuente = {
         meta: "Customer Success · el equipo",
         accion: "Abrir la primera",
         href: fichaDeLaCuenta(piden[0].clientId),
-        enlaces: piden.map((x) => ({ texto: `${x.empresa} · ${x.enRiesgo ? "en riesgo" : "sin acción o reunión"}`, href: fichaDeLaCuenta(x.clientId) })),
+        enlaces: piden.map((x) => ({ texto: `${x.empresa} · ${x.enRiesgo ? "en riesgo" : "sin siguiente paso"}`, href: fichaDeLaCuenta(x.clientId) })),
         desde: null,
       });
     }

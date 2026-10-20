@@ -5,9 +5,11 @@
  * Sin gate: es de todo el equipo interno, y no muestra nada que la persona no pueda abrir. Cada equipo ve su inicio
  * (lib/mi-dia/inicio.ts, del registro de equipos):
  *   · Ventas: la agenda, lo que importa hoy, su meta y su pipeline, y «Tu cartera».
- *   · CSE: la agenda, lo que importa hoy y sus cuentas con su acción de la semana y su reunión de los próximos 8 días;
- *     en «Tu cartera», sus empresas con sus proyectos de HubSpot (components/para-ti/CarteraDeCustomerSuccess.tsx).
- *   · CSL: lo mismo, con toda la cartera («La cartera»). Customer Success no ve la cartera de Ventas (2026-10-17).
+ *   · CSE: la agenda y, en lugar de «Lo que importa hoy», tres bloques (lib/para-ti/foco.ts, 2026-10-19): sus reuniones
+ *     con sus cuentas de los próximos días, sus cuentas sin siguiente paso y los pendientes sin seguimiento; a la
+ *     derecha, sus cuentas con su siguiente paso. En «Tu cartera», sus empresas con sus proyectos de HubSpot
+ *     (components/para-ti/CarteraDeCustomerSuccess.tsx).
+ *   · CSL: lo mismo, con toda la cartera y agrupado por CSE («La cartera»). Customer Success no ve la cartera de Ventas.
  *   · Desarrollo: los clientes con proyecto de desarrollo activo.
  *   · Marketing: sus tareas internas (Smarteam, SmartAgro).
  *   · Los demás (dirección, Finanzas): la agenda, lo que importa hoy, las tareas de hoy y los avisos.
@@ -155,7 +157,7 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
     proxima: proxima ? { hora: horaCR(proxima.inicio), titulo: proxima.titulo, empresa: proxima.empresas.length === 1 ? proxima.nombres[proxima.empresas[0]] : "un cliente" } : null,
     primero: medicion.importa[0] ? { titulo: medicion.importa[0].titulo } : null,
     delAgente: [...medicion.importa, ...medicion.tambien].filter((p) => p.delAgente).length,
-    cuentasSinAccion: variante === "cse" ? cuentas.filter((c) => lasQueLlevo!.has(c.clientId) && c.servicio?.falta.length).map((c) => c.empresa) : [],
+    cuentasSinAccion: variante === "cse" ? cuentas.filter((c) => lasQueLlevo!.has(c.clientId) && c.servicio && !c.servicio.paso).map((c) => c.empresa) : [],
     hueco: hueco ? { hora: horaCR(hueco.inicio) } : null,
   });
 
@@ -170,6 +172,7 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
     cuentas,
     ventas: vistaDeVentas ? { meta: vistaDeVentas.meta, anio: vistaDeVentas.anio, ponderado: vistaDeVentas.ponderado } : null,
     tareas: internas ? { hoy: hoy.total, porDecidir: internas.porDecidir, internas: internas.tareas.filter((t) => t.interna).length } : null,
+    sinSeguimiento: medicion.foco ? (medicion.foco.bloques.find((b) => b.clave === "sin-seguimiento")?.total ?? 0) : null,
   });
 
   const nombre = alcance.nombre.trim().split(/\s+/)[0] ?? alcance.nombre;

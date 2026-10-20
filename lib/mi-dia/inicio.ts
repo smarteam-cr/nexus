@@ -457,7 +457,7 @@ export function resumenDelDia(d: DatosParaElResumen): PedazoDeFrase[][] {
     const mas = d.cuentasSinAccion.length - nombres.length;
     frases.push([
       { t: listar(mas > 0 ? [...nombres, `${mas} más`] : nombres), fuerte: true },
-      { t: d.cuentasSinAccion.length === 1 ? " no tiene su acción o su reunión de la semana." : " no tienen su acción o su reunión de la semana." },
+      { t: d.cuentasSinAccion.length === 1 ? " no tiene siguiente paso: ni tarea con fecha ni reunión." : " no tienen siguiente paso: ni tarea con fecha ni reunión." },
     ]);
   } else if (d.delAgente > 0) {
     frases.push([{ t: "Nexus dejó " }, { t: d.delAgente === 1 ? "1 cosa" : `${d.delAgente} cosas`, fuerte: true }, { t: " para que decidas." }]);

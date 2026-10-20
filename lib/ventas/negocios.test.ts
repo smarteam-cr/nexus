@@ -14,6 +14,7 @@ import {
   preguntaDelNegocio,
   senalesDelNegocio,
   temperaturaDelNegocio,
+  tieneSiguientePasoDeVentas,
   type NegocioVisto,
 } from "./negocios";
 import type { SiguientePasoVisto } from "@/lib/siguiente-paso/reglas";
@@ -207,6 +208,30 @@ describe("la cartera", () => {
     const n = negocio({ pasos: [{ ...PASO, fecha: "2026-10-10" }] });
     expect(senalesDelNegocio(n, HOY, AHORA)).toEqual(["siguiente-paso-vencido"]);
     expect(accionDelNegocio(n, HOY, AHORA)?.motivo).toContain("venció el 10 oct");
+  });
+
+  it("una reunión agendada con la empresa ES el siguiente paso del negocio (2026-10-19)", () => {
+    const reunion = { inicio: enDias(3), titulo: "Revisión de la propuesta" };
+    // Sin paso de Ventas, con reunión: no se pide definirlo ni se marca.
+    const sinPaso = negocio({ pasos: [], reunion });
+    expect(tieneSiguientePasoDeVentas(sinPaso, HOY)).toBe(true);
+    expect(accionDelNegocio(sinPaso, HOY, AHORA)).toBeNull();
+    expect(senalesDelNegocio(sinPaso, HOY, AHORA)).not.toContain("sin-siguiente-paso");
+    // Con el paso vencido, la reunión lo cubre igual.
+    const vencido = negocio({ pasos: [{ ...PASO, fecha: "2026-10-10" }], reunion });
+    expect(accionDelNegocio(vencido, HOY, AHORA)).toBeNull();
+    expect(senalesDelNegocio(vencido, HOY, AHORA)).toEqual([]);
+    // Una reunión en las próximas horas pide prepararla.
+    const pronto = negocio({ pasos: [], reunion: { inicio: new Date(AHORA.getTime() + 5 * 3_600_000).toISOString(), titulo: "Demo" } });
+    expect(accionDelNegocio(pronto, HOY, AHORA)).toMatchObject({ clave: "preparar", motivo: expect.stringContaining("reunión") });
+    // Sin reunión ni paso vigente, como siempre.
+    expect(tieneSiguientePasoDeVentas(negocio({ pasos: [] }), HOY)).toBe(false);
+    expect(tieneSiguientePasoDeVentas(negocio(), HOY)).toBe(true);
+  });
+
+  it("una reunión agendada cuenta como algo agendado: no pide retomar", () => {
+    const n = negocio({ ultimaActividad: haceDias(18), reunion: { inicio: enDias(4), titulo: "Seguimiento" } });
+    expect(accionDelNegocio(n, HOY, AHORA)).toBeNull();
   });
 
   it("un pausado no se pregunta ni cuenta en lo ponderado", () => {

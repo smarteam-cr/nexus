@@ -7539,9 +7539,10 @@ model PreparacionDeReunion {
   @@unique([personaEmail, eventoId])
 }
 
-/// Una sugerencia de Nexus que una persona descartó, para no volver a mostrársela (2026-10-19). Hoy: el siguiente paso que
-/// Nexus arma con la reunión de una cuenta sin acción (tipo «siguiente-paso-de-la-reunion», clave «<cuenta>:<evento>»).
-/// Lo escribe solo app/api/para-ti/siguiente-paso-de-la-reunion. Sin FK: la clave nombra un evento del calendario.
+/// Una sugerencia de Nexus que una persona descartó, para no volver a mostrársela (2026-10-19). Nació para el siguiente
+/// paso que Nexus armaba con la reunión de una cuenta sin acción (tipo «siguiente-paso-de-la-reunion», clave
+/// «<cuenta>:<evento>»), que se retiró esa misma tarde: una reunión agendada ya ES el siguiente paso (docs/DECISIONS.md
+/// «Una reunión agendada es el siguiente paso»). Hoy nadie la escribe; queda para la próxima sugerencia por persona.
 model SugerenciaDescartada {
   id           String   @id @default(cuid())
   personaEmail String

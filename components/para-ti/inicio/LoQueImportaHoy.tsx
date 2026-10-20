@@ -7,8 +7,11 @@
  * Como mucho cinco, una por cuenta, numeradas: el riesgo en rojo, lo que dejó un agente en azul con la chispa, el resto
  * neutro. Lo demás de esa cuenta va plegado («+N en esta cuenta»). Abajo, «También para hoy», «Esta semana» y «Cuando
  * puedas», que se abren ahí mismo. «Agendar» de una cuenta sin reunión deja el evento en la agenda, en la primera hora
- * libre, y abre Google Calendar para guardarlo (AgendarEnLaAgenda.tsx). Una cuenta con reunión esta semana y sin acción
- * trae debajo el siguiente paso que sugiere Nexus (la reunión misma), para usar o descartar ahí (SugerenciaDeSiguientePaso).
+ * libre, y abre Google Calendar para guardarlo (AgendarEnLaAgenda.tsx).
+ *
+ * Al CSE y a la CSL (`medicion.foco`, 2026-10-19), en lugar de las cinco, sus tres bloques en este orden: reuniones con
+ * sus cuentas, cuentas sin siguiente paso y pendientes sin seguimiento (lib/para-ti/foco.ts). A la CSL, cada bloque por
+ * CSE. Lo demás queda abajo, en «También para hoy».
  */
 import { useState } from "react";
 import { cn } from "@/lib/cn";
@@ -19,7 +22,9 @@ import { MAX_LO_QUE_IMPORTA, pesoDe, PESOS } from "@/lib/para-ti/importa";
 import type { ParaTi, Pendiente } from "@/lib/para-ti/tipos";
 import { ENLACE_BOTON, EnlaceDelInicio, TARJETA, TITULO } from "./piezas";
 import { AccionDelPendiente } from "./AgendarEnLaAgenda";
-import SugerenciaDeSiguientePaso from "./SugerenciaDeSiguientePaso";
+import { cuantosSeVen } from "@/lib/para-ti/foco";
+import { FUENTE_REUNION_CON_LA_CUENTA } from "@/lib/mi-dia/servicio";
+import type { BloqueDelFoco } from "@/lib/para-ti/tipos";
 
 export default function LoQueImportaHoy({ medicion }: { medicion: ParaTi }) {
   const [abierta, setAbierta] = useState<"tambien" | "semana" | "luego" | null>(null);
@@ -36,9 +41,17 @@ export default function LoQueImportaHoy({ medicion }: { medicion: ParaTi }) {
         <h2 id="importa-t" className={TITULO}>
           Lo que importa hoy
         </h2>
-        <span className="text-xs text-fg-muted">{MAX_LO_QUE_IMPORTA} como mucho, una por cuenta</span>
+        <span className="text-xs text-fg-muted">
+          {medicion.foco ? (medicion.foco.modo === "csl" ? "De toda la cartera, por CSE" : "De tus cuentas") : `${MAX_LO_QUE_IMPORTA} como mucho, una por cuenta`}
+        </span>
       </div>
-      {medicion.importa.length === 0 ? (
+      {medicion.foco ? (
+        <div className="flex flex-col gap-5">
+          {medicion.foco.bloques.map((b, i) => (
+            <BloqueDeFoco key={b.clave} b={b} numero={i + 1} />
+          ))}
+        </div>
+      ) : medicion.importa.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line bg-surface-muted px-4 py-3 text-[13px] text-fg-muted">
           Nada urgente por hoy. Lo que te toque hacer en Nexus va a aparecer acá, con el botón que lleva a donde se hace.
         </p>
@@ -130,7 +143,6 @@ function FilaQueImporta({ it, numero, ultima }: { it: Pendiente; numero: number;
           <p className={cn("text-sm font-medium leading-5", it.delAgente ? "text-brand" : "text-fg")}>{it.titulo}</p>
           {it.detalle && <p className="line-clamp-2 text-xs leading-[17px] text-fg-muted">{it.detalle}</p>}
           <Enlaces it={it} />
-          {it.siguientePaso && it.clientId && <SugerenciaDeSiguientePaso clientId={it.clientId} paso={it.siguientePaso} className="mt-1.5" />}
         </div>
         {it.plata && <span className="flex-none text-[13px] tabular-nums text-fg-secondary">{it.plata}</span>}
         <AccionDelPendiente it={it} className={ENLACE_BOTON} />
@@ -171,17 +183,54 @@ export function FilaDePendiente({ it }: { it: Pendiente }) {
           <IconoDeSugerencia className="h-[13px] w-[13px]" />
         </span>
       ) : (
-        <span aria-hidden className={cn("h-2 w-2 flex-none rounded-full", it.error ? "bg-destructive" : "bg-warning")} />
+        <span aria-hidden className={cn("h-2 w-2 flex-none rounded-full", it.error ? "bg-destructive" : it.fuente === FUENTE_REUNION_CON_LA_CUENTA || it.fuente === "foco-reuniones" ? "bg-brand" : "bg-warning")} />
       )}
       <div className="flex min-w-0 flex-[1_1_260px] flex-col gap-0.5">
         <span className="text-[13px] font-semibold leading-[19px] text-fg">{it.titulo}</span>
         {it.detalle && <span className="text-xs leading-[17px] text-fg-secondary">{it.detalle}</span>}
         <Enlaces it={it} />
-        {it.siguientePaso && it.clientId && <SugerenciaDeSiguientePaso clientId={it.clientId} paso={it.siguientePaso} className="mt-1" />}
         <span className={cn("text-xs leading-4", it.error ? "text-danger-ink" : it.delAgente ? "text-brand" : "text-fg-muted")}>{it.meta}</span>
       </div>
       {it.plata && <span className="flex-none text-[13px] tabular-nums text-fg-secondary">{it.plata}</span>}
       <AccionDelPendiente it={it} className={ENLACE_BOTON} />
     </div>
+  );
+}
+
+/** Un bloque del inicio de Customer Success: su título, una línea de ayuda y sus filas (a la CSL, una por CSE). */
+function BloqueDeFoco({ b, numero }: { b: BloqueDelFoco; numero: number }) {
+  const tope = cuantosSeVen(b);
+  return (
+    <section aria-labelledby={`foco-${b.clave}`} className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+        <span className="flex h-[22px] w-[22px] flex-none items-center justify-center rounded-md border border-line bg-surface-muted text-[11px] font-semibold text-fg-secondary">
+          {numero}
+        </span>
+        <h3 id={`foco-${b.clave}`} className="text-sm font-semibold text-fg">
+          {b.titulo}
+        </h3>
+        <span className="text-xs text-fg-muted">{b.total}</span>
+        {tope && (
+          <span className="text-xs text-fg-muted">
+            · se ven {tope}; {b.sobranEn === "agenda" ? "las demás están en la agenda" : "el resto está en «También para hoy»"}
+          </span>
+        )}
+        {b.verTodas && (
+          <EnlaceDelInicio href={b.verTodas.href} className="text-xs font-medium text-brand hover:text-brand-light">
+            {b.verTodas.texto}
+          </EnlaceDelInicio>
+        )}
+      </div>
+      <p className="text-xs leading-[17px] text-fg-muted">{b.ayuda}</p>
+      {b.items.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-line bg-surface-muted px-4 py-2.5 text-[13px] text-fg-muted">{b.vacio}</p>
+      ) : (
+        <div className="flex flex-col rounded-lg border border-line">
+          {b.items.map((it) => (
+            <FilaDePendiente key={it.clave} it={it} />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

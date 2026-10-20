@@ -1,13 +1,14 @@
 /**
- * TusCuentasDelInicio — las cuentas del inicio con su acción de la semana y su reunión de los próximos 8 días (ficha D,
- * 2026-10-17; diseño «Para ti · Ventas y CSE», la tarjeta «Tus cuentas» del CSE).
+ * TusCuentasDelInicio — las cuentas del inicio con su siguiente paso (ficha D, 2026-10-17; diseño «Para ti · Ventas y
+ * CSE», la tarjeta «Tus cuentas» del CSE; una sola marca desde el 2026-10-19).
  *
- * Una fila por cuenta: el color (a quien lo puede ver), el nombre, por qué tiene ese color o qué se hace con ella, y
- * dos marcas: ✓ si tiene su acción esta semana y ✓ con el día si tiene reunión; ○ en ámbar si falta. Primero las que
- * les falta algo. La CSL ve además quién la lleva.
+ * Una fila por cuenta: el color (a quien lo puede ver), el nombre, por qué tiene ese color o qué se hace con ella, y su
+ * siguiente paso: ✓ con el día de la reunión, ✓ con la tarea, o ○ en ámbar si no tiene (lib/mi-dia/servicio.ts ›
+ * siguientePasoDeLaCuenta: una reunión agendada ya es el siguiente paso). Primero las que no tienen. La CSL ve además
+ * quién la lleva.
  *
- * Abajo, «Ver las N» lleva a TODAS las cuentas y «Ver las M sin acción o reunión», a todas las que la regla marca, sin
- * tope (2026-10-19): la tarjeta muestra cinco, y lo que no entra tiene que poder verse entero.
+ * Abajo, «Ver las N» lleva a TODAS las cuentas y «Ver las M sin siguiente paso», a todas las que la regla marca, sin
+ * tope: la tarjeta muestra cinco, y lo que no entra tiene que poder verse entero.
  */
 import Link from "next/link";
 import { cn } from "@/lib/cn";
@@ -20,7 +21,7 @@ const ORDEN_DE_SALUD: Record<string, number> = { riesgo: 0, senales: 1, "sin-dat
 export function ordenarCuentas(cuentas: readonly CuentaDelInicio[]): CuentaDelInicio[] {
   return [...cuentas].sort(
     (a, b) =>
-      (b.servicio?.falta.length ?? 0) - (a.servicio?.falta.length ?? 0) ||
+      Number(!!a.servicio && !a.servicio.paso ? 0 : 1) - Number(!!b.servicio && !b.servicio.paso ? 0 : 1) ||
       (ORDEN_DE_SALUD[a.salud ?? "sin-datos"] ?? 2) - (ORDEN_DE_SALUD[b.salud ?? "sin-datos"] ?? 2) ||
       a.empresa.localeCompare(b.empresa, "es"),
   );
@@ -54,8 +55,9 @@ export default function TusCuentasDelInicio({
 }) {
   const orden = ordenarCuentas(cuentas);
   const vista = max == null ? orden : orden.slice(0, max);
-  const faltan = cuentas.filter((c) => (c.servicio?.falta.length ?? 0) > 0).length;
-  const faltanFuera = orden.slice(vista.length).some((c) => (c.servicio?.falta.length ?? 0) > 0);
+  const sinPaso = (c: CuentaDelInicio) => !!c.servicio && !c.servicio.paso;
+  const faltan = cuentas.filter(sinPaso).length;
+  const faltanFuera = orden.slice(vista.length).some(sinPaso);
   const total = enElDestino ?? cuentas.length;
   const mismaLista = total === cuentas.length;
   return (
@@ -64,17 +66,16 @@ export default function TusCuentasDelInicio({
         <h2 id="cuentas-t" className={TITULO}>
           {titulo}
         </h2>
-        <span className="text-[11px] text-fg-muted">Acción · Reunión en {DIAS_PARA_LA_REUNION} días</span>
+        <span className="text-[11px] text-fg-muted">Siguiente paso</span>
       </div>
       {vista.length === 0 ? (
         <p className="border-t border-line pt-2.5 text-[13px] text-fg-muted">No hay cuentas con servicio activo.</p>
       ) : (
         <ul className="flex flex-col">
           {vista.map((c) => {
-            const accion = c.servicio?.accion ?? null;
-            const reunion = c.servicio?.reunion ?? null;
+            const paso = c.servicio?.paso ?? null;
             const sinCalendario = c.servicio ? !c.servicio.calendarioLeido : false;
-            const linea = [conQuienLaLleva ? (c.lleva ? `Lleva ${c.lleva}` : "Sin CSE") : null, c.porque ?? (accion ? `Acción: ${accion.titulo}` : c.proyectos.join(", "))]
+            const linea = [conQuienLaLleva ? (c.lleva ? `Lleva ${c.lleva}` : "Sin CSE") : null, c.porque ?? (paso?.tipo === "accion" ? `Acción: ${paso.accion.titulo}` : c.proyectos.join(", "))]
               .filter(Boolean)
               .join(" · ");
             return (
@@ -88,16 +89,19 @@ export default function TusCuentasDelInicio({
                     {linea}
                   </p>
                 </div>
-                <span className="flex flex-none items-baseline gap-3 whitespace-nowrap text-xs">
-                  <span className={cn("font-semibold", accion ? "text-success-ink" : "text-warn-ink")} title={accion ? `T-${accion.numero} · ${accion.titulo}` : "Sin una tarea con fecha esta semana"}>
-                    {accion ? "✓" : "○"}
-                  </span>
-                  <span
-                    className={cn("min-w-[44px] font-semibold", reunion ? "text-success-ink" : sinCalendario ? "text-fg-muted" : "text-warn-ink")}
-                    title={reunion ? reunion.titulo : sinCalendario ? "El calendario no se pudo leer" : `Sin reunión en los próximos ${DIAS_PARA_LA_REUNION} días`}
-                  >
-                    {reunion ? `✓ ${cuandoEsLaReunion(reunion.inicio, hoyISO)}` : sinCalendario ? "?" : "○"}
-                  </span>
+                <span
+                  className={cn("flex-none whitespace-nowrap text-xs font-semibold", paso ? "text-success-ink" : sinCalendario ? "text-fg-muted" : "text-warn-ink")}
+                  title={
+                    paso?.tipo === "reunion"
+                      ? paso.reunion.titulo
+                      : paso?.tipo === "accion"
+                        ? `T-${paso.accion.numero} · ${paso.accion.titulo}`
+                        : sinCalendario
+                          ? "Sin una tarea con fecha esta semana; el calendario no se pudo leer"
+                          : `Ni una tarea con fecha esta semana ni una reunión en los próximos ${DIAS_PARA_LA_REUNION} días`
+                  }
+                >
+                  {paso?.tipo === "reunion" ? `✓ reunión ${cuandoEsLaReunion(paso.reunion.inicio, hoyISO)}` : paso ? `✓ T-${paso.accion.numero}` : sinCalendario ? "?" : "○"}
                 </span>
               </li>
             );
@@ -108,7 +112,7 @@ export default function TusCuentasDelInicio({
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           {verSinServicio && faltanFuera && (
             <Link href={verSinServicio} className="text-[13px] font-medium text-brand transition-colors hover:text-brand-light">
-              {mismaLista ? `Ver las ${faltan} sin acción o reunión` : "Ver las que no tienen acción o reunión"}
+              {mismaLista ? `Ver las ${faltan} sin siguiente paso` : "Ver las que no tienen siguiente paso"}
             </Link>
           )}
           {verTodas && (

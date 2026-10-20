@@ -38,8 +38,21 @@ const hora = (iso: string) => new Date(new Date(iso).getTime() - 6 * 3_600_000).
 
 const absoluta = (base: string, href: string) => (/^https?:\/\//.test(href) ? href : `${base.replace(/\/+$/, "")}${href.startsWith("/") ? "" : "/"}${href}`);
 
-/** Las mismas cinco de «Lo que importa hoy» (una por cuenta, lib/para-ti/importa.ts), sin Finanzas ni plata. */
-export function cosasDelCorreo(paraTi: Pick<ParaTi, "agente" | "hoy">): { cosas: Pendiente[]; mas: number } {
+/**
+ * Las mismas cinco de «Lo que importa hoy» (una por cuenta, lib/para-ti/importa.ts), sin Finanzas ni plata. Al CSE y a
+ * la CSL (2026-10-19), lo de sus bloques de cuentas sin siguiente paso y pendientes sin seguimiento (lib/para-ti/foco.ts):
+ * las reuniones ya van arriba, con «Preparar».
+ */
+export function cosasDelCorreo(paraTi: Pick<ParaTi, "agente" | "hoy" | "foco">): { cosas: Pendiente[]; mas: number } {
+  if (paraTi.foco) {
+    const delFoco = paraTi.foco.bloques
+      .filter((b) => b.clave !== "reuniones")
+      .flatMap((b) => b.items)
+      .filter((p) => !FUENTES_FUERA.test(p.fuente) && !p.plata);
+    const total = paraTi.foco.bloques.filter((b) => b.clave !== "reuniones").reduce((n, b) => n + b.total, 0);
+    const cosas = delFoco.slice(0, MAX_COSAS);
+    return { cosas, mas: Math.max(0, total - cosas.length) };
+  }
   const todas = [...paraTi.agente, ...paraTi.hoy].filter((p) => !FUENTES_FUERA.test(p.fuente) && !p.plata);
   const vistas = new Set<string>();
   const unicas = todas.filter((p) => (vistas.has(p.clave) ? false : (vistas.add(p.clave), true)));
@@ -51,7 +64,7 @@ export function armarCorreoDeLaManana(o: {
   nombre: string;
   fechaLarga: string;
   reuniones: readonly ReunionDeLaAgenda[] | null;
-  paraTi: Pick<ParaTi, "agente" | "hoy">;
+  paraTi: Pick<ParaTi, "agente" | "hoy" | "foco">;
   /** La dirección de Nexus (APP_URL): cada línea lleva ahí. */
   base: string;
 }): CorreoDeLaManana {
