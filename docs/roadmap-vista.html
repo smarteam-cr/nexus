@@ -80,7 +80,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 .ini h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 16px; font-weight: 650; margin: 0 0 4px; color: var(--fg); }
 .ini > p { margin: 0 0 10px; color: var(--fg-muted); font-size: 14px; }
 .ini h3.plegable { cursor: pointer; user-select: none; margin: 0; }
-.ini h3.plegable::before { content: "B8"; color: var(--fg-muted); font-size: 12px; width: 12px; transition: transform .15s; }
+.ini h3.plegable::before { content: "\25B8"; color: var(--fg-muted); font-size: 12px; width: 12px; transition: transform .15s; }
 .ini.abierta h3.plegable::before { transform: rotate(90deg); }
 .ini.abierta h3.plegable { margin-bottom: 4px; }
 .ini h3 .resumen { font-size: 12.5px; font-weight: 500; color: var(--fg-muted); }
@@ -213,11 +213,14 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     h.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cambiar(); } });
   });
 
-  // Tres pestañas: el roadmap, lo que le pides al equipo y las pruebas. Cada «##» va a la suya.
+  // Seis pestañas: lo que falta, lo que validas tú, lo que valido yo, lo que le pides al equipo, lo hecho y cómo funciona Nexus. Cada «##» va a la suya.
   var PESTANAS = [
     { id: 'roadmap', nombre: 'Roadmap' },
+    { id: 'validar', nombre: 'Lo que validas tú', h2: /^\s*Lo que validas tú$/i },
+    { id: 'claude', nombre: 'Lo que valido yo', h2: /^\s*Lo que valido yo$/i },
     { id: 'equipo', nombre: 'Lo que pides al equipo', h2: /pides al equipo/i },
-    { id: 'validar', nombre: 'Pruebas', h2: /^\s*Pruebas$/i },
+    { id: 'hecho', nombre: 'Hecho', h2: /^\s*Hecho$/i },
+    { id: 'como', nombre: 'Cómo funciona Nexus', h2: /^\s*(Cómo funciona Nexus|Cómo se mantiene este roadmap)$/i },
   ];
   var paneles = {};
   PESTANAS.forEach(function (p) { var d = document.createElement('div'); d.className = 'panel'; d.id = 'panel-' + p.id; paneles[p.id] = d; });
@@ -231,9 +234,9 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   });
   PESTANAS.forEach(function (p) { doc.appendChild(paneles[p.id]); });
   var faltan = paneles.validar.querySelectorAll('table.pruebas tbody tr:not(.listo):not(.arreglo)').length;
-  // «Pruebas» va en pestañas por área, agrupadas por prioridad: una tarjeta a la vez, con cuántas faltan; abre en la primera con algo pendiente.
-  (function () {
-    var cards = Array.prototype.slice.call(paneles.validar.querySelectorAll('.ini'));
+  // Las pestañas de pruebas van por tema (agrupadas por prioridad si la tienen): una tarjeta a la vez, con cuántas faltan; abre en la primera con algo pendiente.
+  [paneles.validar, paneles.claude].forEach(function (panel) {
+    var cards = Array.prototype.slice.call(panel.querySelectorAll('.ini'));
     if (cards.length < 2) return;
     var nav = document.createElement('nav'); nav.className = 'subtabs'; nav.setAttribute('role', 'tablist');
     cards[0].parentNode.insertBefore(nav, cards[0]);
@@ -260,7 +263,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     }
     var primera = botones.findIndex(function (x) { return x.pend > 0; });
     mostrar(primera < 0 ? 0 : primera);
-  })();
+  });
   var tabs = document.getElementById('tabs');
   function elegir(id, guardar) {
     PESTANAS.forEach(function (p) {
