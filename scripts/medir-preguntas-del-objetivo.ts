@@ -74,7 +74,7 @@ async function main() {
   const { getAnthropic } = await import("@/lib/anthropic");
   const { conContextoDeIA } = await import("@/lib/ai/contexto-de-corrida");
   const { costoDeLlamada } = await import("@/lib/ai/precios");
-  const { contextoParaLaGuia, AGENTE_DE_LA_EXPLORACION } = await import("@/lib/exploraciones/agente");
+  const { contextoParaLaGuia, nombresDelEquipo, AGENTE_DE_LA_EXPLORACION } = await import("@/lib/exploraciones/agente");
   const { entradaDelObjetivo, ORIGEN_DEL_OBJETIVO } = await import("@/lib/exploraciones/guia-ajustes-server");
   const { avisoParaOtraVez, leerPreguntasDelObjetivo, pedidoDePreguntasDelObjetivo } = await import("@/lib/exploraciones/guia-pregunta-pedido");
 
@@ -87,8 +87,8 @@ async function main() {
     }) ?? 0;
 
   try {
-    const base = await contextoParaLaGuia(elegida.id);
-    const { sesionId, entrada } = entradaDelObjetivo(base, arg("--objetivo") ?? undefined);
+    const [base, equipo] = await Promise.all([contextoParaLaGuia(elegida.id), nombresDelEquipo()]);
+    const { sesionId, entrada } = entradaDelObjetivo(base, arg("--objetivo") ?? undefined, equipo);
     console.log(`\n${elegida.empresa} · exploración ${elegida.id} · ${base.marco.clave === "cs" ? "proyecto" : "preventa"} · próxima sesión: la ${base.ctx.proxima.numero} (${sesionId ?? "sin sesión todavía"})`);
     if (!entrada) {
       console.log("La próxima sesión no tiene objetivo: pásalo con --objetivo.");

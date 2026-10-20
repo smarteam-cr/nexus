@@ -9601,6 +9601,11 @@ quería llevar las preguntas en el orden en que las va a hacer.
   Liliana, una llamada de 4.742 tokens de entrada y 466 de salida, US$0,021 y 10,7 s; con «Enfocar la sesión en marketing y
   en lo que pidió Marco: los volúmenes de leads y la tasa de conversión», 4.704 y 435, US$0,021 y 8,5 s. Las tres de la
   segunda: los leads que entran al mes, la tasa de conversión que maneja Marco y el volumen que pide alcanzar.
+- **Las preguntas del objetivo nunca nombran a alguien de Smarteam** (motivo `equipo`, `nombraAlEquipo`): el objetivo
+  nombra a quien pidió algo («lo que pidió Marco») y el modelo le preguntaba al cliente «¿qué tasa maneja Marco?». El
+  pedido lleva los nombres del equipo (`nombresDelEquipo`) y el código descarta la pregunta o la repregunta que nombra a
+  uno (nombre de pila con mayúscula, como palabra entera). Medido después: «¿Cuál es hoy tu tasa de conversión de lead
+  a venta?», US$0,021 y 8 s.
 - **Aplicar una lista del chat que toca la guía vuelve a leer la exploración abierta** (lib/exploraciones/
   aviso-de-la-guia.ts). En un proyecto la exploración se pide desde el navegador, así que el `router.refresh()` del chat
   no la traía. El cajón del chat (components/nexus-chat/ChatDeNexus.tsx), al aplicar, mira si quedaron marcadas

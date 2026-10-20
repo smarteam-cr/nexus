@@ -356,3 +356,15 @@ describe("al aplicar una lista del chat que toca la guía, la exploración abier
     expect(lienzo).toMatch(/esParaEstaExploracion\(.*, expId\)\) void recargar\(\)/);
   });
 });
+
+describe("las preguntas del objetivo no nombran al equipo de Smarteam (CEMACO, 2026-10-20)", () => {
+  it("una pregunta que nombra a Marco (de Smarteam) se descarta; una sin nombres pasa", async () => {
+    const { nombraAlEquipo } = await import("./guia-pregunta-pedido");
+    const equipo = ["Marco Salas", "Liliana Moreno"];
+    expect(nombraAlEquipo(["¿Cuál es hoy la tasa de conversión que maneja Marco como referencia?"], equipo)).toBe(true);
+    expect(nombraAlEquipo(["¿Cuántos leads entran al mes por todos los canales?"], equipo)).toBe(false);
+    // Palabra entera: «Marcos» o «marcos de referencia» no es Marco.
+    expect(nombraAlEquipo(["¿Qué marcos de referencia usan?"], equipo)).toBe(false);
+    expect(nombraAlEquipo(["¿Lo sabe Marco?"], [])).toBe(false);
+  });
+});

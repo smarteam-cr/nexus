@@ -86,6 +86,8 @@ Sin esto, algo sigue mal o no se puede validar:
 3. La fecha de cancelación de Cicadex en HubSpot (29 ene 2029).
 4. Las 176 reuniones que la IA asignó en 8 proyectos y Juan Carlos tiene por revisar.
 5. «Ver como»: dos lecturas que escriben sin autor (`deal-line-items` y `hubspot/read`) y la cookie sin el prefijo `__Host-`.
+6. Los desplegables de las tablas y las fichas (`CeldaSelect`, el selector de ícono y la lectura de la cuenta) todavía se dibujan dentro de su contenedor: pueden quedar tapados como le pasaba al menú del avatar.
+7. El chat todavía no puede ocultar secciones del kickoff.
 
 ## Lo que configuras tú
 
@@ -144,6 +146,11 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 | 182 | Por validar | Que el CSE vea las cuentas sin siguiente paso | «Ver como» Juan Carlos Armijos › «Para ti» › «Cuentas sin siguiente paso» › «Ver las 13 en la cartera». | 3 cuentas con «Agendar», «se ven 3 de 13…» y el enlace; sin «Estabilizar». La cartera abre en «Sin siguiente paso» y las cuentas con reunión dicen «✓ Siguiente paso: reunión …». |
 | 187 | Por validar | Que «Sugerencias» no pida el paso si hay reunión | Ficha de Cemaco › chat de Nexus › «Sugerencias». | No aparece «Fija el siguiente paso de Customer Success con …». |
 | 230 | Por validar | Que sin meta la tarjeta lo diga | «Ver como» Alexander Arrieta › «Para ti» y «Tu cartera». | La tarjeta «Tu meta 2026» con «—» y «Aún no tienes una meta configurada.» |
+| 236 | Por validar | Que a Valentina no le llegue lo que lleva Marco | «Ver como» Valentina Sandoval › «Para ti» › «Pendientes sin seguimiento». | Ya no aparece «kölbi: un compromiso … Preparar y enviar a Priscilla Sanabria la propuesta…». |
+| 237 | Por validar | Que a Marco le lleguen sus compromisos | «Ver como» Marco Salas › «Para ti». | «kölbi: un compromiso tuyo en una reunión lleva N días sin decidir» (T-117) y los de Distribuidora Larce (T-22, T-121, T-122). |
+| 238 | Por validar | Que la CSL vea por cuenta solo lo de Customer Success | «Ver como» Alexander Vanegas › «Para ti» › «Pendientes sin seguimiento». | kölbi ya no aparece; Distribuidora Larce muestra 1 compromiso («Recordarle a Sonia…»), no los de Marco. |
+| 239 | Por validar | Que el menú del avatar se abra encima del contenido | Tema oscuro y barra colapsada: Clientes › clic en tu avatar (abajo a la izquierda). Después «Para ti» con la barra abierta, y en la ficha de un cliente toca «Modo claro». | El menú entero (tu correo, Configuración, Recorridos, Modo claro, Cerrar sesión) encima de la tabla y de la agenda, sin nada que lo corte. «Modo claro» cambia el tema con el menú abierto; un clic afuera o Escape lo cierran. |
+| 240 | Por validar | Que los desplegables del menú se abran encima | En Clientes, «Para ti» y Tareas, pasa el mouse por Tareas, Marketing, Ventas y Finanzas, en los dos temas. | Cada desplegable se abre al lado de la barra, encima del contenido. |
 
 ### Tareas <span class="prioridad">Alta</span>
 
@@ -166,6 +173,17 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 | 161 | Por validar | Que deshacer no diga que otra persona la cambió | La misma tarea: toca el círculo otra vez enseguida, varias veces rápido. También en «Hechas (2 semanas)» y en «Para ti» › «Tus tareas de hoy». | Se marca y se desmarca en el acto y nunca sale «Otra persona cambió esta tarea…». Con una tarea de HubSpot, en HubSpot queda el último estado que marcaste. |
 | 163 | Por validar | Que el estado del cajón cambie al instante | Abre una tarea (el cajón) › «Estado»: «Hecha» y enseguida «Pendiente». | El botón cambia al instante y queda en «Pendiente», sin el aviso. Al pie, «Guardado». |
 
+### Kickoff y cronograma <span class="prioridad">Alta</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 241 | Por validar | Que la fecha de arranque se elija en un calendario | Clientes › Cayalá › «Cayalá - WhatsApp Nativo» › Kickoff › en la portada, clic en «26 oct 2026». Elige el 2 de noviembre y después vuelve al 26 de octubre. | Se abre un calendario en octubre de 2026, sin un campo encimado, y la fila no se mueve. La portada y el Gantt dicen la fecha elegida, sin años raros. |
+| 242 | Por validar | Que la fila de datos se edite como las etiquetas | La portada › «+ Dato»: escribe «3 integraciones» con la etiqueta «Alcance»; quita «Hoja de ruta» con la ×; arrastra el dato nuevo al primer lugar; recarga. | La fila queda en ese orden, también después de recargar. |
+| 243 | Por validar | Que un dato vacío vuelva al del cronograma | La portada › borra el texto de «8 semanas» y sal del campo. | Aparece «9 semanas», el número que sale del cronograma. |
+| 244 | Por validar | Que la portada se vea alineada | La portada, al editar y al presentar. | «+ Tag» en la misma línea que la última etiqueta y «+ Dato» al final de la fila de datos; todos los datos del mismo alto. |
+| 245 | Por validar | Que una sección oculta siga oculta sin subir | Cualquier sección del kickoff › el ojo › ocultarla. No subas; recarga la página (y al día siguiente, otra vez). | Sigue oculta. |
+| 246 | Por validar | Que el cliente vea lo mismo que por dentro | «Subir al cliente» y abre el enlace del cliente; después «Exportar PDF». | La portada con la fecha de arranque y los mismos datos que por dentro, en el enlace y en el PDF. |
+
 ### Preventa y exploración <span class="prioridad">Alta</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
@@ -176,6 +194,15 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 | 172 | Por validar | Que la guía nueva del proyecto sea corta | Botón «Actualizar la guía». | Unas 5 preguntas de estrategia y escala, cada una con su ⓘ, más de 3 a 5 de lo vendido. El aviso ámbar desaparece. |
 | 175 | Por validar | Que regenerar, agregar y el asistente funcionen en el proyecto | Cemaco, después de actualizar: ⋯ › «Regenerar»; «+ Agregar pregunta» y otra vez «Actualizar la guía»; «Mejorar con el asistente». | La pregunta cambia y dice «Regenerada»; la tuya dice «Tuya» y sigue después de actualizar; el chat de Cemaco abre con la guía y de 3 a 4 pedidos en botones. |
 | 178 | Por validar | Que «Lo que cubre la guía» sume lo vendido | Cemaco, «Lo que cubre la guía». | Retos, Resultados que persigue y Obstáculos, y debajo «Piezas de lo vendido que pregunta:» con sus temas. |
+| 247 | Por validar | Que cambiar el objetivo proponga preguntas | Cemaco Internacional - CRM › Exploración › próxima sesión › Preparación › «Objetivo de la sesión» › «Editar»: «Enfocar la sesión en marketing y en lo que pidió Marco: volúmenes de leads y tasa de conversión» › «Guardar». | «Nexus está pensando preguntas para este objetivo» y después «Nexus propone 3 preguntas para este objetivo», en azul con la chispa, sobre leads, conversión y volumen. |
+| 248 | Por validar | Que las preguntas del objetivo se usen o se descarten | En ese bloque azul, «Usar» en una y «Descartar» en otra; después «Pedir otras». | La usada entra a «La guía» con la marca «Por el objetivo»; la descartada no vuelve. |
+| 249 | Por validar | Que la guía se refresque sola con el asistente | La misma sesión › «Mejorar con el asistente» › «quita las preguntas de ventas» › aplica la lista. | La guía cambia en pantalla, sin recargar. |
+| 250 | Por validar | Que las preguntas se arrastren | «La guía» › «En orden»: arrastra una pregunta por los puntitos de la izquierda; repite con el teclado (Tab hasta el asa, Espacio, flechas, Espacio). Después abre «En vivo» y toca «Actualizar la guía». | La pregunta queda donde la soltaste y arriba dice «Van en el orden que elegiste» con «Volver al orden de la guía». «En vivo» muestra el mismo orden y actualizar la guía lo mantiene (lo nuevo va al final). |
+| 251 | Por validar | Lo mismo en la preventa | Distribuidora Larce › Exploración › próxima sesión: repite la 247, la 249 y la 250. | Lo mismo que en Cemaco. |
+| 257 | Por validar | Que el asistente de la guía use todas las sesiones | Cemaco Internacional - CRM › Exploración › guía de la sesión 5 › «Mejorar con el asistente» › «¿Qué otras preguntas agregarías para la próxima sesión?». | Preguntas sobre cuántos contactos o leads llegan por canal al mes y cuántos se vuelven clientes; ninguna sobre quién coordina con las agencias. |
+| 258 | Por validar | Que no repita lo que ya se habló | El mismo chat › «Agrega más preguntas sobre las 5 agencias». | Preguntas nuevas (qué quieren hacer ellos mismos, mensajes que se contradicen entre agencias), no la de cuántas personas coordinan con ellas. |
+| 259 | Por validar | Que «Actualizar la guía» retome lo acordado | La misma guía › «Actualizar la guía». | El objetivo de la sesión habla de las volumetrías de cada canal y la apertura retoma lo acordado el 19 oct. |
+| 260 | Por validar | Lo mismo en la preventa | Preventa de Tecnosagot › guía de la próxima sesión › «Mejorar con el asistente» › «¿Qué otras preguntas agregarías para la próxima sesión?». | Retoma la meta de ventas que quedó sin preguntar y no vuelve a preguntar quién da el visto bueno. |
 
 ### La cuenta: encargado, proyectos y ficha <span class="prioridad">Alta</span>
 
@@ -314,6 +341,8 @@ Las que corre la IA (Claude) sin pantalla: con los datos de producción, en solo
 | 224 | ✓ Validado por Claude 19 oct | Que cada línea diga quién y qué | El mismo bloque › «20 proyectos sin encargado en HubSpot». | «9 encargado que ya no está · 11 sin encargado», con 11 enlaces a HubSpot y «y 9 más en la lista». Wherex dice «(le toca a Heiver Gomez)». |
 | 225 | ✓ Validado por Claude 19 oct | Que no se repita en «Esta semana» | «Para ti» de Alexander › «Esta semana». | Ya no aparecen «HubSpot: 26 cosas por poner al día» ni «8 proyectos de Customer Success sin encargado». |
 | 226 | ✓ Validado por Claude 19 oct | Que el CSE siga con sus tres bloques | «Ver como» Heiver Gomez › «Para ti». | Sus tres bloques iguales; en «También para hoy», «HubSpot: 1 cosa por resolver hoy» (Wherex). |
+| 252 | ✓ Validado por Claude 20 oct | Que cada compromiso le llegue a quien le toca | Repartí con la regla nueva los compromisos de 41 lecturas de 14 días y los comparé con las 92 propuestas vivas (`scripts/a-quien-le-llegan-las-propuestas.ts`). | Ninguna le llegó a otra persona. El único aviso ajeno de hoy era el de Valentina (T-117, de Marco) y ya no le sale; 5 avisos propios que no le llegaban a nadie ahora sí (4 de Marco y T-102 de Alexander). |
+| 253 | ✓ Validado por Claude 20 oct | Que los desplegables de la barra queden encima, para todos | Página de prueba con el sidebar real, midiendo punto por punto qué queda arriba de cada panel abierto. | Super Admin en 5 pantallas, 2 temas y la barra abierta y colapsada: 20 de 20 sin un punto tapado. Los otros 6 roles en Clientes: 24 de 24. Antes del arreglo, con la barra colapsada, 167 de 273 puntos tapados. |
 
 ### Tareas
 
@@ -324,6 +353,13 @@ Las que corre la IA (Claude) sin pantalla: con los datos de producción, en solo
 | 193 | ⏳ La corre la IA el 20 oct en la tarde | Que lo descartado no vuelva | Un CSE descarta una propuesta y espera la próxima reunión de esa cuenta donde se hable de lo mismo. | No vuelve, ni a él ni a otra persona de esa cuenta. Si la deja vencer sin decidir, sí puede volver. |
 | 198 | ✓ Validado por Claude 19 oct | Que el sprint siga igual | Alejandra Ortega, después de la reunión del sprint de marketing. | Siguen saliendo hasta 5 por persona. |
 
+### Kickoff y cronograma
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 254 | ✓ Validado por Claude 20 oct | Por qué Cayalá salía con tareas vencidas y los años 1900 | La base en solo lectura: los cambios del cronograma de Cayalá, Cemaco y Spectrum, y toda columna de fecha. | El campo de fecha guardaba en cada tecla: escribir «2026» dejaba el año 0026 (1926 en el calendario). Cayalá estuvo en el año 0026 del 15 al 17 oct: por eso todo salía vencido. Hoy hay 0 fechas antes del 2000 en toda la base. |
+| 255 | ✓ Validado por Claude 20 oct | Que la portada no se descuadre | Página de prueba con la portada real, en edición y en lectura. | Cada dato mide 53 px al editar y al presentar; el calendario flota sin mover nada; «+ Tag» en la línea de las etiquetas. |
+
 ### Preventa y exploración
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
@@ -332,6 +368,10 @@ Las que corre la IA (Claude) sin pantalla: con los datos de producción, en solo
 | 171 | ✓ Validado por Claude 19 oct | Que el proyecto tenga «Lo que ya sabemos» | La misma pestaña, «Lo que ya sabemos». | 5 líneas: dos de reuniones y Retos, Resultados que persigue y Obstáculos, con «Confirmado en la estrategia». |
 | 173 | ✓ Validado por Claude 19 oct | Que la guía de base también sea corta | Ferreteria Noelito › «Implementación CRM + Conexión SAP» › Exploración › Sesión 1 › «Preparación». | 5 preguntas (Retos, Resultados que persigue, Obstáculos y dos de la escala), ya no 8. |
 | 174 | ✓ Validado por Claude 19 oct | Que cierre pensando en los resultados | Cualquiera de esas guías, tramo «Cerrar». | «¿Hay algo que no hayamos hablado y que deba saber para que el proyecto llegue a esos resultados?» |
+| 256 | ✓ Validado por Claude 20 oct | Cuánto cuesta proponer preguntas para un objetivo | Cemaco, con el objetivo real de Liliana y con «…volúmenes de leads y tasa de conversión» (`scripts/medir-preguntas-del-objetivo.ts`, sin escribir). | Unos US$0,021 y de 9 a 11 s por corrida; 3 preguntas válidas (leads al mes, tasa de conversión, volumen que se quiere alcanzar). |
+| 261 | ✓ Validado por Claude 20 oct | Por qué el asistente de la guía se quedaba en un tema | El contexto que recibía con Cemaco, en solo lectura (`scripts/ver-contexto-de-la-guia.ts`). | No recibía ninguna sesión, ni el objetivo de la próxima, el handoff, el kickoff ni la memoria del proyecto. Lo que pidió Marco estaba en un acuerdo de la minuta del 19 oct que la memoria recortaba a 560 caracteres. |
+| 262 | ✓ Validado por Claude 20 oct | Que el asistente proponga lo que falta y no repita | Conversaciones reales con Cemaco y Tecnosagot, en hilos de prueba que se borraron. | Cemaco: en 3 de 4 corridas propuso leads por canal y su conversión, y nunca repreguntó por las agencias. Tecnosagot: retomó la meta de ventas y los leads de ferias. El primer turno cuesta US$0,09–0,15 y tarda 18–24 s; los siguientes, US$0,025–0,04. |
+| 263 | ✓ Validado por Claude 20 oct | Que las preguntas del objetivo no nombren al equipo | Cemaco con «…lo que pidió Marco…», ya con todo junto en `main`. | «¿Cuál es hoy tu tasa de conversión de lead a venta?» (antes: «…que maneja Marco como referencia?»). US$0,021 y 8 s. |
 
 ### La cuenta: encargado, proyectos y ficha
 

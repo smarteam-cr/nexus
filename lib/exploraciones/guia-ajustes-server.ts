@@ -41,7 +41,7 @@ import {
   type EntradaDelObjetivo,
   type EntradaDeUnaPregunta,
 } from "./guia-pregunta-pedido";
-import { AGENTE_DE_LA_EXPLORACION, contextoParaLaGuia, planDeLaGuiaDeLaSesion } from "./agente";
+import { AGENTE_DE_LA_EXPLORACION, contextoParaLaGuia, nombresDelEquipo, planDeLaGuiaDeLaSesion } from "./agente";
 import { guiaDeAntesDelPlan } from "./plan-de-la-guia";
 import { aplicarCambios, type FilaDeExploracion } from "./servidor";
 
@@ -158,7 +158,7 @@ function temasDeLaGuia(base: BaseDeLaGuia): { id: string; nombre: string }[] {
  * `proponerPreguntasDelObjetivo` y la medición (scripts/medir-preguntas-del-objetivo.ts). `objetivo` reemplaza al de la
  * sesión (para medir con otro).
  */
-export function entradaDelObjetivo(base: BaseDeLaGuia, objetivo?: string): { sesionId: string | null; entrada: EntradaDelObjetivo | null } {
+export function entradaDelObjetivo(base: BaseDeLaGuia, objetivo?: string, equipo: readonly string[] = []): { sesionId: string | null; entrada: EntradaDelObjetivo | null } {
   const { sesionId, preguntas } = preguntasDeLaProxima(base);
   const sesion = sesionId ? base.estado.contenido.sesiones.find((s) => s.id === sesionId) : undefined;
   const elObjetivo = (objetivo ?? sesion?.objetivo ?? "").trim();
@@ -171,6 +171,7 @@ export function entradaDelObjetivo(base: BaseDeLaGuia, objetivo?: string): { ses
       temas: temasDeLaGuia(base),
       guia: preguntas.map((p) => p.pregunta),
       yaPropuestas: yaPropuestasParaElObjetivo(sesion?.ajustesDeLaGuia, elObjetivo),
+      equipo,
     },
   };
 }
@@ -182,8 +183,8 @@ export function entradaDelObjetivo(base: BaseDeLaGuia, objetivo?: string): { ses
  * propuestas (`sugeridas`): la persona usa o descarta cada una.
  */
 export async function proponerPreguntasDelObjetivo(exploracionId: string, quienPide: string | null): Promise<FilaDeExploracion> {
-  const base = await contextoParaLaGuia(exploracionId);
-  const { entrada } = entradaDelObjetivo(base);
+  const [base, equipo] = await Promise.all([contextoParaLaGuia(exploracionId), nombresDelEquipo()]);
+  const { entrada } = entradaDelObjetivo(base, undefined, equipo);
   if (!entrada) throw new ErrorDeLaGuia(400, "Escribe el objetivo de la sesión primero.");
   const pedir = (aviso = "") =>
     conContextoDeIA(
