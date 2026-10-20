@@ -143,3 +143,7 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   el MISMO evento del calendario a una fecha nueva después de la reunión; la sync de Meet le pisa `date` a la fila y
   conserva el transcript viejo (`cambiosDeSesion`). Si la reunión nueva trae otro Doc de Gemini, el reset por Doc nuevo
   borra el transcript viejo. Visto el 2026-10-16 (kickoff de Spectrum, seguimiento CS + RevOps). Sin guarda todavía.
+- **Una sesión de Claude Code se queda sin contexto a las pocas horas.** *Causa:* `CLAUDE.md` importaba con `@` el
+  DECISIONS, el GLOSSARY y el RUNBOOK: 411.000 tokens (41 % de la ventana) cargados antes del primer mensaje, medido el
+  2026-10-20. *Guarda:* esos tres son punteros con su condición; con `@` solo van ARCHITECTURE y este archivo. Antes de
+  sumar un `@` a `CLAUDE.md`, medir el archivo (`wc -c`).

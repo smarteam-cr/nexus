@@ -436,12 +436,23 @@ export async function cargarMaterialParaElChat(projectId: string): Promise<Mater
     }),
   ]);
   const instrucciones = canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null;
+  /* LO QUE NEXUS YA SABE (2026-10-20): sin reuniones elegidas el chat no sabía nada de las reuniones con el cliente.
+     La memoria trae los acuerdos y las decisiones de cada reunión del proyecto, en resumen, recortada para el cliente
+     (lo que escribe el chat lo lee el cliente). Las elegidas no se repiten (`yaLeidas`). Si falla, el chat sigue. */
+  const memoria = await import("@/lib/memoria")
+    // Import dinámico: `lib/memoria` es server-only y este archivo lo importan pruebas que no llegan a la memoria.
+    .then(({ memoriaDelDocumento }) => memoriaDelDocumento(projectId, { lector: "cronograma-chat", yaLeidas: mat.sesionesUsadas }))
+    .catch((e) => {
+      console.warn("[contexto] no se pudo leer la memoria para el chat del cronograma", { projectId, error: e instanceof Error ? e.message : e });
+      return { texto: "", partes: [] };
+    });
   return {
     texto: bloqueDelMaterialParaElChat({
       reuniones: mat.reuniones,
       notas: mat.notas,
       informe: mat.informe,
       instrucciones,
+      memoria: memoria.texto,
       ahora: Date.now(),
     }),
     lectura: lecturaDelMaterial(mat.informe, !!instrucciones),

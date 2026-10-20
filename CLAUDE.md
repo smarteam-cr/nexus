@@ -7,10 +7,13 @@ cronograma y procesos con agentes (Claude). Stack: **Next.js 16** (App Router, T
 SDK · HubSpot/Google Workspace/Apify (versiones exactas: ARCHITECTURE Parte 0 · cap. A).
 
 - Arquitectura detallada + referencia rápida (stack/local/DB/tests): @ARCHITECTURE.md
-- Decisiones tomadas (no re-litigar): @docs/DECISIONS.md
-- Glosario de dominio: @docs/GLOSSARY.md
 - Errores conocidos (no tropezar dos veces): @docs/KNOWN-ERRORS.md
-- Operación de PRODUCCIÓN (deploy, rollback, jobs, invariantes de infra): @docs/RUNBOOK.md
+- **Decisiones** (`docs/DECISIONS.md`, el porqué de cada módulo; no re-litigar): antes de cambiar cómo se
+  comporta un módulo, busca su sección (`grep -n "^## " docs/DECISIONS.md`) y lee solo esa. Pesa ~1 MB:
+  leerlo entero llena el contexto de la sesión.
+- **Glosario** (`docs/GLOSSARY.md`): un término del dominio que no conoces, o copy nuevo con palabras de Nexus.
+- **Producción** (`docs/RUNBOOK.md`: deploy, rollback, jobs, invariantes de infra): antes de desplegar, tocar
+  un job o diagnosticar producción.
 
 ## ⛔ INVARIANTES MEDULARES (no negociables)
 

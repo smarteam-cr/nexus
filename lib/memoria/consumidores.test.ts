@@ -30,7 +30,8 @@ function archivos(dir: string): string[] {
   return out;
 }
 
-const IMPORTA = /from "@\/lib\/memoria(?:\/[^"]*)?"/;
+// También el import dinámico (`import("@/lib/memoria")`): si no, un lector se salta el registro por esa vía.
+const IMPORTA = /(?:from |import\()"@\/lib\/memoria(?:\/[^"]*)?"/;
 const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
 
 const IMPORTADORES = ["app", "lib", "components"]

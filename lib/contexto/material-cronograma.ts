@@ -1448,12 +1448,15 @@ export function bloqueDelMaterialParaElChat(input: {
   informe: InformeDelMaterial;
   /** Las «Instrucciones adicionales» del cronograma (el brief `__doc`), o null. */
   instrucciones: string | null;
+  /** Lo que Nexus ya sabe del proyecto y de la cuenta (`memoriaDelDocumento`, recortada para el cliente), o "". */
+  memoria?: string;
   /** epoch ms — el «Hoy es…». */
   ahora: number;
 }): string {
   const r = resumenDelInforme(input.informe);
   const instrucciones = (input.instrucciones ?? "").trim().slice(0, TOPE_INSTRUCCIONES_DEL_DOC);
-  if (r.elegidas === 0 && r.notas === 0 && !instrucciones) return "";
+  const memoria = (input.memoria ?? "").trim();
+  if (r.elegidas === 0 && r.notas === 0 && !instrucciones && !memoria) return "";
 
   const cabecera = [
     "=== MATERIAL DEL CRONOGRAMA — lo que el CSE eligió y escribió en el «Contexto adicional» del cronograma (INTERNO) ===",
@@ -1483,7 +1486,16 @@ export function bloqueDelMaterialParaElChat(input: {
       instrucciones
     : "";
 
-  return [cabecera, bloqueDeInstrucciones, input.reuniones.trim(), input.notas.trim()]
+  const bloqueDeLaMemoria = memoria
+    ? "=== LO QUE NEXUS YA SABE DEL PROYECTO Y DE LA CUENTA (en resumen) ===\n" +
+      "Lo que dejó cada reunión del proyecto con el cliente (sus acuerdos y decisiones), las desviaciones y lo que " +
+      "se sabe de la cuenta. Es un RESUMEN, no la conversación: úsalo para entender al cliente y respaldar lo que " +
+      "propongas, y dile al CSE que sale de ahí. Si para un cambio hace falta la conversación entera de una " +
+      "reunión, dile que la elija en el «Contexto adicional» del cronograma.\n" +
+      memoria
+    : "";
+
+  return [cabecera, bloqueDeInstrucciones, input.reuniones.trim(), input.notas.trim(), bloqueDeLaMemoria]
     .filter(Boolean)
     .join("\n\n")
     .slice(0, TECHO_DEL_MATERIAL_DEL_CHAT_CHARS);

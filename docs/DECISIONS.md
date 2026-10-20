@@ -3184,6 +3184,12 @@ fabricarla.
 > contexto» dejó de cumplirse ahí. Si el chat no ve las reuniones que el CSE eligió ni sus notas,
 > nadie las ve en ese camino.
 
+- **Desde el 2026-10-20 también lee la memoria del proyecto** (lector `cronograma-chat`, alcance cliente, sin los
+  procesos): los acuerdos y las decisiones de cada reunión del proyecto con el cliente, las desviaciones y lo que se
+  sabe de la cuenta, en resumen, al final del mismo bloque y sin repetir las elegidas. *Por qué:* nadie elige reuniones
+  en el cronograma (Cayalá, 20-oct: 6 vinculadas, 0 elegidas), así que el chat no sabía nada de lo conversado con el
+  cliente. La conversación entera sigue siendo solo la de las elegidas, y el chat lo dice cuando el resumen no alcanza.
+
 - **Una sola puerta, con presupuesto propio.** El chat lee las reuniones elegidas (con sus minutas),
   las notas y las «Instrucciones adicionales» del cronograma por `materialDelCronograma`
   (lib/asistente/contexto.ts) → `cargarMaterialParaElChat` (lib/contexto/cargar.ts). Usa el mismo

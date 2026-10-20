@@ -228,3 +228,18 @@ describe("el RUNBOOK dice la verdad sobre los jobs y tiene las secciones de recu
     expect(ejemplo, "la nota de cual ANTHROPIC_API_KEY es la de produccion").toContain("key de PRODUCCION");
   });
 });
+
+describe("CLAUDE.md no llena el contexto de la sesión (2026-10-20)", () => {
+  /* Un `@archivo` en CLAUDE.md se carga ENTERO en cada sesión, antes del primer mensaje. Con DECISIONS, GLOSSARY y
+     RUNBOOK importados eran 411.000 tokens (41 % de la ventana) y las sesiones se quedaban sin contexto en horas. Lo
+     grande va como puntero con su condición (docs/KNOWN-ERRORS.md). */
+  it("lo importado con @ suma menos de 150 KB", () => {
+    const claude = leer("CLAUDE.md");
+    const importados = [...claude.matchAll(/(?:^|\s)@([\w./-]+\.md)\b/g)].map((m) => m[1]);
+    const total = importados.reduce((s, f) => s + (existsSync(join(RAIZ, f)) ? statSync(join(RAIZ, f)).size : 0), 0);
+    expect(
+      total,
+      `CLAUDE.md importa con @: ${importados.join(", ")} (${Math.round(total / 1024)} KB). Lo grande va como puntero.`,
+    ).toBeLessThan(150 * 1024);
+  });
+});

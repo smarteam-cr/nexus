@@ -29,7 +29,8 @@ export type LectorDeMemoria =
   | "lo-que-sabe-la-ia"
   | "vigia"
   | "nexus-chat"
-  | "escala";
+  | "escala"
+  | "cronograma-chat";
 
 export interface ConsumidorDeLaMemoria {
   /** El slug de la pieza (lib/pieces/registry.ts) que escribe, o null si no escribe una pieza. */
@@ -242,6 +243,17 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     archivos: ["lib/exploraciones/posicionar-fuentes.ts"],
     motivo:
       "«Actualizar escala» (2026-10-18): lo que Nexus ya sabe de la cuenta y del proyecto, para entender a la empresa al ubicarla. No respalda un nivel (A0 y A1 no son lo que dijo el cliente).",
+  },
+  "cronograma-chat": {
+    pieza: "timeline",
+    // Lo que escribe el chat (nombres de fase, títulos de tarea) lo lee el cliente en el cronograma publicado: recortado.
+    alcance: alcanceDeLaPieza("timeline"),
+    excluirOrigenes: [],
+    // Los mapas de procesos no cambian una fase ni una tarea, y pesan en cada turno.
+    sinPartes: ["procesos"],
+    archivos: ["lib/contexto/cargar.ts"],
+    motivo:
+      "El chat del cronograma (2026-10-20): sin reuniones elegidas no sabía nada de las reuniones con el cliente. Lee los acuerdos y las decisiones de cada reunión del proyecto, las desviaciones y lo que se sabe de la cuenta, en resumen; la conversación entera sigue siendo solo la de las elegidas.",
   },
 };
 
