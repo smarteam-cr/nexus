@@ -35,8 +35,8 @@ chocar:
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `38be4315` desde la noche del 19 oct, hora de Costa Rica: todo lo del 19 oct (madrugada, Alex, tarde y noche). Sana, con el esquema al día. |
-| Por desplegar | Nada: todo `main` está en producción. 12.443 pruebas en verde y tsc en 0. |
+| Producción | Corre `85f212ce` desde la noche del 19 oct, hora de Costa Rica: todo lo del 19 oct, más la meta sin configurar, «Ver como» a Super Admin para Elías, la reunión interna con su cuenta y el arreglo de la lectura de los números. Sana, con el esquema al día. |
+| Por desplegar | Nada: todo `main` está en producción. 12.464 pruebas en verde y tsc en 0. |
 | En curso | Nada construyéndose: los arreglos de las pruebas del 19 oct ya están en `main` (12.179 pruebas en verde, tsc en 0). |
 | La base | Tiene todo lo que necesita lo que está en `main`: los SQL del 18 oct ya se aplicaron (biblioteca de módulos, escala ligada a la venta, servicio recurrente, gasto de IA, rentabilidad conectada y comunicaciones de HubSpot). La copia de comunicaciones ya corrió: 256 notas y 6 llamadas. |
 | En rojo en producción | Un proyecto en un pipeline sin declarar, un cliente apuntando a una empresa fusionada en HubSpot y el corte de cobranza, que nunca corrió. |
@@ -386,7 +386,7 @@ Aquí quedan solo las pruebas que necesitan la pantalla con sesión o tu criteri
 
 Las áreas van por prioridad: **Alta** antes del deploy (toca plata, la usa todo el equipo cada día, la ve el cliente, o es SmartLoop y comisiones), **Media** lo que se usa todos los días sin ese riesgo, y **Baja** lo que es solo de dirección. Para entrar como otra persona: Equipo › la persona › «Ver como»; «Volver a mi usuario» te devuelve.
 
-Todo `main` está en producción desde el 19 oct (`38be4315`). Si usas el 3004, haz `git pull` y reinícialo antes.
+Todo `main` está en producción desde el 19 oct (`85f212ce`). Si usas el 3004, haz `git pull` y reinícialo antes.
 
 **Lo que se arregló el 19 oct, con tu revisión y la mía:**
 
