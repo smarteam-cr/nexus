@@ -28,7 +28,6 @@ import {
   cuentasSinServicio,
   diasHastaElDia,
   diasSinContacto,
-  encargadosDelPase,
   filtrarEmpresas,
   hayFiltros,
   montoUsd,
@@ -325,7 +324,7 @@ function FilaDeEmpresa({
             <CseEncargadoSelect
               clientId={e.clientId}
               clientName={e.nombre}
-              nombres={encargadosDelPase(e)}
+              encargado={e.cse}
               opciones={cartera.equipoParaPase}
               puedeEditar
             />

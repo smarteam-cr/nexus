@@ -258,15 +258,6 @@ export interface GrupoDeCse {
 
 const claveDeCse = (p: PersonaDeCs | null) => (p ? (p.email ?? p.nombre).toLowerCase() : "");
 
-/**
- * Los encargados de HOY que cambia el pase de cuenta (2026-10-19): los de sus proyectos de Customer Success y SmartLoop,
- * sin repetir. Los de Desarrollo no: el pase no los toca (app/api/clients/[id]/cse-encargado). Es lo que muestra la celda
- * «CSE encargado» de la cartera de «Para ti», igual que en Éxito del cliente.
- */
-export function encargadosDelPase(e: Pick<EmpresaDeCs, "proyectos">): string[] {
-  return [...new Set(e.proyectos.filter((p) => p.pipeline !== "development" && p.encargado).map((p) => p.encargado as string))];
-}
-
 /** ¿La cuenta tiene dónde escribir el encargado? Un proyecto de Customer Success o SmartLoop. */
 export function tieneDondeHacerElPase(e: Pick<EmpresaDeCs, "proyectos">): boolean {
   return e.proyectos.some((p) => p.pipeline !== "development");

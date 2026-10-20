@@ -197,7 +197,7 @@ function CuentasSinCse({
             <CseEncargadoSelect
               clientId={c.clientId}
               clientName={c.nombre}
-              nombres={[]}
+              encargado={null}
               opciones={puedeReasignar ? opciones : []}
               puedeEditar={puedeReasignar}
               sugerencia={c.propuesta?.email}

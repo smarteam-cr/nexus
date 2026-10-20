@@ -56,6 +56,7 @@ import type { ClientesQueVes } from "./clientes";
 import { instanteCR } from "./agenda";
 import { NO_SON_PERSONAS } from "./toques";
 import { DE_LA_PREVENTA } from "@/lib/exploraciones/marco";
+import { ESTADOS_QUE_SE_MUDAN, firmaDelPase, porQueLaMueveElPase, textoDelPase, type MotivoDelPase, type PorQueLaMueve } from "./pase";
 import { elegirCandidato } from "@/lib/hubspot/cliente-de-la-empresa";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
 import { OBJETOS_QUE_SE_VINCULAN, leerEnlaceDeHubspot, seVincula, type EnlaceDeHubspot } from "@/lib/hubspot/urls";
@@ -1614,6 +1615,146 @@ export async function mantenimientoDelLunes(ahora = new Date()): Promise<Resulta
 
     return { vencidas: vencidas.length, proyectosVencidos: proyectos.length, aPorAsignar, privadasDeBajas, mudadas };
   }, OPCIONES_DE_TX);
+  return r;
+}
+
+/* ── El pase de cuenta (2026-10-19) ──────────────────────────────────────────────────────────────────────────────── */
+
+export interface PaseDeTareas {
+  clientId: string;
+  /**
+   * A quién va cada tarea de la cuenta que se muda (lib/tareas/pase.ts), según su responsable y su proyecto; null = se
+   * queda. Lo arma lib/cuentas/pase.ts: un proyecto cuyo dueño cambió manda las suyas al dueño nuevo; las de la cuenta
+   * van al encargado nuevo.
+   */
+  destino: (t: { responsableEmail: string; projectId: string | null }) => string | null;
+  /** Quien hizo el pase; null = cambió en HubSpot (firma el sistema). */
+  porEmail: string | null;
+  motivo: MotivoDelPase;
+}
+
+export interface TareaDelPase {
+  id: string;
+  numero: number;
+  titulo: string;
+  de: string;
+  a: string;
+  porQue: PorQueLaMueve;
+}
+
+export interface ResultadoDelPaseDeTareas {
+  movidas: TareaDelPase[];
+  /** Propuestas que la persona nueva ya tenía iguales: se juntan con la suya, como «No es mía». */
+  fusionadas: number;
+  /** Otra persona la cambió mientras tanto (versión distinta): queda como estaba. */
+  noSePudieron: number;
+}
+
+/**
+ * Muda al encargado nuevo las tareas abiertas de la cuenta que eran del anterior POR SER EL ENCARGADO (el criterio vive
+ * en lib/tareas/pase.ts). Una transacción por tarea, con su evento «asignada» (`motivo: "pase"`, «pasó de X a Y por el
+ * pase de cuenta»). Va a la semana de la persona nueva (`semanaDestino`, nunca una ya revisada) y su sprint de casa; el
+ * bloque de la agenda era del calendario de la anterior, así que vuelve a «sin agendar». Con `simular` no escribe nada.
+ * Correrla dos veces no mueve nada la segunda: la tarea ya es de la persona nueva.
+ */
+export async function pasarTareasPorElPase(p: PaseDeTareas, opciones: { simular?: boolean } = {}, ahora = new Date()): Promise<ResultadoDelPaseDeTareas> {
+  const [candidatas, miembros] = await Promise.all([
+    prisma.tarea.findMany({
+      where: { clientId: p.clientId, archivadaAt: null, privada: false, responsableEmail: { not: null }, estado: { in: [...ESTADOS_QUE_SE_MUDAN] } },
+      select: {
+        id: true,
+        numero: true,
+        titulo: true,
+        version: true,
+        estado: true,
+        privada: true,
+        archivadaAt: true,
+        origen: true,
+        origenId: true,
+        clase: true,
+        lado: true,
+        creadaPorEmail: true,
+        equipo: true,
+        responsableEmail: true,
+        projectId: true,
+        semana: true,
+        huella: true,
+        pedidaPorEmail: true,
+        sessionId: true,
+        cita: true,
+        agendaEstado: true,
+      },
+      orderBy: { numero: "asc" },
+    }),
+    prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { email: true, name: true, area: true, lideraEquipos: true } }),
+  ]);
+  const casa = new Map(miembros.map((m) => [m.email.toLowerCase(), claveDeEquipo(m.area, m.email)]));
+  // El siguiente paso de CS lo lleva alguien del sprint de CS (de casa o porque lo lidera): a otra persona no se le pasa.
+  const deCs = new Set(miembros.filter((m) => claveDeEquipo(m.area, m.email) === "cs" || m.lideraEquipos.includes("cs")).map((m) => m.email.toLowerCase()));
+  const nombre = new Map(miembros.map((m) => [m.email.toLowerCase(), m.name]));
+  const firma = firmaDelPase(p.porEmail);
+  const r: ResultadoDelPaseDeTareas = { movidas: [], fusionadas: 0, noSePudieron: 0 };
+  const tocadas = new Set<string>();
+
+  for (const t of candidatas) {
+    const porQue = porQueLaMueveElPase(t);
+    if (!porQue) continue;
+    const de = t.responsableEmail!.toLowerCase();
+    const a = p.destino({ responsableEmail: de, projectId: t.projectId })?.toLowerCase() ?? null;
+    if (!a || a === de) continue;
+    const equipoNuevo = casa.get(a);
+    if (!equipoNuevo) continue; // solo a alguien del equipo activo
+    if (porQue === "siguiente-paso" && !deCs.has(a)) continue;
+    r.movidas.push({ id: t.id, numero: t.numero, titulo: t.titulo, de, a, porQue });
+    if (opciones.simular) continue;
+
+    const datos = { desde: de, hacia: a, motivo: "pase", porque: p.motivo, texto: textoDelPase(nombre.get(de) ?? de, nombre.get(a) ?? a, p.motivo) };
+    const esPropuesta = t.estado === "propuesta";
+    // Una propuesta igual que la persona nueva ya tiene (mismo título, cliente y pedido) chocaría con el único: se junta.
+    const igual = esPropuesta
+      ? await prisma.tarea.findFirst({
+          where: { estado: "propuesta", huella: t.huella, responsableEmail: a, clientId: p.clientId, pedidaPorEmail: t.pedidaPorEmail ?? null, id: { not: t.id } },
+          select: { id: true },
+        })
+      : null;
+    try {
+      await prisma.$transaction(async (tx) => {
+        if (igual) {
+          const n = await tx.tarea.updateMany({
+            where: { id: t.id, version: t.version, estado: "propuesta" },
+            data: { estado: "fusionada", decision: "misma", decididaPorEmail: firma, decididaAt: ahora, mismaQueId: igual.id, version: { increment: 1 } },
+          });
+          if (n.count === 0) throw new ErrorDeTareas(409, "cambió");
+          await evento(tx, { tareaId: t.id, tipo: "pase", porEmail: firma, datos: { ...datos, juntadaCon: igual.id } });
+          await evento(tx, { tareaId: igual.id, tipo: "mencionada", porEmail: firma, sessionId: t.sessionId, cita: t.cita, datos: { de: "pase", desde: t.id } });
+          return;
+        }
+        const semana = t.semana && !esPropuesta ? await semanaDestino(tx, a, comoFecha(t.semana)!, true, ahora) : comoFecha(t.semana);
+        const n = await tx.tarea.updateMany({
+          where: { id: t.id, version: t.version, responsableEmail: t.responsableEmail },
+          data: {
+            responsableEmail: a,
+            // Una tarea sin sprint (la de un proyecto) sigue sin sprint; las demás van al sprint de casa de la persona nueva.
+            // El siguiente paso es del sprint de CS: se queda ahí (la persona nueva es de CS o lo lidera).
+            ...(t.equipo === null || porQue === "siguiente-paso" ? {} : { equipo: equipoNuevo }),
+            semana: semana ? aDate(semana) : null,
+            ...(t.agendaEstado === "sin_agendar" ? {} : { agendaEstado: "sin_agendar" }),
+            version: { increment: 1 },
+          },
+        });
+        if (n.count === 0) throw new ErrorDeTareas(409, "cambió");
+        await evento(tx, { tareaId: t.id, tipo: "pase", porEmail: firma, datos });
+      }, OPCIONES_DE_TX);
+      if (igual) r.fusionadas++;
+      tocadas.add(de).add(a);
+    } catch (e) {
+      // Otra corrida la movió primero (versión distinta) o dejó una propuesta igual (el único): queda como está y se sigue.
+      if (!(e instanceof ErrorDeTareas) && !esUnicoDuplicado(e)) throw e;
+      r.movidas.pop();
+      r.noSePudieron++;
+    }
+  }
+  for (const e of tocadas) olvidarMedicion(e);
   return r;
 }
 

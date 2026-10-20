@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   cuentasSinServicio,
   sinSiguientePaso,
-  encargadosDelPase,
   filtrarEmpresas,
   motivosDeAtencion,
   negociosDeLaEmpresa,
@@ -55,26 +54,6 @@ function empresa(e: Partial<EmpresaDeCs> = {}): EmpresaDeCs {
 }
 
 describe("el pase de cuenta en la cartera", () => {
-  it("muestra los encargados de Customer Success y SmartLoop, sin repetir", () => {
-    const e = empresa({
-      proyectos: [
-        proyecto({ id: "a", encargado: "Caroline Bersot" }),
-        proyecto({ id: "b", pipeline: "smartloop", encargado: "Caroline Bersot" }),
-        proyecto({ id: "c", pipeline: "smartloop", encargado: "Heiver Gómez" }),
-      ],
-    });
-    expect(encargadosDelPase(e)).toEqual(["Caroline Bersot", "Heiver Gómez"]);
-  });
-
-  it("los de Desarrollo no: el pase no los toca", () => {
-    const e = empresa({ proyectos: [proyecto({ encargado: "Caroline Bersot" }), proyecto({ id: "d", pipeline: "development", encargado: "Breiner Salas" })] });
-    expect(encargadosDelPase(e)).toEqual(["Caroline Bersot"]);
-  });
-
-  it("sin encargado no inventa uno", () => {
-    expect(encargadosDelPase(empresa({ proyectos: [proyecto({ encargado: null })] }))).toEqual([]);
-  });
-
   it("solo con desarrollo no hay dónde hacer el pase", () => {
     expect(tieneDondeHacerElPase(empresa({ proyectos: [proyecto({ pipeline: "development" })] }))).toBe(false);
     expect(tieneDondeHacerElPase(empresa())).toBe(true);

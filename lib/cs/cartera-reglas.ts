@@ -39,6 +39,7 @@ import { VENTANA_DE_RELACION, VENTANA_DE_RELACION_URGENTE, VENTANA_DE_RELACION_T
 import { esMotivoDelCliente, type AjustesDeSalud, type CorreccionGuardada, type EsperaGuardada } from "./ajustes-de-salud";
 import { CATEGORIAS_QUE_PINTAN, citaDeLaEvidencia, dondeLoDijo, type CitaDeAlerta } from "./cita-de-alerta";
 import { coincideBusqueda, filtrarPorBusqueda } from "@/lib/ui/text-search";
+import { encargadoDeLaCuenta, quienesLlevanLaCuenta, type ProyectoQueLleva } from "@/lib/cuentas/encargado";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 
 // ───────────────────────────────────────────────────────────────────────────────────────────
@@ -62,6 +63,14 @@ export interface ProyectoDeCuenta {
   cseDeBaja?: string | null;
   /** false = cerrado o inactivo (solo se traen los cerrados hace poco, para el cruce de uso). */
   activo: boolean;
+  /**
+   * Para la regla de quién lleva la cuenta (lib/cuentas/encargado.ts). `deCs`: del pipeline de Customer Success (un
+   * proyecto de Desarrollo no define el CSE de la cuenta); `deHubspot`: con registro en HubSpot; `creadoAt`: cuándo se
+   * creó en HubSpot (desempata). Sin el dato, cuentan (las filas de antes).
+   */
+  deCs?: boolean;
+  deHubspot?: boolean;
+  creadoAt?: string | null;
   bloqueado: boolean;
   motivoBloqueo: string | null;
   detalleBloqueo: string | null;
@@ -395,18 +404,29 @@ export function cseVigente(
   return { cseNombre: nombre, cseEmail: email, cseDeBaja: null };
 }
 
-/** El CSE de la cuenta: quien lleva más proyectos activos en ella. */
+/**
+ * El CSE de la cuenta, con la regla única (lib/cuentas/encargado.ts): quien lleva más proyectos de CS activos en ella.
+ * `cseNombre`/`cseEmail` ya vienen sin los de baja (`cseVigente`).
+ */
 export function cseDeLaCuenta(c: Pick<CuentaDeCartera, "proyectos">): { nombre: string; email: string | null } | null {
-  const conteo = new Map<string, { nombre: string; email: string | null; n: number }>();
-  for (const p of c.proyectos) {
-    if (!p.activo || !p.cseNombre) continue;
-    const k = p.cseEmail ?? p.cseNombre;
-    const e = conteo.get(k) ?? { nombre: p.cseNombre, email: p.cseEmail, n: 0 };
-    e.n++;
-    conteo.set(k, e);
-  }
-  const lista = [...conteo.values()].sort((a, b) => b.n - a.n || a.nombre.localeCompare(b.nombre));
-  return lista[0] ? { nombre: lista[0].nombre, email: lista[0].email } : null;
+  const e = encargadoDeLaCuenta(c.proyectos.map(comoProyectoQueLleva));
+  return e.email ? { nombre: e.nombre ?? e.email, email: e.email } : null;
+}
+
+/** Todos los que llevan un proyecto de CS activo de la cuenta, el encargado primero (los nombres). */
+export function csesDeLaCuenta(c: Pick<CuentaDeCartera, "proyectos">): string[] {
+  return quienesLlevanLaCuenta(c.proyectos.map(comoProyectoQueLleva)).map((p) => p.nombre);
+}
+
+function comoProyectoQueLleva(p: ProyectoDeCuenta): ProyectoQueLleva {
+  return {
+    activo: p.activo,
+    deCs: p.deCs ?? true,
+    deHubspot: p.deHubspot ?? true,
+    email: p.cseEmail,
+    nombre: p.cseNombre,
+    creadoAt: p.creadoAt ?? null,
+  };
 }
 
 /** Todos los motivos para llamar a una cuenta, de más a menos urgente. */
@@ -994,7 +1014,7 @@ export function listaParaLlamar(cuentas: readonly CuentaDeCartera[], hoy: string
       renueva: proximaRenovacion(c, hoy),
       ultimoContacto: c.ultimoContacto,
       cse: cseDeLaCuenta(c),
-      cses: [...new Set(c.proyectos.filter((p) => p.activo && p.cseNombre).map((p) => p.cseNombre as string))],
+      cses: csesDeLaCuenta(c),
       riesgoDoble: motivos.some((m) => m.clave === "riesgoDoble"),
       cruce: motivos.some((m) => m.cruce || m.ia),
       // «Sin datos» es no saber: de su uso (Partner) o de ningún contacto con el cliente. Las dos van
@@ -1045,7 +1065,7 @@ export function alertasParaRevisar(cuentas: readonly CuentaDeCartera[], hoy: str
         nombre: c.nombre,
         salud: salud.salud,
         porqueDeLaSalud: salud.porque,
-        cses: [...new Set(c.proyectos.filter((p) => p.activo && p.cseNombre).map((p) => p.cseNombre as string))],
+        cses: csesDeLaCuenta(c),
         alertas: [...c.alertas].sort(
           (a, b) => RANGO_DE_SEVERIDAD[a.severidad] - RANGO_DE_SEVERIDAD[b.severidad] || b.detectadaEn.localeCompare(a.detectadaEn),
         ),
@@ -1104,7 +1124,7 @@ export function cuentasParaBuscar(cuentas: readonly CuentaDeCartera[], hoy: stri
         renueva: proximaRenovacion(c, hoy),
         uso: c.partner?.uso ?? null,
         cse: cseDeLaCuenta(c)?.nombre ?? null,
-        cses: [...new Set(c.proyectos.filter((p) => p.activo && p.cseNombre).map((p) => p.cseNombre as string))],
+        cses: csesDeLaCuenta(c),
         proyectosActivos: c.proyectos.filter((p) => p.activo).length,
       };
     })

@@ -72,3 +72,33 @@ describe("el pase de cuenta relee lo que escribió", () => {
     expect(ruta).toMatch(/olvidarMedicion\(anterior\)/);
   });
 });
+
+describe("⭐ el espejo dirigido también da de baja la fila fusionada (2026-10-19, la segunda vez)", () => {
+  /* El pase de cuenta, saltado por el piso, relee proyecto por proyecto. Pedir el id fusionado devuelve el del que
+     sigue: sin esto, el espejo actualizaba la fila nueva y la vieja seguía activa con Heiver. */
+  const sync = leer("lib/hubspot/sync-projects.ts");
+  const bloque = sync.slice(sync.indexOf("const enOtro = projects.length === 1"));
+
+  it("compara el id pedido con el que devolvió HubSpot y da de baja SOLO la fila del id pedido", () => {
+    expect(bloque).toContain("fusionadoEn(dirigido, projects[0].id)");
+    expect(bloque).toContain("hubspotServiceId: dirigido, status: \"active\"");
+    expect(bloque).toContain("data: { status: \"inactive\" }");
+  });
+
+  it("las dos bajas por fusión quedan anotadas para el pase de cuenta", () => {
+    expect(sync.match(/fusiones\.push\(/g)?.length).toBe(2);
+    expect(sync).toContain("pasarSiCambioElEncargado(");
+  });
+});
+
+describe("el pase confirma antes de decir «listo»", () => {
+  const ruta = leer("app/api/clients/[id]/cse-encargado/route.ts");
+  it("relee quién lleva la cuenta con la regla única y, si no es la persona nueva, lo dice (409)", () => {
+    expect(ruta).toContain("await encargadoDe(clientId)");
+    expect(ruta).toContain("status: 409");
+  });
+  it("mueve lo abierto del anterior, firmado por quien hizo el pase", () => {
+    expect(ruta).toContain("pasarLoDeLaCuenta(");
+    expect(ruta).toContain("porEmail: quienPasa");
+  });
+});

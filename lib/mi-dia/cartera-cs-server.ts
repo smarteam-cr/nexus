@@ -27,6 +27,7 @@ import { esLiderDeCs } from "@/lib/cs/acceso";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
 import { hoyEnCostaRica } from "@/lib/cs/cartera";
 import { cseDeLaCuenta, proximaRenovacion, type CuentaDeCartera } from "@/lib/cs/cartera-reglas";
+import { encargadoDeLaCuenta, proyectoQueLleva } from "@/lib/cuentas/encargado";
 import { relacionConHubspot } from "@/lib/cs/relacion-gestionada";
 import { portalDelSistema } from "@/lib/hubspot/registro-para-vincular";
 import { hubspotProjectUrl } from "@/lib/hubspot/urls";
@@ -114,6 +115,7 @@ const SELECT_PROYECTO = {
   hermanoCsProjectId: true,
   altaEstado: true,
   esPrueba: true,
+  hubspotCreatedAt: true,
   client: { select: { name: true } },
 } as const;
 
@@ -206,8 +208,10 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
     return p.deactivatedAt ? `${p.name} (de baja)` : p.name;
   };
 
-  // El CSE de cada cuenta: el de Éxito del cliente; sin cuenta (solo desarrollo), el encargado de su primer proyecto
-  // de Customer Success que siga en el equipo.
+  // El CSE de cada cuenta: el de Éxito del cliente; sin cuenta (solo desarrollo, o fuera de la cartera), la misma regla
+  // única (lib/cuentas/encargado.ts) sobre sus proyectos abiertos.
+  const deBajaPorCorreo = new Map(personas.filter((x) => x.deactivatedAt).map((x) => [x.email.toLowerCase(), x.name]));
+  const nombreEnNexus = new Map(personas.map((x) => [x.email.toLowerCase(), x.name]));
   const cseDe = new Map<string, { nombre: string; email: string | null } | null>();
   for (const id of ids) {
     const c = cuentaDe.get(id);
@@ -215,10 +219,8 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
       cseDe.set(id, cseDeLaCuenta(c));
       continue;
     }
-    const deCs = proyectos.find(
-      (p) => p.clientId === id && PIPELINE_DE.get(p.hubspotPipelineId ?? "") !== "development" && p.hubspotOwnerEmail && !persona.get(p.hubspotOwnerEmail.toLowerCase())?.deactivatedAt,
-    );
-    cseDe.set(id, deCs?.hubspotOwnerEmail ? { nombre: nombreDelEncargado(deCs.hubspotOwnerEmail, deCs.hubspotOwnerName) ?? deCs.hubspotOwnerEmail, email: deCs.hubspotOwnerEmail.toLowerCase() } : null);
+    const e = encargadoDeLaCuenta(proyectos.filter((p) => p.clientId === id).map(proyectoQueLleva), deBajaPorCorreo, nombreEnNexus);
+    cseDe.set(id, e.email ? { nombre: e.nombre ?? e.email, email: e.email } : null);
   }
 
   // La acción de la semana y la próxima reunión: del calendario de quien la lleva. El CSE, del suyo (como el resto de

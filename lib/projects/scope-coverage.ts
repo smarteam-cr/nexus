@@ -52,7 +52,6 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   // La carga de CS (2026-10-06): los cronogramas y las cuentas de la cartera, como Éxito del cliente.
   "lib/carga/queries.ts": { modo: "criterio", criterio: "cartera" },
   // La lectura de seguimiento (memoria de la cuenta, etapa 2): el CSE de la cuenta, para lo que prometió el cliente.
-  "lib/lecturas/personas.ts": { modo: "criterio", criterio: "cartera" },
   // La lista de limpieza de HubSpot (2026-10-16, fase 0.5): los proyectos abiertos de HubSpot, de cualquier pipeline.
   "lib/limpieza/lista-server.ts": { modo: "criterio", criterio: "clasificable" },
   // Las propuestas de salud del vigía (2026-10-19): solo busca QUÉ CLIENTES tienen una propuesta guardada; la cartera
@@ -209,12 +208,17 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "no pregunta «¿qué proyectos cuentan?»: busca de qué cuentas es DUEÑA una persona, con el mismo filtro de " +
       "pipeline que requireAccessToClient (PROYECTO_DE_PIPELINE_CS_WHERE). Es acceso, no alcance.",
   },
-  "lib/cs/adopcion-del-cse-server.ts": {
+  "lib/cuentas/encargado-server.ts": {
     modo: "exento",
     razon:
-      "decide si quien abre la pestaña Adopción es el CSE de la cuenta: busca un proyecto donde sea el encargado en " +
-      "HubSpot, acotado por PIPELINE (`PROYECTO_DE_PIPELINE_CS_WHERE`), igual que lib/auth/access.ts decide el dueño de " +
-      "la cuenta. Es una pregunta de acceso, no de pantalla.",
+      "quién lleva la cuenta (2026-10-19): trae los proyectos ACTIVOS con dueño y la regla pura (lib/cuentas/encargado.ts) " +
+      "filtra por pipeline con `esProyectoDePipelineCS`, en memoria. Es la pregunta «¿de quién es la cuenta?», no de pantalla.",
+  },
+  "lib/cuentas/pase-server.ts": {
+    modo: "exento",
+    razon:
+      "la foto de los proyectos activos con dueño, antes y después de sincronizar, para saber si cambió el encargado. " +
+      "Mira TODOS los pipelines a propósito: una tarea de un proyecto que su responsable sigue llevando no se mueve.",
   },
   "lib/sessions/solicitudes-server.ts": {
     modo: "exento",

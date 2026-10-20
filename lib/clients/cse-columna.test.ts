@@ -40,30 +40,17 @@ describe("⭐ la columna CSE de /clients no mezcla pipelines", () => {
   });
 
   it("⛔ cseNames/cseEmails salen de proyectos YA filtrados, no de c.projects crudo", () => {
-    /* La edición que la pone en rojo: volver `const proyectosDeCS = c.projects;` (sin `.filter`),
-       o mapear `cseNames` directo desde `c.projects` otra vez. `tsc` NO cazaría ese cambio —
-       sigue siendo TypeScript válido, solo cambia el comportamiento en producción. */
-    /* 2026-10-11: el filtro por pipeline pasó a `deCS`, y `proyectosDeCS` se queda con los ACTIVOS de esa lista (o con
-       todos, si el cliente no tiene ninguno activo). Un proyecto cerrado guarda a quien lo llevaba entonces. */
+    /* La edición que la pone en rojo: volver `const proyectosDeCS = c.projects;` (sin `.filter`), o armar `cseNames`
+       directo desde `c.projects` otra vez. `tsc` NO cazaría ese cambio. Desde el 2026-10-19 los dos arrays salen de la
+       regla única (lib/cuentas/encargado.ts) aplicada a esa lista ya filtrada. */
     const f = FUENTE.indexOf("const deCS = c.projects.filter(esProyectoDePipelineCS);");
     expect(f, "desapareció el filtro por pipeline antes de armar los arrays").toBeGreaterThan(-1);
-    const i = FUENTE.indexOf("const proyectosDeCS = activosDeCS.length > 0 ? activosDeCS : deCS;", f);
+    const i = FUENTE.indexOf("const proyectosDeCS = activosDeCS.length > 0 ? activosDeCS :", f);
     expect(i, "proyectosDeCS tiene que salir de la lista ya filtrada por pipeline, primero los activos").toBeGreaterThan(-1);
-    const bloque = FUENTE.slice(i, FUENTE.indexOf("const cseEmails = [", i) + 400);
-    expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(200);
-    /* ⚠ NO se busca ".map((p) => p.hubspotOwnerName)" como string contiguo: el formato real
-       parte la llamada en dos líneas (`proyectosDeCS\n  .map(...)`). Y NO alcanza con que
-       ".map((p) => p.hubspotOwnerName)" exista en algún lado — eso también sería cierto si
-       alguien volviera a mapear directo `c.projects`. Lo que hace falta es que el RECEPTOR de
-       los dos `.map()` sea `proyectosDeCS`: se cuenta cuántas veces aparece el nombre en el
-       bloque — 1 por la definición, 1 por cada `.map()` que lo usa. */
-    const usos = (bloque.match(/proyectosDeCS/g) ?? []).length;
-    expect(
-      usos,
-      "cseNames/cseEmails dejaron de leer de `proyectosDeCS` (la lista ya filtrada por " +
-        "pipeline): vuelve a mezclar el CSE real con desarrolladores de proyectos hijos",
-    ).toBe(3);
-    expect(bloque).toContain(".map((p) => p.hubspotOwnerName)");
-    expect(bloque).toContain(".map((p) => p.hubspotOwnerEmail)");
+    const bloque = FUENTE.slice(i, FUENTE.indexOf("const cseEmail = ", i) + 200);
+    expect(bloque).toContain("const lleva = proyectosDeCS.map(proyectoQueLleva);");
+    expect(bloque).toContain("encargadoDeLaCuenta(lleva");
+    expect(bloque).toContain("quienesLlevanLaCuenta(lleva");
+    expect(bloque, "cseNames/cseEmails volvieron a leer de c.projects crudo").not.toContain("c.projects");
   });
 });

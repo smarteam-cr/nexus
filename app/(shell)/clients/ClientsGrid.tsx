@@ -72,6 +72,8 @@ export interface ClientRow {
   createdAt: string;            // ISO
   cseNames: string[];           // owners distintos de los proyectos
   cseEmails: string[];          // owners en email para matching contra activeCse
+  /** El encargado de la cuenta (lib/cuentas/encargado.ts); null = nadie del equipo activo la lleva. */
+  cseEmail: string | null;
   lastSalesMeeting: string | null; // ISO
   lastCseMeeting: string | null;   // ISO
   // Última actividad PASADA — orden principal de la lista
@@ -504,7 +506,7 @@ export default function ClientsGrid({
             <CseEncargadoSelect
               clientId={c.id}
               clientName={c.name}
-              nombres={c.cseNames}
+              encargado={c.cseNames[0] ? { nombre: c.cseNames[0], email: c.cseEmail } : null}
               opciones={opcionesDeEncargado}
               puedeEditar={puedeReasignarEncargado}
             />

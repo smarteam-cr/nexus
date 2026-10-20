@@ -623,8 +623,9 @@ const ESTADOS_TERMINADOS = ESTADOS_DE_ALTA.filter(altaTerminada);
 export async function espejarProyectoRecienCreado(
   clientId: string,
   hubspotServiceId: string,
+  o: { porEmail?: string | null } = {},
 ): Promise<SyncResult> {
-  return syncProjectsForClient(clientId, { force: true, soloRecord: hubspotServiceId });
+  return syncProjectsForClient(clientId, { force: true, soloRecord: hubspotServiceId, porEmail: o.porEmail ?? null });
 }
 
 export interface SyncOpts {
@@ -639,6 +640,11 @@ export interface SyncOpts {
    * SÍ corre: es lo que el motor necesita para dar el alta por terminada.
    */
   soloRecord?: string;
+  /**
+   * Quien pidió la corrida para hacer el pase de cuenta (la ruta del pase). Si el encargado cambió, lo abierto del
+   * anterior pasa al nuevo firmado por esa persona; sin esto (cambió en HubSpot), firma el sistema.
+   */
+  porEmail?: string | null;
 }
 
 /**
@@ -694,7 +700,47 @@ export async function syncProjectsForClient(clientId: string, opts: SyncOpts = {
   return promesa;
 }
 
+/**
+ * La corrida, y después el pase de cuenta (2026-10-19): se mira quién lleva la cuenta y cada proyecto ANTES y DESPUÉS,
+ * y si cambió (el pase en Nexus, o alguien lo cambió en HubSpot), lo abierto del anterior pasa al nuevo
+ * (lib/cuentas/pase-server.ts). Una foto de los proyectos activos con dueño antes y otra después: dos consultas chicas.
+ */
 async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult> {
+  const pase: FotoDelPase = { modulo: null, antes: null };
+  const fusiones: { viejoProjectId: string; nuevoHubspotId: string }[] = [];
+  const despuesDelEspejo = async (result: SyncResult | null) => {
+    if (!pase.modulo || !pase.antes) return;
+    const r = await pase.modulo.pasarSiCambioElEncargado({ clientId, antes: pase.antes, fusiones, porEmail: opts.porEmail ?? null });
+    if (result && (r.tareas.length || r.avisos || r.alertas)) {
+      result.debug!.push(`Pase de cuenta: ${r.tareas.length} tareas, ${r.avisos} avisos y ${r.alertas} alertas pasaron al encargado nuevo.`);
+    }
+  };
+  let result: SyncResult;
+  try {
+    result = await correrElEspejo(clientId, opts, fusiones, pase);
+  } catch (e) {
+    // Si el espejo se cayó DESPUÉS de escribir dueños, el pase igual se hace: la próxima corrida ya vería lo nuevo como
+    // «antes» y lo abierto quedaría con el anterior para siempre.
+    await despuesDelEspejo(null);
+    throw e;
+  }
+  await despuesDelEspejo(result);
+  return result;
+}
+
+/** La foto de antes, que se toma apenas se sabe que el cliente existe (sin cambiar cuándo arranca la corrida). */
+interface FotoDelPase {
+  modulo: typeof import("@/lib/cuentas/pase-server") | null;
+  antes: Awaited<ReturnType<typeof import("@/lib/cuentas/pase-server").fotoParaElPase>> | null;
+}
+
+async function correrElEspejo(
+  clientId: string,
+  opts: SyncOpts,
+  /** Las filas que esta corrida dio de baja porque en HubSpot se fusionaron en otro proyecto (para el pase). */
+  fusiones: { viejoProjectId: string; nuevoHubspotId: string }[],
+  pase: FotoDelPase,
+): Promise<SyncResult> {
   const result: SyncResult = { found: 0, created: 0, updated: 0, skipped: 0, suprimidos: 0, errors: [], debug: [] };
   const dirigido = opts.soloRecord?.trim() || null;
 
@@ -714,6 +760,11 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
     result.errors.push("Cliente no encontrado");
     return result;
   }
+
+  /* La foto de ANTES para el pase de cuenta (2026-10-19): quién lleva cada proyecto activo. Import dinámico: el pase
+     arrastra Tareas, «Para ti» y las alertas, y el espejo no puede depender de que carguen. Si falla, no hay pase. */
+  pase.modulo = await import("@/lib/cuentas/pase-server").catch(() => null);
+  pase.antes = pase.modulo ? await pase.modulo.fotoParaElPase(clientId).catch(() => null) : null;
 
   // 2. Obtener HubSpot client:
   //    Caso A: cliente tiene su propio portal HubSpot → usar su cuenta
@@ -1054,6 +1105,34 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
   }
 
   result.found = projects.length;
+
+  /* ⚠ EL ESPEJO DIRIGIDO DE UN PROYECTO FUSIONADO (2026-10-19, Librería Internacional, la segunda vez). Pedir el id de
+     un proyecto fusionado en HubSpot devuelve el del que sigue: el espejo dirigido actualizaba la fila del que sigue y
+     dejaba la vieja activa con el encargado de antes, porque la reconciliación (la que da de baja lo fusionado) no
+     corre en el modo dirigido. Era el camino del pase de cuenta cuando el piso de 60 s saltaba la corrida completa: la
+     celda volvía a Heiver. Acá se da de baja SOLO la fila del id pedido: HubSpot ya confirmó que se fusionó. */
+  if (dirigido) {
+    const enOtro = projects.length === 1 ? fusionadoEn(dirigido, projects[0].id) : null;
+    if (enOtro) {
+      const [vieja] = await prisma.project.findMany({ where: { clientId, hubspotServiceId: dirigido, status: "active" }, select: { id: true, name: true }, take: 1 });
+      if (vieja) {
+        await prisma.project.update({ where: { id: vieja.id }, data: { status: "inactive" } });
+        fusiones.push({ viejoProjectId: vieja.id, nuevoHubspotId: enOtro });
+        result.updated++;
+        result.debug!.push(`Espejo dirigido: "${vieja.name}" (${dirigido}) se fusionó en ${enOtro} en HubSpot → inactive`);
+        logTransicion({
+          project: `${vieja.name} (${dirigido})`,
+          de: "active",
+          a: "inactive",
+          pipelineId: null,
+          stageId: null,
+          stageLabel: null,
+          rawStatus: "",
+          motivo: `espejo dirigido: se fusionó en ${enOtro}`,
+        });
+      }
+    }
+  }
 
   /* Las asociaciones proyecto↔proyecto de TODA la corrida, en una sola llamada. Como los
      proyectos de una empresa vienen todos juntos, el grafo del hermano se arma sin pedir
@@ -1449,6 +1528,7 @@ async function correrSync(clientId: string, opts: SyncOpts): Promise<SyncResult>
         continue;
       }
       await prisma.project.update({ where: { id: cand.id }, data: { status: "inactive" } });
+      if (typeof verdict === "object") fusiones.push({ viejoProjectId: cand.id, nuevoHubspotId: verdict.fusionadoEn });
       result.updated++; // dispara router.refresh() en WorkspaceClient
       const porQue =
         typeof verdict === "object" ? `se fusionó en ${verdict.fusionadoEn}` : verdict === "gone" ? "no existe (404)" : "en estado cerrado";

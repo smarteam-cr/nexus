@@ -18,7 +18,8 @@ export async function ultimosToquesDePersonas(ids: readonly string[]): Promise<M
   if (!ids.length) return mapa;
   const filas = await prisma.tareaEvento.groupBy({
     by: ["tareaId"],
-    where: { tareaId: { in: [...ids] }, porEmail: { notIn: NO_SON_PERSONAS } },
+    // El pase de cuenta (evento `pase`) lo firma quien lo hizo, pero no es tocar la tarea: es mudarla de dueña.
+    where: { tareaId: { in: [...ids] }, porEmail: { notIn: NO_SON_PERSONAS }, tipo: { not: "pase" } },
     _max: { createdAt: true },
   });
   for (const f of filas) if (f.tareaId && f._max.createdAt) mapa.set(f.tareaId, f._max.createdAt);

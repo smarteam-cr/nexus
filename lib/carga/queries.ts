@@ -18,6 +18,8 @@ import { modeloDisponible } from "@/lib/db/esquema";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
 import { proyectoClasificableWhere, proyectoDeCarteraWhere } from "@/lib/projects/scope";
+import { encargadoDeLaCuenta, proyectoQueLleva } from "@/lib/cuentas/encargado";
+import { SELECT_PARA_EL_ENCARGADO } from "@/lib/cuentas/encargado-server";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { SECCION_DE_ESCALA } from "@/lib/escala/contexto";
 import { leerPosicion, valorDeNivel } from "@/lib/escala/posicion";
@@ -402,7 +404,12 @@ export async function leerCuentasDeCartera(ids?: readonly string[]) {
       partnerSnapshot: { select: { hubEditions: true, seats: true, uusTrend: true, fetchedAt: true } },
       projects: {
         where: proyectoDeCarteraWhere(),
-        select: { hubspotOwnerEmail: true, hubspotOwnerName: true, hubspotPipelineStageLabel: true, tags: true },
+        select: {
+          hubspotPipelineStageLabel: true,
+          tags: true,
+          // hubspotOwnerEmail y hubspotOwnerName vienen acá. Lo que mira la regla de quién lleva la cuenta (lib/cuentas/encargado.ts).
+          ...SELECT_PARA_EL_ENCARGADO,
+        },
       },
       _count: { select: { projects: { where: proyectoClasificableWhere({ hubspotPipelineName: { in: PIPELINES_DE_DESARROLLO } }) } } },
     },
@@ -496,19 +503,10 @@ export async function factoresDeLasCuentas(ids: readonly string[], config: Confi
   return factoresDeComplejidad(cuentas, ultimas, config, ahora, niveles);
 }
 
-/** El CSE de una cuenta: el dueño en HubSpot de la mayoría de sus proyectos de cartera, o nadie si ya no está. */
+/** El CSE de una cuenta, con la regla única (lib/cuentas/encargado.ts); sin nadie activo, de quién era. */
 export function cseDeLaCuenta(c: CuentaDb, deBaja: Map<string, string>): { nombre: string | null; email: string | null; deBaja: string | null } {
-  const conteo = new Map<string, { nombre: string | null; n: number }>();
-  for (const p of c.projects) {
-    const e = norm(p.hubspotOwnerEmail);
-    if (!e) continue;
-    const x = conteo.get(e) ?? { nombre: p.hubspotOwnerName, n: 0 };
-    x.n++;
-    conteo.set(e, x);
-  }
-  const [email, dueno] = [...conteo.entries()].sort((a, b) => b[1].n - a[1].n)[0] ?? [null, null];
-  const baja = email ? deBaja.get(email) ?? null : null;
-  return baja ? { nombre: null, email: null, deBaja: dueno?.nombre ?? baja } : { nombre: dueno?.nombre ?? null, email, deBaja: null };
+  const e = encargadoDeLaCuenta(c.projects.map(proyectoQueLleva), deBaja);
+  return { nombre: e.nombre, email: e.email, deBaja: e.deBaja };
 }
 
 /** Asientos asignados (core + ventas + servicio), o null si la copia de Partner no los trae. */
