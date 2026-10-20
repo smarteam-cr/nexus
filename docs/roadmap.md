@@ -365,14 +365,49 @@ Todo `main` está en producción desde el 19 oct (`af896cfd`). Si usas el 3004, 
 
 **Para decidir (sprint de marketing):** sacar el tope de 5 por persona en la reunión del sprint, y leer también la conversación aunque las notas traigan pasos (unos US$0,014 por reunión). El segundo sirve solo con el primero.
 
-**Mejoras del 19 oct en la noche, en curso** (cada una en su sesión; se juntan, se suben y se despliegan al terminar):
+**Mejoras del 19 oct en la noche:** en producción; sus pruebas son las del área «Lo de la noche del 19 oct». La exploración de los proyectos tiene lo de la preventa; una reunión agendada cuenta como siguiente paso y «Para ti» del CSE y la CSL son tres bloques (reuniones, sin siguiente paso, pendientes sin seguimiento); de las reuniones con clientes salen como mucho 3 tareas esenciales y lo descartado no vuelve; con varios proyectos cada quien abre en el suyo; «quién lleva la cuenta» sale de una sola regla y el pase mueve lo abierto al encargado nuevo; «Seguimiento de cuentas» en Éxito del cliente (próxima sesión, siguiente paso y temas por cuenta; el CSE entra solo a esta página); y a la CSL le llega primero lo de la limpieza de HubSpot que deja cuentas sin dueño.
 
-- La exploración de los proyectos de clientes con todo lo de la preventa: «Lo que ya sabemos», preguntas cortas, el menú de cada pregunta, agregar a mano y el asistente. Sin tocar lo ya generado.  ⏳ En curso
-- Una reunión agendada cuenta como el siguiente paso: «Para ti» y «Sugerencias» dejan de pedirlo.  ⏳ En curso
-- «Para ti» de cada CSE con lo que importa hoy: reuniones de los próximos días, cuentas sin siguiente paso y pendientes sin seguimiento.  ⏳ En curso
-- Tareas de lo que se habló con el cliente: pocas y esenciales («Enviar el reporte a CEMACO»), y lo descartado no vuelve.  ⏳ En curso
-- Con varios proyectos, cada quien abre en el de su equipo (Cemaco: Lili en el CRM, Breiner en Desarrollo).  ⏳ En curso
-- Lo mismo para Ventas, donde aplique (cada sesión lo revisa).  ⏳ En curso
+**Para decidir:** las tareas de seguimiento que quedaron en «Por asignar · Customer Success» en una cuenta sin CSE (hay 4 en Secure Title), ¿pasan solas al encargado nuevo? Hoy se quedan. Y «Fomento Urbano» y «Fomento Urbano S.A.» parecen la misma empresa dos veces.
+
+### 0 · Lo de la noche del 19 oct <span class="prioridad">Alta</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 170 | Por validar | Que una guía de proyecto vieja avise | Clientes › Cemaco Internacional › «Cemaco Internacional - CRM» › Exploración › próxima sesión › «Preparación». | Arriba, en ámbar: «Se armó antes de «Lo que ya sabemos»…» con «Actualizar la guía». La guía sigue igual (9 preguntas). |
+| 171 | Por validar | Que el proyecto tenga «Lo que ya sabemos» | La misma pestaña, «Lo que ya sabemos». | 5 líneas: dos de reuniones y Retos, Resultados que persigue y Obstáculos, con «Confirmado en la estrategia». |
+| 172 | Por validar | Que la guía nueva del proyecto sea corta | Botón «Actualizar la guía». | Unas 5 preguntas de estrategia y escala, cada una con su ⓘ, más de 3 a 5 de lo vendido. El aviso ámbar desaparece. |
+| 173 | Por validar | Que la guía de base también sea corta | Ferreteria Noelito › «Implementación CRM + Conexión SAP» › Exploración › Sesión 1 › «Preparación». | 5 preguntas (Retos, Resultados que persigue, Obstáculos y dos de la escala), ya no 8. |
+| 174 | Por validar | Que cierre pensando en los resultados | Cualquiera de esas guías, tramo «Cerrar». | «¿Hay algo que no hayamos hablado y que deba saber para que el proyecto llegue a esos resultados?» |
+| 175 | Por validar | Que regenerar, agregar y el asistente funcionen en el proyecto | Cemaco, después de actualizar: ⋯ › «Regenerar»; «+ Agregar pregunta» y otra vez «Actualizar la guía»; «Mejorar con el asistente». | La pregunta cambia y dice «Regenerada»; la tuya dice «Tuya» y sigue después de actualizar; el chat de Cemaco abre con la guía y de 3 a 4 pedidos en botones. |
+| 178 | Por validar | Que «Lo que cubre la guía» sume lo vendido | Cemaco, «Lo que cubre la guía». | Retos, Resultados que persigue y Obstáculos, y debajo «Piezas de lo vendido que pregunta:» con sus temas. |
+| 180 | Por validar | Que una reunión agendada cuente como siguiente paso | «Ver como» Liliana Moreno › «Para ti» › «Lo que importa hoy». | Bloque «Reuniones con tus cuentas» con «Cemaco Internacional: … — Mañana» y «Preparar». No aparece «falta el siguiente paso»; los otros bloques dicen «Todas tus cuentas tienen su siguiente paso.» y «Nada prometido sin tomar…». |
+| 182 | Por validar | Que el CSE vea las cuentas sin siguiente paso | «Ver como» Juan Carlos Armijos › «Para ti» › «Cuentas sin siguiente paso» › «Ver las 13 en la cartera». | 3 cuentas con «Agendar», «se ven 3 de 13…» y el enlace; sin «Estabilizar». La cartera abre en «Sin siguiente paso» y las cuentas con reunión dicen «✓ Siguiente paso: reunión …». |
+| 184 | Por validar | Que vea lo prometido sin tomar | «Ver como» Heiver Gomez › «Para ti» › «Pendientes sin seguimiento». | Primero los compromisos de TEC sin tomar y después «TEC: 2 tareas vencidas», con T-45. |
+| 186 | Por validar | Que la CSL vea los tres bloques por CSE | «Ver como» Alexander Vanegas › «Para ti». | En cada bloque, una línea por CSE («Heiver Gomez: 6 cuentas sin siguiente paso», «Sin CSE: …»), con enlaces. |
+| 187 | Por validar | Que «Sugerencias» no pida el paso si hay reunión | Ficha de Cemaco › chat de Nexus › «Sugerencias». | No aparece «Fija el siguiente paso de Customer Success con …». |
+| 188 | Por validar | Que en Ventas la reunión también cuente | «Ver como» Andrés Pinzón › «Para ti» › «Tu cartera» › «Para mover hoy». | Un negocio cuya empresa tiene reunión esta semana no pide «Definir siguiente paso» y dice «Siguiente paso: reunión …». |
+| 190 | Por validar | Que de una reunión con cliente salgan pocas tareas | Liliana Moreno con su usuario › Tareas › «Mis tareas», después de la próxima reunión de Cemaco. | Como mucho 3 propuestas, con títulos cortos que empiezan con un verbo, como «Enviar el reporte a CEMACO». Lo que el cliente espera de Smarteam sale como tarea suya, no como «Recordarle a…». |
+| 192 | Por validar | Que no salgan tareas de coordinación interna | Marco Salas, después de una reunión con un cliente. | No aparecen «Realizar reunión interna» ni «Estar disponible el…». |
+| 193 | Por validar | Que lo descartado no vuelva | Un CSE descarta una propuesta y espera la próxima reunión de esa cuenta donde se hable de lo mismo. | No vuelve, ni a él ni a otra persona de esa cuenta. Si la deja vencer sin decidir, sí puede volver. |
+| 198 | Por validar | Que el sprint siga igual | Alejandra Ortega, después de la reunión del sprint de marketing. | Siguen saliendo hasta 5 por persona. |
+| 200 | Por validar | Que cada quien abra en su proyecto | Clientes › Cemaco Internacional con «Ver como» Liliana Moreno, Alejandro Salas y Heiver Gomez; después Alexander Vanegas y tú. | Liliana y Heiver abren en «Cemaco Internacional - CRM»; Alejandro en «CEMACO»; Alex y tú en la cuenta. Arriba: «Esta cuenta tiene otro proyecto: …» con el enlace. |
+| 204 | Por validar | Que lo que eliges gane | Liliana: toca «CEMACO» en esa línea y recarga. | Se queda en «CEMACO». |
+| 205 | Por validar | Que «Preparar» lleve al proyecto propio | «Ver como» Liliana › agenda › una reunión con Cemaco › «Preparar» › enlace a la ficha. | Llega a «Cemaco Internacional - CRM». |
+| 206 | Por validar | Que Librería muestre a su encargada | Clientes, busca «libr», columna «CSE encargado». | «Caroline Bersot», sin «+1», y ya no aparece «Implementación HubSpot Refresh». |
+| 207 | Por validar | Que el CSE encargado quede al cambiarlo | En esa celda, elige otra persona de CS; cierra el desplegable y recarga. Después devuélvela a Caroline. | Queda la persona elegida, también después de recargar. |
+| 209 | Por validar | Que el CSE de una cuenta nunca sea el desarrollador | Éxito del cliente › Cartera › Cemaco Internacional. | El CSE es Liliana, no Breiner. |
+| 210 | Por validar | Que el pase mueva lo abierto | Tras pasar una cuenta con tareas de seguimiento: Tareas › esa tarea › historia; «Para ti» de quien la recibe. | «Cambió de manos: pasó de X a Y por el pase de cuenta», la tarea en la semana de la persona nueva y el aviso «Quedaste como encargado…» con «Te pasaron N tareas abiertas…». |
+| 213 | Por validar | Que un cambio hecho en HubSpot también pase todo | Cambia el «CSE Encargado» directo en HubSpot y abre la ficha en Nexus. | A la persona nueva le llega «Quedaste como encargado de … Cambió en HubSpot», y sus tareas se movieron. |
+| 215 | Por validar | Que el CSE entre a «Seguimiento de cuentas» | «Ver como» Juan Carlos Armijos › menú › Éxito del cliente. | Llega a «Seguimiento de cuentas» con «Las que llevas» (16), sin montos ni uso de HubSpot. |
+| 216 | Por validar | Que la CSL vea el seguimiento de toda la cartera | «Ver como» Alexander Vanegas › Éxito del cliente › «Seguimiento de cuentas». | 48 cuentas, 35 sin sesión y 34 sin siguiente paso, con el filtro por CSE. Cada fila: «Próxima sesión», «Siguiente paso», «Temas que se están tratando» y «Última reunión». |
+| 217 | Por validar | Que «Agendar» lleve a la agenda | Esa página › una cuenta «Sin sesión agendada» › «Agendar». | «Para ti» con el borrador del evento abierto, con la gente de la última reunión. |
+| 220 | Por validar | Que cada tema diga de dónde sale | Esa página › BLUESAT. | Cuatro temas de la reunión del 16 oct, cada uno con su enlace y el día. |
+| 221 | Por validar | Que los filtros funcionen | Botones «Sin sesión agendada» y «Sin siguiente paso». | Filtran, con el número de cada uno. |
+| 222 | Por validar | Que Ventas, Desarrollo y Marketing no entren | «Ver como» Andrés Pinzón y alguien de Desarrollo › menú. | No ven «Éxito del cliente» ni entran a la página. |
+| 223 | Por validar | Que a la CSL le llegue la limpieza que rompe la asignación | «Ver como» Alexander Vanegas › «Para ti» › «Lo que importa hoy». | Primero «Cuentas sin dueño en HubSpot · 27» con «Ver la lista de limpieza» y tres líneas: «20 proyectos sin encargado en HubSpot», «6 cuentas cobran un servicio sin proyecto en HubSpot» y «1 cosa abierta en una cuenta excliente». |
+| 224 | Por validar | Que cada línea diga quién y qué | El mismo bloque › «20 proyectos sin encargado en HubSpot». | «9 encargado que ya no está · 11 sin encargado», con 11 enlaces a HubSpot y «y 9 más en la lista». Wherex dice «(le toca a Heiver Gomez)». |
+| 225 | Por validar | Que no se repita en «Esta semana» | «Para ti» de Alexander › «Esta semana». | Ya no aparecen «HubSpot: 26 cosas por poner al día» ni «8 proyectos de Customer Success sin encargado». |
+| 226 | Por validar | Que el CSE siga con sus tres bloques | «Ver como» Heiver Gomez › «Para ti». | Sus tres bloques iguales; en «También para hoy», «HubSpot: 1 cosa por resolver hoy» (Wherex). |
 
 ### 0 · Lo de la tarde del 19 oct <span class="prioridad">Alta</span>
 
