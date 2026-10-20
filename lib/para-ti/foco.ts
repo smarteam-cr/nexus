@@ -2,14 +2,15 @@
  * lib/para-ti/foco.ts — el inicio de Customer Success: solo lo que más importa hoy de la cartera (2026-10-19). PURO.
  *
  * Elías: «Para ti» tiene que ser más simple para Customer Success. Al CSE (y a la CSL, de toda la cartera, agrupado por
- * CSE) arriba le van TRES bloques, en este orden, y nada más:
+ * CSE) arriba le van TRES bloques, en este orden, y nada más (a la CSL, uno más antes; ver abajo):
  *   1. Reuniones con sus cuentas de hoy y los próximos días hábiles, con «Preparar».
  *   2. Cuentas sin siguiente paso (ni tarea con fecha esta semana ni reunión en 8 días; lib/mi-dia/servicio.ts), con
  *      «Agendar».
  *   3. Pendientes sin seguimiento: lo prometido al cliente que nadie tomó (el aviso de las 48 horas) y las tareas
  *      vencidas de sus cuentas.
  * Lo demás que antes competía por «Lo que importa hoy» (las cuentas en riesgo, lo que dejó un agente, las encuestas, la
- * limpieza de HubSpot, las propuestas del vigía, los avisos de la cartera…) baja a «También para hoy», sin perderse.
+ * limpieza de HubSpot que es orden, las propuestas del vigía, los avisos de la cartera…) baja a «También para hoy» o se
+ * queda en «Esta semana», sin perderse.
  *
  * Los topes, para que siga siendo simple:
  *   · el CSE ve como mucho `MAX_POR_BLOQUE` por bloque. Las cuentas y los pendientes que no entran bajan a «También para
@@ -17,10 +18,18 @@
  *   · la CSL ve UNA LÍNEA POR CSE en cada bloque («Heiver Gomez: 3 cuentas sin siguiente paso»), con el enlace a cada
  *     cuenta: así la cartera entera cabe en una pantalla y nada se pierde. Lo de una persona que ya no está va a «Sin CSE».
  *
+ * A la CSL, ANTES de los tres (2026-10-19), un cuarto bloque que solo aparece si hay algo: «Cuentas sin dueño en
+ * HubSpot» (lib/limpieza/para-ti.ts): proyectos sin encargado o a nombre de alguien que se fue, servicios que se cobran
+ * sin proyecto y exclientes con algo abierto, de toda la lista de limpieza, una línea por lo que hay que hacer. Mientras
+ * una cuenta no tenga dueño, nada de lo demás le llega a nadie: es lo que la CSL resuelve primero. Al CSE, lo suyo de
+ * eso va a «También para hoy».
+ *
  * Reemplaza, para CSE y CSL, a «como mucho cinco, una por cuenta» y a «Estabilizar N cuentas» (lib/para-ti/importa.ts,
  * que sigue valiendo para los demás equipos).
  */
 import { FUENTE_CUENTA_SIN_ACCION, FUENTE_REUNION_CON_LA_CUENTA, FUENTE_TAREAS_VENCIDAS, SIN_CSE } from "@/lib/mi-dia/servicio";
+import { FUENTE_SIN_DUENO, ordenDeLasLineasSinDueno } from "@/lib/limpieza/para-ti";
+import { RUTA_DE_LA_LIMPIEZA } from "@/lib/limpieza/reglas";
 import type { BloqueDelFoco, ClaveDeBloque, FocoDelDia, Pendiente } from "./tipos";
 
 export type ModoDelFoco = FocoDelDia["modo"];
@@ -46,11 +55,37 @@ interface DefDelBloque {
   cuantos: (n: number) => string;
   /** ¿Lo que no entra en el tope baja a «También para hoy»? Las reuniones no: ya están en la agenda. */
   bajaLoQueSobra: boolean;
+  /** Solo en este modo (el bloque de la limpieza es de la CSL). Sin esto, en los dos. */
+  soloEn?: ModoDelFoco;
+  /** Se muestra solo si tiene algo (un bloque de higiene vacío no aporta). */
+  soloSiHay?: boolean;
+  /** La fuente ya manda una línea por grupo: no se agrupa por CSE ni se recorta; se ordena con `ordenar`. */
+  yaAgrupado?: boolean;
+  ordenar?: (a: Pendiente, b: Pendiente) => number;
+  /** El enlace del rótulo («Ver las N en la cartera», «Ver la lista de limpieza»). */
+  verTodas?: (total: number, modo: ModoDelFoco) => { texto: string; href: string } | null;
 }
 
 const plural = (n: number, uno: string, varios: string) => (n === 1 ? `1 ${uno}` : `${n} ${varios}`);
 
 export const BLOQUES_DEL_FOCO: readonly DefDelBloque[] = [
+  {
+    clave: "sin-dueno",
+    fuentes: [FUENTE_SIN_DUENO],
+    titulo: { cse: "", csl: "Cuentas sin dueño en HubSpot" },
+    ayuda: {
+      cse: "",
+      csl: "Proyectos sin encargado o a nombre de alguien que se fue, servicios sin proyecto y exclientes con algo abierto. Mientras sigan así, sus avisos no le llegan a nadie. Se arregla en HubSpot.",
+    },
+    vacio: { cse: "", csl: "Todas las cuentas tienen dueño en HubSpot." },
+    cuantos: (n) => plural(n, "cosa sin dueño", "cosas sin dueño"),
+    bajaLoQueSobra: false,
+    soloEn: "csl",
+    soloSiHay: true,
+    yaAgrupado: true,
+    ordenar: ordenDeLasLineasSinDueno,
+    verTodas: () => ({ texto: "Ver la lista de limpieza", href: RUTA_DE_LA_LIMPIEZA }),
+  },
   {
     clave: "reuniones",
     fuentes: [FUENTE_REUNION_CON_LA_CUENTA],
@@ -74,6 +109,7 @@ export const BLOQUES_DEL_FOCO: readonly DefDelBloque[] = [
     vacio: { cse: "Todas tus cuentas tienen su siguiente paso.", csl: "Todas las cuentas de la cartera tienen su siguiente paso." },
     cuantos: (n) => plural(n, "cuenta sin siguiente paso", "cuentas sin siguiente paso"),
     bajaLoQueSobra: true,
+    verTodas: (total, modo) => (total > (modo === "cse" ? MAX_POR_BLOQUE : 0) ? { texto: `Ver las ${total} en la cartera`, href: CARTERA_SIN_SIGUIENTE_PASO } : null),
   },
   {
     clave: "sin-seguimiento",
@@ -89,12 +125,18 @@ export const BLOQUES_DEL_FOCO: readonly DefDelBloque[] = [
   },
 ];
 
-const BLOQUE_DE_LA_FUENTE = new Map<string, ClaveDeBloque>(BLOQUES_DEL_FOCO.flatMap((b) => b.fuentes.map((f) => [f, b.clave] as const)));
-
-/** ¿Va a un bloque del inicio de Customer Success? */
-export function bloqueDe(p: Pendiente): ClaveDeBloque | null {
-  return BLOQUE_DE_LA_FUENTE.get(p.fuente) ?? null;
+/** Los bloques que ve cada modo, en orden. */
+export function bloquesDelModo(modo: ModoDelFoco): readonly DefDelBloque[] {
+  return BLOQUES_DEL_FOCO.filter((b) => !b.soloEn || b.soloEn === modo);
 }
+
+/** ¿Va a un bloque del inicio de Customer Success, en este modo? */
+export function bloqueDe(p: Pendiente, modo: ModoDelFoco): ClaveDeBloque | null {
+  return bloquesDelModo(modo).find((b) => b.fuentes.includes(p.fuente))?.clave ?? null;
+}
+
+/** Cuántas cosas suma un pendiente (una línea de la limpieza junta varios proyectos). */
+const cuantasJunta = (p: Pendiente) => p.cantidad ?? 1;
 
 const tiempo = (p: Pendiente) => (p.desde ? Date.parse(p.desde) : Number.NEGATIVE_INFINITY);
 
@@ -148,7 +190,7 @@ export interface FocoArmado {
 }
 
 /**
- * Reparte lo de hoy (y lo que dejó un agente) en los tres bloques. `candidatos` ya viene sin claves repetidas.
+ * Reparte lo de hoy (y lo que dejó un agente) en los bloques del modo (los tres, y a la CSL el de la limpieza). `candidatos` ya viene sin claves repetidas.
  *
  * A quien lidera, lo personal que repite lo de la cartera (un compromiso suyo de una cuenta que ya está en «Lo prometido
  * al cliente» de la cartera) no se muestra dos veces.
@@ -158,21 +200,25 @@ export function armarFoco(candidatos: readonly Pendiente[], modo: ModoDelFoco): 
   const porBloque = new Map<ClaveDeBloque, Pendiente[]>();
   const resto: Pendiente[] = [];
   for (const p of candidatos) {
-    const b = bloqueDe(p);
+    const b = bloqueDe(p, modo);
     if (!b) {
       resto.push(p);
       continue;
     }
     if (modo === "csl" && p.fuente === COMPROMISOS && deLaCartera.has(p.clientId ?? "")) continue;
-    porBloque.set(b, [...(porBloque.get(b) ?? []), modo === "csl" ? { ...p, grupo: p.grupo ?? OTRAS_CUENTAS } : p]);
+    const yaAgrupado = BLOQUES_DEL_FOCO.find((d) => d.clave === b)?.yaAgrupado;
+    porBloque.set(b, [...(porBloque.get(b) ?? []), modo === "csl" && !yaAgrupado ? { ...p, grupo: p.grupo ?? OTRAS_CUENTAS } : p]);
   }
 
   const bloques: BloqueDelFoco[] = [];
   const enLosBloques: Pendiente[] = [];
-  for (const def of BLOQUES_DEL_FOCO) {
-    const todos = [...(porBloque.get(def.clave) ?? [])].sort(orden(def.clave));
+  for (const def of bloquesDelModo(modo)) {
+    const todos = [...(porBloque.get(def.clave) ?? [])].sort(def.ordenar ?? orden(def.clave));
+    if (def.soloSiHay && todos.length === 0) continue;
     let items: Pendiente[];
-    if (modo === "cse") {
+    if (def.yaAgrupado) {
+      items = todos;
+    } else if (modo === "cse") {
       items = todos.slice(0, MAX_POR_BLOQUE);
       if (def.bajaLoQueSobra) resto.push(...todos.slice(MAX_POR_BLOQUE));
     } else {
@@ -186,10 +232,10 @@ export function armarFoco(candidatos: readonly Pendiente[], modo: ModoDelFoco): 
       titulo: def.titulo[modo],
       ayuda: def.ayuda[modo],
       items,
-      total: todos.length,
+      total: todos.reduce((n, p) => n + cuantasJunta(p), 0),
       vacio: def.vacio[modo],
-      verTodas: def.clave === "sin-paso" && todos.length > (modo === "cse" ? MAX_POR_BLOQUE : 0) ? { texto: `Ver las ${todos.length} en la cartera`, href: CARTERA_SIN_SIGUIENTE_PASO } : null,
-      sobranEn: modo === "cse" && todos.length > MAX_POR_BLOQUE ? (def.bajaLoQueSobra ? "tambien" : "agenda") : null,
+      verTodas: def.verTodas?.(todos.length, modo) ?? null,
+      sobranEn: modo === "cse" && !def.yaAgrupado && todos.length > MAX_POR_BLOQUE ? (def.bajaLoQueSobra ? "tambien" : "agenda") : null,
     });
   }
   return { foco: { modo, bloques }, enLosBloques, resto };

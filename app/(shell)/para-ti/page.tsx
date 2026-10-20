@@ -9,7 +9,8 @@
  *     con sus cuentas de los próximos días, sus cuentas sin siguiente paso y los pendientes sin seguimiento; a la
  *     derecha, sus cuentas con su siguiente paso. En «Tu cartera», sus empresas con sus proyectos de HubSpot
  *     (components/para-ti/CarteraDeCustomerSuccess.tsx).
- *   · CSL: lo mismo, con toda la cartera y agrupado por CSE («La cartera»). Customer Success no ve la cartera de Ventas.
+ *   · CSL: lo mismo, con toda la cartera y agrupado por CSE («La cartera»), y antes, si hay algo, «Cuentas sin dueño en
+ *     HubSpot» (lib/limpieza/para-ti.ts). Customer Success no ve la cartera de Ventas.
  *   · Desarrollo: los clientes con proyecto de desarrollo activo.
  *   · Marketing: sus tareas internas (Smarteam, SmartAgro).
  *   · Los demás (dirección, Finanzas): la agenda, lo que importa hoy, las tareas de hoy y los avisos.

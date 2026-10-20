@@ -41,15 +41,16 @@ const absoluta = (base: string, href: string) => (/^https?:\/\//.test(href) ? hr
 /**
  * Las mismas cinco de «Lo que importa hoy» (una por cuenta, lib/para-ti/importa.ts), sin Finanzas ni plata. Al CSE y a
  * la CSL (2026-10-19), lo de sus bloques de cuentas sin siguiente paso y pendientes sin seguimiento (lib/para-ti/foco.ts):
- * las reuniones ya van arriba, con «Preparar».
+ * las reuniones ya van arriba, con «Preparar». El bloque de la CSL «Cuentas sin dueño en HubSpot» tampoco: es limpieza
+ * que dura semanas y se hace en HubSpot, no lo del día (y sus líneas juntan decenas de proyectos).
  */
 export function cosasDelCorreo(paraTi: Pick<ParaTi, "agente" | "hoy" | "foco">): { cosas: Pendiente[]; mas: number } {
   if (paraTi.foco) {
-    const delFoco = paraTi.foco.bloques
-      .filter((b) => b.clave !== "reuniones")
+    const delDia = paraTi.foco.bloques.filter((b) => b.clave !== "reuniones" && b.clave !== "sin-dueno");
+    const delFoco = delDia
       .flatMap((b) => b.items)
       .filter((p) => !FUENTES_FUERA.test(p.fuente) && !p.plata);
-    const total = paraTi.foco.bloques.filter((b) => b.clave !== "reuniones").reduce((n, b) => n + b.total, 0);
+    const total = delDia.reduce((n, b) => n + b.total, 0);
     const cosas = delFoco.slice(0, MAX_COSAS);
     return { cosas, mas: Math.max(0, total - cosas.length) };
   }

@@ -40,6 +40,8 @@ export interface Pendiente {
   peso?: number;
   /** La cuenta de la que es. Sin esto, la del enlace (`/clients/<id>`); null = no es de una cuenta. */
   clientId?: string | null;
+  /** Cuántas cosas junta esta línea (una línea de la limpieza de HubSpot junta varios proyectos). Sin esto, 1. */
+  cantidad?: number;
   /** Solo en «Lo que importa hoy»: lo demás de esta cuenta («+N en esta cuenta»). */
   otrosEnLaCuenta?: Pendiente[];
   /**
@@ -111,7 +113,7 @@ export interface CuentaDeParaTi {
 }
 
 /** Los tres bloques del inicio de Customer Success, en orden (lib/para-ti/foco.ts). */
-export type ClaveDeBloque = "reuniones" | "sin-paso" | "sin-seguimiento";
+export type ClaveDeBloque = "sin-dueno" | "reuniones" | "sin-paso" | "sin-seguimiento";
 
 export interface BloqueDelFoco {
   clave: ClaveDeBloque;

@@ -8474,6 +8474,8 @@ hacerlo**. El plan, por fases, está en `docs/nexus-sistema-de-trabajo-plan.md`.
   - *Dónde se ve*: en «Para ti», una línea de «Esta semana» con lo de cada persona y su enlace a HubSpot (es limpieza:
     no compite con lo de hoy), y la lista entera por responsable en Éxito del cliente › «Limpieza de HubSpot», para la
     CSL y dirección.
+    ⚠ **Enmendado el 2026-10-19** («La limpieza de HubSpot en «Para ti» de la CSL»): lo que deja una cuenta sin dueño
+    va a lo de hoy, y a la CSL en su propio bloque; en «Esta semana» queda solo la etapa quieta y la falta de actividad.
   - *Dos datos nuevos del espejo de proyectos*: desde cuándo está en la etapa de hoy (`hs_v2_date_entered_current_stage`)
     y la última actividad (`hs_last_activity_date`), en `Project.hubspotEtapaDesde` y `hubspotUltimaActividad` (SQL
     `2026-10-16-limpieza-de-hubspot.sql`, aplicado el mismo día). Nacen vacíos y se llenan con la siguiente
@@ -9861,4 +9863,38 @@ de los dueños de todos los proyectos. Medido ese día: había seis formas disti
   migración no escribió nada.
 - **Pendiente de Elías:** si el seguimiento que quedó en «Por asignar · Customer Success» de una cuenta que no tenía CSE
   (4 en Secure Title) debe pasar solo al encargado nuevo.
+
+## La limpieza de HubSpot en «Para ti» de la CSL (2026-10-19)
+
+**Contexto.** Con los tres bloques del inicio de Customer Success, la limpieza de HubSpot le llegaba a la CSL como una
+línea de «Esta semana» («HubSpot: 26 cosas por poner al día»), debajo de todo, y repetida por «cs-sin-encargado» (8
+proyectos, un subconjunto). Pero un proyecto sin encargado rompe todo lo demás: sin dueño, sus alertas, su «Para ti» y su
+lugar en las carteras no le llegan a nadie. Es lo primero que la CSL tiene que resolver. Medido ese día, en solo lectura:
+la lista tenía 30 cosas; a Alexander Vanegas le tocaban 26 (11 sin encargado, 9 a nombre de alguien que se fue, 6
+servicios sin proyecto), a Heiver Gomez 1 (un excliente con un proyecto abierto), y 3 eran etapas quietas o sin
+actividad de otros.
+
+- **Dos clases de limpieza** (`MOTIVOS_SIN_DUENO`, lib/limpieza/para-ti.ts, puro): lo que deja una cuenta SIN DUEÑO
+  (sin encargado, encargado que ya no está, servicio sin proyecto, excliente con algo abierto) va a lo de HOY; lo que es
+  orden (etapa quieta, sin actividad) sigue en «Esta semana». El servicio sin proyecto entra en la primera: sin proyecto
+  en HubSpot la cuenta no tiene CSE, es el mismo «sin dueño» que ya agrupaba el orden de la lista.
+- **A la CSL, un bloque propio, primero y solo si hay algo** («Cuentas sin dueño en HubSpot», lib/para-ti/foco.ts),
+  con lo sin dueño de TODA la lista, no solo lo suyo, en UNA línea por lo que hay que hacer: «20 proyectos sin encargado
+  en HubSpot», «6 cuentas cobran un servicio sin proyecto en HubSpot», «1 cosa abierta en una cuenta excliente». Cada
+  línea enlaza hasta 12 proyectos a HubSpot (el último, «y N más en la lista»; lo que le toca a otra persona lo dice) y
+  el bloque, a la lista. El número del bloque es el de esos motivos en la lista. Va antes de las reuniones porque,
+  mientras no esté resuelto, lo demás de esas cuentas no le llega a nadie. Le llega a la CSL que lleva el frente
+  Liderar Customer Success; sin el frente, solo lo suyo.
+- **Un proyecto sale en UNA sola línea**: si tiene algo sin dueño, en la de hoy (o el bloque), con lo que es orden
+  nombrado al lado («sin encargado, sin actividad»); si no, en «Esta semana».
+- **El correo de la mañana no lleva el bloque de la limpieza**: es trabajo de semanas que se hace en HubSpot, no lo del
+  día, y cada línea junta decenas de proyectos. El número del menú sí lo cuenta (hasta 3 líneas): baja cuando se limpia.
+- **Al CSE no le desplaza sus tres bloques**: lo suyo sin dueño (en la práctica, un excliente con algo abierto: lo sin
+  encargado le llega a quien lidera el sprint) va en una línea a «También para hoy». A los demás roles (dirección,
+  Desarrollo) la línea de hoy compite en «Lo que importa hoy» con el peso de «cs-sin-encargado».
+- **«cs-sin-encargado» ya no aplica a la CSL**: era un subconjunto del bloque (y además contaba un proyecto de pruebas
+  sin HubSpot). Sigue para quien lleva el frente Liderar Customer Success sin ser CSL.
+- **Medido antes → después, el lunes 19** (los mismos datos): Alexander Vanegas, arriba 15 → 18 (el bloque nuevo, 3
+  líneas por 27 cosas, más 4 + 5 + 6 de los tres de siempre) y «Esta semana» 13 → 11 (salen la línea de 26 y
+  «cs-sin-encargado»). Heiver Gomez: sus tres bloques igual (9), el excliente pasa de «Esta semana» a «También para hoy».
 

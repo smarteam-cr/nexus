@@ -172,6 +172,9 @@ export const SIN_ENCARGADO: Fuente = {
   clave: "cs-sin-encargado",
   frente: "LIDERAR_CS",
   alDia: "Los encargados de los proyectos",
+  // A la CSL se lo dice su bloque «Cuentas sin dueño en HubSpot» (lib/limpieza/para-ti.ts), con los de Desarrollo
+  // también: esta línea era un subconjunto de ese bloque (2026-10-19).
+  aplica: (a) => a.rol !== "CSL",
   async medir() {
     const sin = await implementacionesAbiertas({ OR: [{ hubspotOwnerEmail: null }, { hubspotOwnerEmail: "" }] });
     if (sin.length === 0) return [];
