@@ -70,6 +70,9 @@ export const PESO_DE_LA_FUENTE: Record<string, number> = {
   // Un CSE con más cuentas que piden atención de las que entran en sus cinco (a quien lidera, 2026-10-17).
   "cs-estabilizar": PESOS.servicio + 5,
   "cs-sin-encargado": PESOS.servicio - 5,
+  // Lo de la limpieza de HubSpot que deja una cuenta sin dueño (sin encargado, encargado que se fue, servicio sin
+  // proyecto, excliente con algo abierto; lib/limpieza/para-ti.ts). Lo demás de la limpieza es orden y pesa poco.
+  "hubspot-limpieza-dueno": PESOS.servicio - 5,
   // Una decisión que frena.
   "cronograma-propuesta": PESOS.decision,
   "cs-cronogramas-trabados": PESOS.decision,

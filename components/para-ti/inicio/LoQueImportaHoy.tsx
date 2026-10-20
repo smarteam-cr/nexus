@@ -11,7 +11,8 @@
  *
  * Al CSE y a la CSL (`medicion.foco`, 2026-10-19), en lugar de las cinco, sus tres bloques en este orden: reuniones con
  * sus cuentas, cuentas sin siguiente paso y pendientes sin seguimiento (lib/para-ti/foco.ts). A la CSL, cada bloque por
- * CSE. Lo demás queda abajo, en «También para hoy».
+ * CSE, y antes, si hay algo, «Cuentas sin dueño en HubSpot» (lib/limpieza/para-ti.ts). Lo demás queda abajo, en
+ * «También para hoy».
  */
 import { useState } from "react";
 import { cn } from "@/lib/cn";
@@ -163,8 +164,8 @@ function Enlaces({ it }: { it: Pendiente }) {
   if (!it.enlaces?.length) return null;
   return (
     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-4">
-      {it.enlaces.map((e) => (
-        <EnlaceDelInicio key={e.href} href={e.href} className="text-brand hover:text-brand-light">
+      {it.enlaces.map((e, i) => (
+        <EnlaceDelInicio key={`${i}:${e.href}`} href={e.href} className="text-brand hover:text-brand-light">
           {e.texto}
           {/^https?:\/\//.test(e.href) ? " ↗" : ""}
         </EnlaceDelInicio>

@@ -248,7 +248,9 @@
   sugerencia de crear la tarea con la reunión, del mismo día por la mañana, se retiró.)
 - **Los tres bloques** («Para ti» del CSE y de la CSL, lib/para-ti/foco.ts): reuniones con sus cuentas de los próximos
   días, cuentas sin siguiente paso y pendientes sin seguimiento (lo prometido que nadie tomó y las tareas vencidas). La
-  CSL los ve de toda la cartera, una línea por CSE.
+  CSL los ve de toda la cartera, una línea por CSE, y antes, si hay algo, un cuarto: **Cuentas sin dueño en HubSpot**
+  (lib/limpieza/para-ti.ts, desde el 2026-10-19): proyectos sin encargado o a nombre de alguien que se fue, servicios
+  que se cobran sin proyecto y exclientes con algo abierto, de toda la lista de limpieza.
 - **Preparación de una reunión** (`PreparacionDeReunion`): el objetivo y las notas que una persona escribe para una
   reunión en el panel de la agenda. Solo los ve ella.
 - **Agenda de la reunión**: lo que se iba a tratar en una reunión: lo escrito por una persona, la invitación del
