@@ -1,6 +1,6 @@
 import { requireAccessToClient } from "@/lib/auth/access";
 import { UnauthorizedError, ForbiddenError, requireInternalUser } from "@/lib/auth/supabase";
-import { proyectoQueAbreLaFicha } from "@/lib/clients/proyecto-inicial";
+import { elegirProyectoParaQuienMira } from "@/lib/clients/proyecto-inicial-server";
 import { can } from "@/lib/auth/permissions/engine";
 import { espacioDe } from "@/lib/clients/kind";
 import EspacioPropuestas from "@/components/clients/EspacioPropuestas";
@@ -131,8 +131,16 @@ export default async function ClientPage({
         // caso que en el 99% de las filas no dispara nada.
         altaEstado: true,
         esPrueba: true,
-        // El encargado: con varios proyectos, la ficha abre en el de quien mira (lib/clients/proyecto-inicial.ts).
+        // Con varios proyectos, la ficha abre en el que le corresponde a quien mira (lib/clients/proyecto-inicial.ts):
+        // el encargado, el tipo (pipeline), de qué venta nació y qué tan vivo está. El nombre del encargado lo dice la
+        // línea «Esta cuenta tiene otro proyecto».
         hubspotOwnerEmail: true,
+        hubspotOwnerName: true,
+        hubspotDealId: true,
+        hubspotStatus: true,
+        hubspotPipelineStageLabel: true,
+        hubspotUltimaActividad: true,
+        createdAt: true,
         altaError: true,
         altaUltimoIntentoAt: true,
         altaActorEmail: true,
@@ -193,8 +201,12 @@ export default async function ClientPage({
   const initialProjectId =
     tabParam && visibleProjects.some((p) => p.id === tabParam)
       ? tabParam
-      : /* El mismo criterio que el layout: con uno real, ése; con varios, el de quien mira (lib/clients/proyecto-inicial.ts). */
-        proyectoQueAbreLaFicha(visibleProjects, (await requireInternalUser().catch(() => null))?.teamMember.email);
+      : /* El mismo criterio que el layout: con uno real, ése; con varios, el que le corresponde a quien mira
+           (lib/clients/proyecto-inicial.ts). */
+        await (async () => {
+          const ctx = await requireInternalUser().catch(() => null);
+          return (await elegirProyectoParaQuienMira(visibleProjects, { email: ctx?.teamMember.email, rol: ctx?.role })).id;
+        })();
   const initialCanvases = initialProjectId ? await seedCanvases(initialProjectId) : null;
 
   return (

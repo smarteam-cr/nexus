@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { invalidateGps } from "@/lib/clients/gps-cache";
+import { otrosProyectosDeLaCuenta } from "@/lib/clients/proyecto-inicial";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import AvisoDeFicha from "@/components/clients/AvisoDeFicha";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
@@ -71,6 +72,8 @@ interface ProjectSummary {
   hermanoCsProjectId?: string | null;
   /** `Project.esPrueba` (2026-10-11): un proyecto de prueba se ve marcado en el riel y en el centro. */
   esPrueba?: boolean;
+  /** El encargado en HubSpot: la línea «Esta cuenta tiene otro proyecto» lo nombra. */
+  hubspotOwnerName?: string | null;
   /** `Project.altaEstado` — un alta a medio hacer no cobra ni se publica (lib/projects/alta.ts). */
   altaEstado?: string | null;
   /** Diagnóstico del alta trabada: alimentan el cartel con el botón "Reintentar". */
@@ -547,6 +550,7 @@ function ProjectSection({
   const isNotas = activeProjectId === NOTAS_TAB_ID;
   const isTareas = activeProjectId === TAREAS_TAB_ID;
   const activeProject = projects.find((p) => p.id === activeProjectId);
+  const otrosProyectos = otrosProyectosDeLaCuenta(projects, activeProject?.id ?? null);
 
   /* El proyecto cuyas piezas cuelgan en el riel: el abierto o, mientras se mira algo de la cuenta
      («Información del cliente», «Procesos»), el último que se abrió. Su panel queda MONTADO y
@@ -703,6 +707,26 @@ function ProjectSection({
           <div role="note" className="border-b border-warn-line bg-warn-surface px-6 py-2 text-[13px] text-warn-ink">
             <span className="font-semibold">Proyecto de prueba.</span> Usa los datos reales de la empresa, pero no está
             en HubSpot, no cuenta en la cartera ni en Cobranza y el cliente no lo ve.
+          </div>
+        )}
+        {/* Con varios proyectos, que se sepa que hay otros (Cemaco, 2026-10-19): quien entra a uno que no es el suyo lo
+            ve vacío y cree que perdió su trabajo. lib/clients/proyecto-inicial.ts. */}
+        {otrosProyectos.length > 0 && (
+          <div role="note" className="border-b border-line bg-surface-muted px-6 py-2 text-[13px] text-fg-secondary">
+            {otrosProyectos.length === 1 ? "Esta cuenta tiene otro proyecto: " : `Esta cuenta tiene ${otrosProyectos.length} proyectos más: `}
+            {otrosProyectos.map((o, i) => (
+              <span key={o.id}>
+                {i > 0 && " · "}
+                <button
+                  type="button"
+                  onClick={() => selectTab(o.id)}
+                  className="font-medium text-brand hover:underline"
+                >
+                  «{o.nombre}»
+                </button>{" "}
+                <span className="text-fg-muted">({[o.tipo, o.encargado].filter(Boolean).join(", ")})</span>
+              </span>
+            ))}
           </div>
         )}
         {!panelVisible && activeProject && <div className="flex flex-col">{avisosDelProyecto("centro")}</div>}
