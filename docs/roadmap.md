@@ -17,7 +17,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 | Producción | Corre `25986aef` desde la madrugada del 20 oct (el chat del cronograma lee la memoria del proyecto). Sana, con el esquema al día. |
 | Por desplegar | Nada: todo `main` está en producción (12.464 pruebas en verde, tsc en 0). |
 | En rojo en producción | 4 invariantes, todos con su decisión abajo: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot, una reunión movida después de leerse y el corte de cobranza apagado. |
-| Pruebas | 92 para ti (pestaña «Lo que validas tú»), 61 que valido yo con datos y 31 ya validadas por ti. |
+| Pruebas | 92 para personas (pestaña «Pruebas para personas»), 61 con IA sobre los datos (pestaña «Pruebas con IA») y 31 ya validadas por ti. |
 
 ## Cómo va Nexus
 
@@ -117,9 +117,9 @@ Lo que dijiste en otros chats que querías más adelante:
 - Decidir si se prende el vigía de Éxito del cliente, después de que Alex Vanegas revise la cartera.
 
 
-## Lo que validas tú
+## Pruebas para personas
 
-Solo lo que necesita la pantalla con sesión o tu criterio, por tema. Lo que comprobé con datos está en «Lo que valido yo»; lo que hace alguien del equipo con su usuario dice quién. Dime el número y cómo te fue, y lo marco. Para entrar como otra persona: Equipo › la persona › «Ver como» (solo para mirar).
+Las que hace una persona en la pantalla: tú, o alguien del equipo con su usuario (la prueba dice quién). Solo lo que necesita una sesión abierta o criterio humano, por tema. Lo que la IA comprueba con los datos está en «Pruebas con IA»; lo que hace alguien del equipo con su usuario dice quién. Dime el número y cómo te fue, y lo marco. Para entrar como otra persona: Equipo › la persona › «Ver como» (solo para mirar).
 
 - **↻ Validar otra vez**: lo corregí, o cambió después de que lo validaste.
 - **Por validar**: te toca a ti.
@@ -290,9 +290,9 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 | 232 | Por validar | Que puedas ver como Marco | Equipo › «Ver como» en Marco Salas › «Para ti». | Su meta de 400.000 (lleva 301.536), su cartera y lo de Finanzas. Un cambio responde «es solo lectura». |
 | 233 | Por validar | Que mirar como otra persona no le marque nada | Mirando como otra persona, abre un reporte suyo en Feedback y vuelve a tu usuario. | El reporte sigue sin leer para esa persona. |
 
-## Lo que valido yo
+## Pruebas con IA
 
-Mi pasada de validación: con los datos de producción, en solo lectura, compruebo que cada pantalla diga lo que dicen la base, el calendario y HubSpot, que las tareas salgan para la persona y el equipo correctos, que las copias y los jobs corran y que no se mezclen clientes. Se vuelve a correr con `scripts/validar-*.ts`; la última está en `docs/validacion-2026-10-19.md`.
+Las que corre la IA (Claude) sin pantalla: con los datos de producción, en solo lectura, compruebo que cada pantalla diga lo que dicen la base, el calendario y HubSpot, que las tareas salgan para la persona y el equipo correctos, que las copias y los jobs corran y que no se mezclen clientes. Se vuelve a correr con `scripts/validar-*.ts`; la última está en `docs/validacion-2026-10-19.md`.
 
 **La próxima pasada:** las tareas de las reuniones con clientes leídas con la regla nueva (190, 192 y 193, el 20 oct en la tarde), que el cobro automático y la copia de HubSpot corran solos (103 y 81) y los indicadores de «Cómo va Nexus», cada semana.
 
@@ -319,9 +319,9 @@ Mi pasada de validación: con los datos de producción, en solo lectura, comprue
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
-| 190 | ⏳ Lo valido yo el 20 oct en la tarde | Que de una reunión con cliente salgan pocas tareas | Liliana Moreno con su usuario › Tareas › «Mis tareas», después de la próxima reunión de Cemaco. | Como mucho 3 propuestas, con títulos cortos que empiezan con un verbo, como «Enviar el reporte a CEMACO». Lo que el cliente espera de Smarteam sale como tarea suya, no como «Recordarle a…». |
-| 192 | ⏳ Lo valido yo el 20 oct en la tarde | Que no salgan tareas de coordinación interna | Marco Salas, después de una reunión con un cliente. | No aparecen «Realizar reunión interna» ni «Estar disponible el…». |
-| 193 | ⏳ Lo valido yo el 20 oct en la tarde | Que lo descartado no vuelva | Un CSE descarta una propuesta y espera la próxima reunión de esa cuenta donde se hable de lo mismo. | No vuelve, ni a él ni a otra persona de esa cuenta. Si la deja vencer sin decidir, sí puede volver. |
+| 190 | ⏳ La corre la IA el 20 oct en la tarde | Que de una reunión con cliente salgan pocas tareas | Liliana Moreno con su usuario › Tareas › «Mis tareas», después de la próxima reunión de Cemaco. | Como mucho 3 propuestas, con títulos cortos que empiezan con un verbo, como «Enviar el reporte a CEMACO». Lo que el cliente espera de Smarteam sale como tarea suya, no como «Recordarle a…». |
+| 192 | ⏳ La corre la IA el 20 oct en la tarde | Que no salgan tareas de coordinación interna | Marco Salas, después de una reunión con un cliente. | No aparecen «Realizar reunión interna» ni «Estar disponible el…». |
+| 193 | ⏳ La corre la IA el 20 oct en la tarde | Que lo descartado no vuelva | Un CSE descarta una propuesta y espera la próxima reunión de esa cuenta donde se hable de lo mismo. | No vuelve, ni a él ni a otra persona de esa cuenta. Si la deja vencer sin decidir, sí puede volver. |
 | 198 | ✓ Validado por Claude 19 oct | Que el sprint siga igual | Alejandra Ortega, después de la reunión del sprint de marketing. | Siguen saliendo hasta 5 por persona. |
 
 ### Preventa y exploración
@@ -601,6 +601,6 @@ En pocas palabras, para ubicarse. El detalle está en la Documentación de Nexus
 1. **Lo edita una sola sesión: la que junta las ramas en `main`.** Las demás terminan con un bloque «Para el roadmap» y la que junta lo copia.
 2. **El roadmap tiene solo lo que falta.** Lo que llega a producción pasa a «Hecho», por tema, en el mismo commit en que se despliega.
 3. **Una prueba entra cuando su código está en `main`**, con el camino exacto, el cliente o la persona y un resultado que se ve en la pantalla.
-4. **Antes de pedirte una prueba, la compruebo yo** con los datos de producción. Lo que se comprueba sin pantalla va a «Lo que valido yo»; a ti te llegan solo las de pantalla y de criterio.
+4. **Antes de pedirte una prueba, la compruebo yo** con los datos de producción. Lo que se comprueba sin pantalla va a «Pruebas con IA»; a «Pruebas para personas» llegan solo las de pantalla y de criterio.
 5. **Cuando algo validado cambia, vuelve a «↻ Validar otra vez».** Los números de prueba no se reusan.
 6. **Cada vez que se junta algo:** tsc en 0, la suite en verde, «Estado hoy» al día y la vista publicada en la misma dirección (`node scripts/roadmap-vista.mjs` y el artefacto).

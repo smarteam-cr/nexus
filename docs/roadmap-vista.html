@@ -213,11 +213,11 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     h.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cambiar(); } });
   });
 
-  // Seis pestañas: lo que falta, lo que validas tú, lo que valido yo, lo que le pides al equipo, lo hecho y cómo funciona Nexus. Cada «##» va a la suya.
+  // Seis pestañas: lo que falta, las pruebas para personas, las pruebas con IA, lo que le pides al equipo, lo hecho y cómo funciona Nexus. Cada «##» va a la suya.
   var PESTANAS = [
     { id: 'roadmap', nombre: 'Roadmap' },
-    { id: 'validar', nombre: 'Lo que validas tú', h2: /^\s*Lo que validas tú$/i },
-    { id: 'claude', nombre: 'Lo que valido yo', h2: /^\s*Lo que valido yo$/i },
+    { id: 'validar', nombre: 'Pruebas para personas', h2: /^\s*Pruebas para personas$/i },
+    { id: 'claude', nombre: 'Pruebas con IA', h2: /^\s*Pruebas con IA$/i },
     { id: 'equipo', nombre: 'Lo que pides al equipo', h2: /pides al equipo/i },
     { id: 'hecho', nombre: 'Hecho', h2: /^\s*Hecho$/i },
     { id: 'como', nombre: 'Cómo funciona Nexus', h2: /^\s*(Cómo funciona Nexus|Cómo se mantiene este roadmap)$/i },
