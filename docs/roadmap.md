@@ -15,9 +15,9 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 | Qué | Cómo está |
 |---|---|
 | Producción | Corre `fd95f2f4` desde la tarde del 20 oct: lo que salió de la revisión con Valentina y Liliana (kickoff, Para ti, la guía y su asistente, el menú lateral). Sana, con el esquema al día. |
-| Por desplegar | Nada: todo `main` está en producción (12.559 pruebas en verde, tsc en 0). |
+| Por desplegar | El calendario de la fecha de arranque del kickoff, que se abría debajo de la sección siguiente (prueba 241). |
 | En rojo en producción | 3 invariantes, todos con su decisión abajo: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado. |
-| Pruebas | 113 para personas (pestaña «Pruebas para personas»), 70 con IA sobre los datos (pestaña «Pruebas con IA») y 31 ya validadas por ti. |
+| Pruebas | 108 para personas (pestaña «Pruebas para personas»), 70 con IA sobre los datos (pestaña «Pruebas con IA») y 35 ya validadas por ti. |
 
 ## Cómo va Nexus
 
@@ -177,12 +177,7 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
-| 241 | Por validar | Que la fecha de arranque se elija en un calendario | Clientes › Cayalá › «Cayalá - WhatsApp Nativo» › Kickoff › en la portada, clic en «26 oct 2026». Elige el 2 de noviembre y después vuelve al 26 de octubre. | Se abre un calendario en octubre de 2026, sin un campo encimado, y la fila no se mueve. La portada y el Gantt dicen la fecha elegida, sin años raros. |
-| 242 | Por validar | Que la fila de datos se edite como las etiquetas | La portada › «+ Dato»: escribe «3 integraciones» con la etiqueta «Alcance»; quita «Hoja de ruta» con la ×; arrastra el dato nuevo al primer lugar; recarga. | La fila queda en ese orden, también después de recargar. |
-| 243 | Por validar | Que un dato vacío vuelva al del cronograma | La portada › borra el texto de «8 semanas» y sal del campo. | Aparece «9 semanas», el número que sale del cronograma. |
-| 244 | Por validar | Que la portada se vea alineada | La portada, al editar y al presentar. | «+ Tag» en la misma línea que la última etiqueta y «+ Dato» al final de la fila de datos; todos los datos del mismo alto. |
-| 245 | Por validar | Que una sección oculta siga oculta sin subir | Cualquier sección del kickoff › el ojo › ocultarla. No subas; recarga la página (y al día siguiente, otra vez). | Sigue oculta. |
-| 246 | Por validar | Que el cliente vea lo mismo que por dentro | «Subir al cliente» y abre el enlace del cliente; después «Exportar PDF». | La portada con la fecha de arranque y los mismos datos que por dentro, en el enlace y en el PDF. |
+| 241 | ↻ Validar otra vez | Que la fecha de arranque se elija en un calendario | Clientes › Cayalá › «Cayalá - WhatsApp Nativo» › Kickoff › en la portada, clic en «26 oct 2026». Elige el 2 de noviembre y después vuelve al 26 de octubre. | Se abre un calendario en octubre de 2026, sin un campo encimado, y la fila no se mueve. La portada y el Gantt dicen la fecha elegida, sin años raros. (Arreglado el 20 oct: el calendario quedaba debajo de la sección siguiente.) |
 
 ### Preventa y exploración <span class="prioridad">Alta</span>
 
@@ -594,6 +589,15 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 | 150 | ✓ Validado 19 oct | Que un evento propio se abra en el panel | «Ver como» Andrés Pinzón › «Para ti» › semana del 19 al 23 oct › toca «Tenis». | El panel de la derecha con «Tenis», el día y la hora, «Evento tuyo, sin otros invitados» y «Abrir en Google Calendar» como enlace. No se abre otra pestaña. |
 | 152 | ✓ Validado 19 oct | Que un evento personal no se asigne a un cliente | La misma agenda › toca «Cita Médica». | Solo el título, la hora y el enlace a Calendar, sin cuenta. |
 | 153 | ✓ Validado 19 oct | Que las notas de un evento propio queden | Tu agenda, sin «Ver como» › un evento tuyo › escribe en «Tus notas» y vuelve a abrirlo. | Dice «Guardado» y la nota sigue ahí. |
+
+#### Kickoff y cronograma
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 242 | ✓ Validado 20 oct | Que la fila de datos se edite como las etiquetas | La portada › «+ Dato»: escribe «3 integraciones» con la etiqueta «Alcance»; quita «Hoja de ruta» con la ×; arrastra el dato nuevo al primer lugar; recarga. | La fila queda en ese orden, también después de recargar. |
+| 244 | ✓ Validado 20 oct | Que la portada se vea alineada | La portada, al editar y al presentar. | «+ Tag» en la misma línea que la última etiqueta y «+ Dato» al final de la fila de datos; todos los datos del mismo alto. |
+| 245 | ✓ Validado 20 oct | Que una sección oculta siga oculta sin subir | Cualquier sección del kickoff › el ojo › ocultarla. No subas; recarga la página (y al día siguiente, otra vez). | Sigue oculta. |
+| 246 | ✓ Validado 20 oct | Que el cliente vea lo mismo que por dentro | «Subir al cliente» y abre el enlace del cliente; después «Exportar PDF». | La portada con la fecha de arranque y los mismos datos que por dentro, en el enlace y en el PDF. |
 
 #### Preventa y exploración
 

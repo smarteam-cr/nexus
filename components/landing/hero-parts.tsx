@@ -18,7 +18,9 @@
  * `coverImageUrl` y `brands` viven FUERA del schema del agente (los cura el CSE y
  * sobreviven a las regeneraciones por carry-forward de keys no-schema).
  */
-import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { Z } from "@/lib/ui/z";
 import { DayPicker } from "react-day-picker";
 import { es } from "react-day-picker/locale";
 import { useToast } from "@/components/ui/Toast";
@@ -456,19 +458,54 @@ export function HeroStatFecha({
   const [guardando, setGuardando] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   const calendarioRef = useRef<HTMLSpanElement>(null);
-  usePopoverDismiss(abierto, useCallback(() => setAbierto(false), []), ref);
 
-  /* Centrado bajo la fecha, salvo que se salga de la pantalla (en un teléfono, el dato de la derecha
-     dejaba medio calendario afuera): ahí se corre lo justo para quedar a 16px del borde. */
+  /* ⛔ El calendario va en un portal sobre la página (2026-10-20): dibujado dentro de la portada, la
+     sección de abajo lo tapaba (la portada arma su propia capa). Por eso el clic afuera mira las DOS
+     piezas: el botón y el calendario, que ya no es su descendiente en el DOM. */
+  useEffect(() => {
+    if (!abierto) return;
+    const adentro = (t: EventTarget | null) =>
+      t instanceof Node && (ref.current?.contains(t) || calendarioRef.current?.contains(t));
+    const onDoc = (e: MouseEvent) => {
+      if (!adentro(e.target)) setAbierto(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAbierto(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [abierto]);
+
+  /* Debajo de la fecha y centrado, salvo que se salga de la pantalla (en un teléfono, el dato de la
+     derecha dejaba medio calendario afuera): ahí se corre lo justo para quedar a 16px del borde. Se
+     vuelve a ubicar al desplazar o cambiar el tamaño de la ventana. */
   useLayoutEffect(() => {
-    const el = calendarioRef.current;
-    if (!abierto || !el) return;
-    el.style.transform = "translateX(-50%)";
-    const r = el.getBoundingClientRect();
-    const margen = 16;
-    const corrimiento =
-      r.right > window.innerWidth - margen ? window.innerWidth - margen - r.right : r.left < margen ? margen - r.left : 0;
-    if (corrimiento) el.style.transform = `translateX(calc(-50% + ${Math.round(corrimiento)}px))`;
+    if (!abierto) return;
+    const ubicar = () => {
+      const el = calendarioRef.current;
+      const boton = ref.current;
+      if (!el || !boton) return;
+      const b = boton.getBoundingClientRect();
+      el.style.top = `${Math.round(b.bottom + 12)}px`;
+      el.style.left = `${Math.round(b.left + b.width / 2)}px`;
+      el.style.transform = "translateX(-50%)";
+      const r = el.getBoundingClientRect();
+      const margen = 16;
+      const corrimiento =
+        r.right > window.innerWidth - margen ? window.innerWidth - margen - r.right : r.left < margen ? margen - r.left : 0;
+      if (corrimiento) el.style.transform = `translateX(calc(-50% + ${Math.round(corrimiento)}px))`;
+    };
+    ubicar();
+    window.addEventListener("scroll", ubicar, true);
+    window.addEventListener("resize", ubicar);
+    return () => {
+      window.removeEventListener("scroll", ubicar, true);
+      window.removeEventListener("resize", ubicar);
+    };
   }, [abierto]);
 
   const elegida = valor ? fechaLocalDeYmd(valor) : undefined;
@@ -504,8 +541,19 @@ export function HeroStatFecha({
       >
         {guardando ? "Guardando…" : etiqueta}
       </button>
-      {abierto && (
-        <span ref={calendarioRef} className="stl-dato-calendario" role="dialog" aria-label="Elige la fecha de arranque">
+      {abierto &&
+        typeof document !== "undefined" &&
+        createPortal(
+          /* El envoltorio `.stl` trae las variables y las reglas del motor (`.stl .stl-dato-calendario`); no ocupa
+             lugar ni recibe clics. */
+          <div className="stl" style={{ position: "fixed", inset: 0, background: "transparent", pointerEvents: "none", zIndex: Z.POPOVER }}>
+        <span
+          ref={calendarioRef}
+          className="stl-dato-calendario"
+          role="dialog"
+          aria-label="Elige la fecha de arranque"
+          style={{ position: "fixed", pointerEvents: "auto" }}
+        >
           {propuesta && sugerida && (
             <button type="button" className="stl-dato-calendario-sugerida" onClick={() => void elegir(sugerida.ymd)}>
               Usar el {fmtLocalDay(propuesta)}
@@ -537,7 +585,9 @@ export function HeroStatFecha({
             </button>
           </span>
         </span>
-      )}
+          </div>,
+          document.body,
+        )}
     </span>
   );
 }
