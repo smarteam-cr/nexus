@@ -30,7 +30,8 @@ export type LectorDeMemoria =
   | "vigia"
   | "nexus-chat"
   | "escala"
-  | "cronograma-chat";
+  | "cronograma-chat"
+  | "guia-de-la-exploracion";
 
 export interface ConsumidorDeLaMemoria {
   /** El slug de la pieza (lib/pieces/registry.ts) que escribe, o null si no escribe una pieza. */
@@ -254,6 +255,18 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     archivos: ["lib/contexto/cargar.ts"],
     motivo:
       "El chat del cronograma (2026-10-20): sin reuniones elegidas no sabía nada de las reuniones con el cliente. Lee los acuerdos y las decisiones de cada reunión del proyecto, las desviaciones y lo que se sabe de la cuenta, en resumen; la conversación entera sigue siendo solo la de las elegidas.",
+  },
+  "guia-de-la-exploracion": {
+    pieza: "exploration",
+    // La guía la lee el CSE antes de su sesión: interna, como la exploración del proyecto.
+    alcance: alcanceDeLaPieza("exploration"),
+    // Lo que la exploración propuso a la ficha sale de las mismas sesiones que ya lee: no se cuenta dos veces.
+    excluirOrigenes: ["Exploración"],
+    // Los resultados medibles del handoff ya le llegan en «LO VENDIDO» (`loVendidoDelProyecto`).
+    sinPartes: ["resultados"],
+    archivos: ["lib/exploraciones/agente.ts"],
+    motivo:
+      "La guía de la próxima sesión de un proyecto (2026-10-20, caso CEMACO): lo que dejaron las demás reuniones del proyecto (el kickoff, las técnicas) y los compromisos abiertos. Las sesiones de la exploración van aparte, con lo cubierto y lo acordado (`yaLeidas`). Lo leen el agente que arma la guía, «Regenerar» una pregunta y el asistente de la guía (lib/operaciones/guia-server.ts), del mismo `contextoParaLaGuia`.",
   },
 };
 
