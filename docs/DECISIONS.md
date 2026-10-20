@@ -9611,3 +9611,30 @@ avisos y devolver la tarea, ~0,85 s), más 1 a 3 s de HubSpot en una tarea de Hu
   HubSpot y los avisos de marcarla hecha (`cambiarEstado(…, { diferir })`; sin `diferir` corren enseguida, como antes).
   La escritura a HubSpot va en fila por tarea (`reflejarTareaEnHubspot`): con dos cambios seguidos, la última escritura
   es la del último cambio.
+
+## Cada quien cae en el proyecto que le corresponde (2026-10-19)
+
+**Contexto.** Cemaco Internacional tiene dos proyectos: «Cemaco Internacional - CRM» (implementación, Liliana Moreno) y
+«CEMACO » (Desarrollo e integración, Breiner). Con dos, la ficha abría en la cuenta; Liliana entró al de Desarrollo, lo
+vio vacío y creyó que había perdido su trabajo. Ese mismo día la ficha pasó a abrir en el proyecto que lleva quien mira;
+esta tanda lo completa para quien no lleva ninguno.
+
+- **El orden, con varios proyectos** (`lib/clients/proyecto-inicial.ts`, puro, con su prueba): (1) el que la persona
+  lleva (encargado en HubSpot); (2) si no lleva ninguno o lleva varios, el del tipo de su equipo: Customer Success, los
+  que entrega CS (implementación, SmartLoop, sitio web y los de antes sin pipeline); Desarrollo, los de desarrollo e
+  integración; Ventas, el que nació de una venta suya (`VentaGanada.vendedor` por `Project.hubspotDealId`); (3) si sigue
+  habiendo varios, el más vivo: no parado (en pausa o «Bloqueado») y con la actividad más reciente en HubSpot; (4)
+  dirección y la CSL, la cuenta, salvo que lleven uno. Marketing, Finanzas y el vendedor sin venta propia en la cuenta
+  también abren en la cuenta. Con un solo proyecto real abre en él, como siempre; uno de prueba nunca abre solo.
+- **El tipo sale de la tabla de pipelines (`equipoDeEntrega`, lib/projects/kind.ts) y el equipo del registro de
+  equipos** (`equipoDeRol`, lib/equipos/registro.ts). No hay otra tabla.
+- **La elección explícita gana**: `?tab=` en la dirección (también al recargar: el riel la escribe al elegir). Todos los
+  enlaces a la ficha sin proyecto («Para ti», «Preparar», Éxito del cliente › cuenta, la cartera de CS y la de Ventas)
+  quedan como están: la regla corre para quien abre la ficha, así que caen solos en el suyo. Los que llevan `?tab=` son
+  de un proyecto concreto (una corrida, la propuesta del cronograma) y se respetan.
+- **Que se vea que hay otros**: arriba del proyecto abierto, «Esta cuenta tiene otro proyecto: «CEMACO» (Desarrollo e
+  integración, Breiner)», con el enlace (`otrosProyectosDeLaCuenta`). Nunca nombra un proyecto de prueba.
+- **La venta solo se consulta para Ventas** (`lib/clients/proyecto-inicial-server.ts`), y solo con dos o más proyectos
+  reales con trato: al resto le alcanza con la fila del proyecto.
+- ⚠ **El desempate por actividad todavía casi no corre**: `hubspotUltimaActividad` nace vacío y se llena con la siguiente
+  sincronización de cada cliente. Mientras tanto desempata el proyecto más nuevo.

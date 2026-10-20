@@ -1,6 +1,6 @@
 import { requireAccessToClient } from "@/lib/auth/access";
 import { UnauthorizedError, ForbiddenError, requireInternalUser } from "@/lib/auth/supabase";
-import { proyectoQueAbreLaFicha } from "@/lib/clients/proyecto-inicial";
+import { elegirProyectoParaQuienMira, SELECT_PARA_ELEGIR_PROYECTO } from "@/lib/clients/proyecto-inicial-server";
 import { esLiderDeCs } from "@/lib/cs/acceso";
 import { esCseDeLaCuenta } from "@/lib/cs/adopcion-del-cse-server";
 import { LecturaDeLaCuenta } from "@/components/cs/LecturaDeLaCuenta";
@@ -94,15 +94,16 @@ export default async function ClientLayout({
   const activeProjects = enProyectos
     ? await prisma.project.findMany({
         where: proyectoNavegableWhere({ clientId: id }),
-        select: { id: true, esPrueba: true, hubspotOwnerEmail: true },
+        select: SELECT_PARA_ELEGIR_PROYECTO,
         orderBy: { createdAt: "asc" },
       })
     : [];
-  /* Con uno real abre en él; con varios, en el de quien mira si lleva uno solo (lib/clients/proyecto-inicial.ts,
-     Cemaco 2026-10-19). Un proyecto de prueba no cuenta para abrir solo. */
+  /* Con uno real abre en él; con varios, en el que le corresponde a quien mira: el que lleva, el del tipo de su equipo,
+     el más vivo; dirección y la CSL, la cuenta (lib/clients/proyecto-inicial.ts, Cemaco 2026-10-19). */
   const quienMira = enProyectos ? await requireInternalUser().catch(() => null) : null;
   const initialProjectId =
-    proyectoQueAbreLaFicha(activeProjects, quienMira?.teamMember.email) ?? SENTINEL_SERVICE_TYPE;
+    (await elegirProyectoParaQuienMira(activeProjects, { email: quienMira?.teamMember.email, rol: quienMira?.role })).id ??
+    SENTINEL_SERVICE_TYPE;
 
   // Nombre de empresa live desde HubSpot. Es una llamada de RED en el camino crítico del
   // header: solo se paga en el espacio de proyectos, donde el nombre de HubSpot es el que
