@@ -11,12 +11,19 @@
  *
  * Un dolor que el cliente ya contó arranca en impacto, nunca en situación; una tarjeta con dato no se pregunta. El
  * agente solo escribe la pregunta del paso que le toca, y `repiteLoSabido` descarta la que igual vuelve a preguntar lo
- * dicho (en su lugar va `preguntaDeRespaldo`, con las palabras del cliente). Solo la preventa: la exploración de un
- * proyecto (Customer Success) sigue con su foco (guia.ts › `focoDeLaGuia`).
+ * dicho (en su lugar va `preguntaDeRespaldo`, con las palabras del cliente).
+ *
+ * La exploración de un PROYECTO (Customer Success, `marco: "cs"`) usa el mismo plan desde el 2026-10-19, con su
+ * estrategia: los retos del negocio (situación), los dolores que el cliente ya contó del proyecto (impacto), los
+ * resultados que persigue en cifras (impacto) y lo que le impide llegar (situación). Sin «cuándo» ni «con qué»: el
+ * cliente ya compró. Lo que dijo sale del proyecto (lo-que-ya-sabemos.ts), nunca del test. Una guía de un proyecto
+ * armada ANTES del plan (sus preguntas no tienen paso) se sigue mostrando como se armó hasta que alguien toque
+ * «Actualizar la guía» (`guiaDeAntesDelPlan`).
  */
 import { LETRAS } from "@/lib/escala/documento/tipos";
 import { metaEnCifras, type ClaveDeCasilla, type Meta, type Persona } from "./casillas";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
+import type { ClaveDeMarco } from "./marco";
 import type { ContextoDelPlan, GuiaDeLaSesion, PosicionParaLaGuia, SesionPlaneada } from "./guia";
 import { fuentesDistintas, loQueYaSabemos, type DatoDelCliente, type EntradaDelSaber, type SaberDelCliente } from "./lo-que-ya-sabemos";
 
@@ -74,6 +81,8 @@ export interface EntradaDelPlan {
   /** A qué apuntaba lo que una sesión cortada tenía preparado: va primero, si todavía falta. */
   pasaron?: readonly string[];
   max?: number;
+  /** «cs» = la exploración de un proyecto: el plan de la estrategia. Sin él, la preventa. */
+  marco?: ClaveDeMarco;
 }
 
 const vacia = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
@@ -114,7 +123,19 @@ export function contextoDelPlan(o: EntradaDelSaber & { sesionId: string | null }
     yaPreguntado: pasosYaPreguntados(sesiones, o.estado.propuesta.guias),
     llevados: (sesiones.find((s) => s.id === o.sesionId)?.explorar ?? []).length,
     pasaron: [...new Set(sesiones.filter((s) => s.resultado === "cortada").flatMap((s) => s.pasaron ?? []))],
+    ...(o.marco ? { marco: o.marco } : {}),
   };
+}
+
+/**
+ * ¿La guía de un PROYECTO se armó antes del plan? Sus preguntas no tienen paso. Esa guía se muestra como se armó (las
+ * tarjetas que faltan y las dimensiones sin evidencia, sin el plan) hasta que alguien toque «Actualizar la guía»: lo ya
+ * generado de una exploración no se reescribe solo. En la preventa no aplica: ahí la guía vieja ya se muestra con el plan
+ * desde el 2026-10-18. Una guía sin preguntas (solo lo vendido) no cuenta como vieja.
+ */
+export function guiaDeAntesDelPlan(guia: Pick<GuiaDeLaSesion, "preguntas"> | null | undefined, marco: ClaveDeMarco): boolean {
+  if (marco !== "cs" || !guia || !guia.preguntas.length) return false;
+  return !guia.preguntas.some((p) => !!p.paso);
 }
 
 /**
@@ -124,6 +145,7 @@ export function contextoDelPlan(o: EntradaDelSaber & { sesionId: string | null }
  * la escala. Nunca más de `max` en total, contando lo llevado.
  */
 export function planDeLaGuia(o: EntradaDelPlan): PreguntaPlaneada[] {
+  const cs = o.marco === "cs";
   const max = o.max ?? MAX_PREGUNTAS_DE_LA_GUIA;
   const lugar = Math.max(MIN_PREGUNTAS_PROPIAS, max - Math.max(0, o.llevados ?? 0));
   const ya = o.yaPreguntado ?? new Map<string, ReadonlySet<PasoDeLaPregunta>>();
@@ -189,7 +211,17 @@ export function planDeLaGuia(o: EntradaDelPlan): PreguntaPlaneada[] {
   });
 
   const sinDolores = dolores.length === 0;
-  const necesarias: PreguntaPlaneada[] = [
+  /* En un proyecto, la estrategia: los retos del negocio, los dolores que ya contó, los resultados en cifras y lo que le
+     impide llegar. Sin «cuándo» ni «con qué»: el cliente ya compró (quién firma y el presupuesto son de la venta). */
+  const necesariasDelProyecto: PreguntaPlaneada[] = [
+    ...pasaron,
+    ...(falta("retos") ? [tarjeta("retos")] : []),
+    ...dolores.slice(0, MAX_DOLORES),
+    ...(falta("metas") ? [tarjeta("metas")] : []),
+    ...(falta("obstaculos") ? [tarjeta("obstaculos")] : []),
+    ...(sinDolores ? sinDato.slice(0, 1) : []),
+  ];
+  const necesarias: PreguntaPlaneada[] = cs ? necesariasDelProyecto : [
     ...pasaron,
     ...dolores.slice(0, MAX_DOLORES),
     ...(sinDolores && falta("retos") ? [tarjeta("retos")] : []),
@@ -201,7 +233,7 @@ export function planDeLaGuia(o: EntradaDelPlan): PreguntaPlaneada[] {
     ...(falta("autoridad") ? [tarjeta("autoridad")] : []),
     ...(falta("presupuesto") ? [tarjeta("presupuesto")] : []),
   ];
-  const relleno: PreguntaPlaneada[] = [
+  const relleno: PreguntaPlaneada[] = cs ? [...dolores.slice(MAX_DOLORES), ...sinDato] : [
     ...dolores.slice(MAX_DOLORES),
     ...(falta("planes") ? [tarjeta("planes")] : []),
     ...(falta("implicaciones") ? [tarjeta("implicaciones")] : []),
@@ -296,6 +328,13 @@ export function preguntaDeRespaldo(p: PreguntaPlaneada, base: string): string {
 
 /** La pregunta de cierre de toda sesión de la preventa. */
 export const PREGUNTA_DE_CIERRE = "¿Hay algo que no hayamos hablado y que deba saber para proponerte el primer paso?";
+/** La de una sesión de la exploración de un proyecto: el cliente ya compró, se cierra hacia sus resultados. */
+export const PREGUNTA_DE_CIERRE_DEL_PROYECTO = "¿Hay algo que no hayamos hablado y que deba saber para que el proyecto llegue a esos resultados?";
+
+/** La pregunta de cierre del marco. */
+export function preguntaDeCierre(marco: ClaveDeMarco): string {
+  return marco === "cs" ? PREGUNTA_DE_CIERRE_DEL_PROYECTO : PREGUNTA_DE_CIERRE;
+}
 
 /**
  * Lo que va al cerrar, además de pedir el siguiente paso: lo que falta para proponer y ninguna pregunta de la guía

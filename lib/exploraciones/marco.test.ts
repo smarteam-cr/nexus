@@ -144,7 +144,8 @@ describe("la guía de Customer Success", () => {
     const cuerpo = String((p.messages[0] as { content: string }).content);
     expect(cuerpo).toContain("EL PROYECTO");
     expect(cuerpo).toContain("Quieren bajar la pérdida de clientes.");
-    expect(cuerpo).toContain("LAS TARJETAS QUE FALTAN DE LA ESTRATEGIA");
+    // Desde el 2026-10-19 la guía de un proyecto también sale del plan (guia-del-proyecto.test.ts).
+    expect(cuerpo).toContain("LAS TARJETAS DE ESTA SESIÓN");
     expect(cuerpo).not.toContain("Las objeciones típicas");
   });
 });

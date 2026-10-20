@@ -13,6 +13,7 @@ import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { definicionEnElMarco, esTarjeta } from "./marco";
 import { hoyEnCostaRica } from "./fechas";
 import {
+  focoDeLaGuia,
   nuevoIdDeSesion,
   pestanasDeSesiones,
   preguntasParaMostrar,
@@ -23,7 +24,8 @@ import { aplicarAjustes, apuntaDelTema, claveDePregunta, ErrorDeLaGuia, type Cam
 
 export { ErrorDeLaGuia };
 import { avisoParaOtraVez, leerUnaPregunta, pedidoDeUnaPregunta, type EntradaDeUnaPregunta } from "./guia-pregunta-pedido";
-import { AGENTE_DE_LA_EXPLORACION, contextoParaLaGuia, planDeLaGuiaDeLaPreventa } from "./agente";
+import { AGENTE_DE_LA_EXPLORACION, contextoParaLaGuia, planDeLaGuiaDeLaSesion } from "./agente";
+import { guiaDeAntesDelPlan } from "./plan-de-la-guia";
 import { aplicarCambios, type FilaDeExploracion } from "./servidor";
 
 /** El `origen` de cada llamada de «Regenerar»: así se ve aparte en el gasto de la IA. */
@@ -48,9 +50,13 @@ export function preguntasDeLaProxima(base: BaseDeLaGuia): { sesionId: string | n
   const sesionId = ctx.proxima.sesionId ?? null;
   const sesion = sesionId ? estado.contenido.sesiones.find((s) => s.id === sesionId) : undefined;
   const guia = (sesionId ? estado.propuesta.guias[sesionId] : null) ?? estado.propuesta.guia;
-  const huecos = ctx.huecos.map((h) => h.clave);
-  const enfoque = ctx.enfoque.map((d) => d.id);
-  const plan = marco.clave === "venta" ? planDeLaGuiaDeLaPreventa(estado, loLeido.tests, escala, posiciones, sesionId) : null;
+  /* Con el plan (la preventa, y un proyecto desde el 2026-10-19). La guía de un proyecto armada antes del plan se ve como
+     se armó, con lo que falta hoy, hasta que alguien toque «Actualizar la guía» (plan-de-la-guia.ts › `guiaDeAntesDelPlan`). */
+  const antesDelPlan = guiaDeAntesDelPlan(guia, marco.clave);
+  const sinPlan = antesDelPlan ? focoDeLaGuia(estado.contenido.casillas, escala, estado.areas, posiciones, estado.contenido.aExplorar, marco) : null;
+  const huecos = sinPlan ? sinPlan.huecos : ctx.huecos.map((h) => h.clave);
+  const enfoque = sinPlan ? sinPlan.enfoque : ctx.enfoque.map((d) => d.id);
+  const plan = antesDelPlan ? null : planDeLaGuiaDeLaSesion(estado, loLeido.tests, escala, posiciones, sesionId, marco);
   // Las procedencias salen de las sesiones guardadas (de qué sesión viene cada punto llevado): para las claves alcanza.
   const pestanas = pestanasDeSesiones(estado.contenido.sesiones, [], hoyEnCostaRica(base.ahora));
   const activa = pestanas.find((p) => p.clave === sesionId) ?? { clave: "nueva", sesion: null };

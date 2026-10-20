@@ -12,10 +12,16 @@
  * HubSpot, una reunión, lo sumado a mano, el handoff o un cuestionario; nunca N, las notas del vendedor), la evidencia
  * de un nivel confirmado en una reunión o en su portal, y las casillas del Resumen que dice el cliente. ⛔ Nunca lo
  * interno: presupuesto, quién decide, objeciones, contexto, particularidades ni la hipótesis de valor.
+ *
+ * En la exploración de un PROYECTO (Customer Success, `marco: "cs"`, 2026-10-19) lo que dijo el cliente sale del
+ * proyecto, no del test: las citas del handoff (V0), de los cuestionarios (Q0) y de las reuniones, la evidencia de un
+ * nivel confirmado y lo confirmado de la estrategia (retos, resultados que persigue y obstáculos). El test no cuenta: es
+ * de la venta, y el agente del proyecto no lo lee. Hasta 2 líneas de dimensiones, así entran las tres de la estrategia.
  */
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { LETRAS } from "@/lib/escala/documento/tipos";
 import type { ClaveDeCasilla, Meta, Reto } from "./casillas";
+import type { ClaveDeMarco } from "./marco";
 import type { EstadoDeExploracion, FuenteCitada } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { diaCorto } from "./fechas";
@@ -58,6 +64,9 @@ export const MAX_LINEAS_DE_LO_QUE_SABEMOS = 5;
 const MAX_LINEAS_DE_DIMENSIONES = 3;
 /** El orden en que las casillas llenan «Lo que ya sabemos» después de los dolores. */
 const ORDEN_DE_LAS_CASILLAS: readonly ClaveDeCasilla[] = ["tiempos", "metas", "consecuencias", "planes", "implicaciones", "retos", "obstaculos"];
+/** En un proyecto: solo la estrategia (las tres tarjetas del marco de Customer Success), y menos dimensiones. */
+const CASILLAS_DEL_PROYECTO: readonly ClaveDeCasilla[] = ["retos", "metas", "obstaculos"];
+const MAX_LINEAS_DE_DIMENSIONES_EN_UN_PROYECTO = 2;
 const LARGO_DE_UNA_LINEA = 240;
 
 /** El origen de una cita, por el id de su fuente. N (las notas del vendedor) no es del cliente: null. */
@@ -131,6 +140,8 @@ export interface EntradaDelSaber {
   escala: Pick<EscalaDelLienzo, "areas">;
   /** Dónde parece estar cada dimensión: ordena las líneas (lo más bajo, lo que más duele, primero). */
   posiciones: Readonly<Record<string, { nivel: Letra } | undefined>>;
+  /** «cs» = la exploración de un proyecto: sin el test, y las casillas son las de la estrategia. Sin él, la preventa. */
+  marco?: ClaveDeMarco;
 }
 
 /**
@@ -145,7 +156,10 @@ export function loQueYaSabemos(o: EntradaDelSaber): SaberDelCliente {
     if (!estado.areas.includes(a.id)) continue;
     for (const d of a.dimensiones) if (d.aplica) dims.set(d.id, { capa: d.capa, orden: orden++ });
   }
-  const casillasDelSaber = new Set<string>(CASILLAS_DEL_SABER);
+  const cs = o.marco === "cs";
+  const casillasDelMarco: readonly ClaveDeCasilla[] = cs ? CASILLAS_DEL_PROYECTO : CASILLAS_DEL_SABER;
+  const casillasDelSaber = new Set<string>(casillasDelMarco);
+  const deLoConfirmado = cs ? "Confirmado en la estrategia" : "Confirmado en el Resumen";
   const valido = (para: string) => dims.has(para) || casillasDelSaber.has(para);
 
   const porTema = new Map<string, DatoDelCliente[]>();
@@ -184,8 +198,8 @@ export function loQueYaSabemos(o: EntradaDelSaber): SaberDelCliente {
     }
   }
 
-  // 3. Lo que marcó en el test: la frase que eligió de cada dimensión.
-  for (const t of o.tests) {
+  // 3. Lo que marcó en el test: la frase que eligió de cada dimensión. En un proyecto no: el test es de la venta.
+  for (const t of cs ? [] : o.tests) {
     const area = escala.areas.find((a) => a.id === t.resultado.areaId)?.nombre ?? "el diagnóstico";
     const quien = t.contacto.split(/\s+/)[0] ?? t.contacto;
     const cuando = t.resultado.fecha ? `, ${diaCorto(t.resultado.fecha)}` : "";
@@ -197,11 +211,11 @@ export function loQueYaSabemos(o: EntradaDelSaber): SaberDelCliente {
 
   // 4. Lo confirmado en el Resumen que dice el cliente. Un reto atado a una dimensión también cuenta para ella.
   const casillas = estado.contenido.casillas as Partial<Record<ClaveDeCasilla, unknown>>;
-  for (const clave of CASILLAS_DEL_SABER) {
-    for (const texto of textosDeLaCasilla(clave, casillas[clave])) sumar({ para: clave, texto, de: "Confirmado en el Resumen", origen: "resumen" });
+  for (const clave of casillasDelMarco) {
+    for (const texto of textosDeLaCasilla(clave, casillas[clave])) sumar({ para: clave, texto, de: deLoConfirmado, origen: "resumen" });
     if (clave === "retos" || clave === "obstaculos") {
       for (const r of (casillas[clave] as Reto[] | undefined) ?? []) {
-        if (r?.dimensionId && r.texto?.trim()) sumar({ para: r.dimensionId, texto: r.texto.trim(), de: "Confirmado en el Resumen", origen: "resumen" });
+        if (r?.dimensionId && r.texto?.trim()) sumar({ para: r.dimensionId, texto: r.texto.trim(), de: deLoConfirmado, origen: "resumen" });
       }
     }
   }
@@ -210,7 +224,10 @@ export function loQueYaSabemos(o: EntradaDelSaber): SaberDelCliente {
   const fuerza = (d: DatoDelCliente) => ORIGENES_DEL_DATO.indexOf(d.origen);
   for (const [k, v] of porTema) porTema.set(k, [...v].sort((a, b) => fuerza(a) - fuerza(b) || a.texto.length - b.texto.length));
 
-  return { porTema, lineas: lineasDeLoQueSabemos(porTema, dims, o.posiciones) };
+  const lineas = cs
+    ? lineasDeLoQueSabemos(porTema, dims, o.posiciones, { casillas: CASILLAS_DEL_PROYECTO, maxDimensiones: MAX_LINEAS_DE_DIMENSIONES_EN_UN_PROYECTO })
+    : lineasDeLoQueSabemos(porTema, dims, o.posiciones);
+  return { porTema, lineas };
 }
 
 /** Cuántas fuentes distintas dicen algo de un tema (el test de dos personas cuenta como una). */
@@ -234,6 +251,7 @@ function lineasDeLoQueSabemos(
   porTema: ReadonlyMap<string, readonly DatoDelCliente[]>,
   dims: ReadonlyMap<string, { capa: string; orden: number }>,
   posiciones: Readonly<Record<string, { nivel: Letra } | undefined>>,
+  opciones: { casillas?: readonly ClaveDeCasilla[]; maxDimensiones?: number } = {},
 ): LineaDeLoQueSabemos[] {
   const nivel = (id: string) => {
     const p = posiciones[id];
@@ -255,9 +273,9 @@ function lineasDeLoQueSabemos(
         dims.get(a)!.orden - dims.get(b)!.orden
       );
     })
-    .slice(0, MAX_LINEAS_DE_DIMENSIONES)
+    .slice(0, opciones.maxDimensiones ?? MAX_LINEAS_DE_DIMENSIONES)
     .map((id) => linea(porTema.get(id)!));
-  const deCasillas = ORDEN_DE_LAS_CASILLAS.filter((c) => (porTema.get(c) ?? []).length > 0).map((c) => linea(porTema.get(c)!));
+  const deCasillas = (opciones.casillas ?? ORDEN_DE_LAS_CASILLAS).filter((c) => (porTema.get(c) ?? []).length > 0).map((c) => linea(porTema.get(c)!));
   return [...deDimensiones, ...deCasillas].slice(0, MAX_LINEAS_DE_LO_QUE_SABEMOS);
 }
 

@@ -77,6 +77,21 @@ export function LoQueCubreLaGuia({ pestana, esLaProxima }: { pestana: PestanaDeS
             </ul>
           </div>
         )}
+        {enProyecto && (
+          <div className="space-y-1.5">
+            <p className="text-xs text-fg-muted">{r.vendido.length ? "Piezas de lo vendido que pregunta:" : "La guía todavía no pregunta por lo vendido: actualízala para que lo arme desde el handoff."}</p>
+            {r.vendido.length > 0 && (
+              <ul className="flex flex-wrap gap-1.5">
+                {r.vendido.map((t) => (
+                  <li key={t} className="inline-flex items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-[11.5px] text-fg-secondary">
+                    <span className="font-semibold text-fg">V</span>
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         <p className="text-[11px] text-fg-muted">Verde: listo · azul: lo pregunta la guía · punteado: no lo pregunta</p>
       </div>
     </section>

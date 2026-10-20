@@ -7,7 +7,8 @@
  * las preguntas YA ajustadas (ajustes-de-la-guia.ts › `aplicarAjustes`): las mismas que se ven.
  *
  * En la preventa, los puntos son los de «lista para proponer» (calidad.ts); en un proyecto, las tarjetas de la
- * estrategia. Un punto está «listo» si ya está; «cubre» si la guía lo pregunta; «falta» si no.
+ * estrategia, y aparte las piezas de lo vendido que pregunta (2026-10-19). Un punto está «listo» si ya está; «cubre» si
+ * la guía lo pregunta; «falta» si no.
  */
 import type { Letra } from "@/lib/escala/documento/tipos";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
@@ -38,13 +39,15 @@ export interface LoQueCubreLaGuia {
   /** De lo que falta, cuánto pregunta la guía. */
   faltan: number;
   cubre: number;
+  /** Solo en un proyecto: las piezas de lo vendido que pregunta la guía (su tema, como lo nombra el handoff). */
+  vendido: string[];
 }
 
 /** Un punto que mirar: los de calidad.ts (la venta) o las tarjetas de la estrategia (un proyecto). */
 export type PuntoAMirar = Pick<PuntoDeCalidad, "corto" | "titulo" | "cumplido"> & { id: string };
 
 export function queCubreLaGuia(o: {
-  preguntas: readonly Pick<PreguntaParaMostrar, "para" | "tipo" | "paso" | "apunta">[];
+  preguntas: readonly Pick<PreguntaParaMostrar, "para" | "tipo" | "paso" | "apunta" | "tema">[];
   puntos: readonly PuntoAMirar[];
   escala: Pick<EscalaDelLienzo, "areas">;
   posiciones: Readonly<Record<string, PosicionParaLaGuia | undefined>>;
@@ -77,6 +80,11 @@ export function queCubreLaGuia(o: {
     dimensiones.push({ id, nombre: d.nombre, area: area.nombre, nivel: pos?.nivel ?? null, clase: pos?.clase ?? null });
   }
 
+  const vendido =
+    o.marco === "cs"
+      ? [...new Set(o.preguntas.filter((p) => ladoDeLaPregunta(p) === "vendido").map((p) => p.tema?.trim() || "").filter(Boolean))]
+      : [];
+
   const faltantes = puntos.filter((p) => p.estado !== "listo");
-  return { puntos, dimensiones, faltan: faltantes.length, cubre: faltantes.filter((p) => p.estado === "cubre").length };
+  return { puntos, dimensiones, faltan: faltantes.length, cubre: faltantes.filter((p) => p.estado === "cubre").length, vendido };
 }

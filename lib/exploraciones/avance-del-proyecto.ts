@@ -39,6 +39,15 @@ export function avanceDeLaEstrategia(estado: EstadoDeExploracion): PuntoDelProye
   ];
 }
 
+/**
+ * Lo que falta de la estrategia y ninguna pregunta de la guía pregunta: el cierre de la sesión lo pide («Si no salió en
+ * la conversación, pregunta: …», plan-de-la-guia.ts › `siNoSalio`). Es el par de `faltanAlCerrar` de la preventa
+ * (calidad.ts). `temas` son los temas que pregunta la guía (las tarjetas y las dimensiones).
+ */
+export function faltanDeLaEstrategia(puntos: readonly Pick<PuntoDelProyecto, "id" | "titulo" | "cumplido">[], temas: ReadonlySet<string>): string[] {
+  return puntos.filter((p) => !p.cumplido && !temas.has(p.id)).map((p) => p.titulo);
+}
+
 /** Cuántas dimensiones de las áreas en juego tienen evidencia (lo confirmado con evidencia), de cuántas. */
 export function escalaConEvidencia(chequeo: ResultadoDelChequeo): { con: number; de: number } {
   let con = 0;

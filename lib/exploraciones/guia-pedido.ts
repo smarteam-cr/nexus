@@ -42,6 +42,7 @@ import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import type { PosicionEnElMapa } from "./mapa";
 import type { LoLeidoDeHubspot } from "./lo-leido";
 import { faltanAlCerrar, type PuntoDeCalidad } from "./calidad";
+import { avanceDeLaEstrategia, faltanDeLaEstrategia } from "./avance-del-proyecto";
 import { saberParaElPedido, type SaberDelCliente } from "./lo-que-ya-sabemos";
 import {
   contextoDelPlan,
@@ -117,13 +118,13 @@ export interface ContextoDeLaGuia {
   /** Las instrucciones adicionales del vendedor (contexto de la preventa), ya como bloque, o "". */
   instrucciones?: string;
   /**
-   * Solo en la preventa (iniciativa A, 2026-10-18): lo que el cliente ya respondió, tema por tema, con sus palabras y
-   * de dónde sale (lo-que-ya-sabemos.ts). No se vuelve a preguntar.
+   * Lo que el cliente ya respondió, tema por tema, con sus palabras y de dónde sale (lo-que-ya-sabemos.ts). No se vuelve
+   * a preguntar. La preventa desde el 2026-10-18 (iniciativa A) y un proyecto desde el 2026-10-19.
    */
   loQueYaSabemos?: string[];
-  /** Solo en la preventa: cada pregunta de la guía en orden, con su tema, su paso y de qué dicho del cliente parte. */
+  /** Cada pregunta de la guía en orden, con su tema, su paso y de qué dicho del cliente parte. */
   plan?: { para: string; paso: PasoDeLaPregunta; motivo: string | null }[];
-  /** Solo en la preventa: lo que falta para proponer y ninguna pregunta cubre (el cierre lo pide). */
+  /** Lo que falta para proponer (en un proyecto, de la estrategia) y ninguna pregunta cubre: el cierre lo pide. */
   faltanAlCerrar?: string[];
   /** Para filtrar lo que devuelve el agente: lo que ya se sabe de cada tema (no viaja al pedido como objeto). */
   saber?: SaberDelCliente;
@@ -176,13 +177,13 @@ export function herramientaDeLaGuia(ctx: ContextoDeLaGuia): Anthropic.Messages.T
               pregunta: {
                 type: "string",
                 description: ctx.plan
-                  ? "SOLO la pregunta: corta (20 palabras como mucho), tuteando al cliente, en el paso que se indica. Sin repetir lo que dijo el cliente ni decir de dónde sale (eso lo ve el vendedor aparte): nada de «Dijiste que…», «En el diagnóstico…» ni citas. Nunca le pidas que lo vuelva a contar."
+                  ? `SOLO la pregunta: corta (20 palabras como mucho), tuteando al cliente, en el paso que se indica. Sin repetir lo que dijo el cliente ni decir de dónde sale (eso lo ve el ${cs ? "CSE" : "vendedor"} aparte): nada de «Dijiste que…», «En el diagnóstico…» ni citas. Nunca le pidas que lo vuelva a contar.`
                   : "Abierta, en lenguaje llano, tuteando al cliente.",
               },
               repreguntas: {
                 type: "array",
                 description: ctx.plan
-                  ? "Tres repreguntas cortas, cada una un paso más hondo que la pregunta (cuánto le cuesta, cómo lo quiere resolver, para cuándo, con qué). Ninguna vuelve a preguntar lo que ya se sabe."
+                  ? `Tres repreguntas cortas, cada una un paso más hondo que la pregunta (${cs ? "el último caso real, cuánto le cuesta, cómo lo quiere resolver" : "cuánto le cuesta, cómo lo quiere resolver, para cuándo, con qué"}). Ninguna vuelve a preguntar lo que ya se sabe.`
                   : "La siguiente pregunta lógica, tres veces: 1) el último caso real, 2) la causa o el dolor de fondo, 3) cuánto le cuesta (en tiempo, plata o clientes).",
                 items: { type: "string" },
               },
@@ -242,7 +243,7 @@ export function herramientaDeLaGuia(ctx: ContextoDeLaGuia): Anthropic.Messages.T
         cierre: {
           type: "string",
           description: cs
-            ? "Cómo cerrar esta sesión: qué se confirma y el siguiente paso, con fecha y con quién."
+            ? `Cómo cerrar esta sesión, en dos frases y 45 palabras como mucho, sin espacios por completar («[fecha]»): qué se confirma y el siguiente paso, con fecha y con quién.${ctx.faltanAlCerrar?.length ? ` Si en la conversación no salió, pide también: ${ctx.faltanAlCerrar.join(", ")}.` : ""}`
             : `Cómo cerrar esta reunión, en dos frases y 45 palabras como mucho, sin espacios por completar («[fecha]»): resume en una línea lo que entendiste y pide el siguiente paso, con fecha y con quién.${ctx.faltanAlCerrar?.length ? ` Si en la conversación no salió, pide también: ${ctx.faltanAlCerrar.join(", ")}.` : ""}`,
         },
         ...(ctx.suIndustria
@@ -292,10 +293,14 @@ Reglas:
 - El CSE le habla al cliente de TÚ (tuteo). Nunca voseo (las formas del Río de la Plata) ni «usted». Se escribe así: «tú vives», «puedes», «cuentas», «dices», «crees», «llegas», «quieres», «tienes», «cuéntame», «para ti». Aunque las fuentes estén en voseo, tú escribes en tuteo.
 - Primero lo que viene de antes: lo que el CSE se llevó de una sesión anterior (A1, A2…) y lo que quedó sin preguntar porque una sesión se cortó. Cada punto llevado va en una pregunta (la de la tarjeta o la dimensión a la que apunta) con su «abierto», y en «ubicacion» dices a qué tarjeta o dimensión apunta cada uno, aunque ninguna pregunta lo retome; si la sesión anterior se cortó, la apertura lo dice en una frase.
 - Parte de lo que ya se sabe: el handoff dice qué se vendió y qué resultados persigue el cliente. No los vuelvas a preguntar como si no se supieran: confírmalos, ponlos en números si les falta y busca lo que el handoff no dice (por qué ahora, qué pasa si no llegan, qué ya intentaron).
+- LO QUE YA SABEMOS es lo que el cliente ya respondió en el proyecto (en el handoff, en un cuestionario, en una reunión). NUNCA lo vuelvas a preguntar ni le pidas que lo cuente de nuevo: parte de ahí y pregunta lo que sigue.
+- Cada pregunta de la estrategia y de la escala tiene su PASO de la siguiente pregunta lógica: situación (cómo pasa hoy), impacto (cuánto le afecta y le cuesta), solución (cómo lo quiere resolver, qué ya intentó). Escribe la del paso que se indica, y nada más.
+- Cada pregunta es SOLO la pregunta: corta, directa a lo que le importa, sin repetir lo que dijo el cliente ni decir de dónde sale. Lo que dijo el CSE ya lo tiene a la vista, al lado de la pregunta. Así:
+  · Lo que dijo: «Cada vendedor lleva sus clientes en su Excel: nadie ve cuándo uno deja de comprar.» Paso impacto. Bien: «¿Cuántos clientes dejaron de comprar este año sin que nadie lo notara a tiempo?» Mal: «Dijiste que cada vendedor lleva su Excel… ¿Cuántos…?» (repite lo que dijo) y «¿Cómo llevan hoy a sus clientes?» (ya lo dijo).
 - LO VENDIDO pesa tanto como la estrategia y la escala. En «loVendido», una pregunta por cada pieza del alcance que más pesa (de 3 a 5): cómo la va a usar el cliente en su negocio. Quién la va a usar y cómo trabaja hoy ese proceso, qué datos, sistemas o personas toca, qué casos raros tiene, y qué tiene que pasar para que diga que funcionó. Si el handoff dejó algo dicho a medias o dado por supuesto sobre esa pieza, la pregunta va ahí. Usa lo que cada etiqueta suele esconder (en «LO VENDIDO») para saber qué preguntar, sin afirmarlo.
 - Preguntas abiertas, cortas y en lenguaje llano, sobre el negocio del cliente. Nada de configuración, licencias ni funciones de HubSpot: eso se ve en el proyecto.
 - Una pregunta por cada cosa en «para», y nada más. No preguntes lo que ya está confirmado.
-- Las repreguntas siguen el método de la siguiente pregunta lógica: cada una parte de lo que el cliente acaba de decir y va un paso más hondo. Primero el último caso real («¿me cuentas la última vez que pasó?»), después la causa o el obstáculo de fondo, y al final cuánto le cuesta (horas, plata, clientes perdidos), para cuantificarlo.
+- Las repreguntas se muestran solo si el cliente responde rápido: cada una parte de lo que acaba de decir y va un paso más hondo (el último caso real, la causa de fondo, cuánto le cuesta en horas, plata o clientes). Ninguna vuelve a preguntar lo que ya se sabe.
 - Para una dimensión de la escala, parte de su pregunta y de lo que hoy se cree de ella; nunca escribas identificadores de la escala ni nombres de niveles en las preguntas.
 - La apertura sale de algo real del proyecto o del cliente que digan las fuentes. Si no hay nada, una frase simple sobre para qué es la sesión. Nunca inventes datos, cifras ni nombres.
 - Nunca inventes casos de otros clientes, historias de éxito ni resultados («tuve un cliente que…»): el CSE los diría como ciertos. Si sirve un ejemplo, que sea una pregunta sobre el caso del propio cliente.
@@ -389,7 +394,7 @@ function cuerpoDeLaGuia(ctx: ContextoDeLaGuia): string {
       lineas.push(`- ${pl.para} («${nombre}») · paso: ${pl.paso} (${QUE_BUSCA_CADA_PASO[pl.paso]})${pl.motivo ? ` · parte de: ${pl.motivo}` : " · el cliente todavía no dijo nada de esto"}`);
     }
   }
-  lineas.push("", cs ? "=== PARA: LAS TARJETAS QUE FALTAN DE LA ESTRATEGIA ===" : ctx.plan ? "=== LAS TARJETAS DE ESTA SESIÓN ===" : "=== PARA: LAS TARJETAS QUE FALTAN DEL MARCO ===");
+  lineas.push("", ctx.plan ? "=== LAS TARJETAS DE ESTA SESIÓN ===" : cs ? "=== PARA: LAS TARJETAS QUE FALTAN DE LA ESTRATEGIA ===" : "=== PARA: LAS TARJETAS QUE FALTAN DEL MARCO ===");
   for (const h of ctx.huecos) lineas.push(`- ${h.clave} («${h.etiqueta}»: ${h.ayuda}) · pregunta de base: ${h.base}`);
   if (!ctx.huecos.length) lineas.push("(ninguna: están todas)");
   lineas.push("", ctx.plan ? "=== LAS DIMENSIONES DE ESTA SESIÓN ===" : "=== PARA: LAS DIMENSIONES EN FOCO ===");
@@ -617,11 +622,12 @@ export function contextoDeLaGuia(o: {
   const nombreDeNivel = (l: string) => escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
   const proximaId = proximaReunion(c.sesiones, o.agenda, o.hoy, { pasadasSinSesion: o.pasadasSinSesion ?? 0 }).sesionId;
   const sesionProxima = c.sesiones.find((x) => x.id === proximaId);
-  // En la preventa, la guía parte de lo que el cliente ya respondió (iniciativa A, 2026-10-18).
-  const delPlan = cs ? null : contextoDelPlan({ estado, tests: o.tests ?? [], escala, posiciones, sesionId: proximaId });
-  const saber = delPlan?.saber ?? null;
+  /* La guía parte de lo que el cliente ya respondió: la preventa desde el 2026-10-18 (iniciativa A) y un proyecto desde
+     el 2026-10-19, con su estrategia y sin el test. */
+  const delPlan = contextoDelPlan({ estado, tests: o.tests ?? [], escala, posiciones, sesionId: proximaId, marco: marco.clave });
+  const saber = delPlan.saber;
   const pasaronIds = [...new Set(c.sesiones.filter((s) => s.resultado === "cortada").flatMap((s) => s.pasaron ?? []))];
-  const { huecos, enfoque, plan } = focoDeLaGuia(c.casillas, escala, estado.areas, posiciones, c.aExplorar, marco, delPlan ?? undefined);
+  const { huecos, enfoque, plan } = focoDeLaGuia(c.casillas, escala, estado.areas, posiciones, c.aExplorar, marco, delPlan);
   const nombreDelTema = (para: string) =>
     esTarjeta(para) ? definicionEnElMarco(para, marco).etiqueta : (escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === para)?.nombre ?? para);
   const conEvidencia = Object.values(c.chequeo).some((e) => !esFuenteDeHipotesis(e.fuente)) || estado.propuesta.leidas.sesiones.length > 0;
@@ -702,10 +708,13 @@ export function contextoDeLaGuia(o: {
           saber,
           loQueYaSabemos: saberParaElPedido(saber, nombreDelTema),
           plan: plan.map((pl: PreguntaPlaneada) => ({ para: pl.para, paso: pl.paso, motivo: pl.motivo ? `«${pl.motivo.texto}» (${pl.motivo.de})` : null })),
-          faltanAlCerrar: faltanAlCerrar(o.faltanParaProponer ?? [], new Set(plan.map((pl) => pl.para)), {
-            hayDimensiones: plan.some((pl) => pl.tipo === "dimension"),
-            hayImpacto: plan.some((pl) => pl.tipo === "dimension" && pl.paso === "impacto"),
-          }).map((f) => f.corto.toLowerCase()),
+          // En un proyecto, lo que falta de la estrategia (avance-del-proyecto.ts); en la preventa, lo que falta para proponer.
+          faltanAlCerrar: cs
+            ? faltanDeLaEstrategia(avanceDeLaEstrategia(estado), new Set(plan.map((pl) => pl.para))).map((t) => t.charAt(0).toLowerCase() + t.slice(1))
+            : faltanAlCerrar(o.faltanParaProponer ?? [], new Set(plan.map((pl) => pl.para)), {
+                hayDimensiones: plan.some((pl) => pl.tipo === "dimension"),
+                hayImpacto: plan.some((pl) => pl.tipo === "dimension" && pl.paso === "impacto"),
+              }).map((f) => f.corto.toLowerCase()),
         }
       : {}),
   };

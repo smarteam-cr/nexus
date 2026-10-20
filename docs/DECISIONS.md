@@ -4275,9 +4275,10 @@ objeciones, y ver de un vistazo qué le falta para proponer.
   hipótesis de nivel siguen siendo el mapa.
 - **Las sesiones son las que hagan falta** (supera «dos reuniones, por decisión de Elías» del
   2026-09-30): el vendedor las agrega en `contenido.sesiones`, y la guía es siempre la de la PRÓXIMA.
-- **SUPERSEDED 2026-10-18 en la preventa** (ver «La preventa lleva a la siguiente pregunta lógica»): la guía parte de lo
-  que el cliente ya respondió, son unas 5 preguntas y cada una tiene su paso. Sigue valiendo para la exploración de un
-  proyecto.
+- **SUPERSEDED 2026-10-18 en la preventa y 2026-10-19 en un proyecto** (ver «La preventa lleva a la siguiente pregunta
+  lógica» y «La guía de la exploración de un proyecto, con las mejoras de la preventa»): la guía parte de lo que el
+  cliente ya respondió, son unas 5 preguntas y cada una tiene su paso. Sigue valiendo para mostrar una guía de un
+  proyecto armada antes del 2026-10-19.
   **La guía de la próxima reunión: el código elige qué cubre, el agente escribe** (`lib/exploraciones/guia.ts`,
   `guia-pedido.ts`). Hasta 5 tarjetas vacías, en el orden `PRIORIDAD_DE_LAS_TARJETAS` (metas primero, el
   presupuesto al final: hablar de plata antes de la meta es vender antes de diagnosticar), y hasta 8
@@ -9164,7 +9165,8 @@ guardados, pero el pedido de la guía no los leía. El plan está en `docs/preve
   del agente (sin espacios por completar: si trae uno, va el de base) y «Si no salió en la conversación, pregunta: …» con
   lo que falta para proponer y ninguna pregunta cubre (`faltanAlCerrar`, calidad.ts).
 - **Sin SQL.** El paso va en la pregunta guardada (`PreguntaDeLaGuia.paso`, en el Json de la propuesta); «Lo que ya
-  sabemos» se calcula al leer. La exploración de un proyecto (Customer Success) no cambia.
+  sabemos» se calcula al leer. La exploración de un proyecto (Customer Success) no cambió ese día; desde el 2026-10-19
+  también usa el plan (ver «La guía de la exploración de un proyecto, con las mejoras de la preventa»).
 - **Medido antes de entregar** (`scripts/medir-guia-de-preventa.ts`, en seco, contra el presupuesto humano): Larce,
   CreditForce, Universidad Monterrey y Cicadex pasaron de 7 u 8 preguntas a entre 4 y 5. Ninguna vuelve a preguntar lo
   que el cliente ya dijo.
@@ -9217,7 +9219,7 @@ repreguntas, y lo que cubre la guía pegado a ella. El plan está en `docs/preve
   proponer» queda en lo mínimo: los siete trazos verdes y «N de 7 listos».
 - **Lo que no cambió:** el plan (qué temas y en qué paso), «Lo que ya sabemos», la escala y la regla «sin una pista del
   cliente no hay nivel» (el asistente no confirma niveles), las guías por sesión y el marco de Customer Success (que
-  también acepta ajustes y lleva la ⓘ).
+  también acepta ajustes; la ⓘ, «Lo que ya sabemos» y el plan le llegaron el 2026-10-19).
 - **Medido con Larce** (`scripts/medir-guia-2.ts`, sin escribir la exploración ni el hilo): «Regenerar pregunta» cuesta
   unos US$0,015 por llamada (unos 4.100 tokens de entrada y 150 de salida; el doble si reintenta). Un turno del asistente
   que agrega dos preguntas y acorta otra son dos llamadas: unos US$0,11 el primero (escribe la caché del prompt y de la
@@ -9434,6 +9436,52 @@ resumen, y al aplicar repetía cada línea. Plan: `docs/chat-fluido-plan.md`.
   su `AgentRun` (`tiempos`).
 - **Sin streaming, por ahora.** En el caso común el turno es una sola llamada; el streaming pide cambiar la ruta y el
   cajón que comparten los tres chats. Es lo siguiente si sigue sintiéndose lento.
+
+## La guía de la exploración de un proyecto, con las mejoras de la preventa (2026-10-19)
+
+**Contexto.** La guía de la preventa ganó en dos días «Lo que ya sabemos», el plan por pasos, la ⓘ, los ajustes por
+sesión, el asistente y «Lo que cubre la guía». La exploración de un proyecto (`marco = "cs"`, la que usa el CSE) es el
+mismo lienzo, así que la mitad ya funcionaba; la otra mitad dependía de `marco === "venta"`. Inventario de ese día:
+
+| Mejora | Antes de esta tanda, en un proyecto |
+|---|---|
+| Menú ⋯ (Regenerar, Editar, Volver a la de la guía, Borrar con Deshacer), «+ Agregar pregunta» | Ya funcionaba (componentes compartidos, `guardDeLaExploracion` con `exploracion.generate`) |
+| «Mejorar con el asistente» y las operaciones `guia.*` | Ya funcionaba: el chat de la cuenta está en la ficha y las operaciones verifican la empresa del hilo y piden `exploracion.generate` |
+| Estado de la guía y «Actualizar la guía» | Ya funcionaba, con su texto de proyecto |
+| «Lo que cubre la guía» | Ya funcionaba con las tres tarjetas de la estrategia; no decía nada de lo vendido |
+| «Lo que ya sabemos» | No se veía: se calculaba solo en la venta |
+| Plan por pasos, unas 5 preguntas, la ⓘ con la fuente | No: 3 tarjetas y hasta 5 dimensiones, sin paso ni ⓘ |
+| Cierre con su pregunta y «Si no salió…» | No |
+| «Regenerar» | Funcionaba, pero el pedido le hablaba al vendedor |
+
+- **«Lo que ya sabemos» sale de lo que dijo el cliente EN EL PROYECTO** (`loQueYaSabemos` con `marco: "cs"`): las citas
+  verificadas del handoff (V0), los cuestionarios (Q0) y las reuniones, la evidencia de un nivel confirmado y lo
+  confirmado de la estrategia («Confirmado en la estrategia»). **Nunca el test**: es de la venta y el agente del proyecto
+  no lo lee. Hasta 2 líneas de dimensiones, así entran las tres tarjetas. Nada nuevo se lee de la base: es lo que el
+  lienzo ya tenía.
+- **El plan de un proyecto es el de la estrategia** (`planDeLaGuia` con `marco: "cs"`): los retos del negocio (situación),
+  los dos dolores que el cliente ya contó (impacto), los resultados en cifras (impacto) y lo que le impide llegar
+  (situación); con lugar, más dolores y la escala sin dato. **Sin «cuándo» ni «con qué»**: el cliente ya compró. Lo vendido
+  sigue aparte, de 3 a 5 preguntas que escribe el agente.
+- **Lo ya generado no se reescribe solo.** Una guía de un proyecto armada antes del plan (sus preguntas no tienen paso,
+  `guiaDeAntesDelPlan`) se sigue mostrando como se armó (3 tarjetas, 5 dimensiones, lo vendido) y el estado dice «es de
+  antes de «Lo que ya sabemos»» con «Actualizar la guía». *Por qué distinto de la preventa:* allá el 2026-10-18 la guía
+  vieja se mostró con el plan; acá Elías pidió que lo guardado siga igual hasta que alguien la actualice. La de base (sin
+  guía armada) sí usa el plan: no es algo generado.
+- **El cierre de un proyecto** pregunta «¿Hay algo que no hayamos hablado y que deba saber para que el proyecto llegue a
+  esos resultados?» y pide lo que falta de la estrategia que ninguna pregunta cubre (`faltanDeLaEstrategia`).
+- **«Regenerar» le habla al CSE** (`PROMPT_DE_CUSTOMER_SUCCESS`, guia-pregunta-pedido.ts), sin «con qué».
+- **«Lo que cubre la guía» suma las piezas de lo vendido que pregunta**, y el asistente ofrece «Agrega una pregunta sobre
+  cómo van a usar lo que se vendió» cuando la guía no trae ninguna.
+- **«Lo que traes de las sesiones anteriores» deja de repetir las tarjetas respondidas**: están en «Lo que ya sabemos».
+- `scripts/ver-guia-del-proyecto.ts` (solo lectura, sin IA) muestra en seco lo que ve el CSE. Medido ese día: la guía de
+  Cemaco Internacional - CRM es del 19 oct, de antes del plan, y sigue igual (9 preguntas); «Lo que ya sabemos» trae 5
+  líneas (dos dimensiones de reuniones y las tres tarjetas confirmadas); «Actualizar la guía» la armaría con 1.2 y 1.7 en
+  impacto, los resultados en cifras, 1.3 y 1.4. Ferretería Noelito, Global Supply y Areyá todavía tienen la guía de base:
+  pasan de 8 preguntas a 3 o 5.
+- **Sin SQL.** Pendiente para otra tanda: que «Lo que ya sabemos» lea directo los resultados medibles confirmados del
+  handoff y las respuestas confirmadas del cuestionario de estrategia (hoy llegan solo como citas de lo que propuso el
+  agente).
 
 ## «Para ti» después de probarlo: el espacio libre y la sesión (2026-10-19)
 
