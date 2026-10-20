@@ -20,7 +20,13 @@ import type { EntradaDeLasSenales, MesDeSolvencia, Senal } from "./senales";
 
 export const AGENT_SLUG_DE_LA_LECTURA = "rentabilidad-lectura";
 export const MODELO_DE_LA_LECTURA = "claude-sonnet-4-6";
-export const MAX_TOKENS_DE_LA_LECTURA = 3000;
+/**
+ * Hasta 12 señales (una de solvencia, 5 + 5 cuentas y la meta), una propuesta por señal. Con los topes del esquema (unos
+ * 4.100 caracteres por propuesta) el peor caso ronda los 15.600 tokens; lo que no se escribe no se cobra. Con 3000 la
+ * respuesta se cortaba siempre y el job reintentaba cada hora (21 corridas el 2026-10-19). Debajo de 21.333: sin
+ * streaming el SDK no acepta más. Lo vigila lectura.test.ts.
+ */
+export const MAX_TOKENS_DE_LA_LECTURA = 16000;
 
 /** Lo mínimo del punto de equilibrio que entra: el piso y, por mes, ingresos, lo programado y si está completo. */
 export interface MesDelEquilibrio {

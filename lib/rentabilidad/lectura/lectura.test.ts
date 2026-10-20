@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { DatosDeRentabilidad } from "@/lib/rentabilidad/tipos";
 import { detectarSenales, UMBRALES, type EntradaDeLasSenales } from "./senales";
-import { armarMensaje, entradaDesdeLosDatos, leerPropuestas, PROMPT_DE_LA_LECTURA, type MesDelEquilibrio } from "./contexto";
+import { armarMensaje, entradaDesdeLosDatos, leerPropuestas, MAX_TOKENS_DE_LA_LECTURA, PROMPT_DE_LA_LECTURA, type MesDelEquilibrio } from "./contexto";
 import { estadoDeLaPropuesta, mesQueTocaLeer } from "./estado";
 
 // ── Datos con MARCAS en todo lo que nunca puede llegar al prompt ─────────────
@@ -158,5 +158,16 @@ describe("el ciclo de una propuesta y cuándo lee el job", () => {
     expect(mesQueTocaLeer(new Date("2026-10-04T14:00:00Z"))).toBe("2026-09");
     expect(mesQueTocaLeer(new Date("2026-10-03T20:00:00Z"))).toBeNull();
     expect(mesQueTocaLeer(new Date("2027-01-10T15:00:00Z"))).toBe("2026-12");
+  });
+});
+
+describe("el tope de la respuesta alcanza para todas las señales", () => {
+  it("una de solvencia, las cuentas de cada clase y la meta, con cada propuesta en el tope del esquema", () => {
+    // Con 3000 la respuesta se cortaba y el job reintentaba cada hora (21 corridas el 2026-10-19).
+    const maxSenales = 1 + 2 * UMBRALES.cuentasPorClase + 1;
+    // Unos 4.100 caracteres por propuesta con los topes de zod (titulo, queVe, propuesta, inversionNota): ~1.300 tokens.
+    expect(MAX_TOKENS_DE_LA_LECTURA).toBeGreaterThanOrEqual(maxSenales * 1300);
+    // Sin streaming, el SDK exige streaming por encima de 21.333 (KNOWN-ERRORS / DECISIONS «FIX streaming»).
+    expect(MAX_TOKENS_DE_LA_LECTURA).toBeLessThanOrEqual(21_333);
   });
 });
