@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { fetchJson } from "@/lib/api/fetch-json";
+import { zClass } from "@/lib/ui/z";
 import { groupNavChildren, isChildActive } from "./nav-config";
 import type { NavChildConfig, NavItemConfig } from "./nav-config";
 
@@ -107,7 +108,7 @@ export default function NavFlyout({
             onMouseEnter={openFlyout}
             onMouseLeave={scheduleClose}
             style={{ position: "fixed", top: coords.top, left: coords.left }}
-            className="z-[70] max-h-[70vh] w-56 overflow-y-auto rounded-xl border border-line bg-surface shadow-2xl py-1.5"
+            className={`${zClass("POPOVER")} max-h-[70vh] w-56 overflow-y-auto rounded-xl border border-line bg-surface shadow-2xl py-1.5`}
           >
             {groupNavChildren(items).map((bloque, bi) => (
               <div key={bloque.section ?? `__suelto-${bi}`}>

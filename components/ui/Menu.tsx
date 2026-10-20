@@ -1,7 +1,9 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { zClass } from "@/lib/ui/z";
 import { usePanelFlotante } from "./usePanelFlotante";
 
 // ── Menu ───────────────────────────────────────────────────────────────────────
@@ -19,6 +21,14 @@ import { usePanelFlotante } from "./usePanelFlotante";
 // trigger, el scroll externo que cierra pero el interno no, Escape que devuelve
 // el foco— habría creado la segunda implementación que este encabezado juraba
 // que no iba a existir. El hook las tiene, con el porqué de cada una.
+//
+// ⚠ EL PANEL VA EN UN PORTAL a document.body, en la capa POPOVER (lib/ui/z.ts). Hasta el
+// 2026-10-20 era `fixed z-50` en el lugar: el menú del avatar del sidebar (Configuración, Modo
+// oscuro, Cerrar sesión) colgaba del contenedor `sticky` del rail, que crea un contexto de
+// apilamiento, y lo tapaba cualquier elemento posicionado de la columna principal — las celdas
+// `relative` de la tabla de Clientes, la agenda de Para ti. En Tareas, sin nada posicionado, se
+// veía bien. Con el portal el panel no depende de lo que haga cada página. La guarda es
+// `lib/ui/capas-del-menu.test.ts`.
 //
 // Tipos de ítem: `href` → Link · `onSelect` → button · `formAction` → POST
 // (ej. /auth/signout). `keepOpen` para toggles que no deben cerrar (tema).
@@ -107,12 +117,14 @@ export function Menu({
         {typeof trigger === "function" ? trigger(open) : trigger}
       </button>
 
-      {open && pos && (
+      {open && pos && createPortal(
         <div
           ref={panelRef}
           role="menu"
+          aria-label={ariaLabel}
           className={cn(
-            "fixed z-50 bg-surface border border-line rounded-xl shadow-xl py-1.5 overflow-y-auto",
+            "fixed bg-surface border border-line rounded-xl shadow-xl py-1.5 overflow-y-auto",
+            zClass("POPOVER"),
             panelWidth,
           )}
           style={{ maxHeight: "calc(100vh - 16px)", ...pos }}
@@ -157,7 +169,8 @@ export function Menu({
               </div>
             );
           })}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
