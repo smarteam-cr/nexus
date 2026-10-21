@@ -14,8 +14,8 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `c5659704` desde la noche del 20 oct: «Para ti» simplificado (Preparar abre el panel, «Ya la agendé», las tareas se deciden en Tareas, el nombre corto de cada tarea) y el calendario de la fecha del kickoff. Sana, con el esquema al día. |
-| Por desplegar | Lo de las pruebas del 20 oct: las alertas ya no saltan encima de la pantalla, la propuesta de tarea abre corta con los botones abajo, la agenda solo del horario de trabajo (con «Ver el calendario completo») y la guía de una reunión que toma el tema de la invitación. Sin SQL. |
+| Producción | Corre `a922e481` desde la madrugada del 21 oct: sin alertas que salten encima de la pantalla, la propuesta de tarea corta, la agenda del horario de trabajo y la guía que toma el tema de la invitación. Antes, el mismo 20 oct, «Para ti» simplificado (`c5659704`). Sana, con el esquema al día. |
+| Por desplegar | Nada: todo `main` está en producción (12.571 pruebas en verde, tsc en 0). |
 | En rojo en producción | 3 invariantes, todos con su decisión abajo: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado. |
 | Pruebas | 16 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 79 que valida el equipo al usarlas, 75 con IA sobre los datos y 48 ya validadas por ti. |
 
@@ -497,6 +497,9 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 10. [hecho] «Preparar» abre el panel de la reunión en la agenda, con la guía, la búsqueda en las reuniones y los pendientes que se marcan hechos, se desestiman o se agendan ahí mismo.
 11. [hecho] «Ya la agendé» en una cuenta sin siguiente paso: se elige la reunión del calendario y Nexus la verifica; cuenta como siguiente paso hasta 30 días.
 12. [hecho] Las tareas nuevas de las reuniones llegan en una sola línea a Tareas, y el espacio libre nombra cada tarea «Cliente – nombre corto».
+13. [hecho] Las alertas del vigía ya no saltan encima de la pantalla: siguen en Éxito del cliente y en «Para ti» de la CSL.
+14. [hecho] La agenda muestra solo de 8:00 a 17:00, con «Ver el calendario completo».
+15. [hecho] La guía de una reunión sin otra fuente toma el tema del título de la invitación.
 
 ### Tareas <span class="estado">En producción</span>
 
@@ -508,6 +511,7 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 6. [hecho] «Planifica tu semana», de viernes a domingo.
 7. [hecho] Las propuestas se deciden solo en Tareas, con «Usar las N» por reunión; la página de la sesión las muestra para leer.
 8. [hecho] El nombre corto de cada tarea lo escribe la IA cada 10 minutos (job «titulos-cortos»).
+9. [hecho] Una propuesta de tarea abre corta, con «Descartar», «Más adelante» y «Usar» abajo; el cajón se titula con el nombre de la tarea.
 
 ### Preventa y exploración <span class="estado">En producción</span>
 
