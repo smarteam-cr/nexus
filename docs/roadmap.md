@@ -14,8 +14,8 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `fd95f2f4` desde la tarde del 20 oct: lo que salió de la revisión con Valentina y Liliana (kickoff, Para ti, la guía y su asistente, el menú lateral). Sana, con el esquema al día. |
-| Por desplegar | El calendario de la fecha de arranque del kickoff (prueba 241) y «Para ti» simplificado: «Preparar» abre el panel de la reunión con los pendientes accionables, «Ya la agendé» con la reunión del calendario, las tareas se deciden solo en Tareas y el nombre corto de cada tarea lo escribe la IA. El SQL `2026-10-20-titulo-corto-de-la-tarea.sql` ya está aplicado. |
+| Producción | Corre `c5659704` desde la noche del 20 oct: «Para ti» simplificado (Preparar abre el panel, «Ya la agendé», las tareas se deciden en Tareas, el nombre corto de cada tarea) y el calendario de la fecha del kickoff. Sana, con el esquema al día. |
+| Por desplegar | Nada: todo `main` está en producción (12.569 pruebas en verde, tsc en 0). |
 | En rojo en producción | 3 invariantes, todos con su decisión abajo: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado. |
 | Pruebas | 113 para personas (pestaña «Pruebas para personas»), 72 con IA sobre los datos (pestaña «Pruebas con IA») y 35 ya validadas por ti. |
 
@@ -345,7 +345,7 @@ Las que corre la IA (Claude) sin pantalla: con los datos de producción, en solo
 | 252 | ✓ Validado por Claude 20 oct | Que cada compromiso le llegue a quien le toca | Repartí con la regla nueva los compromisos de 41 lecturas de 14 días y los comparé con las 92 propuestas vivas (`scripts/a-quien-le-llegan-las-propuestas.ts`). | Ninguna le llegó a otra persona. El único aviso ajeno de hoy era el de Valentina (T-117, de Marco) y ya no le sale; 5 avisos propios que no le llegaban a nadie ahora sí (4 de Marco y T-102 de Alexander). |
 | 253 | ✓ Validado por Claude 20 oct | Que los desplegables de la barra queden encima, para todos | Página de prueba con el sidebar real, midiendo punto por punto qué queda arriba de cada panel abierto. | Super Admin en 5 pantallas, 2 temas y la barra abierta y colapsada: 20 de 20 sin un punto tapado. Los otros 6 roles en Clientes: 24 de 24. Antes del arreglo, con la barra colapsada, 167 de 273 puntos tapados. |
 | 271 | ✓ Validado por Claude 20 oct | Que la IA escriba un buen nombre corto | 40 tareas abiertas reales de producción, con el pedido final, sin escribir nada. | 40 de 40 con nombre, en unos 20 s y US$0,014 por tanda de 40: «Pedirle a Ana el inventario actualizado», «Agendar sesión de e-commerce con Álvaro», «Dar seguimiento a lo que prometió el cliente». La primera versión dejaba nombres colgando («…Josseline los»): se corrigió el recorte. |
-| 272 | ⏳ La corre la IA después del deploy | Que el job ponga los nombres cortos | Integraciones › «El nombre corto de las tareas», y contar en la base las tareas abiertas con `tituloCorto`. | En la primera hora, casi todas las abiertas con nombre, unos centavos de dólar en total, y el job en verde. |
+| 272 | ✓ Validado por Claude 20 oct | Que el job ponga los nombres cortos | Producción, después del deploy de `c5659704`: las tareas abiertas con `tituloCorto` y las corridas del job. | La primera corrida nombró las 127 tareas abiertas en 4 pedidos (40, 40, 40 y 7), sin ninguna sin nombre, por US$0,039 en total. |
 
 ### Tareas
 
@@ -508,6 +508,9 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 7. [hecho] La meta de HubSpot de cada vendedor, copiada cada hora, y el aviso cuando no hay meta.
 8. [hecho] Lo que sale de una reunión le llega a quien le toca: lo de venta o negociación al dueño del negocio, y el aviso de las 48 horas a quien se le propuso, no a quien lleva la cuenta.
 9. [hecho] Los menús de la barra lateral (el del avatar y los desplegables) se abren siempre encima del contenido, en todas las pantallas y temas.
+10. [hecho] «Preparar» abre el panel de la reunión en la agenda, con la guía, la búsqueda en las reuniones y los pendientes que se marcan hechos, se desestiman o se agendan ahí mismo.
+11. [hecho] «Ya la agendé» en una cuenta sin siguiente paso: se elige la reunión del calendario y Nexus la verifica; cuenta como siguiente paso hasta 30 días.
+12. [hecho] Las tareas nuevas de las reuniones llegan en una sola línea a Tareas, y el espacio libre nombra cada tarea «Cliente – nombre corto».
 
 ### Tareas <span class="estado">En producción</span>
 
@@ -517,6 +520,8 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 4. [hecho] Un seguimiento por reunión y cuenta para lo que prometió el cliente; lo rápido plegado por cuenta; Nexus sugiere cerrar lo viejo.
 5. [hecho] Marcar hecha y deshacer al instante; el panel de la tarea dice si guardó.
 6. [hecho] «Planifica tu semana», de viernes a domingo.
+7. [hecho] Las propuestas se deciden solo en Tareas, con «Usar las N» por reunión; la página de la sesión las muestra para leer.
+8. [hecho] El nombre corto de cada tarea lo escribe la IA cada 10 minutos (job «titulos-cortos»).
 
 ### Preventa y exploración <span class="estado">En producción</span>
 
@@ -568,6 +573,7 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 2. [hecho] La fila de datos de la portada se edita como las etiquetas (agregar, quitar, reordenar, editar texto y etiqueta), alineada al editar y al presentar.
 3. [hecho] Una sección oculta queda oculta aunque no se publique, y el cliente y el PDF ven lo mismo que por dentro.
 4. [hecho] El chat del cronograma lee la memoria del proyecto: sabe lo que se habló con el cliente aunque nadie haya elegido reuniones.
+5. [hecho] El calendario de la fecha de arranque se abre encima de la sección siguiente.
 
 ### Reuniones, memoria y la escala <span class="estado">En producción</span>
 
