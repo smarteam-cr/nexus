@@ -7,7 +7,6 @@ import { esAdminDeRoles, hasSharedRoleDocs } from "@/lib/roles/access";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import { vistaFinanzasDe } from "@/lib/finanzas/vista";
 import SidebarShell from "./SidebarShell";
-import CsAlertNotifier from "@/components/cs/CsAlertNotifier";
 import { TooltipLayer } from "@/components/ui/Tooltip";
 import { PanelLateralProvider } from "@/components/ui/PanelLateral";
 import { COOKIE_PANEL_LATERAL, panelAbiertoDesdeCookie } from "@/components/ui/panel-lateral-cookie";
@@ -109,9 +108,6 @@ export default async function AppShell({
         <AsistenteDeTareasProvider habilitado={chatDeTareas} email={user.teamMember?.email ?? user.email}>
         <PanelLateralProvider initialOpen={panelAbierto}>
         <SidebarShell user={userLite} initialOpen={!sidebarCollapsed}>
-          {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
-              (el componente se auto-apaga para otros roles; render null). */}
-          <CsAlertNotifier role={userLite.role} />
           {/* «¿Cuánto te tomó?» al publicar un documento (2026-10-05): la tarjeta fija abajo a la derecha. */}
           <PreguntasFlotantes />
           {/* LA capa de ayuda. Va UNA vez y acá: adopta el `title` de cualquier elemento de

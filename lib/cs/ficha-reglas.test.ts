@@ -177,11 +177,10 @@ describe("⭐ la cuenta de respaldo de la ficha lleva sus alertas", () => {
     expect(ruta, "la ruta que cierra alertas volvió a mirar la cartera").not.toMatch(/cartera|PROYECTO_DE_|proyectoDe[A-Z]\w*Where|loadPortfolio/);
   });
 
-  it("⭐ el aviso de una alerta alta lleva a la ficha de SU cuenta, no al índice (D13)", () => {
-    /* El índice solo lista la cartera: desde «Ver panel», la alerta de un cliente fuera de ella no
-       se encontraba. La edición que lo pone en rojo: volver a mandar al índice. */
-    const src = leer("components/cs/CsAlertNotifier.tsx");
-    expect(src).toContain("`/customer-success/${encodeURIComponent(a.clientId)}`");
-    expect(src).not.toMatch(/push\("\/customer-success"\)|url: "\/customer-success"/);
+  it("⭐ las alertas del vigía no saltan como avisos encima de la pantalla (2026-10-20, decisión de Elías)", () => {
+    /* Se ven en Éxito del cliente y en «Para ti» de quien lidera Customer Success; encima de la pantalla solo los
+       errores. La edición que lo pone en rojo: volver a montar un notificador de alertas en el shell. */
+    const shell = leer("components/layout/AppShell.tsx");
+    expect(shell).not.toMatch(/CsAlertNotifier|notifyCsAlert/);
   });
 });

@@ -9,6 +9,11 @@
  * cajón; lo demás, al elegirlo. Los pedidos van en fila, uno detrás del otro, para que cada uno lleve la versión que dejó
  * el anterior. Lo que la persona no puede hacer no se pinta (`tarea.acciones`, calculadas en el servidor con la misma
  * regla que exige al guardar).
+ *
+ * Una PROPUESTA que puedes decidir (2026-10-20, decisión de Elías) abre corta: qué propone Nexus, para quién, cuándo
+ * vence y de dónde salió, con «Usar», «Más adelante» y «Descartar» abajo, en el pie. El resto del formulario espera
+ * detrás de «Cambiar otros detalles». Arriba, el nombre de la tarea para una persona («Honda Costa Rica – Configurar
+ * los informes…»), no «T-9»: el número va en la línea de abajo.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CeldaSelect, Drawer, Field, Input, Interruptor, Segmentado, Textarea, type OpcionDeCelda } from "@/components/ui";
@@ -21,6 +26,7 @@ import { ESPERA_AL_ESCRIBIR_MS, TEXTO_DEL_GUARDADO, estadoDelGuardado } from "@/
 import { conEstadoAlInstante } from "@/lib/tareas/fila-de-cambios";
 import { NOMBRE_DEL_ESTADO, NOMBRE_DEL_ORIGEN, type OrigenDeTarea } from "@/lib/tareas/estados";
 import { diaYHora, rangoDeLaSemana, sumarSemanas } from "@/lib/tareas/semana";
+import { tareaParaUnaPersona } from "@/lib/tareas/titulo-corto";
 import type { OpcionesDeTareas, TareaVista } from "@/lib/tareas/tipos";
 import { apiTareas, ErrorDeApi } from "./api";
 import { ChipDeAgenda, horas } from "./chips";
@@ -29,6 +35,10 @@ import { DependenciasDeLaTarea } from "./DependenciasDeLaTarea";
 import { EtiquetasDeLaTarea } from "./EtiquetasDeLaTarea";
 import { VinculosDeLaTarea } from "./VinculosDeLaTarea";
 import { useAsistenteDeTareas } from "./AsistenteDeTareas";
+
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+/** «16 oct» de un AAAA-MM-DD. */
+const diaCorto = (ymd: string) => `${Number(ymd.slice(8, 10))} ${MESES[Number(ymd.slice(5, 7)) - 1]}`;
 
 type Historia = { id: string; tipo: string; texto: string; quien: string; cuando: string; detalle: string | null }[];
 
@@ -59,6 +69,8 @@ export function CajonDeTarea({
   const [notas, setNotas] = useState("");
   const [proyectosHubspot, setProyectosHubspot] = useState<{ id: string; nombre: string; interno: boolean }[]>([]);
   const [noSeHara, setNoSeHara] = useState<string | null>(null);
+  // Una propuesta abre corta; «Cambiar otros detalles» muestra el formulario entero.
+  const [detalles, setDetalles] = useState(false);
   // El guardado: cuántos pedidos esperan respuesta, si el último falló y si ya se guardó algo desde que se abrió.
   const [enVuelo, setEnVuelo] = useState(0);
   const [fallo, setFallo] = useState(false);
@@ -95,6 +107,7 @@ export function CajonDeTarea({
   useEffect(() => {
     ponerTarea(null);
     setNoSeHara(null);
+    setDetalles(false);
     setFallo(false);
     setGuardadoAlguna(false);
     ultimoFallido.current = null;
@@ -221,6 +234,33 @@ export function CajonDeTarea({
     }
   }
 
+  /** «Usar» una propuesta: lo escrito primero (usarla con la versión de antes daría «otra persona la cambió»). */
+  async function usarPropuesta() {
+    guardarTexto();
+    await cola.current;
+    const ultima = tareaRef.current;
+    if (ultima) onDecidir(ultima, !!ultima.sugerencias?.cliente);
+  }
+
+  /** «Más adelante» o «Descartar» una propuesta, desde el pie del cajón. */
+  async function decidirPropuesta(tipo: "mas_adelante" | "rechazar") {
+    guardarTexto();
+    await cola.current;
+    const t0 = tareaRef.current;
+    if (!t0) return;
+    setEnVuelo((n) => n + 1);
+    try {
+      await apiTareas.decidir(t0.id, t0.version, { tipo });
+      toast.success(tipo === "rechazar" ? "Descartada." : "Quedó para más adelante.");
+      onCambio();
+      onCerrar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar la decisión.");
+    } finally {
+      setEnVuelo((n) => n - 1);
+    }
+  }
+
   function reintentar() {
     const body = ultimoFallido.current;
     if (body) void cambiar(body).catch(() => undefined);
@@ -245,6 +285,8 @@ export function CajonDeTarea({
 
   const t = tarea;
   const acc = t?.acciones;
+  const esPropuesta = !!t && t.estado === "propuesta" && !!acc?.decidir;
+  const corta = esPropuesta && !detalles;
   // No se deshabilita mientras guarda: los pedidos van en fila y escribir no tiene que perder el foco.
   const puedeEditar = !!acc?.editar;
   const personas: OpcionDeCelda[] = (opciones?.personas ?? []).map((p) => ({ value: p.email, label: p.nombre, hint: p.email }));
@@ -262,8 +304,8 @@ export function CajonDeTarea({
       open={!!id}
       onClose={cerrarCajon}
       size="lg"
-      title={t ? `T-${t.numero}` : "Tarea"}
-      description={t ? NOMBRE_DEL_ESTADO[t.estado] : undefined}
+      title={t ? tareaParaUnaPersona({ titulo: t.titulo, tituloCorto: t.tituloCorto, empresa: t.cliente?.nombre ?? null, ambito: t.ambito?.nombre ?? null }) : "Tarea"}
+      description={t ? `T-${t.numero} · ${esPropuesta ? "Nexus te la propone" : NOMBRE_DEL_ESTADO[t.estado]}` : undefined}
       footer={
         t ? (
           <>
@@ -280,7 +322,20 @@ export function CajonDeTarea({
             ) : (
               <p className="mr-auto text-xs text-fg-muted">Solo lectura: no la puedes cambiar.</p>
             )}
-            {asistente && (
+            {esPropuesta && (
+              <>
+                <BotonTexto disabled={guardando} onClick={() => void decidirPropuesta("rechazar")}>
+                  Descartar
+                </BotonTexto>
+                <BotonBlanco disabled={guardando} onClick={() => void decidirPropuesta("mas_adelante")}>
+                  Más adelante
+                </BotonBlanco>
+                <BotonAzul disabled={guardando} onClick={() => void usarPropuesta()}>
+                  Usar
+                </BotonAzul>
+              </>
+            )}
+            {asistente && !esPropuesta && (
               <BotonTexto
                 onClick={() => {
                   asistente.abrir({ chip: { tipo: "tarea", id: t.id, etiqueta: `T-${t.numero} «${t.titulo}»` } });
@@ -296,25 +351,44 @@ export function CajonDeTarea({
     >
       {error && <p className="text-sm text-danger-ink">{error}</p>}
       {!t && !error && <p className="text-sm text-fg-muted">Abriendo…</p>}
-      {t && acc && (
-        <div className="space-y-5">
-          {t.estado === "propuesta" && acc.decidir && (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-info-line bg-info-surface px-3 py-2.5">
-              <p className="min-w-0 flex-1 text-[13px] text-brand">Es una propuesta: cámbiala acá y úsala cuando esté como quieres.</p>
-              <BotonAzul
-                disabled={guardando}
-                onClick={async () => {
-                  // Lo escrito primero: usarla con la versión de antes daría «otra persona la cambió».
-                  guardarTexto();
-                  await cola.current;
-                  const ultima = tareaRef.current;
-                  if (ultima) onDecidir(ultima, !!ultima.sugerencias?.cliente);
-                }}
-              >
-                Usar
-              </BotonAzul>
+      {t && acc && corta && (
+        <div className="space-y-4">
+          <div className="space-y-2.5 rounded-lg border border-info-line bg-info-surface px-3.5 py-3">
+            <p className={cn(ROTULO_DEL_SISTEMA, "flex items-center gap-1.5 text-brand")}>
+              <IconoDeSugerencia className="h-3.5 w-3.5" />
+              Nexus te propone esta tarea
+            </p>
+            <Field label="Qué hay que hacer">
+              <Input value={titulo} disabled={!puedeEditar} onChange={(e) => setTitulo(e.target.value)} onBlur={guardarTexto} />
+            </Field>
+            {t.contexto && <p className="line-clamp-4 whitespace-pre-line text-[13px] leading-relaxed text-fg-secondary">{t.contexto}</p>}
+          </div>
+          <dl className="grid grid-cols-3 gap-3 text-[13px]">
+            <div>
+              <dt className="text-xs text-fg-muted">Para</dt>
+              <dd className="text-fg">{t.responsable?.nombre ?? "Por asignar"}</dd>
             </div>
+            <div>
+              <dt className="text-xs text-fg-muted">Vence</dt>
+              <dd className="text-fg">{t.venceEl ? diaCorto(t.venceEl) : "Sin fecha"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-fg-muted">Cliente</dt>
+              <dd className="text-fg">{t.cliente?.nombre ?? t.sugerencias?.cliente?.nombre ?? "Sin cliente"}</dd>
+            </div>
+          </dl>
+          {t.salioDe?.visible && (
+            <p className="text-xs leading-[17px] text-fg-muted">
+              Salió de «{t.salioDe.titulo}»{t.salioDe.cita ? ` · «${t.salioDe.cita}»` : ""}
+            </p>
           )}
+          <BotonTexto className="px-0" onClick={() => setDetalles(true)}>
+            Cambiar otros detalles
+          </BotonTexto>
+        </div>
+      )}
+      {t && acc && !corta && (
+        <div className="space-y-5">
 
           {/* «Ya pasó» (lib/tareas/aligerar.ts): Nexus propone cerrarla; la cierra quien la mira, con el motivo escrito. */}
           {t.cerrar && (

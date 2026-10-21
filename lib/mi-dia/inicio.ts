@@ -104,16 +104,21 @@ export interface Grilla {
   desdeHora: number;
   hastaHora: number;
   eventos: EventoEnLaGrilla[];
+  /** Con un rango: cuántos eventos quedaron fuera de él, enteros o en parte («Ver el calendario completo»). */
+  fuera: number;
 }
 
 const MIN_ALTO = 20;
 
 /**
- * Dónde cae cada reunión de UN día. La grilla va de 8:00 a 18:00 y se estira si hay reuniones antes o después. Las que
- * se pisan se reparten en columnas, como en Google Calendar.
+ * Dónde cae cada reunión de UN día. Las que se pisan se reparten en columnas, como en Google Calendar.
+ *
+ * Con `rango` (en horas: el horario de trabajo, 2026-10-20) la grilla va justo de una hora a la otra: lo que cae
+ * afuera no se pinta y lo que lo cruza se recorta; `fuera` cuenta cuántos quedaron afuera, enteros o en parte. Sin
+ * `rango` (el calendario completo), va de 8:00 a 18:00 y se estira si hay reuniones antes o después.
  */
-export function grillaDelDia(eventos: readonly EventoParaLaGrilla[], dia: string): Grilla {
-  const delDia = eventos
+export function grillaDelDia(eventos: readonly EventoParaLaGrilla[], dia: string, rango: { desde: number; hasta: number } | null = null): Grilla {
+  const todosDelDia = eventos
     .map((e) => {
       const a = minutoDelDia(e.inicio);
       if (a.dia !== dia) return null;
@@ -121,11 +126,21 @@ export function grillaDelDia(eventos: readonly EventoParaLaGrilla[], dia: string
       const duracion = Math.max(15, Math.round((finMs - Date.parse(e.inicio)) / 60_000));
       return { id: e.id, desde: a.minuto, hasta: Math.min(24 * 60, a.minuto + duracion) };
     })
-    .filter((x): x is { id: string; desde: number; hasta: number } => !!x)
-    .sort((a, b) => a.desde - b.desde || b.hasta - a.hasta);
+    .filter((x): x is { id: string; desde: number; hasta: number } => !!x);
 
-  const desdeHora = Math.min(HORA_INICIO_DE_LA_AGENDA, ...delDia.map((e) => Math.floor(e.desde / 60)));
-  const hastaHora = Math.max(HORA_FIN_DE_LA_AGENDA, ...delDia.map((e) => Math.ceil(e.hasta / 60)));
+  let fuera = 0;
+  const enRango = rango
+    ? todosDelDia.flatMap((e) => {
+        const desde = Math.max(e.desde, rango.desde * 60);
+        const hasta = Math.min(e.hasta, rango.hasta * 60);
+        if (desde !== e.desde || hasta !== e.hasta) fuera++;
+        return hasta > desde ? [{ ...e, desde, hasta }] : [];
+      })
+    : todosDelDia;
+  const delDia = enRango.sort((a, b) => a.desde - b.desde || b.hasta - a.hasta);
+
+  const desdeHora = rango ? rango.desde : Math.min(HORA_INICIO_DE_LA_AGENDA, ...delDia.map((e) => Math.floor(e.desde / 60)));
+  const hastaHora = rango ? rango.hasta : Math.max(HORA_FIN_DE_LA_AGENDA, ...delDia.map((e) => Math.ceil(e.hasta / 60)));
   const base = desdeHora * 60;
 
   // Grupos de reuniones que se pisan; dentro de cada grupo, la primera columna libre.
@@ -148,7 +163,7 @@ export function grillaDelDia(eventos: readonly EventoParaLaGrilla[], dia: string
     finDelGrupo = Math.max(finDelGrupo, e.hasta);
   }
   if (grupo.length) cerrar();
-  return { desdeHora, hastaHora, eventos: salida };
+  return { desdeHora, hastaHora, eventos: salida, fuera };
 }
 
 /** La línea de «ahora», en minutos desde el inicio de la grilla. null = no es hoy o está fuera de la grilla. */

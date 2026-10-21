@@ -33,7 +33,8 @@ describe("el cajón de la tarea dice si guardó", () => {
   it("cerrar el cajón manda lo escrito, y el título y las notas se guardan al dejar de escribir", () => {
     expect(cajon).toMatch(/onClose=\{cerrarCajon\}/);
     expect(cajon).toContain("ESPERA_AL_ESCRIBIR_MS");
-    expect(cajon.match(/onBlur=\{guardarTexto\}/g)?.length).toBe(2);
+    // El título (en la vista corta de una propuesta y en la entera) y las notas.
+    expect(cajon.match(/onBlur=\{guardarTexto\}/g)?.length).toBe(3);
   });
 
   it("escribe solo por la API de siempre (el escritor único)", () => {

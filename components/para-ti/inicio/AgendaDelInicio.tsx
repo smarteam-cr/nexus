@@ -23,12 +23,13 @@
  * (agenda-navegable.ts); la agenda es de lunes a viernes (lib/mi-dia/agenda-dias.ts); tocar afuera, la X o Escape suelta
  * el borrador (se borra y el hueco queda como estaba).
  */
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Segmentado } from "@/components/ui";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
 import { grillaDelDia, horaCR, instante, lineaDeAhora, minutoDelDia, ocupadoDeLaAgenda, type ConQueAvanzar, type EventoEnLaGrilla } from "@/lib/mi-dia/inicio";
 import { deTodoElDiaEn } from "@/lib/mi-dia/agenda";
+import { HORA_FIN_LABORAL, HORA_INICIO_LABORAL } from "@/lib/mi-dia/constantes";
 import { MINUTOS_DEL_BORRADOR, sePisan, tituloDelBorrador, type BorradorDeEvento } from "@/lib/mi-dia/agenda-borrador";
 import { finDelEspacio, sugerenciasParaElEspacio, type ParaSugerirEnElEspacio } from "@/lib/mi-dia/espacio-libre";
 import type { AgendaDeHoy, EventoPropioDeLaAgenda, ReunionDeLaAgenda } from "@/lib/mi-dia/agenda-server";
@@ -144,6 +145,9 @@ export default function AgendaDelInicio({
   // Un borrador tapa el espacio libre que se pisa con él (ya se está usando).
   const huecosVisibles = useMemo(() => huecos.filter((h) => !borradores.lista.some((b) => sePisan(b, h))), [huecos, borradores.lista]);
   const huecoPorId = useMemo(() => new Map(huecosVisibles.map((h) => [h.id, h])), [huecosVisibles]);
+  // Solo el horario de trabajo (2026-10-20, decisión de Elías): lo de antes de las 8:00 y después de las 17:00
+  // («Fuera de la oficina») no se pinta, salvo que la persona pida el calendario completo.
+  const [completa, setCompleta] = useState(false);
   // La grilla se calcula una vez por cambio de lo que se ve (no en cada render del inicio).
   const grillas = useMemo(() => {
     const todos = [
@@ -151,8 +155,10 @@ export default function AgendaDelInicio({
       ...huecosVisibles.map((h) => ({ id: h.id, inicio: h.inicio, fin: h.fin })),
       ...borradores.lista.map((b) => ({ id: ID_DEL_BORRADOR + b.id, inicio: b.inicio, fin: b.fin })),
     ];
-    return dias.map((d) => grillaDelDia(todos, d));
-  }, [pintados, huecosVisibles, borradores.lista, dias]);
+    const rango = completa ? null : { desde: HORA_INICIO_LABORAL, hasta: HORA_FIN_LABORAL };
+    return dias.map((d) => grillaDelDia(todos, d, rango));
+  }, [pintados, huecosVisibles, borradores.lista, dias, completa]);
+  const fueraDelHorario = grillas.reduce((n, g) => n + g.fuera, 0);
   const desdeHora = Math.min(...grillas.map((g) => g.desdeHora));
   const hastaHora = Math.max(...grillas.map((g) => g.hastaHora));
   const horas = Array.from({ length: hastaHora - desdeHora }, (_, i) => desdeHora + i);
@@ -371,6 +377,17 @@ export default function AgendaDelInicio({
             </div>
           </div>
         </div>
+      )}
+      {(completa || fueraDelHorario > 0) && (
+        <button
+          type="button"
+          onClick={() => setCompleta((v) => !v)}
+          className="self-start text-xs font-medium text-brand transition-colors hover:text-brand-light"
+        >
+          {completa
+            ? `Ver solo de ${HORA_INICIO_LABORAL}:00 a ${HORA_FIN_LABORAL}:00`
+            : `Ver el calendario completo · ${fueraDelHorario === 1 ? "1 evento" : `${fueraDelHorario} eventos`} fuera del horario`}
+        </button>
       )}
       <p className="text-xs text-fg-muted">
         {agenda.estado === "ok" && agenda.reuniones.length === 0 && agenda.propios.length === 0

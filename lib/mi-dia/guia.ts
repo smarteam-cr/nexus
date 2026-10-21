@@ -6,7 +6,9 @@
  * con «Editar» y lo suyo manda (lib/mi-dia/preparacion-server.ts).
  *
  * El objetivo, en este orden: el siguiente paso de tu equipo sobre la cuenta; el negocio abierto que cierra antes (a
- * quien vende); lo que debe el cliente. Si no hay nada, no se inventa: se pide que lo escriba la persona.
+ * quien vende); lo que debe el cliente; y, desde el 2026-10-20 (Fundauna: la reunión era el siguiente paso, sin
+ * pendientes ni minuta), el tema que dice el título de la invitación. Si no hay nada, no se inventa: se pide que lo
+ * escriba la persona.
  */
 import type { ResumenDeLaReunion } from "./resumen-server";
 import type { EquipoDelSiguientePaso } from "@/lib/siguiente-paso/propiedades";
@@ -28,7 +30,32 @@ const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "o
 const dia = (ymd: string) => `${Number(ymd.slice(8, 10))} ${MESES[Number(ymd.slice(5, 7)) - 1]}`;
 const sinPunto = (t: string) => t.trim().replace(/[.\s]+$/, "");
 
-export type DatosParaLaGuia = Pick<ResumenDeLaReunion, "cliente" | "invitados" | "pendientes" | "pasos" | "negocios" | "tickets" | "ultimaVez">;
+export type DatosParaLaGuia = Pick<ResumenDeLaReunion, "cliente" | "invitados" | "pendientes" | "pasos" | "negocios" | "tickets" | "ultimaVez"> &
+  Partial<Pick<ResumenDeLaReunion, "reunion">>;
+
+/** Lo que el título no dice del tema: el nombre de un encuentro, sin más. */
+const TITULO_GENERICO = /^(reuni[oó]n|sesi[oó]n|llamada|seguimiento|kickoff|kick off|meet|call|sync|check[- ]?in)$/i;
+const sinTildes = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+/**
+ * El tema de la reunión que dice el título de la invitación, sin el nombre del cliente ni el de Smarteam:
+ * «FUNDAUNA: Conexiones de HubSpot» → «Conexiones de HubSpot». null si no queda un tema (solo «Seguimiento»).
+ */
+export function temaDelTitulo(titulo: string | null | undefined, cliente: string): string | null {
+  if (!titulo) return null;
+  const quitar = new Set([...sinTildes(cliente).split(/[^\p{L}\p{N}]+/u), "smarteam"].filter((w) => w.length > 1));
+  const palabras = titulo.split(/\s+/).filter((w) => {
+    const limpia = sinTildes(w).replace(/[^\p{L}\p{N}]+/gu, "");
+    return limpia.length > 0 && !quitar.has(limpia);
+  });
+  const tema = palabras
+    .join(" ")
+    .replace(/^[\s:|+\-–—·,]+|[\s:|+\-–—·,]+$/gu, "")
+    .replace(/\s*[|+]\s*/g, " · ")
+    .trim();
+  if (tema.split(/\s+/).filter((w) => /\p{L}/u.test(w)).length === 0 || TITULO_GENERICO.test(tema)) return null;
+  return tema;
+}
 
 /**
  * El siguiente paso que muestra el panel de un evento propio (2026-10-19): el de tu equipo sobre la cuenta, el más
@@ -63,6 +90,9 @@ export function guiaDeLaReunion(
     };
   } else if (delCliente[0]) {
     objetivo = { texto: `Destrabar lo que debe el cliente: ${sinPunto(delCliente[0].titulo)}.`, deDonde: "Lo pendiente del cliente en Tareas" };
+  } else {
+    const tema = temaDelTitulo(r.reunion?.titulo, r.cliente.nombre);
+    if (tema) objetivo = { texto: `Cubrir el tema de la invitación: ${sinPunto(tema)}.`, deDonde: "El título de la invitación" };
   }
 
   const puntos: string[] = [];

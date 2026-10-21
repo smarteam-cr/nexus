@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { esDiaLaboral, grillaDelDia, horaCR, huecoLibre, instante, lineaDeAhora, primerHuecoLaboral, resumenDelDia, reunionesDelDia, varianteDelInicio } from "./inicio";
 import { cifrasDelInicio, siguienteMovimiento, type ReunionParaCifras } from "./cifras";
-import { guiaDeLaReunion, type DatosParaLaGuia } from "./guia";
+import { guiaDeLaReunion, temaDelTitulo, type DatosParaLaGuia } from "./guia";
 import { equipoDeRol, EQUIPOS_DE_NEXUS } from "@/lib/equipos/registro";
 import type { NegocioVisto } from "@/lib/ventas/negocios";
 
@@ -58,6 +58,24 @@ describe("la cuadrícula de la agenda", () => {
     expect(g.desdeHora).toBe(7);
     expect(g.hastaHora).toBe(19);
     expect(g.eventos.map((e) => e.id).sort()).toEqual(["tarde", "temprano"]);
+  });
+  it("con el horario de trabajo, lo de afuera no se pinta y lo que lo cruza se recorta (2026-10-20)", () => {
+    const g = grillaDelDia(
+      [
+        { id: "reunion", inicio: a(16), fin: a(17) },
+        { id: "fuera-tarde", inicio: a(17), fin: a(21) },
+        { id: "cruza", inicio: a(7, 30), fin: a(9) },
+      ],
+      DIA,
+      { desde: 8, hasta: 17 },
+    );
+    expect(g.desdeHora).toBe(8);
+    expect(g.hastaHora).toBe(17);
+    expect(g.fuera).toBe(2);
+    const por = new Map(g.eventos.map((e) => [e.id, e]));
+    expect(por.has("fuera-tarde")).toBe(false);
+    expect(por.get("cruza")).toMatchObject({ arriba: 0, alto: 60 });
+    expect(por.get("reunion")).toMatchObject({ arriba: 8 * 60, alto: 60 });
   });
   it("las que se pisan van en columnas; una corta igual se puede tocar", () => {
     const g = grillaDelDia(
@@ -229,6 +247,16 @@ describe("la guía de una reunión", () => {
     expect(guiaDeLaReunion({ ...base, invitados: [], pendientes: [], negocios: [], ultimaVez: null }, { equipo: "cs", hoyISO: DIA, hayReunionDespues: false }).puntos).toEqual([
       "Antes de colgar, deja agendada la próxima reunión.",
     ]);
+  });
+
+  it("sin nada más, el objetivo es el tema del título de la invitación (Fundauna, 2026-10-20)", () => {
+    const soloLaInvitacion = { ...base, invitados: [], pendientes: [], negocios: [], ultimaVez: null, reunion: { id: "e1", titulo: "FUNDAUNA: Conexiones de HubSpot", inicio: "2026-10-21T19:00:00Z", fin: null } };
+    expect(guiaDeLaReunion({ ...soloLaInvitacion, cliente: { id: "c1", nombre: "Fundauna" } }, { equipo: "cs", hoyISO: DIA, hayReunionDespues: true }).objetivo).toEqual({
+      texto: "Cubrir el tema de la invitación: Conexiones de HubSpot.",
+      deDonde: "El título de la invitación",
+    });
+    expect(temaDelTitulo("Fundauna + Smarteam | Seguimiento", "Fundauna")).toBeNull();
+    expect(temaDelTitulo("Informe mensual FUNDAUNA", "Fundauna")).toBe("Informe mensual");
   });
 });
 

@@ -5037,6 +5037,7 @@ producción no había ningún comentario ni ningún reporte de la escala: no hub
   escribió (`mensaje: true` en `TIPOS_DE_AVISO`: `feedback.respuesta`, `documentacion.comentario` y
   `documentacion.respuesta`) se pinta con el ámbar del sistema («pendiente, atención») y el rótulo «Mensaje»,
   hasta que lo lees. Ámbar y no rojo: el rojo es de los errores.
+- *(Cerrado el 2026-10-20: el notificador de alertas se retiró. Ver «Para ti después de las pruebas del 20 oct».)*
 - **Pendiente, a propósito:** el notificador de alertas de la CSL (`CsAlertNotifier`) sigue hasta que el vigía escriba
   avisos (su archivo lo estaba cambiando otra sesión), y el «Necesitan atención» del índice de clientes sigue con el
   alcance por permiso hasta sumarle «Tuyas · Todas».
@@ -10236,3 +10237,30 @@ pide elegir la reunión del calendario; el nombre corto de la tarea lo escribe l
   bloque en el calendario «Cayalá – Enviar propuesta a Marta | Espacio interno» (lib/tareas/titulo-corto.ts); sin
   cliente, su proyecto interno; sin ninguno, Smarteam. El T-n queda solo dentro de Tareas.
 - **SQL:** `scripts/sql/2026-10-20-titulo-corto-de-la-tarea.sql` (aditivo, dos columnas nullable), antes del deploy.
+
+## «Para ti» después de las pruebas del 20 oct: menos ruido y la agenda del horario de trabajo (2026-10-20, noche)
+
+**Contexto.** Elías validó la mayoría de las pruebas de «Para ti» y pidió cuatro cosas: que no salten avisos encima de
+la pantalla, que una propuesta de tarea se decida sin un formulario entero, que la agenda no muestre lo de fuera del
+horario y menos pruebas para él.
+
+- **Las alertas del vigía no saltan encima de la pantalla.** Se retira `CsAlertNotifier` (avisaba cada 90 s a la CSL y al
+  Super Admin de toda alerta alta de la cartera, no solo de lo que lleva cada uno). Las alertas siguen en Éxito del
+  cliente y en «Para ti» de quien lidera Customer Success. Encima de la pantalla quedan los errores y las
+  confirmaciones de lo que la persona hace. La notificación del sistema operativo de un aviso de «Para ti» (con la
+  pestaña escondida) no cambia.
+- **Una propuesta de tarea abre corta** (components/tareas/CajonDeTarea.tsx): qué propone Nexus (el título editable y su
+  contexto), para quién, cuándo vence, el cliente y de qué reunión salió; en el pie «Descartar», «Más adelante» y «Usar».
+  El formulario entero espera detrás de «Cambiar otros detalles». En toda tarea, el título del cajón es su nombre para
+  una persona («Honda Costa Rica – Configurar…») y «T-9» pasa a la línea de abajo.
+- **La agenda de «Para ti» muestra solo el horario de trabajo** (8:00 a 17:00, `HORA_INICIO_LABORAL` y
+  `HORA_FIN_LABORAL`): lo de afuera no se pinta y lo que lo cruza se recorta (`grillaDelDia` con `rango`). Abajo, «Ver
+  el calendario completo · N eventos fuera del horario» lo muestra todo, como antes.
+- **La guía de una reunión, sin nada más, toma el tema del título de la invitación** (`temaDelTitulo`, lib/mi-dia/guia.ts):
+  «FUNDAUNA: Conexiones de…» → «Cubrir el tema de la invitación: Conexiones de…», sin el nombre del cliente ni el de
+  Smarteam, y nunca un título genérico («Seguimiento»). Va al final de la cascada: el siguiente paso de tu equipo, el
+  negocio (Ventas) y lo que debe el cliente siguen primero. *Por qué:* Fundauna no tenía ninguno de esos (su reunión ES el
+  siguiente paso, y la última solo dejó notas) y la guía salía vacía.
+- **Las pruebas para Elías son solo las que piden su criterio de producto.** Lo de pantalla de todos los días lo valida
+  quien lo usa, al usarlo («⏳ La valida el equipo: <persona>»), y lo que se comprueba con datos o código, Claude
+  («Pruebas con IA»). Regla 4 de «Cómo se mantiene este roadmap».
