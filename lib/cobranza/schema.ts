@@ -1124,6 +1124,9 @@ export type OdooReabrirLiberacion = z.infer<typeof odooReabrirLiberacionSchema>;
 export const odooUsarMontoFacturaSchema = z.object({ cobroId: idDeBase, facturaId: idDeBase });
 export type OdooUsarMontoFactura = z.infer<typeof odooUsarMontoFacturaSchema>;
 
+/** «Deshacer» de lo que Nexus ordenó solo (2026-10-22): una orden entera, por su grupo. */
+export const deshacerOrdenSchema = z.object({ accion: z.literal("deshacer"), grupo: z.string().uuid() });
+
 /* ── Soltar facturas al recuadrar el acuerdo ─────────────────────────────────
  *
  * ⚠ Sin default entre CANCELAR y REVERTIR: la persona elige factura por factura, porque

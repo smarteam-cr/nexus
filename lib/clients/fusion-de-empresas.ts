@@ -151,6 +151,9 @@ export const DE_LA_CUENTA = [
      parte de servicio del contrato. ⚠ Si las dos cuentas tienen un contrato vivo en la misma moneda, el índice único
      frena la fusión: se archiva uno antes. */
   "licenciaRevendida",
+  /* Lo que Nexus ordenó solo en «Lo que no cuadra» (2026-10-22): `onDelete: Cascade`; sin mudarlo, fusionar borraba la
+     evidencia para deshacerlo. Sus cuotas se mudan juntas (`cobro`). */
+  "ordenDelSistema",
 ] as const;
 
 /** Las relaciones con una regla propia en el script, que no cabe en las listas de arriba. */

@@ -3722,10 +3722,11 @@ model CuentaFinanciera {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  servicios ServicioContratado[]
-  cobros    Cobro[] // vía cuentaId denormalizado en Cobro (panel sin doble join)
-  alertas   AlertaCobro[]
-  bitacora  BitacoraCobro[]
+  servicios         ServicioContratado[]
+  cobros            Cobro[] // vía cuentaId denormalizado en Cobro (panel sin doble join)
+  alertas           AlertaCobro[]
+  bitacora          BitacoraCobro[]
+  ordenesDelSistema OrdenDelSistema[]
 
   // Espejo de Odoo (solo lectura)
   facturasOdoo        FacturaOdoo[]
@@ -3888,6 +3889,7 @@ model Cobro {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   cobroFacturaOdoos CobroFacturaOdoo[]
+  ordenesDelSistema OrdenDelSistema[]
 
   @@unique([servicioId, numCuota])
   @@index([cuentaId, fechaProgramada])
@@ -4032,6 +4034,42 @@ model BitacoraCobro {
   createdAt    DateTime          @default(now())
 
   @@index([cuentaId, createdAt])
+}
+
+// ─── OrdenDelSistema ────────────────────────────────────────────────────────────
+// Lo que Nexus ordenó solo en una cuota desde «Lo que no cuadra» (2026-10-22): el número de su factura, y el monto
+// si difería en centavos. Guarda lo que había antes para poder deshacerlo. Las reglas: lib/cobranza/libro/ordenar.ts.
+// SQL: scripts/sql/2026-10-22-orden-del-sistema.sql.
+model OrdenDelSistema {
+  id          String           @id @default(cuid())
+  cobroId     String
+  cobro       Cobro            @relation(fields: [cobroId], references: [id], onDelete: Cascade)
+  cuentaId    String
+  cuenta      CuentaFinanciera @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  /// Una factura = un grupo: se deshace entero.
+  grupo       String
+  regla       ReglaDeOrden
+  fuente      CobranzaViaCobro
+  numero      String
+  texto       String           @db.Text
+  /// Foto de los campos que se tocan, antes y después (`FotoDeLaCuota`, ordenar-server.ts). Evidencia para deshacer.
+  antes       Json
+  despues     Json
+  creadoEn    DateTime         @default(now())
+  /// nullable porque casi ninguna se deshace. Los dos juntos (CHECK OrdenDelSistema_deshecho_entero).
+  deshechoEn  DateTime?
+  deshechoPor String?
+
+  @@index([cobroId])
+  @@index([cuentaId])
+  @@index([grupo])
+  @@index([creadoEn])
+}
+
+enum ReglaDeOrden {
+  NUMERO_DE_MERCURY
+  VARIAS_CUOTAS
+  FACTURA_REEMPLAZADA
 }
 
 enum CobranzaImportEstado {

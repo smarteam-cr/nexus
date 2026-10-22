@@ -667,7 +667,7 @@ const loPagadoDaily: JobDef = {
       await t.soltar();
       return SIN_TURNO;
     }
-    const { turno, resultado } = r;
+    const { turno, resultado, orden, errorDelOrden } = r;
     const plata = (xs: ReadonlyArray<{ monto: number; moneda: string }>) => {
       const t = new Map<string, number>();
       for (const x of xs) t.set(x.moneda, Math.round(((t.get(x.moneda) ?? 0) + x.monto) * 100) / 100);
@@ -675,12 +675,15 @@ const loPagadoDaily: JobDef = {
     };
     console.log(
       `[jobs/lo-pagado] ${t.turno} — cobradas solas: ${resultado.cobradas.length} (${plata(resultado.cobradas)}) · ` +
-        `quedan para una persona: ${resultado.quedan.length} · sin el día del pago: ${resultado.pagadasSinFecha}`,
+        `quedan para una persona: ${resultado.quedan.length} · sin el día del pago: ${resultado.pagadasSinFecha}` +
+        ` · ordenadas solas: ${orden?.escritas ?? 0}`,
     );
     const problemas = [
       ...turno.atrasadas.map((f) => `la copia de ${f === "ODOO" ? "Odoo" : "Mercury"} no corrió bien hoy: lo suyo no se cobró`),
       ...(resultado.avisoOdoo ? [resultado.avisoOdoo] : []),
       ...resultado.saltadas.map((s) => `${s.cuenta}: ${s.motivo}`),
+      ...(errorDelOrden ? [`el orden de «Lo que no cuadra» falló: ${errorDelOrden}`] : []),
+      ...(orden?.saltadas ?? []).map((s) => `${s.cuenta} ${s.numero} (orden): ${s.motivo}`),
     ];
     if (problemas.length) {
       const fallo = new Error(`cobró ${resultado.cobradas.length}, pero: ${problemas.join(" · ")}. La próxima hora vuelve a mirar.`);

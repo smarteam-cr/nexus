@@ -66,6 +66,7 @@ export async function cobrarLoPagadoAhora(actor: string, now: Date = new Date())
     if (r.enCurso) return { estado: "EN_CURSO" };
     const res = r.resultado;
     if (!res) return { estado: "HECHO", cobradas: [], quedan: 0, sinElDiaDelPago: 0, atrasadas: r.turno.atrasadas, noSePudieron: [], avisoOdoo: null };
+    if (r.errorDelOrden) console.error(`[cobranza/cobro-a-pedido] el orden de lo que no cuadra falló: ${r.errorDelOrden}`);
     console.log(
       `[cobranza/cobro-a-pedido] pedido por ${actor} — cobradas solas: ${res.cobradas.length} · quedan para una persona: ${res.quedan.length} · ` +
         `sin el día del pago: ${res.pagadasSinFecha}${res.saltadas.length ? ` · no se pudieron: ${res.saltadas.length}` : ""}`,
@@ -78,6 +79,7 @@ export async function cobrarLoPagadoAhora(actor: string, now: Date = new Date())
       atrasadas: r.turno.atrasadas,
       noSePudieron: res.saltadas,
       avisoOdoo: res.avisoOdoo,
+      ordenadas: r.orden?.escritas ?? 0,
     };
   } catch (e) {
     console.error(`[cobranza/cobro-a-pedido] falló: ${e instanceof Error ? e.message : String(e)}`);

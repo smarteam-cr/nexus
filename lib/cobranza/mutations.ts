@@ -1041,6 +1041,7 @@ export async function alinearMontoConFacturaTx(
   cobroId: string,
   factura: { numero: string; montoNeto: number },
   byEmail: string,
+  sistema: "Odoo" | "Mercury" = "Odoo",
 ): Promise<{ antes: number; ahora: number }> {
   const cobro = await db.cobro.findUnique({ where: { id: cobroId }, select: { id: true, cuentaId: true, monto: true, moneda: true } });
   if (!cobro) throw new CobranzaError("El cobro no existe.", 404);
@@ -1062,11 +1063,109 @@ export async function alinearMontoConFacturaTx(
       cuentaId: cobro.cuentaId,
       cobroId,
       tipo: "NOTA",
-      contenido: `Monto corregido con el de la factura ${factura.numero} de Odoo: ${cobro.moneda} ${fmt(antes)} → ${fmt(ahora)}.`,
+      contenido: `Monto corregido con el de la factura ${factura.numero} de ${sistema}: ${cobro.moneda} ${fmt(antes)} → ${fmt(ahora)}.`,
       usuarioEmail: byEmail,
     },
   });
   return { antes, ahora };
+}
+
+/** Los campos de una cuota que toca «lo que Nexus ordena solo» (lib/cobranza/libro/ordenar-server.ts). Fechas ISO. */
+export interface FotoDeLaCuota {
+  numeroFactura: string | null;
+  numeroFacturaPor: string | null;
+  numeroFacturaEn: string | null;
+  sinNumeroFacturaMotivo: string | null;
+  fechaEmision: string | null;
+  facturadoPor: string | null;
+  facturadoEn: string | null;
+  monto: number;
+  estado: string;
+}
+
+/** La foto de una cuota leída de la base. */
+export function fotoDeLaCuota(c: {
+  numeroFactura: string | null;
+  numeroFacturaPor: string | null;
+  numeroFacturaEn: Date | null;
+  sinNumeroFacturaMotivo: string | null;
+  fechaEmision: Date | null;
+  facturadoPor: string | null;
+  facturadoEn: Date | null;
+  monto: Prisma.Decimal | number;
+  estado: string;
+}): FotoDeLaCuota {
+  return {
+    numeroFactura: c.numeroFactura,
+    numeroFacturaPor: c.numeroFacturaPor,
+    numeroFacturaEn: c.numeroFacturaEn?.toISOString() ?? null,
+    sinNumeroFacturaMotivo: c.sinNumeroFacturaMotivo,
+    fechaEmision: c.fechaEmision?.toISOString() ?? null,
+    facturadoPor: c.facturadoPor,
+    facturadoEn: c.facturadoEn?.toISOString() ?? null,
+    monto: Number(c.monto),
+    estado: c.estado,
+  };
+}
+
+/**
+ * «Deshacer» de lo que Nexus ordenó solo (2026-10-22): la cuota vuelve EXACTAMENTE a la foto de antes —número, su firma,
+ * fecha de emisión y monto—. Es la otra excepción angosta al chokepoint, al lado de `alinearMontoConFacturaTx`, porque el
+ * chokepoint no deja quitar un número sin poner la marca (regla 5 de numero-factura.ts) y lo que se deshace es una
+ * escritura del sistema, no la de una persona:
+ *  · solo si la cuota sigue como Nexus la dejó (`despues`): si alguien la tocó, o se cobró después, es 409 y se corrige a
+ *    mano en la cuenta. Deshacer el número de una cuota que el sistema cobró sola le quitaría la evidencia (INV25);
+ *  · el monto vuelve solo si no entró en una comisión liquidada (mismo 409 que `alinearMontoConFacturaTx`);
+ *  · deja su línea en la bitácora, con quién lo deshizo.
+ */
+export async function deshacerOrdenDelSistemaTx(
+  db: ClienteDb,
+  cobroId: string,
+  foto: { antes: FotoDeLaCuota; despues: FotoDeLaCuota },
+  texto: string,
+  byEmail: string,
+): Promise<void> {
+  const c = await db.cobro.findUnique({ where: { id: cobroId } });
+  if (!c) throw new CobranzaError("La cuota ya no existe.", 404);
+  const ahora = fotoDeLaCuota(c);
+  const { antes, despues } = foto;
+  const igual = (a: FotoDeLaCuota, b: FotoDeLaCuota) =>
+    a.numeroFactura === b.numeroFactura && a.fechaEmision === b.fechaEmision && Math.round(a.monto * 100) === Math.round(b.monto * 100) && a.estado === b.estado;
+  if (!igual(ahora, despues)) {
+    throw new CobranzaError(
+      "Esa cuota cambió desde que Nexus la ordenó (alguien la editó, o se cobró): corrígela a mano desde «Abrir la cuenta».",
+      409,
+    );
+  }
+  if (Math.round(antes.monto * 100) !== Math.round(despues.monto * 100)) {
+    const liquidadas = await db.comisionVendedor.count({ where: { cobroIds: { has: cobroId } } });
+    if (liquidadas > 0) {
+      throw new CobranzaError("Esta cuota ya entró en una comisión liquidada: su monto quedó congelado ahí.", 409);
+    }
+  }
+  const fecha = (iso: string | null) => (iso ? new Date(iso) : null);
+  await db.cobro.update({
+    where: { id: cobroId },
+    data: {
+      numeroFactura: antes.numeroFactura,
+      numeroFacturaPor: antes.numeroFacturaPor,
+      numeroFacturaEn: fecha(antes.numeroFacturaEn),
+      sinNumeroFacturaMotivo: antes.sinNumeroFacturaMotivo,
+      fechaEmision: fecha(antes.fechaEmision),
+      facturadoPor: antes.facturadoPor,
+      facturadoEn: fecha(antes.facturadoEn),
+      monto: antes.monto,
+    },
+  });
+  await db.bitacoraCobro.create({
+    data: {
+      cuentaId: c.cuentaId,
+      cobroId,
+      tipo: "NOTA",
+      contenido: `${byEmail} deshizo lo que Nexus había ordenado solo: ${texto} La cuota vuelve a como estaba y Nexus no lo vuelve a ordenar.`,
+      usuarioEmail: byEmail,
+    },
+  });
 }
 
 // ── Liberar una factura y recuadrar el cronograma ───────────────────────────────

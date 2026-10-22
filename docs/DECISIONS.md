@@ -10443,3 +10443,43 @@ llegaba pagada a la copia y la cuota seguía sin cobrar; el simulacro de esa tar
   suma slots del pooler (Invariante #3). Medido el 21 oct: copia de Odoo ~8 s, Mercury ~3 s, cobro ~6 s.
 - ⛔ **No cambia qué se cobra.** El emparejamiento (qué factura es de qué cuota, el monto con o sin IVA) es de
   `lib/cobranza/libro/hechos.ts` y `aplicar.ts`; esto solo cambia cuándo corre y quién lo dispara.
+
+## Lo que no cuadra: lo que Nexus ordena solo, y la pantalla por grupos (2026-10-22)
+
+**Contexto.** Revisando Conciliación › «Lo que no cuadra» (21 oct), Elías preguntó si Nexus no debería «limpiarse» solo
+con lo que traen Odoo y Mercury, como dice el plan «Un solo libro financiero». Un simulacro en solo lectura sobre las 156
+filas de ese día midió que unas 35 eran papeles que se ordenan sin adivinar y sin mover plata: cuotas sin el número de su
+factura. Diseño revisado con él en Claude Design («Lo que no cuadra · Conciliación», con los datos del 22 oct).
+
+- **Tres reglas, y solo esas** (`lib/cobranza/libro/ordenar.ts`, puro, con pruebas). *Número de Mercury*: la cuota sin
+  número y la factura de su cuenta por el mismo monto (hasta US$1) a 60 días, si cada una es la más cercana de la otra y
+  sin empate; con centavos de diferencia, la cuota toma el monto de la factura (ACCCSA 712 → 712,50). *Varias cuotas*:
+  una factura que nadie anotó y que suma EXACTO de 2 a 5 cuotas libres, si la combinación es única y ninguna de esas
+  cuotas calza con otra factura. *Factura reemplazada*: un número de Odoo que ya no está vigente y UNA factura vigente
+  libre por el mismo monto hasta 90 días después (Honda 0347 → 0348). Lo demás queda para una persona.
+- **Nunca mueve plata.** Factura pagada ⇒ todas sus cuotas ya cobradas; sin pagar ⇒ ninguna cobrada; pagada en parte o
+  en proceso, no se toca. Solo anota en cuotas ya marcadas facturadas (una cobrada sin fecha de emisión recibe la de la
+  factura). Esto corrige, solo para este caso, «el libro nunca reparte una factura entre cuotas que no la anotaron»
+  (sección del 21 oct): `hechos.ts` sigue sin repartir; lo hace este módulo, con la combinación única como prueba.
+- **Las cuotas mensuales iguales no se adivinan.** Fundauna FAC/2026/0359 calza con 4 combinaciones (septiembre y
+  octubre tienen los mismos montos), Teamnet tiene dos cuotas de US$2.000 en el mismo mes: quedan en «facturas que Nexus
+  no ordenó solo», con el porqué. *Rechazado:* elegir la del mes más cercano; con plata cobrada de por medio, elegir mal
+  es cobrar el mes equivocado.
+- **Dónde se facturó lo dice la cuota, no la cuenta.** `plataformaFactura` o el formato del número; la vía de la cuenta
+  no: ACCCSA cobra por Odoo y sus cuotas de enero a abril se facturaron en Mercury.
+- **Se puede deshacer, y no vuelve.** Cada cuota ordenada queda en `OrdenDelSistema` con la foto de antes y después;
+  «Deshacer» (por factura) la devuelve exacta y Nexus no la vuelve a ordenar. Es una excepción angosta al chokepoint
+  (`deshacerOrdenDelSistemaTx`, al lado de `alinearMontoConFacturaTx`): el chokepoint no deja quitar un número sin la
+  marca, y lo que se deshace es una escritura del sistema. Si la cuota cambió desde entonces (alguien la editó, o se
+  cobró), es 409: se corrige a mano en la cuenta. Escribe con la firma del sistema de su fuente (`sistema:odoo`,
+  `sistema:mercury`), la misma del cobro solo.
+- **Cuándo corre.** En el mismo turno que el cobro de lo pagado (cada hora de 7 a 19 y con «Actualizar»), antes de
+  cobrar, solo con las copias que están al día. Si falla, el cobro corre igual y el job lo dice. A mano:
+  `scripts/ordenar-lo-que-no-cuadra.ts` (simulacro por defecto). Medido el 22 oct: 25 facturas en 36 cuotas, ninguna
+  cambia de estado; 10 facturas quedan para una persona.
+- **La pantalla, por grupos** (`agruparDiferencias`, lib/finanzas/conciliacion.ts): 1 · cambia lo que Nexus da por
+  cobrado (y las filas de otras líneas que hablan de los mismos documentos: Fundauna eran 4 filas en 4 listas), 2 ·
+  facturado que Nexus no ve, 3 · hay que preguntar, 4 · papeles por ordenar, y la historia plegada (incluye las facturas
+  de antes de la cuenta que siguen por cobrar: `antesDeLaCuenta`). Arriba una frase con lo de hoy, «Nexus ordenó solo»
+  y una tarjeta por grupo; al costado, qué toca cada cosa en Nexus y cómo se cierra. Las líneas y sus botones son los de
+  siempre. Las pantallas de Odoo y Mercury por separado no cambian. SQL: `2026-10-22-orden-del-sistema.sql`.

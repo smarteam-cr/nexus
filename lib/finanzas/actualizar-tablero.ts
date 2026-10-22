@@ -90,6 +90,8 @@ export type CobroDeLoPagado =
       atrasadas: ReadonlyArray<"ODOO" | "MERCURY">;
       noSePudieron: ReadonlyArray<{ cuenta: string; motivo: string }>;
       avisoOdoo: string | null;
+      /** Facturas que Nexus ordenó solo en «Lo que no cuadra» (2026-10-22). Sin el dato = 0. */
+      ordenadas?: number;
     };
 
 /** Los montos por moneda, nunca sumados entre monedas: «USD 1.200 + CRC 450.000». */
@@ -123,6 +125,7 @@ export function resumenDelCobro(c: CobroDeLoPagado): FuenteActualizada {
   const notas = [
     c.quedan > 0 ? `${cuotas(c.quedan)} ${c.quedan === 1 ? "espera" : "esperan"} tu firma en «Lo pagado»` : null,
     c.sinElDiaDelPago > 0 ? `${c.sinElDiaDelPago === 1 ? "1 pagada" : `${c.sinElDiaDelPago} pagadas`} sin el día del pago` : null,
+    c.ordenadas ? `Nexus ordenó solo ${c.ordenadas === 1 ? "1 factura" : `${c.ordenadas} facturas`} en «Lo que no cuadra»` : null,
   ].filter((x): x is string => x !== null);
   const problemas = [
     ...c.atrasadas.map((f) => `la copia de ${f === "ODOO" ? "Odoo" : "Mercury"} no está al día, así que lo suyo no se cobró`),

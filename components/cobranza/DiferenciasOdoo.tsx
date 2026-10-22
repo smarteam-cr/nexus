@@ -39,6 +39,12 @@
  * viene y quién la resuelve. Las líneas que «falta un dato de negocio» son decisiones de quien supervisa; las demás las
  * trabaja quien registra, y con eso arranca filtrada la vista de Dinia. Cada «Está bien así» y cada «Deshacer» va a la
  * ruta de su línea.
+ *
+ * ── Y EN GRUPOS, CON LO QUE NEXUS ORDENÓ SOLO (rediseño 2026-10-22) ─────────────
+ * Juntas, la lista se lee por grupos según qué tocan en Nexus (lib/finanzas/conciliacion.ts › `agruparDiferencias`):
+ * primero lo que cambia lo cobrado, después lo facturado que Nexus no ve, lo que hay que preguntar, los papeles y la
+ * historia plegada. Arriba, lo que Nexus ordenó solo (lib/cobranza/libro/ordenar.ts), con «Deshacer». Las piezas viven en
+ * components/finanzas/conciliacion/LoQueNoCuadra.tsx; las líneas son las mismas de siempre.
  */
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -56,6 +62,7 @@ import {
 } from "@/lib/cobranza/odoo/diferencias";
 import { fmtFecha } from "./format";
 import {
+  agruparDiferencias,
   filasPorQuien,
   filtrarDiferencias,
   fuenteDeLinea,
@@ -64,6 +71,16 @@ import {
   type FiltroQuien,
 } from "@/lib/finanzas/conciliacion";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
+import type { LoOrdenado } from "@/lib/cobranza/libro/ordenar-server";
+import {
+  ColumnaDeContexto,
+  FacturasDudosas,
+  Historia,
+  NexusOrdenoSolo,
+  ResumenDeHoy,
+  SeccionDeGrupo,
+  TarjetasDeGrupos,
+} from "@/components/finanzas/conciliacion/LoQueNoCuadra";
 
 /** Una factura soltada cerrada a mano con «Ya está anulada» (`AnuladaAMano`, servicio.ts). */
 interface AnuladaAMano {
@@ -216,6 +233,8 @@ export default function DiferenciasOdoo({
   const [data, setData] = useState<Respuesta | null>(null);
   /* Con las dos juntas, lo medido de Mercury (lo de Odoo queda en `data.medido`). */
   const [medidoMercury, setMedidoMercury] = useState<Medido | null>(null);
+  /* Con las dos juntas, lo que Nexus ordenó solo y lo que dejó para una persona. null = no se pudo leer: la lista sigue. */
+  const [ordenado, setOrdenado] = useState<LoOrdenado | null>(null);
   /* Los filtros de la lista juntas. Quien registra arranca viendo lo suyo; quien supervisa, todo. */
   const [filtroFuente, setFiltroFuente] = useState<FiltroFuente>("todas");
   const [filtroQuien, setFiltroQuien] = useState<FiltroQuien>(quienInicial ?? (vista === "REGISTRA" ? "mias" : "todas"));
@@ -230,10 +249,12 @@ export default function DiferenciasOdoo({
     try {
       let r: Respuesta;
       if (juntas) {
-        const [o, m] = await Promise.all([
+        const [o, m, orden] = await Promise.all([
           fetchJson<Respuesta>(FUENTE.odoo.endpoint),
           fetchJson<Respuesta>(FUENTE.mercury.endpoint),
+          fetchJson<LoOrdenado>("/api/cobranza/ordenado").catch(() => null),
         ]);
+        setOrdenado(orden);
         r = {
           inconsistencias: juntarDiferencias(o.inconsistencias, m.inconsistencias),
           anuladas: o.anuladas,
@@ -351,6 +372,30 @@ export default function DiferenciasOdoo({
     [enviar, toast],
   );
 
+  /* «Deshacer» de lo que Nexus ordenó solo: una factura entera vuelve a como estaba. */
+  const deshacerOrden = useCallback(
+    async (grupo: string) => {
+      setOcupado(`orden ${grupo}`);
+      try {
+        const r = await fetchJson<{ cuotas: number }>("/api/cobranza/ordenado", {
+          method: "POST",
+          body: JSON.stringify({ accion: "deshacer", grupo }),
+        });
+        toast.success(
+          r.cuotas === 1
+            ? "Listo: la cuota vuelve a como estaba y Nexus no la vuelve a ordenar."
+            : `Listo: las ${r.cuotas} cuotas vuelven a como estaban y Nexus no las vuelve a ordenar.`,
+        );
+        await cargar();
+      } catch (e) {
+        toast.error(e instanceof ApiError ? e.message : "No se pudo deshacer.");
+      } finally {
+        setOcupado(null);
+      }
+    },
+    [cargar, toast],
+  );
+
   const reabrir = useCallback(
     async (liberacionId: string, clave: string) => {
       if (await enviar(clave, { accion: "reabrir-liberacion", liberacionId }, "ODOO")) {
@@ -385,6 +430,8 @@ export default function DiferenciasOdoo({
   }, [data]);
   /* Una línea sin filas pendientes no es trabajo: sus filas están en «Marcadas». */
   const abiertas = useMemo(() => visibles.filter((i) => i.items.length > 0), [visibles]);
+  /* Juntas: los cinco grupos del rediseño (2026-10-22). */
+  const grupos = useMemo(() => (juntas ? agruparDiferencias(visibles) : []), [juntas, visibles]);
   /* En «Marcadas» también las que tienen filas que volvieron porque cambió un número: se dice por qué volvieron. */
   const conMarcadas = useMemo(
     () => (data?.inconsistencias ?? []).filter((i) => i.marcadas.length > 0 || i.volvieron.length > 0),
@@ -412,9 +459,7 @@ export default function DiferenciasOdoo({
   /* Cómo se nombran las decisiones según quién mira: a Dinia le dicen que esperan a otro; a Alex, que esperan por él. */
   const decisionesLabel = vista === "REGISTRA" ? `Esperan a ${supervisor}` : "Esperan tu decisión";
 
-  return (
-    <div className="space-y-4">
-      {juntas && (
+  const filtros = (
         <div data-recorrido="fin.conciliacion.filtros" className="flex flex-wrap items-center gap-3">
           <Segmentado<FiltroQuien>
             etiqueta="Quién lo resuelve"
@@ -445,7 +490,95 @@ export default function DiferenciasOdoo({
             ]}
           />
         </div>
-      )}
+  );
+
+  const lineaDe = (inc: DiferenciaOdoo) => (
+    <Linea
+      key={inc.codigo}
+      inc={inc}
+      tituloDe={tituloDe}
+      espejoAl={juntas && fuenteDeLinea(inc.codigo) === "mercury" ? (medidoMercury?.espejoAl ?? null) : data.medido.espejoAl}
+      nombre={juntas ? deLaLinea(inc.codigo).nombre : nombre}
+      dondes={juntas ? deLaLinea(inc.codigo).dondes : dondes}
+      origen={juntas ? deLaLinea(inc.codigo).nombre : undefined}
+      ocupado={ocupado}
+      puedeEditar={puedeEditar}
+      motivos={motivos}
+      onIrAEmparejar={onIrAEmparejar}
+      onMarcar={(items, motivo, clave) => marcar(inc, items, motivo, clave)}
+      onAnular={(liberacionId, nota, clave) => anular(inc, liberacionId, nota, clave)}
+      onUsarMonto={(it, clave) => usarMonto(inc, it, clave)}
+    />
+  );
+
+  /* ⭐ Fija al final y visible, no plegada: lo marcado tiene que poder encontrarse —con quién, cuándo y por
+      qué— y deshacerse, aunque su línea ya no tenga nada pendiente. Si se escondiera, una fila quedaría fuera de
+      la lista para siempre por un clic. */
+  const desestimadas = (conMarcadas.length > 0 || data.anuladas.length > 0) && (
+    <Marcadas
+      lineas={conMarcadas}
+      anuladas={data.anuladas}
+      ocupado={ocupado}
+      puedeEditar={puedeEditar}
+      onDeshacer={deshacer}
+      onReabrir={reabrir}
+    />
+  );
+
+  if (juntas) {
+    const historia = grupos.find((g) => g.grupo === "HISTORIA")!;
+    const trabajo = grupos.filter((g) => g.grupo !== "HISTORIA");
+    const dudosas = ordenado?.dudosas ?? [];
+    return (
+      <div className="flex flex-wrap items-start gap-6">
+        <div className="min-w-0 flex-[2_1_40rem] space-y-4">
+          <div data-recorrido="fin.conciliacion.resumen">
+            <ResumenDeHoy grupos={grupos} ordenadas={ordenado?.ordenes.length ?? 0} />
+          </div>
+          {ordenado && (
+            <NexusOrdenoSolo ordenado={ordenado} puedeEditar={puedeEditar} ocupado={ocupado} onDeshacer={deshacerOrden} />
+          )}
+          <TarjetasDeGrupos grupos={grupos} />
+          {filtros}
+          {trabajo.map((g, i) =>
+            g.filas === 0 && !(g.grupo === "PAPELES" && dudosas.length > 0) ? null : (
+              <SeccionDeGrupo key={g.grupo} grupo={g} numero={i + 1}>
+                {g.grupo === "PAPELES" && (
+                  <>
+                    <p className="text-sm text-fg-secondary">
+                      No cambian ningún número de hoy, pero si una cuota no tiene el número de su factura, el día que el
+                      cliente pague no se cobra sola.
+                    </p>
+                    <FacturasDudosas dudosas={dudosas} />
+                  </>
+                )}
+                {g.lineas.map(lineaDe)}
+              </SeccionDeGrupo>
+            ),
+          )}
+          <Historia grupo={historia}>{historia.lineas.map(lineaDe)}</Historia>
+          {desestimadas}
+          <p className="text-xs text-fg-muted">
+            Cruzado con {data.medido.facturas} facturas de Odoo
+            {data.medido.espejoAl && <> (copia del {data.medido.espejoAl})</>}
+            {medidoMercury && (
+              <>
+                {" "}y {medidoMercury.facturas} de Mercury
+                {medidoMercury.espejoAl && <> (copia del {medidoMercury.espejoAl})</>}
+              </>
+            )}
+            . Cada moneda por separado y cada documento contado una vez, aunque lo miren varias líneas; sin IVA.
+          </p>
+        </div>
+        <div className="min-w-0 flex-[1_1_18rem]">
+          <ColumnaDeContexto />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
       <div data-recorrido="fin.conciliacion.resumen" className="rounded-lg border border-line bg-surface px-4 py-3 text-sm">
         <p className="text-fg">
           {/* ⚠ FILAS, no líneas (2026-09-25): una línea con una fila pendiente no pesa lo mismo que una con treinta. */}
@@ -518,39 +651,10 @@ export default function DiferenciasOdoo({
           }
         />
       ) : (
-        abiertas.map((inc) => (
-          <Linea
-            key={inc.codigo}
-            inc={inc}
-            tituloDe={tituloDe}
-            espejoAl={juntas && fuenteDeLinea(inc.codigo) === "mercury" ? (medidoMercury?.espejoAl ?? null) : data.medido.espejoAl}
-            nombre={juntas ? deLaLinea(inc.codigo).nombre : nombre}
-            dondes={juntas ? deLaLinea(inc.codigo).dondes : dondes}
-            origen={juntas ? deLaLinea(inc.codigo).nombre : undefined}
-            ocupado={ocupado}
-            puedeEditar={puedeEditar}
-            motivos={motivos}
-            onIrAEmparejar={onIrAEmparejar}
-            onMarcar={(items, motivo, clave) => marcar(inc, items, motivo, clave)}
-            onAnular={(liberacionId, nota, clave) => anular(inc, liberacionId, nota, clave)}
-            onUsarMonto={(it, clave) => usarMonto(inc, it, clave)}
-          />
-        ))
+        abiertas.map(lineaDe)
       )}
 
-      {/* ⭐ Fija al final y visible, no plegada: lo marcado tiene que poder encontrarse —con quién, cuándo y por
-          qué— y deshacerse, aunque su línea ya no tenga nada pendiente. Si se escondiera, una fila quedaría fuera de
-          la lista para siempre por un clic. */}
-      {(conMarcadas.length > 0 || data.anuladas.length > 0) && (
-        <Marcadas
-          lineas={conMarcadas}
-          anuladas={data.anuladas}
-          ocupado={ocupado}
-          puedeEditar={puedeEditar}
-          onDeshacer={deshacer}
-          onReabrir={reabrir}
-        />
-      )}
+      {desestimadas}
     </div>
   );
 }

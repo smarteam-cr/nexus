@@ -15,6 +15,7 @@
 import "server-only";
 import { aplicarLoQueDicenOdooYMercury, cobrarLoPagadoSolo, type ResultadoDelCobroSolo, type ResultadoDelLibro } from "./aplicar";
 import type { SeleccionDelLibro } from "./hechos";
+import { ordenarLoSeguro, type ResultadoDelOrden } from "./ordenar-server";
 import { decidirElTurno, estadoDeLaCopia, type Turno } from "./turno";
 import { crearTransporteXmlRpc, configDesdeEntorno } from "@/lib/cobranza/odoo/transporte-xmlrpc";
 import type { OdooTransport } from "@/lib/cobranza/odoo/transporte";
@@ -35,11 +36,14 @@ function transporteOdoo(): OdooTransport | null {
  * El cobro solo del día (job `lo-pagado-daily`). Mira si las copias de Odoo y Mercury corrieron bien hoy
  * (`decidirElTurno`) y, si toca, cobra con las que están al día. `aplicar: false` = el simulacro del mismo cálculo.
  * Devuelve `resultado: null` si todavía no toca (hay que esperar a una copia).
+ *
+ * Antes de cobrar, ordena lo seguro de «Lo que no cuadra» (2026-10-22, ordenar-server.ts): números de factura que se
+ * anotan solos sin mover plata. Si eso falla, el cobro corre igual (`orden: null`) y el job lo dice.
  */
 export async function correrElCobroDelDia(
   now: Date,
   opciones: { aplicar: boolean; ignorarLaHora?: boolean },
-): Promise<{ turno: Turno; resultado: ResultadoDelCobroSolo | null }> {
+): Promise<{ turno: Turno; resultado: ResultadoDelCobroSolo | null; orden: ResultadoDelOrden | null; errorDelOrden: string | null }> {
   const { dateKey: hoy, hour } = crDateParts(now);
   const [odooBuena, mercuryBuena] = await Promise.all([
     prisma.syncOdooCorrida.findFirst({ where: { ok: true }, orderBy: { iniciadaEn: "desc" }, select: { iniciadaEn: true } }),
@@ -50,10 +54,17 @@ export async function correrElCobroDelDia(
     ODOO: estadoDeLaCopia(motivoApagado("odoo-espejo-daily", process.env) === null, diaDe(odooBuena), hoy),
     MERCURY: estadoDeLaCopia(motivoApagado("mercury-espejo-daily", process.env) === null, diaDe(mercuryBuena), hoy),
   });
-  if (!turno.correr) return { turno, resultado: null };
+  if (!turno.correr) return { turno, resultado: null, orden: null, errorDelOrden: null };
+  let orden: ResultadoDelOrden | null = null;
+  let errorDelOrden: string | null = null;
+  try {
+    orden = await ordenarLoSeguro({ aplicar: opciones.aplicar, hoy, fuentes: turno.fuentes });
+  } catch (e) {
+    errorDelOrden = e instanceof Error ? e.message : String(e);
+  }
   const odoo = turno.fuentes.includes("ODOO") && process.env.ODOO_PASSWORD ? crearTransporteXmlRpc(configDesdeEntorno()) : null;
   const resultado = await cobrarLoPagadoSolo({ aplicar: opciones.aplicar, hoy, odoo, fuentes: turno.fuentes });
-  return { turno, resultado };
+  return { turno, resultado, orden, errorDelOrden };
 }
 
 export interface LoPagado extends ResultadoDelLibro {

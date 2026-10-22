@@ -103,6 +103,11 @@ export interface ItemDiferencia extends ItemInconsistencia {
    * `ponerCuentas` al final de cada detector; sin una sola cuenta clara, no viene.
    */
   cuentaId?: string;
+  /**
+   * Una factura de antes del primer cobro que Nexus tiene de su cuenta (2026-10-22): sigue por cobrar, así que no es
+   * historia para el detector, pero en Conciliación se muestra con la historia (lib/finanzas/conciliacion.ts).
+   */
+  antesDeLaCuenta?: true;
 }
 
 /**
@@ -2638,6 +2643,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
               `${f.numero} · ${f.invoiceDate} · ${estadoDePagoEnPalabras(f)}` +
               (f.paymentState === "partial" ? ` de ${fmt(f.montoNeto, f.moneda)}` : "") +
               (antesDelPrimerCobro(f) ? " · de antes del primer cobro que Nexus tiene de la cuenta" : ""),
+            ...(antesDelPrimerCobro(f) ? { antesDeLaCuenta: true as const } : {}),
             fila: filaDeUna(`f:${f.id}`, huellaDeFactura(f)),
           })),
       };
