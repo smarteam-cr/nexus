@@ -21,8 +21,9 @@
  *   INV-36 (US$3.360) son las dos cuotas de US$1.680 de junio y julio, que Nexus ya tiene cobradas sin número. Se
  *   listan aparte, para anotar el número en la cuota que corresponde.
  * - Pagada en Mercury → cobrada, ⛔ solo si quien carga firma el cobro (`cobrarConFirma`, INV3). El día es el de la
- *   entrada de plata que paga esa factura (`entradasDeFacturas`); si no se encuentra, el último cambio de la factura en
- *   Mercury, que para una pagada suele ser el pago (la API no dice cuándo se pagó), y la bitácora lo dice.
+ *   entrada de plata que paga esa factura (`entradasDeFacturas`); si no se encuentra, el día en que la copia la vio
+ *   pagada (`pagadaVistaEn`). ⚠ Hasta el 2026-10-22 era el último cambio de la factura en Mercury, que NO es el pago:
+ *   Mercury no cambia su `updatedAt` al pagarse. Sin ninguno de los dos, entra por cobrar.
  * - En proceso de pago o sin pagar → por cobrar.
  */
 import { numeroDeMercury } from "./mercury/espejo";
@@ -39,8 +40,10 @@ export interface FacturaDeMercury {
   moneda: string;
   /** Unpaid · Paid · Cancelled · Processing, como los dice Mercury. */
   estado: string;
-  /** `YYYY-MM-DD` del último cambio en Mercury. */
+  /** `YYYY-MM-DD` del último cambio en Mercury. ⚠ No es el día del pago: Mercury no lo cambia al pagarse (2026-10-22). */
   actualizadaEn: string;
+  /** `YYYY-MM-DD` en que la copia la vio pagada (sin depósito, es el día del pago). null = no se sabe. */
+  pagadaVistaEn?: string | null;
 }
 
 /** Una cuota que la cuenta ya tiene, como la mira la carga. */
@@ -65,8 +68,9 @@ export interface CobroDesdeMercury {
   estado: "COBRADO" | "POR_COBRAR";
   /** Solo si entra cobrado: el día en que entró la plata. */
   fechaCobro: string | null;
-  /** De dónde salió `fechaCobro`: la entrada del banco o el último cambio de la factura. */
-  origenDelDia: "ENTRADA" | "FACTURA" | null;
+  /** De dónde salió `fechaCobro`: la entrada del banco o el día en que la copia la vio pagada. */
+  /** De dónde sale el día del cobro: el depósito en Mercury, o el día en que la copia la vio pagada. */
+  origenDelDia: "ENTRADA" | "VISTA" | null;
   /** Qué hay que saber de esta factura, en palabras. */
   nota: string | null;
 }
@@ -128,14 +132,19 @@ export function planDeCargaDesdeMercury(
     }
     const pagada = f.estado === "Paid";
     const deLaEntrada = opciones.entradas.get(f.id) ?? null;
-    const cobrada = pagada && opciones.cobrarConFirma;
+    /* ⚠ Sin depósito, el día es el que la copia la vio pagada. El último cambio de Mercury NO sirve: no cambia al pagarse
+       (2026-10-22). Sin ninguno de los dos no se sabe el día, y no se cobra. */
+    const diaDelPago = deLaEntrada ?? f.pagadaVistaEn ?? null;
+    const cobrada = pagada && opciones.cobrarConFirma && diaDelPago !== null;
     const nota = f.estado === "Processing"
       ? "Mercury la da en proceso de pago: entra por cobrar."
-      : pagada && !cobrada
+      : pagada && !opciones.cobrarConFirma
         ? "Mercury la da pagada: entra por cobrar, para registrar el pago con el comprobante."
-        : cobrada && !deLaEntrada
-          ? "No se encontró en el banco la entrada que la paga: el día del cobro es el último cambio de la factura en Mercury, que para una pagada suele ser el pago."
-          : null;
+        : pagada && !cobrada
+          ? "Mercury la da pagada, pero no dice qué día y no hay depósito en Mercury (tarjeta por Stripe o pago externo): entra por cobrar, para registrar el pago con su fecha."
+          : cobrada && !deLaEntrada
+            ? "Sin depósito en Mercury (tarjeta por Stripe o pago externo): el día del cobro es el que la copia la vio pagada."
+            : null;
     plan.aCargar.push({
       numero: f.numero,
       mercuryCustomerId: f.mercuryCustomerId,
@@ -145,8 +154,8 @@ export function planDeCargaDesdeMercury(
       monto: round2(f.monto),
       moneda: f.moneda,
       estado: cobrada ? "COBRADO" : "POR_COBRAR",
-      fechaCobro: cobrada ? (deLaEntrada ?? f.actualizadaEn) : null,
-      origenDelDia: cobrada ? (deLaEntrada ? "ENTRADA" : "FACTURA") : null,
+      fechaCobro: cobrada ? diaDelPago : null,
+      origenDelDia: cobrada ? (deLaEntrada ? "ENTRADA" : "VISTA") : null,
       nota,
     });
     plan.totales[f.moneda] = round2(plan.totales[f.moneda] + f.monto);

@@ -8,7 +8,7 @@
  * la plata de Smarteam y la transferencia de Atlas Mining).
  */
 import { describe, it, expect } from "vitest";
-import { esEntradaDeCliente, facturaCambio, mapearCliente, mapearFactura, mapearMovimiento, nombreDeQuienPago } from "./espejo";
+import { cuandoSeVioPagada, esEntradaDeCliente, facturaCambio, mapearCliente, mapearFactura, mapearMovimiento, nombreDeQuienPago } from "./espejo";
 
 const CRUDA = {
   id: "55573008-bdfb-11f1-8d46-2ddf73c78b8b",
@@ -92,5 +92,35 @@ describe("¿esta entrada de plata es un cliente pagando?", () => {
     expect(esEntradaDeCliente(mov({ status: "failed", counterpartyName: "Cliente" }))).toBe(false);
     expect(esEntradaDeCliente(mov({ status: "reversed", counterpartyName: "Cliente" }))).toBe(false);
     expect(esEntradaDeCliente(mov({ amount: -100, counterpartyName: "Proveedor" }))).toBe(false);
+  });
+});
+
+describe("cuándo la copia vio pagada una factura (2026-10-22)", () => {
+  const ahora = new Date("2026-10-22T15:00:00Z");
+  const anterior = new Date("2026-10-22T14:00:00Z");
+  const creada = new Date("2026-10-01T13:00:00Z");
+
+  it("pasó de no pagada a «Paid»: ahora, y la última vez que se copió sin pagar", () => {
+    const r = cuandoSeVioPagada({ estado: "Unpaid", pagadaVistaEn: null, sincronizadoEn: anterior }, { estado: "Paid", creadaEnMercury: creada }, anterior, ahora);
+    expect(r).toEqual({ pagadaVistaEn: ahora, pagadaNoVistaEn: anterior });
+  });
+
+  it("ya estaba pagada: no se toca", () => {
+    expect(cuandoSeVioPagada({ estado: "Paid", pagadaVistaEn: anterior, sincronizadoEn: anterior }, { estado: "Paid", creadaEnMercury: creada }, anterior, ahora)).toBeUndefined();
+  });
+
+  it("nueva, creada después de la copia anterior y ya pagada: nació pagada entre las dos", () => {
+    const nace = new Date("2026-10-22T14:30:00Z");
+    expect(cuandoSeVioPagada(null, { estado: "Paid", creadaEnMercury: nace }, anterior, ahora)).toEqual({ pagadaVistaEn: ahora, pagadaNoVistaEn: nace });
+  });
+
+  it("⛔ nueva pero de antes (la primera copia): no se sabe, y no se inventa", () => {
+    expect(cuandoSeVioPagada(null, { estado: "Paid", creadaEnMercury: creada }, anterior, ahora)).toEqual({ pagadaVistaEn: null, pagadaNoVistaEn: null });
+    expect(cuandoSeVioPagada(null, { estado: "Paid", creadaEnMercury: creada }, null, ahora)).toEqual({ pagadaVistaEn: null, pagadaNoVistaEn: null });
+  });
+
+  it("dejó de estar pagada: se borra, y si vuelve a pagarse se mide de nuevo", () => {
+    expect(cuandoSeVioPagada({ estado: "Paid", pagadaVistaEn: anterior, sincronizadoEn: anterior }, { estado: "Unpaid", creadaEnMercury: creada }, anterior, ahora)).toEqual({ pagadaVistaEn: null, pagadaNoVistaEn: null });
+    expect(cuandoSeVioPagada({ estado: "Unpaid", pagadaVistaEn: null, sincronizadoEn: anterior }, { estado: "Unpaid", creadaEnMercury: creada }, anterior, ahora)).toBeUndefined();
   });
 });

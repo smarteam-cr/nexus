@@ -85,10 +85,16 @@ describe("cobrada o por cobrar", () => {
     expect(c).toMatchObject({ estado: "COBRADO", fechaCobro: "2026-02-03", origenDelDia: "ENTRADA", nota: null });
   });
 
-  it("pagada sin entrada en el banco: el último cambio de la factura, y la nota lo dice", () => {
+  it("pagada sin entrada en el banco: el día en que la copia la vio pagada, y la nota lo dice", () => {
+    const [c] = planDeCargaDesdeMercury([factura("INV-8", "2026-01-08", 4000, { pagadaVistaEn: "2026-01-12" })], BASE).aCargar;
+    expect(c).toMatchObject({ estado: "COBRADO", fechaCobro: "2026-01-12", origenDelDia: "VISTA" });
+    expect(c!.nota).toMatch(/la copia la vio pagada/);
+  });
+
+  it("⛔ pagada sin entrada y sin saber cuándo: entra por cobrar, nunca con el último cambio de Mercury", () => {
     const [c] = planDeCargaDesdeMercury([factura("INV-8", "2026-01-08", 4000, { actualizadaEn: "2026-01-09" })], BASE).aCargar;
-    expect(c).toMatchObject({ estado: "COBRADO", fechaCobro: "2026-01-09", origenDelDia: "FACTURA" });
-    expect(c!.nota).toMatch(/último cambio de la factura/);
+    expect(c).toMatchObject({ estado: "POR_COBRAR", fechaCobro: null, origenDelDia: null });
+    expect(c!.nota).toMatch(/no dice qué día/);
   });
 
   it("⛔ sin firma de cobro nada entra cobrado (INV3)", () => {

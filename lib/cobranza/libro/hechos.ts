@@ -11,6 +11,9 @@
  *  · LO PAGADO ALLÁ SE COBRA ACÁ. Odoo: «pagada» o «en proceso de pago» (Alex: ya tiene la referencia y la fecha de
  *    la transferencia; conciliar contra el estado de cuenta es el segundo paso del contador). Mercury: «Paid». La fecha
  *    del cobro es la del pago real, nunca la del día en que corre esto.
+ *    ⚠ Mercury no es siempre el banco (2026-10-22): lo pagado con tarjeta va a Stripe, y lo pagado por fuera se marca a
+ *    mano. Su API no dice el día del pago. Si no hay depósito en Mercury, el día es el que la copia la vio pasar a
+ *    «Paid» (`pagadaVistaEn`); si tampoco se sabe eso, espera a una persona («Sin el día del pago»).
  *    Desde el 2026-10-18 (decisión de Elías) lo pagado Y conciliado con el banco se cobra SOLO, cada día, firmado por
  *    el sistema (`sistema:odoo`, `sistema:mercury`): ver `paraCobrarSolo`. Lo que no es seguro (Odoo «en proceso de
  *    pago», una entrada de Mercury encontrada solo por el monto, un día del pago raro) sigue en «Lo pagado» para que lo
@@ -63,7 +66,8 @@ export interface Pegado {
   impaga: boolean;
   /**
    * Pagada Y conciliada con el banco: en Odoo, `paid` (el contador la concilió con el estado de cuenta); en Mercury,
-   * `Paid` (Mercury es el banco). «En proceso de pago» de Odoo está pagada pero no conciliada.
+   * `Paid`. «En proceso de pago» de Odoo está pagada pero no conciliada. ⚠ Mercury no siempre es el banco (2026-10-22): lo
+   * pagado con tarjeta va a Stripe y lo pagado por fuera se marca a mano; el día sale de `decidir`.
    */
   conciliada: boolean;
   /**
@@ -273,15 +277,21 @@ const DIAS_ANTES_DE_LA_FACTURA = 3;
  *  · El día del pago es posterior a hoy: no pasó todavía.
  *  · El día del pago es muy anterior a la factura: un anticipo o un pago mal conciliado; lo mira una persona.
  */
+/**
+ * De dónde sale el día de un pago de Mercury: el depósito atado por el nombre de quien pagó, el depósito atado solo por
+ * el monto, o el día en que la copia vio la factura pasar a «Paid» (sin depósito en Mercury: tarjeta o pago externo).
+ */
+export type DiaDeMercury = "nombre" | "monto" | "vista";
+
 export function dudaDelCobro(
   p: { fuente: Fuente; conciliada: boolean; fechaFactura: string; conIva?: true },
   fechaCobro: string,
   hoy: string,
-  mercuryPorNombre: boolean,
+  diaDeMercury: DiaDeMercury,
 ): string | null {
   if (p.conIva) return "La cuota está cargada con el IVA y la factura sin IVA es menor: corrige el monto con «Usar el monto de la factura» en «Lo que no cuadra».";
   if (p.fuente === "ODOO" && !p.conciliada) return "Odoo la da «en proceso de pago»: todavía no está conciliada con el banco.";
-  if (p.fuente === "MERCURY" && !mercuryPorNombre) return "La entrada de plata en Mercury se encontró solo por el monto, no por el nombre de quien pagó.";
+  if (p.fuente === "MERCURY" && diaDeMercury === "monto") return "La entrada de plata en Mercury se encontró solo por el monto, no por el nombre de quien pagó.";
   if (fechaCobro > hoy) return `El día del pago (${fechaCobro}) es posterior a hoy.`;
   if (dias(p.fechaFactura, fechaCobro) > DIAS_ANTES_DE_LA_FACTURA) return `El día del pago (${fechaCobro}) es anterior a la factura (${p.fechaFactura}).`;
   return null;
@@ -297,12 +307,13 @@ export interface Decision {
 
 /**
  * Qué escribir. `fechasDePagoOdoo` (facturaId → `YYYY-MM-DD`) la arma quien habla con Odoo: el día del movimiento del
- * banco con que se concilió. Para Mercury el día sale de su entrada de plata; si no se encuentra, la factura va a
- * `pagadasSinFecha` (no se cobra con una fecha aproximada).
+ * banco con que se concilió. Para Mercury el día sale de su entrada de plata; si no hay, del día en que la copia la vio
+ * pasar a «Paid» (`diaVistoPagada`). Si tampoco se sabe eso, la factura va a `pagadasSinFecha`.
  */
 export function decidir(e: EntradaDelLibro, pegados: readonly Pegado[], fechasDePagoOdoo: ReadonlyMap<string, string>): Decision {
   const cobros = new Map(e.cobros.map((c) => [c.id, c]));
   const entradas = entradasDeFacturasConDetalle(e.facturasMercury, e.entradasMercury);
+  const facturasMercury = new Map(e.facturasMercury.map((f) => [f.id, f]));
   const out: Decision = { acciones: [], pagadasSinFecha: [], choques: [] };
   for (const p of pegados) {
     const c = cobros.get(p.cobroId);
@@ -328,27 +339,44 @@ export function decidir(e: EntradaDelLibro, pegados: readonly Pegado[], fechasDe
     if (p.pagada) {
       let fecha: string | null = null;
       let deDonde = "";
-      let porNombre = false;
+      let diaDeMercury: DiaDeMercury = "nombre";
       if (p.fuente === "ODOO") {
         fecha = fechasDePagoOdoo.get(p.facturaId) ?? null;
         deDonde = "el pago con que Odoo concilió la factura";
       } else {
-        // ⚠ Sin la entrada de plata no hay día del pago: el día en que la factura cambió en Mercury es una aproximación
-        // y DECISIONS prohíbe aproximar la fecha de pago (decide el mes del gráfico). Va a `pagadasSinFecha`.
         const x = entradas.get(p.facturaId);
-        fecha = x?.entrada.fecha ?? null;
-        porNombre = x?.porNombre ?? false;
-        deDonde = "la entrada de plata en Mercury";
+        const vista = x ? null : diaVistoPagada(facturasMercury.get(p.facturaId));
+        if (x) {
+          fecha = x.entrada.fecha;
+          diaDeMercury = x.porNombre ? "nombre" : "monto";
+          deDonde = "la entrada de plata en Mercury";
+        } else if (vista) {
+          fecha = vista;
+          diaDeMercury = "vista";
+          deDonde = "el día en que la copia de Mercury la vio pagada (sin depósito en Mercury: tarjeta por Stripe o pago externo)";
+        }
       }
       if (!fecha) {
         out.pagadasSinFecha.push(p);
       } else {
-        a.cobrar = { fechaCobro: fecha, deDonde, porQueNoSolo: dudaDelCobro(p, fecha, e.hoy, porNombre) };
+        a.cobrar = { fechaCobro: fecha, deDonde, porQueNoSolo: dudaDelCobro(p, fecha, e.hoy, diaDeMercury) };
       }
     }
     if (a.fechaEmision || a.numeroFactura || a.cobrar) out.acciones.push(a);
   }
   return out;
+}
+
+/**
+ * El día del pago de una factura de Mercury sin depósito: el día (Costa Rica) en que la copia la vio en «Paid» por
+ * primera vez (2026-10-22). La copia corre cada hora, pero de 19:00 a 7:00 no: un pago de la noche se ve a la mañana
+ * siguiente. Si entre la última vez que se vio sin pagar y la primera que se vio pagada cambió el MES, no se sabe a qué
+ * mes va (y el mes es lo que cuenta en el gráfico): null, y la decide una persona.
+ */
+export function diaVistoPagada(f: Pick<FacturaMercuryParaCruzar, "estado" | "pagadaVistaEn" | "pagadaNoVistaEn"> | undefined): string | null {
+  if (!f || f.estado !== "Paid" || !f.pagadaVistaEn) return null;
+  if (f.pagadaNoVistaEn && f.pagadaNoVistaEn.slice(0, 7) !== f.pagadaVistaEn.slice(0, 7)) return null;
+  return f.pagadaVistaEn;
 }
 
 /* ── Lo que se cobra solo (2026-10-18, decisión de Elías: «cobrar sin firma, cada día y solo») ───────────────────── */

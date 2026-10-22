@@ -87,7 +87,10 @@ export async function cargarEntradaDelLibro(hoy: string): Promise<EntradaDelLibr
     }),
     prisma.facturaMercury.findMany({
       where: { estadoEspejo: "VIGENTE" },
-      select: { id: true, numero: true, invoiceDate: true, dueDate: true, monto: true, moneda: true, estado: true, mercuryCustomerId: true, clienteNombre: true, actualizadaEnMercury: true },
+      select: {
+        id: true, numero: true, invoiceDate: true, dueDate: true, monto: true, moneda: true, estado: true, mercuryCustomerId: true, clienteNombre: true,
+        actualizadaEnMercury: true, pagadaVistaEn: true, pagadaNoVistaEn: true,
+      },
       orderBy: { invoiceDate: "asc" },
     }),
     prisma.clienteMercury.findMany({ where: { cuentaId: { not: null }, ignorado: false }, select: { mercuryCustomerId: true, cuentaId: true } }),
@@ -123,6 +126,7 @@ export async function cargarEntradaDelLibro(hoy: string): Promise<EntradaDelLibr
     facturasMercury: facturasMercuryDb.map((f) => ({
       id: f.id, numero: f.numero, invoiceDate: iso(f.invoiceDate)!, dueDate: iso(f.dueDate), monto: Number(f.monto), moneda: f.moneda, estado: f.estado,
       mercuryCustomerId: f.mercuryCustomerId, clienteNombre: f.clienteNombre, actualizadaEn: diaCR(f.actualizadaEnMercury),
+      pagadaVistaEn: f.pagadaVistaEn ? diaCR(f.pagadaVistaEn) : null, pagadaNoVistaEn: f.pagadaNoVistaEn ? diaCR(f.pagadaNoVistaEn) : null,
     })),
     cuentaDeClienteMercury: new Map(clientesDb.map((c) => [c.mercuryCustomerId, c.cuentaId!])),
     entradasMercury: movimientosDb

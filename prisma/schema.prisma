@@ -5999,8 +5999,15 @@ model FacturaMercury {
   clienteNombre        String
   canceladaEn          DateTime?
   creadaEnMercury      DateTime
-  /// ⚠ La API no dice CUÁNDO se pagó: este es el último cambio, que para una pagada suele ser el pago.
+  /// ⚠ La API no dice CUÁNDO se pagó, y este NO es el día del pago: medido el 2026-10-22, el updatedAt de Mercury no
+  /// cambia al pagarse (INV-61 e INV-5-4 lo tienen igual a la creación). El día sale de `pagadaVistaEn`.
   actualizadaEnMercury DateTime
+  /// Cuándo la copia vio por primera vez la factura en «Paid» (2026-10-22, la copia corre cada hora). nullable porque
+  /// las que ya estaban pagadas antes de esto no lo tienen: no se sabe cuándo pasaron a pagadas.
+  pagadaVistaEn        DateTime?
+  /// La última vez que la copia la vio sin pagar (o cuando se creó, si nació pagada entre dos copias): el pago ocurrió
+  /// entre esto y `pagadaVistaEn`. nullable por lo mismo.
+  pagadaNoVistaEn      DateTime?
   /// VIGENTE · DESAPARECIDA (CHECK en el SQL).
   estadoEspejo         String    @default("VIGENTE")
   sincronizadoEn       DateTime

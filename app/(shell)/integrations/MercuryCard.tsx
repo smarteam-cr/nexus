@@ -4,7 +4,8 @@
  * Server component: no tiene estado ni handlers, solo pinta lo que la página ya midió.
  *
  * ── POR QUÉ EXISTE ───────────────────────────────────────────────────────────
- * Mercury es el banco: lo que entró de verdad, contra lo que Odoo dice que se facturó. Copia a
+ * Mercury es un banco y además factura: lo que entró de verdad, contra lo que Odoo dice que se facturó. ⚠ No todo lo
+ * que Mercury da pagado entra a Mercury: con tarjeta va a Stripe, y lo externo se marca a mano (2026-10-22). Copia a
  * diario y tiene su propio job (`mercury-espejo-daily`), pero en `/integrations` no aparecía —
  * la única conexión del producto sin tarjeta propia. Se llegaba a ella solo desde Cobranza.
  *

@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { configDesdeEntorno, crearTransporteHttp } from "./transporte-http";
 import { MercuryError, MOVIMIENTOS_DESDE, explicarFallo, type MercuryFalloClase, type MercuryTransport } from "./transporte";
 import {
+  cuandoSeVioPagada,
   esBorradoMasivo,
   esCorridaParcial,
   espejoVencido,
@@ -143,6 +144,12 @@ async function copiar(opts: OpcionesDeCopiaMercury): Promise<ResultadoSyncMercur
 
     const ahora = new Date();
     const nombreDe = new Map(clientes.map((c) => [c.mercuryCustomerId, c.nombre]));
+    /* La copia buena anterior: una factura nueva creada después nació pagada entre las dos (`cuandoSeVioPagada`). */
+    const anterior = await prisma.syncMercuryCorrida.findFirst({
+      where: { ok: true, id: { not: res.corridaId } },
+      orderBy: { iniciadaEn: "desc" },
+      select: { iniciadaEn: true },
+    });
 
     /* ── 2. Los clientes primero: las facturas nombran a su cliente ──────────────── */
     res.clientesNuevos = await copiarClientes(clientes, ahora);
@@ -162,6 +169,8 @@ async function copiar(opts: OpcionesDeCopiaMercury): Promise<ResultadoSyncMercur
         canceladaEn: true,
         actualizadaEnMercury: true,
         estadoEspejo: true,
+        pagadaVistaEn: true,
+        sincronizadoEn: true,
       },
     });
     const previaDe = new Map(previas.map((p) => [p.mercuryInvoiceId, p]));
@@ -207,7 +216,8 @@ async function copiar(opts: OpcionesDeCopiaMercury): Promise<ResultadoSyncMercur
         sinCambio.push(p.id);
         continue;
       }
-      await prisma.facturaMercury.update({ where: { id: p.id }, data: datos });
+      const vista = cuandoSeVioPagada(p, { estado: f.estado, creadaEnMercury: new Date(f.creadaEnMercury) }, anterior?.iniciadaEn ?? null, ahora);
+      await prisma.facturaMercury.update({ where: { id: p.id }, data: { ...datos, ...(vista ?? {}) } });
       res.actualizadas++;
     }
     if (nuevas.length) {
@@ -226,6 +236,7 @@ async function copiar(opts: OpcionesDeCopiaMercury): Promise<ResultadoSyncMercur
           creadaEnMercury: new Date(f.creadaEnMercury),
           actualizadaEnMercury: new Date(f.actualizadaEnMercury),
           sincronizadoEn: ahora,
+          ...(cuandoSeVioPagada(null, { estado: f.estado, creadaEnMercury: new Date(f.creadaEnMercury) }, anterior?.iniciadaEn ?? null, ahora) ?? {}),
         })),
         skipDuplicates: true,
       });

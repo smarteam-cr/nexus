@@ -10509,4 +10509,41 @@ facturas» con 2 a la vista). Medido en solo lectura contra producción:
   factura; `CobroFacturaOdoo`, la tabla pensada para la unión factura–cuota, está vacía. Y Mercury pagada sin entrada de
   plata (Noelito INV-60, marcada pagada el mismo día que se emitió, como sus tres anteriores): **decidido por Elías el
   22 oct, sigue como hoy.** No se cobra sola con el día en que Mercury la marcó pagada; la confirma una persona en
-  «Lo pagado», que es quien sabe si la plata entró.
+  «Lo pagado», que es quien sabe si la plata entró. ⚠ **Reemplazado el mismo día** por la sección «Mercury: el día del
+  pago cuando no hay depósito» (la premisa estaba mal: el día que se leía no era el del pago).
+
+## Mercury: el día del pago cuando no hay depósito (2026-10-22)
+
+**Contexto.** Alex Arrieta (22 oct): la INV-61 de Multiquímica está pagada en Mercury y Nexus no la cobra; «no está
+tomando los pagos realizados externamente, ya sea por Stripe o colocados de manera manual como externos». Tenía razón.
+Medido ese día en solo lectura, contra la base y contra la API de Mercury:
+
+- **La premisa estaba mal.** Nexus trataba a Mercury como el banco (17 y 18 oct: «Paid con su entrada de plata»): una
+  factura pagada se cobraba solo si aparecía su depósito en Mercury, atado por el nombre de quien pagó. Pero Mercury
+  también factura: lo pagado con tarjeta va a Stripe (y Stripe le paga a otra cuenta: el último depósito de Stripe en
+  Mercury es del 8 dic 2025) y lo pagado por fuera se marca a mano. De las 50 facturas de 2026 pagadas en Mercury
+  (US$156.274), 18 tienen depósito atado por el nombre (US$70.820), 9 solo por el monto (US$22.392) y **23 no tienen
+  depósito en Mercury (US$63.063)**.
+- **La API de Mercury no dice cuándo se pagó**: la factura no trae fecha ni medio de pago, no hay un endpoint de pagos, el
+  historial de eventos no registra facturas, y su `updatedAt` no cambia al pagarse (INV-61 e INV-5-4 lo tienen igual al
+  de creación). Nexus mostraba ese `updatedAt` como «Mercury la marcó pagada el…» y el cargador de cuentas lo usaba como
+  día del cobro: estaba mal. Se corrige en los dos.
+- **El día, cuando no hay depósito, es el que la copia la ve pagada.** La copia corre cada hora: la primera vez que ve
+  una factura en «Paid» guarda el momento (`FacturaMercury.pagadaVistaEn`) y la última vez que la vio sin pagar
+  (`pagadaNoVistaEn`). Con eso se cobra sola, firmada `sistema:mercury`, con ese día (`diaVistoPagada`,
+  lib/cobranza/libro/hechos.ts). El depósito manda cuando existe. *Por qué no el día de hoy:* la fecha decide el mes del
+  gráfico; la copia ve el cambio dentro de la hora (de 19:00 a 7:00 no corre: un pago de la noche cuenta al día
+  siguiente). *Por qué una persona en el cambio de mes:* si entre «sin pagar» y «pagada» cambió el mes, no se sabe a
+  qué mes va.
+- **Lo de antes no se inventa.** Las facturas que ya estaban pagadas el 22 oct no tienen ese dato y siguen en «Sin el
+  día del pago», para una persona que mira el día en Mercury («Paid on … via card»). El 22 oct eran dos: Ferretería
+  Noelito INV-60 y Multiquímica INV-61.
+- **Cobrado no es lo mismo que «en el banco».** El cobro de una cuota es cuando el cliente pagó; lo que llega a la cuenta
+  (Stripe paga neto de su comisión, días después, a veces juntando varios pagos) es tesorería. Nexus no mira todavía
+  la liquidación de Stripe ni su comisión.
+- **Stripe, después.** Con una clave de solo lectura de Stripe se sabría el día exacto de cada pago con tarjeta, la
+  comisión (un gasto financiero) y a qué cuenta va la liquidación. Espera la clave de Alex.
+- **Queda para mirar con Alex:** desde el 20 oct la API de Mercury no devuelve ningún movimiento nuevo de ninguna cuenta
+  (ni de tarjeta). Si en Mercury sí hay, la copia de movimientos se quedó atrás.
+- SQL: `2026-10-22-mercury-pagada-vista.sql` (dos columnas nullable). Odoo no cambia: su día del pago sale del pago con
+  que se concilió la factura (`fechasDePagoEnOdoo`), que es lo correcto.

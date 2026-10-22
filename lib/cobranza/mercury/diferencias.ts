@@ -47,8 +47,18 @@ export interface FacturaMercuryParaCruzar {
   estado: string;
   mercuryCustomerId: string;
   clienteNombre: string;
-  /** `YYYY-MM-DD` del último cambio en Mercury: para una pagada, casi siempre el día que se marcó pagada. */
+  /**
+   * `YYYY-MM-DD` del último cambio en Mercury. ⚠ NO es el día del pago: medido el 2026-10-22, el `updatedAt` de Mercury
+   * no cambia al pagarse una factura. El día del pago, cuando no hay depósito, es `pagadaVistaEn`.
+   */
   actualizadaEn: string;
+  /**
+   * `YYYY-MM-DD` (Costa Rica) en que la copia vio la factura en «Paid» por primera vez, y la última vez que la vio sin
+   * pagar: el pago ocurrió entre los dos (2026-10-22, lib/cobranza/mercury/espejo.ts › `cuandoSeVioPagada`). null = no se
+   * sabe (ya estaba pagada cuando se empezó a medir). Opcionales: los cargadores viejos no los pasan.
+   */
+  pagadaVistaEn?: string | null;
+  pagadaNoVistaEn?: string | null;
 }
 
 export interface ClienteMercuryParaCruzar {
@@ -403,7 +413,11 @@ export function detectarDiferenciasMercury(e: EstadoMercury): DiferenciaOdoo[] {
       const p = pago.get(x.f.id);
       return {
         texto: `${textoFactura(x.f)} → ${x.cs.map(textoCobro).join("; ")}`,
-        nota: p ? `Entró el ${p.fecha}: ${plata(p.monto, x.f.moneda)} de ${nombreDeQuienPago(p.quien)}` : `Mercury la marcó pagada el ${x.f.actualizadaEn}; no se encontró el movimiento`,
+        nota: p
+          ? `Entró el ${p.fecha}: ${plata(p.monto, x.f.moneda)} de ${nombreDeQuienPago(p.quien)}`
+          : x.f.pagadaVistaEn
+            ? `Sin depósito en Mercury (tarjeta por Stripe o pago externo): la copia la vio pagada el ${x.f.pagadaVistaEn}`
+            : "Sin depósito en Mercury (tarjeta por Stripe o pago externo), y Mercury no dice qué día se pagó",
         monto: x.cs.reduce((s, c) => s + c.monto, 0),
         moneda: x.f.moneda,
         fila: identidadDeFila(`fm:${x.f.id}`, [docFactura(x.f), ...x.cs.map(docCobro)]),

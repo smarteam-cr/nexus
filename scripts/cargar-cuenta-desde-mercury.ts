@@ -169,7 +169,7 @@ function imprimirPlan(plan: PlanDeCargaDesdeMercury) {
   console.log(`\n══ Cobros que se cargan: ${plan.aCargar.length} · ${monto(plan.totales.USD, "USD")} + ${monto(plan.totales.CRC, "CRC")} ══`);
   for (const c of plan.aCargar) {
     console.log(
-      `  ${c.numero} · ${c.fecha} · ${monto(c.monto, c.moneda)} · ${c.estado === "COBRADO" ? `cobrado el ${c.fechaCobro}${c.origenDelDia === "ENTRADA" ? " (entrada del banco)" : " (último cambio en Mercury)"}` : "por cobrar"} · ${c.clienteNombre.slice(0, 40)}${c.nota ? ` · ${c.nota}` : ""}`,
+      `  ${c.numero} · ${c.fecha} · ${monto(c.monto, c.moneda)} · ${c.estado === "COBRADO" ? `cobrado el ${c.fechaCobro}${c.origenDelDia === "ENTRADA" ? " (entrada del banco)" : " (el día que la copia la vio pagada)"}` : "por cobrar"} · ${c.clienteNombre.slice(0, 40)}${c.nota ? ` · ${c.nota}` : ""}`,
     );
   }
   if (plan.enCuotasSinNumero.length) {

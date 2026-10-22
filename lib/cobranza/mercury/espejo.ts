@@ -159,6 +159,33 @@ export function facturaCambio(
   );
 }
 
+/**
+ * Cuándo la copia vio pagada una factura (2026-10-22). La API de Mercury no dice el día del pago —ni el medio— y su
+ * `updatedAt` no cambia al pagarse, así que el día se toma de la copia, que corre cada hora: la primera vez que la ve en
+ * «Paid» (`pagadaVistaEn`) y la última que la vio sin pagar (`pagadaNoVistaEn`). El pago ocurrió entre los dos.
+ *
+ *  · Pasó de no pagada a «Paid» desde la copia anterior: ahora, y la última vez que se copió sin pagar.
+ *  · Es nueva y nació después de la copia anterior ya pagada: ahora, y su creación.
+ *  · Es nueva pero ya existía antes (la primera copia, o una que se había saltado): no se sabe → los dos en null.
+ *  · Dejó de estar pagada: se borran (si vuelve a pagarse, se mide de nuevo).
+ * Devuelve `undefined` cuando no hay nada que cambiar.
+ */
+export function cuandoSeVioPagada(
+  previa: { estado: string; pagadaVistaEn: Date | null; sincronizadoEn: Date } | null,
+  nueva: { estado: string; creadaEnMercury: Date },
+  copiaAnterior: Date | null,
+  ahora: Date,
+): { pagadaVistaEn: Date | null; pagadaNoVistaEn: Date | null } | undefined {
+  const pagada = nueva.estado === "Paid";
+  if (!pagada) return previa?.pagadaVistaEn ? { pagadaVistaEn: null, pagadaNoVistaEn: null } : undefined;
+  if (previa) {
+    if (previa.estado === "Paid") return undefined;
+    return { pagadaVistaEn: ahora, pagadaNoVistaEn: previa.sincronizadoEn };
+  }
+  if (copiaAnterior && nueva.creadaEnMercury >= copiaAnterior) return { pagadaVistaEn: ahora, pagadaNoVistaEn: nueva.creadaEnMercury };
+  return { pagadaVistaEn: null, pagadaNoVistaEn: null };
+}
+
 export function movimientoCambio(
   previo: Pick<MovimientoDeMercury, "monto" | "estado" | "posteadoEn" | "contraparteNombre" | "nota" | "memoExterno">,
   nuevo: MovimientoDeMercury,

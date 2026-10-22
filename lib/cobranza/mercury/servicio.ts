@@ -11,6 +11,7 @@
  * ⛔ No escribe en Mercury (el token no puede), ni en ningún cobro: la lista lleva a la persona al cobro.
  */
 import "server-only";
+import { crDateParts } from "@/lib/jobs/time";
 import { prisma } from "@/lib/db/prisma";
 import { agregarSociedadTx, SociedadError } from "../sociedades-servicio";
 import { decidirMarcas, montosPorMoneda, type FilaPedida, type MarcaDeFila, type MontoEnMoneda } from "../odoo/diferencias";
@@ -245,7 +246,10 @@ export async function cargarEstadoMercury(): Promise<EstadoMercury> {
   const [facturas, clientes, cuentas, cobros, movimientos, marcas, copiaOk] = await Promise.all([
     prisma.facturaMercury.findMany({
       where: { estadoEspejo: "VIGENTE" },
-      select: { id: true, numero: true, invoiceDate: true, dueDate: true, monto: true, moneda: true, estado: true, mercuryCustomerId: true, clienteNombre: true, actualizadaEnMercury: true },
+      select: {
+        id: true, numero: true, invoiceDate: true, dueDate: true, monto: true, moneda: true, estado: true, mercuryCustomerId: true, clienteNombre: true,
+        actualizadaEnMercury: true, pagadaVistaEn: true, pagadaNoVistaEn: true,
+      },
     }),
     prisma.clienteMercury.findMany({ select: { mercuryCustomerId: true, nombre: true, cuentaId: true, ignorado: true } }),
     prisma.cuentaFinanciera.findMany({ select: { id: true, viaCobro: true, client: { select: { name: true } } } }),
@@ -274,6 +278,8 @@ export async function cargarEstadoMercury(): Promise<EstadoMercury> {
       mercuryCustomerId: f.mercuryCustomerId,
       clienteNombre: f.clienteNombre,
       actualizadaEn: isoDia(f.actualizadaEnMercury)!,
+      pagadaVistaEn: f.pagadaVistaEn ? crDateParts(f.pagadaVistaEn).dateKey : null,
+      pagadaNoVistaEn: f.pagadaNoVistaEn ? crDateParts(f.pagadaNoVistaEn).dateKey : null,
     })),
     clientes,
     cuentas: cuentas.map((c) => ({ id: c.id, nombre: c.client.name, via: c.viaCobro })),

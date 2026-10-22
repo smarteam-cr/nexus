@@ -7,6 +7,7 @@ import type { FacturaMercuryParaCruzar } from "@/lib/cobranza/mercury/diferencia
 import {
   accionesElegidas,
   decidir,
+  diaVistoPagada,
   dudaDelCobro,
   facturasOdooParaFechar,
   paraCobrarSolo,
@@ -243,6 +244,31 @@ describe("qué se escribe", () => {
     expect(decidir(e, pegarMercury(e), new Map()).acciones[0]!.cobrar).toEqual({ fechaCobro: "2026-08-12", deDonde: "la entrada de plata en Mercury", porQueNoSolo: null });
   });
 
+  it("Mercury sin depósito (tarjeta por Stripe o pago externo): se cobra sola con el día en que la copia la vio pagada (2026-10-22)", () => {
+    const cs = [cobro("c1", { plataforma: "MERCURY", numeroFactura: "INV-1", fechaEmision: "2026-08-03" })];
+    const f = mercury("m1", { estado: "Paid", pagadaVistaEn: "2026-08-20", pagadaNoVistaEn: "2026-08-19" });
+    const e = entrada({ cobros: cs, facturasMercury: [f] });
+    const d = decidir(e, pegarMercury(e), new Map());
+    expect(d.pagadasSinFecha).toEqual([]);
+    expect(d.acciones[0]!.cobrar).toMatchObject({ fechaCobro: "2026-08-20", porQueNoSolo: null });
+    expect(d.acciones[0]!.cobrar!.deDonde).toMatch(/la copia de Mercury la vio pagada/);
+    expect(paraCobrarSolo(d.acciones, new Set()).acciones).toHaveLength(1);
+  });
+
+  it("Mercury: el depósito manda sobre el día visto", () => {
+    const cs = [cobro("c1", { plataforma: "MERCURY", numeroFactura: "INV-1", fechaEmision: "2026-08-03" })];
+    const f = mercury("m1", { estado: "Paid", clienteNombre: "Client Inc", pagadaVistaEn: "2026-08-20" });
+    const e = entrada({ cobros: cs, facturasMercury: [f], entradasMercury: [{ id: "t1", monto: 1000, fecha: "2026-08-12", quien: "Client Inc" }] });
+    expect(decidir(e, pegarMercury(e), new Map()).acciones[0]!.cobrar!.fechaCobro).toBe("2026-08-12");
+  });
+
+  it("⛔ Mercury: si entre «sin pagar» y «pagada» cambió el mes, no se sabe a qué mes va: espera a una persona", () => {
+    expect(diaVistoPagada({ estado: "Paid", pagadaVistaEn: "2026-11-01", pagadaNoVistaEn: "2026-10-31" })).toBeNull();
+    expect(diaVistoPagada({ estado: "Paid", pagadaVistaEn: "2026-10-16", pagadaNoVistaEn: "2026-10-15" })).toBe("2026-10-16");
+    expect(diaVistoPagada({ estado: "Paid", pagadaVistaEn: null, pagadaNoVistaEn: null })).toBeNull();
+    expect(diaVistoPagada({ estado: "Unpaid", pagadaVistaEn: "2026-10-16", pagadaNoVistaEn: null })).toBeNull();
+  });
+
   it("una cuota ya cobrada sin número recibe el de su factura pagada, sin volver a cobrarla (Corrugando 0221, 2026-10-18)", () => {
     const e = entrada({
       cobros: [cobro("c1", { estado: "COBRADO", fechaEmision: "2026-08-01" })],
@@ -419,9 +445,9 @@ describe("lo que se cobra solo cada día (2026-10-18)", () => {
 
   it("dudaDelCobro: un día del pago posterior a hoy o muy anterior a la factura queda para una persona", () => {
     const p = { fuente: "ODOO" as const, conciliada: true, fechaFactura: "2026-08-10" };
-    expect(dudaDelCobro(p, "2026-08-20", "2026-10-18", false)).toBeNull();
-    expect(dudaDelCobro(p, "2026-08-07", "2026-10-18", false)).toBeNull();
-    expect(dudaDelCobro(p, "2026-10-19", "2026-10-18", false)).toMatch(/posterior a hoy/);
-    expect(dudaDelCobro(p, "2026-07-01", "2026-10-18", false)).toMatch(/anterior a la factura/);
+    expect(dudaDelCobro(p, "2026-08-20", "2026-10-18", "nombre")).toBeNull();
+    expect(dudaDelCobro(p, "2026-08-07", "2026-10-18", "nombre")).toBeNull();
+    expect(dudaDelCobro(p, "2026-10-19", "2026-10-18", "nombre")).toMatch(/posterior a hoy/);
+    expect(dudaDelCobro(p, "2026-07-01", "2026-10-18", "nombre")).toMatch(/anterior a la factura/);
   });
 });

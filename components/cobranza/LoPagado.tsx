@@ -282,7 +282,7 @@ export default function LoPagado({ puedeEditar, recarga = 0 }: { puedeEditar: bo
           <Seccion
             titulo={`Pagadas allá, listas para cobrar · ${paraCobrar.length} · ${plata(paraCobrar)}`}
             salida="firma"
-            que="Odoo (pagada o en proceso de pago) o Mercury («Paid», con su entrada de plata) dicen que el cliente pagó, y en Nexus la cuota sigue por cobrar. Se sabe qué día entró la plata."
+            que="Odoo (pagada o en proceso de pago) o Mercury («Paid») dicen que el cliente pagó, y en Nexus la cuota sigue por cobrar. Se sabe qué día: el del pago en Odoo, el del depósito en Mercury o, si se pagó con tarjeta o por fuera, el día en que la copia de Mercury la vio pasar a pagada."
             pasos={[
               "Las que no dicen nada al costado se cobran solas en la próxima hora, o ya mismo con «Actualizar desde Odoo y Mercury».",
               "Las que dicen por qué esperan: revísalas, deja marcadas las que ves bien y aprieta «Confirmar con mi firma». Quedan cobradas con el día real del pago.",
@@ -343,12 +343,11 @@ export default function LoPagado({ puedeEditar, recarga = 0 }: { puedeEditar: bo
             <Seccion
               titulo={`Sin el día del pago · ${lista.pagadasSinFecha.length}`}
               salida="fila"
-              que="Odoo o Mercury las dan pagadas, pero no hay una entrada de plata que lo pruebe: Nexus no sabe si la plata entró ni qué día. Por eso no se cobran solas ni con la firma (el día decide el mes del gráfico). Pasa, por ejemplo, cuando alguien la marca pagada en Mercury a mano o el cliente pagó a otra cuenta."
+              que="Odoo o Mercury las dan pagadas, pero Nexus no sabe qué día. Mercury no lo dice en su API: Nexus lo sabe por el depósito en Mercury o porque la copia (cada hora) la vio pasar a pagada. Acá quedan las que se pagaron con tarjeta (Stripe) o por fuera ANTES del 22 oct, cuando Nexus todavía no lo medía, o en un cambio de mes. No se cobran solas: el día decide el mes del gráfico."
               pasos={[
-                "Revisa en el banco si la plata entró y qué día.",
-                "Si entró: «Registrar el pago» en esa fila, con la fecha real. Queda cobrada a tu nombre.",
-                "Si no entró: pide que la corrijan en Mercury u Odoo (que no figure pagada). Sale sola de esta lista con la próxima copia.",
-                "Si la entrada aparece después en Mercury, sale sola y se cobra en la hora siguiente.",
+                "Abre la factura en Mercury: dice el día del pago (por ejemplo, «Paid on Oct 15 via card») o que se marcó pagada por fuera.",
+                "«Registrar el pago» en esa fila, con ese día. Queda cobrada a tu nombre.",
+                "Si en realidad no se pagó, que la corrijan en Mercury u Odoo (que no figure pagada): sale sola de esta lista con la próxima copia.",
               ]}
             >
               <Filas filas={lista.pagadasSinFecha} accion="Registrar el pago" ayuda="Abre la cuenta en Cobranza: ahí registras el pago de esta cuota con el día en que entró la plata." />
