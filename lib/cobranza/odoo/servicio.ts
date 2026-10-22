@@ -424,7 +424,7 @@ export async function actualizarDesdeOdoo(actor: string, ahora: Date = new Date(
     const r = await sincronizarOdoo({ disparadaPor: actor, esperaMs: ESPERA_A_PEDIDO_MS });
     if (r.enCurso) {
       estado = "EN_CURSO";
-      mensaje = "Ya hay una copia de Odoo en curso, pedida por otra persona o la de la mañana. Espera unos segundos y actualiza otra vez.";
+      mensaje = "Ya hay una copia de Odoo en curso, pedida por otra persona o la automática de la hora. Espera unos segundos y actualiza otra vez.";
     } else if (!r.ok) {
       estado = "FALLO";
       mensaje = `No se pudo leer Odoo: ${r.error ?? "sin detalle"} Lo que ves es la copia anterior.`;

@@ -36,6 +36,7 @@ import { useCallback, useRef, useState, type ReactNode } from "react";
 import { Button, Tabs } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
+import type { FuenteActualizada } from "@/lib/finanzas/actualizar-tablero";
 import EmparejadoOdoo from "./EmparejadoOdoo";
 import DiferenciasOdoo from "./DiferenciasOdoo";
 import FacturacionOdoo from "./FacturacionOdoo";
@@ -68,6 +69,8 @@ interface RespuestaDeActualizar {
   mensaje: string;
   corrida: CorridaDelEspejo | null;
   facturas: number;
+  /** El cobro de lo pagado que corre después de copiar (2026-10-21). */
+  cobro: FuenteActualizada;
 }
 
 /**
@@ -148,15 +151,20 @@ export default function OdooClient({
   const [facturas, setFacturas] = useState(conteos.facturas);
   const [recarga, setRecarga] = useState(0);
   const [actualizando, setActualizando] = useState(false);
+  /* Un doble clic rápido llega antes de que el botón se dibuje deshabilitado: el ref lo corta en el acto. */
+  const enCurso = useRef(false);
   const actualizar = useCallback(async () => {
+    if (enCurso.current) return;
+    enCurso.current = true;
     setActualizando(true);
     try {
       const r = await fetchJson<RespuestaDeActualizar>("/api/cobranza/odoo/actualizar", { method: "POST" });
       setCopia(r.corrida);
       setFacturas(r.facturas);
-      if (r.estado === "FALLO") toast.error(r.mensaje);
-      else if (r.estado === "COPIADO") toast.success(r.mensaje);
-      else toast.info(r.mensaje);
+      const texto = `${r.mensaje} ${r.cobro.texto}`;
+      if (r.estado === "FALLO" || !r.cobro.ok) toast.error(texto);
+      else if (r.estado === "COPIADO") toast.success(texto);
+      else toast.info(texto);
       /* La vista se recarga también cuando no se volvió a leer Odoo: lo que otra persona cambió en Nexus sale igual.
          «Lo que no cuadra» abierta se recuenta sola al recargar; desde otra pestaña, su número se pide aparte. */
       setRecarga((n) => n + 1);
@@ -164,6 +172,7 @@ export default function OdooClient({
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar desde Odoo.");
     } finally {
+      enCurso.current = false;
       setActualizando(false);
     }
   }, [toast, recontarDiferencias, tab]);
@@ -220,9 +229,9 @@ export default function OdooClient({
           className="shrink-0"
           onClick={() => void actualizar()}
           disabled={actualizando}
-          title="Trae ya las facturas y los clientes de Odoo, sin esperar a mañana. Solo lee Odoo: no cambia ningún cobro."
+          title="Trae ya las facturas y los clientes de Odoo, sin esperar a la próxima hora, y cobra lo que Odoo da por pagado y conciliado. Solo lee Odoo."
         >
-          {actualizando ? "Leyendo Odoo…" : "Actualizar desde Odoo"}
+          {actualizando ? "Leyendo Odoo y cobrando lo pagado…" : "Actualizar desde Odoo"}
         </Button>
       </div>
 
@@ -299,7 +308,7 @@ function EstadoDelEspejo({
   return (
     <p className="flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
       {corrida.ultimaOkEn && (
-        <span title="Hora de Costa Rica. La copia se hace sola cada mañana, desde las 6, y cada vez que alguien aprieta «Actualizar desde Odoo».">
+        <span title="Hora de Costa Rica. La copia se hace sola cada hora, de 6:00 a 19:00, y cada vez que alguien aprieta «Actualizar desde Odoo».">
           Copia de Odoo del {cuando(corrida.ultimaOkEn)}
           {corrida.horasDesdeLaUltimaBuena !== null && ` (${hace(corrida.horasDesdeLaUltimaBuena)})`} · {facturas} facturas
         </span>
@@ -332,7 +341,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           reunión de dirección.
         </p>
         <p className="mt-2 text-sm text-fg-secondary">
-          Ahora Nexus lee Odoo cada mañana —cuando la copia automática está encendida en el servidor—, y otra vez cada
+          Ahora Nexus lee Odoo cada hora, de 6:00 a 19:00 —cuando la copia automática está encendida en el servidor—, y otra vez cada
           vez que alguien aprieta «Actualizar desde Odoo», y pone las facturas reales al lado de los cobros de las
           cuentas emparejadas. Lo que no coincide aparece en una lista, con su monto y con quién lo puede cerrar.
         </p>
@@ -342,7 +351,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
         <div className="rounded-lg border border-success-line bg-success-surface p-5">
           <h3 className="text-sm font-semibold text-success-ink">Lo que sí hace</h3>
           <ul className="mt-2 space-y-1.5 text-sm text-fg-secondary">
-            <li>· Trae las facturas de venta y la lista de clientes de Odoo, cada mañana y cuando se lo pides con «Actualizar desde Odoo».</li>
+            <li>· Trae las facturas de venta y la lista de clientes de Odoo, cada hora y cuando se lo pides con «Actualizar desde Odoo».</li>
             <li>· En las cuentas emparejadas, las muestra al lado del cobro que les corresponde, con su número y su estado real.</li>
             <li>· Lista lo que no cuadra, ordenado por la plata que mueve.</li>
             <li>· Guarda el monto sin impuesto y el total, porque los cobros de Nexus están cargados sin IVA.</li>
@@ -387,8 +396,8 @@ function QueEs({ conteos }: { conteos: Conteos }) {
             su motivo; lo que hay que corregir en Nexus, con «Abrir la cuenta».
           </li>
           <li>
-            <strong className="text-fg">3. Mirar de cuándo es la copia.</strong> La copia de Odoo se hace sola cada mañana,
-            desde las 6. La línea de arriba de estas pestañas dice de cuándo es la última copia buena, en hora de Costa
+            <strong className="text-fg">3. Mirar de cuándo es la copia.</strong> La copia de Odoo se hace sola cada hora,
+            de 6:00 a 19:00. La línea de arriba de estas pestañas dice de cuándo es la última copia buena, en hora de Costa
             Rica; si falla o deja de hacerse, se pone en rojo. Mientras esté en rojo, lo facturado después no está acá.
           </li>
           <li>
@@ -524,7 +533,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
         </li>
         <li>
           · Lo que corriges en Nexus sale la próxima vez que abres la pestaña. Lo que se corrige en Odoo sale con la
-          próxima copia de Odoo: la de la mañana, o la que pides con «Actualizar desde Odoo».
+          próxima copia de Odoo: la de la hora, o la que pides con «Actualizar desde Odoo».
         </li>
         <li>
           · La suma de arriba va por moneda y sin IVA, y cuenta cada documento una sola vez aunque lo miren varias

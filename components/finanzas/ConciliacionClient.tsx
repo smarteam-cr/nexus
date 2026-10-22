@@ -17,7 +17,7 @@
  * del título. Son enlaces al lado de la fecha de cada copia, y esas páginas vuelven acá con «← Conciliación».
  */
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Button, PageHeader, Segmentado, Tabs } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
@@ -73,8 +73,14 @@ export default function ConciliacionClient({
   const [porEmparejar, setPorEmparejar] = useState({ odoo: conteos.porEmparejarOdoo, mercury: conteos.porEmparejarMercury });
   const [recarga, setRecarga] = useState(0);
   const [actualizando, setActualizando] = useState(false);
+  /* Un doble clic rápido llega antes de que el botón se dibuje deshabilitado: el ref lo corta en el acto. */
+  const enCurso = useRef(false);
 
+  /* Copia Odoo y Mercury y después cobra lo pagado (2026-10-21): el aviso dice cuántas facturas cambiaron y cuántas
+     cuotas quedaron cobradas, o el error en palabras. «Lo pagado» y «Lo que no cuadra» se vuelven a leer. */
   const actualizar = useCallback(async () => {
+    if (enCurso.current) return;
+    enCurso.current = true;
     setActualizando(true);
     try {
       const r = await fetchJson<{ fuentes: FuenteActualizada[]; todoBien: boolean; texto: string }>("/api/finanzas/actualizar", {
@@ -87,6 +93,7 @@ export default function ConciliacionClient({
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar.");
     } finally {
+      enCurso.current = false;
       setActualizando(false);
     }
   }, [toast]);
@@ -108,9 +115,9 @@ export default function ConciliacionClient({
               size="sm"
               onClick={() => void actualizar()}
               disabled={actualizando}
-              title="Trae ya lo último de Odoo y de Mercury, sin esperar a mañana. Solo lee: no cambia ningún cobro."
+              title="Trae ya lo último de Odoo y de Mercury, sin esperar a la próxima hora, y cobra lo que dan por pagado y conciliado con el banco. Solo lee Odoo y Mercury."
             >
-              {actualizando ? "Leyendo Odoo y Mercury…" : "Actualizar desde Odoo y Mercury"}
+              {actualizando ? "Leyendo Odoo y Mercury y cobrando lo pagado…" : "Actualizar desde Odoo y Mercury"}
             </Button>
             <span className="text-xs text-fg-muted">
               <Link href="/cobranza/odoo" className="font-medium text-brand hover:text-brand-light" title="La copia de Odoo: qué es, emparejar y la facturación por cliente.">
@@ -178,7 +185,7 @@ export default function ConciliacionClient({
         </div>
       )}
 
-      {tab === "pagado" && <LoPagado puedeEditar={puedeEditar} />}
+      {tab === "pagado" && <LoPagado puedeEditar={puedeEditar} recarga={recarga} />}
 
       {tab === "no-cuadra" && (
         <DiferenciasOdoo

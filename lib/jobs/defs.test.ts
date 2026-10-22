@@ -25,6 +25,8 @@ const { claimDateKey, liberarTurno, sincronizarOdoo, sincronizarMercury, tickMar
     barrerTokens: vi.fn(),
     barrerIntentos: vi.fn(),
   }));
+/* La fila del turno de los jobs de cada hora (2026-10-21): dice si quedaron retenidos hoy. */
+const filaDelTurno = vi.hoisted(() => vi.fn());
 
 // El turno del día se reclama contra la base: cada test decide si este proceso lo ganó.
 vi.mock("./registry", async (importOriginal) => ({
@@ -33,7 +35,7 @@ vi.mock("./registry", async (importOriginal) => ({
 }));
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    cronJobState: { updateMany: liberarTurno },
+    cronJobState: { updateMany: liberarTurno, findUnique: filaDelTurno },
     printJobToken: { deleteMany: barrerTokens },
     externalVerifyAttempt: { deleteMany: barrerIntentos },
   },
@@ -43,8 +45,9 @@ vi.mock("@/lib/cobranza/mercury/sync", () => ({ sincronizarMercury }));
 vi.mock("@/lib/cobranza/alertas-refresco", () => ({ refrescarAlertasDeCobranza }));
 vi.mock("@/lib/marketing/cron", () => ({ tickMarketingCron }));
 // El cobro solo (2026-10-18): la regla y la base viven en lib/cobranza/libro; acá se prueba qué hace el job con lo que devuelve.
-const correrElCobroDelDia = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/cobranza/libro/servicio", () => ({ correrElCobroDelDia }));
+// Desde el 2026-10-21 pasa por el candado que comparte con el botón «Actualizar».
+const correrElCobroConCandado = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/cobranza/libro/cobro-a-pedido", () => ({ correrElCobroConCandado }));
 // «Para ti»: el mantenimiento borra los avisos viejos (la base acá está simulada).
 const borrarAvisosViejos = vi.hoisted(() => vi.fn(async () => 0));
 vi.mock("@/lib/para-ti/avisos-server", () => ({ borrarAvisosViejos }));
@@ -62,9 +65,15 @@ vi.mock("@/lib/cs/watchdog", () => ({
 import { allJobs } from "./defs";
 import { SIN_TURNO } from "./registry";
 import { NOMBRE_DE_JOB, nombreDeJob } from "./nombres";
+import { prisma } from "@/lib/db/prisma";
 
 const AHORA = new Date("2026-09-12T12:05:00Z"); // 6:05 en Costa Rica, cuando corre el espejo
 const HOY = "2026-09-12";
+/* Las copias de Odoo y Mercury y el cobro de lo pagado corren cada hora (2026-10-21): su turno es el día y la hora. */
+const TURNO_6 = "2026-09-12T06";
+const RETENIDO = "2026-09-12·retenido";
+const soltado = (id: string, turno: string) => ({ where: { id, lastRunDateKey: turno }, data: { lastRunDateKey: null } });
+const retenido = (id: string, turno: string) => ({ where: { id, lastRunDateKey: turno }, data: { lastRunDateKey: RETENIDO } });
 
 function job(key: string) {
   const encontrado = allJobs().find((j) => j.key === key);
@@ -103,6 +112,9 @@ beforeEach(() => {
   refrescarAlertasDeCobranza.mockReset();
   barrerTokens.mockReset().mockResolvedValue({ count: 0 });
   barrerIntentos.mockReset().mockResolvedValue({ count: 0 });
+  /* tipo-cambio cuelga su propio findUnique: acá se vuelve a poner el de la fila del turno. */
+  filaDelTurno.mockReset().mockResolvedValue(null);
+  (prisma.cronJobState as unknown as { findUnique: typeof filaDelTurno }).findUnique = filaDelTurno;
 });
 
 describe("maintenance-daily", () => {
@@ -172,30 +184,29 @@ describe("maintenance-daily", () => {
 });
 
 describe("odoo-espejo-daily", () => {
-  it("un rechazo de credenciales LANZA y retiene el turno: rojo en el semáforo, sin reintentar cada minuto", async () => {
+  it("un rechazo de credenciales LANZA y retiene el DÍA: rojo en el semáforo, sin reintentar cada hora", async () => {
     /* La edición que lo pone en rojo: volver a `console.error(…); return;`. El scheduler anota «ok»
        y el semáforo queda en verde con el espejo muerto, que es como pasaron diez días. */
     sincronizarOdoo.mockResolvedValue(corrida({ ok: false, clase: "AUTENTICACION", error: "Access Denied" }));
     const run = job("odoo-espejo-daily").run(AHORA);
     await expect(run).rejects.toThrow(/FALLÓ \(AUTENTICACION\): Access Denied; turno RETENIDO/);
     await expect(run).rejects.toMatchObject({ name: "SyncOdooFallido" });
-    expect(claimDateKey).toHaveBeenCalledWith("odoo-espejo-daily", HOY, AHORA);
-    expect(liberarTurno, "reintentar con la clave rechazada suma al bloqueo en Odoo").not.toHaveBeenCalled();
+    expect(claimDateKey).toHaveBeenCalledWith("odoo-espejo-daily", TURNO_6, AHORA);
+    /* Cada hora serían 13 intentos por día con la clave rechazada: el bloqueo por IP de Odoo salta a los 10. */
+    expect(liberarTurno, "reintentar con la clave rechazada suma al bloqueo en Odoo").toHaveBeenCalledWith(retenido("odoo-espejo-daily", TURNO_6));
+    expect(liberarTurno).not.toHaveBeenCalledWith(soltado("odoo-espejo-daily", TURNO_6));
   });
 
   it("un fallo de red LANZA y libera el turno de hoy para reintentar en el tick siguiente", async () => {
     sincronizarOdoo.mockResolvedValue(corrida({ ok: false, clase: "RED", error: "ECONNRESET" }));
     await expect(job("odoo-espejo-daily").run(AHORA)).rejects.toThrow(/FALLÓ \(RED\).*turno liberado/);
-    expect(liberarTurno).toHaveBeenCalledWith({
-      where: { id: "odoo-espejo-daily", lastRunDateKey: HOY },
-      data: { lastRunDateKey: null },
-    });
+    expect(liberarTurno).toHaveBeenCalledWith(soltado("odoo-espejo-daily", TURNO_6));
   });
 
   it("una corrida parcial LANZA y retiene el turno", async () => {
     sincronizarOdoo.mockResolvedValue(corrida({ ok: false, parcial: true, error: "Odoo devolvió 120 de 347" }));
     await expect(job("odoo-espejo-daily").run(AHORA)).rejects.toThrow(/corrida PARCIAL.*turno RETENIDO/);
-    expect(liberarTurno).not.toHaveBeenCalled();
+    expect(liberarTurno).toHaveBeenCalledWith(retenido("odoo-espejo-daily", TURNO_6));
   });
 
   it("una corrida buena termina sin lanzar y cuenta como corrida", async () => {
@@ -219,10 +230,36 @@ describe("odoo-espejo-daily", () => {
        una copia que sí se está haciendo) o quedarse con el turno (la copia de la mañana no correría ese día). */
     sincronizarOdoo.mockResolvedValue(corrida({ ok: false, enCurso: true, corridaId: "", error: "Ya hay una copia de Odoo en curso." }));
     await expect(job("odoo-espejo-daily").run(AHORA)).resolves.toBe(SIN_TURNO);
-    expect(liberarTurno).toHaveBeenCalledWith({
-      where: { id: "odoo-espejo-daily", lastRunDateKey: HOY },
-      data: { lastRunDateKey: null },
-    });
+    expect(liberarTurno).toHaveBeenCalledWith(soltado("odoo-espejo-daily", TURNO_6));
+  });
+
+  it("retenido hoy, no toca a Odoo en ninguna hora del día; mañana vuelve", async () => {
+    /* La edición que lo pone en rojo: tomar el turno de la hora sin mirar si el día quedó retenido. */
+    filaDelTurno.mockResolvedValue({ lastRunDateKey: RETENIDO });
+    await expect(job("odoo-espejo-daily").run(new Date("2026-09-12T20:05:00Z"))).resolves.toBe(SIN_TURNO);
+    expect(sincronizarOdoo).not.toHaveBeenCalled();
+    expect(claimDateKey).not.toHaveBeenCalled();
+    sincronizarOdoo.mockResolvedValue(corrida({ ok: true }));
+    const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await expect(job("odoo-espejo-daily").run(new Date("2026-09-13T12:05:00Z"))).resolves.not.toBe(SIN_TURNO);
+    } finally {
+      silencio.mockRestore();
+    }
+    expect(claimDateKey).toHaveBeenCalledWith("odoo-espejo-daily", "2026-09-13T06", expect.any(Date));
+  });
+
+  it("corre cada hora: a las 9:05 su turno es el de las 9, y de noche el de las 19", async () => {
+    sincronizarOdoo.mockResolvedValue(corrida({ ok: true }));
+    const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await job("odoo-espejo-daily").run(new Date("2026-09-12T15:05:00Z"));
+      await job("odoo-espejo-daily").run(new Date("2026-09-13T03:30:00Z")); // 21:30 del 12 en Costa Rica
+    } finally {
+      silencio.mockRestore();
+    }
+    expect(claimDateKey).toHaveBeenNthCalledWith(1, "odoo-espejo-daily", "2026-09-12T09", expect.any(Date));
+    expect(claimDateKey).toHaveBeenNthCalledWith(2, "odoo-espejo-daily", "2026-09-12T19", expect.any(Date));
   });
 });
 
@@ -246,12 +283,12 @@ describe("mercury-espejo-daily", () => {
     ...c,
   });
 
-  it("un token rechazado LANZA y retiene el turno: no se reintenta cada minuto con un token muerto", async () => {
+  it("un token rechazado LANZA y retiene el día: no se reintenta cada hora con un token muerto", async () => {
     sincronizarMercury.mockResolvedValue(copia({ ok: false, clase: "TOKEN", error: "401" }));
     const run = job("mercury-espejo-daily").run(AHORA);
     await expect(run).rejects.toThrow(/FALLÓ \(TOKEN\).*turno RETENIDO/);
     await expect(run).rejects.toMatchObject({ name: "SyncMercuryFallido" });
-    expect(liberarTurno).not.toHaveBeenCalled();
+    expect(liberarTurno).toHaveBeenCalledWith(retenido("mercury-espejo-daily", TURNO_6));
   });
 
   it("un fallo de red o un «esperá» de Mercury LANZA y libera el turno para reintentar", async () => {
@@ -259,14 +296,14 @@ describe("mercury-espejo-daily", () => {
       liberarTurno.mockClear();
       sincronizarMercury.mockResolvedValue(copia({ ok: false, clase, error: "x" }));
       await expect(job("mercury-espejo-daily").run(AHORA)).rejects.toThrow(/turno liberado/);
-      expect(liberarTurno).toHaveBeenCalledWith({ where: { id: "mercury-espejo-daily", lastRunDateKey: HOY }, data: { lastRunDateKey: null } });
+      expect(liberarTurno).toHaveBeenCalledWith(soltado("mercury-espejo-daily", TURNO_6));
     }
   });
 
   it("una corrida parcial LANZA y retiene el turno; una buena cuenta como corrida", async () => {
     sincronizarMercury.mockResolvedValue(copia({ ok: false, parcial: true, clase: "RED", error: "trajo 10 de 76" }));
     await expect(job("mercury-espejo-daily").run(AHORA)).rejects.toThrow(/corrida PARCIAL.*turno RETENIDO/);
-    expect(liberarTurno).not.toHaveBeenCalled();
+    expect(liberarTurno).toHaveBeenCalledWith(retenido("mercury-espejo-daily", TURNO_6));
     sincronizarMercury.mockResolvedValue(copia({ ok: true }));
     const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
@@ -426,6 +463,7 @@ describe("tipo-cambio-daily", () => {
 
 describe("lo-pagado-daily", () => {
   const MANANA = new Date("2026-09-12T13:05:00Z"); // 7:05 en Costa Rica
+  const TURNO_7 = "2026-09-12T07";
   const resultado = (cambios: Record<string, unknown> = {}) => ({
     aplicado: true,
     cobradas: [{ cobroId: "c1", monto: 500, moneda: "USD" }],
@@ -437,31 +475,39 @@ describe("lo-pagado-daily", () => {
   });
 
   it("mientras una copia no corrió bien hoy, suelta el turno y no anota nada", async () => {
-    correrElCobroDelDia.mockReset().mockResolvedValue({ turno: { correr: false, fuentes: ["MERCURY"], atrasadas: ["ODOO"] }, resultado: null });
+    correrElCobroConCandado.mockReset().mockResolvedValue({ enCurso: false, turno: { correr: false, fuentes: ["MERCURY"], atrasadas: ["ODOO"] }, resultado: null });
     await expect(job("lo-pagado-daily").run(MANANA)).resolves.toBe(SIN_TURNO);
-    expect(liberarTurno).toHaveBeenCalledWith({ where: { id: "lo-pagado-daily", lastRunDateKey: HOY }, data: { lastRunDateKey: null } });
+    expect(liberarTurno).toHaveBeenCalledWith(soltado("lo-pagado-daily", TURNO_7));
+  });
+
+  it("si alguien está cobrando con «Actualizar», suelta la hora y no anota nada", async () => {
+    correrElCobroConCandado.mockReset().mockResolvedValue({ enCurso: true });
+    await expect(job("lo-pagado-daily").run(MANANA)).resolves.toBe(SIN_TURNO);
+    expect(liberarTurno).toHaveBeenCalledWith(soltado("lo-pagado-daily", TURNO_7));
   });
 
   it("cobra y termina sin lanzar cuando todo salió bien", async () => {
-    correrElCobroDelDia.mockReset().mockResolvedValue({ turno: { correr: true, fuentes: ["ODOO", "MERCURY"], atrasadas: [] }, resultado: resultado() });
+    correrElCobroConCandado.mockReset().mockResolvedValue({ enCurso: false, turno: { correr: true, fuentes: ["ODOO", "MERCURY"], atrasadas: [] }, resultado: resultado() });
     const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
       await expect(job("lo-pagado-daily").run(MANANA)).resolves.not.toBe(SIN_TURNO);
     } finally {
       silencio.mockRestore();
     }
-    expect(correrElCobroDelDia).toHaveBeenCalledWith(MANANA, { aplicar: true });
+    expect(correrElCobroConCandado).toHaveBeenCalledWith(MANANA, { aplicar: true });
+    expect(claimDateKey).toHaveBeenCalledWith("lo-pagado-daily", TURNO_7, MANANA);
   });
 
-  it("LANZA (rojo) si cobró sin una copia o si una cuota no se pudo escribir, y retiene el turno", async () => {
-    correrElCobroDelDia.mockReset().mockResolvedValue({
+  it("LANZA (rojo) si cobró sin una copia o si una cuota no se pudo escribir, y retiene la hora", async () => {
+    correrElCobroConCandado.mockReset().mockResolvedValue({
+      enCurso: false,
       turno: { correr: true, fuentes: ["MERCURY"], atrasadas: ["ODOO"] },
       resultado: resultado({ saltadas: [{ cobroId: "c2", cuenta: "Acme", motivo: "número en otra cuenta" }] }),
     });
     const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
       const run = job("lo-pagado-daily").run(MANANA);
-      await expect(run).rejects.toThrow(/la copia de Odoo no corrió bien hoy.*Acme: número en otra cuenta.*Turno RETENIDO/);
+      await expect(run).rejects.toThrow(/la copia de Odoo no corrió bien hoy.*Acme: número en otra cuenta.*La próxima hora vuelve a mirar/);
       await expect(run).rejects.toMatchObject({ name: "CobroSoloIncompleto" });
     } finally {
       silencio.mockRestore();

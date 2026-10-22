@@ -15,6 +15,7 @@ import { useCallback, useRef, useState, type ReactNode } from "react";
 import { Button, Tabs } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
+import type { FuenteActualizada } from "@/lib/finanzas/actualizar-tablero";
 import EmparejadoMercury from "./EmparejadoMercury";
 import DiferenciasOdoo from "./DiferenciasOdoo";
 import type { PestanaMercury } from "@/lib/cobranza/mercury/pestanas";
@@ -39,6 +40,8 @@ interface RespuestaDeActualizar {
   mensaje: string;
   corrida: CorridaDelEspejo | null;
   facturas: number;
+  /** El cobro de lo pagado que corre después de copiar (2026-10-21). */
+  cobro: FuenteActualizada;
 }
 
 interface Conteos {
@@ -97,20 +100,26 @@ export default function MercuryClient({
   const [facturas, setFacturas] = useState(conteos.facturas);
   const [recarga, setRecarga] = useState(0);
   const [actualizando, setActualizando] = useState(false);
+  /* Un doble clic rápido llega antes de que el botón se dibuje deshabilitado: el ref lo corta en el acto. */
+  const enCurso = useRef(false);
   const actualizar = useCallback(async () => {
+    if (enCurso.current) return;
+    enCurso.current = true;
     setActualizando(true);
     try {
       const r = await fetchJson<RespuestaDeActualizar>("/api/cobranza/mercury/actualizar", { method: "POST" });
       setCopia(r.corrida);
       setFacturas(r.facturas);
-      if (r.estado === "FALLO") toast.error(r.mensaje);
-      else if (r.estado === "COPIADO") toast.success(r.mensaje);
-      else toast.info(r.mensaje);
+      const texto = `${r.mensaje} ${r.cobro.texto}`;
+      if (r.estado === "FALLO" || !r.cobro.ok) toast.error(texto);
+      else if (r.estado === "COPIADO") toast.success(texto);
+      else toast.info(texto);
       setRecarga((n) => n + 1);
       if (tab !== "no-cuadra") recontarDiferencias();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar desde Mercury.");
     } finally {
+      enCurso.current = false;
       setActualizando(false);
     }
   }, [toast, recontarDiferencias, tab]);
@@ -159,9 +168,9 @@ export default function MercuryClient({
           className="shrink-0"
           onClick={() => void actualizar()}
           disabled={actualizando || !tieneToken}
-          title="Trae ya las facturas, los clientes y los pagos de Mercury. Solo lee: no cambia ningún cobro."
+          title="Trae ya las facturas, los clientes y los pagos de Mercury, y cobra lo que Mercury da por pagado. Solo lee Mercury."
         >
-          {actualizando ? "Leyendo Mercury…" : "Actualizar desde Mercury"}
+          {actualizando ? "Leyendo Mercury y cobrando lo pagado…" : "Actualizar desde Mercury"}
         </Button>
       </div>
 
@@ -213,7 +222,7 @@ function EstadoDelEspejo({ corrida, facturas }: { corrida: CorridaDelEspejo; fac
   return (
     <p className="flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
       {corrida.ultimaOkEn && (
-        <span title="Hora de Costa Rica. La copia se hace sola cada mañana, desde las 6, y con «Actualizar desde Mercury».">
+        <span title="Hora de Costa Rica. La copia se hace sola cada hora, de 6:00 a 19:00, y con «Actualizar desde Mercury».">
           Copia de Mercury del {cuando(corrida.ultimaOkEn)}
           {corrida.horasDesdeLaUltimaBuena !== null && ` (${hace(corrida.horasDesdeLaUltimaBuena)})`} · {facturas} facturas
         </span>
@@ -238,7 +247,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           pagado era entrar a Mercury y comparar a mano con los cobros de Nexus.
         </p>
         <p className="mt-2 text-sm text-fg-secondary">
-          Ahora Nexus copia de Mercury las facturas, los clientes y las entradas de plata cada mañana, y cada vez que alguien
+          Ahora Nexus copia de Mercury las facturas, los clientes y las entradas de plata cada hora, de 6:00 a 19:00, y cada vez que alguien
           aprieta «Actualizar desde Mercury». Lo que no coincide con los cobros aparece en «Lo que no cuadra», con su monto,
           dónde se arregla y los pasos. Cada copia lo vuelve a calcular: lo arreglado sale solo y lo que sigue mal sigue ahí.
         </p>
