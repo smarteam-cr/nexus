@@ -33,7 +33,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   try {
-    await updateComisionPartner(comisionId, parsed.data);
+    await updateComisionPartner(comisionId, parsed.data, guard.user.email);
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof CobranzaError) {

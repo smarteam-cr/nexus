@@ -1284,6 +1284,12 @@ export interface ComisionPartnerDTO {
   montoBruto: number | null;
   /** true = nadie confirmó este número; es una estimación, no una medición. */
   montoEsProyeccion: boolean;
+  /** Lo que decía el estimado antes de pasar a real. null = nunca pasó, o nadie lo cambió. */
+  montoEstimado: number | null;
+  /** La referencia de la factura del aliado, si alguien la registró. */
+  facturaAliado: string | null;
+  /** Quién dio el monto por real con la factura. null = sigue estimado, o lo confirmó el banco. */
+  montoRealPor: string | null;
   /**
    * Lo que se llevó el procesador, DERIVADO del bruto y el neto. null = sin bruto
    * cargado, o sea que no se sabe — que no es lo mismo que cero.
@@ -1375,6 +1381,9 @@ export async function loadComisionesPartner(): Promise<ComisionesPartnerDTO> {
     estado: c.estado,
     montoBruto: num(c.montoBruto),
     montoEsProyeccion: c.montoEsProyeccion,
+    montoEstimado: num(c.montoEstimado),
+    facturaAliado: c.facturaAliado,
+    montoRealPor: c.montoRealPor,
     retencion: retencionDe(num(c.monto)!, num(c.montoBruto)),
     fechaCobro: isoDay(c.fechaCobro),
     confirmadoPor: c.confirmadoPor,
@@ -2987,7 +2996,9 @@ async function armarEstadoParaAuditar(
       },
     }),
     prisma.comisionPartner.findMany({
-      where: { estado: "POR_COBRAR", fecha: { gte: desde, lte: hasta } },
+      // Una «sin comisión» (real en cero: el aliado dijo que ese período no hay) no se espera,
+      // así que tampoco vence. Espejo de `sinComision` en lib/cobranza/comisiones-partner.ts.
+      where: { estado: "POR_COBRAR", fecha: { gte: desde, lte: hasta }, NOT: { monto: 0, montoEsProyeccion: false } },
       select: { partner: true, monto: true, fecha: true },
     }),
     // Servicios activos sin cuotas por delante (etapa 14): los que nunca generaron un cobro y los

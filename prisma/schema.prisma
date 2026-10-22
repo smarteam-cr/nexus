@@ -4643,6 +4643,19 @@ model ComisionPartner {
   /// exactos, dos veces" — una proyección tecleada. Sin esto el panel muestra las cuatro
   /// con el mismo peso.
   montoEsProyeccion Boolean        @default(false)
+  // ── El monto real de la factura del aliado (2026-10-21) ─────────────────────
+  // Estimado o real ya no depende del estado: una por cobrar pasa a real cuando llega la
+  // factura del aliado, antes de que entre la plata. El monto acepta cero (CHECK >= 0):
+  // una real en cero es «sin comisión» ese período. Ver DECISIONS «Comisiones de aliado:
+  // estimado, real de la factura y cero». Los cuatro se limpian al volver a estimado.
+  /// Lo que decía el estimado antes de pasar a real. nullable porque solo existe tras ese paso.
+  montoEstimado     Decimal?       @db.Decimal(12, 2)
+  /// La referencia de la factura del aliado. nullable porque a veces es un aviso por correo.
+  facturaAliado     String?
+  /// Quién dio el monto por real (email del guard). nullable mientras siga estimado.
+  montoRealPor      String?
+  /// Cuándo se dio por real. nullable mientras siga estimado.
+  montoRealEn       DateTime?
   moneda            CobranzaMoneda
   fecha             DateTime       @db.Date
 

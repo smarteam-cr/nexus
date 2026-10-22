@@ -25,7 +25,7 @@ import { Button, Modal, Field, Input } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { fmtFecha, fmtMonto } from "@/components/cobranza/format";
-import { comisionesPorCobrar } from "@/lib/cobranza/comisiones-partner";
+import { comisionesPorCobrar, sinComision } from "@/lib/cobranza/comisiones-partner";
 import type { ComisionPartnerDTO } from "@/lib/cobranza";
 
 const TH = "px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-fg-muted";
@@ -165,6 +165,19 @@ export default function ComisionesDeAliado({
                   {c.montoEsProyeccion && (
                     <span className="ml-1.5 text-[10px] text-fg-muted font-normal">estimado</span>
                   )}
+                  {/* El real de la factura del aliado, antes de que entre la plata (2026-10-21):
+                      se ve distinto del estimado y dice de dónde salió. Una cobrada no lo
+                      necesita: su monto lo confirmó el banco. */}
+                  {!c.montoEsProyeccion && c.estado !== "COBRADO" && !sinComision(c) && (
+                    <span className="ml-1.5 text-[10px] text-fg-secondary font-normal">
+                      real{c.facturaAliado ? ` · factura ${c.facturaAliado}` : ""}
+                    </span>
+                  )}
+                  {!c.montoEsProyeccion && c.montoEstimado !== null && c.montoEstimado !== c.monto && (
+                    <p className="text-[10px] text-fg-muted font-normal">
+                      el estimado era {fmtMonto(c.montoEstimado, c.moneda as "CRC" | "USD")}
+                    </p>
+                  )}
                   {c.retencion && (
                     <p className="text-[10px] text-fg-muted font-normal">
                       bruto {fmtMonto(c.montoBruto!, c.moneda as "CRC" | "USD")} · retención{" "}
@@ -176,6 +189,11 @@ export default function ComisionesDeAliado({
                   {c.estado === "COBRADO" ? (
                     <span className="text-[11px] px-1.5 py-0.5 rounded border border-line bg-surface-muted text-fg-secondary">
                       Cobrada{c.fechaCobro ? ` · ${fmtFecha(c.fechaCobro)}` : ""}
+                    </span>
+                  ) : sinComision(c) ? (
+                    // El aliado dijo que este período es cero: no hay nada que cobrar ni esperar.
+                    <span className="text-[11px] px-1.5 py-0.5 rounded border border-line bg-surface-muted text-fg-muted">
+                      Sin comisión
                     </span>
                   ) : (
                     <span className="text-[11px] px-1.5 py-0.5 rounded border border-warn-line bg-warn-surface text-warn-ink">
@@ -189,7 +207,7 @@ export default function ComisionesDeAliado({
                       <Button variant="secondary" size="sm" onClick={() => revertir(c.id)}>
                         Revertir
                       </Button>
-                    ) : (
+                    ) : sinComision(c) ? null : (
                       <Button
                         size="sm"
                         onClick={() =>
@@ -222,7 +240,7 @@ export default function ComisionesDeAliado({
           open
           onClose={() => setCobro(null)}
           title={`Registrar cobro · ${cobro.partner}`}
-          description="La fecha en que entró la plata y el monto NETO que llegó al banco. Lo registrado antes era una proyección: casi nunca coincide con lo que entra."
+          description="La fecha en que entró la plata y el monto NETO que llegó al banco. Si lo registrado era un estimado, casi nunca coincide con lo que entra."
         >
           <div className="space-y-3">
             <Field label="Fecha en que entró">

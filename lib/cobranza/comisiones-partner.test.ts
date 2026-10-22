@@ -9,14 +9,22 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  cambioDeOrigenDelMonto,
   comisionesPorCobrar,
   montoEsProyeccionPara,
+  OrigenDelMontoError,
   retencionDe,
+  sinComision,
   sugerenciaParaLaProxima,
   totalesPorMoneda,
   totalesPorPartner,
   type ComisionParaSumar,
 } from "./comisiones-partner";
+import {
+  comisionPartnerCreateSchema,
+  comisionPartnerEstadoSchema,
+  comisionPartnerPatchSchema,
+} from "./schema";
 
 const c = (
   partner: string,
@@ -222,3 +230,131 @@ describe("la alerta: qué comisiones ya deberían haber entrado", () => {
   });
 });
 
+// ── 2026-10-21: estimado, real de la factura y cero (feedback #17) ─────────────
+
+describe("el cero: un período «sin comisión»", () => {
+  it("EL CASO DEL FEEDBACK #17: Atom Chat dijo que este trimestre es cero, y eso es «sin comisión»", () => {
+    expect(sinComision({ monto: 0, montoEsProyeccion: false })).toBe(true);
+  });
+
+  it("un cero ESTIMADO no lo dijo nadie: sigue esperando que alguien lo confirme", () => {
+    expect(sinComision({ monto: 0, montoEsProyeccion: true })).toBe(false);
+    expect(sinComision({ monto: 0 })).toBe(false);
+  });
+
+  it("un monto real distinto de cero es una comisión, no un período en cero", () => {
+    expect(sinComision({ monto: 938.22, montoEsProyeccion: false })).toBe(false);
+  });
+
+  it("no cuenta como esperada ni como cobrada, pero se cuenta aparte", () => {
+    const [usd] = totalesPorMoneda([
+      { partner: "Atom Chat", monto: 0, moneda: "USD", estado: "POR_COBRAR", montoEsProyeccion: false },
+      { partner: "Atom Chat", monto: 2_849.25, moneda: "USD", estado: "COBRADO", montoEsProyeccion: false },
+    ]);
+    expect(usd!.cuantasEsperadas).toBe(0);
+    expect(usd!.cuantasCobradas).toBe(1);
+    expect(usd!.cuantasSinComision).toBe(1);
+    expect(usd!.total).toBe(2_849.25);
+  });
+
+  it("no vence: no hay nada que cobrar", () => {
+    const base = { id: "q3", partner: "Atom Chat", moneda: "USD", fecha: "2026-08-15", estado: "POR_COBRAR" };
+    expect(comisionesPorCobrar([{ ...base, monto: 0, montoEsProyeccion: false }], "2026-10-21")).toEqual([]);
+    // El estimado en cero sí vence: alguien tiene que confirmar que de verdad no hay.
+    expect(comisionesPorCobrar([{ ...base, monto: 0, montoEsProyeccion: true }], "2026-10-21")).toHaveLength(1);
+  });
+});
+
+describe("lo que se espera, partido en estimado y real de la factura", () => {
+  it("una factura recibida y sin pagar es esperada, pero ya no es estimado", () => {
+    const [usd] = totalesPorMoneda([
+      { partner: "kölbi", monto: 1_200, moneda: "USD", estado: "POR_COBRAR", montoEsProyeccion: false },
+      { partner: "HubSpot", monto: 51_000, moneda: "USD", estado: "POR_COBRAR", montoEsProyeccion: true },
+    ]);
+    expect(usd!.esperado).toBe(52_200);
+    expect(usd!.esperadoEstimado).toBe(51_000);
+  });
+
+  it("sin la marca se lee como estimado: es lo que afirma menos", () => {
+    const [usd] = totalesPorMoneda([c("X", 100, "POR_COBRAR")]);
+    expect(usd!.esperadoEstimado).toBe(100);
+  });
+});
+
+describe("montoEsProyeccionPara con el monto real de la factura", () => {
+  it("una por cobrar con la factura del aliado ya no es estimación", () => {
+    expect(montoEsProyeccionPara("POR_COBRAR", true)).toBe(false);
+  });
+
+  it("una cobrada es real con o sin factura", () => {
+    expect(montoEsProyeccionPara("COBRADO", false)).toBe(false);
+  });
+});
+
+describe("cambioDeOrigenDelMonto: de estimado a real y al revés", () => {
+  const ahora = new Date("2026-10-21T15:00:00Z");
+  const estimada = { estado: "POR_COBRAR", monto: 1_000, montoEsProyeccion: true };
+  const real = { estado: "POR_COBRAR", monto: 1_180.5, montoEsProyeccion: false };
+
+  it("EL CASO DE KÖLBI: llega la factura y el estimado pasa a real, guardando lo que decía antes", () => {
+    const r = cambioDeOrigenDelMonto(estimada, { montoReal: true, facturaAliado: " F-0042 " }, "mzamora@smarteamcr.com", ahora);
+    expect(r).toEqual({
+      montoEsProyeccion: false,
+      montoEstimado: 1_000,
+      facturaAliado: "F-0042",
+      montoRealPor: "mzamora@smarteamcr.com",
+      montoRealEn: ahora,
+    });
+  });
+
+  it("la factura es opcional: a veces el aliado avisa por correo", () => {
+    const r = cambioDeOrigenDelMonto(estimada, { montoReal: true, facturaAliado: "  " }, "a@b.c", ahora);
+    expect(r.facturaAliado).toBeNull();
+    expect(r.montoEsProyeccion).toBe(false);
+  });
+
+  it("una ya real no reescribe su firma: solo puede cambiar la referencia de la factura", () => {
+    expect(cambioDeOrigenDelMonto(real, { montoReal: true }, "otro@b.c", ahora)).toEqual({});
+    expect(cambioDeOrigenDelMonto(real, { montoReal: true, facturaAliado: "F-1" }, "otro@b.c", ahora)).toEqual({
+      facturaAliado: "F-1",
+    });
+  });
+
+  it("volver a estimado limpia los cuatro: el número que queda no lo confirmó nadie", () => {
+    expect(cambioDeOrigenDelMonto(real, { montoReal: false }, "a@b.c", ahora)).toEqual({
+      montoEsProyeccion: true,
+      montoEstimado: null,
+      facturaAliado: null,
+      montoRealPor: null,
+      montoRealEn: null,
+    });
+  });
+
+  it("⚠ una cobrada no vuelve a estimado: su monto lo confirmó el banco", () => {
+    expect(() =>
+      cambioDeOrigenDelMonto({ estado: "COBRADO", monto: 1_000, montoEsProyeccion: false }, { montoReal: false }, "a@b.c", ahora),
+    ).toThrow(OrigenDelMontoError);
+  });
+
+  it("sin pedir el origen no se toca nada, y una estimada no guarda factura", () => {
+    expect(cambioDeOrigenDelMonto(estimada, {}, "a@b.c", ahora)).toEqual({});
+    expect(cambioDeOrigenDelMonto(estimada, { facturaAliado: "F-9" }, "a@b.c", ahora)).toEqual({});
+  });
+});
+
+describe("el monto de una comisión en la frontera (Zod)", () => {
+  const base = { partner: "Atom Chat", monto: 0, moneda: "USD", fecha: "2026-09-30" };
+
+  it("acepta cero al registrarla y al editarla", () => {
+    expect(comisionPartnerCreateSchema.safeParse({ ...base, montoReal: true }).success).toBe(true);
+    expect(comisionPartnerPatchSchema.safeParse({ monto: 0 }).success).toBe(true);
+  });
+
+  it("negativo no, como el CHECK de la base", () => {
+    expect(comisionPartnerCreateSchema.safeParse({ ...base, monto: -1 }).success).toBe(false);
+  });
+
+  it("cobrar sigue pidiendo un monto positivo: cobrar cero no es un cobro", () => {
+    expect(comisionPartnerEstadoSchema.safeParse({ estado: "COBRADO", fechaCobro: "2026-10-21", monto: 0 }).success).toBe(false);
+  });
+});
