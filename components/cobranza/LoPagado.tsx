@@ -12,6 +12,10 @@
  * aprieta «Actualizar desde Odoo y Mercury» (`recarga` sube y la lista se vuelve a leer). Acá queda lo que necesita a una persona —cada fila dice por qué— y lo que
  * todavía no cobró la vuelta de la hora. Los choques (cobrada en Nexus, impaga allá) solo se muestran: se arreglan en
  * Odoo o en Mercury, desde «Lo que no cuadra». ⛔ Nada de esto escribe en Odoo ni en Mercury.
+ *
+ * Cada sección dice qué es, cómo se resuelve y si entra en «Confirmar con mi firma» (2026-10-22, Elías: «que quede claro
+ * para el usuario qué es lo que pasa»). Solo las dos primeras se confirman con la firma; «Sin el día del pago» y los
+ * choques se resuelven fila por fila, desde la cuenta o en Odoo y Mercury, y cada fila trae su enlace.
  */
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -68,12 +72,50 @@ function plata(xs: ReadonlyArray<{ monto: number; moneda: string }>): string {
 
 const DE = { ODOO: "Odoo", MERCURY: "Mercury" } as const;
 
-function Seccion({ titulo, detalle, children }: { titulo: string; detalle: string; children: React.ReactNode }) {
+/** Cómo se resuelve una sección: con la firma de arriba, fila por fila, o del otro lado (Odoo o Mercury). */
+type Salida = "firma" | "fila";
+
+const SALIDA: Record<Salida, { etiqueta: string; clase: string }> = {
+  firma: { etiqueta: "Entra en «Confirmar con mi firma»", clase: "border-info-line bg-info-surface text-info-ink" },
+  fila: { etiqueta: "No entra en la firma: se resuelve fila por fila", clase: "border-warn-line bg-warn-surface text-warn-ink" },
+};
+
+function Seccion({
+  titulo,
+  que,
+  pasos,
+  salida,
+  children,
+}: {
+  titulo: string;
+  /** Qué es, en una o dos frases. */
+  que: string;
+  /** Cómo se resuelve, en orden. */
+  pasos: string[];
+  salida: Salida;
+  children: React.ReactNode;
+}) {
   return (
     <section className="overflow-hidden rounded-xl border border-line bg-surface">
-      <header className="border-b border-line px-4 py-2.5">
-        <h3 className="text-sm font-semibold text-fg">{titulo}</h3>
-        <p className="mt-0.5 text-xs text-fg-muted">{detalle}</p>
+      <header className="space-y-2 border-b border-line px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-fg">{titulo}</h3>
+          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${SALIDA[salida].clase}`}>{SALIDA[salida].etiqueta}</span>
+        </div>
+        <div className="grid gap-x-6 gap-y-1.5 text-xs md:grid-cols-2">
+          <p className="text-fg-secondary">
+            <span className="font-semibold text-fg">Qué es: </span>
+            {que}
+          </p>
+          <div className="text-fg-secondary">
+            <span className="font-semibold text-fg">Cómo se resuelve:</span>
+            <ol className="mt-0.5 list-decimal space-y-0.5 pl-4">
+              {pasos.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ol>
+          </div>
+        </div>
       </header>
       {children}
     </section>
@@ -197,7 +239,12 @@ export default function LoPagado({ puedeEditar, recarga = 0 }: { puedeEditar: bo
             {cargando ? "Leyendo…" : "Volver a mirar"}
           </Button>
           {puedeEditar && !vacia && (
-            <Button size="sm" onClick={() => setConfirmando(true)} disabled={nada}>
+            <Button
+              size="sm"
+              onClick={() => setConfirmando(true)}
+              disabled={nada}
+              title="Confirma lo que dejaste marcado en «Pagadas allá, listas para cobrar» y en «Se pegan a su factura». «Sin el día del pago» y los choques no entran: se resuelven fila por fila."
+            >
               Confirmar con mi firma
             </Button>
           )}
@@ -234,7 +281,13 @@ export default function LoPagado({ puedeEditar, recarga = 0 }: { puedeEditar: bo
         <>
           <Seccion
             titulo={`Pagadas allá, listas para cobrar · ${paraCobrar.length} · ${plata(paraCobrar)}`}
-            detalle="Odoo las da por pagadas («en proceso de pago» cuenta) o Mercury por «Paid». Quedan cobradas con el día real del pago, nunca con el de hoy. Cobrar también pega la cuota a su factura. Las que no dicen por qué esperan, las cobra el sistema en la próxima hora, o ya mismo con «Actualizar desde Odoo y Mercury»."
+            salida="firma"
+            que="Odoo (pagada o en proceso de pago) o Mercury («Paid», con su entrada de plata) dicen que el cliente pagó, y en Nexus la cuota sigue por cobrar. Se sabe qué día entró la plata."
+            pasos={[
+              "Las que no dicen nada al costado se cobran solas en la próxima hora, o ya mismo con «Actualizar desde Odoo y Mercury».",
+              "Las que dicen por qué esperan: revísalas, deja marcadas las que ves bien y aprieta «Confirmar con mi firma». Quedan cobradas con el día real del pago.",
+              "Si una no corresponde, desmárcala: se queda acá sin cambiar nada.",
+            ]}
           >
             {paraCobrar.length === 0 ? (
               <p className="px-4 py-3 text-xs text-fg-muted">No hay cuotas pagadas allá que sigan por cobrar.</p>
@@ -259,7 +312,13 @@ export default function LoPagado({ puedeEditar, recarga = 0 }: { puedeEditar: bo
 
           <Seccion
             titulo={`Se pegan a su factura · ${soloPegar.length} · ${plata(soloPegar)}`}
-            detalle="Tienen su factura en Odoo o en Mercury (por número, o por el monto exacto si es la única que calza) y no hay que cobrarlas: todavía no están pagadas, o ya están cobradas acá y su factura está pagada allá. Quedan con la fecha y el número de esa factura."
+            salida="firma"
+            que="No mueve plata. Odoo o Mercury tienen la factura de esta cuota (por su número, o porque es la única con ese monto exacto) y a la cuota le falta anotarla: todavía no está pagada, o ya estaba cobrada acá sin el número."
+            pasos={[
+              "Revisa que la factura sea de esa cuota (mismo mes y monto).",
+              "Deja marcadas las que ves bien y aprieta «Confirmar con mi firma»: la cuota queda con el número y la fecha de la factura. Así, el día que se pague, se cobra sola.",
+              "Si una no es de esa cuota, desmárcala y anota el número correcto desde la cuenta.",
+            ]}
           >
             {soloPegar.length === 0 ? (
               <p className="px-4 py-3 text-xs text-fg-muted">Ninguna cuota espera su factura.</p>
@@ -283,18 +342,31 @@ export default function LoPagado({ puedeEditar, recarga = 0 }: { puedeEditar: bo
           {lista.pagadasSinFecha.length > 0 && (
             <Seccion
               titulo={`Sin el día del pago · ${lista.pagadasSinFecha.length}`}
-              detalle="Están pagadas allá, pero no se encontró qué día entró la plata. No se cobran: el día decide el mes del gráfico. Regístralas con «Registrar pago» cuando sepas la fecha."
+              salida="fila"
+              que="Odoo o Mercury las dan pagadas, pero no hay una entrada de plata que lo pruebe: Nexus no sabe si la plata entró ni qué día. Por eso no se cobran solas ni con la firma (el día decide el mes del gráfico). Pasa, por ejemplo, cuando alguien la marca pagada en Mercury a mano o el cliente pagó a otra cuenta."
+              pasos={[
+                "Revisa en el banco si la plata entró y qué día.",
+                "Si entró: «Registrar el pago» en esa fila, con la fecha real. Queda cobrada a tu nombre.",
+                "Si no entró: pide que la corrijan en Mercury u Odoo (que no figure pagada). Sale sola de esta lista con la próxima copia.",
+                "Si la entrada aparece después en Mercury, sale sola y se cobra en la hora siguiente.",
+              ]}
             >
-              <Filas filas={lista.pagadasSinFecha} />
+              <Filas filas={lista.pagadasSinFecha} accion="Registrar el pago" ayuda="Abre la cuenta en Cobranza: ahí registras el pago de esta cuota con el día en que entró la plata." />
             </Seccion>
           )}
 
           {lista.choques.length > 0 && (
             <Seccion
               titulo={`Choques · ${lista.choques.length} · ${plata(lista.choques)}`}
-              detalle="Cobradas en Nexus y sin pagar allá. No se tocan: si el pago entró, regístralo en Odoo o en Mercury; si no, la cuota sale de Cobrado. Se resuelven en «Lo que no cuadra»."
+              salida="fila"
+              que="Al revés: en Nexus la cuota está cobrada y Odoo o Mercury dicen que la factura no está pagada. Uno de los dos está mal, y Nexus no lo cambia solo."
+              pasos={[
+                "Revisa en el banco si el pago entró.",
+                "Si entró: que lo registren en Odoo o en Mercury. El choque se va solo con la próxima copia.",
+                "Si no entró: abre la cuenta y saca la cuota de Cobrado con el motivo. Vuelve a quedar por cobrar.",
+              ]}
             >
-              <Filas filas={lista.choques} />
+              <Filas filas={lista.choques} accion="Abrir la cuenta" ayuda="Abre la cuenta en Cobranza, con esta cuota: ahí la sacas de Cobrado si el pago no entró." />
             </Seccion>
           )}
         </>
@@ -373,7 +445,7 @@ function Tabla({
   );
 }
 
-function Filas({ filas }: { filas: PegadoVisto[] }) {
+function Filas({ filas, accion, ayuda }: { filas: PegadoVisto[]; accion: string; ayuda: string }) {
   return (
     <ul>
       {filas.map((p) => (
@@ -383,9 +455,16 @@ function Filas({ filas }: { filas: PegadoVisto[] }) {
           </Link>
           <span className="text-fg-secondary">{etiquetaMes(p.periodo)}</span>
           <span className="tabular-nums text-fg">{fmtMonto(p.monto, p.moneda)}</span>
-          <span className="text-fg-muted">
-            {p.numero} · {DE[p.fuente]}
+          <span className="text-fg-secondary">
+            {p.numero} <span className="text-xs text-fg-muted">· {DE[p.fuente]} · del {fmtFecha(p.fechaFactura)}</span>
           </span>
+          <Link
+            href={`/cobranza?cuenta=${p.cuentaId}`}
+            title={ayuda}
+            className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-surface-hover"
+          >
+            {accion}
+          </Link>
         </li>
       ))}
     </ul>
