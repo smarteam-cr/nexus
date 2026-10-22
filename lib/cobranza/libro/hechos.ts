@@ -20,6 +20,8 @@
  *
  * ⛔ Lo que este módulo NO hace: nunca saca una cuota de COBRADO, nunca cambia un monto, nunca pega una factura cuyo
  * monto no calza (eso es «monto distinto», una pregunta), nunca reparte una factura entre cuotas que no la anotaron.
+ * La única excepción al monto (2026-10-21): la cuota que anotó el número y se cargó CON el IVA (`conIva`) se pega, pero
+ * nunca se cobra sola.
  *
  * La regla del monto exacto es MÁS estricta que la de «Lo que no cuadra» (`cruzar`), a propósito: ahí un par dudoso se
  * muestra y una persona lo mira; acá se ESCRIBE. Medido el 2026-10-16: con la ventana de 180 días, Ferretería Noelito
@@ -64,6 +66,13 @@ export interface Pegado {
    * `Paid` (Mercury es el banco). «En proceso de pago» de Odoo está pagada pero no conciliada.
    */
   conciliada: boolean;
+  /**
+   * La cuota anotó el número de esta factura pero se cargó CON el IVA: su monto es el total de la factura y no el neto
+   * (Librería Internacional, 2.655,50 contra 2.350 + 13 %). Es la misma factura —lo dice el número—, pero el monto de la
+   * cuota está mal, así que nunca se cobra sola: la confirma una persona en «Lo pagado» (`dudaDelCobro`), y el monto se
+   * corrige con «Usar el monto de la factura» en «Lo que no cuadra». Ver DECISIONS «Lo pagado: por qué una factura pagada en Odoo seguía pendiente».
+   */
+  conIva?: true;
 }
 
 export interface EntradaDelLibro {
@@ -145,6 +154,30 @@ export function pegarOdoo(e: EntradaDelLibro): Pegado[] {
       impaga: f.paymentState === "not_paid" || f.paymentState === "partial",
       conciliada: f.paymentState === "paid" && f.montoResidual <= 0.005,
     });
+  }
+  /* La cuota anotó el número y se cargó con el IVA (2026-10-21): `cruzar` compara contra el neto y la deja en «monto
+     distinto», así que sin esto su factura pagada nunca la alcanzaba. Solo por número, solo si la suma de sus cuotas es
+     el total exacto y la factura lleva impuesto: por monto, una cuota con IVA sería adivinar. */
+  for (const m of cruce.montosDistintos) {
+    if (!m.porNumero) continue;
+    const f = facturas.get(m.facturaId)!;
+    if (!(f.montoImpuesto > 0) || centavos(m.montoCobro) !== centavos(f.montoTotal)) continue;
+    for (const cobroId of m.cobroIds) {
+      if (!porId.has(cobroId)) continue;
+      out.push({
+        fuente: "ODOO",
+        cobroId,
+        facturaId: f.id,
+        numero: f.numero,
+        fechaFactura: f.invoiceDate,
+        via: "numero",
+        cuotas: m.cuotas,
+        pagada: PAGADA_EN_ODOO.includes(f.paymentState) && f.montoResidual <= 0.005,
+        impaga: f.paymentState === "not_paid" || f.paymentState === "partial",
+        conciliada: f.paymentState === "paid" && f.montoResidual <= 0.005,
+        conIva: true,
+      });
+    }
   }
   return out;
 }
@@ -233,18 +266,20 @@ export interface Accion {
 const DIAS_ANTES_DE_LA_FACTURA = 3;
 
 /**
- * Por qué un pago no es seguro para cobrarse solo, o null si lo es (2026-10-18). Las cuatro dudas, en este orden:
+ * Por qué un pago no es seguro para cobrarse solo, o null si lo es (2026-10-18). Las dudas, en este orden:
+ *  · La cuota se cargó con el IVA (`conIva`, 2026-10-21): la factura es suya, el monto de la cuota no.
  *  · Odoo «en proceso de pago»: el asistente registró el depósito, pero el contador todavía no lo concilió con el banco.
  *  · Mercury, la entrada de plata se ató a la factura solo por el monto: el nombre de quien pagó no se parece al cliente.
  *  · El día del pago es posterior a hoy: no pasó todavía.
  *  · El día del pago es muy anterior a la factura: un anticipo o un pago mal conciliado; lo mira una persona.
  */
 export function dudaDelCobro(
-  p: { fuente: Fuente; conciliada: boolean; fechaFactura: string },
+  p: { fuente: Fuente; conciliada: boolean; fechaFactura: string; conIva?: true },
   fechaCobro: string,
   hoy: string,
   mercuryPorNombre: boolean,
 ): string | null {
+  if (p.conIva) return "La cuota está cargada con el IVA y la factura sin IVA es menor: corrige el monto con «Usar el monto de la factura» en «Lo que no cuadra».";
   if (p.fuente === "ODOO" && !p.conciliada) return "Odoo la da «en proceso de pago»: todavía no está conciliada con el banco.";
   if (p.fuente === "MERCURY" && !mercuryPorNombre) return "La entrada de plata en Mercury se encontró solo por el monto, no por el nombre de quien pagó.";
   if (fechaCobro > hoy) return `El día del pago (${fechaCobro}) es posterior a hoy.`;
