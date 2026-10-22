@@ -385,13 +385,15 @@ export function detectarDiferenciasMercury(e: EstadoMercury): DiferenciaOdoo[] {
   agregar("MERCURY-PAGADA-SIN-COBRAR", pagadasSinCobrar, (x) => [docFactura(x.f), ...x.cs.map(docCobro)], (xs) => ({
     codigo: "MERCURY-PAGADA-SIN-COBRAR",
     severidad: "ALTA",
-    titulo: `${facturas_(xs.length)} pagadas en Mercury que en Nexus siguen por cobrar`,
-    detalle: "Mercury ya las da pagadas. En Nexus sus cobros siguen abiertos: el semáforo los acusa y el punto de equilibrio no cuenta esa plata como cobrada.",
+    titulo: xs.length === 1 ? "1 factura pagada en Mercury que en Nexus sigue por cobrar" : `${xs.length} facturas pagadas en Mercury que en Nexus siguen por cobrar`,
+    detalle:
+      "Mercury ya las da pagadas. En Nexus sus cobros siguen abiertos: el semáforo los acusa y el punto de equilibrio no cuenta esa plata como cobrada. " +
+      "Nexus cobra sola la pagada que tiene su entrada de plata; si no encontró el movimiento, no sabe qué día entró y la deja para una persona.",
     montos: montosPorMoneda(xs.flatMap((x) => x.cs)),
     plata: xs.flatMap((x) => x.cs.map((c) => ({ clave: `c:${c.id}`, moneda: c.moneda, monto: c.monto }))),
     donde: "NEXUS",
     pasos: [
-      "Abre el cobro en Cobranza y registra el pago, con el día que entró la plata (la fila lo dice cuando se encontró el movimiento).",
+      "Confírmala en Conciliación › «Lo pagado», con el día que entró la plata (la fila lo dice cuando se encontró el movimiento).",
       "Si el cliente pagó menos por la comisión del banco, el cobro igual se registra completo: la comisión es un gasto.",
     ],
     queSignificaAceptar: "Que en Mercury figura pagada pero la plata no entró. Revísalo con Alex antes de marcar.",

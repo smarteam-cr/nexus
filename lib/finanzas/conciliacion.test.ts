@@ -71,7 +71,7 @@ const fila = (clave: string, docs: string[], o: Record<string, unknown> = {}) =>
   ...o,
 });
 const conFilas = (codigo: string, items: ReturnType<typeof fila>[], plata: Array<{ clave: string; moneda: string; monto: number }> = [], donde = "NEXUS") =>
-  ({ codigo, donde, severidad: "MEDIA", items, plata, montos: [], marcadas: [], volvieron: [] }) as unknown as DiferenciaOdoo;
+  ({ codigo, donde, severidad: "MEDIA", titulo: `${items.length} filas`, detalle: "", items, plata, montos: [], marcadas: [], volvieron: [] }) as unknown as DiferenciaOdoo;
 
 describe("agruparDiferencias (rediseño 2026-10-22)", () => {
   it("cada línea va a su grupo; una que no está en la tabla cae por su donde", () => {
@@ -98,10 +98,18 @@ describe("agruparDiferencias (rediseño 2026-10-22)", () => {
     expect(papeles.plata).toEqual([{ moneda: "USD", monto: 50 }]);
   });
 
-  it("una factura de antes de la cuenta va a la historia", () => {
-    const g = agruparDiferencias([conFilas("ODOO-FACTURA-SIN-COBRO", [fila("f:1", ["f:1"], { antesDeLaCuenta: true }), fila("f:2", ["f:2"])])]);
-    expect(g.find((x) => x.grupo === "HISTORIA")!.filas).toBe(1);
-    expect(g.find((x) => x.grupo === "NO_VE")!.filas).toBe(1);
+  it("las facturas sin cobro van enteras a lo que Nexus no ve, también las de antes de la cuenta (son plata que se debe)", () => {
+    const g = agruparDiferencias([conFilas("ODOO-FACTURA-SIN-COBRO", [fila("f:1", ["f:1"]), fila("f:2", ["f:2"])])]);
+    expect(g.find((x) => x.grupo === "NO_VE")!.filas).toBe(2);
+    expect(g.find((x) => x.grupo === "HISTORIA")!.filas).toBe(0);
+  });
+
+  it("una línea partida dice en el título cuántas filas muestra, y quita el «Suman» de la línea entera", () => {
+    const l = { ...conFilas("ODOO-MONTO", [fila("c:a", ["c:a", "f:9"]), fila("c:z", ["c:z"])]), titulo: "2 cobros con un monto distinto", detalle: "Algo pasa. Suman US$20.350 sin IVA. Y más." } as DiferenciaOdoo;
+    const pagada = conFilas("ODOO-POR-COBRAR-PAGADA", [fila("f:9", ["f:9", "c:a"])]);
+    const papeles = agruparDiferencias([pagada, l]).find((x) => x.grupo === "PAPELES")!.lineas[0]!;
+    expect(papeles.titulo).toBe("1 de 2 cobros con un monto distinto");
+    expect(papeles.detalle).toBe("Algo pasa. Y más.");
   });
 
   it("siempre devuelve los cinco grupos, en orden", () => {

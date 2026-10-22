@@ -103,11 +103,6 @@ export interface ItemDiferencia extends ItemInconsistencia {
    * `ponerCuentas` al final de cada detector; sin una sola cuenta clara, no viene.
    */
   cuentaId?: string;
-  /**
-   * Una factura de antes del primer cobro que Nexus tiene de su cuenta (2026-10-22): sigue por cobrar, así que no es
-   * historia para el detector, pero en Conciliación se muestra con la historia (lib/finanzas/conciliacion.ts).
-   */
-  antesDeLaCuenta?: true;
 }
 
 /**
@@ -475,6 +470,8 @@ const DIA = 86_400_000;
 const dias = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / DIA;
 const restarDias = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) - n * DIA).toISOString().slice(0, 10);
 const round2 = (n: number) => Math.round(n * 100) / 100;
+/** «1 cobro anota» / «3 cobros anotan»: el título dice lo mismo que las filas que se ven, en singular si es una. */
+const cuantos = (n: number, uno: string, varios: string) => (n === 1 ? `1 ${uno}` : `${n} ${varios}`);
 const anioDe = (iso: string) => Number(iso.slice(0, 4));
 
 /**
@@ -1977,7 +1974,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       codigo: "ODOO-MONEDA",
       /* Con importes chicos lo peor que puede pasar son unos cientos de dólares: no compite con lo alto. */
       severidad: pares.some((d) => d.monto >= 1000) ? "ALTA" : "BAJA",
-      titulo: `${pares.length} montos facturados al mismo cliente en DOS monedas distintas`,
+      titulo: `${cuantos(pares.length, "monto facturado", "montos facturados")} al mismo cliente en DOS monedas distintas`,
       detalle:
         "El mismo cliente tiene facturas vigentes por el importe exacto en dólares y en colones. Con un tipo de cambio de ~500 eso no puede ser casualidad: alguna de las dos salió en la moneda equivocada. " +
         (pesoDe(pares) >= 0.01
@@ -2116,7 +2113,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       return {
         codigo: "ODOO-MONTO",
         severidad: "ALTA",
-        titulo: `${montosReales.length} cobros con un monto distinto al de su factura`,
+        titulo: `${cuantos(montosReales.length, "cobro", "cobros")} con un monto distinto al de su factura`,
         detalle:
           `Nexus dice una cifra y Odoo otra para la misma factura, y no es el IVA ni una factura que cubra varias cuotas. La diferencia total es ${textoDeMontos(montos)}. Puede ser un descuento que se aplicó al facturar, o un error de carga en el plan de pago.` +
           (deIva.length
@@ -2201,22 +2198,22 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       return {
         codigo: "ODOO-POR-COBRAR-PAGADA",
         severidad: "ALTA",
-        titulo: `${cobros.length} cobros por cobrar en Nexus con su factura ya pagada en Odoo`,
+        titulo: `${cuantos(cobros.length, "cuota por cobrar", "cuotas por cobrar")} en Nexus con su factura ya pagada en Odoo`,
         detalle:
-          `Nexus los sigue dando por cobrar —y vencidos, si ya pasó la fecha— y Odoo ya registró el pago de su factura. Lo más probable es que la plata haya entrado y falte registrarla en Nexus. Suman ${textoDeMontos(montos)}. ` +
-          "⛔ Nexus no los pasa a Cobrado por lo que diga Odoo: el pago lo registra una persona, con el comprobante.",
+          `Nexus las sigue dando por cobrar y Odoo ya registró el pago de su factura. Suman ${textoDeMontos(montos)}. ` +
+          "Lo pagado y conciliado con el banco se cobra solo, cada hora, cuando la cuota está unida a su factura sin dudas. Si sigue acá es porque la unión es una suposición —por el monto, por la suma de varias cuotas, o un monto distinto— o porque Odoo la da en proceso de pago.",
         montos,
         plata,
         documentos: porCobrarPagadas.flatMap(casaDelPar),
         donde: "NEXUS",
         pasos: [
-          "Abre el cronograma de la cuenta de cada fila.",
-          "Si entró la plata, registra el pago con el comprobante y la fecha en que entró.",
+          "Si la factura es de esta cuota, anótale su número desde «Abrir la cuenta»: Nexus la cobra sola en la próxima lectura.",
+          "Si la factura es de otra cuota (otro mes), anota el número en esa: esta vuelve a esperar su propia factura.",
           "Si Odoo registró un pago que no es de esta factura, pídele a contabilidad que lo corrija en Odoo.",
         ],
         queSignificaAceptar:
-          "Que estos cobros siguen por cobrar aunque Odoo tenga su factura pagada. ⚠ Mientras tanto cuentan en la cartera vencida y abren alertas.",
-        queHacer: "Registrar el pago de cada cobro con su comprobante, desde el cronograma.",
+          "Que la factura no es de esta cuota. ⚠ Mientras la cuota siga por cobrar, cuenta en la cartera vencida y abre alertas.",
+        queHacer: "Unir cada cuota con su factura: con el número anotado, Nexus la cobra sola.",
         resuelve: "COBRANZA",
         items: porCobrarPagadas
           .slice()
@@ -2286,7 +2283,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       return {
         codigo: "ODOO-FACTURA-VARIAS-CUOTAS",
         severidad: "MEDIA",
-        titulo: `${variasCuotas.length} facturas de Odoo cubren varias cuotas de Nexus`,
+        titulo: `${cuantos(variasCuotas.length, "factura de Odoo cubre", "facturas de Odoo cubren")} varias cuotas de Nexus`,
         detalle:
           "Cada factura suma exactamente dos o tres cuotas de su cuenta que no tienen el número anotado, y no hay otra combinación que dé lo mismo. No es un monto distinto ni un cobro sin factura: falta anotar el número de la factura en cada una de esas cuotas, y con eso el cruce las junta sin adivinar. ⚠ La propuesta sale del monto: confírmala antes de anotar.",
         montos: montosPorMoneda(variasCuotas.map((v) => ({ moneda: v.factura.moneda, monto: v.factura.montoNeto }))),
@@ -2351,7 +2348,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       return {
         codigo: "ODOO-COBRO-SIN-FACTURA",
         severidad: "ALTA",
-        titulo: `${acusables.length} cobros marcados facturados que no tienen factura en Odoo`,
+        titulo: `${cuantos(acusables.length, "cobro marcado facturado que no tiene", "cobros marcados facturados que no tienen")} factura en Odoo`,
         detalle:
           `Son de cuentas que facturan por Odoo y ya están emparejadas, y se marcaron facturados hasta el ${corte} —${DIAS_DE_GRACIA_DEL_ESPEJO} días antes de la última copia buena de Odoo—, así que Odoo ya tendría que tener su documento y no lo tiene: ni una factura sola ni una que sume varias cuotas. O la factura no se emitió, o se emitió a nombre de una razón social de Odoo que no está vinculada a esta cuenta. Suman ${textoDeMontos(montos)}.` +
           (recientes.length
@@ -2520,7 +2517,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       return {
         codigo: "ODOO-NUMERO-SIN-DOCUMENTO",
         severidad: "ALTA",
-        titulo: `${sinFacturaVigenteAcusables.length} cobros anotan una factura que Odoo no tiene vigente`,
+        titulo: `${cuantos(sinFacturaVigenteAcusables.length, "cobro anota", "cobros anotan")} una factura que Odoo no tiene vigente`,
         detalle:
           `Cada uno tiene anotado un número de factura de Odoo, pero en su cuenta ese número no es una factura vigente: Odoo no tiene el documento, es una nota de crédito, está anulada o está en otra moneda (cada fila dice cuál). O el número está mal anotado, o la factura que respaldaba el cobro ya no vale. Suman ${textoDeMontos(montos)}.` +
           (numerosTodaviaNoVistos
@@ -2612,7 +2609,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       return {
         codigo: "ODOO-FACTURA-SIN-COBRO",
         severidad: "MEDIA",
-        titulo: `${facturasSinCobro.length} facturas de Odoo sin un cobro que las explique`,
+        titulo: `${cuantos(facturasSinCobro.length, "factura de Odoo sin un cobro que la explique", "facturas de Odoo sin un cobro que las explique")}`,
         detalle:
           `Se le facturó a un cliente que Nexus conoce, pero no hay ningún cobro planificado que corresponda, ni solo ni sumando cuotas. Puede ser algo que se facturó fuera del plan, un servicio que falta cargar o una deuda de antes de que Nexus planificara la cuenta, que Odoo sigue dando por cobrar. Suman ${textoDeMontos(montos)} sin IVA.` +
           (historia.length
@@ -2643,7 +2640,6 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
               `${f.numero} · ${f.invoiceDate} · ${estadoDePagoEnPalabras(f)}` +
               (f.paymentState === "partial" ? ` de ${fmt(f.montoNeto, f.moneda)}` : "") +
               (antesDelPrimerCobro(f) ? " · de antes del primer cobro que Nexus tiene de la cuenta" : ""),
-            ...(antesDelPrimerCobro(f) ? { antesDeLaCuenta: true as const } : {}),
             fila: filaDeUna(`f:${f.id}`, huellaDeFactura(f)),
           })),
       };
@@ -2765,7 +2761,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       return {
         codigo: "ODOO-LIBERADAS-SIN-NUMERO",
         severidad: "ALTA",
-        titulo: `${enOdooSinNumero.length} facturas soltadas sin número de documento`,
+        titulo: `${cuantos(enOdooSinNumero.length, "factura soltada", "facturas soltadas")} sin número de documento`,
         detalle: `Se soltaron como de Odoo, pero sin un número de documento de Odoo —el cobro no lo tenía, o tenía otro número, como el de una transferencia—, así que la copia de Odoo no tiene contra qué compararlas: no se pueden cerrar solas. Pasa con los cobros facturados antes de que «Marcar facturado» pidiera el número. Cada fila dice lo que se encontró: una factura ya revertida por el mismo importe, o un cliente sin ninguna factura en Odoo. Suman ${textoDeMontos(montos)}.`,
         montos,
         plata,
@@ -2849,6 +2845,11 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         return min === max ? `de ${min}` : `de ${min} a ${max}`;
       };
       const periodoReciente = anioRef === null ? "" : ` de ${anioRef - 1} y ${anioRef}`;
+      /* Una fila por cliente: el título dice de cuántos, para que «62 facturas» no se lea contra 31 filas. */
+      const clientesDe = (fs: readonly FacturaParaCruzar[]) => {
+        const n = new Set(fs.map((f) => f.odooPartnerId)).size;
+        return n > 1 ? ` (de ${n} clientes, una fila por cliente)` : "";
+      };
       /* Una fila por año junta todas las facturas de ese año: cada una es un documento, con su marca. Las ya marcadas
          van en otra fila del mismo año (`sufijo`), así una factura nueva de un año viejo aparece sola. */
       const filasPorAnio = (fs: readonly FacturaParaCruzar[]) =>
@@ -2866,8 +2867,8 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         codigo: "ODOO-IN-PAYMENT",
         severidad: "BAJA",
         titulo: recientesPago.length
-          ? `${recientesPago.length} facturas${periodoReciente} figuran pagadas en Odoo, pero el pago no está conciliado con el banco`
-          : `${enPago.length} facturas ${aniosDe(enPago)} figuran pagadas en Odoo, pero el pago no está conciliado con el banco`,
+          ? `${cuantos(recientesPago.length, "factura", "facturas")}${periodoReciente}${clientesDe(recientesPago)} ${recientesPago.length === 1 ? "figura pagada" : "figuran pagadas"} en Odoo, pero el pago no está conciliado con el banco`
+          : `${cuantos(enPago.length, "factura", "facturas")} ${aniosDe(enPago)} ${enPago.length === 1 ? "figura pagada" : "figuran pagadas"} en Odoo, pero el pago no está conciliado con el banco`,
         detalle: [
           sinSaldo === enPago.length
             ? "Odoo ya registró el pago de cada una y no les deja saldo: falta cruzar ese pago con el estado de cuenta del banco."
@@ -2888,7 +2889,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
           "Los de años anteriores no mueven la cobranza de hoy: que los concilie cuando cierre esos años.",
         ],
         queSignificaAceptar:
-          "Que contabilidad ya tiene la lista. ⚠ Aceptarla no pone ningún cobro en verde: un cobro pasa a Cobrado solo cuando una persona registra el pago.",
+          "Que contabilidad ya tiene la lista. Desestimarla no cobra nada: Nexus cobra solo lo que Odoo da pagado Y conciliado con el banco; lo que está en proceso de pago lo confirma una persona en «Lo pagado».",
         queHacer: "Pasarle la lista a contabilidad para conciliar esos pagos con el banco.",
         resuelve: "COBRANZA",
         items: [...agruparPorPartner(recientesPago, (f) => f.montoNeto, { sufijo }), ...filasPorAnio(viejasPago)],
@@ -2910,7 +2911,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       return {
         codigo: "ODOO-EXENTAS",
         severidad: "BAJA",
-        titulo: `${exentasDelAnio.length} facturas${anioRef === null ? "" : ` de ${anioRef}`} salieron sin impuesto`,
+        titulo: `${cuantos(exentasDelAnio.length, "factura", "facturas")}${anioRef === null ? "" : ` de ${anioRef}`} ${exentasDelAnio.length === 1 ? "salió" : "salieron"} sin impuesto`,
         detalle:
           `Pueden ser exenciones legítimas —un cliente del exterior, un ente público— o impuesto que faltó cargar. Importa porque el borrador de cobro le dice al cliente un monto sin impuesto, y la factura que recibe puede traerlo. Si todas debían llevarlo, faltarían ${textoDeMontos(impuesto)} de IVA.` +
           (anteriores ? ` No se cuentan ${anteriores} de años anteriores.` : ""),

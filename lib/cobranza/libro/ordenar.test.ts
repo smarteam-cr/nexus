@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import type { FacturaParaCruzar } from "@/lib/cobranza/odoo/diferencias";
 import type { FacturaMercuryParaCruzar } from "@/lib/cobranza/mercury/diferencias";
 import type { CobroDelLibro, EntradaDelLibro } from "./hechos";
-import { claveDeshecha, combinacionesExactas, decidirOrden, porQueNoSeOrdena } from "./ordenar";
+import { claveDeshecha, combinacionesDeCuotas, combinacionesExactas, decidirOrden, porQueNoSeOrdena } from "./ordenar";
 
 const cobro = (id: string, o: Partial<CobroDelLibro> = {}): CobroDelLibro => ({
   id,
@@ -227,10 +227,20 @@ describe("el número de Mercury", () => {
 });
 
 describe("las piezas", () => {
-  it("combinacionesExactas encuentra todas hasta 4", () => {
+  it("combinacionesExactas encuentra todas, y con tolerancia las que difieren por redondeo", () => {
     const xs = [1, 1, 1, 1].map((monto) => ({ monto }));
-    expect(combinacionesExactas(xs, 200).length).toBe(4);
+    expect(combinacionesExactas(xs, 200).length).toBe(6);
     expect(combinacionesExactas([{ monto: 10 }, { monto: 20 }], 3000)).toEqual([[{ monto: 20 }, { monto: 10 }]]);
+    expect(combinacionesExactas([{ monto: 1666.67 }, { monto: 1666.67 }, { monto: 1666.67 }], 500000)).toEqual([]);
+    expect(combinacionesExactas([{ monto: 1666.67 }, { monto: 1666.67 }, { monto: 1666.67 }], 500000, 100)).toHaveLength(1);
+  });
+
+  it("combinacionesDeCuotas cuenta una vez las que solo cambian una cuota por su gemela", () => {
+    const gemelas = [cobro("a"), cobro("b"), cobro("c", { periodo: "2026-06" })];
+    expect(combinacionesDeCuotas(gemelas, 200000).map((k) => k.map((c) => c.periodo).sort())).toEqual([
+      ["2026-05", "2026-05"],
+      ["2026-05", "2026-06"],
+    ]);
   });
 
   it("porQueNoSeOrdena: solo lo que no cambia de estado", () => {
@@ -238,5 +248,68 @@ describe("las piezas", () => {
     expect(porQueNoSeOrdena(false, true, [{ estado: "POR_COBRAR", fechaEmision: "x" }])).toBeNull();
     expect(porQueNoSeOrdena(false, true, [{ estado: "COBRADO", fechaEmision: "x" }])).not.toBeNull();
     expect(porQueNoSeOrdena(false, false, [{ estado: "COBRADO", fechaEmision: "x" }])).not.toBeNull();
+  });
+});
+
+describe("las reglas de la etapa 1 (2026-10-22)", () => {
+  it("Fundauna: las dos cuotas que anotaban la 0357 revertida son la 0359, que suma exacto las dos", () => {
+    const d = decidirOrden(
+      entrada({
+        cobros: [
+          cobro("s1", { periodo: "2026-09", monto: 1265600, moneda: "CRC", numeroFactura: "FAC/2026/0357", fechaEmision: "2026-09-22" }),
+          cobro("s2", { periodo: "2026-09", monto: 1037001, moneda: "CRC", numeroFactura: "FAC/2026/0357", fechaEmision: "2026-09-22" }),
+          cobro("o1", { periodo: "2026-10", monto: 1265600, moneda: "CRC", estado: "PROGRAMADO", fechaEmision: null }),
+          cobro("o2", { periodo: "2026-10", monto: 1037001, moneda: "CRC", estado: "PROGRAMADO", fechaEmision: "2026-10-05" }),
+        ],
+        facturasOdoo: [
+          odoo("f357", { montoNeto: 5413604, moneda: "CRC", invoiceDate: "2026-09-22", paymentState: "reversed" }),
+          odoo("f359", { montoNeto: 2302601, moneda: "CRC", invoiceDate: "2026-09-28" }),
+        ],
+      }),
+      nada,
+    );
+    expect(d.ordenes).toHaveLength(1);
+    expect(d.ordenes[0]).toMatchObject({ regla: "FACTURA_REEMPLAZADA", numero: "FAC/2026/0359" });
+    expect(d.ordenes[0]!.cuotas.map((c) => c.cobroId).sort()).toEqual(["s1", "s2"]);
+    expect(d.dudosas).toEqual([]);
+  });
+
+  it("Teamnet: dos cuotas gemelas y dos facturas iguales se reparten", () => {
+    const d = decidirOrden(
+      entrada({
+        cobros: [
+          cobro("t1", { periodo: "2026-08", monto: 2000, fechaEmision: "2026-09-11", plataforma: "MERCURY" }),
+          cobro("t2", { periodo: "2026-08", monto: 2000, fechaEmision: "2026-09-11", plataforma: "MERCURY" }),
+        ],
+        facturasMercury: [mercury("m57", { monto: 2000, invoiceDate: "2026-09-11" }), mercury("m58", { monto: 2000, invoiceDate: "2026-09-11" })],
+      }),
+      nada,
+    );
+    expect(d.ordenes.map((o) => [o.cuotas[0]!.cobroId, o.numero])).toEqual([
+      ["t1", "INV-57"],
+      ["t2", "INV-58"],
+    ]);
+  });
+
+  it("PRIMO: tres cuotas de 1.666,67 son la INV-31 por 5.000 (redondeo), sin tocar los montos", () => {
+    const d = decidirOrden(
+      entrada({
+        cobros: ["05", "06", "07"].map((m) => cobro(`p${m}`, { periodo: `2026-${m}`, fechaEmision: `2026-${m}-15`, monto: 1666.67, plataforma: "MERCURY" })),
+        facturasMercury: [mercury("m31", { monto: 5000, invoiceDate: "2026-07-09" })],
+      }),
+      nada,
+    );
+    expect(d.ordenes).toHaveLength(1);
+    expect(d.ordenes[0]!.texto).toContain("redondeo");
+    expect(d.ordenes[0]!.cuotas.every((c) => c.montoDespues === undefined)).toBe(true);
+  });
+
+  it("con una combinación exacta, el redondeo no suma dudas", () => {
+    const d = decidirOrden(
+      entrada({ cobros: [cobro("a", { monto: 1000 }), cobro("b", { periodo: "2026-06", monto: 1000 }), cobro("c", { periodo: "2026-07", monto: 999.5 })], facturasOdoo: [odoo("f1", { montoNeto: 2000 })] }),
+      nada,
+    );
+    expect(d.ordenes).toHaveLength(1);
+    expect(d.ordenes[0]!.cuotas.map((c) => c.cobroId).sort()).toEqual(["a", "b"]);
   });
 });

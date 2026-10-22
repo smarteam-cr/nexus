@@ -10479,7 +10479,33 @@ factura. Diseño revisado con él en Claude Design («Lo que no cuadra · Concil
   cambia de estado; 10 facturas quedan para una persona.
 - **La pantalla, por grupos** (`agruparDiferencias`, lib/finanzas/conciliacion.ts): 1 · cambia lo que Nexus da por
   cobrado (y las filas de otras líneas que hablan de los mismos documentos: Fundauna eran 4 filas en 4 listas), 2 ·
-  facturado que Nexus no ve, 3 · hay que preguntar, 4 · papeles por ordenar, y la historia plegada (incluye las facturas
-  de antes de la cuenta que siguen por cobrar: `antesDeLaCuenta`). Arriba una frase con lo de hoy, «Nexus ordenó solo»
+  facturado que Nexus no ve, 3 · hay que preguntar, 4 · papeles por ordenar, y la historia plegada. ⚠ Corregido el mismo
+  día: las facturas de antes del primer cobro de su cuenta que Odoo sigue dando por cobrar (6 de 2025, US$2.015) NO son
+  historia: son plata que se debe, y van con lo facturado que Nexus no ve. Una línea partida entre grupos dice en el
+  título cuántas filas muestra («4 de 5 cobros…»). Arriba una frase con lo de hoy, «Nexus ordenó solo»
   y una tarjeta por grupo; al costado, qué toca cada cosa en Nexus y cómo se cierra. Las líneas y sus botones son los de
   siempre. Las pantallas de Odoo y Mercury por separado no cambian. SQL: `2026-10-22-orden-del-sistema.sql`.
+
+**Etapa 1 del diagnóstico del 22 oct** (Elías: «¿esto no debería resolverse solo?», con Fundauna en el grupo 1 y «8
+facturas» con 2 a la vista). Medido en solo lectura contra producción:
+
+- **Fundauna en rojo era falso.** La 0359 (₡2.302.601, pagada) no es de octubre: reemplaza a la 0357 de septiembre
+  (₡5.413.604), revertida con la NC/2026/0024 el mismo día. Las dos cuotas de septiembre seguían anotando la 0357 y
+  `cruzar` unía la 0359 con la cuota de octubre por cercanía. Ahora la factura reemplazada mira juntas las cuotas que
+  anotan el mismo número muerto y busca la que suma exacto todas; va antes que «varias cuotas».
+- **Cuotas gemelas** (misma cuenta, moneda, monto, mes, estado y fechas) no son duda: Teamnet, dos de US$2.000 de
+  agosto contra INV-57 e INV-58 del 11 sep. Las facturas iguales se reparten en orden.
+- **Redondeo** de una factura partida, hasta US$1 y solo si no hay combinación exacta: PRIMO (3 × 1.666,67 contra
+  5.000) y Spectrum (3 × 2.333 contra 7.000). Los montos no se tocan.
+- **Textos al día con el 18 oct:** «cuotas por cobrar con su factura pagada» ya no dice que el pago lo registra una
+  persona; dice por qué no se cobró sola (la unión es una suposición, o Odoo la da en proceso de pago). Igual Mercury y
+  los pagos sin conciliar con el banco. Títulos en singular cuando es una («1 cuota», «1 factura pagada»), y «62
+  facturas» dice que son 31 clientes, una fila por cliente.
+- **Simulacro del 22 oct con las reglas nuevas:** 30 facturas en 46 cuotas (antes 25 en 36), ninguna cambia de estado;
+  quedan 7 para una persona (Ecoquintas ×2, TEC-AE ×2, Construtecho, Teamnet INV-33 e INV-34).
+- **Queda abierto (etapas 2 y 3, sin hacer):** tres motores leen las mismas facturas (`cruzar` para «Lo que no
+  cuadra», `hechos` para «Lo pagado», `ordenar` para esto) y no siempre dicen lo mismo; la cuota todavía guarda a mano
+  si está facturada (114 marcadas por una persona, 32 PROGRAMADO con fecha de emisión) en vez de derivarlo de su
+  factura; `CobroFacturaOdoo`, la tabla pensada para la unión factura–cuota, está vacía. Y Mercury pagada sin entrada de
+  plata (Noelito INV-60, marcada pagada el mismo día que se emitió, como sus tres anteriores) espera una decisión: si se
+  cobra con el día en que Mercury la marcó pagada.

@@ -78,8 +78,9 @@ Nexus, más la historia:
   2 · NO_VE     — facturado que Nexus no ve: facturas sin cuenta o sin cuota.
   3 · PREGUNTAR — no se arregla tecleando: una venta contada dos veces, plata que entró sin factura.
   4 · PAPELES   — no mueve plata hoy, pero el día que el cliente pague no se cobra sola.
-  HISTORIA      — sin efecto hoy: pagos sin conciliar de años pasados, monedas ya corregidas, facturas de antes de que
-                  Nexus tuviera la cuenta. Plegada. */
+  HISTORIA      — sin efecto hoy: pagos sin conciliar con el banco, monedas ya corregidas, exentas. Plegada.
+⚠ Una factura de antes del primer cobro de su cuenta que Odoo sigue dando por cobrar NO es historia: es plata que se
+  debe (el 22 oct, 6 facturas de 2025 por US$2.015). Va con lo facturado que Nexus no ve. */
 
 export type GrupoDeConciliacion = "COBRADO" | "NO_VE" | "PREGUNTAR" | "PAPELES" | "HISTORIA";
 
@@ -116,7 +117,10 @@ export interface GrupoArmado {
 
 const clavesDe = (it: ItemDiferencia) => [it.fila.clave, ...it.fila.documentos.map((d) => d.clave)];
 
-/** Una línea recortada a algunas de sus filas: la plata, solo la de los documentos de esas filas. */
+/**
+ * Una línea recortada a algunas de sus filas: la plata, solo la de los documentos de esas filas, y el título con las
+ * filas que se ven («4 de 5 cobros con un monto distinto…»). El «Suman …» del detalle habla de la línea entera: se quita.
+ */
 function recortar(l: DiferenciaOdoo, items: ItemDiferencia[]): DiferenciaOdoo {
   if (items.length === l.items.length) return l;
   const docs = new Set(items.flatMap(clavesDe));
@@ -125,6 +129,8 @@ function recortar(l: DiferenciaOdoo, items: ItemDiferencia[]): DiferenciaOdoo {
   for (const p of plata) montos.set(p.moneda, (montos.get(p.moneda) ?? 0) + p.monto);
   return {
     ...l,
+    titulo: /^\d+ /.test(l.titulo) ? `${items.length} de ${l.titulo}` : l.titulo,
+    detalle: l.detalle.replace(/ ?Suman .*?\.(?=\s|$)/, ""),
     items,
     plata,
     montos: [...montos].map(([moneda, monto]) => ({ moneda, monto: Math.round(monto * 100) / 100 })),
@@ -133,7 +139,7 @@ function recortar(l: DiferenciaOdoo, items: ItemDiferencia[]): DiferenciaOdoo {
 
 /**
  * Reparte las filas pendientes en los cinco grupos, en orden. Una fila va a COBRADO si su línea es de ese grupo o si
- * nombra un documento de una fila que lo es; a HISTORIA si es una factura de antes de la cuenta; si no, al de su línea.
+ * nombra un documento de una fila que lo es; si no, al de su línea.
  */
 export function agruparDiferencias(lineas: readonly DiferenciaOdoo[]): GrupoArmado[] {
   const abiertas = lineas.filter((l) => l.items.length > 0);
@@ -144,7 +150,6 @@ export function agruparDiferencias(lineas: readonly DiferenciaOdoo[]): GrupoArma
     const g = grupoDeLaLinea(l);
     if (g === "COBRADO" || g === "HISTORIA") return g;
     if (it.fila.documentos.some((d) => deCobrado.has(d.clave))) return "COBRADO";
-    if (it.antesDeLaCuenta) return "HISTORIA";
     return g;
   };
   const porGrupo = new Map<GrupoDeConciliacion, DiferenciaOdoo[]>(ORDEN_DE_GRUPOS.map((g) => [g, []]));

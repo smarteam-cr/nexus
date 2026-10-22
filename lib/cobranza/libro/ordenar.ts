@@ -24,6 +24,15 @@
  * emisión recibe la de la factura, como hace el libro al pegar.
  * ⛔ Lo que una persona deshizo no se vuelve a ordenar (`deshechas`: `cobroId|número`).
  *
+ * Etapa 1 del diagnóstico del 22 oct (tres casos que quedaban para una persona sin necesitarla):
+ *  · La factura reemplazada mira JUNTAS las cuotas que anotan el mismo número muerto: Fundauna anotaba la 0357
+ *    (₡5.413.604, revertida con la NC/2026/0024) en sus dos cuotas de septiembre, y la 0359 que la reemplazó el mismo día
+ *    es la suma exacta de las dos. Se mira antes que «varias cuotas», porque el número anulado es evidencia.
+ *  · Las cuotas GEMELAS (misma cuenta, moneda, monto, mes, estado y fechas) no son una duda: cambiar una por otra no
+ *    cambia nada. Teamnet tiene dos cuotas de agosto de US$2.000 y dos facturas iguales del 11 sep.
+ *  · Una factura partida en cuotas puede diferir por redondeo, hasta US$1, si no hay ninguna combinación exacta:
+ *    PRIMO 3 × 1.666,67 = 5.000,01 contra INV-31 por 5.000. Los montos no se tocan.
+ *
  * La escritura y el deshacer viven en ordenar-server.ts.
  */
 import { esDocumentoVivo, type FacturaParaCruzar } from "@/lib/cobranza/odoo/diferencias";
@@ -41,6 +50,8 @@ export const CENTAVOS_DE_TOLERANCIA_MERCURY = 100;
 export const DIAS_NUMERO_DE_MERCURY = 60;
 /** Una factura que cubre varias cuotas: cuántas como mucho, y cuántas candidatas se miran antes de rendirse. */
 export const CUOTAS_POR_FACTURA = { min: 2, max: 5, candidatas: 16 } as const;
+/** Hasta cuánto puede diferir por redondeo una factura partida en cuotas, en centavos (US$1). */
+export const CENTAVOS_DE_REDONDEO = 100;
 /** Días después de la factura anulada en los que se busca la que la reemplaza. */
 export const DIAS_FACTURA_REEMPLAZADA = 90;
 
@@ -97,21 +108,43 @@ const enLaVentana = (c: CobroDelLibro, fechaFactura: string) => {
   return m >= mes(fechaFactura) - 6 && m <= mes(fechaFactura) + 1;
 };
 
-/** Todas las combinaciones de `min`..`max` cuotas que suman EXACTO `objetivo` centavos (corta al pasar de 4: ya es «varias»). */
-export function combinacionesExactas<T extends { monto: number }>(cands: readonly T[], objetivo: number): T[][] {
+/**
+ * Las combinaciones de `min`..`max` cuotas que suman `objetivo` centavos, con hasta `tolerancia` de diferencia. Corta a
+ * las 24: con tantas, ya es «varias».
+ */
+export function combinacionesExactas<T extends { monto: number }>(cands: readonly T[], objetivo: number, tolerancia = 0): T[][] {
   const out: T[][] = [];
   const xs = [...cands].sort((a, b) => b.monto - a.monto);
   const rec = (i: number, elegidas: T[], suma: number) => {
-    if (out.length > 3) return;
-    if (suma === objetivo && elegidas.length >= CUOTAS_POR_FACTURA.min) {
+    if (out.length >= 24) return;
+    if (Math.abs(suma - objetivo) <= tolerancia && elegidas.length >= CUOTAS_POR_FACTURA.min) {
       out.push([...elegidas]);
       return;
     }
-    if (elegidas.length >= CUOTAS_POR_FACTURA.max || suma > objetivo) return;
+    if (elegidas.length >= CUOTAS_POR_FACTURA.max || suma > objetivo + tolerancia) return;
     for (let k = i; k < xs.length; k++) rec(k + 1, [...elegidas, xs[k]!], suma + centavos(xs[k]!.monto));
   };
   if (objetivo > 0) rec(0, [], 0);
   return out;
+}
+
+/** Dos cuotas gemelas: misma cuenta, moneda, monto, mes, estado y fechas. Cambiar una por otra no cambia nada. */
+export const claveDeGemela = (c: CobroDelLibro) =>
+  [c.cuentaId, c.moneda, centavos(c.monto), c.periodo, c.estado, c.fechaEmision ?? "", c.fechaProgramada].join("|");
+
+/**
+ * Las combinaciones de cuotas de una factura: las exactas y, si no hay ninguna, las que difieren por redondeo. Dos
+ * combinaciones que solo cambian una cuota por su gemela cuentan como una. Devuelve como mucho 4 (4 = «4 o más»).
+ */
+export function combinacionesDeCuotas(cands: readonly CobroDelLibro[], objetivo: number): CobroDelLibro[][] {
+  const exactas = combinacionesExactas(cands, objetivo);
+  const todas = exactas.length ? exactas : combinacionesExactas(cands, objetivo, CENTAVOS_DE_REDONDEO);
+  const vistas = new Map<string, CobroDelLibro[]>();
+  for (const k of todas) {
+    const clave = k.map(claveDeGemela).sort().join(" + ");
+    if (!vistas.has(clave)) vistas.set(clave, k);
+  }
+  return [...vistas.values()].slice(0, 4);
 }
 
 /**
@@ -169,12 +202,83 @@ export function decidirOrden(e: EntradaDelLibro, deshechas: ReadonlySet<string>)
   );
   const libreOdoo = (c: CobroDelLibro) => !c.numeroFactura || !numerosVigentes.has(normalizarNumeroFactura(c.numeroFactura)!);
 
+  /* FACTURA_REEMPLAZADA: un número de Odoo que ya no es una factura vigente. Las cuotas que anotan el mismo número
+     muerto se miran juntas: primero la factura que suma exacto todas; si no hay, una por una, por el mismo monto. */
+  const conNumeroMuerto = new Map<string, CobroDelLibro[]>();
+  for (const c of cobrosOdoo) {
+    const n = normalizarNumeroFactura(c.numeroFactura);
+    if (!n || plataformaDelNumero(n) !== "ODOO" || numerosVigentes.has(n)) continue;
+    const k = `${c.cuentaId}|${c.moneda}|${n}`;
+    conNumeroMuerto.set(k, [...(conNumeroMuerto.get(k) ?? []), c]);
+  }
+  for (const cs of conNumeroMuerto.values()) {
+    const c0 = cs[0]!;
+    const n = normalizarNumeroFactura(c0.numeroFactura)!;
+    const vieja = porNumeroOdoo.get(n);
+    const desde = vieja?.invoiceDate ?? cs.map((c) => c.fechaEmision ?? c.fechaProgramada).sort()[0]!;
+    const libre = (f: FacturaParaCruzar) =>
+      f.cuentaId === c0.cuentaId &&
+      f.moneda === c0.moneda &&
+      !anotadasOdoo.has(normalizarNumeroFactura(f.numero)!) &&
+      dias(f.invoiceDate, desde) >= 0 &&
+      dias(f.invoiceDate, desde) <= DIAS_FACTURA_REEMPLAZADA;
+    const estado = vieja ? (vieja.paymentState === "reversed" ? "revertida" : "anulada") : "no está en Odoo";
+    const total = cs.reduce((a, c) => a + centavos(c.monto), 0);
+    const enteras = vigentes.filter((f) => libre(f) && centavos(f.montoNeto) === total);
+    if (enteras.length > 1) {
+      dudar("ODOO", c0.cuentaId, n, `${n} ya no está vigente y hay ${enteras.length} facturas que podrían reemplazarla`);
+      continue;
+    }
+    const reemplazos: Array<{ f: FacturaParaCruzar; cs: CobroDelLibro[] }> = [];
+    if (enteras[0]) reemplazos.push({ f: enteras[0], cs });
+    else {
+      for (const c of cs) {
+        const cands = vigentes.filter((f) => libre(f) && centavos(f.montoNeto) === centavos(c.monto));
+        if (cands.length > 1) dudar("ODOO", c.cuentaId, n, `${n} ya no está vigente y hay ${cands.length} facturas que podrían reemplazarla`);
+        else if (cands[0]) reemplazos.push({ f: cands[0], cs: [c] });
+      }
+      /* Dos cuotas que apuntarían a la misma factura: eso ya no es un reemplazo de una por una. */
+      const repetidas = new Set(reemplazos.map((r) => r.f.id).filter((id, i, xs) => xs.indexOf(id) !== i));
+      if (repetidas.size) {
+        dudar("ODOO", c0.cuentaId, n, `${n} ya no está vigente y sus cuotas calzan con la misma factura`);
+        reemplazos.splice(0, reemplazos.length, ...reemplazos.filter((r) => !repetidas.has(r.f.id)));
+      }
+    }
+    for (const { f, cs: deEsta } of reemplazos) {
+      const no = porQueNoSeOrdena(pagadaOdoo(f), impagaOdoo(f), deEsta);
+      if (no) {
+        dudar("ODOO", c0.cuentaId, f.numero, `${n} → ${f.numero}: ${no}`);
+        continue;
+      }
+      const texto =
+        deEsta.length === 1
+          ? `${c0.cuentaNombre}, cuota de ${deEsta[0]!.periodo}: anotaba la ${n} (${estado}); es la ${f.numero}, por el mismo monto.`
+          : `${c0.cuentaNombre}, cuotas de ${enMeses(deEsta)}: anotaban la ${n} (${estado}); es la ${f.numero}, que suma exacto las ${deEsta.length}.`;
+      if (
+        tomar(
+          {
+            regla: "FACTURA_REEMPLAZADA",
+            fuente: "ODOO",
+            cuentaId: c0.cuentaId,
+            cuenta: c0.cuentaNombre,
+            numero: f.numero,
+            moneda: c0.moneda,
+            cuotas: deEsta.map((c) => cuota(c, f.invoiceDate)),
+            texto,
+          },
+          deEsta,
+        )
+      )
+        anotadasOdoo.add(normalizarNumeroFactura(f.numero)!);
+    }
+  }
+
   /* VARIAS_CUOTAS en Odoo. */
   const variasOdoo = vigentes
     .filter((f) => !anotadasOdoo.has(normalizarNumeroFactura(f.numero)!))
     .map((f) => {
       const cands = cobrosOdoo.filter((c) => c.cuentaId === f.cuentaId && c.moneda === f.moneda && libreOdoo(c) && enLaVentana(c, f.invoiceDate));
-      return { f, combos: cands.length > CUOTAS_POR_FACTURA.candidatas ? [] : combinacionesExactas(cands, centavos(f.montoNeto)) };
+      return { f, combos: cands.length > CUOTAS_POR_FACTURA.candidatas ? [] : combinacionesDeCuotas(cands, centavos(f.montoNeto)) };
     })
     .filter((x) => x.combos.length > 0);
   ordenarVarias(
@@ -190,51 +294,6 @@ export function decidirOrden(e: EntradaDelLibro, deshechas: ReadonlySet<string>)
       combos: x.combos,
     })),
   );
-
-  /* FACTURA_REEMPLAZADA: un número de Odoo que ya no es una factura vigente. */
-  for (const c of cobrosOdoo) {
-    const n = normalizarNumeroFactura(c.numeroFactura);
-    if (!n || plataformaDelNumero(n) !== "ODOO" || numerosVigentes.has(n) || usadas.has(c.id)) continue;
-    const vieja = porNumeroOdoo.get(n);
-    const desde = vieja?.invoiceDate ?? c.fechaEmision ?? c.fechaProgramada;
-    const cands = vigentes.filter(
-      (f) =>
-        f.cuentaId === c.cuentaId &&
-        f.moneda === c.moneda &&
-        !anotadasOdoo.has(normalizarNumeroFactura(f.numero)!) &&
-        centavos(f.montoNeto) === centavos(c.monto) &&
-        dias(f.invoiceDate, desde) >= 0 &&
-        dias(f.invoiceDate, desde) <= DIAS_FACTURA_REEMPLAZADA,
-    );
-    if (cands.length > 1) {
-      dudar("ODOO", c.cuentaId, n, `${n} ya no está vigente y hay ${cands.length} facturas que podrían reemplazarla`);
-      continue;
-    }
-    const f = cands[0];
-    if (!f) continue;
-    const no = porQueNoSeOrdena(pagadaOdoo(f), impagaOdoo(f), [c]);
-    if (no) {
-      dudar("ODOO", c.cuentaId, f.numero, `${n} → ${f.numero}: ${no}`);
-      continue;
-    }
-    const estado = vieja ? (vieja.paymentState === "reversed" ? "revertida" : "anulada") : "no está en Odoo";
-    if (
-      tomar(
-        {
-          regla: "FACTURA_REEMPLAZADA",
-          fuente: "ODOO",
-          cuentaId: c.cuentaId,
-          cuenta: c.cuentaNombre,
-          numero: f.numero,
-          moneda: c.moneda,
-          cuotas: [cuota(c, f.invoiceDate)],
-          texto: `${c.cuentaNombre}, cuota de ${c.periodo}: anotaba la ${n} (${estado}); es la ${f.numero}, por el mismo monto.`,
-        },
-        [c],
-      )
-    )
-      anotadasOdoo.add(normalizarNumeroFactura(f.numero)!);
-  }
 
   /* ── Mercury ──────────────────────────────────────────────────────────────────────────────────────────── */
   const cuentaDe = (f: FacturaMercuryParaCruzar) => e.cuentaDeClienteMercury.get(f.mercuryCustomerId) ?? null;
@@ -260,11 +319,26 @@ export function decidirOrden(e: EntradaDelLibro, deshechas: ReadonlySet<string>)
     if (orden.length > 1 && d(orden[0]!) === d(orden[1]!)) return null;
     return orden[0]!;
   };
-  for (const c of sinNumero) {
-    const f = elMasCercano(facturasLibres.filter((x) => calza(c, x)), (x) => distancia(c, x));
-    if (!f) continue;
-    const deVuelta = elMasCercano(sinNumero.filter((x) => calza(x, f)), (x) => distancia(x, f));
-    if (deVuelta?.id !== c.id) continue;
+  /* Se empareja por clases: las cuotas gemelas juntas y las facturas iguales (cuenta, moneda, monto, fecha y estado)
+     juntas. Una clase de cuotas y una de facturas del mismo tamaño, las más cercanas entre sí, se reparten en orden. */
+  const agrupar = <T,>(xs: readonly T[], clave: (x: T) => string) => {
+    const m = new Map<string, T[]>();
+    for (const x of xs) m.set(clave(x), [...(m.get(clave(x)) ?? []), x]);
+    return [...m.values()];
+  };
+  const clasesDeCuotas = agrupar(sinNumero, claveDeGemela).map((cs) => [...cs].sort((a, b) => a.id.localeCompare(b.id)));
+  const clasesDeFacturas = agrupar(facturasLibres, (f) => [cuentaDe(f), f.moneda, centavos(f.monto), f.invoiceDate, f.estado].join("|")).map((fs) =>
+    [...fs].sort((a, b) => a.numero.localeCompare(b.numero)),
+  );
+  const pares: Array<{ c: CobroDelLibro; f: FacturaMercuryParaCruzar }> = [];
+  for (const cs of clasesDeCuotas) {
+    const fs = elMasCercano(clasesDeFacturas.filter((x) => calza(cs[0]!, x[0]!)), (x) => distancia(cs[0]!, x[0]!));
+    if (!fs) continue;
+    const deVuelta = elMasCercano(clasesDeCuotas.filter((x) => calza(x[0]!, fs[0]!)), (x) => distancia(x[0]!, fs[0]!));
+    if (deVuelta !== cs || cs.length !== fs.length) continue;
+    cs.forEach((c, i) => pares.push({ c, f: fs[i]! }));
+  }
+  for (const { c, f } of pares) {
     const no = porQueNoSeOrdena(pagadaMercury(f), impagaMercury(f), [c]);
     if (no) {
       dudar("MERCURY", c.cuentaId, f.numero, `${f.numero} para la cuota de ${c.periodo}: ${no}`);
@@ -297,7 +371,7 @@ export function decidirOrden(e: EntradaDelLibro, deshechas: ReadonlySet<string>)
     .map((f) => {
       const cuentaId = cuentaDe(f)!;
       const cands = cobrosM.filter((c) => c.cuentaId === cuentaId && c.moneda === f.moneda && libreM(c) && !usadas.has(c.id) && enLaVentana(c, f.invoiceDate));
-      return { f, cuentaId, combos: cands.length > CUOTAS_POR_FACTURA.candidatas ? [] : combinacionesExactas(cands, centavos(f.monto)) };
+      return { f, cuentaId, combos: cands.length > CUOTAS_POR_FACTURA.candidatas ? [] : combinacionesDeCuotas(cands, centavos(f.monto)) };
     })
     .filter((x) => x.combos.length > 0);
   ordenarVarias(
@@ -320,10 +394,11 @@ export function decidirOrden(e: EntradaDelLibro, deshechas: ReadonlySet<string>)
   function ordenarVarias(
     xs: ReadonlyArray<{ fuente: Fuente; cuentaId: string; numero: string; moneda: string; monto: number; fecha: string; pagada: boolean; impaga: boolean; combos: CobroDelLibro[][] }>,
   ) {
+    /* Por clase de gemelas: si dos facturas pueden tomar cuotas gemelas, eso es una duda aunque no sea la misma fila. */
     const uso = new Map<string, number>();
-    for (const x of xs) for (const id of new Set(x.combos.flat().map((c) => c.id))) uso.set(id, (uso.get(id) ?? 0) + 1);
+    for (const x of xs) for (const k of new Set(x.combos.flat().map(claveDeGemela))) uso.set(k, (uso.get(k) ?? 0) + 1);
     for (const x of xs) {
-      const unica = x.combos.length === 1 && x.combos[0]!.every((c) => uso.get(c.id) === 1);
+      const unica = x.combos.length === 1 && x.combos[0]!.every((c) => uso.get(claveDeGemela(c)) === 1);
       if (!unica) {
         dudar(
           x.fuente,
@@ -353,7 +428,9 @@ export function decidirOrden(e: EntradaDelLibro, deshechas: ReadonlySet<string>)
           numero: x.numero,
           moneda: x.moneda,
           cuotas: cs.map((c) => cuota(c, x.fecha)),
-          texto: `${nombre.get(x.cuentaId) ?? "?"}: la ${x.numero} (${fmt(x.monto, x.moneda)}) cubre las cuotas de ${enMeses(cs)}, que suman exacto.`,
+          texto: `${nombre.get(x.cuentaId) ?? "?"}: la ${x.numero} (${fmt(x.monto, x.moneda)}) cubre las cuotas de ${enMeses(cs)}, ${
+            centavos(x.monto) === cs.reduce((a, c) => a + centavos(c.monto), 0) ? "que suman exacto" : `que suman ${fmt(cs.reduce((a, c) => a + c.monto, 0), x.moneda)} (redondeo)`
+          }.`,
         },
         cs,
       );

@@ -1377,7 +1377,7 @@ describe("⭐ la plata va por moneda y cada documento se cuenta una vez", () => 
         factura({ id: "e2", odooMoveId: 2, cuentaId: null, invoiceDate: "2021-03-01", montoNeto: 500, montoImpuesto: 0 }),
       ],
     }).find((i) => i.codigo === "ODOO-EXENTAS");
-    expect(l?.titulo).toBe("1 facturas de 2026 salieron sin impuesto");
+    expect(l?.titulo).toBe("1 factura de 2026 salió sin impuesto");
     expect(l?.montos).toEqual([{ moneda: "CRC", monto: 237900 }]);
     expect(l?.detalle).toContain("No se cuentan 1 de años anteriores");
     expect(l?.detalle).not.toContain("costarricenses");

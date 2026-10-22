@@ -231,8 +231,8 @@ export function Historia({ grupo, children }: { grupo: GrupoArmado; children: Re
             Historia sin efecto hoy · {plural(grupo.filas, "fila", "filas")}
           </h2>
           <p className="text-xs text-fg-muted">
-            Pagos que Odoo no tiene conciliados con el banco (para contabilidad), facturas de antes de que Nexus tuviera la cuenta y monedas ya
-            corregidas. No cambian ningún número de hoy.
+            Pagos que Odoo no tiene conciliados con el banco (para contabilidad), monedas ya corregidas y facturas sin impuesto. No cambian
+            ningún número de hoy.
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => setAbierta((v) => !v)}>
