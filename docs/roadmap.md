@@ -14,10 +14,10 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `a922e481` desde la madrugada del 21 oct: sin alertas que salten encima de la pantalla, la propuesta de tarea corta, la agenda del horario de trabajo y la guía que toma el tema de la invitación. Antes, el mismo 20 oct, «Para ti» simplificado (`c5659704`). Sana, con el esquema al día. |
-| Por desplegar | Nada: todo `main` está en producción (12.571 pruebas en verde, tsc en 0). |
-| En rojo en producción | 3 invariantes, todos con su decisión abajo: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado. |
-| Pruebas | 16 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 79 que valida el equipo al usarlas, 75 con IA sobre los datos y 48 ya validadas por ti. |
+| Producción | Corre `da1fd3bf` desde la noche del 21 oct: el modelo de comisiones cerrado con Marco, las comisiones de partners en cero y estimado o real, lo pagado que se cobra cada hora y al tocar «Actualizar», y la cuota cargada con IVA que se pega a su factura. Sana, con el esquema al día. |
+| Por desplegar | Nada: todo `main` está en producción (12.623 pruebas en verde, tsc en 0). |
+| En rojo en producción | 4 invariantes: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado (con su decisión abajo), y desde el 21 oct INV16(a): 2 reuniones de Meet leídas antes de ocurrir (un evento movido de fecha después de leerse, el caso conocido de KNOWN-ERRORS). |
+| Pruebas | 17 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 81 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
 
 ## Cómo va Nexus
 
@@ -61,13 +61,12 @@ Sin esto, algo sigue mal o no se puede validar:
 
 ### Ventas y comisiones
 
-1. Construir el módulo de comisiones en Nexus cuando Marco cierre el modelo, y pagar las comisiones con él.
+1. Pagar las comisiones desde Nexus (el modelo con Marco se cerró el 21 oct; hoy es «Cómo funciona» y la simulación). Antes, que Cobranza sepa cuándo termina un servicio y si una renovación fue a tiempo.
 2. Licencias y precio de cada caso de uso de la biblioteca.
 
 ### Finanzas
 
-1. Dar de alta a María José (tú): Equipo › agregar persona con su correo de Smarteam, área «Admin», rol «Asistente administrativo».
-2. Prender el corte de cobranza (`COBRANZA_CRON_ENABLED`): sin él, Reportes y algunas alertas de cobranza son una foto del 24 jul.
+1. Prender el corte de cobranza (`COBRANZA_CRON_ENABLED`): sin él, Reportes y algunas alertas de cobranza son una foto del 24 jul.
 
 ### Marketing y Desarrollo
 
@@ -228,12 +227,15 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 ### Comisiones <span class="prioridad">Alta</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
+| 278 | Por validar | Que la página de comisiones diga lo cerrado con Marco | Finanzas › Modelos › Comisiones › «Cómo funciona» y «Simulación». | Arriba, «Modelo en prueba…». En el bono de liderazgo, «¿Por qué se calculan distinto?» y los ejemplos 133, 0, 500 y 750. «Pendientes» con dos preguntas y «Lo que no cuadra» con la oferta de Liz. En «Simulación», la tabla «Techos» (solo tú). |
 |---|---|---|---|---|
 | 95 | Por validar | Que la aprobación quede y el cliente no la vea | En «CreditForce · prueba (borrar)» (la de la 24) › «2 · Propuesta» › Inversión: «Montos en» USD; en Servicios, «precio de lista» 10000 y «dcto» 15%; en Licencias, «Agregar línea» «Sales Hub Professional» 1000; IVA «+ IVA (13%)». Espera a que se guarde y toca «Aprobar el descuento». Después «Descargar PDF», «Subir al cliente» y «3 · Compartir» › «Copiar el link», y ábrelo. | «Descuento aprobado.» y la franja dice «…lo aprobó Elías González el 19/10/2026, hasta el 15 %.» En el link y en el PDF no está la franja ni el botón; la línea sí muestra «−15%», $10,000 tachado y $8,500. |
 
 ### Finanzas <span class="prioridad">Alta</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
+| 279 | ⏳ La valida el equipo: María José Zamora | Que una comisión de partner acepte cero y diga si es estimada o real | Finanzas › Comisiones de partner › Atom: monto 0. Después, Coby (kölbi): registra su factura con el monto real. | Atom queda en cero, sin error. Coby pasa de «Estimado» a «Real de la factura», con el número de la factura. |
+| 280 | ⏳ La valida el equipo: Alex Arrieta | Que «Actualizar» traiga lo conciliado y lo cobre | Concilia una factura en Odoo; en Nexus, Conciliación › «Actualizar». | Dice cuántas facturas cambiaron y la cuota pagada queda cobrada en el momento. Sin tocar nada, lo pagado se cobra cada hora de 7:00 a 19:00. |
 |---|---|---|---|---|
 | 32 | ⏳ La valida Admin | Que solo se cobre lo pagado que confirmas | Finanzas › Conciliación › «Lo pagado». Desmarca una cuota y confirma con tu firma. | Las cuotas que Odoo y Mercury dan por pagadas, con el día del pago. Las de Mercury sin entrada de plata van a «Pagadas sin el día del pago» y no se cobran. Solo se cobran las marcadas. |
 | 33 | ⏳ La valida Admin | Que los montos de las licencias se lean bien | Finanzas › Punto de equilibrio › «Licencias revendidas» › en la fila de kölbi, «Editar». Escribe solo «Lo que se le paga» y «Guardar». | Guarda: la moneda es la del contrato y la frecuencia «Cada mes», a la vista y solo si hay monto. Cada contrato tiene «Editar» en su fila. (Arreglado el 19 oct: antes «Guardar» quedaba apagado.) |
@@ -403,6 +405,8 @@ Las que corre la IA (Claude) sin pantalla: con los datos de producción, en solo
 ### Finanzas
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
+| 281 | ✓ Validado por Claude 21 oct | Por qué la factura de AMVAC seguía pendiente | Las cuotas pendientes con factura en Odoo, contra Odoo en vivo. | No era el IVA: la cuota (1.848) y la factura sin IVA (1.848) se emparejaban. Odoo la dio pagada en el «Actualizar» de Alex de las 16:15, y el cobro de lo pagado ya había corrido a las 7:00. Lo mismo con Fomento Urbano. Las otras 30 pendientes con factura están impagas también en Odoo. |
+| 282 | ✓ Validado por Claude 21 oct | Que AMVAC y Fomento quedaran cobradas | El cobro de lo pagado en producción, después del deploy de `da1fd3bf`. | AMVAC septiembre (US$1.848, FAC/2026/0354) cobrada el 14 oct y Fomento octubre (US$300, FAC/2026/0363) el 16 oct, con la firma del sistema y las fechas reales del pago en Odoo. |
 |---|---|---|---|---|
 | 34 | ✓ Validado por Claude 19 oct | Que las comisiones de Stripe y transferencias sumen como gasto | Conciliación › Gastos y Mercury › «Gastos financieros». Confirma una. | 81 comisiones para confirmar (US$350,67), sin duplicados; la suscripción de Mercury ya no sale (es la herramienta «Mercury») y la comisión por compras en el exterior dice «Comisión del banco». Lo confirmado suma como gasto financiero. Confirmarlas es de Admin. |
 | 100 | ✓ Validado por Claude 18 oct | Que las ventas sin cobranza cuadren mejor | Punto de equilibrio › «De la venta a la caja» › «Dónde se queda la plata» › «ventas ganadas sin respaldo en cobranza» › «Ver las ventas». | US$171.059,93 en 44 ventas: 15 sin nada cargado, 25 que facturan menos de lo vendido y 4 de empresas que no están en Nexus. Aparte, US$68.321,61 ya cargados en cuotas sin facturar. (Antes se llamaba «Lo que no cuadra»; lo comprobé con los datos.) |
@@ -477,6 +481,9 @@ Lo que ya está en producción y les toca revisar a ellos, no a ti.
 | 12 | Alejandro Salas | Prender las notas y la transcripción de Gemini en «SPRINT DEPT. SOFTWARE» (lunes 8:00): ya es el planning de Desarrollo, a su nombre, pero sin notas no hay qué leer |
 | 13 | Juan Carlos Armijos | En «Para ti», «Metzger Supplies: un compromiso…» › «Tomarlo o decidir» › «Usar» en la tarea: la línea desaparece de su «Para ti» y del de Alex (prueba 80) |
 | 14 | Heiver Gomez | Tareas › «Planifica tu semana»: en una cuenta, «Agendar» la reunión sugerida y «Ya lo guardé»; en otra, «Usar» o «Crear la acción» (prueba 20) |
+| 15 | María José o Alex Arrieta | Cobranza › Fundauna: la factura FAC/2026/0359 (pagada) cubre dos cuotas sin el número anotado; anotarlo en las dos para que se cobren |
+| 16 | María José o Alex Arrieta | Cobranza › Honda, septiembre: la cuota apunta a la FAC/2026/0347, que Odoo anuló; cambiarla a la 0348 |
+| 17 | María José o Alex Arrieta | Ferretería Noelito INV-60: pagada en Mercury sin una entrada de plata con su fecha; confirmar el día del pago a mano |
 
 
 ## Hecho
@@ -543,12 +550,16 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 3. [hecho] Módulos nativos (casos de uso, licencias, fases) y una biblioteca de módulos con «Adaptar a esta empresa».
 4. [hecho] «+ IVA» o «IVA incluido» para Costa Rica.
 5. [hecho] La propuesta de comisiones que cuida el valor de la cuenta, con su simulación, y la aprobación de descuentos de más del 10 %.
+6. [hecho] El modelo de comisiones cerrado con Marco: sin el factor 1,2, el descuento contra la primera propuesta, el bono de liderazgo por persona, ventas que se caen en 90 días, renovaciones, venta compartida, techos (solo Super Admin) y quién ve qué.
 
 ### Finanzas <span class="estado">En producción</span>
 
 1. [hecho] Lo pagado y conciliado en Odoo y Mercury se cobra solo cada mañana.
 2. [hecho] El menú simplificado, Conciliación en una sola fila y el punto de equilibrio con solo lo del año.
 3. [hecho] Licencias revendidas, gastos financieros y el detalle de cada factura.
+4. [hecho] Las comisiones de partners aceptan cero y dicen si el monto es estimado o el real de la factura del aliado.
+5. [hecho] «Actualizar» trae Odoo y Mercury y cobra lo pagado en el momento; las copias y el cobro corren cada hora de 7:00 a 19:00.
+6. [hecho] Una cuota cargada con IVA que tiene el número de su factura queda unida a ella y espera en «Lo pagado».
 
 ### Éxito del cliente y rentabilidad <span class="estado">En producción</span>
 
