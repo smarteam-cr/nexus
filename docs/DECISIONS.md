@@ -9398,7 +9398,8 @@ concilie cada mañana María José. El análisis, la evidencia y lo que quedó h
 - **Qué es seguro.** Odoo `paid` (el contador la concilió con el estado de cuenta) o Mercury `Paid` con su entrada de
   plata atada por el nombre de quien pagó, y un día del pago que cuadra (no posterior a hoy, no más de 3 días antes de la
   factura). Lo demás espera a una persona en Conciliación › «Lo pagado», con su porqué: Odoo «en proceso de pago» (pagada
-  pero sin conciliar con el banco), una entrada de Mercury encontrada solo por el monto, un día del pago raro. *Por qué no
+  pero sin conciliar con el banco), una entrada de Mercury encontrada solo por el monto, un día del pago raro, una cuota
+  cargada con el IVA (2026-10-21, sección siguiente a esta). *Por qué no
   «en proceso de pago»:* Elías pidió «pagado y conciliado con el banco»; el 16 oct «en proceso de pago» se dio por pagado
   para la lista que confirma una persona, y ahí sigue.
 - **Nunca se cobra solo** lo de «Pagadas sin el día del pago» (la fecha decide el mes del gráfico), un choque, ni lo que
@@ -9444,6 +9445,39 @@ concilie cada mañana María José. El análisis, la evidencia y lo que quedó h
 - **Quien concilia cada mañana es María José**, con el rol de Dinia («Asistente administrativo», ADMIN): `cobranza` leer y
   escribir, `gastos` leer y escribir, y el frente «Finanzas: registrar». No hizo falta un permiso nuevo. Nexus no crea la
   cuenta: la da de alta Elías en Equipo.
+
+## Lo pagado: por qué una factura pagada en Odoo seguía pendiente (2026-10-21)
+
+**Contexto.** Revisando Finanzas con Alex Arrieta y María José, la factura de AMVAC del 15 de septiembre (FAC/2026/0354,
+US$1.848 sin IVA en Nexus, US$2.088,24 con IVA en Odoo) estaba pagada y conciliada en Odoo y seguía pendiente en
+Cobranza, aun después de sincronizar. La sospecha era el IVA. Medido ese día contra producción y contra Odoo en vivo,
+en solo lectura:
+
+- **La causa fue el horario, no el IVA.** El espejo de Odoo guarda el neto (`montoNeto`) y Nexus compara cuota contra
+  neto: 1.848 = 1.848, se pegaba bien por número. Odoo la dio pagada recién en la sincronización a mano de Alex (16:15 de
+  Costa Rica), y `lo-pagado-daily` ya había corrido a las 7:00 con el día tomado: la cuota iba a esperar hasta la mañana
+  siguiente. Igual Fomento Urbano (FAC/2026/0363). El arreglo es de la sesión «Sincronizar Odoo y Mercury a mano y más
+  seguido» (rama `claude/nostalgic-northcutt-3dc22f`): el cobro corre cada hora y justo después de «Actualizar desde
+  Odoo/Mercury» (`cobrarLoPagadoAhora`). Esta tanda no toca el job.
+- **Las demás pendientes están impagas de verdad.** De las 49 cuotas de Odoo vencidas sin cobrar, 30 se pegan a una
+  factura que Odoo da impaga: se comparó el estado del espejo con Odoo en vivo y coinciden las 32 (las 30 más AMVAC y
+  Fomento). El resto no tiene factura en Odoo todavía.
+- **La cuota cargada con el IVA no se pegaba nunca** (`conIva`, `pegarOdoo`). Librería Internacional anotó FAC/2026/0365
+  en la cuota de octubre por 2.655,50: es el total con IVA de 2.350. `cruzar` la deja en «monto distinto», así que el
+  día que Odoo la dé pagada se iba a quedar pendiente igual que AMVAC. Ahora, si la cuota anotó el número y su monto (o la
+  suma de sus cuotas) es el total exacto de una factura con impuesto, se pega a esa factura, pero **nunca se cobra
+  sola**: espera en «Lo pagado» con «La cuota está cargada con el IVA…», y el monto se corrige con «Usar el monto de la
+  factura» en «Lo que no cuadra». *Por qué solo por número:* sin número, una cuota con IVA contra una factura por monto
+  sería adivinar. *Por qué no cambia el monto:* el libro nunca cambia un monto; corregirlo es de una persona.
+  `cruzar` no cambia: «Lo que no cuadra» la sigue mostrando como monto distinto, que lo es.
+- **Lo que queda para una persona, sin regla nueva:** Fundauna (FAC/2026/0359, ₡2.302.601 pagada) cubre dos cuotas de
+  octubre sin número (₡1.037.001 + ₡1.265.600). El libro nunca reparte una factura entre cuotas que no la anotaron: se
+  anota el número en las dos y el cobro las alcanza. Ferretería Noelito INV-60 (Mercury) está pagada sin una entrada de
+  plata que la explique («Sin el día del pago»). Honda 2026-09 anota FAC/2026/0347, que Odoo revirtió; la vigente es
+  FAC/2026/0348, impaga.
+- **Reparación:** `scripts/cobrar-lo-pagado.ts` (simulacro por defecto, `--apply` con `ALLOW_PROD_WRITE=1`). El 21 oct:
+  2 cuotas, US$2.148 (AMVAC 2026-09 cobrada el 14 oct, Fomento Urbano 2026-10 cobrada el 16 oct, el día real del pago en
+  Odoo). Sin SQL.
 
 ## El chat de Nexus sobre la guía, fluido (2026-10-18)
 

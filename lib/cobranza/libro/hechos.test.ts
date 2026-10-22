@@ -131,6 +131,53 @@ describe("Odoo: la factura se pega sola", () => {
   });
 });
 
+describe("Odoo: la cuota cargada con el IVA (2026-10-21)", () => {
+  /* Librería Internacional: la cuota de octubre anota FAC/2026/0365 por 2.655,50, y la factura es 2.350 sin IVA. */
+  const conIva = (o: Partial<FacturaParaCruzar> = {}) =>
+    entrada({
+      cobros: [cobro("c1", { monto: 1130, numeroFactura: "FAC/2026/0009", fechaEmision: "2026-08-03" })],
+      facturasOdoo: [odoo("f9", { numero: "FAC/2026/0009", paymentState: "paid", montoResidual: 0, ...o })],
+    });
+
+  it("con el número anotado, se pega a su factura aunque su monto sea el total con IVA", () => {
+    expect(pegarOdoo(conIva()).map((p) => [p.cobroId, p.facturaId, p.via, p.pagada, p.conIva])).toEqual([["c1", "f9", "numero", true, true]]);
+  });
+
+  it("pagada allá, ⛔ no se cobra sola: espera a una persona con el porqué", () => {
+    const e = conIva();
+    const d = decidir(e, pegarOdoo(e), new Map([["f9", "2026-08-20"]]));
+    expect(d.acciones[0]!.cobrar).toMatchObject({ fechaCobro: "2026-08-20" });
+    expect(d.acciones[0]!.cobrar!.porQueNoSolo).toMatch(/con el IVA/);
+    const solo = paraCobrarSolo(d.acciones, new Set());
+    expect(solo.acciones).toEqual([]);
+    expect(solo.quedan.map((q) => q.accion.cobroId)).toEqual(["c1"]);
+  });
+
+  it("⛔ sin el número no se pega: por monto, una cuota con IVA sería adivinar", () => {
+    const e = entrada({ cobros: [cobro("c1", { monto: 1130 })], facturasOdoo: [odoo("f1", { paymentState: "paid", montoResidual: 0 })] });
+    expect(pegarOdoo(e)).toEqual([]);
+  });
+
+  it("⛔ un monto que no es ni el neto ni el total sigue siendo un monto distinto", () => {
+    const e = entrada({
+      cobros: [cobro("c1", { monto: 1100, numeroFactura: "FAC/2026/0009" })],
+      facturasOdoo: [odoo("f9", { numero: "FAC/2026/0009", paymentState: "paid", montoResidual: 0 })],
+    });
+    expect(pegarOdoo(e)).toEqual([]);
+  });
+
+  it("la cuota con el neto sigue cobrándose sola (AMVAC FAC/2026/0354: 1.848 contra 2.088,24 con IVA)", () => {
+    const e = entrada({
+      cobros: [cobro("c1", { monto: 1848, numeroFactura: "FAC/2026/0354", fechaEmision: "2026-09-15", periodo: "2026-09", fechaProgramada: "2026-09-15" })],
+      facturasOdoo: [odoo("f354", { numero: "FAC/2026/0354", invoiceDate: "2026-09-15", montoNeto: 1848, montoTotal: 2088.24, montoImpuesto: 240.24, paymentState: "paid", montoResidual: 0 })],
+    });
+    const pegados = pegarOdoo(e);
+    expect(pegados.map((p) => [p.via, p.conciliada, p.conIva])).toEqual([["numero", true, undefined]]);
+    const d = decidir(e, pegados, new Map([["f354", "2026-10-14"]]));
+    expect(paraCobrarSolo(d.acciones, new Set()).acciones.map((a) => a.cobrar)).toEqual([{ fechaCobro: "2026-10-14", deDonde: "el pago con que Odoo concilió la factura", porQueNoSolo: null }]);
+  });
+});
+
 describe("Mercury: por número, y por monto sin dudas", () => {
   it("varias cuotas con el mismo número son una factura compartida, si suman la factura", () => {
     const cs = [cobro("a", { plataforma: "MERCURY", numeroFactura: "INV-5", monto: 500 }), cobro("b", { plataforma: "MERCURY", numeroFactura: "INV-5", monto: 500 })];
