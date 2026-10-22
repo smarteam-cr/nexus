@@ -482,6 +482,11 @@ export interface LandingContext {
       /** Quien mira tiene el rol que aprueba (dirección). */
       puedeAprobar: boolean;
       aprobar: () => Promise<void>;
+      /**
+       * La primera propuesta del trato, contra la que se mide el descuento (2026-10-21). null cuando la versión que se
+       * mira es la primera, o no hay otra: no hay descuento que medir.
+       */
+      primera: { nombre: string; version: number; inversion: unknown } | null;
     };
   };
   /**

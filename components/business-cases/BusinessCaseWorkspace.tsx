@@ -110,7 +110,12 @@ export default function BusinessCaseWorkspace({
   /** ¿El cliente es de Costa Rica? Lo usa el control del IVA de la Inversión. */
   paisDelCliente?: PaisDelCliente | null;
   /** Las aprobaciones de un descuento grande y si quien mira puede aprobar (lib/business-cases/descuento.ts). */
-  descuento?: { aprobaciones: AprobacionDeDescuento[]; puedeAprobar: boolean };
+  descuento?: {
+    aprobaciones: AprobacionDeDescuento[];
+    puedeAprobar: boolean;
+    /** La primera propuesta del trato: el descuento se mide contra ella (2026-10-21). */
+    primera: { canvasId: string; nombre: string; version: number; inversion: unknown } | null;
+  };
 }) {
   const toast = useToast();
   const [paso, setPasoState] = useState<PasoDeLaPropuesta>(pasoInicial);
@@ -767,7 +772,18 @@ export default function BusinessCaseWorkspace({
                       hubsVendidos,
                       inversion: inversionDelDocumento(sectionsData),
                       pais: paisDelCliente ?? null,
-                      descuento: descuento ? { aprobaciones, puedeAprobar: descuento.puedeAprobar, aprobar: aprobarDescuento } : undefined,
+                      descuento: descuento
+                        ? {
+                            aprobaciones,
+                            puedeAprobar: descuento.puedeAprobar,
+                            aprobar: aprobarDescuento,
+                            // La versión que se mira ES la primera: no hay contra qué medir.
+                            primera:
+                              descuento.primera && descuento.primera.canvasId !== canvasId
+                                ? { nombre: descuento.primera.nombre, version: descuento.primera.version, inversion: descuento.primera.inversion }
+                                : null,
+                          }
+                        : undefined,
                     },
                     clientLogoUrl: clientLogo,
                     clientLogoDarkUrl,

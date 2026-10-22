@@ -2104,6 +2104,7 @@ model TeamMember {
   aguinaldosPagados       AguinaldoPago[]         @relation("AguinaldosDePersona")
   // Lo vendido y las metas comerciales de la persona (2026-10-08): dato general, no remuneración.
   ventasGanadas           VentaGanada[]           @relation("VentasDelVendedor")
+  ventasCompartidas       VentaGanada[]           @relation("VentasCompartidas")
   metasComerciales        MetaComercial[]         @relation("MetasDelVendedor")
   negociosAbiertos        NegocioAbierto[]        @relation("NegociosDelVendedor")
 }
@@ -5003,6 +5004,13 @@ model TipoCambioDia {
 
 /// En qué estado está una venta ganada respecto de HubSpot. NO es la etapa del trato:
 /// es qué sabemos de él la última vez que miramos.
+/// Qué es un negocio ganado para las comisiones (2026-10-21). Sale de `motion_comercial` en HubSpot: «Recuperación» es NUEVO.
+enum TipoDeNegocio {
+  NUEVO
+  EXPANSION
+  RENOVACION
+}
+
 enum VentaGanadaEstado {
   GANADA // vigente y ganada, lo normal
   REABIERTA // volvió a una etapa abierta: dejó de ser venta
@@ -5092,6 +5100,18 @@ model VentaGanada {
   vendedorId     String?
   vendedor       TeamMember? @relation("VentasDelVendedor", fields: [vendedorId], references: [id], onDelete: SetNull)
 
+  /// Qué es el negocio (2026-10-21, modelo de comisiones): la propiedad `motion_comercial` del trato en HubSpot.
+  // nullable porque nadie lo marcó todavía en la mayoría de los tratos: la simulación lo deduce.
+  tipoDeNegocio               TipoDeNegocio?
+  /// Con quién se compartió, según «Venta compartida con» (`venta_compartida_con`) al entrar a ganado.
+  compartidaConHubspotOwnerId String?
+  // nullable porque casi ninguna venta se comparte, y la persona puede no estar en Nexus. SetNull: borrar a la
+  // persona no borra la venta.
+  compartidaConId             String?
+  compartidaCon               TeamMember?    @relation("VentasCompartidas", fields: [compartidaConId], references: [id], onDelete: SetNull)
+  /// La marca de compartida se puso o cambió después de la firma: no vale, y la simulación lo dice.
+  compartidaDespuesDeLaFirma  Boolean        @default(false)
+
   /// El nombre huele a prueba ("Negocio para prueba (Nexus)"). La regex MARCA; una
   /// persona decide. Son dos campos y no uno a propósito: sospechar no es excluir.
   sospechaPrueba Boolean @default(false)
@@ -5110,6 +5130,7 @@ model VentaGanada {
   @@index([clientId])
   @@index([estado, fechaCierre])
   @@index([vendedorId])
+  @@index([compartidaConId])
 }
 
 // ─── NegocioAbierto ─────────────────────────────────────────────────────────────

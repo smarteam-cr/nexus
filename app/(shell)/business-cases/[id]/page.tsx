@@ -11,6 +11,7 @@ import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { aprobacionesDe, puedeAprobarDescuentos } from "@/lib/business-cases/descuento";
+import { primeraPropuestaDe } from "@/lib/business-cases/primera-propuesta-server";
 import { can } from "@/lib/auth/permissions/engine";
 /* El envoltorio y no el workspace: el proveedor del aplicador del chat tiene que ser ANCESTRO del
    editor, y esta página es de servidor. Ver `PropuestaConChat`. */
@@ -65,7 +66,7 @@ export default async function PropuestaPage({
   });
   if (!bc) notFound();
 
-  const [brandLogos, v0, generadas, portal, paisDelCliente] = await Promise.all([
+  const [brandLogos, v0, generadas, portal, paisDelCliente, primera] = await Promise.all([
     // Logos de marca (Smarteam + HubSpot + Insider One): el hero los pinta en la fila de marcas.
     getBrandLogos(),
     // Tipo y plantilla (columna → __meta del v0 → hubspot por defecto).
@@ -74,6 +75,8 @@ export default async function PropuestaPage({
     prisma.hubspotAccount.findFirst({ where: { isSystem: true }, select: { hubspotPortalId: true } }),
     // El país del cliente, para el IVA de Costa Rica de la Inversión (lib/landing/iva.ts).
     cargarPaisDelCliente(bc.client.id, bc.exploracionId),
+    // La primera propuesta del trato: contra ella se mide el descuento (2026-10-21).
+    primeraPropuestaDe(id),
   ]);
   const resolved = resolveCaseTypeFor(bc, v0?.sections);
   const subtipo = resolved.caseSubtype
@@ -155,7 +158,11 @@ export default async function PropuestaPage({
         puedeEditar={puedeEditar}
         tratoUrl={tratoUrl}
         paisDelCliente={paisDelCliente}
-        descuento={{ aprobaciones: aprobacionesDe(v0?.sections), puedeAprobar: puedeAprobarDescuentos(ctx.role) }}
+        descuento={{
+          aprobaciones: aprobacionesDe(v0?.sections),
+          puedeAprobar: puedeAprobarDescuentos(ctx.role),
+          primera: primera ? { canvasId: primera.canvasId, nombre: primera.nombre, version: primera.version, inversion: primera.inversion } : null,
+        }}
       />
     </div>
   );

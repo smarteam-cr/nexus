@@ -42,6 +42,7 @@ import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { leerDuenos } from "@/lib/hubspot/duenos";
 import { huelaAPrueba } from "./clasificar-huecos";
 import { ETAPAS_GANADAS, ETAPAS_PERDIDAS, labelDePipeline } from "./pipelines";
+import { PROPIEDAD_COMPARTIDA, PROPIEDAD_TIPO_DE_NEGOCIO, compartidaAlFirmar, tipoDeNegocioDe, type CompartidaAlFirmar, type ValorEnLaHistoria } from "./tipo-de-negocio";
 
 // Se re-exportan para no romper a quien ya las importaba de acá; viven en ./pipelines.
 export { ETAPAS_GANADAS, ETAPAS_PERDIDAS, PIPELINES_VENTA_PROPIA } from "./pipelines";
@@ -60,6 +61,9 @@ const PROPIEDADES = [
   "hs_date_entered_closedwon",
   // Quién vendió (2026-10-08): lo vendido por persona, para las metas y las comisiones.
   "hubspot_owner_id",
+  // Qué es el negocio y con quién se compartió (2026-10-21, ./tipo-de-negocio.ts): el modelo de comisiones.
+  PROPIEDAD_TIPO_DE_NEGOCIO,
+  PROPIEDAD_COMPARTIDA,
 ];
 
 export interface SyncVentasResult {
@@ -278,7 +282,21 @@ export async function syncVentasGanadas(opciones: {
     // Las CONOCIDAS del rango: solo para la guarda y para saber cuáles dejaron de venir.
     const conocidas = await prisma.ventaGanada.findMany({
       where: { fechaCierre: { gte: new Date(`${opciones.desde}T00:00:00.000Z`), lte: new Date(`${opciones.hasta}T00:00:00.000Z`) } },
-      select: { id: true, hubspotDealId: true, nombre: true, monto: true, fechaCierre: true, estado: true, clientId: true, hubspotOwnerId: true, vendedorId: true },
+      select: {
+        id: true,
+        hubspotDealId: true,
+        nombre: true,
+        monto: true,
+        fechaCierre: true,
+        estado: true,
+        clientId: true,
+        hubspotOwnerId: true,
+        vendedorId: true,
+        tipoDeNegocio: true,
+        compartidaConHubspotOwnerId: true,
+        compartidaConId: true,
+        compartidaDespuesDeLaFirma: true,
+      },
     });
     // ⚠ Y las que ya existen de los tratos que ACABAN de llegar, sin filtrar por fecha.
     // Sin esto, un trato al que le editaron la fecha de cierre y cruzó de año no se
@@ -287,13 +305,57 @@ export async function syncVentasGanadas(opciones: {
     // midió que a cuatro tratos de 2026 les movieron el cierre mientras estaban abiertos.
     const yaExistentes = await prisma.ventaGanada.findMany({
       where: { hubspotDealId: { in: crudos.map((d) => d.id) } },
-      select: { id: true, hubspotDealId: true, nombre: true, monto: true, fechaCierre: true, estado: true, clientId: true, hubspotOwnerId: true, vendedorId: true },
+      select: {
+        id: true,
+        hubspotDealId: true,
+        nombre: true,
+        monto: true,
+        fechaCierre: true,
+        estado: true,
+        clientId: true,
+        hubspotOwnerId: true,
+        vendedorId: true,
+        tipoDeNegocio: true,
+        compartidaConHubspotOwnerId: true,
+        compartidaConId: true,
+        compartidaDespuesDeLaFirma: true,
+      },
     });
     const parcial = conocidas.length > 0 && crudos.length < conocidas.length * 0.5;
     if (parcial) {
       res.errores.push(
         `La búsqueda trajo ${crudos.length} tratos contra ${conocidas.length} conocidos (menos del 50%): no se reclasifica nada.`,
       );
+    }
+
+    // ── 4b. Con quién se compartió, al firmar ─────────────────────────────────
+    // Solo los tratos que tienen la marca hoy o la tenían guardada: la historia de la propiedad dice qué valor tenía al
+    // entrar a ganado. Si no se puede leer, esos campos no se tocan (undefined) y se dice.
+    const compartidaDe = new Map<string, CompartidaAlFirmar>();
+    let compartidasLeidas = true;
+    {
+      const guardadas = new Set(yaExistentes.filter((v) => v.compartidaConHubspotOwnerId).map((v) => v.hubspotDealId));
+      const conMarca = crudos.filter((d) => (d.p[PROPIEDAD_COMPARTIDA] ?? "").trim() || guardadas.has(d.id));
+      for (let i = 0; i < conMarca.length; i += 50) {
+        const lote = conMarca.slice(i, i + 50);
+        const r = await hs.apiRequest({
+          method: "POST",
+          path: "/crm/v3/objects/deals/batch/read",
+          body: { properties: [PROPIEDAD_COMPARTIDA], propertiesWithHistory: [PROPIEDAD_COMPARTIDA], inputs: lote.map((d) => ({ id: d.id })) },
+        });
+        if (!r.ok) {
+          res.errores.push(`historia de «venta compartida con» lote ${i / 50 + 1}: HTTP ${r.status} — esas ventas quedan como estaban`);
+          compartidasLeidas = false;
+          continue;
+        }
+        const data = (await r.json()) as {
+          results?: Array<{ id: string; properties: Record<string, string | null>; propertiesWithHistory?: Record<string, ValorEnLaHistoria[]> }>;
+        };
+        const ganadaEnDe = new Map(lote.map((d) => [d.id, fechaOrNull(d.p.hs_date_entered_closedwon)]));
+        for (const x of data.results ?? []) {
+          compartidaDe.set(x.id, compartidaAlFirmar(x.properties[PROPIEDAD_COMPARTIDA], x.propertiesWithHistory?.[PROPIEDAD_COMPARTIDA] ?? [], ganadaEnDe.get(x.id) ?? null));
+        }
+      }
     }
 
     // ── 5. Upsert + bitácora ──────────────────────────────────────────────────
@@ -316,6 +378,9 @@ export async function syncVentasGanadas(opciones: {
       }
       if (monto === null) res.sinMonto++;
       const cli = resolverCliente(d.id, nombre);
+      // Sin marca hoy ni guardada, no se compartió. Con marca y la historia sin leer, no se toca (undefined).
+      const tieneMarca = !!(d.p[PROPIEDAD_COMPARTIDA] ?? "").trim() || !!previas.get(d.id)?.compartidaConHubspotOwnerId;
+      const compartida: CompartidaAlFirmar | undefined = compartidaDe.get(d.id) ?? (tieneMarca && !compartidasLeidas ? undefined : { ownerId: null, despuesDeLaFirma: false });
       const datos = {
         nombre,
         fechaCierre: soloDia(fecha),
@@ -336,6 +401,10 @@ export async function syncVentasGanadas(opciones: {
         hubspotOwnerId: (d.p.hubspot_owner_id ?? "").trim() || null,
         // Sin la tabla de dueños no se toca el vendedor que ya tenía (undefined = no se escribe).
         vendedorId: duenosLeidos ? vendedorDe((d.p.hubspot_owner_id ?? "").trim() || null) : undefined,
+        tipoDeNegocio: tipoDeNegocioDe(d.p[PROPIEDAD_TIPO_DE_NEGOCIO]),
+        compartidaConHubspotOwnerId: compartida ? compartida.ownerId : undefined,
+        compartidaConId: compartida && duenosLeidos ? vendedorDe(compartida.ownerId) : undefined,
+        compartidaDespuesDeLaFirma: compartida ? compartida.despuesDeLaFirma : undefined,
         sospechaPrueba: huelaAPrueba(nombre),
         sincronizadoEn: now,
       };
@@ -363,6 +432,10 @@ export async function syncVentasGanadas(opciones: {
             clientId: cli.id,
             hubspotOwnerId: datos.hubspotOwnerId,
             vendedorId: datos.vendedorId ?? null,
+            tipoDeNegocio: datos.tipoDeNegocio,
+            compartidaConHubspotOwnerId: datos.compartidaConHubspotOwnerId ?? null,
+            compartidaConId: datos.compartidaConId ?? null,
+            compartidaDespuesDeLaFirma: datos.compartidaDespuesDeLaFirma ?? false,
           });
           await prisma.ventaGanadaCambio.create({
             data: { ventaId: creada.id, hubspotDealId: d.id, nombre, tipo: "ALTA", nuevo: String(monto ?? "(sin monto)") },
@@ -393,7 +466,13 @@ export async function syncVentasGanadas(opciones: {
       // El vendedor no va a la bitácora (es de quién es la venta, no cuánto vale), pero sí se
       // actualiza: la primera corrida después de sumarlo lo completa en todas las del año.
       const cambiaVendedor =
-        (previa.hubspotOwnerId ?? null) !== datos.hubspotOwnerId || (duenosLeidos && (previa.vendedorId ?? null) !== datos.vendedorId);
+        (previa.hubspotOwnerId ?? null) !== datos.hubspotOwnerId ||
+        (duenosLeidos && (previa.vendedorId ?? null) !== datos.vendedorId) ||
+        // Lo mismo con qué es el negocio y con quién se compartió (2026-10-21): no va a la bitácora.
+        (previa.tipoDeNegocio ?? null) !== datos.tipoDeNegocio ||
+        (datos.compartidaConHubspotOwnerId !== undefined && (previa.compartidaConHubspotOwnerId ?? null) !== datos.compartidaConHubspotOwnerId) ||
+        (datos.compartidaConId !== undefined && (previa.compartidaConId ?? null) !== datos.compartidaConId) ||
+        (datos.compartidaDespuesDeLaFirma !== undefined && previa.compartidaDespuesDeLaFirma !== datos.compartidaDespuesDeLaFirma);
       if (deltas.length === 0 && cambiaVendedor) {
         res.actualizadas++;
         if (!opciones.dryRun) await prisma.ventaGanada.update({ where: { id: previa.id }, data: datos });

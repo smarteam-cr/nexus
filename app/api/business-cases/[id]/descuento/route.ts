@@ -6,8 +6,9 @@
  * canvas v0 de la propuesta: sin SQL, y una versión nueva de la propuesta no la pierde.
  *
  *  GET  → las aprobaciones guardadas. Gate: Ventas (lectura).
- *  POST → aprueba el descuento de la versión que se está viendo (`canvasId`; sin él, la activa). El porcentaje lo
- *         calcula el SERVIDOR con lo guardado: lo que diga el navegador no se aprueba. Gate: Ventas + rol de dirección.
+ *  POST → aprueba el descuento de la versión que se está viendo (`canvasId`; sin él, la activa), medido contra la
+ *         primera propuesta del trato (lib/business-cases/primera-propuesta-server.ts). El porcentaje lo calcula el
+ *         SERVIDOR con lo guardado: lo que diga el navegador no se aprueba. Gate: Ventas + rol de dirección.
  *
  * No cambia la propuesta ni llega al cliente: el snapshot, el PDF y la propuesta publicada no leen el v0.
  */
@@ -21,10 +22,11 @@ import {
   UMBRAL_DE_APROBACION,
   aprobacionesDe,
   conAprobacion,
-  descuentoDeServicios,
+  descuentoContraLaPrimera,
   puedeAprobarDescuentos,
   textoPorcentaje,
 } from "@/lib/business-cases/descuento";
+import { primeraPropuestaDe } from "@/lib/business-cases/primera-propuesta-server";
 
 type Params = Promise<{ id: string }>;
 
@@ -66,7 +68,10 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     : (versiones.find((v) => v.isActive) ?? [...versiones].sort((a, b) => b.version - a.version)[0]);
   if (!leida) return NextResponse.json({ error: "Esta propuesta todavía no tiene una versión." }, { status: 404 });
 
-  const descuento = descuentoDeServicios(leida.canvasSections[0]?.blocks[0]?.data ?? null);
+  // Contra la primera propuesta del trato (2026-10-21): la versión 1 de la propuesta más vieja del mismo negocio.
+  const primera = await primeraPropuestaDe(id);
+  const actual = leida.canvasSections[0]?.blocks[0]?.data ?? null;
+  const descuento = descuentoContraLaPrimera(primera && primera.canvasId !== leida.id ? primera.inversion : actual, actual);
   if (descuento.porcentaje <= UMBRAL_DE_APROBACION) {
     return NextResponse.json(
       { error: `El descuento guardado es del ${textoPorcentaje(descuento.porcentaje)}: no hace falta aprobarlo. Si lo acabas de cambiar, espera a que se guarde.` },

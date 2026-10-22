@@ -46,7 +46,7 @@ import {
 } from "@/lib/landing/inversion";
 import { ivaDelCierre, modoIvaDe, TASA_IVA_CR, type DesgloseIva, type ModoIva } from "@/lib/landing/iva";
 import { NOMBRE_DE_LA_FUENTE, type PaisDelCliente } from "@/lib/business-cases/pais-del-cliente";
-import { UMBRAL_DE_APROBACION, descuentoDeServicios, estadoDeLaAprobacion, textoPorcentaje } from "@/lib/business-cases/descuento";
+import { UMBRAL_DE_APROBACION, descuentoContraLaPrimera, estadoDeLaAprobacion, textoPorcentaje } from "@/lib/business-cases/descuento";
 
 /** El rótulo de un total con su IVA: «Total servicios + IVA» · «Pago único · IVA incluido». */
 function conIva(rotulo: string, modo: ModoIva, lang: LandingLang): string {
@@ -695,11 +695,12 @@ function GrupoTabla({
  */
 function AprobacionDelDescuento({ data, canal }: { data: WebInvestmentData; canal: NonNullable<SectionProps<WebInvestmentData>["ctx"]["propuesta"]>["descuento"] }) {
   const [ocupado, setOcupado] = useState(false);
-  if (!canal) return null;
-  const desc = descuentoDeServicios(data);
+  // Contra la primera propuesta del trato (2026-10-21): sin otra versión con qué comparar, no hay descuento que medir.
+  if (!canal?.primera) return null;
+  const desc = descuentoContraLaPrimera(canal.primera.inversion, data);
   if (desc.porcentaje <= UMBRAL_DE_APROBACION) return null;
   const estado = estadoDeLaAprobacion(desc.porcentaje, canal.aprobaciones);
-  const cuanto = `Descuento del ${textoPorcentaje(desc.porcentaje)} en los servicios (${formatRango({ min: desc.descontado, max: desc.descontado }, desc.moneda)} en 12 meses)`;
+  const cuanto = `Descuento del ${textoPorcentaje(desc.porcentaje)} en los servicios contra la primera propuesta (${formatRango({ min: desc.descontado, max: desc.descontado }, desc.moneda)} en 12 meses)`;
   if (estado.estado === "aprobado") {
     // La fecha en Costa Rica (UTC-6, sin horario de verano), armada a mano: `toLocale…` escribe distinto en Node y el navegador.
     const dia = new Date(+new Date(estado.aprobacion.en) - 6 * 3_600_000);

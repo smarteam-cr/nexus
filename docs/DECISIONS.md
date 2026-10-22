@@ -8142,20 +8142,20 @@ que quede registrado quién respondió.
 5 % fijo se llegue o no a la meta). Finanzas › Modelos › Comisiones (`/finanzas/modelo-de-comisiones`) muestra la
 propuesta en dos pestañas: «Cómo funciona» y «Simulación». Las reglas salen de la reunión del 2026-10-15.
 
-- **Es solo para Super Admin** (`isCostosRole`, el mismo gate de Costos): la simulación muestra lo que vendió y lo que
-  ganaría cada persona. Quién más la ve es una decisión pendiente.
+- **Quién la ve** (cerrado el 2026-10-21, ver «El modelo de comisiones cerrado con Marco»): «Cómo funciona», todo el
+  equipo comercial; la simulación, cada persona solo lo suyo; Super Admin, todo.
 - **Nada se paga ni se guarda.** Lo que paga hoy sigue en Comisiones de vendedor. Lo que se toca en la simulación (si
-  una venta es licencia, el valor mensual de una licencia, el tope del bono) se pierde al recargar.
+  una venta es licencia, el valor mensual de una licencia) se pierde al recargar.
 - **Las reglas viven en un solo lugar** (`lib/finanzas/modelo-comisiones/reglas.ts`, puro): las dos pestañas las leen,
   así una regla que cambia cambia la explicación y el cálculo.
 - **La meta es mensual y la de HubSpot** (`lib/ventas/metas.ts`, que ahora devuelve cada tramo). HubSpot la guarda por
   trimestre y la reparte por días; Nexus hace la misma cuenta, así la meta de cada mes es la del desglose mensual de
   HubSpot. Solo cuentan los servicios: las licencias no suman, aunque HubSpot cuente las que tienen monto.
 - **El equipo de ventas es quien tiene el rol de Ventas en Nexus** (hoy Andrés y Liz); lo lidera quien lleva más
-  tiempo. Marco vende pero no cuenta para el bono de nadie. El bono de quien lidera sale de las metas de las personas
-  que lidera, nunca de las suyas: US$ 500 al mes por persona que llega a su meta, desde el 70 %.
+  tiempo. Marco vende pero no cuenta para el bono de nadie. El bono de quien lidera sale de lo que venden las personas
+  que lidera, nunca de lo suyo (la regla del bono cambió el 2026-10-21: ver «El modelo de comisiones cerrado con Marco»).
 - **Quien lidera Customer Success gana un bono por el área, no por persona** (`BONO_DE_CUSTOMER_SUCCESS`): el 2 % de la
-  meta de expansión del trimestre, con el mismo mínimo (70 %) y tope del de Ventas. *Por qué:* US$ 500 por cada uno de
+  meta de expansión del trimestre, desde el 70 % y con tope del 150 %. *Por qué:* US$ 500 por cada uno de
   los 4 CSE sumaba un 18 % de costo sobre la expansión; así son el 5 % de los CSE más el 2 %, parejo en toda la escalera.
   Lo que vende Alex solo le da el 5 %; con un CSE, 2,5 % cada uno.
 - **La meta de Customer Success sube por escalones: US$ 25.000, 33.000, 37.000 y 40.000 por trimestre.** La base es lo
@@ -8170,7 +8170,7 @@ propuesta en dos pestañas: «Cómo funciona» y «Simulación». Las reglas sal
 - **Una venta es de Ventas en sus primeros 6 meses desde la primera venta del cliente**, de cualquier vendedor; después,
   de quien creó el negocio (la simulación toma al dueño del trato en HubSpot).
 - **Lo que falta decidir con Marco** está en la página, cada pregunta con su contexto, y se cierra antes de construir
-  el pago.
+  el pago. Se cerró el 2026-10-21: quedan dos pendientes (ver la sección de ese día).
 
 ## Comisiones que cuidan el valor de la cuenta (2026-10-18)
 
@@ -8180,22 +8180,21 @@ misma página del modelo (se explica y se simula, no se paga). Plan: `docs/comis
 
 - **Una venta vale lo único más 12 meses de lo recurrente, y el descuento sale de la base**: base = lo cerrado − lo
   descontado. El caso de Marco: 12 × 2.800 = 33.600, menos 2.400 = 31.200; al 5 %, US$ 1.560 en vez de US$ 1.680. Es la
-  prueba central (`lib/finanzas/modelo-comisiones/valor-de-la-cuenta.test.ts`). Cuánto del descuento sale (entero, la
-  mitad o nada) es una decisión de la simulación; la propuesta dice entero.
+  prueba central (`lib/finanzas/modelo-comisiones/valor-de-la-cuenta.test.ts`). El descuento sale entero (cerrado el
+  2026-10-21: ya no hay «la mitad» ni «nada»).
 - **El descuento no baja lo que cuenta para la meta**: la meta mide lo que se cerró; el descuento solo baja lo que
-  comisiona. **Lo recurrente pesa `FACTOR_DE_RECURRENCIA` (1,2) veces en la meta**, y la comisión se calcula sobre la
-  base, sin el factor: el factor solo ayuda a llegar al porcentaje más alto.
+  comisiona. Lo recurrente cuenta sus 12 meses, sin factor (el `FACTOR_DE_RECURRENCIA` de 1,2 se quitó el 2026-10-21).
 - **Una venta única cuenta completa en el mes en que se firma**, aunque se cobre en partes: una expansión de US$ 20.000
-  cuenta 20.000 y una recurrencia de US$ 1.000 al mes cuenta 14.400. Así el factor no hace que convenga más una
-  recurrencia chica que una expansión grande.
+  cuenta 20.000 y una recurrencia de US$ 1.000 al mes cuenta 12.000.
 - **Sin propuesta ni cambio, una venta es única y vale su monto de HubSpot**: el cálculo de antes no se mueve. Con una
-  propuesta en el mismo trato, sus servicios dicen qué es único, qué es al mes y cuánto se descontó contra el precio de
-  lista (`descuentoDeServicios`, `lib/business-cases/descuento.ts`, con las cuentas del motor de la Inversión). Las
-  licencias no cuentan: pagan su propia comisión y su descuento lo da HubSpot. Una propuesta en otra moneda no se usa.
+  propuesta en el mismo trato, sus servicios dicen qué es único y qué es al mes (`descuentoDeServicios`,
+  `lib/business-cases/descuento.ts`, con las cuentas del motor de la Inversión). Lo descontado se mide contra la primera
+  propuesta del trato (2026-10-21, ver la sección de ese día), ya no contra un precio de lista. Las licencias no
+  cuentan: pagan su propia comisión y su descuento lo da HubSpot. Una propuesta en otra moneda no se usa.
 - **«Antes» y «ahora» salen de la misma función** (`simularVendedor`, con `sinCuidarElValor` para el antes): «antes» es
-  la propuesta del 15 de octubre, así la diferencia que se ve es solo la de esta iniciativa.
-- **Un descuento de más del `UMBRAL_DE_APROBACION` (10 %) lo aprueba dirección en la propuesta**, sobre el precio de
-  lista de 12 meses de los servicios. Lo aprueba un ROL (`ROLES_QUE_APRUEBAN_DESCUENTOS`, Super Admin), no un correo; el
+  el descuento dentro de la base, así la diferencia que se ve es solo la de esta iniciativa.
+- **Un descuento de más del `UMBRAL_DE_APROBACION` (10 %) lo aprueba dirección en la propuesta**, medido contra la
+  primera propuesta del trato. Lo aprueba un ROL (`ROLES_QUE_APRUEBAN_DESCUENTOS`, Super Admin), no un correo; el
   texto dice «Marco». La franja vive en el editor de la Inversión (no llega al cliente ni al PDF) y **solo avisa: no
   frena «Subir al cliente»**.
 - **La aprobación vive en la entry `__descuento` del Json de secciones del canvas v0, sin SQL**: el v0 no se regenera,
@@ -8204,8 +8203,86 @@ misma página del modelo (se explica y se simula, no se paga). Plan: `docs/comis
   porcentaje; vale mientras el descuento no suba por encima de lo aprobado. Quedan las últimas 10.
 - **La simulación marca** «Sin aprobar» una venta cuya propuesta pasa el umbral sin aprobación, y «No se sabe si se
   aprobó» cuando el descuento se escribió a mano.
-- **Lo que falta decidir con Marco**: el umbral del 10 %, el factor 1,2 y cuánto del descuento sale de la base. Están en
-  «Decisiones pendientes», y las dos últimas se prueban en la simulación.
+- **Lo que faltaba decidir con Marco** (el umbral del 10 %, el factor 1,2 y cuánto del descuento sale) se cerró el
+  2026-10-21: 10 %, sin factor, entero.
+
+## El modelo de comisiones cerrado con Marco (2026-10-21)
+
+**Contexto.** Elías cerró el modelo con Marco y pasó 16 puntos. La página sigue explicando y simulando: el pago sigue en
+Comisiones de vendedor hasta que se construya. Las reglas viven en `lib/finanzas/modelo-comisiones/reglas.ts`; lo que
+dicen las dos pestañas sale de ahí.
+
+- **Rige desde el 1 de noviembre de 2026; los bonos, desde el trimestre que empieza en enero de 2027.** Reemplaza todas
+  las condiciones anteriores; lo vendido antes se paga como se acordó. La simulación muestra el año entero como si
+  hubiera regido, para comparar. Arriba de la página va el aviso «Modelo en prueba…», con el texto de Elías tal cual.
+- **Una venta vale lo único más 12 meses de lo mensual, para la meta y para la comisión.** Sin factor. El descuento sale
+  entero de la base de la comisión y no baja lo que cuenta para la meta.
+- **El descuento se mide contra la primera propuesta del mismo trato**, hasta que existan precios estándar por caso de
+  uso (la página lo dice). La primera propuesta es la versión 1 (la de número más bajo después del v0) de la propuesta
+  más vieja con ese `hubspotDealId`; sin trato, la de la misma propuesta. Lo descontado es lo que valía esa versión a
+  12 meses menos lo que vale la que se mira, nunca negativo; el porcentaje es sobre lo que valía la primera. Lo lee
+  `descuentoContraLaPrimera` (puro, `lib/business-cases/descuento.ts`) y la primera la busca
+  `lib/business-cases/primera-propuesta-server.ts`; lo usan la simulación, el aviso del editor de la Inversión y la ruta
+  que aprueba. *Consecuencia aceptada por Elías:* un precio tachado que ya viene en la primera versión no cuenta como
+  descuento, porque no hay precio de lista contra el cual medirlo. Si la primera versión se editó después en el lugar,
+  Nexus ve cómo está hoy. Si la primera no tiene servicios o está en otra moneda, no hay contra qué medir y el
+  descuento es cero. Un cambio de alcance (sacar un servicio) baja el valor y se lee como descuento: en la simulación se
+  corrige a mano. El aviso a dirección sigue en el 10 %.
+- **Comisión de quien vende: 3 % por debajo del 50 % de la meta del mes, 4 % hasta el 100 %, 5 % desde ahí. Para
+  todos.** La oferta de Liz dice 60 %: está en «Lo que no cuadra» de la página.
+- **Bono de quien lidera Ventas** (`BONO_DEL_LIDER`): el 1/60 de lo que vende cada persona que lidera (US$ 500 por cada
+  US$ 30.000, el 1,67 %), mes por mes. Ese mes cuenta si la persona llegó al 70 % de SU meta del mes (en sus primeros
+  meses, la reducida que tenga en HubSpot); lo vendido deja de crecer en el 150 % de esa meta. Se suma por trimestre y
+  se paga cada trimestre. Las ventas de quien lidera no cuentan. Lo vendido de cada persona es lo mismo que mide su
+  comisión (`simularVendedor`: sin renovaciones, sin las ventas que se cayeron, la compartida completa), ya no el avance
+  de su meta en HubSpot. Ejemplos que fija la prueba: meta 10.000 y vende 8.000, 133,33; meta 30.000: 18.000 da 0,
+  30.000 da 500 y 50.000 da 750. Para calcularlo, quien lidera ve lo que vendió cada persona que lidera.
+- **Tope de los dos bonos: 150 %** (`TOPE_DE_LOS_BONOS`), fijo. El de Customer Success sigue siendo el 2 % de la meta
+  del área, desde el 70 %.
+- **El bono de Andrés y el de Alex se calculan distinto, a propósito**: en el de Andrés solo cuenta lo que vende su
+  equipo, porque sus propias ventas ya le pagan comisión; en el de Alex cuenta todo lo que crece la cartera, también lo
+  que venda él. La página lo explica.
+- **Una venta que se cae en sus primeros 90 días** (`DIAS_PARA_CAERSE`) se resta del mes en que se firmó, el porcentaje
+  de ese mes se recalcula y la diferencia se descuenta de las próximas comisiones; nunca se pide dinero de vuelta. Vale
+  igual para un servicio mensual cancelado en ese plazo, y para Ventas y Customer Success. Nexus lo sabe solo cuando el
+  trato pasa a perdido o se reabre en HubSpot (la fecha es la del cambio de estado en `VentaGanadaCambio`); un servicio
+  que el cliente deja de pagar sin que el trato cambie se marca a mano en la simulación, porque Cobranza no guarda
+  cuándo terminó un servicio. Eso hay que resolverlo antes de construir el pago. Una venta que se cae después de los
+  90 días no se descuenta.
+- **Datos de cada negocio, desde HubSpot** (SQL `scripts/sql/2026-10-21-tipo-de-negocio-y-compartida.sql`):
+  - `VentaGanada.tipoDeNegocio` (`nuevo` · `expansion` · `renovacion`) sale de la propiedad de trato `motion_comercial`,
+    que ya existía, con la opción «Renovación» sumada. «Recuperación» cuenta como `nuevo` (un cliente que vuelve es
+    trabajo de Ventas). Se lee el valor de hoy: el tipo se puede corregir después de la firma (así se cierran los casos
+    que confirma Alex). Vacío = Nexus lo deduce como antes (primera venta del cliente, cliente nuevo; si no, expansión)
+    y la simulación dice «deducido».
+  - La marca de venta compartida es la propiedad nueva «Venta compartida con» (`venta_compartida_con`, un usuario de
+    HubSpot). La pone quien crea el negocio, antes de la firma: el sync lee su historia y se queda con el valor que
+    tenía al entrar a ganado (`ganadaEn`). Si se puso o cambió después, no vale: `compartidaDespuesDeLaFirma` lo deja
+    a la vista y la simulación lo dice.
+- **Venta compartida entre Ventas y Customer Success**: la mitad de la comisión para cada uno (quien vende con su
+  porcentaje del mes, el CSE con su 5 %), y la venta cuenta completa en las dos metas. Sin marca, la venta es entera de
+  su dueño en HubSpot: ya no se supone el 50 · 50.
+- **Una venta de Customer Success sin Ventas cuenta solo para la meta de Customer Success.** Una venta es de Customer
+  Success cuando su dueño en HubSpot tiene rol CSE o CSL.
+- **Renovaciones** (`RENOVACION`): no cuentan para ninguna meta ni pagan comisión de vendedor. El CSE encargado de la
+  cuenta (`lib/cuentas/encargado.ts`, la regla única) recibe un bono del 2 % sobre un año del contrato renovado, si se
+  renovó a tiempo y sin descuento; se le paga cuando el cliente paga. «A tiempo» no lo sabe Nexus: la simulación lo
+  supone y deja cambiarlo. Lo que crece en la renovación (más alcance o más precio) es expansión: paga el 5 % y cuenta
+  para la meta; en HubSpot va como su propio negocio de expansión. Un servicio mensual sin fecha de fin
+  (`ServicioContratado` recurrente sin `duracionMeses`, activo) cuenta como renovación en cada aniversario de su
+  `fechaInicioFacturacion`, por 12 veces su monto mensual. Las licencias no cambian.
+- **Techos, solo Super Admin** (`TECHOS`): lo que se paga a quienes atienden al cliente (quien vende, Customer Success
+  y quien lidera) hasta el 7 % de los servicios vendidos, y todo hasta el 10 %, sin licencias en ningún lado. Se mide
+  por trimestre; si se pasa, se ajusta la versión siguiente y nunca se recorta lo ya ganado. Hoy nadie más cobra
+  comisión, así que los dos números miden lo mismo; la comisión de Marco entra aunque la done.
+- **Quién ve qué**: entran Super Admin y los roles comerciales (`ROLES_QUE_VEN_COMISIONES`: Ventas, CSE, CSL). «Cómo
+  funciona» es igual para todos. La simulación se carga en el servidor solo con lo de quien mira
+  (`cargarSimulacionDeComisiones(alcance)`): sus ventas y su meta, las de las personas que lidera si lidera Ventas, y
+  lo del área si lidera Customer Success. Super Admin ve a todos y los techos. Lo de cada persona es privado, como un
+  salario: el filtro es del servidor, nunca de la pantalla.
+- **Pendientes que quedan**: la meta de ventas de toda la empresa (con Marco) y si RC Inmobiliaria, Honda, JUDESUR y
+  APRECAP son renovaciones o expansiones (con Alex). En «Lo que no cuadra»: la oferta de Liz dice 60 % para el tramo del
+  3 % y debe decir 50 %.
 
 ## Agregar una reunión a mano: la transcripción o lo que se recuerda (2026-10-15)
 

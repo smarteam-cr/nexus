@@ -10,6 +10,8 @@
  * Solo los SERVICIOS de Smarteam (`lineas`): las licencias pagan su propia comisión y su descuento lo da HubSpot. El
  * descuento de cada línea sale del motor de la Inversión (`montoDeLinea`: `bruto` es el precio de lista, `rango` lo que
  * se cobra), así que es el mismo número que ve el cliente tachado. Todo se lleva a 12 meses: lo recurrente × 12.
+ * Desde el 2026-10-21 el descuento que cuenta (comisión y aprobación) es el de `descuentoContraLaPrimera`: lo que bajó
+ * contra la primera propuesta del trato. `descuentoDeServicios` queda como la lectura de una versión.
  *
  * ── DÓNDE QUEDA LA APROBACIÓN, SIN SQL ──────────────────────────────────────
  * Entry reservada `__descuento` del Json `ProjectCanvas.sections` del canvas v0 de la propuesta (el mismo contrato que
@@ -19,7 +21,7 @@
  */
 import { adoptarRecurrentes, adoptarShapeNuevo, esInversionLegacy, esLineaActiva, esRecurrente, gruposDeInversion, montoDeLinea, type InversionData } from "@/lib/landing/inversion";
 
-/** Por encima de este porcentaje de descuento (sobre el precio de lista de 12 meses), lo aprueba dirección. */
+/** Por encima de este porcentaje de descuento (contra la primera propuesta del trato, a 12 meses), lo aprueba dirección. */
 export const UMBRAL_DE_APROBACION = 10;
 
 /** Quién aprueba un descuento: dirección (Marco). Un rol, no un correo: si cambia quién dirige, no hay que tocar código. */
@@ -99,6 +101,51 @@ export function descuentoDeServicios(data: unknown): DescuentoDeServicios {
     porcentaje: lista > 0 ? r2((descontado / lista) * 100) : 0,
     incompleto,
     hayServicios,
+  };
+}
+
+// ── Contra la primera propuesta (2026-10-21) ───────────────────────────────────
+
+export interface DescuentoContraLaPrimera {
+  moneda: string;
+  /** Lo que se cobra una vez y al mes en la versión que se mira. */
+  unico: number;
+  mensual: number;
+  /** Lo que vale a 12 meses la versión que se mira, y lo que valía la primera. */
+  valor: number;
+  valorDeLaPrimera: number;
+  /** Lo que valía la primera menos lo que vale esta, a 12 meses. Nunca negativo. */
+  descontado: number;
+  /** Lo descontado sobre lo que valía la primera, en por ciento. */
+  porcentaje: number;
+  incompleto: boolean;
+  hayServicios: boolean;
+  /** Hubo contra qué medir: la primera tiene servicios y está en la misma moneda. */
+  comparable: boolean;
+}
+
+/**
+ * El descuento de una versión de la propuesta medido contra la PRIMERA propuesta del mismo trato (DECISIONS «El modelo
+ * de comisiones cerrado con Marco»): hasta que existan precios estándar por caso de uso, no hay precio de lista contra
+ * el cual medir. Un precio tachado que ya venía en la primera no cuenta. Sin primera con servicios, o en otra moneda,
+ * no hay contra qué medir y el descuento es cero.
+ */
+export function descuentoContraLaPrimera(primera: unknown, actual: unknown): DescuentoContraLaPrimera {
+  const a = descuentoDeServicios(actual);
+  const p = descuentoDeServicios(primera);
+  const comparable = p.hayServicios && a.hayServicios && (p.moneda || a.moneda) === (a.moneda || p.moneda);
+  const descontado = comparable ? r2(Math.max(0, p.valor - a.valor)) : 0;
+  return {
+    moneda: a.moneda,
+    unico: a.unico,
+    mensual: a.mensual,
+    valor: a.valor,
+    valorDeLaPrimera: comparable ? p.valor : a.valor,
+    descontado,
+    porcentaje: comparable && p.valor > 0 ? r2((descontado / p.valor) * 100) : 0,
+    incompleto: a.incompleto || (comparable && p.incompleto),
+    hayServicios: a.hayServicios,
+    comparable,
   };
 }
 

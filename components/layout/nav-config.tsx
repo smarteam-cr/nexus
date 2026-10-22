@@ -20,6 +20,7 @@ import type { PermissionMap } from "@/lib/auth/permissions/types";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import { MARKETING_NAV } from "@/components/marketing/nav-config";
 import { ROLES_DEL_SEGUIMIENTO, ENTRADA_DE_EXITO_DEL_CLIENTE } from "@/lib/cs/acceso";
+import { ROLES_QUE_VEN_COMISIONES } from "@/lib/finanzas/modelo-comisiones/quien-ve";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,11 @@ export interface NavChildConfig {
   vistas?: readonly VistaFinanzas[];
   /** Además de lo anterior, el hijo pide este permiso (p. ej. `gastos.read` para lo de gastos sin salarios). */
   permiso?: { section: string; action: string };
+  /**
+   * Hijo solo para estos ROLES (Super Admin incluido solo si está en la lista). Comisiones bajo Ventas (2026-10-21): la
+   * ve el equipo comercial; Super Admin la tiene en Finanzas › Modelos.
+   */
+  roles?: readonly string[];
   /**
    * Hoja de quien REGISTRA que Super Admin no ve en el menú (2026-10-18, decisión de Elías): Pendientes, y Comisiones de
    * vendedor y Aguinaldo como entradas sueltas, porque para Super Admin ya están dentro de Planilla. Solo el menú: la
@@ -156,11 +162,12 @@ export function canSeeNavItem(item: Pick<NavItemConfig, "gate">, ctx: NavContext
  */
 export function visibleNavChildren(
   item: Pick<NavItemConfig, "children">,
-  ctx: { isCostos: boolean; vista?: VistaFinanzas; permissions?: PermissionMap },
+  ctx: { isCostos: boolean; vista?: VistaFinanzas; permissions?: PermissionMap; role?: string | null },
 ): NavChildConfig[] {
   const sections = (ctx.permissions?.sections ?? {}) as Record<string, Record<string, boolean> | undefined>;
   return (item.children ?? []).filter(
     (c) =>
+      (!c.roles || (!!ctx.role && c.roles.includes(ctx.role))) &&
       (!c.costosOnly || ctx.isCostos) &&
       (!c.soloQuienRegistra || !ctx.isCostos) &&
       // Super Admin ve TODO Finanzas en cualquier vista (Elías, 2026-10-08): la vista elige adónde entra, no qué ve.
@@ -323,6 +330,9 @@ export const APP_NAV: readonly NavItemConfig[] = [
       // Licitaciones públicas: viven como tickets del pipeline «Gobiernos» de HubSpot,
       // no como tratos. Una hoja se declara acá en la MISMA tanda que crea su ruta.
       { href: "/sales/sicop", label: "SICOP", permiso: { section: "ventas", action: "read" } },
+      // El modelo de comisiones (2026-10-21): el equipo comercial lee «Cómo funciona» y simula lo suyo. La página
+      // carga solo lo de quien mira (lib/finanzas/modelo-comisiones/quien-ve.ts).
+      { href: "/finanzas/modelo-de-comisiones", label: "Comisiones", roles: ROLES_QUE_VEN_COMISIONES },
     ],
     icon: icon("M3 3v18h18M7 14l4-4 3 3 5-6"),
   },

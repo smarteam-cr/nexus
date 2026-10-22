@@ -309,6 +309,7 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
                       isCostos: isCostosRole(role),
                       vista: user.vistaFinanzas,
                       permissions: user.permissions,
+                      role: user.role,
                     });
                     return <NavFlyout key={item.key} item={item} items={children} isOpen={isOpen} />;
                   }

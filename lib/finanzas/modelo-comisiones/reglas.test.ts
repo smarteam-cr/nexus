@@ -1,17 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
   BONO_DE_CUSTOMER_SUCCESS,
-  DECISIONES_DE_LA_PROPUESTA,
-  bonoDeCustomerSuccessAlCien,
+  TECHOS,
   aQuienLeCuenta,
+  bonoDeCustomerSuccess,
+  bonoDeCustomerSuccessAlCien,
+  bonoDeRenovacion,
+  bonoDelAreaDeCustomerSuccess,
   bonoDelLider,
-  bonoTrimestral,
+  bonoDelLiderPorPersona,
   comisionDeLicencia,
+  metaDeCustomerSuccess,
   metaDelMes,
   pareceLicencia,
   porcentajeDelCumplimiento,
+  renovacionesDelAnio,
+  seCayoATiempo,
   simularVendedor,
   sumarMeses,
+  techoDelTrimestre,
+  type PeriodoSimulado,
   type TramoDeMeta,
   type VentaParaSimular,
 } from "./reglas";
@@ -38,35 +46,107 @@ describe("los tramos de la comisión por venta", () => {
     expect(porcentajeDelCumplimiento(25000 / 30000)).toBe(4);
     expect(porcentajeDelCumplimiento(31500 / 30000)).toBe(5);
   });
-  it("el 50 % y el 100 % ya son del tramo de arriba: 30.000 de 30.000 paga 5 %", () => {
+  it("el 3 % corre por debajo del 50 %, para todos: el 50 % y el 100 % ya son del tramo de arriba", () => {
+    expect(porcentajeDelCumplimiento(0.49)).toBe(3);
     expect(porcentajeDelCumplimiento(0.5)).toBe(4);
+    expect(porcentajeDelCumplimiento(0.55)).toBe(4); // con el 60 % de la oferta de Liz sería 3 %
     expect(porcentajeDelCumplimiento(1)).toBe(5);
     expect(porcentajeDelCumplimiento(29900 / 30000)).toBe(4);
   });
 });
 
-describe("licencias y bono", () => {
+describe("el bono de quien lidera Ventas", () => {
+  it("los ejemplos de Elías: meta 10.000 y vende 8.000 → 133; meta 30.000: 18.000 → 0, 30.000 → 500, 50.000 → 750", () => {
+    expect(bonoDelLiderPorPersona(8000, 10000)).toBeCloseTo(133.33, 2);
+    expect(bonoDelLiderPorPersona(18000, 30000)).toBe(0);
+    expect(bonoDelLiderPorPersona(30000, 30000)).toBe(500);
+    expect(bonoDelLiderPorPersona(50000, 30000)).toBe(750);
+  });
+  it("desde el 70 % de SU meta, justo en el borde; sin meta, nada", () => {
+    expect(bonoDelLiderPorPersona(21000, 30000)).toBe(350);
+    expect(bonoDelLiderPorPersona(20999, 30000)).toBe(0);
+    expect(bonoDelLiderPorPersona(5000, null)).toBe(0);
+    expect(bonoDelLiderPorPersona(5000, 0)).toBe(0);
+  });
+
+  const mes = (numero: number, meta: number | null, vendido: number): PeriodoSimulado => ({
+    clave: `2026-${String(numero).padStart(2, "0")}`,
+    numero,
+    enCurso: false,
+    meta,
+    vendido,
+    cumplimiento: meta ? vendido / meta : null,
+    porcentaje: 4,
+    comision: 0,
+    aDescontar: 0,
+  });
+
+  it("se suma mes por mes y persona por persona en cada trimestre; las ventas de quien lidera no entran", () => {
+    const liz = { nombre: "Liz", periodos: [mes(1, 10000, 8000), mes(2, 20000, 10000), mes(3, 30000, 50000), mes(4, 30000, 30000)] };
+    const t = bonoDelLider(4, [liz]);
+    expect(t).toHaveLength(2);
+    expect(t[0]).toMatchObject({ personas: 1, meta: 60000, vendido: 68000, mesesBajoElMinimo: 1, mesesConTope: 1 });
+    expect(t[0].bono).toBeCloseTo(133.33 + 0 + 750, 2);
+    expect(t[1]).toMatchObject({ enCurso: true, bono: 500 });
+  });
+  it("sin nadie con meta, no hay bono", () => {
+    expect(bonoDelLider(4, [])[0]).toMatchObject({ personas: 0, bono: 0 });
+    expect(bonoDelLider(2, [{ nombre: "Liz", periodos: [mes(1, null, 9000)] }])[0]).toMatchObject({ personas: 0, bono: 0 });
+  });
+});
+
+describe("el bono de quien lidera Customer Success", () => {
+  it("es el 2 % de la meta del trimestre, que sube por escalones", () => {
+    const metas = BONO_DE_CUSTOMER_SUCCESS.escalera.map((e) => e.meta);
+    expect(metas).toEqual([...metas].sort((a, b) => a - b));
+    expect(bonoDeCustomerSuccessAlCien(25000)).toBe(500);
+    expect(metaDeCustomerSuccess(1)).toBe(25000);
+    expect(metaDeCustomerSuccess(9)).toBe(40000);
+  });
+  it("desde el 70 % y con tope del 150 %", () => {
+    expect(bonoDeCustomerSuccess(25000, 17500)).toBe(350);
+    expect(bonoDeCustomerSuccess(25000, 17499)).toBe(0);
+    expect(bonoDeCustomerSuccess(25000, 100000)).toBe(750);
+  });
+  it("el ritmo de hoy es la base de 12 meses sin renovaciones, repartida en 4 trimestres", () => {
+    const ritmo = BONO_DE_CUSTOMER_SUCCESS.base.expansion / 4;
+    expect(Math.abs(BONO_DE_CUSTOMER_SUCCESS.escalera[1].meta - ritmo)).toBeLessThan(1000);
+  });
+  it("el área trimestre a trimestre: lo que creció contra su escalón", () => {
+    const area = simularVendedor({
+      anio: 2026,
+      mesActual: 4,
+      ventas: [venta({ id: "a", fecha: "2026-02-10", monto: 20000, primeraVenta: "2024-01-01" }), venta({ id: "b", fecha: "2026-04-02", monto: 9000, primeraVenta: "2024-01-01" })],
+      tramos: [],
+      area: "customerSuccess",
+    });
+    const t = bonoDelAreaDeCustomerSuccess(4, area.periodos);
+    expect(t[0]).toMatchObject({ meta: 25000, vendido: 20000, bono: 400 });
+    expect(t[1]).toMatchObject({ meta: 33000, vendido: 9000, bono: 0, enCurso: true });
+  });
+});
+
+describe("licencias", () => {
   it("una licencia de 621 al mes paga 62,10 durante 3 meses: 186,30", () => {
     expect(comisionDeLicencia(621)).toBe(186.3);
-  });
-  it("el bono con una persona liderada (1.500 al trimestre): cero bajo el 70 %, proporcional en el medio, con tope", () => {
-    expect(bonoTrimestral(1500, 0.69)).toBe(0);
-    expect(bonoTrimestral(1500, 0.8)).toBeCloseTo(1200);
-    expect(bonoTrimestral(1500, 2.5)).toBe(3000);
-    expect(bonoTrimestral(1500, 2.5, 1.5)).toBe(2250);
   });
 });
 
 describe("a quién le cuenta una venta", () => {
-  it("cliente nuevo, primeros 6 meses y expansión", () => {
-    expect(aQuienLeCuenta(venta({ id: "a", fecha: "2026-05-05" }), "completa").como).toBe("clienteNuevo");
-    expect(aQuienLeCuenta(venta({ id: "a", fecha: "2026-02-02", primeraVenta: "2025-12-23" }), "completa").como).toBe("primerosMeses");
-    const exp = aQuienLeCuenta(venta({ id: "a", fecha: "2026-01-30", primeraVenta: "2024-05-31" }), "mitad");
-    expect(exp).toEqual({ como: "expansion", parte: 0.5 });
-    expect(aQuienLeCuenta(venta({ id: "a", fecha: "2026-01-30", primeraVenta: "2024-05-31" }), "completa").parte).toBe(1);
+  it("deducido: cliente nuevo, primeros 6 meses y expansión", () => {
+    expect(aQuienLeCuenta(venta({ id: "a", fecha: "2026-05-05" }))).toEqual({ como: "clienteNuevo", parte: 1, deducido: true });
+    expect(aQuienLeCuenta(venta({ id: "a", fecha: "2026-02-02", primeraVenta: "2025-12-23" })).como).toBe("primerosMeses");
+    expect(aQuienLeCuenta(venta({ id: "a", fecha: "2026-01-30", primeraVenta: "2024-05-31" }))).toEqual({ como: "expansion", parte: 1, deducido: true });
+  });
+  it("lo que dice HubSpot manda: una renovación no cuenta; un nuevo marcado no se deduce", () => {
+    expect(aQuienLeCuenta(venta({ id: "a", fecha: "2026-01-30", primeraVenta: "2024-05-31", tipoDeNegocio: "renovacion" }))).toEqual({ como: "renovacion", parte: 0, deducido: false });
+    expect(aQuienLeCuenta(venta({ id: "a", fecha: "2026-01-30", primeraVenta: "2024-05-31", tipoDeNegocio: "nuevo" })).como).toBe("clienteNuevo");
+  });
+  it("compartida, la mitad; sin marca ya no se supone el 50 · 50", () => {
+    expect(aQuienLeCuenta(venta({ id: "a", fecha: "2026-01-30", primeraVenta: "2024-05-31", compartidaCon: { id: "cse", nombre: "Caro" } })).parte).toBe(0.5);
   });
   it("sin empresa en Nexus cuenta como cliente nuevo de Ventas", () => {
-    expect(aQuienLeCuenta(venta({ id: "a", fecha: "2026-01-13", cliente: null, primeraVenta: null }), "mitad")).toEqual({ como: "sinEmpresa", parte: 1 });
+    expect(aQuienLeCuenta(venta({ id: "a", fecha: "2026-01-13", cliente: null, primeraVenta: null }))).toEqual({ como: "sinEmpresa", parte: 1, deducido: true });
   });
   it("sumarMeses cruza el año", () => {
     expect(sumarMeses("2025-12-23", 6)).toBe("2026-06-23");
@@ -101,7 +181,7 @@ describe("la simulación de un vendedor", () => {
     venta({ id: "lic", fecha: "2026-03-21", nombre: "Licencias Sales Pro", monto: null }),
     venta({ id: "crc", fecha: "2026-03-22", monto: 3_000_000, moneda: "CRC" }),
   ];
-  const base = { anio: 2026, mesActual: 4, ventas, tramos: TRAMOS, decisiones: DECISIONES_DE_LA_PROPUESTA };
+  const base = { anio: 2026, mesActual: 4, ventas, tramos: TRAMOS };
 
   it("cada mes con su porcentaje, aplicado a todo lo del mes", () => {
     const s = simularVendedor(base);
@@ -117,17 +197,17 @@ describe("la simulación de un vendedor", () => {
     expect(s.conElPorcentajeDeHoy).toBe(2325);
   });
 
-  it("la expansión 50 · 50 parte a la mitad solo lo de después de los 6 meses", () => {
-    const s = simularVendedor({ ...base, decisiones: { ...DECISIONES_DE_LA_PROPUESTA, expansion: "mitad" } });
+  it("una venta compartida paga la mitad y cuenta completa para la meta", () => {
+    const s = simularVendedor({ ...base, ventas: ventas.map((v) => (v.id === "v3" ? { ...v, compartidaCon: { id: "cse", nombre: "Caro" } } : v)) });
     expect(s.servicios.find((x) => x.venta.id === "v3")!.comision).toBe(50);
-    expect(s.servicios.find((x) => x.venta.id === "v2")!.comision).toBe(1575);
+    expect(s.periodos.find((p) => p.clave === "2026-03")!.vendido).toBe(33500);
   });
 
-  it("por trimestre, el cumplimiento se mide con la meta del trimestre", () => {
-    const s = simularVendedor({ ...base, decisiones: { ...DECISIONES_DE_LA_PROPUESTA, medida: "trimestre" } });
-    expect(s.periodos.map((p) => p.clave)).toEqual(["2026-T1", "2026-T2"]);
-    expect(s.periodos[0].vendido).toBe(46500);
-    expect(s.periodos[0].porcentaje).toBe(4);
+  it("una renovación no cuenta para la meta ni comisiona", () => {
+    const s = simularVendedor({ ...base, ventas: ventas.map((v) => (v.id === "v3" ? { ...v, tipoDeNegocio: "renovacion" as const } : v)) });
+    const mar = s.periodos.find((p) => p.clave === "2026-03")!;
+    expect(mar.vendido).toBe(31500);
+    expect(s.servicios.find((x) => x.venta.id === "v3")!.comision).toBeNull();
   });
 
   it("una licencia sin valor no paga; con valor y traída por Smarteam, 10 % × 3", () => {
@@ -148,42 +228,72 @@ describe("la simulación de un vendedor", () => {
     expect(s.servicios.some((x) => x.venta.id === "v1")).toBe(false);
     expect(s.licencias.some((x) => x.venta.id === "v1")).toBe(true);
   });
-});
 
-describe("el bono de quien lidera Customer Success", () => {
-  it("es el 2 % de la meta del trimestre, que sube por escalones", () => {
-    const metas = BONO_DE_CUSTOMER_SUCCESS.escalera.map((e) => e.meta);
-    expect(metas).toEqual([...metas].sort((a, b) => a - b));
-    expect(bonoDeCustomerSuccessAlCien(25000)).toBe(500);
-    expect(bonoTrimestral(bonoDeCustomerSuccessAlCien(25000), 0.7)).toBeCloseTo(350);
-    expect(bonoTrimestral(bonoDeCustomerSuccessAlCien(25000), 0.69)).toBe(0);
-  });
-
-  it("el ritmo de hoy es la base de 12 meses sin renovaciones, repartida en 4 trimestres", () => {
-    const ritmo = BONO_DE_CUSTOMER_SUCCESS.base.expansion / 4;
-    expect(Math.abs(BONO_DE_CUSTOMER_SUCCESS.escalera[1].meta - ritmo)).toBeLessThan(1000);
+  it("Customer Success: el 5 % fijo, sin meta", () => {
+    const s = simularVendedor({ ...base, tramos: [], area: "customerSuccess" });
+    const mar = s.periodos.find((p) => p.clave === "2026-03")!;
+    expect(mar.meta).toBeNull();
+    expect(mar.porcentaje).toBe(5);
+    expect(mar.comision).toBe(1675);
   });
 });
 
-describe("el bono de quien lidera", () => {
-  const liz: TramoDeMeta[] = [
-    { desde: "2026-01-01", hasta: "2026-04-01", monto: 90000, avance: 90000 },
-    { desde: "2026-04-01", hasta: "2026-07-01", monto: 90000, avance: 60000 },
+describe("una venta que se cae", () => {
+  // Marzo: meta de 31.000 (31 de los 90 días de 90.000).
+  const ventas = [
+    venta({ id: "a", fecha: "2026-03-02", monto: 26000 }),
+    venta({ id: "b", fecha: "2026-03-05", monto: 6000, caida: { fecha: "2026-04-14", estado: "PERDIDA" } }),
   ];
-  it("US$ 500 al mes por persona liderada que llega a su meta; el trimestre de hoy todavía no paga", () => {
-    const t = bonoDelLider(2026, 5, [liz]);
-    expect(t[0].personas).toBe(1);
-    expect(t[0].base).toBe(1500);
-    expect(t[0].bono).toBe(1500);
-    expect(t[1].enCurso).toBe(true);
-    expect(t[1].bono).toBeNull();
+  const base = { anio: 2026, mesActual: 5, ventas, tramos: TRAMOS };
+
+  it("en sus primeros 90 días se resta del mes en que se firmó, y la diferencia se descuenta", () => {
+    const s = simularVendedor(base);
+    const mar = s.periodos.find((p) => p.clave === "2026-03")!;
+    expect(mar.vendido).toBe(26000);
+    expect(mar.porcentaje).toBe(4);
+    expect(mar.comision).toBe(1040);
+    // Con la venta: 32.000 de 31.000, 5 % de todo = 1.600. Sin ella: 1.040. Se descuentan 560.
+    expect(mar.aDescontar).toBe(560);
+    expect(s.totalADescontar).toBe(560);
+    expect(s.servicios.find((x) => x.venta.id === "b")).toMatchObject({ seCayo: true, comision: null });
   });
-  it("bajo el 70 % no hay bono", () => {
-    const t = bonoDelLider(2026, 7, [liz]);
-    expect(t[1].cumplimiento).toBeCloseTo(0.667, 2);
-    expect(t[1].bono).toBe(0);
+
+  it("pasados los 90 días no se descuenta nada", () => {
+    expect(seCayoATiempo(venta({ id: "x", fecha: "2026-03-05", caida: { fecha: "2026-07-01", estado: "PERDIDA" } }))).toBe(false);
+    expect(seCayoATiempo(venta({ id: "x", fecha: "2026-03-05", caida: { fecha: "2026-06-03", estado: "REABIERTA" } }))).toBe(true);
   });
-  it("sin nadie con meta, no hay bono", () => {
-    expect(bonoDelLider(2026, 4, [])[0]).toMatchObject({ personas: 0, base: 0, bono: 0 });
+
+  it("se puede marcar a mano (un servicio que se dejó de pagar sin que HubSpot cambie)", () => {
+    const s = simularVendedor({ ...base, ventas: [ventas[0]], ajustes: { a: { seCayo: true } } });
+    expect(s.periodos.find((p) => p.clave === "2026-03")!).toMatchObject({ vendido: 0, comision: 0, aDescontar: 1040 });
+  });
+});
+
+describe("las renovaciones", () => {
+  it("el 2 % de un año, solo a tiempo y sin descuento", () => {
+    expect(bonoDeRenovacion(25200, true, 0)).toBe(504);
+    expect(bonoDeRenovacion(25200, false, 0)).toBe(0);
+    expect(bonoDeRenovacion(25200, true, 100)).toBe(0);
+  });
+  it("los tratos marcados renovación y cada aniversario de un servicio mensual sin fin", () => {
+    const r = renovacionesDelAnio({
+      anio: 2026,
+      mesActual: 10,
+      tratos: [venta({ id: "acccsa", fecha: "2026-01-15", monto: 25200, tipoDeNegocio: "renovacion" }), venta({ id: "otra", fecha: "2026-02-01", monto: 9000 })],
+      mensuales: [{ id: "sop", cliente: "Wherex", nombre: "Soporte", inicio: "2024-06-01", mensual: 1000, moneda: "USD", encargado: { id: "cse", nombre: "Caro" } }],
+      ajustes: { "sop:2": { aTiempo: false } },
+    });
+    expect(r.map((x) => x.id)).toEqual(["acccsa", "sop:2"]);
+    expect(r[0]).toMatchObject({ valorDelAnio: 25200, bono: 504, aTiempo: true, aTiempoEscrito: false });
+    expect(r[1]).toMatchObject({ fecha: "2026-06-01", valorDelAnio: 12000, bono: 0, aTiempo: false });
+  });
+});
+
+describe("los techos", () => {
+  it("7 % para quienes atienden al cliente y 10 % en total", () => {
+    expect(TECHOS).toEqual({ quienesAtienden: 7, total: 10 });
+    expect(techoDelTrimestre(1, false, 100000, 6500)).toMatchObject({ porcentaje: 6.5, pasaQuienesAtienden: false, pasaElTotal: false });
+    expect(techoDelTrimestre(1, false, 100000, 8000)).toMatchObject({ pasaQuienesAtienden: true, pasaElTotal: false });
+    expect(techoDelTrimestre(1, false, 0, 0).porcentaje).toBeNull();
   });
 });

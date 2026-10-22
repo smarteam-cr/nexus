@@ -472,6 +472,8 @@ describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
    * app/(shell)/finanzas.
    */
   const NO_COSTOS: Record<string, string> = {
+    "modelo-de-comisiones":
+      "el modelo de comisiones (2026-10-21): entra el equipo comercial y la carga se filtra por quien mira (alcanceDeComisiones, lib/finanzas/modelo-comisiones/quien-ve.ts). Lo vigila quien-ve.test.ts: el alcance se decide antes de cargar",
     "ingresos-variables":
       "son INGRESOS (cobros ya registrados), no costos: su gate es cobranza.read, la superficie de ADMIN",
     "comisiones-partner":
