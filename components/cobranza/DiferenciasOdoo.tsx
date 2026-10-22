@@ -40,15 +40,16 @@
  * trabaja quien registra, y con eso arranca filtrada la vista de Dinia. Cada «Está bien así» y cada «Deshacer» va a la
  * ruta de su línea.
  *
- * ── Y EN GRUPOS, CON LO QUE NEXUS ORDENÓ SOLO (rediseño 2026-10-22) ─────────────
- * Juntas, la lista se lee por grupos según qué tocan en Nexus (lib/finanzas/conciliacion.ts › `agruparDiferencias`):
- * primero lo que cambia lo cobrado, después lo facturado que Nexus no ve, lo que hay que preguntar, los papeles y la
- * historia plegada. Arriba, lo que Nexus ordenó solo (lib/cobranza/libro/ordenar.ts), con «Deshacer». Las piezas viven en
- * components/finanzas/conciliacion/LoQueNoCuadra.tsx; las líneas son las mismas de siempre.
+ * ── Y POR DOCUMENTO, CON LO QUE NEXUS ORDENÓ SOLO (rediseño 2026-10-22) ─────────
+ * Juntas, la lista se lee por documento (lib/finanzas/conciliacion-por-documento.ts): facturas de Odoo, facturas de
+ * Mercury, cuotas de Nexus, depósitos y cuentas, cada uno con sus razones, contados por documento y no por «fila» (Elías:
+ * «esto no es una hoja de cálculo»). Arriba, lo que Nexus ordenó solo (lib/cobranza/libro/ordenar.ts), con «Deshacer».
+ * Cada razón se abre en su línea de siempre, con sus botones. Los filtros de quién y de dónde se fueron: la sección ya
+ * dice de dónde viene. `quienInicial="decisiones"` (Supervisión › «Decidir») sigue mostrando solo las decisiones.
  */
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, EmptyState, Input, Segmentado, Spinner } from "@/components/ui";
+import { Alert, Button, EmptyState, Input, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import {
@@ -62,24 +63,20 @@ import {
 } from "@/lib/cobranza/odoo/diferencias";
 import { fmtFecha } from "./format";
 import {
-  agruparDiferencias,
-  filasPorQuien,
   filtrarDiferencias,
   fuenteDeLinea,
   juntarDiferencias,
-  type FiltroFuente,
   type FiltroQuien,
 } from "@/lib/finanzas/conciliacion";
-import type { VistaFinanzas } from "@/lib/finanzas/vista";
+import { porDocumento } from "@/lib/finanzas/conciliacion-por-documento";
 import type { LoOrdenado } from "@/lib/cobranza/libro/ordenar-server";
 import {
   ColumnaDeContexto,
-  FacturasDudosas,
-  Historia,
   NexusOrdenoSolo,
-  ResumenDeHoy,
-  SeccionDeGrupo,
-  TarjetasDeGrupos,
+  ParaContabilidad,
+  ResumenPorDocumento,
+  SeccionPorDocumento,
+  TarjetasPorDocumento,
 } from "@/components/finanzas/conciliacion/LoQueNoCuadra";
 
 /** Una factura soltada cerrada a mano con «Ya está anulada» (`AnuladaAMano`, servicio.ts). */
@@ -188,8 +185,6 @@ const enLineas = (n: number) => (n === 1 ? "1 línea" : `${n} líneas`);
 
 export default function DiferenciasOdoo({
   fuente = "odoo",
-  vista = "SUPERVISA",
-  supervisor = "quien supervisa",
   quienInicial,
   onIrAEmparejar,
   onPendientes,
@@ -198,13 +193,6 @@ export default function DiferenciasOdoo({
 }: {
   /** Contra qué sistema se cruza: Odoo (por defecto), Mercury, o los dos juntos (Conciliación). */
   fuente?: FuenteDeDiferencias;
-  /**
-   * La vista de Finanzas de quien mira (lib/finanzas/vista.ts). Solo cambia cómo se nombran las decisiones («esperan a
-   * Alex» o «esperan tu decisión») y con qué filtro arranca la lista juntas. No cambia qué se puede hacer.
-   */
-  vista?: VistaFinanzas;
-  /** El nombre de pila de quien supervisa, para decirle a quien registra «Esperan a Alex». */
-  supervisor?: string;
   /** Con qué filtro arranca la lista juntas, cuando se llega con uno (Supervisión › «Decidir» abre las decisiones). */
   quienInicial?: FiltroQuien;
   /**
@@ -235,9 +223,9 @@ export default function DiferenciasOdoo({
   const [medidoMercury, setMedidoMercury] = useState<Medido | null>(null);
   /* Con las dos juntas, lo que Nexus ordenó solo y lo que dejó para una persona. null = no se pudo leer: la lista sigue. */
   const [ordenado, setOrdenado] = useState<LoOrdenado | null>(null);
-  /* Los filtros de la lista juntas. Quien registra arranca viendo lo suyo; quien supervisa, todo. */
-  const [filtroFuente, setFiltroFuente] = useState<FiltroFuente>("todas");
-  const [filtroQuien, setFiltroQuien] = useState<FiltroQuien>(quienInicial ?? (vista === "REGISTRA" ? "mias" : "todas"));
+  /* La lista juntas se ve entera; solo se recorta a las decisiones si se llega desde Supervisión › «Decidir». */
+  const [filtroQuien, setFiltroQuien] = useState<FiltroQuien>(quienInicial ?? "todas");
+  const soloDecisiones = filtroQuien === "decisiones";
   const [cargando, setCargando] = useState(true);
   /* Una escritura a la vez: la clave de la que está en curso, para decir «Guardando…» en su botón. */
   const [ocupado, setOcupado] = useState<string | null>(null);
@@ -412,26 +400,17 @@ export default function DiferenciasOdoo({
   const visibles = useMemo(
     () =>
       juntas
-        ? filtrarDiferencias(data?.inconsistencias ?? [], { fuente: filtroFuente, quien: filtroQuien })
+        ? filtrarDiferencias(data?.inconsistencias ?? [], { fuente: "todas", quien: filtroQuien })
         : (data?.inconsistencias ?? []),
-    [data, juntas, filtroFuente, filtroQuien],
+    [data, juntas, filtroQuien],
   );
   const resumen = useMemo(() => resumenDeDiferencias(visibles), [visibles]);
-  /* Lo que muestra cada botón de filtro: las filas pendientes de cada lado. */
-  const conteos = useMemo(() => {
-    const todas = data?.inconsistencias ?? [];
-    const filasDe = (ls: readonly DiferenciaOdoo[]) => ls.reduce((n, l) => n + l.items.length, 0);
-    return {
-      todas: filasDe(todas),
-      odoo: filasDe(todas.filter((l) => fuenteDeLinea(l.codigo) === "odoo")),
-      mercury: filasDe(todas.filter((l) => fuenteDeLinea(l.codigo) === "mercury")),
-      ...filasPorQuien(todas),
-    };
-  }, [data]);
   /* Una línea sin filas pendientes no es trabajo: sus filas están en «Marcadas». */
   const abiertas = useMemo(() => visibles.filter((i) => i.items.length > 0), [visibles]);
-  /* Juntas: los cinco grupos del rediseño (2026-10-22). */
-  const grupos = useMemo(() => (juntas ? agruparDiferencias(visibles) : []), [juntas, visibles]);
+  /* Juntas: por documento (2026-10-22). */
+  const porDoc = useMemo(() => porDocumento(visibles), [visibles]);
+  /* Lo que cuenta la pestaña juntas: documentos por resolver, de toda la lista (no del recorte de decisiones). */
+  const porResolver = useMemo(() => (juntas ? porDocumento(data?.inconsistencias ?? []).porResolver : 0), [juntas, data]);
   /* En «Marcadas» también las que tienen filas que volvieron porque cambió un número: se dice por qué volvieron. */
   const conMarcadas = useMemo(
     () => (data?.inconsistencias ?? []).filter((i) => i.marcadas.length > 0 || i.volvieron.length > 0),
@@ -439,8 +418,8 @@ export default function DiferenciasOdoo({
   );
   /* ⭐ El número de la pestaña sale de acá después de cada carga: marcar una fila lo baja sin recargar la página. */
   useEffect(() => {
-    if (data) onPendientes?.(juntas ? (vista === "REGISTRA" ? conteos.mias : conteos.todas) : resumen.filas);
-  }, [data, resumen.filas, onPendientes, juntas, vista, conteos]);
+    if (data) onPendientes?.(juntas ? porResolver : resumen.filas);
+  }, [data, resumen.filas, onPendientes, juntas, porResolver]);
   /* «Ya contado en» con el título de la otra línea: el código (ODOO-SIN-CUENTA) no lo entiende nadie. */
   const tituloDe = useMemo(
     () => new Map((data?.inconsistencias ?? []).map((i) => [i.codigo, i.titulo] as const)),
@@ -455,42 +434,6 @@ export default function DiferenciasOdoo({
     );
   }
   if (!data) return null;
-
-  /* Cómo se nombran las decisiones según quién mira: a Dinia le dicen que esperan a otro; a Alex, que esperan por él. */
-  const decisionesLabel = vista === "REGISTRA" ? `Esperan a ${supervisor}` : "Esperan tu decisión";
-
-  const filtros = (
-        <div data-recorrido="fin.conciliacion.filtros" className="flex flex-wrap items-center gap-3">
-          <Segmentado<FiltroQuien>
-            etiqueta="Quién lo resuelve"
-            valor={filtroQuien}
-            onCambio={setFiltroQuien}
-            opciones={[
-              {
-                clave: "mias",
-                etiqueta: vista === "REGISTRA" ? `Te tocan · ${conteos.mias}` : `Se arreglan registrando · ${conteos.mias}`,
-                title: "Lo que se arregla registrando o corrigiendo un dato.",
-              },
-              {
-                clave: "decisiones",
-                etiqueta: `${decisionesLabel} · ${conteos.decisiones}`,
-                title: "Preguntas de negocio, como «¿entró esta plata?». Las decide quien supervisa.",
-              },
-              { clave: "todas", etiqueta: `Todas · ${conteos.todas}` },
-            ]}
-          />
-          <Segmentado<FiltroFuente>
-            etiqueta="De dónde viene"
-            valor={filtroFuente}
-            onCambio={setFiltroFuente}
-            opciones={[
-              { clave: "todas", etiqueta: "Odoo y Mercury" },
-              { clave: "odoo", etiqueta: `Odoo · ${conteos.odoo}` },
-              { clave: "mercury", etiqueta: `Mercury · ${conteos.mercury}` },
-            ]}
-          />
-        </div>
-  );
 
   const lineaDe = (inc: DiferenciaOdoo) => (
     <Linea
@@ -526,37 +469,33 @@ export default function DiferenciasOdoo({
   );
 
   if (juntas) {
-    const historia = grupos.find((g) => g.grupo === "HISTORIA")!;
-    const trabajo = grupos.filter((g) => g.grupo !== "HISTORIA");
-    const dudosas = ordenado?.dudosas ?? [];
+    const secciones = porDoc.secciones.filter((x) => x.seccion !== "CONTABILIDAD");
+    const contabilidad = porDoc.secciones.find((x) => x.seccion === "CONTABILIDAD");
     return (
       <div className="flex flex-wrap items-start gap-6">
         <div className="min-w-0 flex-[2_1_40rem] space-y-4">
           <div data-recorrido="fin.conciliacion.resumen">
-            <ResumenDeHoy grupos={grupos} ordenadas={ordenado?.ordenes.length ?? 0} />
+            <ResumenPorDocumento p={porDoc} />
           </div>
+          {soloDecisiones && (
+            <Alert variant="info" title="Solo lo que espera una decisión">
+              Se ven las razones que no se arreglan registrando, sino decidiendo (una venta que puede estar contada dos veces,
+              plata que entró sin factura).{" "}
+              <button type="button" onClick={() => setFiltroQuien("todas")} className="font-semibold underline">
+                Ver todo
+              </button>
+            </Alert>
+          )}
           {ordenado && (
             <NexusOrdenoSolo ordenado={ordenado} puedeEditar={puedeEditar} ocupado={ocupado} onDeshacer={deshacerOrden} />
           )}
-          <TarjetasDeGrupos grupos={grupos} />
-          {filtros}
-          {trabajo.map((g, i) =>
-            g.filas === 0 && !(g.grupo === "PAPELES" && dudosas.length > 0) ? null : (
-              <SeccionDeGrupo key={g.grupo} grupo={g} numero={i + 1}>
-                {g.grupo === "PAPELES" && (
-                  <>
-                    <p className="text-sm text-fg-secondary">
-                      No cambian ningún número de hoy, pero si una cuota no tiene el número de su factura, el día que el
-                      cliente pague no se cobra sola.
-                    </p>
-                    <FacturasDudosas dudosas={dudosas} />
-                  </>
-                )}
-                {g.lineas.map(lineaDe)}
-              </SeccionDeGrupo>
-            ),
-          )}
-          <Historia grupo={historia}>{historia.lineas.map(lineaDe)}</Historia>
+          <div data-recorrido="fin.conciliacion.documentos">
+            <TarjetasPorDocumento p={porDoc} />
+          </div>
+          {secciones.map((x) => (
+            <SeccionPorDocumento key={x.seccion} s={x} renderLinea={lineaDe} />
+          ))}
+          {contabilidad && <ParaContabilidad s={contabilidad} renderLinea={lineaDe} />}
           {desestimadas}
           <p className="text-xs text-fg-muted">
             Cruzado con {data.medido.facturas} facturas de Odoo
@@ -567,7 +506,7 @@ export default function DiferenciasOdoo({
                 {medidoMercury.espejoAl && <> (copia del {medidoMercury.espejoAl})</>}
               </>
             )}
-            . Cada moneda por separado y cada documento contado una vez, aunque lo miren varias líneas; sin IVA.
+            . Cada documento se cuenta una vez; los montos, cada moneda por separado y sin IVA.
           </p>
         </div>
         <div className="min-w-0 flex-[1_1_18rem]">

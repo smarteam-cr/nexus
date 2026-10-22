@@ -10547,3 +10547,27 @@ Medido ese día en solo lectura, contra la base y contra la API de Mercury:
   (ni de tarjeta). Si en Mercury sí hay, la copia de movimientos se quedó atrás.
 - SQL: `2026-10-22-mercury-pagada-vista.sql` (dos columnas nullable). Odoo no cambia: su día del pago sale del pago con
   que se concilió la factura (`fechasDePagoEnOdoo`), que es lo correcto.
+
+## Lo que no cuadra, por documento (2026-10-22)
+
+**Contexto.** Elías, revisando la pestaña rediseñada por grupos: «¿qué quiere decir filas? Esto no es una hoja de
+cálculo. Debería decir: hay 5 facturas en Odoo y 25 en Mercury que no calzan, por tal y tal razón». Una fila podía ser
+una factura, una cuota, un cliente, un año de pagos o un depósito. Diseño revisado con él en Claude Design («Lo que no
+cuadra · Conciliación», página «por documento», con los datos del 22 oct).
+
+- **Se cuenta por documento, no por fila** (`porDocumento`, lib/finanzas/conciliacion-por-documento.ts). Cada línea de
+  lo que no cuadra es una RAZÓN dentro de la sección del documento del que habla: facturas de Odoo, facturas de Mercury,
+  cuotas de Nexus, depósitos de Mercury, cuentas por emparejar. La razón cuenta las claves de sus filas (`f:`, `fm:`,
+  `c:`, `mov:`, `l:`, `cuenta:`) y el total de la sección cuenta cada documento una vez aunque tenga dos razones. La
+  tabla `DE_LA_LINEA` dice, por línea, la sección, cómo se dice y qué hacer; una línea nueva que no esté en la tabla va
+  por el prefijo de sus documentos, con su propio título.
+- **Arriba, la frase en documentos**: «Hoy no calzan con Nexus 28 facturas de Odoo, 13 de Mercury, 22 cuotas de Nexus y
+  10 depósitos de Mercury. Solo 2 cambian lo cobrado». Las que cambian lo cobrado (pagada allá y por cobrar acá, o al
+  revés) van primero y en rojo en su sección.
+- **Cada razón se abre en su línea de siempre** («Ver y resolver»), con «Desestimar», «Usar el monto de la factura» y
+  «Abrir la cuenta». No se perdió ninguna acción.
+- **Aparte**: lo que se le pregunta a quien vendió (una venta que puede estar contada dos veces) y lo de contabilidad
+  (pagos sin conciliar con el banco, monedas ya corregidas), plegado: no cambia nada en Nexus.
+- **Se fueron los filtros** «Quién lo resuelve» y «De dónde viene» (contaban filas, y la sección ya dice de dónde viene).
+  Supervisión › «Decidir» (`?ver=decisiones`) sigue mostrando solo las decisiones, con «Ver todo». El número de la
+  pestaña es el de documentos por resolver (sin contabilidad). Reemplaza la vista por grupos de la mañana del mismo día.

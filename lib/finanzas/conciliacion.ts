@@ -12,7 +12,7 @@
  *
  * PURO: sin Prisma ni red.
  */
-import { resumenDeDiferencias, type DiferenciaOdoo, type ItemDiferencia, type MontoEnMoneda } from "@/lib/cobranza/odoo/diferencias";
+import type { DiferenciaOdoo } from "@/lib/cobranza/odoo/diferencias";
 
 export type FuenteDeLinea = "odoo" | "mercury";
 export type FiltroFuente = "todas" | FuenteDeLinea;
@@ -65,105 +65,4 @@ export function filasPorQuien(lineas: readonly DiferenciaOdoo[]): { mias: number
     else mias += l.items.length;
   }
   return { mias, decisiones };
-}
-
-/* ── Los grupos de «Lo que no cuadra» (rediseño 2026-10-22) ─────────────────────────────────────────────────────
-
-Revisando la pestaña con Elías (2026-10-21): 156 filas en 20 líneas, ordenadas por gravedad, no decían por dónde
-empezar. El diseño (Claude Design, «Lo que no cuadra · Conciliación») las junta en cuatro grupos según QUÉ TOCAN en
-Nexus, más la historia:
-  1 · COBRADO   — plata que ya entró y Nexus da por cobrar: mueve Cobranza, las alertas, el equilibrio y comisiones.
-                  Se suman las filas de otras líneas que hablan de los mismos documentos (Fundauna era 4 filas en 4
-                  listas: número sin documento ×2, monto distinto y por cobrar con la factura pagada).
-  2 · NO_VE     — facturado que Nexus no ve: facturas sin cuenta o sin cuota.
-  3 · PREGUNTAR — no se arregla tecleando: una venta contada dos veces, plata que entró sin factura.
-  4 · PAPELES   — no mueve plata hoy, pero el día que el cliente pague no se cobra sola.
-  HISTORIA      — sin efecto hoy: pagos sin conciliar con el banco, monedas ya corregidas, exentas. Plegada.
-⚠ Una factura de antes del primer cobro de su cuenta que Odoo sigue dando por cobrar NO es historia: es plata que se
-  debe (el 22 oct, 6 facturas de 2025 por US$2.015). Va con lo facturado que Nexus no ve. */
-
-export type GrupoDeConciliacion = "COBRADO" | "NO_VE" | "PREGUNTAR" | "PAPELES" | "HISTORIA";
-
-export const ORDEN_DE_GRUPOS: readonly GrupoDeConciliacion[] = ["COBRADO", "NO_VE", "PREGUNTAR", "PAPELES", "HISTORIA"];
-
-/** El grupo de cada línea. Una línea que no está acá cae por su `donde`: PREGUNTANDO → PREGUNTAR, lo demás → PAPELES. */
-export const GRUPO_DE_LA_LINEA: Readonly<Record<string, GrupoDeConciliacion>> = {
-  "ODOO-POR-COBRAR-PAGADA": "COBRADO",
-  "MERCURY-PAGADA-SIN-COBRAR": "COBRADO",
-  "ODOO-SIN-CUENTA": "NO_VE",
-  "ODOO-FACTURA-SIN-COBRO": "NO_VE",
-  "MERCURY-SIN-CUENTA": "NO_VE",
-  "MERCURY-FACTURA-SIN-COBRO": "NO_VE",
-  "MERCURY-CUENTA-SIN-CLIENTE": "NO_VE",
-  "VENTA-CONTADA-DOS-VECES": "PREGUNTAR",
-  "MERCURY-ENTRADA-SIN-FACTURA": "PREGUNTAR",
-  "ODOO-IN-PAYMENT": "HISTORIA",
-  "ODOO-MONEDA-CORREGIDA": "HISTORIA",
-  "ODOO-EXENTAS": "HISTORIA",
-};
-
-export function grupoDeLaLinea(l: Pick<DiferenciaOdoo, "codigo" | "donde">): GrupoDeConciliacion {
-  return GRUPO_DE_LA_LINEA[l.codigo] ?? (l.donde === "PREGUNTANDO" ? "PREGUNTAR" : "PAPELES");
-}
-
-export interface GrupoArmado {
-  grupo: GrupoDeConciliacion;
-  /** Las líneas del grupo, cada una con SOLO sus filas de este grupo (y su plata recortada a esas filas). */
-  lineas: DiferenciaOdoo[];
-  filas: number;
-  /** La plata del grupo por moneda, cada documento una vez. */
-  plata: MontoEnMoneda[];
-}
-
-const clavesDe = (it: ItemDiferencia) => [it.fila.clave, ...it.fila.documentos.map((d) => d.clave)];
-
-/**
- * Una línea recortada a algunas de sus filas: la plata, solo la de los documentos de esas filas, y el título con las
- * filas que se ven («4 de 5 cobros con un monto distinto…»). El «Suman …» del detalle habla de la línea entera: se quita.
- */
-function recortar(l: DiferenciaOdoo, items: ItemDiferencia[]): DiferenciaOdoo {
-  if (items.length === l.items.length) return l;
-  const docs = new Set(items.flatMap(clavesDe));
-  const plata = l.plata.filter((p) => docs.has(p.clave) || (p.clave.startsWith("m:") && docs.has(`f:${p.clave.slice(2)}`)));
-  const montos = new Map<string, number>();
-  for (const p of plata) montos.set(p.moneda, (montos.get(p.moneda) ?? 0) + p.monto);
-  return {
-    ...l,
-    titulo: /^\d+ /.test(l.titulo) ? `${items.length} de ${l.titulo}` : l.titulo,
-    detalle: l.detalle.replace(/ ?Suman .*?\.(?=\s|$)/, ""),
-    items,
-    plata,
-    montos: [...montos].map(([moneda, monto]) => ({ moneda, monto: Math.round(monto * 100) / 100 })),
-  };
-}
-
-/**
- * Reparte las filas pendientes en los cinco grupos, en orden. Una fila va a COBRADO si su línea es de ese grupo o si
- * nombra un documento de una fila que lo es; si no, al de su línea.
- */
-export function agruparDiferencias(lineas: readonly DiferenciaOdoo[]): GrupoArmado[] {
-  const abiertas = lineas.filter((l) => l.items.length > 0);
-  const deCobrado = new Set(
-    abiertas.filter((l) => grupoDeLaLinea(l) === "COBRADO").flatMap((l) => l.items.flatMap((it) => it.fila.documentos.map((d) => d.clave))),
-  );
-  const grupoDeLaFila = (l: DiferenciaOdoo, it: ItemDiferencia): GrupoDeConciliacion => {
-    const g = grupoDeLaLinea(l);
-    if (g === "COBRADO" || g === "HISTORIA") return g;
-    if (it.fila.documentos.some((d) => deCobrado.has(d.clave))) return "COBRADO";
-    return g;
-  };
-  const porGrupo = new Map<GrupoDeConciliacion, DiferenciaOdoo[]>(ORDEN_DE_GRUPOS.map((g) => [g, []]));
-  for (const l of abiertas) {
-    const reparto = new Map<GrupoDeConciliacion, ItemDiferencia[]>();
-    for (const it of l.items) {
-      const g = grupoDeLaFila(l, it);
-      reparto.set(g, [...(reparto.get(g) ?? []), it]);
-    }
-    for (const [g, items] of reparto) porGrupo.get(g)!.push(recortar(l, items));
-  }
-  return ORDEN_DE_GRUPOS.map((grupo) => {
-    const ls = porGrupo.get(grupo)!;
-    const r = resumenDeDiferencias(ls);
-    return { grupo, lineas: ls, filas: r.filas, plata: r.plata };
-  });
 }

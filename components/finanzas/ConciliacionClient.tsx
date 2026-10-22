@@ -22,7 +22,6 @@ import { Button, PageHeader, Segmentado, Tabs } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
 import type { FuenteActualizada } from "@/lib/finanzas/actualizar-tablero";
-import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import DiferenciasOdoo from "@/components/cobranza/DiferenciasOdoo";
 import EmparejadoOdoo from "@/components/cobranza/EmparejadoOdoo";
 import EmparejadoMercury from "@/components/cobranza/EmparejadoMercury";
@@ -35,8 +34,6 @@ type Pestana = "no-cuadra" | "pagado" | "emparejar" | "libro" | "gastos";
 type Sistema = "odoo" | "mercury";
 
 export default function ConciliacionClient({
-  vista,
-  supervisor,
   puedeEditar,
   copias,
   conteos,
@@ -46,9 +43,6 @@ export default function ConciliacionClient({
   puedeEditarGastos = false,
   conIntegraciones = false,
 }: {
-  vista: VistaFinanzas;
-  /** El nombre de pila de quien supervisa (lib/finanzas/vista-server.ts). */
-  supervisor: string;
   /** `cobranza.write`: marcar «Está bien así» y deshacerlo. */
   puedeEditar: boolean;
   /** De cuándo es la última copia buena de cada sistema, ya en hora de Costa Rica. */
@@ -190,8 +184,6 @@ export default function ConciliacionClient({
       {tab === "no-cuadra" && (
         <DiferenciasOdoo
           fuente="todas"
-          vista={vista}
-          supervisor={supervisor}
           quienInicial={soloDecisiones ? "decisiones" : undefined}
           puedeEditar={puedeEditar}
           recarga={recarga}

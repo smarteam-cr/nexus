@@ -7,14 +7,12 @@
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
-import { vistaFinanzasDe } from "@/lib/finanzas/vista";
-import { nombreDeQuienSupervisa } from "@/lib/finanzas/vista-server";
 import { cargarDiferencias, contarEmparejado } from "@/lib/cobranza/odoo/servicio";
 import { cargarDiferenciasMercury, cargarEmparejadoMercury } from "@/lib/cobranza/mercury/servicio";
 import { ultimaCorrida } from "@/lib/cobranza/odoo/sync";
 import { ultimaCorridaMercury } from "@/lib/cobranza/mercury/sync";
 import { horaDeCostaRica } from "@/lib/cobranza/odoo/espejo";
-import { filasPorQuien, juntarDiferencias } from "@/lib/finanzas/conciliacion";
+import { porDocumento } from "@/lib/finanzas/conciliacion-por-documento";
 import { cargarGastosContraMercury } from "@/lib/finanzas/gastos-mercury-server";
 import { crDateParts } from "@/lib/jobs/time";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
@@ -26,10 +24,9 @@ export const dynamic = "force-dynamic";
 export default async function ConciliacionPage({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "cobranza", "read"))) redirect("/clients");
-  const vista = vistaFinanzasDe(ctx.teamMember);
   // Gastos contra Mercury (2026-10-06): solo con `gastos.read`. Son cargos de tarjeta, nunca transferencias ni planilla.
   const puedeVerGastos = await can(ctx.teamMember, "gastos", "read");
-  const [puedeEditar, puedeEditarGastos, odoo, mercury, empOdoo, empMercury, copiaOdoo, copiaMercury, supervisor, gastosMercury] = await Promise.all([
+  const [puedeEditar, puedeEditarGastos, odoo, mercury, empOdoo, empMercury, copiaOdoo, copiaMercury, gastosMercury] = await Promise.all([
     can(ctx.teamMember, "cobranza", "write"),
     puedeVerGastos ? can(ctx.teamMember, "gastos", "write") : Promise.resolve(false),
     cargarDiferencias(),
@@ -38,16 +35,14 @@ export default async function ConciliacionPage({ searchParams }: { searchParams:
     cargarEmparejadoMercury().then((e) => e.conteos),
     ultimaCorrida(),
     ultimaCorridaMercury(),
-    nombreDeQuienSupervisa(),
     puedeVerGastos ? cargarGastosContraMercury(crDateParts(new Date()).dateKey) : Promise.resolve(null),
   ]);
   const ver = (await searchParams).ver;
-  const porQuien = filasPorQuien(juntarDiferencias(odoo.inconsistencias, mercury.inconsistencias));
+  /* El número de la pestaña: documentos por resolver (facturas, cuotas, depósitos, cuentas), no filas. */
+  const porResolver = porDocumento([...odoo.inconsistencias, ...mercury.inconsistencias]).porResolver;
   return (
     <div className={`${SHELL_DEFAULT} space-y-4`}>
       <ConciliacionClient
-        vista={vista}
-        supervisor={supervisor}
         /* Supervisión › «Decidir» llega con ?ver=decisiones. */
         soloDecisiones={ver === "decisiones"}
         /* Pendientes › «Cobrar lo pagado» llega con ?ver=pagados; la tarea de gastos financieros, con ?ver=gastos. */
@@ -61,7 +56,7 @@ export default async function ConciliacionPage({ searchParams }: { searchParams:
           mercury: copiaMercury?.ultimaOkEn ? horaDeCostaRica(copiaMercury.ultimaOkEn) : null,
         }}
         conteos={{
-          noCuadra: vista === "REGISTRA" ? porQuien.mias : porQuien.mias + porQuien.decisiones,
+          noCuadra: porResolver,
           porEmparejarOdoo: empOdoo.porEmparejar,
           porEmparejarMercury: empMercury.sinEmparejar,
         }}
