@@ -10507,5 +10507,6 @@ facturas» con 2 a la vista). Medido en solo lectura contra producción:
   cuadra», `hechos` para «Lo pagado», `ordenar` para esto) y no siempre dicen lo mismo; la cuota todavía guarda a mano
   si está facturada (114 marcadas por una persona, 32 PROGRAMADO con fecha de emisión) en vez de derivarlo de su
   factura; `CobroFacturaOdoo`, la tabla pensada para la unión factura–cuota, está vacía. Y Mercury pagada sin entrada de
-  plata (Noelito INV-60, marcada pagada el mismo día que se emitió, como sus tres anteriores) espera una decisión: si se
-  cobra con el día en que Mercury la marcó pagada.
+  plata (Noelito INV-60, marcada pagada el mismo día que se emitió, como sus tres anteriores): **decidido por Elías el
+  22 oct, sigue como hoy.** No se cobra sola con el día en que Mercury la marcó pagada; la confirma una persona en
+  «Lo pagado», que es quien sabe si la plata entró.
