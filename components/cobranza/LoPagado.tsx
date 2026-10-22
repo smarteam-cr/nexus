@@ -7,9 +7,10 @@
  * real del pago) y cuotas que se pegan a su factura. Quien concilia marca lo que ve bien y lo confirma de una vez, con su
  * firma. La lista la arma lib/cobranza/libro/hechos.ts, la misma regla que el script `aplicar-odoo-y-mercury.ts`.
  *
- * Desde el 2026-10-18 lo pagado y conciliado con el banco se cobra SOLO cada mañana, después de las copias (job
- * `lo-pagado-daily`, firmado por el sistema). Acá queda lo que necesita a una persona —cada fila dice por qué— y lo que
- * todavía no cobró la vuelta de la mañana. Los choques (cobrada en Nexus, impaga allá) solo se muestran: se arreglan en
+ * Desde el 2026-10-18 lo pagado y conciliado con el banco se cobra SOLO, después de las copias (job
+ * `lo-pagado-daily`, firmado por el sistema): cada hora de 7:00 a 19:00 desde el 2026-10-21, y cada vez que alguien
+ * aprieta «Actualizar desde Odoo y Mercury» (`recarga` sube y la lista se vuelve a leer). Acá queda lo que necesita a una persona —cada fila dice por qué— y lo que
+ * todavía no cobró la vuelta de la hora. Los choques (cobrada en Nexus, impaga allá) solo se muestran: se arreglan en
  * Odoo o en Mercury, desde «Lo que no cuadra». ⛔ Nada de esto escribe en Odoo ni en Mercury.
  */
 import Link from "next/link";
@@ -32,7 +33,7 @@ interface AccionVista extends DeLaCuota {
   numero: string;
   fechaEmision?: string;
   numeroFactura?: string;
-  /** `porQueNoSolo` null = el sistema la cobra solo en la vuelta de la mañana; si no, por qué espera a una persona. */
+  /** `porQueNoSolo` null = el sistema la cobra solo en la próxima vuelta; si no, por qué espera a una persona. */
   cobrar?: { fechaCobro: string; deDonde: string; porQueNoSolo: string | null };
   /** Ya estaba cobrada en Nexus y su factura está pagada allá: solo le falta el número. */
   yaCobrada?: true;
@@ -92,7 +93,7 @@ function Casilla({ marcada, onCambio, etiqueta, deshabilitada }: { marcada: bool
   );
 }
 
-export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
+export default function LoPagado({ puedeEditar, recarga = 0 }: { puedeEditar: boolean; recarga?: number }) {
   const toast = useToast();
   const [lista, setLista] = useState<Lista | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +125,7 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
 
   useEffect(() => {
     void cargar();
-  }, [cargar]);
+  }, [cargar, recarga]);
 
   const paraCobrar = useMemo(() => lista?.acciones.filter((a) => a.cobrar) ?? [], [lista]);
   /* ⚠ Una pagada sin el día del pago también viene como acción (para pegarla a su factura), pero no va en «Se pegan a su
@@ -188,7 +189,7 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
       <div className="flex flex-wrap items-start gap-3">
         <p className="min-w-0 max-w-3xl flex-[1_1_420px] text-sm text-fg-secondary">
           Lo que Odoo y Mercury ya dan por facturado o pagado y en Nexus todavía no. Lo pagado y conciliado con el banco se
-          cobra solo cada mañana, después de las copias de las 6:00; acá queda lo que necesita tu mirada, y cada fila dice por
+          cobra solo cada hora, de 7:00 a 19:00, y al apretar «Actualizar desde Odoo y Mercury»; acá queda lo que necesita tu mirada, y cada fila dice por
           qué. Lo que confirmas queda a tu nombre en la bitácora de cada cuenta, y nada se escribe en Odoo ni en Mercury.
         </p>
         <div className="flex shrink-0 items-center gap-2">
@@ -233,7 +234,7 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
         <>
           <Seccion
             titulo={`Pagadas allá, listas para cobrar · ${paraCobrar.length} · ${plata(paraCobrar)}`}
-            detalle="Odoo las da por pagadas («en proceso de pago» cuenta) o Mercury por «Paid». Quedan cobradas con el día real del pago, nunca con el de hoy. Cobrar también pega la cuota a su factura. Las que no dicen por qué esperan, las cobra el sistema en la próxima vuelta de la mañana."
+            detalle="Odoo las da por pagadas («en proceso de pago» cuenta) o Mercury por «Paid». Quedan cobradas con el día real del pago, nunca con el de hoy. Cobrar también pega la cuota a su factura. Las que no dicen por qué esperan, las cobra el sistema en la próxima hora, o ya mismo con «Actualizar desde Odoo y Mercury»."
           >
             {paraCobrar.length === 0 ? (
               <p className="px-4 py-3 text-xs text-fg-muted">No hay cuotas pagadas allá que sigan por cobrar.</p>
@@ -248,7 +249,7 @@ export default function LoPagado({ puedeEditar }: { puedeEditar: boolean }) {
                   <span className="flex flex-col" title={a.cobrar!.deDonde}>
                     <span>Cobrada el {fmtFecha(a.cobrar!.fechaCobro)}</span>
                     <span className={`text-xs ${a.cobrar!.porQueNoSolo ? "text-warn-ink" : "text-fg-muted"}`}>
-                      {a.cobrar!.porQueNoSolo ?? "La cobra el sistema en la próxima vuelta de la mañana."}
+                      {a.cobrar!.porQueNoSolo ?? "La cobra el sistema en la próxima hora, o ya mismo con «Actualizar desde Odoo y Mercury»."}
                     </span>
                   </span>
                 )}

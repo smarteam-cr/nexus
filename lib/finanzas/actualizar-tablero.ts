@@ -16,7 +16,8 @@
 import type { SyncVentasResult } from "@/lib/ventas/sync-ganadas";
 
 export interface FuenteActualizada {
-  fuente: "HUBSPOT" | "ODOO" | "MERCURY";
+  /** COBRO = el cobro de lo pagado que corre después de las copias (2026-10-21). */
+  fuente: "HUBSPOT" | "ODOO" | "MERCURY" | "COBRO";
   /** false = esa fuente no se pudo actualizar: el tablero muestra lo que tenía de ella. */
   ok: boolean;
   /** Lo que se le dice a la persona, tal cual. */
@@ -66,4 +67,71 @@ export function ventasSinActualizar(error: unknown): FuenteActualizada {
 /** El aviso entero: las fuentes, una por línea, y si hay que mirar alguna. */
 export function avisoDeActualizacion(fuentes: readonly FuenteActualizada[]): { todoBien: boolean; texto: string } {
   return { todoBien: fuentes.every((f) => f.ok), texto: fuentes.map((f) => f.texto).join(" ") };
+}
+
+/* ── El cobro de lo pagado, después de las copias (2026-10-21) ──────────────────────────────────────────────────── */
+
+/**
+ * Qué pasó con el cobro de lo pagado que corre al apretar «Actualizar» (lib/cobranza/libro/cobro-a-pedido.ts). Antes
+ * del 2026-10-21 el botón solo copiaba: lo que administración concilió en Odoo a media mañana llegaba a Nexus como
+ * factura pagada, pero la cuota seguía sin cobrar hasta la vuelta del día siguiente, y el botón parecía no hacer nada.
+ */
+export type CobroDeLoPagado =
+  | { estado: "APAGADO" }
+  | { estado: "EN_CURSO" }
+  | { estado: "FALLO"; error: string }
+  | {
+      estado: "HECHO";
+      cobradas: ReadonlyArray<{ monto: number; moneda: string }>;
+      /** Lo pagado que no se cobra solo: espera una firma en «Lo pagado». */
+      quedan: number;
+      sinElDiaDelPago: number;
+      /** Copias que no corrieron bien hoy: lo suyo no se cobró. */
+      atrasadas: ReadonlyArray<"ODOO" | "MERCURY">;
+      noSePudieron: ReadonlyArray<{ cuenta: string; motivo: string }>;
+      avisoOdoo: string | null;
+    };
+
+/** Los montos por moneda, nunca sumados entre monedas: «USD 1.200 + CRC 450.000». */
+export function plataPorMoneda(xs: ReadonlyArray<{ monto: number; moneda: string }>): string {
+  const t = new Map<string, number>();
+  for (const x of xs) t.set(x.moneda, Math.round(((t.get(x.moneda) ?? 0) + x.monto) * 100) / 100);
+  return [...t].map(([m, v]) => `${m} ${v.toLocaleString("es-CR", { maximumFractionDigits: 2 })}`).join(" + ");
+}
+
+const cuotas = (n: number) => (n === 1 ? "1 cuota" : `${n} cuotas`);
+
+/** Lo que pasó con el cobro de lo pagado, en una frase para quien apretó el botón. */
+export function resumenDelCobro(c: CobroDeLoPagado): FuenteActualizada {
+  if (c.estado === "APAGADO") {
+    return { fuente: "COBRO", ok: true, texto: "El cobro automático de lo pagado está apagado en este servidor: lo pagado espera tu firma en «Lo pagado»." };
+  }
+  if (c.estado === "EN_CURSO") {
+    return {
+      fuente: "COBRO",
+      ok: true,
+      texto: "Lo pagado ya se estaba cobrando en este momento (la vuelta de la hora o alguien más): en un minuto lo ves en «Lo pagado».",
+    };
+  }
+  if (c.estado === "FALLO") {
+    return { fuente: "COBRO", ok: false, texto: `No se pudo cobrar lo pagado: ${c.error}. Lo copiado sí quedó.` };
+  }
+  const cobro =
+    c.cobradas.length === 0
+      ? "Lo pagado: nada nuevo para cobrar"
+      : `Lo pagado: ${cuotas(c.cobradas.length)} ${c.cobradas.length === 1 ? "quedó cobrada" : "quedaron cobradas"} (${plataPorMoneda(c.cobradas)})`;
+  const notas = [
+    c.quedan > 0 ? `${cuotas(c.quedan)} ${c.quedan === 1 ? "espera" : "esperan"} tu firma en «Lo pagado»` : null,
+    c.sinElDiaDelPago > 0 ? `${c.sinElDiaDelPago === 1 ? "1 pagada" : `${c.sinElDiaDelPago} pagadas`} sin el día del pago` : null,
+  ].filter((x): x is string => x !== null);
+  const problemas = [
+    ...c.atrasadas.map((f) => `la copia de ${f === "ODOO" ? "Odoo" : "Mercury"} no está al día, así que lo suyo no se cobró`),
+    ...(c.avisoOdoo ? [c.avisoOdoo] : []),
+    ...c.noSePudieron.map((s) => `${s.cuenta}: ${s.motivo}`),
+  ];
+  return {
+    fuente: "COBRO",
+    ok: problemas.length === 0,
+    texto: `${cobro}${notas.length ? ` · ${notas.join(" · ")}` : ""}.${problemas.length ? ` ⚠ ${problemas.join(" · ")}.` : ""}`,
+  };
 }

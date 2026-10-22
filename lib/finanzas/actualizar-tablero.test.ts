@@ -10,7 +10,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SyncVentasResult } from "@/lib/ventas/sync-ganadas";
-import { avisoDeActualizacion, resumenDeVentas, ventasSinActualizar } from "./actualizar-tablero";
+import { avisoDeActualizacion, plataPorMoneda, resumenDelCobro, resumenDeVentas, ventasSinActualizar, type CobroDeLoPagado } from "./actualizar-tablero";
 
 const corrida = (p: Partial<SyncVentasResult> = {}): SyncVentasResult => ({
   traidas: 94,
@@ -103,7 +103,59 @@ describe("⚠ el botón del tablero: privacidad y robustez", () => {
        HubSpot, Odoo y Mercury, y Conciliación pide solo las dos últimas. */
     const src = leer("lib/finanzas/actualizar-tablero-server.ts");
     expect(src.match(/\.catch\(/g)?.length).toBe(3);
-    expect(src).toMatch(/Promise\.all\(\[ventas, odoo, mercury\]\)/);
     expect(src).toMatch(/Promise\.all\(\[odoo, mercury\]\)/);
+    expect(src).toMatch(/Promise\.all\(\[ventas, copiasYCobro\]\)/);
+    /* El cobro de lo pagado (2026-10-21) corre después de las copias y no lanza: un cobro roto no tumba lo copiado. */
+    expect(src.indexOf("cobrarLoPagadoAhora("), "el cobro corre DESPUÉS de las dos copias").toBeGreaterThan(src.indexOf("Promise.all([odoo, mercury])"));
+  });
+});
+
+describe("lo que dice «Actualizar» del cobro de lo pagado (2026-10-21)", () => {
+  /* Antes el botón solo copiaba: la factura pagada llegaba y la cuota seguía sin cobrar hasta el día siguiente, y
+     administración leía «no funciona». Ahora dice cuántas cuotas cobró, o por qué no. */
+  const hecho = (c: Partial<Extract<CobroDeLoPagado, { estado: "HECHO" }>> = {}): CobroDeLoPagado => ({
+    estado: "HECHO",
+    cobradas: [],
+    quedan: 0,
+    sinElDiaDelPago: 0,
+    atrasadas: [],
+    noSePudieron: [],
+    avisoOdoo: null,
+    ...c,
+  });
+
+  it("dice cuántas cuotas cobró y cuánta plata, por moneda y sin sumar monedas", () => {
+    const r = resumenDelCobro(hecho({ cobradas: [{ monto: 500, moneda: "USD" }, { monto: 700, moneda: "USD" }, { monto: 45000, moneda: "CRC" }] }));
+    expect(r.ok).toBe(true);
+    expect(r.fuente).toBe("COBRO");
+    expect(r.texto).toMatch(/^Lo pagado: 3 cuotas quedaron cobradas \(USD 1[.,\s ]?200 \+ CRC 45[.,\s ]?000\)\.$/);
+  });
+
+  it("sin nada nuevo lo dice, y lo que espera una firma también", () => {
+    expect(resumenDelCobro(hecho()).texto).toBe("Lo pagado: nada nuevo para cobrar.");
+    expect(resumenDelCobro(hecho({ quedan: 1, sinElDiaDelPago: 2 })).texto).toBe(
+      "Lo pagado: nada nuevo para cobrar · 1 cuota espera tu firma en «Lo pagado» · 2 pagadas sin el día del pago.",
+    );
+  });
+
+  it("⚠ una copia atrasada o una cuota que no se pudo escribir lo pone en rojo, con el porqué", () => {
+    const r = resumenDelCobro(hecho({ cobradas: [{ monto: 1, moneda: "USD" }], atrasadas: ["ODOO"], noSePudieron: [{ cuenta: "Acme", motivo: "ya estaba cobrada" }] }));
+    expect(r.ok).toBe(false);
+    expect(r.texto).toMatch(/la copia de Odoo no está al día.*Acme: ya estaba cobrada/);
+  });
+
+  it("apagado, en curso o caído: nunca un error mudo", () => {
+    expect(resumenDelCobro({ estado: "APAGADO" })).toMatchObject({ ok: true, texto: expect.stringMatching(/apagado/) });
+    expect(resumenDelCobro({ estado: "EN_CURSO" })).toMatchObject({ ok: true, texto: expect.stringMatching(/ya se estaba cobrando/) });
+    expect(resumenDelCobro({ estado: "FALLO", error: "timeout de la base" })).toEqual({
+      fuente: "COBRO",
+      ok: false,
+      texto: "No se pudo cobrar lo pagado: timeout de la base. Lo copiado sí quedó.",
+    });
+  });
+
+  it("los montos van por moneda", () => {
+    expect(plataPorMoneda([])).toBe("");
+    expect(plataPorMoneda([{ monto: 10.5, moneda: "USD" }])).toBe("USD 10,5");
   });
 });

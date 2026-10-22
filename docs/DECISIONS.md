@@ -9392,7 +9392,8 @@ sin firma lo que Odoo y Mercury dan por pagado (Alex, 16 oct: «definitivo»), p
 concilie cada mañana María José. El análisis, la evidencia y lo que quedó hecho están en ese documento.
 
 - **Lo pagado y conciliado con el banco se cobra solo, cada mañana** (job `lo-pagado-daily`, ≥ 7:00 CR, después de las
-  copias de las 6:00). Va por `cambiarEstadoCobroTx`, una transacción por cuota con la cuota bloqueada, y deja su
+  copias de las 6:00). ⚠ Desde el 2026-10-21, cada hora de 7:00 a 19:00 y al apretar «Actualizar»: ver «Lo conciliado en Odoo se
+  ve en la hora». Va por `cambiarEstadoCobroTx`, una transacción por cuota con la cuota bloqueada, y deja su
   bitácora. La firma es del sistema y dice de dónde salió: `sistema:odoo` o `sistema:mercury`
   (`lib/cobranza/firma-del-sistema.ts`). La regla es pura: `paraCobrarSolo` y `dudaDelCobro` en `lib/cobranza/libro/hechos.ts`.
 - **Qué es seguro.** Odoo `paid` (el contador la concilió con el estado de cuenta) o Mercury `Paid` con su entrada de
@@ -10264,3 +10265,40 @@ horario y menos pruebas para él.
 - **Las pruebas para Elías son solo las que piden su criterio de producto.** Lo de pantalla de todos los días lo valida
   quien lo usa, al usarlo («⏳ La valida el equipo: <persona>»), y lo que se comprueba con datos o código, Claude
   («Pruebas con IA»). Regla 4 de «Cómo se mantiene este roadmap».
+
+## Lo conciliado en Odoo se ve en la hora: copias y cobro cada hora, y «Actualizar» que cobra (2026-10-21)
+
+**Contexto.** Revisando Finanzas con Alex Arrieta y María José (21 oct), administración dijo que «Actualizar desde Odoo y
+Mercury» no funcionaba: concilia en Odoo durante el día y Nexus no lo mostraba hasta el día siguiente. Medido en la base:
+el botón SÍ copiaba (Alex lo apretó a las 16:15 y trajo 3 facturas nuevas y 3 con cambios). Lo que no corría era el cobro
+de lo pagado: `lo-pagado-daily` corría una sola vez, a las 7:00, con su turno del día ya tomado. La factura conciliada
+llegaba pagada a la copia y la cuota seguía sin cobrar; el simulacro de esa tarde decía «cobraría 2».
+
+- **«Actualizar» cobra después de copiar** (`cobrarLoPagadoAhora`, `lib/cobranza/libro/cobro-a-pedido.ts`), en los cinco
+  botones: Conciliación, Cobranza › Odoo, Cobranza › Mercury, Integraciones y el punto de equilibrio. Es el mismo cobro
+  del job, firmado por el sistema (`sistema:odoo` / `sistema:mercury`) y no por quien aprieta: adelanta lo que el job
+  haría solo, con las mismas reglas (`paraCobrarSolo`). Por eso basta el permiso de LECTURA de Cobranza. Cobra a
+  cualquier hora con las copias que corrieron bien hoy (`ignorarLaHora`); lo de una copia atrasada queda con su porqué.
+- **El aviso dice qué pasó**: cuántas facturas cambiaron en cada copia y cuántas cuotas quedaron cobradas, por moneda;
+  cuántas esperan una firma; o el error en palabras (`resumenDelCobro`, `lib/finanzas/actualizar-tablero.ts`). Si el cobro
+  falla, lo copiado queda igual y el aviso sale en rojo. Conciliación vuelve a leer «Lo pagado» al terminar.
+- **No se puede tocar dos veces mientras corre**: el botón se deshabilita y un ref corta el doble clic antes de que se
+  dibuje; en el servidor, cada copia tiene su candado y el cobro el suyo (`lo-pagado-candado`, mismo molde que el de la
+  copia de Odoo). *Por qué un candado si cada cuota ya se bloquea con FOR UPDATE:* el segundo cobro encontraría la cuota
+  «ya cobrada» y la contaría como no escrita: el job se pondría en rojo por una cuota que sí quedó.
+- **Cada hora, de 6:00 a 19:00 CR** las copias, y **de 7:00 a 19:00** el cobro, todos los días (`lib/jobs/turno-por-hora.ts`;
+  la clave del turno es `AAAA-MM-DDTHH`, como `negocios-abiertos`). Las tres siguen llamándose `*-daily`: cambiar la clave
+  perdía la fila de `CronJobState` y el semáforo de Integraciones. El cobro va detrás de las copias en `allJobs()`, así que
+  en el mismo tick cobra con lo que acaban de traer. Pasadas las 19 la clave sigue siendo la de las 19: un servidor que
+  estuvo caído corre una vez de noche y no cada hora. *Por qué no cada 15 minutos:* administración concilia por tandas, y
+  una hora alcanza para «lo veo hoy»; para el momento está el botón.
+- **Un fallo que no se arregla reintentando cierra el DÍA, no la hora** (`turnoRetenido`): la clave de Odoo rechazada, el
+  token de Mercury muerto o una copia que trajo la mitad. Con la regla vieja («retener el turno») corriendo cada hora,
+  serían 13 intentos por día con la clave rechazada, y el bloqueo por IP de Odoo salta a los 10. Un fallo de red sigue
+  soltando la hora y reintentando en el tick siguiente.
+- **El cobro con problemas** (una copia atrasada, Odoo sin el día de los pagos, una cuota que no se pudo escribir) queda
+  en rojo y retiene solo esa hora: la siguiente vuelve a mirar. No toca a Odoo de más: lee el día de los pagos una vez.
+- **Infra**: todo corre dentro del tick del único proceso (RUNBOOK, Invariante #1), en serie y con el pool de la app: no
+  suma slots del pooler (Invariante #3). Medido el 21 oct: copia de Odoo ~8 s, Mercury ~3 s, cobro ~6 s.
+- ⛔ **No cambia qué se cobra.** El emparejamiento (qué factura es de qué cuota, el monto con o sin IVA) es de
+  `lib/cobranza/libro/hechos.ts` y `aplicar.ts`; esto solo cambia cuándo corre y quién lo dispara.

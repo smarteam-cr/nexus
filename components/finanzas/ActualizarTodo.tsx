@@ -2,10 +2,10 @@
 
 /**
  * components/finanzas/ActualizarTodo.tsx — «Actualizar todo» de Finanzas › Integraciones (rediseño 2026-10-03): vuelve a
- * copiar Odoo, Mercury y las ventas de HubSpot y recarga la página. ⛔ Solo lee esos sistemas.
+ * copiar Odoo, Mercury y las ventas de HubSpot, cobra lo pagado (2026-10-21) y recarga la página. ⛔ Solo lee esos sistemas.
  */
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
@@ -14,13 +14,17 @@ export default function ActualizarTodo() {
   const router = useRouter();
   const toast = useToast();
   const [actualizando, setActualizando] = useState(false);
+  /* Un doble clic rápido llega antes de que el botón se dibuje deshabilitado: el ref lo corta en el acto. */
+  const enCurso = useRef(false);
   return (
     <Button data-recorrido="fin.integraciones.actualizar"
       variant="secondary"
       size="sm"
       disabled={actualizando}
-      title="Trae ya lo último de Odoo, Mercury y HubSpot, sin esperar a mañana. Solo lee: no cambia ningún cobro."
+      title="Trae ya lo último de Odoo, Mercury y HubSpot y cobra lo que Odoo y Mercury dan por pagado y conciliado. Solo lee esos sistemas."
       onClick={async () => {
+        if (enCurso.current) return;
+        enCurso.current = true;
         setActualizando(true);
         try {
           const r = await fetchJson<{ todoBien: boolean; texto: string }>("/api/finanzas/actualizar", {
@@ -33,6 +37,7 @@ export default function ActualizarTodo() {
         } catch (e) {
           toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar.");
         } finally {
+          enCurso.current = false;
           setActualizando(false);
         }
       }}

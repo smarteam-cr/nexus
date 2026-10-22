@@ -33,9 +33,12 @@
  *     desde las 7:00 CR; una vez por mes y sin pisar una foto que ya está.
  *   - rentabilidad-lectura-mensual → la lectura de los números (lib/rentabilidad/lectura/servidor.ts), el día 4 desde
  *     las 8:00 CR, una vez por mes, después de la foto. Llama a Claude solo si hay señales y si queda presupuesto.
+ *   - odoo-espejo-daily / mercury-espejo-daily → las copias de Odoo y Mercury, cada hora de 6:00 a 19:00 CR desde el
+ *     2026-10-21 (antes, una vez al día). La clave sigue diciendo «daily» para no perder la fila ni el semáforo.
  *   - lo-pagado-daily → cobra solo lo que Odoo y Mercury dan por pagado y conciliado con el banco, firmado por el sistema
- *     (lib/cobranza/libro, decisión de Elías del 2026-10-18). Diario ≥ 7:00 CR, después de las dos copias de las 6:00;
- *     espera a una copia atrasada hasta las 10:00. Gated por COBRO_SOLO_ENABLED≠0 y alguna de las dos credenciales.
+ *     (lib/cobranza/libro, decisión de Elías del 2026-10-18). Cada hora de 7:00 a 19:00 CR desde el 2026-10-21, después
+ *     de las dos copias de esa hora; espera a una copia atrasada hasta las 10:00. Gated por COBRO_SOLO_ENABLED≠0 y alguna
+ *     de las dos credenciales. El turno de las tres: lib/jobs/turno-por-hora.ts.
  *   - titulos-cortos → el nombre corto de las tareas abiertas que no lo tienen o cuyo título cambió
  *     (lib/tareas/ia/titulo-corto-server.ts), cada 10 minutos, con Haiku y si queda presupuesto automático.
  *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
@@ -58,6 +61,7 @@ import { watchdogJobs } from "@/lib/cs/watchdog";
 import { claimDateKey, correrPasosAislados, SIN_TURNO, type JobDef } from "./registry";
 import { motivoApagado, partnerCreaClientes } from "./requisitos";
 import { WEEKDAYS_MON_FRI } from "./time";
+import { retenidoHoy, turnoDeLaHora, turnoRetenido } from "./turno-por-hora";
 import { esDiaDeCorte } from "@/lib/cobranza/antiguedad";
 import { mesQueTocaFotografiar } from "@/lib/rentabilidad/foto";
 import { mesQueTocaLeer } from "@/lib/rentabilidad/lectura/estado";
@@ -74,6 +78,24 @@ async function quedaPresupuesto(now: Date): Promise<boolean> {
 
 /** ¿La configuración de este servidor deja correr el job? Si no, Integraciones dice por qué. */
 const encendido = (jobKey: string): boolean => motivoApagado(jobKey, process.env) === null;
+
+/**
+ * El turno de esta hora para las copias de Odoo y Mercury y el cobro de lo pagado (2026-10-21, lib/jobs/turno-por-hora.ts).
+ * `SIN_TURNO` = no le toca: otro proceso tomó la hora, o el job quedó retenido hoy por un fallo que no se arregla
+ * reintentando (no se toca a Odoo ni a Mercury hasta mañana). `soltar` deja la hora libre para el tick siguiente;
+ * `retener` cierra el día.
+ */
+async function turnoDeFinanzas(jobKey: string, now: Date) {
+  const { crDateParts } = await import("./time");
+  const { dateKey, hour } = crDateParts(now);
+  const fila = await prisma.cronJobState.findUnique({ where: { id: jobKey }, select: { lastRunDateKey: true } });
+  if (retenidoHoy(fila?.lastRunDateKey, dateKey)) return SIN_TURNO;
+  const turno = turnoDeLaHora(dateKey, hour);
+  if (!(await claimDateKey(jobKey, turno, now))) return SIN_TURNO;
+  const cambiar = (lastRunDateKey: string | null) =>
+    prisma.cronJobState.updateMany({ where: { id: jobKey, lastRunDateKey: turno }, data: { lastRunDateKey } }).catch(() => {});
+  return { turno, soltar: () => cambiar(null), retener: () => cambiar(turnoRetenido(dateKey)) };
+}
 
 const marketingWeekly: JobDef = {
   key: "marketing-weekly",
@@ -446,14 +468,16 @@ const ventasGanadasDaily: JobDef = {
  * ⚠ Necesita `ODOO_PASSWORD`. Sin eso ni se intenta: un intento en vano cuenta para el
  * bloqueo por IP de Odoo (10 fallos por defecto en Odoo 17). `ODOO_SYNC_ENABLED=0` lo apaga
  * sin sacar el código.
+ *
+ * Cada hora de 6:00 a 19:00 CR desde el 2026-10-21 (`turnoDeFinanzas`): lo que administración concilia en Odoo durante
+ * el día se ve en Nexus a la hora siguiente, y `lo-pagado-daily` lo cobra detrás.
  */
 const odooEspejoDaily: JobDef = {
   key: "odoo-espejo-daily",
   shouldRun: (_now, parts) => encendido("odoo-espejo-daily") && parts.hour >= 6,
   run: async (now) => {
-    const { crDateParts } = await import("./time");
-    const { dateKey } = crDateParts(now);
-    if (!(await claimDateKey("odoo-espejo-daily", dateKey, now))) return SIN_TURNO;
+    const t = await turnoDeFinanzas("odoo-espejo-daily", now);
+    if (t === SIN_TURNO) return SIN_TURNO;
     const { sincronizarOdoo } = await import("@/lib/cobranza/odoo/sync");
     const r = await sincronizarOdoo({ disparadaPor: "cron" });
 
@@ -461,9 +485,7 @@ const odooEspejoDaily: JobDef = {
        Si justo había una en curso, esta no hizo nada: se suelta el turno y el tick siguiente lo vuelve a intentar,
        con la otra ya terminada. No es una corrida —ni buena ni mala—, así que el scheduler no anota nada. */
     if (r.enCurso) {
-      await prisma.cronJobState
-        .updateMany({ where: { id: "odoo-espejo-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
-        .catch(() => {});
+      await t.soltar();
       return SIN_TURNO;
     }
 
@@ -477,13 +499,11 @@ const odooEspejoDaily: JobDef = {
        mitad porque algo está mal allá— reintentaba cada 60 s todo el día: 1080 corridas, 1080
        filas de basura en SyncOdooCorrida, y la evidencia de la última corrida buena enterrada.
        Si el ERP devuelve la mitad, esperar un minuto no lo arregla; esperar a mañana, tal vez. */
+    /* ⚠ Desde que corre cada hora (2026-10-21), retener cierra el DÍA y no solo la hora: 13 intentos con la clave
+       rechazada superan el bloqueo por IP de Odoo (10 fallos en Odoo 17). */
     const transitorio = r.clase === "RED";
     if (!r.ok) {
-      if (transitorio) {
-        await prisma.cronJobState
-          .updateMany({ where: { id: "odoo-espejo-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
-          .catch(() => {});
-      }
+      await (transitorio ? t.soltar() : t.retener());
       /* ⚠ LANZA, después de decidir el turno. Hasta el 2026-09-12 un fallo iba solo al log y el
          job volvía como si nada: el scheduler anotaba «ok» y el semáforo de Integraciones quedaba
          en verde con el espejo muerto. Lanzar lo pinta en rojo con este texto y lo manda a Sentry.
@@ -499,13 +519,14 @@ const odooEspejoDaily: JobDef = {
       throw fallo;
     }
     console.log(
-      `[jobs/odoo-espejo] ${dateKey} — ${r.facturasVistas} facturas: ${r.creadas} nuevas, ${r.actualizadas} con cambios (${r.cambios} anotados), ${r.desaparecidas} desaparecidas, ${r.sinCuenta} sin cuenta${r.rechazadas.length ? `, ${r.rechazadas.length} rechazadas` : ""} (${r.duracionMs} ms)`,
+      `[jobs/odoo-espejo] ${t.turno} —${r.facturasVistas} facturas: ${r.creadas} nuevas, ${r.actualizadas} con cambios (${r.cambios} anotados), ${r.desaparecidas} desaparecidas, ${r.sinCuenta} sin cuenta${r.rechazadas.length ? `, ${r.rechazadas.length} rechazadas` : ""} (${r.duracionMs} ms)`,
     );
   },
 };
 
 /**
- * La copia de Mercury (2026-10-02): facturas, clientes y movimientos, una vez al día ≥ 6:00 CR. Mismo molde que la de
+ * La copia de Mercury (2026-10-02): facturas, clientes y movimientos, cada hora de 6:00 a 19:00 CR desde el 2026-10-21
+ * (`turnoDeFinanzas`; antes una vez al día). Mismo molde que la de
  * Odoo: el turno se suelta solo si el fallo es pasajero (red o «esperá» de Mercury) y LANZA si falla, para que el
  * semáforo de Integraciones se ponga en rojo. Sin `MERCURY_API_TOKEN` ni se intenta (requisitos.ts).
  */
@@ -513,25 +534,20 @@ const mercuryEspejoDaily: JobDef = {
   key: "mercury-espejo-daily",
   shouldRun: (_now, parts) => encendido("mercury-espejo-daily") && parts.hour >= 6,
   run: async (now) => {
-    const { crDateParts } = await import("./time");
-    const { dateKey } = crDateParts(now);
-    if (!(await claimDateKey("mercury-espejo-daily", dateKey, now))) return SIN_TURNO;
+    const t = await turnoDeFinanzas("mercury-espejo-daily", now);
+    if (t === SIN_TURNO) return SIN_TURNO;
     const { sincronizarMercury } = await import("@/lib/cobranza/mercury/sync");
     const { esTransitorio } = await import("@/lib/cobranza/mercury/transporte");
     const r = await sincronizarMercury({ disparadaPor: "cron" });
-    const soltarTurno = () =>
-      prisma.cronJobState
-        .updateMany({ where: { id: "mercury-espejo-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
-        .catch(() => {});
     /* Otra copia en curso (la pidió alguien con el botón): esta no hizo nada, y el tick siguiente lo vuelve a intentar. */
     if (r.enCurso) {
-      await soltarTurno();
+      await t.soltar();
       return SIN_TURNO;
     }
     if (!r.ok) {
-      /* ⚠ Un token rechazado no se arregla reintentando cada minuto: el turno se retiene hasta mañana. */
+      /* ⚠ Un token rechazado no se arregla reintentando cada hora: el turno se retiene hasta mañana. */
       const transitorio = !r.parcial && esTransitorio(r.clase);
-      if (transitorio) await soltarTurno();
+      await (transitorio ? t.soltar() : t.retener());
       const fallo = new Error(
         `${r.parcial ? "corrida PARCIAL" : `FALLÓ (${r.clase ?? "?"})`}: ${r.error}; ` +
           (transitorio ? "turno liberado: reintenta en el próximo tick" : "turno RETENIDO: no reintenta hasta mañana"),
@@ -540,7 +556,7 @@ const mercuryEspejoDaily: JobDef = {
       throw fallo;
     }
     console.log(
-      `[jobs/mercury-espejo] ${dateKey} — ${r.facturasVistas} facturas: ${r.creadas} nuevas, ${r.actualizadas} con cambios, ${r.desaparecidas} desaparecidas · ${r.clientesVistos} clientes (${r.clientesNuevos} nuevos) · ${r.movimientosVistos} movimientos (${r.movimientosNuevos} nuevos)${r.rechazadas.length ? `, ${r.rechazadas.length} facturas sin leer` : ""} (${r.duracionMs} ms)`,
+      `[jobs/mercury-espejo] ${t.turno} —${r.facturasVistas} facturas: ${r.creadas} nuevas, ${r.actualizadas} con cambios, ${r.desaparecidas} desaparecidas · ${r.clientesVistos} clientes (${r.clientesNuevos} nuevos) · ${r.movimientosVistos} movimientos (${r.movimientosNuevos} nuevos)${r.rechazadas.length ? `, ${r.rechazadas.length} facturas sin leer` : ""} (${r.duracionMs} ms)`,
     );
   },
 };
@@ -625,38 +641,40 @@ const tipoCambioDaily: JobDef = {
 };
 
 /**
- * Lo pagado se cobra solo (2026-10-18). Una vez al día, después de las copias de Odoo y Mercury: lo que dan por pagado y
+ * Lo pagado se cobra solo (2026-10-18). Cada hora de 7:00 a 19:00 CR desde el 2026-10-21 (antes, una vez al día),
+ * después de las copias de Odoo y Mercury de esa hora: lo que dan por pagado y
  * conciliado con el banco pasa a COBRADO con el día real del pago, firmado `sistema:odoo` o `sistema:mercury`, con su
  * bitácora (lib/cobranza/libro/aplicar.ts › `cobrarLoPagadoSolo`). Lo que no es seguro queda en Conciliación › «Lo
  * pagado» para una persona.
  *
  * El turno se toma recién cuando toca (`decidirElTurno`): mientras una copia encendida no corrió bien hoy, espera hasta
  * las 10:00 sin anotar nada. Pasada esa hora cobra con la que está al día y LANZA diciendo cuál faltó (semáforo rojo).
- * También lanza si alguna cuota no se pudo escribir o si Odoo no dijo el día de los pagos: esas esperan a mañana.
+ * También lanza si alguna cuota no se pudo escribir o si Odoo no dijo el día de los pagos: esas esperan a la próxima
+ * hora. El mismo cobro corre cuando alguien aprieta «Actualizar» (lib/cobranza/libro/cobro-a-pedido.ts), con el mismo
+ * candado: nunca dos a la vez.
  */
 const loPagadoDaily: JobDef = {
   key: "lo-pagado-daily",
   shouldRun: (_now, parts) => encendido("lo-pagado-daily") && parts.hour >= 7,
   run: async (now) => {
-    const { crDateParts } = await import("./time");
-    const { dateKey } = crDateParts(now);
-    const { correrElCobroDelDia } = await import("@/lib/cobranza/libro/servicio");
-    if (!(await claimDateKey("lo-pagado-daily", dateKey, now))) return SIN_TURNO;
-    const { turno, resultado } = await correrElCobroDelDia(now, { aplicar: true });
-    if (!resultado) {
-      /* Todavía no toca: se suelta el turno y el tick siguiente vuelve a mirar las copias. */
-      await prisma.cronJobState
-        .updateMany({ where: { id: "lo-pagado-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
-        .catch(() => {});
+    const { correrElCobroConCandado } = await import("@/lib/cobranza/libro/cobro-a-pedido");
+    const t = await turnoDeFinanzas("lo-pagado-daily", now);
+    if (t === SIN_TURNO) return SIN_TURNO;
+    /* Con candado (2026-10-21): una persona puede estar cobrando con «Actualizar» en este mismo momento. */
+    const r = await correrElCobroConCandado(now, { aplicar: true });
+    if (r.enCurso || !r.resultado) {
+      /* Otro cobro en curso, o todavía no toca: se suelta el turno y el tick siguiente vuelve a mirar las copias. */
+      await t.soltar();
       return SIN_TURNO;
     }
+    const { turno, resultado } = r;
     const plata = (xs: ReadonlyArray<{ monto: number; moneda: string }>) => {
       const t = new Map<string, number>();
       for (const x of xs) t.set(x.moneda, Math.round(((t.get(x.moneda) ?? 0) + x.monto) * 100) / 100);
       return [...t].map(([m, v]) => `${m} ${v}`).join(" + ") || "nada";
     };
     console.log(
-      `[jobs/lo-pagado] ${dateKey} — cobradas solas: ${resultado.cobradas.length} (${plata(resultado.cobradas)}) · ` +
+      `[jobs/lo-pagado] ${t.turno} — cobradas solas: ${resultado.cobradas.length} (${plata(resultado.cobradas)}) · ` +
         `quedan para una persona: ${resultado.quedan.length} · sin el día del pago: ${resultado.pagadasSinFecha}`,
     );
     const problemas = [
@@ -665,7 +683,7 @@ const loPagadoDaily: JobDef = {
       ...resultado.saltadas.map((s) => `${s.cuenta}: ${s.motivo}`),
     ];
     if (problemas.length) {
-      const fallo = new Error(`cobró ${resultado.cobradas.length}, pero: ${problemas.join(" · ")}. Turno RETENIDO: mañana vuelve a mirar.`);
+      const fallo = new Error(`cobró ${resultado.cobradas.length}, pero: ${problemas.join(" · ")}. La próxima hora vuelve a mirar.`);
       fallo.name = "CobroSoloIncompleto";
       throw fallo;
     }
