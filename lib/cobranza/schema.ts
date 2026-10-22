@@ -443,6 +443,17 @@ const partnerBase = z.object({
 export const partnerCreateSchema = partnerBase;
 export const partnerPatchSchema = partnerBase.partial();
 
+/**
+ * El monto de una comisión de aliado acepta CERO (2026-10-21, feedback #17): un trimestre en
+ * que el aliado no generó comisión es un dato, y sin la fila el historial muestra un hueco.
+ * Negativo no: espejo del CHECK `ComisionPartner_monto_no_negativo`. Cobrar sigue pidiendo
+ * un monto positivo (`comisionPartnerEstadoSchema`): cobrar cero no es un cobro.
+ */
+const montoComision = z
+  .number()
+  .nonnegative("El monto no puede ser negativo")
+  .multipleOf(0.01, "Máximo 2 decimales");
+
 const comisionPartnerBase = z.object({
   partner: z.string().trim().min(1, "El partner es requerido").max(80),
   // El aliado configurado. null = todavía no está dado de alta; el pago se
@@ -450,7 +461,14 @@ const comisionPartnerBase = z.object({
   // después. Forzarlo obligaría a configurar antes de poder anotar la plata.
   partnerId: idDeBase.nullable().optional(),
   concepto: z.string().trim().max(160).nullable().optional(),
-  monto,
+  monto: montoComision,
+  /**
+   * true = el monto es el REAL (factura o aviso del aliado); false = es un estimado.
+   * Ausente = no se toca. La regla vive en `cambioDeOrigenDelMonto` (comisiones-partner.ts).
+   */
+  montoReal: z.boolean().optional(),
+  /** La referencia de la factura del aliado. Solo se guarda con el monto real. */
+  facturaAliado: z.string().trim().max(120).nullable().optional(),
   moneda: z.enum(COBRANZA_MONEDAS),
   fecha: isoDateReal,
   // null / ausente = el aliado no está en la cartera como Client. No se inventa.

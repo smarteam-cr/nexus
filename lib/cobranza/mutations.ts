@@ -37,7 +37,7 @@ import { decidirCambioDeNombre } from "./nombre-de-empresa";
 import { mensajeReferenciaYaEsCobro, normalizarReferenciaExterna } from "./ingresos-no-venta";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { FAMILIA_DEL_COBRO, filasQueLeImportan, resolverMergeAlerta } from "./alertas-merge";
-import { montoEsProyeccionPara } from "./comisiones-partner";
+import { cambioDeOrigenDelMonto, montoEsProyeccionPara, OrigenDelMontoError } from "./comisiones-partner";
 import {
   alertasQueYaNoAplican,
   cuentasEvaluadas,
@@ -1813,6 +1813,12 @@ export async function createComisionPartner(
     });
     if (!cliente) throw new CobranzaError("El cliente vinculado no existe.", 400);
   }
+  if (data.estado === "COBRADO" && data.monto === 0) {
+    throw new CobranzaError(
+      "Una comisión cobrada no puede ser cero. Si el aliado dijo que este período no hay comisión, regístrala por cobrar con el monto real en cero.",
+      400,
+    );
+  }
   const c = await prisma.comisionPartner.create({
     data: {
       partner: data.partner,
@@ -1832,8 +1838,16 @@ export async function createComisionPartner(
       // `confirmadoPor` sale del guard, NUNCA del body.
       // ⚠ Y la que se espera nace ESTIMADA. Sin esta línea la columna quedaba en su default
       // (false) y el reporte de equilibrio contaba una comisión que nadie cobró con el mismo
-      // peso que la plata en el banco.
-      montoEsProyeccion: montoEsProyeccionPara(data.estado),
+      // peso que la plata en el banco. Salvo que quien la anota diga que el monto es el real
+      // (la factura o el aviso del aliado, 2026-10-21): entonces lleva su firma y su factura.
+      montoEsProyeccion: montoEsProyeccionPara(data.estado, data.montoReal),
+      ...(data.estado !== "COBRADO" && data.montoReal
+        ? {
+            facturaAliado: data.facturaAliado?.trim() || null,
+            montoRealPor: byEmail,
+            montoRealEn: new Date(),
+          }
+        : {}),
       ...(data.estado === "COBRADO"
         ? {
             estado: "COBRADO" as const,
@@ -1869,9 +1883,15 @@ export async function cambiarEstadoComisionPartner(
   }
   const actual = await prisma.comisionPartner.findUnique({
     where: { id: comisionId },
-    select: { id: true, estado: true, monto: true },
+    select: { id: true, estado: true, monto: true, montoEsProyeccion: true, montoRealEn: true, montoEstimado: true },
   });
   if (!actual) throw new CobranzaError("La comisión no existe.", 404);
+  if (data.estado === "COBRADO" && data.monto === undefined && Number(actual.monto) === 0) {
+    throw new CobranzaError(
+      "Esta comisión está en cero: no hay nada que cobrar. Si el aliado sí pagó, escribe el monto que entró.",
+      400,
+    );
+  }
   if (actual.estado === data.estado) {
     throw new CobranzaError(
       data.estado === "COBRADO" ? "Esa comisión ya está cobrada." : "Esa comisión ya está por cobrar.",
@@ -1889,8 +1909,20 @@ export async function cambiarEstadoComisionPartner(
       ...(data.monto !== undefined ? { monto: data.monto } : {}),
       ...(data.montoBruto !== undefined ? { montoBruto: data.montoBruto } : {}),
       // Confirmar es, por definición, dejar de proyectar: alguien miró el banco. Y al
-      // revertir vuelve a serlo — el número que queda es el que nadie confirmó.
-      montoEsProyeccion: montoEsProyeccionPara(data.estado),
+      // revertir vuelve a serlo — el número que queda es el que nadie confirmó —, salvo
+      // que alguien haya registrado la factura del aliado (2026-10-21): ese monto sigue
+      // siendo el real aunque la plata no haya entrado.
+      montoEsProyeccion: montoEsProyeccionPara(data.estado, actual.montoRealEn !== null),
+      // Lo que decía el estimado, para ver cuánto se movió. Se guarda al cobrar una
+      // estimada con otro monto; se limpia si vuelve a ser estimada.
+      ...(data.estado === "COBRADO" &&
+      actual.montoEsProyeccion &&
+      actual.montoEstimado === null &&
+      data.monto !== undefined &&
+      data.monto !== Number(actual.monto)
+        ? { montoEstimado: actual.monto }
+        : {}),
+      ...(data.estado === "POR_COBRAR" && actual.montoRealEn === null ? { montoEstimado: null } : {}),
       ...(data.estado === "COBRADO"
         ? {
             // El refine del schema garantiza que la fecha viene: marcarla cobrada sin
@@ -1921,10 +1953,11 @@ export async function cambiarEstadoComisionPartner(
 export async function updateComisionPartner(
   comisionId: string,
   data: z.infer<typeof comisionPartnerPatchSchema>,
+  byEmail: string,
 ) {
   const actual = await prisma.comisionPartner.findUnique({
     where: { id: comisionId },
-    select: { id: true, estado: true, monto: true, fecha: true },
+    select: { id: true, estado: true, monto: true, fecha: true, montoEsProyeccion: true },
   });
   if (!actual) throw new CobranzaError("La comisión no existe.", 404);
   if (actual.estado === "COBRADO") {
@@ -1937,9 +1970,24 @@ export async function updateComisionPartner(
       );
     }
   }
+  // Estimado → real (llegó la factura del aliado) o al revés. La regla es pura y tiene
+  // pruebas; acá solo se traduce su negativa a un 409 para la persona.
+  let origen;
+  try {
+    origen = cambioDeOrigenDelMonto(
+      { estado: actual.estado, monto: Number(actual.monto), montoEsProyeccion: actual.montoEsProyeccion },
+      { montoReal: data.montoReal, facturaAliado: data.facturaAliado },
+      byEmail,
+      new Date(),
+    );
+  } catch (e) {
+    if (e instanceof OrigenDelMontoError) throw new CobranzaError(e.message, 409);
+    throw e;
+  }
   await prisma.comisionPartner.update({
     where: { id: comisionId },
     data: {
+      ...origen,
       ...(data.partner !== undefined ? { partner: data.partner } : {}),
       ...(data.partnerId !== undefined ? { partnerId: data.partnerId ?? null } : {}),
       ...(data.concepto !== undefined ? { concepto: data.concepto } : {}),

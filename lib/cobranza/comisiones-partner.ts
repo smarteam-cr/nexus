@@ -25,6 +25,8 @@ export interface ComisionParaSumar {
   moneda: string;
   /** "COBRADO" = la plata entró y alguien lo firmó. Cualquier otra cosa: todavía no. */
   estado: string;
+  /** true = nadie confirmó el monto. Ausente se lee como estimado: es lo que afirma menos. */
+  montoEsProyeccion?: boolean;
 }
 
 /** El corte de una moneda: lo que entró, lo que se espera, y la suma de los dos. */
@@ -32,9 +34,13 @@ export interface CorteDeMoneda {
   moneda: string;
   cobrado: number;
   esperado: number;
+  /** La parte de `esperado` que todavía es un estimado (sin factura del aliado). */
+  esperadoEstimado: number;
   total: number;
   cuantasCobradas: number;
   cuantasEsperadas: number;
+  /** Períodos que el aliado declaró en cero: ni se cobran ni se esperan (`sinComision`). */
+  cuantasSinComision: number;
 }
 
 export interface TotalPorPartner extends CorteDeMoneda {
@@ -53,16 +59,42 @@ function clave(partner: string): string {
 }
 
 function vacio(moneda: string): CorteDeMoneda {
-  return { moneda, cobrado: 0, esperado: 0, total: 0, cuantasCobradas: 0, cuantasEsperadas: 0 };
+  return {
+    moneda,
+    cobrado: 0,
+    esperado: 0,
+    esperadoEstimado: 0,
+    total: 0,
+    cuantasCobradas: 0,
+    cuantasEsperadas: 0,
+    cuantasSinComision: 0,
+  };
+}
+
+/**
+ * Si la comisión es un período «sin comisión»: el aliado dijo que es cero (monto real en cero).
+ *
+ * Es la ÚNICA regla del cero (feedback #17: Atom Chat no generó comisión ese trimestre). Una
+ * así no se espera ni se cobra: no es vencida, no cuenta como esperada y no ofrece «Registrar
+ * cobro». Una ESTIMADA en cero no entra: ese cero no lo dijo nadie, y sigue esperando que
+ * alguien lo confirme.
+ */
+export function sinComision(c: { monto: number; montoEsProyeccion?: boolean }): boolean {
+  return c.monto === 0 && c.montoEsProyeccion === false;
 }
 
 function acumular(dst: CorteDeMoneda, c: ComisionParaSumar): void {
+  if (sinComision(c)) {
+    dst.cuantasSinComision += 1;
+    return;
+  }
   if (c.estado === "COBRADO") {
     dst.cobrado = round2(dst.cobrado + c.monto);
     dst.cuantasCobradas += 1;
   } else {
     dst.esperado = round2(dst.esperado + c.monto);
     dst.cuantasEsperadas += 1;
+    if (c.montoEsProyeccion !== false) dst.esperadoEstimado = round2(dst.esperadoEstimado + c.monto);
   }
   dst.total = round2(dst.cobrado + dst.esperado);
 }
@@ -127,14 +159,80 @@ export function retencionDe(
 /**
  * Si el monto de una comisión en este estado es una estimación.
  *
- * Solo una COBRADA tiene un monto que alguien confirmó mirando el banco; cualquier otra es un
- * número que todavía nadie firmó. Existe porque el alta desde la pantalla no escribía la marca y
- * una comisión nueva POR_COBRAR nacía con el mismo peso que la plata que ya entró: el reporte de
+ * Una COBRADA tiene un monto que alguien confirmó mirando el banco. Una POR_COBRAR es estimada
+ * salvo que quien la anota diga que el monto es el REAL (`montoReal`: la factura o el aviso del
+ * aliado — 2026-10-21; antes el estado lo decidía solo y una factura recibida sin pagar se veía
+ * igual que un prorrateo). Existe porque el alta desde la pantalla no escribía la marca y una
+ * comisión nueva POR_COBRAR nacía con el mismo peso que la plata que ya entró: el reporte de
  * equilibrio la contaba en el margen a la fecha. El alta, el cambio de estado y la carga del Excel
  * leen esta regla y no una copia.
  */
-export function montoEsProyeccionPara(estado: string | undefined): boolean {
-  return estado !== "COBRADO";
+export function montoEsProyeccionPara(estado: string | undefined, montoReal = false): boolean {
+  return estado !== "COBRADO" && !montoReal;
+}
+
+/** Lo que una comisión ya tiene, para decidir qué cambia al marcar su monto estimado o real. */
+export interface MontoActual {
+  estado: string;
+  monto: number;
+  montoEsProyeccion: boolean;
+}
+
+/** Lo que se pide al editar: `montoReal` ausente = no se toca el origen del monto. */
+export interface MontoPedido {
+  montoReal?: boolean;
+  facturaAliado?: string | null;
+}
+
+/** Las columnas del origen del monto que hay que escribir. Solo trae las que cambian. */
+export interface CambioDeOrigen {
+  montoEsProyeccion?: boolean;
+  montoEstimado?: number | null;
+  facturaAliado?: string | null;
+  montoRealPor?: string | null;
+  montoRealEn?: Date | null;
+}
+
+/** Un pedido que la regla no acepta. Lleva el mensaje para la persona. */
+export class OrigenDelMontoError extends Error {}
+
+/**
+ * Qué escribir cuando una comisión pasa de estimada a real (llegó la factura del aliado), o al revés.
+ *
+ * PURA: la firma (`por`) y la hora (`ahora`) entran por parámetro. Las reglas:
+ *   · estimado → real: guarda lo que decía el estimado (`montoEstimado`), quién y cuándo, y la
+ *     referencia de la factura. Así se ve cuánto se movió el número.
+ *   · ya real: solo puede cambiar la referencia de la factura.
+ *   · real → estimado: limpia los cuatro; el número que queda es uno que nadie confirmó.
+ *   · una COBRADA no vuelve a estimado: su monto lo confirmó el banco. Se revierte el cobro primero.
+ */
+export function cambioDeOrigenDelMonto(
+  actual: MontoActual,
+  pedido: MontoPedido,
+  por: string,
+  ahora: Date,
+): CambioDeOrigen {
+  const factura = pedido.facturaAliado === undefined ? undefined : pedido.facturaAliado?.trim() || null;
+  if (pedido.montoReal === undefined) {
+    return factura !== undefined && !actual.montoEsProyeccion ? { facturaAliado: factura } : {};
+  }
+  if (pedido.montoReal) {
+    if (!actual.montoEsProyeccion) return factura !== undefined ? { facturaAliado: factura } : {};
+    return {
+      montoEsProyeccion: false,
+      montoEstimado: actual.monto,
+      facturaAliado: factura ?? null,
+      montoRealPor: por,
+      montoRealEn: ahora,
+    };
+  }
+  if (actual.estado === "COBRADO") {
+    throw new OrigenDelMontoError(
+      "Esta comisión ya está cobrada: su monto lo confirmó el banco. Para volverla estimada, revierte el cobro primero.",
+    );
+  }
+  if (actual.montoEsProyeccion) return {};
+  return { montoEsProyeccion: true, montoEstimado: null, facturaAliado: null, montoRealPor: null, montoRealEn: null };
 }
 
 /** Una comisión, con lo justo para poder sugerir la próxima. */
@@ -181,6 +279,7 @@ export interface ComisionParaAlertar {
   moneda: string;
   fecha: string;
   estado: string;
+  montoEsProyeccion?: boolean;
 }
 
 /**
@@ -192,14 +291,15 @@ export interface ComisionParaAlertar {
  *
  * El criterio es la fecha ESPERADA, no la de cobro: mientras esté POR_COBRAR no hay
  * fecha de cobro — es justamente lo que falta. Una comisión de hoy todavía no está
- * vencida; se avisa desde el día siguiente.
+ * vencida; se avisa desde el día siguiente. Una «sin comisión» (real en cero) no se
+ * espera, así que nunca vence.
  */
 export function comisionesPorCobrar(
   comisiones: readonly ComisionParaAlertar[],
   hoyISO: string,
 ): ComisionParaAlertar[] {
   return comisiones
-    .filter((c) => c.estado !== "COBRADO" && c.fecha < hoyISO)
+    .filter((c) => c.estado !== "COBRADO" && !sinComision(c) && c.fecha < hoyISO)
     .sort((a, b) => a.fecha.localeCompare(b.fecha));
 }
 

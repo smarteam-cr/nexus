@@ -42,7 +42,10 @@ import type { CorteDeMoneda } from "@/lib/cobranza/comisiones-partner";
  * El CONTEO sí cruza monedas —son cuántas cosas, no cuánta plata— y por eso vive acá
  * y no en el módulo de totales, donde la regla es que CRC y USD jamás se mezclan.
  */
-function cuantas(totales: readonly CorteDeMoneda[], campo: "cuantasCobradas" | "cuantasEsperadas"): number {
+function cuantas(
+  totales: readonly CorteDeMoneda[],
+  campo: "cuantasCobradas" | "cuantasEsperadas" | "cuantasSinComision",
+): number {
   return totales.reduce((n, t) => n + t[campo], 0);
 }
 import { COBRANZA_MONEDAS } from "@/lib/cobranza/schema";
@@ -72,6 +75,13 @@ type FormState = {
   fecha: string;
   clientId: string;
   notas: string;
+  /** true = el monto es el real (factura o aviso del aliado); false = un estimado. */
+  montoReal: boolean;
+  facturaAliado: string;
+  /** El estado de la comisión que se edita: una cobrada es real por el banco y no se elige. */
+  estado: string;
+  /** El título del modal cuando se abre desde «Registrar factura». */
+  titulo?: string;
 };
 
 type AliadoForm = { id: string | null; nombre: string; frecuenciaMeses: string; notas: string };
@@ -100,10 +110,12 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
   async function guardar() {
     if (!form) return;
     const monto = Number(form.monto);
-    if (!Number.isFinite(monto) || monto <= 0) {
-      toast.error("El monto tiene que ser un número positivo.");
+    // Cero vale (feedback #17): un período en que el aliado no generó comisión es un dato.
+    if (form.monto.trim() === "" || !Number.isFinite(monto) || monto < 0) {
+      toast.error("El monto tiene que ser un número, cero o mayor.");
       return;
     }
+    const cobrada = form.estado === "COBRADO";
     const body = {
       partner: form.partner.trim(),
       partnerId: form.partnerId || null,
@@ -113,6 +125,10 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
       fecha: form.fecha,
       clientId: form.clientId || null,
       notas: form.notas.trim() || null,
+      // Una cobrada es real por el banco: no se le pregunta.
+      ...(cobrada
+        ? {}
+        : { montoReal: form.montoReal, facturaAliado: form.montoReal ? form.facturaAliado.trim() || null : null }),
     };
     setGuardando(true);
     try {
@@ -189,6 +205,25 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
 
   const hoy = new Date().toISOString().slice(0, 10);
 
+  /** Abre el formulario sobre una comisión. `conFactura` lo abre ya puesto en «monto real». */
+  function abrirEdicion(c: ComisionPartnerDTO, conFactura: boolean) {
+    setEditandoId(c.id);
+    setForm({
+      partner: c.partner,
+      partnerId: c.partnerId ?? "",
+      concepto: c.concepto ?? "",
+      monto: String(c.monto),
+      moneda: c.moneda,
+      fecha: c.fecha,
+      clientId: c.clientId ?? "",
+      notas: c.notas ?? "",
+      montoReal: conFactura || !c.montoEsProyeccion,
+      facturaAliado: c.facturaAliado ?? "",
+      estado: c.estado,
+      titulo: conFactura ? `Registrar factura · ${c.partner}` : undefined,
+    });
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader recorrido="finanzas-comisiones-partner"
@@ -207,6 +242,9 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
                 fecha: hoy,
                 clientId: "",
                 notas: "",
+                montoReal: false,
+                facturaAliado: "",
+                estado: "POR_COBRAR",
               });
             }}
           >
@@ -230,6 +268,10 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
             <p className="mt-0.5 text-[11px] text-fg-muted">
               {cuantas(data.totales, "cuantasCobradas")} confirmada
               {cuantas(data.totales, "cuantasCobradas") === 1 ? "" : "s"} · plata en el banco
+              {cuantas(data.totales, "cuantasSinComision") > 0 &&
+                ` · ${cuantas(data.totales, "cuantasSinComision")} período${
+                  cuantas(data.totales, "cuantasSinComision") === 1 ? "" : "s"
+                } sin comisión`}
             </p>
           </div>
           <div className="rounded-xl border border-line border-dashed bg-surface px-4 py-3">
@@ -239,7 +281,15 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
             </p>
             <p className="mt-0.5 text-[11px] text-fg-muted">
               {cuantas(data.totales, "cuantasEsperadas")} esperada
-              {cuantas(data.totales, "cuantasEsperadas") === 1 ? "" : "s"} · el monto se confirma al entrar
+              {cuantas(data.totales, "cuantasEsperadas") === 1 ? "" : "s"}
+              {data.totales.some((t) => t.esperadoEstimado > 0)
+                ? ` · ${data.totales
+                    .filter((t) => t.esperadoEstimado > 0)
+                    .map((t) => fmtMonto(t.esperadoEstimado, t.moneda as "CRC" | "USD"))
+                    .join(" · ")} todavía estimado`
+                : cuantas(data.totales, "cuantasEsperadas") > 0
+                  ? " · todo con factura del aliado"
+                  : ""}
             </p>
           </div>
         </div>
@@ -260,6 +310,7 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
                 {p.esperado > 0
                   ? `+ ${fmtMonto(p.esperado, p.moneda as "CRC" | "USD")} por venir · ${p.moneda}`
                   : `${p.cuantasCobradas} pago${p.cuantasCobradas === 1 ? "" : "s"} · ${p.moneda}`}
+                {p.cuantasSinComision > 0 && ` · ${p.cuantasSinComision} sin comisión`}
               </p>
             </div>
           ))}
@@ -348,6 +399,9 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
                             fecha: "",
                             clientId: "",
                             notas: `Estimada a partir de la comisión confirmada del ${h.proximo!.segun}.`,
+                            montoReal: false,
+                            facturaAliado: "",
+                            estado: "POR_COBRAR",
                           });
                         }}
                       >
@@ -374,23 +428,14 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
           onCambio={refrescar}
           extraAcciones={(c: ComisionPartnerDTO) => (
             <>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setEditandoId(c.id);
-                  setForm({
-                    partner: c.partner,
-                    partnerId: c.partnerId ?? "",
-                    concepto: c.concepto ?? "",
-                    monto: String(c.monto),
-                    moneda: c.moneda,
-                    fecha: c.fecha,
-                    clientId: c.clientId ?? "",
-                    notas: c.notas ?? "",
-                  });
-                }}
-              >
+              {/* Llegó la factura del aliado: el estimado pasa a real (2026-10-21). Es el mismo
+                  formulario de editar, ya puesto en «real», para que el monto se corrija ahí. */}
+              {c.estado !== "COBRADO" && c.montoEsProyeccion && (
+                <Button variant="secondary" size="sm" onClick={() => abrirEdicion(c, true)}>
+                  Registrar factura
+                </Button>
+              )}
+              <Button variant="secondary" size="sm" onClick={() => abrirEdicion(c, false)}>
                 Editar
               </Button>
               <Button variant="secondary" size="sm" onClick={() => borrar(c.id)}>
@@ -538,7 +583,7 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
             setForm(null);
             setEditandoId(null);
           }}
-          title={editandoId ? "Editar comisión" : "Registrar comisión de partner"}
+          title={form.titulo ?? (editandoId ? "Editar comisión" : "Registrar comisión de partner")}
           description="Lo que te pagó un aliado comercial. Si el aliado no está en la cartera, deja el cliente vacío."
         >
           <div className="space-y-3">
@@ -609,6 +654,39 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
                 />
               </Field>
             </div>
+            {/* Estimado o real (2026-10-21): la comisión se anota primero como estimado y pasa a
+                real cuando llega la factura del aliado. Una cobrada es real por el banco. */}
+            {form.estado !== "COBRADO" && (
+              <Field
+                label="El monto es"
+                hint={
+                  Number(form.monto) === 0 && form.monto.trim() !== ""
+                    ? form.montoReal
+                      ? "Queda como «sin comisión» este período: no se espera ningún cobro."
+                      : "Un cero estimado sigue esperando que alguien confirme que de verdad no hay comisión."
+                    : form.montoReal
+                      ? "Cuenta como ingreso del período aunque la plata todavía no haya entrado."
+                      : "No suma a los ingresos hasta que se registre la factura o el cobro."
+                }
+              >
+                <Select
+                  value={form.montoReal ? "real" : "estimado"}
+                  onChange={(e) => setForm({ ...form, montoReal: e.target.value === "real" })}
+                >
+                  <option value="estimado">Estimado (prorrateo o proyección)</option>
+                  <option value="real">Real (factura o aviso del aliado)</option>
+                </Select>
+              </Field>
+            )}
+            {form.estado !== "COBRADO" && form.montoReal && (
+              <Field label="Factura del aliado (opcional)">
+                <Input
+                  value={form.facturaAliado}
+                  onChange={(e) => setForm({ ...form, facturaAliado: e.target.value })}
+                  placeholder="Ej. número de factura, o «aviso por correo»"
+                />
+              </Field>
+            )}
             <Field label="Cliente (opcional)" hint="Solo si el aliado ya existe en la cartera.">
               <Select
                 value={form.clientId}

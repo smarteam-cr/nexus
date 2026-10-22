@@ -2559,7 +2559,8 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   ACUMULADO (`=B11+C11`) que repite cada total en dos columnas, y sumarla contaba todo dos veces.
   Lo que entró son **5 pagos**: HubSpot 38.756,61 (feb-15) + 45.921,72 (may-15) · Atom Chat
   2.796,75 + 2.849,25 (mismas fechas) · Cooby 938,22 (jul-30). **Nua talk está en cero y no se
-  carga**: una fila de $0 no es una comisión, es una columna que quedó vacía. Es la CUARTA vez que
+  carga**: una fila de $0 no es una comisión, es una columna que quedó vacía (en el Excel; un trimestre que el aliado
+  declara en cero sí se registra, ver 2026-10-21). Es la CUARTA vez que
   un total del propio documento miente (facturaciones, herramientas, salarios, y ahora ésta) — la
   regla ya escrita arriba se confirma: lo leído celda por celda es la verdad. Por eso los 5 montos
   van escritos a mano en `scripts/import-comisiones-partner.ts` y no salen de un parser que
@@ -2938,7 +2939,8 @@ fabricarla.
   brecha, margen ni «Igualar al equilibrio»: se declara aparte, en `partnershipProyectado`. No
   se le preguntó a nadie porque no era una decisión sino un error de fidelidad (H12): los
   «US$51.000 exactos, dos veces» pesaban igual que lo que entró al banco. Una comisión nueva
-  POR_COBRAR nace estimada (`montoEsProyeccionPara`).
+  POR_COBRAR nace estimada (`montoEsProyeccionPara`), salvo que quien la anota diga que el monto es el real de la
+  factura del aliado (2026-10-21, ver «Comisiones de aliado: estimado, real de la factura y cero»).
 - **`PARTNERSHIP_CUBRE_EL_PISO = true`** hasta que Marco y Claudia contesten si el punto de
   equilibrio se cubre también con lo que pagan los aliados. `true` es lo que el reporte hizo
   siempre sin que nadie lo firmara. Vive en `lib/finanzas/equilibrio.ts`, los tests corren con
@@ -10264,3 +10266,31 @@ horario y menos pruebas para él.
 - **Las pruebas para Elías son solo las que piden su criterio de producto.** Lo de pantalla de todos los días lo valida
   quien lo usa, al usarlo («⏳ La valida el equipo: <persona>»), y lo que se comprueba con datos o código, Claude
   («Pruebas con IA»). Regla 4 de «Cómo se mantiene este roadmap».
+
+## Comisiones de aliado: estimado, real de la factura y cero (2026-10-21)
+
+> Revisando Finanzas con Alex Arrieta y María José Zamora (feedback #17): *«Necesito colocar que el monto sea cero
+> porque según lo indicado por atom chat este trimestre no hay comisión»*. Y en la misma reunión: una comisión no es un
+> monto fijo; primero se anota un estimado (un prorrateo) y se ajusta al real cuando llega la factura del aliado. Ese
+> día kölbi (Coby) mandó la suya.
+
+- **Estimado o real ya no depende del estado.** Hasta hoy `montoEsProyeccionPara(estado)` decía «por cobrar = estimado,
+  cobrada = real», así que una factura recibida y sin pagar se veía igual que un prorrateo. El SQL del 2026-08-20 ya lo
+  había dejado escrito: esa distinción la hace una persona desde la pantalla. Ahora hay tres orígenes del monto: el
+  **estimado** (nadie lo confirmó), el **real de la factura** (el aliado lo dijo: factura o aviso) y el **cobrado** (llegó
+  al banco). Una cobrada siempre es real. Una por cobrar nace estimada salvo que quien la anota diga que es el real.
+- **El paso de estimado a real queda guardado con su firma y su antes.** `montoRealPor` y `montoRealEn` dicen quién y
+  cuándo lo dio por real; `facturaAliado` la referencia de la factura (opcional: a veces es un correo); `montoEstimado`
+  lo que decía el estimado, para ver cuánto se movió. Volver a estimado limpia los cuatro. Confirmar el cobro de una
+  estimada con otro monto también guarda el estimado. Revertir un cobro devuelve la comisión a estimada solo si nadie
+  registró su factura.
+- **Una comisión real devenga aunque no se haya cobrado.** Es lo que el reporte de equilibrio ya hacía con
+  `montoEsProyeccion = false` (como una factura emitida sin cobrar): suma a ingresos y no a caja. La estimada sigue
+  aparte, en `partnershipProyectado`.
+- **El cero es un dato, no una columna vacía.** El monto acepta cero (`>= 0`, Zod y un CHECK en la base). Una real en
+  cero es **«sin comisión»** en ese período: no se espera cobro, no aparece como vencida en la lista, en Pendientes, en
+  el cierre ni en las inconsistencias, y no cuenta como esperada ni como cobrada (`sinComision`, una sola regla en
+  `lib/cobranza/comisiones-partner.ts`). Una estimada en cero sí sigue esperando que alguien la confirme. Esto corrige lo
+  que dijo la carga de agosto («una fila de $0 no es una comisión»): ahí era una celda vacía del Excel; acá es un
+  trimestre que el aliado declaró en cero, y sin la fila el historial muestra un hueco que nadie puede explicar.
+- **Cobrar sigue exigiendo un monto positivo.** Cobrar cero no es un cobro: es «sin comisión», y se registra así.
