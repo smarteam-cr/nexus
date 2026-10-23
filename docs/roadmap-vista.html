@@ -154,6 +154,8 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       // Orden: lo que hay que volver a validar, lo que falta, lo que estoy arreglando, y lo validado al final, por fecha.
       var MESES = { ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, sep: 9, oct: 10, nov: 11, dic: 12 };
       var tb = t.querySelector('tbody');
+      // Una tabla sin filas no trae tbody: sin esta salida, el script muere y la página queda sin pestañas (22 oct).
+      if (!tb) return;
       var filas = Array.prototype.slice.call(tb.children).map(function (tr, i) {
         var e = tr.children[1] ? tr.children[1].textContent.trim() : '';
         var g = /^↻/.test(e) ? 0 : /^✓/.test(e) ? 3 : /^⏳/.test(e) ? 2 : 1;

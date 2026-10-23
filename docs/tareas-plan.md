@@ -1440,6 +1440,18 @@ En cada entrega: `tsc` en 0, la suite, `/ship-nexus` antes de commitear. En la q
 
 ---
 
+## 17. Las tareas que nacen del plan del proyecto (propuesta del 2026-10-22, nada construido)
+
+Sale de `docs/actividades-plan.md` (las actividades de cada caso de uso). La lectura de producción de ese día: en 45 días
+a los cinco CSE les nacieron 105 tareas de reuniones, **0 aceptadas y 0 hechas**, 37 vencidas sin decidir. Sumarles las
+del handoff a «Por decidir» repetiría eso. La propuesta son tres puertas a una sola lista por persona:
+
+1. **El plan del proyecto**: nace en el handoff, una tarea por actividad vendida. Ya está vendido, así que no pasa por
+   «Por decidir»: vive en la lista del cliente y sube a «Para ti» solo lo de la semana.
+2. **Lo que se dijo con el cliente** (lo de hoy): compromisos y seguimientos de las reuniones, por «Por decidir» con tope.
+3. **Lo que se dijo puertas adentro**: en una reunión interna alguien pide algo; Nexus crea la tarea para quien la
+   hace y una de revisión para quien la pidió (roadmap, área H).
+
 ## Autorizar el permiso de Calendar (lo hace Elías, antes del deploy de 1A.1)
 
 Nexus ya tiene una cuenta de servicio con delegación de todo el dominio. Hay que sumarle UN permiso a la lista que ya tiene, sin borrar los otros.

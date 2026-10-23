@@ -324,11 +324,6 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 | 269 | ⏳ La valida el equipo: Caroline Bersot | Que la página de una sesión quede para leer | Una sesión con tareas propuestas › «Lo que dejó esta reunión». | «Tus tareas propuestas» se ven como texto, con «Decidir en Tareas». La minuta, los pedidos y la ficha se siguen decidiendo ahí; «Usar todo» ya no habla de tus tareas. |
 | 273 | Por validar | Que una propuesta de tarea se decida fácil | Con «Ver como» Caroline Bersot › Tareas › «Por decidir» › abre una propuesta (por ejemplo, la de los informes de activaciones de Honda). | Arriba, «Honda Costa Rica – Configurar…» (no «T-9») y «T-9 · Nexus te la propone». Una caja azul con qué propone Nexus, debajo «Para · Vence · Cliente» y de qué reunión salió. Abajo, en el pie, «Descartar», «Más adelante» y «Usar». «Cambiar otros detalles» abre el formulario entero. |
 
-### Kickoff y cronograma <span class="prioridad">Alta</span>
-
-| # | Estado | Prueba | Pasos | Resultado esperado |
-|---|---|---|---|---|
-
 ### Preventa y exploración <span class="prioridad">Alta</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
