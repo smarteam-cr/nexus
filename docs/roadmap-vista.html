@@ -110,6 +110,15 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 .subtabs button .p { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; background: currentColor; }
 .subtabs .grupo { flex-basis: 100%; font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-muted); margin: 6px 0 0; }
 .subtabs .grupo:first-child { margin-top: 0; }
+/* Resumen: la pestaña que abre primero, para quien no sigue el día a día. Una tarjeta por área, siempre abierta. */
+.tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin: 12px 0 0; }
+.tarjetas .ini { margin: 0; display: flex; flex-direction: column; }
+.ini.tarjeta h3 { margin: 0 0 8px; justify-content: space-between; }
+#doc .ini.tarjeta ul { list-style: none; padding: 0; margin: 0; }
+#doc .ini.tarjeta li { margin: 0; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+#doc .ini.tarjeta li strong { display: block; font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-muted); }
+#panel-resumen > p, #panel-resumen > ol { max-width: 760px; }
+#panel-resumen > ol li { margin: 6px 0; }
 </style>
 
 <main>
@@ -170,6 +179,10 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   // Cada iniciativa (h3 y lo que sigue hasta el próximo encabezado) en su tarjeta.
   doc.querySelectorAll('h3').forEach(function (h) {
     var card = document.createElement('section'); card.className = 'ini';
+    // Las del «Resumen» son tarjetas que no se pliegan.
+    var antes = h.previousElementSibling;
+    while (antes && antes.tagName !== 'H2') antes = antes.previousElementSibling;
+    if (antes && /^\s*Resumen$/i.test(antes.textContent)) card.classList.add('tarjeta');
     h.parentNode.insertBefore(card, h);
     var el = h;
     while (el && !(el !== h && /^H[23]$/.test(el.tagName))) { var sig = el.nextElementSibling; card.appendChild(el); el = sig; }
@@ -198,6 +211,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     var cuerpo = document.createElement('div'); cuerpo.className = 'cuerpo';
     while (h.nextSibling) cuerpo.appendChild(h.nextSibling);
     card.appendChild(cuerpo);
+    if (card.classList.contains('tarjeta')) { card.classList.add('abierta'); return; }
     var chip = h.querySelector('.chip.estado'), estado = chip ? chip.textContent.trim() : '';
     var pasos = cuerpo.querySelectorAll('ol > li'), hechos = cuerpo.querySelectorAll('ol > li.hecho').length;
     var enCurso = cuerpo.querySelectorAll('ol > li .marca.curso').length;
@@ -215,8 +229,18 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     h.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cambiar(); } });
   });
 
-  // Seis pestañas: lo que falta, las pruebas para personas, las pruebas con IA, lo que le pides al equipo, lo hecho y cómo funciona Nexus. Cada «##» va a la suya.
+  // Las tarjetas seguidas del Resumen, en una grilla.
+  var sueltas = Array.prototype.slice.call(doc.querySelectorAll('.ini.tarjeta'));
+  sueltas.forEach(function (card) {
+    var prev = card.previousElementSibling;
+    if (prev && prev.classList.contains('tarjetas')) { prev.appendChild(card); return; }
+    var g = document.createElement('div'); g.className = 'tarjetas';
+    card.parentNode.insertBefore(g, card); g.appendChild(card);
+  });
+
+  // Siete pestañas: el resumen, lo que falta, las pruebas para personas, las pruebas con IA, lo que le pides al equipo, lo hecho y cómo funciona Nexus. Cada «##» va a la suya.
   var PESTANAS = [
+    { id: 'resumen', nombre: 'Resumen', h2: /^\s*Resumen$/i },
     { id: 'roadmap', nombre: 'Roadmap' },
     { id: 'validar', nombre: 'Pruebas para personas', h2: /^\s*Pruebas para personas$/i },
     { id: 'claude', nombre: 'Pruebas con IA', h2: /^\s*Pruebas con IA$/i },
@@ -228,6 +252,8 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   PESTANAS.forEach(function (p) { var d = document.createElement('div'); d.className = 'panel'; d.id = 'panel-' + p.id; paneles[p.id] = d; });
   var actual = 'roadmap';
   Array.prototype.slice.call(doc.children).forEach(function (el) {
+    // El título y la línea del corte ya están en la cabecera.
+    if (el.tagName === 'H1' || (el.tagName === 'P' && /^\s*Corte:/.test(el.textContent))) { el.remove(); return; }
     if (el.tagName === 'H2') {
       var p = PESTANAS.filter(function (x) { return x.h2 && x.h2.test(el.textContent); })[0];
       actual = p ? p.id : 'roadmap';
@@ -283,6 +309,6 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     tabs.appendChild(b);
   });
   var inicial = (location.hash || '').slice(1);
-  elegir(PESTANAS.some(function (p) { return p.id === inicial; }) ? inicial : 'roadmap', false);
+  elegir(PESTANAS.some(function (p) { return p.id === inicial; }) ? inicial : 'resumen', false);
 })();
 </script>

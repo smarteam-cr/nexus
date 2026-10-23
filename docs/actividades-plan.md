@@ -124,15 +124,25 @@ a «Por decidir», se ignoran igual.
    reunión, y Nexus crea la tarea para ella y una de revisión para él.
 - **«Para ti» muestra el día y la semana**, con pocas cosas; el resto vive en la lista del cliente y en Tareas.
 
+## Cuarta ronda (2026-10-23)
+
+- **El tamaño lo estima el agente de la preventa.** El agente que investiga la empresa lo estima; si en HubSpot está
+  vacío lo escribe allá, y si no coincide propone el cambio para que el vendedor lo acepte antes de escribirlo (roadmap
+  B1 etapa 2).
+- **Se limpian las tareas de hoy antes de sumar las del handoff:** cerrar lo vencido, juntar los seguimientos y bajar
+  el tope de «Por decidir» (roadmap D2 etapa 1).
+- **El orden:** primero desarmar el cotizador contigo y limpiar las tareas; está escrito en el roadmap, en «Orden
+  sugerido».
+- **kölbi se cotiza como gobierno** (tarifa 120 y actas). Ya se le está ofreciendo SmartLoop.
+
 ## Lo que falta decidir
 
-Cuarta ronda, preguntada el 2026-10-22. Al cerrarlas, cada respuesta sube a su sección de arriba.
-
 1. **Las tareas de gestión del cliente** (seguimiento de 15 minutos, planear una sesión, gestión del cambio que no es
-   de un caso): ¿se cobran o solo se miden? Recomendación: se miden siempre (son costo de servir la cuenta) y en el
-   precio entran como un bloque fijo de horas al mes según la escala, sin detallarlas en la propuesta.
-2. **Las 105 tareas de los CSE que nadie decidió:** antes de sumar las del handoff, ¿limpiamos lo que hay (cerrar lo
-   vencido, juntar los seguimientos) y bajamos el tope de «Por decidir»?
-3. **El orden:** ¿primero desarmar el cotizador contigo (biblioteca de actividades) o primero la propuesta de las tres
-   puertas para Tareas? Recomendación: el cotizador primero, porque sin actividades el handoff no tiene qué crear.
-4. **kölbi pesa el 37 %.** ¿Sus proyectos se cotizan como gobierno (tarifa 120 y actas) o como corporativo?
+   de un caso): ¿se cobran o solo se miden? Elías pidió más contexto el 2026-10-23.
+   - **El contexto:** hay trabajo que no está en ningún caso y que se hace igual: seguimientos, preparar sesiones,
+     contestar al cliente.
+   - **Si solo se mide**, el precio no lo cubre y la rentabilidad de cada caso se ve mejor de lo que es.
+   - **Si se detalla en la propuesta**, el cliente ve horas, cosa que ya se descartó.
+   - **Recomendación:** medirlo siempre (es el costo de servir la cuenta) y que en el precio entre como un bloque fijo
+     de horas al mes según la escala, sin detallarlo.
+   - Está en el roadmap, «Lo que decides tú» 11.

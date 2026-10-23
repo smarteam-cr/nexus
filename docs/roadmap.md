@@ -1,6 +1,70 @@
 # Roadmap de Nexus
 
-**Corte:** 2026-10-22
+**Corte:** 2026-10-23
+
+## Resumen
+
+**Nexus en una frase:** el sistema donde Smarteam vende por resultados (casos de uso), los entrega con Customer Success y sabe cuánto le cuesta cada uno; cada persona entra y ve qué le toca hoy.
+
+**Lo que importa esta semana:**
+
+1. Hoy, 23 oct, se despliegan los cambios de la preventa y del diagnóstico para tus reuniones con Ventas y con Customer Success (CEMACO).
+2. Revisar y aprobar, área por área, la propuesta de vender y entregar por casos de uso (pestaña «Roadmap»).
+3. Empezar contigo a desarmar el cotizador en un catálogo de actividades.
+
+### Vender por resultados <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** el vendedor arma la propuesta con los casos de uso y las actividades que sugiere Nexus, cada una con su porqué y su precio calculado, y el cliente entiende qué resultado compra.
+- **Hoy:** la biblioteca tiene 26 casos sin actividades ni horas, y el cotizador vive fuera de Nexus. La preventa guía las sesiones, pero a Ventas le sobran preguntas y le falta ir por área y a lo técnico: se arregla hoy.
+- **Plan:** la actividad ya está definida contigo; sigue desarmar el cotizador en actividades, que cada caso las jale y que la propuesta las sugiera.
+
+### Los datos de la empresa <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** Nexus conoce el tamaño y la forma de cada empresa (equipos, personas, herramientas) y con eso decide cuántas actividades sugerir.
+- **Hoy:** el tamaño de HubSpot no sirve: a 60 de 163 empresas les falta y otras lo tienen mal (Honda Costa Rica figura con 5 empleados).
+- **Plan:** el agente que investiga la empresa en la preventa estima el tamaño, lo escribe en HubSpot si está vacío y, si no coincide, propone el cambio para que el vendedor lo acepte.
+
+### Entregar: cronograma y tareas <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** el cliente ve de un vistazo cómo va su proyecto, y cada CSE sabe qué le toca hoy y esta semana, sin 20 tareas de golpe.
+- **Hoy:** el cronograma lo arma el handoff y no está unido a las tareas, a propósito. A los CSE les llegaron 105 tareas en 45 días: ninguna aceptada.
+- **Plan:** limpiar lo que hay y abrir tres puertas: el plan del proyecto nace en el handoff ya decidido, lo dicho con el cliente pasa por «Por decidir» y lo dicho puertas adentro deja tarea y revisión.
+
+### El diagnóstico y los entregables de Customer Success <span class="estado">En curso</span>
+
+- **Resultado esperado:** un diagnóstico corto que le explica al cliente por qué tiene los resultados que tiene y qué vamos a hacer (el enfoque de la solución), escrito en minutos con lo que Nexus ya sabe.
+- **Hoy:** se construye hoy: dos plantillas (liviana y avanzada) que se eligen al crearlo, «Enfoque de la solución», todo se mueve y se borra, y un aviso cuando casi nada está confirmado.
+- **Plan:** después, plantillas por caso de uso y definir contigo qué necesita Customer Success para cada entregable.
+
+### Rentabilidad y capacidad <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** saber cuánto cuesta entregar cada caso y cuánto tiempo le gana Nexus al trabajo a mano.
+- **Hoy:** Rentabilidad ya calcula el costo por hora con la planilla y mide las reuniones del calendario; falta el tiempo del resto del trabajo.
+- **Plan:** cada actividad trae su tiempo a mano (para el precio) y su tiempo con Nexus (la meta); se compara con lo que de verdad duró.
+
+### Expansión y servicio recurrente <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** lo que pide el cliente se vuelve su siguiente caso, y el servicio recurrente corre con su cadencia: entrega semanal, reporte de avance mensual y stakeholders cada tres meses.
+- **Hoy:** SmartLoop todavía no tiene uso real (Honda y kölbi sin primer ciclo en Nexus). A kölbi ya se le ofrece SmartLoop y se cotiza como gobierno.
+- **Plan:** fuera de alcance en las implementaciones y solicitudes en SmartLoop, con la CSL decidiendo; un agente por cliente que une lo que pide con la biblioteca.
+
+### Que cada reunión deje su trabajo <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** cada reunión, también las internas, deja lo que hay que hacer para quien lo tiene que hacer.
+- **Hoy:** solo se leen las reuniones con clientes y los sprints, y la copia de Meet corre cuando alguien abre Nexus.
+- **Plan:** la copia de Meet cada hora y tu piloto con tus reuniones internas.
+
+### Finanzas y cobranza <span class="estado">En producción</span>
+
+- **Resultado esperado:** lo facturado, lo cobrado y lo que entró al banco cuadran solos; una persona decide solo lo dudoso.
+- **Hoy:** «Lo que no cuadra» se cuenta por documento, Nexus ordena solo lo seguro (con «Deshacer») y Mercury cobra sola con el día en que se vio pagada.
+- **Plan:** Stripe cuando Alex dé la clave, prender el corte de cobranza y pagar las comisiones desde Nexus.
+
+### Que el equipo use Nexus <span class="estado">En curso</span>
+
+- **Resultado esperado:** 10 de las 14 personas operativas entran 3 días o más por semana, y la mitad de lo que propone Nexus se decide antes de que venza.
+- **Hoy:** 0 de 14 entran 3 días; se decide a tiempo el 7,4 % de lo que propone Nexus.
+- **Plan:** menos cosas que decidir (las tres puertas de las tareas) y «Para ti» con el día y la semana.
 
 ## Para qué
 
@@ -47,6 +111,7 @@ Sin esto, algo sigue mal o no se puede validar:
 8. **La escala 8.9.1:** revisarla para publicarla (prueba 108).
 9. **El correo de la mañana:** mandarlo por Gmail o por un proveedor.
 10. **La página de la sesión:** la minuta, la ficha y las novedades todavía se deciden en «Lo que dejó esta reunión». ¿Pasan también a Tareas (o a la agenda), para salir del todo de esa página? (Los pedidos fuera de alcance no: el 22 oct decidiste que siguen como avisos, ver la propuesta E1.)
+11. **Las tareas de gestión del cliente** (el seguimiento de 15 minutos, planear una sesión, la gestión del cambio que no es de un caso): ¿se cobran o solo se miden? Mi recomendación: se miden siempre, porque son el costo de servir la cuenta, y en el precio entran como un bloque fijo de horas al mes según la escala, sin detallarlas en la propuesta (`docs/actividades-plan.md`).
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -70,10 +135,17 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 | Dos casos de Insider y el de agentes de atención prometen de Inicial a Óptimo | La meta es el siguiente nivel | A5 |
 | Las comisiones del CSE son un 5 % fijo (modelo del 21 oct) | El pago del CSE anclado a la escala | Más adelante |
 | El cliente ve todas las tareas del cronograma, también las del equipo | El cliente ve un resumen, como se vendió | D1 |
+| Las tareas del CSE nacen todas «por decidir» (en 45 días, 105 tareas y ninguna aceptada) | Las del plan del proyecto nacen ya decididas | D2 |
+| El cotizador cambia las horas según el tamaño (una exploración de hora y media en una empresa grande) | El tiempo de cada actividad es uno; cambia cuáles y cuántas | A2 |
+
+**Los planes escritos** (cada uno es la fuente de su parte):
+
+- `docs/actividades-plan.md`: qué es una actividad, sus dos tiempos, el tamaño y el ICP, quién elige y las tareas que nacen del plan. Sirve a A, C2, D2 y G.
+- `docs/tareas-plan.md` § 17: las tres puertas de las tareas. Sirve a D2 y H.
 
 **Orden sugerido, por dependencias:**
 
-1. Para empezar ya, sin depender de nada: A1 (qué es una actividad, contigo), H1 (tu piloto con tus propias sesiones) y la etapa 1 de B1 (qué datos de la empresa hay y dónde).
+1. Para empezar ya, sin depender de nada: desarmar contigo el cotizador en un catálogo de actividades (A1 etapa 2 y A2 etapa 1), limpiar las tareas de los CSE que nadie decidió (D2 etapa 1), H1 (tu piloto con tus propias sesiones) y la etapa 1 de B1 (qué datos de la empresa hay y dónde).
 2. Con A1 cerrado: A3 (criterios en palabras simples) y A5 (los casos que faltan).
 3. A2 (migrar el cotizador a la biblioteca) y después A4 (duración y «cómo sabrás que funcionó»).
 4. B1 completo y después B2 (la escala lee los datos de la empresa).
@@ -83,15 +155,25 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 
 ### A · La biblioteca de casos de uso y sus actividades <span class="estado">Propuesta</span>
 
-1. **A1 · Definir contigo qué es una actividad.** *Sale de:* «debajo de los casos de uso va un catálogo de actividades», «un caso es maleable», tu respuesta 3. *Depende de:* nada.
-   - Etapa 1 · Una serie de chats exploratorios contigo: qué es una actividad, qué campos tiene (qué deja hecho, en qué etapa del caso va, quién la hace, si es sesión o trabajo del equipo, tiempo máximo, qué parte de la escala cumple, si es opcional y cómo cambia con el tamaño de la empresa).
-   - Etapa 2 · Bajar dos casos completos a actividades, con el cotizador como punto de partida: «Sistematiza tu proceso comercial» y «Entiende por qué ganas y pierdes».
+1. [en curso] **A1 · Definir contigo qué es una actividad.** *Sale de:* «debajo de los casos de uso va un catálogo de actividades», «un caso es maleable», tu respuesta 3. *Depende de:* nada.
+   - Etapa 1 · ✓ Hecha el 22 oct, en tres rondas (`docs/actividades-plan.md`). Una actividad es el trabajo para llegar al resultado; lo que ve el cliente es lo que se entrega.
+     - Cada actividad lleva dos tiempos: el de hacerla a mano (se cotiza) y el objetivo con Nexus (la meta). La rentabilidad usa lo que de verdad duró.
+     - Las sesiones duran una hora.
+     - Un solo tipo, con «es con el cliente: sí o no».
+     - Se comparte entre casos.
+     - Algunas se repiten (en SmartLoop: semanal, mensual, trimestral).
+     - En cada proyecto nace como tarea en el handoff.
+   - Etapa 2 · Desarmar el cotizador contigo: juntar todas sus tareas en un catálogo de actividades agrupadas, y después ver qué actividades jala cada caso (primero las actividades, después los casos). Empezar por «Sistematiza tu proceso comercial» y «Entiende por qué ganas y pierdes».
    - Etapa 3 · La regla de corte: lo fijo de un caso es el resultado y cómo saber que funcionó; las actividades son una sugerencia que se infla o se aliviana. Si una actividad agregada cumple algo de otra dimensión o de un nivel más alto, Nexus avisa «esto ya es otro caso».
    - Etapa 4 · Dejarlo escrito en DECISIONS como la definición oficial, antes de tocar código.
 2. **A2 · Migrar el cotizador a la biblioteca de casos.** *Sale de:* tu respuesta 1 (reabre la decisión del 17 oct) y «yo entrego el tiempo máximo de cada actividad». *Depende de:* A1.
-   - Etapa 1 · Inventario, sin código: cada tarea del cotizador (`D:\Proyectos\casos-de-uso-escala`) puesta al lado del caso de la biblioteca al que pertenece, para que lo revises.
+   - Etapa 1 · Inventario, sin código: el catálogo de actividades que sale de A1 etapa 2 (`D:\Proyectos\casos-de-uso-escala`), con su tiempo a mano, su tiempo con Nexus, su responsable y los casos que la usan, para que lo revises. Lo mantienes tú.
    - Etapa 2 · Las actividades viven en el mismo archivo de la biblioteca (`lib/casos-de-uso/catalogo.ts`), sin tabla nueva, con pruebas: cada actividad cumple algo dentro del resultado de su caso, tiene etapa y tiempo.
-   - Etapa 3 · El cálculo de horas por caso según el tamaño de la empresa, con las reglas del cotizador (personas por equipo, áreas, procesos, integraciones, complejidad de la adopción).
+   - Etapa 3 · Sin multiplicador por tamaño.
+     - El tiempo de cada actividad es uno: la exploración de hora y media de una empresa grande pasa a ser dos sesiones de una hora.
+     - Lo que crece con la empresa es el número de veces: una exploración por equipo, una capacitación por grupo, un relevamiento por sistema.
+     - Gobierno y corporativo suman actividades (actas, SICOP, comité) y cobran su tarifa (80, 100, 120).
+     - La persona ve «3 exploraciones»; el cálculo lo hace Nexus. Los datos del ICP están en el plan.
    - Etapa 4 · La biblioteca muestra las actividades y las horas, solo al equipo. El cotizador externo se retira cuando la biblioteca lo reemplace.
 3. **A3 · Los criterios, en palabras simples.** *Sale de:* tu respuesta 4. *Depende de:* A1.
    - Etapa 1 · Cada caso dice en frases cortas qué va a poder hacer el cliente cuando termine, escritas desde la escala y revisadas contigo.
@@ -111,7 +193,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 
 1. **B1 · Una sola ficha con los datos de la empresa.** *Sale de:* «el tamaño de un caso se califica solo según los datos del cliente» y tu comentario de que aplica a todo Nexus. *Depende de:* nada para la etapa 1.
    - Etapa 1 · Diagnóstico: qué datos hay y dónde (la ficha del cliente, las personas de la exploración, la empresa, los contactos y los asientos de HubSpot). Sale la lista: vendedores, gente de marketing y de servicio, líderes y cómo está organizada, modelo de negocio y herramientas.
-   - Etapa 2 · Nexus la llena solo desde HubSpot y desde la investigación del cliente, y dice de dónde salió cada dato.
+   - Etapa 2 · Nexus la llena solo desde HubSpot y desde la investigación del cliente, y dice de dónde salió cada dato. El agente que investiga la empresa en la preventa estima el tamaño. Si en HubSpot está vacío, lo escribe allá; si no coincide, propone el cambio y el vendedor lo acepta antes de que se escriba. Hoy el tamaño de HubSpot no sirve: a 60 de 163 empresas les falta, y Honda Costa Rica figura con 5 empleados.
    - Etapa 3 · Lo que falta lo pregunta: al vendedor en la preventa, al CSE en el cliente, en una casilla corta. Lo que se responde puede volver al CRM.
    - Etapa 4 · Decidir si se enriquece con créditos de HubSpot.
    - Etapa 5 · El tamaño de cada caso (liviano, mediano o grande) sale solo, con su porqué a la vista.
@@ -127,7 +209,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
    - Etapa 2 · Que explique por qué recomienda ese caso, en una frase, con el resultado que el cliente busca.
    - Etapa 3 · Varios carriles en paralelo cuando el cliente quiere varias áreas: un caso por área, cada uno con sus sesiones. El texto de SmartLoop pasa de «una prioridad a la vez» a «una prioridad a la vez por carril».
 2. **C2 · La cotización sale de las actividades.** *Sale de:* tu respuesta 1 («para que salga directamente cuando se crean cotizaciones») y la respuesta 1 sobre la implementación base. *Depende de:* A2 y B1.
-   - Etapa 1 · Al elegir los casos, Nexus suma las horas según el tamaño y propone el precio; el vendedor lo ajusta, como hoy.
+   - Etapa 1 · Al elegir los casos, Nexus sugiere las actividades según la empresa, con el porqué de cada una. Propone el precio con el tiempo a mano por la tarifa del segmento. El vendedor quita o ajusta entendiendo ese porqué. Si en la entrega se suma una actividad, no cambia el precio: baja la rentabilidad, y sirve para afinar el precio o para avisar a tiempo que falta alcance.
    - Etapa 2 · La implementación base: las actividades de portal y arquitectura van dentro del caso de aterrizaje y se cuentan una sola vez por cliente. En una implementación (no recurrente) quedan claras desde el inicio; en SmartLoop las ajusta el primer diagnóstico.
    - Etapa 3 · Lo vendido queda guardado por caso y actividad: de ahí salen el cronograma, las tareas y la rentabilidad.
 3. **C3 · «Lo que normalmente viene después», en una sección aparte.** *Sale de:* «mostrar lo necesario con precio y aparte lo que viene después sin precio» y tu respuesta 6. *Depende de:* nada.
@@ -147,11 +229,16 @@ Lo que mostró el diagnóstico del 22 oct: hay un solo cronograma por proyecto y
    - Etapa 2 · El diseño en Claude Design: lo que ve el cliente es un resumen, como se vendió (los casos con sus etapas y las sesiones); las tareas del equipo van aparte.
    - Etapa 3 · El corte limpio: los proyectos nuevos nacen con el modelo nuevo; los de hoy siguen como están. Para tener un cronograma nuevo sin tocar el viejo se usa lo que ya existe: otro proyecto del mismo cliente (un cliente ya puede tener varios). No se cambia la regla de un cronograma por proyecto.
    - Etapa 4 · Nada cambia en un cronograma publicado sin una propuesta que el CSE apruebe, como hoy.
-2. **D2 · Las tareas del equipo salen de las actividades.** *Sale de:* «cada caso de uso genera tareas para Customer Success» y «cada tarea guarda tiempo estimado y real». *Depende de:* A2 y D1.
-   - Etapa 1 · Al aprobar el plan de un caso nacen las tareas del CSE, una por actividad del equipo, con su tiempo estimado y unidas a su etapa del cronograma (solo en proyectos nuevos).
-   - Etapa 2 · Las sesiones siguen en el cronograma, que es lo que ve el cliente.
-   - Etapa 3 · Al cerrar una tarea se pregunta «¿Cuánto te tomó?» (la pregunta que ya existe, encendida y extendida a estas tareas).
-   - Etapa 4 · Probarlo primero en tus propias tareas y después en un piloto con alguien del equipo.
+2. **D2 · Las tareas del equipo salen de las actividades, por tres puertas.** *Sale de:* «cada caso de uso genera tareas para Customer Success», «cada tarea guarda tiempo estimado y real» y tus respuestas del 22 oct. *Depende de:* A2 para la etapa 2; la etapa 1 va ya.
+   - Etapa 1 · Limpiar antes de sumar: cerrar lo vencido, juntar los seguimientos sueltos y bajar el tope de «Por decidir». Hoy, en 45 días, a los cinco CSE les llegaron 105 tareas: ninguna aceptada ni hecha, 37 vencidas sin decidir, y hay 26 seguimientos que nadie tomó.
+   - Etapa 2 · Las tres puertas (`docs/tareas-plan.md` § 17):
+     - **El plan del proyecto:** nace en el handoff, una tarea por actividad vendida, con su responsable y su tiempo. Ya está vendido, así que no pasa por «Por decidir».
+     - **Lo que se dijo con el cliente:** como hoy, por «Por decidir» y con tope.
+     - **Lo que se dijo puertas adentro:** deja una tarea para quien la hace y una de revisión para quien la pidió (H1).
+   - Etapa 3 · La lista de cada cliente, tipo ClickUp: un clic en el cliente y ves todo lo que hay que hacer ahí. «Para ti» muestra solo el día y la semana.
+   - Etapa 4 · El cronograma sigue aparte del sistema de tareas: se arma desde la propuesta y el handoff para que el cliente entienda de un vistazo cómo vamos, y más adelante se cambia por Gantts por caso. El puente por ahora es el chat del cronograma: conoce las actividades y las tareas del proyecto, y el CSE le pide sumar líneas.
+   - Etapa 5 · En SmartLoop, las actividades que se repiten (la entrega semanal, el reporte de avance mensual, los stakeholders cada tres meses) dejan su tarea en cada ciclo, y varias las prepara Nexus solo.
+   - Etapa 6 · Probarlo primero en tus propias tareas y después en un piloto con alguien del equipo.
 3. **D3 · Lo que se habla en una sesión: tarea si está dentro del alcance.** *Sale de:* «lo hablado genera tareas si cae dentro del alcance; si no, aviso». *Depende de:* D2.
    - Etapa 1 · La lectura de cada reunión compara lo pedido contra las actividades de lo vendido: dentro, propuesta de tarea; fuera, pedido (ver E1).
    - Etapa 2 · Que no duplique una tarea que ya está en el cronograma (hoy no lo detecta).
@@ -160,7 +247,7 @@ Lo que mostró el diagnóstico del 22 oct: hay un solo cronograma por proyecto y
 
 1. **E1 · Fuera de alcance en implementaciones; solicitudes en SmartLoop.** *Sale de:* «los avisos de fuera de alcance son el pipeline de expansión», «el CSE puede levantar la mano» y tu comentario 7. *Depende de:* nada para la etapa 1.
    - Etapa 1 · En una implementación sigue siendo «fuera de alcance», y la CSL (Alex) decide con dos salidas: es una extensión o necesita a Ventas.
-   - Etapa 2 · En SmartLoop el mismo pedido se llama «solicitud» y se puede volver un caso del backlog del cliente (el campo para hacerlo ya existe y nadie lo usa).
+   - Etapa 2 · En SmartLoop el mismo pedido se llama «solicitud» y se puede volver un caso del backlog del cliente (el campo para hacerlo ya existe y nadie lo usa). En SmartLoop, sumar actividades alarga el plan, con una cadencia de entrega por definir.
    - Etapa 3 · Levantar la mano ya existe (sumar un pedido a mano): hacerlo visible donde el CSE trabaja.
 2. **E2 · Un agente por cliente que une lo que pide con la biblioteca.** *Sale de:* «cada cliente debería tener un agente que determine lo que va necesitando». *Depende de:* A2 y E1.
    - Etapa 1 · Al confirmar un pedido, Nexus sugiere qué caso de la biblioteca lo resuelve, primero por reglas (los síntomas de cada caso).
@@ -177,10 +264,10 @@ Lo que mostró el diagnóstico del 22 oct: hay un solo cronograma por proyecto y
 ### G · Horas, rentabilidad y capacidad <span class="estado">Propuesta</span>
 
 1. **G1 · Tiempo estimado y real por tarea.** *Sale de:* «hay que medir las sesiones y todo el trabajo detrás». *Depende de:* D2.
-   - Etapa 1 · Va con D2: lo estimado sale de la actividad y lo real de «¿Cuánto te tomó?».
-   - Etapa 2 · Las reuniones ya se miden solas desde el calendario.
+   - Etapa 1 · Va con D2: lo estimado sale de la actividad, y lo real sale de «¿Cuánto te tomó?» o del bloque que la persona agenda en su calendario desde Tareas.
+   - Etapa 2 · Las sesiones se miden solas con Google Workspace (el calendario ya entra en «Para ti»).
 2. **G2 · Rentabilidad por caso.** *Sale de:* «como prioridad de RevOps voy a calcular la rentabilidad de los servicios». *Depende de:* G1.
-   - Etapa 1 · Lo estimado contra lo real por caso, al lado de lo que se cobró (Rentabilidad ya lo hace por cuenta).
+   - Etapa 1 · Lo estimado contra lo real por caso, al lado de lo que se cobró (Rentabilidad ya lo hace por cuenta). Lo real se paga al costo por hora de la planilla, que ya calcula `lib/rentabilidad/margen.ts`. El precio usa la tarifa del segmento.
    - Etapa 2 · Mientras no haya datos, cada estimación dice cuánto riesgo de rentabilidad asume.
 3. **G3 · La capacidad del CSE con las horas de las actividades.** *Sale de:* «la capacidad no se mide en número de casos». *Depende de:* A2.
    - Etapa 1 · La carga ya se mide en horas; pasa a usar las horas de cada actividad en vez del promedio por tipo de fase.
