@@ -78,7 +78,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `6353e689` desde el 23 oct: la preventa por equipo del cliente (guía de ese equipo con lo técnico, una hora con «Contarle», el panel que dice la verdad y «Por equipo») y el diagnóstico con todo el contexto (lee las sesiones de la exploración, avisa si casi nada está confirmado), el «Enfoque de la solución», todo se mueve y se quita, y dos plantillas: esencial y completa. |
+| Producción | Corre `f5a1cb42` desde el 23 oct: el Kickoff también en el riel de un SmartLoop (estaba creado y no se veía; RC Inmobiliaria), la preventa por equipo del cliente (guía de ese equipo con lo técnico, una hora con «Contarle», el panel que dice la verdad y «Por equipo») y el diagnóstico con todo el contexto (lee las sesiones de la exploración, avisa si casi nada está confirmado), el «Enfoque de la solución», todo se mueve y se quita, y dos plantillas: esencial y completa. |
 | Por desplegar | Nada: todo `main` está en producción (12.716 pruebas unitarias y 189 de integración en verde, tsc en 0). |
 | En rojo en producción | 4 invariantes: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado (con su decisión abajo), y desde el 21 oct INV16(a): 2 reuniones de Meet leídas antes de ocurrir (un evento movido de fecha después de leerse, el caso conocido de KNOWN-ERRORS). |
 | Pruebas | 25 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 81 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
