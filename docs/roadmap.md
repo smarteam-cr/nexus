@@ -8,14 +8,14 @@
 
 **Lo que importa esta semana:**
 
-1. Hoy, 23 oct, se despliegan los cambios de la preventa y del diagnóstico para tus reuniones con Ventas y con Customer Success (CEMACO).
+1. Ya están en producción los cambios de la preventa y del diagnóstico para tus reuniones de hoy con Ventas y con Customer Success (CEMACO): pruebas 283 a 290.
 2. Revisar y aprobar, área por área, la propuesta de vender y entregar por casos de uso (pestaña «Roadmap»).
 3. Empezar contigo a desarmar el cotizador en un catálogo de actividades.
 
 ### Vender por resultados <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** el vendedor arma la propuesta con los casos de uso y las actividades que sugiere Nexus, cada una con su porqué y su precio calculado, y el cliente entiende qué resultado compra.
-- **Hoy:** la biblioteca tiene 26 casos sin actividades ni horas, y el cotizador vive fuera de Nexus. La preventa guía las sesiones, pero a Ventas le sobran preguntas y le falta ir por área y a lo técnico: se arregla hoy.
+- **Hoy:** la biblioteca tiene 26 casos sin actividades ni horas, y el cotizador vive fuera de Nexus. Desde el 23 oct la preventa va por equipo del cliente, con preguntas técnicas y de proceso y una hora con tiempo para contarle.
 - **Plan:** la actividad ya está definida contigo; sigue desarmar el cotizador en actividades, que cada caso las jale y que la propuesta las sugiera.
 
 ### Los datos de la empresa <span class="estado">Propuesta</span>
@@ -30,10 +30,10 @@
 - **Hoy:** el cronograma lo arma el handoff y no está unido a las tareas, a propósito. A los CSE les llegaron 105 tareas en 45 días: ninguna aceptada.
 - **Plan:** limpiar lo que hay y abrir tres puertas: el plan del proyecto nace en el handoff ya decidido, lo dicho con el cliente pasa por «Por decidir» y lo dicho puertas adentro deja tarea y revisión.
 
-### El diagnóstico y los entregables de Customer Success <span class="estado">En curso</span>
+### El diagnóstico y los entregables de Customer Success <span class="estado">En producción</span>
 
 - **Resultado esperado:** un diagnóstico corto que le explica al cliente por qué tiene los resultados que tiene y qué vamos a hacer (el enfoque de la solución), escrito en minutos con lo que Nexus ya sabe.
-- **Hoy:** se construye hoy: dos plantillas (liviana y avanzada) que se eligen al crearlo, «Enfoque de la solución», todo se mueve y se borra, y un aviso cuando casi nada está confirmado.
+- **Hoy:** desde el 23 oct lee las sesiones de la exploración, avisa cuando casi nada está confirmado, trae el «Enfoque de la solución», todo se mueve y se quita, y se elige entre la plantilla esencial (7 partes) y la completa, o se escribe a mano.
 - **Plan:** después, plantillas por caso de uso y definir contigo qué necesita Customer Success para cada entregable.
 
 ### Rentabilidad y capacidad <span class="estado">Propuesta</span>
@@ -78,10 +78,10 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `fbf559e2` desde el 22 oct: Conciliación › «Lo que no cuadra» contado por documento, lo que Nexus ordena solo (con «Deshacer»), «Lo pagado» con qué es y cómo se resuelve cada sección, y Mercury que cobra sola la factura pagada sin depósito con el día en que la copia la vio pagada. Sana, con el esquema al día. |
-| Por desplegar | Nada: todo `main` está en producción (12.623 pruebas en verde, tsc en 0). |
+| Producción | Corre `6353e689` desde el 23 oct: la preventa por equipo del cliente (guía de ese equipo con lo técnico, una hora con «Contarle», el panel que dice la verdad y «Por equipo») y el diagnóstico con todo el contexto (lee las sesiones de la exploración, avisa si casi nada está confirmado), el «Enfoque de la solución», todo se mueve y se quita, y dos plantillas: esencial y completa. |
+| Por desplegar | Nada: todo `main` está en producción (12.716 pruebas unitarias y 189 de integración en verde, tsc en 0). |
 | En rojo en producción | 4 invariantes: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado (con su decisión abajo), y desde el 21 oct INV16(a): 2 reuniones de Meet leídas antes de ocurrir (un evento movido de fecha después de leerse, el caso conocido de KNOWN-ERRORS). |
-| Pruebas | 17 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 81 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
+| Pruebas | 25 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 81 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
 
 ## Cómo va Nexus
 
@@ -794,6 +794,7 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 4. [hecho] El correo de seguimiento y la próxima reunión sugerida después de cada sesión.
 5. [hecho] En la guía de una sesión (proyecto y preventa): el objetivo propone unas tres preguntas para usar o descartar, las preguntas se arrastran y la pantalla se pone al día sola cuando el asistente las cambia.
 6. [hecho] El asistente y el agente de la guía leen todas las sesiones de la exploración (lo respondido, lo acordado para la próxima), el kickoff y la memoria del proyecto; en la preventa, lo de HubSpot.
+7. [hecho] Cada sesión tiene su equipo del cliente (Dirección, Ventas, Marketing, Servicio al cliente, Operaciones o Tecnología) y la guía es la de ese equipo, con lo técnico y de proceso; la sesión dura una hora con «Contarle»; lo ya respondido no se repite; el panel de la derecha dice la verdad, con «Por equipo» (23 oct).
 
 ### La cuenta: encargado, proyectos y ficha <span class="estado">En producción</span>
 
@@ -833,6 +834,13 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 2. [hecho] Las propuestas del vigía se deciden en un solo lugar y dicen de qué a qué.
 3. [hecho] La lista de limpieza de HubSpot, los exclientes fuera de todo y la cartera por proyectos.
 4. [hecho] El margen por cuenta y por persona con las horas del calendario y las tareas, la meta del año y la lectura de los números.
+
+### Diagnóstico <span class="estado">En producción</span>
+
+1. [hecho] El diagnóstico lee enteras las sesiones de la exploración y lo que propuso Nexus, marcado como supuesto; avisa y pide confirmación cuando casi nada está confirmado (23 oct).
+2. [hecho] «Política rectora» pasa a «Enfoque de la solución», con su marca de revisión arriba a la derecha que el cliente no ve (23 oct).
+3. [hecho] El subtítulo, la intro y el cuerpo de cada sección se mueven y se quitan, y todas las secciones se pueden ocultar; un diseño más liviano, igual en la vista del cliente y en el PDF (23 oct).
+4. [hecho] Dos plantillas, esencial (7 partes, la recomendada) y completa (la de siempre), o «Escribirlo yo» en blanco (23 oct).
 
 ### Kickoff y cronograma <span class="estado">En producción</span>
 
