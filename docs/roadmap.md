@@ -306,6 +306,13 @@ Lo que mostró el diagnóstico del 22 oct: Nexus guarda las reuniones de Meet de
 4. Armar las propuestas recurrentes internas de FACO (Honda Costa Rica), kölbi, Cayalá y Grupo Inve con lo que ya se les vendió, sin tocar la que firmaron (el script ya corrió en simulacro).
 5. Volver a generar con «Rehacer desde cero» los handoffs que leyeron el texto de otra reunión: RC Inmobiliaria, AMC, DISTELSA, Grupo Printer, REMPRO y Teamnet.
 
+### Preventa y diagnóstico (lo que quedó del 23 oct)
+
+1. Que el documento de diagnóstico lea por equipo del cliente, como ya lo hace la guía de la preventa.
+2. Un equipo del cliente también en las reuniones que no son sesiones de una exploración (la entrega de servicio).
+3. Cambiar la plantilla de un diagnóstico ya generado (hoy se elige solo al crearlo) y arrastrar las filas de sus tablas.
+4. Que el chat, cuando genera el diagnóstico, también avise si casi nada está confirmado (hoy solo avisa el botón).
+
 ### Ventas y comisiones
 
 1. Pagar las comisiones desde Nexus (el modelo con Marco se cerró el 21 oct; hoy es «Cómo funciona» y la simulación). Antes, que Cobranza sepa cuándo termina un servicio y si una renovación fue a tiempo.
@@ -336,6 +343,8 @@ Lo que mostró el diagnóstico del 22 oct: Nexus guarda las reuniones de Meet de
 6. Los desplegables de las tablas y las fichas (`CeldaSelect`, el selector de ícono y la lectura de la cuenta) todavía se dibujan dentro de su contenedor: pueden quedar tapados como le pasaba al menú del avatar.
 7. El chat todavía no puede ocultar secciones del kickoff.
 8. Una tarea del cronograma marcada «por validar» igual llega al cliente: el código solo le esconde la marca (lo encontró el diagnóstico del 22 oct). Que no cruce hasta que el CSE la valide.
+9. En la copia de proyectos de HubSpot, el filtro de errores 401 y 403 nunca coincide (`lib/hubspot/sync-projects.ts`, el error conocido de los `\b` escritos desde Python).
+10. La base local nueva no arranca: `prisma/policies.sql` usa la tabla `TarjetaCredito` antes de que la cree su SQL, y `2026-09-26-cuestionario-previo.sql` no se puede correr dos veces. Por eso las pruebas de integración no corren en un worktree nuevo.
 
 ## Lo que configuras tú
 
@@ -430,6 +439,19 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 | 258 | ⏳ La valida el equipo: Liliana Moreno | Que no repita lo que ya se habló | El mismo chat › «Agrega más preguntas sobre las 5 agencias». | Preguntas nuevas (qué quieren hacer ellos mismos, mensajes que se contradicen entre agencias), no la de cuántas personas coordinan con ellas. |
 | 259 | ⏳ La valida el equipo: Liliana Moreno | Que «Actualizar la guía» retome lo acordado | La misma guía › «Actualizar la guía». | El objetivo de la sesión habla de las volumetrías de cada canal y la apertura retoma lo acordado el 19 oct. |
 | 260 | ⏳ La valida el equipo: Andrés Pinzón | Lo mismo en la preventa | Preventa de Tecnosagot › guía de la próxima sesión › «Mejorar con el asistente» › «¿Qué otras preguntas agregarías para la próxima sesión?». | Retoma la meta de ventas que quedó sin preguntar y no vuelve a preguntar quién da el visto bueno. |
+| 283 | Por validar | Que cada sesión tenga su equipo del cliente | Preventa de CEMACO › Exploración › la sesión del 20 oct › debajo de la fecha, «Equipo del cliente» › Marketing. | Un aviso de que la guía es la de Marketing y que Marketing quedó en las áreas en juego; arriba ofrece «Actualizar la guía». |
+| 284 | Por validar | Que la guía de un equipo pregunte lo que pregunta Marco | Esa sesión › Preparación › «La guía», después de «Actualizar la guía». | Unas 5 preguntas de marketing: cómo está armado, cómo lo miden, un canal de punta a punta, herramientas y datos, qué canal duele. Sin quién firma ni presupuesto. |
+| 285 | Por validar | Que la sesión quepa en una hora y deje tiempo para contarle | La misma guía, abajo. | Los tramos suman 60 minutos, con «Contarle (40 – 50 min)» antes de «Cerrar». |
+| 286 | Por validar | Que el panel de la derecha diga la verdad | Preventa de Cicadex › panel de la derecha. | «Tiempos» y «Quién decide» en ámbar, con el motivo al pasar el mouse; «Para proponer» en 1 de 7, y un bloque «Por equipo» con lo que falta preguntarle a cada equipo. |
+
+### Diagnóstico <span class="prioridad">Alta</span>
+
+| # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
+| 287 | Por validar | Que el diagnóstico avise cuando casi nada está confirmado | CEMACO › «Cemaco Internacional - CRM» › activar «Diagnóstico». | Un aviso «Casi nada de lo que lee el diagnóstico está confirmado», con la ficha, los resultados y los procesos y dónde revisar cada uno. Al generar, pide confirmación («Generar igual» o «Revisar antes»). |
+| 288 | Por validar | Que se elija entre dos plantillas | El mismo lugar, debajo del aviso. | Dos tarjetas, «Diagnóstico esencial» (recomendada, 7 partes) y «Diagnóstico completo», cada una con su lista de secciones. |
+| 289 | Por validar | Que el diagnóstico esencial explique simple el porqué y el qué haremos | Generar con la esencial y leerlo entero. | 7 partes: portada, objetivos, problema, desafío, «Enfoque de la solución», acciones y siguiente paso; lee las 5 sesiones de la exploración. |
+| 290 | Por validar | Que el «Enfoque de la solución» se lea claro | Esa sección. | La frase del enfoque pegada al título y los principios numerados; arriba a la derecha, «Marcar como revisado», que el cliente no ve. |
 
 ### La cuenta: encargado, proyectos y ficha <span class="prioridad">Alta</span>
 
