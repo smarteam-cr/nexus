@@ -19,6 +19,7 @@
  * siempre: un documento sin `__plantilla` se lee con la primera de su entregable.
  */
 import { pieceBySlug } from "@/lib/pieces/registry";
+import { parseSectionEntries, patchSectionEntry, type CanvasSectionEntry } from "@/lib/business-cases/section-briefs";
 
 export interface PlantillaDeEntregable {
   /** IDENTIDAD estable: es lo que queda guardado en el documento. Nunca cambia. */
@@ -139,6 +140,34 @@ export function seccionesDeLaPlantilla<S extends { key: string }>(p: Pick<Planti
   if (!p.secciones) return [...canon];
   const de = new Set(p.secciones);
   return canon.filter((s) => de.has(s.key));
+}
+
+/**
+ * LO QUE SE VE Y LO QUE NO SEGÚN LA PLANTILLA (2026-10-23), sobre las entradas del Json del canvas. Puro.
+ *   · lo que tiene texto y la plantilla no tiene (`conTextoFuera`) se oculta con la marca `ocultaPorLaPlantilla`; una que
+ *     ya estaba oculta (por una persona, o antes por la plantilla) queda como está;
+ *   · lo que la plantilla tiene y ocultó una plantilla anterior se vuelve a mostrar (de la esencial a la completa). Lo que
+ *     ocultó una persona no: su ojo borra la marca.
+ */
+export function entradasSegunLaPlantilla(
+  sections: unknown,
+  o: { deLaPlantilla: ReadonlySet<string>; conTextoFuera: readonly string[] },
+): { entradas: CanvasSectionEntry[]; cambio: boolean } {
+  const antes = parseSectionEntries(sections);
+  let entradas = antes;
+  let cambio = false;
+  for (const key of o.conTextoFuera) {
+    if (antes.find((e) => e.key === key)?.hidden === true) continue;
+    entradas = patchSectionEntry(entradas, key, { hidden: true, ocultaPorLaPlantilla: true });
+    cambio = true;
+  }
+  for (const e of antes) {
+    if (o.deLaPlantilla.has(e.key) && e.ocultaPorLaPlantilla === true) {
+      entradas = patchSectionEntry(entradas, e.key, { hidden: false, ocultaPorLaPlantilla: false });
+      cambio = true;
+    }
+  }
+  return { entradas, cambio };
 }
 
 // ── La plantilla que se usó, guardada en el documento ─────────────────────────────────────────────────────────────

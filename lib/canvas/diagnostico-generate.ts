@@ -37,7 +37,7 @@ import { Prisma } from "@prisma/client";
 import {
   DIAGNOSTICO_CANVAS,
   DIAGNOSTICO_CIERRE_DEFAULT,
-  ROTULOS_VIEJOS_DEL_DIAGNOSTICO,
+  ROTULOS_RENOMBRADOS,
   diagnosticoSectionSequence,
   type CanvasDefinition,
 } from "@/lib/canvas/canvas-defs";
@@ -48,7 +48,7 @@ import {
 } from "@/lib/canvas/default-canvases";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
-import { bloqueDeInstruccionesDelPedido } from "@/lib/entregables/registro";
+import { bloqueDeInstruccionesDelPedido, entradasSegunLaPlantilla } from "@/lib/entregables/registro";
 import {
   DIAGNOSTICO_TEMPLATE,
   POLITICA_RECTORA_KEY,
@@ -210,18 +210,23 @@ export async function runDiagnosticoGeneration(opts: {
 
 /**
  * EL DOCUMENTO QUEDA CON LAS SECCIONES DE SU PLANTILLA (2026-10-23). Las del canon que la plantilla no tiene: vacías, se
- * borran (la fila y su entrada del Json, así no aparecen en el índice del panel); con algo escrito, se OCULTAN —nada se
- * pierde: se vuelven a mostrar con el ojo—. Las creadas por una persona (`custom:*`) y las retiradas no se tocan.
+ * borran (la fila y su entrada del Json, así no aparecen en el índice del panel); con algo escrito, se OCULTAN con la
+ * marca `ocultaPorLaPlantilla` —nada se pierde—. Al volver a una plantilla que las tiene (de la esencial a la completa),
+ * las que ocultó la plantilla se vuelven a mostrar; las que ocultó una persona, no (su ojo borra la marca). Las creadas
+ * por una persona (`custom:*`) y las retiradas no se tocan.
  */
-async function ajustarALaPlantilla(canvasId: string, def: CanvasDefinition): Promise<void> {
+export async function ajustarALaPlantilla(canvasId: string, def: CanvasDefinition): Promise<void> {
   const deLaPlantilla = new Set(def.sections.map((s) => s.key));
   const queNoTiene = DIAGNOSTICO_CANVAS.sections.map((s) => s.key).filter((k) => !deLaPlantilla.has(k));
-  if (!queNoTiene.length) return; // la completa tiene todas: no hay nada que ajustar
-  const fuera = await prisma.canvasSection.findMany({
-    where: { canvasId, key: { in: queNoTiene } },
-    select: { id: true, key: true, _count: { select: { blocks: true } } },
-  });
-  if (!fuera.length) return;
+  const c0 = await prisma.projectCanvas.findUnique({ where: { id: canvasId }, select: { sections: true } });
+  const hayQueMostrar = parseSectionEntries(c0?.sections).some((e) => deLaPlantilla.has(e.key) && e.ocultaPorLaPlantilla === true);
+  const fuera = queNoTiene.length
+    ? await prisma.canvasSection.findMany({
+        where: { canvasId, key: { in: queNoTiene } },
+        select: { id: true, key: true, _count: { select: { blocks: true } } },
+      })
+    : [];
+  if (!fuera.length && !hayQueMostrar) return; // la completa sobre un documento que nunca fue esencial: nada que ajustar
   const vacias = fuera.filter((s) => s._count.blocks === 0);
   const conAlgo = fuera.filter((s) => s._count.blocks > 0).map((s) => s.key);
   await prisma.$transaction(async (tx) => {
@@ -229,10 +234,24 @@ async function ajustarALaPlantilla(canvasId: string, def: CanvasDefinition): Pro
     await tx.$queryRaw`SELECT id FROM "ProjectCanvas" WHERE id = ${canvasId} FOR UPDATE`;
     const c = await tx.projectCanvas.findUnique({ where: { id: canvasId }, select: { sections: true } });
     const borradas = new Set(vacias.map((s) => s.key));
-    let entradas: unknown = parseSectionEntries(c?.sections).filter((e) => !borradas.has(e.key));
-    for (const key of conAlgo) entradas = patchSectionEntry(entradas, key, { hidden: true });
-    await tx.projectCanvas.update({ where: { id: canvasId }, data: { sections: entradas as Prisma.InputJsonValue } });
+    const sinLasBorradas = parseSectionEntries(c?.sections).filter((e) => !borradas.has(e.key));
+    // Ocultar lo de afuera con texto y volver a mostrar lo que ocultó otra plantilla: regla pura en lib/entregables/registro.ts.
+    const { entradas } = entradasSegunLaPlantilla(sinLasBorradas, { deLaPlantilla, conTextoFuera: conAlgo });
+    await tx.projectCanvas.update({ where: { id: canvasId }, data: { sections: entradas as unknown as Prisma.InputJsonValue } });
   });
+}
+
+/**
+ * EMPEZAR EN BLANCO (2026-10-23, revisión de la rama): el documento con las secciones de la plantilla elegida, sin
+ * generar, para quien prefiere escribirlo a mano. La plantilla la anota quien llama (lib/entregables/generar-server.ts).
+ * Aprobado = cerrado: no se toca.
+ */
+export async function prepararDiagnosticoEnBlanco(projectId: string, plantilla: BcTemplateDef): Promise<string> {
+  const canvasId = await ensureDiagnosticoCanvas(projectId, plantilla);
+  if (await documentoAprobado(canvasId).catch(() => false)) throw new Error(MENSAJE_APROBADO);
+  await ajustarALaPlantilla(canvasId, definicionDeLaPlantilla(plantilla));
+  await llevarAlOrdenDelContrato(canvasId);
+  return canvasId;
 }
 
 /**
@@ -241,18 +260,16 @@ async function ajustarALaPlantilla(canvasId: string, def: CanvasDefinition): Pro
  * renombró a mano se respeta). El título del documento ya sale de la definición.
  */
 async function ponerAlDiaLosRotulos(canvasId: string): Promise<void> {
-  const porKey = new Map(DIAGNOSTICO_CANVAS.sections.map((s) => [s.key, s.label]));
-  for (const [key, viejos] of Object.entries(ROTULOS_VIEJOS_DEL_DIAGNOSTICO)) {
-    const nuevo = porKey.get(key);
-    if (!nuevo) continue;
+  const renombrados = ROTULOS_RENOMBRADOS.diagnosis;
+  for (const [key, { viejos, nuevo }] of Object.entries(renombrados)) {
     await prisma.canvasSection.updateMany({ where: { canvasId, key, label: { in: [...viejos] } }, data: { label: nuevo } });
   }
   const c = await prisma.projectCanvas.findUnique({ where: { id: canvasId }, select: { sections: true } });
   const entradas = parseSectionEntries(c?.sections);
-  const cambian = entradas.filter((e) => (ROTULOS_VIEJOS_DEL_DIAGNOSTICO[e.key] ?? []).includes(e.label));
+  const cambian = entradas.filter((e) => (renombrados[e.key]?.viejos ?? []).includes(e.label));
   if (!cambian.length) return;
   let nuevas: unknown = entradas;
-  for (const e of cambian) nuevas = patchSectionEntry(nuevas, e.key, { label: porKey.get(e.key) ?? e.label });
+  for (const e of cambian) nuevas = patchSectionEntry(nuevas, e.key, { label: renombrados[e.key]?.nuevo ?? e.label });
   await prisma.projectCanvas.update({ where: { id: canvasId }, data: { sections: nuevas as Prisma.InputJsonValue } });
 }
 

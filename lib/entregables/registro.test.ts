@@ -20,6 +20,7 @@ import {
   conPlantillaAnotada,
   entregableDe,
   entregablePorAgente,
+  entradasSegunLaPlantilla,
   plantillaDe,
   seccionesDeLaPlantilla,
   SECCIONES_DEL_DIAGNOSTICO_ESENCIAL,
@@ -56,6 +57,27 @@ describe("el registro de entregables", () => {
     expect(plantillaDe("diagnosis")?.nombre).toBe("Diagnóstico completo");
     expect(plantillaDe("diagnosis")?.secciones).toBeUndefined();
     expect(pieceBySlug("diagnosis")?.label).toBe("Diagnóstico");
+  });
+
+  it("de la esencial a la completa: vuelve lo que ocultó la plantilla, no lo que ocultó una persona", () => {
+    const completo = new Set(DIAGNOSTICO_CANVAS.sections.map((s) => s.key));
+    const esencial = new Set<string>(SECCIONES_DEL_DIAGNOSTICO_ESENCIAL);
+    const json = [
+      { key: "fortalezas", label: "Fortalezas" }, // con texto, fuera de la esencial
+      { key: "herramientas", label: "Herramientas", hidden: true }, // la ocultó una persona antes
+      { key: "desafio", label: "Desafío principal" },
+    ];
+    // A la esencial: «fortalezas» se oculta CON la marca; «herramientas» ya estaba oculta y queda como estaba.
+    const aEsencial = entradasSegunLaPlantilla(json, { deLaPlantilla: esencial, conTextoFuera: ["fortalezas", "herramientas"] });
+    expect(aEsencial.cambio).toBe(true);
+    expect(aEsencial.entradas.find((e) => e.key === "fortalezas")).toMatchObject({ hidden: true, ocultaPorLaPlantilla: true });
+    expect(aEsencial.entradas.find((e) => e.key === "herramientas")?.ocultaPorLaPlantilla).toBeUndefined();
+    // De vuelta a la completa: vuelve «fortalezas», «herramientas» sigue oculta.
+    const aCompleto = entradasSegunLaPlantilla(aEsencial.entradas, { deLaPlantilla: completo, conTextoFuera: [] });
+    expect(aCompleto.entradas.find((e) => e.key === "fortalezas")).toMatchObject({ hidden: false, ocultaPorLaPlantilla: false });
+    expect(aCompleto.entradas.find((e) => e.key === "herramientas")?.hidden).toBe(true);
+    // Sin nada que hacer, no cambia (el runner no escribe).
+    expect(entradasSegunLaPlantilla(aCompleto.entradas, { deLaPlantilla: completo, conTextoFuera: [] }).cambio).toBe(false);
   });
 
   it("la esencial es la recomendada y tiene solo sus secciones, en el orden del canvas", () => {

@@ -88,8 +88,9 @@ export default function CanvasAgentButton({
 }) {
   const [running, setRunning] = useState(false);
   /* El diagnóstico sobre supuestos (2026-10-23): el servidor responde 409 `SUPUESTOS_SIN_VALIDAR` si casi nada de lo que
-     lee está confirmado. Se pregunta UNA vez y, con el sí, se vuelve a pedir con `aSabiendas`. */
-  const [supuestos, setSupuestos] = useState<string | null>(null);
+     lee está confirmado. Se pregunta UNA vez y, con el sí, se vuelve a pedir con `aSabiendas` — y con el `forzar` del
+     pedido que lo trajo: quien ya dijo «Generar igual» a la pieza que no le corresponde no lo vuelve a decir. */
+  const [supuestos, setSupuestos] = useState<{ mensaje: string; forzar: boolean } | null>(null);
   const toast = useToast();
   const me = useMe();
   const { phase, track } = useAgentRun(clientId);
@@ -138,7 +139,10 @@ export default function CanvasAgentButton({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (data.error === ERROR_SUPUESTOS_SIN_VALIDAR) {
-          setSupuestos(typeof data.message === "string" ? data.message : "El diagnóstico va a salir de supuestos que nadie validó.");
+          setSupuestos({
+            mensaje: typeof data.message === "string" ? data.message : "El diagnóstico va a salir de supuestos que nadie validó.",
+            forzar,
+          });
         } else if (data.error === "PIECE_NOT_APPLICABLE") {
           // AVISA y deja seguir: la pieza no le corresponde al proyecto por sus tags,
           // pero los tags se equivocan y el CSE es quien sabe. El toast con acción es
@@ -184,7 +188,7 @@ export default function CanvasAgentButton({
       title="¿Generar con supuestos sin validar?"
       description={
         <>
-          {supuestos} Revisa antes lo que propuso Nexus para que el diagnóstico tenga sentido, o genéralo igual y
+          {supuestos?.mensaje} Revisa antes lo que propuso Nexus para que el diagnóstico tenga sentido, o genéralo igual y
           revísalo después.
         </>
       }
@@ -193,8 +197,9 @@ export default function CanvasAgentButton({
       variant="default"
       onCancel={() => setSupuestos(null)}
       onConfirm={() => {
+        const forzar = supuestos?.forzar === true;
         setSupuestos(null);
-        void run(false, true);
+        void run(forzar, true);
       }}
     />
     <button

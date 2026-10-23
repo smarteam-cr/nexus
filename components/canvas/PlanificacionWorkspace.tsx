@@ -11,6 +11,7 @@
  * cliente en sesión, pero no tiene superficie externa propia.
  */
 import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
+import { rotuloVigente } from "@/lib/canvas/canvas-defs";
 /* ⚠ La MISMA tabla que usa el servidor para correr el ejecutor en seco antes de acordar. Con
    dos literales, el chat podía acordar algo que este editor rechaza al aplicar. */
 import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
@@ -185,7 +186,7 @@ export default function PlanificacionWorkspace({
           dialogTitle="Mejorar el plan con IA"
           chips={["Hazlo más concreto en tiempos y responsables", "Ancla los procesos a los diagramas reales", "Resume las secciones largas"]}
           placeholder='Ej: "detalla mejor cómo va a operar cada proceso"'
-          labelFor={(key) => cs.sections.find((s) => s.key === key)?.label ?? key}
+          labelFor={(key) => rotuloVigente("planning", key, cs.sections.find((s) => s.key === key)?.label ?? key)}
           onApplySection={(key, data) => {
             const s = cs.sections.find((x) => x.key === key);
             if (!s) return;

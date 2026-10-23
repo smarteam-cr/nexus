@@ -2973,7 +2973,9 @@
 /* ── Las piezas de una sección (2026-10-23, components/landing/partes.tsx) ──────────────────────────────────────────
    El subtítulo, la intro y el cuerpo se arrastran y se quitan como un ítem. La manija y la X van FUERA del texto, a los
    costados (en el margen de la página), solo al pasar el mouse: la vista de edición sigue igual a la del cliente. */
-.stl .stl-partes { display: flex; flex-direction: column; }
+/* BLOQUE, no flex: con las piezas, los márgenes de la intro y del cuerpo colapsan igual que cuando eran hermanos sueltos de
+   la sección, así la vista del cliente y el PDF de los demás documentos no se mueven ni un píxel. */
+.stl .stl-partes { display: block; }
 /* ⚠ NO es `.stl-item`: `.stl-item:hover .stl-remove` es DESCENDENTE, y el cuerpo tiene adentro las tarjetas: pasar el
    mouse por el cuerpo mostraría la X de todas. La pieza muestra solo lo SUYO (hijos directos). */
 .stl .stl-parte { position: relative; }
@@ -2996,9 +2998,12 @@
 }
 .stl .stl-partes-agregar button:hover { color: var(--blue); border-color: var(--blue); }
 .stl .stl-dark .stl-partes-agregar button { border-color: var(--dark-border-strong); color: var(--dark-text-2); }
-/* La prosa: el subtítulo y la intro pegados al título; el cuerpo, con su aire. */
-.stl .stl-partes-prosa { gap: 14px; }
-.stl .stl-partes-prosa .stl-lead { margin-top: 0; }
+/* La prosa de SIEMPRE (las tarjetas: kickoff, desarrollo, entrega, planificación) es el mismo contenedor de antes —en
+   columna, 16 px entre piezas—: se ve igual. Solo los diseños del diagnóstico pegan el subtítulo y la intro al título. */
+.stl .stl-partes-prosa { display: flex; flex-direction: column; gap: 16px; }
+.stl .stl-prosa-cuerpo { display: flex; flex-direction: column; gap: 16px; }
+.stl .stl-partes-prosa:not(.stl-partes-tarjetas) { gap: 14px; }
+.stl .stl-partes-prosa:not(.stl-partes-tarjetas) .stl-lead { margin-top: 0; }
 
 /* ── Los diseños de PROSA del diagnóstico (2026-10-23, components/landing/prosa-con-diseno.tsx) ──────────────────────
    Elías: «secciones con cards muy amplias». Sin tarjetas blancas anchas: datos en tres columnas, puntos numerados,

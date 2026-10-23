@@ -451,18 +451,20 @@ export function planificacionSectionSequence(existingKeys: string[]): string[] {
 export const DIAGNOSTICO_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.slug === "diagnosis")!;
 
 /**
- * Los rótulos de secciones del Diagnóstico que cambiaron de nombre (2026-10-23). La fila de la sección y su entrada del
- * Json guardan el rótulo con que nacieron; el runner las pone al día al regenerar, y mientras tanto la pantalla los lee
- * con el nombre nuevo (`rotuloVigente`). La key no cambia nunca.
+ * Los rótulos de secciones que cambiaron de nombre (2026-10-23: «Política rectora» → «Enfoque de la solución», en el
+ * Diagnóstico y en la sección retirada de las Planificaciones viejas). La fila de la sección y su entrada del Json guardan
+ * el rótulo con que nacieron; el runner del diagnóstico las pone al día al regenerar, y mientras tanto la pantalla los lee
+ * con el nombre nuevo (`rotuloVigente`), así la lista de secciones dice lo mismo que el título. La key no cambia nunca.
  */
-export const ROTULOS_VIEJOS_DEL_DIAGNOSTICO: Readonly<Record<string, readonly string[]>> = {
-  politica_rectora: ["Política rectora"],
+export const ROTULOS_RENOMBRADOS: Readonly<Record<string, Readonly<Record<string, { viejos: readonly string[]; nuevo: string }>>>> = {
+  diagnosis: { politica_rectora: { viejos: ["Política rectora"], nuevo: "Enfoque de la solución" } },
+  planning: { politica_rectora: { viejos: ["Política rectora"], nuevo: "Enfoque de la solución" } },
 };
 
 /** El rótulo que se muestra de una sección guardada: el nuevo si el guardado es uno viejo de esa key; si no, el guardado. */
 export function rotuloVigente(slug: string | null | undefined, key: string, guardado: string): string {
-  if (slug !== "diagnosis" || !(ROTULOS_VIEJOS_DEL_DIAGNOSTICO[key] ?? []).includes(guardado)) return guardado;
-  return DIAGNOSTICO_CANVAS.sections.find((s) => s.key === key)?.label ?? guardado;
+  const r = slug ? ROTULOS_RENOMBRADOS[slug]?.[key] : undefined;
+  return r && r.viejos.includes(guardado) ? r.nuevo : guardado;
 }
 
 /** Secuencia destino de las secciones del canvas Diagnóstico (orden vivo + inserta

@@ -49,6 +49,7 @@ import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO, BotonAzul, BotonBlan
 import VersionesDelDocumento from "@/components/canvas/VersionesDelDocumento";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { rotuloVigente } from "@/lib/canvas/canvas-defs";
+import { plantillaDelDocumento } from "@/lib/entregables/registro";
 import { slugForCanvas, pieceBySlug, pieceLabel, PIECES } from "@/lib/pieces/registry";
 import { buscarDocumento, vistaDeLaUrl } from "@/lib/flow/vista-de-la-url";
 // La dirección de la ficha del documento dentro del manual — un solo lugar que sabe dónde vive.
@@ -724,9 +725,14 @@ export default function ProjectCanvasPanel({
   const readinessActiva = filaActiva
     ? pieceReadiness(filaActiva.slug, { tags: tags ?? [], piezasConContenido, hubspotPipelineId: hubspotPipelineId ?? null })
     : null;
-  /* El diagnóstico sin generar se genera desde su selector de plantillas (2026-10-23, components/canvas/ElegirPlantilla.tsx):
-     el botón de arriba generaría con la plantilla de siempre sin que nadie la eligiera. Ya generado, regenera con la suya. */
-  const diagnosticoSinGenerar = activeSlug === "diagnosis" && !!filaActiva && filaActiva.state !== "generada";
+  /* El diagnóstico sin generar y sin plantilla elegida se genera desde su selector (2026-10-23,
+     components/canvas/ElegirPlantilla.tsx): el botón de arriba generaría con la plantilla de siempre sin que nadie la
+     eligiera. Con la plantilla anotada («Escribirlo yo», o ya generado), el botón vuelve y genera con la suya. */
+  const diagnosticoSinGenerar =
+    activeSlug === "diagnosis" &&
+    !!filaActiva &&
+    filaActiva.state !== "generada" &&
+    !plantillaDelDocumento("diagnosis", activeCanvas?.sections)?.guardada;
   const botonDelAgente =
     activeCanvas && CANVAS_PRIMARY_AGENT[activeSlug ?? ""] && activeSlug !== "exploration" && !diagnosticoSinGenerar ? (
       <CanvasAgentButton

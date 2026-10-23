@@ -9,11 +9,14 @@
  * (lib/entregables/registro.ts) y del canon del canvas: sumar una plantilla allá la muestra acá sola.
  *
  * UI interna: primitivas y tokens, tuteo. El botón es el de siempre (`CanvasAgentButton`), con la plantilla elegida:
- * mismo permiso, misma corrida y el mismo aviso si casi nada está confirmado.
+ * mismo permiso, misma corrida y el mismo aviso si casi nada está confirmado. «Escribirlo yo» abre el documento con las
+ * secciones de la plantilla elegida y sin la IA (POST …/diagnostico/plantilla): antes del selector, un diagnóstico vacío
+ * se podía escribir a mano, y esa puerta no se cierra.
  */
 import { useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/cn";
-import { ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { BotonBlanco, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { useToast } from "@/components/ui/Toast";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { canvasDefForSlug } from "@/lib/canvas/canvas-defs";
 import { entregableDe, seccionesDeLaPlantilla, type PlantillaDeEntregable } from "@/lib/entregables/registro";
@@ -54,7 +57,30 @@ export default function ElegirPlantilla({
   const plantillas: readonly PlantillaDeEntregable[] = entregableDe(slug)?.plantillas ?? [];
   const canon = canvasDefForSlug(slug)?.sections ?? [];
   const [elegida, setElegida] = useState<string>(() => (plantillas.find((p) => p.recomendada) ?? plantillas[0])?.id ?? "");
+  const [abriendo, setAbriendo] = useState(false);
+  const toast = useToast();
   if (plantillas.length < 2) return null;
+
+  const escribirloYo = async () => {
+    setAbriendo(true);
+    try {
+      const r = await fetch(`/api/projects/${projectId}/diagnostico/plantilla`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plantilla: elegida }),
+      });
+      const j = (await r.json().catch(() => null)) as { error?: string } | null;
+      if (!r.ok) {
+        toast.error(j?.error ?? "No se pudo abrir el documento en blanco. Vuelve a intentarlo.");
+        return;
+      }
+      onGenerado?.();
+    } catch {
+      toast.error("Error de conexión.");
+    } finally {
+      setAbriendo(false);
+    }
+  };
 
   const alTeclado = (e: KeyboardEvent<HTMLDivElement>, id: string) => {
     if (e.key === " " || e.key === "Enter") {
@@ -141,6 +167,9 @@ export default function ElegirPlantilla({
           alreadyGenerated={false}
           onDone={onGenerado}
         />
+        <BotonBlanco onClick={() => void escribirloYo()} disabled={abriendo} title="Abre el documento con estas secciones, vacío, para escribirlo a mano">
+          {abriendo ? "Abriendo…" : "Escribirlo yo"}
+        </BotonBlanco>
         <span className="text-xs text-fg-muted">La corrida aparece en el centro de corridas: puedes seguir navegando.</span>
       </div>
     </section>

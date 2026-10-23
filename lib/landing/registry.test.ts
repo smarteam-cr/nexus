@@ -40,7 +40,7 @@ import {
   SECCIONES_RETIRADAS_DEL_DIAGNOSTICO,
 } from "@/components/landing/configs/diagnostico.defs";
 import { DIAGNOSTICO_SECTION_COMPONENTS, landingConfigForDiagnostico } from "@/components/landing/configs/diagnostico";
-import { DIAGNOSTICO_CANVAS, PLANIFICACION_CANVAS, IMPLEMENTACION_CANVAS, ENTREGA_CANVAS } from "@/lib/canvas/canvas-defs";
+import { DIAGNOSTICO_CANVAS, PLANIFICACION_CANVAS, IMPLEMENTACION_CANVAS, ENTREGA_CANVAS, rotuloVigente } from "@/lib/canvas/canvas-defs";
 import { ENTREGA_SECTION_DEFS, ENTREGA_DEF_BY_KEY } from "@/components/landing/configs/entrega.defs";
 import { ENTREGA_SECTION_COMPONENTS, landingConfigForEntrega } from "@/components/landing/configs/entrega";
 import { IMPLEMENTACION_SECTION_DEFS, SECCIONES_RETIRADAS_DE_EJECUCION } from "@/components/landing/configs/implementacion.defs";
@@ -860,6 +860,18 @@ describe("Diagnóstico: registry completo + keys congeladas", () => {
     for (const key of [...SECCIONES_RETIRADAS_DEL_DIAGNOSTICO, "cierre"]) {
       expect(DIAGNOSTICO_DEF_BY_KEY[key].agentGenerated, `${key} debería ser agentGenerated:false`).toBe(false);
     }
+  });
+});
+
+describe("«Política rectora» → «Enfoque de la solución» (2026-10-23): el rótulo guardado se lee con el nombre nuevo", () => {
+  it("en el diagnóstico y en la sección retirada de una planificación vieja; un rótulo escrito a mano se respeta", () => {
+    expect(rotuloVigente("diagnosis", "politica_rectora", "Política rectora")).toBe("Enfoque de la solución");
+    expect(rotuloVigente("planning", "politica_rectora", "Política rectora")).toBe("Enfoque de la solución");
+    expect(rotuloVigente("planning", "politica_rectora", "Nuestro enfoque")).toBe("Nuestro enfoque");
+    expect(rotuloVigente("kickoff", "politica_rectora", "Política rectora")).toBe("Política rectora");
+    // El título que pinta el motor sale de la definición: tiene que decir lo mismo que la lista.
+    expect(DIAGNOSTICO_DEF_BY_KEY.politica_rectora.label).toBe("Enfoque de la solución");
+    expect(PLANIFICACION_SECTION_DEFS.find((d) => d.key === "politica_rectora")?.label).toBe("Enfoque de la solución");
   });
 });
 
