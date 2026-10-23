@@ -14,6 +14,7 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { puntoQueSePregunta, type PuntoDeCalidad } from "./calidad";
 import { ladoDeLaPregunta, temaDeLaPregunta, type PosicionParaLaGuia, type PreguntaParaMostrar } from "./guia";
+import { EQUIPOS, temaDeEquipo, type ClaveDeEquipo } from "./equipos";
 
 export type EstadoDelPunto = "listo" | "cubre" | "falta";
 
@@ -41,6 +42,11 @@ export interface LoQueCubreLaGuia {
   cubre: number;
   /** Solo en un proyecto: las piezas de lo vendido que pregunta la guía (su tema, como lo nombra el handoff). */
   vendido: string[];
+  /**
+   * En una sesión con un equipo del cliente (2026-10-23): cada tema del equipo, listo (lo respondió en otra sesión), lo
+   * pregunta la guía, o no. Vacío sin equipo.
+   */
+  temasDelEquipo: PuntoQueCubre[];
 }
 
 /** Un punto que mirar: los de calidad.ts (la venta) o las tarjetas de la estrategia (un proyecto). */
@@ -53,6 +59,9 @@ export function queCubreLaGuia(o: {
   posiciones: Readonly<Record<string, PosicionParaLaGuia | undefined>>;
   /** «venta»: los puntos para proponer, con sus reglas (calidad.ts). «cs»: un punto se cubre si la guía pregunta su tarjeta. */
   marco: "venta" | "cs";
+  /** El equipo del cliente de la sesión y los temas que ya se respondieron (plan-de-la-guia.ts › `contextoDelPlan`). */
+  equipo?: ClaveDeEquipo | null;
+  yaPreguntado?: ReadonlyMap<string, ReadonlySet<string>>;
 }): LoQueCubreLaGuia {
   const temas = new Set(o.preguntas.map(temaDeLaPregunta).filter((t): t is string => !!t));
   const hayDimensiones = o.preguntas.some((p) => ladoDeLaPregunta(p) === "dimension");
@@ -85,6 +94,19 @@ export function queCubreLaGuia(o: {
       ? [...new Set(o.preguntas.filter((p) => ladoDeLaPregunta(p) === "vendido").map((p) => p.tema?.trim() || "").filter(Boolean))]
       : [];
 
+  const equipo = o.equipo ?? null;
+  // El «dónde duele» de un equipo con área se pregunta con la dimensión de su área si el cliente ya contó un dolor.
+  const areaDelEquipo = equipo ? EQUIPOS[equipo].area : null;
+  const dolorConDimension = !!areaDelEquipo && dimensiones.some((d) => o.escala.areas.find((a) => a.id === areaDelEquipo)?.dimensiones.some((x) => x.id === d.id));
+  const temasDelEquipo: PuntoQueCubre[] = equipo
+    ? EQUIPOS[equipo].temas.map((t) => {
+        const id = temaDeEquipo(equipo, t.tema);
+        const listo = (o.yaPreguntado?.get(id)?.size ?? 0) > 0;
+        const cubre = temas.has(id) || (t.tema === "dolor" && dolorConDimension);
+        return { id, corto: t.nombre, titulo: t.busca, estado: listo ? "listo" : cubre ? "cubre" : "falta" };
+      })
+    : [];
+
   const faltantes = puntos.filter((p) => p.estado !== "listo");
-  return { puntos, dimensiones, faltan: faltantes.length, cubre: faltantes.filter((p) => p.estado === "cubre").length, vendido };
+  return { puntos, dimensiones, faltan: faltantes.length, cubre: faltantes.filter((p) => p.estado === "cubre").length, vendido, temasDelEquipo };
 }

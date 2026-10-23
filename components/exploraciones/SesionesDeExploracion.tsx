@@ -40,6 +40,7 @@ import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/
 import AntesDeLaSesion from "./AntesDeLaSesion";
 import DespuesDeLaSesion, { type Llevar } from "./DespuesDeLaSesion";
 import DuranteLaSesion from "./DuranteLaSesion";
+import { EquipoDeLaSesion } from "./EquipoDeLaSesion";
 import Segmentos from "./Segmentos";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
 import { diaLargo } from "./piezas-de-la-sesion";
@@ -308,6 +309,10 @@ function EncabezadoDeLaSesion({
               </span>
             ))}
           </p>
+          {/* Con qué equipo del cliente es (2026-10-23): decide qué pregunta la guía. */}
+          <div className="mt-1.5">
+            <EquipoDeLaSesion pestana={pestana} momento={momento} />
+          </div>
           {momento !== "durante" && <LineaDeLaReunion pestana={pestana} onSumarMinuta={onSumarMinuta} />}
         </div>
         <span className="flex-1" />

@@ -43,6 +43,7 @@ import {
 } from "./guia-pregunta-pedido";
 import { AGENTE_DE_LA_EXPLORACION, contextoParaLaGuia, nombresDelEquipo, planDeLaGuiaDeLaSesion } from "./agente";
 import { guiaDeAntesDelPlan } from "./plan-de-la-guia";
+import { EQUIPOS, leerTemaDeEquipo, nombreDelTemaDeEquipo, temaDeEquipo } from "./equipos";
 import { aplicarCambios, type FilaDeExploracion } from "./servidor";
 
 /** El `origen` de cada llamada de «Regenerar»: así se ve aparte en el gasto de la IA. */
@@ -51,9 +52,14 @@ export const ORIGEN_DE_REGENERAR = "exploraciones/guia:regenerar-pregunta";
 
 type BaseDeLaGuia = Awaited<ReturnType<typeof contextoParaLaGuia>>;
 
-/** El nombre de un tema: la tarjeta del marco o la dimensión de la escala. */
+/**
+ * El nombre de un tema: la tarjeta del marco, el tema de un equipo del cliente (con lo que busca, para que «Regenerar» y
+ * las preguntas del objetivo sepan qué preguntarle a ese equipo) o la dimensión de la escala.
+ */
 function nombreDelTema(base: BaseDeLaGuia, para: string): string {
   if (esTarjeta(para)) return definicionEnElMarco(para, base.marco).etiqueta;
+  const delEquipo = leerTemaDeEquipo(para);
+  if (delEquipo) return `${nombreDelTemaDeEquipo(para)} (busca: ${delEquipo.definicion.busca})`;
   return base.escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === para)?.nombre ?? para;
 }
 
@@ -111,7 +117,7 @@ export async function regenerarPregunta(exploracionId: string, clave: string, qu
   const { preguntas } = preguntasDeLaProxima(base);
   const p = preguntas.find((x) => claveDePregunta(x) === clave);
   if (!p) throw new ErrorDeLaGuia(404, "Esa pregunta ya no está en la guía: recarga la página.");
-  const tema = p.apunta?.para ?? (p.tipo === "tarjeta" || p.tipo === "dimension" ? p.para : null);
+  const tema = p.apunta?.para ?? (p.tipo === "tarjeta" || p.tipo === "dimension" || p.tipo === "equipo" ? p.para : null);
   const dim = tema && !esTarjeta(tema) ? base.escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === tema) : undefined;
   const pos = tema ? base.posiciones[tema] : undefined;
   const entrada: EntradaDeUnaPregunta = {
@@ -146,11 +152,21 @@ export const ORIGEN_DEL_OBJETIVO = "exploraciones/guia:preguntas-del-objetivo";
 /** Los temas que puede llevar una pregunta nueva: las tarjetas del marco y las dimensiones de las áreas en juego. */
 function temasDeLaGuia(base: BaseDeLaGuia): { id: string; nombre: string }[] {
   return [
+    // Los del equipo del cliente de la próxima sesión primero (2026-10-23): son de lo que trata esa sesión.
+    ...temasDelEquipoDeLaProxima(base),
     ...base.marco.tarjetas.map((k) => ({ id: k as string, nombre: definicionEnElMarco(k, base.marco).etiqueta })),
     ...base.escala.areas
       .filter((a) => base.estado.areas.includes(a.id))
       .flatMap((a) => a.dimensiones.filter((d) => d.aplica).map((d) => ({ id: d.id, nombre: `${d.nombre} (${a.nombre})` }))),
   ];
+}
+
+/** Los temas del equipo del cliente de la próxima sesión (`marketing.medicion`), con su nombre; vacío sin equipo. */
+export function temasDelEquipoDeLaProxima(base: Pick<BaseDeLaGuia, "estado" | "ctx">): { id: string; nombre: string }[] {
+  const sesionId = base.ctx.proxima.sesionId ?? null;
+  const equipo = sesionId ? base.estado.contenido.sesiones.find((s) => s.id === sesionId)?.equipo : undefined;
+  if (!equipo) return [];
+  return EQUIPOS[equipo].temas.map((t) => ({ id: temaDeEquipo(equipo, t.tema), nombre: `${EQUIPOS[equipo].nombre} · ${t.nombre}` }));
 }
 
 /**

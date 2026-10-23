@@ -19,12 +19,25 @@
  * cliente ya compró. Lo que dijo sale del proyecto (lo-que-ya-sabemos.ts), nunca del test. Una guía de un proyecto
  * armada ANTES del plan (sus preguntas no tienen paso) se sigue mostrando como se armó hasta que alguien toque
  * «Actualizar la guía» (`guiaDeAntesDelPlan`).
+ *
+ * Una sesión con un EQUIPO del cliente (2026-10-23, equipos.ts) tiene su propio plan (`planDelEquipo`): cómo está armado
+ * el equipo, cómo lo miden, cómo funciona, con qué sistemas y datos, y dónde duele (con la dimensión de su área si el
+ * cliente ya contó un dolor). Sin quién firma ni presupuesto, salvo con Dirección en la preventa. Lo que el equipo ya
+ * respondió en otra sesión no se vuelve a preguntar.
+ *
+ * Qué entra y en qué orden se pregunta son dos cosas (2026-10-23): la guía elige por prioridad (lo que viene de antes,
+ * los dolores, lo que falta para proponer) y después lo ordena como una conversación: la meta primero, después cómo pasa,
+ * cuánto cuesta, cómo lo resolvería, para cuándo y con qué, y el presupuesto al final. Lo que una lectura marcó
+ * respondido cuenta como preguntado (`pasosRespondidos`), igual que lo marcado hecho en «En vivo».
  */
 import { LETRAS } from "@/lib/escala/documento/tipos";
 import { metaEnCifras, type ClaveDeCasilla, type Meta, type Persona } from "./casillas";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import type { ClaveDeMarco } from "./marco";
 import type { ContextoDelPlan, GuiaDeLaSesion, PosicionParaLaGuia, SesionPlaneada } from "./guia";
+import type { EstadoDeExploracion, LecturaDeReunion } from "./contenido";
+import { conAlgoQueSirve } from "./estado-de-las-tarjetas";
+import { EQUIPOS, equiposQueNombra, leerTemaDeEquipo, TEMA_DE_SISTEMAS_DE_LA_EMPRESA, temaDeEquipo, type ClaveDeEquipo } from "./equipos";
 import { fuentesDistintas, loQueYaSabemos, type DatoDelCliente, type EntradaDelSaber, type SaberDelCliente } from "./lo-que-ya-sabemos";
 
 export const PASOS_DE_LA_PREGUNTA = ["situacion", "impacto", "solucion", "cuando", "conQue"] as const;
@@ -61,7 +74,8 @@ const PASO_DE_LA_TARJETA: Partial<Record<ClaveDeCasilla, PasoDeLaPregunta>> = {
 
 export interface PreguntaPlaneada {
   para: string;
-  tipo: "tarjeta" | "dimension";
+  /** `equipo`: un tema de un equipo del cliente (`marketing.medicion`) o la pregunta de sistemas de la empresa. */
+  tipo: "tarjeta" | "dimension" | "equipo";
   paso: PasoDeLaPregunta;
   /** Lo que ya dijo el cliente de este tema y de donde parte la pregunta. null = no dijo nada todavía. */
   motivo: DatoDelCliente | null;
@@ -83,16 +97,23 @@ export interface EntradaDelPlan {
   max?: number;
   /** «cs» = la exploración de un proyecto: el plan de la estrategia. Sin él, la preventa. */
   marco?: ClaveDeMarco;
+  /** El equipo del cliente de la sesión: su plan (`planDelEquipo`). Sin él, la empresa entera. */
+  equipo?: ClaveDeEquipo | null;
+  /** La conversación se puso técnica (o el objetivo habla de sistemas): la empresa suma una pregunta de sistemas y datos. */
+  tecnica?: boolean;
 }
 
 const vacia = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
 
-/** ¿Falta esta tarjeta? La meta, sin cifras; quién decide, sin quien firma; las demás, vacías. */
+/**
+ * ¿Falta esta tarjeta? La meta, sin cifras; quién decide, sin quien firma; las demás, vacías o con texto que solo dice
+ * que no se sabe («Sin fecha límite explícita»: 2026-10-23, estado-de-las-tarjetas.ts).
+ */
 export function faltaLaTarjeta(clave: ClaveDeCasilla, casillas: Partial<Record<ClaveDeCasilla, unknown>>): boolean {
   const v = casillas[clave];
   if (clave === "metas") return !((v as Meta[] | undefined) ?? []).some(metaEnCifras);
   if (clave === "autoridad") return !((v as Persona[] | undefined) ?? []).some((p) => p?.rol === "firma");
-  return vacia(v);
+  return vacia(v) || !conAlgoQueSirve(v);
 }
 
 /** Los pasos que ya se preguntaron: de cada sesión, las preguntas de su guía (con su paso) que se marcaron hechas. */
@@ -112,18 +133,85 @@ export function pasosYaPreguntados(
 }
 
 /**
- * Lo que necesita el plan de la guía de una sesión, desde lo guardado: lo que ya sabemos, lo que ya se preguntó, lo
- * que el vendedor se llevó a ESA sesión y lo que pasó de una sesión cortada. Lo usan la pantalla y el pedido al agente,
- * así las dos dicen lo mismo.
+ * El paso que pregunta una pregunta, por su texto: para lo respondido en una reunión cuya guía ya no está (se volvió a
+ * armar en la misma corrida que la leyó, como CEMACO el 21 oct). «¿Cuántas campañas…?» es impacto; «¿con qué criterio
+ * decide…?», situación.
+ */
+export function pasoQuePregunta(texto: string): PasoDeLaPregunta {
+  const t = texto.toLowerCase();
+  if (/presupuesto|inversi[oó]n|visto bueno|qui[eé]n (firma|aprueba)/.test(t)) return "conQue";
+  if (/para cu[aá]ndo|qu[eé] fecha/.test(t)) return "cuando";
+  if (/resolver|soluci[oó]n|te gustar[ií]a|ideal|intentaron|probaron/.test(t)) return "solucion";
+  if (/\bcu[aá]nt[oa]s?\b|cost|pierd|perdi|\bhoras\b|\btasa\b|plata|dinero|margen/.test(t)) return "impacto";
+  return "situacion";
+}
+
+/**
+ * Los pasos que ya se respondieron según la lectura de cada reunión (CEMACO, 20 oct: la lectura marcó respondidas 1.2,
+ * 1.3 y 1.6 y nadie las marcó «hecha»; la guía siguiente las volvía a preguntar igual). Cada tema respondido suma los
+ * pasos con que lo planeó una guía armada ANTES de la lectura; si ninguna lo dice, el paso que pregunta su texto
+ * (`pasoQuePregunta`); un tema de un equipo, el paso de su tema. Lo sumado a mano, lo vendido y lo llevado no tienen paso.
+ */
+export function pasosRespondidos(
+  lecturas: Readonly<Record<string, Pick<LecturaDeReunion, "cobertura" | "en">>>,
+  guias: Readonly<Record<string, Pick<GuiaDeLaSesion, "preguntas" | "en">>>,
+): Map<string, Set<PasoDeLaPregunta>> {
+  const out = new Map<string, Set<PasoDeLaPregunta>>();
+  const sumar = (para: string, paso: PasoDeLaPregunta) => out.set(para, new Set([...(out.get(para) ?? []), paso]));
+  for (const l of Object.values(lecturas)) {
+    for (const c of l.cobertura ?? []) {
+      if (!c.respondida) continue;
+      const delEquipo = leerTemaDeEquipo(c.para);
+      if (delEquipo) {
+        sumar(c.para, delEquipo.definicion.paso);
+        continue;
+      }
+      if (/^(propia|vendido|abierto):/.test(c.para)) continue;
+      let conPaso = false;
+      for (const g of Object.values(guias)) {
+        if (!(g.en < l.en)) continue;
+        for (const p of g.preguntas) {
+          if (p.para !== c.para || !p.paso) continue;
+          sumar(c.para, p.paso);
+          conPaso = true;
+        }
+      }
+      if (!conPaso) sumar(c.para, pasoQuePregunta(c.pregunta));
+    }
+  }
+  return out;
+}
+
+function juntarPasos(...mapas: ReadonlyMap<string, ReadonlySet<PasoDeLaPregunta>>[]): Map<string, Set<PasoDeLaPregunta>> {
+  const out = new Map<string, Set<PasoDeLaPregunta>>();
+  for (const m of mapas) for (const [para, pasos] of m) out.set(para, new Set([...(out.get(para) ?? []), ...pasos]));
+  return out;
+}
+
+/** Lo que ya se preguntó en la exploración, por tema: lo marcado hecho en «En vivo» y lo que la lectura dio por respondido. */
+export function yaPreguntadoEnLaExploracion(estado: Pick<EstadoDeExploracion, "contenido" | "propuesta">): Map<string, Set<PasoDeLaPregunta>> {
+  return juntarPasos(pasosYaPreguntados(estado.contenido.sesiones, estado.propuesta.guias), pasosRespondidos(estado.propuesta.lecturas ?? {}, estado.propuesta.guias));
+}
+
+/**
+ * Lo que necesita el plan de la guía de una sesión, desde lo guardado: lo que ya sabemos, lo que ya se preguntó (lo
+ * marcado hecho y lo que la lectura dio por respondido), lo que el vendedor se llevó a ESA sesión, lo que pasó de una
+ * sesión cortada, su equipo y si la conversación se puso técnica. Lo usan la pantalla y el pedido al agente, así las dos
+ * dicen lo mismo.
  */
 export function contextoDelPlan(o: EntradaDelSaber & { sesionId: string | null }): ContextoDelPlan {
   const sesiones = o.estado.contenido.sesiones;
+  const sesion = sesiones.find((s) => s.id === o.sesionId);
+  const equipo = sesion?.equipo ?? null;
+  const tecnica = !!o.estado.propuesta.alertaTecnica || (!!sesion?.objetivo && equiposQueNombra(sesion.objetivo).includes("tecnologia"));
   return {
     saber: loQueYaSabemos(o),
-    yaPreguntado: pasosYaPreguntados(sesiones, o.estado.propuesta.guias),
-    llevados: (sesiones.find((s) => s.id === o.sesionId)?.explorar ?? []).length,
+    yaPreguntado: yaPreguntadoEnLaExploracion(o.estado),
+    llevados: (sesion?.explorar ?? []).length,
     pasaron: [...new Set(sesiones.filter((s) => s.resultado === "cortada").flatMap((s) => s.pasaron ?? []))],
     ...(o.marco ? { marco: o.marco } : {}),
+    ...(equipo ? { equipo } : {}),
+    ...(tecnica ? { tecnica } : {}),
   };
 }
 
@@ -139,10 +227,11 @@ export function guiaDeAntesDelPlan(guia: Pick<GuiaDeLaSesion, "preguntas"> | nul
 }
 
 /**
- * Las preguntas de la próxima sesión de la preventa, en orden. Lo que viene de antes primero; después los dolores que
- * el cliente ya contó (el nivel más bajo y con más fuentes), en impacto; después lo que falta para proponer (la meta
- * en cifras, para cuándo, quién firma) y el presupuesto al final. Sin ningún dolor dicho, se arranca por los retos y
- * la escala. Nunca más de `max` en total, contando lo llevado.
+ * Las preguntas de la próxima sesión, en el orden de la conversación. ENTRAN, por prioridad: lo que viene de antes; los
+ * dolores que el cliente ya contó (el nivel más bajo y con más fuentes), en impacto; lo que falta para proponer (la meta
+ * en cifras, para cuándo, quién firma) y el presupuesto. Sin ningún dolor dicho, se arranca por los retos y la escala.
+ * Nunca más de `max` en total, contando lo llevado. Después se ORDENAN como se conversa (`enOrdenDeConversacion`). Con
+ * un equipo del cliente, el plan del equipo (`planDelEquipo`).
  */
 export function planDeLaGuia(o: EntradaDelPlan): PreguntaPlaneada[] {
   const cs = o.marco === "cs";
@@ -207,10 +296,18 @@ export function planDeLaGuia(o: EntradaDelPlan): PreguntaPlaneada[] {
   // Lo que viene de una sesión cortada, si todavía falta.
   const pasaron: PreguntaPlaneada[] = (o.pasaron ?? []).flatMap((para) => {
     if (PASO_DE_LA_TARJETA[para as ClaveDeCasilla] !== undefined) return falta(para as ClaveDeCasilla) ? [tarjeta(para as ClaveDeCasilla)] : [];
+    // Un tema de un equipo pasa a una sesión del MISMO equipo, si todavía no se respondió.
+    const delEquipo = leerTemaDeEquipo(para);
+    if (delEquipo) return delEquipo.equipo === (o.equipo ?? null) && !(ya.get(para)?.size ?? 0) ? [{ para, tipo: "equipo" as const, paso: delEquipo.definicion.paso, motivo: null }] : [];
     return [...dolores, ...sinDato].filter((p) => p.para === para);
   });
 
+  if (o.equipo) return planDelEquipo(o.equipo, { ...o, lugar, ya, dolores, falta, tarjeta, pasaron });
+
   const sinDolores = dolores.length === 0;
+  // La conversación se puso técnica: una pregunta de sistemas y datos (fuentes, campos, integraciones), si no se respondió.
+  const sistemas: PreguntaPlaneada[] =
+    o.tecnica && !(ya.get(TEMA_DE_SISTEMAS_DE_LA_EMPRESA)?.size ?? 0) ? [{ para: TEMA_DE_SISTEMAS_DE_LA_EMPRESA, tipo: "equipo", paso: "situacion", motivo: null }] : [];
   /* En un proyecto, la estrategia: los retos del negocio, los dolores que ya contó, los resultados en cifras y lo que le
      impide llegar. Sin «cuándo» ni «con qué»: el cliente ya compró (quién firma y el presupuesto son de la venta). */
   const necesariasDelProyecto: PreguntaPlaneada[] = [
@@ -229,27 +326,93 @@ export function planDeLaGuia(o: EntradaDelPlan): PreguntaPlaneada[] {
     // Con un dolor en impacto, «qué pasa si no actúa» sale de ahí: no se pregunta aparte.
     ...(sinDolores && falta("consecuencias") ? [tarjeta("consecuencias")] : []),
     ...(sinDolores ? sinDato.slice(0, 1) : []),
+    ...sistemas,
     ...(falta("tiempos") ? [tarjeta("tiempos")] : []),
     ...(falta("autoridad") ? [tarjeta("autoridad")] : []),
     ...(falta("presupuesto") ? [tarjeta("presupuesto")] : []),
   ];
-  const relleno: PreguntaPlaneada[] = cs ? [...dolores.slice(MAX_DOLORES), ...sinDato] : [
+  const relleno: PreguntaPlaneada[] = cs ? [...sistemas, ...dolores.slice(MAX_DOLORES), ...sinDato] : [
     ...dolores.slice(MAX_DOLORES),
     ...(falta("planes") ? [tarjeta("planes")] : []),
     ...(falta("implicaciones") ? [tarjeta("implicaciones")] : []),
     ...sinDato,
   ];
 
+  return enOrdenDeConversacion(elegir([...necesarias, ...relleno], lugar), new Set(pasaron.map((p) => p.para)));
+}
+
+/** Los primeros `lugar` sin repetir tema: lo que entra, por prioridad. */
+function elegir(candidatas: readonly PreguntaPlaneada[], lugar: number): PreguntaPlaneada[] {
   const plan: PreguntaPlaneada[] = [];
   const usados = new Set<string>();
-  for (const p of [...necesarias, ...relleno]) {
+  for (const p of candidatas) {
     if (plan.length >= lugar) break;
     if (usados.has(p.para)) continue;
     usados.add(p.para);
     plan.push(p);
   }
-  // El presupuesto, al final: hablar de plata antes de la meta es vender antes de diagnosticar.
-  return [...plan.filter((p) => p.para !== "presupuesto"), ...plan.filter((p) => p.para === "presupuesto")];
+  return plan;
+}
+
+/** En qué momento de la conversación va cada paso: la meta primero, después cómo pasa, cuánto cuesta, cómo, cuándo y con qué. */
+const MOMENTO_DEL_PASO: Record<PasoDeLaPregunta, number> = { situacion: 1, impacto: 2, solucion: 3, cuando: 4, conQue: 5 };
+
+/**
+ * Lo elegido, en el orden de una conversación (Marco, 22 oct: «la pregunta que propone Nexus no es la siguiente lógica en
+ * la conversación»; antes la sesión abría con el costo de un dolor y la meta iba tercera). Lo que viene de antes va
+ * primero; después adónde quiere llegar (la meta), cómo pasa hoy, cuánto le cuesta, cómo lo resolvería, para cuándo y
+ * con qué. El presupuesto, al final: hablar de plata antes de la meta es vender antes de diagnosticar.
+ */
+export function enOrdenDeConversacion(plan: readonly PreguntaPlaneada[], deAntes: ReadonlySet<string> = new Set()): PreguntaPlaneada[] {
+  const momento = (p: PreguntaPlaneada) => (deAntes.has(p.para) ? -1 : p.para === "metas" ? 0 : p.para === "presupuesto" ? 9 : MOMENTO_DEL_PASO[p.paso]);
+  return plan
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => momento(a.p) - momento(b.p) || a.i - b.i)
+    .map(({ p }) => p);
+}
+
+/**
+ * El plan de una sesión con un equipo del cliente (2026-10-23): sus temas (equipos.ts), en el orden de su conversación,
+ * con lo que viene de antes primero. Su «dónde duele» es la dimensión de su área con lo que el cliente ya contó, si hay
+ * una debajo de Funcional (con su nivel y su evidencia); si no, el tema del equipo. Lo que el equipo ya respondió en otra
+ * sesión no entra. Con Dirección en la preventa, después de sus temas va lo que falta para proponer (para cuándo, quién
+ * firma y el presupuesto): es con quien se habla de eso. Sin lugar para todo, entra por la prioridad del equipo.
+ */
+function planDelEquipo(
+  equipo: ClaveDeEquipo,
+  o: Pick<EntradaDelPlan, "escala" | "marco"> & {
+    lugar: number;
+    ya: ReadonlyMap<string, ReadonlySet<PasoDeLaPregunta>>;
+    dolores: readonly PreguntaPlaneada[];
+    falta: (clave: ClaveDeCasilla) => boolean;
+    tarjeta: (clave: ClaveDeCasilla) => PreguntaPlaneada;
+    pasaron: readonly PreguntaPlaneada[];
+  },
+): PreguntaPlaneada[] {
+  const def = EQUIPOS[equipo];
+  const respondido = (para: string) => (o.ya.get(para)?.size ?? 0) > 0;
+  const delArea = new Set(def.area ? (o.escala.areas.find((a) => a.id === def.area)?.dimensiones.map((d) => d.id) ?? []) : []);
+  const dolorDelArea = o.dolores.find((d) => delArea.has(d.para)) ?? null;
+
+  // Cada tema del equipo, en el orden de su conversación; el de «dónde duele», con la dimensión del área si la hay.
+  const temas: PreguntaPlaneada[] = def.temas.flatMap((t): PreguntaPlaneada[] => {
+    const para = temaDeEquipo(equipo, t.tema);
+    if (t.tema === "dolor" && dolorDelArea) return [dolorDelArea];
+    if (respondido(para)) return [];
+    return [{ para, tipo: "equipo", paso: t.paso, motivo: null }];
+  });
+  const conQue: PreguntaPlaneada[] =
+    equipo === "direccion" && o.marco !== "cs" ? (["tiempos", "autoridad", "presupuesto"] as const).filter(o.falta).map(o.tarjeta) : [];
+
+  const porTema = new Map(temas.map((p) => [p.para, p] as const));
+  const prioridad = def.prioridad.flatMap((t) => {
+    const para = t === "dolor" && dolorDelArea ? dolorDelArea.para : temaDeEquipo(equipo, t);
+    const p = porTema.get(para);
+    return p ? [p] : [];
+  });
+  const elegidas = new Set(elegir([...o.pasaron, ...prioridad, ...conQue], o.lugar).map((p) => p.para));
+  // El orden: lo que viene de antes, los temas del equipo como se conversan, y lo de la venta al final (el presupuesto, último).
+  return [...o.pasaron, ...temas, ...conQue].filter((p, i, todos) => elegidas.has(p.para) && todos.findIndex((x) => x.para === p.para) === i);
 }
 
 // ── Lo que repite y su respaldo ───────────────────────────────────────────────

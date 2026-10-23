@@ -18,6 +18,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { ladoDeLaPregunta, type PestanaDeSesion, type PreguntaParaMostrar } from "@/lib/exploraciones/guia";
+import { EQUIPOS } from "@/lib/exploraciones/equipos";
 import { claveDeNotaDePregunta, claveDeNotaDeSesion, MAX_NOTA_DE_SESION } from "@/lib/exploraciones/notas-de-sesion";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
 import { SiSeResiste } from "./AntesDeLaSesion";
@@ -25,7 +26,7 @@ import { useLienzo } from "./contexto";
 import { EstadoDelGuardado, EtiquetaDePregunta, Rotulo, useEditarLaSesion, useGuiaDeLaSesion, useNotaQueSeGuarda } from "./piezas-de-la-sesion";
 import Segmentos from "./Segmentos";
 
-type Filtro = "todas" | "marco" | "escala" | "vendido";
+type Filtro = "todas" | "equipo" | "marco" | "escala" | "vendido";
 
 const CAMPO = "w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-[13px] text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none disabled:opacity-60";
 
@@ -134,7 +135,10 @@ export default function DuranteLaSesion({ pestana, esLaProxima }: { pestana: Pes
   const delMarco = enOrden.filter((p) => ladoDeLaPregunta(p) === "tarjeta");
   const deLaEscala = enOrden.filter((p) => ladoDeLaPregunta(p) === "dimension");
   const deLoVendido = enOrden.filter((p) => ladoDeLaPregunta(p) === "vendido");
-  const visibles = filtro === "marco" ? delMarco : filtro === "escala" ? deLaEscala : filtro === "vendido" ? deLoVendido : enOrden;
+  // Los temas del equipo del cliente de la sesión (2026-10-23), o la pregunta de sistemas y datos de la empresa.
+  const delEquipo = enOrden.filter((p) => ladoDeLaPregunta(p) === "equipo");
+  const visibles =
+    filtro === "equipo" ? delEquipo : filtro === "marco" ? delMarco : filtro === "escala" ? deLaEscala : filtro === "vendido" ? deLoVendido : enOrden;
   const ahora = elegida && visibles.some((p) => p.para === elegida) ? elegida : (visibles.find((p) => !hechas.has(p.para))?.para ?? null);
   const objetivo = s?.objetivo ?? guia?.objetivo ?? null;
 
@@ -169,6 +173,7 @@ export default function DuranteLaSesion({ pestana, esLaProxima }: { pestana: Pes
             etiqueta="Filtrar las preguntas"
             opciones={[
               { clave: "todas", nombre: "Todas", cuenta: enOrden.length },
+              ...(delEquipo.length ? [{ clave: "equipo" as const, nombre: s?.equipo ? EQUIPOS[s.equipo].nombre : "Sistemas y datos", cuenta: delEquipo.length }] : []),
               { clave: "marco", nombre: marco.nombre, cuenta: delMarco.length },
               { clave: "escala", nombre: "Escala de rendimiento", cuenta: deLaEscala.length },
               ...(deLoVendido.length ? [{ clave: "vendido" as const, nombre: "Lo vendido", cuenta: deLoVendido.length }] : []),

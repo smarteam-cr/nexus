@@ -74,7 +74,8 @@ describe("el plan de la guía, en Larce", () => {
     const estado = estadoDePrueba();
     const ctx = contextoDelPlan({ estado, tests: [], escala: ESCALA_DE_PRUEBA, posiciones: {}, sesionId: null });
     const plan = planDeLaGuia({ ...ctx, casillas: {}, escala: ESCALA_DE_PRUEBA, areas: ["1"], posiciones: {}, aExplorar: {} });
-    expect(resumen(plan)).toEqual(["retos:situacion", "metas:impacto", "consecuencias:impacto", "1.1:situacion", "tiempos:cuando"]);
+    // En el orden de la conversación (2026-10-23): la meta, cómo pasa, cuánto cuesta, para cuándo.
+    expect(resumen(plan)).toEqual(["metas:impacto", "retos:situacion", "1.1:situacion", "consecuencias:impacto", "tiempos:cuando"]);
   });
 });
 

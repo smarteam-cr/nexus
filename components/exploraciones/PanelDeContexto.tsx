@@ -26,9 +26,11 @@ import { ETIQUETA_DE_LA_OBJECION, type Objecion } from "@/lib/exploraciones/casi
 import { avanceDeLaEstrategia, escalaConEvidencia } from "@/lib/exploraciones/avance-del-proyecto";
 import { conteoDeLasSesiones } from "@/lib/exploraciones/inicio";
 import { definicionEnElMarco } from "@/lib/exploraciones/marco";
+import { estadoDeLaTarjeta } from "@/lib/exploraciones/estado-de-las-tarjetas";
+import { resumenPorEquipo } from "@/lib/exploraciones/por-equipo";
+import { yaPreguntadoEnLaExploracion } from "@/lib/exploraciones/plan-de-la-guia";
 import { useLienzo, type PasoDelLienzoUI } from "./contexto";
 import { NivelChip } from "./QueVaPrimero";
-import { lineasDe } from "./Resumen";
 import { IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { useSesiones } from "./useSesiones";
@@ -57,36 +59,60 @@ function Bloque({ titulo, accion, children }: { titulo: string; accion?: React.R
 }
 
 /**
- * Las tarjetas del marco: las ocho de la venta de a cuatro, las tres de la estrategia de a tres. Verde
- * lo confirmado, azul lo que sugirió el agente, punteado lo que falta.
+ * Las tarjetas del marco: las ocho de la venta de a cuatro, las tres de la estrategia de a tres. El color dice la verdad
+ * (2026-10-23, estado-de-las-tarjetas.ts): verde lo completo, ámbar lo que está a medias (una meta sin cifra, quién
+ * decide sin quien aprueba, un texto que dice que no se sabe), azul lo que sugirió el agente, punteado lo que falta. Un
+ * punto azul en una tarjeta con algo: una sesión trajo algo nuevo para revisar (antes no se veía).
  */
 function Arquitectura() {
   const { exp, marco, pendientesPara, abrirCasilla } = useLienzo();
   const { paras } = useLoQueSePreguntaEnLaProxima();
-  const confirmadas = marco.tarjetas.filter((c) => lineasDe(c, exp.estado.contenido.casillas[c]).length > 0).length;
+  const estados = marco.tarjetas.map((clave) => {
+    const propuestas = pendientesPara((d) => d.tipo === "casilla" && d.clave === clave).length;
+    return { clave, propuestas, ...estadoDeLaTarjeta(clave, exp.estado.contenido.casillas[clave], propuestas) };
+  });
+  const completas = estados.filter((e) => e.estado === "completa").length;
+  const aMedias = estados.filter((e) => e.estado === "aMedias").length;
   return (
-    <Bloque titulo={marco.nombre} accion={<span className="text-[11px] text-fg-muted">{confirmadas} de {marco.tarjetas.length}</span>}>
+    <Bloque
+      titulo={marco.nombre}
+      accion={
+        <span className="text-[11px] text-fg-muted">
+          {completas} de {marco.tarjetas.length}
+          {aMedias > 0 ? ` · ${aMedias} a medias` : ""}
+        </span>
+      }
+    >
       <div data-recorrido="preventa.panel.marco" className={cn("grid gap-1.5", marco.tarjetas.length === 3 ? "grid-cols-3" : "grid-cols-4")}>
-        {marco.tarjetas.map((clave) => {
-          const lleno = lineasDe(clave, exp.estado.contenido.casillas[clave]).length > 0;
-          const propuestas = pendientesPara((d) => d.tipo === "casilla" && d.clave === clave).length;
+        {estados.map(({ clave, estado, motivo, nuevo, propuestas }) => {
           const etiqueta = definicionEnElMarco(clave, marco).etiqueta;
+          const sugeridas = `${propuestas} ${propuestas === 1 ? "sugerida" : "sugeridas"} por el agente`;
+          const que =
+            estado === "completa"
+              ? "confirmado"
+              : estado === "aMedias"
+                ? `a medias: ${motivo}`
+                : estado === "sugerida"
+                  ? sugeridas
+                  : paras.has(clave)
+                    ? "falta · se pregunta en la próxima sesión"
+                    : "falta";
           return (
             <button
               key={clave}
               type="button"
               onClick={() => abrirCasilla(clave)}
-              title={`${etiqueta}: ${lleno ? "confirmado" : propuestas > 0 ? `${propuestas} ${propuestas === 1 ? "sugerida" : "sugeridas"} por el agente` : paras.has(clave) ? "falta · se pregunta en la próxima sesión" : "falta"}`}
+              title={`${etiqueta}: ${que}${nuevo ? ` · hay algo nuevo: ${sugeridas}` : ""}`}
               className={cn(
                 "relative flex h-[46px] flex-col items-center justify-center rounded-lg border text-xs font-bold transition-colors",
-                lleno
-                  ? "border-transparent bg-success-surface text-success-ink"
-                  : propuestas > 0
-                    ? "border-transparent bg-info-surface text-brand"
-                    : "border-dashed border-line text-fg-muted hover:bg-surface-hover",
+                estado === "completa" && "border-transparent bg-success-surface text-success-ink",
+                estado === "aMedias" && "border-warn-line bg-warn-surface text-warn-ink",
+                estado === "sugerida" && "border-transparent bg-info-surface text-brand",
+                estado === "falta" && "border-dashed border-line text-fg-muted hover:bg-surface-hover",
               )}
             >
-              {!lleno && propuestas > 0 && <IconoDeSugerencia className="absolute right-[3px] top-[3px] h-3 w-3" />}
+              {estado === "sugerida" && <IconoDeSugerencia className="absolute right-[3px] top-[3px] h-3 w-3" />}
+              {nuevo && <span className="absolute right-[4px] top-[4px] h-[7px] w-[7px] rounded-full bg-brand" aria-hidden="true" />}
               {marco.letras[clave]?.letra ?? etiqueta.charAt(0)}
               <span className="w-full truncate px-1 text-center text-[10px] font-medium leading-tight">{etiqueta}</span>
             </button>
@@ -95,15 +121,73 @@ function Arquitectura() {
       </div>
       <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-fg-muted">
         <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" /> confirmado
+          <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" /> completo
         </span>
         <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-brand" aria-hidden="true" /> sugerido
+          <span className="h-2 w-2 rounded-full bg-warning" aria-hidden="true" /> a medias
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full bg-brand" aria-hidden="true" /> sugerido o nuevo
         </span>
         <span className="flex items-center gap-1">
           <span className="h-2 w-2 rounded-full border border-dashed border-line" aria-hidden="true" /> falta
         </span>
       </p>
+    </Bloque>
+  );
+}
+
+/**
+ * Por equipo (2026-10-23, por-equipo.ts): cada equipo del cliente con sus sesiones y cuáles de sus temas ya se
+ * respondieron. Es lo que dice la verdad por área: «Retos» en verde no dice si de Marketing se sabe cómo lo miden.
+ */
+function PorEquipo() {
+  const { exp, escala } = useLienzo();
+  const { pestanas } = useSesiones();
+  const ya = yaPreguntadoEnLaExploracion(exp.estado);
+  const { filas, sinEquipo } = resumenPorEquipo(pestanas, ya, (area) => escala.areas.find((a) => a.id === area)?.dimensiones.map((d) => d.id) ?? []);
+  if (!filas.length) {
+    if (!sinEquipo) return null;
+    return (
+      <Bloque titulo="Por equipo">
+        <p className="text-xs leading-[17px] text-fg-muted">
+          Ninguna sesión tiene equipo del cliente. Elígelo en cada sesión (Marketing, Servicio, Tecnología…): la guía pregunta como se le pregunta a ese
+          equipo y acá ves qué se sabe de cada uno.
+        </p>
+      </Bloque>
+    );
+  }
+  return (
+    <Bloque titulo="Por equipo">
+      <ul data-recorrido="preventa.panel.equipos" className="space-y-2">
+        {filas.map((f) => {
+          const faltan = f.temas.filter((t) => !t.respondido);
+          return (
+            <li key={f.equipo} className="rounded-xl border border-line bg-surface px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2 text-[13px]">
+                <span className="min-w-0 truncate font-medium text-fg">{f.nombre}</span>
+                <span className={cn("flex-shrink-0 text-[11px]", faltan.length ? "text-fg-muted" : "text-success-ink")}>
+                  {f.respondidos} de {f.temas.length} temas
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-fg-muted">
+                {f.sesiones} {f.sesiones === 1 ? "sesión" : "sesiones"}
+                {f.hechas < f.sesiones ? ` · ${f.sesiones - f.hechas} por hacer` : ""}
+              </p>
+              {faltan.length > 0 && (
+                <p className="mt-1 text-[11.5px] leading-[16px] text-fg-secondary">
+                  Falta: {faltan.map((t) => t.nombre.charAt(0).toLowerCase() + t.nombre.slice(1)).join(", ")}
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {sinEquipo > 0 && (
+        <p className="text-[11px] text-fg-muted">
+          {sinEquipo} {sinEquipo === 1 ? "sesión sin equipo" : "sesiones sin equipo"}: con la empresa entera.
+        </p>
+      )}
     </Bloque>
   );
 }
@@ -425,6 +509,7 @@ export default function PanelDeContexto({
       {paso === "exploracion" && <LasSesiones />}
       <Arquitectura />
       {enProyecto ? <AvanceDelProyecto /> : <ParaProponer />}
+      <PorEquipo />
       {paso !== "escala" && <LaEscala />}
       {marco.conObjeciones && <Objeciones />}
       {!enProyecto && <Proyectos />}

@@ -25,6 +25,7 @@ import {
   type CambioDeLaGuia,
 } from "@/lib/exploraciones/ajustes-de-la-guia";
 import type { PestanaDeSesion, PreguntaParaMostrar } from "@/lib/exploraciones/guia";
+import { EQUIPOS, temaDeEquipo, type ClaveDeEquipo } from "@/lib/exploraciones/equipos";
 import { useLienzo } from "./contexto";
 import { DeQueEs, EtiquetaDePregunta, nombreDelPara, useEditarLaSesion } from "./piezas-de-la-sesion";
 
@@ -311,10 +312,14 @@ export function Quitadas({ pestana }: { pestana: PestanaDeSesion }) {
   );
 }
 
-/** Los temas a los que puede apuntar una pregunta tuya: las tarjetas del marco y las dimensiones de las áreas en juego. */
-export function useTemasDeLaGuia(): { id: string; nombre: string }[] {
+/**
+ * Los temas a los que puede apuntar una pregunta tuya: los del equipo del cliente de la sesión (si tiene uno), las
+ * tarjetas del marco y las dimensiones de las áreas en juego.
+ */
+export function useTemasDeLaGuia(equipo: ClaveDeEquipo | null = null): { id: string; nombre: string }[] {
   const { exp, escala, marco } = useLienzo();
   return [
+    ...(equipo ? EQUIPOS[equipo].temas.map((t) => ({ id: temaDeEquipo(equipo, t.tema), nombre: `${EQUIPOS[equipo].nombre} · ${t.nombre}` })) : []),
     ...marco.tarjetas.map((k) => ({ id: k as string, nombre: nombreDelPara(k, escala, marco) })),
     ...escala.areas.filter((a) => exp.estado.areas.includes(a.id)).flatMap((a) => a.dimensiones.filter((d) => d.aplica).map((d) => ({ id: d.id, nombre: `${d.nombre} (${a.nombre})` }))),
   ];

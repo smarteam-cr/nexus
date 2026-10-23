@@ -28,7 +28,8 @@ import {
 import type { EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { contextoDelPlan, guiaDeAntesDelPlan, QUE_BUSCA_CADA_PASO } from "@/lib/exploraciones/plan-de-la-guia";
 import { aplicarAjustes, apuntaDelTema } from "@/lib/exploraciones/ajustes-de-la-guia";
-import { useLienzo, type MomentoDeLaSesion } from "./contexto";
+import { letraDelTemaDeEquipo, nombreDelTemaDeEquipo } from "@/lib/exploraciones/equipos";
+import { useLienzo, type MomentoDeLaSesion, type OpcionesDeCambio } from "./contexto";
 import { NivelChip } from "./QueVaPrimero";
 import { nuevoIdDeSesion, useSesiones } from "./useSesiones";
 
@@ -79,10 +80,10 @@ export function Tarjeta({
   );
 }
 
-/** El nombre de lo que pregunta una pregunta: la tarjeta del marco (con su nombre en ese marco) o la dimensión. */
+/** El nombre de lo que pregunta una pregunta: la tarjeta del marco (con su nombre en ese marco), el tema de un equipo o la dimensión. */
 export function nombreDelPara(para: string, escala: EscalaDelLienzo, marco: Marco = MARCO_DE_VENTA): string {
   if (esTarjeta(para)) return definicionEnElMarco(para, marco).etiqueta;
-  return escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === para)?.nombre ?? para;
+  return nombreDelTemaDeEquipo(para) ?? escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === para)?.nombre ?? para;
 }
 
 /**
@@ -96,7 +97,7 @@ export function useFocoDeLaGuia(sesionId: string | null, opciones: { sinPlan?: b
   const e = exp.estado;
   const delPlan = contextoDelPlan({ estado: e, tests: exp.leido.tests, escala, posiciones: mapa.posiciones, sesionId, marco: marco.clave });
   const foco = focoDeLaGuia(e.contenido.casillas, escala, e.areas, mapa.posiciones, e.contenido.aExplorar, marco, opciones.sinPlan ? undefined : delPlan);
-  return { foco, saber: delPlan.saber };
+  return { foco, saber: delPlan.saber, yaPreguntado: delPlan.yaPreguntado };
 }
 
 /**
@@ -111,7 +112,7 @@ export function useGuiaDeLaSesion(pestana: PestanaDeSesion, esLaProxima: boolean
   const guia = guardada ?? (esLaProxima ? e.propuesta.guia : null);
   // Lo ya generado no se reescribe solo: la guía de un proyecto armada antes del plan se ve como se armó.
   const antesDelPlan = guiaDeAntesDelPlan(guia, marco.clave);
-  const { foco, saber } = useFocoDeLaGuia(pestana.sesion?.id ?? null, { sinPlan: antesDelPlan });
+  const { foco, saber, yaPreguntado } = useFocoDeLaGuia(pestana.sesion?.id ?? null, { sinPlan: antesDelPlan });
   const procedencias = procedenciasDeLaSesion(pestana, todas);
   const conPlan = foco.plan && saber ? { plan: foco.plan, saber } : undefined;
   const deLaGuia: PreguntaParaMostrar[] = esLaProxima
@@ -121,7 +122,7 @@ export function useGuiaDeLaSesion(pestana: PestanaDeSesion, esLaProxima: boolean
       : [];
   // Lo que decidió el vendedor sobre la guía de esta sesión (sus preguntas, las cambiadas, las quitadas): validación 71.
   const preguntas = aplicarAjustes(deLaGuia, pestana.sesion?.ajustesDeLaGuia, apuntaDelTema(escala));
-  return { guia, foco, saber, antesDelPlan, procedencias, preguntas, enOrden: ordenDeLaConversacion(preguntas) };
+  return { guia, foco, saber, yaPreguntado, antesDelPlan, procedencias, preguntas, enOrden: ordenDeLaConversacion(preguntas) };
 }
 
 /**
@@ -149,6 +150,14 @@ export function EtiquetaDePregunta({ p }: { p: PreguntaParaMostrar }) {
         <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <path d="M4 3v5a2 2 0 0 0 2 2h6M9.5 7.5L12 10l-2.5 2.5" />
         </svg>
+      </span>
+    );
+  }
+  // Un tema del equipo del cliente (2026-10-23): la inicial del equipo («M», «S», «TI»), en el color de la marca suave.
+  if (lado === "equipo") {
+    return (
+      <span className={cn(base, "bg-brand-soft text-brand-dark")} title={nombreDelTemaDeEquipo(para) ?? undefined} aria-hidden="true">
+        {letraDelTemaDeEquipo(para)}
       </span>
     );
   }
@@ -224,6 +233,9 @@ export function DeQueEs({ p, corta = false, conProcedencia = true }: { p: Pregun
         {[corta ? null : marco.clave === "cs" ? "Estrategia" : "Arquitectura", nombreDelPara(para, escala, marco), para === "presupuesto" ? "al final: primero la meta, después la plata" : null].filter(Boolean).join(" · ")}
       </span>
     );
+  } else if (lado === "equipo") {
+    // «Marketing · Cómo lo miden»; en la vista por sección, la sección ya dice el equipo.
+    que = <span className="text-xs text-fg-muted">{nombreDelTemaDeEquipo(para, { conEquipo: !corta })}</span>;
   } else if (lado === "vendido") {
     que = <span className="text-xs text-fg-muted">{[corta ? null : "Lo vendido", p.tema].filter(Boolean).join(" · ")}</span>;
   } else {
@@ -255,7 +267,11 @@ function sesionDeLaPestana(p: PestanaDeSesion): SesionPlaneada {
 export function useEditarLaSesion(pestana: PestanaDeSesion, momento: MomentoDeLaSesion) {
   const { cambiar, sesion: seleccion } = useLienzo();
   const { sesiones } = useSesiones();
-  return async (cambio: ((s: SesionPlaneada) => SesionPlaneada) | null, extra: (id: string) => Operacion[] = () => []): Promise<string | null> => {
+  return async (
+    cambio: ((s: SesionPlaneada) => SesionPlaneada) | null,
+    extra: (id: string) => Operacion[] = () => [],
+    opciones?: OpcionesDeCambio,
+  ): Promise<string | null> => {
     const existente = pestana.sesion;
     if (!existente && sesiones.length >= MAX_SESIONES) return null;
     const base = existente ?? sesionDeLaPestana(pestana);
@@ -265,7 +281,7 @@ export function useEditarLaSesion(pestana: PestanaDeSesion, momento: MomentoDeLa
     else if (cambio) ops.push({ op: "sesiones", sesiones: sesiones.map((x) => (x.id === existente.id ? nueva : x)) });
     ops.push(...extra(nueva.id));
     if (!ops.length) return nueva.id;
-    const ok = await cambiar(ops);
+    const ok = await cambiar(ops, opciones);
     if (ok && !existente) {
       seleccion.elegir(nueva.id);
       seleccion.ponerMomento(nueva.id, momento);

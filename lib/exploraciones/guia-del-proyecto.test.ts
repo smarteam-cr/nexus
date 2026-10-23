@@ -102,7 +102,8 @@ describe("lo que ya sabemos, en un proyecto", () => {
 describe("el plan de la guía de un proyecto", () => {
   it("parte de los dolores que ya dijo, en impacto; pregunta la estrategia que falta; nunca cuándo ni con qué", () => {
     const { plan } = planDelProyecto(proyecto());
-    expect(resumen(plan)).toEqual(["retos:situacion", "1.7:impacto", "1.2:impacto", "metas:impacto", "obstaculos:situacion"]);
+    // Entran los mismos; en el orden de la conversación (2026-10-23): la meta, cómo pasa y después cuánto cuesta.
+    expect(resumen(plan)).toEqual(["metas:impacto", "retos:situacion", "obstaculos:situacion", "1.7:impacto", "1.2:impacto"]);
     expect(plan.length).toBeLessThanOrEqual(MAX_PREGUNTAS_DE_LA_GUIA);
     expect(plan.find((p) => p.para === "1.7")?.motivo?.de).toBe("El handoff");
     expect(plan.some((p) => ["tiempos", "autoridad", "presupuesto", "consecuencias"].includes(p.para))).toBe(false);
@@ -113,14 +114,16 @@ describe("el plan de la guía de un proyecto", () => {
     e.contenido.casillas = { retos: [{ texto: "x" }], metas: [{ que: "y", actual: "1", objetivo: "2" }], obstaculos: [{ texto: "z" }] };
     const { plan } = planDelProyecto(e);
     expect(plan.filter((p) => p.tipo === "tarjeta")).toEqual([]);
-    expect(resumen(plan).slice(0, 2)).toEqual(["1.7:impacto", "1.2:impacto"]);
+    // Los dolores entran primero; se conversan después de cómo pasa hoy (2026-10-23).
+    expect(resumen(plan)).toEqual(expect.arrayContaining(["1.7:impacto", "1.2:impacto"]));
+    expect(resumen(plan).slice(0, 2)).toEqual(["1.1:situacion", "1.3:situacion"]);
     expect(plan).toHaveLength(MAX_PREGUNTAS_DE_LA_GUIA);
   });
 
   it("sin nada dicho: la estrategia y la escala en situación (la base operativa, sin dato primero)", () => {
     const e = proyecto({ propuesta: propuestaVacia() });
     const { plan } = planDelProyecto(e);
-    expect(resumen(plan)).toEqual(["retos:situacion", "metas:impacto", "obstaculos:situacion", "1.1:situacion", "1.3:situacion"]);
+    expect(resumen(plan)).toEqual(["metas:impacto", "retos:situacion", "obstaculos:situacion", "1.1:situacion", "1.3:situacion"]);
   });
 
   it("focoDeLaGuia con el contexto del proyecto da el plan; sin contexto, como antes (3 tarjetas y 5 dimensiones)", () => {
@@ -128,7 +131,7 @@ describe("el plan de la guía de un proyecto", () => {
     const ctx = contextoDelPlan({ estado: e, tests: [], escala: ESCALA_DE_PRUEBA, posiciones: POSICIONES, sesionId: null, marco: "cs" });
     const conPlan = focoDeLaGuia(e.contenido.casillas, ESCALA_DE_PRUEBA, e.areas, POSICIONES, {}, MARCO_DE_CS, ctx);
     expect(conPlan.plan).not.toBeNull();
-    expect(conPlan.huecos).toEqual(["retos", "metas", "obstaculos"]);
+    expect(conPlan.huecos).toEqual(["metas", "retos", "obstaculos"]);
     const sinPlan = focoDeLaGuia(e.contenido.casillas, ESCALA_DE_PRUEBA, e.areas, POSICIONES, {}, MARCO_DE_CS);
     expect(sinPlan.plan).toBeNull();
     expect(sinPlan.enfoque).toHaveLength(5);

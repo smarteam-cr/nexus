@@ -77,6 +77,7 @@ import {
   type SesionPlaneada,
 } from "./guia";
 import { PASOS_DE_LA_PREGUNTA } from "./plan-de-la-guia";
+import { EQUIPOS_DEL_CLIENTE } from "./equipos";
 import {
   LARGO_DE_UN_OBJETIVO,
   LARGO_DE_UNA_CLAVE,
@@ -417,6 +418,7 @@ export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
   pasaron: z.array(z.string().min(1).max(40)).max(20).optional(),
   hechas: z.array(z.string().min(1).max(40)).max(30).optional(),
   ajustesDeLaGuia: AjustesDeLaGuiaSchema.optional(),
+  equipo: z.enum(EQUIPOS_DEL_CLIENTE).optional(),
 });
 
 export const OperacionSchema = z.discriminatedUnion("op", [
@@ -508,6 +510,8 @@ const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
   corridaId: z.string().max(60).nullable(),
   huecos: z.array(z.string().max(40)).max(20),
   enfoque: z.array(z.string().max(20)).max(20),
+  equipo: z.enum(EQUIPOS_DEL_CLIENTE).optional(),
+  lentes: z.array(z.string().max(40)).max(20).optional(),
   objetivo: textoDeGuia(400).nullable().optional(),
   ubicaciones: z
     .record(z.string().max(600), z.string().min(1).max(40))
@@ -578,7 +582,7 @@ function leerSesion(raw: unknown): SesionPlaneada | null {
   const r = SesionPlaneadaSchema.safeParse(raw);
   if (r.success) return r.data;
   if (!esObjeto(raw)) return null;
-  for (const sacar of [["evento"], ["ajustesDeLaGuia"], ["evento", "ajustesDeLaGuia"]] as const) {
+  for (const sacar of [["evento"], ["ajustesDeLaGuia"], ["equipo"], ["evento", "ajustesDeLaGuia"], ["evento", "ajustesDeLaGuia", "equipo"]] as const) {
     if (!sacar.every((k) => raw[k] !== undefined)) continue;
     const sin = SesionPlaneadaSchema.safeParse(Object.fromEntries(Object.entries(raw).filter(([k]) => !(sacar as readonly string[]).includes(k))));
     if (sin.success) return sin.data;
