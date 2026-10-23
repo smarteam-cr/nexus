@@ -1,6 +1,6 @@
 # Roadmap de Nexus
 
-**Corte:** 2026-10-20
+**Corte:** 2026-10-22
 
 ## Para qué
 
@@ -14,7 +14,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `da1fd3bf` desde la noche del 21 oct: el modelo de comisiones cerrado con Marco, las comisiones de partners en cero y estimado o real, lo pagado que se cobra cada hora y al tocar «Actualizar», y la cuota cargada con IVA que se pega a su factura. Sana, con el esquema al día. |
+| Producción | Corre `fbf559e2` desde el 22 oct: Conciliación › «Lo que no cuadra» contado por documento, lo que Nexus ordena solo (con «Deshacer»), «Lo pagado» con qué es y cómo se resuelve cada sección, y Mercury que cobra sola la factura pagada sin depósito con el día en que la copia la vio pagada. Sana, con el esquema al día. |
 | Por desplegar | Nada: todo `main` está en producción (12.623 pruebas en verde, tsc en 0). |
 | En rojo en producción | 4 invariantes: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado (con su decisión abajo), y desde el 21 oct INV16(a): 2 reuniones de Meet leídas antes de ocurrir (un evento movido de fecha después de leerse, el caso conocido de KNOWN-ERRORS). |
 | Pruebas | 17 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 81 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
@@ -45,9 +45,169 @@ Sin esto, algo sigue mal o no se puede validar:
 6. **«TEC- AE»** apunta a una empresa fusionada en HubSpot: ¿la reapunto (`scripts/reapuntar-empresa-fusionada.ts`)?
 7. **La reunión del sprint:** sacar el tope de 5 tareas por persona y leer también su conversación (unos US$0,014 por reunión).
 8. **La escala 8.9.1:** revisarla para publicarla (prueba 108).
-9. **El modelo de comisiones:** cerrarlo con Marco (las tres preguntas de la página del modelo).
-10. **El correo de la mañana:** mandarlo por Gmail o por un proveedor.
-11. **La página de la sesión:** la minuta, los pedidos fuera de alcance, la ficha y las novedades todavía se deciden en «Lo que dejó esta reunión». ¿Pasan también a Tareas (o a la agenda), para salir del todo de esa página?
+9. **El correo de la mañana:** mandarlo por Gmail o por un proveedor.
+10. **La página de la sesión:** la minuta, la ficha y las novedades todavía se deciden en «Lo que dejó esta reunión». ¿Pasan también a Tareas (o a la agenda), para salir del todo de esa página? (Los pedidos fuera de alcance no: el 22 oct decidiste que siguen como avisos, ver la propuesta E1.)
+
+## Propuesta por aprobar: vender y entregar por casos de uso
+
+Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resultados, no proyectos»). **Todo lo de esta sección es nuevo y espera tu aprobación**: nada se construye hasta que lo apruebes, área por área. Cada ítem dice de qué decisión sale, de qué depende y su plan por etapa.
+
+**Cómo se despliega sin cambiar lo que ya funciona** (vale para toda la sección):
+
+- Un vendedor sigue haciendo su preventa, su cotización y viendo a la empresa en la escala; Customer Success sigue haciendo su kickoff, su diagnóstico y su cronograma. Nada de eso cambia mientras se construye lo nuevo.
+- Lo nuevo entra en **secciones nuevas o plantillas nuevas**, al lado de lo de hoy. Cambiar una sección existente se consensúa contigo antes, pantalla por pantalla, con su diseño en Claude Design.
+- **Corte limpio en las entregas**: los proyectos nuevos nacen con el modelo nuevo; los que están en curso siguen con su handoff, su cronograma y sus tareas hasta que su CSE decida pasarlos. Nada se migra solo.
+- Primero que funcione con buena arquitectura y genere buenos datos desde el día 1; después, pilotos con personas del equipo, y con lo que salga de ahí se ajusta el roadmap.
+- Lo que ve el cliente habla en su idioma: nunca códigos de criterios ni letras de niveles, nunca horas ni créditos.
+
+**Lo que choca con lo que ya existe** (se resuelve dentro de cada ítem):
+
+| Hoy en Nexus | Lo decidido | Dónde se resuelve |
+|---|---|---|
+| El cotizador quedó fuera de Nexus (17 oct) | El cotizador se migra a la biblioteca de casos, con las actividades | A2 |
+| SmartLoop dice «una prioridad a la vez» por ciclo | Varias áreas son varios carriles en paralelo | C1 |
+| Los casos del catálogo se pensaron «sin calculadora» | Horas internas por actividad y caso (no es precio, y el cliente no las ve) | A2 |
+| Dos casos de Insider y el de agentes de atención prometen de Inicial a Óptimo | La meta es el siguiente nivel | A5 |
+| Las comisiones del CSE son un 5 % fijo (modelo del 21 oct) | El pago del CSE anclado a la escala | Más adelante |
+| El cliente ve todas las tareas del cronograma, también las del equipo | El cliente ve un resumen, como se vendió | D1 |
+
+**Orden sugerido, por dependencias:**
+
+1. Para empezar ya, sin depender de nada: A1 (qué es una actividad, contigo), H1 (tu piloto con tus propias sesiones) y la etapa 1 de B1 (qué datos de la empresa hay y dónde).
+2. Con A1 cerrado: A3 (criterios en palabras simples) y A5 (los casos que faltan).
+3. A2 (migrar el cotizador a la biblioteca) y después A4 (duración y «cómo sabrás que funcionó»).
+4. B1 completo y después B2 (la escala lee los datos de la empresa).
+5. C1 y C3 (pueden ir antes: usan lo que ya hay), C2 (la cotización calculada, necesita A2 y B1) y C4.
+6. D1 (diseño del cronograma con casos), después D2 y D3, y junto con ellos G1 a G3.
+7. E1, E2, F1 e I1.
+
+### A · La biblioteca de casos de uso y sus actividades <span class="estado">Propuesta</span>
+
+1. **A1 · Definir contigo qué es una actividad.** *Sale de:* «debajo de los casos de uso va un catálogo de actividades», «un caso es maleable», tu respuesta 3. *Depende de:* nada.
+   - Etapa 1 · Una serie de chats exploratorios contigo: qué es una actividad, qué campos tiene (qué deja hecho, en qué etapa del caso va, quién la hace, si es sesión o trabajo del equipo, tiempo máximo, qué parte de la escala cumple, si es opcional y cómo cambia con el tamaño de la empresa).
+   - Etapa 2 · Bajar dos casos completos a actividades, con el cotizador como punto de partida: «Sistematiza tu proceso comercial» y «Entiende por qué ganas y pierdes».
+   - Etapa 3 · La regla de corte: lo fijo de un caso es el resultado y cómo saber que funcionó; las actividades son una sugerencia que se infla o se aliviana. Si una actividad agregada cumple algo de otra dimensión o de un nivel más alto, Nexus avisa «esto ya es otro caso».
+   - Etapa 4 · Dejarlo escrito en DECISIONS como la definición oficial, antes de tocar código.
+2. **A2 · Migrar el cotizador a la biblioteca de casos.** *Sale de:* tu respuesta 1 (reabre la decisión del 17 oct) y «yo entrego el tiempo máximo de cada actividad». *Depende de:* A1.
+   - Etapa 1 · Inventario, sin código: cada tarea del cotizador (`D:\Proyectos\casos-de-uso-escala`) puesta al lado del caso de la biblioteca al que pertenece, para que lo revises.
+   - Etapa 2 · Las actividades viven en el mismo archivo de la biblioteca (`lib/casos-de-uso/catalogo.ts`), sin tabla nueva, con pruebas: cada actividad cumple algo dentro del resultado de su caso, tiene etapa y tiempo.
+   - Etapa 3 · El cálculo de horas por caso según el tamaño de la empresa, con las reglas del cotizador (personas por equipo, áreas, procesos, integraciones, complejidad de la adopción).
+   - Etapa 4 · La biblioteca muestra las actividades y las horas, solo al equipo. El cotizador externo se retira cuando la biblioteca lo reemplace.
+3. **A3 · Los criterios, en palabras simples.** *Sale de:* tu respuesta 4. *Depende de:* A1.
+   - Etapa 1 · Cada caso dice en frases cortas qué va a poder hacer el cliente cuando termine, escritas desde la escala y revisadas contigo.
+   - Etapa 2 · Los códigos de la escala y las letras de los niveles no salen en ninguna pantalla de vendedor, de Customer Success ni del cliente; una prueba lo vigila.
+   - Etapa 3 · Las actividades y los criterios se ven juntos: cada actividad dice qué parte del resultado deja lista.
+4. **A4 · Cada caso con su duración y «cómo sabrás que funcionó».** *Sale de:* «a las tarjetas les falta la duración y cómo sabrás que funcionó». *Depende de:* A2 y A3.
+   - Etapa 1 · La duración sale de las actividades y de las sesiones por semana.
+   - Etapa 2 · «Cómo sabrás que funcionó» sale de los criterios en palabras simples, con la métrica que ya guarda cada caso aplicado a un cliente.
+   - Etapa 3 · Las tarjetas de la biblioteca y la propuesta los muestran.
+5. **A5 · Llenar la parte de producción de la biblioteca.** *Sale de:* «el catálogo está cargado hacia la base operativa», el caso de Ganadas y Perdidas y la revisión de Insider. *Depende de:* A1.
+   - Etapa 1 · Definir contigo «Entiende por qué ganas y pierdes»: que todo negocio perdido tenga su razón, elegida de una lista, y que el líder saque el reporte sin armarlo a mano; la revisión mensual con el líder comercial como actividad de adopción. Su siguiente caso: ajustar el proceso con lo aprendido; y más arriba, la IA que analiza las llamadas.
+   - Etapa 2 · Casos para Medición y Aprendizaje de Marketing y para Escalabilidad del Servicio, que hoy tienen uno cada uno.
+   - Etapa 3 · Insider: tú me pasas la reunión con el equipo de Insider (casos por industria) y con ella se ajusta la escala y se parten los casos que prometen de Inicial a Óptimo en uno de aterrizaje y uno de expansión.
+   - Etapa 4 · El sitio web con criterio: ICP, buyer personas y kit de marca como actividades del caso de presencia web (también pensando en gobierno), porque terminan en HubSpot como contexto para su IA.
+
+### B · Los datos de la empresa, de la preventa al cliente <span class="estado">Propuesta</span>
+
+1. **B1 · Una sola ficha con los datos de la empresa.** *Sale de:* «el tamaño de un caso se califica solo según los datos del cliente» y tu comentario de que aplica a todo Nexus. *Depende de:* nada para la etapa 1.
+   - Etapa 1 · Diagnóstico: qué datos hay y dónde (la ficha del cliente, las personas de la exploración, la empresa, los contactos y los asientos de HubSpot). Sale la lista: vendedores, gente de marketing y de servicio, líderes y cómo está organizada, modelo de negocio y herramientas.
+   - Etapa 2 · Nexus la llena solo desde HubSpot y desde la investigación del cliente, y dice de dónde salió cada dato.
+   - Etapa 3 · Lo que falta lo pregunta: al vendedor en la preventa, al CSE en el cliente, en una casilla corta. Lo que se responde puede volver al CRM.
+   - Etapa 4 · Decidir si se enriquece con créditos de HubSpot.
+   - Etapa 5 · El tamaño de cada caso (liviano, mediano o grande) sale solo, con su porqué a la vista.
+2. **B2 · Que la escala lea esos datos para saber cuánto pide «Funcional» en esta empresa.** *Sale de:* tu respuesta 2 («los criterios de Funcional pueden ser un arma de doble filo»). *Depende de:* B1.
+   - Etapa 1 · Diagnóstico del agente que pone la escala («Actualizar escala»).
+   - Etapa 2 · Sumarle los datos de B1.
+   - Etapa 3 · Que diga, en palabras simples, qué le falta a esta empresa para llegar a Funcional y cuánto trabajo es, antes de que se venda.
+
+### C · Preventa y propuestas <span class="estado">Propuesta</span>
+
+1. **C1 · Recomendar el caso según la escala, enfocado en el resultado.** *Sale de:* la regla de aterrizaje y expansión, y «que se enfoque en el resultado que el cliente necesita». *Depende de:* nada (la regla ya existe).
+   - Etapa 1 · Revisar la recomendación de hoy (`lib/casos-de-uso/camino.ts`) con cinco preventas reales.
+   - Etapa 2 · Que explique por qué recomienda ese caso, en una frase, con el resultado que el cliente busca.
+   - Etapa 3 · Varios carriles en paralelo cuando el cliente quiere varias áreas: un caso por área, cada uno con sus sesiones. El texto de SmartLoop pasa de «una prioridad a la vez» a «una prioridad a la vez por carril».
+2. **C2 · La cotización sale de las actividades.** *Sale de:* tu respuesta 1 («para que salga directamente cuando se crean cotizaciones») y la respuesta 1 sobre la implementación base. *Depende de:* A2 y B1.
+   - Etapa 1 · Al elegir los casos, Nexus suma las horas según el tamaño y propone el precio; el vendedor lo ajusta, como hoy.
+   - Etapa 2 · La implementación base: las actividades de portal y arquitectura van dentro del caso de aterrizaje y se cuentan una sola vez por cliente. En una implementación (no recurrente) quedan claras desde el inicio; en SmartLoop las ajusta el primer diagnóstico.
+   - Etapa 3 · Lo vendido queda guardado por caso y actividad: de ahí salen el cronograma, las tareas y la rentabilidad.
+3. **C3 · «Lo que normalmente viene después», en una sección aparte.** *Sale de:* «mostrar lo necesario con precio y aparte lo que viene después sin precio» y tu respuesta 6. *Depende de:* nada.
+   - Etapa 1 · Una sección nueva en la plantilla de la propuesta, sin precio, con los siguientes casos del camino de crecimiento. Las propuestas de hoy no cambian.
+   - Etapa 2 · El vendedor la muestra u oculta con el ojo de la sección, que el motor ya trae.
+4. **C4 · Las implementaciones de hoy, leídas como casos de uso.** *Sale de:* «interpretar las implementaciones actuales como casos de uso». *Depende de:* A2.
+   - Etapa 1 · Para cada proyecto en curso, Nexus propone a qué casos corresponde lo vendido (desde la propuesta y el handoff), sin tocar su cronograma.
+   - Etapa 2 · El CSE lo confirma.
+   - Etapa 3 · La cuenta lo muestra como lectura: «esto es lo que se vendió, en casos de uso», con sus etapas (diagnóstico, planificación, implementación y adopción), las mismas de SmartLoop.
+
+### D · La entrega: cronogramas y tareas, con corte limpio <span class="estado">Propuesta</span>
+
+Lo que mostró el diagnóstico del 22 oct: hay un solo cronograma por proyecto y lo arma el handoff; cada regeneración queda como propuesta que alguien aprueba; las tareas del cronograma no tienen persona ni horas y no están unidas a las tareas del equipo; y el cliente ve todas las tareas del cronograma, no un resumen.
+
+1. **D1 · Diseñar el cronograma con casos de uso.** *Sale de:* «cada caso lleva su diagnóstico, planificación, implementación y adopción» y tu respuesta 3 sobre cronogramas y tareas. *Depende de:* A1.
+   - Etapa 1 · Contar los cronogramas activos y en qué estado están (publicados, aprobados, con propuesta pendiente).
+   - Etapa 2 · El diseño en Claude Design: lo que ve el cliente es un resumen, como se vendió (los casos con sus etapas y las sesiones); las tareas del equipo van aparte.
+   - Etapa 3 · El corte limpio: los proyectos nuevos nacen con el modelo nuevo; los de hoy siguen como están. Para tener un cronograma nuevo sin tocar el viejo se usa lo que ya existe: otro proyecto del mismo cliente (un cliente ya puede tener varios). No se cambia la regla de un cronograma por proyecto.
+   - Etapa 4 · Nada cambia en un cronograma publicado sin una propuesta que el CSE apruebe, como hoy.
+2. **D2 · Las tareas del equipo salen de las actividades.** *Sale de:* «cada caso de uso genera tareas para Customer Success» y «cada tarea guarda tiempo estimado y real». *Depende de:* A2 y D1.
+   - Etapa 1 · Al aprobar el plan de un caso nacen las tareas del CSE, una por actividad del equipo, con su tiempo estimado y unidas a su etapa del cronograma (solo en proyectos nuevos).
+   - Etapa 2 · Las sesiones siguen en el cronograma, que es lo que ve el cliente.
+   - Etapa 3 · Al cerrar una tarea se pregunta «¿Cuánto te tomó?» (la pregunta que ya existe, encendida y extendida a estas tareas).
+   - Etapa 4 · Probarlo primero en tus propias tareas y después en un piloto con alguien del equipo.
+3. **D3 · Lo que se habla en una sesión: tarea si está dentro del alcance.** *Sale de:* «lo hablado genera tareas si cae dentro del alcance; si no, aviso». *Depende de:* D2.
+   - Etapa 1 · La lectura de cada reunión compara lo pedido contra las actividades de lo vendido: dentro, propuesta de tarea; fuera, pedido (ver E1).
+   - Etapa 2 · Que no duplique una tarea que ya está en el cronograma (hoy no lo detecta).
+
+### E · Lo que pide el cliente: el camino de expansión <span class="estado">Propuesta</span>
+
+1. **E1 · Fuera de alcance en implementaciones; solicitudes en SmartLoop.** *Sale de:* «los avisos de fuera de alcance son el pipeline de expansión», «el CSE puede levantar la mano» y tu comentario 7. *Depende de:* nada para la etapa 1.
+   - Etapa 1 · En una implementación sigue siendo «fuera de alcance», y la CSL (Alex) decide con dos salidas: es una extensión o necesita a Ventas.
+   - Etapa 2 · En SmartLoop el mismo pedido se llama «solicitud» y se puede volver un caso del backlog del cliente (el campo para hacerlo ya existe y nadie lo usa).
+   - Etapa 3 · Levantar la mano ya existe (sumar un pedido a mano): hacerlo visible donde el CSE trabaja.
+2. **E2 · Un agente por cliente que une lo que pide con la biblioteca.** *Sale de:* «cada cliente debería tener un agente que determine lo que va necesitando». *Depende de:* A2 y E1.
+   - Etapa 1 · Al confirmar un pedido, Nexus sugiere qué caso de la biblioteca lo resuelve, primero por reglas (los síntomas de cada caso).
+   - Etapa 2 · Después con IA y la memoria de la cuenta.
+   - Etapa 3 · Lo acumulado alimenta el camino de crecimiento del cliente.
+
+### F · La adopción y la rutina del equipo del cliente <span class="estado">Propuesta</span>
+
+1. **F1 · Una actividad de auditoría de adopción en HubSpot.** *Sale de:* «no se quitan las piezas que convierten un servicio temporal en recurrente» y tu comentario sobre adopción. *Depende de:* A1.
+   - Etapa 1 · Una actividad fija en la etapa de adopción de cada caso: armar en HubSpot el reporte de uso del equipo y revisarlo con el cliente.
+   - Etapa 2 · Su resultado entra al reporte de entrega y a la adopción de SmartLoop, en las secciones que ya existen.
+   - Etapa 3 · Decidir dónde queda registrada la rutina que adoptó el equipo del cliente.
+
+### G · Horas, rentabilidad y capacidad <span class="estado">Propuesta</span>
+
+1. **G1 · Tiempo estimado y real por tarea.** *Sale de:* «hay que medir las sesiones y todo el trabajo detrás». *Depende de:* D2.
+   - Etapa 1 · Va con D2: lo estimado sale de la actividad y lo real de «¿Cuánto te tomó?».
+   - Etapa 2 · Las reuniones ya se miden solas desde el calendario.
+2. **G2 · Rentabilidad por caso.** *Sale de:* «como prioridad de RevOps voy a calcular la rentabilidad de los servicios». *Depende de:* G1.
+   - Etapa 1 · Lo estimado contra lo real por caso, al lado de lo que se cobró (Rentabilidad ya lo hace por cuenta).
+   - Etapa 2 · Mientras no haya datos, cada estimación dice cuánto riesgo de rentabilidad asume.
+3. **G3 · La capacidad del CSE con las horas de las actividades.** *Sale de:* «la capacidad no se mide en número de casos». *Depende de:* A2.
+   - Etapa 1 · La carga ya se mide en horas; pasa a usar las horas de cada actividad en vez del promedio por tipo de fase.
+   - Etapa 2 · Calibrar con kölbi y FACO, los primeros datos reales de recurrencia.
+
+### H · Que Nexus lea todas tus sesiones y te proponga tareas <span class="estado">Propuesta</span>
+
+Lo que mostró el diagnóstico del 22 oct: Nexus guarda las reuniones de Meet de todo el equipo, pero solo propone tareas en reuniones con un cliente o prospecto (y ahí solo lo que cada uno se comprometió) y en las reuniones de sprint configuradas. Las reuniones internas sueltas no se leen solas, y la copia de Meet corre solo cuando alguien abre Nexus.
+
+1. **H1 · Tu piloto: todas tus sesiones proponen tareas.** *Sale de:* tu respuesta 4 («Nexus debería proponerme tareas a mí, y a cada persona con sus sesiones»). *Depende de:* nada.
+   - Etapa 1 · Que la copia de Meet corra sola cada hora, sin depender de que alguien abra Nexus.
+   - Etapa 2 · La lectura personal: las reuniones internas de una persona le proponen tareas, empezando por ti, en tu equipo y no en el de Customer Success.
+   - Etapa 3 · Leer también las reuniones con aliados y las que no tienen dueño, que hoy no lee nadie.
+   - Etapa 4 · Una semana midiendo costo y ruido contigo; después, el resto del equipo. Cuidado: una reunión interna con el nombre de un cliente en el título no puede dejarle tareas a ese cliente.
+
+### I · Varias plantillas de diagnóstico y planificación <span class="estado">Propuesta</span>
+
+1. **I1 · Elegir la plantilla de cada entregable.** *Sale de:* «es importante que pronto haya varias plantillas de diagnóstico o planificación» y «cada caso lleva su propio diagnóstico corto». *Depende de:* A1.
+   - Etapa 1 · Un selector de plantilla en cada entregable (el registro ya admite varias; hoy hay una por entregable).
+   - Etapa 2 · Plantillas por caso de uso: el diagnóstico corto de cada caso.
+   - Etapa 3 · Las plantillas de hoy siguen igual y son las que salen por defecto.
+
+### J · Definir contigo los entregables de Customer Success <span class="estado">Propuesta</span>
+
+1. **J1 · Qué necesita Customer Success para cada entregable y cuáles automatiza Nexus.** *Sale de:* «quiero definir qué necesita Customer Success para entregar los entregables principales; ese ejercicio lo quiero hacer contigo». *Depende de:* A1.
+   - Etapa 1 · Un chat contigo por entregable (kickoff, diagnóstico, planificación, entrega, adopción): qué información necesita, de dónde sale y qué parte puede escribir Nexus con las sesiones y lo que sabe del cliente.
+   - Etapa 2 · Con eso, actualizar las tareas de cada cliente con Caroline: qué se hizo, cuánto tomó y qué sigue según lo vendido, traducido a SmartLoop.
 
 ## Lo que falta, por tema
 
@@ -88,6 +248,7 @@ Sin esto, algo sigue mal o no se puede validar:
 5. «Ver como»: dos lecturas que escriben sin autor (`deal-line-items` y `hubspot/read`) y la cookie sin el prefijo `__Host-`.
 6. Los desplegables de las tablas y las fichas (`CeldaSelect`, el selector de ícono y la lectura de la cuenta) todavía se dibujan dentro de su contenedor: pueden quedar tapados como le pasaba al menú del avatar.
 7. El chat todavía no puede ocultar secciones del kickoff.
+8. Una tarea del cronograma marcada «por validar» igual llega al cliente: el código solo le esconde la marca (lo encontró el diagnóstico del 22 oct). Que no cruce hasta que el CSE la valide.
 
 ## Lo que configuras tú
 
@@ -117,6 +278,7 @@ Lo que dijiste en otros chats que querías más adelante:
 - Un portal de autoservicio para los clientes.
 - Pruebas de punta a punta en el navegador.
 - Decidir si se prende el vigía de Éxito del cliente, después de que Alex Vanegas revise la cartera.
+- De la propuesta del 22 oct, para después: créditos de cara al cliente (con sus reglas de vencimiento y estados), el nivel de cada CSE por actividad y su pago anclado a la escala, el playbook de momentos del CSE (y que la IA revise si se cumple), el precio por valor en algunos casos (registrando siempre el tiempo real) y la formación del CSE como diseñador de sistemas.
 
 
 ## Pruebas para personas
@@ -227,16 +389,16 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 ### Comisiones <span class="prioridad">Alta</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
-| 278 | Por validar | Que la página de comisiones diga lo cerrado con Marco | Finanzas › Modelos › Comisiones › «Cómo funciona» y «Simulación». | Arriba, «Modelo en prueba…». En el bono de liderazgo, «¿Por qué se calculan distinto?» y los ejemplos 133, 0, 500 y 750. «Pendientes» con dos preguntas y «Lo que no cuadra» con la oferta de Liz. En «Simulación», la tabla «Techos» (solo tú). |
 |---|---|---|---|---|
+| 278 | Por validar | Que la página de comisiones diga lo cerrado con Marco | Finanzas › Modelos › Comisiones › «Cómo funciona» y «Simulación». | Arriba, «Modelo en prueba…». En el bono de liderazgo, «¿Por qué se calculan distinto?» y los ejemplos 133, 0, 500 y 750. «Pendientes» con dos preguntas y «Lo que no cuadra» con la oferta de Liz. En «Simulación», la tabla «Techos» (solo tú). |
 | 95 | Por validar | Que la aprobación quede y el cliente no la vea | En «CreditForce · prueba (borrar)» (la de la 24) › «2 · Propuesta» › Inversión: «Montos en» USD; en Servicios, «precio de lista» 10000 y «dcto» 15%; en Licencias, «Agregar línea» «Sales Hub Professional» 1000; IVA «+ IVA (13%)». Espera a que se guarde y toca «Aprobar el descuento». Después «Descargar PDF», «Subir al cliente» y «3 · Compartir» › «Copiar el link», y ábrelo. | «Descuento aprobado.» y la franja dice «…lo aprobó Elías González el 19/10/2026, hasta el 15 %.» En el link y en el PDF no está la franja ni el botón; la línea sí muestra «−15%», $10,000 tachado y $8,500. |
 
 ### Finanzas <span class="prioridad">Alta</span>
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
 | 279 | ⏳ La valida el equipo: María José Zamora | Que una comisión de partner acepte cero y diga si es estimada o real | Finanzas › Comisiones de partner › Atom: monto 0. Después, Coby (kölbi): registra su factura con el monto real. | Atom queda en cero, sin error. Coby pasa de «Estimado» a «Real de la factura», con el número de la factura. |
 | 280 | ⏳ La valida el equipo: Alex Arrieta | Que «Actualizar» traiga lo conciliado y lo cobre | Concilia una factura en Odoo; en Nexus, Conciliación › «Actualizar». | Dice cuántas facturas cambiaron y la cuota pagada queda cobrada en el momento. Sin tocar nada, lo pagado se cobra cada hora de 7:00 a 19:00. |
-|---|---|---|---|---|
 | 32 | ⏳ La valida Admin | Que solo se cobre lo pagado que confirmas | Finanzas › Conciliación › «Lo pagado». Desmarca una cuota y confirma con tu firma. | Las cuotas que Odoo y Mercury dan por pagadas, con el día del pago. Las de Mercury sin entrada de plata van a «Pagadas sin el día del pago» y no se cobran. Solo se cobran las marcadas. |
 | 33 | ⏳ La valida Admin | Que los montos de las licencias se lean bien | Finanzas › Punto de equilibrio › «Licencias revendidas» › en la fila de kölbi, «Editar». Escribe solo «Lo que se le paga» y «Guardar». | Guarda: la moneda es la del contrato y la frecuencia «Cada mes», a la vista y solo si hay monto. Cada contrato tiene «Editar» en su fila. (Arreglado el 19 oct: antes «Guardar» quedaba apagado.) |
 | 35 | ⏳ La valida Admin | Que Mercury esté en la facturación por cliente | Finanzas › Conciliación › enlace «Odoo» (al lado de su copia) › «Facturación por cliente». Busca un cliente, filtra «Facturado por: Mercury» y toca la columna «Facturas» › «Ver». | Los clientes de Mercury junto a los de Odoo; la columna «Facturas» abre sus facturas y «Ver» el detalle de cada una. (Arreglado el 19 oct: estaba escondido detrás de un triángulo.) |
@@ -405,9 +567,9 @@ Las que corre la IA (Claude) sin pantalla: con los datos de producción, en solo
 ### Finanzas
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|---|
 | 281 | ✓ Validado por Claude 21 oct | Por qué la factura de AMVAC seguía pendiente | Las cuotas pendientes con factura en Odoo, contra Odoo en vivo. | No era el IVA: la cuota (1.848) y la factura sin IVA (1.848) se emparejaban. Odoo la dio pagada en el «Actualizar» de Alex de las 16:15, y el cobro de lo pagado ya había corrido a las 7:00. Lo mismo con Fomento Urbano. Las otras 30 pendientes con factura están impagas también en Odoo. |
 | 282 | ✓ Validado por Claude 21 oct | Que AMVAC y Fomento quedaran cobradas | El cobro de lo pagado en producción, después del deploy de `da1fd3bf`. | AMVAC septiembre (US$1.848, FAC/2026/0354) cobrada el 14 oct y Fomento octubre (US$300, FAC/2026/0363) el 16 oct, con la firma del sistema y las fechas reales del pago en Odoo. |
-|---|---|---|---|---|
 | 34 | ✓ Validado por Claude 19 oct | Que las comisiones de Stripe y transferencias sumen como gasto | Conciliación › Gastos y Mercury › «Gastos financieros». Confirma una. | 81 comisiones para confirmar (US$350,67), sin duplicados; la suscripción de Mercury ya no sale (es la herramienta «Mercury») y la comisión por compras en el exterior dice «Comisión del banco». Lo confirmado suma como gasto financiero. Confirmarlas es de Admin. |
 | 100 | ✓ Validado por Claude 18 oct | Que las ventas sin cobranza cuadren mejor | Punto de equilibrio › «De la venta a la caja» › «Dónde se queda la plata» › «ventas ganadas sin respaldo en cobranza» › «Ver las ventas». | US$171.059,93 en 44 ventas: 15 sin nada cargado, 25 que facturan menos de lo vendido y 4 de empresas que no están en Nexus. Aparte, US$68.321,61 ya cargados en cuotas sin facturar. (Antes se llamaba «Lo que no cuadra»; lo comprobé con los datos.) |
 | 103 | ⏳ Lo reviso yo después del deploy | Que el cobro automático corra cada mañana | Integraciones › «Jobs del servidor», el día siguiente del deploy, desde las 7:00. | «El cobro de lo pagado en Odoo y Mercury» con punto verde y la fecha de la corrida. |
