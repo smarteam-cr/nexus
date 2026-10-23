@@ -97,8 +97,9 @@ describe("la guía del CSE", () => {
 });
 
 describe("las piezas de un servicio recurrente", () => {
-  it("el Cronograma junto al Resumen y, en el ciclo, los documentos de siempre más Adopción y Aprendizaje (2026-10-12)", () => {
+  it("el Kickoff y el Cronograma junto al Resumen y, en el ciclo, los documentos de siempre más Adopción y Aprendizaje (2026-10-23)", () => {
     expect(PIEZAS_DE_UN_SERVICIO_RECURRENTE).toEqual([
+      "kickoff",
       "timeline",
       "questionnaires",
       "exploration",
@@ -120,8 +121,8 @@ describe("las piezas de un servicio recurrente", () => {
         sinCanvas: { "cycle-adoption": "vacia", "cycle-learning": "vacia" },
       },
     ).map((r) => r.slug);
-    expect(filas).toEqual(["timeline", "exploration", "diagnosis", "planning", "tech-requirements", "cycle-adoption", "cycle-learning", "delivery"]);
-    expect(filas).not.toContain("kickoff");
+    // El kickoff que el proyecto ya tiene se ve (RC Inmobiliaria, 2026-10-23: el riel lo escondía).
+    expect(filas).toEqual(["kickoff", "timeline", "exploration", "diagnosis", "planning", "tech-requirements", "cycle-adoption", "cycle-learning", "delivery"]);
   });
 
   it("cada etapa tiene su artefacto: el Diagnóstico, la Planificación, el Cronograma, Adopción y Aprendizaje", () => {

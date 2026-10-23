@@ -7953,6 +7953,11 @@ le pregunta a la persona del cliente.
   tareas del cronograma con responsable CLIENTE, el fin de cada fase y las series del calendario con la empresa.
 - **Las piezas del riel se ocultan** (en todo proyecto): `Project.piezasOcultas`, del proyecto y no de una persona, y
   cosmético (lo cambia cualquiera con acceso). No borra ni apaga nada: quedan en «Ver N piezas más».
+- **El Kickoff también está en un servicio recurrente** (2026-10-23, Elías con el SmartLoop de RC Inmobiliaria): va
+  primero, afuera del ciclo y junto al Cronograma, porque se hace una vez al arrancar el servicio. Hasta ese día el riel
+  de un recurrente no lo listaba, aunque todo proyecto nace con su canvas de kickoff: el de RC Inmobiliaria existía y no
+  se podía abrir. `PIEZAS_DE_UN_SERVICIO_RECURRENTE` (lib/servicios/ciclo.ts) lo suma; el motor de etapas del recurrente
+  sigue saliendo del ciclo, no del kickoff.
 
 ## Preguntas sobre la cuenta: lo que Customer Success sabe de cada cliente (2026-10-13)
 

@@ -32,8 +32,12 @@ export const PIEZAS_DEL_CICLO = [
 /** Los artefactos propios del ciclo: no viven en un canvas y su estado sale del ciclo. */
 export const PIEZAS_PROPIAS_DEL_CICLO = [PIEZA_ADOPCION_DEL_CICLO, PIEZA_APRENDIZAJE_DEL_CICLO] as const;
 
-/** Las piezas de un proyecto de servicio recurrente, en el orden del riel (el Resumen va aparte, arriba). */
-export const PIEZAS_DE_UN_SERVICIO_RECURRENTE = ["timeline", ...PIEZAS_DEL_CICLO] as const;
+/**
+ * Las piezas de un proyecto de servicio recurrente, en el orden del riel (el Resumen va aparte, arriba).
+ * El Kickoff va primero y afuera del ciclo, como el Cronograma: se hace una vez, al arrancar el servicio (Elías,
+ * 2026-10-23, con el SmartLoop de RC Inmobiliaria: el proyecto tenía su kickoff y el riel no lo mostraba).
+ */
+export const PIEZAS_DE_UN_SERVICIO_RECURRENTE = ["kickoff", "timeline", ...PIEZAS_DEL_CICLO] as const;
 
 /** El artefacto donde se trabaja cada etapa del ciclo. */
 export const PIEZA_DE_LA_ETAPA: Record<EtapaDelCiclo, string> = {

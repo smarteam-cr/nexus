@@ -46,7 +46,7 @@ export interface OpcionesDeFilas {
   sinCanvas?: Partial<Record<string, RowState>>;
   /**
    * Las piezas de un SERVICIO RECURRENTE, en su orden (lib/servicios/ciclo.ts). Un proyecto así no recorre
-   * el flujo de una implementación —no lleva kickoff, diagnóstico ni entrega—: sus filas son éstas y
+   * el flujo de una implementación: sus filas son el Kickoff, el Cronograma y los artefactos de su ciclo, y
    * nada más (más los canvases sueltos del CSE). Sin el campo, el flujo de siempre.
    */
   piezasDelServicio?: readonly string[];
