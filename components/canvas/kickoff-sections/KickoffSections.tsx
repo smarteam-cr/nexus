@@ -26,11 +26,13 @@ import dynamic from "next/dynamic";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "@/components/landing/inline";
 import { SortableItems } from "@/components/landing/sortable";
 import { CardGrid } from "@/components/landing/card-grid";
+import { PartesDeLaSeccion } from "@/components/landing/partes";
+import { ProsaConDiseno } from "@/components/landing/prosa-con-diseno";
 import { HeroUploadButtons, BrandRow, TagRow, HeroStatFecha, FilaDeDatos } from "@/components/landing/hero-parts";
 import { CtaEditor, CtaButton } from "@/components/landing/sections";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import { landingLang, t } from "@/components/landing/i18n";
-import type { SectionProps } from "@/components/landing/types";
+import type { DisenoDeProsa, SectionProps } from "@/components/landing/types";
 import { Prose, InlineMD } from "@/components/landing/prose";
 import { IconCheck } from "@/components/ui/AcceptReject";
 import { DiagramStatic } from "@/components/landing/diagram-static";
@@ -106,7 +108,16 @@ function LegacyNote() {
 }
 
 // ── Prosa ──────────────────────────────────────────────────────────────────────
-export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editable, onChange }) => {
+/** La ayuda de la intro según el diseño: en el desafío es una pregunta, en el enfoque una frase. */
+const AYUDA_DE_LA_INTRO: Record<DisenoDeProsa, string> = {
+  tarjetas: "Una frase que enmarca la sección…",
+  datos: "Una frase que enmarca la sección…",
+  numerada: "La pregunta que lo resume…",
+  check: "Una frase que enmarca la sección…",
+  enfoque: "El enfoque en una frase…",
+};
+
+export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editable, onChange, sectionDiseno }) => {
   const d = normalizeProse(data);
   // Sección LEGACY (bloque TEXT markdown, sin CARD tipado): read-only. La edición
   // tipada recién aplica cuando el bloque es CARD (curadas o regeneradas por el agente).
@@ -119,49 +130,90 @@ export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editabl
     );
   }
 
-  const set = (next: Partial<ProseData>) => onChange?.({ ...d, ...next });
+  /* ⛔ Se escribe sobre la data CRUDA, no sobre la normalizada (2026-10-23): `normalizeProse` se queda solo con su forma,
+     y escribir `{ ...d, ...next }` borraba en silencio todo lo que vive fuera de ella — la marca de revisión del enfoque
+     (`revisadaAt`), las piezas (`__partes`), el módulo de la biblioteca. Editar una frase del enfoque ya revisado lo
+     devolvía a sugerencia sin que nadie lo notara. */
+  const base: Record<string, unknown> = { ...((data ?? {}) as unknown as Record<string, unknown>) };
+  delete base.__legacyMd;
+  const set = (next: Record<string, unknown>) => onChange?.({ ...base, ...next } as unknown as ProseData);
   const items = d.items;
+  const diseno: DisenoDeProsa = sectionDiseno ?? "tarjetas";
+  const introGrande = diseno === "numerada" || diseno === "enfoque";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* ⭐ El SUBTÍTULO, debajo del título grande. Lo pide Elías entre las piezas que el chat
-          debería manejar. Va antes de la intro y con la clase del lead, que es la que el motor ya
-          usa para una bajada. ⛔ Se pinta ACÁ o el chat diría «aplicado» sobre algo invisible —
-          el defecto que `TarjetasData.intro` ya tiene documentado. */}
-      {(editable || d.subhead) && (
-        <Editable
-          as="p"
-          className="stl-lead"
-          editable={editable}
-          value={d.subhead ?? ""}
-          placeholder="Subtítulo (opcional)…"
-          onCommit={(v) => set({ subhead: v })}
-        />
-      )}
-      {(editable || d.intro) && (
-        <Editable
-          as="p"
-          className="stl-prose"
-          editable={editable}
-          value={d.intro ?? ""}
-          placeholder="Intro (opcional)…"
-          onCommit={(v) => set({ intro: v })}
-        />
-      )}
-      {/* El markup lo pone `CardGrid`, el mismo de los dolores de una propuesta: lo propio de esta
-          grilla son las dos columnas y que no lleva ícono. */}
-      <CardGrid
-        items={items}
+    <>
+      {/* Las piezas (2026-10-23): el subtítulo, la intro y el cuerpo se arrastran y se quitan como un ítem; una vacía no
+          deja hueco en edición y se agrega con «+». ⭐ El SUBTÍTULO se pinta ACÁ o el chat diría «aplicado» sobre algo
+          invisible — el defecto que `TarjetasData.intro` ya tiene documentado. */}
+      <PartesDeLaSeccion
+        data={base}
         editable={editable}
-        onItems={(next) => set({ items: next })}
-        columnas={2}
-        addLabel="Agregar punto"
-        placeholderTitulo="Título corto…"
-        placeholderDetalle="Una línea que lo explique…"
+        onCambios={(cambios) => set(cambios)}
+        className={`stl-partes-prosa stl-partes-${diseno}`}
+        partes={[
+          {
+            id: "subhead",
+            rotulo: "Subtítulo",
+            opcional: true,
+            conContenido: !!d.subhead?.trim(),
+            alQuitar: { subhead: "" },
+            render: () => (
+              <Editable
+                as="p"
+                className="stl-lead"
+                editable={editable}
+                value={d.subhead ?? ""}
+                placeholder="Subtítulo…"
+                onCommit={(v) => set({ subhead: v })}
+              />
+            ),
+          },
+          {
+            id: "intro",
+            rotulo: "Introducción",
+            opcional: true,
+            conContenido: !!d.intro?.trim(),
+            alQuitar: { intro: "" },
+            render: () => (
+              <Editable
+                as="p"
+                className={introGrande ? "stl-prosa-pregunta" : "stl-prose"}
+                editable={editable}
+                value={d.intro ?? ""}
+                placeholder={AYUDA_DE_LA_INTRO[diseno]}
+                onCommit={(v) => set({ intro: v })}
+              />
+            ),
+          },
+          {
+            id: "cuerpo",
+            rotulo: "Puntos",
+            conContenido: items.length > 0 || !!d.compara,
+            render: () => (
+              <div>
+                {/* Las tarjetas de siempre (kickoff y los demás); el diagnóstico elige su diseño por la definición. */}
+                {diseno === "tarjetas" ? (
+                  <CardGrid
+                    items={items}
+                    editable={editable}
+                    onItems={(next) => set({ items: next })}
+                    columnas={2}
+                    addLabel="Agregar punto"
+                    placeholderTitulo="Título corto…"
+                    placeholderDetalle="Una línea que lo explique…"
+                  />
+                ) : (
+                  <ProsaConDiseno diseno={diseno} items={items} editable={editable} onItems={(next) => set({ items: next })} />
+                )}
+                {d.compara && <ComparaBlock c={d.compara} />}
+              </div>
+            ),
+          },
+        ]}
       />
-      {d.compara && <ComparaBlock c={d.compara} />}
       {!editable && proseIsEmpty(d) && <p className="stl-prose" style={{ color: "var(--text-muted)" }}>—</p>}
-    </div>
+    </>
   );
 };
 

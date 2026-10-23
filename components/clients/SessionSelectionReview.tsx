@@ -459,25 +459,30 @@ export default function SessionSelectionReview({
     [postReuniones],
   );
 
+  /* En el DIAGNÓSTICO, las reuniones de las sesiones de la exploración ENTRAN SOLAS (2026-10-23,
+     `reunionesDeLaExploracionDelDiagnostico`): las eligió quien las unió a una sesión. El servidor las sigue mandando
+     como sugeridas de la exploración; acá se cuentan y se muestran como lo que son, con «Sacar» (`false`). */
+  const entranSolasDeLaExploracion = destino === "diagnostico" ? data.sugeridas.filter((s) => s.fuente === "exploracion") : [];
+  const nEntranSolas = entranSolasDeLaExploracion.length;
   useEffect(() => {
     if (!loading && !errorDeCarga) {
-      onCount?.(data.feeding.length);
+      onCount?.(data.feeding.length + nEntranSolas);
       onExcludedCount?.(data.excluded.length);
-      onSugeridas?.(soloElegidas ? data.sugeridas.length : 0);
+      onSugeridas?.(soloElegidas ? data.sugeridas.length - nEntranSolas : 0);
     }
-  }, [loading, errorDeCarga, data.feeding.length, data.excluded.length, data.sugeridas.length, soloElegidas, onCount, onExcludedCount, onSugeridas]);
+  }, [loading, errorDeCarga, data.feeding.length, data.excluded.length, data.sugeridas.length, nEntranSolas, soloElegidas, onCount, onExcludedCount, onSugeridas]);
   useEffect(() => {
     if (!loading) onErrorDeCarga?.(errorDeCarga);
   }, [loading, errorDeCarga, onErrorDeCarga]);
 
   const { feeding, excluded, candidates } = data;
-  const sugeridas = soloElegidas ? data.sugeridas : [];
+  const sugeridas = soloElegidas ? data.sugeridas.filter((s) => !entranSolasDeLaExploracion.includes(s)) : [];
   /* El filtro mira título Y participantes: el caso que lo motivó es "esta reunión la tuvo Marco
      con alguien de tal empresa", y ese dato no está en el título. Escribir un dominio la encuentra. */
   const filtered = candidates.filter((c) => coincideConLaBusqueda(c, search));
   /* Las sin dueño van DEBAJO de las del cliente, con su separador, y sin repetir: una que ya está en
      alguna lista (un proyecto interno ya las recibe todas) o que se acaba de agregar no se duplica. */
-  const yaListadas = new Set([...feeding, ...excluded, ...candidates, ...sugeridas].map((s) => s.sessionId));
+  const yaListadas = new Set([...feeding, ...excluded, ...candidates, ...sugeridas, ...entranSolasDeLaExploracion].map((s) => s.sessionId));
   /* El calendario también se filtra acá con lo escrito: con una o dos letras el servidor devuelve
      las recientes sin filtrar, y la lista tiene que responder igual a lo que se tipea. */
   const delCalendario =
@@ -741,6 +746,43 @@ export default function SessionSelectionReview({
             hueco — si tienes las notas, pégalas en <em>Fuentes manuales</em>.
           </p>
         )}
+        {/* Las de las sesiones de la exploración, en el diagnóstico: entran solas y enteras (2026-10-23). «Sacar» las
+            desestima (`false`) y deja de leerlas. */}
+        {entranSolasDeLaExploracion.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <FranjaDeSugerencias>
+              {entranSolasDeLaExploracion.length === 1
+                ? "La reunión de la sesión de la exploración entra sola y entera al diagnóstico."
+                : `Las ${entranSolasDeLaExploracion.length} reuniones de las sesiones de la exploración entran solas y enteras al diagnóstico.`}
+            </FranjaDeSugerencias>
+            <ul className="flex flex-col gap-1.5">
+              {entranSolasDeLaExploracion.map((s) => (
+                <FilaSugerida
+                  key={s.sessionId}
+                  origen={<span className="min-w-0 truncate" title={s.motivo}>{s.motivo}</span>}
+                  acciones={
+                    readOnly ? undefined : (
+                      <BotonTexto
+                        onClick={() => void descartarSugerida(s.sessionId)}
+                        disabled={decidiendo !== null}
+                        title="El diagnóstico deja de leerla"
+                      >
+                        Sacar
+                      </BotonTexto>
+                    )
+                  }
+                >
+                  <span className="font-medium">{s.title || "Sin título"}</span>
+                  <span className="text-xs text-fg-muted">
+                    {" "}
+                    · {datosDeLaReunion(s.date, s.alsoIn)}
+                    {s.sinContenido ? " · sin transcripción" : ""}
+                  </span>
+                </FilaSugerida>
+              ))}
+            </ul>
+          </div>
+        )}
         {/* Lo que sugiere Nexus (etapa 7, solo los seis documentos): arriba y una sola vez, con las piezas del
             sistema. Se calcula al leer: no entra al documento hasta que alguien toca «Usar». */}
         {sugeridas.length > 0 && (
@@ -825,7 +867,9 @@ export default function SessionSelectionReview({
               ? `No se pudo cargar la lista de reuniones ${delDocumento}: recarga la página. Lo que elegiste sigue elegido.`
               : esCronograma
                 ? "Todavía no elegiste reuniones para el cronograma. Búscalas en tu calendario o entre las del proyecto."
-                : soloElegidas
+                : soloElegidas && entranSolasDeLaExploracion.length > 0
+                  ? "Ninguna elegida a mano: la IA lee enteras las de las sesiones de la exploración (arriba). Suma las que quieras."
+                  : soloElegidas
                   ? "Sin reuniones elegidas: la IA no lee ninguna reunión, solo la memoria del proyecto. Elige las que quieras que lea enteras."
                   : `Ninguna reunión alimenta ${esteDocumento}. Búscala con «Buscar una reunión de Meet».`
           }

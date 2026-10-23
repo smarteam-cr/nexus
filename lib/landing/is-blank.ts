@@ -42,6 +42,9 @@ export const NO_CONTENIDO = new Set([
   // Sobrevive a «Limpiar» porque está fuera del schema: sin esta entrada, una sección vaciada quedaría
   // no-blank solo por la marca y se publicaría como un hueco con título.
   "__moduloId",
+  // Las piezas de la sección (2026-10-23, lib/landing/partes.ts): en qué orden van el subtítulo, la intro y el cuerpo,
+  // y cuáles se quitaron. Una sección vacía con las piezas reordenadas sigue vacía.
+  "__partes",
   // Moneda de la sección de inversión. El `<select>` la escribe apenas el CSE lo toca, así
   // que una sección donde SOLO eligió la moneda quedaría no-blank y se publicaría diciendo
   // "Montos en CRC" y nada más. Describe CÓMO se muestran los montos, no QUÉ dice.

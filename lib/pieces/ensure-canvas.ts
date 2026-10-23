@@ -33,6 +33,7 @@ import {
   reconcileOnDemandCanvasSections,
 } from "@/lib/canvas/default-canvases";
 import { canvasOfNested } from "./canvas-query";
+import { entregableDe, plantillaDelDocumento, seccionesDeLaPlantilla } from "@/lib/entregables/registro";
 import { pieceBySlug } from "./registry";
 
 export type EnsureOutcome =
@@ -78,12 +79,15 @@ export async function ensurePieceCanvas(projectId: string, slug: string): Promis
   // Sin `onlyEnabled`: necesitamos VER la apagada. Ver el encabezado.
   const existente = await prisma.projectCanvas.findFirst({
     where: canvasOfNested(slug, { projectId }),
-    select: { id: true, disabledAt: true },
+    select: { id: true, disabledAt: true, sections: true },
   });
 
   if (existente) {
+    /* Un entregable con plantilla de menos secciones (el diagnóstico esencial, 2026-10-23) se reconcilia a SU plantilla:
+       si no, cualquier activación —un cambio de etiquetas, la materialización del editor— le devolvía las del completo. */
+    const defDelDocumento = definicionSegunLaPlantilla(slug, def, existente.sections);
     if (!existente.disabledAt) {
-      await reconcileSecciones(existente.id, def);
+      await reconcileSecciones(existente.id, defDelDocumento);
       return { canvasId: existente.id, outcome: "sin-cambios" };
     }
     await prisma.projectCanvas.update({
@@ -92,7 +96,7 @@ export async function ensurePieceCanvas(projectId: string, slug: string): Promis
       // convertiría el rastro en una mentira.
       data: { disabledAt: null, disabledBy: null, disabledReason: null },
     });
-    await reconcileSecciones(existente.id, def);
+    await reconcileSecciones(existente.id, defDelDocumento);
     return { canvasId: existente.id, outcome: "reactivada" };
   }
 
@@ -112,6 +116,13 @@ export async function ensurePieceCanvas(projectId: string, slug: string): Promis
     }
     throw e;
   }
+}
+
+/** La estructura canónica recortada a las secciones de la plantilla que el documento tiene anotada (sin recorte si no). */
+function definicionSegunLaPlantilla(slug: string, def: CanvasDefinition, sections: unknown): CanvasDefinition {
+  const guardada = entregableDe(slug) ? plantillaDelDocumento(slug, sections) : null;
+  if (!guardada?.plantilla.secciones) return def;
+  return { ...def, sections: seccionesDeLaPlantilla(guardada.plantilla, def.sections) };
 }
 
 /** Reconcilia las secciones a la estructura canónica (idempotente, no borra nada). */

@@ -16,7 +16,9 @@ import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/cli
 import { useMe } from "@/hooks/useMe";
 import { urlDeProyecto } from "@/lib/agents/run-url";
 import { BOTON_DE_HERRAMIENTA } from "@/components/ui/sistema";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
+import { ERROR_SUPUESTOS_SIN_VALIDAR } from "@/lib/canvas/diagnostico-confirmado";
 
 // Gating COSMÉTICO por sección de permisos (PERM-F5): agentes que ESCRIBEN un
 // artefacto → si el usuario no puede NI generar NI regenerar esa sección, el CTA
@@ -49,6 +51,7 @@ export default function CanvasAgentButton({
   busy,
   alreadyGenerated,
   canvasId,
+  plantilla,
 }: {
   clientId: string;
   projectId: string;
@@ -80,8 +83,13 @@ export default function CanvasAgentButton({
    *  Si se pasa, el CTA se gatea por ESA celda (honesto: no muestra un botón que dará 403).
    *  `undefined` (no threadeado por el montaje) → fallback al OR generate||regenerate (compat). */
   alreadyGenerated?: boolean;
+  /** La plantilla de un entregable (lib/entregables/registro.ts). Sin ella, la que el documento ya tiene. */
+  plantilla?: string;
 }) {
   const [running, setRunning] = useState(false);
+  /* El diagnóstico sobre supuestos (2026-10-23): el servidor responde 409 `SUPUESTOS_SIN_VALIDAR` si casi nada de lo que
+     lee está confirmado. Se pregunta UNA vez y, con el sí, se vuelve a pedir con `aSabiendas`. */
+  const [supuestos, setSupuestos] = useState<string | null>(null);
   const toast = useToast();
   const me = useMe();
   const { phase, track } = useAgentRun(clientId);
@@ -110,7 +118,7 @@ export default function CanvasAgentButton({
   // (lib/agents/run-url.ts) — acá todavía no existen.
   const notifyUrl = urlDeProyecto(clientId, projectId, canvasId);
 
-  const run = async (forzar = false) => {
+  const run = async (forzar = false, aSabiendas = false) => {
     if (running || disabled || busy) return;
     maybeRequestPermission(); // gesto del usuario → ofrecer activar notificaciones (una vez)
     setRunning(true);
@@ -123,16 +131,20 @@ export default function CanvasAgentButton({
           projectId,
           ...(useAsync ? { async: true } : {}),
           ...(forzar ? { forzar: true } : {}),
+          ...(plantilla ? { plantilla } : {}),
+          ...(aSabiendas ? { aSabiendas: true } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (data.error === "PIECE_NOT_APPLICABLE") {
+        if (data.error === ERROR_SUPUESTOS_SIN_VALIDAR) {
+          setSupuestos(typeof data.message === "string" ? data.message : "El diagnóstico va a salir de supuestos que nadie validó.");
+        } else if (data.error === "PIECE_NOT_APPLICABLE") {
           // AVISA y deja seguir: la pieza no le corresponde al proyecto por sus tags,
           // pero los tags se equivocan y el CSE es quien sabe. El toast con acción es
           // sticky, así que el aviso espera la decisión en vez de desaparecer solo.
           toast.info(data.message ?? "Esta pieza no le corresponde a este proyecto.", {
-            action: { label: "Generar igual", onClick: () => void run(true) },
+            action: { label: "Generar igual", onClick: () => void run(true, aSabiendas) },
           });
         } else {
           // Guards (p.ej. NO_HANDOFF) devuelven { error, message } → mostrar el mensaje claro.
@@ -166,6 +178,25 @@ export default function CanvasAgentButton({
   const showRunning = running || !!busy;
 
   return (
+    <>
+    <ConfirmDialog
+      open={supuestos !== null}
+      title="¿Generar con supuestos sin validar?"
+      description={
+        <>
+          {supuestos} Revisa antes lo que propuso Nexus para que el diagnóstico tenga sentido, o genéralo igual y
+          revísalo después.
+        </>
+      }
+      confirmLabel="Generar igual"
+      cancelLabel="Revisar antes"
+      variant="default"
+      onCancel={() => setSupuestos(null)}
+      onConfirm={() => {
+        setSupuestos(null);
+        void run(false, true);
+      }}
+    />
     <button
       onClick={() => void run()}
       disabled={running || disabled || !!busy}
@@ -191,5 +222,6 @@ export default function CanvasAgentButton({
       )}
       {showRunning ? (phase ?? runningLabel) : label}
     </button>
+    </>
   );
 }

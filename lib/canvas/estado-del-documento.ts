@@ -11,7 +11,7 @@
  *      └───────── v+1 ─────────┴─────────────────────────────────────┘
  *
  *  · PRESENTAR exige el hilo cerrado (lib/canvas/revisar-hilo.ts: ninguna acción sin causa ni
- *    objetivo, ningún problema sin acción) y la política rectora revisada por el ejecutivo. Deja una
+ *    objetivo, ningún problema sin acción) y el enfoque de la solución revisado por el ejecutivo. Deja una
  *    FOTO PROTEGIDA de lo que vio el cliente (lib/canvas/versiones.ts).
  *  · Lo que pasa después de presentar abre la versión siguiente: la vN presentada queda en el
  *    historial, intacta.
@@ -88,14 +88,16 @@ export interface RevisionParaPresentar {
 /**
  * ¿Se puede presentar? Junta TODOS los motivos (no el primero): la persona arregla todo de una vez.
  *
- * `politica`: la data de la sección «Política rectora» (o `undefined` si el documento no la tiene o
- * está oculta).
+ * `politica`: la data de la sección «Enfoque de la solución» (key `politica_rectora`; «Política rectora» hasta el
+ * 2026-10-23), o `undefined` si el documento no la tiene o está oculta. `politicaOculta`: la ocultó una persona — desde
+ * el 2026-10-23 toda sección se puede ocultar, y un enfoque que no se presenta no frena la presentación.
  */
 export function revisarParaPresentar(opts: {
   estado: EstadoDocumento;
   tieneContenido: boolean;
   cabos: readonly CaboSuelto[];
   politica: unknown;
+  politicaOculta?: boolean;
 }): RevisionParaPresentar {
   const motivos: string[] = [];
   if (opts.estado === "aprobado") {
@@ -115,10 +117,12 @@ export function revisarParaPresentar(opts: {
   }
   const p = opts.politica as { intro?: unknown; items?: unknown; revisadaAt?: unknown } | undefined;
   const conContenido = !!p && ((typeof p.intro === "string" && p.intro.trim() !== "") || (Array.isArray(p.items) && p.items.length > 0));
-  if (!conContenido) {
-    motivos.push("Falta la política rectora: regenera el diagnóstico o escríbela antes de presentar.");
+  if (opts.politicaOculta) {
+    // Oculto a propósito: no se presenta, así que no hay nada que revisar.
+  } else if (!conContenido) {
+    motivos.push("Falta el enfoque de la solución: regenera el diagnóstico o escríbelo antes de presentar.");
   } else if (!(typeof p!.revisadaAt === "string" && p!.revisadaAt.trim() !== "")) {
-    motivos.push("La política rectora sigue siendo la sugerencia de la IA: ajústala y márcala como revisada.");
+    motivos.push("El enfoque de la solución sigue siendo la sugerencia de la IA: ajústalo y márcalo como revisado.");
   }
   return { ok: motivos.length === 0, motivos };
 }

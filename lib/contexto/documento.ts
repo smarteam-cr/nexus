@@ -193,7 +193,12 @@ export function queLeeSinElegidas(doc: Pick<DocumentoConContexto, "pieza">): str
   }
   const base =
     "Sin elegidas, no lee ninguna reunión entera: de las demás le llegan los acuerdos y las decisiones de sus minutas, también las que están en borrador.";
-  return doc.pieza === "delivery" ? `${base} La sección de impacto sale vacía: sus cifras salen de las reuniones.` : base;
+  if (doc.pieza === "delivery") return `${base} La sección de impacto sale vacía: sus cifras salen de las reuniones.`;
+  // El diagnóstico lee además, enteras y sin elegirlas, las reuniones de las sesiones de la exploración (2026-10-23).
+  if (doc.pieza === "diagnosis") {
+    return "Sin elegidas, no lee ninguna reunión entera salvo las de las sesiones de la exploración, que entran solas: de las demás le llegan los acuerdos y las decisiones de sus minutas, también las que están en borrador.";
+  }
+  return base;
 }
 
 /**

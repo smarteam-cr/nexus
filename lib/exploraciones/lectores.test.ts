@@ -187,7 +187,8 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "exploracion-del-proyecto",
     motivo:
       "Diagnóstico y Planificación leen lo confirmado de la exploración del proyecto (la estrategia, la escala con evidencia): " +
-      "lo dijo el cliente con su CSE, en el proyecto. Nunca una preventa ni la libreta del CSE.",
+      "lo dijo el cliente con su CSE, en el proyecto. Nunca una preventa ni la libreta del CSE. Desde el 2026-10-23 también " +
+      "cuánto hay confirmado y propuesto (solo números) para «Antes de generar» del diagnóstico.",
   },
   "lib/tareas/clientes.ts": {
     destino: "ventas",
@@ -282,7 +283,7 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     prohibidas: /exploracionParaLaPropuesta|bloqueParaElHandoff|exploracionParaElHandoff|internoParaElCse|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\.estado\b/,
   },
   "exploracion-del-proyecto": {
-    permitidas: /\btextoDeLaExploracionDelProyecto\b|\basegurarExploracionDelProyecto\b/,
+    permitidas: /\btextoDeLaExploracionDelProyecto\b|\basegurarExploracionDelProyecto\b|\bcuantoHayEnLaExploracionDelProyecto\b/,
     // Nunca lo de la preventa: ni la propuesta, ni el handoff, ni lo interno.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff/,
   },

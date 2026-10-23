@@ -34,7 +34,14 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
-import { DIAGNOSTICO_CANVAS, DIAGNOSTICO_CIERRE_DEFAULT, diagnosticoSectionSequence } from "@/lib/canvas/canvas-defs";
+import {
+  DIAGNOSTICO_CANVAS,
+  DIAGNOSTICO_CIERRE_DEFAULT,
+  ROTULOS_VIEJOS_DEL_DIAGNOSTICO,
+  diagnosticoSectionSequence,
+  type CanvasDefinition,
+} from "@/lib/canvas/canvas-defs";
+import { parseSectionEntries, patchSectionEntry } from "@/lib/business-cases/section-briefs";
 import {
   createOnDemandCanvas,
   reconcileOnDemandCanvasSections,
@@ -62,15 +69,26 @@ import {
   MENSAJE_APROBADO_MIENTRAS_SE_REGENERABA,
 } from "@/lib/canvas/estado-del-documento-servidor";
 
-/** Asegura el canvas "Diagnóstico" del proyecto + reconcilia sus secciones. Idempotente. */
-export async function ensureDiagnosticoCanvas(projectId: string): Promise<string> {
+/**
+ * Asegura el canvas "Diagnóstico" del proyecto + reconcilia sus secciones. Idempotente. Con `plantilla`, reconcilia
+ * SOLO a las secciones de esa plantilla (2026-10-23): el diagnóstico esencial no gana las del completo.
+ */
+export async function ensureDiagnosticoCanvas(projectId: string, plantilla?: BcTemplateDef): Promise<string> {
   const existing = await prisma.projectCanvas.findFirst({
     where: canvasOfNested(DIAGNOSTICO_CANVAS.slug, { projectId }),
     select: { id: true },
   });
-  const canvasId = existing?.id ?? (await createOnDemandCanvas(projectId, DIAGNOSTICO_CANVAS));
-  await reconcileOnDemandCanvasSections(canvasId, DIAGNOSTICO_CANVAS, diagnosticoSectionSequence);
+  const def = definicionDeLaPlantilla(plantilla);
+  const canvasId = existing?.id ?? (await createOnDemandCanvas(projectId, def));
+  await reconcileOnDemandCanvasSections(canvasId, def, diagnosticoSectionSequence);
   return canvasId;
+}
+
+/** El canvas del diagnóstico con solo las secciones de la plantilla (todas, sin plantilla o con la completa). */
+function definicionDeLaPlantilla(plantilla?: BcTemplateDef): CanvasDefinition {
+  if (!plantilla) return DIAGNOSTICO_CANVAS;
+  const keys = new Set(plantilla.sections.map((d) => d.key));
+  return { ...DIAGNOSTICO_CANVAS, sections: DIAGNOSTICO_CANVAS.sections.filter((s) => keys.has(s.key)) };
 }
 
 /**
@@ -87,6 +105,7 @@ export async function runDiagnosticoGeneration(opts: {
   instrucciones?: string | null;
 }): Promise<{ canvasId: string; sectionCount: number }> {
   const { projectId } = opts;
+  const plantilla = opts.plantilla ?? DIAGNOSTICO_TEMPLATE;
   /* Los objetivos cuantitativos apuntan a los resultados medibles del handoff (2026-10-02). Un
      handoff de antes de esa lista todavía no la tiene: se lee primero. Si no sale, el diagnóstico se
      genera igual (los cuantitativos quedan sin resultado y «Por validar»). */
@@ -94,7 +113,7 @@ export async function runDiagnosticoGeneration(opts: {
     await leerOProponerResultados(projectId, { origen: "diagnostico" });
   }
   const [canvasId, fuentes] = await Promise.all([
-    opts.canvasId ?? ensureDiagnosticoCanvas(projectId),
+    opts.canvasId ?? ensureDiagnosticoCanvas(projectId, plantilla),
     fuentesDelDiagnostico(projectId),
   ]);
   // Aprobado por el cliente = cerrado (lib/canvas/estado-del-documento.ts): no se regenera sin reabrirlo.
@@ -103,7 +122,7 @@ export async function runDiagnosticoGeneration(opts: {
   const userMessage = [
     `${bloqueDeInstruccionesDelPedido(opts.instrucciones)}${fuentes}`,
     "",
-    "Escribe el informe siguiendo tus instrucciones: el hilo completo con sus códigos (S, F, OBJ, AC) — toda causa con al menos una acción, toda acción con causas y objetivos —, la política rectora como sugerencia, cómo va a operar sin detalle de configuración, y sin escala de madurez.",
+    "Escribe el informe siguiendo tus instrucciones, solo con las secciones de tu formato: el hilo con sus códigos (S, F, OBJ, AC) — toda causa con al menos una acción, toda acción con causas y objetivos —, el enfoque de la solución como sugerencia, sin detalle de configuración y sin escala de madurez. Las intros, de una frase corta.",
   ].join("\n");
 
   // Carry-forward: sin la data previa, `coerceToSchema` descartaría lo curado fuera de
@@ -123,7 +142,7 @@ export async function runDiagnosticoGeneration(opts: {
      algo en la presentación— no puede devolverla a la sugerencia de la IA. */
   const politicaRevisada = estaRevisada(prevDataByKey[POLITICA_RECTORA_KEY]);
   const generado = await generateSectionsForTemplate(
-    opts.plantilla ?? DIAGNOSTICO_TEMPLATE,
+    plantilla,
     userMessage,
     undefined,
     politicaRevisada ? new Set([POLITICA_RECTORA_KEY]) : undefined,
@@ -181,10 +200,60 @@ export async function runDiagnosticoGeneration(opts: {
      contrato de FUNDAUNA (lib/canvas/diagnostico-contrato.ts). */
   if (sectionCount > 0) {
     await ocultarSeccionesRetiradas(canvasId, prevSecs.map((s) => s.key), SECCIONES_RETIRADAS_DEL_DIAGNOSTICO);
+    await ajustarALaPlantilla(canvasId, definicionDeLaPlantilla(plantilla));
     await llevarAlOrdenDelContrato(canvasId);
     await ponerAlDiaElCierre(canvasId);
+    await ponerAlDiaLosRotulos(canvasId);
   }
   return { canvasId, sectionCount };
+}
+
+/**
+ * EL DOCUMENTO QUEDA CON LAS SECCIONES DE SU PLANTILLA (2026-10-23). Las del canon que la plantilla no tiene: vacías, se
+ * borran (la fila y su entrada del Json, así no aparecen en el índice del panel); con algo escrito, se OCULTAN —nada se
+ * pierde: se vuelven a mostrar con el ojo—. Las creadas por una persona (`custom:*`) y las retiradas no se tocan.
+ */
+async function ajustarALaPlantilla(canvasId: string, def: CanvasDefinition): Promise<void> {
+  const deLaPlantilla = new Set(def.sections.map((s) => s.key));
+  const queNoTiene = DIAGNOSTICO_CANVAS.sections.map((s) => s.key).filter((k) => !deLaPlantilla.has(k));
+  if (!queNoTiene.length) return; // la completa tiene todas: no hay nada que ajustar
+  const fuera = await prisma.canvasSection.findMany({
+    where: { canvasId, key: { in: queNoTiene } },
+    select: { id: true, key: true, _count: { select: { blocks: true } } },
+  });
+  if (!fuera.length) return;
+  const vacias = fuera.filter((s) => s._count.blocks === 0);
+  const conAlgo = fuera.filter((s) => s._count.blocks > 0).map((s) => s.key);
+  await prisma.$transaction(async (tx) => {
+    if (vacias.length) await tx.canvasSection.deleteMany({ where: { id: { in: vacias.map((s) => s.id) } } });
+    await tx.$queryRaw`SELECT id FROM "ProjectCanvas" WHERE id = ${canvasId} FOR UPDATE`;
+    const c = await tx.projectCanvas.findUnique({ where: { id: canvasId }, select: { sections: true } });
+    const borradas = new Set(vacias.map((s) => s.key));
+    let entradas: unknown = parseSectionEntries(c?.sections).filter((e) => !borradas.has(e.key));
+    for (const key of conAlgo) entradas = patchSectionEntry(entradas, key, { hidden: true });
+    await tx.projectCanvas.update({ where: { id: canvasId }, data: { sections: entradas as Prisma.InputJsonValue } });
+  });
+}
+
+/**
+ * Los rótulos guardados que cambiaron de nombre (2026-10-23: «Política rectora» → «Enfoque de la solución»). La fila y su
+ * entrada del Json guardan el rótulo con que nacieron; solo se cambia el que sigue igual al viejo (uno que alguien
+ * renombró a mano se respeta). El título del documento ya sale de la definición.
+ */
+async function ponerAlDiaLosRotulos(canvasId: string): Promise<void> {
+  const porKey = new Map(DIAGNOSTICO_CANVAS.sections.map((s) => [s.key, s.label]));
+  for (const [key, viejos] of Object.entries(ROTULOS_VIEJOS_DEL_DIAGNOSTICO)) {
+    const nuevo = porKey.get(key);
+    if (!nuevo) continue;
+    await prisma.canvasSection.updateMany({ where: { canvasId, key, label: { in: [...viejos] } }, data: { label: nuevo } });
+  }
+  const c = await prisma.projectCanvas.findUnique({ where: { id: canvasId }, select: { sections: true } });
+  const entradas = parseSectionEntries(c?.sections);
+  const cambian = entradas.filter((e) => (ROTULOS_VIEJOS_DEL_DIAGNOSTICO[e.key] ?? []).includes(e.label));
+  if (!cambian.length) return;
+  let nuevas: unknown = entradas;
+  for (const e of cambian) nuevas = patchSectionEntry(nuevas, e.key, { label: porKey.get(e.key) ?? e.label });
+  await prisma.projectCanvas.update({ where: { id: canvasId }, data: { sections: nuevas as Prisma.InputJsonValue } });
 }
 
 /** ¿La política rectora guardada ya la revisó el ejecutivo? (`revisadaAt`, fuera del esquema). */

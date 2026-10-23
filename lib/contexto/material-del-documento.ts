@@ -46,7 +46,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { getProjectDocumentSessions } from "@/lib/sessions/project-sources";
+import { getProjectDocumentSessions, getProjectMemberSessions } from "@/lib/sessions/project-sources";
 import { esSoloElegidas } from "@/lib/sessions/destinos-de-contexto";
 import { soloOcurridas } from "@/lib/sessions/ocurridas";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
@@ -133,6 +133,12 @@ export interface OpcionesDelMaterial {
    * por pedido no se justifican para mejorar una sección.
    */
   elegidasEnResumen?: boolean;
+  /**
+   * Reuniones que entran COMO ELEGIDAS sin que nadie las haya tocado en el Contexto (2026-10-23): las de las sesiones de
+   * la exploración, en el diagnóstico (`reunionesDeLaExploracionDelDiagnostico`). Son ids: se buscan en la membresía del
+   * proyecto por el chokepoint, así una que no es del proyecto (o de otro cliente) no entra aunque venga en la lista.
+   */
+  sumarReuniones?: readonly string[];
 }
 
 export async function cargarMaterialDelDocumento(
@@ -140,12 +146,16 @@ export async function cargarMaterialDelDocumento(
   doc: DocumentoConContexto,
   opts: OpcionesDelMaterial = {},
 ): Promise<MaterialDelDocumento> {
-  const [{ sessions }, categorias, notas, instrucciones] = await Promise.all([
+  const sumar = new Set(opts.sumarReuniones ?? []);
+  const [{ sessions: elegidas }, sumadas, categorias, notas, instrucciones] = await Promise.all([
     getProjectDocumentSessions(projectId, doc.destino),
+    sumar.size ? getProjectMemberSessions(projectId).then((r) => r.sessions.filter((s) => sumar.has(s.id))) : Promise.resolve([]),
     getSessionCategories(),
     leerNotas(projectId, doc.pieza),
     leerInstrucciones(projectId, doc.pieza),
   ]);
+  const yaElegidas = new Set(elegidas.map((s) => s.id));
+  const sessions = [...elegidas, ...sumadas.filter((s) => !yaElegidas.has(s.id))];
   const dominiosPropios = buildInternalDomainsSet(categorias);
   const ahora = Date.now();
   const soloElegidas = esSoloElegidas(doc.destino);

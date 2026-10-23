@@ -51,6 +51,7 @@ import {
   PROSA_SCHEMA_DEL_CHAT,
 } from "./shared-sections.defs";
 import { DIAGNOSTICO_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
+import { SECCIONES_DEL_DIAGNOSTICO_ESENCIAL } from "@/lib/entregables/registro";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
 
 const str = { type: "string" } as const;
@@ -122,7 +123,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     backdrop: true,
     selfTitled: true,
     pinned: true,
-    noHide: true,
+    // Se puede ocultar desde el 2026-10-23 (Elías: «que todos los módulos se puedan ocultar»).
     // La portada del BC + la línea «Cliente · Fecha · Versión · Estado» (2026-10-02). Tipo propio y no
     // `hero`: el mismo nombre resolviendo a dos componentes es justo lo que el registro prohíbe.
     sectionType: "diagnostico_portada",
@@ -151,11 +152,13 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     eyebrow: "El punto de partida",
     theme: "light",
     sectionType: "kickoff_prose",
+    // Datos cortos en tres columnas (2026-10-23): la foto del cliente se lee de un vistazo.
+    diseno: "datos",
     agentGenerated: true,
     empty: proseEmpty,
     agentHint: "Quién es el cliente hoy: a quién atiende, sus frentes y el punto de partida del proyecto. 3-5 tarjetas.",
     brief:
-      "La foto del cliente antes de hablar de problemas. `intro`: 1-2 frases con qué es la organización y qué atiende hoy. `items` (3-5 tarjetas): `title` = un frente o un hecho del contexto ('A quién atiende', 'Captación y matrícula', 'Mesa de ayuda', 'Punto de partida del proyecto'); `detail` = 1-2 frases concretas, con cifras si las fuentes las traen. La última tarjeta es siempre el punto de partida: qué contrató, cuánto dura y qué entrega. Sin juicios: los problemas van en la sección siguiente.",
+      "La foto del cliente antes de hablar de problemas. `intro`: UNA frase corta con qué es la organización y qué atiende hoy. `items` (3-5 tarjetas): `title` = un frente o un hecho del contexto ('A quién atiende', 'Captación y matrícula', 'Mesa de ayuda', 'Punto de partida del proyecto'); `detail` = 1-2 frases concretas, con cifras si las fuentes las traen. La última tarjeta es siempre el punto de partida: qué contrató, cuánto dura y qué entrega. Sin juicios: los problemas van en la sección siguiente.",
     schema: asSchema(proseSchema),
     schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
@@ -217,6 +220,8 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     eyebrow: "El problema en una pregunta",
     theme: "dark",
     sectionType: "kickoff_prose",
+    // La pregunta grande y las situaciones numeradas, sin tarjetas blancas sobre el fondo oscuro (2026-10-23).
+    diseno: "numerada",
     agentGenerated: true,
     empty: proseEmpty,
     agentHint: "La pregunta que resume el problema + 4-6 situaciones de hoy con lo que le cuestan, sin la solución.",
@@ -225,7 +230,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
        «le hablan igual a todos sus contactos y la mitad no abre nada» dice qué pasa y qué cuesta.
        Los ejemplos de antes («Sin registro único», «Sin medición») empujaban justo a la carencia. */
     brief:
-      "El problema en una pregunta, contado como lo vive el cliente HOY. `intro` = UNA pregunta que lo resume en palabras del cliente y que hable del resultado que no consigue ('¿Por qué invertimos en pauta y no sabemos cuántas matrículas nos trae?'). " +
+      "El problema en una pregunta, contado como lo vive el cliente HOY. `intro` = UNA pregunta CORTA (menos de 25 palabras) que lo resume en palabras del cliente y que hable del resultado que no consigue ('¿Por qué invertimos en pauta y no sabemos cuántas matrículas nos trae?'). " +
       "`items` (4-6): lo que pasa hoy — `title` = la situación en 3-6 palabras, dicha como un hecho de su operación ('Le hablan igual a todos', 'Cada lead depende de quién lo atiende'); `detail` = UNA línea con lo que eso le cuesta (tiempo, plata, clientes u oportunidades), con la cifra si las fuentes la traen ('La misma campaña llega a quien ya compró y a quien nunca abrió un correo'). Cada situación sale de una o más causas (F) de la sección anterior; no repitas sus textos. " +
       "⛔ Sin la solución escondida: no nombres herramientas ni funciones, y no armes la situación como una carencia ('Sin segmentación', 'No tiene CRM', 'Falta automatizar', 'No puede automatizar porque no segmenta'): eso ya dice qué hay que comprar. Describe qué pasa y qué cuesta; la solución va en Acciones.",
     schema: asSchema(proseSchema),
@@ -237,17 +242,20 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
        el renderer la marca «Sugerencia por revisar» (solo en edición) hasta que alguien la revisa,
        y sin revisar no se presenta. Revisada, regenerar no la pisa (diagnostico-generate.ts). */
     key: POLITICA_RECTORA_KEY,
-    label: "Política rectora",
-    eyebrow: "¿En qué debemos enfocarnos y para qué?",
+    /* 2026-10-23 (Elías): «Política rectora» pasa a llamarse «Enfoque de la solución». La key y `revisadaAt` no
+       cambian: los diagnósticos guardados siguen igual. */
+    label: "Enfoque de la solución",
+    eyebrow: "Cómo lo vamos a resolver",
     theme: "dark",
     sectionType: "diagnostico_politica",
+    diseno: "enfoque",
     agentGenerated: true,
     empty: proseEmpty,
-    agentHint: "La pregunta del enfoque + 4-6 principios, cada uno nacido de las causas (F). Es una sugerencia: la revisa el ejecutivo.",
+    agentHint: "El enfoque en una frase + 3-5 principios, cada uno nacido de las causas (F). Es una sugerencia: la revisa el ejecutivo.",
     brief:
-      "Los principios que guían la solución — lo que se decide una vez y no se vuelve a discutir. Es una SUGERENCIA: casi nunca se habla en las sesiones, así que la propones desde las causas (F) y los objetivos (OBJ), y el ejecutivo la ajusta antes de presentarla. " +
-      "`intro` = UNA pregunta de enfoque ('¿En qué debemos enfocarnos y para qué?'). `items` (4-6): `title` = el principio en 3-7 palabras, dicho como decisión ('HubSpot como única fuente', 'Automatizar lo repetitivo, dejar el criterio a las personas', 'Medir desde el día uno con lo mínimo'); " +
-      "`detail` = 1-2 frases con qué significa EN CONCRETO para este cliente. Un principio que no ataca ninguna causa, sobra. Sin detalle de configuración.",
+      "El enfoque de la solución: en qué nos vamos a concentrar y los principios que guían cada decisión — lo que se decide una vez y no se vuelve a discutir. Es una SUGERENCIA: casi nunca se habla en las sesiones, así que la propones desde las causas (F) y los objetivos (OBJ), y el ejecutivo la ajusta antes de presentarla. " +
+      "`intro` = UNA frase corta (menos de 25 palabras) con el enfoque central, dicho al cliente ('Primero un solo registro del cliente; después, medir y automatizar sobre ese dato'). `items` (3-5): `title` = el principio en 3-7 palabras, dicho como decisión ('HubSpot como única fuente', 'Automatizar lo repetitivo, dejar el criterio a las personas', 'Medir desde el día uno con lo mínimo'); " +
+      "`detail` = UNA frase con qué significa EN CONCRETO para este cliente. Un principio que no ataca ninguna causa, sobra. Sin detalle de configuración.",
     schema: asSchema(proseSchema),
     schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
@@ -278,6 +286,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     eyebrow: "¿Qué estamos haciendo bien?",
     theme: "soft",
     sectionType: "kickoff_prose",
+    diseno: "check",
     agentGenerated: true,
     empty: proseEmpty,
     agentHint: "Lo que el cliente ya hace bien y el proyecto aprovecha. 3-6 tarjetas.",
@@ -403,7 +412,6 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     theme: "dark",
     selfTitled: true,
     pinned: true,
-    noHide: true,
     ctxDriven: true, // banda oscura propia que además lee `data` (CTA), como el kickoff
     sectionType: "kickoff_cta",
     agentGenerated: false, // CURADA: la escribe el equipo, el agente no la toca
@@ -541,12 +549,32 @@ export const DIAGNOSTICO_TEMPLATE: BcTemplateDef = {
     "LA DIVISIÓN DEL TRABAJO: este informe es la parte TEÓRICA — el problema, sus causas, a dónde queremos llegar y CÓMO lo vamos a resolver (las acciones, las herramientas y cómo va a operar). La parte PRÁCTICA, lo que termina configurado en HubSpot, es de la planificación: aquí NUNCA va detalle de configuración — ni nombres de propiedades, ni etapas de pipeline, ni reglas de workflow.\n\n" +
     "EL HILO (lo que hace distinto a este informe): todo se une con CÓDIGOS. Los síntomas son S1, S2…; las causas son F1, F2…; los objetivos son OBJ-01, OBJ-02…; las acciones son AC-01, AC-02…. Cada causa dice qué síntomas explica, cada consecuencia dice qué causas la producen, cada ACCIÓN dice qué causas ataca y qué objetivos mueve, cada pregunta de negocio dice qué objetivo la responde. Nada queda suelto: una causa sin acción, una acción sin causa o sin objetivo, o un síntoma que ninguna causa explica, es un error del informe. Los códigos son correlativos y no se repiten.\n\n" +
     "TU MÉTODO: parte de la evidencia — las sesiones con el cliente, sus respuestas a la encuesta, la ficha del cliente, lo que se conversó al vender el proyecto, la exploración y sus procesos mapeados. Los objetivos salen de los resultados que el cliente persigue. Explica dónde está con causas, no con síntomas: el cliente no compra un informe, compra entender POR QUÉ está donde está y cómo se sale de ahí.\n\n" +
-    "LA POLÍTICA RECTORA es una sugerencia tuya: casi nunca se habla en las sesiones. Propónla desde las causas y los objetivos; el ejecutivo la ajusta antes de presentarla.\n\n" +
+    "EL ENFOQUE DE LA SOLUCIÓN (la sección `politica_rectora`) es una sugerencia tuya: casi nunca se habla en las sesiones. Propónlo desde las causas y los objetivos; el ejecutivo lo ajusta antes de presentarlo.\n\n" +
     "LO QUE ESTE INFORME NO HACE: no ubica al cliente en ninguna escala de madurez y no baja a la configuración.\n\n" +
     "REGISTRO CLIENTE-FACING: tuteo, claro, sin jerga interna de Smarteam ('handoff', 'CSE', 'exploración', 'ficha' no existen para el cliente — di 'las sesiones que tuvimos', 'tus respuestas a la encuesta'). Honesto sin ser cruel: la fricción se nombra con precisión, no con burla ni eufemismo. Nunca opines sobre las personas del cliente.\n\n" +
     "DISCIPLINA ANTI-ALUCINACIÓN (dura): NUNCA inventes datos, cifras, procesos ni personas del cliente. Todo lo que afirmes tiene que rastrearse a una fuente del contexto. Lo que la exploración marcó como 'sin verificar' NO se afirma como hecho — o se omite, o se presenta como pregunta abierta. Una meta numérica que nadie dio va como 'meta por validar'. Un número inventado en un informe que el cliente guarda es el peor error posible.\n\n" +
-    "FORMATO: cada sección tiene su PROPIO shape (su `schema` y su guía) — NO es prosa libre. Los `detail` van en una o dos líneas. Español, tuteo. Si una sección no tiene respaldo en las fuentes, deja sus arrays vacíos — vacío es correcto, inventado no.",
+    "FORMATO: cada sección tiene su PROPIO shape (su `schema` y su guía) — NO es prosa libre. Los `detail` van en una o dos líneas. Toda `intro` es CORTA: una sola frase de menos de 25 palabras, o vacía si la sección se entiende sin ella. Español, tuteo. Si una sección no tiene respaldo en las fuentes, deja sus arrays vacíos — vacío es correcto, inventado no.",
   sections: DIAGNOSTICO_SECTION_DEFS,
+};
+
+/**
+ * El «Diagnóstico esencial» (2026-10-23, Elías: «un diagnóstico nunca debería ser pesado»): el mismo agente con las
+ * secciones de `SECCIONES_DEL_DIAGNOSTICO_ESENCIAL` (lib/entregables/registro.ts) y las listas en el mínimo. Explica por
+ * qué el cliente tiene los resultados que tiene (el problema, sus causas, el desafío) y qué vamos a hacer (el enfoque de
+ * la solución y las acciones). Las defs son las mismas: cambiar de plantilla no cambia cómo se ve ni cómo se edita.
+ */
+const ESENCIAL = new Set<string>(SECCIONES_DEL_DIAGNOSTICO_ESENCIAL);
+export const DIAGNOSTICO_ESENCIAL_TEMPLATE: BcTemplateDef = {
+  ...DIAGNOSTICO_TEMPLATE,
+  id: "diagnostico_esencial_v1",
+  caseLabel: "Diagnóstico esencial",
+  // Seis secciones generadas en vez de catorce.
+  maxTokens: 12000,
+  agentIntro:
+    DIAGNOSTICO_TEMPLATE.agentIntro +
+    "\n\nESTA ES LA VERSIÓN ESENCIAL: el informe se lee en cinco minutos y le explica simple al cliente por qué tiene los resultados que tiene y qué vamos a hacer para mejorarlos. Escribe SOLO las secciones de tu formato (no hay cómo va a operar, herramientas, equipos, preguntas, brecha ni alcance). " +
+    "Cada lista va en el MÍNIMO de su rango: objetivos 3-5, síntomas 3-5, causas 3-5, consecuencias 3-4, situaciones del desafío 3-4, principios del enfoque 3-4, acciones 4-6. Si algo no entra, junta: menos y más claro es mejor que completo.",
+  sections: DIAGNOSTICO_SECTION_DEFS.filter((d) => ESENCIAL.has(d.key)),
 };
 
 /** Lookup key → def (seed, agente, SectionTools). */

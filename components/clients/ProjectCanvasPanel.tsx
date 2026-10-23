@@ -48,6 +48,7 @@ import type { PiezaParaQueSigue, QueSigueDelProyecto } from "@/lib/clients/que-s
 import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO, BotonAzul, BotonBlanco, BotonEnlace, QueSigue } from "@/components/ui/sistema";
 import VersionesDelDocumento from "@/components/canvas/VersionesDelDocumento";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
+import { rotuloVigente } from "@/lib/canvas/canvas-defs";
 import { slugForCanvas, pieceBySlug, pieceLabel, PIECES } from "@/lib/pieces/registry";
 import { buscarDocumento, vistaDeLaUrl } from "@/lib/flow/vista-de-la-url";
 // La dirección de la ficha del documento dentro del manual — un solo lugar que sabe dónde vive.
@@ -723,8 +724,11 @@ export default function ProjectCanvasPanel({
   const readinessActiva = filaActiva
     ? pieceReadiness(filaActiva.slug, { tags: tags ?? [], piezasConContenido, hubspotPipelineId: hubspotPipelineId ?? null })
     : null;
+  /* El diagnóstico sin generar se genera desde su selector de plantillas (2026-10-23, components/canvas/ElegirPlantilla.tsx):
+     el botón de arriba generaría con la plantilla de siempre sin que nadie la eligiera. Ya generado, regenera con la suya. */
+  const diagnosticoSinGenerar = activeSlug === "diagnosis" && !!filaActiva && filaActiva.state !== "generada";
   const botonDelAgente =
-    activeCanvas && CANVAS_PRIMARY_AGENT[activeSlug ?? ""] && activeSlug !== "exploration" ? (
+    activeCanvas && CANVAS_PRIMARY_AGENT[activeSlug ?? ""] && activeSlug !== "exploration" && !diagnosticoSinGenerar ? (
       <CanvasAgentButton
         clientId={clientId}
         projectId={projectId}
@@ -743,6 +747,8 @@ export default function ProjectCanvasPanel({
         }}
       />
     ) : null;
+  /* Las secciones con el rótulo de hoy: un diagnóstico de antes trae guardada la «Política rectora» (2026-10-23). */
+  const seccionesConRotuloVigente = (activeCanvas?.sections ?? []).map((s) => ({ ...s, label: rotuloVigente(activeSlug, s.key, s.label) }));
   /** La franja del marco dice si el documento abierto se publica al cliente (registro de piezas). */
   const loVeElCliente = !!(activeSlug && pieceBySlug(activeSlug)?.clientFacing);
   /** Los documentos con «Contexto adicional» propio (lib/contexto/documento.ts). */
@@ -1042,7 +1048,7 @@ export default function ProjectCanvasPanel({
             accion={ctaEnElPanel ? botonDelAgente : null}
             queSigueDelProyecto={queSigueParaElDocumento}
             queSigueOcupado={queSigueOcupado}
-            secciones={activeCanvas.sections ?? []}
+            secciones={seccionesConRotuloVigente}
           />,
           slotDelPanel,
         )}
@@ -1100,7 +1106,7 @@ export default function ProjectCanvasPanel({
           key={`novedades-${activeCanvasId}`}
           projectId={projectId}
           pieza={activeSlug}
-          secciones={activeCanvas.sections ?? []}
+          secciones={seccionesConRotuloVigente}
           novedades={novedades![activeSlug]}
           abierta={novedadesAbiertas}
           onAlternar={() => setNovedadesAbiertas((v) => !v)}
@@ -1187,7 +1193,18 @@ export default function ProjectCanvasPanel({
       {activeSlug === "diagnosis" && activeCanvasId && (
         <MarcoDelDocumento loVeElCliente={loVeElCliente}>
           <CanvasBoundary label="el diagnóstico">
-            <DiagnosticoWorkspace key={`diagnostico-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+            <DiagnosticoWorkspace
+              key={`diagnostico-${activeCanvasId}-${agentNonce}`}
+              projectId={projectId}
+              canvasId={activeCanvasId}
+              clientId={clientId}
+              /* El selector de plantillas genera desde adentro del documento: el mismo cierre que el botón de arriba. */
+              onGenerado={() => {
+                setAgentNonce((n) => n + 1);
+                bumpGpsRefresh();
+                void refetchCanvases();
+              }}
+            />
           </CanvasBoundary>
         </MarcoDelDocumento>
       )}

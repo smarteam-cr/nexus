@@ -159,6 +159,7 @@ export function toSectionDef(
     chips: d.chips,
     invest: d.invest,
     compara: d.compara,
+    diseno: d.diseno,
     empty: d.empty,
     Component,
   };

@@ -11,6 +11,7 @@
 import { useState, type CSSProperties, type FC, type ReactNode } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
+import { ConIntro } from "./partes";
 import { CtaButton, CtaEditor } from "./sections";
 import { landingLang, t, type LandingLang, type LandingStringKey } from "./i18n";
 import type {
@@ -120,11 +121,7 @@ export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, 
   const setBullets = (list: { title: string; detail: string }[]) => set({ porQueBullets: list, porQuePlataforma: "" });
   const rotuloRetosPorDefecto = sectionChips?.retos ?? t(lang, "retosActuales");
   return (
-    <>
-      {(data.intro || editable) && (
-        <Editable as="p" className="stl-intro" editable={editable} value={data.intro ?? ""}
-          placeholder="Contexto esencial (máx 2 frases)…" onCommit={(v) => set({ intro: v })} />
-      )}
+    <ConIntro data={data} editable={editable} onCambios={(c) => onChange?.({ ...data, ...c } as typeof data)} claseIntro="stl-intro" placeholder="Contexto esencial en una frase…">
       <div className="stl-diag">
         {/* Izquierda: retos actuales (cards de una línea) */}
         <div>
@@ -213,7 +210,7 @@ export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, 
           )}
         </div>
       </div>
-    </>
+    </ConIntro>
   );
 };
 

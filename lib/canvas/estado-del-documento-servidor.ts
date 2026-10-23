@@ -82,7 +82,13 @@ function dataVisible(doc: Documento): (key: string) => Record<string, unknown> |
 function revisar(doc: Documento, estado: EstadoDocumento, conContenido: boolean) {
   const dataDe = dataVisible(doc);
   const cabos = revisarHilo(seccionesDelHilo((k: SeccionDelHilo) => dataDe(k)));
-  return revisarParaPresentar({ estado, tieneContenido: conContenido, cabos, politica: dataDe(POLITICA_RECTORA_KEY) });
+  return revisarParaPresentar({
+    estado,
+    tieneContenido: conContenido,
+    cabos,
+    politica: dataDe(POLITICA_RECTORA_KEY),
+    politicaOculta: hiddenKeysFrom(doc.sections).has(POLITICA_RECTORA_KEY),
+  });
 }
 
 async function ultimoPresentado(canvasId: string, version: number) {

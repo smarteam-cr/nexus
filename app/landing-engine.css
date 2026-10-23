@@ -2602,18 +2602,28 @@
 .stl .stl-alcance-items li { position: relative; font-size: 13.5px; color: var(--text-2); line-height: 1.5; }
 .stl .stl-alcance-ac { margin-bottom: 0; margin-right: 4px; }
 .stl .stl-alcance-fuera { margin-top: 20px; opacity: 0.8; }
-.stl .stl-sugerencia {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  margin-bottom: 16px; padding: 10px 14px; border-radius: 10px;
-  background: #FFF7ED; border: 1px solid #FED7AA; color: #9A3412; font-size: 13px;
+/* La marca de revisión del ENFOQUE DE LA SOLUCIÓN (2026-10-23): arriba a la DERECHA de la sección, compacta, solo en
+   edición (el componente no la pinta en lectura: ni el cliente ni el PDF la ven). Antes era una franja en medio del
+   contenido que separaba el título del enfoque. El chrome de la sección está a la izquierda (`.stl-overlay`), así que
+   no se pisan. Letra de la interfaz, como «Cambiar»: es del editor, no del documento. */
+.stl .stl-revision {
+  position: absolute; top: 12px; right: 16px; z-index: 5;
+  display: inline-flex; align-items: center; gap: 8px; max-width: calc(100% - 32px);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.2;
 }
-.stl .stl-sugerencia span { flex: 1; min-width: 220px; }
-.stl .stl-sugerencia button {
-  font: inherit; font-weight: 700; padding: 5px 12px; border-radius: 8px; cursor: pointer;
-  background: #9A3412; color: #FFF7ED; border: none;
+.stl .stl-revision-estado {
+  padding: 5px 10px; border-radius: 999px; font-weight: 600; white-space: nowrap;
+  background: #FFF7ED; border: 1px solid #FED7AA; color: #9A3412;
 }
-.stl .stl-sugerencia-ok { background: #F0FDF4; border-color: #BBF7D0; color: #166534; }
-.stl .stl-sugerencia-ok button { background: transparent; color: #166534; box-shadow: inset 0 0 0 1px #86EFAC; }
+.stl .stl-revision button {
+  font: inherit; font-weight: 600; padding: 5px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+  border: 1px solid #e5e7eb; background: #ffffff; color: #374151;
+}
+.stl .stl-revision button:hover { background: #f9fafb; color: #111827; }
+.stl .stl-revision-ok .stl-revision-estado { background: #F0FDF4; border-color: #BBF7D0; color: #166534; }
+@media (max-width: 720px) {
+  .stl .stl-revision { position: static; display: flex; flex-wrap: wrap; margin: 0 0 14px; }
+}
 /* Las ACCIONES (components/landing/sections-ejecucion.tsx): en el diagnóstico desde el 2026-10-02. */
 .stl .stl-acciones td { vertical-align: top; }
 .stl .stl-acciones .stl-codigo { white-space: nowrap; }
@@ -2959,3 +2969,95 @@
 /* En el PDF nada scrollea: la tabla de licencias se imprime entera. */
 .stl-pdf-mode .stl-mod-lic-scroll { overflow: visible !important; }
 .stl-pdf-mode .stl-props.stl-mod-lic-tabla { min-width: 0 !important; }
+
+/* ── Las piezas de una sección (2026-10-23, components/landing/partes.tsx) ──────────────────────────────────────────
+   El subtítulo, la intro y el cuerpo se arrastran y se quitan como un ítem. La manija y la X van FUERA del texto, a los
+   costados (en el margen de la página), solo al pasar el mouse: la vista de edición sigue igual a la del cliente. */
+.stl .stl-partes { display: flex; flex-direction: column; }
+/* ⚠ NO es `.stl-item`: `.stl-item:hover .stl-remove` es DESCENDENTE, y el cuerpo tiene adentro las tarjetas: pasar el
+   mouse por el cuerpo mostraría la X de todas. La pieza muestra solo lo SUYO (hijos directos). */
+.stl .stl-parte { position: relative; }
+.stl .stl-parte:hover > .stl-remove,
+.stl .stl-parte:hover > .stl-drag-item { opacity: 1; }
+.stl .stl-parte > .stl-drag-item { top: 2px; left: -38px; }
+.stl .stl-parte > .stl-remove { top: 2px; right: -38px; }
+/* El cuerpo es grande: su manija y su X no compiten con las de las tarjetas de adentro. */
+.stl .stl-parte[data-parte="cuerpo"] > .stl-drag-item,
+.stl .stl-parte[data-parte="cuerpo"] > .stl-remove { top: 0; }
+@media (max-width: 900px) {
+  .stl .stl-parte > .stl-drag-item { left: auto; right: 38px; top: -32px; }
+  .stl .stl-parte > .stl-remove { right: 0; top: -32px; }
+}
+.stl .stl-partes-agregar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.stl .stl-partes-agregar button {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 12px; font-weight: 600; line-height: 1.2;
+  padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px dashed var(--border-strong); background: transparent; color: var(--text-muted);
+}
+.stl .stl-partes-agregar button:hover { color: var(--blue); border-color: var(--blue); }
+.stl .stl-dark .stl-partes-agregar button { border-color: var(--dark-border-strong); color: var(--dark-text-2); }
+/* La prosa: el subtítulo y la intro pegados al título; el cuerpo, con su aire. */
+.stl .stl-partes-prosa { gap: 14px; }
+.stl .stl-partes-prosa .stl-lead { margin-top: 0; }
+
+/* ── Los diseños de PROSA del diagnóstico (2026-10-23, components/landing/prosa-con-diseno.tsx) ──────────────────────
+   Elías: «secciones con cards muy amplias». Sin tarjetas blancas anchas: datos en tres columnas, puntos numerados,
+   checks y principios. El esquema es el mismo de la prosa (`items: [{ title, detail }]`). Hex literal y CSS estático:
+   salen igual en la vista del cliente y en el PDF. */
+.stl .stl-prosa { display: grid; gap: 0 40px; margin-top: 8px; }
+.stl .stl-prosa-punto { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 16px; align-items: start; }
+.stl .stl-prosa-titulo {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-weight: 700; font-size: 16.5px; line-height: 1.35; margin: 0 0 4px; color: var(--text);
+}
+.stl .stl-prosa-detalle { font-size: 14.5px; line-height: 1.55; margin: 0; color: var(--text-2); }
+.stl .stl-dark .stl-prosa-titulo { color: var(--dark-text); }
+.stl .stl-dark .stl-prosa-detalle { color: var(--dark-text-2); }
+.stl .stl-prosa-num {
+  font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 800; font-size: 22px; line-height: 1.1;
+  letter-spacing: -0.02em; color: var(--accent-display, var(--blue)); min-width: 2ch; padding-top: 1px;
+}
+/* La intro grande: la pregunta del desafío, la frase del enfoque. Pegada al título, con la raya del acento. */
+.stl .stl-prosa-pregunta {
+  font-family: var(--font-jakarta), system-ui, sans-serif; font-weight: 700;
+  font-size: clamp(19px, 2.1vw, 23px); line-height: 1.4; letter-spacing: -0.01em;
+  margin: 0; max-width: 820px; padding-left: 18px; border-left: 3px solid var(--accent-display, var(--blue));
+  color: var(--text);
+}
+.stl .stl-dark .stl-prosa-pregunta { color: var(--dark-text); }
+
+/* numerada (el desafío): dos columnas, una raya fina entre punto y punto, sin tarjeta. */
+.stl .stl-prosa-numerada { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 18px; }
+.stl .stl-prosa-numerada .stl-prosa-punto { padding: 18px 0; border-top: 1px solid var(--border); }
+.stl .stl-dark .stl-prosa-numerada .stl-prosa-punto { border-top-color: var(--dark-border-strong); }
+
+/* enfoque (el enfoque de la solución): los principios numerados en dos columnas, en una tarjeta translúcida. */
+.stl .stl-prosa-enfoque { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+.stl .stl-prosa-enfoque .stl-prosa-punto {
+  padding: 16px 18px; border-radius: 14px; background: var(--bg-soft); border: 1px solid var(--border);
+}
+.stl .stl-dark .stl-prosa-enfoque .stl-prosa-punto { background: rgba(255, 255, 255, 0.05); border-color: var(--dark-border); }
+
+/* datos (la foto del cliente): tres columnas cortas con el acento arriba. */
+.stl .stl-prosa-datos { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+.stl .stl-prosa-datos .stl-prosa-punto {
+  grid-template-columns: minmax(0, 1fr); padding: 16px 18px; border-radius: 14px;
+  background: #fff; border: 1px solid var(--border); border-top: 3px solid var(--accent-display, var(--blue));
+}
+.stl .stl-prosa-datos .stl-prosa-titulo { font-size: 15px; }
+.stl .stl-prosa-datos .stl-prosa-detalle { font-size: 14px; }
+
+/* check (las fortalezas): lista con check en dos columnas. */
+.stl .stl-prosa-check { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 40px; margin-top: 18px; }
+.stl .stl-prosa-tilde {
+  width: 26px; height: 26px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--blue-soft); color: var(--blue); margin-top: 1px;
+}
+.stl .stl-prosa-tilde svg { width: 15px; height: 15px; }
+
+@media (max-width: 880px) {
+  .stl .stl-prosa-datos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .stl .stl-prosa-numerada, .stl .stl-prosa-enfoque, .stl .stl-prosa-datos, .stl .stl-prosa-check { grid-template-columns: 1fr; }
+}

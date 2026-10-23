@@ -402,6 +402,7 @@ export default function LandingView({
         sectionInvest={def.invest}
         sectionCompara={def.compara}
         sectionRotulosDeListas={def.rotulosDeListas}
+        sectionDiseno={def.diseno}
         editable={editable}
         onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
       />
@@ -480,6 +481,7 @@ export default function LandingView({
           sectionInvest={def.invest}
           sectionCompara={def.compara}
           sectionRotulosDeListas={def.rotulosDeListas}
+          sectionDiseno={def.diseno}
           editable={editable}
           onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
         />

@@ -430,6 +430,16 @@ export async function loadCanvasContext(
 }
 
 /**
+ * Cuánto hay confirmado y propuesto en la exploración del proyecto (2026-10-23): solo números, para «Antes de generar»
+ * del diagnóstico. La misma puerta que el texto (`textoDeLaExploracionDelProyecto`): los documentos del cliente no leen
+ * la exploración directo (lib/exploraciones/lectores.test.ts).
+ */
+export async function cuantoHayEnLaExploracion(projectId: string): Promise<{ existe: boolean; confirmados: number; propuestos: number }> {
+  const { cuantoHayEnLaExploracionDelProyecto } = await import("@/lib/exploraciones/del-proyecto");
+  return cuantoHayEnLaExploracionDelProyecto(projectId).catch(() => ({ existe: false, confirmados: 0, propuestos: 0 }));
+}
+
+/**
  * El HANDOFF que le corresponde a este proyecto — que no siempre es el suyo.
  *
  * Un desarrollo que cuelga de una implementación de Customer Success comparte con ella el

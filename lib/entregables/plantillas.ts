@@ -2,12 +2,13 @@
  * lib/entregables/plantillas.ts — de la plantilla de un entregable a su TEMPLATE del motor (las defs de
  * components/landing/configs). Server-safe; no se importa desde la pantalla (las defs pesan).
  *
- * Cada plantilla de ./registro.ts tiene su template acá, y `registro.test.ts` lo verifica. Hoy son los templates de
- * siempre de cada documento: generar con la plantilla de siempre manda al modelo EXACTAMENTE lo mismo que antes.
+ * Cada plantilla de ./registro.ts tiene su template acá, y `registro.test.ts` lo verifica. La de siempre de cada documento
+ * es su template de siempre: generar con ella manda al modelo EXACTAMENTE lo mismo que antes. El «Diagnóstico esencial»
+ * (2026-10-23) es el mismo agente con menos secciones.
  */
 import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
 import { KICKOFF_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
-import { DIAGNOSTICO_TEMPLATE } from "@/components/landing/configs/diagnostico.defs";
+import { DIAGNOSTICO_ESENCIAL_TEMPLATE, DIAGNOSTICO_TEMPLATE } from "@/components/landing/configs/diagnostico.defs";
 import { PLANIFICACION_TEMPLATE } from "@/components/landing/configs/planificacion.defs";
 import { DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
 import { ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
@@ -16,6 +17,7 @@ import { ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
 export const TEMPLATE_DE_LA_PLANTILLA: Readonly<Record<string, BcTemplateDef>> = {
   kickoff: KICKOFF_TEMPLATE,
   "diagnostico-estrategico": DIAGNOSTICO_TEMPLATE,
+  "diagnostico-esencial": DIAGNOSTICO_ESENCIAL_TEMPLATE,
   planificacion: PLANIFICACION_TEMPLATE,
   integraciones: DESARROLLO_TEMPLATE,
   entrega: ENTREGA_TEMPLATE,

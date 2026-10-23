@@ -11,6 +11,7 @@
 import { Fragment, type FC } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { SortableItems } from "./sortable";
+import { ConIntro } from "./partes";
 import { landingLang, t } from "./i18n";
 import type { SectionProps, TechArchitectureData, ProcessMappingData, UseCasesData } from "./types";
 
@@ -143,9 +144,7 @@ export const ProcessMappingSection: FC<SectionProps<ProcessMappingData>> = ({ da
   const procesos = data.procesos ?? [];
   const set = (next: Partial<ProcessMappingData>) => onChange?.({ ...data, ...next });
   return (
-    <>
-      <Editable as="p" className="stl-intro" editable={editable} value={data.intro ?? ""}
-        placeholder="Qué procesos del cliente cambian con la implementación…" onCommit={(v) => set({ intro: v })} />
+    <ConIntro data={data} editable={editable} onCambios={(c) => onChange?.({ ...data, ...c } as typeof data)} claseIntro="stl-intro" placeholder="Qué procesos del cliente cambian con la implementación…">
       <SortableItems items={procesos} disabled={!editable} onReorder={(next) => set({ procesos: next })}
         container={(nodes) => <>{nodes}</>}>
         {(p, i, handle) => (
@@ -186,6 +185,6 @@ export const ProcessMappingSection: FC<SectionProps<ProcessMappingData>> = ({ da
         )}
       </SortableItems>
       {editable && <AddBtn label="Agregar proceso" onClick={() => set({ procesos: appendItem(procesos, { nombre: "", resumenHoy: "", comoEsHoy: "", resumenSera: "", comoSera: "", sistemas: "" }) })} />}
-    </>
+    </ConIntro>
   );
 };

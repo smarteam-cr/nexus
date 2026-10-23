@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { areasContratadas } from "@/lib/escala/areas-por-hub";
 import type { Meta, Reto } from "./casillas";
 import { contenidoVacio, propuestaVacia, type ContenidoDeExploracion } from "./contenido";
+import { CASILLAS_PROPUESTAS_AL_DOCUMENTO, itemsPropuestosAlDocumento, propuestoSinDecidir } from "./propuesto-al-documento";
 import { leerContenido, leerPropuesta } from "./esquemas";
 import { lecturasDeLaExploracion, type SesionPlaneada } from "./guia";
 import { definicionEnElMarco, MARCO_DE_CS } from "./marco";
@@ -148,6 +149,18 @@ export async function textoDeLaExploracionDelProyecto(projectId: string): Promis
   if (particularidades.length) partes.push(`## Lo propio de la cuenta\n${particularidades.map((p) => `- ${p}`).join("\n")}`);
   // «Lo que nadie siguió» no va: es la libreta del CSE para la próxima sesión, no algo que sepa del cliente.
 
+  /* Lo que Nexus propuso y nadie decidió todavía (2026-10-23): entra rotulado como supuesto. Sin esto, una exploración
+     con las sesiones leídas pero sin revisar le llegaba al diagnóstico casi vacía. Solo lo que dice el cliente (la
+     estrategia y lo propio de la cuenta); nunca la libreta del CSE («no explorado», el siguiente paso, los criterios). */
+  const supuestos = propuestoSinDecidir(c, propuesta.items);
+  if (supuestos.length) {
+    partes.push(
+      `## Lo que Nexus propuso y nadie confirmó todavía (SUPUESTOS: orientan, nunca se afirman como hechos)\n${supuestos
+        .map((s) => `- ${s}`)
+        .join("\n")}`,
+    );
+  }
+
   // Solo lo leído de sus sesiones (etapa A): lo de una reunión que no es sesión no llega al Diagnóstico ni a la Planificación.
   const lecturas = Object.values(lecturasDeLaExploracion(propuesta.lecturas, c.sesiones, { automaticas: false, fuera: c.fuera })).sort((a, b) =>
     a.en.localeCompare(b.en),
@@ -155,6 +168,30 @@ export async function textoDeLaExploracionDelProyecto(projectId: string): Promis
   if (lecturas.length) partes.push(`## Lo que salió de cada sesión\n${lecturas.map((l) => `- ${l.etiqueta}: ${l.resumen}`).join("\n")}`);
 
   return partes.length ? `# Exploración del proyecto\n\n${partes.join("\n\n")}` : "";
+}
+
+/**
+ * CUÁNTO hay en la exploración del proyecto: lo confirmado (la estrategia, lo propio de la cuenta y los niveles con
+ * evidencia) y lo que Nexus propuso y nadie decidió (de esas mismas casillas). Solo los números, nunca el contenido: lo
+ * usa «Antes de generar» del diagnóstico (2026-10-23, lib/canvas/diagnostico-confirmado.ts).
+ */
+export async function cuantoHayEnLaExploracionDelProyecto(
+  projectId: string,
+): Promise<{ existe: boolean; confirmados: number; propuestos: number }> {
+  const nada = { existe: false, confirmados: 0, propuestos: 0 };
+  if (!modeloDisponible(prisma.exploracionDeVenta)) return nada;
+  const fila = await prisma.exploracionDeVenta
+    .findFirst({ where: { projectId, archivadaEn: null }, select: { contenido: true, propuesta: true } })
+    .catch(() => null);
+  if (!fila) return nada;
+  const c = leerContenido(fila.contenido);
+  const propuesta = leerPropuesta(fila.propuesta);
+  const enCasillas = CASILLAS_PROPUESTAS_AL_DOCUMENTO.reduce((n, k) => {
+    const v = c.casillas[k] as unknown;
+    return n + (Array.isArray(v) ? v.length : 0);
+  }, 0);
+  const niveles = Object.values(c.chequeo).filter((e) => e.fuente !== "test" && e.fuente !== "hipotesis").length;
+  return { existe: true, confirmados: enCasillas + niveles, propuestos: itemsPropuestosAlDocumento(c, propuesta.items).length };
 }
 
 /**

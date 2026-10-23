@@ -65,7 +65,14 @@ describe("⭐ todo documento que la IA reescribe guarda la foto ANTES de escribi
 
   it("⛔ el diagnóstico ya no BORRA sus secciones retiradas: las oculta (la Entrega lee la Escala)", () => {
     const src = leer("lib/canvas/diagnostico-generate.ts").replace(/\/\*[\s\S]*?\*\//g, "");
-    expect(src).not.toMatch(/canvasSection\.deleteMany/);
+    /* 2026-10-23 (las dos plantillas): el ÚNICO borrado de secciones es el de `ajustarALaPlantilla`, y solo de las
+       VACÍAS que la plantilla esencial no tiene. Una sección con algo escrito se oculta, nunca se borra; las retiradas no
+       están en el canon, así que ese borrado ni las mira. */
+    expect(src.match(/canvasSection\.deleteMany/g) ?? []).toHaveLength(1);
+    const ajuste = src.slice(src.indexOf("async function ajustarALaPlantilla"), src.indexOf("async function ponerAlDiaLosRotulos"));
+    expect(ajuste).toContain("canvasSection.deleteMany");
+    expect(ajuste).toContain("_count.blocks === 0");
+    expect(ajuste).toContain("DIAGNOSTICO_CANVAS.sections");
     // Desde el 2026-10-02 lo hace un ayudante compartido con Planificación y Ejecución.
     expect(src).toContain("ocultarSeccionesRetiradas(");
     const ayudante = leer("lib/canvas/retirar-secciones.ts").replace(/\/\*[\s\S]*?\*\//g, "");

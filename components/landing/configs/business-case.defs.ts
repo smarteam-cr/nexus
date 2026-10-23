@@ -12,7 +12,7 @@
  * el registry es la fuente de composición; BC_SECTION_DEFS/BC_DEF_BY_KEY se mantienen
  * exportados por compatibilidad.
  */
-import type { CompararLabels, InvestLabels, LandingContext } from "../types";
+import type { CompararLabels, DisenoDeProsa, InvestLabels, LandingContext } from "../types";
 
 export interface BCSectionDef {
   key: string;
@@ -48,6 +48,9 @@ export interface BCSectionDef {
    *  correcto en los cuatro documentos que miran hacia adelante. La Entrega mira hacia
    *  atrás y usa "Antes" / "Ahora". Ver `SectionProps.sectionCompara`. */
   compara?: CompararLabels;
+  /** Cómo se dibuja una sección de PROSA (`kickoff_prose`), por documento. Hermano de `chips`: la forma entra por la
+   *  DEFINICIÓN, nunca por `data`, así el esquema, el chat y el agente no cambian. Ver `DisenoDeProsa`. */
+  diseno?: DisenoDeProsa;
   /** La sección nace OCULTA: createBusinessCaseCanvas siembra `hidden:true` en el Json
    *  del canvas (publish filtra por ese Json, no por la config). El CSE la muestra cuando aplica. */
   defaultHidden?: boolean;

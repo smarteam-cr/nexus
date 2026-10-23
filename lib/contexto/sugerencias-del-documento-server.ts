@@ -27,7 +27,12 @@ import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { COLUMNA_DEL_DESTINO, esSoloElegidas, type DestinoDeContexto } from "@/lib/sessions/destinos-de-contexto";
 import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
 import { documentoDelDestino } from "./documento";
-import { sugerenciasDelDocumento, type HechoQueSugiere, type SugerenciaDeReunion } from "./sugerencias-del-documento";
+import {
+  reunionesDeLasSesiones,
+  sugerenciasDelDocumento,
+  type HechoQueSugiere,
+  type SugerenciaDeReunion,
+} from "./sugerencias-del-documento";
 
 /** Una sugerencia con lo que el panel necesita para pintar la fila. */
 export interface SugerenciaParaElPanel extends SugerenciaDeReunion {
@@ -99,4 +104,27 @@ export async function sugerenciasParaElDocumento(
     const r = porId.get(s.sessionId);
     return r ? [{ ...s, titulo: r.titulo, fecha: r.fecha, participantes: [...r.participantes] }] : [];
   });
+}
+
+/**
+ * LAS REUNIONES DE LAS SESIONES DE LA EXPLORACIÓN, que entran SOLAS al diagnóstico (2026-10-23, DECISIONS «El Diagnóstico:
+ * todo el contexto…»). Una reunión unida a una sesión —a mano o por su evento del calendario— ya la eligió una persona:
+ * es la misma regla que la sugerencia «Sesión N de la exploración» (`reunionesDeLasSesiones`), y salen de la membresía
+ * del proyecto por el chokepoint. Las desestimadas en el Contexto del diagnóstico (`false`, «Descartar») no entran.
+ * Devuelve ids; el material las lee enteras con las elegidas (lib/contexto/material-del-documento.ts). [] sin exploración.
+ */
+export async function reunionesDeLaExploracionDelDiagnostico(projectId: string, ahora: Date = new Date()): Promise<string[]> {
+  const columna = COLUMNA_DEL_DESTINO.diagnostico;
+  const sesiones = await seguro("la exploración", () => sesionesDeLaExploracionDelProyecto(projectId), []);
+  if (!sesiones.length) return [];
+  const [miembros, categorias] = await Promise.all([
+    getProjectMemberSessions(projectId),
+    seguro("las categorías", () => getSessionCategories(), null),
+  ]);
+  const reuniones = miembros.sessions
+    .filter((s) => s[columna] !== false)
+    .map((s) => ({ id: s.id, titulo: s.title, fecha: s.date, participantes: s.participants }));
+  return reunionesDeLasSesiones(sesiones, reuniones, ahora.getTime(), categorias ? buildInternalDomainsSet(categorias) : undefined).map(
+    (r) => r.sessionId,
+  );
 }
