@@ -10619,6 +10619,19 @@ determinado por el momento».
   sale de la guía con que se planeó la reunión; si esa guía ya no está (CEMACO: se rearmó en la misma corrida que la
   leyó), del texto de la pregunta (`pasoQuePregunta`). Medido con CEMACO: 1.2 y 1.3, respondidas en impacto el 20 oct,
   pasan a solución en la próxima.
+  ⚠ **Ajustado tras la revisión del mismo día** (el commit siguiente al de esta tanda):
+  · **Una guía ya armada no se mueve sola.** Lo leído DESPUÉS de armarla no le cambia el plan (`contextoDelPlan` ›
+    `hasta`, con la fecha de la guía que se muestra: la pantalla, el chat y «Regenerar»). Si moviera el paso de un tema,
+    los retoques del vendedor (guardados por «tema:paso») y la pregunta del agente dejarían de aplicarse sin aviso. En
+    su lugar, el estado de la guía avisa «una reunión leída después ya respondió…» (`respondidoDespuesDeLaGuia`) y
+    «Actualizar la guía» lo pasa al paso siguiente. Al ARMAR una guía cuenta todo.
+  · El paso sale de la guía de ESA reunión (la de su sesión o la viva, armada antes de la reunión: el criterio de
+    `planDeLaLectura`), no de la de cualquier sesión; las reuniones «fuera de la exploración» no cuentan, y en un cliente
+    o un proyecto solo cuentan las de una sesión (`sesionDeLaLectura`, ahora en su propio módulo).
+  · `pasoQuePregunta` va por palabras enteras y un «cuántos» solo es situación («¿Cuántas personas tiene el equipo?»);
+    impacto es lo que dice que algo cuesta (tiempo que tarda, horas, plata, lo que se pierde o se queda sin salir).
+  · El aviso de guía vieja ya no dice «ya se respondió» de una tarjeta que solo salió del plan por el tope de 5
+    (`OpcionesDeLosCambios.sigueFaltando`). La pregunta de sistemas no se fuerza si el aviso técnico ya se cerró (`vista`).
 - **Dos preguntas de respaldo iguales no se leen repetidas**: la segunda nombra su tema («Y sobre datos: ¿cómo te
   gustaría que funcione…?»).
 - **Una hora, con tiempo para hablarle**: Abrir 0–5 · Preguntar 5–40 · Contarle 40–50 · Cerrar 50–60 (antes 45 minutos
@@ -10629,7 +10642,10 @@ determinado por el momento».
   (una meta sin cifra, quién decide sin quien aprueba, un texto que solo dice que no se sabe), azul sugerido, punteado
   falta, y un punto azul cuando una sesión trajo algo nuevo para una tarjeta que ya tenía algo (antes no se veía).
   «Para proponer», la guía y «Lo que ya sabemos» dejan de tomar «no se sabe» como un dato (`diceQueNoSeSabe`). Medido con
-  Cicadex: «Para proponer» baja de 2 a 1 de 7, y la guía vuelve a preguntar para cuándo.
+  Cicadex: «Para proponer» baja de 2 a 1 de 7, y la guía vuelve a preguntar para cuándo. Un texto con algo concreto no es
+  «no se sabe» aunque diga que algo falta (revisión del mismo día): un monto («USD 15k aprobados, no dijo si incluye
+  licencias»), una comparación («lo comparan con lo que pagan hoy en Zoho»), una condición («sin límite si se demuestra
+  ROI») o un plazo con nombre; la fecha de la reunión en la que no se dijo no cuenta como dato.
 - **«Por equipo» en el panel** (`resumenPorEquipo`): cada equipo con sus sesiones y cuáles de sus temas ya se
   respondieron; las sesiones sin equipo se cuentan aparte. «Lo que cubre la guía» de una sesión con equipo dice qué de
   ese equipo pregunta.

@@ -79,7 +79,8 @@ export function preguntasDeLaProxima(base: BaseDeLaGuia): { sesionId: string | n
   const sinPlan = antesDelPlan ? focoDeLaGuia(estado.contenido.casillas, escala, estado.areas, posiciones, estado.contenido.aExplorar, marco) : null;
   const huecos = sinPlan ? sinPlan.huecos : ctx.huecos.map((h) => h.clave);
   const enfoque = sinPlan ? sinPlan.enfoque : ctx.enfoque.map((d) => d.id);
-  const plan = antesDelPlan ? null : planDeLaGuiaDeLaSesion(estado, loLeido.tests, escala, posiciones, sesionId, marco);
+  // Con la fecha de la guía que se ve: lo leído después no la cambia sin aviso (igual que la pantalla).
+  const plan = antesDelPlan ? null : planDeLaGuiaDeLaSesion(estado, loLeido.tests, escala, posiciones, sesionId, marco, { hasta: guia?.en ?? null, automaticas: base.automaticas });
   // Las procedencias salen de las sesiones guardadas (de qué sesión viene cada punto llevado): para las claves alcanza.
   const pestanas = pestanasDeSesiones(estado.contenido.sesiones, [], hoyEnCostaRica(base.ahora));
   const activa = pestanas.find((p) => p.clave === sesionId) ?? { clave: "nueva", sesion: null };

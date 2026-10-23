@@ -15,6 +15,8 @@ import type { CoberturaDeLaPregunta, LecturaDeReunion } from "./contenido";
 import { lecturasDeLaExploracion, type SesionPlaneada } from "./guia";
 import { claveDeNotaDeSesion } from "./notas-de-sesion";
 import { diaConAnio } from "./fechas";
+// La sesión de una lectura (por su reunión, su evento o el día): vive aparte porque también la usa el plan de la guía.
+import { sesionDeLaLectura } from "./sesion-de-la-lectura";
 
 /** Los acuerdos y las decisiones de la minuta de una reunión (la minuta la escribe la IA; `revisada` = la confirmó el CSE). */
 export interface AcuerdosDeLaReunion {
@@ -73,16 +75,6 @@ const recortar = (t: string, n: number) => {
   const s = t.replace(/\s+/g, " ").trim();
   return s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s;
 };
-
-/** La sesión de una lectura: por su reunión elegida, por su evento o, sin ninguno, por el día. */
-function sesionDeLaLectura(clave: string, l: Pick<LecturaDeReunion, "fecha">, sesiones: readonly SesionPlaneada[]): SesionPlaneada | null {
-  const porReunion = sesiones.find((s) => s.reunion && `${s.reunion.origen}:${s.reunion.id}` === clave);
-  if (porReunion) return porReunion;
-  const porEvento = sesiones.find((s) => s.evento && clave === `meet:gmeet_${s.evento.id}`);
-  if (porEvento) return porEvento;
-  const dia = l.fecha?.slice(0, 10);
-  return (dia && sesiones.find((s) => !s.reunion && !s.evento && s.fecha === dia)) || null;
-}
 
 /** Lo que escribió quien llevó la sesión: su nota y lo que anotó que respondió el cliente a cada pregunta. */
 function notasDeLaSesion(notas: Readonly<Record<string, string>>, sesionId: string): string | null {

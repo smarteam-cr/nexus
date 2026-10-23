@@ -684,7 +684,8 @@ export function contextoDeLaGuia(o: {
   const sesionProxima = c.sesiones.find((x) => x.id === proximaId);
   /* La guía parte de lo que el cliente ya respondió: la preventa desde el 2026-10-18 (iniciativa A) y un proyecto desde
      el 2026-10-19, con su estrategia y sin el test. */
-  const delPlan = contextoDelPlan({ estado, tests: o.tests ?? [], escala, posiciones, sesionId: proximaId, marco: marco.clave });
+  // Para ARMAR la guía cuenta todo lo leído (sin `hasta`).
+  const delPlan = contextoDelPlan({ estado, tests: o.tests ?? [], escala, posiciones, sesionId: proximaId, marco: marco.clave, automaticas: !!o.automaticas });
   const saber = delPlan.saber;
   const pasaronIds = [...new Set(c.sesiones.filter((s) => s.resultado === "cortada").flatMap((s) => s.pasaron ?? []))];
   const { huecos, enfoque, lentes, plan } = focoDeLaGuia(c.casillas, escala, estado.areas, posiciones, c.aExplorar, marco, delPlan);

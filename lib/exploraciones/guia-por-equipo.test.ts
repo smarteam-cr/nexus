@@ -24,7 +24,15 @@ import {
 } from "./equipos";
 import { cambiosDesdeLaGuia, DURACION_DE_LA_SESION, preguntasParaMostrar, TRAMOS_DE_LA_SESION, type GuiaDeLaSesion } from "./guia";
 import { contextoDeLaGuia, herramientaDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia } from "./guia-pedido";
-import { contextoDelPlan, enOrdenDeConversacion, pasoQuePregunta, pasosRespondidos, planDeLaGuia, type PreguntaPlaneada } from "./plan-de-la-guia";
+import {
+  contextoDelPlan,
+  enOrdenDeConversacion,
+  pasoQuePregunta,
+  pasosRespondidos,
+  planDeLaGuia,
+  respondidoDespuesDeLaGuia,
+  type PreguntaPlaneada,
+} from "./plan-de-la-guia";
 import { conAlgoQueSirve, diceQueNoSeSabe, estadoDeLaTarjeta } from "./estado-de-las-tarjetas";
 import { listaParaProponer } from "./calidad";
 import { chequeoDelMapa } from "./mapa";
@@ -250,51 +258,132 @@ describe("una sesión de una hora que sigue la conversación", () => {
     expect(enOrdenDeConversacion(plan, new Set(["1.2"])).map((x) => x.para)).toEqual(["1.2", "metas", "retos", "1.7", "tiempos", "presupuesto"]);
   });
 
-  it("lo que una lectura dio por respondido cuenta como preguntado (CEMACO, 20 oct)", () => {
-    const guias: Record<string, Pick<GuiaDeLaSesion, "preguntas" | "en">> = {
-      "s-1": { en: "2026-10-19T10:00:00Z", preguntas: [{ para: "1.2", pregunta: "¿Cuántas campañas…?", repreguntas: [], paso: "impacto" }] },
-    };
-    const lecturas: Record<string, Pick<LecturaDeReunion, "cobertura" | "en">> = {
-      "meet:x": {
-        en: "2026-10-21T10:00:00Z",
-        cobertura: [
-          { para: "1.2", pregunta: "¿Cuántas campañas…?", respondida: true },
-          { para: "1.7", pregunta: "¿Cuántos leads…?", respondida: false },
-          { para: "marketing.estructura", pregunta: "¿Cómo está armado?", respondida: true },
-        ],
-      },
-    };
-    const ya = pasosRespondidos(lecturas, guias);
+  // La sesión del 20 oct con su reunión, y la guía con que se planeó (armada el 19, antes de la reunión).
+  const SESIONES = [{ id: "s-1", reunion: { id: "x", origen: "meet" as const } }];
+  const GUIA_DEL_19: Pick<GuiaDeLaSesion, "preguntas" | "en"> = {
+    en: "2026-10-19T10:00:00Z",
+    preguntas: [{ para: "1.2", pregunta: "¿Cuántas campañas salen al mes?", repreguntas: [], paso: "impacto" }],
+  };
+  const LECTURAS: Record<string, Pick<LecturaDeReunion, "cobertura" | "en" | "fecha">> = {
+    "meet:x": {
+      en: "2026-10-21T05:10:45Z",
+      fecha: "2026-10-20T15:00:00Z",
+      cobertura: [
+        { para: "1.2", pregunta: "¿Cuántas campañas salen al mes?", respondida: true },
+        { para: "1.7", pregunta: "¿Cuántos leads se pierden?", respondida: false },
+        { para: "marketing.estructura", pregunta: "¿Cómo está armado?", respondida: true },
+      ],
+    },
+  };
+
+  it("lo que una lectura dio por respondido cuenta como preguntado, con el paso de la guía de ESA reunión (CEMACO, 20 oct)", () => {
+    const ya = pasosRespondidos({ lecturas: LECTURAS, guias: { "s-1": GUIA_DEL_19 } }, { sesiones: SESIONES });
     expect([...(ya.get("1.2") ?? [])]).toEqual(["impacto"]);
     expect(ya.has("1.7")).toBe(false);
     expect([...(ya.get("marketing.estructura") ?? [])]).toEqual(["situacion"]);
-    /* Una guía armada DESPUÉS de la lectura no planeó esa reunión (en CEMACO se rearmó en la misma corrida que la leyó):
-       el paso sale del texto de la pregunta respondida. */
-    const sinLaGuia = pasosRespondidos(lecturas, { "s-2": { ...guias["s-1"], en: "2026-10-22T00:00:00Z" } });
-    expect([...(sinLaGuia.get("1.2") ?? [])]).toEqual(["impacto"]);
-    const situacional = pasosRespondidos(
-      { "meet:y": { en: "2026-10-21T10:00:00Z", cobertura: [{ para: "1.6", pregunta: "Cuando un asesor recibe varios clientes a la vez, ¿con qué criterio decide a cuál atender primero?", respondida: true }] } },
-      {},
-    );
-    expect([...(situacional.get("1.6") ?? [])]).toEqual(["situacion"]);
+    // La guía de OTRA sesión no dice con qué paso se planeó esta reunión: sin la suya, el paso sale del texto.
+    const deOtra = pasosRespondidos({ lecturas: LECTURAS, guias: { "s-otra": { ...GUIA_DEL_19, preguntas: [{ ...GUIA_DEL_19.preguntas[0], paso: "solucion" }] } } }, { sesiones: SESIONES });
+    expect([...(deOtra.get("1.2") ?? [])]).toEqual(["situacion"]);
+    /* Una guía armada DESPUÉS de la reunión no la planeó (en CEMACO se rearmó en la misma corrida que la leyó): el paso
+       sale del texto de la pregunta respondida. */
+    const rearmada = pasosRespondidos({ lecturas: LECTURAS, guias: { "s-1": { ...GUIA_DEL_19, en: "2026-10-21T05:10:46Z" } } }, { sesiones: SESIONES });
+    expect([...(rearmada.get("1.2") ?? [])]).toEqual(["situacion"]);
+    // Sin la guía de la sesión, la viva si se armó antes de la reunión.
+    const conLaViva = pasosRespondidos({ lecturas: LECTURAS, guias: {}, guia: GUIA_DEL_19 }, { sesiones: SESIONES });
+    expect([...(conLaViva.get("1.2") ?? [])]).toEqual(["impacto"]);
     // Lo sumado a mano o lo vendido no tienen paso.
-    expect(pasosRespondidos({ "meet:z": { en: "2026-10-21T10:00:00Z", cobertura: [{ para: "propia:p1", pregunta: "¿Cuántos?", respondida: true }] } }, {}).size).toBe(0);
+    const propia = { "meet:z": { en: "2026-10-21T10:00:00Z", cobertura: [{ para: "propia:p1", pregunta: "¿Cuántos?", respondida: true }] } };
+    expect(pasosRespondidos({ lecturas: propia, guias: {} }).size).toBe(0);
   });
 
-  it("el paso de una pregunta, por su texto", () => {
+  it("no cuentan las reuniones de fuera de la exploración, ni en un cliente las que no son de una sesión", () => {
+    expect(pasosRespondidos({ lecturas: LECTURAS, guias: { "s-1": GUIA_DEL_19 } }, { sesiones: SESIONES, fuera: ["meet:x"] }).size).toBe(0);
+    expect(pasosRespondidos({ lecturas: LECTURAS, guias: {} }, { sesiones: [], automaticas: false }).size).toBe(0);
+    // En un prospecto, cada reunión es sesión: cuenta.
+    expect(pasosRespondidos({ lecturas: LECTURAS, guias: {} }, { sesiones: [], automaticas: true }).has("1.2")).toBe(true);
+  });
+
+  it("hasta y desde: lo leído después de una guía no la mueve, y se puede pedir aparte", () => {
+    const propuesta = { lecturas: LECTURAS, guias: { "s-1": GUIA_DEL_19 } };
+    expect(pasosRespondidos(propuesta, { sesiones: SESIONES, hasta: "2026-10-21T00:00:00Z" }).size).toBe(0);
+    expect(pasosRespondidos(propuesta, { sesiones: SESIONES, hasta: "2026-10-22T00:00:00Z" }).has("1.2")).toBe(true);
+    expect(pasosRespondidos(propuesta, { sesiones: SESIONES, desde: "2026-10-21T00:00:00Z" }).has("1.2")).toBe(true);
+    expect(pasosRespondidos(propuesta, { sesiones: SESIONES, desde: "2026-10-22T00:00:00Z" }).size).toBe(0);
+  });
+
+  it("una guía ya armada no cambia sola por una lectura posterior: sus retoques por «tema:paso» siguen aplicando", () => {
+    // Un dolor de Ventas que el cliente ya contó; la guía de la sesión 2 lo pregunta en impacto, y el vendedor lo retocó.
+    const base = conSesion(undefined, {
+      contenido: {
+        ...contenidoVacio(),
+        sesiones: [{ id: "s-1", reunion: { id: "x", origen: "meet" } }, { id: "s-prox", ajustesDeLaGuia: { cambios: { "1.2:impacto": { pregunta: "¿Cuántas campañas se caen al mes?", origen: "tuya" } } } }],
+        casillas: { retos: [{ texto: "Las campañas dependen de exportar a mano", dimensionId: "1.2" }] },
+      },
+    });
+    const completa = (g: Pick<GuiaDeLaSesion, "preguntas" | "en">): GuiaDeLaSesion => ({
+      ...g,
+      corridaId: null,
+      huecos: [],
+      enfoque: ["1.2"],
+      apertura: [],
+      escalaEnSimple: null,
+      objeciones: [],
+      pocaApertura: null,
+      cierre: null,
+    });
+    const guiaDeLaProxima = completa({ ...GUIA_DEL_19, en: "2026-10-20T08:00:00Z" });
+    const estado: EstadoDeExploracion = {
+      ...base,
+      propuesta: { ...base.propuesta, guias: { "s-1": completa(GUIA_DEL_19), "s-prox": guiaDeLaProxima }, lecturas: LECTURAS as Record<string, LecturaDeReunion> },
+    };
+    const pasoDe12 = (hasta: string | null) => {
+      const ctx = contextoDelPlan({ estado, tests: [], escala: ESCALA, posiciones: {}, sesionId: "s-prox", hasta });
+      return planDeLaGuia({ ...ctx, casillas: estado.contenido.casillas, escala: ESCALA, areas: estado.areas, posiciones: {}, aExplorar: {} }).find((p) => p.para === "1.2")?.paso;
+    };
+    // Mostrando la guía de la próxima (del 20, antes de la lectura del 21): sigue en impacto.
+    expect(pasoDe12(guiaDeLaProxima.en)).toBe("impacto");
+    // Al rearmarla (sin `hasta`), lo respondido pasa al paso siguiente.
+    expect(pasoDe12(null)).toBe("solucion");
+    // Y el estado de la guía lo avisa.
+    expect(respondidoDespuesDeLaGuia(estado, guiaDeLaProxima.en, ["1.2", "metas"])).toEqual(["1.2"]);
+    expect(cambiosDesdeLaGuia({ huecos: [], enfoque: ["1.2"] }, [], ["1.2"], [], { leidoDespues: ["1.2"] })?.leidoDespues).toEqual(["1.2"]);
+  });
+
+  it("el aviso no da por respondida una tarjeta que solo dejó el plan porque entraron otros temas", () => {
+    const g = { huecos: ["tiempos", "autoridad"], enfoque: [] };
+    // Hoy el plan trae «presupuesto» y ya no «autoridad» (por el tope), pero quién firma sigue sin saberse.
+    const sigueFaltando = (para: string) => para === "autoridad";
+    const c = cambiosDesdeLaGuia(g, ["tiempos", "presupuesto"], [], [], { sigueFaltando });
+    expect(c?.respondidas).toEqual([]);
+    expect(c?.nuevas).toEqual(["presupuesto"]);
+    // Una que de verdad se respondió, sí.
+    expect(cambiosDesdeLaGuia(g, ["autoridad"], [], [], { sigueFaltando })?.respondidas).toEqual(["tiempos"]);
+  });
+
+  it("el paso de una pregunta, por su texto, con palabras enteras", () => {
     expect(pasoQuePregunta("¿Cuántas horas a la semana se van en eso?")).toBe("impacto");
+    expect(pasoQuePregunta("¿Cuántas campañas se quedan sin salir al mes?")).toBe("impacto");
+    expect(pasoQuePregunta("Cuando necesitas un dato de cliente completo, ¿cuánto tiempo tarda armarlo hoy?")).toBe("impacto");
+    expect(pasoQuePregunta("¿Cuánto les costó perder ese cliente?")).toBe("impacto");
     expect(pasoQuePregunta("¿Cómo te gustaría que funcione?")).toBe("solucion");
     expect(pasoQuePregunta("¿Para cuándo lo necesitan?")).toBe("cuando");
     expect(pasoQuePregunta("¿Tienen un rango de inversión pensado?")).toBe("conQue");
     expect(pasoQuePregunta("¿Qué pasa cuando entra un lead por WhatsApp?")).toBe("situacion");
+    // Un «cuántos» solo no dice que algo cuesta, y «cost» dentro de otra palabra no cuenta.
+    expect(pasoQuePregunta("¿Cuántas personas tiene el equipo?")).toBe("situacion");
+    expect(pasoQuePregunta("¿Qué acostumbran hacer cuando llega un pedido?")).toBe("situacion");
+    expect(pasoQuePregunta("Cuando un asesor recibe varios clientes a la vez, ¿con qué criterio decide a cuál atender primero?")).toBe("situacion");
   });
 
   it("la conversación se puso técnica: entra una pregunta de sistemas y datos a la sesión de la empresa", () => {
     const sin = planDe(conSesion(undefined));
     expect(sin.map((p) => p.para)).not.toContain(TEMA_DE_SISTEMAS_DE_LA_EMPRESA);
-    const propuesta = { ...propuestaVacia(), alertaTecnica: { reunion: "Reunión del 8 oct", temas: ["ERP"], en: "2026-10-08T00:00:00Z", corridaId: "r" } };
-    const tecnica = planDe(conSesion(undefined, { propuesta }));
+    const alerta = { reunion: "Reunión del 8 oct", temas: ["ERP"], en: "2026-10-08T00:00:00Z", corridaId: "r" };
+    const tecnica = planDe(conSesion(undefined, { propuesta: { ...propuestaVacia(), alertaTecnica: alerta } }));
     expect(tecnica.map((p) => p.para)).toContain(TEMA_DE_SISTEMAS_DE_LA_EMPRESA);
+    // Con el aviso cerrado (alguien ya lo vio), no se fuerza la pregunta.
+    const vista = planDe(conSesion(undefined, { propuesta: { ...propuestaVacia(), alertaTecnica: { ...alerta, vista: true } } }));
+    expect(vista.map((p) => p.para)).not.toContain(TEMA_DE_SISTEMAS_DE_LA_EMPRESA);
   });
 });
 
@@ -307,6 +396,26 @@ describe("el panel dice la verdad", () => {
     expect(diceQueNoSeSabe("Entre 15 y 20 mil dólares, contra lo que cuesta su agencia")).toBe(false);
     expect(conAlgoQueSirve(["No determinado por el momento", "Sin fecha límite explícita"])).toBe(false);
     expect(conAlgoQueSirve(["No determinado", "Antes de diciembre"])).toBe(true);
+  });
+
+  it("un texto con algo concreto (un monto, una comparación, una condición) no cuenta como «no se sabe» (revisión del 23 oct)", () => {
+    const presupuestos = [
+      "No hay presupuesto definido; lo comparan con lo que pagan hoy en Zoho (USD 500/mes)",
+      "USD 15k aprobados, no dijo si incluye licencias",
+      "Presupuesto sin límite si se demuestra ROI",
+    ];
+    for (const p of presupuestos) {
+      expect(diceQueNoSeSabe(p), p).toBe(false);
+      expect(estadoDeLaTarjeta("presupuesto", p, 0).estado, p).toBe("completa");
+    }
+    const e = estadoDePrueba();
+    for (const p of presupuestos) {
+      e.contenido.casillas = { presupuesto: p };
+      expect(listaParaProponer(e, chequeoDelMapa(ESCALA_DE_PRUEBA, e.areas, {})).find((x) => x.id === "presupuesto")?.cumplido, p).toBe(true);
+    }
+    // La fecha de la reunión en la que no se dijo no es un dato del tema.
+    expect(diceQueNoSeSabe("Sin fecha límite explícita declarada por el cliente en la reunión del 8 oct 2026.")).toBe(true);
+    expect(diceQueNoSeSabe("Sin fecha definida; lo quieren antes del cierre del Q1")).toBe(false);
   });
 
   it("completa, a medias, sugerida o falta; y lo nuevo de una sesión en una tarjeta que ya tiene algo", () => {
