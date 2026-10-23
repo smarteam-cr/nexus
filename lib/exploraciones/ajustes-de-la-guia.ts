@@ -19,6 +19,7 @@
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import type { PreguntaParaMostrar } from "./guia";
 import { esTarjeta } from "./marco";
+import { esTemaDeEquipo } from "./equipos";
 
 /** Un error de un cambio a la guía, con su estado HTTP y un mensaje para la persona (lo reconoce la capa de operaciones). */
 export class ErrorDeLaGuia extends Error {
@@ -189,10 +190,11 @@ export function aplicarAjustes(
   });
 }
 
-/** A qué apunta el tema de una propia: una tarjeta del marco o una dimensión de la escala (otra cosa, a nada). */
+/** A qué apunta el tema de una propia: una tarjeta del marco, un tema de un equipo o una dimensión de la escala (otra cosa, a nada). */
 export function apuntaDelTema(escala: Pick<EscalaDelLienzo, "areas">): (para: string) => PreguntaParaMostrar["apunta"] {
   return (para) => {
     if (esTarjeta(para)) return { tipo: "tarjeta", para };
+    if (esTemaDeEquipo(para)) return { tipo: "equipo", para };
     return escala.areas.some((a) => a.dimensiones.some((d) => d.id === para)) ? { tipo: "dimension", para } : undefined;
   };
 }

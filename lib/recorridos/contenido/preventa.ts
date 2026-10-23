@@ -41,7 +41,8 @@ export const PREVENTA: Recorrido = {
   // 6 (2026-10-18): «Lo que ya sabemos» arriba de la guía, que trae unas 5 preguntas desde lo que el cliente ya respondió.
   // 7 (2026-10-18): preguntas cortas con su ⓘ, «Regenerar pregunta», preguntas tuyas, el asistente y lo que cubre la guía.
   // 8 (2026-10-18): Regenerar, Editar y Borrar pasan al «⋯» de cada pregunta.
-  version: 8,
+  // 9 (2026-10-23): el equipo del cliente de cada sesión, el panel con «a medias» y «Por equipo».
+  version: 9,
   titulo: "Una preventa",
   descripcion: "Todas sus piezas, de la preparación a la propuesta",
   rotulo: "Recorrido · Preventa",
@@ -87,7 +88,7 @@ export const PREVENTA: Recorrido = {
     {
       ancla: "preventa.panel.marco",
       titulo: "El marco, de un vistazo",
-      texto: "Las ocho tarjetas en miniatura: verde la confirmada, azul la sugerida y punteada la que falta.",
+      texto: "Las ocho tarjetas en miniatura: verde la completa, ámbar la que está a medias, azul la sugerida y punteada la que falta. Debajo, qué se sabe de cada equipo.",
       lado: "left-start",
     },
     // Preparación
@@ -154,6 +155,13 @@ export const PREVENTA: Recorrido = {
       texto: "Cada sesión tiene tres pestañas: la guía para prepararla, lo que anotas mientras ocurre y lo que salió de la reunión.",
       lado: "bottom-end",
       accion: enLaSesion,
+    },
+    {
+      ancla: "preventa.sesion.equipo",
+      titulo: "Con qué equipo del cliente es",
+      texto: "Marketing, Servicio, Tecnología… Con un equipo, la guía le pregunta a ese equipo: cómo está armado, cómo lo miden, cómo funciona, con qué sistemas y dónde duele.",
+      lado: "bottom-start",
+      accion: momento("antes"),
     },
     {
       ancla: "preventa.sesion.sabemos",

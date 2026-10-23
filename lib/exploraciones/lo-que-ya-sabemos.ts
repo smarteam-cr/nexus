@@ -21,6 +21,7 @@
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { LETRAS } from "@/lib/escala/documento/tipos";
 import type { ClaveDeCasilla, Meta, Reto } from "./casillas";
+import { diceQueNoSeSabe } from "./estado-de-las-tarjetas";
 import type { ClaveDeMarco } from "./marco";
 import type { EstadoDeExploracion, FuenteCitada } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
@@ -212,7 +213,8 @@ export function loQueYaSabemos(o: EntradaDelSaber): SaberDelCliente {
   // 4. Lo confirmado en el Resumen que dice el cliente. Un reto atado a una dimensión también cuenta para ella.
   const casillas = estado.contenido.casillas as Partial<Record<ClaveDeCasilla, unknown>>;
   for (const clave of casillasDelMarco) {
-    for (const texto of textosDeLaCasilla(clave, casillas[clave])) sumar({ para: clave, texto, de: deLoConfirmado, origen: "resumen" });
+    // Lo que dice que no se sabe («Sin fecha límite explícita») no es algo que el cliente ya respondió (2026-10-23).
+    for (const texto of textosDeLaCasilla(clave, casillas[clave])) if (!diceQueNoSeSabe(texto)) sumar({ para: clave, texto, de: deLoConfirmado, origen: "resumen" });
     if (clave === "retos" || clave === "obstaculos") {
       for (const r of (casillas[clave] as Reto[] | undefined) ?? []) {
         if (r?.dimensionId && r.texto?.trim()) sumar({ para: r.dimensionId, texto: r.texto.trim(), de: deLoConfirmado, origen: "resumen" });

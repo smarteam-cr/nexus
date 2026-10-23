@@ -9261,6 +9261,8 @@ guardados, pero el pedido de la guía no los leía. El plan está en `docs/preve
      reto confirmado en el Resumen y después el que más fuentes dicen.
   3. Lo que falta para proponer: la meta en cifras, para cuándo, quién firma y el presupuesto, que va al final.
   4. Si sobra lugar, más dolores, planes, implicaciones y dimensiones sin dato.
+  ⚠ **Enmendado el 2026-10-23** (ver «La preventa por área…»): este es el orden en que ENTRAN; se conversan con la meta
+  primero, después cómo pasa, cuánto cuesta, cómo, cuándo y con qué.
   Sin ningún dolor dicho, arranca por los retos y una dimensión en situación. Una tarjeta con dato no se pregunta. Un
   dolor cuyo impacto ya se preguntó y se marcó hecho en una sesión anterior pasa a solución (`pasosYaPreguntados`, de las
   guías guardadas). Con un dolor en impacto, «qué pasa si no actúa» no se pregunta aparte. *Por qué en código:* con el
@@ -10571,3 +10573,72 @@ cuadra · Conciliación», página «por documento», con los datos del 22 oct).
 - **Se fueron los filtros** «Quién lo resuelve» y «De dónde viene» (contaban filas, y la sección ya dice de dónde viene).
   Supervisión › «Decidir» (`?ver=decisiones`) sigue mostrando solo las decisiones, con «Ver todo». El número de la
   pestaña es el de documentos por resolver (sin contabilidad). Reemplaza la vista por grupos de la mañana del mismo día.
+
+## La preventa por área: cada sesión con un equipo del cliente, una hora de conversación y un panel que dice la verdad (2026-10-23)
+
+**Contexto.** Feedback de Ventas (Marco Salas y Andrés Pinzón) que Elías lleva a la reunión del 23 oct. Medido ese día
+en producción, en solo lectura (plan en `docs/preventa-por-area-plan.md`): en Cicadex, el 8 oct se acordaron sesiones de
+30 minutos por área y Andrés pegó en la preventa una nota con la estructura de cada sesión por departamento (Marketing,
+SAC, gerentes de marca, Dirección, Tecnología), pero la guía seguía siendo de la empresa entera. En CEMACO, las cinco
+sesiones fueron con equipos distintos (comercial, datos, operaciones, marketing dos veces) y la exploración tenía en
+juego solo Ventas: lo de marketing quedó atado a dimensiones de Ventas, y la guía de la sesión de marketing preguntaba
+por las comisiones de los asesores. El panel decía «3 de 3» en verde, y en Cicadex «Tiempos» estaba en verde con «No
+determinado por el momento».
+
+- **El equipo del cliente vive en la sesión** (`SesionPlaneada.equipo`, en el Json `contenido`): **sin SQL**. La preventa y
+  la exploración de un proyecto (la entrega de servicio de Customer Success) son el mismo lienzo con las mismas sesiones.
+  El equipo se elige antes de la reunión, cuando todavía no hay fila de Meet: por eso no va en `FirefliesSession`. Una
+  reunión de implementación que no es sesión de una exploración no se diagnostica y no lleva equipo; si algún día hace
+  falta (por ejemplo, para que el documento de diagnóstico lea por área), es una columna aparte en la reunión.
+- **Seis equipos fijos** (`lib/exploraciones/equipos.ts`): Dirección, Ventas, Marketing, Servicio al cliente, Operaciones y
+  Tecnología. Ventas, Marketing y Servicio son las áreas 1, 2 y 3 de la escala. *Por qué fijos y no por cliente:* lo que
+  cambia es qué se le pregunta a cada uno, y eso es el método de Smarteam, no un dato del cliente.
+- **Se elige en la cabecera de la sesión** («Equipo del cliente», `EquipoDeLaSesion.tsx`). Nexus sugiere uno por el
+  objetivo y después el título (`sugerirEquipo`: el primer texto que nombra un solo equipo); nunca lo guarda solo.
+  Elegir un equipo cuya área no está en juego la suma en el mismo cambio, con un aviso: así lo que diga ese equipo llega a
+  su área de la escala.
+- **La guía de una sesión con equipo es la del equipo** (`planDelEquipo`): unas 5 preguntas, en el orden de la nota de
+  Andrés y la estructura de Marco — cómo está armado, cómo lo miden, cómo funciona (canal por canal en Marketing; de
+  punta a punta en los demás), con qué sistemas y datos, y dónde duele. «Dónde duele» es la dimensión de su área si el
+  cliente ya contó un dolor de ahí. Sin quién firma ni presupuesto, salvo con Dirección en la preventa (con quien se
+  habla de eso). Sin lugar para todo, entra por la prioridad del equipo. El cierre es su «cómo sería si funcionara».
+- **Los temas de un equipo se escriben `<equipo>.<tema>`** (`marketing.medicion`) en el mismo `para` que las tarjetas y las
+  dimensiones. Así los ajustes, «En vivo», la lectura de la reunión (cobertura), el asistente y «Lo que cubre la guía»
+  los llevan sin otra estructura. La guía guardada anota su `equipo` y sus `lentes`: si la sesión cambia de equipo, la
+  guía queda vieja y lo dice.
+- **Lo técnico y el proceso pesan como el negocio**: los dos prompts de la guía suman la regla (fuentes de datos, campos,
+  identificador del cliente, lo que se pasa a mano, cómo funciona por dentro), cada equipo tiene su tema de sistemas y
+  datos, y una sesión sin equipo suma `empresa.sistemas` cuando la última reunión se puso técnica o el objetivo habla de
+  sistemas.
+- **Qué entra y en qué orden se pregunta son dos cosas** (`enOrdenDeConversacion`). Se elige como antes (lo de antes, los
+  dolores, lo que falta para proponer) y se conversa así: lo que viene de antes, la meta, cómo pasa, cuánto cuesta, cómo
+  lo resolvería, para cuándo y con qué, y el presupuesto al final. ⚠ Enmienda el orden de «La preventa lleva a la
+  siguiente pregunta lógica (2026-10-18)», que abría con el costo de un dolor y dejaba la meta tercera (Marco: «la
+  pregunta que propone Nexus no es la siguiente lógica en la conversación»). Lo que entra no cambió.
+- **Lo que una lectura dio por respondido cuenta como preguntado** (`pasosRespondidos`), además de lo marcado hecho. El paso
+  sale de la guía con que se planeó la reunión; si esa guía ya no está (CEMACO: se rearmó en la misma corrida que la
+  leyó), del texto de la pregunta (`pasoQuePregunta`). Medido con CEMACO: 1.2 y 1.3, respondidas en impacto el 20 oct,
+  pasan a solución en la próxima.
+- **Dos preguntas de respaldo iguales no se leen repetidas**: la segunda nombra su tema («Y sobre datos: ¿cómo te
+  gustaría que funcione…?»).
+- **Una hora, con tiempo para hablarle**: Abrir 0–5 · Preguntar 5–40 · Contarle 40–50 · Cerrar 50–60 (antes 45 minutos
+  sin un momento para contarle nada). «Contarle» (`queContarle`) usa solo lo que Nexus sabe: dónde está su área en la
+  escala y los casos de uso elegidos; nada de casos de otros clientes. Los retos de su industria quedan plegados y no
+  salen en una sesión con equipo.
+- **El color del panel dice la verdad** (`estadoDeLaTarjeta`, `estado-de-las-tarjetas.ts`): verde completo, ámbar a medias
+  (una meta sin cifra, quién decide sin quien aprueba, un texto que solo dice que no se sabe), azul sugerido, punteado
+  falta, y un punto azul cuando una sesión trajo algo nuevo para una tarjeta que ya tenía algo (antes no se veía).
+  «Para proponer», la guía y «Lo que ya sabemos» dejan de tomar «no se sabe» como un dato (`diceQueNoSeSabe`). Medido con
+  Cicadex: «Para proponer» baja de 2 a 1 de 7, y la guía vuelve a preguntar para cuándo.
+- **«Por equipo» en el panel** (`resumenPorEquipo`): cada equipo con sus sesiones y cuáles de sus temas ya se
+  respondieron; las sesiones sin equipo se cuentan aparte. «Lo que cubre la guía» de una sesión con equipo dice qué de
+  ese equipo pregunta.
+- **El asistente sabe con qué equipo es la sesión**: va en el mensaje de cada turno (no en lo estable, porque se cambia en
+  la pantalla), y los temas del equipo son temas válidos para sumar una pregunta; las preguntas del objetivo y
+  «Regenerar» también los conocen.
+- `scripts/ver-guia-por-equipo.ts` (solo lectura, sin IA) muestra en seco el panel, «Por equipo», lo respondido y la guía
+  de la próxima con cada equipo que se pida.
+- **Pendiente:** una sesión con la guía de base (sin «Armar la guía») no deja cobertura en la lectura (es la regla de
+  siempre: solo se compara contra una guía guardada antes de la reunión); sus temas cuentan si se marcan hechos en «En
+  vivo». El documento de diagnóstico por área es de su propia sesión de trabajo: lo que deja esta es que cada sesión sabe
+  su equipo y el área del equipo queda en juego con su evidencia.

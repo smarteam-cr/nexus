@@ -17,7 +17,8 @@ import { can } from "@/lib/auth/permissions/engine";
 import { formasDeVoseo } from "@/lib/ui/voseo-formas";
 import { definicionEnElMarco, esTarjeta, DE_LA_PREVENTA } from "@/lib/exploraciones/marco";
 import { contextoParaLaGuia } from "@/lib/exploraciones/agente";
-import { ajustarLaGuia, ErrorDeLaGuia, preguntasDeLaProxima } from "@/lib/exploraciones/guia-ajustes-server";
+import { ajustarLaGuia, ErrorDeLaGuia, preguntasDeLaProxima, temasDelEquipoDeLaProxima } from "@/lib/exploraciones/guia-ajustes-server";
+import { nombreDelTemaDeEquipo } from "@/lib/exploraciones/equipos";
 import { repiteLoSabido, QUE_BUSCA_CADA_PASO } from "@/lib/exploraciones/plan-de-la-guia";
 import { normalizarPregunta, problemaAlAgregar } from "@/lib/exploraciones/agregar-a-la-guia";
 import {
@@ -110,13 +111,19 @@ async function exploracionDeLaCuenta(clientId: string): Promise<string | null> {
 }
 
 const nombreDelTema = (base: Base, para: string) =>
-  esTarjeta(para) ? definicionEnElMarco(para, base.marco).etiqueta : (base.escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === para)?.nombre ?? para);
+  esTarjeta(para)
+    ? definicionEnElMarco(para, base.marco).etiqueta
+    : (nombreDelTemaDeEquipo(para) ?? base.escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === para)?.nombre ?? para);
 
-const temaDe = (p: PreguntaParaMostrar) => p.apunta?.para ?? (p.tipo === "tarjeta" || p.tipo === "dimension" ? p.para : null);
+const temaDe = (p: PreguntaParaMostrar) => p.apunta?.para ?? (p.tipo === "tarjeta" || p.tipo === "dimension" || p.tipo === "equipo" ? p.para : null);
 
-/** Los temas que puede llevar una pregunta nueva: las tarjetas del marco y las dimensiones de las áreas en juego. */
+/**
+ * Los temas que puede llevar una pregunta nueva: los del equipo del cliente de la próxima sesión (2026-10-23), las
+ * tarjetas del marco y las dimensiones de las áreas en juego.
+ */
 function temasPosibles(base: Base): { id: string; nombre: string }[] {
   return [
+    ...temasDelEquipoDeLaProxima(base),
     ...base.marco.tarjetas.map((k) => ({ id: k as string, nombre: definicionEnElMarco(k, base.marco).etiqueta })),
     ...base.escala.areas.filter((a) => base.estado.areas.includes(a.id)).flatMap((a) => a.dimensiones.filter((d) => d.aplica).map((d) => ({ id: d.id, nombre: `${d.nombre} (${a.nombre})` }))),
   ];
@@ -191,6 +198,13 @@ export function preguntasDeLaGuiaParaElChat(exploracionId: string, base: Base): 
   const preguntas = preguntasEnOrden(base);
   const { ctx } = base;
   const l: string[] = [`LA GUÍA DE LA PRÓXIMA SESIÓN · exploración ${exploracionId} · sesión ${ctx.proxima.numero}${ctx.proxima.titulo ? ` «${ctx.proxima.titulo}»` : ""}`];
+  // Con un equipo del cliente (2026-10-23): va en el mensaje y no en lo estable, porque se elige en la pantalla en cualquier momento.
+  if (ctx.equipo) {
+    l.push(
+      "",
+      `La sesión es con ${ctx.equipo.nombre} (${ctx.equipo.quienes}). Las preguntas que sumes o cambies son de ese equipo: cómo está armado, cómo lo miden, cómo funciona por dentro, con qué sistemas y datos, y dónde duele.${ctx.equipo.clave === "direccion" ? "" : " Sin quién firma ni presupuesto: no es con quien se habla de eso."}`,
+    );
+  }
   if (ctx.faltanAlCerrar?.length) {
     const que = base.marco.clave === "cs" ? "Lo que falta de la estrategia" : "Lo que falta para proponer";
     l.push("", `${que} y ninguna pregunta cubre: ${ctx.faltanAlCerrar.join(", ")}.`);

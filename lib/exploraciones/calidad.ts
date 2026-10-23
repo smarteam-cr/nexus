@@ -13,6 +13,7 @@
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import { estaDebajo } from "@/lib/escala/chequeo";
 import { metaEnCifras } from "./casillas";
+import { conAlgoQueSirve } from "./estado-de-las-tarjetas";
 import { esFuenteDeHipotesis, esHipotesisDeNivel, propuestaVigente, type EstadoDeExploracion } from "./contenido";
 import { diaCorto, hoyEnCostaRica } from "./fechas";
 import { avisoDeLasSesiones, type PestanaDeSesion } from "./guia";
@@ -44,8 +45,6 @@ function sabeQueLoFrena(chequeo: ResultadoDelChequeo): boolean {
   return chequeo.areas.some((a) => a.dimensiones.some((d) => d.aplica && d.nivel !== null && estaDebajo(d.nivel, "F")));
 }
 
-const conTexto = (v: unknown) => (Array.isArray(v) ? v.length > 0 : typeof v === "string" && v.trim().length > 0);
-
 /**
  * ¿El siguiente paso sigue en pie? Tiene fecha y no pasó (rediseño de las sesiones, 2026-10-07: en
  * CreditForce el siguiente paso era del 28 sep y contaba como listo el 7 oct). `hoy` es `AAAA-MM-DD`.
@@ -59,8 +58,9 @@ export function listaParaProponer(estado: EstadoDeExploracion, chequeo: Resultad
   return [
     { id: "frena", titulo: "Qué frena al equipo del land, dicho por el cliente", corto: "Qué frena al equipo", cumplido: estado.areas.length > 0 && sabeQueLoFrena(chequeo) },
     { id: "meta", titulo: "Al menos una meta en cifras", corto: "Meta en cifras", cumplido: (c.metas ?? []).some(metaEnCifras) },
-    { id: "tiempos", titulo: "Para cuándo lo necesita", corto: "Para cuándo", cumplido: conTexto(c.tiempos) },
-    { id: "presupuesto", titulo: "El presupuesto o contra qué lo compara", corto: "Presupuesto", cumplido: conTexto(c.presupuesto) },
+    // Un texto que dice que no se sabe («Sin fecha límite explícita») no cuenta como listo (estado-de-las-tarjetas.ts).
+    { id: "tiempos", titulo: "Para cuándo lo necesita", corto: "Para cuándo", cumplido: conAlgoQueSirve(c.tiempos) },
+    { id: "presupuesto", titulo: "El presupuesto o contra qué lo compara", corto: "Presupuesto", cumplido: conAlgoQueSirve(c.presupuesto) },
     { id: "autoridad", titulo: "Quién firma", corto: "Quién firma", cumplido: (c.autoridad ?? []).some((p) => p.rol === "firma") },
     { id: "consecuencia", titulo: "Qué pasa si no actúa", corto: "Qué pasa si no actúa", cumplido: (c.consecuencias ?? []).length > 0 },
     { id: "siguientePaso", titulo: "Siguiente paso con fecha", corto: "Siguiente paso con fecha", cumplido: siguientePasoVigente(c.siguientePaso, hoy) },

@@ -35,6 +35,8 @@ import { esTarjeta } from "@/lib/exploraciones/marco";
 import { preguntaDeCierre, siNoSalio } from "@/lib/exploraciones/plan-de-la-guia";
 import { avanceDeLaEstrategia, faltanDeLaEstrategia } from "@/lib/exploraciones/avance-del-proyecto";
 import { REUNIONES } from "@/lib/exploraciones/sesion";
+import { EQUIPOS } from "@/lib/exploraciones/equipos";
+import { queContarle } from "@/lib/exploraciones/contarle";
 import { useLienzo } from "./contexto";
 import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useAjustarLaGuia, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
@@ -71,7 +73,8 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const { guia, foco, antesDelPlan } = useGuiaDeLaSesion(pestana, true);
   const armando = (corriendo && corrida?.modo === "guia") || lanzando;
-  const cambios = guia ? cambiosDesdeLaGuia(guia, foco.huecos, foco.enfoque, pestana.sesion?.explorar ?? [], { antesDelPlan }) : null;
+  const equipo = pestana.sesion?.equipo ?? null;
+  const cambios = guia ? cambiosDesdeLaGuia(guia, foco.huecos, foco.enfoque, pestana.sesion?.explorar ?? [], { antesDelPlan, equipo }) : null;
   const nombre = (para: string) => nombreDelPara(para, escala, marco);
 
   let titulo: string;
@@ -85,14 +88,20 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
     tono = "info";
   } else if (!guia) {
     titulo = "Esta es la guía de base";
-    detalle =
-      marco.clave === "cs"
+    detalle = equipo
+      ? `Las preguntas de siempre para ${EQUIPOS[equipo].nombre}. «Armar la guía» las adapta a esta empresa con lo que ya se sabe, suma repreguntas y cómo abrir y cerrar.`
+      : marco.clave === "cs"
         ? "Preguntas generales para lo que falta. «Armar la guía» la adapta a este cliente: escribe las preguntas con lo que dice el handoff, suma repreguntas y cómo abrir y cerrar."
         : "Preguntas generales para lo que falta. «Armar la guía» la adapta a esta empresa: escribe las preguntas con lo que ya se sabe, suma repreguntas, cómo abrir y cómo responder objeciones.";
     boton = "Armar la guía";
     tono = "info";
   } else if (cambios) {
     const partes = [
+      cambios.equipo
+        ? cambios.equipo.ahora
+          ? `ahora la sesión es con ${EQUIPOS[cambios.equipo.ahora].nombre}: la guía todavía no pregunta como se le pregunta a ese equipo`
+          : "la sesión volvió a ser con la empresa entera"
+        : null,
       cambios.antesDelPlan ? "se armó antes de «Lo que ya sabemos»: no parte de lo que el cliente ya respondió" : null,
       cambios.respondidas.length ? `ya se respondió ${enLista(cambios.respondidas.map(nombre))}` : null,
       cambios.nuevas.length ? `ahora también falta ${enLista(cambios.nuevas.map(nombre))}` : null,
@@ -101,9 +110,11 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
     ].filter((x): x is string => !!x);
     titulo = `La guía es del ${diaCorto(guia.en)} y desde entonces cambió lo que se sabe`;
     detalle = `${partes.join("; ").replace(/^\p{Ll}/u, (c) => c.toUpperCase())}. ${
-      cambios.antesDelPlan
-        ? "«Actualizar la guía» la arma desde ahí: unas 5 preguntas, cada una en su paso, sin repreguntar lo que ya se sabe."
-        : "«Actualizar la guía» deja de preguntar lo ya respondido y suma lo nuevo."
+      cambios.equipo?.ahora
+        ? `«Actualizar la guía» la arma para ${EQUIPOS[cambios.equipo.ahora].nombre}: cómo está armado, cómo lo miden, cómo funciona, con qué sistemas y dónde duele.`
+        : cambios.antesDelPlan
+          ? "«Actualizar la guía» la arma desde ahí: unas 5 preguntas, cada una en su paso, sin repreguntar lo que ya se sabe."
+          : "«Actualizar la guía» deja de preguntar lo ya respondido y suma lo nuevo."
     }`;
     boton = "Actualizar la guía";
     tono = "aviso";
@@ -192,7 +203,14 @@ function Objetivo({
   const cubre = faltan.filter((p) => puntoQueSePregunta(p.id, paras, hayDimensiones, hayImpacto)).length;
   const faltanDelProyecto = enProyecto ? avanceDeLaEstrategia(exp.estado).filter((p) => !p.cumplido) : [];
   const cubreDelProyecto = faltanDelProyecto.filter((p) => paras.has(p.id)).length;
-  const saleBien = enProyecto ? siSaleBienEnElProyecto(faltanDelProyecto.length, cubreDelProyecto) : siSaleBien(faltan.length, cubre);
+  // Con un equipo que no es Dirección, la sesión no es para cerrar lo de proponer: se dice qué es (2026-10-23).
+  const equipo = pestana.sesion?.equipo ?? null;
+  const saleBien =
+    equipo && equipo !== "direccion"
+      ? `Sesión con ${EQUIPOS[equipo].nombre}: la guía pregunta lo de ese equipo.${enProyecto ? "" : " Para cuándo, quién firma y el presupuesto se hablan con Dirección."}`
+      : enProyecto
+        ? siSaleBienEnElProyecto(faltanDelProyecto.length, cubreDelProyecto)
+        : siSaleBien(faltan.length, cubre);
 
   // Proponer preguntas es de la próxima sesión (la guía que se puede cambiar) y de un objetivo escrito por la persona.
   const conPropuestas = esLaProxima && puedeEditar;
@@ -461,16 +479,19 @@ function LoQueYaSabemos({ pestana }: { pestana: PestanaDeSesion }) {
 function RetosDeLaIndustria({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
   const { guia } = useGuiaDeLaSesion(pestana, esLaProxima);
   const retos = guia?.retosDeLaIndustria ?? [];
-  if (!retos.length) return null;
+  /* Plegados y fuera de una sesión con un equipo (2026-10-23): eran tres preguntas más, siempre abiertas, encima de una
+     guía que ya llena la hora (Marco: «redundancias»). Siguen para quien los quiera abrir. */
+  if (!retos.length || pestana.sesion?.equipo) return null;
   return (
-    <section className="overflow-hidden rounded-xl border border-line bg-surface">
-      <header className="flex flex-wrap items-center gap-2.5 border-b border-line px-[18px] py-3.5">
-        <h3 className="text-[15px] font-semibold text-fg">Retos de su industria</h3>
+    <details className="overflow-hidden rounded-xl border border-line bg-surface">
+      <summary className="flex cursor-pointer select-none flex-wrap items-center gap-2.5 border-b border-line px-[18px] py-3.5">
+        <span className="text-[15px] font-semibold text-fg">Retos de su industria</span>
         <span className="rounded-full border border-warn-line bg-warn-surface px-2 py-px text-[11.5px] text-warn-ink">Hipótesis</span>
-        <p className="basis-full text-[12.5px] text-fg-muted">
-          Salen de lo que el agente encontró en internet sobre su industria, no de lo que dijo el cliente. Úsalos solo para preguntar: si le pasa, lo anotas en «En vivo».
-        </p>
-      </header>
+        <span className="text-[12.5px] text-fg-muted">· {retos.length} para usar si sobra tiempo</span>
+      </summary>
+      <p className="border-b border-line px-[18px] py-2.5 text-[12.5px] text-fg-muted">
+        Salen de lo que el agente encontró en internet sobre su industria, no de lo que dijo el cliente. Úsalos solo para preguntar: si le pasa, lo anotas en «En vivo».
+      </p>
       <ul>
         {retos.map((r, i) => (
           <li key={i} className="border-b border-surface-hover px-[18px] py-3 last:border-b-0">
@@ -481,7 +502,7 @@ function RetosDeLaIndustria({ pestana, esLaProxima }: { pestana: PestanaDeSesion
           </li>
         ))}
       </ul>
-    </section>
+    </details>
   );
 }
 
@@ -538,8 +559,8 @@ function Columna({
 }
 
 function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
-  const { exp, escala, marco, chequeo, mapa, puedeEditar, conAsistente } = useLienzo();
-  const temas = useTemasDeLaGuia();
+  const { exp, escala, marco, chequeo, mapa, puedeEditar, conAsistente, nombreDeNivel } = useLienzo();
+  const temas = useTemasDeLaGuia(pestana.sesion?.equipo ?? null);
   // Cambiar la guía (regenerar, editar, quitar, sumar) es de la próxima sesión: la de una que ya pasó queda como se armó.
   const editable = esLaProxima && puedeEditar;
   const enProyecto = marco.clave === "cs";
@@ -555,6 +576,9 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
      arrastrando, si lo eligió): arrastrar se hace solo en «En orden», donde se ve la conversación entera. */
   const deTarjetas = enOrden.filter((p) => ladoDeLaPregunta(p) === "tarjeta");
   const deDimensiones = enOrden.filter((p) => ladoDeLaPregunta(p) === "dimension");
+  // Los temas del equipo del cliente de la sesión (2026-10-23), o la pregunta de sistemas y datos de la empresa.
+  const equipo = pestana.sesion?.equipo ?? null;
+  const deEquipo = enOrden.filter((p) => ladoDeLaPregunta(p) === "equipo");
   // Lo vendido (solo en un proyecto): sus preguntas las escribe el agente al armar la guía.
   const deLoVendido = enOrden.filter((p) => ladoDeLaPregunta(p) === "vendido");
   // Solo lo llevado que todavía no se sabe a qué apunta (se llevó después de armar la guía), y las tuyas sin tema.
@@ -567,7 +591,8 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
   /* Siempre cierra con la pregunta de cierre y el siguiente paso, y pide lo que falta que no salió: para proponer en la
      preventa, de la estrategia en un proyecto (avance-del-proyecto.ts). */
   const temasDeLaGuia = new Set(preguntas.map((p) => p.apunta?.para ?? p.para));
-  const sinPreguntar = !esLaProxima
+  // Con un equipo que no es Dirección, el cierre no pide quién firma ni el presupuesto: no es con quien se habla de eso.
+  const sinPreguntar = !esLaProxima || (equipo && equipo !== "direccion")
     ? []
     : enProyecto
       ? faltanDeLaEstrategia(avanceDeLaEstrategia(e), temasDeLaGuia)
@@ -577,6 +602,14 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
         }).map((p) => p.corto);
   const siNo = siNoSalio(sinPreguntar);
   const areasEnJuego = escala.areas.filter((a) => e.areas.includes(a.id)).map((a) => a.nombre);
+  const contar = queContarle({
+    marco: marco.clave,
+    equipo,
+    areas: mapa.chequeo.areas.map((a) => ({ id: a.id, nombre: a.nombre, nivel: a.nivel })),
+    nombreDeNivel,
+    casos: Object.values(e.contenido.casosDeUso),
+  });
+  const columnas = 2 + (enProyecto ? 1 : 0) + (deEquipo.length ? 1 : 0);
 
   return (
     <section data-recorrido="preventa.sesion.preguntas" className="overflow-hidden rounded-xl border border-line bg-surface">
@@ -701,7 +734,17 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
               </ul>
             </div>
           )}
-          <div className={`grid items-start gap-4 ${enProyecto ? "xl:grid-cols-3" : "xl:grid-cols-2"}`}>
+          <div className={cn("grid items-start gap-4", columnas >= 4 ? "xl:grid-cols-4" : columnas === 3 ? "xl:grid-cols-3" : "xl:grid-cols-2")}>
+            {deEquipo.length > 0 && (
+              <Columna
+                titulo={equipo ? EQUIPOS[equipo].nombre : "Sistemas y datos"}
+                detalle={equipo ? "el equipo de esta sesión" : "la conversación se puso técnica"}
+                preguntas={deEquipo}
+                pestana={pestana}
+                editable={editable}
+                vacio=""
+              />
+            )}
             <Columna
               titulo={marco.nombre}
               detalle={faltan > 0 ? `faltan ${faltan} de ${marco.tarjetas.length}` : "completa"}
@@ -734,11 +777,27 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
         </div>
       )}
 
+      {/* Una hora con tiempo para hablarle (2026-10-23): lo que se le cuenta, de lo que Nexus ya sabe. */}
+      <Tramo nombre="Contarle" minutos={TRAMOS_DE_LA_SESION.contar} className="border-t border-line">
+        <p className="text-[14.5px] leading-[21px] text-fg">{contar.guia}</p>
+        {contar.puntos.length > 0 && (
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] leading-[19px] text-fg-secondary">
+            {contar.puntos.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        )}
+      </Tramo>
+
       <Tramo nombre="Cerrar" minutos={TRAMOS_DE_LA_SESION.cerrar} className="border-t border-line">
         <p className="text-[14.5px] font-semibold leading-[21px] text-fg">
-          {enProyecto ? "Confirma lo que entendiste y acuerda el siguiente paso, con fecha y con quién." : "Pide el siguiente paso con fecha y con quién."}
+          {equipo
+            ? "Valida lo que entendiste de su equipo («Entonces lo que más les pesa es…, ¿es así?») y acuerda el siguiente paso."
+            : enProyecto
+              ? "Confirma lo que entendiste y acuerda el siguiente paso, con fecha y con quién."
+              : "Pide el siguiente paso con fecha y con quién."}
         </p>
-        <p className="mt-1 text-[14.5px] leading-[21px] text-fg">«{preguntaDeCierre(marco.clave)}»</p>
+        <p className="mt-1 text-[14.5px] leading-[21px] text-fg">«{equipo ? EQUIPOS[equipo].cierre : preguntaDeCierre(marco.clave)}»</p>
         <p className="mt-1 text-[13px] leading-[19px] text-fg-secondary">{guia?.cierre ?? CIERRE_DE_BASE}</p>
         {siNo && <p className="mt-1 text-[13px] leading-[19px] text-fg-secondary">{siNo}</p>}
       </Tramo>

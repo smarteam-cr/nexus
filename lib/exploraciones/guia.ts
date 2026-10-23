@@ -26,13 +26,14 @@
  */
 import { LETRAS, type Letra } from "@/lib/escala/documento/tipos";
 import { CASILLAS_DEL_RESUMEN, type ClaveDeCasilla } from "./casillas";
-import { esTarjeta, MARCO_DE_VENTA, type ClaveDeMarco, type Marco } from "./marco";
+import { definicionEnElMarco, esTarjeta, MARCO_DE_VENTA, type ClaveDeMarco, type Marco } from "./marco";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { aFecha, hoyEnCostaRica } from "./fechas";
 import { coincideConElEvento, HORAS_ESPERANDO_LA_TRANSCRIPCION, mismaReunion } from "./lectura";
 import type { SaberDelCliente } from "./lo-que-ya-sabemos";
 import { planDeLaGuia, preguntaDeRespaldo, REPREGUNTAS_DEL_PASO, repiteLoSabido, type PasoDeLaPregunta, type PreguntaPlaneada } from "./plan-de-la-guia";
 import { sinCitaAdelante, type AjustesDeLaGuia, type OrigenDelAjuste } from "./ajustes-de-la-guia";
+import { esTemaDeEquipo, leerTemaDeEquipo, nombreDelTemaDeEquipo, type ClaveDeEquipo } from "./equipos";
 
 // ── Las sesiones ──────────────────────────────────────────────────────────────
 
@@ -115,6 +116,11 @@ export interface SesionPlaneada {
    * la guía que reescribió o sacó. Vive acá (lo de las personas) y no en la guía: sobrevive a «Actualizar la guía».
    */
   ajustesDeLaGuia?: AjustesDeLaGuia;
+  /**
+   * Con qué equipo del cliente es la sesión (2026-10-23, equipos.ts): la guía pregunta como se le pregunta a ese equipo y
+   * por las dimensiones de su área. Sin él, la sesión es con la empresa entera. Lo elige una persona (Nexus lo sugiere).
+   */
+  equipo?: ClaveDeEquipo;
 }
 
 /** Hasta cuántas sesiones tiene una exploración (subió de 12 a 20 en la etapa A: ahora se materializan más). */
@@ -703,6 +709,10 @@ export interface ContextoDelPlan {
   pasaron?: readonly string[];
   /** El marco con que se armó lo que ya se sabe: en un proyecto, sin el test. */
   marco?: ClaveDeMarco;
+  /** El equipo del cliente de la sesión (equipos.ts): la guía es la de ese equipo. */
+  equipo?: ClaveDeEquipo;
+  /** La conversación se puso técnica: entra una pregunta de sistemas y datos. */
+  tecnica?: boolean;
 }
 
 /**
@@ -720,18 +730,19 @@ export function focoDeLaGuia(
   aExplorar: Readonly<Record<string, unknown>>,
   marco: Marco = MARCO_DE_VENTA,
   contexto?: ContextoDelPlan,
-): { huecos: ClaveDeCasilla[]; enfoque: string[]; plan: PreguntaPlaneada[] | null } {
+): { huecos: ClaveDeCasilla[]; enfoque: string[]; lentes: string[]; plan: PreguntaPlaneada[] | null } {
   if (contexto) {
     const plan = planDeLaGuia({ ...contexto, casillas, escala, areas, posiciones, aExplorar, marco: marco.clave });
     return {
       huecos: plan.filter((p) => p.tipo === "tarjeta").map((p) => p.para as ClaveDeCasilla),
       enfoque: plan.filter((p) => p.tipo === "dimension").map((p) => p.para),
+      lentes: plan.filter((p) => p.tipo === "equipo").map((p) => p.para),
       plan,
     };
   }
   const huecos = huecosDelResumen(casillas, marco).slice(0, marco.maxTarjetas);
   const enfoque = enfoqueDeLaGuia(escala, areas, posiciones, aExplorar, Math.min(marco.maxDimensiones, MAX_PREGUNTAS_POR_REUNION - huecos.length));
-  return { huecos, enfoque, plan: null };
+  return { huecos, enfoque, lentes: [], plan: null };
 }
 
 // ── Lo de base: lo que la guía muestra aunque el agente no la haya armado ─────
@@ -823,6 +834,10 @@ export interface GuiaDeLaSesion {
   /** Las tarjetas vacías y las dimensiones en foco con que se armó: si cambian, la guía quedó vieja. */
   huecos: string[];
   enfoque: string[];
+  /** El equipo del cliente para el que se armó (2026-10-23): si la sesión cambia de equipo, la guía quedó vieja. */
+  equipo?: ClaveDeEquipo;
+  /** Los temas del equipo que pregunta (`marketing.medicion`, o `empresa.sistemas`), como `huecos` y `enfoque`. */
+  lentes?: string[];
   /** El objetivo de la sesión, en una frase: lo sugiere el agente y lo confirma el vendedor. */
   objetivo?: string | null;
   /**
@@ -896,19 +911,22 @@ export interface CambiosDesdeLaGuia {
   llevados: number;
   /** La guía de un proyecto se armó antes del plan (plan-de-la-guia.ts › `guiaDeAntesDelPlan`): no parte de lo que ya se sabe. */
   antesDelPlan?: boolean;
+  /** La sesión cambió de equipo del cliente (o lo tiene y la guía es de la empresa entera): `ahora` es el de hoy. */
+  equipo?: { antes: ClaveDeEquipo | null; ahora: ClaveDeEquipo | null };
 }
 
 /**
- * Qué cambió desde que se armó la guía: lo que ya se respondió, lo que entró, las dimensiones y lo que
- * el vendedor se llevó de otra sesión después. Con esto la pantalla dice POR QUÉ actualizarla, en vez
- * de un «la guía es de antes de lo último que se supo» (Elías, 2026-10-07: «no hay claridad de qué hace»).
+ * Qué cambió desde que se armó la guía: lo que ya se respondió, lo que entró, las dimensiones, lo que el vendedor se
+ * llevó de otra sesión después y el equipo del cliente de la sesión. Con esto la pantalla dice POR QUÉ actualizarla, en
+ * vez de un «la guía es de antes de lo último que se supo» (Elías, 2026-10-07: «no hay claridad de qué hace»).
+ * `opciones.equipo`: el equipo de la sesión hoy (sin él, no se mira).
  */
 export function cambiosDesdeLaGuia(
-  guia: Pick<GuiaDeLaSesion, "huecos" | "enfoque"> & Partial<Pick<GuiaDeLaSesion, "preguntas" | "ubicaciones">>,
+  guia: Pick<GuiaDeLaSesion, "huecos" | "enfoque"> & Partial<Pick<GuiaDeLaSesion, "preguntas" | "ubicaciones" | "equipo">>,
   huecos: readonly string[],
   enfoque: readonly string[],
   llevados: readonly string[] = [],
-  opciones: { antesDelPlan?: boolean } = {},
+  opciones: { antesDelPlan?: boolean; equipo?: ClaveDeEquipo | null } = {},
 ): CambiosDesdeLaGuia | null {
   const respondidas = guia.huecos.filter((h) => !huecos.includes(h));
   const nuevas = huecos.filter((h) => !guia.huecos.includes(h));
@@ -916,26 +934,31 @@ export function cambiosDesdeLaGuia(
   const ubicados = new Set([...(guia.preguntas ?? []).flatMap((p) => (p.abierto ? [p.abierto] : [])), ...Object.keys(guia.ubicaciones ?? {})]);
   const sinUbicar = llevados.filter((t) => !ubicados.has(t)).length;
   const antesDelPlan = !!opciones.antesDelPlan;
-  if (!respondidas.length && !nuevas.length && !dimensiones && !sinUbicar && !antesDelPlan) return null;
-  return { respondidas, nuevas, dimensiones, llevados: sinUbicar, ...(antesDelPlan ? { antesDelPlan } : {}) };
+  const equipo = opciones.equipo !== undefined && (guia.equipo ?? null) !== opciones.equipo ? { antes: guia.equipo ?? null, ahora: opciones.equipo } : null;
+  if (!respondidas.length && !nuevas.length && !dimensiones && !sinUbicar && !antesDelPlan && !equipo) return null;
+  return { respondidas, nuevas, dimensiones, llevados: sinUbicar, ...(antesDelPlan ? { antesDelPlan } : {}), ...(equipo ? { equipo } : {}) };
 }
 
-/** ¿La guía se armó con otras tarjetas vacías, otras dimensiones en foco o sin lo que se llevó después? */
+/** ¿La guía se armó con otras tarjetas vacías, otras dimensiones en foco, sin lo que se llevó después o con otro equipo? */
 export function guiaVieja(
-  guia: Pick<GuiaDeLaSesion, "huecos" | "enfoque"> & Partial<Pick<GuiaDeLaSesion, "preguntas" | "ubicaciones">>,
+  guia: Pick<GuiaDeLaSesion, "huecos" | "enfoque"> & Partial<Pick<GuiaDeLaSesion, "preguntas" | "ubicaciones" | "equipo">>,
   huecos: readonly string[],
   enfoque: readonly string[],
   llevados: readonly string[] = [],
-  opciones: { antesDelPlan?: boolean } = {},
+  opciones: { antesDelPlan?: boolean; equipo?: ClaveDeEquipo | null } = {},
 ): boolean {
   return cambiosDesdeLaGuia(guia, huecos, enfoque, llevados, opciones) !== null;
 }
 
 // ── Lo que se muestra ─────────────────────────────────────────────────────────
 
-/** Cuánto dura una sesión de exploración, y en qué minutos se abre, se pregunta y se cierra. */
-export const DURACION_DE_LA_SESION = 45;
-export const TRAMOS_DE_LA_SESION = { abrir: [0, 5], preguntar: [5, 40], cerrar: [40, 45] } as const;
+/**
+ * Cuánto dura una sesión de exploración, y en qué minutos se abre, se pregunta, se le cuenta y se cierra. Una hora
+ * (2026-10-23, Marco: «la sesión dura una hora y el cliente no solo quiere responder: también espera que le hablen y lo
+ * entusiasmen»). Antes eran 45 minutos sin un momento para contarle nada.
+ */
+export const DURACION_DE_LA_SESION = 60;
+export const TRAMOS_DE_LA_SESION = { abrir: [0, 5], preguntar: [5, 40], contar: [40, 50], cerrar: [50, 60] } as const;
 
 /**
  * De dónde viene lo que se pregunta hoy (rediseño de las sesiones, 2026-10-07: «que la información
@@ -957,7 +980,8 @@ export interface PreguntaParaMostrar {
    * pregunta que sumó el vendedor `propia:<id>`.
    */
   para: string;
-  tipo: "tarjeta" | "dimension" | "vendido" | "abierto" | "propia";
+  /** `equipo`: un tema de un equipo del cliente (`marketing.medicion`) o la pregunta de sistemas de la empresa. */
+  tipo: "tarjeta" | "dimension" | "equipo" | "vendido" | "abierto" | "propia";
   pregunta: string;
   /** Para una pregunta de lo vendido: la pieza del alcance a la que apunta. */
   tema?: string;
@@ -969,7 +993,7 @@ export interface PreguntaParaMostrar {
    * Para un punto llevado que ninguna pregunta retoma: la tarjeta o la dimensión a la que apunta, si
    * se sabe (al llevarlo, o porque el agente lo ubicó al armar la guía). Sin esto se muestra aparte.
    */
-  apunta?: { tipo: "tarjeta" | "dimension"; para: string };
+  apunta?: { tipo: "tarjeta" | "dimension" | "equipo"; para: string };
   /** El paso que pregunta (solo en la guía de la preventa con plan). */
   paso?: PasoDeLaPregunta;
   /** Lo que ya dijo el cliente y de donde parte la pregunta (va en el ⓘ, no en la pregunta). */
@@ -982,8 +1006,8 @@ export interface PreguntaParaMostrar {
   posicion?: number;
 }
 
-/** De qué lado está una pregunta: el marco, la escala, lo vendido o ninguno (un punto llevado sin ubicar). */
-export function ladoDeLaPregunta(p: Pick<PreguntaParaMostrar, "tipo" | "apunta">): "tarjeta" | "dimension" | "vendido" | null {
+/** De qué lado está una pregunta: el marco, la escala, el equipo, lo vendido o ninguno (un punto llevado sin ubicar). */
+export function ladoDeLaPregunta(p: Pick<PreguntaParaMostrar, "tipo" | "apunta">): "tarjeta" | "dimension" | "equipo" | "vendido" | null {
   return p.tipo === "abierto" || p.tipo === "propia" ? (p.apunta?.tipo ?? null) : p.tipo;
 }
 
@@ -1038,7 +1062,7 @@ export function procedenciasDeLaSesion(
  * dimensión en la escala). Primero las tarjetas, después las dimensiones.
  */
 export function preguntasParaMostrar(
-  guia: Pick<GuiaDeLaSesion, "preguntas" | "ubicaciones" | "loVendido"> | null,
+  guia: (Pick<GuiaDeLaSesion, "preguntas" | "ubicaciones" | "loVendido"> & Partial<Pick<GuiaDeLaSesion, "lentes">>) | null,
   huecos: readonly string[],
   enfoque: readonly string[],
   escala: EscalaDelLienzo,
@@ -1055,14 +1079,19 @@ export function preguntasParaMostrar(
   conPlan?: { plan: readonly PreguntaPlaneada[]; saber: SaberDelCliente },
 ): PreguntaParaMostrar[] {
   const preguntaDeLaDimension = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.pregunta ?? null;
+  const nombreDelTemaParaMostrar = (para: string) =>
+    esTarjeta(para)
+      ? definicionEnElMarco(para, marco).etiqueta
+      : (nombreDelTemaDeEquipo(para, { conEquipo: false }) ?? escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === para)?.nombre ?? para);
   const ladoDelPara = (para: string | undefined): PreguntaParaMostrar["apunta"] => {
     if (!para) return undefined;
     if (esTarjeta(para)) return { tipo: "tarjeta", para };
+    if (esTemaDeEquipo(para)) return { tipo: "equipo", para };
     return escala.areas.some((a) => a.dimensiones.some((d) => d.id === para)) ? { tipo: "dimension", para } : undefined;
   };
   const out: PreguntaParaMostrar[] = [];
   const retomados = new Set<string>();
-  const armar = (para: string, tipo: "tarjeta" | "dimension", base: string | null) => {
+  const armar = (para: string, tipo: "tarjeta" | "dimension" | "equipo", base: string | null, repreguntasDeBase: readonly string[] = []) => {
     const delAgente = guia?.preguntas.filter((p) => p.para === para) ?? [];
     const pasoDe = procedencias.pasaron.get(para);
     if (delAgente.length) {
@@ -1077,12 +1106,14 @@ export function preguntasParaMostrar(
         out.push({ para, tipo, pregunta: sinCitaAdelante(p.pregunta), repreguntas: p.repreguntas, ...(procedencia ? { procedencia } : {}) });
       }
     } else if (base) {
-      out.push({ para, tipo, pregunta: base, repreguntas: [], ...(pasoDe ? { procedencia: { tipo: "paso" as const, numero: pasoDe } } : {}) });
+      out.push({ para, tipo, pregunta: base, repreguntas: [...repreguntasDeBase], ...(pasoDe ? { procedencia: { tipo: "paso" as const, numero: pasoDe } } : {}) });
     }
   };
   if (conPlan) {
     for (const pl of conPlan.plan) {
-      const base = (pl.tipo === "tarjeta" ? marco.preguntaDeBase[pl.para as ClaveDeCasilla] : preguntaDeLaDimension(pl.para)) ?? "";
+      const delEquipo = pl.tipo === "equipo" ? leerTemaDeEquipo(pl.para) : null;
+      const base =
+        (pl.tipo === "tarjeta" ? marco.preguntaDeBase[pl.para as ClaveDeCasilla] : delEquipo ? delEquipo.definicion.pregunta : preguntaDeLaDimension(pl.para)) ?? "";
       // La del agente vale si es del paso que toca; una de antes del plan (sin paso), si no repite lo que ya dijo.
       const delAgente = guia?.preguntas.find((p) => p.para === pl.para && (p.paso ? p.paso === pl.paso : !repiteLoSabido(p.pregunta, pl, conPlan.saber)));
       const abierto = delAgente?.abierto && procedencias.abiertos.has(delAgente.abierto) ? delAgente.abierto : null;
@@ -1094,14 +1125,17 @@ export function preguntasParaMostrar(
           ? { tipo: "paso", numero: pasoDe }
           : undefined;
       // Sin la cita adelante (validación 69): lo que dijo el cliente va en el ⓘ, con su fuente.
-      const pregunta = delAgente ? sinCitaAdelante(delAgente.pregunta) : preguntaDeRespaldo(pl, base);
-      if (!pregunta) continue;
+      const escrita = delAgente ? sinCitaAdelante(delAgente.pregunta) : preguntaDeRespaldo(pl, base);
+      if (!escrita) continue;
+      /* Dos temas en el mismo paso sin pregunta del agente dan la misma de respaldo («¿Cómo te gustaría que funcione…?»
+         dos veces, CEMACO 23 oct): la segunda nombra su tema, así no se lee repetida. */
+      const pregunta = out.some((o) => o.pregunta === escrita) ? `Y sobre ${nombreDelTemaParaMostrar(pl.para).toLowerCase()}: ${escrita.charAt(0) === "¿" ? "¿" + escrita.charAt(1).toLowerCase() + escrita.slice(2) : escrita}` : escrita;
       out.push({
         para: pl.para,
         tipo: pl.tipo,
         pregunta,
-        // La de respaldo también lleva repreguntas: las del paso (validación 104).
-        repreguntas: delAgente?.repreguntas.length ? delAgente.repreguntas : [...REPREGUNTAS_DEL_PASO[pl.paso]],
+        // La de respaldo también lleva repreguntas: las del paso (validación 104), o las del tema de un equipo.
+        repreguntas: delAgente?.repreguntas.length ? delAgente.repreguntas : [...(delEquipo?.definicion.repreguntas ?? REPREGUNTAS_DEL_PASO[pl.paso])],
         paso: pl.paso,
         ...(pl.motivo ? { motivo: { texto: pl.motivo.texto, de: pl.motivo.de } } : {}),
         ...(procedencia ? { procedencia } : {}),
@@ -1110,6 +1144,11 @@ export function preguntasParaMostrar(
   } else {
     for (const h of huecos) armar(h, "tarjeta", marco.preguntaDeBase[h as ClaveDeCasilla] ?? null);
     for (const d of enfoque) armar(d, "dimension", preguntaDeLaDimension(d));
+    // Los temas del equipo con que se armó la guía (2026-10-23): así la lectura de la reunión sabe que se planearon.
+    for (const l of guia?.lentes ?? []) {
+      const t = leerTemaDeEquipo(l);
+      if (t) armar(l, "equipo", t.definicion.pregunta, t.definicion.repreguntas);
+    }
   }
   // Lo vendido (solo en un proyecto): una pregunta por pieza del alcance, como la escribió el agente.
   for (const v of guia?.loVendido ?? []) out.push({ para: v.id, tipo: "vendido", pregunta: sinCitaAdelante(v.pregunta), repreguntas: v.repreguntas, tema: v.tema });
@@ -1172,7 +1211,8 @@ function ordenNatural(preguntas: readonly PreguntaParaMostrar[]): PreguntaParaMo
     const tarjetas = lista.filter((p) => p.tipo === "tarjeta");
     const dimensiones = lista.filter((p) => p.tipo === "dimension");
     const vendido = lista.filter((p) => p.tipo === "vendido");
-    const out: PreguntaParaMostrar[] = lista.filter((p) => p.tipo === "abierto");
+    // Los temas de un equipo van en su orden, después de lo llevado: son la conversación de esa sesión.
+    const out: PreguntaParaMostrar[] = [...lista.filter((p) => p.tipo === "abierto"), ...lista.filter((p) => p.tipo === "equipo")];
     for (let i = 0; i < Math.max(tarjetas.length, dimensiones.length, vendido.length); i++) {
       if (tarjetas[i]) out.push(tarjetas[i]);
       if (vendido[i]) out.push(vendido[i]);

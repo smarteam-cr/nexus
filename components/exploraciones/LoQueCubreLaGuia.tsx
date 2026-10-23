@@ -11,26 +11,53 @@ import { cn } from "@/lib/cn";
 import { listaParaProponer } from "@/lib/exploraciones/calidad";
 import { avanceDeLaEstrategia } from "@/lib/exploraciones/avance-del-proyecto";
 import type { PestanaDeSesion } from "@/lib/exploraciones/guia";
-import { queCubreLaGuia } from "@/lib/exploraciones/que-cubre-la-guia";
+import { queCubreLaGuia, type PuntoQueCubre } from "@/lib/exploraciones/que-cubre-la-guia";
+import { EQUIPOS } from "@/lib/exploraciones/equipos";
 import { useLienzo } from "./contexto";
 import { NivelChip } from "./QueVaPrimero";
 import { useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 
+/** Un punto o un tema: verde listo, azul lo pregunta la guía, punteado no. */
+function Punto({ p }: { p: PuntoQueCubre }) {
+  return (
+    <span
+      title={`${p.titulo}: ${p.estado === "listo" ? "ya lo respondió" : p.estado === "cubre" ? "lo pregunta la guía" : "la guía no lo pregunta"}`}
+      className={cn(
+        "rounded-full border px-2 py-0.5 text-[11.5px]",
+        p.estado === "listo" && "border-success-line bg-success-surface text-success-ink",
+        p.estado === "cubre" && "border-info-line bg-info-surface text-brand",
+        p.estado === "falta" && "border-dashed border-line text-fg-muted",
+      )}
+    >
+      {p.estado === "listo" && "✓ "}
+      {p.corto}
+    </span>
+  );
+}
+
 export function LoQueCubreLaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
   const { exp, chequeo, escala, mapa, marco } = useLienzo();
-  const { preguntas } = useGuiaDeLaSesion(pestana, esLaProxima);
+  const { preguntas, yaPreguntado } = useGuiaDeLaSesion(pestana, esLaProxima);
   // Solo la próxima: la de una sesión que ya pasó se mira tal como se armó, no contra lo que falta hoy.
   if (!esLaProxima) return null;
   const enProyecto = marco.clave === "cs";
+  const equipo = pestana.sesion?.equipo ?? null;
   const r = queCubreLaGuia({
     preguntas,
     puntos: enProyecto ? avanceDeLaEstrategia(exp.estado) : listaParaProponer(exp.estado, chequeo),
     escala,
     posiciones: mapa.posiciones,
     marco: enProyecto ? "cs" : "venta",
+    equipo,
+    yaPreguntado,
   });
-  const resumen =
-    r.faltan === 0
+  const deEquipoCubre = r.temasDelEquipo.filter((t) => t.estado !== "falta").length;
+  // Con un equipo, lo primero es qué de ese equipo se sabe o se pregunta; lo de proponer se cierra con Dirección.
+  const resumen = equipo
+    ? `${EQUIPOS[equipo].nombre}: la guía cubre ${deEquipoCubre} de sus ${r.temasDelEquipo.length} temas (contando lo que ya respondió).${
+        equipo !== "direccion" && !enProyecto ? " Para cuándo, quién firma y el presupuesto se hablan con Dirección." : ""
+      }`
+    : r.faltan === 0
       ? enProyecto
         ? "La estrategia ya está: esta sesión profundiza."
         : "Ya está lista para proponer: esta sesión confirma y profundiza."
@@ -45,6 +72,17 @@ export function LoQueCubreLaGuia({ pestana, esLaProxima }: { pestana: PestanaDeS
         <p className="mt-0.5 text-[12.5px] text-fg-muted">{resumen}</p>
       </header>
       <div className="space-y-3 px-[18px] py-3.5">
+        {r.temasDelEquipo.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs text-fg-muted">{equipo ? `Lo de ${EQUIPOS[equipo].nombre}:` : ""}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {r.temasDelEquipo.map((p) => (
+                <Punto key={p.id} p={p} />
+              ))}
+            </div>
+            {!enProyecto && <p className="pt-1 text-xs text-fg-muted">Para proponer, de toda la empresa:</p>}
+          </div>
+        )}
         <div className="flex flex-wrap gap-1.5">
           {r.puntos.map((p) => (
             <span
