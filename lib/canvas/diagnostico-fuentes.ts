@@ -11,6 +11,10 @@
  * Las fuentes y sus reglas:
  *   · las reuniones ELEGIDAS por el equipo en su «Contexto adicional», leídas enteras (etapa 7: sin
  *     elegidas no entra ninguna, y la línea lo dice), y las notas del CSE (material-del-documento),
+ *   · desde el 2026-10-23, también las reuniones de las SESIONES DE LA EXPLORACIÓN, enteras y sin que nadie las
+ *     elija en el Contexto: una persona ya las unió a una sesión (`reunionesDeLaExploracionDelDiagnostico`). Antes
+ *     eran solo una sugerencia, y CEMACO llegaba al diagnóstico sin una sola transcripción de sus cinco sesiones,
+ *   · lo que Nexus PROPUSO y nadie confirmó (la ficha y la exploración), rotulado como supuesto (2026-10-23),
  *   · la memoria de la cuenta y del proyecto (lib/memoria, alcance del cliente): lo que dejaron las
  *     demás reuniones (acuerdos y decisiones de las minutas revisadas), la historia con Smarteam y las
  *     desviaciones que el cliente ve. Sin la ficha, los procesos ni los resultados: ya los lee abajo,
@@ -25,7 +29,7 @@ import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
 import { DIAGNOSTICO_HANDOFF_KEYS } from "@/components/landing/configs/diagnostico.defs";
 import { tagLabels } from "@/lib/tags/catalog";
 import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
-import { fichaParaPrompt, leerFicha } from "@/lib/clients/ficha";
+import { fichaParaPrompt, leerFicha, propuestaDeLaFichaParaElDocumento } from "@/lib/clients/ficha";
 import { cargarMaterialDelDocumento, encuadreDeLasElegidas } from "@/lib/contexto/material-del-documento";
 import { documentoConContexto } from "@/lib/contexto/documento";
 import { fronteraDeLaPieza } from "@/lib/contexto/frontera-de-los-documentos";
@@ -33,6 +37,7 @@ import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { resultadosDelProyecto } from "@/lib/handoff/resultados";
 import { resultadosParaPrompt } from "@/lib/handoff/resultados-medibles";
 import { memoriaDelDocumento } from "@/lib/memoria";
+import { reunionesDeLaExploracionDelDiagnostico } from "@/lib/contexto/sugerencias-del-documento-server";
 
 /**
  * El equipo de Smarteam del proyecto, para la fila «Smarteam» de «Equipos involucrados y licencias»
@@ -64,12 +69,18 @@ async function equipoDeSmarteam(projectId: string): Promise<string[]> {
  */
 export async function fuentesDelDiagnostico(projectId: string, opts: { paraElAssist?: boolean } = {}): Promise<string> {
   const doc = documentoConContexto("diagnosis")!;
+  /* Las reuniones de las sesiones de la exploración entran solas, como elegidas (2026-10-23): una persona ya las unió a
+     una sesión. Si falla, el diagnóstico sale con las elegidas de siempre: nunca lo frena. */
+  const deLaExploracion = await reunionesDeLaExploracionDelDiagnostico(projectId).catch((e: unknown) => {
+    console.warn("[diagnostico-fuentes] las reuniones de la exploración no se pudieron leer:", e instanceof Error ? e.message : e);
+    return [] as string[];
+  });
   const [handoffCtx, exploracionCtx, timelineCtx, encuestaCtx, material, smarteam, resultados, project] = await Promise.all([
     loadHandoffContext(projectId, { onlyConfirmed: false, includeKeys: DIAGNOSTICO_HANDOFF_KEYS }),
     loadCanvasContext(projectId, "exploration", { onlyConfirmed: false }),
     loadTimelineContext(projectId),
     loadCuestionarioContext(projectId).catch(() => ""),
-    cargarMaterialDelDocumento(projectId, doc, { elegidasEnResumen: opts.paraElAssist === true }),
+    cargarMaterialDelDocumento(projectId, doc, { elegidasEnResumen: opts.paraElAssist === true, sumarReuniones: deLaExploracion }),
     equipoDeSmarteam(projectId).catch(() => [] as string[]),
     resultadosDelProyecto(projectId).catch(() => null),
     prisma.project.findUnique({
@@ -87,7 +98,11 @@ export async function fuentesDelDiagnostico(projectId: string, opts: { paraElAss
     ? await serializeProcesosForPrompt(project.clientId, { onlyConfirmed: false })
     : "";
   // ⛔ Sin los campos internos: este informe lo lee el cliente (lib/clients/ficha.ts).
-  const fichaCtx = fichaParaPrompt(leerFicha(project?.client?.ficha), { paraDocumentoDelCliente: true });
+  const ficha = leerFicha(project?.client?.ficha);
+  const fichaCtx = fichaParaPrompt(ficha, { paraDocumentoDelCliente: true });
+  /* Lo que Nexus propuso de la ficha y nadie confirmó (2026-10-23): entra como SUPUESTO. Sin esto, con la ficha sin
+     confirmar —CEMACO el 23 oct: 9 campos propuestos— al diagnóstico no le llegaba nada de la ficha. */
+  const fichaPropuesta = propuestaDeLaFichaParaElDocumento(ficha);
   /* La memoria de la cuenta y del proyecto (lib/memoria), con el alcance del CLIENTE: el informe lo lee el cliente.
      Suma lo que dejaron las reuniones que su material NO lee (`yaLeidas`: solo los acuerdos y las decisiones de las
      minutas revisadas), la historia y las desviaciones que el cliente ve. Desde la etapa 7 es lo que lleva el peso
@@ -111,12 +126,15 @@ export async function fuentesDelDiagnostico(projectId: string, opts: { paraElAss
     hubs.length ? `Hubs/áreas del proyecto (dirigen QUÉ frentes cubre el informe): ${hubs.join(", ")}` : "",
     "",
     material.reuniones
-      ? `=== LAS REUNIONES ELEGIDAS POR EL EQUIPO ===\n${encuadreDeReuniones}\nCada reunión trae su sala: lo dicho [PUERTAS ADENTRO] es de Smarteam y NUNCA se le atribuye al cliente.\n${material.reuniones}`
+      ? `=== ${deLaExploracion.length ? "LAS REUNIONES DE LAS SESIONES DE LA EXPLORACIÓN Y LAS ELEGIDAS POR EL EQUIPO" : "LAS REUNIONES ELEGIDAS POR EL EQUIPO"} ===\n${encuadreDeReuniones}\nCada reunión trae su sala: lo dicho [PUERTAS ADENTRO] es de Smarteam y NUNCA se le atribuye al cliente.\n${material.reuniones}`
       : material.avisoSinReuniones,
     material.notas ? `\n=== NOTAS DEL EQUIPO PARA ESTE DIAGNÓSTICO (pesan como una fuente más; si contradicen una reunión, gana la más reciente) ===\n${material.notas}` : "",
     memoria.texto ? `\n${memoria.texto}` : "",
     encuestaCtx ? `\n=== RESPUESTAS DEL CLIENTE A LA ENCUESTA PREVIA ===\n${encuestaCtx}` : "",
     fichaCtx ? `\n${fichaCtx}` : "",
+    fichaPropuesta
+      ? `\n=== LO QUE NEXUS PROPUSO DE LA FICHA DEL CLIENTE Y NADIE CONFIRMÓ (SUPUESTOS: orientan, nunca se afirman como hechos; si contradicen algo confirmado, vale lo confirmado) ===\n${fichaPropuesta}`
+      : "",
     "\n=== LO QUE SE CONVERSÓ AL VENDER EL PROYECTO (solo lo apto para el cliente) ===",
     handoffCtx || "(Sin handoff generado.)",
     resultados?.resultados.length

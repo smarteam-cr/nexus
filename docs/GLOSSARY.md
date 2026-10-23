@@ -392,6 +392,21 @@
   colgaban también de ahí hasta el 2026-10-11, cuando pasaron a ser un artefacto propio). Desde la etapa A de la memoria de la cuenta abre en su **página de
   inicio**, y solo cuentan las reuniones que son de una sesión: lo demás del proyecto le llega por la memoria. Ver
   DECISIONS «La exploración del proyecto es la de la preventa» y «La exploración son sus sesiones».
+- **Enfoque de la solución** (sección del Diagnóstico, key `politica_rectora`; se llamaba **«Política rectora»** hasta el
+  2026-10-23): en qué nos vamos a concentrar y los principios que guían cada decisión. La propone la IA y la revisa el
+  ejecutivo («Marcar como revisado»; «Dejar que la IA lo reescriba» lo devuelve a sugerencia). Sin revisar, el
+  diagnóstico no se presenta. La key no cambió: los documentos guardados siguen igual.
+- **Plantilla de un entregable** (`lib/entregables/registro.ts`): con qué secciones y qué instrucciones se genera un
+  documento del cliente. El Diagnóstico tiene dos desde el 2026-10-23: **Diagnóstico esencial** (liviana y recomendada:
+  portada, objetivos, explicación del problema, desafío, enfoque de la solución, acciones y el siguiente paso) y
+  **Diagnóstico completo** (la de siempre, id `diagnostico-estrategico`: todas las secciones). Se elige al abrir un
+  diagnóstico sin generar; regenerar usa la del documento.
+- **Antes de generar** (Diagnóstico, `lib/canvas/diagnostico-confirmado.ts`): lo que Nexus propuso y nadie confirmó de lo
+  que lee el diagnóstico —la ficha, los resultados medibles del handoff, los procesos y la exploración—, con dónde se
+  revisa. **Casi nada confirmado**: de las piezas que tienen algo, menos de la mitad tienen algo confirmado; ahí
+  «Generar» pide confirmación («el diagnóstico va a salir de supuestos que nadie validó»).
+- **Piezas de una sección** (`data.__partes`, `lib/landing/partes.ts`): el subtítulo, la intro y el cuerpo de una sección
+  del motor de documentos. Se arrastran y se quitan como un ítem; una quitada vuelve con «+ Subtítulo» o «+ Introducción».
 - **Cuestionarios** (artefacto del proyecto, entre el Kickoff y la Exploración desde el 2026-10-11, `lib/cuestionario`;
   antes «cuestionario previo», dentro de Exploración): lo que contesta cada persona del cliente por su enlace, sin
   contraseña. Recomendado, nunca requerido: no frena ninguna etapa. Tres tipos: el **táctico** (por hubs y etapas del

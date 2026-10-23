@@ -23,7 +23,7 @@ import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
 import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { runDesarrolloGeneration } from "@/lib/canvas/desarrollo-generate";
 import { runEntregaGeneration } from "@/lib/canvas/entrega-generate";
-import { conPlantillaAnotada, entregableDe, nombreDelEntregable, plantillaDe, type PlantillaDeEntregable } from "./registro";
+import { conPlantillaAnotada, entregableDe, nombreDelEntregable, plantillaDe, plantillaDelDocumento, type PlantillaDeEntregable } from "./registro";
 import { templateDeLaPlantilla } from "./plantillas";
 
 export interface PedidoDeEntregable {
@@ -80,8 +80,19 @@ export function resolverPlantilla(slug: string, plantillaId?: string | null): Pl
   return p;
 }
 
+/**
+ * La plantilla que el documento ya tiene anotada (`__plantilla`), o null. Sin pedir una, regenerar usa ESTA y no «la de
+ * siempre» (2026-10-23): un diagnóstico esencial regenerado desde el botón de arriba no puede volverse el completo.
+ */
+async function plantillaGuardada(projectId: string, slug: string): Promise<string | null> {
+  const c = await prisma.projectCanvas.findFirst({ where: { projectId, ...canvasOf(slug) }, select: { sections: true } });
+  const g = c ? plantillaDelDocumento(slug, c.sections) : null;
+  return g?.guardada ? g.plantilla.id : null;
+}
+
 export async function generarEntregable(pedido: PedidoDeEntregable): Promise<EntregableGenerado> {
-  const plantilla = resolverPlantilla(pedido.slug, pedido.plantillaId);
+  const plantillaId = pedido.plantillaId ?? (await plantillaGuardada(pedido.projectId, pedido.slug).catch(() => null));
+  const plantilla = resolverPlantilla(pedido.slug, plantillaId);
   const template = templateDeLaPlantilla(plantilla.id);
   const base = { projectId: pedido.projectId, agentRunId: pedido.agentRunId, plantilla: template, instrucciones: pedido.instrucciones ?? null };
   const fase = FASE[pedido.slug];

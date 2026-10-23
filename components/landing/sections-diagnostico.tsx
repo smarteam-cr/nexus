@@ -19,8 +19,10 @@
  *                               y en el PDF no se lee.)
  *   · `diagnostico_preguntas` — las preguntas de negocio que se van a poder responder, cada una
  *                               atada a su OBJ.
- *   · `diagnostico_politica`  — la política rectora: la prosa de siempre, más el aviso INTERNO
- *                               «Sugerencia por revisar» mientras el ejecutivo no la revisa.
+ *   · `diagnostico_politica`  — el ENFOQUE DE LA SOLUCIÓN («política rectora» hasta el 2026-10-23): la
+ *                               prosa con su diseño, más la marca INTERNA de revisión arriba a la derecha.
+ * Desde el 2026-10-23 la intro de cada sección es una pieza (components/landing/partes.tsx): se quita con
+ * la X, se agrega con «+ Introducción» y se mueve con la manija.
  *   · `diagnostico_equipos`   — equipos involucrados y licencias (tabla de FUNDAUNA).
  *   · `diagnostico_alcance`   — el alcance acordado, por hub, con sus acciones.
  * (Las acciones y las herramientas reusan los renderers de sections-ejecucion.tsx.)
@@ -33,6 +35,8 @@ import type { CtxDelDiagnostico, HeroData, SectionProps } from "./types";
 import { HeroSection } from "./sections";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { KickoffProseSection } from "@/components/canvas/kickoff-sections/KickoffSections";
+import { ConIntro } from "./partes";
+import { SortableItems } from "./sortable";
 import { SUGERENCIA_POR_REVISAR } from "./configs/diagnostico.defs";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────────────────────
@@ -154,11 +158,6 @@ function Refs({ rotulo, value, editable, onCommit, placeholder }: { rotulo: stri
   );
 }
 
-function Intro({ value, editable, onCommit, placeholder }: { value?: string; editable?: boolean; onCommit: (v: string) => void; placeholder: string }) {
-  if (!editable && !value) return null;
-  return <Editable as="p" className="stl-lead" editable={editable} value={value ?? ""} placeholder={placeholder} onCommit={onCommit} />;
-}
-
 /** El siguiente código libre de una serie: F1…Fn → F(n+1). Solo para el botón «Agregar». */
 function siguiente(prefijo: string, usados: string[], ancho = 1): string {
   const n = usados.reduce((max, id) => {
@@ -227,8 +226,7 @@ export const ObjetivosDiagnosticoSection: FC<SectionProps<ObjetivosDiagnosticoDa
     { titulo: "Objetivos cualitativos", cuali: true },
   ];
   return (
-    <>
-      <Intro value={data.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca los objetivos (opcional)…" />
+    <ConIntro data={data} editable={editable} onCambios={(c) => onChange?.({ ...data, ...c } as typeof data)} placeholder="Una frase que enmarca los objetivos…">
       {/* Un grupo por FILA y no dos columnas: con 2 cuantitativos y 6 cualitativos, las columnas
           dejaban un hueco del alto de cuatro tarjetas (FUNDAUNA, 2026-09-28). */}
       <div className="stl-obj-grupos">
@@ -275,7 +273,7 @@ export const ObjetivosDiagnosticoSection: FC<SectionProps<ObjetivosDiagnosticoDa
           );
         })}
       </div>
-    </>
+    </ConIntro>
   );
 };
 
@@ -292,13 +290,15 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
   const conPositivas = !!ctx?.diagnostico && (acciones.length > 0 || !!editable);
 
   return (
-    <>
-      <Intro value={data.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca el problema (opcional)…" />
+    <ConIntro data={data} editable={editable} onCambios={(c) => onChange?.({ ...data, ...c } as typeof data)} placeholder="Una frase que enmarca el problema…">
       <div className={conPositivas ? "stl-hilo stl-hilo-4" : "stl-hilo"}>
         <div className="stl-hilo-col stl-hilo-sintomas">
           <h3 className="stl-hilo-titulo">Síntomas actuales <span>lo que se ve hoy</span></h3>
-          {sintomas.map((s, i) => (
-            <div key={i} className="stl-item stl-hilo-card">
+          {/* Se arrastran (2026-10-23): el orden es de quien presenta; los códigos no cambian. */}
+          <SortableItems items={sintomas} disabled={!editable} onReorder={(next) => set({ sintomas: next })} container={(nodes) => <>{nodes}</>}>
+          {(s, i, handle) => (
+            <div className="stl-item stl-hilo-card">
+              {handle}
               {editable && <RemoveBtn onClick={() => set({ sintomas: removeAt(sintomas, i) })} />}
               <Codigo value={s.id} editable={editable} placeholder="S1" onCommit={(v) => set({ sintomas: replaceAt(sintomas, i, { ...s, id: v }) })} />
               <Editable as="h4" className="stl-hilo-card-titulo" editable={editable} value={s.titulo} placeholder="El síntoma…"
@@ -306,7 +306,8 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
               <Editable as="p" className="stl-hilo-card-detalle" editable={editable} value={s.detalle} placeholder="Con el dato que lo muestra…"
                 onCommit={(v) => set({ sintomas: replaceAt(sintomas, i, { ...s, detalle: v }) })} />
             </div>
-          ))}
+          )}
+          </SortableItems>
           {editable && (
             <AddBtn label="Agregar síntoma" onClick={() => set({ sintomas: appendItem(sintomas, { id: siguiente("S", sintomas.map((x) => x.id)), titulo: "", detalle: "" }) })} />
           )}
@@ -314,8 +315,11 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
 
         <div className="stl-hilo-col stl-hilo-causas">
           <h3 className="stl-hilo-titulo">Causas <span>por qué pasa</span></h3>
-          {causas.map((c, i) => (
-            <div key={i} className="stl-item stl-hilo-card">
+          {/* Se arrastran (2026-10-23): el orden es de quien presenta; los códigos no cambian. */}
+          <SortableItems items={causas} disabled={!editable} onReorder={(next) => set({ causas: next })} container={(nodes) => <>{nodes}</>}>
+          {(c, i, handle) => (
+            <div className="stl-item stl-hilo-card">
+              {handle}
               {editable && <RemoveBtn onClick={() => set({ causas: removeAt(causas, i) })} />}
               <Codigo value={c.id} editable={editable} placeholder="F1" onCommit={(v) => set({ causas: replaceAt(causas, i, { ...c, id: v }) })} />
               <Editable as="h4" className="stl-hilo-card-titulo" editable={editable} value={c.titulo} placeholder="La causa…"
@@ -325,7 +329,8 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
               <Refs rotulo="Explica" value={c.explica ?? ""} editable={editable} placeholder="S1, S2"
                 onCommit={(v) => set({ causas: replaceAt(causas, i, { ...c, explica: v }) })} />
             </div>
-          ))}
+          )}
+          </SortableItems>
           {editable && (
             <AddBtn label="Agregar causa" onClick={() => set({ causas: appendItem(causas, { id: siguiente("F", causas.map((x) => x.id)), titulo: "", detalle: "", explica: "" }) })} />
           )}
@@ -333,8 +338,11 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
 
         <div className="stl-hilo-col stl-hilo-consecuencias">
           <h3 className="stl-hilo-titulo">Consecuencias negativas <span>¿cómo me hace perder dinero?</span></h3>
-          {consecuencias.map((k, i) => (
-            <div key={i} className="stl-item stl-hilo-card">
+          {/* Se arrastran (2026-10-23): el orden es de quien presenta; los códigos no cambian. */}
+          <SortableItems items={consecuencias} disabled={!editable} onReorder={(next) => set({ consecuencias: next })} container={(nodes) => <>{nodes}</>}>
+          {(k, i, handle) => (
+            <div className="stl-item stl-hilo-card">
+              {handle}
               {editable && <RemoveBtn onClick={() => set({ consecuencias: removeAt(consecuencias, i) })} />}
               <Editable as="h4" className="stl-hilo-card-titulo" editable={editable} value={k.titulo} placeholder="La consecuencia…"
                 onCommit={(v) => set({ consecuencias: replaceAt(consecuencias, i, { ...k, titulo: v }) })} />
@@ -343,7 +351,8 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
               <Refs rotulo="Por" value={k.por ?? ""} editable={editable} placeholder="F1"
                 onCommit={(v) => set({ consecuencias: replaceAt(consecuencias, i, { ...k, por: v }) })} />
             </div>
-          ))}
+          )}
+          </SortableItems>
           {editable && (
             <AddBtn label="Agregar consecuencia" onClick={() => set({ consecuencias: appendItem(consecuencias, { titulo: "", detalle: "", por: "" }) })} />
           )}
@@ -373,7 +382,7 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
           </div>
         )}
       </div>
-    </>
+    </ConIntro>
   );
 };
 
@@ -384,8 +393,7 @@ export const PreguntasDiagnosticoSection: FC<SectionProps<PreguntasDiagnosticoDa
   const set = (next: Partial<PreguntasDiagnosticoData>) => onChange?.({ ...data, ...next });
   if (!editable && !preguntas.length) return null;
   return (
-    <>
-      <Intro value={data.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca las preguntas (opcional)…" />
+    <ConIntro data={data} editable={editable} onCambios={(c) => onChange?.({ ...data, ...c } as typeof data)} placeholder="Una frase que enmarca las preguntas…">
       <div className="stl-props-scroll">
         <table className="stl-props">
           <thead>
@@ -417,7 +425,7 @@ export const PreguntasDiagnosticoSection: FC<SectionProps<PreguntasDiagnosticoDa
         </table>
       </div>
       {editable && <AddBtn label="Agregar pregunta" onClick={() => set({ preguntas: appendItem(preguntas, { pregunta: "", objetivos: "" }) })} />}
-    </>
+    </ConIntro>
   );
 };
 
@@ -438,7 +446,7 @@ export const DiagnosticoHeroSection: FC<SectionProps<HeroData>> = (props) => {
   );
 };
 
-// ── Política rectora (con su marca de revisión) ──────────────────────────────────────────────
+// ── Enfoque de la solución (con su marca de revisión) ───────────────────────────────────────
 
 function fechaCorta(iso: string): string {
   const d = new Date(iso);
@@ -448,32 +456,42 @@ function fechaCorta(iso: string): string {
 }
 
 /**
- * La política rectora es una SUGERENCIA de la IA hasta que el ejecutivo la revisa (2026-10-02): casi
- * nunca se habla en las sesiones. El aviso es INTERNO: solo existe en edición, así que no llega ni al
- * modo lectura ni al PDF. Sin revisar, el diagnóstico no se presenta.
+ * El ENFOQUE DE LA SOLUCIÓN («Política rectora» hasta el 2026-10-23) es una SUGERENCIA de la IA hasta que el ejecutivo
+ * lo revisa (2026-10-02): casi nunca se habla en las sesiones. Sin revisar, el diagnóstico no se presenta.
+ *
+ * La marca de revisión va ARRIBA A LA DERECHA de la sección, compacta (2026-10-23, Elías: el aviso verde en medio del
+ * contenido separaba el título del enfoque). Es INTERNA: solo existe en edición, así que no llega ni a la vista del
+ * cliente ni al PDF. «Volver a sugerencia» no se entendía: ahora dice lo que hace, «Dejar que la IA lo reescriba».
  */
 export const PoliticaDiagnosticoSection: FC<SectionProps<PoliticaDiagnosticoData>> = (props) => {
   const { data, editable, onChange } = props;
   const revisada = typeof data?.revisadaAt === "string" && data.revisadaAt !== "";
   const tieneContenido = !!(data?.intro || (Array.isArray(data?.items) && data.items.length));
+  const fecha = revisada ? fechaCorta(data.revisadaAt!) : "";
   return (
     <>
       {editable && tieneContenido && (
-        <div className={revisada ? "stl-sugerencia stl-sugerencia-ok" : "stl-sugerencia"} role="note">
-          <span>
-            {revisada
-              ? `Revisada${fechaCorta(data.revisadaAt!) ? ` el ${fechaCorta(data.revisadaAt!)}` : ""}. Regenerar el diagnóstico ya no la cambia.`
-              : `${SUGERENCIA_POR_REVISAR}: la propuso la IA porque casi nunca se habla en las sesiones. Ajústala y márcala como revisada antes de presentar.`}
+        <div className={revisada ? "stl-revision stl-revision-ok" : "stl-revision"} role="note">
+          <span
+            className="stl-revision-estado"
+            title={
+              revisada
+                ? "Regenerar el diagnóstico ya no lo cambia."
+                : "Lo propuso la IA: casi nunca se habla en las sesiones. Ajústalo y márcalo como revisado antes de presentar."
+            }
+          >
+            {revisada ? `✓ Revisado${fecha ? ` el ${fecha}` : ""}` : SUGERENCIA_POR_REVISAR}
           </span>
           <button
             type="button"
+            title={revisada ? "Al regenerar el diagnóstico, la IA vuelve a proponer el enfoque." : "Regenerar el diagnóstico ya no lo va a cambiar."}
             onClick={() => onChange?.({ ...data, revisadaAt: revisada ? "" : new Date().toISOString() })}
           >
-            {revisada ? "Volver a sugerencia" : "Marcar como revisada"}
+            {revisada ? "Dejar que la IA lo reescriba" : "Marcar como revisado"}
           </button>
         </div>
       )}
-      {/* La prosa de siempre: el mismo renderer que el resto de las secciones de texto. */}
+      {/* La prosa de siempre, con el diseño del enfoque (`diseno: "enfoque"` en la definición). */}
       <KickoffProseSection {...(props as unknown as Parameters<typeof KickoffProseSection>[0])} />
     </>
   );
@@ -492,8 +510,7 @@ export const EquiposDiagnosticoSection: FC<SectionProps<EquiposDiagnosticoData>>
       onCommit={(v) => set({ equipos: replaceAt(filas, i, { ...filas[i], [campo]: v }) })} />
   );
   return (
-    <>
-      <Intro value={data.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca los equipos (opcional)…" />
+    <ConIntro data={data} editable={editable} onCambios={(c) => onChange?.({ ...data, ...c } as typeof data)} placeholder="Una frase que enmarca los equipos…">
       <div className="stl-props-scroll">
         <table className="stl-props stl-equipos">
           <thead>
@@ -525,7 +542,7 @@ export const EquiposDiagnosticoSection: FC<SectionProps<EquiposDiagnosticoData>>
       {editable && (
         <AddBtn label="Agregar equipo" onClick={() => set({ equipos: appendItem(filas, { equipo: "", personas: "", rol: "", licencia: "" }) })} />
       )}
-    </>
+    </ConIntro>
   );
 };
 
@@ -566,20 +583,25 @@ export const AlcanceDiagnosticoSection: FC<SectionProps<AlcanceDiagnosticoData>>
   const set = (next: Partial<AlcanceDiagnosticoData>) => onChange?.({ ...data, ...next });
   if (!editable && !grupos.length && !fuera.length) return null;
   return (
-    <>
-      <Intro value={data.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca el alcance (opcional)…" />
+    <ConIntro data={data} editable={editable} onCambios={(c) => onChange?.({ ...data, ...c } as typeof data)} placeholder="Una frase que enmarca el alcance…">
       {(grupos.length > 0 || editable) && <h3 className="stl-obj-titulo">Incluido</h3>}
-      <div className="stl-grid stl-grid-2 stl-alcance">
-        {grupos.map((g, i) => (
-          <div key={i} className="stl-item stl-card">
+      <SortableItems
+        items={grupos}
+        disabled={!editable}
+        onReorder={(next) => set({ grupos: next })}
+        container={(nodes) => <div className="stl-grid stl-grid-2 stl-alcance">{nodes}</div>}
+      >
+        {(g, i, handle) => (
+          <div className="stl-item stl-card">
+            {handle}
             {editable && <RemoveBtn onClick={() => set({ grupos: removeAt(grupos, i) })} title="Quitar este grupo" />}
             <Editable as="h3" className="stl-card-title" editable={editable} value={g.titulo ?? ""} placeholder="El hub o el frente…"
               onCommit={(v) => set({ grupos: replaceAt(grupos, i, { ...g, titulo: v }) })} />
             <ItemsDeAlcance items={arr(g.items)} editable={editable}
               onChange={(items) => set({ grupos: replaceAt(grupos, i, { ...g, items }) })} />
           </div>
-        ))}
-      </div>
+        )}
+      </SortableItems>
       {editable && <AddBtn label="Agregar grupo" onClick={() => set({ grupos: appendItem(grupos, { titulo: "", items: [] }) })} />}
       {(fuera.length > 0 || editable) && (
         <div className="stl-alcance-fuera">
@@ -587,6 +609,6 @@ export const AlcanceDiagnosticoSection: FC<SectionProps<AlcanceDiagnosticoData>>
           <ItemsDeAlcance items={fuera} editable={editable} onChange={(items) => set({ fuera: items })} />
         </div>
       )}
-    </>
+    </ConIntro>
   );
 };

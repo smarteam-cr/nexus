@@ -32,6 +32,8 @@ import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/can
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
 import { generarEntregable } from "@/lib/entregables/generar-server";
 import { entregablePorAgente, plantillaDe } from "@/lib/entregables/registro";
+import { loConfirmadoDelProyecto } from "@/lib/canvas/diagnostico-confirmado-server";
+import { ERROR_SUPUESTOS_SIN_VALIDAR, mensajeDeSupuestos } from "@/lib/canvas/diagnostico-confirmado";
 import { generarResumenDeHandoff } from "@/lib/handoff/resumen";
 import { leerOProponerResultados } from "@/lib/handoff/proponer-resultados";
 import { proponerFichaDesdeHandoff } from "@/lib/clients/ficha-propuesta";
@@ -157,9 +159,12 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
     preview?: boolean;
     /** El CSE ya vio el aviso de "esta pieza no le corresponde al proyecto" y sigue igual. */
     forzar?: boolean;
-    /** La plantilla de un ENTREGABLE (lib/entregables/registro.ts). Sin ella, la de siempre; una que no es de ese
-     *  entregable responde 400 antes de crear la corrida. */
+    /** La plantilla de un ENTREGABLE (lib/entregables/registro.ts). Sin ella, la que el documento ya tiene anotada (o la
+     *  de siempre); una que no es de ese entregable responde 400 antes de crear la corrida. */
     plantilla?: string;
+    /** El diagnóstico (2026-10-23): quien genera ya vio que casi nada de lo que lee está confirmado y sigue igual. Sin esto
+     *  y con casi nada confirmado, responde 409 `SUPUESTOS_SIN_VALIDAR` antes de crear la corrida. */
+    aSabiendas?: boolean;
     /** E2a: el paso 2 de «Regenerar todo» / «Generar cronograma» completa el BORRADOR del cronograma
      *  (lib/timeline/borrador-del-detalle.ts): el que el CSE tiene enfrente (`token` + `version`), o
      *  uno nuevo si no había propuesta de fases (`token` null). Desde E2b también «Regenerar» de una
@@ -635,6 +640,19 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   }
   // Quién pide la generación de un entregable: queda con la plantilla anotada en el documento.
   const quienPideElEntregable = entregableDelAgente ? await triggeredByEmail() : null;
+
+  // ── El diagnóstico sobre supuestos (2026-10-23): con casi nada confirmado, se pide confirmación ANTES de la corrida ──
+  // (lib/canvas/diagnostico-confirmado.ts). El botón la pide con un diálogo y vuelve con `aSabiendas`. Si el cálculo
+  // falla, no frena: el aviso es una ayuda, no una puerta.
+  if (entregableDelAgente?.slug === "diagnosis" && bodyProjectId && !body.aSabiendas) {
+    const confirmado = await loConfirmadoDelProyecto(bodyProjectId).catch(() => null);
+    if (confirmado?.casiNada) {
+      return NextResponse.json(
+        { error: ERROR_SUPUESTOS_SIN_VALIDAR, message: mensajeDeSupuestos(confirmado), piezas: confirmado.piezas },
+        { status: 409 },
+      );
+    }
+  }
 
   // ── A2: el trabajo real (contexto → LLM → persistencia) va en un closure para
   // poder ejecutarlo síncrono (modo normal) o detached (modo async). Captura todo

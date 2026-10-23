@@ -21,12 +21,15 @@ import {
   entregableDe,
   entregablePorAgente,
   plantillaDe,
+  seccionesDeLaPlantilla,
+  SECCIONES_DEL_DIAGNOSTICO_ESENCIAL,
   plantillaDelDocumento,
 } from "./registro";
 import { TEMPLATE_DE_LA_PLANTILLA } from "./plantillas";
 import { DOC } from "@/lib/canvas/assist-de-documento";
 import { KICKOFF_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
-import { DIAGNOSTICO_TEMPLATE } from "@/components/landing/configs/diagnostico.defs";
+import { DIAGNOSTICO_ESENCIAL_TEMPLATE, DIAGNOSTICO_TEMPLATE } from "@/components/landing/configs/diagnostico.defs";
+import { DIAGNOSTICO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { PLANIFICACION_TEMPLATE } from "@/components/landing/configs/planificacion.defs";
 import { DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
 import { ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
@@ -40,16 +43,36 @@ describe("el registro de entregables", () => {
   it("el set y las plantillas, congelados", () => {
     expect(ENTREGABLES.map((e) => [e.slug, e.plantillas.map((p) => p.id)])).toEqual([
       ["kickoff", ["kickoff"]],
-      ["diagnosis", ["diagnostico-estrategico"]],
+      // 2026-10-23 (Elías): dos plantillas del diagnóstico, la completa (la de siempre) y la esencial.
+      ["diagnosis", ["diagnostico-estrategico", "diagnostico-esencial"]],
       ["planning", ["planificacion"]],
       ["tech-requirements", ["integraciones"]],
       ["delivery", ["entrega"]],
     ]);
   });
 
-  it("el diagnóstico de hoy es la plantilla «Diagnóstico estratégico»; el documento se sigue llamando Diagnóstico", () => {
-    expect(plantillaDe("diagnosis")?.nombre).toBe("Diagnóstico estratégico");
+  it("la de siempre del diagnóstico es «Diagnóstico completo» (id de antes); el documento se sigue llamando Diagnóstico", () => {
+    expect(plantillaDe("diagnosis")?.id).toBe("diagnostico-estrategico");
+    expect(plantillaDe("diagnosis")?.nombre).toBe("Diagnóstico completo");
+    expect(plantillaDe("diagnosis")?.secciones).toBeUndefined();
     expect(pieceBySlug("diagnosis")?.label).toBe("Diagnóstico");
+  });
+
+  it("la esencial es la recomendada y tiene solo sus secciones, en el orden del canvas", () => {
+    const esencial = plantillaDe("diagnosis", "diagnostico-esencial")!;
+    expect(esencial.recomendada).toBe(true);
+    expect(seccionesDeLaPlantilla(esencial, DIAGNOSTICO_CANVAS.sections).map((s) => s.key)).toEqual([
+      "diagnostico", "objetivos", "problema", "desafio", "politica_rectora", "acciones", "cierre",
+    ]);
+    // Cada sección de la plantilla existe en el canvas: una key mal escrita desaparecería sin aviso.
+    const canon = new Set(DIAGNOSTICO_CANVAS.sections.map((s) => s.key));
+    expect(SECCIONES_DEL_DIAGNOSTICO_ESENCIAL.filter((k) => !canon.has(k))).toEqual([]);
+    // Su template genera exactamente esas secciones (el agente no escribe las demás).
+    expect(DIAGNOSTICO_ESENCIAL_TEMPLATE.sections.map((d) => d.key)).toEqual([...SECCIONES_DEL_DIAGNOSTICO_ESENCIAL]);
+    // Sin `secciones`, la plantilla tiene el canvas entero.
+    expect(seccionesDeLaPlantilla(plantillaDe("diagnosis")!, DIAGNOSTICO_CANVAS.sections)).toHaveLength(DIAGNOSTICO_CANVAS.sections.length);
+    // Una sola recomendada por entregable.
+    for (const e of ENTREGABLES) expect(e.plantillas.filter((p) => p.recomendada).length, e.slug).toBeLessThanOrEqual(1);
   });
 
   it("todo entregable lo ve el cliente y vive en un canvas de proyecto", () => {

@@ -22,7 +22,7 @@ import type { CaboSuelto } from "./revisar-hilo";
 const db = vi.hoisted(() => ({
   projectCanvas: { findUnique: vi.fn(), updateMany: vi.fn() },
   hitoDeDocumento: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
-  canvasSection: { findMany: vi.fn(), update: vi.fn() },
+  canvasSection: { findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   canvasBlock: { deleteMany: vi.fn(), create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
   versionDeDocumento: { update: vi.fn() },
   $transaction: vi.fn(),
@@ -68,7 +68,11 @@ describe("estado del documento: borrador, presentado y aprobado", () => {
     expect(r.motivos).toHaveLength(2);
     expect(r.motivos[0]).toContain("La causa F2 no tiene ninguna acción");
     expect(r.motivos[1]).toContain("sugerencia de la IA");
-    expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: undefined }).motivos[0]).toContain("Falta la política rectora");
+    expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: undefined }).motivos[0]).toContain("Falta el enfoque de la solución");
+  });
+
+  it("un enfoque OCULTO a propósito no frena la presentación (2026-10-23: toda sección se puede ocultar)", () => {
+    expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: undefined, politicaOculta: true })).toEqual({ ok: true, motivos: [] });
   });
 
   it("aprobado no se presenta (está cerrado), y sin contenido no hay nada que presentar", () => {

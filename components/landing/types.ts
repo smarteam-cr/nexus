@@ -597,7 +597,21 @@ export interface SectionProps<T> {
    * documento mostraría otra. Ahora la definición es la única fuente y el renderer la lee.
    */
   sectionRotulosDeListas?: Record<string, string>;
+  /** Cómo se dibuja una sección de prosa en ESTE documento. Ver `SectionDef.diseno` y `DisenoDeProsa`. */
+  sectionDiseno?: DisenoDeProsa;
 }
+
+/**
+ * Cómo se dibuja una sección de PROSA (`kickoff_prose`: intro + tarjetas título/detalle), por documento (2026-10-23).
+ * El esquema es el mismo en todos: cambiar de diseño no reescribe contenido.
+ *   · `tarjetas` — la grilla de dos columnas de siempre (la del kickoff). Es el default.
+ *   · `datos`    — datos cortos en tres columnas, con el acento arriba (la foto del cliente).
+ *   · `numerada` — puntos numerados en dos columnas, sin tarjeta, con la intro como pregunta grande (el desafío).
+ *   · `check`    — lista con check en dos columnas (lo que el cliente ya hace bien).
+ *   · `enfoque`  — la intro grande pegada al título y los principios numerados (el enfoque de la solución).
+ * Todos son CSS estático: salen igual en el PDF.
+ */
+export type DisenoDeProsa = "tarjetas" | "datos" | "numerada" | "check" | "enfoque";
 
 /**
  * Rótulos de las dos columnas de la comparación de procesos, declarados POR DOCUMENTO.
@@ -696,6 +710,8 @@ export interface SectionDef {
   invest?: InvestLabels;
   /** Rótulos de las dos columnas de `process_mapping`, por documento. Ver `CompararLabels`. */
   compara?: CompararLabels;
+  /** Cómo se dibuja una sección de prosa en este documento. Ver `DisenoDeProsa`. */
+  diseno?: DisenoDeProsa;
   empty: unknown;              // data inicial (template vacío)
   /** La sección se alimenta de `ctx` (no de `data`): NO se omite en read por `isBlank`
    *  (el Component decide si devuelve null). Ej. kickoff: cronograma/procesos/cierre. */

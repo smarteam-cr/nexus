@@ -7633,6 +7633,8 @@ arrancara vacío, saldría sin reuniones cada vez que alguien se olvida de elegi
     elegido, una reunión del proyecto que quedaba fuera de esas 100 no se podía elegir de ninguna forma («Buscar en tu
     calendario» saca a propósito las que ya son del proyecto). Medido el 2026-10-10: 58 reuniones vinculadas en 9
     proyectos (Grupo Inve, kölbi, Smarteam), 48 con contenido.
+- ⚠ **Enmendado el 2026-10-23, solo en el diagnóstico**: las reuniones de las sesiones de la exploración ya no son una
+  sugerencia, entran solas y enteras. Ver «El Diagnóstico: todo el contexto, dos plantillas y un documento liviano».
 - **Los tres valores de cada columna:** «Usar» es el clic de una persona y escribe `true`; «Descartar» escribe `false`,
   que no pone candado (los `false` de antes, la X sobre una sugerida, se leen igual); la X sobre una elegida vuelve a
   `null`, como en el cronograma. Sin tocar, una reunión no entra. Una desestimada no se sugiere más **mientras exista el
@@ -8950,6 +8952,8 @@ que tener su acción de la semana y su reunión agendada.
   Diagnóstico. La plantilla usada queda en el Json del canvas (`__plantilla`), sin columna nueva; sin ella, se lee con
   la de siempre, así los kickoffs y diagnósticos que existen no se tocan. Sin selector todavía: hoy hay una por
   entregable.
+  ⚠ **Enmendado el 2026-10-23**: el Diagnóstico tiene dos plantillas y un selector, y regenerar usa la anotada. Ver «El
+  Diagnóstico: todo el contexto, dos plantillas y un documento liviano».
 - **Una sola función genera cualquier entregable** (`generarEntregable`), con la misma corrida, medidor y permiso que
   /analyze, que la usa. El kickoff salió de /analyze a lib/canvas/kickoff-generate.ts con el mismo mensaje y la misma
   forma de guardar.
@@ -10642,3 +10646,65 @@ determinado por el momento».
   siempre: solo se compara contra una guía guardada antes de la reunión); sus temas cuentan si se marcan hechos en «En
   vivo». El documento de diagnóstico por área es de su propia sesión de trabajo: lo que deja esta es que cada sesión sabe
   su equipo y el área del equipo queda en juego con su evidencia.
+
+## El Diagnóstico: todo el contexto, dos plantillas y un documento liviano (2026-10-23)
+
+**Contexto.** Elías, antes de la sesión de diagnóstico de CEMACO con Customer Success: que el diagnóstico tome todo lo
+que se sabe de la empresa, que avise cuando casi nada está confirmado, que «Política rectora» pase a llamarse «Enfoque de
+la solución», que todo se pueda mover, quitar y ocultar, un diseño menos pesado y dos plantillas. Medido ese día en
+producción, solo lectura (`scripts/medir-contexto-del-diagnostico.ts --cliente "CEMACO"`): el diagnóstico de «Cemaco
+Internacional - CRM» habría salido sin una sola transcripción de las cinco sesiones de la exploración (nadie las había
+elegido en el Contexto), sin la ficha (sin confirmar, 8 campos propuestos), con los 5 resultados medibles sin confirmar y
+los 2 procesos en borrador. Plan y pruebas: `docs/diagnostico-plantillas-plan.md`.
+
+- **Las reuniones de las sesiones de la exploración entran solas y enteras al diagnóstico**
+  (`reunionesDeLaExploracionDelDiagnostico`, lib/contexto/sugerencias-del-documento-server.ts, y `sumarReuniones` de
+  lib/contexto/material-del-documento.ts). *Por qué:* una reunión unida a una sesión —a mano o por su evento— ya la eligió
+  una persona; es la misma regla que la sugerencia «Sesión N de la exploración». Salen de la membresía del proyecto por el
+  chokepoint. «Sacar» en el Contexto las desestima (`false`). Enmienda «Los documentos leen la memoria y solo las
+  reuniones elegidas» solo para el diagnóstico. CEMACO: el mensaje pasa de 49.000 a 194.000 caracteres (las 5 enteras).
+- **Lo que Nexus propuso entra como SUPUESTO**: los campos propuestos de la ficha (solo los que van al cliente, sin la
+  postura de nadie ni lo marcado interno: `propuestaDeLaFichaParaElDocumento`) y lo que la exploración propuso y nadie
+  decidió de la estrategia y lo propio de la cuenta (`propuestoSinDecidir`, lib/exploraciones/propuesto-al-documento.ts).
+  La libreta del CSE («no explorado», el siguiente paso) no entra.
+- **«Antes de generar»** (lib/canvas/diagnostico-confirmado.ts): cuatro piezas —ficha, resultados del handoff, procesos,
+  exploración— con su estado y dónde se revisan. **Casi nada confirmado** = de las que tienen algo, menos de la mitad
+  tienen algo confirmado. Ahí `/analyze` responde 409 `SUPUESTOS_SIN_VALIDAR` y el botón pide confirmación («Generar
+  igual» / «Revisar antes»); con el sí vuelve con `aSabiendas`. Si el cálculo falla, no frena. Las reuniones se informan
+  pero no cuentan: son lo que se dijo, no algo que confirmar. El chat («documento.generar») no pasa por este aviso.
+  CEMACO hoy: 1 de 4 → pide confirmación.
+- **«Política rectora» → «Enfoque de la solución».** Cambia todo lo visible y los prompts; la key `politica_rectora` y
+  `revisadaAt` no cambian. Los rótulos guardados se leen con el nombre nuevo (`rotuloVigente`) y el runner los pone al día
+  al regenerar. La marca de revisión va arriba a la derecha de la sección, solo en edición: «Marcar como revisado» y
+  «Dejar que la IA lo reescriba» (era «Volver a sugerencia», que no decía qué hacía).
+- **Arreglo de paso**: la prosa escribía `{ ...normalizada, ...cambio }` y borraba todo lo que vive fuera de su forma.
+  Editar una frase del enfoque ya revisado lo devolvía a sugerencia sin aviso. Ahora escribe sobre la data cruda.
+- **Piezas de una sección** (`data.__partes`, lib/landing/partes.ts y components/landing/partes.tsx): el subtítulo, la
+  intro y el cuerpo se arrastran y se quitan como un ítem. Una opcional vacía no deja hueco ni su ayuda en edición
+  («Subtítulo (opcional)…» separaba el título del contenido): se agrega con «+». Lo quitado sigue quitado al regenerar
+  (`preserveNonSchemaKeys`) y no cuenta como contenido (`NO_CONTENIDO`). Lo usan la prosa de todos los documentos y las
+  secciones con intro del diagnóstico, la ejecución, la planificación, el mapeo de procesos y la brecha. Los síntomas,
+  las causas, las consecuencias y los grupos del alcance se arrastran. Las filas de tabla, no (otra tanda).
+- **Todo módulo del diagnóstico se puede ocultar**, la portada y el cierre también. Un enfoque oculto a propósito no frena
+  la presentación (`politicaOculta`).
+- **Diseño** (`SectionDef.diseno`, como `chips`: entra por la definición, el esquema y el chat no cambian): «Situación
+  actual» = datos en tres columnas; «Desafío» = la pregunta grande y las situaciones numeradas, sin tarjetas blancas sobre
+  el fondo oscuro; «Fortalezas» = lista con check; «Enfoque» = la frase del enfoque pegada al título y los principios
+  numerados. CSS estático con hex literal: sale igual en la vista del cliente y en el PDF. Las intros se piden de una
+  frase de menos de 25 palabras.
+- **Dos plantillas** (lib/entregables/registro.ts). **Diagnóstico esencial**, la recomendada: portada, objetivos,
+  explicación del problema, desafío, enfoque de la solución, acciones y el siguiente paso, con las listas en el mínimo.
+  Los objetivos van porque las acciones dicen qué objetivos mueven. **Diagnóstico completo** (id `diagnostico-estrategico`,
+  la de siempre): todas. *Por qué esta división:* lo esencial cuenta por qué el cliente tiene los resultados que tiene y
+  qué vamos a hacer; lo demás profundiza. Un diagnóstico sin plantilla anotada (Wherex y todos los de antes) se lee y se
+  regenera con la completa, como hasta hoy.
+- **El selector** (components/canvas/ElegirPlantilla.tsx) reemplaza al documento vacío: dos tarjetas con radio, dibujo,
+  para qué sirve y «Secciones · N»; «Generar con esta plantilla». El botón de arriba no aparece mientras el diagnóstico no
+  está generado. **Regenerar sin pedir plantilla usa la del documento** (`generarEntregable`), no la de siempre.
+- **El documento queda con las secciones de su plantilla** (`ajustarALaPlantilla`): las vacías de afuera se borran (la
+  fila y su entrada del Json); las que tienen algo se ocultan. La reconciliación (`ensurePieceCanvas`,
+  `ensureDiagnosticoCanvas`) respeta la plantilla anotada: un cambio de etiquetas ya no le devuelve las del completo.
+- **Probado** en la base local con CEMACO (exploración, handoff y procesos copiados de producción): la esencial generó 6
+  secciones en 87 s, el documento quedó con sus 7 y el hilo, cerrado (0 cabos sueltos). Una corrida de Sonnet 4.6 con
+  unos 194.000 caracteres de entrada: unos US$0,20–0,30, estimado.
+- **Sin SQL**: la plantilla vive en `__plantilla`, las piezas en `__partes` y la revisión en `revisadaAt`, como antes.

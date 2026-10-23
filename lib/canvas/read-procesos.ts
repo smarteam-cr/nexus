@@ -41,6 +41,29 @@ async function leerBloquesDeProcesos(clientId: string, opts: { onlyConfirmed?: b
 }
 
 /**
+ * Cuántos procesos tiene el cliente y cuántos validó con él (2026-10-23, «Antes de generar» del diagnóstico). Un mapa
+ * nuevo cuenta validado solo con `estado: "validado"`; un flowchart del formato anterior, si está CONFIRMED.
+ */
+export async function contarProcesosDelCliente(clientId: string): Promise<{ total: number; validados: number }> {
+  const blocks = await leerBloquesDeProcesos(clientId, {});
+  let total = 0;
+  let validados = 0;
+  for (const b of blocks) {
+    const data: unknown = b.data;
+    if (esMapaDeCarriles(data)) {
+      total++;
+      if (data.estado === "validado") validados++;
+      continue;
+    }
+    const d = data as { nodes?: unknown[] } | null;
+    if (!Array.isArray(d?.nodes) || d.nodes.length === 0) continue;
+    total++;
+    if (b.status === "CONFIRMED") validados++;
+  }
+  return { total, validados };
+}
+
+/**
  * Los procesos que dibuja el kickoff (editor, vista del cliente y PDF), en la forma del visor viejo.
  * Un mapa NUEVO (lib/procesos) entra solo cuando está validado con el cliente, y entra su versión de
  * HOY traducida (lib/procesos/legado.ts): el kickoff es lo que el cliente ve, y un borrador del agente

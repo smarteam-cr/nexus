@@ -323,14 +323,15 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
   {
     /* La política rectora vivió acá del 28-sep al 2-oct y volvió al DIAGNÓSTICO (la parte teórica). */
     key: "politica_rectora",
-    label: "Política rectora",
+    // «Enfoque de la solución» desde el 2026-10-23, como en el diagnóstico (la key no cambia).
+    label: "Enfoque de la solución",
     eyebrow: "En qué nos enfocamos y para qué",
     theme: "dark",
     sectionType: "kickoff_prose",
     agentGenerated: false,
     empty: proseEmpty,
     agentHint: "",
-    brief: "Sección legacy. La política rectora vive ahora en el diagnóstico, al lado del desafío principal.",
+    brief: "Sección legacy. El enfoque de la solución vive ahora en el diagnóstico, al lado del desafío principal.",
     schema: asSchema(proseSchema),
     schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
@@ -383,7 +384,7 @@ export const PLANIFICACION_TEMPLATE: BcTemplateDef = {
   agentIntro:
     "Eres el consultor senior de Smarteam que escribe la PLANIFICACIÓN de un proyecto de HubSpot: lo que va a quedar CONFIGURADO en el portal, armado por fuera para que el cliente lo vea y lo apruebe antes de configurar nada. Muestra cómo van a funcionar sus procesos, las etapas del ciclo de vida, la arquitectura, las propiedades por objeto, los pipelines, las automatizaciones y las conversaciones (mensajería instantánea y agentes de IA).\n\n" +
     "SOLO LO QUE SE HARÁ: cómo opera hoy el cliente, el problema y el enfoque viven en el DIAGNÓSTICO. Acá no se describe el presente ni se vuelve a explicar el problema: se dice qué se va a configurar.\n\n" +
-    "TU MÉTODO: parte del DIAGNÓSTICO (la parte teórica: une todo con CÓDIGOS —síntomas S1…, causas F1…, objetivos OBJ-01…, acciones AC-01…—, y trae la POLÍTICA RECTORA y las ACCIONES con sus herramientas). Esta planificación es la parte práctica: baja esas acciones a lo que se configura en HubSpot, respetando la política rectora. Si no hay diagnóstico, trabaja con las reuniones de tu contexto. No inventes códigos.\n\n" +
+    "TU MÉTODO: parte del DIAGNÓSTICO (la parte teórica: une todo con CÓDIGOS —síntomas S1…, causas F1…, objetivos OBJ-01…, acciones AC-01…—, y trae el ENFOQUE DE LA SOLUCIÓN y las ACCIONES con sus herramientas). Esta planificación es la parte práctica: baja esas acciones a lo que se configura en HubSpot, respetando el enfoque de la solución. Si no hay diagnóstico, trabaja con las reuniones de tu contexto. No inventes códigos.\n\n" +
     "DE DÓNDE SALE CADA COSA: cada paso, etapa, propiedad, pipeline, automatización y conversación lleva su `origen`. 'acordado' SOLO si una reunión con el cliente lo respalda (y la nombras en `fuente`); 'propuesta' si es diseño de Smarteam; 'supuesto' si das por hecho algo del cliente que nadie dijo. Lo que solo aparece en una nota interna o en el handoff NO cuenta como acordado. Prefiere menos cosas bien respaldadas a muchas supuestas.\n\n" +
     "LOS MAPAS DE PROCESOS son una fuente más, no la verdad: un sistema, un paso o un rol que el mapa trae y que ninguna reunión menciona es, a lo sumo, un supuesto.\n\n" +
     "LA MODALIDAD DE ADOPCIÓN gobierna las rutinas y el despliegue por olas: la recibes en el contexto (directa o por pilotos, con su porqué). Con adopción DIRECTA, el plan de despliegue por olas queda VACÍO — vacío es correcto. Con PILOTOS, define las olas con equipo inicial, módulos e indicador de éxito para avanzar.\n\n" +

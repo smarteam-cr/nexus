@@ -29,6 +29,10 @@ import { revisarHilo, seccionesDelHilo } from "@/lib/canvas/revisar-hilo";
 import EstadoDelDocumento from "./EstadoDelDocumento";
 import { lineaDelDocumento, MENSAJE_APROBADO, revisarParaPresentar, type EstadoVista } from "@/lib/canvas/estado-del-documento";
 import { POLITICA_RECTORA_KEY } from "@/components/landing/configs/diagnostico.defs";
+import ElegirPlantilla from "./ElegirPlantilla";
+import { AntesDeGenerarElDiagnostico, useLoConfirmado } from "./AntesDeGenerarElDiagnostico";
+import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
+import { rotuloVigente } from "@/lib/canvas/canvas-defs";
 
 const MAXW = 860;
 
@@ -49,9 +53,15 @@ const SIN_SECCION =
 export default function DiagnosticoWorkspace({
   projectId,
   canvasId,
+  clientId,
+  onGenerado,
 }: {
   projectId: string;
   canvasId: string;
+  /** Para el selector de plantillas y los enlaces de «Antes de generar». Sin él, el diagnóstico vacío no los muestra. */
+  clientId?: string;
+  /** Lo que hace el panel al terminar de generar (remontar el editor, refrescar el riel), como el botón de arriba. */
+  onGenerado?: () => void;
 }) {
   // poll:false — el runner persiste CONFIRMED; tras generar, el remonte lo fuerza el
   // padre (`key` con su `agentNonce` al terminar el agente del header).
@@ -158,6 +168,8 @@ export default function DiagnosticoWorkspace({
   const cabos = useMemo(() => cabosTodos.filter((c) => c.bloquea), [cabosTodos]);
   const avisos = useMemo(() => cabosTodos.filter((c) => !c.bloquea), [cabosTodos]);
   const [verCabos, setVerCabos] = useState(false);
+  // Lo que propuso Nexus y nadie confirmó (2026-10-23): se lee una vez por montaje (el editor se remonta al generar).
+  const confirmado = useLoConfirmado(projectId);
 
   /* Lo que hoy impide presentar, en vivo (el servidor lo vuelve a revisar al presentar). */
   const motivosParaNoPresentar = useMemo(() => {
@@ -168,6 +180,7 @@ export default function DiagnosticoWorkspace({
       tieneContenido: hasGeneratedContent,
       cabos: cabosTodos,
       politica: dataPolitica,
+      politicaOculta: politica?.hidden === true,
     }).motivos;
   }, [cs.sections, cabosTodos, estado?.estado, hasGeneratedContent]);
 
@@ -246,6 +259,28 @@ export default function DiagnosticoWorkspace({
         del marco del documento (ProjectCanvasPanel, 2026-10-05). */}
     {/* Borrador → presentado → aprobado (2026-10-02). También fuera de `.stl`: es del equipo. */}
     <EstadoDelDocumento projectId={projectId} canvasId={canvasId} motivosLocales={motivosParaNoPresentar} onEstado={setEstado} />
+    {/* Sin generar (2026-10-23): lo que propuso Nexus y nadie confirmó, y el selector de plantillas en vez del documento
+        vacío. Fuera de `.stl`: es del equipo, con la UI de Nexus. Ya generado, la misma lista plegada en una franja. */}
+    {!hasGeneratedContent && clientId && (
+      <div className="flex flex-col gap-2 pt-4">
+        {confirmado && (
+          <div className="mx-auto w-full max-w-[960px] px-4">
+            <AntesDeGenerarElDiagnostico confirmado={confirmado} clientId={clientId} projectId={projectId} />
+          </div>
+        )}
+        <ElegirPlantilla
+          slug={PIECE_SLUG}
+          clientId={clientId}
+          projectId={projectId}
+          canvasId={canvasId}
+          agentId={CANVAS_PRIMARY_AGENT[PIECE_SLUG].agentId}
+          onGenerado={onGenerado}
+        />
+      </div>
+    )}
+    {hasGeneratedContent && clientId && confirmado && !aprobado && (
+      <AntesDeGenerarElDiagnostico confirmado={confirmado} clientId={clientId} projectId={projectId} generado />
+    )}
     {/* Cuándo se presenta: lo pregunta el panel del proyecto, arriba del marco, para los cuatro documentos
         (components/presentaciones/PresentacionDelDocumento.tsx, 2026-10-14). */}
     <div className="stl">
@@ -263,8 +298,9 @@ export default function DiagnosticoWorkspace({
         </div>
       )}
 
-      {/* Estado IDLE: abrir la pieza recién activada sin generar es lo normal. */}
-      {!hasGeneratedContent && (
+      {/* Estado IDLE: abrir la pieza recién activada sin generar es lo normal. Sin `clientId` (un montaje viejo), el
+          aviso de siempre: el botón de arriba genera con la plantilla de siempre. */}
+      {!hasGeneratedContent && !clientId && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg-soft)", borderBottom: "1px solid var(--border)", fontSize: 13, color: "var(--text-2)" }}>
           <span>
             Todavía sin generar. Revisa el contexto de arriba y usa <strong>Generar diagnóstico</strong>, junto
@@ -320,7 +356,7 @@ export default function DiagnosticoWorkspace({
           dialogTitle="Mejorar el diagnóstico con IA"
           chips={["Hazlo más directo y menos técnico", "Ancla los síntomas a datos de las sesiones", "Resume las secciones largas"]}
           placeholder='Ej: "sé más concreto en las causas de la Explicación del problema"'
-          labelFor={(key) => cs.sections.find((s) => s.key === key)?.label ?? key}
+          labelFor={(key) => rotuloVigente(PIECE_SLUG, key, cs.sections.find((s) => s.key === key)?.label ?? key)}
           onApplySection={(key, data) => {
             const s = cs.sections.find((x) => x.key === key);
             if (!s) return;
@@ -330,6 +366,7 @@ export default function DiagnosticoWorkspace({
           className="px-4 pt-3"
         />
       )}
+      {(hasGeneratedContent || !clientId) && (
       <LandingView
         config={config}
         ctx={ctx}
@@ -372,6 +409,7 @@ export default function DiagnosticoWorkspace({
           if (ordered.length) cs.reorderSections(ordered);
         }}
       />
+      )}
     </div>
     </>
   );

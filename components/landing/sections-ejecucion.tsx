@@ -18,6 +18,7 @@
 import type { FC } from "react";
 import type { SectionProps } from "./types";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
+import { ConIntro } from "./partes";
 
 export interface AccionEjecucion {
   id: string;
@@ -60,11 +61,6 @@ const leerSiNo = (v: string) => (esSi(v) ? "Sí" : /^no\b/i.test((v ?? "").trim(
 const leerAlcance = (v: string) =>
   esFuera(v) ? "Fuera" : /dentro/i.test(v ?? "") ? "Dentro" : (v ?? "");
 
-function Intro({ value, editable, onCommit, placeholder }: { value?: string; editable?: boolean; onCommit: (v: string) => void; placeholder: string }) {
-  if (!editable && !value) return null;
-  return <Editable as="p" className="stl-lead" editable={editable} value={value ?? ""} placeholder={placeholder} onCommit={onCommit} />;
-}
-
 function siguienteAC(usados: string[]): string {
   const n = usados.reduce((m, id) => {
     const r = /^AC-?(\d+)$/i.exec((id ?? "").trim());
@@ -90,8 +86,7 @@ export const AccionesEjecucionSection: FC<SectionProps<AccionesEjecucionData>> =
     return <Editable as="span" className={className} editable={editable} value={valor} placeholder={placeholder} onCommit={(v) => setCampo(i, campo, v)} />;
   };
   return (
-    <>
-      <Intro value={data.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca las acciones (opcional)…" />
+    <ConIntro data={{ ...(data as object), intro: data.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<AccionesEjecucionData>)} placeholder="Una frase que enmarca las acciones…">
       <div className="stl-props-scroll">
         <table className="stl-props stl-acciones">
           <thead>
@@ -145,7 +140,7 @@ export const AccionesEjecucionSection: FC<SectionProps<AccionesEjecucionData>> =
           }
         />
       )}
-    </>
+    </ConIntro>
   );
 };
 
@@ -158,8 +153,7 @@ export const HerramientasEjecucionSection: FC<SectionProps<HerramientasEjecucion
       onCommit={(v) => set({ herramientas: replaceAt(filas, i, { ...filas[i], [campo]: v }) })} />
   );
   return (
-    <>
-      <Intro value={data.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca las herramientas (opcional)…" />
+    <ConIntro data={{ ...(data as object), intro: data.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<HerramientasEjecucionData>)} placeholder="Una frase que enmarca las herramientas…">
       <div className="stl-props-scroll">
         <table className="stl-props">
           <thead>
@@ -187,6 +181,6 @@ export const HerramientasEjecucionSection: FC<SectionProps<HerramientasEjecucion
         </table>
       </div>
       {editable && <AddBtn label="Agregar herramienta" onClick={() => set({ herramientas: appendItem(filas, { herramienta: "", paraQue: "", acciones: "" }) })} />}
-    </>
+    </ConIntro>
   );
 };

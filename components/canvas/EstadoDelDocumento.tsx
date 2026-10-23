@@ -143,7 +143,7 @@ export default function EstadoDelDocumento({
               ? estado.cambiosDesdeLaPresentacion
                 ? "Cambió desde que se presentó: preséntalo de nuevo (será la versión siguiente) antes de registrar la aprobación."
                 : "Presentado al cliente. Si le compartiste el enlace, puede aprobarlo ahí; si te llega por correo, regístrala aquí."
-              : "Borrador: se presenta cuando el hilo está cerrado y la política rectora revisada."}
+              : "Borrador: se presenta cuando el hilo está cerrado y el enfoque de la solución, revisado."}
         </span>
         <div className="flex flex-wrap gap-2">
           {estado.estado !== "aprobado" && (estado.estado === "borrador" || estado.cambiosDesdeLaPresentacion) && (

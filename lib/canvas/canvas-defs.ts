@@ -255,7 +255,8 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
       { key: "objetivos", label: "Objetivos" },
       { key: "problema", label: "Explicación del problema" },
       { key: "desafio", label: "Desafío principal" },
-      { key: "politica_rectora", label: "Política rectora" },
+      // «Política rectora» hasta el 2026-10-23: los documentos de antes lo traen guardado (ver `rotuloVigente`).
+      { key: "politica_rectora", label: "Enfoque de la solución" },
       { key: "estado_actual", label: "Cómo opera hoy y cómo va a operar" },
       // (aquí va la Escala de madurez cuando vuelva — Elías la postergó el 2026-10-02)
       { key: "fortalezas", label: "Fortalezas" },
@@ -448,6 +449,21 @@ export function planificacionSectionSequence(existingKeys: string[]): string[] {
 
 // ── Canvas Diagnóstico (informe de rendimiento para el cliente) ───────────────
 export const DIAGNOSTICO_CANVAS: CanvasDefinition = DEFAULT_PROJECT_CANVASES.find((c) => c.slug === "diagnosis")!;
+
+/**
+ * Los rótulos de secciones del Diagnóstico que cambiaron de nombre (2026-10-23). La fila de la sección y su entrada del
+ * Json guardan el rótulo con que nacieron; el runner las pone al día al regenerar, y mientras tanto la pantalla los lee
+ * con el nombre nuevo (`rotuloVigente`). La key no cambia nunca.
+ */
+export const ROTULOS_VIEJOS_DEL_DIAGNOSTICO: Readonly<Record<string, readonly string[]>> = {
+  politica_rectora: ["Política rectora"],
+};
+
+/** El rótulo que se muestra de una sección guardada: el nuevo si el guardado es uno viejo de esa key; si no, el guardado. */
+export function rotuloVigente(slug: string | null | undefined, key: string, guardado: string): string {
+  if (slug !== "diagnosis" || !(ROTULOS_VIEJOS_DEL_DIAGNOSTICO[key] ?? []).includes(guardado)) return guardado;
+  return DIAGNOSTICO_CANVAS.sections.find((s) => s.key === key)?.label ?? guardado;
+}
 
 /** Secuencia destino de las secciones del canvas Diagnóstico (orden vivo + inserta
  *  canónicas faltantes). La usan el reconcile y la activación de la pieza. */

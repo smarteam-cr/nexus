@@ -1040,6 +1040,25 @@ function valorDelCampo(campo: CampoDeFicha, bruto: string | undefined): string {
 }
 
 /**
+ * LO QUE NEXUS PROPUSO DE LA FICHA Y NADIE CONFIRMÓ, para un documento que lee el cliente (el diagnóstico, 2026-10-23).
+ * Puro. Solo los campos que van al cliente, sin la postura de nadie (`stakeholdersSinPostura`) y sin los propuestos que
+ * traen algo interno (`propuestaConLoInterno`). "" sin campos propuestos. Lo rotula quien lo arma: es un SUPUESTO.
+ */
+export function propuestaDeLaFichaParaElDocumento(ficha: FichaGuardada): string {
+  const propuestos = new Set(camposPropuestos(ficha));
+  const bloques: string[] = [];
+  for (const campo of CAMPOS_DE_LA_FICHA) {
+    if (!campo.alCliente || !propuestos.has(campo.clave) || propuestaConLoInterno(ficha, campo.clave)) continue;
+    const bruto = valorDelCampo(campo, ficha.propuesta?.valores[campo.clave]);
+    const valor = campo.clave === "stakeholders" ? stakeholdersSinPostura(bruto) : bruto;
+    if (!valor) continue;
+    const marca = campo.recorteAlCliente ? ` (al cliente: ${campo.recorteAlCliente})` : "";
+    bloques.push(`### ${campo.etiqueta}${marca}\n${valor}`);
+  }
+  return bloques.join("\n\n");
+}
+
+/**
  * LA FICHA PARA LA MEMORIA (lib/memoria): lo confirmado y, para los agentes, lo propuesto con su fuente. Sin título
  * (lo pone quien la arma). "" si no hay nada que decir. Funciona sin `confirmadaAt`: lo propuesto también es memoria.
  *

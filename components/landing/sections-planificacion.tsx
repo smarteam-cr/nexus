@@ -23,6 +23,8 @@
 import { useState, type FC } from "react";
 import type { SectionProps } from "./types";
 import { Editable, InlineCheck, InlineSelect, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
+import { ConIntro } from "./partes";
+import { partesDe } from "@/lib/landing/partes";
 import { ORIGENES, normalizarOrigen, etiquetaDeOrigen } from "@/lib/planificacion/origen";
 import {
   adoptarProcesos,
@@ -60,11 +62,6 @@ import {
 } from "@/lib/planificacion/propiedades";
 
 /* ── Piezas comunes ─────────────────────────────────────────────────────────── */
-
-function Intro({ value, editable, onCommit, placeholder }: { value?: string; editable?: boolean; onCommit: (v: string) => void; placeholder: string }) {
-  if (!editable && !value) return null;
-  return <Editable as="p" className="stl-lead" editable={editable} value={value ?? ""} placeholder={placeholder} onCommit={onCommit} />;
-}
 
 /** El chip de origen. En edición, un desplegable; en lectura, nada si no se sabe. */
 function OrigenChip({ value, editable, onCommit }: { value?: string; editable?: boolean; onCommit: (v: string) => void }) {
@@ -108,12 +105,11 @@ function Campo({ rotulo, value, editable, placeholder, onCommit, aviso }: { rotu
 export const ProcesosFuturoSection: FC<SectionProps<ProcesosFuturoData>> = ({ data, editable, onChange }) => {
   const d = adoptarProcesos(data);
   const procesos = d.procesos;
-  const set = (next: Partial<ProcesosFuturoData>) => onChange?.({ ...d, ...next });
+  const set = (next: Partial<ProcesosFuturoData>) => onChange?.({ ...partesDe(data), ...d, ...next });
   const setProceso = (i: number, patch: Partial<ProcesoFuturo>) => set({ procesos: replaceAt(procesos, i, { ...procesos[i], ...patch }) });
   if (!editable && !procesos.length) return null;
   return (
-    <>
-      <Intro value={d.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca los procesos (opcional)…" />
+    <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<ProcesosFuturoData>)} placeholder="Una frase que enmarca los procesos…">
       {procesos.map((p, i) => {
         const pasos = p.pasos;
         const setPaso = (j: number, patch: Partial<PasoDeProceso>) => setProceso(i, { pasos: replaceAt(pasos, j, { ...pasos[j], ...patch }) });
@@ -160,7 +156,7 @@ export const ProcesosFuturoSection: FC<SectionProps<ProcesosFuturoData>> = ({ da
         );
       })}
       {editable && <AddBtn label="Agregar proceso" onClick={() => set({ procesos: appendItem(procesos, { nombre: "", resumen: "", fuente: "", pasos: [] }) })} />}
-    </>
+    </ConIntro>
   );
 };
 
@@ -170,15 +166,14 @@ export const CicloDeVidaSection: FC<SectionProps<CicloDeVidaData>> = ({ data, ed
   const d = adoptarCicloDeVida(data);
   const etapas = d.etapas;
   // La forma nueva se guarda limpia: sin los `items` de la prosa vieja.
-  const set = (next: Partial<CicloDeVidaData>) => onChange?.({ intro: d.intro, etapas: d.etapas, ...next });
+  const set = (next: Partial<CicloDeVidaData>) => onChange?.({ ...partesDe(data), intro: d.intro, etapas: d.etapas, ...next });
   const setEtapa = (i: number, patch: Partial<EtapaDeCiclo>) => set({ etapas: replaceAt(etapas, i, { ...etapas[i], ...patch }) });
   if (!editable && !etapas.length) return null;
   const celda = (i: number, campo: keyof EtapaDeCiclo, placeholder: string, className?: string) => (
     <Editable as="span" className={className} editable={editable} value={etapas[i][campo] ?? ""} placeholder={placeholder} onCommit={(v) => setEtapa(i, { [campo]: v })} />
   );
   return (
-    <>
-      <Intro value={d.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="De dónde parte: cuántas etapas tiene hoy el portal y cuántas se proponen…" />
+    <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<CicloDeVidaData>)} placeholder="De dónde parte: cuántas etapas tiene hoy el portal y cuántas se proponen…">
       <div className="stl-props-scroll">
         <table className="stl-props stl-plan-tabla">
           <thead>
@@ -210,7 +205,7 @@ export const CicloDeVidaSection: FC<SectionProps<CicloDeVidaData>> = ({ data, ed
         </table>
       </div>
       {editable && <AddBtn label="Agregar etapa" onClick={() => set({ etapas: appendItem(etapas, { etapa: "", entraCuando: "", laMueve: "", cambio: "nueva", origen: "" }) })} />}
-    </>
+    </ConIntro>
   );
 };
 
@@ -299,8 +294,7 @@ export const PropiedadesObjetoSection: FC<SectionProps<PropiedadesData>> = ({ da
   };
 
   return (
-    <>
-      <Intro value={data?.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca las propiedades (opcional)…" />
+    <ConIntro data={{ ...(data as object), intro: data?.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<PropiedadesData>)} placeholder="Una frase que enmarca las propiedades…">
       {!ctx.pdfMode && objetos.length > 0 && (
         <div className="stl-plan-tabs" role="tablist" aria-label="Objetos">
           {objetos.map((o) => {
@@ -314,7 +308,7 @@ export const PropiedadesObjetoSection: FC<SectionProps<PropiedadesData>> = ({ da
         </div>
       )}
       {visibles.map(tabla)}
-    </>
+    </ConIntro>
   );
 };
 
@@ -326,12 +320,11 @@ export const PipelinesSection: FC<SectionProps<PipelinesData>> = ({ data, editab
   const d = adoptarPipelines(data);
   const pipelines = d.pipelines;
   // La forma nueva se guarda limpia: sin los `procesos` que vinieron de Ejecución.
-  const set = (next: Partial<PipelinesData>) => onChange?.({ intro: d.intro, pipelines: d.pipelines, ...next });
+  const set = (next: Partial<PipelinesData>) => onChange?.({ ...partesDe(data), intro: d.intro, pipelines: d.pipelines, ...next });
   const setPipe = (i: number, patch: Partial<Pipeline>) => set({ pipelines: replaceAt(pipelines, i, { ...pipelines[i], ...patch }) });
   if (!editable && !pipelines.length) return null;
   return (
-    <>
-      <Intro value={d.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca los pipelines (opcional)…" />
+    <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<PipelinesData>)} placeholder="Una frase que enmarca los pipelines…">
       {pipelines.map((p, i) => {
         const etapas = p.etapas;
         const setEtapa = (j: number, patch: Partial<EtapaDePipeline>) => setPipe(i, { etapas: replaceAt(etapas, j, { ...etapas[j], ...patch }) });
@@ -395,7 +388,7 @@ export const PipelinesSection: FC<SectionProps<PipelinesData>> = ({ data, editab
         );
       })}
       {editable && <AddBtn label="Agregar pipeline" onClick={() => set({ pipelines: appendItem(pipelines, { tipo: "ventas", nombre: "", objeto: "", nota: "", origen: "", etapas: [] }) })} />}
-    </>
+    </ConIntro>
   );
 };
 
@@ -404,12 +397,11 @@ export const PipelinesSection: FC<SectionProps<PipelinesData>> = ({ data, editab
 export const AutomatizacionesSection: FC<SectionProps<AutomatizacionesData>> = ({ data, editable, onChange }) => {
   const d = adoptarAutomatizaciones(data);
   const items = d.items;
-  const set = (next: Partial<AutomatizacionesData>) => onChange?.({ intro: d.intro, items: d.items, ...next });
+  const set = (next: Partial<AutomatizacionesData>) => onChange?.({ ...partesDe(data), intro: d.intro, items: d.items, ...next });
   const setItem = (i: number, patch: Partial<Automatizacion>) => set({ items: replaceAt(items, i, { ...items[i], ...patch }) });
   if (!editable && !items.length) return null;
   return (
-    <>
-      <Intro value={d.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca las automatizaciones (opcional)…" />
+    <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<AutomatizacionesData>)} placeholder="Una frase que enmarca las automatizaciones…">
       <div className="stl-plan-cards">
         {items.map((a, i) => (
           <div key={i} className={`stl-plan-card stl-item${(a.falta ?? "").trim() || normalizarOrigen(a.origen) === "supuesto" ? " stl-plan-card--aviso" : ""}`}>
@@ -436,7 +428,7 @@ export const AutomatizacionesSection: FC<SectionProps<AutomatizacionesData>> = (
         ))}
       </div>
       {editable && <AddBtn label="Agregar automatización" onClick={() => set({ items: appendItem(items, { nombre: "", donde: "", cuando: "", hace: "", resuelve: "", falta: "", origen: "", fuente: "" }) })} />}
-    </>
+    </ConIntro>
   );
 };
 
@@ -445,12 +437,11 @@ export const AutomatizacionesSection: FC<SectionProps<AutomatizacionesData>> = (
 export const ConversacionesSection: FC<SectionProps<ConversacionesData>> = ({ data, editable, onChange }) => {
   const d = adoptarConversaciones(data);
   const items = d.items;
-  const set = (next: Partial<ConversacionesData>) => onChange?.({ intro: d.intro, items: d.items, ...next });
+  const set = (next: Partial<ConversacionesData>) => onChange?.({ ...partesDe(data), intro: d.intro, items: d.items, ...next });
   const setItem = (i: number, patch: Partial<Conversacion>) => set({ items: replaceAt(items, i, { ...items[i], ...patch }) });
   if (!editable && !items.length) return null;
   return (
-    <>
-      <Intro value={d.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Los canales que entran a la bandeja de HubSpot y quién responde en cada uno…" />
+    <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<ConversacionesData>)} placeholder="Los canales que entran a la bandeja de HubSpot y quién responde en cada uno…">
       <div className="stl-plan-cards">
         {items.map((c, i) => (
           <div key={i} className={`stl-plan-card stl-item${(c.falta ?? "").trim() || normalizarOrigen(c.origen) === "supuesto" ? " stl-plan-card--aviso" : ""}`}>
@@ -483,6 +474,6 @@ export const ConversacionesSection: FC<SectionProps<ConversacionesData>> = ({ da
         ))}
       </div>
       {editable && <AddBtn label="Agregar conversación" onClick={() => set({ items: appendItem(items, { nombre: "", canal: "", responde: "", paraQue: "", pasaA: "", registra: "", falta: "", origen: "", fuente: "" }) })} />}
-    </>
+    </ConIntro>
   );
 };

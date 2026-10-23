@@ -8,14 +8,15 @@
  * secciones, su voz, su tope de tokens) son las defs del motor de landings (components/landing/configs/*.defs.ts): el
  * puente id → template vive en ./plantillas.ts, que importa esas defs y por eso no se carga en la pantalla.
  *
- * ⚠ Hoy cada entregable tiene UNA plantilla. El lugar para elegir otra ya está: `generarEntregable` recibe el id, el
- * chat lo puede pedir, /analyze lo acepta en el cuerpo (`plantilla`) y la plantilla que se usó queda guardada en el
- * documento (la entry `__plantilla` de `ProjectCanvas.sections`). Sumar una = una entrada en `plantillas` acá y su
- * template en ./plantillas.ts; la primera de la lista es la de siempre.
+ * `generarEntregable` recibe el id, el chat lo puede pedir, /analyze lo acepta en el cuerpo (`plantilla`) y la plantilla
+ * que se usó queda guardada en el documento (la entry `__plantilla` de `ProjectCanvas.sections`). Sumar una = una
+ * entrada en `plantillas` acá y su template en ./plantillas.ts; la primera de la lista es la de siempre.
  *
- * El diagnóstico de hoy es la plantilla «Diagnóstico estratégico»: el DOCUMENTO se sigue llamando Diagnóstico, y sus
- * bloques no cambian (los diagnósticos y los kickoffs que ya existen no se tocan como datos: un documento sin
- * `__plantilla` se lee con la plantilla de siempre de su entregable).
+ * El DIAGNÓSTICO tiene dos desde el 2026-10-23 (DECISIONS «El Diagnóstico: todo el contexto, dos plantillas y un
+ * documento liviano»): «Diagnóstico completo» (la de siempre, id `diagnostico-estrategico`: así se llamaba) y
+ * «Diagnóstico esencial», la liviana y la recomendada, con solo sus secciones (`secciones`). Al abrir un diagnóstico
+ * sin generar se elige una (components/canvas/ElegirPlantilla.tsx). Los diagnósticos que ya existen se leen con la de
+ * siempre: un documento sin `__plantilla` se lee con la primera de su entregable.
  */
 import { pieceBySlug } from "@/lib/pieces/registry";
 
@@ -26,7 +27,29 @@ export interface PlantillaDeEntregable {
   nombre: string;
   /** Para qué sirve, en una frase (lo leen la pantalla y el chat). */
   paraQue: string;
+  /**
+   * Las secciones del documento que tiene esta plantilla (sus keys, en el orden del canon del canvas). Sin esto, todas
+   * las del canvas. Con esto, el documento tiene SOLO esas: la reconciliación no le suma las demás.
+   */
+  secciones?: readonly string[];
+  /** La que se ofrece marcada al elegir (una por entregable, como mucho). */
+  recomendada?: boolean;
 }
+
+/**
+ * Las secciones del «Diagnóstico esencial» (2026-10-23): por qué el cliente tiene los resultados que tiene y qué vamos a
+ * hacer. Portada, objetivos, el problema, el desafío, el enfoque de la solución, las acciones y el siguiente paso.
+ * Los objetivos van porque las acciones dicen qué objetivos mueven (el hilo, lib/canvas/revisar-hilo.ts).
+ */
+export const SECCIONES_DEL_DIAGNOSTICO_ESENCIAL = [
+  "diagnostico",
+  "objetivos",
+  "problema",
+  "desafio",
+  "politica_rectora",
+  "acciones",
+  "cierre",
+] as const;
 
 export interface Entregable {
   /** El slug de su pieza en el registro. */
@@ -49,8 +72,17 @@ export const ENTREGABLES: readonly Entregable[] = [
     plantillas: [
       {
         id: "diagnostico-estrategico",
-        nombre: "Diagnóstico estratégico",
-        paraQue: "El problema del cliente, sus causas, a dónde quiere llegar y cómo se resuelve, con el hilo de síntomas, causas, objetivos y acciones.",
+        nombre: "Diagnóstico completo",
+        paraQue:
+          "Todo el hilo: además de lo esencial, cómo opera hoy y cómo va a operar, fortalezas, herramientas de HubSpot, equipos y licencias, preguntas de negocio, la brecha y el alcance acordado.",
+      },
+      {
+        id: "diagnostico-esencial",
+        nombre: "Diagnóstico esencial",
+        paraQue:
+          "Lo justo para que el cliente entienda por qué tiene los resultados que tiene y qué vamos a hacer: el problema y sus causas, el enfoque de la solución y las acciones.",
+        secciones: SECCIONES_DEL_DIAGNOSTICO_ESENCIAL,
+        recomendada: true,
       },
     ],
   },
@@ -97,6 +129,16 @@ export function plantillaDe(slug: string, id?: string | null): PlantillaDeEntreg
   if (!e) return null;
   if (!id) return e.plantillas[0] ?? null;
   return e.plantillas.find((p) => p.id === id) ?? null;
+}
+
+/**
+ * Las secciones de una plantilla, con su nombre, en el orden del canon del canvas. Sin `secciones`, el canon entero.
+ * El canon lo pasa quien llama (`canvasDefForSlug(slug).sections`): este archivo no conoce los canvases.
+ */
+export function seccionesDeLaPlantilla<S extends { key: string }>(p: Pick<PlantillaDeEntregable, "secciones">, canon: readonly S[]): S[] {
+  if (!p.secciones) return [...canon];
+  const de = new Set(p.secciones);
+  return canon.filter((s) => de.has(s.key));
 }
 
 // ── La plantilla que se usó, guardada en el documento ─────────────────────────────────────────────────────────────
