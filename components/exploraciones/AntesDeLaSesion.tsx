@@ -18,7 +18,6 @@ import { esFuenteDeHipotesis } from "@/lib/exploraciones/contenido";
 import { diaCorto, diaYHora } from "@/lib/exploraciones/fechas";
 import {
   APERTURA_DE_BASE,
-  cambiosDesdeLaGuia,
   CIERRE_DE_BASE,
   CONEXION_DE_BASE,
   DURACION_DE_LA_SESION,
@@ -38,7 +37,7 @@ import { REUNIONES } from "@/lib/exploraciones/sesion";
 import { EQUIPOS } from "@/lib/exploraciones/equipos";
 import { queContarle } from "@/lib/exploraciones/contarle";
 import { useLienzo } from "./contexto";
-import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
+import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useCambiosDesdeLaGuia, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useAjustarLaGuia, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
 import { GuiaEnOrden } from "./GuiaEnOrden";
 import { PreguntasDelObjetivo, usePedirPreguntasDelObjetivo } from "./PreguntasDelObjetivo";
@@ -71,10 +70,9 @@ function enLista(xs: readonly string[]): string {
 function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
   const { escala, marco, puedeEditar } = useLienzo();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
-  const { guia, foco, antesDelPlan } = useGuiaDeLaSesion(pestana, true);
+  const { guia, cambios } = useCambiosDesdeLaGuia(pestana);
   const armando = (corriendo && corrida?.modo === "guia") || lanzando;
   const equipo = pestana.sesion?.equipo ?? null;
-  const cambios = guia ? cambiosDesdeLaGuia(guia, foco.huecos, foco.enfoque, pestana.sesion?.explorar ?? [], { antesDelPlan, equipo }) : null;
   const nombre = (para: string) => nombreDelPara(para, escala, marco);
 
   let titulo: string;
@@ -103,6 +101,7 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
           : "la sesión volvió a ser con la empresa entera"
         : null,
       cambios.antesDelPlan ? "se armó antes de «Lo que ya sabemos»: no parte de lo que el cliente ya respondió" : null,
+      cambios.leidoDespues?.length ? `una reunión leída después ya respondió ${enLista(cambios.leidoDespues.map(nombre))}` : null,
       cambios.respondidas.length ? `ya se respondió ${enLista(cambios.respondidas.map(nombre))}` : null,
       cambios.nuevas.length ? `ahora también falta ${enLista(cambios.nuevas.map(nombre))}` : null,
       cambios.dimensiones ? "cambiaron las dimensiones de la escala que conviene preguntar" : null,
@@ -114,7 +113,9 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
         ? `«Actualizar la guía» la arma para ${EQUIPOS[cambios.equipo.ahora].nombre}: cómo está armado, cómo lo miden, cómo funciona, con qué sistemas y dónde duele.`
         : cambios.antesDelPlan
           ? "«Actualizar la guía» la arma desde ahí: unas 5 preguntas, cada una en su paso, sin repreguntar lo que ya se sabe."
-          : "«Actualizar la guía» deja de preguntar lo ya respondido y suma lo nuevo."
+          : cambios.leidoDespues?.length
+            ? "La guía no cambia sola para no perder tus ajustes: «Actualizar la guía» pasa eso al paso siguiente y suma lo nuevo."
+            : "«Actualizar la guía» deja de preguntar lo ya respondido y suma lo nuevo."
     }`;
     boton = "Actualizar la guía";
     tono = "aviso";

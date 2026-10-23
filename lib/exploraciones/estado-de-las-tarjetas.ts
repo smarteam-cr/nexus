@@ -28,8 +28,20 @@ export type EstadoDeLaTarjeta = "completa" | "aMedias" | "sugerida" | "falta";
 const NO_SE_SABE =
   /\b(no (est[aá]n? |fue |ha sido |se ha |se |lo )?(determinad|definid|confirmad|declarad|mencionad|especificad|precisad|establecid|sab)|no (hay|tienen|tiene|existe) (un |una |ning[uú]n |ninguna )?(fecha|plazo|presupuesto|rango|monto|l[ií]mite|cifra)|sin (una |un )?(fecha|plazo|presupuesto|rango|monto|l[ií]mite|cifra)s?\b|por (definir|confirmar|determinar)|a[uú]n no (lo |la )?(sab|defin|confirm|determin)|pendiente de (definir|confirmar)|se desconoce|desconocid[oa]|no indic[oó]|no dijo)/i;
 
+/**
+ * Lo concreto que salva a un texto aunque diga que algo no está definido (revisión del 23 oct): un monto o un número
+ * («USD 15k aprobados, no dijo si incluye licencias»), una comparación («lo comparan con lo que pagan hoy en Zoho»), una
+ * condición («sin límite si se demuestra ROI») o una fecha o un plazo con nombre («antes de diciembre», «en el Q1»).
+ */
+const ALGO_CONCRETO =
+  /\d|\$|₡|€|\busd\b|\bmil\b|\bmill[oó]n(es)?\b|\bcompar|\bcontra\b|\bsi se\b|\bsiempre que\b|\bdepende\b|\bsujeto a\b|\baprobad|\bantes de\b|\bq[1-4]\b|\btrimestre\b|\bsemestre\b|\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\b/i;
+
+/** «… en la reunión del 8 oct 2026»: de cuándo es lo dicho, no un dato del tema. Se saca antes de buscar lo concreto. */
+const DE_LA_REUNION = /\b(en|durante|desde) (la|una|esa) (reuni[oó]n|sesi[oó]n|llamada)\b[^,.;]*/gi;
+
 export function diceQueNoSeSabe(texto: string): boolean {
-  return NO_SE_SABE.test(texto);
+  if (!NO_SE_SABE.test(texto)) return false;
+  return !ALGO_CONCRETO.test(texto.replace(DE_LA_REUNION, " "));
 }
 
 /** Los textos de una tarjeta, cualquiera sea su forma (texto, lista, metas, retos, personas). */

@@ -28,7 +28,6 @@ import { datosConOrigen } from "@/lib/contexto/lista-de-reuniones";
 import type { Operacion } from "@/lib/exploraciones/contenido";
 import { diaConSemana, diaCorto } from "@/lib/exploraciones/fechas";
 import {
-  cambiosDesdeLaGuia,
   claveDeReunion,
   nombreDeLaPestana,
   nuevoIdDeSesion,
@@ -53,7 +52,7 @@ import { tarjetasDeLoQueSabeLaIA } from "@/lib/exploraciones/lo-que-sabe-la-ia";
 import AgregarSesion from "./AgregarSesion";
 import SumarAMano from "./SumarAMano";
 import { useLienzo } from "./contexto";
-import { useGuiaDeLaSesion } from "./piezas-de-la-sesion";
+import { useCambiosDesdeLaGuia } from "./piezas-de-la-sesion";
 import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
 
@@ -91,8 +90,8 @@ function ProximaSesion() {
   const { todas, claveDeLaProxima, proxima, estadoDeLaReunion } = useSesiones();
   const { corrida, corriendo } = useCorrida();
   const p = todas.find((x) => x.clave === claveDeLaProxima) ?? todas[todas.length - 1];
-  const { guia, foco, antesDelPlan } = useGuiaDeLaSesion(p, true);
-  const cambios = guia ? cambiosDesdeLaGuia(guia, foco.huecos, foco.enfoque, p.sesion?.explorar ?? [], { antesDelPlan }) : null;
+  // El mismo «qué cambió» que la Preparación (piezas-de-la-sesion.tsx › `useCambiosDesdeLaGuia`).
+  const { guia, cambios } = useCambiosDesdeLaGuia(p);
   const estado = estadoDeLaReunion(p);
   const e = p.sesion?.evento;
   const deHubspot = !p.sesion && proxima.desde === "hubspot";

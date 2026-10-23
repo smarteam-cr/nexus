@@ -913,30 +913,58 @@ export interface CambiosDesdeLaGuia {
   antesDelPlan?: boolean;
   /** La sesión cambió de equipo del cliente (o lo tiene y la guía es de la empresa entera): `ahora` es el de hoy. */
   equipo?: { antes: ClaveDeEquipo | null; ahora: ClaveDeEquipo | null };
+  /**
+   * Temas que la guía pregunta y una reunión leída DESPUÉS de armarla dio por respondidos (2026-10-23). La guía no se
+   * mueve sola (sus retoques van por «tema:paso»): se avisa, y «Actualizar la guía» los pasa al paso siguiente.
+   */
+  leidoDespues?: string[];
+}
+
+/** Lo que mira `cambiosDesdeLaGuia` además de los temas de hoy. */
+export interface OpcionesDeLosCambios {
+  antesDelPlan?: boolean;
+  /** El equipo de la sesión hoy (sin él, no se mira). */
+  equipo?: ClaveDeEquipo | null;
+  /**
+   * ¿Este tema todavía falta? Una tarjeta que dejó el plan porque entraron otros temas (el tope de 5) no está
+   * respondida: sin esto se decía «ya se respondió Quién decide» sin que nadie lo respondiera. Sin él, como antes.
+   */
+  sigueFaltando?: (para: string) => boolean;
+  /** Los temas de la guía que una reunión leída después de armarla dio por respondidos (`pasosRespondidos` con `desde`). */
+  leidoDespues?: readonly string[];
 }
 
 /**
  * Qué cambió desde que se armó la guía: lo que ya se respondió, lo que entró, las dimensiones, lo que el vendedor se
- * llevó de otra sesión después y el equipo del cliente de la sesión. Con esto la pantalla dice POR QUÉ actualizarla, en
- * vez de un «la guía es de antes de lo último que se supo» (Elías, 2026-10-07: «no hay claridad de qué hace»).
- * `opciones.equipo`: el equipo de la sesión hoy (sin él, no se mira).
+ * llevó de otra sesión después, el equipo del cliente de la sesión y lo que respondió una reunión leída después. Con
+ * esto la pantalla dice POR QUÉ actualizarla, en vez de un «la guía es de antes de lo último que se supo» (Elías,
+ * 2026-10-07: «no hay claridad de qué hace»).
  */
 export function cambiosDesdeLaGuia(
   guia: Pick<GuiaDeLaSesion, "huecos" | "enfoque"> & Partial<Pick<GuiaDeLaSesion, "preguntas" | "ubicaciones" | "equipo">>,
   huecos: readonly string[],
   enfoque: readonly string[],
   llevados: readonly string[] = [],
-  opciones: { antesDelPlan?: boolean; equipo?: ClaveDeEquipo | null } = {},
+  opciones: OpcionesDeLosCambios = {},
 ): CambiosDesdeLaGuia | null {
-  const respondidas = guia.huecos.filter((h) => !huecos.includes(h));
+  const respondidas = guia.huecos.filter((h) => !huecos.includes(h) && !opciones.sigueFaltando?.(h));
   const nuevas = huecos.filter((h) => !guia.huecos.includes(h));
   const dimensiones = guia.enfoque.length !== enfoque.length || [...guia.enfoque].sort().join() !== [...enfoque].sort().join();
   const ubicados = new Set([...(guia.preguntas ?? []).flatMap((p) => (p.abierto ? [p.abierto] : [])), ...Object.keys(guia.ubicaciones ?? {})]);
   const sinUbicar = llevados.filter((t) => !ubicados.has(t)).length;
   const antesDelPlan = !!opciones.antesDelPlan;
   const equipo = opciones.equipo !== undefined && (guia.equipo ?? null) !== opciones.equipo ? { antes: guia.equipo ?? null, ahora: opciones.equipo } : null;
-  if (!respondidas.length && !nuevas.length && !dimensiones && !sinUbicar && !antesDelPlan && !equipo) return null;
-  return { respondidas, nuevas, dimensiones, llevados: sinUbicar, ...(antesDelPlan ? { antesDelPlan } : {}), ...(equipo ? { equipo } : {}) };
+  const leidoDespues = [...new Set(opciones.leidoDespues ?? [])];
+  if (!respondidas.length && !nuevas.length && !dimensiones && !sinUbicar && !antesDelPlan && !equipo && !leidoDespues.length) return null;
+  return {
+    respondidas,
+    nuevas,
+    dimensiones,
+    llevados: sinUbicar,
+    ...(antesDelPlan ? { antesDelPlan } : {}),
+    ...(equipo ? { equipo } : {}),
+    ...(leidoDespues.length ? { leidoDespues } : {}),
+  };
 }
 
 /** ¿La guía se armó con otras tarjetas vacías, otras dimensiones en foco, sin lo que se llevó después o con otro equipo? */
@@ -945,7 +973,7 @@ export function guiaVieja(
   huecos: readonly string[],
   enfoque: readonly string[],
   llevados: readonly string[] = [],
-  opciones: { antesDelPlan?: boolean; equipo?: ClaveDeEquipo | null } = {},
+  opciones: OpcionesDeLosCambios = {},
 ): boolean {
   return cambiosDesdeLaGuia(guia, huecos, enfoque, llevados, opciones) !== null;
 }

@@ -37,6 +37,7 @@ import type { ClaveDeMarco } from "./marco";
 import type { ContextoDelPlan, GuiaDeLaSesion, PosicionParaLaGuia, SesionPlaneada } from "./guia";
 import type { EstadoDeExploracion, LecturaDeReunion } from "./contenido";
 import { conAlgoQueSirve } from "./estado-de-las-tarjetas";
+import { sesionDeLaLectura } from "./sesion-de-la-lectura";
 import { EQUIPOS, equiposQueNombra, leerTemaDeEquipo, TEMA_DE_SISTEMAS_DE_LA_EMPRESA, temaDeEquipo, type ClaveDeEquipo } from "./equipos";
 import { fuentesDistintas, loQueYaSabemos, type DatoDelCliente, type EntradaDelSaber, type SaberDelCliente } from "./lo-que-ya-sabemos";
 
@@ -134,31 +135,65 @@ export function pasosYaPreguntados(
 
 /**
  * El paso que pregunta una pregunta, por su texto: para lo respondido en una reunión cuya guía ya no está (se volvió a
- * armar en la misma corrida que la leyó, como CEMACO el 21 oct). «¿Cuántas campañas…?» es impacto; «¿con qué criterio
- * decide…?», situación.
+ * armar en la misma corrida que la leyó, como CEMACO el 21 oct). «¿Cuántas campañas se quedan sin salir…?» y «¿cuánto
+ * tiempo tarda armarlo?» son impacto; «¿con qué criterio decide…?» y «¿Cuántas personas tiene el equipo?», situación: un
+ * «cuántos» solo no dice que algo cuesta. Las palabras van enteras («cost» no es «acostumbran»).
  */
 export function pasoQuePregunta(texto: string): PasoDeLaPregunta {
   const t = texto.toLowerCase();
-  if (/presupuesto|inversi[oó]n|visto bueno|qui[eé]n (firma|aprueba)/.test(t)) return "conQue";
-  if (/para cu[aá]ndo|qu[eé] fecha/.test(t)) return "cuando";
-  if (/resolver|soluci[oó]n|te gustar[ií]a|ideal|intentaron|probaron/.test(t)) return "solucion";
-  if (/\bcu[aá]nt[oa]s?\b|cost|pierd|perdi|\bhoras\b|\btasa\b|plata|dinero|margen/.test(t)) return "impacto";
+  if (/\bpresupuesto|\binversi[oó]n\b|\bvisto bueno\b|\bqui[eé]n (firma|aprueba)\b/.test(t)) return "conQue";
+  if (/\bpara cu[aá]ndo\b|\bqu[eé] fecha\b/.test(t)) return "cuando";
+  if (/\bresolver\b|\bsoluci[oó]n\b|\bte gustar[ií]a\b|\bideal\b|\bintentaron\b|\bprobaron\b/.test(t)) return "solucion";
+  if (/\bcu[aá]nto tiempo\b|\btarda\b|\bcost(o|os|ar|ado|ar[ií]a)\b|\bcostó|\bcuesta(n)?\b|\bpierd|\bperdi|\bhoras?\b|\btasa\b|\bplata\b|\bdinero\b|\bmargen\b|\bse quedan sin\b|\bsin seguimiento\b/.test(t)) {
+    return "impacto";
+  }
   return "situacion";
 }
 
+/** Qué lecturas cuentan para lo ya respondido. */
+export interface LecturasQueCuentan {
+  /** Las sesiones: de cuál es cada lectura y con qué guía se planeó su reunión. */
+  sesiones?: readonly SesionPlaneada[];
+  /** «Fuera de la exploración» (`contenido.fuera`): lo que se leyó de esas reuniones no cuenta. */
+  fuera?: readonly string[];
+  /**
+   * Un prospecto: cada reunión con la empresa es sesión. Con `false` (un cliente o un proyecto) solo cuentan las lecturas
+   * de una sesión y lo sumado a mano. Sin el dato, no se mira (como `lecturasDeLaExploracion`).
+   */
+  automaticas?: boolean;
+  /** Solo las lecturas hechas hasta esta fecha (ISO): una guía ya armada no cambia sola por una lectura posterior. */
+  hasta?: string | null;
+  /** Solo las lecturas hechas después de esta fecha (ISO): lo que una guía ya armada todavía no sabe. */
+  desde?: string | null;
+}
+
+type PropuestaParaLoRespondido = {
+  lecturas?: Readonly<Record<string, Pick<LecturaDeReunion, "cobertura" | "en" | "fecha">>>;
+  guias: Readonly<Record<string, Pick<GuiaDeLaSesion, "preguntas" | "en">>>;
+  guia?: Pick<GuiaDeLaSesion, "preguntas" | "en"> | null;
+};
+
 /**
  * Los pasos que ya se respondieron según la lectura de cada reunión (CEMACO, 20 oct: la lectura marcó respondidas 1.2,
- * 1.3 y 1.6 y nadie las marcó «hecha»; la guía siguiente las volvía a preguntar igual). Cada tema respondido suma los
- * pasos con que lo planeó una guía armada ANTES de la lectura; si ninguna lo dice, el paso que pregunta su texto
- * (`pasoQuePregunta`); un tema de un equipo, el paso de su tema. Lo sumado a mano, lo vendido y lo llevado no tienen paso.
+ * 1.3 y 1.6 y nadie las marcó «hecha»; la guía siguiente las volvía a preguntar igual). Cada tema respondido suma el paso
+ * con que lo planeó la guía de ESA reunión (la de su sesión o la viva, armada antes de la reunión: el mismo criterio de
+ * agente.ts › `planDeLaLectura`); si esa guía ya no está, el paso que pregunta su texto (`pasoQuePregunta`); un tema de
+ * un equipo, el paso de su tema. Lo sumado a mano, lo vendido y lo llevado no tienen paso. Las reuniones «fuera de la
+ * exploración» no cuentan.
  */
-export function pasosRespondidos(
-  lecturas: Readonly<Record<string, Pick<LecturaDeReunion, "cobertura" | "en">>>,
-  guias: Readonly<Record<string, Pick<GuiaDeLaSesion, "preguntas" | "en">>>,
-): Map<string, Set<PasoDeLaPregunta>> {
+export function pasosRespondidos(propuesta: PropuestaParaLoRespondido, o: LecturasQueCuentan = {}): Map<string, Set<PasoDeLaPregunta>> {
   const out = new Map<string, Set<PasoDeLaPregunta>>();
   const sumar = (para: string, paso: PasoDeLaPregunta) => out.set(para, new Set([...(out.get(para) ?? []), paso]));
-  for (const l of Object.values(lecturas)) {
+  const fuera = new Set(o.fuera ?? []);
+  for (const [clave, l] of Object.entries(propuesta.lecturas ?? {})) {
+    if (fuera.has(clave)) continue;
+    if (o.hasta && !(l.en <= o.hasta)) continue;
+    if (o.desde && !(l.en > o.desde)) continue;
+    const sesion = o.sesiones ? sesionDeLaLectura(clave, l, o.sesiones) : null;
+    if (o.automaticas === false && !sesion && !clave.startsWith("documento:")) continue;
+    const cuando = l.fecha ?? l.en;
+    const deLaSesion = sesion ? propuesta.guias[sesion.id] : undefined;
+    const planeada = deLaSesion && deLaSesion.en < cuando ? deLaSesion : propuesta.guia && propuesta.guia.en < cuando ? propuesta.guia : null;
     for (const c of l.cobertura ?? []) {
       if (!c.respondida) continue;
       const delEquipo = leerTemaDeEquipo(c.para);
@@ -167,19 +202,30 @@ export function pasosRespondidos(
         continue;
       }
       if (/^(propia|vendido|abierto):/.test(c.para)) continue;
-      let conPaso = false;
-      for (const g of Object.values(guias)) {
-        if (!(g.en < l.en)) continue;
-        for (const p of g.preguntas) {
-          if (p.para !== c.para || !p.paso) continue;
-          sumar(c.para, p.paso);
-          conPaso = true;
-        }
-      }
-      if (!conPaso) sumar(c.para, pasoQuePregunta(c.pregunta));
+      const paso = planeada?.preguntas.find((p) => p.para === c.para && p.paso)?.paso;
+      sumar(c.para, paso ?? pasoQuePregunta(c.pregunta));
     }
   }
   return out;
+}
+
+/**
+ * Los temas de una guía ya armada (`temas`, los de las preguntas que se ven) que una reunión leída DESPUÉS de armarla dio
+ * por respondidos: el estado de la guía los avisa, porque la guía no se mueve sola (ver `contextoDelPlan` › `hasta`).
+ */
+export function respondidoDespuesDeLaGuia(
+  estado: Pick<EstadoDeExploracion, "contenido" | "propuesta">,
+  guiaEn: string,
+  temas: Iterable<string>,
+  automaticas?: boolean,
+): string[] {
+  const despues = pasosRespondidos(estado.propuesta, {
+    sesiones: estado.contenido.sesiones,
+    fuera: estado.contenido.fuera,
+    desde: guiaEn,
+    ...(automaticas !== undefined ? { automaticas } : {}),
+  });
+  return [...new Set(temas)].filter((t) => despues.has(t));
 }
 
 function juntarPasos(...mapas: ReadonlyMap<string, ReadonlySet<PasoDeLaPregunta>>[]): Map<string, Set<PasoDeLaPregunta>> {
@@ -188,9 +234,18 @@ function juntarPasos(...mapas: ReadonlyMap<string, ReadonlySet<PasoDeLaPregunta>
   return out;
 }
 
-/** Lo que ya se preguntó en la exploración, por tema: lo marcado hecho en «En vivo» y lo que la lectura dio por respondido. */
-export function yaPreguntadoEnLaExploracion(estado: Pick<EstadoDeExploracion, "contenido" | "propuesta">): Map<string, Set<PasoDeLaPregunta>> {
-  return juntarPasos(pasosYaPreguntados(estado.contenido.sesiones, estado.propuesta.guias), pasosRespondidos(estado.propuesta.lecturas ?? {}, estado.propuesta.guias));
+/**
+ * Lo que ya se preguntó en la exploración, por tema: lo marcado hecho en «En vivo» y lo que la lectura dio por respondido
+ * (sin las reuniones de fuera; `o.hasta` deja afuera lo leído después de una guía ya armada).
+ */
+export function yaPreguntadoEnLaExploracion(
+  estado: Pick<EstadoDeExploracion, "contenido" | "propuesta">,
+  o: Pick<LecturasQueCuentan, "automaticas" | "hasta"> = {},
+): Map<string, Set<PasoDeLaPregunta>> {
+  return juntarPasos(
+    pasosYaPreguntados(estado.contenido.sesiones, estado.propuesta.guias),
+    pasosRespondidos(estado.propuesta, { sesiones: estado.contenido.sesiones, fuera: estado.contenido.fuera, ...o }),
+  );
 }
 
 /**
@@ -198,15 +253,21 @@ export function yaPreguntadoEnLaExploracion(estado: Pick<EstadoDeExploracion, "c
  * marcado hecho y lo que la lectura dio por respondido), lo que el vendedor se llevó a ESA sesión, lo que pasó de una
  * sesión cortada, su equipo y si la conversación se puso técnica. Lo usan la pantalla y el pedido al agente, así las dos
  * dicen lo mismo.
+ *
+ * `hasta` (la fecha de la guía que se está MOSTRANDO): lo leído después no mueve su plan. Si moviera el paso de un tema,
+ * los retoques del vendedor (guardados por «tema:paso») y la pregunta del agente dejarían de aplicarse sin aviso; lo
+ * nuevo se avisa («Actualizar la guía») y entra al rearmarla. Al ARMAR una guía no se pasa: cuenta todo.
  */
-export function contextoDelPlan(o: EntradaDelSaber & { sesionId: string | null }): ContextoDelPlan {
+export function contextoDelPlan(o: EntradaDelSaber & { sesionId: string | null; hasta?: string | null; automaticas?: boolean }): ContextoDelPlan {
   const sesiones = o.estado.contenido.sesiones;
   const sesion = sesiones.find((s) => s.id === o.sesionId);
   const equipo = sesion?.equipo ?? null;
-  const tecnica = !!o.estado.propuesta.alertaTecnica || (!!sesion?.objetivo && equiposQueNombra(sesion.objetivo).includes("tecnologia"));
+  // La última reunión se puso técnica y nadie cerró el aviso, o el objetivo habla de sistemas.
+  const alerta = o.estado.propuesta.alertaTecnica;
+  const tecnica = (!!alerta && !alerta.vista) || (!!sesion?.objetivo && equiposQueNombra(sesion.objetivo).includes("tecnologia"));
   return {
     saber: loQueYaSabemos(o),
-    yaPreguntado: yaPreguntadoEnLaExploracion(o.estado),
+    yaPreguntado: yaPreguntadoEnLaExploracion(o.estado, { hasta: o.hasta ?? null, ...(o.automaticas !== undefined ? { automaticas: o.automaticas } : {}) }),
     llevados: (sesion?.explorar ?? []).length,
     pasaron: [...new Set(sesiones.filter((s) => s.resultado === "cortada").flatMap((s) => s.pasaron ?? []))],
     ...(o.marco ? { marco: o.marco } : {}),

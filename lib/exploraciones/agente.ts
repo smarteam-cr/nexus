@@ -827,7 +827,7 @@ export async function armarLaGuiaSinGuardar(
   exploracionId: string,
   opts: Pick<OpcionesDeLaCorrida, "triggeredByEmail">,
 ): Promise<{ guia: GuiaDeLaSesion; ctx: ReturnType<typeof contextoDeLaGuia>; preguntas: PreguntaParaMostrar[] } | null> {
-  const { fila, estado, escala, posiciones, loLeido, marco, ctx, ahora } = await contextoParaLaGuia(exploracionId);
+  const { fila, estado, escala, posiciones, loLeido, marco, ctx, ahora, automaticas } = await contextoParaLaGuia(exploracionId);
   const pedir = (aviso = "") =>
     conContextoDeIA(
       {
@@ -852,7 +852,8 @@ export async function armarLaGuiaSinGuardar(
     if (otra && voseoEnLaGuia(otra).length < voseo.length) guia = otra;
   }
   // Lo que va a ver el vendedor: las preguntas del plan, con la de respaldo donde el agente repitió lo sabido.
-  const plan = ctx.saber ? planDeLaGuiaDeLaSesion(estado, loLeido.tests, escala, posiciones, ctx.proxima.sesionId ?? null, marco) : null;
+  // La guía recién armada: cuenta todo lo leído (sin `hasta`).
+  const plan = ctx.saber ? planDeLaGuiaDeLaSesion(estado, loLeido.tests, escala, posiciones, ctx.proxima.sesionId ?? null, marco, { automaticas }) : null;
   const preguntas = preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco, plan ?? undefined);
   return { guia, ctx, preguntas };
 }
@@ -945,7 +946,7 @@ export async function contextoParaLaGuia(exploracionId: string) {
   });
   /* `delProyecto` (cada fuente con su id) y `memoriaDelProyecto` también los lee el asistente
      (lib/operaciones/guia-server.ts › `loEstableDeLaGuia`): sin F0, que el chat ya tiene en su contexto. */
-  return { fila, estado, escala, general: escalaVig.general, posiciones, pendientes, loLeido, marco, ctx, ahora, delProyecto, memoriaDelProyecto: memoriaProyecto ?? "" };
+  return { fila, estado, escala, general: escalaVig.general, posiciones, pendientes, loLeido, marco, ctx, ahora, delProyecto, memoriaDelProyecto: memoriaProyecto ?? "", automaticas };
 }
 
 /**
@@ -959,8 +960,10 @@ export function planDeLaGuiaDeLaSesion(
   posiciones: ReturnType<typeof posicionesDelMapa>,
   sesionId: string | null,
   marco: Marco = marcoDe("venta"),
+  /** `hasta`: la fecha de la guía que se muestra (lo leído después no mueve su plan); `automaticas`: un prospecto. */
+  o: { hasta?: string | null; automaticas?: boolean } = {},
 ): { plan: PreguntaPlaneada[]; saber: SaberDelCliente } | null {
-  const delPlan = contextoDelPlan({ estado, tests, escala, posiciones, sesionId, marco: marco.clave });
+  const delPlan = contextoDelPlan({ estado, tests, escala, posiciones, sesionId, marco: marco.clave, ...o });
   const foco = focoDeLaGuia(estado.contenido.casillas, escala, estado.areas, posiciones, estado.contenido.aExplorar, marco, delPlan);
   return foco.plan ? { plan: foco.plan, saber: delPlan.saber } : null;
 }
