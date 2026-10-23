@@ -191,7 +191,7 @@ export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editabl
             rotulo: "Puntos",
             conContenido: items.length > 0 || !!d.compara,
             render: () => (
-              <div>
+              <div className="stl-prosa-cuerpo">
                 {/* Las tarjetas de siempre (kickoff y los demás); el diagnóstico elige su diseño por la definición. */}
                 {diseno === "tarjetas" ? (
                   <CardGrid

@@ -10631,8 +10631,20 @@ los 2 procesos en borrador. Plan y pruebas: `docs/diagnostico-plantillas-plan.md
   para qué sirve y «Secciones · N»; «Generar con esta plantilla». El botón de arriba no aparece mientras el diagnóstico no
   está generado. **Regenerar sin pedir plantilla usa la del documento** (`generarEntregable`), no la de siempre.
 - **El documento queda con las secciones de su plantilla** (`ajustarALaPlantilla`): las vacías de afuera se borran (la
-  fila y su entrada del Json); las que tienen algo se ocultan. La reconciliación (`ensurePieceCanvas`,
-  `ensureDiagnosticoCanvas`) respeta la plantilla anotada: un cambio de etiquetas ya no le devuelve las del completo.
+  fila y su entrada del Json); las que tienen algo se ocultan con la marca `ocultaPorLaPlantilla`. Al pasar a una
+  plantilla que las tiene (de la esencial a la completa, también desde el chat), las que ocultó la plantilla vuelven a
+  verse; las que ocultó una persona no (su ojo borra la marca; regla pura `entradasSegunLaPlantilla`). La reconciliación
+  (`ensurePieceCanvas`, `ensureDiagnosticoCanvas`) respeta la plantilla anotada: un cambio de etiquetas ya no le devuelve
+  las del completo.
+- **«Escribirlo yo»** (revisión de la rama, mismo día): el selector no cierra la puerta de escribir el diagnóstico a mano.
+  Abre el documento con las secciones de la plantilla elegida y la anota, sin la IA (POST
+  `…/diagnostico/plantilla`, `empezarEnBlanco`). Un diagnóstico vacío con plantilla anotada muestra el documento, no el
+  selector, y el botón de arriba vuelve (genera con la anotada).
+- **La prosa de los demás documentos se ve igual que antes**: las piezas sueltas son bloque (los márgenes colapsan como
+  cuando eran hermanos de la sección) y el contenedor de las tarjetas es el de siempre (columna, 16 px). El subtítulo
+  pegado al título y los 14 px son solo de los diseños del diagnóstico. Lo vigila `lib/landing/partes.test.ts`.
+- **«Enfoque de la solución» también en la lista de secciones de una Planificación vieja** (`ROTULOS_RENOMBRADOS`), así
+  la lista dice lo mismo que el título.
 - **Probado** en la base local con CEMACO (exploración, handoff y procesos copiados de producción): la esencial generó 6
   secciones en 87 s, el documento quedó con sus 7 y el hilo, cerrado (0 cabos sueltos). Una corrida de Sonnet 4.6 con
   unos 194.000 caracteres de entrada: unos US$0,20–0,30, estimado.

@@ -86,6 +86,19 @@ describe("el motor las usa (si no, la X y la manija no existen en pantalla)", ()
     }
   });
 
+  it("⛔ la prosa de los demás documentos se ve igual que antes: solo el diagnóstico pega el subtítulo al título", () => {
+    /* Revisión de la rama (2026-10-23): el ajuste de 14 px y el subtítulo sin margen alcanzaban al kickoff, al desarrollo y a
+       la entrega, también en la vista del cliente y en el PDF. Las tarjetas (el diseño de siempre) conservan el contenedor
+       de antes; las piezas sueltas son BLOQUE, para que los márgenes colapsen como cuando eran hermanos de la sección. */
+    const css = leer("app/landing-engine.css");
+    expect(css).toContain(".stl .stl-partes { display: block; }");
+    expect(css).toContain(".stl .stl-partes-prosa { display: flex; flex-direction: column; gap: 16px; }");
+    expect(css).toContain(".stl .stl-prosa-cuerpo { display: flex; flex-direction: column; gap: 16px; }");
+    const ajustes = css.match(/\.stl-partes-prosa[^{]*\{[^}]*(gap: 14px|margin-top: 0)[^}]*\}/g) ?? [];
+    expect(ajustes.length).toBeGreaterThan(0);
+    for (const a of ajustes) expect(a, a).toContain(":not(.stl-partes-tarjetas)");
+  });
+
   it("la planificación conserva las piezas al escribir su forma limpia", () => {
     const src = leer("components/landing/sections-planificacion.tsx");
     const limpias = src.match(/onChange\?\.\(\{ (?!\.\.\.data)[^}]*\}\)/g) ?? [];

@@ -19,7 +19,7 @@ import { prisma } from "@/lib/db/prisma";
 import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
 import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
 import { runKickoffGeneration } from "@/lib/canvas/kickoff-generate";
-import { runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
+import { prepararDiagnosticoEnBlanco, runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
 import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { runDesarrolloGeneration } from "@/lib/canvas/desarrollo-generate";
 import { runEntregaGeneration } from "@/lib/canvas/entrega-generate";
@@ -125,6 +125,19 @@ export async function generarEntregable(pedido: PedidoDeEntregable): Promise<Ent
     console.warn("[entregables] la plantilla no quedó anotada:", e instanceof Error ? e.message : e),
   );
   return { canvasId: r.canvasId, sectionCount: r.sectionCount, plantilla, ...(r.salida !== undefined ? { salidaEnLaCorrida: r.salida } : {}) };
+}
+
+/**
+ * EMPEZAR EN BLANCO (2026-10-23): el documento con las secciones de la plantilla elegida, sin la IA, y la plantilla
+ * anotada (así regenerar después usa la misma). Hoy solo el diagnóstico tiene más de una plantilla; los demás se escriben
+ * a mano como siempre, sin pasar por acá.
+ */
+export async function empezarEnBlanco(o: { projectId: string; slug: string; plantillaId: string; porEmail: string | null }): Promise<{ canvasId: string }> {
+  const plantilla = resolverPlantilla(o.slug, o.plantillaId);
+  if (o.slug !== "diagnosis") throw new ErrorDelEntregable(400, `${nombreDelEntregable(o.slug)} se escribe a mano sin elegir plantilla.`);
+  const canvasId = await prepararDiagnosticoEnBlanco(o.projectId, templateDeLaPlantilla(plantilla.id));
+  await anotarPlantilla(canvasId, plantilla, o.porEmail);
+  return { canvasId };
 }
 
 /** Escribe la entry `__plantilla` del Json de secciones del documento, tocando solo esa entry. */

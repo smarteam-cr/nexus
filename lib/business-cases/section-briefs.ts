@@ -22,6 +22,11 @@ export interface CanvasSectionEntry {
   previousBrief?: string | null;
   /** El CSE ocultó esta sección: no se publica al cliente (reversible, no borra datos). */
   hidden?: boolean;
+  /**
+   * La ocultó la PLANTILLA y no una persona (2026-10-23): el diagnóstico esencial oculta lo que tiene texto y no es suyo.
+   * Al volver a una plantilla que la tiene, se vuelve a mostrar sola. El ojo de una persona borra la marca.
+   */
+  ocultaPorLaPlantilla?: boolean;
 }
 
 /**

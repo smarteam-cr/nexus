@@ -170,6 +170,26 @@ export default function DiagnosticoWorkspace({
   const [verCabos, setVerCabos] = useState(false);
   // Lo que propuso Nexus y nadie confirmó (2026-10-23): se lee una vez por montaje (el editor se remonta al generar).
   const confirmado = useLoConfirmado(projectId);
+  /* ¿El documento ya tiene su plantilla anotada? Un diagnóstico vacío con plantilla es uno que alguien abrió para
+     escribirlo a mano («Escribirlo yo»): se muestra el documento, no el selector. null = todavía no se sabe. */
+  const [conPlantilla, setConPlantilla] = useState<boolean | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/projects/${projectId}/diagnostico/plantilla`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { guardada?: boolean } | null) => {
+        if (vivo) setConPlantilla(j?.guardada === true);
+      })
+      .catch(() => {
+        if (vivo) setConPlantilla(true); // sin saberlo, el documento: nunca dejar a alguien sin poder escribir
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [projectId]);
+  /* El selector: sin contenido y sin plantilla elegida. Sin `clientId` (un montaje viejo), el documento de siempre. */
+  const verSelector = !hasGeneratedContent && !!clientId && conPlantilla === false;
+  const verDocumento = hasGeneratedContent || !clientId || conPlantilla === true;
 
   /* Lo que hoy impide presentar, en vivo (el servidor lo vuelve a revisar al presentar). */
   const motivosParaNoPresentar = useMemo(() => {
@@ -261,7 +281,7 @@ export default function DiagnosticoWorkspace({
     <EstadoDelDocumento projectId={projectId} canvasId={canvasId} motivosLocales={motivosParaNoPresentar} onEstado={setEstado} />
     {/* Sin generar (2026-10-23): lo que propuso Nexus y nadie confirmó, y el selector de plantillas en vez del documento
         vacío. Fuera de `.stl`: es del equipo, con la UI de Nexus. Ya generado, la misma lista plegada en una franja. */}
-    {!hasGeneratedContent && clientId && (
+    {verSelector && clientId && (
       <div className="flex flex-col gap-2 pt-4">
         {confirmado && (
           <div className="mx-auto w-full max-w-[960px] px-4">
@@ -300,11 +320,12 @@ export default function DiagnosticoWorkspace({
 
       {/* Estado IDLE: abrir la pieza recién activada sin generar es lo normal. Sin `clientId` (un montaje viejo), el
           aviso de siempre: el botón de arriba genera con la plantilla de siempre. */}
-      {!hasGeneratedContent && !clientId && (
+      {!hasGeneratedContent && verDocumento && (
+        /* Vacío y abierto para escribir (o un montaje sin selector): se escribe a mano o se genera con el botón de arriba. */
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg-soft)", borderBottom: "1px solid var(--border)", fontSize: 13, color: "var(--text-2)" }}>
           <span>
-            Todavía sin generar. Revisa el contexto de arriba y usa <strong>Generar diagnóstico</strong>, junto
-            al nombre del canvas — la corrida aparece en el centro de corridas y puedes seguir navegando.
+            Todavía sin generar. Escríbelo aquí o usa <strong>Generar diagnóstico</strong>, junto al nombre del
+            canvas — la corrida aparece en el centro de corridas y puedes seguir navegando.
           </span>
         </div>
       )}
@@ -366,7 +387,7 @@ export default function DiagnosticoWorkspace({
           className="px-4 pt-3"
         />
       )}
-      {(hasGeneratedContent || !clientId) && (
+      {verDocumento && (
       <LandingView
         config={config}
         ctx={ctx}

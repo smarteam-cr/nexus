@@ -81,7 +81,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
      lo sigue mostrando hasta la próxima publicación por otro motivo. */
   if ("hidden" in body) {
     const hidden = body.hidden === true;
-    const entries = patchSectionEntry(section.canvas.sections, section.key, { hidden });
+    // El ojo es de una persona: desde ahora la plantilla ya no la vuelve a mostrar sola (`ocultaPorLaPlantilla`).
+    const entries = patchSectionEntry(section.canvas.sections, section.key, { hidden, ocultaPorLaPlantilla: false });
     await prisma.projectCanvas.update({
       where: { id: section.canvasId },
       data: { sections: entries as unknown as Prisma.InputJsonValue },
