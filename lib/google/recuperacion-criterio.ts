@@ -101,3 +101,30 @@ export function datosDeReset(bucket: BucketDeRescate): {
   // limpiar, y summary/minutas no se tocan NUNCA — ver la cabecera.
   return bucket === "C_transcript_basura" ? { ...base, transcript: null } : base;
 }
+
+/**
+ * `--dias N` o `--dias=N` del rescate (U1, 2026-10-25). Sin el flag, null (toda la historia). Mal escrito es un ERROR y
+ * el script aborta: perderlo en silencio rescataba toda la historia (950 filas) en vez de las 177 de los últimos 90 días.
+ */
+export function diasDelRescate(argv: readonly string[]): { dias: number | null } | { error: string } {
+  const conIgual = argv.find((a) => a.startsWith("--dias="));
+  const i = argv.indexOf("--dias");
+  if (!conIgual && i < 0) return { dias: null };
+  const crudo = conIgual ? conIgual.slice("--dias=".length) : (argv[i + 1] ?? "");
+  const n = Number(crudo);
+  if (!/^\d+$/.test(crudo) || !Number.isSafeInteger(n) || n <= 0) {
+    return { error: `--dias necesita un número de días mayor que cero (llegó «${crudo}»)` };
+  }
+  return { dias: n };
+}
+
+/** Los recortes del rescate sobre UNA fila. `duena` = `duenoDeLaSesion(fila)`; `deEmpresa` = clientes y prospectos. */
+export function entraEnElRecorte(
+  f: { date: Date; duena: string | null },
+  ahora: Date,
+  r: { soloFuturas: boolean; soloClientesYProspectos: boolean; deEmpresa: ReadonlySet<string> },
+): boolean {
+  if (r.soloFuturas && f.date.getTime() <= ahora.getTime()) return false;
+  if (r.soloClientesYProspectos && (!f.duena || !r.deEmpresa.has(f.duena))) return false;
+  return true;
+}

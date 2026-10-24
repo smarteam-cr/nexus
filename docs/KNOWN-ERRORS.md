@@ -54,6 +54,7 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   (`2026-08-17-cortes-aguinaldo-atribucion.sql`) lo frenaba desde agosto en toda base que ya existía. *Guarda:*
   `test/global-setup.integration.ts` aplica los `.sql` posteriores al baseline antes de cada `npm run test:int`, y
   si uno falla al reaplicarse lo dice con su nombre: se arregla el `.sql`, no se saltea.
+- **Tests de integración que fallan sin motivo en un worktree: una fila recién creada «no existe», o un único que choca en una tabla que nació vacía.** *Causa:* todos los worktrees usan la MISMA `nexus_test` (el Postgres del checkout principal, puerto 5433): otra sesión corrió `test:int` a la vez (trunca todo antes de cada caso) o su global-setup le aplicó un `.sql` que tu rama no tiene (pasó el 2026-10-25 con el índice único de `Client.hubspotCompanyId`). *Guarda:* correr solo tus archivos (`npx vitest run --project integration <archivo>`), y antes de dar un rojo por tuyo, mirar si el objeto que choca está en algún `.sql` de tu rama.
 - **CSS/estilos rotos tras `git pull`.** *Causa:* caché de Turbopack stale. *Guarda:* `rm -rf .next`
   + reiniciar (un restart solo no alcanza).
 - **El preview del navegador no está logueado** → middleware redirige al login. *Guarda:* el E2E de

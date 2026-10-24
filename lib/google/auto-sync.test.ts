@@ -9,6 +9,7 @@ import {
   ESPERA_TOPE_MS,
   fallosSeguidosDe,
   noCorrerAntesDe,
+  ultimaCopiaBuenaDe,
   VENCE_TURNO_MS,
   type DbDeTurnos,
   type DepsDeAutoSync,
@@ -172,7 +173,7 @@ describe("si falla, espera antes de reintentar", () => {
     const { t, db } = tablaFalsa({ lastRunAt: null, lastResult: null });
     const llamadas: string[] = [];
     const { deps, estado } = proceso(db, { reloj, duraMs: 2 * MIN, falla: true, llamadas });
-    expect(await autoSyncGoogleMeet(deps)).toEqual({ skipped: true, reason: "error" });
+    expect(await autoSyncGoogleMeet(deps)).toMatchObject({ skipped: true, reason: "error" });
     const fin = T0 + 2 * MIN;
     expect(t.fila?.lastRunAt?.getTime()).toBe(fin + ESPERA_BASE_MS);
     expect(t.fila?.lastResult).toMatchObject({ ok: false, fallosSeguidos: 1, error: "Calendar 500" });
@@ -222,7 +223,7 @@ describe("si falla, espera antes de reintentar", () => {
       },
     };
     const { deps, estado } = proceso(rota, { reloj: { ms: T0 } });
-    expect(await autoSyncGoogleMeet(deps)).toEqual({ skipped: true, reason: "error" });
+    expect(await autoSyncGoogleMeet(deps)).toMatchObject({ skipped: true, reason: "error" });
     expect(estado.cooldownHasta).toBe(T0 + ESPERA_BASE_MS);
   });
 });
@@ -353,5 +354,51 @@ describe("convive con un proceso del código VIEJO (hasta el deploy, un dev:prod
       noAntesDe: new Date(T0).toISOString(),
     });
     expect(conMarca(null, new Date(T0))).toEqual({ noAntesDe: new Date(T0).toISOString() });
+  });
+});
+
+describe("U1: el job pasa su espera, y la última copia buena sobrevive a un fallo", () => {
+  it("con cooldownMs de 10 min la próxima queda para fin + 10", async () => {
+    const reloj = { ms: T0 };
+    const { t, db } = tablaFalsa(null);
+    const { deps } = proceso(db, { reloj, duraMs: 1 * MIN });
+    const r = await autoSyncGoogleMeet(deps, { cooldownMs: 10 * MIN });
+    expect(r.skipped).toBe(false);
+    expect(r.duracionSeg).toBe(60);
+    expect(t.fila?.lastRunAt?.getTime()).toBe(T0 + 1 * MIN + 10 * MIN);
+    expect(ultimaCopiaBuenaDe(t.fila?.lastResult ?? null)?.getTime()).toBe(T0 + 1 * MIN);
+  });
+
+  it("un fallo después de una buena conserva cuándo fue la buena, y dice qué falló", async () => {
+    const reloj = { ms: T0 };
+    const { t, db } = tablaFalsa(filaNuestra(T0 - 1 * MIN, { ok: true, at: new Date(T0 - 21 * MIN).toISOString(), ultimaBuena: new Date(T0 - 21 * MIN).toISOString() }));
+    const { deps } = proceso(db, { reloj, falla: true });
+    const r = await autoSyncGoogleMeet(deps);
+    expect(r).toMatchObject({ skipped: true, reason: "error", error: "Calendar 500" });
+    expect((t.fila?.lastResult as Prisma.JsonObject).ok).toBe(false);
+    expect(ultimaCopiaBuenaDe(t.fila?.lastResult ?? null)?.getTime()).toBe(T0 - 21 * MIN);
+  });
+
+  it("ultimaCopiaBuenaDe lee una fila de antes de U1 (sin ultimaBuena) por su `at` si terminó bien", () => {
+    expect(ultimaCopiaBuenaDe({ ok: true, at: "2026-10-24T17:54:41.173Z" })?.toISOString()).toBe("2026-10-24T17:54:41.173Z");
+    expect(ultimaCopiaBuenaDe({ ok: false, at: "2026-10-24T17:54:41.173Z" })).toBeNull();
+    expect(ultimaCopiaBuenaDe(null)).toBeNull();
+    expect(ultimaCopiaBuenaDe({ ultimaBuena: "no es una fecha" })).toBeNull();
+  });
+});
+
+describe("U1: una corrida sin respuesta de Google es un fallo", () => {
+  it("si la sync devuelve error, se anota como fallo con su espera y no mueve la última copia buena", async () => {
+    /* La edición que la pone en rojo: ignorar `error` de la sync (se anotaba «ok» cada 10 min con Google caído). */
+    const reloj = { ms: T0 };
+    const buena = new Date(T0 - 30 * MIN).toISOString();
+    const { t, db } = tablaFalsa(filaNuestra(T0 - 1 * MIN, { ok: true, at: buena, ultimaBuena: buena }));
+    const { deps } = proceso(db, { reloj });
+    deps.sync = async () => ({ synced: 0, alreadyExisted: 0, error: "Fallaron los 23 calendarios del dominio" });
+    const r = await autoSyncGoogleMeet(deps, { cooldownMs: 10 * MIN });
+    expect(r).toMatchObject({ skipped: true, reason: "error" });
+    expect((t.fila?.lastResult as Prisma.JsonObject).ok).toBe(false);
+    expect(ultimaCopiaBuenaDe(t.fila?.lastResult ?? null)?.toISOString()).toBe(buena);
+    expect(t.fila?.lastRunAt?.getTime(), "espera tras fallo, no los 10 min").toBe(T0 + ESPERA_BASE_MS);
   });
 });

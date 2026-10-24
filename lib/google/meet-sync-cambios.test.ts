@@ -1,16 +1,23 @@
 import { describe, it, expect } from "vitest";
 import {
+  cambiosDeInvitados,
   cambiosDeSesion,
+  canceladasDeLaCorrida,
   diasHaciaAtras,
+  dominiosDelEquipoDe,
   DIAS_POR_DEFECTO,
+  frenadaPorUnCalendarioSinLeer,
   enLotes,
   esBloqueDeTarea,
   eventIdDeFila,
   fusionarCopia,
   idDeSesion,
+  invitadosDelEvento,
   mismosParticipantes,
   participantesConOrganizador,
+  respuestaDe,
   type EventoMeet,
+  type InvitadoGuardado,
   type SesionGuardada,
 } from "./meet-sync-cambios";
 
@@ -53,6 +60,8 @@ function guardada(extra: Partial<SesionGuardada> = {}): SesionGuardada {
     manualClientId: null,
     resolvedClientId: "cli_acme",
     descripcionDelEvento: null,
+    conferenceId: null,
+    canceladaEn: null,
     ...extra,
   };
 }
@@ -229,5 +238,103 @@ describe("esBloqueDeTarea: un bloque de una tarea de Nexus nunca es una sesión"
   it("una reunión llamada «Tarea …» con invitados sí es una reunión", () => {
     expect(esBloqueDeTarea({ summary: "Tarea · revisión con el cliente", attendees: [{ email: "a@x" }, { email: "b@y" }] })).toBe(false);
     expect(esBloqueDeTarea({ summary: "Sprint planning de marketing" })).toBe(false);
+  });
+});
+
+describe("U1: el código de la reunión y la cancelada que vuelve", () => {
+  it("el código nuevo se escribe; un evento sin código no borra el guardado", () => {
+    expect(cambios(guardada(), evento({ conferenceId: "abc-defg-hij" })).cambios).toEqual({ conferenceId: "abc-defg-hij" });
+    expect(cambios(guardada({ conferenceId: "abc-defg-hij" }), evento()).cambios).toBeNull();
+    expect(cambios(guardada({ conferenceId: "abc-defg-hij" }), evento({ conferenceId: "abc-defg-hij" })).cambios).toBeNull();
+  });
+
+  it("si el evento aparece vivo, la marca de cancelada se quita", () => {
+    expect(cambios(guardada({ canceladaEn: new Date("2026-09-16T00:00:00Z") }), evento()).cambios).toEqual({ canceladaEn: null });
+  });
+
+  it("fusionarCopia conserva el código y une los invitados, con la primera respuesta que la diga", () => {
+    const a = evento({ invitados: [{ correo: "ana@acme.com", respuesta: null }] });
+    const b = evento({ conferenceId: "abc-defg-hij", invitados: [{ correo: "ana@acme.com", respuesta: "ACEPTO" }, { correo: "eli@smarteamcr.com", respuesta: "RECHAZO" }] });
+    const f = fusionarCopia(fusionarCopia(undefined, a), b);
+    expect(f.conferenceId).toBe("abc-defg-hij");
+    expect(f.invitados).toEqual([
+      { correo: "ana@acme.com", respuesta: "ACEPTO" },
+      { correo: "eli@smarteamcr.com", respuesta: "RECHAZO" },
+    ]);
+  });
+});
+
+describe("U1: los invitados con su respuesta", () => {
+  it("respuestaDe traduce las cuatro respuestas de Google y deja en null lo que no conoce", () => {
+    expect(["accepted", "tentative", "declined", "needsAction"].map(respuestaDe)).toEqual(["ACEPTO", "TENTATIVA", "RECHAZO", "SIN_RESPONDER"]);
+    expect(respuestaDe("otra-cosa")).toBeNull();
+    expect(respuestaDe(undefined)).toBeNull();
+  });
+
+  it("invitadosDelEvento: minúsculas, uno por correo, sin salas, y el organizador aunque no figure", () => {
+    const r = invitadosDelEvento(
+      [
+        { email: "Ana@ACME.com", responseStatus: "accepted" },
+        { email: "ana@acme.com", responseStatus: "declined" },
+        { email: "sala-1@resource.calendar.google.com", resource: true, responseStatus: "accepted" },
+        { email: "c_987cec9d@group.calendar.google.com", responseStatus: "accepted" },
+        { email: null },
+      ],
+      "Eli@smarteamcr.com",
+    );
+    expect(r).toEqual([
+      { correo: "ana@acme.com", respuesta: "ACEPTO" },
+      { correo: "eli@smarteamcr.com", respuesta: null },
+    ]);
+  });
+
+  const equipo = new Set(["smarteamcr.com"]);
+  const g = (x: Partial<InvitadoGuardado> & { correo: string }): InvitadoGuardado => ({ id: `id-${x.correo}`, esDelEquipo: false, respuesta: null, entro: null, ...x });
+
+  it("sin cambios, ninguna escritura", () => {
+    const r = cambiosDeInvitados(
+      [g({ correo: "ana@acme.com", respuesta: "ACEPTO" }), g({ correo: "eli@smarteamcr.com", esDelEquipo: true })],
+      [{ correo: "ana@acme.com", respuesta: "ACEPTO" }, { correo: "eli@smarteamcr.com", respuesta: null }],
+      equipo,
+    );
+    expect(r).toEqual({ crear: [], actualizar: [], borrar: [] });
+  });
+
+  it("crea el nuevo, cambia la respuesta, y borra al que sacaron, salvo que ya tenga asistencia", () => {
+    const r = cambiosDeInvitados(
+      [g({ correo: "ana@acme.com", respuesta: "SIN_RESPONDER" }), g({ correo: "sacado@acme.com" }), g({ correo: "estuvo@acme.com", entro: new Date() })],
+      [{ correo: "ana@acme.com", respuesta: "RECHAZO" }, { correo: "eli@smarteamcr.com", respuesta: "ACEPTO" }],
+      equipo,
+    );
+    expect(r.crear).toEqual([{ correo: "eli@smarteamcr.com", esDelEquipo: true, respuesta: "ACEPTO" }]);
+    expect(r.actualizar).toEqual([{ id: "id-ana@acme.com", esDelEquipo: false, respuesta: "RECHAZO" }]);
+    expect(r.borrar, "el que estuvo (U3 le anotó la entrada) no se borra").toEqual(["id-sacado@acme.com"]);
+  });
+});
+
+describe("U1: dominiosDelEquipoDe", () => {
+  it("la categoría interna (la misma de la atribución); sin ninguno, el de arranque", () => {
+    expect([...dominiosDelEquipoDe(["SmarteamCR.com", "otro.com"], "smarteamcr.com")].sort()).toEqual(["otro.com", "smarteamcr.com"]);
+    expect([...dominiosDelEquipoDe([], "smarteamcr.com")]).toEqual(["smarteamcr.com"]);
+  });
+});
+
+describe("U1: canceladasDeLaCorrida y el calendario sin leer", () => {
+  it("solo las canceladas en TODOS los calendarios: una copia viva la salva (al invitado que sacan se la muestran cancelada)", () => {
+    expect(canceladasDeLaCorrida(new Set(["a", "b"]), new Set(["b", "c"]))).toEqual(["a"]);
+  });
+  it("un calendario sin leer frena solo las reuniones donde su dueño estaba invitado (u organizaba)", () => {
+    /* La edición que la pone en rojo: volver a «un calendario sin leer frena todas» (una cuenta suspendida apagaba la
+       marca para siempre) o a no mirar el calendario sin leer (una reunión viva se marcaría cancelada). */
+    const sinLeer = new Set(["pau@smarteamcr.com"]);
+    expect(frenadaPorUnCalendarioSinLeer({ participants: ["ana@acme.com", "Pau@SmarteamCR.com"], organizerEmail: null }, sinLeer)).toBe(true);
+    expect(frenadaPorUnCalendarioSinLeer({ participants: ["ana@acme.com"], organizerEmail: "pau@smarteamcr.com" }, sinLeer)).toBe(true);
+    expect(frenadaPorUnCalendarioSinLeer({ participants: ["ana@acme.com", "eli@smarteamcr.com"], organizerEmail: "eli@smarteamcr.com" }, sinLeer)).toBe(false);
+    expect(frenadaPorUnCalendarioSinLeer({ participants: ["pau@smarteamcr.com"], organizerEmail: null }, new Set())).toBe(false);
+  });
+  it("con un calendario sin leer no se borra ningún invitado (el que falta pudo ser el único que lo veía)", () => {
+    const g = { id: "p1", correo: "luis@acme.com", esDelEquipo: false, respuesta: null, entro: null };
+    expect(cambiosDeInvitados([g], [], new Set(), { borrar: false }).borrar).toEqual([]);
+    expect(cambiosDeInvitados([g], [], new Set()).borrar).toEqual(["p1"]);
   });
 });

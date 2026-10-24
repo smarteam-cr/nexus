@@ -18,7 +18,8 @@
  *
  * Una reunión de OTRO cliente se devuelve igual, marcada con su motivo y sin botón: esconderla sería
  * que alguien la busque en su calendario y crea que no existe. La puerta de cada documento la rechaza
- * por su cuenta. Las futuras quedan afuera: no dejaron nada que leer. Solo lectura.
+ * por su cuenta. Las futuras quedan afuera: no dejaron nada que leer. Tampoco sale una reunión cancelada sin texto
+ * (lib/sessions/canceladas.ts). Solo lectura.
  */
 import "server-only";
 import { Prisma } from "@prisma/client";
@@ -31,6 +32,7 @@ import {
 } from "./candidatas-internas";
 import { buildInternalDomainsSet } from "./categorize";
 import { belongsToClient } from "./project-sources";
+import { noEsCanceladaSinTextoSql } from "./canceladas";
 
 /** Sin escribir nada: las más recientes. Es lo que se ve al abrir el buscador. */
 const TOPE_RECIENTES = 30;
@@ -102,6 +104,7 @@ export async function buscarEnTuCalendario(o: {
     SELECT s."id"
     FROM "FirefliesSession" s
     WHERE s."date" <= ${ahora}
+      AND ${noEsCanceladaSinTextoSql("s")}
       AND (
         lower(s."organizerEmail") = ${email}
         OR EXISTS (SELECT 1 FROM unnest(s."participants") p WHERE lower(p) = ${email})

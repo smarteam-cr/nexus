@@ -27,6 +27,16 @@ export type Entorno = Readonly<Record<string, string | undefined>>;
 const falta = (...variables: string[]) =>
   `Apagado: falta ${variables.join(" y ")} en el .env del servidor.`;
 
+/* Cada variable se lee como propiedad del entorno y no como un string suelto: `lib/docs/doc-sync.test.ts` escanea así
+   las banderas de los jobs para exigir que el .env.example las declare. */
+const faltaGoogle = (env: Entorno): string | null => {
+  const faltan = [
+    env.GOOGLE_SERVICE_ACCOUNT_KEY ? null : "GOOGLE_SERVICE_ACCOUNT_KEY",
+    env.GOOGLE_ADMIN_EMAIL ? null : "GOOGLE_ADMIN_EMAIL",
+  ].filter((v): v is string => v !== null);
+  return faltan.length ? falta(...faltan) : null;
+};
+
 const exitoDelCliente = (env: Entorno) =>
   env.CS_WATCHDOG_ENABLED === "1" ? null : falta("CS_WATCHDOG_ENABLED=1");
 
@@ -54,15 +64,17 @@ const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
     env.COBRANZA_CRON_ENABLED === "1"
       ? null
       : `${falta("COBRANZA_CRON_ENABLED=1")} El corte se puede hacer a mano desde Cobranza › Corte quincenal.`,
-  "google-enrich-retry": (env) => {
-    /* Cada variable se lee como propiedad del entorno y no como un string suelto:
-       `lib/docs/doc-sync.test.ts` escanea así las banderas de los jobs para exigir que el
-       .env.example las declare. */
-    const faltan = [
-      env.GOOGLE_SERVICE_ACCOUNT_KEY ? null : "GOOGLE_SERVICE_ACCOUNT_KEY",
-      env.GOOGLE_ADMIN_EMAIL ? null : "GOOGLE_ADMIN_EMAIL",
-    ].filter((v): v is string => v !== null);
-    return faltan.length ? falta(...faltan) : null;
+  "google-enrich-retry": (env) => faltaGoogle(env),
+  /* La copia de Google Meet cada 10 minutos (U1, 2026-10-25). Prendida por defecto: solo se apaga a propósito, y apagada
+     la copia vuelve a correr al abrir la app (`copiaDeMeetPorJob`). Sin las credenciales no corre ninguna de las dos. */
+  "google-meet-sync": (env) => {
+    const motivos: string[] = [];
+    if (env.GOOGLE_MEET_SYNC_ENABLED === "0") {
+      motivos.push("Apagado a propósito: GOOGLE_MEET_SYNC_ENABLED=0 en el .env del servidor. La copia de Meet corre al abrir la app.");
+    }
+    const sinCredenciales = faltaGoogle(env);
+    if (sinCredenciales) motivos.push(sinCredenciales);
+    return motivos.length ? motivos.join(" ") : null;
   },
   "odoo-espejo-daily": (env) => {
     /* Los dos motivos se dicen por separado: uno es una credencial que falta, el otro una
@@ -112,6 +124,15 @@ export const JOBS_CON_REQUISITO: readonly string[] = Object.keys(REQUISITOS);
 export function motivoApagado(jobKey: string, env: Entorno): string | null {
   const requisito = REQUISITOS[jobKey];
   return requisito ? requisito(env) : null;
+}
+
+/**
+ * ¿La copia de Google Meet la hace el job `google-meet-sync` en ESTE servidor? Solo con el scheduler arrancado y el job
+ * encendido. Si no (las PCs, o GOOGLE_MEET_SYNC_ENABLED=0 en producción), la vuelta atrás: la copia corre al abrir la
+ * app (POST /api/integrations/google/auto-sync). Los dos caminos comparten el turno de `CronJobState`: nunca a la vez.
+ */
+export function copiaDeMeetPorJob(env: Entorno): boolean {
+  return motivoSchedulerApagado(env) === null && motivoApagado("google-meet-sync", env) === null;
 }
 
 /**

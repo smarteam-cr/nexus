@@ -11,7 +11,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { JOBS_CON_REQUISITO, motivoApagado, motivoSchedulerApagado } from "./requisitos";
+import { copiaDeMeetPorJob, JOBS_CON_REQUISITO, motivoApagado, motivoSchedulerApagado } from "./requisitos";
 
 describe("motivoApagado", () => {
   it("odoo-espejo-daily distingue la contraseña que falta del apagado a propósito", () => {
@@ -53,6 +53,25 @@ describe("motivoApagado", () => {
     expect(motivoApagado("google-enrich-retry", { GOOGLE_ADMIN_EMAIL: "a@b", GOOGLE_SERVICE_ACCOUNT_KEY: "{}" })).toBeNull();
   });
 
+  it("google-meet-sync: prendido por defecto con las credenciales; «0» lo apaga y dice que vuelve el disparo al abrir la app", () => {
+    const google = { GOOGLE_ADMIN_EMAIL: "a@b", GOOGLE_SERVICE_ACCOUNT_KEY: "{}" };
+    expect(motivoApagado("google-meet-sync", google)).toBeNull();
+    expect(motivoApagado("google-meet-sync", { ...google, GOOGLE_MEET_SYNC_ENABLED: "1" })).toBeNull();
+    const aProposito = motivoApagado("google-meet-sync", { ...google, GOOGLE_MEET_SYNC_ENABLED: "0" });
+    expect(aProposito).toContain("GOOGLE_MEET_SYNC_ENABLED=0");
+    expect(aProposito).toContain("al abrir la app");
+    expect(motivoApagado("google-meet-sync", {})).toContain("GOOGLE_SERVICE_ACCOUNT_KEY y GOOGLE_ADMIN_EMAIL");
+  });
+
+  it("copiaDeMeetPorJob: el job la hace solo con el scheduler arrancado y el job encendido; si no, la app", () => {
+    const google = { GOOGLE_ADMIN_EMAIL: "a@b", GOOGLE_SERVICE_ACCOUNT_KEY: "{}" };
+    expect(copiaDeMeetPorJob({ ...google, CRON_ENABLED: "1" })).toBe(true);
+    // Una PC (sin scheduler) sigue con el disparo al abrir la app.
+    expect(copiaDeMeetPorJob(google)).toBe(false);
+    // La vuelta atrás en producción.
+    expect(copiaDeMeetPorJob({ ...google, CRON_ENABLED: "1", GOOGLE_MEET_SYNC_ENABLED: "0" })).toBe(false);
+  });
+
   it("seguimiento-reuniones está prendido sin la variable y solo «0» lo apaga, diciendo que vuelve el post-proceso viejo", () => {
     expect(motivoApagado("seguimiento-reuniones", {})).toBeNull();
     expect(motivoApagado("seguimiento-reuniones", { SEGUIMIENTO_REUNIONES_ENABLED: "1" })).toBeNull();
@@ -91,8 +110,8 @@ describe("defs.ts decide con esta regla y no con una copia", () => {
   it("cada job con requisito consulta la regla en su shouldRun", () => {
     /* 9 desde el 2026-10-05: el tipo de cambio del BCCR. 10 desde el 2026-10-10: la lectura de cada reunión. 11 desde el
        2026-10-15: las tareas de HubSpot. 12 desde el 2026-10-18: las comunicaciones de HubSpot. 13 desde el 2026-10-18:
-       el cobro solo de lo pagado. */
-    expect(JOBS_CON_REQUISITO.length).toBe(13);
+       el cobro solo de lo pagado. 14 desde el 2026-10-25: la copia de Google Meet cada 10 minutos (U1). */
+    expect(JOBS_CON_REQUISITO.length).toBe(14);
     for (const key of JOBS_CON_REQUISITO) expect(defs, key).toContain(`encendido("${key}")`);
     expect(defs).toContain("motivoApagado(jobKey, process.env) === null");
   });

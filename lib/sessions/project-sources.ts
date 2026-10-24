@@ -15,6 +15,9 @@
  *
  * El check de invariante (scripts/check-invariants.ts) verifica que no queden links
  * cruzados; este chokepoint es la red de runtime aunque alguno se cuele.
+ *
+ * U1 (2026-10-25): una reunión cuyo evento se canceló y no tiene texto, minuta, hechos ni tareas no sale de acá
+ * (lib/sessions/canceladas.ts). La cancelada con algo de eso sí: queda para que una persona la revise.
  */
 import { prisma } from "@/lib/db/prisma";
 import { asignarDuenioManual } from "./duenio-manual";
@@ -31,6 +34,7 @@ import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
 import { pisoDelProyecto, quedaAntesDelPiso } from "./piso-del-proyecto";
 import { NO_ES_CONTENEDOR_WHERE } from "@/lib/projects/scope";
+import { NO_ES_CANCELADA_SIN_TEXTO } from "./canceladas";
 
 /** Compatible con `RawTranscript` de analyze (date en epoch ms). */
 export interface ProjectSourceSession {
@@ -213,7 +217,7 @@ export async function getProjectMemberSessions(
   const piso = pisoDelProyecto(project, anteriorDelCliente > 0);
 
   const links = await prisma.sessionProject.findMany({
-    where: { projectId, included: true },
+    where: { projectId, included: true, session: NO_ES_CANCELADA_SIN_TEXTO },
     select: {
       handoffOverride: true,
       timelineOverride: true,
@@ -393,7 +397,12 @@ export async function getClientSessions(
   const techo = opts.before && opts.before < ahora ? opts.before : ahora;
 
   const rows = await prisma.firefliesSession.findMany({
-    where: { ...whereBelongsToClient(clientId), date: { lte: techo }, ...(opts.ids ? { id: { in: [...opts.ids] } } : {}) },
+    where: {
+      ...whereBelongsToClient(clientId),
+      date: { lte: techo },
+      ...(opts.ids ? { id: { in: [...opts.ids] } } : {}),
+      AND: [NO_ES_CANCELADA_SIN_TEXTO],
+    },
     orderBy: { date: "desc" },
     take: opts.take ?? 200,
     select: { id: true, title: true, date: true, participants: true, organizerEmail: true },
@@ -442,7 +451,7 @@ export async function contarSesionesSinRevisar(
   if (proyectos.length === 0) return out;
   const clienteDe = new Map(proyectos.map((p) => [p.id, p.clientId]));
   const links = await prisma.sessionProject.findMany({
-    where: { projectId: { in: [...clienteDe.keys()] }, included: true, source: "agent", reviewedAt: null },
+    where: { projectId: { in: [...clienteDe.keys()] }, included: true, source: "agent", reviewedAt: null, session: NO_ES_CANCELADA_SIN_TEXTO },
     select: { projectId: true, session: { select: { resolvedClientId: true, manualClientId: true } } },
   });
   for (const l of links) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bucketDe, datosDeReset, type FilaCandidata } from "./recuperacion-criterio";
+import { bucketDe, datosDeReset, diasDelRescate, entraEnElRecorte, type FilaCandidata } from "./recuperacion-criterio";
 
 /**
  * lib/google/recuperacion-criterio.test.ts — QUÉ SE RESCATA, COMO TABLA.
@@ -127,5 +127,29 @@ describe("bucket D — selladas vacías antes de que terminara la reunión (2026
     expect(bucketDe(fila({ date: INICIO, duration: 90, googleDocId: "d", enrichedAt: new Date(INICIO.getTime() + 61 * 60_000) }), HOY)).toBe("D_sellada_antes_de_terminar");
     expect(bucketDe(fila({ date: INICIO, duration: 30, googleDocId: "d", enrichedAt: new Date(INICIO.getTime() + 61 * 60_000) }), HOY)).toBe("A_sellada_con_doc");
     expect(bucketDe(fila({ date: INICIO, duration: 90, transcript: "x".repeat(500), enrichedAt: new Date(INICIO.getTime() + 61 * 60_000) }), HOY)).toBeNull();
+  });
+});
+
+describe("U1: los recortes del rescate de las 177", () => {
+  it("diasDelRescate: sin el flag, toda la historia; «90» y «=90» valen; mal escrito es un error, no «toda la historia»", () => {
+    /* La edición que la pone en rojo: volver a ignorar un --dias mal escrito (rescataba 950 en vez de 177). */
+    expect(diasDelRescate(["--apply"])).toEqual({ dias: null });
+    expect(diasDelRescate(["--dias", "90"])).toEqual({ dias: 90 });
+    expect(diasDelRescate(["--dias=90"])).toEqual({ dias: 90 });
+    for (const malo of [["--dias", "noventa"], ["--dias"], ["--dias", "0"], ["--dias", "-3"], ["--dias=9.5"], ["--dias", "--apply"]]) {
+      expect(diasDelRescate(malo), malo.join(" ")).toHaveProperty("error");
+    }
+  });
+
+  it("entraEnElRecorte: solo clientes y prospectos por la dueña; solo futuras por la fecha", () => {
+    const ahora = new Date("2026-10-25T15:00:00Z");
+    const ayer = new Date("2026-10-24T15:00:00Z");
+    const deEmpresa = new Set(["cli_acme"]);
+    const r = { soloFuturas: false, soloClientesYProspectos: true, deEmpresa };
+    expect(entraEnElRecorte({ date: ayer, duena: "cli_acme" }, ahora, r)).toBe(true);
+    expect(entraEnElRecorte({ date: ayer, duena: "cli_interno" }, ahora, r)).toBe(false);
+    expect(entraEnElRecorte({ date: ayer, duena: null }, ahora, r)).toBe(false);
+    expect(entraEnElRecorte({ date: ayer, duena: null }, ahora, { ...r, soloClientesYProspectos: false })).toBe(true);
+    expect(entraEnElRecorte({ date: ayer, duena: "cli_acme" }, ahora, { ...r, soloFuturas: true })).toBe(false);
   });
 });

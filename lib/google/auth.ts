@@ -146,6 +146,9 @@ export async function listDomainUsers(): Promise<DomainUser[]> {
         orderBy: "email",
         pageToken,
         projection: "basic",
+        // U1 (2026-10-25): sin las suspendidas. Su calendario falla en cada corrida (no se puede impersonar), y un
+        // calendario sin leer frena la marca de canceladas y el borrado de invitados de sus reuniones.
+        query: "isSuspended=false",
       });
 
       const page = res.data.users ?? [];

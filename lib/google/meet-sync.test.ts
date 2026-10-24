@@ -27,7 +27,10 @@ type FilaFalsa = {
   source: string;
   manualClientId: string | null;
   resolvedClientId: string | null;
+  conferenceId: string | null;
+  canceladaEn: Date | null;
 };
+type InvitadoFalso = { id: string; sessionId: string; correo: string; esDelEquipo: boolean; respuesta: string | null; entro: Date | null };
 type Escritura = { tipo: "update" | "upsert"; id: string; data: Record<string, unknown>; select: unknown };
 
 const h = vi.hoisted(() => ({
@@ -39,6 +42,17 @@ const h = vi.hoisted(() => ({
   leidas: [] as string[],
   escrituras: [] as Escritura[],
   listados: 0,
+  /** Los calendarios que fallan al leerse. */
+  fallan: new Set<string>(),
+  /** Los calendarios que devuelven siempre otra página (para llegar al tope de páginas). */
+  sinFin: new Set<string>(),
+  /** Si listar a los usuarios del dominio falla. */
+  usuariosFallan: false,
+  invitados: [] as InvitadoFalso[],
+  /** Escrituras de `ParticipanteDeReunion`. */
+  invitadosEscritos: [] as Array<{ tipo: string; data: unknown }>,
+  /** Los `where` de las marcas de canceladas. */
+  canceladas: [] as unknown[],
 }));
 
 // La MISMA ruta que importa meet-sync.ts (el import profundo, no la raíz: ver googleapis-sin-raiz.test.ts).
@@ -47,7 +61,8 @@ vi.mock("googleapis/build/src/apis/calendar", () => ({
     events: {
       list: async () => {
         await new Promise<void>((r) => setImmediate(r));
-        return { data: { items: h.calendarios.get(auth.email) ?? [], nextPageToken: null } };
+        if (h.fallan.has(auth.email)) throw new Error("Calendar 500");
+        return { data: { items: h.calendarios.get(auth.email) ?? [], nextPageToken: h.sinFin.has(auth.email) ? "otra" : null } };
       },
     },
   }),
@@ -58,12 +73,13 @@ vi.mock("@/lib/google/auth", () => ({
   listDomainUsers: async () => {
     h.listados++;
     await new Promise<void>((r) => setImmediate(r));
+    if (h.usuariosFallan) throw new Error("unauthorized_client");
     return h.usuarios;
   },
 }));
 
 vi.mock("@/lib/sessions/resolve-client", () => ({
-  buildCategorizeCtx: async () => ({}),
+  buildCategorizeCtx: async () => ({ internalDomains: new Set(["smarteamcr.com"]) }),
   resolveSessionClientId: () => "cli_acme",
 }));
 
@@ -96,6 +112,29 @@ vi.mock("@/lib/db/prisma", () => {
         upsert: async (args: { where: { id: string }; create: Record<string, unknown>; select?: unknown }) => {
           h.escrituras.push({ tipo: "upsert", id: args.where.id, data: args.create, select: args.select });
           return { id: args.where.id };
+        },
+        updateMany: async (args: { where: unknown; data: Record<string, unknown> }) => {
+          h.canceladas.push(args.where);
+          const pedidos = buscados(args.where, new Set<string>());
+          return {
+            count: h.filas.filter((f) => f.canceladaEn === null && (pedidos.has(f.id) || (f.googleEventId !== null && pedidos.has(f.googleEventId)))).length,
+          };
+        },
+      },
+      sessionCategory: { findMany: async () => [{ domains: ["smarteamcr.com"], kind: "internal" }] },
+      participanteDeReunion: {
+        findMany: async (args: { where: { sessionId: { in: string[] } } }) => h.invitados.filter((i) => args.where.sessionId.in.includes(i.sessionId)),
+        createMany: async (args: { data: unknown[] }) => {
+          h.invitadosEscritos.push({ tipo: "createMany", data: args.data });
+          return { count: args.data.length };
+        },
+        update: async (args: { where: { id: string }; data: object }) => {
+          h.invitadosEscritos.push({ tipo: "update", data: { id: args.where.id, ...args.data } });
+          return { id: args.where.id };
+        },
+        deleteMany: async (args: { where: { id: { in: string[] } } }) => {
+          h.invitadosEscritos.push({ tipo: "deleteMany", data: args.where.id.in });
+          return { count: args.where.id.in.length };
         },
       },
     },
@@ -142,6 +181,8 @@ function fila(eventId: string, extra: Partial<FilaFalsa> = {}): FilaFalsa {
     source: "google_meet",
     manualClientId: null,
     resolvedClientId: "cli_acme",
+    conferenceId: null,
+    canceladaEn: null,
     ...extra,
   };
 }
@@ -164,6 +205,12 @@ beforeEach(() => {
   h.leidas = [];
   h.escrituras = [];
   h.listados = 0;
+  h.fallan = new Set();
+  h.sinFin = new Set();
+  h.usuariosFallan = false;
+  h.invitados = [];
+  h.invitadosEscritos = [];
+  h.canceladas = [];
   vi.spyOn(console, "log").mockImplementation(() => {});
 });
 
@@ -246,13 +293,14 @@ describe("⛔ no se pierde ningún dato real", () => {
     expect(Object.keys(h.escrituras[0]?.data ?? {})).toEqual(["participants"]);
   });
 
-  it("la reunión cancelada (Google ya no la trae) no se lee ni se toca: la fila queda como estaba", async () => {
+  it("la reunión que Google ya no trae (ni viva ni cancelada) no se lee ni se toca: la fila queda como estaba", async () => {
     /* Igual que antes del 2026-09-21: la sync nunca borra. Lo nuevo es que ni la lee. */
     calendarios({ [ELI]: [item("ev1")] });
     h.filas = [fila("ev1"), fila("ev2", { title: "Demo cancelada" })];
     await correr();
     expect(h.escrituras).toEqual([]);
     expect(h.leidas).toEqual(["gmeet_ev1"]);
+    expect(h.canceladas).toEqual([]);
   });
 
   it("una fila previa al refactor (sin googleEventId) se encuentra y se sana, no se duplica", async () => {
@@ -334,5 +382,172 @@ describe("candado por fuente: el enriquecimiento tampoco pide la fila entera", (
       expect(llamadas.length, `${archivo}: la guarda no está mirando nada`).toBeGreaterThan(0);
       for (const args of llamadas) expect(args, `${archivo}: una escritura sin select`).toMatch(/select:\s*\{\s*id:\s*true\s*\}/);
     }
+  });
+});
+
+describe("U1: los eventos cancelados se marcan, nunca se borran", () => {
+  const cancelado = (eventId: string) => ({ id: eventId, status: "cancelled" });
+
+  it("cancelado en TODOS los calendarios: una marca de canceladaEn, sin borrar nada", async () => {
+    /* La edición que la pone en rojo: borrar la fila (arrastra en cascada hechos, turnos y lectura). */
+    calendarios({ [ELI]: [item("ev1"), cancelado("ev2")], [PAU]: [cancelado("ev2")] });
+    h.filas = [fila("ev1"), fila("ev2")];
+    const r = await correr();
+    expect(h.canceladas).toHaveLength(1);
+    const where = JSON.stringify(h.canceladas[0]);
+    expect(where).toContain("ev2");
+    expect(where).not.toContain("ev1");
+    expect(where, "solo las que no estaban marcadas").toContain(`"canceladaEn":null`);
+    expect(r.canceladas).toBe(1);
+  });
+
+  it("cancelado en un calendario y vivo en otro (al invitado que sacan se la muestran cancelada): no se marca", async () => {
+    calendarios({ [ELI]: [item("ev1")], [PAU]: [cancelado("ev1")] });
+    h.filas = [fila("ev1")];
+    await correr();
+    expect(h.canceladas).toEqual([]);
+  });
+
+  it("un calendario que falla frena solo las reuniones donde su dueño estaba invitado", async () => {
+    /* PAU puede tener la copia viva de ev2 (estaba invitada); de ev3 no (no lo estaba). */
+    calendarios({ [ELI]: [item("ev1"), cancelado("ev2"), cancelado("ev3")], [PAU]: [] });
+    h.fallan = new Set([PAU]);
+    h.filas = [fila("ev1"), fila("ev2", { participants: [ANA, ELI, PAU] }), fila("ev3")];
+    const r = await correr();
+    expect(h.canceladas).toHaveLength(1);
+    const where = JSON.stringify(h.canceladas[0]);
+    expect(where).toContain("gmeet_ev3");
+    expect(where).not.toContain("gmeet_ev2");
+    expect(r.canceladas).toBe(1);
+  });
+
+  it("un calendario cortado por el tope de páginas cuenta como sin leer", async () => {
+    /* La edición que la pone en rojo: no marcar `completo = false` al cortar la paginación. Con los cancelados en la
+       lectura (showDeleted) el tope está más cerca. */
+    calendarios({ [ELI]: [cancelado("ev2")], [PAU]: [item("ev1")] });
+    h.sinFin = new Set([PAU]);
+    h.filas = [fila("ev1"), fila("ev2", { participants: [ANA, PAU] })];
+    await correr();
+    expect(h.canceladas).toEqual([]);
+  });
+
+  it("una copia viva fuera de la ventana (o sin Meet) salva a la reunión: el invitado que sacaron la ve cancelada", async () => {
+    /* La edición que la pone en rojo: contar como vivas solo las copias que se guardan (las de la ventana con Meet). */
+    const viejo = new Date(Date.now() - 40 * DIA);
+    calendarios({ [ELI]: [cancelado("ev2")], [PAU]: [item("ev2", { inicio: viejo }), { ...item("ev3"), conferenceData: undefined }], [MAR]: [cancelado("ev3")] });
+    h.filas = [fila("ev2"), fila("ev3")];
+    await correr();
+    expect(h.canceladas).toEqual([]);
+  });
+
+  it("si fallan TODOS los calendarios la corrida es un error, no una copia buena, y no escribe nada", async () => {
+    /* La edición que la pone en rojo: volver a devolver «0 nuevas» sin error (INV49 quedaba verde con Google caído). */
+    calendarios({ [ELI]: [item("ev1")], [PAU]: [item("ev1")] });
+    h.fallan = new Set([ELI, PAU]);
+    h.filas = [fila("ev1")];
+    const r = await correr();
+    expect(r.error).toContain("Fallaron los 2 calendarios");
+    expect(h.escrituras).toEqual([]);
+    expect(h.canceladas).toEqual([]);
+  });
+
+  it("la marcada que vuelve a aparecer viva se desmarca", async () => {
+    calendarios({ [ELI]: [item("ev1")] });
+    h.filas = [fila("ev1", { canceladaEn: new Date("2026-10-20T00:00:00Z") })];
+    await correr();
+    expect(h.escrituras).toEqual([{ tipo: "update", id: "gmeet_ev1", data: { canceladaEn: null }, select: { id: true } }]);
+  });
+});
+
+describe("U1: el código de la reunión y los invitados", () => {
+  it("una reunión nueva guarda su código y sus invitados con la respuesta, el organizador y quién es del equipo", async () => {
+    const conCodigo = {
+      ...item("ev9", { asistentes: [] }),
+      attendees: [
+        { email: ANA, responseStatus: "accepted" },
+        { email: "sala@resource.calendar.google.com", resource: true, responseStatus: "accepted" },
+      ],
+      conferenceData: { conferenceId: "abc-defg-hij", conferenceSolution: { key: { type: "hangoutsMeet" } } },
+    };
+    calendarios({ [ELI]: [conCodigo] });
+    await correr();
+    expect(h.escrituras[0]?.data).toMatchObject({ conferenceId: "abc-defg-hij" });
+    expect(h.invitadosEscritos).toEqual([
+      {
+        tipo: "createMany",
+        data: [
+          { sessionId: "gmeet_ev9", correo: ANA, esDelEquipo: false, respuesta: "ACEPTO" },
+          { sessionId: "gmeet_ev9", correo: ELI, esDelEquipo: true, respuesta: null },
+        ],
+      },
+    ]);
+  });
+
+  it("con los invitados ya guardados igual, ninguna escritura", async () => {
+    calendarios({ [ELI]: [item("ev1")] });
+    h.filas = [fila("ev1")];
+    h.invitados = [
+      { id: "p1", sessionId: "gmeet_ev1", correo: ANA, esDelEquipo: false, respuesta: null, entro: null },
+      { id: "p2", sessionId: "gmeet_ev1", correo: ELI, esDelEquipo: true, respuesta: null, entro: null },
+    ];
+    await correr();
+    expect(h.invitadosEscritos).toEqual([]);
+  });
+});
+
+describe("U1: Google sin responder no es una copia buena", () => {
+  it("si no se puede listar a los usuarios, error (antes: «0 nuevas» como buena)", async () => {
+    /* La edición que la pone en rojo: volver a `return vacio` sin `error`: INV49 quedaba verde con Google caído. */
+    calendarios({ [ELI]: [item("ev1")] });
+    h.usuariosFallan = true;
+    const r = await correr();
+    expect(r.error).toContain("No se pudo listar a los usuarios del dominio");
+    expect(h.escrituras).toEqual([]);
+  });
+
+  it("si el dominio viene vacío, error", async () => {
+    calendarios({});
+    const r = await correr();
+    expect(r.error).toContain("ningún usuario");
+  });
+
+  it("una corrida sana no trae error", async () => {
+    calendarios({ [ELI]: [item("ev1")] });
+    h.filas = [fila("ev1")];
+    expect((await correr()).error).toBeUndefined();
+  });
+});
+
+describe("U1: los invitados en la corrida completa", () => {
+  const guardado = (id: string, correo: string, respuesta: string | null = null) => ({ id, sessionId: "gmeet_ev1", correo, esDelEquipo: correo.endsWith("@smarteamcr.com"), respuesta, entro: null });
+
+  it("al que sacaron se lo borra y al que cambió su respuesta se le actualiza", async () => {
+    calendarios({ [ELI]: [{ ...item("ev1"), attendees: [{ email: ANA, responseStatus: "declined" }, { email: ELI }] }] });
+    h.filas = [fila("ev1")];
+    h.invitados = [guardado("p1", ANA, "ACEPTO"), guardado("p2", ELI), guardado("p3", LUIS)];
+    await correr();
+    expect(h.invitadosEscritos).toEqual([
+      { tipo: "update", data: { id: "p1", esDelEquipo: false, respuesta: "RECHAZO" } },
+      { tipo: "deleteMany", data: ["p3"] },
+    ]);
+  });
+
+  it("si no se leyó el calendario de alguien invitado a esa reunión, no se borra a nadie en ella", async () => {
+    /* La edición que la pone en rojo: borrar siempre (el calendario que falta pudo ser el único que veía a LUIS). */
+    calendarios({ [ELI]: [item("ev1", { asistentes: [ANA, ELI, PAU] })], [PAU]: [] });
+    h.fallan = new Set([PAU]);
+    h.filas = [fila("ev1", { participants: [ANA, ELI, PAU, LUIS] })];
+    h.invitados = [guardado("p1", ANA), guardado("p2", ELI), guardado("p3", PAU), guardado("p4", LUIS)];
+    await correr();
+    expect(h.invitadosEscritos.filter((e) => e.tipo === "deleteMany")).toEqual([]);
+  });
+
+  it("y un calendario sin leer de alguien que NO estaba en esa reunión no frena su borrado", async () => {
+    calendarios({ [ELI]: [item("ev1")], [MAR]: [] });
+    h.fallan = new Set([MAR]);
+    h.filas = [fila("ev1")];
+    h.invitados = [guardado("p1", ANA), guardado("p2", ELI), guardado("p3", LUIS)];
+    await correr();
+    expect(h.invitadosEscritos).toEqual([{ tipo: "deleteMany", data: ["p3"] }]);
   });
 });

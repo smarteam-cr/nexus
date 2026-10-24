@@ -2,8 +2,12 @@
  * lib/google/auto-sync.ts
  *
  * Sync + enrich combinado con turno PERSISTIDO en CronJobState.
- * Se ejecuta automáticamente en background cuando el usuario usa la app (lo disparan el shell,
- * /sessions y la ficha de un cliente por POST /api/integrations/google/auto-sync).
+ * Lo corren dos caminos, con el MISMO turno (nunca a la vez):
+ *   · el job `google-meet-sync` del scheduler, cada 10 minutos contados desde el fin
+ *     (lib/google/copia-por-job.ts; U1, 2026-10-25);
+ *   · la vuelta atrás: al usar la app (el shell, /sessions y la ficha de un cliente por
+ *     POST /api/integrations/google/auto-sync), con 20 minutos de espera. Solo donde el job no
+ *     corre: sin scheduler (las PCs) o con GOOGLE_MEET_SYNC_ENABLED=0 (`copiaDeMeetPorJob`).
  *
  * Historia:
  * - El cooldown vivía en memoria → cada deploy lo reseteaba y re-disparaba un sync completo en el
@@ -24,7 +28,9 @@
  * ⚠ La columna `lastRunAt` de la fila `google-auto-sync` ya NO es «cuándo arrancó la última»:
  * es «no correr antes de». Mientras corre, vale el vencimiento del turno; al terminar, el fin más
  * el cooldown (o más la espera, si falló). Se reusa la columna para no cambiar el schema.
- * `lastResult` guarda cómo terminó la última: `{ at, ok, fallosSeguidos, noAntesDe, … }`.
+ * `lastResult` guarda cómo terminó la última: `{ at, ok, fallosSeguidos, noAntesDe, ultimaBuena, … }`.
+ * `ultimaBuena` (U1) es el fin de la última corrida que terminó bien, y sobrevive a los fallos que
+ * vengan después: de ahí sale la frescura de la copia (INV49).
  * ⚠ Convive con el código VIEJO, que en la misma columna guarda el ARRANQUE de su corrida: la
  * marca `lastResult.noAntesDe` dice quién escribió `lastRunAt` (ver `noCorrerAntesDe`), y el turno
  * se toma comparando con lo LEÍDO, no con la hora.
@@ -34,7 +40,9 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 
 const JOB_KEY = "google-auto-sync";
-/** Espera entre corridas, contada desde el FIN de la anterior. */
+/** La fila de `CronJobState` del turno (la lee INV49). */
+export const CLAVE_DEL_TURNO = JOB_KEY;
+/** Espera entre corridas, contada desde el FIN de la anterior. Es la del disparo al abrir la app; el job usa la suya. */
 export const COOLDOWN_MS = 20 * 60 * 1000;
 /** Vencimiento del turno: si el proceso muere a mitad de una corrida, a esta hora se libera solo. */
 export const VENCE_TURNO_MS = 60 * 60 * 1000;
@@ -51,6 +59,18 @@ export function esperaTrasFallo(fallosSeguidos: number): number {
 /** `lastResult` como objeto, o null si no es uno (nunca se escribió, o es ilegible). */
 function objetoDe(lastResult: Prisma.JsonValue | null): Prisma.JsonObject | null {
   return lastResult && typeof lastResult === "object" && !Array.isArray(lastResult) ? lastResult : null;
+}
+
+/**
+ * El fin de la última corrida BUENA, o null si no hay ninguna. `ultimaBuena` lo dice aunque después haya fallado otra;
+ * una fila escrita antes de U1 no lo tiene, y entonces vale su `at` si esa corrida terminó bien.
+ */
+export function ultimaCopiaBuenaDe(lastResult: Prisma.JsonValue | null): Date | null {
+  const o = objetoDe(lastResult);
+  const crudo = typeof o?.ultimaBuena === "string" ? o.ultimaBuena : o?.ok === true && typeof o.at === "string" ? o.at : null;
+  if (!crudo) return null;
+  const d = new Date(crudo);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 /** Los fallos seguidos que anotó la última corrida en `lastResult` (0 si no hay nada legible). */
@@ -114,7 +134,8 @@ export interface DbDeTurnos {
 /** Lo que el auto-sync necesita del mundo. Inyectable para probarlo con una base falsa. */
 export interface DepsDeAutoSync {
   db: DbDeTurnos;
-  sync(): Promise<{ synced: number; alreadyExisted: number }>;
+  /** `error` = Google no respondió (lib/google/meet-sync.ts): la corrida es un fallo, no una copia buena. */
+  sync(): Promise<{ synced: number; alreadyExisted: number; canceladas?: number; invitados?: number; error?: string }>;
   enrich(): Promise<{ enriched: number; skipped: number; errors: number }>;
   ahora(): Date;
   configurado(): boolean;
@@ -153,12 +174,21 @@ async function cerrarTurno(db: DbDeTurnos, turno: Date, noAntesDe: number, resul
 
 // ── Función pública ───────────────────────────────────────────────────────────
 
-export async function autoSyncGoogleMeet(deps: DepsDeAutoSync = DEPS_REALES): Promise<{
+/** Cómo corre: el job pasa su propia espera (10 min); el disparo al abrir la app usa `COOLDOWN_MS`. */
+export interface OpcionesDeAutoSync {
+  cooldownMs?: number;
+}
+
+export async function autoSyncGoogleMeet(deps: DepsDeAutoSync = DEPS_REALES, opciones: OpcionesDeAutoSync = {}): Promise<{
   skipped: boolean;
   reason?: string;
-  sync?: { synced: number; alreadyExisted: number };
+  /** Solo con `reason: "error"`: qué falló. */
+  error?: string;
+  sync?: { synced: number; alreadyExisted: number; canceladas?: number; invitados?: number };
   enrich?: { enriched: number; skipped: number; errors: number };
+  duracionSeg?: number;
 }> {
+  const cooldownMs = opciones.cooldownMs ?? COOLDOWN_MS;
   // Verificar que las credenciales existen
   if (!deps.configurado()) {
     return { skipped: true, reason: "google_not_configured" };
@@ -178,6 +208,7 @@ export async function autoSyncGoogleMeet(deps: DepsDeAutoSync = DEPS_REALES): Pr
 
   let turno: Date | null = null;
   let fallosPrevios = 0;
+  let ultimaBuenaPrevia: Date | null = null;
   try {
     // C-21: LEER antes de escribir. Con el turno bloqueado esta lectura es todo lo que pasa.
     const fila = await db.cronJobState.findUnique({ where: { id: JOB_KEY }, select: { lastRunAt: true, lastResult: true } });
@@ -190,6 +221,7 @@ export async function autoSyncGoogleMeet(deps: DepsDeAutoSync = DEPS_REALES): Pr
     const leida = fila?.lastRunAt ?? null;
     const resultadoPrevio = fila?.lastResult ?? null;
     fallosPrevios = fallosSeguidosDe(resultadoPrevio);
+    ultimaBuenaPrevia = ultimaCopiaBuenaDe(resultadoPrevio);
 
     // Turno atómico: la fila existe (se crea solo la primera vez) y el UPDATE solo gana si
     // `lastRunAt` sigue siendo el que se LEYÓ. count=0 → otro proceso (nuevo o viejo) la escribió
@@ -211,6 +243,8 @@ export async function autoSyncGoogleMeet(deps: DepsDeAutoSync = DEPS_REALES): Pr
 
     // 1. Sincronizar nuevas sesiones (Calendar API)
     const syncResult = await deps.sync();
+    // Sin respuesta de Google no hay copia: se anota como fallo, con su espera, y no como «0 nuevas» buena.
+    if (syncResult.error) throw new Error(syncResult.error);
     console.log(`[google/auto-sync] Sync: ${syncResult.synced} nuevas, ${syncResult.alreadyExisted} ya existían`);
 
     // 2. Enriquecer sesiones pendientes (Google Docs / Gemini Notes)
@@ -219,17 +253,24 @@ export async function autoSyncGoogleMeet(deps: DepsDeAutoSync = DEPS_REALES): Pr
 
     // El cooldown cuenta desde ACÁ, el fin: una corrida larga no deja al proceso encadenando otra.
     const fin = deps.ahora().getTime();
-    const proxima = fin + COOLDOWN_MS;
+    const proxima = fin + cooldownMs;
     estado.cooldownHasta = proxima;
+    const duracionSeg = Math.round((fin - inicio) / 1000);
     await cerrarTurno(db, turno, proxima, {
       at: new Date(fin).toISOString(),
       ok: true,
+      ultimaBuena: new Date(fin).toISOString(),
       fallosSeguidos: 0,
-      duracionSeg: Math.round((fin - inicio) / 1000),
-      sync: { nuevas: syncResult.synced, existentes: syncResult.alreadyExisted },
+      duracionSeg,
+      sync: {
+        nuevas: syncResult.synced,
+        existentes: syncResult.alreadyExisted,
+        ...(syncResult.canceladas !== undefined ? { canceladas: syncResult.canceladas } : {}),
+        ...(syncResult.invitados !== undefined ? { invitados: syncResult.invitados } : {}),
+      },
       enrich: { enriquecidas: enrichResult.enriched, saltadas: enrichResult.skipped, errores: enrichResult.errors },
     });
-    return { skipped: false, sync: syncResult, enrich: enrichResult };
+    return { skipped: false, sync: syncResult, enrich: enrichResult, duracionSeg };
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : String(err);
     console.error("[google/auto-sync] Error:", mensaje);
@@ -247,9 +288,11 @@ export async function autoSyncGoogleMeet(deps: DepsDeAutoSync = DEPS_REALES): Pr
         ok: false,
         error: mensaje.slice(0, 300),
         fallosSeguidos: fallos,
+        // Un fallo no borra cuándo fue la última copia buena: es lo que mide la frescura (INV49).
+        ...(ultimaBuenaPrevia ? { ultimaBuena: ultimaBuenaPrevia.toISOString() } : {}),
       });
     }
-    return { skipped: true, reason: "error" };
+    return { skipped: true, reason: "error", error: mensaje.slice(0, 300) };
   } finally {
     estado.running = false;
   }
