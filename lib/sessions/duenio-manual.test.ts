@@ -72,8 +72,8 @@ describe("⛔ el sello y su procedencia se escriben JUNTOS o no se escriben", ()
       "script de corrección puntual, corrido a mano contra un incidente y con dry-run",
     "scripts/reassign-cross-client-to-project-client.ts":
       "reasignación masiva puntual, mismo criterio que el anterior",
-    "app/api/clients/[id]/route.ts":
-      "NULEA el sello antes de borrar el cliente, dentro de la misma transacción — es lo contrario de asignar, y otra guarda (punteros-al-borrar) EXIGE que esa escritura exista",
+    "lib/clients/soltar-reuniones.ts":
+      "NULEA el sello antes de borrar una empresa, dentro de la misma transacción — es lo contrario de asignar, y otra guarda (punteros-al-borrar) EXIGE que esa escritura exista. Desde R7 (2026-10-24) la usan el DELETE de la app y los scripts que borran empresas",
   };
 
   /**
