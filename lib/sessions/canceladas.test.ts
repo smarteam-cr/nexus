@@ -32,11 +32,21 @@ describe("el filtro de canceladas está donde la regla dice", () => {
     expect(src).toContain('AND ${noEsCanceladaSinTextoSql("s")}');
   });
 
-  it("la cola de Docs: la búsqueda por título y los reintentos dejan afuera a la cancelada sin su Doc", () => {
-    /* La edición que la pone en rojo: borrar `canceladaEn: null` de la pasada 2 o el OR de los reintentos. */
+  it("la cola de Docs: la búsqueda por título y los reintentos dejan afuera a la cancelada sin su Doc; la del Doc adjunto se lee", () => {
+    /* La edición que la pone en rojo: borrar el filtro de la pasada 2 o de los reintentos, o sumarlo «por simetría» a
+       la pasada 1 (el kickoff técnico de CAV ocurrió, se borró del calendario y tiene su Doc: se tiene que leer). */
     const src = fuente("lib/google/meet-enrichment.ts");
-    const pasada2 = src.slice(src.indexOf("googleDocId: null,"), src.indexOf("googleDocId: null,") + 200);
-    expect(pasada2, "la pasada 2 (busca el Doc en Drive por el título)").toContain("canceladaEn: null");
-    expect(src, "los reintentos").toContain("OR: [{ canceladaEn: null }, { googleDocId: { not: null } }]");
+    const bloque = (desde: string) => src.slice(src.indexOf(desde), src.indexOf("});", src.indexOf(desde)));
+    expect(bloque("googleDocId: { not: null },"), "la pasada 1 (Doc adjunto) no filtra canceladas").not.toMatch(/cancelad|SE_LEE_SI_CANCELADA/i);
+    expect(bloque("googleDocId: null,"), "la pasada 2 (Drive por el título)").toContain("...SE_LEE_SI_CANCELADA_TIENE_SU_DOC");
+    expect(bloque("enrichAttempts: { gte: 1, lt: MAX_ENRICH_ATTEMPTS },"), "los reintentos").toContain("...SE_LEE_SI_CANCELADA_TIENE_SU_DOC");
+  });
+
+  it("el rescate y la vigilancia de reintentos usan la MISMA regla de la cola (no una copia a mano)", () => {
+    expect(fuente("scripts/recuperar-transcripts-meet.ts")).toContain("SE_LEE_SI_CANCELADA_TIENE_SU_DOC");
+    expect(fuente("scripts/check-invariants.ts")).toContain("SE_LEE_SI_CANCELADA_TIENE_SU_DOC");
+    for (const rel of ["lib/google/meet-enrichment.ts", "scripts/recuperar-transcripts-meet.ts", "scripts/check-invariants.ts"]) {
+      expect(fuente(rel), `${rel}: la regla escrita a mano`).not.toContain("{ canceladaEn: null }, { googleDocId");
+    }
   });
 });

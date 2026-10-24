@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getClientSessions, getProjectMemberSessions } from "./project-sources";
-import { noEsCanceladaSinTextoSql } from "./canceladas";
+import { noEsCanceladaSinTextoSql, SE_LEE_SI_CANCELADA_TIENE_SU_DOC } from "./canceladas";
 
 const AYER = new Date(Date.now() - 24 * 60 * 60 * 1000);
 const CANCELADA = new Date();
@@ -101,5 +101,17 @@ describe("U1: la reunión cancelada en las lecturas (DB real)", () => {
     });
     const ids = (await getClientSessions(cliente.id)).map((s) => s.id);
     expect(ids).toContain("vigente-vacia");
+  });
+});
+
+describe("U1: la cola de Docs y la cancelada (DB real)", () => {
+  it("SE_LEE_SI_CANCELADA_TIENE_SU_DOC: la vigente sí, la cancelada con su Doc adjunto sí, la cancelada sin Doc no", async () => {
+    const cliente = await prisma.client.create({ data: { name: "Cola de Docs (test)" } });
+    const base = { date: AYER, participants: [], resolvedClientId: cliente.id };
+    await prisma.firefliesSession.create({ data: { id: "vigente-sin-doc", title: "a", ...base } });
+    await prisma.firefliesSession.create({ data: { id: "cancelada-con-doc", title: "b", canceladaEn: CANCELADA, googleDocId: "doc1", ...base } });
+    await prisma.firefliesSession.create({ data: { id: "cancelada-sin-doc", title: "c", canceladaEn: CANCELADA, ...base } });
+    const filas = await prisma.firefliesSession.findMany({ where: SE_LEE_SI_CANCELADA_TIENE_SU_DOC, select: { id: true }, orderBy: { id: "asc" } });
+    expect(filas.map((f) => f.id)).toEqual(["cancelada-con-doc", "vigente-sin-doc"]);
   });
 });

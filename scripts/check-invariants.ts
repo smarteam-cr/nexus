@@ -12,6 +12,7 @@ import { GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { escribeSqlCrudo, soloCodigo } from "@/lib/db/escritura-sql-cruda";
 import { problemasDeLasLlaves } from "@/lib/db/llaves-de-la-empresa";
+import { SE_LEE_SI_CANCELADA_TIENE_SU_DOC } from "@/lib/sessions/canceladas";
 import {
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46,
@@ -632,8 +633,16 @@ async function main(): Promise<number> {
       WHERE transcript IS NOT NULL AND length(transcript) < 200
     `.then((r) => Number(r[0]?.n ?? 0)),
   ]);
+  /* U1 (2026-10-25): la cancelada sin su Doc salió de la cola a propósito (lib/sessions/canceladas.ts); no es un
+     reintento muerto. Sin el SQL de U1 la columna no existe y se cuenta como antes. */
+  const conCanceladas =
+    (
+      await prisma.$queryRaw<Array<{ n: bigint }>>`
+        SELECT COUNT(*)::bigint AS n FROM information_schema.columns
+        WHERE table_name = 'FirefliesSession' AND column_name = 'canceladaEn'`
+    )[0]?.n === BigInt(1);
   const reintentos = await prisma.firefliesSession.findMany({
-    where: { enrichedAt: null, enrichAttempts: { gte: 1 } },
+    where: { enrichedAt: null, enrichAttempts: { gte: 1 }, ...(conCanceladas ? SE_LEE_SI_CANCELADA_TIENE_SU_DOC : {}) },
     select: { id: true, enrichAttempts: true, enrichError: true },
   });
   const SIETE_DIAS_MS = 7 * 24 * 3_600_000;

@@ -16,5 +16,11 @@ export const POST = withAuth(async () => {
   }
 
   const result = await syncGoogleMeetSessions();
+  // U1: con Google sin responder no es «0 nuevas»: es un error (la tarjeta lo muestra), y el texto crudo de Google
+  // (puede nombrar la cuenta o la llave) queda en el log del servidor.
+  if (result.error) {
+    console.log(`[google/sync] el botón Sincronizar falló: ${result.error}`);
+    return apiError("google_no_respondio", 502);
+  }
   return NextResponse.json(result);
 });

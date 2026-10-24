@@ -36,6 +36,16 @@ const CANCELADA_SIN_TEXTO = {
  */
 export const NO_ES_CANCELADA_SIN_TEXTO = { NOT: CANCELADA_SIN_TEXTO } satisfies Prisma.FirefliesSessionWhereInput;
 
+/**
+ * Filtro de la cola de Docs: una reunión se le busca o se le reintenta su texto si no está cancelada, o si lo está pero
+ * tiene su Doc ADJUNTO (es el de esa reunión). Lo usan las pasadas y los reintentos de `meet-enrichment.ts`, el rescate
+ * (`scripts/recuperar-transcripts-meet.ts`) e INV16(b): una sola regla para no dejar reuniones pendientes en una copia
+ * y saltadas en otra.
+ */
+export const SE_LEE_SI_CANCELADA_TIENE_SU_DOC = {
+  OR: [{ canceladaEn: null }, { googleDocId: { not: null } }],
+} satisfies Prisma.FirefliesSessionWhereInput;
+
 /** El mismo filtro, en SQL, para las consultas crudas. `s` = el alias de `FirefliesSession` en la consulta. */
 export function noEsCanceladaSinTextoSql(alias: string = "s"): Prisma.Sql {
   const s = Prisma.raw(`"${alias.replace(/"/g, "")}"`);

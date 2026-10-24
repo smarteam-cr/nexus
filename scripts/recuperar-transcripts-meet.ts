@@ -64,8 +64,9 @@ import "dotenv/config";
 import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
-import { bucketDe, datosDeReset, type BucketDeRescate } from "@/lib/google/recuperacion-criterio";
+import { bucketDe, datosDeReset, diasDelRescate, entraEnElRecorte, type BucketDeRescate } from "@/lib/google/recuperacion-criterio";
 import { duenoDeLaSesion } from "@/lib/sessions/project-sources";
+import { SE_LEE_SI_CANCELADA_TIENE_SU_DOC } from "@/lib/sessions/canceladas";
 
 const APPLY = resolverApply();
 const DEPLOY_CONFIRMADO = process.argv.includes("--deploy-confirmado");
@@ -74,18 +75,14 @@ const SOLO_FUTURAS = process.argv.includes("--solo-futuras");
    en masa: las drenan las pasadas con su batch chico. */
 const SOLO_ANTES_DE_TERMINAR = process.argv.includes("--solo-antes-de-terminar");
 const SOLO_CLIENTES_Y_PROSPECTOS = process.argv.includes("--solo-clientes-y-prospectos");
-/* `--dias N` o `--dias=N`. Mal escrito ABORTA: perderlo en silencio rescataba toda la historia (950 filas) en vez de 177. */
+/* `--dias N` o `--dias=N`. Mal escrito ABORTA (`diasDelRescate`): perderlo en silencio rescataba toda la historia. */
 const DIAS = (() => {
-  const conIgual = process.argv.find((a) => a.startsWith("--dias="));
-  const i = process.argv.indexOf("--dias");
-  if (!conIgual && i < 0) return null;
-  const crudo = conIgual ? conIgual.slice("--dias=".length) : (process.argv[i + 1] ?? "");
-  const n = Number(crudo);
-  if (!/^\d+$/.test(crudo) || !Number.isSafeInteger(n) || n <= 0) {
-    console.error(`✗ ABORTADO: --dias necesita un número de días mayor que cero (llegó «${crudo}»).`);
+  const r = diasDelRescate(process.argv);
+  if ("error" in r) {
+    console.error(`✗ ABORTADO: ${r.error}.`);
     process.exit(1);
   }
-  return n;
+  return r.dias;
 })();
 const LIMIT = (() => {
   const i = process.argv.indexOf("--limit");
@@ -139,7 +136,7 @@ async function main() {
     where: {
       source: "google_meet",
       ...(DIAS ? { date: { gte: new Date(ahora.getTime() - DIAS * 86_400_000) } } : {}),
-      ...(conCanceladas ? { OR: [{ canceladaEn: null }, { googleDocId: { not: null } }] } : {}),
+      ...(conCanceladas ? SE_LEE_SI_CANCELADA_TIENE_SU_DOC : {}),
     },
     select: {
       id: true,
@@ -165,11 +162,8 @@ async function main() {
 
   const porBucket = new Map<BucketDeRescate, typeof filas>();
   for (const f of filas) {
-    if (SOLO_FUTURAS && f.date.getTime() <= ahora.getTime()) continue;
-    if (SOLO_CLIENTES_Y_PROSPECTOS) {
-      const duena = duenoDeLaSesion(f);
-      if (!duena || !deEmpresa.has(duena)) continue;
-    }
+    const recorte = { soloFuturas: SOLO_FUTURAS, soloClientesYProspectos: SOLO_CLIENTES_Y_PROSPECTOS, deEmpresa };
+    if (!entraEnElRecorte({ date: f.date, duena: duenoDeLaSesion(f) }, ahora, recorte)) continue;
     const b = bucketDe(f, ahora);
     if (SOLO_ANTES_DE_TERMINAR && b !== "D_sellada_antes_de_terminar") continue;
     if (b) porBucket.set(b, [...(porBucket.get(b) ?? []), f]);

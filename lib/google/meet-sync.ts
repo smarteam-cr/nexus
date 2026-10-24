@@ -35,7 +35,6 @@ import { calendar as apiCalendar, type calendar_v3 } from "googleapis/build/src/
 import { prisma } from "@/lib/db/prisma";
 import { getImpersonatedAuth, listDomainUsers } from "@/lib/google/auth";
 import { buildCategorizeCtx, resolveSessionClientId } from "@/lib/sessions/resolve-client";
-import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import {
@@ -103,6 +102,8 @@ interface CalendarioLeido {
   eventos: EventoMeet[];
   /** Los ids de los eventos que en este calendario están cancelados. */
   cancelados: string[];
+  /** Los ids de TODOS los eventos no cancelados, también los que no se guardan (ver `canceladasDeLaCorrida`). */
+  vivos: string[];
   completo: boolean;
   fallo: boolean;
 }
@@ -123,6 +124,7 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
 
     const events: EventoMeet[] = [];
     const cancelados: string[] = [];
+    const vivos: string[] = [];
     let pageToken: string | undefined = undefined;
     let pagesFetched = 0;
     let completo = true;
@@ -143,7 +145,7 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
       });
 
       const items = res.data.items ?? [];
-      processItems(items, userEmail, events, cancelados, { timeMin, timeMax });
+      processItems(items, userEmail, events, cancelados, vivos, { timeMin, timeMax });
 
       pageToken = res.data.nextPageToken ?? undefined;
       pagesFetched += 1;
@@ -154,13 +156,13 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
       }
     } while (pageToken);
 
-    return { eventos: events, cancelados, completo, fallo: false };
+    return { eventos: events, cancelados, vivos, completo, fallo: false };
   } catch (err) {
     console.log(
       `[google/sync] Error obteniendo eventos de ${userEmail}:`,
       err instanceof Error ? err.message : err
     );
-    return { eventos: [], cancelados: [], completo: false, fallo: true };
+    return { eventos: [], cancelados: [], vivos: [], completo: false, fallo: true };
   }
 }
 
@@ -170,6 +172,7 @@ function processItems(
   userEmail: string,
   events: EventoMeet[],
   cancelados: string[],
+  vivos: string[],
   bounds: { timeMin: Date; timeMax: Date }
 ): void {
   let outOfRange = 0;
@@ -179,6 +182,8 @@ function processItems(
       if (item.id) cancelados.push(item.id);
       continue;
     }
+    // Vivo en este calendario, se guarde o no (fuera de rango, sin Meet, bloque de tarea): no es una cancelada.
+    if (item.id) vivos.push(item.id);
     // Solo eventos con Google Meet
     const confType = item.conferenceData?.conferenceSolution?.key?.type;
     if (confType !== "hangoutsMeet") continue;
@@ -249,12 +254,12 @@ let corridaEnVuelo: Promise<MeetSyncResult> | null = null;
  * @param options.daysBack Días hacia atrás a sincronizar (default: 30 o GOOGLE_MEET_DAYS_BACK).
  *                         Útil para backfill puntual con rangos mayores (scripts/backfill-meet.ts).
  */
-export function syncGoogleMeetSessions(options: { daysBack?: number } = {}): Promise<MeetSyncResult> {
+export function syncGoogleMeetSessions(options: { daysBack?: number; marcarCanceladas?: boolean } = {}): Promise<MeetSyncResult> {
   if (corridaEnVuelo) {
     console.log("[google/sync] ya hay una corrida en vuelo en este proceso — devuelvo la suya");
     return corridaEnVuelo;
   }
-  const corrida = correrSync(options.daysBack ?? DAYS_BACK).finally(() => {
+  const corrida = correrSync(options.daysBack ?? DAYS_BACK, options.marcarCanceladas ?? true).finally(() => {
     corridaEnVuelo = null;
   });
   corridaEnVuelo = corrida;
@@ -266,7 +271,8 @@ function cederElHilo(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-async function correrSync(daysBack: number): Promise<MeetSyncResult> {
+/** `marcarCanceladas = false`: el backfill de un año (scripts/backfill-meet.ts) no marca canceladas sin que se lo pidan. */
+async function correrSync(daysBack: number, marcarLasCanceladas: boolean): Promise<MeetSyncResult> {
   const t0 = Date.now();
   console.log(`[google/sync] Iniciando sync con daysBack=${daysBack}`);
   const vacio: MeetSyncResult = { synced: 0, alreadyExisted: 0, total: 0, actualizadas: 0, apariciones: 0, canceladas: 0, invitados: 0 };
@@ -301,6 +307,7 @@ async function correrSync(daysBack: number): Promise<MeetSyncResult> {
   //    vez por copia (15.011 UPDATE por corrida para 6.176 reuniones). Ahora queda UNA por eventId.
   const eventos = new Map<string, EventoMeet>();
   const cancelados = new Set<string>();
+  const vivos = new Set<string>();
   /** Los calendarios que no se leyeron enteros (fallaron o se cortó la paginación), en minúsculas. */
   const sinLeer = new Set<string>();
   let fallaron = 0;
@@ -314,6 +321,7 @@ async function correrSync(daysBack: number): Promise<MeetSyncResult> {
     });
     for (const leido of batchResults) {
       for (const id of leido.cancelados) cancelados.add(id);
+      for (const id of leido.vivos) vivos.add(id);
       for (const event of leido.eventos) {
         apariciones++;
         eventos.set(event.eventId, fusionarCopia(eventos.get(event.eventId), event));
@@ -326,13 +334,6 @@ async function correrSync(daysBack: number): Promise<MeetSyncResult> {
     return { ...vacio, error: `Fallaron los ${fallaron} calendarios del dominio` };
   }
 
-  // «Del equipo»: la categoría interna de /sessions/categories (la de la atribución) más las cuentas del Workspace.
-  const categoriasInternas = await prisma.sessionCategory.findMany({ where: { kind: "internal" }, select: { domains: true, kind: true } });
-  const dominiosDelEquipo = dominiosDelEquipoDe(
-    buildInternalDomainsSet(categoriasInternas),
-    domainUsers.map((u) => u.email),
-    DOMINIO_PROPIO,
-  );
 
   // 3. Leer de la base SOLO las filas de esas reuniones y SOLO las columnas que deciden si algo
   //    cambió (SELECT_SESION_GUARDADA: ni transcripción ni resumen). Antes se precargaban las
@@ -359,6 +360,8 @@ async function correrSync(daysBack: number): Promise<MeetSyncResult> {
 
   // PERF #1: ctx de categorización una vez por corrida → resolvedClientId inline en cada write.
   const categorizeCtx = await buildCategorizeCtx();
+  // «Del equipo»: la categoría interna de /sessions/categories, la misma que usa la atribución (ya viene en el ctx).
+  const dominiosDelEquipo = dominiosDelEquipoDe(categorizeCtx.internalDomains, DOMINIO_PROPIO);
 
   // 4. Escribir solo lo nuevo o lo que cambió.
   let synced = 0;
@@ -444,16 +447,18 @@ async function correrSync(daysBack: number): Promise<MeetSyncResult> {
         );
       }
     }
-    if (!invitados.sinTabla) await ponerAlDiaLosInvitados(escritas, dominiosDelEquipo, invitados, { borrar: sinLeer.size === 0 });
+    if (!invitados.sinTabla) await ponerAlDiaLosInvitados(escritas, dominiosDelEquipo, invitados, sinLeer);
     await cederElHilo();
   }
 
   // 5. Las canceladas en todos los calendarios. Nunca se borran: se marcan (ver el encabezado).
-  const { marcadas: canceladas, frenadas } = await marcarCanceladas(canceladasDeLaCorrida(cancelados, new Set(eventos.keys())), sinLeer);
+  const { marcadas: canceladas, frenadas } = marcarLasCanceladas
+    ? await marcarCanceladas(canceladasDeLaCorrida(cancelados, vivos), sinLeer)
+    : { marcadas: 0, frenadas: 0 };
   if (sinLeer.size > 0) {
     console.log(
       `[google/sync] ${sinLeer.size} calendario(s) sin leer entero (${[...sinLeer].join(", ")}): ` +
-        `${frenadas} cancelada(s) con alguien de esos calendarios invitado quedan para la corrida siguiente`,
+        `${frenadas} cancelada(s) y los invitados que salieron de las reuniones donde estaban quedan para la corrida siguiente`,
     );
   }
 
@@ -469,12 +474,14 @@ async function correrSync(daysBack: number): Promise<MeetSyncResult> {
 /**
  * Los invitados de las reuniones de un lote, en `ParticipanteDeReunion`: una lectura por lote y solo lo que cambió
  * (`cambiosDeInvitados`). Sin la tabla (el SQL 2026-10-25 sin aplicar) lo dice una vez y la corrida sigue sin esto.
+ * Borrar a un invitado se decide por reunión, como la marca de canceladas: si estaba invitado alguien cuyo calendario no
+ * se leyó, su copia pudo traer invitados que las otras no ven, y en esa reunión no se borra a nadie.
  */
 async function ponerAlDiaLosInvitados(
   escritas: readonly { sessionId: string; event: EventoMeet }[],
   dominiosDelEquipo: ReadonlySet<string>,
   cuenta: { escritos: number; sinTabla: boolean },
-  opciones: { borrar: boolean },
+  sinLeer: ReadonlySet<string>,
 ): Promise<void> {
   const conInvitados = escritas.filter((e) => e.event.invitados !== undefined);
   if (conInvitados.length === 0) return;
@@ -489,7 +496,12 @@ async function ponerAlDiaLosInvitados(
     const crear: { sessionId: string; correo: string; esDelEquipo: boolean; respuesta: InvitadoGuardado["respuesta"] }[] = [];
     const borrar: string[] = [];
     for (const { sessionId, event } of conInvitados) {
-      const c = cambiosDeInvitados(guardadosDe.get(sessionId) ?? [], event.invitados ?? [], dominiosDelEquipo, opciones);
+      const guardados = guardadosDe.get(sessionId) ?? [];
+      const sePuedeBorrar = !frenadaPorUnCalendarioSinLeer(
+        { participants: [...event.participants, ...guardados.map((g) => g.correo)], organizerEmail: event.organizerEmail },
+        sinLeer,
+      );
+      const c = cambiosDeInvitados(guardados, event.invitados ?? [], dominiosDelEquipo, { borrar: sePuedeBorrar });
       for (const x of c.crear) crear.push({ sessionId, ...x });
       borrar.push(...c.borrar);
       for (const x of c.actualizar) {

@@ -267,6 +267,10 @@ export function cambiosDeSesion(
  * ninguna copia viva. Una copia cancelada sola no alcanza: a un invitado que sacan del evento Google se lo muestra
  * cancelado en SU calendario, y la reunión sigue para los demás. Antes de marcar, cada una pasa por
  * `frenadaPorUnCalendarioSinLeer`.
+ *
+ * ⚠ `vivas` son TODAS las copias no canceladas que trajo Google, también las que la sync descarta para guardar (fuera
+ * de la ventana de fechas, sin Meet porque le cambiaron la herramienta, un bloque de tarea): en el borde de los 30 días
+ * la copia viva de una reunión vieja queda afuera de la ventana y la cancelada del invitado que sacaron, adentro.
  */
 export function canceladasDeLaCorrida(canceladas: ReadonlySet<string>, vivas: ReadonlySet<string>): string[] {
   return [...canceladas].filter((id) => !vivas.has(id));
@@ -311,14 +315,13 @@ export interface OpcionesDeInvitados {
 }
 
 /**
- * Los dominios «del equipo»: la verdad en caliente es la categoría `internal` de /sessions/categories (la misma que usa la
- * atribución, lib/sessions/dominio-propio.ts); se le suman los de las cuentas del Workspace, que son gente del equipo
- * por definición. Sin ninguna de las dos, el de arranque (`DOMINIO_PROPIO`).
+ * Los dominios «del equipo»: los de la categoría `internal` de /sessions/categories, la MISMA definición que usa la
+ * atribución de la reunión (lib/sessions/dominio-propio.ts: «la verdad en caliente»). Sin ninguno, el de arranque
+ * (`DOMINIO_PROPIO`). No se le suman las cuentas del Workspace: sería una definición más de «nosotros».
  */
-export function dominiosDelEquipoDe(internos: Iterable<string>, cuentasDelWorkspace: Iterable<string>, porDefecto: string): Set<string> {
+export function dominiosDelEquipoDe(internos: Iterable<string>, porDefecto: string): Set<string> {
   const out = new Set<string>();
   for (const d of internos) if (d.trim()) out.add(d.trim().toLowerCase());
-  for (const c of cuentasDelWorkspace) out.add(dominioDe(c));
   if (out.size === 0) out.add(porDefecto.toLowerCase());
   return out;
 }
@@ -330,8 +333,7 @@ export function dominioDe(correo: string): string {
 
 /**
  * Qué escribir para que los invitados guardados de una reunión sean los del evento. Como `cambiosDeSesion`: solo lo
- * que difiere. `dominiosDelEquipo` = los de la categoría interna de /sessions/categories más los de las cuentas del
- * Workspace (`dominiosDelEquipoDe`).
+ * que difiere. `dominiosDelEquipo` = los de `dominiosDelEquipoDe`.
  */
 export function cambiosDeInvitados(
   guardados: readonly InvitadoGuardado[],

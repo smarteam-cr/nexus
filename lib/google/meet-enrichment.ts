@@ -44,6 +44,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getImpersonatedAuth } from "@/lib/google/auth";
 import { summarizeTranscript } from "@/lib/ai/summarize-session";
 import { DIAS_DE_FRESCURA, seguimientoPrendido } from "@/lib/lecturas/reglas";
+import { SE_LEE_SI_CANCELADA_TIENE_SU_DOC } from "@/lib/sessions/canceladas";
 import { MIN_NOTAS_PARA_LEER, hechosPrendidos } from "@/lib/seguimiento/hechos/reglas";
 import { parseDocTabs, parseDocBody, MAX_TRANSCRIPT_CHARS, MIN_TRANSCRIPT_CHARS, type DocTab } from "./doc-parse";
 import { candidatosImpersonables } from "./elegir-impersonado";
@@ -586,7 +587,7 @@ async function correrPasadas(resultado: EnrichResult): Promise<EnrichResult> {
       date: { lt: yaOcurrio },
       // U1: a una cancelada no se le busca el Doc por el título: trae el de otra reunión (KNOWN-ERRORS, primera entrada).
       // La que tiene su Doc adjunto sí se lee (pasada 1): es el de ESE evento, y pudo ocurrir y borrarse después.
-      canceladaEn: null,
+      ...SE_LEE_SI_CANCELADA_TIENE_SU_DOC,
     },
     select: SELECT_ENRIQUECER,
     orderBy: { date: "desc" },
@@ -632,7 +633,7 @@ export async function drenarReintentos(limit = 20): Promise<EnrichResult> {
       enrichAttempts: { gte: 1, lt: MAX_ENRICH_ATTEMPTS },
       date: { lt: new Date(ahora.getTime() - GRACIA_MS) },
       // U1: la cancelada sin Doc adjunto sale de la cola (ver la pasada 2); con su Doc, se reintenta como cualquiera.
-      OR: [{ canceladaEn: null }, { googleDocId: { not: null } }],
+      ...SE_LEE_SI_CANCELADA_TIENE_SU_DOC,
     },
     select: { id: true, enrichAttempts: true, enrichError: true },
     orderBy: { date: "asc" },

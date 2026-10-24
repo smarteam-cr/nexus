@@ -313,9 +313,9 @@ describe("U1: los invitados con su respuesta", () => {
 });
 
 describe("U1: dominiosDelEquipoDe", () => {
-  it("la categoría interna más las cuentas del Workspace; sin ninguna, el de arranque", () => {
-    expect([...dominiosDelEquipoDe(["SmarteamCR.com", "otro.com"], ["eli@smarteamcr.com"], "smarteamcr.com")].sort()).toEqual(["otro.com", "smarteamcr.com"]);
-    expect([...dominiosDelEquipoDe([], [], "smarteamcr.com")]).toEqual(["smarteamcr.com"]);
+  it("la categoría interna (la misma de la atribución); sin ninguno, el de arranque", () => {
+    expect([...dominiosDelEquipoDe(["SmarteamCR.com", "otro.com"], "smarteamcr.com")].sort()).toEqual(["otro.com", "smarteamcr.com"]);
+    expect([...dominiosDelEquipoDe([], "smarteamcr.com")]).toEqual(["smarteamcr.com"]);
   });
 });
 
