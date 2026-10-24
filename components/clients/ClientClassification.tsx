@@ -37,6 +37,8 @@ export default function ClientClassification({
 
   const [kind, setKind] = useState<ClientKind>(initialKind);
   const [tam, setTam] = useState(initialTamUsd === null ? "" : String(initialTamUsd));
+  // Lo último guardado (no lo de cuando se abrió la página): contra esto se mira si el TAM cambió.
+  const [tamGuardado, setTamGuardado] = useState(initialTamUsd === null ? "" : String(initialTamUsd));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -47,7 +49,7 @@ export default function ClientClassification({
 
   const dirty =
     (canClassify && kind !== initialKind) ||
-    (canSetTam && tam.trim() !== (initialTamUsd === null ? "" : String(initialTamUsd)));
+    (canSetTam && tam.trim() !== tamGuardado);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +61,7 @@ export default function ClientClassification({
       if (canClassify) body.kind = kind;
       /* El TAM solo si la persona lo cambió: mandarlo siempre reescribía con el valor de cuando se abrió la página (Nexus
          pudo recalcularlo mientras tanto) y lo dejaba «corregido a mano» a su nombre (revisión de R1, 2026-10-24). */
-      const tamCambio = tam.trim() !== (initialTamUsd === null ? "" : String(initialTamUsd));
+      const tamCambio = tam.trim() !== tamGuardado;
       if (canSetTam && tamCambio) body.tamUsd = tam.trim() === "" ? null : tam.trim();
 
       const res = await fetch(`/api/clients/${clientId}/classification`, {
@@ -69,6 +71,7 @@ export default function ClientClassification({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? "No se pudo guardar la clasificación.");
+      if (canSetTam && tamCambio) setTamGuardado(tam.trim());
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
       onSaved?.();

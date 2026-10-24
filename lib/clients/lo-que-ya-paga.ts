@@ -18,6 +18,10 @@ export interface HubQueYaPaga {
   /** «Professional», o null si solo se sabe que lo compró. */
   plan: string | null;
   montoMensual: number | null;
+  /** La moneda de ESTE monto: lo cargado a mano puede estar en colones aunque Partner esté en dólares. */
+  moneda: string | null;
+  /** De dónde se sabe: el registro de Partner (gestionada), lo cargado a mano en «Licencias», o lo vendido. */
+  origen: "partner" | "a_mano" | "vendida";
 }
 
 export interface LoQueYaPaga {
@@ -25,9 +29,10 @@ export interface LoQueYaPaga {
    *  vendida = solo se sabe qué compró. */
   fuente: "gestionada" | "a_mano" | "vendida";
   hubs: HubQueYaPaga[];
+  /** La suma al mes, solo si todos los montos están en la MISMA moneda (no se suman dólares con colones). */
   totalMensual: number | null;
   moneda: string | null;
-  /** Cuándo se copió del registro de Partner. */
+  /** Cuándo se copió del registro de Partner (día de Costa Rica). null = no salió de Partner. */
   copiadaAt: string | null;
 }
 
@@ -47,42 +52,51 @@ const numero = (v: unknown): number | null => {
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
 };
 
+/** El día de Costa Rica de una fecha (una copia de las 7 p. m. del 24 no es del 25). */
+const diaDeCostaRica = (d: Date | string) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Costa_Rica" }).format(new Date(d));
+
 /**
- * Lo que ya paga, o null si ni el registro de Partner ni lo cargado a mano dicen nada. `manuales` son las filas de
- * `LicenciaCliente` de la empresa: sin ellas, la ficha diría «no lo tiene» de un hub que la pestaña Licencias muestra.
+ * Lo que ya paga, o null si ni el registro de Partner ni lo cargado a mano ni lo vendido dicen nada. `manuales` son las
+ * filas de `LicenciaCliente` de la empresa: sin ellas, la ficha diría «no lo tiene» de un hub que la pestaña Licencias
+ * muestra. Lo vendido (`hs_sold_product_lines`) suma los hubs que no aparecen en lo otro, sin plan ni monto.
  */
 export function loQueYaPaga(
   snapshot: { properties: unknown; fetchedAt?: Date | string | null } | null,
   manuales: readonly LicenciaManual[] = [],
 ): LoQueYaPaga | null {
   const p = (snapshot?.properties && typeof snapshot.properties === "object" ? snapshot.properties : {}) as Record<string, unknown>;
-  const copiadaAt = snapshot?.fetchedAt ? new Date(snapshot.fetchedAt).toISOString().slice(0, 10) : null;
-
   const delPartner = licenciasDesdePartner(p).filter((l) => l.plan || l.montoMensual);
+  const dePartner = new Set(delPartner.map((l) => l.hub));
   const pagadas = combinarLicencias(licenciasDesdePartner(p), manuales).filter((l) => l.plan || l.montoMensual);
-  if (pagadas.length > 0) {
-    const hubs = pagadas.map((l) => ({ hub: l.hub, nombre: NOMBRE_DEL_HUB[l.hub], plan: l.plan, montoMensual: l.montoMensual }));
-    const suma = hubs.reduce((s, h) => s + (h.montoMensual ?? 0), 0);
-    const moneda = pagadas.find((l) => l.moneda)?.moneda ?? "USD";
-    return {
-      fuente: delPartner.length > 0 ? "gestionada" : "a_mano",
-      hubs,
-      totalMensual: suma > 0 ? Math.round(suma * 100) / 100 : numero(p.hs_total_subscription_mrr),
-      moneda,
-      copiadaAt: delPartner.length > 0 ? copiadaAt : null,
-    };
-  }
+  const hubs: HubQueYaPaga[] = pagadas.map((l) => ({
+    hub: l.hub,
+    nombre: NOMBRE_DEL_HUB[l.hub],
+    plan: l.plan,
+    montoMensual: l.montoMensual,
+    moneda: l.montoMensual !== null ? (l.moneda ?? "USD") : null,
+    origen: dePartner.has(l.hub) ? "partner" : "a_mano",
+  }));
 
   const lineas = typeof p.hs_sold_product_lines === "string" ? p.hs_sold_product_lines.split(";").map((x) => x.trim().toLowerCase()) : [];
   const vendidos = [...new Set(lineas.map((l) => HUB_DE_LA_LINEA[l]).filter((h): h is Hub => !!h))];
-  if (vendidos.length === 0) return null;
-  return {
-    fuente: "vendida",
-    hubs: vendidos.map((hub) => ({ hub, nombre: NOMBRE_DEL_HUB[hub], plan: null, montoMensual: null })),
-    totalMensual: numero(p.hs_sold_mrr),
-    moneda: "USD",
-    copiadaAt,
-  };
+  for (const hub of vendidos) {
+    if (!hubs.some((h) => h.hub === hub)) hubs.push({ hub, nombre: NOMBRE_DEL_HUB[hub], plan: null, montoMensual: null, moneda: null, origen: "vendida" });
+  }
+  if (hubs.length === 0) return null;
+
+  const fuente: LoQueYaPaga["fuente"] = dePartner.size > 0 ? "gestionada" : hubs.some((h) => h.origen === "a_mano") ? "a_mano" : "vendida";
+  const conMonto = hubs.filter((h) => h.montoMensual !== null);
+  const monedas = new Set(conMonto.map((h) => h.moneda));
+  let totalMensual: number | null = null;
+  let moneda: string | null = monedas.size === 1 ? [...monedas][0] : null;
+  if (conMonto.length > 0 && monedas.size === 1) totalMensual = Math.round(conMonto.reduce((s, h) => s + h.montoMensual!, 0) * 100) / 100;
+  else if (conMonto.length === 0) {
+    // Sin montos por hub: el total que da Partner (gestionado o vendido), en dólares.
+    totalMensual = fuente === "vendida" ? numero(p.hs_sold_mrr) : numero(p.hs_total_subscription_mrr);
+    moneda = totalMensual !== null ? "USD" : null;
+  }
+  const saleDePartner = dePartner.size > 0 || vendidos.length > 0;
+  return { fuente, hubs, totalMensual, moneda, copiadaAt: saleDePartner && snapshot?.fetchedAt ? diaDeCostaRica(snapshot.fetchedAt) : null };
 }
 
 const ORDEN: Record<Edicion, number> = { starter: 1, professional: 2, enterprise: 3 };

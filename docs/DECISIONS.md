@@ -10837,15 +10837,22 @@ decidió el 24 oct que la empresa es el centro de Nexus, como en un CRM (planes:
    opciones, su propiedad de HubSpot, quién manda y en qué sentido va. La pantalla, el motor, la investigación, la carga
    inicial y el espejo con HubSpot lo leen de ahí.
 4. **Quién manda** (`quienManda`, puro, con un caso por fila del catálogo). Tres familias:
-   - **Lo calcula Nexus** (TAM, edición de la escala, si califica para Insider): Nexus lo aplica solo. Si una persona lo
-     corrigió, Nexus ya no lo pisa: lo propone.
+   - **Lo calcula Nexus** (TAM, edición de la escala, si califica para Insider): Nexus lo aplica cuando está vacío o lo
+     había puesto él. Si lo puso una persona (en Nexus, el vendedor en la preventa, alguien en HubSpot o el test), Nexus
+     ya no lo pisa: lo propone.
    - **Lo dice HubSpot** (empleados, facturación, país, sitio, la industria de HubSpot): lo que llega de HubSpot se
-     aplica, salvo que una persona lo haya corregido en Nexus (entonces se propone). La investigación o una reunión solo
+     aplica, salvo que una persona lo haya decidido en Nexus (entonces se propone). La investigación o una reunión solo
      lo llenan si está vacío; si no, lo proponen.
    - **Lo decide una persona** (la industria de Smarteam, el segmento, casa matriz o filial, el perfil de negocio, el
-     tráfico y la base con consentimiento): la IA siempre propone, nunca aplica. Lo que llega de HubSpot o de la
-     preventa solo llena lo vacío.
+     tráfico y la base con consentimiento): la IA siempre propone, nunca aplica. Lo que llega de HubSpot, de la
+     preventa o del test llena lo vacío, o cambia lo que esa MISMA fuente había puesto (alguien lo cambió allá); si no,
+     lo propone.
    - Una persona que **puede decidir** aplica directo; una que no, propone. Un valor igual al que ya está no hace nada.
+   - **Decidir es de la persona, también al usar una propuesta** (revisión del 24 oct): «Usar» o «Editar» dejan el dato
+     con fuente `persona` (de dónde salió la idea queda en la fila), y desde ahí nadie lo pisa. La única excepción es usar
+     lo que calcula Nexus, que le devuelve el dato a Nexus. Y **vaciar** un dato a propósito también es una decisión: lo
+     vacío con fuente `persona` no se vuelve a llenar solo (ni al recalcular, ni al fusionar dos fichas).
+   - Los números escritos por una persona no se adivinan: «50.000» o «36,000» se rechazan y se pide escribir 50000.
 5. **Quién decide:** el usuario de Nexus que lo está usando, según su rol: la celda nueva `clientes.decidirDatos`, que
    traen CSE, CSL, Ventas y los super admin (Elías, 24 oct). Cualquiera del equipo con acceso a la empresa puede
    proponer. Las propuestas pendientes se cuentan en la ficha («3 datos por revisar») y **no** van a «Por decidir» de

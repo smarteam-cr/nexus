@@ -111,6 +111,26 @@ describe("loQueYaPaga", () => {
     expect(loQueLeFalta({ hubs: ["sales"], edicion: "professional" }, soloAMano)).toEqual([]);
   });
 
+  it("no mezcla monedas: cada hub dice la suya y sin una sola moneda no hay total", () => {
+    const enColones = { hub: "sales", plan: "Professional", fechaCompra: null, fechaRenovacion: null, montoMensual: 450000, moneda: "CRC", nota: null };
+    const y = loQueYaPaga({ properties: { hs_marketing_hub_edition: "professional", hs_marketing_hub_mrr: "900" } }, [enColones]);
+    expect(y!.hubs.map((h) => `${h.hub}:${h.moneda}:${h.origen}`)).toEqual(["marketing:USD:partner", "sales:CRC:a_mano"]);
+    expect(y!.totalMensual).toBeNull();
+    expect(y!.moneda).toBeNull();
+  });
+
+  it("lo cargado a mano no tapa lo vendido: los hubs vendidos siguen contando", () => {
+    const service = { hub: "service", plan: "Starter", fechaCompra: null, fechaRenovacion: null, montoMensual: null, moneda: null, nota: null };
+    const y = loQueYaPaga({ properties: { hs_sold_product_lines: "marketing_hub;sales_hub" } }, [service]);
+    expect(y!.hubs.map((h) => `${h.hub}:${h.origen}`)).toEqual(["service:a_mano", "marketing:vendida", "sales:vendida"]);
+    expect(loQueLeFalta({ hubs: ["marketing", "sales"], edicion: "starter" }, y)).toEqual([]);
+  });
+
+  it("la fecha de la copia es el día de Costa Rica (una copia de las 7 p. m. no es del día siguiente)", () => {
+    const y = loQueYaPaga({ properties: { hs_sold_product_lines: "marketing_hub" }, fetchedAt: "2026-10-25T01:30:00Z" });
+    expect(y!.copiadaAt).toBe("2026-10-24");
+  });
+
   it("sin registro, o con un registro vacío, no dice nada", () => {
     expect(loQueYaPaga(null)).toBeNull();
     expect(loQueYaPaga({ properties: { hs_sold_product_lines: "", hs_sold_mrr: "0.00" } })).toBeNull();

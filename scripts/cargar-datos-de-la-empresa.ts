@@ -107,13 +107,8 @@ async function main() {
 
   for (const c of clientes) {
     const pedidos: { clave: ClaveDeDato; valor: unknown; fuente: FuenteDeDato; cita: string }[] = [];
-    const hs = c.hubspotCompanyId ? deHubspot.get(c.hubspotCompanyId) : undefined;
-    if (hs) {
-      for (const [prop, clave] of Object.entries(DE_HUBSPOT)) {
-        const v = hs[prop];
-        if (v !== null && v !== undefined && String(v).trim() !== "") pedidos.push({ clave, valor: v, fuente: "hubspot", cita: `HubSpot · ${prop}` });
-      }
-    }
+    /* La preventa PRIMERO: la edición que eligió el vendedor gana sobre la que Nexus deriva de la industria de HubSpot
+       (que entonces queda como propuesta). Lo que manda HubSpot (el país) se aplica después igual. */
     const p = preventaDe.get(c.id);
     if (p) {
       if (p.edicion) pedidos.push({ clave: "edicionEscala", valor: p.edicion, fuente: "preventa", cita: "La edición elegida en la preventa" });
@@ -121,6 +116,13 @@ async function main() {
       if (p.perfilDespues) pedidos.push({ clave: "perfilDespues", valor: p.perfilDespues, fuente: "preventa", cita: "El perfil de la preventa" });
       const medicion = (p.contenido as { medicion?: { pais?: string } } | null)?.medicion;
       if (medicion?.pais) pedidos.push({ clave: "pais", valor: medicion.pais, fuente: "preventa", cita: "El país de la preventa" });
+    }
+    const hs = c.hubspotCompanyId ? deHubspot.get(c.hubspotCompanyId) : undefined;
+    if (hs) {
+      for (const [prop, clave] of Object.entries(DE_HUBSPOT)) {
+        const v = hs[prop];
+        if (v !== null && v !== undefined && String(v).trim() !== "") pedidos.push({ clave, valor: v, fuente: "hubspot", cita: `HubSpot · ${prop}` });
+      }
     }
     if (pedidos.length === 0 && !SOLO_TAM) continue;
 

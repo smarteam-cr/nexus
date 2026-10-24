@@ -15,6 +15,7 @@ import { Alert, Input, Select, Skeleton } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import {
   datoDeLaEmpresa,
+  esFuenteDeIA,
   ETIQUETA_DE_LA_FUENTE,
   textoDelContador,
   valorParaMostrar,
@@ -73,7 +74,7 @@ interface Respuesta {
 }
 
 const GRUPOS: { rotulo: string; titulo: string; claves: ClaveDeDato[] }[] = [
-  { rotulo: "La empresa", titulo: "Quién es", claves: ["pais", "sitioWeb", "industriaSmarteam", "segmento"] },
+  { rotulo: "La empresa", titulo: "Quién es", claves: ["pais", "sitioWeb", "industriaSmarteam", "industry", "segmento"] },
   { rotulo: "El tamaño", titulo: "Cuánta empresa es", claves: ["empleados", "estructura", "filiales", "facturacionAnualUsd"] },
   { rotulo: "Cómo vende", titulo: "Su modelo de negocio", claves: ["aQuienVende", "perfilCierre", "perfilDespues", "trafico", "baseConsentimiento"] },
 ];
@@ -81,7 +82,11 @@ const GRUPOS: { rotulo: string; titulo: string; claves: ClaveDeDato[] }[] = [
 /** «24 oct». Una fecha sin hora («2026-10-24») es ese día: leída como medianoche UTC, en Costa Rica saldría el 23. */
 const fecha = (iso: string | null | undefined) => {
   if (!iso) return null;
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T12:00:00`) : new Date(iso);
+  // Solo año y mes (así guarda la investigación algunas fechas): se muestra el mes, sin inventar un día.
+  if (/^\d{4}-\d{2}$/.test(iso)) {
+    return new Date(`${iso}-15T12:00:00`).toLocaleDateString("es-CR", { month: "short", year: "numeric", timeZone: "America/Costa_Rica" }).replace(".", "");
+  }
+  const d =/^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T12:00:00`) : new Date(iso);
   return d.toLocaleDateString("es-CR", { day: "numeric", month: "short", timeZone: "America/Costa_Rica" }).replace(".", "");
 };
 const usd = (n: number) => `US$ ${n.toLocaleString("es-CR", { maximumFractionDigits: 0 })}`;
@@ -230,7 +235,7 @@ function Sugerencia({
   onDescartar: () => void;
 }) {
   const valor = valorParaMostrar(dato, propuesta.valor) ?? "vacío";
-  const deLaIA = propuesta.fuente === "investigacion" || propuesta.fuente === "reunion" || propuesta.fuente === "nexus";
+  const deLaIA = esFuenteDeIA(propuesta.fuente);
   const quien =
     propuesta.fuente === "persona"
       ? `Propuesto por ${propuesta.autor ?? "una persona"}`
@@ -402,7 +407,12 @@ export default function DatosDeLaEmpresa({ clientId }: { clientId: string }) {
             />
           ) : (
             <>
-              {d.valor === null ? <Falta /> : <div className="text-sm font-medium leading-[21px] text-fg tabular-nums">{valorParaMostrar(def, d.valor)}</div>}
+              {d.valor === null ? (
+                <Falta>
+                  {/* Vaciarlo a propósito es una decisión (no se vuelve a llenar solo): se dice, para no confundirlo con «nunca se cargó». */}
+                  {d.fuente === "persona" ? `Vacío a propósito${d.decidio ? ` · lo vació ${d.decidio.nombre}` : ""}${d.at ? ` · ${fecha(d.at)}` : ""}` : "Falta"}
+                </Falta>
+              ) : <div className="text-sm font-medium leading-[21px] text-fg tabular-nums">{valorParaMostrar(def, d.valor)}</div>}
               {d.valor !== null && <LineaDeFuente dato={d} extra={extraFuente} />}
               {ps.map((p) => (
                 <Sugerencia
@@ -464,33 +474,46 @@ export default function DatosDeLaEmpresa({ clientId }: { clientId: string }) {
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
-          {GRUPOS.map((g) => (
-            <Tarjeta key={g.rotulo} rotulo={g.rotulo} titulo={g.titulo} etiqueta={g.rotulo}>
-              {g.claves.map((clave) =>
-                clave === "industriaSmarteam" ? (
-                  <div key={clave}>
-                    {fila(clave, {
-                      extraFuente: (
-                        <>
-                          {" "}
-                          · decide la edición de la escala: <b className="font-semibold text-fg-secondary">{nombreDeLaEdicion ?? "la escala general"}</b>
-                        </>
-                      ),
-                      ayuda: "Cambiarla cambia la edición de la escala, la exploración y el diagnóstico.",
-                    })}
-                    {propuestasDe("edicionEscala").length > 0 && fila("edicionEscala")}
-                  </div>
-                ) : clave === "filiales" && porClave.get("estructura")?.valor !== "casa_matriz" && porClave.get("filiales")?.valor === null && propuestasDe("filiales").length === 0 ? null : (
-                  fila(clave)
-                ),
-              )}
-            </Tarjeta>
-          ))}
+          {GRUPOS.map((g) => {
+            const filas = g.claves.flatMap((clave) => {
+              if (clave === "industriaSmarteam") {
+                return [
+                  fila(clave, {
+                    extraFuente: (
+                      <>
+                        {" "}
+                        · decide la edición de la escala: <b className="font-semibold text-fg-secondary">{nombreDeLaEdicion ?? "la escala general"}</b>
+                      </>
+                    ),
+                    ayuda: "Cambiarla cambia la edición de la escala, la exploración y el diagnóstico.",
+                  }),
+                  propuestasDe("edicionEscala").length > 0 ? fila("edicionEscala") : null,
+                ];
+              }
+              if (clave === "filiales" && porClave.get("estructura")?.valor !== "casa_matriz" && porClave.get("filiales")?.valor === null && propuestasDe("filiales").length === 0) return [];
+              return [fila(clave)];
+            });
+            // Con el filtro, una tarjeta sin nada por revisar no se muestra (quedaba el título solo).
+            if (soloPorRevisar && filas.every((f) => f === null)) return null;
+            return (
+              <Tarjeta key={g.rotulo} rotulo={g.rotulo} titulo={g.titulo} etiqueta={g.rotulo}>
+                {filas}
+              </Tarjeta>
+            );
+          })}
         </div>
 
         <div className="flex flex-col gap-4">
           <Tarjeta rotulo="El potencial" titulo="Cuánto le podría vender Smarteam en un año" etiqueta="El potencial" derecha={<Chip tono="hubspot">Solo el equipo</Chip>}>
-            <Potencial tam={tam} calculo={r.tamCalculo} propuestas={propuestasDe("tamUsd")} puedeDecidir={r.puedeDecidir} ocupado={ocupado} decidir={decidir} />
+            <Potencial
+              tam={tam}
+              calculo={r.tamCalculo}
+              propuestas={editando?.clave === "tamUsd" ? [] : propuestasDe("tamUsd")}
+              puedeDecidir={r.puedeDecidir}
+              ocupado={ocupado}
+              decidir={decidir}
+              onEditar={(p) => setEditando({ clave: "tamUsd", propuestaId: p.id })}
+            />
             {editando?.clave === "tamUsd" ? (
               <div className="mt-3">{fila("tamUsd")}</div>
             ) : (
@@ -521,6 +544,7 @@ function Potencial({
   puedeDecidir,
   ocupado,
   decidir,
+  onEditar,
 }: {
   tam: Dato | undefined;
   calculo: CalculoDelTam | null;
@@ -528,6 +552,7 @@ function Potencial({
   puedeDecidir: boolean;
   ocupado: boolean;
   decidir: (p: Propuesta, cuerpo: { accion: "usar" } | { accion: "descartar" }) => Promise<boolean>;
+  onEditar: (p: Propuesta) => void;
 }) {
   const valor = typeof tam?.valor === "number" ? tam.valor : null;
   const deNexus = tam?.fuente === "nexus";
@@ -549,34 +574,26 @@ function Potencial({
           {!deNexus && tam.fuente === "persona" && " · corregido a mano: Nexus ya no lo pisa"}
         </div>
       )}
-      {valor === null && !calculo && <p className="mt-1 text-xs leading-4 text-fg-muted">Nexus lo calcula apenas sepa cuántos empleados tiene.</p>}
+      {valor === null && tam?.fuente === "persona" && (
+        <p className="mt-1 text-xs leading-4 text-fg-muted">
+          Lo vació {tam.decidio?.nombre ?? "una persona"} a propósito{fecha(tam.at) ? ` el ${fecha(tam.at)}` : ""}: Nexus ya no lo llena solo, lo propone.
+        </p>
+      )}
+      {valor === null && tam?.fuente !== "persona" && !calculo && <p className="mt-1 text-xs leading-4 text-fg-muted">Nexus lo calcula apenas sepa cuántos empleados tiene.</p>}
 
+      {/* La misma propuesta que el resto de la ficha: dice quién la hizo (Nexus, HubSpot o una persona) y deja editarla. */}
       {propuestas.map((p) => (
-        <div key={p.id} className="mt-2 flex flex-col gap-2 rounded-[14px] border border-info-line bg-info-surface px-3.5 py-2.5">
-          <div className="flex items-center gap-1.5 text-[13px] text-info-ink">
-            <IconoDeSugerencia className="h-[15px] w-[15px] text-brand" />
-            <span>
-              Nexus calcula <b className="font-semibold">{typeof p.valor === "number" ? usd(p.valor) : "—"}</b>
-              {valor !== null && <span className="text-fg-muted"> en lugar de {usd(valor)}</span>}
-            </span>
-          </div>
-          {p.cita && <div className="text-xs leading-4 text-fg-secondary">{p.cita}</div>}
-          {puedeDecidir && (
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                disabled={ocupado}
-                onClick={() => void decidir(p, { accion: "usar" })}
-                className="rounded-[10px] border border-info-line bg-info-surface px-[11px] py-1.5 text-[13px] font-semibold text-info-ink transition-colors hover:bg-surface disabled:opacity-50"
-              >
-                Usar
-              </button>
-              <BotonTexto onClick={() => void decidir(p, { accion: "descartar" })} disabled={ocupado} className="text-[13px]">
-                Descartar
-              </BotonTexto>
-            </div>
-          )}
-        </div>
+        <Sugerencia
+          key={p.id}
+          propuesta={p}
+          dato={datoDeLaEmpresa("tamUsd")}
+          actual={valor}
+          puedeDecidir={puedeDecidir}
+          ocupado={ocupado}
+          onUsar={() => void decidir(p, { accion: "usar" })}
+          onEditar={() => onEditar(p)}
+          onDescartar={() => void decidir(p, { accion: "descartar" })}
+        />
       ))}
 
       {calculo && calculo.total !== null && (

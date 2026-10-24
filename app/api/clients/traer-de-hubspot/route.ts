@@ -288,7 +288,7 @@ export async function POST(req: NextRequest) {
   /* R7b (2026-10-24): si una ficha ya tiene esta empresa de HubSpot, no se crea otra: se dice cuál es. El proyecto se
      trae desde esa ficha (su copia de proyectos lo encuentra). */
   const conLaEmpresa = await fichaConLaEmpresa(empresa.companyId);
-  if (conLaEmpresa) return NextResponse.json(cuerpoDeEmpresaRepetida(conLaEmpresa), { status: 409 });
+  if (conLaEmpresa) return NextResponse.json(await cuerpoDeEmpresaRepetida(conLaEmpresa), { status: 409 });
 
   /* Cliente y proyecto en UNA transacción. Si nacieran por separado, cualquier fallo del
      segundo dejaría un Client huérfano: sin proyectos es invisible en el índice, en cobranza y

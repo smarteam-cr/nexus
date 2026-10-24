@@ -50,7 +50,7 @@ export const PUT = withClientAccess(async (
   }
 
   const r = await asignarEmpresaDeHubspot(clientId, hubspotCompanyId);
-  if (!r.ok) return NextResponse.json(cuerpoDeEmpresaRepetida(r.ficha), { status: 409 });
+  if (!r.ok) return NextResponse.json(await cuerpoDeEmpresaRepetida(r.ficha), { status: 409 });
 
   return NextResponse.json({ id: clientId, hubspotCompanyId });
 });

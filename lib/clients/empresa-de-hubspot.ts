@@ -18,6 +18,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { esUnicoViolado } from "@/lib/db/unico-violado";
+import { requireAccessToClient } from "@/lib/auth/access";
 
 export interface FichaDeLaEmpresa {
   id: string;
@@ -37,9 +38,19 @@ export function mensajeDeEmpresaRepetida(ficha: Pick<FichaDeLaEmpresa, "name">):
   return `Esa empresa de HubSpot ya es la ficha «${ficha.name}» en Nexus. Ábrela a ella, o fusiona las dos fichas.`;
 }
 
-/** El cuerpo del 409: el mensaje y la ficha que ya la tiene, para que la pantalla pueda llevar a ella. */
-export function cuerpoDeEmpresaRepetida(ficha: FichaDeLaEmpresa) {
-  return { error: mensajeDeEmpresaRepetida(ficha), clientIdExistente: ficha.id, nombreExistente: ficha.name };
+/**
+ * El cuerpo del 409: el mensaje y la ficha que ya la tiene, para que la pantalla pueda llevar a ella. Solo con el nombre
+ * si quien pregunta tiene acceso a esa ficha: si no, un CSE podría probar ids de HubSpot y enterarse de qué empresas son
+ * clientes de otro.
+ */
+export async function cuerpoDeEmpresaRepetida(ficha: FichaDeLaEmpresa) {
+  const puedeVerla = await requireAccessToClient(ficha.id).then(
+    () => true,
+    () => false,
+  );
+  return puedeVerla
+    ? { error: mensajeDeEmpresaRepetida(ficha), clientIdExistente: ficha.id, nombreExistente: ficha.name }
+    : { error: "Esa empresa de HubSpot ya es otra ficha en Nexus, a la que no tienes acceso. Pídele a la CSL que la revise." };
 }
 
 export type ResultadoDeAsignar = { ok: true } | { ok: false; ficha: FichaDeLaEmpresa };

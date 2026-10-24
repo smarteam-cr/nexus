@@ -174,8 +174,10 @@ async function correr(runId: string, clientId: string, opts: { triggeredByEmail:
 /** Un fallo que se le puede contar a la persona tal cual. */
 class FalloDeLaInvestigacion extends Error {}
 
+/** Hay algo que guardar solo si al menos una cosa trae su enlace de la búsqueda: un resumen solo («no encontré
+ *  información verificable») taparía la investigación anterior con una vacía. */
 function tieneContenido(l: LecturaDeLaInvestigacion): boolean {
-  return Boolean(l.resumen || l.contenido.sector || l.contenido.hitos?.length || l.contrataciones.length || l.tamanoEstimado || l.datos.length);
+  return l.fuentes.length > 0;
 }
 
 /**

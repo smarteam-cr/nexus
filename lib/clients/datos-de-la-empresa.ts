@@ -41,6 +41,11 @@ export function esFuenteDeDato(x: unknown): x is FuenteDeDato {
 
 /** Las que son IA: nunca deciden un dato de persona, ni pisan lo que una persona corrigió. */
 const FUENTES_DE_IA: ReadonlySet<FuenteDeDato> = new Set(["investigacion", "reunion", "nexus"]);
+
+/** ¿La sugirió la IA? (la pantalla le pone la chispa). Una sola lista, la del motor. */
+export function esFuenteDeIA(f: FuenteDeDato): boolean {
+  return FUENTES_DE_IA.has(f);
+}
 /** Las que vienen de una persona en otro lado (HubSpot, la preventa, el test): llenan lo vacío de un dato de persona. */
 const FUENTES_HUMANAS_DE_AFUERA: ReadonlySet<FuenteDeDato> = new Set(["hubspot", "preventa", "test"]);
 
@@ -385,7 +390,8 @@ export function plegarDatosDeLaEmpresa(sigue: Readonly<Record<string, unknown>>,
   for (const d of CATALOGO_DE_DATOS) {
     const c = columnasDelDato(d.clave);
     const vacio = (v: unknown) => v === null || v === undefined;
-    if (vacio(sigue[c.valor]) && !vacio(absorbida[c.valor])) {
+    // Lo que una persona vació a propósito en la que sigue tampoco se rellena al fusionar.
+    if (vacio(sigue[c.valor]) && sigue[c.fuente] !== "persona" && !vacio(absorbida[c.valor])) {
       cambios[c.valor] = absorbida[c.valor];
       cambios[c.fuente] = absorbida[c.fuente] ?? null;
       cambios[c.at] = absorbida[c.at] ?? null;
@@ -420,7 +426,9 @@ export function leerValor(dato: DatoDeLaEmpresa, crudo: unknown): LecturaDeValor
     const n = leido.n;
     if (!Number.isFinite(n)) return { ok: false, error: `${dato.etiqueta}: tiene que ser un número.` };
     const v = dato.tipo === "entero" ? Math.round(n) : Math.round(n * 100) / 100;
-    if (dato.tipo === "entero" && !Number.isInteger(n)) return { ok: false, error: `${dato.etiqueta}: tiene que ser un número entero.` };
+    // Una persona que escribe «12.5» empleados se equivocó; un número que llega calculado (el punto medio de «51-200»
+    // que da la investigación) se redondea: rechazarlo dejaba a la empresa sin empleados y sin TAM, en silencio.
+    if (dato.tipo === "entero" && !Number.isInteger(n) && typeof crudo === "string") return { ok: false, error: `${dato.etiqueta}: tiene que ser un número entero.` };
     if (dato.min !== undefined && v < dato.min) return { ok: false, error: `${dato.etiqueta}: no puede ser menor que ${dato.min}.` };
     if (dato.max !== undefined && v > dato.max) return { ok: false, error: `${dato.etiqueta}: no puede pasar de ${dato.max.toLocaleString("es")}.` };
     return { ok: true, valor: v };

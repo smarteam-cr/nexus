@@ -172,7 +172,9 @@ describe("leerValor", () => {
     const e = datoDeLaEmpresa("empleados");
     expect(leerValor(e, "1250")).toEqual({ ok: true, valor: 1250 });
     expect(leerValor(e, " 1 250 ")).toEqual({ ok: true, valor: 1250 });
-    expect(leerValor(e, 12.5).ok).toBe(false);
+    expect(leerValor(e, "12.5").ok).toBe(false);
+    // El punto medio de un rango que trae la investigación (51-200 → 125,5) se redondea.
+    expect(leerValor(e, 125.5)).toEqual({ ok: true, valor: 126 });
     expect(leerValor(e, 0).ok).toBe(false);
     expect(leerValor(e, "muchos").ok).toBe(false);
     expect(leerValor(datoDeLaEmpresa("facturacionAnualUsd"), 1234.567)).toEqual({ ok: true, valor: 1234.57 });
@@ -227,6 +229,10 @@ describe("plegarDatosDeLaEmpresa (fusionar dos fichas)", () => {
     const sigue = { empleados: 240, empleadosFuente: "hubspot", trafico: null };
     const absorbida = { empleados: 310, empleadosFuente: "persona", trafico: "50k_200k", traficoFuente: "persona", traficoAt: at };
     expect(plegarDatosDeLaEmpresa(sigue, absorbida)).toEqual({ trafico: "50k_200k", traficoFuente: "persona", traficoAt: at });
+  });
+
+  it("lo que una persona vació en la que sigue no se rellena", () => {
+    expect(plegarDatosDeLaEmpresa({ tamUsd: null, tamFuente: "persona" }, { tamUsd: 40000, tamFuente: "nexus" })).toEqual({});
   });
 
   it("el TAM viaja con su cálculo", () => {

@@ -22,7 +22,6 @@ const PERMITIDOS: Readonly<Record<string, string>> = {
   "lib/cs/cartera.ts": "lee `tamFuente` para la razón del potencial",
   "lib/cs/cartera-reglas.ts": "el tipo de la cuenta de cartera (`tamFuente`)",
   "lib/cs/clasificacion.ts": "la razón del potencial dice de dónde salió el TAM",
-  "app/api/clients/[id]/datos/route.ts": "lee el cálculo del TAM para decir qué hubs le faltan",
   "components/clients/DatosDeLaEmpresa.tsx": "la pantalla muestra cómo se calculó el TAM (lo lee de la respuesta)",
   "scripts/cargar-datos-de-la-empresa.ts": "lee `tamFuente` para el potencial de después del simulacro",
 };
@@ -74,7 +73,11 @@ describe("la fuente y la fecha de los datos de la empresa", () => {
      los datos del catálogo escritas a mano. Las altas que nacen con un dato lo ponen con `datosAlNacerDesdeHubspot`. */
   it("nadie escribe el valor de un dato de la empresa en Client por su cuenta", () => {
     const claves = CATALOGO_DE_DATOS.map((d) => d.clave);
-    const clave = new RegExp(`\\b(${claves.join("|")})\\s*:\\s*(?!true\\b)`);
+    const alternativas = claves.join("|");
+    // `industry: x`, y también la forma corta `{ industry }` (así escribía la importación del sistema hasta este cambio).
+    const clave = new RegExp(`\\b(${alternativas})\\s*:\\s*(?!true\\b)|[{,]\\s*(${alternativas})\\s*(?=[,}])`);
+    // `data.tamUsd = …` sobre el objeto que después se escribe (así escribía Clasificación hasta este cambio).
+    const asignacion = new RegExp(`\\b(?:data|datos|cambios)\\.(${alternativas})\\s*=(?!=)`);
     const escritura = /\b(?:tx|prisma|db)\.client\.(?:create|update|updateMany|upsert)\(/g;
     const VALORES_PERMITIDOS: Readonly<Record<string, string>> = {
       "lib/clients/datos-de-la-empresa-server.ts": "el motor: escribe con su fuente, su fecha y su fila",
@@ -88,6 +91,11 @@ describe("la fuente y la fecha de los datos de la empresa", () => {
         const rel = relative(RAIZ, ruta).replace(/\\/g, "/");
         if (VALORES_PERMITIDOS[rel] || rel.startsWith("scripts/archive/")) continue;
         const src = readFileSync(ruta, "utf8");
+        const asignada = src.match(asignacion);
+        if (asignada) {
+          ofensores.push(`${rel} (${asignada[1]})`);
+          continue;
+        }
         for (const m of src.matchAll(escritura)) {
           // Solo lo que se ESCRIBE: el objeto de `data:` (o `create:`/`update:` de un upsert), sin lo que va adentro de la
           // ayuda que pone la fuente al nacer.
@@ -96,7 +104,7 @@ describe("la fuente y la fecha de los datos de la empresa", () => {
           const tramo = bloques.join("\n").replace(/datosAlNacerDesdeHubspot\([^)]*\)/g, "");
           const hit = tramo.match(clave);
           if (hit) {
-            ofensores.push(`${rel} (${hit[1]})`);
+            ofensores.push(`${rel} (${hit[1] ?? hit[2]})`);
             break;
           }
         }
