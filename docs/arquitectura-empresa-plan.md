@@ -138,6 +138,21 @@ No hay una persona con su rol en la empresa.
       empresa qué casos la moverían y no tiene.
     - Ventas lo ve en la cuenta; el CSE, al cerrar un ciclo o una implementación.
     - Se puede escribir en HubSpot como propiedad de la empresa (el siguiente caso sugerido).
+13. **R13 · Smarteam, la empresa que usa Nexus** (Elías, 2026-10-24: el cliente ideal, las buyer personas y lo demás de
+    Smarteam tienen que estar bien armados en la arquitectura y fáciles de usar).
+    - **Hoy:** Smarteam ya es un `Client` de tipo `INTERNO` (con su `hubspotCompanyId`). El cliente ideal (`IcpItem`, 44
+      filas) y las buyer personas (`BuyerPersona`, 4) son tablas sueltas de Marketing, sin relación con esa ficha, y solo
+      los leen `lib/marketing/agents/generate-ideas.ts` y `lib/documentacion/vivos.ts`.
+    - **El perfil de la empresa que usa Nexus**, colgando de su ficha: el cliente ideal, las buyer personas, la propuesta
+      de valor y el position statement (K3), los servicios y sus tarifas, los clientes de referencia por industria (K4) y
+      el tono de la marca. Se edita en una pantalla; lo de hoy se muda sin perder nada (SQL aditivo y una carga con
+      simulacro).
+    - **Un solo lector** (`lib/smarteam/contexto.ts` o el que se elija) para la preventa, las propuestas, el analizador
+      de reuniones de venta y Marketing: es la pieza de R11 que habla de Smarteam y no del cliente.
+    - **El encaje con el cliente ideal:** cada empresa dice qué tanto se parece al cliente ideal, con su porqué, al lado
+      de su TAM.
+    - **Pensado para varias empresas:** el perfil es de la empresa que usa Nexus (hoy una sola), no una constante en el
+      código; así no se cierra la puerta a un SaaS (ARCHITECTURE §0).
 
 **Lo que no se hace:** renombrar `FirefliesSession` (176 archivos, poco beneficio) ni migrar los 104 estados de texto a
 enums.

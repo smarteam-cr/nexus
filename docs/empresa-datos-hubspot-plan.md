@@ -184,6 +184,26 @@ edición del test, la exploración y el diagnóstico.
 - **La investigación:** guardada en la empresa, con su fecha y sus fuentes, en las activas.
 - «0 propiedades nuevas de texto libre» aplica al catálogo cuando se cree.
 
+## Validado en HubSpot (2026-10-24, solo lectura)
+
+- **Existen** las 7 que el catálogo marca como existentes: `tam__potencial`, `numberofemployees`, `annualrevenue`,
+  `industria__smarteam_`, `country` y `nexus_apertura_asesoria`, con su tipo (número, lista o texto).
+- **No existen todavía** las 13 marcadas como nuevas (la fuente y la fecha del TAM, el perfil de negocio, el tráfico, la
+  base con consentimiento, Insider, el nivel en cada área, la fecha de la escala, el siguiente caso y la fecha de la
+  investigación). Se crean en el paso 1, con simulacro.
+- Existen además 7 `nexus_*` de texto libre de la ficha (`nexus_a_que_se_dedica`, `nexus_dolor_principal`,
+  `nexus_herramientas_actuales`, `nexus_oportunidades_futuras`, `nexus_resultados_que_persigue`,
+  `nexus_retos_estrategicos`, `nexus_stakeholders`).
+
+## Cómo pregunta Nexus lo que falta (Elías, 2026-10-24)
+
+Con el mecanismo que ya existe, «Preguntas sobre la cuenta» (`lib/encuestas-de-cuenta/`): al entrar a la ficha de una
+empresa, Nexus le pregunta a quien la ve (según su rol) lo que nadie anotó, y la respuesta se escribe en HubSpot. Hoy solo
+acepta «Sí / No / No sé». Se le suma:
+- respuestas con opciones (los rangos de tráfico, de base, el perfil de negocio);
+- que Nexus proponga la respuesta (de la investigación o de las reuniones) y la persona solo confirme o corrija;
+- que pregunte solo lo que falta, una cosa por vez, y que no vuelva a preguntar lo que ya está confirmado.
+
 ## Cuidados
 
 - Crear propiedades en HubSpot es escribir en el portal de producción: va con simulacro y con el sí de Elías.
