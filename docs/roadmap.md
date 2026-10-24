@@ -12,19 +12,19 @@
 2. Revisar y aprobar, área por área, la propuesta de vender y entregar por casos de uso (pestaña «Roadmap»).
 3. Empezar contigo a desarmar el cotizador en un catálogo de actividades.
 
-**El orden:** las áreas van numeradas por dependencia: cada una usa lo de las anteriores. La escala va primero porque todo la lee (el test, la preventa, la propuesta, el diagnóstico y los ciclos de SmartLoop); los datos de la empresa le dan el perfil; el test es la puerta de entrada de los prospectos; con eso se vende por resultados, y lo vendido se entrega por SmartLoop, las tareas, el cronograma y los entregables. Las tareas van antes que el cronograma porque las tareas que nacen de lo vendido necesitan el módulo listo. **Lo urgente que pidió el equipo el 23 oct va primero aunque su área esté más abajo** (los arreglos de SmartLoop, de la exploración y del diagnóstico: ver «Orden sugerido» en la pestaña «Roadmap»).
+**El orden:** las áreas van numeradas por dependencia: cada una usa lo de las anteriores. La empresa va primero porque todo cuelga de ella (sus datos, su investigación y su espejo en HubSpot); la escala va después porque todo la lee (el test, la preventa, la propuesta, el diagnóstico y los ciclos de SmartLoop); los datos de la empresa le dan el perfil; el test es la puerta de entrada de los prospectos; con eso se vende por resultados, y lo vendido se entrega por SmartLoop, las tareas, el cronograma y los entregables. Las tareas van antes que el cronograma porque las tareas que nacen de lo vendido necesitan el módulo listo. **Lo urgente que pidió el equipo el 23 oct va primero aunque su área esté más abajo** (los arreglos de SmartLoop, de la exploración y del diagnóstico: ver «Orden sugerido» en la pestaña «Roadmap»).
 
-### 1 · La escala de rendimiento <span class="estado">Propuesta</span>
+### 1 · La empresa: sus datos y su arquitectura <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** la empresa es el centro de Nexus, como en un CRM profesional: sus datos (tamaño, industria, TAM, perfil, escala) en un solo lugar con su fuente, la investigación y los documentos colgando de ella aunque no haya proyecto, una persona del cliente con su rol, todo sincronizado con HubSpot en los dos sentidos, y un solo contexto que leen los agentes.
+- **Hoy:** la industria vive en cinco lugares, el tamaño no se guarda, el TAM está vacío en las 200 empresas, Nexus no escribe en HubSpot lo que enriquece, un documento no puede existir sin proyecto («Información del cliente» es un proyecto falso) y las personas del cliente están en cinco copias sin unir.
+- **Plan:** primero, los datos y la investigación en la empresa, el TAM calculado por Nexus, propuestas que cualquiera hace y el encargado decide o edita, y propiedades de HubSpot hechas para reportar (`docs/empresa-datos-hubspot-plan.md`); después, documentos e investigaciones de la empresa; una persona con su rol; endurecer las llaves y limpiar lo viejo; y lo que le falta comprar a cada empresa (área R).
+
+### 2 · La escala de rendimiento <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** la escala ubica bien a cada empresa en Ventas, Marketing y Servicio, según su industria y su perfil, y muestra el camino hacia arriba; el mapa de herramientas dice qué pone HubSpot y qué pone Insider en cada paso.
 - **Hoy:** corre la 8.9.0; la 8.9.1 espera tu revisión (prueba 108). Para la 9.0 hay 14 temas pendientes (`docs/escala/pendiente-9-0.md`) y, desde el 23 oct, lo de Insider: 16 cambios, la condición «tráfico suficiente» y la lectura «Preparación para engagement avanzado» (área N).
 - **Plan:** publicar la 8.9.1; probarla con 5 a 8 clientes reales (el orden acordado para la 9.0); escribir la 9.0 con sus temas pendientes y lo de Insider juntos; el mapa de herramientas para la 9.0; y la lectura de preparación en la preventa y el diagnóstico.
-
-### 2 · La empresa: sus datos y su arquitectura <span class="estado">Propuesta</span>
-
-- **Resultado esperado:** la empresa es el centro de Nexus, como en un CRM profesional: sus datos (tamaño, industria, TAM, perfil, escala) en un solo lugar con su fuente, la investigación y los documentos colgando de ella aunque no haya proyecto, una persona del cliente con su rol, todo sincronizado con HubSpot en los dos sentidos, y un solo contexto que leen los agentes.
-- **Hoy:** la industria vive en cinco lugares, el tamaño no se guarda, el TAM está vacío en las 200 empresas, Nexus no escribe en HubSpot lo que enriquece, un documento no puede existir sin proyecto («Información del cliente» es un proyecto falso) y las personas del cliente están en cinco copias sin unir.
-- **Plan:** el agente de la preventa estima el tamaño y el vendedor lo confirma (B1); los datos de la empresa en columnas y un solo módulo con HubSpot; documentos e investigaciones de la empresa; una persona con su rol; endurecer las llaves y limpiar lo viejo; y lo que le falta comprar a cada empresa (área R).
 
 ### 3 · Los tests del diagnóstico de rendimiento <span class="estado">Propuesta</span>
 
@@ -135,6 +135,7 @@ Sin esto, algo sigue mal o no se puede validar:
 17. **El formato del documento de resultados de la preventa** (C5): lo define Ventas el lunes 27 oct.
 18. **La calificación de clientes de Insider** (N4): pedirles el umbral de tráfico con que califican a un cliente; es el de la condición «tráfico suficiente».
 19. **«Capacitación» en las tareas** (P1): ¿es la formación del equipo de Smarteam, la que se le da a un cliente, o las dos? Te propongo una categoría propia para la del equipo; la de un cliente va con su cliente asociado.
+20. **La fórmula del TAM** (R1): te propongo lo que Smarteam le podría vender a esa empresa en un año: licencias de HubSpot según su tamaño y los hubs que le sirven, Insider si califica, y los servicios según su escala, a la tarifa de su segmento. ¿La validamos así?
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -176,20 +177,21 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 - `docs/tareas-organizacion-plan.md`: el módulo de Tareas organizado (barra por cliente, la tarea en un modal grande, el calendario, las subtareas y leer todas las sesiones). Sirve a P, D2 y H.
 - `docs/kickoff-mejoras-plan.md`: la ruta de HubSpot Academy y el acceso al portal en el kickoff. Sirve a Q.
 - `docs/arquitectura-empresa-plan.md`: la empresa como objeto central (datos en columnas, HubSpot en los dos sentidos, documentos sin proyecto, personas, contexto único para los agentes y venta cruzada). Sirve a R, B, C5, K y E2.
+- `docs/empresa-datos-hubspot-plan.md`: el paso uno: los datos y la investigación en la empresa, el TAM, proponer y decidir, y el catálogo de propiedades de HubSpot para reportar. Sirve a R1, R2, R5 y B1.
 
 **Orden sugerido, por dependencias** (el foco es que Ventas y Customer Success queden funcionando):
 
-1. Lo que pidieron Ventas y Customer Success el 23 oct, que no depende de nada:
+1. **Paso uno: la empresa y HubSpot** (`docs/empresa-datos-hubspot-plan.md`): R7 y R10, después R1, R2 y R5 con B1 adentro (los datos y la investigación en la empresa, el TAM calculado por Nexus, propuestas que se deciden y editan, y las propiedades de HubSpot hechas para reportar).
+2. Lo que pidieron Ventas y Customer Success el 23 oct, que no depende de nada:
    - M1 y M2: el kickoff que sabe que es SmartLoop y el orden exploración → diagnóstico, antes del primer ciclo de RC Inmobiliaria;
    - K7 y K1, con K8 dentro: la siguiente pregunta de calidad y la exploración por departamento con la escala y el dinero;
    - L1 a L3: las reuniones con solo notas, publicar diciendo por qué y los detalles del diagnóstico y la ficha.
-2. R7 y R10 (endurecer las llaves y corregir ARCHITECTURE.md: bajo riesgo, protegen lo que hay).
 3. Sin depender de nada: desarmar contigo el cotizador en un catálogo de actividades (A1 etapa 2 y A2 etapa 1), limpiar las tareas de los CSE que nadie decidió (D2 etapa 1), H1 (tu piloto con tus propias sesiones) y la etapa 1 de B1 (qué datos de la empresa hay y dónde).
 4. Q (Academy y el acceso al portal en el kickoff), K5 y K6 (dejar de buscar sesiones a mano), D4 (el seguimiento en HubSpot), M3 (el primer ciclo de cada cliente con su CSE) y P (el módulo de Tareas: el diseño, la barra por cliente, la vista grande, el calendario y leer todas las sesiones; P4 espera a A2).
-5. R5 y R6 (las investigaciones de la empresa y una persona con su rol), y después K2, K3 y K4 juntas (la primera sesión en frío necesita el position statement), y K10.
+5. R6 (una persona con su rol), y después K2, K3 y K4 juntas (la primera sesión en frío necesita el position statement), y K10.
 6. Con A1 cerrado: A3 (criterios en palabras simples) y A5 (los casos que faltan).
 7. A2 (migrar el cotizador a la biblioteca) y después A4 (duración y «cómo sabrás que funcionó»).
-8. N1 y N2 (publicar la 8.9.1 y probarla con clientes), B1 completo con R1 y R2 (los datos de la empresa en columnas y el módulo único con HubSpot), O1 a O4 (el test dentro de Nexus, que arranca con la 8.9.1 y toma la 9.0 solo), N3 a N7 (la 9.0 con lo pendiente y lo de Insider), O5 y O6 (las dos versiones del test y el corte de la aplicación vieja) y después B2 (la escala lee los datos de la empresa). A6 (los casos de Insider por industria) va con N.
+8. N1 y N2 (publicar la 8.9.1 y probarla con clientes), B2 (la escala lee los datos de la empresa), O1 a O4 (el test dentro de Nexus, que arranca con la 8.9.1 y toma la 9.0 solo), N3 a N7 (la 9.0 con lo pendiente y lo de Insider), O5 y O6 (las dos versiones del test y el corte de la aplicación vieja). A6 (los casos de Insider por industria) va con N.
 9. R3 y R4 (los documentos de la empresa sin proyecto), C1 y C3 (pueden ir antes: usan lo que ya hay), C2 (la cotización calculada, necesita A2 y B1), C4 y C5 (cuando se defina su formato; necesita R3 y R4, los documentos de la empresa sin proyecto).
 10. D1 (diseño del cronograma con casos), después D2, D3 y L4, y junto con ellos G1 a G3.
 11. E1, E2 (con R11 y R12: el contexto único de la empresa y lo que le falta comprar), F1, I1 y M4. R8 y R9 cuando se toque cada parte.
@@ -537,20 +539,23 @@ Pedido del 23 oct. El kickoff es un documento que ve el cliente: una sección nu
 
 Pedido del 23 oct: que la empresa sea el centro, enriquecida y sincronizada con HubSpot en los dos sentidos, con documentos sin proyecto, para vender, atender con IA y hacer venta cruzada. Revisado contra el esquema y la base ese día. Plan: `docs/arquitectura-empresa-plan.md`; el plano de hoy, en «Cómo funciona Nexus».
 
-1. **R1 · Los datos de la empresa en columnas.** *Existe a medias:* la industria vive en cinco lugares sin regla de cuál manda, el tamaño se lee de HubSpot y no se guarda, el TAM está vacío en las 200 empresas.
+1. **R1 · Los datos de la empresa en columnas** (paso uno del roadmap; plan: `docs/empresa-datos-hubspot-plan.md`). *Existe a medias:* la industria vive en cinco lugares sin regla de cuál manda, el tamaño se lee de HubSpot y no se guarda, el TAM está vacío en las 200 empresas.
    - Etapa 1 · Empleados, país, sitio web, industria, TAM, perfil de negocio, edición de la escala, tráfico, base con consentimiento y si califica para Insider, cada uno con su fuente y su fecha (SQL aditivo).
    - Etapa 2 · La carga inicial desde las preventas y HubSpot.
    - Etapa 3 · Una sola regla de quién manda en cada dato: HubSpot, Nexus o una persona.
+   - Etapa 4 · El TAM lo calcula Nexus con la investigación y una fórmula escrita, y lo escribe en «TAM | Potencial $» de HubSpot, que existe y nadie llena: el equipo no tiene el criterio para definirlo.
+   - Etapa 5 · Proponer y decidir: la IA o cualquier persona propone un cambio, que se ve al lado del dato con quién y por qué; el encargado lo usa, lo edita o lo descarta, y cualquier dato se edita a mano.
 2. **R2 · Un solo módulo de la empresa de HubSpot.** *Existe a medias:* hay cinco listas distintas de lo que se lee, y solo se escriben las 9 propiedades `nexus_*` de la ficha.
    - Etapa 1 · Una tabla que dice, campo por campo, qué propiedad es, quién manda y en qué sentido va.
    - Etapa 2 · Escribir en HubSpot lo que Nexus enriquece (TAM, perfil, escala, tráfico, Insider) como propiedades `nexus_*`.
    - Etapa 3 · Las propiedades estándar (industria, empleados) solo si en HubSpot están vacías, o con el sí del vendedor (B1).
+   - Etapa 4 · Propiedades hechas para reportar: listas, números y fechas en un grupo «Nexus · Empresa» (perfil, tráfico, Insider, nivel en cada área, siguiente caso, fechas); hoy casi todas las `nexus_*` son texto libre y no se pueden agrupar. Con tres o cuatro reportes base y el tablero «Cartera por potencial».
 3. **R3 · Los documentos de la empresa, con o sin proyecto.** *No existe:* cada documento es de un proyecto o de una propuesta.
    - Etapa 1 · La empresa como dueña de cada documento; el proyecto y la propuesta, opcionales.
    - Etapa 2 · Un diagnóstico personalizado para un prospecto, y el documento de resultados de la preventa (C5).
    - Etapa 3 · Los permisos y la vista del cliente, probados con un diagnóstico de un prospecto y uno de un proyecto.
 4. **R4 · Retirar «Información del cliente» como proyecto falso.** *Depende de:* R3. Hay 94 para 88 empresas y arrastran canvases que no son suyos.
-5. **R5 · Las investigaciones son de la empresa.** *Existe a medias:* la investigación web vive dentro de la preventa. Se guarda en la empresa con su fecha y sus fuentes, y se rehace cuando vence.
+5. **R5 · Las investigaciones son de la empresa** (paso uno, con R1). *Existe a medias:* la investigación web vive dentro de la preventa. Se guarda en la empresa con su fecha y sus fuentes, y se rehace cuando vence.
 6. **R6 · Una persona del cliente, con su rol.** *No existe:* hay cinco copias sin unir (1.612 participantes de reuniones, de los que solo 567 son contactos de HubSpot). Una tabla de personas por empresa con su rol (decide, influye, usa), alimentada por HubSpot.
 7. **R7 · Endurecer las llaves.** La dueña de cada reunión pasa a ser una relación de verdad (protege la invariante de no mezclar clientes) y la empresa de HubSpot pasa a ser única. Bajo riesgo.
 8. **R8 · Limpiar lo viejo.** Borrar los campos vacíos y vencidos (SQL aparte y revisado), quitar los escritores de las tarjetas viejas, pasar a tablas la copia en Json de HubSpot y partir la ruta `analyze` (3.385 líneas).
