@@ -243,7 +243,7 @@ const compuertasP = agent(
 Corre DE VERDAD estas compuertas y copia la salida real; nunca digas que algo pasó sin haberlo corrido:
 1. node --max-old-space-size=8192 ./node_modules/typescript/lib/tsc.js --noEmit -p .
 2. npx eslint <cada archivo .ts/.tsx cambiado que exista>
-3. npx vitest run <las carpetas de lib/ de los archivos cambiados> (si no hay ninguna, lib/ entero no: di no_corrio y por qué)
+3. npx vitest run --project unit (la suite unit COMPLETA: muchas pruebas son guardas que recorren todo el repo, y un cambio en una carpeta rompe una guarda de otra; pasó el 24 oct con duenio-manual.test.ts)
 4. Si el cambio toca SQL o schema.prisma: npm run check:esquema
 5. Si el cambio toca reuniones, tareas, cobranza o datos de clientes: npm run check:invariants (solo lee producción)
 Si una compuerta no se puede correr, resultado "no_corrio" con el motivo en salida. Un error que ya existía antes del
