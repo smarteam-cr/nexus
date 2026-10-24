@@ -3,7 +3,7 @@
 > Sale del documento de Elías del 2026-10-23: la sesión «Casos de uso por industria» con Insider One (21 oct), más una
 > investigación. Se consensuó y se rehízo el mismo día, cruzado contra cuatro cosas: la escala publicada (**8.9.0**), sus
 > seis ediciones por industria, el mapa de herramientas (`docs/escala/mapa_de_herramientas.md`) y lo pendiente para la 9.0
-> (`docs/escala/pendiente-9-0.md`). **Nada construido.** En el roadmap es el área N y el ítem A6.
+> (`docs/escala/pendiente-9-0.md`). **Nada construido.** En el roadmap es el área N (N4 a N7) y el ítem A6.
 
 ## Cómo se arma: tres capas
 

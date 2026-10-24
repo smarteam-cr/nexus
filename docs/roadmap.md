@@ -12,7 +12,7 @@
 2. Revisar y aprobar, área por área, la propuesta de vender y entregar por casos de uso (pestaña «Roadmap»).
 3. Empezar contigo a desarmar el cotizador en un catálogo de actividades.
 
-**El orden:** las áreas van numeradas en el orden en que conviene hacerlas. El foco ahora es que Ventas y Customer Success queden funcionando de punta a punta: primero el servicio recurrente, porque ya hay clientes en SmartLoop (RC Inmobiliaria, Honda, kölbi) y hoy no tiene uso real; después vender por resultados, que necesita los datos de la empresa; y con eso, la entrega y el diagnóstico. Lo demás sigue cuando eso esté andando.
+**El orden:** las áreas van numeradas en el orden en que conviene hacerlas. El foco ahora es que Ventas y Customer Success queden funcionando de punta a punta: primero el servicio recurrente, porque ya hay clientes en SmartLoop (RC Inmobiliaria, Honda, kölbi) y hoy no tiene uso real; después vender por resultados, que necesita los datos de la empresa y la escala; y con eso, la entrega y el diagnóstico. Lo demás sigue cuando eso esté andando.
 
 ### 1 · El servicio recurrente funcionando <span class="estado">Propuesta</span>
 
@@ -32,37 +32,43 @@
 - **Hoy:** el tamaño de HubSpot no sirve: a 60 de 163 empresas les falta y otras lo tienen mal (Honda Costa Rica figura con 5 empleados).
 - **Plan:** el agente que investiga la empresa en la preventa estima el tamaño, lo escribe en HubSpot si está vacío y, si no coincide, propone el cambio para que el vendedor lo acepte. Se le pregunta además al vendedor lo que pide la escala 9.0: a quién le vende, si vende en su sitio o su app, si tiene catálogo, su tráfico, su base con consentimiento y si se planea o califica para Insider; todo llega a HubSpot.
 
-### 4 · Entregar: cronograma y tareas <span class="estado">Propuesta</span>
+### 4 · La escala de rendimiento <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** la escala ubica bien a cada empresa en Ventas, Marketing y Servicio, según su industria y su perfil, y muestra el camino hacia arriba; el mapa de herramientas dice qué pone HubSpot y qué pone Insider en cada paso.
+- **Hoy:** corre la 8.9.0; la 8.9.1 espera tu revisión (prueba 108). Para la 9.0 hay 14 temas pendientes (`docs/escala/pendiente-9-0.md`) y, desde el 23 oct, lo de Insider: 16 cambios, la condición «tráfico suficiente» y la lectura «Preparación para engagement avanzado» (área N).
+- **Plan:** publicar la 8.9.1; probarla con 5 a 8 clientes reales (el orden acordado para la 9.0); escribir la 9.0 con sus temas pendientes y lo de Insider juntos; el mapa de herramientas para la 9.0; y la lectura de preparación en la preventa y el diagnóstico.
+
+### 5 · Entregar: cronograma y tareas <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** el cliente ve de un vistazo cómo va su proyecto, y cada CSE sabe qué le toca hoy y esta semana, sin 20 tareas de golpe.
 - **Hoy:** el cronograma lo arma el handoff y no está unido a las tareas, a propósito. A los CSE les llegaron 105 tareas en 45 días: ninguna aceptada.
 - **Plan:** limpiar lo que hay y abrir tres puertas: el plan del proyecto nace en el handoff ya decidido, lo dicho con el cliente pasa por «Por decidir» y lo dicho puertas adentro deja tarea y revisión.
 
-### 5 · El diagnóstico y los entregables de Customer Success <span class="estado">En producción</span>
+### 6 · El diagnóstico y los entregables de Customer Success <span class="estado">En producción</span>
 
 - **Resultado esperado:** un diagnóstico corto que le explica al cliente por qué tiene los resultados que tiene y qué vamos a hacer (el enfoque de la solución), escrito en minutos con lo que Nexus ya sabe.
 - **Hoy:** desde el 23 oct lee las sesiones de la exploración, avisa cuando casi nada está confirmado, trae el «Enfoque de la solución», todo se mueve y se quita, y se elige entre la plantilla esencial (7 partes) y la completa, o se escribe a mano.
 - **Plan:** lo que salió de usarlo el 23 oct (L): las reuniones con solo notas cuentan, publicar dice por qué no, la ficha editable y todo movible; después, la Planificación con sesiones y entrenamientos, plantillas por caso de uso y qué necesita Customer Success para cada entregable.
 
-### 6 · Que el equipo use Nexus <span class="estado">En curso</span>
+### 7 · Que el equipo use Nexus <span class="estado">En curso</span>
 
 - **Resultado esperado:** 10 de las 14 personas operativas entran 3 días o más por semana, y la mitad de lo que propone Nexus se decide antes de que venza.
 - **Hoy:** 0 de 14 entran 3 días; se decide a tiempo el 7,4 % de lo que propone Nexus.
 - **Plan:** menos cosas que decidir (las tres puertas de las tareas) y «Para ti» con el día y la semana.
 
-### 7 · Rentabilidad y capacidad <span class="estado">Propuesta</span>
+### 8 · Rentabilidad y capacidad <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** saber cuánto cuesta entregar cada caso y cuánto tiempo le gana Nexus al trabajo a mano.
 - **Hoy:** Rentabilidad ya calcula el costo por hora con la planilla y mide las reuniones del calendario; falta el tiempo del resto del trabajo.
 - **Plan:** cada actividad trae su tiempo a mano (para el precio) y su tiempo con Nexus (la meta); se compara con lo que de verdad duró.
 
-### 8 · Que cada reunión deje su trabajo <span class="estado">Propuesta</span>
+### 9 · Que cada reunión deje su trabajo <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** cada reunión, también las internas, deja lo que hay que hacer para quien lo tiene que hacer.
 - **Hoy:** solo se leen las reuniones con clientes y los sprints, y la copia de Meet corre cuando alguien abre Nexus.
 - **Plan:** la copia de Meet cada hora y tu piloto con tus reuniones internas.
 
-### 9 · Finanzas y cobranza <span class="estado">En producción</span>
+### 10 · Finanzas y cobranza <span class="estado">En producción</span>
 
 - **Resultado esperado:** lo facturado, lo cobrado y lo que entró al banco cuadran solos; una persona decide solo lo dudoso.
 - **Hoy:** «Lo que no cuadra» se cuenta por documento, Nexus ordena solo lo seguro (con «Deshacer») y Mercury cobra sola con el día en que se vio pagada.
@@ -120,7 +126,7 @@ Sin esto, algo sigue mal o no se puede validar:
 15. **«Diagnóstico virtual»** (K7): confirmar con Marco que es el test en línea que deja la nota «Diagnóstico de Rendimiento» en HubSpot.
 16. **Las Acciones coherentes** (L4): ¿se quedan en el diagnóstico o pasan a la Planificación? Te propongo dejar en el diagnóstico el enfoque con tres o cuatro acciones en una línea, y pasar el detalle a la Planificación.
 17. **El formato del documento de resultados de la preventa** (C5): lo define Ventas el lunes 27 oct.
-18. **La calificación de clientes de Insider** (N1): pedirles el umbral de tráfico con que califican a un cliente; es el de la condición «tráfico suficiente».
+18. **La calificación de clientes de Insider** (N4): pedirles el umbral de tráfico con que califican a un cliente; es el de la condición «tráfico suficiente».
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -170,7 +176,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 4. K2, K3 y K4 juntas (la primera sesión en frío necesita el position statement), y K10.
 5. Con A1 cerrado: A3 (criterios en palabras simples) y A5 (los casos que faltan).
 6. A2 (migrar el cotizador a la biblioteca) y después A4 (duración y «cómo sabrás que funcionó»).
-7. B1 completo (con el perfil que pide la escala 9.0), N (la escala con engagement avanzado, después de publicar la 8.9.1) y después B2 (la escala lee los datos de la empresa). A6 (los casos de Insider por industria) va con N.
+7. N1 y N2 (publicar la 8.9.1 y probarla con clientes), B1 completo (con el perfil que pide la escala 9.0), N3 a N7 (la 9.0 con lo pendiente y lo de Insider) y después B2 (la escala lee los datos de la empresa). A6 (los casos de Insider por industria) va con N.
 8. C1 y C3 (pueden ir antes: usan lo que ya hay), C2 (la cotización calculada, necesita A2 y B1), C4 y C5 (cuando se defina su formato).
 9. D1 (diseño del cronograma con casos), después D2, D3 y L4, y junto con ellos G1 a G3.
 10. E1, E2, F1, I1 y M4.
@@ -416,22 +422,30 @@ Sale de Liliana con RC Inmobiliaria (23 oct). Es la prioridad 1 del Resumen. Pla
 4. **M3 · El primer ciclo de cada cliente, con su CSE:** RC Inmobiliaria con Liliana, Honda con Caroline y kölbi con Valentina; lo que salga se arregla en el momento.
 5. **M4 · Las actividades que se repiten dejan su tarea en cada ciclo** (D2 etapa 5).
 
-### N · La escala con engagement avanzado <span class="estado">Propuesta</span>
+### N · La escala de rendimiento <span class="estado">Propuesta</span>
 
-Sale de la sesión con Insider One del 21 oct y de tu documento del 23 oct, consensuado y rehecho ese día contra las ediciones por industria, el mapa de herramientas y lo pendiente para la 9.0. Tres capas: la escala general (sin nombrar herramientas), las ediciones (lo propio de cada industria) y el mapa de herramientas (qué habilita HubSpot y qué Insider, criterio por criterio). Plan, cambio por cambio: `docs/escala-engagement-avanzado-plan.md`.
+La escala ubica a cada empresa en Ventas, Marketing y Servicio. Corre la 8.9.0; la 8.9.1 espera tu revisión. Planes: lo pendiente para la 9.0 en `docs/escala/pendiente-9-0.md` (14 temas, con el orden acordado: probar antes de cambiar) y lo de Insider en `docs/escala-engagement-avanzado-plan.md` (tres capas: la escala general sin herramientas, las ediciones por industria y el mapa de herramientas, que dice qué habilita HubSpot y qué Insider criterio por criterio).
 
-1. **N1 · La condición «tráfico suficiente».** *No existe.* Personalizar al visitante anónimo y medir contra un grupo de control solo funcionan con volumen (HubSpot no personaliza al anónimo por lo que hace; Insider sí, y califica a sus clientes por tráfico).
+1. **N1 · Publicar la 8.9.1.** *Por decidir:* la revisas tú (prueba 108 y «Lo que decides tú» 8).
+2. **N2 · Probar la escala con 5 a 8 clientes reales.** *No existe todavía.* Es el orden acordado para la 9.0 (decisión 13 de `pendiente-9-0.md`): el diagnóstico y el chequeo, comparados con lo que cree el equipo. Nunca con Wherex.
+   - Etapa 1 · Elegir los clientes con Customer Success, de varias industrias.
+   - Etapa 2 · Comparar lo que da la escala con lo que cree el equipo; eso decide sobre todo las celdas desbalanceadas y si se muestra el avance («cumple 27 de 30»).
+3. **N3 · La 9.0 con lo pendiente.** *Existe a medias:* los 14 temas están escritos, con su propuesta.
+   - Etapa 1 · Primero lo que hoy ubica mal a una empresa (igualdad entre áreas, criterios compuestos, repetidos), después lo que ordena la expansión, y al final lo que depende de la prueba.
+   - Etapa 2 · Se escribe junto con lo de Insider (N4 a N7), en un solo borrador, revisado por ti; se publica la 9.0.0.
+   - Etapa 3 · Los casos de la biblioteca que citan criterios que cambian de identificador se actualizan en el mismo paso.
+4. **N4 · La condición «tráfico suficiente»** (de aquí a N7, lo de Insider: la sesión del 21 oct y tu documento del 23 oct). *No existe.* Personalizar al visitante anónimo y medir contra un grupo de control solo funcionan con volumen (HubSpot no personaliza al anónimo por lo que hace; Insider sí, y califica a sus clientes por tráfico).
    - Etapa 1 · Una tercera pregunta del perfil de la escala, con el umbral de la calificación de Insider, editable. Lo demás reusa la marca «venta sin vendedor», que ya existe: ningún criterio lleva dos condiciones.
-2. **N2 · Los 16 cambios de la versión 9.0.** *Existe a medias:* buena parte de lo que mostró Insider ya está en las ediciones (el catálogo, los carritos y las solicitudes a medias, las recomendaciones, la búsqueda).
+5. **N5 · Los 16 cambios de la versión 9.0.** *Existe a medias:* buena parte de lo que mostró Insider ya está en las ediciones (el catálogo, los carritos y las solicitudes a medias, las recomendaciones, la búsqueda).
    - Etapa 1 · La escala general, 11 cambios: el permiso por canal (sigue de riesgo), lo que hacen en el sitio o la app unido a la ficha, segmentos que se actualizan solos, tres canales en un recorrido, A/B con hipótesis, el ingreso que agrega el marketing contra un grupo de control (con tráfico suficiente; el más importante), los agentes que alimentan la ficha, operar con agentes de IA (nuevo), priorizar con comportamiento digital, segmentos de valor y lealtad, y avisos disparados por el evento.
    - Etapa 2 · Las ediciones, 5 cambios: en Ecommerce y retail, personalizar también al anónimo (con tráfico suficiente) y el aviso de disponibilidad o de baja de precio; en Turismo, personalizar el motor de reservas (con tráfico suficiente), recuperar búsquedas y reservas a medias, y el aviso de un cambio de vuelo.
    - Etapa 3 · Cuatro de los cambios se escriben junto con temas que la 9.0 ya tenía abiertos (permiso de contacto, partir 2.7.E1, mover 1.6.O1, 3.6.E2), sin duplicar.
    - Etapa 4 · En un borrador de la escala, revisado por ti; se publica la 9.0.0 después de la 8.9.1.
-3. **N3 · La lectura «Preparación para engagement avanzado».** *No existe.* No cambia el nivel.
+6. **N6 · La lectura «Preparación para engagement avanzado».** *No existe.* No cambia el nivel.
    - Etapa 1 · «Lista», «Casi lista» (dice qué cimientos faltan: es lo que vende Smarteam antes de la plataforma) o «Todavía no» (su camino es HubSpot y SmartLoop).
    - Etapa 2 · Los umbrales editables: tráfico (el de Insider) y base con consentimiento (5.000 para empezar).
    - Etapa 3 · Se ve en la exploración de la preventa y en el diagnóstico del CSE. No nombra a Insider.
-4. **N4 · El mapa de herramientas para la 9.0.** *Existe* (versión 1.0.1, para la 8.8.0): ya dice, criterio por criterio, qué habilita Insider, HubSpot o Smarteam.
+7. **N7 · El mapa de herramientas para la 9.0.** *Existe* (versión 1.0.1, para la 8.8.0): ya dice, criterio por criterio, qué habilita Insider, HubSpot o Smarteam.
    - Etapa 1 · Sumar los 16 cambios con quién los habilita.
    - Etapa 2 · La ficha de Insider con el umbral de tráfico de su calificación, y la de HubSpot con lo que no hace (personalizar al anónimo por su comportamiento).
 
