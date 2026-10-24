@@ -19,6 +19,8 @@ const db = vi.hoisted(() => {
     }),
     cronJobState: {
       update: vi.fn(async ({ where, data }: { where: { id: string }; data: { lastResult: unknown } }) => {
+        // Como la base real: actualizar una fila que no existe falla (P2025). Sin el INSERT de antes, rojo.
+        if (!filas.has(where.id)) throw new Error("P2025: Record to update not found.");
         filas.set(where.id, data.lastResult);
       }),
     },
@@ -67,15 +69,30 @@ describe("diasSeguidosEnCero (el criterio de U6)", () => {
   const sin = () => ({ ...conteoVacio(), pedidos: 10 });
   const con = () => ({ ...conteoVacio(), pedidos: 10, fallas429: 1 });
 
-  it("una semana sin una falla da 7, aunque haya días sin fila", () => {
-    const dias = { "2026-10-18": sin(), "2026-10-20": sin(), "2026-10-24": sin() };
-    expect(diasSeguidosEnCero(dias, "2026-10-24")).toBe(7);
+  const semana = (desde: number, hasta: number) =>
+    Object.fromEntries(Array.from({ length: hasta - desde + 1 }, (_, i) => [`2026-10-${String(desde + i).padStart(2, "0")}`, sin()]));
+
+  it("siete días con pedidos y sin fallas dan 7", () => {
+    expect(diasSeguidosEnCero(semana(18, 24), "2026-10-24")).toBe(7);
   });
 
-  it("corta en el último día con una falla, y no cuenta antes del primer día registrado", () => {
-    expect(diasSeguidosEnCero({ "2026-10-20": con(), "2026-10-22": sin() }, "2026-10-24")).toBe(4);
+  it("⭐ un día sin datos corta la racha: es un día en que el registro no anduvo, no uno perfecto", () => {
+    /* La edición que la pone en rojo: contar como cero un día sin fila. Con el registro caído desde el 25, el 2 de
+       noviembre diría «9 días sin fallas» sin un solo dato. */
+    expect(diasSeguidosEnCero({ "2026-10-24": sin() }, "2026-11-02")).toBe(0);
+    const conHueco = { ...semana(18, 24) };
+    delete conHueco["2026-10-21"];
+    expect(diasSeguidosEnCero(conHueco, "2026-10-24")).toBe(3);
+    expect(diasSeguidosEnCero({ ...semana(18, 24), "2026-10-21": conteoVacio() }, "2026-10-24")).toBe(3); // fila sin pedidos
+  });
+
+  it("hoy sin datos todavía no corta: se cuenta desde ayer", () => {
+    expect(diasSeguidosEnCero(semana(17, 23), "2026-10-24")).toBe(7);
+  });
+
+  it("corta en el último día con una falla", () => {
+    expect(diasSeguidosEnCero({ ...semana(18, 24), "2026-10-20": con() }, "2026-10-24")).toBe(4);
     expect(diasSeguidosEnCero({ "2026-10-24": con() }, "2026-10-24")).toBe(0);
-    expect(diasSeguidosEnCero({ "2026-10-14": con() }, "2026-10-24")).toBe(10);
     expect(diasSeguidosEnCero({}, "2026-10-24")).toBe(0);
   });
 });

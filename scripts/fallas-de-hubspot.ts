@@ -49,7 +49,7 @@ async function main() {
     const racha = diasSeguidosEnCero(registro.dias, crDateParts(new Date()).dateKey);
     console.log("");
     console.log(`Días seguidos hasta hoy sin ninguna falla que llegara al llamador: ${racha} (meta de U6: 7).`);
-    console.log("Un día sin fila es un día sin pedidos a HubSpot.");
+    console.log("Un día sin datos (sin fila o sin pedidos) corta la racha: es un día en que el registro no anduvo.");
   } finally {
     await close();
   }

@@ -53,7 +53,7 @@ export function nombreYDetalle(objeto: string, id: string, p: Props): { etiqueta
   return { etiqueta: (etiqueta || `${tipo} #${id}`).slice(0, 160), detalle: [tipo, extra].filter(Boolean).join(" · ").slice(0, 160) };
 }
 
-async function leerFoto(enlace: EnlaceDeHubspot): Promise<{ status: number; foto: FotoDeRegistro }> {
+async function leerFoto(enlace: EnlaceDeHubspot): Promise<FotoDeRegistro> {
   const hs = await getSystemHubspotClient();
   const props = PROPIEDADES[enlace.objeto] ?? ["hs_object_id"];
   const asociacion = enlace.objeto === "0-2" ? "" : "&associations=companies";
@@ -61,20 +61,20 @@ async function leerFoto(enlace: EnlaceDeHubspot): Promise<{ status: number; foto
     method: "GET",
     path: `/crm/v3/objects/${enlace.objeto}/${encodeURIComponent(enlace.id)}?properties=${props.join(",")}${asociacion}`,
   });
-  if (res.status === 401) return { status: 401, foto: { estado: "error", motivo: "401" } };
-  if (res.status === 403) return { status: 403, foto: { estado: "sin_permiso" } };
-  if (res.status === 404) return { status: 404, foto: { estado: "no_existe" } };
-  if (res.status !== 200) return { status: res.status, foto: { estado: "error", motivo: `HubSpot respondió ${res.status}` } };
+  if (res.status === 401) return { estado: "error", motivo: "401" };
+  if (res.status === 403) return { estado: "sin_permiso" };
+  if (res.status === 404) return { estado: "no_existe" };
+  if (res.status !== 200) return { estado: "error", motivo: `HubSpot respondió ${res.status}` };
   const d = (await res.json()) as { id: string; properties?: Props; associations?: { companies?: { results?: { id: string }[] } } };
   const { etiqueta, detalle } = nombreYDetalle(enlace.objeto, enlace.id, d.properties ?? {});
   const empresas = enlace.objeto === "0-2" ? [d.id] : [...new Set((d.associations?.companies?.results ?? []).map((r) => String(r.id)))];
-  return { status: 200, foto: { estado: "ok", etiqueta, detalle, empresas } };
+  return { estado: "ok", etiqueta, detalle, empresas };
 }
 
 /** La foto. El 401 (KNOWN-ERRORS: 401 aunque `expiresAt` diga válido) lo reintenta el transporte (lib/hubspot/client.ts). */
 export async function leerRegistroParaVincular(enlace: EnlaceDeHubspot): Promise<FotoDeRegistro> {
   try {
-    return (await leerFoto(enlace)).foto;
+    return await leerFoto(enlace);
   } catch (e) {
     return { estado: "error", motivo: e instanceof Error ? e.message : "sin respuesta" };
   }

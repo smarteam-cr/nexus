@@ -83,21 +83,27 @@ export function mezclarRegistro(guardado: unknown, pendiente: Record<string, Con
   return { version: 1, dias: Object.fromEntries(recientes.map((d) => [d, dias[d]])), at: ahora.toISOString() };
 }
 
+/** Un día con datos: el registro anduvo (hubo pedidos a HubSpot y se guardaron). */
+export function diaConDatos(c: ConteoDelDia | undefined): c is ConteoDelDia {
+  return !!c && (c.pedidos ?? 0) > 0;
+}
+
 /**
- * Cuántos días seguidos, contando hacia atrás desde `hoy` (`YYYY-MM-DD`, Costa Rica), no llegó ninguna falla al
- * llamador. Un día sin fila es un día sin pedidos a HubSpot: cuenta como cero, mientras sea posterior al primer día
- * registrado (antes de ese día el registro no existía). Es el criterio de éxito de U6: 7. Puro.
+ * Cuántos días seguidos, contando hacia atrás desde `hoy` (`YYYY-MM-DD`, Costa Rica), tienen datos y ninguna falla que
+ * llegara al llamador. Es el criterio de éxito de U6: 7. Puro.
+ *
+ * ⛔ Un día sin datos (sin fila, o sin pedidos) CORTA la racha: en producción hay jobs que le piden a HubSpot cada 15
+ * minutos, así que un día sin nada anotado es un día en que el registro no anduvo, no uno perfecto. Hoy, si todavía no
+ * tiene datos (es temprano o no se guardó aún), no corta: se empieza a contar desde ayer.
  */
 export function diasSeguidosEnCero(dias: Record<string, ConteoDelDia>, hoy: string): number {
-  const claves = Object.keys(dias).sort();
-  if (!claves.length) return 0;
-  const primero = claves[0];
+  const DIA_MS = 24 * 60 * 60 * 1000;
+  let t = Date.parse(`${hoy}T12:00:00Z`);
+  if (!diaConDatos(dias[hoy])) t -= DIA_MS;
   let n = 0;
-  for (let t = Date.parse(`${hoy}T12:00:00Z`); ; t -= 24 * 60 * 60 * 1000) {
-    const dia = new Date(t).toISOString().slice(0, 10);
-    if (dia < primero) return n;
-    const c = dias[dia];
-    if (c && c.fallas401 + c.fallas429 > 0) return n;
+  for (; ; t -= DIA_MS) {
+    const c = dias[new Date(t).toISOString().slice(0, 10)];
+    if (!diaConDatos(c) || c.fallas401 + c.fallas429 > 0) return n;
     n++;
   }
 }
@@ -170,6 +176,12 @@ export const eventosQueSeCuentan: EventosDelTransporte = {
     });
   },
 };
+
+/** Guarda ya lo pendiente, sin esperar los 10 s: para la prueba de integración (registro-de-fallas.int.test.ts). */
+export function _guardarAhoraParaPruebas(): Promise<void> {
+  if (programado) clearTimeout(programado);
+  return guardar();
+}
 
 /** Lo pendiente de guardar, para las pruebas. */
 export function _pendienteParaPruebas(): Record<string, ConteoDelDia> {

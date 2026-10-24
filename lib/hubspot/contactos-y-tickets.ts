@@ -62,12 +62,8 @@ function fecha(v: string | null | undefined): Date | null {
 
 const texto = (v: string | null | undefined): string | null => (v && v.trim() ? v.trim() : null);
 
-/** Un pedido; el transporte (lib/hubspot/client.ts) ya renueva el token ante un 401 y espera ante un 429. Devuelve la respuesta cruda. */
-type Respuesta = Awaited<ReturnType<HsClient["apiRequest"]>>;
-
-async function pedir(hs: HsClient, req: { method: "GET" | "POST"; path: string; body?: object }): Promise<Respuesta> {
-  return hs.apiRequest(req);
-}
+// Los pedidos van directo por `hs.apiRequest`: el transporte (lib/hubspot/client.ts) ya renueva el token ante un 401 y
+// espera ante un 429.
 
 /** Qué contactos (o tickets) tiene asociados cada empresa. */
 export async function asociacionesDeEmpresas(hs: HsClient, companyIds: readonly string[], hacia: ObjetoAsociado): Promise<Asociaciones> {
@@ -75,7 +71,7 @@ export async function asociacionesDeEmpresas(hs: HsClient, companyIds: readonly 
   for (let i = 0; i < companyIds.length; i += LOTE) {
     const lote = companyIds.slice(i, i + LOTE);
     try {
-      const r = await pedir(hs, { method: "POST", path: `/crm/v4/associations/companies/${hacia}/batch/read`, body: { inputs: lote.map((id) => ({ id })) } });
+      const r = await hs.apiRequest({ method: "POST", path: `/crm/v4/associations/companies/${hacia}/batch/read`, body: { inputs: lote.map((id) => ({ id })) } });
       if (r.status === 403) {
         out.sinPermiso = true;
         return out;
@@ -121,7 +117,7 @@ async function leerEnLote(
   for (let i = 0; i < ids.length; i += LOTE) {
     const lote = ids.slice(i, i + LOTE);
     try {
-      const r = await pedir(hs, {
+      const r = await hs.apiRequest({
         method: "POST",
         path: `/crm/v3/objects/${objeto}/batch/read`,
         body: { inputs: lote.map((id) => ({ id })), properties: propiedades },
@@ -182,7 +178,7 @@ export async function leerTickets(hs: HsClient, ids: readonly string[]) {
 export async function etapasDeTickets(hs: HsClient): Promise<Map<string, EtapaDeTicket>> {
   const out = new Map<string, EtapaDeTicket>();
   try {
-    const res = await pedir(hs, { method: "GET", path: "/crm/v3/pipelines/tickets" });
+    const res = await hs.apiRequest({ method: "GET", path: "/crm/v3/pipelines/tickets" });
     if (!res.ok) return out;
     const data = (await res.json()) as {
       results?: { label: string; stages?: { id: string; label: string; metadata?: { ticketState?: string } }[] }[];

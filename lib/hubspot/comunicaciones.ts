@@ -16,12 +16,9 @@ import type { Client as HsClient } from "./sdk";
 /** correo | nota | llamada (los mismos valores que lib/comunicaciones/reglas.ts: la integración no importa del módulo). */
 export type TipoDeComunicacion = "correo" | "nota" | "llamada";
 
+/** Lo que responde un pedido. Van directo por `hs.apiRequest`: el transporte (lib/hubspot/client.ts) ya renueva el
+ *  token ante un 401 y espera ante un 429. */
 type Respuesta = Awaited<ReturnType<HsClient["apiRequest"]>>;
-
-/** Un pedido. El transporte del cliente (lib/hubspot/client.ts) ya renueva el token ante un 401 y espera ante un 429. */
-async function pedir(hs: HsClient, req: { method: "GET" | "POST"; path: string; body?: object }): Promise<Respuesta> {
-  return hs.apiRequest(req);
-}
 
 /** El objeto de HubSpot de cada tipo y las propiedades que se piden. */
 export const OBJETO_DEL_TIPO: Record<TipoDeComunicacion, { objeto: "emails" | "notes" | "calls"; propiedades: readonly string[] }> = {
@@ -88,7 +85,7 @@ export async function buscarModificadas(
     };
     let r: Respuesta;
     try {
-      r = await pedir(hs, { method: "POST", path: `/crm/v3/objects/${objeto}/search`, body });
+      r = await hs.apiRequest({ method: "POST", path: `/crm/v3/objects/${objeto}/search`, body });
     } catch {
       return out;
     }
@@ -140,7 +137,7 @@ export async function asociacionesDe(
   for (let i = 0; i < ids.length; i += 100) {
     const lote = ids.slice(i, i + 100);
     try {
-      const r = await pedir(hs, { method: "POST", path: `/crm/v4/associations/${objeto}/${hacia}/batch/read`, body: { inputs: lote.map((id) => ({ id })) } });
+      const r = await hs.apiRequest({ method: "POST", path: `/crm/v4/associations/${objeto}/${hacia}/batch/read`, body: { inputs: lote.map((id) => ({ id })) } });
       if (r.status === 403) return { ...out, sinPermiso: true };
       if (r.status !== 200 && r.status !== 207) {
         for (const id of lote) out.ilegibles.add(id);

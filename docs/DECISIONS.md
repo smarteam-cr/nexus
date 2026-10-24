@@ -10813,7 +10813,8 @@ auditoría. El reintento del SDK (`numberOfApiCallRetries`) no sirve: espera fij
    respondió HubSpot (`vistos401`, `vistos429`, el número de antes) y lo que llegó al llamador (`fallas401`,
    `fallas429`, la meta de 7 días en 0). Se guarda cada 10 s como mucho, con la fila bloqueada (`FOR UPDATE`: prod y el
    3004 de cada PC escriben en la misma). Solo cuenta la app: un script no escribe en producción por contar un 429.
-   Lo lee `scripts/fallas-de-hubspot.ts`, que cuenta la racha por días del calendario.
+   Lo lee `scripts/fallas-de-hubspot.ts`, que cuenta la racha por días del calendario: un día sin datos la corta
+   (con jobs cada 15 minutos, un día sin nada anotado es un registro que no anduvo, no un día perfecto).
 7. **Fuera del transporte:** las APIs tipadas del SDK (`client.crm.*`, `client.settings.users`, 7 llamadas) van por el
    http del SDK y lanzan su `ApiException` como siempre; si una choca con el límite, se pasa a `apiRequest`. La
    auditoría de portales (`lib/auditoria-portal/lecturas.ts`) conserva su propio pedido: es el motor separado, con el
