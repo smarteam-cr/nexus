@@ -8,9 +8,12 @@
 
 **Lo que importa esta semana:**
 
-1. Ya están en producción los cambios de la preventa y del diagnóstico para tus reuniones de hoy con Ventas y con Customer Success (CEMACO): pruebas 283 a 290.
-2. Revisar y aprobar, área por área, la propuesta de vender y entregar por casos de uso (pestaña «Roadmap»).
-3. Empezar contigo a desarmar el cotizador en un catálogo de actividades.
+**Prioridad 1: el contexto inicial** (tarjetas 1 a 3). Todo lo demás de Nexus se basa en lo que sabe de cada empresa y de sus reuniones.
+
+1. Los permisos de Google y de HubSpot, con el wizard `scripts/wizards/permisos-contexto.sh` (8 pasos, ninguno pide secretos).
+2. El pedido al equipo: toda reunión con un cliente o un prospecto, por Google Meet, convocada por Smarteam, con «Transcribir» y las notas activadas (pestaña «Lo que pides al equipo»).
+3. El paso uno del orden sugerido: Google cada 10 minutos con el rescate de 177 reuniones, las notas de Gemini que cuentan (301 reuniones), el tablero de salud de las reuniones, y los datos y la investigación de la empresa.
+4. Lo que cuesta traer todo: unos US$150 a 180 una sola vez, y unos US$55 a 65 más al mes (`docs/reuniones-pieza-angular-plan.md`, «Lo que cuesta»).
 
 **El orden:** las áreas van numeradas por dependencia: cada una usa lo de las anteriores. La empresa va primero porque todo cuelga de ella (sus datos, su investigación y su espejo en HubSpot); las reuniones van segundas porque son las que crean su contexto, y las integraciones terceras porque son por donde entra todo; la escala va después porque todo la lee (el test, la preventa, la propuesta, el diagnóstico y los ciclos de SmartLoop); los datos de la empresa le dan el perfil; el test es la puerta de entrada de los prospectos; con eso se vende por resultados, y lo vendido se entrega por SmartLoop, las tareas, el cronograma y los entregables. Las tareas van antes que el cronograma porque las tareas que nacen de lo vendido necesitan el módulo listo. **Lo urgente que pidió el equipo el 23 oct va primero aunque su área esté más abajo** (los arreglos de SmartLoop, de la exploración y del diagnóstico: ver «Orden sugerido» en la pestaña «Roadmap»).
 
@@ -1110,6 +1113,7 @@ Lo que ya está en producción y les toca revisar a ellos, no a ti.
 | 15 | María José o Alex Arrieta | Cobranza › Fundauna: la factura FAC/2026/0359 (pagada) cubre dos cuotas sin el número anotado; anotarlo en las dos para que se cobren |
 | 16 | María José o Alex Arrieta | Cobranza › Honda, septiembre: la cuota apunta a la FAC/2026/0347, que Odoo anuló; cambiarla a la 0348 |
 | 17 | María José o Alex Arrieta | Ferretería Noelito INV-60: pagada en Mercury sin una entrada de plata con su fecha; confirmar el día del pago a mano |
+| 18 | Todo el equipo | Toda reunión con un cliente o un prospecto por Google Meet, convocada por alguien de Smarteam (si la convoca el cliente, las notas quedan en su Drive y Nexus no las lee), con «Transcribir» y las notas de Gemini activadas. Una reunión presencial: grabarla y subirla. En 90 días, 643 reuniones con clientes quedaron sin transcripción, y unas 430 por esto |
 
 
 ## Hecho

@@ -74,6 +74,37 @@ el código:
    la persona no estuvo, y las que quedaron en otra empresa con el mismo dominio, con «Mover a esta empresa». Va junto con
    la asociación automática de K5.
 
+## Lo que cuesta (IA, estimado el 2026-10-24)
+
+Con el costo real por llamada de los últimos 30 días: US$118 en 2.051 llamadas. Una reunión con transcripción leída
+entera (la post-sesión, los hechos, la lectura de tareas y el clasificador) cuesta unos US$0,21, y una con solo notas,
+unos US$0,10. Las APIs de Google (Meet, Calendar, Workspace Events) y la de HubSpot no cobran; Pub/Sub entra en la capa
+gratis.
+
+**Una sola vez, para traer lo que ya existe:**
+
+| Qué | Cuánto | US$ |
+|---|---|---|
+| Leer las reuniones con solo notas (T2) | 301 | ~30 |
+| El rescate de las que se leyeron antes de terminar (U1) | 177 | ~37 |
+| Los resúmenes de reuniones y llamadas de HubSpot (U7) | hasta 1.416, sin las que ya llegan por Meet | 25 a 50 |
+| Las reuniones con texto sin empresa: clasificar y leer (T3) | 67 | ~15 |
+| La investigación de cada empresa con búsqueda web (R5) | 200 | ~25 |
+| El TAM y los datos de la empresa (R1) | 200 | ~2 |
+| El analizador de venta sobre las de los últimos 90 días (S) | 31 | ~4 |
+| **Total** | | **~150 a 180** |
+
+**Al mes, de más:**
+- unos US$45 si el equipo transcribe las reuniones que hoy no (unas 215 más por mes);
+- unos US$10 por leer las notas;
+- y unos US$8 entre los resúmenes nuevos de HubSpot, el analizador y rehacer la investigación cada 6 meses.
+
+Son **unos US$55 a 65 al mes** sobre los US$118 de hoy. Los ahorros de U21 a U23 (el precio de Sonnet 5, los lotes y
+la caché) devuelven entre US$20 y 30 al mes.
+
+Fuera de la IA, transcribir audio de reuniones presenciales con Speech-to-Text cuesta del orden de 1 a 2 centavos de
+dólar por minuto (por confirmar con el precio vigente).
+
 ## Orden
 
 T1 y T2 primero: dicen la verdad y recuperan 301 reuniones. Después T3 y T6, y luego T4, T7, T8 y T5.
