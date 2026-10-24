@@ -44,6 +44,7 @@ import {
   estadoDeTarea,
   vencioSinRevisar,
 } from "./ciclo";
+import { ETIQUETA_DE_LA_RECUPERACION } from "@/lib/lecturas/reglas";
 import { contarTipo, conteoVacio, type ConteoDeTipo, type ItemParaContar, type Ventana } from "./conteo";
 import { PLAZO_PARA_REVISAR_DIAS, TIPOS_DE_LO_PROPUESTO, type ClaveDeTipo } from "./tipos";
 
@@ -69,17 +70,33 @@ async function seguro<T>(p: Promise<T>, siFalta: T): Promise<T> {
   }
 }
 
+/**
+ * Sin las minutas de la RECUPERACIÓN (T2: reuniones de hace meses, leídas por lote): no nacieron de una reunión de hoy.
+ * Contarlas llenaría «Minuta de la reunión» y «Nota para HubSpot» de pendientes y vencidas que nadie tenía que revisar.
+ * Se reconocen por la etiqueta de su corrida (`ETIQUETA_DE_LA_RECUPERACION`).
+ */
+export async function sinLasRecuperadas<T extends { generatedByAgentRunId: string | null }>(db: Pick<PrismaClient, "agentRun">, minutas: T[]): Promise<T[]> {
+  const corridas = [...new Set(minutas.map((m) => m.generatedByAgentRunId).filter((x): x is string => !!x))];
+  if (!corridas.length) return minutas;
+  const recuperadas = new Set(
+    (await db.agentRun.findMany({ where: { id: { in: corridas }, stepLabel: ETIQUETA_DE_LA_RECUPERACION }, select: { id: true } })).map((r) => r.id),
+  );
+  return minutas.filter((m) => !m.generatedByAgentRunId || !recuperadas.has(m.generatedByAgentRunId));
+}
+
 const minutas: Lector = async ({ db, ...v }, hoyISO) => {
-  const filas = await db.sessionMinute.findMany({
+  const todas = await db.sessionMinute.findMany({
     where: { OR: [{ createdAt: rango(v) }, { reviewedAt: rango(v) }] },
     select: {
       status: true,
       reviewedByEmail: true,
       reviewedAt: true,
       createdAt: true,
+      generatedByAgentRunId: true,
       session: { select: { resolvedClientId: true, manualClientId: true } },
     },
   });
+  const filas = await sinLasRecuperadas(db, todas);
   return {
     minuta: filas.map((m) => ({
       ...estadoDeMinuta(m, hoyISO),
@@ -352,16 +369,20 @@ const notasParaHubspot: Lector = async ({ db, ahora, ...v }, hoyISO) => {
     [],
   );
   const porReunion = new Map(decididas.filter((d) => d.sessionId).map((d) => [d.sessionId!, d]));
-  const minutasDeLaVentana = await db.sessionMinute.findMany({
-    where: { session: { date: { gte: v.desde, lt: v.hasta, lte: ahora } } },
-    select: {
-      sessionId: true,
-      summary: true,
-      agreements: true,
-      decisions: true,
-      session: { select: { title: true, date: true, resolvedClientId: true, manualClientId: true } },
-    },
-  });
+  const minutasDeLaVentana = await sinLasRecuperadas(
+    db,
+    await db.sessionMinute.findMany({
+      where: { session: { date: { gte: v.desde, lt: v.hasta, lte: ahora } } },
+      select: {
+        sessionId: true,
+        summary: true,
+        agreements: true,
+        decisions: true,
+        generatedByAgentRunId: true,
+        session: { select: { title: true, date: true, resolvedClientId: true, manualClientId: true } },
+      },
+    }),
+  );
   const duenos = [...new Set(minutasDeLaVentana.map((m) => m.session.resolvedClientId ?? m.session.manualClientId).filter((x): x is string => !!x))];
   const clientes = duenos.length ? await db.client.findMany({ where: { id: { in: duenos }, kind: { in: ["CLIENTE", "PROSPECTO"] } }, select: { id: true } }) : [];
   const conTarjeta = new Set(clientes.map((c) => c.id));

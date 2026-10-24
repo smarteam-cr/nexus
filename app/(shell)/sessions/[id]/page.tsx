@@ -9,7 +9,8 @@ import { cargarTarjeta } from "@/lib/seguimiento/tarjeta-server";
 import { tarjetaTieneAlgo } from "@/lib/seguimiento/tarjeta";
 import LoQueDejoLaReunion from "@/components/seguimiento/LoQueDejoLaReunion";
 import LeerEstaReunion from "@/components/seguimiento/LeerEstaReunion";
-import { MIN_TRANSCRIPT_CHARS } from "@/lib/google/doc-parse";
+import { queSeLee } from "@/lib/lecturas/reglas";
+import { tieneTexto } from "@/lib/sessions/tiene-texto";
 import { contextoDeTareas, tareasDisponible } from "@/lib/tareas/servidor";
 import { contarTareasDeLaReunion } from "@/lib/tareas/consultas";
 import { invitadosDe } from "@/lib/contactos/lectura-server";
@@ -240,7 +241,8 @@ export default async function SessionPage({
 
   // Ficha G: la agenda, los avisos, las tareas y «Después de la reunión». Si a la base le falta el SQL, la página se ve
   // como antes (las lecturas que dependen de él salen vacías adentro; acá, por si falla el resto).
-  const textoDeLaReunion = (session.transcript?.trim().length ?? 0) >= MIN_TRANSCRIPT_CHARS || !!(session.summary as { overview?: string } | null)?.overview?.trim();
+  // El predicado único (lib/sessions/tiene-texto.ts): transcripción, o solo notas de Gemini que alcanzan para leerlas.
+  const textoDeLaReunion = tieneTexto(session);
   const pagina: PaginaDeLaVista | undefined = await cargarPaginaDeLaReunion({
     sessionId: session.id,
     user,
@@ -269,7 +271,9 @@ export default async function SessionPage({
 
   // «Leer esta reunión»: una reunión con tarjeta (de un cliente o un prospecto, no de puertas adentro, y que quien mira
   // puede ver), con transcripción y sin minuta. Es el camino de una persona cuando la cola no la leyó (el remedio de INV44).
-  const puedeLeer = !!tarjeta && !minute && (session.transcript?.trim().length ?? 0) >= MIN_TRANSCRIPT_CHARS;
+  // Se puede leer a mano lo mismo que lee la cola (`queSeLee`): la transcripción, lo que recuerda alguien o, con la
+  // bandera prendida, las notas de Gemini (T2).
+  const puedeLeer = !!tarjeta && !minute && queSeLee(session, process.env).fuente !== null;
   const arriba =
     tarjetaSinCompromisos && tarjetaTieneAlgo(tarjetaSinCompromisos) ? (
       <>

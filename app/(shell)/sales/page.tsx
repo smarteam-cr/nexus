@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import SalesClient from "./SalesClient";
 import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
+import { DONDE_TIENE_TRANSCRIPCION } from "@/lib/sessions/tiene-texto";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export default async function SalesPage() {
       select: { id: true, title: true, date: true, participants: true, duration: true },
     }),
     prisma.firefliesSession.findMany({
-      where: { participants: { hasSome: [...SALES_EMAILS] }, transcript: { not: null }, NOT: { transcript: "" } },
+      where: { participants: { hasSome: [...SALES_EMAILS] }, ...DONDE_TIENE_TRANSCRIPCION },
       select: { id: true },
     }),
   ]);

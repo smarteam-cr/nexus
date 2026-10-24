@@ -10778,3 +10778,35 @@ queda sin dueña en la local. El SQL también suelta las dueñas resueltas huér
 **Borrar una empresa:** toda la que borra (el DELETE de la app y los scripts) suelta antes sus reuniones con
 `soltarReunionesDeLaEmpresa` (`lib/clients/soltar-reuniones.ts`), dentro de la misma transacción. Un script que limpia
 duplicados no borra una empresa con reuniones: la salta y lo dice.
+
+## Las reuniones con solo notas cuentan, y lo atrasado se lee por lote (2026-10-24, T1, T2 y U22)
+
+**Contexto.** En 90 días, de 1.264 reuniones con empresa, 301 tenían solo notas de Gemini y Nexus las trataba como sin
+texto: la lectura dejaba solo sus hechos (etapa 6), sin minuta. Cada lector decidía «tiene texto» con su propio filtro.
+Y el ahorro por lote (desde el 18 oct) tenía 0 pedidos: el barrido diario del vigía no corre en producción.
+
+**Decisiones.**
+1. **Un predicado único** (`lib/sessions/tiene-texto.ts`): transcripción de 200 caracteres o más; sin ella, notas de
+   400 o más; si no, nada. `DONDE_TIENE_TRANSCRIPCION` (no nula y no vacía) para quien necesita la conversación misma
+   (el vigía, el analizador de venta); `DONDE_PUEDE_TENER_TEXTO` como filtro grueso; `sqlClaseDeTexto` en SQL. Sin SQL:
+   una columna «solo notas» sería un dato derivable duplicado. Un escaneo prohíbe volver a `transcript: { not: null }`.
+2. **Una reunión con solo notas se lee entera** (minuta, compromisos y pedidos: sus «Próximos pasos» son justo los
+   compromisos), con su propia bandera `SEGUIMIENTO_SOLO_NOTAS` (prendida; `0` es la vuelta atrás). Supersede, para las
+   notas, la regla de la etapa 6 «no deja minuta, sí sus hechos». Las citas se verifican contra las notas.
+3. **Lo atrasado (más de 14 días) se lee por el modo de recuperación**, por la API de lotes, fuera del presupuesto
+   automático (el gasto se anota a nombre de quien la corre y cuenta en el presupuesto HUMANO del día (el que comparte todo el equipo, US$20); con su tope de 100 por corrida): minuta y temas, sin propuestas de
+   Tarea, pedidos fuera de alcance, fecha del diagnóstico ni lo que sigue. No toca `LecturaDeReunion`: una fila «lista»
+   sin la salida de Tareas se soltaría para Tareas, que propondría tareas viejas. Por defecto, solo las empresas activas
+   (un proyecto de cartera o una preventa viva). Un pedido que vuelve sin minuta se puede volver a mandar (otra clave por
+   intento), hasta 3; la misma reunión en dos series o dos fichas se reconoce por la huella de la cola (normalizada, sin
+   mirar el dueño); el proyecto del pedido es el principal solo si es del dueño; sus minutas no cuentan en «Uso de Nexus»
+   ni en la proyección del gasto (se reconocen por la etiqueta de su corrida). El `--apply` va después del deploy.
+4. **Los hechos de lo atrasado NO se leen** (por ahora): el enrutador no distingue una reunión vieja y mandaría avance,
+   etapa, alertas y novedades de hace meses como si fueran de hoy. Si se quieren, primero el enrutador aprende «solo
+   memoria» para una reunión de más de 14 días.
+5. **INV47**: ninguna reunión de los últimos 14 días con texto y gente de fuera queda sin empresa más de 48 horas.
+   Nació «no bloquea» (`INV47_BLOQUEA`) porque ese día contaba reuniones de FACO, entrevistas con correos personales y
+   aliados sin ficha; se cambia a `true` con su primer verde.
+
+**Lo verificado antes de contar las notas:** «Cemaco | Data Hub» del 22 oct tiene su propio documento de notas (creado
+ese día por la organizadora, con otro contenido que el del 15 oct): no es texto de otra reunión de la serie.

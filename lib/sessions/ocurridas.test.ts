@@ -215,7 +215,11 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   },
   "app/api/sales/analyze/route.ts": {
     clase: "contexto",
-    motivo: "Acotado por `transcript: { not: null }` sobre ids explícitos — una futura no tiene transcripción.",
+    motivo: "Acotado por `DONDE_TIENE_TRANSCRIPCION` sobre ids explícitos — una futura no tiene transcripción.",
+  },
+  "lib/lecturas/recuperacion.ts": {
+    clase: "contexto",
+    motivo: "La recuperación (T2) lee reuniones de MÁS de 14 días: corta por `date < hace 14 días`, así que una futura nunca entra.",
   },
   "app/api/business-cases/[id]/generate/route.ts": {
     clase: "contexto",
@@ -314,6 +318,10 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   "lib/sessions/vincular-al-llegar.ts": {
     clase: "plomeria",
     motivo: "Memoria de la cuenta, etapa 2: vincula a su proyecto las reuniones con solo notas (el clasificador). Ya corta por `date: { lte: ahora - 1h }`.",
+  },
+  "lib/invariantes/reuniones.ts": {
+    clase: "plomeria",
+    motivo: "INV47 (T1): cuenta las reuniones recientes con texto y sin empresa. Corta por `date: { lte: ahora }`; no afirma nada sobre el contenido.",
   },
   "lib/invariantes/lecturas.ts": {
     clase: "plomeria",
@@ -521,8 +529,7 @@ describe("/sales no carga el texto de las transcripciones para saber si existen 
     /* La edición que lo pone en rojo: volver a `transcript: true` en el select «porque es más simple». */
     const src = readFileSync(join(RAIZ, "app/(shell)/sales/page.tsx"), "utf8").replace(/\/\/[^\n]*/g, "");
     expect(src, "el blob entero de todas las reuniones de Ventas, por visita").not.toMatch(/transcript:\s*true/);
-    expect(src).toMatch(/transcript:\s*\{\s*not:\s*null\s*\}/);
-    expect(src, '`""` no es un transcript: el conteo de analizables tiene que ser el de antes').toMatch(/NOT:\s*\{\s*transcript:\s*""\s*\}/);
+    expect(src, '`""` no es un transcript: el conteo de analizables tiene que ser el de antes (el predicado único lo excluye)').toContain("...DONDE_TIENE_TRANSCRIPCION");
     expect(src).toContain("idsConTranscript.has(s.id)");
   });
 });

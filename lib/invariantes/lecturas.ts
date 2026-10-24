@@ -9,8 +9,8 @@
  * tareas). INV45, el de los hechos de la etapa 6, vive en lib/invariantes/hechos.ts.
  */
 import { esquemaDesactualizado } from "@/lib/db/esquema";
-import { MIN_TRANSCRIPT_CHARS } from "@/lib/google/doc-parse";
-import { DIAS_DE_FRESCURA, ESTADOS_QUE_CUENTAN, SQL_DEL_SEGUIMIENTO } from "@/lib/lecturas/reglas";
+import { DIAS_DE_FRESCURA, ESTADOS_QUE_CUENTAN, SQL_DEL_SEGUIMIENTO, colaTomaSoloNotas } from "@/lib/lecturas/reglas";
+import { DONDE_PUEDE_TENER_TEXTO, claseDeTexto } from "@/lib/sessions/tiene-texto";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { cumple, viola, type Invariante } from "./contrato";
@@ -27,7 +27,7 @@ export const REMEDIO_DE_INV44 =
 
 /**
  * INV44 · Toda reunión con un CLIENTE o un PROSPECTO, de 14 días o menos, enriquecida hace más de 24 h y con
- * transcripción, que NO es de puertas adentro (todos los que estuvieron son de la casa: esa no la lee el seguimiento),
+ * texto (transcripción o, si la cola las toma, solo notas de Gemini: lib/sessions/tiene-texto.ts), que NO es de puertas adentro (todos los que estuvieron son de la casa: esa no la lee el seguimiento),
  * tiene su lectura de seguimiento (lista, sin texto, copia o error) O su minuta. La minuta cubre la transición y la
  * bandera apagada (el post-proceso viejo deja minuta y no toca la cola). Una en `error` cuenta: la señal es el job, que
  * se pone en rojo el tick en que llega ahí.
@@ -43,8 +43,8 @@ export const INV44: Invariante = {
         where: {
           date: { gte: desde, lte: ahora },
           enrichedAt: { not: null, lte: enriquecidaAntesDe },
-          transcript: { not: null },
           OR: [{ resolvedClientId: { not: null } }, { manualClientId: { not: null } }],
+          AND: [DONDE_PUEDE_TENER_TEXTO],
         },
         select: { id: true, title: true, date: true, enrichedAt: true, resolvedClientId: true, manualClientId: true, participants: true, organizerEmail: true },
       })
@@ -80,19 +80,21 @@ export const INV44: Invariante = {
     }
     const pendientes = deClientes.filter((s) => !conMinuta.has(s.id) && !leidas.has(s.id));
 
-    // La transcripción tiene que ser de verdad (MIN_TRANSCRIPT_CHARS). Se trae SOLO para las que quedan, de a 50.
-    const largos = new Map<string, number>();
+    // El texto tiene que ser de verdad (el predicado único). Se trae SOLO para las que quedan, de a 50. Las de solo notas
+    // se esperan si la cola las toma (`colaTomaSoloNotas`): con las dos banderas apagadas, nadie las lee.
+    const conNotas = colaTomaSoloNotas(process.env);
+    const clases = new Map<string, string>();
     for (let i = 0; i < pendientes.length; i += 50) {
       const tanda = pendientes.slice(i, i + 50).map((s) => s.id);
-      const filas = await db.firefliesSession.findMany({ where: { id: { in: tanda } }, select: { id: true, transcript: true } });
-      for (const f of filas) if (tanda.includes(f.id)) largos.set(f.id, (f.transcript ?? "").trim().length);
+      const filas = await db.firefliesSession.findMany({ where: { id: { in: tanda } }, select: { id: true, transcript: true, summary: true } });
+      for (const f of filas) if (tanda.includes(f.id)) clases.set(f.id, claseDeTexto(f));
     }
-    const sinLectura = pendientes.filter((s) => (largos.get(s.id) ?? 0) >= MIN_TRANSCRIPT_CHARS);
+    const sinLectura = pendientes.filter((s) => clases.get(s.id) === "transcripcion" || (conNotas && clases.get(s.id) === "solo_notas"));
     const nota = sinLasColumnas ? ` (sin las columnas de la cola —falta ${SQL_DEL_SEGUIMIENTO}—: se mira solo la minuta)` : "";
 
     if (sinLectura.length) {
       return viola(
-        `✗ INV44 VIOLADO: ${sinLectura.length} reunión(es) de clientes o prospectos, de ${DIAS_DE_FRESCURA} días o menos y con transcripción, sin su lectura a las ${HORAS_PARA_LEERLA} h${nota}.\n` +
+        `✗ INV44 VIOLADO: ${sinLectura.length} reunión(es) de clientes o prospectos, de ${DIAS_DE_FRESCURA} días o menos y con texto, sin su lectura a las ${HORAS_PARA_LEERLA} h${nota}.\n` +
           `${lista(sinLectura.map((s) => `«${s.title}» (${s.id}), ${dia(s.date)}`))}\n` +
           `    ${REMEDIO_DE_INV44}`,
       );

@@ -8,7 +8,7 @@
  * Y dos guardas estructurales: el script `check-invariants.ts` CONSUME todos los del registro (no
  * conserva una copia inline de ninguno), y ninguno de estos módulos escribe en la base.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { pipelineByKey } from "@/lib/projects/kind";
 import fs from "node:fs";
 import path from "node:path";
@@ -23,6 +23,7 @@ import {
 import { INV49 } from "./google";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
 import { invariantesOkDesde, leerInvariantesOk } from "./salud";
+import { DONDE_PUEDE_TENER_TEXTO } from "@/lib/sessions/tiene-texto";
 
 type Fila = Record<string, unknown>;
 type Llamada = { modelo: string; metodo: string; args: Record<string, unknown> };
@@ -646,9 +647,9 @@ describe("la lectura de cada reunión: INV44 (memoria de la cuenta, etapa 2)", (
     const r = await INV44.correr(baseFalsa({ firefliesSession: [reunion()], client: clientes, sessionMinute: [], lecturaDeReunion: [] }, llamadas), AHORA);
     expect(r.ok).toBe(false);
     expect(r.lineas[0]).toContain("«Semanal Acme» (s1)");
-    // La forma de la consulta es la mitad del invariante: 14 días, enriquecida hace 24 h o más, con transcripción y con dueño.
+    // La forma de la consulta es la mitad del invariante: 14 días, enriquecida hace 24 h o más, con texto y con dueño.
     const w = where(llamadas, "firefliesSession");
-    expect(w).toMatchObject({ transcript: { not: null } });
+    expect(w.AND).toEqual([DONDE_PUEDE_TENER_TEXTO]);
     expect(w.OR).toEqual([{ resolvedClientId: { not: null } }, { manualClientId: { not: null } }]);
   });
 
@@ -678,6 +679,24 @@ describe("la lectura de cada reunión: INV44 (memoria de la cuenta, etapa 2)", (
     ] as const) {
       const r = await INV44.correr(baseFalsa({ firefliesSession: [fila], client: clientes, sessionMinute: [], lecturaDeReunion: [] }), AHORA);
       expect(r.ok, motivo).toBe(true);
+    }
+  });
+
+  it("T2: una reunión con SOLO notas de Gemini también se espera, salvo con las notas y los hechos apagados", async () => {
+    const soloNotas = reunion({ transcript: null, summary: { overview: TEXTO.repeat(2) } });
+    const cortas = reunion({ transcript: null, summary: { overview: "Resumen corto." } });
+    const correr = (fila: Record<string, unknown>) => INV44.correr(baseFalsa({ firefliesSession: [fila], client: clientes, sessionMinute: [], lecturaDeReunion: [] }), AHORA);
+    vi.stubEnv("SEGUIMIENTO_SOLO_NOTAS", "");
+    vi.stubEnv("SEGUIMIENTO_HECHOS", "");
+    try {
+      expect((await correr(soloNotas)).ok, "con las notas prendidas (por defecto) se espera su lectura").toBe(false);
+      expect((await correr(cortas)).ok, "unas notas bajo el piso no son texto").toBe(true);
+      vi.stubEnv("SEGUIMIENTO_SOLO_NOTAS", "0");
+      expect((await correr(soloNotas)).ok, "con las notas y los hechos apagados nadie la lee: no se espera").toBe(true);
+      vi.stubEnv("SEGUIMIENTO_HECHOS", "1");
+      expect((await correr(soloNotas)).ok, "con los hechos prendidos la cola la toma: se espera").toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
     }
   });
 
@@ -795,9 +814,10 @@ describe("el registro y el consumidor", () => {
       // 38–43: Tareas internas (2026-10-09).
       "38", "39", "40", "41", "42", "43",
       // 44: la lectura de cada reunión (memoria de la cuenta, etapa 2); 45, los hechos de las reuniones (etapa 6); 46,
-      // los pedidos fuera de alcance de una reunión de otro cliente (el gemelo de INV42).
-      "44", "45", "46",
-      // 49: la frescura de la copia de Google Meet (U1, 2026-10-25). 47 es de las reuniones (T1) y 48 vive en el script.
+      // los pedidos fuera de alcance de una reunión de otro cliente (el gemelo de INV42); 47, ninguna reunión reciente con
+      // texto sin empresa (T1, 2026-10-24). 48 vive en el script.
+      "44", "45", "46", "47",
+      // 49: la frescura de la copia de Google Meet (U1, 2026-10-25).
       "49",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);

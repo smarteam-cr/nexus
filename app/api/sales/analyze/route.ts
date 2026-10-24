@@ -6,6 +6,7 @@ import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
+import { DONDE_TIENE_TRANSCRIPCION } from "@/lib/sessions/tiene-texto";
 import { duenosPorCantidad, sesionesDelDueno } from "@/lib/ventas/dueno-del-analisis";
 
 const INTERNAL_DOMAIN = DOMINIO_PROPIO;
@@ -119,7 +120,7 @@ export const POST = withPermission("ventas", "read", async (req) => {
 
   // 2. Cargar transcripts
   const sessions = await prisma.firefliesSession.findMany({
-    where: { id: { in: sessionIds }, transcript: { not: null } },
+    where: { id: { in: sessionIds }, ...DONDE_TIENE_TRANSCRIPCION },
     select: {
       id: true,
       title: true,

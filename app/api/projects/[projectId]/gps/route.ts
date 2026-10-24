@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { Prisma } from "@prisma/client";
 import { withProjectAccess } from "@/lib/api";
 import { withDbRetry } from "@/lib/db/retry";
 import { classifyTeamEmailsByArea } from "@/lib/sessions/areas";
@@ -22,6 +21,7 @@ import { frentesDeProyecto, hechosDeProyecto, resolvePipeline, type EquipoDeFren
 import { etapaEnHubspot } from "@/lib/projects/etapa-sugerida";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 import { VENTANA_DE_COBERTURA_DIAS, type CoberturaDelCliente } from "@/lib/sessions/cobertura-por-cse";
+import { DONDE_PUEDE_TENER_TEXTO, DONDE_TIENE_TRANSCRIPCION } from "@/lib/sessions/tiene-texto";
 import { evaluarFrescura } from "@/lib/projects/brief-vencido";
 import { hubspotProjectUrl } from "@/lib/hubspot/urls";
 import { hayPropuestaParaRevisar } from "@/lib/timeline/borrador";
@@ -382,7 +382,7 @@ export const GET = withProjectAccess(async (
            de que regenerarlo no lo arregla, porque la reunión futura sigue estando adelante. Hay
            459 sesiones futuras en el corpus (agenda recurrente de Google), así que no es un borde. */
         date: { lte: new Date() },
-        OR: [{ summary: { not: Prisma.DbNull } }, { transcript: { not: null } }],
+        ...DONDE_PUEDE_TENER_TEXTO,
       },
       orderBy: { date: "desc" },
       select: { date: true },
@@ -437,13 +437,14 @@ export const GET = withProjectAccess(async (
   /* D-08 (2026-09-04): % de reuniones del CLIENTE con transcripción — la ficha del cliente. Dos
      COUNT sobre el índice [resolvedClientId, date], nunca filas ni blobs. Solo las que YA
      ocurrieron y dentro de la ventana (la misma que el aviso de /sessions), y «con transcripción»
-     con el criterio único del repo: no nula y no vacía (`""` no es un transcript, lección de C-10). */
+     con el criterio único del repo (`DONDE_TIENE_TRANSCRIPCION`, lib/sessions/tiene-texto.ts): no nula y no vacía
+     (`""` no es un transcript, lección de C-10). */
   const ahoraCobertura = new Date();
   const desdeCobertura = new Date(ahoraCobertura.getTime() - VENTANA_DE_COBERTURA_DIAS * 24 * 60 * 60 * 1000);
   const whereCobertura = { ...whereBelongsToClient(project.clientId), date: { gte: desdeCobertura, lt: ahoraCobertura } };
   const [reunionesPasadas, reunionesConTranscript] = await Promise.all([
     prisma.firefliesSession.count({ where: whereCobertura }),
-    prisma.firefliesSession.count({ where: { ...whereCobertura, transcript: { not: null }, NOT: { transcript: "" } } }),
+    prisma.firefliesSession.count({ where: { ...whereCobertura, ...DONDE_TIENE_TRANSCRIPCION } }),
   ]);
   const coberturaDelCliente: CoberturaDelCliente = {
     pasadas: reunionesPasadas,

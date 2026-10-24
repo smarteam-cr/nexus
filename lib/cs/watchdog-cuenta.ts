@@ -24,6 +24,7 @@ import { prisma } from "@/lib/db/prisma";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
+import { DONDE_TIENE_TRANSCRIPCION } from "@/lib/sessions/tiene-texto";
 import { leerResultadosDelHandoff, porValidar } from "@/lib/handoff/resultados-medibles";
 import { lineaDeLaDuracion, lineaDeLaFecha, limitesDeLaFila, revisarLimites } from "@/lib/timeline/limites";
 import { SELECT_LIMITES, conSemanaCeroDelPipeline } from "@/lib/timeline/limites-servidor";
@@ -320,7 +321,7 @@ async function bloqueDeReuniones(clientId: string, yaListadas: ReadonlySet<strin
   const sinMinuta = lista.filter((s) => !s.minute?.summary?.trim()).map((s) => s.id);
   const transcripciones = sinMinuta.length
     ? await prisma.firefliesSession.findMany({
-        where: { id: { in: sinMinuta }, transcript: { not: null } },
+        where: { id: { in: sinMinuta }, ...DONDE_TIENE_TRANSCRIPCION },
         select: { id: true, transcript: true },
       })
     : [];

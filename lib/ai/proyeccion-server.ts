@@ -7,6 +7,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { PROYECTO_DE_CARTERA_WHERE } from "@/lib/projects/scope";
 import { hechosPrendidos } from "@/lib/seguimiento/hechos/reglas";
+import { ORIGEN_DE_LA_RECUPERACION } from "./lotes";
 import { armarLaBase, ETIQUETA_DEL_BARRIDO, SONNET, type BaseDeLaProyeccion, type FilaAgente } from "./proyeccion-base";
 
 export type { BaseDeLaProyeccion } from "./proyeccion-base";
@@ -29,6 +30,9 @@ export async function baseDeLaProyeccion(ahora = new Date()): Promise<BaseDeLaPr
         coalesce(sum(l."inputTokens" + l."cacheReadTokens" + l."cacheCreationTokens"), 0)::float8 AS entrada
       FROM "LlmCall" l
       WHERE l."at" >= ${desde} AND l."at" < ${ahora}
+        -- La recuperación de las lecturas (T2) es una carga de UNA vez (reuniones de hace meses, por lote): no es el ritmo
+        -- del mes, y contarla inflaría las reuniones leídas y bajaría el costo por reunión.
+        AND coalesce(l."origen", '') <> ${ORIGEN_DE_LA_RECUPERACION}
       GROUP BY 1, 2, 3, 4`),
     // Los hechos todavía no corren en producción (2026-10-18): se mira el sondeo con Sonnet, de cualquier fecha.
     prisma.$queryRaw<{ agentSlug: string; costo: number; llamadas: number; entrada: number }[]>(Prisma.sql`

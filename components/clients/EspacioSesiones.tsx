@@ -20,7 +20,8 @@ import { prisma } from "@/lib/db/prisma";
 import { EmptyState } from "@/components/ui";
 import { CLIENT_KIND_META } from "@/lib/clients/kind";
 import { yaOcurrio } from "@/lib/sessions/ocurridas";
-import type { ClientKind } from "@prisma/client";
+import { sqlClaseDeTexto, type ClaseDeTexto } from "@/lib/sessions/tiene-texto";
+import { Prisma, type ClientKind } from "@prisma/client";
 
 /** Techo de la lista. Con más que esto la pantalla deja de ser un mapa y pasa a ser un volcado. */
 const TECHO = 200;
@@ -53,7 +54,7 @@ function FilaDeSesion({
     date: Date;
     duration: number;
     participants: string[];
-    tieneTranscripcion: boolean;
+    texto: ClaseDeTexto;
   };
   futura: boolean;
 }) {
@@ -74,11 +75,20 @@ function FilaDeSesion({
         </p>
       </div>
       {/* Que una reunión no tenga transcripción no es un error: puede no haberse grabado.
-          Se dice, porque es lo que explica por qué de esa reunión no se puede sacar nada. */}
-      {!futura && !s.tieneTranscripcion && (
+          Se dice, porque es lo que explica por qué de esa reunión no se puede sacar nada. Con
+          solo las notas de Gemini SÍ hay texto (T2): se dice eso, no «sin transcripción». */}
+      {!futura && s.texto === "solo_notas" && (
+        <span
+          className="flex-shrink-0 text-[11px] px-2 py-1 rounded border border-line text-fg-secondary"
+          title="No hay transcripción, pero sí las notas que tomó Gemini: Nexus las lee igual."
+        >
+          Solo notas
+        </span>
+      )}
+      {!futura && s.texto === "nada" && (
         <span
           className="flex-shrink-0 text-[11px] px-2 py-1 rounded border border-line text-fg-muted"
-          title="Nexus no tiene la transcripción de esta reunión: no se grabó, o el documento de Meet no se pudo leer."
+          title="Nexus no tiene texto que leer de esta reunión: no se grabó, la transcripción o las notas son muy cortas, o el documento de Meet no se pudo leer."
         >
           Sin transcripción
         </span>
@@ -123,20 +133,21 @@ export default async function EspacioSesiones({
      /sessions y acá sería igual—: solo cruzan los ids de las que la tienen. Y se pregunta por
      `transcript` y no por `enrichedAt`, que es cuándo se INTENTÓ traerla: el sellado viejo
      marcaba antes de tiempo, así que `enrichedAt` habría dicho "tiene" sobre reuniones vacías.
+     Qué texto dejó cada una lo dice el predicado único (lib/sessions/tiene-texto.ts), en SQL.
 
      El total va aparte para poder decir si el techo recortó: un listado que muestra 200 de
      340 sin decirlo se lee como "hay 200". */
   const ids = sesiones.map((s) => s.id);
-  const [conTranscripcion, total] = await Promise.all([
-    prisma.firefliesSession.findMany({
-      where: { id: { in: ids }, transcript: { not: null } },
-      select: { id: true },
-    }),
+  const [conTexto, total] = await Promise.all([
+    ids.length
+      ? prisma.$queryRaw<{ id: string; clase: ClaseDeTexto }[]>`
+          SELECT s."id", ${sqlClaseDeTexto("s")} AS "clase" FROM "FirefliesSession" s WHERE s."id" IN (${Prisma.join(ids)})`
+      : Promise.resolve([]),
     prisma.firefliesSession.count({
       where: { OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }] },
     }),
   ]);
-  const tienen = new Set(conTranscripcion.map((s) => s.id));
+  const texto = new Map(conTexto.map((s) => [s.id, s.clase]));
 
   /* `yaOcurrio` es el mismo predicado que usan los lectores de contexto, pero acá SEPARA en
      vez de descartar: la agenda se pinta en su propio bloque y no desaparece. Usar el helper
@@ -148,7 +159,7 @@ export default async function EspacioSesiones({
     date: s.date,
     duration: s.duration,
     participants: s.participants,
-    tieneTranscripcion: tienen.has(s.id),
+    texto: texto.get(s.id) ?? ("nada" as const),
     ocurrio: yaOcurrio(s.date, ahora),
   }));
   const futuras = filas.filter((s) => !s.ocurrio).reverse(); // la más próxima primero

@@ -32,8 +32,7 @@ import { MIN_RECUERDO } from "@/lib/sessions/reunion-a-mano";
 import { esDePuertasAdentro } from "@/lib/sessions/reuniones-para-seguimiento";
 import { crearFilaDelSeguimiento, soltarLaCopiaPorTextoNuevo, soltarLaFilaDelSeguimiento } from "@/lib/tareas/lectura";
 import { limpiarAnalisis } from "@/lib/sessions/analisis-ajeno-db";
-import { hechosPrendidos } from "@/lib/seguimiento/hechos/reglas";
-import { ESTADOS_QUE_SE_ENCOLAN, MAX_INTENTOS, MINUTOS_COLGADA, esperaDelIntento, motivoParaNoEncolar, rutaDeLaLectura, type EstadoDeSeguimiento } from "./reglas";
+import { ESTADOS_QUE_SE_ENCOLAN, MAX_INTENTOS, MINUTOS_COLGADA, colaTomaSoloNotas, esperaDelIntento, motivoParaNoEncolar, rutaDeLaLectura, type EstadoDeSeguimiento } from "./reglas";
 
 /* ── ¿Está el SQL? ─────────────────────────────────────────────────────────────────── */
 
@@ -102,8 +101,8 @@ export type ResultadoDeEncolar = { encolada: boolean; lecturaId?: string; motivo
 
 /**
  * Deja la lectura de seguimiento de esta reunión en la cola, si corresponde (`debeEncolar`: de un cliente o un
- * prospecto, no de puertas adentro, ya ocurrida, de 14 días o menos y con transcripción; con `SEGUIMIENTO_HECHOS`
- * prendida, también con solo notas de Gemini). Si la fila no existe la crea
+ * prospecto, no de puertas adentro, ya ocurrida, de 14 días o menos y con texto: transcripción o, salvo con
+ * `SEGUIMIENTO_SOLO_NOTAS=0` y los hechos apagados, solo notas de Gemini). Si la fila no existe la crea
  * lib/tareas/lectura.ts (`crearFilaDelSeguimiento`). Si existe, la pasa a `en_espera` solo desde null, sin texto, error
  * u omitida: nunca una lista, una copia ni una que se está leyendo. `sinCorteDeFrescura`: una persona pidió esa reunión
  * puntual (scripts/encolar-lecturas-pendientes.ts). NUNCA lanza.
@@ -127,11 +126,11 @@ export async function encolarSeguimiento(
         largoNotas: leida.reunion.notas?.trim().length ?? 0,
         ahora,
       },
-      // Con la lectura de hechos prendida, una reunión con solo notas también entra (memoria de la cuenta, etapa 6). Lo
-      // que alguien recuerda de una reunión agregada a mano entra siempre, con su propio piso: se lee entero.
+      // Una reunión con solo notas también entra (T2: la lectura la lee entera; o deja sus hechos). Lo que alguien
+      // recuerda de una reunión agregada a mano entra siempre, con su propio piso: se lee entero.
       leida.reunion.aMano === "recuerdo"
         ? { sinCorteDeFrescura: opciones.sinCorteDeFrescura, leerSoloNotas: true, minNotas: MIN_RECUERDO }
-        : { sinCorteDeFrescura: opciones.sinCorteDeFrescura, leerSoloNotas: hechosPrendidos(process.env) },
+        : { sinCorteDeFrescura: opciones.sinCorteDeFrescura, leerSoloNotas: colaTomaSoloNotas(process.env) },
     );
     if (motivo) return { encolada: false, motivo };
     return await ponerEnLaCola(leida.reunion, ahora, profundidad, opciones.porTextoNuevo ? ESTADOS_POR_TEXTO_NUEVO : ESTADOS_QUE_SE_ENCOLAN, !!opciones.porTextoNuevo);

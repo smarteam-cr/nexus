@@ -13,6 +13,7 @@ import { resumenDeReunion } from "@/lib/contexto/material-cronograma";
 import { KICKOFF_TITLE_FILTERS, pickKickoffSessionDate } from "@/lib/sessions/kickoff-pick";
 import { belongsToClient } from "@/lib/sessions/project-sources";
 import { recortarTranscripcion } from "@/lib/sessions/recortar-transcripcion";
+import { DONDE_TIENE_TRANSCRIPCION } from "@/lib/sessions/tiene-texto";
 
 export interface PastSessionContext {
   id: string;
@@ -112,7 +113,7 @@ export async function getSessionsForProgress(
       where: { id: { in: ids } },
       select: { id: true, summary: true, minute: { select: { summary: true, decisions: true, agreements: true, risks: true, status: true } } },
     }),
-    prisma.firefliesSession.findMany({ where: { id: { in: ids }, transcript: { not: null } }, select: { id: true } }),
+    prisma.firefliesSession.findMany({ where: { id: { in: ids }, ...DONDE_TIENE_TRANSCRIPCION }, select: { id: true } }),
   ]);
   const resumenes = new Map(
     filas.map((f) => {

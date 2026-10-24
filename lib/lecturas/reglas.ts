@@ -9,8 +9,9 @@
  * enriquecimiento de Meet (que solo encola), los requisitos del job (lib/jobs/requisitos.ts) e INV44. Si dos de ellos
  * tuvieran su copia, el job podría tomar una reunión que INV44 no espera, o al revés.
  */
-import { MIN_TRANSCRIPT_CHARS } from "@/lib/google/doc-parse";
-import { MIN_NOTAS_PARA_LEER } from "@/lib/seguimiento/hechos/reglas";
+import { MIN_NOTAS_PARA_LEER, hechosPrendidos } from "@/lib/seguimiento/hechos/reglas";
+import { claseDeTexto, claseDesdeLosLargos } from "@/lib/sessions/tiene-texto";
+import { MIN_RECUERDO, recuerdoDeLaReunion } from "@/lib/sessions/reunion-a-mano";
 
 /**
  * El estado de la lectura de seguimiento de una fila (`LecturaDeReunion.seguimientoEstado`). null = el seguimiento no
@@ -124,9 +125,9 @@ export interface ReunionParaEncolar {
 
 /**
  * `sinCorteDeFrescura`: lo pidió una persona para una reunión puntual (el script de la cola, el botón de la reunión).
- * `leerSoloNotas`: la lectura de hechos está prendida (`SEGUIMIENTO_HECHOS`, memoria de la cuenta, etapa 6): una reunión
- * sin transcripción pero con notas de Gemini de `MIN_NOTAS_PARA_LEER` caracteres o más también entra (deja sus hechos,
- * no una minuta). Sin la bandera, la cobertura de la etapa 2 no cambia.
+ * `leerSoloNotas`: la cola toma las reuniones con solo notas (`colaTomaSoloNotas`: la lectura las lee enteras con
+ * `SEGUIMIENTO_SOLO_NOTAS`, o deja sus hechos con `SEGUIMIENTO_HECHOS`): una reunión sin transcripción pero con notas
+ * de Gemini de `MIN_NOTAS_PARA_LEER` caracteres o más también entra. Es la regla de lib/sessions/tiene-texto.ts.
  * `minNotas`: el piso de las notas para esta reunión. Lo que una persona recuerda de una reunión agregada a mano entra
  * con `MIN_RECUERDO` (lib/sessions/reunion-a-mano.ts), aunque la lectura de hechos esté apagada: se lee entero.
  */
@@ -139,7 +140,8 @@ export function motivoParaNoEncolar(
   if (o.puertasAdentro) return "puertas_adentro";
   if (+o.fecha > +o.ahora) return "futura";
   if (!opciones.sinCorteDeFrescura && +o.ahora - +o.fecha > DIAS_DE_FRESCURA * 86_400_000) return "vieja";
-  if (o.largoTranscript < MIN_TRANSCRIPT_CHARS && !(opciones.leerSoloNotas && (o.largoNotas ?? 0) >= (opciones.minNotas ?? MIN_NOTAS_PARA_LEER))) return "sin_texto";
+  const conTranscripcion = claseDesdeLosLargos({ transcripcion: o.largoTranscript, notas: 0 }) === "transcripcion";
+  if (!conTranscripcion && !(opciones.leerSoloNotas && (o.largoNotas ?? 0) >= (opciones.minNotas ?? MIN_NOTAS_PARA_LEER))) return "sin_texto";
   return null;
 }
 
@@ -157,6 +159,60 @@ export function debeEncolar(o: ReunionParaEncolar): boolean {
  */
 export function seguimientoPrendido(env: Readonly<Record<string, string | undefined>>): boolean {
   return env.SEGUIMIENTO_REUNIONES_ENABLED !== "0";
+}
+
+/**
+ * ¿La lectura lee ENTERA una reunión con solo notas de Gemini (T2, 2026-10-24)? Sin transcripción, unas notas de
+ * `MIN_NOTAS_PARA_LEER` caracteres o más dejan minuta, compromisos y pedidos, como una transcripción (sus «Próximos
+ * pasos» son justo los compromisos). Solo `SEGUIMIENTO_SOLO_NOTAS=0` la apaga, y es la vuelta atrás: apagada, una
+ * reunión con solo notas vuelve a dejar solo sus hechos (con `SEGUIMIENTO_HECHOS` prendida) o nada. Lo leído queda.
+ */
+export function soloNotasPrendido(env: Readonly<Record<string, string | undefined>>): boolean {
+  return (env.SEGUIMIENTO_SOLO_NOTAS ?? "").trim() !== "0";
+}
+
+/**
+ * ¿El modo de recuperación está prendido (T2: las reuniones de más de 14 días que nunca se leyeron, por lote)? Solo
+ * `LECTURA_DE_RECUPERACION=0` lo apaga, y es la vuelta atrás: el script no encola y lo que espera en el lote no se manda.
+ * Lo que ya se leyó queda.
+ */
+export function recuperacionPrendida(env: Readonly<Record<string, string | undefined>>): boolean {
+  return (env.LECTURA_DE_RECUPERACION ?? "").trim() !== "0";
+}
+
+/**
+ * La etiqueta (`AgentRun.stepLabel`) de la corrida que deja una minuta RECUPERADA. Por ella la reconocen los lectores
+ * que cuentan minutas nuevas (lib/lo-propuesto: «Uso de Nexus»), que no las cuentan como nacidas hoy.
+ */
+export const ETIQUETA_DE_LA_RECUPERACION = "Análisis post-sesión (recuperación)";
+
+/** Cuántas reuniones encola como mucho una corrida de la recuperación (el tope por corrida; `--limite` baja de acá). */
+export const TOPE_DE_LA_RECUPERACION = 100;
+
+/** De qué se lee una reunión: su transcripción, lo que recuerda una persona (agregada a mano) o sus notas de Gemini. */
+export type FuenteDeLaLectura = "transcripcion" | "recuerdo" | "notas";
+
+/**
+ * QUÉ SE LEE de una reunión, en un solo lugar (lo usan la lectura de siempre y la recuperación, lib/sessions/post-process.ts):
+ *   · la transcripción, si tiene `MIN_TRANSCRIPT_CHARS` o más (lib/sessions/tiene-texto.ts);
+ *   · si no, lo que recuerda quien la agregó a mano, con `MIN_RECUERDO` o más (se lee entero aunque las banderas estén apagadas);
+ *   · si no, las notas de Gemini que alcanzan, solo con `SEGUIMIENTO_SOLO_NOTAS` prendida (T2);
+ *   · si no, nada (null): la lectura termina «sin texto».
+ */
+export function queSeLee(
+  s: { transcript: string | null | undefined; summary: unknown },
+  env: Readonly<Record<string, string | undefined>>,
+): { fuente: FuenteDeLaLectura | null; recuerdo: string | null } {
+  if (claseDeTexto({ transcript: s.transcript }) === "transcripcion") return { fuente: "transcripcion", recuerdo: null };
+  const recuerdo = recuerdoDeLaReunion(s.summary);
+  if (recuerdo && recuerdo.length >= MIN_RECUERDO) return { fuente: "recuerdo", recuerdo };
+  if (soloNotasPrendido(env) && claseDeTexto({ summary: s.summary }) === "solo_notas") return { fuente: "notas", recuerdo: null };
+  return { fuente: null, recuerdo: null };
+}
+
+/** ¿La cola toma las reuniones con solo notas? Si la lectura las lee enteras, o si deja sus hechos. */
+export function colaTomaSoloNotas(env: Readonly<Record<string, string | undefined>>): boolean {
+  return soloNotasPrendido(env) || hechosPrendidos(env);
 }
 
 /**

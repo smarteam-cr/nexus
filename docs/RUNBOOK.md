@@ -391,6 +391,24 @@ la cola.
 - **Después:** el semáforo de Integraciones con «La lectura de cada reunión» en verde, INV44 en verde cuando el job
   terminó lo encolado (con presupuesto, de a 2 por minuto), y el costo por reunión en `LlmCall`: las llamadas de cada
   reunión llevan `origen = "reunion:<sessionId> › <sitio>"` (sumar por reunión con `split_part(origen, ' ', 1)`).
+- **Las reuniones con solo notas de Gemini (T2, 2026-10-24):** se leen enteras, como una transcripción (minuta,
+  compromisos y pedidos; la corrida guarda `fuente: "notas"`). `SEGUIMIENTO_SOLO_NOTAS=0` es la vuelta atrás (vuelven a
+  dejar solo sus hechos). Justo después del deploy que lo trae, las frescas que ya quedaron `sin_texto` se vuelven a
+  encolar con el mismo `scripts/encolar-lecturas-pendientes.ts` (en seco primero; medido el 2026-10-24: 39). ⚠ Desde el
+  deploy hasta que el job las lea, INV44 da rojo con esas reuniones (ahora también espera las de solo notas): es esperado.
+- **Lo atrasado, el modo de recuperación (T2):** las reuniones de MÁS de 14 días con texto y sin minuta se leen por
+  lote (API Batch, mitad de precio): minuta y temas, sin propuestas de Tarea, pedidos fuera de alcance ni lo que sigue,
+  y sin tocar `LecturaDeReunion`. Fuera del presupuesto automático: el gasto se anota a nombre de quien la corre y cuenta en el presupuesto HUMANO del día (el que comparte todo el equipo, US$20). En seco primero:
+  `npx tsx scripts/encolar-lecturas-pendientes.ts --recuperacion --desde 2026-07-26 --limite 10` (lista y costo
+  estimado); después, `$env:ALLOW_PROD_WRITE="1"; npx tsx scripts/encolar-lecturas-pendientes.ts --recuperacion --desde
+  2026-07-26 --limite 10 --por <correo> --desplegado --apply; Remove-Item Env:ALLOW_PROD_WRITE` (respalda `PedidoEnLote`).
+  ⚠ SOLO después del deploy que la trae (por eso `--desplegado`): con el código viejo, el job `ia-lotes` mandaría los
+  pedidos contra el presupuesto automático y los tiraría al volver, pagados. `--por` tiene que ser alguien del equipo. Una
+  reunión cuyo pedido volvió sin minuta se puede volver a mandar en otra corrida; a los 3 intentos, no. Tope: 100
+  por corrida. El job `ia-lotes` las manda a los 5 minutos y deja cada minuta cuando Anthropic responde. Se mide en
+  `PedidoEnLote` (`tipo = 'lectura-recuperacion'`, por `estado`) y en `LlmCall` (`origen = 'lotes › lectura-recuperacion'`,
+  `lote = true`). Vuelta atrás: `LECTURA_DE_RECUPERACION=0` en el `.env` del servidor (lo que espera no se manda; lo
+  leído queda).
 - **Una reunión en `error`:** el error queda en `LecturaDeReunion.seguimientoError`; se vuelve a leer con «Leer esta
   reunión» en su página (`/sessions/<id>`, si no tiene minuta), o con `scripts/encolar-lecturas-pendientes.ts --sesion
   <id>` (sin el corte de 14 días). Varias a la vez: `--tambien-errores`. No hace falta tocar la base a mano.

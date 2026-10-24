@@ -46,6 +46,13 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/nexus-chat/lecturas-server.ts": { modo: "criterio", criterio: "navegable" },
   "lib/portfolio/load.ts": { modo: "criterio", criterio: "cartera" },
   "lib/cs/watchdog.ts": { modo: "criterio", criterio: "cartera" },
+  // La lectura de una reunión (T2): en la recuperación confirma que el proyecto principal ya vinculado es del dueño.
+  "lib/sessions/post-process.ts": {
+    modo: "exento",
+    razon: "Busca UN proyecto por id (el principal de la reunión) y exige que sea del cliente dueño; no lista proyectos.",
+  },
+  // La recuperación de las lecturas (T2): una empresa es activa si tiene un proyecto de cartera (o una preventa viva).
+  "lib/lecturas/recuperacion.ts": { modo: "criterio", criterio: "cartera" },
   "lib/ai/proyeccion-server.ts": { modo: "criterio", criterio: "cartera" },
   // El vigía de UN cliente (al entrar y a mano, D14): corre para sus proyectos de cartera.
   "lib/cs/vigia-por-cliente.ts": { modo: "criterio", criterio: "cartera" },

@@ -9,11 +9,49 @@
  * respuesta al manejador de su tipo.
  */
 
-/** Los tipos de pedido que van por lote, cada uno con su manejador en lib/ai/lotes-manejadores.ts. */
-export const TIPOS_DE_LOTE = ["vigia-barrido"] as const;
+import { recuperacionPrendida } from "@/lib/lecturas/reglas";
+
+/**
+ * Los tipos de pedido que van por lote, cada uno con su manejador en lib/ai/lotes-manejadores.ts.
+ *   · vigia-barrido — el triaje del barrido diario del vigía (lo que entra solo por un riesgo que sigue).
+ *   · lectura-recuperacion — la lectura de una reunión de hace más de 14 días que nunca se leyó (T2, el modo de
+ *     recuperación: lib/lecturas/recuperacion.ts).
+ */
+export const TIPOS_DE_LOTE = ["vigia-barrido", "lectura-recuperacion"] as const;
 export type TipoDeLote = (typeof TIPOS_DE_LOTE)[number];
 
 export const esTipoDeLote = (t: string): t is TipoDeLote => (TIPOS_DE_LOTE as readonly string[]).includes(t);
+
+/**
+ * Los tipos que NO esperan al presupuesto automático del día: los encola una persona con su tope por corrida (el script
+ * de la recuperación), y su gasto se anota a nombre de quien lo corrió: cuenta en el presupuesto humano del día, el
+ * compartido. Una carga de 300 reuniones por el automático se comería unos 8 días de su tope de 10 USD.
+ */
+export const FUERA_DEL_PRESUPUESTO_AUTOMATICO: ReadonlySet<TipoDeLote> = new Set(["lectura-recuperacion"]);
+
+/** El `LlmCall.origen` de una respuesta que llegó por lote: así la reconocen el panel y la proyección del gasto. */
+export const origenDelLote = (tipo: string) => `lotes › ${tipo}`;
+export const ORIGEN_DE_LA_RECUPERACION = origenDelLote("lectura-recuperacion");
+
+/**
+ * Los estados de un pedido que todavía puede volver (esperando o enviado): uno así no se vuelve a encolar. La única
+ * lista; la recuperación la usa también en SQL.
+ */
+export const ESTADOS_VIVOS = ["en_espera", "enviado"] as const satisfies readonly EstadoDelPedido[];
+
+/** ¿Este tipo se manda? Cada tipo puede tener su vuelta atrás: apagado, lo que espera se queda esperando. */
+export function tipoPrendido(tipo: TipoDeLote, env: Readonly<Record<string, string | undefined>>): boolean {
+  if (tipo === "lectura-recuperacion") return recuperacionPrendida(env);
+  return true;
+}
+
+/**
+ * Los tipos que se mandan en este tick: los prendidos y, sin presupuesto automático, solo los que no lo esperan. Se
+ * decide ANTES de buscar los pendientes, así 100 pedidos automáticos esperando no tapan a los que sí pueden salir.
+ */
+export function tiposQueSeMandan(env: Readonly<Record<string, string | undefined>>, quedaAutomatico: boolean): TipoDeLote[] {
+  return TIPOS_DE_LOTE.filter((t) => tipoPrendido(t, env) && (quedaAutomatico || FUERA_DEL_PRESUPUESTO_AUTOMATICO.has(t)));
+}
 
 /** Cuánto se espera a que se junten más pedidos antes de mandar el lote (un lote de uno también vale la mitad). */
 export const ESPERA_PARA_JUNTAR_MS = 5 * 60_000;

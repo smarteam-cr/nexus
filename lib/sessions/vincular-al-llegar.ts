@@ -12,7 +12,7 @@
  * Lo corre el job de la lectura (`seguimiento-reuniones`), después de sus lecturas: las reuniones de 14 días o menos,
  * ya ocurridas y enriquecidas, de un CLIENTE, sin ningún vínculo, con transcripción o con notas. Solo el clasificador
  * (con un proyecto, sin IA), nunca un override. Las que la lectura va a leer o ya leyó (`seguimientoEstado` en la cola,
- * leyéndose o lista) no: las vincula la lectura misma.
+ * leyéndose o lista) no: las vincula la lectura misma (desde T2, también las de solo notas que la lectura lee enteras).
  *
  * ⚠ Una que el clasificador no puede vincular (dos proyectos y ninguno claro) no se vuelve a intentar en 24 h: sin
  * esto, el job le pagaría una llamada cada minuto. El recuerdo vive en memoria (un solo contenedor, RUNBOOK inv. #1).
@@ -22,8 +22,9 @@ import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { conLaReunion } from "@/lib/ai/contexto-de-corrida";
 import { duenoDeLaSesion } from "@/lib/sessions/project-sources";
+import { DONDE_NO_TIENE_TRANSCRIPCION, DONDE_TIENE_TRANSCRIPCION, claseDeTexto } from "@/lib/sessions/tiene-texto";
 import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";
-import { DIAS_DE_FRESCURA } from "@/lib/lecturas/reglas";
+import { DIAS_DE_FRESCURA, soloNotasPrendido } from "@/lib/lecturas/reglas";
 
 const HORA_MS = 3_600_000;
 /** Cuánto se espera para volver a intentar una reunión que no se pudo vincular. */
@@ -82,22 +83,25 @@ export async function vincularReunionesSinProyecto(limit = 10, ahora = new Date(
   // clasificador lo lee por su cuenta).
   const [sinTexto, conTexto] = await Promise.all([
     prisma.firefliesSession.findMany({
-      where: { ...base, transcript: null },
+      where: { ...base, AND: [DONDE_NO_TIENE_TRANSCRIPCION] },
       select: { id: true, resolvedClientId: true, manualClientId: true, summary: true },
       orderBy: { date: "desc" },
       take: 60,
     }),
     prisma.firefliesSession.findMany({
-      where: { ...base, transcript: { not: null } },
+      where: { ...base, ...DONDE_TIENE_TRANSCRIPCION },
       select: { id: true, resolvedClientId: true, manualClientId: true },
       orderBy: { date: "desc" },
       take: 60,
     }),
   ]);
-  const vinculaLaLectura = await lasQueVinculaLaLectura(conTexto.map((f) => f.id));
+  // Con la lectura de las notas prendida (T2), las de solo notas que alcanzan las lee (y vincula) la lectura misma: se
+  // miran igual que las de transcripción, para no pagar el clasificador dos veces.
+  const lasLeeLaLectura = soloNotasPrendido(process.env) ? sinTexto.filter((f) => claseDeTexto({ summary: f.summary }) === "solo_notas").map((f) => f.id) : [];
+  const vinculaLaLectura = await lasQueVinculaLaLectura([...conTexto.map((f) => f.id), ...lasLeeLaLectura]);
   const sinIntentar = (id: string) => (intentadas.get(id) ?? 0) < +ahora - ESPERA_ENTRE_INTENTOS_MS;
   const candidatas = [
-    ...sinTexto.filter((f) => tieneNotas(f.summary) && sinIntentar(f.id)),
+    ...sinTexto.filter((f) => tieneNotas(f.summary) && !vinculaLaLectura.has(f.id) && sinIntentar(f.id)),
     ...conTexto.filter((f) => !vinculaLaLectura.has(f.id) && sinIntentar(f.id)),
   ];
   if (!candidatas.length) return resultado;
