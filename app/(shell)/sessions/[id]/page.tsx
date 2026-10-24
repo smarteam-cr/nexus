@@ -241,8 +241,10 @@ export default async function SessionPage({
 
   // Ficha G: la agenda, los avisos, las tareas y «Después de la reunión». Si a la base le falta el SQL, la página se ve
   // como antes (las lecturas que dependen de él salen vacías adentro; acá, por si falla el resto).
-  // El predicado único (lib/sessions/tiene-texto.ts): transcripción, o solo notas de Gemini que alcanzan para leerlas.
-  const textoDeLaReunion = tieneTexto(session);
+  // El predicado único (lib/sessions/tiene-texto.ts): transcripción, o solo notas de Gemini que alcanzan para leerlas. Y
+  // lo que la lectura sí lee aunque sea corto (`queSeLee`: lo que recuerda quien la agregó a mano, desde 40 letras): si
+  // no, la página diría «no tiene qué leer» al lado de «Leer esta reunión».
+  const textoDeLaReunion = tieneTexto(session) || queSeLee(session, process.env).fuente !== null;
   const pagina: PaginaDeLaVista | undefined = await cargarPaginaDeLaReunion({
     sessionId: session.id,
     user,

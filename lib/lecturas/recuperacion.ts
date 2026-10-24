@@ -202,9 +202,11 @@ const TIPO = "lectura-recuperacion";
 const CLAVE_PREFIJO = `${TIPO}:`;
 
 /**
- * La huella del texto en SQL: la MISMA que la de la cola (`huella`, lib/sessions/reuniones-para-tareas.ts → la columna
- * `LecturaDeReunion.huellaTexto`): la transcripción, o si no las notas, sin mayúsculas y con los espacios juntados, en
- * md5. Iguala la misma reunión en dos series del calendario, o en dos fichas de la empresa, sin importar el dueño.
+ * La huella del texto en SQL, propia de la recuperación: la transcripción, o si no las notas, sin mayúsculas y con los
+ * espacios juntados, en md5. Iguala la misma reunión en dos series del calendario, o en dos fichas de la empresa, sin
+ * importar el dueño. ⚠ NO es la de la cola (`huella`, lib/sessions/reuniones-para-tareas.ts → `LecturaDeReunion.huellaTexto`):
+ * se calcula distinto y para la misma reunión da otro valor. Solo se comparan huellas de esta función entre sí; cruzarla
+ * con la columna de la cola no reconocería la reunión y la leería dos veces.
  */
 /** Los espacios, con la clase POSIX: sin barras que se pierdan entre la plantilla y Postgres. */
 const ESPACIOS = "[[:space:]]+";

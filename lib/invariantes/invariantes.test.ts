@@ -805,7 +805,7 @@ describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 36 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 37 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -866,7 +866,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("36 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("37 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;

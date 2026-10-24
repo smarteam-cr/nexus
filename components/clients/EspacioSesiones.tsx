@@ -20,6 +20,7 @@ import { prisma } from "@/lib/db/prisma";
 import { EmptyState } from "@/components/ui";
 import { CLIENT_KIND_META } from "@/lib/clients/kind";
 import { yaOcurrio } from "@/lib/sessions/ocurridas";
+import { MIN_RECUERDO } from "@/lib/sessions/reunion-a-mano";
 import { sqlClaseDeTexto, type ClaseDeTexto } from "@/lib/sessions/tiene-texto";
 import { Prisma, type ClientKind } from "@prisma/client";
 
@@ -54,7 +55,8 @@ function FilaDeSesion({
     date: Date;
     duration: number;
     participants: string[];
-    texto: ClaseDeTexto;
+    /** «recuerdo»: sin transcripción, lo que escribió quien la agregó a mano (Nexus lo lee: `queSeLee`). */
+    texto: ClaseDeTexto | "recuerdo";
   };
   futura: boolean;
 }) {
@@ -83,6 +85,14 @@ function FilaDeSesion({
           title="No hay transcripción, pero sí las notas que tomó Gemini: Nexus las lee igual."
         >
           Solo notas
+        </span>
+      )}
+      {!futura && s.texto === "recuerdo" && (
+        <span
+          className="flex-shrink-0 text-[11px] px-2 py-1 rounded border border-line text-fg-secondary"
+          title="No hay transcripción, pero sí lo que escribió quien la agregó: Nexus lo lee igual."
+        >
+          Escrita a mano
         </span>
       )}
       {!futura && s.texto === "nada" && (
@@ -140,14 +150,18 @@ export default async function EspacioSesiones({
   const ids = sesiones.map((s) => s.id);
   const [conTexto, total] = await Promise.all([
     ids.length
-      ? prisma.$queryRaw<{ id: string; clase: ClaseDeTexto }[]>`
-          SELECT s."id", ${sqlClaseDeTexto("s")} AS "clase" FROM "FirefliesSession" s WHERE s."id" IN (${Prisma.join(ids)})`
+      ? prisma.$queryRaw<{ id: string; clase: ClaseDeTexto; recuerdo: boolean }[]>`
+          SELECT s."id", ${sqlClaseDeTexto("s")} AS "clase",
+            (s."summary"->'aMano'->>'tipo' = 'recuerdo'
+              AND length(btrim(coalesce(s."summary"->>'overview', ''))) >= ${MIN_RECUERDO}) IS TRUE AS "recuerdo"
+          FROM "FirefliesSession" s WHERE s."id" IN (${Prisma.join(ids)})`
       : Promise.resolve([]),
     prisma.firefliesSession.count({
       where: { OR: [{ resolvedClientId: clientId }, { manualClientId: clientId }] },
     }),
   ]);
-  const texto = new Map(conTexto.map((s) => [s.id, s.clase]));
+  // Lo que escribió una persona se lee como recuerdo (`queSeLee`), no como notas de Gemini: se dice eso.
+  const texto = new Map(conTexto.map((s) => [s.id, s.clase !== "transcripcion" && s.recuerdo ? ("recuerdo" as const) : s.clase]));
 
   /* `yaOcurrio` es el mismo predicado que usan los lectores de contexto, pero acá SEPARA en
      vez de descartar: la agenda se pinta en su propio bloque y no desaparece. Usar el helper
