@@ -14,7 +14,7 @@ import { escribeSqlCrudo, soloCodigo } from "@/lib/db/escritura-sql-cruda";
 import { problemasDeLasLlaves } from "@/lib/db/llaves-de-la-empresa";
 import {
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
-  INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46,
+  INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
   type Invariante,
 } from "@/lib/invariantes";
 
@@ -778,6 +778,10 @@ async function main(): Promise<number> {
   // ── Inv 46 → lib/invariantes/lecturas.ts (2026-10-10: ningún pedido fuera de alcance de una reunión de otro cliente;
   //    el gemelo de INV42) ──
   violations += await reportar(INV46, prisma);
+
+  // ── Inv 47 → lib/invariantes/reuniones.ts (2026-10-24, T1: ninguna reunión reciente con texto y gente de fuera lleva
+  //    más de 48 h sin empresa; nació «no bloquea» hasta su primer verde) ──
+  violations += await reportar(INV47, prisma);
 
   // ── Inv 48 (2026-10-24, R7): las llaves que protegen de quién es cada reunión existen y hacen lo decidido al borrar
   //    una empresa. `check:esquema` no ve llaves foráneas; sin ellas la base vuelve a aceptar reuniones de una empresa

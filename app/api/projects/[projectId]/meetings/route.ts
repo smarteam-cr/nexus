@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { DONDE_TIENE_TRANSCRIPCION } from "@/lib/sessions/tiene-texto";
 import { isProjectHot, HOT_THRESHOLD, HOT_WINDOW_DAYS } from "@/lib/projects/heat";
 
 /**
@@ -68,7 +69,7 @@ export async function GET(
   const sessionsWithTranscript =
     sessionIds.length > 0
       ? await prisma.firefliesSession.findMany({
-          where: { id: { in: sessionIds }, transcript: { not: null } },
+          where: { id: { in: sessionIds }, ...DONDE_TIENE_TRANSCRIPCION },
           select: { id: true },
         })
       : [];

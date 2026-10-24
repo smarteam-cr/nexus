@@ -4,7 +4,8 @@
  *  · `encolarEnLote` guarda un pedido (`PedidoEnLote`) con su tipo, sus parámetros y lo que su manejador va a necesitar.
  *    Lo mismo no se encola dos veces (`claveUnica`).
  *  · `correrTickDeLotes` (job «ia-lotes», cada tick): manda los pendientes en un lote cuando se juntaron o esperaron lo
- *    suficiente (y si queda presupuesto automático), mira los lotes enviados cada `MIRAR_CADA_MS` y, cuando terminan,
+ *    suficiente (lo automático, si queda presupuesto automático; lo que pidió una persona, como la recuperación de las
+ *    lecturas, no lo espera), y solo los tipos prendidos (`tipoPrendido`), mira los lotes enviados cada `MIRAR_CADA_MS` y, cuando terminan,
  *    anota cada llamada en el medidor (a mitad de precio, `lote: true`) y le pasa la respuesta al manejador de su tipo
  *    (lib/ai/lotes-manejadores.ts). Un pedido sin respuesta en `HORAS_PARA_VENCER` queda vencido.
  *
@@ -21,7 +22,21 @@ import { getAnthropic } from "@/lib/anthropic";
 import { registrarLlamada } from "./medidor";
 import { quedaPresupuestoAutomatico } from "./guardia-de-presupuesto";
 import { MANEJADORES } from "./lotes-manejadores";
-import { esTipoDeLote, estadoDelResultado, hayQueEnviar, idParaAnthropic, MAX_PEDIDOS_POR_LOTE, MIRAR_CADA_MS, seVencio, type TipoDeLote } from "./lotes";
+import {
+  esTipoDeLote,
+  estadoDelResultado,
+  hayQueEnviar,
+  idParaAnthropic,
+  MAX_PEDIDOS_POR_LOTE,
+  MIRAR_CADA_MS,
+  seVencio,
+  TIPOS_DE_LOTE,
+  tipoPrendido,
+  tiposQueSeMandan,
+  origenDelLote,
+  ESTADOS_VIVOS,
+  type TipoDeLote,
+} from "./lotes";
 
 /* ── ¿Está el SQL? ──────────────────────────────────────────────────────────── */
 
@@ -80,7 +95,7 @@ export async function encolarEnLote(p: PedidoParaElLote): Promise<"encolado" | "
 /** ¿Hay un pedido vivo (esperando o enviado) con esta clave? */
 export async function hayPedidoVivo(claveUnica: string): Promise<boolean> {
   if (!(await lotesDisponible())) return false;
-  return !!(await prisma.pedidoEnLote.findFirst({ where: { claveUnica, estado: { in: ["en_espera", "enviado"] } }, select: { id: true } }));
+  return !!(await prisma.pedidoEnLote.findFirst({ where: { claveUnica, estado: { in: [...ESTADOS_VIVOS] } }, select: { id: true } }));
 }
 
 /* ── El tick ─────────────────────────────────────────────────────────────── */
@@ -115,18 +130,26 @@ export async function correrTickDeLotes(ahora = new Date()): Promise<ResultadoDe
 }
 
 async function enviarLosPendientes(ahora: Date, r: ResultadoDelTick): Promise<void> {
+  // Un tipo apagado (su vuelta atrás) no se manda: lo suyo espera. Lo automático, sin presupuesto del día, espera a
+  // mañana (no se pierde). Lo que encoló una persona con su tope (la recuperación) no espera al automático: se anota a
+  // nombre de quien lo pidió (presupuesto humano, compartido). Los tipos se eligen ANTES de buscar los pendientes:
+  // 100 pedidos automáticos esperando no tapan a los que sí pueden salir.
+  const prendidos = TIPOS_DE_LOTE.filter((t) => tipoPrendido(t, process.env));
+  if (!(await prisma.pedidoEnLote.count({ where: { estado: "en_espera", tipo: { in: prendidos } } }))) return;
+  const quedaAutomatico = await quedaPresupuestoAutomatico(ahora);
+  const tipos = tiposQueSeMandan(process.env, quedaAutomatico);
+  if (!quedaAutomatico) {
+    const esperan = await prisma.pedidoEnLote.count({ where: { estado: "en_espera", tipo: { in: prendidos.filter((t) => !tipos.includes(t)) } } });
+    if (esperan) r.errores.push(`${esperan} pedido(s) esperan: no queda presupuesto automático hoy`);
+  }
+  if (!tipos.length) return;
   const pendientes = await prisma.pedidoEnLote.findMany({
-    where: { estado: "en_espera" },
+    where: { estado: "en_espera", tipo: { in: tipos } },
     orderBy: { createdAt: "asc" },
     take: MAX_PEDIDOS_POR_LOTE,
     select: { id: true, pedido: true, createdAt: true },
   });
   if (!hayQueEnviar(pendientes, ahora)) return;
-  // Lo que se manda por lote es automático: sin presupuesto del día, esperan a mañana (no se pierden).
-  if (!(await quedaPresupuestoAutomatico(ahora))) {
-    r.errores.push(`${pendientes.length} pedido(s) esperan: no queda presupuesto automático hoy`);
-    return;
-  }
   const lote = await getAnthropic().messages.batches.create({
     requests: pendientes.map((p) => ({ custom_id: idParaAnthropic(p.id), params: p.pedido as unknown as Anthropic.Messages.MessageCreateParamsNonStreaming })),
   });
@@ -183,22 +206,24 @@ type PedidoEnviado = { id: string; tipo: string; contexto: unknown; pedido: unkn
 async function aplicar(p: PedidoEnviado, mensaje: Anthropic.Messages.Message, r: ResultadoDelTick): Promise<void> {
   const model = (p.pedido as { model?: string }).model ?? mensaje.model;
   let agentRunId: string | null = null;
+  let quien: string | null = null;
   let error: string | null = null;
   try {
     if (!esTipoDeLote(p.tipo)) throw new Error(`no hay manejador para «${p.tipo}»`);
     const manejador = await MANEJADORES[p.tipo]();
+    quien = manejador.quienPidio?.(p.contexto) ?? null;
     agentRunId = (await manejador.aplicar({ pedidoId: p.id, contexto: p.contexto, mensaje })).agentRunId ?? null;
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
-  // Se pagó aunque el manejador haya fallado: la llamada se anota igual, a mitad de precio.
+  // Se pagó aunque el manejador haya fallado: la llamada se anota igual, a mitad de precio (y a nombre de quien la pidió).
   registrarLlamada({
     model,
     usage: mensaje.usage,
     durationMs: 0,
     ok: true,
     lote: true,
-    ctx: { agentSlug: p.agentSlug, agentRunId, clientId: p.clientId, projectId: p.projectId, triggeredByEmail: null, origen: `lotes › ${p.tipo}` },
+    ctx: { agentSlug: p.agentSlug, agentRunId, clientId: p.clientId, projectId: p.projectId, triggeredByEmail: quien, origen: origenDelLote(p.tipo) },
   });
   if (error) {
     r.errores.push(`${p.tipo} ${p.id}: ${error}`);

@@ -151,6 +151,10 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "disparo",
     motivo: "La copia congelada del post-proceso (el retroceso de SEGUIMIENTO_REUNIONES_ENABLED=0): lanza lo mismo; no lee contenido.",
   },
+  "lib/lecturas/recuperacion.ts": {
+    destino: "ventas",
+    motivo: "El modo de recuperación de las lecturas (T2): una empresa con una preventa viva cuenta como activa. Solo pregunta si existe, nada de su contenido.",
+  },
   "lib/lecturas/personas.ts": {
     destino: "ventas",
     motivo: "La lectura de seguimiento (memoria de la cuenta, etapa 2): a quién va el seguimiento de lo que prometió un prospecto. Solo el responsable de la preventa viva, nada de su contenido.",

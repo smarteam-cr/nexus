@@ -43,8 +43,8 @@ import { drive as apiDrive } from "googleapis/build/src/apis/drive";
 import { prisma } from "@/lib/db/prisma";
 import { getImpersonatedAuth } from "@/lib/google/auth";
 import { summarizeTranscript } from "@/lib/ai/summarize-session";
-import { DIAS_DE_FRESCURA, seguimientoPrendido } from "@/lib/lecturas/reglas";
-import { MIN_NOTAS_PARA_LEER, hechosPrendidos } from "@/lib/seguimiento/hechos/reglas";
+import { DIAS_DE_FRESCURA, colaTomaSoloNotas, seguimientoPrendido } from "@/lib/lecturas/reglas";
+import { claseDeTexto } from "@/lib/sessions/tiene-texto";
 import { parseDocTabs, parseDocBody, MAX_TRANSCRIPT_CHARS, MIN_TRANSCRIPT_CHARS, type DocTab } from "./doc-parse";
 import { candidatosImpersonables } from "./elegir-impersonado";
 import { consultaDeDrive, elegirArchivosDeLaReunion, VENTANA_DRIVE_MS, type ArchivoDeDrive } from "./drive-candidatos";
@@ -419,11 +419,11 @@ async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProce
      (de un cliente o un prospecto, de 14 días o menos, con transcripción). Antes se disparaba el post-proceso sin
      esperarlo, y si fallaba nadie lo reintentaba. Encolar es barato y nunca lanza.
      Con `SEGUIMIENTO_REUNIONES_ENABLED=0` o sin las columnas del SQL, el camino viejo: dispara y olvida.
-     Con `SEGUIMIENTO_HECHOS` prendida (memoria de la cuenta, etapa 6), una reunión con SOLO notas de Gemini también se
-     encola: deja sus hechos (no una minuta). El camino viejo no la toca. */
+     Una reunión con SOLO notas de Gemini también se encola (T2, lib/sessions/tiene-texto.ts): la lectura la lee entera,
+     o con `SEGUIMIENTO_SOLO_NOTAS=0` deja solo sus hechos (con `SEGUIMIENTO_HECHOS`). El camino viejo no la toca. */
   const esReciente = Date.now() - s.date.getTime() <= DIAS_DE_FRESCURA * 86_400_000;
   const conTranscripcion = !!lectura.transcript && lectura.transcript.trim().length >= MIN_TRANSCRIPT_CHARS;
-  const soloNotas = !conTranscripcion && hechosPrendidos(process.env) && largoDeLasNotas(finalSummary) >= MIN_NOTAS_PARA_LEER;
+  const soloNotas = !conTranscripcion && colaTomaSoloNotas(process.env) && claseDeTexto({ summary: finalSummary }) === "solo_notas";
   if (datos.transcript === null) {
     // Se vació la transcripción ajena: lo que dejó la lectura salió de ella. Rehacer o avisar (lib/sessions/reanalizar.ts,
     // que mira si es reciente y si alguien ya trabajó algo).
@@ -473,14 +473,6 @@ async function transcripcionGuardadaAjena(s: SesionAEnriquecer): Promise<boolean
   const l1 = filas[0]?.l1;
   if (!l1?.trim()) return false;
   return procedenciaDelTexto(s.title, l1).tipo !== "propia";
-}
-
-/** El largo de las notas de Gemini (`summary.overview`): con la lectura de hechos prendida, alcanzan para encolar. */
-function largoDeLasNotas(summary: unknown): number {
-  if (!summary || typeof summary !== "object" || Array.isArray(summary)) return 0;
-  const o = (summary as { overview?: unknown }).overview;
-  const texto = Array.isArray(o) ? o.filter((x) => typeof x === "string").join(" ") : typeof o === "string" ? o : "";
-  return texto.trim().length;
 }
 
 /** Corre un lote con backoff: tras un batch con 429/5xx, duerme antes del siguiente. */

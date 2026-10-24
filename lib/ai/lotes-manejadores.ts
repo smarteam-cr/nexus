@@ -13,10 +13,16 @@ export interface ManejadorDeLote {
    * con la llamada. Si lanza, el pedido queda en error con el mensaje (la llamada igual se anota: se pagó).
    */
   aplicar(p: { pedidoId: string; contexto: unknown; mensaje: Anthropic.Messages.Message }): Promise<{ agentRunId?: string | null }>;
+  /**
+   * Quién pidió el pedido, si fue una persona (sale de su contexto): la llamada se anota a su nombre y cobra contra el
+   * presupuesto humano, aunque el manejador falle. Sin esto, o null, es automática.
+   */
+  quienPidio?(contexto: unknown): string | null;
   /** Avisa que el pedido no va a volver (error de Anthropic o vencido), por si hay que soltar algo. */
   alFallar?(p: { pedidoId: string; contexto: unknown; error: string }): Promise<void>;
 }
 
 export const MANEJADORES: Record<TipoDeLote, () => Promise<ManejadorDeLote>> = {
   "vigia-barrido": () => import("@/lib/cs/watchdog").then((m) => m.manejadorDelVigiaEnLote),
+  "lectura-recuperacion": () => import("@/lib/lecturas/recuperacion").then((m) => m.manejadorDeLaRecuperacion),
 };

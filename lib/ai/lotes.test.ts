@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { estadoDelResultado, ESPERA_PARA_JUNTAR_MS, hayQueEnviar, idParaAnthropic, MAX_PEDIDOS_POR_LOTE, seVencio, TIPOS_DE_LOTE } from "./lotes";
+import { estadoDelResultado, ESPERA_PARA_JUNTAR_MS, hayQueEnviar, idParaAnthropic, MAX_PEDIDOS_POR_LOTE, seVencio, TIPOS_DE_LOTE, tipoPrendido, tiposQueSeMandan } from "./lotes";
 
 /**
  * lib/ai/lotes.test.ts — LA PUERTA DE LOS LOTES ES UNA SOLA, Y SUS REGLAS SE CUMPLEN.
@@ -38,6 +38,27 @@ describe("lo que vuelve", () => {
   it("el id de la fila sirve como custom_id; uno raro no se manda", () => {
     expect(idParaAnthropic("cmabc123def456")).toBe("cmabc123def456");
     expect(() => idParaAnthropic("con espacio")).toThrow();
+  });
+});
+
+describe("qué tipos se mandan (T2: la recuperación de las lecturas)", () => {
+  it("con presupuesto automático, todos los prendidos", () => {
+    expect(tiposQueSeMandan({}, true)).toEqual(["vigia-barrido", "lectura-recuperacion"]);
+  });
+  it("sin presupuesto automático, solo la recuperación (la encola una persona con su tope)", () => {
+    expect(tiposQueSeMandan({}, false)).toEqual(["lectura-recuperacion"]);
+  });
+  it("LECTURA_DE_RECUPERACION=0 la apaga: lo que espera no se manda", () => {
+    expect(tipoPrendido("lectura-recuperacion", { LECTURA_DE_RECUPERACION: "0" })).toBe(false);
+    expect(tiposQueSeMandan({ LECTURA_DE_RECUPERACION: "0" }, true)).toEqual(["vigia-barrido"]);
+    expect(tiposQueSeMandan({ LECTURA_DE_RECUPERACION: "0" }, false)).toEqual([]);
+  });
+  it("la puerta elige los tipos antes de buscar, y anota la llamada a nombre de quien la pidió", () => {
+    const src = fs.readFileSync(path.resolve(__dirname, "lotes-server.ts"), "utf8");
+    expect(src).toContain("const tipos = tiposQueSeMandan(process.env, quedaAutomatico);");
+    expect(src).toContain('where: { estado: "en_espera", tipo: { in: tipos } }');
+    expect(src).toContain("quien = manejador.quienPidio?.(p.contexto) ?? null;");
+    expect(src).toContain("triggeredByEmail: quien,");
   });
 });
 

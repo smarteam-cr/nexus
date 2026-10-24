@@ -7,6 +7,7 @@
  * Correr: `npx vitest run lib/lecturas/reglas.test.ts --project unit`.
  */
 import { describe, expect, it } from "vitest";
+import { summaryDelRecuerdo } from "@/lib/sessions/reunion-a-mano";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -24,6 +25,7 @@ import {
   esperaDelIntento,
   finDeLaLectura,
   motivoParaNoEncolar,
+  queSeLee,
   rutaDeLaLectura,
   seguimientoPrendido,
 } from "./reglas";
@@ -87,7 +89,7 @@ describe("qué se encola", () => {
     expect(motivoParaNoEncolar({ ...soloNotas, fecha: hace(DIAS_DE_FRESCURA + 1) }, { leerSoloNotas: true })).toBe("vieja");
     // La cola pasa la bandera y el largo de las notas.
     const cola = fs.readFileSync(path.join(process.cwd(), "lib/lecturas/cola.ts"), "utf8");
-    expect(cola).toContain("leerSoloNotas: hechosPrendidos(process.env)");
+    expect(cola).toContain("leerSoloNotas: colaTomaSoloNotas(process.env)");
     expect(cola).toContain("largoNotas:");
   });
 });
@@ -178,5 +180,23 @@ describe("las piezas de la cola respetan su frontera", () => {
     expect(leer("lib/sessions/post-process.ts")).toContain("conLaReunion(sessionId, () => leer(sessionId, opts))");
     expect(leer("lib/sessions/vincular-al-llegar.ts")).toContain("conLaReunion(f.id, () => classifySessionToProjects(f.id, dueno))");
     expect(leer("lib/ai/medidor.ts")).toContain("origen: origenDeLaFila(ctx)");
+  });
+});
+
+describe("qué se lee de una reunión (T2: `queSeLee`, la regla de la lectura de siempre y de la recuperación)", () => {
+  const T = (n: number) => "a".repeat(n);
+  const notas = { overview: T(500) };
+  const recuerdo = summaryDelRecuerdo(T(60), { tipo: "recuerdo", por: "liz@smarteam.test", nombre: "Liz", at: "2026-10-24T15:00:00Z" });
+  it("la transcripción manda", () => {
+    expect(queSeLee({ transcript: T(300), summary: notas }, {})).toEqual({ fuente: "transcripcion", recuerdo: null });
+  });
+  it("sin transcripción, las notas que alcanzan se leen enteras; con SEGUIMIENTO_SOLO_NOTAS=0, no", () => {
+    expect(queSeLee({ transcript: T(50), summary: notas }, {}).fuente).toBe("notas");
+    expect(queSeLee({ transcript: null, summary: notas }, { SEGUIMIENTO_SOLO_NOTAS: "0" }).fuente).toBeNull();
+    expect(queSeLee({ transcript: null, summary: { overview: T(399) } }, {}).fuente).toBeNull();
+  });
+  it("lo que recuerda una persona se lee aunque las notas estén apagadas", () => {
+    const r = queSeLee({ transcript: null, summary: recuerdo }, { SEGUIMIENTO_SOLO_NOTAS: "0" });
+    expect(r).toEqual({ fuente: "recuerdo", recuerdo: T(60) });
   });
 });

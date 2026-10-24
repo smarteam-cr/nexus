@@ -19,6 +19,7 @@ import {
 import { cachedSearchCompaniesByDomains } from "@/lib/hubspot/companies";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { coberturaPorCse } from "@/lib/sessions/cobertura-por-cse";
+import { DONDE_TIENE_TRANSCRIPCION } from "@/lib/sessions/tiene-texto";
 import { getTeamMembers } from "@/lib/cache/team";
 import { getSessionCategories } from "@/lib/cache/session-categories";
 import { PROYECTO_CLASIFICABLE_WHERE } from "@/lib/projects/scope";
@@ -61,7 +62,7 @@ export async function cargarSesionesCategorizadas() {
       },
     }),
     prisma.firefliesSession.findMany({
-      where: { transcript: { not: null } },
+      where: DONDE_TIENE_TRANSCRIPCION,
       select: { id: true },
     }),
     // ¿Qué sesiones tienen resumen CON CONTENIDO? Misma semántica que el check viejo

@@ -42,8 +42,7 @@ import { loadHandoffContext } from "@/lib/canvas/load-canvas-context";
 import { fechaLocalDeLaReunion } from "@/lib/sessions/compromisos-y-alcance";
 import { ADENDA_PRESENTACION_DEL_DIAGNOSTICO, leerPresentacionDetectada } from "@/lib/canvas/presentacion-del-diagnostico";
 import { citaEstaEnLasFuentes, normalizarParaCita } from "@/lib/timeline/limites";
-import { MIN_TRANSCRIPT_CHARS } from "@/lib/google/doc-parse";
-import { MIN_RECUERDO, leerMarcaAMano, recuerdoDeLaReunion } from "@/lib/sessions/reunion-a-mano";
+import { leerMarcaAMano } from "@/lib/sessions/reunion-a-mano";
 import {
   TOPE_DE_LA_TRANSCRIPCION,
   adendaDeLaHerramienta,
@@ -54,8 +53,9 @@ import {
   HERRAMIENTA_DE_LA_LECTURA,
   type SalidaDeLaLectura,
 } from "@/lib/sessions/lectura-salida";
-import { TOPE_DE_TOKENS, rutaDeLaLectura, type RutaDeLaLectura } from "@/lib/lecturas/reglas";
-import { MIN_NOTAS_PARA_LEER, hechosPrendidos } from "@/lib/seguimiento/hechos/reglas";
+import { DIAS_DE_FRESCURA, ETIQUETA_DE_LA_RECUPERACION, TOPE_DE_TOKENS, queSeLee, rutaDeLaLectura, type FuenteDeLaLectura, type RutaDeLaLectura } from "@/lib/lecturas/reglas";
+import { claseDeTexto, notasDeLaReunion } from "@/lib/sessions/tiene-texto";
+import { hechosPrendidos } from "@/lib/seguimiento/hechos/reglas";
 import { cseDeLaCuenta, cseDelProyecto, negocioDeLaCuenta, responsableDeLaPreventaViva } from "@/lib/lecturas/personas";
 import { armarPropuestasDeSeguimiento, elegirLoEsencial } from "@/lib/tareas/seguimiento";
 import { descartesDeLaCuenta, escribirSalidaDeSeguimiento } from "@/lib/tareas/lectura";
@@ -173,9 +173,13 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
   // Lo que alguien recuerda de una reunión agregada a mano (lib/sessions/reunion-a-mano.ts) se lee entero, como una
   // transcripción: deja minuta, tareas y pedidos. Pero no son palabras de nadie, y el mensaje lo dice.
   const marcaAMano = leerMarcaAMano(session.summary);
-  const recuerdo = transcript.trim().length < MIN_TRANSCRIPT_CHARS ? recuerdoDeLaReunion(session.summary) : null;
-  const leeElRecuerdo = !!recuerdo && recuerdo.length >= MIN_RECUERDO;
-  if (transcript.trim().length < MIN_TRANSCRIPT_CHARS && !leeElRecuerdo) {
+  // T2 (2026-10-24): sin transcripción, unas notas de Gemini que alcanzan se leen ENTERAS, como una transcripción (minuta,
+  // compromisos y pedidos), salvo con `SEGUIMIENTO_SOLO_NOTAS=0` (la vuelta atrás: solo sus hechos, como antes). La regla
+  // de qué se lee es UNA (`queSeLee`, lib/lecturas/reglas.ts), la misma de la recuperación.
+  const { fuente, recuerdo } = queSeLee(session, process.env);
+  const leeElRecuerdo = fuente === "recuerdo";
+  const leeLasNotas = fuente === "notas";
+  if (!fuente) {
     const sinTexto: ResultadoDeLaLectura = { status: "sin_texto", sessionId, clientId: client.id, ruta, reason: "Sin transcripción (o muy corta)" };
     // Memoria de la cuenta, etapa 6 (solo con SEGUIMIENTO_HECHOS prendida y el SQL): una reunión con SOLO notas de
     // Gemini no deja minuta, pero sí sus hechos (fuente «notas»). Antes, el clasificador la vincula a su proyecto (solo
@@ -235,42 +239,19 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
   //    privado, lo de un espacio de «solo miembros» ni el borrador de un plan).
   const miembros = await miembrosActivos();
   const yaSonTareas = (await titulosParaLaLectura({ clientId: client.id, sessionId }).catch(() => [] as string[])).slice(0, 30);
-  const overview =
-    session.summary && typeof session.summary === "object" && "overview" in (session.summary as object) ? String((session.summary as { overview?: unknown }).overview ?? "") : "";
-  const userMessage = [
-    `=== CLIENTE ===`,
-    `Nombre: ${client.name}`,
-    client.company ? `Empresa: ${client.company}` : null,
-    client.industry ? `Industria: ${client.industry}` : null,
-    ruta === "prospecto" ? `(Es un PROSPECTO: todavía no compró.)` : null,
-    project ? `\nProyecto activo: ${project.name}` : "",
-    "",
-    `=== EQUIPO INTERNO (correos válidos para ownerEmail) ===`,
-    miembros.map((m) => `- ${m.nombre} <${m.email}>${m.area ? ` [${m.area}]` : ""}`).join("\n"),
-    "",
-    `=== REUNIÓN ===`,
-    `Título: ${session.title}`,
-    // En hora de Costa Rica: en UTC, una reunión de las 18:00 caía al día siguiente y toda fecha calculada desde ahí también.
-    `Fecha: ${fechaLocalDeLaReunion(session.date)}`,
-    `Participantes: ${session.participants.join(", ")}`,
-    overview && !leeElRecuerdo ? `\n\n=== RESUMEN GENERADO POR GEMINI NOTES ===\n${overview}` : "",
-    alcanceVendido.trim() ? `\n\n=== LO QUE SE VENDIÓ (para reconocer lo que está fuera de alcance) ===\n${alcanceVendido}` : "",
-    yaSonTareas.length ? `\n\n=== YA SON TAREAS (no las repitas como compromiso) ===\n${yaSonTareas.map((t) => `- ${t}`).join("\n")}` : "",
-    "",
-    ...(leeElRecuerdo && marcaAMano
-      ? [
-          `=== LO QUE RECUERDA ${(marcaAMano.nombre ?? marcaAMano.por).toUpperCase()} DE LA REUNIÓN ===`,
-          `(Lo escribió a mano después de la reunión. No es una transcripción: no son palabras textuales de nadie, así que nada de esto es una cita del cliente.)`,
-          (recuerdo ?? "").slice(0, TOPE_DE_LA_TRANSCRIPCION),
-        ]
-      : [
-          marcaAMano?.tipo === "transcripcion" ? `=== TRANSCRIPT (agregado a mano por ${marcaAMano.nombre ?? marcaAMano.por}) ===` : `=== TRANSCRIPT ===`,
-          transcript.slice(0, TOPE_DE_LA_TRANSCRIPCION),
-        ]),
-  ]
-    .filter((x) => x !== null)
-    .join("\n");
-
+  const overview = notasDeLaReunion(session.summary);
+  const cabecera = cabeceraDeLaLectura({
+    client,
+    ruta,
+    proyecto: project?.name ?? null,
+    miembros,
+    session,
+    // Las notas van como el texto de la reunión cuando se leen enteras: no se repiten como resumen.
+    overview: leeElRecuerdo || leeLasNotas ? "" : overview,
+    alcanceVendido,
+    yaSonTareas,
+  });
+  const userMessage = [cabecera, "", ...bloqueDelTexto({ transcript, overview, recuerdo: leeElRecuerdo ? recuerdo : null, marcaAMano, leeLasNotas })].join("\n");
   const system =
     ((await prisma.agent.findUnique({ where: { id: AGENT_ID_POST_SESSION }, select: { systemPrompt: true } }))?.systemPrompt ?? "") +
     adendaDeLaHerramienta({ pideFueraDeAlcance }) +
@@ -285,7 +266,8 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
     opts.formaDelPedido === "compartida" ||
     (opts.formaDelPedido !== "propia" && LECTURA_Y_HECHOS_COMPARTEN_PREFIJO && !opts.soloLeer && hechosPrendidos(process.env) &&
       (await import("@/lib/seguimiento/hechos-server").then((m) => m.hechosActivos()).catch(() => false)));
-  const textoCompartido = quiereCompartir && !leeElRecuerdo ? armarTextoDeLaReunion({ transcript: session.transcript, summary: session.summary }) : null;
+  // Las notas leídas como texto van por el pedido propio: ahí llevan su aviso («no son palabras textuales de nadie»).
+  const textoCompartido = quiereCompartir && !leeElRecuerdo && !leeLasNotas ? armarTextoDeLaReunion({ transcript: session.transcript, summary: session.summary }) : null;
   const prefijoCompartido = textoCompartido
     ? prefijoDeLaReunion({
         reunion: { titulo: session.title ?? "", fecha: fechaLocalDeLaReunion(session.date), texto: textoCompartido },
@@ -297,7 +279,7 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
     ? [
         system,
         "",
-        userMessage.slice(0, userMessage.indexOf(`=== TRANSCRIPT`) >= 0 ? userMessage.indexOf(`=== TRANSCRIPT`) : userMessage.length).trimEnd(),
+        cabecera.trimEnd(),
         "",
         `(La reunión —su transcripción, numerada por turno— está arriba, en el sistema. Llama a la herramienta ${HERRAMIENTA_DE_LA_LECTURA}.)`,
       ].join("\n")
@@ -381,7 +363,7 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
 
   await prisma.agentRun.update({
     where: { id: run!.id },
-    data: { status: "DONE", output: JSON.stringify({ salida, descartadosPorCita, ruta, tokens }), currentPhase: null },
+    data: { status: "DONE", output: JSON.stringify({ salida, descartadosPorCita, ruta, tokens, fuente }), currentPhase: null },
   });
 
   // 9. Los compromisos → propuestas de Tarea, por el único escritor de Tareas.
@@ -453,7 +435,7 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
   });
 
   console.log(
-    `[lectura] ✓ "${session.title}" (${client.name}, ${ruta}) — minuta + ${escrita.propuestas} propuesta(s), ${escrita.porAsignar} por asignar, ${salida.fueraDeAlcance.length} pedido(s)` +
+    `[lectura] ✓ "${session.title}" (${client.name}, ${ruta}${fuente === "notas" ? ", solo notas" : ""}) — minuta + ${escrita.propuestas} propuesta(s), ${escrita.porAsignar} por asignar, ${salida.fueraDeAlcance.length} pedido(s)` +
       (descartadosPorCita.compromisos + descartadosPorCita.pedidos ? ` · ${descartadosPorCita.compromisos + descartadosPorCita.pedidos} descartado(s) por la cita` : ""),
   );
 
@@ -491,12 +473,228 @@ async function leer(sessionId: string, opts: OpcionesDeLaLectura): Promise<Resul
   };
 }
 
-/** ¿Las notas de Gemini alcanzan para leer sus hechos? (memoria de la cuenta, etapa 6: la cobertura de las de solo notas). */
+/** ¿Las notas de Gemini alcanzan para leerlas? El piso del predicado único (lib/sessions/tiene-texto.ts). */
 function tieneNotasParaLeer(summary: unknown): boolean {
-  if (!summary || typeof summary !== "object" || Array.isArray(summary)) return false;
-  const o = (summary as { overview?: unknown }).overview;
-  const texto = Array.isArray(o) ? o.filter((x) => typeof x === "string").join("\n") : typeof o === "string" ? o : "";
-  return texto.trim().length >= MIN_NOTAS_PARA_LEER;
+  return claseDeTexto({ summary }) === "solo_notas";
+}
+
+/**
+ * Lo que va ANTES del texto de la reunión en el mensaje de la lectura: la empresa, el equipo, la reunión y su contexto.
+ * Con el prefijo compartido con los hechos (la reunión en el `system`), el mensaje es esto solo.
+ */
+function cabeceraDeLaLectura(c: {
+  client: { name: string; company: string | null; industry: string | null };
+  ruta: RutaDeLaLectura;
+  proyecto: string | null;
+  miembros: { nombre: string; email: string; area?: string | null }[];
+  session: { title: string | null; date: Date; participants: string[] };
+  /** Las notas de Gemini como resumen de apoyo ("" si no van, o si son el texto mismo de la lectura). */
+  overview: string;
+  alcanceVendido: string;
+  yaSonTareas: string[];
+  /** Una línea más al final (el modo de recuperación dice qué no se pide). */
+  aviso?: string | null;
+}): string {
+  return [
+    `=== CLIENTE ===`,
+    `Nombre: ${c.client.name}`,
+    c.client.company ? `Empresa: ${c.client.company}` : null,
+    c.client.industry ? `Industria: ${c.client.industry}` : null,
+    c.ruta === "prospecto" ? `(Es un PROSPECTO: todavía no compró.)` : null,
+    c.proyecto ? `\nProyecto activo: ${c.proyecto}` : "",
+    "",
+    `=== EQUIPO INTERNO (correos válidos para ownerEmail) ===`,
+    c.miembros.map((m) => `- ${m.nombre} <${m.email}>${m.area ? ` [${m.area}]` : ""}`).join("\n"),
+    "",
+    `=== REUNIÓN ===`,
+    `Título: ${c.session.title}`,
+    // En hora de Costa Rica: en UTC, una reunión de las 18:00 caía al día siguiente y toda fecha calculada desde ahí también.
+    `Fecha: ${fechaLocalDeLaReunion(c.session.date)}`,
+    `Participantes: ${c.session.participants.join(", ")}`,
+    c.overview ? `\n\n=== RESUMEN GENERADO POR GEMINI NOTES ===\n${c.overview}` : "",
+    c.alcanceVendido.trim() ? `\n\n=== LO QUE SE VENDIÓ (para reconocer lo que está fuera de alcance) ===\n${c.alcanceVendido}` : "",
+    c.yaSonTareas.length ? `\n\n=== YA SON TAREAS (no las repitas como compromiso) ===\n${c.yaSonTareas.map((t) => `- ${t}`).join("\n")}` : "",
+    c.aviso ? `\n${c.aviso}` : null,
+  ]
+    .filter((x) => x !== null)
+    .join("\n");
+}
+
+/** El texto de la reunión en el mensaje: la transcripción, lo que recuerda una persona, o (T2) las notas de Gemini. */
+function bloqueDelTexto(c: {
+  transcript: string;
+  overview: string;
+  recuerdo: string | null;
+  marcaAMano: ReturnType<typeof leerMarcaAMano>;
+  leeLasNotas: boolean;
+}): string[] {
+  if (c.recuerdo && c.marcaAMano) {
+    return [
+      `=== LO QUE RECUERDA ${(c.marcaAMano.nombre ?? c.marcaAMano.por).toUpperCase()} DE LA REUNIÓN ===`,
+      `(Lo escribió a mano después de la reunión. No es una transcripción: no son palabras textuales de nadie, así que nada de esto es una cita del cliente.)`,
+      c.recuerdo.slice(0, TOPE_DE_LA_TRANSCRIPCION),
+    ];
+  }
+  if (c.leeLasNotas) {
+    return [
+      `=== NOTAS DE GEMINI (no hay transcripción de esta reunión) ===`,
+      `(Es el resumen que tomó Gemini durante la reunión, no la conversación: no son palabras textuales de nadie. Las citas se copian tal cual de estas notas.)`,
+      c.overview.slice(0, TOPE_DE_LA_TRANSCRIPCION),
+    ];
+  }
+  return [
+    c.marcaAMano?.tipo === "transcripcion" ? `=== TRANSCRIPT (agregado a mano por ${c.marcaAMano.nombre ?? c.marcaAMano.por}) ===` : `=== TRANSCRIPT ===`,
+    c.transcript.slice(0, TOPE_DE_LA_TRANSCRIPCION),
+  ];
+}
+
+/* ── El modo de RECUPERACIÓN (T2, 2026-10-24) ───────────────────────────────────────────────────
+ * Las reuniones de más de 14 días que nunca se leyeron (las 301 con solo notas, las del rescate de Google) se leen para
+ * la memoria de la cuenta: minuta y temas, SIN propuestas de Tarea, pedidos fuera de alcance ni fecha del diagnóstico,
+ * y sin lo que sigue (avance, ficha, etapa, preventa): todo eso hablaría de agosto como si fuera hoy. Van por la API de
+ * lotes (lib/lecturas/recuperacion.ts), a mitad de precio: `pedidoDeRecuperacion` arma el pedido sin llamar a nadie, y
+ * `aplicarRecuperacion` deja lo que volvió. No tocan la cola (`LecturaDeReunion`): una fila «lista» sin la salida de
+ * Tareas se soltaría para Tareas, que propondría tareas viejas. «Ya tiene minuta» es la marca de que se leyó.
+ * Sin clasificador: el proyecto es el principal que ya tenga (solo sirve de contexto).
+ */
+
+/** Lo que el pedido por lote guarda para aplicar la respuesta. */
+export interface ContextoDeLaRecuperacion {
+  sessionId: string;
+  clientId: string;
+  projectId: string | null;
+  ruta: RutaDeLaLectura;
+  fuente: FuenteDeLaLectura;
+  /** Quién corrió la recuperación: la llamada se anota a su nombre (presupuesto humano, el compartido), no al automático. */
+  quien: string | null;
+}
+
+export type PedidoDeRecuperacion =
+  | { ok: true; pedido: Anthropic.Messages.MessageCreateParamsNonStreaming; contexto: ContextoDeLaRecuperacion; caracteres: number }
+  | { ok: false; motivo: string };
+
+/** El aviso que lleva el mensaje de una lectura de recuperación. */
+export const AVISO_DE_RECUPERACION =
+  "(MODO RECUPERACIÓN: es una reunión de hace más de 14 días que se lee para la memoria de la cuenta. Escribe la minuta y los temas. Deja `compromisos` vacío: de esta reunión ya no se proponen tareas.)";
+
+/** Arma el pedido de la lectura de recuperación de una reunión, sin llamar a la IA ni escribir nada. */
+export async function pedidoDeRecuperacion(sessionId: string, quien: string | null): Promise<PedidoDeRecuperacion> {
+  const session = await prisma.firefliesSession.findUnique({
+    where: { id: sessionId },
+    select: { id: true, title: true, date: true, participants: true, organizerEmail: true, resolvedClientId: true, manualClientId: true, transcript: true, summary: true },
+  });
+  if (!session) return { ok: false, motivo: "no_existe" };
+  // Una de 14 días o menos la lee la cola, entera (con sus tareas): la recuperación es solo para lo atrasado.
+  if (+session.date > Date.now() - DIAS_DE_FRESCURA * 86_400_000) return { ok: false, motivo: "fresca" };
+  const duenoId = duenoDeLaSesion(session);
+  if (!duenoId) return { ok: false, motivo: "sin_duenio" };
+  const client = await prisma.client.findUnique({ where: { id: duenoId }, select: { id: true, name: true, company: true, industry: true, kind: true } });
+  const ruta = rutaDeLaLectura(client?.kind);
+  if (!client || !ruta) return { ok: false, motivo: "no_es_cliente" };
+  if (await esDePuertasAdentro({ participants: session.participants, organizerEmail: session.organizerEmail })) return { ok: false, motivo: "puertas_adentro" };
+  if (await prisma.sessionMinute.findUnique({ where: { sessionId }, select: { id: true } })) return { ok: false, motivo: "ya_tiene_minuta" };
+
+  const transcript = session.transcript ?? "";
+  const marcaAMano = leerMarcaAMano(session.summary);
+  // La misma regla de qué se lee que la lectura de siempre (`queSeLee`).
+  const { fuente, recuerdo } = queSeLee(session, process.env);
+  if (!fuente) return { ok: false, motivo: "sin_texto" };
+  const leeElRecuerdo = fuente === "recuerdo";
+  const leeLasNotas = fuente === "notas";
+
+  // El proyecto principal que ya tenga, SOLO si es de la empresa dueña: una reunión vieja que cambió de dueño puede
+  // arrastrar el vínculo a un proyecto del dueño anterior (la lectura de siempre lo corrige al clasificar; esta no
+  // clasifica). Nunca el nombre de un proyecto de otro cliente en el pedido (invariante 1).
+  const principal = ruta === "completa" ? await getPrimaryProjectIdForSession(sessionId) : null;
+  const project = principal ? await prisma.project.findFirst({ where: { id: principal, clientId: client.id }, select: { id: true, name: true } }) : null;
+  const projectId = project?.id ?? null;
+  const miembros = await miembrosActivos();
+  const overview = notasDeLaReunion(session.summary);
+  const cabecera = cabeceraDeLaLectura({
+    client,
+    ruta,
+    proyecto: project?.name ?? null,
+    miembros,
+    session,
+    overview: leeElRecuerdo || leeLasNotas ? "" : overview,
+    alcanceVendido: "",
+    yaSonTareas: [],
+    aviso: AVISO_DE_RECUPERACION,
+  });
+  const texto = bloqueDelTexto({ transcript, overview, recuerdo: leeElRecuerdo ? recuerdo : null, marcaAMano, leeLasNotas });
+  const userMessage = [cabecera, "", ...texto].join("\n");
+  const system =
+    ((await prisma.agent.findUnique({ where: { id: AGENT_ID_POST_SESSION }, select: { systemPrompt: true } }))?.systemPrompt ?? "") +
+    adendaDeLaHerramienta({ pideFueraDeAlcance: false });
+  const herramienta = herramientaDeLaLectura({ pideFueraDeAlcance: false, pidePresentacion: false, emailsDelEquipo: miembros.map((m) => m.email) });
+  return {
+    ok: true,
+    pedido: {
+      model: "claude-sonnet-4-6",
+      max_tokens: TOPE_DE_TOKENS[TOPE_DE_TOKENS.length - 1],
+      system,
+      tools: [herramienta],
+      tool_choice: { type: "tool", name: HERRAMIENTA_DE_LA_LECTURA },
+      messages: [{ role: "user", content: userMessage }],
+    },
+    contexto: { sessionId, clientId: client.id, projectId, ruta, fuente, quien },
+    caracteres: system.length + userMessage.length,
+  };
+}
+
+/**
+ * Deja lo que volvió de una lectura de recuperación: la corrida, los temas y la minuta (en borrador), nada más. Si la
+ * reunión cambió de dueño o ya tiene minuta (alguien la leyó mientras el lote esperaba), no escribe nada y dice por qué.
+ * LANZA si la respuesta no se puede leer (el pedido queda en error, y la llamada igual se anota: se pagó).
+ */
+export async function aplicarRecuperacion(c: ContextoDeLaRecuperacion, mensaje: Anthropic.Messages.Message): Promise<{ agentRunId: string | null; motivo?: string }> {
+  const session = await prisma.firefliesSession.findUnique({ where: { id: c.sessionId }, select: { id: true, title: true, resolvedClientId: true, manualClientId: true } });
+  if (!session) return { agentRunId: null, motivo: "la reunión ya no existe" };
+  if (duenoDeLaSesion(session) !== c.clientId) return { agentRunId: null, motivo: "la reunión cambió de dueño mientras esperaba el lote" };
+  if (await prisma.sessionMinute.findUnique({ where: { sessionId: c.sessionId }, select: { id: true } })) return { agentRunId: null, motivo: "ya tenía minuta" };
+  if (mensaje.stop_reason === "max_tokens") throw new Error(`La respuesta se cortó (tope de ${TOPE_DE_TOKENS[TOPE_DE_TOKENS.length - 1]} tokens).`);
+  const salida = leerSalidaDeLaLectura(mensaje);
+  if (!salida) throw new Error("El modelo no llamó a la herramienta de la lectura.");
+
+  const tokens = { entrada: mensaje.usage?.input_tokens ?? 0, salida: mensaje.usage?.output_tokens ?? 0 };
+  const run = await prisma.agentRun.create({
+    data: {
+      agentId: AGENT_ID_POST_SESSION,
+      clientId: c.clientId,
+      projectId: c.projectId,
+      status: "DONE",
+      triggeredByEmail: c.quien,
+      sourceSessionIds: [c.sessionId],
+      stepLabel: ETIQUETA_DE_LA_RECUPERACION,
+      // Lo que no se usa (compromisos, pedidos) no se guarda: de esta reunión no sale nada más que la minuta.
+      output: JSON.stringify({ salida: { minuta: salida.minuta, detectedTopics: salida.detectedTopics }, ruta: c.ruta, tokens, fuente: c.fuente, recuperacion: true, lote: true }),
+    },
+    select: { id: true },
+  });
+  if (salida.detectedTopics.length) {
+    await prisma.firefliesSession.update({ where: { id: c.sessionId }, data: { detectedTopics: [...new Set(salida.detectedTopics)] }, select: { id: true } });
+  }
+  try {
+    await prisma.sessionMinute.create({
+      data: {
+        sessionId: c.sessionId,
+        summary: salida.minuta.summary,
+        agreements: salida.minuta.agreements as unknown as object,
+        decisions: salida.minuta.decisions as unknown as object,
+        risks: salida.minuta.risks as unknown as object,
+        topics: salida.minuta.topics as unknown as object,
+        status: "DRAFT",
+        generatedByAgentRunId: run.id,
+      },
+      select: { id: true },
+    });
+  } catch (e) {
+    // Otro la escribió entre la mirada y la escritura (el botón «Generar minuta»): la de esa persona queda.
+    if ((e as { code?: string } | null)?.code === "P2002") return { agentRunId: run.id, motivo: "ya tenía minuta" };
+    throw e;
+  }
+  console.log(`[lectura] ✓ recuperada «${session.title}» (${c.ruta}${c.fuente === "notas" ? ", solo notas" : ""}) — minuta, por lote`);
+  return { agentRunId: run.id };
 }
 
 /** Una reunión con solo notas: solo sus hechos (no hay minuta que escribir). Nunca lanza. */

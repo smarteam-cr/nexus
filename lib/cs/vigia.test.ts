@@ -323,9 +323,9 @@ describe("⭐ reuniones sin minuta: un extracto ACOTADO de la transcripción (D1
   it("los dos bloques del vigía la usan, con su tope, y solo traen la transcripción de las que no tienen minuta", () => {
     const cuenta = leer("lib/cs/watchdog-cuenta.ts");
     expect(cuenta).toMatch(/extractosDelBloque\([\s\S]{0,300}TOPE_TRANSCRIPCION_CUENTA/);
-    expect(cuenta).toMatch(/where: \{ id: \{ in: sinMinuta \}, transcript: \{ not: null \} \}/);
+    expect(cuenta).toMatch(/where: \{ id: \{ in: sinMinuta \}, \.\.\.DONDE_TIENE_TRANSCRIPCION \}/);
     const proyecto = leer("lib/cs/watchdog-context.ts");
     expect(proyecto).toMatch(/extractosDelBloque\([\s\S]{0,400}TOPE_TRANSCRIPCION_PROYECTO/);
-    expect(proyecto).toMatch(/where: \{ id: \{ in: sinMinuta \}, transcript: \{ not: null \} \}/);
+    expect(proyecto).toMatch(/where: \{ id: \{ in: sinMinuta \}, \.\.\.DONDE_TIENE_TRANSCRIPCION \}/);
   });
 });

@@ -16,6 +16,7 @@ import { computePhaseRanges, addWeeks, projectedEnd } from "@/lib/timeline/weeks
 import { bloquesDeLaCuenta, type CorreoLeido } from "./watchdog-cuenta";
 import { TOPE_TRANSCRIPCION_PROYECTO, extractosDelBloque } from "./transcripcion-del-vigia";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
+import { DONDE_TIENE_TRANSCRIPCION } from "@/lib/sessions/tiene-texto";
 import { lineaParaElVigia, pendientesVencidosParaElVigia } from "@/lib/tareas/para-agentes";
 import { riesgosParaElVigia } from "@/lib/seguimiento/hechos-server";
 
@@ -229,7 +230,7 @@ export async function buildWatchdogContext(
   const sinMinuta = recentSessions.filter((sp) => !tieneMinuta(sp.session)).map((sp) => sp.session.id);
   const transcripciones = sinMinuta.length
     ? await prisma.firefliesSession.findMany({
-        where: { id: { in: sinMinuta }, transcript: { not: null } },
+        where: { id: { in: sinMinuta }, ...DONDE_TIENE_TRANSCRIPCION },
         select: { id: true, transcript: true },
       })
     : [];

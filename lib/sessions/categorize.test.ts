@@ -525,14 +525,15 @@ test("D-08 · /sessions agrupa por CSE sobre lo que ya cargó, y el aviso lo PIN
 });
 
 test("D-08 · la ficha del cliente: el GPS cuenta con dos COUNT (pasadas, con transcript no vacío) y el widget lo pinta", () => {
-  /* La edición que lo pone en rojo: contar `transcript: { not: null }` sin excluir `""` («total
+  /* La edición que lo pone en rojo: contar la transcripción sin excluir `""` (el predicado único,
+     `DONDE_TIENE_TRANSCRIPCION` de lib/sessions/tiene-texto.ts, la excluye; «total
      analizables» mentiría hacia arriba, lección de C-10); contar también lo agendado (el % empeora solo
      por agendar); o traer filas en vez de contar. */
   const ruta = fs.readFileSync(path.join(process.cwd(), "app/api/projects/[projectId]/gps/route.ts"), "utf8");
   const bloque = ruta.slice(ruta.indexOf("const ahoraCobertura"), ruta.indexOf("const pendingItemsCompat"));
   expect(bloque.length, "la guarda no mira nada").toBeGreaterThan(200);
   expect(bloque, "solo las que ya ocurrieron, dentro de la ventana").toContain("date: { gte: desdeCobertura, lt: ahoraCobertura }");
-  expect(bloque, "«con transcripción» = no nula Y no vacía").toContain('transcript: { not: null }, NOT: { transcript: "" }');
+  expect(bloque, "«con transcripción» = no nula Y no vacía").toContain("...DONDE_TIENE_TRANSCRIPCION");
   expect(bloque, "se cuenta, no se traen filas").toContain("prisma.firefliesSession.count({ where: whereCobertura })");
   expect(bloque).not.toContain("findMany");
   expect(ruta, "el dato viaja en la respuesta del GPS").toMatch(/^\s+coberturaDelCliente,$/m);
