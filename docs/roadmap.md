@@ -120,6 +120,7 @@ Sin esto, algo sigue mal o no se puede validar:
 15. **«Diagnóstico virtual»** (K7): confirmar con Marco que es el test en línea que deja la nota «Diagnóstico de Rendimiento» en HubSpot.
 16. **Las Acciones coherentes** (L4): ¿se quedan en el diagnóstico o pasan a la Planificación? Te propongo dejar en el diagnóstico el enfoque con tres o cuatro acciones en una línea, y pasar el detalle a la Planificación.
 17. **El formato del documento de resultados de la preventa** (C5): lo define Ventas el lunes 27 oct.
+18. **La calificación de clientes de Insider** (N1): pedirles el umbral de tráfico con que califican a un cliente; es el de la condición «tráfico suficiente».
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -212,9 +213,9 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
    - Etapa 4 · El sitio web con criterio: ICP, buyer personas y kit de marca como actividades del caso de presencia web (también pensando en gobierno), porque terminan en HubSpot como contexto para su IA.
 6. **A6 · Los casos de Insider, por industria.** *Sale de:* la sesión «Casos de uso por industria» con Insider One (21 oct) y tu documento del 23 oct. *Depende de:* N para los criterios nuevos; las etapas 1 y 4 pueden ir antes. Plan: `docs/escala-engagement-avanzado-plan.md`.
    - Hoy hay cuatro casos de Insider: personalizar la experiencia web, recuperar carritos, recompra y la ficha única. Ninguno dice para qué industria es, y el de carritos promete de Inicial a Óptimo.
-   - Etapa 1 · Un caso de aterrizaje antes de Insider, «Prepara tus datos para personalizar» (los cuatro cimientos de datos), con HubSpot y Smarteam: es lo que vende la lectura «Casi lista» de N.
+   - Etapa 1 · Un caso de aterrizaje antes de Insider, «Prepara tus datos para personalizar» (el permiso por canal, lo que hacen en el sitio unido a la ficha y el catálogo de su industria), con HubSpot y Smarteam: es lo que vende la lectura «Casi lista» de N.
    - Etapa 2 · Ajustar los cuatro casos a los criterios de la 9.0 y partir el de carritos en aterrizaje (Eficiente) y expansión (Óptimo).
-   - Etapa 3 · Los casos que faltan: WhatsApp para vender y atender, un recorrido que coordina sitio, notificaciones, SMS y WhatsApp, «Demuestra cuánto vende de más tu marketing» con un grupo de control, búsqueda en catálogos grandes, avisos por evento (vuelos, reservas, entregas) y segmentos de valor y lealtad.
+   - Etapa 3 · Los casos que faltan: WhatsApp para vender y atender, un recorrido que coordina sitio, notificaciones, SMS y WhatsApp, «Demuestra cuánto vende de más tu marketing» con un grupo de control, avisos por evento (vuelos, reservas, entregas), avisos de disponibilidad y de baja de precio, y segmentos de valor y lealtad. Cada caso apunta a sus criterios y el mapa de herramientas dice qué pone HubSpot y qué Insider.
    - Etapa 4 · Cada caso dice para qué industrias es (las ediciones de la escala: Ecommerce y retail, Turismo, Banca), con sus ejemplos; la biblioteca filtra por la industria del cliente, sin duplicar casos.
    - Etapa 5 · El aviso de la integración: el conector de HubSpot a Insider va en una sola dirección; un caso que devuelve a HubSpot lo que calcula Insider lo dice.
 
@@ -417,23 +418,22 @@ Sale de Liliana con RC Inmobiliaria (23 oct). Es la prioridad 1 del Resumen. Pla
 
 ### N · La escala con engagement avanzado <span class="estado">Propuesta</span>
 
-Sale de la sesión con Insider One del 21 oct y de tu documento del 23 oct, consensuado ese día. La escala sigue sin nombrar herramientas: reconoce lo que hacen las empresas más maduras que le venden a personas por canales digitales, sobre todo en Eficiente y Óptimo. Plan, criterio por criterio («hoy dice / pasaría a»): `docs/escala-engagement-avanzado-plan.md`.
+Sale de la sesión con Insider One del 21 oct y de tu documento del 23 oct, consensuado y rehecho ese día contra las ediciones por industria, el mapa de herramientas y lo pendiente para la 9.0. Tres capas: la escala general (sin nombrar herramientas), las ediciones (lo propio de cada industria) y el mapa de herramientas (qué habilita HubSpot y qué Insider, criterio por criterio). Plan, cambio por cambio: `docs/escala-engagement-avanzado-plan.md`.
 
-1. **N1 · Dos condiciones nuevas para los criterios.** *Existe a medias:* la escala ya apaga criterios según cómo se cierra la venta y qué pasa después.
-   - Etapa 1 · Las condiciones «canal digital propio» y «oferta en catálogo».
-   - Etapa 2 · Un criterio puede llevar dos condiciones (hoy lleva una): cambia la estructura de la escala, su lector, su generador, su editor y las pruebas.
-   - Etapa 3 · El tráfico y la base con consentimiento no son condiciones: solo cuentan para la lectura de preparación (N3).
-2. **N2 · Los criterios de engagement avanzado, en la versión 9.0.** *Existe a medias:* de 19 criterios pedidos, 5 son nuevos, 11 son ajustes de los que hay y 3 ya existen casi igual.
-   - Etapa 1 · Los cimientos de datos, solo en Datos de Marketing (2.3): consentimiento por canal (sigue siendo de riesgo), lo que hacen en el sitio o la app unido a la ficha, reconocer al visitante anónimo y el catálogo al día.
-   - Etapa 2 · Marketing: segmentos por comportamiento y predictivos, el sitio que cambia según quién lo visita (en Segmentación), tres canales en un recorrido, pruebas A/B con hipótesis, el ingreso que agrega el marketing contra un grupo de control (el criterio más importante) y operar con agentes de IA.
-   - Etapa 3 · Ventas y Servicio: priorizar con comportamiento digital, recuperar abandonos, segmentos de valor y lealtad, avisos por evento y atención automatizada con traspaso.
+1. **N1 · La condición «tráfico suficiente».** *No existe.* Personalizar al visitante anónimo y medir contra un grupo de control solo funcionan con volumen (HubSpot no personaliza al anónimo por lo que hace; Insider sí, y califica a sus clientes por tráfico).
+   - Etapa 1 · Una tercera pregunta del perfil de la escala, con el umbral de la calificación de Insider, editable. Lo demás reusa la marca «venta sin vendedor», que ya existe: ningún criterio lleva dos condiciones.
+2. **N2 · Los 16 cambios de la versión 9.0.** *Existe a medias:* buena parte de lo que mostró Insider ya está en las ediciones (el catálogo, los carritos y las solicitudes a medias, las recomendaciones, la búsqueda).
+   - Etapa 1 · La escala general, 11 cambios: el permiso por canal (sigue de riesgo), lo que hacen en el sitio o la app unido a la ficha, segmentos que se actualizan solos, tres canales en un recorrido, A/B con hipótesis, el ingreso que agrega el marketing contra un grupo de control (con tráfico suficiente; el más importante), los agentes que alimentan la ficha, operar con agentes de IA (nuevo), priorizar con comportamiento digital, segmentos de valor y lealtad, y avisos disparados por el evento.
+   - Etapa 2 · Las ediciones, 5 cambios: en Ecommerce y retail, personalizar también al anónimo (con tráfico suficiente) y el aviso de disponibilidad o de baja de precio; en Turismo, personalizar el motor de reservas (con tráfico suficiente), recuperar búsquedas y reservas a medias, y el aviso de un cambio de vuelo.
+   - Etapa 3 · Cuatro de los cambios se escriben junto con temas que la 9.0 ya tenía abiertos (permiso de contacto, partir 2.7.E1, mover 1.6.O1, 3.6.E2), sin duplicar.
    - Etapa 4 · En un borrador de la escala, revisado por ti; se publica la 9.0.0 después de la 8.9.1.
 3. **N3 · La lectura «Preparación para engagement avanzado».** *No existe.* No cambia el nivel.
-   - Etapa 1 · Tres estados: «Lista» (el perfil cumple, tiene los cimientos y Marketing está en Funcional o más), «Casi lista» (dice qué cimientos faltan: es el proyecto que vende Smarteam antes de la plataforma) y «Todavía no» (su camino es HubSpot y SmartLoop).
-   - Etapa 2 · Los umbrales editables: el de la base con consentimiento arranca en 5.000 contactos.
+   - Etapa 1 · «Lista», «Casi lista» (dice qué cimientos faltan: es lo que vende Smarteam antes de la plataforma) o «Todavía no» (su camino es HubSpot y SmartLoop).
+   - Etapa 2 · Los umbrales editables: tráfico (el de Insider) y base con consentimiento (5.000 para empezar).
    - Etapa 3 · Se ve en la exploración de la preventa y en el diagnóstico del CSE. No nombra a Insider.
-4. **N4 · Los ejemplos por industria.** *Existe a medias:* hay seis ediciones; no hacen falta nuevas.
-   - Etapa única · Los ejemplos de moda, hogar y electrónica en Ecommerce y retail; los de aerolíneas, hotelería y agencias en Turismo; los de finanzas en Banca.
+4. **N4 · El mapa de herramientas para la 9.0.** *Existe* (versión 1.0.1, para la 8.8.0): ya dice, criterio por criterio, qué habilita Insider, HubSpot o Smarteam.
+   - Etapa 1 · Sumar los 16 cambios con quién los habilita.
+   - Etapa 2 · La ficha de Insider con el umbral de tráfico de su calificación, y la de HubSpot con lo que no hace (personalizar al anónimo por su comportamiento).
 
 ## Lo que falta, por tema
 

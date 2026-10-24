@@ -1,234 +1,161 @@
 # La escala con engagement avanzado y los casos de Insider por industria — plan
 
-> Sale del documento de Elías del 2026-10-23 (sesión «Casos de uso por industria» con Insider One del 21 oct, más
-> investigación). **Consensuado con Elías el 2026-10-23** (ver «Lo consensuado»). Nada construido: entra al roadmap como
-> el área N y el ítem A6. Comparado contra la escala publicada en
-> producción, versión **8.9.0** (la 8.9.1 está en revisión, prueba 108), y contra la biblioteca de casos
-> (`lib/casos-de-uso/catalogo.ts`).
+> Sale del documento de Elías del 2026-10-23: la sesión «Casos de uso por industria» con Insider One (21 oct), más una
+> investigación. Se consensuó y se rehízo el mismo día, cruzado contra cuatro cosas: la escala publicada (**8.9.0**), sus
+> seis ediciones por industria, el mapa de herramientas (`docs/escala/mapa_de_herramientas.md`) y lo pendiente para la 9.0
+> (`docs/escala/pendiente-9-0.md`). **Nada construido.** En el roadmap es el área N y el ítem A6.
 
-## Dónde cabe
+## Cómo se arma: tres capas
 
-Son dos salidas, en dos partes del roadmap:
+1. **La escala general** solo pide lo que vale para cualquier empresa que trabaja con sus canales digitales. No nombra
+   herramientas.
+2. **Las ediciones por industria** piden lo propio de cada industria, como criterio de la edición o marcando lo que no
+   aplica. Ecommerce y retail, Turismo y Banca ya traen buena parte de lo que mostró Insider: el catálogo, los carritos y
+   las solicitudes a medias, las recomendaciones, la búsqueda y la venta de adicionales.
+3. **El mapa de herramientas** dice, criterio por criterio, qué herramienta lo habilita: HubSpot, Insider o Smarteam. Su
+   regla es «lo habilita, no lo cumple». **Aquí se anclan Insider y HubSpot: a criterios, no a niveles.** Dentro de
+   Eficiente, unos criterios los habilita HubSpot, otros Insider, y algunos los dos.
 
-1. **La escala** (un área nueva del roadmap, junto a B «Los datos de la empresa»): el perfil de la empresa con las
-   condiciones nuevas, los criterios de engagement avanzado (la siguiente versión de la escala), la lectura «Preparación
-   para engagement avanzado» y los ejemplos en las ediciones por industria. La escala sigue sin nombrar herramientas.
-2. **Los casos de uso de Insider por industria** (el área A, donde A5 etapa 3 ya esperaba esta reunión): ajustar los
-   cuatro casos de Insider que hay, sumar los que faltan y que cada caso diga para qué industrias es. Aquí sí se nombra a
-   Insider.
+## Qué cambió respecto del borrador
 
-## Lo que ya existe (y cambia el plan)
+- **Una sola condición nueva: «tráfico suficiente».** «Canal digital propio» no hace falta: la marca «venta sin
+  vendedor», que ya existe, cubre a quien compra, reserva o solicita en el sitio o la app. «Oferta en catálogo» tampoco
+  hace falta: el catálogo vive en las ediciones que lo necesitan.
+- **Ningún criterio lleva dos condiciones,** así que la estructura de la escala casi no cambia: una marca nueva y una
+  tercera pregunta del perfil.
+- **El catálogo, los carritos y la atención automatizada ya existen:** en las ediciones y en 3.2 (bot y agente con traspaso).
+- **La personalización del sitio a cada comprador** va en las ediciones (dimensión 1.6). La 9.0 ya propone acotar 2.6.O3 a
+  los mensajes de marketing.
+- **Cuatro ajustes caen en temas que la 9.0 ya tenía abiertos** (permiso de contacto, partir 2.7.E1, 1.6.O1, 3.6.E2):
+  se escriben juntos, sin duplicar.
 
-- **La escala ya apaga criterios según el perfil.** Tiene un «perfil de negocio» con dos preguntas: cómo se cierra la
-  venta (con equipo, transaccional o mixta) y qué pasa después (una sola compra, recompra o relación continua). Cada
-  criterio puede llevar una marca («venta con equipo», «venta sin vendedor», «cliente recurrente», «recompra»,
-  «relación continua»); si no aplica, no cuenta, y si una dimensión se queda sin criterios en Funcional, la dimensión
-  entera no aplica (`lib/escala/documento/perfil.ts`). **Lo de 5.1 no es nuevo: se suman condiciones a un mecanismo que ya
-  funciona.**
-- **Límite técnico:** hoy un criterio lleva **una sola marca**. Un criterio de Ventas que ya es «venta con equipo» no
-  puede sumar «canales digitales propios» sin cambiar la gramática de la escala (el tipo, el lector y el generador del
-  texto, el editor y el port de `docs/escala/pruebas_escala.py`). Es trabajo de código, no solo de texto.
-- **Ya hay seis ediciones por industria:** Ecommerce y retail, Banca y servicios financieros, Educación, Inmobiliaria,
-  Turismo y Automotriz. Moda, hogar y electrónica caben en Ecommerce y retail; aerolíneas, hotelería y agencias, en
-  Turismo; finanzas, en Banca. **No hacen falta ediciones nuevas.**
-- **Varios criterios pedidos ya existen con otras palabras** (abajo, marcados «ya existe»).
+## La condición nueva: «tráfico suficiente»
 
-## 5.1 · El perfil y las condiciones de aplicación
+Personalizar a un visitante anónimo y medir con un grupo de control solo funcionan con volumen. HubSpot no personaliza al
+anónimo por lo que hace: solo por país, dispositivo, fuente o idioma. Insider sí, con su código en el sitio, y por eso
+califica a sus clientes por tráfico. La condición es una **tercera pregunta del perfil** («¿el sitio tiene el tráfico que
+pide la calificación?»). El umbral es el de Insider (hay que pedírselo) y queda editable. Si no la cumple, el criterio no
+aplica.
 
-| Del documento | Hoy | Propuesta |
-|---|---|---|
-| Le vende a empresas, a personas o a ambos | No es una pregunta del perfil | Se guarda en la ficha de la empresa (B1), **no** como condición de criterios: la personalización del sitio sirve igual a un B2B con tienda en línea. Entra a la lectura de preparación |
-| La compra, reserva o solicitud ocurre en canales digitales propios | Se acerca a «venta sin vendedor», pero no es lo mismo | **Marca nueva: «canal digital propio»** |
-| Tráfico digital, por rangos | No existe | Solo para la lectura de preparación (5.3), **no** como condición: un nivel de madurez no debería depender del volumen |
-| Base de contactos con consentimiento, por rangos | No existe | Igual: solo para la lectura de preparación |
-| La oferta está en un catálogo | No existe | **Marca nueva: «oferta en catálogo»** |
-| Una sola compra o recurrente | Ya existe («qué pasa después») | Sin cambio |
+## Los cambios, uno por uno
 
-- **El perfil vive en la ficha de la empresa** (B1) y la escala lo lee. En el chequeo para prospectos se resuelve con dos
-  preguntas: «¿Tus clientes compran, reservan o solicitan en tu sitio o tu app?» y «¿Lo que ofreces está en un catálogo
-  (productos, habitaciones, rutas, planes)?».
-- **Un criterio puede llevar dos marcas** (por ejemplo «venta con equipo» y «canal digital propio»): se aplica si cumple
-  las dos.
+Leyenda:
+- **Tipo:** Nuevo, Ajuste (mismo identificador) o Ajuste mínimo.
+- **Lo habilita:** según el mapa de herramientas.
+- **Con la 9.0:** el tema de `pendiente-9-0.md` con el que se escribe.
+- Los identificadores nuevos son tentativos.
 
-## 5.2 · Los criterios, uno por uno
+### Escala general
 
-Leyenda: **Ya existe** (no se toca o casi), **Ajuste** (se reescribe el que hay, mismo identificador), **Nuevo**.
-«{marca}» es la condición de aplicación.
+| # | Criterio | Nivel | Tipo | Qué diría | Condición | Lo habilita | Con la 9.0 |
+|---|---|---|---|---|---|---|---|
+| 1 | 2.3.F7 | Funcional (de riesgo) | Ajuste | El permiso de cada contacto está registrado por canal —correo, SMS, WhatsApp, notificaciones— y se respeta en cada envío | — | HubSpot (suscripción por canal) e Insider | Tema 13: riesgo en las tres áreas; decide Funcional solo donde la ley lo exige |
+| 2 | 2.3.E4 | Eficiente | Ajuste | Lo que la persona hace en el sitio o la app —qué visita, busca, abandona, compra o reserva— queda en su ficha, también lo que hizo antes de dejar sus datos, que se une al identificarse | — | HubSpot (visitas y eventos; une lo anterior al identificarse) e Insider (todos los eventos) | — |
+| 3 | 2.6.E4 | Eficiente | Ajuste | La segmentación usa el comportamiento, no solo lo declarado, **y los segmentos se actualizan solos** | — | HubSpot (listas activas) e Insider | — |
+| 4 | 2.7.E1 | Eficiente | Ajuste | La parte «un canal continúa lo que empezó otro» pasa a «al menos tres canales se coordinan en un mismo recorrido, con un límite de frecuencia y respetando el permiso de cada canal» | — | Insider (con push); HubSpot en parte (correo, SMS y WhatsApp) | Se parte en tres, como ya propone la 9.0 |
+| 5 | 2.8.E1 | Eficiente | Ajuste | Pruebas A/B regulares, al menos una activa por mes, **cada una con su hipótesis escrita y su resultado registrado** | — | HubSpot (correos y páginas) e Insider (cada canal) | Se retira 2.8.E2 |
+| 6 | 2.8.O3 | Óptimo | Ajuste (**el más importante**) | Cada recorrido y cada campaña se miden por el ingreso que agregan contra un grupo de control que no los recibe, por recorrido y en general, y con eso se decide qué escalar y qué apagar | **Tráfico suficiente** | Insider (grupo de control nativo); en HubSpot lo monta Smarteam | — |
+| 7 | 2.2.O2 | Óptimo | Ajuste mínimo | Los agentes de IA que conversan con quien responde, **y lo que la persona responde alimenta su ficha** | — | HubSpot (Customer Agent) e Insider (Agent One) | — |
+| 8 | 2.2.O4 | Óptimo | **Nuevo** | El equipo crea segmentos y recorridos describiéndolos en palabras y consulta los resultados en lenguaje natural; una persona aprueba antes de publicar | — | HubSpot (Breeze) e Insider (Agent One) | — |
+| 9 | 1.6.O1 | Eficiente (al moverse) | Ajuste | La siguiente mejor acción que propone la IA usa **las señales de comportamiento digital y una probabilidad de compra calculada por un modelo**, y se ve en el CRM | Venta con equipo (ya la tiene) | HubSpot (puntaje predictivo); con Insider, la probabilidad vuelve al CRM solo con otra integración | La 9.0 la pasa a Eficiente; en Óptimo, la IA ejecuta |
+| 10 | 3.6.E2 | Eficiente | Ajuste | Los clientes se segmentan según el momento de su relación **y según su valor o su nivel en el programa de lealtad**, que cambian la atención y las ofertas | — | HubSpot (listas activas) e Insider (audiencias predictivas) | Se suma «listos para recomendar» |
+| 11 | 3.7.E5 | Eficiente | Ajuste | La información antes de los momentos clave sale sola, **disparada por el evento —un cambio, una entrega, un vencimiento— y en el canal que el cliente prefiere** | — | HubSpot (flujos por fecha) e Insider (canal de cada persona) | Registro de equivalencias de los avisos |
 
-### Los cimientos de datos (en 2.3 Datos de Marketing)
+### Ediciones por industria
 
-El documento los pide «en la dimensión de datos de cada área». Propuesta: **solo en 2.3**, porque los mismos cuatro
-criterios en 1.3, 2.3 y 3.3 contarían tres veces lo mismo. Ventas y Servicio los heredan con el campo «requiere».
+| # | Edición · criterio | Nivel | Tipo | Qué diría | Condición | Lo habilita |
+|---|---|---|---|---|---|---|
+| 12 | Ecommerce y retail · 1.6.O101 | Óptimo | Ajuste | La IA decide qué mostrarle a cada comprador —productos, orden y oferta— en tiempo real según su comportamiento, **también a quien todavía no dejó sus datos** | **Tráfico suficiente** | Insider (HubSpot no personaliza al anónimo por lo que hace) |
+| 13 | Ecommerce y retail · 1.7.E103 | Eficiente | **Nuevo** | Quien mostró interés en un producto agotado o caro recibe solo el aviso cuando vuelve a haber o cuando baja de precio | — | Insider |
+| 14 | Turismo · 1.6.O501 | Óptimo | **Nuevo** | El sitio y el motor de reservas le muestran a cada viajero, aunque no haya dejado sus datos, lo que corresponde a lo que buscó: destinos, fechas y tarifas | **Tráfico suficiente** | Insider |
+| 15 | Turismo · 1.7.F503 | Funcional | **Nuevo** | Las búsquedas y las reservas que el viajero deja a medias en el sitio o el motor de reservas reciben un recordatorio automático, por al menos dos canales, dentro del plazo acordado | Venta sin vendedor | Insider; HubSpot si el motor de reservas le manda el evento |
+| 16 | Turismo · 3.7.E501 | Eficiente | Ajuste | El aviso antes de salir hacia el destino cubre también **un cambio de vuelo o de horario**, no solo el clima, un cierre o un proveedor | — | Insider y HubSpot |
 
-1. **Consentimiento por canal — Funcional · Ajuste de 2.3.F7.**
-   Hoy dice: «Cuando se pide un teléfono u otro dato de contacto, se pregunta si la persona acepta que le escriban por
-   ese canal, y su respuesta queda registrada» (es de riesgo).
-   Pasaría a: «El consentimiento de cada contacto está registrado por canal —correo, SMS, WhatsApp, notificaciones— y
-   se respeta en cada envío». **Sigue siendo de riesgo** (Elías, 23 oct): una empresa sin él igual puede llegar a
-   Funcional. La lectura de preparación (5.3) sí lo exige.
-2. **Lo que hacen en los canales digitales, unido al perfil — Eficiente · Nuevo 2.3.E5 {canal digital propio}.**
-   Hoy: no existe (2.3.O5 pide «una sola ficha que junta al momento lo que hace en todos los canales», en Óptimo).
-   Pasaría a: «Lo que las personas hacen en el sitio o la app —qué visitan, qué ven, qué buscan, qué abandonan y qué
-   compran o reservan— queda registrado y unido a su ficha».
-3. **Reconocer al visitante anónimo — Eficiente · Ajuste de 2.3.E4 {canal digital propio}.**
-   Hoy dice: «Lo que alguien hizo antes de dejar sus datos queda en su ficha cuando se identifica».
-   Pasaría a: «Un visitante anónimo se reconoce, y su historial se une a su ficha cuando se identifica: al iniciar
-   sesión, llenar un formulario o comprar».
-4. **El catálogo al día — Eficiente · Nuevo 2.3.E6 {oferta en catálogo}.**
-   Hoy: no existe.
-   Pasaría a: «Lo que se ofrece está en un catálogo estructurado que se actualiza solo con su precio y su
-   disponibilidad».
+**En total, 16 cambios: 4 nuevos y 12 ajustes.**
+- **Condiciones:** «tráfico suficiente» en tres (6, 12 y 14) y «venta sin vendedor» en uno (15).
+- **Funcional:** solo lo tocan el permiso (que sigue de riesgo) y el abandono en Turismo, que ya es Funcional en Banca y en
+  Educación.
+- **Ediciones sin cambios:** Inmobiliaria y Automotriz no cambian; Educación tampoco.
 
-### Marketing
+### Lo que ya existe y no se toca
 
-5. **El sitio que cambia según quién lo visita — Óptimo · Ajuste de 2.6.O3 {canal digital propio}** (el documento lo
-   pone en 2.5 Marca y Presencia; propongo dejarlo en Segmentación, donde ya vive).
-   Hoy dice: «Hay personalización uno a uno: la IA cambia en tiempo real lo que ve cada persona en los mensajes, el sitio
-   web o la app según lo que hizo antes…».
-   Pasaría a: lo mismo, sumando «contenido, banners, recomendaciones y resultados de búsqueda» y «cada cambio se prueba
-   antes de quedarse».
-6. **Segmentos por comportamiento que se actualizan solos — Eficiente · Ajuste de 2.6.E4.**
-   Hoy dice: «La segmentación usa datos de comportamiento —qué abrió, qué visitó, qué compró—, no solo lo que la persona
-   declaró».
-   Pasaría a: lo mismo, más «y los segmentos se actualizan solos».
-7. **Segmentos predictivos — Óptimo · Ajuste de 2.6.O1.**
-   Hoy dice: «La IA predice quién va a comprar y quién va a perder interés en los mensajes, y arma los segmentos con
-   eso…».
-   Pasaría a: sumar «el canal y el momento preferidos de cada persona» y que esos segmentos «deciden qué ve y qué recibe
-   cada una».
-8. **Tres canales en un mismo recorrido — Eficiente · Ajuste de 2.7.E1.**
-   Hoy dice: «Los canales —también el conversacional— comparten datos y se alimentan entre sí: uno continúa lo que
-   empezó otro, hay remarketing activo y las audiencias se construyen desde el CRM».
-   Pasaría a: sumar «al menos tres canales se coordinan dentro de un mismo recorrido, con un límite de frecuencia y
-   respetando el consentimiento de cada canal».
-9. **El recorrido elige canal y momento, con conversación de doble vía — Óptimo · Ya existe.**
-   Hoy lo dicen 2.2.O1 («La IA decide qué mensaje recibe cada persona, por qué canal y en qué momento…») y 2.2.O2
-   (agentes de IA que conversan por WhatsApp o chat). **Ajuste mínimo de 2.2.O2:** «y lo que la persona responde
-   alimenta su ficha». No se duplica en 2.7.
-10. **Pruebas A/B con hipótesis — Eficiente · Ajuste de 2.8.E1.**
-    Hoy dice: «Hay pruebas A/B regulares (al menos una activa por mes)».
-    Pasaría a: «Hay pruebas A/B regulares —al menos una activa por mes—, cada una con su hipótesis escrita y su
-    resultado registrado».
-11. **Ingreso incremental contra un grupo de control — Óptimo · Ajuste de 2.8.O3 (el criterio más importante).**
-    Hoy dice: «Los mensajes que decide la IA se miden contra un grupo de control, y en el sistema se ve cuánto agregan…».
-    Pasaría a: «Las campañas y los recorridos se miden por el ingreso que agregan contra un grupo de control que no
-    recibe la acción, por recorrido y en general, y con ese dato se decide qué escalar y qué apagar». Ya no depende de
-    que decida la IA. Sin condición, pero con la nota de que con pocas personas la comparación no sirve.
-12. **Operar con agentes de IA — Óptimo · Nuevo 2.2.O4** (el documento pide proponer la dimensión: 2.2 Tecnología y
-    Automatización, donde ya viven los otros criterios de la IA que decide).
-    Hoy: no existe.
-    Pasaría a: «El equipo crea segmentos y recorridos describiéndolos en palabras y consulta los resultados en lenguaje
-    natural; una persona aprueba antes de publicar».
+- **El catálogo al día:** Ecommerce 1.2.F102 y 2.2.F101; Turismo 1.2.F501.
+- **Los carritos y las solicitudes a medias:**
+  - Ecommerce, en «Carrito y recompra»;
+  - Banca 1.7.F201;
+  - Educación 1.7.F302.
+- **Las recomendaciones y la venta cruzada:**
+  - Ecommerce 1.6.F102 y 1.6.E101;
+  - los adicionales en Turismo 1.6.E502;
+  - los preaprobados en Banca 1.6.E202.
+- **La búsqueda en catálogos grandes:** Ecommerce 1.5.E101.
+- **En Turismo:** el precio según demanda (1.5.E501) y lo directo contra los intermediarios (1.3.E501 y 2.7.E501).
+- **En Banca:** la incorporación digital (1.2.E201) y los avisos antes de cada cobro (3.7.F203).
+- **El canal y el momento por persona:** 2.2.O1, 1.7.O2 y 3.7.O3.
+- **Los segmentos predictivos:** 2.6.O1.
+- **La atención automatizada con traspaso a una persona:** 3.2.F6 y 3.2.O1.
+- **WhatsApp para salir con campañas:** 2.7.F4 y 2.2.E2.
 
-### Ventas
+Lo de la sesión que no es un criterio de madurez va como ejemplo de la edición: la prueba social, las historias en el
+sitio, los acompañantes del titular y los grupos y socios en hotelería.
 
-13. **Priorizar con comportamiento digital y un modelo — Óptimo · Ajuste de 1.6.O1 {venta con equipo} + {canal digital
-    propio}** (necesita las dos marcas).
-    Hoy dice: «Agentes de IA analizan todo lo que se sabe de cada lead y deciden la siguiente mejor acción, que el
-    vendedor ve en el CRM y valida…».
-    Pasaría a: sumar «con las señales de su comportamiento digital y una probabilidad de compra calculada por un modelo,
-    que regresa al CRM».
-    ⚠ El conector oficial entre HubSpot e Insider va en una sola dirección: devolver la probabilidad al CRM pide otra
-    integración. Va como aviso en el caso de uso, no en la escala.
-14. **Recuperar abandonos — Eficiente · Nuevo 1.7.E5 {canal digital propio}.**
-    Hoy: 1.7.E1 habla de negocios que se enfrían, no de compras a medias.
-    Pasaría a: «Los carritos, las reservas o las cotizaciones abandonadas se recuperan con un recorrido automático por
-    varios canales».
-15. **El abandono ajustado a cada persona — Óptimo · Ya existe** en 1.7.O2 («La IA decide el canal y el momento de cada
-    seguimiento, persona por persona…»). Ajuste mínimo: sumar «y, en una compra a medias, también la oferta». La medición
-    incremental queda en 2.8.O3, en un solo lugar.
+## La lectura «Preparación para engagement avanzado»
 
-### Servicio
+No cambia el nivel. Tiene tres estados:
+- **Lista:** cumple el perfil (le vende a personas o a ambos, con relación digital recurrente), tiene tráfico suficiente y
+  una base con consentimiento sobre el umbral (5.000 para empezar), cumple los cimientos y Marketing está en Funcional o más.
+  - Los cimientos son 2.3.F7 y 2.3.E4, más el catálogo de su edición donde aplica (Ecommerce 1.2.F102, Turismo 1.2.F501).
+- **Casi lista:** dice qué cimientos faltan. Eso es lo que vende Smarteam antes de la plataforma.
+- **Todavía no:** su camino es HubSpot y SmartLoop.
 
-16. **Segmentos de valor o lealtad — Eficiente · Ajuste de 3.6.E2.**
-    Hoy dice: «Los clientes se segmentan para acciones diferenciadas según el momento de su relación…».
-    Pasaría a: sumar «y según su valor o su nivel en el programa de lealtad, que cambian la atención y las ofertas que
-    recibe».
-17. **Avisar antes de que pregunte — Ya existe** en 3.7.E5 (Eficiente: la información antes de los momentos clave, en
-    automático) y 3.7.O3 (Óptimo: la IA decide qué, cuándo y por qué canal). Ajuste mínimo de 3.7.E5: «disparado por el
-    evento —un cambio de vuelo, una reserva próxima, una entrega, un vencimiento— y en el canal que el cliente prefiere».
-18. **Atención automatizada con traspaso — Eficiente · Nuevo 3.8.E4.**
-    Hoy: 3.8 Eficiente habla de la base de conocimiento y el autoservicio, no de la conversación.
-    Pasaría a: «En los canales de conversación hay atención automatizada, y lo que no resuelve pasa a una persona con
-    todo el contexto».
-19. **Un agente de IA que resuelve lo frecuente — Óptimo · Ajuste de 3.8.O2.**
-    Hoy dice: «Los picos de demanda los absorben la IA y el autoservicio…».
-    Pasaría a: sumar «un agente de IA resuelve los casos frecuentes y deja registro en la ficha del cliente».
+Se ve en la exploración de la preventa y en el diagnóstico del CSE, y no nombra a Insider.
 
-**En total:** 5 criterios nuevos (2.3.E5, 2.3.E6, 2.2.O4, 1.7.E5, 3.8.E4), 11 ajustes y 3 que ya existen con un ajuste
-mínimo. Llevan condición 2.3.E4, 2.3.E5, 2.3.E6, 2.6.O3, 1.6.O1 y 1.7.E5. Los casos de la biblioteca que citan estos
-criterios no se rompen: los identificadores que ya existen se quedan.
+## El mapa de herramientas
 
-## 5.3 · La lectura «Preparación para engagement avanzado»
+- Una versión nueva del mapa para la escala 9.0, con los 16 cambios: quién habilita cada uno, como en las tablas.
+- La ficha de Insider dice cuándo conviene con el umbral de tráfico de su calificación.
+- La de HubSpot aclara que no personaliza al anónimo por su comportamiento.
 
-Es nueva y no cambia el nivel.
+## Los casos de uso de Insider por industria (área A, ítem A6)
 
-- **Lista:**
-  - el perfil cumple (le vende a personas, o a empresas y personas; relación digital recurrente; tráfico y base con
-    consentimiento sobre el umbral);
-  - cumple los cuatro cimientos (2.3.F7, 2.3.E4, 2.3.E5 y, con catálogo, 2.3.E6);
-  - Marketing está al menos en Funcional.
-- **Casi lista:** el perfil cumple, pero faltan cimientos. Muestra cuáles faltan, porque **esos huecos son el proyecto que
-  vende Smarteam antes de la plataforma**.
-- **Todavía no:** el perfil no cumple. Su camino es HubSpot y SmartLoop.
-- **Los umbrales** de tráfico y de base con consentimiento son editables; el de la base arranca en 5.000 contactos.
-- **Se ve** en la exploración de la preventa y en el diagnóstico del CSE.
-- **No nombra a Insider:** Insider aparece en la biblioteca de casos y en la propuesta.
-
-## 5.4 · Los ejemplos por industria
-
-Van como palabras y ejemplos de las ediciones que ya existen, sin cambiar dimensiones:
-- **Ecommerce y retail:**
-  - moda y lujo: recomendaciones, prueba social, historias en el sitio, recuperar el carrito y WhatsApp para vender;
-  - hogar y electrónica: búsqueda en catálogos grandes, avisos de disponibilidad o de baja de precio, y compras que se
-    deciden en varias visitas.
-- **Turismo:**
-  - aerolíneas: búsquedas y reservas abandonadas, servicios adicionales, avisos del vuelo y lealtad;
-  - hotelería y agencias: reserva directa contra intermediarios, precio según demanda, lealtad, acompañantes como
-    segmento aparte, y grupos y socios.
-- **Banca y servicios financieros:** incorporación digital, venta cruzada con consentimiento y avisos de vencimiento.
-
-## Los casos de uso de Insider por industria (área A)
-
-Hoy hay cuatro: «Personaliza la experiencia web», «Recupera carritos y compras a medias» (promete de Inicial a Óptimo,
-y A5 ya pedía partirlo), «Haz que tus clientes vuelvan a comprar» y «Une la ficha de cada cliente».
-
-1. **Un caso de aterrizaje antes de Insider:** «Prepara tus datos para personalizar» (los cuatro cimientos). Es lo que
-   la lectura «Casi lista» vende, y se hace con HubSpot y Smarteam.
-2. **Ajustar los cuatro de hoy** a los criterios nuevos (2.3.E5, 1.7.E5, 2.6.O3 ajustado) y partir el de carritos en
-   aterrizaje (Eficiente) y expansión (Óptimo).
-3. **Los que faltan, por lo que mostró la sesión:**
-   - WhatsApp como canal de venta y atención (Clarins México: ventas por WhatsApp ×20, cifra del fabricante);
-   - un recorrido que coordina sitio, notificaciones, SMS y WhatsApp;
-   - «Demuestra cuánto vende de más tu marketing», con un grupo de control (2.8.O3);
-   - búsqueda y descubrimiento en catálogos grandes;
-   - avisos proactivos por evento (vuelos, reservas, entregas);
-   - segmentos de valor y lealtad.
-4. **Por industria, sin duplicar casos:** un campo nuevo en cada caso, «para qué ediciones es» (las claves de la escala:
-   `ecommerce-retail`, `turismo`, `banca`), y los ejemplos de esa industria en el caso. La biblioteca filtra por la
-   industria del cliente.
-5. **El aviso de la integración:** el conector HubSpot ↔ Insider va en una sola dirección; todo caso que devuelve a HubSpot
-   lo que calcula Insider lo dice.
+1. **Un caso de aterrizaje antes de Insider:** «Prepara tus datos para personalizar» (2.3.F7, 2.3.E4 y el catálogo de su
+   edición), con HubSpot y Smarteam. Es lo que vende la lectura «Casi lista».
+2. **Ajustar los cuatro de hoy:**
+   - «personalizar la experiencia web» apunta a 1.6.O101 y 1.6.O501, con la condición de tráfico;
+   - el de carritos se parte en aterrizaje y expansión;
+   - «la ficha única» apunta al 2.3.E4 nuevo.
+3. **Los que faltan:**
+   - WhatsApp para vender y atender;
+   - un recorrido que coordina sitio, notificaciones, SMS y WhatsApp (2.7.E1);
+   - «Demuestra cuánto vende de más tu marketing» (2.8.O3);
+   - avisos por evento (3.7.E5, Turismo 3.7.E501);
+   - avisos de disponibilidad y de baja de precio (Ecommerce 1.7.E103);
+   - segmentos de valor y lealtad (3.6.E2).
+4. **Cada caso dice para qué ediciones es,** con sus ejemplos; la biblioteca filtra por la industria del cliente.
+5. **El aviso de la integración:** el conector de HubSpot a Insider va en una sola dirección.
 
 ## Lo consensuado (2026-10-23)
 
-1. **Tráfico y tamaño de la base** son solo de la lectura de preparación, no condiciones de los criterios. **Y se le
-   preguntan al vendedor** en la preventa, junto con «¿se planea o califica para Insider?»; lo que responde se guarda en los
-   datos de la empresa y llega a HubSpot (roadmap B1).
-2. **Le vende a empresas, a personas o a ambos** se guarda en los datos de la empresa (y en HubSpot), sin apagar criterios.
-3. Los **cimientos** viven solo en 2.3.
-4. **«El sitio que cambia según quién lo visita»** se queda en 2.6.
-5. **El consentimiento por canal** (2.3.F7) **sigue siendo de riesgo**: no frena llegar a Funcional.
-6. Entra en la **9.0.0**, después de publicar la 8.9.1.
+1. El tráfico y el tamaño de la base se le preguntan al vendedor en la preventa, junto con «¿se planea o califica para
+   Insider?»; van a los datos de la empresa y a HubSpot (roadmap B1). **El tráfico además es condición de tres criterios**
+   (rehecho el mismo día, después de ver que HubSpot no personaliza al anónimo y que Insider califica por tráfico).
+2. A quién le vende (empresas, personas o ambos) se guarda en los datos de la empresa y en HubSpot, y no apaga criterios.
+3. Los cimientos de datos van en 2.3 (más el catálogo en las ediciones).
+4. La personalización del sitio a cada comprador va en las ediciones, y 2.6.O3 se acota a los mensajes (como ya proponía la 9.0).
+5. El permiso de contacto sigue de riesgo.
+6. Todo entra en la 9.0.0, después de publicar la 8.9.1, junto con lo pendiente de `pendiente-9-0.md`.
+
+## Pendiente
+
+- Pedirle a Insider su calificación de clientes, con el umbral de tráfico.
 
 ## Etapas
 
-1. **La gramática:** dos marcas nuevas y un criterio con dos marcas (tipo, lector, generador, editor y port de Python), con
-   pruebas.
-2. **El perfil en los datos de la empresa** (B1): qué vende y a quién, canales digitales propios, catálogo, tráfico y base
-   con consentimiento (por rangos), y si se planea o califica para Insider. Lo estima Nexus con la investigación y lo
-   confirma el vendedor en la preventa; lo confirmado se escribe en HubSpot. En el chequeo para prospectos, dos preguntas.
-3. **Los criterios:** en un borrador de la escala (editor de la escala), con revisión de Elías, y se publica la 9.0.0.
-4. **La lectura de preparación** en la exploración de la preventa y en el diagnóstico, con los umbrales editables.
-5. **Los ejemplos** en las ediciones Ecommerce y retail, Turismo y Banca.
-6. **Los casos de Insider:** ajustar los cuatro, sumar el de aterrizaje y los que faltan, y el campo de industrias.
+1. **La marca «tráfico suficiente»:** la tercera pregunta del perfil, en el tipo, el lector, el generador, el editor y el port
+   de Python, con pruebas.
+2. **El perfil en los datos de la empresa** (B1), con lo que confirma el vendedor y llega a HubSpot.
+3. **Los 16 cambios en un borrador de la escala,** junto con los temas de la 9.0 con los que se cruzan, revisado por Elías.
+   Se publica la 9.0.0.
+4. **El mapa de herramientas** en su versión para la 9.0.
+5. **La lectura de preparación** en la preventa y en el diagnóstico, con los umbrales editables.
+6. **Los casos de Insider** (A6).
