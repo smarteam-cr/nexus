@@ -60,7 +60,7 @@
 
 - **Resultado esperado:** un diagnóstico corto que le explica al cliente por qué tiene los resultados que tiene y qué vamos a hacer (el enfoque de la solución), escrito en minutos con lo que Nexus ya sabe.
 - **Hoy:** desde el 23 oct lee las sesiones de la exploración, avisa cuando casi nada está confirmado, trae el «Enfoque de la solución», todo se mueve y se quita, y se elige entre la plantilla esencial (7 partes) y la completa, o se escribe a mano.
-- **Plan:** lo que salió de usarlo el 23 oct (L): las reuniones con solo notas cuentan, publicar dice por qué no, la ficha editable y todo movible; después, la Planificación con sesiones y entrenamientos, plantillas por caso de uso y qué necesita Customer Success para cada entregable.
+- **Plan:** en el kickoff, la ruta de HubSpot Academy por rol y el pedido fijo del acceso a su portal (Q); lo que salió de usar el diagnóstico el 23 oct (L): las reuniones con solo notas cuentan, publicar dice por qué no, la ficha editable y todo movible; después, la Planificación con sesiones y entrenamientos, plantillas por caso de uso y qué necesita Customer Success para cada entregable.
 
 ### 9 · Que el equipo use Nexus <span class="estado">En curso</span>
 
@@ -174,6 +174,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 - `docs/escala-engagement-avanzado-plan.md`: la escala con engagement avanzado (criterio por criterio, «hoy dice / pasaría a») y los casos de Insider por industria, de la sesión con Insider One. Sirve a N, A6 y B1.
 - `docs/tests-diagnostico-plan.md`: el test público de cada departamento dentro de Nexus, con el diagnóstico de la aplicación de hoy. Sirve a O.
 - `docs/tareas-organizacion-plan.md`: el módulo de Tareas organizado (barra por cliente, la tarea en un modal grande, el calendario, las subtareas y leer todas las sesiones). Sirve a P, D2 y H.
+- `docs/kickoff-mejoras-plan.md`: la ruta de HubSpot Academy y el acceso al portal en el kickoff. Sirve a Q.
 
 **Orden sugerido, por dependencias** (el foco es que Ventas y Customer Success queden funcionando):
 
@@ -182,7 +183,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
    - K7 y K1, con K8 dentro: la siguiente pregunta de calidad y la exploración por departamento con la escala y el dinero;
    - L1 a L3: las reuniones con solo notas, publicar diciendo por qué y los detalles del diagnóstico y la ficha.
 2. Sin depender de nada: desarmar contigo el cotizador en un catálogo de actividades (A1 etapa 2 y A2 etapa 1), limpiar las tareas de los CSE que nadie decidió (D2 etapa 1), H1 (tu piloto con tus propias sesiones) y la etapa 1 de B1 (qué datos de la empresa hay y dónde).
-3. K5 y K6 (dejar de buscar sesiones a mano), D4 (el seguimiento en HubSpot), M3 (el primer ciclo de cada cliente con su CSE) y P (el módulo de Tareas: el diseño, la barra por cliente, la vista grande, el calendario y leer todas las sesiones; P4 espera a A2).
+3. Q (Academy y el acceso al portal en el kickoff), K5 y K6 (dejar de buscar sesiones a mano), D4 (el seguimiento en HubSpot), M3 (el primer ciclo de cada cliente con su CSE) y P (el módulo de Tareas: el diseño, la barra por cliente, la vista grande, el calendario y leer todas las sesiones; P4 espera a A2).
 4. K2, K3 y K4 juntas (la primera sesión en frío necesita el position statement), y K10.
 5. Con A1 cerrado: A3 (criterios en palabras simples) y A5 (los casos que faltan).
 6. A2 (migrar el cotizador a la biblioteca) y después A4 (duración y «cómo sabrás que funcionó»).
@@ -511,6 +512,19 @@ Pedido del 23 oct, con la tarjeta de Trello y la barra de clientes de ClickUp co
    - Etapa 1 · La copia de Meet cada hora, y leer las reuniones internas de cada persona (tu piloto, H1, primero).
    - Etapa 2 · Cada propuesta guarda y muestra su sesión, el contexto, las personas que estuvieron, el encargado y quién la pidió.
    - Etapa 3 · Con tope, y después de limpiar lo que nadie decidió (D2 etapa 1).
+
+### Q · El kickoff: HubSpot Academy y el acceso al portal <span class="estado">Propuesta</span>
+
+Pedido del 23 oct. El kickoff es un documento que ve el cliente: una sección nueva sigue el contrato de los documentos y entra a su registro. Plan: `docs/kickoff-mejoras-plan.md`.
+
+1. **Q1 · La ruta de HubSpot Academy.** *No existe.*
+   - Etapa 1 · Un catálogo de listas de reproducción de Academy que mantiene Smarteam: nombre, enlace, hub, rol y duración.
+   - Etapa 2 · Una sección nueva del kickoff, «Tu ruta en HubSpot Academy»: las listas asignadas por rol (líderes, Ventas, Marketing, Servicio) según los hubs contratados y el equipo del cliente; el CSE ajusta.
+   - Etapa 3 · Más adelante, la adopción (F) mira quién terminó su lista.
+2. **Q2 · El acceso a su portal.** *Existe a medias:* «Lo que necesitamos de tu equipo» pide «accesos» en general, sin garantía de que aparezca y sin seguimiento.
+   - Etapa 1 · Una tarjeta fija, siempre la primera de esa sección: darnos acceso a su portal de HubSpot, con los pasos y para cuándo.
+   - Etapa 2 · El estado del acceso en el proyecto (dado o pendiente), con un aviso al CSE mientras falte.
+   - Etapa 3 · La comprobación automática cuando los portales de los clientes estén conectados (la auditoría del portal).
 
 ## Lo que falta, por tema
 
@@ -1159,6 +1173,7 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 
 En pocas palabras, para ubicarse. El detalle está en la Documentación de Nexus y en `docs/DECISIONS.md`.
 
+- **Los objetos de una empresa, en un plano:** https://claude.ai/artifact/Dv1surKwZBcYoLrqCLwaHS (lo que Nexus sabe de un cliente o un prospecto y cómo se une).
 - **La cuenta es el centro.** Todo lo que Smarteam hace con un cliente cuelga de su ficha: proyectos, reuniones, tareas, la escala, las propuestas, lo que se cobra.
 - **Cada reunión se lee una vez** y deja su minuta, sus tareas propuestas y sus hechos; eso es la memoria de la cuenta, que leen los agentes, la preventa, el chat y los documentos. Los correos y notas de HubSpot entran igual.
 - **El siguiente paso de una cuenta** es su próxima tarea con fecha o su próxima reunión agendada. Sin eso, la cuenta aparece en «Para ti» de quien la lleva.
