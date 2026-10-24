@@ -12,67 +12,74 @@
 2. Revisar y aprobar, área por área, la propuesta de vender y entregar por casos de uso (pestaña «Roadmap»).
 3. Empezar contigo a desarmar el cotizador en un catálogo de actividades.
 
-**El orden:** las áreas van numeradas en el orden en que conviene hacerlas. El foco ahora es que Ventas y Customer Success queden funcionando de punta a punta: primero el servicio recurrente, porque ya hay clientes en SmartLoop (RC Inmobiliaria, Honda, kölbi) y hoy no tiene uso real; después vender por resultados, que necesita los datos de la empresa y la escala; y con eso, la entrega y el diagnóstico. Lo demás sigue cuando eso esté andando.
+**El orden:** las áreas van numeradas por dependencia: cada una usa lo de las anteriores. La escala va primero porque todo la lee (el test, la preventa, la propuesta, el diagnóstico y los ciclos de SmartLoop); los datos de la empresa le dan el perfil; el test es la puerta de entrada de los prospectos; con eso se vende por resultados, y lo vendido se entrega por SmartLoop, el cronograma y los entregables. **Lo urgente que pidió el equipo el 23 oct va primero aunque su área esté más abajo** (los arreglos de SmartLoop, de la exploración y del diagnóstico: ver «Orden sugerido» en la pestaña «Roadmap»).
 
-### 1 · El servicio recurrente funcionando <span class="estado">Propuesta</span>
-
-- **Resultado esperado:** lo que pide el cliente se vuelve su siguiente caso, y el servicio recurrente corre con su cadencia: entrega semanal, reporte de avance mensual y stakeholders cada tres meses.
-- **Hoy:** SmartLoop todavía no tiene uso real: Honda y kölbi sin primer ciclo en Nexus, y RC Inmobiliaria arrancando con Liliana (desde el 23 oct su proyecto ya muestra el Kickoff). A kölbi ya se le ofrece SmartLoop y se cotiza como gobierno.
-- **Plan:** un kickoff que sabe que es SmartLoop y el orden exploración → diagnóstico (M1 y M2); abrir el primer ciclo de cada cliente recurrente con su CSE y arreglar lo que salga al usarlo; las actividades que se repiten dejan su tarea en cada ciclo; las solicitudes del cliente con la CSL decidiendo; después, un agente por cliente que une lo que pide con la biblioteca.
-
-### 2 · Vender por resultados <span class="estado">Propuesta</span>
-
-- **Resultado esperado:** el vendedor arma la propuesta con los casos de uso y las actividades que sugiere Nexus, cada una con su porqué y su precio calculado, y el cliente entiende qué resultado compra.
-- **Hoy:** la biblioteca tiene 26 casos sin actividades ni horas, y el cotizador vive fuera de Nexus. Desde el 23 oct la preventa va por equipo del cliente, con preguntas técnicas y de proceso y una hora con tiempo para contarle.
-- **Plan:** primero lo que pidió Ventas el 23 oct para explorar (K): la siguiente pregunta de calidad, el departamento con la escala y el dinero, sesiones que se asocian solas, la primera sesión en frío con el position statement y los clientes similares. Después, desarmar el cotizador en actividades, que cada caso las jale y que la propuesta las sugiera, con el documento de resultados por departamento antes (C5).
-
-### 3 · Los datos de la empresa <span class="estado">Propuesta</span>
-
-- **Resultado esperado:** Nexus conoce el tamaño y la forma de cada empresa (equipos, personas, herramientas) y con eso decide cuántas actividades sugerir.
-- **Hoy:** el tamaño de HubSpot no sirve: a 60 de 163 empresas les falta y otras lo tienen mal (Honda Costa Rica figura con 5 empleados).
-- **Plan:** el agente que investiga la empresa en la preventa estima el tamaño, lo escribe en HubSpot si está vacío y, si no coincide, propone el cambio para que el vendedor lo acepte. Se le pregunta además al vendedor lo que pide la escala 9.0: a quién le vende, si vende en su sitio o su app, si tiene catálogo, su tráfico, su base con consentimiento y si se planea o califica para Insider; todo llega a HubSpot.
-
-### 4 · La escala de rendimiento <span class="estado">Propuesta</span>
+### 1 · La escala de rendimiento <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** la escala ubica bien a cada empresa en Ventas, Marketing y Servicio, según su industria y su perfil, y muestra el camino hacia arriba; el mapa de herramientas dice qué pone HubSpot y qué pone Insider en cada paso.
 - **Hoy:** corre la 8.9.0; la 8.9.1 espera tu revisión (prueba 108). Para la 9.0 hay 14 temas pendientes (`docs/escala/pendiente-9-0.md`) y, desde el 23 oct, lo de Insider: 16 cambios, la condición «tráfico suficiente» y la lectura «Preparación para engagement avanzado» (área N).
 - **Plan:** publicar la 8.9.1; probarla con 5 a 8 clientes reales (el orden acordado para la 9.0); escribir la 9.0 con sus temas pendientes y lo de Insider juntos; el mapa de herramientas para la 9.0; y la lectura de preparación en la preventa y el diagnóstico.
 
-### 5 · Entregar: cronograma y tareas <span class="estado">Propuesta</span>
+### 2 · Los datos de la empresa <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** Nexus conoce el tamaño y la forma de cada empresa (equipos, personas, herramientas) y con eso decide cuántas actividades sugerir.
+- **Hoy:** el tamaño de HubSpot no sirve: a 60 de 163 empresas les falta y otras lo tienen mal (Honda Costa Rica figura con 5 empleados).
+- **Plan:** el agente que investiga la empresa en la preventa estima el tamaño, lo escribe en HubSpot si está vacío y, si no coincide, propone el cambio para que el vendedor lo acepte. Se le pregunta además al vendedor lo que pide la escala 9.0: a quién le vende, si vende en su sitio o su app, si tiene catálogo, su tráfico, su base con consentimiento y si se planea o califica para Insider; todo llega a HubSpot.
+
+### 3 · Los tests del diagnóstico de rendimiento <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** el test que llena un prospecto, por departamento, vive en Nexus: preguntas escritas para él, según su industria y su perfil, y un resultado atinado con la escala de hoy, una sola recomendación y los casos de uso que lo mueven.
+- **Hoy:** es una aplicación aparte (`dev.smarteamcr.com/diagnostico-rendimiento`) con la escala vieja (v4): 8 preguntas iguales para todas las industrias, tres dimensiones sin la opción Funcional y un puntaje que mueve la IA. Nexus ya tiene el motor: el cuestionario de la escala y su cálculo, hoy solo para clientes.
+- **Plan:** el test dentro de Nexus con el mismo motor, preguntas por industria, la página de resultados nueva, todo unido a la preventa y a HubSpot, una versión corta y una completa, y el corte de la aplicación vieja (área O).
+
+### 4 · Vender por resultados <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** el vendedor arma la propuesta con los casos de uso y las actividades que sugiere Nexus, cada una con su porqué y su precio calculado, y el cliente entiende qué resultado compra.
+- **Hoy:** la biblioteca tiene 26 casos sin actividades ni horas, y el cotizador vive fuera de Nexus. Desde el 23 oct la preventa va por equipo del cliente, con preguntas técnicas y de proceso y una hora con tiempo para contarle.
+- **Plan:** primero lo que pidió Ventas el 23 oct para explorar (K): la siguiente pregunta de calidad, el departamento con la escala y el dinero, sesiones que se asocian solas, la primera sesión en frío con el position statement y los clientes similares. Después, desarmar el cotizador en actividades, que cada caso las jale y que la propuesta las sugiera, con el documento de resultados por departamento antes (C5).
+
+### 5 · El servicio recurrente funcionando <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** lo que pide el cliente se vuelve su siguiente caso, y el servicio recurrente corre con su cadencia: entrega semanal, reporte de avance mensual y stakeholders cada tres meses.
+- **Hoy:** SmartLoop todavía no tiene uso real: Honda y kölbi sin primer ciclo en Nexus, y RC Inmobiliaria arrancando con Liliana (desde el 23 oct su proyecto ya muestra el Kickoff). A kölbi ya se le ofrece SmartLoop y se cotiza como gobierno.
+- **Plan:** un kickoff que sabe que es SmartLoop y el orden exploración → diagnóstico (M1 y M2); abrir el primer ciclo de cada cliente recurrente con su CSE y arreglar lo que salga al usarlo; las actividades que se repiten dejan su tarea en cada ciclo; las solicitudes del cliente con la CSL decidiendo; después, un agente por cliente que une lo que pide con la biblioteca.
+
+### 6 · Entregar: cronograma y tareas <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** el cliente ve de un vistazo cómo va su proyecto, y cada CSE sabe qué le toca hoy y esta semana, sin 20 tareas de golpe.
 - **Hoy:** el cronograma lo arma el handoff y no está unido a las tareas, a propósito. A los CSE les llegaron 105 tareas en 45 días: ninguna aceptada.
 - **Plan:** limpiar lo que hay y abrir tres puertas: el plan del proyecto nace en el handoff ya decidido, lo dicho con el cliente pasa por «Por decidir» y lo dicho puertas adentro deja tarea y revisión.
 
-### 6 · El diagnóstico y los entregables de Customer Success <span class="estado">En producción</span>
+### 7 · El diagnóstico y los entregables de Customer Success <span class="estado">En producción</span>
 
 - **Resultado esperado:** un diagnóstico corto que le explica al cliente por qué tiene los resultados que tiene y qué vamos a hacer (el enfoque de la solución), escrito en minutos con lo que Nexus ya sabe.
 - **Hoy:** desde el 23 oct lee las sesiones de la exploración, avisa cuando casi nada está confirmado, trae el «Enfoque de la solución», todo se mueve y se quita, y se elige entre la plantilla esencial (7 partes) y la completa, o se escribe a mano.
 - **Plan:** lo que salió de usarlo el 23 oct (L): las reuniones con solo notas cuentan, publicar dice por qué no, la ficha editable y todo movible; después, la Planificación con sesiones y entrenamientos, plantillas por caso de uso y qué necesita Customer Success para cada entregable.
 
-### 7 · Que el equipo use Nexus <span class="estado">En curso</span>
+### 8 · Que el equipo use Nexus <span class="estado">En curso</span>
 
 - **Resultado esperado:** 10 de las 14 personas operativas entran 3 días o más por semana, y la mitad de lo que propone Nexus se decide antes de que venza.
 - **Hoy:** 0 de 14 entran 3 días; se decide a tiempo el 7,4 % de lo que propone Nexus.
 - **Plan:** menos cosas que decidir (las tres puertas de las tareas) y «Para ti» con el día y la semana.
 
-### 8 · Rentabilidad y capacidad <span class="estado">Propuesta</span>
+### 9 · Rentabilidad y capacidad <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** saber cuánto cuesta entregar cada caso y cuánto tiempo le gana Nexus al trabajo a mano.
 - **Hoy:** Rentabilidad ya calcula el costo por hora con la planilla y mide las reuniones del calendario; falta el tiempo del resto del trabajo.
 - **Plan:** cada actividad trae su tiempo a mano (para el precio) y su tiempo con Nexus (la meta); se compara con lo que de verdad duró.
 
-### 9 · Que cada reunión deje su trabajo <span class="estado">Propuesta</span>
+### 10 · Que cada reunión deje su trabajo <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** cada reunión, también las internas, deja lo que hay que hacer para quien lo tiene que hacer.
 - **Hoy:** solo se leen las reuniones con clientes y los sprints, y la copia de Meet corre cuando alguien abre Nexus.
 - **Plan:** la copia de Meet cada hora y tu piloto con tus reuniones internas.
 
-### 10 · Finanzas y cobranza <span class="estado">En producción</span>
+### 11 · Finanzas y cobranza <span class="estado">En producción</span>
 
 - **Resultado esperado:** lo facturado, lo cobrado y lo que entró al banco cuadran solos; una persona decide solo lo dudoso.
 - **Hoy:** «Lo que no cuadra» se cuenta por documento, Nexus ordena solo lo seguro (con «Deshacer») y Mercury cobra sola con el día en que se vio pagada.
 - **Plan:** Stripe cuando Alex dé la clave, prender el corte de cobranza y pagar las comisiones desde Nexus.
+
 
 ## Para qué
 
@@ -164,6 +171,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 - `docs/diagnostico-plantillas-plan.md` § «Lo que salió de usarlo»: el diagnóstico y la planificación después de usarlos. Sirve a L.
 - `docs/smartloop-plan.md` § «El recorrido de punta a punta»: SmartLoop con lo que salió de RC Inmobiliaria. Sirve a M.
 - `docs/escala-engagement-avanzado-plan.md`: la escala con engagement avanzado (criterio por criterio, «hoy dice / pasaría a») y los casos de Insider por industria, de la sesión con Insider One. Sirve a N, A6 y B1.
+- `docs/tests-diagnostico-plan.md`: el test público de cada departamento dentro de Nexus, con el diagnóstico de la aplicación de hoy. Sirve a O.
 
 **Orden sugerido, por dependencias** (el foco es que Ventas y Customer Success queden funcionando):
 
@@ -176,7 +184,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 4. K2, K3 y K4 juntas (la primera sesión en frío necesita el position statement), y K10.
 5. Con A1 cerrado: A3 (criterios en palabras simples) y A5 (los casos que faltan).
 6. A2 (migrar el cotizador a la biblioteca) y después A4 (duración y «cómo sabrás que funcionó»).
-7. N1 y N2 (publicar la 8.9.1 y probarla con clientes), B1 completo (con el perfil que pide la escala 9.0), N3 a N7 (la 9.0 con lo pendiente y lo de Insider) y después B2 (la escala lee los datos de la empresa). A6 (los casos de Insider por industria) va con N.
+7. N1 y N2 (publicar la 8.9.1 y probarla con clientes), B1 completo (con el perfil que pide la escala 9.0), O1 a O4 (el test dentro de Nexus, que arranca con la 8.9.1 y toma la 9.0 solo), N3 a N7 (la 9.0 con lo pendiente y lo de Insider), O5 y O6 (las dos versiones del test y el corte de la aplicación vieja) y después B2 (la escala lee los datos de la empresa). A6 (los casos de Insider por industria) va con N.
 8. C1 y C3 (pueden ir antes: usan lo que ya hay), C2 (la cotización calculada, necesita A2 y B1), C4 y C5 (cuando se defina su formato).
 9. D1 (diseño del cronograma con casos), después D2, D3 y L4, y junto con ellos G1 a G3.
 10. E1, E2, F1, I1 y M4.
@@ -449,6 +457,34 @@ La escala ubica a cada empresa en Ventas, Marketing y Servicio. Corre la 8.9.0; 
    - Etapa 1 · Sumar los 16 cambios con quién los habilita.
    - Etapa 2 · La ficha de Insider con el umbral de tráfico de su calificación, y la de HubSpot con lo que no hace (personalizar al anónimo por su comportamiento).
 
+### O · Los tests del diagnóstico de rendimiento <span class="estado">Propuesta</span>
+
+Pedido del 23 oct: migrar a Nexus el test público de cada departamento, con mejores preguntas por industria y una página de resultados atinada. Hoy es una aplicación aparte con la escala vieja (v4); Nexus ya tiene el motor (el cuestionario de la escala y su cálculo). Plan, con el diagnóstico de la aplicación: `docs/tests-diagnostico-plan.md`.
+
+1. **O1 · El test dentro de Nexus.** *No existe* (el motor sí). *Depende de:* N1.
+   - Etapa 1 · Una página pública por área, con protección contra abuso, que usa el mismo armado que el cuestionario del cliente, sin proyecto: la persona y su empresa.
+   - Etapa 2 · Cada intento queda guardado en Nexus (tabla nueva, SQL aditivo).
+   - Etapa 3 · La experiencia de hoy: una pregunta por pantalla, el matiz, el guardado al avanzar y el aviso de abandono.
+2. **O2 · Mejores preguntas, por industria.** *No existe:* hoy son 8 preguntas iguales para todas las industrias. *Depende de:* N4 para la pregunta del tráfico.
+   - Etapa 1 · Una o dos preguntas por dimensión, escritas para el cliente, con «No lo sé»; nunca se veta un nivel.
+   - Etapa 2 · La industria elige la edición (Ecommerce y retail, Banca, Educación, Inmobiliaria, Turismo, Automotriz) con sus palabras y sus preguntas.
+   - Etapa 3 · El perfil corto (cómo cierra la venta, qué pasa después y el tráfico); lo que no aplica no se pregunta.
+   - Etapa 4 · Las revisas tú antes de publicarlas.
+3. **O3 · La página de resultados.** *Existe a medias:* hoy muestra el nivel, el radar y recomendaciones de la IA, con un puntaje que mueve la IA.
+   - Etapa 1 · El cálculo lo hace Nexus con la escala de hoy (cada dimensión a mitad de su banda, la capa y el área como promedio), marcado como estimado.
+   - Etapa 2 · Los riesgos, el costo de quedarse y una sola recomendación con su razón.
+   - Etapa 3 · Los casos de uso que lo mueven, sin precio, y la lectura de preparación cuando aplica (N6).
+   - Etapa 4 · La síntesis la escribe la IA sin mover números; se reusan el radar y la curva de hoy.
+4. **O4 · Unido a HubSpot y a la preventa.** *Existe a medias:* hoy deja la nota y la dirección del resultado en HubSpot, y la preventa la decodifica.
+   - Etapa 1 · HubSpot recibe lo mismo que hoy (contacto, empresa, nota y dirección), para no romper nada.
+   - Etapa 2 · El resultado entra directo a la preventa de la empresa en Nexus, como algo a validar en la primera sesión (K7).
+   - Etapa 3 · Los leads, agrupados por empresa con quién llenó cada área (K10).
+5. **O5 · Dos versiones del test.** *No existe.* Una corta para atraer leads y una completa para usar con el cliente.
+6. **O6 · El corte de la aplicación vieja.**
+   - Etapa 1 · Los enlaces viejos del resultado se siguen leyendo.
+   - Etapa 2 · La dirección pública pasa a Nexus, con los píxeles de anuncios y el formulario de HubSpot intactos.
+   - Etapa 3 · Se mide cuántos empiezan, abandonan (y en qué pregunta) y terminan; se apagan el backend de Vercel y la página estática.
+
 ## Lo que falta, por tema
 
 ### Customer Success y el servicio recurrente
@@ -478,7 +514,7 @@ La escala ubica a cada empresa en Ventas, Marketing y Servicio. Corre la 8.9.0; 
 ### Marketing y Desarrollo
 
 1. Que Desarrollo empiece a entrar a Nexus (0 de 3 en la última semana) y prenda las notas de Gemini en su sprint.
-2. Marketing: rehacer el test de marketing con la escala nueva, uno corto para atraer leads y uno completo para usarlo con el cliente.
+2. Marketing: el test de marketing con la escala nueva pasó a la propuesta, área O.
 3. Desarrollo: un lugar para sus proyectos, con las estimaciones que se escriben en HubSpot.
 
 ### Lo que conecta a los equipos
@@ -517,7 +553,7 @@ Lo que dijiste en otros chats que querías más adelante:
 - El centro de comando de dirección.
 - Procesos y Planificación: que el chat cambie el mapa, la puesta en marcha y las plantillas de propiedades.
 - La auditoría del portal con un cliente piloto, con lo que hay que comprobar a mano.
-- La escala: el test aparte detrás de un botón, la teoría en Documentación y guardar en Nexus los resultados del test de marketing (la versión 9.0 pasó a la propuesta, N).
+- La escala: la teoría en Documentación (la versión 9.0 pasó a la propuesta, N; el test y guardar sus resultados, a O).
 - Cuestionarios con IA: que el cliente converse unos minutos con un chat que llena el formulario.
 - Exportar un documento a Google Docs.
 - Traer la facturación de Odoo de 2025 para comparar lo cobrado contra lo vendido.
