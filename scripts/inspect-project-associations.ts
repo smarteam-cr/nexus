@@ -31,12 +31,10 @@
  * Uso: npx tsx scripts/inspect-project-associations.ts
  */
 import "dotenv/config";
-import { createScriptDb } from "./lib/db";
-import { tokenDeCuenta as leerTokenDeCuenta } from "@/lib/hubspot/client";
+import { prisma } from "@/lib/db/prisma";
+import { getPortalInfo, getSystemAccessToken, getSystemHubspotClient } from "@/lib/hubspot/client";
 
-// Pool ACOTADO (max: 2). El pooler de Supabase da ~15 slots compartidos entre prod, las dos
-// PCs de dev y cualquier script suelto — ver scripts/lib/db.ts.
-const { prisma, close } = createScriptDb();
+type ClienteHubspot = Awaited<ReturnType<typeof getSystemHubspotClient>>;
 
 const OBJETO_PROYECTOS = "0-970";
 const SCOPE_REQUERIDO = "crm.objects.projects.write";
@@ -48,40 +46,11 @@ const NECESARIAS: Array<{ hacia: string; rotulo: string; paraQue: string }> = [
   { hacia: OBJETO_PROYECTOS, rotulo: "hermano", paraQue: "un desarrollo colgado de una implementación NO se factura aparte: cobra el hermano" },
 ];
 
-// ── Token del sistema (mismo patrón que inspect-project-pipelines.ts) ─────────
-async function systemToken(): Promise<string> {
-  const acc = await prisma.hubspotAccount.findFirst({ where: { isSystem: true } });
-  if (!acc) throw new Error("No hay cuenta HubSpot del sistema");
-  if (new Date(acc.expiresAt) > new Date(Date.now() + 5 * 60 * 1000)) return leerTokenDeCuenta(acc);
-  const res = await fetch("https://api.hubapi.com/oauth/v1/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: process.env.HUBSPOT_CLIENT_ID!,
-      client_secret: process.env.HUBSPOT_CLIENT_SECRET!,
-      refresh_token: acc.refreshToken,
-    }),
-  });
-  if (!res.ok) throw new Error("refresh falló: " + (await res.text()));
-  const j = (await res.json()) as { access_token: string; refresh_token: string; expires_in: number };
-  await prisma.hubspotAccount.update({
-    where: { id: acc.id },
-    data: {
-      accessToken: j.access_token,
-      refreshToken: j.refresh_token,
-      expiresAt: new Date(Date.now() + j.expires_in * 1000),
-    },
-  });
-  return j.access_token;
-}
-
 const str = (v: unknown): string => (v === null || v === undefined ? "" : String(v));
 
-async function get(token: string, path: string): Promise<{ ok: boolean; status: number; json: unknown }> {
-  const res = await fetch(`https://api.hubapi.com${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+// El pedido va por el transporte de lib/hubspot/client.ts: renueva el token ante un 401 y espera ante un 429.
+async function get(hs: ClienteHubspot, path: string): Promise<{ ok: boolean; status: number; json: unknown }> {
+  const res = await hs.apiRequest({ method: "GET", path });
   const json = await res.json().catch(() => null);
   return { ok: res.ok, status: res.status, json };
 }
@@ -107,8 +76,8 @@ const esLaPorDefecto = (e: { label: string; category: string }) =>
   e.category === "HUBSPOT_DEFINED" && !e.label;
 
 /** Las etiquetas de asociación de 0-970 hacia `hacia`. Devuelve `null` si no se pudo leer. */
-async function leerEtiquetas(token: string, hacia: string): Promise<Etiqueta[] | null> {
-  const r = await get(token, `/crm/v4/associations/${OBJETO_PROYECTOS}/${hacia}/labels`);
+async function leerEtiquetas(hs: ClienteHubspot, hacia: string): Promise<Etiqueta[] | null> {
+  const r = await get(hs, `/crm/v4/associations/${OBJETO_PROYECTOS}/${hacia}/labels`);
   if (!r.ok) {
     console.log(`   ⚠ no se pudo leer (HTTP ${r.status}): ${JSON.stringify(r.json).slice(0, 200)}`);
     return null;
@@ -125,7 +94,7 @@ async function leerEtiquetas(token: string, hacia: string): Promise<Etiqueta[] |
 }
 
 async function main() {
-  const token = await systemToken();
+  const hs = await getSystemHubspotClient();
 
   console.log("═".repeat(78));
   console.log("C0 · PREFLIGHT DEL ALTA ÚNICA — solo lectura");
@@ -133,8 +102,9 @@ async function main() {
 
   // ── 1. Los scopes del token ────────────────────────────────────────────────
   console.log("\n1. PERMISOS DEL TOKEN DEL SISTEMA\n");
-  const info = await get(token, "/oauth/v1/access-tokens/" + token);
-  const scopes = ((info.json as { scopes?: string[] })?.scopes ?? []).slice().sort();
+  // Si el token-info no se puede leer, sin scopes (como antes): el gate da NO PASA.
+  const info = await getPortalInfo(await getSystemAccessToken()).catch(() => null);
+  const scopes = (info?.scopes ?? []).slice().sort();
   const deProyectos = scopes.filter((s) => s.includes("projects"));
   console.log(`   scopes totales: ${scopes.length}`);
   console.log(`   sobre proyectos: ${deProyectos.length ? deProyectos.join(" · ") : "(ninguno)"}`);
@@ -148,7 +118,7 @@ async function main() {
 
   for (const n of NECESARIAS) {
     console.log(`   ${n.rotulo.toUpperCase()}  (0-970 → ${n.hacia})`);
-    const etiquetas = await leerEtiquetas(token, n.hacia);
+    const etiquetas = await leerEtiquetas(hs, n.hacia);
     if (etiquetas === null) {
       faltantes++;
       console.log("");
@@ -205,4 +175,4 @@ main()
     console.error("ERROR:", e instanceof Error ? e.message : String(e));
     process.exitCode = 1;
   })
-  .finally(close);
+  .finally(() => prisma.$disconnect());

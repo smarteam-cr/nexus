@@ -1,5 +1,4 @@
-import { prisma } from "@/lib/db/prisma";
-import { refreshAccessToken, tokenDeCuenta } from "./client";
+import { getAccountAccessToken } from "./client";
 import { readAccountState, HubspotAccountState, PipelineDef } from "./reader";
 import {
   crearLector,
@@ -1020,28 +1019,10 @@ export interface LifecycleSnapshot {
   lecturas?: LecturasDeLaFoto;
 }
 
-/** Obtiene un token fresco (refresca si está por vencer) sin cargar el estado completo del portal */
+/** Obtiene un token fresco (refresca si está por vencer) sin cargar el estado completo del portal.
+ *  El refresco vive en lib/hubspot/client.ts (uno solo, aunque lo pidan varios a la vez). */
 export async function getFreshToken(accountId: string): Promise<string> {
-  const account = await prisma.hubspotAccount.findUnique({
-    where: { id: accountId },
-    select: { accessToken: true, refreshToken: true, expiresAt: true },
-  });
-  if (!account) throw new Error(`Account not found: ${accountId}`);
-
-  if (account.expiresAt <= new Date(Date.now() + 5 * 60 * 1000)) {
-    const refreshed = await refreshAccessToken(account.refreshToken);
-    await prisma.hubspotAccount.update({
-      where: { id: accountId },
-      data: {
-        accessToken: refreshed.access_token,
-        refreshToken: refreshed.refresh_token,
-        expiresAt: new Date(Date.now() + refreshed.expires_in * 1000),
-      },
-    });
-    return refreshed.access_token;
-  }
-
-  return tokenDeCuenta(account);
+  return getAccountAccessToken(accountId);
 }
 
 /** Un propietario activo, como lo da `/crm/v3/owners`. */
@@ -1223,12 +1204,8 @@ export async function buildPortalSnapshot(accountId: string): Promise<PortalSnap
   // readAccountState refreshes token if needed
   const accountState = await readAccountState(accountId);
 
-  // Read fresh token from DB (after possible refresh above)
-  const account = await prisma.hubspotAccount.findUnique({
-    where: { id: accountId },
-    select: { accessToken: true },
-  });
-  const token = account ? tokenDeCuenta(account) : "";
+  // El token vigente (readAccountState ya lo renovó si hacía falta).
+  const token = await getAccountAccessToken(accountId);
 
   const pipelineCount = Object.values(accountState.pipelines).flat().length;
   const customObjectsCount = accountState.customObjects.length;

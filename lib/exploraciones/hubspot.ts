@@ -1,13 +1,13 @@
 /**
  * lib/exploraciones/hubspot.ts — lo que la exploración lee del HubSpot de SMARTEAM. SERVIDOR.
  *
- * Solo lee: la exploración nunca escribe en HubSpot. Todo pasa por el token del sistema con el
- * reintento ante un 401 que usan los demás lectores (el token se refresca y se vuelve a pedir una
- * vez). Lo que no responde se devuelve vacío: sin HubSpot, el lienzo se puede llenar a mano.
+ * Solo lee: la exploración nunca escribe en HubSpot. Todo pasa por el cliente del sistema, cuyo
+ * transporte renueva el token ante un 401 y espera ante un 429 (lib/hubspot/client.ts). Lo que no
+ * responde se devuelve vacío: sin HubSpot, el lienzo se puede llenar a mano.
  */
 import "server-only";
 import { esNotaDeLaFicha } from "@/lib/clients/ficha";
-import { forceRefreshSystemToken, getSystemHubspotClient } from "@/lib/hubspot/client";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { PROPIEDADES_DEL_RASTRO, rastroDe, type RastroDelContacto } from "./senales";
 import { agruparLlegadas, esDePrueba, leerNotaDelTest, type LlegadaAgrupada, type NotaDeLlegada } from "./llegadas";
 import { leerResultadoDelTest, PROPIEDADES_DEL_TEST, type ResultadoDelTest } from "./test-de-marketing";
@@ -21,16 +21,10 @@ interface Pedido {
   body?: unknown;
 }
 
-/** Un pedido a HubSpot con un reintento si el token venció. null si no se pudo. */
+/** Un pedido a HubSpot (el transporte renueva el token y espera el límite). null si no se pudo. */
 export async function pedirAHubspot<T>(pedido: Pedido): Promise<T | null> {
   try {
-    let hs = await getSystemHubspotClient();
-    let res = await hs.apiRequest(pedido);
-    if (res.status === 401) {
-      await forceRefreshSystemToken();
-      hs = await getSystemHubspotClient();
-      res = await hs.apiRequest(pedido);
-    }
+    const res = await (await getSystemHubspotClient()).apiRequest(pedido);
     if (!res.ok) {
       console.error(`[exploraciones/hubspot] ${pedido.method} ${pedido.path} → ${res.status}`);
       return null;

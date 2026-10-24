@@ -37,8 +37,9 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   (gmail) o de agencia apuntado a un solo cliente le cuela las sesiones de todos. *Guarda:* solo
   dominios únicos por empresa, confirmados a mano.
 - **Token de HubSpot del sistema da 401 aunque `expiresAt` diga válido.** *Causa:* clock skew /
-  rotación entre PROD y local (comparten la cuenta del sistema). *Guarda:* `forceRefreshSystemToken`
-  + retry-on-401 en `/api/handoffs/lookup`.
+  rotación entre PROD y local (comparten la cuenta del sistema). *Guarda:* el transporte de
+  `lib/hubspot/client.ts` (U6) renueva una vez, con un solo refresh; no escribas otro reintento
+  (`transporte-unico.test.ts`). Por día: `scripts/fallas-de-hubspot.ts`.
 - **"Unknown field" / P2022 tras cambiar el schema.** *Causa:* el dev server tiene el Prisma client
   viejo (no entra por HMR) o la columna no se aplicó a PROD a mano. *Guarda:* tras aplicar el `.sql`
   correr `npx prisma generate` y reiniciar el dev server (flujo completo: ARCHITECTURE Parte 0 ·

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- script de inspección: lee el JSON crudo de HubSpot sin tipar */
 /**
  * scripts/discover-partner-clients.ts  (READ-ONLY — CS360 Fase 0)
  *
@@ -14,40 +15,15 @@
  * ORDEN ESTRICTO: token-info PRIMERO. No escribe nada (solo lectura).
  * Uso: npx tsx scripts/discover-partner-clients.ts
  */
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import "dotenv/config";
-import { tokenDeCuenta as leerTokenDeCuenta } from "@/lib/hubspot/client";
+import { prisma } from "@/lib/db/prisma";
+import { getPortalInfo, getSystemAccessToken, getSystemHubspotClient } from "@/lib/hubspot/client";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+type ClienteHubspot = Awaited<ReturnType<typeof getSystemHubspotClient>>;
 
-async function systemToken(): Promise<string> {
-  const acc = await prisma.hubspotAccount.findFirst({ where: { isSystem: true } });
-  if (!acc) throw new Error("No hay cuenta HubSpot del sistema");
-  if (new Date(acc.expiresAt) > new Date(Date.now() + 5 * 60 * 1000)) return leerTokenDeCuenta(acc);
-  const res = await fetch("https://api.hubapi.com/oauth/v1/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: process.env.HUBSPOT_CLIENT_ID!,
-      client_secret: process.env.HUBSPOT_CLIENT_SECRET!,
-      refresh_token: acc.refreshToken,
-    }),
-  });
-  if (!res.ok) throw new Error("refresh falló: " + (await res.text()));
-  const j = (await res.json()) as { access_token: string; refresh_token: string; expires_in: number };
-  await prisma.hubspotAccount.update({
-    where: { id: acc.id },
-    data: { accessToken: j.access_token, refreshToken: j.refresh_token, expiresAt: new Date(Date.now() + j.expires_in * 1000) },
-  });
-  return j.access_token;
-}
-
-async function getJson(token: string, path: string): Promise<{ status: number; body: any }> {
-  const r = await fetch("https://api.hubapi.com" + path, { headers: { Authorization: `Bearer ${token}` } });
+// El pedido va por el transporte de lib/hubspot/client.ts: renueva el token ante un 401 y espera ante un 429.
+async function getJson(hs: ClienteHubspot, path: string): Promise<{ status: number; body: any }> {
+  const r = await hs.apiRequest({ method: "GET", path });
   return { status: r.status, body: await r.json().catch(() => null) };
 }
 
@@ -150,10 +126,11 @@ function printMatches(all: HsProp[], wanted: Array<{ key: string; re: RegExp }>,
 }
 
 async function main() {
-  const token = await systemToken();
+  const hs = await getSystemHubspotClient();
 
   // ── PASO 1: token-info (GATE) ──────────────────────────────────────────────
-  const info = (await (await fetch("https://api.hubapi.com/oauth/v1/access-tokens/" + token)).json()) as {
+  // Si el token-info no responde 200, sin datos (como antes: el JSON de error no trae scopes).
+  const info = (await getPortalInfo(await getSystemAccessToken()).catch(() => ({}))) as {
     scopes?: string[]; hub_id?: number; hub_domain?: string;
   };
   const scopes = info.scopes ?? [];
@@ -165,7 +142,7 @@ async function main() {
 
   // ── PASO 2: fqn del objeto partner ─────────────────────────────────────────
   console.log("\n=== PASO 2 · buscar el objeto partner ===");
-  const schemas = await getJson(token, "/crm/v3/schemas");
+  const schemas = await getJson(hs, "/crm/v3/schemas");
   let partnerFqn: string | null = null;
   if (schemas.status === 200) {
     const list = (schemas.body.results ?? []) as Array<{ objectTypeId: string; fullyQualifiedName: string; name: string; labels?: { singular?: string } }>;
@@ -183,7 +160,7 @@ async function main() {
   const candidates = [partnerFqn, "partner_clients", "0-145", "PARTNER_CLIENT"].filter(Boolean) as string[];
   let workingFqn: string | null = null;
   for (const fqn of candidates) {
-    const probe = await getJson(token, `/crm/v3/properties/${encodeURIComponent(fqn)}`);
+    const probe = await getJson(hs, `/crm/v3/properties/${encodeURIComponent(fqn)}`);
     console.log(`  properties de "${fqn}": status ${probe.status}${probe.status === 200 ? ` (${(probe.body.results ?? []).length} props)` : ""}`);
     if (probe.status === 200) { workingFqn = fqn; break; }
     if (probe.status === 403) console.log("    → 403: el objeto existe pero FALTA SCOPE (anotar para re-autorizar la app)");
@@ -192,19 +169,19 @@ async function main() {
   // ── PASO 3: properties del objeto partner ──────────────────────────────────
   if (workingFqn) {
     console.log(`\n=== PASO 3 · properties de ${workingFqn} ===`);
-    const props = await getJson(token, `/crm/v3/properties/${encodeURIComponent(workingFqn)}`);
+    const props = await getJson(hs, `/crm/v3/properties/${encodeURIComponent(workingFqn)}`);
     const all = (props.body.results ?? []) as HsProp[];
     printMatches(all, PARTNER_WANTED, `PARTNER_PROPERTIES (${workingFqn})`);
 
     // ── PASO 4: read de prueba ───────────────────────────────────────────────
     console.log(`\n=== PASO 4 · GET list de prueba (${workingFqn}) ===`);
-    const sample = await getJson(token, `/crm/v3/objects/${encodeURIComponent(workingFqn)}?limit=5`);
+    const sample = await getJson(hs, `/crm/v3/objects/${encodeURIComponent(workingFqn)}?limit=5`);
     console.log("status:", sample.status, "| total en página:", (sample.body?.results ?? []).length, "| paging:", !!sample.body?.paging);
     if (sample.status === 200 && sample.body.results?.[0]) {
       console.log("primer record (props default):", JSON.stringify(sample.body.results[0].properties, null, 2).slice(0, 800));
       // asociaciones a companies del primer record
       const id = sample.body.results[0].id;
-      const assoc = await getJson(token, `/crm/v4/objects/${encodeURIComponent(workingFqn)}/${id}/associations/companies`);
+      const assoc = await getJson(hs, `/crm/v4/objects/${encodeURIComponent(workingFqn)}/${id}/associations/companies`);
       console.log(`asociaciones a companies del record ${id}: status ${assoc.status}, ${(assoc.body?.results ?? []).length} companies`);
     }
     if (sample.status === 403) console.log("→ 403 en el read: properties visibles pero records NO — scope de objeto faltante.");
@@ -214,14 +191,14 @@ async function main() {
 
   // ── PASO 5: properties nuevas del 0-970 ────────────────────────────────────
   console.log("\n=== PASO 5 · properties del objeto Proyectos (0-970) ===");
-  const pprops = await getJson(token, "/crm/v3/properties/0-970");
+  const pprops = await getJson(hs, "/crm/v3/properties/0-970");
   if (pprops.status === 200) {
     const all = (pprops.body.results ?? []) as HsProp[];
     console.log(`props totales: ${all.length}`);
     printMatches(all, PROJECT_WANTED, "PROYECTOS 0-970 (nuevas para el dashboard)");
   } else {
     console.log("status:", pprops.status, "→ probar slug 'projects'");
-    const alt = await getJson(token, "/crm/v3/properties/projects");
+    const alt = await getJson(hs, "/crm/v3/properties/projects");
     if (alt.status === 200) {
       printMatches((alt.body.results ?? []) as HsProp[], PROJECT_WANTED, "PROYECTOS (slug projects)");
     } else {
@@ -237,5 +214,4 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
-    await pool.end();
   });

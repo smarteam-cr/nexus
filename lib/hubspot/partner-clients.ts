@@ -20,10 +20,10 @@
  * persiste en `ClientPartnerSnapshot.properties` (~6 KB/record, trivial en jsonb),
  * así promover un campo a escalar tipado no exige re-sincronizar contra HubSpot.
  *
- * Retry-401 con forceRefreshSystemToken (token del sistema compartido PROD/local).
+ * El 401 lo reintenta el transporte con el token renovado (lib/hubspot/client.ts).
  */
 import type { Client as HsClient } from "./sdk";
-import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
+import { getSystemHubspotClient } from "./client";
 
 /** Slug documentado del objeto (HubSpot-defined). El discovery confirmó que existe
  *  (403 = sin scope, no 404). Si al autorizar cambiara el fqn, es UNA constante. */
@@ -294,15 +294,10 @@ async function fetchOnce(hsClient: HsClient): Promise<{ status: number; result: 
   return { status: 200, result: { supported: true, records, associationsOk, propertyLabels } };
 }
 
-/** Todos los partner clients del portal, con degradación de scope y retry-401. */
+/** Todos los partner clients del portal, con degradación de scope (el 401 lo reintenta el transporte). */
 export async function fetchAllPartnerClients(): Promise<PartnerClientsResult> {
   try {
-    const hsClient = await getSystemHubspotClient();
-    let r = await fetchOnce(hsClient);
-    if (r.status === 401) {
-      await forceRefreshSystemToken();
-      r = await fetchOnce(await getSystemHubspotClient());
-    }
+    const r = await fetchOnce(await getSystemHubspotClient());
     return r.result;
   } catch {
     // API caída ≠ scope faltante: soportado pero vacío (el caller decide no pisar

@@ -355,8 +355,10 @@ describe("C-25: el token de una cuenta de HubSpot se lee por UN accesor (lib/hub
        es lo mismo» — hoy sí; con el cifrado, no. */
     const src = sinComentarios(fs.readFileSync(path.join(RAIZ, ACCESOR), "utf8"));
     expect(src).toContain("export function tokenDeCuenta(");
-    expect(src.split("tokenDeCuenta(account)").length - 1, "las tres lecturas internas pasan por el accesor").toBe(3);
-    expect(src, "client.ts lee la columna a mano").not.toContain("account.accessToken");
+    // Desde U6 (2026-10-24) las lecturas internas son tres: el token vigente, la renovación tras un 401 y el
+    // refresh forzado de compatibilidad.
+    expect(src.match(/tokenDeCuenta\((account|cuenta)\)/g)?.length ?? 0, "las tres lecturas internas pasan por el accesor").toBe(3);
+    expect(src.match(/\b\w+\.accessToken\b/g), "client.ts lee la columna a mano fuera del accesor").toEqual(["cuenta.accessToken"]);
   });
 
   it("LA guarda: ningún archivo que nombra hubspotAccount lee `.accessToken` fuera del accesor", () => {

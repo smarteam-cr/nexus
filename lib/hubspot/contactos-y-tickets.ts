@@ -9,7 +9,6 @@
  * NO le da de baja a nadie (un 429 no puede vaciar la lista de personas de un cliente). Un 403 es `sinPermiso`.
  */
 import type { Client as HsClient } from "./sdk";
-import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
 
 const LOTE = 100;
 
@@ -63,18 +62,8 @@ function fecha(v: string | null | undefined): Date | null {
 
 const texto = (v: string | null | undefined): string | null => (v && v.trim() ? v.trim() : null);
 
-/** Un pedido con un reintento ante 401 (el token del sistema se comparte y rota). Devuelve la respuesta cruda. */
-type Respuesta = Awaited<ReturnType<HsClient["apiRequest"]>>;
-
-async function pedir(hs: HsClient, req: { method: "GET" | "POST"; path: string; body?: object }): Promise<{ hs: HsClient; res: Respuesta }> {
-  let res = await hs.apiRequest(req);
-  if (res.status === 401) {
-    await forceRefreshSystemToken();
-    hs = await getSystemHubspotClient();
-    res = await hs.apiRequest(req);
-  }
-  return { hs, res };
-}
+// Los pedidos van directo por `hs.apiRequest`: el transporte (lib/hubspot/client.ts) ya renueva el token ante un 401 y
+// espera ante un 429.
 
 /** Qué contactos (o tickets) tiene asociados cada empresa. */
 export async function asociacionesDeEmpresas(hs: HsClient, companyIds: readonly string[], hacia: ObjetoAsociado): Promise<Asociaciones> {
@@ -82,17 +71,16 @@ export async function asociacionesDeEmpresas(hs: HsClient, companyIds: readonly 
   for (let i = 0; i < companyIds.length; i += LOTE) {
     const lote = companyIds.slice(i, i + LOTE);
     try {
-      const r = await pedir(hs, { method: "POST", path: `/crm/v4/associations/companies/${hacia}/batch/read`, body: { inputs: lote.map((id) => ({ id })) } });
-      hs = r.hs;
-      if (r.res.status === 403) {
+      const r = await hs.apiRequest({ method: "POST", path: `/crm/v4/associations/companies/${hacia}/batch/read`, body: { inputs: lote.map((id) => ({ id })) } });
+      if (r.status === 403) {
         out.sinPermiso = true;
         return out;
       }
-      if (r.res.status !== 200 && r.res.status !== 207) {
+      if (r.status !== 200 && r.status !== 207) {
         for (const id of lote) out.ilegibles.add(id);
         continue;
       }
-      const data = (await r.res.json()) as {
+      const data = (await r.json()) as {
         results?: { from: { id: string }; to?: { toObjectId: string | number }[]; paging?: { next?: { after?: string } } }[];
         errors?: { subCategory?: string; context?: { fromObjectId?: string[] } }[];
       };
@@ -129,18 +117,17 @@ async function leerEnLote(
   for (let i = 0; i < ids.length; i += LOTE) {
     const lote = ids.slice(i, i + LOTE);
     try {
-      const r = await pedir(hs, {
+      const r = await hs.apiRequest({
         method: "POST",
         path: `/crm/v3/objects/${objeto}/batch/read`,
         body: { inputs: lote.map((id) => ({ id })), properties: propiedades },
       });
-      hs = r.hs;
-      if (r.res.status === 403) return { sinPermiso: true, fallo, filas };
-      if (r.res.status !== 200 && r.res.status !== 207) {
+      if (r.status === 403) return { sinPermiso: true, fallo, filas };
+      if (r.status !== 200 && r.status !== 207) {
         fallo = true;
         continue;
       }
-      const data = (await r.res.json()) as { results?: { id: string; properties: Record<string, string | null | undefined> }[] };
+      const data = (await r.json()) as { results?: { id: string; properties: Record<string, string | null | undefined> }[] };
       for (const x of data.results ?? []) filas.push({ id: String(x.id), p: x.properties ?? {} });
     } catch {
       fallo = true;
@@ -191,7 +178,7 @@ export async function leerTickets(hs: HsClient, ids: readonly string[]) {
 export async function etapasDeTickets(hs: HsClient): Promise<Map<string, EtapaDeTicket>> {
   const out = new Map<string, EtapaDeTicket>();
   try {
-    const { res } = await pedir(hs, { method: "GET", path: "/crm/v3/pipelines/tickets" });
+    const res = await hs.apiRequest({ method: "GET", path: "/crm/v3/pipelines/tickets" });
     if (!res.ok) return out;
     const data = (await res.json()) as {
       results?: { label: string; stages?: { id: string; label: string; metadata?: { ticketState?: string } }[] }[];

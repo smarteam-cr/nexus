@@ -12,22 +12,13 @@
  * el punto de partida. Un 403 es `sinPermiso` (los correos, sin `sales-email-read`).
  */
 import type { Client as HsClient } from "./sdk";
-import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
 
 /** correo | nota | llamada (los mismos valores que lib/comunicaciones/reglas.ts: la integración no importa del módulo). */
 export type TipoDeComunicacion = "correo" | "nota" | "llamada";
 
+/** Lo que responde un pedido. Van directo por `hs.apiRequest`: el transporte (lib/hubspot/client.ts) ya renueva el
+ *  token ante un 401 y espera ante un 429. */
 type Respuesta = Awaited<ReturnType<HsClient["apiRequest"]>>;
-
-async function pedir(hs: HsClient, req: { method: "GET" | "POST"; path: string; body?: object }): Promise<{ hs: HsClient; res: Respuesta }> {
-  let res = await hs.apiRequest(req);
-  if (res.status === 401) {
-    await forceRefreshSystemToken();
-    hs = await getSystemHubspotClient();
-    res = await hs.apiRequest(req);
-  }
-  return { hs, res };
-}
 
 /** El objeto de HubSpot de cada tipo y las propiedades que se piden. */
 export const OBJETO_DEL_TIPO: Record<TipoDeComunicacion, { objeto: "emails" | "notes" | "calls"; propiedades: readonly string[] }> = {
@@ -92,16 +83,15 @@ export async function buscarModificadas(
       limit: POR_PAGINA,
       ...(after ? { after } : {}),
     };
-    let r: { hs: HsClient; res: Respuesta };
+    let r: Respuesta;
     try {
-      r = await pedir(hs, { method: "POST", path: `/crm/v3/objects/${objeto}/search`, body });
+      r = await hs.apiRequest({ method: "POST", path: `/crm/v3/objects/${objeto}/search`, body });
     } catch {
       return out;
     }
-    hs = r.hs;
-    if (r.res.status === 403) return { ...out, sinPermiso: true };
-    if (!r.res.ok) return out;
-    const data = (await r.res.json()) as { results?: { id: string; properties?: Record<string, string | null> }[]; paging?: { next?: { after?: string } } };
+    if (r.status === 403) return { ...out, sinPermiso: true };
+    if (!r.ok) return out;
+    const data = (await r.json()) as { results?: { id: string; properties?: Record<string, string | null> }[]; paging?: { next?: { after?: string } } };
     for (const x of data.results ?? []) {
       const id = String(x.id);
       if (vistos.has(id)) continue;
@@ -147,14 +137,13 @@ export async function asociacionesDe(
   for (let i = 0; i < ids.length; i += 100) {
     const lote = ids.slice(i, i + 100);
     try {
-      const r = await pedir(hs, { method: "POST", path: `/crm/v4/associations/${objeto}/${hacia}/batch/read`, body: { inputs: lote.map((id) => ({ id })) } });
-      hs = r.hs;
-      if (r.res.status === 403) return { ...out, sinPermiso: true };
-      if (r.res.status !== 200 && r.res.status !== 207) {
+      const r = await hs.apiRequest({ method: "POST", path: `/crm/v4/associations/${objeto}/${hacia}/batch/read`, body: { inputs: lote.map((id) => ({ id })) } });
+      if (r.status === 403) return { ...out, sinPermiso: true };
+      if (r.status !== 200 && r.status !== 207) {
         for (const id of lote) out.ilegibles.add(id);
         continue;
       }
-      const data = (await r.res.json()) as {
+      const data = (await r.json()) as {
         results?: { from: { id: string | number }; to?: { toObjectId: string | number }[] }[];
         errors?: { subCategory?: string; context?: { fromObjectId?: string[] } }[];
       };

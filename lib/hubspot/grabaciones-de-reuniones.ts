@@ -15,7 +15,7 @@
  * vuelve a pedir por una hora (cada pedido negado es un 403 más en el log).
  */
 import type { Client } from "./sdk";
-import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
+import { getSystemHubspotClient } from "./client";
 import { textoDeLaTranscripcion, type IntervencionDeHubspot } from "./transcripcion-de-reunion";
 
 export interface GrabacionDeReunion {
@@ -39,18 +39,14 @@ const negado: { reuniones: number; transcripciones: number } = { reuniones: 0, t
 type Pedido = { method: "GET" | "POST"; path: string; body?: unknown };
 
 /**
- * Un pedido con un reintento si el token del sistema venció. Con `cliente` (el portal de un cliente, como
- * en el handoff), sin reintento. null si ni siquiera hubo respuesta.
+ * Un pedido con el cliente del sistema o, con `cliente`, el del portal de un cliente (como en el handoff). El
+ * transporte de los dos (lib/hubspot/client.ts) renueva el token ante un 401 y espera ante un 429. null si ni
+ * siquiera hubo respuesta.
  */
 async function pedir(pedido: Pedido, cliente?: Client): Promise<{ status: number; json: unknown; texto: string } | null> {
   try {
-    let hs = cliente ?? (await getSystemHubspotClient());
-    let res = await hs.apiRequest(pedido);
-    if (res.status === 401 && !cliente) {
-      await forceRefreshSystemToken();
-      hs = await getSystemHubspotClient();
-      res = await hs.apiRequest(pedido);
-    }
+    const hs = cliente ?? (await getSystemHubspotClient());
+    const res = await hs.apiRequest(pedido);
     const texto = await res.text();
     let json: unknown = null;
     try {

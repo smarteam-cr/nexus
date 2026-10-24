@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { getSystemHubspotClient, forceRefreshSystemToken } from "@/lib/hubspot/client";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { elegirCandidato } from "@/lib/hubspot/cliente-de-la-empresa";
 import { fetchCompanyDeals } from "@/lib/hubspot/deals";
 
@@ -36,13 +36,10 @@ export async function GET(req: NextRequest) {
   };
 
   try {
-    let hs = await getSystemHubspotClient();
-    let searchRes = await hs.apiRequest(searchBody);
-    if (searchRes.status === 401) {
-      await forceRefreshSystemToken();
-      hs = await getSystemHubspotClient();
-      searchRes = await hs.apiRequest(searchBody);
-    }
+    // El token vencido aunque expiresAt diga lo contrario (KNOWN-ERRORS) y el límite de HubSpot los
+    // resuelve el transporte del cliente (lib/hubspot/client.ts): un solo refresh, y 2 s como máximo de espera.
+    const hs = await getSystemHubspotClient();
+    const searchRes = await hs.apiRequest(searchBody);
     if (!searchRes.ok) {
       console.error("[business-cases/lookup] HubSpot search no-ok:", searchRes.status);
       return NextResponse.json(

@@ -48,4 +48,6 @@ export declare class Client {
   get crm(): CrmDeNexus;
   get settings(): SettingsDeNexus;
   apiRequest(opts?: IHttpOptions): Promise<Response>;
+  /** Cambia el token de las APIs tipadas (lo usa el transporte de client.ts al renovarlo). */
+  setAccessToken(token: string): void;
 }

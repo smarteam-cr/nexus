@@ -91,6 +91,18 @@ describe("fetchCompanyContacts: «no soportado» no es lo mismo que «falló»",
     await expect(fetchCompanyContacts(hs, "hs-99")).resolves.toEqual({ supported: false, contactos: [] });
   });
 
+  it("⭐ un 401 (el transporte ya renovó el token y reintentó) LANZA: nunca «cero contactos»", async () => {
+    /* La edición que la pone en rojo: borrar el `throw` ante el 401 de fetchCompanyContacts. Volvería
+       «soportado, cero contactos» y la copia de señales pisaría a las personas guardadas. */
+    hubspotQueContesta(respuesta(401));
+    await expect(fetchCompanyContacts(hs, "hs-99")).rejects.toThrow(/401 aun con el token renovado/);
+  });
+
+  it("⭐ un 429 agotado LANZA", async () => {
+    hubspotQueContesta(respuesta(429));
+    await expect(fetchCompanyContacts(hs, "hs-99")).rejects.toBeInstanceOf(FalloAlLeerContactos);
+  });
+
   it("una empresa sin contactos asociados sí es «soportado, cero»", async () => {
     hubspotQueContesta(respuesta(200, { results: [] }));
     await expect(fetchCompanyContacts(hs, "hs-99")).resolves.toEqual({ supported: true, contactos: [] });
