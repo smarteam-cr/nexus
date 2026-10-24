@@ -95,6 +95,16 @@
    - Se mide cuántos empiezan, cuántos abandonan y en qué pregunta, y cuántos terminan.
    - Se apagan el backend de Vercel y la página estática.
 
+## Las versiones del test (Elías, 2026-10-24)
+
+1. **La de Marketing:** 4 preguntas fáciles de responder, para conseguir el lead.
+2. **La web:** 8 preguntas, una por dimensión. La usan Marketing y Ventas para conseguir la primera reunión.
+3. **La completa:** la llena el consultor de Customer Success en la exploración profunda, según el caso de uso o en
+   una exploración general. **Va por equipo:** la escala ubica a un equipo, así que una empresa puede tener varias
+   (Ventas, servicio, Customer Success, sus clientes).
+
+Las preguntas las revisa Elías, y el equipo opina al usarlas.
+
 ## Depende de
 
 - **N1 (publicar la 8.9.1):** el test arranca con la escala publicada y toma la 9.0 sola cuando salga.

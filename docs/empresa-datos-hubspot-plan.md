@@ -56,7 +56,9 @@
    - **La propuesta se ve en la ficha, al lado del dato,** con quién la hizo, por qué (la cita o la fuente) y tres
      botones: «Usar», «Editar» y «Descartar».
    - **Cualquier dato se edita a mano** con un clic.
-   - **Quién decide:** el encargado de la cuenta, o el vendedor en un prospecto. Otra persona solo propone. Las
+   - **Quién decide** (Elías, 2026-10-24): **el usuario de Nexus que lo está usando, según su rol**, y lo que decide
+     se escribe en HubSpot con la sugerencia del agente. El TAM lo ve solo el equipo, nunca el cliente. Los reportes
+     de HubSpot van después: primero, que el usuario escriba en HubSpot. Las
      propuestas pendientes se cuentan en la ficha («3 datos por revisar»); no se suman a «Por decidir» de Tareas, para no
      cargar a nadie.
    - Es el mismo patrón que ya usa la ficha; se extiende a todos los datos de la empresa.

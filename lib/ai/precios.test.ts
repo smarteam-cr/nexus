@@ -118,13 +118,13 @@ describe("el formato no dice «gratis» cuando no lo es", () => {
 describe("Sonnet 5 y Sonnet 4.5 tienen tarifa (C-01)", () => {
   /* La edición que lo pone en rojo: sacar la entrada de Sonnet 5 «hasta verificarla» — un agente
      migrado a ese modelo gastaría con costo null y el tope diario no lo vería. */
-  it("Sonnet 5 cobra $3/$15 (el precio de lanzamiento venció el 2026-08-31) y dice que hay que verificarlo", () => {
+  it("Sonnet 5 cobra $2/$10 (U21: se cobraba $3/$15 por una nota equivocada) y dice que hay que verificarlo", () => {
     const p = precioDe("claude-sonnet-5");
     expect(p).not.toBeNull();
-    expect(p?.entrada).toBe(3);
-    expect(p?.salida).toBe(15);
-    expect(p?.nota, "la tarifa salió del SDK: tiene que decir que falta verificarla").toContain("verificar en consola");
-    expect(costoDeLlamada("claude-sonnet-5", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBe(18);
+    expect(p?.entrada).toBe(2);
+    expect(p?.salida).toBe(10);
+    expect(p?.nota, "la tarifa no salió de la consola: tiene que decir que falta verificarla").toContain("verificar en consola");
+    expect(costoDeLlamada("claude-sonnet-5", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBe(12);
   });
 
   it("Sonnet 4.5 cobra igual que 4.6 por su id corto y por el datado", () => {

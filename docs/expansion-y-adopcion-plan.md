@@ -31,8 +31,9 @@
 ## Etapas
 
 1. **E1 · Decidir cada pedido.**
-   - Etapa 1: quién decide. Hoy decide el CSE y avisa a la CSL; lo decidido dice que decide la CSL. Se alinea el código
-     con la respuesta de Elías (pregunta 1) y se escribe en DECISIONS.
+   - Etapa 1: decidido el 2026-10-24: **el CSE puede aceptar un pedido o una solicitud, y la CSL siempre la
+     revisa.** Al aceptarlo, le nace a la CSL una tarea de revisión. Hoy el CSE ya decide y la CSL solo recibe un
+     aviso: falta la tarea. Se escribe en DECISIONS antes del código.
    - Etapa 2: «Volver caso de uso» en una solicitud de SmartLoop. Crea un `CasoDeUso` con origen «pedido», unido al
      pedido por una columna nueva (SQL aditivo, nula), y el pedido pasa a «incluido».
    - Etapa 3: levantar la mano (sumar un pedido a mano) visible donde trabaja el CSE.
@@ -58,7 +59,7 @@
 
 ## Preguntas para Elías
 
-1. ¿Quién decide un pedido: la CSL siempre, o el CSE puede aceptar los chicos y la CSL solo los que piden a Ventas?
+1. ✓ El CSE acepta y la CSL siempre revisa, con una tarea (2026-10-24).
 2. Los 40 pedidos que nadie decidió, ¿los revisa Alex en una sola sesión?
 3. La revisión de adopción, ¿es una sesión con el cliente, o un reporte que el CSE manda y comenta?
 4. ¿Qué cuenta como «adoptado»: que el equipo entre a HubSpot, o que use lo que se le configuró (por ejemplo, que

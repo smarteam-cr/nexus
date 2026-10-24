@@ -71,18 +71,19 @@ export const PRECIOS: Record<string, PrecioDeModelo> = {
     factorLecturaCache: FACTOR_LECTURA_CACHE,
     verificado: "2026-08-17",
   },
-  // Sonnet 5 y Sonnet 4.5 (C-01, 2026-09-04): tarifas tomadas del SDK, no de la consola.
-  // ⚠ VERIFICAR EN LA CONSOLA DE FACTURACIÓN: el precio de lanzamiento de Sonnet 5 ($2/$10)
-  // venció el 2026-08-31; acá se cobra el vigente ($3/$15). Sin esta entrada, migrar un agente
-  // a Sonnet 5 (C-04) haría que su gasto saliera `null` y el tope diario no lo viera.
+  // Sonnet 5 (U21, 2026-10-24): $2/$10, según la tabla de modelos de Anthropic (al 2026-10-06). Desde el 2026-09-04
+  // se cobraba $3/$15 porque una nota decía que el precio de lanzamiento había vencido: no venció, y el panel lo
+  // sobrecobraba un 50 %. Lo guardado se corrige con `scripts/recalcular-costo-de-llamadas.ts`. Sin esta entrada, un
+  // agente en Sonnet 5 gastaría con costo `null` y el tope diario no lo vería.
   "claude-sonnet-5": {
-    entrada: 3.0,
-    salida: 15.0,
+    entrada: 2.0,
+    salida: 10.0,
     factorEscrituraCache: FACTOR_ESCRITURA_CACHE,
     factorLecturaCache: FACTOR_LECTURA_CACHE,
-    verificado: "2026-09-04",
-    nota: "tarifa del SDK, no de la consola — verificar en consola",
+    verificado: "2026-10-24",
+    nota: "tarifa de la referencia de modelos de Anthropic, no de la consola — verificar en consola",
   },
+  // Sonnet 4.5 (C-01, 2026-09-04): tarifa tomada del SDK, no de la consola.
   "claude-sonnet-4-5": {
     entrada: 3.0,
     salida: 15.0,

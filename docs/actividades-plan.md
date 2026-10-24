@@ -35,8 +35,8 @@
 - **Cada actividad lleva dos tiempos:** el de hacerla a mano (el espacio que se reserva y se cotiza; un diagnóstico
   personalizado ≈ 4 horas) y el objetivo con Nexus (lo que buscamos que tarde revisarlo y ajustarlo: 1 hora, media
   hora o menos).
-- **Para la propuesta y el precio cuenta lo que debería durar** (el tiempo a mano), con la tarifa por segmento del
-  cotizador (80, 100, 120). **Para la rentabilidad y los costos cuenta lo que realmente duró**, al costo de la
+- **Se vende por valor (2026-10-24).** Lo que debería durar (el tiempo a mano), con la tarifa por segmento del
+  cotizador (80, 100, 120), da el **precio mínimo**: ninguna propuesta baja de ahí. El precio lo pone el valor. **Para la rentabilidad y los costos cuenta lo que realmente duró**, al costo de la
   planilla: ya existe en `lib/rentabilidad/margen.ts` (por persona y cargado). La diferencia entre los dos tiempos es
   lo que Nexus le gana al trabajo.
 - **Las sesiones duran una hora**, con una agenda clara y específica: explorar, presentar una propuesta o una entrega.
@@ -137,7 +137,8 @@ a «Por decidir», se ignoran igual.
 
 ## El ejercicio de validación (A0, pedido del 2026-10-24)
 
-Antes de crear las actividades y los casos de uso, Elías y Claude los validan juntos. La pregunta que guía todo:
+Antes de crear las actividades y los casos de uso, Elías y Claude los validan juntos. **Va amarrado a la preventa**
+(Elías, 2026-10-24): cada sesión que se analiza en una preventa lo complementa, porque ahí se ve qué hace falta. La pregunta que guía todo:
 **¿cuál es la menor cantidad de actividades que podemos hacer para un cliente y que igual llegue al resultado?** Una
 implementación tiene que ser fácil y sencilla de hacer con todo lo que la IA permite. **Nada de A1 etapa 2, A2, C2, D2
 etapa 2 ni P4 se programa sin este ejercicio aprobado.**

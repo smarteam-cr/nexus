@@ -31,8 +31,9 @@
 ## Decisiones que ya están (no se re-litigan)
 
 - El vendedor ve casos, actividades y su porqué; **el cliente nunca ve horas ni créditos**, ni códigos de criterios.
-- **El precio sale del tiempo a mano de cada actividad por la tarifa del segmento** (80, 100, 120). Sumar una
-  actividad en la entrega no cambia el precio: baja la rentabilidad.
+- **Se vende por valor** (2026-10-24). El tiempo a mano de cada actividad por la tarifa del segmento (80, 100, 120)
+  da el **precio mínimo** y la rentabilidad, no el precio. Sumar una actividad en la entrega no cambia el precio: baja
+  la rentabilidad.
 - El tiempo de cada actividad es uno solo; lo que crece con la empresa es cuántas veces se hace.
 - La implementación base (portal y arquitectura) va dentro del caso de aterrizaje y se cuenta una vez por cliente.
 - Lo nuevo entra al lado de lo viejo: las propuestas de hoy no cambian.
@@ -51,8 +52,9 @@
      Entra al registro congelado (`lib/landing/registry.test.ts`).
    - El vendedor la muestra u oculta con el ojo de la sección.
 3. **C2 · La cotización sale de las actividades** (depende de A0, A2 y B1).
-   - Un motor de precio puro, en `lib/casos-de-uso/precio.ts`, con sus pruebas: actividades × veces × tiempo a mano ×
-     tarifa, y la base contada una sola vez por cliente.
+   - Un motor puro, en `lib/casos-de-uso/precio.ts`, con sus pruebas, que calcula el **precio mínimo**: actividades ×
+     veces × tiempo a mano × tarifa, y la base contada una sola vez por cliente. El vendedor pone el precio por valor;
+     la propuesta avisa si queda bajo el mínimo.
    - Nexus sugiere las actividades según la empresa (tamaño, equipos, segmento), cada una con su porqué. El vendedor
      quita, suma o cambia cuántas veces.
    - **Lo vendido se congela al firmar**: una tabla nueva de líneas vendidas (propuesta, caso, actividad, veces,
@@ -68,14 +70,14 @@
 
 ## Criterio de éxito
 
-5 propuestas reales armadas desde las actividades que sugiere Nexus, cada una con su porqué; el precio difiere menos
-de un 10 % del que daba el cotizador; lo vendido queda guardado por caso y actividad, y el cliente no ve una sola hora.
+5 propuestas reales armadas desde las actividades que sugiere Nexus, cada una con su porqué; ninguna queda bajo su
+precio mínimo; lo vendido queda guardado por caso y actividad, y el cliente no ve una sola hora.
 
 ## Preguntas para Elías
 
-1. ¿El vendedor puede bajar el precio que propone Nexus? ¿Hasta cuánto sin pedirle aprobación a nadie?
+1. Un precio bajo el mínimo, ¿se puede mandar con la aprobación de alguien (tuya, de Marco), o nunca?
 2. «Lo que normalmente viene después», ¿sale visible por defecto o lo prende el vendedor?
-3. Para C4, ¿qué proyectos en curso leemos primero como casos de uso?
+3. ✓ Para C4, los recurrentes primero, empezando por Honda, que ya está andando (2026-10-24).
 4. ¿Las licencias de HubSpot entran en la misma propuesta como una línea aparte, o siguen fuera (fase 2 de la
    biblioteca)?
 

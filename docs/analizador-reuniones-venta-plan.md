@@ -115,6 +115,13 @@ En lenguaje sencillo, con sus citas:
    conversaciones de venta. Recomendación: entran desde el principio, porque la venta cruzada también se explora.
    Pendiente de que Elías lo confirme.
 
+## Respuestas de Elías (2026-10-24)
+
+- **Primero lo ven los super admin**, y después todo Ventas, cada uno con sus análisis.
+- **Además, un analizador por cliente (S7):** cómo se ha tratado a un cliente a lo largo de todas sus reuniones (qué se
+  exploró y qué no, quién habló, qué siguientes pasos se cumplieron). Es para el líder y los super admin; el de cada
+  reunión es el ejercicio del vendedor.
+
 ## A quién se le atribuye una reunión
 
 Hoy Nexus guarda solo al organizador. La de Camosa la organizó Liz Navarro, y Marco y Andrés fueron invitados. El

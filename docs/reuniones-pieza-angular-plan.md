@@ -23,11 +23,10 @@
 - También se leyó para tareas.
 - La organizó Liz Navarro, y Marco y Andrés fueron invitados: hoy Nexus solo guarda al organizador como «de quién es».
 
-**El caso de Liliana** (no encontró una reunión que tenía texto) está por identificar. Hay dos causas probables, ya vistas en
-el código:
-- una reunión con solo notas aparece como «sin transcripción»: el buscador marca así todo lo que no es transcripción;
-- una reunión que quedó en otra empresa no aparece en la lista «De la empresa», y si Liliana no estaba invitada, tampoco en
-  «De tu calendario».
+**El caso de Liliana, resuelto el 2026-10-24:** era «Cemaco | Data Hub» del 22 oct, organizada por ella. Está en
+Cemaco y unida a sus proyectos, pero sin texto. La API de Meet dice que ocurrió (de 8:58 a 9:46, con 7 personas) y que
+no hubo transcripción ni notas: nadie las activó. Además, Nexus la guarda a la hora del evento (3 de la tarde) y no a
+la real; U3 lo corrige con la hora de la conferencia. De ahí nace T9: que la persona aporte el contexto.
 
 ## Decisiones
 
@@ -56,10 +55,11 @@ el código:
 2. **T2 · Las notas de Gemini cuentan** (antes L1): la lectura acepta notas largas; la minuta y los hechos salen de ellas;
    el buscador deja de decir «sin transcripción» cuando hay notas.
 3. **T3 · Las 67 reuniones sin empresa:** Nexus propone la empresa, o crea el prospecto desde la empresa de HubSpot del
-   dominio (con los leads, B3). Se decide en /sessions con un clic.
+   dominio (con los leads, B3). Lo decide quien la organizó, con un clic (2026-10-24).
 4. **T4 · Las 404 sin nada:**
    - el motivo de cada una: Gemini sin activar, la organizó el cliente, fue presencial o se canceló;
-   - un aviso el mismo día a quien la organizó, con cómo activar las notas la próxima vez;
+   - el aviso va en la reunión misma, en Nexus, para quien la organizó (2026-10-24), con cómo activar las notas la
+     próxima vez;
    - la configuración de Google para toda la organización está en «Lo que configuras tú».
 5. **T5 · La reunión presencial:**
    - subir el texto ya existe («Leer una reunión»);
@@ -73,6 +73,11 @@ el código:
 8. **T8 · Encontrar cualquier reunión de la empresa:** el buscador muestra también las reuniones de la empresa en las que
    la persona no estuvo, y las que quedaron en otra empresa con el mismo dominio, con «Mover a esta empresa». Va junto con
    la asociación automática de K5.
+
+9. **T9 · La persona aporta el contexto** (2026-10-24). En cada reunión sin texto, o con poco, Nexus le hace a quien
+   estuvo dos o tres preguntas armadas con lo que sabe de las otras reuniones de la empresa. Lo que responde se guarda
+   como el texto de esa reunión, marcado «lo contó una persona», y se lee como cualquier otro. Pasa por el chokepoint de
+   siempre: la pregunta solo usa reuniones de la misma empresa.
 
 ## Lo que cuesta (IA, estimado el 2026-10-24)
 

@@ -16,8 +16,8 @@
  * Por tarea cruzan {title, weekIndex, status, party}: el status y el party
  * (responsable) los muestra la página compartible del cronograma (gated por
  * "Subir"). NUNCA cruzan: notes/source/needsValidation de tarea, ni el source de
- * fase. Las tareas SUSPENDED (E) se EXCLUYEN por completo — algo descartado del
- * plan, no parte del cronograma del cliente. SÍ cruzan, by-design: las notas de
+ * fase. Las tareas SUSPENDED (E) y las «por validar» (needsValidation, D0) se EXCLUYEN
+ * por completo — algo descartado del plan o sin revisar no es parte del cronograma del cliente. SÍ cruzan, by-design: las notas de
  * FASE (lenguaje cliente, D.1) y el activityType (D.1.5 — el Gantt del cliente
  * colorea y arma leyenda por tipo).
  *
@@ -28,6 +28,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { cruzaAlCliente } from "./tarea-del-cronograma";
 import { resolveActiveAccess, touchAccess } from "./access";
 import type { ExternalTimelineData } from "./timeline-view-types";
 import { normalizePublishedTimeline } from "./snapshot-normalize";
@@ -80,15 +81,16 @@ export async function readClientTimeline(projectId: string): Promise<ExternalTim
     const tasks = await prisma.timelineTask.findMany({
       where: { phase: { timelineId: tl.id } },
       orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-      // status + party + type cruzan al cronograma compartible (gated por "Subir"); status además filtra SUSPENDED.
-      select: { phaseId: true, title: true, weekIndex: true, status: true, party: true, type: true },
+      // status + party + type cruzan al cronograma compartible (gated por "Subir"); status y
+      // needsValidation además filtran (needsValidation se lee para filtrar, nunca cruza).
+      select: { phaseId: true, title: true, weekIndex: true, status: true, party: true, type: true, needsValidation: true },
     });
     tasksByPhase = new Map();
     for (const t of tasks) {
-      // E — una tarea SUSPENDED se descartó del plan: no es parte del cronograma del cliente.
-      // Filtramos en JS (NO en un WHERE con el literal del enum) para no depender de que el valor
-      // SUSPENDED exista ya en la DB — así funciona aunque la migración E se aplique recién al deploy.
-      if (t.status === "SUSPENDED") continue;
+      // E — una tarea SUSPENDED se descartó del plan, y una «por validar» el CSE todavía no la
+      // revisó (D0, 2026-10-24): ninguna es parte del cronograma del cliente. Filtramos en JS (NO en
+      // un WHERE con el literal del enum) para no depender de que el valor SUSPENDED exista en la DB.
+      if (!cruzaAlCliente(t)) continue;
       const arr = tasksByPhase.get(t.phaseId) ?? [];
       arr.push({ title: t.title, weekIndex: t.weekIndex, status: t.status, party: t.party, type: t.type });
       tasksByPhase.set(t.phaseId, arr);
