@@ -86,7 +86,7 @@ existe, saber si la reunión ocurrió y que transcribir sea lo normal.
    - la copia de Calendar y la lectura de los Docs pasan a un job cada 10 minutos (es T6);
    - correr el rescate de las 177 que se leyeron antes de terminar;
    - guardar el código de la reunión, la respuesta de cada invitado y los eventos cancelados.
-2. **U2 · La prueba de un día:** un script de solo lectura con el scope nuevo, sobre 5 reuniones reales (una organizada por
+2. **U2 · La prueba de un día** (✓ en parte, 2026-10-24: Elías habilitó las APIs, sumó el scope a la delegación de dominio y creó `nexus-meet-eventos` y `nexus-meet-eventos-pull` con sus permisos. Con la cuenta de servicio, impersonando a una persona del equipo, se leyeron 10 conferencias con sus participantes y la transcripción por frases en 8; una tuvo 0 participantes, o sea que no ocurrió. Falta probar una reunión organizada por un cliente y los eventos con delegación de dominio): un script de solo lectura con el scope nuevo, sobre 5 reuniones reales (una organizada por
    un cliente). Confirma:
    - el código de la reunión;
    - el acceso como invitado;

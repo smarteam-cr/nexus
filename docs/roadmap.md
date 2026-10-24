@@ -627,7 +627,7 @@ Pedido del 23 oct: que no vuelva a pasar lo de Mercury (no usábamos lo que la A
 
 **Google Workspace** (la base de las reuniones, T):
 1. **U1 · Sin scopes nuevos.** La copia de Calendar y la lectura de los Docs en un job cada 10 minutos (hoy solo cuando alguien abre la app); correr el rescate de las 177 reuniones que se leyeron antes de terminar; guardar el código de la reunión, la respuesta de cada invitado y los eventos cancelados (hoy una reunión borrada se queda).
-2. **U2 · La prueba de un día** con el scope de Meet, sobre 5 reuniones reales: el código de la reunión, si un invitado puede leer una reunión del cliente, y si los eventos aceptan delegación de dominio.
+2. [en curso] **U2 · La prueba de un día** con el scope de Meet (24 oct: los permisos de Google están dados y la API ya lee participantes y transcripciones por frases), sobre 5 reuniones reales: el código de la reunión, si un invitado puede leer una reunión del cliente, y si los eventos aceptan delegación de dominio.
 3. **U3 · La API de Meet.** Prueba que la reunión ocurrió («no ocurrió» deja de contar como «no se grabó»); la transcripción por frases con quién habló y cuándo (se borra a los 30 días: hay que copiarla antes); quiénes estuvieron y cuánto tiempo; y el orden de las fuentes: las frases, el Doc de la transcripción, el Doc de las notas y el Drive.
 4. **U4 · Enterarse al momento:** los eventos de Meet (conferencia terminada, transcripción y notas listas) por Pub/Sub, con el sondeo como red; Calendar con copia incremental.
 5. **U5 · Las reuniones del cliente y las presenciales:** probar si un invitado nuestro las lee; si no, que las convoque Smarteam. Las presenciales, con el audio transcrito (T5).
