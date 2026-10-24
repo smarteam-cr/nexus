@@ -22,6 +22,7 @@ import {
   type ClaimsInput,
   type FaseParaEntrega,
 } from "./claims";
+import { cruzaAlCliente } from "@/lib/external/tarea-del-cronograma";
 
 describe("fasesDeLaEntrega — lo que el cliente lee como pendiente suyo (D0)", () => {
   it("saca la tarea «por validar» y deja la confirmada y la suspendida", () => {
@@ -42,7 +43,7 @@ describe("fasesDeLaEntrega — lo que el cliente lee como pendiente suyo (D0)", 
     expect(pendientesAbiertos(fases).map((p) => p.title)).toEqual(["Enviar la base"]);
   });
 
-  it("una «por validar» que el CSE ya marcó HECHA se cuenta: marcarla hecha no borra la marca", () => {
+  it("una «por validar» no cuenta aunque esté HECHA: la misma regla que el cronograma del cliente", () => {
     const fases = fasesDeLaEntrega([
       {
         name: "Configuración",
@@ -55,7 +56,17 @@ describe("fasesDeLaEntrega — lo que el cliente lee como pendiente suyo (D0)", 
         ],
       },
     ]);
-    expect(fases[0].tasks.map((t) => t.title)).toEqual(["Hecha y por validar"]);
+    expect(fases[0].tasks).toEqual([]);
+    // Y la regla es la misma que la del cronograma externo, tarea por tarea (salvo las suspendidas, que la Entrega trata aparte).
+    const tareas = [
+      { status: "DONE", needsValidation: true },
+      { status: "PENDING", needsValidation: false },
+      { status: "IN_PROGRESS", needsValidation: true },
+    ];
+    for (const t of tareas) {
+      const enLaEntrega = fasesDeLaEntrega([{ name: "F", status: "PENDING", durationWeeks: 1, startWeek: 0, tasks: [{ title: "x", party: null, ...t }] }])[0].tasks.length === 1;
+      expect(enLaEntrega, JSON.stringify(t)).toBe(cruzaAlCliente(t));
+    }
   });
 
   it("el documento y el panel «¿lista para entregar?» leen las fases con fasesDeLaEntrega", () => {

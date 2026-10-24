@@ -41,8 +41,9 @@ export interface FaseParaEntrega extends PhaseSpanLike {
 /**
  * Las fases del cronograma como las lee la Entrega, que es un documento del cliente: una tarea «por validar» (la inventó el
  * agente y el CSE no la revisó) no es un pendiente suyo ni cuenta para el avance (D0, 2026-10-24; lo encontró /revisar).
- * Salvo que ya esté HECHA: marcarla hecha en el Gantt no borra la marca, y un trabajo que una persona cerró se cuenta.
- * Las SUSPENDIDAS siguen entrando: `pendientesAbiertos` y las cifras las tratan a su manera. La usan el documento
+ * Tampoco HECHA: la misma regla que el cronograma del cliente (`cruzaAlCliente`), porque la IA de avance también marca
+ * tareas hechas y «hecha» no prueba que una persona la revisó. Que marcarla hecha a mano borre la marca es una decisión
+ * pendiente («Lo que decides tú», roadmap). Las SUSPENDIDAS siguen entrando: `pendientesAbiertos` y las cifras las tratan a su manera. La usan el documento
  * (`lib/canvas/entrega-generate.ts`) y el panel «¿lista para entregar?» (`delivery/readiness`): los dos cuentan lo mismo.
  */
 export function fasesDeLaEntrega(
@@ -54,7 +55,7 @@ export function fasesDeLaEntrega(
     durationWeeks: f.durationWeeks,
     startWeek: f.startWeek,
     tasks: f.tasks
-      .filter((t) => !t.needsValidation || t.status === "DONE")
+      .filter((t) => !t.needsValidation)
       .map((t) => ({ title: t.title, status: t.status, party: t.party })),
   }));
 }

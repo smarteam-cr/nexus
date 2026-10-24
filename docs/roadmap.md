@@ -226,6 +226,7 @@ Sin esto, algo sigue mal o no se puede validar:
 28. **Las 98 líneas del banco sin conciliar** (U15): ¿Alex las revisa en Nexus o en Odoo? Si es en Odoo, U15 sale del paso uno.
 29. **El test de Marketing** (O2 y O5): ¿sus 4 preguntas salen de las 8 de la web o son propias? ¿Y el perfil corto (cierre, después y tráfico) se pregunta en la web, en la de Marketing o solo en la completa?
 30. **Lo que Nexus ordena solo en «Lo que no cuadra»:** ¿qué porcentaje esperas, a fijar con Alex? Es la N del criterio de la tarjeta 13.
+31. **Una tarea «por validar» que una persona marca hecha en el Gantt:** hoy conserva la marca, así que ni el cronograma del cliente ni la Entrega la muestran (una sola regla desde el 24 oct, porque la IA de avance también marca tareas hechas). Te propongo que marcarla hecha **a mano** le borre la marca; lo que marca la IA, no.
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 

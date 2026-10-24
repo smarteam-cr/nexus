@@ -139,10 +139,9 @@ const VACIOS = {
 const INFORME = {
   type: 'object',
   properties: {
-    veredicto: { type: 'string', enum: ['listo', 'listo_con_cuidado', 'no_listo'] },
     informe: { type: 'string', description: 'El informe en markdown, en español con tuteo, para Elías' },
   },
-  required: ['veredicto', 'informe'],
+  required: ['informe'],
 }
 
 // ── Los revisores: uno por riesgo de Nexus ───────────────────────────────────────────────────
@@ -410,11 +409,20 @@ const enPie = todos.filter((h) => h.estado !== 'descartado')
 // El veredicto lo decide el guion, con una regla fija; el informe solo lo explica.
 const graves = (h) => h.gravedad === 'critico' || h.gravedad === 'alto'
 const rojosDelCambio = (compuertas ? compuertas.corridas : []).filter((c) => c.resultado === 'rojo' && c.culpaDelCambio !== 'no')
-const veredicto = !compuertas || enPie.some((h) => graves(h) && h.estado === 'confirmado') || rojosDelCambio.length
-  ? 'no_listo'
-  : enPie.some(graves) || (rojo && rojo.pruebas.some((p) => p.sinElCambio !== 'rojo'))
-    ? 'listo_con_cuidado'
-    : 'listo'
+const BASICAS = /tsc|eslint|vitest/
+const sinCorrer = (compuertas ? compuertas.corridas : []).filter((c) => c.resultado === 'no_corrio' && BASICAS.test(c.comando))
+const rojoQueFalta = alcance.pruebasNuevas.length > 0 && !alcance.sinCommitear && !rojo
+const razones = []
+if (!compuertas) razones.push('las compuertas no devolvieron resultado')
+for (const h of enPie.filter((x) => graves(x) && x.estado === 'confirmado')) razones.push(`hallazgo ${h.gravedad} confirmado: ${h.titulo}`)
+for (const c of rojosDelCambio) razones.push(`compuerta en rojo que causa el cambio o no se sabe: ${c.comando}`)
+const noListo = razones.length > 0
+for (const h of enPie.filter((x) => graves(x) && x.estado !== 'confirmado')) razones.push(`hallazgo ${h.gravedad} ${h.estado}: ${h.titulo}`)
+for (const c of sinCorrer) razones.push(`compuerta básica que no corrió: ${c.comando}`)
+if (rojoQueFalta) razones.push('la prueba de rojo debía correr y no volvió')
+for (const p of rojo ? rojo.pruebas.filter((x) => x.sinElCambio !== 'rojo') : []) razones.push(`prueba que no se puso en rojo sin el cambio (${p.sinElCambio}): ${p.archivo}`)
+// La regla vive SOLO aquí; el informe recibe el veredicto y sus razones, y las explica.
+const veredicto = noListo ? 'no_listo' : razones.length ? 'listo_con_cuidado' : 'listo'
 const informe = await agent(
   `Escribe el informe de una revisión de código para Elías, el dueño de Nexus. No es programador de oficio: quiere entender qué
 pasa sin leer código. Español, tuteo, frases cortas, sin jerga (si hace falta un término, explícalo en la misma frase).
@@ -430,9 +438,8 @@ DATOS (no inventes nada fuera de esto):
 
 Forma del informe:
 1. Una línea de veredicto. Ya está decidido: «${veredicto === 'no_listo' ? 'No está listo' : veredicto === 'listo_con_cuidado' ? 'Listo, con cuidado' : 'Listo'}».
-   Explica por qué en una frase. (La regla: «No está listo» con un crítico o alto confirmado, o una compuerta en rojo que
-   causa el cambio o no se sabe; «Listo, con cuidado» con un crítico o alto plausible o sin verificar, o una prueba nueva
-   que no se puso en rojo sin el cambio.) Un rojo que ya estaba se cuenta aparte, con su nombre, sin cambiar el veredicto.
+   Sus razones, que explicas en una o dos frases: ${razones.length ? razones.join('; ') : 'ninguna'}. Un rojo que ya
+   estaba antes del cambio se cuenta aparte, con su nombre, y no cambia el veredicto.
 2. «Qué cambia»: dos o tres frases de qué hace el cambio para el equipo.
 3. «Lo que hay que arreglar»: cada hallazgo en pie, juntando los repetidos, del más grave al menos: qué pasa, a quién, en
    palabras de la pantalla; al final, entre paréntesis, archivo:línea y si está confirmado o es plausible.
