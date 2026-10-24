@@ -12,10 +12,11 @@
  *     de cada `npm run test:int`: así un `.sql` nuevo no rompe las pruebas hasta que alguien se acuerde de
  *     volver a correr el bootstrap.
  *
- * Corren los `.sql` cuyo nombre empieza con una fecha POSTERIOR a la del baseline, en orden de nombre, y TIENEN
- * que ser idempotentes (`IF NOT EXISTS`, `ADD VALUE IF NOT EXISTS`…): se reaplican en cada corrida. Si uno
- * falla, se aborta en vez de seguir: una base a medio migrar produce fallos que parecen bugs del código. El
- * arreglo es hacer idempotente el `.sql`, no saltearlo.
+ * Corren los `.sql` cuyo nombre empieza con una fecha POSTERIOR a la del baseline, en orden de nombre y en pasadas
+ * (lo que falla porque su tabla todavía no existe se reintenta después: `lib/db/sql-en-pasadas.ts`), y TIENEN que
+ * ser idempotentes (`IF NOT EXISTS`, `ADD VALUE IF NOT EXISTS`…): se reaplican en cada corrida. Si una pasada no
+ * aplica ninguno de los que quedan, se aborta: una base a medio migrar produce fallos que parecen bugs del código.
+ * El arreglo es hacer idempotente el `.sql`, no saltearlo.
  *
  * ⛔ Solo bases LOCALES (`esBaseLocal`): contra cualquier otro host lanza antes de conectar. Producción sigue
  * siendo a mano, con `ALLOW_PROD_WRITE`.
@@ -24,6 +25,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
 import { describirDestino, esBaseLocal } from "./guard";
+import { aplicarEnPasadas, ErrorDeSqlEnPasadas } from "../../lib/db/sql-en-pasadas";
 
 /** La fecha de `prisma/migrations/0_init`: lo de esa fecha o antes ya está en el baseline. */
 export const FECHA_DEL_BASELINE = "2026-08-01";
@@ -48,19 +50,20 @@ export async function aplicarSqlPosteriores(url: string, raiz: string): Promise<
   const c = new Client({ connectionString: url });
   await c.connect();
   try {
-    for (const f of archivos) {
-      try {
-        await c.query(readFileSync(join(raiz, f), "utf8"));
-      } catch (e) {
-        throw new Error(
-          `${f} falló sobre ${describirDestino(url)}: ${e instanceof Error ? e.message : e}\n` +
-            `Se reaplica en cada corrida, así que tiene que ser idempotente ` +
-            `(ADD COLUMN IF NOT EXISTS / ADD VALUE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS).`,
-        );
-      }
-    }
+    // En pasadas: el orden de nombre no siempre respeta las dependencias (lib/db/sql-en-pasadas.ts).
+    const { aplicados } = await aplicarEnPasadas(archivos, async (f) => {
+      await c.query(readFileSync(join(raiz, f), "utf8"));
+    });
+    return aplicados;
+  } catch (e) {
+    if (!(e instanceof ErrorDeSqlEnPasadas)) throw e;
+    throw new Error(
+      `${e.archivo} falló sobre ${describirDestino(url)}: ${e.detalle}\n` +
+        `Se reaplica en cada corrida, así que tiene que ser idempotente ` +
+        `(ADD COLUMN IF NOT EXISTS / ADD VALUE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS).` +
+        (e.sinAplicar.length > 1 ? `\nTampoco se aplicaron: ${e.sinAplicar.slice(1).join(", ")}.` : ""),
+    );
   } finally {
     await c.end();
   }
-  return archivos;
 }

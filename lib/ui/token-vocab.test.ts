@@ -412,7 +412,7 @@ describe("Clases de token: ninguna nombra un token que no existe", () => {
     const raices = new Set([...declarados].map((d) => d.split("-")[0]));
     /* ⚠ Literal, NO `new RegExp` con plantilla. La primera versión armaba el patrón interpolando
        la lista de prefijos, y el `\b` de la plantilla se convertía en el carácter de RETROCESO
-       () en vez de un límite de palabra: la expresión no matcheaba absolutamente nada y la
+       (\x08) en vez de un límite de palabra: la expresión no matcheaba absolutamente nada y la
        guarda pasaba en verde con cuatro clases muertas en pantalla. Un regex escrito como literal
        no tiene esa ambigüedad. */
     const re = /\b(?:text|bg|border|ring|divide|from|via|to)-([a-z][a-z0-9-]*)\b/g;

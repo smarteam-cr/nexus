@@ -181,10 +181,12 @@ async function bootstrap(): Promise<void> {
     console.log(`· migrate deploy ✓ ${resumen ? `(${resumen.trim()})` : ""}`);
     await aplicarSql(db, "prisma/migrations/0_init/after.sql");
     console.log("· after.sql ✓ (CHECK logoScale; pgvector omitido si no está)");
-    await aplicarSql(db, "prisma/policies.sql");
-    console.log("· policies.sql ✓ (RLS + policies)");
     const n = await aplicarSqlPosterioresAlBaseline(db);
     console.log(`· scripts/sql posteriores al baseline ✓ (${n})`);
+    // Después de los posteriores: policies.sql toca tablas que nacen ahí (TarjetaCredito, de 2026-08-16). Antes iba
+    // primero y el bootstrap de una base nueva se caía (paso cero del roadmap, 2026-10-24).
+    await aplicarSql(db, "prisma/policies.sql");
+    console.log("· policies.sql ✓ (RLS + policies)");
   }
   console.log("\n✓ bootstrap completo. URLs:");
   for (const db of BASES) console.log(`  ${db}: ${urlDe(db)}`);

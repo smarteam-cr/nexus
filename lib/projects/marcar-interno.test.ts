@@ -21,7 +21,7 @@ const RUTA = "app/api/projects/[projectId]/interno/route.ts";
 /** Todo lo que va adentro de un `data: {…}`, con llaves balanceadas. Escribir, no leer. */
 function bloquesData(src: string): string {
   const out: string[] = [];
-  const re = /data:\s*\{/g;
+  const re = /\bdata:\s*\{/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(src)) !== null) {
     let i = m.index + m[0].length;

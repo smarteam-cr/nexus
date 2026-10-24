@@ -144,7 +144,7 @@ describe("las dos pantallas usan lo que se les preparó", () => {
        `max-h-80` en prosa, y un escaneo crudo se caía con el código correcto — la clase de guarda
        que después alguien borra por molesta. */
     const clases = [...src.matchAll(/className="([^"]*)"/g)].map((m) => m[1]).join(" ");
-    expect(clases, "volvió el tope fijo que anula el alto del diálogo").not.toMatch(/max-h-80/);
+    expect(clases, "volvió el tope fijo que anula el alto del diálogo").not.toMatch(/\bmax-h-80\b/);
     expect(clases, "la lista se quedó sin tope: scrollearía la página entera").toMatch(/max-h-\[\d+vh\]/);
   });
 

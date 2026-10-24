@@ -576,7 +576,7 @@ describe("las casillas retiradas", () => {
     const textos = (tool.input_schema as { properties: { textos: { items: { properties: { casilla: { enum: string[] } } } } } }).properties.textos;
     expect(textos.items.properties.casilla.enum).not.toContain("hipotesis");
     expect(textos.items.properties.casilla.enum).toContain("contexto");
-    expect(String(pedidoDeLaExploracion(ctx({ modo: "preparar" })).system)).not.toMatch(/hipotesis \(/);
+    expect(String(pedidoDeLaExploracion(ctx({ modo: "preparar" })).system)).not.toMatch(/\bhipotesis \(/);
   });
 });
 

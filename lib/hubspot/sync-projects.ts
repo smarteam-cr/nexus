@@ -507,7 +507,7 @@ async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promi
     } catch (e) {
       const msg = String((e as Error)?.message ?? "");
       if (msg.includes("404") || /not found/i.test(msg)) confirmedNotFound = true;
-      else if (/(401|403)/.test(msg) || /scope/i.test(msg)) sinPermiso.push(slug);
+      else if (/\b(401|403)\b/.test(msg) || /scope/i.test(msg)) sinPermiso.push(slug);
       else ambiguous = true;
     }
   }

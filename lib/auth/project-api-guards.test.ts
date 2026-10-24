@@ -740,7 +740,7 @@ describe("C-22: el logo tiene tope de 300 KB, con el porqué, en TODAS las rutas
         /* Se caza por la CONSTANTE del tope, no por `file.size` — renombrar la variable local
            (`archivo`, `blob`, `f`) sacaba la ruta del censo sin que nada avisara, que es
            exactamente la clase de falso negativo que este censo vino a matar. */
-        else if (e.name === "route.ts" && /MAX_\w*(?:SIZE|BYTES)|\.size\s*>/.test(fs.readFileSync(p, "utf8"))) {
+        else if (e.name === "route.ts" && /MAX_\w*(?:SIZE|BYTES)\b|\.size\s*>/.test(fs.readFileSync(p, "utf8"))) {
           out.push(path.relative(process.cwd(), p).split(path.sep).join("/"));
         }
       }
