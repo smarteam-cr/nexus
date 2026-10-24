@@ -26,6 +26,7 @@ import "dotenv/config";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "../lib/db/prisma";
 import { PARTNER_CREATE_SKIP } from "../lib/cs/partner-sync";
+import { reunionesDeLaEmpresa } from "../lib/clients/soltar-reuniones";
 
 /** [nombre del duplicado creado por el sync, nombre del cliente preexistente] */
 const MERGES: Array<[string, string]> = [
@@ -65,6 +66,10 @@ async function main() {
     });
     if (!viejo) { console.log(`  ⚠ merge "${newName}": preexistente "${oldName}" no encontrado`); continue; }
     if (viejo.partnerSnapshot) { console.log(`  ✖ merge "${newName}": "${oldName}" YA tiene snapshot vinculado — revisar a mano`); continue; }
+    // R7 (2026-10-24): una empresa con reuniones no se borra acá (la llave lo frenaría a mitad del lote, y antes de la
+    // llave las dejaba apuntando a una lápida). Se fusiona con scripts/merge-duplicate-clients.ts, que las muda.
+    const reunionesTarget = await reunionesDeLaEmpresa(prisma, target.id);
+    if (reunionesTarget > 0) { console.log(`  ✖ merge "${newName}": tiene ${reunionesTarget} reunión(es) — usar merge-duplicate-clients.ts`); continue; }
 
     const domains = [...new Set([...viejo.emailDomains, ...target.emailDomains].map((d) => d.toLowerCase()))];
     console.log(`  MERGE "${newName}" (${target.id}) → "${viejo.name}" (${viejo.id})`);
@@ -89,6 +94,9 @@ async function main() {
   );
   for (const c of internos) {
     if (c._count.projects > 0) { console.log(`  ✖ interno "${c.name}": tiene proyectos — NO se toca`); continue; }
+    // R7 (2026-10-24): una empresa con reuniones no se borra (Eurostone, Transportes Juanva, STLA y Corrugando caían acá).
+    const reuniones = await reunionesDeLaEmpresa(prisma, c.id);
+    if (reuniones > 0) { console.log(`  ✖ interno "${c.name}": tiene ${reuniones} reunión(es) — NO se toca`); continue; }
     console.log(`  DELETE interno "${c.name}" (${c.id})${c.partnerSnapshot ? " — snapshot queda sin vincular" : ""}`);
     if (apply) {
       if (c.partnerSnapshot) {

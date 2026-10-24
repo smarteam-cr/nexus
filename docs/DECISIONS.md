@@ -10771,6 +10771,10 @@ impide dos fichas con el mismo `hubspotCompanyId` (Areyas y Areyá, fusionadas e
 los `manualClientId` huérfanos y después crea las dos llaves. Si hubiera una reunión resuelta huérfana, el ALTER falla
 entero y no cambia nada. Volver atrás: los `DROP` del encabezado del SQL.
 
-**La base local:** `scripts/local-pull-context.ts` trae reuniones de un lote de empresas; una reunión cuyo dueño no
-viene en el lote se trae sin dueño manual y su `resolvedClientId` se re-resuelve en la local, en vez de chocar con la
-llave.
+**La base local:** `scripts/local-pull-context.ts` copia primero todas las empresas del lote y después las reuniones;
+un dueño (resuelto o manual) que no está en la local se suelta a null en vez de chocar con la llave, y esa reunión
+queda sin dueña en la local. El SQL también suelta las dueñas resueltas huérfanas que dejó una copia vieja.
+
+**Borrar una empresa:** toda la que borra (el DELETE de la app y los scripts) suelta antes sus reuniones con
+`soltarReunionesDeLaEmpresa` (`lib/clients/soltar-reuniones.ts`), dentro de la misma transacción. Un script que limpia
+duplicados no borra una empresa con reuniones: la salta y lo dice.

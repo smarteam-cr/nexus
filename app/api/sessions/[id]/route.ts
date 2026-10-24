@@ -30,11 +30,11 @@ export const GET = withAuth(async (_req, ctx) => {
 /**
  * PATCH /api/sessions/[id] — asignación manual de cliente.
  *
- * ⚠ `manualClientId` NO es clave foránea: la base acepta cualquier string y nadie la valida
- * después. Un id que no existe deja la sesión en tierra de nadie —no pertenece a ningún cliente
- * vivo, pero tampoco cuenta como "sin dueño", así que el buscador de reuniones internas también la
- * rechaza— y desde ahí es invisible en toda la app. Es lo que escondió una reunión en un demo en
- * vivo el 2026-08-04. Acá se cierra la puerta de entrada: si el cliente no existe, 400.
+ * ⚠ Hasta R7 (2026-10-24) `manualClientId` NO era clave foránea: la base aceptaba cualquier string,
+ * y un id que no existe dejaba la sesión en tierra de nadie —no pertenece a ningún cliente vivo, pero
+ * tampoco cuenta como "sin dueño"— e invisible en toda la app (una reunión escondida en un demo en vivo
+ * el 2026-08-04). Desde R7 la base lo rechaza (P2003); esta validación queda para responder un 400
+ * claro en vez de un error de la base.
  */
 export const PATCH = withAuth(async (req, ctx) => {
   const { id } = await ctx.params;

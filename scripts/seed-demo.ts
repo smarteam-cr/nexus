@@ -16,6 +16,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
+import { soltarReunionesDeLaEmpresa } from "../lib/clients/soltar-reuniones";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
@@ -32,7 +33,8 @@ async function main() {
     where: { name: "Demo Agency" },
   });
   if (existing) {
-    await prisma.client.delete({ where: { id: existing.id } });
+    // R7: la dueña de una reunión es una llave; se sueltan antes de borrar, en la misma transacción.
+    await prisma.$transaction(async (tx) => { await soltarReunionesDeLaEmpresa(tx, existing.id); await tx.client.delete({ where: { id: existing.id } }); });
     console.log("🗑  Cliente anterior 'Demo Agency' eliminado.");
   }
 

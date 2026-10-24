@@ -8,14 +8,13 @@
 -- Volver único `Client.hubspotCompanyId` es R7b, aparte: hoy siete caminos pueden repetir el id.
 --
 -- QUÉ ENTRA.
---   1. La reunión que apunta a una empresa borrada vuelve a «sin dueño manual» (es el estado honesto, lo mismo que
---      hace el DELETE de una empresa). Solo toca filas huérfanas: en una base sana no cambia nada.
+--   1. La reunión que apunta a una empresa borrada (como dueña manual o resuelta) queda sin dueña: es el estado honesto,
+--      lo mismo que hace el DELETE de una empresa. Solo toca filas huérfanas: en una base sana no cambia nada.
 --   2. `resolvedClientId` → llave a "Client" con RESTRICT: borrar una empresa con reuniones es un error visible, nunca
 --      reuniones sin dueño en silencio. El DELETE y la fusión ya sueltan o mudan las reuniones antes de borrar.
 --   3. `manualClientId` → llave a "Client" con SET NULL: si la empresa se borra, el override se cae solo.
 --
--- Se puede correr dos veces. Si hubiera una reunión con `resolvedClientId` huérfano, el ALTER falla entero y no cambia
--- nada (el 24 oct había 0).
+-- Se puede correr dos veces.
 --
 -- Volver atrás:
 --   ALTER TABLE "FirefliesSession" DROP CONSTRAINT IF EXISTS "FirefliesSession_resolvedClientId_fkey";
@@ -29,6 +28,13 @@ UPDATE "FirefliesSession" s
    SET "manualClientId" = NULL
  WHERE s."manualClientId" IS NOT NULL
    AND NOT EXISTS (SELECT 1 FROM "Client" c WHERE c."id" = s."manualClientId");
+
+-- En producción hay 0 (24 oct): esto es para una base LOCAL poblada con una copia vieja, que podía dejar la dueña
+-- apuntando a una empresa que no se trajo. Sin esto, el bootstrap de esa base se cortaba en la llave.
+UPDATE "FirefliesSession" s
+   SET "resolvedClientId" = NULL
+ WHERE s."resolvedClientId" IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM "Client" c WHERE c."id" = s."resolvedClientId");
 
 DO $$
 BEGIN

@@ -5,6 +5,7 @@ import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 import { guardAccessToClient, guardCapability } from "@/lib/auth/api-guards";
 import { clampLogoScale } from "@/lib/ui/logo-scale";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
+import { soltarReunionesDeLaEmpresa } from "@/lib/clients/soltar-reuniones";
 import { z } from "zod";
 
 /* A-20 (auditoría 2026-09-03): el PATCH escribía lo que llegaba en el body (`data.name.trim()`
@@ -115,8 +116,9 @@ export async function DELETE(
   if (guard instanceof NextResponse) return guard;
 
   /* ⚠ SOLTAR LAS SESIONES ANTES DE BORRAR, Y DENTRO DE LA MISMA TRANSACCIÓN.
-     `manualClientId` y `resolvedClientId` NO son claves foráneas, así que la base no las limpia:
-     borrar el cliente las deja apuntando a un id muerto. Y ahí la sesión desaparece de todos lados
+     Desde R7 (2026-10-24) `resolvedClientId` es una llave con RESTRICT y `manualClientId` una con SET NULL: sin
+     soltarlas, el borrado falla. Antes NO eran llaves, y borrar el cliente las dejaba apuntando a un id muerto: la
+     sesión desaparecía de todos lados
      a la vez — no pertenece a ningún cliente vivo, pero tampoco cuenta como "sin dueño", así que
      el buscador de reuniones internas (que exige las dos columnas en null) también la rechaza.
      Invisible en la pantalla, invisible para INV1 y para INV2. Es lo que escondió una reunión en
@@ -129,14 +131,7 @@ export async function DELETE(
      columnas indexadas, milisegundos. Dejar las sesiones huérfanas un rato es estrictamente mejor
      que dejarlas apuntando a una lápida — y es el estado honesto. */
   await prisma.$transaction(async (tx) => {
-    await tx.firefliesSession.updateMany({
-      where: { manualClientId: id },
-      data: { manualClientId: null },
-    });
-    await tx.firefliesSession.updateMany({
-      where: { resolvedClientId: id },
-      data: { resolvedClientId: null },
-    });
+    await soltarReunionesDeLaEmpresa(tx, id);
     await tx.client.delete({ where: { id } });
   });
   revalidateClientsSidebar();

@@ -30,6 +30,7 @@
 import "dotenv/config";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
+import { soltarReunionesDeLaEmpresa } from "@/lib/clients/soltar-reuniones";
 
 const APPLY = resolverApply();
 const SNAPSHOTS_TODOS = process.argv.includes("--snapshots-todos");
@@ -73,7 +74,8 @@ async function main() {
       continue;
     }
     console.log(`  ✖ Client demo "${cl.name}" (0 proyectos)`);
-    if (APPLY) await prisma.client.delete({ where: { id: cl.id } });
+    // R7: la dueña de una reunión es una llave; se sueltan antes de borrar, en la misma transacción.
+    if (APPLY) await prisma.$transaction(async (tx) => { await soltarReunionesDeLaEmpresa(tx, cl.id); await tx.client.delete({ where: { id: cl.id } }); });
   }
 
   // 2b) Costos recurrentes demo (seed-costos-demo.ts, fase 4): por marca en notas.

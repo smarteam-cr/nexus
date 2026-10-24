@@ -6,7 +6,7 @@ import path from "node:path";
  * lib/db/punteros-al-borrar.test.ts — BORRAR NO DEJA PUNTEROS MUERTOS.
  *
  * ── LA FALLA QUE ATACA ───────────────────────────────────────────────────────
- * `FirefliesSession.manualClientId` y `resolvedClientId` son `String?` **sin `@relation`**: la
+ * `FirefliesSession.manualClientId` y `resolvedClientId` eran `String?` **sin `@relation`** (hasta R7, 2026-10-24): la
  * base no los protege y ningún DELETE los limpiaba. Una sesión con el dueño apuntando a un
  * cliente borrado cae en tierra de nadie — no pertenece a ningún cliente vivo, pero tampoco
  * cuenta como «sin dueño», así que el buscador de reuniones internas (que exige las dos columnas
@@ -48,17 +48,19 @@ describe("borrar un cliente suelta sus sesiones", () => {
        en rojo. */
     const src = leer(RUTA);
     const tx = bloqueDesde(src, "prisma.$transaction");
-    expect(tx.length, "el borrado de cliente dejó de ser transaccional").toBeGreaterThan(200);
-    expect(tx, "el override manual volvió a quedar colgando").toContain("manualClientId: null");
-    expect(tx, "el dueño automático volvió a quedar colgando").toContain("resolvedClientId: null");
-    expect(tx, "se soltaron con el prisma global, o sea fuera de la transacción").toContain(
-      "tx.firefliesSession.updateMany",
-    );
+    expect(tx, "el borrado de cliente dejó de ser transaccional").toContain("tx.client.delete");
+    /* Desde R7 (2026-10-24) las dos columnas se sueltan con UNA función compartida con los scripts que borran empresas
+       (`soltarReunionesDeLaEmpresa`), y con la transacción: si se llamara con el prisma global, volvería a abrirse la
+       ventana. La función tiene que soltar las DOS. */
+    expect(tx, "se soltaron fuera de la transacción, o se dejó de soltar").toContain("soltarReunionesDeLaEmpresa(tx, id)");
+    const funcion = leer("lib/clients/soltar-reuniones.ts");
+    expect(funcion, "el override manual volvió a quedar colgando").toContain("data: { manualClientId: null }");
+    expect(funcion, "el dueño automático volvió a quedar colgando").toContain("data: { resolvedClientId: null }");
   });
 
   it("se sueltan ANTES de borrar el cliente", () => {
     const tx = bloqueDesde(leer(RUTA), "prisma.$transaction");
-    expect(tx.indexOf("manualClientId: null")).toBeLessThan(tx.indexOf("tx.client.delete"));
+    expect(tx.indexOf("soltarReunionesDeLaEmpresa(tx, id)")).toBeLessThan(tx.indexOf("tx.client.delete"));
   });
 
   it("el fallo del re-resolve se loguea, no se traga", () => {

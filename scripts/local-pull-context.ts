@@ -283,12 +283,15 @@ async function main() {
       return hay;
     };
 
+    // Primero TODAS las empresas del lote (y sus proyectos), después las reuniones: una reunión de B vinculada a un
+    // proyecto de A tiene que encontrar a B ya en la local, pidas «A,B» o «B,A» (lo encontró /revisar, 2026-10-24).
     for (const plan of planes) {
       await destino.prisma.client.upsert({
         where: { id: plan.cliente.id },
         create: asInput<Prisma.ClientUncheckedCreateInput>(plan.cliente),
         update: asInput<Prisma.ClientUncheckedUpdateInput>(plan.cliente),
       });
+      enDestino.add(plan.cliente.id);
       for (const p of plan.proyectos) {
         await destino.prisma.project.upsert({
           where: { id: p.id },
@@ -296,11 +299,14 @@ async function main() {
           update: asInput<Prisma.ProjectUncheckedUpdateInput>(p),
         });
       }
+    }
+
+    for (const plan of planes) {
       for (const s0 of plan.sesiones) {
         if (sesionesEscritas.has(s0.id)) continue;
         sesionesEscritas.add(s0.id);
-        // R7 (2026-10-24): el dueño de una reunión es una llave a Client. Un dueño que no viene en el lote ni está en la
-        // local se suelta (null) en vez de chocar; el resolvedClientId lo vuelve a calcular la local si hace falta.
+        // R7 (2026-10-24): el dueño de una reunión es una llave a Client. Un dueño que no está en la local (no vino en
+        // este lote ni en uno anterior) se suelta a null en vez de chocar: la reunión queda sin dueña en la local.
         const s = {
           ...s0,
           resolvedClientId: (await existeEnDestino(s0.resolvedClientId)) ? s0.resolvedClientId : null,
