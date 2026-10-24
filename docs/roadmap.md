@@ -12,7 +12,7 @@
 2. Revisar y aprobar, área por área, la propuesta de vender y entregar por casos de uso (pestaña «Roadmap»).
 3. Empezar contigo a desarmar el cotizador en un catálogo de actividades.
 
-**El orden:** las áreas van numeradas por dependencia: cada una usa lo de las anteriores. La escala va primero porque todo la lee (el test, la preventa, la propuesta, el diagnóstico y los ciclos de SmartLoop); los datos de la empresa le dan el perfil; el test es la puerta de entrada de los prospectos; con eso se vende por resultados, y lo vendido se entrega por SmartLoop, el cronograma y los entregables. **Lo urgente que pidió el equipo el 23 oct va primero aunque su área esté más abajo** (los arreglos de SmartLoop, de la exploración y del diagnóstico: ver «Orden sugerido» en la pestaña «Roadmap»).
+**El orden:** las áreas van numeradas por dependencia: cada una usa lo de las anteriores. La escala va primero porque todo la lee (el test, la preventa, la propuesta, el diagnóstico y los ciclos de SmartLoop); los datos de la empresa le dan el perfil; el test es la puerta de entrada de los prospectos; con eso se vende por resultados, y lo vendido se entrega por SmartLoop, las tareas, el cronograma y los entregables. Las tareas van antes que el cronograma porque las tareas que nacen de lo vendido necesitan el módulo listo. **Lo urgente que pidió el equipo el 23 oct va primero aunque su área esté más abajo** (los arreglos de SmartLoop, de la exploración y del diagnóstico: ver «Orden sugerido» en la pestaña «Roadmap»).
 
 ### 1 · La escala de rendimiento <span class="estado">Propuesta</span>
 
@@ -44,35 +44,35 @@
 - **Hoy:** SmartLoop todavía no tiene uso real: Honda y kölbi sin primer ciclo en Nexus, y RC Inmobiliaria arrancando con Liliana (desde el 23 oct su proyecto ya muestra el Kickoff). A kölbi ya se le ofrece SmartLoop y se cotiza como gobierno.
 - **Plan:** un kickoff que sabe que es SmartLoop y el orden exploración → diagnóstico (M1 y M2); abrir el primer ciclo de cada cliente recurrente con su CSE y arreglar lo que salga al usarlo; las actividades que se repiten dejan su tarea en cada ciclo; las solicitudes del cliente con la CSL decidiendo; después, un agente por cliente que une lo que pide con la biblioteca.
 
-### 6 · Entregar: cronograma y tareas <span class="estado">Propuesta</span>
+### 6 · El módulo de Tareas <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** un sistema de tareas profesional y sencillo: cada persona filtra por cliente en una barra a la izquierda, abre cada tarea en una vista grande y ordenada, la une a su sesión en el calendario, y recibe tareas propuestas de todas sus reuniones, con su fuente clara.
+- **Hoy:** la tarea se abre en un cajón angosto con nombres que confunden («Para» y «Para quién»); no hay subtareas a la vista, ni fotos, ni forma de unir una tarea con un evento que ya existe; solo se leen las reuniones con clientes y los sprints.
+- **Plan:** el diseño primero; después la barra por cliente, la vista grande con subtareas, el calendario y las sesiones, leer todas las reuniones de cada persona, y dejarlo listo para generar tareas desde lo vendido (área P).
+
+### 7 · Entregar: cronograma y tareas <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** el cliente ve de un vistazo cómo va su proyecto, y cada CSE sabe qué le toca hoy y esta semana, sin 20 tareas de golpe.
 - **Hoy:** el cronograma lo arma el handoff y no está unido a las tareas, a propósito. A los CSE les llegaron 105 tareas en 45 días: ninguna aceptada.
 - **Plan:** limpiar lo que hay y abrir tres puertas: el plan del proyecto nace en el handoff ya decidido, lo dicho con el cliente pasa por «Por decidir» y lo dicho puertas adentro deja tarea y revisión.
 
-### 7 · El diagnóstico y los entregables de Customer Success <span class="estado">En producción</span>
+### 8 · El diagnóstico y los entregables de Customer Success <span class="estado">En producción</span>
 
 - **Resultado esperado:** un diagnóstico corto que le explica al cliente por qué tiene los resultados que tiene y qué vamos a hacer (el enfoque de la solución), escrito en minutos con lo que Nexus ya sabe.
 - **Hoy:** desde el 23 oct lee las sesiones de la exploración, avisa cuando casi nada está confirmado, trae el «Enfoque de la solución», todo se mueve y se quita, y se elige entre la plantilla esencial (7 partes) y la completa, o se escribe a mano.
 - **Plan:** lo que salió de usarlo el 23 oct (L): las reuniones con solo notas cuentan, publicar dice por qué no, la ficha editable y todo movible; después, la Planificación con sesiones y entrenamientos, plantillas por caso de uso y qué necesita Customer Success para cada entregable.
 
-### 8 · Que el equipo use Nexus <span class="estado">En curso</span>
+### 9 · Que el equipo use Nexus <span class="estado">En curso</span>
 
 - **Resultado esperado:** 10 de las 14 personas operativas entran 3 días o más por semana, y la mitad de lo que propone Nexus se decide antes de que venza.
 - **Hoy:** 0 de 14 entran 3 días; se decide a tiempo el 7,4 % de lo que propone Nexus.
 - **Plan:** menos cosas que decidir (las tres puertas de las tareas) y «Para ti» con el día y la semana.
 
-### 9 · Rentabilidad y capacidad <span class="estado">Propuesta</span>
+### 10 · Rentabilidad y capacidad <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** saber cuánto cuesta entregar cada caso y cuánto tiempo le gana Nexus al trabajo a mano.
 - **Hoy:** Rentabilidad ya calcula el costo por hora con la planilla y mide las reuniones del calendario; falta el tiempo del resto del trabajo.
 - **Plan:** cada actividad trae su tiempo a mano (para el precio) y su tiempo con Nexus (la meta); se compara con lo que de verdad duró.
-
-### 10 · Que cada reunión deje su trabajo <span class="estado">Propuesta</span>
-
-- **Resultado esperado:** cada reunión, también las internas, deja lo que hay que hacer para quien lo tiene que hacer.
-- **Hoy:** solo se leen las reuniones con clientes y los sprints, y la copia de Meet corre cuando alguien abre Nexus.
-- **Plan:** la copia de Meet cada hora y tu piloto con tus reuniones internas.
 
 ### 11 · Finanzas y cobranza <span class="estado">En producción</span>
 
@@ -134,6 +134,7 @@ Sin esto, algo sigue mal o no se puede validar:
 16. **Las Acciones coherentes** (L4): ¿se quedan en el diagnóstico o pasan a la Planificación? Te propongo dejar en el diagnóstico el enfoque con tres o cuatro acciones en una línea, y pasar el detalle a la Planificación.
 17. **El formato del documento de resultados de la preventa** (C5): lo define Ventas el lunes 27 oct.
 18. **La calificación de clientes de Insider** (N4): pedirles el umbral de tráfico con que califican a un cliente; es el de la condición «tráfico suficiente».
+19. **«Capacitación» en las tareas** (P1): ¿es la formación del equipo de Smarteam, la que se le da a un cliente, o las dos? Te propongo una categoría propia para la del equipo; la de un cliente va con su cliente asociado.
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -172,6 +173,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 - `docs/smartloop-plan.md` § «El recorrido de punta a punta»: SmartLoop con lo que salió de RC Inmobiliaria. Sirve a M.
 - `docs/escala-engagement-avanzado-plan.md`: la escala con engagement avanzado (criterio por criterio, «hoy dice / pasaría a») y los casos de Insider por industria, de la sesión con Insider One. Sirve a N, A6 y B1.
 - `docs/tests-diagnostico-plan.md`: el test público de cada departamento dentro de Nexus, con el diagnóstico de la aplicación de hoy. Sirve a O.
+- `docs/tareas-organizacion-plan.md`: el módulo de Tareas organizado (barra por cliente, la tarea en un modal grande, el calendario, las subtareas y leer todas las sesiones). Sirve a P, D2 y H.
 
 **Orden sugerido, por dependencias** (el foco es que Ventas y Customer Success queden funcionando):
 
@@ -180,7 +182,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
    - K7 y K1, con K8 dentro: la siguiente pregunta de calidad y la exploración por departamento con la escala y el dinero;
    - L1 a L3: las reuniones con solo notas, publicar diciendo por qué y los detalles del diagnóstico y la ficha.
 2. Sin depender de nada: desarmar contigo el cotizador en un catálogo de actividades (A1 etapa 2 y A2 etapa 1), limpiar las tareas de los CSE que nadie decidió (D2 etapa 1), H1 (tu piloto con tus propias sesiones) y la etapa 1 de B1 (qué datos de la empresa hay y dónde).
-3. K5 y K6 (dejar de buscar sesiones a mano), D4 (el seguimiento en HubSpot) y M3 (el primer ciclo de cada cliente con su CSE).
+3. K5 y K6 (dejar de buscar sesiones a mano), D4 (el seguimiento en HubSpot), M3 (el primer ciclo de cada cliente con su CSE) y P (el módulo de Tareas: el diseño, la barra por cliente, la vista grande, el calendario y leer todas las sesiones; P4 espera a A2).
 4. K2, K3 y K4 juntas (la primera sesión en frío necesita el position statement), y K10.
 5. Con A1 cerrado: A3 (criterios en palabras simples) y A5 (los casos que faltan).
 6. A2 (migrar el cotizador a la biblioteca) y después A4 (duración y «cómo sabrás que funcionó»).
@@ -285,7 +287,7 @@ Lo que mostró el diagnóstico del 22 oct: hay un solo cronograma por proyecto y
      - **El plan del proyecto:** nace en el handoff, una tarea por actividad vendida, con su responsable y su tiempo. Ya está vendido, así que no pasa por «Por decidir».
      - **Lo que se dijo con el cliente:** como hoy, por «Por decidir» y con tope.
      - **Lo que se dijo puertas adentro:** deja una tarea para quien la hace y una de revisión para quien la pidió (H1).
-   - Etapa 3 · La lista de cada cliente, tipo ClickUp: un clic en el cliente y ves todo lo que hay que hacer ahí. «Para ti» muestra solo el día y la semana.
+   - Etapa 3 · La lista de cada cliente, tipo ClickUp: un clic en el cliente y ves todo lo que hay que hacer ahí (es P1). «Para ti» muestra solo el día y la semana.
    - Etapa 4 · El cronograma sigue aparte del sistema de tareas: se arma desde la propuesta y el handoff para que el cliente entienda de un vistazo cómo vamos, y más adelante se cambia por Gantts por caso. El puente por ahora es el chat del cronograma: conoce las actividades y las tareas del proyecto, y el CSE le pide sumar líneas.
    - Etapa 5 · En SmartLoop, las actividades que se repiten (la entrega semanal, el reporte de avance mensual, los stakeholders cada tres meses) dejan su tarea en cada ciclo, y varias las prepara Nexus solo.
    - Etapa 6 · Probarlo primero en tus propias tareas y después en un piloto con alguien del equipo.
@@ -333,7 +335,7 @@ Lo que mostró el diagnóstico del 22 oct: hay un solo cronograma por proyecto y
 
 Lo que mostró el diagnóstico del 22 oct: Nexus guarda las reuniones de Meet de todo el equipo, pero solo propone tareas en reuniones con un cliente o prospecto (y ahí solo lo que cada uno se comprometió) y en las reuniones de sprint configuradas. Las reuniones internas sueltas no se leen solas, y la copia de Meet corre solo cuando alguien abre Nexus.
 
-1. **H1 · Tu piloto: todas tus sesiones proponen tareas.** *Sale de:* tu respuesta 4 («Nexus debería proponerme tareas a mí, y a cada persona con sus sesiones»). *Depende de:* nada.
+1. **H1 · Tu piloto: todas tus sesiones proponen tareas** (se construye dentro de P5, con la fuente, el contexto y las personas de cada propuesta). *Sale de:* tu respuesta 4 («Nexus debería proponerme tareas a mí, y a cada persona con sus sesiones»). *Depende de:* nada.
    - Etapa 1 · Que la copia de Meet corra sola cada hora, sin depender de que alguien abra Nexus.
    - Etapa 2 · La lectura personal: las reuniones internas de una persona le proponen tareas, empezando por ti, en tu equipo y no en el de Customer Success.
    - Etapa 3 · Leer también las reuniones con aliados y las que no tienen dueño, que hoy no lee nadie.
@@ -484,6 +486,31 @@ Pedido del 23 oct: migrar a Nexus el test público de cada departamento, con mej
    - Etapa 1 · Los enlaces viejos del resultado se siguen leyendo.
    - Etapa 2 · La dirección pública pasa a Nexus, con los píxeles de anuncios y el formulario de HubSpot intactos.
    - Etapa 3 · Se mide cuántos empiezan, abandonan (y en qué pregunta) y terminan; se apagan el backend de Vercel y la página estática.
+
+### P · El módulo de Tareas, organizado y profesional <span class="estado">Propuesta</span>
+
+Pedido del 23 oct, con la tarjeta de Trello y la barra de clientes de ClickUp como referencia. No va amarrado al cronograma: es cómo se ven y se organizan las tareas. Plan: `docs/tareas-organizacion-plan.md`.
+
+1. **P1 · Filtrar por cliente en una barra a la izquierda.** *Existe a medias:* hoy se filtra por tipo de empresa (Cliente, Interno, Prospecto, Aliado), no por una empresa, y «Por cliente» es una tabla aparte.
+   - Etapa 1 · La barra: «Todas», cada cliente donde la persona tiene tareas (con el color de su tipo de cuenta), «Sin cliente», «Capacitación» y «Equipo interno», con su número de abiertas.
+   - Etapa 2 · «Por cliente» pasa a ser esa misma vista.
+2. **P2 · La tarea en un modal grande.** *No existe:* hoy es un cajón de 560 px.
+   - Etapa 1 · El diseño en Claude Design (pantalla interna), revisado por ti.
+   - Etapa 2 · A la izquierda, el nombre, la **descripción** debajo, las subtareas y la actividad; a la derecha, «Agregar a la tarea» (responsable, cliente asociado, fechas, estimación de tiempo, etiquetas, sesión, proyecto).
+   - Etapa 3 · Los nombres: «Cuánto toma» → «Estimación de tiempo», «Notas» → «Descripción», «Para quién» → «Cliente asociado», «Para» → «Responsable».
+   - Etapa 4 · La casilla «Es una sesión» o «Asociada a una sesión», con los invitados y la hora.
+   - Etapa 5 · Subtareas: tareas hijas con su responsable y su fecha (SQL aditivo), y el checklist simple para lo demás (el campo ya existe y nadie lo usa).
+3. **P3 · El calendario y las sesiones.** *Existe a medias:* «Agendar» crea un bloque nuevo; no se puede unir una tarea con un evento que ya existe.
+   - Etapa 1 · En la agenda, tocar un evento existente ofrece «Asociar a una tarea»; tocar un espacio vacío la crea, como hoy.
+   - Etapa 2 · Una tarea que es una sesión queda unida a su reunión de Meet cuando llega, y la reunión se lee con IA como cualquier otra.
+   - Etapa 3 · Las fotos de las personas en la tarea y en la agenda, en una versión chica (64 px) que no pesa; iniciales para quien no tiene.
+4. **P4 · Listo para generar tareas desde lo vendido.** *No existe:* las plantillas de tareas están en el modelo, sin uso. *Depende de:* A2.
+   - Etapa 1 · Plantillas con subtareas: una tarea por actividad de cada caso vendido, con el cliente asociado y su fuente («propuesta X · caso Y»).
+   - Etapa 2 · El disparo desde el handoff es D2.
+5. **P5 · Leer todas las sesiones de cada persona.** *Existe a medias:* hoy se leen las reuniones con clientes de los últimos 14 días y los sprints; las internas sueltas no.
+   - Etapa 1 · La copia de Meet cada hora, y leer las reuniones internas de cada persona (tu piloto, H1, primero).
+   - Etapa 2 · Cada propuesta guarda y muestra su sesión, el contexto, las personas que estuvieron, el encargado y quién la pidió.
+   - Etapa 3 · Con tope, y después de limpiar lo que nadie decidió (D2 etapa 1).
 
 ## Lo que falta, por tema
 
