@@ -102,6 +102,16 @@ gratis.
 Son **unos US$55 a 65 al mes** sobre los US$118 de hoy. Los ahorros de U21 a U23 (el precio de Sonnet 5, los lotes y
 la caché) devuelven entre US$20 y 30 al mes.
 
+**La forma más barata (recomendada):**
+- **Las empresas activas** (con un proyecto activo o una preventa abierta) son 71 de 200, pero tienen casi todo: 285 de
+  las 301 reuniones con solo notas y 513 de las 544 reuniones del último mes. Recortar a ellas casi no baja lo de las
+  reuniones, y sí lo de la investigación (71 en vez de 200) y lo de HubSpot (sus últimos 6 meses).
+- **Lo que no es urgente va por lotes,** que cuestan la mitad: todo lo de traer lo que ya existe lo es.
+- **Las demás empresas se traen solas** cuando alguien las abre o les llega una reunión nueva.
+
+Así, **una sola vez cuesta unos US$45 a 55** (en vez de 150 a 180), y **al mes, unos US$35 a 45 más** (las lecturas que
+no son urgentes también van por lotes). Depende de que los lotes funcionen (U22).
+
 Fuera de la IA, transcribir audio de reuniones presenciales con Speech-to-Text cuesta del orden de 1 a 2 centavos de
 dólar por minuto (por confirmar con el precio vigente).
 
