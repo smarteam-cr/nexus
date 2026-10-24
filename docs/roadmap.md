@@ -36,7 +36,7 @@
 
 - **Resultado esperado:** el vendedor arma la propuesta con los casos de uso y las actividades que sugiere Nexus, cada una con su porqué y su precio calculado, y el cliente entiende qué resultado compra.
 - **Hoy:** la biblioteca tiene 26 casos sin actividades ni horas, y el cotizador vive fuera de Nexus. Desde el 23 oct la preventa va por equipo del cliente, con preguntas técnicas y de proceso y una hora con tiempo para contarle.
-- **Plan:** primero lo que pidió Ventas el 23 oct para explorar (K): la siguiente pregunta de calidad, el departamento con la escala y el dinero, sesiones que se asocian solas, la primera sesión en frío con el position statement y los clientes similares. Después, desarmar el cotizador en actividades, que cada caso las jale y que la propuesta las sugiera, con el documento de resultados por departamento antes (C5).
+- **Plan:** el analizador de reuniones de venta para que cada vendedor explore más y venda menos licencias (S, coaching con citas); lo que pidió Ventas el 23 oct para explorar (K): la siguiente pregunta de calidad, el departamento con la escala y el dinero, sesiones que se asocian solas, la primera sesión en frío con el position statement y los clientes similares. Después, desarmar el cotizador en actividades, que cada caso las jale y que la propuesta las sugiera, con el documento de resultados por departamento antes (C5).
 
 ### 5 · El servicio recurrente funcionando <span class="estado">Propuesta</span>
 
@@ -135,6 +135,10 @@ Sin esto, algo sigue mal o no se puede validar:
 17. **El formato del documento de resultados de la preventa** (C5): lo define Ventas el lunes 27 oct.
 18. **La calificación de clientes de Insider** (N4): pedirles el umbral de tráfico con que califican a un cliente; es el de la condición «tráfico suficiente».
 19. **«Capacitación» en las tareas** (P1): ¿es la formación del equipo de Smarteam, la que se le da a un cliente, o las dos? Te propongo una categoría propia para la del equipo; la de un cliente va con su cliente asociado.
+20. **La reunión de referencia del analizador** (S1): la sesión de Grupo Avis (20 oct) no tiene transcripción ni notas en Nexus. ¿Existe en otro lado (una grabación de HubSpot, otro grabador), o elegimos otra mientras tanto?
+21. **Quién ve el análisis de cada vendedor** (S5): te propongo el vendedor, su líder (Andrés) y tú; nadie más.
+22. **Pablo Bogantes** (S1): no aparece entre las personas del equipo en Nexus. ¿Es de Ventas, o un aliado?
+23. **Las reuniones de expansión con clientes** (S3): ¿entran al analizador desde el principio, o solo prospectos al empezar?
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -177,6 +181,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 - `docs/kickoff-mejoras-plan.md`: la ruta de HubSpot Academy y el acceso al portal en el kickoff. Sirve a Q.
 - `docs/arquitectura-empresa-plan.md`: la empresa como objeto central (datos en columnas, HubSpot en los dos sentidos, documentos sin proyecto, personas, contexto único para los agentes y venta cruzada). Sirve a R, B, C5, K y E2.
 - `docs/empresa-datos-hubspot-plan.md`: el paso uno: los datos y la investigación en la empresa, el TAM, proponer y decidir, y el catálogo de propiedades de HubSpot para reportar. Sirve a R1, R2, R5 y B1.
+- `docs/analizador-reuniones-venta-plan.md`: el analizador de reuniones de venta, para coaching. Sirve a S, K1 y K7.
 
 **Orden sugerido, por dependencias** (el foco es que Ventas y Customer Success queden funcionando):
 
@@ -184,8 +189,9 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 2. Lo que pidieron Ventas y Customer Success el 23 oct, que no depende de nada:
    - M1 y M2: el kickoff que sabe que es SmartLoop y el orden exploración → diagnóstico, antes del primer ciclo de RC Inmobiliaria;
    - K7 y K1, con K8 dentro: la siguiente pregunta de calidad y la exploración por departamento con la escala y el dinero;
+   - S1 a S3: el analizador de reuniones de venta (el criterio, quién habló y el análisis con citas), y S6 con Andrés;
    - L1 a L3: las reuniones con solo notas, publicar diciendo por qué y los detalles del diagnóstico y la ficha.
-3. Sin depender de nada: desarmar contigo el cotizador en un catálogo de actividades (A1 etapa 2 y A2 etapa 1), limpiar las tareas de los CSE que nadie decidió (D2 etapa 1), H1 (tu piloto con tus propias sesiones) y la etapa 1 de B1 (qué datos de la empresa hay y dónde).
+3. S4 y S5 (comentar, confirmar y la tendencia por vendedor). Sin depender de nada: desarmar contigo el cotizador en un catálogo de actividades (A1 etapa 2 y A2 etapa 1), limpiar las tareas de los CSE que nadie decidió (D2 etapa 1), H1 (tu piloto con tus propias sesiones) y la etapa 1 de B1 (qué datos de la empresa hay y dónde).
 4. Q (Academy y el acceso al portal en el kickoff), K5 y K6 (dejar de buscar sesiones a mano), D4 (el seguimiento en HubSpot), M3 (el primer ciclo de cada cliente con su CSE) y P (el módulo de Tareas: el diseño, la barra por cliente, la vista grande, el calendario y leer todas las sesiones; P4 espera a A2).
 5. R6 (una persona con su rol), y después K2, K3 y K4 juntas (la primera sesión en frío necesita el position statement), y K10.
 6. Con A1 cerrado: A3 (criterios en palabras simples) y A5 (los casos que faltan).
@@ -562,6 +568,24 @@ Pedido del 23 oct: que la empresa sea el centro, enriquecida y sincronizada con 
 10. **R10 · Corregir ARCHITECTURE.md** donde ya no dice la verdad (los estados y la deuda de §12).
 11. **R11 · Un solo contexto de la empresa para los agentes** (IA first): los datos, la investigación, la escala, los casos de uso, las personas y la memoria, armados en un lugar que lee cada agente.
 12. **R12 · Lo que le falta comprar a cada empresa** (venta cruzada): con la escala y los casos de uso, qué casos la moverían y no tiene; se ve en la cuenta y se puede escribir en HubSpot.
+
+### S · El analizador de reuniones de venta <span class="estado">Propuesta</span>
+
+Pedido del 23 oct: Ventas va muy directo a la solución y explora poco. Un analizador de reuniones con prospectos que le dice a cada vendedor qué tan consultiva fue su reunión y cómo mejorar, empezando por Andrés Pinzón. Es coaching, no control: el análisis es una propuesta que el vendedor comenta y una persona confirma, cada juicio trae su cita y no hay ranking. Plan: `docs/analizador-reuniones-venta-plan.md`.
+
+1. **S1 · El criterio escrito.** *Existe a medias:* la guía y la escala existen; el proceso consultivo (identificar, investigar, conectar, explorar, asesorar) no está escrito como lista y el position statement todavía no existe (K3).
+   - Etapa 1 · El proceso consultivo como lista, con qué se espera en cada etapa, revisado contigo y con Andrés.
+   - Etapa 2 · Marcar una reunión de referencia (la de Grupo Avis no tiene transcripción en Nexus: ver «Lo que decides tú»).
+2. **S2 · Quién habló y la vista por prospecto.** *No existe.* Sin IA.
+   - Etapa 1 · El conteo de palabras por persona en cada transcripción, separando Smarteam y cliente.
+   - Etapa 2 · Por empresa, todas sus reuniones con fecha y vendedor; las que no tienen transcripción, a la vista (en 90 días: 71 reuniones con prospectos y solo 31 con texto).
+3. **S3 · El análisis de cada reunión.** *Existe a medias:* la preventa ya lee cada sesión y sabe qué preguntas de la guía se respondieron.
+   - Etapa 1 · Qué tan consultiva fue; problemas y resultados frente a licencias y precio; la guía; la escala; el posicionamiento; qué quedó sin explorar por dimensión; asesor o vendedor de licencias; el siguiente paso.
+   - Etapa 2 · Cada juicio con su cita textual, y dos o tres recomendaciones para la siguiente reunión.
+   - Etapa 3 · Se analiza solo al llegar la transcripción; el prompt vive en la base y se mide su costo.
+4. **S4 · Comentar y confirmar.** El vendedor comenta o discrepa; una persona lo confirma. Lo aprendido alimenta el lienzo de la preventa sin duplicar la lectura de hoy.
+5. **S5 · La tendencia por vendedor,** solo para él y su líder: cuánto explora, cuánto habla, cuántas reuniones dejan siguiente paso con fecha y cuántas tienen transcripción.
+6. **S6 · Probar con Andrés** cinco reuniones reales, entre ellas la de Camosa del 23 oct, antes de abrirlo al resto de Ventas.
 
 ## Lo que falta, por tema
 
