@@ -27,6 +27,9 @@
  *     correos enviados (lib/comunicaciones/compromisos-server.ts, contra el presupuesto automático). Iniciativa B.
  *   - indice-de-reuniones → parte en turnos las transcripciones nuevas de las reuniones con clientes y prospectos, para
  *     la búsqueda (lib/busqueda/indexar-server.ts), cada hora, de a 60 (etapa 4c de docs/mi-dia-plan.md).
+ *   - google-meet-sync → la copia de Google Meet (Calendar + Docs) cada 10 minutos desde el fin de la anterior
+ *     (lib/google/copia-por-job.ts, U1). Lanza la corrida sin esperarla. Gated por GOOGLE_MEET_SYNC_ENABLED≠0 y las
+ *     credenciales de Google; apagado, la copia vuelve a correr al abrir la app.
  *   - seguimiento-reuniones → la lectura de cada reunión con un cliente o un prospecto, por la cola
  *     `LecturaDeReunion` (memoria de la cuenta, etapa 2). Cada tick. Gated por SEGUIMIENTO_REUNIONES_ENABLED≠0.
  *   - rentabilidad-foto-mensual → la foto del margen del mes que cerró (lib/rentabilidad/foto-server.ts), el día 3
@@ -252,6 +255,23 @@ const cobranzaQuincenal: JobDef = {
     console.log(
       `[jobs/cobranza] ${dateKey} — corte quincenal: ${digest.diff.nuevas.length} nuevas, ${digest.diff.resueltas.length} resueltas, ${digest.diff.persistentes} persistentes${digest.diff.sinCambios ? " (sin cambios)" : ""}`,
     );
+  },
+};
+
+/**
+ * La copia de Google Meet cada 10 minutos (U1, 2026-10-25; lib/google/copia-por-job.ts): la copia de Calendar y la
+ * lectura de los Docs, que hasta U1 corrían solo al abrir la app. Cada tick LANZA la corrida y vuelve: no la espera
+ * (una corrida larga no puede quedarse dentro del tick). Siempre devuelve SIN_TURNO; la corrida anota su resultado al
+ * terminar. El turno y la espera de 10 minutos desde el fin viven en `autoSyncGoogleMeet`, compartidos con la vuelta
+ * atrás (GOOGLE_MEET_SYNC_ENABLED=0 → la copia corre al abrir la app): nunca a la vez.
+ */
+const googleMeetSync: JobDef = {
+  key: "google-meet-sync",
+  shouldRun: () => encendido("google-meet-sync"),
+  run: async () => {
+    const { lanzarCopiaDeMeet } = await import("@/lib/google/copia-por-job");
+    lanzarCopiaDeMeet();
+    return SIN_TURNO;
   },
 };
 
@@ -995,5 +1015,5 @@ const titulosCortos: JobDef = {
 };
 
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, loPagadoDaily, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, loPagadoDaily, invariantsDaily];
 }

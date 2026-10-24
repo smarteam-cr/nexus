@@ -2353,6 +2353,13 @@ model FirefliesSession {
   // Ficha G (2026-10-17): la descripción del evento del calendario, limpia (sin el bloque de Google Meet ni el HTML).
   // Es la AGENDA de la reunión: lo que se iba a tratar. La escribe la sync de Meet (lib/sessions/descripcion-del-evento.ts).
   descripcionDelEvento String?   @db.Text
+  // U1 (2026-10-25): el código de Meet de la reunión (abc-defg-hij), del evento del calendario. U3 lo cruza con el
+  // registro de conferencia de la API de Meet. Lo escribe la sync de Meet; null = el evento no lo traía.
+  conferenceId         String?
+  // U1 (2026-10-25): cuándo vio la sync que el evento se canceló en TODOS los calendarios donde estaba. Nunca se borra
+  // la fila: la cancelada con texto, minuta, hechos o tareas queda para revisar; la que no tiene nada sale de las
+  // lecturas (lib/sessions/canceladas.ts). null = vigente (si el evento vuelve, la sync la desmarca).
+  canceladaEn          DateTime?
   manualClientId       String? // override manual del matching automático de cliente
   // R7 (2026-10-24): llave de verdad. Si la empresa se borra, el override se cae solo (SET NULL).
   manualClient         Client?   @relation("ReunionesAsignadasAMano", fields: [manualClientId], references: [id], onDelete: SetNull)
@@ -2390,6 +2397,7 @@ model FirefliesSession {
   indexada              ReunionIndexada?       @relation("ReunionIndexada")
   notasParaHubspot      NotaDeLaCuenta[]       @relation("NotasDeLaReunion") // la nota para HubSpot que se sugirió después de la reunión (SET NULL)
   seguimiento           SeguimientoDeReunion?  @relation("SeguimientoDeLaReunion") // ficha G: agenda escrita, correo y próxima reunión (CASCADE)
+  invitados             ParticipanteDeReunion[] @relation("ParticipantesDeLaReunion") // U1: cada invitado con su respuesta; U3 suma la asistencia (CASCADE)
 
   // Índices para los queries principales:
   //   /sessions: findMany({ where: { date: { lt: now } }, orderBy: { date: desc } })
@@ -2398,6 +2406,39 @@ model FirefliesSession {
   @@index([date(sort: Desc)])
   @@index([manualClientId])
   @@index([resolvedClientId, date(sort: Desc)])
+  @@index([conferenceId])
+}
+
+/// La respuesta de un invitado al evento del calendario (`responseStatus` de Google Calendar).
+enum RespuestaAlEvento {
+  ACEPTO
+  TENTATIVA
+  RECHAZO
+  SIN_RESPONDER
+}
+
+/// U1 (2026-10-25) · Un invitado de una reunión, con su respuesta al evento y si es del equipo. Lo escribe SOLO la sync
+/// de Meet (lib/google/meet-sync.ts), y solo lo que cambió. `entro`, `salio` y `minutos` nacen vacíos: los llena U3 con
+/// la asistencia de la API de Meet (T7 la lee). ⚠ Google pide no usar la asistencia para medir desempeño: los minutos de
+/// cada persona no van a ninguna evaluación.
+model ParticipanteDeReunion {
+  id          String             @id @default(cuid())
+  sessionId   String
+  session     FirefliesSession   @relation("ParticipantesDeLaReunion", fields: [sessionId], references: [id], onDelete: Cascade)
+  /// En minúsculas.
+  correo      String
+  /// Su dominio es uno de los de las cuentas del Workspace de Smarteam.
+  esDelEquipo Boolean            @default(false)
+  /// null = el calendario no la dijo (el organizador sin fila de invitado).
+  respuesta   RespuestaAlEvento?
+  entro       DateTime?
+  salio       DateTime?
+  minutos     Int?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@unique([sessionId, correo])
+  @@index([correo])
 }
 
 /// Ficha G (2026-10-17) · Lo que se hace con UNA reunión después de que ocurre: la agenda que escribió una persona, el

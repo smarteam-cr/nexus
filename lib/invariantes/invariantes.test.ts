@@ -20,6 +20,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46,
   type Invariante,
 } from "./index";
+import { INV49 } from "./google";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
 import { invariantesOkDesde, leerInvariantesOk } from "./salud";
 
@@ -785,7 +786,7 @@ describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 35 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 36 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -796,6 +797,8 @@ describe("el registro y el consumidor", () => {
       // 44: la lectura de cada reunión (memoria de la cuenta, etapa 2); 45, los hechos de las reuniones (etapa 6); 46,
       // los pedidos fuera de alcance de una reunión de otro cliente (el gemelo de INV42).
       "44", "45", "46",
+      // 49: la frescura de la copia de Google Meet (U1, 2026-10-25). 47 es de las reuniones (T1) y 48 vive en el script.
+      "49",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -843,7 +846,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("35 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("36 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;
@@ -923,5 +926,34 @@ describe("/api/health expone UN booleano de invariantes, y nada más (B-09)", ()
     expect((src.match(/ok = false/g) ?? []).length, "solo los tres checks de infraestructura apagan el ok").toBe(3);
     expect(src).not.toMatch(/invariantesOk\s*(&&|\|\||\?)/);
     expect(src).not.toMatch(/\.(lineas|error|resultados)\b/);
+  });
+});
+
+describe("frescura: INV49 (la copia de Google Meet)", () => {
+  /* Medido el 2026-10-24 (sábado): la última copia buena tenía casi dos horas, porque solo corría al abrir la app. */
+  const haceMin = (m: number) => new Date(AHORA.getTime() - m * 60_000).toISOString();
+  const turno = (lastResult: unknown) => ({ cronJobState: [{ id: "google-auto-sync", lastResult }] });
+
+  it("a 50 min cumple; a 61 min viola con la fecha, cuánto hace y el remedio", async () => {
+    /* La edición que lo pone en rojo: mirar `at` de la última corrida en vez de la última BUENA. */
+    expect((await INV49.correr(baseFalsa(turno({ ok: true, at: haceMin(50), ultimaBuena: haceMin(50) })), AHORA)).ok).toBe(true);
+    const vieja = await INV49.correr(baseFalsa(turno({ ok: true, at: haceMin(61), ultimaBuena: haceMin(61) })), AHORA);
+    expect(vieja.ok).toBe(false);
+    expect(vieja.lineas[0]).toContain("(hace 61 min)");
+    expect(vieja.lineas[0]).toContain("google-meet-sync");
+  });
+
+  it("una corrida que acaba de fallar no la deja al día: cuenta la última BUENA", async () => {
+    const r = await INV49.correr(baseFalsa(turno({ ok: false, at: haceMin(5), ultimaBuena: haceMin(180) })), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("(hace 3 h)");
+  });
+
+  it("una fila de antes de U1 cuenta por su `at` si terminó bien; corrió y nunca bien viola; sin fila cumple", async () => {
+    expect((await INV49.correr(baseFalsa(turno({ ok: true, at: haceMin(10) })), AHORA)).ok).toBe(true);
+    const nunca = await INV49.correr(baseFalsa(turno({ ok: false, at: haceMin(10), error: "x" })), AHORA);
+    expect(nunca.ok).toBe(false);
+    expect(nunca.lineas[0]).toContain("ninguna corrida anotada terminó bien");
+    expect((await INV49.correr(baseFalsa({}), AHORA)).ok, "sin copia no hay copia vieja").toBe(true);
   });
 });

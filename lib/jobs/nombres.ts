@@ -19,6 +19,7 @@ export const NOMBRE_DE_JOB: Readonly<Record<string, string>> = {
   "cs-watchdog-debounce": "La revisión de eventos del vigía de Éxito del cliente",
   "maintenance-daily": "El mantenimiento diario",
   "cobranza-quincenal": "El corte de cobranza",
+  "google-meet-sync": "La copia de las reuniones de Google Meet",
   "google-enrich-retry": "El reintento de las reuniones de Google Meet",
   "seguimiento-reuniones": "La lectura de cada reunión",
   "ventas-ganadas-daily": "La copia de ventas ganadas",

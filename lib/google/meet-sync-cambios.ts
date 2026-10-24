@@ -10,9 +10,12 @@
  *      (`fusionarCopia` junta las copias, sin perder el Doc ni asistentes de ninguna);
  *   2. se escribe SOLO lo que difiere de lo guardado (`cambiosDeSesion`); si nada cambió, no hay
  *      UPDATE.
+ * U1 (2026-10-25) suma, con la misma regla: el código de la reunión, la respuesta de cada invitado
+ * (`cambiosDeInvitados`) y los eventos cancelados (`canceladasDeLaCorrida`).
  *
  * Sin dependencias de base ni de red: lo prueba `meet-sync-cambios.test.ts`.
  */
+import { esRecursoDeCalendario } from "@/lib/sessions/dominio-propio";
 
 /** Una reunión de Google Meet tal como la trae el calendario de UN usuario. */
 export interface EventoMeet {
@@ -25,6 +28,56 @@ export interface EventoMeet {
   organizerEmail: string;
   /** La descripción del evento, ya limpia (lib/sessions/descripcion-del-evento.ts): la agenda. null = sin descripción. */
   descripcion?: string | null;
+  /** El código de Meet (`conferenceData.conferenceId`, abc-defg-hij). undefined = el evento no lo trae. */
+  conferenceId?: string;
+  /** Los invitados con su respuesta, tal como los trae el evento (sin salas). undefined = no se pidieron. */
+  invitados?: InvitadoDelEvento[];
+}
+
+/** La respuesta de un invitado, con los valores del enum `RespuestaAlEvento` del schema. */
+export type Respuesta = "ACEPTO" | "TENTATIVA" | "RECHAZO" | "SIN_RESPONDER";
+
+/** Un invitado del evento. `correo` en minúsculas; `respuesta` null = el calendario no la dijo. */
+export interface InvitadoDelEvento {
+  correo: string;
+  respuesta: Respuesta | null;
+}
+
+/** El `responseStatus` de Google Calendar en el enum de Nexus. Un valor que Google sume mañana queda en null. */
+export function respuestaDe(responseStatus: string | null | undefined): Respuesta | null {
+  switch (responseStatus) {
+    case "accepted":
+      return "ACEPTO";
+    case "tentative":
+      return "TENTATIVA";
+    case "declined":
+      return "RECHAZO";
+    case "needsAction":
+      return "SIN_RESPONDER";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Los invitados de un evento como los guarda Nexus: en minúsculas, uno por correo, sin las salas ni los calendarios de
+ * grupo (`resource`, o un correo de `esRecursoDeCalendario`: no son personas), y con el organizador aunque Google no lo
+ * liste como invitado (sin respuesta).
+ */
+export function invitadosDelEvento(
+  attendees: readonly { email?: string | null; responseStatus?: string | null; resource?: boolean | null }[] | null | undefined,
+  organizerEmail: string | null | undefined,
+): InvitadoDelEvento[] {
+  const porCorreo = new Map<string, InvitadoDelEvento>();
+  for (const a of attendees ?? []) {
+    if (a.resource) continue;
+    const correo = a.email?.trim().toLowerCase();
+    if (!correo || porCorreo.has(correo) || esRecursoDeCalendario(correo)) continue;
+    porCorreo.set(correo, { correo, respuesta: respuestaDe(a.responseStatus) });
+  }
+  const organizador = organizerEmail?.trim().toLowerCase();
+  if (organizador && !porCorreo.has(organizador) && !esRecursoDeCalendario(organizador)) porCorreo.set(organizador, { correo: organizador, respuesta: null });
+  return [...porCorreo.values()];
 }
 
 /** Lo guardado de una sesión que hace falta para decidir si cambió. Nada pesado: ni transcripción ni resumen. */
@@ -41,6 +94,8 @@ export interface SesionGuardada {
   manualClientId: string | null;
   resolvedClientId: string | null;
   descripcionDelEvento: string | null;
+  conferenceId: string | null;
+  canceladaEn: Date | null;
 }
 
 /** El `select` de Prisma que arma una `SesionGuardada`: la sync no necesita más que esto. */
@@ -57,6 +112,8 @@ export const SELECT_SESION_GUARDADA = {
   manualClientId: true,
   resolvedClientId: true,
   descripcionDelEvento: true,
+  conferenceId: true,
+  canceladaEn: true,
 } as const;
 
 /** Solo los campos que cambiaron. Si el Doc es nuevo, además se reinicia el enriquecimiento. */
@@ -71,6 +128,8 @@ export interface CambiosDeSesion {
   source?: "google_meet";
   resolvedClientId?: string | null;
   descripcionDelEvento?: string | null;
+  conferenceId?: string;
+  canceladaEn?: null;
   enrichedAt?: null;
   enrichAttempts?: number;
   enrichError?: null;
@@ -127,7 +186,21 @@ export function fusionarCopia(previa: EventoMeet | undefined, copia: EventoMeet)
     organizerEmail: previa.organizerEmail || copia.organizerEmail,
     // La descripción es del evento (igual en todas las copias): la primera que la traiga.
     descripcion: previa.descripcion ?? copia.descripcion,
+    conferenceId: previa.conferenceId ?? copia.conferenceId,
+    invitados: unirInvitados(previa.invitados, copia.invitados),
   };
+}
+
+/** Los invitados de dos copias: todos, uno por correo; la respuesta, la primera que la diga. */
+function unirInvitados(a: InvitadoDelEvento[] | undefined, b: InvitadoDelEvento[] | undefined): InvitadoDelEvento[] | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  const porCorreo = new Map(a.map((i) => [i.correo, i]));
+  for (const i of b) {
+    const ya = porCorreo.get(i.correo);
+    if (!ya || (ya.respuesta === null && i.respuesta !== null)) porCorreo.set(i.correo, i);
+  }
+  return [...porCorreo.values()];
 }
 
 /** Los asistentes que se guardan: los del evento más el organizador (para el matching de ventas en consultas). */
@@ -174,6 +247,10 @@ export function cambiosDeSesion(
   if (guardada.resolvedClientId !== resolvedClientId) c.resolvedClientId = resolvedClientId;
   // La agenda (ficha G): si Google la cambió o la borró, se copia tal cual. Un evento sin el dato no la toca.
   if (evento.descripcion !== undefined && (guardada.descripcionDelEvento ?? null) !== (evento.descripcion ?? null)) c.descripcionDelEvento = evento.descripcion ?? null;
+  // El código de la reunión: como el Doc, nunca se borra con un evento que no lo trae.
+  if (evento.conferenceId && evento.conferenceId !== guardada.conferenceId) c.conferenceId = evento.conferenceId;
+  // El evento está vivo en algún calendario: si estaba marcada como cancelada, volvió (alguien la restauró).
+  if (guardada.canceladaEn !== null) c.canceladaEn = null;
 
   const docNuevo = !!evento.googleDocId && evento.googleDocId !== guardada.googleDocId;
   if (docNuevo) {
@@ -183,6 +260,97 @@ export function cambiosDeSesion(
     c.enrichError = null;
   }
   return { cambios: Object.keys(c).length > 0 ? c : null, docNuevo };
+}
+
+/**
+ * Los eventos que la corrida vio cancelados en TODOS los calendarios donde aparecieron: los cancelados que no tienen
+ * ninguna copia viva. Una copia cancelada sola no alcanza: a un invitado que sacan del evento Google se lo muestra
+ * cancelado en SU calendario, y la reunión sigue para los demás. Antes de marcar, cada una pasa por
+ * `frenadaPorUnCalendarioSinLeer`.
+ */
+export function canceladasDeLaCorrida(canceladas: ReadonlySet<string>, vivas: ReadonlySet<string>): string[] {
+  return [...canceladas].filter((id) => !vivas.has(id));
+}
+
+/**
+ * ¿No se puede marcar esta reunión como cancelada porque el calendario de alguien que estaba invitado no se leyó entero
+ * (falló, o se cortó la paginación)? Su copia viva pudo quedar sin ver. La corrida siguiente la vuelve a mirar.
+ *
+ * ⚠ Por reunión y no por corrida: con «un calendario sin leer frena todo», una cuenta suspendida del dominio (que falla
+ * en cada corrida) apagaba la marca de canceladas para siempre y sin aviso. Se mira con quiénes estaban invitados según
+ * lo GUARDADO: un calendario que no se leyó no puede tener la copia de una reunión a la que su dueño no estaba invitado.
+ */
+export function frenadaPorUnCalendarioSinLeer(
+  fila: { participants: readonly string[]; organizerEmail: string | null },
+  calendariosSinLeer: ReadonlySet<string>,
+): boolean {
+  if (calendariosSinLeer.size === 0) return false;
+  return [...fila.participants, fila.organizerEmail ?? ""].some((c) => calendariosSinLeer.has(c.trim().toLowerCase()));
+}
+
+/** Un invitado guardado en `ParticipanteDeReunion`: lo que decide si cambió, y si U3 ya le anotó la asistencia. */
+export interface InvitadoGuardado {
+  id: string;
+  correo: string;
+  esDelEquipo: boolean;
+  respuesta: Respuesta | null;
+  entro: Date | null;
+}
+
+/** Lo que hay que escribir en `ParticipanteDeReunion` para UNA reunión. Las tres listas vacías = ninguna escritura. */
+export interface CambiosDeInvitados {
+  crear: { correo: string; esDelEquipo: boolean; respuesta: Respuesta | null }[];
+  actualizar: { id: string; esDelEquipo: boolean; respuesta: Respuesta | null }[];
+  /** Los que ya no están invitados. Nunca uno con asistencia anotada (U3): estuvo, aunque lo hayan sacado después. */
+  borrar: string[];
+}
+
+/** Cómo se ponen al día. `borrar: false` cuando algún calendario no se leyó: el que falta pudo ser el único que lo veía. */
+export interface OpcionesDeInvitados {
+  borrar: boolean;
+}
+
+/**
+ * Los dominios «del equipo»: la verdad en caliente es la categoría `internal` de /sessions/categories (la misma que usa la
+ * atribución, lib/sessions/dominio-propio.ts); se le suman los de las cuentas del Workspace, que son gente del equipo
+ * por definición. Sin ninguna de las dos, el de arranque (`DOMINIO_PROPIO`).
+ */
+export function dominiosDelEquipoDe(internos: Iterable<string>, cuentasDelWorkspace: Iterable<string>, porDefecto: string): Set<string> {
+  const out = new Set<string>();
+  for (const d of internos) if (d.trim()) out.add(d.trim().toLowerCase());
+  for (const c of cuentasDelWorkspace) out.add(dominioDe(c));
+  if (out.size === 0) out.add(porDefecto.toLowerCase());
+  return out;
+}
+
+/** El dominio de un correo, en minúsculas. */
+export function dominioDe(correo: string): string {
+  return correo.slice(correo.lastIndexOf("@") + 1).toLowerCase();
+}
+
+/**
+ * Qué escribir para que los invitados guardados de una reunión sean los del evento. Como `cambiosDeSesion`: solo lo
+ * que difiere. `dominiosDelEquipo` = los de la categoría interna de /sessions/categories más los de las cuentas del
+ * Workspace (`dominiosDelEquipoDe`).
+ */
+export function cambiosDeInvitados(
+  guardados: readonly InvitadoGuardado[],
+  invitados: readonly InvitadoDelEvento[],
+  dominiosDelEquipo: ReadonlySet<string>,
+  opciones: OpcionesDeInvitados = { borrar: true },
+): CambiosDeInvitados {
+  const out: CambiosDeInvitados = { crear: [], actualizar: [], borrar: [] };
+  const guardadoDe = new Map(guardados.map((g) => [g.correo, g]));
+  const siguen = new Set<string>();
+  for (const i of invitados) {
+    siguen.add(i.correo);
+    const esDelEquipo = dominiosDelEquipo.has(dominioDe(i.correo));
+    const g = guardadoDe.get(i.correo);
+    if (!g) out.crear.push({ correo: i.correo, esDelEquipo, respuesta: i.respuesta });
+    else if (g.esDelEquipo !== esDelEquipo || g.respuesta !== i.respuesta) out.actualizar.push({ id: g.id, esDelEquipo, respuesta: i.respuesta });
+  }
+  if (opciones.borrar) for (const g of guardados) if (!siguen.has(g.correo) && g.entro === null) out.borrar.push(g.id);
+  return out;
 }
 
 /** Parte una lista en lotes de `tamano` (para los `IN (...)` de la lectura y para ceder el hilo entre lotes). */
