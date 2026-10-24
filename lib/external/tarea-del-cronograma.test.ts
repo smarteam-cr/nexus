@@ -4,10 +4,10 @@
  * ── LA FALLA QUE ATACA ───────────────────────────────────────────────────────
  * El cronograma externo escondía la marca «por validar» pero dejaba pasar la tarea, con su título
  * y su semana: el cliente veía como plan algo que el agente inventó y el CSE no revisó. El filtro
- * vive en `cruzaAlCliente`, y `readClientTimeline` tiene que usarlo (lo vigila el último caso).
+ * vive en `cruzaAlCliente`. Que se aplique sobre filas reales lo vigilan las pruebas de integración
+ * del cronograma externo (`timeline-view.int.test.ts`) y de la ruta del servicio
+ * (`lib/servicios/ruta-del-servicio.int.test.ts`); la Entrega, `fasesDeLaEntrega` en lib/delivery.
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { cruzaAlCliente } from "./tarea-del-cronograma";
 
@@ -26,9 +26,4 @@ describe("cruzaAlCliente", () => {
     expect(cruzaAlCliente({ status: "SUSPENDED", needsValidation: false })).toBe(false);
   });
 
-  it("readClientTimeline lee la marca y filtra con cruzaAlCliente", () => {
-    const fuente = readFileSync(resolve(__dirname, "timeline-view.ts"), "utf8");
-    expect(fuente).toMatch(/needsValidation:\s*true/);
-    expect(fuente).toMatch(/if\s*\(\s*!cruzaAlCliente\(t\)\s*\)\s*continue/);
-  });
 });

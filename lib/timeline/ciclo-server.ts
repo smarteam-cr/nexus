@@ -178,7 +178,7 @@ export async function leerFasesDelCiclo(projectId: string, faseIds: readonly str
         where: { timelineId: t.id, id: { in: [...faseIds] } },
         select: {
           id: true, name: true, durationWeeks: true, startWeek: true, status: true,
-          tasks: { orderBy: [{ weekIndex: "asc" }, { order: "asc" }], select: { id: true, title: true, weekIndex: true, status: true, party: true } },
+          tasks: { orderBy: [{ weekIndex: "asc" }, { order: "asc" }], select: { id: true, title: true, weekIndex: true, status: true, party: true, needsValidation: true } },
         },
       })
     : [];

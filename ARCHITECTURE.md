@@ -239,7 +239,7 @@ silencio por colisión de flat config — ya pasó una vez.)
 **CI** (`.github/workflows/ci.yml`, cada push/PR): ratchet de tsc (baseline **0**) + ratchet
 de eslint (baseline en `eslint-baseline.txt`, solo errores — los ~1.5k warnings de los guards
 no bloquean ahí: bloquean los ratchets de vitest) + `npm test`. `check:invariants` NO corre en
-CI: corre desde dev contra la base real (lo invoca la skill /ship-nexus).
+CI: corre desde dev contra la base real (lo pide la skill /revisar cuando el cambio toca datos de clientes).
 
 ---
 
@@ -644,7 +644,7 @@ carpeta de su integración.
 - **Imports absolutos con `@/`**, prohibidos los `../../../`.
 - **Naming**: archivos kebab-case (`post-process.ts`), componentes React PascalCase (`ProjectGPS.tsx`), tipos PascalCase, funciones y variables camelCase.
 
-> Construido el 2026-07: el CI de GitHub Actions falla si el contador de tsc o de eslint sube respecto del baseline commiteado. Lo que el CI NO corre: `next build` (el único build de prod ocurre en deploy.sh) ni `check:invariants` (necesita la DB real — corre desde dev vía /ship-nexus).
+> Construido el 2026-07: el CI de GitHub Actions falla si el contador de tsc o de eslint sube respecto del baseline commiteado. Lo que el CI NO corre: `next build` (el único build de prod ocurre en deploy.sh) ni `check:invariants` (necesita la DB real — corre desde dev vía /revisar).
 
 ---
 

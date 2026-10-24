@@ -11,7 +11,7 @@
 **Prioridad 1: el contexto inicial** (tarjetas 1 a 3). Todo lo demás de Nexus se basa en lo que sabe de cada empresa y de sus reuniones.
 
 1. ✓ Los permisos de Google y de HubSpot, dados y probados el 24 oct: la API de Meet ya lee quiénes estuvieron y la transcripción frase por frase, y HubSpot ya deja leer los correos, los leads y las transcripciones de llamadas.
-2. ✓ Respondiste las preguntas de las tarjetas 1 a 7 y la primera de la 8 el 24 oct (están en cada tarjeta); el resto queda para después. Con eso arranca el paso uno. Ya están hechos: la escala 8.9.1 publicada (tu tarea #285 para revisarla), D0 (una tarea «por validar» ya no llega al cliente, falta el deploy) y U21 (el precio de Sonnet 5, corregido también en lo guardado).
+2. ✓ Respondiste las preguntas de las tarjetas 1 a 7 y la primera de la 8 el 24 oct (están en cada tarjeta); el resto queda para después. Con eso arranca el paso uno. Ya están hechos: la escala 8.9.1 publicada (tu tarea #285 para revisarla), D0 (una tarea «por validar» deja de llegar al cliente en lo que se suba desde ahora, también en la ruta del servicio; falta el deploy, y la foto ya publicada de Wherex las sigue mostrando: «Lo que decides tú» 22) y U21 (el precio de Sonnet 5, corregido también en lo guardado).
 3. El pedido al equipo: toda reunión con un cliente o un prospecto, por Google Meet, convocada por Smarteam, con «Transcribir» y las notas activadas (pestaña «Lo que pides al equipo»).
 4. El paso uno del orden sugerido: Google cada 10 minutos con el rescate de 177 reuniones, las notas de Gemini que cuentan (301 reuniones), el tablero de salud de las reuniones, y los datos y la investigación de la empresa.
 5. Lo que cuesta: todo de una vez, unos US$150 a 180 y US$55 a 65 más al mes; recomendado, primero las 71 empresas activas y por lotes (a mitad de precio), unos US$45 a 55 una vez y US$35 a 45 más al mes, y las demás cuando alguien las abra (`docs/reuniones-pieza-angular-plan.md`, «Lo que cuesta»).
@@ -172,7 +172,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 | Qué | Cómo está |
 |---|---|
 | Producción | Corre `ed86aa4a` desde el 24 oct (solo documentos y el permiso nuevo de HubSpot en el `.env`); el código es el del 23 oct: el Kickoff también en el riel de un SmartLoop (estaba creado y no se veía; RC Inmobiliaria), la preventa por equipo del cliente (guía de ese equipo con lo técnico, una hora con «Contarle», el panel que dice la verdad y «Por equipo») y el diagnóstico con todo el contexto (lee las sesiones de la exploración, avisa si casi nada está confirmado), el «Enfoque de la solución», todo se mueve y se quita, y dos plantillas: esencial y completa. |
-| Por desplegar | Dos arreglos del 24 oct: D0 (una tarea «por validar» del cronograma ya no llega al cliente) y U21 (Sonnet 5 a US$2/US$10 en el panel de gasto). Después del deploy, correr otra vez `scripts/recalcular-costo-de-llamadas.ts --apply` para las llamadas de Sonnet 5 hechas entre el arreglo y el deploy. |
+| Por desplegar | Dos arreglos del 24 oct: D0 (una tarea «por validar» del cronograma deja de llegar al cliente en lo que se suba desde ahora; la foto ya publicada de Wherex las sigue mostrando hasta que se vuelva a subir o se revoque su acceso) y U21 (Sonnet 5 a US$2/US$10 en el panel de gasto). Después del deploy, correr otra vez `scripts/recalcular-costo-de-llamadas.ts --apply` para las llamadas de Sonnet 5 hechas entre el arreglo y el deploy. |
 | En rojo en producción | 4 invariantes: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado (con su decisión abajo), y desde el 21 oct INV16(a): 2 reuniones de Meet leídas antes de ocurrir (un evento movido de fecha después de leerse, el caso conocido de KNOWN-ERRORS). |
 | Pruebas | 25 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 81 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
 
@@ -215,6 +215,7 @@ Sin esto, algo sigue mal o no se puede validar:
 19. **«Capacitación» en las tareas** (P1): ¿es la formación del equipo de Smarteam, la que se le da a un cliente, o las dos? Te propongo una categoría propia para la del equipo; la de un cliente va con su cliente asociado.
 20. **Las reuniones de expansión con clientes** (S3): las conversaciones de venta con quien ya es cliente (como «Fase 2: Marketing» con CEMACO). Te propongo que entren al analizador desde el principio, porque la venta cruzada también se explora.
 21. **El servicio para transcribir audio** (T5): para las reuniones presenciales grabadas con un teléfono, como la de Grupo Avis. Hoy Nexus no transcribe audio; hay que elegir un servicio (por ejemplo, el de Google, que ya usamos para Workspace).
+22. **El acceso externo de Wherex:** es excliente, su acceso al cronograma sigue activo (se usó por última vez el 5 oct) y su foto publicada trae 4 tareas «por validar» de antes de D0. Te propongo revocar el acceso; la otra salida es que alguien vuelva a subir su cronograma.
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -254,6 +255,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 6. **Toda IA nueva se mide** (cuánto cuesta cada corrida) y se prueba con 5 casos reales antes de abrirla al equipo.
 7. **Cada integración tiene un solo transporte** (reintentos y límites en un lugar) y cada job avisa si deja de correr.
 8. **Una parte está terminada cuando cumple su criterio de éxito**, no cuando está construida.
+9. **Cada cambio pasa por `/revisar` antes del commit, y cada rama antes de juntarse en `main`:** un batallón de agentes revisa los riesgos de Nexus, dos escépticos verifican cada hallazgo, se comprueba que las pruebas nuevas se pongan en rojo sin el cambio, y el informe dice siempre lo que la revisión no garantiza.
 
 **Los planes escritos** (cada uno es la fuente de su parte):
 
@@ -407,7 +409,7 @@ Plan: `docs/propuestas-por-casos-plan.md`.
 
 Plan: `docs/entrega-por-casos-plan.md`. Lo que mostró el diagnóstico del 22 oct: hay un solo cronograma por proyecto y lo arma el handoff; cada regeneración queda como propuesta que alguien aprueba; las tareas del cronograma no tienen persona ni horas y no están unidas a las tareas del equipo; y el cliente ve todas las tareas del cronograma, no un resumen.
 
-1. [hecho, falta el deploy] **D0 · Que una tarea «por validar» no llegue al cliente.** Arreglado el 24 oct (`lib/external/tarea-del-cronograma.ts`, con su prueba). Hoy afecta a un solo cronograma publicado (Wherex, 4 tareas): se corrige cuando su CSE lo vuelva a publicar. *Era el error:* la vista del cliente esconde solo las suspendidas (`lib/external/timeline-view.ts`), así que una tarea por validar cruza con su título y su semana. Un filtro y una prueba que lo congele. *Depende de:* nada.
+1. [hecho, falta el deploy] **D0 · Que una tarea «por validar» no llegue al cliente.** Arreglado el 24 oct (`lib/external/tarea-del-cronograma.ts`, con su prueba de integración), también en la ruta del servicio de SmartLoop, que tenía su propia regla (lo encontró `/revisar`). Hoy afecta a un solo cronograma publicado (Wherex, 4 tareas): se corrige cuando su CSE lo vuelva a publicar. *Era el error:* la vista del cliente esconde solo las suspendidas (`lib/external/timeline-view.ts`), así que una tarea por validar cruza con su título y su semana. Un filtro y una prueba que lo congele. *Depende de:* nada.
 2. **D1 · Diseñar el cronograma con casos de uso.** *Sale de:* «cada caso lleva su diagnóstico, planificación, implementación y adopción» y tu respuesta 3 sobre cronogramas y tareas. *Depende de:* A1.
    - Etapa 1 · Contar los cronogramas activos y en qué estado están (publicados, aprobados, con propuesta pendiente).
    - Etapa 2 · El diseño en Claude Design: lo que ve el cliente es un resumen, como se vendió (los casos con sus etapas y las sesiones); las tareas del equipo van aparte.

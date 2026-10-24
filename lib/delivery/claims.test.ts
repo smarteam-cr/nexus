@@ -15,12 +15,33 @@ import { BUCKET_LABEL } from "@/lib/timeline/particularidades-summary";
 import path from "node:path";
 import {
   buildDeliveryClaims,
+  fasesDeLaEntrega,
   metricasDeCumplimiento,
   pendientesAbiertos,
   cronogramaSinMarcar,
   type ClaimsInput,
   type FaseParaEntrega,
 } from "./claims";
+
+describe("fasesDeLaEntrega — lo que el cliente lee como pendiente suyo (D0)", () => {
+  it("saca la tarea «por validar» y deja la confirmada y la suspendida", () => {
+    const fases = fasesDeLaEntrega([
+      {
+        name: "Configuración",
+        status: "IN_PROGRESS",
+        durationWeeks: 2,
+        startWeek: 0,
+        tasks: [
+          { title: "Enviar la base", status: "PENDING", party: "CLIENTE", needsValidation: false },
+          { title: "Aprobar algo inventado", status: "PENDING", party: "CLIENTE", needsValidation: true },
+          { title: "Aparcada", status: "SUSPENDED", party: "CLIENTE", needsValidation: false },
+        ],
+      },
+    ]);
+    expect(fases[0].tasks.map((t) => t.title)).toEqual(["Enviar la base", "Aparcada"]);
+    expect(pendientesAbiertos(fases).map((p) => p.title)).toEqual(["Enviar la base"]);
+  });
+});
 
 const tareas = (n: number, status = "PENDING") =>
   Array.from({ length: n }, (_, i) => ({ title: `T${i}`, status }));

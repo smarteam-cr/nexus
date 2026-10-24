@@ -71,7 +71,10 @@ SDK · HubSpot/Google Workspace/Apify (versiones exactas: ARCHITECTURE Parte 0 �
   `tsc` como "baseline/ajeno" sin verificar que ya existía. Antes de pushear algo que roce tipos,
   `npm run build` verde (o `tsc --noEmit` en 0 en todo el proyecto). El gate de datos sigue
   siendo `npm run check:invariants` + el ojo.
-- Antes de commitear: correr **`/ship-nexus`** (invariantes + tsc/lint en lo tocado + checklist).
+- Antes de commitear código, y antes de juntar en `main` la rama de otra sesión: **`/revisar`** (el batallón de
+  revisión: revisores por riesgo, verificación adversarial y lo que no queda garantizado). `/revisar` corre tsc, eslint,
+  las pruebas y, si el cambio toca datos de clientes, `check:invariants`. El hook de commit que corre tsc y eslint vive
+  fuera de git (`.claude/hooks/`): no está en todas las PCs ni ve un commit hecho desde PowerShell.
 - **No push hasta que el usuario lo pida.**
 - **El roadmap (`docs/roadmap.md`) lo edita solo la sesión que junta las ramas en `main`.** Una sesión de trabajo no lo
   toca: termina con un bloque «Para el roadmap» (qué cambió y las pruebas con número, pasos exactos y resultado esperado).

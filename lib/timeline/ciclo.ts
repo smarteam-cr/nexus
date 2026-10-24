@@ -51,6 +51,8 @@ export interface TareaDeLaFase {
   weekIndex: number;
   status: string;
   party: string | null;
+  /** «Por validar»: el agente la inventó y el CSE no la revisó. Nunca cruza al cliente (`cruzaAlCliente`). */
+  needsValidation: boolean;
 }
 
 export interface FaseDelCiclo {

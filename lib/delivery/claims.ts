@@ -38,6 +38,23 @@ export interface FaseParaEntrega extends PhaseSpanLike {
   tasks: Array<{ title: string; status: string; party?: string | null }>;
 }
 
+/**
+ * Las fases del cronograma como las lee la Entrega, que es un documento del cliente: una tarea «por validar» (la inventó el
+ * agente y el CSE no la revisó) no es un pendiente suyo ni cuenta para el avance (D0, 2026-10-24; lo encontró /revisar).
+ * Las SUSPENDIDAS siguen entrando: `pendientesAbiertos` y las cifras las tratan a su manera.
+ */
+export function fasesDeLaEntrega(
+  fases: ReadonlyArray<PhaseSpanLike & { name: string; status: string; tasks: ReadonlyArray<{ title: string; status: string; party: string | null; needsValidation: boolean }> }>,
+): FaseParaEntrega[] {
+  return fases.map((f) => ({
+    name: f.name,
+    status: f.status,
+    durationWeeks: f.durationWeeks,
+    startWeek: f.startWeek,
+    tasks: f.tasks.filter((t) => !t.needsValidation).map((t) => ({ title: t.title, status: t.status, party: t.party })),
+  }));
+}
+
 export interface ClaimsInput {
   fases: FaseParaEntrega[];
   anchorStartDate: string | null;

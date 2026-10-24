@@ -1,7 +1,8 @@
 /**
  * lib/external/tarea-del-cronograma.ts — qué tarea del cronograma cruza al cliente. PURO.
  *
- * Lo usa `readClientTimeline` (el único filtro del cronograma externo). No cruzan:
+ * Lo usan `readClientTimeline` (el filtro del cronograma externo) y la ruta del servicio de SmartLoop
+ * (`lib/servicios/ruta-del-servicio-server.ts`). La Entrega aplica la misma marca al leer sus fases. No cruzan:
  *   · SUSPENDED: se descartó del plan (E).
  *   · needsValidation: es una tarea típica que el agente inventó con un handoff flaco y el CSE
  *     todavía no validó. Hasta el 2026-10-24 cruzaba con su título y su semana (solo se escondía la

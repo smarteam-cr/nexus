@@ -58,6 +58,7 @@ import {
 } from "@/lib/delivery/objetivos";
 import {
   buildDeliveryClaims,
+  fasesDeLaEntrega,
   metricasDeCumplimiento,
   pendientesAbiertos,
   type FaseParaEntrega,
@@ -146,7 +147,7 @@ export async function runEntregaGeneration(opts: {
                 status: true,
                 durationWeeks: true,
                 startWeek: true,
-                tasks: { select: { title: true, status: true, party: true } },
+                tasks: { select: { title: true, status: true, party: true, needsValidation: true } },
               },
             },
             /* D-09: las desviaciones que el CSE curó como visibles al cliente, con el MISMO gate
@@ -306,13 +307,8 @@ export async function runEntregaGeneration(opts: {
   }
 
   // ── Las cifras, desde el cronograma. El agente no participa ──────────────────
-  const fases: FaseParaEntrega[] = (project?.timeline?.phases ?? []).map((f) => ({
-    name: f.name,
-    status: f.status,
-    durationWeeks: f.durationWeeks,
-    startWeek: f.startWeek,
-    tasks: f.tasks.map((t) => ({ title: t.title, status: t.status, party: t.party })),
-  }));
+  // Sin las tareas «por validar»: la Entrega la lee el cliente (`fasesDeLaEntrega`, D0).
+  const fases: FaseParaEntrega[] = fasesDeLaEntrega(project?.timeline?.phases ?? []);
 
   const claims = buildDeliveryClaims({
     fases,

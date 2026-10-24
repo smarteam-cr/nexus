@@ -4,13 +4,14 @@
  *
  * Lee todos los ciclos del proyecto (abiertos y cerrados) con sus casos de uso, y las fechas de cada caso salen de su
  * fase del cronograma del proyecto con la misma regla que el cronograma del ciclo (lib/timeline/ciclo.ts). Las tareas
- * SUSPENDED no cuentan (igual que en el cronograma que ve el cliente).
+ * SUSPENDED y las «por validar» no cuentan: la regla es la del cronograma que ve el cliente (`cruzaAlCliente`, D0).
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { cronogramaDelCiclo } from "@/lib/timeline/ciclo";
 import { leerFasesDelCiclo } from "@/lib/timeline/ciclo-server";
 import { resolvePipeline } from "@/lib/projects/kind";
+import { cruzaAlCliente } from "@/lib/external/tarea-del-cronograma";
 import { guiaDeServicio } from "./index";
 import { rutaDelServicio, type CicloParaLaRuta, type RutaDelServicio } from "./ruta-del-servicio";
 
@@ -46,10 +47,10 @@ export async function armarRutaDelServicio(projectId: string, ahora = new Date()
 
   const faseIds = p.ciclos.flatMap((c) => c.casosDeUso.map((x) => x.faseId)).filter((x): x is string => !!x);
   const { anchor, fases } = await leerFasesDelCiclo(projectId, faseIds);
-  const sinSuspendidas = fases.map((f) => ({ ...f, tasks: f.tasks.filter((t) => t.status !== "SUSPENDED") }));
+  const fasesQueCruzan = fases.map((f) => ({ ...f, tasks: f.tasks.filter(cruzaAlCliente) }));
 
   const ciclos: CicloParaLaRuta[] = p.ciclos.map((c) => {
-    const crono = cronogramaDelCiclo({ anchor, casos: c.casosDeUso, fases: sinSuspendidas, ahora });
+    const crono = cronogramaDelCiclo({ anchor, casos: c.casosDeUso, fases: fasesQueCruzan, ahora });
     const porCaso = new Map(crono.casos.map((x) => [x.casoId, x]));
     return {
       numero: c.numero,

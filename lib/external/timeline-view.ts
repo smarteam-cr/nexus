@@ -162,8 +162,10 @@ export async function readPublishedClientTimeline(projectId: string): Promise<Ex
     select: { publishedSnapshot: true },
   });
   if (tl?.publishedSnapshot) {
-    // El snapshot ya nace sin tareas SUSPENDED: se congela desde readClientTimeline (que las
-    // filtra) tanto en publish-timeline como en el backfill de abajo — no hay status que filtrar acá.
+    // El snapshot nace sin tareas SUSPENDED ni «por validar»: se congela desde readClientTimeline (que
+    // las filtra) en publish-timeline y en el backfill de abajo. ⚠ Lo congelado ANTES del 2026-10-24 (D0)
+    // puede traer tareas «por validar»: la foto no guarda la marca, así que acá no se pueden filtrar; se
+    // corrige cuando el CSE vuelve a subir el cronograma (en producción, solo Wherex).
     // SANEO antes de devolver: era un cast crudo, y un snapshot congelado viejo sin `phases`
     // reventaba al consumidor (el read vivo sí guarda `?? []`; el congelado no lo hacía).
     return normalizePublishedTimeline(tl.publishedSnapshot) as unknown as ExternalTimelineData;

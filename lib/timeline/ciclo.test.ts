@@ -91,10 +91,10 @@ describe("el cronograma del ciclo", () => {
           startWeek: 4,
           durationWeeks: 6,
           tasks: [
-            { id: "t1", title: "Enviar la base", weekIndex: 0, status: "PENDING", party: "CLIENTE" },
-            { id: "t2", title: "Aprobar el pipeline", weekIndex: 3, status: "DONE", party: "CLIENTE" },
-            { id: "t3", title: "Configurar", weekIndex: 1, status: "DONE", party: "SMARTEAM" },
-            { id: "t4", title: "Probar", weekIndex: 2, status: "PENDING", party: "AMBOS" },
+            { id: "t1", title: "Enviar la base", weekIndex: 0, status: "PENDING", party: "CLIENTE", needsValidation: false },
+            { id: "t2", title: "Aprobar el pipeline", weekIndex: 3, status: "DONE", party: "CLIENTE", needsValidation: false },
+            { id: "t3", title: "Configurar", weekIndex: 1, status: "DONE", party: "SMARTEAM", needsValidation: false },
+            { id: "t4", title: "Probar", weekIndex: 2, status: "PENDING", party: "AMBOS", needsValidation: false },
           ],
         }),
       ],
@@ -115,7 +115,7 @@ describe("el cronograma del ciclo", () => {
     const r = cronogramaDelCiclo({
       anchor: ANCLA,
       casos: [caso("a", "f1")],
-      fases: [fase("f1", { status: "DONE", startWeek: 0, tasks: [{ id: "t1", title: "x", weekIndex: 0, status: "PENDING", party: "CLIENTE" }] })],
+      fases: [fase("f1", { status: "DONE", startWeek: 0, tasks: [{ id: "t1", title: "x", weekIndex: 0, status: "PENDING", party: "CLIENTE", needsValidation: false }] })],
       ahora,
     });
     expect(r.casos[0].propuesta).toBeNull();
@@ -144,9 +144,9 @@ describe("la propuesta por una dependencia atrasada", () => {
       {
         durationWeeks: 4,
         tasks: [
-          { id: "d1", title: "a", weekIndex: 0, status: "PENDING", party: "CLIENTE" },
-          { id: "d2", title: "b", weekIndex: 3, status: "PENDING", party: "CLIENTE" },
-          { id: "t", title: "c", weekIndex: 1, status: "PENDING", party: "SMARTEAM" },
+          { id: "d1", title: "a", weekIndex: 0, status: "PENDING", party: "CLIENTE", needsValidation: false },
+          { id: "d2", title: "b", weekIndex: 3, status: "PENDING", party: "CLIENTE", needsValidation: false },
+          { id: "t", title: "c", weekIndex: 1, status: "PENDING", party: "SMARTEAM", needsValidation: false },
         ],
       },
       { semanas: 2, dependencias: ["d1", "d2"] },
@@ -169,7 +169,7 @@ describe("la versión aprobada", () => {
   it("dice qué entró, qué salió, qué se corrió y qué criterio cambió", () => {
     const foto = fotoParaAprobar(hoy([fase("f1"), fase("f2")], [caso("a", "f1"), caso("b", "f2")]));
     const ahoraHoy = hoy(
-      [fase("f1", { startWeek: 3 }), fase("f3", { tasks: [{ id: "t", title: "Base", weekIndex: 0, status: "PENDING", party: "CLIENTE" }] })],
+      [fase("f1", { startWeek: 3 }), fase("f3", { tasks: [{ id: "t", title: "Base", weekIndex: 0, status: "PENDING", party: "CLIENTE", needsValidation: false }] })],
       [caso("a", "f1", { criterio: "Otro" }), caso("c", "f3")],
     );
     expect(cambiosDesdeLaAprobada(foto, ahoraHoy)).toEqual([
