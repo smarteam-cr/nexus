@@ -83,9 +83,29 @@ existe, saber si la reunión ocurrió y que transcribir sea lo normal.
 ## Etapas
 
 1. **U1 · Sin scopes nuevos (ya):**
-   - la copia de Calendar y la lectura de los Docs pasan a un job cada 10 minutos (es T6);
-   - correr el rescate de las 177 que se leyeron antes de terminar;
-   - guardar el código de la reunión, la respuesta de cada invitado y los eventos cancelados.
+   - la copia de Calendar y la lectura de los Docs pasan a un job cada 10 minutos (es T6):
+     - usa el mismo turno de `CronJobState` que `autoSyncGoogleMeet` (con la espera contada desde el fin) y no espera
+       dentro del tick;
+     - tiene la bandera `GOOGLE_MEET_SYNC_ENABLED=0`, que lo apaga y vuelve al disparo al abrir la app. Ese disparo
+       queda en el código como vuelta atrás y nunca corre a la vez que el job;
+     - **antes de empezar,** medir cuánto dura una corrida y la frescura de hoy. Si una corrida pasa de unos 3 minutos,
+       `syncToken` pasa de U4 a U1, o va un barrido corto cada 10 minutos y el completo una vez al día;
+     - una invariante de frescura, con el molde de INV31 (la del espejo de Odoo): si la última copia buena tiene más de
+       una hora, rojo;
+   - correr el rescate de las 177 que se leyeron antes de terminar:
+     `recuperar-transcripts-meet.ts --solo-antes-de-terminar --deploy-confirmado`, después del deploy. Recupera el
+     texto pero no lo lee: la lectura va por el modo de recuperación (`docs/reuniones-pieza-angular-plan.md` › «Cómo se
+     trae lo que ya existe»);
+   - guardar el código de la reunión, la respuesta de cada invitado y los eventos cancelados, en un solo SQL aditivo:
+     `FirefliesSession.conferenceId` (con índice) y `canceladaEn`, más la tabla `ParticipanteDeReunion` con su forma
+     completa (correo, `esDelEquipo`, respuesta y, ya nullables, `entro`, `salio` y `minutos` para U3). U3 y T7 la
+     llenan y no crean otra;
+   - **un evento cancelado nunca se borra:** borrar la fila arrastra en cascada los hechos, los turnos y la lectura. Si
+     la reunión tiene texto, minuta, hechos o tareas, se marca y queda para que una persona la revise. Solo una
+     cancelada sin texto sale del chokepoint, del buscador y de la cola. Prueba de integración: una cancelada sin texto
+     no sale en `getClientSessions`.
+   - El código de la reunión solo no evita que un evento movido pise la fecha: eso pide el registro de conferencia de U3
+     (INV16 a sigue pendiente de U3).
 2. **U2 · La prueba de un día** (✓ en parte, 2026-10-24: Elías habilitó las APIs, sumó el scope a la delegación de dominio y creó `nexus-meet-eventos` y `nexus-meet-eventos-pull` con sus permisos. Con la cuenta de servicio, impersonando a una persona del equipo, se leyeron 10 conferencias con sus participantes y la transcripción por frases en 8; una tuvo 0 participantes, o sea que no ocurrió. Falta probar una reunión organizada por un cliente y los eventos con delegación de dominio): un script de solo lectura con el scope nuevo, sobre 5 reuniones reales (una organizada por
    un cliente). Confirma:
    - el código de la reunión;
@@ -94,8 +114,10 @@ existe, saber si la reunión ocurrió y que transcribir sea lo normal.
 3. **U3 · La API de Meet:**
    - un job por organizador interno: las conferencias terminadas, «no ocurrió» cuando no hay registro, y las fuentes de
      texto en su orden;
-   - una tabla de participantes con su asistencia;
-   - los turnos con su hora y su persona;
+   - la tabla de participantes de U1 (`ParticipanteDeReunion`) con su asistencia;
+   - los turnos con su hora y su persona, en `TurnoDeReunion`, con columnas nuevas y un solo escritor (antes, confirmar
+     las columnas que tiene hoy);
+   - la hora real de la conferencia, en una columna nueva: no pisa `date`, que U1 reescribe cada 10 minutos;
    - quiénes de Smarteam estuvieron sale de aquí (T7).
 4. **U4 · Enterarse al momento:** la suscripción a los eventos de Meet (conferencia terminada, transcripción y notas
    listas) por Pub/Sub, leída cada minuto, con su renovación semanal; Calendar con `syncToken`.
@@ -106,18 +128,28 @@ existe, saber si la reunión ocurrió y que transcribir sea lo normal.
 
 ## Lo que tiene que configurar Elías
 
-1. **En Google Cloud:** habilitar las APIs de Meet REST, Workspace Events, Pub/Sub y, para las presenciales,
-   Speech-to-Text.
-2. **En Admin, en la delegación de dominio:** agregar `https://www.googleapis.com/auth/meetings.space.readonly`.
+1. **En Google Cloud:** habilitar las APIs de Meet REST, Workspace Events y Pub/Sub (✓ hecho el 24 oct) y, para las
+   presenciales, Speech-to-Text (pendiente: «Lo que decides tú» 21 del roadmap).
+2. **En Admin, en la delegación de dominio:** agregar `https://www.googleapis.com/auth/meetings.space.readonly` (✓ hecho
+   el 24 oct).
 3. **En Pub/Sub:** crear un tema y una suscripción pull, y darle el rol de publicador a
-   `meet-api-event-push@system.gserviceaccount.com`.
+   `meet-api-event-push@system.gserviceaccount.com` (✓ hecho el 24 oct).
 4. **En Admin, en Meet:** que la transcripción y las notas de Gemini estén permitidas para el equipo, y la toma de notas
    automática.
 
 Lo guía la skill `wizard`, paso por paso.
 
+## Criterio de éxito
+
+- **U1:** el job corre cada 10 minutos durante 7 días (`CronJobState.lastRunAt`); la frescura se mide antes de
+  construir, y después la mediana queda bajo una hora; las «leídas antes de terminar» bajan de 177 a 0; y quedan 0
+  canceladas en la base (sin texto) o marcadas para revisar (con texto).
+- **U3:** «no ocurrió» queda separado de «no se grabó».
+
 ## Riesgos
 
+- El scheduler corre los jobs en serie: «cada 10 minutos» quiere decir «como mucho». Y ya hubo un incidente de 821 % de
+  CPU: una corrida larga no puede quedarse dentro del tick.
 - Un scope nuevo sin autorizar tumba todas las lecturas: va en un JWT aparte, como el de Tareas.
 - Las frases se borran a los 30 días: el job tiene que copiarlas antes.
 - Que los eventos acepten delegación de dominio es una incógnita: U2 lo confirma antes de construir U4.

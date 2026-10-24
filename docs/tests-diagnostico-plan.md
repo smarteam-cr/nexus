@@ -70,7 +70,8 @@
    - Una tabla nueva para guardar cada intento, con SQL aditivo.
    - Se mantiene la experiencia de hoy: una pregunta por pantalla, el matiz, el guardado al avanzar y el aviso de abandono.
 2. **O2 · Mejores preguntas, por industria.**
-   - Una o dos preguntas por dimensión, escritas para el cliente, con su versión por edición.
+   - Una pregunta por dimensión en la web, escrita para el cliente, con su versión por edición (las de Marketing esperan
+     «Lo que decides tú» 29 del roadmap).
    - Las dos preguntas del perfil y la del tráfico.
    - Nunca se veta un nivel.
    - Las revisa Elías antes de publicarlas.
@@ -86,9 +87,11 @@
    - Además, el resultado entra directo a la preventa de la empresa en Nexus, sin decodificar la dirección.
    - Las respuestas del test llegan a la guía como algo a validar (K7).
    - Los leads, agrupados por empresa con quién llenó cada área (K10).
-5. **O5 · Dos versiones del test** (lo que pedía Marketing):
-   - una corta, para atraer leads (una pregunta por dimensión);
-   - una completa, para usar con el cliente (la del cuestionario).
+5. **O5 · Tres versiones del test** (Elías, 2026-10-24; el detalle, abajo en «Las versiones del test»):
+   - la de Marketing, de 4 preguntas, para conseguir el lead;
+   - la web, de 8, una por dimensión;
+   - la completa, que llena el consultor, por equipo (la del cuestionario).
+   - De dónde salen las 4 de Marketing y dónde va el perfil corto es «Lo que decides tú» 29 del roadmap.
 6. **O6 · El corte.**
    - Los enlaces viejos (`resultado.html#…`, `v:1`) se siguen leyendo.
    - La dirección pública pasa a Nexus, con los píxeles de anuncios y el formulario de HubSpot intactos.

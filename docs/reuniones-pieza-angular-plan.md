@@ -2,7 +2,10 @@
 
 > Elías, 2026-10-23: «el módulo que obtiene las sesiones es de lo más importante de Nexus: es el creador de contexto de
 > cada empresa, la pieza angular». Este plan junta en un solo lugar todo lo que hace que una reunión llegue completa a su
-> empresa y se lea. Medido en producción en solo lectura el mismo día. **Nada construido.** En el roadmap es el área T.
+> empresa y se lea. Medido en producción en solo lectura el mismo día. **Nada construido de este plan**, pero hay piezas
+> que ya existen a medias: la lectura de hechos de las reuniones con solo notas (T2), el motivo de las que no tienen
+> texto en `lib/google/por-que-falta.ts` (T4) y la reunión agregada a mano (`lib/sessions/reunion-a-mano.ts`, T9). En
+> el roadmap es el área T.
 
 ## Lo que se midió (últimos 90 días)
 
@@ -48,16 +51,38 @@ la real; U3 lo corrige con la hora de la conferencia. De ahí nace T9: que la pe
 ## Etapas
 
 1. **T1 · El tablero de salud de las reuniones.**
-   - Por persona y por empresa: con transcripción, solo notas, sin nada (con el motivo) y sin empresa; leídas o no.
-   - Una invariante nueva en `check:invariants`: ninguna reunión con texto e invitados de fuera sin empresa por más de 48
-     horas.
-   - Lo ve la CSL y los super admin; cada persona ve las suyas.
-2. **T2 · Las notas de Gemini cuentan** (antes L1): la lectura acepta notas largas; la minuta y los hechos salen de ellas;
-   el buscador deja de decir «sin transcripción» cuando hay notas.
+   - Por persona y por empresa: con transcripción, solo notas, sin nada (con el motivo, desde el primer día) y sin
+     empresa; leídas o no.
+   - Una invariante nueva en `check:invariants`, INV47: ninguna reunión **de los últimos 14 días** con texto e invitados
+     de fuera sin empresa por más de 48 horas (la ventana, como INV44). Si al nacer cuenta alguna, entra como «no
+     bloquea» (el patrón de INV4, INV6 e INV13) hasta su primer verde. Las 67 de antes las resuelve T3.
+   - Pruebas: un `*.int.test.ts` (una reunión de 3 días da rojo, una de 30 no). Entra a `invariants-daily`.
+   - Lo ve la CSL y los super admin; cada persona ve las suyas. El tablero lleva gate de permiso y va declarado en
+     `skeleton-coverage` y `page-shell-coverage`.
+2. **T2 · Las notas de Gemini cuentan** (antes L1).
+   - Hoy: la lectura ya toma las reuniones con solo notas de 400 caracteres o más cuando `SEGUIMIENTO_HECHOS=1` está
+     prendida (lo está: 581 hechos, 153 sacados de notas), pero solo saca hechos, no minuta ni tareas
+     (`motivoParaNoEncolar`, `lib/lecturas/reglas.ts`).
+   - T2 suma la minuta y separa «lee solo notas» con su propia bandera, que también es la vuelta atrás.
+   - Un predicado único «tiene texto» en `lib/sessions/` reemplaza los ~10 filtros `transcript: { not: null }`
+     sueltos; T1 usa el mismo. El buscador deja de decir «sin transcripción» cuando hay notas.
+   - Las de más de 14 días van por el modo de recuperación («Cómo se trae lo que ya existe»).
+   - **Antes de contar las notas como texto:** verificar «Cemaco | Data Hub» del 22 oct. Tiene 8.336 caracteres de
+     notas que la API de Meet dice que no generó, y puede ser texto de otra reunión de la misma serie (KNOWN-ERRORS,
+     primera entrada).
+   - Prueba: unit de `motivoParaNoEncolar` con notas sobre y bajo el piso.
 3. **T3 · Las 67 reuniones sin empresa:** Nexus propone la empresa, o crea el prospecto desde la empresa de HubSpot del
-   dominio (con los leads, B3). Lo decide quien la organizó, con un clic (2026-10-24).
+   dominio. Lo decide quien la organizó, con un clic (2026-10-24). *Depende de:* R7.
+   - La propuesta reusa las piezas de `categorize.ts` (`extractParticipantDomains`, `buildHubspotDomainMap`), sin un
+     matching nuevo.
+   - Confirmar escribe `manualClientId` con `manualClientSource = humano` por `reResolveSession`. Lo mismo vale para
+     «Mover a esta empresa» de T8.
+   - Una reunión de más de 14 días no se lee sola: va por el modo de recuperación.
+   - Un escaneo estructural comprueba que T3 y T8 no eligen empresa fuera de `categorize.ts`.
 4. **T4 · Las 404 sin nada:**
-   - el motivo de cada una: Gemini sin activar, la organizó el cliente, fue presencial o se canceló;
+   - el motivo de cada una ya lo calcula `lib/google/por-que-falta.ts`, con 11 motivos y quién lo arregla, pero solo lo
+     usa un script: falta guardarlo y mostrarlo (T1 lo muestra desde el primer día), más «cancelada» (U1) y «no
+     ocurrió» (U3);
    - el aviso va en la reunión misma, en Nexus, para quien la organizó (2026-10-24), con cómo activar las notas la
      próxima vez;
    - la configuración de Google para toda la organización está en «Lo que configuras tú».
@@ -66,10 +91,11 @@ la real; U3 lo corrige con la hora de la conferencia. De ahí nace T9: que la pe
    - subir el audio y transcribirlo pide elegir un servicio (ver «Lo que decides tú»).
 
    Es el caso de la reunión de Grupo Avis.
-6. **T6 · La copia de Meet cada hora,** sin depender de que alguien abra Nexus (hoy corre al abrir la app, con 20 minutos
-   de espera). Antes estaba en H1 y en P5.
+6. **T6 · La copia de Meet cada 10 minutos (es U1),** sin depender de que alguien abra Nexus (hoy corre al abrir la
+   app, con 20 minutos de espera). Antes estaba en H1 y en P5.
 7. **T7 · Quiénes de Smarteam estuvieron:** cada reunión guarda sus participantes del equipo con su papel (organizó o
-   asistió).
+   asistió). Hoy se guardan los invitados y `participantes.ts` ya cuenta los del equipo; quién estuvo sale de la API de
+   Meet. *Depende de:* U3.
 8. **T8 · Encontrar cualquier reunión de la empresa:** el buscador muestra también las reuniones de la empresa en las que
    la persona no estuvo, y las que quedaron en otra empresa con el mismo dominio, con «Mover a esta empresa». Va junto con
    la asociación automática de K5.
@@ -77,7 +103,8 @@ la real; U3 lo corrige con la hora de la conferencia. De ahí nace T9: que la pe
 9. **T9 · La persona aporta el contexto** (2026-10-24). En cada reunión sin texto, o con poco, Nexus le hace a quien
    estuvo dos o tres preguntas armadas con lo que sabe de las otras reuniones de la empresa. Lo que responde se guarda
    como el texto de esa reunión, marcado «lo contó una persona», y se lee como cualquier otro. Pasa por el chokepoint de
-   siempre: la pregunta solo usa reuniones de la misma empresa.
+   siempre: la pregunta solo usa reuniones de la misma empresa. La base ya existe: `lib/sessions/reunion-a-mano.ts`,
+   con la marca `aMano`; en producción, 0 usos.
 
 ## Lo que cuesta (IA, estimado el 2026-10-24)
 
@@ -117,8 +144,33 @@ la caché) devuelven entre US$20 y 30 al mes.
 Así, **una sola vez cuesta unos US$45 a 55** (en vez de 150 a 180), y **al mes, unos US$35 a 45 más** (las lecturas que
 no son urgentes también van por lotes). Depende de que los lotes funcionen (U22).
 
+**Cómo se trae lo que ya existe (el modo de recuperación):**
+- Las reuniones de más de 14 días (`DIAS_DE_FRESCURA`) se leen sacando minuta y hechos, **sin propuestas de Tarea ni
+  pedidos fuera de alcance**. Con `sinCorteDeFrescura` llegarían cientos de tareas de agosto a «Por decidir».
+- No pasan por la cola `seguimiento-reuniones` ni por el presupuesto automático de 10 USD por día: van por lotes, con
+  su tope por corrida. Una carga por los jobs se comería unos 8 días de ese tope.
+- El script es `scripts/encolar-lecturas-pendientes.ts`, con un modo nuevo `--recuperacion --desde --limite` y
+  simulacro. Primero se corre con 10 y se mira la salida.
+- Se mide cuántas se leyeron, el costo por lote y cuántas quedaron sin texto.
+- Se vuelve atrás con una bandera; lo que ya se leyó queda.
+- El costo de la tabla de arriba se recalcula sin la lectura de tareas.
+- Si alguna carga corriera por los jobs, se sube `PRESUPUESTO_IA_AUTOMATICO_USD_DIA` mientras dure (en el `.env` del
+  VPS; está en «Lo que configuras tú» del roadmap).
+
 Fuera de la IA, transcribir audio de reuniones presenciales con Speech-to-Text cuesta del orden de 1 a 2 centavos de
 dólar por minuto (por confirmar con el precio vigente).
+
+## Criterio de éxito
+
+- **El indicador 4** (reuniones con cliente que dejan texto) pasa del 72 % (149 de 207, que ya cuenta las notas) al
+  90 %. La fuente es «Reuniones sin grabar» de Uso de Nexus, con 14 días fijos: `scripts/medir-transcripciones-faltantes.ts`
+  no lo imprime, o la primera tarea de T1 es que lo imprima. Las que no ocurrieron salen del denominador desde U3, y
+  ese día se anota cuánto subió solo por eso.
+- **T1:** INV47 en verde 7 días seguidos.
+- **T2:** el 95 % de las reuniones con solo notas tiene lectura y minuta (hoy 0 de 301), y el buscador no dice «sin
+  transcripción» cuando hay notas.
+- **T3:** al menos 2 de cada 3 propuestas de empresa confirmadas en 48 horas.
+- **T9:** «lo contó una persona» en la mitad de las reuniones sin texto que lo preguntan.
 
 ## Orden
 

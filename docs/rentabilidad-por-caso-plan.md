@@ -30,7 +30,7 @@
 
 ## Decisiones que ya están
 
-- **Para el precio cuenta lo que debería durar** (el tiempo a mano); **para la rentabilidad, lo que de verdad duró**,
+- **Para el precio mínimo cuenta lo que debería durar** (el tiempo a mano; el precio lo pone el valor, 2026-10-24); **para la rentabilidad, lo que de verdad duró**,
   al costo de la planilla.
 - **Las sesiones se miden solas** con el calendario de Google.
 - **La capacidad no se mide en número de casos**, sino en horas.

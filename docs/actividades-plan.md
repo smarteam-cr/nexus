@@ -32,7 +32,7 @@
 
 ## Los tiempos (decidido)
 
-- **Cada actividad lleva dos tiempos:** el de hacerla a mano (el espacio que se reserva y se cotiza; un diagnóstico
+- **Cada actividad lleva dos tiempos:** el de hacerla a mano (el espacio que se reserva y da el precio mínimo; un diagnóstico
   personalizado ≈ 4 horas) y el objetivo con Nexus (lo que buscamos que tarde revisarlo y ajustarlo: 1 hora, media
   hora o menos).
 - **Se vende por valor (2026-10-24).** Lo que debería durar (el tiempo a mano), con la tarifa por segmento del
@@ -127,8 +127,8 @@ a «Por decidir», se ignoran igual.
 ## Cuarta ronda (2026-10-23)
 
 - **El tamaño lo estima el agente de la preventa.** El agente que investiga la empresa lo estima; si en HubSpot está
-  vacío lo escribe allá, y si no coincide propone el cambio para que el vendedor lo acepte antes de escribirlo (roadmap
-  B1 etapa 2).
+  vacío lo escribe allá, y si no coincide propone el cambio para que el usuario de Nexus que lo está usando, según su
+  rol (2026-10-24), lo acepte antes de escribirlo (roadmap B1 etapa 2).
 - **Se limpian las tareas de hoy antes de sumar las del handoff:** cerrar lo vencido, juntar los seguimientos y bajar
   el tope de «Por decidir» (roadmap D2 etapa 1).
 - **El orden:** primero desarmar el cotizador contigo y limpiar las tareas; está escrito en el roadmap, en «Orden
@@ -179,6 +179,6 @@ cada una tiene su porqué, y Elías lo aprueba.
      contestar al cliente.
    - **Si solo se mide**, el precio no lo cubre y la rentabilidad de cada caso se ve mejor de lo que es.
    - **Si se detalla en la propuesta**, el cliente ve horas, cosa que ya se descartó.
-   - **Recomendación:** medirlo siempre (es el costo de servir la cuenta) y que en el precio entre como un bloque fijo
-     de horas al mes según la escala, sin detallarlo.
+   - **Recomendación:** medirlo siempre (es el costo de servir la cuenta) y que en el precio mínimo entre como un bloque
+     fijo de horas al mes según la escala, sin detallarlo.
    - Está en el roadmap, «Lo que decides tú» 11.

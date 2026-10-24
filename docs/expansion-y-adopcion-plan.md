@@ -23,9 +23,10 @@
 
 ## Decisiones que ya están
 
-- **En una implementación es «fuera de alcance», y decide la CSL** (Alex), con dos salidas: es una extensión o
-  necesita a Ventas. En SmartLoop el mismo pedido se llama «solicitud» y puede volverse un caso del backlog del cliente.
-- **Los avisos de fuera de alcance siguen como avisos:** no pasan a Tareas (22 oct).
+- **En una implementación es «fuera de alcance»: lo acepta o lo descarta el CSE, y la CSL (Alex) siempre revisa lo
+  aceptado** (2026-10-24), con dos salidas: es una extensión o necesita a Ventas. En SmartLoop el mismo pedido se llama
+  «solicitud» y puede volverse un caso del backlog del cliente.
+- **Los avisos de fuera de alcance siguen como avisos** (22 oct): lo único que llega a Tareas es la revisión de la CSL.
 - **No se quitan las piezas que vuelven recurrente un servicio temporal:** la adopción es una de ellas.
 
 ## Etapas
@@ -53,8 +54,9 @@
 
 ## Criterio de éxito
 
-- Cada pedido tiene una decisión en menos de 5 días hábiles.
-- En SmartLoop, al menos un pedido se vuelve un caso del backlog.
+- Cada pedido tiene la decisión del CSE en menos de 5 días hábiles, y la revisión de la CSL en 5 más. Hoy hay 40 sin
+  decidir; la meta es 0 con más de 5 días.
+- En SmartLoop, al menos un pedido se vuelve un caso del backlog, con su origen guardado.
 - Cada caso que termina tiene su revisión de adopción, vista con el cliente.
 
 ## Preguntas para Elías

@@ -55,18 +55,22 @@ la API no tiene endpoints de pagos.
 **Lo que se encontró:**
 - **El panel de gasto sobrecobra Sonnet 5:** lo cobra a US$3/US$15 por millón y el precio vigente es US$2/US$10
   (`lib/ai/precios.ts`).
-- **El ahorro por lotes nunca corrió:** está desplegado desde el 18 oct y la tabla sigue vacía. El vigía hizo 104 llamadas
-  en el momento.
+- **El ahorro por lotes nunca corrió:** está desplegado desde el 18 oct y hay 0 filas en `PedidoEnLote`. El vigía ya
+  está conectado (`VIGIA_BARRIDO_POR_LOTE = true`), pero solo encola los proyectos sin novedad y con huella
+  (`lib/cs/watchdog.ts:1044-1051`), y en una semana hizo 34 llamadas en el momento.
 - **Una caché que solo escribe:** 1,18 millones de tokens escritos y 33 mil leídos. Se paga el recargo sin ahorrar.
 - **La exploración de venta,** el agente que más gasta, no usa caché.
 
 **Mejoras** (el ahorro realista es de US$20 a US$30 al mes; vale más por el orden que por la plata):
-1. **U21 · Corregir el precio de Sonnet 5.** Sin riesgo.
-2. **U22 · Que el vigía entre por los lotes,** y después la post-sesión y el avance del cronograma.
+1. **U21 · Corregir el precio de Sonnet 5.** ✓ Corregido el 24 oct (90 llamadas); falta el deploy.
+2. **U22 · Que el ahorro por lotes corra.** Primero se mide por qué el vigía no encola. Va en dos partes:
+   - **en el paso uno del roadmap,** las lecturas de reuniones van por lotes, antes de traer las 301 con solo notas, las
+     177 del rescate y la investigación de las 71 empresas activas: es lo que abarata la carga;
+   - **en el paso 2,** que el vigía entre por los lotes, y después la post-sesión y el avance del cronograma.
 3. **U23 · La caché donde ahorra:**
    - quitar la que solo escribe;
    - cachear el contexto que repite la exploración de venta;
-   - el clasificador a Haiku, después de compararlo (ya estaba en «Lo que conecta a los equipos»).
+   - el clasificador a Haiku, después de compararlo (antes en «Lo que conecta a los equipos» del roadmap).
 
 ## El resto
 
@@ -77,10 +81,18 @@ la API no tiene endpoints de pagos.
 - **U24 · Sentry Crons:** que avise cuando un job deja de correr, no solo cuando falla. Eso habría mostrado lo de los
   lotes. Antes hay que ver si producción tiene el DSN.
 
+## Criterio de éxito
+
+- **U15:** las líneas del banco sin conciliar se ven en una fila aparte de «Lo que no cuadra».
+- **U21:** el gasto que muestra Nexus queda a ±5 % de la factura de Anthropic.
+- **U22:** al menos una llamada en lote por día.
+- **U23:** la caché leída queda por encima de la escrita.
+- **U24:** se vio avisar una vez.
+
 ## Orden
 
-1. U21, U15 y el token de Apify (sin riesgo).
-2. U22 y U24 (que lo que corre solo se vea).
+1. U21 (✓ hecho), U15 y el token de Apify (sin riesgo); la parte de U22 de las lecturas de reuniones.
+2. El resto de U22 y U24 (que lo que corre solo se vea).
 3. U16, U18 y U23.
 4. U17, con su simulacro.
 5. U20, cuando llegue la clave de Alex y se sepa de quién es la cuenta.

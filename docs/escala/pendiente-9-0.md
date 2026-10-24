@@ -4,7 +4,7 @@
 
 La 8.8.0 fue una limpieza: precisó y acotó textos sin cambiar qué se mide, y ningún identificador cambió. Todo lo que sí cambia qué se mide quedó para la 9.0 y está aquí: agregar o quitar criterios o señales, partir un criterio, moverlo de nivel, de dimensión o de área, cambiar la marca «riesgo», que un criterio pida otra cosa, y los cambios del cálculo. No entraron en la 8.8 porque, con ellos, la misma empresa con la misma evidencia puede quedar en otro nivel: eso pide identificadores nuevos y una versión mayor.
 
-**El orden acordado (decisión 13).** Antes de la 9.0 se prueba la 8.8 con 5 a 8 clientes reales, con el diagnóstico y con el chequeo, y se compara con lo que el equipo cree. ⛔ Nunca con Wherex: hizo churn y es el cliente de prueba de Nexus. Esa prueba decide sobre todo las celdas desbalanceadas y si hay que mostrar el avance («cumple 27 de 30»).
+**El orden acordado (decisión 13).** Antes de la 9.0 se prueba la 8.9.1 (publicada el 2026-10-24) con la empresa que elija cada usuario, desde su preventa o su ficha, hasta juntar 5 a 8 clientes reales de varias industrias, con el diagnóstico y con el chequeo, y se compara con lo que el equipo cree. ⛔ Nunca con Wherex: hizo churn y es el cliente de prueba de Nexus. Esa prueba decide sobre todo las celdas desbalanceadas y si hay que mostrar el avance («cumple 27 de 30»).
 
 **Cómo se ordena.** La escala sirve para que un consultor ubique a una empresa y a la empresa le haga sentido estar ahí. De eso salen la previsibilidad para el cliente (ver todo lo que se le puede mejorar), el land and expand (vender un caso de uso que mejora una o varias dimensiones y seguir con lo que sugiere la escala) y el servicio recurrente (casos de uso hasta llevarlo a niveles superiores). Por eso van primero los temas que hoy ubican mal a una empresa, después los que ordenan la expansión y el camino hacia arriba, y al final lo que depende de la prueba, las ediciones y el cálculo.
 
@@ -263,7 +263,7 @@ Cada cambio de la general lo deciden también las cuatro ediciones (ver sección
 
 ## 17. Cálculo y especificación
 
-Cambian cómo se calcula o qué se emite: van con una versión nueva de la especificación (hoy 1.3.7).
+Cambian cómo se calcula o qué se emite: van con una versión nueva de la especificación (hoy 1.3.8).
 
 - **Especificación, pasos 3 y 6 · Parte 2, «El puntaje de 0 a 100»** — Debajo de Funcional, el puntaje depende de elegir entre Deficiente e Inicial: con la misma evidencia hay 20 puntos de diferencia, y una dimensión en Deficiente con 90 % de Funcional saca 18, menos que una en Inicial con 10 % (22). El cliente ve un número que no refleja lo que avanzó. *Propuesta:* que Deficiente o Inicial salga del avance hacia Funcional (por ejemplo, Inicial desde un tercio de sus criterios), o que el puntaje debajo de Funcional vaya de 0 a 40 por avance y Deficiente o Inicial quede solo como etiqueta.
 - **Especificación, chequeo pasos 2 y 5 · Parte 2, «Dos formas de aplicar la escala»** — El chequeo no es repetible ni ve los riesgos: admite dos métodos (la IA o una tabla) que pueden dar resultados distintos, compara las respuestas contra la frase y contra los criterios, y ninguna pregunta de Datos toca duplicados, contexto ni permiso de contacto. *Propuesta:* una tabla fija de respuestas a niveles, con la IA solo para redactar el resultado (como ya hace el test actual), y una pregunta que destape los riesgos en cada Datos.
@@ -274,10 +274,10 @@ Cambian cómo se calcula o qué se emite: van con una versión nueva de la espec
 
 ## 18. Cómo se trabaja la 9.0
 
-1. **Primero, la prueba.** La 8.8 se mide con 5 a 8 clientes reales (⛔ nunca Wherex), con el diagnóstico y con el chequeo. Los que el equipo valide pasan a ser los primeros casos de referencia: la prueba 6 de la especificación, hoy en espera.
+1. **Primero, la prueba.** La 8.9.1 se mide con 5 a 8 clientes reales que elige cada usuario (⛔ nunca Wherex), con el diagnóstico y con el chequeo. Los que el equipo valide pasan a ser los primeros casos de referencia: la prueba 6 de la especificación, hoy en espera.
 2. **El borrador.** Se abre el borrador 9.0.0 en Nexus (/escala/borrador, solo super admin) desde la 8.8.0 publicada. Cada cambio se hace ahí —el editor cubre criterios, niveles y dimensiones de la escala general— o bajando el .md, editándolo y subiéndolo, que es la vía para las ediciones y para retirar criterios. Antes de guardar, Nexus muestra qué cambia.
 3. **Cada cambio con su porqué.** Se anota en la bitácora la razón y el feedback que lo originó; el panel de edición muestra el feedback de esa ancla y lo vincula.
 4. **Identificadores.** El criterio que cambia de dimensión, de nivel o de lo que mide deja su identificador y entra con otro: el siguiente número libre de su nivel. El que solo se acota o se precisa conserva el suyo. Cada identificador retirado se suma a la lista de retirados de la especificación y no se vuelve a usar (prueba 5); si cambia a qué perfiles aplica un criterio, lo dice el historial.
-5. **Las CUATRO ediciones.** Cada criterio nuevo o retirado de la general se decide en las cuatro: lo reescriben, lo sacan o lo dejan como está, una sola de las tres (prueba 8). Conviene cerrar la general primero y pasar las ediciones de una vez. Lo que aparece en tres ediciones sube a la general.
+5. **Las SEIS ediciones** (Ecommerce y retail, Banca, Educación, Inmobiliaria, Turismo y Automotriz). Cada criterio nuevo o retirado de la general se decide en las seis: lo reescriben, lo sacan o lo dejan como está, una sola de las tres (prueba 8). Conviene cerrar la general primero y pasar las ediciones de una vez. Lo que aparece en tres ediciones sube a la general.
 6. **Lo que espera la prueba.** Las celdas desbalanceadas (sección 14) y el «cumple 27 de 30» (sección 17) se deciden con lo que muestre la prueba.
 7. **Antes de publicar.** Las pruebas 1 a 9 de la especificación (pruebas_escala.py; Nexus las corre al publicar), con el ejemplo de 1.6 rehecho para la prueba 3. Si cambia el cálculo o la lista de retirados, la especificación saca versión nueva y su encabezado dice desde qué escala vale; lo mismo el manual, si cambia.

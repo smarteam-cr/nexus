@@ -182,7 +182,8 @@ Continuidad, CSE Carolina Bersot). Se prueba con un **proyecto de prueba** en pr
      piden cosas (solicitudes) y qué pasa en el primer ciclo.
   3. Con un kickoff generado antes de que el proyecto fuera recurrente, el riel avisa «Este kickoff es anterior al
      servicio: regenéralo» (con su aviso de supuestos, como el diagnóstico).
-  4. Corregir `serviceType` y `servicioRecurrente` de los proyectos del pipeline SmartLoop (simulacro primero).
+  4. Corregir `serviceType` y `servicioRecurrente` de los proyectos del pipeline SmartLoop (simulacro primero): 5 de los
+     7 proyectos del pipeline `942509592` tienen `proyecto_temporal`.
 - **M2 · El orden correcto: primero exploración, después diagnóstico.** La exploración no es una etapa del ciclo; el
   riel la muestra antes del diagnóstico, pero el «Qué sigue» va directo al diagnóstico
   (`lib/clients/que-sigue-del-proyecto.ts`) y la guía de SmartLoop no la nombra (`lib/servicios/smartloop.ts`).
@@ -191,7 +192,9 @@ Continuidad, CSE Carolina Bersot). Se prueba con un **proyecto de prueba** en pr
   2. La guía de la etapa Diagnóstico de SmartLoop dice «explora primero, por equipo; después escribe el diagnóstico».
   3. El diagnóstico de un recurrente avisa si se genera sin exploraciones del ciclo (el aviso de supuestos ya existe).
 - **M3 · El primer ciclo de cada cliente, con su CSE** (estaba en «Lo que falta»): RC Inmobiliaria con Liliana, Honda con
-  Caroline, kölbi con Valentina. Lo que salga al usarlo se arregla en el momento.
+  Caroline, kölbi con Valentina. Lo que salga al usarlo se arregla en el momento. Honda ya está andando (2026-10-24): lo
+  primero es leer lo que se le vendió con los 26 casos de hoy, a mano y sin A2 (roadmap C4 etapa 0, en el paso 4), junto
+  con las propuestas recurrentes internas de FACO, kölbi, Cayalá y Grupo Inve, que ya tienen script.
 - **M4 · Las actividades que se repiten** dejan su tarea en cada ciclo (roadmap D2 etapa 5, `docs/actividades-plan.md`).
 
 Orden: M1 y M2 antes del primer ciclo de RC Inmobiliaria; después M3 con cada cliente; M4 cuando exista la biblioteca de

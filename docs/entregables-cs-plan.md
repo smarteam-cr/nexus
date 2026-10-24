@@ -35,7 +35,7 @@
    - El diagnóstico ya lo tiene.
    - Para los demás, la misma forma: una entrada en el registro, su definición, y el registro congelado por prueba.
    - Las plantillas de hoy siguen siendo las de por defecto.
-   - Cambiar la plantilla de un documento ya generado queda en «Lo que falta» (preventa y diagnóstico, 3).
+   - Cambiar la plantilla de un documento ya generado queda en «Lo que falta» (preventa y diagnóstico, 2).
 3. **I2 · Dos plantillas de Planificación** (con L4).
    - Una esencial y una completa, como el diagnóstico.
    - La sección «Sesiones y entrenamientos» sale de las actividades vendidas cuando existan.

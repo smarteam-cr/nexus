@@ -18,7 +18,10 @@
 - **La investigación web** («Radiografía»: sector, herramientas, hitos con su enlace) vive dentro de la preventa: hay 14
   de 20 preventas con ella.
 - **La ficha** (`Client.ficha`) ya tiene el patrón de propuesta y confirmación: la IA propone un campo, el CSE lo usa o lo
-  descarta, y al confirmar Nexus escribe 9 propiedades `nexus_*` en HubSpot.
+  descarta, y al confirmar Nexus escribe en HubSpot 8 propiedades `nexus_*` (7 de texto y una lista) y 2 notas. Aparte,
+  escribe `siguiente_paso_<equipo>` en empresas, negocios y proyectos.
+- **La copia de las empresas desde HubSpot no existe:** hoy nada trae a Nexus, cada hora, lo que cambia en la empresa de
+  HubSpot.
 
 **En HubSpot**, propiedades de la empresa que ya existen:
 
@@ -48,7 +51,22 @@
    - Insider si califica;
    - los servicios (implementación y recurrente) según su escala, a la tarifa de su segmento.
 
-   El TAM queda en `tam__potencial`, con su fuente y su fecha. **Fórmula validada por Elías el 2026-10-23.**
+   El TAM queda en `tam__potencial`, con su fuente y su fecha. **Fórmula validada por Elías el 2026-10-23.** Va en dos
+   versiones:
+   - **TAM v1, en el paso uno:** las licencias según tamaño y hubs, más los servicios con un monto por nivel de la
+     escala a la tarifa del segmento (80, 100 o 120). Insider queda «sin evaluar» y no suma. El TAM dice «estimado v1».
+     El monto por nivel y la tabla de precios de las licencias no los inventa la sesión: «Lo que decides tú» 25 del
+     roadmap.
+   - **TAM v2, después de N4, N6 y A2:** con Insider y las horas por actividad.
+   - En Nexus se reusan `Client.tamUsd` y `Client.industry`, y se les suma la fuente y la fecha; la etapa 2 suma la
+     columna **segmento** (estándar, corporativo o gobierno).
+   - **Antes del código, se enmienda DECISIONS «Qué ES una empresa: `ClientKind` + TAM (2026-07-24)»**, que hoy dice que
+     Nexus no deriva el TAM. Se conservan null distinto de 0 y el techo de 100 millones.
+   - **Quién lee `tamUsd` hoy:** `proponerPotencial` (`lib/cs/clasificacion.ts:228-231`) dice «TAM estimado por Ventas»,
+     y `app/api/clients/[id]/classification/route.ts` exige `ventas.write` para escribirlo. La razón pasa a decir la
+     fuente («calculado por Nexus»), el permiso se ajusta, y antes del `--apply` se muestra cuántas cuentas cambian de
+     potencial (la CSL tiene que saberlo).
+   - El TAM no entra a la memoria de la cuenta: `lib/memoria/frontera.test.ts:311` ya lo prohíbe, y R11 lo respeta.
 3. **Cada dato tiene un dueño y una fuente.** Por dato se guarda: el valor, de dónde salió (la investigación, HubSpot,
    una persona o el test), quién y cuándo. Una sola regla dice quién manda en cada uno.
 4. **Proponer es fácil; decidir también.**
@@ -57,7 +75,8 @@
      botones: «Usar», «Editar» y «Descartar».
    - **Cualquier dato se edita a mano** con un clic.
    - **Quién decide** (Elías, 2026-10-24): **el usuario de Nexus que lo está usando, según su rol**, y lo que decide
-     se escribe en HubSpot con la sugerencia del agente. El TAM lo ve solo el equipo, nunca el cliente. Los reportes
+     se escribe en HubSpot con la sugerencia del agente. El rol sale de una celda nueva, `clientes.decidirDatos`
+     (`lib/auth/permissions/registry.ts`, editable en /team); qué roles la traen es «Lo que decides tú» 26 del roadmap. El TAM lo ve solo el equipo, nunca el cliente. Los reportes
      de HubSpot van después: primero, que el usuario escriba en HubSpot. Las
      propuestas pendientes se cuentan en la ficha («3 datos por revisar»); no se suman a «Por decidir» de Tareas, para no
      cargar a nadie.
@@ -68,11 +87,18 @@
    - las propiedades nuevas van en un grupo propio de HubSpot, «Nexus · Empresa», con una descripción que dice que las
      escribe Nexus y de dónde salen.
 6. **HubSpot en los dos sentidos, sin pisar a Ventas:**
-   - lo que manda Nexus (TAM, perfil, escala, tráfico, Insider) se escribe siempre;
-   - lo estándar (industria, empleados, facturación, país) se escribe solo si en HubSpot está vacío, o cuando el
-     encargado acepta la propuesta;
+   - lo que **calcula** Nexus (TAM, nivel en la escala, Insider, siguiente caso y sus fechas) se escribe siempre;
+   - lo que decide una persona (industria, perfil, tráfico, base) y lo estándar (industria, empleados, facturación,
+     país) se escribe cuando el usuario, según su rol, usa o edita la propuesta; lo estándar, además, se llena solo si
+     en HubSpot está vacío;
    - lo que alguien cambia en HubSpot vuelve a Nexus en la copia de cada hora y, si choca con lo de Nexus, aparece como
-     propuesta.
+     propuesta. **Esa copia no existe:** se crea el job `empresas-hubspot`, cada hora, incremental por
+     `hs_lastmodifieddate`, por el transporte de U6 y con bandera. Lleva un filtro de eco: lo que Nexus acaba de
+     escribir no vuelve como propuesta.
+7. **Dónde viven los datos** (se escribe en DECISIONS antes del código): los valores, en columnas de `Client` con su
+   tipo; las propuestas y la procedencia, en una tabla `PropuestaDeDato` (empresa, campo, valor, fuente, autor, cita,
+   estado, quién decidió y cuándo, **valor anterior**), no en el Json `Client.ficha`. Esa tabla es también la historia
+   que pide R9.
 
 ## El catálogo de propiedades
 
@@ -88,8 +114,8 @@
 | A quién le vende | `nexus_a_quien_vende` (nueva) | lista: empresas, personas, ambos | la persona, con propuesta | escribe |
 | Cómo cierra la venta | `nexus_perfil_cierre` (nueva) | lista: con equipo, transaccional, mixta | la persona, con propuesta | escribe |
 | Qué pasa después | `nexus_perfil_despues` (nueva) | lista: una sola compra, recompra, continua | la persona, con propuesta | escribe |
-| Tráfico del sitio | `nexus_trafico` (nueva) | lista por rangos | el vendedor, con propuesta | escribe |
-| Base con consentimiento | `nexus_base_consentimiento` (nueva) | lista por rangos | el vendedor, con propuesta | escribe |
+| Tráfico del sitio | `nexus_trafico` (nueva) | lista por rangos | la persona, con propuesta | escribe |
+| Base con consentimiento | `nexus_base_consentimiento` (nueva) | lista por rangos | la persona, con propuesta | escribe |
 | Califica para Insider | `nexus_califica_insider` (nueva) | lista: lista, casi lista, todavía no, sin evaluar | Nexus (lectura de preparación, N6) | escribe |
 | Nivel en Ventas, Marketing y Servicio | `nexus_nivel_ventas`, `nexus_nivel_marketing`, `nexus_nivel_servicio` (nuevas) | lista: los cinco niveles y sin evaluar | Nexus (la última posición confirmada) | escribe |
 | Fecha de la posición en la escala | `nexus_escala_fecha` (nueva) | fecha | Nexus | escribe |
@@ -110,19 +136,29 @@ edición del test, la exploración y el diagnóstico.
 ## Etapas
 
 1. **El catálogo en HubSpot.**
-   - Crear el grupo «Nexus · Empresa» y las propiedades nuevas con sus opciones, con un script en simulacro primero.
+   - En el paso uno se crean el grupo «Nexus · Empresa» y, ya como listas, números y fechas, **solo las propiedades que
+     algo llena ahora**: `nexus_tam_fuente`, `nexus_tam_fecha`, `nexus_investigacion_fecha`, `nexus_a_quien_vende`,
+     `nexus_perfil_cierre`, `nexus_perfil_despues`, `nexus_trafico` y `nexus_base_consentimiento`. Con un script en
+     simulacro primero y el sí de Elías. Molde: `scripts/hubspot-crear-propiedades-ficha.ts` y
+     `hubspot-crear-propiedades-siguiente-paso.ts`.
+   - `nexus_nivel_*` y `nexus_escala_fecha` (B2 o N2), `nexus_califica_insider` (N6) y `nexus_siguiente_caso` (R12) se
+     crean cuando exista su fuente.
    - Ajustar las descripciones de las que existen.
-   - Revisar con Elías los rangos de tráfico y de base, y las opciones de cada lista.
+   - Revisar con Elías los rangos de tráfico y de base, y las opciones de cada lista («Lo que decides tú» 27 del
+     roadmap).
 2. **Los datos en la empresa de Nexus:**
-   - las columnas con su fuente y su fecha (SQL aditivo);
+   - las columnas con su fuente y su fecha, más el segmento (un solo SQL aditivo, con la tabla `PropuestaDeDato` y la
+     de la investigación);
    - la carga inicial desde HubSpot y desde las 14 investigaciones de las preventas;
    - la tabla de la industria a la edición de la escala.
-3. **La investigación en la empresa:**
-   - mudarla de la preventa a la empresa, con su fecha y sus fuentes, y que la preventa la lea de ahí;
-   - sumar las contrataciones y el tamaño estimado;
-   - el botón «Actualizar la investigación».
+   - Pruebas: un motor puro `quienManda(…)` con su unit por fila del catálogo, y una prueba de integración de usar,
+     editar y descartar.
+3. **La investigación en la empresa** (R5), en dos partes que comparten `lib/exploraciones/agente.ts` y `esquemas.ts`:
+   - en el paso uno: mudarla de la preventa a la empresa, con su fecha, sus fuentes, las contrataciones y el tamaño
+     estimado, y el botón «Actualizar la investigación»;
+   - después de K7 y K1 en `main` (o en la misma sesión que K): que la preventa la lea de ahí.
 4. **El TAM:** la fórmula (validada el 2026-10-23), calculada por Nexus para cada empresa, con su explicación a la vista y la
-   escritura en `tam__potencial`.
+   escritura en `tam__potencial`. Primero el TAM v1 (decisión 2).
 5. **Proponer y decidir:**
    - el diseño de la sección «Datos de la empresa» de la ficha en Claude Design (pantalla interna);
    - cada dato con su valor, su fuente y su fecha, la propuesta al lado (de quién y por qué), y «Usar», «Editar» y
@@ -130,12 +166,28 @@ edición del test, la exploración y el diagnóstico.
    - el contador de lo que falta revisar.
 6. **El espejo con HubSpot:**
    - un solo módulo con la tabla de arriba, que reemplaza las cinco listas de lectura de hoy;
-   - escribe según la regla de cada dato, y lo que cambia en HubSpot vuelve como propuesta.
-7. **Los reportes:** tres o cuatro reportes base y un tablero «Cartera por potencial» en HubSpot, armados con Elías.
+   - escribe según la regla de cada dato, y lo que cambia en HubSpot vuelve como propuesta (el job `empresas-hubspot` de
+     la decisión 6).
+7. **Los reportes** (después): tres o cuatro reportes base y un tablero «Cartera por potencial» en HubSpot, armados con
+   Elías.
+
+## Criterio de éxito
+
+- **Completo:** en las empresas activas (con un proyecto activo o una preventa abierta), tamaño, industria (la columna
+  `industry`, hoy llena en 47), perfil y TAM («estimado v1») llenos y con su fuente.
+- **Igual en HubSpot:** el mismo valor en el 100 %.
+- **Creíble:** 8 de cada 10 creíbles en una muestra que revisa su encargado.
+- **Usado:** al menos la mitad de las propuestas usadas, editadas o descartadas en 14 días (hoy, en la ficha, 23 de 199).
+- **La investigación:** guardada en la empresa, con su fecha y sus fuentes, en las activas.
+- «0 propiedades nuevas de texto libre» aplica al catálogo cuando se cree.
 
 ## Cuidados
 
 - Crear propiedades en HubSpot es escribir en el portal de producción: va con simulacro y con el sí de Elías.
+- **Escribir en HubSpot** va detrás de la bandera `EMPRESA_HUBSPOT_ESCRITURA=0`; el valor anterior se guarda **solo** en
+  `PropuestaDeDato.valorAnterior`, y hay un script de vuelta con simulacro. La primera escritura masiva se hace con 5
+  empresas, se mira en HubSpot y después va el resto.
 - Ninguna propiedad estándar se pisa sin regla: si HubSpot tiene un dato, Nexus solo lo propone.
-- Un dato con fuente «persona» no lo cambia la IA: lo propone, y decide el encargado.
+- Un dato con fuente «persona» no lo cambia la IA: lo propone, y decide el usuario de Nexus que lo está usando, según
+  su rol (2026-10-24).
 - La investigación no inventa cifras: lo que no encuentra queda vacío y se pregunta (B1).

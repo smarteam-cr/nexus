@@ -86,5 +86,5 @@ precio mínimo; lo vendido queda guardado por caso y actividad, y el cliente no 
 - Programar C2 antes de A0 obliga a rehacer el motor cuando cambie el catálogo: por eso espera.
 - Dos fuentes de casos (la tabla vieja `UseCase` y la biblioteca) conviviendo mucho tiempo: hay que fijar cuándo se
   retira la vieja.
-- El precio calculado puede chocar con lo que el vendedor ya prometió: la propuesta muestra la diferencia, no la
+- El precio mínimo calculado puede chocar con lo que el vendedor ya prometió: la propuesta muestra la diferencia, no la
   esconde.

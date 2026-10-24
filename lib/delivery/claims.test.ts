@@ -41,6 +41,33 @@ describe("fasesDeLaEntrega — lo que el cliente lee como pendiente suyo (D0)", 
     expect(fases[0].tasks.map((t) => t.title)).toEqual(["Enviar la base", "Aparcada"]);
     expect(pendientesAbiertos(fases).map((p) => p.title)).toEqual(["Enviar la base"]);
   });
+
+  it("una «por validar» que el CSE ya marcó HECHA se cuenta: marcarla hecha no borra la marca", () => {
+    const fases = fasesDeLaEntrega([
+      {
+        name: "Configuración",
+        status: "DONE",
+        durationWeeks: 1,
+        startWeek: 0,
+        tasks: [
+          { title: "Hecha y por validar", status: "DONE", party: "SMARTEAM", needsValidation: true },
+          { title: "En curso y por validar", status: "IN_PROGRESS", party: "SMARTEAM", needsValidation: true },
+        ],
+      },
+    ]);
+    expect(fases[0].tasks.map((t) => t.title)).toEqual(["Hecha y por validar"]);
+  });
+
+  it("el documento y el panel «¿lista para entregar?» leen las fases con fasesDeLaEntrega", () => {
+    // Escaneo estructural: los dos piden Prisma. Si uno vuelve a armar las fases a mano, cuentan tareas distintas.
+    const raiz = path.resolve(__dirname, "../..");
+    const documento = fs.readFileSync(path.join(raiz, "lib/canvas/entrega-generate.ts"), "utf8");
+    const panel = fs.readFileSync(path.join(raiz, "app/api/projects/[projectId]/delivery/readiness/route.ts"), "utf8");
+    for (const [nombre, fuente] of [["documento", documento], ["panel", panel]] as const) {
+      expect(fuente, nombre).toMatch(/const fases: FaseParaEntrega\[\] = fasesDeLaEntrega\(project\?\.timeline\?\.phases \?\? \[\]\);/);
+      expect(fuente, nombre).toMatch(/tasks: \{ select: \{ title: true, status: true, party: true, needsValidation: true \} \}/);
+    }
+  });
 });
 
 const tareas = (n: number, status = "PENDING") =>

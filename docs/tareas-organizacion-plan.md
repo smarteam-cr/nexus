@@ -82,7 +82,7 @@
      con IA como cualquier otra;
    - las fotos de las personas en la tarea y en la agenda, en su versión chica.
 5. **P5 · Leer todas las sesiones de cada persona** (es el área H del roadmap):
-   - la copia de Meet cada hora;
+   - la copia de Meet cada 10 minutos (es U1);
    - leer las reuniones internas de cada persona, no solo las de clientes y las de sprint;
    - cada propuesta de tarea guarda su sesión, el contexto, las personas que estuvieron, el encargado y quién la pidió, y
      la tarea los muestra.

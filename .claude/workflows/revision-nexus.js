@@ -1,7 +1,7 @@
 export const meta = {
   name: 'revision-nexus',
   description: 'Revisa un cambio de Nexus con revisores especializados, verifica cada hallazgo y dice qué no quedó garantizado',
-  whenToUse: 'Antes de commitear código, antes de juntar en main la rama de otra sesión, o cuando Elías pide revisar un cambio. args: { rango?: "base..head", foco?: "qué mirar con más cuidado", nivel?: "normal" | "completo" }',
+  whenToUse: 'La dispara la skill /revisar, que además arregla lo encontrado y se lo cuenta a Elías: para revisar un cambio, usa /revisar. args: { rango?: "base..head", foco?: "qué mirar con más cuidado", nivel?: "normal" | "completo" }',
   phases: [
     { title: 'Alcance', detail: 'qué cambió, de qué tipo, y qué revisores aplican' },
     { title: 'Pruebas reales', detail: 'tsc, eslint, vitest y lo que aplique, corridos de verdad' },
@@ -54,9 +54,10 @@ const COMPUERTAS = {
           comando: { type: 'string' },
           codigoDeSalida: { type: 'number' },
           resultado: { type: 'string', enum: ['verde', 'rojo', 'no_corrio'] },
+          culpaDelCambio: { type: 'string', enum: ['si', 'no', 'no_se', 'no_aplica'], description: 'Si es rojo: ¿lo causa este cambio? "no" solo con evidencia (el rojo no toca nada del diff, o ya estaba en la base del rango). Verde o no_corrio: no_aplica' },
           salida: { type: 'string', description: 'Las últimas líneas reales de la salida, copiadas, no resumidas' },
         },
-        required: ['comando', 'codigoDeSalida', 'resultado', 'salida'],
+        required: ['comando', 'codigoDeSalida', 'resultado', 'culpaDelCambio', 'salida'],
       },
     },
   },
@@ -106,7 +107,7 @@ const ROJO = {
         properties: {
           archivo: { type: 'string' },
           conElCambio: { type: 'string', enum: ['verde', 'rojo', 'no_corrio'] },
-          sinElCambio: { type: 'string', enum: ['verde', 'rojo', 'no_corrio'] },
+          sinElCambio: { type: 'string', enum: ['verde', 'rojo', 'no_concluyente', 'no_corrio'], description: 'no_concluyente: falla porque falta una función o un import nuevo, no por lo que comprueba' },
           nota: { type: 'string' },
         },
         required: ['archivo', 'conElCambio', 'sinElCambio', 'nota'],
@@ -247,7 +248,10 @@ Corre DE VERDAD estas compuertas y copia la salida real; nunca digas que algo pa
 4. Si el cambio toca SQL o schema.prisma: npm run check:esquema
 5. Si el cambio toca reuniones, tareas, cobranza o datos de clientes: npm run check:invariants (solo lee producción)
 Si una compuerta no se puede correr, resultado "no_corrio" con el motivo en salida. Un error que ya existía antes del
-cambio igual es rojo: dilo en la salida.`,
+cambio igual es rojo, y en culpaDelCambio dices si lo causa el cambio, con la evidencia en la salida:
+- una prueba que falla por tiempo agotado (las que recorren el repo tardan bajo carga): córrela sola antes de llamarla rojo;
+- una invariante en rojo: ¿toca datos o código del diff? Si no, "no", con el nombre de la invariante y por qué no;
+- ante la duda, "no_se".`,
   { label: 'compuertas', phase: 'Pruebas reales', schema: COMPUERTAS },
 )
 
@@ -334,7 +338,11 @@ Evidencia: ${h.evidencia}`,
         const v = votos.filter(Boolean)
         const enPie = v.filter((x) => !x.refutado).length
         // Un verificador que se cayó no es un voto: si no votó nadie, el hallazgo queda en pie «sin verificar».
-        const estado = !v.length ? 'sin_verificar' : enPie === lentes.length ? 'confirmado' : enPie > 0 ? 'plausible' : 'descartado'
+        // Un voto que falta no cuenta como refutación: sin todos los votos, nunca se descarta (lo encontró /revisar).
+        const estado =
+          v.length < lentes.length
+            ? enPie > 0 ? 'plausible' : 'sin_verificar'
+            : enPie === lentes.length ? 'confirmado' : enPie > 0 ? 'plausible' : 'descartado'
         return { ...h, estado, votos: v }
       })
     }),
@@ -367,6 +375,9 @@ Comprueba que las pruebas nuevas o cambiadas de verdad vigilan el cambio. Estás
 1. Corre cada una con npx vitest run <archivo>: anota conElCambio.
 2. Devuelve a la versión de antes del cambio SOLO los archivos que no son pruebas (git checkout <base del rango> -- <archivos>).
 3. Córrelas otra vez: anota sinElCambio. Lo esperado es rojo; si siguen verdes, la prueba no vigila el cambio: dilo en la nota.
+   Si fallan porque no existe una función o un import nuevo (no por lo que comprueban), eso no prueba nada: vuelve a
+   poner el cambio y quita SOLO la línea donde se usa la lógica nueva (el filtro, la condición); si así fallan, es rojo;
+   si no se puede aislar, es no_concluyente.
 No commitees nada.`,
     { label: 'prueba-de-rojo', phase: 'Prueba de rojo', schema: ROJO, isolation: 'worktree' },
   )
@@ -396,6 +407,14 @@ compuertas en rojo o que no corrieron. Cada uno con cómo comprobarlo. Solo lo q
 // ── 7. Informe ───────────────────────────────────────────────────────────────────────────────
 phase('Informe')
 const enPie = todos.filter((h) => h.estado !== 'descartado')
+// El veredicto lo decide el guion, con una regla fija; el informe solo lo explica.
+const graves = (h) => h.gravedad === 'critico' || h.gravedad === 'alto'
+const rojosDelCambio = (compuertas ? compuertas.corridas : []).filter((c) => c.resultado === 'rojo' && c.culpaDelCambio !== 'no')
+const veredicto = !compuertas || enPie.some((h) => graves(h) && h.estado === 'confirmado') || rojosDelCambio.length
+  ? 'no_listo'
+  : enPie.some(graves) || (rojo && rojo.pruebas.some((p) => p.sinElCambio !== 'rojo'))
+    ? 'listo_con_cuidado'
+    : 'listo'
 const informe = await agent(
   `Escribe el informe de una revisión de código para Elías, el dueño de Nexus. No es programador de oficio: quiere entender qué
 pasa sin leer código. Español, tuteo, frases cortas, sin jerga (si hace falta un término, explícalo en la misma frase).
@@ -410,8 +429,10 @@ DATOS (no inventes nada fuera de esto):
 - Lo que no se garantiza: ${JSON.stringify(vacios)}
 
 Forma del informe:
-1. Una línea de veredicto: «Listo», «Listo, con cuidado» o «No está listo», y por qué en una frase. «No está listo» si hay un
-   confirmado crítico o alto, o una compuerta en rojo. «Listo, con cuidado» si hay plausibles altos o vacíos importantes.
+1. Una línea de veredicto. Ya está decidido: «${veredicto === 'no_listo' ? 'No está listo' : veredicto === 'listo_con_cuidado' ? 'Listo, con cuidado' : 'Listo'}».
+   Explica por qué en una frase. (La regla: «No está listo» con un crítico o alto confirmado, o una compuerta en rojo que
+   causa el cambio o no se sabe; «Listo, con cuidado» con un crítico o alto plausible o sin verificar, o una prueba nueva
+   que no se puso en rojo sin el cambio.) Un rojo que ya estaba se cuenta aparte, con su nombre, sin cambiar el veredicto.
 2. «Qué cambia»: dos o tres frases de qué hace el cambio para el equipo.
 3. «Lo que hay que arreglar»: cada hallazgo en pie, juntando los repetidos, del más grave al menos: qué pasa, a quién, en
    palabras de la pantalla; al final, entre paréntesis, archivo:línea y si está confirmado o es plausible.
@@ -422,7 +443,7 @@ Sin adornos, sin felicitaciones, sin «todo se ve bien» si hay vacíos.`,
 )
 
 return {
-  veredicto: informe ? informe.veredicto : 'no_listo',
+  veredicto,
   informe: informe ? informe.informe : 'No se pudo escribir el informe.',
   alcance,
   compuertas,

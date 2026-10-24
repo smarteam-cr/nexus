@@ -90,7 +90,8 @@ En lenguaje sencillo, con sus citas:
    - se mide su costo.
 4. **S4 · Comentar y confirmar:** el vendedor lo lee, comenta o discrepa, y una persona lo confirma. Lo confirmado
    alimenta la tendencia.
-5. **S5 · La vista por vendedor:** la tendencia en el tiempo, solo para el vendedor y su líder.
+5. **S5 · La vista por vendedor:** la tendencia en el tiempo, solo para el vendedor y su líder. La reunión se atribuye
+   por el calendario y por quién habló en la transcripción, nunca por la asistencia ni los minutos de la API de Meet.
 6. **S6 · Probar con Andrés:** cinco reuniones reales, entre ellas la de Camosa, revisadas con Andrés antes de abrirlo al
    resto de Ventas.
 
@@ -126,4 +127,6 @@ En lenguaje sencillo, con sus citas:
 
 Hoy Nexus guarda solo al organizador. La de Camosa la organizó Liz Navarro, y Marco y Andrés fueron invitados. El
 analizador atribuye la reunión a todos los de Smarteam que estuvieron, con su papel (organizó o asistió), y la tendencia
-de cada vendedor cuenta las suyas. Va con T7 del plan de las reuniones.
+de cada vendedor cuenta las suyas. Va con T7 del plan de las reuniones. Quién estuvo sale del calendario y de quién habló
+en la transcripción, nunca de la asistencia ni de los minutos de la API de Meet: Google pide no usarla para medir
+desempeño.

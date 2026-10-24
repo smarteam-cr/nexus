@@ -8,6 +8,8 @@
  * del cronograma externo (`timeline-view.int.test.ts`) y de la ruta del servicio
  * (`lib/servicios/ruta-del-servicio.int.test.ts`); la Entrega, `fasesDeLaEntrega` en lib/delivery.
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { cruzaAlCliente } from "./tarea-del-cronograma";
 
@@ -26,4 +28,13 @@ describe("cruzaAlCliente", () => {
     expect(cruzaAlCliente({ status: "SUSPENDED", needsValidation: false })).toBe(false);
   });
 
+  it("vigía para el CI: el cronograma externo y la ruta del servicio siguen usando la regla", () => {
+    // Las pruebas de integración son la prueba de verdad, pero el CI todavía no las corre. Este escaneo sí corre en cada
+    // push: es frágil a propósito (un comentario lo engaña), solo avisa si alguien borra el filtro.
+    const vista = readFileSync(resolve(__dirname, "timeline-view.ts"), "utf8");
+    const ruta = readFileSync(resolve(__dirname, "../servicios/ruta-del-servicio-server.ts"), "utf8");
+    expect(vista).toMatch(/^\s*if \(!cruzaAlCliente\(t\)\) continue;/m);
+    expect(vista).toMatch(/needsValidation: true \}/);
+    expect(ruta).toMatch(/^\s*const fasesQueCruzan = fases\.map\(\(f\) => \(\{ \.\.\.f, tasks: f\.tasks\.filter\(cruzaAlCliente\) \}\)\);/m);
+  });
 });

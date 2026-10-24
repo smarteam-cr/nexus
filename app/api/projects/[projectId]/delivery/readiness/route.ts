@@ -16,7 +16,7 @@ import { prisma } from "@/lib/db/prisma";
 import { loadProjectSummary } from "@/lib/portfolio/load";
 import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
 import { tagLabels } from "@/lib/tags/catalog";
-import { buildDeliveryClaims, cronogramaSinMarcar, type FaseParaEntrega } from "@/lib/delivery/claims";
+import { buildDeliveryClaims, cronogramaSinMarcar, fasesDeLaEntrega, type FaseParaEntrega } from "@/lib/delivery/claims";
 import { deliveryReadiness } from "@/lib/delivery/readiness";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
@@ -40,7 +40,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
                 status: true,
                 durationWeeks: true,
                 startWeek: true,
-                tasks: { select: { title: true, status: true, party: true } },
+                tasks: { select: { title: true, status: true, party: true, needsValidation: true } },
               },
             },
           },
@@ -51,13 +51,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
     getProjectMemberSessions(projectId).catch(() => ({ sessions: [] as Array<{ id: string }> })),
   ]);
 
-  const fases: FaseParaEntrega[] = (project?.timeline?.phases ?? []).map((f) => ({
-    name: f.name,
-    status: f.status,
-    durationWeeks: f.durationWeeks,
-    startWeek: f.startWeek,
-    tasks: f.tasks.map((t) => ({ title: t.title, status: t.status, party: t.party })),
-  }));
+  // La misma lectura que el documento (`fasesDeLaEntrega`): si el panel contara otras tareas, avisaría lo que el documento no hace.
+  const fases: FaseParaEntrega[] = fasesDeLaEntrega(project?.timeline?.phases ?? []);
 
   const claims = buildDeliveryClaims({
     fases,

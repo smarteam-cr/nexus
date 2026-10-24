@@ -22,14 +22,15 @@
 
 **HubSpot va casi en un solo sentido:**
 - Hay cinco listas distintas de propiedades que se leen.
-- Nexus escribe sus 9 propiedades `nexus_*` de la ficha, los encargados, el siguiente paso y notas.
+- Nexus escribe las de la ficha (8 propiedades `nexus_*`, 7 de texto y una lista, y 2 notas), los encargados y el
+  siguiente paso (`siguiente_paso_<equipo>` en empresas, negocios y proyectos).
 - Nexus nunca escribe la industria, los empleados, la facturación, el país ni el TAM.
 
 **Un documento no puede existir sin proyecto:**
 - Cada documento (`ProjectCanvas`) es de un proyecto o de una propuesta comercial.
 - Un diagnóstico personalizado para un prospecto no se puede hacer hoy.
 - El parche es «Información del cliente», un proyecto falso (`__strategy__`) que aparece en 32 archivos. Hay 94 para 88
-  empresas (6 tienen dos) y arrastra canvases que no son suyos.
+  empresas (tres tienen más de uno: Ministerio de Economía 5, AMC 2 y Librería 2) y arrastra canvases que no son suyos.
 
 **Las personas del cliente están en cinco copias sin unir:**
 - los contactos de HubSpot (1.419);
@@ -71,19 +72,23 @@ No hay una persona con su rol en la empresa.
      los dos).
    - Reemplaza las cinco listas de hoy y la escritura de la ficha.
    - Empieza escribiendo propiedades `nexus_*` (TAM, perfil, escala, tráfico, Insider), que no pisan a Ventas. Las
-     estándar (industria, empleados) se escriben solo si en HubSpot están vacías, o con el sí del vendedor (B1).
+     estándar (industria, empleados) se escriben solo si en HubSpot están vacías, o cuando el usuario de Nexus que lo
+     está usando, según su rol, usa o edita la propuesta (2026-10-24). El detalle, en
+     `docs/empresa-datos-hubspot-plan.md`.
 3. **R3 · Los documentos de la empresa, con o sin proyecto.**
    - Cada documento lleva la empresa como dueña; el proyecto y la propuesta pasan a ser opcionales.
    - Con eso se puede hacer un diagnóstico personalizado para un prospecto, y el documento de resultados de la preventa
      (C5).
    - Lleva una carga inicial y una regla en la base, y toca los permisos y la vista que ve el cliente.
 4. **R4 · Retirar «Información del cliente» como proyecto falso.**
-   - Va después de R3: los procesos pasan a un documento de la empresa, se resuelven las 6 empresas con dos, y se limpian
-     los canvases que no son suyos.
+   - Etapa previa: unir los contenedores repetidos de las tres empresas que tienen más de uno, con su script en
+     simulacro.
+   - Va después de R3: los procesos pasan a un documento de la empresa y se limpian los canvases que no son suyos.
    - Mientras tanto, ordenar la búsqueda para que siempre tome el mismo.
 5. **R5 · Las investigaciones son de la empresa.**
-   - La investigación web (sector, herramientas, hitos, contrataciones) se guarda en la empresa con su fecha y sus
-     fuentes, y la preventa la lee.
+   - La investigación web (sector, herramientas, hitos, contrataciones y tamaño estimado) se guarda en la empresa con su
+     fecha y sus fuentes (paso uno); que la preventa la lea de ahí va después de K7 y K1 en `main`, o en la misma sesión
+     que K, porque comparten `lib/exploraciones/agente.ts` y `esquemas.ts`.
    - Se rehace cuando vence, no en cada preventa. Sirve a K3 y a la venta cruzada.
 6. **R6 · Una persona del cliente, con su rol.**
    - Una tabla de personas por empresa (correo único por empresa, nombre, cargo, su contacto de HubSpot) y su rol:
@@ -91,20 +96,38 @@ No hay una persona con su rol en la empresa.
    - La alimentan los contactos de HubSpot; los cuestionarios y los participantes de las reuniones apuntan a ella. Los
      textos de la ficha y del handoff no se tocan al principio.
    - Sirve a K4, E2 y la atención con IA.
-7. **R7 · Endurecer las llaves.**
-   - La dueña de cada reunión (`resolvedClientId`) pasa a ser una relación de verdad (hoy no hay huérfanas).
-   - La empresa de HubSpot pasa a ser única, después de fusionar el grupo duplicado.
-   - Es de bajo riesgo y protege la invariante de no mezclar clientes.
+7. **R7 · Endurecer las llaves** (el día 0 del paso uno, en una sola sesión en `main`: es lo único que cambia a la vez
+   `FirefliesSession` y `Client` en `schema.prisma`).
+   - La dueña de cada reunión (`resolvedClientId`) pasa a ser una relación de verdad.
+   - La empresa de HubSpot pasa a ser única, después de fusionar el grupo duplicado (Areyas y Areyá: «Lo que decides tú»
+     23 del roadmap).
+   - **Antes del SQL:** una consulta de solo lectura, **justo antes**, que busque `manualClientId` y `resolvedClientId`
+     huérfanos y grupos con el mismo `hubspotCompanyId` (no se fijan ids hoy); y que `local-pull-context.ts` suelte o
+     traiga al dueño de una reunión que no viene en el lote.
+   - **El SQL se puede correr dos veces** (`DO $$ … IF NOT EXISTS`, `CREATE UNIQUE INDEX IF NOT EXISTS`; `NOT VALID` y
+     después `VALIDATE` es opcional).
+   - **El `onDelete` se anota en DECISIONS antes del SQL.** Recomendado: `resolvedClientId` → Restrict (la invariante 1
+     prefiere un error visible a reuniones sin dueño en silencio) y `manualClientId` → SetNull (es higiene: es la
+     «lápida» de `app/api/clients/[id]/route.ts:116-128`).
+   - La fusión de empresas sigue moviendo los dos punteros antes de borrar la empresa, con su prueba.
+   - Una invariante comprueba que existen la llave foránea y el índice único, porque `check:esquema` no los ve.
+   - Volver atrás: `DROP CONSTRAINT`.
+   - Protege la invariante de no mezclar clientes.
 8. **R8 · Limpiar lo viejo.**
-   - Borrar los campos vacíos y vencidos (en un SQL aparte, revisado, porque es irreversible).
+   - Borrar los campos vacíos y vencidos (en un SQL aparte, revisado, porque es irreversible). `isProspect` todavía lo
+     escribe `lib/clients/fusion-de-empresas.ts:421` y 9 empresas lo tienen en true: R8 quita ese escritor antes del
+     DROP.
    - Quitar los escritores de `ClientContextCard`.
    - Pasar los lectores de `ClientCsSignals` a las tablas de HubSpot.
    - Partir la ruta `analyze` de 3.385 líneas.
-9. **R9 · La historia de la ficha en una tabla:** los cambios y las propuestas de cada campo, no dentro de un Json de
-   114 kB.
+9. **R9 · La historia de la ficha en una tabla:** los cambios y las propuestas de cada campo (hoy la historia suma
+   9,6 kB y la ficha más grande pesa 23 kB). Es la tabla `PropuestaDeDato` de `docs/empresa-datos-hubspot-plan.md`.
 10. **R10 · Corregir ARCHITECTURE.md** donde ya no dice la verdad:
     - la regla de los estados: en la práctica son textos con su catálogo, no enums;
-    - la deuda de §12 que ya cambió.
+    - la deuda de §12 que ya cambió;
+    - lo medido el 2026-10-24: `analyze` tiene 3.385 líneas y `ProjectCanvasPanel` 1.364; hay 128 `page.tsx`, 512
+      `route.ts`, 197 modelos, 92 enums y 89 carpetas en `lib/`; siguen sin existir `lib/api/parse.ts` y
+      `lib/ai/parse-json-output.ts`.
 11. **R11 · Un solo contexto de la empresa para los agentes.**
     - Un lector que arma, en un lugar: los datos de la empresa, la investigación, la posición en la escala, los casos de
       uso, las personas y la memoria de la cuenta.
@@ -118,6 +141,13 @@ No hay una persona con su rol en la empresa.
 
 **Lo que no se hace:** renombrar `FirefliesSession` (176 archivos, poco beneficio) ni migrar los 104 estados de texto a
 enums.
+
+## Criterio de éxito
+
+- **R7:** 0 reuniones huérfanas, 0 grupos con el mismo `hubspotCompanyId`, y la invariante de la llave en verde.
+- **R10:** ARCHITECTURE leído contra el código en §2.6 y §12 (`doc-sync` no los cubre).
+- **R1, R2 y R5:** el criterio de `docs/empresa-datos-hubspot-plan.md`.
+- **R4:** «Información del cliente» baja de 94 a 0.
 
 ## Orden
 
