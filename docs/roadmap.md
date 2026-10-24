@@ -12,59 +12,61 @@
 2. Revisar y aprobar, área por área, la propuesta de vender y entregar por casos de uso (pestaña «Roadmap»).
 3. Empezar contigo a desarmar el cotizador en un catálogo de actividades.
 
-### Vender por resultados <span class="estado">Propuesta</span>
+**El orden:** las áreas van numeradas en el orden en que conviene hacerlas. El foco ahora es que Ventas y Customer Success queden funcionando de punta a punta: primero el servicio recurrente, porque ya hay clientes en SmartLoop (RC Inmobiliaria, Honda, kölbi) y hoy no tiene uso real; después vender por resultados, que necesita los datos de la empresa; y con eso, la entrega y el diagnóstico. Lo demás sigue cuando eso esté andando.
+
+### 1 · El servicio recurrente funcionando <span class="estado">Propuesta</span>
+
+- **Resultado esperado:** lo que pide el cliente se vuelve su siguiente caso, y el servicio recurrente corre con su cadencia: entrega semanal, reporte de avance mensual y stakeholders cada tres meses.
+- **Hoy:** SmartLoop todavía no tiene uso real: Honda y kölbi sin primer ciclo en Nexus, y RC Inmobiliaria arrancando con Liliana (desde el 23 oct su proyecto ya muestra el Kickoff). A kölbi ya se le ofrece SmartLoop y se cotiza como gobierno.
+- **Plan:** abrir el primer ciclo de cada cliente recurrente con su CSE y arreglar lo que salga al usarlo; las actividades que se repiten dejan su tarea en cada ciclo; las solicitudes del cliente con la CSL decidiendo; después, un agente por cliente que une lo que pide con la biblioteca.
+
+### 2 · Vender por resultados <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** el vendedor arma la propuesta con los casos de uso y las actividades que sugiere Nexus, cada una con su porqué y su precio calculado, y el cliente entiende qué resultado compra.
 - **Hoy:** la biblioteca tiene 26 casos sin actividades ni horas, y el cotizador vive fuera de Nexus. Desde el 23 oct la preventa va por equipo del cliente, con preguntas técnicas y de proceso y una hora con tiempo para contarle.
 - **Plan:** la actividad ya está definida contigo; sigue desarmar el cotizador en actividades, que cada caso las jale y que la propuesta las sugiera.
 
-### Los datos de la empresa <span class="estado">Propuesta</span>
+### 3 · Los datos de la empresa <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** Nexus conoce el tamaño y la forma de cada empresa (equipos, personas, herramientas) y con eso decide cuántas actividades sugerir.
 - **Hoy:** el tamaño de HubSpot no sirve: a 60 de 163 empresas les falta y otras lo tienen mal (Honda Costa Rica figura con 5 empleados).
 - **Plan:** el agente que investiga la empresa en la preventa estima el tamaño, lo escribe en HubSpot si está vacío y, si no coincide, propone el cambio para que el vendedor lo acepte.
 
-### Entregar: cronograma y tareas <span class="estado">Propuesta</span>
+### 4 · Entregar: cronograma y tareas <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** el cliente ve de un vistazo cómo va su proyecto, y cada CSE sabe qué le toca hoy y esta semana, sin 20 tareas de golpe.
 - **Hoy:** el cronograma lo arma el handoff y no está unido a las tareas, a propósito. A los CSE les llegaron 105 tareas en 45 días: ninguna aceptada.
 - **Plan:** limpiar lo que hay y abrir tres puertas: el plan del proyecto nace en el handoff ya decidido, lo dicho con el cliente pasa por «Por decidir» y lo dicho puertas adentro deja tarea y revisión.
 
-### El diagnóstico y los entregables de Customer Success <span class="estado">En producción</span>
+### 5 · El diagnóstico y los entregables de Customer Success <span class="estado">En producción</span>
 
 - **Resultado esperado:** un diagnóstico corto que le explica al cliente por qué tiene los resultados que tiene y qué vamos a hacer (el enfoque de la solución), escrito en minutos con lo que Nexus ya sabe.
 - **Hoy:** desde el 23 oct lee las sesiones de la exploración, avisa cuando casi nada está confirmado, trae el «Enfoque de la solución», todo se mueve y se quita, y se elige entre la plantilla esencial (7 partes) y la completa, o se escribe a mano.
 - **Plan:** después, plantillas por caso de uso y definir contigo qué necesita Customer Success para cada entregable.
 
-### Rentabilidad y capacidad <span class="estado">Propuesta</span>
+### 6 · Que el equipo use Nexus <span class="estado">En curso</span>
+
+- **Resultado esperado:** 10 de las 14 personas operativas entran 3 días o más por semana, y la mitad de lo que propone Nexus se decide antes de que venza.
+- **Hoy:** 0 de 14 entran 3 días; se decide a tiempo el 7,4 % de lo que propone Nexus.
+- **Plan:** menos cosas que decidir (las tres puertas de las tareas) y «Para ti» con el día y la semana.
+
+### 7 · Rentabilidad y capacidad <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** saber cuánto cuesta entregar cada caso y cuánto tiempo le gana Nexus al trabajo a mano.
 - **Hoy:** Rentabilidad ya calcula el costo por hora con la planilla y mide las reuniones del calendario; falta el tiempo del resto del trabajo.
 - **Plan:** cada actividad trae su tiempo a mano (para el precio) y su tiempo con Nexus (la meta); se compara con lo que de verdad duró.
 
-### Expansión y servicio recurrente <span class="estado">Propuesta</span>
-
-- **Resultado esperado:** lo que pide el cliente se vuelve su siguiente caso, y el servicio recurrente corre con su cadencia: entrega semanal, reporte de avance mensual y stakeholders cada tres meses.
-- **Hoy:** SmartLoop todavía no tiene uso real (Honda y kölbi sin primer ciclo en Nexus). A kölbi ya se le ofrece SmartLoop y se cotiza como gobierno.
-- **Plan:** fuera de alcance en las implementaciones y solicitudes en SmartLoop, con la CSL decidiendo; un agente por cliente que une lo que pide con la biblioteca.
-
-### Que cada reunión deje su trabajo <span class="estado">Propuesta</span>
+### 8 · Que cada reunión deje su trabajo <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** cada reunión, también las internas, deja lo que hay que hacer para quien lo tiene que hacer.
 - **Hoy:** solo se leen las reuniones con clientes y los sprints, y la copia de Meet corre cuando alguien abre Nexus.
 - **Plan:** la copia de Meet cada hora y tu piloto con tus reuniones internas.
 
-### Finanzas y cobranza <span class="estado">En producción</span>
+### 9 · Finanzas y cobranza <span class="estado">En producción</span>
 
 - **Resultado esperado:** lo facturado, lo cobrado y lo que entró al banco cuadran solos; una persona decide solo lo dudoso.
 - **Hoy:** «Lo que no cuadra» se cuenta por documento, Nexus ordena solo lo seguro (con «Deshacer») y Mercury cobra sola con el día en que se vio pagada.
 - **Plan:** Stripe cuando Alex dé la clave, prender el corte de cobranza y pagar las comisiones desde Nexus.
-
-### Que el equipo use Nexus <span class="estado">En curso</span>
-
-- **Resultado esperado:** 10 de las 14 personas operativas entran 3 días o más por semana, y la mitad de lo que propone Nexus se decide antes de que venza.
-- **Hoy:** 0 de 14 entran 3 días; se decide a tiempo el 7,4 % de lo que propone Nexus.
-- **Plan:** menos cosas que decidir (las tres puertas de las tareas) y «Para ti» con el día y la semana.
 
 ## Para qué
 
