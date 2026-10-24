@@ -30,7 +30,7 @@
 
 - **Resultado esperado:** Nexus conoce el tamaño y la forma de cada empresa (equipos, personas, herramientas) y con eso decide cuántas actividades sugerir.
 - **Hoy:** el tamaño de HubSpot no sirve: a 60 de 163 empresas les falta y otras lo tienen mal (Honda Costa Rica figura con 5 empleados).
-- **Plan:** el agente que investiga la empresa en la preventa estima el tamaño, lo escribe en HubSpot si está vacío y, si no coincide, propone el cambio para que el vendedor lo acepte.
+- **Plan:** el agente que investiga la empresa en la preventa estima el tamaño, lo escribe en HubSpot si está vacío y, si no coincide, propone el cambio para que el vendedor lo acepte. Se le pregunta además al vendedor lo que pide la escala 9.0: a quién le vende, si vende en su sitio o su app, si tiene catálogo, su tráfico, su base con consentimiento y si se planea o califica para Insider; todo llega a HubSpot.
 
 ### 4 · Entregar: cronograma y tareas <span class="estado">Propuesta</span>
 
@@ -156,6 +156,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 - `docs/exploracion-mejoras-plan.md`: el feedback de Ventas y Customer Success del 23 oct sobre explorar, en la preventa y con los clientes, y lo que sirve del método de Andrés. Sirve a K.
 - `docs/diagnostico-plantillas-plan.md` § «Lo que salió de usarlo»: el diagnóstico y la planificación después de usarlos. Sirve a L.
 - `docs/smartloop-plan.md` § «El recorrido de punta a punta»: SmartLoop con lo que salió de RC Inmobiliaria. Sirve a M.
+- `docs/escala-engagement-avanzado-plan.md`: la escala con engagement avanzado (criterio por criterio, «hoy dice / pasaría a») y los casos de Insider por industria, de la sesión con Insider One. Sirve a N, A6 y B1.
 
 **Orden sugerido, por dependencias** (el foco es que Ventas y Customer Success queden funcionando):
 
@@ -168,7 +169,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 4. K2, K3 y K4 juntas (la primera sesión en frío necesita el position statement), y K10.
 5. Con A1 cerrado: A3 (criterios en palabras simples) y A5 (los casos que faltan).
 6. A2 (migrar el cotizador a la biblioteca) y después A4 (duración y «cómo sabrás que funcionó»).
-7. B1 completo y después B2 (la escala lee los datos de la empresa).
+7. B1 completo (con el perfil que pide la escala 9.0), N (la escala con engagement avanzado, después de publicar la 8.9.1) y después B2 (la escala lee los datos de la empresa). A6 (los casos de Insider por industria) va con N.
 8. C1 y C3 (pueden ir antes: usan lo que ya hay), C2 (la cotización calculada, necesita A2 y B1), C4 y C5 (cuando se defina su formato).
 9. D1 (diseño del cronograma con casos), después D2, D3 y L4, y junto con ellos G1 a G3.
 10. E1, E2, F1, I1 y M4.
@@ -207,15 +208,22 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 5. **A5 · Llenar la parte de producción de la biblioteca.** *Sale de:* «el catálogo está cargado hacia la base operativa», el caso de Ganadas y Perdidas y la revisión de Insider. *Depende de:* A1.
    - Etapa 1 · Definir contigo «Entiende por qué ganas y pierdes»: que todo negocio perdido tenga su razón, elegida de una lista, y que el líder saque el reporte sin armarlo a mano; la revisión mensual con el líder comercial como actividad de adopción. Su siguiente caso: ajustar el proceso con lo aprendido; y más arriba, la IA que analiza las llamadas.
    - Etapa 2 · Casos para Medición y Aprendizaje de Marketing y para Escalabilidad del Servicio, que hoy tienen uno cada uno.
-   - Etapa 3 · Insider: tú me pasas la reunión con el equipo de Insider (casos por industria) y con ella se ajusta la escala y se parten los casos que prometen de Inicial a Óptimo en uno de aterrizaje y uno de expansión.
+   - Etapa 3 · Insider: ✓ llegó la sesión con Insider One del 21 oct; lo que sale de ella pasó a A6 (los casos) y a N (la escala).
    - Etapa 4 · El sitio web con criterio: ICP, buyer personas y kit de marca como actividades del caso de presencia web (también pensando en gobierno), porque terminan en HubSpot como contexto para su IA.
+6. **A6 · Los casos de Insider, por industria.** *Sale de:* la sesión «Casos de uso por industria» con Insider One (21 oct) y tu documento del 23 oct. *Depende de:* N para los criterios nuevos; las etapas 1 y 4 pueden ir antes. Plan: `docs/escala-engagement-avanzado-plan.md`.
+   - Hoy hay cuatro casos de Insider: personalizar la experiencia web, recuperar carritos, recompra y la ficha única. Ninguno dice para qué industria es, y el de carritos promete de Inicial a Óptimo.
+   - Etapa 1 · Un caso de aterrizaje antes de Insider, «Prepara tus datos para personalizar» (los cuatro cimientos de datos), con HubSpot y Smarteam: es lo que vende la lectura «Casi lista» de N.
+   - Etapa 2 · Ajustar los cuatro casos a los criterios de la 9.0 y partir el de carritos en aterrizaje (Eficiente) y expansión (Óptimo).
+   - Etapa 3 · Los casos que faltan: WhatsApp para vender y atender, un recorrido que coordina sitio, notificaciones, SMS y WhatsApp, «Demuestra cuánto vende de más tu marketing» con un grupo de control, búsqueda en catálogos grandes, avisos por evento (vuelos, reservas, entregas) y segmentos de valor y lealtad.
+   - Etapa 4 · Cada caso dice para qué industrias es (las ediciones de la escala: Ecommerce y retail, Turismo, Banca), con sus ejemplos; la biblioteca filtra por la industria del cliente, sin duplicar casos.
+   - Etapa 5 · El aviso de la integración: el conector de HubSpot a Insider va en una sola dirección; un caso que devuelve a HubSpot lo que calcula Insider lo dice.
 
 ### B · Los datos de la empresa, de la preventa al cliente <span class="estado">Propuesta</span>
 
 1. **B1 · Una sola ficha con los datos de la empresa.** *Sale de:* «el tamaño de un caso se califica solo según los datos del cliente» y tu comentario de que aplica a todo Nexus. *Depende de:* nada para la etapa 1.
    - Etapa 1 · Diagnóstico: qué datos hay y dónde (la ficha del cliente, las personas de la exploración, la empresa, los contactos y los asientos de HubSpot). Sale la lista: vendedores, gente de marketing y de servicio, líderes y cómo está organizada, modelo de negocio y herramientas.
    - Etapa 2 · Nexus la llena solo desde HubSpot y desde la investigación del cliente, y dice de dónde salió cada dato. El agente que investiga la empresa en la preventa estima el tamaño. Si en HubSpot está vacío, lo escribe allá; si no coincide, propone el cambio y el vendedor lo acepta antes de que se escriba. Hoy el tamaño de HubSpot no sirve: a 60 de 163 empresas les falta, y Honda Costa Rica figura con 5 empleados.
-   - Etapa 3 · Lo que falta lo pregunta: al vendedor en la preventa, al CSE en el cliente, en una casilla corta. Lo que se responde puede volver al CRM.
+   - Etapa 3 · Lo que falta lo pregunta: al vendedor en la preventa, al CSE en el cliente, en una casilla corta. Lo que se responde vuelve a HubSpot. Incluye el perfil que pide la escala 9.0 (N): a quién le vende (empresas, personas o ambos), si compra, reserva o solicita en su sitio o su app, si tiene catálogo, su tráfico y su base con consentimiento por rangos, y si se planea o califica para Insider.
    - Etapa 4 · Decidir si se enriquece con créditos de HubSpot.
    - Etapa 5 · El tamaño de cada caso (liviano, mediano o grande) sale solo, con su porqué a la vista.
 2. **B2 · Que la escala lea esos datos para saber cuánto pide «Funcional» en esta empresa.** *Sale de:* tu respuesta 2 («los criterios de Funcional pueden ser un arma de doble filo»). *Depende de:* B1.
@@ -407,6 +415,26 @@ Sale de Liliana con RC Inmobiliaria (23 oct). Es la prioridad 1 del Resumen. Pla
 4. **M3 · El primer ciclo de cada cliente, con su CSE:** RC Inmobiliaria con Liliana, Honda con Caroline y kölbi con Valentina; lo que salga se arregla en el momento.
 5. **M4 · Las actividades que se repiten dejan su tarea en cada ciclo** (D2 etapa 5).
 
+### N · La escala con engagement avanzado <span class="estado">Propuesta</span>
+
+Sale de la sesión con Insider One del 21 oct y de tu documento del 23 oct, consensuado ese día. La escala sigue sin nombrar herramientas: reconoce lo que hacen las empresas más maduras que le venden a personas por canales digitales, sobre todo en Eficiente y Óptimo. Plan, criterio por criterio («hoy dice / pasaría a»): `docs/escala-engagement-avanzado-plan.md`.
+
+1. **N1 · Dos condiciones nuevas para los criterios.** *Existe a medias:* la escala ya apaga criterios según cómo se cierra la venta y qué pasa después.
+   - Etapa 1 · Las condiciones «canal digital propio» y «oferta en catálogo».
+   - Etapa 2 · Un criterio puede llevar dos condiciones (hoy lleva una): cambia la estructura de la escala, su lector, su generador, su editor y las pruebas.
+   - Etapa 3 · El tráfico y la base con consentimiento no son condiciones: solo cuentan para la lectura de preparación (N3).
+2. **N2 · Los criterios de engagement avanzado, en la versión 9.0.** *Existe a medias:* de 19 criterios pedidos, 5 son nuevos, 11 son ajustes de los que hay y 3 ya existen casi igual.
+   - Etapa 1 · Los cimientos de datos, solo en Datos de Marketing (2.3): consentimiento por canal (sigue siendo de riesgo), lo que hacen en el sitio o la app unido a la ficha, reconocer al visitante anónimo y el catálogo al día.
+   - Etapa 2 · Marketing: segmentos por comportamiento y predictivos, el sitio que cambia según quién lo visita (en Segmentación), tres canales en un recorrido, pruebas A/B con hipótesis, el ingreso que agrega el marketing contra un grupo de control (el criterio más importante) y operar con agentes de IA.
+   - Etapa 3 · Ventas y Servicio: priorizar con comportamiento digital, recuperar abandonos, segmentos de valor y lealtad, avisos por evento y atención automatizada con traspaso.
+   - Etapa 4 · En un borrador de la escala, revisado por ti; se publica la 9.0.0 después de la 8.9.1.
+3. **N3 · La lectura «Preparación para engagement avanzado».** *No existe.* No cambia el nivel.
+   - Etapa 1 · Tres estados: «Lista» (el perfil cumple, tiene los cimientos y Marketing está en Funcional o más), «Casi lista» (dice qué cimientos faltan: es el proyecto que vende Smarteam antes de la plataforma) y «Todavía no» (su camino es HubSpot y SmartLoop).
+   - Etapa 2 · Los umbrales editables: el de la base con consentimiento arranca en 5.000 contactos.
+   - Etapa 3 · Se ve en la exploración de la preventa y en el diagnóstico del CSE. No nombra a Insider.
+4. **N4 · Los ejemplos por industria.** *Existe a medias:* hay seis ediciones; no hacen falta nuevas.
+   - Etapa única · Los ejemplos de moda, hogar y electrónica en Ecommerce y retail; los de aerolíneas, hotelería y agencias en Turismo; los de finanzas en Banca.
+
 ## Lo que falta, por tema
 
 ### Customer Success y el servicio recurrente
@@ -475,7 +503,7 @@ Lo que dijiste en otros chats que querías más adelante:
 - El centro de comando de dirección.
 - Procesos y Planificación: que el chat cambie el mapa, la puesta en marcha y las plantillas de propiedades.
 - La auditoría del portal con un cliente piloto, con lo que hay que comprobar a mano.
-- La escala: el test aparte detrás de un botón, la teoría en Documentación, guardar en Nexus los resultados del test de marketing y la versión 9.0.
+- La escala: el test aparte detrás de un botón, la teoría en Documentación y guardar en Nexus los resultados del test de marketing (la versión 9.0 pasó a la propuesta, N).
 - Cuestionarios con IA: que el cliente converse unos minutos con un chat que llena el formulario.
 - Exportar un documento a Google Docs.
 - Traer la facturación de Odoo de 2025 para comparar lo cobrado contra lo vendido.
