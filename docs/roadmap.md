@@ -1,6 +1,6 @@
 # Roadmap de Nexus
 
-**Corte:** 2026-10-23
+**Corte:** 2026-10-24
 
 ## Resumen
 
@@ -10,91 +10,150 @@
 
 **Prioridad 1: el contexto inicial** (tarjetas 1 a 3). Todo lo demás de Nexus se basa en lo que sabe de cada empresa y de sus reuniones.
 
-1. Los permisos de Google y de HubSpot, con el wizard `scripts/wizards/permisos-contexto.sh` (8 pasos, ninguno pide secretos).
-2. El pedido al equipo: toda reunión con un cliente o un prospecto, por Google Meet, convocada por Smarteam, con «Transcribir» y las notas activadas (pestaña «Lo que pides al equipo»).
-3. El paso uno del orden sugerido: Google cada 10 minutos con el rescate de 177 reuniones, las notas de Gemini que cuentan (301 reuniones), el tablero de salud de las reuniones, y los datos y la investigación de la empresa.
-4. Lo que cuesta: todo de una vez, unos US$150 a 180 y US$55 a 65 más al mes; recomendado, primero las 71 empresas activas y por lotes (a mitad de precio), unos US$45 a 55 una vez y US$35 a 45 más al mes, y las demás cuando alguien las abra (`docs/reuniones-pieza-angular-plan.md`, «Lo que cuesta»).
+1. ✓ Los permisos de Google y de HubSpot, dados y probados el 24 oct: la API de Meet ya lee quiénes estuvieron y la transcripción frase por frase, y HubSpot ya deja leer los correos, los leads y las transcripciones de llamadas.
+2. **Antes de programar:** responder las preguntas de cada tarjeta de abajo (las de las tarjetas 1 a 3 primero, porque frenan el paso uno).
+3. El pedido al equipo: toda reunión con un cliente o un prospecto, por Google Meet, convocada por Smarteam, con «Transcribir» y las notas activadas (pestaña «Lo que pides al equipo»).
+4. El paso uno del orden sugerido: Google cada 10 minutos con el rescate de 177 reuniones, las notas de Gemini que cuentan (301 reuniones), el tablero de salud de las reuniones, y los datos y la investigación de la empresa.
+5. Lo que cuesta: todo de una vez, unos US$150 a 180 y US$55 a 65 más al mes; recomendado, primero las 71 empresas activas y por lotes (a mitad de precio), unos US$45 a 55 una vez y US$35 a 45 más al mes, y las demás cuando alguien las abra (`docs/reuniones-pieza-angular-plan.md`, «Lo que cuesta»).
 
-**El orden:** las áreas van numeradas por dependencia: cada una usa lo de las anteriores. La empresa va primero porque todo cuelga de ella (sus datos, su investigación y su espejo en HubSpot); las reuniones van segundas porque son las que crean su contexto, y las integraciones terceras porque son por donde entra todo; la escala va después porque todo la lee (el test, la preventa, la propuesta, el diagnóstico y los ciclos de SmartLoop); los datos de la empresa le dan el perfil; el test es la puerta de entrada de los prospectos; con eso se vende por resultados, y lo vendido se entrega por SmartLoop, las tareas, el cronograma y los entregables. Las tareas van antes que el cronograma porque las tareas que nacen de lo vendido necesitan el módulo listo. **Lo urgente que pidió el equipo el 23 oct va primero aunque su área esté más abajo** (los arreglos de SmartLoop, de la exploración y del diagnóstico: ver «Orden sugerido» en la pestaña «Roadmap»).
+**El orden:** las áreas van numeradas por dependencia: cada una usa lo de las anteriores. La empresa va primero porque todo cuelga de ella (sus datos, su investigación y su espejo en HubSpot); las reuniones van segundas porque son las que crean su contexto, y las integraciones terceras porque son por donde entra todo; la escala va después porque todo la lee (el test, la preventa, la propuesta, el diagnóstico y los ciclos de SmartLoop); los datos de la empresa le dan el perfil; el test es la puerta de entrada de los prospectos; con eso se vende por resultados, y lo vendido se entrega por SmartLoop, las tareas, el cronograma y los entregables. Las tareas van antes que el cronograma porque las tareas que nacen de lo vendido necesitan el módulo listo. **Lo urgente que pidió el equipo el 23 oct va primero aunque su área esté más abajo** (los arreglos de SmartLoop, de la exploración y del diagnóstico: ver «Orden sugerido» en la pestaña «Roadmap»). **Cada tarjeta trae su criterio de éxito** (cómo sabremos que quedó, con un número cuando se puede) **y las preguntas que necesito que respondas** antes de programar esa parte.
 
 ### 1 · La empresa: sus datos y su arquitectura <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** la empresa es el centro de Nexus, como en un CRM profesional: sus datos (tamaño, industria, TAM, perfil, escala) en un solo lugar con su fuente, la investigación y los documentos colgando de ella aunque no haya proyecto, una persona del cliente con su rol, todo sincronizado con HubSpot en los dos sentidos, y un solo contexto que leen los agentes.
 - **Hoy:** la industria vive en cinco lugares, el tamaño no se guarda, el TAM está vacío en las 200 empresas, Nexus no escribe en HubSpot lo que enriquece, un documento no puede existir sin proyecto («Información del cliente» es un proyecto falso) y las personas del cliente están en cinco copias sin unir.
 - **Plan:** primero, los datos y la investigación en la empresa, el TAM calculado por Nexus, propuestas que cualquiera hace y el encargado decide o edita, y propiedades de HubSpot hechas para reportar (`docs/empresa-datos-hubspot-plan.md`); después, documentos e investigaciones de la empresa; una persona con su rol; endurecer las llaves y limpiar lo viejo; y lo que le falta comprar a cada empresa (área R).
+- **Criterio de éxito:** las 71 empresas activas tienen tamaño, industria, perfil y TAM, cada dato con su fuente y lo mismo en HubSpot; un agente lee la empresa desde un solo lugar.
+- **Preguntas para ti:**
+  1. Cuando HubSpot y Nexus no coinciden en un dato, ¿quién decide: el vendedor, el CSE o la CSL?
+  2. ¿Qué tres reportes quieres ver primero en HubSpot con lo que escriba Nexus?
+  3. El TAM, ¿lo ve solo el equipo o también el cliente?
 
 ### 2 · Las reuniones: la pieza angular del contexto <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** toda reunión con alguien de fuera llega completa a su empresa y se lee, o dice por qué no: con transcripción, con notas, presencial o sin empresa esperando que alguien decida.
 - **Hoy:** en 90 días, de 1.264 reuniones con empresa, 545 tienen transcripción, 301 solo notas de Gemini (y Nexus las trata como sin texto) y 404 nada; hay 67 reuniones con texto que no son de ninguna empresa, y Nexus solo sabe quién organizó cada reunión.
-- **Plan:** un tablero de salud de las reuniones, las notas cuentan como texto, proponer la empresa de las que no tienen, el motivo de las que no tienen texto, la reunión presencial, la copia de Meet cada hora y quiénes de Smarteam estuvieron (área T).
+- **Plan:** un tablero de salud de las reuniones, las notas cuentan como texto, proponer la empresa de las que no tienen, el motivo de las que no tienen texto, la reunión presencial, la copia de Meet cada 10 minutos y quiénes de Smarteam estuvieron (área T).
+- **Criterio de éxito:** las reuniones con cliente que dejan texto pasan del 72 % al 90 % (indicador 4), y ninguna reunión con texto queda sin empresa más de 48 horas.
+- **Preguntas para ti:**
+  1. Una reunión sin empresa, ¿quién la resuelve: quien la organizó o la CSL?
+  2. El aviso «esta reunión quedó sin texto», ¿le llega a quien la organizó, al encargado de la cuenta o a los dos?
+  3. ¿Cuál era la reunión que Liliana no encontró? Con eso cerramos su caso.
 
 ### 3 · Las integraciones: Google, HubSpot, finanzas y la IA <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** cada integración usa lo que su API de verdad permite (la lección de Mercury): Google da la transcripción con quién habló, quiénes estuvieron y si la reunión ocurrió; HubSpot avisa sus cambios y trae los resúmenes de sus reuniones; Odoo dice en qué banco entró cada pago; y la IA cuesta lo que debe.
 - **Hoy:** Google corre solo cuando alguien abre la app y no usa la API de Meet; HubSpot es todo sondeo, sin correos copiados y con 770 reuniones y 646 llamadas con transcripción que no entran; Odoo tiene 98 movimientos del banco sin conciliar que Nexus no ve; el panel de la IA sobrecobra Sonnet 5 y el ahorro por lotes nunca corrió.
 - **Plan:** primero lo que no pide permisos nuevos (Google cada 10 minutos, el rescate de 177 reuniones, un solo transporte de HubSpot, el precio de Sonnet 5, el banco sin conciliar de Odoo); después la API de Meet, los resúmenes de HubSpot, las fusiones y los webhooks (área U).
+- **Criterio de éxito:** ningún job depende de que alguien abra la app, los correos de HubSpot entran, y el gasto de la IA que muestra Nexus cuadra con la factura de Anthropic.
+- **Preguntas para ti:**
+  1. Los correos de HubSpot ya se pueden leer: ¿todos, o solo los de las empresas activas?
+  2. ¿Registras la dirección de producción en la app de HubSpot, para reconectar desde nexus.smarteamcr.com y no desde tu PC?
+  3. Cuando un job deja de correr, ¿a quién le llega el aviso: a ti o a alguien de Desarrollo?
 
 ### 4 · La escala de rendimiento <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** la escala ubica bien a cada empresa en Ventas, Marketing y Servicio, según su industria y su perfil, y muestra el camino hacia arriba; el mapa de herramientas dice qué pone HubSpot y qué pone Insider en cada paso.
 - **Hoy:** corre la 8.9.0; la 8.9.1 espera tu revisión (prueba 108). Para la 9.0 hay 14 temas pendientes (`docs/escala/pendiente-9-0.md`) y, desde el 23 oct, lo de Insider: 16 cambios, la condición «tráfico suficiente» y la lectura «Preparación para engagement avanzado» (área N).
 - **Plan:** publicar la 8.9.1; probarla con 5 a 8 clientes reales (el orden acordado para la 9.0); escribir la 9.0 con sus temas pendientes y lo de Insider juntos; el mapa de herramientas para la 9.0; y la lectura de preparación en la preventa y el diagnóstico.
+- **Criterio de éxito:** la 9.0 publicada y probada con 5 a 8 clientes, y Customer Success está de acuerdo con el nivel de al menos 4 de cada 5.
+- **Preguntas para ti:**
+  1. ¿Cuándo revisas la 8.9.1? Frena el test y la 9.0.
+  2. ¿Con qué clientes la probamos, y quién del equipo dice dónde cree que está cada uno?
 
 ### 5 · Los tests del diagnóstico de rendimiento <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** el test que llena un prospecto, por departamento, vive en Nexus: preguntas escritas para él, según su industria y su perfil, y un resultado atinado con la escala de hoy, una sola recomendación y los casos de uso que lo mueven.
 - **Hoy:** es una aplicación aparte (`dev.smarteamcr.com/diagnostico-rendimiento`) con la escala vieja (v4): 8 preguntas iguales para todas las industrias, tres dimensiones sin la opción Funcional y un puntaje que mueve la IA. Nexus ya tiene el motor: el cuestionario de la escala y su cálculo, hoy solo para clientes.
 - **Plan:** el test dentro de Nexus con el mismo motor, preguntas por industria, la página de resultados nueva, todo unido a la preventa y a HubSpot, una versión corta y una completa, y el corte de la aplicación vieja (área O).
+- **Criterio de éxito:** la aplicación vieja apagada sin perder un solo lead: cada intento entra a Nexus y a HubSpot, y se sabe en qué pregunta abandonan.
+- **Preguntas para ti:**
+  1. La versión corta, ¿cuántas preguntas como máximo?
+  2. La completa, ¿la llena el cliente solo o el consultor con él en una sesión?
+  3. ¿Quién revisa las preguntas por industria, además de ti?
 
 ### 6 · Vender por resultados <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** el vendedor arma la propuesta con los casos de uso y las actividades que sugiere Nexus, cada una con su porqué y su precio calculado, y el cliente entiende qué resultado compra.
 - **Hoy:** la biblioteca tiene 26 casos sin actividades ni horas, y el cotizador vive fuera de Nexus. Desde el 23 oct la preventa va por equipo del cliente, con preguntas técnicas y de proceso y una hora con tiempo para contarle.
-- **Plan:** el analizador de reuniones de venta para que cada vendedor explore más y venda menos licencias (S, coaching con citas); lo que pidió Ventas el 23 oct para explorar (K): la siguiente pregunta de calidad, el departamento con la escala y el dinero, sesiones que se asocian solas, la primera sesión en frío con el position statement y los clientes similares. Después, desarmar el cotizador en actividades, que cada caso las jale y que la propuesta las sugiera, con el documento de resultados por departamento antes (C5).
+- **Plan:** el analizador de reuniones de venta para que cada vendedor explore más y venda menos licencias (S, coaching con citas); lo que pidió Ventas el 23 oct para explorar (K): la siguiente pregunta de calidad, el departamento con la escala y el dinero, sesiones que se asocian solas, la primera sesión en frío con el position statement y los clientes similares. Después, el ejercicio contigo de la menor cantidad de actividades (A0), y con eso desarmar el cotizador en actividades, que cada caso las jale y que la propuesta las sugiera, con el documento de resultados por departamento antes (C5).
+- **Criterio de éxito:** 5 propuestas reales salen de las actividades que sugiere Nexus, el vendedor entiende el porqué de cada una y el precio cuadra con el del cotizador; antes, el ejercicio de «la menor cantidad de actividades» (A0) aprobado por ti.
+- **Preguntas para ti:**
+  1. ¿Con qué dos o tres implementaciones reales hacemos el ejercicio de la menor cantidad de actividades?
+  2. ¿Hay casos que se venden a precio fijo desde el día 1, o todos salen de las horas?
+  3. El analizador de reuniones de venta, ¿lo ve solo Andrés en el piloto, o también su líder?
 
 ### 7 · El servicio recurrente funcionando <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** lo que pide el cliente se vuelve su siguiente caso, y el servicio recurrente corre con su cadencia: entrega semanal, reporte de avance mensual y stakeholders cada tres meses.
 - **Hoy:** SmartLoop todavía no tiene uso real: Honda y kölbi sin primer ciclo en Nexus, y RC Inmobiliaria arrancando con Liliana (desde el 23 oct su proyecto ya muestra el Kickoff). A kölbi ya se le ofrece SmartLoop y se cotiza como gobierno.
 - **Plan:** un kickoff que sabe que es SmartLoop y el orden exploración → diagnóstico (M1 y M2); abrir el primer ciclo de cada cliente recurrente con su CSE y arreglar lo que salga al usarlo; las actividades que se repiten dejan su tarea en cada ciclo; las solicitudes del cliente con la CSL decidiendo; después, un agente por cliente que une lo que pide con la biblioteca.
+- **Criterio de éxito:** RC Inmobiliaria, Honda y kölbi cierran su primer ciclo en Nexus (exploración, diagnóstico y entrega), y cada pedido del cliente tiene una decisión.
+- **Preguntas para ti:**
+  1. Una solicitud del cliente en SmartLoop, ¿la decide siempre la CSL, o el CSE puede aceptar las chicas?
+  2. ¿Cuándo arranca el primer ciclo de Honda y el de kölbi?
 
 ### 8 · El módulo de Tareas <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** un sistema de tareas profesional y sencillo: cada persona filtra por cliente en una barra a la izquierda, abre cada tarea en una vista grande y ordenada, la une a su sesión en el calendario, y recibe tareas propuestas de todas sus reuniones, con su fuente clara.
 - **Hoy:** la tarea se abre en un cajón angosto con nombres que confunden («Para» y «Para quién»); no hay subtareas a la vista, ni fotos, ni forma de unir una tarea con un evento que ya existe; solo se leen las reuniones con clientes y los sprints.
 - **Plan:** el diseño primero; después la barra por cliente, la vista grande con subtareas, el calendario y las sesiones, leer todas las reuniones de cada persona, y dejarlo listo para generar tareas desde lo vendido (área P).
+- **Criterio de éxito:** los CSE trabajan sus tareas desde la barra por cliente, y nadie tiene más de 10 cosas por decidir.
+- **Preguntas para ti:**
+  1. Las subtareas, ¿con su propio responsable y fecha (como en Trello), o basta una lista para marcar?
+  2. ¿Arrancamos tu piloto de reuniones internas (H1) apenas la copia de Meet corra cada 10 minutos?
 
 ### 9 · Entregar: cronograma y tareas <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** el cliente ve de un vistazo cómo va su proyecto, y cada CSE sabe qué le toca hoy y esta semana, sin 20 tareas de golpe.
 - **Hoy:** el cronograma lo arma el handoff y no está unido a las tareas, a propósito. A los CSE les llegaron 105 tareas en 45 días: ninguna aceptada.
-- **Plan:** limpiar lo que hay y abrir tres puertas: el plan del proyecto nace en el handoff ya decidido, lo dicho con el cliente pasa por «Por decidir» y lo dicho puertas adentro deja tarea y revisión.
+- **Plan:** que una tarea «por validar» no llegue al cliente (D0, un error de hoy); limpiar lo que hay y abrir tres puertas: el plan del proyecto nace en el handoff ya decidido, lo dicho con el cliente pasa por «Por decidir» y lo dicho puertas adentro deja tarea y revisión.
+- **Criterio de éxito:** un proyecto nuevo nace con su plan en tareas ya decididas, y el cliente ve un resumen sin las tareas internas.
+- **Preguntas para ti:**
+  1. En su cronograma, ¿el cliente ve los casos con sus etapas y sesiones, o también cada entregable?
+  2. Las 105 tareas que nadie decidió, ¿las cerramos en bloque o cada CSE revisa las suyas?
 
 ### 10 · El diagnóstico y los entregables de Customer Success <span class="estado">En producción</span>
 
 - **Resultado esperado:** un diagnóstico corto que le explica al cliente por qué tiene los resultados que tiene y qué vamos a hacer (el enfoque de la solución), escrito en minutos con lo que Nexus ya sabe.
 - **Hoy:** desde el 23 oct lee las sesiones de la exploración, avisa cuando casi nada está confirmado, trae el «Enfoque de la solución», todo se mueve y se quita, y se elige entre la plantilla esencial (7 partes) y la completa, o se escribe a mano.
 - **Plan:** en el kickoff, la ruta de HubSpot Academy por rol y el pedido fijo del acceso a su portal (Q); lo que salió de usar el diagnóstico el 23 oct (L): las reuniones con solo notas cuentan, publicar dice por qué no, la ficha editable y todo movible; después, la Planificación con sesiones y entrenamientos, plantillas por caso de uso y qué necesita Customer Success para cada entregable.
+- **Criterio de éxito:** Liliana genera, presenta y publica un diagnóstico sin tener que preguntar por qué no puede, y cada kickoff nuevo trae la ruta de Academy y el pedido del acceso al portal.
+- **Preguntas para ti:**
+  1. Las Acciones coherentes, ¿van en el diagnóstico o en la Planificación? («Lo que decides tú» 16)
+  2. ¿Quién arma y mantiene la lista de cursos de Academy por rol?
+  3. ¿Cuándo hacemos el chat por entregable (J1)?
 
 ### 11 · Que el equipo use Nexus <span class="estado">En curso</span>
 
 - **Resultado esperado:** 10 de las 14 personas operativas entran 3 días o más por semana, y la mitad de lo que propone Nexus se decide antes de que venza.
 - **Hoy:** 0 de 14 entran 3 días; se decide a tiempo el 7,4 % de lo que propone Nexus.
 - **Plan:** menos cosas que decidir (las tres puertas de las tareas) y «Para ti» con el día y la semana.
+- **Criterio de éxito:** los indicadores 1 y 3 de «Cómo va Nexus» llegan a su meta.
+- **Preguntas para ti:**
+  1. ¿Quién revisa cada semana quién no entra: tú o el líder de cada equipo?
+  2. Al llegar en la mañana, ¿qué debería abrir cada persona primero: «Para ti» o Tareas?
 
 ### 12 · Rentabilidad y capacidad <span class="estado">Propuesta</span>
 
 - **Resultado esperado:** saber cuánto cuesta entregar cada caso y cuánto tiempo le gana Nexus al trabajo a mano.
 - **Hoy:** Rentabilidad ya calcula el costo por hora con la planilla y mide las reuniones del calendario; falta el tiempo del resto del trabajo.
-- **Plan:** cada actividad trae su tiempo a mano (para el precio) y su tiempo con Nexus (la meta); se compara con lo que de verdad duró.
+- **Plan:** prender «¿cuánto te tomó?», que nunca se prendió (G0); cada actividad trae su tiempo a mano (para el precio) y su tiempo con Nexus (la meta); se compara con lo que de verdad duró.
+- **Criterio de éxito:** por cada caso entregado, lo estimado contra lo real y su margen, con datos de al menos dos proyectos.
+- **Preguntas para ti:**
+  1. Las tareas de gestión del cliente, ¿se cobran o solo se miden? («Lo que decides tú» 11)
+  2. «¿Cuánto te tomó?», ¿se pregunta en toda tarea o solo en las que salen de lo vendido?
 
 ### 13 · Finanzas y cobranza <span class="estado">En producción</span>
 
 - **Resultado esperado:** lo facturado, lo cobrado y lo que entró al banco cuadran solos; una persona decide solo lo dudoso.
 - **Hoy:** «Lo que no cuadra» se cuenta por documento, Nexus ordena solo lo seguro (con «Deshacer») y Mercury cobra sola con el día en que se vio pagada.
 - **Plan:** Stripe cuando Alex dé la clave, prender el corte de cobranza y pagar las comisiones desde Nexus.
-
+- **Criterio de éxito:** «Lo que no cuadra» baja cada semana, y una persona decide solo lo dudoso.
+- **Preguntas para ti:**
+  1. ¿Cuándo prendemos el corte de cobranza?
+  2. Las 98 líneas del banco sin conciliar, ¿las revisa Alex en Nexus o en Odoo?
+  3. ¿Cuándo llega la clave de Stripe?
 
 ## Para qué
 
@@ -108,7 +167,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `f5a1cb42` desde el 23 oct: el Kickoff también en el riel de un SmartLoop (estaba creado y no se veía; RC Inmobiliaria), la preventa por equipo del cliente (guía de ese equipo con lo técnico, una hora con «Contarle», el panel que dice la verdad y «Por equipo») y el diagnóstico con todo el contexto (lee las sesiones de la exploración, avisa si casi nada está confirmado), el «Enfoque de la solución», todo se mueve y se quita, y dos plantillas: esencial y completa. |
+| Producción | Corre `ed86aa4a` desde el 24 oct (solo documentos y el permiso nuevo de HubSpot en el `.env`); el código es el del 23 oct: el Kickoff también en el riel de un SmartLoop (estaba creado y no se veía; RC Inmobiliaria), la preventa por equipo del cliente (guía de ese equipo con lo técnico, una hora con «Contarle», el panel que dice la verdad y «Por equipo») y el diagnóstico con todo el contexto (lee las sesiones de la exploración, avisa si casi nada está confirmado), el «Enfoque de la solución», todo se mueve y se quita, y dos plantillas: esencial y completa. |
 | Por desplegar | Nada: todo `main` está en producción (12.716 pruebas unitarias y 189 de integración en verde, tsc en 0). |
 | En rojo en producción | 4 invariantes: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado (con su decisión abajo), y desde el 21 oct INV16(a): 2 reuniones de Meet leídas antes de ocurrir (un evento movido de fecha después de leerse, el caso conocido de KNOWN-ERRORS). |
 | Pruebas | 25 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 81 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
@@ -181,6 +240,17 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 | Nada que nazca en Nexus se crea en HubSpot (Tareas, oct) | La tarea de seguimiento comercial va también a HubSpot | D4: solo para el seguimiento con un contacto o negocio |
 | La exploración no es una etapa del ciclo de SmartLoop y «Qué sigue» va directo al diagnóstico | Primero exploración, después diagnóstico | M2 |
 
+**Cómo se construye cada parte** (vale para todas; el detalle está en ARCHITECTURE):
+
+1. **Primero se mira, después se diseña, después se programa.** Cada parte arranca leyendo los datos reales en solo lectura; las pantallas internas nuevas pasan por un diseño en Claude Design que revisas tú; y lo que cambia cómo se comporta un módulo se escribe en DECISIONS antes del código.
+2. **Cada etapa se despliega sola** y no rompe lo de hoy: lo nuevo entra al lado de lo viejo, y lo viejo se retira cuando lo nuevo ya se usa.
+3. **El SQL va antes del código**, solo aditivo y que se pueda correr dos veces; `check:esquema` en verde antes del deploy.
+4. **La lógica vive en `lib/<módulo>` con sus pruebas** desde el primer día; la pantalla solo muestra. Toda lectura de reuniones pasa por el chokepoint (`lib/sessions/project-sources.ts`).
+5. **Lo que escribe en masa va en simulacro primero**, y el `--apply` después de leer la salida.
+6. **Toda IA nueva se mide** (cuánto cuesta cada corrida) y se prueba con 5 casos reales antes de abrirla al equipo.
+7. **Cada integración tiene un solo transporte** (reintentos y límites en un lugar) y cada job avisa si deja de correr.
+8. **Una parte está terminada cuando cumple su criterio de éxito**, no cuando está construida.
+
 **Los planes escritos** (cada uno es la fuente de su parte):
 
 - `docs/actividades-plan.md`: qué es una actividad, sus dos tiempos, el tamaño y el ICP, quién elige y las tareas que nacen del plan. Sirve a A, C2, D2 y G.
@@ -199,20 +269,27 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 - `docs/integracion-google-plan.md`: Google Workspace, lo que hace hoy, lo que permiten las APIs de Meet, Workspace Events, Calendar y Speech-to-Text, y lo que tienes que configurar. Sirve a U1 a U5 y a T.
 - `docs/integracion-hubspot-plan.md`: HubSpot, del sondeo a los webhooks, los resúmenes de sus reuniones, las fusiones, los leads y Nexus dentro de HubSpot. Sirve a U6 a U14, R2 y B3.
 - `docs/integraciones-finanzas-ia-plan.md`: Odoo, Mercury, Stripe, Claude, Apify, Supabase y Sentry. Sirve a U15 a U24.
+- `docs/propuestas-por-casos-plan.md`: recomendar el caso, la cotización que sale de las actividades, «lo que viene después», las implementaciones de hoy leídas como casos y el documento de resultados. Sirve a C.
+- `docs/entrega-por-casos-plan.md`: el cronograma con casos, las tareas por tres puertas, lo hablado en una sesión y el seguimiento en HubSpot. Sirve a D.
+- `docs/expansion-y-adopcion-plan.md`: fuera de alcance y solicitudes, el agente de cada cliente y la auditoría de adopción. Sirve a E y F.
+- `docs/rentabilidad-por-caso-plan.md`: el tiempo estimado y real por tarea, la rentabilidad por caso y la capacidad con las horas de las actividades. Sirve a G.
+- `docs/entregables-cs-plan.md`: las plantillas de cada entregable y qué necesita Customer Success para cada uno. Sirve a I y J.
 
 **Orden sugerido, por dependencias** (el foco es que Ventas y Customer Success queden funcionando):
 
 1. **Paso uno: la empresa, sus reuniones y las integraciones.** U1 (Google cada 10 minutos, el rescate de 177 reuniones, el código de la reunión y los cancelados: `docs/integracion-google-plan.md`), U6 (un solo transporte de HubSpot: `docs/integracion-hubspot-plan.md`), U21 y U15 (el precio de Sonnet 5 y el banco sin conciliar de Odoo: `docs/integraciones-finanzas-ia-plan.md`), T1 y T2 (el tablero de salud de las reuniones y que las notas de Gemini cuenten: `docs/reuniones-pieza-angular-plan.md`), y la empresa (`docs/empresa-datos-hubspot-plan.md`): R7 y R10, después R1, R2 y R5 con B1 adentro (los datos y la investigación en la empresa, el TAM calculado por Nexus, propuestas que se deciden y editan, y las propiedades de HubSpot hechas para reportar).
-2. Lo que pidieron Ventas y Customer Success el 23 oct, que no depende de nada:
+2. Lo que pidieron Ventas y Customer Success el 23 oct, que no depende de nada (y N1, publicar la 8.9.1, que es solo tu revisión y destraba O y N):
    - M1 y M2: el kickoff que sabe que es SmartLoop y el orden exploración → diagnóstico, antes del primer ciclo de RC Inmobiliaria;
    - K7 y K1, con K8 dentro: la siguiente pregunta de calidad y la exploración por departamento con la escala y el dinero;
    - S1 a S3: el analizador de reuniones de venta (el criterio, quién habló y el análisis con citas), y S6 con Andrés;
+   - D0: que una tarea «por validar» no llegue al cliente (un error de hoy, chico);
+   - G0: prender «¿cuánto te tomó?» contigo y con un CSE;
    - L2 y L3: publicar diciendo por qué y los detalles del diagnóstico y la ficha (L1 pasó a T2);
    - T3: proponer la empresa de las reuniones que no tienen;
    - U2 y U3: la prueba de un día con la API de Meet y, si sale bien, la API de Meet (la transcripción con quién habló, quiénes estuvieron, «no ocurrió»);
    - U7, U8 y U9: los resúmenes de HubSpot, los correos y las fusiones;
    - U22 y U24: que el ahorro por lotes corra y que un job que deja de correr avise.
-3. S4 y S5 (comentar, confirmar y la tendencia por vendedor). Sin depender de nada: desarmar contigo el cotizador en un catálogo de actividades (A1 etapa 2 y A2 etapa 1), limpiar las tareas de los CSE que nadie decidió (D2 etapa 1), H1 (tu piloto con tus propias sesiones) y la etapa 1 de B1 (qué datos de la empresa hay y dónde).
+3. S4 y S5 (comentar, confirmar y la tendencia por vendedor). Sin depender de nada: **A0, el ejercicio de validación contigo (la menor cantidad de actividades)**, y solo con A0 aprobado, desarmar el cotizador en un catálogo de actividades (A1 etapa 2 y A2 etapa 1); limpiar las tareas de los CSE que nadie decidió (D2 etapa 1) y H1 (tu piloto con tus propias sesiones). La etapa 1 de B1 ya va en el paso uno, dentro de R1.
 4. Q (Academy y el acceso al portal en el kickoff), K5 y K6 (dejar de buscar sesiones a mano), D4 (el seguimiento en HubSpot), M3 (el primer ciclo de cada cliente con su CSE) y P (el módulo de Tareas: el diseño, la barra por cliente, la vista grande, el calendario y leer todas las sesiones; P4 espera a A2).
 5. R6 (una persona con su rol), y después K2, K3 y K4 juntas (la primera sesión en frío necesita el position statement), y K10.
 6. Con A1 cerrado: A3 (criterios en palabras simples) y A5 (los casos que faltan).
@@ -220,12 +297,18 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 8. N1 y N2 (publicar la 8.9.1 y probarla con clientes), B2 (la escala lee los datos de la empresa), O1 a O4 (el test dentro de Nexus, que arranca con la 8.9.1 y toma la 9.0 solo), N3 a N7 (la 9.0 con lo pendiente y lo de Insider), O5 y O6 (las dos versiones del test y el corte de la aplicación vieja). A6 (los casos de Insider por industria) va con N.
 9. R3 y R4 (los documentos de la empresa sin proyecto), C1 y C3 (pueden ir antes: usan lo que ya hay), C2 (la cotización calculada, necesita A2 y B1), C4 y C5 (cuando se defina su formato; necesita R3 y R4, los documentos de la empresa sin proyecto).
 10. D1 (diseño del cronograma con casos), después D2, D3 y L4, y junto con ellos G1 a G3.
-U4 y U5 (enterarse al momento de lo de Meet; las reuniones del cliente y las presenciales), U10 a U14 (webhooks, copia incremental, leads, Nexus dentro de HubSpot, salir de lo legacy), U16 a U20 y U23. E1, E2 (con R11 y R12: el contexto único de la empresa y lo que le falta comprar), F1, I1 y M4. R8 y R9 cuando se toque cada parte.
+11. U4 y U5 (enterarse al momento de lo de Meet; las reuniones del cliente y las presenciales), U10 a U14 (webhooks, copia incremental, leads, Nexus dentro de HubSpot, salir de lo legacy), U16 a U20 y U23. E1, E2 (con R11 y R12: el contexto único de la empresa y lo que le falta comprar), F1, I1 y M4. R8 y R9 cuando se toque cada parte.
 12. K9 (aprender de los ajustes a la guía), cuando haya volumen.
 
 ### A · La biblioteca de casos de uso y sus actividades <span class="estado">Propuesta</span>
 
-1. [en curso] **A1 · Definir contigo qué es una actividad.** *Sale de:* «debajo de los casos de uso va un catálogo de actividades», «un caso es maleable», tu respuesta 3. *Depende de:* nada.
+1. **A0 · El ejercicio de validación: la menor cantidad de actividades.** *Sale de:* tu pedido del 24 oct: antes de crear las actividades y los casos de uso, validarlo juntos; las implementaciones tienen que ser fáciles y sencillas con todo lo que la IA permite. *Depende de:* nada. **Nada de A1 etapa 2, A2, C2, D2 etapa 2 ni P4 se programa sin este ejercicio aprobado.** Plan: `docs/actividades-plan.md` § «El ejercicio de validación».
+   - Etapa 1 · Tú me das el contexto: cómo ves una implementación hoy con la IA (qué hace Nexus solo, qué hace el CSE, qué hace el cliente), con dos o tres implementaciones reales recientes, una que salió bien y una que no.
+   - Etapa 2 · Yo exploro: el cotizador, las propuestas firmadas, los cronogramas y las tareas reales de esos proyectos, sus sesiones y lo que Nexus ya escribe solo (kickoff, diagnóstico, planificación, reportes). Sale qué actividades se repiten en todos, cuáles casi nunca y cuáles ya hace Nexus.
+   - Etapa 3 · La propuesta: la menor cantidad de actividades que llega al resultado de cada caso, cada una con su porqué y el artefacto de Nexus que la acelera, y qué se quita o se junta respecto del cotizador.
+   - Etapa 4 · La validamos juntos, caso por caso, con una pregunta: «¿se llega al resultado sin esta actividad?». Lo aprobado va al plan y a DECISIONS; recién ahí se programa.
+   - **Criterio de éxito:** el catálogo tiene menos actividades que tareas el cotizador, ningún caso pasa de 8, y tú lo apruebas.
+2. [en curso] **A1 · Definir contigo qué es una actividad.** *Sale de:* «debajo de los casos de uso va un catálogo de actividades», «un caso es maleable», tu respuesta 3. *Depende de:* nada.
    - Etapa 1 · ✓ Hecha el 22 oct, en tres rondas (`docs/actividades-plan.md`). Una actividad es el trabajo para llegar al resultado; lo que ve el cliente es lo que se entrega.
      - Cada actividad lleva dos tiempos: el de hacerla a mano (se cotiza) y el objetivo con Nexus (la meta). La rentabilidad usa lo que de verdad duró.
      - Las sesiones duran una hora.
@@ -233,10 +316,10 @@ U4 y U5 (enterarse al momento de lo de Meet; las reuniones del cliente y las pre
      - Se comparte entre casos.
      - Algunas se repiten (en SmartLoop: semanal, mensual, trimestral).
      - En cada proyecto nace como tarea en el handoff.
-   - Etapa 2 · Desarmar el cotizador contigo: juntar todas sus tareas en un catálogo de actividades agrupadas, y después ver qué actividades jala cada caso (primero las actividades, después los casos). Empezar por «Sistematiza tu proceso comercial» y «Entiende por qué ganas y pierdes».
+   - Etapa 2 · Con A0 aprobado, desarmar el cotizador contigo: juntar todas sus tareas en un catálogo de actividades agrupadas, y después ver qué actividades jala cada caso (primero las actividades, después los casos). Empezar por «Sistematiza tu proceso comercial» y «Entiende por qué ganas y pierdes».
    - Etapa 3 · La regla de corte: lo fijo de un caso es el resultado y cómo saber que funcionó; las actividades son una sugerencia que se infla o se aliviana. Si una actividad agregada cumple algo de otra dimensión o de un nivel más alto, Nexus avisa «esto ya es otro caso».
    - Etapa 4 · Dejarlo escrito en DECISIONS como la definición oficial, antes de tocar código.
-2. **A2 · Migrar el cotizador a la biblioteca de casos.** *Sale de:* tu respuesta 1 (reabre la decisión del 17 oct) y «yo entrego el tiempo máximo de cada actividad». *Depende de:* A1.
+3. **A2 · Migrar el cotizador a la biblioteca de casos.** *Sale de:* tu respuesta 1 (reabre la decisión del 17 oct) y «yo entrego el tiempo máximo de cada actividad». *Depende de:* A1.
    - Etapa 1 · Inventario, sin código: el catálogo de actividades que sale de A1 etapa 2 (`D:\Proyectos\casos-de-uso-escala`), con su tiempo a mano, su tiempo con Nexus, su responsable y los casos que la usan, para que lo revises. Lo mantienes tú.
    - Etapa 2 · Las actividades viven en el mismo archivo de la biblioteca (`lib/casos-de-uso/catalogo.ts`), sin tabla nueva, con pruebas: cada actividad cumple algo dentro del resultado de su caso, tiene etapa y tiempo.
    - Etapa 3 · Sin multiplicador por tamaño.
@@ -245,26 +328,28 @@ U4 y U5 (enterarse al momento de lo de Meet; las reuniones del cliente y las pre
      - Gobierno y corporativo suman actividades (actas, SICOP, comité) y cobran su tarifa (80, 100, 120).
      - La persona ve «3 exploraciones»; el cálculo lo hace Nexus. Los datos del ICP están en el plan.
    - Etapa 4 · La biblioteca muestra las actividades y las horas, solo al equipo. El cotizador externo se retira cuando la biblioteca lo reemplace.
-3. **A3 · Los criterios, en palabras simples.** *Sale de:* tu respuesta 4. *Depende de:* A1.
+4. **A3 · Los criterios, en palabras simples.** *Sale de:* tu respuesta 4. *Depende de:* A1.
    - Etapa 1 · Cada caso dice en frases cortas qué va a poder hacer el cliente cuando termine, escritas desde la escala y revisadas contigo.
    - Etapa 2 · Los códigos de la escala y las letras de los niveles no salen en ninguna pantalla de vendedor, de Customer Success ni del cliente; una prueba lo vigila.
    - Etapa 3 · Las actividades y los criterios se ven juntos: cada actividad dice qué parte del resultado deja lista.
-4. **A4 · Cada caso con su duración y «cómo sabrás que funcionó».** *Sale de:* «a las tarjetas les falta la duración y cómo sabrás que funcionó». *Depende de:* A2 y A3.
+5. **A4 · Cada caso con su duración y «cómo sabrás que funcionó».** *Sale de:* «a las tarjetas les falta la duración y cómo sabrás que funcionó». *Depende de:* A2 y A3.
    - Etapa 1 · La duración sale de las actividades y de las sesiones por semana.
    - Etapa 2 · «Cómo sabrás que funcionó» sale de los criterios en palabras simples, con la métrica que ya guarda cada caso aplicado a un cliente.
    - Etapa 3 · Las tarjetas de la biblioteca y la propuesta los muestran.
-5. **A5 · Llenar la parte de producción de la biblioteca.** *Sale de:* «el catálogo está cargado hacia la base operativa», el caso de Ganadas y Perdidas y la revisión de Insider. *Depende de:* A1.
+6. **A5 · Llenar la parte de producción de la biblioteca.** *Sale de:* «el catálogo está cargado hacia la base operativa», el caso de Ganadas y Perdidas y la revisión de Insider. *Depende de:* A1.
    - Etapa 1 · Definir contigo «Entiende por qué ganas y pierdes»: que todo negocio perdido tenga su razón, elegida de una lista, y que el líder saque el reporte sin armarlo a mano; la revisión mensual con el líder comercial como actividad de adopción. Su siguiente caso: ajustar el proceso con lo aprendido; y más arriba, la IA que analiza las llamadas.
    - Etapa 2 · Casos para Medición y Aprendizaje de Marketing y para Escalabilidad del Servicio, que hoy tienen uno cada uno.
    - Etapa 3 · Insider: ✓ llegó la sesión con Insider One del 21 oct; lo que sale de ella pasó a A6 (los casos) y a N (la escala).
    - Etapa 4 · El sitio web con criterio: ICP, buyer personas y kit de marca como actividades del caso de presencia web (también pensando en gobierno), porque terminan en HubSpot como contexto para su IA.
-6. **A6 · Los casos de Insider, por industria.** *Sale de:* la sesión «Casos de uso por industria» con Insider One (21 oct) y tu documento del 23 oct. *Depende de:* N para los criterios nuevos; las etapas 1 y 4 pueden ir antes. Plan: `docs/escala-engagement-avanzado-plan.md`.
+7. **A6 · Los casos de Insider, por industria.** *Sale de:* la sesión «Casos de uso por industria» con Insider One (21 oct) y tu documento del 23 oct. *Depende de:* N para los criterios nuevos; las etapas 1 y 4 pueden ir antes. Plan: `docs/escala-engagement-avanzado-plan.md`.
    - Hoy hay cuatro casos de Insider: personalizar la experiencia web, recuperar carritos, recompra y la ficha única. Ninguno dice para qué industria es, y el de carritos promete de Inicial a Óptimo.
    - Etapa 1 · Un caso de aterrizaje antes de Insider, «Prepara tus datos para personalizar» (el permiso por canal, lo que hacen en el sitio unido a la ficha y el catálogo de su industria), con HubSpot y Smarteam: es lo que vende la lectura «Casi lista» de N.
    - Etapa 2 · Ajustar los cuatro casos a los criterios de la 9.0 y partir el de carritos en aterrizaje (Eficiente) y expansión (Óptimo).
    - Etapa 3 · Los casos que faltan: WhatsApp para vender y atender, un recorrido que coordina sitio, notificaciones, SMS y WhatsApp, «Demuestra cuánto vende de más tu marketing» con un grupo de control, avisos por evento (vuelos, reservas, entregas), avisos de disponibilidad y de baja de precio, y segmentos de valor y lealtad. Cada caso apunta a sus criterios y el mapa de herramientas dice qué pone HubSpot y qué Insider.
    - Etapa 4 · Cada caso dice para qué industrias es (las ediciones de la escala: Ecommerce y retail, Turismo, Banca), con sus ejemplos; la biblioteca filtra por la industria del cliente, sin duplicar casos.
    - Etapa 5 · El aviso de la integración: el conector de HubSpot a Insider va en una sola dirección; un caso que devuelve a HubSpot lo que calcula Insider lo dice.
+
+**Criterio de éxito:** un vendedor arma una propuesta con casos y actividades de la biblioteca sin abrir el cotizador externo, y en 5 propuestas reales el precio de Nexus difiere menos de un 10 % del que daba el cotizador.
 
 ### B · Los datos de la empresa, de la preventa al cliente <span class="estado">Propuesta</span>
 
@@ -284,7 +369,11 @@ U4 y U5 (enterarse al momento de lo de Meet; las reuniones del cliente y las pre
    - Etapa 2 · Verlos en la preventa y en «Llegaron por el test» (K10), unidos a la empresa.
    - Etapa 3 · Sumarlos al plano de una empresa y a lo que leen los agentes de la preventa.
 
+**Criterio de éxito:** las 71 empresas activas tienen sus datos con su fuente, ninguna con el tamaño en blanco, y la escala dice qué le falta a cada una para llegar a Funcional.
+
 ### C · Preventa y propuestas <span class="estado">Propuesta</span>
+
+Plan: `docs/propuestas-por-casos-plan.md`.
 
 1. **C1 · Recomendar el caso según la escala, enfocado en el resultado.** *Sale de:* la regla de aterrizaje y expansión, y «que se enfoque en el resultado que el cliente necesita». *Depende de:* nada (la regla ya existe).
    - Etapa 1 · Revisar la recomendación de hoy (`lib/casos-de-uso/camino.ts`) con cinco preventas reales.
@@ -308,16 +397,19 @@ U4 y U5 (enterarse al momento de lo de Meet; las reuniones del cliente y las pre
    - Etapa 2 · Lo arma Nexus con las sesiones de cada equipo (K1) y la escala; Ventas lo revisa y lo presenta antes de la propuesta.
    - Etapa 3 · La propuesta con casos de uso parte de ese documento (C1).
 
+**Criterio de éxito:** 5 propuestas reales armadas desde las actividades, cada una con su porqué; lo vendido queda guardado por caso y actividad.
+
 ### D · La entrega: cronogramas y tareas, con corte limpio <span class="estado">Propuesta</span>
 
-Lo que mostró el diagnóstico del 22 oct: hay un solo cronograma por proyecto y lo arma el handoff; cada regeneración queda como propuesta que alguien aprueba; las tareas del cronograma no tienen persona ni horas y no están unidas a las tareas del equipo; y el cliente ve todas las tareas del cronograma, no un resumen.
+Plan: `docs/entrega-por-casos-plan.md`. Lo que mostró el diagnóstico del 22 oct: hay un solo cronograma por proyecto y lo arma el handoff; cada regeneración queda como propuesta que alguien aprueba; las tareas del cronograma no tienen persona ni horas y no están unidas a las tareas del equipo; y el cliente ve todas las tareas del cronograma, no un resumen.
 
-1. **D1 · Diseñar el cronograma con casos de uso.** *Sale de:* «cada caso lleva su diagnóstico, planificación, implementación y adopción» y tu respuesta 3 sobre cronogramas y tareas. *Depende de:* A1.
+1. **D0 · Que una tarea «por validar» no llegue al cliente.** *Existe el error:* la vista del cliente esconde solo las suspendidas (`lib/external/timeline-view.ts`), así que una tarea por validar cruza con su título y su semana. Un filtro y una prueba que lo congele. *Depende de:* nada.
+2. **D1 · Diseñar el cronograma con casos de uso.** *Sale de:* «cada caso lleva su diagnóstico, planificación, implementación y adopción» y tu respuesta 3 sobre cronogramas y tareas. *Depende de:* A1.
    - Etapa 1 · Contar los cronogramas activos y en qué estado están (publicados, aprobados, con propuesta pendiente).
    - Etapa 2 · El diseño en Claude Design: lo que ve el cliente es un resumen, como se vendió (los casos con sus etapas y las sesiones); las tareas del equipo van aparte.
    - Etapa 3 · El corte limpio: los proyectos nuevos nacen con el modelo nuevo; los de hoy siguen como están. Para tener un cronograma nuevo sin tocar el viejo se usa lo que ya existe: otro proyecto del mismo cliente (un cliente ya puede tener varios). No se cambia la regla de un cronograma por proyecto.
    - Etapa 4 · Nada cambia en un cronograma publicado sin una propuesta que el CSE apruebe, como hoy.
-2. **D2 · Las tareas del equipo salen de las actividades, por tres puertas.** *Sale de:* «cada caso de uso genera tareas para Customer Success», «cada tarea guarda tiempo estimado y real» y tus respuestas del 22 oct. *Depende de:* A2 para la etapa 2; la etapa 1 va ya.
+3. **D2 · Las tareas del equipo salen de las actividades, por tres puertas.** *Sale de:* «cada caso de uso genera tareas para Customer Success», «cada tarea guarda tiempo estimado y real» y tus respuestas del 22 oct. *Depende de:* A2 para la etapa 2; la etapa 1 va ya.
    - Etapa 1 · Limpiar antes de sumar: cerrar lo vencido, juntar los seguimientos sueltos y bajar el tope de «Por decidir». Hoy, en 45 días, a los cinco CSE les llegaron 105 tareas: ninguna aceptada ni hecha, 37 vencidas sin decidir, y hay 26 seguimientos que nadie tomó.
    - Etapa 2 · Las tres puertas (`docs/tareas-plan.md` § 17):
      - **El plan del proyecto:** nace en el handoff, una tarea por actividad vendida, con su responsable y su tiempo. Ya está vendido, así que no pasa por «Por decidir».
@@ -327,49 +419,64 @@ Lo que mostró el diagnóstico del 22 oct: hay un solo cronograma por proyecto y
    - Etapa 4 · El cronograma sigue aparte del sistema de tareas: se arma desde la propuesta y el handoff para que el cliente entienda de un vistazo cómo vamos, y más adelante se cambia por Gantts por caso. El puente por ahora es el chat del cronograma: conoce las actividades y las tareas del proyecto, y el CSE le pide sumar líneas.
    - Etapa 5 · En SmartLoop, las actividades que se repiten (la entrega semanal, el reporte de avance mensual, los stakeholders cada tres meses) dejan su tarea en cada ciclo, y varias las prepara Nexus solo.
    - Etapa 6 · Probarlo primero en tus propias tareas y después en un piloto con alguien del equipo.
-3. **D3 · Lo que se habla en una sesión: tarea si está dentro del alcance.** *Sale de:* «lo hablado genera tareas si cae dentro del alcance; si no, aviso». *Depende de:* D2.
+4. **D3 · Lo que se habla en una sesión: tarea si está dentro del alcance.** *Sale de:* «lo hablado genera tareas si cae dentro del alcance; si no, aviso». *Depende de:* D2.
    - Etapa 1 · La lectura de cada reunión compara lo pedido contra las actividades de lo vendido: dentro, propuesta de tarea; fuera, pedido (ver E1).
    - Etapa 2 · Que no duplique una tarea que ya está en el cronograma (hoy no lo detecta).
 
-4. **D4 · Las tareas de seguimiento comercial, también en HubSpot.** *Sale de:* el feedback de Ventas del 23 oct («que quede en el calendario y en HubSpot, y que al marcarla hecha en un lado se marque en el otro»). *Depende de:* nada. Plan: `docs/tareas-plan.md` § 17.
+5. **D4 · Las tareas de seguimiento comercial, también en HubSpot.** *Sale de:* el feedback de Ventas del 23 oct («que quede en el calendario y en HubSpot, y que al marcarla hecha en un lado se marque en el otro»). *Depende de:* nada. Plan: `docs/tareas-plan.md` § 17.
    - Hoy existe a medias: lo que nace en HubSpot se sincroniza en los dos sentidos (hecha incluida) cada 15 minutos, y una tarea a mano con fecha se agenda en Calendar con un clic. Lo que nace en Nexus no se crea en HubSpot.
    - Etapa 1 · Una tarea de seguimiento con un contacto o negocio («el cliente no responde hace 3 días») se crea también en HubSpot y guarda su id: desde ahí, el estado viaja solo.
    - Etapa 2 · Al crearla, «Agendar» propone el bloque en el calendario del consultor.
    - Etapa 3 · Las tareas internas siguen solo en Nexus; la excepción se anota en DECISIONS antes del código.
 
+**Criterio de éxito:** un proyecto nuevo nace con sus tareas ya decididas; «Por decidir» baja a menos de 10 por CSE; el cliente ve un resumen sin las tareas internas ni las que están «por validar».
+
 ### E · Lo que pide el cliente: el camino de expansión <span class="estado">Propuesta</span>
 
+Plan: `docs/expansion-y-adopcion-plan.md`.
+
 1. **E1 · Fuera de alcance en implementaciones; solicitudes en SmartLoop.** *Sale de:* «los avisos de fuera de alcance son el pipeline de expansión», «el CSE puede levantar la mano» y tu comentario 7. *Depende de:* nada para la etapa 1.
-   - Etapa 1 · En una implementación sigue siendo «fuera de alcance», y la CSL (Alex) decide con dos salidas: es una extensión o necesita a Ventas.
-   - Etapa 2 · En SmartLoop el mismo pedido se llama «solicitud» y se puede volver un caso del backlog del cliente (el campo para hacerlo ya existe y nadie lo usa). En SmartLoop, sumar actividades alarga el plan, con una cadencia de entrega por definir.
+   - Etapa 1 · En una implementación sigue siendo «fuera de alcance», y la CSL (Alex) decide con dos salidas: es una extensión o necesita a Ventas. Ojo: hoy el código deja decidir al CSE y le avisa a la CSL; se alinea con tu respuesta (pregunta de la tarjeta 7).
+   - Etapa 2 · En SmartLoop el mismo pedido se llama «solicitud» y se puede volver un caso del backlog del cliente. Hoy el caso de uso tiene el origen «pedido», pero nada lo escribe ni guarda de qué pedido salió; en producción hay 40 pedidos sin decidir. En SmartLoop, sumar actividades alarga el plan, con una cadencia de entrega por definir.
    - Etapa 3 · Levantar la mano ya existe (sumar un pedido a mano): hacerlo visible donde el CSE trabaja.
 2. **E2 · Un agente por cliente que une lo que pide con la biblioteca.** *Sale de:* «cada cliente debería tener un agente que determine lo que va necesitando». *Depende de:* A2 y E1.
    - Etapa 1 · Al confirmar un pedido, Nexus sugiere qué caso de la biblioteca lo resuelve, primero por reglas (los síntomas de cada caso).
    - Etapa 2 · Después con IA y la memoria de la cuenta.
    - Etapa 3 · Lo acumulado alimenta el camino de crecimiento del cliente.
 
+**Criterio de éxito:** cada pedido fuera de alcance tiene una decisión de la CSL en menos de 5 días hábiles, y en SmartLoop al menos un pedido se vuelve un caso del backlog.
+
 ### F · La adopción y la rutina del equipo del cliente <span class="estado">Propuesta</span>
+
+Plan: `docs/expansion-y-adopcion-plan.md`.
 
 1. **F1 · Una actividad de auditoría de adopción en HubSpot.** *Sale de:* «no se quitan las piezas que convierten un servicio temporal en recurrente» y tu comentario sobre adopción. *Depende de:* A1.
    - Etapa 1 · Una actividad fija en la etapa de adopción de cada caso: armar en HubSpot el reporte de uso del equipo y revisarlo con el cliente.
    - Etapa 2 · Su resultado entra al reporte de entrega y a la adopción de SmartLoop, en las secciones que ya existen.
    - Etapa 3 · Decidir dónde queda registrada la rutina que adoptó el equipo del cliente.
 
+**Criterio de éxito:** cada caso que termina tiene su revisión de adopción, con el reporte de uso de HubSpot visto con el cliente.
+
 ### G · Horas, rentabilidad y capacidad <span class="estado">Propuesta</span>
 
-1. **G1 · Tiempo estimado y real por tarea.** *Sale de:* «hay que medir las sesiones y todo el trabajo detrás». *Depende de:* D2.
+Plan: `docs/rentabilidad-por-caso-plan.md`.
+
+1. **G0 · Prender «¿cuánto te tomó?».** *Existe y nunca se prendió:* 0 preguntas en producción. Activar el momento «tarea hecha» contigo y con un CSE, y medir en dos semanas cuántas se responden. Es la única fuente del tiempo real del trabajo que no es una reunión. *Depende de:* nada.
+2. **G1 · Tiempo estimado y real por tarea.** *Sale de:* «hay que medir las sesiones y todo el trabajo detrás». *Depende de:* D2.
    - Etapa 1 · Va con D2: lo estimado sale de la actividad, y lo real sale de «¿Cuánto te tomó?» o del bloque que la persona agenda en su calendario desde Tareas.
    - Etapa 2 · Las sesiones se miden solas con Google Workspace (el calendario ya entra en «Para ti»).
-2. **G2 · Rentabilidad por caso.** *Sale de:* «como prioridad de RevOps voy a calcular la rentabilidad de los servicios». *Depende de:* G1.
+3. **G2 · Rentabilidad por caso.** *Sale de:* «como prioridad de RevOps voy a calcular la rentabilidad de los servicios». *Depende de:* G1.
    - Etapa 1 · Lo estimado contra lo real por caso, al lado de lo que se cobró (Rentabilidad ya lo hace por cuenta). Lo real se paga al costo por hora de la planilla, que ya calcula `lib/rentabilidad/margen.ts`. El precio usa la tarifa del segmento.
    - Etapa 2 · Mientras no haya datos, cada estimación dice cuánto riesgo de rentabilidad asume.
-3. **G3 · La capacidad del CSE con las horas de las actividades.** *Sale de:* «la capacidad no se mide en número de casos». *Depende de:* A2.
+4. **G3 · La capacidad del CSE con las horas de las actividades.** *Sale de:* «la capacidad no se mide en número de casos». *Depende de:* A2.
    - Etapa 1 · La carga ya se mide en horas; pasa a usar las horas de cada actividad en vez del promedio por tipo de fase.
    - Etapa 2 · Calibrar con kölbi y FACO, los primeros datos reales de recurrencia.
 
+**Criterio de éxito:** por cada caso entregado, lo estimado contra lo real y su margen, con datos de al menos dos proyectos; la carga de cada CSE en horas de actividades.
+
 ### H · Que Nexus lea todas tus sesiones y te proponga tareas <span class="estado">Propuesta</span>
 
-Lo que mostró el diagnóstico del 22 oct: Nexus guarda las reuniones de Meet de todo el equipo, pero solo propone tareas en reuniones con un cliente o prospecto (y ahí solo lo que cada uno se comprometió) y en las reuniones de sprint configuradas. Las reuniones internas sueltas no se leen solas, y la copia de Meet corre solo cuando alguien abre Nexus.
+Plan: `docs/tareas-organizacion-plan.md` (P5) y `docs/reuniones-pieza-angular-plan.md`. Lo que mostró el diagnóstico del 22 oct: Nexus guarda las reuniones de Meet de todo el equipo, pero solo propone tareas en reuniones con un cliente o prospecto (y ahí solo lo que cada uno se comprometió) y en las reuniones de sprint configuradas. Las reuniones internas sueltas no se leen solas, y la copia de Meet corre solo cuando alguien abre Nexus.
 
 1. **H1 · Tu piloto: todas tus sesiones proponen tareas** (se construye dentro de P5, con la fuente, el contexto y las personas de cada propuesta). *Sale de:* tu respuesta 4 («Nexus debería proponerme tareas a mí, y a cada persona con sus sesiones»). *Depende de:* nada.
    - Etapa 1 · Que la copia de Meet corra sola cada hora, sin depender de que alguien abra Nexus.
@@ -377,18 +484,28 @@ Lo que mostró el diagnóstico del 22 oct: Nexus guarda las reuniones de Meet de
    - Etapa 3 · Leer también las reuniones con aliados y las que no tienen dueño, que hoy no lee nadie.
    - Etapa 4 · Una semana midiendo costo y ruido contigo; después, el resto del equipo. Cuidado: una reunión interna con el nombre de un cliente en el título no puede dejarle tareas a ese cliente.
 
+**Criterio de éxito:** una semana de tus reuniones internas te deja tareas útiles, con menos de una de cada tres descartada por ruido y su costo medido.
+
 ### I · Varias plantillas de diagnóstico y planificación <span class="estado">Propuesta</span>
 
+Plan: `docs/entregables-cs-plan.md`.
+
 1. **I1 · Elegir la plantilla de cada entregable.** *Sale de:* «es importante que pronto haya varias plantillas de diagnóstico o planificación» y «cada caso lleva su propio diagnóstico corto». *Depende de:* A1.
-   - Etapa 1 · Un selector de plantilla en cada entregable (el registro ya admite varias; hoy hay una por entregable).
+   - Etapa 1 · Un selector de plantilla en cada entregable. El diagnóstico ya lo tiene desde el 23 oct (esencial y completa); falta en los demás.
    - Etapa 2 · Plantillas por caso de uso: el diagnóstico corto de cada caso.
    - Etapa 3 · Las plantillas de hoy siguen igual y son las que salen por defecto.
 
+**Criterio de éxito:** cada entregable deja elegir plantilla, las de hoy siguen por defecto, y hay al menos un diagnóstico corto por caso de uso.
+
 ### J · Definir contigo los entregables de Customer Success <span class="estado">Propuesta</span>
+
+Plan: `docs/entregables-cs-plan.md`.
 
 1. **J1 · Qué necesita Customer Success para cada entregable y cuáles automatiza Nexus.** *Sale de:* «quiero definir qué necesita Customer Success para entregar los entregables principales; ese ejercicio lo quiero hacer contigo». *Depende de:* A1.
    - Etapa 1 · Un chat contigo por entregable (kickoff, diagnóstico, planificación, entrega, adopción): qué información necesita, de dónde sale y qué parte puede escribir Nexus con las sesiones y lo que sabe del cliente.
    - Etapa 2 · Con eso, actualizar las tareas de cada cliente con Caroline: qué se hizo, cuánto tomó y qué sigue según lo vendido, traducido a SmartLoop.
+
+**Criterio de éxito:** cada entregable principal tiene escrito qué necesita, de dónde sale y qué escribe Nexus solo, aprobado por ti.
 
 ### K · Explorar mejor, en la preventa y con los clientes <span class="estado">Propuesta</span>
 
@@ -432,6 +549,8 @@ Sale del feedback de Ventas (Marco, Andrés y Liz) y de Customer Success (Lilian
    - Etapa 2 · Los intentos sin empresa, agrupados por el dominio del correo, con «Crear la empresa en HubSpot».
    - Etapa 3 · Un reporte de marketing por empresa: cuántas llegaron, con cuántas áreas y cuántas pasaron a preventa.
 
+**Criterio de éxito:** Marco revisa 5 guías reales y dice que la siguiente pregunta es la que él haría; las sesiones se asocian solas sin un solo cruce de clientes.
+
 ### L · El diagnóstico y la planificación, después de usarlos <span class="estado">Propuesta</span>
 
 Sale del feedback de Customer Success y Ventas del 23 oct, validado contra el diagnóstico que entró ese día. Plan: `docs/diagnostico-plantillas-plan.md` § «Lo que salió de usarlo».
@@ -452,6 +571,8 @@ Sale del feedback de Customer Success y Ventas del 23 oct, validado contra el di
    - Etapa 2 · Decidir dónde viven las Acciones coherentes (ver «Lo que decides tú»).
    - Etapa 3 · Dos plantillas de Planificación, como el diagnóstico (I1).
 
+**Criterio de éxito:** Liliana genera, presenta y publica un diagnóstico sin preguntar por qué no puede, y todas las tarjetas se mueven.
+
 ### M · SmartLoop de punta a punta <span class="estado">En curso</span>
 
 Sale de Liliana con RC Inmobiliaria (23 oct). Es la prioridad 1 del Resumen. Plan: `docs/smartloop-plan.md` § «El recorrido de punta a punta».
@@ -467,6 +588,8 @@ Sale de Liliana con RC Inmobiliaria (23 oct). Es la prioridad 1 del Resumen. Pla
    - Etapa 2 · La guía de la etapa Diagnóstico dice «explora primero, por equipo».
 4. **M3 · El primer ciclo de cada cliente, con su CSE:** RC Inmobiliaria con Liliana, Honda con Caroline y kölbi con Valentina; lo que salga se arregla en el momento.
 5. **M4 · Las actividades que se repiten dejan su tarea en cada ciclo** (D2 etapa 5).
+
+**Criterio de éxito:** RC Inmobiliaria, Honda y kölbi cierran su primer ciclo en Nexus con exploración, diagnóstico y la tarea de cada actividad que se repite.
 
 ### N · La escala de rendimiento <span class="estado">Propuesta</span>
 
@@ -494,6 +617,8 @@ La escala ubica a cada empresa en Ventas, Marketing y Servicio. Corre la 8.9.0; 
 7. **N7 · El mapa de herramientas para la 9.0.** *Existe* (versión 1.0.1, para la 8.8.0): ya dice, criterio por criterio, qué habilita Insider, HubSpot o Smarteam.
    - Etapa 1 · Sumar los 16 cambios con quién los habilita.
    - Etapa 2 · La ficha de Insider con el umbral de tráfico de su calificación, y la de HubSpot con lo que no hace (personalizar al anónimo por su comportamiento).
+
+**Criterio de éxito:** la 9.0 publicada y probada con 5 a 8 clientes, con acuerdo de Customer Success en al menos 4 de cada 5.
 
 ### O · Los tests del diagnóstico de rendimiento <span class="estado">Propuesta</span>
 
@@ -523,6 +648,8 @@ Pedido del 23 oct: migrar a Nexus el test público de cada departamento, con mej
    - Etapa 2 · La dirección pública pasa a Nexus, con los píxeles de anuncios y el formulario de HubSpot intactos.
    - Etapa 3 · Se mide cuántos empiezan, abandonan (y en qué pregunta) y terminan; se apagan el backend de Vercel y la página estática.
 
+**Criterio de éxito:** la aplicación vieja apagada sin perder leads; cada intento llega a Nexus y a HubSpot, y el abandono se mide por pregunta.
+
 ### P · El módulo de Tareas, organizado y profesional <span class="estado">Propuesta</span>
 
 Pedido del 23 oct, con la tarjeta de Trello y la barra de clientes de ClickUp como referencia. No va amarrado al cronograma: es cómo se ven y se organizan las tareas. Plan: `docs/tareas-organizacion-plan.md`.
@@ -548,6 +675,8 @@ Pedido del 23 oct, con la tarjeta de Trello y la barra de clientes de ClickUp co
    - Etapa 2 · Cada propuesta guarda y muestra su sesión, el contexto, las personas que estuvieron, el encargado y quién la pidió.
    - Etapa 3 · Con tope, y después de limpiar lo que nadie decidió (D2 etapa 1).
 
+**Criterio de éxito:** los CSE abren sus tareas en la vista grande y filtran por cliente; las subtareas se usan; tu piloto de lectura interna en marcha.
+
 ### Q · El kickoff: HubSpot Academy y el acceso al portal <span class="estado">Propuesta</span>
 
 Pedido del 23 oct. El kickoff es un documento que ve el cliente: una sección nueva sigue el contrato de los documentos y entra a su registro. Plan: `docs/kickoff-mejoras-plan.md`.
@@ -560,6 +689,8 @@ Pedido del 23 oct. El kickoff es un documento que ve el cliente: una sección nu
    - Etapa 1 · Una tarjeta fija, siempre la primera de esa sección: darnos acceso a su portal de HubSpot, con los pasos y para cuándo.
    - Etapa 2 · El estado del acceso en el proyecto (dado o pendiente), con un aviso al CSE mientras falte.
    - Etapa 3 · La comprobación automática cuando los portales de los clientes estén conectados (la auditoría del portal).
+
+**Criterio de éxito:** todo kickoff nuevo trae la ruta de Academy por rol y la tarjeta del acceso al portal, y el CSE ve si el acceso falta.
 
 ### R · La empresa como objeto central <span class="estado">Propuesta</span>
 
@@ -590,6 +721,8 @@ Pedido del 23 oct: que la empresa sea el centro, enriquecida y sincronizada con 
 11. **R11 · Un solo contexto de la empresa para los agentes** (IA first): los datos, la investigación, la escala, los casos de uso, las personas y la memoria, armados en un lugar que lee cada agente.
 12. **R12 · Lo que le falta comprar a cada empresa** (venta cruzada): con la escala y los casos de uso, qué casos la moverían y no tiene; se ve en la cuenta y se puede escribir en HubSpot.
 
+**Criterio de éxito:** un agente lee la empresa desde un solo lugar; el TAM lleno en las 71 activas y escrito en HubSpot; un documento vive en la empresa sin proyecto.
+
 ### S · El analizador de reuniones de venta <span class="estado">Propuesta</span>
 
 Pedido del 23 oct: Ventas va muy directo a la solución y explora poco. Un analizador de reuniones con prospectos que le dice a cada vendedor qué tan consultiva fue su reunión y cómo mejorar, empezando por Andrés Pinzón. Es coaching, no control: el análisis es una propuesta que el vendedor comenta y una persona confirma, cada juicio trae su cita y no hay ranking. Plan: `docs/analizador-reuniones-venta-plan.md`.
@@ -608,6 +741,8 @@ Pedido del 23 oct: Ventas va muy directo a la solución y explora poco. Un anali
 5. **S5 · La tendencia por vendedor,** primero solo para los super admin, para probar, y después para todo Ventas; cuenta las reuniones de cada vendedor que estuvo, no solo las que organizó (T7): cuánto explora, cuánto habla, cuántas reuniones dejan siguiente paso con fecha y cuántas tienen transcripción.
 6. **S6 · Probar con Andrés** cinco reuniones reales, entre ellas la de Camosa del 23 oct, antes de abrirlo al resto de Ventas.
 
+**Criterio de éxito:** Andrés revisa 5 análisis y está de acuerdo con la mayoría; cada juicio trae su cita.
+
 ### T · Las reuniones, la pieza angular del contexto <span class="estado">Propuesta</span>
 
 Elías, 23 oct: el módulo que obtiene las sesiones es el creador del contexto de cada empresa. Medido en 90 días: de 1.264 reuniones con empresa, 545 con transcripción, 301 solo con notas (tratadas como sin texto) y 404 sin nada; y 67 reuniones con texto sin empresa. El caso de Camosa está bien en todo el camino; el de Liliana está por identificar. Plan: `docs/reuniones-pieza-angular-plan.md`.
@@ -620,6 +755,8 @@ Elías, 23 oct: el módulo que obtiene las sesiones es el creador del contexto d
 6. **T6 · La copia de Meet sin esperar a que alguien abra Nexus** (antes en H1 y P5): se hace en U1, cada 10 minutos, y al momento con U4.
 7. **T7 · Quiénes de Smarteam estuvieron.** *No existe:* hoy solo se sabe quién organizó (la de Camosa la organizó Liz y fueron Marco y Andrés). Cada reunión guarda a los del equipo con su papel.
 8. **T8 · Encontrar cualquier reunión de la empresa.** *Existe a medias:* el buscador muestra las de la empresa y las de tu calendario, y marca «sin transcripción» lo que tiene notas. Mostrar también las de la empresa en que no estuviste y las que quedaron en otra empresa con el mismo dominio, con «Mover a esta empresa» (con K5).
+
+**Criterio de éxito:** el indicador 4 llega al 90 %, y ninguna reunión con texto queda sin empresa más de 48 horas.
 
 ### U · Las integraciones, aprovechando lo que cada API permite <span class="estado">Propuesta</span>
 
@@ -635,7 +772,7 @@ Pedido del 23 oct: que no vuelva a pasar lo de Mercury (no usábamos lo que la A
 **HubSpot:**
 6. **U6 · Un solo transporte:** el token, los reintentos ante 401 y 429 respetando la espera, y una sola lista de propiedades (hoy hay 5 copias del reintento y ninguna espera ante el límite).
 7. **U7 · Los resúmenes de sus reuniones y llamadas** como contexto (Notetaker responde hoy, sin permisos nuevos); la transcripción, a probar. Son 770 reuniones y 646 llamadas que no entran. Sin duplicar las que llegan por Meet.
-8. **U8 · Los correos:** hoy entran 0 porque falta el permiso `sales-email-read` (está en «Lo que configuras tú»).
+8. **U8 · Los correos:** el permiso `sales-email-read` se dio el 24 oct; la copia de cada hora trae los de 120 días. Falta comprobar que entren y que la preventa y la memoria de la cuenta los lean.
 9. **U9 · Las fusiones, de forma sistemática:** una búsqueda diaria que propone reapuntar (34 empresas fusionadas en el portal).
 10. **U10 · Webhooks** para empresa, contacto, negocio y ticket, con el sondeo como red; y un job para los proyectos, que hoy solo se copian al abrir la ficha.
 11. **U11 · La copia incremental** de contactos y tickets (hoy se releen enteros cada hora).
@@ -656,6 +793,8 @@ Pedido del 23 oct: que no vuelva a pasar lo de Mercury (no usábamos lo que la A
 22. **U22 · Que el ahorro por lotes corra:** está desplegado desde el 18 oct y nunca encoló nada.
 23. **U23 · La caché donde ahorra:** quitar la que solo escribe, cachear la exploración de venta y el clasificador a Haiku después de compararlo.
 24. **U24 · Que un job que deja de correr avise** (Sentry Crons), y el token de Apify en la cabecera.
+
+**Criterio de éxito:** ningún job depende de que alguien abra la app; los correos de HubSpot entran; el gasto de la IA cuadra con la factura.
 
 ## Lo que falta, por tema
 
@@ -703,15 +842,17 @@ Pedido del 23 oct: que no vuelva a pasar lo de Mercury (no usábamos lo que la A
 5. «Ver como»: dos lecturas que escriben sin autor (`deal-line-items` y `hubspot/read`) y la cookie sin el prefijo `__Host-`.
 6. Los desplegables de las tablas y las fichas (`CeldaSelect`, el selector de ícono y la lectura de la cuenta) todavía se dibujan dentro de su contenedor: pueden quedar tapados como le pasaba al menú del avatar.
 7. El chat todavía no puede ocultar secciones del kickoff.
-8. Una tarea del cronograma marcada «por validar» igual llega al cliente: el código solo le esconde la marca (lo encontró el diagnóstico del 22 oct). Que no cruce hasta que el CSE la valide.
+8. Una tarea del cronograma marcada «por validar» igual llega al cliente: el código solo le esconde la marca (lo encontró el diagnóstico del 22 oct). Pasó a la propuesta: D0.
 9. En la copia de proyectos de HubSpot, el filtro de errores 401 y 403 nunca coincide (`lib/hubspot/sync-projects.ts`, el error conocido de los `\b` escritos desde Python).
 10. La base local nueva no arranca: `prisma/policies.sql` usa la tabla `TarjetaCredito` antes de que la cree su SQL, y `2026-09-26-cuestionario-previo.sql` no se puede correr dos veces. Por eso las pruebas de integración no corren en un worktree nuevo.
 
 ## Lo que configuras tú
 
-**En HubSpot:** darle a la app de Nexus el permiso de correos (`sales-email-read`) y reconectar HubSpot desde Integraciones. Sin él, Nexus lee las notas y las llamadas, pero no los correos, y no ve lo que se le prometió al cliente por correo. Los pasos están en el RUNBOOK.
+**En HubSpot:** ✓ hecho el 24 oct: la app tiene los permisos de correos, leads y transcripciones de llamadas, y la conexión del sistema ya los tiene.
 
-**En Google Cloud y Admin, para la API de Meet** (U2 a U5, `docs/integracion-google-plan.md`): habilitar las APIs de Meet REST, Workspace Events y Pub/Sub (y Speech-to-Text para las presenciales); sumar el scope `meetings.space.readonly` a la delegación de dominio; crear el tema de Pub/Sub con su suscripción y darle el rol de publicador a la cuenta de Meet. Lo guía un wizard, paso por paso.
+**Pendiente, sin urgencia:** reconectar HubSpot desde producción hoy no funciona, porque la app de HubSpot solo tiene registrada la vuelta a `http://localhost:3004` (por eso se reconecta desde tu PC con `npm run dev:prod`). Para reconectar desde nexus.smarteamcr.com: agregar `https://nexus.smarteamcr.com/api/auth/callback` como dirección de vuelta en la app de HubSpot, y la misma en `HUBSPOT_REDIRECT_URI` del `.env` del VPS.
+
+**En Google Cloud y Admin, para la API de Meet:** ✓ hecho el 24 oct: las APIs habilitadas, el scope en la delegación de dominio, y el tema y la suscripción de Pub/Sub con sus permisos. Queda Speech-to-Text, cuando se elija el servicio para las reuniones presenciales («Lo que decides tú» 21).
 
 **En Google Workspace** (el 28 % de las reuniones con clientes no deja texto; 239 en 90 días solo dejaron notas porque nadie activó «Transcribir»):
 

@@ -1,6 +1,6 @@
 # Actividades: el trabajo debajo de cada caso de uso
 
-> Plan del ítem A1 del roadmap (`docs/roadmap.md` › «Propuesta por aprobar: vender y entregar por casos de uso»).
+> Plan de los ítems A0 y A1 del roadmap (`docs/roadmap.md` › «Propuesta por aprobar: vender y entregar por casos de uso»).
 > Nace de tres rondas de preguntas con Elías el 2026-10-22. **Nada construido.** Lo que sigue son las decisiones de
 > esas conversaciones, los datos que las sostienen y lo que queda abierto. Cuando el roadmap pase la propuesta a
 > aprobada, este archivo es la fuente de A2, C2, D1, D2, G, H y J1.
@@ -134,6 +134,41 @@ a «Por decidir», se ignoran igual.
 - **El orden:** primero desarmar el cotizador contigo y limpiar las tareas; está escrito en el roadmap, en «Orden
   sugerido».
 - **kölbi se cotiza como gobierno** (tarifa 120 y actas). Ya se le está ofreciendo SmartLoop.
+
+## El ejercicio de validación (A0, pedido del 2026-10-24)
+
+Antes de crear las actividades y los casos de uso, Elías y Claude los validan juntos. La pregunta que guía todo:
+**¿cuál es la menor cantidad de actividades que podemos hacer para un cliente y que igual llegue al resultado?** Una
+implementación tiene que ser fácil y sencilla de hacer con todo lo que la IA permite. **Nada de A1 etapa 2, A2, C2, D2
+etapa 2 ni P4 se programa sin este ejercicio aprobado.**
+
+1. **Elías da el contexto.** Cómo ve una implementación hoy con la IA: qué hace Nexus solo, qué hace el CSE y qué hace
+   el cliente. Con dos o tres implementaciones reales recientes: una que salió bien y una que no.
+2. **Claude explora**, en solo lectura:
+   - el cotizador (`D:\Proyectos\casos-de-uso-escala`) y sus tareas por tamaño y segmento;
+   - las propuestas firmadas de esos proyectos, sus handoffs, sus cronogramas y sus tareas reales;
+   - sus sesiones: cuántas hubo, de qué, y cuáles se repitieron;
+   - lo que Nexus ya escribe solo (kickoff, diagnóstico, planificación, procesos, reportes).
+
+   Sale una tabla: qué actividades aparecen en todos los proyectos, cuáles casi nunca, y cuáles ya hace Nexus.
+3. **Claude propone** la menor cantidad de actividades por caso. Cada una con:
+   - su porqué (qué parte del resultado deja lista);
+   - el artefacto de Nexus que la hace o la acelera;
+   - si es con el cliente;
+   - qué tarea del cotizador reemplaza, junta o elimina.
+4. **Se valida junto, caso por caso,** con una sola pregunta por actividad: «¿se llega al resultado sin esta
+   actividad?». Si la respuesta es sí, sale. Lo aprobado se escribe acá y en DECISIONS; recién ahí se programa.
+
+**Las preguntas para llevar a la sesión:**
+- ¿Qué implementación reciente salió mejor, y cuál peor? ¿Por qué?
+- ¿Qué parte de una implementación sigue siendo a mano y la IA ya podría hacer (o preparar para que el CSE solo revise)?
+- ¿Cuántas sesiones con el cliente necesita como mínimo un caso de aterrizaje?
+- ¿Qué no se puede quitar nunca? (el kickoff, el acceso al portal, la revisión de adopción…)
+- ¿Qué aprende el cliente solo, con la ruta de Academy (Q1), y qué necesita una sesión?
+- ¿Qué actividades son iguales en todos los casos (la base: portal y arquitectura) y se cuentan una sola vez por cliente?
+
+**Criterio de éxito:** el catálogo tiene menos actividades que tareas el cotizador, ningún caso pasa de 8 actividades,
+cada una tiene su porqué, y Elías lo aprueba.
 
 ## Lo que falta decidir
 
