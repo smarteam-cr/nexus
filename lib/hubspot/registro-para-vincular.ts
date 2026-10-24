@@ -10,7 +10,7 @@
  *   · `error`: cualquier otra cosa (HubSpot no respondió). Quien llama decide si guarda igual, enmascarado.
  */
 import "server-only";
-import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
+import { getSystemHubspotClient } from "./client";
 import { OBJETOS_QUE_SE_VINCULAN, type EnlaceDeHubspot } from "./urls";
 import { OBJETO_PROYECTOS } from "./asociaciones-proyecto";
 
@@ -71,15 +71,10 @@ async function leerUnaVez(enlace: EnlaceDeHubspot): Promise<{ status: number; fo
   return { status: 200, foto: { estado: "ok", etiqueta, detalle, empresas } };
 }
 
-/** La foto, con un reintento si el token del sistema venció (KNOWN-ERRORS: 401 aunque `expiresAt` diga válido). */
+/** La foto. El 401 (KNOWN-ERRORS: 401 aunque `expiresAt` diga válido) lo reintenta el transporte (lib/hubspot/client.ts). */
 export async function leerRegistroParaVincular(enlace: EnlaceDeHubspot): Promise<FotoDeRegistro> {
   try {
-    let r = await leerUnaVez(enlace);
-    if (r.status === 401) {
-      await forceRefreshSystemToken();
-      r = await leerUnaVez(enlace);
-    }
-    return r.foto;
+    return (await leerUnaVez(enlace)).foto;
   } catch (e) {
     return { estado: "error", motivo: e instanceof Error ? e.message : "sin respuesta" };
   }

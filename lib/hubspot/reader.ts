@@ -1,6 +1,5 @@
 import { Client } from "./sdk";
-import { getHubspotClient, tokenDeCuenta } from "./client";
-import { prisma } from "@/lib/db/prisma";
+import { getHubspotClient } from "./client";
 
 export interface HubspotAccountState {
   portal: { id: string; name?: string };
@@ -86,15 +85,9 @@ const STANDARD_OBJECTS = ["contacts", "companies", "deals", "tickets"] as const;
 export async function readAccountState(
   accountId: string
 ): Promise<HubspotAccountState> {
-  // getHubspotClient refresca el token si está vencido y lo guarda en DB
+  // getHubspotClient refresca el token si está vencido y lo guarda en DB; su `apiRequest` va por el
+  // transporte (lib/hubspot/client.ts): renueva el token ante un 401 y espera ante un 429.
   const client = await getHubspotClient(accountId);
-
-  // Leer el token actualizado directo de DB (post-posible-refresh)
-  const accountRow = await prisma.hubspotAccount.findUnique({
-    where: { id: accountId },
-    select: { accessToken: true },
-  });
-  const token = accountRow ? tokenDeCuenta(accountRow) : "";
 
   const [
     propertiesResult,
@@ -110,10 +103,10 @@ export async function readAccountState(
     readAllProperties(client),
     readAllPipelines(client),
     readCustomObjects(client),
-    readLists(token),
-    readForms(token),
-    readWorkflows(token),
-    readSequences(token),
+    readLists(client),
+    readForms(client),
+    readWorkflows(client),
+    readSequences(client),
     readTeams(client),
     readUsers(client),
   ]);
@@ -254,7 +247,7 @@ async function readCustomObjects(client: Client): Promise<CustomObjectDef[]> {
 
 // ─── Lists (Segmentos) ─────────────────────────────────────────────────────
 
-async function readLists(token: string): Promise<ListDef[]> {
+async function readLists(client: Client): Promise<ListDef[]> {
   const allLists: ListDef[] = [];
 
   // CRM Lists v3 — POST /crm/v3/lists/search (endpoint correcto para listar)
@@ -263,13 +256,10 @@ async function readLists(token: string): Promise<ListDef[]> {
   const count = 250;
 
   for (let page = 0; page < 40; page++) {
-    const res = await fetch("https://api.hubapi.com/crm/v3/lists/search", {
+    const res = await client.apiRequest({
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ count, offset }),
+      path: "/crm/v3/lists/search",
+      body: { count, offset },
     });
 
     if (!res.ok) {
@@ -302,7 +292,7 @@ async function readLists(token: string): Promise<ListDef[]> {
 
 // ─── Forms ─────────────────────────────────────────────────────────────────
 
-async function readForms(token: string): Promise<FormDef[]> {
+async function readForms(client: Client): Promise<FormDef[]> {
   const allForms: FormDef[] = [];
   let after: string | undefined;
 
@@ -311,10 +301,7 @@ async function readForms(token: string): Promise<FormDef[]> {
     const params = new URLSearchParams({ limit: "100" });
     if (after) params.set("after", after);
 
-    const res = await fetch(
-      `https://api.hubapi.com/marketing/v3/forms?${params}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    const res = await client.apiRequest({ method: "GET", path: `/marketing/v3/forms?${params}` });
 
     if (res.ok) {
       const data = (await res.json()) as {
@@ -338,9 +325,7 @@ async function readForms(token: string): Promise<FormDef[]> {
 
     // Fallback: legacy Forms v2 (sin paginación, devuelve todos)
     if (page === 0) {
-      const res2 = await fetch("https://api.hubapi.com/forms/v2/forms", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res2 = await client.apiRequest({ method: "GET", path: "/forms/v2/forms" });
 
       if (!res2.ok) {
         const body = await res2.text().catch(() => "");
@@ -367,11 +352,9 @@ async function readForms(token: string): Promise<FormDef[]> {
 
 // ─── Workflows ─────────────────────────────────────────────────────────────
 
-async function readWorkflows(token: string): Promise<WorkflowDef[]> {
+async function readWorkflows(client: Client): Promise<WorkflowDef[]> {
   // v3 devuelve todos los workflows de Contacts sin paginación
-  const res = await fetch("https://api.hubapi.com/automation/v3/workflows", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await client.apiRequest({ method: "GET", path: "/automation/v3/workflows" });
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -397,7 +380,7 @@ async function readWorkflows(token: string): Promise<WorkflowDef[]> {
 
 // ─── Sequences ─────────────────────────────────────────────────────────────
 
-async function readSequences(token: string): Promise<SequenceDef[]> {
+async function readSequences(client: Client): Promise<SequenceDef[]> {
   const allSequences: SequenceDef[] = [];
   let after: string | undefined;
 
@@ -406,10 +389,7 @@ async function readSequences(token: string): Promise<SequenceDef[]> {
     const params = new URLSearchParams({ limit: "100" });
     if (after) params.set("after", after);
 
-    const res = await fetch(
-      `https://api.hubapi.com/automation/v4/sequences?${params}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    const res = await client.apiRequest({ method: "GET", path: `/automation/v4/sequences?${params}` });
 
     if (!res.ok) {
       if (page === 0) {

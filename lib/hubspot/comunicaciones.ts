@@ -12,21 +12,15 @@
  * el punto de partida. Un 403 es `sinPermiso` (los correos, sin `sales-email-read`).
  */
 import type { Client as HsClient } from "./sdk";
-import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
 
 /** correo | nota | llamada (los mismos valores que lib/comunicaciones/reglas.ts: la integración no importa del módulo). */
 export type TipoDeComunicacion = "correo" | "nota" | "llamada";
 
 type Respuesta = Awaited<ReturnType<HsClient["apiRequest"]>>;
 
+/** Un pedido. El transporte del cliente (lib/hubspot/client.ts) ya renueva el token ante un 401 y espera ante un 429. */
 async function pedir(hs: HsClient, req: { method: "GET" | "POST"; path: string; body?: object }): Promise<{ hs: HsClient; res: Respuesta }> {
-  let res = await hs.apiRequest(req);
-  if (res.status === 401) {
-    await forceRefreshSystemToken();
-    hs = await getSystemHubspotClient();
-    res = await hs.apiRequest(req);
-  }
-  return { hs, res };
+  return { hs, res: await hs.apiRequest(req) };
 }
 
 /** El objeto de HubSpot de cada tipo y las propiedades que se piden. */

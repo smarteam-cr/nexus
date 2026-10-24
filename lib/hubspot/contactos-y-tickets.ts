@@ -9,7 +9,6 @@
  * NO le da de baja a nadie (un 429 no puede vaciar la lista de personas de un cliente). Un 403 es `sinPermiso`.
  */
 import type { Client as HsClient } from "./sdk";
-import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
 
 const LOTE = 100;
 
@@ -63,17 +62,11 @@ function fecha(v: string | null | undefined): Date | null {
 
 const texto = (v: string | null | undefined): string | null => (v && v.trim() ? v.trim() : null);
 
-/** Un pedido con un reintento ante 401 (el token del sistema se comparte y rota). Devuelve la respuesta cruda. */
+/** Un pedido; el transporte (lib/hubspot/client.ts) ya renueva el token ante un 401 y espera ante un 429. Devuelve la respuesta cruda. */
 type Respuesta = Awaited<ReturnType<HsClient["apiRequest"]>>;
 
 async function pedir(hs: HsClient, req: { method: "GET" | "POST"; path: string; body?: object }): Promise<{ hs: HsClient; res: Respuesta }> {
-  let res = await hs.apiRequest(req);
-  if (res.status === 401) {
-    await forceRefreshSystemToken();
-    hs = await getSystemHubspotClient();
-    res = await hs.apiRequest(req);
-  }
-  return { hs, res };
+  return { hs, res: await hs.apiRequest(req) };
 }
 
 /** Qué contactos (o tickets) tiene asociados cada empresa. */

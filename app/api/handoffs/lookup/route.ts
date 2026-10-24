@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardLecturaParaArrancar } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { getSystemHubspotClient, forceRefreshSystemToken } from "@/lib/hubspot/client";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { elegirCandidato } from "@/lib/hubspot/cliente-de-la-empresa";
 import { fetchCompanyDeals } from "@/lib/hubspot/deals";
 
@@ -36,15 +36,10 @@ export async function GET(req: NextRequest) {
   };
 
   try {
-    let hs = await getSystemHubspotClient();
-    let searchRes = await hs.apiRequest(searchBody);
-    // El token del sistema puede estar vencido aunque expiresAt diga lo contrario (clock
-    // skew / rotación entre entornos). Si da 401, refrescamos a la fuerza y reintentamos.
-    if (searchRes.status === 401) {
-      await forceRefreshSystemToken();
-      hs = await getSystemHubspotClient();
-      searchRes = await hs.apiRequest(searchBody);
-    }
+    // El token vencido aunque expiresAt diga lo contrario (KNOWN-ERRORS) y el límite de HubSpot los
+    // resuelve el transporte del cliente (lib/hubspot/client.ts): un solo refresh, y 2 s como máximo de espera.
+    const hs = await getSystemHubspotClient();
+    const searchRes = await hs.apiRequest(searchBody);
     // Distinguir "no hay company" (200 + 0 resultados) de un fallo de HubSpot (no-ok): el
     // error genérico NO debe mostrarse como "no existe registro".
     if (!searchRes.ok) {

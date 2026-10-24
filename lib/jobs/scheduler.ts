@@ -18,6 +18,7 @@
  */
 import * as Sentry from "@sentry/nextjs";
 import { registrarResultado } from "./estado";
+import { enUnJob } from "./contexto";
 import { crDateParts } from "./time";
 import { allJobs } from "./defs";
 import { SIN_TURNO } from "./registry";
@@ -46,7 +47,8 @@ export async function runSchedulerTick(now: Date): Promise<void> {
   for (const job of allJobs()) {
     try {
       if (await job.shouldRun(now, parts)) {
-        const salida = await job.run(now);
+        // Dentro de `enUnJob`: el transporte de HubSpot espera lo que pida `Retry-After` (en una ruta, 2 s como máximo).
+        const salida = await enUnJob(job.key, () => job.run(now));
         // B-03: la corrida que terminó bien queda anotada (con rezago de hasta 10 min por job).
         // ⚠ Solo si CORRIÓ: el «ok» de un tick que no tomó el turno tapaba el rojo de la corrida
         // real un minuto después (ver SIN_TURNO en registry.ts).

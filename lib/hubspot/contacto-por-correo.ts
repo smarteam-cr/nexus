@@ -12,7 +12,7 @@
  * HubSpot ni contestó. Agregar una persona no puede fallar porque HubSpot falló.
  */
 import type { Client as HsClient } from "./sdk";
-import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
+import { getSystemHubspotClient } from "./client";
 
 export interface ContactoPorCorreo {
   id: string;
@@ -83,11 +83,8 @@ async function buscarUnaVez(hs: HsClient, email: string): Promise<{ status: numb
 }
 
 async function buscar(email: string): Promise<BusquedaPorCorreo> {
-  let r = await buscarUnaVez(await getSystemHubspotClient(), email);
-  if (r.status === 401) {
-    await forceRefreshSystemToken();
-    r = await buscarUnaVez(await getSystemHubspotClient(), email);
-  }
+  // El transporte ya renueva el token ante un 401 y espera ante un 429 (lib/hubspot/client.ts).
+  const r = await buscarUnaVez(await getSystemHubspotClient(), email);
   if (r.status !== 200) {
     console.error("[hubspot/contacto-por-correo]", `HubSpot respondió ${r.status}`);
     return NO_SE_PUDO;

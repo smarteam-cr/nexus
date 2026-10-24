@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exchangeCodeForTokens, getPortalInfo } from "@/lib/hubspot/client";
+import { exchangeCodeForTokens, getPortalInfo, pedirConToken } from "@/lib/hubspot/client";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { requireInternalUser } from "@/lib/auth/supabase";
@@ -212,17 +212,14 @@ async function findMainCompany(
   hubDomain: string
 ): Promise<{ id: string; name: string; industry: string | null } | null> {
   try {
-    const res = await fetch("https://api.hubapi.com/crm/v3/objects/companies/search", {
+    const res = await pedirConToken(accessToken, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+      path: "/crm/v3/objects/companies/search",
+      body: {
         filterGroups: [{ filters: [{ propertyName: "domain", operator: "EQ", value: hubDomain }] }],
         properties: ["name", "domain", "industry"],
         limit: 1,
-      }),
+      },
     });
 
     if (!res.ok) return null;

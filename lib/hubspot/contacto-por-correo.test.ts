@@ -5,10 +5,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const hubspot = vi.hoisted(() => ({ apiRequest: vi.fn() }));
-const refrescar = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("./client", () => ({
   getSystemHubspotClient: async () => hubspot,
-  forceRefreshSystemToken: refrescar,
 }));
 
 import { buscarContactoPorCorreo, correoBuscable, leerContactoEncontrado } from "./contacto-por-correo";
@@ -17,7 +15,6 @@ const respuesta = (status: number, body: unknown = {}) => ({ status, json: async
 
 beforeEach(() => {
   hubspot.apiRequest.mockReset();
-  refrescar.mockClear();
 });
 
 describe("correoBuscable", () => {
@@ -76,15 +73,12 @@ describe("buscarContactoPorCorreo", () => {
     expect(hubspot.apiRequest).not.toHaveBeenCalled();
   });
 
-  it("401: renueva el token y reintenta una vez", async () => {
-    hubspot.apiRequest
-      .mockResolvedValueOnce(respuesta(401))
-      .mockResolvedValueOnce(respuesta(200, { results: [{ id: "9", properties: { email: "a@x.com", jobtitle: "CFO" } }] }));
-    expect(await buscarContactoPorCorreo("a@x.com")).toEqual({
-      estado: "encontrado",
-      contacto: { id: "9", nombre: null, cargo: "CFO" },
-    });
-    expect(refrescar).toHaveBeenCalledTimes(1);
+  it("401 (el transporte ya renovó el token y reintentó, lib/hubspot/client.ts): no-se-pudo, sin un segundo intento", async () => {
+    const consola = callarConsola();
+    hubspot.apiRequest.mockResolvedValueOnce(respuesta(401));
+    expect(await buscarContactoPorCorreo("a@x.com")).toEqual({ estado: "no-se-pudo", contacto: null });
+    expect(hubspot.apiRequest).toHaveBeenCalledTimes(1);
+    consola.mockRestore();
   });
 
   it("403, 500 o la red: no-se-pudo, sin lanzar (nunca «no-existe»)", async () => {

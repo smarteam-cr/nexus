@@ -1,12 +1,11 @@
 import "dotenv/config";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Client as HubspotClient } from "@/lib/hubspot/sdk";
 import type { Prisma } from "@prisma/client";
 import { describirDestino, resolverApply } from "./lib/guard";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { prisma } from "@/lib/db/prisma";
-import { refreshAccessToken } from "@/lib/hubspot/client";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { detectarFusion, type VeredictoDeFusion } from "@/lib/hubspot/empresa-fusionada";
 import { crDateParts } from "@/lib/jobs/time";
 import {
@@ -61,7 +60,9 @@ import {
  * Y en la ficha que sigue: suma los dominios de correo (las reuniones siguen llegando: INV2), junta las notas, toma lo
  * que le falta y apunta a la empresa de HubSpot VIVA. Si las dos empresas se fusionaron en HubSpot en una tercera
  * —Librería: seis fichas dentro de 58805575479—, la que sigue apunta a esa, y los business cases y ventas que guardaban
- * un id viejo también. HubSpot se lee con un token renovado en memoria: el simulacro no escribe ni el token.
+ * un id viejo también. HubSpot se lee con el cliente del sistema (`getSystemHubspotClient`): si el token venció, se
+ * renueva y se guarda. En el simulacro la base está en solo lectura: el token renovado no se puede guardar, se usa
+ * igual (lib/hubspot/client.ts lo avisa) y el simulacro no escribe nada.
  *
  * ⛔ POR DEFECTO ES UN SIMULACRO: la base se abre en solo lectura y se imprime el plan. Para escribir hacen falta
  * `--apply`, `--firma=<correo del equipo>` y `ALLOW_PROD_WRITE=1`. Antes de la primera escritura deja un respaldo JSON
@@ -189,15 +190,16 @@ async function puntaje(clientId: string) {
   return { sesiones, manuales, proyectos, total: sesiones + manuales + proyectos };
 }
 
-/** HubSpot, para saber en qué empresa quedó cada id. El token se renueva EN MEMORIA: nada se escribe en la base. */
+/**
+ * HubSpot, para saber en qué empresa quedó cada id. Con el cliente del sistema: su `apiRequest` va por el transporte
+ * (renueva el token ante un 401 y espera ante un 429). Si el token vence, se renueva y se guarda como en el resto de
+ * Nexus; en el simulacro (base en solo lectura) se renueva sin guardarse y se usa igual.
+ */
 async function veredictosDeHubspot(ids: string[]): Promise<Map<string, VeredictoDeFusion>> {
   const out = new Map<string, VeredictoDeFusion>();
   if (!ids.length) return out;
   try {
-    const cuenta = await prisma.hubspotAccount.findFirst({ where: { isSystem: true }, select: { refreshToken: true } });
-    if (!cuenta) throw new Error("no hay cuenta de HubSpot del sistema");
-    const token = await refreshAccessToken(cuenta.refreshToken);
-    const hs = new HubspotClient({ accessToken: token.access_token });
+    const hs = await getSystemHubspotClient();
     for (const id of ids) out.set(id, await detectarFusion(hs, id));
   } catch (e) {
     console.warn(`  ⚠ No se pudo consultar HubSpot (${e instanceof Error ? e.message : e}): los ids se toman tal cual.`);

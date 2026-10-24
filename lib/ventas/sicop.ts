@@ -16,11 +16,11 @@
  * scope `tickets`, un 403 NO es un error rojo — devuelve `soportado: false` y la pantalla
  * explica que falta el permiso en vez de mentir con una lista vacía.
  *
- * Retry-401 con `forceRefreshSystemToken`: la cuenta del sistema es compartida (PROD +
- * local + scripts) y el refresh token ROTA.
+ * El 401 lo reintenta el transporte con el token renovado (lib/hubspot/client.ts): la cuenta del
+ * sistema es compartida (PROD + local + scripts).
  */
 import type { Client as HsClient } from "@/lib/hubspot/sdk";
-import { getSystemHubspotClient, forceRefreshSystemToken } from "@/lib/hubspot/client";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { prisma } from "@/lib/db/prisma";
 
 /** El pipeline de TICKETS "Gobiernos" del portal de Smarteam (6553628). */
@@ -411,11 +411,8 @@ export async function leerTableroSicop(): Promise<TableroSicop> {
   const portalId = cuenta?.hubspotPortalId ?? null;
 
   try {
-    let cruda = await unaPasada(await getSystemHubspotClient());
-    if (cruda.status === 401) {
-      await forceRefreshSystemToken();
-      cruda = await unaPasada(await getSystemHubspotClient());
-    }
+    // El 401 y el 429 los resuelve el transporte del cliente (lib/hubspot/client.ts).
+    const cruda = await unaPasada(await getSystemHubspotClient());
     if (cruda.status === 403) {
       return { soportado: false, etapas: [], total: 0, portalId, error: null };
     }

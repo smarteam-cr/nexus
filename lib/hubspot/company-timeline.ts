@@ -27,7 +27,6 @@
  * try/catch y siguen sin el timeline: la generación no se rompe.
  */
 import type { Client } from "./sdk";
-import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
 import { grabacionesDeReuniones } from "./grabaciones-de-reuniones";
 import { textoDeLaReunion } from "./transcripcion-de-reunion";
 import { esNotaDeLaFicha } from "@/lib/clients/ficha";
@@ -94,7 +93,7 @@ export class FalloAlLeerElRegistro extends Error {
   }
 }
 
-/** Una llamada cruda a la v1 de engagements. 401 vuelve para reintentar; 403 = sin permiso (vacío);
+/** Una llamada cruda a la v1 de engagements. 401 vuelve (el transporte ya reintentó); 403 = sin permiso (vacío);
  *  cualquier otro status LANZA. */
 async function fetchEngagements(hsClient: Client, companyId: string): Promise<{ status: number; results: V1Engagement[] }> {
   const res = await hsClient.apiRequest({
@@ -117,17 +116,12 @@ const REUNIONES_CON_GRABACION = 15;
 async function fetchAllTimelineItems(hsClient: Client, companyId: string, grabaciones = true): Promise<TimelineItem[]> {
   let raw: V1Engagement[] = [];
   try {
-    let r = await fetchEngagements(hsClient, companyId);
-    // 401 = el access token del sistema está stale: la cuenta de HubSpot del sistema es
-    // compartida (PROD/local/scripts/2da PC) y el refresh-token ROTA, así que un entorno
-    // desincroniza al otro. Forzamos refresh y reintentamos UNA vez con un cliente fresco; si
-    // no, el panel y el contexto de generación quedaban VACÍOS sin avisar (síntoma real visto
-    // en Visual Branding). Ver forceRefreshSystemToken en lib/hubspot/client.ts.
-    if (r.status === 401) {
-      await forceRefreshSystemToken();
-      r = await fetchEngagements(await getSystemHubspotClient(), companyId);
-      if (r.status === 401) throw new FalloAlLeerElRegistro(401, "401 aun con el token renovado");
-    }
+    const r = await fetchEngagements(hsClient, companyId);
+    // 401 = el token está stale (la cuenta del sistema es compartida entre PROD, local y scripts).
+    // El transporte ya lo renovó y reintentó UNA vez (lib/hubspot/client.ts); si ni así, LANZA:
+    // devolver vacío dejaba el panel y el contexto de generación VACÍOS sin avisar (síntoma real
+    // visto en Visual Branding).
+    if (r.status === 401) throw new FalloAlLeerElRegistro(401, "401 aun con el token renovado");
     raw = r.results;
   } catch (e) {
     if (e instanceof FalloAlLeerElRegistro) throw e;

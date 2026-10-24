@@ -10778,3 +10778,43 @@ queda sin dueña en la local. El SQL también suelta las dueñas resueltas huér
 **Borrar una empresa:** toda la que borra (el DELETE de la app y los scripts) suelta antes sus reuniones con
 `soltarReunionesDeLaEmpresa` (`lib/clients/soltar-reuniones.ts`), dentro de la misma transacción. Un script que limpia
 duplicados no borra una empresa con reuniones: la salta y lo dice.
+
+## Un solo transporte para HubSpot: el token, el 401 y el 429 (2026-10-24, U6)
+
+**El hecho:** el reintento ante un 401 estaba copiado en 14 lugares (12 en `lib/` y las 2 rutas lookup), el bloque de
+refrescar y guardar el token en 5 (4 en `client.ts` y 1 en `portal-analyzer.ts`) y 9 scripts hablaban con la API por su
+cuenta (7 con su propio refresh; `merge-duplicate-clients.ts` refrescaba sin guardar). Ante un 429 solo esperaba la
+auditoría. El reintento del SDK (`numberOfApiCallRetries`) no sirve: espera fijo (10 s o 1 s según el mensaje), no lee
+`Retry-After`, y `apiRequest` no lanza ante un 429, así que nunca se dispara para lo que usa Nexus. Y ninguna falla por
+401 o 429 quedaba registrada: en producción no había rastro ni en `CronJobState` ni en `AgentRun`.
+
+**Lo decidido:**
+
+1. **Un pedido:** `pedirAHubspot` (`lib/hubspot/transporte.ts`, puro, con `fetch` inyectable). Los clientes que
+   devuelven `getSystemHubspotClient` y `getHubspotClient` mandan su `apiRequest` por ahí: las firmas no cambian y los
+   ~90 llamadores lo tienen sin tocar una línea. Para un token suelto (el callback de OAuth, la conexión de una Private
+   App) está `pedirConToken`.
+2. **401:** un refresh y un reintento. Los pedidos que reciben 401 a la vez comparten el refresh en curso; si otro
+   pedido u otro proceso ya renovó, se usa ese token sin refrescar otra vez. Una cuenta sin refresh token (Private App)
+   no se renueva.
+3. **429:** se espera `Retry-After` (si no viene, 1 s, 2 s, 4 s) y, mientras tanto, se frena a los demás pedidos del
+   proceso. Con los encabezados del límite casi en cero, se espacian los pedidos siguientes.
+4. **Dos presupuestos:** en un job del scheduler (`enUnJob`, `lib/jobs/contexto.ts`) o en un script, lo que diga
+   `Retry-After` (hasta 60 s por espera y 5 reintentos); en una ruta, 2 s en total, y el llamador degrada.
+5. **El contrato de errores no cambia:** un 429 que no cabe vuelve como 429 (quien lanzaba ante él sigue lanzando), un
+   403 vuelve sin reintento, un error de red sube. No se reintentan los 5xx: no era parte del pedido y un POST que
+   escribe podría duplicarse.
+6. **Se registra:** por día de Costa Rica, en la fila `hubspot-transporte` de `CronJobState`, sin SQL nuevo
+   (`lib/hubspot/registro-de-fallas.ts`): lo que respondió HubSpot (`vistos401`, `vistos429`, el número de antes) y lo
+   que llegó al llamador (`fallas401`, `fallas429`, la meta de 7 días en 0). Lo lee `scripts/fallas-de-hubspot.ts`.
+7. **Fuera del transporte:** las APIs tipadas del SDK (`client.crm.*`, `client.settings.users`, 7 llamadas) van por el
+   http del SDK y lanzan su `ApiException` como siempre; si una choca con el límite, se pasa a `apiRequest`. La
+   auditoría de portales (`lib/auditoria-portal/lecturas.ts`) conserva su propio pedido: es el motor separado, con el
+   token de un portal de cliente, y ya esperaba `Retry-After`.
+
+**Lo vigila** `lib/hubspot/transporte-unico.test.ts`: el host de la API solo en el transporte, `client.ts` y la
+auditoría; el refresh solo en `client.ts`; nadie llama a `forceRefreshSystemToken` ni a `refreshAccessToken`, ni arma un
+cliente del SDK con un token a mano. `forceRefreshSystemToken` queda exportada, deprecada, para ramas que todavía la
+llamen.
+
+**Volver atrás:** revertir el commit. No hay SQL; la fila `hubspot-transporte` de `CronJobState` se puede dejar o borrar.

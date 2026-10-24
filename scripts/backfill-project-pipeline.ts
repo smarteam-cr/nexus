@@ -28,7 +28,7 @@ import "dotenv/config";
 import "./lib/permitir-server-only";
 import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
-import { tokenDeCuenta as leerTokenDeCuenta } from "@/lib/hubspot/client";
+import { getHubspotClient } from "@/lib/hubspot/client";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { resolverHermanos } from "@/lib/hubspot/sync-projects";
 
@@ -45,31 +45,18 @@ const close = () => prisma.$disconnect();
 const APLICAR = resolverApply();
 const LOTE = 100; // techo de la API de batch/read de HubSpot
 
-async function tokenDeCuenta(accountId: string): Promise<string | null> {
-  const acc = await prisma.hubspotAccount.findUnique({ where: { id: accountId } });
-  if (!acc) return null;
-  if (new Date(acc.expiresAt) > new Date(Date.now() + 5 * 60 * 1000)) return leerTokenDeCuenta(acc);
-  const res = await fetch("https://api.hubapi.com/oauth/v1/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: process.env.HUBSPOT_CLIENT_ID!,
-      client_secret: process.env.HUBSPOT_CLIENT_SECRET!,
-      refresh_token: acc.refreshToken,
-    }),
-  });
-  if (!res.ok) return null;
-  const j = (await res.json()) as { access_token: string; refresh_token: string; expires_in: number };
-  await prisma.hubspotAccount.update({
-    where: { id: acc.id },
-    data: {
-      accessToken: j.access_token,
-      refreshToken: j.refresh_token,
-      expiresAt: new Date(Date.now() + j.expires_in * 1000),
-    },
-  });
-  return j.access_token;
+type ClienteHubspot = Awaited<ReturnType<typeof getHubspotClient>>;
+
+/**
+ * El cliente de la cuenta, con su `apiRequest` por el transporte de lib/hubspot/client.ts (renueva el token ante un
+ * 401 y espera ante un 429). null si la cuenta no existe o no se pudo refrescar su token.
+ */
+async function clienteDeCuenta(accountId: string): Promise<ClienteHubspot | null> {
+  try {
+    return await getHubspotClient(accountId);
+  } catch {
+    return null;
+  }
 }
 
 interface Leido {
@@ -78,16 +65,16 @@ interface Leido {
 }
 
 /** Lee un lote de proyectos de UN portal. Devuelve solo los que respondieron. */
-async function leerLote(token: string, ids: string[]): Promise<Map<string, Leido>> {
+async function leerLote(hs: ClienteHubspot, ids: string[]): Promise<Map<string, Leido>> {
   const out = new Map<string, Leido>();
   for (const slug of ["0-970", "projects", "PROJECT"]) {
-    const res = await fetch(`https://api.hubapi.com/crm/v3/objects/${slug}/batch/read`, {
+    const res = await hs.apiRequest({
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
+      path: `/crm/v3/objects/${slug}/batch/read`,
+      body: {
         inputs: ids.map((id) => ({ id })),
         properties: ["hs_pipeline", "proyecto_interno"],
-      }),
+      },
     });
     if (!res.ok) continue;
     const data = (await res.json()) as {
@@ -106,18 +93,18 @@ async function leerLote(token: string, ids: string[]): Promise<Map<string, Leido
 
 /**
  * Las asociaciones proyecto↔proyecto de un lote. Mismo endpoint y mismos lotes de 100 que el
- * sync (`leerProyectosAsociados`), replicado acá porque el script habla con la API cruda y no
- * con el cliente de HubSpot.
+ * sync (`leerProyectosAsociados`), replicado acá porque el script pide por `apiRequest` y no
+ * por el sync.
  */
-async function leerAsociaciones(token: string, ids: string[]): Promise<Map<string, string[]>> {
+async function leerAsociaciones(hs: ClienteHubspot, ids: string[]): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>();
   for (let i = 0; i < ids.length; i += LOTE) {
     const tanda = ids.slice(i, i + LOTE);
     try {
-      const res = await fetch("https://api.hubapi.com/crm/v4/associations/0-970/0-970/batch/read", {
+      const res = await hs.apiRequest({
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ inputs: tanda.map((id) => ({ id })) }),
+        path: "/crm/v4/associations/0-970/0-970/batch/read",
+        body: { inputs: tanda.map((id) => ({ id })) },
       });
       if (!res.ok) continue;
       const data = (await res.json()) as {
@@ -194,8 +181,8 @@ async function main() {
   }
 
   for (const [accountId, lista] of porPortal) {
-    const token = await tokenDeCuenta(accountId);
-    if (!token) {
+    const hs = await clienteDeCuenta(accountId);
+    if (!hs) {
       for (const p of lista) {
         noResueltos.push({
           etiqueta: `${p.client.name} · ${p.name} (${p.status})`,
@@ -209,8 +196,8 @@ async function main() {
       const tanda = lista.slice(i, i + LOTE);
       const hsIds = tanda.map((p) => p.hubspotServiceId!);
       const [leidos, asociaciones] = await Promise.all([
-        leerLote(token, hsIds),
-        leerAsociaciones(token, hsIds),
+        leerLote(hs, hsIds),
+        leerAsociaciones(hs, hsIds),
       ]);
 
       for (const p of tanda) {

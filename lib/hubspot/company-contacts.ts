@@ -7,7 +7,7 @@
  * dentro de `ClientCsSignals.engagement`, sin columna nueva.
  *
  * Mismo molde que `tickets.ts`: asociaciones v3 + lectura en lote, 403 = sin permiso (no es
- * error), 401 = reintento con el token del sistema renovado. Scope: `crm.objects.contacts.read`,
+ * error), el 401 lo reintenta el transporte con el token renovado. Scope: `crm.objects.contacts.read`,
  * que la app ya tiene.
  *
  * ⛔ «No soportado» y «falló» NO son lo mismo (2026-10-05). Un 403 dice que no hay permiso: se
@@ -17,7 +17,6 @@
  * llama (cs-signals.ts) atrapa el error y conserva los contactos de la copia anterior.
  */
 import type { Client as HsClient } from "./sdk";
-import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
 
 export interface ContactoDeEmpresa {
   id: string;
@@ -55,7 +54,7 @@ export class FalloAlLeerContactos extends Error {
   }
 }
 
-/** `status` 401 vuelve para reintentar con el token renovado; cualquier otro fallo LANZA. */
+/** `status` 401 vuelve (el transporte ya renovó el token una vez); cualquier otro fallo LANZA. */
 async function fetchOnce(hs: HsClient, companyId: string): Promise<{ status: number; result: ContactosDeEmpresa }> {
   const assoc = await hs.apiRequest({
     method: "GET",
@@ -101,18 +100,14 @@ async function fetchOnce(hs: HsClient, companyId: string): Promise<{ status: num
 }
 
 /**
- * Contactos de la empresa, con degradación de permiso (403 → `supported: false`) y reintento ante 401.
+ * Contactos de la empresa, con degradación de permiso (403 → `supported: false`) y el 401 que ni el transporte pudo resolver como fallo.
  * ⛔ Ante cualquier otro fallo LANZA `FalloAlLeerContactos`: nunca devuelve «cero contactos» sin saberlo.
  */
 export async function fetchCompanyContacts(hs: HsClient, companyId: string): Promise<ContactosDeEmpresa> {
   try {
-    let r = await fetchOnce(hs, companyId);
-    if (r.status === 401) {
-      await forceRefreshSystemToken();
-      r = await fetchOnce(await getSystemHubspotClient(), companyId);
-      // Ni con el token renovado: tampoco se sabe quiénes son.
-      if (r.status === 401) throw new FalloAlLeerContactos(401, "401 aun con el token renovado");
-    }
+    const r = await fetchOnce(hs, companyId);
+    // El transporte ya renovó el token una vez (lib/hubspot/client.ts): ni así se sabe quiénes son.
+    if (r.status === 401) throw new FalloAlLeerContactos(401, "401 aun con el token renovado");
     return r.result;
   } catch (e) {
     if (e instanceof FalloAlLeerContactos) throw e;

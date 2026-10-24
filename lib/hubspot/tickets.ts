@@ -10,8 +10,8 @@
  * panel muestra "sin permiso" y el watchdog omite la señal. Cuando se re-autorice
  * la app con el scope, esto empieza a andar solo.
  *
- * Retry-401 con forceRefreshSystemToken: la cuenta del sistema es compartida
- * (PROD/local/scripts) y el refresh token ROTA — lección de company-timeline.ts.
+ * El 401 lo reintenta el transporte con el token renovado (lib/hubspot/client.ts): la cuenta del
+ * sistema es compartida (PROD/local/scripts) — lección de company-timeline.ts.
  *
  * ⛔ «No soportado» y «falló» NO son lo mismo (2026-10-05, mismo criterio que company-contacts.ts).
  * Un 403 dice que no hay permiso: `supported: false`. Cualquier otro fallo (un 500, un 429, la red,
@@ -21,7 +21,6 @@
  * el error y conserva los tickets de la copia anterior.
  */
 import type { Client as HsClient } from "./sdk";
-import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
 
 export interface CompanyTicket {
   id: string;
@@ -49,7 +48,7 @@ export class FalloAlLeerTickets extends Error {
   }
 }
 
-/** `status` 401 vuelve para reintentar con el token renovado; cualquier otro fallo LANZA. */
+/** `status` 401 vuelve (el transporte ya renovó el token una vez); cualquier otro fallo LANZA. */
 async function fetchOnce(
   hsClient: HsClient,
   companyId: string,
@@ -109,22 +108,18 @@ async function fetchOnce(
 }
 
 /**
- * Tickets de la company, con degradación de scope (403 → `supported: false`) y retry-401 (token
- * compartido). ⛔ Ante cualquier otro fallo LANZA `FalloAlLeerTickets`: nunca devuelve «cero
- * tickets» sin saberlo.
+ * Tickets de la company, con degradación de scope (403 → `supported: false`); el 401 ya lo
+ * reintentó el transporte. ⛔ Ante cualquier otro fallo LANZA `FalloAlLeerTickets`: nunca devuelve
+ * «cero tickets» sin saberlo.
  */
 export async function fetchCompanyTickets(
   hsClient: HsClient,
   companyId: string,
 ): Promise<CompanyTicketsResult> {
   try {
-    let r = await fetchOnce(hsClient, companyId);
-    if (r.status === 401) {
-      await forceRefreshSystemToken();
-      r = await fetchOnce(await getSystemHubspotClient(), companyId);
-      // Ni con el token renovado: tampoco se sabe cuántos hay.
-      if (r.status === 401) throw new FalloAlLeerTickets(401, "401 aun con el token renovado");
-    }
+    const r = await fetchOnce(hsClient, companyId);
+    // El transporte ya renovó el token una vez: ni así se sabe cuántos hay.
+    if (r.status === 401) throw new FalloAlLeerTickets(401, "401 aun con el token renovado");
     return r.result;
   } catch (e) {
     // API caída ≠ scope faltante: el fallo SUBE para que la copia conserve lo que tenía.

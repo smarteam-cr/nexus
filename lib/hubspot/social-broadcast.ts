@@ -12,11 +12,11 @@
  * como BORRADOR en el compositor social de HubSpot (confirmado en el LinkedIn de
  * Smarteam) — no publica nada.
  *
- * Retry-401 con forceRefreshSystemToken: la cuenta del sistema es compartida
- * (PROD/local/scripts) y el refresh token ROTA (lección de company-timeline.ts).
+ * El 401 lo reintenta el transporte con el token renovado (lib/hubspot/client.ts): la cuenta del
+ * sistema es compartida (PROD/local/scripts) — lección de company-timeline.ts.
  */
 import type { Client as HsClient } from "./sdk";
-import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
+import { getSystemHubspotClient } from "./client";
 
 export interface SocialChannel {
   channelKey: string; // "LinkedInCompanyPage:52169371" — identificador durable para publicar
@@ -40,18 +40,11 @@ export interface DraftResult {
 const CHANNELS_PATH = "/broadcast/v1/channels/setting/publish/current";
 const BROADCASTS_PATH = "/broadcast/v1/broadcasts";
 
-/** Corre fn con el client del sistema; si da 401, refresca el token y reintenta 1 vez. */
+/** Corre fn con el client del sistema. El 401 y el 429 los resuelve su transporte (lib/hubspot/client.ts). */
 async function withRetry<T>(
   fn: (client: HsClient) => Promise<{ status: number; value: T }>,
 ): Promise<T> {
-  let client = await getSystemHubspotClient();
-  let r = await fn(client);
-  if (r.status === 401) {
-    await forceRefreshSystemToken();
-    client = await getSystemHubspotClient();
-    r = await fn(client);
-  }
-  return r.value;
+  return (await fn(await getSystemHubspotClient())).value;
 }
 
 /** Canales sociales conectados en HubSpot (LinkedIn/FB/IG…). 403 → supported:false. */

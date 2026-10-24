@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/api";
 import { guardPermission } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { getSystemAccessToken } from "@/lib/hubspot/client";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 
@@ -26,9 +26,9 @@ export const POST = withAuth(async () => {
   const guard = await guardPermission("configuracion", "manage");
   if (guard instanceof NextResponse) return guard;
 
-  let accessToken: string;
+  let hs: Awaited<ReturnType<typeof getSystemHubspotClient>>;
   try {
-    accessToken = await getSystemAccessToken();
+    hs = await getSystemHubspotClient();
   } catch {
     return NextResponse.json(
       { error: "No hay cuenta HubSpot del sistema configurada" },
@@ -58,17 +58,8 @@ export const POST = withAuth(async () => {
       ...(after ? { after } : {}),
     };
 
-    const res = await fetch(
-      "https://api.hubapi.com/crm/v3/objects/companies/search",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      }
-    );
+    // El transporte del cliente renueva el token ante un 401 y espera ante un 429 (lib/hubspot/client.ts).
+    const res = await hs.apiRequest({ method: "POST", path: "/crm/v3/objects/companies/search", body });
 
     if (!res.ok) {
       const errText = await res.text();

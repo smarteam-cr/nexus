@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCapability } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
+import { pedirConToken } from "@/lib/hubspot/client";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
 
@@ -36,9 +37,7 @@ export const POST = withCapability("seeAllClients", async (request) => {
   }
 
   // 1. Validar token con HubSpot
-  const accountRes = await fetch("https://api.hubapi.com/account-info/v3/details", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const accountRes = await pedirConToken(token, { method: "GET", path: "/account-info/v3/details" });
 
   if (!accountRes.ok) {
     return NextResponse.json(
@@ -120,18 +119,15 @@ async function findMainCompany(token: string): Promise<{
   industry: string | null;
 } | null> {
   try {
-    const res = await fetch("https://api.hubapi.com/crm/v3/objects/companies/search", {
+    const res = await pedirConToken(token, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+      path: "/crm/v3/objects/companies/search",
+      body: {
         filterGroups: [],
         properties: ["name", "domain", "industry"],
         sorts: [{ propertyName: "createdate", direction: "ASCENDING" }],
         limit: 1,
-      }),
+      },
     });
 
     if (!res.ok) return null;

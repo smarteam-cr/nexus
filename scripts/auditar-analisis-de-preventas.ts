@@ -23,7 +23,7 @@ import { opcionesDeLasPestanas, pestanasDeSesiones, type PestanaDeSesion } from 
 import { hoyEnCostaRica } from "@/lib/exploraciones/fechas";
 import { cuentaEnLaPreventa, DIAS_ANTES_DEL_ALTA, mismaReunion, reunionQueNoOcurrio, type CorteDeLaPreventa } from "@/lib/exploraciones/lectura";
 import { salesPresenceEmails } from "@/lib/handoff/sales-presence";
-import { tokenDeCuenta } from "@/lib/hubspot/client";
+import { pedirConToken, tokenDeCuenta } from "@/lib/hubspot/client";
 import { leerLoLeido } from "@/lib/exploraciones/lo-leido";
 import { claveDeLaReunion } from "@/lib/exploraciones/contenido";
 
@@ -53,11 +53,16 @@ function estadoDe(p: PestanaDeSesion, lecturas: ReturnType<typeof leerPropuesta>
   return { estado: r.leida ? "leida-sin-resumen" : "sin-leer" };
 }
 
-/** El correo de cada usuario de HubSpot (id → correo), activos y archivados. Solo lectura. */
+/**
+ * El correo de cada usuario de HubSpot (id → correo), activos y archivados. Solo lectura.
+ *
+ * Los pedidos de este script van con `pedirConToken` (el transporte, con el token suelto): espera ante un 429 pero NO
+ * renueva ante un 401, porque renovar escribe el token nuevo en la base y este reporte solo lee.
+ */
 async function correosDeLosUsuarios(token: string): Promise<Map<string, string>> {
   const mapa = new Map<string, string>();
   for (const archivados of [false, true]) {
-    const r = await fetch(`https://api.hubapi.com/crm/v3/owners?limit=500&archived=${archivados}`, { headers: { Authorization: `Bearer ${token}` } });
+    const r = await pedirConToken(token, { method: "GET", path: `/crm/v3/owners?limit=500&archived=${archivados}` });
     if (!r.ok) continue;
     const j = (await r.json()) as { results?: { id?: string | number; email?: string | null }[] };
     for (const o of j.results ?? []) if (o.id != null && o.email) mapa.set(String(o.id), o.email.toLowerCase());
@@ -72,11 +77,7 @@ async function grabadasEnHubspot(
   correoDe: Map<string, string>,
 ): Promise<{ id: string; titulo: string; inicio: string; resumen: number; transcripcion: boolean; internos: string[] }[] | null> {
   const get = async (path: string, body?: unknown) => {
-    const r = await fetch(`https://api.hubapi.com${path}`, {
-      method: body ? "POST" : "GET",
-      headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
+    const r = await pedirConToken(token, { method: body ? "POST" : "GET", path, ...(body ? { body } : {}) });
     return r.ok ? ((await r.json()) as unknown) : null;
   };
   const v1 = (await get(`/engagements/v1/engagements/associated/company/${companyId}/paged?limit=100`)) as {

@@ -25,7 +25,8 @@
 import "dotenv/config";
 import { createScriptDb } from "./lib/db";
 import { PROJECT_PIPELINES } from "@/lib/projects/kind";
-import { tokenDeCuenta as leerTokenDeCuenta } from "@/lib/hubspot/client";
+import { prisma as prismaDeLaApp } from "@/lib/db/prisma";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
 
 // Pool ACOTADO (max: 2). El pooler de Supabase da ~15 slots compartidos entre prod,
 // las dos PCs de dev y cualquier script suelto — ver scripts/lib/db.ts.
@@ -55,33 +56,7 @@ const ETAPAS_DE_CIERRE_ESPERADAS: Record<string, { pipelineId: string; stageId: 
 
 const PIPELINE_CS_CONOCIDO = "826270797";
 
-// ── Token del sistema (mismo patrón que inspect-hubspot-projects.ts) ──────────
-async function systemToken(): Promise<string> {
-  const acc = await prisma.hubspotAccount.findFirst({ where: { isSystem: true } });
-  if (!acc) throw new Error("No hay cuenta HubSpot del sistema");
-  if (new Date(acc.expiresAt) > new Date(Date.now() + 5 * 60 * 1000)) return leerTokenDeCuenta(acc);
-  const res = await fetch("https://api.hubapi.com/oauth/v1/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: process.env.HUBSPOT_CLIENT_ID!,
-      client_secret: process.env.HUBSPOT_CLIENT_SECRET!,
-      refresh_token: acc.refreshToken,
-    }),
-  });
-  if (!res.ok) throw new Error("refresh falló: " + (await res.text()));
-  const j = (await res.json()) as { access_token: string; refresh_token: string; expires_in: number };
-  await prisma.hubspotAccount.update({
-    where: { id: acc.id },
-    data: {
-      accessToken: j.access_token,
-      refreshToken: j.refresh_token,
-      expiresAt: new Date(Date.now() + j.expires_in * 1000),
-    },
-  });
-  return j.access_token;
-}
+type ClienteHubspot = Awaited<ReturnType<typeof getSystemHubspotClient>>;
 
 /**
  * La respuesta de HubSpot, sin `any`. Un objeto de claves desconocidas describe la forma
@@ -103,10 +78,9 @@ function leerLista(v: unknown): Array<Record<string, unknown>> {
   return Array.isArray(v) ? (v.filter((x) => typeof x === "object" && x !== null) as Array<Record<string, unknown>>) : [];
 }
 
-async function getJson(token: string, path: string): Promise<{ status: number; body: JsonHubspot }> {
-  const r = await fetch("https://api.hubapi.com" + path, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+// El pedido va por el transporte de lib/hubspot/client.ts: renueva el token ante un 401 y espera ante un 429.
+async function getJson(hs: ClienteHubspot, path: string): Promise<{ status: number; body: JsonHubspot }> {
+  const r = await hs.apiRequest({ method: "GET", path });
   return { status: r.status, body: obj(await r.json().catch(() => null)) };
 }
 
@@ -138,12 +112,12 @@ interface Pipeline {
 }
 
 async function main() {
-  const token = await systemToken();
+  const hs = await getSystemHubspotClient();
 
   // Resolver el slug del objeto Proyectos una sola vez.
   let slug = "";
   for (const cand of ["0-970", "projects", "PROJECT"]) {
-    const r = await getJson(token, `/crm/v3/pipelines/${cand}`);
+    const r = await getJson(hs, `/crm/v3/pipelines/${cand}`);
     if (r.status === 200) {
       slug = cand;
       break;
@@ -157,7 +131,7 @@ async function main() {
 
   // ── PASO 1 · pipelines + etapas ────────────────────────────────────────────
   console.log("═══ PASO 1 · PIPELINES DEL OBJETO PROYECTOS ═══\n");
-  const pipesRes = await getJson(token, `/crm/v3/pipelines/${slug}`);
+  const pipesRes = await getJson(hs, `/crm/v3/pipelines/${slug}`);
   if (pipesRes.status !== 200) {
     console.log(`⛔ /crm/v3/pipelines/${slug} → HTTP ${pipesRes.status}. Parar.`);
     return;
@@ -211,7 +185,7 @@ async function main() {
 
   // ── PASO 2 · la propiedad proyecto_interno ─────────────────────────────────
   console.log("═══ PASO 2 · propiedad `proyecto_interno` ═══\n");
-  const prop = await getJson(token, `/crm/v3/properties/${slug}/proyecto_interno`);
+  const prop = await getJson(hs, `/crm/v3/properties/${slug}/proyecto_interno`);
   if (prop.status === 200) {
     console.log("  ✓ EXISTE:", {
       name: str(prop.body.name),
@@ -224,7 +198,7 @@ async function main() {
     }
   } else {
     console.log(`  ✗ NO existe con el nombre interno 'proyecto_interno' (HTTP ${prop.status}).`);
-    const todas = await getJson(token, `/crm/v3/properties/${slug}`);
+    const todas = await getJson(hs, `/crm/v3/properties/${slug}`);
     if (todas.status === 200) {
       console.log("  Candidatas booleanas del objeto Proyectos:");
       leerLista(todas.body.results)
@@ -235,7 +209,7 @@ async function main() {
 
   // ── PASO 3 · asociación proyecto ↔ proyecto ────────────────────────────────
   console.log("\n═══ PASO 3 · asociación proyecto ↔ proyecto (el hermano) ═══\n");
-  const assoc = await getJson(token, `/crm/v4/associations/${slug}/${slug}/labels`);
+  const assoc = await getJson(hs, `/crm/v4/associations/${slug}/${slug}/labels`);
   if (assoc.status === 200) {
     const rs = leerLista(assoc.body.results);
     if (!rs.length) console.log("  (sin etiquetas — usar la asociación por defecto)");
@@ -273,7 +247,7 @@ async function main() {
     const url =
       `/crm/v3/objects/${slug}?limit=100&properties=${propsPedidas}` +
       (after ? `&after=${encodeURIComponent(after)}` : "");
-    const page = await getJson(token, url);
+    const page = await getJson(hs, url);
     if (page.status !== 200) {
       console.log(`  ⚠ corte de paginación en HTTP ${page.status} tras ${crudos.length} proyectos.`);
       break;
@@ -432,4 +406,7 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(close);
+  .finally(async () => {
+    await close();
+    await prismaDeLaApp.$disconnect();
+  });
