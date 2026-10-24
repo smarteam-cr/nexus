@@ -101,10 +101,22 @@ En lenguaje sencillo, con sus citas:
 - **K3** (el position statement), para el punto 6.
 - **H y P5** (leer todas las sesiones): misma lectura de reuniones, otro fin.
 
-## Preguntas para Elías
+## Respuestas de Elías (2026-10-23)
 
-1. La sesión de Grupo Avis no tiene transcripción en Nexus. ¿Existe en otro lado (una grabación de HubSpot, otro
-   grabador), o elegimos otra referencia mientras tanto?
-2. ¿Quién ve el análisis de cada vendedor? Te propongo el vendedor, su líder (Andrés) y tú; nadie más.
-3. ¿Pablo Bogantes es del equipo de Ventas? No aparece entre las personas del equipo en Nexus.
-4. Las reuniones de expansión con clientes que ya son clientes, ¿entran desde el principio o después?
+1. **La referencia:** en el pedido era la sesión de Grupo Avis con Pablo Bogantes. Fue presencial, se grabó con un
+   teléfono y todavía no está. **Mientras tanto se prueba con Camosa** («Exploración de retos operativos», 23 oct), y
+   Elías y Andrés deciden después de verla si sirve como referencia. Cuando llegue la grabación de Avis entra por T5
+   (`docs/reuniones-pieza-angular-plan.md`) y se marca como referencia.
+2. **Quién lo ve:** todos, al final. Primero solo los super admin, para probar; después se abre a Ventas.
+3. **Pablo Bogantes** es del lado del cliente: un lead, que toma decisiones e influye en Avis y en una junta que administra
+   Nissan. El analizador lo cuenta como cliente; queda unido a su empresa cuando existan los leads (B3) y las personas
+   con su rol (R6).
+4. **Las reuniones de expansión con clientes que ya lo son** (por ejemplo, «Fase 2: Marketing» con CEMACO) son
+   conversaciones de venta. Recomendación: entran desde el principio, porque la venta cruzada también se explora.
+   Pendiente de que Elías lo confirme.
+
+## A quién se le atribuye una reunión
+
+Hoy Nexus guarda solo al organizador. La de Camosa la organizó Liz Navarro, y Marco y Andrés fueron invitados. El
+analizador atribuye la reunión a todos los de Smarteam que estuvieron, con su papel (organizó o asistió), y la tendencia
+de cada vendedor cuenta las suyas. Va con T7 del plan de las reuniones.
