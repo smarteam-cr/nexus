@@ -13,7 +13,11 @@ type Db = Pick<PrismaClient | Prisma.TransactionClient, "firefliesSession">;
 
 /** Suelta las reuniones de la empresa (dueña resuelta y asignación manual). Devuelve cuántas soltó de cada una. */
 export async function soltarReunionesDeLaEmpresa(db: Db, clientId: string): Promise<{ manuales: number; resueltas: number }> {
-  const manuales = await db.firefliesSession.updateMany({ where: { manualClientId: clientId }, data: { manualClientId: null } });
+  // El sello y su procedencia van juntos (lib/sessions/duenio-manual.ts): sin dueño, tampoco quién ni cuándo.
+  const manuales = await db.firefliesSession.updateMany({
+    where: { manualClientId: clientId },
+    data: { manualClientId: null, manualClientSource: null, manualClientBy: null, manualClientAt: null },
+  });
   const resueltas = await db.firefliesSession.updateMany({ where: { resolvedClientId: clientId }, data: { resolvedClientId: null } });
   return { manuales: manuales.count, resueltas: resueltas.count };
 }

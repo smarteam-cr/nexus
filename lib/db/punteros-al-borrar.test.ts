@@ -54,7 +54,7 @@ describe("borrar un cliente suelta sus sesiones", () => {
        ventana. La función tiene que soltar las DOS. */
     expect(tx, "se soltaron fuera de la transacción, o se dejó de soltar").toContain("soltarReunionesDeLaEmpresa(tx, id)");
     const funcion = leer("lib/clients/soltar-reuniones.ts");
-    expect(funcion, "el override manual volvió a quedar colgando").toContain("data: { manualClientId: null }");
+    expect(funcion, "el override manual volvió a quedar colgando").toMatch(/data: { manualClientId: null,/);
     expect(funcion, "el dueño automático volvió a quedar colgando").toContain("data: { resolvedClientId: null }");
   });
 
