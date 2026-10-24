@@ -53,11 +53,14 @@
 
    El TAM queda en `tam__potencial`, con su fuente y su fecha. **Fórmula validada por Elías el 2026-10-23.** Va en dos
    versiones:
-   - **TAM v1, en el paso uno:** las licencias según tamaño y hubs, más los servicios con un monto por nivel de la
-     escala a la tarifa del segmento (80, 100 o 120). Insider queda «sin evaluar» y no suma. El TAM dice «estimado v1».
-     El monto por nivel y la tabla de precios de las licencias no los inventa la sesión: «Lo que decides tú» 25 del
-     roadmap.
-   - **TAM v2, después de N4, N6 y A2:** con Insider y las horas por actividad.
+   - **TAM v1, en el paso uno** (Elías, 2026-10-24): sale de cómo es la empresa: su tamaño (empleados), si es casa
+     matriz o filial (y cuántas filiales tiene), su industria y su modelo de negocio. Con eso, las licencias de HubSpot
+     que le corresponden por tamaño y por los hubs que le sirven, a precio de lista, e Insider si califica. **Los
+     servicios todavía no suman:** los precios los fija Ventas hasta que existan las actividades, y no se usa un monto
+     por nivel de la escala. El TAM dice «estimado v1».
+   - **Lo que la empresa ya paga de licencias** sale de su portal, por Client Partners
+     (`docs/integracion-hubspot-partners-plan.md`); el TAM muestra al lado lo que ya tiene y lo que le falta.
+   - **TAM v2, después de A2:** suma los servicios, con las horas de las actividades.
    - En Nexus se reusan `Client.tamUsd` y `Client.industry`, y se les suma la fuente y la fecha; la etapa 2 suma la
      columna **segmento** (estándar, corporativo o gobierno).
    - **Antes del código, se enmienda DECISIONS «Qué ES una empresa: `ClientKind` + TAM (2026-07-24)»**, que hoy dice que
@@ -76,7 +79,7 @@
    - **Cualquier dato se edita a mano** con un clic.
    - **Quién decide** (Elías, 2026-10-24): **el usuario de Nexus que lo está usando, según su rol**, y lo que decide
      se escribe en HubSpot con la sugerencia del agente. El rol sale de una celda nueva, `clientes.decidirDatos`
-     (`lib/auth/permissions/registry.ts`, editable en /team); qué roles la traen es «Lo que decides tú» 26 del roadmap. El TAM lo ve solo el equipo, nunca el cliente. Los reportes
+     (`lib/auth/permissions/registry.ts`, editable en /team); la traen CSE, CSL, Ventas y los super admin (Elías, 2026-10-24). El TAM lo ve solo el equipo, nunca el cliente. Los reportes
      de HubSpot van después: primero, que el usuario escriba en HubSpot. Las
      propuestas pendientes se cuentan en la ficha («3 datos por revisar»); no se suman a «Por decidir» de Tareas, para no
      cargar a nadie.
