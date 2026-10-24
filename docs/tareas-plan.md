@@ -1452,6 +1452,17 @@ del handoff a «Por decidir» repetiría eso. La propuesta son tres puertas a un
 3. **Lo que se dijo puertas adentro**: en una reunión interna alguien pide algo; Nexus crea la tarea para quien la
    hace y una de revisión para quien la pidió (roadmap, área H).
 
+**Tareas de seguimiento que nacen en Nexus también en HubSpot** (feedback de Ventas, 2026-10-23; roadmap D4). Hoy
+HubSpot→Nexus corre cada 15 minutos y lo que nació en HubSpot se sincroniza en los dos sentidos, «hecha» incluida
+(`lib/tareas-hubspot/reglas.ts`). Lo que nace en Nexus no se crea en HubSpot, por decisión escrita (`sync-server.ts`,
+§ 8). La tarea a mano con fecha existe y se agenda en Calendar con un clic. Lo que falta:
+
+1. Una tarea de seguimiento con un contacto o un negocio de HubSpot («el cliente no responde hace 3 días») se crea
+   también en HubSpot, asociada a ese contacto o negocio, y guarda su `hubspotTaskId`. Desde ahí, el estado viaja solo.
+2. Al crearla, «Agendar» propone el bloque en el calendario del consultor.
+3. Las tareas internas (sin contacto ni negocio) siguen solo en Nexus. Esto reabre la regla «nada que nazca en Nexus
+   se crea en HubSpot» solo para el seguimiento comercial: se anota en DECISIONS antes del código.
+
 ## Autorizar el permiso de Calendar (lo hace Elías, antes del deploy de 1A.1)
 
 Nexus ya tiene una cuenta de servicio con delegación de todo el dominio. Hay que sumarle UN permiso a la lista que ya tiene, sin borrar los otros.

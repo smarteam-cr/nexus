@@ -164,3 +164,35 @@ Continuidad, CSE Carolina Bersot). Se prueba con un **proyecto de prueba** en pr
 
 - La lista preliminar de casos de uso (Elías la pasa).
 - La etapa del ciclo de cada recurrente al migrar: preguntarla a Customer Success.
+
+## El recorrido de punta a punta, con lo que salió de usarlo (2026-10-23, roadmap área M)
+
+> Feedback de Liliana con RC Inmobiliaria el 2026-10-23 y validación en producción en solo lectura. Nada construido,
+> salvo M0. Es la prioridad 1 del Resumen del roadmap: que Customer Success use SmartLoop de verdad.
+
+- **M0 · El Kickoff en el riel de un recurrente.** ✓ En producción desde `f5a1cb42` (23 oct): lo dejaba fuera
+  `PIEZAS_DE_UN_SERVICIO_RECURRENTE`.
+- **M1 · Un kickoff que sabe que es SmartLoop.** El de «CONTINUIDAD CRM» (RC Inmobiliaria) es de otra época: 7 bloques
+  generados el 10 jul, antes de SmartLoop, sobre un handoff que mezcla tres negocios. No está copiado de otro proyecto.
+  Si se regenera, `lib/canvas/kickoff-generate.ts` le pasa «Tipo de servicio contratado: proyecto_temporal», porque el
+  proyecto tiene `serviceType` viejo y `servicioRecurrente` vacío.
+  1. El kickoff de un recurrente lee el servicio del pipeline (`servicioDelProyecto`), su cadencia (entrega semanal,
+     reporte mensual, stakeholders cada tres meses) y que se trabaja por ciclos.
+  2. Una plantilla de kickoff de servicio recurrente: cómo trabajamos cada ciclo, la cadencia, quién es quién, cómo se
+     piden cosas (solicitudes) y qué pasa en el primer ciclo.
+  3. Con un kickoff generado antes de que el proyecto fuera recurrente, el riel avisa «Este kickoff es anterior al
+     servicio: regenéralo» (con su aviso de supuestos, como el diagnóstico).
+  4. Corregir `serviceType` y `servicioRecurrente` de los proyectos del pipeline SmartLoop (simulacro primero).
+- **M2 · El orden correcto: primero exploración, después diagnóstico.** La exploración no es una etapa del ciclo; el
+  riel la muestra antes del diagnóstico, pero el «Qué sigue» va directo al diagnóstico
+  (`lib/clients/que-sigue-del-proyecto.ts`) y la guía de SmartLoop no la nombra (`lib/servicios/smartloop.ts`).
+  1. En la etapa Diagnóstico, si la exploración del ciclo no tiene sesiones con lectura, «Qué sigue» propone la
+     exploración (preparar la primera sesión por equipo) y no el diagnóstico.
+  2. La guía de la etapa Diagnóstico de SmartLoop dice «explora primero, por equipo; después escribe el diagnóstico».
+  3. El diagnóstico de un recurrente avisa si se genera sin exploraciones del ciclo (el aviso de supuestos ya existe).
+- **M3 · El primer ciclo de cada cliente, con su CSE** (estaba en «Lo que falta»): RC Inmobiliaria con Liliana, Honda con
+  Caroline, kölbi con Valentina. Lo que salga al usarlo se arregla en el momento.
+- **M4 · Las actividades que se repiten** dejan su tarea en cada ciclo (roadmap D2 etapa 5, `docs/actividades-plan.md`).
+
+Orden: M1 y M2 antes del primer ciclo de RC Inmobiliaria; después M3 con cada cliente; M4 cuando exista la biblioteca de
+actividades.

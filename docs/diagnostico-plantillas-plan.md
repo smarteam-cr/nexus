@@ -123,3 +123,42 @@ revisión del enfoque en `revisadaAt`, como hasta hoy.
 - Cambiar la plantilla de un diagnóstico ya generado desde la pantalla: hoy se hace desde el chat
   («documento.generar» con plantilla). Si hace falta un botón, es otra tanda.
 - Reordenar filas de tablas (preguntas, equipos): se quitan con la X; arrastrar `<tr>` es otra tanda.
+
+## Lo que salió de usarlo (2026-10-23, roadmap área L)
+
+> Feedback de Customer Success (Liliana) y Ventas el 2026-10-23, validado contra el código de hoy y la base en solo
+> lectura. Nada construido.
+
+- **L1 · Las reuniones con solo notas de Gemini cuentan como reuniones con texto.** En CEMACO hay 4 reuniones con notas
+  de Gemini (5 a 10 mil caracteres) y sin transcripción: se tomaron notas sin «Transcribir», no hay nada perdido. La
+  lectura de cada reunión exige una transcripción de 200 caracteres (`lib/sessions/post-process.ts`,
+  `lib/lecturas/reglas.ts`): con solo notas queda `sin_texto` y sin minuta, aunque lea los hechos (el Data Hub del 22 oct
+  tiene 15). El diagnóstico sí las lee, pero solo las elegidas y las de la exploración: quedaron fuera Alineación, el
+  Handoff y «Caso CEMACO».
+  1. Una reunión con notas largas se lee como reunión con texto: minuta y lectura con las notas, marcadas «solo notas».
+  2. El diagnóstico propone en su Contexto todas las reuniones del proyecto con texto (no solo las de la exploración),
+     con «Sacar».
+  3. Avisar a Customer Success de activar «Transcribir» (está en «Lo que configuras tú»).
+- **L2 · Publicar dice por qué no.** «Presentar» ya lista los motivos (el enfoque sin revisar). Publicar el enlace solo
+  dice «Primero presenta el Diagnóstico» (`lib/projects/publicar-documento.ts`). Y el desafío principal no tiene revisión.
+  1. Publicar repite los motivos de presentar, con un enlace a cada sección.
+  2. El desafío principal con su marca de revisión, como el enfoque, y presentar la exige.
+- **L3 · Detalles que siguen pasando:**
+  1. **La ficha del cliente:** con una propuesta de la IA en un campo, no hay dónde escribir; y después de «Usar», la
+     primera letra hace reaparecer la propuesta (`components/clients/FichaDelCliente.tsx`). Que «Usar» deje el campo
+     editable y la propuesta no vuelva.
+  2. **Tarjetas sin manija:** «Consecuencias positivas» (sale de las Acciones), la escala, los objetivos, los ítems de un
+     grupo del alcance y las filas de las tablas. Arrastrar filas estaba anotado como otra tanda: entra aquí.
+  3. **El asistente con las consecuencias positivas:** sí puede borrar ítems, pero no sabe que esa columna se arma con las
+     Acciones coherentes. Enseñárselo en el contrato de secciones.
+  4. **El contexto adicional:** abre cerrado solo con el documento generado. Que abra cerrado siempre que ya tenga algo, y
+     recuerde lo que eligió cada persona.
+- **L4 · La Planificación como el siguiente entregable.** Hoy cubre propiedades por objeto, pilotos (modalidad y olas) y
+  rutinas de adopción, y lee las Acciones coherentes del diagnóstico para bajarlas a configuración. No cubre cuántas
+  sesiones, con quiénes ni los entrenamientos (quedaba para una «Puesta en marcha»).
+  1. Una sección «Sesiones y entrenamientos»: cuántas, con quién, de qué, en qué orden, sale de las actividades vendidas
+     cuando existan (`docs/actividades-plan.md`).
+  2. Decidir con Elías si las Acciones coherentes se quedan en el diagnóstico esencial (como el «qué haremos») o pasan a la
+     Planificación. Recomendación: en el diagnóstico queda el enfoque y tres o cuatro acciones en una línea; el detalle
+     pasa a la Planificación.
+  3. Dos plantillas de Planificación, como el diagnóstico (I1).
