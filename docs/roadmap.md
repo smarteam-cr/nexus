@@ -249,6 +249,11 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
    - Etapa 2 · Sumarle los datos de B1.
    - Etapa 3 · Que diga, en palabras simples, qué le falta a esta empresa para llegar a Funcional y cuánto trabajo es, antes de que se venda.
 
+3. **B3 · Los leads de HubSpot, en Nexus.** *Sale de:* tu revisión del plano de una empresa (23 oct). *Depende de:* nada. *No existe:* Nexus copia contactos, negocios, tickets y correos de HubSpot, pero no el objeto Lead (el prospecto en calificación).
+   - Etapa 1 · Copiar los leads de cada empresa cada hora, como los contactos: nombre, etapa, origen, dueño y fechas, solo lectura.
+   - Etapa 2 · Verlos en la preventa y en «Llegaron por el test» (K10), unidos a la empresa.
+   - Etapa 3 · Sumarlos al plano de una empresa y a lo que leen los agentes de la preventa.
+
 ### C · Preventa y propuestas <span class="estado">Propuesta</span>
 
 1. **C1 · Recomendar el caso según la escala, enfocado en el resultado.** *Sale de:* la regla de aterrizaje y expansión, y «que se enfoque en el resultado que el cliente necesita». *Depende de:* nada (la regla ya existe).
@@ -262,7 +267,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 3. **C3 · «Lo que normalmente viene después», en una sección aparte.** *Sale de:* «mostrar lo necesario con precio y aparte lo que viene después sin precio» y tu respuesta 6. *Depende de:* nada.
    - Etapa 1 · Una sección nueva en la plantilla de la propuesta, sin precio, con los siguientes casos del camino de crecimiento. Las propuestas de hoy no cambian.
    - Etapa 2 · El vendedor la muestra u oculta con el ojo de la sección, que el motor ya trae.
-4. **C4 · Las implementaciones de hoy, leídas como casos de uso.** *Sale de:* «interpretar las implementaciones actuales como casos de uso». *Depende de:* A2.
+4. **C4 · Las implementaciones de hoy, leídas como casos de uso** (el objeto ya lo permite: un caso de uso es de la empresa y puede entrar a un proyecto sin ciclo, y a una fase del cronograma; hoy el flujo solo lo usa en SmartLoop. También abre vender casos de uso sin servicio recurrente). *Sale de:* «interpretar las implementaciones actuales como casos de uso». *Depende de:* A2.
    - Etapa 1 · Para cada proyecto en curso, Nexus propone a qué casos corresponde lo vendido (desde la propuesta y el handoff), sin tocar su cronograma.
    - Etapa 2 · El CSE lo confirma.
    - Etapa 3 · La cuenta lo muestra como lectura: «esto es lo que se vendió, en casos de uso», con sus etapas (diagnóstico, planificación, implementación y adopción), las mismas de SmartLoop.
