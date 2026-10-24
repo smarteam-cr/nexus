@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { requireAccessToClient } from "@/lib/auth/access";
+import { datosAlNacerDesdeHubspot } from "@/lib/clients/datos-de-la-empresa-server";
 import { requireCapability } from "@/lib/auth/roles";
 import { can } from "@/lib/auth/permissions/engine";
 import {
@@ -142,12 +143,13 @@ export async function GET(request: NextRequest) {
         }
 
         const company = await findMainCompany(tokens.access_token, portalInfo.hub_domain);
+        /* R7b (Elías, 24 oct): `hubspotCompanyId` es SOLO la empresa en el HubSpot de Smarteam. La de este portal es del
+           portal del cliente (otro espacio de ids): no se guarda; se vuelve a buscar en su portal cuando hace falta. */
         const newClientRecord = await tx.client.create({
           data: {
             name: company?.name || portalInfo.hub_domain,
             company: company?.name || null,
-            industry: company?.industry || null,
-            hubspotCompanyId: company?.id || null,
+            ...datosAlNacerDesdeHubspot({ industry: company?.industry }),
           },
         });
 

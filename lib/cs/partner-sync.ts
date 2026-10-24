@@ -27,6 +27,7 @@ import { fetchAllPartnerClients, type PartnerClientRecord } from "@/lib/hubspot/
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { leerDuenos } from "@/lib/hubspot/duenos";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
+import { esUnicoViolado } from "@/lib/db/unico-violado";
 
 export interface PartnerSyncResult {
   supported: boolean;
@@ -271,6 +272,13 @@ export async function syncPartnerClients(
       if (c.hubspotCompanyId) byCompanyId.set(c.hubspotCompanyId, c.id);
       for (const d of c.emailDomains) byDomain.set(d.toLowerCase(), c.id);
     }
+    /* R7b (2026-10-24): la empresa de HubSpot es de UNA sola ficha. Las de arriba no ven prospectos ni aliados; esta sí,
+       para no crear una segunda ficha con la empresa de un prospecto (antes la creaba, y el índice único de hoy le
+       daría un error). Ese registro queda sin vincular y se reporta: decidir si el prospecto ya es cliente es de la CSL. */
+    const fichaDeLaEmpresa = new Map<string, { id: string; name: string; kind: string }>();
+    for (const c of await prisma.client.findMany({ where: { hubspotCompanyId: { not: null } }, select: { id: true, name: true, kind: true, hubspotCompanyId: true } })) {
+      fichaDeLaEmpresa.set(c.hubspotCompanyId!, c);
+    }
     const existingSnapshots = await prisma.clientPartnerSnapshot.findMany({
       select: {
         hubspotPartnerClientId: true, clientId: true,
@@ -322,8 +330,15 @@ export async function syncPartnerClients(
           const noSeCrea = !clientId && (PARTNER_CREATE_SKIP.test(name) || unmatchable);
           if (noSeCrea) result.unmatched++;
 
+          // Una empresa asociada que ya es de otra ficha (un prospecto, un aliado): no se crea otra.
+          const yaEsDeOtra = !clientId && !noSeCrea ? rec.associatedCompanyIds.map((id) => fichaDeLaEmpresa.get(id)).find(Boolean) : undefined;
+          if (yaEsDeOtra) {
+            result.unmatched++;
+            result.errors.push(`partner ${rec.id} («${name}»): su empresa de HubSpot ya es la ficha «${yaEsDeOtra.name}» (${yaEsDeOtra.kind}); queda sin vincular`);
+          }
+
           // Crear Client si no hay match (decisión de producto).
-          if (!clientId && !noSeCrea) {
+          if (!clientId && !noSeCrea && !yaEsDeOtra) {
             const draft = {
               name,
               domain: scalars.domain,
@@ -333,19 +348,35 @@ export async function syncPartnerClients(
               result.wouldCreateClients.push(draft);
               result.unmatched++;
             } else {
-              const created = await prisma.client.create({
-                data: {
-                  name,
-                  hubspotCompanyId: draft.hubspotCompanyId,
-                  emailDomains: scalars.domain ? [scalars.domain] : [],
-                  kind: "CLIENTE",
-                },
-                select: { id: true },
-              });
-              clientId = created.id;
-              if (draft.hubspotCompanyId) byCompanyId.set(draft.hubspotCompanyId, created.id);
-              if (scalars.domain) byDomain.set(scalars.domain, created.id);
-              result.createdClients.push(draft);
+              let created: { id: string; name: string; kind: string; gano?: true };
+              try {
+                created = await prisma.client.create({
+                  data: {
+                    name,
+                    hubspotCompanyId: draft.hubspotCompanyId,
+                    emailDomains: scalars.domain ? [scalars.domain] : [],
+                    kind: "CLIENTE",
+                  },
+                  select: { id: true, name: true, kind: true },
+                });
+              } catch (e) {
+                // Otro camino creó la ficha de esta empresa mientras corría la copia: se usa la que ganó si es cliente.
+                if (!draft.hubspotCompanyId || !esUnicoViolado(e)) throw e;
+                const gano = await prisma.client.findUnique({ where: { hubspotCompanyId: draft.hubspotCompanyId }, select: { id: true, name: true, kind: true } });
+                if (!gano) throw e;
+                created = { ...gano, gano: true };
+              }
+              if (created.gano && created.kind !== "CLIENTE") {
+                result.errors.push(`partner ${rec.id} («${name}»): su empresa de HubSpot ya es la ficha «${created.name}» (${created.kind}); queda sin vincular`);
+              } else {
+                clientId = created.id;
+                if (draft.hubspotCompanyId) {
+                  byCompanyId.set(draft.hubspotCompanyId, created.id);
+                  fichaDeLaEmpresa.set(draft.hubspotCompanyId, created);
+                }
+                if (scalars.domain) byDomain.set(scalars.domain, created.id);
+                if (!created.gano) result.createdClients.push(draft);
+              }
             }
           }
 

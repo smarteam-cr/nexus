@@ -15,6 +15,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
+import { esUnicoViolado } from "@/lib/db/unico-violado";
 import { areasContratadas } from "@/lib/escala/areas-por-hub";
 import type { Meta, Reto } from "./casillas";
 import { contenidoVacio, propuestaVacia, type ContenidoDeExploracion } from "./contenido";
@@ -29,7 +30,6 @@ export const SQL_DE_LA_EXPLORACION_DEL_PROYECTO = "scripts/sql/2026-10-07-explor
 
 export type ResultadoDeAsegurar = { ok: true; id: string; creada: boolean } | { ok: false; status: number; error: string };
 
-const esUnicoViolado = (e: unknown) => typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2002";
 const sinSql = (): ResultadoDeAsegurar => ({ ok: false, status: 503, error: `Falta aplicar ${SQL_DE_LA_EXPLORACION_DEL_PROYECTO} y reiniciar.` });
 
 async function laViva(projectId: string): Promise<string | null> {

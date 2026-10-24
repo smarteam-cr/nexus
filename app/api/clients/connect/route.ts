@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { withCapability } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
+import { datosAlNacerDesdeHubspot } from "@/lib/clients/datos-de-la-empresa-server";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -66,13 +67,13 @@ export const POST = withCapability("seeAllClients", async (request) => {
   // 3. Buscar la empresa principal del portal (la más antigua = la propia empresa)
   const company = await findMainCompany(token);
 
-  // 4. Crear el Client con datos de HubSpot
+  // 4. Crear el Client con datos de HubSpot. R7b (Elías, 24 oct): `hubspotCompanyId` es SOLO la empresa en el HubSpot
+  //    de Smarteam; la de este portal es del portal del cliente y no se guarda (se busca en su portal cuando hace falta).
   const client = await prisma.client.create({
     data: {
       name: company?.name || `Portal ${portalId}`,
       company: company?.name || null,
-      industry: company?.industry || null,
-      hubspotCompanyId: company?.id || null,
+      ...datosAlNacerDesdeHubspot({ industry: company?.industry }),
     },
   });
 

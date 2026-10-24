@@ -39,6 +39,10 @@ export const PERMISSION_SECTIONS = [
       // necesita quien ve la cartera completa: es ahí donde se nota que una fila no
       // es un cliente. Ver lib/clients/kind.ts.
       { key: "classify", label: "Clasificar empresas (cliente/prospecto/aliado/interno)", enforced: true },
+      // Decidir los datos de la empresa (R1, 2026-10-24, decisión de Elías): usar, editar o descartar lo que proponen la
+      // IA y el equipo, y editar un dato a mano (también el TAM). Sin la celda, la persona propone y decide otro. La
+      // traen CSE, CSL, Ventas y los super admin. Ver lib/clients/datos-de-la-empresa.ts.
+      { key: "decidirDatos", label: "Decidir los datos de la empresa (usar, editar o descartar propuestas)", enforced: true },
     ],
   },
   {

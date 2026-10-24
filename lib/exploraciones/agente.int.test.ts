@@ -37,6 +37,8 @@ import { aplicarCambios } from "./servidor";
 const texto = leerArchivoDeLaEscala("escala");
 const general = parsearEscala(texto);
 
+let sembradas = 0;
+
 async function sembrar(creadaHaceHoras: number, o: { kind?: "PROSPECTO" | "CLIENTE"; archivada?: boolean } = {}) {
   // La escala publicada, una vez por caso (hay casos que siembran dos empresas).
   await prisma.escalaDocumento.upsert({
@@ -51,7 +53,8 @@ async function sembrar(creadaHaceHoras: number, o: { kind?: "PROSPECTO" | "CLIEN
       huella: createHash("sha256").update(texto).digest("hex"),
     },
   });
-  const c = await prisma.client.create({ data: { name: "Prospecto de prueba", kind: o.kind ?? "PROSPECTO", hubspotCompanyId: "999" }, select: { id: true } });
+  // Una empresa de HubSpot por ficha (R7b: el id es único), aunque el caso siembre dos.
+  const c = await prisma.client.create({ data: { name: "Prospecto de prueba", kind: o.kind ?? "PROSPECTO", hubspotCompanyId: String(999 + sembradas++) }, select: { id: true } });
   const e = await prisma.exploracionDeVenta.create({
     data: {
       clientId: c.id,

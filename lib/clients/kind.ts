@@ -10,6 +10,7 @@
  * aparece una categoría más (ej. EX_CLIENTE), se decide acá una vez y todos los listados
  * la heredan.
  */
+import { numeroEscrito } from "./datos-de-la-empresa";
 import type { ClientKind } from "@prisma/client";
 
 export const CLIENT_KINDS = ["CLIENTE", "PROSPECTO", "ALIADO", "INTERNO"] as const;
@@ -139,7 +140,10 @@ export const TAM_MAX_USD = 100_000_000;
  */
 export function parseTamUsd(v: unknown): { ok: true; value: number | null } | { ok: false; error: string } {
   if (v === null || v === "") return { ok: true, value: null };
-  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(/[\s,]/g, "")) : NaN;
+  // Sin adivinar separadores (2026-10-24): «50.000» se guardaba como 50. Ver numeroEscrito.
+  const leido = typeof v === "number" ? { ok: true as const, n: v } : typeof v === "string" ? numeroEscrito(v, true) : null;
+  if (leido && !leido.ok) return { ok: false, error: `El TAM: ${leido.error}` };
+  const n = leido ? leido.n : NaN;
   if (!Number.isFinite(n)) return { ok: false, error: "El TAM tiene que ser un número en dólares." };
   if (n < 0) return { ok: false, error: "El TAM no puede ser negativo." };
   if (n > TAM_MAX_USD) return { ok: false, error: `El TAM no puede pasar de ${TAM_MAX_USD.toLocaleString("en-US")} USD.` };

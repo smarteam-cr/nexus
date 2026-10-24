@@ -224,8 +224,10 @@ export interface CuentaDeCartera {
   ultimoCierre?: string | null;
   /** Hay una preventa abierta con la cuenta. */
   preventaViva?: boolean;
-  /** El TAM que estimó Ventas, en USD. null = sin estimar. */
+  /** El TAM en USD. null = sin estimar. Desde el 2026-10-24 lo calcula Nexus (estimado v1) y una persona lo corrige. */
   tamUsd?: number | null;
+  /** De dónde salió el TAM (`nexus`, `persona`…; lib/clients/datos-de-la-empresa.ts). null = de antes, a mano. */
+  tamFuente?: string | null;
   /** Lo que confirmó (y descartó) la CSL. null = nada todavía. */
   clasificacion?: ClasificacionGuardada | null;
   /** El color corregido a mano y el «en espera del cliente» (2026-10-09). null = nada. */

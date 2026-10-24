@@ -750,17 +750,28 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   mover una fila de pestaña, no navegar a otro módulo. El eje categoría se compone con el eje
   pertenencia que ya existía (Mis clientes / Compartido / Todos): los conteos de pertenencia se
   calculan DENTRO de la categoría abierta. Abre siempre en "Clientes".
-- **El TAM es un dato de VENTAS, estimado a mano, y `null` ≠ 0.** Nexus no lo deriva de nada
-  (ni de cobros ni de proyectos): es cuánto **puede** llegar a facturar la cuenta en un año. Por
-  eso "sin estimar" es su propio estado — si se sumara como cero, el potencial de la cartera
-  diría que vale menos de lo que vale y nadie sabría cuánto falta por estimar. El total de la UI
-  cuenta los "sin estimar" APARTE, nunca dentro. `Decimal(12,2)` como el resto del dinero del
-  repo, cruzado a `number` en la frontera (Decimal no es serializable). Techo de cordura de
+- **El TAM es cuánto PUEDE llegar a facturar la cuenta en un año, y `null` ≠ 0.** ~~Es un dato de
+  Ventas, estimado a mano; Nexus no lo deriva de nada.~~ **Enmendado el 2026-10-24** (Elías: el
+  equipo no tiene el criterio para definirlo; las 200 empresas lo tenían vacío): **Nexus lo
+  calcula** con una fórmula escrita, dice cómo lo calculó y guarda su fuente y su fecha
+  (`tamFuente`, `tamAt`, `tamCalculo`). La versión de hoy es el **TAM estimado v1**
+  (`lib/clients/tam-v1.ts`): las licencias de HubSpot que le corresponden por su tamaño, si es
+  casa matriz o filial, su industria y su modelo de negocio, a precio de lista y por año, más
+  Insider si califica. **Los servicios no suman** (sus precios los fija Ventas hasta que existan
+  las actividades) y no hay monto por nivel de la escala. Sigue sin derivarse de cobros ni de
+  proyectos. Una persona con `clientes.decidirDatos` lo puede corregir a mano, y desde ahí Nexus
+  ya no lo pisa: lo propone. Lo ve solo el equipo. Detalle en «Los datos de la empresa» (abajo).
+  Lo que no cambia: "sin estimar" es su propio estado — si se sumara como cero, el potencial de la
+  cartera diría que vale menos de lo que vale y nadie sabría cuánto falta por estimar. El total de
+  la UI cuenta los "sin estimar" APARTE, nunca dentro. `Decimal(12,2)` como el resto del dinero
+  del repo, cruzado a `number` en la frontera (Decimal no es serializable). Techo de cordura de
   100M USD: un dedazo de ceros arruina el total de toda la cartera.
 - **Dos campos, dos permisos, un formulario**: `kind` va por la celda NUEVA `clientes.classify`
   (concedida a los mismos roles que `clientes.viewAll` — quien ve la cartera entera es quien nota
   que una fila no es un cliente; un CSE scoped no tiene con qué comparar) y `tamUsd` por
-  `ventas.write`, que pasó de `enforced:false` a `true` — **su primer guard real**. El endpoint
+  `ventas.write`, que pasó de `enforced:false` a `true` — **su primer guard real**. (Desde el
+  2026-10-24 el TAM a mano pide `clientes.decidirDatos`, la celda de todos los datos de la
+  empresa: la traen CSE, CSL, Ventas y los super admin.) El endpoint
   valida campo por campo y **no escribe nada** si falta un permiso; el cliente manda solo los
   campos que puede tocar, así alguien con un solo permiso no se come un 403 en el guardado entero.
 - **No se adivinan aliados ni internos desde el nombre.** El backfill solo mapea
@@ -10778,3 +10789,91 @@ queda sin dueña en la local. El SQL también suelta las dueñas resueltas huér
 **Borrar una empresa:** toda la que borra (el DELETE de la app y los scripts) suelta antes sus reuniones con
 `soltarReunionesDeLaEmpresa` (`lib/clients/soltar-reuniones.ts`), dentro de la misma transacción. Un script que limpia
 duplicados no borra una empresa con reuniones: la salta y lo dice.
+
+**R7b, hecho el 2026-10-24 (la sesión de la empresa):** `Client.hubspotCompanyId` es único
+(`Client_hubspotCompanyId_key`, en `scripts/sql/2026-10-25-datos-de-la-empresa.sql`; medido en producción ese día: 0 ids
+repetidos y 0 portales de clientes conectados). Antes del índice se arreglaron los caminos, con un solo módulo
+(`lib/clients/empresa-de-hubspot.ts`) y un solo `esUnicoViolado` (`lib/db/unico-violado.ts`):
+
+- **Reusan la ficha que ya tiene la empresa** (y si dos altas llegan a la vez, el índice frena la segunda y se usa la que
+  ganó): el handoff, importar un proyecto, el alta de un proyecto, la empresa de Ventas (propuesta y preventa) y el
+  import del sistema.
+- **Responden 409 con el nombre de la ficha** que ya la tiene: elegir la empresa a mano, «Traer de HubSpot» y un
+  reapunte por fusión que choca con otra ficha.
+- **No guardan un id que ya es de otra ficha:** la copia de proyectos por nombre (corta la corrida con el motivo: si
+  siguiera, se traería los proyectos de la otra), la ficha de HubSpot, el alta por OAuth y la conexión de un portal.
+- **La copia de Partner** no crea una segunda ficha cuando la empresa ya es de un prospecto o un aliado: deja el registro
+  sin vincular y lo reporta (decidir si ya es cliente es de la CSL).
+- La fusión (`merge-duplicate-clients.ts`) ya borraba la absorbida antes de pasarle el id a la que sigue; la limpieza de
+  Partner (`cleanup-partner-created-clients.ts`) ahora también, en una transacción.
+- INV48 vigila también el índice (`problemasDeLosIndices`, lib/db/llaves-de-la-empresa.ts).
+
+**El portal propio del cliente (Elías, 24 oct):** `Client.hubspotCompanyId` es SOLO la empresa en el HubSpot de
+Smarteam, y por eso el candado es global. Antes, cuando un cliente conectaba su propio HubSpot (OAuth o un token de app
+privada), Nexus guardaba en este mismo campo el id de la empresa en SU portal, y dos portales pueden tener el mismo
+número. Desde hoy esos caminos (el alta por OAuth, la conexión con un token, la ficha de HubSpot y la copia de proyectos
+con la cuenta del cliente) no lo escriben: buscan la empresa en su portal cada vez que la necesitan. El 24 oct había 0
+portales de clientes conectados, así que no hubo nada que mover.
+
+
+## Los datos de la empresa: en columnas, con quién manda en cada uno, propuestas y la investigación (2026-10-24, R1, R5 y U27)
+
+**El hecho:** de las 200 empresas, el TAM estaba vacío en todas, la industria vivía en cinco lugares sin regla de cuál
+manda, el tamaño se leía de HubSpot en vivo sin guardarse y la investigación web vivía dentro de la preventa. Elías
+decidió el 24 oct que la empresa es el centro de Nexus, como en un CRM (planes: `docs/empresa-datos-hubspot-plan.md` y
+`docs/arquitectura-empresa-plan.md`).
+
+**Lo decidido:**
+
+1. **Los valores viven en columnas de `Client`, con su tipo, y cada uno con su fuente y su fecha** (`<dato>Fuente`,
+   `<dato>At`). Se reusan `industry` y `tamUsd`. Son la foto del valor de hoy: rápidas de leer para la pantalla, para
+   `quienManda` y para el día que se escriban en HubSpot. No van en el Json `Client.ficha`.
+2. **Las propuestas y la historia viven en `PropuestaDeDato`** (empresa, dato, valor, valor anterior, fuente, autor,
+   cita, enlace, estado, quién decidió y cuándo). Es también la historia que pide R9. **Todo cambio de un dato pasa por
+   un solo lugar** (`lib/clients/datos-de-la-empresa-server.ts`), que escribe la columna, su fuente, su fecha y su fila,
+   en la misma transacción. Un escritor directo dejaría una fuente que miente; la guarda
+   `lib/clients/datos-de-la-empresa-escritores.test.ts` lo frena.
+3. **El catálogo es uno solo** (`lib/clients/datos-de-la-empresa.ts`, puro): por dato, su columna, su tipo, sus
+   opciones, su propiedad de HubSpot, quién manda y en qué sentido va. La pantalla, el motor, la investigación, la carga
+   inicial y el espejo con HubSpot lo leen de ahí.
+4. **Quién manda** (`quienManda`, puro, con un caso por fila del catálogo). Tres familias:
+   - **Lo calcula Nexus** (TAM, edición de la escala, si califica para Insider): Nexus lo aplica solo. Si una persona lo
+     corrigió, Nexus ya no lo pisa: lo propone.
+   - **Lo dice HubSpot** (empleados, facturación, país, sitio, la industria de HubSpot): lo que llega de HubSpot se
+     aplica, salvo que una persona lo haya corregido en Nexus (entonces se propone). La investigación o una reunión solo
+     lo llenan si está vacío; si no, lo proponen.
+   - **Lo decide una persona** (la industria de Smarteam, el segmento, casa matriz o filial, el perfil de negocio, el
+     tráfico y la base con consentimiento): la IA siempre propone, nunca aplica. Lo que llega de HubSpot o de la
+     preventa solo llena lo vacío.
+   - Una persona que **puede decidir** aplica directo; una que no, propone. Un valor igual al que ya está no hace nada.
+5. **Quién decide:** el usuario de Nexus que lo está usando, según su rol: la celda nueva `clientes.decidirDatos`, que
+   traen CSE, CSL, Ventas y los super admin (Elías, 24 oct). Cualquiera del equipo con acceso a la empresa puede
+   proponer. Las propuestas pendientes se cuentan en la ficha («3 datos por revisar») y **no** van a «Por decidir» de
+   Tareas, para no cargar a nadie. Una propuesta nueva de la misma fuente para el mismo dato reemplaza a la pendiente.
+6. **El TAM estimado v1** (`lib/clients/tam-v1.ts`, puro): ver la enmienda de «Qué ES una empresa». Qué hubs le sirven
+   sale del modelo de negocio (a quién le vende y cómo cierra); la edición (Starter, Professional o Enterprise) y los
+   asientos, del tamaño y de si es casa matriz con filiales; los precios de lista viven en una sola tabla del código,
+   con su fecha (HubSpot: la página pública, Professional y Enterprise por hub y asiento, anual, tomada el 24 oct). Insider
+   suma solo si califica «lista», con USD 42.000 al año (el ticket mínimo de Insider One, unos USD 3.500 al mes: valor
+   PROVISIONAL de Elías, por validar, en `PRECIO_INSIDER_ANUAL_USD`); si no califica, la línea dice por qué no suma. El
+   TAM dice «estimado v1» y guarda en `tamCalculo` cada línea, para mostrar cómo se calculó. Calcularlo para toda la
+   cartera es un script en simulacro que dice cuántas cuentas cambian de potencial antes del `--apply` (la CSL tiene
+   que saberlo).
+7. **Lo que ya paga y lo que le falta (U27)** sale de la copia de HubSpot Partner que Nexus ya tiene
+   (`ClientPartnerSnapshot`): el MRR por hub de las cuentas gestionadas y, para las no gestionadas, lo vendido
+   (`hs_sold_product_lines`). Los hubs que el TAM v1 le asigna y no paga son la venta cruzada. Se muestra al lado del
+   TAM; no se guarda aparte (la copia ya es la fuente).
+8. **La investigación es de la empresa (R5, primera parte):** cada una queda en `InvestigacionDeEmpresa` con su fecha,
+   su vencimiento (6 meses), sus fuentes, las contrataciones y el tamaño estimado, y se lee de ahí. La hace un agente
+   propio de la empresa (`lib/clients/investigacion/`) con la búsqueda web y la misma regla de la radiografía: un dato
+   o un hito sin enlace de la búsqueda se descarta, y lo que no encuentra queda vacío. Lo que encuentra pasa por la
+   regla de quién manda como cualquier otra fuente (`investigacion`): llena lo VACÍO de lo que manda HubSpot (empleados,
+   país, sitio) y **propone** todo lo demás (lo que decide una persona siempre; lo que ya tiene un valor). Nunca cambia
+   lo que decidió una persona. Con los empleados llenos, el TAM v1 se calcula solo. La preventa sigue haciendo su radiografía hasta el paso 2 (que la lea de
+   aquí comparte `lib/exploraciones/agente.ts` con K7 y K1). Las investigaciones que ya hicieron las preventas se mudan
+   con un script en simulacro.
+9. **HubSpot (R2) espera al transporte único (U6):** el mapa dato → propiedad vive en `lib/hubspot/empresa.ts`, y la
+   escritura queda detrás de `EMPRESA_HUBSPOT_ESCRITURA` (apagada). En el paso uno Nexus **no escribe nada** en
+   HubSpot por estos datos.
+10. **El TAM lo ve solo el equipo:** no entra a la memoria de la cuenta (`lib/memoria/frontera.test.ts`) ni a un
+    documento del cliente.

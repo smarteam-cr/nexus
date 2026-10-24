@@ -5,6 +5,9 @@ import { prisma } from "@/lib/db/prisma";
 import { getSystemAccessToken } from "@/lib/hubspot/client";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
+import { crearOReusarFicha, fichaConLaEmpresa } from "@/lib/clients/empresa-de-hubspot";
+import { esUnicoViolado } from "@/lib/db/unico-violado";
+import { datosAlNacerDesdeHubspot, proponerDato } from "@/lib/clients/datos-de-la-empresa-server";
 
 // Propiedad HubSpot que marca a un contacto/empresa como cliente Nexus
 const IMPLEMENTOR_PROPERTY = "nexus";
@@ -91,6 +94,7 @@ export const POST = withAuth(async () => {
   // Crear o actualizar clientes en la DB
   let created = 0;
   let updated = 0;
+  const saltadas: string[] = [];
 
   for (const company of companies) {
     const props = company.properties;
@@ -99,34 +103,50 @@ export const POST = withAuth(async () => {
     const domain = props.domain?.trim() || null;
     const industry = props.industry?.trim() || null;
 
-    // Buscar por hubspotCompanyId primero, luego por nombre
-    const existing = await prisma.client.findFirst({
-      where: {
-        OR: [
-          { hubspotCompanyId: hsCompanyId },
-          ...(domain ? [{ company: { contains: domain, mode: "insensitive" as const } }] : []),
-        ],
-      },
-    });
+    /* R7b (2026-10-24): primero la ficha que YA tiene esta empresa; si no hay, una con el dominio que todavía no tenga
+       empresa de HubSpot. Antes el `findFirst` con OR podía devolver una ficha del mismo dominio con OTRA empresa y
+       pisarle el id, o dejar dos fichas con el mismo. */
+    const existing =
+      (await fichaConLaEmpresa(hsCompanyId)) ??
+      (domain
+        ? await prisma.client.findFirst({
+            where: { hubspotCompanyId: null, company: { contains: domain, mode: "insensitive" as const } },
+            orderBy: { createdAt: "asc" },
+            select: { id: true, name: true, kind: true },
+          })
+        : null);
 
     if (existing) {
-      await prisma.client.update({
-        where: { id: existing.id },
-        data: {
-          hubspotCompanyId: hsCompanyId,
-          ...(industry ? { industry } : {}),
-        },
-      });
+      // Solo si sigue sin empresa (o con esta): otra ficha pudo tomarla entre la lectura y la escritura.
+      const tomada = await prisma.client
+        .updateMany({ where: { id: existing.id, OR: [{ hubspotCompanyId: null }, { hubspotCompanyId: hsCompanyId }] }, data: { hubspotCompanyId: hsCompanyId } })
+        .catch((e) => {
+          if (esUnicoViolado(e)) return { count: 0 };
+          throw e;
+        });
+      if (tomada.count === 0) {
+        saltadas.push(`${name} (${hsCompanyId})`);
+        continue;
+      }
+      // La industria de HubSpot entra por la regla de los datos de la empresa (lo que una persona corrigió no se pisa).
+      if (industry) {
+        await proponerDato({ clientId: existing.id, clave: "industry", valor: industry, fuente: "hubspot" }).catch((e) =>
+          console.error(`[hubspot/import] la industria de ${hsCompanyId} no se guardó`, e),
+        );
+      }
       updated++;
     } else {
-      const newClient = await prisma.client.create({
-        data: {
-          name,
-          company: domain ?? name,
-          industry,
-          hubspotCompanyId: hsCompanyId,
-        },
-      });
+      const r = await crearOReusarFicha(hsCompanyId, () =>
+        prisma.client.create({
+          data: {
+            name,
+            company: domain ?? name,
+            ...datosAlNacerDesdeHubspot({ industry }),
+            hubspotCompanyId: hsCompanyId,
+          },
+          select: { id: true },
+        }),
+      );
 
       // NO creamos un stub "Proyecto principal": estos clientes vienen de HubSpot
       // (nexus=true → con hubspotCompanyId), así que sus proyectos REALES los trae el
@@ -134,7 +154,8 @@ export const POST = withAuth(async () => {
       // del detalle) y además contaminaba el clasificador de sesiones (un candidato
       // fantasma que podía robarse el handoff). El empty-state del workspace ya guía
       // mientras el sync corre.
-      created++;
+      if (r.creado) created++;
+      else updated++;
     }
   }
 
@@ -150,5 +171,6 @@ export const POST = withAuth(async () => {
     total: companies.length,
     created,
     updated,
+    ...(saltadas.length ? { saltadas } : {}),
   });
 });

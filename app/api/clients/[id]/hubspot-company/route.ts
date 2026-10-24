@@ -1,7 +1,8 @@
 import { withClientAccess } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
-import { getHubspotClient, getSystemHubspotClient } from "@/lib/hubspot/client";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { NextResponse } from "next/server";
+import { asignarEmpresaDeHubspot, cuerpoDeEmpresaRepetida } from "@/lib/clients/empresa-de-hubspot";
 
 /**
  * PUT — guarda el hubspotCompanyId elegido por el usuario.
@@ -9,9 +10,11 @@ import { NextResponse } from "next/server";
  * ⛔ Auditoría 2026-09-03: entraba con `withAuth` (cualquier sesión) y aceptaba CUALQUIER
  * `hubspotCompanyId` sin verificar que existiera. Re-apuntar el vínculo de un cliente a otra
  * empresa de HubSpot contamina después handoffs, CS360 y cobranza con datos ajenos. Ahora: acceso
- * al cliente, y la empresa tiene que EXISTIR en el portal desde el que Nexus lee para ese cliente
- * (el suyo si tiene cuenta propia; si no, el del sistema). Es el mismo portal contra el que busca
- * `hubspot-company/search`, así que lo que se ofrece para elegir es lo que se acepta.
+ * al cliente, y la empresa tiene que EXISTIR en el HubSpot de Smarteam.
+ *
+ * R7b (2026-10-24): el campo es SOLO la empresa en el HubSpot de Smarteam (Elías): un cliente con su propio portal
+ * conectado no la guarda (409), porque su empresa es de otro espacio de ids. Y una empresa es de una sola ficha: si otra
+ * ya la tiene, 409 con cuál es (antes quedaban dos fichas para la misma empresa, y con el índice único sería un 500).
  */
 export const PUT = withClientAccess(async (
   request,
@@ -29,7 +32,15 @@ export const PUT = withClientAccess(async (
       where: { clientId },
       select: { id: true },
     });
-    const existe = await empresaExisteEnElPortal(cuenta?.id, hubspotCompanyId);
+    /* R7b (Elías, 24 oct): el campo es SOLO la empresa en el HubSpot de Smarteam. Un cliente con su propio portal no la
+       guarda: Nexus la busca en su portal cada vez. */
+    if (cuenta) {
+      return NextResponse.json(
+        { error: "Este cliente tiene su propio HubSpot conectado: Nexus busca su empresa en ese portal, no se guarda acá." },
+        { status: 409 },
+      );
+    }
+    const existe = await empresaExisteEnSmarteam(hubspotCompanyId);
     if (!existe) {
       return NextResponse.json(
         { error: "Esa empresa no existe en el portal de HubSpot desde el que Nexus lee este cliente" },
@@ -38,19 +49,16 @@ export const PUT = withClientAccess(async (
     }
   }
 
-  const updated = await prisma.client.update({
-    where: { id: clientId },
-    data: { hubspotCompanyId },
-    select: { id: true, hubspotCompanyId: true },
-  });
+  const r = await asignarEmpresaDeHubspot(clientId, hubspotCompanyId);
+  if (!r.ok) return NextResponse.json(cuerpoDeEmpresaRepetida(r.ficha), { status: 409 });
 
-  return NextResponse.json(updated);
+  return NextResponse.json({ id: clientId, hubspotCompanyId });
 });
 
-/** GET de la empresa por id contra el portal que corresponde. Cualquier fallo cuenta como «no existe». */
-async function empresaExisteEnElPortal(accountId: string | undefined, companyId: string): Promise<boolean> {
+/** GET de la empresa por id en el HubSpot de Smarteam. Cualquier fallo cuenta como «no existe». */
+async function empresaExisteEnSmarteam(companyId: string): Promise<boolean> {
   try {
-    const hs = accountId ? await getHubspotClient(accountId) : await getSystemHubspotClient();
+    const hs = await getSystemHubspotClient();
     const res = await hs.apiRequest({
       method: "GET",
       path: `/crm/v3/objects/companies/${companyId}?properties=name`,

@@ -11,7 +11,7 @@ import { detectarFusionesEnLote } from "@/lib/hubspot/empresa-fusionada";
 import { GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { escribeSqlCrudo, soloCodigo } from "@/lib/db/escritura-sql-cruda";
-import { problemasDeLasLlaves } from "@/lib/db/llaves-de-la-empresa";
+import { problemasDeLasLlaves, problemasDeLosIndices } from "@/lib/db/llaves-de-la-empresa";
 import {
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46,
@@ -784,13 +784,15 @@ async function main(): Promise<number> {
   //    borrada. Lista y regla: lib/db/llaves-de-la-empresa.ts ──
   {
     const llaves = await prisma.$queryRaw<{ nombre: string; alBorrar: string }[]>`SELECT conname AS nombre, confdeltype::text AS "alBorrar" FROM pg_constraint WHERE contype = 'f' AND conrelid = '"FirefliesSession"'::regclass`;
-    const problemas = problemasDeLasLlaves(llaves);
+    // R7b (2026-10-24): y la empresa de HubSpot es de una sola ficha.
+    const indices = await prisma.$queryRaw<{ nombre: string; unico: boolean }[]>`SELECT i.relname AS nombre, ix.indisunique AS unico FROM pg_index ix JOIN pg_class i ON i.oid = ix.indexrelid WHERE ix.indrelid = '"Client"'::regclass`;
+    const problemas = [...problemasDeLasLlaves(llaves), ...problemasDeLosIndices(indices)];
     if (problemas.length) {
       violations++;
-      console.error(`✗ INV48 VIOLADO: las llaves de la dueña de cada reunión no están como se decidió: ${problemas.join("; ")}.`);
-      console.error("  Aplicá scripts/sql/2026-10-24-llaves-de-la-empresa.sql (DECISIONS › «Las llaves de la empresa»).");
+      console.error(`✗ INV48 VIOLADO: las llaves de la empresa no están como se decidió: ${problemas.join("; ")}.`);
+      console.error("  Aplicá scripts/sql/2026-10-24-llaves-de-la-empresa.sql y 2026-10-25-datos-de-la-empresa.sql (DECISIONS › «Las llaves de la empresa»).");
     } else {
-      console.log("✓ INV48: la dueña de cada reunión (RESTRICT) y su dueña manual (SET NULL) son llaves de verdad.");
+      console.log("✓ INV48: la dueña de cada reunión (RESTRICT), su dueña manual (SET NULL) y la empresa de HubSpot única son llaves de verdad.");
     }
   }
 

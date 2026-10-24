@@ -537,9 +537,19 @@
   (`accessibleClientWhere`, quién ve qué cliente): uno dice "esto es un cliente", el otro "a este
   usuario le toca".
 - **TAM** (`Client.tamUsd`): *Total Addressable Market* de una cuenta — cuánto puede llegar a
-  facturar en un año, en USD. Lo estima **Ventas a mano** (celda `ventas.write`); Nexus no lo
-  deriva de cobros ni de proyectos. `null` = **sin estimar**, que NO es cero: el "potencial
-  estimado" del listado suma los cargados y cuenta los sin estimar aparte.
+  facturar en un año, en USD. Desde el 2026-10-24 lo **calcula Nexus**: el **TAM estimado v1**
+  (`lib/clients/tam-v1.ts`), con las licencias de HubSpot que le corresponden por tamaño, estructura,
+  industria y modelo de negocio, a precio de lista, e Insider si califica; los servicios no suman
+  todavía. Una persona con `clientes.decidirDatos` lo corrige, y desde ahí Nexus solo lo propone. No
+  se deriva de cobros ni de proyectos. `null` = **sin estimar**, que NO es cero: el "potencial
+  estimado" del listado suma los cargados y cuenta los sin estimar aparte. Lo ve solo el equipo.
+- **datos de la empresa** (`lib/clients/datos-de-la-empresa.ts`): los datos de una empresa en columnas
+  de `Client` (empleados, país, industria de Smarteam, segmento, perfil de negocio, tráfico, base con
+  consentimiento, Insider, TAM…), cada uno con su **fuente** (HubSpot, investigación, reunión,
+  persona, Nexus, preventa, test) y su fecha. La IA y el equipo **proponen**; decide quien tiene
+  `clientes.decidirDatos` («Usar», «Editar», «Descartar»). La historia y las propuestas viven en
+  `PropuestaDeDato`. **Investigación de la empresa** (`InvestigacionDeEmpresa`): lo que Nexus encontró
+  en la web, con su fecha, sus fuentes, las contrataciones y el tamaño estimado; vence a los 6 meses.
 - **meta comercial** (`MetaComercial`, `lib/ventas/metas.ts`): cuánto tiene que vender una persona en el año, copiado
   de las metas de HubSpot, con el **avance** que calcula HubSpot. Una meta trimestral son cuatro tramos; el total se
   suma al leer. **Vendedor** de un negocio ganado (`VentaGanada.vendedorId`): el dueño del trato en HubSpot.

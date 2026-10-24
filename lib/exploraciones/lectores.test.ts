@@ -62,9 +62,17 @@ type Destino =
    * la exploración (los invitados de un evento, sus fechas, los dominios genéricos) para saber con qué empresa es cada
    * reunión. No lee ninguna exploración.
    */
-  | "agenda-interna";
+  | "agenda-interna"
+  /**
+   * La investigación web de la EMPRESA (R5, 2026-10-24, lib/clients/investigacion): usa los ayudantes de la radiografía
+   * (los enlaces de las búsquedas, la empresa en HubSpot, la fecha de Costa Rica). No lee ninguna exploración; lo que
+   * encuentra queda en la empresa como propuestas que decide una persona, nunca en un documento del cliente.
+   */
+  | "investigacion-de-la-empresa";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
+  "lib/clients/investigacion/pedido.ts": { destino: "investigacion-de-la-empresa", motivo: "Reusa los enlaces de las búsquedas de la radiografía." },
+  "lib/clients/investigacion/servidor.ts": { destino: "investigacion-de-la-empresa", motivo: "Lee la empresa en HubSpot con el lector de la exploración y la fecha de Costa Rica." },
   "app/(shell)/sales/exploraciones/page.tsx": { destino: "ventas", motivo: "La lista de exploraciones." },
   "app/(shell)/sales/exploraciones/[id]/page.tsx": { destino: "ventas", motivo: "El lienzo." },
   "app/api/sales/exploraciones/route.ts": { destino: "ventas", motivo: "Abrir una exploración." },
@@ -314,6 +322,11 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
   "agenda-interna": {
     permitidas: /\binvitadosDelEvento\b|\bisoDelEvento\b|\bDOMINIOS_GENERICOS\b/,
     // Solo el calendario: ninguna exploración, ni la propuesta, ni el handoff, ni lo interno.
+    prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\bexploracionesDeVenta\b/,
+  },
+  "investigacion-de-la-empresa": {
+    permitidas: /\benlacesDeLasBusquedas\b|\burlComparable\b|\bleerEmpresa\b|\bhoyEnCostaRica\b/,
+    // Ninguna exploración: ni lo confirmado, ni la propuesta, ni el handoff, ni lo interno de la preventa.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\bexploracionesDeVenta\b/,
   },
   "memoria-interna": {

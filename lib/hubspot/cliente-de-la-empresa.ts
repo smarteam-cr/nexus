@@ -184,6 +184,10 @@ export function armarReapunte(
  *   · `in: absorbidos` — no basta con la lápida del cliente: una empresa puede haberse comido
  *     varias fichas (Spectrum absorbió seis) y un caso puede estar estampado con cualquiera de
  *     ellas. Moviendo solo una, el invariante seguiría rojo después del arreglo.
+ *
+ * ⚠ R7b (2026-10-24): `hubspotCompanyId` es único. Si otra ficha tomó la empresa viva entre la resolución y esta
+ * transacción, el `update` choca (P2002) y aborta la transacción entera: quien la abrió lo traduce con
+ * `quienTieneLaEmpresaTrasChocar` (lib/clients/empresa-de-hubspot.ts), afuera de la transacción.
  */
 export async function reapuntarEnTx(
   tx: Prisma.TransactionClient,

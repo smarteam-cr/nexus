@@ -6,6 +6,7 @@ import type { Prisma } from "@prisma/client";
 import { describirDestino, resolverApply } from "./lib/guard";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { prisma } from "@/lib/db/prisma";
+import { plegarDatosDeLaEmpresa, SELECT_DE_LOS_DATOS } from "@/lib/clients/datos-de-la-empresa";
 import { refreshAccessToken } from "@/lib/hubspot/client";
 import { detectarFusion, type VeredictoDeFusion } from "@/lib/hubspot/empresa-fusionada";
 import { crDateParts } from "@/lib/jobs/time";
@@ -171,12 +172,15 @@ async function cargarFicha(id: string) {
       canvasConfidence: true,
       ficha: true,
       tamUsd: true,
+      ...SELECT_DE_LOS_DATOS,
       cuentaFinanciera: { select: CUENTA_SELECT },
     },
   });
   if (!c) return null;
   const ficha: FichaParaFusionar = { ...c, tamUsd: c.tamUsd === null ? null : Number(c.tamUsd) };
-  return { ficha, cuenta: c.cuentaFinanciera as CuentaParaFusionar | null, hubspotCompanyId: c.hubspotCompanyId };
+  // Los datos de la empresa (R1) tal cual vienen de la base, para plegarlos con su fuente y su fecha.
+  const datos = c as unknown as Record<string, unknown>;
+  return { ficha, datos, cuenta: c.cuentaFinanciera as CuentaParaFusionar | null, hubspotCompanyId: c.hubspotCompanyId };
 }
 
 /** Sesiones + proyectos: con cuál quedarse si nadie lo dice. Se exige que el canónico no tenga MENOS. */
@@ -534,6 +538,7 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
         where: { id: a.canon },
         data: {
           ...(pliegue.cambios as Prisma.ClientUpdateInput),
+          ...(plegarDatosDeLaEmpresa(canon.datos, dup.datos) as Prisma.ClientUpdateInput),
           hubspotCompanyId: hub.id,
           ...(opciones.nombre ? { name: opciones.nombre } : {}),
         },

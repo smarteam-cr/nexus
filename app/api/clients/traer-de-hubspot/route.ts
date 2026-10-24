@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardInternalUser, guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { esUnicoViolado } from "@/lib/db/unico-violado";
+import { cuerpoDeEmpresaRepetida, fichaConLaEmpresa } from "@/lib/clients/empresa-de-hubspot";
 import { listarEmpresasTraibles } from "@/lib/hubspot/empresas-con-proyecto";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { avanzarAlta } from "@/lib/projects/alta-runner";
@@ -283,6 +285,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  /* R7b (2026-10-24): si una ficha ya tiene esta empresa de HubSpot, no se crea otra: se dice cuál es. El proyecto se
+     trae desde esa ficha (su copia de proyectos lo encuentra). */
+  const conLaEmpresa = await fichaConLaEmpresa(empresa.companyId);
+  if (conLaEmpresa) return NextResponse.json(cuerpoDeEmpresaRepetida(conLaEmpresa), { status: 409 });
+
   /* Cliente y proyecto en UNA transacción. Si nacieran por separado, cualquier fallo del
      segundo dejaría un Client huérfano: sin proyectos es invisible en el índice, en cobranza y
      en la cartera, pero está plenamente vivo en el clasificador de sesiones como señal fuerte
@@ -325,11 +332,13 @@ export async function POST(req: NextRequest) {
     clientId = creado.clientId;
     projectId = creado.projectId;
   } catch (e) {
-    // Alguien ganó la carrera con el mismo `companyId`: no es un error, es el resultado.
-    const yaEsta = await prisma.client.findFirst({
-      where: { source: FUENTE, sourceExternalId: companyId },
-      select: { id: true },
-    });
+    // Alguien ganó la carrera con el mismo `companyId`: no es un error, es el resultado. Desde R7b (2026-10-24) también
+    // choca con una ficha creada por OTRO camino (la empresa de HubSpot es única): se busca por las dos llaves.
+    const yaEsta =
+      (await prisma.client.findFirst({
+        where: { source: FUENTE, sourceExternalId: companyId },
+        select: { id: true },
+      })) ?? (esUnicoViolado(e) ? await fichaConLaEmpresa(companyId) : null);
     if (yaEsta) {
       // Sin `termino: false` el panel pinta verde sobre un alta que no sabe si terminó.
       return NextResponse.json({ clientId: yaEsta.id, projectId: null, yaEstaba: true, termino: false });

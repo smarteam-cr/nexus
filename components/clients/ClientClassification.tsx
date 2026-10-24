@@ -6,7 +6,8 @@
  * Vive en la ficha (Configuración del cliente) y escribe por
  * `PATCH /api/clients/[id]/classification`. Dos campos con dos permisos distintos:
  * la categoría la mueve quien puede clasificar (`clientes.classify`) y el TAM lo
- * escribe el área de Ventas (`ventas.write`) — el gate de acá es COSMÉTICO; la
+ * corrige quien decide los datos de la empresa (`clientes.decidirDatos`, desde el 2026-10-24: el TAM
+ * lo calcula Nexus y una persona lo corrige) — el gate de acá es COSMÉTICO; la
  * seguridad vive en el endpoint, que valida campo por campo.
  *
  * Manda SOLO los campos que el usuario puede tocar: si mandara los dos siempre, a
@@ -32,7 +33,7 @@ export default function ClientClassification({
 }) {
   const me = useMe();
   const canClassify = me?.permissions?.sections?.clientes?.classify === true;
-  const canSetTam = me?.permissions?.sections?.ventas?.write === true;
+  const canSetTam = me?.permissions?.sections?.clientes?.decidirDatos === true;
 
   const [kind, setKind] = useState<ClientKind>(initialKind);
   const [tam, setTam] = useState(initialTamUsd === null ? "" : String(initialTamUsd));
@@ -56,7 +57,10 @@ export default function ClientClassification({
     try {
       const body: Record<string, unknown> = {};
       if (canClassify) body.kind = kind;
-      if (canSetTam) body.tamUsd = tam.trim() === "" ? null : tam.trim();
+      /* El TAM solo si la persona lo cambió: mandarlo siempre reescribía con el valor de cuando se abrió la página (Nexus
+         pudo recalcularlo mientras tanto) y lo dejaba «corregido a mano» a su nombre (revisión de R1, 2026-10-24). */
+      const tamCambio = tam.trim() !== (initialTamUsd === null ? "" : String(initialTamUsd));
+      if (canSetTam && tamCambio) body.tamUsd = tam.trim() === "" ? null : tam.trim();
 
       const res = await fetch(`/api/clients/${clientId}/classification`, {
         method: "PATCH",
@@ -101,7 +105,7 @@ export default function ClientClassification({
           {canSetTam && (
             <Field
               label="TAM estimado (USD)"
-              hint="Cuánto puede facturar esta cuenta en un año. Vacío = todavía sin estimar (no es cero)."
+              hint="Lo calcula Nexus (estimado v1). Si lo corriges, Nexus ya no lo pisa: te propone su cálculo. Vacío = todavía sin estimar (no es cero)."
             >
               <Input
                 type="text"
