@@ -36,11 +36,11 @@ Monolito App Router, sin `src/`:
 
 | Carpeta | Qué vive ahí |
 |---|---|
-| `app/` | 118 `page.tsx` + 441 `route.ts` (medido el 2026-10-10) en SEIS superficies con reglas de auth DISTINTAS: `(shell)/` (interna: sidebar + sesión), `api/`, `external/` (pública por token), `print/` (render PDF, bypass `?pdfToken=`), `portal/`, `auth/`, más la raíz pública (login). El criterio vive en `middleware.ts` (PUBLIC_PATHS / PUBLIC_PREFIXES) |
-| `lib/` | 71 carpetas (medido el 2026-10-10): los módulos de dominio (forma ideal: vertical slice, §1) + la infra compartida (`lib/db/`, `lib/auth/`, `lib/anthropic.ts`) |
+| `app/` | 128 `page.tsx` + 512 `route.ts` (medido el 2026-10-24) en SEIS superficies con reglas de auth DISTINTAS: `(shell)/` (interna: sidebar + sesión), `api/`, `external/` (pública por token), `print/` (render PDF, bypass `?pdfToken=`), `portal/`, `auth/`, más la raíz pública (login). El criterio vive en `middleware.ts` (PUBLIC_PATHS / PUBLIC_PREFIXES) |
+| `lib/` | 90 carpetas (medido el 2026-10-24): los módulos de dominio (forma ideal: vertical slice, §1) + la infra compartida (`lib/db/`, `lib/auth/`, `lib/anthropic.ts`) |
 | `components/` | React por módulo; `components/ui` = el vocabulario del §1-UI; `components/landing` = el motor de documentos del §1-WEB |
-| `scripts/` | ~240 `.ts` de operación (dry-run-first + guard anti-prod, ver cap. D) + `scripts/sql/` (los DDL a mano) + `scripts/archive/` (one-offs históricos, no son catálogo) + `deploy.sh` |
-| `prisma/` | `schema.prisma` (168 modelos, 90 enums, medido el 2026-10-10) + `migrations/0_init` (baseline, cap. D) + `migrations-archive/` + `policies.sql` (RLS idempotente) + 3 seeds |
+| `scripts/` | ~300 `.ts` de operación (dry-run-first + guard anti-prod, ver cap. D) + `scripts/sql/` (los DDL a mano) + `scripts/archive/` (one-offs históricos, no son catálogo) + `deploy.sh` |
+| `prisma/` | `schema.prisma` (197 modelos, 92 enums, medido el 2026-10-24) + `migrations/0_init` (baseline, cap. D) + `migrations-archive/` + `policies.sql` (RLS idempotente) + 3 seeds |
 | `docs/` | `DECISIONS` (el porqué, no re-litigar) · `GLOSSARY` · `RUNBOOK` (operación de PROD) · `KNOWN-ERRORS` · `CHANGELOG` |
 | `hooks/` | 3 hooks React globales (hay 2 más en `lib/hooks/` — deuda de consolidación) |
 
@@ -212,7 +212,7 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**777**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+**778**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`
@@ -528,7 +528,7 @@ for (const t of ALL_PUBLIC_TABLES) {
 
 **Verificable con regla de ESLint** (a configurar): `import/no-internal-modules` con patrón que solo permita `lib/<modulo>/index.ts` cruzando módulos.
 
-**Por qué**: hoy hay god routes (`app/api/clients/[id]/analyze/route.ts` con 1500 líneas mezclando 4 dominios) y god components (`ProjectCanvasPanel.tsx` con 1000 líneas) que serían imposibles de mantener si crece el equipo. Forzar aislamiento empuja a partir responsabilidades.
+**Por qué**: hoy hay god routes (`app/api/clients/[id]/analyze/route.ts` con 3.385 líneas mezclando 4 dominios, medido el 2026-10-24) y god components (`ProjectCanvasPanel.tsx` con 1.364 líneas) que serían imposibles de mantener si crece el equipo. Forzar aislamiento empuja a partir responsabilidades.
 
 ---
 
@@ -656,7 +656,7 @@ carpeta de su integración.
 - **Antes de dar por terminado un cambio en un módulo con tests**, correr `npm test -- lib/<modulo>` y verificar que pasen.
 - **Si tocás `prisma/schema.prisma`**: NO existe una "DB de dev" y `db push` está prohibido — el flujo completo (SQL aditivo a mano + `migrate diff` como detector + `prisma generate` + `check:invariants`) está en **Parte 0 · cap. D**. El smoke sigue siendo abrir una ruta que use el modelo y ver que carga.
 
-**La suite vive y frena merges**: 627 archivos unit y más de 10.000 casos bajo `lib/` el 2026-10-10 (el conteo exacto de archivos lo vigila `doc-sync`, en la Parte 0 · cap. F), organizados en las cinco familias de la Parte 0 · cap. F — unit de motor, golden, ratchets, escaneos estructurales y registros congelados. Módulo nuevo sin tests = módulo no terminado (regla de arriba, ahora sí cumplida por los módulos recientes: cobranza, timeline, roles, marketing…). Los módulos viejos sin cobertura se cubren cuando se tocan.
+**La suite vive y frena merges**: unos 780 archivos unit y más de 12.000 casos bajo `lib/` el 2026-10-24 (el conteo exacto de archivos lo vigila `doc-sync`, en la Parte 0 · cap. F), organizados en las cinco familias de la Parte 0 · cap. F — unit de motor, golden, ratchets, escaneos estructurales y registros congelados. Módulo nuevo sin tests = módulo no terminado (regla de arriba, ahora sí cumplida por los módulos recientes: cobranza, timeline, roles, marketing…). Los módulos viejos sin cobertura se cubren cuando se tocan.
 
 > El project `integration` está VIVO desde el 2026-08-01 (F4): `npm run test:int` contra la base local `nexus_test` (ver Parte 0 · cap. F). *Pendiente real*: crecer la suite (hoy cubre el chokepoint de sesiones y el acceso de Roles) y llevarla al CI con un service container.
 
@@ -695,8 +695,8 @@ Cosas que duelen, pero el módulo externo puede abrirse sin tenerlas resueltas (
 6. **Adoptar Zod en todos los endpoints POST/PATCH/PUT** vía `parseBody(req, schema)`. Empezar por los del módulo externo (esos sí en la 🔴), después barrer el resto.
 7. **Migrar `accountId` → `clientId` en `Audit`, `Implementation`, `Knowledge`** y borrar el campo viejo (deuda declarada hace meses).
 8. **Borrar `Project.canvas`** (marcado DEPRECATED, no se usa).
-9. **Refactor de `app/api/clients/[id]/analyze/route.ts` (1500 líneas)** en submódulos `lib/agents/`.
-10. **Refactor de `components/clients/ProjectCanvasPanel.tsx` (1000 líneas)** dividiendo responsabilidades.
+9. **Refactor de `app/api/clients/[id]/analyze/route.ts` (3.385 líneas el 2026-10-24)** en submódulos `lib/agents/`.
+10. **Refactor de `components/clients/ProjectCanvasPanel.tsx` (1.364 líneas el 2026-10-24)** dividiendo responsabilidades.
 11. **Centralizar parseo JSON de Claude** en `lib/ai/parse-json-output.ts` (helper aún NO construido — hoy lo más cercano es `lib/ai/section-schema.ts`) y migrar los callers.
 12. ~~**Resolver los 29 errores TypeScript baseline.**~~ ✅ **HECHO** (baseline en 0 desde 2026-07, `tsc-baseline.txt`; el ratchet del CI impide que vuelva a subir).
 13. ~~**Sincronizar `ActionItem.done` con `status === "DONE"`** o eliminar uno.~~ Ya no aplica: `ActionItem` quedó DEPRECATED el 2026-10-10 (memoria de la cuenta, etapa 2), sin escritores; los pendientes son tareas. Se borra con el modelo (después del 2027-04-01).

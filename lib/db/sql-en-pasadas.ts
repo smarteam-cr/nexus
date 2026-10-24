@@ -8,14 +8,16 @@
  * bootstrap se caía. Lo encontró la revisión del roadmap del 2026-10-24 (paso cero).
  *
  * La regla: se aplican todos; los que fallan se reintentan en la pasada siguiente, porque el que crea su tabla ya pudo
- * correr. Si una pasada no logra aplicar NINGUNO de los que quedan, se aborta con el primer error: ahí ya no es un
- * problema de orden. Funciona porque todo `.sql` tiene que poder correr dos veces (un archivo que falló a la mitad se
- * reaplica entero).
+ * correr. Si una pasada no logra aplicar NINGUNO de los que quedan, se aborta y se dice, de cada archivo que quedó, su
+ * error: ahí ya no es un problema de orden, y el culpable puede no ser el primero por nombre (si A necesita algo de B
+ * y B está roto, el error que importa es el de B). Funciona porque todo `.sql` tiene que poder correr dos veces.
  */
 export interface FallaDeSql {
   archivo: string;
-  error: unknown;
+  detalle: string;
 }
+
+const detalleDe = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export async function aplicarEnPasadas(
   archivos: readonly string[],
@@ -32,26 +34,19 @@ export async function aplicarEnPasadas(
         await aplicar(archivo);
         aplicados.push(archivo);
       } catch (error) {
-        fallaron.push({ archivo, error });
+        fallaron.push({ archivo, detalle: detalleDe(error) });
       }
     }
-    if (fallaron.length === pendientes.length) {
-      const [primera] = fallaron;
-      const mensaje = primera.error instanceof Error ? primera.error.message : String(primera.error);
-      throw new ErrorDeSqlEnPasadas(primera.archivo, mensaje, fallaron.map((f) => f.archivo));
-    }
+    if (fallaron.length === pendientes.length) throw new ErrorDeSqlEnPasadas(fallaron);
     pendientes = fallaron.map((f) => f.archivo);
   }
   return { aplicados, pasadas };
 }
 
+/** Lo que quedó sin aplicar, cada archivo con el error de la última pasada. */
 export class ErrorDeSqlEnPasadas extends Error {
-  constructor(
-    readonly archivo: string,
-    readonly detalle: string,
-    readonly sinAplicar: string[],
-  ) {
-    super(`${archivo}: ${detalle} (sin aplicar: ${sinAplicar.join(", ")})`);
+  constructor(readonly fallas: FallaDeSql[]) {
+    super(fallas.map((f) => `${f.archivo}: ${f.detalle}`).join(" · "));
     this.name = "ErrorDeSqlEnPasadas";
   }
 }

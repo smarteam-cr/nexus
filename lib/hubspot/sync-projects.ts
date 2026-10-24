@@ -507,6 +507,9 @@ async function verifyProjectInHubspot(hsClient: Client, objectId: string): Promi
     } catch (e) {
       const msg = String((e as Error)?.message ?? "");
       if (msg.includes("404") || /not found/i.test(msg)) confirmedNotFound = true;
+      // Hasta el 2026-10-24 esta regex llevaba un carácter de retroceso en vez de \b y nunca coincidía: un 401/403
+      // lanzado contaba como duda, distinto de la rama de la respuesta (arriba). Ahora las dos hacen lo mismo. Un token
+      // vencido no da de baja nada: falla en todos los slugs a la vez, así que ninguno da 404 (confirmedNotFound).
       else if (/\b(401|403)\b/.test(msg) || /scope/i.test(msg)) sinPermiso.push(slug);
       else ambiguous = true;
     }

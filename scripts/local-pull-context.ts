@@ -273,6 +273,15 @@ async function main() {
     // proyectos de dos clientes distintos (eso es justamente lo que INV1 vigila en prod)
     // y sin esto se escribiría dos veces.
     const sesionesEscritas = new Set<string>();
+    // ¿La empresa ya está en la local? Solo se recuerda el «sí»: una empresa de un plan posterior todavía puede llegar.
+    const enDestino = new Set<string>();
+    const existeEnDestino = async (id: string | null): Promise<boolean> => {
+      if (!id) return false;
+      if (enDestino.has(id)) return true;
+      const hay = !!(await destino.prisma.client.findUnique({ where: { id }, select: { id: true } }));
+      if (hay) enDestino.add(id);
+      return hay;
+    };
 
     for (const plan of planes) {
       await destino.prisma.client.upsert({
@@ -287,9 +296,16 @@ async function main() {
           update: asInput<Prisma.ProjectUncheckedUpdateInput>(p),
         });
       }
-      for (const s of plan.sesiones) {
-        if (sesionesEscritas.has(s.id)) continue;
-        sesionesEscritas.add(s.id);
+      for (const s0 of plan.sesiones) {
+        if (sesionesEscritas.has(s0.id)) continue;
+        sesionesEscritas.add(s0.id);
+        // R7 (2026-10-24): el dueño de una reunión es una llave a Client. Un dueño que no viene en el lote ni está en la
+        // local se suelta (null) en vez de chocar; el resolvedClientId lo vuelve a calcular la local si hace falta.
+        const s = {
+          ...s0,
+          resolvedClientId: (await existeEnDestino(s0.resolvedClientId)) ? s0.resolvedClientId : null,
+          manualClientId: (await existeEnDestino(s0.manualClientId)) ? s0.manualClientId : null,
+        };
         await destino.prisma.firefliesSession.upsert({
           where: { id: s.id },
           create: asInput<Prisma.FirefliesSessionUncheckedCreateInput>(s),

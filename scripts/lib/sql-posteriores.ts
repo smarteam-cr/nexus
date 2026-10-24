@@ -52,16 +52,24 @@ export async function aplicarSqlPosteriores(url: string, raiz: string): Promise<
   try {
     // En pasadas: el orden de nombre no siempre respeta las dependencias (lib/db/sql-en-pasadas.ts).
     const { aplicados } = await aplicarEnPasadas(archivos, async (f) => {
-      await c.query(readFileSync(join(raiz, f), "utf8"));
+      try {
+        await c.query(readFileSync(join(raiz, f), "utf8"));
+      } catch (e) {
+        // Un archivo con su propio BEGIN que falla deja la conexión en una transacción abortada, y todo lo que sigue
+        // fallaría con «current transaction is aborted» en vez de su error real. Sin transacción abierta, el ROLLBACK
+        // solo avisa: no falla.
+        await c.query("ROLLBACK").catch(() => {});
+        throw e;
+      }
     });
     return aplicados;
   } catch (e) {
     if (!(e instanceof ErrorDeSqlEnPasadas)) throw e;
     throw new Error(
-      `${e.archivo} falló sobre ${describirDestino(url)}: ${e.detalle}\n` +
-        `Se reaplica en cada corrida, así que tiene que ser idempotente ` +
-        `(ADD COLUMN IF NOT EXISTS / ADD VALUE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS).` +
-        (e.sinAplicar.length > 1 ? `\nTampoco se aplicaron: ${e.sinAplicar.slice(1).join(", ")}.` : ""),
+      `Los scripts/sql posteriores no se pudieron aplicar sobre ${describirDestino(url)}. Cada uno con su error:\n` +
+        e.fallas.map((f) => `  · ${f.archivo}: ${f.detalle}`).join("\n") +
+        `\nSe reaplican en cada corrida, así que tienen que ser idempotentes ` +
+        `(ADD COLUMN IF NOT EXISTS / ADD VALUE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS).`,
     );
   } finally {
     await c.end();

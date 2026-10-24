@@ -1697,7 +1697,7 @@ se vinculó el cliente. Si hubo fusión, los dos ids no coinciden, el cliente "n
 3. **El desempate entre dos clientes de una misma empresa prefiere `CLIENTE` sobre `PROSPECTO`,**
    y con dos `CLIENTE` de verdad **no elige**. Es de plata: un proyecto que nace en un prospecto
    queda fuera de cobranza, de la cartera y del vigilante, sin ningún error. Hay un caso vivo
-   (empresa `53154855252`: «Areyas» prospecto y «Areyá» cliente).
+   (empresa `53154855252`: «Areyas» prospecto y «Areyá» cliente). ⚠ **2026-10-24:** Areyas quedó fusionada en Areyá. Volver único el `hubspotCompanyId` (que este caso no pueda existir) es R7b: ver «Las llaves de la empresa».
 4. **El reapunte automático queda acotado a ese caso.** Barrer la cartera entera sigue siendo el
    script manual con `--apply` + `ALLOW_PROD_WRITE=1`: ahí nadie pidió nada y conviene mirar antes.
 
@@ -10741,3 +10741,36 @@ los 2 procesos en borrador. Plan y pruebas: `docs/diagnostico-plantillas-plan.md
   secciones en 87 s, el documento quedó con sus 7 y el hilo, cerrado (0 cabos sueltos). Una corrida de Sonnet 4.6 con
   unos 194.000 caracteres de entrada: unos US$0,20–0,30, estimado.
 - **Sin SQL**: la plantilla vive en `__plantilla`, las piezas en `__partes` y la revisión en `revisadaAt`, como antes.
+
+## Las llaves de la empresa: la dueña de la reunión y la empresa de HubSpot (2026-10-24, R7 y R7b)
+
+**El hecho:** `FirefliesSession.resolvedClientId` es LA fuente de «de quién es la reunión» (invariante 1) y
+`manualClientId` su override humano, pero ninguna era una llave foránea: la base dejaba que apuntaran a una empresa
+borrada. Pasó (la reunión escondida en un demo del 2026-08-04) y el 24 oct quedaba 1 `manualClientId` huérfano. Y nada
+impide dos fichas con el mismo `hubspotCompanyId` (Areyas y Areyá, fusionadas ese día).
+
+**Lo decidido:**
+
+1. **`resolvedClientId` es una llave con `onDelete: Restrict`.** Borrar una empresa con reuniones es un error visible;
+   nunca reuniones apuntando a una lápida en silencio. El DELETE de la empresa (`app/api/clients/[id]/route.ts`) ya
+   suelta las reuniones dentro de la misma transacción antes de borrar, y la fusión las muda: los dos siguen igual.
+2. **`manualClientId` es una llave con `onDelete: SetNull`.** Es la «lápida» que el DELETE ya hacía a mano: si la empresa
+   se borra, el override se cae solo.
+3. **Volver único `Client.hubspotCompanyId` va aparte (R7b), no en este paso.** Se pensó para el mismo día, y la
+   revisión del código lo frenó: siete caminos pueden repetir hoy el id (la copia de Partner, el import del sistema,
+   elegir la empresa a mano, la copia de proyectos por nombre, la ficha de HubSpot, el alta por OAuth y la conexión de
+   un portal), y con el índice darían un 500 en vez de un aviso. Además, algunos guardan el id de la empresa en el
+   portal del propio cliente y no en el de Smarteam, así que un índice global podría chocar entre portales. R7b: cada
+   camino busca la ficha que ya tiene ese id y la reusa o responde 409 diciendo cuál es; después, el índice. Va con
+   la sesión de la empresa (R1 y R2). Hasta entonces, dos fichas para la misma empresa se fusionan a mano
+   (`scripts/merge-duplicate-clients.ts`, como dice KNOWN-ERRORS).
+4. **La invariante INV48 comprueba que existen las dos llaves**, porque `check:esquema` mira tablas, columnas y valores
+   de enum, no llaves.
+
+**Cómo se aplica:** el SQL `scripts/sql/2026-10-24-llaves-de-la-empresa.sql` (se puede correr dos veces) primero suelta
+los `manualClientId` huérfanos y después crea las dos llaves. Si hubiera una reunión resuelta huérfana, el ALTER falla
+entero y no cambia nada. Volver atrás: los `DROP` del encabezado del SQL.
+
+**La base local:** `scripts/local-pull-context.ts` trae reuniones de un lote de empresas; una reunión cuyo dueño no
+viene en el lote se trae sin dueño manual y su `resolvedClientId` se re-resuelve en la local, en vez de chocar con la
+llave.

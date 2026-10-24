@@ -11,6 +11,7 @@ import { detectarFusionesEnLote } from "@/lib/hubspot/empresa-fusionada";
 import { GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { escribeSqlCrudo, soloCodigo } from "@/lib/db/escritura-sql-cruda";
+import { llavesQueFaltan } from "@/lib/db/llaves-de-la-empresa";
 import {
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46,
@@ -777,6 +778,22 @@ async function main(): Promise<number> {
   // ── Inv 46 → lib/invariantes/lecturas.ts (2026-10-10: ningún pedido fuera de alcance de una reunión de otro cliente;
   //    el gemelo de INV42) ──
   violations += await reportar(INV46, prisma);
+
+  // ── Inv 48 (2026-10-24, R7): existen las llaves que protegen de quién es cada reunión. `check:esquema` no ve llaves
+  //    foráneas ni índices únicos; sin ellas la base vuelve a aceptar reuniones de una empresa borrada o dos fichas
+  //    para la misma empresa de HubSpot. Lista y regla: lib/db/llaves-de-la-empresa.ts ──
+  {
+    const fks = await prisma.$queryRaw<{ conname: string }[]>`SELECT conname FROM pg_constraint WHERE contype = 'f' AND conrelid = '"FirefliesSession"'::regclass`;
+    const indices = await prisma.$queryRaw<{ indexname: string }[]>`SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'Client'`;
+    const faltan = llavesQueFaltan({ llavesForaneas: fks.map((f) => f.conname), indices: indices.map((i) => i.indexname) });
+    if (faltan.length) {
+      violations++;
+      console.error(`✗ INV48 VIOLADO: faltan ${faltan.length} llave(s) de la empresa: ${faltan.join(", ")}.`);
+      console.error("  Aplicá scripts/sql/2026-10-24-llaves-de-la-empresa.sql (DECISIONS › «Las llaves de la empresa»).");
+    } else {
+      console.log("✓ INV48: la dueña de cada reunión (y su dueño manual) son llaves de verdad.");
+    }
+  }
 
   return violations;
 }

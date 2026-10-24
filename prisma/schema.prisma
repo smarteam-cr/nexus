@@ -137,7 +137,7 @@ model Client {
   company           String?
   industry          String?
   notes             String?    @db.Text
-  hubspotCompanyId  String? // ID de la empresa vinculada en HubSpot CRM
+  hubspotCompanyId  String? // ID de la empresa vinculada en HubSpot CRM. Volverla única es R7b (ver DECISIONS «Las llaves de la empresa»)
   emailDomains      String[] // dominios de email para matching automático de sesiones (ej: "ice.go.cr")
   // Siglas con que el EQUIPO nombra a este cliente en los títulos de sus reuniones («CAV» por
   // Club de Amantes del Vino). Una reunión 100 % interna solo se puede atribuir por título, y el
@@ -244,6 +244,10 @@ model Client {
   hechosDeReuniones        HechoDeReunion[]          @relation("HechosDelCliente") // memoria de la cuenta: los hechos de sus reuniones (CASCADE)
   hilosDeChat              HiloDeChat[]              @relation("HilosDeChatDeLaCuenta") // el chat de Nexus sobre la cuenta (2026-10-17, CASCADE)
   propuestasDeRentabilidad PropuestaDeRentabilidad[] @relation("PropuestasDeRentabilidad")
+  // R7 (2026-10-24): las reuniones de las que es dueña (RESTRICT: no se borra una empresa con reuniones; el DELETE y la
+  // fusión las sueltan o las mudan antes) y las que alguien le asignó a mano (SET NULL).
+  reunionesResueltas       FirefliesSession[]        @relation("ReunionesResueltas")
+  reunionesAsignadasAMano  FirefliesSession[]        @relation("ReunionesAsignadasAMano")
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
 }
@@ -2350,6 +2354,8 @@ model FirefliesSession {
   // Es la AGENDA de la reunión: lo que se iba a tratar. La escribe la sync de Meet (lib/sessions/descripcion-del-evento.ts).
   descripcionDelEvento String?   @db.Text
   manualClientId       String? // override manual del matching automático de cliente
+  // R7 (2026-10-24): llave de verdad. Si la empresa se borra, el override se cae solo (SET NULL).
+  manualClient         Client?   @relation("ReunionesAsignadasAMano", fields: [manualClientId], references: [id], onDelete: SetNull)
   // ── QUIÉN puso ese override, y si fue una decisión o un efecto secundario ──────
   // `manualClientId` lo escriben DOS gestos que se ven idénticos en la base: alguien eligiendo
   // el cliente a mano, y la ADOPCIÓN automática al agregar una reunión huérfana a un proyecto.
@@ -2360,6 +2366,9 @@ model FirefliesSession {
   manualClientBy       String? // email de quien lo puso
   manualClientAt       DateTime?
   resolvedClientId     String? // PERF #1: cliente resuelto (materializado de categorizeSession) para "última actividad"/bookends sin cargar todas las sesiones. Re-resuelto en write/override/mutación de Client.
+  // R7 (2026-10-24): LA dueña de la reunión, como llave de verdad. RESTRICT: borrar una empresa con reuniones es un
+  // error visible, nunca reuniones apuntando a una lápida (el DELETE de la empresa y la fusión las sueltan antes).
+  resolvedClient       Client?   @relation("ReunionesResueltas", fields: [resolvedClientId], references: [id], onDelete: Restrict)
 
   // F5: sub-topics detectados por IA (lead-scoring, workflow-builder, etc.).
   // Lista canónica viva en lib/sessions/topic-vocabulary.ts y se sesga por

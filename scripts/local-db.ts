@@ -15,9 +15,10 @@
  *   down       lo apaga
  *   status     ¿está corriendo?
  *   bootstrap  aplica el schema COMPLETO a nexus_local y nexus_test:
- *              0_init (migrate deploy) → after.sql → policies.sql → los scripts/sql
- *              posteriores al baseline (si no, la local queda vieja: ver el docblock
- *              de aplicarSqlPosterioresAlBaseline)
+ *              0_init (migrate deploy) → after.sql → los scripts/sql posteriores al
+ *              baseline, en pasadas (si no, la local queda vieja: ver el docblock de
+ *              aplicarSqlPosterioresAlBaseline) → policies.sql AL FINAL (toca tablas
+ *              que nacen en los posteriores; antes iba primero y una base nueva se caía)
  *   seed       puebla nexus_local: catálogo (agentes/prompts/config/equipo
  *              ficticio) + el fixture fx- (scripts/seed-fixture.ts). F3.
  *   acceso     copia el ROSTER INTERNO real de prod → nexus_local, para poder
@@ -145,8 +146,9 @@ async function aplicarSql(db: string, rutaRelativa: string): Promise<void> {
  * de los tests de integración, que desde el 2026-10-10 los aplica solo a nexus_test antes de
  * cada `npm run test:int`). Deben ser IDEMPOTENTES (`IF NOT EXISTS`, `ADD VALUE IF NOT EXISTS`,
  * etc.), porque el mismo archivo puede reaplicarse en cada bootstrap.
- * ⚠ Si uno falla, esto ABORTA en vez de seguir: una base local a medio migrar produce fallos
- * que parecen bugs del código, que es exactamente el rato perdido que esto viene a evitar.
+ * Van en pasadas: lo que falla porque su tabla nace en un archivo posterior se reintenta después
+ * (lib/db/sql-en-pasadas.ts). ⚠ Si una pasada no aplica ninguno de los que quedan, ABORTA y dice
+ * el error de cada uno: una base local a medio migrar produce fallos que parecen bugs del código.
  * El arreglo es hacer idempotente el `.sql`, no saltearlo.
  *
  * Solo toca bases LOCALES (el helper lanza contra cualquier host que no sea loopback, y `up()`

@@ -40,10 +40,15 @@ describe("aplicarEnPasadas", () => {
     const b = base({ a: { crea: "A" }, roto: { crea: "X", necesita: "NoExiste" } });
     const error = await aplicarEnPasadas(["roto", "a"], b.aplicar).catch((e) => e);
     expect(error).toBeInstanceOf(ErrorDeSqlEnPasadas);
-    expect(error.archivo).toBe("roto");
-    expect(error.detalle).toContain("NoExiste");
-    expect(error.sinAplicar).toEqual(["roto"]);
+    expect(error.fallas).toEqual([{ archivo: "roto", detalle: 'relation "NoExiste" does not exist' }]);
     expect(b.intentos.filter((x) => x === "roto")).toHaveLength(2);
+  });
+
+  it("si A necesita algo de B y B está roto, el error dice los dos, con el de B a la vista", async () => {
+    const b = base({ a: { crea: "A", necesita: "B" }, b: { crea: "B", necesita: "NoExiste" } });
+    const error = await aplicarEnPasadas(["a", "b"], b.aplicar).catch((e) => e);
+    expect(error.fallas.map((f: { archivo: string }) => f.archivo)).toEqual(["a", "b"]);
+    expect(error.message).toContain('b: relation "NoExiste" does not exist');
   });
 
   it("sin archivos no hace nada", async () => {
