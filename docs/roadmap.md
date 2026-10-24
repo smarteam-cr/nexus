@@ -135,7 +135,6 @@ Sin esto, algo sigue mal o no se puede validar:
 17. **El formato del documento de resultados de la preventa** (C5): lo define Ventas el lunes 27 oct.
 18. **La calificación de clientes de Insider** (N4): pedirles el umbral de tráfico con que califican a un cliente; es el de la condición «tráfico suficiente».
 19. **«Capacitación» en las tareas** (P1): ¿es la formación del equipo de Smarteam, la que se le da a un cliente, o las dos? Te propongo una categoría propia para la del equipo; la de un cliente va con su cliente asociado.
-20. **La fórmula del TAM** (R1): te propongo lo que Smarteam le podría vender a esa empresa en un año: licencias de HubSpot según su tamaño y los hubs que le sirven, Insider si califica, y los servicios según su escala, a la tarifa de su segmento. ¿La validamos así?
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -543,7 +542,7 @@ Pedido del 23 oct: que la empresa sea el centro, enriquecida y sincronizada con 
    - Etapa 1 · Empleados, país, sitio web, industria, TAM, perfil de negocio, edición de la escala, tráfico, base con consentimiento y si califica para Insider, cada uno con su fuente y su fecha (SQL aditivo).
    - Etapa 2 · La carga inicial desde las preventas y HubSpot.
    - Etapa 3 · Una sola regla de quién manda en cada dato: HubSpot, Nexus o una persona.
-   - Etapa 4 · El TAM lo calcula Nexus con la investigación y una fórmula escrita, y lo escribe en «TAM | Potencial $» de HubSpot, que existe y nadie llena: el equipo no tiene el criterio para definirlo.
+   - Etapa 4 · El TAM lo calcula Nexus con la investigación y una fórmula escrita (validada el 23 oct: licencias de HubSpot según su tamaño y los hubs que le sirven, Insider si califica, y los servicios según su escala a la tarifa de su segmento, en un año), y lo escribe en «TAM | Potencial $» de HubSpot, que existe y nadie llena: el equipo no tiene el criterio para definirlo.
    - Etapa 5 · Proponer y decidir: la IA o cualquier persona propone un cambio, que se ve al lado del dato con quién y por qué; el encargado lo usa, lo edita o lo descarta, y cualquier dato se edita a mano.
 2. **R2 · Un solo módulo de la empresa de HubSpot.** *Existe a medias:* hay cinco listas distintas de lo que se lee, y solo se escriben las 9 propiedades `nexus_*` de la ficha.
    - Etapa 1 · Una tabla que dice, campo por campo, qué propiedad es, quién manda y en qué sentido va.

@@ -48,7 +48,7 @@
    - Insider si califica;
    - los servicios (implementación y recurrente) según su escala, a la tarifa de su segmento.
 
-   El TAM queda en `tam__potencial`, con su fuente y su fecha. La fórmula la valida Elías («Lo que decides tú» 20).
+   El TAM queda en `tam__potencial`, con su fuente y su fecha. **Fórmula validada por Elías el 2026-10-23.**
 3. **Cada dato tiene un dueño y una fuente.** Por dato se guarda: el valor, de dónde salió (la investigación, HubSpot,
    una persona o el test), quién y cuándo. Una sola regla dice quién manda en cada uno.
 4. **Proponer es fácil; decidir también.**
@@ -119,7 +119,7 @@ edición del test, la exploración y el diagnóstico.
    - mudarla de la preventa a la empresa, con su fecha y sus fuentes, y que la preventa la lea de ahí;
    - sumar las contrataciones y el tamaño estimado;
    - el botón «Actualizar la investigación».
-4. **El TAM:** la fórmula validada por Elías, calculada por Nexus para cada empresa, con su explicación a la vista y la
+4. **El TAM:** la fórmula (validada el 2026-10-23), calculada por Nexus para cada empresa, con su explicación a la vista y la
    escritura en `tam__potencial`.
 5. **Proponer y decidir:**
    - el diseño de la sección «Datos de la empresa» de la ficha en Claude Design (pantalla interna);
