@@ -36,6 +36,7 @@ vi.mock("./defs", () => ({ allJobs: () => registro.jobs }));
 import { runSchedulerTick } from "./scheduler";
 import { SIN_TURNO } from "./registry";
 import { InvariantesVioladosError } from "@/lib/invariantes/job";
+import { jobEnCurso } from "./contexto";
 
 const TICK = new Date("2026-09-04T12:00:00Z");
 
@@ -56,6 +57,25 @@ beforeEach(() => {
 });
 
 describe("runSchedulerTick", () => {
+  it("cada job corre dentro de su contexto: el transporte de HubSpot le da el presupuesto largo ante un 429 (U6)", async () => {
+    /* La edicion que lo pone en rojo: volver a `await job.run(now)` sin `enUnJob`. Entonces cs-signals y la copia de
+       contactos tendrían los 2 s de una ruta y volverían a fallar ante un 429. */
+    const vistos: (string | null)[] = [];
+    registro.jobs = [
+      {
+        key: "cs-signals",
+        shouldRun: () => true,
+        run: async () => {
+          await Promise.resolve();
+          vistos.push(jobEnCurso());
+        },
+      },
+    ];
+    await tickCallado();
+    expect(vistos).toEqual(["cs-signals"]);
+    expect(jobEnCurso()).toBeNull();
+  });
+
   it("un job que lanza llega a Sentry con tags.job, y el siguiente corre igual", async () => {
     /* La edicion que lo pone en rojo: sacar captureException del catch, o mandarlo sin tags.job. */
     registro.jobs = [

@@ -119,7 +119,7 @@ describe("429: espera lo que diga Retry-After", () => {
     expect(esperas).toEqual([1000, 2000, 4000]);
   });
 
-  it("⭐ agotado: devuelve el 429 (y quien lanzaba ante él sigue lanzando)", async () => {
+  it("⭐ agotado: devuelve el 429 tal cual (los lectores reales se prueban en client.test.ts)", async () => {
     const respuestas = Array.from({ length: PRESUPUESTO_DE_JOB.reintentos429 + 1 }, () => res(429, { "Retry-After": "1" }));
     const { deps, eventos } = depsFalsas(respuestas);
     const consola = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -128,12 +128,6 @@ describe("429: espera lo que diga Retry-After", () => {
     expect(r.status).toBe(429);
     expect(deps.fetch).toHaveBeenCalledTimes(PRESUPUESTO_DE_JOB.reintentos429 + 1);
     expect(eventos.falla429).toHaveBeenCalledTimes(1);
-
-    // Lo que hacen los lectores con `status !== 200` (contactos-y-tickets.ts, cs-signals.ts): lanzar.
-    const lector = async () => {
-      if (r.status !== 200) throw new Error(`HubSpot respondió ${r.status}`);
-    };
-    await expect(lector()).rejects.toThrow(/429/);
   });
 
   it("en una ruta: 2 s como máximo; un Retry-After de 5 s no se espera y el 429 vuelve al instante", async () => {
@@ -145,13 +139,48 @@ describe("429: espera lo que diga Retry-After", () => {
     expect(esperas).toEqual([]);
   });
 
-  it("en una ruta: la suma de esperas no pasa de 2 s", async () => {
+  it("en una ruta: reintenta mientras quepa, y la suma de esperas no pasa de 2 s", async () => {
     const { deps, esperas } = depsFalsas([res(429, { "Retry-After": "1" }), res(429, { "Retry-After": "1" }), res(429, { "Retry-After": "1" })]);
     const consola = vi.spyOn(console, "error").mockImplementation(() => {});
     const r = await pedirAHubspot({ path: "/x" }, credencialFija(), PRESUPUESTO_DE_RUTA, deps);
     consola.mockRestore();
     expect(r.status).toBe(429);
-    expect(esperas.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(PRESUPUESTO_DE_RUTA.esperaTotalMs);
+    expect(esperas).toEqual([1000, 1000]);
+    expect(deps.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("en una ruta, un 429 de 1 s se espera y el reintento entra", async () => {
+    const { deps, esperas } = depsFalsas([res(429, { "Retry-After": "1" }), res(200)]);
+    const r = await pedirAHubspot({ path: "/x" }, credencialFija(), PRESUPUESTO_DE_RUTA, deps);
+    expect(r.status).toBe(200);
+    expect(esperas).toEqual([1000]);
+  });
+
+  it("⭐ una ruta no se queda colgada por el freno de un job: si no cabe en sus 2 s, pide igual", async () => {
+    /* La edición que la pone en rojo: esperar el freno sin mirar el presupuesto. Una pantalla quedaría esperando
+       lo que un job recibió de Retry-After. */
+    const { deps, esperas } = depsFalsas([res(200)]);
+    deps.freno!.hasta = deps.ahora() + 30_000;
+    const r = await pedirAHubspot({ path: "/x" }, credencialFija(), PRESUPUESTO_DE_RUTA, deps);
+    expect(r.status).toBe(200);
+    expect(esperas).toEqual([]);
+  });
+
+  it("en un job, entre uno y tres minutos de espera total: se espera hasta 60 s cada vez, no más de 180 s", async () => {
+    const respuestas = Array.from({ length: 4 }, () => res(429, { "Retry-After": "60" }));
+    const { deps, esperas } = depsFalsas([...respuestas, res(200)]);
+    const consola = vi.spyOn(console, "error").mockImplementation(() => {});
+    const r = await pedirAHubspot({ path: "/x" }, credencialFija(), PRESUPUESTO_DE_JOB, deps);
+    consola.mockRestore();
+    expect(esperas).toEqual([60_000, 60_000, 60_000]);
+    expect(r.status).toBe(429);
+  });
+
+  it("cada intento lleva su propia señal (Next no le devuelve al reintento el 429 memorizado)", async () => {
+    const { deps, pedidos } = depsFalsas([res(429, { "Retry-After": "1" }), res(200)]);
+    await pedirAHubspot({ path: "/x" }, credencialFija(), PRESUPUESTO_DE_JOB, deps);
+    expect(pedidos[0].init.signal).toBeInstanceOf(AbortSignal);
+    expect(pedidos[0].init.signal).not.toBe(pedidos[1].init.signal);
   });
 
   it("en un job, una espera de más de un minuto no se hace (no es el límite de 10 s)", async () => {

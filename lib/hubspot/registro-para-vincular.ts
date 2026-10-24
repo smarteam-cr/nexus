@@ -53,7 +53,7 @@ export function nombreYDetalle(objeto: string, id: string, p: Props): { etiqueta
   return { etiqueta: (etiqueta || `${tipo} #${id}`).slice(0, 160), detalle: [tipo, extra].filter(Boolean).join(" · ").slice(0, 160) };
 }
 
-async function leerUnaVez(enlace: EnlaceDeHubspot): Promise<{ status: number; foto: FotoDeRegistro }> {
+async function leerFoto(enlace: EnlaceDeHubspot): Promise<{ status: number; foto: FotoDeRegistro }> {
   const hs = await getSystemHubspotClient();
   const props = PROPIEDADES[enlace.objeto] ?? ["hs_object_id"];
   const asociacion = enlace.objeto === "0-2" ? "" : "&associations=companies";
@@ -74,7 +74,7 @@ async function leerUnaVez(enlace: EnlaceDeHubspot): Promise<{ status: number; fo
 /** La foto. El 401 (KNOWN-ERRORS: 401 aunque `expiresAt` diga válido) lo reintenta el transporte (lib/hubspot/client.ts). */
 export async function leerRegistroParaVincular(enlace: EnlaceDeHubspot): Promise<FotoDeRegistro> {
   try {
-    return (await leerUnaVez(enlace)).foto;
+    return (await leerFoto(enlace)).foto;
   } catch (e) {
     return { estado: "error", motivo: e instanceof Error ? e.message : "sin respuesta" };
   }

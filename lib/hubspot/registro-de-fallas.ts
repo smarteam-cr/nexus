@@ -9,8 +9,10 @@
  * - `vistos401` / `vistos429`: lo que respondió HubSpot. Es el número de ANTES: sin el transporte, cada 429 llegaba
  *   al llamador, y cada 401 también salvo en los 14 lugares que tenían su propio reintento.
  * - `fallas401` / `fallas429`: lo que llegó al llamador aun con el transporte (el criterio de «7 días con 0»).
+ * - `pedidos`: cuántos llegaron a HubSpot. Con eso un día sin ninguna falla también deja su fila (si no, la racha de
+ *   «días en 0» no se podría contar: no se distingue un día perfecto de uno sin el registro andando).
  * - `renovaciones`, `esperaMs` (lo esperado por 429) y `cupoMinimo` (el menor `X-HubSpot-RateLimit-Remaining` del día,
- *   solo si bajó de 10: un pedido con cupo de sobra no programa una escritura).
+ *   solo si bajó de 10).
  *
  * ── DÓNDE ────────────────────────────────────────────────────────────────────
  * En la fila `hubspot-transporte` de `CronJobState` (su `lastResult`), sin SQL nuevo: esa tabla ya guarda filas que no
@@ -19,6 +21,7 @@
  *
  * ⚠ Se acumula en memoria y se guarda a los 10 s del primer evento: un 429 no puede convertirse en una escritura a la
  * base por pedido. Si el proceso muere en esos 10 s, lo de esos segundos se pierde (queda el `console.error`).
+ * ⚠ Solo cuenta la app (dentro de Next): los scripts no escriben acá.
  * ⛔ Nunca lanza: contar no puede romper un pedido.
  */
 import { prisma } from "@/lib/db/prisma";
@@ -30,6 +33,8 @@ const DIAS_QUE_SE_GUARDAN = 60;
 const GUARDAR_A_LOS_MS = 10_000;
 
 export interface ConteoDelDia {
+  /** Los pedidos que llegaron a HubSpot ese día: el denominador, y lo que hace que un día sin fallas deje su fila. */
+  pedidos: number;
   vistos401: number;
   renovaciones: number;
   fallas401: number;
@@ -47,13 +52,14 @@ export interface RegistroGuardado {
 }
 
 export function conteoVacio(): ConteoDelDia {
-  return { vistos401: 0, renovaciones: 0, fallas401: 0, vistos429: 0, esperaMs: 0, fallas429: 0, cupoMinimo: null };
+  return { pedidos: 0, vistos401: 0, renovaciones: 0, fallas401: 0, vistos429: 0, esperaMs: 0, fallas429: 0, cupoMinimo: null };
 }
 
 /** Suma `b` a `a` (el cupo, el mínimo). */
 export function sumarConteos(a: ConteoDelDia, b: ConteoDelDia): ConteoDelDia {
   const minimos = [a.cupoMinimo, b.cupoMinimo].filter((v): v is number => v !== null);
   return {
+    pedidos: a.pedidos + b.pedidos,
     vistos401: a.vistos401 + b.vistos401,
     renovaciones: a.renovaciones + b.renovaciones,
     fallas401: a.fallas401 + b.fallas401,
@@ -77,6 +83,25 @@ export function mezclarRegistro(guardado: unknown, pendiente: Record<string, Con
   return { version: 1, dias: Object.fromEntries(recientes.map((d) => [d, dias[d]])), at: ahora.toISOString() };
 }
 
+/**
+ * Cuántos días seguidos, contando hacia atrás desde `hoy` (`YYYY-MM-DD`, Costa Rica), no llegó ninguna falla al
+ * llamador. Un día sin fila es un día sin pedidos a HubSpot: cuenta como cero, mientras sea posterior al primer día
+ * registrado (antes de ese día el registro no existía). Es el criterio de éxito de U6: 7. Puro.
+ */
+export function diasSeguidosEnCero(dias: Record<string, ConteoDelDia>, hoy: string): number {
+  const claves = Object.keys(dias).sort();
+  if (!claves.length) return 0;
+  const primero = claves[0];
+  let n = 0;
+  for (let t = Date.parse(`${hoy}T12:00:00Z`); ; t -= 24 * 60 * 60 * 1000) {
+    const dia = new Date(t).toISOString().slice(0, 10);
+    if (dia < primero) return n;
+    const c = dias[dia];
+    if (c && c.fallas401 + c.fallas429 > 0) return n;
+    n++;
+  }
+}
+
 let pendiente: Record<string, ConteoDelDia> = {};
 let programado: ReturnType<typeof setTimeout> | null = null;
 
@@ -91,17 +116,18 @@ async function guardar(): Promise<void> {
   pendiente = {};
   if (!Object.keys(lote).length) return;
   try {
+    // Con la fila bloqueada: producción y el 3004 de cada PC escriben en la misma, y leer-sumar-escribir sin el
+    // candado deja que el segundo pise lo que anotó el primero.
     await prisma.$transaction(async (tx) => {
-      const fila = await tx.cronJobState.findUnique({ where: { id: FILA_DEL_REGISTRO }, select: { lastResult: true } });
-      const nuevo = mezclarRegistro(fila?.lastResult ?? null, lote, new Date());
-      await tx.cronJobState.upsert({
-        where: { id: FILA_DEL_REGISTRO },
-        create: { id: FILA_DEL_REGISTRO, lastResult: nuevo as object },
-        update: { lastResult: nuevo as object },
-      });
+      await tx.$executeRaw`INSERT INTO "CronJobState" ("id", "updatedAt") VALUES (${FILA_DEL_REGISTRO}, now()) ON CONFLICT ("id") DO NOTHING`;
+      const filas = await tx.$queryRaw<{ lastResult: unknown }[]>`SELECT "lastResult" FROM "CronJobState" WHERE "id" = ${FILA_DEL_REGISTRO} FOR UPDATE`;
+      const nuevo = mezclarRegistro(filas[0]?.lastResult ?? null, lote, new Date());
+      await tx.cronJobState.update({ where: { id: FILA_DEL_REGISTRO }, data: { lastResult: nuevo as object } });
     });
   } catch (e) {
     console.error(`[hubspot/registro-de-fallas] no se pudo guardar: ${e instanceof Error ? e.message : String(e)}`);
+    // Lo que no se guardó vuelve a lo pendiente: lo lleva el próximo guardado.
+    for (const [dia, c] of Object.entries(lote)) pendiente[dia] = sumarConteos(pendiente[dia] ?? conteoVacio(), c);
   }
 }
 
@@ -113,6 +139,9 @@ function programar(): void {
 }
 
 function anotar(f: (c: ConteoDelDia) => void): void {
+  // Solo cuenta la app: un script (fuera de Next) no escribe en producción sin `ALLOW_PROD_WRITE` por contar un 429.
+  // Su 429 igual queda en el `console.error` del transporte.
+  if (!process.env.NEXT_RUNTIME) return;
   try {
     f(delDia());
     programar();
@@ -123,6 +152,7 @@ function anotar(f: (c: ConteoDelDia) => void): void {
 
 /** Los eventos que el transporte de client.ts le pasa a `pedirAHubspot`. */
 export const eventosQueSeCuentan: EventosDelTransporte = {
+  pedido: () => anotar((c) => c.pedidos++),
   visto401: () => anotar((c) => c.vistos401++),
   renovado: () => anotar((c) => c.renovaciones++),
   falla401: () => anotar((c) => c.fallas401++),
@@ -132,7 +162,7 @@ export const eventosQueSeCuentan: EventosDelTransporte = {
       c.esperaMs += ms;
     }),
   falla429: () => anotar((c) => c.fallas429++),
-  // El cupo solo se anota si es bajo: un pedido normal no programa una escritura.
+  // El cupo solo se anota si es bajo.
   cupo: (restante) => {
     if (restante > 10) return;
     anotar((c) => {

@@ -90,6 +90,19 @@ describe("un solo transporte para HubSpot", () => {
     expect(fuera, "Ese cliente no pasa por el transporte: pídelo a lib/hubspot/client.ts").toEqual([]);
   });
 
+  it("nadie fuerza el vencimiento del token ni lo escribe fuera de client.ts y del alta de una conexión", () => {
+    /* Lo que se escapó de la primera pasada de U6: `deal-line-items` ponía `expiresAt: new Date(0)` para que el
+       siguiente pedido refrescara. Mismo efecto que un refresh suelto, con otra forma. */
+    const ALTA_DE_CONEXION = new Set([
+      "lib/hubspot/client.ts",
+      "app/api/auth/callback/route.ts", // el OAuth guarda la conexión nueva
+      "app/api/clients/connect/route.ts", // la Private App pegada a mano
+      "scripts/local-db.ts", // copia la conexión de prod a la base local
+    ]);
+    const fuera = quienesDicen(/hubspotAccount\.(update|updateMany|upsert)\(\{[\s\S]{0,600}?expiresAt/, (r) => ALTA_DE_CONEXION.has(r));
+    expect(fuera, "El vencimiento del token lo maneja lib/hubspot/client.ts: no lo fuerces para que refresque").toEqual([]);
+  });
+
   it("la excepción sigue existiendo (si se borra el archivo, se borra la excepción)", () => {
     for (const f of Object.keys(EXCEPCIONES_DEL_HOST)) expect(fs.existsSync(path.join(RAIZ, f)), f).toBe(true);
   });

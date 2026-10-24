@@ -26,7 +26,8 @@
  * ejercitan con un `fetch` falso (`transporte.test.ts`).
  */
 
-export const BASE_DE_HUBSPOT = "https://api.hubapi.com";
+/** Sin exportar a propósito: quien necesite la URL de la API está armando un pedido fuera del transporte. */
+const BASE_DE_HUBSPOT = "https://api.hubapi.com";
 
 /** Lo que se le pide a HubSpot: la misma forma que `apiRequest` del SDK (IHttpOptions), para no tocar llamadores. */
 export interface PedidoAHubspot {
@@ -71,6 +72,8 @@ export interface Credencial {
 
 /** Lo que el transporte avisa para que alguien lo cuente (client.ts lo guarda por día: `registro-de-fallas.ts`). */
 export interface EventosDelTransporte {
+  /** Un pedido llegó a HubSpot (cada intento cuenta). */
+  pedido?(): void;
   /** HubSpot respondió 401 (antes de intentar renovar). */
   visto401?(): void;
   /** Se renovó el token después de un 401. */
@@ -197,7 +200,12 @@ export async function pedirAHubspot(
     }
 
     const { url, init } = armarPedido(pedido, token);
+    // Una señal propia en cada intento: dentro de un Server Component, Next memoriza los GET iguales del mismo render
+    // y le devolvería al reintento el mismo 429 sin volver a preguntarle a HubSpot. El SDK pedía con node-fetch, que
+    // Next no toca; el `fetch` global sí. Con la señal, cada intento es un pedido nuevo.
+    init.signal = new AbortController().signal;
     const res = await deps.fetch(url, init);
+    ev.pedido?.();
 
     const cupo = frenoPorCupo(res.headers);
     if (cupo.restante !== null) ev.cupo?.(cupo.restante);

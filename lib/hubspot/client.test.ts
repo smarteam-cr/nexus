@@ -30,7 +30,16 @@ const db = vi.hoisted(() => {
   };
 });
 vi.mock("@/lib/db/prisma", () => ({ prisma: db.prisma }));
-vi.mock("./registro-de-fallas", () => ({ eventosQueSeCuentan: {} }));
+const eventos = vi.hoisted(() => ({
+  pedido: vi.fn(),
+  visto401: vi.fn(),
+  renovado: vi.fn(),
+  falla401: vi.fn(),
+  visto429: vi.fn(),
+  falla429: vi.fn(),
+  cupo: vi.fn(),
+}));
+vi.mock("./registro-de-fallas", () => ({ eventosQueSeCuentan: eventos }));
 
 import {
   _olvidarTokensParaPruebas,
@@ -43,6 +52,8 @@ import {
 } from "./client";
 import { enUnJob } from "@/lib/jobs/contexto";
 import { PRESUPUESTO_DE_JOB, PRESUPUESTO_DE_RUTA } from "./transporte";
+import { FalloAlLeerContactos, fetchCompanyContacts } from "./company-contacts";
+import { asociacionesDeEmpresas } from "./contactos-y-tickets";
 
 type Llamada = { url: string; auth: string | null };
 
@@ -97,6 +108,19 @@ describe("⭐ 401 con dos pedidos a la vez: un solo refresh", () => {
     expect((await a.apiRequest({ path: "/x" })).status).toBe(200);
     expect((await b.apiRequest({ path: "/y" })).status).toBe(200);
     expect(hs.refrescos()).toBe(1);
+  });
+
+  it("si otro proceso ya renovó (el token de la base no es el rechazado), lo usa sin refrescar", async () => {
+    /* La edición que la pone en rojo: sacar la relectura de la base en renovarToken. Cada entorno (prod, el 3004 de
+       cada PC, los scripts) volvería a refrescar por su cuenta cada vez que recibe un 401. */
+    const hs = hubspotFalso();
+    vi.stubGlobal("fetch", hs.fetch);
+    const a = await getSystemHubspotClient(); // con «viejo»
+    db.cuenta.accessToken = "de-otro-proceso"; // otro entorno ya renovó y guardó
+    const r = await a.apiRequest({ path: "/x" });
+    expect(r.status).toBe(200);
+    expect(hs.refrescos()).toBe(0);
+    expect(hs.llamadas.at(-1)?.auth).toBe("Bearer de-otro-proceso");
   });
 
   it("forceRefreshSystemToken (compatibilidad) comparte el refresh en curso", async () => {
@@ -160,6 +184,45 @@ describe("el contrato de errores no cambia", () => {
     const r = await pedirConToken("suelto", { path: "/account-info/v3/details" });
     expect(r.status).toBe(401);
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("el registro ve lo que pasa (si no, «0 fallas» sería un éxito falso)", () => {
+  it("cada pedido, el 401, la renovación, el 429 y la falla llegan a los eventos que se cuentan", async () => {
+    const hs = hubspotFalso();
+    vi.stubGlobal("fetch", hs.fetch);
+    await (await getSystemHubspotClient()).apiRequest({ path: "/x" });
+    expect(eventos.visto401).toHaveBeenCalledTimes(1);
+    expect(eventos.renovado).toHaveBeenCalledTimes(1);
+    expect(eventos.pedido).toHaveBeenCalledTimes(2);
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 429, headers: { "Retry-After": "3600" } })));
+    const consola = vi.spyOn(console, "error").mockImplementation(() => {});
+    await (await getSystemHubspotClient()).apiRequest({ path: "/y" });
+    consola.mockRestore();
+    expect(eventos.visto429).toHaveBeenCalledTimes(1);
+    expect(eventos.falla429).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("el contrato del 429 agotado, con los lectores reales", () => {
+  /** HubSpot pide esperar una hora: no cabe en ningún presupuesto, el 429 vuelve al lector al instante. */
+  const limiteDeUnaHora = () => vi.fn(async () => new Response("{}", { status: 429, headers: { "Retry-After": "3600" } }));
+
+  it("⭐ fetchCompanyContacts LANZA (cs-signals conserva los contactos de la copia anterior)", async () => {
+    vi.stubGlobal("fetch", limiteDeUnaHora());
+    const consola = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(fetchCompanyContacts(await getSystemHubspotClient(), "hs-1")).rejects.toBeInstanceOf(FalloAlLeerContactos);
+    consola.mockRestore();
+  });
+
+  it("⭐ la copia en lote de contactos y tickets marca esas empresas como ilegibles (y no le da de baja a nadie)", async () => {
+    vi.stubGlobal("fetch", limiteDeUnaHora());
+    const consola = vi.spyOn(console, "error").mockImplementation(() => {});
+    const r = await asociacionesDeEmpresas(await getSystemHubspotClient(), ["hs-1", "hs-2"], "contacts");
+    consola.mockRestore();
+    expect([...r.ilegibles].sort()).toEqual(["hs-1", "hs-2"]);
+    expect(r.porEmpresa.size).toBe(0);
   });
 });
 

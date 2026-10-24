@@ -6,11 +6,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => {
   const filas = new Map<string, unknown>();
+  /* El SQL a mano se reconoce por su texto: el INSERT crea la fila vacía, el SELECT … FOR UPDATE la lee bloqueada. */
+  const sql = (partes: TemplateStringsArray) => partes.join("?");
   const tx = {
+    $executeRaw: vi.fn(async (partes: TemplateStringsArray, id: string) => {
+      if (sql(partes).includes("ON CONFLICT") && !filas.has(id)) filas.set(id, null);
+      return 1;
+    }),
+    $queryRaw: vi.fn(async (partes: TemplateStringsArray, id: string) => {
+      expect(sql(partes)).toContain("FOR UPDATE");
+      return filas.has(id) ? [{ lastResult: filas.get(id) }] : [];
+    }),
     cronJobState: {
-      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => (filas.has(where.id) ? { lastResult: filas.get(where.id) } : null)),
-      upsert: vi.fn(async ({ where, create, update }: { where: { id: string }; create: { lastResult: unknown }; update: { lastResult: unknown } }) => {
-        filas.set(where.id, filas.has(where.id) ? update.lastResult : create.lastResult);
+      update: vi.fn(async ({ where, data }: { where: { id: string }; data: { lastResult: unknown } }) => {
+        filas.set(where.id, data.lastResult);
       }),
     },
   };
@@ -18,15 +27,21 @@ const db = vi.hoisted(() => {
 });
 vi.mock("@/lib/db/prisma", () => ({ prisma: db.prisma }));
 
-import { FILA_DEL_REGISTRO, conteoVacio, eventosQueSeCuentan, mezclarRegistro, type RegistroGuardado } from "./registro-de-fallas";
+import { FILA_DEL_REGISTRO, conteoVacio, diasSeguidosEnCero, eventosQueSeCuentan, mezclarRegistro, type RegistroGuardado } from "./registro-de-fallas";
 
+const runtime = process.env.NEXT_RUNTIME;
 beforeEach(() => {
+  process.env.NEXT_RUNTIME = "nodejs"; // solo la app guarda
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-10-24T18:00:00Z")); // 12:00 en Costa Rica
   db.filas.clear();
   vi.clearAllMocks();
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  if (runtime === undefined) delete process.env.NEXT_RUNTIME;
+  else process.env.NEXT_RUNTIME = runtime;
+});
 
 describe("mezclarRegistro", () => {
   it("suma al día que ya estaba y guarda el cupo mínimo", () => {
@@ -48,6 +63,23 @@ describe("mezclarRegistro", () => {
   });
 });
 
+describe("diasSeguidosEnCero (el criterio de U6)", () => {
+  const sin = () => ({ ...conteoVacio(), pedidos: 10 });
+  const con = () => ({ ...conteoVacio(), pedidos: 10, fallas429: 1 });
+
+  it("una semana sin una falla da 7, aunque haya días sin fila", () => {
+    const dias = { "2026-10-18": sin(), "2026-10-20": sin(), "2026-10-24": sin() };
+    expect(diasSeguidosEnCero(dias, "2026-10-24")).toBe(7);
+  });
+
+  it("corta en el último día con una falla, y no cuenta antes del primer día registrado", () => {
+    expect(diasSeguidosEnCero({ "2026-10-20": con(), "2026-10-22": sin() }, "2026-10-24")).toBe(4);
+    expect(diasSeguidosEnCero({ "2026-10-24": con() }, "2026-10-24")).toBe(0);
+    expect(diasSeguidosEnCero({ "2026-10-14": con() }, "2026-10-24")).toBe(10);
+    expect(diasSeguidosEnCero({}, "2026-10-24")).toBe(0);
+  });
+});
+
 describe("los eventos del transporte", () => {
   it("se acumulan y se guardan UNA vez a los 10 s, en el día de Costa Rica", async () => {
     eventosQueSeCuentan.visto401!();
@@ -62,6 +94,7 @@ describe("los eventos del transporte", () => {
     expect(db.prisma.$transaction).toHaveBeenCalledTimes(1);
     const guardado = db.filas.get(FILA_DEL_REGISTRO) as RegistroGuardado;
     expect(guardado.dias["2026-10-24"]).toEqual({
+      pedidos: 0,
       vistos401: 1,
       renovaciones: 1,
       fallas401: 0,
@@ -72,18 +105,45 @@ describe("los eventos del transporte", () => {
     });
   });
 
-  it("un pedido con cupo de sobra no programa ninguna escritura", async () => {
+  it("un cupo de sobra no se anota", async () => {
     eventosQueSeCuentan.cupo!(100);
     await vi.advanceTimersByTimeAsync(20_000);
     expect(db.prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it("si la base falla, no lanza", async () => {
+  it("si la base falla, no lanza, y lo no guardado lo lleva el próximo guardado", async () => {
     db.prisma.$transaction.mockRejectedValueOnce(new Error("sin conexión"));
     const consola = vi.spyOn(console, "error").mockImplementation(() => {});
     eventosQueSeCuentan.falla401!();
     await vi.advanceTimersByTimeAsync(10_000);
     expect(consola).toHaveBeenCalled();
     consola.mockRestore();
+    eventosQueSeCuentan.falla401!();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect((db.filas.get(FILA_DEL_REGISTRO) as RegistroGuardado).dias["2026-10-24"].fallas401).toBe(2);
+  });
+
+  it("un día sin fallas deja su fila con los pedidos (si no, la racha de días en 0 no se puede contar)", async () => {
+    eventosQueSeCuentan.pedido!();
+    eventosQueSeCuentan.pedido!();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect((db.filas.get(FILA_DEL_REGISTRO) as RegistroGuardado).dias["2026-10-24"]).toMatchObject({ pedidos: 2, fallas401: 0, fallas429: 0 });
+  });
+
+  it("dos guardados seguidos suman, no se pisan", async () => {
+    eventosQueSeCuentan.visto429!(1000);
+    await vi.advanceTimersByTimeAsync(10_000);
+    eventosQueSeCuentan.visto429!(500);
+    await vi.advanceTimersByTimeAsync(10_000);
+    const dia = (db.filas.get(FILA_DEL_REGISTRO) as RegistroGuardado).dias["2026-10-24"];
+    expect(dia.vistos429).toBe(2);
+    expect(dia.esperaMs).toBe(1500);
+  });
+
+  it("fuera de Next (un script) no guarda nada", async () => {
+    delete process.env.NEXT_RUNTIME;
+    eventosQueSeCuentan.falla429!();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(db.prisma.$transaction).not.toHaveBeenCalled();
   });
 });

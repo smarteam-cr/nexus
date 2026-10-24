@@ -40,8 +40,9 @@ export interface DraftResult {
 const CHANNELS_PATH = "/broadcast/v1/channels/setting/publish/current";
 const BROADCASTS_PATH = "/broadcast/v1/broadcasts";
 
-/** Corre fn con el client del sistema. El 401 y el 429 los resuelve su transporte (lib/hubspot/client.ts). */
-async function withRetry<T>(
+/** Corre fn con el client del sistema. El 401 y el 429 los resuelve su transporte (lib/hubspot/client.ts): acá no
+ *  hay segundo intento. `status` queda para que cada rama diga qué respondió HubSpot. */
+async function conElClienteDelSistema<T>(
   fn: (client: HsClient) => Promise<{ status: number; value: T }>,
 ): Promise<T> {
   return (await fn(await getSystemHubspotClient())).value;
@@ -49,7 +50,7 @@ async function withRetry<T>(
 
 /** Canales sociales conectados en HubSpot (LinkedIn/FB/IG…). 403 → supported:false. */
 export async function getPublishingChannels(): Promise<ChannelsResult> {
-  return withRetry<ChannelsResult>(async (client) => {
+  return conElClienteDelSistema<ChannelsResult>(async (client) => {
     const res = await client.apiRequest({ method: "GET", path: CHANNELS_PATH });
     if (res.status === 403) return { status: 403, value: { supported: false, channels: [] } };
     if (res.status !== 200) return { status: res.status, value: { supported: true, channels: [] } };
@@ -68,13 +69,14 @@ export async function getPublishingChannels(): Promise<ChannelsResult> {
  */
 export async function createDraftBroadcast(channelKey: string, body: string): Promise<DraftResult> {
   try {
-    return await withRetry<DraftResult>(async (client) => {
+    return await conElClienteDelSistema<DraftResult>(async (client) => {
       const res = await client.apiRequest({
         method: "POST",
         path: BROADCASTS_PATH,
         body: { channelKey, status: "DRAFT", content: { body } },
       });
-      if (res.status === 401) return { status: 401, value: { channelKey, ok: false, error: "401" } }; // → retry
+      // Un 401 acá es que ni con el token renovado entró (el transporte ya lo reintentó).
+      if (res.status === 401) return { status: 401, value: { channelKey, ok: false, error: "401" } };
       if (res.status === 200 || res.status === 201) {
         const j = (await res.json()) as { broadcastGuid?: string };
         // ok:true aunque falte broadcastGuid — HubSpot ya creó el borrador (efecto

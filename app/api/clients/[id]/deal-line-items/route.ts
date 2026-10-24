@@ -33,15 +33,6 @@ function detectServiceType(lineItems: LineItem[]): ServiceType | null {
   return "proyecto_temporal";
 }
 
-/** Fuerza refresh del token invalidando expiresAt en DB, luego retorna cliente fresco */
-async function getHsClientForced(accountId?: string): Promise<HsClient> {
-  await prisma.hubspotAccount.updateMany({
-    where: accountId ? { id: accountId } : { isSystem: true },
-    data: { expiresAt: new Date(0) },
-  });
-  return accountId ? getHubspotClient(accountId) : getSystemHubspotClient();
-}
-
 /** Obtiene propiedades y line items de un deal específico */
 async function fetchDealData(hsClient: HsClient, dealId: string): Promise<{
   deal: DealInfo | null;
@@ -152,42 +143,27 @@ export const GET = withClientAccess(async (
   const accountId = client.hubspotAccount?.id;
 
   try {
-    let hsClient = accountId
+    // El 401 (token renovado una vez) y el 429 los resuelve el transporte del cliente (lib/hubspot/client.ts).
+    const hsClient = accountId
       ? await getHubspotClient(accountId)
       : await getSystemHubspotClient();
 
     // ── Si el proyecto ya tiene un deal vinculado, ir directo ─────────────────
     console.log("[deal-line-items] project.hubspotDealId:", project?.hubspotDealId);
     if (project?.hubspotDealId) {
-      let { deal, lineItems } = await fetchDealData(hsClient, project.hubspotDealId);
+      const { deal, lineItems } = await fetchDealData(hsClient, project.hubspotDealId);
       console.log("[deal-line-items] fetchDealData result - deal:", deal?.id, "lineItems:", lineItems.length);
-      // Retry en 401 (token expirado)
-      if (!deal) {
-        hsClient = await getHsClientForced(accountId);
-        ({ deal, lineItems } = await fetchDealData(hsClient, project.hubspotDealId));
-      }
       const serviceType = detectServiceType(lineItems);
       return NextResponse.json({ deal, lineItems, serviceType, dealId: project.hubspotDealId });
     }
 
     // ── Lookup de todos los deals de la empresa ───────────────────────────────
     console.log("[deal-line-items] Buscando deals para companyId:", client.hubspotCompanyId);
-    let assocRes = await hsClient.apiRequest({
+    const assocRes = await hsClient.apiRequest({
       method: "GET",
       path: `/crm/v3/objects/companies/${client.hubspotCompanyId}/associations/deals?limit=100`,
     });
     console.log("[deal-line-items] assocRes.status:", assocRes.status);
-
-    // Retry en 401
-    if (assocRes.status === 401) {
-      console.log("[deal-line-items] 401 → forzando refresh de token y reintentando");
-      hsClient = await getHsClientForced(accountId);
-      assocRes = await hsClient.apiRequest({
-        method: "GET",
-        path: `/crm/v3/objects/companies/${client.hubspotCompanyId}/associations/deals?limit=100`,
-      });
-      console.log("[deal-line-items] assocRes.status tras retry:", assocRes.status);
-    }
 
     const assocData = (await assocRes.json()) as { results?: { id: string }[] };
     const dealIds = (assocData.results ?? []).map((r) => r.id);

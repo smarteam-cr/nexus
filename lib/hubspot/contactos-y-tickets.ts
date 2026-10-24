@@ -65,8 +65,8 @@ const texto = (v: string | null | undefined): string | null => (v && v.trim() ? 
 /** Un pedido; el transporte (lib/hubspot/client.ts) ya renueva el token ante un 401 y espera ante un 429. Devuelve la respuesta cruda. */
 type Respuesta = Awaited<ReturnType<HsClient["apiRequest"]>>;
 
-async function pedir(hs: HsClient, req: { method: "GET" | "POST"; path: string; body?: object }): Promise<{ hs: HsClient; res: Respuesta }> {
-  return { hs, res: await hs.apiRequest(req) };
+async function pedir(hs: HsClient, req: { method: "GET" | "POST"; path: string; body?: object }): Promise<Respuesta> {
+  return hs.apiRequest(req);
 }
 
 /** Qué contactos (o tickets) tiene asociados cada empresa. */
@@ -76,16 +76,15 @@ export async function asociacionesDeEmpresas(hs: HsClient, companyIds: readonly 
     const lote = companyIds.slice(i, i + LOTE);
     try {
       const r = await pedir(hs, { method: "POST", path: `/crm/v4/associations/companies/${hacia}/batch/read`, body: { inputs: lote.map((id) => ({ id })) } });
-      hs = r.hs;
-      if (r.res.status === 403) {
+      if (r.status === 403) {
         out.sinPermiso = true;
         return out;
       }
-      if (r.res.status !== 200 && r.res.status !== 207) {
+      if (r.status !== 200 && r.status !== 207) {
         for (const id of lote) out.ilegibles.add(id);
         continue;
       }
-      const data = (await r.res.json()) as {
+      const data = (await r.json()) as {
         results?: { from: { id: string }; to?: { toObjectId: string | number }[]; paging?: { next?: { after?: string } } }[];
         errors?: { subCategory?: string; context?: { fromObjectId?: string[] } }[];
       };
@@ -127,13 +126,12 @@ async function leerEnLote(
         path: `/crm/v3/objects/${objeto}/batch/read`,
         body: { inputs: lote.map((id) => ({ id })), properties: propiedades },
       });
-      hs = r.hs;
-      if (r.res.status === 403) return { sinPermiso: true, fallo, filas };
-      if (r.res.status !== 200 && r.res.status !== 207) {
+      if (r.status === 403) return { sinPermiso: true, fallo, filas };
+      if (r.status !== 200 && r.status !== 207) {
         fallo = true;
         continue;
       }
-      const data = (await r.res.json()) as { results?: { id: string; properties: Record<string, string | null | undefined> }[] };
+      const data = (await r.json()) as { results?: { id: string; properties: Record<string, string | null | undefined> }[] };
       for (const x of data.results ?? []) filas.push({ id: String(x.id), p: x.properties ?? {} });
     } catch {
       fallo = true;
@@ -184,7 +182,7 @@ export async function leerTickets(hs: HsClient, ids: readonly string[]) {
 export async function etapasDeTickets(hs: HsClient): Promise<Map<string, EtapaDeTicket>> {
   const out = new Map<string, EtapaDeTicket>();
   try {
-    const { res } = await pedir(hs, { method: "GET", path: "/crm/v3/pipelines/tickets" });
+    const res = await pedir(hs, { method: "GET", path: "/crm/v3/pipelines/tickets" });
     if (!res.ok) return out;
     const data = (await res.json()) as {
       results?: { label: string; stages?: { id: string; label: string; metadata?: { ticketState?: string } }[] }[];
