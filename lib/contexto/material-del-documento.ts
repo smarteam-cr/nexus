@@ -95,6 +95,8 @@ export interface MaterialDelDocumento {
    * proyecto (lib/memoria) se los pasa como `yaLeidas`, así la misma reunión no se lee dos veces.
    */
   sesionesUsadas: string[];
+  /** Las mismas, con su título (en el orden en que entraron): el diagnóstico las cuenta por equipo (L5, 2026-10-25). */
+  reunionesLeidas: Array<{ id: string; titulo: string }>;
   /**
    * Solo en los seis documentos que leen las elegidas (etapa 7): la línea que dice que no hay reuniones
    * elegidas para leer (o que las elegidas todavía no tienen nada), para el lugar donde iría el bloque de
@@ -135,10 +137,20 @@ export interface OpcionesDelMaterial {
   elegidasEnResumen?: boolean;
   /**
    * Reuniones que entran COMO ELEGIDAS sin que nadie las haya tocado en el Contexto (2026-10-23): las de las sesiones de
-   * la exploración, en el diagnóstico (`reunionesDeLaExploracionDelDiagnostico`). Son ids: se buscan en la membresía del
+   * la exploración y las del proyecto con texto, en el diagnóstico (`reunionesQueEntranSolasAlDiagnostico`). Son ids: se buscan en la membresía del
    * proyecto por el chokepoint, así una que no es del proyecto (o de otro cliente) no entra aunque venga en la lista.
    */
   sumarReuniones?: readonly string[];
+  /**
+   * El rótulo que va al lado del título de cada reunión, por id (L5, 2026-10-25: el diagnóstico lee por equipo del cliente
+   * y cada reunión dice con qué equipo fue). Sin él, los encabezados de siempre.
+   */
+  rotuloPorReunion?: ReadonlyMap<string, string>;
+  /**
+   * Las que entran solas y van PRIMERO para leerse enteras, junto con las elegidas (en el diagnóstico, las de las sesiones
+   * de la exploración): ver `planDeLasElegidas`. Sin esto, todas por fecha.
+   */
+  primero?: readonly string[];
 }
 
 export async function cargarMaterialDelDocumento(
@@ -165,7 +177,11 @@ export async function cargarMaterialDelDocumento(
      espacio a una que tiene transcripción. */
   const plan =
     soloElegidas && !opts.elegidasEnResumen
-      ? planDeLasElegidas(ocurridas, await elegidasConContenido(ocurridas.map((s) => s.id)))
+      ? planDeLasElegidas(
+          ocurridas,
+          await elegidasConContenido(ocurridas.map((s) => s.id)),
+          opts.primero ? new Set([...elegidas.map((s) => s.id), ...opts.primero]) : undefined,
+        )
       : null;
   // Las más recientes, si no caben todas; y después en orden de fecha, que es como se cuenta una historia.
   const aLeer = (plan ? [...plan.enteras, ...plan.enResumen] : masRecientes(ocurridas, MAX_REUNIONES_DEL_DOCUMENTO)).sort(
@@ -181,6 +197,7 @@ export async function cargarMaterialDelDocumento(
   let enteras = 0;
   const leidas: ReunionLeidaDelDocumento[] = [];
   const sesionesUsadas: string[] = [];
+  const reunionesLeidas: Array<{ id: string; titulo: string }> = [];
   for (const s of aLeer) {
     const c = contenidos.get(s.id);
     const texto = c?.texto.trim() ?? "";
@@ -190,8 +207,10 @@ export async function cargarMaterialDelDocumento(
     }
     const sala = prefijoDeSala(etiquetaDeSala({ participants: s.participants }, dominiosPropios));
     const enResumen = plan && !c?.entera ? " (en resumen: no entró entera)" : "";
-    leidas.push({ encabezado: `### ${sala}${s.title} — ${fecha(s.date)}${enResumen}`, texto });
+    const rotulo = opts.rotuloPorReunion?.get(s.id);
+    leidas.push({ encabezado: `### ${sala}${s.title} — ${fecha(s.date)}${rotulo ? ` · ${rotulo}` : ""}${enResumen}`, texto });
     sesionesUsadas.push(s.id);
+    reunionesLeidas.push({ id: s.id, titulo: s.title });
     if (plan && c?.entera) enteras++;
   }
   const fueraDelTope = soloElegidas ? Math.max(0, ocurridas.length - leidas.length - sinContenido) : 0;
@@ -203,6 +222,7 @@ export async function cargarMaterialDelDocumento(
     ...armarMaterialDelDocumento({ pieza: doc.pieza, leidas, notas, cobertura }),
     instrucciones,
     sesionesUsadas,
+    reunionesLeidas,
     avisoSinReuniones:
       soloElegidas && leidas.length === 0 ? avisoSinReunionesElegidas(doc, { elegidas: sessions.length }) : "",
     cierreDeFrontera: cierreDeFronteraDelDocumento(doc.pieza, {
@@ -283,10 +303,21 @@ export interface PlanDeLasElegidas<S> {
 export function planDeLasElegidas<S extends { id: string; date: number }>(
   ocurridas: readonly S[],
   conContenido?: ReadonlySet<string>,
+  /**
+   * Las que van PRIMERO (2026-10-25, la revisión de L1 etapa 2): en el diagnóstico, las elegidas a mano y las de las
+   * sesiones de la exploración. Las del proyecto que entran solas son muchas y recientes: sin esto, las seis enteras
+   * serían los últimos seguimientos semanales y la exploración por equipo quedaría en resumen. Sin ella, por fecha.
+   */
+  primero?: ReadonlySet<string>,
 ): PlanDeLasElegidas<S> {
   const vacias = conContenido ? ocurridas.filter((s) => !conContenido.has(s.id)) : [];
   const conTexto = conContenido ? ocurridas.filter((s) => conContenido.has(s.id)) : ocurridas;
-  const recientes = masRecientes(conTexto, MAX_ELEGIDAS_A_LEER);
+  const recientes = primero?.size
+    ? [
+        ...masRecientes(conTexto.filter((s) => primero.has(s.id)), MAX_ELEGIDAS_A_LEER),
+        ...masRecientes(conTexto.filter((s) => !primero.has(s.id)), MAX_ELEGIDAS_A_LEER),
+      ].slice(0, MAX_ELEGIDAS_A_LEER)
+    : masRecientes(conTexto, MAX_ELEGIDAS_A_LEER);
   const enteras = recientes.slice(0, MAX_ELEGIDAS_ENTERAS);
   const enResumen = recientes.slice(MAX_ELEGIDAS_ENTERAS);
   return { enteras, enResumen, espacio: espacioPorElegida(enteras.length, enResumen.length), vacias };

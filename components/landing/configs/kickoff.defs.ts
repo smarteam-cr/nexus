@@ -107,6 +107,52 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     schema: proseSchema,
     schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
   },
+  /* ── El kickoff de un SERVICIO RECURRENTE (M1 del roadmap, 2026-10-24) ─────────────────────────────────────────────
+     Solo las crea la plantilla «Kickoff de servicio recurrente» (lib/entregables/registro.ts): el canon de siempre
+     (`KICKOFF_CANVAS`) no las tiene, así que un kickoff de implementación nunca las ve. Prosa de siempre; la fuente es el
+     bloque «EL SERVICIO CONTRATADO» del mensaje, que sale del catálogo (lib/servicios/catalogo.ts). */
+  {
+    key: "como_trabajamos",
+    label: "Cómo trabajamos cada ciclo",
+    eyebrow: "El método",
+    theme: "dark",
+    sectionType: "kickoff_prose",
+    agentGenerated: true,
+    empty: proseEmpty,
+    agentHint: "Las etapas del ciclo, una card por etapa, dichas para el cliente.",
+    brief:
+      "Cómo se trabaja el servicio: por CICLOS. `intro` = UNA frase que diga que el servicio avanza en ciclos cortos y que cada ciclo ataca UNA prioridad. `items` = una card por etapa del ciclo, en orden (las del bloque «EL SERVICIO CONTRATADO»): `title` = la etapa en 1-3 palabras; `detail` = UNA línea de qué pasa en ella y qué ve el cliente. No inventes etapas ni cambies su orden. Si el mensaje no trae el servicio, deja la sección vacía.",
+    schema: proseSchema,
+    schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
+  },
+  {
+    key: "primer_ciclo",
+    label: "El primer ciclo",
+    eyebrow: "Lo que viene",
+    theme: "light",
+    sectionType: "kickoff_prose",
+    agentGenerated: true,
+    empty: proseEmpty,
+    agentHint: "3-4 pasos del primer ciclo: explorar por equipo, diagnosticar, elegir la prioridad y arrancar.",
+    brief:
+      "Qué pasa en el PRIMER ciclo, paso a paso (3-4 cards). Primero exploramos con cada equipo del cliente (una sesión por equipo), después escribimos el diagnóstico y con él elegimos la prioridad del ciclo, su criterio de aceptación y sus fechas. `title` = el paso en 3-6 palabras; `detail` = UNA línea con qué necesitamos del cliente en ese paso (quién va a cada sesión, qué datos). Nombra los equipos del cliente solo si el handoff o las reuniones los nombran. No inventes fechas.",
+    schema: proseSchema,
+    schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
+  },
+  {
+    key: "cadencia_del_servicio",
+    label: "La cadencia del servicio",
+    eyebrow: "Cada semana y cada mes",
+    theme: "soft",
+    sectionType: "kickoff_prose",
+    agentGenerated: true,
+    empty: proseEmpty,
+    agentHint: "Las reuniones fijas y lo que se entrega con su frecuencia.",
+    brief:
+      "La cadencia del servicio: una card por cada reunión fija y por lo que se entrega con frecuencia (el avance, el reporte). `title` = qué es y cada cuánto, en 3-6 palabras ('Seguimiento semanal', 'Sesión ejecutiva mensual'); `detail` = UNA línea con quién va y para qué. SOLO lo del bloque «EL SERVICIO CONTRATADO» (o lo que el handoff acordó con este cliente, que manda): no cambies frecuencias ni duraciones.",
+    schema: proseSchema,
+    schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
+  },
   {
     key: "hoy_vs_sistema",
     label: "Del hoy al nuevo sistema",
@@ -170,6 +216,20 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     agentHint: "3-5 pedidos accionables al equipo del cliente (disponibilidad, accesos, decisores, datos).",
     brief:
       "3-5 cards accionables de lo que necesitás del equipo del cliente. `title` = el pedido en 3-6 palabras (disponibilidad, accesos, decisores, datos); `detail` = UNA línea con de quién o para cuándo. Fuente: `stakeholders_handoff` + `desarrollo` + el cronograma.",
+    schema: proseSchema,
+    schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
+  },
+  {
+    key: "solicitudes",
+    label: "Cómo nos pides cosas",
+    eyebrow: "Tus solicitudes",
+    theme: "light",
+    sectionType: "kickoff_prose",
+    agentGenerated: true,
+    empty: proseEmpty,
+    agentHint: "Cómo se pide algo y cuánto tardamos en responder, por prioridad.",
+    brief:
+      "Cómo nos pide cosas el cliente durante el servicio. `intro` = UNA frase con el canal para pedir (el de la sección de canales si el handoff lo dice; si no, 'por el canal acordado'). `items` = una card por prioridad del nivel de servicio del bloque «EL SERVICIO CONTRATADO»: `title` = la prioridad y el tiempo ('Crítica · 4 h'); `detail` = UNA línea con qué entra en esa prioridad. Copia los tiempos tal cual; no prometas resolución, solo respuesta.",
     schema: proseSchema,
     schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
   },
@@ -328,6 +388,9 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
   },
 ];
 
+/** Las secciones que tiene solo el kickoff de un servicio recurrente (lib/canvas/canvas-defs.ts › KICKOFF_SECCIONES_DEL_SERVICIO). */
+export const SECCIONES_SOLO_DEL_SERVICIO: ReadonlySet<string> = new Set(["como_trabajamos", "primer_ciclo", "cadencia_del_servicio", "solicitudes"]);
+
 /** Template del kickoff para el agente tipado (F4). El input NO son transcripts crudos:
  *  es el handoff curado + el cronograma (lo arma la rama isKickoffAgent de analyze). */
 export const KICKOFF_TEMPLATE: BcTemplateDef = {
@@ -364,7 +427,48 @@ export const KICKOFF_TEMPLATE: BcTemplateDef = {
     "TUTEO SIEMPRE (tú: tienes, necesitas, podrás). Prohibido voseo/ustedeo.\n\n" +
 
     "DISCIPLINA: el alcance es el CONTRATADO y los objetivos los ACORDADOS (no inflar). Las métricas, si no están en el handoff, se formulan como PROPUESTA de Smarteam. Si una sección no tiene respaldo en la fuente, dejá sus campos VACÍOS — vacío es correcto, inventado es un error.",
-  sections: KICKOFF_SECTION_DEFS,
+  /* Sin las cuatro del servicio recurrente (M1, 2026-10-25): son de su plantilla. Con ellas acá, todo kickoff de siempre
+     le pedía a la IA cómo se trabaja cada ciclo (lo encontró la revisión). */
+  sections: KICKOFF_SECTION_DEFS.filter((d) => !SECCIONES_SOLO_DEL_SERVICIO.has(d.key)),
+};
+
+/**
+ * La plantilla «Kickoff de servicio recurrente» (M1, 2026-10-24): el mismo agente con sus secciones y un párrafo más de
+ * reglas. La portada no dice «Inicio de proyecto»: dice que arranca el servicio.
+ */
+const SECCIONES_DEL_KICKOFF_RECURRENTE_DEFS = [
+  "bienvenida",
+  "objetivos",
+  "como_trabajamos",
+  "primer_ciclo",
+  "cadencia_del_servicio",
+  "equipo",
+  "tu_rol",
+  "solicitudes",
+  "punto_de_partida",
+  "canales",
+  "cierre",
+] as const;
+
+export const KICKOFF_RECURRENTE_TEMPLATE: BcTemplateDef = {
+  ...KICKOFF_TEMPLATE,
+  id: "kickoff_recurrente_v1",
+  caseLabel: "Kickoff de servicio recurrente",
+  agentIntro:
+    KICKOFF_TEMPLATE.agentIntro +
+    "\n\n" +
+    "ESTE KICKOFF ES DE UN SERVICIO RECURRENTE, NO DE UN PROYECTO QUE SE ENTREGA UNA VEZ. El mensaje trae el bloque «EL SERVICIO CONTRATADO»: de ahí salen el método por ciclos, la cadencia, las reuniones fijas y cómo nos pide cosas el cliente. No hables de 'el proyecto' ni de una fecha de entrega final: el servicio sigue mientras siga el acuerdo. El primer ciclo arranca explorando con cada equipo del cliente; no prometas resultados del primer ciclo antes del diagnóstico.",
+  sections: SECCIONES_DEL_KICKOFF_RECURRENTE_DEFS.map((k) => {
+    const d = KICKOFF_SECTION_DEFS.find((x) => x.key === k)!;
+    if (k !== "bienvenida") return d;
+    return {
+      ...d,
+      eyebrow: "Kickoff del servicio",
+      brief:
+        heroTitleBrief("Kickoff del servicio") +
+        "Portada del kickoff de un SERVICIO RECURRENTE. `headline`: SIEMPRE con el patrón `Arranca [nombre del servicio]: [qué se trabaja]` — ej. 'Arranca SmartLoop: tu HubSpot, mejorando cada ciclo'. El nombre del servicio sale del bloque «EL SERVICIO CONTRATADO». `subhead`: UNA frase (máx. 25 palabras) con lo que cambia para el negocio. `tags`: 3-5 chips cortos (2-4 palabras) del servicio y lo contratado (ej. 'Ciclos de 60 a 90 días', 'Seguimiento semanal', 'Sales Hub Pro'). No inventes herramientas.",
+    };
+  }),
 };
 
 /** Lookup key → def (para el seed y el agente). */

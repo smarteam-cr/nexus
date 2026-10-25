@@ -199,3 +199,9 @@ Continuidad, CSE Carolina Bersot). Se prueba con un **proyecto de prueba** en pr
 
 Orden: M1 y M2 antes del primer ciclo de RC Inmobiliaria; después M3 con cada cliente; M4 cuando exista la biblioteca de
 actividades.
+
+**Avance (2026-10-25, paso dos):** M1 (las cuatro etapas) y M2 (las tres) en el código, sin desplegar. SQL
+`2026-10-25-smartloop.sql` antes del deploy (es de L5, no de M); después del deploy, `scripts/smartloop-tipo-de-servicio.ts`
+(simulacro: 5 de 7) y con `--apply`. Qué se decidió y por qué: DECISIONS › «SmartLoop y el diagnóstico después de
+usarlos». Para RC Inmobiliaria: regenerar el kickoff (sale con la plantilla del servicio) y explorar por equipo antes del
+diagnóstico.

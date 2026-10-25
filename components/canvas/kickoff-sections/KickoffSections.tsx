@@ -28,6 +28,7 @@ import { SortableItems } from "@/components/landing/sortable";
 import { CardGrid } from "@/components/landing/card-grid";
 import { PartesDeLaSeccion } from "@/components/landing/partes";
 import { ProsaConDiseno } from "@/components/landing/prosa-con-diseno";
+import { MarcaDeRevision } from "@/components/landing/marca-de-revision";
 import { HeroUploadButtons, BrandRow, TagRow, HeroStatFecha, FilaDeDatos } from "@/components/landing/hero-parts";
 import { CtaEditor, CtaButton } from "@/components/landing/sections";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
@@ -117,7 +118,7 @@ const AYUDA_DE_LA_INTRO: Record<DisenoDeProsa, string> = {
   enfoque: "El enfoque en una frase…",
 };
 
-export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editable, onChange, sectionDiseno }) => {
+export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editable, onChange, sectionDiseno, sectionRevision }) => {
   const d = normalizeProse(data);
   // Sección LEGACY (bloque TEXT markdown, sin CARD tipado): read-only. La edición
   // tipada recién aplica cuando el bloque es CARD (curadas o regeneradas por el agente).
@@ -143,6 +144,16 @@ export const KickoffProseSection: FC<SectionProps<ProseData>> = ({ data, editabl
 
   return (
     <>
+      {/* La marca de revisión, si la definición la pide (el desafío principal del diagnóstico, L2 etapa 2, 2026-10-24).
+          Solo en edición: no llega al cliente ni al PDF. Escribe sobre la data cruda, como todo lo de esta sección. */}
+      {editable && sectionRevision && (
+        <MarcaDeRevision
+          revisadaAt={base.revisadaAt}
+          tieneContenido={!!(d.intro?.trim() || items.length)}
+          pendiente={sectionRevision}
+          onAlternar={(revisadaAt) => set({ revisadaAt })}
+        />
+      )}
       {/* Las piezas (2026-10-23): el subtítulo, la intro y el cuerpo se arrastran y se quitan como un ítem; una vacía no
           deja hueco en edición y se agrega con «+». ⭐ El SUBTÍTULO se pinta ACÁ o el chat diría «aplicado» sobre algo
           invisible — el defecto que `TarjetasData.intro` ya tiene documentado. */}

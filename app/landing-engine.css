@@ -3066,3 +3066,16 @@
 @media (max-width: 640px) {
   .stl .stl-prosa-numerada, .stl .stl-prosa-enfoque, .stl .stl-prosa-datos, .stl .stl-prosa-check { grid-template-columns: 1fr; }
 }
+
+/* ── Lo que se arrastra desde el 2026-10-24 (L3 etapa 2 del roadmap) ────────────────────────────
+   Las FILAS de una tabla: la manija va en la celda de acciones, junto a la ×, inline (una manija
+   absoluta se saldría de la tabla) y aparece al pasar por la fila, como la ×. */
+.stl .stl-props-actions { white-space: nowrap; }
+.stl .stl-props-actions .stl-drag-item {
+  position: static; display: inline-flex; vertical-align: middle; opacity: 0; width: 24px; height: 24px; margin-right: 4px;
+}
+.stl .stl-props tbody tr:hover .stl-drag-item,
+.stl .stl-props .stl-drag-item:focus-visible { opacity: 1; }
+/* Los ítems de un grupo del alcance son renglones: la manija, chica, a la izquierda del renglón. */
+.stl .stl-alcance-items > li > .stl-drag-item { top: 0; left: -28px; width: 22px; height: 22px; font-size: 12px; }
+.stl .stl-alcance-items > li:hover > .stl-drag-item { opacity: 1; }

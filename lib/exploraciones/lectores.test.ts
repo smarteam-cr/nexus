@@ -68,7 +68,13 @@ type Destino =
    * (los enlaces de las búsquedas, la empresa en HubSpot, la fecha de Costa Rica). No lee ninguna exploración; lo que
    * encuentra queda en la empresa como propuestas que decide una persona, nunca en un documento del cliente.
    */
-  | "investigacion-de-la-empresa";
+  | "investigacion-de-la-empresa"
+  /**
+   * El EQUIPO DEL CLIENTE de una reunión del proyecto (L5 etapa 2, 2026-10-25): el catálogo de los seis equipos
+   * (lib/exploraciones/equipos.ts › EQUIPOS) para elegirlo en el Contexto del diagnóstico y guardarlo en el vínculo de la
+   * reunión con el proyecto. No lee ninguna exploración.
+   */
+  | "equipos-del-cliente";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "lib/clients/investigacion/pedido.ts": { destino: "investigacion-de-la-empresa", motivo: "Reusa los enlaces de las búsquedas de la radiografía." },
@@ -270,6 +276,22 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "agenda-interna",
     motivo: "La agenda de hoy de «Para ti»: los ayudantes del calendario (invitados, fechas, dominios genéricos). No lee exploraciones.",
   },
+  "lib/servicios/arranque-del-ciclo-server.ts": {
+    destino: "exploracion-del-proyecto",
+    motivo: "M2 (2026-10-25): si el ciclo de un SmartLoop ya exploró antes del diagnóstico. Solo las FECHAS de lo que leyó la exploración del proyecto (fechasDeLasLecturasDelProyecto), nunca lo que dice.",
+  },
+  "app/api/projects/[projectId]/contexto/[pieza]/equipo/route.ts": {
+    destino: "equipos-del-cliente",
+    motivo: "Valida que el equipo sea uno de los seis (EQUIPOS_DEL_CLIENTE) al guardarlo en el vínculo de la reunión con el proyecto.",
+  },
+  "components/clients/SessionSelectionReview.tsx": {
+    destino: "equipos-del-cliente",
+    motivo: "El selector «Equipo del cliente» de cada reunión que entra sola al diagnóstico: los nombres de los seis equipos (EQUIPOS).",
+  },
+  "lib/sessions/equipo-de-la-reunion-server.ts": {
+    destino: "equipos-del-cliente",
+    motivo: "Lee y escribe el equipo de la reunión en el proyecto; valida la clave con esEquipo.",
+  },
   "lib/cuestionario/escala.ts": {
     destino: "cuestionario-al-cliente",
     motivo: "El cuestionario de escala llega con el nivel ya ubicado marcado, para que la persona lo confirme. Solo niveles.",
@@ -295,7 +317,7 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     prohibidas: /exploracionParaLaPropuesta|bloqueParaElHandoff|exploracionParaElHandoff|internoParaElCse|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\.estado\b/,
   },
   "exploracion-del-proyecto": {
-    permitidas: /\btextoDeLaExploracionDelProyecto\b|\basegurarExploracionDelProyecto\b|\bcuantoHayEnLaExploracionDelProyecto\b/,
+    permitidas: /\btextoDeLaExploracionDelProyecto\b|\basegurarExploracionDelProyecto\b|\bcuantoHayEnLaExploracionDelProyecto\b|\bfechasDeLasLecturasDelProyecto\b/,
     // Nunca lo de la preventa: ni la propuesta, ni el handoff, ni lo interno.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff/,
   },
@@ -331,6 +353,11 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
   "investigacion-de-la-empresa": {
     permitidas: /\benlacesDeLasBusquedas\b|\burlComparable\b|\bleerEmpresa\b|\bhoyEnCostaRica\b/,
     // Ninguna exploración: ni lo confirmado, ni la propuesta, ni el handoff, ni lo interno de la preventa.
+    prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\bexploracionesDeVenta\b/,
+  },
+  "equipos-del-cliente": {
+    permitidas: /\bEQUIPOS\b|\bEQUIPOS_DEL_CLIENTE\b|\besEquipo\b/,
+    // Solo el catálogo de los equipos: ninguna exploración, ni la propuesta, ni el handoff, ni lo interno.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\bexploracionesDeVenta\b/,
   },
   "memoria-interna": {

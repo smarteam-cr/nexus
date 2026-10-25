@@ -18,7 +18,12 @@
  *
  * Las reuniones no entran al veredicto: son lo que se dijo, no algo que alguien tenga que confirmar. Se informan.
  * Lo usan el panel «Antes de generar» del diagnóstico y `/analyze`, que pide confirmación (`SUPUESTOS_SIN_VALIDAR`).
+ *
+ * UN RECURRENTE SIN EXPLORACIÓN DEL CICLO (M2 del roadmap, 2026-10-24): el diagnóstico de un ciclo se escribe después de
+ * explorar con cada equipo del cliente. Si la exploración no leyó ninguna reunión en el ciclo, también se pide
+ * confirmación (`pideConfirmacion`), con su propio motivo, aunque lo demás esté confirmado.
  */
+import { avisoSinExploracionDelCiclo } from "@/lib/servicios/arranque-del-ciclo";
 
 export type ClaveDeLoConfirmado = "ficha" | "resultados" | "procesos" | "exploracion";
 export type EstadoDeLoConfirmado = "confirmado" | "en-parte" | "sin-confirmar" | "sin-datos";
@@ -30,6 +35,8 @@ export interface EntradaDeLoConfirmado {
   exploracionDelProyecto: { existe: boolean; confirmados: number; propuestos: number };
   /** Las reuniones que el diagnóstico va a leer enteras (las de la exploración más las elegidas). */
   reuniones: number;
+  /** Solo en un servicio recurrente: el ciclo abierto (o el siguiente) y cuántas reuniones leyó su exploración. */
+  ciclo?: { numero: number; lecturasDeExploracion: number } | null;
 }
 
 export interface PiezaDeLoConfirmado {
@@ -49,6 +56,10 @@ export interface LoConfirmado {
   conAlgoConfirmado: number;
   conAlgo: number;
   reuniones: number;
+  /** Un recurrente cuya exploración no leyó ninguna reunión en el ciclo: el número del ciclo. null en los demás. */
+  cicloSinExploracion: number | null;
+  /** Se pide confirmación antes de generar: casi nada confirmado, o un ciclo sin exploración. */
+  pideConfirmacion: boolean;
 }
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
@@ -106,12 +117,16 @@ export function loConfirmadoDelDiagnostico(e: EntradaDeLoConfirmado): LoConfirma
   const piezas = [deLaFicha(e.ficha), deLosResultados(e.resultados), deLosProcesos(e.procesos), deLaExploracion(e.exploracionDelProyecto)];
   const conAlgo = piezas.filter((p) => p.estado !== "sin-datos").length;
   const conAlgoConfirmado = piezas.filter((p) => p.estado === "confirmado" || p.estado === "en-parte").length;
+  const casiNada = conAlgo === 0 || conAlgoConfirmado * 2 < conAlgo;
+  const cicloSinExploracion = e.ciclo && e.ciclo.lecturasDeExploracion === 0 ? e.ciclo.numero : null;
   return {
     piezas,
-    casiNada: conAlgo === 0 || conAlgoConfirmado * 2 < conAlgo,
+    casiNada,
     conAlgoConfirmado,
     conAlgo,
     reuniones: e.reuniones,
+    cicloSinExploracion,
+    pideConfirmacion: casiNada || cicloSinExploracion !== null,
   };
 }
 
@@ -120,6 +135,13 @@ export const ERROR_SUPUESTOS_SIN_VALIDAR = "SUPUESTOS_SIN_VALIDAR";
 
 /** Lo que dice el aviso antes de generar igual (el diálogo de confirmación y el 409 de `/analyze`). */
 export function mensajeDeSupuestos(r: LoConfirmado): string {
+  const delCiclo = r.cicloSinExploracion !== null && r.cicloSinExploracion !== undefined ? avisoSinExploracionDelCiclo(r.cicloSinExploracion) : "";
+  if (!r.casiNada) return delCiclo;
+  const deLoConfirmado = mensajeDeLoConfirmado(r);
+  return delCiclo ? `${delCiclo} ${deLoConfirmado}` : deLoConfirmado;
+}
+
+function mensajeDeLoConfirmado(r: LoConfirmado): string {
   if (r.conAlgo === 0) {
     return "Nexus todavía no tiene nada confirmado de este cliente: el diagnóstico va a salir de supuestos que nadie validó.";
   }

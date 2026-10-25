@@ -30,6 +30,8 @@ import {
 } from "@/lib/servicios/ciclo";
 import { leerCierre, type CierreGuardado } from "@/lib/servicios/cierre";
 import { servicioDelCatalogo } from "@/lib/servicios/catalogo";
+import type { ArranqueDelCiclo } from "@/lib/servicios/arranque-del-ciclo";
+import { arranqueDelCiclo } from "@/lib/servicios/arranque-del-ciclo-server";
 
 export class ErrorDelCiclo extends Error {
   constructor(
@@ -232,6 +234,30 @@ export interface CicloParaElRiel {
   enHubspot: boolean;
   /** Quien mira puede cambiar el ciclo (lo pone la ruta que lo lee: es del usuario, no del proyecto). */
   puedeEditar?: boolean;
+  /**
+   * M1 y M2 (2026-10-24): el kickoff anterior al servicio y cuántas reuniones leyó la exploración en este ciclo
+   * (lib/servicios/arranque-del-ciclo.ts). Opcional: una respuesta cacheada vieja no lo trae.
+   */
+  arranque?: ArranqueDelCiclo;
+}
+
+/** Desde cuándo cuenta la exploración del ciclo: el cierre del último ciclo cerrado (null en el primero). */
+async function inicioDeLaExploracionDelCiclo(projectId: string): Promise<Date | null> {
+  const cerrado = await prisma.cicloDeProyecto.findFirst({
+    where: { projectId, estado: "cerrado" },
+    orderBy: { numero: "desc" },
+    select: { cerradoAt: true },
+  });
+  return cerrado?.cerradoAt ?? null;
+}
+
+async function arranqueSeguro(projectId: string): Promise<ArranqueDelCiclo> {
+  try {
+    return await arranqueDelCiclo(projectId, await inicioDeLaExploracionDelCiclo(projectId));
+  } catch (e) {
+    console.warn("[ciclo] el arranque del ciclo no se pudo leer:", e instanceof Error ? e.message : e);
+    return { lecturasDeExploracion: 0, kickoffAnteriorAlServicio: false };
+  }
 }
 
 /** null si el proyecto no es recurrente. */
@@ -239,6 +265,7 @@ export async function estadoDelCicloParaElRiel(projectId: string): Promise<Ciclo
   const p = await proyectoRecurrente(projectId).catch(() => null);
   const guiaServicio = guiaDeServicio(p?.servicio);
   if (!p?.servicio || !guiaServicio) return null;
+  const arranque = await arranqueSeguro(projectId);
   const c = await prisma.cicloDeProyecto.findFirst({
     where: { projectId, estado: "abierto" },
     select: {
@@ -259,7 +286,7 @@ export async function estadoDelCicloParaElRiel(projectId: string): Promise<Ciclo
     return {
       abierto: false, id: null, numero: (ultimo?.numero ?? 0) + 1, nombre: null, desde: null, hasta: null, etapa: etapa0,
       corto: ETIQUETA_DE_ETAPA[etapa0], falta: null, piezaDeLaEtapa: PIEZA_DE_LA_ETAPA[etapa0], planListo: false,
-      producido: g0.producido, enHubspot: !!p.hubspotServiceId,
+      producido: g0.producido, enHubspot: !!p.hubspotServiceId, arranque,
     };
   }
   const etapa = etapaQueMuestraElCiclo({ enHubspot: !!p.hubspotServiceId, rotuloDeHubspot: p.hubspotPipelineStageLabel, etapaGuardada: c.etapa });
@@ -289,6 +316,7 @@ export async function estadoDelCicloParaElRiel(projectId: string): Promise<Ciclo
     planListo: !faltaDelPlan,
     producido: g.producido,
     enHubspot: !!p.hubspotServiceId,
+    arranque,
   };
 }
 

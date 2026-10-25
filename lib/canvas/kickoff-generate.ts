@@ -14,6 +14,14 @@
  *
  * Las puertas siguen en la ruta y en `porQueNoSePuedeGenerar` (lib/entregables/generar-server.ts): sin handoff no hay
  * kickoff, y el permiso lo pide el artifact-gate antes de llegar acá.
+ *
+ * EL KICKOFF DE UN SERVICIO RECURRENTE (M1 del roadmap, 2026-10-24): con un servicio del catálogo, el mensaje ya no dice
+ * «Tipo de servicio contratado: proyecto_temporal» (el `serviceType` viejo de RC Inmobiliaria) sino el servicio, su
+ * cadencia, sus reuniones fijas, el ciclo en curso y su nivel de servicio (`servicioParaElKickoff`). Con la plantilla
+ * «Kickoff de servicio recurrente» el documento queda con SUS secciones: las de afuera vacías se borran y las que tienen
+ * algo se ocultan en el EDITOR (`ajustarElKickoffALaPlantilla`; el ojo del kickoff vive en `__ocultas` y en
+ * `Project.hiddenKickoffKeys`, no en el `hidden` del Json: lib/kickoff/plantilla-del-kickoff.ts). El cliente deja de verlas
+ * al «Subir», como cualquier cambio del kickoff.
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -32,6 +40,19 @@ import { memoriaDelDocumento } from "@/lib/memoria";
 import { sanitizeTags, tagLabels, SERVICE_TO_PRODUCT } from "@/lib/tags/catalog";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { bloqueDeInstruccionesDelPedido } from "@/lib/entregables/registro";
+import { KICKOFF_RECURRENTE_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
+import { canonDelKickoff, KICKOFF_SECCIONES_DEL_SERVICIO } from "@/lib/canvas/canvas-defs";
+import { kickoffHiddenKey } from "@/components/canvas/kickoff-landing-adapter";
+import { conOcultasDelBorrador, mismasOcultas, ocultasDelBorrador, ocultasEnElEditor } from "@/lib/kickoff/ocultas-del-editor";
+import { conOcultasPorLaPlantilla, fueraDeLaPlantilla, ocultasPorLaPlantilla, ocultasSegunLaPlantilla } from "@/lib/kickoff/plantilla-del-kickoff";
+import { resolvePipeline } from "@/lib/projects/kind";
+import { servicioDelProyecto, servicioParaElKickoff } from "@/lib/servicios/catalogo";
+import { esEtapaDelCiclo, ETIQUETA_DE_ETAPA } from "@/lib/servicios/ciclo";
+
+/** Las secciones de la plantilla con que se genera; null = el canon de siempre. */
+function seccionesDeLaPlantilla(template: BcTemplateDef): string[] | null {
+  return template.id === KICKOFF_RECURRENTE_TEMPLATE.id ? template.sections.map((d) => d.key) : null;
+}
 
 export const MENSAJE_SIN_KICKOFF = "Este proyecto no tiene el kickoff: actívalo en el riel de la ficha y vuelve a generarlo.";
 export const MENSAJE_KICKOFF_VACIO = "El agente devolvió bloques inválidos. Prueba de nuevo.";
@@ -48,18 +69,45 @@ export async function runKickoffGeneration(opts: {
   const template = opts.plantilla ?? KICKOFF_TEMPLATE;
   const proyecto = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { clientId: true, serviceType: true, tags: true, client: { select: { name: true, company: true, industry: true } } },
+    select: {
+      clientId: true,
+      serviceType: true,
+      tags: true,
+      servicioRecurrente: true,
+      hubspotPipelineId: true,
+      client: { select: { name: true, company: true, industry: true } },
+    },
   });
   if (!proyecto) throw new Error("El proyecto no existe.");
   const clientId = proyecto.clientId;
   const companyName = proyecto.client.company ?? proyecto.client.name ?? "la empresa";
-  const serviceTypeLabel = proyecto.serviceType ?? null;
+  /* El servicio recurrente manda sobre el `serviceType` (M1): un SmartLoop con `proyecto_temporal` guardado no es un
+     proyecto temporal. */
+  const servicio = servicioDelProyecto({
+    servicioRecurrente: proyecto.servicioRecurrente,
+    servicioDelPipeline: resolvePipeline(proyecto.hubspotPipelineId)?.servicioRecurrente ?? null,
+  });
+  const cicloAbierto = servicio?.ciclo
+    ? await prisma.cicloDeProyecto
+        .findFirst({ where: { projectId, estado: "abierto" }, select: { numero: true, etapa: true } })
+        .catch(() => null)
+    : null;
+  const serviceTypeLabel = servicio ? null : (proyecto.serviceType ?? null);
+  const bloqueDelServicio = servicio
+    ? `${servicioParaElKickoff(
+        servicio,
+        cicloAbierto
+          ? { numero: cicloAbierto.numero, etapa: esEtapaDelCiclo(cicloAbierto.etapa) ? ETIQUETA_DE_ETAPA[cicloAbierto.etapa] : cicloAbierto.etapa }
+          : null,
+      )}\n\n`
+    : "";
+  const secciones = seccionesDeLaPlantilla(template);
 
   // 9a2/9a3 de la ruta: el canvas destino, con las secciones nuevas del canon (idempotente).
   const canvas = await prisma.projectCanvas.findFirst({ where: { projectId, ...canvasOf("kickoff") }, select: { id: true } });
   if (!canvas) throw new Error(MENSAJE_SIN_KICKOFF);
   const targetCanvasId = canvas.id;
-  await reconcileKickoffCanvasSections(targetCanvasId);
+  await reconcileKickoffCanvasSections(targetCanvasId, undefined, { secciones });
 
   // ── 10b de la ruta: el input del agente Kickoff ─────────────────────────────────────────────────────────────────
   // El kickoff es interno: usa el handoff GENERADO aunque esté en borrador (no se exige aceptación).
@@ -114,8 +162,8 @@ ${memoriaDelKickoff}
   // Las instrucciones de quien pide ESTA generación van primero, junto a las del documento ("" sin ellas).
   const userMessage = `${bloqueDeInstruccionesDelPedido(opts.instrucciones)}${materialDelKickoff.instrucciones}Empresa: ${companyName}
 Industria: ${proyecto.client.industry ?? "No especificada"}
-${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}${tagsLabel ? `Alcance etiquetado (tags del proyecto): ${tagsLabel}\n` : ""}
-=== HANDOFF DEL PROYECTO (${conMaterial || memoriaDelKickoff ? "TU FUENTE ANCLA" : "ESTA ES TU ÚNICA FUENTE"}) ===
+${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}${servicio ? `Servicio contratado: ${servicio.nombre} (servicio recurrente)\n` : ""}${tagsLabel ? `Alcance etiquetado (tags del proyecto): ${tagsLabel}\n` : ""}
+${bloqueDelServicio}=== HANDOFF DEL PROYECTO (${conMaterial || memoriaDelKickoff ? "TU FUENTE ANCLA" : "ESTA ES TU ÚNICA FUENTE"}) ===
 ${handoffCtx || "(Sin handoff todavía. Dejá vacías las secciones sin respaldo; no inventes contenido.)"}
 
 ${bloqueDeMemoriaDelKickoff}${reunionesDelKickoff}${notasDelKickoff}${timelineCtx ? `${timelineCtx}\n\n` : ""}${escalaDelKickoff.texto}
@@ -194,11 +242,64 @@ Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: es
     sectionCount++;
   }
 
+  /* El documento queda con las secciones de su plantilla (M1): de la de siempre a la del servicio y de vuelta. Las de
+     afuera vacías se borran; con algo, se ocultan (nada se pierde). Solo si la generación escribió algo. */
+  if (sectionCount > 0) {
+    await ajustarElKickoffALaPlantilla(projectId, targetCanvasId, secciones).catch((e) =>
+      console.warn("[kickoff] no se ajustó a la plantilla:", e instanceof Error ? e.message : e),
+    );
+  }
+
   // ── 14 de la ruta: la clasificación del proyecto (lo que `persistTimelineFromAgentOutput` hacía con la salida del
   // kickoff, que no trae etiquetas): suma el producto del servicio contratado si falta y deja la fila saneada.
   await asegurarEtiquetaDelServicio(projectId).catch((e) => console.warn("[kickoff] tags no guardados:", e instanceof Error ? e.message : e));
 
   return { canvasId: targetCanvasId, sectionCount, salida };
+}
+
+/**
+ * EL KICKOFF QUEDA CON LAS SECCIONES DE SU PLANTILLA (M1, 2026-10-25). Las del canon (el de siempre más las del servicio)
+ * que la plantilla no tiene: vacías, se borran; con algo, se ocultan en el editor. Las de la plantilla que había ocultado
+ * otra plantilla vuelven a verse. Las creadas por una persona (`custom:*`) no se tocan. Nada cambia para el cliente hasta
+ * que alguien toca «Subir».
+ */
+async function ajustarElKickoffALaPlantilla(projectId: string, canvasId: string, secciones: readonly string[] | null): Promise<void> {
+  const deLaPlantilla = new Set(canonDelKickoff(secciones).map((s) => s.key));
+  const delCanon = new Set([...canonDelKickoff(null), ...KICKOFF_SECCIONES_DEL_SERVICIO].map((s) => s.key));
+  const filas = await prisma.canvasSection.findMany({
+    where: { canvasId },
+    select: { id: true, key: true, _count: { select: { blocks: true } } },
+  });
+  // Las ctx (cronograma, procesos) no tienen bloques pero muestran lo del proyecto: cuentan como «con algo».
+  const { borrar: vacias, ocultar } = fueraDeLaPlantilla(
+    filas.map((s) => ({ id: s.id, key: s.key, bloques: s._count.blocks, ctx: kickoffHiddenKey(s.key, s.id) === s.key })),
+    deLaPlantilla,
+    delCanon,
+  );
+  await prisma.$transaction(async (tx) => {
+    if (vacias.length) await tx.canvasSection.deleteMany({ where: { id: { in: vacias.map((s) => s.id) } } });
+    // FOR UPDATE: el Json lo escriben también el ojo del kickoff, los briefs y la plantilla anotada.
+    await tx.$queryRaw`SELECT id FROM "ProjectCanvas" WHERE id = ${canvasId} FOR UPDATE`;
+    const [c, p] = await Promise.all([
+      tx.projectCanvas.findUnique({ where: { id: canvasId }, select: { sections: true } }),
+      tx.project.findUnique({ where: { id: projectId }, select: { hiddenKickoffKeys: true } }),
+    ]);
+    const publicadas = p?.hiddenKickoffKeys ?? [];
+    const { ocultas, porLaPlantilla } = ocultasSegunLaPlantilla({
+      ocultasDelEditor: ocultasEnElEditor(publicadas, ocultasDelBorrador(c?.sections)),
+      porLaPlantillaAntes: ocultasPorLaPlantilla(c?.sections),
+      fueraConAlgo: ocultar.map((s) => ({ key: s.key, claveDelOjo: kickoffHiddenKey(s.key, s.id) })),
+      adentro: filas.filter((s) => deLaPlantilla.has(s.key)).map((s) => ({ key: s.key, claveDelOjo: kickoffHiddenKey(s.key, s.id) })),
+    });
+    // Las entradas del Json de las secciones borradas se van (así no aparecen en el índice del panel).
+    const borradas = new Set(vacias.map((s) => s.key));
+    const sinLasBorradas = (Array.isArray(c?.sections) ? (c!.sections as unknown[]) : []).filter(
+      (x) => !(x && typeof x === "object" && borradas.has(String((x as { key?: unknown }).key))),
+    );
+    const borrador = mismasOcultas(ocultas, publicadas) ? null : ocultas;
+    const json = conOcultasPorLaPlantilla(conOcultasDelBorrador(sinLasBorradas, borrador, "plantilla", new Date().toISOString()), porLaPlantilla);
+    await tx.projectCanvas.update({ where: { id: canvasId }, data: { sections: json as object[] } });
+  });
 }
 
 async function asegurarEtiquetaDelServicio(projectId: string): Promise<void> {

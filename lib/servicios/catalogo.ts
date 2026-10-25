@@ -296,3 +296,33 @@ export function servicioParaLaPropuesta(s: ServicioRecurrente): string {
   );
   return lineas.join("\n");
 }
+
+/**
+ * Lo que el agente del KICKOFF tiene que saber del servicio recurrente (M1 del roadmap, 2026-10-24). Sin esto, el kickoff
+ * de un recurrente se escribía como el arranque de una implementación: le llegaba «Tipo de servicio contratado:
+ * proyecto_temporal» (RC Inmobiliaria). Es la misma fuente que la propuesta —el catálogo—, más el ciclo en que está el
+ * proyecto y el nivel de servicio, que en el kickoff es «cómo nos pides cosas».
+ */
+export function servicioParaElKickoff(s: ServicioRecurrente, ciclo?: { numero: number; etapa: string } | null): string {
+  const lineas = [
+    `=== EL SERVICIO CONTRATADO (fuente: el catálogo de Smarteam; es un servicio RECURRENTE, no un proyecto temporal) ===`,
+    `Servicio: ${s.nombre}. ${s.descripcion}`,
+    `Qué incluye: ${s.incluye.join(" · ")}.`,
+    `Cadencia: ${s.cadencia}`,
+    `Reuniones fijas: ${s.reuniones.map((r) => `${r.titulo} (${ETIQUETA_DE_CADENCIA[r.cada].toLowerCase()}, ${r.duracionMin} min, con ${r.conQuien.toLowerCase()}: ${r.paraQue})`).join(" · ")}.`,
+  ];
+  if (s.ciclo) {
+    lineas.push(`Se trabaja por CICLOS de cinco etapas: ${s.ciclo.paraLaPropuesta.map((e) => `${e.titulo} (${e.detalle})`).join(" → ")} → y vuelve a empezar.`);
+    lineas.push(
+      "El primer ciclo arranca explorando con cada equipo del cliente (una sesión por equipo: cómo está armado, cómo lo mide, cómo funciona, con qué sistemas y dónde duele) y después escribimos el diagnóstico, que define la prioridad del ciclo.",
+    );
+  }
+  if (ciclo) lineas.push(`Hoy el proyecto está en el ciclo ${ciclo.numero}, etapa ${ciclo.etapa}.`);
+  lineas.push(
+    `Cómo nos pide cosas el cliente (nivel de servicio): ${s.nivelDeServicio.map((n) => `${n.prioridad}: ${n.tiempo} (${n.detalle})`).join(" · ")}. ${NOTA_DE_TIEMPOS}`,
+  );
+  lineas.push(
+    "La cadencia, las reuniones, el ciclo y los tiempos salen de acá: no los inventes ni los cambies. Si el handoff dice otra cosa de la cadencia, manda el handoff (es lo que se acordó con este cliente).",
+  );
+  return lineas.join("\n");
+}

@@ -168,9 +168,14 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     eyebrow: "Lo que queremos lograr",
     theme: "soft",
     sectionType: "diagnostico_objetivos",
+    /* L3 etapa 3 (2026-10-24): el chat sí podía quitar ítems, pero no sabía que la cuarta columna sale de las Acciones y
+       buscaba «consecuencias positivas» acá, donde no existen. */
     avisoDelChat:
       "los códigos (S1, F1, OBJ-01) unen secciones: si borras o renumeras uno, actualiza también donde se cita " +
-      "(«explica» de las causas, «por» de las consecuencias y los objetivos de Preguntas); códigos nuevos, correlativos.",
+      "(«explica» de las causas, «por» de las consecuencias y los objetivos de Preguntas); códigos nuevos, correlativos. " +
+      "La cuarta columna, «Consecuencias positivas», NO vive acá: es la tabla de «Acciones coherentes» (sección `acciones`, " +
+      "cada acción con su «detalle» de cómo genera dinero). Para quitar, cambiar o reordenar una consecuencia positiva, cambia " +
+      "esa acción en «Acciones coherentes»; `consecuencias` de esta sección son solo las negativas.",
     agentGenerated: true,
     empty: { intro: "", objetivos: [] },
     agentHint: "OBJ-01…: los cuantitativos SON los resultados medibles del handoff (uno por R, con su `resultado`); los cualitativos, lo que cambia en cómo se trabaja.",
@@ -192,9 +197,14 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     eyebrow: "Síntomas, causas y lo que cuestan",
     theme: "light",
     sectionType: "diagnostico_problema",
+    /* L3 etapa 3 (2026-10-24): el chat sí podía quitar ítems, pero no sabía que la cuarta columna sale de las Acciones y
+       buscaba «consecuencias positivas» acá, donde no existen. */
     avisoDelChat:
       "los códigos (S1, F1, OBJ-01) unen secciones: si borras o renumeras uno, actualiza también donde se cita " +
-      "(«explica» de las causas, «por» de las consecuencias y los objetivos de Preguntas); códigos nuevos, correlativos.",
+      "(«explica» de las causas, «por» de las consecuencias y los objetivos de Preguntas); códigos nuevos, correlativos. " +
+      "La cuarta columna, «Consecuencias positivas», NO vive acá: es la tabla de «Acciones coherentes» (sección `acciones`, " +
+      "cada acción con su «detalle» de cómo genera dinero). Para quitar, cambiar o reordenar una consecuencia positiva, cambia " +
+      "esa acción en «Acciones coherentes»; `consecuencias` de esta sección son solo las negativas.",
     agentGenerated: true,
     empty: { intro: "", sintomas: [], causas: [], consecuencias: [] },
     agentHint: "Síntomas S1… (lo que se ve, con datos) → causas F1… (por qué pasa) → qué le cuesta al cliente.",
@@ -222,6 +232,9 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     sectionType: "kickoff_prose",
     // La pregunta grande y las situaciones numeradas, sin tarjetas blancas sobre el fondo oscuro (2026-10-23).
     diseno: "numerada",
+    /* L2 etapa 2 (2026-10-24): como el enfoque, lo propone la IA y lo revisa el ejecutivo; presentar lo exige
+       (lib/canvas/estado-del-documento.ts) y, revisado, regenerar no lo toca. */
+    revision: "Lo propuso la IA con lo que dijeron las reuniones. Revísalo con el cliente en mente y márcalo como revisado antes de presentar.",
     agentGenerated: true,
     empty: proseEmpty,
     agentHint: "La pregunta que resume el problema + 4-6 situaciones de hoy con lo que le cuestan, sin la solución.",
@@ -307,7 +320,8 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     sectionType: "ejecucion_acciones",
     agentGenerated: true,
     avisoDelChat:
-      "cada acción ataca causas (F) y mueve objetivos (OBJ) que existen en este diagnóstico, y toda causa tiene al menos una acción: si cambias un código, cámbialo donde se cita; códigos AC nuevos, correlativos.",
+      "cada acción ataca causas (F) y mueve objetivos (OBJ) que existen en este diagnóstico, y toda causa tiene al menos una acción: si cambias un código, cámbialo donde se cita; códigos AC nuevos, correlativos. " +
+      "Estas acciones son también la columna «Consecuencias positivas» de la Explicación del problema: lo que cambies acá (quitar, editar, reordenar) cambia allá.",
     empty: { intro: "", acciones: [] },
     agentHint: "AC-01…: la acción, cómo genera dinero, su grupo, qué causas (F) ataca, qué objetivos (OBJ) mueve, hub, quick win y alcance.",
     brief:
@@ -356,9 +370,14 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     eyebrow: "Preguntas de negocio",
     theme: "light",
     sectionType: "diagnostico_preguntas",
+    /* L3 etapa 3 (2026-10-24): el chat sí podía quitar ítems, pero no sabía que la cuarta columna sale de las Acciones y
+       buscaba «consecuencias positivas» acá, donde no existen. */
     avisoDelChat:
       "los códigos (S1, F1, OBJ-01) unen secciones: si borras o renumeras uno, actualiza también donde se cita " +
-      "(«explica» de las causas, «por» de las consecuencias y los objetivos de Preguntas); códigos nuevos, correlativos.",
+      "(«explica» de las causas, «por» de las consecuencias y los objetivos de Preguntas); códigos nuevos, correlativos. " +
+      "La cuarta columna, «Consecuencias positivas», NO vive acá: es la tabla de «Acciones coherentes» (sección `acciones`, " +
+      "cada acción con su «detalle» de cómo genera dinero). Para quitar, cambiar o reordenar una consecuencia positiva, cambia " +
+      "esa acción en «Acciones coherentes»; `consecuencias` de esta sección son solo las negativas.",
     agentGenerated: true,
     empty: { intro: "", preguntas: [] },
     agentHint: "Las preguntas de negocio que el cliente va a poder responder, cada una atada a su OBJ.",

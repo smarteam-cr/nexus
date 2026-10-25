@@ -423,6 +423,8 @@ export async function GET(
     fuente: s.fuente,
     alsoIn: alsoInBySession.get(s.sessionId) ?? [],
     sinContenido: !conContenido.has(s.sessionId),
+    // Solo en el diagnóstico, las que entran solas (L5, 2026-10-25): el equipo del cliente de la reunión.
+    ...(s.equipo !== undefined ? { equipo: s.equipo } : {}),
   }));
 
   return NextResponse.json({ feeding, excluded, candidates, unreviewedCount, sugeridas });

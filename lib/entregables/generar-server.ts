@@ -23,7 +23,17 @@ import { prepararDiagnosticoEnBlanco, runDiagnosticoGeneration } from "@/lib/can
 import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { runDesarrolloGeneration } from "@/lib/canvas/desarrollo-generate";
 import { runEntregaGeneration } from "@/lib/canvas/entrega-generate";
-import { conPlantillaAnotada, entregableDe, nombreDelEntregable, plantillaDe, plantillaDelDocumento, type PlantillaDeEntregable } from "./registro";
+import {
+  conPlantillaAnotada,
+  entregableDe,
+  nombreDelEntregable,
+  plantillaDe,
+  plantillaDelDocumento,
+  PLANTILLA_DEL_KICKOFF_RECURRENTE,
+  type PlantillaDeEntregable,
+} from "./registro";
+import { resolvePipeline } from "@/lib/projects/kind";
+import { servicioDelProyecto } from "@/lib/servicios/catalogo";
 import { templateDeLaPlantilla } from "./plantillas";
 
 export interface PedidoDeEntregable {
@@ -90,8 +100,28 @@ async function plantillaGuardada(projectId: string, slug: string): Promise<strin
   return g?.guardada ? g.plantilla.id : null;
 }
 
+/**
+ * La plantilla que le toca al proyecto sin que nadie la pida (M1 del roadmap, 2026-10-24): el kickoff de un SERVICIO
+ * QUE AVANZA POR CICLOS es el kickoff del servicio, también el que se generó antes de que el proyecto fuera recurrente (RC
+ * Inmobiliaria: el de julio decía «proyecto temporal»). null = la regla de siempre (la guardada o la primera).
+ */
+export async function plantillaPorDefectoDelProyecto(projectId: string, slug: string): Promise<string | null> {
+  if (slug !== "kickoff") return null;
+  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { servicioRecurrente: true, hubspotPipelineId: true } });
+  if (!p) return null;
+  const servicio = servicioDelProyecto({
+    servicioRecurrente: p.servicioRecurrente,
+    servicioDelPipeline: resolvePipeline(p.hubspotPipelineId)?.servicioRecurrente ?? null,
+  });
+  // Solo un servicio que avanza por ciclos (SmartLoop): la plantilla cuenta el método por ciclos y el primer ciclo.
+  return servicio?.ciclo ? PLANTILLA_DEL_KICKOFF_RECURRENTE : null;
+}
+
 export async function generarEntregable(pedido: PedidoDeEntregable): Promise<EntregableGenerado> {
-  const plantillaId = pedido.plantillaId ?? (await plantillaGuardada(pedido.projectId, pedido.slug).catch(() => null));
+  const plantillaId =
+    pedido.plantillaId ??
+    (await plantillaPorDefectoDelProyecto(pedido.projectId, pedido.slug).catch(() => null)) ??
+    (await plantillaGuardada(pedido.projectId, pedido.slug).catch(() => null));
   const plantilla = resolverPlantilla(pedido.slug, plantillaId);
   const template = templateDeLaPlantilla(plantilla.id);
   const base = { projectId: pedido.projectId, agentRunId: pedido.agentRunId, plantilla: template, instrucciones: pedido.instrucciones ?? null };

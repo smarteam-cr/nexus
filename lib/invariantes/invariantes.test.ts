@@ -21,6 +21,7 @@ import {
   type Invariante,
 } from "./index";
 import { INV49 } from "./google";
+import { INV55, INV55_BLOQUEA } from "./smartloop";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
 import { invariantesOkDesde, leerInvariantesOk } from "./salud";
 import { DONDE_PUEDE_TENER_TEXTO } from "@/lib/sessions/tiene-texto";
@@ -805,7 +806,7 @@ describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 37 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 38 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -819,6 +820,8 @@ describe("el registro y el consumidor", () => {
       "44", "45", "46", "47",
       // 49: la frescura de la copia de Google Meet (U1, 2026-10-25).
       "49",
+      // 55: ningún proyecto de SmartLoop dice ser «proyecto_temporal» (M1, 2026-10-25). 50–54, de otras sesiones.
+      "55",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -866,7 +869,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("37 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("38 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;
@@ -975,5 +978,18 @@ describe("frescura: INV49 (la copia de Google Meet)", () => {
     expect(nunca.ok).toBe(false);
     expect(nunca.lineas[0]).toContain("ninguna corrida anotada terminó bien");
     expect((await INV49.correr(baseFalsa({}), AHORA)).ok, "sin copia no hay copia vieja").toBe(true);
+  });
+});
+
+describe("SmartLoop: INV55 (2026-10-25, M1)", () => {
+  it("sin proyectos de SmartLoop con «proyecto_temporal», cumple; con alguno lo lista, y no bloquea hasta su primer verde", async () => {
+    const llamadas: Llamada[] = [];
+    expect((await INV55.correr(baseFalsa({ project: [] }, llamadas), AHORA)).ok).toBe(true);
+    // Mira solo los activos del pipeline de SmartLoop con el tipo temporal.
+    expect(where(llamadas, "project")).toMatchObject({ status: "active", serviceType: "proyecto_temporal", hubspotPipelineId: { in: ["942509592"] } });
+    const r = await INV55.correr(baseFalsa({ project: [{ id: "p1", name: "CONTINUIDAD CRM", client: { name: "RC Inmobiliaria" } }] }), AHORA);
+    expect(r.ok).toBe(!INV55_BLOQUEA);
+    expect(r.lineas[0]).toContain("1 proyecto de SmartLoop dice");
+    expect(r.lineas[1]).toContain("RC Inmobiliaria › CONTINUIDAD CRM");
   });
 });

@@ -6,6 +6,7 @@ import { asignarEmpresaDeHubspot } from "@/lib/clients/empresa-de-hubspot";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { sanitizeTags, normalizeTag } from "@/lib/tags/catalog";
 import { cerradoPorEstadoCrudo, decidirCierre, estadoCrudoDeHubspot, resolvePipeline } from "@/lib/projects/kind";
+import { tipoDeServicioDelEspejo } from "@/lib/servicios/tipo-de-servicio";
 import type { Client } from "./sdk";
 import { detectarFusion, explicarFusion } from "@/lib/hubspot/empresa-fusionada";
 import { fusionadoEn } from "@/lib/hubspot/proyecto-fusionado";
@@ -1267,7 +1268,10 @@ async function correrElEspejo(
     }
 
     const servicioContratado = props.servicio_contratado || props.tipo_de_servicio || projectName;
-    const mapping = inferServiceMapping(servicioContratado);
+    const deducido = inferServiceMapping(servicioContratado);
+    /* M1 etapa 4 (2026-10-25): un proyecto del pipeline de un servicio recurrente (SmartLoop) no es un «proyecto
+       temporal»; lo que el nombre no deja deducir queda vacío y el servicio lo dice el pipeline (lib/servicios). */
+    const mapping = { ...deducido, serviceType: tipoDeServicioDelEspejo(deducido.serviceType, pipelineId) };
 
     // ── Resolver CSE encargado (gobierna la VISIBILIDAD del cliente) ──────────
     // La asignación del CSE vive en la propiedad custom "CSE Encargado" (cse_encargado) y, si

@@ -9,11 +9,17 @@
  * pidió por correo — quién, cuándo y la evidencia. Aprobado = cerrado hasta reabrirlo con motivo.
  *
  * Las reglas viven en lib/canvas/estado-del-documento.ts; el servidor las vuelve a revisar siempre.
- * `motivosLocales` es lo que la pantalla ya sabe (el hilo y la política, en vivo) para no tener que
- * preguntarle al servidor en cada edición.
+ * `motivosLocales` es lo que la pantalla ya sabe (el hilo, el desafío y el enfoque, en vivo) para no tener que
+ * preguntarle al servidor en cada edición. Cada motivo lleva a su sección (L2, 2026-10-24).
  */
 import { useCallback, useEffect, useState } from "react";
-import { ETIQUETA_DEL_ESTADO, type EstadoVista, type HitoVista } from "@/lib/canvas/estado-del-documento";
+import { ETIQUETA_DEL_ESTADO, type EstadoVista, type HitoVista, type MotivoParaPresentar } from "@/lib/canvas/estado-del-documento";
+
+/** Lleva a la sección del documento (el índice del panel salta igual: `data-seccion`, LandingView). */
+function irALaSeccion(key: string): void {
+  const destino = document.querySelector(`[data-seccion="${CSS.escape(key)}"]`);
+  destino?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 import { subirDirecto } from "@/lib/storage/subir-directo";
 
 function fecha(iso: string | null): string {
@@ -54,8 +60,8 @@ export default function EstadoDelDocumento({
 }: {
   projectId: string;
   canvasId: string;
-  /** Lo que hoy impide presentar, calculado en vivo por la pantalla (hilo + política). */
-  motivosLocales: string[];
+  /** Lo que hoy impide presentar, calculado en vivo por la pantalla (hilo, desafío y enfoque), con su sección. */
+  motivosLocales: MotivoParaPresentar[];
   /** Avisa cada vez que el estado cambia (la portada lo muestra y el editor se cierra al aprobar). */
   onEstado: (estado: EstadoVista) => void;
 }) {
@@ -151,7 +157,7 @@ export default function EstadoDelDocumento({
               type="button"
               disabled={!puedePresentar || ocupado}
               onClick={() => void pedir({ accion: "presentar" })}
-              title={motivos.length ? motivos.join("\n") : "Deja guardado lo que vio el cliente"}
+              title={motivos.length ? motivos.map((m) => m.texto).join("\n") : "Deja guardado lo que vio el cliente"}
               className="text-xs font-semibold text-primary-fg bg-brand hover:bg-brand-dark disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
             >
               {estado.estado === "presentado" ? `Presentar la v${estado.version + 1}` : "Presentar al cliente"}
@@ -192,7 +198,17 @@ export default function EstadoDelDocumento({
       {estado.estado !== "aprobado" && motivos.length > 0 && (estado.estado === "borrador" || estado.cambiosDesdeLaPresentacion) && (
         <ul className="mt-2 space-y-0.5 text-[11px] text-fg-muted list-disc pl-5">
           {motivos.map((m, i) => (
-            <li key={i}>{m}</li>
+            <li key={i}>
+              {m.texto}
+              {m.seccion && (
+                <>
+                  {" "}
+                  <button type="button" className="font-semibold text-brand hover:underline" onClick={() => irALaSeccion(m.seccion!)}>
+                    Ir a la sección →
+                  </button>
+                </>
+              )}
+            </li>
           ))}
         </ul>
       )}

@@ -59,7 +59,7 @@ describe("estado del documento: borrador, presentado y aprobado", () => {
   });
 
   it("se presenta con el hilo cerrado y la política revisada (los avisos no frenan)", () => {
-    expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [aviso], politica: POLITICA_REVISADA })).toEqual({ ok: true, motivos: [] });
+    expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [aviso], politica: POLITICA_REVISADA })).toEqual({ ok: true, motivos: [], detalle: [] });
   });
 
   it("no se presenta con un cabo suelto, con la política sin revisar, ni sin política: junta TODOS los motivos", () => {
@@ -72,7 +72,24 @@ describe("estado del documento: borrador, presentado y aprobado", () => {
   });
 
   it("un enfoque OCULTO a propósito no frena la presentación (2026-10-23: toda sección se puede ocultar)", () => {
-    expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: undefined, politicaOculta: true })).toEqual({ ok: true, motivos: [] });
+    expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: undefined, politicaOculta: true })).toEqual({ ok: true, motivos: [], detalle: [] });
+  });
+
+  it("L2 (2026-10-24): el desafío principal con algo escrito también se revisa; oculto o vacío no frena", () => {
+    const desafio = { intro: "¿Por qué invertimos en pauta y no sabemos cuántas matrículas trae?", items: [{ title: "Le hablan igual a todos" }] };
+    const r = revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: POLITICA_REVISADA, desafio });
+    expect(r.ok).toBe(false);
+    expect(r.detalle).toEqual([{ texto: expect.stringContaining("desafío principal"), seccion: "desafio" }]);
+    const revisado = { ...desafio, revisadaAt: "2026-10-24T10:00:00.000Z" };
+    expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: POLITICA_REVISADA, desafio: revisado }).ok).toBe(true);
+    expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: POLITICA_REVISADA, desafio, desafioOculto: true }).ok).toBe(true);
+    expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: POLITICA_REVISADA, desafio: { intro: "", items: [] } }).ok).toBe(true);
+  });
+
+  it("L2: cada motivo dice en qué sección se arregla (para el enlace de «Presentar» y de «Publicar»)", () => {
+    const r = revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [roto], politica: { ...POLITICA_REVISADA, revisadaAt: "" } });
+    expect(r.detalle.map((m) => m.seccion)).toEqual(["acciones", "politica_rectora"]);
+    expect(r.detalle.map((m) => m.texto)).toEqual(r.motivos);
   });
 
   it("aprobado no se presenta (está cerrado), y sin contenido no hay nada que presentar", () => {

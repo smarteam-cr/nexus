@@ -26,7 +26,7 @@
  * monta el panel del proyecto ARRIBA del marco «El documento» (ProjectCanvasPanel), no el documento:
  * adentro del marco quedaba cerrada debajo de «así lo ve el cliente» y nadie la encontraba.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import SessionSelectionReview from "@/components/clients/SessionSelectionReview";
 import FuentesManualesColumn from "@/components/clients/FuentesManualesColumn";
 import { ContextColumn, CTX_ICONS } from "@/components/clients/context-column";
@@ -48,17 +48,41 @@ export default function DocumentoContextSection({
 }: {
   projectId: string;
   doc: DocumentoConContexto;
-  /** Sin generar arranca ABIERTA (es el momento de curar antes de generar); generado, cerrada. */
+  /**
+   * Sin generar y vacía arranca ABIERTA (es el momento de curar antes de generar). Generado, o con algo ya puesto
+   * (reuniones, notas o instrucciones), CERRADA: L3 etapa 4 (2026-10-24, Liliana) — abría encima del documento
+   * aunque ya tuviera todo. Y recuerda lo que eligió cada persona, por documento (en este navegador).
+   */
   generado: boolean;
   canEdit?: boolean;
 }) {
+  const clave = `nexus:contexto-abierto:${projectId}:${doc.pieza}`;
   const [override, setOverride] = useState<boolean | null>(null);
-  const abierto = override ?? !generado;
+  // Lo que eligió esta persona la última vez (localStorage, leído después de montar: el servidor no lo sabe).
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem(clave);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- leer una preferencia del navegador al montar
+      if (v === "1" || v === "0") setOverride(v === "1");
+    } catch {
+      // Sin almacenamiento (navegación privada): la regla de siempre.
+    }
+  }, [clave]);
+  const alternar = (abrir: boolean) => {
+    setOverride(abrir);
+    try {
+      window.localStorage.setItem(clave, abrir ? "1" : "0");
+    } catch {
+      // Sin almacenamiento: se recuerda solo mientras la pantalla esté abierta.
+    }
+  };
   const [reuniones, setReunionesState] = useState(0);
   const [sugeridas, setSugeridasState] = useState(0);
   const [notas, setNotasState] = useState(0);
   const [reunionesIlegibles, setReunionesIlegibles] = useState(false);
   const [instruccionesActivas, setInstruccionesActivasState] = useState(false);
+  const tieneAlgo = reuniones > 0 || notas > 0 || instruccionesActivas;
+  const abierto = override ?? (!generado && !tieneAlgo);
   const setInstruccionesActivas = useCallback((v: boolean) => setInstruccionesActivasState(v), []);
   const setReuniones = useCallback((n: number) => setReunionesState((c) => (c === n ? c : n)), []);
   const setSugeridas = useCallback((n: number) => setSugeridasState((c) => (c === n ? c : n)), []);
@@ -67,7 +91,7 @@ export default function DocumentoContextSection({
   return (
     <ContextoAdicional
       abierto={abierto}
-      onAlternar={() => setOverride(!abierto)}
+      onAlternar={() => alternar(!abierto)}
       /* Cerrada se sigue leyendo con qué se va a generar. */
       resumen={
         <>

@@ -3,7 +3,8 @@
  *
  * Sale de la sección 5 del documento de proceso de SmartLoop (v0.3.0, 2026-10-10), que es la fuente de
  * verdad del servicio: por etapa, qué hace el CSE, qué tiene que quedar producido y la señal de que la
- * etapa se saltó. No agrega reglas que no estén ahí (Parte III del documento). Un servicio recurrente
+ * etapa se saltó. No agrega reglas que no estén ahí (Parte III del documento), salvo «explora primero, por equipo» en
+ * Diagnóstico (M2, 2026-10-24: lo pidió Customer Success al usarlo). Un servicio recurrente
  * nuevo es OTRO archivo como éste, escrito desde su propio documento de proceso.
  */
 import type { GuiaDeServicio } from "./tipos";
@@ -14,8 +15,10 @@ export const GUIA_SMARTLOOP: GuiaDeServicio = {
   documento: "Proceso de SmartLoop",
   etapas: {
     diagnostico: {
+      /* «Explora primero, por equipo» (M2 del roadmap, 2026-10-24, Liliana con RC Inmobiliaria): la exploración no es una
+         etapa del ciclo, pero el diagnóstico se escribe sobre lo que dijo cada equipo del cliente. */
       queHaces:
-        "Mides las ocho dimensiones del área y confirmas qué resultado persigue el cliente. Desde el segundo ciclo puede ser un diagnóstico simple: parte de lo aprendido en el ciclo anterior.",
+        "Explora primero, por equipo: una sesión de la exploración con cada equipo del cliente (cómo está armado, cómo lo mide, cómo funciona y dónde duele). Después escribes el diagnóstico: mides las ocho dimensiones del área y confirmas qué resultado persigue el cliente. Desde el segundo ciclo puede ser un diagnóstico simple: parte de lo aprendido en el ciclo anterior.",
       producido: [
         { clave: "niveles", texto: "El nivel de cada dimensión del área" },
         { clave: "riesgos", texto: "Los riesgos activos" },

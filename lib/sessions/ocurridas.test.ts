@@ -110,6 +110,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "La carga de CS y la rentabilidad AFIRMAN horas en reuniones: solo leen semanas o meses que ya cerraron (el techo es " +
       "el lunes de esta semana o el 1 del mes) y la última reunión de cada cuenta corta en `ahora`. Lo que viene se proyecta, no se lee.",
   },
+  "lib/sessions/clase-de-texto-server.ts": {
+    clase: "plomeria",
+    motivo:
+      "L1 etapa 2 (2026-10-25): la clase de texto (transcripción, solo notas o nada) de reuniones que ya salieron de la membresía " +
+      "del proyecto, sin traer los textos. No elige reuniones ni lee su contenido; las futuras las deja afuera quien la llama.",
+  },
   "lib/rentabilidad/fuentes-de-horas-server.ts": {
     clase: "plomeria",
     motivo:

@@ -8,12 +8,18 @@
  *
  * ⛔ El proyecto se verifica contra la empresa (el `clientId` lo pone el servidor, el de la cuenta del hilo): un
  * proyecto de otra empresa no se genera desde este chat.
+ *
+ * El diagnóstico avisa AL PROPONER si casi nada de lo que lee está confirmado o si es un ciclo de SmartLoop sin
+ * exploración (L5 etapa 3, 2026-10-24): la línea lo dice, y el clic de «aplicar» es el «generar igual» del botón. El kickoff
+ * de un servicio recurrente sale sin pedirlo con la plantilla del servicio (M1).
  */
 import "server-only";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { ENTREGABLES, TOPE_INSTRUCCIONES_DEL_PEDIDO, nombreDelEntregable, plantillaDe } from "@/lib/entregables/registro";
-import { porQueNoSePuedeGenerar } from "@/lib/entregables/generar-server";
+import { plantillaPorDefectoDelProyecto, porQueNoSePuedeGenerar } from "@/lib/entregables/generar-server";
+import { loConfirmadoDelProyecto } from "@/lib/canvas/diagnostico-confirmado-server";
+import { mensajeDeSupuestos } from "@/lib/canvas/diagnostico-confirmado";
 import { lanzarEntregable, permisoParaGenerar, seEstaGenerando } from "@/lib/entregables/lanzar-server";
 import { exigirCliente, type ContextoDeNexus } from "./contexto-server";
 import type { OperacionQuePropone } from "./tipos";
@@ -58,7 +64,8 @@ export const GENERAR_DOCUMENTO: OperacionQuePropone<EntradaDeGenerar, DatosDeGen
     await exigirCliente(ctx, e.clientId);
     const proyecto = await prisma.project.findFirst({ where: { id: e.projectId, clientId: e.clientId }, select: { id: true, name: true } });
     if (!proyecto) return { ok: false, motivo: "Ese proyecto no es de esta empresa." };
-    const plantilla = plantillaDe(e.pieza, e.plantilla);
+    const porDefecto = e.plantilla ? null : await plantillaPorDefectoDelProyecto(e.projectId, e.pieza).catch(() => null);
+    const plantilla = plantillaDe(e.pieza, e.plantilla ?? porDefecto);
     if (!plantilla) return { ok: false, motivo: `${nombreDelEntregable(e.pieza)} no tiene la plantilla «${e.plantilla}».` };
     // Las mismas puertas que el botón, AL PROPONER: no se ofrece algo que va a fallar.
     const permiso = await permisoParaGenerar(ctx.persona, { clientId: e.clientId, projectId: e.projectId, slug: e.pieza });
@@ -71,13 +78,17 @@ export const GENERAR_DOCUMENTO: OperacionQuePropone<EntradaDeGenerar, DatosDeGen
     const instrucciones = e.instrucciones?.trim() || null;
     const verbo = permiso.gate?.action === "regenerate" ? "Volver a generar" : "Generar";
     const aviso = permiso.gate?.action === "regenerate" ? " (reescribe lo que escribió la IA)" : "";
+    /* Lo mismo que el botón pregunta antes de generar el diagnóstico (el 409 `SUPUESTOS_SIN_VALIDAR`): acá va en la línea,
+       y aplicarla es generar igual. Si el cálculo falla, no se dice nada: el aviso nunca frena. */
+    const confirmado = e.pieza === "diagnosis" ? await loConfirmadoDelProyecto(e.projectId).catch(() => null) : null;
+    const supuestos = confirmado?.pideConfirmacion ? ` ⚠ ${mensajeDeSupuestos(confirmado)}` : "";
     return {
       ok: true,
       datos: { clientId: e.clientId, projectId: e.projectId, proyecto: proyecto.name, pieza: e.pieza, plantilla: plantilla.id, instrucciones },
       linea:
         `${verbo} ${documento} de «${proyecto.name}» con la plantilla «${plantilla.nombre}»${aviso}` +
         `${instrucciones ? `, con tus instrucciones: «${recortar(instrucciones, 80)}»` : ""}` +
-        ` — se arma en unos minutos y se ve en la ficha del cliente › ${proyecto.name} › ${documento}`,
+        ` — se arma en unos minutos y se ve en la ficha del cliente › ${proyecto.name} › ${documento}${supuestos}`,
     };
   },
   // El lanzador vuelve a mirar todo (proyecto, permiso, puertas, si ya corre) y tira `ErrorDelEntregable` con su motivo

@@ -195,6 +195,20 @@ export async function cuantoHayEnLaExploracionDelProyecto(
 }
 
 /**
+ * CUÁNDO fue cada reunión que leyó la exploración viva del proyecto (M2 del roadmap, 2026-10-25): solo las fechas de
+ * `propuesta.lecturas` —cuándo fue y cuándo se leyó—, nunca lo que dice. Lo usa el riel de un servicio recurrente para
+ * saber si el ciclo ya exploró antes del diagnóstico (lib/servicios/arranque-del-ciclo-server.ts). [] sin exploración.
+ */
+export async function fechasDeLasLecturasDelProyecto(projectId: string): Promise<Array<{ fecha?: string; en: string }>> {
+  if (!modeloDisponible(prisma.exploracionDeVenta)) return [];
+  const fila = await prisma.exploracionDeVenta
+    .findFirst({ where: { projectId, archivadaEn: null }, select: { propuesta: true } })
+    .catch(() => null);
+  if (!fila) return [];
+  return Object.values(leerPropuesta(fila.propuesta).lecturas).map((l) => ({ ...(l.fecha ? { fecha: l.fecha } : {}), en: l.en }));
+}
+
+/**
  * Las sesiones de la exploración viva del proyecto, para las SUGERENCIAS del panel de los documentos
  * (lib/contexto/sugerencias-del-documento-server.ts, etapa 7 de la memoria de la cuenta): el diagnóstico sugiere la
  * reunión de cada sesión. Solo las sesiones (qué reunión es de cuál y su fecha): ni lo confirmado, ni la libreta del

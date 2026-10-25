@@ -17,6 +17,8 @@
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Modal } from "@/components/ui";
+import { Select } from "@/components/ui/Input";
+import { EQUIPOS, EQUIPOS_DEL_CLIENTE, esEquipo, type ClaveDeEquipo } from "@/lib/exploraciones/equipos";
 import { useToast } from "@/components/ui/Toast";
 import {
   coincideConLaBusqueda,
@@ -25,7 +27,7 @@ import {
 } from "@/lib/sessions/candidatas-internas";
 import { resumirSala, textoDeSala } from "@/lib/sessions/participantes";
 import { esSoloElegidas, usaReglaDeRelevancia, type DestinoDeContexto } from "@/lib/sessions/destinos-de-contexto";
-import { MAX_ELEGIDAS_ENTERAS, documentoDelDestino } from "@/lib/contexto/documento";
+import { MAX_ELEGIDAS_A_LEER, MAX_ELEGIDAS_ENTERAS, documentoDelDestino } from "@/lib/contexto/documento";
 import { BotonBlanco, BotonTexto, BotonUsar, FilaSugerida, FranjaDeSugerencias } from "@/components/ui/sistema";
 import {
   avisoDelMaterial,
@@ -116,13 +118,72 @@ interface SugeridaSession {
   participants: string[];
   /** Por qué la sugiere Nexus: «Sesión 2 de la exploración», la frase de un hecho o «Reunión con el cliente en este proyecto». */
   motivo: string;
-  fuente: "exploracion" | "hecho" | "reunion";
+  fuente: "exploracion" | "proyecto" | "hecho" | "reunion";
   alsoIn?: string[];
   sinContenido?: boolean;
+  /** Solo en el diagnóstico (L5, 2026-10-25): el equipo del cliente de la reunión que entra sola. null = sin equipo. */
+  equipo?: ClaveDeEquipo | null;
 }
 
 /** Una fila del modal o el rótulo de un grupo. */
 type FilaDelModal = CandidateSession | { separador: string };
+
+/**
+ * «Equipo del cliente» de una reunión que entra sola al diagnóstico (L5 etapa 2, 2026-10-25). La de una sesión de la
+ * exploración lo muestra (se cambia en la sesión); la de una reunión del proyecto lo elige acá.
+ */
+function EquipoDeLaReunion({
+  equipo,
+  editable,
+  onCambiar,
+}: {
+  equipo: ClaveDeEquipo | null;
+  /** false = de una sesión de la exploración (solo se muestra) o sin permiso. */
+  editable: boolean;
+  onCambiar: (equipo: ClaveDeEquipo | null) => void;
+}) {
+  if (!editable) {
+    return equipo ? <span className="text-xs text-fg-muted"> · {EQUIPOS[equipo].nombre}</span> : null;
+  }
+  return (
+    <Select
+      value={equipo ?? ""}
+      onChange={(e) => onCambiar(esEquipo(e.target.value) ? e.target.value : null)}
+      aria-label="Equipo del cliente de esta reunión"
+      title="Con qué equipo del cliente fue: el diagnóstico la lee por equipo"
+      className="ml-1 w-auto px-1.5 py-0.5 text-xs"
+    >
+      <option value="">Equipo del cliente…</option>
+      {EQUIPOS_DEL_CLIENTE.map((e) => (
+        <option key={e} value={e}>
+          {EQUIPOS[e].nombre}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+/** Lo que dice la franja de las reuniones que entran solas al diagnóstico (la exploración y las del proyecto con texto). */
+function fraseDeLasQueEntranSolas(total: number, deLaExploracion: number): string {
+  const delProyecto = total - deLaExploracion;
+  const lectura =
+    total > MAX_ELEGIDAS_A_LEER
+      ? ` Lee ${MAX_ELEGIDAS_A_LEER}: primero las elegidas y las de la exploración (6 enteras), después las más recientes; las más viejas quedan afuera.`
+      : total > 6
+        ? " Lee 6 enteras (primero las elegidas y las de la exploración) y las demás en resumen."
+        : "";
+  if (delProyecto === 0) {
+    return total === 1
+      ? "La reunión de la sesión de la exploración entra sola y entera al diagnóstico."
+      : `Las ${total} reuniones de las sesiones de la exploración entran solas al diagnóstico.${lectura}`;
+  }
+  if (deLaExploracion === 0) {
+    return total === 1
+      ? "La reunión del proyecto con texto entra sola al diagnóstico. «Sacar» la deja afuera."
+      : `Las ${total} reuniones del proyecto con texto entran solas al diagnóstico. «Sacar» deja afuera la que no va.${lectura}`;
+  }
+  return `${total} reuniones entran solas al diagnóstico: las de las sesiones de la exploración y las del proyecto con texto. «Sacar» deja afuera la que no va.${lectura}`;
+}
 
 function fmtDuracion(min: number | null | undefined): string | null {
   /* Redondeado a minutos: el dato viene con decimales y "47,3 min" no ayuda a decidir nada.
@@ -459,10 +520,35 @@ export default function SessionSelectionReview({
     [postReuniones],
   );
 
-  /* En el DIAGNÓSTICO, las reuniones de las sesiones de la exploración ENTRAN SOLAS (2026-10-23,
-     `reunionesDeLaExploracionDelDiagnostico`): las eligió quien las unió a una sesión. El servidor las sigue mandando
-     como sugeridas de la exploración; acá se cuentan y se muestran como lo que son, con «Sacar» (`false`). */
-  const entranSolasDeLaExploracion = destino === "diagnostico" ? data.sugeridas.filter((s) => s.fuente === "exploracion") : [];
+  /* «Equipo del cliente» de una reunión del proyecto que entra sola al diagnóstico (L5 etapa 2, 2026-10-25): se guarda en
+     el vínculo de la reunión con el proyecto y el diagnóstico la lee por equipo. */
+  const cambiarEquipo = useCallback(
+    async (sessionId: string, equipo: ClaveDeEquipo | null) => {
+      try {
+        const r = await fetch(`/api/projects/${projectId}/contexto/diagnosis/equipo`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, equipo }),
+        });
+        if (!r.ok) {
+          const d = (await r.json().catch(() => null)) as { error?: string } | null;
+          toast.error(d?.error ?? "No se pudo guardar el equipo de la reunión.");
+        }
+        await reload();
+      } catch {
+        toast.error("No se pudo guardar el equipo de la reunión: revisa la conexión.");
+      }
+    },
+    [projectId, reload, toast],
+  );
+
+  /* En el DIAGNÓSTICO, las reuniones de las sesiones de la exploración (2026-10-23) y, desde el 2026-10-24 (L1 etapa 2),
+     todas las demás del proyecto con texto ENTRAN SOLAS (`reunionesQueEntranSolasAlDiagnostico`). El servidor las manda
+     como sugeridas de las fuentes `exploracion` y `proyecto`; acá se cuentan y se muestran como lo que son, con «Sacar»
+     (`false`). */
+  const entranSolasDeLaExploracion =
+    destino === "diagnostico" ? data.sugeridas.filter((s) => s.fuente === "exploracion" || s.fuente === "proyecto") : [];
+  const nDeLaExploracion = entranSolasDeLaExploracion.filter((s) => s.fuente === "exploracion").length;
   const nEntranSolas = entranSolasDeLaExploracion.length;
   useEffect(() => {
     if (!loading && !errorDeCarga) {
@@ -751,9 +837,7 @@ export default function SessionSelectionReview({
         {entranSolasDeLaExploracion.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <FranjaDeSugerencias>
-              {entranSolasDeLaExploracion.length === 1
-                ? "La reunión de la sesión de la exploración entra sola y entera al diagnóstico."
-                : `Las ${entranSolasDeLaExploracion.length} reuniones de las sesiones de la exploración entran solas y enteras al diagnóstico.`}
+              {fraseDeLasQueEntranSolas(entranSolasDeLaExploracion.length, nDeLaExploracion)}
             </FranjaDeSugerencias>
             <ul className="flex flex-col gap-1.5">
               {entranSolasDeLaExploracion.map((s) => (
@@ -778,6 +862,13 @@ export default function SessionSelectionReview({
                     · {datosDeLaReunion(s.date, s.alsoIn)}
                     {s.sinContenido ? " · sin transcripción" : ""}
                   </span>
+                  {s.equipo !== undefined && (
+                    <EquipoDeLaReunion
+                      equipo={s.equipo}
+                      editable={!readOnly && s.fuente === "proyecto"}
+                      onCambiar={(equipo) => void cambiarEquipo(s.sessionId, equipo)}
+                    />
+                  )}
                 </FilaSugerida>
               ))}
             </ul>
@@ -832,6 +923,13 @@ export default function SessionSelectionReview({
                     · {datosDeLaReunion(s.date, s.alsoIn)}
                     {s.sinContenido ? " · sin transcripción" : ""}
                   </span>
+                  {s.equipo !== undefined && (
+                    <EquipoDeLaReunion
+                      equipo={s.equipo}
+                      editable={!readOnly && s.fuente === "proyecto"}
+                      onCambiar={(equipo) => void cambiarEquipo(s.sessionId, equipo)}
+                    />
+                  )}
                 </FilaSugerida>
               ))}
             </ul>
@@ -868,7 +966,7 @@ export default function SessionSelectionReview({
               : esCronograma
                 ? "Todavía no elegiste reuniones para el cronograma. Búscalas en tu calendario o entre las del proyecto."
                 : soloElegidas && entranSolasDeLaExploracion.length > 0
-                  ? "Ninguna elegida a mano: la IA lee enteras las de las sesiones de la exploración (arriba). Suma las que quieras."
+                  ? "Ninguna elegida a mano: la IA lee las que entran solas (arriba). Suma las que quieras."
                   : soloElegidas
                   ? "Sin reuniones elegidas: la IA no lee ninguna reunión, solo la memoria del proyecto. Elige las que quieras que lea enteras."
                   : `Ninguna reunión alimenta ${esteDocumento}. Búscala con «Buscar una reunión de Meet».`

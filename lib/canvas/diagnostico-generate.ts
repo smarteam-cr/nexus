@@ -62,6 +62,7 @@ import { ocultarSeccionesRetiradas } from "@/lib/canvas/retirar-secciones";
 import { cierreAlDia, ordenDelContrato } from "@/lib/canvas/diagnostico-contrato";
 import { resultadosDelProyecto } from "@/lib/handoff/resultados";
 import { leerOProponerResultados } from "@/lib/handoff/proponer-resultados";
+import { DESAFIO_KEY, marcadaRevisada } from "@/lib/canvas/estado-del-documento";
 import {
   documentoAprobado,
   escribirLoRegenerado,
@@ -140,12 +141,14 @@ export async function runDiagnosticoGeneration(opts: {
   /* La política rectora que el ejecutivo YA REVISÓ no se vuelve a pedir (2026-10-02): es la versión
      ajustada a mano de una sugerencia, y regenerar —por ejemplo, después de que el cliente agregó
      algo en la presentación— no puede devolverla a la sugerencia de la IA. */
-  const politicaRevisada = estaRevisada(prevDataByKey[POLITICA_RECTORA_KEY]);
+  /* Igual el DESAFÍO PRINCIPAL revisado (L2 etapa 2, 2026-10-24): desde que presentar lo exige, regenerar no puede
+     devolverlo a lo que propuso la IA. */
+  const revisadas = [POLITICA_RECTORA_KEY, DESAFIO_KEY].filter((k) => estaRevisada(prevDataByKey[k]));
   const generado = await generateSectionsForTemplate(
     plantilla,
     userMessage,
     undefined,
-    politicaRevisada ? new Set([POLITICA_RECTORA_KEY]) : undefined,
+    revisadas.length ? new Set(revisadas) : undefined,
     prevDataByKey,
   );
   // Los OBJ en orden (cuantitativos primero, seguidos) y sus menciones reescritas: no se le pide al
@@ -273,10 +276,9 @@ async function ponerAlDiaLosRotulos(canvasId: string): Promise<void> {
   await prisma.projectCanvas.update({ where: { id: canvasId }, data: { sections: nuevas as Prisma.InputJsonValue } });
 }
 
-/** ¿La política rectora guardada ya la revisó el ejecutivo? (`revisadaAt`, fuera del esquema). */
+/** ¿La sección guardada ya la revisó el ejecutivo? (`revisadaAt`, fuera del esquema). La MISMA regla que presentar. */
 export function estaRevisada(data: unknown): boolean {
-  const r = (data as { revisadaAt?: unknown } | null | undefined)?.revisadaAt;
-  return typeof r === "string" && r.trim() !== "";
+  return marcadaRevisada(data);
 }
 
 /** El cierre con el texto de fábrica viejo (hablaba de la escala) pasa al de hoy (ver `cierreAlDia`). */

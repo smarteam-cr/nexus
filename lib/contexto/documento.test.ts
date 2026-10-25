@@ -335,6 +335,11 @@ describe("⭐ los seis documentos leen SOLO LAS ELEGIDAS, enteras (etapa 7)", ()
     expect(plan.espacio).toBe(espacioPorElegida(5, 0));
     // Sin el conjunto, cuentan todas (como antes).
     expect(planDeLasElegidas(sesiones).enteras).toHaveLength(6);
+    // 2026-10-25: las que van primero (las elegidas y las de la exploración) se leen enteras aunque sean más viejas.
+    const viejas = new Set(["s0", "s1"]);
+    const conPrimero = planDeLasElegidas(sesiones, undefined, viejas);
+    expect(conPrimero.enteras.slice(0, 2).map((s) => s.id).sort()).toEqual([...viejas].sort());
+    expect(conPrimero.enteras).toHaveLength(6);
   });
 
   it("la línea de cobertura dice cuántas se leyeron y por qué no las demás; con todas leídas, nada", () => {

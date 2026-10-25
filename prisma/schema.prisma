@@ -2821,6 +2821,11 @@ model SessionProject {
   explorationOverride      Boolean?
   techRequirementsOverride Boolean?
   deliveryOverride         Boolean?
+  /// L5 etapa 2 (2026-10-25): con qué EQUIPO del cliente fue la reunión, en este proyecto (las claves de
+  /// lib/exploraciones/equipos.ts). null = sin equipo. Las sesiones de una exploración lo llevan en su sesión; esto es
+  /// para las demás (la entrega de servicio). Lo escribe solo lib/sessions/equipo-de-la-reunion-server.ts.
+  /// SQL: scripts/sql/2026-10-25-smartloop.sql.
+  equipoDeLaReunion        String?
 
   generatedByAgentRunId String? // FK suave al AgentRun del clasificador
   createdAt             DateTime @default(now())

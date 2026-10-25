@@ -8,7 +8,10 @@
  *  · DIAGNÓSTICO — tiene estados (borrador · presentado · aprobado) y al presentarlo se guarda una
  *    foto protegida. El enlace muestra ESA foto (decisión de Elías: «la versión presentada»), así que
  *    solo se puede compartir después de «Presentar». No hay snapshot propio: habría dos versiones
- *    «oficiales» que pueden no coincidir. Lo lee lib/external/diagnostico-view.ts.
+ *    «oficiales» que pueden no coincidir. Lo lee lib/external/diagnostico-view.ts. Sin presentar, dice POR QUÉ
+ *    todavía no se puede presentar (L2 del roadmap, 2026-10-24): los mismos motivos de «Presentar», cada uno con el
+ *    enlace a la sección donde se arregla. Antes solo decía «Primero presenta el Diagnóstico», y Liliana no sabía qué
+ *    faltaba.
  *  · PLANIFICACIÓN — no tiene estados: al compartir se congela un SNAPSHOT, crudo (lo oculto se filtra
  *    al leer) y con el ENCABEZADO resuelto (un rótulo que cambie en el código no le reescribe el
  *    título a un documento ya entregado). Solo bloques CONFIRMED.
@@ -21,6 +24,8 @@ import { prisma } from "@/lib/db/prisma";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { publishSurface } from "@/lib/projects/publish-surfaces";
 import { ultimaVersionPresentada } from "@/lib/external/diagnostico-view";
+import { estadoDelDocumento } from "@/lib/canvas/estado-del-documento-servidor";
+import { urlDeProyecto } from "@/lib/agents/run-url";
 import { PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
 
 export type DocumentoPublicable = "diagnostico" | "planificacion";
@@ -54,15 +59,30 @@ export async function publicarDocumento(projectId: string, doc: DocumentoPublica
 
 /** El diagnóstico se comparte en su versión PRESENTADA: sin presentar, no hay qué compartir. */
 async function publicarDiagnosticoPresentado(projectId: string) {
-  const canvas = await prisma.projectCanvas.findFirst({ where: canvasOfNested("diagnosis", { projectId }), select: { id: true } });
+  const canvas = await prisma.projectCanvas.findFirst({
+    where: canvasOfNested("diagnosis", { projectId }),
+    select: { id: true, project: { select: { clientId: true } } },
+  });
   if (!canvas) {
     return NextResponse.json({ error: "SIN_CANVAS", message: "Este proyecto todavía no tiene el Diagnóstico." }, { status: 409 });
   }
   if (!(await ultimaVersionPresentada(canvas.id))) {
+    // Los motivos de «Presentar», con el enlace a su sección. Si no se pueden leer, el mensaje de siempre.
+    const estado = await estadoDelDocumento(canvas.id).catch(() => null);
+    const base = canvas.project ? urlDeProyecto(canvas.project.clientId, projectId, canvas.id) : null;
+    const motivos = (estado?.motivosConSeccion ?? []).map((m) => ({
+      texto: m.texto,
+      seccion: m.seccion,
+      href: base && m.seccion ? `${base}&seccion=${encodeURIComponent(m.seccion)}` : base,
+    }));
     return NextResponse.json(
       {
         error: "SIN_PRESENTAR",
-        message: "Primero presenta el Diagnóstico: el enlace le muestra al cliente la versión presentada.",
+        message: motivos.length
+          ? `Primero presenta el Diagnóstico: el enlace le muestra al cliente la versión presentada. Para presentarlo falta: ${motivos.map((m) => m.texto).join(" ")}`
+          : "Primero presenta el Diagnóstico: el enlace le muestra al cliente la versión presentada. Ábrelo y toca «Presentar al cliente».",
+        motivos,
+        href: base,
       },
       { status: 409 },
     );

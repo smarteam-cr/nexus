@@ -10964,3 +10964,101 @@ cliente del SDK con un token a mano, ni escribe el vencimiento del token fuera d
 llamen.
 
 **Volver atrás:** revertir el commit. No hay SQL; la fila `hubspot-transporte` de `CronJobState` se puede dejar o borrar.
+
+## SmartLoop y el diagnóstico después de usarlos: el kickoff del servicio, explorar primero, todas las reuniones con texto y publicar diciendo por qué (2026-10-25, paso dos: M1, M2, L1 etapa 2, L2, L3 y L5)
+
+**Contexto.** Liliana con RC Inmobiliaria y CEMACO (23 oct) y la validación en producción en solo lectura
+(`docs/smartloop-plan.md` › «El recorrido de punta a punta» y `docs/diagnostico-plantillas-plan.md` › «Lo que salió de
+usarlo»). Elías aprobó el paso dos el 24 oct. Simulacro del 25 oct: 5 de los 7 proyectos del pipeline SmartLoop tienen
+`serviceType = proyecto_temporal` (RC Inmobiliaria, los dos de Honda/FACO y los dos de TEC); kölbi tiene `loop_*`.
+
+- **M1 · El kickoff sabe que es SmartLoop.**
+  - El runner (`lib/canvas/kickoff-generate.ts`) lee el servicio del proyecto (`servicioDelProyecto`: el elegido en Nexus o
+    el del pipeline). Con servicio, el mensaje deja de decir «Tipo de servicio contratado: proyecto_temporal» y suma el
+    bloque «EL SERVICIO CONTRATADO» (`servicioParaElKickoff`, `lib/servicios/catalogo.ts`): qué incluye, la cadencia, las
+    reuniones fijas, el ciclo en curso, que se trabaja por ciclos y que el primero arranca explorando por equipo, y el
+    nivel de servicio. La fuente es el catálogo (`validado: false`): no se inventaron rutinas nuevas (el roadmap nombraba
+    «stakeholders cada tres meses», que el catálogo no tiene; lo que el handoff acordó con el cliente manda).
+  - **Plantilla «Kickoff de servicio recurrente»** (`kickoff-recurrente`, `lib/entregables/registro.ts`): portada, objetivos,
+    cómo trabajamos cada ciclo, el primer ciclo, la cadencia, el equipo, lo que necesitamos de tu equipo, cómo nos pides
+    cosas, desde dónde arrancamos, canales y cierre. Las cuatro nuevas son prosa de siempre (`kickoff_prose`) y viven en
+    `KICKOFF_SECCIONES_DEL_SERVICIO`, FUERA del canon de siempre (`KICKOFF_CANVAS`) y del template del kickoff de siempre:
+    un proyecto nuevo, la reconciliación y el agente de un kickoff de implementación no las crean ni las piden
+    (`canonDelKickoff`, `SECCIONES_SOLO_DEL_SERVICIO`). Al generar con ella, lo de afuera vacío se borra y lo que tiene
+    algo se oculta **en el ojo del kickoff** (`__ocultas`, el set del editor; lib/kickoff/plantilla-del-kickoff.ts): el
+    cliente deja de verlo al «Subir», como cualquier cambio del kickoff. Lo que ocultó la plantilla se recuerda
+    (`__ocultasPorLaPlantilla`) y vuelve al regresar a la de siempre; lo que ocultó una persona, no, y lo que una persona volvió
+    a mostrar no se vuelve a ocultar al regenerar. «Mejorar con IA» de un kickoff así lee la misma voz y el mismo bloque del
+    servicio que la generación. ⚠ La primera versión
+    usaba el `hidden` del Json, como el diagnóstico, y en el kickoff eso es mudo (el editor, «Subir» y el enlace no lo
+    leen): lo cazó la revisión. *Por qué secciones nuevas y no reescribir las de siempre:* «Del hoy al nuevo sistema» y el
+    alcance cerrado son de una implementación; el registro congelado (`lib/landing/registry.test.ts`) suma las cuatro.
+  - **Un SmartLoop la usa sin pedirla** (`plantillaPorDefectoDelProyecto`, `lib/entregables/generar-server.ts`): solo un
+    servicio que avanza por ciclos. Pedir otra explícitamente (el chat con `plantilla`) sigue mandando para ESA corrida,
+    pero el siguiente «Regenerar» sin plantilla vuelve a la del servicio. *Por qué gana a la guardada:* los kickoffs que se
+    generaron después del 17 oct ya tienen anotada «kickoff» (la de siempre) aunque el proyecto sea SmartLoop; si la
+    guardada mandara, regenerar nunca los pondría al día. Generar un SmartLoop con la de siempre a propósito no tiene caso.
+  - **«Anterior al servicio»** (`lib/servicios/arranque-del-ciclo.ts`): un kickoff con contenido que no se generó con esa
+    plantilla. El riel lo marca en la fila del Kickoff y, en el primer ciclo con el diagnóstico sin escribir, el «Qué
+    sigue» pide regenerarlo antes que nada. Nunca se regenera solo.
+  - **`proyecto_temporal` en un pipeline recurrente:** el espejo de HubSpot lo deducía del nombre y lo volvía a escribir en
+    cada sincronización; desde ahora queda vacío (`tipoDeServicioDelEspejo`, `lib/servicios/tipo-de-servicio.ts`, una
+    línea en `lib/hubspot/sync-projects.ts`). Lo guardado lo limpia `scripts/smartloop-tipo-de-servicio.ts` (simulacro y
+    `--apply`, DESPUÉS del deploy). `servicioRecurrente` no se escribe: en el pipeline de SmartLoop el servicio lo da el
+    pipeline, y lo escriben solo el servicio y el alta. **INV55** lo vigila y nace «no bloquea» hasta su primer verde.
+- **M2 · Primero explorar, después el diagnóstico.** La exploración del ciclo = las reuniones que la exploración viva del
+  proyecto ya leyó (`propuesta.lecturas`) desde que cerró el ciclo anterior (en el primero, todas). Sin ninguna:
+  - el «Qué sigue» del Resumen, en Diagnóstico y con el diagnóstico sin escribir, lleva a la Exploración («Explora
+    primero, por equipo»), no al diagnóstico;
+  - la guía de la etapa Diagnóstico de SmartLoop lo dice (`lib/servicios/smartloop.ts`, la única regla que no sale del
+    documento de proceso, y lo dice su encabezado);
+  - el diagnóstico pide confirmación antes de generar (`pideConfirmacion`, el mismo 409 `SUPUESTOS_SIN_VALIDAR` del aviso
+    de supuestos) y «Antes de generar» lo muestra con el enlace a la Exploración. *Por qué un aviso y no una puerta:* un
+    ciclo 2 que parte de lo aprendido puede escribirse sin sesiones nuevas.
+- **L1 etapa 2 · El Contexto del diagnóstico propone todas las reuniones del proyecto con texto.** Además de las de las
+  sesiones de la exploración, ENTRAN SOLAS todas las reuniones de la membresía del proyecto (el chokepoint) CON EL CLIENTE
+  (las de puertas adentro —la Alineación, el Handoff interno, una revisión de precio— siguen esperando un «Usar»: el
+  diagnóstico lo lee el cliente, y la sala no se adivina sin los dominios de Smarteam) que dejaron
+  texto —transcripción o notas de Gemini, el predicado único (`sqlClaseDeTexto` vía
+  `lib/sessions/clase-de-texto-server.ts`)—, ya ocurridas y sin tocar, sin tope. El panel las muestra arriba con «Sacar»
+  (`false`), con «solo notas de Gemini» cuando corresponde. Es la misma regla que lee el runner
+  (`reunionesQueEntranSolasAlDiagnostico` ahora sale de `sugerenciasParaElDocumento`, fuentes `exploracion` y `proyecto`).
+  El material sigue con sus topes (6 enteras, el resto en resumen, 24 como mucho), pero van PRIMERO las elegidas a mano
+  y las de las sesiones de la exploración (`planDeLasElegidas`, `primero`): sin eso, las seis enteras de un ciclo 2 serían
+  los últimos seguimientos semanales. *Por qué solas y no sugeridas:* quedaban fuera la Alineación, el Handoff y «Caso CEMACO» porque nadie las había elegido; la elección humana
+  es sacar, no poner.
+- **L2 · Publicar dice por qué.** `revisarParaPresentar` devuelve cada motivo con la sección donde se arregla
+  (`detalle`); «Presentar» los lista con «Ir a la sección», y publicar el enlace sin presentar (409 `SIN_PRESENTAR`) los
+  repite en la ventana de Acceso, cada uno con su enlace (`?seccion=<key>`, el documento salta ahí una vez). **El desafío
+  principal lleva marca de revisión** como el enfoque: `SectionDef.revision` (entra por la definición, mismo esquema y
+  mismo `sectionType`; la marca es una primitiva del motor, `components/landing/marca-de-revision.tsx`, solo en edición).
+  Presentar exige el desafío revisado si tiene algo escrito y no está oculto, y regenerar no toca el revisado. ⚠ Un
+  diagnóstico en borrador de hoy pide, desde este deploy, marcar el desafío antes de presentarlo.
+- **L3 · Los detalles.**
+  1. La ficha: «Usar» deja el campo para escribir y la propuesta no vuelve con la primera letra (vuelve solo si la IA
+     propone OTRO texto); «escribe tú» deja el campo editable sin descartar la propuesta en el servidor.
+  2. Se arrastran la cuarta columna del problema (reordena la tabla de Acciones, que es de donde sale), las áreas de la
+     escala, los objetivos dentro de su grupo (`reordenarEnSusLugares`), los ítems de un grupo del alcance y las filas de
+     las tablas (equipos y preguntas). `SortableItems` aprendió `elemento: "tr" | "li"`: un `div` no puede vivir en un
+     `tbody`, por eso las filas no se movían.
+  3. El chat sabe que «Consecuencias positivas» son las Acciones (`avisoDelChat` de las dos secciones).
+  4. El «Contexto adicional» abre cerrado siempre que ya tenga algo (reuniones, notas o instrucciones), y recuerda lo
+     que eligió cada persona por documento (en su navegador).
+- **L5 · Lo que quedó del 23 oct.**
+  1. El documento de diagnóstico lee por equipo del cliente (`lib/canvas/diagnostico-por-equipo.ts`): cada reunión lleva
+     su equipo en el encabezado y un bloque dice qué equipos hablaron (con su área de la escala), cuáles no, y la regla
+     (lo de un equipo es de su área; un equipo sin reunión no tiene voz). Sin ningún equipo, el mensaje queda como antes.
+  2. **Un equipo también en las reuniones que no son sesiones de una exploración** (la entrega de servicio):
+     `SessionProject.equipoDeLaReunion` (SQL `scripts/sql/2026-10-25-smartloop.sql`), en el vínculo de la reunión con el
+     proyecto y no en `FirefliesSession` (no toca el chokepoint ni la tabla de las reuniones). Se elige en el Contexto del
+     diagnóstico, en cada reunión que entra sola (`PATCH .../contexto/diagnosis/equipo`). Ponerlo deja el vínculo como
+     revisado por una persona (`reviewedAt`, el candado contra el clasificador): si no, una reclasificación podía borrar
+     el vínculo y el equipo. Se lee y escribe por SQL
+     (`lib/sessions/equipo-de-la-reunion-server.ts`): sin la columna todavía, «sin equipo» y nada se cae. El de una sesión
+     de la exploración manda (se eligió para esa sesión) y se cambia en la sesión. *Se llama `equipoDeLaReunion` y no
+     `equipoDelCliente`:* la guarda de las fusiones lee cualquier `…Cliente` como un id de ficha.
+  3. El chat, al proponer generar el diagnóstico, dice en la línea si casi nada está confirmado o si es un ciclo sin
+     exploración; aplicarla es el «generar igual» del botón.
+
+**Volver atrás:** revertir el commit. El SQL es una columna nullable (se puede dejar). Si ya corrió el script,
+`UPDATE "Project" SET "serviceType" = 'proyecto_temporal' WHERE id IN (…)` con los ids que imprimió.

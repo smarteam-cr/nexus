@@ -37,7 +37,8 @@ import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./
 import { KickoffProseSection } from "@/components/canvas/kickoff-sections/KickoffSections";
 import { ConIntro } from "./partes";
 import { SortableItems } from "./sortable";
-import { SUGERENCIA_POR_REVISAR } from "./configs/diagnostico.defs";
+import { MarcaDeRevision } from "./marca-de-revision";
+import { reordenarEnSusLugares } from "@/lib/landing/reordenar";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────────────────────
 
@@ -236,9 +237,16 @@ export const ObjetivosDiagnosticoSection: FC<SectionProps<ObjetivosDiagnosticoDa
           return (
             <div key={g.titulo}>
               <h3 className="stl-obj-titulo">{g.titulo}</h3>
-              <div className="stl-grid stl-grid-3 stl-obj-lista">
-                {delGrupo.map(({ o, i }) => (
-                  <div key={i} className="stl-item stl-card stl-obj">
+              {/* Se arrastran dentro de su grupo (L3 etapa 2, 2026-10-24): los demás objetivos no se mueven de lugar. */}
+              <SortableItems
+                items={delGrupo}
+                disabled={!editable}
+                onReorder={(next) => set({ objetivos: reordenarEnSusLugares(objetivos, delGrupo.map((x) => x.i), next.map((x) => x.i)) })}
+                container={(nodes) => <div className="stl-grid stl-grid-3 stl-obj-lista">{nodes}</div>}
+              >
+                {({ o, i }, _k, handle) => (
+                  <div className="stl-item stl-card stl-obj">
+                    {handle}
                     {editable && <RemoveBtn onClick={() => set({ objetivos: removeAt(objetivos, i) })} />}
                     <Codigo value={o.id} editable={editable} placeholder="OBJ-01" hueco={g.cuali}
                       onCommit={(v) => set({ objetivos: replaceAt(objetivos, i, { ...o, id: v }) })} />
@@ -252,8 +260,8 @@ export const ObjetivosDiagnosticoSection: FC<SectionProps<ObjetivosDiagnosticoDa
                       <DatosDelResultado r={resultados.get((o.resultado ?? "").trim().toUpperCase())} editable={editable} onEditar={onEditar} />
                     )}
                   </div>
-                ))}
-              </div>
+                )}
+              </SortableItems>
               {editable && (
                 <AddBtn
                   label={g.cuali ? "Agregar objetivo cualitativo" : "Agregar objetivo cuantitativo"}
@@ -287,6 +295,7 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
   /* La cuarta columna de FUNDAUNA sale de la tabla de Acciones del MISMO documento: se lee, no se
      escribe acá. Sin el canal (otro documento que reuse este renderer), la columna no existe. */
   const acciones = (ctx?.diagnostico?.acciones ?? []).filter((a) => a.accion || a.id);
+  const reordenarAcciones = ctx?.diagnostico?.onReordenarAcciones;
   const conPositivas = !!ctx?.diagnostico && (acciones.length > 0 || !!editable);
 
   return (
@@ -361,8 +370,16 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
         {conPositivas && (
           <div className="stl-hilo-col stl-hilo-positivas">
             <h3 className="stl-hilo-titulo">Consecuencias positivas <span>acciones coherentes y cómo generan dinero</span></h3>
-            {acciones.map((a, i) => (
-              <div key={i} className={a.fuera ? "stl-hilo-card stl-hilo-fuera" : "stl-hilo-card"}>
+            {/* Se arrastran (L3 etapa 2, 2026-10-24): el orden nuevo es el de la tabla de Acciones, que es de donde salen. */}
+            <SortableItems
+              items={acciones}
+              disabled={!editable || !reordenarAcciones}
+              onReorder={(next) => reordenarAcciones?.(next.map((a, i) => a.indice ?? i))}
+              container={(nodes) => <>{nodes}</>}
+            >
+            {(a, _i, handle) => (
+              <div className={a.fuera ? "stl-item stl-hilo-card stl-hilo-fuera" : "stl-item stl-hilo-card"}>
+                {handle}
                 {a.id && <span className="stl-codigo">{a.id}</span>}
                 {a.fuera && <span className="stl-hilo-fuera-tag">Fuera de este alcance</span>}
                 <h4 className="stl-hilo-card-titulo">{a.accion}</h4>
@@ -373,7 +390,8 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
                   </p>
                 )}
               </div>
-            ))}
+            )}
+            </SortableItems>
             {editable && (
               <p className="stl-hilo-nota">
                 {acciones.length ? "Se editan en «Acciones coherentes»." : "Se llena sola con la tabla de «Acciones coherentes»."}
@@ -403,9 +421,16 @@ export const PreguntasDiagnosticoSection: FC<SectionProps<PreguntasDiagnosticoDa
               {editable && <th className="stl-props-actions" aria-label="Acciones" />}
             </tr>
           </thead>
-          <tbody>
-            {preguntas.map((p, i) => (
-              <tr key={i}>
+          {/* Las filas se arrastran (L3 etapa 2, 2026-10-24): la manija va junto a la ×. */}
+          <SortableItems
+            items={preguntas}
+            disabled={!editable}
+            onReorder={(next) => set({ preguntas: next })}
+            elemento="tr"
+            container={(nodes) => <tbody>{nodes}</tbody>}
+          >
+            {(p, i, handle) => (
+              <>
                 <td>
                   <Editable as="span" editable={editable} value={p.pregunta} placeholder="¿Qué pregunta no puede responder hoy?"
                     onCommit={(v) => set({ preguntas: replaceAt(preguntas, i, { ...p, pregunta: v }) })} />
@@ -416,12 +441,13 @@ export const PreguntasDiagnosticoSection: FC<SectionProps<PreguntasDiagnosticoDa
                 </td>
                 {editable && (
                   <td className="stl-props-actions">
+                    {handle}
                     <RemoveBtn onClick={() => set({ preguntas: removeAt(preguntas, i) })} title="Quitar esta pregunta" />
                   </td>
                 )}
-              </tr>
-            ))}
-          </tbody>
+              </>
+            )}
+          </SortableItems>
         </table>
       </div>
       {editable && <AddBtn label="Agregar pregunta" onClick={() => set({ preguntas: appendItem(preguntas, { pregunta: "", objetivos: "" }) })} />}
@@ -448,13 +474,6 @@ export const DiagnosticoHeroSection: FC<SectionProps<HeroData>> = (props) => {
 
 // ── Enfoque de la solución (con su marca de revisión) ───────────────────────────────────────
 
-function fechaCorta(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? ""
-    : d.toLocaleDateString("es-CR", { day: "numeric", month: "long", timeZone: "America/Costa_Rica" });
-}
-
 /**
  * El ENFOQUE DE LA SOLUCIÓN («Política rectora» hasta el 2026-10-23) es una SUGERENCIA de la IA hasta que el ejecutivo
  * lo revisa (2026-10-02): casi nunca se habla en las sesiones. Sin revisar, el diagnóstico no se presenta.
@@ -465,31 +484,16 @@ function fechaCorta(iso: string): string {
  */
 export const PoliticaDiagnosticoSection: FC<SectionProps<PoliticaDiagnosticoData>> = (props) => {
   const { data, editable, onChange } = props;
-  const revisada = typeof data?.revisadaAt === "string" && data.revisadaAt !== "";
   const tieneContenido = !!(data?.intro || (Array.isArray(data?.items) && data.items.length));
-  const fecha = revisada ? fechaCorta(data.revisadaAt!) : "";
   return (
     <>
-      {editable && tieneContenido && (
-        <div className={revisada ? "stl-revision stl-revision-ok" : "stl-revision"} role="note">
-          <span
-            className="stl-revision-estado"
-            title={
-              revisada
-                ? "Regenerar el diagnóstico ya no lo cambia."
-                : "Lo propuso la IA: casi nunca se habla en las sesiones. Ajústalo y márcalo como revisado antes de presentar."
-            }
-          >
-            {revisada ? `✓ Revisado${fecha ? ` el ${fecha}` : ""}` : SUGERENCIA_POR_REVISAR}
-          </span>
-          <button
-            type="button"
-            title={revisada ? "Al regenerar el diagnóstico, la IA vuelve a proponer el enfoque." : "Regenerar el diagnóstico ya no lo va a cambiar."}
-            onClick={() => onChange?.({ ...data, revisadaAt: revisada ? "" : new Date().toISOString() })}
-          >
-            {revisada ? "Dejar que la IA lo reescriba" : "Marcar como revisado"}
-          </button>
-        </div>
+      {editable && (
+        <MarcaDeRevision
+          revisadaAt={data?.revisadaAt}
+          tieneContenido={tieneContenido}
+          pendiente="Lo propuso la IA: casi nunca se habla en las sesiones. Ajústalo y márcalo como revisado antes de presentar."
+          onAlternar={(revisadaAt) => onChange?.({ ...data, revisadaAt })}
+        />
       )}
       {/* La prosa de siempre, con el diseño del enfoque (`diseno: "enfoque"` en la definición). */}
       <KickoffProseSection {...(props as unknown as Parameters<typeof KickoffProseSection>[0])} />
@@ -522,21 +526,29 @@ export const EquiposDiagnosticoSection: FC<SectionProps<EquiposDiagnosticoData>>
               {editable && <th className="stl-props-actions" aria-label="Acciones" />}
             </tr>
           </thead>
-          <tbody>
-            {filas.map((f, i) => (
-              <tr key={i}>
+          {/* Las filas se arrastran (L3 etapa 2, 2026-10-24): la manija va junto a la ×. */}
+          <SortableItems
+            items={filas}
+            disabled={!editable}
+            onReorder={(next) => set({ equipos: next })}
+            elemento="tr"
+            container={(nodes) => <tbody>{nodes}</tbody>}
+          >
+            {(f, i, handle) => (
+              <>
                 <td>{celda(i, "equipo", "El equipo o el área…", "stl-accion-titulo")}</td>
                 <td>{celda(i, "personas", "Quiénes…")}</td>
                 <td>{celda(i, "rol", "Qué hace en el proyecto…")}</td>
                 <td className={POR_VALIDAR.test(f.licencia ?? "") ? "stl-por-validar" : undefined}>{celda(i, "licencia", "Por validar")}</td>
                 {editable && (
                   <td className="stl-props-actions">
+                    {handle}
                     <RemoveBtn onClick={() => set({ equipos: removeAt(filas, i) })} title="Quitar este equipo" />
                   </td>
                 )}
-              </tr>
-            ))}
-          </tbody>
+              </>
+            )}
+          </SortableItems>
         </table>
       </div>
       {editable && (
@@ -558,22 +570,29 @@ function ItemsDeAlcance({
   onChange: (items: ItemDeAlcance[]) => void;
 }) {
   return (
-    <ul className="stl-alcance-items">
-      {items.map((it, i) => (
-        <li key={i} className="stl-item">
+    /* Los ítems se arrastran (L3 etapa 2, 2026-10-24); «Agregar ítem» va fuera de la lista ordenable. */
+    <>
+    <SortableItems
+      items={items}
+      disabled={!editable}
+      onReorder={onChange}
+      elemento="li"
+      itemClassName="stl-item"
+      container={(nodes) => <ul className="stl-alcance-items">{nodes}</ul>}
+    >
+      {(it, i, handle) => (
+        <>
+          {handle}
           {editable && <RemoveBtn onClick={() => onChange(removeAt(items, i))} title="Quitar este ítem" />}
           <Editable as="span" className="stl-codigo stl-alcance-ac" editable={editable} value={it.acciones ?? ""} placeholder="AC-01"
             onCommit={(v) => onChange(replaceAt(items, i, { ...it, acciones: v }))} />{" "}
           <Editable as="span" editable={editable} value={it.texto ?? ""} placeholder="Lo que incluye…"
             onCommit={(v) => onChange(replaceAt(items, i, { ...it, texto: v }))} />
-        </li>
-      ))}
-      {editable && (
-        <li>
-          <AddBtn label="Agregar ítem" onClick={() => onChange(appendItem(items, { texto: "", acciones: "" }))} />
-        </li>
+        </>
       )}
-    </ul>
+    </SortableItems>
+    {editable && <AddBtn label="Agregar ítem" onClick={() => onChange(appendItem(items, { texto: "", acciones: "" }))} />}
+    </>
   );
 }
 

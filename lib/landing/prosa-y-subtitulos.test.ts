@@ -60,8 +60,9 @@ describe("una sola forma de prosa, y con subtítulo para el chat", () => {
     /* 25 desde el 2026-09-28: el hilo del diagnóstico suma cuatro (situación actual, desafío,
        fortalezas y quiénes participan) y Planificación su política rectora, todas con la MISMA
        constante. 24 desde el 2026-10-02: las etapas del ciclo de vida de la Planificación pasaron
-       a tabla (`ciclo_vida_tabla`). */
-    expect(PROSA.length, "se movió el sectionType de las secciones de prosa").toBe(24);
+       a tabla (`ciclo_vida_tabla`). 28 desde el 2026-10-24: el kickoff de un servicio recurrente suma cuatro (cómo
+       trabajamos cada ciclo, el primer ciclo, la cadencia y cómo nos pides cosas), con la misma constante. */
+    expect(PROSA.length, "se movió el sectionType de las secciones de prosa").toBe(28);
   });
 
   it("⭐ las VEINTE comparten la MISMA constante — cero copias inline", () => {

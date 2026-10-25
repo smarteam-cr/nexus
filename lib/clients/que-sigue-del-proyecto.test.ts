@@ -236,6 +236,48 @@ describe("qué sigue en un servicio recurrente (2026-10-12)", () => {
   });
 });
 
+describe("primero el kickoff del servicio y la exploración, después el diagnóstico (M1 y M2, 2026-10-24)", () => {
+  const rc: PiezaParaQueSigue[] = [
+    { slug: "kickoff", etiqueta: "Kickoff", estado: "generada", stale: false },
+    { slug: "exploration", etiqueta: "Exploración", estado: "vacia", stale: false },
+    { slug: "diagnosis", etiqueta: "Diagnóstico", estado: "vacia", stale: false },
+  ];
+  const ciclo = (arranque: { lecturasDeExploracion: number; kickoffAnteriorAlServicio: boolean }, numero = 1) => ({
+    corto: "Diagnóstico", abierto: true, falta: "Falta el nivel de cada dimensión del área.", numero, piezaDeLaEtapa: "diagnosis", arranque,
+  });
+
+  it("RC Inmobiliaria: el kickoff de julio es anterior al servicio → regenerarlo", () => {
+    const q = queSigueDelProyecto({ ...base, piezas: rc, etapa: null, ciclo: ciclo({ lecturasDeExploracion: 0, kickoffAnteriorAlServicio: true }) });
+    expect(q.texto).toMatch(/kickoff es anterior al servicio/);
+    expect(q.accion).toEqual({ tipo: "pieza", slug: "kickoff", etiqueta: "Kickoff" });
+  });
+
+  it("con el kickoff al día y sin reuniones leídas en la exploración, propone explorar por equipo (no el diagnóstico)", () => {
+    const q = queSigueDelProyecto({ ...base, piezas: rc, etapa: null, ciclo: ciclo({ lecturasDeExploracion: 0, kickoffAnteriorAlServicio: false }) });
+    expect(q.texto).toMatch(/Explora primero, por equipo/);
+    expect(q.accion).toEqual({ tipo: "pieza", slug: "exploration", etiqueta: "Exploración" });
+  });
+
+  it("con una sesión leída en el ciclo, vuelve a lo que falta del diagnóstico", () => {
+    const q = queSigueDelProyecto({ ...base, piezas: rc, etapa: null, ciclo: ciclo({ lecturasDeExploracion: 1, kickoffAnteriorAlServicio: false }) });
+    expect(q.texto).toBe("Diagnóstico: falta el nivel de cada dimensión del área.");
+    expect(q.accion).toEqual({ tipo: "pieza", slug: "diagnosis", etiqueta: "Diagnóstico" });
+  });
+
+  it("el kickoff viejo solo se pide en el primer ciclo; con el diagnóstico escrito, ni el kickoff ni explorar", () => {
+    const segundo = queSigueDelProyecto({ ...base, piezas: rc, etapa: null, ciclo: ciclo({ lecturasDeExploracion: 0, kickoffAnteriorAlServicio: true }, 2) });
+    expect(segundo.accion).toEqual({ tipo: "pieza", slug: "exploration", etiqueta: "Exploración" });
+    const conDiagnostico = rc.map((p) => (p.slug === "diagnosis" ? { ...p, estado: "generada" as const } : p));
+    const q = queSigueDelProyecto({ ...base, piezas: conDiagnostico, etapa: null, ciclo: ciclo({ lecturasDeExploracion: 0, kickoffAnteriorAlServicio: true }) });
+    expect(q.accion).toEqual({ tipo: "pieza", slug: "diagnosis", etiqueta: "Diagnóstico" });
+  });
+
+  it("sin el dato del arranque (una respuesta vieja), lo de siempre", () => {
+    const q = queSigueDelProyecto({ ...base, piezas: rc, etapa: null, ciclo: { corto: "Diagnóstico", abierto: false, falta: null, numero: 1, piezaDeLaEtapa: "diagnosis" } });
+    expect(q.texto).toBe("El ciclo está en Diagnóstico: trabaja «Diagnóstico».");
+  });
+});
+
 describe("la recomendación de seguir con SmartLoop se ve siempre (prueba 13)", () => {
   const entrega: PiezaParaQueSigue[] = [{ slug: "delivery", etiqueta: "Entrega", estado: "por_activar", stale: false }];
   const recurrencia = { texto: "Propónle a Honda seguir con SmartLoop." };
