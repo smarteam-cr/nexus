@@ -178,7 +178,10 @@ describe("fuente única: la escala no está escrita en el código", () => {
   );
 
   const codigo = [
-    ...archivos("lib/escala", (f) => /\.tsx?$/.test(f) && !f.endsWith(".test.ts") && !f.includes(".fixture.")),
+    // lib/escala/nueve/ queda afuera a propósito: es el catálogo del borrador 9.0.0, la lista de cambios con su texto
+    // nuevo (y, donde un criterio se mueve o se repite en otra área, el de hoy). No muestra la escala: la escribe una vez,
+    // por scripts/escala-borrador-9-0.ts, en el borrador de la base.
+    ...archivos("lib/escala", (f) => /\.tsx?$/.test(f) && !f.endsWith(".test.ts") && !f.includes(".fixture.")).filter((rel) => !/[\\/]nueve[\\/]/.test(rel)),
     ...archivos("components/escala", (f) => /\.tsx?$/.test(f)),
     ...archivos("app/(shell)/escala", (f) => /\.tsx?$/.test(f)),
     ...archivos("app/api/escala", (f) => /\.tsx?$/.test(f)),

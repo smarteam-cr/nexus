@@ -275,7 +275,13 @@ Cambian cómo se calcula o qué se emite: van con una versión nueva de la espec
 ## 18. Cómo se trabaja la 9.0
 
 1. **Primero, la prueba.** La 8.9.1 se mide con 5 a 8 clientes reales que elige cada usuario (⛔ nunca Wherex), con el diagnóstico y con el chequeo. Los que el equipo valide pasan a ser los primeros casos de referencia: la prueba 6 de la especificación, hoy en espera.
-2. **El borrador.** Se abre el borrador 9.0.0 en Nexus (/escala/borrador, solo super admin) desde la 8.8.0 publicada. Cada cambio se hace ahí —el editor cubre criterios, niveles y dimensiones de la escala general— o bajando el .md, editándolo y subiéndolo, que es la vía para las ediciones y para retirar criterios. Antes de guardar, Nexus muestra qué cambia.
+2. **El borrador.** ✓ Escrito el 2026-10-25 (Elías, 24 oct: se escribe ya y se publica después de la prueba). Sale de la
+   8.9.1 con `scripts/escala-borrador-9-0.ts` (simulacro; con `--apply`, abre el borrador 9.0.0 en la base), que aplica
+   el catálogo `lib/escala/nueve/catalogo.ts`: una entrada por punto de este documento (juntos donde van juntos) y por
+   cambio de Insider, cada una con su nota en la bitácora. Lo claro entró; lo que este documento deja con dos caminos o
+   con «decidir» quedó como pregunta en la parte «Lo que falta decidir» del propio borrador, que frena la publicación.
+   La trazabilidad punto por punto: `docs/escala/borrador-9-0.md`. Desde ahí se sigue editando en Nexus
+   (/escala/borrador, solo super admin). Cada cambio se hace ahí —el editor cubre criterios, niveles y dimensiones de la escala general— o bajando el .md, editándolo y subiéndolo, que es la vía para las ediciones y para retirar criterios. Antes de guardar, Nexus muestra qué cambia.
 3. **Cada cambio con su porqué.** Se anota en la bitácora la razón y el feedback que lo originó; el panel de edición muestra el feedback de esa ancla y lo vincula.
 4. **Identificadores.** El criterio que cambia de dimensión, de nivel o de lo que mide deja su identificador y entra con otro: el siguiente número libre de su nivel. El que solo se acota o se precisa conserva el suyo. Cada identificador retirado se suma a la lista de retirados de la especificación y no se vuelve a usar (prueba 5); si cambia a qué perfiles aplica un criterio, lo dice el historial.
 5. **Las SEIS ediciones** (Ecommerce y retail, Banca, Educación, Inmobiliaria, Turismo y Automotriz). Cada criterio nuevo o retirado de la general se decide en las seis: lo reescriben, lo sacan o lo dejan como está, una sola de las tres (prueba 8). Conviene cerrar la general primero y pasar las ediciones de una vez. Lo que aparece en tres ediciones sube a la general.

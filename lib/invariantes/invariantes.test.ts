@@ -21,6 +21,7 @@ import {
   type Invariante,
 } from "./index";
 import { INV49, INV53 } from "./google";
+import { INV59 } from "./escala";
 import { INV55, INV55_BLOQUEA } from "./smartloop";
 import { INV51 } from "./empresa";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
@@ -812,7 +813,7 @@ describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 43 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 44 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -829,6 +830,8 @@ describe("el registro y el consumidor", () => {
       // parte 2); 55, ningún proyecto de SmartLoop dice ser «proyecto_temporal» (M1). Todas del 2026-10-25.
       "49", "50", "51", "52", "53", "54",
       "55",
+      // 59: ninguna versión publicada de la escala trae «Lo que falta decidir» (el borrador 9.0, 2026-10-25).
+      "59",
       // 52: cada reunión con empresa que terminó sin texto tiene su motivo guardado (T4); 53: ninguna reunión de 3 a 25
       // días sin revisar su conferencia de Meet (U3). Del 2026-10-25.
       // 49: la frescura de la copia de Google Meet (U1, 2026-10-25).
@@ -880,7 +883,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("43 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("44 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;
@@ -1056,5 +1059,20 @@ describe("frescura: INV53 (la revisión de las conferencias de Meet)", () => {
     expect(w.conferenceId).toEqual({ not: null });
     expect(w.date.gte.toISOString()).toBe(hace(25).toISOString());
     expect(w.date.lte.toISOString()).toBe(hace(3).toISOString());
+  });
+});
+
+describe("la escala: INV59 (ninguna publicada trae «Lo que falta decidir»)", () => {
+  const parte = (titulo: string) => ({ tipo: "prosa", bloques: [{ tipo: "titulo", nivel: 1, texto: titulo }] });
+  const version = (v: string, titulos: string[]) => ({ version: v, datos: { partes: titulos.map(parte) } });
+
+  it("una publicada con la parte del borrador viola, con su versión; sin ella cumple; mira solo las publicadas", async () => {
+    const llamadas: Llamada[] = [];
+    const bien = await INV59.correr(baseFalsa({ escalaVersion: [version("8.9.1", ["Cómo leer este documento", "Parte 1 — Qué es la escala"])] }, llamadas), AHORA);
+    expect(bien.ok).toBe(true);
+    expect(where(llamadas, "escalaVersion")).toEqual({ estado: "publicada" });
+    const mal = await INV59.correr(baseFalsa({ escalaVersion: [version("9.0.0", ["Cómo leer este documento", "Borrador 9.0.0 — Lo que falta decidir"])] }), AHORA);
+    expect(mal.ok).toBe(false);
+    expect(mal.lineas[0]).toContain("9.0.0");
   });
 });

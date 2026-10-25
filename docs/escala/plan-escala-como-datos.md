@@ -51,7 +51,7 @@ mediciones necesitan consultar criterios con SQL, el catálogo por versión se d
 | ⬜ | **Teoría y manual a Documentación** — la Parte 1 y la parte de uso de la Parte 2 salen de la escala; la medición queda en la especificación. |
 | ⬜ | **El banco de preguntas** — el botón «Test» en la escala: preguntas por dimensión, con sus opciones y el nivel de cada una, filtrables por área, dimensión y dónde se preguntan. Lo leen el cuestionario y las exploraciones. |
 | ✅ | **La mejora grande, primera parte: la 8.8.0** (2026-10-09) — la limpieza de la revisión de la 8.7 que no cambia qué se mide: las 13 decisiones donde se podían aplicar sin tocar identificadores, las 24 preguntas, las palabras, los umbrales, las condiciones «Si…», y el feedback del equipo (F-5, F-6, F-7). Se hizo antes que las dos etapas de arriba porque Elías la pidió primero. |
-| ⬜ | **La mejora grande, segunda parte: la 9.0** — lo que sí cambia qué se mide (criterios nuevos, partidos o movidos, riesgo, cálculo): [`pendiente-9-0.md`](pendiente-9-0.md). Antes, probar la 8.8 con 5 a 8 clientes reales (nunca Wherex). |
+| ⬜ | **La mejora grande, segunda parte: la 9.0** — lo que sí cambia qué se mide (criterios nuevos, partidos o movidos, riesgo, cálculo): [`pendiente-9-0.md`](pendiente-9-0.md). El borrador 9.0.0 está escrito (2026-10-25, [`borrador-9-0.md`](borrador-9-0.md)); se publica después de probar la 8.9.1 con 5 a 8 clientes reales (nunca Wherex). |
 
 ## Cómo se trabaja con la escala mientras tanto (etapas 2 y 3)
 

@@ -14,7 +14,7 @@ import type { Escala } from "@/lib/escala/documento/tipos";
 import { validarEscala, type ResultadoDePrueba } from "@/lib/escala/documento/validar";
 import { problemasDelMapa } from "@/lib/escala/herramientas/validar";
 import type { MapaDeHerramientas } from "@/lib/escala/herramientas/tipos";
-import { compararVersiones } from "./reglas";
+import { compararVersiones, tieneLoQueFaltaDecidir } from "./reglas";
 
 export interface RevisionDelBorrador {
   version: string;
@@ -51,6 +51,10 @@ export function revisarParaPublicar(args: {
   const ultima = [...args.publicadas].sort(compararVersiones).at(-1) ?? null;
   if (ultima && compararVersiones(escala.version, ultima) <= 0 && !args.publicadas.includes(escala.version)) {
     bloqueos.push(`La ${escala.version} no es posterior a la ${ultima}, que es la última publicada.`);
+  }
+
+  if (tieneLoQueFaltaDecidir(args.texto)) {
+    bloqueos.push("El borrador todavía trae «Lo que falta decidir»: decide lo que pregunta, escribe lo que falta y quita esa parte antes de publicar.");
   }
 
   const pruebas = validarEscala(escala, {

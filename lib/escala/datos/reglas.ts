@@ -19,6 +19,30 @@ export type AccionDelCambio = (typeof ACCIONES_DEL_CAMBIO)[number];
 export const ORIGENES_DEL_CAMBIO = ["importacion", "editor"] as const;
 export type OrigenDelCambio = (typeof ORIGENES_DEL_CAMBIO)[number];
 
+/**
+ * «Lo que falta decidir» (2026-10-25, el borrador 9.0.0): una parte de prosa que un borrador puede llevar con las
+ * preguntas para Elías y lo que falta escribir (lib/escala/nueve/informe.ts). Es del borrador: una versión que la
+ * trae no se publica (lib/escala/datos/publicar.ts y scripts/publicar-escala.ts), e INV59 avisa si alguna publicada
+ * la tiene.
+ */
+export const TITULO_DE_LO_QUE_FALTA_DECIDIR = (version: string) => `Borrador ${version} — Lo que falta decidir`;
+const LO_QUE_FALTA_DECIDIR = /^# Borrador \d+\.\d+\.\d+ — Lo que falta decidir\s*$/m;
+
+/** ¿El `.md` de una versión trae «Lo que falta decidir»? */
+export function tieneLoQueFaltaDecidir(texto: string): boolean {
+  return LO_QUE_FALTA_DECIDIR.test(texto);
+}
+
+/** Lo mismo sobre los datos (o lo que venga de la base): alguna parte de prosa con ese título. */
+export function datosConLoQueFaltaDecidir(datos: unknown): boolean {
+  const partes = (datos as { partes?: unknown } | null)?.partes;
+  if (!Array.isArray(partes)) return false;
+  return partes.some((p: { tipo?: unknown; bloques?: { tipo?: unknown; nivel?: unknown; texto?: unknown }[] }) => {
+    const t = Array.isArray(p?.bloques) ? p.bloques[0] : undefined;
+    return p?.tipo === "prosa" && t?.tipo === "titulo" && t.nivel === 1 && typeof t.texto === "string" && LO_QUE_FALTA_DECIDIR.test(`# ${t.texto}`);
+  });
+}
+
 /** Quién edita y publica la escala en Nexus: los super admin (Elías, 2026-10-08). */
 export function puedeEditarLaEscala(role: string | null | undefined): boolean {
   return role === "SUPER_ADMIN";
