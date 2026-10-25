@@ -235,8 +235,11 @@ describe("CLAUDE.md no llena el contexto de la sesión (2026-10-20)", () => {
      grande va como puntero con su condición (docs/KNOWN-ERRORS.md). */
   it("lo importado con @ suma menos de 150 KB", () => {
     const claude = leer("CLAUDE.md");
-    const importados = [...claude.matchAll(/(?:^|\s)@([\w./-]+\.md)\b/g)].map((m) => m[1]);
-    const total = importados.reduce((s, f) => s + (existsSync(join(RAIZ, f)) ? statSync(join(RAIZ, f)).size : 0), 0);
+    // Un archivo importado dos veces se carga una sola vez. Y se mide sin los \r: con core.autocrlf, en Windows cada
+    // línea pesa un byte más que en el repo y la cuenta cambiaba según la PC (2026-10-25: ARCHITECTURE.md contado dos
+    // veces y con CRLF pasaba el tope por 586 bytes; ver KNOWN-ERRORS, el test que falla solo en Windows).
+    const importados = [...new Set([...claude.matchAll(/(?:^|\s)@([\w./-]+\.md)\b/g)].map((m) => m[1]))];
+    const total = importados.reduce((s, f) => s + (existsSync(join(RAIZ, f)) ? Buffer.byteLength(leer(f).replace(/\r/g, ""), "utf8") : 0), 0);
     expect(
       total,
       `CLAUDE.md importa con @: ${importados.join(", ")} (${Math.round(total / 1024)} KB). Lo grande va como puntero.`,
