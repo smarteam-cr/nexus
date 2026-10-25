@@ -22,6 +22,11 @@ const r = (p: Partial<ReunionSinTranscripcion> = {}): ReunionSinTranscripcion =>
 
 describe("porQueFalta", () => {
   it("todavía no terminó", () => expect(porQueFalta(r(), mas(70))).toBe("todavia_no_termino"));
+  it("cancelada en el calendario: gana sobre todo lo demás (probablemente no ocurrió)", () => {
+    expect(porQueFalta(r({ canceladaEn: mas(-60) }), HOY)).toBe("cancelada");
+    expect(porQueFalta(r({ canceladaEn: mas(-60), enrichedAt: null }), mas(70))).toBe("cancelada");
+    expect(DE_QUIEN_ES.cancelada.dueno).toBe("nada");
+  });
   it("nadie del equipo invitado", () => {
     expect(porQueFalta(r({ organizerEmail: CLIENTE, participants: [CLIENTE] }), HOY)).toBe("sin_nadie_del_equipo");
   });
