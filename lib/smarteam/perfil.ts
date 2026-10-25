@@ -101,6 +101,20 @@ export interface ContextoDeLaEmpresaQueUsaNexus {
 }
 
 /**
+ * Lo que la preventa necesita de Smarteam para abrir y para «Contarle», sin inflar el pedido: la propuesta de valor y el
+ * position statement, cortos. Sin ninguno de los dos, null (y el pedido no suma nada).
+ */
+export function textoParaLaPreventa(c: ContextoDeLaEmpresaQueUsaNexus | null, max = 900): string | null {
+  if (!c) return null;
+  const partes = [c.perfil.propuestaDeValor && `Propuesta de valor: ${c.perfil.propuestaDeValor}`, c.perfil.positionStatement && `Position statement: ${c.perfil.positionStatement}`].filter(
+    (x): x is string => !!x,
+  );
+  if (!partes.length) return null;
+  const t = partes.join("\n");
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
+
+/**
  * El bloque que se le pasa a un agente: lo que Nexus sabe de la empresa que lo usa. Sin lo que falta (una sección vacía
  * no se nombra: el agente no tiene que adivinar qué quiso decir un título sin nada abajo).
  */

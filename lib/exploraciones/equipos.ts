@@ -10,8 +10,14 @@
  * datos, métricas), con un banco por área.
  *
  * Un equipo vive en la sesión (`SesionPlaneada.equipo`), no en la reunión: se elige antes de que la reunión exista.
- * Ventas, Marketing y Servicio son las áreas 1, 2 y 3 de la escala (lib/escala/areas-por-hub.ts); Dirección, Operaciones
- * y Tecnología no tienen área.
+ * Ventas, Marketing y Servicio son las áreas 1, 2 y 3 de la escala (lib/escala/areas-por-hub.ts); Dirección, Operaciones,
+ * Financiero y Tecnología no tienen área.
+ *
+ * K1 (2026-10-26, docs/exploracion-mejoras-plan.md): el equipo Financiero (lo facturado contra lo cobrado, la distinción
+ * de la nota de Andrés), un tema de INVERSIÓN en cada equipo (cuánto, en qué, por qué y cómo saben si vale la pena), y cada
+ * tema de un equipo con área dice qué dimensiones de la escala ayuda a ubicar (`dimensiones`): la guía elige primero el
+ * que ubica las que todavía no tienen evidencia (plan-de-la-guia.ts › planDelEquipo). El banco de preguntas por
+ * departamento de Andrés (`departamentos.md`) todavía no está en el repo: cuando llegue, se contrasta tema por tema.
  *
  * Los temas de un equipo se escriben `<equipo>.<tema>` (`marketing.medicion`): van en el mismo campo `para` que las
  * tarjetas del marco (`metas`) y las dimensiones de la escala (`1.3`), así «En vivo», la lectura de la reunión, los
@@ -20,11 +26,11 @@
  */
 import type { PasoDeLaPregunta } from "./plan-de-la-guia";
 
-export const EQUIPOS_DEL_CLIENTE = ["direccion", "ventas", "marketing", "servicio", "operaciones", "tecnologia"] as const;
+export const EQUIPOS_DEL_CLIENTE = ["direccion", "ventas", "marketing", "servicio", "operaciones", "financiero", "tecnologia"] as const;
 export type ClaveDeEquipo = (typeof EQUIPOS_DEL_CLIENTE)[number];
 
 /** Lo que se le pregunta a un equipo, en el orden de la conversación. */
-export const TEMAS_DEL_EQUIPO = ["prioridades", "estructura", "medicion", "proceso", "sistemas", "datos", "dolor"] as const;
+export const TEMAS_DEL_EQUIPO = ["prioridades", "estructura", "medicion", "proceso", "sistemas", "datos", "dolor", "inversion"] as const;
 export type TemaDelEquipo = (typeof TEMAS_DEL_EQUIPO)[number];
 
 export interface DefinicionDelTema {
@@ -38,6 +44,11 @@ export interface DefinicionDelTema {
   /** La pregunta de base, tuteando al cliente. */
   pregunta: string;
   repreguntas: readonly string[];
+  /**
+   * Las dimensiones de la escala del área del equipo que este tema ayuda a ubicar (K1 etapa 3): la guía elige primero el
+   * tema que ubica las que todavía no tienen evidencia. Solo en los equipos con área; sin él, el tema no ubica ninguna.
+   */
+  dimensiones?: readonly string[];
 }
 
 export interface DefinicionDelEquipo {
@@ -89,8 +100,16 @@ const DIRECCION: DefinicionDelEquipo = {
       pregunta: "De lo que vimos con tus equipos, ¿qué problema le pega más a los ingresos y cuál atacarías primero?",
       repreguntas: ["¿Cuál genera más riesgo?", "¿Cuál afecta más la experiencia del cliente?", "¿Cuánto les cuesta, más o menos, no resolverlo este año?"],
     },
+    {
+      tema: "inversion",
+      nombre: "Cuánto invierten",
+      busca: "cuánto invierte la empresa en crecer (equipo, herramientas, agencias) y cómo decide si vale la pena",
+      paso: "impacto",
+      pregunta: "¿Cuánto invierten hoy en crecer, en qué se va ese dinero y cómo deciden si vale la pena?",
+      repreguntas: ["¿Qué inversión de este año te dio más resultado?", "¿Cuál sientes que no rindió?", "¿Con qué número la justificas ante la junta?"],
+    },
   ],
-  prioridad: ["prioridades", "medicion", "dolor"],
+  prioridad: ["prioridades", "medicion", "dolor", "inversion"],
   cierre: "Si dentro de un año la operación fuera mucho más madura, ¿qué podrían hacer que hoy no pueden?",
 };
 
@@ -107,6 +126,7 @@ const VENTAS: DefinicionDelEquipo = {
       paso: "situacion",
       pregunta: "¿Cómo está armado el equipo comercial: cuántas personas, qué rol tiene cada una y qué vende?",
       repreguntas: ["¿Quién compra y cómo llegan normalmente los clientes?", "¿Cómo se reparten los clientes o los contactos?", "¿Quién revisa cómo va cada vendedor?"],
+      dimensiones: ["1.4"],
     },
     {
       tema: "medicion",
@@ -115,6 +135,7 @@ const VENTAS: DefinicionDelEquipo = {
       paso: "impacto",
       pregunta: "¿Qué meta tiene el equipo este año y con qué número mides a cada vendedor?",
       repreguntas: ["¿Cuánto es hoy ese número y cuánto debería ser?", "¿De dónde lo sacas y cuánto tarda armarlo?", "¿Cuánto dura, en promedio, una venta?"],
+      dimensiones: ["1.7", "1.8"],
     },
     {
       tema: "proceso",
@@ -123,6 +144,7 @@ const VENTAS: DefinicionDelEquipo = {
       paso: "situacion",
       pregunta: "Muéstrame cómo gestionaste tu última venta, desde que apareció el cliente hasta que compró.",
       repreguntas: ["¿Qué etapas tiene la venta?", "¿Qué información necesitas antes de cotizar?", "¿Qué haces cuando alguien deja de responder?"],
+      dimensiones: ["1.1", "1.6"],
     },
     {
       tema: "sistemas",
@@ -135,6 +157,7 @@ const VENTAS: DefinicionDelEquipo = {
         "¿Qué pasas a mano de un sistema a otro?",
         "¿Cómo usan WhatsApp con los clientes y queda registro?",
       ],
+      dimensiones: ["1.2", "1.3"],
     },
     {
       tema: "dolor",
@@ -144,8 +167,17 @@ const VENTAS: DefinicionDelEquipo = {
       pregunta: "¿Dónde se les pierden más oportunidades y cuántas, más o menos, al mes?",
       repreguntas: ["¿Cuánto representa eso en ventas?", "¿Qué tareas administrativas te quitan más tiempo?", "¿Qué intentaron para evitarlo?"],
     },
+    {
+      tema: "inversion",
+      nombre: "Cuánto invierten",
+      busca: "cuánto invierten en vender (equipo, herramientas, comisiones, eventos), en qué y cómo saben si rinde",
+      paso: "impacto",
+      pregunta: "¿Cuánto invierten en el equipo comercial y sus herramientas, y cómo saben si esa inversión rinde?",
+      repreguntas: ["¿Cuánto les cuesta, más o menos, conseguir un cliente nuevo?", "¿Qué herramienta pagan y casi no usan?", "¿En qué invertirías primero si tuvieras más?"],
+      dimensiones: ["1.7"],
+    },
   ],
-  prioridad: ["medicion", "proceso", "dolor", "sistemas", "estructura"],
+  prioridad: ["medicion", "proceso", "dolor", "sistemas", "estructura", "inversion"],
   cierre: "Si esto funcionara perfecto en seis meses, ¿qué tendría que hacer el CRM para facilitarte de verdad el trabajo?",
 };
 
@@ -162,6 +194,7 @@ const MARKETING: DefinicionDelEquipo = {
       paso: "situacion",
       pregunta: "¿Cómo está armado hoy marketing: cuántas personas, qué hace cada una y con qué agencias trabajan?",
       repreguntas: ["¿Qué hace la agencia y qué hacen ustedes?", "¿Quién decide qué campaña sale y cuándo?", "¿Quién responde los mensajes que llegan de las campañas?"],
+      dimensiones: ["2.4"],
     },
     {
       tema: "medicion",
@@ -174,6 +207,7 @@ const MARKETING: DefinicionDelEquipo = {
         "¿Cada cuánto lo revisas y de dónde lo sacas?",
         "¿Puedes saber cuántas ventas salieron de una campaña?",
       ],
+      dimensiones: ["2.8"],
     },
     {
       tema: "proceso",
@@ -186,6 +220,7 @@ const MARKETING: DefinicionDelEquipo = {
         "¿Cómo sabes qué campaña originó una conversación?",
         "¿Qué pasa con quien preguntó y no compró?",
       ],
+      dimensiones: ["2.1", "2.7"],
     },
     {
       tema: "sistemas",
@@ -198,6 +233,7 @@ const MARKETING: DefinicionDelEquipo = {
         "¿Qué tienen que pasar a mano de un sistema a otro?",
         "¿Cómo distinguen a un cliente nuevo de uno que ya compró?",
       ],
+      dimensiones: ["2.2", "2.3", "2.6"],
     },
     {
       tema: "dolor",
@@ -211,8 +247,17 @@ const MARKETING: DefinicionDelEquipo = {
         "¿Cuánto representa eso en ventas, más o menos?",
       ],
     },
+    {
+      tema: "inversion",
+      nombre: "Cuánto invierten",
+      busca: "cuánto invierten en marketing (pauta, agencias, herramientas), en qué canal y cómo saben si vale la pena",
+      paso: "impacto",
+      pregunta: "¿Cuánto invierten al mes en marketing, en qué canales, y cómo saben si esa inversión vale la pena?",
+      repreguntas: ["¿Cuánto se va en pauta y cuánto en agencias?", "¿Qué canal rinde más por cada dólar?", "¿Qué inversión cortarías si tuvieras que hacerlo mañana?"],
+      dimensiones: ["2.7", "2.8"],
+    },
   ],
-  prioridad: ["medicion", "proceso", "dolor", "sistemas", "estructura"],
+  prioridad: ["medicion", "proceso", "dolor", "sistemas", "estructura", "inversion"],
   cierre: "Si marketing funcionara perfecto en seis meses, ¿qué sería distinto y qué número te gustaría poder mostrar?",
 };
 
@@ -229,6 +274,7 @@ const SERVICIO: DefinicionDelEquipo = {
       paso: "situacion",
       pregunta: "¿Cómo está armado servicio al cliente: cuántas personas, en qué turnos y qué casos atiende cada una?",
       repreguntas: ["¿Por qué canales llegan los casos?", "¿Qué volumen manejan al mes?", "¿Quién decide cuándo un caso escala?"],
+      dimensiones: ["3.4"],
     },
     {
       tema: "medicion",
@@ -236,7 +282,12 @@ const SERVICIO: DefinicionDelEquipo = {
       busca: "con qué números miden el servicio (tiempo de respuesta, casos resueltos, satisfacción, lo que recuperan)",
       paso: "impacto",
       pregunta: "¿Con qué números miden hoy el servicio, y cuánto es cada uno?",
-      repreguntas: ["¿Cuál es el tiempo de respuesta promedio?", "¿De dónde sacan esos números?", "¿Cuánto debería ser para que digas que va bien?"],
+      repreguntas: [
+        "¿Cuál es el tiempo de respuesta y el de resolución, en promedio?",
+        "¿Cuántos clientes se les van al año, y saben por qué?",
+        "¿Cuánta rotación tiene el equipo, y cuánto tarda alguien nuevo en atender bien?",
+      ],
+      dimensiones: ["3.5", "3.8"],
     },
     {
       tema: "proceso",
@@ -249,6 +300,7 @@ const SERVICIO: DefinicionDelEquipo = {
         "¿Después de cuántos días la consideran enfriada?",
         "¿Qué excepciones se les complican?",
       ],
+      dimensiones: ["3.1", "3.6", "3.7"],
     },
     {
       tema: "sistemas",
@@ -261,6 +313,7 @@ const SERVICIO: DefinicionDelEquipo = {
         "¿Qué información suele faltar para resolverlo?",
         "¿Qué pasas a mano de un sistema a otro?",
       ],
+      dimensiones: ["3.2", "3.3"],
     },
     {
       tema: "dolor",
@@ -270,8 +323,17 @@ const SERVICIO: DefinicionDelEquipo = {
       pregunta: "¿Qué casos se les complican o se pierden, y cuántos son al mes?",
       repreguntas: ["¿Cuántas oportunidades recuperan para ventas y cuántas terminan en venta?", "¿Cuánto tiempo se va en eso?", "¿Cuánto representa en plata?"],
     },
+    {
+      tema: "inversion",
+      nombre: "Cuánto invierten",
+      busca: "cuánto cuesta atender (personas, herramientas, canales), en qué se va y cómo saben si rinde",
+      paso: "impacto",
+      pregunta: "¿Cuánto les cuesta hoy atender a los clientes, en personas y herramientas, y cómo saben si rinde?",
+      repreguntas: ["¿Cuánto cuesta atender un caso, más o menos?", "¿Qué canal es el más caro de atender?", "¿Qué inversión les ahorraría más tiempo?"],
+      dimensiones: ["3.8"],
+    },
   ],
-  prioridad: ["medicion", "proceso", "dolor", "sistemas", "estructura"],
+  prioridad: ["medicion", "proceso", "dolor", "sistemas", "estructura", "inversion"],
   cierre: "Si el servicio funcionara perfecto en seis meses, ¿qué sería distinto para el cliente y para tu equipo?",
 };
 
@@ -321,9 +383,76 @@ const OPERACIONES: DefinicionDelEquipo = {
       pregunta: "¿Dónde se traba hoy la operación, y cuánto les cuesta al mes en tiempo o en errores?",
       repreguntas: ["¿Cuántos pedidos al mes tienen algún problema?", "¿Cuántas horas se van en coordinar a mano?", "¿Qué le pasa al cliente cuando falla?"],
     },
+    {
+      tema: "inversion",
+      nombre: "Cuánto invierten",
+      busca: "cuánto invierten en la operación (personas, transporte, sistemas) y dónde se va el dinero",
+      paso: "impacto",
+      pregunta: "¿Cuánto les cuesta al mes la operación, y en qué se va la mayor parte?",
+      repreguntas: ["¿Qué parte de ese costo es por errores o reprocesos?", "¿Qué inversión les bajaría ese costo?", "¿Cómo deciden si vale la pena?"],
+    },
   ],
-  prioridad: ["proceso", "dolor", "sistemas", "medicion", "estructura"],
+  prioridad: ["proceso", "dolor", "sistemas", "medicion", "estructura", "inversion"],
   cierre: "¿Qué tendría que pasar para que la operación no dependa de pasos a mano?",
+};
+
+const FINANCIERO: DefinicionDelEquipo = {
+  clave: "financiero",
+  nombre: "Financiero",
+  area: null,
+  quienes: "Finanzas, contabilidad o cobros: cómo se factura y se cobra, y qué números ve la gerencia.",
+  temas: [
+    {
+      tema: "estructura",
+      nombre: "Cómo está armado",
+      busca: "quién factura, quién cobra, con qué sistema contable y quién arma los reportes",
+      paso: "situacion",
+      pregunta: "¿Cómo está armado finanzas: quién factura, quién cobra y en qué sistema llevan la contabilidad?",
+      repreguntas: ["¿Quién arma los reportes para la gerencia?", "¿Qué hace un proveedor y qué hacen ustedes?", "¿Quién aprueba un descuento o una nota de crédito?"],
+    },
+    {
+      tema: "proceso",
+      nombre: "De la venta al cobro",
+      busca: "cómo pasa una venta cerrada a la factura y al cobro, qué pasos son a mano y dónde se atrasa",
+      paso: "situacion",
+      pregunta: "Recórreme una venta desde que se cierra hasta que se cobra: ¿qué pasa en cada paso y quién lo hace?",
+      repreguntas: ["¿Qué datos de la venta te llegan y cuáles tienes que buscar?", "¿Qué pasos son a mano?", "¿Dónde suele atrasarse?"],
+    },
+    {
+      tema: "medicion",
+      nombre: "Cerrado, facturado y cobrado",
+      busca: "cómo distinguen lo cerrado, lo facturado y lo cobrado, de qué período, de qué fuente y con qué definición, y cuánto se separan",
+      paso: "impacto",
+      pregunta: "¿Cuánto se separa lo que Ventas da por cerrado de lo que se factura y de lo que de verdad se cobra?",
+      repreguntas: ["¿De qué período y de qué sistema sale cada número?", "¿Cuánto tarda, en promedio, una venta en cobrarse?", "¿Qué parte se queda sin cobrar?"],
+    },
+    {
+      tema: "datos",
+      nombre: "Los reportes de la gerencia",
+      busca: "qué reportes usa la gerencia, de dónde salen, cuánto tarda armarlos y qué no pueden ver",
+      paso: "situacion",
+      pregunta: "¿Qué reportes le pasas a la gerencia, de dónde sacas los números y cuánto tardas en armarlos?",
+      repreguntas: ["¿Qué reporte te piden y no puedes armar?", "¿Qué número se discute porque cada área tiene el suyo?", "¿Cada cuánto los actualizas?"],
+    },
+    {
+      tema: "inversion",
+      nombre: "Cuánto invierten",
+      busca: "cuánto le cuesta a la empresa facturar y cobrar (personas, sistemas, comisiones bancarias) y qué ahorraría",
+      paso: "impacto",
+      pregunta: "¿Cuánto les cuesta facturar y cobrar, en personas y sistemas, y qué inversión les ahorraría más?",
+      repreguntas: ["¿Cuántas horas al mes se van en conciliar?", "¿Qué pagan por cobrar (comisiones, plataformas)?", "¿Cómo deciden si una inversión así vale la pena?"],
+    },
+    {
+      tema: "dolor",
+      nombre: "Dónde se traba el cobro",
+      busca: "cuánto está vencido, qué errores de facturación se repiten y cuánto cuestan",
+      paso: "impacto",
+      pregunta: "¿Cuánto tienen hoy vencido sin cobrar, y qué errores de facturación se repiten?",
+      repreguntas: ["¿Cuánto representa eso en plata al mes?", "¿Qué cliente o qué tipo de venta se atrasa más?", "¿Qué intentaron para cobrarlo antes?"],
+    },
+  ],
+  prioridad: ["medicion", "proceso", "dolor", "datos", "estructura", "inversion"],
+  cierre: "Si los números de la venta y los del cobro fueran los mismos, ¿qué decisiones tomarías distinto?",
 };
 
 const TECNOLOGIA: DefinicionDelEquipo = {
@@ -354,7 +483,11 @@ const TECNOLOGIA: DefinicionDelEquipo = {
       busca: "qué sistemas se hablan entre sí, cómo (API, archivos, a mano), cada cuánto y qué falla",
       paso: "situacion",
       pregunta: "¿Qué sistemas se hablan entre sí, de qué manera, y qué falla hoy en esas integraciones?",
-      repreguntas: ["¿Tienen API o se pasa por archivos?", "¿Cada cuánto se sincronizan?", "¿Qué datos tendrían que ir a HubSpot y cuáles volver?"],
+      repreguntas: [
+        "¿Qué falla hoy entre el ERP y los demás sistemas, y cada cuánto se sincronizan?",
+        "¿Cómo se conectan la telefonía y WhatsApp, y queda registro de cada conversación?",
+        "¿Qué datos tendrían que ir a HubSpot y cuáles volver?",
+      ],
     },
     {
       tema: "datos",
@@ -372,8 +505,16 @@ const TECNOLOGIA: DefinicionDelEquipo = {
       pregunta: "¿Qué se rompe más seguido en los datos o las integraciones, y cuánto tiempo les cuesta al mes?",
       repreguntas: ["¿Qué reporte no pueden armar por eso?", "¿Cuántas horas se van en corregir datos?", "¿Qué intentaron y no funcionó?"],
     },
+    {
+      tema: "inversion",
+      nombre: "Cuánto invierten",
+      busca: "cuánto invierten en sistemas e integraciones (licencias, proveedores, desarrollo) y qué les rinde",
+      paso: "impacto",
+      pregunta: "¿Cuánto invierten al año en sistemas, licencias y proveedores, y qué les rinde menos de lo que cuesta?",
+      repreguntas: ["¿Qué licencias pagan y se usan poco?", "¿Cuánto les cuesta mantener las integraciones?", "¿En qué invertirías primero?"],
+    },
   ],
-  prioridad: ["proceso", "sistemas", "datos", "dolor", "estructura"],
+  prioridad: ["proceso", "sistemas", "datos", "dolor", "estructura", "inversion"],
   cierre: "Si los datos estuvieran donde los necesitas, ¿qué podrían hacer que hoy no pueden?",
 };
 
@@ -383,6 +524,7 @@ export const EQUIPOS: Readonly<Record<ClaveDeEquipo, DefinicionDelEquipo>> = {
   marketing: MARKETING,
   servicio: SERVICIO,
   operaciones: OPERACIONES,
+  financiero: FINANCIERO,
   tecnologia: TECNOLOGIA,
 };
 
@@ -392,7 +534,7 @@ export function esEquipo(x: unknown): x is ClaveDeEquipo {
 
 /**
  * El área de la escala que se suma a las áreas en juego al elegir un equipo: la suya, si la escala la trae y todavía no
- * está. null si ya está, si el equipo no tiene área (Dirección, Operaciones, Tecnología) o si ya hay tres en juego.
+ * está. null si ya está, si el equipo no tiene área (Dirección, Operaciones, Financiero, Tecnología) o si ya hay tres.
  */
 export function areaQueSuma(equipo: ClaveDeEquipo, enJuego: readonly string[], areasDeLaEscala: readonly { id: string }[]): string | null {
   const area = EQUIPOS[equipo].area;
@@ -463,6 +605,7 @@ const PALABRAS: Readonly<Record<ClaveDeEquipo, RegExp>> = {
   marketing: /\b(marketing|mercadeo|marketing hub|pauta|campanas?|redes sociales|email marketing|agencias?)\b/,
   servicio: /\b(servicio al cliente|atencion al cliente|sac|soporte|service hub|postventa|posventa|tickets?)\b/,
   operaciones: /\b(operaciones|operativ[oa]s?|logistica|entregas?|bodega|inventarios?|despachos?|devoluciones|talleres?|anticipos?)\b/,
+  financiero: /\b(finanzas|financier[oa]s?|contabilidad|contador(a|es)?|facturacion|cobros?|cobranza|tesoreria|cuentas por cobrar)\b/,
   // Sin «ti» (es «para ti») ni «desarrollo» suelto (el del negocio).
   tecnologia: /\b(tecnologia|sistemas|data hub|integracion(es)?|erp|api|arquitectura tecnica|desarrollo a la medida)\b/,
 };

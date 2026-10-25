@@ -30,6 +30,8 @@ export interface PreguntaARegenerar {
   paso?: PasoDeLaPregunta;
   /** Lo que dijo el cliente de este tema y de dónde, si dijo algo. */
   motivo?: { texto: string; de: string } | null;
+  /** K7: parte solo de lo que marcó en el test: la nueva también lo valida. */
+  aValidar?: boolean;
   /** Para una dimensión: la pregunta de la escala y dónde parece estar. */
   dimension?: { pregunta: string; nivel: string | null } | null;
   /** La pregunta de hoy y sus repreguntas: la nueva tiene que ser otra. */
@@ -48,7 +50,7 @@ const PROMPT_DE_LA_VENTA = `Eres el coach de ventas de Smarteam, una consultora 
 
 Reglas:
 - Le habla al cliente de TÚ (tuteo). Nunca voseo ni «usted»: «puedes», «cuéntame», «tienes», «para ti».
-- SOLO la pregunta: corta (20 palabras como mucho), directa a lo que le duele. Sin repetir lo que el cliente ya dijo ni decir de dónde sale (el vendedor lo ve aparte): nada de «Dijiste que…», «En el diagnóstico…» ni citas.
+- SOLO la pregunta: corta (20 palabras como mucho), directa a lo que le duele. Sin repetir lo que el cliente ya dijo ni decir de dónde sale (el vendedor lo ve aparte): nada de «Dijiste que…» ni citas. La única excepción: si la pregunta es «a validar» (lo marcó en el test en línea, no lo dijo), abre con lo que marcó y pide cómo se ve en su día a día: «En el diagnóstico marcaste que …; ¿…?» (35 palabras como mucho).
 - Distinta de la de hoy y de las otras de la guía: otro ángulo del mismo paso, no la misma con otras palabras.
 - El paso manda: situación (cómo pasa hoy), impacto (cuánto le afecta y le cuesta), solución (cómo lo quiere resolver, qué ya intentó), cuándo, con qué (quién decide y con qué presupuesto).
 - Lo que el cliente ya dijo NO se vuelve a preguntar: parte de ahí y pregunta lo que sigue.
@@ -100,7 +102,13 @@ function cuerpo(o: EntradaDeUnaPregunta): string {
   if (proxima) l.push("", "=== LA PRÓXIMA SESIÓN ===", proxima);
   l.push("", "=== LA PREGUNTA QUE SE CAMBIA ===", `Tema: ${q.nombre} (${q.para})`);
   if (q.paso) l.push(`Paso: ${q.paso} (${QUE_BUSCA_CADA_PASO[q.paso]})`);
-  if (q.motivo) l.push(`Parte de lo que dijo el cliente: «${q.motivo.texto}» (${q.motivo.de})`);
+  if (q.motivo) {
+    l.push(
+      q.aValidar
+        ? `A VALIDAR: lo MARCÓ EN EL TEST (no lo dijo en una reunión): «${q.motivo.texto}» (${q.motivo.de}). La nueva abre con lo que marcó y pide un caso de su día a día.`
+        : `Parte de lo que dijo el cliente: «${q.motivo.texto}» (${q.motivo.de})`,
+    );
+  }
   if (q.dimension) l.push(`Pregunta de la escala: ${q.dimension.pregunta}${q.dimension.nivel ? ` · hoy creemos que está en ${q.dimension.nivel}` : ""}`);
   l.push(`La de hoy (escribe OTRA): ${q.actual}`);
   if (q.repreguntas.length) l.push(`Sus repreguntas de hoy: ${q.repreguntas.join(" · ")}`);
@@ -143,18 +151,19 @@ export const MAX_PALABRAS_DE_UNA_PREGUNTA = 30;
 export function revisarPregunta(
   crudaDelAgente: unknown,
   repreguntasDelAgente: unknown,
-  o: { yaEstan: readonly string[]; saber?: SaberDelCliente | null; tema?: string | null; paso?: PasoDeLaPregunta | null },
+  o: { yaEstan: readonly string[]; saber?: SaberDelCliente | null; tema?: string | null; paso?: PasoDeLaPregunta | null; aValidar?: boolean },
 ): LecturaDeUnaPregunta {
   const cruda = typeof crudaDelAgente === "string" ? crudaDelAgente.trim().slice(0, LARGO_DE_UNA_PREGUNTA) : "";
-  const pregunta = cruda ? sinCitaAdelante(cruda) : "";
+  // La que valida lo que marcó en el test (K7) dice a propósito de dónde sale: ni se le quita ni cuenta como repetir.
+  const pregunta = cruda ? (o.aValidar ? cruda : sinCitaAdelante(cruda)) : "";
   if (!pregunta) return { ok: false, motivo: "vacia" };
   const repreguntas = (Array.isArray(repreguntasDelAgente) ? repreguntasDelAgente : [])
     .filter((r): r is string => typeof r === "string" && !!r.trim())
     .map((r) => r.trim().slice(0, LARGO_DE_UNA_REPREGUNTA))
     .slice(0, MAX_REPREGUNTAS);
-  if (pregunta.split(/\s+/).length > MAX_PALABRAS_DE_UNA_PREGUNTA) return { ok: false, motivo: "larga" };
+  if (pregunta.split(/\s+/).length > (o.aValidar ? MAX_PALABRAS_DE_UNA_PREGUNTA + 10 : MAX_PALABRAS_DE_UNA_PREGUNTA)) return { ok: false, motivo: "larga" };
   if (new Set(o.yaEstan.map(normal)).has(normal(pregunta))) return { ok: false, motivo: "igual" };
-  if (o.saber && o.tema && o.paso && repiteLoSabido(pregunta, { para: o.tema, paso: o.paso }, o.saber)) return { ok: false, motivo: "repite" };
+  if (!o.aValidar && o.saber && o.tema && o.paso && repiteLoSabido(pregunta, { para: o.tema, paso: o.paso }, o.saber)) return { ok: false, motivo: "repite" };
   const voseo = [...new Set([pregunta, ...repreguntas].flatMap((t) => formasDeVoseo(t)).filter((w) => !/r[áa]s?$/i.test(w) && !/r[áa]n$/i.test(w)))];
   if (voseo.length) return { ok: false, motivo: "voseo", voseo };
   return { ok: true, pregunta, repreguntas };
@@ -168,7 +177,13 @@ export function revisarPregunta(
 export function leerUnaPregunta(respuesta: Anthropic.Messages.Message, o: EntradaDeUnaPregunta, saber?: SaberDelCliente | null): LecturaDeUnaPregunta {
   const b = respuesta.content.find((x) => x.type === "tool_use" && x.name === HERRAMIENTA_DE_UNA_PREGUNTA);
   const input = b && b.type === "tool_use" && typeof b.input === "object" && b.input ? (b.input as Record<string, unknown>) : null;
-  return revisarPregunta(input?.pregunta, input?.repreguntas, { yaEstan: [o.objetivo.actual, ...o.otras], saber, tema: o.objetivo.para, paso: o.objetivo.paso });
+  return revisarPregunta(input?.pregunta, input?.repreguntas, {
+    yaEstan: [o.objetivo.actual, ...o.otras],
+    saber,
+    tema: o.objetivo.para,
+    paso: o.objetivo.paso,
+    ...(o.objetivo.aValidar ? { aValidar: true } : {}),
+  });
 }
 
 /** El aviso para pedirla otra vez, según por qué no sirvió. */

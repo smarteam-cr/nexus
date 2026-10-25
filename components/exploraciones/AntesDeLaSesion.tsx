@@ -801,6 +801,19 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
         <p className="mt-1 text-[14.5px] leading-[21px] text-fg">«{equipo ? EQUIPOS[equipo].cierre : preguntaDeCierre(marco.clave)}»</p>
         <p className="mt-1 text-[13px] leading-[19px] text-fg-secondary">{guia?.cierre ?? CIERRE_DE_BASE}</p>
         {siNo && <p className="mt-1 text-[13px] leading-[19px] text-fg-secondary">{siNo}</p>}
+        {/* K8 (2026-10-26): en una sesión con la empresa entera, las sesiones por equipo que conviene agendar después. */}
+        {!equipo && !!guia?.sesionesSugeridas?.length && (
+          <div className="mt-2.5">
+            <p className="text-xs text-fg-muted">Para agendar después, por equipo:</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] leading-[19px] text-fg-secondary">
+              {guia.sesionesSugeridas.map((s) => (
+                <li key={s.equipo}>
+                  <span className="font-medium text-fg">{EQUIPOS[s.equipo].nombre}</span>: {s.porque}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Tramo>
     </section>
   );

@@ -66,6 +66,8 @@ describe("⛔ las comunicaciones de HubSpot", () => {
       "scripts/a-quien-le-llegan-las-propuestas.ts",
       // Los leads de HubSpot (B3, 2026-10-25): la MISMA regla de dueño (`clienteDeLaComunicacion`, invariante 1), pura.
       "lib/leads/reglas.ts",
+      // La guía de la preventa (K7, 2026-10-26): las notas recientes de UNA empresa, por la puerta de lectura.
+      "lib/exploraciones/agente.ts",
     ]);
     const malos = TODO.filter((rel) => !rel.startsWith("lib/comunicaciones/") && /["']@\/lib\/comunicaciones\//.test(leer(rel)) && !permitidos.has(rel));
     expect(malos).toEqual([]);

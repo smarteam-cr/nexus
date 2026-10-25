@@ -18,7 +18,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
   type Invariante,
 } from "@/lib/invariantes";
-import { INV49, INV50, INV51, INV52, INV53, INV54, INV55 } from "@/lib/invariantes";
+import { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56 } from "@/lib/invariantes";
 
 /**
  * Imprime un invariante extraído a `lib/invariantes/` exactamente como se imprimía acá adentro
@@ -837,6 +837,9 @@ async function main(): Promise<number> {
   violations += await reportar(INV53, prisma);
   // ── Inv 54 → lib/invariantes/hubspot.ts (2026-10-25, U9: ninguna ficha apunta a una empresa de HubSpot fusionada) ──
   violations += await reportar(INV54, prisma);
+
+  // ── Inv 56 → lib/invariantes/empresa.ts (2026-10-26, R5: cada investigación que salió de una preventa es de la empresa de esa preventa) ──
+  violations += await reportar(INV56, prisma);
 
   return violations;
 }

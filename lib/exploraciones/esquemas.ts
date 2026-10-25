@@ -504,6 +504,8 @@ const PreguntaDeLaGuiaSchema = z.object({
   repreguntas: z.array(textoDeGuia(300)).max(REPREGUNTAS_POR_PREGUNTA),
   abierto: z.string().min(1).max(600).optional(),
   paso: z.enum(PASOS_DE_LA_PREGUNTA).optional(),
+  investiga: textoDeGuia(200).optional(),
+  pideVer: textoDeGuia(200).optional(),
 });
 const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
   en: z.string().max(40),
@@ -531,6 +533,10 @@ const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
       }),
     )
     .max(MAX_PREGUNTAS_DE_LO_VENDIDO)
+    .optional(),
+  sesionesSugeridas: z
+    .array(z.object({ equipo: z.enum(EQUIPOS_DEL_CLIENTE), porque: textoDeGuia(200) }))
+    .max(4)
     .optional(),
   apertura: z.array(textoDeGuia(400)).max(4),
   escalaEnSimple: textoDeGuia(800).nullable(),

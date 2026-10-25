@@ -826,6 +826,10 @@ export interface PreguntaDeLaGuia {
   abierto?: string;
   /** El paso de la siguiente pregunta lógica que pregunta (plan-de-la-guia.ts). Sin él, una guía de antes del 2026-10-18. */
   paso?: PasoDeLaPregunta;
+  /** K8 (2026-10-26): qué investiga, la hipótesis o el vacío, en una frase. Lo lee quien lleva la sesión. */
+  investiga?: string;
+  /** K8: qué pedirle al cliente que muestre para comprobarlo (un reporte, un registro, una pantalla). */
+  pideVer?: string;
 }
 
 export interface GuiaDeLaSesion {
@@ -859,6 +863,11 @@ export interface GuiaDeLaSesion {
    * y qué tiene que pasar para que el cliente diga que funcionó.
    */
   loVendido?: PreguntaDeLoVendido[];
+  /**
+   * K8 (2026-10-26): en una sesión con la empresa entera, sin sesiones por equipo todavía, las que conviene agendar
+   * después, cada una con su porqué. Las sugiere el agente; las agenda una persona.
+   */
+  sesionesSugeridas?: { equipo: ClaveDeEquipo; porque: string }[];
   /** Cómo abrir la conversación, desde algo de la empresa. */
   apertura: string[];
   /** La escala explicada en simple: solo cuando no hizo el test y todavía no se habló. */
@@ -1002,6 +1011,20 @@ export function textoDeLaProcedencia(p: Procedencia): string {
   return p.tipo === "abierto" ? `Quedó abierto en la sesión ${p.numero}` : `Pasó de la sesión ${p.numero}`;
 }
 
+/**
+ * K7 (2026-10-26): la pregunta que valida lo que marcó en el test, cuando el agente no escribió una (o la guía es de antes).
+ * La de respaldo de siempre daba por cierto lo marcado («¿Cuánto les ha costado esto…?»): el caso de Distribuidora Larce.
+ */
+export function preguntaQueValida(marcado: string): string {
+  // Corta para leerla en voz alta (25 palabras como mucho, sugerencias-del-asistente.ts): la primera frase de lo marcado,
+  // en 10 palabras, sin terminar en un conector.
+  const palabras = (marcado.trim().split(/[:;,.(]/)[0] ?? "").split(/\s+/).filter(Boolean).slice(0, 10);
+  while (palabras.length > 3 && /^(y|o|con|de|del|en|que|a|al|la|el|los|las|un|una|por|para|sin)$/i.test(palabras[palabras.length - 1])) palabras.pop();
+  const t = palabras.join(" ");
+  const inicio = /^\p{Lu}\p{Ll}/u.test(t) ? t.charAt(0).toLowerCase() + t.slice(1) : t;
+  return `En el diagnóstico marcaste que ${inicio}; ¿cómo se ve eso en el día a día?`;
+}
+
 export interface PreguntaParaMostrar {
   /**
    * A qué apunta: una tarjeta, una dimensión, para un punto llevado que ninguna pregunta retoma `abierto:<n>`, y para una
@@ -1030,6 +1053,11 @@ export interface PreguntaParaMostrar {
   marca?: OrigenDelAjuste;
   /** Es una pregunta de la guía que el vendedor cambió: se puede devolver a la de la guía. */
   cambiada?: boolean;
+  /** K8: qué investiga y qué pedirle que muestre (lo escribe el agente; lo lee quien lleva la sesión). */
+  investiga?: string;
+  pideVer?: string;
+  /** K7: parte solo de lo que marcó en el test: la pregunta lo valida. */
+  aValidar?: boolean;
   /** El lugar que le dio la persona al arrastrarla (ajustes-de-la-guia.ts › `orden`): manda en `ordenDeLaConversacion`. */
   posicion?: number;
 }
@@ -1131,7 +1159,15 @@ export function preguntasParaMostrar(
           : pasoDe
             ? { tipo: "paso", numero: pasoDe }
             : undefined;
-        out.push({ para, tipo, pregunta: sinCitaAdelante(p.pregunta), repreguntas: p.repreguntas, ...(procedencia ? { procedencia } : {}) });
+        out.push({
+          para,
+          tipo,
+          pregunta: sinCitaAdelante(p.pregunta),
+          repreguntas: p.repreguntas,
+          ...(procedencia ? { procedencia } : {}),
+          ...(p.investiga ? { investiga: p.investiga } : {}),
+          ...(p.pideVer ? { pideVer: p.pideVer } : {}),
+        });
       }
     } else if (base) {
       out.push({ para, tipo, pregunta: base, repreguntas: [...repreguntasDeBase], ...(pasoDe ? { procedencia: { tipo: "paso" as const, numero: pasoDe } } : {}) });
@@ -1152,8 +1188,16 @@ export function preguntasParaMostrar(
         : pasoDe
           ? { tipo: "paso", numero: pasoDe }
           : undefined;
-      // Sin la cita adelante (validación 69): lo que dijo el cliente va en el ⓘ, con su fuente.
-      const escrita = delAgente ? sinCitaAdelante(delAgente.pregunta) : preguntaDeRespaldo(pl, base);
+      // Sin la cita adelante (validación 69): lo que dijo el cliente va en el ⓘ, con su fuente. La que valida lo que marcó en
+      // el test (K7) la dice a propósito.
+      const aValidar = marco.clave !== "cs" && pl.motivo?.origen === "test";
+      const escrita = delAgente
+        ? aValidar
+          ? delAgente.pregunta
+          : sinCitaAdelante(delAgente.pregunta)
+        : aValidar && pl.motivo
+          ? preguntaQueValida(pl.motivo.texto)
+          : preguntaDeRespaldo(pl, base);
       if (!escrita) continue;
       /* Dos temas en el mismo paso sin pregunta del agente dan la misma de respaldo («¿Cómo te gustaría que funcione…?»
          dos veces, CEMACO 23 oct): la segunda nombra su tema, así no se lee repetida. */
@@ -1167,6 +1211,9 @@ export function preguntasParaMostrar(
         paso: pl.paso,
         ...(pl.motivo ? { motivo: { texto: pl.motivo.texto, de: pl.motivo.de } } : {}),
         ...(procedencia ? { procedencia } : {}),
+        ...(delAgente?.investiga ? { investiga: delAgente.investiga } : {}),
+        ...(delAgente?.pideVer ? { pideVer: delAgente.pideVer } : {}),
+        ...(aValidar ? { aValidar: true } : {}),
       });
     }
   } else {

@@ -69,6 +69,8 @@ type Destino =
    * encuentra queda en la empresa como propuestas que decide una persona, nunca en un documento del cliente.
    */
   | "investigacion-de-la-empresa"
+  /** INV56 (2026-10-26): solo de qué empresa es la preventa de la que salió una investigación. Nada de su contenido. */
+  | "invariante-de-la-empresa"
   /**
    * El EQUIPO DEL CLIENTE de una reunión del proyecto (L5 etapa 2, 2026-10-25): el catálogo de los seis equipos
    * (lib/exploraciones/equipos.ts › EQUIPOS) para elegirlo en el Contexto del diagnóstico y guardarlo en el vínculo de la
@@ -82,6 +84,10 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "lib/clients/lo-que-le-falta-comprar-server.ts": {
     destino: "escala-de-la-empresa",
     motivo: "Lo que le falta comprar (R12): lee solo los niveles de la foto más reciente (escalaParaLaPropuesta), interno, para la ficha y el siguiente caso en HubSpot.",
+  },
+  "lib/invariantes/empresa.ts": {
+    destino: "invariante-de-la-empresa",
+    motivo: "INV56 (2026-10-26): compara de qué empresa es cada investigación y la preventa de la que salió. No lee su contenido.",
   },
   "lib/clients/personas-de-la-empresa.ts": {
     destino: "agenda-interna",
@@ -368,6 +374,11 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     permitidas: /\benlacesDeLasBusquedas\b|\burlComparable\b|\bleerEmpresa\b|\bhoyEnCostaRica\b/,
     // Ninguna exploración: ni lo confirmado, ni la propuesta, ni el handoff, ni lo interno de la preventa.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\bexploracionesDeVenta\b/,
+  },
+  "invariante-de-la-empresa": {
+    // Solo de qué empresa es la preventa: `exploracion: { select: { clientId: true } }`.
+    permitidas: /\bexploracion\s*:\s*\{\s*select\s*:\s*\{\s*clientId\s*:\s*true\s*\}\s*\}/,
+    prohibidas: /@\/lib\/exploraciones\/|\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\bexploracionesDeVenta\b|contenido\s*:\s*true/,
   },
   "equipos-del-cliente": {
     permitidas: /\bEQUIPOS\b|\bEQUIPOS_DEL_CLIENTE\b|\besEquipo\b/,

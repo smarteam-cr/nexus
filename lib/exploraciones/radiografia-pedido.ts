@@ -182,11 +182,26 @@ export function leerLaRadiografia(contenido: readonly Anthropic.Messages.Content
     stack: (Array.isArray(input.stack) ? input.stack : []).map(str).filter((x): x is string => !!x).slice(0, 20),
     hitos: hitos.slice(0, 8),
   };
+  const comoPropuesta = radiografiaComoPropuesta(crudo, corridaId, ahora, { item: "Búsqueda en internet", fuente: "Lo que encontró en internet sobre la empresa" });
+  return { item: comoPropuesta?.item ?? null, fuente: comoPropuesta?.fuente ?? null, industria, hitosSinEnlace, busquedas };
+}
+
+/**
+ * Una radiografía (de la búsqueda o de la investigación de la empresa) como la propuesta de su casilla y su fuente W1. Sin
+ * nada que sirva, null. La usan la radiografía de la preventa y la lectura de la investigación de la empresa (R5).
+ */
+export function radiografiaComoPropuesta(
+  crudo: Radiografia,
+  corridaId: string,
+  ahora: Date,
+  etiquetas: { item: string; fuente: string },
+  extra: readonly string[] = [],
+): { item: ItemPropuesto; fuente: Fuente } | null {
   // Sin lo vacío: un arreglo vacío o un texto en blanco no es un dato.
-  const limpio = Object.fromEntries(Object.entries(crudo).filter(([, v]) => v !== undefined && !(Array.isArray(v) && v.length === 0))) as Radiografia;
+  const limpio = Object.fromEntries(Object.entries(crudo).filter(([, v]) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0))) as Radiografia;
   const destino = { tipo: "casilla" as const, clave: "radiografia" as const };
   const valor = Object.keys(limpio).length ? VALIDADOR_ESTRICTO.valorDelDestino(destino, limpio) : null;
-  if (!valor) return { item: null, fuente: null, industria, hitosSinEnlace, busquedas };
+  if (!valor) return null;
 
   const r = valor as Radiografia;
   const texto = [
@@ -195,6 +210,7 @@ export function leerLaRadiografia(contenido: readonly Anthropic.Messages.Content
     r.modelos?.length && `Modelo de negocio: ${r.modelos.map((m) => ETIQUETA_DEL_MODELO[m]).join(", ")}`,
     r.stack?.length && `Herramientas que se le ven: ${r.stack.join(", ")}`,
     ...(r.hitos ?? []).map((h) => `Hito${h.fecha ? ` (${h.fecha})` : ""}: ${h.texto}`),
+    ...extra,
   ]
     .filter(Boolean)
     .join("\n");
@@ -203,14 +219,50 @@ export function leerLaRadiografia(contenido: readonly Anthropic.Messages.Content
       id: idDelItem(destino, valor),
       destino,
       valor,
-      fuentes: [{ id: "W1", etiqueta: "Búsqueda en internet" }],
+      fuentes: [{ id: "W1", etiqueta: etiquetas.item }],
       corridaId,
       en: ahora.toISOString(),
     },
-    fuente: { id: "W1", etiqueta: "Lo que encontró en internet sobre la empresa", texto },
-    industria,
-    hitosSinEnlace,
-    busquedas,
+    fuente: { id: "W1", etiqueta: etiquetas.fuente, texto },
+  };
+}
+
+/** Lo que guarda la investigación de la empresa (lib/clients/investigacion), lo mínimo para leerla como radiografía. */
+export interface InvestigacionParaLaPreventa {
+  hechaAt: Date;
+  resumen: string | null;
+  contenido: { sector?: string; stack?: string[]; hitos?: { texto: string; fecha?: string; url: string }[] };
+  contrataciones: { puesto: string; url: string; fecha?: string }[];
+}
+
+/**
+ * R5, segunda parte (2026-10-26): la preventa lee la investigación desde la EMPRESA. Una investigación vigente se usa como
+ * la radiografía (su casilla y su fuente W1), con las contrataciones como una línea más, y la preventa no vuelve a buscar
+ * en internet. La industria (W2) no viene: la investigación de la empresa no la trae.
+ */
+export function radiografiaDesdeLaInvestigacion(inv: InvestigacionParaLaPreventa, corridaId: string, ahora = new Date()): { item: ItemPropuesto; fuente: Fuente } | null {
+  const contrataciones = inv.contrataciones.slice(0, 6).map((c) => `Está contratando: ${c.puesto}${c.fecha ? ` (${c.fecha})` : ""}`);
+  return radiografiaComoPropuesta(
+    { resumen: inv.resumen ?? undefined, sector: inv.contenido.sector, stack: inv.contenido.stack, hitos: inv.contenido.hitos?.slice(0, 8) },
+    corridaId,
+    ahora,
+    { item: "La investigación de la empresa", fuente: `Lo que Nexus investigó de la empresa (${inv.hechaAt.toISOString().slice(0, 10)})` },
+    contrataciones,
+  );
+}
+
+/** Al revés: la radiografía de la preventa, para guardarla en la empresa (sin investigación vigente, R5). */
+export function investigacionDesdeLaRadiografia(r: Radiografia): {
+  resumen: string | null;
+  contenido: InvestigacionParaLaPreventa["contenido"];
+  fuentes: { url: string }[];
+} | null {
+  const hitos = (r.hitos ?? []).filter((h) => h?.url && h.texto);
+  if (!r.resumen && !r.sector && !hitos.length) return null;
+  return {
+    resumen: r.resumen ?? null,
+    contenido: { ...(r.sector ? { sector: r.sector } : {}), ...(r.stack?.length ? { stack: r.stack } : {}), ...(hitos.length ? { hitos } : {}) },
+    fuentes: [...new Set(hitos.map((h) => h.url))].map((url) => ({ url })),
   };
 }
 

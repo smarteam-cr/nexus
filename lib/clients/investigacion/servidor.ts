@@ -60,6 +60,36 @@ export async function ultimaInvestigacion(clientId: string, ahora = new Date()):
 }
 
 /**
+ * R5, segunda parte (2026-10-26): la radiografía que hizo una preventa porque la empresa no tenía una investigación
+ * vigente, guardada en la empresa (origen `preventa`). Así la próxima preventa, la ficha y los agentes la leen de ahí y no
+ * se vuelve a buscar en internet hasta que venza. No propone datos: la radiografía no los trae con su cita.
+ */
+export async function guardarInvestigacionDeLaPreventa(o: {
+  clientId: string;
+  exploracionId: string;
+  agentRunId: string;
+  resumen: string | null;
+  contenido: LecturaDeLaInvestigacion["contenido"];
+  fuentes: { url: string }[];
+  ahora?: Date;
+}): Promise<void> {
+  const hechaAt = o.ahora ?? new Date();
+  await prisma.investigacionDeEmpresa.create({
+    data: {
+      clientId: o.clientId,
+      hechaAt,
+      venceAt: venceLaInvestigacion(hechaAt),
+      origen: "preventa",
+      exploracionId: o.exploracionId,
+      agentRunId: o.agentRunId,
+      resumen: o.resumen,
+      contenido: o.contenido as Prisma.InputJsonValue,
+      fuentes: o.fuentes as Prisma.InputJsonValue,
+    },
+  });
+}
+
+/**
  * La corrida en curso o la última de la empresa (para que la pantalla siga la fase). Una que dice «corriendo» pero hace
  * rato que no da señales murió con un reinicio (lib/agents/run-colgada.ts): se muestra como fallada, con su motivo, para
  * que la pantalla deje de esperarla y ofrezca lanzarla otra vez (`lanzarInvestigacion` la cierra en la base).

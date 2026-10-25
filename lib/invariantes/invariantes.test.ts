@@ -22,7 +22,7 @@ import {
 } from "./index";
 import { INV49, INV53 } from "./google";
 import { INV55, INV55_BLOQUEA } from "./smartloop";
-import { INV51 } from "./empresa";
+import { INV51, INV56 } from "./empresa";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
 import { invariantesOkDesde, leerInvariantesOk } from "./salud";
 import { DONDE_PUEDE_TENER_TEXTO } from "@/lib/sessions/tiene-texto";
@@ -812,7 +812,7 @@ describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 43 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 44 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -829,6 +829,8 @@ describe("el registro y el consumidor", () => {
       // parte 2); 55, ningún proyecto de SmartLoop dice ser «proyecto_temporal» (M1). Todas del 2026-10-25.
       "49", "50", "51", "52", "53", "54",
       "55",
+      // 56: cada investigación que salió de una preventa es de la empresa de esa preventa (R5, 2026-10-26).
+      "56",
       // 52: cada reunión con empresa que terminó sin texto tiene su motivo guardado (T4); 53: ninguna reunión de 3 a 25
       // días sin revisar su conferencia de Meet (U3). Del 2026-10-25.
       // 49: la frescura de la copia de Google Meet (U1, 2026-10-25).
@@ -880,7 +882,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("43 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("44 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;
@@ -960,6 +962,17 @@ describe("/api/health expone UN booleano de invariantes, y nada más (B-09)", ()
     expect((src.match(/ok = false/g) ?? []).length, "solo los tres checks de infraestructura apagan el ok").toBe(3);
     expect(src).not.toMatch(/invariantesOk\s*(&&|\|\||\?)/);
     expect(src).not.toMatch(/\.(lineas|error|resultados)\b/);
+  });
+});
+
+describe("INV56 (la investigación de una preventa)", () => {
+  it("una investigación colgada de una empresa distinta a la de su preventa la pone en rojo", async () => {
+    const propia = { id: "i1", clientId: "c1", exploracion: { clientId: "c1" } };
+    const cruzada = { id: "i2", clientId: "c1", exploracion: { clientId: "c2" } };
+    expect((await INV56.correr(baseFalsa({ investigacionDeEmpresa: [propia] }), AHORA)).ok).toBe(true);
+    const r = await INV56.correr(baseFalsa({ investigacionDeEmpresa: [propia, cruzada] }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("i2");
   });
 });
 

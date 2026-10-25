@@ -437,11 +437,15 @@ export function enOrdenDeConversacion(plan: readonly PreguntaPlaneada[], deAntes
  * con lo que viene de antes primero. Su «dónde duele» es la dimensión de su área con lo que el cliente ya contó, si hay
  * una debajo de Funcional (con su nivel y su evidencia); si no, el tema del equipo. Lo que el equipo ya respondió en otra
  * sesión no entra. Con Dirección en la preventa, después de sus temas va lo que falta para proponer (para cuándo, quién
- * firma y el presupuesto): es con quien se habla de eso. Sin lugar para todo, entra por la prioridad del equipo.
+ * firma y el presupuesto): es con quien se habla de eso. Sin lugar para todo, entra por la prioridad del equipo, y
+ * dentro de ella (K1 etapa 3, 2026-10-26) un tema cuyas dimensiones del área ya tienen todas evidencia baja detrás de los
+ * que todavía ubican alguna: la guía pregunta primero lo que ubica al cliente en la escala, sin desordenar la prioridad
+ * del equipo entre los que ubican. Los temas sin dimensiones (el dolor) se quedan en su lugar. Con Dirección en la
+ * preventa, la inversión no entra: la cubre el presupuesto, que va con ella.
  */
 function planDelEquipo(
   equipo: ClaveDeEquipo,
-  o: Pick<EntradaDelPlan, "escala" | "marco"> & {
+  o: Pick<EntradaDelPlan, "escala" | "marco" | "posiciones"> & {
     lugar: number;
     ya: ReadonlyMap<string, ReadonlySet<PasoDeLaPregunta>>;
     dolores: readonly PreguntaPlaneada[];
@@ -466,7 +470,19 @@ function planDelEquipo(
     equipo === "direccion" && o.marco !== "cs" ? (["tiempos", "autoridad", "presupuesto"] as const).filter(o.falta).map(o.tarjeta) : [];
 
   const porTema = new Map(temas.map((p) => [p.para, p] as const));
-  const prioridad = def.prioridad.flatMap((t) => {
+  const sinEvidencia = new Set([...delArea].filter((d) => o.posiciones[d]?.clase !== "evidencia"));
+  // Ubica si alguna de sus dimensiones (de las que trae la escala) todavía no tiene evidencia. Un tema sin ninguna de sus
+  // dimensiones en esta escala no entra al reorden: se queda donde está.
+  const suyas = (t: (typeof def.prioridad)[number]) => (def.temas.find((x) => x.tema === t)?.dimensiones ?? []).filter((d) => delArea.has(d));
+  const ubica = (t: (typeof def.prioridad)[number]) => (suyas(t).some((d) => sinEvidencia.has(d)) ? 1 : 0);
+  const conDimensiones = def.prioridad.filter((t) => suyas(t).length > 0);
+  const porLoQueUbican = [...conDimensiones].sort((a, b) => ubica(b) - ubica(a) || conDimensiones.indexOf(a) - conDimensiones.indexOf(b));
+  let siguiente = 0;
+  const conPresupuesto = equipo === "direccion" && o.marco !== "cs";
+  const ordenDelEquipo = def.prioridad
+    .map((t) => (conDimensiones.includes(t) ? porLoQueUbican[siguiente++] : t))
+    .filter((t) => !(conPresupuesto && t === "inversion"));
+  const prioridad = ordenDelEquipo.flatMap((t) => {
     const para = t === "dolor" && dolorDelArea ? dolorDelArea.para : temaDeEquipo(equipo, t);
     const p = porTema.get(para);
     return p ? [p] : [];
