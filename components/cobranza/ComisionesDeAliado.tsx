@@ -163,7 +163,10 @@ export default function ComisionesDeAliado({
                       redondos eran una estimación tecleada y hasta acá se mostraban
                       igual que los $45.921,72 que sí se contaron. */}
                   {c.montoEsProyeccion && (
-                    <span className="ml-1.5 text-[10px] text-fg-muted font-normal">estimado</span>
+                    <span className="ml-1.5 text-[10px] text-fg-muted font-normal">
+                      {/* U25: el de HubSpot lo arma Partner y se pone al día solo. */}
+                      {c.montoDesdePartner ? "estimado · desde Partner" : "estimado"}
+                    </span>
                   )}
                   {/* El real de la factura del aliado, antes de que entre la plata (2026-10-21):
                       se ve distinto del estimado y dice de dónde salió. Una cobrada no lo

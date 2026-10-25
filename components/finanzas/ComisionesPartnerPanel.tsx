@@ -14,6 +14,7 @@
  */
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { ComisionesPartnerDTO } from "@/lib/cobranza";
 // ⚠ El VALOR se importa del modulo puro, NO del barrel: @/lib/cobranza reexporta
 // queries.ts, que arrastra Prisma. Un Client Component que lo importe como valor
@@ -33,6 +34,8 @@ import {
 } from "@/components/ui";
 import { fmtFecha, fmtMonto } from "@/components/cobranza/format";
 import ComisionesDeAliado from "@/components/cobranza/ComisionesDeAliado";
+import ComisionDeHubspot from "@/components/finanzas/ComisionDeHubspot";
+import type { ComisionDeHubspotDTO } from "@/lib/cobranza/comision-hubspot-server";
 import type { ComisionPartnerDTO } from "@/lib/cobranza";
 import type { CorteDeMoneda } from "@/lib/cobranza/comisiones-partner";
 
@@ -61,6 +64,8 @@ interface Props {
   clientes: ClienteLite[];
   /** Hoy, por parámetro: la alerta de vencidas no lee el reloj. */
   todayISO: string;
+  /** La comisión del próximo pago de HubSpot, armada desde Partner (U25). null = la base no tiene su SQL todavía. */
+  hubspot: ComisionDeHubspotDTO | null;
 }
 
 const TH = "px-3 py-2 text-left text-[11px] font-medium uppercase tracking-widest text-fg-muted";
@@ -82,13 +87,16 @@ type FormState = {
   estado: string;
   /** El título del modal cuando se abre desde «Registrar factura». */
   titulo?: string;
+  /** El monto con que se abrió la edición: si no cambió, no se manda (U25: un formulario viejo no revierte el estimado). */
+  montoOriginal?: string;
 };
 
 type AliadoForm = { id: string | null; nombre: string; frecuenciaMeses: string; notas: string };
 
 
-export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: Props) {
+export default function ComisionesPartnerPanel({ initial, clientes, todayISO, hubspot }: Props) {
   const toast = useToast();
+  const router = useRouter();
   const [data, setData] = useState(initial);
   const [form, setForm] = useState<FormState | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -102,6 +110,8 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
     try {
       const r = await fetchJson<{ data: ComisionesPartnerDTO }>("/api/cobranza/comisiones-partner");
       setData(r.data);
+      // La caja de HubSpot llega del servidor: sin esto seguía mostrando la fila de antes de editarla.
+      router.refresh();
     } catch {
       toast.error("No se pudo refrescar la lista. Recarga la página.");
     }
@@ -120,7 +130,9 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
       partner: form.partner.trim(),
       partnerId: form.partnerId || null,
       concepto: form.concepto.trim() || null,
-      monto,
+      // Al editar, el monto va solo si la persona lo cambió: si no, guardar las notas de una fila que el estimado de
+      // Partner puso al día mientras tanto le devolvería el monto viejo y apagaría «desde Partner».
+      ...(editandoId && form.montoOriginal !== undefined && form.monto.trim() === form.montoOriginal ? {} : { monto }),
       moneda: form.moneda,
       fecha: form.fecha,
       clientId: form.clientId || null,
@@ -213,6 +225,7 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
       partnerId: c.partnerId ?? "",
       concepto: c.concepto ?? "",
       monto: String(c.monto),
+      montoOriginal: String(c.monto),
       moneda: c.moneda,
       fecha: c.fecha,
       clientId: c.clientId ?? "",
@@ -316,6 +329,8 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
           ))}
         </div>
       )}
+
+      {hubspot && <ComisionDeHubspot data={hubspot} />}
 
       <div className="rounded-lg border border-line bg-surface-muted px-3 py-2">
         <p className="text-[11px] text-fg-muted">

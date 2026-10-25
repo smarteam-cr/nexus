@@ -1284,6 +1284,8 @@ export interface ComisionPartnerDTO {
   montoBruto: number | null;
   /** true = nadie confirmó este número; es una estimación, no una medición. */
   montoEsProyeccion: boolean;
+  /** true = el monto lo arma la copia de HubSpot Partner (U25); una edición a mano lo apaga. */
+  montoDesdePartner: boolean;
   /** Lo que decía el estimado antes de pasar a real. null = nunca pasó, o nadie lo cambió. */
   montoEstimado: number | null;
   /** La referencia de la factura del aliado, si alguien la registró. */
@@ -1381,6 +1383,7 @@ export async function loadComisionesPartner(): Promise<ComisionesPartnerDTO> {
     estado: c.estado,
     montoBruto: num(c.montoBruto),
     montoEsProyeccion: c.montoEsProyeccion,
+    montoDesdePartner: c.montoDesdePartner,
     montoEstimado: num(c.montoEstimado),
     facturaAliado: c.facturaAliado,
     montoRealPor: c.montoRealPor,

@@ -253,6 +253,8 @@ async function main() {
           where: { id: existente.id },
           data: {
             monto: f.monto,
+            // U25: el monto del Excel es de una persona; el estimado de Partner deja de tocar la fila.
+            ...(Number(existente.monto) !== f.monto ? { montoDesdePartner: false } : {}),
             estado: f.estado,
             ...(f.estado === "COBRADO"
               ? { fechaCobro: fecha, confirmadoPor: REGISTRADO_POR, confirmadoEn: new Date() }

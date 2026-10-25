@@ -15,6 +15,7 @@ export const NOMBRE_DE_JOB: Readonly<Record<string, string>> = {
   "marketing-weekly": "La tanda de Marketing",
   "cs-signals-daily": "La lectura de señales de Éxito del cliente",
   "cs-partner-daily": "La copia de HubSpot Partner",
+  "comisiones-hubspot-estimado": "La comisión estimada de HubSpot",
   "cs-watchdog-daily": "El vigía de Éxito del cliente",
   "cs-watchdog-debounce": "La revisión de eventos del vigía de Éxito del cliente",
   "maintenance-daily": "El mantenimiento diario",

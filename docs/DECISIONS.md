@@ -10429,6 +10429,43 @@ horario y menos pruebas para él.
   trimestre que el aliado declaró en cero, y sin la fila el historial muestra un hueco que nadie puede explicar.
 - **Cobrar sigue exigiendo un monto positivo.** Cobrar cero no es un cobro: es «sin comisión», y se registra así.
 
+## La comisión estimada de HubSpot sale de HubSpot Partner (2026-10-25, U25)
+
+> Roadmap U25 y U29 (`docs/integracion-hubspot-partners-plan.md`): la comisión de HubSpot de cada cliente sale del
+> número de HubSpot, no de una estimación tecleada, antes del 15 de noviembre. Hasta hoy la fila de noviembre decía
+> US$51.000, escritos a mano.
+
+- **Qué número es.** HubSpot no tiene API de comisiones. La copia de Partner trae `hs_projected_commission` por cuenta, y
+  medido el 2026-10-24 es **mensual**: en las 44 cuentas con comisión es exactamente el 20 % de `hs_sold_mrr` (kölbi:
+  4.701,60 de 23.508). Suma US$18.240 al mes. La liquidación del trimestre (la app Commissions, solo Super Admin) sigue
+  siendo el monto REAL y se registra a mano con «Registrar factura».
+- **Cómo se arma el trimestre.** HubSpot paga el 15 de feb/may/ago/nov el trimestre de calendario que cerró antes (el 15
+  de noviembre paga jul–sep). Cada cuenta aporta su comisión del mes por cada mes del trimestre que terminó después de
+  que empezó la venta (`hs_sold_relationship_start_date`): una venta del 30 de septiembre cuenta septiembre y no julio.
+  Con las cuentas de hoy esa regla reconstruye feb +5,6 %, may −8,3 % y ago −6,6 %; × 3 parejo daba un 8,5 % de más
+  para noviembre. No se aplica el tope de 3 años: la comisión proyectada ya es lo que HubSpot dice que va a pagar.
+  Noviembre: **US$52.550,63** (jul–sep).
+- **El estimado solo escribe donde nadie afirmó otra cosa** (`decidirFilaDeHubspot`, `lib/cobranza/comision-hubspot.ts`).
+  El job `comisiones-hubspot-estimado` crea la fila del próximo pago si falta y pone al día la que armó Partner
+  (`montoDesdePartner`). No toca una cobrada ni una con factura. Una estimada escrita a mano la toma solo el script con
+  `--apply`, una vez (así se reemplazan los 51.000). Si después alguien escribe otro monto (editarla, cobrarla con otro
+  monto, el importador del Excel), `montoDesdePartner` se apaga y manda la persona; guardar el formulario sin tocar el
+  monto no lo manda. La fila del pago se reconoce aunque la muevan de día (±45 días), la anoten en otra moneda o
+  escriban «Hub Spot»: así no nace una segunda. Dos filas de HubSpot para el mismo pago: no toca ninguna.
+- **El job no baja el estimado a cero ni a menos de la mitad.** Suele ser un cambio de permisos o de formato en HubSpot,
+  no comisión perdida: la fila se queda con el último monto, INV50 avisa a los 5 días y una persona decide con el
+  simulacro del script (que sí escribe la caída, nunca el cero).
+- **El detalle por cuenta viaja con la fila** (`detalleDePartner`) y sobrevive al paso a real: con `montoEstimado` se ve
+  el 15 de noviembre cuánto se movió el número y qué cuentas lo explican. La pantalla (Finanzas › Comisiones de partner)
+  muestra el estimado, la fila, el detalle por cuenta y la comprobación contra el último pago.
+- **Una cuenta cuenta si vino en la última copia.** Los registros que HubSpot ya no devuelve quedan en la tabla con su
+  comisión vieja; se descartan los de más de 2 días antes de la última copia. Con la copia de más de 4 días no se estima.
+- **U29: la copia pasa a columnas lo que estaba suelto** (lo vendido, las fechas de la relación, la comisión, el MRR por
+  hub; `lib/cs/partner-columnas.ts`) y las guarda también semana a semana en `PartnerUsageSnapshot`, para comparar cada
+  estimado con lo que HubSpot terminó pagando. La corrida guarda el texto de sus errores (`errorDetail`, los primeros
+  50). El hueco de historial de julio a octubre no se puede llenar (HubSpot no da uso de semanas pasadas): INV50 vigila
+  que no haya otro desde la semana 41.
+
 ## Lo conciliado en Odoo se ve en la hora: copias y cobro cada hora, y «Actualizar» que cobra (2026-10-21)
 
 **Contexto.** Revisando Finanzas con Alex Arrieta y María José (21 oct), administración dijo que «Actualizar desde Odoo y
