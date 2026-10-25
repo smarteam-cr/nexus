@@ -319,6 +319,10 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "plomeria",
     motivo: "Memoria de la cuenta, etapa 2: vincula a su proyecto las reuniones con solo notas (el clasificador). Ya corta por `date: { lte: ahora - 1h }`.",
   },
+  "lib/sessions/salud-de-las-reuniones-server.ts": {
+    clase: "plomeria",
+    motivo: "El tablero de salud (T1): cuenta las reuniones del periodo por estado. Corta por `date <= ahora` (el armado descarta una futura) y no le habla a ningún modelo.",
+  },
   "lib/invariantes/reuniones.ts": {
     clase: "plomeria",
     motivo: "INV47 (T1): cuenta las reuniones recientes con texto y sin empresa. Corta por `date: { lte: ahora }`; no afirma nada sobre el contenido.",

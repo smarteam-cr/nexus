@@ -221,6 +221,12 @@ function AvisoDeCobertura({ cobertura }: { cobertura: Cobertura }) {
       <Alert
         variant={variant}
         title={`${pctTotal}% de las reuniones de los últimos 3 meses no dejó transcripción`}
+        // T1: el detalle por persona, empresa y motivo (y lo que espera empresa) vive en su tablero.
+        action={
+          <Link href="/sessions/salud" className="whitespace-nowrap text-xs font-semibold text-brand hover:text-brand-dark">
+            Ver la salud de las reuniones →
+          </Link>
+        }
       >
         <span>
           Con el cliente: <strong>{pct(conClienteSinTr, conCliente)}%</strong> ({conClienteSinTr} de{" "}

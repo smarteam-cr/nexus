@@ -4,8 +4,9 @@
  * Ficha C del roadmap («Que no falte ninguna reunión», 2026-10-17). Elías: «bajo ninguna circunstancia se pierda
  * contexto», y faltan transcripciones, también de Desarrollo. Cada reunión sin transcripción cae en UN motivo, y cada
  * motivo dice de quién es el arreglo: de Nexus (ya lo arregló este cambio, o lo arregla el rescate) o de Google Workspace
- * (la reunión no se grabó, no se transcribió, o el documento quedó donde Nexus no puede leer). Lo usa
- * scripts/medir-transcripciones-faltantes.ts (solo lectura) y su prueba.
+ * (la reunión no se grabó, no se transcribió, o el documento quedó donde Nexus no puede leer). Lo usan
+ * scripts/medir-transcripciones-faltantes.ts (solo lectura) y el tablero de salud de las reuniones (T1,
+ * lib/sessions/salud-de-las-reuniones.ts). Desde el 2026-10-25, una reunión cuyo evento se canceló dice «cancelada».
  *
  * El orden de las reglas ES el criterio: lo que dice la fila de Nexus va primero (todavía no terminó, se está
  * esperando, falló la lectura), después lo que dice Google (no había documento, el documento no traía transcripción).
@@ -14,6 +15,8 @@ import { esDeNuestroEquipo, esRecursoDeCalendario } from "@/lib/sessions/dominio
 import { MARGEN_TRAS_EL_FIN_MS, MAX_ENRICH_ATTEMPTS, estaEsperandoMaterial, finDeLaReunion, listaParaLeer } from "./enrich-retry";
 
 export type MotivoDeLaFalta =
+  /** El evento se canceló en el calendario (U1, `canceladaEn`): probablemente no ocurrió. Nada que hacer. */
+  | "cancelada"
   /** Todavía no terminó (o terminó hace menos de 20 minutos). Nada que hacer. */
   | "todavia_no_termino"
   /** Pendiente de la primera lectura de Nexus (la pasada siguiente la toma). */
@@ -40,6 +43,7 @@ export type MotivoDeLaFalta =
 export type DuenoDelArreglo = "nada" | "nexus" | "google_workspace" | "persona";
 
 export const DE_QUIEN_ES: Record<MotivoDeLaFalta, { dueno: DuenoDelArreglo; texto: string }> = {
+  cancelada: { dueno: "nada", texto: "El evento se canceló en el calendario: lo más probable es que no ocurrió." },
   todavia_no_termino: { dueno: "nada", texto: "Todavía no terminó (o terminó hace menos de 20 minutos)." },
   pendiente_de_leer: { dueno: "nada", texto: "Nexus todavía no la leyó: la toma la pasada siguiente." },
   esperando_a_google: { dueno: "nada", texto: "Nexus la leyó y Google todavía no tenía nada; la vuelve a mirar (hasta 48 horas)." },
@@ -64,6 +68,8 @@ export interface ReunionSinTranscripcion {
   participants: readonly string[];
   /** ¿Tiene notas de Gemini (`summary.overview` con texto)? */
   tieneNotas: boolean;
+  /** Cuándo vio la copia de Calendar el evento cancelado (U1); null o sin el campo = no se canceló. */
+  canceladaEn?: Date | null;
 }
 
 function nuestros(r: Pick<ReunionSinTranscripcion, "organizerEmail" | "participants">): string[] {
@@ -83,6 +89,7 @@ function errorDe(enrichError: string | null): string {
 
 /** PURA. Por qué esta reunión (que no tiene transcripción) no la tiene. */
 export function porQueFalta(r: ReunionSinTranscripcion, ahora: Date): MotivoDeLaFalta {
+  if (r.canceladaEn) return "cancelada";
   if (!listaParaLeer(r, ahora)) return "todavia_no_termino";
   if (errorDe(r.enrichError) === "sin_interno_para_impersonar" || nuestros(r).length === 0) return "sin_nadie_del_equipo";
   if (r.enrichedAt === null) {

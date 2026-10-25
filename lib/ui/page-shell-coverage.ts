@@ -23,6 +23,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   // ── Índices con constante (el estándar) ─────────────────────────────────────
   "para-ti": { shell: "SHELL_DEFAULT" },
   "para-ti/uso": { shell: "SHELL_DEFAULT" },
+  "sessions/salud": { shell: "SHELL_DEFAULT" },
   "para-ti/correo": { shell: "SHELL_DEFAULT" },
   "para-ti/reunion/[eventoId]": { custom: "redirect al panel de la reunión en /para-ti (2026-10-20)" },
   tareas: { shell: "SHELL_DEFAULT" },
