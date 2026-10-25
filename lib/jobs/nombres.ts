@@ -50,6 +50,7 @@ export const NOMBRE_DE_JOB: Readonly<Record<string, string>> = {
   "reuniones-motivos": "El motivo de las reuniones sin texto",
   "reuniones-propuestas": "La empresa que propone Nexus para las reuniones sin empresa",
   "reuniones-audio": "La transcripción del audio de las reuniones presenciales",
+  "analizador-venta": "El analizador de reuniones de venta",
   "hubspot-eventos": "Los avisos de HubSpot",
   "hubspot-fusiones": "La búsqueda de las fusiones de HubSpot",
   "hubspot-leads": "La copia de los leads de HubSpot",

@@ -830,8 +830,9 @@ describe("el registro y el consumidor", () => {
       "49", "50", "51", "52", "53", "54",
       "55",
       // 60: la copia del banco de Odoo no se queda atrás de la de las facturas (U15, 2026-10-26).
-      "56", "60",
+      "56", "57", "60",
       // 56: cada investigación que salió de una preventa es de la empresa de esa preventa (R5, 2026-10-26).
+      // 57: cada análisis de una reunión de venta es de la empresa dueña de su reunión (S3, 2026-10-25).
       // 52: cada reunión con empresa que terminó sin texto tiene su motivo guardado (T4); 53: ninguna reunión de 3 a 25
       // días sin revisar su conferencia de Meet (U3). Del 2026-10-25.
       // 49: la frescura de la copia de Google Meet (U1, 2026-10-25).

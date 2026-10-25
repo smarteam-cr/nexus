@@ -11148,6 +11148,35 @@ reuniones sin nada no decían por qué en la reunión misma.
    bucket. El archivo se borra al transcribirse; el texto entra por `agregarReunion` (origen «audio»), que nunca pisa lo
    que dejó Meet.
 
+## El analizador de reuniones de venta: el criterio, quién habló y el análisis con citas (2026-10-25, S1 a S3)
+
+**Contexto.** Elías, 23 oct: Ventas va muy directo a la solución y explora poco. El analizador le dice a cada vendedor qué
+tan consultiva fue su reunión y cómo mejorar. Es coaching, no control (docs/analizador-reuniones-venta-plan.md).
+
+**Decisiones.**
+1. **El criterio vive en código, una vez** (`lib/analizador-venta/criterio.ts`, con su versión): el proceso consultivo
+   (identificar, investigar, conectar, explorar, asesorar) con lo que se espera y las señales de cada etapa. Es la primera
+   propuesta: la revisan Elías y Andrés en «Reuniones de venta › El criterio». El prompt del agente vive en la base
+   (`agent-analizador-venta`, editable en /agents) y no repite el criterio: el criterio viaja en el mensaje.
+2. **Quién habló lo cuenta Nexus**, por palabras (las frases de la API de Meet si las hay, si no la transcripción), y se
+   reconoce al equipo por el correo o el nombre. Nunca por la asistencia ni los minutos de la API de Meet.
+3. **Sin cita no hay juicio:** el modelo cita por turno, Nexus verifica que el pedazo esté en la transcripción y descarta
+   el juicio que no (en la prueba con Camosa, 8 de 36). Lo que no pasó se dice «por ausencia», sin cita y marcado.
+4. **Un solo cliente por análisis** (invariante 1): la reunión sale del chokepoint, la guía es la de la preventa de esa
+   empresa (la que se armó antes de la reunión, como la lectura de la preventa) y la reunión de REFERENCIA no entra al
+   contexto: es de otra empresa. Se muestra al lado para que una persona compare. INV57 vigila que cada análisis sea de la
+   empresa dueña de su reunión. Es un cambio contra el plan («el analizador la usa como ejemplo»): queda para Elías.
+5. **Qué reunión es de venta:** la de un prospecto, y la de un cliente con preventa abierta y alguien de Ventas. La
+   expansión de un cliente sin preventa (la «Fase 2: Marketing» de CEMACO es un negocio abierto de HubSpot) se analiza a
+   mano y desde ahí cuenta: medido el 25 oct, ninguna señal automática la separa de la entrega (con los negocios abiertos
+   entraban 346 reuniones de 29 clientes; con las exploraciones de proyecto, 278). Con la regla: 95 reuniones en 90 días,
+   52 con transcripción.
+6. **Lo ven los super admin** mientras se prueba (`veElAnalizador`), y el análisis automático nace apagado
+   (`ANALIZADOR_VENTA`): primero Andrés revisa cinco (S6). El agente no se despacha por /analyze («camino propio» en
+   lib/agents/retirados.ts). Costo medido con Camosa: unos US$0,16 por reunión de una hora con Sonnet 4.6.
+7. **Pendiente:** con una preventa de las tres áreas, el análisis juzga las 24 dimensiones (muchas «sin explorar» que
+   quizá no tocaban); conviene acotarlas al área de la sesión cuando la guía la dice.
+
 ## Un solo transporte para HubSpot: el token, el 401 y el 429 (2026-10-24, U6)
 
 **El hecho:** el reintento ante un 401 estaba copiado en 14 lugares (12 en `lib/` y las 2 rutas lookup) y había un

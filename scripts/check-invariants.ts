@@ -18,7 +18,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
   type Invariante,
 } from "@/lib/invariantes";
-import { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV60 } from "@/lib/invariantes";
+import { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV60 } from "@/lib/invariantes";
 
 /**
  * Imprime un invariante extraído a `lib/invariantes/` exactamente como se imprimía acá adentro
@@ -818,6 +818,10 @@ async function main(): Promise<number> {
   // ── Inv 55 → lib/invariantes/smartloop.ts (2026-10-25, M1: ningún proyecto de SmartLoop dice ser «proyecto_temporal»;
   //    nace «no bloquea» hasta su primer verde) ──
   violations += await reportar(INV55, prisma);
+
+  // ── Inv 57 → lib/invariantes/analizador-venta.ts (2026-10-25, S3: cada análisis de venta es de la empresa dueña de
+  //    su reunión; invariante 1) ──
+  violations += await reportar(INV57, prisma);
   // ── Inv 51 → lib/invariantes/empresa.ts (2026-10-25, R3 y R6: cada documento tiene un dueño; ninguna persona del cliente
   //    es del equipo). Y acá, que lee el catálogo de Postgres: que la REGLA esté en la base (el CHECK de un solo dueño y el
   //    único parcial por empresa), que `check:esquema` no ve. ──

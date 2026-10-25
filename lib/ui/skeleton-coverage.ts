@@ -43,6 +43,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   sessions: { modo: "own" },
   "sessions/[id]": { modo: "own" },
   "sessions/salud": { modo: "own" },
+  "sessions/venta": { modo: "own" },
   "sessions/categories": { modo: "inherits", de: "sessions" },
 
   // ── Cobranza y Finanzas ─────────────────────────────────────────────────────

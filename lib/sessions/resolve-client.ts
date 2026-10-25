@@ -156,6 +156,8 @@ export async function reResolveSession(
     void import("@/lib/seguimiento/hechos-server")
       .then((m) => m.alCambiarDeDueno([{ sessionId, duenoNuevo }]))
       .catch(() => {});
+    // El análisis de venta de la dueña anterior ya no vale (S3, invariante 1; INV57). Nunca lanza.
+    void import("@/lib/analizador-venta/ajenos").then((m) => m.soltarAnalisisDeVentaAjenos([sessionId])).catch(() => {});
   }
 }
 
@@ -257,6 +259,10 @@ export async function resolveAllSessions(opts?: { dryRun?: boolean; reclassify?:
     if (cambios.length) {
       void import("@/lib/seguimiento/hechos-server")
         .then((m) => m.alCambiarDeDueno(cambios))
+        .catch(() => {});
+      // El análisis de venta de la dueña anterior ya no vale (S3, invariante 1; INV57). Nunca lanza.
+      void import("@/lib/analizador-venta/ajenos")
+        .then((m) => m.soltarAnalisisDeVentaAjenos(cambios.map((c) => c.sessionId)))
         .catch(() => {});
     }
 
