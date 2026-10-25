@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   CATALOGO_DE_DATOS,
   CLAVES_DE_DATO,
+  cierraElEditor,
   EDICIONES_DE_LA_ESCALA,
   INDUSTRIAS_DE_SMARTEAM,
   columnasDelDato,
@@ -252,5 +253,18 @@ describe("quién decide los datos (Elías, 2026-10-24)", () => {
     const conLaCelda = (Object.keys(DEFAULT_MATRIX) as (keyof typeof DEFAULT_MATRIX)[]).filter((r) => DEFAULT_MATRIX[r].sections.clientes.decidirDatos);
     expect(conLaCelda.sort()).toEqual(["CSE", "CSL", "SUPER_ADMIN", "VENTAS"]);
     expect(computeEffective("SUPER_ADMIN", null, null).sections.clientes.decidirDatos).toBe(true);
+  });
+});
+
+describe("cierraElEditor", () => {
+  it("usar o descartar la propuesta de OTRO dato no cierra lo que se está editando", () => {
+    expect(cierraElEditor("usar", "p-otra", { propuestaId: undefined })).toBe(false);
+    expect(cierraElEditor("descartar", "p-otra", { propuestaId: "p-esta" })).toBe(false);
+    expect(cierraElEditor("usar", "p-otra", null)).toBe(false);
+  });
+
+  it("editar cierra su editor, y usar o descartar la misma propuesta que estaba abierta también", () => {
+    expect(cierraElEditor("editar", "p-1", null)).toBe(true);
+    expect(cierraElEditor("descartar", "p-1", { propuestaId: "p-1" })).toBe(true);
   });
 });

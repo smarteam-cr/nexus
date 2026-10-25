@@ -15,6 +15,7 @@ import { Alert, Input, Select, Skeleton } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonEnlace, BotonTexto, BotonUsar, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import {
   CATALOGO_DE_DATOS,
+  cierraElEditor,
   datoDeLaEmpresa,
   esFuenteDeIA,
   ETIQUETA_DE_LA_FUENTE,
@@ -27,7 +28,7 @@ import {
   type ValorDeDato,
 } from "@/lib/clients/datos-de-la-empresa";
 import type { CalculoDelTam } from "@/lib/clients/tam-v1";
-import type { LoQueLeFalta, LoQueYaPaga } from "@/lib/clients/lo-que-ya-paga";
+import { deDondeSale, montoConMoneda, type LoQueLeFalta, type LoQueYaPaga } from "@/lib/clients/lo-que-ya-paga";
 
 interface Dato {
   clave: ClaveDeDato;
@@ -396,8 +397,7 @@ export default function DatosDeLaEmpresa({ clientId }: { clientId: string }) {
   const decidir = (p: Propuesta, cuerpo: { accion: "usar" } | { accion: "descartar" } | { accion: "editar"; valor: string | null }) =>
     enviar(`/api/clients/${clientId}/datos/propuestas/${p.id}`, "PATCH", cuerpo, {
       clave: p.clave,
-      // Editar cierra su propio editor; usar o descartar cierran solo si lo abierto era esta misma propuesta.
-      cierra: cuerpo.accion === "editar" || editando?.propuestaId === p.id,
+      cierra: cierraElEditor(cuerpo.accion, p.id, editando),
     });
   const investigar = () => enviar(`/api/clients/${clientId}/investigacion`, "POST", {});
 
@@ -545,6 +545,12 @@ export default function DatosDeLaEmpresa({ clientId }: { clientId: string }) {
               decidir={decidir}
               onEditar={(p) => setEditando({ clave: "tamUsd", propuestaId: p.id })}
             />
+            {/* El TAM no tiene fila a la vista (solo al editarlo): lo que pasó al usar o descartar su propuesta se dice acá. */}
+            {aviso?.clave === "tamUsd" && editando?.clave !== "tamUsd" && (
+              <div className="mt-2">
+                <Alert variant={aviso.tono}>{aviso.texto}</Alert>
+              </div>
+            )}
             {editando?.clave === "tamUsd" ? (
               <div className="mt-3">{fila("tamUsd")}</div>
             ) : (
@@ -657,22 +663,6 @@ function Potencial({
   );
 }
 
-/** «US$ 1.280» o «CRC 450.000»: la moneda de ese monto, nunca la de otro. */
-const monto = (n: number, moneda: string | null) =>
-  `${!moneda || moneda === "USD" ? "US$" : moneda} ${n.toLocaleString("es-CR", { maximumFractionDigits: 0 })}`;
-
-/** De dónde sale lo que ya paga: el registro de Partner, lo cargado a mano en Licencias, o los dos. */
-function deDondeSale(y: LoQueYaPaga): string {
-  const dePartner = y.hubs.some((h) => h.origen !== "a_mano");
-  const aMano = y.hubs.some((h) => h.origen === "a_mano");
-  const partes = [
-    dePartner ? `Del registro de HubSpot Partner${y.copiadaAt ? ` · ${fecha(y.copiadaAt)}` : ""}` : null,
-    aMano ? (dePartner ? "y lo cargado a mano en Licencias" : "De lo cargado a mano en Licencias") : null,
-    y.fuente === "vendida" ? "Smarteam no la gestiona: se sabe qué compró, no cuánto paga cada hub" : null,
-  ];
-  return partes.filter(Boolean).join(" · ");
-}
-
 function LoQuePaga({ yaPaga, leFalta }: { yaPaga: LoQueYaPaga | null; leFalta: LoQueLeFalta[] }) {
   return (
     <>
@@ -687,16 +677,16 @@ function LoQuePaga({ yaPaga, leFalta }: { yaPaga: LoQueYaPaga | null; leFalta: L
                   {h.plan ? ` ${h.plan}` : ""}
                 </span>
                 {/* Cada monto con SU moneda: lo cargado a mano puede estar en colones aunque Partner esté en dólares. */}
-                {h.montoMensual !== null && <span className="tabular-nums">{`${monto(h.montoMensual, h.moneda)} al mes`}</span>}
+                {h.montoMensual !== null && <span className="tabular-nums">{`${montoConMoneda(h.montoMensual, h.moneda)} al mes`}</span>}
               </div>
             ))}
             {yaPaga.totalMensual !== null && yaPaga.hubs.every((h) => h.montoMensual === null) && (
               <div className="flex justify-between gap-3 border-t border-line py-1.5 text-[13px] leading-[19px] text-fg-secondary">
                 <span>En total</span>
-                <span className="tabular-nums">{`${monto(yaPaga.totalMensual, yaPaga.moneda)} al mes`}</span>
+                <span className="tabular-nums">{`${montoConMoneda(yaPaga.totalMensual, yaPaga.moneda)} al mes`}</span>
               </div>
             )}
-            <div className="mt-0.5 text-xs leading-4 text-fg-muted">{deDondeSale(yaPaga)}</div>
+            <div className="mt-0.5 text-xs leading-4 text-fg-muted">{deDondeSale(yaPaga, fecha)}</div>
           </>
         ) : (
           <p className="mt-1.5 text-[13px] text-fg-muted">HubSpot Partner no dice que pague licencias.</p>

@@ -839,11 +839,16 @@ async function correrElEspejo(
       result.debug!.push(`✓ Empresa encontrada: ${companyId} — guardando en DB`);
       // El módulo único (lib/clients/empresa-de-hubspot.ts): si otra ficha ya la tiene, o la tomó en una carrera, no se
       // guarda y la corrida se corta diciendo cuál es (seguir traería los proyectos de esa otra ficha).
-      const r = await asignarEmpresaDeHubspot(clientId, companyId).catch((e) => {
-        // Como antes: guardar el id es una comodidad para la próxima corrida; un fallo de la base no corta esta.
-        console.error("[sync-projects] no se guardó la empresa encontrada", e);
-        return { ok: true as const };
-      });
+      let r: Awaited<ReturnType<typeof asignarEmpresaDeHubspot>>;
+      try {
+        r = await asignarEmpresaDeHubspot(clientId, companyId);
+      } catch (e) {
+        /* Si la base falla al verificarla, NO se sigue: sin saber si esa empresa es de otra ficha, traer sus proyectos
+           podría colgarlos de la ficha equivocada (la mezcla que esto existe para impedir). La próxima corrida reintenta. */
+        console.error("[sync-projects] no se pudo verificar la empresa encontrada", e);
+        result.errors.push("No se pudo verificar si esa empresa de HubSpot ya es de otra ficha: la copia se corta y reintenta en la próxima corrida.");
+        return result;
+      }
       if (!r.ok) {
         result.errors.push(`La empresa de HubSpot que coincide por nombre ya es la ficha «${r.ficha.name}» en Nexus: elige la empresa a mano en esta ficha, o fusiona las dos.`);
         return result;

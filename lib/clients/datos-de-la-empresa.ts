@@ -551,6 +551,14 @@ export function quienManda({ dato, actual, propuesta, puedeDecidir }: EntradaDeQ
 
 // ── Las propuestas ───────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Al decidir una propuesta, ¿se cierra el editor que está abierto? Solo al editarla (cierra su propio editor) o si lo
+ * abierto era ESA misma propuesta. Usar o descartar la de otro dato no se lleva lo que la persona estaba escribiendo.
+ */
+export function cierraElEditor(accion: "usar" | "editar" | "descartar", propuestaId: string, enEdicion: { propuestaId?: string } | null): boolean {
+  return accion === "editar" || enEdicion?.propuestaId === propuestaId;
+}
+
 export const ESTADOS_DE_PROPUESTA = ["pendiente", "usada", "editada", "descartada", "aplicada", "reemplazada"] as const;
 export type EstadoDePropuesta = (typeof ESTADOS_DE_PROPUESTA)[number];
 
