@@ -18,7 +18,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
   type Invariante,
 } from "@/lib/invariantes";
-import { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV60 } from "@/lib/invariantes";
+import { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV59, INV60 } from "@/lib/invariantes";
 
 /**
  * Imprime un invariante extraído a `lib/invariantes/` exactamente como se imprimía acá adentro
@@ -846,6 +846,8 @@ async function main(): Promise<number> {
 
   // ── Inv 56 → lib/invariantes/empresa.ts (2026-10-26, R5: cada investigación que salió de una preventa es de la empresa de esa preventa) ──
   violations += await reportar(INV56, prisma);
+  // ── Inv 59 → lib/invariantes/escala.ts (2026-10-25, la escala 9.0: ninguna versión publicada trae «Lo que falta decidir») ──
+  violations += await reportar(INV59, prisma);
 
   return violations;
 }

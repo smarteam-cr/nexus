@@ -60,6 +60,7 @@ import { DOCUMENTOS_DE_LA_ESCALA, type DocumentoDeLaEscala } from "@/lib/escala/
 import { leerEncabezado, parsearEscala, todosLosCriterios } from "@/lib/escala/documento/parsear";
 import { ErrorDeFormato, type Escala } from "@/lib/escala/documento/tipos";
 import { tieneRequeridos, validarEscala } from "@/lib/escala/documento/validar";
+import { tieneLoQueFaltaDecidir } from "@/lib/escala/datos/reglas";
 import { huellaDe } from "@/lib/escala/documento/huella";
 import { parsearMapaDeHerramientas } from "@/lib/escala/herramientas/parsear";
 import { problemasDelMapa } from "@/lib/escala/herramientas/validar";
@@ -222,6 +223,11 @@ async function main() {
 
     // 3 · Las pruebas de Nexus
     titulo("Pruebas de Nexus");
+    // Un borrador con «Lo que falta decidir» (el 9.0.0, lib/escala/nueve) no se publica: esa parte es para Elías.
+    if (tieneLoQueFaltaDecidir(textos.escala)) {
+      console.log("FALLA El borrador todavía trae «Lo que falta decidir»: decide lo que pregunta, escribe lo que falta y quita esa parte.");
+      fallas.push("Lo que falta decidir");
+    }
     // Con las del cálculo (2 y 3): desde el 2026-10-08 también corren en TypeScript, para publicar desde Nexus.
     for (const r of validarEscala(escala, { anterior, especificacion: textos.especificacion, manual: textos.manual, calculo: { texto: textos.escala } })) {
       console.log(`${r.ok ? "PASA " : "FALLA"} ${r.nombre}`);

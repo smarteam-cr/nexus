@@ -152,10 +152,13 @@ Se ve en la exploración de la preventa y en el diagnóstico del CSE, y no nombr
 ## Etapas
 
 1. **La marca «tráfico suficiente»:** la tercera pregunta del perfil, en el tipo, el lector, el generador, el editor y el port
-   de Python, con pruebas.
+   de Python, con pruebas. *En el borrador 9.0.0 (2026-10-25) va como condición «Si…» en el texto de los dos criterios de las ediciones (el de Marketing, 2.8.O3, quedó como pregunta: así redactado no tenía IA),
+   con el umbral provisional que propuso Claude (más de 50.000 visitas al mes, por validar), como las demás condiciones de
+   la escala; si pasa a marca de perfil es una pregunta para Elías en «Lo que falta decidir».*
 2. **El perfil en los datos de la empresa** (B1), con lo que confirma el vendedor y llega a HubSpot.
 3. **Los 16 cambios en un borrador de la escala,** junto con los temas de la 9.0 con los que se cruzan, revisado por Elías.
-   Se publica la 9.0.0.
+   Se publica la 9.0.0. ✓ Escritos en el borrador el 2026-10-25 (`lib/escala/nueve/catalogo.ts`, con qué los habilita), y la
+   lectura de preparación en la Parte 2, sin nombrar herramientas; falta la revisión de Elías y la publicación.
 4. **El mapa de herramientas** en su versión para la 9.0.
 5. **La lectura de preparación** en la preventa y en el diagnóstico, con los umbrales editables.
 6. **Los casos de Insider** (A6).
