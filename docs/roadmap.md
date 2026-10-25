@@ -623,7 +623,7 @@ Sale del feedback de Customer Success y Ventas del 23 oct, validado contra el di
    - Etapa 1 · Una sección «Sesiones y entrenamientos», que sale de las actividades vendidas cuando existan.
    - Etapa 2 · Decidir dónde viven las Acciones coherentes (ver «Lo que decides tú»).
    - Etapa 3 · Dos plantillas de Planificación, como el diagnóstico (es I2).
-   - **Ampliada el 24 oct con el Brief de implementación** (`docs/planificacion-brief-plan.md`): la Planificación trae las 20 pestañas de la hoja «BRIEF DE IMPLEMENTACIÓN» (la «Historia de proceso de ventas» se queda en el Diagnóstico). Decidido: usuarios y permisos van DENTRO de la Planificación, la que ve el cliente. Siete etapas, ninguna con SQL:
+   - [construida el 26 oct en la rama `claude/planificacion-brief`, sin juntar en `main` ni desplegar: etapas 1 a 4 y la plantilla de importación de la 5; sin SQL] **Ampliada el 24 oct con el Brief de implementación** (`docs/planificacion-brief-plan.md`): la Planificación trae las 20 pestañas de la hoja «BRIEF DE IMPLEMENTACIÓN» (la «Historia de proceso de ventas» se queda en el Diagnóstico). Decidido: usuarios y permisos van DENTRO de la Planificación, la que ve el cliente. Siete etapas, ninguna con SQL:
      1. las propiedades por grupos (con orden, «Aparece en la ficha», «Viene con HubSpot», la vista previa de la ficha e importar la plantilla de Caroline; antes, «Mejorar con IA» y el chat pasan por `fusionarFilas`);
      2. los usuarios y los permisos (equipos, usuarios, licencias contra lo vendido y la matriz Nada · Lo suyo · Lo de su equipo · Todo);
      3. cómo entra y avanza un lead (su estado, los canales, los formularios con campos de las propiedades, las automatizaciones con ramas y lo que pasa solo en cada etapa);
