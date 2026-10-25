@@ -22,7 +22,7 @@ import {
 } from "./index";
 import { INV49, INV53 } from "./google";
 import { INV55, INV55_BLOQUEA } from "./smartloop";
-import { INV51 } from "./empresa";
+import { INV51, INV56 } from "./empresa";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
 import { invariantesOkDesde, leerInvariantesOk } from "./salud";
 import { DONDE_PUEDE_TENER_TEXTO } from "@/lib/sessions/tiene-texto";
@@ -830,7 +830,8 @@ describe("el registro y el consumidor", () => {
       "49", "50", "51", "52", "53", "54",
       "55",
       // 60: la copia del banco de Odoo no se queda atrás de la de las facturas (U15, 2026-10-26).
-      "60",
+      "56", "60",
+      // 56: cada investigación que salió de una preventa es de la empresa de esa preventa (R5, 2026-10-26).
       // 52: cada reunión con empresa que terminó sin texto tiene su motivo guardado (T4); 53: ninguna reunión de 3 a 25
       // días sin revisar su conferencia de Meet (U3). Del 2026-10-25.
       // 49: la frescura de la copia de Google Meet (U1, 2026-10-25).
@@ -962,6 +963,17 @@ describe("/api/health expone UN booleano de invariantes, y nada más (B-09)", ()
     expect((src.match(/ok = false/g) ?? []).length, "solo los tres checks de infraestructura apagan el ok").toBe(3);
     expect(src).not.toMatch(/invariantesOk\s*(&&|\|\||\?)/);
     expect(src).not.toMatch(/\.(lineas|error|resultados)\b/);
+  });
+});
+
+describe("INV56 (la investigación de una preventa)", () => {
+  it("una investigación colgada de una empresa distinta a la de su preventa la pone en rojo", async () => {
+    const propia = { id: "i1", clientId: "c1", exploracion: { clientId: "c1" } };
+    const cruzada = { id: "i2", clientId: "c1", exploracion: { clientId: "c2" } };
+    expect((await INV56.correr(baseFalsa({ investigacionDeEmpresa: [propia] }), AHORA)).ok).toBe(true);
+    const r = await INV56.correr(baseFalsa({ investigacionDeEmpresa: [propia, cruzada] }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("i2");
   });
 });
 

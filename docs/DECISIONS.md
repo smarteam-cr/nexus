@@ -10948,9 +10948,9 @@ decidió el 24 oct que la empresa es el centro de Nexus, como en un CRM (planes:
    o un hito sin enlace de la búsqueda se descarta, y lo que no encuentra queda vacío. Lo que encuentra pasa por la
    regla de quién manda como cualquier otra fuente (`investigacion`): llena lo VACÍO de lo que manda HubSpot (empleados,
    país, sitio) y **propone** todo lo demás (lo que decide una persona siempre; lo que ya tiene un valor). Nunca cambia
-   lo que decidió una persona. Con los empleados llenos, el TAM v1 se calcula solo. La preventa sigue haciendo su radiografía hasta el paso 2 (que la lea de
-   aquí comparte `lib/exploraciones/agente.ts` con K7 y K1). Las investigaciones que ya hicieron las preventas se mudan
-   con un script en simulacro.
+   lo que decidió una persona. Con los empleados llenos, el TAM v1 se calcula solo. Desde el 2026-10-26 la preventa la
+   lee de aquí (ver «La preventa, después de usarla»). Las investigaciones que ya hicieron las preventas se mudaron con
+   un script en simulacro.
 9. **HubSpot (R2):** el mapa dato → propiedad vive en `lib/hubspot/empresa.ts`. En el paso uno Nexus no escribía nada en
    HubSpot por estos datos; desde el 25 oct escribe y copia detrás de dos banderas: ver «La empresa, parte 2».
 10. **El TAM lo ve solo el equipo:** no entra a la memoria de la cuenta (`lib/memoria/frontera.test.ts`) ni a un
@@ -11036,6 +11036,54 @@ ideal y las buyer personas de Smarteam eran tablas sueltas de Marketing. SQL: `s
 
 **Volver atrás:** apagar las dos banderas; `scripts/hubspot-empresa-volver-atras.ts` para lo escrito en HubSpot; el SQL dice
 qué dropear.
+
+## La preventa, después de usarla: la siguiente pregunta de calidad, el método de Andrés, por departamento con el dinero y la investigación de la empresa (2026-10-26, K7, K8, K1 y R5 segunda parte)
+
+**El hecho:** el feedback de Ventas (Marco, Andrés y Liz) y de Customer Success (Liliana) del 23 oct
+(`docs/exploracion-mejoras-plan.md`). La guía tomaba lo marcado en el test como si el cliente lo hubiera dicho
+(Distribuidora Larce: «Dijiste que…») y no buscaba la causa; las notas de HubSpot no llegaban a la guía con su texto;
+faltaban el equipo Financiero y la plata en cada equipo; y la preventa volvía a buscar en internet aunque la empresa ya
+tuviera su investigación.
+
+**Lo decidido:**
+
+1. **Lo del test se valida (K7 etapa 1).** Lo que viene del test en línea (el «Diagnóstico de Rendimiento», origen
+   `test` en «Lo que ya sabemos») es algo a VALIDAR: la pregunta del plan que parte solo de eso va marcada «a validar»
+   y abre con lo que marcó: «En el diagnóstico marcaste que …; ¿cómo se ve eso en el día a día?». Es la única pregunta
+   que dice de dónde sale: no se le quita la cita ni se cae por repetir lo sabido, y la pantalla la marca. «Regenerar»
+   la respeta, y sin la del agente (o en una guía de antes) la de respaldo también valida. Nunca «Dijiste que…» de algo
+   del test. En un proyecto el test no entra.
+2. **Las notas de HubSpot llegan con su texto (K7 etapa 2).** Las recientes de la empresa (la del test primero, cinco
+   como mucho, cortas) entran al pedido de la guía de la preventa, por la puerta de lectura de las comunicaciones
+   (`lib/comunicaciones/lectura-server.ts`). Son contexto, no palabras del cliente.
+3. **El método de Andrés en las instrucciones (K8, los dos lugares)**, sin copiar la nota: la secuencia para profundizar
+   (ejemplo, frecuencia, efecto, cómo lo miden, causa, qué falta comprobar) que siguen las repreguntas; un caso real de
+   punta a punta; las cifras con su período, su fuente y su definición (cerrado, facturado o cobrado…); no asumir que
+   el problema es la adopción; el contraste entre equipos cuando ya hubo sesiones con dos. Cada pregunta guarda qué
+   investiga (`investiga`) y qué pedir que muestren (`pideVer`); el cierre acuerda la evidencia que falta; y una sesión
+   con la empresa entera, sin sesiones por equipo planeadas, sugiere cuáles siguen (`sesionesSugeridas`). El contraste
+   cuenta solo las sesiones hechas cuya reunión dejó qué leer (sin `resultado`). Todo en el
+   Json de la guía: sin SQL. La agenda se queda con «Contarle».
+4. **Por departamento, con la escala y el dinero (K1 etapas 1 a 4).** Financiero es el séptimo equipo, sin área de la
+   escala (lo cerrado contra lo facturado y lo cobrado, y los reportes de la gerencia). Cada equipo tiene un tema de
+   inversión (cuánto, en qué y cómo saben si vale la pena), último en su prioridad; con Dirección en la preventa no
+   entra, porque lo cubre el presupuesto; «Lo que cubre la guía» la cuenta solo si la guía la pregunta o ya se respondió.
+   Cada tema de un equipo con área dice qué dimensiones ubica (`dimensiones`), y dentro de la prioridad del equipo baja
+   el que ya no ubica ninguna sin evidencia; un tema sin ninguna de sus dimensiones en la escala no se mueve. Las
+   preguntas de base suman telefonía, ERP y WhatsApp (Tecnología) y retención, tiempos y rotación (Servicio).
+   **Pendiente:** contrastar con el banco de preguntas por departamento de Andrés (`departamentos.md`, que no está en el
+   repo) y revisar con Marco cinco guías reales (K7 etapa 4).
+5. **La preventa lee la investigación de la empresa (R5, segunda parte).** Con una investigación vigente
+   (`InvestigacionDeEmpresa`), la preparación la usa como su radiografía (W1, con las contrataciones como una línea más)
+   y no busca en internet, aunque la empresa no esté en HubSpot. Sin ella, investiga como siempre y lo que encuentra
+   queda también en la empresa (`origen: "preventa"`). La industria (W2) solo la trae la búsqueda de la preventa: con
+   una investigación vigente, la guía no tiene retos de la industria. INV56 vigila que una investigación de una preventa
+   sea de la empresa de esa preventa.
+6. **Lo que Smarteam dice de sí mismo** entra a la guía de la preventa por su lector (`lib/smarteam/contexto.ts`), solo
+   la propuesta de valor y el position statement, en 900 caracteres como mucho y nada si no están: para la apertura y
+   «Contarle», nunca para nombrar a otros clientes.
+
+**Volver atrás:** revertir el commit. No hay SQL: las guías viejas se siguen leyendo (los campos nuevos son opcionales).
 
 ## Las reuniones con solo notas cuentan, y lo atrasado se lee por lote (2026-10-24, T1, T2 y U22)
 

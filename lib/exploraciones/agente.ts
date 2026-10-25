@@ -71,7 +71,7 @@ import { agendaRenovada, exploracionesQueLeenLaReunion, hayQueLeerAlPreparar, mi
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
-import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia, voseoEnLaGuia } from "./guia-pedido";
+import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, notasParaLaGuia, pedidoDeLaGuia, voseoEnLaGuia } from "./guia-pedido";
 import {
   focoDeLaGuia,
   guiaDeAntesDeLaReunion,
@@ -90,7 +90,12 @@ import { aplicarAjustes, apuntaDelTema } from "./ajustes-de-la-guia";
 import { contextoDelPlan, type PreguntaPlaneada } from "./plan-de-la-guia";
 import { leerEmpresa } from "./hubspot";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
-import { leerLaRadiografia, pedidoDeLaRadiografia } from "./radiografia-pedido";
+import { investigacionDesdeLaRadiografia, leerLaRadiografia, pedidoDeLaRadiografia, radiografiaDesdeLaInvestigacion } from "./radiografia-pedido";
+import type { Radiografia } from "./casillas";
+import { guardarInvestigacionDeLaPreventa, ultimaInvestigacion } from "@/lib/clients/investigacion/servidor";
+import { comunicacionesDeLaCuenta } from "@/lib/comunicaciones/lectura-server";
+import { contextoDeSmarteam } from "@/lib/smarteam/contexto";
+import { textoParaLaPreventa } from "@/lib/smarteam/perfil";
 import { posicionesDelMapa } from "./mapa";
 import { DE_LA_PREVENTA, marcoDe, type Marco } from "./marco";
 import { avanceDeLaEstrategia } from "./avance-del-proyecto";
@@ -330,20 +335,36 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       ...(modo === "leer" ? planDeLaLectura(estado, escala, leido, marcoDe(fila.marco)) : {}),
     };
 
-    /* Al preparar, primero la radiografía: el agente investiga la empresa en internet. Lo que
-       encuentra se propone en su casilla y entra como fuente (W1, y W2 la industria) para la
+    /* Al preparar, primero la radiografía. R5, segunda parte (2026-10-26): la investigación es de la EMPRESA. Si tiene una
+       vigente (lib/clients/investigacion), la preventa la lee de ahí como su radiografía (W1) y no busca en internet,
+       aunque la empresa no esté en HubSpot. Si no, el agente investiga como siempre (W1, y W2 la industria) y lo que
+       encuentra queda también en la empresa. Lo que encuentra se propone en su casilla y entra como fuente para la
        hipótesis de valor y el pitch. Si falla, la preparación sigue sin ella. */
     let deLaWeb: ItemPropuesto[] = [];
-    if (modo === "preparar" && fila.client.hubspotCompanyId) {
-      await fase(runId, "Investigando la empresa en internet…");
-      const r = await investigar(runId, fila, opts).catch((e) => {
-        console.error(`[exploraciones/agente] radiografía ${exploracionId}`, e);
-        return null;
-      });
-      if (r?.item) deLaWeb = [r.item];
-      if (r?.industria) deLaWeb.push(r.industria.item);
-      if (r?.fuente) leido.fuentes.push(r.fuente);
-      if (r?.industria) leido.fuentes.push(r.industria.fuente);
+    if (modo === "preparar") {
+      const vigente = await ultimaInvestigacion(fila.clientId).catch(() => null);
+      const deLaEmpresa = vigente && !vigente.vencida ? radiografiaDesdeLaInvestigacion(vigente, runId) : null;
+      if (deLaEmpresa) {
+        await fase(runId, "Leyendo la investigación de la empresa…");
+        deLaWeb = [deLaEmpresa.item];
+        leido.fuentes.push(deLaEmpresa.fuente);
+      } else if (fila.client.hubspotCompanyId) {
+        await fase(runId, "Investigando la empresa en internet…");
+        const r = await investigar(runId, fila, opts).catch((e) => {
+          console.error(`[exploraciones/agente] radiografía ${exploracionId}`, e);
+          return null;
+        });
+        if (r?.item) deLaWeb = [r.item];
+        if (r?.industria) deLaWeb.push(r.industria.item);
+        if (r?.fuente) leido.fuentes.push(r.fuente);
+        if (r?.industria) leido.fuentes.push(r.industria.fuente);
+        const paraLaEmpresa = r?.item ? investigacionDesdeLaRadiografia(r.item.valor as Radiografia) : null;
+        if (paraLaEmpresa) {
+          await guardarInvestigacionDeLaPreventa({ clientId: fila.clientId, exploracionId, agentRunId: runId, ...paraLaEmpresa }).catch((e) =>
+            console.error(`[exploraciones/agente] la radiografía no quedó en la empresa ${exploracionId}`, e),
+          );
+        }
+      }
       ctx.fuentes = leido.fuentes;
     }
 
@@ -923,7 +944,23 @@ export async function contextoParaLaGuia(exploracionId: string) {
         .catch(() => 0)
     : 0;
   const posiciones = posicionesDelMapa(estado, pendientes);
+  /* La preventa (K7 y R13, 2026-10-26): las notas recientes de HubSpot con su texto (la del test primero) y lo que
+     Smarteam dice de sí mismo, corto. Si no se pueden leer, la guía se arma igual. */
+  const [notasDeHubspot, smarteam] =
+    marco.clave === "venta"
+      ? await Promise.all([
+          // 30 (el tope de la puerta): con muchas notas recientes, la del test igual tiene que entrar y va primero.
+          comunicacionesDeLaCuenta(fila.clientId, { tope: 30, tipo: "nota" })
+            .then((ns) => notasParaLaGuia(ns))
+            .catch(() => []),
+          contextoDeSmarteam()
+            .then((c) => textoParaLaPreventa(c))
+            .catch(() => null),
+        ])
+      : [[], null];
   const ctx = contextoDeLaGuia({
+    notasDeHubspot,
+    smarteam,
     marco,
     proyecto,
     loVendido,

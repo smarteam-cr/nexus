@@ -128,6 +128,7 @@ export async function regenerarPregunta(exploracionId: string, clave: string, qu
       nombre: tema ? nombreDelTema(base, tema) : (p.tema ?? "Pregunta de la guía"),
       ...(p.paso ? { paso: p.paso } : {}),
       motivo: p.motivo ?? null,
+      ...(p.aValidar ? { aValidar: true } : {}),
       dimension: dim ? { pregunta: dim.pregunta, nivel: pos ? (base.escala.niveles.find((n) => n.letra === pos.nivel)?.nombre ?? pos.nivel) : null } : null,
       actual: p.pregunta,
       repreguntas: p.repreguntas,

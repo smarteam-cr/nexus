@@ -194,6 +194,22 @@ export function PreguntaDeLaGuia({
               )}
             </div>
             <DeQueEs p={p} corta={corta} />
+            {/* K7 y K8 (2026-10-26): si valida lo del test, qué investiga y qué pedirle que muestre. Lo lee quien lleva la sesión. */}
+            {!corta && (p.aValidar || p.investiga || p.pideVer) && (
+              <div className="mt-1 space-y-0.5 text-xs leading-[17px] text-fg-muted">
+                {p.aValidar && <p>Lo marcó en el test: valídalo con un caso de su día a día.</p>}
+                {p.investiga && (
+                  <p>
+                    <span className="font-medium text-fg-secondary">Investiga:</span> {p.investiga}
+                  </p>
+                )}
+                {p.pideVer && (
+                  <p>
+                    <span className="font-medium text-fg-secondary">Pide que te muestren:</span> {p.pideVer}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
               {p.repreguntas.length > 0 && (
                 <button type="button" aria-expanded={abierta} onClick={() => setAbierta((x) => !x)} className="text-[12.5px] text-brand hover:underline">

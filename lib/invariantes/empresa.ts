@@ -44,3 +44,27 @@ export const INV51: Invariante = {
     );
   },
 };
+
+/**
+ * INV56 · Una investigación que salió de una preventa es de la MISMA empresa que esa preventa (R5, segunda parte,
+ * 2026-10-26). Desde ese día la radiografía de una preventa sin investigación vigente queda guardada en la empresa
+ * (`InvestigacionDeEmpresa.origen = "preventa"`), y la próxima preventa de esa empresa la lee como su radiografía: una
+ * colgada de otra empresa le llevaría a una preventa lo que se investigó de otro cliente (invariante 1).
+ */
+export const INV56: Invariante = {
+  id: "56",
+  nombre: "cada investigación que salió de una preventa es de la empresa de esa preventa",
+  async correr(db) {
+    const filas = await db.investigacionDeEmpresa.findMany({
+      where: { exploracionId: { not: null } },
+      select: { id: true, clientId: true, exploracion: { select: { clientId: true } } },
+    });
+    const cruzadas = filas.filter((f) => f.exploracion && f.exploracion.clientId !== f.clientId);
+    if (!cruzadas.length) return cumple(`✓ INV56: las ${filas.length} investigaciones que salieron de una preventa son de la empresa de su preventa.`);
+    return viola(
+      `✗ INV56 VIOLADO: ${cruzadas.length} investigación(es) colgadas de una empresa distinta a la de su preventa (${cruzadas.slice(0, 5).map((f) => f.id).join(", ")}).` +
+        `\n    Remedio: revisar a mano de quién es cada una (la radiografía es de la empresa de la preventa) y moverla o borrarla; la` +
+        `\n    preventa de la otra empresa no debe leerla. Regla: lib/exploraciones/agente.ts › correr (preparar).`,
+    );
+  },
+};

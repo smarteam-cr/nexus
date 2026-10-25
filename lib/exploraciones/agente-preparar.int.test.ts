@@ -30,18 +30,27 @@ vi.mock("./fuentes", () => ({
   reunionesDeLaExploracion: async () => [],
 }));
 
-/* Claude: elige «banca» para la industria y no propone nada en la preparación. */
+/* La empresa en HubSpot, para la búsqueda en internet (R5): sin esto, la radiografía saldría a HubSpot. */
+vi.mock("./hubspot", async (original) => ({
+  ...(await original<typeof import("./hubspot")>()),
+  leerEmpresa: async () => ({ nombre: "Crédito Ágil", dominio: null, industria: null, pais: "Costa Rica" }),
+}));
+
+/* Claude: elige «banca» para la industria, la radiografía trae un resumen y no propone nada en la preparación. */
 const pedidos: string[] = [];
 vi.mock("@/lib/anthropic", () => ({
   getAnthropic: () => ({
     messages: {
       create: async (p: { tools: { name: string }[] }) => {
-        const herramienta = p.tools[0].name;
+        // La radiografía pide antes la búsqueda en internet: la herramienta que cuenta es la suya.
+        const herramienta = (p.tools.find((t) => t.name !== "web_search") ?? p.tools[0]).name;
         pedidos.push(herramienta);
         const input =
           herramienta === "elegir_industria"
             ? { edicion: "banca", razon: "Es una financiera que coloca créditos a pymes." }
-            : { textos: [], metas: [], retos: [], personas: [], areas: [] };
+            : herramienta === "radiografia"
+              ? { resumen: "Financiera que coloca créditos a pymes.", sector: "Servicios financieros" }
+              : { textos: [], metas: [], retos: [], personas: [], areas: [] };
         return { content: [{ type: "tool_use", id: "tu", name: herramienta, input }], usage: { input_tokens: 1, output_tokens: 1 } };
       },
     },
@@ -52,7 +61,7 @@ import { prisma } from "@/lib/db/prisma";
 import { leerArchivoDeLaEscala } from "@/lib/escala/documento/archivos";
 import { parsearEscala } from "@/lib/escala/documento/parsear";
 import { AGENTE_DE_LA_EXPLORACION, lanzarCorrida } from "./agente";
-import { leerContenido } from "./esquemas";
+import { leerContenido, leerPropuesta } from "./esquemas";
 
 const texto = leerArchivoDeLaEscala("escala");
 const general = parsearEscala(texto);
@@ -154,5 +163,54 @@ describe("lo que la preparación deja hecho sola", () => {
     await prepararYEsperar(id, clientId);
     expect(pedidos).not.toContain("elegir_industria");
     expect((await prisma.exploracionDeVenta.findUniqueOrThrow({ where: { id } })).edicion).toBe("educacion");
+  });
+});
+
+describe("R5 · la preventa lee la investigación de la empresa (2026-10-26)", () => {
+  it("con una investigación vigente, la usa como su radiografía y no busca en internet", async () => {
+    const { clientId, id } = await sembrar();
+    await prisma.investigacionDeEmpresa.create({
+      data: {
+        clientId,
+        hechaAt: new Date(),
+        venceAt: new Date(Date.now() + 90 * 86_400_000),
+        origen: "actualizar",
+        resumen: "Financiera que coloca créditos a pymes en Costa Rica.",
+        contenido: { sector: "Servicios financieros", hitos: [{ texto: "Lanzó crédito en línea", url: "https://noticia.example/credito" }] },
+        fuentes: [{ url: "https://noticia.example/credito" }],
+        contrataciones: [{ puesto: "Analista de crédito", url: "https://empleo.example/1" }],
+      },
+    });
+    pedidos.length = 0;
+    const run = await prepararYEsperar(id, clientId);
+    expect(run.status).toBe("DONE");
+    expect(pedidos).not.toContain("radiografia");
+    const fila = await prisma.exploracionDeVenta.findUniqueOrThrow({ where: { id } });
+    const radiografia = leerPropuesta(fila.propuesta).items.find((it) => it.destino.tipo === "casilla" && it.destino.clave === "radiografia");
+    expect(radiografia?.fuentes[0]?.etiqueta).toBe("La investigación de la empresa");
+    // No se guardó otra: la de la empresa sigue siendo la única.
+    expect(await prisma.investigacionDeEmpresa.count({ where: { clientId } })).toBe(1);
+  });
+
+  it("sin una vigente, investiga y lo que encuentra queda en ESTA empresa, con su preventa", async () => {
+    const { clientId, id } = await sembrar();
+    const otra = await prisma.client.create({ data: { name: "Otra empresa", kind: "PROSPECTO" }, select: { id: true } });
+    pedidos.length = 0;
+    expect((await prepararYEsperar(id, clientId)).status).toBe("DONE");
+    expect(pedidos).toContain("radiografia");
+    const guardadas = await prisma.investigacionDeEmpresa.findMany({ where: { exploracionId: id } });
+    expect(guardadas.map((g) => [g.clientId, g.origen, g.resumen])).toEqual([[clientId, "preventa", "Financiera que coloca créditos a pymes."]]);
+    expect(await prisma.investigacionDeEmpresa.count({ where: { clientId: otra.id } })).toBe(0);
+  });
+
+  it("una vencida no se usa: vuelve a investigar", async () => {
+    const { clientId, id } = await sembrar();
+    await prisma.investigacionDeEmpresa.create({
+      data: { clientId, hechaAt: new Date(Date.now() - 200 * 86_400_000), venceAt: new Date(Date.now() - 86_400_000), origen: "actualizar", resumen: "Vieja.", contenido: {}, fuentes: [], contrataciones: [] },
+    });
+    pedidos.length = 0;
+    await prepararYEsperar(id, clientId);
+    expect(pedidos).toContain("radiografia");
+    expect(await prisma.investigacionDeEmpresa.count({ where: { clientId } })).toBe(2);
   });
 });

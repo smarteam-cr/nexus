@@ -98,13 +98,17 @@ export function queCubreLaGuia(o: {
   // El «dónde duele» de un equipo con área se pregunta con la dimensión de su área si el cliente ya contó un dolor.
   const areaDelEquipo = equipo ? EQUIPOS[equipo].area : null;
   const dolorConDimension = !!areaDelEquipo && dimensiones.some((d) => o.escala.areas.find((a) => a.id === areaDelEquipo)?.dimensiones.some((x) => x.id === d.id));
+  /* La inversión (K1, 2026-10-26) es el tema de menos prioridad: solo se cuenta si la guía la pregunta o ya se respondió.
+     Si no entró (no hubo lugar, o con Dirección en la preventa la cubre el presupuesto), no es un pendiente. */
   const temasDelEquipo: PuntoQueCubre[] = equipo
-    ? EQUIPOS[equipo].temas.map((t) => {
-        const id = temaDeEquipo(equipo, t.tema);
-        const listo = (o.yaPreguntado?.get(id)?.size ?? 0) > 0;
-        const cubre = temas.has(id) || (t.tema === "dolor" && dolorConDimension);
-        return { id, corto: t.nombre, titulo: t.busca, estado: listo ? "listo" : cubre ? "cubre" : "falta" };
-      })
+    ? EQUIPOS[equipo].temas
+        .filter((t) => t.tema !== "inversion" || temas.has(temaDeEquipo(equipo, t.tema)) || (o.yaPreguntado?.get(temaDeEquipo(equipo, t.tema))?.size ?? 0) > 0)
+        .map((t) => {
+          const id = temaDeEquipo(equipo, t.tema);
+          const listo = (o.yaPreguntado?.get(id)?.size ?? 0) > 0;
+          const cubre = temas.has(id) || (t.tema === "dolor" && dolorConDimension);
+          return { id, corto: t.nombre, titulo: t.busca, estado: listo ? "listo" : cubre ? "cubre" : "falta" };
+        })
     : [];
 
   const faltantes = puntos.filter((p) => p.estado !== "listo");

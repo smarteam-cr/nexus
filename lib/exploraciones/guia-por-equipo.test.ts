@@ -94,10 +94,10 @@ describe("los equipos del cliente", () => {
   });
 
   it("Marketing pregunta lo de Marco: cómo está armado, cómo lo miden, canal por canal, sistemas y qué duele en cada canal", () => {
-    expect(EQUIPOS.marketing.temas.map((t) => t.tema)).toEqual(["estructura", "medicion", "proceso", "sistemas", "dolor"]);
+    expect(EQUIPOS.marketing.temas.map((t) => t.tema)).toEqual(["estructura", "medicion", "proceso", "sistemas", "dolor", "inversion"]);
     expect(EQUIPOS.marketing.temas.find((t) => t.tema === "medicion")?.pregunta).toMatch(/te miden/);
     // Tecnología arma el mapa técnico de la nota de Andrés: dónde vive cada dato, integraciones y el identificador.
-    expect(EQUIPOS.tecnologia.temas.map((t) => t.tema)).toEqual(["estructura", "proceso", "sistemas", "datos", "dolor"]);
+    expect(EQUIPOS.tecnologia.temas.map((t) => t.tema)).toEqual(["estructura", "proceso", "sistemas", "datos", "dolor", "inversion"]);
   });
 
   it("los temas se escriben <equipo>.<tema> y se leen de vuelta", () => {
@@ -185,7 +185,8 @@ describe("la guía de una sesión con un equipo", () => {
     const estado = conSesion("marketing", { contenido: { ...contenidoVacio(), sesiones: [{ id: "s-prox", fecha: "2026-10-30", equipo: "marketing" }] } });
     const ctx = contextoDeLaGuia({ empresa: "Cemaco", industria: null, estado, escala: ESCALA, posiciones: {}, pendientes: [], agenda: [], conTest: false, hoy: "2026-10-23" });
     expect(ctx.equipo?.nombre).toBe("Marketing");
-    expect(ctx.lentes?.map((l) => l.para)).toEqual(EQUIPOS.marketing.temas.map((t) => `marketing.${t.tema}`));
+    // Cinco preguntas: la inversión, última en la prioridad, queda afuera.
+    expect(ctx.lentes?.map((l) => l.para)).toEqual(EQUIPOS.marketing.temas.filter((t) => t.tema !== "inversion").map((t) => `marketing.${t.tema}`));
     expect(ctx.faltanAlCerrar).toEqual([]);
     const herramienta = herramientaDeLaGuia(ctx) as { input_schema: { properties: { preguntas: { items: { properties: { para: { enum: string[] } } } } } } };
     expect(herramienta.input_schema.properties.preguntas.items.properties.para.enum).toContain("marketing.medicion");
@@ -232,7 +233,7 @@ describe("la guía de una sesión con un equipo", () => {
     expect(g?.preguntas.map((p) => p.para)).toEqual(["marketing.medicion"]);
     // Sin el plan (como la lee la lectura de la reunión): los temas del equipo siguen ahí, con la del agente.
     const sinPlan = preguntasParaMostrar(g, g!.huecos, g!.enfoque, ESCALA);
-    expect(sinPlan.filter((p) => p.tipo === "equipo").map((p) => p.para)).toEqual(EQUIPOS.marketing.temas.map((t) => `marketing.${t.tema}`));
+    expect(sinPlan.filter((p) => p.tipo === "equipo").map((p) => p.para)).toEqual(EQUIPOS.marketing.temas.filter((t) => t.tema !== "inversion").map((t) => `marketing.${t.tema}`));
     expect(sinPlan.find((p) => p.para === "marketing.medicion")?.pregunta).toBe("¿Con qué número te mide la gerencia hoy?");
   });
 
@@ -475,6 +476,9 @@ describe("el panel dice la verdad", () => {
       "marketing.sistemas": "falta",
       "marketing.dolor": "cubre",
     });
+    // La inversión cuenta solo si la guía la pregunta (o ya se respondió): fuera del plan no es un pendiente.
+    const conInversion = queCubreLaGuia({ preguntas: [...preguntas, { para: "marketing.inversion", tipo: "equipo" as const }], puntos: [], escala: ESCALA, posiciones: {}, marco: "venta", equipo: "marketing" });
+    expect(conInversion.temasDelEquipo.find((t) => t.id === "marketing.inversion")?.estado).toBe("cubre");
   });
 });
 
@@ -502,5 +506,62 @@ describe("Contarle", () => {
     const r = queContarle({ marco: "cs", equipo: null, areas: [{ id: "1", nombre: "Ventas", nivel: null }], nombreDeNivel, casos: [{ titulo: "x", areaId: null }] });
     expect(r.guia).toContain("lo que se vendió");
     expect(r.puntos).toEqual([]);
+  });
+});
+
+describe("K1 · por departamento, con la escala y el dinero", () => {
+  it("Financiero es un equipo sin área: lo cerrado contra lo facturado y lo cobrado, y los reportes de la gerencia", () => {
+    expect(EQUIPOS.financiero.area).toBeNull();
+    expect(EQUIPOS.financiero.temas.find((t) => t.tema === "medicion")?.busca).toMatch(/cerrado, lo facturado y lo cobrado/);
+    expect(EQUIPOS.financiero.temas.some((t) => t.tema === "datos" && /gerencia/.test(t.pregunta))).toBe(true);
+    expect(sugerirEquipo(["Sesión con contabilidad y cobros"])).toBe("financiero");
+    expect(areaQueSuma("financiero", ["1"], ESCALA.areas)).toBeNull();
+  });
+
+  it("cada equipo tiene su tema de inversión: cuánto, en qué y cómo saben si vale la pena", () => {
+    for (const e of EQUIPOS_DEL_CLIENTE) {
+      const t = EQUIPOS[e].temas.find((x) => x.tema === "inversion");
+      expect(t, e).toBeTruthy();
+      expect(t!.pregunta, e).toMatch(/invierten|cuesta/);
+    }
+  });
+
+  it("cada tema de un equipo con área dice qué dimensiones de SU área ubica", () => {
+    for (const e of EQUIPOS_DEL_CLIENTE) {
+      const def = EQUIPOS[e];
+      for (const t of def.temas) {
+        if (!def.area) expect(t.dimensiones, `${e}.${t.tema}`).toBeUndefined();
+        for (const d of t.dimensiones ?? []) expect(d.split(".")[0], `${e}.${t.tema}`).toBe(def.area);
+      }
+    }
+  });
+
+  it("la guía elige primero el tema que todavía ubica algo: uno con todas sus dimensiones con evidencia baja", () => {
+    // Esta escala de Marketing trae 2.1 a 2.4. Proceso ubica 2.1 (2.7 no está), sistemas 2.2 y 2.3, estructura 2.4; la
+    // medición (2.8) no tiene ninguna aquí y se queda donde está.
+    const delEquipo = (plan: ReturnType<typeof planDe>) => plan.filter((p) => p.tipo === "equipo").map((p) => p.para);
+    const conEvidencia = { "2.1": { nivel: "F" as const, clase: "evidencia" as const } };
+    // Con dos lugares: sin evidencia entran medición y proceso; con 2.1 con evidencia, proceso ya no ubica nada y le
+    // deja el lugar a sistemas. La medición (sin dimensiones en esta escala) no se mueve.
+    expect(delEquipo(planDe(conSesion("marketing"), { max: 2 }))).toEqual(["marketing.medicion", "marketing.proceso"]);
+    expect(delEquipo(planDe(conSesion("marketing"), { max: 2, posiciones: conEvidencia }))).toEqual(["marketing.medicion", "marketing.sistemas"]);
+    // Con cuatro, proceso baja detrás de estructura: queda afuera y entra estructura.
+    expect(delEquipo(planDe(conSesion("marketing"), { max: 4, posiciones: conEvidencia }))).not.toContain("marketing.proceso");
+  });
+
+  it("con Dirección en la preventa, la inversión no le quita lugar al presupuesto; en un proyecto, sí entra", () => {
+    expect(planDe(conSesion("direccion"), { max: 7 }).some((p) => p.para === "direccion.inversion")).toBe(false);
+    expect(planDe(conSesion("direccion"), { marco: "cs" }).some((p) => p.para === "direccion.inversion")).toBe(true);
+  });
+
+  it("las preguntas de base que faltaban: telefonía, ERP y WhatsApp en Tecnología; retención, tiempos y rotación en Servicio", () => {
+    const tec = EQUIPOS.tecnologia.temas.find((t) => t.tema === "sistemas")!.repreguntas.join(" ");
+    expect(tec).toMatch(/ERP/);
+    expect(tec).toMatch(/telefon/);
+    expect(tec).toMatch(/WhatsApp/);
+    const sac = EQUIPOS.servicio.temas.find((t) => t.tema === "medicion")!.repreguntas.join(" ");
+    expect(sac).toMatch(/respuesta/);
+    expect(sac).toMatch(/se les van/);
+    expect(sac).toMatch(/rotación/);
   });
 });
