@@ -52,15 +52,19 @@ export function partnerCreaClientes(env: Entorno): boolean {
   return env.CS_PARTNER_CREA_CLIENTES === "1";
 }
 
+const copiaDePartner = (env: Entorno) =>
+  env.CS_WATCHDOG_ENABLED === "1" || env.CS_PARTNER_SYNC_ENABLED === "1"
+    ? null
+    : falta("CS_PARTNER_SYNC_ENABLED=1 (o CS_WATCHDOG_ENABLED=1)");
+
 const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
   "cs-signals-daily": exitoDelCliente,
   /* La copia de HubSpot Partner (licencias, renovaciones, uso) se puede prender SOLA desde el
      2026-10-02, sin el vigilante con IA: las renovaciones de la información del cliente la necesitan y
      en producción estaba parada desde julio porque colgaba de CS_WATCHDOG_ENABLED. */
-  "cs-partner-daily": (env) =>
-    env.CS_WATCHDOG_ENABLED === "1" || env.CS_PARTNER_SYNC_ENABLED === "1"
-      ? null
-      : falta("CS_PARTNER_SYNC_ENABLED=1 (o CS_WATCHDOG_ENABLED=1)"),
+  "cs-partner-daily": copiaDePartner,
+  /* La comisión estimada de HubSpot sale de la copia de Partner (U25, 2026-10-25): sin la copia no hay de dónde. */
+  "comisiones-hubspot-estimado": copiaDePartner,
   "cs-watchdog-daily": exitoDelCliente,
   "cs-watchdog-debounce": exitoDelCliente,
   "cobranza-quincenal": (env) =>

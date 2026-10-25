@@ -53,6 +53,11 @@ function baseFalsa(tablas: Record<string, Fila[] | number>, llamadas: Llamada[] 
       llamadas.push({ modelo, metodo: "findUnique", args });
       return filasDe(modelo).find((r) => r.id === args.where.id) ?? null;
     },
+    /** Sin filas, el máximo no existe (INV50 lo lee como «no hay copia de Partner»). Los casos con datos: el .int.test. */
+    async aggregate(args: Record<string, unknown>) {
+      llamadas.push({ modelo, metodo: "aggregate", args });
+      return { _max: {} };
+    },
   });
   return new Proxy({}, { get: (_, modelo) => (typeof modelo === "string" ? delegado(modelo) : undefined) }) as unknown as PrismaClient;
 }
@@ -805,7 +810,7 @@ describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 37 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 38 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -817,8 +822,9 @@ describe("el registro y el consumidor", () => {
       // los pedidos fuera de alcance de una reunión de otro cliente (el gemelo de INV42); 47, ninguna reunión reciente con
       // texto sin empresa (T1, 2026-10-24). 48 vive en el script.
       "44", "45", "46", "47",
-      // 49: la frescura de la copia de Google Meet (U1, 2026-10-25).
-      "49",
+      // 49: la frescura de la copia de Google Meet (U1, 2026-10-25); 50, el historial de Partner y la comisión de
+      // HubSpot (U25 y U29, 2026-10-25).
+      "49", "50",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -866,7 +872,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("37 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("38 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;

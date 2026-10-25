@@ -28,6 +28,7 @@ import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { leerDuenos } from "@/lib/hubspot/duenos";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { crearOReusarFicha } from "@/lib/clients/empresa-de-hubspot";
+import { columnasDePartner, semanaIso } from "@/lib/cs/partner-columnas";
 
 export interface PartnerSyncResult {
   supported: boolean;
@@ -85,17 +86,6 @@ const dateOrNull = (v: string | undefined): Date | null => {
   const t = /^\d{10,}$/.test(v) ? Number(v) : Date.parse(v);
   return Number.isFinite(t) && !Number.isNaN(t) ? new Date(t) : null;
 };
-
-/** Semana ISO "YYYY-Www" — clave del historial semanal de uso (el UUS se
- *  recalcula semanalmente en HubSpot; el sync diario pisa la fila de la semana). */
-function isoWeekKey(d: Date): string {
-  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const day = t.getUTCDay() || 7;
-  t.setUTCDate(t.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(((t.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${t.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
-}
 
 /** stringify determinístico (keys ordenadas recursivamente) — jsonb reordena keys,
  *  así que comparar stringify de orden de inserción marcaba "cambio" siempre. */
@@ -404,6 +394,9 @@ export async function syncPartnerClients(
         // del primer sync no cita el bloque entero de partner que acaba de aparecer.
         const changedMaterially = !existing || materialKey(existing) !== materialKey(scalars);
 
+        // U29: lo vendido, las fechas de la relación, la comisión y el MRR por hub, a columnas.
+        const columnas = columnasDePartner(rec.properties as Record<string, unknown>);
+        const mrrByHub = columnas.mrrByHub ? (columnas.mrrByHub as Prisma.InputJsonValue) : Prisma.DbNull;
         const base = {
           fetchedAt: new Date(),
           fetchStatus: fetched.associationsOk ? "ok" : "partial",
@@ -412,6 +405,8 @@ export async function syncPartnerClients(
           seats: scalars.seats as Prisma.InputJsonValue,
           renewalsByHub: scalars.renewalsByHub as Prisma.InputJsonValue,
           hubEditions: scalars.hubEditions as Prisma.InputJsonValue,
+          ...columnas,
+          mrrByHub,
         };
         await prisma.clientPartnerSnapshot.upsert({
           where: { hubspotPartnerClientId: rec.id },
@@ -431,7 +426,7 @@ export async function syncPartnerClients(
         // ── Historial SEMANAL de uso (el UUS se recalcula semanalmente): una fila
         //    por (record, semana ISO); el sync diario pisa la de la semana en curso
         //    → queda la última foto de cada semana para tendencia propia. ────────
-        const weekKey = isoWeekKey(now);
+        const weekKey = semanaIso(now);
         const usageRow = {
           clientId,
           uusScore: scalars.uusScore,
@@ -447,6 +442,11 @@ export async function syncPartnerClients(
           seats: scalars.seats as Prisma.InputJsonValue,
           mrrTotal: scalars.mrrTotal,
           nextRenewalAt: scalars.nextRenewalAt,
+          isManaged: columnas.isManaged,
+          mrrManaged: scalars.mrrManaged,
+          soldMrr: columnas.soldMrr,
+          projectedCommission: columnas.projectedCommission,
+          mrrByHub,
           capturedAt: new Date(),
         };
         await prisma.partnerUsageSnapshot.upsert({
@@ -487,6 +487,9 @@ export async function syncPartnerClients(
   }
 }
 
+/** Cuántos errores de una corrida se guardan con su texto. Los demás se cuentan en `errors`. */
+export const MAX_ERRORES_GUARDADOS = 50;
+
 /** Escribe cs-partner-sync-status.lastResult si la corrida fue concluyente. Best-effort:
  *  un fallo acá no debe tumbar el sync (los datos ya están persistidos). */
 async function persistSyncStatus(result: PartnerSyncResult): Promise<void> {
@@ -500,6 +503,8 @@ async function persistSyncStatus(result: PartnerSyncResult): Promise<void> {
     wouldCreate: result.wouldCreateClients.length,
     created: result.createdClients.length,
     errors: result.errors.length,
+    // U29: el texto, no solo la cuenta (la corrida del 23 oct tuvo 10 errores y nadie sabía cuáles).
+    errorDetail: result.errors.slice(0, MAX_ERRORES_GUARDADOS),
     at: new Date().toISOString(),
   };
   await prisma.cronJobState
@@ -520,5 +525,7 @@ export interface PartnerSyncStatus {
   wouldCreate: number;
   created: number;
   errors: number;
+  /** El texto de los primeros `MAX_ERRORES_GUARDADOS` errores. Ausente en las corridas de antes del 2026-10-25. */
+  errorDetail?: string[];
   at: string;
 }

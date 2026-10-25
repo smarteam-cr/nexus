@@ -3396,6 +3396,25 @@ model ClientPartnerSnapshot {
   cslImplementaciones    String? // custom "CSL | Implementaciones"
   country                String?
   portalLink             String? // hs_account_link: deep-link al portal del cliente en HubSpot
+  // ── U29 (2026-10-25): a columnas lo que estaba suelto en `properties` ─────────
+  // Lo vendido, las fechas de la relación, la comisión y el MRR por hub. Los llena la copia
+  // (lib/cs/partner-columnas.ts); los registros de antes los llena scripts/partner-columnas.ts.
+  isManaged                  Boolean? // hs_is_managed: Smarteam gestiona la cuenta
+  isSold                     Boolean? // hs_is_sold: Smarteam la vendió
+  soldMrr                    Float? // hs_sold_mrr: el MRR vendido (la base de la comisión)
+  soldProductLines           String? // hs_sold_product_lines: «sales_hub;marketing_hub»
+  soldRelationshipStartAt    DateTime? // hs_sold_relationship_start_date
+  soldRelationshipEndAt      DateTime? // hs_sold_relationship_end_date
+  relationshipStartAt        DateTime? // hs_relationship_start_date
+  relationshipEndAt          DateTime? // hs_relationship_end_date
+  managedRelationshipStartAt DateTime? // hs_managed_relationship_start_date
+  managedRelationshipEndAt   DateTime? // hs_managed_relationship_end_date
+  // La comisión que HubSpot proyecta para la cuenta. Es MENSUAL: el 20 % del MRR vendido
+  // (medido el 2026-10-24 en las 44 cuentas con comisión). La lee lib/cobranza/comision-hubspot.ts.
+  projectedCommission        Float?
+  projectedCommissionCurrency String?
+  projectedCommissionAt      DateTime? // hs_projected_commission_calculated_at
+  mrrByHub                   Json? // { marketing|sales|service|operations|content|commerce|addOns|seats: monto }
 
   updatedAt DateTime @updatedAt
 }
@@ -3425,6 +3444,13 @@ model PartnerUsageSnapshot {
   seats                  Json?
   mrrTotal               Float?
   nextRenewalAt          DateTime?
+  // U29 (2026-10-25): la comisión y el MRR también semana a semana, para comparar el estimado
+  // de cada trimestre con lo que HubSpot terminó pagando.
+  isManaged              Boolean?
+  mrrManaged             Float?
+  soldMrr                Float?
+  projectedCommission    Float?
+  mrrByHub               Json?
 
   @@unique([hubspotPartnerClientId, weekKey])
   @@index([clientId, weekKey])
@@ -4888,6 +4914,14 @@ model ComisionPartner {
   montoRealPor      String?
   /// Cuándo se dio por real. nullable mientras siga estimado.
   montoRealEn       DateTime?
+  // ── La estimada de HubSpot sale de HubSpot Partner (U25, 2026-10-25) ────────────
+  // true = el monto lo arma el job `comisiones-hubspot-estimado` con la comisión proyectada
+  // de cada cuenta (lib/cobranza/comision-hubspot.ts). Lo apaga una edición a mano del monto:
+  // desde ahí manda la persona. Solo vive en filas estimadas por cobrar.
+  montoDesdePartner Boolean        @default(false)
+  /// El detalle por cuenta del último estimado: { calculadoEn, meses, cuentas[] }. nullable
+  /// porque solo lo tienen las filas que armó Partner (y se conserva al pasar a real).
+  detalleDePartner  Json?
   moneda            CobranzaMoneda
   fecha             DateTime       @db.Date
 

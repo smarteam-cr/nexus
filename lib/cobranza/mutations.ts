@@ -1982,7 +1982,7 @@ export async function cambiarEstadoComisionPartner(
   }
   const actual = await prisma.comisionPartner.findUnique({
     where: { id: comisionId },
-    select: { id: true, estado: true, monto: true, montoEsProyeccion: true, montoRealEn: true, montoEstimado: true },
+    select: { id: true, estado: true, monto: true, montoEsProyeccion: true, montoRealEn: true, montoEstimado: true, montoDesdePartner: true },
   });
   if (!actual) throw new CobranzaError("La comisión no existe.", 404);
   if (data.estado === "COBRADO" && data.monto === undefined && Number(actual.monto) === 0) {
@@ -2032,6 +2032,10 @@ export async function cambiarEstadoComisionPartner(
           }
         : { fechaCobro: null, confirmadoPor: null, confirmadoEn: null }),
       ...(data.notas !== undefined ? { notas: data.notas } : {}),
+      // U25: confirmar con otro monto es escribirlo a mano; desde ahí el estimado de Partner no la vuelve a tocar.
+      ...(actual.montoDesdePartner && data.monto !== undefined && data.monto !== Number(actual.monto)
+        ? { montoDesdePartner: false }
+        : {}),
     },
   });
   return { id: comisionId };
@@ -2056,13 +2060,13 @@ export async function updateComisionPartner(
 ) {
   const actual = await prisma.comisionPartner.findUnique({
     where: { id: comisionId },
-    select: { id: true, estado: true, monto: true, fecha: true, montoEsProyeccion: true },
+    select: { id: true, estado: true, monto: true, fecha: true, montoEsProyeccion: true, montoDesdePartner: true },
   });
   if (!actual) throw new CobranzaError("La comisión no existe.", 404);
+  const cambiaElMonto = data.monto !== undefined && Number(data.monto) !== Number(actual.monto);
   if (actual.estado === "COBRADO") {
-    const cambiaMonto = data.monto !== undefined && Number(data.monto) !== Number(actual.monto);
     const cambiaFecha = data.fecha !== undefined && data.fecha !== isoDay(actual.fecha);
-    if (cambiaMonto || cambiaFecha) {
+    if (cambiaElMonto || cambiaFecha) {
       throw new CobranzaError(
         "Esta comisión ya está confirmada como cobrada. Para corregir el monto o la fecha, reviértela a «por cobrar» y vuelve a confirmarla con el número bueno — así queda claro quién firmó qué.",
         409,
@@ -2095,6 +2099,9 @@ export async function updateComisionPartner(
       ...(data.fecha !== undefined ? { fecha: dayUTC(data.fecha) } : {}),
       ...(data.clientId !== undefined ? { clientId: data.clientId } : {}),
       ...(data.notas !== undefined ? { notas: data.notas } : {}),
+      // U25: el estimado de HubSpot lo arma Partner hasta que una persona escribe otro monto; desde ahí manda ella
+      // y el job `comisiones-hubspot-estimado` no la vuelve a tocar (lib/cobranza/comision-hubspot.ts).
+      ...(actual.montoDesdePartner && cambiaElMonto ? { montoDesdePartner: false } : {}),
     },
   });
   return { id: comisionId };

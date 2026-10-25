@@ -11,6 +11,9 @@
  *   - cs-partner-daily  → sync del objeto Partner Clients (uso/licencias/MRR/
  *     renovaciones), L–V ≥ 6:00 CR — ANTES del sweep de las 7 para que el
  *     watchdog vea partner data fresca. Degrada si falta el scope (403).
+ *   - comisiones-hubspot-estimado → la comisión del próximo pago de HubSpot (15 de feb/may/ago/nov), armada con la
+ *     comisión proyectada de cada cuenta de la copia de Partner (lib/cobranza/comision-hubspot-server.ts, U25). L–V
+ *     ≥ 7:00 CR, una vez al día, después de la copia. Solo escribe la fila estimada que armó Partner (o la crea).
  *   - cs-watchdog-daily → sweep del watchdog (L–V ≥ 7:00 CR, tras las señales),
  *     con pre-filtro determinístico. Gated por env + CsSettings.watchdogEnabled.
  *   - cs-watchdog-debounce → triage de eventos "quiesced" (>15 min), cada tick.
@@ -156,6 +159,27 @@ const csPartnerDaily: JobDef = {
     console.log(
       `[jobs/cs-partner] ${dateKey} — ${r.total} records (asociaciones ${r.associationsOk ? "ok" : "PARCIALES"}): ${r.matchedByCompany} por company, ${r.matchedByDomain} por dominio, ${r.alreadyLinked} ya vinculados, ${r.createdClients.length} clients creados, ${r.briefsMarkedStale} briefs stale, ${r.unlinkedGone} desvinculados${r.errors.length ? `, ${r.errors.length} errores` : ""}`,
     );
+  },
+};
+
+const comisionesHubspotEstimado: JobDef = {
+  key: "comisiones-hubspot-estimado",
+  shouldRun: (_now, parts) => encendido("comisiones-hubspot-estimado") && WEEKDAYS_MON_FRI.has(parts.weekday) && parts.hour >= 7,
+  run: async (now) => {
+    const { dateKey } = (await import("./time")).crDateParts(now);
+    if (!(await claimDateKey("comisiones-hubspot-estimado", dateKey, now))) return SIN_TURNO;
+    const { aplicarEstimado } = await import("@/lib/cobranza/comision-hubspot-server");
+    const r = await aplicarEstimado(prisma, dateKey, now);
+    const pago = r.plan.estimado?.pago;
+    if (r.escrito) {
+      console.log(
+        `[jobs/comisiones-hubspot] ${dateKey} — comisión del ${pago?.fecha} (${pago?.trimestre}) ${r.escrito.accion}: ` +
+          `${r.escrito.antes ?? "—"} → ${r.escrito.despues} USD, ${r.plan.estimado?.cuentas.length ?? 0} cuentas`,
+      );
+    } else {
+      const motivo = r.aviso ?? (r.plan.decision.accion === "nada" ? r.plan.decision.motivo : "sin cambios");
+      console.log(`[jobs/comisiones-hubspot] ${dateKey} — no se escribió nada: ${motivo}`);
+    }
   },
 };
 
@@ -1015,5 +1039,5 @@ const titulosCortos: JobDef = {
 };
 
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, loPagadoDaily, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, loPagadoDaily, invariantsDaily];
 }
