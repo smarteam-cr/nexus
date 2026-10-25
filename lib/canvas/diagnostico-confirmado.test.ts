@@ -72,3 +72,39 @@ describe("lo confirmado del diagnóstico", () => {
     for (const p of r.piezas) expect(p.texto).not.toMatch(/\b(tenés|podés|revisá|confirmá)\b/);
   });
 });
+
+describe("un ciclo de SmartLoop sin exploración (M2, 2026-10-24)", () => {
+  const confirmado: EntradaDeLoConfirmado = {
+    ...CEMACO,
+    ficha: { confirmada: true, camposPropuestos: 0 },
+    resultados: { total: 5, confirmados: 5 },
+  };
+
+  it("todo confirmado pero el ciclo sin ninguna reunión leída: pide confirmación con su propio motivo", () => {
+    const r = loConfirmadoDelDiagnostico({ ...confirmado, ciclo: { numero: 1, lecturasDeExploracion: 0 } });
+    expect(r.casiNada).toBe(false);
+    expect(r.cicloSinExploracion).toBe(1);
+    expect(r.pideConfirmacion).toBe(true);
+    expect(mensajeDeSupuestos(r)).toMatch(/ciclo 1 de un servicio recurrente/);
+    expect(mensajeDeSupuestos(r)).not.toMatch(/fuentes tienen algo confirmado/);
+  });
+
+  it("con una reunión leída en el ciclo, no pide nada", () => {
+    const r = loConfirmadoDelDiagnostico({ ...confirmado, ciclo: { numero: 2, lecturasDeExploracion: 1 } });
+    expect(r.cicloSinExploracion).toBeNull();
+    expect(r.pideConfirmacion).toBe(false);
+    expect(mensajeDeSupuestos(r)).toBe("");
+  });
+
+  it("los dos motivos juntos: el del ciclo primero", () => {
+    const r = loConfirmadoDelDiagnostico({ ...CEMACO, ciclo: { numero: 1, lecturasDeExploracion: 0 } });
+    const m = mensajeDeSupuestos(r);
+    expect(m.indexOf("ciclo 1")).toBeLessThan(m.indexOf("Solo 1 de 4"));
+  });
+
+  it("fuera de un servicio recurrente, la regla de siempre", () => {
+    const r = loConfirmadoDelDiagnostico(CEMACO);
+    expect(r.cicloSinExploracion).toBeNull();
+    expect(r.pideConfirmacion).toBe(r.casiNada);
+  });
+});

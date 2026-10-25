@@ -21,6 +21,7 @@ import {
   type Invariante,
 } from "./index";
 import { INV49 } from "./google";
+import { INV55, INV55_BLOQUEA } from "./smartloop";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
 import { invariantesOkDesde, leerInvariantesOk } from "./salud";
 import { DONDE_PUEDE_TENER_TEXTO } from "@/lib/sessions/tiene-texto";
@@ -825,6 +826,8 @@ describe("el registro y el consumidor", () => {
       // 49: la frescura de la copia de Google Meet (U1, 2026-10-25); 50, el historial de Partner y la comisión de
       // HubSpot (U25 y U29, 2026-10-25).
       "49", "50",
+      // 55: ningún proyecto de SmartLoop dice ser «proyecto_temporal» (M1, 2026-10-25). 51–54, de otras sesiones.
+      "55",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -981,5 +984,18 @@ describe("frescura: INV49 (la copia de Google Meet)", () => {
     expect(nunca.ok).toBe(false);
     expect(nunca.lineas[0]).toContain("ninguna corrida anotada terminó bien");
     expect((await INV49.correr(baseFalsa({}), AHORA)).ok, "sin copia no hay copia vieja").toBe(true);
+  });
+});
+
+describe("SmartLoop: INV55 (2026-10-25, M1)", () => {
+  it("sin proyectos de SmartLoop con «proyecto_temporal», cumple; con alguno lo lista, y no bloquea hasta su primer verde", async () => {
+    const llamadas: Llamada[] = [];
+    expect((await INV55.correr(baseFalsa({ project: [] }, llamadas), AHORA)).ok).toBe(true);
+    // Mira solo los activos del pipeline de SmartLoop con el tipo temporal.
+    expect(where(llamadas, "project")).toMatchObject({ status: "active", serviceType: "proyecto_temporal", hubspotPipelineId: { in: ["942509592"] } });
+    const r = await INV55.correr(baseFalsa({ project: [{ id: "p1", name: "CONTINUIDAD CRM", client: { name: "RC Inmobiliaria" } }] }), AHORA);
+    expect(r.ok).toBe(!INV55_BLOQUEA);
+    expect(r.lineas[0]).toContain("1 proyecto de SmartLoop dice");
+    expect(r.lineas[1]).toContain("RC Inmobiliaria › CONTINUIDAD CRM");
   });
 });

@@ -127,7 +127,9 @@ revisión del enfoque en `revisadaAt`, como hasta hoy.
 ## Lo que salió de usarlo (2026-10-23, roadmap área L)
 
 > Feedback de Customer Success (Liliana) y Ventas el 2026-10-23, validado contra el código de hoy y la base en solo
-> lectura. Nada construido.
+> lectura. **Avance (2026-10-25, paso dos):** L1 etapa 2, L2 (las dos etapas), L3 (las cuatro) y L5 (las tres) en el código,
+> sin desplegar; SQL `2026-10-25-smartloop.sql` antes del deploy. L1 etapa 1 pasó a T2 y L4 sigue pendiente. Qué se
+> decidió: DECISIONS › «SmartLoop y el diagnóstico después de usarlos».
 
 - **L1 · Las reuniones con solo notas de Gemini cuentan como reuniones con texto.** En CEMACO hay 4 reuniones con notas
   de Gemini (5 a 10 mil caracteres) y sin transcripción: se tomaron notas sin «Transcribir», no hay nada perdido. La

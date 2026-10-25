@@ -11,8 +11,10 @@
  *      └───────── v+1 ─────────┴─────────────────────────────────────┘
  *
  *  · PRESENTAR exige el hilo cerrado (lib/canvas/revisar-hilo.ts: ninguna acción sin causa ni
- *    objetivo, ningún problema sin acción) y el enfoque de la solución revisado por el ejecutivo. Deja una
- *    FOTO PROTEGIDA de lo que vio el cliente (lib/canvas/versiones.ts).
+ *    objetivo, ningún problema sin acción), el enfoque de la solución revisado por el ejecutivo y, desde el
+ *    2026-10-24 (L2 etapa 2 del roadmap), el desafío principal revisado. Deja una FOTO PROTEGIDA de lo que vio
+ *    el cliente (lib/canvas/versiones.ts). Cada motivo dice en qué sección se arregla (`detalle`): «Presentar»
+ *    y «Publicar el enlace» los listan con un enlace a esa sección.
  *  · Lo que pasa después de presentar abre la versión siguiente: la vN presentada queda en el
  *    historial, intacta.
  *  · APROBAR solo se registra sobre lo presentado y sin cambios desde entonces: el cliente aprobó lo
@@ -74,15 +76,39 @@ export interface EstadoVista {
   cliente: string;
   /** Lo que impide presentar hoy (vacío = se puede). Solo informativo: el servidor revisa al presentar. */
   motivosParaNoPresentar: string[];
+  /** Los mismos motivos con la sección donde se arreglan (L2, 2026-10-24). Opcional: una respuesta vieja no lo trae. */
+  motivosConSeccion?: MotivoParaPresentar[];
   /** Cambió desde que se presentó (no se puede registrar la aprobación sin volver a presentar). */
   cambiosDesdeLaPresentacion: boolean;
   hitos: HitoVista[];
+}
+
+/** Un motivo para no presentar y la sección donde se arregla (null = del documento entero). */
+export interface MotivoParaPresentar {
+  texto: string;
+  seccion: string | null;
 }
 
 export interface RevisionParaPresentar {
   ok: boolean;
   /** Por qué no se puede, en frases para la persona. Vacío si `ok`. */
   motivos: string[];
+  /** Los mismos, con su sección (en el mismo orden). */
+  detalle: MotivoParaPresentar[];
+}
+
+/** La key de la sección del desafío principal (diagnostico.defs.ts). */
+export const DESAFIO_KEY = "desafio";
+
+/** ¿La sección de prosa tiene algo escrito (la frase o al menos un punto)? */
+function prosaConContenido(d: { intro?: unknown; items?: unknown } | undefined): boolean {
+  return !!d && ((typeof d.intro === "string" && d.intro.trim() !== "") || (Array.isArray(d.items) && d.items.length > 0));
+}
+
+/** ¿La revisó una persona? (`revisadaAt`, fuera del esquema del agente.) */
+export function marcadaRevisada(data: unknown): boolean {
+  const r = (data as { revisadaAt?: unknown } | null | undefined)?.revisadaAt;
+  return typeof r === "string" && r.trim() !== "";
 }
 
 /**
@@ -98,33 +124,50 @@ export function revisarParaPresentar(opts: {
   cabos: readonly CaboSuelto[];
   politica: unknown;
   politicaOculta?: boolean;
+  /**
+   * La data del «Desafío principal» (L2 etapa 2, 2026-10-24), o `undefined` si el documento no la tiene. Con algo escrito,
+   * tiene que estar revisado, como el enfoque. Oculto (`desafioOculto`) no frena. Vacío tampoco: el hilo ya lo dice.
+   */
+  desafio?: unknown;
+  desafioOculto?: boolean;
 }): RevisionParaPresentar {
-  const motivos: string[] = [];
+  const detalle: MotivoParaPresentar[] = [];
+  const fin = (): RevisionParaPresentar => ({ ok: detalle.length === 0, motivos: detalle.map((m) => m.texto), detalle });
   if (opts.estado === "aprobado") {
-    return { ok: false, motivos: ["Ya está aprobado por el cliente: para cambiarlo, reábrelo."] };
+    detalle.push({ texto: "Ya está aprobado por el cliente: para cambiarlo, reábrelo.", seccion: null });
+    return fin();
   }
   if (!opts.tieneContenido) {
-    return { ok: false, motivos: ["Todavía no hay nada que presentar: genera el diagnóstico primero."] };
+    detalle.push({ texto: "Todavía no hay nada que presentar: genera el diagnóstico primero.", seccion: null });
+    return fin();
   }
   const rotos = opts.cabos.filter((c) => c.bloquea);
   if (rotos.length) {
-    motivos.push(
-      `El hilo tiene ${rotos.length} ${rotos.length === 1 ? "cabo suelto" : "cabos sueltos"}: ${rotos
+    detalle.push({
+      texto: `El hilo tiene ${rotos.length} ${rotos.length === 1 ? "cabo suelto" : "cabos sueltos"}: ${rotos
         .slice(0, 3)
         .map((c) => c.texto)
         .join(" ")}${rotos.length > 3 ? " …" : ""}`,
-    );
+      // Se arregla en la sección del primer cabo suelto.
+      seccion: rotos[0].seccion,
+    });
+  }
+  const d = opts.desafio as { intro?: unknown; items?: unknown; revisadaAt?: unknown } | undefined;
+  if (!opts.desafioOculto && prosaConContenido(d) && !marcadaRevisada(d)) {
+    detalle.push({
+      texto: "El desafío principal sigue siendo el de la IA: revísalo con lo que dijo el cliente y márcalo como revisado.",
+      seccion: DESAFIO_KEY,
+    });
   }
   const p = opts.politica as { intro?: unknown; items?: unknown; revisadaAt?: unknown } | undefined;
-  const conContenido = !!p && ((typeof p.intro === "string" && p.intro.trim() !== "") || (Array.isArray(p.items) && p.items.length > 0));
   if (opts.politicaOculta) {
     // Oculto a propósito: no se presenta, así que no hay nada que revisar.
-  } else if (!conContenido) {
-    motivos.push("Falta el enfoque de la solución: regenera el diagnóstico o escríbelo antes de presentar.");
-  } else if (!(typeof p!.revisadaAt === "string" && p!.revisadaAt.trim() !== "")) {
-    motivos.push("El enfoque de la solución sigue siendo la sugerencia de la IA: ajústalo y márcalo como revisado.");
+  } else if (!prosaConContenido(p)) {
+    detalle.push({ texto: "Falta el enfoque de la solución: regenera el diagnóstico o escríbelo antes de presentar.", seccion: "politica_rectora" });
+  } else if (!marcadaRevisada(p)) {
+    detalle.push({ texto: "El enfoque de la solución sigue siendo la sugerencia de la IA: ajústalo y márcalo como revisado.", seccion: "politica_rectora" });
   }
-  return { ok: motivos.length === 0, motivos };
+  return fin();
 }
 
 export interface DatosDeAprobacion {

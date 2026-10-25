@@ -389,4 +389,11 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "INV21 recorre los proyectos activos con sello de reclasificación para encontrar los que quedaron sin " +
       "reuniones: es una vigilancia sobre el conjunto entero, no una pantalla con alcance.",
   },
+  // M1 (2026-10-25): INV55 vigila el tipo de servicio de los proyectos de SmartLoop.
+  "lib/invariantes/smartloop.ts": {
+    modo: "exento",
+    razon:
+      "INV55 recorre los proyectos activos del pipeline de SmartLoop para encontrar los que dicen «proyecto_temporal»: " +
+      "es una vigilancia sobre el conjunto entero, no una pantalla con alcance.",
+  },
 };

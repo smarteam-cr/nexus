@@ -13,6 +13,11 @@
  *    la sesión (elegida a mano, o la gemela de Meet de una de HubSpot) o la de su evento del calendario
  *    (`sesionUnidaALaReunion`). La ligadura por fecha NO cuenta: es una adivinanza. Motivo: «Sesión N de la
  *    exploración», con el mismo número que la pantalla de la exploración (`pestanasDeSesiones`).
+ *  · En el DIAGNÓSTICO, desde el 2026-10-24 (L1 etapa 2 del roadmap, Liliana con CEMACO): TODAS las demás reuniones del
+ *    proyecto CON EL CLIENTE (las de puertas adentro esperan un «Usar») que dejaron texto —transcripción o, sin ella, notas de Gemini (`lib/sessions/tiene-texto.ts`, el predicado
+ *    único)—, sin tope. Motivo: «Reunión del proyecto» (y «solo notas» si no hay transcripción). Como las de la
+ *    exploración, ENTRAN SOLAS (`reunionesQueEntranSolasAlDiagnostico`) y el panel las muestra con «Sacar»: quedaban
+ *    fuera la Alineación, el Handoff y «Caso CEMACO» porque nadie las había elegido.
  *  · En TODOS, las reuniones con hechos abiertos que el registro de destinos (lib/seguimiento/destinos.ts) rutea a ese
  *    documento. Motivo: la frase del hecho más reciente.
  *  · En TODOS, después de las otras dos y sin repetirlas, las reuniones que el documento leía con la REGLA VIEJA (el
@@ -38,6 +43,8 @@ import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { esSoloElegidas, type DestinoDeContexto } from "@/lib/sessions/destinos-de-contexto";
 import { etiquetaDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { queLeiaConLaReglaVieja } from "./migracion-de-reuniones";
+import type { ClaseDeTexto } from "@/lib/sessions/tiene-texto";
+import type { ClaveDeEquipo } from "@/lib/exploraciones/equipos";
 
 /** Una reunión de la membresía del proyecto (la trae el chokepoint), con el afinado de ESTE documento. */
 export interface ReunionDelProyecto {
@@ -71,6 +78,11 @@ export interface EntradaDeSugerencias {
   /** Los hechos abiertos que el registro rutea a este documento, el más reciente primero. */
   hechos?: readonly HechoQueSugiere[];
   /**
+   * La clase de texto de cada reunión de la membresía (`claseDeTexto`, lib/sessions/tiene-texto.ts). Solo cuenta en el
+   * diagnóstico: con ella entran solas las del proyecto con texto. Sin ella, ninguna por esta vía.
+   */
+  clasesDeTexto?: ReadonlyMap<string, ClaseDeTexto>;
+  /**
    * ¿Se suma la regla vieja? `false` = no se sabe la sala (el servidor no pudo leer los dominios de Smarteam): sin
    * saber si fue con el cliente, no se sugiere. Por defecto sí.
    */
@@ -79,8 +91,19 @@ export interface EntradaDeSugerencias {
   ahora: number;
 }
 
-/** `reunion`: la leía la regla vieja (una reunión con el cliente en este proyecto). */
-export type FuenteDeLaSugerencia = "exploracion" | "hecho" | "reunion";
+/**
+ * `reunion`: la leía la regla vieja (una reunión con el cliente en este proyecto). `proyecto`: una reunión del proyecto con
+ * texto, que en el diagnóstico entra sola (L1 etapa 2, 2026-10-24).
+ */
+export type FuenteDeLaSugerencia = "exploracion" | "proyecto" | "hecho" | "reunion";
+
+/** Las fuentes que ENTRAN SOLAS al diagnóstico (el panel las muestra con «Sacar»); las demás esperan un «Usar». */
+export const FUENTES_QUE_ENTRAN_SOLAS: readonly FuenteDeLaSugerencia[] = ["exploracion", "proyecto"];
+
+/** El motivo de una reunión del proyecto que entra sola al diagnóstico. */
+export function motivoDeLaReunionConTexto(clase: ClaseDeTexto): string {
+  return clase === "solo_notas" ? "Reunión del proyecto · solo notas de Gemini" : "Reunión del proyecto";
+}
 
 export interface SugerenciaDeReunion {
   sessionId: string;
@@ -125,7 +148,7 @@ export function reunionesDeLasSesiones(
   reuniones: readonly Pick<ReunionDelProyecto, "id" | "titulo" | "fecha" | "participantes">[],
   ahora: number,
   dominiosPropios: ReadonlySet<string> = new Set(),
-): { sessionId: string; numero: number }[] {
+): { sessionId: string; numero: number; equipo?: ClaveDeEquipo }[] {
   if (!sesiones.length || !reuniones.length) return [];
   const comoExploracion: ReunionDeLaExploracion[] = reuniones.map((r) => ({
     id: r.id,
@@ -139,7 +162,7 @@ export function reunionesDeLasSesiones(
   for (const p of pestanasDeSesiones(sesiones, comoExploracion, hoyEnCostaRica(new Date(ahora)))) {
     if (p.sesion && !p.noSeHizo && p.numero > 0) numeros.set(p.sesion.id, p.numero);
   }
-  const out: { sessionId: string; numero: number }[] = [];
+  const out: { sessionId: string; numero: number; equipo?: ClaveDeEquipo }[] = [];
   const usadas = new Set<string>();
   for (const s of sesiones) {
     const numero = numeros.get(s.id);
@@ -147,7 +170,8 @@ export function reunionesDeLasSesiones(
     const r = reuniones.find((x) => !usadas.has(x.id) && sesionUnidaALaReunion(s, { id: x.id, fecha: new Date(x.fecha).toISOString() }));
     if (!r) continue;
     usadas.add(r.id);
-    out.push({ sessionId: r.id, numero });
+    // El equipo del cliente de la sesión (lib/exploraciones/equipos.ts): el diagnóstico lee por equipo (L5, 2026-10-25).
+    out.push({ sessionId: r.id, numero, ...(s.equipo ? { equipo: s.equipo } : {}) });
   }
   return out.sort((a, b) => a.numero - b.numero);
 }
@@ -173,26 +197,52 @@ export function sugerenciasDelDocumento(destino: DestinoDeContexto, e: EntradaDe
     }
   }
 
+  /* Las del proyecto con texto (L1 etapa 2): sin tope, de la más reciente a la más vieja. Van fuera del tope de las
+     sugerencias porque entran solas: el panel las muestra todas, cada una con su «Sacar». */
+  const entranSolas: SugerenciaDeReunion[] = [];
+  /* Solo las que fueron CON EL CLIENTE (la revisión del 25 oct): el diagnóstico lo lee el cliente, y una reunión de puertas
+     adentro (la Alineación, el Handoff, una revisión de precio) entra solo si una persona la elige con «Usar». Sin los
+     dominios de Smarteam no se sabe la sala: no entra ninguna sola. */
+  if (destino === "diagnostico" && e.clasesDeTexto && e.dominiosPropios) {
+    const propiosDeLaSala = e.dominiosPropios;
+    const conTexto = [...libres.values()]
+      .filter((r) => !out.has(r.id) && (e.clasesDeTexto!.get(r.id) ?? "nada") !== "nada")
+      .filter((r) => etiquetaDeSala({ participants: [...r.participantes] }, propiosDeLaSala) === "CON EL CLIENTE")
+      .sort((a, b) => b.fecha - a.fecha || a.id.localeCompare(b.id));
+    for (const r of conTexto) {
+      entranSolas.push({ sessionId: r.id, motivo: motivoDeLaReunionConTexto(e.clasesDeTexto.get(r.id)!), fuente: "proyecto" });
+    }
+  }
+  const yaVan = new Set([...out.keys(), ...entranSolas.map((s) => s.sessionId)]);
+
   const porReunion = new Map<string, string[]>();
   for (const h of e.hechos ?? []) {
     const frase = h.frase?.trim();
-    if (!h.sessionId || !frase || !libres.has(h.sessionId)) continue;
+    if (!h.sessionId || !frase || !libres.has(h.sessionId) || yaVan.has(h.sessionId)) continue;
     porReunion.set(h.sessionId, [...(porReunion.get(h.sessionId) ?? []), frase]);
   }
   for (const [sessionId, frases] of porReunion) {
     if (!out.has(sessionId)) out.set(sessionId, { sessionId, motivo: motivoDeLosHechos(frases), fuente: "hecho" });
   }
 
+  /* Las que entran solas van primero (las de la exploración, después las del proyecto) y no cuentan para el tope: el tope
+     es de lo que espera un «Usar». */
+  const conLasSolas = (resto: SugerenciaDeReunion[]): SugerenciaDeReunion[] => {
+    const solasExploracion = resto.filter((s) => s.fuente === "exploracion");
+    const otras = resto.filter((s) => s.fuente !== "exploracion");
+    return [...solasExploracion, ...entranSolas, ...otras.slice(0, TOPE_DE_SUGERENCIAS)];
+  };
+
   // La regla vieja: las con el cliente, sin tocar y ya ocurridas (`libres` ya dejó afuera elegidas y desestimadas).
-  if (e.reglaVieja === false) return [...out.values()].slice(0, TOPE_DE_SUGERENCIAS);
+  if (e.reglaVieja === false) return conLasSolas([...out.values()]);
   const propios = e.dominiosPropios ?? new Set<string>();
   const deLaReglaVieja = queLeiaConLaReglaVieja(
     [...libres.values()].map((r) => ({ ...r, conElCliente: etiquetaDeSala({ participants: [...r.participantes] }, propios) === "CON EL CLIENTE" })),
     e.ahora,
-  ).filter((r) => !out.has(r.id));
+  ).filter((r) => !out.has(r.id) && !yaVan.has(r.id));
   for (const r of deLaReglaVieja.slice(0, SUGERIDAS_DE_LA_REGLA_VIEJA)) {
     out.set(r.id, { sessionId: r.id, motivo: MOTIVO_DE_LA_REGLA_VIEJA, fuente: "reunion" });
   }
 
-  return [...out.values()].slice(0, TOPE_DE_SUGERENCIAS);
+  return conLasSolas([...out.values()]);
 }

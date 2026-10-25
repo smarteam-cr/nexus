@@ -18,7 +18,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
   type Invariante,
 } from "@/lib/invariantes";
-import { INV49, INV50 } from "@/lib/invariantes";
+import { INV49, INV50, INV55 } from "@/lib/invariantes";
 
 /**
  * Imprime un invariante extraído a `lib/invariantes/` exactamente como se imprimía acá adentro
@@ -815,6 +815,9 @@ async function main(): Promise<number> {
 
   // ── Inv 50 → lib/invariantes/partner.ts (2026-10-25, U25 y U29: el historial de Partner y la comisión de HubSpot) ──
   violations += await reportar(INV50, prisma);
+  // ── Inv 55 → lib/invariantes/smartloop.ts (2026-10-25, M1: ningún proyecto de SmartLoop dice ser «proyecto_temporal»;
+  //    nace «no bloquea» hasta su primer verde) ──
+  violations += await reportar(INV55, prisma);
 
   return violations;
 }

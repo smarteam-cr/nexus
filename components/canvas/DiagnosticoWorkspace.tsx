@@ -17,8 +17,9 @@ import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-o
 /* ⚠ La MISMA tabla que usa el servidor para correr el ejecutor en seco antes de acordar. Con
    dos literales, el chat podía acordar algo que este editor rechaza al aplicar. */
 import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
-import { DIAGNOSTICO_DEF_BY_KEY } from "@/components/landing/configs/diagnostico.defs";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ACCIONES_KEY, DIAGNOSTICO_DEF_BY_KEY } from "@/components/landing/configs/diagnostico.defs";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { reordenarPorIndices } from "@/lib/landing/reordenar";
 import type { ResultadoMedible } from "@/lib/handoff/resultados-medibles";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
@@ -27,7 +28,7 @@ import { buildDiagnosticoConfig, buildDiagnosticoSections, ctxDelDiagnostico } f
 import DocumentAssist from "@/components/ai/DocumentAssist";
 import { revisarHilo, seccionesDelHilo } from "@/lib/canvas/revisar-hilo";
 import EstadoDelDocumento from "./EstadoDelDocumento";
-import { lineaDelDocumento, MENSAJE_APROBADO, revisarParaPresentar, type EstadoVista } from "@/lib/canvas/estado-del-documento";
+import { DESAFIO_KEY, lineaDelDocumento, MENSAJE_APROBADO, revisarParaPresentar, type EstadoVista } from "@/lib/canvas/estado-del-documento";
 import { POLITICA_RECTORA_KEY } from "@/components/landing/configs/diagnostico.defs";
 import ElegirPlantilla from "./ElegirPlantilla";
 import { AntesDeGenerarElDiagnostico, useLoConfirmado } from "./AntesDeGenerarElDiagnostico";
@@ -136,8 +137,13 @@ export default function DiagnosticoWorkspace({
     [projectId, resultados],
   );
 
+  /* Guarda la data de una sección (lo mismo que `onSectionChange` del motor). Va en un ref porque la cuarta columna del
+     problema escribe en OTRA sección (las Acciones) y el canal se arma antes que `resolveSection`. */
+  const guardarSeccionRef = useRef<((key: string, data: unknown) => void) | null>(null);
+
   /* El canal del diagnóstico (ctxDelDiagnostico): la cuarta columna del problema lee la tabla de
-     Acciones del mismo documento, en vivo — editar una acción la cambia en las dos partes. */
+     Acciones del mismo documento, en vivo — editar una acción la cambia en las dos partes. Desde el 2026-10-24 (L3 etapa
+     2) también se arrastra: reordenarla reordena la tabla de Acciones. */
   const ctx: LandingContext = useMemo(
     () => ({
       clientName: "",
@@ -145,6 +151,15 @@ export default function DiagnosticoWorkspace({
         ...ctxDelDiagnostico(sections),
         resultados,
         onEditarResultado: aprobado ? undefined : editarResultado,
+        onReordenarAcciones: aprobado
+          ? undefined
+          : (indices: number[]) => {
+              const sec = sections.find((s) => s.key === ACCIONES_KEY);
+              const data = (sec?.data ?? {}) as { acciones?: unknown };
+              const lista = Array.isArray(data.acciones) ? (data.acciones as unknown[]) : [];
+              const acciones = reordenarPorIndices(lista, indices);
+              guardarSeccionRef.current?.(ACCIONES_KEY, { ...data, acciones });
+            },
         lineaDelDocumento: estado
           ? lineaDelDocumento({ cliente: estado.cliente, fecha: estado.fecha ? new Date(estado.fecha) : null, version: estado.version, estado: estado.estado })
           : undefined,
@@ -187,6 +202,21 @@ export default function DiagnosticoWorkspace({
       vivo = false;
     };
   }, [projectId]);
+  /* `?seccion=<key>` (L2, 2026-10-24): «Publicar» dice por qué todavía no se puede y cada motivo enlaza a su sección. Con
+     el documento ya pintado, se salta ahí una vez y se saca el parámetro (recargar no vuelve a saltar). */
+  useEffect(() => {
+    if (cs.loading) return;
+    const url = new URL(window.location.href);
+    const seccion = url.searchParams.get("seccion");
+    if (!seccion) return;
+    url.searchParams.delete("seccion");
+    window.history.replaceState(window.history.state, "", url.toString());
+    // Sin limpiar el temporizador: el parámetro ya se sacó y un refetch que vuelva a cargar no puede tragarse el salto.
+    window.setTimeout(() => {
+      document.querySelector(`[data-seccion="${CSS.escape(seccion)}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 300);
+  }, [cs.loading]);
+
   /* El selector: sin contenido y sin plantilla elegida. Sin `clientId` (un montaje viejo), el documento de siempre. */
   const verSelector = !hasGeneratedContent && !!clientId && conPlantilla === false;
   const verDocumento = hasGeneratedContent || !clientId || conPlantilla === true;
@@ -195,13 +225,17 @@ export default function DiagnosticoWorkspace({
   const motivosParaNoPresentar = useMemo(() => {
     const politica = cs.sections.find((x) => x.key === POLITICA_RECTORA_KEY);
     const dataPolitica = politica && !politica.hidden ? politica.blocks.find((b) => b.blockType === "CARD")?.data : undefined;
+    const desafio = cs.sections.find((x) => x.key === DESAFIO_KEY);
+    const dataDesafio = desafio && !desafio.hidden ? desafio.blocks.find((b) => b.blockType === "CARD")?.data : undefined;
     return revisarParaPresentar({
       estado: estado?.estado ?? "borrador",
       tieneContenido: hasGeneratedContent,
       cabos: cabosTodos,
       politica: dataPolitica,
       politicaOculta: politica?.hidden === true,
-    }).motivos;
+      desafio: dataDesafio,
+      desafioOculto: desafio?.hidden === true,
+    }).detalle;
   }, [cs.sections, cabosTodos, estado?.estado, hasGeneratedContent]);
 
   /**
@@ -243,6 +277,19 @@ export default function DiagnosticoWorkspace({
       return null;
     }
   };
+
+  const guardarSeccion = (key: string, data: unknown) => {
+    void (async () => {
+      const target = await resolveSection(key);
+      if (!target) return setAviso(SIN_SECCION);
+      // Legacy con bloques TEXT y sin CARD: read-only (manda el fallback markdown).
+      if (!target.cardBlockId && target.hasBlocks) return;
+      await cs.upsertCardData(target.id, target.cardBlockId, data);
+    })();
+  };
+  useEffect(() => {
+    guardarSeccionRef.current = guardarSeccion;
+  });
 
   if (cs.loading) {
     return (
@@ -394,15 +441,7 @@ export default function DiagnosticoWorkspace({
         sections={sections}
         mode={aprobado ? "read" : "edit"}
         showBriefs={false}
-        onSectionChange={(key, data) => {
-          void (async () => {
-            const target = await resolveSection(key);
-            if (!target) return setAviso(SIN_SECCION);
-            // Legacy con bloques TEXT y sin CARD: read-only (manda el fallback markdown).
-            if (!target.cardBlockId && target.hasBlocks) return;
-            await cs.upsertCardData(target.id, target.cardBlockId, data);
-          })();
-        }}
+        onSectionChange={guardarSeccion}
         onTitleChange={(key, title) => {
           void (async () => {
             const target = await resolveSection(key);

@@ -27,6 +27,7 @@ import {
   etapasDeLaPieza,
 } from "@/lib/servicios/ciclo";
 import type { CicloParaElRiel } from "@/lib/servicios/ciclos-server";
+import { AVISO_KICKOFF_ANTERIOR } from "@/lib/servicios/arranque-del-ciclo";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { PIEZA_CUESTIONARIOS, type EstadoDeCuestionarios } from "@/lib/pieces/estado-de-cuestionarios";
 import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
@@ -315,8 +316,12 @@ export default function ProjectCanvasPanel({
   /** ¿Es una pieza que no vive en un canvas (Cuestionarios, Adopción, Aprendizaje)? Se abre por su slug. */
   const esSinCanvas = useCallback((slug: string) => pieceBySlug(slug)?.hasCanvas === false, []);
   /** Lo que dice la fila del artefacto de la etapa en curso, o cuándo cierra el ciclo. */
-  const avisoDelCiclo = (slug: string): { corto: string; largo?: string; tono: "neutro" } | null => {
+  const avisoDelCiclo = (slug: string): { corto: string; largo?: string; tono: "neutro" | "atencion" } | null => {
     if (!esRecurrente || !etapaDelCiclo) return null;
+    /* El kickoff generado antes de que el proyecto fuera recurrente (M1, 2026-10-24): no cuenta el método por ciclos. */
+    if (slug === "kickoff" && estadoCiclo?.arranque?.kickoffAnteriorAlServicio) {
+      return { ...AVISO_KICKOFF_ANTERIOR, tono: "atencion" };
+    }
     if (etapasDeLaPieza(slug).includes(etapaDelCiclo)) {
       return { corto: "en curso", largo: `El ciclo está en ${ETIQUETA_DE_ETAPA[etapaDelCiclo]}: se trabaja acá.`, tono: "neutro" };
     }

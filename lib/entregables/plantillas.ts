@@ -7,7 +7,7 @@
  * (2026-10-23) es el mismo agente con menos secciones.
  */
 import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
-import { KICKOFF_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
+import { KICKOFF_RECURRENTE_TEMPLATE, KICKOFF_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
 import { DIAGNOSTICO_ESENCIAL_TEMPLATE, DIAGNOSTICO_TEMPLATE } from "@/components/landing/configs/diagnostico.defs";
 import { PLANIFICACION_TEMPLATE } from "@/components/landing/configs/planificacion.defs";
 import { DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
@@ -16,6 +16,7 @@ import { ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
 /** id de la plantilla → su template. */
 export const TEMPLATE_DE_LA_PLANTILLA: Readonly<Record<string, BcTemplateDef>> = {
   kickoff: KICKOFF_TEMPLATE,
+  "kickoff-recurrente": KICKOFF_RECURRENTE_TEMPLATE,
   "diagnostico-estrategico": DIAGNOSTICO_TEMPLATE,
   "diagnostico-esencial": DIAGNOSTICO_ESENCIAL_TEMPLATE,
   planificacion: PLANIFICACION_TEMPLATE,

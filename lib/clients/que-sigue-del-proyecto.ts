@@ -28,6 +28,7 @@ import type { ProjectLifecycleStage } from "@prisma/client";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import { FULL_CYCLE_ORDER, STAGE_EXIT_STEPS, STAGE_LABEL_ES } from "@/lib/lifecycle/stage-engine";
 import { flowForStage } from "@/lib/flow/stage-pieces";
+import { EXPLORA_PRIMERO, type ArranqueDelCiclo } from "@/lib/servicios/arranque-del-ciclo";
 
 /** Lo mínimo de una pieza que el cálculo necesita (sale de las filas del riel). */
 export interface PiezaParaQueSigue {
@@ -127,7 +128,15 @@ export function queSigueDelProyecto(i: {
    * El Ciclo de un servicio recurrente (docs/smartloop-plan.md). null = el proyecto no es recurrente. Lo primero
    * que falta en su etapa (si Nexus lo puede comprobar) y, si no, el artefacto de la etapa todavía sin escribir.
    */
-  ciclo?: { corto: string; abierto: boolean; falta: string | null; numero: number; piezaDeLaEtapa?: string | null } | null;
+  ciclo?: {
+    corto: string;
+    abierto: boolean;
+    falta: string | null;
+    numero: number;
+    piezaDeLaEtapa?: string | null;
+    /** M1 y M2 (2026-10-24): el kickoff anterior al servicio y la exploración del ciclo. */
+    arranque?: ArranqueDelCiclo;
+  } | null;
   /**
    * La recomendación de pasar a un servicio recurrente (SmartLoop, etapa 6 de docs/smartloop-plan.md), solo mientras
    * está PENDIENTE (lib/lo-propuesto). null = el proyecto no califica, ya se decidió o venció.
@@ -155,6 +164,26 @@ export function queSigueDelProyecto(i: {
     const slug = i.ciclo.piezaDeLaEtapa ?? "diagnosis";
     const pieza = i.piezas.find((p) => p.slug === slug);
     const accion = pieza ? ({ tipo: "pieza", slug: pieza.slug, etiqueta: pieza.etiqueta } as const) : null;
+    /* En Diagnóstico, con el diagnóstico todavía sin escribir (M1 y M2, Liliana con RC Inmobiliaria, 2026-10-23): primero
+       el kickoff del servicio —en el primer ciclo: es el arranque— y después explorar con cada equipo del cliente. El
+       diagnóstico se escribe sobre lo que dijo cada equipo, no antes. */
+    const arranque = i.ciclo.arranque;
+    if (slug === "diagnosis" && pieza?.estado !== "generada" && arranque) {
+      const kickoff = i.piezas.find((p) => p.slug === "kickoff");
+      if (i.ciclo.numero === 1 && arranque.kickoffAnteriorAlServicio && kickoff) {
+        return {
+          texto: "El kickoff es anterior al servicio: no cuenta cómo se trabaja por ciclos ni la cadencia. Regenéralo antes de arrancar el ciclo.",
+          accion: { tipo: "pieza", slug: kickoff.slug, etiqueta: kickoff.etiqueta },
+        };
+      }
+      const exploracion = i.piezas.find((p) => p.slug === "exploration");
+      if (arranque.lecturasDeExploracion === 0 && exploracion) {
+        return {
+          texto: `El ciclo está en ${i.ciclo.corto}. ${EXPLORA_PRIMERO}`,
+          accion: { tipo: "pieza", slug: exploracion.slug, etiqueta: exploracion.etiqueta },
+        };
+      }
+    }
     if (i.ciclo.falta) {
       const falta = i.ciclo.falta.replace(/\.$/, "");
       return { texto: `${i.ciclo.corto}: ${falta.charAt(0).toLowerCase()}${falta.slice(1)}.`, accion };

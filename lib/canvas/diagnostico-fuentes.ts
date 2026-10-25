@@ -12,8 +12,10 @@
  *   · las reuniones ELEGIDAS por el equipo en su «Contexto adicional», leídas enteras (etapa 7: sin
  *     elegidas no entra ninguna, y la línea lo dice), y las notas del CSE (material-del-documento),
  *   · desde el 2026-10-23, también las reuniones de las SESIONES DE LA EXPLORACIÓN, enteras y sin que nadie las
- *     elija en el Contexto: una persona ya las unió a una sesión (`reunionesDeLaExploracionDelDiagnostico`). Antes
- *     eran solo una sugerencia, y CEMACO llegaba al diagnóstico sin una sola transcripción de sus cinco sesiones,
+ *     elija en el Contexto: una persona ya las unió a una sesión (`reunionesQueEntranSolasAlDiagnostico`). Antes
+ *     eran solo una sugerencia, y CEMACO llegaba al diagnóstico sin una sola transcripción de sus cinco sesiones.
+ *     Desde el 2026-10-24 (L1 etapa 2) entran igual todas las reuniones del proyecto con texto (transcripción o notas de
+ *     Gemini): quedaban fuera la Alineación, el Handoff y «Caso CEMACO». «Sacar» en el Contexto las deja afuera,
  *   · lo que Nexus PROPUSO y nadie confirmó (la ficha y la exploración), rotulado como supuesto (2026-10-23),
  *   · la memoria de la cuenta y del proyecto (lib/memoria, alcance del cliente): lo que dejaron las
  *     demás reuniones (acuerdos y decisiones de las minutas revisadas), la historia con Smarteam y las
@@ -37,7 +39,12 @@ import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { resultadosDelProyecto } from "@/lib/handoff/resultados";
 import { resultadosParaPrompt } from "@/lib/handoff/resultados-medibles";
 import { memoriaDelDocumento } from "@/lib/memoria";
-import { reunionesDeLaExploracionDelDiagnostico } from "@/lib/contexto/sugerencias-del-documento-server";
+import {
+  EQUIPOS_PARA_EL_DIAGNOSTICO,
+  equiposDeLasReunionesDelDiagnostico,
+  reunionesQueEntranSolasPorFuente,
+} from "@/lib/contexto/sugerencias-del-documento-server";
+import { bloqueDelDiagnosticoPorEquipo, rotuloDelEquipo } from "@/lib/canvas/diagnostico-por-equipo";
 
 /**
  * El equipo de Smarteam del proyecto, para la fila «Smarteam» de «Equipos involucrados y licencias»
@@ -69,18 +76,23 @@ async function equipoDeSmarteam(projectId: string): Promise<string[]> {
  */
 export async function fuentesDelDiagnostico(projectId: string, opts: { paraElAssist?: boolean } = {}): Promise<string> {
   const doc = documentoConContexto("diagnosis")!;
-  /* Las reuniones de las sesiones de la exploración entran solas, como elegidas (2026-10-23): una persona ya las unió a
-     una sesión. Si falla, el diagnóstico sale con las elegidas de siempre: nunca lo frena. */
-  const deLaExploracion = await reunionesDeLaExploracionDelDiagnostico(projectId).catch((e: unknown) => {
-    console.warn("[diagnostico-fuentes] las reuniones de la exploración no se pudieron leer:", e instanceof Error ? e.message : e);
-    return [] as string[];
+  /* Las reuniones que entran solas, como elegidas: las de las sesiones de la exploración (2026-10-23) y las del proyecto
+     con texto (2026-10-24). Si falla, el diagnóstico sale con las elegidas de siempre: nunca lo frena. */
+  const solas = await reunionesQueEntranSolasPorFuente(projectId).catch((e: unknown) => {
+    console.warn("[diagnostico-fuentes] las reuniones que entran solas no se pudieron leer:", e instanceof Error ? e.message : e);
+    return { todas: [] as string[], deLaExploracion: [] as string[] };
   });
+  const deLaExploracion = solas.todas;
+  /* El equipo del cliente de cada reunión (L5, 2026-10-25): va en su encabezado y en el bloque «por equipo». Si falla,
+     sin equipos: el mensaje queda como antes. */
+  const equipos = await equiposDeLasReunionesDelDiagnostico(projectId).catch(() => new Map<string, never>());
+  const rotuloPorReunion = new Map([...equipos].map(([id, e]) => [id, rotuloDelEquipo(e)] as const));
   const [handoffCtx, exploracionCtx, timelineCtx, encuestaCtx, material, smarteam, resultados, project] = await Promise.all([
     loadHandoffContext(projectId, { onlyConfirmed: false, includeKeys: DIAGNOSTICO_HANDOFF_KEYS }),
     loadCanvasContext(projectId, "exploration", { onlyConfirmed: false }),
     loadTimelineContext(projectId),
     loadCuestionarioContext(projectId).catch(() => ""),
-    cargarMaterialDelDocumento(projectId, doc, { elegidasEnResumen: opts.paraElAssist === true, sumarReuniones: deLaExploracion }),
+    cargarMaterialDelDocumento(projectId, doc, { elegidasEnResumen: opts.paraElAssist === true, sumarReuniones: deLaExploracion, rotuloPorReunion, primero: solas.deLaExploracion }),
     equipoDeSmarteam(projectId).catch(() => [] as string[]),
     resultadosDelProyecto(projectId).catch(() => null),
     prisma.project.findUnique({
@@ -116,6 +128,7 @@ export async function fuentesDelDiagnostico(projectId: string, opts: { paraElAss
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
   const hubs = tagLabels(project?.tags ?? []);
   const encuadreDeReuniones = encuadreDeLasElegidas(material.resumen);
+  const porEquipo = bloqueDelDiagnosticoPorEquipo(material.reunionesLeidas ?? [], equipos, EQUIPOS_PARA_EL_DIAGNOSTICO);
 
   return [
     // Las «Instrucciones adicionales» del diagnóstico (2026-10-07): primero, porque mandan sobre todo.
@@ -126,7 +139,7 @@ export async function fuentesDelDiagnostico(projectId: string, opts: { paraElAss
     hubs.length ? `Hubs/áreas del proyecto (dirigen QUÉ frentes cubre el informe): ${hubs.join(", ")}` : "",
     "",
     material.reuniones
-      ? `=== ${deLaExploracion.length ? "LAS REUNIONES DE LAS SESIONES DE LA EXPLORACIÓN Y LAS ELEGIDAS POR EL EQUIPO" : "LAS REUNIONES ELEGIDAS POR EL EQUIPO"} ===\n${encuadreDeReuniones}\nCada reunión trae su sala: lo dicho [PUERTAS ADENTRO] es de Smarteam y NUNCA se le atribuye al cliente.\n${material.reuniones}`
+      ? `${porEquipo ? `${porEquipo}\n\n` : ""}=== ${deLaExploracion.length ? "LAS REUNIONES DEL PROYECTO (LAS DE LA EXPLORACIÓN, LAS DEL PROYECTO CON TEXTO) Y LAS ELEGIDAS POR EL EQUIPO" : "LAS REUNIONES ELEGIDAS POR EL EQUIPO"} ===\n${encuadreDeReuniones}\nCada reunión trae su sala: lo dicho [PUERTAS ADENTRO] es de Smarteam y NUNCA se le atribuye al cliente.\n${material.reuniones}`
       : material.avisoSinReuniones,
     material.notas ? `\n=== NOTAS DEL EQUIPO PARA ESTE DIAGNÓSTICO (pesan como una fuente más; si contradicen una reunión, gana la más reciente) ===\n${material.notas}` : "",
     memoria.texto ? `\n${memoria.texto}` : "",

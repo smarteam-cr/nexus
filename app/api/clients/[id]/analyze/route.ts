@@ -646,7 +646,8 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // falla, no frena: el aviso es una ayuda, no una puerta.
   if (entregableDelAgente?.slug === "diagnosis" && bodyProjectId && !body.aSabiendas) {
     const confirmado = await loConfirmadoDelProyecto(bodyProjectId).catch(() => null);
-    if (confirmado?.casiNada) {
+    // `pideConfirmacion`: casi nada confirmado, o (desde el 2026-10-24, M2) un ciclo de SmartLoop sin exploración leída.
+    if (confirmado?.pideConfirmacion) {
       return NextResponse.json(
         { error: ERROR_SUPUESTOS_SIN_VALIDAR, message: mensajeDeSupuestos(confirmado), piezas: confirmado.piezas },
         { status: 409 },

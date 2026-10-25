@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { cn } from "@/lib/cn";
 import { urlDeProyecto } from "@/lib/agents/run-url";
+import { MAX_ELEGIDAS_A_LEER } from "@/lib/contexto/documento";
 import type { ClaveDeLoConfirmado, EstadoDeLoConfirmado, LoConfirmado } from "@/lib/canvas/diagnostico-confirmado";
 
 export type LoConfirmadoConMensaje = LoConfirmado & { mensaje: string };
@@ -66,14 +67,20 @@ export function AntesDeGenerarElDiagnostico({
 }) {
   const [abierto, setAbierto] = useState(!generado);
   const pendientes = confirmado.piezas.filter((p) => p.estado === "sin-confirmar" || p.estado === "en-parte");
+  /* M2 (2026-10-24): un ciclo de SmartLoop cuya exploración no leyó ninguna reunión. Una respuesta vieja no lo trae. */
+  const cicloSinExploracion = confirmado.cicloSinExploracion ?? null;
   // Ya generado y todo confirmado: no hay nada que decir.
   if (generado && !pendientes.length) return null;
 
-  const titulo = confirmado.casiNada
-    ? "Casi nada de lo que lee el diagnóstico está confirmado"
-    : pendientes.length
-      ? "Revisa lo que propuso Nexus antes de generar"
-      : "Lo que lee el diagnóstico está confirmado";
+  const titulo =
+    cicloSinExploracion !== null
+      ? "Explora primero, por equipo"
+      : confirmado.casiNada
+        ? "Casi nada de lo que lee el diagnóstico está confirmado"
+        : pendientes.length
+          ? "Revisa lo que propuso Nexus antes de generar"
+          : "Lo que lee el diagnóstico está confirmado";
+  const pideConfirmacion = confirmado.pideConfirmacion ?? confirmado.casiNada;
 
   const lista = (
     <ul className="mt-2 flex flex-col gap-1.5">
@@ -91,8 +98,10 @@ export function AntesDeGenerarElDiagnostico({
       ))}
       <li className="text-xs opacity-80">
         {confirmado.reuniones === 0
-          ? "No hay reuniones para leer enteras: une las reuniones a las sesiones de la exploración o elígelas en el Contexto."
-          : `Lee ${confirmado.reuniones} ${confirmado.reuniones === 1 ? "reunión entera" : "reuniones enteras"}: las de las sesiones de la exploración y las que elegiste en el Contexto.`}
+          ? "No hay reuniones con texto para leer: une las reuniones a las sesiones de la exploración o elígelas en el Contexto."
+          : confirmado.reuniones > MAX_ELEGIDAS_A_LEER
+            ? `Hay ${confirmado.reuniones} reuniones para leer: lee ${MAX_ELEGIDAS_A_LEER}, primero las que elegiste y las de las sesiones de la exploración (6 enteras), después las más recientes del proyecto con el cliente.`
+            : `Lee ${confirmado.reuniones} ${confirmado.reuniones === 1 ? "reunión" : "reuniones"}: las que elegiste en el Contexto, las de las sesiones de la exploración y las del proyecto con el cliente que tienen texto (6 enteras, primero las elegidas y las de la exploración).`}
       </li>
     </ul>
   );
@@ -111,11 +120,20 @@ export function AntesDeGenerarElDiagnostico({
   }
 
   return (
-    <Alert variant={confirmado.casiNada ? "warning" : "info"} title={titulo}>
+    <Alert variant={pideConfirmacion ? "warning" : "info"} title={titulo}>
       <p className="text-xs">
-        {confirmado.casiNada
-          ? `${confirmado.mensaje} Revisa las propuestas de Nexus para que el diagnóstico tenga sentido.`
-          : "El diagnóstico lee lo que Nexus sabe de la cuenta. Lo que nadie confirmó entra como supuesto: no se afirma como hecho."}
+        {cicloSinExploracion !== null ? (
+          <>
+            {`${confirmado.mensaje} `}
+            <a className="font-semibold underline underline-offset-2" href={urlDeProyecto(clientId, projectId, "exploration")}>
+              Preparar la primera sesión de la exploración →
+            </a>
+          </>
+        ) : confirmado.casiNada ? (
+          `${confirmado.mensaje} Revisa las propuestas de Nexus para que el diagnóstico tenga sentido.`
+        ) : (
+          "El diagnóstico lee lo que Nexus sabe de la cuenta. Lo que nadie confirmó entra como supuesto: no se afirma como hecho."
+        )}
       </p>
       {lista}
     </Alert>

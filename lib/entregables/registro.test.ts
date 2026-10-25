@@ -24,13 +24,15 @@ import {
   plantillaDe,
   seccionesDeLaPlantilla,
   SECCIONES_DEL_DIAGNOSTICO_ESENCIAL,
+  SECCIONES_DEL_KICKOFF_RECURRENTE,
+  PLANTILLA_DEL_KICKOFF_RECURRENTE,
   plantillaDelDocumento,
 } from "./registro";
 import { TEMPLATE_DE_LA_PLANTILLA } from "./plantillas";
 import { DOC } from "@/lib/canvas/assist-de-documento";
-import { KICKOFF_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
+import { KICKOFF_RECURRENTE_TEMPLATE, KICKOFF_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
 import { DIAGNOSTICO_ESENCIAL_TEMPLATE, DIAGNOSTICO_TEMPLATE } from "@/components/landing/configs/diagnostico.defs";
-import { DIAGNOSTICO_CANVAS } from "@/lib/canvas/canvas-defs";
+import { canonDelKickoff, DIAGNOSTICO_CANVAS, KICKOFF_CANVAS, KICKOFF_SECCIONES_DEL_SERVICIO } from "@/lib/canvas/canvas-defs";
 import { PLANIFICACION_TEMPLATE } from "@/components/landing/configs/planificacion.defs";
 import { DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
 import { ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
@@ -43,7 +45,8 @@ describe("el registro de entregables", () => {
 
   it("el set y las plantillas, congelados", () => {
     expect(ENTREGABLES.map((e) => [e.slug, e.plantillas.map((p) => p.id)])).toEqual([
-      ["kickoff", ["kickoff"]],
+      // 2026-10-24 (M1): el kickoff de un servicio recurrente, con sus secciones.
+      ["kickoff", ["kickoff", "kickoff-recurrente"]],
       // 2026-10-23 (Elías): dos plantillas del diagnóstico, la completa (la de siempre) y la esencial.
       ["diagnosis", ["diagnostico-estrategico", "diagnostico-esencial"]],
       ["planning", ["planificacion"]],
@@ -95,6 +98,29 @@ describe("el registro de entregables", () => {
     expect(seccionesDeLaPlantilla(plantillaDe("diagnosis")!, DIAGNOSTICO_CANVAS.sections)).toHaveLength(DIAGNOSTICO_CANVAS.sections.length);
     // Una sola recomendada por entregable.
     for (const e of ENTREGABLES) expect(e.plantillas.filter((p) => p.recomendada).length, e.slug).toBeLessThanOrEqual(1);
+  });
+
+  it("M1 (2026-10-24): el kickoff de un servicio recurrente tiene sus secciones; las del servicio no entran al kickoff de siempre", () => {
+    const recurrente = plantillaDe("kickoff", PLANTILLA_DEL_KICKOFF_RECURRENTE)!;
+    expect(recurrente.secciones).toEqual(SECCIONES_DEL_KICKOFF_RECURRENTE);
+    // Su template genera exactamente esas secciones, en ese orden (el agente no escribe las demás).
+    expect(KICKOFF_RECURRENTE_TEMPLATE.sections.map((d) => d.key)).toEqual([...SECCIONES_DEL_KICKOFF_RECURRENTE]);
+    // Cada sección existe en el canon del kickoff o en las del servicio: una key mal escrita no puede desaparecer.
+    expect(canonDelKickoff(SECCIONES_DEL_KICKOFF_RECURRENTE).map((s) => s.key)).toEqual([...SECCIONES_DEL_KICKOFF_RECURRENTE]);
+    // El kickoff de siempre no tiene las del servicio: un proyecto nuevo y la reconciliación no las crean.
+    const deSiempre = new Set(canonDelKickoff(null).map((s) => s.key));
+    expect(KICKOFF_SECCIONES_DEL_SERVICIO.filter((s) => deSiempre.has(s.key))).toEqual([]);
+    expect(canonDelKickoff(null)).toEqual(KICKOFF_CANVAS.sections);
+    // Y el agente del kickoff de siempre no las pide (la revisión del 25 oct: le pedía a la IA cómo se trabaja cada ciclo).
+    const delTemplate = new Set(KICKOFF_TEMPLATE.sections.map((d) => d.key));
+    expect(KICKOFF_SECCIONES_DEL_SERVICIO.filter((s) => delTemplate.has(s.key))).toEqual([]);
+    expect([...delTemplate].sort()).toEqual(KICKOFF_CANVAS.sections.map((s) => s.key).sort());
+    // La de siempre sigue siendo la primera y no recorta nada.
+    expect(plantillaDe("kickoff")?.id).toBe("kickoff");
+    expect(plantillaDe("kickoff")?.secciones).toBeUndefined();
+    // La portada del recurrente no dice «Inicio de proyecto».
+    expect(KICKOFF_RECURRENTE_TEMPLATE.sections[0].brief).not.toMatch(/Inicio de proyecto/);
+    expect(KICKOFF_RECURRENTE_TEMPLATE.agentIntro).toMatch(/SERVICIO RECURRENTE/);
   });
 
   it("todo entregable lo ve el cliente y vive en un canvas de proyecto", () => {

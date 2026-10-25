@@ -104,6 +104,9 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const [confirming, setConfirming] = useState<"regenerate" | "revoke" | null>(null);
+  /* Por qué el diagnóstico todavía no se puede publicar (L2, 2026-10-24): los motivos de «Presentar», cada uno con el
+     enlace a su sección. Se ve en la ventana hasta que se cierra o se vuelve a intentar. */
+  const [porQueNo, setPorQueNo] = useState<{ motivos: Array<{ texto: string; href: string | null }>; href: string | null } | null>(null);
   const toast = useToast();
 
   const refresh = useCallback(async () => {
@@ -177,14 +180,21 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
   const togglePublish = async (kind: ExternalSurface, publish: boolean) => {
     const endpoint = publishSurface(kind).endpoint;
     try {
+      setPorQueNo(null);
       const res = await fetch(`/api/projects/${projectId}/${endpoint}`, { method: publish ? "POST" : "DELETE" });
       if (!res.ok) {
         // El motivo del servidor gana («todavía no tiene el documento de Entrega»…); la frase genérica es el respaldo.
-        const motivo = await res
-          .json()
-          .then((b: { message?: string; error?: string } | null) => b?.message || null)
-          .catch(() => null);
-        toast.error(motivo || "No se pudo cambiar la publicación.");
+        const cuerpo = (await res.json().catch(() => null)) as {
+          message?: string;
+          error?: string;
+          motivos?: Array<{ texto: string; href: string }>;
+          href?: string;
+        } | null;
+        if (cuerpo?.error === "SIN_PRESENTAR") {
+          setPorQueNo({ motivos: Array.isArray(cuerpo.motivos) ? cuerpo.motivos : [], href: cuerpo.href ?? null });
+          return;
+        }
+        toast.error(cuerpo?.message || "No se pudo cambiar la publicación.");
         return;
       }
       if (kind === "cronograma" && publish) {
@@ -204,6 +214,7 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
   const closeModal = () => {
     setOpen(false);
     setConfirming(null);
+    setPorQueNo(null);
   };
 
   if (!state) {
@@ -246,6 +257,7 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
             <Revocado state={state} working={working} onGenerate={generateAll} />
           ) : (
             <>
+              {porQueNo && <PorQueNoSePublica motivos={porQueNo.motivos} href={porQueNo.href} />}
               <Activo state={state} onSavePassword={savePassword} onTogglePublish={togglePublish} />
               <Pie
                 state={state}
@@ -262,6 +274,43 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
         </Ventana>
       )}
     </>
+  );
+}
+
+// ── Por qué el diagnóstico no se puede publicar ──────────────────────────────
+
+/** Los motivos de «Presentar» repetidos al publicar, cada uno con el enlace a la sección donde se arregla (L2). */
+function PorQueNoSePublica({ motivos, href }: { motivos: Array<{ texto: string; href: string | null }>; href: string | null }) {
+  return (
+    <div role="alert" className="mx-6 mt-4 rounded-lg border border-warn-line bg-warn-surface px-3.5 py-3 text-[13px] text-warn-ink">
+      <p className="font-semibold">Primero presenta el Diagnóstico: el enlace le muestra al cliente la versión presentada.</p>
+      {motivos.length > 0 ? (
+        <>
+          <p className="mt-1">Para presentarlo falta:</p>
+          <ul className="mt-1 list-disc space-y-1 pl-5">
+            {motivos.map((m, i) => (
+              <li key={i}>
+                {m.texto}{" "}
+                {m.href && (
+                  <a href={m.href} className="font-semibold underline underline-offset-2">
+                    Ir a la sección →
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="mt-1">
+          Ya se puede presentar: ábrelo y toca «Presentar al cliente».{" "}
+          {href && (
+            <a href={href} className="font-semibold underline underline-offset-2">
+              Abrir el Diagnóstico →
+            </a>
+          )}
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -71,6 +71,9 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
   const [hubspotUrl, setHubspotUrl] = useState<string | null>(null);
   const [borrador, setBorrador] = useState<ValoresDeFicha>(valoresVacios());
   const [descartadas, setDescartadas] = useState<Set<ClaveDeFicha>>(new Set());
+  /* Los campos donde se tocó «Usar», con el texto que se usó (L3 etapa 1, 2026-10-24, Liliana): después de «Usar» el
+     campo queda para escribir, y la propuesta no vuelve con la primera letra. Vuelve solo si la IA propone OTRO texto. */
+  const [usadas, setUsadas] = useState<Map<ClaveDeFicha, string>>(new Map());
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +100,7 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
     if (r.proyectosConResultados) setProyectos(r.proyectosConResultados);
     setBorrador(conResultados(r.ficha.valores, r.resultadosParaLaFicha));
     setDescartadas(new Set());
+    setUsadas(new Map());
     descartesEnviados.current = new Set();
     // El aviso de la pestaña «Información del cliente» cuenta los campos por revisar.
     window.dispatchEvent(new CustomEvent(EVENTO_FICHA_CAMBIO, { detail: { clientId } }));
@@ -175,9 +179,15 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
     const p = ficha?.propuesta?.valores ?? {};
     return CAMPOS_QUE_PROPONE_LA_IA.filter((c) => {
       const v = p[c.clave];
-      return typeof v === "string" && v.trim() && v.trim() !== borrador[c.clave].trim() && !descartadas.has(c.clave);
+      return (
+        typeof v === "string" &&
+        v.trim() &&
+        v.trim() !== borrador[c.clave].trim() &&
+        !descartadas.has(c.clave) &&
+        usadas.get(c.clave) !== v
+      );
     }).map((c) => c.clave);
-  }, [ficha, borrador, descartadas]);
+  }, [ficha, borrador, descartadas, usadas]);
 
   const hubspotPendiente = !!ficha?.confirmadaAt && ficha.hubspot?.estado !== "sincronizada" && ficha.hubspot?.estado !== "sin_empresa";
 
@@ -240,12 +250,21 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
   if (!ficha) return <p className="text-sm text-danger-ink">{error ?? "No se pudo cargar la ficha."}</p>;
 
   const set = (clave: ClaveDeFicha, valor: string) => setBorrador((b) => ({ ...b, [clave]: valor }));
-  const usarTodas = () =>
+  /** «Usar»: el texto de la IA pasa al campo, que queda para escribir; la propuesta no vuelve al editarlo. */
+  const usar = (claves: readonly ClaveDeFicha[]) => {
+    const valores = ficha.propuesta!.valores;
     setBorrador((b) => {
       const n = { ...b };
-      for (const k of propuestas) n[k] = ficha.propuesta!.valores[k]!;
+      for (const k of claves) n[k] = valores[k]!;
       return n;
     });
+    setUsadas((u) => {
+      const n = new Map(u);
+      for (const k of claves) n.set(k, valores[k]!);
+      return n;
+    });
+  };
+  const usarTodas = () => usar(propuestas);
 
   /** Lleva la vista al primer campo con propuesta («Revisar uno por uno»). */
   const irALaPrimera = () =>
@@ -339,7 +358,8 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
                 propuesta={propuestas.includes(c.clave) ? ficha.propuesta!.valores[c.clave]! : null}
                 fuentes={ficha.propuesta?.fuentesPorCampo[c.clave] ?? []}
                 onChange={(v) => set(c.clave, v)}
-                onUsar={() => set(c.clave, ficha.propuesta!.valores[c.clave]!)}
+                onUsar={() => usar([c.clave])}
+                onEscribir={() => setUsadas((u) => new Map(u).set(c.clave, ficha.propuesta!.valores[c.clave]!))}
                 onDescartar={() => void descartarCampo(c.clave)}
               />
               ),
@@ -444,6 +464,7 @@ function Campo({
   fuentes,
   onChange,
   onUsar,
+  onEscribir,
   onDescartar,
 }: {
   campo: CampoDeFicha;
@@ -455,6 +476,8 @@ function Campo({
   fuentes: string[];
   onChange: (v: string) => void;
   onUsar: () => void;
+  /** Deja el campo para escribir, con lo que tiene, sin descartar la propuesta en el servidor. */
+  onEscribir: () => void;
   onDescartar: () => void;
 }) {
   const [verLoDeHoy, setVerLoDeHoy] = useState(false);
@@ -516,7 +539,11 @@ function Campo({
             )}
             <p className="mt-1 text-xs text-fg-muted">
               {fuentes.length > 0 ? `Lo propone la IA con: ${fuentes.join(" · ")}` : "Lo propone la IA"}
-              {" · Úsala y ajústala en el campo si hace falta"}
+              {" · Úsala y ajústala en el campo, o "}
+              {/* L3 etapa 1 (2026-10-24): con una propuesta, el campo no estaba en pantalla y no había dónde escribir. */}
+              <button type="button" onClick={onEscribir} className="text-brand hover:text-brand-light">
+                escribe tú
+              </button>
               {valor.trim() && (
                 <>
                   {" · "}

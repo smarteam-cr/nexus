@@ -396,8 +396,34 @@ export function sectionSequence(canonKeys: string[], existingKeys: string[]): st
  * La comparten `reconcileKickoffCanvasSections` (runtime, al regenerar) y
  * `scripts/backfill-kickoff-sections.ts` (los kickoffs viejos) → mismo resultado.
  */
-export function kickoffSectionSequence(existingKeys: string[]): string[] {
-  return sectionSequence(KICKOFF_CANVAS.sections.map((s) => s.key), existingKeys);
+export function kickoffSectionSequence(existingKeys: string[], canon: readonly CanvasSectionDef[] = KICKOFF_CANVAS.sections): string[] {
+  return sectionSequence(canon.map((s) => s.key), existingKeys);
+}
+
+/**
+ * Las secciones propias del KICKOFF DE UN SERVICIO RECURRENTE (M1 del roadmap, 2026-10-24): cómo trabajamos cada ciclo, el
+ * primer ciclo, la cadencia y cómo nos pide cosas el cliente. NO están en el canon de siempre (`KICKOFF_CANVAS`): un
+ * proyecto nuevo no las crea y la reconciliación de un kickoff de implementación tampoco. Las crea solo la plantilla
+ * «Kickoff de servicio recurrente» (lib/entregables/registro.ts), al generar.
+ */
+export const KICKOFF_SECCIONES_DEL_SERVICIO: readonly CanvasSectionDef[] = [
+  { key: "como_trabajamos", label: "Cómo trabajamos cada ciclo" },
+  { key: "primer_ciclo", label: "El primer ciclo" },
+  { key: "cadencia_del_servicio", label: "La cadencia del servicio" },
+  { key: "solicitudes", label: "Cómo nos pides cosas" },
+];
+
+/**
+ * El canon del kickoff según su plantilla: sin `secciones`, el de siempre; con ellas, esas secciones en ESE orden (las del
+ * canon de siempre y las del servicio). Una key que no está en ninguno de los dos se ignora.
+ */
+export function canonDelKickoff(secciones?: readonly string[] | null): CanvasSectionDef[] {
+  if (!secciones) return [...KICKOFF_CANVAS.sections];
+  const porKey = new Map([...KICKOFF_CANVAS.sections, ...KICKOFF_SECCIONES_DEL_SERVICIO].map((s) => [s.key, s]));
+  return secciones.flatMap((k) => {
+    const s = porKey.get(k);
+    return s ? [s] : [];
+  });
 }
 
 // ── Canvas Desarrollo (requerimiento técnico) ─────────────────────────────────

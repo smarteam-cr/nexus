@@ -15,8 +15,9 @@
  * ⚠ Los diagnósticos de antes de la 5.2 guardan tarjetas «N/5» (medidas con la v4). Se siguen
  * pintando con la grilla de métricas de siempre: otra vara, y el documento ya se le presentó así.
  */
-import type { FC } from "react";
+import type { FC, ReactNode } from "react";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
+import { SortableItems } from "./sortable";
 import { RoiSection } from "./sections";
 import { landingLang, t, type LandingLang } from "./i18n";
 import type { RoiData, SectionProps } from "./types";
@@ -116,15 +117,19 @@ function Area({
   editable,
   onChange,
   onRemove,
+  handle,
 }: {
   a: AreaEnLaEscala;
   lang: LandingLang;
   editable?: boolean;
   onChange: (cambio: Partial<AreaEnLaEscala>) => void;
   onRemove: () => void;
+  /** La manija para arrastrar el área (L3 etapa 2, 2026-10-24). */
+  handle?: ReactNode;
 }) {
   return (
     <div className="stl-item stl-card stl-escala-area">
+      {handle}
       {editable && <RemoveBtn onClick={onRemove} />}
       <Editable
         as="h3"
@@ -205,18 +210,24 @@ export const EscalaPosicionSection: FC<SectionProps<EscalaData>> = (props) => {
         />
       )}
       {areas.length > 0 && (
-        <div className="stl-escala-grid">
-          {areas.map((a, i) => (
+        /* Las áreas se arrastran (L3 etapa 2, 2026-10-24): el orden es de quien presenta. */
+        <SortableItems
+          items={areas}
+          disabled={!editable}
+          onReorder={(next) => set({ areas: next })}
+          container={(nodes) => <div className="stl-escala-grid">{nodes}</div>}
+        >
+          {(a, i, handle) => (
             <Area
-              key={i}
               a={a}
               lang={lang}
               editable={editable}
+              handle={handle}
               onChange={(cambio) => set({ areas: replaceAt(areas, i, { ...a, ...cambio }) })}
               onRemove={() => set({ areas: removeAt(areas, i) })}
             />
-          ))}
-        </div>
+          )}
+        </SortableItems>
       )}
       {editable && <AddBtn label="Agregar área" onClick={() => set({ areas: appendItem(areas, { ...AREA_NUEVA }) })} />}
       {(data.remedicion || editable) && (

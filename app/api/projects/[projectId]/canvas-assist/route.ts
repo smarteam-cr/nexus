@@ -22,6 +22,9 @@ import { runDocumentAssist, type AssistSectionDef } from "@/lib/ai/assist";
 import { loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { pieceForCanvas } from "@/lib/pieces/registry";
 import { DOC } from "@/lib/canvas/assist-de-documento";
+import { KICKOFF_RECURRENTE_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
+import { resolvePipeline } from "@/lib/projects/kind";
+import { servicioDelProyecto, servicioParaElKickoff } from "@/lib/servicios/catalogo";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { fuentesDelDiagnostico } from "@/lib/canvas/diagnostico-fuentes";
 import { documentoAprobado, MENSAJE_APROBADO } from "@/lib/canvas/estado-del-documento-servidor";
@@ -104,7 +107,12 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     prisma.agent.findUnique({ where: { id: doc.agentId }, select: { additionalInstructions: true } }),
     prisma.project.findUnique({
       where: { id: projectId },
-      select: { clientId: true, client: { select: { name: true, industry: true } } },
+      select: {
+        clientId: true,
+        servicioRecurrente: true,
+        hubspotPipelineId: true,
+        client: { select: { name: true, industry: true } },
+      },
     }),
     // MISMO contexto que la generación de cada documento (analyze isKickoffAgent /
     // desarrollo-generate): allowlist por doc — el kickoff/desarrollo los lee gente
@@ -123,8 +131,19 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   // la ruta de assist del business case. Antes se leía `agent.systemPrompt` de la DB,
   // que para estos dos agentes es la nota-puntero ("[NOTA] Este agente genera con el
   // prompt del código…"): el assist corría sin persona ni posicionamiento.
+  /* El kickoff de un SERVICIO que avanza por ciclos (M1, 2026-10-25, lo encontró la revisión): «Mejorar con IA» lee la voz
+     y el servicio de su plantilla, como la generación. Sin esto, podía devolverlo a un kickoff de proyecto temporal. */
+  const servicio =
+    pieza.slug === "kickoff" && project
+      ? servicioDelProyecto({
+          servicioRecurrente: project.servicioRecurrente,
+          servicioDelPipeline: resolvePipeline(project.hubspotPipelineId)?.servicioRecurrente ?? null,
+        })
+      : null;
+  const delServicio = servicio?.ciclo ? servicio : null;
   const systemPrompt = [
-    doc.tpl.agentIntro ?? `Mejoras el ${doc.docLabel} de un proyecto de Smarteam (consultora HubSpot).`,
+    (delServicio ? KICKOFF_RECURRENTE_TEMPLATE.agentIntro : doc.tpl.agentIntro) ??
+      `Mejoras el ${doc.docLabel} de un proyecto de Smarteam (consultora HubSpot).`,
     agent?.additionalInstructions?.trim() || "",
   ]
     .filter(Boolean)
@@ -141,6 +160,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       ? await fuentesDelDiagnostico(projectId, { paraElAssist: true })
       : [
           `Empresa: ${project?.client.name ?? "—"} · Industria: ${project?.client.industry ?? "No especificada"}`,
+          delServicio ? servicioParaElKickoff(delServicio) : "",
           handoffCtx ? `=== HANDOFF CURADO (única fuente de datos del proyecto; no inventes) ===\n${handoffCtx}` : "",
           timelineCtx,
         ]

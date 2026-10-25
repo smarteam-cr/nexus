@@ -11,6 +11,7 @@ import {
   canvasDefForSlug,
   AGENT_GROUP_TO_CANVAS,
   kickoffSectionSequence,
+  canonDelKickoff,
   desarrolloSectionSequence,
   exploracionSectionSequence,
 } from "./canvas-defs";
@@ -341,16 +342,26 @@ export async function reconcileHandoffCanvasSections(canvasId: string, db: Db = 
  * DIFERENCIA con el handoff: acá el CSE puede REORDENAR las secciones (drag & drop del
  * motor), y ese orden es el del render. Por eso NO se renormaliza al orden canónico: se
  * parte del orden vivo y cada key faltante se inserta detrás de su predecesora canónica.
+ *
+ * `secciones` (2026-10-24, el kickoff de un servicio recurrente): las de la plantilla con que se va a generar. Sin ellas,
+ * el canon de siempre. Con ellas, se crean SOLO esas (las demás no se tocan: las oculta o las borra el runner al terminar).
  */
-export async function reconcileKickoffCanvasSections(canvasId: string, db: Db = prisma): Promise<void> {
-  const canon = KICKOFF_CANVAS.sections;
+export async function reconcileKickoffCanvasSections(
+  canvasId: string,
+  db: Db = prisma,
+  opts: { secciones?: readonly string[] | null } = {},
+): Promise<void> {
+  const canon = canonDelKickoff(opts.secciones);
   const existing = await db.canvasSection.findMany({
     where: { canvasId },
     orderBy: { order: "asc" },
     select: { id: true, key: true, order: true, _count: { select: { blocks: true } } },
   });
   const existingKeys = new Set(existing.map((s) => s.key));
-  const seq = kickoffSectionSequence(existing.map((s) => s.key));
+  const seq = kickoffSectionSequence(
+    existing.map((s) => s.key),
+    canon,
+  );
   const missing = canon.filter((s) => !existingKeys.has(s.key));
 
   if (missing.length) {

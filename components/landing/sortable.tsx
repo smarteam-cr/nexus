@@ -17,6 +17,11 @@
  * Los ids son ESTABLES por ítem (lista paralela interna, NO el índice): si el id
  * cambiara con la posición, al soltar dnd-kit animaría el wrapper de vuelta a su
  * slot viejo (React solo intercambia el contenido) → efecto "rebota y se acomoda".
+ *
+ * `elemento` (2026-10-24, L3 etapa 2 del roadmap): el envoltorio de cada ítem. Por defecto un `div`; en una TABLA, `tr`
+ * (el render devuelve las CELDAS y el `handle` va en la primera), y en una lista, `li`. Con `tr` o `li` el envoltorio
+ * existe también en lectura (con `itemClassName`), así el HTML es válido en los dos modos: antes las filas de las tablas
+ * no se podían arrastrar porque un `div` no puede vivir dentro de un `tbody`.
  */
 import { Fragment, useRef, type CSSProperties, type ReactNode } from "react";
 import {
@@ -37,13 +42,19 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS as DndCss } from "@dnd-kit/utilities";
 
+type ElementoDelItem = "div" | "tr" | "li";
+
 function SortableItem({
   id,
   style,
+  elemento = "div",
+  className,
   children,
 }: {
   id: string;
   style?: CSSProperties;
+  elemento?: ElementoDelItem;
+  className?: string;
   children: (handle: ReactNode) => ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -59,9 +70,11 @@ function SortableItem({
       ⠿
     </button>
   );
+  const Elemento = elemento;
   return (
-    <div
-      ref={setNodeRef}
+    <Elemento
+      ref={setNodeRef as (el: HTMLElement | null) => void}
+      className={className}
       style={{
         ...style,
         // Translate SOLO (sin scaleX/scaleY): rectSortingStrategy escala cada wrapper
@@ -79,7 +92,7 @@ function SortableItem({
       }}
     >
       {children(handle)}
-    </div>
+    </Elemento>
   );
 }
 
@@ -89,6 +102,8 @@ export function SortableItems<T>({
   onReorder,
   container,
   itemStyle,
+  elemento = "div",
+  itemClassName,
   children,
 }: {
   items: T[];
@@ -100,6 +115,10 @@ export function SortableItems<T>({
   /** Estilo del div wrapper de cada ítem (p.ej. flex del hijo cuando el
    *  container es flex/grid y el ítem trae siblings como flechas). */
   itemStyle?: CSSProperties;
+  /** El envoltorio de cada ítem: `div` (por defecto), `tr` en una tabla o `li` en una lista. Ver el encabezado. */
+  elemento?: ElementoDelItem;
+  /** La clase del envoltorio (`tr`/`li`), en edición y en lectura. */
+  itemClassName?: string;
   /** Render de UN ítem; colocá `handle` dentro del elemento raíz (junto al ×). */
   children: (item: T, index: number, handle: ReactNode) => ReactNode;
 }) {
@@ -123,6 +142,9 @@ export function SortableItems<T>({
   //   viaja con el ítem y dnd-kit anima el drop hacia el slot NUEVO.
   // Borrar en el medio corre los ids de la cola (como un índice): sin efecto — los
   // ids son opacos y no hay animación de drop en juego en ese momento.
+  /* eslint-disable react-hooks/refs -- a propósito: los ids estables viven en un ref y se ajustan durante el render
+     (append/trim idempotente, explicado arriba); con estado, el primer render tendría keys distintas y dnd-kit no
+     animaría el drop. Ya estaba así antes del 2026-10-25; el CI lo tolera en su línea base. */
   const idsRef = useRef<string[]>([]);
   const idSeq = useRef(0);
   while (idsRef.current.length < items.length) idsRef.current.push(`it-${idSeq.current++}`);
@@ -132,6 +154,10 @@ export function SortableItems<T>({
   // Con 0-1 ítems no hay nada que reordenar: render plano SIN handle a propósito
   // (un ⠿ muerto es ruido, no affordance). El handle aparece al agregar el 2º ítem.
   if (disabled || items.length < 2) {
+    if (elemento !== "div") {
+      const Elemento = elemento;
+      return <>{container(items.map((it, i) => <Elemento key={i} className={itemClassName}>{children(it, i, null)}</Elemento>))}</>;
+    }
     return <>{container(items.map((it, i) => <Fragment key={i}>{children(it, i, null)}</Fragment>))}</>;
   }
 
@@ -150,7 +176,7 @@ export function SortableItems<T>({
       <SortableContext items={ids} strategy={rectSortingStrategy}>
         {container(
           items.map((it, i) => (
-            <SortableItem key={ids[i]} id={ids[i]} style={itemStyle}>
+            <SortableItem key={ids[i]} id={ids[i]} style={itemStyle} elemento={elemento} className={itemClassName}>
               {(handle) => children(it, i, handle)}
             </SortableItem>
           )),
@@ -159,3 +185,4 @@ export function SortableItems<T>({
     </DndContext>
   );
 }
+/* eslint-enable react-hooks/refs */

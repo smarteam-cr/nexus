@@ -160,6 +160,7 @@ export function toSectionDef(
     invest: d.invest,
     compara: d.compara,
     diseno: d.diseno,
+    revision: d.revision,
     empty: d.empty,
     Component,
   };

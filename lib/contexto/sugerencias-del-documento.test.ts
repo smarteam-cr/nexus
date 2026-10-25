@@ -14,6 +14,8 @@ import {
   MOTIVO_DE_LA_REGLA_VIEJA,
   SUGERIDAS_DE_LA_REGLA_VIEJA,
   TOPE_DE_SUGERENCIAS,
+  FUENTES_QUE_ENTRAN_SOLAS,
+  motivoDeLaReunionConTexto,
   motivoDeLaSesion,
   motivoDeLosHechos,
   reunionesDeLasSesiones,
@@ -284,5 +286,118 @@ describe("el panel de los seis documentos (SessionSelectionReview + DocumentoCon
     // Y el panel les pone su grupo arriba de las del cliente.
     expect(PANEL).toContain("filtered.filter((c) => c.delProyecto)");
     expect(PANEL).toContain('{ separador: "Del proyecto" }');
+  });
+});
+
+describe("en el diagnóstico entran solas todas las reuniones del proyecto con texto (L1 etapa 2, 2026-10-24)", () => {
+  /* CEMACO el 23 oct: cinco sesiones de la exploración, más la Alineación, el Handoff y «Caso CEMACO», que nadie eligió
+     y el diagnóstico no leía. Dos con solo notas de Gemini. */
+  const reuniones = [
+    reunion("s1", 18),
+    reunion("alineacion", 25),
+    reunion("handoff", 30),
+    reunion("caso", 12),
+    reunion("solo-notas", 4),
+    reunion("vacia", 3),
+    reunion("sacada", 8, false),
+    reunion("elegida", 9, true),
+    reunion("futura", -2),
+    // Solo Smarteam: la Alineación interna. Tiene texto y NO entra sola (el diagnóstico lo lee el cliente).
+    reunion("interna", 6, null, { participantes: ["eli@smarteamcr.com", "ana@smarteamcr.com"] }),
+  ];
+  const sesiones: SesionPlaneada[] = [{ id: "e1", fecha: "2026-09-22", reunion: { id: "s1", origen: "meet" } }];
+  const clases = new Map([
+    ["s1", "transcripcion"],
+    ["alineacion", "transcripcion"],
+    ["handoff", "transcripcion"],
+    ["caso", "transcripcion"],
+    ["solo-notas", "solo_notas"],
+    ["vacia", "nada"],
+    ["sacada", "transcripcion"],
+    ["elegida", "transcripcion"],
+    ["futura", "transcripcion"],
+    ["interna", "transcripcion"],
+  ] as const);
+  const out = sugerenciasDelDocumento("diagnostico", {
+    reuniones,
+    sesionesDeLaExploracion: sesiones,
+    dominiosPropios: PROPIOS,
+    clasesDeTexto: new Map(clases),
+    ahora: AHORA,
+  });
+
+  it("primero la de la exploración y después las del proyecto con texto, de la más reciente a la más vieja", () => {
+    const solas = out.filter((s) => FUENTES_QUE_ENTRAN_SOLAS.includes(s.fuente));
+    expect(solas.map((s) => [s.sessionId, s.fuente])).toEqual([
+      ["s1", "exploracion"],
+      ["solo-notas", "proyecto"],
+      ["caso", "proyecto"],
+      ["alineacion", "proyecto"],
+      ["handoff", "proyecto"],
+    ]);
+    expect(solas.find((s) => s.sessionId === "solo-notas")?.motivo).toBe(motivoDeLaReunionConTexto("solo_notas"));
+  });
+
+  it("nunca la sacada, la elegida (ya entra por su lado), la futura ni la que no dejó texto", () => {
+    const solas = new Set(out.filter((s) => s.fuente === "proyecto").map((s) => s.sessionId));
+    for (const id of ["sacada", "elegida", "futura", "vacia", "interna"]) expect(solas.has(id), id).toBe(false);
+  });
+
+  it("una de puertas adentro con texto no entra sola, y sin los dominios de Smarteam no entra ninguna", () => {
+    expect(out.find((s) => s.sessionId === "interna")?.fuente).not.toBe("proyecto");
+    const sinSala = sugerenciasDelDocumento("diagnostico", { reuniones, clasesDeTexto: new Map(clases), ahora: AHORA });
+    expect(sinSala.some((s) => s.fuente === "proyecto")).toBe(false);
+  });
+
+  it("la que no dejó texto queda como sugerencia de siempre, que espera un «Usar»", () => {
+    expect(out.find((s) => s.sessionId === "vacia")?.fuente).toBe("reunion");
+  });
+
+  it("no tienen tope (entran todas): el tope es de lo que espera un «Usar»", () => {
+    const muchas = Array.from({ length: TOPE_DE_SUGERENCIAS + 5 }, (_, i) => reunion(`r${i}`, i + 1));
+    const r = sugerenciasDelDocumento("diagnostico", {
+      reuniones: muchas,
+      clasesDeTexto: new Map(muchas.map((m) => [m.id, "transcripcion" as const])),
+      dominiosPropios: PROPIOS,
+      ahora: AHORA,
+    });
+    expect(r.filter((s) => s.fuente === "proyecto")).toHaveLength(TOPE_DE_SUGERENCIAS + 5);
+  });
+
+  it("solo en el diagnóstico: los demás documentos siguen esperando un «Usar»", () => {
+    const r = sugerenciasDelDocumento("planificacion", { reuniones, clasesDeTexto: new Map(clases), dominiosPropios: PROPIOS, ahora: AHORA });
+    expect(r.some((s) => s.fuente === "proyecto")).toBe(false);
+  });
+
+  it("el servidor usa el predicado único y el chokepoint", () => {
+    const servidor = fs.readFileSync(path.join(process.cwd(), "lib/contexto/sugerencias-del-documento-server.ts"), "utf8");
+    expect(servidor).toContain("clasesDeTextoDeLasReuniones(");
+    expect(fs.readFileSync(path.join(process.cwd(), "lib/sessions/clase-de-texto-server.ts"), "utf8")).toContain("sqlClaseDeTexto(");
+    expect(servidor).toContain("getProjectMemberSessions(");
+    expect(servidor).not.toMatch(/transcript:\s*\{\s*not:/);
+  });
+});
+
+describe("el equipo del cliente de las reuniones (L5, 2026-10-25)", () => {
+  it("la reunión de una sesión de la exploración lleva el equipo de su sesión", () => {
+    const reuniones = [reunion("m1", 20), reunion("m2", 10)];
+    const sesiones: SesionPlaneada[] = [
+      { id: "s1", fecha: "2026-09-20", reunion: { id: "m1", origen: "meet" }, equipo: "marketing" },
+      { id: "s2", fecha: "2026-09-30", reunion: { id: "m2", origen: "meet" } },
+    ];
+    expect(reunionesDeLasSesiones(sesiones, reuniones, AHORA)).toEqual([
+      { sessionId: "m1", numero: 1, equipo: "marketing" },
+      { sessionId: "m2", numero: 2 },
+    ]);
+  });
+
+  it("el servidor: el de la sesión manda, el del Contexto solo para las demás; la ruta exige la membresía del proyecto", () => {
+    const servidor = fs.readFileSync(path.join(process.cwd(), "lib/contexto/sugerencias-del-documento-server.ts"), "utf8");
+    expect(servidor).toMatch(/const sinSesion = ids\.filter\(\(id\) => !out\.has\(id\)\)/);
+    const ruta = fs.readFileSync(path.join(process.cwd(), "app/api/projects/[projectId]/contexto/[pieza]/equipo/route.ts"), "utf8");
+    expect(ruta).toContain("getProjectMemberSessions(projectId)");
+    expect(ruta).toContain("guardContextoDelDocumento(");
+    const escritor = fs.readFileSync(path.join(process.cwd(), "lib/sessions/equipo-de-la-reunion-server.ts"), "utf8");
+    expect(escritor).toMatch(/WHERE "projectId" = \$\{projectId\} AND "sessionId" = \$\{sessionId\}/);
   });
 });

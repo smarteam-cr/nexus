@@ -19,6 +19,7 @@ import { revisarHilo, seccionesDelHilo, type SeccionDelHilo } from "./revisar-hi
 import { fotoDelDocumento, guardarVersionDelDocumento, huellaDe, tieneContenido } from "./versiones";
 import {
   aColumna,
+  DESAFIO_KEY,
   leerEstado,
   notaDeAprobacion,
   revisarParaPresentar,
@@ -88,6 +89,8 @@ function revisar(doc: Documento, estado: EstadoDocumento, conContenido: boolean)
     cabos,
     politica: dataDe(POLITICA_RECTORA_KEY),
     politicaOculta: hiddenKeysFrom(doc.sections).has(POLITICA_RECTORA_KEY),
+    desafio: dataDe(DESAFIO_KEY),
+    desafioOculto: hiddenKeysFrom(doc.sections).has(DESAFIO_KEY),
   });
 }
 
@@ -122,6 +125,7 @@ export async function estadoDelDocumento(canvasId: string): Promise<EstadoVista 
     fecha: fecha ? fecha.toISOString() : null,
     cliente: doc.project?.client?.name ?? "",
     motivosParaNoPresentar: revision.ok ? [] : revision.motivos,
+    motivosConSeccion: revision.ok ? [] : revision.detalle,
     cambiosDesdeLaPresentacion: cambios,
     hitos: hitos.map((h) => ({
       id: h.id,

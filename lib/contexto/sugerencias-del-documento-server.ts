@@ -20,6 +20,18 @@
  */
 import "server-only";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
+import { clasesDeTextoDeLasReuniones } from "@/lib/sessions/clase-de-texto-server";
+import { equiposDeLasReuniones } from "@/lib/sessions/equipo-de-la-reunion-server";
+import { EQUIPOS, EQUIPOS_DEL_CLIENTE, type ClaveDeEquipo } from "@/lib/exploraciones/equipos";
+import type { EquipoParaElDiagnostico } from "@/lib/canvas/diagnostico-por-equipo";
+
+/** Los equipos del cliente, en su orden, como los lee el documento de diagnóstico (nombre y área de la escala). */
+export const EQUIPOS_PARA_EL_DIAGNOSTICO: readonly EquipoParaElDiagnostico[] = EQUIPOS_DEL_CLIENTE.map((clave) => ({
+  clave,
+  nombre: EQUIPOS[clave].nombre,
+  area: EQUIPOS[clave].area,
+}));
+const PARA_EL_DIAGNOSTICO = new Map(EQUIPOS_PARA_EL_DIAGNOSTICO.map((e) => [e.clave, e]));
 import { getSessionCategories } from "@/lib/cache/session-categories";
 import { sesionesDeLaExploracionDelProyecto } from "@/lib/exploraciones/del-proyecto";
 import { novedadesDelProyecto } from "@/lib/seguimiento/novedades-server";
@@ -28,6 +40,7 @@ import { COLUMNA_DEL_DESTINO, esSoloElegidas, type DestinoDeContexto } from "@/l
 import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
 import { documentoDelDestino } from "./documento";
 import {
+  FUENTES_QUE_ENTRAN_SOLAS,
   reunionesDeLasSesiones,
   sugerenciasDelDocumento,
   type HechoQueSugiere,
@@ -40,6 +53,11 @@ export interface SugerenciaParaElPanel extends SugerenciaDeReunion {
   /** ms. */
   fecha: number;
   participantes: string[];
+  /**
+   * Solo en el diagnóstico (L5, 2026-10-25): el equipo del cliente de la reunión. De una sesión de la exploración, el de
+   * su sesión (se cambia allá); de una reunión del proyecto, el que se eligió en el Contexto. null = sin equipo.
+   */
+  equipo?: ClaveDeEquipo | null;
 }
 
 /** Una fuente que falla no tumba a las otras: sin ella, menos sugerencias. */
@@ -92,39 +110,99 @@ export async function sugerenciasParaElDocumento(
     afinado: s[columna],
   }));
   const porId = new Map(reuniones.map((r) => [r.id, r]));
+  // En el diagnóstico, la clase de texto de las que nadie tocó todavía (las que pueden entrar solas).
+  const clases = conExploracion
+    ? await seguro("la clase de texto", () => clasesDeTextoDeLasReuniones(reuniones.filter((r) => r.afinado === null).map((r) => r.id)), undefined)
+    : undefined;
   const sugeridas = sugerenciasDelDocumento(destino, {
     reuniones,
     sesionesDeLaExploracion: sesiones,
     dominiosPropios: categorias ? buildInternalDomainsSet(categorias) : undefined,
     reglaVieja: categorias !== null,
     hechos,
+    clasesDeTexto: clases,
     ahora: ahora.getTime(),
   });
+  /* El equipo del cliente de las que entran solas (L5, 2026-10-25): de la sesión de la exploración, o el elegido en el
+     Contexto para las demás reuniones del proyecto. Sin la columna todavía, sin equipo. */
+  const equipos = conExploracion
+    ? await seguro("los equipos", () => equiposDelDiagnostico(projectId, sugeridas.map((s) => s.sessionId), sesiones, reuniones, ahora, categorias), new Map<string, ClaveDeEquipo>())
+    : new Map<string, ClaveDeEquipo>();
   return sugeridas.flatMap((s) => {
     const r = porId.get(s.sessionId);
-    return r ? [{ ...s, titulo: r.titulo, fecha: r.fecha, participantes: [...r.participantes] }] : [];
+    if (!r) return [];
+    const fila: SugerenciaParaElPanel = { ...s, titulo: r.titulo, fecha: r.fecha, participantes: [...r.participantes] };
+    if (conExploracion && FUENTES_QUE_ENTRAN_SOLAS.includes(s.fuente)) fila.equipo = equipos.get(s.sessionId) ?? null;
+    return [fila];
   });
 }
 
 /**
- * LAS REUNIONES DE LAS SESIONES DE LA EXPLORACIÓN, que entran SOLAS al diagnóstico (2026-10-23, DECISIONS «El Diagnóstico:
- * todo el contexto…»). Una reunión unida a una sesión —a mano o por su evento del calendario— ya la eligió una persona:
- * es la misma regla que la sugerencia «Sesión N de la exploración» (`reunionesDeLasSesiones`), y salen de la membresía
- * del proyecto por el chokepoint. Las desestimadas en el Contexto del diagnóstico (`false`, «Descartar») no entran.
- * Devuelve ids; el material las lee enteras con las elegidas (lib/contexto/material-del-documento.ts). [] sin exploración.
+ * El equipo del cliente de estas reuniones del proyecto (L5, 2026-10-25): el de su sesión de la exploración si es una
+ * (manda: se eligió para esa sesión), o el que se eligió en el Contexto del diagnóstico para las demás.
  */
-export async function reunionesDeLaExploracionDelDiagnostico(projectId: string, ahora: Date = new Date()): Promise<string[]> {
-  const columna = COLUMNA_DEL_DESTINO.diagnostico;
-  const sesiones = await seguro("la exploración", () => sesionesDeLaExploracionDelProyecto(projectId), []);
-  if (!sesiones.length) return [];
-  const [miembros, categorias] = await Promise.all([
+async function equiposDelDiagnostico(
+  projectId: string,
+  ids: readonly string[],
+  sesiones: Awaited<ReturnType<typeof sesionesDeLaExploracionDelProyecto>>,
+  reuniones: ReadonlyArray<{ id: string; titulo: string; fecha: number; participantes: readonly string[] }>,
+  ahora: Date,
+  categorias: Awaited<ReturnType<typeof getSessionCategories>> | null,
+): Promise<Map<string, ClaveDeEquipo>> {
+  const out = new Map<string, ClaveDeEquipo>();
+  for (const r of reunionesDeLasSesiones(sesiones, reuniones, ahora.getTime(), categorias ? buildInternalDomainsSet(categorias) : undefined)) {
+    if (r.equipo) out.set(r.sessionId, r.equipo);
+  }
+  const sinSesion = ids.filter((id) => !out.has(id));
+  for (const [id, equipo] of await equiposDeLasReuniones(projectId, sinSesion)) out.set(id, equipo);
+  return out;
+}
+
+/**
+ * EL EQUIPO DE CADA REUNIÓN DEL PROYECTO, para que el documento de diagnóstico lea por equipo (L5 etapa 1). Las reuniones
+ * salen de la membresía (el chokepoint); el equipo, de la sesión de la exploración o del Contexto. Vacío si falla.
+ */
+export async function equiposDeLasReunionesDelDiagnostico(
+  projectId: string,
+  ahora: Date = new Date(),
+): Promise<Map<string, EquipoParaElDiagnostico>> {
+  const [miembros, sesiones, categorias] = await Promise.all([
     getProjectMemberSessions(projectId),
+    seguro("la exploración", () => sesionesDeLaExploracionDelProyecto(projectId), []),
     seguro("las categorías", () => getSessionCategories(), null),
   ]);
-  const reuniones = miembros.sessions
-    .filter((s) => s[columna] !== false)
-    .map((s) => ({ id: s.id, titulo: s.title, fecha: s.date, participantes: s.participants }));
-  return reunionesDeLasSesiones(sesiones, reuniones, ahora.getTime(), categorias ? buildInternalDomainsSet(categorias) : undefined).map(
-    (r) => r.sessionId,
+  const reuniones = miembros.sessions.map((s) => ({ id: s.id, titulo: s.title, fecha: s.date, participantes: s.participants }));
+  const claves = await seguro(
+    "los equipos",
+    () => equiposDelDiagnostico(projectId, reuniones.map((r) => r.id), sesiones, reuniones, ahora, categorias),
+    new Map<string, ClaveDeEquipo>(),
   );
+  return new Map([...claves].flatMap(([id, clave]) => (PARA_EL_DIAGNOSTICO.has(clave) ? [[id, PARA_EL_DIAGNOSTICO.get(clave)!] as const] : [])));
+}
+
+/**
+ * LAS REUNIONES QUE ENTRAN SOLAS AL DIAGNÓSTICO, sin que nadie las elija en su Contexto:
+ *  · las de las sesiones de la exploración (2026-10-23, DECISIONS «El Diagnóstico: todo el contexto…»): una reunión unida
+ *    a una sesión —a mano o por su evento del calendario— ya la eligió una persona (`reunionesDeLasSesiones`);
+ *  · desde el 2026-10-24 (L1 etapa 2), todas las demás reuniones del proyecto que dejaron texto, transcripción o notas de
+ *    Gemini (el predicado único, lib/sessions/tiene-texto.ts).
+ * Las dos salen de la MISMA regla que pinta el panel (`sugerenciasParaElDocumento`, fuentes `exploracion` y `proyecto`) y
+ * de la membresía del proyecto por el chokepoint. Las desestimadas en el Contexto (`false`, «Sacar») no entran; las
+ * elegidas (`true`) ya entran por su lado. Devuelve ids; el material las lee con las elegidas, las 6 más recientes enteras
+ * y las demás en resumen (lib/contexto/material-del-documento.ts).
+ */
+export async function reunionesQueEntranSolasAlDiagnostico(projectId: string, ahora: Date = new Date()): Promise<string[]> {
+  return (await reunionesQueEntranSolasPorFuente(projectId, ahora)).todas;
+}
+
+/** Las mismas, separadas: las de las sesiones de la exploración van primero para leerse enteras (el material). */
+export async function reunionesQueEntranSolasPorFuente(
+  projectId: string,
+  ahora: Date = new Date(),
+): Promise<{ todas: string[]; deLaExploracion: string[] }> {
+  const solas = (await sugerenciasParaElDocumento(projectId, "diagnostico", ahora)).filter((s) => FUENTES_QUE_ENTRAN_SOLAS.includes(s.fuente));
+  return {
+    todas: solas.map((s) => s.sessionId),
+    deLaExploracion: solas.filter((s) => s.fuente === "exploracion").map((s) => s.sessionId),
+  };
 }

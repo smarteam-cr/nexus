@@ -635,9 +635,12 @@ describe("Kickoff: registry completo + keys congeladas", () => {
   });
 
   it("snapshot de keys: bienvenida abre, cierre cierra", () => {
+    /* 2026-10-24 (M1, decisión de producto: Elías aprobó el paso dos): el kickoff de un SERVICIO RECURRENTE suma cuatro
+       secciones —cómo trabajamos cada ciclo, el primer ciclo, la cadencia y cómo nos pides cosas—. Las crea solo su
+       plantilla (lib/entregables/registro.ts); un kickoff de implementación no las ve (`KICKOFF_CANVAS` no las tiene). */
     expect(KICKOFF_SECTION_DEFS.map((d) => d.key)).toEqual([
-      "bienvenida", "objetivos", "hoy_vs_sistema", "alcance", "equipo", "tu_rol",
-      "metricas_exito", "punto_de_partida", "horarios", "canales", "proximos_pasos", "cronograma", "procesos", "cierre",
+      "bienvenida", "objetivos", "como_trabajamos", "primer_ciclo", "cadencia_del_servicio", "hoy_vs_sistema", "alcance", "equipo", "tu_rol",
+      "solicitudes", "metricas_exito", "punto_de_partida", "horarios", "canales", "proximos_pasos", "cronograma", "procesos", "cierre",
     ]);
   });
 

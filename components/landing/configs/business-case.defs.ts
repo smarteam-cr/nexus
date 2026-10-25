@@ -51,6 +51,9 @@ export interface BCSectionDef {
   /** Cómo se dibuja una sección de PROSA (`kickoff_prose`), por documento. Hermano de `chips`: la forma entra por la
    *  DEFINICIÓN, nunca por `data`, así el esquema, el chat y el agente no cambian. Ver `DisenoDeProsa`. */
   diseno?: DisenoDeProsa;
+  /** La sección lleva MARCA DE REVISIÓN (L2, 2026-10-24): el texto es lo que la persona tiene que hacer mientras no está
+   *  revisada. Hermano de `diseno`: entra por la definición. Ver `SectionDef.revision`. */
+  revision?: string;
   /** La sección nace OCULTA: createBusinessCaseCanvas siembra `hidden:true` en el Json
    *  del canvas (publish filtra por ese Json, no por la config). El CSE la muestra cuando aplica. */
   defaultHidden?: boolean;

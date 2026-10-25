@@ -506,7 +506,12 @@ export interface CtxDelDiagnostico {
    * escribirlas dos veces. `fuera`: la acción quedó fuera del alcance contratado (se marca, no se
    * esconde: sigue siendo la que ataca su causa, pero no se le promete al cliente en este proyecto).
    */
-  acciones?: Array<{ id: string; accion: string; detalle: string; ataca: string; fuera?: boolean }>;
+  acciones?: Array<{ id: string; accion: string; detalle: string; ataca: string; fuera?: boolean; indice?: number }>;
+  /**
+   * Solo edición (L3 etapa 2, 2026-10-24): la cuarta columna se arrastra, y el orden nuevo es el de la tabla de Acciones
+   * (`indice` = la posición de cada acción en esa tabla). Ausente en lectura y en el PDF.
+   */
+  onReordenarAcciones?: (indices: number[]) => void;
   /**
    * Los resultados medibles del HANDOFF (lib/handoff/resultados-medibles.ts). Los objetivos
    * cuantitativos apuntan a uno (`resultado: "R1"`) y muestran su línea base, meta y plazo desde acá:
@@ -599,6 +604,8 @@ export interface SectionProps<T> {
   sectionRotulosDeListas?: Record<string, string>;
   /** Cómo se dibuja una sección de prosa en ESTE documento. Ver `SectionDef.diseno` y `DisenoDeProsa`. */
   sectionDiseno?: DisenoDeProsa;
+  /** La sección lleva marca de revisión: qué tiene que hacer la persona mientras no está revisada. Ver `SectionDef.revision`. */
+  sectionRevision?: string;
 }
 
 /**
@@ -712,6 +719,12 @@ export interface SectionDef {
   compara?: CompararLabels;
   /** Cómo se dibuja una sección de prosa en este documento. Ver `DisenoDeProsa`. */
   diseno?: DisenoDeProsa;
+  /**
+   * La sección lleva MARCA DE REVISIÓN (`revisadaAt`, components/landing/marca-de-revision.tsx): la propone la IA y la revisa
+   * una persona. El texto es lo que la persona tiene que hacer mientras no está revisada. Entra por la DEFINICIÓN, como
+   * `diseno`: mismo esquema y mismo `sectionType` (L2 etapa 2, 2026-10-24: el desafío principal del diagnóstico).
+   */
+  revision?: string;
   empty: unknown;              // data inicial (template vacío)
   /** La sección se alimenta de `ctx` (no de `data`): NO se omite en read por `isBlank`
    *  (el Component decide si devuelve null). Ej. kickoff: cronograma/procesos/cierre. */

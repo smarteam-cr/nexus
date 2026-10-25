@@ -52,6 +52,28 @@ export const SECCIONES_DEL_DIAGNOSTICO_ESENCIAL = [
   "cierre",
 ] as const;
 
+/**
+ * El KICKOFF DE UN SERVICIO RECURRENTE (M1 del roadmap, 2026-10-24, Liliana con RC Inmobiliaria): el de siempre le decía
+ * «proyecto temporal» a un SmartLoop. Cuenta cómo se trabaja cada ciclo, la cadencia, quién es quién, cómo se piden cosas
+ * y qué pasa en el primer ciclo; deja afuera lo que es de una implementación (del hoy al nuevo sistema, el alcance
+ * cerrado, las métricas de un proyecto, el cronograma y los próximos pasos). Un proyecto recurrente la usa sola al
+ * generar el kickoff (`plantillaPorDefectoDelProyecto`, lib/entregables/generar-server.ts).
+ */
+export const PLANTILLA_DEL_KICKOFF_RECURRENTE = "kickoff-recurrente";
+export const SECCIONES_DEL_KICKOFF_RECURRENTE = [
+  "bienvenida",
+  "objetivos",
+  "como_trabajamos",
+  "primer_ciclo",
+  "cadencia_del_servicio",
+  "equipo",
+  "tu_rol",
+  "solicitudes",
+  "punto_de_partida",
+  "canales",
+  "cierre",
+] as const;
+
 export interface Entregable {
   /** El slug de su pieza en el registro. */
   slug: string;
@@ -65,7 +87,16 @@ export const ENTREGABLES: readonly Entregable[] = [
   {
     slug: "kickoff",
     agentId: "agent-kickoff-canvas",
-    plantillas: [{ id: "kickoff", nombre: "Kickoff", paraQue: "La presentación de arranque: el alcance, el equipo, cómo se trabaja y lo que sigue." }],
+    plantillas: [
+      { id: "kickoff", nombre: "Kickoff", paraQue: "La presentación de arranque: el alcance, el equipo, cómo se trabaja y lo que sigue." },
+      {
+        id: PLANTILLA_DEL_KICKOFF_RECURRENTE,
+        nombre: "Kickoff de servicio recurrente",
+        paraQue:
+          "El arranque de un servicio que se hace todos los meses: cómo trabajamos cada ciclo, la cadencia, quién es quién, cómo nos pides cosas y qué pasa en el primer ciclo.",
+        secciones: SECCIONES_DEL_KICKOFF_RECURRENTE,
+      },
+    ],
   },
   {
     slug: "diagnosis",
