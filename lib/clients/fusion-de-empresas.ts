@@ -76,6 +76,9 @@ export const SE_MUDAN = [
      se borrarían con la ficha. Su único es (tipo, hubspotId), sin la ficha: no chocan. La copia de la hora siguiente los
      vuelve a resolver por la empresa de HubSpot viva. */
   ["comunicacionDeHubspot", "clientId"],
+  /* Los leads de HubSpot (B3 etapa 1, 2026-10-25): `onDelete: Cascade`. Su único es el id de HubSpot, sin la ficha: no
+     chocan. La copia de la hora siguiente los vuelve a resolver por la empresa viva. */
+  ["leadDeHubspot", "clientId"],
   ["importacionFila", "aplicadoClientId"],
   ["escalaComentario", "clienteId"],
   /* Tareas internas (2026-10-09): `onDelete: SetNull`, así que sin mudarlas perderían el cliente en silencio. */

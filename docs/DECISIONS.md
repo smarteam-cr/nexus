@@ -9434,6 +9434,12 @@ nunca se agendó, nadie le dio seguimiento y el cliente le escribió a Marco. Ne
 ni el timeline de HubSpot. Enmienda el «Fuera por ahora» de «La memoria de la cuenta: una sola lectura por reunión, en
 cinco piezas»: los correos entran, como una fuente aparte, no como una fuente más de la lectura de cada reunión.
 
+> **Enmienda U8 (2026-10-25):** el permiso de correos se dio el 24 oct y la copia los trae (98,4 % de los correos de un
+> cliente, medido). Decidido por Elías el 24 oct: se COPIAN todos (no gasta) y la IA lee los compromisos solo de las
+> cuentas activas o usadas en Nexus (`cuentaQueLeeLaIA`: un proyecto activo, o la preventa trabajada en 90 días). Abajo,
+> «Lo que Smarteam prometió por correo» ya no vale para cualquier correo enviado. Y desde U7 entran también las reuniones
+> de HubSpot (tipo `reunion`): ver «HubSpot como contexto y como aviso».
+
 - **Una copia de solo lectura, `ComunicacionDeHubspot`**, con su único escritor (lib/comunicaciones/copia-server.ts) y un
   job (`comunicaciones-hubspot`, cada hora de 6:00 a 20:00). Lee los correos (enviados y recibidos), las notas y las
   llamadas de 120 días por la BÚSQUEDA de HubSpot (lo modificado desde la corrida anterior) y las asociaciones v4 en
@@ -10964,3 +10970,82 @@ cliente del SDK con un token a mano, ni escribe el vencimiento del token fuera d
 llamen.
 
 **Volver atrás:** revertir el commit. No hay SQL; la fila `hubspot-transporte` de `CronJobState` se puede dejar o borrar.
+
+## HubSpot como contexto y como aviso (2026-10-25, U7 a U11, U22, U24 y B3 etapa 1)
+
+**El hecho** (medido el 2026-10-24 y 25, solo lectura): 759 reuniones y 566 llamadas de HubSpot tienen el resumen de
+Notetaker y no entraban; el 89 % de las llamadas no trae cuerpo y la copia las descartaba. Casi todas las reuniones de
+HubSpot son las del calendario de Google (`BIDIRECTIONAL_SYNC`); de las 486 con resumen de 120 días, 364 son de Meet (336
+cruzan con su reunión de Nexus por el evento de Calendar) y 120 de Zoom o Teams, que no llegan por ningún lado. La
+transcripción de HubSpot NO sale por la API (404 en los dos endpoints, con los permisos del 24 oct). Los correos ya
+entran (1.721 de 1.749 de un cliente). En el portal hay 79 empresas absorbidas por una fusión, y dos fichas de Nexus
+guardan la vieja (kölbi, y «TEC- AE», que es la misma empresa que «TEC»). El barrido del vigía nunca corrió en
+producción (falta `CS_WATCHDOG_ENABLED`): lo que corre es la revisión al entrar a la ficha, en el momento.
+
+**Lo decidido:**
+
+1. **U7 · Las reuniones de HubSpot van a las comunicaciones, no a las reuniones.** Un tipo nuevo, `reunion`, en
+   `ComunicacionDeHubspot`, con el resumen como texto (la búsqueda pide solo las que lo tienen); de las llamadas, el
+   cuerpo y el resumen. *Por qué no `FirefliesSession`:* una reunión de Nexus dispara la lectura de cada reunión, el
+   clasificador y los documentos (IA por cada una, y el riesgo de mezclar dueños); el resumen de HubSpot es contexto, y
+   las comunicaciones ya tienen su regla de dueño (de UN cliente por las asociaciones) y su lugar en la memoria interna.
+   **No se duplica lo que llega por Meet:** se cruza por el evento de Calendar (el `eid` del enlace), el código de Meet o
+   la misma cuenta a la misma hora (±10 min), contra las reuniones de Meet que da el chokepoint
+   (`indiceDeReunionesDeMeet`, lib/sessions/project-sources.ts: el dueño es `duenoDeLaSesion`). Si la de Meet tiene texto,
+   la de HubSpot no se guarda; si no lo tiene, el resumen de HubSpot es lo único que hay y se guarda, y se da de baja el
+   día en que llegue el texto de Meet. **Si la reunión de Meet que la cubre es de otro cliente, no se guarda** (alguien la
+   asoció en HubSpot a otra empresa: manda el chokepoint, no la asociación); una de Meet SIN dueño no tapa a la de HubSpot;
+   el código de Meet solo cruza a la misma hora (±2 h: una sala fija se usa con varios clientes el mismo día); y una
+   llamada con notas de la persona no se cruza con Meet (sus notas no están en la transcripción). Simulacro del 25 oct: 83 reuniones y 51
+   llamadas nuevas; 303 y 72 descartadas. El punto de partida de la copia tiene versión: la 2 olvida una vez el de las
+   llamadas, que ya había pasado por las 566 con resumen y las había descartado por no tener cuerpo.
+2. **U8 · La IA lee solo los correos de las cuentas que lo necesitan** (`cuentaQueLeeLaIA`): con un proyecto activo
+   (`PROYECTO_CLASIFICABLE_WHERE`) o con su preventa o exploración trabajada en Nexus en los últimos 90 días. Es la opción
+   conservadora de «activas o usadas en Nexus». El resto se copia y queda `no_aplica` («cuenta_sin_uso»); los enviados de
+   14 días vuelven a `pendiente` en la corrida en que su cuenta se activa.
+3. **U9 · Las fusiones se buscan del lado del sobreviviente.** El absorbido no deja marca, pero el que sobrevive guarda
+   `hs_merged_object_ids`: una búsqueda por tipo de objeto (empresas, contactos, negocios, proyectos y tickets), una vez
+   al día (`hubspot-fusiones`), guarda los pares en `FusionDeHubspot`. **No reapunta solo:** mover la empresa de una
+   ficha mueve proyectos, cobranza y cartera; se hace con los scripts de siempre, con simulacro. INV54 da rojo mientras
+   una ficha guarde una empresa absorbida. El aviso de fusión de los webhooks escribe en la misma tabla.
+4. **U10 · Los webhooks solo adelantan; el sondeo sigue siendo la red.** La ruta es pública y la protege la firma v3
+   (con 5 minutos de edad máxima, y el cuerpo cortado en 1 MB antes de leerlo entero); guarda el aviso y responde. El job
+   `hubspot-eventos` sincroniza los proyectos de la empresa de Nexus que cambió (3 por tick; el aviso queda procesado solo
+   si la sincronización corrió sin errores; las empresas y las fusiones se leen aparte para que una importación de
+   contactos no las tape) y adelanta UNA copia por tick (que al terminar da por hechos todos los avisos de su tipo
+   anteriores), la de contactos y tickets o la de negocios, una cada 20
+   minutos por tipo y solo de día: el tick del scheduler es uno para todos los jobs. Los avisos procesados se borran a
+   los 30 días (son un registro, no una copia). **Un aviso no decide de quién es nada** (invariante 1): solo dispara la copia que ya lo decide. Un aviso de
+   otro portal se guarda «ignorado». El proyecto (0-970) no tiene avisos: tiene su job diario (`hubspot-proyectos`, la
+   sincronización de la ficha en tandas de 20 empresas por minuto, para no trabar el tick). ⚠ **Lo único que esa
+   sincronización puede escribir en HubSpot** es lo que ya escribía al abrir la ficha: si el encargado de un proyecto
+   cambió EN HubSpot, el pase de cuenta reescribe allá el siguiente paso con la persona nueva (lib/cuentas/pase-server.ts).
+   Se deja así a propósito: saltarse el pase en los caminos automáticos lo perdería para siempre (la ficha ya no vería el
+   «antes y después»), y lo que escribe es la consecuencia de lo que alguien decidió en HubSpot. Configurar la URL y las
+   suscripciones en la app de HubSpot es de Elías (RUNBOOK › «Los avisos de HubSpot»).
+5. **U11 · No se hace la copia incremental de contactos y tickets.** Medido: una copia completa son unos 25 pedidos
+   (1.410 contactos y 422 tickets de 187 empresas). Partirla en incremental y diaria agrega dos caminos para ahorrar
+   casi nada; se revisa si la cartera crece diez veces.
+6. **B3 etapa 1 · Los leads, como los contactos.** `LeadDeHubspot`, una copia de solo lectura cada hora (`hubspot-leads`,
+   único escritor lib/leads/copia-server.ts). Se leen todos los leads del portal (86) y el dueño sale de la MISMA regla
+   de las comunicaciones (empresa primero, contacto después; de dos clientes, de ninguno). Un lead es una fila por su id:
+   si pasa a otro cliente, la fila se mueve. 57 de los 86 son de clientes de Nexus. Todavía sin lectores (etapas 2 y 3).
+7. **U22 · El vigía, por lote donde nadie espera.** La revisión al entrar a la ficha va por la API Batch
+   (`VIGIA_AL_ENTRAR_POR_LOTE`, lib/ai/ahorro.ts): corre en segundo plano y nadie espera su respuesta. **Salvo el proyecto
+   con eventos del cronograma sin procesar:** ese se tría en el momento, porque el lote no reclama eventos y en producción
+   la entrada a la ficha es lo único que los tría (lo encontró la revisión). En el barrido, va
+   por lote todo lo que no trae eventos del cronograma sin procesar (antes solo lo que entraba por un riesgo
+   persistente; el riesgo nuevo de una reunión tampoco tiene eventos que reclamar). La corrida a mano y el debounce
+   siguen en el momento. Que el barrido corra en producción pide `CS_WATCHDOG_ENABLED=1` en el servidor (Elías).
+8. **U24 · Un job que deja de correr avisa, por dos lados.** Sentry Crons (cada corrida manda su latido con el horario
+   del job; avisa aunque el servidor se caiga) y el job `jobs-vigia` (cada hora; lanza si un job que ya corrió lleva más
+   de lo esperado sin correr, y eso llega a «Para ti» del sistema). La tabla es una (`CADENCIA_DE_JOB`,
+   lib/jobs/cadencias.ts). Un job que nunca corrió no cuenta: eso no es «dejó de correr». Por ahora le avisa a Elías.
+   La copia de Meet no está en la tabla: anota en su propia fila, y su frescura la vigila INV49.
+9. **U13 y U14 quedan para después**, como dice el plan: la tarjeta dentro de HubSpot pide migrar la app a la plataforma
+   nueva de desarrolladores (decisión y trámite de Elías), y salir de la API v1 de engagements toca el timeline que leen
+   el vigía, las señales y la preventa (`company-timeline.ts`, `exploraciones/hubspot.ts`); con las comunicaciones ya
+   copiadas, el camino es que lean de la copia en vez de pedirle a HubSpot.
+
+**Volver atrás:** `HUBSPOT_LEADS_ENABLED=0`, `HUBSPOT_PROYECTOS_JOB_ENABLED=0`, `JOBS_VIGIA_ENABLED=0`; quitar la URL del
+webhook en la app de HubSpot; `VIGIA_AL_ENTRAR_POR_LOTE = false`. Las tablas nuevas se pueden dejar: nadie más las lee.

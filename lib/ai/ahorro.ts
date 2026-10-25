@@ -50,3 +50,18 @@ export const DIAS_PARA_VOLVER_A_TRIAR = 7;
  * aparece más tarde ese día. `false` los vuelve a triar en el momento.
  */
 export const VIGIA_BARRIDO_POR_LOTE = true;
+
+/**
+ * U22 (2026-10-25): la revisión del vigía al ENTRAR a la ficha de un cliente (lib/cs/vigia-por-cliente.ts) también va por
+ * la API Batch. Es la que de verdad corre en producción (77 corridas en dos semanas, todas en el momento; el barrido
+ * diario nunca corrió porque el servidor no tiene CS_WATCHDOG_ENABLED) y nadie espera su respuesta: corre en segundo
+ * plano y las alertas «aparecen solas». Riesgo: aparecen minutos u horas después de abrir la ficha, no al rato. La
+ * corrida A MANO («Revisar ahora») sigue en el momento, y también la del proyecto con cambios del cronograma sin revisar
+ * (el lote no los reclama). `false` la vuelve a triar en el momento.
+ */
+export const VIGIA_AL_ENTRAR_POR_LOTE = true;
+
+/** ¿La revisión al entrar a la ficha va por lote? Solo prendida y sin eventos del cronograma sin procesar. */
+export function entradaPorLote(o: { prendido: boolean; eventosSinProcesar: number }): boolean {
+  return o.prendido && o.eventosSinProcesar === 0;
+}

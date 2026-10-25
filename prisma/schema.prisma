@@ -299,6 +299,7 @@ model Client {
   contactosDeHubspot       ContactoDeHubspot[]       @relation("ContactosDeHubspot") // la copia de sus contactos de HubSpot (2026-10-16)
   ticketsDeHubspot         TicketDeHubspot[]         @relation("TicketsDeHubspot") // la copia de sus tickets de HubSpot (2026-10-16)
   comunicacionesDeHubspot  ComunicacionDeHubspot[]   @relation("ComunicacionesDeHubspot") // correos, notas y llamadas de HubSpot (2026-10-18)
+  leadsDeHubspot           LeadDeHubspot[]           @relation("LeadsDeHubspot") // la copia de sus leads de HubSpot (B3 etapa 1, 2026-10-25)
   notasDeLaCuenta          NotaDeLaCuenta[]          @relation("NotasDeLaCuenta") // lo que pasó por WhatsApp, una llamada o un correo (2026-10-16)
   reglasComisionVendedor   ReglaComisionVendedor[]   @relation("ReglasDeComisionVendedor") // ⚠ SUPER_ADMIN-only
   importFilasAplicadas     ImportacionFila[] // Cobranza: trazabilidad del importador
@@ -7894,7 +7895,7 @@ model ComunicacionDeHubspot {
   id                  String    @id @default(cuid())
   clientId            String
   client              Client    @relation("ComunicacionesDeHubspot", fields: [clientId], references: [id], onDelete: Cascade)
-  /// correo | nota | llamada
+  /// correo | nota | llamada | reunion (U7, 2026-10-25: el resumen de Notetaker de una reunión de HubSpot)
   tipo                String
   hubspotId           String
   /// Solo un correo: enviado | recibido. null en una nota o una llamada.
@@ -7919,6 +7920,10 @@ model ComunicacionDeHubspot {
   compromisosIntentos Int       @default(0)
   compromisosLeidoAt  DateTime?
   compromisosError    String?
+  /// U7 (2026-10-25): el evento de Google Calendar de una reunión o llamada de HubSpot (sale del `eid` de su enlace) y su
+  /// código de Meet: con ellos se sabe si ya llega por Meet (lib/comunicaciones/reuniones.ts). null = no lo traía.
+  googleEventId       String?
+  codigoDeMeet        String?
   copiadoAt           DateTime  @default(now())
   createdAt           DateTime  @default(now())
 
@@ -8150,4 +8155,84 @@ model ModuloDePropuesta {
 
   @@index([archivadoAt, updatedAt])
   @@index([origenBusinessCaseId])
+}
+
+// ─── HubSpot como contexto y como aviso (área U: U9, U10 y B3 etapa 1, 2026-10-25) ───
+// SQL: scripts/sql/2026-10-25-hubspot-contexto.sql. Plan: docs/integracion-hubspot-plan.md.
+
+/// Un aviso de HubSpot (webhook, U10): llega por app/api/hubspot/webhooks, se guarda tal cual y lo procesa el job
+/// `hubspot-eventos` (lib/hubspot/eventos-server.ts), que dispara la copia de ese registro. El aviso NUNCA decide de qué
+/// cliente es nada: solo dice «volvé a copiar esto».
+model EventoDeHubspot {
+  id              String    @id @default(cuid())
+  /// subscriptionId:eventId (o el de la fusión): HubSpot reintenta y el mismo aviso llega más de una vez
+  clave           String    @unique
+  /// empresa | contacto | negocio | ticket
+  objeto          String
+  /// creacion | cambio | asociacion | borrado | fusion | restauracion
+  tipo            String
+  hubspotId       String
+  propiedad       String?
+  valor           String?
+  /// En una fusión: los ids que se absorbieron
+  idsFusionados   String[]  @default([])
+  idSobreviviente String?
+  ocurrioAt       DateTime
+  recibidoAt      DateTime  @default(now())
+  /// pendiente | procesado | ignorado | error
+  estado          String    @default("pendiente")
+  intentos        Int       @default(0)
+  procesadoAt     DateTime?
+  error           String?
+
+  @@index([estado, recibidoAt])
+}
+
+/// Una fusión de HubSpot (U9): el id que se absorbió y el que sobrevive. La escriben la búsqueda diaria
+/// (lib/hubspot/fusiones-server.ts, job `hubspot-fusiones`) y el aviso de fusión. Reapuntar lo que Nexus guarda con el id
+/// viejo es aparte, con simulacro (scripts/reapuntar-fusiones-de-hubspot.ts).
+model FusionDeHubspot {
+  id              String   @id @default(cuid())
+  /// empresa | contacto | negocio | proyecto | ticket
+  objeto          String
+  idAbsorbido     String
+  idSobreviviente String
+  /// La última vez que se vio (la búsqueda o un aviso)
+  vistaAt         DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  @@unique([objeto, idAbsorbido])
+  @@index([objeto, idSobreviviente])
+}
+
+/// Un lead de HubSpot de una empresa de Nexus (B3 etapa 1): el prospecto en calificación. Copia de solo lectura, cada
+/// hora, con el job de contactos (lib/leads/copia-server.ts, el único escritor). Nunca se borra: el que deja de estar
+/// asociado queda `vigente = false`.
+model LeadDeHubspot {
+  id                  String    @id @default(cuid())
+  clientId            String
+  client              Client    @relation("LeadsDeHubspot", fields: [clientId], references: [id], onDelete: Cascade)
+  hubspotId           String    @unique
+  nombre              String
+  pipeline            String?
+  etapaId             String?
+  /// El nombre de la etapa (de los pipelines de leads de HubSpot)
+  etapa               String?
+  /// new | in_progress | qualified | unqualified… (hs_pipeline_stage_category)
+  etapaCategoria      String?
+  /// NEW_BUSINESS | RELATIONSHIP… (hs_lead_type)
+  tipoDeLead          String?
+  /// hs_lead_source (OFFLINE, ORGANIC_SEARCH…)
+  origen              String?
+  duenoEmail          String?
+  /// El contacto principal del lead en HubSpot
+  contactoHubspotId   String?
+  creadoEnHubspot     DateTime?
+  modificadoEnHubspot DateTime?
+  huella              String
+  vigente             Boolean   @default(true)
+  copiadoAt           DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+
+  @@index([clientId, vigente])
 }

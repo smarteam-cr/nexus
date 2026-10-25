@@ -12,12 +12,15 @@
  *    Integraciones lo pinta. El claim del día NO se libera al fallar (ver lib/jobs/estado.ts).
  *  - Flag anti-reentrada: si un tick tarda más de 60s (p.ej. refresh de señales
  *    de muchos clientes), el siguiente tick se salta en vez de solaparse.
+ *  - U24 (2026-10-25): cada corrida de un job con cadencia manda su latido a Sentry Crons
+ *    (lib/jobs/latido.ts): Sentry avisa cuando un job DEJA de correr, no solo cuando falla.
  *
  * Lo arranca instrumentation.ts (gates NEXT_RUNTIME nodejs + CRON_ENABLED=1 —
  * solo PROD los setea; en dev los jobs se prueban por scripts).
  */
 import * as Sentry from "@sentry/nextjs";
 import { registrarResultado } from "./estado";
+import { latido } from "./latido";
 import { enUnJob } from "./contexto";
 import { crDateParts } from "./time";
 import { allJobs } from "./defs";
@@ -45,14 +48,18 @@ export function huellaDeSentry(jobKey: string, err: Error): string[] | undefined
 export async function runSchedulerTick(now: Date): Promise<void> {
   const parts = crDateParts(now);
   for (const job of allJobs()) {
+    const inicio = Date.now();
     try {
       if (await job.shouldRun(now, parts)) {
         // Dentro de `enUnJob`: el transporte de HubSpot espera lo que pida `Retry-After` (en una ruta, 2 s como máximo).
         const salida = await enUnJob(job.key, () => job.run(now));
         // B-03: la corrida que terminó bien queda anotada (con rezago de hasta 10 min por job).
         // ⚠ Solo si CORRIÓ: el «ok» de un tick que no tomó el turno tapaba el rojo de la corrida
-        // real un minuto después (ver SIN_TURNO en registry.ts).
-        if (salida !== SIN_TURNO) await registrarResultado(job.key, { ok: true, at: now.toISOString() });
+        // real un minuto después (ver SIN_TURNO en registry.ts). El latido de Sentry, igual.
+        if (salida !== SIN_TURNO) {
+          await registrarResultado(job.key, { ok: true, at: now.toISOString() });
+          latido(job.key, "ok", Date.now() - inicio);
+        }
       }
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
@@ -64,6 +71,7 @@ export async function runSchedulerTick(now: Date): Promise<void> {
       Sentry.captureException(err, huella ? { tags: { job: job.key }, fingerprint: huella } : { tags: { job: job.key } });
       // B-03: el fallo queda anotado SIEMPRE — registrarResultado nunca lanza.
       await registrarResultado(job.key, { ok: false, error: `${err.name}: ${err.message}`, at: now.toISOString() });
+      latido(job.key, "error", Date.now() - inicio);
     }
   }
 }

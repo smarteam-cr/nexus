@@ -36,6 +36,8 @@ export type Cobertura =
 export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   // ── Los que usan un criterio ───────────────────────────────────────────────
   "app/(shell)/clients/[id]/layout.tsx": { modo: "criterio", criterio: "navegable" },
+  // U8 (2026-10-25): una cuenta con un proyecto activo es una cuenta cuyos correos lee la IA.
+  "lib/comunicaciones/copia-server.ts": { modo: "criterio", criterio: "clasificable" },
   "app/(shell)/clients/[id]/page.tsx": { modo: "criterio", criterio: "navegable" },
   // «Agregar una reunión» (etapa 4f): los proyectos que se pueden elegir son los que se ven en la ficha.
   "lib/sessions/reunion-a-mano-server.ts": { modo: "criterio", criterio: "navegable" },
@@ -253,6 +255,13 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "criterio de alcance sería el bug: un hermano INACTIVO —o uno que el criterio esconda por " +
       "cualquier motivo— quedaría igual apuntando a una fila muerta, que es exactamente lo que " +
       "este barrido viene a impedir. La búsqueda es por referencia, no por alcance.",
+  },
+  "lib/hubspot/fusiones-server.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: busca qué proyecto ACTIVO de Nexus guarda un id de HubSpot que se fusionó " +
+      "(U9), para decir cuál hay que reapuntar. La búsqueda es por referencia (el id viejo), no por alcance: un criterio " +
+      "escondería justo el proyecto que hay que arreglar.",
   },
   "lib/hubspot/empresas-con-proyecto.ts": {
     modo: "exento",

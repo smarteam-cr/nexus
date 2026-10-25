@@ -109,6 +109,16 @@ const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
   "comunicaciones-hubspot": (env) => (copiaPrendida(env) ? null : MOTIVO_COPIA_APAGADA),
   "tareas-hubspot": (env) =>
     env.TAREAS_HUBSPOT_ENABLED === "0" ? "Apagado a propósito: TAREAS_HUBSPOT_ENABLED=0 en el .env del servidor." : null,
+  /* Los leads, la sincronización diaria de los proyectos y el vigía de los jobs (2026-10-25: B3, U10 y U24). Prendidos
+     por defecto: solo se apagan a propósito. */
+  "hubspot-leads": (env) =>
+    env.HUBSPOT_LEADS_ENABLED === "0" ? "Apagado a propósito: HUBSPOT_LEADS_ENABLED=0 en el .env del servidor." : null,
+  "hubspot-proyectos": (env) =>
+    env.HUBSPOT_PROYECTOS_JOB_ENABLED === "0"
+      ? "Apagado a propósito: HUBSPOT_PROYECTOS_JOB_ENABLED=0 en el .env del servidor. Los proyectos se copian al abrir la ficha."
+      : null,
+  "jobs-vigia": (env) =>
+    env.JOBS_VIGIA_ENABLED === "0" ? "Apagado a propósito: JOBS_VIGIA_ENABLED=0 en el .env del servidor. Sentry Crons sigue avisando." : null,
   /* El cobro solo de lo pagado y conciliado en Odoo y Mercury (2026-10-18, decisión de Elías). Prendido por defecto: se
      apaga a propósito, o porque este servidor no tiene ninguna de las dos copias (sin ellas no hay nada que cobrar). */
   "lo-pagado-daily": (env) => {

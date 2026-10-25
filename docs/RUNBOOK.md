@@ -203,6 +203,8 @@ Activación 100% por env — sin las vars, cero cambio de comportamiento:
 - Solo errores (`tracesSampleRate: 0`) — sin performance ni replay.
 - Smoke test post-activación: forzar un error (p.ej. URL de API inexistente
   desde la UI) y verificar que aparece en el proyecto de Sentry.
+- **Crons** (U24, 2026-10-25): los jobs con cadencia mandan su latido; la alerta de un job que dejó de correr se
+  configura en Sentry (ver «Un job que deja de correr»).
 
 ## Incidente de memoria o CPU (el contenedor se congela)
 
@@ -297,6 +299,11 @@ toma el turno del día no anota nada, así que un rojo queda rojo hasta la corri
 | `tareas-sprint` | cada tick (con 10 minutos de espera por proceso) | — | las reuniones de sprint de cada equipo (`lib/tareas/fuentes-server.ts`): mira las series que configuró quien lidera cada sprint y pide la lectura de cada reunión nueva que terminó hace entre 15 minutos y 24 horas. Lee lo que ya sincronizó Meet; nunca corre la sync. La misma mirada corre al abrir Tareas. Sin nada que pedir no anota |
 | `contactos-y-tickets` | cada hora de 6:00 a 20:00 CR, todos los días | — | copia los contactos y los tickets de HubSpot de las empresas de Nexus (clientes y prospectos con su empresa de HubSpot) a `ContactoDeHubspot` y `TicketDeHubspot` (`lib/contactos/copia-server.ts`). Solo lee HubSpot. Nunca borra: lo que la empresa deja de tener asociado queda `vigente = false`, y solo en un cliente que se leyó entero. Sin permiso (403), esa mitad no se toca. Un turno por hora; con el candado tomado, suelta el turno y reintenta. Después reintenta las notas de la cuenta que quedaron sin escribir en HubSpot (`lib/notas/escritura-server.ts`, hasta 25 por corrida y 5 intentos cada una). Carga inicial: `scripts/sync-contactos-y-tickets.ts` (simulacro primero) |
 | `comunicaciones-hubspot` | cada hora de 6:00 a 20:00 CR, todos los días | `COMUNICACIONES_HUBSPOT_ENABLED` ≠ `0` (prendido por defecto) y el SQL `2026-10-18-comunicaciones-de-hubspot.sql` | copia los correos, las notas y las llamadas de HubSpot de las empresas de Nexus (clientes y prospectos) y de sus contactos a `ComunicacionDeHubspot` (`lib/comunicaciones/copia-server.ts`), por la búsqueda de lo modificado y las asociaciones en lote, 120 días. Solo lee HubSpot. Una comunicación es de UN cliente: la de dos no se guarda. Nunca borra (`vigente = false`). Sin el permiso de correos, los correos dicen «sin permiso» y sigue con lo demás. Después, si queda presupuesto automático y `COMPROMISOS_DE_CORREOS_ENABLED` ≠ `0`, lee los compromisos de hasta 10 correos enviados (Haiku 4.5) y los deja como propuestas de tarea (`lib/comunicaciones/compromisos-server.ts`). Un turno por hora; con el candado tomado, suelta el turno. Carga inicial: `scripts/sync-comunicaciones-de-hubspot.ts` (simulacro primero). Ver «Los correos, las notas y las llamadas de HubSpot» |
+| `hubspot-eventos` | cada tick en que hay avisos pendientes | el SQL `2026-10-25-hubspot-contexto.sql` | U10: procesa los avisos de HubSpot que guardó `POST /api/hubspot/webhooks` (`EventoDeHubspot`, `lib/hubspot/eventos-server.ts`). Una fusión va a `FusionDeHubspot`; una empresa de Nexus que cambió sincroniza sus proyectos (la sincronización de la ficha, hasta 3 empresas por tick; el aviso queda procesado solo si la sincronización corrió sin errores; las empresas y las fusiones se leen aparte, primero); un contacto o un ticket adelanta `contactos-y-tickets`, y un negocio, `negocios-abiertos` (como mucho UNA copia adelantada por tick, una cada 20 minutos por tipo y solo de 6:00 a 20:00 CR; una que falla anota su hora igual y no se reintenta cada minuto; la que termina da por hechos todos los avisos de su tipo que llegaron antes). Si el encargado de un proyecto cambió en HubSpot, la sincronización hace el pase de cuenta, que reescribe allá el siguiente paso (lo mismo que al abrir la ficha). El aviso nunca decide de quién es nada. Sin pendientes no anota. Un aviso que falla 5 veces queda `error` y ese tick el job FALLA (rojo + Sentry). Ver «Los avisos de HubSpot» |
+| `hubspot-fusiones` | ≥ 6:00 CR, una vez al día | el SQL `2026-10-25-hubspot-contexto.sql` | De paso borra los avisos de HubSpot procesados o ignorados de hace más de 30 días. U9: busca en HubSpot los registros que absorbieron a otros (`hs_merged_object_ids`: empresas, contactos, negocios, proyectos y tickets) y guarda los pares en `FusionDeHubspot` y el informe en la fila `hubspot-fusiones-informe` (`lib/hubspot/fusiones-server.ts`). Solo lee HubSpot y NO reapunta nada. INV54 da rojo si una ficha guarda una empresa absorbida. Ver «Las fusiones de HubSpot» |
+| `hubspot-leads` | cada hora de 6:00 a 20:00 CR, todos los días | `HUBSPOT_LEADS_ENABLED` ≠ `0` (prendido por defecto) y el SQL `2026-10-25-hubspot-contexto.sql` | B3 etapa 1: copia los leads de HubSpot de las empresas de Nexus y de sus contactos a `LeadDeHubspot` (`lib/leads/copia-server.ts`): nombre, etapa, origen, dueño, contacto principal y fechas. Solo lee HubSpot. Un lead es de UN cliente (la regla de las comunicaciones); el de dos no se guarda. Nunca borra (`vigente = false`). Carga inicial: `scripts/sync-leads-de-hubspot.ts` (simulacro primero) |
+| `hubspot-proyectos` | desde las 6:00 CR, una pasada por día en tandas de 20 empresas por minuto (avance en la fila `hubspot-proyectos-avance`) | `HUBSPOT_PROYECTOS_JOB_ENABLED` ≠ `0` (prendido por defecto) | U10: la sincronización de los proyectos (0-970) de cada cliente con su empresa de HubSpot, la misma de la ficha (`syncProjectsForClient`, con su cooldown, su mutex y su piso). El proyecto no tiene avisos de HubSpot: hasta el 2026-10-25 solo se copiaba al abrir la ficha. Si nace un proyecto, se reclasifican las reuniones de ese cliente (cuesta lo mismo que al abrir la ficha). FALLA si falló en más de la mitad de las empresas |
+| `jobs-vigia` | cada hora | `JOBS_VIGIA_ENABLED` ≠ `0` (prendido por defecto) | U24: si un job con cadencia (`lib/jobs/cadencias.ts`) que ya corrió alguna vez lleva más de lo esperado sin anotar una corrida, el vigía FALLA con la lista: rojo en Integraciones, Sentry y «Para ti» de quien ve el sistema. Un job apagado a propósito no cuenta. Ver «Un job que deja de correr» |
 | `indice-de-reuniones` | cada hora, todos los días | — | parte en turnos las transcripciones de las reuniones con clientes y prospectos de los últimos 180 días que todavía no se partieron o cambiaron (`lib/busqueda/indexar-server.ts`), de a 60, para la búsqueda en las reuniones y el resumen antes de cada reunión. Solo escribe `TurnoDeReunion` y `ReunionIndexada`. Carga inicial: `scripts/indexar-reuniones.ts` (simulacro primero) |
 | `negocios-abiertos` | cada hora de 6:00 a 20:00 CR, todos los días | — | copia los negocios ABIERTOS de los tres pipelines de venta propia a `NegocioAbierto` (dueño, empresa, fecha de cierre, monto, probabilidad, siguiente paso y actividad de HubSpot) y el dueño de cada empresa de Nexus a `Client.hubspotOwnerEmail`. «Para ti» de Ventas sale de esta copia. Después copia también las metas comerciales de HubSpot (`MetaComercial`, solo lectura; si fallan, no tumba la corrida). Lee además el siguiente paso de cada equipo (`siguiente_paso_*`) de los negocios y las empresas: lo que alguien escribió en HubSpot entra como tarea del sprint de ese equipo (desde el 2026-10-16 el siguiente paso es una tarea). Lo único que escribe en HubSpot es el siguiente paso: el de las cuentas cuyas tareas cambiaron en las últimas dos horas (hasta 40 cuentas) y lo que quedó sin escribirse (hasta 25 por corrida, 5 intentos cada uno; `lib/siguiente-paso/escritura-server.ts`). Un turno por hora; si otra corrida tiene el candado o la búsqueda trae menos de la mitad de lo conocido, suelta el turno y reintenta. Carga inicial: `scripts/sync-negocios-abiertos.ts` (simulacro primero) |
 | `odoo-espejo-daily` | cada hora de 6:00 a 19:00 CR, todos los días (desde el 2026-10-21; antes una vez al día). Pasadas las 19 corre una sola vez más si el día no tuvo ninguna | `ODOO_PASSWORD` (contraseña o clave de API), `ODOO_LOGIN` si la clave no es de `direct`, y `ODOO_SYNC_ENABLED` ≠ `0` | espeja las facturas de Odoo (Nexus solo lee). Si la corrida falla, el job FALLA (rojo + Sentry); un rechazo de credenciales o una corrida parcial retiene **el día entero**, no solo la hora (`lastRunDateKey` = `AAAA-MM-DD·retenido`): 13 intentos por día superarían el bloqueo por IP de Odoo, que salta a los 10 (ver «El espejo de Odoo no corre»). Un fallo de red suelta la hora y reintenta en el tick siguiente. INV31 da rojo si la última corrida buena tiene más de 20 h |
@@ -311,7 +318,7 @@ toma el turno del día no anota nada, así que un rojo queda rojo hasta la corri
 | `ia-lotes` | cada tick (manda cada 5 min, mira los lotes cada 3) | el SQL `2026-10-18-gasto-de-ia.sql` | los pedidos a Claude que van por la API Batch, a mitad de precio (`lib/ai/lotes-server.ts`, tabla `PedidoEnLote`): hoy, el barrido del vigía para los proyectos que entran solo por riesgo. Junta los pendientes y los manda en un lote si queda presupuesto automático; cuando el lote termina, anota cada llamada en `LlmCall` con `lote = true` y le pasa la respuesta a su manejador. Un pedido sin respuesta en 26 h queda vencido. Una respuesta que no se pudo aplicar, o un vencido, hace FALLAR el job (rojo + Sentry). Volver atrás: `VIGIA_BARRIDO_POR_LOTE = false` en `lib/ai/ahorro.ts` |
 | `titulos-cortos` | cada 10 minutos, todos los días | el SQL `2026-10-20-titulo-corto-de-la-tarea.sql` | el nombre corto de las tareas abiertas que no lo tienen o cuyo título cambió (`lib/tareas/ia/titulo-corto-server.ts`), de a 40 por pedido a Haiku y como mucho 5 pedidos por corrida; con eso «Para ti» y el calendario las nombran «Cayalá – Enviar propuesta a Marta \| Espacio interno». Escribe solo `Tarea.tituloCorto` y `tituloCortoDe` con SQL crudo (no toca `updatedAt` ni la `version`, para no despertar la sincronización con HubSpot) y deja un `AgentRun` por pedido. Sin nada que nombrar no llama a Claude; sin presupuesto automático espera; sin el SQL avisa en el log y no hace nada |
 | `lo-pagado-daily` | cada hora de 7:00 a 19:00 CR (desde el 2026-10-21), después de las dos copias de esa hora (van antes en `allJobs()`, en el mismo tick); espera a una copia que no corrió bien hoy hasta las 10:00. También corre cuando alguien aprieta «Actualizar» en Conciliación, Cobranza › Odoo, Cobranza › Mercury, Integraciones o el punto de equilibrio, con el mismo candado (`lo-pagado-candado`, vence a los 10 minutos): nunca dos a la vez | `COBRO_SOLO_ENABLED` ≠ `0` y `ODOO_PASSWORD` o `MERCURY_API_TOKEN` | cobra solo lo que Odoo (`paid`) y Mercury (`Paid`, con su entrada de plata atada por el nombre) dan por pagado y conciliado con el banco, con el día real del pago, firmado `sistema:odoo` o `sistema:mercury` y con su bitácora (`lib/cobranza/libro`). Lo que no es seguro queda en Conciliación › «Lo pagado» con su porqué. FALLA (rojo + Sentry) si una copia no corrió bien hoy, si Odoo no dijo el día de los pagos o si una cuota no se pudo escribir; retiene esa hora y la siguiente vuelve a mirar (ver «Lo pagado no se cobró solo») |
-| `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 37 invariantes solo-base (`lib/invariantes/`, B-07; INV38–43 son de Tareas internas; INV44, la lectura de cada reunión; INV45, los hechos de las reuniones; INV46, los pedidos fuera de alcance de una reunión de otro cliente; INV47, ninguna reunión de los últimos 14 días con texto y gente de fuera sin empresa más de 48 horas (no bloquea hasta su primer verde); INV49, que la última copia buena de Google Meet tenga menos de una hora); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
+| `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 38 invariantes solo-base (`lib/invariantes/`, B-07; INV38–43 son de Tareas internas; INV44, la lectura de cada reunión; INV45, los hechos de las reuniones; INV46, los pedidos fuera de alcance de una reunión de otro cliente; INV47, ninguna reunión de los últimos 14 días con texto y gente de fuera sin empresa más de 48 horas (no bloquea hasta su primer verde); INV49, que la última copia buena de Google Meet tenga menos de una hora; INV54, que ninguna ficha apunte a una empresa de HubSpot fusionada); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
 
 ⚠ Sin `CS_WATCHDOG_ENABLED` y `COBRANZA_CRON_ENABLED` en el `.env` cinco de estos no corren, y sin
 `ODOO_PASSWORD` tampoco el espejo. Hasta el 2026-09-12 el semáforo los pintaba en gris («nunca
@@ -509,6 +516,60 @@ timeline de HubSpot, en el contexto de la cuenta»; plan en docs/correos-en-el-c
    producción: la hace una persona). Una lectura colgada más de 15 minutos vuelve sola a la cola.
 7. **El punto de partida** vive en `CronJobState` («comunicaciones-hubspot-cursor», ms por tipo). Para releer los 120
    días: borrar esa fila (la corrida siguiente vuelve a leer todo; no duplica nada: el único es por tipo e id de HubSpot).
+8. **Desde el 2026-10-25 (U7 y U8)** también entran las reuniones de HubSpot con el resumen de Notetaker (tipo
+   `reunion`) y el resumen de las llamadas. La que ya llega por Meet con texto no se guarda (se cruza por el evento de
+   Calendar, el código de Meet o la misma cuenta y hora: `lib/comunicaciones/reuniones.ts`). Necesita el SQL
+   `2026-10-25-hubspot-contexto.sql`. La IA lee los compromisos solo de las cuentas con un proyecto activo o con su
+   preventa trabajada en los últimos 90 días; los demás correos se copian igual, y los enviados de 14 días vuelven a la
+   cola el día en que su cuenta se activa. Una reunión de HubSpot cuya reunión de Meet es de OTRO cliente no se guarda
+   (invariante 1). El simulacro dice la COBERTURA de los correos (la meta de U8: 95 %; medida el 2026-10-25: 98,4 %). La
+   transcripción de HubSpot no sale por la API (404). La primera corrida después del deploy relee las llamadas y las
+   reuniones de 120 días sola (el punto de partida tiene versión: la 2 olvida el de las llamadas una vez), sin pasos a mano.
+
+### Los avisos de HubSpot (U10, 2026-10-25)
+
+`POST /api/hubspot/webhooks` recibe los avisos de HubSpot (es PÚBLICA: la protege la firma v3 con `HUBSPOT_CLIENT_SECRET`),
+los guarda en `EventoDeHubspot` y responde enseguida; los procesa el job `hubspot-eventos`. El sondeo de cada hora sigue
+siendo la red: sin avisos, todo funciona como antes.
+
+1. **Antes del deploy**: el SQL `2026-10-25-hubspot-contexto.sql` (con el resto del paso). Sin él, la ruta responde 503 y
+   HubSpot reintenta durante 24 horas.
+2. **Lo configura Elías en la app de HubSpot** (developers.hubspot.com › la app de Nexus › Webhooks): la URL
+   `https://nexus.smarteamcr.com/api/hubspot/webhooks` y las suscripciones de empresa, contacto, negocio y ticket:
+   creación, borrado, fusión, cambio de asociación y cambio de propiedad (para empresa: `name`, `domain`,
+   `hubspot_owner_id`, `lifecyclestage`; para negocio: `dealstage`, `amount`, `closedate`, `hubspot_owner_id`; para
+   contacto: `email`, `jobtitle`, `hubspot_owner_id`; para ticket: `hs_pipeline_stage`, `hubspot_owner_id`). La app es
+   pública: si HubSpot pide pasarla a la plataforma nueva de desarrolladores para los webhooks, eso es U13/U14.
+3. **Comprobar**: en la app de HubSpot, «Probar» un aviso; en la base, `SELECT estado, count(*) FROM "EventoDeHubspot" GROUP BY 1`.
+   Un aviso con la firma mal da 401 y lo dice el log (`[hubspot/webhooks] aviso rechazado: …`). La causa más común: el
+   `APP_URL` del `.env` del servidor no es `https://nexus.smarteamcr.com` (la firma incluye la URL).
+4. **Un aviso en `error`**: falló 5 veces (la columna `error` dice por qué). Para reintentarlo: `estado = 'pendiente'` e
+   `intentos = 0` (escritura a producción: la hace una persona).
+
+### Las fusiones de HubSpot (U9, 2026-10-25)
+
+El job `hubspot-fusiones` guarda cada día los pares absorbido → sobreviviente (`FusionDeHubspot`) y el informe de lo que
+en Nexus apunta a un id viejo. No reapunta nada. INV54 da rojo mientras una ficha guarde una empresa absorbida.
+
+1. **Ver** (solo lee): `npx tsx scripts/fusiones-de-hubspot.ts`. Medido el 2026-10-25: 79 empresas absorbidas en el
+   portal; en Nexus, **kölbi** (28524677478 → 59772815466) y **«TEC- AE»**, cuya empresa nueva ya es la de «TEC».
+2. **La ficha**: `npx tsx scripts/reapuntar-empresa-fusionada.ts` (simulacro) y después `--apply`. Si la empresa nueva
+   ya es de otra ficha, son la misma empresa: `scripts/merge-duplicate-clients.ts` (ver «Fusionar dos fichas»).
+3. **Los proyectos**: `npx tsx scripts/proyectos-fusionados-en-hubspot.ts` (simulacro) y después `--apply`.
+4. **Los contactos y los tickets** se arreglan solos: la copia de cada hora sigue las asociaciones.
+
+### Un job que deja de correr (U24, 2026-10-25)
+
+Dos avisos con la misma tabla (`lib/jobs/cadencias.ts`):
+
+1. **Sentry Crons**: cada corrida de un job con cadencia manda su latido (`lib/jobs/latido.ts`); el monitor de cada job
+   (`nexus-<job>`) lo crea el primer latido. Lo configura Elías: con `SENTRY_DSN` en el `.env` del servidor, en Sentry ›
+   Crons › Alerts, una alerta para los monitores `nexus-*` que le llegue a él (por correo). Sin DSN, no pasa nada.
+2. **El job `jobs-vigia`**: cada hora mira la última corrida de cada job con cadencia. Uno que ya corrió y lleva más de
+   lo esperado sin correr pone al vigía en rojo con la lista, y eso llega a «Para ti» (frente del sistema) y a Sentry.
+   Un job que nunca corrió en esta base no cuenta (ese caso lo muestra Integraciones como «nunca corrió»).
+
+Sumar un job a la vigilancia: una línea en `CADENCIA_DE_JOB`, con su horario y cuántas horas de silencio son normales.
 
 ### Prender la copia diaria de Éxito del cliente
 

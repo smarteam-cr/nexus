@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   clienteDeLaComunicacion,
+  cuentaQueLeeLaIA,
+  tiposQueSeReleen,
+  VERSION_DEL_CURSOR,
   direccionDelCorreo,
   huellaDe,
   limpiarTexto,
@@ -139,6 +142,30 @@ describe("¿la IA lee sus compromisos? (el filtro va antes, sin gastar)", () => 
 
   it("una minuta con próximos pasos, sin día de la semana → lee", () => {
     expect(motivoDeLaLectura({ ...base, asunto: "Resumen", texto: "Comparto los próximos pasos acordados: enviar la base de contactos y revisar el pipeline." }, ahora)).toBe("lee");
+  });
+
+  it("U8 · de una cuenta sin uso en Nexus → no (se copia igual); sin el dato, como antes", () => {
+    expect(motivoDeLaLectura(base, ahora, { cuentaActiva: false })).toBe("cuenta_sin_uso");
+    expect(motivoDeLaLectura(base, ahora, { cuentaActiva: true })).toBe("lee");
+    expect(motivoDeLaLectura({ ...base, tipo: "reunion" }, ahora, { cuentaActiva: true })).toBe("no_es_correo");
+  });
+});
+
+describe("U7 · el punto de partida con versión", () => {
+  it("⭐ el guardado sin versión (el de antes) relee las llamadas y las reuniones UNA vez; el de la versión actual, nada", () => {
+    expect([...tiposQueSeReleen(1)].sort()).toEqual(["llamada", "reunion"]);
+    expect([...tiposQueSeReleen(VERSION_DEL_CURSOR)]).toEqual([]);
+  });
+});
+
+describe("U8 · ¿la IA lee los correos de esta cuenta?", () => {
+  it("con un proyecto activo, o trabajada en Nexus en los últimos 90 días", () => {
+    expect(cuentaQueLeeLaIA({ proyectosActivos: 1, ultimaExploracionAt: null }, ahora)).toBe(true);
+    expect(cuentaQueLeeLaIA({ proyectosActivos: 0, ultimaExploracionAt: new Date("2026-09-01T00:00:00Z") }, ahora)).toBe(true);
+  });
+  it("un prospecto que solo está en HubSpot, o con la preventa vieja, no", () => {
+    expect(cuentaQueLeeLaIA({ proyectosActivos: 0, ultimaExploracionAt: null }, ahora)).toBe(false);
+    expect(cuentaQueLeeLaIA({ proyectosActivos: 0, ultimaExploracionAt: new Date("2026-06-01T00:00:00Z") }, ahora)).toBe(false);
   });
 });
 

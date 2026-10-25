@@ -113,7 +113,7 @@ const TITULOS: Record<ClaveDeParte, string> = {
   personas: "Personas del cliente en HubSpot (INTERNO)",
   tickets: "Tickets abiertos en HubSpot (INTERNO)",
   notasDelEquipo: "Notas del equipo: WhatsApp, llamadas, correos (INTERNO)",
-  comunicaciones: "Comunicaciones con el cliente en HubSpot: correos, notas y llamadas (INTERNO)",
+  comunicaciones: "Comunicaciones con el cliente en HubSpot: correos, notas, llamadas y reuniones (INTERNO)",
   compromisosDeLaCuenta: "Compromisos abiertos de la cuenta, sin proyecto (INTERNO)",
 };
 

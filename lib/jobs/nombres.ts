@@ -42,6 +42,11 @@ export const NOMBRE_DE_JOB: Readonly<Record<string, string>> = {
   "invariants-daily": "La revisión diaria de la base",
   "ia-lotes": "Los pedidos a Claude por lote",
   "titulos-cortos": "El nombre corto de las tareas",
+  "hubspot-eventos": "Los avisos de HubSpot",
+  "hubspot-fusiones": "La búsqueda de las fusiones de HubSpot",
+  "hubspot-leads": "La copia de los leads de HubSpot",
+  "hubspot-proyectos": "La sincronización diaria de los proyectos de HubSpot",
+  "jobs-vigia": "El vigía de los jobs que dejan de correr",
 };
 
 /** El nombre legible del job; si no lo tiene, su clave (nunca se descarta en silencio). */

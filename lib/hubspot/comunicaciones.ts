@@ -8,20 +8,33 @@
  * (medido el 2026-10-18: 1.631 notas y 306 llamadas en 120 días), y las asociaciones v4 en lote dicen de quién es cada
  * una. Lo que no es de un cliente de Nexus se descarta después, sin guardarse.
  *
+ * U7 (2026-10-25): también las REUNIONES de HubSpot con el resumen de Notetaker (la búsqueda pide solo las que tienen
+ * resumen), y de las llamadas el resumen además del cuerpo (el 89 % de las llamadas no trae cuerpo y el 84 % trae resumen,
+ * medido el 2026-10-24). De las dos se piden los enlaces que dicen si ya llegan por Meet (lib/comunicaciones/reuniones.ts).
+ * La transcripción de HubSpot NO sale por la API (404 en los dos endpoints, medido el 2026-10-24): solo el resumen.
+ *
  * ⛔ «No se pudo leer» no es «no hay»: un error a mitad de la búsqueda vuelve como `completa: false`, y la copia no mueve
  * el punto de partida. Un 403 es `sinPermiso` (los correos, sin `sales-email-read`).
  */
 import type { Client as HsClient } from "./sdk";
 
-/** correo | nota | llamada (los mismos valores que lib/comunicaciones/reglas.ts: la integración no importa del módulo). */
-export type TipoDeComunicacion = "correo" | "nota" | "llamada";
+/** correo | nota | llamada | reunion (los mismos valores que lib/comunicaciones/reglas.ts: la integración no importa del módulo). */
+export type TipoDeComunicacion = "correo" | "nota" | "llamada" | "reunion";
 
 /** Lo que responde un pedido. Van directo por `hs.apiRequest`: el transporte (lib/hubspot/client.ts) ya renueva el
  *  token ante un 401 y espera ante un 429. */
 type Respuesta = Awaited<ReturnType<HsClient["apiRequest"]>>;
 
 /** El objeto de HubSpot de cada tipo y las propiedades que se piden. */
-export const OBJETO_DEL_TIPO: Record<TipoDeComunicacion, { objeto: "emails" | "notes" | "calls"; propiedades: readonly string[] }> = {
+export const OBJETO_DEL_TIPO: Record<
+  TipoDeComunicacion,
+  {
+    objeto: "emails" | "notes" | "calls" | "meetings";
+    propiedades: readonly string[];
+    /** Solo las que tienen ALGUNA de estas propiedades (un grupo de filtros por cada una: HubSpot los une con «o»). */
+    conAlguna?: readonly string[];
+  }
+> = {
   correo: {
     objeto: "emails",
     propiedades: ["hs_timestamp", "hs_lastmodifieddate", "hs_email_direction", "hs_email_subject", "hs_email_text", "hs_email_html", "hs_email_from_email", "hubspot_owner_id"],
@@ -29,7 +42,18 @@ export const OBJETO_DEL_TIPO: Record<TipoDeComunicacion, { objeto: "emails" | "n
   nota: { objeto: "notes", propiedades: ["hs_timestamp", "hs_lastmodifieddate", "hs_note_body", "hubspot_owner_id"] },
   llamada: {
     objeto: "calls",
-    propiedades: ["hs_timestamp", "hs_lastmodifieddate", "hs_call_title", "hs_call_body", "hs_call_direction", "hubspot_owner_id"],
+    propiedades: [
+      "hs_timestamp", "hs_lastmodifieddate", "hs_call_title", "hs_call_body", "hs_call_direction", "hubspot_owner_id",
+      "hs_call_summary", "hs_ai_summary", "hs_hosted_video_conference_url",
+    ],
+  },
+  reunion: {
+    objeto: "meetings",
+    propiedades: [
+      "hs_timestamp", "hs_lastmodifieddate", "hs_meeting_title", "hs_meeting_summary", "hs_ai_summary", "hs_meeting_start_time",
+      "hs_meeting_external_url", "hs_video_conference_url", "hs_meeting_location", "hubspot_owner_id",
+    ],
+    conAlguna: ["hs_meeting_summary", "hs_ai_summary"],
   },
 };
 
@@ -62,22 +86,21 @@ export async function buscarModificadas(
   desdeOcurrio: number,
   maxPaginas = 25,
 ): Promise<Busqueda> {
-  const { objeto, propiedades } = OBJETO_DEL_TIPO[tipo];
+  const { objeto, propiedades, conAlguna } = OBJETO_DEL_TIPO[tipo];
   const out: Busqueda = { sinPermiso: false, completa: false, registros: [], ultimaModificacion: null };
   let desde = desdeModificacion;
   let after: string | undefined;
   let enEstaConsulta = 0;
   const vistos = new Set<string>();
   for (let pagina = 0; pagina < maxPaginas; pagina++) {
+    const filtros = [
+      { propertyName: "hs_lastmodifieddate", operator: "GTE", value: String(desde) },
+      { propertyName: "hs_timestamp", operator: "GTE", value: String(desdeOcurrio) },
+    ];
     const body = {
-      filterGroups: [
-        {
-          filters: [
-            { propertyName: "hs_lastmodifieddate", operator: "GTE", value: String(desde) },
-            { propertyName: "hs_timestamp", operator: "GTE", value: String(desdeOcurrio) },
-          ],
-        },
-      ],
+      filterGroups: conAlguna?.length
+        ? conAlguna.map((p) => ({ filters: [...filtros, { propertyName: p, operator: "HAS_PROPERTY" }] }))
+        : [{ filters: filtros }],
       sorts: [{ propertyName: "hs_lastmodifieddate", direction: "ASCENDING" }],
       properties: propiedades,
       limit: POR_PAGINA,
