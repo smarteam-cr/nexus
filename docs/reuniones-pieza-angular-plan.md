@@ -95,7 +95,8 @@ la real; U3 lo corrige con la hora de la conferencia. De ahí nace T9: que la pe
    app, con 20 minutos de espera). Antes estaba en H1 y en P5.
 7. **T7 · Quiénes de Smarteam estuvieron:** cada reunión guarda sus participantes del equipo con su papel (organizó o
    asistió). Hoy se guardan los invitados y `participantes.ts` ya cuenta los del equipo; quién estuvo sale de la API de
-   Meet. *Depende de:* U3.
+   Meet. *Depende de:* U3. ✓ Construido el 2026-10-25 con U3: `lib/google/equipo-en-la-reunion.ts` (quién organizó y quién
+   estuvo, sin minutos); la asistencia la llena `lib/google/conferencias.ts` (`docs/integracion-google-plan.md` › U3).
 8. **T8 · Encontrar cualquier reunión de la empresa:** el buscador muestra también las reuniones de la empresa en las que
    la persona no estuvo, y las que quedaron en otra empresa con el mismo dominio, con «Mover a esta empresa». Va junto con
    la asociación automática de K5.

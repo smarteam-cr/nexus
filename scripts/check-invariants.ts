@@ -18,7 +18,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
   type Invariante,
 } from "@/lib/invariantes";
-import { INV49 } from "@/lib/invariantes";
+import { INV49, INV53 } from "@/lib/invariantes";
 
 /**
  * Imprime un invariante extraído a `lib/invariantes/` exactamente como se imprimía acá adentro
@@ -812,6 +812,9 @@ async function main(): Promise<number> {
 
   // ── Inv 49 → lib/invariantes/google.ts (2026-10-25, U1: la última copia buena de Google Meet tiene menos de una hora) ──
   violations += await reportar(INV49, prisma);
+
+  // ── Inv 53 → lib/invariantes/google.ts (2026-10-25, U3: ninguna reunión de 3 a 25 días sin revisar su conferencia de Meet) ──
+  violations += await reportar(INV53, prisma);
 
   return violations;
 }

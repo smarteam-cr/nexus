@@ -308,6 +308,15 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   },
   "lib/google/meet-sync.ts": { clase: "plomeria", motivo: "Ingest desde Google. Su propio techo (`timeMax`) es lo que acota qué entra." },
   "lib/google/meet-enrichment.ts": { clase: "plomeria", motivo: "Lectura del documento de Meet. Ya filtra `date < now - 1h` (Tanda R)." },
+  "lib/google/conferencias.ts": {
+    clase: "plomeria",
+    motivo: "U3: le pregunta a la API de Meet por las reuniones que ya terminaron (su consulta exige el fin del evento + 10 min) y escribe la asistencia y las frases. No arma contexto.",
+  },
+  "lib/google/equipo-en-la-reunion.ts": {
+    clase: "plomeria",
+    motivo: "T7: hidrata quién del equipo estuvo en reuniones ya elegidas por el chokepoint (recibe sus ids). No elige reuniones.",
+  },
+  "lib/invariantes/google.ts": { clase: "plomeria", motivo: "INV53: cuenta reuniones de 3 a 25 días sin revisar su conferencia. Es un control, no le habla a un modelo." },
   "lib/sessions/reclassify.ts": { clase: "plomeria", motivo: "Re-atribuye dueño. La fecha no cambia de quién es una reunión." },
   "lib/sessions/resolve-client.ts": { clase: "plomeria", motivo: "La cascada de dueño, sobre el corpus entero a propósito." },
   "lib/sessions/reunion-a-mano-server.ts": {

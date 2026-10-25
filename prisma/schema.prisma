@@ -2504,6 +2504,18 @@ model FirefliesSession {
   // la fila: la cancelada con texto, minuta, hechos o tareas queda para revisar; la que no tiene nada sale de las
   // lecturas (lib/sessions/canceladas.ts). null = vigente (si el evento vuelve, la sync la desmarca).
   canceladaEn          DateTime?
+  // U3 (2026-10-25): lo que dice la API de Meet de la conferencia de esta reunión. Lo escribe SOLO lib/google/conferencias.ts.
+  // null = todavía no se miró. SIN_ACCESO = la organizó alguien de fuera y nadie del equipo entró: Meet no dice nada.
+  estadoDeConferencia  EstadoDeConferencia?
+  // La hora REAL de la conferencia (la primera entrada y la última salida). No pisa `date`, que es la del evento.
+  conferenciaInicio    DateTime?
+  conferenciaFin       DateTime?
+  // Cuándo se le preguntó a Meet por última vez, y cuándo ya no quedaba nada que esperar (INV53: antes de los 25 días).
+  conferenciaRevisadaEn DateTime?
+  conferenciaCerradaEn DateTime?
+  // Los Docs que Meet dice que generó para esta conferencia: la lectura va a ellos por su id, no por el título.
+  docDeTranscripcionId String?
+  docDeNotasId         String?
   manualClientId       String? // override manual del matching automático de cliente
   // R7 (2026-10-24): llave de verdad. Si la empresa se borra, el override se cae solo (SET NULL).
   manualClient         Client?   @relation("ReunionesAsignadasAMano", fields: [manualClientId], references: [id], onDelete: SetNull)
@@ -2542,6 +2554,7 @@ model FirefliesSession {
   notasParaHubspot      NotaDeLaCuenta[]       @relation("NotasDeLaReunion") // la nota para HubSpot que se sugirió después de la reunión (SET NULL)
   seguimiento           SeguimientoDeReunion?  @relation("SeguimientoDeLaReunion") // ficha G: agenda escrita, correo y próxima reunión (CASCADE)
   invitados             ParticipanteDeReunion[] @relation("ParticipantesDeLaReunion") // U1: cada invitado con su respuesta; U3 suma la asistencia (CASCADE)
+  frases                FraseDeReunion[]       @relation("FrasesDeLaReunion") // U3: la transcripción por frases de la API de Meet (CASCADE)
 
   // Índices para los queries principales:
   //   /sessions: findMany({ where: { date: { lt: now } }, orderBy: { date: desc } })
@@ -2575,14 +2588,47 @@ model ParticipanteDeReunion {
   esDelEquipo Boolean            @default(false)
   /// null = el calendario no la dijo (el organizador sin fila de invitado).
   respuesta   RespuestaAlEvento?
+  /// U3: la primera entrada, la última salida y los minutos adentro, de la API de Meet. ⚠ Google pide no usar la
+  /// asistencia para medir desempeño: los minutos no van a ninguna evaluación.
   entro       DateTime?
   salio       DateTime?
   minutos     Int?
+  /// U3: el nombre con el que entró a Meet y su id ahí (`users/{id}` o el del participante).
+  nombre      String?
+  idEnMeet    String?
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
   @@unique([sessionId, correo])
   @@index([correo])
+}
+
+/// U3 (2026-10-25) · Qué dice la API de Meet de la conferencia de una reunión. SQL: scripts/sql/2026-10-25-google-meet-api.sql.
+enum EstadoDeConferencia {
+  OCURRIO
+  NO_OCURRIO
+  SIN_ACCESO
+}
+
+/// U3 (2026-10-25) · La transcripción por frases de una reunión, copiada de la API de Meet antes de que Google la borre (a
+/// los 30 días): quién habló y cuándo. La escribe SOLO lib/google/conferencias.ts; la lectura de la reunión arma con ella
+/// el texto cuando no había otro (lib/google/meet-enrichment.ts). Se borra en cascada con su reunión. RLS en su SQL.
+model FraseDeReunion {
+  id        String           @id @default(cuid())
+  sessionId String
+  session   FirefliesSession @relation("FrasesDeLaReunion", fields: [sessionId], references: [id], onDelete: Cascade)
+  orden     Int
+  /// El nombre con el que entró a Meet.
+  hablante  String
+  /// Solo si es del equipo (el directorio traduce su id de Google); de los de fuera Meet no da el correo.
+  correo    String?
+  inicio    DateTime
+  fin       DateTime?
+  texto     String           @db.Text
+  idioma    String?
+  createdAt DateTime         @default(now())
+
+  @@unique([sessionId, orden])
 }
 
 /// Ficha G (2026-10-17) · Lo que se hace con UNA reunión después de que ocurre: la agenda que escribió una persona, el

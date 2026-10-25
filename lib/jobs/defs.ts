@@ -30,6 +30,13 @@
  *   - google-meet-sync → la copia de Google Meet (Calendar + Docs) cada 10 minutos desde el fin de la anterior
  *     (lib/google/copia-por-job.ts, U1). Lanza la corrida sin esperarla. Gated por GOOGLE_MEET_SYNC_ENABLED≠0 y las
  *     credenciales de Google; apagado, la copia vuelve a correr al abrir la app.
+ *   - google-meet-conferencias → la revisión de las conferencias de Meet (lib/google/conferencias.ts, U3): si cada reunión
+ *     ocurrió, a qué hora, quiénes entraron y la transcripción por frases (Google la borra a los 30 días). Un tramo de 10
+ *     minutos por proceso; lanza sin esperar. Gated por las credenciales de Google y GOOGLE_MEET_API_ENABLED≠0.
+ *   - google-meet-eventos → los avisos de Meet por Pub/Sub, cada tick (lib/google/eventos-de-meet.ts, U4): si llegó
+ *     alguno, la revisión de las conferencias recientes enseguida. Gated por GOOGLE_MEET_EVENTOS_ENABLED=1.
+ *   - google-meet-suscripciones → crea, renueva y reactiva las suscripciones a esos avisos (duran 7 días), diario ≥ 6:00
+ *     CR. Gated por GOOGLE_MEET_EVENTOS_ENABLED=1.
  *   - seguimiento-reuniones → la lectura de cada reunión con un cliente o un prospecto, por la cola
  *     `LecturaDeReunion` (memoria de la cuenta, etapa 2). Cada tick. Gated por SEGUIMIENTO_REUNIONES_ENABLED≠0.
  *   - rentabilidad-foto-mensual → la foto del margen del mes que cerró (lib/rentabilidad/foto-server.ts), el día 3
@@ -272,6 +279,60 @@ const googleMeetSync: JobDef = {
     const { lanzarCopiaDeMeet } = await import("@/lib/google/copia-por-job");
     lanzarCopiaDeMeet();
     return SIN_TURNO;
+  },
+};
+
+/**
+ * La revisión de las conferencias de Meet (U3, 2026-10-25; lib/google/conferencias-por-job.ts): un tramo de 10 minutos
+ * reclamado en `CronJobState`; LANZA la corrida y vuelve (no la espera adentro). Siempre SIN_TURNO: la corrida anota su
+ * resultado al terminar. No gasta Claude: la reunión que recibe sus frases vuelve a la cola de lectura de siempre
+ * (`google-meet-sync`), con sus reglas.
+ */
+const googleMeetConferencias: JobDef = {
+  key: "google-meet-conferencias",
+  shouldRun: () => encendido("google-meet-conferencias"),
+  run: async (now) => {
+    const { tickDeConferencias } = await import("@/lib/google/conferencias-por-job");
+    await tickDeConferencias(now);
+    return SIN_TURNO;
+  },
+};
+
+/**
+ * Los avisos de Meet por Pub/Sub (U4, 2026-10-25; lib/google/eventos-de-meet.ts), cada tick: leerlos es un POST barato.
+ * Si llegó alguno, la revisión urgente de las conferencias de las últimas 12 horas, lanzada sin esperar.
+ */
+const googleMeetEventos: JobDef = {
+  key: "google-meet-eventos",
+  shouldRun: () => encendido("google-meet-eventos"),
+  run: async () => {
+    const { leerAvisos } = await import("@/lib/google/eventos-de-meet");
+    const avisos = await leerAvisos();
+    if (avisos.length === 0) return SIN_TURNO;
+    const { lanzarRevision } = await import("@/lib/google/conferencias-por-job");
+    const { estado } = lanzarRevision({ urgente: true });
+    console.log(`[jobs/google-meet-eventos] ${avisos.length} aviso(s) de Meet (${[...new Set(avisos.map((a) => a.tipo.split(".").slice(-2).join(".")))].join(", ")}): revisión ${estado}`);
+  },
+};
+
+/**
+ * Las suscripciones a los avisos de Meet (U4): duran 7 días. Una vez por día ≥ 6:00 CR, crea las que faltan, renueva las
+ * que vencen en menos de 2 días y reactiva las suspendidas. Lanza si TODAS fallaron (el permiso quitado, la API
+ * deshabilitada): semáforo rojo y Sentry. Que fallen algunas (una cuenta recién creada) solo se anota en el log.
+ */
+const googleMeetSuscripciones: JobDef = {
+  key: "google-meet-suscripciones",
+  shouldRun: (_now, parts) => encendido("google-meet-suscripciones") && parts.hour >= 6,
+  run: async (now) => {
+    const { dateKey } = (await import("./time")).crDateParts(now);
+    if (!(await claimDateKey("google-meet-suscripciones", dateKey, now))) return SIN_TURNO;
+    const { asegurarSuscripciones } = await import("@/lib/google/eventos-de-meet");
+    const r = await asegurarSuscripciones(now);
+    console.log(
+      `[jobs/google-meet-suscripciones] ${r.personas} personas: ${r.creadas} creadas, ${r.renovadas} renovadas, ${r.reactivadas} reactivadas, ${r.fallaron.length} fallaron`,
+    );
+    for (const f of r.fallaron.slice(0, 5)) console.log(`[jobs/google-meet-suscripciones]   ✗ ${f}`);
+    if (r.personas > 0 && r.fallaron.length === r.personas) throw new Error(`Fallaron las ${r.personas} suscripciones a los avisos de Meet: ${r.fallaron[0]}`);
   },
 };
 
@@ -1015,5 +1076,5 @@ const titulosCortos: JobDef = {
 };
 
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, loPagadoDaily, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleMeetConferencias, googleMeetEventos, googleMeetSuscripciones, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, loPagadoDaily, invariantsDaily];
 }

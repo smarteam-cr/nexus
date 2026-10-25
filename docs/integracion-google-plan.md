@@ -106,25 +106,107 @@ existe, saber si la reunión ocurrió y que transcribir sea lo normal.
      no sale en `getClientSessions`.
    - El código de la reunión solo no evita que un evento movido pise la fecha: eso pide el registro de conferencia de U3
      (INV16 a sigue pendiente de U3).
-2. **U2 · La prueba de un día** (✓ en parte, 2026-10-24: Elías habilitó las APIs, sumó el scope a la delegación de dominio y creó `nexus-meet-eventos` y `nexus-meet-eventos-pull` con sus permisos. Con la cuenta de servicio, impersonando a una persona del equipo, se leyeron 10 conferencias con sus participantes y la transcripción por frases en 8; una tuvo 0 participantes, o sea que no ocurrió. Falta probar una reunión organizada por un cliente y los eventos con delegación de dominio): un script de solo lectura con el scope nuevo, sobre 5 reuniones reales (una organizada por
-   un cliente). Confirma:
-   - el código de la reunión;
-   - el acceso como invitado;
-   - si los eventos aceptan delegación de dominio.
-3. **U3 · La API de Meet:**
-   - un job por organizador interno: las conferencias terminadas, «no ocurrió» cuando no hay registro, y las fuentes de
-     texto en su orden;
-   - la tabla de participantes de U1 (`ParticipanteDeReunion`) con su asistencia;
-   - los turnos con su hora y su persona, en `TurnoDeReunion`, con columnas nuevas y un solo escritor (antes, confirmar
-     las columnas que tiene hoy);
-   - la hora real de la conferencia, en una columna nueva: no pisa `date`, que U1 reescribe cada 10 minutos;
-   - quiénes de Smarteam estuvieron sale de aquí (T7).
-4. **U4 · Enterarse al momento:** la suscripción a los eventos de Meet (conferencia terminada, transcripción y notas
-   listas) por Pub/Sub, leída cada minuto, con su renovación semanal; Calendar con `syncToken`.
-5. **U5 · Las reuniones del cliente y las presenciales:**
-   - **las del cliente:** se prueba si un invitado nuestro puede leerlas; si no, la regla del equipo es que las convoque
-     Smarteam;
-   - **las presenciales:** subir el audio y transcribirlo con Speech-to-Text (T5).
+2. **U2 · La prueba de un día** (✓ 2026-10-25, `scripts/probar-api-de-meet.ts`, solo lectura, sobre las reuniones
+   reales de los últimos 3 y 20 días; antes, el 24 oct, Elías habilitó las APIs, sumó el scope y creó el tema
+   `nexus-meet-eventos` y la suscripción `nexus-meet-eventos-pull`). Lo que dio:
+   - **El código de la reunión sirve:** `space.meeting_code = "abc-defg-hij"` encuentra la conferencia, con su hora real
+     al segundo. Pero el código es el del ESPACIO: una serie semanal trae todas sus conferencias (4 registros en «Custom
+     Agent en HubSpot», 3 en SMATAGRO), y una misma reunión puede tener dos (alguien salió y volvió: 21:53 a 21:55 y
+     21:56 a 23:25). Cada conferencia va a la reunión de ese código más cercana en el tiempo, a menos de 12 horas.
+   - **Una conferencia con 0 participantes no ocurrió:** SMATAGRO tiene conferencias de 15 minutos exactos cada dos
+     semanas, sin nadie adentro.
+   - **Un invitado del equipo sí la lee**, también si la organizó alguien de fuera, cuando alguien del equipo entró
+     (InsiderOne, Atom, Cooby: la conferencia y sus participantes). Si nadie del equipo entró, no ve nada (0 registros y
+     403 en el espacio), así que «no veo nada» no prueba que no ocurrió: queda «sin acceso». En ninguna de las de fuera
+     hubo transcripción, así que no se pudo probar si un invitado lee sus frases.
+   - **Quién entró viene como `users/{id}`, no por correo:** los del equipo se traducen con el directorio; los de fuera
+     quedan con su nombre.
+   - **Las frases llegan por páginas** (`transcriptEntries`, 100 por página: 421 frases en 5 páginas). Una conferencia
+     puede tener dos transcripciones con las mismas frases: se juntan sin repetir.
+   - **La transcripción y las notas dicen su Doc** (`docsDestination`): el de la transcripción es el mismo Doc adjunto al
+     evento; las notas de Gemini (`smartNotes`) ya responden.
+   - **Los eventos de Workspace aceptan la delegación de dominio:** crear la suscripción de una persona
+     (`//cloudidentity.googleapis.com/users/{id}`) pasa la validación (`validateOnly`, no crea nada).
+   - **Pub/Sub:** la cuenta de servicio tiene `pubsub.subscriptions.consume` sobre la suscripción (leer y confirmar),
+     no `get`: alcanza.
+3. **U3 · La API de Meet** (✓ construido el 2026-10-25, rama `claude/n1-google-f5bf33`; falta el SQL, el deploy y la
+   primera carga). El job `google-meet-conferencias` (`lib/google/conferencias.ts`, un tramo de 10 minutos, lanza sin
+   esperar) mira cada reunión con código que terminó, de los últimos 28 días, como la persona que la organizó o, si no
+   se puede, como un invitado del equipo, y la vuelve a mirar cada 30 minutos hasta que no queda nada que esperar (la
+   transcripción y las notas generadas, o 48 horas). Guarda:
+   - **si ocurrió** (`estadoDeConferencia`): OCURRIO si entraron dos personas o más o hay frases; NO_OCURRIO si la
+     organizó el equipo y no hubo conferencia, o la hubo vacía o con una sola persona (se cierra recién 6 horas después
+     del fin: el cliente que entra tarde por el mismo enlace abre otra conferencia); SIN_ACCESO si la organizó alguien de
+     fuera y ningún invitado del equipo ve una conferencia cerca (se le pregunta a cada invitado, no al primero que
+     responde). Los grabadores («Smarteam's Notetaker») no cuentan como personas. Si ninguna cuenta puede leer la API, no
+     decide nada; si eso pasa en toda la corrida (el permiso quitado en Admin), la corrida falla y va a Sentry, y una
+     reunión con una sola cuenta rota (sin licencia de Meet) se cierra «sin acceso» a las 48 horas;
+   - **de qué reunión es cada conferencia:** el código es el del espacio (una serie, una sala fija que se reusa). Cada
+     reunión con el código «reclama» la conferencia: fuerte si empieza en su hora o hasta 10 minutos antes, débil en sus
+     márgenes (30 minutos antes, 20 después del fin); gana la que la reclama más fuerte, y si dos la reclaman igual cuenta
+     para las dos. Sin ninguna, la más cercana a menos de 12 horas (el evento que se movió, «Cemaco | Data Hub»). Una
+     cancelada no se lleva lo que reclama la vigente que la reemplazó;
+   - **el texto solo si no hay duda:** las frases, los Docs y la gente de fuera se copian solo si todas las conferencias son
+     de la reunión con reclamo fuerte, de nadie más, y no hay otra conferencia del mismo código a menos de una hora (una
+     llamada aparte por la sala fija, con otro cliente). Con cualquier duda se guarda solo que ocurrió, la hora y quién del
+     equipo entró, y el texto sale del Doc del evento, como antes. Medido: 12 de 152 reuniones quedan así;
+   - **las frases se copian una vez, enteras, al cerrar** (con la transcripción y las notas generadas): copiadas a medias,
+     entre «salió» y «volvió», dejaban una transcripción cortada;
+   - **la hora real** (`conferenciaInicio`, `conferenciaFin`), sin pisar `date`;
+   - **quiénes entraron y cuánto** en `ParticipanteDeReunion` (`entro`, `salio`, `minutos`, `nombre`, `idEnMeet`). Los del
+     equipo, con su correo (el directorio traduce `users/{id}`); los de fuera, con `meet:` y su id, porque Meet no da su
+     correo: un invitado de fuera puede quedar dos veces, con su correo del calendario y con su id de Meet. La copia de
+     Calendar no borra una fila con `entro`;
+   - **las frases** en una tabla propia, `FraseDeReunion` (quién, cuándo, qué), y no en `TurnoDeReunion`: los turnos los
+     parte de la transcripción su único escritor, la búsqueda (`lib/busqueda/indexar-server.ts`), y siguen saliendo de
+     ahí;
+   - **los Docs por su id** (`docDeTranscripcionId`, `docDeNotasId`), con los que la lectura va al Doc correcto sin buscar
+     en el Drive por el título.
+
+   **El orden de las fuentes** vive en la lectura de siempre (`lib/google/meet-enrichment.ts`): las frases, el Doc de la
+   transcripción (el adjunto o el que dice Meet), el Doc de las notas, y el Drive solo si no hay ningún Doc. **Las frases no
+   pisan una transcripción propia:** entran si la reunión no tenía transcripción o tenía la de otra reunión (su encabezado
+   nombra otra, o es de otro día de la serie: con el mismo título, pero comparte menos de la mitad de las palabras con las
+   frases); con una propia, se queda la guardada aunque el Doc traiga otra versión, porque cambiarla rehace la lectura. Si
+   el Doc falla y la reunión ya tenía notas, sigue siendo un fallo y se reintenta (las notas de Gemini no se tapan con un
+   resumen de Claude). Sin Doc adjunto, con frases se lee el Doc de las notas y sin frases el de la transcripción. Las
+   frases y la vuelta a la cola se escriben en una sola transacción. Cuando llegan frases nuevas a una
+   reunión sin transcripción o con la de otra reunión, el job la devuelve a la cola de lectura (`enrichedAt` en null, como
+   cuando aparece un Doc nuevo en el evento): la lee la copia de cada 10 minutos, y el resumen, la cola y el aviso de texto
+   cambiado siguen teniendo un solo escritor. Vuelve a la cola una sola vez por cada copia nueva de sus frases.
+
+   Probado contra una base local con las 152 reuniones con código de los 6 días anteriores (de producción, solo lectura):
+   123 ocurrieron, 26 no (almuerzos, bloqueos y conferencias vacías, todas sin texto), 3 sin acceso; 75 reuniones con
+   frases (17.885) y 447 personas (sin grabadores, y sin la gente de fuera de las 12 con el texto en duda); una segunda
+   corrida no encontró nada que hacer. «Capacitación 2
+   Analisa» tenía solo las notas en su Doc y 180 frases en Meet: volvió a la cola, y su lectura le dejó una transcripción
+   de 27.239 caracteres con las notas de Gemini intactas. En Camosa, Liz y Andrés entraron y Marco no.
+
+   INV53 da rojo si una reunión con código de 3 a 25 días queda sin cerrar (las frases se borran a los 30). La primera
+   carga, después del deploy: `scripts/revisar-conferencias-de-meet.ts` (simulacro) y con `--apply`.
+4. **T7 · Quiénes de Smarteam estuvieron** (✓ 2026-10-25): `lib/google/equipo-en-la-reunion.ts` dice, por reunión, quién
+   del equipo organizó y quién estuvo (true, false o «no se sabe» si la conferencia no se miró), con su respuesta a la
+   invitación. **Sin minutos ni horas:** Google pide no usar la asistencia para medir desempeño. Recibe ids que ya
+   salieron del chokepoint. Todavía no lo lee ninguna pantalla: lo usan S4, S5 y S7, la carga y «Para ti».
+5. **U4 · Enterarse al momento** (✓ 2026-10-25, **apagado**: `GOOGLE_MEET_EVENTOS_ENABLED=1` lo prende):
+   - `google-meet-suscripciones` (diario) crea una suscripción de Workspace Events por persona del equipo
+     (`//cloudidentity.googleapis.com/users/{id}`: todas las reuniones que organiza) al tema `nexus-meet-eventos`, con la
+     conferencia terminada y la transcripción y las notas listas; las renueva antes de que venzan (7 días) y reactiva las
+     suspendidas;
+   - `google-meet-eventos` (cada minuto) lee la suscripción pull y, si llegó algo, lanza la revisión de las conferencias de
+     las últimas 12 horas. La revisión de cada 10 minutos sigue siendo la red. Corre dentro del tick, así que cada pedido a
+     Google tiene un tope de 10 segundos y el pull vuelve enseguida si no hay avisos.
+   - **Calendar con `syncToken`, no se hizo** (decisión conservadora): la copia completa dura 7 segundos (medido en U1), y
+     `syncToken` no acepta `timeMin` ni `timeMax`: con `singleEvents` expande las series hasta el infinito (el origen de
+     las reuniones de 2037), y sin él habría que expandir las series a mano. Además, la marca de canceladas y el borrado
+     de invitados dependen de ver todos los calendarios enteros en cada corrida. Se retoma si una corrida pasa de 3 minutos.
+6. **U5 · Las reuniones del cliente y las presenciales:**
+   - **las del cliente** (✓ probado el 2026-10-25): un invitado del equipo ve la conferencia y sus participantes cuando
+     alguien del equipo entró (InsiderOne, Atom, Cooby); si nadie entró, no ve nada. No se pudo ver si lee sus frases:
+     ninguna de las 16 organizadas por fuera en 20 días tuvo transcripción. La transcripción y las notas quedan en el
+     Drive del cliente. **Regla del equipo:** la reunión con un cliente que tiene que dejar texto la convoca Smarteam (o se
+     le pide al cliente que active «Transcribir»). En Nexus esas quedan «sin acceso» o «ocurrió» sin texto;
+   - **las presenciales:** subir el audio y transcribirlo con Speech-to-Text (T5), apagado (decisión 8 del 24 oct).
 
 ## Lo que tiene que configurar Elías
 
@@ -144,7 +226,8 @@ Lo guía la skill `wizard`, paso por paso.
 - **U1:** el job corre cada 10 minutos durante 7 días (`CronJobState.lastRunAt`); la frescura se mide antes de
   construir, y después la mediana queda bajo una hora; las «leídas antes de terminar» bajan de 177 a 0; y quedan 0
   canceladas en la base (sin texto) o marcadas para revisar (con texto).
-- **U3:** «no ocurrió» queda separado de «no se grabó».
+- **U3:** «no ocurrió» queda separado de «no se grabó»; INV53 en verde 7 días seguidos; las reuniones sin texto que
+  tenían frases en Meet bajan a 0.
 
 ## Riesgos
 
@@ -152,5 +235,6 @@ Lo guía la skill `wizard`, paso por paso.
   CPU: una corrida larga no puede quedarse dentro del tick.
 - Un scope nuevo sin autorizar tumba todas las lecturas: va en un JWT aparte, como el de Tareas.
 - Las frases se borran a los 30 días: el job tiene que copiarlas antes.
-- Que los eventos acepten delegación de dominio es una incógnita: U2 lo confirma antes de construir U4.
+- Que los eventos acepten delegación de dominio era una incógnita: U2 lo confirmó (validación sin crear nada). La
+  creación de verdad se ve al prender `GOOGLE_MEET_EVENTOS_ENABLED`.
 - La cuota de la API de Meet es de 100 registros por página y por usuario.

@@ -13,6 +13,8 @@
  *   - https://www.googleapis.com/auth/admin.directory.user.readonly
  *   - https://www.googleapis.com/auth/calendar.readonly
  *   - https://www.googleapis.com/auth/calendar.events.owned (solo getAgendaWriteAuth, aparte)
+ *   - https://www.googleapis.com/auth/meetings.space.readonly (solo getMeetAuth, aparte: U3)
+ *   - https://www.googleapis.com/auth/pubsub (solo getPubSubAuth, la cuenta de servicio sin impersonar: U4)
  */
 
 // Import profundo a propósito, nunca la raíz "googleapis": la raíz carga los tipos de ~400 APIs y
@@ -25,6 +27,8 @@ import { JWT } from "google-auth-library";
 export interface DomainUser {
   email: string;
   name: string;
+  /** El id de Google de la cuenta: la API de Meet nombra a quien entró como `users/{id}`, no por su correo (U3). */
+  id?: string;
 }
 
 // ── Scopes ────────────────────────────────────────────────────────────────────
@@ -108,6 +112,52 @@ export function getAgendaWriteAuth(userEmail: string): JWT {
   });
 }
 
+// ── getMeetAuth / getPubSubAuth (U3 y U4, 2026-10-25) ─────────────────────────
+
+/**
+ * La API REST de Meet (`conferenceRecords`: si la reunión ocurrió, quiénes entraron, la transcripción por frases) con
+ * `meetings.space.readonly`, impersonando a una persona del equipo. JWT APARTE por la misma razón que el de la agenda:
+ * si Admin quita este permiso, pedirlo junto a los de lectura tumbaría Calendar, Drive y Docs. Aparte, falla solo Meet.
+ * También sirve para la API de Workspace Events (las suscripciones a los eventos de Meet piden este mismo permiso).
+ */
+const CLIENTES_DE_MEET = new Map<string, JWT>();
+
+export function getMeetAuth(userEmail: string): JWT {
+  const k = userEmail.trim().toLowerCase();
+  const ya = CLIENTES_DE_MEET.get(k);
+  if (ya) return ya;
+  const { client_email, private_key } = getServiceAccountKey();
+  const nuevo = new JWT({
+    email: client_email,
+    key: private_key,
+    scopes: ["https://www.googleapis.com/auth/meetings.space.readonly"],
+    subject: userEmail,
+  });
+  if (CLIENTES_DE_MEET.size >= MAX_CLIENTES_IMPERSONADOS) CLIENTES_DE_MEET.delete(CLIENTES_DE_MEET.keys().next().value!);
+  CLIENTES_DE_MEET.set(k, nuevo);
+  return nuevo;
+}
+
+let clientePubSub: JWT | null = null;
+
+/** Pub/Sub, como la cuenta de servicio misma (sin impersonar): leer y confirmar los avisos de Meet (U4). */
+export function getPubSubAuth(): JWT {
+  if (clientePubSub) return clientePubSub;
+  const { client_email, private_key } = getServiceAccountKey();
+  clientePubSub = new JWT({ email: client_email, key: private_key, scopes: ["https://www.googleapis.com/auth/pubsub"] });
+  return clientePubSub;
+}
+
+/** El proyecto de Google Cloud de la cuenta de servicio (donde viven el tema y la suscripción de Pub/Sub). */
+export function proyectoDeGoogleCloud(): string | null {
+  try {
+    const parsed = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY ?? "") as { project_id?: string };
+    return parsed.project_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── listDomainUsers ───────────────────────────────────────────────────────────
 
 /**
@@ -158,7 +208,7 @@ export async function listDomainUsers(): Promise<DomainUser[]> {
         const name =
           u.name?.fullName ??
           (`${u.name?.givenName ?? ""} ${u.name?.familyName ?? ""}`.trim() || email);
-        users.push({ email, name });
+        users.push({ email, name, ...(u.id ? { id: u.id } : {}) });
       }
 
       pageToken = res.data.nextPageToken ?? undefined;
