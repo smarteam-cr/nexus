@@ -6,7 +6,10 @@
  * resultado entero comprimido después del `#` (lz-string). Se decodifica esa dirección en vez de
  * leer la nota: la nota es prosa para una persona; la dirección, el dato.
  *
- * ⚠ El test usa la escala ANTERIOR (versión 4). Sus 8 dimensiones por área corresponden una a una,
+ * Desde el 2026-10-26 también lee el test NUEVO, el de Nexus (`v: 2`, lib/tests-diagnostico/enlace.ts), que ya viene con
+ * la escala de hoy.
+ *
+ * ⚠ El test viejo usa la escala ANTERIOR (versión 4). Sus 8 dimensiones por área corresponden una a una,
  * por posición, con las de hoy (procesos…equipo = x.1…x.4; express, tailor, amplify, evolve =
  * x.5…x.8), y sus áreas cambiaron de número (ventas 8 → 1, marketing 7 → 2, servicio 9 → 3). Por
  * eso lo que sale de acá es HIPÓTESIS: el vendedor lo valida en la primera reunión. Y por eso al
@@ -57,11 +60,35 @@ const NIVEL: Record<number, Letra> = { 1: "D", 2: "I", 3: "F", 4: "E", 5: "O" };
 const esObjeto = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 const texto = (x: unknown, max: number): string | null => (typeof x === "string" && x.trim() ? x.trim().slice(0, max) : null);
 
+/**
+ * El resultado del test NUEVO, el de Nexus (2026-10-26, lib/tests-diagnostico/enlace.ts): `v: 2`, con la escala de hoy
+ * (las dimensiones por su id y su letra). No hay que traducir nada: es la misma escala.
+ */
+function leerV2(crudo: Record<string, unknown>, url: string): ResultadoDelTest | null {
+  const areaId = typeof crudo.area === "string" && /^[1-3]$/.test(crudo.area) ? crudo.area : null;
+  if (!areaId || !esObjeto(crudo.dims)) return null;
+  const qa = new Map<string, { respuesta: string | null; matiz: string | null }>();
+  if (Array.isArray(crudo.qa)) {
+    for (const q of crudo.qa) {
+      if (esObjeto(q) && typeof q.dim === "string") qa.set(q.dim, { respuesta: texto(q.respuesta, 400), matiz: texto(q.matiz, 400) });
+    }
+  }
+  const respuestas: RespuestaDelTest[] = [];
+  for (const [id, nivel] of Object.entries(crudo.dims)) {
+    if (!id.startsWith(`${areaId}.`) || typeof nivel !== "string" || !Object.values(NIVEL).includes(nivel as Letra)) continue;
+    respuestas.push({ dimensionId: id, nivel: nivel as Letra, respuesta: qa.get(id)?.respuesta ?? null, matiz: qa.get(id)?.matiz ?? null });
+  }
+  if (respuestas.length === 0) return null;
+  respuestas.sort((a, b) => a.dimensionId.localeCompare(b.dimensionId, "es", { numeric: true }));
+  const fecha = typeof crudo.fecha === "string" && /^\d{4}-\d{2}-\d{2}/.test(crudo.fecha) ? crudo.fecha.slice(0, 10) : null;
+  return { areaId, fecha, respuestas, url };
+}
+
 /** El resultado de una dirección del test, o null si no es una del test o no se puede leer. */
 export function leerResultadoDelTest(url: string | null | undefined): ResultadoDelTest | null {
   if (!url) return null;
   const i = url.indexOf("#");
-  if (i < 0 || !/resultado\.html#/i.test(url)) return null;
+  if (i < 0 || !(/resultado\.html#/i.test(url) || /\/external\/test\/resultado\/[A-Za-z0-9_-]+#/.test(url))) return null;
   let crudo: unknown;
   try {
     const json = decompressFromEncodedURIComponent(url.slice(i + 1));
@@ -70,6 +97,7 @@ export function leerResultadoDelTest(url: string | null | undefined): ResultadoD
   } catch {
     return null;
   }
+  if (esObjeto(crudo) && crudo.v === 2) return leerV2(crudo, url);
   if (!esObjeto(crudo) || crudo.v !== 1 || typeof crudo.area !== "string") return null;
   const areaId = AREA_DEL_TEST[crudo.area];
   if (!areaId || !esObjeto(crudo.dims)) return null;

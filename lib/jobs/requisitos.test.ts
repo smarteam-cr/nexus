@@ -126,8 +126,8 @@ describe("defs.ts decide con esta regla y no con una copia", () => {
        2026-10-25: la transcripción del audio de las reuniones presenciales (T5). 18 y 19 desde el 2026-10-25: la revisión
        de las conferencias de Meet (U3) y sus avisos y suscripciones (U4). 20 a 23 desde el 2026-10-25: los leads,
        la sincronización diaria de los proyectos y el vigía de los jobs (B3, U10, U24). 24 desde el 2026-10-25: el
-       analizador de reuniones de venta (S3). */
-    expect(JOBS_CON_REQUISITO.length).toBe(24);
+       analizador de reuniones de venta (S3). 25 desde el 2026-10-26: los tests del diagnóstico en HubSpot (área O). */
+    expect(JOBS_CON_REQUISITO.length).toBe(25);
     for (const key of JOBS_CON_REQUISITO) expect(defs, key).toContain(`encendido("${key}")`);
     expect(defs).toContain("motivoApagado(jobKey, process.env) === null");
   });

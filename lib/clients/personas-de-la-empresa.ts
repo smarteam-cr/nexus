@@ -62,6 +62,9 @@ const correoValido = (c: string | null | undefined): string | null => {
 };
 export const dominioDe = (correo: string) => correo.split("@")[1] ?? "";
 
+/** ¿Es un dominio genérico o compartido (gmail, hotmail…)? Uno así no dice de qué empresa es nadie. */
+export const esDominioGenerico = (dominio: string) => DOMINIOS_GENERICOS.has(dominio.trim().toLowerCase());
+
 /**
  * Qué mirar en las reuniones de OTROS clientes antes de unir: solo la gente de fuera del dominio de la empresa. Un dominio
  * genérico (gmail) va como correo y nunca como dominio: si no, un gmail que fue a otra reunión sacaba a todos los gmail.

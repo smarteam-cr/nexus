@@ -11401,3 +11401,102 @@ producción (falta `CS_WATCHDOG_ENABLED`): lo que corre es la revisión al entra
 
 **Volver atrás:** `HUBSPOT_LEADS_ENABLED=0`, `HUBSPOT_PROYECTOS_JOB_ENABLED=0`, `JOBS_VIGIA_ENABLED=0`; quitar la URL del
 webhook en la app de HubSpot; `VIGIA_AL_ENTRAR_POR_LOTE = false`. Las tablas nuevas se pueden dejar: nadie más las lee.
+
+## Los tests del Diagnóstico de Rendimiento, dentro de Nexus (2026-10-26, área O: O1 a O6)
+
+**Contexto.** Plan `docs/tests-diagnostico-plan.md` (Elías, 23 y 24 oct). La aplicación de hoy
+(`dev.smarteamcr.com/diagnostico-rendimiento` + el backend de Vercel) usa la escala v4, deja que la IA mueva el puntaje y
+veta Funcional en tres dimensiones. Se construyó con la escala vigente (8.9.1) y sin tocar sus definiciones: el test la lee.
+
+- **Un solo motor.** El nivel lo calcula el chequeo de la escala (`lib/escala/chequeo.ts`), el mismo del cuestionario del
+  cliente; la IA no mueve ningún número. La escala es la publicada (`leerEscalaVigente`), vista por la edición de la
+  industria que elige la persona: la lista de industrias de Smarteam, la misma de «Datos de la empresa»
+  (`edicionDeLaIndustria`). Cuando se publique la 9.0, el test la toma sola. *Por qué esa lista y no las 52 de la app
+  vieja:* es la que ya decide la edición en la empresa, y una sola lista evita que el test y la ficha discrepen.
+- **Las preguntas, en un banco por área × versión × edición** (`PreguntasDelTest`), con un BORRADOR que se edita y una
+  versión APROBADA que es lo único que ve el público. Los borradores salen de la escala (la pregunta de la dimensión y la
+  descripción de cada nivel) para que Elías los reescriba en palabras del cliente; se generan desde `/escala/tests` y nunca
+  pisan uno existente. Aprobar revisa las reglas (`problemasDelBanco`): una pregunta por dimensión, **nunca se veta un
+  nivel** (las cinco opciones siempre), sin nombres de nivel en el texto, y la web cubre todas las dimensiones. Aprueba
+  solo lo que se revisó: si el borrador cambió entre la revisión y la aprobación, no aprueba nada. Sin aprobadas para un
+  área, el test de esa área no se abre. Una edición sin aprobadas usa las de la escala general (el resultado sí se lee con
+  la edición). Lo aprueban los super admin (`puedeEditarLaEscala`).
+- **Las tres versiones (O5).** `marketing` (4 preguntas: las dimensiones de la capa BASE, que salen de las 8 de la web),
+  `web` (8, una por dimensión) y la **completa**, que NO vive acá: es la exploración del proyecto por equipo más el
+  cuestionario de la escala, que llena Customer Success. **El perfil corto (cómo cierra la venta y qué pasa después) va
+  solo en la completa**: el test público no lo pregunta. En la de Marketing, lo no preguntado no cuenta al calcular
+  (`aplica: false`) y el resultado lo dice («estimado con 4 de 8»). «No lo sé» cuenta como el nivel más bajo.
+- **Lo que ve el prospecto es una página del cliente (§1-WEB).** `/external/test/<ventas|marketing|servicio>` (`?v=marketing`
+  para la de 4) y `/external/test/resultado/<token>`: tema claro con hex literal, tuteo, sin JS en el resultado (la curva,
+  el radar y las barras son SVG). Sin login: protección contra abuso en memoria (`lib/tests-diagnostico/limite.ts`: 10
+  intentos por hora por dirección, por el hash de la IP y nunca la IP; 400 por hora en total; 40 guardados por minuto por
+  intento) y un campo trampa. La dirección es la ÚLTIMA de `X-Forwarded-For`, la que agrega nginx: con la primera, que
+  escribe el visitante, un script cambiaba de dirección en cada pedido (revisión del 26 oct). El origen (utm, página,
+  cookie de HubSpot) se guarda filtrado: solo esas claves, hasta 12, de 300 caracteres. Cada intento tiene un token de 256 bits, y quien responde nunca ve ids del banco,
+  dimensiones ni niveles (ids opacos por intento). El resultado se arma con lo GUARDADO; lo que viaja después del `#` es
+  para la preventa. Las dos tablas nacen con RLS y sin policies: la página las lee por el servidor, nunca con la clave
+  pública.
+- **La experiencia de hoy se conserva (O1):** el formulario primero, una pregunta por pantalla, el matiz, el guardado al
+  avanzar (se retoma en el mismo navegador) y el aviso de abandono. Un intento quieto una hora es «abandonado».
+- **El resultado (O3)** es nuevo: nivel con «Estimado», la curva de cinco niveles, el radar y las barras, UNA sola
+  recomendación con su razón y el costo de quedarse, los riesgos activos (hasta 3), los casos de uso que lo mueven sin
+  precio y la invitación a la sesión (`TESTS_ENLACE_DE_AGENDA`). La síntesis la arma Nexus con los datos, sin IA.
+  *Pendiente a propósito:* la síntesis redactada por la IA y la lectura «Preparación para engagement avanzado» (N6), que
+  depende de la 9.0.
+- **Todo queda unido a la preventa y a HubSpot (O4).**
+  - La empresa de Nexus se une **solo por el dominio del correo**, si UNA empresa lo tiene registrado; un dominio genérico
+    no une nada (`esDominioGenerico`). *Por qué no por el sitio que escribe la persona:* con él, cualquiera metía un test
+    inventado en la preventa de un cliente real, y la preventa se queda con el más reciente de cada área (revisión del 26
+    oct). El sitio queda como dato del lead.
+  - La preventa suma los tests terminados en Nexus de su empresa a los que trae HubSpot (`enlacesDelTestEnNexus`), sin
+    esperar a HubSpot: los que se unieron al empezar y los de un prospecto que hizo el test ANTES de que su empresa
+    llegara a Nexus (sin empresa, con el correo de un dominio que solo esa empresa tiene). La dirección del resultado nuevo lleva el resultado comprimido (`v: 2`) y la leen
+    `leerResultadoDelTest` y «Llegaron por el test» igual que la vieja.
+  - HubSpot recibe lo mismo que hoy, por el job `tests-hubspot` (cada 10 minutos): el formulario nativo apenas la persona
+    empieza (cada intento es un lead, lo termine o no; con la cookie `hubspotutk` y la página, así la atribución de
+    anuncios no cambia), y al terminar o dejarlo la nota «📊 Diagnóstico de Rendimiento — Área · nivel» o «⏳ Diagnóstico
+    SIN TERMINAR — Área» en el contacto y la dirección en `url_ultimo_diag_sales|marketing|service`. «Diagnóstico de
+    Rendimiento» es la nota del test en línea. **El job nace APAGADO** (`TESTS_HUBSPOT_ENABLED=1` lo prende, con
+    `TESTS_HUBSPOT_PORTAL_ID` y `TESTS_HUBSPOT_FORM_GUID`): nada escribe en el HubSpot real hasta que Elías lo decida.
+    Cada falla queda en el intento, con «Reintentar» en `/escala/tests`; INV58 avisa del intento de más de 3 horas que no
+    llegó (nace «no bloquea»; con el envío apagado solo avisa). Un intento dado por dejado que la persona retoma vuelve
+    a «en curso» y, al terminar, manda la nota con el resultado aunque antes haya salido la de «SIN TERMINAR».
+  - ⚠ **Riesgo que decide Elías antes de prender el envío:** el formulario nativo de HubSpot actualiza el contacto que
+    ya existe con ese correo (nombre, teléfono, cargo, empresa, sitio), y nadie confirma que el correo sea de quien
+    responde: alguien que escriba el correo de un contacto real le pisa esos datos y le deja una nota con un resultado
+    inventado. La app vieja hace lo mismo (es un formulario de HubSpot). Las salidas: aceptarlo como hoy, o mandar a
+    HubSpot solo los correos que todavía no son contactos y dejar los demás para que una persona los revise en
+    `/escala/tests`.
+  - Los leads por empresa, con quién hizo qué área (K10), y la medición (cuántos empiezan, terminan y lo dejan, y en qué
+    pregunta) están en `/escala/tests`, que ve quien ve la preventa.
+- **Las tablas se leen y escriben con SQL crudo** (`lib/tests-diagnostico/repositorio-server.ts`), no con el cliente de
+  Prisma: el cliente compartido entre las ramas de trabajo no tiene los modelos hasta el deploy. Los modelos están en el
+  schema (para el diff de Prisma y el día que se pase al cliente tipado).
+
+### O6 · El corte de la aplicación vieja: listo y descrito, sin hacer
+
+Lo apaga Elías cuando el test nuevo esté probado. Ningún lead se pierde porque cada intento queda en Nexus antes de
+tocar HubSpot y el job lo reintenta. En orden:
+
+1. **Antes:** aplicar `scripts/sql/2026-10-26-tests-diagnostico.sql`, desplegar, generar y aprobar las preguntas
+   (`/escala/tests`) de las tres áreas, al menos la web y la de Marketing de la escala general.
+2. **Configurar HubSpot:** en el `.env` del servidor, `TESTS_HUBSPOT_PORTAL_ID` y `TESTS_HUBSPOT_FORM_GUID` (el mismo
+   formulario nativo que usa la app vieja, o uno nuevo con email, nombre, apellido, teléfono, cargo, empresa y sitio) y
+   `TESTS_ENLACE_DE_AGENDA`. Las propiedades `url_ultimo_diag_*` ya existen en el contacto.
+3. **Probar en paralelo:** con la app vieja todavía arriba, hacer un test por área en Nexus y prender
+   `TESTS_HUBSPOT_ENABLED=1`. Comprobar en HubSpot el contacto, la nota y la dirección; en Nexus, «Llegaron por el test»
+   y la preventa de una empresa conocida. INV58 en verde un día entero → `INV58_BLOQUEA = true`.
+4. **Mover la dirección pública:** que los botones de la web y las campañas apunten a
+   `https://nexus.smarteamcr.com/external/test/<área>` (`?v=marketing` en las campañas de Marketing). En el VPS, un
+   `301` de `dev.smarteamcr.com/diagnostico-rendimiento*` a la página nueva del área, para los enlaces que ya circulan.
+   Los píxeles de anuncios de la página vieja hay que sumarlos a la nueva antes de mover el tráfico (hoy la página
+   nueva no carga ninguno).
+5. **Apagar:** el backend de Vercel (`escala-diagnostico.vercel.app`) y la carpeta estática
+   (`/var/www/dev.smarteamcr.com/diagnostico-rendimiento`) **después** de una semana sin intentos nuevos en la vieja.
+   Los enlaces viejos (`resultado.html#…`, `v: 1`) se siguen leyendo en Nexus aunque la página ya no exista.
+
+*Lo que no garantiza esta tanda:* el formulario de HubSpot no se probó contra el HubSpot real (el envío nace apagado), y
+los píxeles de anuncios no están en la página nueva. El tope de 400 intentos por hora es uno solo para todos: un ataque
+grande lo agota y deja fuera a los prospectos reales esa hora (se eligió así para que HubSpot no se llene de leads
+falsos). La regla de la dirección del visitante de verify-access (`lib/external/verify-rate-limit.ts › claveDeIp`) todavía
+toma la PRIMERA de `X-Forwarded-For`: queda como seguimiento.

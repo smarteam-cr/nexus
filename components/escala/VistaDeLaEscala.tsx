@@ -395,6 +395,9 @@ export default function VistaDeLaEscala({
                   )}
                 </Link>
               )}
+              <Link href="/escala/tests" className={BOTON_CLARO} title="El test público de cada área: sus preguntas, quién lo llenó y cuántos lo terminan.">
+                Tests
+              </Link>
               {borrador && (
                 <Link
                   href="/escala/borrador"

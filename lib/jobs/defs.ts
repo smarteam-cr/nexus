@@ -76,6 +76,9 @@
  *     admin con Andrés); a mano, desde cada reunión.
  *   - reuniones-audio → mira las transcripciones de audio en curso (lib/sessions/audio-de-reunion-server.ts, T5), cada
  *     tick. Gated por REUNIONES_AUDIO=1 y el bucket; sin audios en curso devuelve SIN_TURNO.
+ *   - tests-hubspot → los tests del diagnóstico de rendimiento en HubSpot (área O, lib/tests-diagnostico/hubspot-server.ts):
+ *     el formulario, la nota y la dirección del resultado, cada 10 minutos. Gated por TESTS_HUBSPOT_ENABLED=1 (apagado
+ *     por defecto) y el formulario configurado.
  *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
  *     ≥ 7:00 CR, después de los espejos. Si alguno está en rojo el job LANZA: semáforo rojo
  *     en Integraciones + Sentry con tags.job. Solo lecturas. (B-08)
@@ -1159,6 +1162,39 @@ const titulosCortos: JobDef = {
   },
 };
 
+/**
+ * Los tests del diagnóstico en HubSpot (área O, lib/tests-diagnostico/hubspot-server.ts): cada 10 minutos marca los
+ * intentos dejados y manda a HubSpot el formulario, la nota y la dirección del resultado de los que les falta. Gated por
+ * TESTS_HUBSPOT_ENABLED=1 (APAGADO por defecto: nada escribe en el HubSpot real hasta que Elías lo prenda). Sin nada que
+ * mandar devuelve SIN_TURNO.
+ */
+const testsHubspot: JobDef = {
+  key: "tests-hubspot",
+  shouldRun: () => encendido("tests-hubspot"),
+  run: async (now) => {
+    const turno = await turnoDeDiezMinutos(now);
+    if (!(await claimDateKey("tests-hubspot", turno, now))) return SIN_TURNO;
+    const { mandarPendientesAHubspot } = await import("@/lib/tests-diagnostico/hubspot-server");
+    const { ErrorSinTablas } = await import("@/lib/tests-diagnostico/repositorio-server");
+    let r;
+    try {
+      r = await mandarPendientesAHubspot(now);
+    } catch (e) {
+      if (e instanceof ErrorSinTablas) {
+        console.log(`[jobs/tests-hubspot] ${turno} — falta el SQL 2026-10-26-tests-diagnostico.sql`);
+        return SIN_TURNO;
+      }
+      throw e;
+    }
+    if (!r.abandonados && !r.formularios && !r.notas && !r.errores.length) return SIN_TURNO;
+    console.log(
+      `[jobs/tests-hubspot] ${turno} — ${r.formularios} formularios, ${r.notas} notas, ${r.abandonados} dejados a medias${r.errores.length ? `, ${r.errores.length} errores` : ""}`,
+    );
+    if (r.errores.length) console.warn(`[jobs/tests-hubspot] ${r.errores.slice(0, 5).join(" · ")}`);
+    if (r.errores.length && !r.formularios && !r.notas) throw new Error(`Ningún test llegó a HubSpot: ${r.errores[0]}`);
+  },
+};
+
 /** El turno de 10 minutos de esta hora («2026-10-25T09:20»), como el de los nombres cortos. */
 async function turnoDeDiezMinutos(now: Date): Promise<string> {
   const { crDateParts } = await import("./time");
@@ -1429,5 +1465,5 @@ const jobsVigia: JobDef = {
 };
 
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleMeetConferencias, googleMeetEventos, googleMeetSuscripciones, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, hubspotEventos, hubspotLeads, hubspotFusiones, hubspotProyectos, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, reunionesMotivos, reunionesPropuestas, reunionesAudio, analizadorVenta, loPagadoDaily, invariantsDaily, jobsVigia];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleMeetConferencias, googleMeetEventos, googleMeetSuscripciones, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, hubspotEventos, hubspotLeads, hubspotFusiones, hubspotProyectos, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, reunionesMotivos, reunionesPropuestas, reunionesAudio, analizadorVenta, loPagadoDaily, invariantsDaily, jobsVigia, testsHubspot];
 }

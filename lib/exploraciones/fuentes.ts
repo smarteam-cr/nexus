@@ -58,6 +58,7 @@ import {
 import type { ClaveDeCasilla } from "./casillas";
 import { fuentesDelProyecto, sesionesDelProyecto } from "./fuentes-del-proyecto";
 import { marcoDe } from "./marco";
+import { enlacesDelTestEnNexus } from "@/lib/tests-diagnostico/preventa-server";
 import { esClaveDeInstrucciones, rotuloDeLaNota } from "./notas-de-sesion";
 import { etiquetaDeLaFuente } from "./senales";
 import {
@@ -596,10 +597,12 @@ export async function leerFuentes(opts: {
 
   /* Solo el test de quien es de esta empresa: el de un contacto cuya empresa principal es otra no es de acá.
      Y el de las notas que dejó el test (ya filtradas por empresa en leerActividad): los tests de junio y
-     julio de 2026 dejaron la nota pero no la dirección en el contacto. */
+     julio de 2026 dejaron la nota pero no la dirección en el contacto. Y los hechos en Nexus por gente de esta
+     empresa (área O): entran sin esperar a HubSpot. */
   const tests = testsDeLosEnlaces([
     ...enlacesDeLosContactos(contactos.filter((c) => !c.empresaId || c.empresaId === opts.companyId)),
     ...(actividad.enlacesDelTest ?? []),
+    ...(await enlacesDelTestEnNexus(opts.clientId)),
   ]);
   tests.forEach((t, i) => {
     const area = opts.escala.areas.find((a) => a.id === t.resultado.areaId)?.nombre ?? t.resultado.areaId;
@@ -918,7 +921,11 @@ export async function fuentesDeHubspotSinMarcar(o: { clientId: string; companyId
         .join("\n"),
     });
   }
-  const tests = testsDeLosEnlaces([...enlacesDeLosContactos(contactos.filter((c) => !c.empresaId || c.empresaId === o.companyId)), ...(actividad.enlacesDelTest ?? [])]);
+  const tests = testsDeLosEnlaces([
+    ...enlacesDeLosContactos(contactos.filter((c) => !c.empresaId || c.empresaId === o.companyId)),
+    ...(actividad.enlacesDelTest ?? []),
+    ...(await enlacesDelTestEnNexus(o.clientId)),
+  ]);
   tests.forEach((t, i) => {
     const area = o.escala.areas.find((a) => a.id === t.resultado.areaId)?.nombre ?? t.resultado.areaId;
     fuentes.push({ id: `T${i + 1}`, etiqueta: `Test de ${area}${t.resultado.fecha ? ` del ${fecha(t.resultado.fecha)}` : ""}`, texto: textoDelTest(t.resultado, t.contacto, o.escala, nombreDeNivel) });

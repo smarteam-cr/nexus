@@ -1,9 +1,13 @@
 # Los tests del Diagnóstico de Rendimiento, dentro de Nexus — plan
 
 > Pedido de Elías del 2026-10-23: migrar a Nexus el test público de cada departamento, con mejores preguntas,
-> personalizadas por industria, y una página de resultados más atinada con la escala nueva. **Nada construido.** En el
+> personalizadas por industria, y una página de resultados más atinada con la escala nueva. En el
 > roadmap es el área O. El diagnóstico de la aplicación de hoy se hizo el 2026-10-23 sobre una copia de lo publicado, en
 > solo lectura.
+>
+> **Avance (2026-10-26):** O1 a O5 construidos en Nexus (sin deploy) y O6 listo y descrito, sin hacer: DECISIONS ›
+> «Los tests del Diagnóstico de Rendimiento, dentro de Nexus». Falta: que Elías apruebe las preguntas, la síntesis con IA,
+> la lectura N6 (con la 9.0), los píxeles de anuncios en la página nueva y el corte.
 
 ## Lo que hay hoy
 

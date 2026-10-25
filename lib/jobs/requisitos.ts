@@ -142,6 +142,16 @@ const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
   "comunicaciones-hubspot": (env) => (copiaPrendida(env) ? null : MOTIVO_COPIA_APAGADA),
   /* La copia de los datos de la empresa desde HubSpot (R2, 2026-10-25). APAGADA por defecto: se prende con "1" después de
      crear las propiedades «Nexus · Empresa» y de la primera escritura con 5 empresas (docs/empresa-datos-hubspot-plan.md). */
+  /* Los tests del diagnóstico en HubSpot (área O, 2026-10-26). APAGADO por defecto: se prende con "1" cuando el test
+     nuevo esté probado y configurado el formulario de HubSpot (portal y formulario). */
+  "tests-hubspot": (env) => {
+    if (env.TESTS_HUBSPOT_ENABLED !== "1") return "Apagado: TESTS_HUBSPOT_ENABLED no es 1 en el .env del servidor (se prende cuando el test nuevo esté probado).";
+    const faltan = [
+      /^\d+$/.test(env.TESTS_HUBSPOT_PORTAL_ID?.trim() ?? "") ? null : "TESTS_HUBSPOT_PORTAL_ID",
+      /^[0-9a-f-]{36}$/i.test(env.TESTS_HUBSPOT_FORM_GUID?.trim() ?? "") ? null : "TESTS_HUBSPOT_FORM_GUID",
+    ].filter((v): v is string => v !== null);
+    return faltan.length ? falta(...faltan) : null;
+  },
   "empresa-copia-de-hubspot": (env) =>
     env.EMPRESA_HUBSPOT_COPIA === "1" ? null : "Apagado: EMPRESA_HUBSPOT_COPIA no es 1 en el .env del servidor (se prende después de crear las propiedades «Nexus · Empresa»).",
   "tareas-hubspot": (env) =>
