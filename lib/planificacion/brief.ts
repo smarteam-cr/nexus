@@ -21,8 +21,22 @@ export const conIds = <T extends { id?: string }>(xs: readonly T[]): T[] => xs.m
 
 /* ── Ficha del proyecto ─────────────────────────────────────────────────────── */
 
-/** Los hubs que trae el Brief, en su orden. */
-export const HUBS = ["Marketing", "Ventas", "Servicio", "Operaciones", "Contenido"] as const;
+/** Los hubs de HubSpot con el nombre y el slug del catálogo de etiquetas (lib/tags/catalog.ts): el Brief decía
+    «Operation» y «Content», que hoy son Data Hub y Content Hub, y le faltaba Revenue Hub. */
+export const HUBS = [
+  { slug: "marketing_hub", hub: "Marketing Hub" },
+  { slug: "sales_hub", hub: "Sales Hub" },
+  { slug: "service_hub", hub: "Service Hub" },
+  { slug: "content_hub", hub: "Content Hub" },
+  { slug: "data_hub", hub: "Data Hub" },
+  { slug: "revenue_hub", hub: "Revenue Hub" },
+] as const;
+
+/** Los hubs que el proyecto tiene vendidos (sus etiquetas), con el nombre de la ficha. */
+export function hubsVendidos(etiquetas: readonly string[] | undefined): string[] {
+  const t = new Set(etiquetas ?? []);
+  return HUBS.filter((h) => t.has(h.slug)).map((h) => h.hub);
+}
 
 export const EDICIONES = [
   { value: "starter", label: "Starter" },
@@ -60,12 +74,13 @@ export interface FichaDelProyectoData {
   consideraciones?: string;
 }
 
-/** Los cinco hubs siempre están (los que no se guardaron, vacíos): así se marca cuál entra sin escribir su nombre. */
+/** Los hubs siempre están (los que no se guardaron, vacíos): así se marca cuál entra sin escribir su nombre. */
 export function adoptarFichaDelProyecto(data: unknown): FichaDelProyectoData {
   const d = (data ?? {}) as Record<string, unknown>;
   const guardados = arr<HubDelProyecto>(d.hubs);
-  const deLaLista = HUBS.map((hub) => guardados.find((h) => txt(h.hub).toLowerCase() === hub.toLowerCase()) ?? { hub });
-  const otros = guardados.filter((h) => !HUBS.some((x) => x.toLowerCase() === txt(h.hub).toLowerCase()));
+  const mismo = (h: HubDelProyecto, nombre: string) => txt(h.hub).toLowerCase() === nombre.toLowerCase();
+  const deLaLista = HUBS.map(({ hub }) => guardados.find((h) => mismo(h, hub)) ?? { hub });
+  const otros = guardados.filter((h) => !HUBS.some((x) => mismo(h, x.hub)));
   return {
     intro: txt(d.intro),
     hubs: [...deLaLista, ...otros],
@@ -146,16 +161,43 @@ export interface UsuariosPermisosData {
   usuarios: UsuarioDeHubspot[];
 }
 
+const rango = (nivel: unknown) => Math.max(0, NIVELES_DE_PERMISO.findIndex((n) => n.value === nivel));
+
+/**
+ * Los permisos de un objeto como los puede mostrar la matriz: un valor que no es del vocabulario se descarta, y lo que
+ * se contradice (editar más amplio que ver, eliminar más que editar) baja al tope. La pantalla ya no deja escribirlo,
+ * pero el chat escribe directo: sin esto, «editar: todo» con «ver: lo suyo» se veía así (2026-10-25, la revisión).
+ */
+export function permisosCoherentes(p: unknown): PermisosDeObjeto {
+  const d = (p ?? {}) as Record<string, unknown>;
+  const out: PermisosDeObjeto = {};
+  let tope = NIVELES_DE_PERMISO.length - 1;
+  for (const { key } of ACCIONES_DE_PERMISO) {
+    const v = d[key];
+    if (!NIVELES_DE_PERMISO.some((n) => n.value === v)) {
+      tope = Math.min(tope, 0);
+      continue;
+    }
+    const r = Math.min(rango(v), tope);
+    out[key] = NIVELES_DE_PERMISO[r].value;
+    tope = r;
+  }
+  return out;
+}
+
 export function adoptarUsuariosPermisos(data: unknown): UsuariosPermisosData {
   const d = (data ?? {}) as Record<string, unknown>;
   return {
     intro: txt(d.intro),
-    equipos: arr<EquipoDeHubspot>(d.equipos),
+    equipos: arr<EquipoDeHubspot>(d.equipos).map((e) => ({
+      ...e,
+      permisos: Object.fromEntries(
+        OBJETOS_CON_PERMISO.filter((o) => e.permisos?.[o.key]).map((o) => [o.key, permisosCoherentes(e.permisos?.[o.key])]),
+      ),
+    })),
     usuarios: arr<UsuarioDeHubspot>(d.usuarios),
   };
 }
-
-const rango = (nivel: unknown) => Math.max(0, NIVELES_DE_PERMISO.findIndex((n) => n.value === nivel));
 
 /** Los niveles que admite una acción: hasta donde llegue la anterior (ver no tiene tope). */
 export function nivelesPermitidos(p: PermisosDeObjeto | undefined, accion: AccionDePermiso) {
@@ -331,4 +373,44 @@ export interface InformesData {
 export function adoptarInformes(data: unknown): InformesData {
   const d = (data ?? {}) as Record<string, unknown>;
   return { intro: txt(d.intro), items: arr<Informe>(d.items) };
+}
+
+/* ── Cuándo una sección no tiene nada que mostrarle al cliente ──────────────────
+   El motor omite en lectura una sección «en blanco» (lib/landing/is-blank.ts), pero mira los DATOS: un «no» de una
+   casilla o el cargo de una fila sin nombre la mantenían viva, y el cliente veía el título sin nada abajo (2026-10-25,
+   la revisión). Cada sección declara su regla (`vacia` en su definición) y su componente filtra con la misma. */
+
+const lleno = (v: unknown) => txt(v).trim() !== "";
+
+export const hubVisible = (h: HubDelProyecto) => esSi(h.incluido);
+export const participanteVisible = (p: Participante) => lleno(p.nombre) || lleno(p.correo);
+export const equipoVisible = (e: EquipoDeHubspot) => lleno(e.nombre);
+export const usuarioVisible = (u: UsuarioDeHubspot) => lleno(u.nombre) || lleno(u.correo);
+export const canalVisible = (c: CanalDeEntrada) => lleno(c.canal);
+export const formularioVisible = (f: Formulario) => lleno(f.nombre) || f.campos.some((c) => lleno(c.etiqueta));
+export const informeVisible = (i: Informe) => lleno(i.nombre);
+
+export function fichaVacia(data: unknown): boolean {
+  const d = adoptarFichaDelProyecto(data);
+  return !lleno(d.intro) && !lleno(d.alcance) && !lleno(d.consideraciones) && !d.hubs.some(hubVisible) && !d.participantes.some(participanteVisible);
+}
+export function usuariosVacia(data: unknown): boolean {
+  const d = adoptarUsuariosPermisos(data);
+  return !lleno(d.intro) && !d.equipos.some(equipoVisible) && !d.usuarios.some(usuarioVisible);
+}
+export function canalesVacia(data: unknown): boolean {
+  const d = adoptarCanales(data);
+  return !lleno(d.intro) && !d.canales.some(canalVisible);
+}
+export function formulariosVacia(data: unknown): boolean {
+  const d = adoptarFormularios(data);
+  return !lleno(d.intro) && !d.items.some(formularioVisible);
+}
+export function cotizacionesVacia(data: unknown): boolean {
+  const d = adoptarCotizaciones(data);
+  return !lleno(d.intro) && !lleno(d.propiedades) && !lleno(d.formato) && !lleno(d.ajustes);
+}
+export function informesVacia(data: unknown): boolean {
+  const d = adoptarInformes(data);
+  return !lleno(d.intro) && !d.items.some(informeVisible);
 }

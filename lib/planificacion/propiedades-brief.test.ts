@@ -13,12 +13,14 @@ import {
   opcionesDe,
   fichaDe,
   plantillaDeImportacion,
+  columnasDeImportacion,
   conservarLoDeFuera,
   fusionarFilas,
   type FilaPropiedad,
   type PropiedadesData,
 } from "./propiedades";
 import { leerPlantilla, sumarImportadas, tipoDesdeTexto } from "./importar";
+import { plantillaExcel } from "./plantilla-excel";
 
 const fila = (p: Partial<FilaPropiedad>): FilaPropiedad => ({ objeto: "Contacto", etiqueta: "", campo: "", tipo: "texto", ...p });
 
@@ -95,7 +97,8 @@ describe("la plantilla de importación", () => {
         fila({ etiqueta: "Ciudad, país", grupo: "Información del contacto" }),
       ],
     };
-    expect(plantillaDeImportacion(d, "Contacto")).toBe('﻿Nombre,"Ciudad, país",Estado del lead,Motivo de interés\r\n');
+    expect(columnasDeImportacion(d, "Contacto")).toEqual(["Nombre", "Ciudad, país", "Estado del lead", "Motivo de interés"]);
+    expect(plantillaDeImportacion(d, "Contacto")).toBe(String.fromCharCode(0xfeff) + 'Nombre,"Ciudad, país",Estado del lead,Motivo de interés\r\n');
   });
 });
 
@@ -113,6 +116,24 @@ describe("la IA y el chat no le borran a una fila lo que no conocen", () => {
     expect(out.grupos).toEqual(previo.grupos);
     // Una fila que el chat quitó no vuelve.
     expect((conservarLoDeFuera(previo, { filas: [] }) as PropiedadesData).filas).toEqual([]);
+  });
+
+  it("dos propiedades «⚠️ Por validar» del mismo objeto no se confunden (manda la etiqueta)", () => {
+    const previo: PropiedadesData = {
+      filas: [
+        fila({ id: "ia1", autor: "ia", etiqueta: "Ciudad", campo: "⚠️ Por validar" }),
+        fila({ id: "p1", autor: "persona", etiqueta: "Motivo", campo: "⚠️ Por validar", enFicha: "si" }),
+      ],
+    };
+    // La IA las devuelve en otro orden y sin identidad.
+    const propuesta = { filas: [{ objeto: "Contacto", etiqueta: "Motivo", campo: "⚠️ Por validar", tipo: "casillas" }, { objeto: "Contacto", etiqueta: "Ciudad", campo: "⚠️ Por validar", tipo: "texto" }] };
+    const out = conservarLoDeFuera(previo, propuesta) as PropiedadesData;
+    expect(out.filas.map((f) => `${f.etiqueta}:${f.id}:${f.autor}`)).toEqual(["Motivo:p1:persona", "Ciudad:ia1:ia"]);
+    expect(out.filas[0].enFicha).toBe("si");
+    // Y regenerar conserva las dos.
+    const regenerado = fusionarFilas(previo.filas, [fila({ etiqueta: "Ciudad", campo: "⚠️ Por validar" }), fila({ etiqueta: "Sede", campo: "⚠️ Por validar" })]);
+    expect(regenerado.map((f) => f.etiqueta)).toEqual(["Motivo", "Ciudad", "Sede"]);
+    expect(regenerado.find((f) => f.etiqueta === "Ciudad")?.id).toBe("ia1");
   });
 
   it("y después de eso, regenerar ya no pisa la fila de la persona", () => {
@@ -159,6 +180,14 @@ describe("pegar una plantilla", () => {
     expect(r.filas[1]).toMatchObject({ objeto: "Contacto", tipo: "texto", obligatoria: "no" });
   });
 
+  it("una celda con varios renglones (entre comillas, como la pega Excel) no se parte en propiedades falsas", () => {
+    const texto = 'Propiedad\tTipo\tOpciones\nEstado del lead\tDesplegable\t"Nuevo\nEn contacto\nDescartado"\nPaís\tTexto\t\nNota\tTexto\t"Dice ""hola"""';
+    const r = leerPlantilla(texto, "Contacto");
+    expect(r.filas.map((f) => f.etiqueta)).toEqual(["Estado del lead", "País", "Nota"]);
+    expect(r.filas[0].opciones).toBe("Nuevo · En contacto · Descartado");
+    expect(r.filas[2].opciones).toBe('Dice "hola"');
+  });
+
   it("lo que no se reconoce no inventa filas", () => {
     expect(leerPlantilla("hola\tmundo\n1\t2", "Contacto")).toEqual({ filas: [], forma: null });
   });
@@ -181,5 +210,16 @@ describe("pegar una plantilla", () => {
     expect(r.data.filas.map((f) => `${f.etiqueta}:${f.autor}`)).toEqual(["Nombre:persona", "Correo:plantilla", "País:plantilla"]);
     expect(r.data.filas[1].id).toBe("i");
     expect(gruposDe(r.data, "Contacto")).toEqual(["Info", "Dirección", ""]);
+  });
+});
+
+describe("la plantilla en Excel", () => {
+  it("una hoja con los títulos en la primera fila, que se abre igual en cualquier configuración", async () => {
+    const buffer = await plantillaExcel(["Nombre", "Ciudad, país", "Estado del lead"], "Importar contactos");
+    const ExcelJS = (await import("exceljs")).default;
+    const libro = new ExcelJS.Workbook();
+    await libro.xlsx.load(buffer);
+    const hoja = libro.getWorksheet("Importar contactos");
+    expect((hoja?.getRow(1).values as unknown[]).slice(1)).toEqual(["Nombre", "Ciudad, país", "Estado del lead"]);
   });
 });

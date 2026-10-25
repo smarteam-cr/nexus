@@ -38,6 +38,14 @@ import {
 } from "./shared-sections.defs";
 import { PLANIFICACION_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
+import {
+  fichaVacia,
+  usuariosVacia,
+  canalesVacia,
+  formulariosVacia,
+  cotizacionesVacia,
+  informesVacia,
+} from "@/lib/planificacion/brief";
 
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
@@ -63,6 +71,9 @@ const ORIGEN_BRIEF =
    Curadas: el agente NO las escribe en la corrida principal (ya está en el tope de tokens), así que
    regenerar no las toca. Las llenan el CSE, el cliente o una plantilla. Su esquema existe para el chat
    y lleva los `id`, así una edición del chat no le cambia la identidad a nadie. */
+/* ⚠ En cada lista, el `id` va AL FINAL del esquema: el chat nombra un ítem por su primer campo de texto con contenido, y
+   con el `id` primero la línea que se aprueba decía «en «pmvo8d3b01», Correo pasa a…» (2026-10-25, la revisión; la misma
+   trampa del kickoff el 2026-08-23). */
 const MANUAL_BRIEF = "Sección curada: la llenan el equipo o el cliente; el agente no la escribe al generar.";
 
 const PERMISOS_DE_OBJETO = { type: "object", properties: { ver: str, editar: str, eliminar: str } } as const;
@@ -74,6 +85,7 @@ const FICHA_PROYECTO_DEF: BCSectionDef = {
   theme: "soft",
   sectionType: "ficha_proyecto",
   agentGenerated: false,
+  vacia: fichaVacia,
   empty: { intro: "", hubs: [], participantes: [], alcance: "", consideraciones: "" },
   agentHint: "",
   brief: MANUAL_BRIEF + " Los hubs con su edición y cuántas sesiones de set up y de capacitación lleva cada uno; quiénes participan de Smarteam, de HubSpot y del cliente; el alcance y lo que hay que tener en cuenta.",
@@ -82,7 +94,7 @@ const FICHA_PROYECTO_DEF: BCSectionDef = {
     properties: {
       intro: str,
       hubs: arrayOf({ hub: str, incluido: str, edicion: str, sesionesSetup: str, sesionesCapacitacion: str }, ["hub"]),
-      participantes: arrayOf({ id: str, nombre: str, cargo: str, correo: str, telefono: str, lado: str, principal: str }, ["nombre"]),
+      participantes: arrayOf({ nombre: str, cargo: str, correo: str, telefono: str, lado: str, principal: str, id: str }, ["nombre"]),
       alcance: str,
       consideraciones: str,
     },
@@ -96,6 +108,7 @@ const USUARIOS_PERMISOS_DEF: BCSectionDef = {
   theme: "light",
   sectionType: "usuarios_permisos",
   agentGenerated: false,
+  vacia: usuariosVacia,
   empty: { intro: "", equipos: [], usuarios: [] },
   agentHint: "",
   brief:
@@ -107,13 +120,14 @@ const USUARIOS_PERMISOS_DEF: BCSectionDef = {
       intro: str,
       equipos: arrayOf(
         {
-          id: str, nombre: str, tipo: str, tablaDeUsuarios: str, exportar: str,
+          nombre: str, tipo: str, tablaDeUsuarios: str, exportar: str,
           permisos: { type: "object", properties: { contactos: PERMISOS_DE_OBJETO, empresas: PERMISOS_DE_OBJETO, negocios: PERMISOS_DE_OBJETO, tickets: PERMISOS_DE_OBJETO } },
+          id: str,
         },
         ["nombre"],
       ),
       usuarios: arrayOf(
-        { id: str, nombre: str, apellido: str, correo: str, cargo: str, equipoId: str, licencia: str, superAdmin: str, champion: str },
+        { nombre: str, apellido: str, correo: str, cargo: str, equipoId: str, licencia: str, superAdmin: str, champion: str, id: str },
         ["nombre"],
       ),
     },
@@ -127,12 +141,13 @@ const CANALES_ENTRADA_DEF: BCSectionDef = {
   theme: "light",
   sectionType: "canales_entrada",
   agentGenerated: false,
+  vacia: canalesVacia,
   empty: { intro: "", canales: [] },
   agentHint: "",
   brief: MANUAL_BRIEF + " Un canal por fila (llamada, formulario del sitio, WhatsApp…): quién lo atiende, cómo se atiende paso a paso y cómo pasa a otra área.",
   schema: {
     type: "object",
-    properties: { intro: str, canales: arrayOf({ id: str, canal: str, responsable: str, atencion: str, pasaA: str, origen: str }, ["canal"]) },
+    properties: { intro: str, canales: arrayOf({ canal: str, responsable: str, atencion: str, pasaA: str, origen: str, id: str }, ["canal"]) },
   },
 };
 
@@ -143,6 +158,7 @@ const FORMULARIOS_DEF: BCSectionDef = {
   theme: "light",
   sectionType: "formularios",
   agentGenerated: false,
+  vacia: formulariosVacia,
   empty: { intro: "", items: [] },
   agentHint: "",
   brief: MANUAL_BRIEF + " Un formulario por tarjeta: dónde vive, sus campos (cada uno apunta a una fila de la tabla de propiedades por `propiedadId`) y qué pasa al enviarlo.",
@@ -151,7 +167,7 @@ const FORMULARIOS_DEF: BCSectionDef = {
     properties: {
       intro: str,
       items: arrayOf(
-        { id: str, nombre: str, objeto: str, donde: str, alEnviar: str, origen: str, campos: arrayOf({ propiedadId: str, etiqueta: str, obligatorio: str }, ["etiqueta"]) },
+        { nombre: str, objeto: str, donde: str, alEnviar: str, origen: str, campos: arrayOf({ etiqueta: str, obligatorio: str, propiedadId: str }, ["etiqueta"]), id: str },
         ["nombre"],
       ),
     },
@@ -165,6 +181,7 @@ const COTIZACIONES_DEF: BCSectionDef = {
   theme: "soft",
   sectionType: "cotizaciones",
   agentGenerated: false,
+  vacia: cotizacionesVacia,
   empty: { intro: "", propiedades: "", formato: "", ajustes: "", origen: "" },
   agentHint: "",
   brief: MANUAL_BRIEF + " Solo si el alcance trae cotizaciones: qué propiedades lleva, el formato y los ajustes.",
@@ -178,12 +195,13 @@ const INFORMES_DEF: BCSectionDef = {
   theme: "light",
   sectionType: "informes",
   agentGenerated: false,
+  vacia: informesVacia,
   empty: { intro: "", items: [] },
   agentHint: "",
   brief: MANUAL_BRIEF + " Un indicador por fila: qué mide, cada cuánto, de qué área, y el objetivo del diagnóstico que mide (OBJ-01…).",
   schema: {
     type: "object",
-    properties: { intro: str, items: arrayOf({ id: str, nombre: str, mide: str, frecuencia: str, area: str, objetivo: str, origen: str }, ["nombre"]) },
+    properties: { intro: str, items: arrayOf({ nombre: str, mide: str, frecuencia: str, area: str, objetivo: str, origen: str, id: str }, ["nombre"]) },
   },
 };
 

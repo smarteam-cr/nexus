@@ -68,10 +68,12 @@ import {
   opcionesDe,
   fichaDe,
   plantillaDeImportacion,
+  columnasDeImportacion,
   type FilaPropiedad,
   type PropiedadesData,
 } from "@/lib/planificacion/propiedades";
 import { leerPlantilla, sumarImportadas } from "@/lib/planificacion/importar";
+import { plantillaExcel } from "@/lib/planificacion/plantilla-excel";
 
 /** «Contacto» → «contactos», para los textos que hablan de varios registros. */
 const enPlural = (objeto: string) =>
@@ -272,13 +274,22 @@ export const CicloDeVidaSection: FC<SectionProps<CicloDeVidaData>> = ({ data, ed
    (con orden), cada una dice si se ve en la ficha, la ficha se previsualiza, se pega una plantilla de
    Excel o la pestaña del Brief, y la plantilla para importar la base sale sola de la tabla. */
 
-/** Descarga la plantilla de importación de un objeto. Solo en el navegador. */
-function descargarPlantilla(data: PropiedadesData, objeto: string) {
-  const blob = new Blob([plantillaDeImportacion(data, objeto)], { type: "text/csv;charset=utf-8" });
+/** Descarga la plantilla de importación de un objeto, en Excel; si el Excel no se puede armar, en CSV. Solo en el navegador. */
+async function descargarPlantilla(data: PropiedadesData, objeto: string) {
+  const nombre = `plantilla-de-importacion-${objeto.toLowerCase().replace(/\s+/g, "-")}`;
+  let blob: Blob;
+  let extension = "xlsx";
+  try {
+    const buffer = await plantillaExcel(columnasDeImportacion(data, objeto), `Importar ${enPlural(objeto)}`);
+    blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  } catch {
+    blob = new Blob([plantillaDeImportacion(data, objeto)], { type: "text/csv;charset=utf-8" });
+    extension = "csv";
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `plantilla-de-importacion-${objeto.toLowerCase().replace(/\s+/g, "-")}.csv`;
+  a.download = `${nombre}.${extension}`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -370,7 +381,7 @@ export const PropiedadesObjetoSection: FC<SectionProps<PropiedadesData>> = ({ da
       opciones: "", obligatoria: "no", enFicha: "no", estado: "nueva", uso: "", origen: "", fuente: "",
     });
     const ficha = fichaDe(d, objeto);
-    const conColumnas = !ctx.pdfMode && filas.some((f) => normalizarObjeto(f.objeto) === objeto) && plantillaDeImportacion(d, objeto).trim().length > 0;
+    const conColumnas = !ctx.pdfMode && filas.some((f) => normalizarObjeto(f.objeto) === objeto) && columnasDeImportacion(d, objeto).length > 0;
     return (
       <div key={objeto}>
         {ctx.pdfMode && <h3 className="stl-plan-objeto">{objeto}</h3>}
@@ -444,7 +455,7 @@ export const PropiedadesObjetoSection: FC<SectionProps<PropiedadesData>> = ({ da
         {editable && aviso && <p className="stl-plan-aviso" role="status">{aviso}</p>}
         {conColumnas && (
           <div className="stl-plan-acciones">
-            <button type="button" className="stl-plan-mini" onClick={() => descargarPlantilla(d, objeto)}>
+            <button type="button" className="stl-plan-mini" onClick={() => void descargarPlantilla(d, objeto)}>
               Descargar la plantilla para importar {enPlural(objeto)}
             </button>
           </div>

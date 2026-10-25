@@ -334,7 +334,7 @@ export default function LandingView({
     // (hero/cierre) y `ctxDriven` (cronograma/procesos: se alimentan de ctx, no de
     // data) NUNCA se omiten por isBlank — su Component decide si devuelve null.
     const alwaysRender = def.pinned || def.ctxDriven;
-    if (!editable && ((!alwaysRender && isBlank(data)) || hidden)) return null;
+    if (!editable && ((!alwaysRender && (def.vacia ? def.vacia(data) : isBlank(data))) || hidden)) return null;
     const isHero = !!def.backdrop;
     // Una sección OCULTA se colapsa a su título: el CSE la sigue viendo en su lugar (puede
     // arrastrarla y volver a mostrarla) sin que le coma la pantalla. El caret la despliega.

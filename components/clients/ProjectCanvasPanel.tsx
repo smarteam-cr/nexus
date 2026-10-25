@@ -1194,7 +1194,7 @@ export default function ProjectCanvasPanel({
       {activeSlug === "planning" && activeCanvasId && (
         <MarcoDelDocumento loVeElCliente={loVeElCliente}>
           <CanvasBoundary label="la planificación">
-            <PlanificacionWorkspace key={`planificacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+            <PlanificacionWorkspace key={`planificacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} etiquetas={tags} />
           </CanvasBoundary>
         </MarcoDelDocumento>
       )}

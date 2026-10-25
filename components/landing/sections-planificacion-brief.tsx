@@ -22,7 +22,7 @@ import { ConIntro } from "./partes";
 import { partesDe } from "@/lib/landing/partes";
 import { OrigenChip, Mover, Campo } from "./sections-planificacion";
 import { mover } from "@/lib/planificacion/secciones";
-import { nuevoIdDeFila } from "@/lib/planificacion/propiedades";
+import { nuevoIdDeFila, normalizarObjeto, OBJETOS_ESTANDAR } from "@/lib/planificacion/propiedades";
 import {
   EDICIONES,
   LADOS,
@@ -44,6 +44,20 @@ import {
   camposContraPropiedades,
   propiedadesParaFormulario,
   conIds,
+  hubsVendidos,
+  hubVisible,
+  participanteVisible,
+  equipoVisible,
+  usuarioVisible,
+  canalVisible,
+  formularioVisible,
+  informeVisible,
+  fichaVacia,
+  usuariosVacia,
+  canalesVacia,
+  formulariosVacia,
+  cotizacionesVacia,
+  informesVacia,
   type FichaDelProyectoData,
   type HubDelProyecto,
   type Participante,
@@ -64,6 +78,7 @@ import {
 
 const etiquetaDe = (opciones: readonly { value: string; label: string }[], v?: string) => opciones.find((o) => o.value === v)?.label ?? v ?? "";
 const lleno = (v?: string) => !!(v ?? "").trim();
+const OBJETOS_DE_FORMULARIO = OBJETOS_ESTANDAR.map((o) => ({ value: o, label: o }));
 
 /** Una celda de texto de una tabla. */
 function Celda({ value, editable, placeholder, onCommit, className }: { value?: string; editable?: boolean; placeholder: string; onCommit: (v: string) => void; className?: string }) {
@@ -72,19 +87,22 @@ function Celda({ value, editable, placeholder, onCommit, className }: { value?: 
 
 /* ── Ficha del proyecto ─────────────────────────────────────────────────────── */
 
-export const FichaDelProyectoSection: FC<SectionProps<FichaDelProyectoData>> = ({ data, editable, onChange }) => {
+export const FichaDelProyectoSection: FC<SectionProps<FichaDelProyectoData>> = ({ data, ctx, editable, onChange }) => {
   const d = adoptarFichaDelProyecto(data);
-  // Se guardan solo los hubs con algún dato: los cinco se pintan siempre (adoptarFichaDelProyecto).
-  const hubsConDato = (hubs: HubDelProyecto[]) => hubs.filter((h) => isSi(h.incluido ?? "") || lleno(h.edicion) || lleno(h.sesionesSetup) || lleno(h.sesionesCapacitacion));
+  /* Se guardan solo los hubs que ENTRAN: tocar la edición o las sesiones de uno lo marca, y quitarle la marca lo saca
+     (con su edición). Así la ficha nunca guarda un hub que el cliente no vería (2026-10-25, la revisión). */
   const set = (next: Partial<FichaDelProyectoData>) =>
-    onChange?.({ ...partesDe(data), ...d, hubs: hubsConDato(d.hubs), participantes: conIds(d.participantes), ...next });
-  const setHub = (i: number, patch: Partial<HubDelProyecto>) => set({ hubs: hubsConDato(replaceAt(d.hubs, i, { ...d.hubs[i], ...patch })) });
+    onChange?.({ ...partesDe(data), ...d, hubs: d.hubs.filter(hubVisible), participantes: conIds(d.participantes), ...next });
+  const setHub = (i: number, patch: Partial<HubDelProyecto>) => set({ hubs: replaceAt(d.hubs, i, { ...d.hubs[i], ...patch }).filter(hubVisible) });
   const participantes = d.participantes;
   const setP = (i: number, patch: Partial<Participante>) => set({ participantes: conIds(replaceAt(participantes, i, { ...participantes[i], ...patch })) });
+  if (!editable && fichaVacia(data)) return null;
 
-  const hubsVisibles = editable ? d.hubs : d.hubs.filter((h) => isSi(h.incluido ?? ""));
-  const vacia = !hubsVisibles.length && !participantes.length && !lleno(d.alcance) && !lleno(d.consideraciones);
-  if (!editable && vacia) return null;
+  // Lo vendido (las etiquetas del proyecto) se OFRECE, no se escribe solo: el editor no guarda nada al abrir.
+  const vendidos = hubsVendidos(ctx.planificacion?.etiquetasDelProyecto);
+  const ofrecerVendidos = editable && vendidos.length > 0 && !d.hubs.some(hubVisible);
+  const hubsVisibles = editable ? d.hubs : d.hubs.filter(hubVisible);
+  const personas = editable ? participantes : participantes.filter(participanteVisible);
 
   return (
     <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<FichaDelProyectoData>)} placeholder="Una frase que presenta el proyecto…">
@@ -103,13 +121,17 @@ export const FichaDelProyectoSection: FC<SectionProps<FichaDelProyectoData>> = (
             <tbody>
               {hubsVisibles.map((h) => {
                 const i = d.hubs.indexOf(h);
+                const marcar = (patch: Partial<HubDelProyecto>) => setHub(i, { incluido: "si", ...patch });
                 return (
-                  <tr key={h.hub} className={editable && !isSi(h.incluido ?? "") ? "stl-plan-apagada" : undefined}>
-                    <td className="stl-accion-titulo">{h.hub}</td>
+                  <tr key={h.hub} className={editable && !hubVisible(h) ? "stl-plan-apagada" : undefined}>
+                    <td className="stl-accion-titulo">
+                      {h.hub}
+                      {editable && vendidos.includes(h.hub) && <span className="stl-plan-oblig"> · vendido</span>}
+                    </td>
                     {editable && <td className="stl-props-mid"><InlineCheck value={h.incluido ?? ""} editable onCommit={(v) => setHub(i, { incluido: v })} ariaLabel={`El proyecto incluye ${h.hub}`} /></td>}
-                    <td><InlineSelect value={h.edicion ?? ""} options={EDICIONES} editable={editable} onCommit={(v) => setHub(i, { edicion: v })} ariaLabel={`Edición de ${h.hub}`} /></td>
-                    <td className="stl-props-mid"><Celda value={h.sesionesSetup} editable={editable} placeholder="—" onCommit={(v) => setHub(i, { sesionesSetup: v })} /></td>
-                    <td className="stl-props-mid"><Celda value={h.sesionesCapacitacion} editable={editable} placeholder="—" onCommit={(v) => setHub(i, { sesionesCapacitacion: v })} /></td>
+                    <td><InlineSelect value={h.edicion ?? ""} options={EDICIONES} editable={editable} onCommit={(v) => marcar({ edicion: v })} ariaLabel={`Edición de ${h.hub}`} /></td>
+                    <td className="stl-props-mid"><Celda value={h.sesionesSetup} editable={editable} placeholder="—" onCommit={(v) => marcar({ sesionesSetup: v })} /></td>
+                    <td className="stl-props-mid"><Celda value={h.sesionesCapacitacion} editable={editable} placeholder="—" onCommit={(v) => marcar({ sesionesCapacitacion: v })} /></td>
                   </tr>
                 );
               })}
@@ -117,9 +139,20 @@ export const FichaDelProyectoSection: FC<SectionProps<FichaDelProyectoData>> = (
           </table>
         </div>
       )}
+      {ofrecerVendidos && (
+        <div className="stl-plan-acciones">
+          <button
+            type="button"
+            className="stl-plan-mini"
+            onClick={() => set({ hubs: d.hubs.map((h) => (vendidos.includes(h.hub) ? { ...h, incluido: "si" } : h)).filter(hubVisible) })}
+          >
+            Marcar los hubs vendidos ({vendidos.join(", ")})
+          </button>
+        </div>
+      )}
 
-      {(editable || participantes.length > 0) && <h3 className="stl-plan-objeto">Quiénes participan</h3>}
-      {participantes.length > 0 && (
+      {(editable || personas.length > 0) && <h3 className="stl-plan-objeto">Quiénes participan</h3>}
+      {personas.length > 0 && (
         <div className="stl-props-scroll">
           <table className="stl-props stl-plan-tabla">
             <thead>
@@ -134,7 +167,7 @@ export const FichaDelProyectoSection: FC<SectionProps<FichaDelProyectoData>> = (
               </tr>
             </thead>
             <tbody>
-              {participantes.map((p, i) => (
+              {personas.map((p, i) => (
                 <tr key={p.id ?? i}>
                   <td><Celda className="stl-accion-titulo" value={p.nombre} editable={editable} placeholder="Nombre…" onCommit={(v) => setP(i, { nombre: v })} /></td>
                   <td><Celda value={p.cargo} editable={editable} placeholder="Cargo…" onCommit={(v) => setP(i, { cargo: v })} /></td>
@@ -153,13 +186,16 @@ export const FichaDelProyectoSection: FC<SectionProps<FichaDelProyectoData>> = (
       )}
       {editable && (
         <div className="stl-plan-acciones">
-          <AddBtn label="Agregar persona" onClick={() => set({ participantes: conIds(appendItem(participantes, { nombre: "", cargo: "", correo: "", telefono: "", lado: "cliente", principal: "no" })) })} />
+          <AddBtn label="Agregar persona" onClick={() => set({ participantes: conIds(appendItem(participantes, { nombre: "", cargo: "", correo: "", telefono: "", lado: "", principal: "" })) })} />
           {!participantes.length && (
-            <button type="button" className="stl-plan-mini" onClick={() => set({ participantes: conIds<Participante>(PARTICIPANTES_DE_SIEMPRE.map((p) => ({ nombre: "", correo: "", telefono: "", principal: "no", ...p }))) })}>
+            <button type="button" className="stl-plan-mini" onClick={() => set({ participantes: conIds<Participante>(PARTICIPANTES_DE_SIEMPRE.map((p) => ({ nombre: "", correo: "", telefono: "", principal: "", ...p }))) })}>
               Empezar con los cargos de siempre
             </button>
           )}
         </div>
+      )}
+      {editable && participantes.some((p) => !participanteVisible(p)) && (
+        <p className="stl-plan-aviso">Las filas sin nombre ni correo no las ve el cliente.</p>
       )}
 
       {(editable || lleno(d.alcance) || lleno(d.consideraciones)) && (
@@ -182,15 +218,21 @@ export const UsuariosPermisosSection: FC<SectionProps<UsuariosPermisosData>> = (
   const usuarios = d.usuarios;
   const setEquipo = (i: number, patch: Partial<EquipoDeHubspot>) => set({ equipos: conIds(replaceAt(equipos, i, { ...equipos[i], ...patch })) });
   const setUsuario = (i: number, patch: Partial<UsuarioDeHubspot>) => set({ usuarios: conIds(replaceAt(usuarios, i, { ...usuarios[i], ...patch })) });
-  if (!editable && !equipos.length && !usuarios.length) return null;
+  // Quitar un equipo deja a sus usuarios sin equipo: si no, la columna mostraba el código del equipo borrado.
+  const quitarEquipo = (i: number) =>
+    set({ equipos: removeAt(equipos, i), usuarios: conIds(usuarios.map((u) => (u.equipoId && u.equipoId === equipos[i].id ? { ...u, equipoId: "" } : u))) });
+  if (!editable && usuariosVacia(data)) return null;
 
   const opcionesDeEquipo = equipos.filter((e) => e.id).map((e) => ({ value: e.id!, label: e.nombre || "Equipo sin nombre" }));
+  const equipoDe = (u: UsuarioDeHubspot) => (opcionesDeEquipo.some((o) => o.value === u.equipoId) ? (u.equipoId ?? "") : "");
+  const equiposVisibles = editable ? equipos : equipos.filter(equipoVisible);
+  const usuariosVisibles = editable ? usuarios : usuarios.filter(usuarioVisible);
   const licencias = resumenDeLicencias(usuarios);
   const avisos = editable ? avisosDeUsuarios(d) : [];
 
   const matriz = (e: EquipoDeHubspot, i: number) => (
     <div key={e.id ?? i} className="stl-plan-bloque stl-item">
-      {editable && <RemoveBtn onClick={() => set({ equipos: removeAt(equipos, i) })} title="Quitar este equipo" />}
+      {editable && <RemoveBtn onClick={() => quitarEquipo(i)} title="Quitar este equipo (sus usuarios quedan sin equipo)" />}
       <div className="stl-plan-bloque-h">
         <span className="stl-plan-tipo">
           {editable ? <InlineSelect value={e.tipo ?? ""} options={TIPOS_DE_EQUIPO} editable onCommit={(v) => setEquipo(i, { tipo: v })} ariaLabel="Tipo de equipo" placeholder="Tipo" /> : etiquetaDe(TIPOS_DE_EQUIPO, e.tipo)}
@@ -238,18 +280,18 @@ export const UsuariosPermisosSection: FC<SectionProps<UsuariosPermisosData>> = (
 
   return (
     <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<UsuariosPermisosData>)} placeholder="Quién va a trabajar en HubSpot y qué puede hacer cada equipo…">
-      {(editable || equipos.length > 0) && <h3 className="stl-plan-objeto">Equipos y sus permisos</h3>}
-      {equipos.map(matriz)}
+      {(editable || equiposVisibles.length > 0) && <h3 className="stl-plan-objeto">Equipos y sus permisos</h3>}
+      {equiposVisibles.map(matriz)}
       {editable && (
         <>
-          <AddBtn label="Agregar equipo" onClick={() => set({ equipos: [...conIds(equipos), { id: nuevoIdDeFila(), nombre: "", tipo: "operativo", permisos: {}, tablaDeUsuarios: "no", exportar: "no" }] })} />
+          <AddBtn label="Agregar equipo" onClick={() => set({ equipos: [...conIds(equipos), { id: nuevoIdDeFila(), nombre: "", tipo: "", permisos: {}, tablaDeUsuarios: "", exportar: "" }] })} />
           <p className="stl-plan-aviso">Editar no puede llegar más lejos que ver, ni eliminar más que editar: al bajar uno, bajan los que dependen de él. Los superadministradores no van en un equipo: los marcas en la lista de usuarios.</p>
         </>
       )}
 
-      {(editable || usuarios.length > 0) && <h3 className="stl-plan-objeto">Usuarios que trabajarán en HubSpot</h3>}
+      {(editable || usuariosVisibles.length > 0) && <h3 className="stl-plan-objeto">Usuarios que trabajarán en HubSpot</h3>}
       {editable && <p className="stl-plan-aviso">Empieza por quien lidera la implementación, sigue con directores y supervisores, y termina con el equipo que opera.</p>}
-      {usuarios.length > 0 && (
+      {usuariosVisibles.length > 0 && (
         <div className="stl-props-scroll">
           <table className="stl-props stl-plan-tabla">
             <thead>
@@ -266,13 +308,13 @@ export const UsuariosPermisosSection: FC<SectionProps<UsuariosPermisosData>> = (
               </tr>
             </thead>
             <tbody>
-              {usuarios.map((u, i) => (
+              {usuariosVisibles.map((u, i) => (
                 <tr key={u.id ?? i}>
                   <td><Celda className="stl-accion-titulo" value={u.nombre} editable={editable} placeholder="Nombre…" onCommit={(v) => setUsuario(i, { nombre: v })} /></td>
                   <td><Celda value={u.apellido} editable={editable} placeholder="Apellido…" onCommit={(v) => setUsuario(i, { apellido: v })} /></td>
                   <td><Celda value={u.correo} editable={editable} placeholder="correo@…" onCommit={(v) => setUsuario(i, { correo: v })} /></td>
                   <td><Celda value={u.cargo} editable={editable} placeholder="Cargo…" onCommit={(v) => setUsuario(i, { cargo: v })} /></td>
-                  <td><InlineSelect value={u.equipoId ?? ""} options={opcionesDeEquipo} editable={editable} onCommit={(v) => setUsuario(i, { equipoId: v })} ariaLabel="Equipo" placeholder="Sin equipo" /></td>
+                  <td><InlineSelect value={equipoDe(u)} options={opcionesDeEquipo} editable={editable} onCommit={(v) => setUsuario(i, { equipoId: v })} ariaLabel="Equipo" placeholder="Sin equipo" /></td>
                   <td><Celda value={u.licencia} editable={editable} placeholder="Sales Hub Pro…" onCommit={(v) => setUsuario(i, { licencia: v })} /></td>
                   <td className="stl-props-mid"><InlineCheck value={u.superAdmin ?? ""} editable={editable} onCommit={(v) => setUsuario(i, { superAdmin: v })} ariaLabel="Superadministrador" /></td>
                   <td className="stl-props-mid"><InlineCheck value={u.champion ?? ""} editable={editable} onCommit={(v) => setUsuario(i, { champion: v })} ariaLabel="Champion" /></td>
@@ -285,7 +327,7 @@ export const UsuariosPermisosSection: FC<SectionProps<UsuariosPermisosData>> = (
           </table>
         </div>
       )}
-      {editable && <AddBtn label="Agregar usuario" onClick={() => set({ usuarios: [...conIds(usuarios), { id: nuevoIdDeFila(), nombre: "", apellido: "", correo: "", cargo: "", licencia: "", superAdmin: "no", champion: "no" }] })} />}
+      {editable && <AddBtn label="Agregar usuario" onClick={() => set({ usuarios: [...conIds(usuarios), { id: nuevoIdDeFila(), nombre: "", apellido: "", correo: "", cargo: "", licencia: "", superAdmin: "", champion: "" }] })} />}
       {licencias.length > 0 && (
         <p className="stl-plan-resumen">
           {(() => {
@@ -308,11 +350,12 @@ export const CanalesDeEntradaSection: FC<SectionProps<CanalesDeEntradaData>> = (
   const canales = d.canales;
   const set = (next: Partial<CanalesDeEntradaData>) => onChange?.({ ...partesDe(data), intro: d.intro, canales: conIds(canales), ...next });
   const setCanal = (i: number, patch: Partial<CanalDeEntrada>) => set({ canales: conIds(replaceAt(canales, i, { ...canales[i], ...patch })) });
-  if (!editable && !canales.length) return null;
+  if (!editable && canalesVacia(data)) return null;
+  const visibles = editable ? canales : canales.filter(canalVisible);
   const nuevo = (canal: string): CanalDeEntrada => ({ id: nuevoIdDeFila(), canal, responsable: "", atencion: "", pasaA: "", origen: "" });
   return (
     <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<CanalesDeEntradaData>)} placeholder="Por dónde llegan los leads y qué pasa con cada uno…">
-      {canales.length > 0 && (
+      {visibles.length > 0 && (
         <div className="stl-props-scroll">
           <table className="stl-props stl-plan-tabla">
             <thead>
@@ -326,7 +369,7 @@ export const CanalesDeEntradaSection: FC<SectionProps<CanalesDeEntradaData>> = (
               </tr>
             </thead>
             <tbody>
-              {canales.map((c, i) => (
+              {visibles.map((c, i) => (
                 <tr key={c.id ?? i}>
                   <td><Celda className="stl-accion-titulo" value={c.canal} editable={editable} placeholder="Canal…" onCommit={(v) => setCanal(i, { canal: v })} /></td>
                   <td><Celda value={c.responsable} editable={editable} placeholder="Persona o equipo…" onCommit={(v) => setCanal(i, { responsable: v })} /></td>
@@ -368,12 +411,13 @@ export const FormulariosSection: FC<SectionProps<FormulariosData>> = ({ data, ct
   const items = d.items;
   const set = (next: Partial<FormulariosData>) => onChange?.({ ...partesDe(data), intro: d.intro, items: conIds(items), ...next });
   const setItem = (i: number, patch: Partial<Formulario>) => set({ items: conIds(replaceAt(items, i, { ...items[i], ...patch })) });
-  if (!editable && !items.length) return null;
+  if (!editable && formulariosVacia(data)) return null;
   const propiedades = ctx.planificacion?.propiedades;
+  const visibles = editable ? items : items.filter(formularioVisible);
   return (
     <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<FormulariosData>)} placeholder="Los formularios que se van a crear y qué pide cada uno…">
       <div className="stl-plan-cards">
-        {items.map((f, i) => {
+        {visibles.map((f, i) => {
           const campos = camposContraPropiedades(f.campos, propiedades);
           const opciones = propiedadesParaFormulario(propiedades, f.objeto);
           const setCampo = (j: number, patch: Partial<CampoDeFormulario>) => setItem(i, { campos: replaceAt(f.campos, j, { ...f.campos[j], ...patch }) });
@@ -386,14 +430,20 @@ export const FormulariosSection: FC<SectionProps<FormulariosData>> = ({ data, ct
                   <Editable as="div" className="stl-plan-card-t" editable={editable} value={f.nombre} placeholder="Nombre del formulario (Formulario · Sitio web)…" onCommit={(v) => setItem(i, { nombre: v })} />
                   {(editable || f.donde) && <Editable as="div" className="stl-plan-fuente" editable={editable} value={f.donde ?? ""} placeholder="Dónde vive (sitio web, anuncio de Meta)…" onCommit={(v) => setItem(i, { donde: v })} />}
                 </div>
-                <OrigenChip value={f.origen} editable={editable} onCommit={(v) => setItem(i, { origen: v })} />
+                <span className="stl-plan-pie">
+                  {/* El objeto decide de qué propiedades salen los campos: un formulario de soporte crea un Ticket. */}
+                  {editable && (
+                    <InlineSelect value={normalizarObjeto(f.objeto) || "Contacto"} options={OBJETOS_DE_FORMULARIO} editable onCommit={(v) => setItem(i, { objeto: v })} ariaLabel="Qué crea el formulario" />
+                  )}
+                  <OrigenChip value={f.origen} editable={editable} onCommit={(v) => setItem(i, { origen: v })} />
+                </span>
               </div>
               <ul className="stl-plan-campos-form">
                 {campos.map((c, j) => (
                   <li key={`${c.propiedadId ?? c.etiqueta}-${j}`} className={c.falta ? "stl-plan-falta" : undefined}>
                     {editable && opciones.length > 0 ? (
                       <InlineSelect
-                        value={c.propiedadId ?? ""}
+                        value={c.falta ? "" : (c.propiedadId ?? "")}
                         options={opciones}
                         editable
                         placeholder={c.etiqueta || "Elige una propiedad"}
@@ -441,7 +491,7 @@ const normalizarSupuesto = (o?: string) => (o ?? "").trim().toLowerCase().starts
 export const CotizacionesSection: FC<SectionProps<CotizacionesData>> = ({ data, editable, onChange }) => {
   const d = adoptarCotizaciones(data);
   const set = (next: Partial<CotizacionesData>) => onChange?.({ ...partesDe(data), ...d, ...next });
-  if (!editable && !lleno(d.propiedades) && !lleno(d.formato) && !lleno(d.ajustes)) return null;
+  if (!editable && cotizacionesVacia(data)) return null;
   return (
     <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<CotizacionesData>)} placeholder="Cómo se van a armar las cotizaciones en HubSpot…">
       <div className="stl-plan-card">
@@ -466,10 +516,11 @@ export const InformesSection: FC<SectionProps<InformesData>> = ({ data, editable
   const items = d.items;
   const set = (next: Partial<InformesData>) => onChange?.({ ...partesDe(data), intro: d.intro, items: conIds(items), ...next });
   const setItem = (i: number, patch: Partial<Informe>) => set({ items: conIds(replaceAt(items, i, { ...items[i], ...patch })) });
-  if (!editable && !items.length) return null;
+  if (!editable && informesVacia(data)) return null;
+  const visibles = editable ? items : items.filter(informeVisible);
   return (
     <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<InformesData>)} placeholder="Los informes y paneles que se van a construir…">
-      {items.length > 0 && (
+      {visibles.length > 0 && (
         <div className="stl-props-scroll">
           <table className="stl-props stl-plan-tabla">
             <thead>
@@ -484,7 +535,7 @@ export const InformesSection: FC<SectionProps<InformesData>> = ({ data, editable
               </tr>
             </thead>
             <tbody>
-              {items.map((x, i) => (
+              {visibles.map((x, i) => (
                 <tr key={x.id ?? i}>
                   <td><Celda className="stl-accion-titulo" value={x.nombre} editable={editable} placeholder="Negocios en el pipeline…" onCommit={(v) => setItem(i, { nombre: v })} /></td>
                   <td><Celda className="stl-props-desc" value={x.mide} editable={editable} placeholder="Qué cuenta y cómo…" onCommit={(v) => setItem(i, { mide: v })} /></td>

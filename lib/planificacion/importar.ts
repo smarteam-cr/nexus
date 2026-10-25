@@ -27,12 +27,56 @@ import {
 const sinTildes = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 const norm = (s: unknown) => (typeof s === "string" ? sinTildes(s).trim().toLowerCase().replace(/\s+/g, " ") : "");
 
-/** Texto pegado → filas de celdas. Tabuladores (lo que pega Excel o Sheets); si no hay ninguno, `;` o `,`. */
+/**
+ * Texto pegado → filas de celdas. Tabuladores (lo que pega Excel o Sheets); si no hay ninguno, `;` o `,`.
+ *
+ * Una celda con varios renglones (las opciones del Brief suelen ir así, una por renglón) llega ENTRE COMILLAS, con las
+ * comillas de adentro dobladas. Cortar por renglón la partía en propiedades falsas («En contacto», «Descartado»), y como
+ * venían de una plantilla regenerar nunca las quitaba (2026-10-25, la revisión). Se lee carácter por carácter.
+ */
 export function celdasDe(texto: string): string[][] {
-  const lineas = texto.replace(/\r\n?/g, "\n").split("\n");
-  const sep = texto.includes("\t") ? "\t" : texto.includes(";") ? ";" : ",";
-  return lineas.map((l) => l.split(sep).map((c) => c.trim().replace(/^"(.*)"$/, "$1")));
+  const t = texto.replace(/\r\n?/g, "\n");
+  const sep = t.includes("\t") ? "\t" : t.includes(";") ? ";" : ",";
+  const filas: string[][] = [];
+  let fila: string[] = [];
+  let celda = "";
+  let i = 0;
+  while (i < t.length) {
+    if (celda === "" && t[i] === '"') {
+      // Celda entre comillas: hasta la comilla que cierra (una doble `""` es una comilla de adentro).
+      i++;
+      while (i < t.length) {
+        if (t[i] === '"' && t[i + 1] === '"') {
+          celda += '"';
+          i += 2;
+        } else if (t[i] === '"') {
+          i++;
+          break;
+        } else celda += t[i++];
+      }
+      // Lo que quede hasta el separador (no debería haber nada) se suma tal cual.
+      while (i < t.length && t[i] !== sep && t[i] !== "\n") celda += t[i++];
+      continue;
+    }
+    const c = t[i++];
+    if (c === sep) {
+      fila.push(celda.trim());
+      celda = "";
+    } else if (c === "\n") {
+      fila.push(celda.trim());
+      filas.push(fila);
+      fila = [];
+      celda = "";
+    } else celda += c;
+  }
+  fila.push(celda.trim());
+  filas.push(fila);
+  return filas;
 }
+
+/** Las opciones de una celda: una por renglón, unidas con «·» como las escribe la tabla. */
+const opcionesDeCelda = (v: string) =>
+  v.includes("\n") ? v.split("\n").map((x) => x.trim()).filter(Boolean).join(" · ") : v;
 
 /** El tipo como lo escribe una plantilla (en español o en inglés, como lo muestra HubSpot) → nuestro valor. */
 export function tipoDesdeTexto(v: unknown): string {
@@ -122,7 +166,7 @@ function leerVertical(celdas: string[][], objetoPorDefecto: string): FilaPropied
         campo: v.campo ?? "",
         grupo: v.grupo ?? "",
         tipo: tipoDesdeTexto(tipoCrudo),
-        opciones: v.opciones ?? "",
+        opciones: opcionesDeCelda(v.opciones ?? ""),
         obligatoria: v.obligatoria ? (esSi(v.obligatoria) ? "si" : "no") : "no",
         estado: /^n\/?a$/.test(norm(tipoCrudo)) ? "hubspot" : v.estado ? norm(v.estado) : "nueva",
         uso: v.uso ?? "",
@@ -162,7 +206,7 @@ function leerDelBrief(celdas: string[][], objeto: string): FilaPropiedad[] | nul
     if (iContenido >= 0) {
       for (let i = iContenido; i < celdas.length; i++) {
         const c = celdas[i][j] ?? "";
-        if (c) opciones.push(c);
+        if (c) opciones.push(opcionesDeCelda(c));
       }
     }
     out.push(

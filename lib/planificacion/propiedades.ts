@@ -171,9 +171,12 @@ export function desdeTablaDeIntegracion(filas: readonly FilaDeIntegracion[], aut
 
 /** Cómo se reconoce la misma propiedad entre dos versiones: objeto + nombre interno (o etiqueta). */
 export function claveDeFila(f: FilaPropiedad): string {
-  const nombre = (f.campo ?? "").replace(/[`⚠️]/g, "").trim() || (f.etiqueta ?? "").trim();
-  const n = sinTildes(nombre).toLowerCase().replace(/por validar/g, "").replace(/\s+/g, " ").trim();
-  return `${normalizarObjeto(f.objeto).toLowerCase()}|${n}`;
+  /* «⚠️ Por validar» NO es un nombre: cuenta como vacío y manda la etiqueta. Antes se limpiaba DESPUÉS de elegir, así
+     que todas las «Por validar» de un objeto tenían la misma clave: al regenerar quedaba una sola, y «Mejorar con IA» o
+     el chat le daban a una la identidad de otra (2026-10-25, lo encontró la revisión). */
+  const limpio = (v: unknown) =>
+    sinTildes(typeof v === "string" ? v : "").replace(/[`⚠️]/g, "").toLowerCase().replace(/por (validar|definir)/g, "").replace(/\s+/g, " ").trim();
+  return `${normalizarObjeto(f.objeto).toLowerCase()}|${limpio(f.campo) || limpio(f.etiqueta)}`;
 }
 
 let contador = 0;
@@ -333,17 +336,22 @@ const NO_SE_IMPORTA = new Set(["calculo", "archivo"]);
 const celdaCsv = (v: string) => (/[",;\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 
 /**
- * La plantilla de importación de un objeto (el «PLANTILLA BD» del Brief): una columna por propiedad, en
- * el orden de la ficha, con la etiqueta que ve el usuario. Sale sola de la tabla de propiedades: si
- * cambia una propiedad, cambia la plantilla. CSV con BOM para que Excel lea las tildes.
+ * Las columnas de la plantilla de importación de un objeto (el «PLANTILLA BD» del Brief): una por propiedad, en el
+ * orden de la ficha, con la etiqueta que ve el usuario. Sale sola de la tabla de propiedades: si cambia una propiedad,
+ * cambia la plantilla. Se descarga en Excel (lib/planificacion/plantilla-excel.ts): un CSV separado por comas se abre
+ * en una sola columna en un Excel configurado para Costa Rica, que separa con punto y coma (2026-10-25, la revisión).
  */
-export function plantillaDeImportacion(data: Pick<PropiedadesData, "filas" | "grupos">, objeto: string): string {
+export function columnasDeImportacion(data: Pick<PropiedadesData, "filas" | "grupos">, objeto: string): string[] {
   const columnas = filasEnOrdenDeFicha(data, objeto)
     .filter((f) => !NO_SE_IMPORTA.has((f.tipo ?? "").trim()))
     .map((f) => (f.etiqueta || f.campo || "").replace(/[`⚠️]/g, "").trim())
     .filter((n) => n && !/por validar/i.test(n));
-  const unicas = columnas.filter((c, i) => columnas.findIndex((x) => x.toLowerCase() === c.toLowerCase()) === i);
-  return "﻿" + unicas.map(celdaCsv).join(",") + "\r\n";
+  return columnas.filter((c, i) => columnas.findIndex((x) => x.toLowerCase() === c.toLowerCase()) === i);
+}
+
+/** La misma plantilla en CSV (con BOM, para las tildes): lo que se baja si el Excel no se puede armar en el navegador. */
+export function plantillaDeImportacion(data: Pick<PropiedadesData, "filas" | "grupos">, objeto: string): string {
+  return String.fromCharCode(0xfeff) + columnasDeImportacion(data, objeto).map(celdaCsv).join(",") + "\r\n";
 }
 
 /**

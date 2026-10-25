@@ -11535,8 +11535,27 @@ toma la PRIMERA de `X-Forwarded-For`: queda como seguimiento.
   cuenta), lo que pasa solo en cada etapa de un pipeline, y el guion del bot y quiénes atienden en una conversación. Esos
   campos sí entran al esquema del agente, opcionales: en una lista, un campo fuera del esquema se pierde al regenerar.
 - **No entra la «Historia de proceso de ventas»**: es cómo vende el cliente hoy, y eso vive en el Diagnóstico.
+- **Lo que cambió con la revisión (mismo día):**
+  - «⚠️ Por validar» no es un nombre: `claveDeFila` lo trata como vacío y manda la etiqueta. Antes todas las «Por
+    validar» de un objeto tenían la misma clave: regenerar dejaba una sola, y la IA o el chat le daban a una la
+    identidad de otra (una fila de una persona pasaba a ser de la IA y se borraba al regenerar).
+  - Una sección puede declarar su regla de vacía (`vacia` en la definición; el motor la usa en lugar de `isBlank`, y el
+    componente filtra con la misma). Un «no» de una casilla o el cargo de una fila sin nombre ya no publican un título
+    sin nada abajo. La ficha guarda solo los hubs que entran: tocar su edición o sus sesiones lo marca.
+  - Pegar lee las celdas de varios renglones (entre comillas, como las pega Excel): antes las opciones del Brief se
+    partían en propiedades falsas que regenerar nunca quitaba.
+  - La plantilla de importación se baja en Excel (`exceljs`, cargado al hacer clic; CSV si falla): un CSV con comas se
+    abre en una sola columna en un Excel configurado para Costa Rica.
+  - Los hubs llevan el nombre del catálogo de etiquetas (Data Hub, Content Hub, Revenue Hub) y la ficha OFRECE marcar
+    los vendidos (las etiquetas del proyecto); no los escribe sola.
+  - El `id` va al final de cada lista del esquema, para que el chat nombre a una persona por su nombre y no por su
+    código; los permisos que escriba el chat se leen sin contradicciones (`permisosCoherentes`); quitar un equipo deja
+    a sus usuarios sin equipo; un formulario elige su objeto.
 
 *Lo que no garantiza esta tanda:* el editor no se probó con sesión (el navegador del preview no está logueado): la
-prueba es de Elías o del equipo en el 3004. La cuenta de licencias no se compara todavía con lo vendido, las fechas de
-la ficha no se leen del Cronograma (se dice que viven ahí), y las etapas 5 a 7 del plan (estado y enlace por cosa
+prueba es de Elías o del equipo en el 3004. Que el cliente vea los correos y teléfonos de «Usuarios y permisos» y de la
+ficha es parte de la decisión de que esto va en la Planificación, pero nadie lo miró publicado ni en el PDF. La
+protección de las propiedades vive en el editor: restaurar una versión o escribir por la API no pasan por ella. La
+cuenta de licencias no se compara todavía con lo vendido, las fechas de la ficha no se leen del Cronograma (se dice que
+viven ahí), y las etapas 5 a 7 del plan (estado y enlace por cosa
 construida, lista de construcción en Tareas, que el cliente edite en el enlace, las dos plantillas) siguen pendientes.

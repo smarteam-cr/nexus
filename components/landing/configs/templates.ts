@@ -142,6 +142,7 @@ export function toSectionDef(
     listasSoloEdicion: d.listasSoloEdicion,
     ctxDriven: d.ctxDriven,
     ctxEmpty: d.ctxEmpty,
+    vacia: d.vacia,
     pinned: d.pinned,
     noHide: d.noHide,
     schema: d.schema,

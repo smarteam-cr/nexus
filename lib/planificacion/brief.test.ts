@@ -15,7 +15,18 @@ import {
   camposContraPropiedades,
   propiedadesParaFormulario,
   conIds,
+  hubsVendidos,
+  permisosCoherentes,
+  adoptarUsuariosPermisos,
+  fichaVacia,
+  usuariosVacia,
+  canalesVacia,
+  formulariosVacia,
+  cotizacionesVacia,
+  informesVacia,
 } from "./brief";
+import { readFileSync } from "node:fs";
+import { landingConfigForPlanificacion } from "@/components/landing/configs/planificacion";
 import type { FilaPropiedad } from "./propiedades";
 import {
   FichaDelProyectoSection,
@@ -88,19 +99,72 @@ describe("los usuarios", () => {
 });
 
 describe("la ficha del proyecto", () => {
-  it("los cinco hubs del Brief siempre están, con lo guardado en su lugar", () => {
-    const f = adoptarFichaDelProyecto({ hubs: [{ hub: "ventas", incluido: "si", edicion: "professional" }] });
-    expect(f.hubs.map((h) => h.hub)).toEqual(["Marketing", "ventas", "Servicio", "Operaciones", "Contenido"]);
+  it("los hubs con el nombre del catálogo siempre están, con lo guardado en su lugar", () => {
+    const f = adoptarFichaDelProyecto({ hubs: [{ hub: "sales hub", incluido: "si", edicion: "professional" }] });
+    expect(f.hubs.map((h) => h.hub)).toEqual(["Marketing Hub", "sales hub", "Service Hub", "Content Hub", "Data Hub", "Revenue Hub"]);
     expect(f.hubs[1].edicion).toBe("professional");
   });
 
+  it("lo vendido sale de las etiquetas del proyecto", () => {
+    expect(hubsVendidos(["sales_hub", "service_hub", "cs_retainer"])).toEqual(["Sales Hub", "Service Hub"]);
+    const out = html(FichaDelProyectoSection, {}, { editable: true, ctx: { planificacion: { etiquetasDelProyecto: ["sales_hub"] } } });
+    expect(out).toContain("Marcar los hubs vendidos (Sales Hub)");
+  });
+
   it("en lectura solo se ven los hubs que entran; vacía no pinta nada", () => {
-    const out = html(FichaDelProyectoSection, { hubs: [{ hub: "Ventas", incluido: "si", edicion: "professional", sesionesSetup: "3" }] });
-    expect(out).toContain("Ventas");
+    const out = html(FichaDelProyectoSection, { hubs: [{ hub: "Sales Hub", incluido: "si", edicion: "professional", sesionesSetup: "3" }] });
+    expect(out).toContain("Sales Hub");
     expect(out).toContain("Professional");
-    expect(out).not.toContain("Marketing");
+    expect(out).not.toContain("Marketing Hub");
     expect(html(FichaDelProyectoSection, {})).toBe("");
     expect(html(FichaDelProyectoSection, {}, { editable: true })).toContain("Empezar con los cargos de siempre");
+  });
+
+  it("no queda un título sin nada abajo: la regla de vacía es la misma del componente", () => {
+    // Una edición elegida sin «Entra», o cargos sin nombre: no hay nada que mostrarle al cliente.
+    const sinEntrar = { hubs: [{ hub: "Marketing Hub", edicion: "professional" }], participantes: [{ cargo: "Ventas", lado: "smarteam", principal: "no" }] };
+    expect(fichaVacia(sinEntrar)).toBe(true);
+    expect(html(FichaDelProyectoSection, sinEntrar)).toBe("");
+    // Solo la intro sí es algo, y se ve.
+    expect(fichaVacia({ intro: "Implementación de Sales Hub" })).toBe(false);
+    expect(html(FichaDelProyectoSection, { intro: "Implementación de Sales Hub" })).toContain("Implementación de Sales Hub");
+    // Las demás secciones, igual.
+    expect(usuariosVacia({ equipos: [{ nombre: "", tipo: "operativo", tablaDeUsuarios: "no" }], usuarios: [{ nombre: "", superAdmin: "no" }] })).toBe(true);
+    expect(canalesVacia({ canales: [{ canal: "", origen: "acordado" }] })).toBe(true);
+    expect(formulariosVacia({ items: [{ nombre: "", objeto: "Contacto", campos: [] }] })).toBe(true);
+    expect(cotizacionesVacia({ origen: "acordado" })).toBe(true);
+    expect(informesVacia({ items: [{ nombre: "", origen: "propuesta" }] })).toBe(true);
+    expect(informesVacia({ intro: "Lo que vas a medir" })).toBe(false);
+  });
+
+  it("el motor usa la regla de cada sección nueva, no la de los datos crudos", () => {
+    for (const k of ["ficha_proyecto", "usuarios_permisos", "canales_entrada", "formularios", "cotizaciones", "informes"]) {
+      const def = landingConfigForPlanificacion().sections.find((s) => s.key === k);
+      expect(typeof def?.vacia, k).toBe("function");
+    }
+  });
+});
+
+describe("los permisos que escribió el chat se leen sin contradicciones", () => {
+  it("un valor raro se descarta y lo que se pasa de largo baja al tope", () => {
+    expect(permisosCoherentes({ ver: "propios", editar: "todo", eliminar: "todo" })).toEqual({ ver: "propios", editar: "propios", eliminar: "propios" });
+    expect(permisosCoherentes({ ver: "TODO", editar: "equipo" })).toEqual({ editar: "nada" });
+    const d = adoptarUsuariosPermisos({ equipos: [{ nombre: "Ventas", permisos: { contactos: { ver: "equipo", editar: "todo" } } }] });
+    expect(d.equipos[0].permisos?.contactos).toEqual({ ver: "equipo", editar: "equipo" });
+  });
+});
+
+describe("las protecciones viven en el editor, y una prueba lo vigila", () => {
+  const src = readFileSync("components/canvas/PlanificacionWorkspace.tsx", "utf-8").replace(/\r\n/g, "\n");
+  it("toda escritura de propiedades pasa por conservarLoDeFuera, y el chat usa ese mismo camino", () => {
+    expect(src).toMatch(/upsertCardData: \(sectionId[\s\S]*?conservarLoDeFuera\(previo, data\)/);
+    expect(src).toMatch(/useEjecutarOperacionesDelChat\(cs,/);
+    expect(src).toMatch(/onApplySection=\{[\s\S]*?cs\.upsertCardData\(/);
+  });
+  it("un documento viejo recibe las secciones nuevas al abrirse, una sola vez", () => {
+    expect(src).toMatch(/PLANIFICACION_CANVAS\.sections\.some/);
+    expect(src).toMatch(/fetch\(`\/api\/projects\/\$\{projectId\}\/pieces\/\$\{PIECE_SLUG\}`, \{ method: "POST" \}\)/);
+    expect(src).toMatch(/yaReconciliado\.current = true/);
   });
 });
 

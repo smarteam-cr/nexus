@@ -43,9 +43,12 @@ const SIN_SECCION =
 export default function PlanificacionWorkspace({
   projectId,
   canvasId,
+  etiquetas,
 }: {
   projectId: string;
   canvasId: string;
+  /** Las etiquetas del proyecto (lo vendido): la ficha del proyecto ofrece marcar esos hubs. */
+  etiquetas?: string[];
 }) {
   // poll:false — el runner persiste CONFIRMED; tras generar, el remonte lo fuerza el
   // padre (`key` con su `agentNonce` al terminar el agente del header).
@@ -99,7 +102,11 @@ export default function PlanificacionWorkspace({
     const d = s?.blocks.find((b) => b.blockType === "CARD")?.data as { filas?: FilaPropiedad[] } | undefined;
     return Array.isArray(d?.filas) ? d.filas : [];
   }, [cs.sections]);
-  const ctx: LandingContext = useMemo(() => ({ clientName: "", planificacion: { propiedades: propiedadesDelPlan } }), [propiedadesDelPlan]);
+  const etiquetasClave = (etiquetas ?? []).join(",");
+  const ctx: LandingContext = useMemo(
+    () => ({ clientName: "", planificacion: { propiedades: propiedadesDelPlan, etiquetasDelProyecto: etiquetasClave ? etiquetasClave.split(",") : [] } }),
+    [propiedadesDelPlan, etiquetasClave],
+  );
 
   /* Un documento anterior a las secciones del Brief (2026-10-25) no las tiene, y el motor solo pinta las que
      existen: sin esto aparecían recién al regenerar, y regenerar no es lo que alguien quiere para escribir sus
