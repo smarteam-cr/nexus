@@ -2199,7 +2199,7 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
       /* Una fila marcada sigue siendo la casa de sus documentos. */
       expect(l.documentos, l.codigo).toEqual(a.documentos);
     }
-    expect(resumenDeDiferencias(despues)).toEqual({ abiertas: 0, filas: 0, plata: [], documentos: 0 });
+    expect(resumenDeDiferencias(despues)).toEqual({ abiertas: 0, filas: 0, filasDelBanco: 0, plata: [], documentos: 0 });
     expect(coberturaDelCruce(conMarcas)).toEqual(coberturaDelCruce(todas));
   });
 

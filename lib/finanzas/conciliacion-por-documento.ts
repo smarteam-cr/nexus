@@ -15,9 +15,16 @@
  */
 import type { DiferenciaOdoo, MontoEnMoneda } from "@/lib/cobranza/odoo/diferencias";
 
-export type SeccionDeDocumento = "ODOO" | "MERCURY" | "NEXUS" | "DEPOSITOS" | "CUENTAS" | "PREGUNTAS" | "CONTABILIDAD";
+export type SeccionDeDocumento = "ODOO" | "MERCURY" | "NEXUS" | "DEPOSITOS" | "BANCO" | "CUENTAS" | "PREGUNTAS" | "CONTABILIDAD";
 
-export const ORDEN_DE_SECCIONES: readonly SeccionDeDocumento[] = ["ODOO", "MERCURY", "NEXUS", "DEPOSITOS", "CUENTAS", "PREGUNTAS", "CONTABILIDAD"];
+export const ORDEN_DE_SECCIONES: readonly SeccionDeDocumento[] = ["ODOO", "MERCURY", "NEXUS", "DEPOSITOS", "BANCO", "CUENTAS", "PREGUNTAS", "CONTABILIDAD"];
+
+/**
+ * Las secciones que no entran a «por resolver», el número de arriba. CONTABILIDAD no cambia nada en Nexus. BANCO son las
+ * líneas del banco de Odoo sin conciliar (U15, 2026-10-26): van en su sección propia y fuera del número para que el
+ * criterio de la tarjeta 13 del roadmap («los dos números bajan semana a semana») se siga comparando con lo de antes.
+ */
+export const FUERA_DE_POR_RESOLVER: ReadonlySet<SeccionDeDocumento> = new Set(["CONTABILIDAD", "BANCO"]);
 
 /** Cómo se lee una línea en esta vista: dónde va, qué cuenta, cómo se dice y qué hacer. */
 interface DeLaLinea {
@@ -69,6 +76,9 @@ export const DE_LA_LINEA: Readonly<Record<string, DeLaLinea>> = {
   /* Cuentas */
   "MERCURY-CUENTA-SIN-CLIENTE": { seccion: "CUENTAS", cuenta: ["cuenta:"], razon: "Factura por Mercury y no tiene su cliente de Mercury", queHacer: "Emparejarla con su cliente de Mercury" },
   "CUENTA-INTERNACIONAL-EN-ODOO": { seccion: "CUENTAS", cuenta: ["cuenta:"], razon: "Dice facturar por Odoo y tiene facturas en Mercury", queHacer: "Revisar su vía de cobro" },
+  /* El banco de Odoo sin conciliar (U15) */
+  "ODOO-BANCO-ENTRADA-SIN-CONCILIAR": { seccion: "BANCO", cuenta: ["bo:"], razon: "Entró plata al banco y Odoo no la tiene atada a ninguna factura", queHacer: "Conciliarla en Odoo, o decir de qué es" },
+  "ODOO-BANCO-SALIDA-SIN-CONCILIAR": { seccion: "BANCO", cuenta: ["bo:"], razon: "Salió plata del banco o de una tarjeta y Odoo no la tiene conciliada", queHacer: "Que contabilidad la concilie en Odoo" },
   /* Aparte */
   "VENTA-CONTADA-DOS-VECES": { seccion: "PREGUNTAS", cuenta: [], razon: "La factura puede ser la misma venta que una cuota", queHacer: "Preguntarle a quien vendió" },
   "ODOO-IN-PAYMENT": { seccion: "CONTABILIDAD", cuenta: F, razon: "Pagadas en Odoo y sin conciliar con el banco", queHacer: "Que contabilidad las concilie" },
@@ -118,7 +128,7 @@ export interface PorDocumento {
   secciones: Seccion[];
   /** Documentos que cambian lo cobrado, sin repetir. */
   cambianLoCobrado: number;
-  /** Lo que hay que resolver: todo menos lo de contabilidad. */
+  /** Lo que hay que resolver: todo menos lo de contabilidad y el banco de Odoo (`FUERA_DE_POR_RESOLVER`). */
   porResolver: number;
 }
 
@@ -170,6 +180,6 @@ export function porDocumento(lineas: readonly DiferenciaOdoo[]): PorDocumento {
   return {
     secciones,
     cambianLoCobrado: cobrado.size,
-    porResolver: secciones.filter((s) => s.seccion !== "CONTABILIDAD").reduce((n, s) => n + s.documentos, 0),
+    porResolver: secciones.filter((s) => !FUERA_DE_POR_RESOLVER.has(s.seccion)).reduce((n, s) => n + s.documentos, 0),
   };
 }

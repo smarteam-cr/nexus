@@ -12,7 +12,7 @@
  *
  * PURO: sin Prisma ni red.
  */
-import type { DiferenciaOdoo } from "@/lib/cobranza/odoo/diferencias";
+import { LINEAS_DEL_BANCO, type DiferenciaOdoo } from "@/lib/cobranza/odoo/diferencias";
 
 export type FuenteDeLinea = "odoo" | "mercury";
 export type FiltroFuente = "todas" | FuenteDeLinea;
@@ -56,11 +56,19 @@ export function filtrarDiferencias(
   );
 }
 
-/** Cuántas FILAS pendientes hay de cada lado: lo que se trabaja registrando y lo que espera una decisión. */
+/**
+ * Cuántas FILAS pendientes hay de cada lado: lo que se trabaja registrando y lo que espera una decisión. Es el número de
+ * «Resolver N diferencias» de Pendientes, Supervisión, «Para ti» y el cierre del mes.
+ *
+ * ⚠ Sin las líneas del banco de Odoo sin conciliar (U15, `LINEAS_DEL_BANCO`): tienen su sección propia en Conciliación y
+ * no entran a los números que el criterio de la tarjeta 13 compara semana a semana. Con ellas, la primera copia habría
+ * sumado 98 de golpe sin que nada empeorara (lo cazó la revisión del 2026-10-26).
+ */
 export function filasPorQuien(lineas: readonly DiferenciaOdoo[]): { mias: number; decisiones: number } {
   let mias = 0;
   let decisiones = 0;
   for (const l of lineas) {
+    if (LINEAS_DEL_BANCO.has(l.codigo)) continue;
     if (esDecision(l)) decisiones += l.items.length;
     else mias += l.items.length;
   }

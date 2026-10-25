@@ -24,6 +24,7 @@ const DE_LA_SECCION: Record<SeccionDeDocumento, { tarjeta: string; uno: string; 
   MERCURY: { tarjeta: "Mercury", uno: "factura", varios: "facturas", titulo: (n) => `Mercury · ${plural(n, "factura que no calza", "facturas que no calzan")} con Nexus`, columna: "Facturas" },
   NEXUS: { tarjeta: "Nexus", uno: "cuota", varios: "cuotas", titulo: (n) => `Nexus · ${plural(n, "cuota que no calza", "cuotas que no calzan")} con Odoo ni Mercury`, columna: "Cuotas" },
   DEPOSITOS: { tarjeta: "Plata en Mercury", uno: "depósito", varios: "depósitos", titulo: (n) => `Plata que entró a Mercury · ${plural(n, "depósito", "depósitos")} sin factura`, columna: "Depósitos" },
+  BANCO: { tarjeta: "Banco de Odoo", uno: "línea", varios: "líneas", titulo: (n) => `El banco de Odoo · ${plural(n, "línea", "líneas")} sin conciliar (no entran al número de arriba)`, columna: "Líneas" },
   CUENTAS: { tarjeta: "Cuentas", uno: "cuenta", varios: "cuentas", titulo: (n) => `Cuentas por emparejar · ${n}`, columna: "Cuentas" },
   PREGUNTAS: { tarjeta: "Preguntas", uno: "factura", varios: "facturas", titulo: (n) => `Para quien vendió · ${plural(n, "factura que puede ser", "facturas que pueden ser")} la misma venta que una cuota`, columna: "Facturas" },
   CONTABILIDAD: { tarjeta: "Contabilidad", uno: "factura", varios: "facturas", titulo: () => "Para contabilidad, sin efecto en Nexus", columna: "Facturas" },

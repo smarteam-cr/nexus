@@ -44,6 +44,7 @@ import {
   type TipoCambioBitacora,
 } from "./espejo";
 import { cambiosDeLaLista, reatribuciones, type PartnerOdoo } from "./emparejado";
+import { copiarBancoSinConciliar, type ResultadoDelBanco } from "./banco-copia";
 
 /** El separador del detalle de rechazos. Constante para no pelear con el escapado. */
 const SALTO = String.fromCharCode(10);
@@ -78,6 +79,8 @@ export interface ResultadoSync {
    * no hizo falta.
    */
   enCurso?: boolean;
+  /** La copia de las líneas del banco sin conciliar (U15). Ausente si la copia de las facturas no llegó hasta ahí. */
+  banco?: ResultadoDelBanco;
 }
 
 /* ── El candado: una sola copia a la vez ───────────────────────────────────────── */
@@ -463,6 +466,9 @@ async function copiar(opts: OpcionesDeCopia): Promise<ResultadoSync> {
       }),
       new Set(vistas.map((f) => f.odooPartnerId)),
     );
+    /* U15: las líneas del banco sin conciliar, con la misma sesión. ⚠ Nunca lanza: si el banco falla, la copia de las
+       facturas igual queda buena (lo vigila INV60). */
+    res.banco = await copiarBancoSinConciliar(t, ahora);
     res.ok = true;
   } catch (e) {
     /* El texto del error se GUARDA. Es la diferencia entre «viene fallando hace tres días

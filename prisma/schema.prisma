@@ -6371,6 +6371,46 @@ model DiferenciaOdooMarca {
   @@index([documento])
 }
 
+/// Una línea del banco de Odoo SIN CONCILIAR (`account.bank.statement.line`, U15, 2026-10-26): plata que entró o salió
+/// de una cuenta del banco o de una tarjeta y que en Odoo no está atada a ninguna factura ni pago. La copia de Odoo la
+/// trae cada hora en solo lectura (lib/cobranza/odoo/banco-copia.ts) y Alex la revisa en Cobranza › Conciliación ›
+/// «Lo que no cuadra». ⛔ No cobra nada ni toca un `Cobro`: el cobro solo de lo pagado sigue siendo lib/cobranza/libro.
+/// NUNCA se borra: la que se concilia en Odoo queda CONCILIADA con el día en que Nexus lo vio.
+/// SQL: scripts/sql/2026-10-26-banco-odoo.sql (⛔ nunca `db push`).
+model MovimientoBancoOdoo {
+  id          String   @id @default(cuid())
+  /// La línea en Odoo. Es la identidad: volver a copiar actualiza, nunca duplica.
+  odooLineId  Int      @unique
+  fecha       DateTime @db.Date
+  /// Con signo, en la moneda del diario: positivo entra, negativo sale.
+  monto       Decimal  @db.Decimal(14, 2)
+  moneda      String
+  /// Si el banco trajo otra moneda (amount_currency / foreign_currency_id). nullable porque casi nunca la hay.
+  montoOtraMoneda Decimal? @db.Decimal(14, 2)
+  otraMoneda      String?
+  /// La referencia del banco (payment_ref): «I003938302 MULTIQUIMICA DOMINI». nullable porque Odoo la permite vacía.
+  referencia  String?
+  /// El cliente o proveedor si alguien lo puso en Odoo. nullable: medido el 2026-10-25, 0 de 98 lo tienen.
+  odooPartnerId     Int?
+  odooPartnerNombre String?
+  /// El diario: «BAC Dolares (USD)», «VISA 7724 Colones»…
+  odooJournalId Int
+  diario        String
+  /// El extracto y el asiento, para buscarla en Odoo. nullable por si Odoo no los trae.
+  extracto    String?
+  asiento     String?
+  /// SIN_CONCILIAR · CONCILIADA (Odoo ya la ató) · DESAPARECIDA (Odoo dejó de devolverla).
+  estadoEspejo String   @default("SIN_CONCILIAR")
+  /// Cuándo la vio Nexus por primera vez, y cuándo la vio conciliada o desaparecida. nullable mientras siga sin conciliar.
+  vistaEn      DateTime @default(now())
+  cerradaEn    DateTime?
+  sincronizadoEn DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([estadoEspejo, fecha])
+}
+
 // ─── Espejo de Mercury (2026-10-02) ─────────────────────────────────────────────
 // Lo internacional se factura en Mercury (sección de facturas) desde noviembre de 2025. Nexus copia sus facturas,
 // sus clientes y los movimientos de la cuenta con un token de SOLO LECTURA: no puede escribir en Mercury aunque

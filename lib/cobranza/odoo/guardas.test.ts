@@ -40,13 +40,17 @@ const fuente = (f: string) => sinComentarios(readFileSync(join(DIR, f), "utf8"))
  * «Ya está anulada» los escribe la pantalla, y también el traspaso de la marca de grupo de las notas
  * de crédito y la reapertura de las facturas cerradas sin motivo (scripts/odoo-*.ts). Nunca borra una
  * marca: lo vigila su bloque.
+ *
+ * `banco-copia.ts` entró el 2026-10-26 (U15): la copia de las líneas del banco sin conciliar. La corre sync.ts con su
+ * mismo transporte, aparte para que un fallo del banco no tumbe la copia de las facturas. Escribe solo
+ * `MovimientoBancoOdoo` y su fila de `CronJobState`, nunca un cobro: lo vigila su bloque.
  */
-const IMPUROS = ["servicio.ts", "sync.ts", "transporte-xmlrpc.ts", "atribucion.ts", "marcas.ts"];
+const IMPUROS = ["servicio.ts", "sync.ts", "transporte-xmlrpc.ts", "atribucion.ts", "marcas.ts", "banco-copia.ts"];
 const puros = archivos.filter((f) => !IMPUROS.includes(f));
-const TOCAN_LA_BASE = ["servicio.ts", "sync.ts", "atribucion.ts", "marcas.ts"];
+const TOCAN_LA_BASE = ["servicio.ts", "sync.ts", "atribucion.ts", "marcas.ts", "banco-copia.ts"];
 
 describe("la frontera entre decidir y tocar el mundo", () => {
-  it("sigue habiendo exactamente cinco archivos impuros", () => {
+  it("sigue habiendo exactamente seis archivos impuros", () => {
     expect(archivos.filter((f) => IMPUROS.includes(f)).sort()).toEqual([...IMPUROS].sort());
     expect(puros.length).toBeGreaterThanOrEqual(3);
   });
@@ -66,6 +70,15 @@ describe("la frontera entre decidir y tocar el mundo", () => {
       if (TOCAN_LA_BASE.includes(f)) continue;
       expect(fuente(f), `${f} importa la base`).not.toMatch(/@prisma\/client|from\s+["']@\/lib\/db/);
     }
+  });
+
+  it("⛔ la copia del banco solo escribe sus líneas y su resultado: nunca un cobro ni una factura", () => {
+    /* La edición que la pone en rojo: «ya que estamos, cobrar la cuota cuando la entrada calza con su factura». El
+       cobro solo de lo pagado es lib/cobranza/libro y nada más (RUNBOOK › «Lo pagado no se cobró solo»). */
+    const src = fuente("banco-copia.ts");
+    const escribe = [...src.matchAll(/prisma\.(\w+)\s*\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g)].map((m) => m[1]);
+    expect([...new Set(escribe)].sort()).toEqual(["cronJobState", "movimientoBancoOdoo"]);
+    expect(src).not.toMatch(/prisma\.cobro\b|facturaOdoo|\/libro/);
   });
 
   it("el puerto no sabe de HTTP en absoluto", () => {
