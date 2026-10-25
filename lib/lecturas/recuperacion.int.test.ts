@@ -56,9 +56,18 @@ describe("la recuperación de las lecturas atrasadas", () => {
         // La gemela (otra serie, otra ficha) de una que ya tiene minuta: mismo texto con otros espacios y mayúsculas.
         { id: "rec-gemela-leida", title: "Gemela de la ya leída", date: hace(24), enrichedAt: hace(24), participants: gente, transcript: `${CONVERSACION.replace(/ /g, "  ")}   OTRA`, resolvedClientId: prospecto.id },
         { id: "rec-muy-vieja", title: "Antes del desde", date: hace(200), enrichedAt: hace(200), participants: gente, transcript: `${CONVERSACION} vieja`, resolvedClientId: cliente.id },
+        // ⚠ Gemelas ya leídas FUERA de las fechas de la búsqueda: una reciente (la leyó la cola) y una anterior al
+        // `desde`. Una «optimización» que le ponga a las ya leídas la ventana de las candidatas las dejaría de ver, y su
+        // par se pagaría dos veces.
+        { id: "rec-leida-reciente", title: "Leída por la cola, hace 5 días", date: hace(5), enrichedAt: hace(5), participants: gente, transcript: `${CONVERSACION} reciente`, resolvedClientId: cliente.id },
+        { id: "rec-par-de-la-reciente", title: "Su par, hace 30 días", date: hace(30), enrichedAt: hace(30), participants: gente, transcript: `${CONVERSACION} reciente`, resolvedClientId: prospecto.id },
+        { id: "rec-leida-antigua", title: "Leída hace 200 días", date: hace(200), enrichedAt: hace(200), participants: gente, transcript: `${CONVERSACION} antigua`, resolvedClientId: cliente.id },
+        { id: "rec-par-de-la-antigua", title: "Su par, hace 40 días", date: hace(40), enrichedAt: hace(40), participants: gente, transcript: `${CONVERSACION} antigua`, resolvedClientId: cliente.id },
       ],
     });
     await prisma.sessionMinute.create({ data: { sessionId: "rec-con-minuta", summary: "ya estaba" } });
+    await prisma.sessionMinute.create({ data: { sessionId: "rec-leida-reciente", summary: "la leyó la cola" } });
+    await prisma.sessionMinute.create({ data: { sessionId: "rec-leida-antigua", summary: "de hace meses" } });
 
     const { candidatas, fuera, total } = await candidatasDeRecuperacion({ desde: hace(90), limite: 10, soloActivas: false, ahora });
     // La copia (mismo texto, mismo dueño) entra una vez; la más nueva primero.
@@ -67,7 +76,9 @@ describe("la recuperación de las lecturas atrasadas", () => {
     expect(ids).toContain("rec-notas");
     expect(ids.filter((id) => id === "rec-transcripcion" || id === "rec-copia")).toHaveLength(1);
     expect(total).toBe(2);
-    expect(fuera.copias, "la copia de la misma corrida y la gemela de una ya leída (aunque sea de otra ficha)").toBe(2);
+    expect(fuera.copias, "la copia de la misma corrida, la gemela de una ya leída (aunque sea de otra ficha) y las pares de dos ya leídas fuera de las fechas").toBe(4);
+    expect(ids).not.toContain("rec-par-de-la-reciente");
+    expect(ids).not.toContain("rec-par-de-la-antigua");
     expect(fuera.puertasAdentro).toBe(1);
     expect(candidatas.find((c) => c.sessionId === "rec-notas")?.clase).toBe("solo_notas");
 

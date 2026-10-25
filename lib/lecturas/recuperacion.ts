@@ -98,27 +98,20 @@ export async function candidatasDeRecuperacion(o: OpcionesDeLaRecuperacion): Pro
   const hasta = new Date(+ahora - DIAS_DE_FRESCURA * DIA_MS);
   const limite = Math.max(1, Math.min(o.limite, TOPE_DE_LA_RECUPERACION));
   const clases = soloNotasPrendido(process.env) ? ["transcripcion", "solo_notas"] : ["transcripcion"];
+  /* Cada huella se calcula UNA vez (los dos CTE MATERIALIZED) y después se cruzan. ⚠ La primera versión la calculaba
+     dentro de un EXISTS por candidata, contra todas las reuniones: con 569 candidatas pasaba los 2 minutos del
+     statement_timeout de producción (medido el 2026-10-24); así, ~5 s. La regla no cambia: cualquier otra reunión ya
+     leída, de cualquier fecha y de cualquier dueño. */
   const filas = await prisma.$queryRaw<
     { id: string; title: string; date: Date; participants: string[]; organizerEmail: string | null; dueno: string; empresa: string; clase: ClaseDeTexto; caracteres: number; huella: string | null; copiaLeida: boolean; enCurso: boolean; intentos: number }[]
   >`
-    SELECT x.* FROM (
+    WITH cand AS MATERIALIZED (
       SELECT s."id", s."title", s."date", s."participants", s."organizerEmail",
         coalesce(s."resolvedClientId", s."manualClientId") AS "dueno",
         c."name" AS "empresa",
         ${sqlClaseDeTexto("s")} AS "clase",
         greatest(length(btrim(coalesce(s."transcript", ''))), length(btrim(coalesce(s."summary"->>'overview', ''))))::int AS "caracteres",
         ${huellaSql("s")} AS "huella",
-        EXISTS (
-          SELECT 1 FROM "FirefliesSession" o
-          WHERE o."id" <> s."id" AND ${huellaSql("o")} = ${huellaSql("s")}
-            AND (
-              EXISTS (SELECT 1 FROM "SessionMinute" om WHERE om."sessionId" = o."id")
-              OR EXISTS (
-                SELECT 1 FROM "PedidoEnLote" op
-                WHERE op."tipo" = ${TIPO} AND op."contexto"->>'sessionId' = o."id" AND op."estado" IN (${Prisma.join([...ESTADOS_VIVOS])})
-              )
-            )
-        ) AS "copiaLeida",
         EXISTS (
           SELECT 1 FROM "LecturaDeReunion" l WHERE l."sessionId" = s."id" AND l."seguimientoEstado" IN ('en_espera', 'leyendo')
         ) OR EXISTS (
@@ -131,7 +124,18 @@ export async function candidatasDeRecuperacion(o: OpcionesDeLaRecuperacion): Pro
         AND s."enrichedAt" IS NOT NULL
         AND c."kind" IN ('CLIENTE', 'PROSPECTO')
         AND NOT EXISTS (SELECT 1 FROM "SessionMinute" m WHERE m."sessionId" = s."id")
-    ) x
+    ),
+    leidas AS MATERIALIZED (
+      SELECT o."id", ${huellaSql("o")} AS "huella"
+      FROM "FirefliesSession" o
+      WHERE EXISTS (SELECT 1 FROM "SessionMinute" om WHERE om."sessionId" = o."id")
+        OR EXISTS (
+          SELECT 1 FROM "PedidoEnLote" op
+          WHERE op."tipo" = ${TIPO} AND op."contexto"->>'sessionId' = o."id" AND op."estado" IN (${Prisma.join([...ESTADOS_VIVOS])})
+        )
+    )
+    SELECT x.*, EXISTS (SELECT 1 FROM leidas l WHERE l."id" <> x."id" AND l."huella" = x."huella") AS "copiaLeida"
+    FROM cand x
     WHERE x."clase" IN (${Prisma.join(clases)})
     ORDER BY x."date" DESC`;
 
