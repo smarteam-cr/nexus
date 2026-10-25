@@ -20,7 +20,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46,
   type Invariante,
 } from "./index";
-import { INV49 } from "./google";
+import { INV49, INV53 } from "./google";
 import { INV55, INV55_BLOQUEA } from "./smartloop";
 import { INV51 } from "./empresa";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
@@ -827,10 +827,10 @@ describe("el registro y el consumidor", () => {
       // 49: la frescura de la copia de Google Meet (U1, 2026-10-25); 50, el historial de Partner y la comisión de
       // HubSpot (U25 y U29); 51, cada documento tiene un dueño y ninguna persona del cliente es del equipo (la empresa,
       // parte 2); 55, ningún proyecto de SmartLoop dice ser «proyecto_temporal» (M1). Todas del 2026-10-25.
-      "49", "50", "51", "52",
+      "49", "50", "51", "52", "53",
       "55",
-      // 49: la frescura de la copia de Google Meet (U1, 2026-10-25).
-      // 52: cada reunión con empresa que terminó sin texto tiene su motivo guardado (T4, 2026-10-25).
+      // 52: cada reunión con empresa que terminó sin texto tiene su motivo guardado (T4); 53: ninguna reunión de 3 a 25
+      // días sin revisar su conferencia de Meet (U3). Del 2026-10-25.
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -1028,5 +1028,31 @@ describe("SmartLoop: INV55 (2026-10-25, M1)", () => {
     expect(r.ok).toBe(!INV55_BLOQUEA);
     expect(r.lineas[0]).toContain("1 proyecto de SmartLoop dice");
     expect(r.lineas[1]).toContain("RC Inmobiliaria › CONTINUIDAD CRM");
+  });
+});
+
+describe("frescura: INV53 (la revisión de las conferencias de Meet)", () => {
+  /* Google borra las frases a los 30 días: una reunión de 3 a 25 días sin cerrar es una que el job no está mirando. */
+  const job = { id: "google-meet-conferencias" };
+
+  it("sin el job en esta base cumple; con reuniones abiertas viola con cuáles y el remedio", async () => {
+    expect((await INV53.correr(baseFalsa({ firefliesSession: 3 }), AHORA)).ok, "nunca corrió: no hay atraso del que avisar").toBe(true);
+    const abiertas = [{ id: "s1", title: "Camosa l Exploración", date: hace(10) }];
+    const r = await INV53.correr(baseFalsa({ cronJobState: [job], firefliesSession: abiertas }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("1 reunión(es)");
+    expect(r.lineas.join("\n")).toContain("«Camosa l Exploración»");
+    expect(r.lineas.join("\n")).toContain("google-meet-conferencias");
+  });
+
+  it("mira solo las de 3 a 25 días, sin cerrar, con código de Meet", async () => {
+    const llamadas: Llamada[] = [];
+    const r = await INV53.correr(baseFalsa({ cronJobState: [job], firefliesSession: [] }, llamadas), AHORA);
+    expect(r.ok).toBe(true);
+    const w = where(llamadas, "firefliesSession", "count") as { conferenciaCerradaEn: null; conferenceId: unknown; date: { gte: Date; lte: Date } };
+    expect(w.conferenciaCerradaEn).toBeNull();
+    expect(w.conferenceId).toEqual({ not: null });
+    expect(w.date.gte.toISOString()).toBe(hace(25).toISOString());
+    expect(w.date.lte.toISOString()).toBe(hace(3).toISOString());
   });
 });

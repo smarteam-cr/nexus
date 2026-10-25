@@ -123,8 +123,9 @@ describe("defs.ts decide con esta regla y no con una copia", () => {
        el cobro solo de lo pagado. 14 desde el 2026-10-25: la copia de Google Meet cada 10 minutos (U1). 15 desde el
        2026-10-25: la comisión estimada de HubSpot, con el mismo requisito que la copia de Partner (U25). 16 desde el
        2026-10-25: la copia de los datos de la empresa desde HubSpot (R2). 17 desde el
-       2026-10-25: la transcripción del audio de las reuniones presenciales (T5). */
-    expect(JOBS_CON_REQUISITO.length).toBe(15);
+       2026-10-25: la transcripción del audio de las reuniones presenciales (T5). 18 y 19 desde el 2026-10-25: la revisión
+       de las conferencias de Meet (U3) y sus avisos y suscripciones (U4). */
+    expect(JOBS_CON_REQUISITO.length).toBe(19);
     for (const key of JOBS_CON_REQUISITO) expect(defs, key).toContain(`encendido("${key}")`);
     expect(defs).toContain("motivoApagado(jobKey, process.env) === null");
   });

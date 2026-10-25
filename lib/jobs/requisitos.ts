@@ -38,6 +38,15 @@ const faltaGoogle = (env: Entorno): string | null => {
   return faltan.length ? falta(...faltan) : null;
 };
 
+const eventosDeMeet = (env: Entorno): string | null => {
+  const motivos: string[] = [];
+  if (env.GOOGLE_MEET_EVENTOS_ENABLED !== "1") motivos.push(falta("GOOGLE_MEET_EVENTOS_ENABLED=1"));
+  if (env.GOOGLE_MEET_API_ENABLED === "0") motivos.push("Apagado a propósito: GOOGLE_MEET_API_ENABLED=0 en el .env del servidor.");
+  const sinCredenciales = faltaGoogle(env);
+  if (sinCredenciales) motivos.push(sinCredenciales);
+  return motivos.length ? motivos.join(" ") : null;
+};
+
 const exitoDelCliente = (env: Entorno) =>
   env.CS_WATCHDOG_ENABLED === "1" ? null : falta("CS_WATCHDOG_ENABLED=1");
 
@@ -87,6 +96,19 @@ const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
     if (sinCredenciales) motivos.push(sinCredenciales);
     return motivos.length ? motivos.join(" ") : null;
   },
+  /* La revisión de las conferencias de Meet (U3, 2026-10-25): si ocurrió, quiénes entraron y las frases. Prendida por
+     defecto con las credenciales (solo lee de Google); GOOGLE_MEET_API_ENABLED=0 la apaga, y la lectura sigue con los Docs. */
+  "google-meet-conferencias": (env) => {
+    const motivos: string[] = [];
+    if (env.GOOGLE_MEET_API_ENABLED === "0") motivos.push("Apagado a propósito: GOOGLE_MEET_API_ENABLED=0 en el .env del servidor.");
+    const sinCredenciales = faltaGoogle(env);
+    if (sinCredenciales) motivos.push(sinCredenciales);
+    return motivos.length ? motivos.join(" ") : null;
+  },
+  /* Los avisos de Meet por Pub/Sub y sus suscripciones (U4, 2026-10-25). APAGADOS por defecto: crean suscripciones en
+     Google. Sin ellos, la revisión de cada 10 minutos hace el mismo trabajo, un poco más tarde. */
+  "google-meet-eventos": (env) => eventosDeMeet(env),
+  "google-meet-suscripciones": (env) => eventosDeMeet(env),
   "odoo-espejo-daily": (env) => {
     /* Los dos motivos se dicen por separado: uno es una credencial que falta, el otro una
        decisión de alguien. Y sin contraseña ni se intenta, porque cada intento en vano cuenta

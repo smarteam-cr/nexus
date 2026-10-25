@@ -15,6 +15,14 @@
  * Cuando el texto de una reunión ya leída CAMBIA, la lectura no se queda con el texto viejo: lo decide
  * lib/sessions/reanalizar.ts (rehacer lo que nadie tocó, o avisar).
  *
+ * ── EL ORDEN DE LAS FUENTES (U3, 2026-10-25) ─────────────────────────────────
+ * 1. Las frases de la API de Meet (`FraseDeReunion`, las copia lib/google/conferencias.ts antes de que Google las
+ *    borre a los 30 días): con quién habló y cuándo. Entran si la reunión no tenía transcripción o tenía la de otra
+ *    reunión; una transcripción propia se queda (`usarLasFrases`, lib/google/conferencias-reglas.ts).
+ * 2. El Doc de la transcripción: el adjunto al evento o, si no hay, el que Meet dice que generó (`docDeTranscripcionId`).
+ * 3. El Doc de las notas de Gemini que Meet dice que generó (`docDeNotasId`).
+ * 4. La búsqueda en el Drive por título y fecha, solo si no hay ninguno de los tres.
+ *
  * ── CUÁNDO SE LEE (2026-10-17, «que no falte ninguna reunión») ────────────────
  * Después del FIN de la reunión más 20 minutos (`listaParaLeer`), no una hora después del inicio. Y
  * «no había nada» en una reunión que terminó hace menos de 48 horas no sella: vuelve en 2, 4, 8 y 16
@@ -51,6 +59,8 @@ import { candidatosImpersonables } from "./elegir-impersonado";
 import { consultaDeDrive, elegirArchivosDeLaReunion, VENTANA_DRIVE_MS, type ArchivoDeDrive } from "./drive-candidatos";
 import { huellaDeTexto, textoCambio } from "@/lib/sessions/analisis-ajeno";
 import { procedenciaDelTexto } from "@/lib/sessions/texto-de-otra-reunion";
+import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
+import { lecturaConFrases, textoDeLasFrases, transcripcionGuardada } from "./conferencias-reglas";
 import {
   datosDeEscritura,
   debeEsperarMaterial,
@@ -105,6 +115,9 @@ interface SesionAEnriquecer {
   /** Minutos (del evento del calendario): con el inicio, dice cuándo terminó. */
   duration: number;
   googleDocId: string | null;
+  /** U3: los Docs que la API de Meet dice que generó para esta conferencia (lib/google/conferencias.ts). */
+  docDeTranscripcionId: string | null;
+  docDeNotasId: string | null;
   organizerEmail: string | null;
   participants: string[];
   enrichAttempts: number;
@@ -118,11 +131,34 @@ const SELECT_ENRIQUECER = {
   date: true,
   duration: true,
   googleDocId: true,
+  docDeTranscripcionId: true,
+  docDeNotasId: true,
   organizerEmail: true,
   participants: true,
   enrichAttempts: true,
   enrichedAt: true,
 } as const;
+
+/**
+ * El Doc de ESTA reunión, por su id (no por el título): el adjunto al evento o, si no hay, uno de los que Meet dice que
+ * generó (U3). Con frases copiadas, el de las notas (el texto ya lo traen las frases, y las notas de Gemini solo están en
+ * su Doc); sin frases, el de la transcripción. null = no hay ninguno y se busca en el Drive.
+ */
+function docDeLaReunion(s: Pick<SesionAEnriquecer, "googleDocId" | "docDeTranscripcionId" | "docDeNotasId">, conFrases = false): string | null {
+  if (s.googleDocId) return s.googleDocId;
+  return (conFrases ? (s.docDeNotasId ?? s.docDeTranscripcionId) : (s.docDeTranscripcionId ?? s.docDeNotasId)) ?? null;
+}
+
+/** ¿La reunión tiene frases de Meet copiadas? (sin la tabla, no). */
+async function tieneFrases(sessionId: string): Promise<boolean> {
+  if (!modeloDisponible(prisma.fraseDeReunion)) return false;
+  try {
+    return (await prisma.fraseDeReunion.count({ where: { sessionId }, take: 1 })) > 0;
+  } catch (err) {
+    if (esquemaDesactualizado(err)) return false;
+    throw err;
+  }
+}
 
 /** El status HTTP de un error de googleapis, si lo trae. */
 function statusDe(err: unknown): number | null {
@@ -311,12 +347,13 @@ async function leerSesion(s: SesionAEnriquecer): Promise<LecturaDoc> {
      interno ACTIVO podía leer el mismo doc. Desde el 2026-10-17 también ante un documento sin
      acceso para esa cuenta (403/404) y, en Drive, ante una cuenta sin nada (las notas que tomó
      otro invitado quedan en SU Drive): `probarOtraCuenta`. Tope de 3 cuentas. */
-  const buscandoEnDrive = !s.googleDocId;
+  const docId = docDeLaReunion(s, await tieneFrases(s.id));
+  const buscandoEnDrive = !docId;
   const serie = buscandoEnDrive ? await fechasDeLaSerie(s) : [];
   let ultimo: LecturaDoc = { ok: false, error: "sin_candidatos", status: null };
   for (const impersonado of candidatos.slice(0, 3)) {
-    ultimo = s.googleDocId
-      ? await fetchDocContent(impersonado, s.googleDocId)
+    ultimo = docId
+      ? await fetchDocContent(impersonado, docId)
       : await searchDriveForTranscript(impersonado, s, serie);
     if (!probarOtraCuenta(ultimo, buscandoEnDrive)) return ultimo;
     console.log(`[google/enrich] «${s.title}»: la cuenta ${impersonado} no la pudo leer — probando la siguiente`);
@@ -362,7 +399,9 @@ async function procesarSesion(s: SesionAEnriquecer): Promise<EstadoProceso> {
 }
 
 async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProceso> {
-  const lectura = await leerSesion(s);
+  const leida = await leerSesion(s);
+  // U3: las frases de Meet van primero (ver el encabezado). Si no hay, o la transcripción guardada es propia, lo leído.
+  const lectura = (await conLasFrases(s, leida)) ?? leida;
 
   if (!lectura.ok) {
     await prisma.firefliesSession.update({
@@ -395,7 +434,7 @@ async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProce
   // El documento del EVENTO (el correcto) trae solo notas de Gemini y la transcripción guardada es de OTRA reunión (la
   // búsqueda vieja en Drive): se vacía y la lectura se rehace con lo que hay. Una transcripción de esta misma reunión
   // (la de Meet, en otro archivo) no se toca: lo decide su primera línea (lib/sessions/texto-de-otra-reunion.ts).
-  const vaciarTranscripcion = !!s.googleDocId && !lectura.transcript && !!lectura.summary && (await transcripcionGuardadaAjena(s));
+  const vaciarTranscripcion = !!docDeLaReunion(s) && !lectura.transcript && !!lectura.summary && (await transcripcionGuardadaAjena(s));
 
   const ahora = new Date();
   const datos = datosDeEscritura(lectura, finalSummary ?? null, s.enrichAttempts, ahora, {
@@ -458,6 +497,36 @@ async function procesarSesionSinMutex(s: SesionAEnriquecer): Promise<EstadoProce
     return { estado: "enriched", status: null };
   }
   return { estado: "skipped", status: null };
+}
+
+/**
+ * U3 · La lectura con las frases de Meet (`FraseDeReunion`), o null si no cambian nada (no hay frases o la tabla no
+ * existe todavía). La regla vive pura en `lecturaConFrases` y `transcripcionGuardada` (lib/google/conferencias-reglas.ts):
+ * con la transcripción guardada vacía o de otra reunión (también la de otro día de la serie) entra el texto de las
+ * frases; con una propia, se queda la guardada; un Doc que falla con notas ya guardadas sigue siendo un fallo.
+ */
+async function conLasFrases(s: SesionAEnriquecer, leida: LecturaDoc): Promise<LecturaDoc | null> {
+  if (!modeloDisponible(prisma.fraseDeReunion)) return null;
+  let frases: { hablante: string; inicio: Date; texto: string }[];
+  try {
+    frases = await prisma.fraseDeReunion.findMany({ where: { sessionId: s.id }, select: { hablante: true, inicio: true, texto: true }, orderBy: { orden: "asc" } });
+  } catch (err) {
+    if (esquemaDesactualizado(err)) return null;
+    throw err;
+  }
+  const textoFrases = textoDeLasFrases(s.title, frases);
+  if (!textoFrases) return null;
+  const fila = await prisma.firefliesSession.findUnique({ where: { id: s.id }, select: { summary: true, transcript: true } });
+  const textoGuardado = fila?.transcript ?? null;
+  const largo = textoGuardado?.length ?? 0;
+  const guardada = transcripcionGuardada({
+    largo,
+    propiaPorEncabezado: largo >= MIN_TRANSCRIPT_CHARS && procedenciaDelTexto(s.title, textoGuardado ?? "").tipo === "propia",
+    texto: textoGuardado,
+    textoFrases,
+  });
+  const notas = fila?.summary as { overview?: unknown } | null | undefined;
+  return lecturaConFrases({ textoFrases, guardada, leida, textoGuardado, hayNotasGuardadas: !!notas && typeof notas.overview === "string" });
 }
 
 /** La huella (md5) de la transcripción guardada, calculada en la base; null si no hay. */
