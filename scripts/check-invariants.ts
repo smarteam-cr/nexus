@@ -18,7 +18,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
   type Invariante,
 } from "@/lib/invariantes";
-import { INV49, INV50, INV51, INV55 } from "@/lib/invariantes";
+import { INV49, INV50, INV51, INV52, INV55 } from "@/lib/invariantes";
 
 /**
  * Imprime un invariante extraído a `lib/invariantes/` exactamente como se imprimía acá adentro
@@ -830,6 +830,9 @@ async function main(): Promise<number> {
     }
   }
   violations += await reportar(INV51, prisma);
+  // ── Inv 52 → lib/invariantes/reuniones.ts (2026-10-25, T4: cada reunión con empresa que terminó sin texto tiene su
+  //    motivo guardado; nació «no bloquea» hasta su primer verde) ──
+  violations += await reportar(INV52, prisma);
 
   return violations;
 }

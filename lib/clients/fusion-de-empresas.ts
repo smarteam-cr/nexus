@@ -115,6 +115,9 @@ export const SE_MUDAN = [
   ["projectCanvas", "clientId"],
   ["icpItem", "clientId"],
   ["buyerPersona", "clientId"],
+  /* La empresa que Nexus propone para una reunión sin empresa (T3, 2026-10-25): `onDelete: SetNull`; sin mudarla, la
+     propuesta de la absorbida quedaría sin empresa. Sin único con la ficha. */
+  ["propuestaDeEmpresa", "clientId"],
   /* Sin relación en el esquema: la base no las cascadea ni las protege (lib/db/punteros-al-borrar.test.ts). */
   ["firefliesSession", "resolvedClientId"],
   ["firefliesSession", "manualClientId"],

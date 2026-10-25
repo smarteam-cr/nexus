@@ -11034,6 +11034,37 @@ Y el ahorro por lote (desde el 18 oct) tenía 0 pedidos: el barrido diario del v
 **Lo verificado antes de contar las notas:** «Cemaco | Data Hub» del 22 oct tiene su propio documento de notas (creado
 ese día por la organizadora, con otro contenido que el del 15 oct): no es texto de otra reunión de la serie.
 
+## La empresa, el motivo y el contexto de cada reunión (2026-10-25, T3, T4, T5, T8 y T9)
+
+**Contexto.** Medido en producción el 25 oct: 67 reuniones con texto, con gente de fuera y sin empresa en 90 días; el
+resolver propone empresa para 53 (las otras 14 son entrevistas y reuniones con correos personales). De esas 53, 18 son
+«crear Faco» (FACO es de Honda Costa Rica, cuyo dominio no está en su ficha) y 13 «crear HubSpot» (un aliado). Y 404
+reuniones sin nada no decían por qué en la reunión misma.
+
+**Decisiones.**
+1. **La propuesta es lo que dice el resolver** (`categorizeSession` con `groupUnlinkedHubspotCompany`, la variante que
+   ya usaba la pantalla de Sesiones), sin matching nuevo: una empresa que ya está, o la empresa de HubSpot del dominio
+   que no está en Nexus. Se guarda en `PropuestaDeEmpresa` (job `reuniones-propuestas`, cada hora) para no consultar
+   HubSpot en cada pantalla y para medir «2 de cada 3 confirmadas en 48 horas». Un escaneo estructural
+   (`lib/sessions/empresa-de-la-reunion.test.ts`) impide que T3 o T8 saquen dominios o títulos por su cuenta.
+2. **Decide quien estuvo** (la organizó o estaba invitado), o la líder de Customer Success y dirección. La empresa
+   elegida tiene que ser una que esa persona puede abrir; mover una reunión de una empresa a otra (T8) pide poder abrir
+   las dos. El dueño se escribe por `asignarDuenioManual` («humano», con quién) y `reResolveSession`.
+3. **Crear un prospecto se confirma aparte** (conservador, por FACO y HubSpot): el diálogo dice qué se crea y recuerda
+   elegir la empresa que ya está. Lo de fondo es configuración, no código: registrar `facocr.com` en Honda Costa Rica (si
+   es de verdad único de esa empresa) y declarar `hubspot.com` como aliado (una categoría o una ficha ALIADO).
+4. **El motivo se guarda como TEXT** (`FirefliesSession.motivoSinTexto`, job `reuniones-motivos`, cada 10 minutos), no
+   como enum: la lista vive en `lib/google/por-que-falta.ts` y crece («no ocurrió», U3). La reunión muestra el guardado
+   y, si no hay, el de ahora. A quien la organizó o estuvo le dice cómo evitarlo la próxima vez. INV52 vigila que esté.
+5. **Las preguntas de T9 salen de la minuta que ya está, sin IA:** el tema del título, lo que quedó de la reunión
+   anterior de la misma empresa (por el chokepoint) y un riesgo abierto, más «qué quedó pendiente». Lo responde solo
+   quien estuvo; queda como un recuerdo con la marca `aMano`, origen «preguntas» («lo contó una persona»). Pendiente:
+   las reuniones «con poco» (notas cortas que no alcanzan para leerse) todavía no reciben las preguntas.
+6. **El audio va directo a Cloud Storage** (subida reanudable que abre el servidor: nginx corta en 1 MB) y lo transcribe
+   Speech-to-Text v2 en lote (modelo «long», `es-US`, sin separar quién habla). Apagado tras `REUNIONES_AUDIO=1` y el
+   bucket. El archivo se borra al transcribirse; el texto entra por `agregarReunion` (origen «audio»), que nunca pisa lo
+   que dejó Meet.
+
 ## Un solo transporte para HubSpot: el token, el 401 y el 429 (2026-10-24, U6)
 
 **El hecho:** el reintento ante un 401 estaba copiado en 14 lugares (12 en `lib/` y las 2 rutas lookup) y había un

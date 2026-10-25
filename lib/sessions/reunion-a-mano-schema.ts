@@ -22,8 +22,9 @@ export const agregarReunionSchema = z.object({
   /** La gente del cliente: un correo o un nombre. */
   delCliente: z.array(z.string().trim().max(120)).max(MAX_PERSONAS).default([]),
   contenido: z.object({
-    tipo: z.enum(["transcripcion", "recuerdo"]),
-    texto: z.string().max(MAX_TEXTO_A_MANO + 1_000),
+    /** «audio» (T5): la reunión nace sin texto y se le sube la grabación después. */
+    tipo: z.enum(["transcripcion", "recuerdo", "audio"]),
+    texto: z.string().max(MAX_TEXTO_A_MANO + 1_000).default(""),
   }),
   /** Agregarle lo que pasó a una reunión que ya está (de Meet, sin transcripción ni notas). */
   reunionExistenteId: z.string().min(1).max(200).nullish(),

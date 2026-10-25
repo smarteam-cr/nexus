@@ -34,8 +34,10 @@ import {
   summaryDeLaTranscripcion,
   summaryDelRecuerdo,
   type MarcaAMano,
+  type OrigenDeLoAgregado,
   type ReunionDelDia,
 } from "./reunion-a-mano";
+import { audioPrendido } from "./audio-de-reunion";
 import type { AgregarReunionInput } from "./reunion-a-mano-schema";
 
 export interface QuienAgrega {
@@ -54,6 +56,8 @@ export interface OpcionesParaAgregar {
   /** Las reuniones del cliente ese día (si vino la fecha), para preguntar si es una de ellas. */
   reunionesDelDia: ReunionDelDiaConMotivo[];
   equipo: { email: string; nombre: string }[];
+  /** Se puede subir el audio de una reunión presencial (T5: REUNIONES_AUDIO=1 y el bucket). */
+  audio: boolean;
 }
 
 /** Las reuniones del cliente en un día de Costa Rica, con lo que ya tienen. Por el chokepoint. */
@@ -101,6 +105,7 @@ export async function opcionesParaAgregar(clientId: string, fecha: string | null
     proyectos: proyectos.map((p) => ({ id: p.id, nombre: p.name })),
     reunionesDelDia: delDia,
     equipo: miembros.filter((m) => !esCuentaDePrueba(m.name) && m.email).map((m) => ({ email: m.email.toLowerCase(), nombre: m.name })),
+    audio: audioPrendido(process.env),
   };
 }
 
@@ -161,13 +166,26 @@ async function vincularProyectos(
   }
 }
 
-/** Agrega una reunión (nueva, o lo que pasó en una de Meet que no dejó nada). La ruta ya comprobó el acceso al cliente. */
-export async function agregarReunion(input: AgregarReunionInput, quien: QuienAgrega): Promise<ResultadoDeAgregar> {
+/**
+ * Agrega una reunión (nueva, o lo que pasó en una de Meet que no dejó nada). La ruta ya comprobó el acceso al cliente.
+ *
+ * `opts.origen` (2026-10-25): lo agregado no se pegó, salió de las preguntas de Nexus (T9) o de un audio (T5); queda en la
+ * marca. Con `contenido.tipo = "audio"` (T5, solo con la transcripción de audio prendida) la reunión nueva nace sin texto
+ * y el audio se le sube después (lib/sessions/audio-de-reunion-server.ts); a una que ya está no se le escribe nada acá.
+ */
+export async function agregarReunion(
+  input: AgregarReunionInput,
+  quien: QuienAgrega,
+  opts: { origen?: OrigenDeLoAgregado } = {},
+): Promise<ResultadoDeAgregar> {
   const cliente = await prisma.client.findUnique({ where: { id: input.clientId }, select: { id: true } });
   if (!cliente) return { ok: false, status: 404, error: "Ese cliente no existe." };
 
-  const texto = input.contenido.texto.trim();
-  const problema = problemaDelContenido(input.contenido.tipo, texto);
+  const conAudio = input.contenido.tipo === "audio";
+  if (conAudio && !audioPrendido(process.env)) return { ok: false, status: 400, error: "La transcripción de audio no está prendida en este servidor." };
+  const texto = conAudio ? "" : input.contenido.texto.trim();
+  const tipoDeTexto = input.contenido.tipo === "audio" ? "transcripcion" : input.contenido.tipo;
+  const problema = conAudio ? null : problemaDelContenido(tipoDeTexto, texto);
   if (problema) return { ok: false, status: 400, error: problema };
 
   // Los proyectos tienen que ser de este cliente (invariante 1: una reunión no cruza de cliente).
@@ -178,7 +196,13 @@ export async function agregarReunion(input: AgregarReunionInput, quien: QuienAgr
   }
 
   const ahora = new Date();
-  const marca: MarcaAMano = { tipo: input.contenido.tipo, por: quien.email.toLowerCase(), nombre: quien.nombre, at: ahora.toISOString() };
+  const marca: MarcaAMano = {
+    tipo: tipoDeTexto,
+    por: quien.email.toLowerCase(),
+    nombre: quien.nombre,
+    at: ahora.toISOString(),
+    ...(opts.origen ? { origen: opts.origen } : {}),
+  };
 
   /* ── Una reunión que ya está: se le agrega lo que pasó ── */
   if (input.reunionExistenteId) {
@@ -195,13 +219,18 @@ export async function agregarReunion(input: AgregarReunionInput, quien: QuienAgr
       largoNotas: typeof notas === "string" ? notas.trim().length : 0,
     });
     if (porQueNo) return { ok: false, status: 409, error: `${porQueNo} Lo que dejó Meet no se reemplaza.` };
+    // El audio se sube después a esta misma reunión: acá solo se vinculan los proyectos elegidos.
+    if (conAudio) {
+      await vincularProyectos(prisma, fila.id, proyectoIds);
+      return { ok: true, sessionId: fila.id, nueva: false, lectura: { encolada: false, mensaje: "Sube el audio: cuando Google lo transcriba, Nexus la lee." } };
+    }
 
     const previo: Prisma.JsonObject = fila.summary && typeof fila.summary === "object" && !Array.isArray(fila.summary) ? fila.summary : {};
     await prisma.$transaction(async (tx) => {
       await tx.firefliesSession.update({
         where: { id: fila.id },
         data:
-          input.contenido.tipo === "transcripcion"
+          tipoDeTexto === "transcripcion"
             ? { transcript: texto, summary: { ...previo, ...summaryDeLaTranscripcion(marca) } }
             : { summary: { ...previo, ...summaryDelRecuerdo(texto, marca) } },
         select: { id: true },
@@ -242,8 +271,9 @@ export async function agregarReunion(input: AgregarReunionInput, quien: QuienAgr
         duration: input.duracionMin ?? 0,
         participants: participantes,
         source: FUENTE_A_MANO,
-        transcript: input.contenido.tipo === "transcripcion" ? texto : null,
-        summary: input.contenido.tipo === "transcripcion" ? summaryDeLaTranscripcion(marca) : summaryDelRecuerdo(texto, marca),
+        transcript: !conAudio && tipoDeTexto === "transcripcion" ? texto : null,
+        // Con audio nace sin texto (ni marca): la marca la pone la transcripción cuando llega.
+        summary: conAudio ? undefined : tipoDeTexto === "transcripcion" ? summaryDeLaTranscripcion(marca) : summaryDelRecuerdo(texto, marca),
         enrichedAt: ahora,
         resolvedClientId: input.clientId,
       },
@@ -254,5 +284,6 @@ export async function agregarReunion(input: AgregarReunionInput, quien: QuienAgr
     await asignarDuenioManual(id, input.clientId, { origen: "humano", actorEmail: quien.email.toLowerCase(), db: tx });
     await vincularProyectos(tx, id, proyectoIds);
   });
+  if (conAudio) return { ok: true, sessionId: id, nueva: true, lectura: { encolada: false, mensaje: "Sube el audio: cuando Google lo transcriba, Nexus la lee." } };
   return { ok: true, sessionId: id, nueva: true, lectura: await ponerEnLaLectura(id) };
 }

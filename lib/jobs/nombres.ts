@@ -44,6 +44,9 @@ export const NOMBRE_DE_JOB: Readonly<Record<string, string>> = {
   "invariants-daily": "La revisión diaria de la base",
   "ia-lotes": "Los pedidos a Claude por lote",
   "titulos-cortos": "El nombre corto de las tareas",
+  "reuniones-motivos": "El motivo de las reuniones sin texto",
+  "reuniones-propuestas": "La empresa que propone Nexus para las reuniones sin empresa",
+  "reuniones-audio": "La transcripción del audio de las reuniones presenciales",
 };
 
 /** El nombre legible del job; si no lo tiene, su clave (nunca se descarta en silencio). */

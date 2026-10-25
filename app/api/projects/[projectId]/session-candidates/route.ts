@@ -23,6 +23,8 @@ import {
 } from "@/lib/sessions/destinos-de-contexto";
 import { etiquetaDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { sugerenciasParaElDocumento, type SugerenciaParaElPanel } from "@/lib/contexto/sugerencias-del-documento-server";
+import { MIN_BUSQUEDA_EN_LA_EMPRESA } from "@/lib/sessions/buscar-en-la-empresa";
+import { idsDeLaEmpresaQueCoinciden } from "@/lib/sessions/buscar-en-la-empresa-server";
 
 /**
  * GET /api/projects/[projectId]/session-candidates
@@ -56,6 +58,11 @@ import { sugerenciasParaElDocumento, type SugerenciaParaElPanel } from "@/lib/co
  * de relevancia; una que el CSE desestimó viene marcada (`desestimada`). Usar, descartar y sacar van por
  * POST .../contexto/[pieza]/sessions. (Hasta la etapa 7 arrancaban SUGERIDOS: toda reunión del proyecto
  * con el cliente alimentaba, y la X la dejaba «Excluida». La exploración conserva esa regla.)
+ *
+ * ── `?q=` (T8, 2026-10-25, «encontrar cualquier reunión de la empresa») ──────
+ * Con `MIN_BUSQUEDA_EN_LA_EMPRESA` letras o más, las candidatas del cliente ya no son las 100 más recientes: son las
+ * 100 más recientes de TODA su historia que coinciden con lo escrito (título, organizador o invitados), también las de
+ * hace un año en las que quien busca no estuvo. El resto de la respuesta es la misma.
  */
 export async function GET(
   req: NextRequest,
@@ -66,6 +73,8 @@ export async function GET(
   if (guard instanceof NextResponse) return guard;
   const { clientId } = guard;
   const destino = parseDestino(req.nextUrl.searchParams.get("para"));
+  const q = (req.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 100);
+  const buscando = q.length >= MIN_BUSQUEDA_EN_LA_EMPRESA;
 
   const salesEmails = await salesPresenceEmails();
   const applies = (title: string, participants: string[], organizerEmail: string | null): boolean =>
@@ -213,10 +222,12 @@ export async function GET(
   /* El cronograma no ofrece las demás reuniones del cliente: sus candidatas son las del PROYECTO
      (abajo) y las del calendario de quien busca (.../session-candidates/calendario), que es lo que pidió
      Elías. Por eso ni se consultan. Los seis documentos ofrecen las dos: las del proyecto y estas. */
+  const idsQueCoinciden = buscando && !esCronograma ? await idsDeLaEmpresaQueCoinciden(clientId, q) : null;
   const clientSessions = esCronograma ? [] : await prisma.firefliesSession.findMany({
     where: {
       ...whereBelongsToClient(clientId),
       date: { lte: new Date() },
+      ...(idsQueCoinciden ? { id: { in: idsQueCoinciden } } : {}),
     },
     orderBy: { date: "desc" },
     take: 100,

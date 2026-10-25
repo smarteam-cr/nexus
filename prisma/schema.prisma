@@ -316,6 +316,7 @@ model Client {
   // fusión las sueltan o las mudan antes) y las que alguien le asignó a mano (SET NULL).
   reunionesResueltas       FirefliesSession[]        @relation("ReunionesResueltas")
   reunionesAsignadasAMano  FirefliesSession[]        @relation("ReunionesAsignadasAMano")
+  propuestasDeReuniones    PropuestaDeEmpresa[]      @relation("PropuestasDeEmpresa") // T3: las reuniones que Nexus le propone (SET NULL)
   propuestasDeDatos        PropuestaDeDato[]         @relation("PropuestasDeDatosDeLaEmpresa") // R1: propuestas e historia de sus datos (CASCADE)
   investigaciones          InvestigacionDeEmpresa[]  @relation("InvestigacionesDeLaEmpresa") // R5: lo que Nexus encontró en la web (CASCADE)
   documentosDeLaEmpresa    ProjectCanvas[]           @relation("DocumentosDeLaEmpresa") // R3: los documentos sin proyecto ni propuesta (CASCADE)
@@ -2531,6 +2532,12 @@ model FirefliesSession {
   // la fila: la cancelada con texto, minuta, hechos o tareas queda para revisar; la que no tiene nada sale de las
   // lecturas (lib/sessions/canceladas.ts). null = vigente (si el evento vuelve, la sync la desmarca).
   canceladaEn          DateTime?
+  // T4 (2026-10-25): POR QUÉ no dejó texto (un `MotivoDeLaFalta` de lib/google/por-que-falta.ts) y cuándo se calculó.
+  // Lo escribe SOLO el job `reuniones-motivos` (lib/sessions/motivo-sin-texto-server.ts) y lo borra cuando la reunión
+  // tiene texto. TEXT y no enum a propósito: la lista vive en el código y crece (ver el .sql). null = tiene texto o no
+  // se calculó todavía.
+  motivoSinTexto       String?
+  motivoSinTextoAt     DateTime?
   manualClientId       String? // override manual del matching automático de cliente
   // R7 (2026-10-24): llave de verdad. Si la empresa se borra, el override se cae solo (SET NULL).
   manualClient         Client?   @relation("ReunionesAsignadasAMano", fields: [manualClientId], references: [id], onDelete: SetNull)
@@ -2569,6 +2576,8 @@ model FirefliesSession {
   notasParaHubspot      NotaDeLaCuenta[]        @relation("NotasDeLaReunion") // la nota para HubSpot que se sugirió después de la reunión (SET NULL)
   seguimiento           SeguimientoDeReunion?   @relation("SeguimientoDeLaReunion") // ficha G: agenda escrita, correo y próxima reunión (CASCADE)
   invitados             ParticipanteDeReunion[] @relation("ParticipantesDeLaReunion") // U1: cada invitado con su respuesta; U3 suma la asistencia (CASCADE)
+  propuestaDeEmpresa    PropuestaDeEmpresa?    @relation("PropuestaDeLaReunion") // T3: a qué empresa la propone Nexus (CASCADE)
+  audio                 AudioDeReunion?        @relation("AudioDeLaReunion") // T5: el audio de la reunión presencial (CASCADE)
 
   // Índices para los queries principales:
   //   /sessions: findMany({ where: { date: { lt: now } }, orderBy: { date: desc } })
@@ -2610,6 +2619,78 @@ model ParticipanteDeReunion {
 
   @@unique([sessionId, correo])
   @@index([correo])
+}
+
+/// T3 (2026-10-25) · A qué empresa propone Nexus una reunión con texto que no tiene dueña. La saca el resolver único
+/// (`categorizeSession`, lib/sessions/categorize.ts: sin matching nuevo) y la escribe SOLO el job `reuniones-propuestas`
+/// (lib/sessions/propuesta-de-empresa-server.ts). La decide una persona por lib/sessions/empresa-de-la-reunion-server.ts,
+/// que escribe el dueño por `asignarDuenioManual` y anota aquí qué decidió. Mide «2 de cada 3 confirmadas en 48 horas».
+model PropuestaDeEmpresa {
+  id               String                   @id @default(cuid())
+  sessionId        String                   @unique
+  session          FirefliesSession         @relation("PropuestaDeLaReunion", fields: [sessionId], references: [id], onDelete: Cascade)
+  tipo             TipoDePropuestaDeEmpresa
+  /// CLIENTE: la empresa que ya está en Nexus. nullable porque una propuesta HUBSPOT todavía no tiene ficha (y si la
+  /// empresa se borra, la propuesta queda sin ella: SET NULL).
+  clientId         String?
+  client           Client?                  @relation("PropuestasDeEmpresa", fields: [clientId], references: [id], onDelete: SetNull)
+  /// HUBSPOT: la empresa del HubSpot de Smarteam del dominio (id externo, sin llave).
+  hubspotCompanyId String?
+  nombre           String
+  dominio          String?
+  propuestaAt      DateTime                 @default(now())
+  /// null = nadie decidió todavía.
+  decision         DecisionDeLaPropuesta?
+  decididaAt       DateTime?
+  decididaPor      String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  @@index([decision])
+}
+
+/// Qué propone Nexus: una empresa que ya está, o una de HubSpot que se crea como prospecto al confirmar.
+enum TipoDePropuestaDeEmpresa {
+  CLIENTE
+  HUBSPOT
+}
+
+/// Lo que decidió la persona: la propuesta, u otra empresa.
+enum DecisionDeLaPropuesta {
+  CONFIRMADA
+  OTRA
+}
+
+/// T5 (2026-10-25) · El audio de una reunión presencial: se sube a Google Cloud Storage y lo transcribe Speech-to-Text
+/// de Google en lote. Una fila por reunión (subir otro reemplaza). Lo escribe SOLO lib/sessions/audio-de-reunion-server.ts,
+/// detrás de REUNIONES_AUDIO=1. El texto termina en `FirefliesSession.transcript`, con la marca `aMano` (origen audio).
+model AudioDeReunion {
+  id          String           @id @default(cuid())
+  sessionId   String           @unique
+  session     FirefliesSession @relation("AudioDeLaReunion", fields: [sessionId], references: [id], onDelete: Cascade)
+  /// gs://bucket/objeto
+  objeto      String
+  archivo     String
+  tipo        String
+  bytes       Int
+  estado      EstadoDelAudio   @default(SUBIENDO)
+  /// El nombre de la operación de Speech-to-Text (projects/…/operations/…).
+  operacion   String?
+  error       String?
+  minutos     Float?
+  subidoPor   String
+  terminadoAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([estado])
+}
+
+enum EstadoDelAudio {
+  SUBIENDO
+  TRANSCRIBIENDO
+  LISTO
+  ERROR
 }
 
 /// Ficha G (2026-10-17) · Lo que se hace con UNA reunión después de que ocurre: la agenda que escribió una persona, el

@@ -49,6 +49,12 @@
  *     de las dos credenciales. El turno de las tres: lib/jobs/turno-por-hora.ts.
  *   - titulos-cortos → el nombre corto de las tareas abiertas que no lo tienen o cuyo título cambió
  *     (lib/tareas/ia/titulo-corto-server.ts), cada 10 minutos, con Haiku y si queda presupuesto automático.
+ *   - reuniones-motivos → POR QUÉ cada reunión de los últimos 90 días no dejó texto, guardado en la reunión
+ *     (lib/sessions/motivo-sin-texto-server.ts, T4), cada 10 minutos. Sin IA ni red: una consulta y lo que cambió.
+ *   - reuniones-propuestas → a qué empresa propone Nexus cada reunión con texto sin dueña (lib/sessions/
+ *     propuesta-de-empresa-server.ts, T3), una vez por hora. El resolver único y una consulta de solo lectura a HubSpot.
+ *   - reuniones-audio → mira las transcripciones de audio en curso (lib/sessions/audio-de-reunion-server.ts, T5), cada
+ *     tick. Gated por REUNIONES_AUDIO=1 y el bucket; sin audios en curso devuelve SIN_TURNO.
  *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
  *     ≥ 7:00 CR, después de los espejos. Si alguno está en rojo el job LANZA: semáforo rojo
  *     en Integraciones + Sentry con tags.job. Solo lecturas. (B-08)
@@ -1078,6 +1084,83 @@ const titulosCortos: JobDef = {
   },
 };
 
+/** El turno de 10 minutos de esta hora («2026-10-25T09:20»), como el de los nombres cortos. */
+async function turnoDeDiezMinutos(now: Date): Promise<string> {
+  const { crDateParts } = await import("./time");
+  const p = crDateParts(now);
+  return `${p.dateKey}T${String(p.hour).padStart(2, "0")}:${String(Math.floor(now.getUTCMinutes() / 10) * 10).padStart(2, "0")}`;
+}
+
+/**
+ * El motivo de cada reunión sin texto (T4, 2026-10-25; lib/sessions/motivo-sin-texto-server.ts): cada 10 minutos guarda
+ * por qué no dejó texto cada reunión de los últimos 90 días, y lo borra de las que ya tienen. La reunión lo muestra a
+ * quien la organizó; INV52 vigila que esté. Sin el SQL (2026-10-25-reuniones-parte-2.sql) avisa y no hace nada.
+ */
+const reunionesMotivos: JobDef = {
+  key: "reuniones-motivos",
+  shouldRun: () => true,
+  run: async (now) => {
+    const turno = await turnoDeDiezMinutos(now);
+    if (!(await claimDateKey("reuniones-motivos", turno, now))) return SIN_TURNO;
+    const { guardarMotivosSinTexto, hayColumnaDelMotivo } = await import("@/lib/sessions/motivo-sin-texto-server");
+    if (!(await hayColumnaDelMotivo())) {
+      console.log(`[jobs/reuniones-motivos] ${turno} — falta el SQL 2026-10-25-reuniones-parte-2.sql`);
+      return;
+    }
+    const r = await guardarMotivosSinTexto({ ahora: now });
+    if (r.escritas + r.borradas > 0) console.log(`[jobs/reuniones-motivos] ${turno} — ${r.miradas} miradas, ${r.escritas} con motivo nuevo, ${r.borradas} ya con texto`);
+  },
+};
+
+/**
+ * La empresa que propone Nexus para cada reunión con texto sin dueña (T3, 2026-10-25;
+ * lib/sessions/propuesta-de-empresa-server.ts), una vez por hora. Lo decide una persona en el tablero de salud o en la
+ * reunión. Sin el SQL avisa y no hace nada. HubSpot caído no rompe: las de empresas que Nexus no tiene esperan.
+ */
+const reunionesPropuestas: JobDef = {
+  key: "reuniones-propuestas",
+  shouldRun: () => true,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const p = crDateParts(now);
+    const turno = `${p.dateKey}T${String(p.hour).padStart(2, "0")}`;
+    if (!(await claimDateKey("reuniones-propuestas", turno, now))) return SIN_TURNO;
+    const { calcularPropuestas } = await import("@/lib/sessions/propuesta-de-empresa-server");
+    try {
+      const r = await calcularPropuestas({ ahora: now });
+      if (r.nuevas + r.cambiadas + r.borradas > 0) {
+        console.log(`[jobs/reuniones-propuestas] ${turno} — ${r.miradas} sin dueña, ${r.nuevas} propuestas nuevas, ${r.cambiadas} cambiadas, ${r.borradas} borradas${r.sinHubspot ? " (sin HubSpot)" : ""}`);
+      }
+    } catch (e) {
+      if (esquemaDesactualizado(e)) {
+        console.log(`[jobs/reuniones-propuestas] ${turno} — falta el SQL 2026-10-25-reuniones-parte-2.sql`);
+        return;
+      }
+      throw e;
+    }
+  },
+};
+
+/**
+ * Las transcripciones de audio de las reuniones presenciales (T5, 2026-10-25; lib/sessions/audio-de-reunion-server.ts):
+ * cada tick mira las que Google está transcribiendo y guarda el texto de las que terminaron. Gated por REUNIONES_AUDIO=1
+ * y GOOGLE_SPEECH_BUCKET. Sin audios en curso devuelve SIN_TURNO. Si Google no se pudo mirar, LANZA (semáforo rojo).
+ */
+const reunionesAudio: JobDef = {
+  key: "reuniones-audio",
+  shouldRun: () => encendido("reuniones-audio"),
+  run: async (now) => {
+    const { mirarAudios } = await import("@/lib/sessions/audio-de-reunion-server");
+    const r = await mirarAudios(now).catch((e) => {
+      if (esquemaDesactualizado(e)) return null;
+      throw e;
+    });
+    if (!r || (r.mirados === 0 && r.conError === 0)) return SIN_TURNO;
+    console.log(`[jobs/reuniones-audio] ${r.mirados} mirados, ${r.listos} transcritos, ${r.conError} con error`);
+    if (r.errores.length && r.listos === 0 && r.conError === 0) throw new Error(`No se pudo mirar la transcripción de audio: ${r.errores.slice(0, 3).join("; ")}`);
+  },
+};
+
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, loPagadoDaily, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, reunionesMotivos, reunionesPropuestas, reunionesAudio, loPagadoDaily, invariantsDaily];
 }

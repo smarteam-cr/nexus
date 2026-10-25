@@ -23,6 +23,8 @@ import { saludDeLasReuniones } from "@/lib/sessions/salud-de-las-reuniones-serve
 import { PeriodoDeLaSalud, PestanasDeLaSalud } from "@/components/sessions/salud/ControlesDeLaSalud";
 import { MotivosSinTexto, NumerosDelPeriodo, ReunionesSinEmpresa, TablaDeGrupos } from "@/components/sessions/salud/TableroDeSalud";
 import TusReuniones from "@/components/sessions/salud/TusReuniones";
+import { ProveedorDeEmpresas } from "@/components/sessions/ElegirEmpresa";
+import { empresasParaElegir } from "@/lib/sessions/empresa-de-la-reunion-server";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +41,11 @@ export default async function SaludDeLasReunionesPage({ searchParams }: { search
 
   const verTodas = primero(sp.todas) ?? null;
   // Quien ve solo las suyas tiene, para comparar, el porcentaje de todo el equipo (solo el número, nada por persona).
-  const { salud, delEquipo } = await saludDeLasReuniones({ dias, soloDe: veTodo ? null : email, teamMemberId: ctx.teamMember.id, verTodas, ahora });
+  const [{ salud, delEquipo }, empresas] = await Promise.all([
+    saludDeLasReuniones({ dias, soloDe: veTodo ? null : email, teamMemberId: ctx.teamMember.id, verTodas, quien: { email, veTodo }, ahora }),
+    // T3: la lista para elegir la empresa de una reunión, solo en la vista que la usa.
+    vista === "sin-empresa" ? empresasParaElegir(ctx.user) : Promise.resolve([]),
+  ]);
   const t = salud.totales;
   const vencidas = t.sinEmpresaVencidas;
   const nav = { vista, dias };
@@ -103,7 +109,11 @@ export default async function SaludDeLasReunionesPage({ searchParams }: { search
         />
       )}
       {vista === "motivos" && <MotivosSinTexto grupos={salud.motivos} total={t.sinNada} nav={nav} />}
-      {vista === "sin-empresa" && <ReunionesSinEmpresa reuniones={salud.sinEmpresa} />}
+      {vista === "sin-empresa" && (
+        <ProveedorDeEmpresas empresas={empresas}>
+          <ReunionesSinEmpresa reuniones={salud.sinEmpresa} />
+        </ProveedorDeEmpresas>
+      )}
     </div>
   );
 }
