@@ -26,6 +26,14 @@ import {
   AutomatizacionesSection,
   ConversacionesSection,
 } from "../sections-planificacion";
+import {
+  FichaDelProyectoSection,
+  UsuariosPermisosSection,
+  CanalesDeEntradaSection,
+  FormulariosSection,
+  CotizacionesSection,
+  InformesSection,
+} from "../sections-planificacion-brief";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const PLANIFICACION_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
@@ -40,6 +48,13 @@ export const PLANIFICACION_SECTION_COMPONENTS: Record<string, FC<SectionProps<an
   pipelines_horizontal: PipelinesSection,
   automatizaciones: AutomatizacionesSection,
   conversaciones: ConversacionesSection,
+  // 2026-10-25 — lo que vino del Brief de implementación (sections-planificacion-brief.tsx).
+  ficha_proyecto: FichaDelProyectoSection,
+  usuarios_permisos: UsuariosPermisosSection,
+  canales_entrada: CanalesDeEntradaSection,
+  formularios: FormulariosSection,
+  cotizaciones: CotizacionesSection,
+  informes: InformesSection,
 };
 
 const PLANIFICACION_LANDING_CONFIG: LandingConfig = {

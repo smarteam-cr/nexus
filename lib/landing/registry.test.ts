@@ -478,6 +478,13 @@ describe("un renderer, un contrato de datos", () => {
     pipelines_horizontal: "modulo",
     automatizaciones: "modulo",
     conversaciones: "modulo",
+    // Lo que vino del Brief de implementación (2026-10-25): solo la Planificación las usa.
+    ficha_proyecto: "modulo",
+    usuarios_permisos: "modulo",
+    canales_entrada: "modulo",
+    formularios: "modulo",
+    cotizaciones: "modulo",
+    informes: "modulo",
     site_architecture: "modulo",
     web_methodology: "modulo",
     web_scope: "modulo",
@@ -891,9 +898,12 @@ describe("Planificación: registry completo + keys congeladas", () => {
     // 2026-10-02 — la Planificación PRÁCTICA (lo que va a quedar configurado en HubSpot). Propiedades,
     // pipelines y automatizaciones vinieron de Ejecución. Salieron la política rectora (al
     // diagnóstico), la hoja de ruta y las métricas: quedan al final, SOLO LECTURA.
+    // 2026-10-25 — lo que pide el Brief de implementación (decisión de Elías del 24 oct): ficha del proyecto,
+    // usuarios y permisos, canales de entrada, formularios, cotizaciones e informes. Curadas.
     expect(PLANIFICACION_SECTION_DEFS.map((d) => d.key)).toEqual([
-      "planificacion", "definicion_procesos", "ciclo_vida_crm", "arquitectura_solucion", "propiedades",
-      "pipelines", "automatizaciones", "conversaciones", "rutinas_adopcion", "plan_despliegue", "cierre",
+      "planificacion", "ficha_proyecto", "usuarios_permisos", "definicion_procesos", "ciclo_vida_crm",
+      "canales_entrada", "arquitectura_solucion", "propiedades", "formularios", "pipelines", "automatizaciones",
+      "conversaciones", "cotizaciones", "informes", "rutinas_adopcion", "plan_despliegue", "cierre",
       "politica_rectora", "roadmap", "metricas_exito",
     ]);
   });

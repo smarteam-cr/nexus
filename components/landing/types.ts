@@ -12,6 +12,7 @@
 import type { FC } from "react";
 import type { KickoffTimelineData, KickoffProceso, KickoffPortadaCongelada } from "@/lib/external/kickoff-view-types";
 import type { LandingStringKey } from "./i18n";
+import type { FilaPropiedad } from "@/lib/planificacion/propiedades";
 
 // ── Datos estructurados por sección (lo que llena el agente) ─────────────────
 
@@ -376,6 +377,12 @@ export interface LandingContext {
   /** Solo KICKOFF: datos derivados/curados que viven FUERA de CanvasBlock (cronograma
    *  de ProjectTimeline, procesos de flowcharts) + callbacks del editor. Las secciones
    *  `ctxDriven` (cronograma/procesos) y el hero (Stats) los leen de acá. Ausente en BC. */
+  /**
+   * Solo el editor de la PLANIFICACIÓN (2026-10-25): la tabla de propiedades del mismo documento, para
+   * que un formulario elija sus campos de ahí y avise si uno ya no existe. Ausente en el PDF y en el
+   * enlace del cliente: ahí el formulario muestra los nombres que guardó.
+   */
+  planificacion?: { propiedades?: FilaPropiedad[]; /** Las etiquetas del proyecto: los hubs vendidos, que la ficha ofrece marcar. */ etiquetasDelProyecto?: string[] };
   kickoff?: {
     timeline?: KickoffTimelineData | null;
     /**
@@ -726,6 +733,13 @@ export interface SectionDef {
    */
   revision?: string;
   empty: unknown;              // data inicial (template vacío)
+  /**
+   * ¿No tiene nada que mostrarle al cliente? Reemplaza a `isBlank` en lectura (la vista del cliente y el PDF), para
+   * las secciones donde un dato que no es contenido —una casilla en «no», el cargo de una fila sin nombre— la
+   * mantendría viva y se publicaría el título sin nada abajo. Función PURA, la misma que usa su componente
+   * (2026-10-25, las secciones del Brief en la Planificación).
+   */
+  vacia?: (data: unknown) => boolean;
   /** La sección se alimenta de `ctx` (no de `data`): NO se omite en read por `isBlank`
    *  (el Component decide si devuelve null). Ej. kickoff: cronograma/procesos/cierre. */
   ctxDriven?: boolean;

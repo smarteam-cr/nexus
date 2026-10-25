@@ -78,6 +78,13 @@ export interface BCSectionDef {
    * sección — ruido global para un caso local.
    */
   avisoDelChat?: string;
+  /**
+   * ¿No tiene nada que mostrarle al cliente? Reemplaza a `isBlank` en lectura (la vista del cliente y el PDF), para
+   * las secciones donde un dato que no es contenido —una casilla en «no», el cargo de una fila sin nombre— la
+   * mantendría viva y se publicaría el título sin nada abajo. Función PURA, la misma que usa su componente
+   * (2026-10-25, las secciones del Brief en la Planificación).
+   */
+  vacia?: (data: unknown) => boolean;
   /** (kickoff) la sección se alimenta de ctx, no de data → no se omite por isBlank en read. */
   ctxDriven?: boolean;
   /** (kickoff) solo `ctxDriven`: true si no hay NADA que renderizar (el Component daría null).

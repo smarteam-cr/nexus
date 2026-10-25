@@ -12,6 +12,10 @@
  * despliegue por olas (hasta que exista el documento de Puesta en marcha) · aprobación. TODAS se
  * pueden ocultar, también la portada y la aprobación.
  *
+ * 2026-10-25 — lo que pide el Brief de implementación (docs/planificacion-brief-plan.md): ficha del
+ * proyecto, usuarios y permisos, por dónde entran los leads, formularios, cotizaciones e informes.
+ * CURADAS: el agente no las escribe al generar (la corrida ya está en su tope de tokens).
+ *
  * Lo que salió: la política rectora (al Diagnóstico), la hoja de ruta (el orden vive en el Cronograma
  * y en las acciones del Diagnóstico) y las métricas de éxito (los OBJ del Diagnóstico). Quedan al
  * final como defs SOLO-LECTURA hasta que la planificación se regenera.
@@ -34,6 +38,14 @@ import {
 } from "./shared-sections.defs";
 import { PLANIFICACION_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
+import {
+  fichaVacia,
+  usuariosVacia,
+  canalesVacia,
+  formulariosVacia,
+  cotizacionesVacia,
+  informesVacia,
+} from "@/lib/planificacion/brief";
 
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
@@ -54,6 +66,144 @@ const proseEmpty = PROSA_EMPTY;
 const ORIGEN_BRIEF =
   "`origen` = 'acordado' SOLO si una reunión con el cliente lo respalda (nómbrala en `fuente`: 'Sesión Ventas 3'); 'propuesta' si es diseño de Smarteam; 'supuesto' si das por hecho algo del cliente que nadie dijo. " +
   "Lo que solo dice una nota interna o el handoff NO es 'acordado': es 'propuesta' o 'supuesto'.";
+
+/* ── Lo que vino del Brief de implementación (2026-10-25, docs/planificacion-brief-plan.md) ───────────────
+   Curadas: el agente NO las escribe en la corrida principal (ya está en el tope de tokens), así que
+   regenerar no las toca. Las llenan el CSE, el cliente o una plantilla. Su esquema existe para el chat
+   y lleva los `id`, así una edición del chat no le cambia la identidad a nadie. */
+/* ⚠ En cada lista, el `id` va AL FINAL del esquema: el chat nombra un ítem por su primer campo de texto con contenido, y
+   con el `id` primero la línea que se aprueba decía «en «pmvo8d3b01», Correo pasa a…» (2026-10-25, la revisión; la misma
+   trampa del kickoff el 2026-08-23). */
+const MANUAL_BRIEF = "Sección curada: la llenan el equipo o el cliente; el agente no la escribe al generar.";
+
+const PERMISOS_DE_OBJETO = { type: "object", properties: { ver: str, editar: str, eliminar: str } } as const;
+
+const FICHA_PROYECTO_DEF: BCSectionDef = {
+  key: "ficha_proyecto",
+  label: "Ficha del proyecto",
+  eyebrow: "Hubs, sesiones y quiénes participan",
+  theme: "soft",
+  sectionType: "ficha_proyecto",
+  agentGenerated: false,
+  vacia: fichaVacia,
+  empty: { intro: "", hubs: [], participantes: [], alcance: "", consideraciones: "" },
+  agentHint: "",
+  brief: MANUAL_BRIEF + " Los hubs con su edición y cuántas sesiones de set up y de capacitación lleva cada uno; quiénes participan de Smarteam, de HubSpot y del cliente; el alcance y lo que hay que tener en cuenta.",
+  schema: {
+    type: "object",
+    properties: {
+      intro: str,
+      hubs: arrayOf({ hub: str, incluido: str, edicion: str, sesionesSetup: str, sesionesCapacitacion: str }, ["hub"]),
+      participantes: arrayOf({ nombre: str, cargo: str, correo: str, telefono: str, lado: str, principal: str, id: str }, ["nombre"]),
+      alcance: str,
+      consideraciones: str,
+    },
+  },
+};
+
+const USUARIOS_PERMISOS_DEF: BCSectionDef = {
+  key: "usuarios_permisos",
+  label: "Usuarios y permisos",
+  eyebrow: "Quién entra y qué puede hacer",
+  theme: "light",
+  sectionType: "usuarios_permisos",
+  agentGenerated: false,
+  vacia: usuariosVacia,
+  empty: { intro: "", equipos: [], usuarios: [] },
+  agentHint: "",
+  brief:
+    MANUAL_BRIEF +
+    " Los equipos con su conjunto de permisos (contactos, empresas, negocios y tickets × ver, editar y eliminar; cada uno nada | propios | equipo | todo, y editar nunca más amplio que ver ni eliminar más que editar) y los usuarios que trabajarán en HubSpot con su equipo (por `equipoId`), su licencia, y si son superadministradores o champions. Nunca inventes personas.",
+  schema: {
+    type: "object",
+    properties: {
+      intro: str,
+      equipos: arrayOf(
+        {
+          nombre: str, tipo: str, tablaDeUsuarios: str, exportar: str,
+          permisos: { type: "object", properties: { contactos: PERMISOS_DE_OBJETO, empresas: PERMISOS_DE_OBJETO, negocios: PERMISOS_DE_OBJETO, tickets: PERMISOS_DE_OBJETO } },
+          id: str,
+        },
+        ["nombre"],
+      ),
+      usuarios: arrayOf(
+        { nombre: str, apellido: str, correo: str, cargo: str, equipoId: str, licencia: str, superAdmin: str, champion: str, id: str },
+        ["nombre"],
+      ),
+    },
+  },
+};
+
+const CANALES_ENTRADA_DEF: BCSectionDef = {
+  key: "canales_entrada",
+  label: "Por dónde entran tus leads",
+  eyebrow: "Canales y quién los atiende",
+  theme: "light",
+  sectionType: "canales_entrada",
+  agentGenerated: false,
+  vacia: canalesVacia,
+  empty: { intro: "", canales: [] },
+  agentHint: "",
+  brief: MANUAL_BRIEF + " Un canal por fila (llamada, formulario del sitio, WhatsApp…): quién lo atiende, cómo se atiende paso a paso y cómo pasa a otra área.",
+  schema: {
+    type: "object",
+    properties: { intro: str, canales: arrayOf({ canal: str, responsable: str, atencion: str, pasaA: str, origen: str, id: str }, ["canal"]) },
+  },
+};
+
+const FORMULARIOS_DEF: BCSectionDef = {
+  key: "formularios",
+  label: "Formularios",
+  eyebrow: "Lo que pide cada uno",
+  theme: "light",
+  sectionType: "formularios",
+  agentGenerated: false,
+  vacia: formulariosVacia,
+  empty: { intro: "", items: [] },
+  agentHint: "",
+  brief: MANUAL_BRIEF + " Un formulario por tarjeta: dónde vive, sus campos (cada uno apunta a una fila de la tabla de propiedades por `propiedadId`) y qué pasa al enviarlo.",
+  schema: {
+    type: "object",
+    properties: {
+      intro: str,
+      items: arrayOf(
+        { nombre: str, objeto: str, donde: str, alEnviar: str, origen: str, campos: arrayOf({ etiqueta: str, obligatorio: str, propiedadId: str }, ["etiqueta"]), id: str },
+        ["nombre"],
+      ),
+    },
+  },
+};
+
+const COTIZACIONES_DEF: BCSectionDef = {
+  key: "cotizaciones",
+  label: "Cotizaciones",
+  eyebrow: "Cómo se arma cada una",
+  theme: "soft",
+  sectionType: "cotizaciones",
+  agentGenerated: false,
+  vacia: cotizacionesVacia,
+  empty: { intro: "", propiedades: "", formato: "", ajustes: "", origen: "" },
+  agentHint: "",
+  brief: MANUAL_BRIEF + " Solo si el alcance trae cotizaciones: qué propiedades lleva, el formato y los ajustes.",
+  schema: { type: "object", properties: { intro: str, propiedades: str, formato: str, ajustes: str, origen: str } },
+};
+
+const INFORMES_DEF: BCSectionDef = {
+  key: "informes",
+  label: "Informes y paneles",
+  eyebrow: "Lo que se va a medir",
+  theme: "light",
+  sectionType: "informes",
+  agentGenerated: false,
+  vacia: informesVacia,
+  empty: { intro: "", items: [] },
+  agentHint: "",
+  brief: MANUAL_BRIEF + " Un indicador por fila: qué mide, cada cuánto, de qué área, y el objetivo del diagnóstico que mide (OBJ-01…).",
+  schema: {
+    type: "object",
+    properties: { intro: str, items: arrayOf({ nombre: str, mide: str, frecuencia: str, area: str, objetivo: str, origen: str, id: str }, ["nombre"]) },
+  },
+};
 
 export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
   {
@@ -82,6 +232,8 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
        pintaba como texto pelado. Las dos puertas cerradas a la vez. */
     schemaDelChat: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray, eyebrow: str } },
   },
+  FICHA_PROYECTO_DEF,
+  USUARIOS_PERMISOS_DEF,
   {
     /* 2026-10-02 — SOLO lo que se hará. El «hoy / cómo será» se partió: cómo operan hoy vive en el
        Diagnóstico («Cómo operas hoy»), y acá queda cómo van a funcionar, paso a paso. Misma key:
@@ -134,6 +286,7 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
       required: ["etapas"],
     },
   },
+  CANALES_ENTRADA_DEF,
   makeDiagramArchitectureDef({
     key: "arquitectura_solucion",
     label: "Arquitectura de la solución",
@@ -158,7 +311,7 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
       "`campo` = el nombre interno propuesto entre backticks si está decidido; si no, `⚠️ Por validar` — NUNCA inventes nombres internos del portal del cliente; " +
       "`tipo` = UNO de: texto | texto_largo | numero | moneda | fecha | fecha_hora | desplegable | opcion_unica | casillas | casilla | telefono | archivo | usuario | calculo; " +
       "`opciones` = las opciones de un desplegable o de casillas separadas por ' · ' (si no se definieron, `⚠️ Por definir`); `obligatoria` = 'si' si sin ella el proceso no camina, si no 'no'; " +
-      "`estado` = nueva | existente | ajustar; `uso` = para qué existe, en 1 línea sin jerga; " + ORIGEN_BRIEF + " " +
+      "`estado` = nueva | existente | ajustar | hubspot (las que ya trae HubSpot, como el correo o la etapa del ciclo de vida, cuando un formulario o un pipeline las pide); `uso` = para qué existe, en 1 línea sin jerga; " + ORIGEN_BRIEF + " " +
       "Las propiedades de una INTEGRACIÓN ya están en el requerimiento técnico: no las repitas acá.",
     schema: {
       type: "object",
@@ -175,6 +328,7 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
       required: ["filas"],
     },
   },
+  FORMULARIOS_DEF,
   {
     /* 2026-10-02 — vino de Ejecución («Pipelines y objetos», que era texto). Ahora con etapas de verdad,
        que se ven de izquierda a derecha. Lo que vino de Ejecución se lee con `adoptarPipelines`. */
@@ -189,7 +343,7 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "Los PIPELINES que van a quedar en HubSpot, en este orden: leads, ventas, servicio (y otros si el alcance los trae). `pipelines`: uno por pipeline — " +
       "`tipo` = UNO de: leads | ventas | servicio | otro; `nombre` = el pipeline ('Admisión de posgrados'); `objeto` = el objeto de HubSpot y una aclaración corta ('Negocio · requisitos de admisión'); `nota` = opcional, una línea (si hay pipelines hermanos, nómbralos acá: 'También: Educación continua y Laboratorio'); " + ORIGEN_BRIEF + " " +
-      "`etapas` (en orden, de izquierda a derecha): `etapa` = su nombre; `entraCuando` = UNA línea; `requisitos` = las propiedades que tienen que estar completas para avanzar, separadas por comas (vacío si no hay); `cierre` = 'ganado' o 'perdido' si la etapa cierra el pipeline, si no vacío; `origen` como arriba. " +
+      "`etapas` (en orden, de izquierda a derecha): `etapa` = su nombre; `entraCuando` = UNA línea; `requisitos` = las propiedades que tienen que estar completas para avanzar, separadas por comas (vacío si no hay); `cierre` = 'ganado' o 'perdido' si la etapa cierra el pipeline, si no vacío; `automatizacion` = opcional, una línea con lo que pasa solo al entrar a la etapa ('Pide la razón de pérdida'); `origen` como arriba. " +
       "Las etapas salen de los procesos y de las reuniones: no inventes etapas que nadie justificó. Solo los pipelines que el alcance incluye.",
     schema: {
       type: "object",
@@ -198,7 +352,7 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
         pipelines: arrayOf(
           {
             tipo: str, nombre: str, objeto: str, nota: str, origen: str,
-            etapas: arrayOf({ etapa: str, entraCuando: str, requisitos: str, cierre: str, origen: str }, ["etapa"]),
+            etapas: arrayOf({ etapa: str, entraCuando: str, requisitos: str, cierre: str, automatizacion: str, origen: str }, ["etapa"]),
           },
           ["tipo", "nombre"],
         ),
@@ -220,14 +374,15 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "Las AUTOMATIZACIONES que se van a construir (workflows, secuencias, asignaciones, scoring, nurturing). `items`: una por automatización — " +
       "`nombre` = qué hace en 3-6 palabras ('Asignar el lead a su proyecto'); `donde` = objeto · hub ('Contacto · Marketing Hub'); `cuando` = qué la dispara; `hace` = qué hace, en una línea; `resuelve` = qué problema del cliente resuelve; " +
-      "`falta` = lo que todavía no está definido ('Cada cuánto y cuántas veces'), vacío si nada; " + ORIGEN_BRIEF + " " +
+      "`falta` = lo que todavía no está definido ('Cada cuánto y cuántas veces'), vacío si nada; " +
+      "SOLO si se bifurca: `condicion` = la condición ('Contacto con propietario asignado'), `siCumple` y `noCumple` = qué pasa en cada rama; `vista` = la vista o el filtro que deja armado, si se habló; si no, vacíos; " + ORIGEN_BRIEF + " " +
       "Solo las que el alcance incluye y las reuniones o los procesos justifican.",
     schema: {
       type: "object",
       properties: {
         intro: str,
         items: arrayOf(
-          { nombre: str, donde: str, cuando: str, hace: str, resuelve: str, falta: str, origen: str, fuente: str },
+          { nombre: str, donde: str, cuando: str, hace: str, resuelve: str, falta: str, condicion: str, siCumple: str, noCumple: str, considerar: str, vista: str, origen: str, fuente: str },
           ["nombre"],
         ),
       },
@@ -249,20 +404,22 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     brief:
       "Los canales de MENSAJERÍA INSTANTÁNEA que entran a la bandeja de conversaciones de HubSpot (WhatsApp, chat del sitio, Messenger, Instagram) y quién responde en cada uno. `intro`: 1 frase opcional. `items`: uno por canal o por agente — " +
       "`nombre` = 'WhatsApp en la bandeja de HubSpot' o 'Agente de IA en WhatsApp'; `canal` = canal · hub ('WhatsApp Business · Service Hub'); `responde` = UNO de: persona | chatbot | agente_ia; " +
-      "`paraQue` = para qué sirve; `pasaA` = a quién pasa la conversación y cuándo; `registra` = qué crea o actualiza en HubSpot; `falta` = lo que no está definido (paquete, horario, preguntas frecuentes), vacío si nada; " + ORIGEN_BRIEF + " " +
+      "`paraQue` = para qué sirve; `pasaA` = a quién pasa la conversación y cuándo; `registra` = qué crea o actualiza en HubSpot; `falta` = lo que no está definido (paquete, horario, preguntas frecuentes), vacío si nada; `atienden` = quiénes responden cuando pasa a una persona, si se habló; `guion` = SOLO para un chatbot o un agente con guion acordado: el saludo y los pasos, en orden; " + ORIGEN_BRIEF + " " +
       "Si el alcance no incluye mensajería, deja `items` vacío: la sección no se muestra.",
     schema: {
       type: "object",
       properties: {
         intro: str,
         items: arrayOf(
-          { nombre: str, canal: str, responde: str, paraQue: str, pasaA: str, registra: str, falta: str, origen: str, fuente: str },
+          { nombre: str, canal: str, responde: str, paraQue: str, pasaA: str, registra: str, falta: str, atienden: str, guion: strArray, origen: str, fuente: str },
           ["nombre"],
         ),
       },
       required: ["items"],
     },
   },
+  COTIZACIONES_DEF,
+  INFORMES_DEF,
   {
     /* Se queda acá hasta que exista el documento de Puesta en marcha (entrenamiento y adopción), que es
        a donde va. Mientras tanto no se esconde: no tiene otro lugar donde verse. */

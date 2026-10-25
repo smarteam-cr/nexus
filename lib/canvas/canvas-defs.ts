@@ -280,13 +280,21 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     // Rutinas y olas se quedan hasta que exista el documento de Puesta en marcha.
     sections: [
       { key: "planificacion", label: "Plan de implementación" },
+      // 2026-10-25 — lo que pide el Brief de implementación (docs/planificacion-brief-plan.md): la ficha
+      // del proyecto, usuarios y permisos, canales de entrada, formularios, cotizaciones e informes.
+      { key: "ficha_proyecto", label: "Ficha del proyecto" },
+      { key: "usuarios_permisos", label: "Usuarios y permisos" },
       { key: "definicion_procesos", label: "Cómo van a funcionar tus procesos" },
       { key: "ciclo_vida_crm", label: "Etapas del ciclo de vida" },
+      { key: "canales_entrada", label: "Por dónde entran tus leads" },
       { key: "arquitectura_solucion", label: "Arquitectura de la solución" },
       { key: "propiedades", label: "Propiedades por objeto" },
+      { key: "formularios", label: "Formularios" },
       { key: "pipelines", label: "Tus pipelines" },
       { key: "automatizaciones", label: "Automatizaciones" },
       { key: "conversaciones", label: "Conversaciones" },
+      { key: "cotizaciones", label: "Cotizaciones" },
+      { key: "informes", label: "Informes y paneles" },
       { key: "rutinas_adopcion", label: "Rutinas de adopción" },
       { key: "plan_despliegue", label: "Plan de despliegue por olas" },
       { key: "cierre", label: "Aprobación", defaultData: { ...PLANIFICACION_CIERRE_DEFAULT } },

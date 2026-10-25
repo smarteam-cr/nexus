@@ -72,18 +72,31 @@ export interface EtapaDeCiclo {
   cambio?: string;
   origen?: string;
 }
+/** El estado del lead (Nuevo, En contacto…): en el Brief va al lado del ciclo de vida. Lo escribe una persona. */
+export interface EstadoDelLead {
+  estado: string;
+  significa?: string;
+  origen?: string;
+}
 export interface CicloDeVidaData {
   intro?: string;
   etapas: EtapaDeCiclo[];
+  /** Fuera del esquema del agente (2026-10-25): `preserveNonSchemaKeys` lo conserva al regenerar. */
+  estadosLead?: EstadoDelLead[];
 }
+
+/** Los cuatro estados del lead que trae el Brief, para empezar sin escribirlos. */
+export const ESTADOS_DEL_LEAD_DE_SIEMPRE = ["Nuevo", "En contacto", "Descartado", "Re ingreso"] as const;
 
 /** La prosa vieja (`items` título + detalle) → tabla. El detalle entero queda en «entra cuando». */
 export function adoptarCicloDeVida(data: unknown): CicloDeVidaData {
   const d = (data ?? {}) as Record<string, unknown>;
   const etapas = arr<EtapaDeCiclo>(d.etapas);
-  if (etapas.length) return { intro: txt(d.intro), etapas };
+  const estadosLead = arr<EstadoDelLead>(d.estadosLead);
+  if (etapas.length) return { intro: txt(d.intro), etapas, estadosLead };
   return {
     intro: txt(d.intro),
+    estadosLead,
     etapas: arr<Record<string, unknown>>(d.items)
       .filter((i) => txt(i.title).trim() || txt(i.detail).trim())
       .map((i) => ({ etapa: txt(i.title), entraCuando: txt(i.detail), laMueve: "", cambio: "", origen: "" })),
@@ -112,6 +125,8 @@ export interface EtapaDePipeline {
   requisitos?: string;
   /** "" | ganado | perdido. */
   cierre?: string;
+  /** Lo que pasa solo al entrar a la etapa (2026-10-25, el Brief: «Propiedad condicional de Razón de pérdida»). */
+  automatizacion?: string;
   origen?: string;
 }
 export interface Pipeline {
@@ -182,6 +197,13 @@ export interface Automatizacion {
   resuelve?: string;
   /** Lo que todavía no está definido. */
   falta?: string;
+  /* 2026-10-25 — la forma del Brief: la condición que la bifurca, qué pasa en cada rama, lo que hay que
+     tener en cuenta y la vista (el filtro) que deja armada. Todo opcional: una lineal no los usa. */
+  condicion?: string;
+  siCumple?: string;
+  noCumple?: string;
+  considerar?: string;
+  vista?: string;
   origen?: string;
   fuente?: string;
 }
@@ -223,6 +245,10 @@ export interface Conversacion {
   pasaA?: string;
   registra?: string;
   falta?: string;
+  /** Quiénes atienden cuando pasa a una persona (2026-10-25, el Brief). */
+  atienden?: string;
+  /** El guion de un chatbot: el saludo y los pasos, en orden (2026-10-25, el Brief). */
+  guion?: string[];
   origen?: string;
   fuente?: string;
 }
@@ -233,7 +259,10 @@ export interface ConversacionesData {
 
 export function adoptarConversaciones(data: unknown): ConversacionesData {
   const d = (data ?? {}) as Record<string, unknown>;
-  return { intro: txt(d.intro), items: arr<Conversacion>(d.items) };
+  return {
+    intro: txt(d.intro),
+    items: arr<Conversacion>(d.items).map((c) => (Array.isArray(c.guion) ? { ...c, guion: c.guion.map(txt) } : c)),
+  };
 }
 
 /* ── Utilidad de los renderers ──────────────────────────────────────────────── */

@@ -11500,3 +11500,62 @@ los píxeles de anuncios no están en la página nueva. El tope de 400 intentos 
 grande lo agota y deja fuera a los prospectos reales esa hora (se eligió así para que HubSpot no se llene de leads
 falsos). La regla de la dirección del visitante de verify-access (`lib/external/verify-rate-limit.ts › claveDeIp`) todavía
 toma la PRIMERA de `X-Forwarded-For`: queda como seguimiento.
+
+## La Planificación con lo que pide el Brief de implementación (2026-10-25, L4 ampliada: etapas 1 a 4)
+
+> Pedido de Elías (24 oct): la hoja «BRIEF DE IMPLEMENTACIÓN» con la que el equipo configura HubSpot, simulada y
+> mejorada dentro de la Planificación. Decidido el mismo día: usuarios y permisos van DENTRO de la Planificación, la que
+> ve el cliente. Plan: `docs/planificacion-brief-plan.md`.
+
+- **Seis secciones nuevas, todas curadas** (`agentGenerated: false`, `components/landing/sections-planificacion-brief.tsx`,
+  lógica pura en `lib/planificacion/brief.ts`): ficha del proyecto, usuarios y permisos, por dónde entran tus leads,
+  formularios, cotizaciones, e informes y paneles. El agente no las escribe al generar porque la corrida ya está en el
+  tope de 21.000 tokens: las llenan el CSE, el cliente o una plantilla, y regenerar no las toca. Vacías no se ven en el
+  enlace ni en el PDF.
+- **Un documento viejo las recibe al abrirse**, no al regenerar: el editor llama una vez a `POST /pieces/planning`
+  (idempotente, crea las que faltan y nunca borra) y relee. Antes, una sección nueva del canon aparecía recién al
+  regenerar, y regenerar no es lo que alguien quiere para escribir sus usuarios.
+- **Las propiedades van por grupo, con orden** (`PropiedadesData.grupos`, fuera del esquema: `preserveNonSchemaKeys` lo
+  conserva). Cada fila dice si va en la ficha (`enFicha`) y la sección arma «Así va a quedar la ficha»; el estado suma
+  «Viene con HubSpot» (lo que el Brief marca «N/A»). Se pega una plantilla de Excel o la pestaña de propiedades del
+  Brief tal cual (`lib/planificacion/importar.ts`: forma vertical o la horizontal del Brief), con `autor: "plantilla"`; lo
+  que escribió una persona no se pisa. La plantilla de importación (el «PLANTILLA BD») sale sola de la tabla.
+- **«Mejorar con IA» y el chat ya no le borran a una fila su identidad.** No por `fusionarFilas` (que resucitaría lo
+  que el chat quitó a pedido) sino por `conservarLoDeFuera`: toda escritura de la sección pasa por ahí en el editor y
+  recupera de la versión anterior el `id`, el `autor`, `extra`, la ficha y el orden de los grupos. Cierra el pendiente
+  del 2026-10-02.
+- **Los permisos no se contradicen**: cuatro niveles (Nada · Lo suyo · Lo de su equipo · Todo) en vez de las nueve
+  casillas del Brief, y editar nunca llega más lejos que ver ni eliminar más que editar (`ajustarPermiso`: bajar uno
+  baja los que dependen; el desplegable solo ofrece lo posible). El usuario apunta a su equipo por `id`.
+- **Un formulario elige sus campos de la tabla de propiedades** (`propiedadId`, con el nombre guardado al lado). El
+  editor recibe la tabla por `ctx.planificacion` y marca el campo cuya propiedad ya no existe; el PDF y el enlace
+  muestran el nombre guardado, sin avisos.
+- **A las secciones de siempre se les sumó lo del Brief**: el estado del lead al lado del ciclo de vida (fuera del
+  esquema), las ramas de una automatización (condición, si se cumple, si no, la vista que deja, lo que hay que tener en
+  cuenta), lo que pasa solo en cada etapa de un pipeline, y el guion del bot y quiénes atienden en una conversación. Esos
+  campos sí entran al esquema del agente, opcionales: en una lista, un campo fuera del esquema se pierde al regenerar.
+- **No entra la «Historia de proceso de ventas»**: es cómo vende el cliente hoy, y eso vive en el Diagnóstico.
+- **Lo que cambió con la revisión (mismo día):**
+  - «⚠️ Por validar» no es un nombre: `claveDeFila` lo trata como vacío y manda la etiqueta. Antes todas las «Por
+    validar» de un objeto tenían la misma clave: regenerar dejaba una sola, y la IA o el chat le daban a una la
+    identidad de otra (una fila de una persona pasaba a ser de la IA y se borraba al regenerar).
+  - Una sección puede declarar su regla de vacía (`vacia` en la definición; el motor la usa en lugar de `isBlank`, y el
+    componente filtra con la misma). Un «no» de una casilla o el cargo de una fila sin nombre ya no publican un título
+    sin nada abajo. La ficha guarda solo los hubs que entran: tocar su edición o sus sesiones lo marca.
+  - Pegar lee las celdas de varios renglones (entre comillas, como las pega Excel): antes las opciones del Brief se
+    partían en propiedades falsas que regenerar nunca quitaba.
+  - La plantilla de importación se baja en Excel (`exceljs`, cargado al hacer clic; CSV si falla): un CSV con comas se
+    abre en una sola columna en un Excel configurado para Costa Rica.
+  - Los hubs llevan el nombre del catálogo de etiquetas (Data Hub, Content Hub, Revenue Hub) y la ficha OFRECE marcar
+    los vendidos (las etiquetas del proyecto); no los escribe sola.
+  - El `id` va al final de cada lista del esquema, para que el chat nombre a una persona por su nombre y no por su
+    código; los permisos que escriba el chat se leen sin contradicciones (`permisosCoherentes`); quitar un equipo deja
+    a sus usuarios sin equipo; un formulario elige su objeto.
+
+*Lo que no garantiza esta tanda:* el editor no se probó con sesión (el navegador del preview no está logueado): la
+prueba es de Elías o del equipo en el 3004. Que el cliente vea los correos y teléfonos de «Usuarios y permisos» y de la
+ficha es parte de la decisión de que esto va en la Planificación, pero nadie lo miró publicado ni en el PDF. La
+protección de las propiedades vive en el editor: restaurar una versión o escribir por la API no pasan por ella. La
+cuenta de licencias no se compara todavía con lo vendido, las fechas de la ficha no se leen del Cronograma (se dice que
+viven ahí), y las etapas 5 a 7 del plan (estado y enlace por cosa
+construida, lista de construcción en Tareas, que el cliente edite en el enlace, las dos plantillas) siguen pendientes.
