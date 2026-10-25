@@ -1,7 +1,7 @@
 export const meta = {
   name: 'revision-nexus',
   description: 'Revisa un cambio de Nexus con revisores especializados, verifica cada hallazgo y dice qué no quedó garantizado',
-  whenToUse: 'La dispara la skill /revisar, que además arregla lo encontrado y se lo cuenta a Elías: para revisar un cambio, usa /revisar. args: { rango?: "base..head", foco?: "qué mirar con más cuidado", nivel?: "normal" | "completo" }',
+  whenToUse: 'La dispara la skill /revisar, que además arregla lo encontrado y se lo cuenta a Elías: para revisar un cambio, usa /revisar. args: { rango?: "base..head", foco?: "qué mirar con más cuidado", nivel?: "ligero" | "normal" | "completo" }',
   phases: [
     { title: 'Alcance', detail: 'qué cambió, de qué tipo, y qué revisores aplican' },
     { title: 'Pruebas reales', detail: 'tsc, eslint, vitest y lo que aplique, corridos de verdad' },
@@ -255,8 +255,17 @@ cambio igual es rojo, y en culpaDelCambio dices si lo causa el cambio, con la ev
 )
 
 // ── 3. Revisión + 4. verificación, en tubería ────────────────────────────────────────────────
-const aplican = REVISORES.filter((r) => r.siempre || (r.cuando && r.cuando(alcance)))
-log(`Revisores: ${aplican.map((r) => r.clave).join(', ')}. No aplican: ${REVISORES.filter((r) => !aplican.includes(r)).map((r) => r.clave).join(', ') || 'ninguno'}.`)
+// Nivel «ligero» (el de siempre desde el 2026-10-24, pedido de Elías: «2 o 3 agentes que analicen desde distintos
+// aspectos», no un ejército): tres revisores que juntan los focos de arriba. «normal» y «completo», solo si se piden.
+const ligero = pedido.nivel !== 'normal' && pedido.nivel !== 'completo'
+const foco = (claves) => REVISORES.filter((r) => claves.includes(r.clave) && (r.siempre || !r.cuando || r.cuando(alcance))).map((r) => r.foco).join('\n\n')
+const LIGEROS = [
+  { clave: 'funciona', siempre: true, foco: foco(['correccion', 'pruebas', 'simplicidad', 'ui']) },
+  { clave: 'seguridad-y-clientes', siempre: true, foco: foco(['invariantes', 'seguridad']) },
+  { clave: 'produccion', cuando: (a) => a.tocaDatos || a.tocaIA || a.archivos.some((f) => f.tipo === 'api' || f.tipo === 'script'), foco: foco(['datos', 'ia']) || 'PRODUCCIÓN. ¿Qué pasa al desplegarlo: el SQL antes del código, los jobs de la noche, el costo de la IA, un script con --apply?' },
+]
+const aplican = (ligero ? LIGEROS : REVISORES).filter((r) => r.siempre || (r.cuando && r.cuando(alcance)))
+log(`Revisores (${ligero ? 'ligero' : pedido.nivel}): ${aplican.map((r) => r.clave).join(', ')}.`)
 
 const LENTES = [
   { clave: 'reproducir', texto: 'Lee el código real (no solo el diff) y trata de demostrar que el escenario NO ocurre: una guarda antes, un llamador que nunca pasa ese valor, un tipo que lo impide. Si no puedes confirmarlo leyendo o corriendo algo, refutado=true.' },
@@ -319,7 +328,9 @@ const completo = pedido.nivel === 'completo'
 const todos = (
   await parallel(
     unicos.map((h) => () => {
-      const lentes = completo || PESO[h.gravedad] >= 3 ? LENTES : LENTES.slice(0, 1)
+      // «ligero»: solo lo crítico y lo alto pasa por un escéptico; lo medio y lo bajo queda «plausible» y se lee al arreglar.
+      const lentes = ligero ? (PESO[h.gravedad] >= 3 ? LENTES.slice(0, 1) : []) : completo || PESO[h.gravedad] >= 3 ? LENTES : LENTES.slice(0, 1)
+      if (!lentes.length) return Promise.resolve({ ...h, estado: 'plausible', votos: [] })
       return parallel(
         lentes.map((l) => () =>
           agent(
@@ -366,7 +377,7 @@ if (sinLeer.length) log(`⚠ Ningún revisor dijo haber leído: ${sinLeer.map((f
 
 // ── 5. Prueba de rojo: las pruebas nuevas tienen que fallar sin el cambio ────────────────────
 let rojo = null
-if (alcance.pruebasNuevas.length && !alcance.sinCommitear) {
+if (!ligero && alcance.pruebasNuevas.length && !alcance.sinCommitear) {
   rojo = await agent(
     `${contexto}
 
@@ -381,7 +392,7 @@ No commitees nada.`,
     { label: 'prueba-de-rojo', phase: 'Prueba de rojo', schema: ROJO, isolation: 'worktree' },
   )
 } else {
-  log(alcance.pruebasNuevas.length ? 'Prueba de rojo: no corre sobre cambios sin commitear.' : 'Prueba de rojo: el cambio no trae pruebas nuevas.')
+  log(ligero ? 'Prueba de rojo: no corre en el nivel ligero (la hace quien arregla, si la prueba es nueva).' : alcance.pruebasNuevas.length ? 'Prueba de rojo: no corre sobre cambios sin commitear.' : 'Prueba de rojo: el cambio no trae pruebas nuevas.')
 }
 
 const compuertas = await compuertasP
@@ -411,7 +422,7 @@ const graves = (h) => h.gravedad === 'critico' || h.gravedad === 'alto'
 const rojosDelCambio = (compuertas ? compuertas.corridas : []).filter((c) => c.resultado === 'rojo' && c.culpaDelCambio !== 'no')
 const BASICAS = /tsc|eslint|vitest/
 const sinCorrer = (compuertas ? compuertas.corridas : []).filter((c) => c.resultado === 'no_corrio' && BASICAS.test(c.comando))
-const rojoQueFalta = alcance.pruebasNuevas.length > 0 && !alcance.sinCommitear && !rojo
+const rojoQueFalta = !ligero && alcance.pruebasNuevas.length > 0 && !alcance.sinCommitear && !rojo
 const razones = []
 if (!compuertas) razones.push('las compuertas no devolvieron resultado')
 for (const h of enPie.filter((x) => graves(x) && x.estado === 'confirmado')) razones.push(`hallazgo ${h.gravedad} confirmado: ${h.titulo}`)

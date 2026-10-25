@@ -16,9 +16,10 @@ Tu trabajo es dispararlo, arreglar lo que encuentra y contarle a Elías el resul
    - `rango`: el de git que se revisa (`main..mi-rama`, `abc123..HEAD`). Sin rango revisa lo que está sin commitear o, si
      no hay nada, el último commit.
    - `foco` (opcional): lo que merece más cuidado («toca la vista del cliente», «el SQL se aplica antes del deploy»).
-   - `nivel` (opcional): `normal` por defecto (dos escépticos solo para lo crítico y lo alto); `completo` para lo que
-     toca la superficie externa, plata o datos de clientes en masa (dos escépticos para todo). Uno normal sobre un cambio
-     chico usa del orden de 20 agentes.
+   - `nivel` (opcional): `ligero` por defecto (desde el 24 oct): tres revisores (que funcione, seguridad y datos de
+     clientes, producción), un escéptico solo para lo crítico y lo alto, y sin prueba de rojo aparte: unos 6 a 8 agentes.
+     `normal` (ocho revisores por riesgo) o `completo` (dos escépticos para todo), solo si Elías lo pide o el cambio
+     toca la superficie externa del cliente o plata en masa.
 
    **Terminado cuando** el workflow devolvió su informe y su veredicto.
 2. **Arregla cada hallazgo confirmado** de gravedad crítica, alta o media. Los plausibles se leen uno por uno: se arreglan
