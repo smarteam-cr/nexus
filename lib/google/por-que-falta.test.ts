@@ -22,6 +22,12 @@ const r = (p: Partial<ReunionSinTranscripcion> = {}): ReunionSinTranscripcion =>
 
 describe("porQueFalta", () => {
   it("todavía no terminó", () => expect(porQueFalta(r(), mas(70))).toBe("todavia_no_termino"));
+  it("no ocurrió (la API de Meet dice que nadie entró, U3): después de que terminó, y nunca antes", () => {
+    expect(porQueFalta(r({ ocurrio: false }), HOY)).toBe("no_ocurrio");
+    expect(porQueFalta(r({ ocurrio: false }), mas(70))).toBe("todavia_no_termino");
+    expect(porQueFalta(r({ ocurrio: true }), HOY)).toBe("no_se_grabo");
+    expect(DE_QUIEN_ES.no_ocurrio.dueno).toBe("nada");
+  });
   it("cancelada en el calendario: gana sobre todo lo demás (probablemente no ocurrió)", () => {
     expect(porQueFalta(r({ canceladaEn: mas(-60) }), HOY)).toBe("cancelada");
     expect(porQueFalta(r({ canceladaEn: mas(-60), enrichedAt: null }), mas(70))).toBe("cancelada");

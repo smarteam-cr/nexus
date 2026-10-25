@@ -35,6 +35,8 @@ import {
   type InsigniaDelMaterial,
 } from "@/lib/contexto/material-cronograma";
 import EnlaceDeContexto from "@/components/contexto/EnlaceDeContexto";
+import { EnOtraEmpresa } from "@/components/sessions/EnOtraEmpresa";
+import { MIN_BUSQUEDA_EN_LA_EMPRESA } from "@/lib/sessions/buscar-en-la-empresa";
 import ListaDeReuniones from "@/components/contexto/ListaDeReuniones";
 import { estadoDeLaReunion, estadoDesdeInsignia, fechaDeReunion } from "@/lib/contexto/lista-de-reuniones";
 
@@ -318,6 +320,33 @@ export default function SessionSelectionReview({
     };
   }, [claveCalendario, projectId, destino]);
 
+  /* T8 (2026-10-25): con lo escrito, las reuniones de la empresa en TODA su historia (la lista del servidor trae las
+     100 más recientes): también las de hace meses en las que quien busca no estuvo. Mismo cuidado que arriba: la
+     respuesta se guarda con la búsqueda que la trajo. */
+  const [deLaEmpresa, setDeLaEmpresa] = useState<{ q: string; candidates: CandidateSession[] }>({ q: "", candidates: [] });
+  // Sube después de «Mover a esta empresa»: la reunión movida tiene que aparecer para elegirla aunque sea vieja.
+  const [buscarOtraVez, setBuscarOtraVez] = useState(0);
+  const consultaEmpresa = showModal && !esCronograma ? search.trim() : "";
+  useEffect(() => {
+    if (consultaEmpresa.length < MIN_BUSQUEDA_EN_LA_EMPRESA) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      fetch(`${urlCandidatas}${urlCandidatas.includes("?") ? "&" : "?"}q=${encodeURIComponent(consultaEmpresa)}`, { signal: ctrl.signal })
+        .then((r) => {
+          if (!r.ok) throw new Error(String(r.status));
+          return r.json();
+        })
+        .then((d: { candidates?: CandidateSession[] }) => setDeLaEmpresa({ q: consultaEmpresa, candidates: d.candidates ?? [] }))
+        .catch(() => {
+          if (!ctrl.signal.aborted) setDeLaEmpresa({ q: consultaEmpresa, candidates: [] });
+        });
+    }, 300);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [consultaEmpresa, urlCandidatas, buscarOtraVez]);
+
   const reload = useCallback(async () => {
     try {
       const r = await fetch(urlCandidatas);
@@ -475,7 +504,13 @@ export default function SessionSelectionReview({
     if (!loading) onErrorDeCarga?.(errorDeCarga);
   }, [loading, errorDeCarga, onErrorDeCarga]);
 
-  const { feeding, excluded, candidates } = data;
+  const { feeding, excluded } = data;
+  // Las de toda la historia de la empresa que trajo la búsqueda (T8), sin repetir las que ya están.
+  const yaCandidatas = new Set(data.candidates.map((c) => c.sessionId));
+  const candidates =
+    consultaEmpresa.length >= MIN_BUSQUEDA_EN_LA_EMPRESA && deLaEmpresa.q === consultaEmpresa
+      ? [...data.candidates, ...deLaEmpresa.candidates.filter((c) => !yaCandidatas.has(c.sessionId))]
+      : data.candidates;
   const sugeridas = soloElegidas ? data.sugeridas.filter((s) => !entranSolasDeLaExploracion.includes(s)) : [];
   /* El filtro mira título Y participantes: el caso que lo motivó es "esta reunión la tuvo Marco
      con alguien de tal empresa", y ese dato no está en el título. Escribir un dominio la encuentra. */
@@ -695,6 +730,16 @@ export default function SessionSelectionReview({
             );
           })}
         </ul>
+      )}
+      {!esCronograma && (
+        <EnOtraEmpresa
+          projectId={projectId}
+          q={search}
+          onMovida={() => {
+            void reload();
+            setBuscarOtraVez((n) => n + 1);
+          }}
+        />
       )}
     </Modal>
   );

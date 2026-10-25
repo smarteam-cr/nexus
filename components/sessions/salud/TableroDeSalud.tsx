@@ -21,6 +21,7 @@ import {
   type SinEmpresaVista,
 } from "@/lib/sessions/salud-de-las-reuniones";
 import type { DuenoDelArreglo } from "@/lib/google/por-que-falta";
+import { ElegirEmpresa } from "@/components/sessions/ElegirEmpresa";
 
 const miles = (n: number) => n.toLocaleString("es-CR");
 const pct = (n: number, de: number) => (de ? Math.round((100 * n) / de) : 0);
@@ -435,7 +436,7 @@ function ReunionesDelMotivo({ reuniones, total, verTodas }: { reuniones: readonl
 
 /* ── Sin empresa ───────────────────────────────────────────────────────────────────────── */
 
-const COLUMNAS_SIN_EMPRESA = "grid grid-cols-[150px_64px_minmax(200px,1.4fr)_minmax(200px,1.2fr)_minmax(150px,1fr)_176px] gap-3";
+const COLUMNAS_SIN_EMPRESA = "grid grid-cols-[150px_64px_minmax(200px,1.4fr)_minmax(200px,1.2fr)_minmax(140px,0.9fr)_176px_minmax(240px,1.3fr)] gap-3";
 
 export function ReunionesSinEmpresa({ reuniones }: { reuniones: readonly SinEmpresaVista[] }) {
   return (
@@ -444,7 +445,9 @@ export function ReunionesSinEmpresa({ reuniones }: { reuniones: readonly SinEmpr
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
           <div className="space-y-1">
             <h2 className="text-sm font-semibold text-fg">Tienen texto, pero Nexus no sabe de qué empresa son</h2>
-            <p className="text-xs text-fg-muted">Reuniones con invitados de fuera que esperan que alguien decida. Primero, las que llevan más tiempo esperando.</p>
+            <p className="text-xs text-fg-muted">
+              Reuniones con invitados de fuera que esperan que alguien decida. Primero, las que llevan más tiempo esperando. La empresa la decide quien la organizó.
+            </p>
           </div>
           <span className="flex items-center gap-1.5 text-xs text-fg-secondary">
             <span aria-hidden className="h-2 w-2 rounded-full bg-warning" />
@@ -457,7 +460,7 @@ export function ReunionesSinEmpresa({ reuniones }: { reuniones: readonly SinEmpr
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <div className="min-w-[1060px]">
+            <div className="min-w-[1320px]">
               <div className={cn(COLUMNAS_SIN_EMPRESA, "border-t border-line bg-surface-muted px-5 py-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-fg-muted")}>
                 <span>Esperando</span>
                 <span>Fecha</span>
@@ -465,6 +468,7 @@ export function ReunionesSinEmpresa({ reuniones }: { reuniones: readonly SinEmpr
                 <span>Invitados de fuera</span>
                 <span>Organizó</span>
                 <span>Texto</span>
+                <span>Empresa</span>
               </div>
               {reuniones.map((r) => (
                 <div key={r.id} className={cn(COLUMNAS_SIN_EMPRESA, "items-center border-t border-line px-5 py-2.5 text-[13px]")}>
@@ -490,16 +494,27 @@ export function ReunionesSinEmpresa({ reuniones }: { reuniones: readonly SinEmpr
                   <span>
                     <ChipDeEstado estado={r.texto} />
                   </span>
+                  <span className="flex min-w-0 flex-col gap-1">
+                    <ElegirEmpresa
+                      sessionId={r.id}
+                      titulo={r.titulo}
+                      propuesta={r.propuesta ? { tipo: r.propuesta.tipo, nombre: r.propuesta.nombre, clientId: r.propuesta.clientId, hubspotCompanyId: r.propuesta.hubspotCompanyId } : null}
+                      puedeDecidir={r.puedeDecidir}
+                    />
+                    {r.propuesta && <span className="text-xs leading-4 text-fg-muted">{r.propuesta.porque}</span>}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
         )}
       </section>
-      <div className="flex items-center gap-2.5 rounded-xl border border-dashed border-line bg-surface-muted px-3.5 py-3 text-[13px] text-fg-muted">
-        <span className="rounded-full bg-surface px-2.5 py-0.5 text-[11px] font-semibold text-fg-secondary">Pronto</span>
-        <span>Nexus te propondrá la empresa de cada reunión para que la confirmes con un clic. Por ahora, se decide desde la página de la reunión.</span>
-      </div>
+      {reuniones.length > 0 && (
+        <p className="text-xs text-fg-muted">
+          Cuando Nexus reconoce la empresa (por los invitados, el título o la empresa de HubSpot del dominio), la propone en azul: elígela para confirmarla.
+          Una de HubSpot que todavía no está en Nexus se crea como prospecto. Una reunión de más de 14 días no se lee sola: entra en la lectura por lote de lo atrasado.
+        </p>
+      )}
     </div>
   );
 }

@@ -12,8 +12,10 @@
  */
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { esRecursoDeCalendario } from "@/lib/sessions/dominio-propio";
-import { DE_QUIEN_ES, porQueFalta, type DuenoDelArreglo, type MotivoDeLaFalta } from "@/lib/google/por-que-falta";
+import { DE_QUIEN_ES, type DuenoDelArreglo, type MotivoDeLaFalta } from "@/lib/google/por-que-falta";
 import type { ClaseDeTexto } from "@/lib/sessions/tiene-texto";
+import { motivoParaMostrar } from "@/lib/sessions/motivo-sin-texto";
+import { porQueLaPropone, puedeDecidirLaEmpresa } from "@/lib/sessions/propuesta-de-empresa";
 
 /** Los periodos del selector, en días. 14 es el del indicador 4 y de INV47. */
 export const PERIODOS_DE_LA_SALUD = [14, 30, 90] as const;
@@ -63,6 +65,19 @@ export interface ReunionParaLaSalud {
   /** Las notas de Gemini no están vacías (aunque no alcancen para leerlas). */
   tieneNotas: boolean;
   canceladaEn: Date | null;
+  /** El motivo guardado por el job `reuniones-motivos` (T4); sin él, se calcula al leer. */
+  motivoSinTexto?: string | null;
+}
+
+/** La empresa que propone Nexus para una reunión sin empresa (T3, `PropuestaDeEmpresa`), si la hay y nadie la decidió. */
+export interface PropuestaParaLaSalud {
+  tipo: "CLIENTE" | "HUBSPOT";
+  /** CLIENTE: la empresa propuesta. */
+  clientId: string | null;
+  /** HUBSPOT: la empresa de HubSpot. */
+  hubspotCompanyId: string | null;
+  nombre: string;
+  dominio: string | null;
 }
 
 export interface PersonaDelEquipo {
@@ -140,6 +155,10 @@ export interface SinEmpresaVista extends ReunionVista {
   texto: "transcripcion" | "solo_notas";
   /** Los de fuera: el primero con nombre de su correo, cuántos y sus dominios. */
   deFuera: { primero: string; cuantos: number; dominios: string[] };
+  /** Lo que propone Nexus (T3), con por qué; null = se elige a mano. */
+  propuesta: (PropuestaParaLaSalud & { porque: string }) | null;
+  /** Quien mira puede decidirla: la organizó o estuvo, o es la líder de CS o dirección. */
+  puedeDecidir: boolean;
 }
 
 export interface SaludDeLasReuniones {
@@ -224,6 +243,10 @@ export function armarSaludDeLasReuniones(
     empresasQueNoAbre?: ReadonlySet<string>;
     /** La clave de la fila (persona, empresa o motivo) que se abrió con «Ver todas». */
     verTodas?: string | null;
+    /** Lo que propone Nexus para cada reunión sin empresa (T3), por id. */
+    propuestas?: ReadonlyMap<string, PropuestaParaLaSalud>;
+    /** Quien mira, para saber si puede decidir la empresa de una reunión (T3). */
+    quien?: { email: string; veTodo: boolean } | null;
   },
 ): SaludDeLasReuniones {
   const soloDe = norm(ctx.soloDe);
@@ -236,6 +259,9 @@ export function armarSaludDeLasReuniones(
     .filter((r) => !soloDe || deQuien(r).includes(soloDe))
     .sort((a, b) => +b.fecha - +a.fecha);
 
+  // El motivo guardado (T4) si lo hay; si no, el de ahora. La misma regla que la página de la reunión.
+  const motivoDe = (r: ReunionParaLaSalud) =>
+    motivoParaMostrar(r.motivoSinTexto, { ...r, date: r.fecha, duration: r.duracion, organizerEmail: r.organizador, participants: r.participantes }, ctx.ahora);
   const nombreDe = (e: string | null) => (e ? (ctx.equipo.get(norm(e))?.nombre ?? e) : null);
   const vencidaDe = (r: ReunionParaLaSalud) => !r.empresaId && vencioSinEmpresa(r, ctx.ahora);
   const tope = (clave: string) => (ctx.verTodas === clave ? REUNIONES_CON_VER_TODAS : REUNIONES_POR_FILA);
@@ -243,7 +269,7 @@ export function armarSaludDeLasReuniones(
     const estado = estadoDe(r);
     const motivo =
       estado === "nada"
-        ? DE_QUIEN_ES[porQueFalta({ ...r, date: r.fecha, duration: r.duracion, organizerEmail: r.organizador, participants: r.participantes }, ctx.ahora)].texto
+        ? DE_QUIEN_ES[motivoDe(r)].texto
         : estado === "sin_empresa"
           ? `Tiene texto, pero falta decidir de qué empresa es. Lleva ${cuantoEspera(horasEsperando(r, ctx.ahora))}.`
           : null;
@@ -281,7 +307,7 @@ export function armarSaludDeLasReuniones(
       porEmpresa.set(r.empresaId, g);
     }
     if (estadoDe(r) === "nada") {
-      const m = porQueFalta({ ...r, date: r.fecha, duration: r.duracion, organizerEmail: r.organizador, participants: r.participantes }, ctx.ahora);
+      const m = motivoDe(r);
       porMotivo.set(m, [...(porMotivo.get(m) ?? []), r]);
     }
   }
@@ -310,6 +336,10 @@ export function armarSaludDeLasReuniones(
     };
   }).filter((g) => g.cuantas > 0);
 
+  const propuestaDe = (id: string) => {
+    const p = ctx.propuestas?.get(id);
+    return p ? { ...p, porque: porQueLaPropone(p) } : null;
+  };
   const sinEmpresa: SinEmpresaVista[] = entran
     .filter((r) => !r.empresaId)
     .map((r) => {
@@ -321,6 +351,8 @@ export function armarSaludDeLasReuniones(
         vencida: vencioSinEmpresa(r, ctx.ahora),
         texto: r.clase === "solo_notas" ? ("solo_notas" as const) : ("transcripcion" as const),
         deFuera: { primero: fuera[0] ?? "", cuantos: fuera.length, dominios: [...new Set(fuera.map(dominioDe))] },
+        propuesta: propuestaDe(r.id),
+        puedeDecidir: !!ctx.quien && puedeDecidirLaEmpresa({ organizador: r.organizador, participantes: r.participantes }, ctx.quien),
       };
     })
     .sort((a, b) => b.horasEsperando - a.horasEsperando);

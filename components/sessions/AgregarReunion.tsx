@@ -9,6 +9,9 @@
  *
  * Antes de crear una reunión nueva se muestran las del cliente ese día: si es una de ellas, se le agrega lo que pasó y
  * no queda dos veces. Las reglas viven en lib/sessions/reunion-a-mano.ts; la escritura, en la ruta del cliente.
+ *
+ * Desde el 2026-10-25 (T5), con la transcripción de audio prendida: «El audio» agrega la reunión sin texto y, en el
+ * mismo cajón, sube la grabación (components/sessions/SubirAudio.tsx); Google la transcribe y Nexus la lee.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -16,6 +19,7 @@ import { Alert, Button, Field, Input, Segmentado, Select, Textarea } from "@/com
 import { Drawer } from "@/components/ui/Drawer";
 import { useToast } from "@/components/ui/Toast";
 import { useMe } from "@/hooks/useMe";
+import { SubirAudio } from "@/components/sessions/SubirAudio";
 import {
   ACEPTA_ARCHIVO_DE_REUNION,
   MAX_BYTES_ARCHIVO,
@@ -33,7 +37,12 @@ interface Opciones {
   proyectos: { id: string; nombre: string }[];
   reunionesDelDia: { id: string; titulo: string; inicio: string; tieneTexto: boolean; aMano: boolean; porQueNo: string | null }[];
   equipo: { email: string; nombre: string }[];
+  /** Se puede subir el audio (T5). */
+  audio?: boolean;
 }
+
+/** Lo que se agrega: lo que pasó escrito, o el audio de una presencial (T5). */
+type QueSeAgrega = TipoDeContenido | "audio";
 
 export interface AgregarReunionProps {
   open: boolean;
@@ -71,7 +80,9 @@ export function AgregarReunion({ open, onClose, clienteFijo, clientes, proyectoI
   const [equipo, setEquipo] = useState<Set<string>>(new Set());
   const [delCliente, setDelCliente] = useState("");
   const [proyectos, setProyectos] = useState<Set<string>>(new Set(proyectoInicial ? [proyectoInicial] : []));
-  const [tipo, setTipo] = useState<TipoDeContenido>("recuerdo");
+  const [tipo, setTipo] = useState<QueSeAgrega>("recuerdo");
+  // T5: la reunión ya se agregó y espera su audio.
+  const [paraElAudio, setParaElAudio] = useState<string | null>(null);
   const [texto, setTexto] = useState("");
   const [leyendoArchivo, setLeyendoArchivo] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -114,13 +125,14 @@ export function AgregarReunion({ open, onClose, clienteFijo, clientes, proyectoI
   const esNueva = delDia.length === 0 || cual === OTRA;
   const existente = !esNueva ? delDia.find((r) => r.id === cual) ?? null : null;
 
-  const problema = useMemo(() => (texto.trim() ? problemaDelContenido(tipo, texto) : null), [tipo, texto]);
+  const conAudio = tipo === "audio";
+  const problema = useMemo(() => (tipo !== "audio" && texto.trim() ? problemaDelContenido(tipo, texto) : null), [tipo, texto]);
   const puedeGuardar =
     !!clientId &&
     !!opciones &&
     !hayQueElegir &&
     !problema &&
-    texto.trim().length > 0 &&
+    (conAudio || texto.trim().length > 0) &&
     (!esNueva || titulo.trim().length > 0) &&
     !(existente && existente.porQueNo) &&
     !guardando;
@@ -168,7 +180,7 @@ export function AgregarReunion({ open, onClose, clienteFijo, clientes, proyectoI
           proyectoIds: [...proyectos],
           equipo: [...equipo],
           delCliente: leerPersonasEscritas(delCliente),
-          contenido: { tipo, texto },
+          contenido: { tipo, texto: conAudio ? "" : texto },
           reunionExistenteId: existente?.id ?? null,
           confirmarOtra: cual === OTRA,
         }),
@@ -181,6 +193,12 @@ export function AgregarReunion({ open, onClose, clienteFijo, clientes, proyectoI
         return;
       }
       if (!r.ok) throw new Error(data.error ?? "No se pudo agregar la reunión.");
+      if (conAudio) {
+        // La reunión ya está: en el mismo cajón se sube la grabación.
+        setParaElAudio(data.sessionId);
+        onAgregada?.(data.sessionId);
+        return;
+      }
       toast.success(data.lectura?.mensaje ?? "Reunión agregada.", {
         action: { label: "Abrir la reunión", onClick: () => router.push(`/sessions/${data.sessionId}`) },
       });
@@ -207,13 +225,29 @@ export function AgregarReunion({ open, onClose, clienteFijo, clientes, proyectoI
           <Button variant="secondary" onClick={onClose} disabled={guardando}>
             Cancelar
           </Button>
-          <Button variant="primary" onClick={guardar} disabled={!puedeGuardar || cargando}>
-            {guardando ? "Agregando…" : existente ? "Agregar lo que pasó" : "Agregar reunión"}
-          </Button>
+          {paraElAudio ? (
+            <Button variant="primary" onClick={() => router.push(`/sessions/${paraElAudio}`)}>
+              Abrir la reunión
+            </Button>
+          ) : (
+            <Button variant="primary" onClick={guardar} disabled={!puedeGuardar || cargando}>
+              {guardando ? "Agregando…" : conAudio ? "Agregar y subir el audio" : existente ? "Agregar lo que pasó" : "Agregar reunión"}
+            </Button>
+          )}
         </div>
       }
     >
       <div className="space-y-6">
+        {paraElAudio && (
+          <section className="space-y-3">
+            <Alert variant="success">La reunión quedó agregada. Ahora sube la grabación: Google la transcribe y Nexus la lee.</Alert>
+            <SubirAudio
+              sessionId={paraElAudio}
+              inicial={null}
+              alTerminarLaSubida={() => toast.success("El audio se subió: Google lo está transcribiendo. Lo verás en la reunión.")}
+            />
+          </section>
+        )}
         {error && (
           <Alert variant="danger" onDismiss={() => setError(null)}>
             {error}
@@ -317,7 +351,7 @@ export function AgregarReunion({ open, onClose, clienteFijo, clientes, proyectoI
           </Field>
         )}
 
-        {clientId && opciones && (cual !== null || delDia.length === 0) && (
+        {!paraElAudio && clientId && opciones && (cual !== null || delDia.length === 0) && (
           <section className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-fg">Lo que pasó</h2>
@@ -326,11 +360,19 @@ export function AgregarReunion({ open, onClose, clienteFijo, clientes, proyectoI
                 opciones={[
                   { clave: "recuerdo", etiqueta: "Lo que recuerdas" },
                   { clave: "transcripcion", etiqueta: "La transcripción" },
+                  ...(opciones.audio ? [{ clave: "audio" as const, etiqueta: "El audio" }] : []),
                 ]}
                 valor={tipo}
                 onCambio={(k) => setTipo(k)}
               />
             </div>
+            {conAudio ? (
+              <p className="text-[13px] leading-[19px] text-fg-secondary">
+                Para una reunión presencial que grabaste con el teléfono: al agregarla, subes el audio aquí mismo. Google lo transcribe en unos
+                minutos y Nexus la lee como cualquier otra.
+              </p>
+            ) : (
+            <>
             <Field
               label={tipo === "recuerdo" ? "Con tus palabras" : "La transcripción"}
               hint={
@@ -358,6 +400,8 @@ export function AgregarReunion({ open, onClose, clienteFijo, clientes, proyectoI
               </Button>
               <span className="text-xs text-fg-muted">.txt, .vtt o .srt (Zoom y Teams). Se muestra acá para que lo revises.</span>
             </div>
+            </>
+            )}
           </section>
         )}
 

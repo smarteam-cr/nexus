@@ -325,7 +325,19 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   },
   "lib/invariantes/reuniones.ts": {
     clase: "plomeria",
-    motivo: "INV47 (T1): cuenta las reuniones recientes con texto y sin empresa. Corta por `date: { lte: ahora }`; no afirma nada sobre el contenido.",
+    motivo: "INV47 (T1) e INV52 (T4): cuentan las reuniones recientes con texto y sin empresa, y las sin texto sin motivo. Cortan por fecha; no afirman nada sobre el contenido.",
+  },
+  "lib/sessions/motivo-sin-texto-server.ts": {
+    clase: "plomeria",
+    motivo: "T4: guarda por qué no dejó texto cada reunión de la ventana. Corta por `date <= ahora` y no le habla a ningún modelo.",
+  },
+  "lib/sessions/propuesta-de-empresa-server.ts": {
+    clase: "plomeria",
+    motivo: "T3: propone la empresa de las reuniones con texto sin dueña, con el resolver único. Corta por `date <= ahora`; una persona decide.",
+  },
+  "lib/sessions/buscar-en-la-empresa-server.ts": {
+    clase: "agenda",
+    motivo: "T8: el buscador de «Contexto adicional», a una PERSONA: las de la empresa en toda su historia y las que quedaron en otra empresa del mismo dominio. Corta por `date <= ahora` (lo futuro no dejó nada que elegir).",
   },
   "lib/invariantes/lecturas.ts": {
     clase: "plomeria",

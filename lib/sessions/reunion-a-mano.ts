@@ -26,6 +26,14 @@ export const PREFIJO_A_MANO = "manual_";
 export type TipoDeContenido = "transcripcion" | "recuerdo";
 
 /**
+ * De dónde salió lo agregado (2026-10-25), además de pegarlo o subir el archivo:
+ *   · «preguntas»: la persona respondió las preguntas que le hizo Nexus con lo que sabe de las otras reuniones de la
+ *     empresa (T9). Es un recuerdo: «lo contó una persona»;
+ *   · «audio»: la grabación de una reunión presencial, transcrita por Speech-to-Text de Google (T5). Es una transcripción.
+ */
+export type OrigenDeLoAgregado = "preguntas" | "audio";
+
+/**
  * Quién agregó lo que pasó, cómo y cuándo. Va en `summary.aMano`. Es un `type` y no una `interface` a propósito: así
  * entra a un campo Json de Prisma sin un cast.
  */
@@ -37,6 +45,8 @@ export type MarcaAMano = {
   nombre: string | null;
   /** ISO. */
   at: string;
+  /** Solo si no se pegó ni se subió el texto (ver `OrigenDeLoAgregado`). */
+  origen?: OrigenDeLoAgregado;
 };
 
 /** Lo mínimo que se lee de un recuerdo: dos líneas alcanzan para una minuta. */
@@ -86,6 +96,7 @@ export function leerMarcaAMano(summary: unknown): MarcaAMano | null {
     por: o.por,
     nombre: typeof o.nombre === "string" && o.nombre.trim() ? o.nombre.trim() : null,
     at: typeof o.at === "string" ? o.at : "",
+    ...(o.origen === "preguntas" || o.origen === "audio" ? { origen: o.origen } : {}),
   };
 }
 
@@ -118,13 +129,17 @@ export function nombreCorto(marca: Pick<MarcaAMano, "nombre" | "por">): string {
  */
 export function etiquetaDeLasNotas(summary: unknown): string {
   const marca = leerMarcaAMano(summary);
-  return marca?.tipo === "recuerdo" ? `Lo que recuerda ${nombreCorto(marca)} (agregado a mano)` : "Notas de Gemini";
+  if (marca?.tipo !== "recuerdo") return "Notas de Gemini";
+  return marca.origen === "preguntas"
+    ? `Lo que contó ${nombreCorto(marca)} respondiendo las preguntas de Nexus (lo contó una persona)`
+    : `Lo que recuerda ${nombreCorto(marca)} (agregado a mano)`;
 }
 
 /** Lo que tiene una reunión sin transcripción, dicho en minúscula para ir entre paréntesis después del título. */
 export function queTieneSinTranscripcion(summary: unknown): string {
   const marca = leerMarcaAMano(summary);
-  return marca?.tipo === "recuerdo" ? `lo que recuerda ${nombreCorto(marca)}, agregado a mano` : "solo las notas de Gemini";
+  if (marca?.tipo !== "recuerdo") return "solo las notas de Gemini";
+  return marca.origen === "preguntas" ? `lo que contó ${nombreCorto(marca)}, respondiendo las preguntas de Nexus` : `lo que recuerda ${nombreCorto(marca)}, agregado a mano`;
 }
 
 /* ── Quién estuvo ──────────────────────────────────────────────────────────────────── */

@@ -11,6 +11,7 @@
  * `FirefliesSession` directo, con la dueña de siempre (`resolvedClientId`, la manual solo si no hay).
  */
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { ROLE_LABEL } from "@/lib/auth/roles";
 import { encargadosDeLasCuentas } from "@/lib/cuentas/encargado-server";
@@ -18,6 +19,7 @@ import { clientesQueNoAbre } from "@/lib/auth/access";
 import { dominiosDeLaCasa } from "@/lib/sessions/reuniones-para-seguimiento";
 import { noEsCanceladaSinTextoSql } from "@/lib/sessions/canceladas";
 import { sqlClaseDeTexto, type ClaseDeTexto } from "@/lib/sessions/tiene-texto";
+import { propuestasDe } from "@/lib/sessions/propuesta-de-empresa-server";
 import { armarSaludDeLasReuniones, type PeriodoDeLaSalud, type PersonaDelEquipo, type ReunionParaLaSalud, type SaludDeLasReuniones } from "./salud-de-las-reuniones";
 
 const DIA_MS = 86_400_000;
@@ -36,11 +38,15 @@ export async function saludDeLasReuniones(o: {
   teamMemberId?: string | null;
   /** La fila abierta con «Ver todas». */
   verTodas?: string | null;
+  /** Quien mira: decide la empresa de las reuniones sin empresa que organizó o en las que estuvo (T3). */
+  quien?: { email: string; veTodo: boolean } | null;
   ahora?: Date;
 }): Promise<TableroDeLaSalud> {
   const ahora = o.ahora ?? new Date();
   const desde = new Date(+ahora - o.dias * DIA_MS);
   const soloDe = o.soloDe?.trim().toLowerCase() || null;
+  // El motivo guardado (T4): sin el SQL del 2026-10-25 la columna no existe y el tablero lo calcula al leer, como antes.
+  const columnaDelMotivo = (await hayColumna("FirefliesSession", "motivoSinTexto")) ? Prisma.sql`s."motivoSinTexto"` : Prisma.sql`NULL::text AS "motivoSinTexto"`;
   const [filas, equipo, propios] = await Promise.all([
     prisma.$queryRaw<
       {
@@ -60,6 +66,7 @@ export async function saludDeLasReuniones(o: {
         googleDocId: string | null;
         tieneNotas: boolean;
         canceladaEn: Date | null;
+        motivoSinTexto: string | null;
       }[]
     >`
       SELECT s."id", s."title", s."date", s."duration", s."organizerEmail", s."participants",
@@ -68,7 +75,7 @@ export async function saludDeLasReuniones(o: {
         EXISTS (SELECT 1 FROM "SessionMinute" m WHERE m."sessionId" = s."id") AS "leida",
         s."enrichedAt", s."enrichAttempts", s."enrichError", s."googleDocId",
         (jsonb_typeof(s."summary") = 'object' AND coalesce(btrim(s."summary"->>'overview'), '') <> '') AS "tieneNotas",
-        s."canceladaEn"
+        s."canceladaEn", ${columnaDelMotivo}
       FROM "FirefliesSession" s
       LEFT JOIN "Client" c ON c."id" = coalesce(s."resolvedClientId", s."manualClientId")
       WHERE s."date" >= ${desde} AND s."date" <= ${ahora}
@@ -97,15 +104,26 @@ export async function saludDeLasReuniones(o: {
     googleDocId: f.googleDocId,
     tieneNotas: !!f.tieneNotas,
     canceladaEn: f.canceladaEn,
+    motivoSinTexto: f.motivoSinTexto,
   }));
   const empresas = [...new Set(reuniones.map((r) => r.empresaId).filter((x): x is string => !!x))];
-  const [porEmpresa, noAbre] = await Promise.all([
+  const [porEmpresa, noAbre, propuestas] = await Promise.all([
     encargadosDeLasCuentas(empresas),
     o.teamMemberId ? clientesQueNoAbre(o.teamMemberId, empresas) : Promise.resolve(new Set<string>()),
+    propuestasDe(reuniones.filter((r) => !r.empresaId && r.clase !== "nada").map((r) => r.id)),
   ]);
+  // Lo que alguien ya decidió no se vuelve a proponer (la reunión ya tiene empresa, o se eligió otra).
+  const sinDecidir = new Map([...propuestas].filter(([, p]) => !p.decision).map(([id, p]) => [id, { tipo: p.tipo, clientId: p.clientId, hubspotCompanyId: p.hubspotCompanyId, nombre: p.nombre, dominio: p.dominio }]));
   const encargadas = new Map([...porEmpresa].map(([id, e]) => [id, e.nombre ?? (e.deBaja ? `${e.deBaja} (de baja)` : null)]));
-  const ctx = { ahora, propios, equipo: personas, encargadas, empresasQueNoAbre: noAbre, verTodas: o.verTodas ?? null };
+  const ctx = { ahora, propios, equipo: personas, encargadas, empresasQueNoAbre: noAbre, verTodas: o.verTodas ?? null, propuestas: sinDecidir, quien: o.quien ?? null };
   const salud = armarSaludDeLasReuniones(reuniones, { ...ctx, soloDe });
   const delEquipo = soloDe ? armarSaludDeLasReuniones(reuniones, ctx).totales.porcentaje : null;
   return { salud, delEquipo };
+}
+
+/** ¿Existe la columna? (un SQL nuevo puede no estar todavía en la base: el tablero se ve igual sin él). */
+async function hayColumna(tabla: string, columna: string): Promise<boolean> {
+  const r = await prisma.$queryRaw<{ existe: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = ${tabla} AND column_name = ${columna}) AS "existe"`;
+  return !!r[0]?.existe;
 }

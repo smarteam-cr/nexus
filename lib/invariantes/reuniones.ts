@@ -10,7 +10,7 @@
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { esRecursoDeCalendario } from "@/lib/sessions/dominio-propio";
-import { DONDE_PUEDE_TENER_TEXTO, claseDeTexto } from "@/lib/sessions/tiene-texto";
+import { DONDE_NO_TIENE_TRANSCRIPCION, DONDE_PUEDE_TENER_TEXTO, claseDeTexto } from "@/lib/sessions/tiene-texto";
 import { DIAS_DE_FRESCURA } from "@/lib/lecturas/reglas";
 import { HORAS_SIN_EMPRESA, vencioSinEmpresa } from "@/lib/sessions/salud-de-las-reuniones";
 import { cumple, viola, type Invariante } from "./contrato";
@@ -104,5 +104,83 @@ export const INV47: Invariante = {
     const titular = `${sinEmpresa.length} reunión(es) de los últimos ${DIAS_DE_FRESCURA} días con texto y gente de fuera llevan más de ${HORAS_SIN_EMPRESA} h sin empresa`;
     if (!INV47_BLOQUEA) return cumple(`⚠ INV47 (no bloquea hasta su primer verde): ${titular}.`, detalle, remedio);
     return viola(`✗ INV47 VIOLADO: ${titular}.\n${detalle}\n${remedio}`);
+  },
+};
+
+/**
+ * ⚠ INV52 nació «no bloquea» (2026-10-25, T4): el día que se escribió ninguna reunión tenía su motivo guardado (lo
+ * escribe el job `reuniones-motivos`, que nace con el deploy). El día de su primer verde se cambia esta línea a `true`.
+ */
+export const INV52_BLOQUEA = false;
+/** Cuánto puede tardar el motivo en guardarse después de que la reunión terminó: lo que se espera la transcripción. */
+export const HORAS_PARA_EL_MOTIVO = 48;
+
+export interface ReunionSinMotivo {
+  id: string;
+  title: string;
+  date: Date;
+  empresa: string | null;
+}
+
+/** ¿El error es «a la base le falta la columna» (P2022)? El SQL de T4 todavía no se aplicó. */
+function faltaLaColumna(e: unknown): boolean {
+  const code = (e as { code?: unknown } | null)?.code;
+  return code === "P2022" || code === "42703" || /column .* does not exist/i.test(e instanceof Error ? e.message : "");
+}
+
+/**
+ * Las reuniones de los últimos 14 días con empresa y sin texto (ni lo que contó una persona), que terminaron hace más de
+ * 48 horas y no tienen su motivo guardado (`motivoSinTexto`). null = a la base le falta el SQL de T4. Sin la
+ * transcripción en la consulta: las que tienen una (no vacía) quedan afuera ahí mismo; las notas se miden acá.
+ */
+export async function reunionesSinTextoNiMotivo(db: PrismaClient, ahora: Date): Promise<ReunionSinMotivo[] | null> {
+  const desde = new Date(+ahora - DIAS_DE_FRESCURA * DIA_MS);
+  const terminoAntesDe = +ahora - HORAS_PARA_EL_MOTIVO * 3_600_000;
+  let filas: { id: string; title: string; date: Date; duration: number | null; summary: unknown; resolvedClient: { name: string } | null; manualClient: { name: string } | null }[];
+  try {
+    filas = await db.firefliesSession.findMany({
+      where: {
+        date: { gte: desde, lte: new Date(terminoAntesDe) },
+        motivoSinTexto: null,
+        OR: [{ resolvedClientId: { not: null } }, { manualClientId: { not: null } }],
+        AND: [DONDE_NO_TIENE_TRANSCRIPCION],
+      },
+      select: { id: true, title: true, date: true, duration: true, summary: true, resolvedClient: { select: { name: true } }, manualClient: { select: { name: true } } },
+      orderBy: { date: "desc" },
+    });
+  } catch (e) {
+    if (faltaLaColumna(e)) return null;
+    throw e;
+  }
+  return filas
+    .filter((s) => +s.date + Math.max(0, s.duration ?? 0) * 60_000 <= terminoAntesDe)
+    .filter((s) => claseDeTexto({ transcript: null, summary: s.summary }) === "nada" && !tieneMarcaAMano(s.summary))
+    .map((s) => ({ id: s.id, title: s.title, date: s.date, empresa: s.resolvedClient?.name ?? s.manualClient?.name ?? null }));
+}
+
+/** ¿Lo agregó una persona (la marca `aMano`)? Eso es texto aunque sea corto. */
+function tieneMarcaAMano(summary: unknown): boolean {
+  return !!summary && typeof summary === "object" && !Array.isArray(summary) && "aMano" in summary;
+}
+
+/**
+ * INV52 · Cada reunión de los últimos 14 días con empresa que terminó sin texto hace más de 48 horas tiene su motivo
+ * guardado (T4): la reunión le dice a quien la organizó por qué no dejó texto y cómo evitarlo. Remedio: que corra el job
+ * `reuniones-motivos` (cada 10 minutos).
+ */
+export const INV52: Invariante = {
+  id: "52",
+  nombre: "cada reunión sin texto dice por qué",
+  async correr(db, ahora) {
+    const sinMotivo = await reunionesSinTextoNiMotivo(db, ahora);
+    if (sinMotivo === null) return cumple("⚠ INV52 no aplica todavía: a la base le falta scripts/sql/2026-10-25-reuniones-parte-2.sql.");
+    if (!sinMotivo.length) return cumple(`✓ INV52: toda reunión de los últimos ${DIAS_DE_FRESCURA} días con empresa que terminó sin texto tiene su motivo guardado.`);
+    const detalle = lista(sinMotivo.map((s) => `«${s.title}» (${s.id}), ${dia(s.date)}, ${s.empresa ?? "sin nombre"}`));
+    const remedio = "    Remedio: que corra el job reuniones-motivos (Integraciones › semáforo de jobs; corre cada 10 minutos). Para mirar sin escribir: npx tsx scripts/medir-motivos-sin-texto.ts.";
+    const titular = `${sinMotivo.length} reunión(es) de los últimos ${DIAS_DE_FRESCURA} días terminaron sin texto hace más de ${HORAS_PARA_EL_MOTIVO} h y no tienen su motivo guardado`;
+    if (!INV52_BLOQUEA) return cumple(`⚠ INV52 (no bloquea hasta su primer verde): ${titular}.`, detalle, remedio);
+    return viola(`✗ INV52 VIOLADO: ${titular}.
+${detalle}
+${remedio}`);
   },
 };

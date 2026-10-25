@@ -15,6 +15,18 @@ import { contextoDeTareas, tareasDisponible } from "@/lib/tareas/servidor";
 import { contarTareasDeLaReunion } from "@/lib/tareas/consultas";
 import { invitadosDe } from "@/lib/contactos/lectura-server";
 import { cargarPaginaDeLaReunion } from "@/lib/seguimiento/reunion/pagina-server";
+import { esLiderDeCs } from "@/lib/cs/acceso";
+import { largoDeLasNotas } from "@/lib/sessions/tiene-texto";
+import { motivoEnLaReunion, motivoParaMostrar } from "@/lib/sessions/motivo-sin-texto";
+import { estuvoEnLaReunion } from "@/lib/sessions/preguntas-de-contexto";
+import { preguntasParaLaReunion } from "@/lib/sessions/preguntas-de-contexto-server";
+import { audioPrendido } from "@/lib/sessions/audio-de-reunion";
+import { audioDeLaReunion } from "@/lib/sessions/audio-de-reunion-server";
+import { porQueLaPropone, puedeDecidirLaEmpresa } from "@/lib/sessions/propuesta-de-empresa";
+import { propuestasDe } from "@/lib/sessions/propuesta-de-empresa-server";
+import { empresasParaElegir } from "@/lib/sessions/empresa-de-la-reunion-server";
+import { SinTextoDeLaReunion } from "@/components/sessions/reunion/SinTextoDeLaReunion";
+import { SinEmpresaDeLaReunion } from "@/components/sessions/reunion/SinEmpresaDeLaReunion";
 import SessionView, { type PaginaDeLaVista, type SessionViewData } from "./SessionView";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +43,10 @@ export const dynamic = "force-dynamic";
  * Desde el 2026-10-10 (etapa 2): «N tareas» cuenta las tareas que dejó, de las que ve quien mira (`ActionItem` se retiró).
  * Desde el 2026-10-17 (ficha G): cada reunión con su página: su agenda, sus avisos, sus tareas con responsable y, si fue
  * con un cliente, el correo de seguimiento y la próxima reunión sugerida (lib/seguimiento/reunion/pagina-server.ts).
+ * Desde el 2026-10-25 (T3, T4, T5 y T9 de docs/reuniones-pieza-angular-plan.md): una reunión SIN EMPRESA deja decidirla
+ * acá, con la propuesta de Nexus; una que terminó SIN TEXTO dice por qué y, a quien la organizó, cómo evitarlo; quien
+ * estuvo responde las preguntas de Nexus, y se puede subir el audio de una presencial. Esos dos bloques reemplazan los
+ * avisos «No tiene cliente» y «Terminó sin transcripción ni notas».
  */
 
 /** Cuántas tareas dejó la reunión, de las que ve quien mira. Sin las tablas de Tareas (o sin un SQL), 0: la página se ve igual. */
@@ -49,8 +65,9 @@ export default async function SessionPage({
   params: Promise<{ id: string }>;
 }) {
   let user: AppUserWithTeamMember;
+  let rol: string;
   try {
-    ({ user } = await requireInternalUser());
+    ({ user, role: rol } = await requireInternalUser());
   } catch {
     redirect("/");
   }
@@ -71,6 +88,9 @@ export default async function SessionPage({
           summary: true,
           transcript: true,
           enrichedAt: true,
+          enrichAttempts: true,
+          enrichError: true,
+          canceladaEn: true,
           source: true,
           googleDocId: true,
           organizerEmail: true,
@@ -268,6 +288,76 @@ export default async function SessionPage({
       throw e;
     });
 
+  // ── T3 y T4: sin empresa, y sin texto (los bloques reemplazan sus avisos) ──
+  const ahora = new Date();
+  const estuvo = estuvoEnLaReunion({ organizador: session.organizerEmail, participantes: session.participants }, user.email);
+  const termino = +session.date + Math.max(0, session.duration || 0) * 60_000 <= +ahora;
+  // El motivo guardado (T4) se lee aparte: sin el SQL del 2026-10-25 la columna no existe y se calcula al leer.
+  const guardado = await prisma.firefliesSession
+    .findUnique({ where: { id }, select: { motivoSinTexto: true } })
+    .then((f) => f?.motivoSinTexto ?? null)
+    .catch(() => null);
+  const motivo =
+    !textoDeLaReunion && termino
+      ? motivoEnLaReunion(
+          motivoParaMostrar(
+            guardado,
+            {
+              date: session.date,
+              duration: session.duration,
+              enrichedAt: session.enrichedAt,
+              enrichAttempts: session.enrichAttempts,
+              enrichError: session.enrichError,
+              googleDocId: session.googleDocId,
+              organizerEmail: session.organizerEmail,
+              participants: session.participants,
+              tieneNotas: largoDeLasNotas(session.summary) > 0,
+              canceladaEn: session.canceladaEn,
+            },
+            ahora,
+          ),
+          estuvo,
+        )
+      : null;
+  const [preguntas, audio] = motivo
+    ? await Promise.all([
+        matchedClient && estuvo
+          ? preguntasParaLaReunion({ sessionId: id, dueno: matchedClient.id, empresa: matchedClient.name, titulo: session.title, fecha: session.date })
+          : Promise.resolve(null),
+        matchedClient && audioPrendido(process.env) ? audioDeLaReunion(id).then((a) => ({ inicial: a })) : Promise.resolve(null),
+      ])
+    : [null, null];
+  const sinEmpresa = !duenoId
+    ? await Promise.all([propuestasDe([id]), empresasParaElegir(user)]).then(([ps, empresas]) => {
+        const p = ps.get(id);
+        const viva = p && !p.decision ? p : null;
+        return {
+          propuesta: viva ? { tipo: viva.tipo, nombre: viva.nombre, clientId: viva.clientId, hubspotCompanyId: viva.hubspotCompanyId } : null,
+          porque: viva ? porQueLaPropone(viva) : null,
+          empresas,
+          puedeDecidir: puedeDecidirLaEmpresa({ organizador: session.organizerEmail, participantes: session.participants }, { email: user.email, veTodo: esLiderDeCs(rol) }),
+        };
+      })
+    : null;
+  const bloques =
+    sinEmpresa || motivo ? (
+      <>
+        {sinEmpresa && <SinEmpresaDeLaReunion sessionId={id} titulo={session.title} {...sinEmpresa} />}
+        {motivo && (
+          <SinTextoDeLaReunion
+            sessionId={id}
+            motivo={motivo}
+            preguntas={preguntas}
+            cliente={matchedClient ? { id: matchedClient.id, nombre: matchedClient.name } : null}
+            audio={audio}
+          />
+        )}
+      </>
+    ) : undefined;
+  const paginaConBloques = pagina
+    ? { ...pagina, avisos: pagina.avisos.filter((a) => !(motivo && a.clave === "sin-texto") && !(sinEmpresa && a.clave === "sin-cliente")) }
+    : pagina;
+
   // «Lo que dejó esta reunión» sin los compromisos: la página los muestra en «Tareas de esta reunión», con responsable.
   const tarjetaSinCompromisos = tarjeta && pagina ? { ...tarjeta, secciones: { ...tarjeta.secciones, compromisos: { items: [], mas: 0, href: null } } } : tarjeta;
 
@@ -286,5 +376,5 @@ export default async function SessionPage({
       <LeerEstaReunion sessionId={session.id} />
     ) : undefined;
 
-  return <SessionView data={data} tarjeta={arriba} pagina={pagina} />;
+  return <SessionView data={data} tarjeta={arriba} pagina={paginaConBloques} bloques={bloques} />;
 }

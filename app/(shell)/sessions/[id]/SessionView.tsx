@@ -108,7 +108,18 @@ type TabKey = "transcript" | "meta";
 /** Lo que suma la ficha G: agenda, avisos, tareas y «Después de la reunión». Sin él, la página es la de antes. */
 export type PaginaDeLaVista = PaginaDeLaReunion & { tuyasPorDecidir: number };
 
-export default function SessionView({ data, tarjeta, pagina }: { data: SessionViewData; tarjeta?: ReactNode; pagina?: PaginaDeLaVista }) {
+export default function SessionView({
+  data,
+  tarjeta,
+  pagina,
+  bloques,
+}: {
+  data: SessionViewData;
+  tarjeta?: ReactNode;
+  pagina?: PaginaDeLaVista;
+  /** Sin empresa y sin texto (T3 y T4, 2026-10-25): van debajo de los avisos. */
+  bloques?: ReactNode;
+}) {
   const [tab, setTab] = useState<TabKey>("transcript");
   const router = useRouter();
   const { session, client, projectAssignments, availableProjects, minute, tareasDeLaReunion } = data;
@@ -167,6 +178,7 @@ export default function SessionView({ data, tarjeta, pagina }: { data: SessionVi
           onAbrirMeta={() => setTab("meta")}
         />
       )}
+      {bloques}
       {pagina && <AgendaDeLaReunion sessionId={session.id} agenda={pagina.agenda} puedeEscribir />}
 
       {/* ── Lo que dejó esta reunión (lib/seguimiento) ────────────────────── */}

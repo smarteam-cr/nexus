@@ -214,3 +214,23 @@ describe("lo que la revisión pidió cuidar", () => {
     expect(pagina).toContain("teamMemberId: ctx.teamMember.id");
   });
 });
+
+describe("T3 y T4 en el tablero (2026-10-25)", () => {
+  it("una sin empresa trae la propuesta de Nexus con su porqué, y quién la puede decidir", () => {
+    const sin = reunion({ id: "faco", empresaId: null, empresa: null, organizador: MARCO, participantes: [MARCO, "pablo@facocr.com"] });
+    const ctx = { ahora: AHORA, propios: PROPIOS, equipo: EQUIPO, propuestas: new Map([["faco", { tipo: "HUBSPOT" as const, clientId: null, hubspotCompanyId: "hs-faco", nombre: "FACO", dominio: "facocr.com" }]]) };
+    const deMarco = armarSaludDeLasReuniones([sin], { ...ctx, quien: { email: MARCO, veTodo: false } }).sinEmpresa[0];
+    expect(deMarco.propuesta).toMatchObject({ tipo: "HUBSPOT", nombre: "FACO" });
+    expect(deMarco.propuesta?.porque).toMatch(/@facocr\.com/);
+    expect(deMarco.puedeDecidir).toBe(true);
+    expect(armarSaludDeLasReuniones([sin], { ...ctx, quien: { email: LIZ, veTodo: false } }).sinEmpresa[0].puedeDecidir).toBe(false);
+    expect(armarSaludDeLasReuniones([sin], { ...ctx, quien: { email: LIZ, veTodo: true } }).sinEmpresa[0].puedeDecidir).toBe(true);
+    expect(armarSaludDeLasReuniones([sin], { ...ctx, quien: null }).sinEmpresa[0]).toMatchObject({ propuesta: expect.anything(), puedeDecidir: false });
+  });
+  it("el motivo guardado manda sobre el de ahora", () => {
+    const nada = reunion({ clase: "nada", googleDocId: null, motivoSinTexto: "documento_vacio" });
+    const s = armar([nada]);
+    expect(s.motivos.flatMap((g) => g.motivos.map((m) => m.motivo))).toEqual(["documento_vacio"]);
+    expect(armar([{ ...nada, motivoSinTexto: "basura" }]).motivos.flatMap((g) => g.motivos.map((m) => m.motivo))).toEqual(["no_se_grabo"]);
+  });
+});

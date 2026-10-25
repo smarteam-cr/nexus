@@ -186,3 +186,15 @@ describe("qué se puede guardar", () => {
     expect(porQueNoSeLePuedeAgregar({ largoTranscript: 0, largoNotas: 0 })).toBeNull();
   });
 });
+
+describe("de dónde salió lo agregado (T5 y T9, 2026-10-25)", () => {
+  it("la marca guarda el origen, y uno que no conoce se ignora", () => {
+    expect(leerMarcaAMano({ aMano: { ...MARCA, origen: "preguntas" } })?.origen).toBe("preguntas");
+    expect(leerMarcaAMano({ aMano: { ...MARCA, origen: "audio" } })?.origen).toBe("audio");
+    expect(leerMarcaAMano({ aMano: { ...MARCA, origen: "otro" } })).not.toHaveProperty("origen");
+  });
+  it("lo que contó respondiendo las preguntas de Nexus se dice «lo contó una persona»", () => {
+    expect(etiquetaDeLasNotas(summaryDelRecuerdo("x", { ...MARCA, origen: "preguntas" }))).toBe("Lo que contó Ana respondiendo las preguntas de Nexus (lo contó una persona)");
+    expect(etiquetaDeLasNotas(summaryDelRecuerdo("x", MARCA))).toBe("Lo que recuerda Ana (agregado a mano)");
+  });
+});
