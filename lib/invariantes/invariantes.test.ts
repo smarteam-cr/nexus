@@ -827,10 +827,12 @@ describe("el registro y el consumidor", () => {
       // 49: la frescura de la copia de Google Meet (U1, 2026-10-25); 50, el historial de Partner y la comisión de
       // HubSpot (U25 y U29); 51, cada documento tiene un dueño y ninguna persona del cliente es del equipo (la empresa,
       // parte 2); 55, ningún proyecto de SmartLoop dice ser «proyecto_temporal» (M1). Todas del 2026-10-25.
-      "49", "50", "51", "52", "53",
+      "49", "50", "51", "52", "53", "54",
       "55",
       // 52: cada reunión con empresa que terminó sin texto tiene su motivo guardado (T4); 53: ninguna reunión de 3 a 25
       // días sin revisar su conferencia de Meet (U3). Del 2026-10-25.
+      // 49: la frescura de la copia de Google Meet (U1, 2026-10-25).
+      // 54: ninguna ficha apunta a una empresa de HubSpot fusionada (U9, 2026-10-25).
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });

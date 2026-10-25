@@ -230,6 +230,12 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "ventas",
     motivo: "Tareas internas: buscar una preventa para vincularla (nombre de la empresa) y el enlace del vínculo. Con DE_LA_PREVENTA.",
   },
+  "lib/comunicaciones/copia-server.ts": {
+    destino: "ventas",
+    motivo:
+      "U8 (2026-10-25): si la preventa de la empresa se trabajó en Nexus en los últimos 90 días, para decidir si la IA lee " +
+      "sus correos. Solo la fecha de la última, con DE_LA_PREVENTA; no lee su contenido.",
+  },
   "lib/cs/cartera.ts": {
     destino: "ventas",
     motivo: "La clasificación de la cartera (Éxito del cliente, interno): si la empresa tiene una preventa abierta. Solo cuenta filas, con DE_LA_PREVENTA.",

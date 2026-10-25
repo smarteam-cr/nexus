@@ -56,6 +56,17 @@
  *     de las dos credenciales. El turno de las tres: lib/jobs/turno-por-hora.ts.
  *   - titulos-cortos → el nombre corto de las tareas abiertas que no lo tienen o cuyo título cambió
  *     (lib/tareas/ia/titulo-corto-server.ts), cada 10 minutos, con Haiku y si queda presupuesto automático.
+ *   - hubspot-eventos → los avisos de HubSpot (webhooks, U10, lib/hubspot/eventos-server.ts), cada tick en que hay
+ *     pendientes: guarda las fusiones, sincroniza los proyectos de la empresa que cambió y adelanta la copia de contactos
+ *     y tickets o la de negocios (una por tick, cada 20 minutos y solo de día). El sondeo de cada hora sigue siendo la red.
+ *   - hubspot-fusiones → la búsqueda diaria de las fusiones de HubSpot (U9, lib/hubspot/fusiones-server.ts), ≥ 6:00 CR.
+ *     Solo lee HubSpot; guarda los pares y el informe. INV54 dice si una ficha quedó con la empresa vieja.
+ *   - hubspot-leads → la copia de los leads de HubSpot (B3 etapa 1, lib/leads/copia-server.ts), cada hora de 6:00 a
+ *     20:00 CR. Gated por HUBSPOT_LEADS_ENABLED≠0.
+ *   - hubspot-proyectos → la sincronización diaria de los proyectos (0-970) de cada empresa de Nexus (U10: el proyecto no
+ *     tiene avisos y hasta hoy solo se copiaba al abrir la ficha), ≥ 6:00 CR. Gated por HUBSPOT_PROYECTOS_JOB_ENABLED≠0.
+ *   - jobs-vigia → U24: cada hora, si un job que ya corrió lleva más de lo esperado sin correr (lib/jobs/cadencias.ts),
+ *     LANZA: rojo en Integraciones, Sentry y «Para ti» de quien ve el sistema. Gated por JOBS_VIGIA_ENABLED≠0.
  *   - reuniones-motivos → POR QUÉ cada reunión de los últimos 90 días no dejó texto, guardado en la reunión
  *     (lib/sessions/motivo-sin-texto-server.ts, T4), cada 10 minutos. Sin IA ni red: una consulta y lo que cambió.
  *   - reuniones-propuestas → a qué empresa propone Nexus cada reunión con texto sin dueña (lib/sessions/
@@ -1222,6 +1233,161 @@ const reunionesAudio: JobDef = {
   },
 };
 
+/**
+ * Los avisos de HubSpot (U10, lib/hubspot/eventos-server.ts): cada tick, si hay pendientes. Sin pendientes, sin la tabla
+ * o con el candado ajeno devuelve SIN_TURNO. Un aviso que falló 5 veces queda «error» y el job LANZA (rojo + Sentry).
+ */
+const hubspotEventos: JobDef = {
+  key: "hubspot-eventos",
+  shouldRun: () => true,
+  run: async (now) => {
+    const { procesarAvisosDeHubspot } = await import("@/lib/hubspot/eventos-server");
+    const r = await procesarAvisosDeHubspot(now);
+    if (!r || r.sinTabla || r.locked) return SIN_TURNO;
+    console.log(
+      `[jobs/hubspot-eventos] ${r.pendientes} avisos: ${r.procesados} procesados, ${r.ignorados} ignorados` +
+        `${r.fusiones ? `, ${r.fusiones} fusiones` : ""}${r.clientes ? `, ${r.clientes} empresas sincronizadas` : ""}` +
+        `${r.contactos ? ` · contactos: ${r.contactos}` : ""}${r.negocios ? ` · negocios: ${r.negocios}` : ""}${r.conError ? `, ${r.conError} con error` : ""}`,
+    );
+    if (r.conError > 0) throw new Error(`${r.conError} aviso(s) de HubSpot no se pudieron procesar: ${r.errores.slice(0, 3).join("; ")}`);
+  },
+};
+
+/** La búsqueda diaria de las fusiones de HubSpot (U9). Solo lee HubSpot. Sin el SQL, lo dice y no falla. */
+const hubspotFusiones: JobDef = {
+  key: "hubspot-fusiones",
+  shouldRun: (_now, parts) => parts.hour >= 6,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const { dateKey } = crDateParts(now);
+    if (!(await claimDateKey("hubspot-fusiones", dateKey, now))) return SIN_TURNO;
+    const { revisarFusiones } = await import("@/lib/hubspot/fusiones-server");
+    // De paso, los avisos de HubSpot ya procesados de hace más de 30 días (la tabla no crece sin fin).
+    const { limpiarAvisosViejos } = await import("@/lib/hubspot/eventos-server");
+    const borrados = await limpiarAvisosViejos(now);
+    if (borrados) console.log(`[jobs/hubspot-fusiones] ${dateKey} — ${borrados} avisos de HubSpot viejos borrados`);
+    const r = await revisarFusiones({ ahora: now });
+    if (r.sinTabla) {
+      console.log(`[jobs/hubspot-fusiones] ${dateKey} — falta el SQL 2026-10-25-hubspot-contexto.sql`);
+      return;
+    }
+    const n = (v: number | null) => (v === null ? "?" : v);
+    console.log(
+      `[jobs/hubspot-fusiones] ${dateKey} — absorbidos en HubSpot: ${n(r.pares.empresa)} empresas, ${n(r.pares.contacto)} contactos, ${n(r.pares.negocio)} negocios, ${n(r.pares.proyecto)} proyectos, ${n(r.pares.ticket)} tickets` +
+        ` · en Nexus con el id viejo: ${r.fichas.length} fichas, ${r.proyectos.length} proyectos, ${r.negociosDeProyectos.length} negocios de proyectos`,
+    );
+  },
+};
+
+/** La copia de los leads de HubSpot (B3 etapa 1). Una corrida por hora; con el candado ajeno, suelta el turno. */
+const hubspotLeads: JobDef = {
+  key: "hubspot-leads",
+  shouldRun: (_now, parts) => encendido("hubspot-leads") && parts.hour >= 6 && parts.hour <= 20,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const p = crDateParts(now);
+    const turno = `${p.dateKey}T${String(p.hour).padStart(2, "0")}`;
+    if (!(await claimDateKey("hubspot-leads", turno, now))) return SIN_TURNO;
+    const { copiarLeads } = await import("@/lib/leads/copia-server");
+    let r: Awaited<ReturnType<typeof copiarLeads>>;
+    try {
+      r = await copiarLeads({ ahora: now });
+    } catch (e) {
+      if (esquemaDesactualizado(e)) {
+        console.log(`[jobs/hubspot-leads] ${turno} — falta el SQL 2026-10-25-hubspot-contexto.sql`);
+        return;
+      }
+      throw e;
+    }
+    if (r.locked) {
+      await prisma.cronJobState.updateMany({ where: { id: "hubspot-leads", lastRunDateKey: turno }, data: { lastRunDateKey: null } }).catch(() => {});
+      console.log(`[jobs/hubspot-leads] ${turno} — lock ajeno; turno liberado para reintentar`);
+      return;
+    }
+    console.log(
+      `[jobs/hubspot-leads] ${turno} — ${r.sinPermiso ? "sin permiso en HubSpot" : `${r.leidos} leads: ${r.creados} nuevos, ${r.actualizados} con cambios, ${r.bajas} de baja${r.ambiguos ? `, ${r.ambiguos} de dos clientes (no se guardan)` : ""}`}`,
+    );
+  },
+};
+
+/**
+ * Los proyectos (0-970) de cada empresa de Nexus, una vez al día (U10): el proyecto no tiene avisos de HubSpot y hasta
+ * el 2026-10-25 solo se copiaba al abrir la ficha. Es la sincronización de la ficha (`syncProjectsForClient`, con su
+ * cooldown, su mutex y su piso), empresa por empresa. Si nace un proyecto, la ficha reclasifica sus reuniones (cuesta
+ * como al abrirla).
+ *
+ * ⚠ En tandas de `EMPRESAS_POR_TANDA` por minuto: el tick del scheduler es secuencial, y 160 empresas de una lo trabarían
+ * varios minutos. El avance del día vive en `CronJobState` «hubspot-proyectos-avance»; terminado el día, SIN_TURNO.
+ */
+const EMPRESAS_POR_TANDA = 20;
+const hubspotProyectos: JobDef = {
+  key: "hubspot-proyectos",
+  shouldRun: (_now, parts) => encendido("hubspot-proyectos") && parts.hour >= 6,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const p = crDateParts(now);
+    const AVANCE = "hubspot-proyectos-avance";
+    const fila = await prisma.cronJobState.findUnique({ where: { id: AVANCE }, select: { lastResult: true } });
+    const avance = (fila?.lastResult ?? null) as { dia?: string; desde?: number; total?: number; nuevos?: number; fallaron?: number } | null;
+    const deHoy = avance?.dia === p.dateKey;
+    if (deHoy && (avance?.desde ?? 0) >= (avance?.total ?? 0)) return SIN_TURNO;
+    // Una tanda por minuto, y un solo proceso por tanda.
+    const minuto = `${p.dateKey}T${String(p.hour).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}`;
+    if (!(await claimDateKey("hubspot-proyectos", minuto, now))) return SIN_TURNO;
+    const clientes = await prisma.client.findMany({ where: { hubspotCompanyId: { not: null }, kind: "CLIENTE" }, select: { id: true }, orderBy: { id: "asc" } });
+    const desde = deHoy ? (avance?.desde ?? 0) : 0;
+    const { syncProjectsForClient } = await import("@/lib/hubspot/sync-projects");
+    let nuevos = deHoy ? (avance?.nuevos ?? 0) : 0;
+    let fallaron = deHoy ? (avance?.fallaron ?? 0) : 0;
+    for (const c of clientes.slice(desde, desde + EMPRESAS_POR_TANDA)) {
+      try {
+        const s = await syncProjectsForClient(c.id);
+        nuevos += s.created;
+        // No lanza ante un token vencido o una empresa que no se pudo verificar: lo anota en `errors`.
+        if (s.errors.length) {
+          fallaron++;
+          console.error(`[jobs/hubspot-proyectos] ${c.id}: ${s.errors[0]}`);
+        }
+      } catch (e) {
+        fallaron++;
+        console.error(`[jobs/hubspot-proyectos] ${c.id}: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+    const hasta = Math.min(clientes.length, desde + EMPRESAS_POR_TANDA);
+    const nuevoAvance = { dia: p.dateKey, desde: hasta, total: clientes.length, nuevos, fallaron };
+    await prisma.cronJobState.upsert({ where: { id: AVANCE }, update: { lastResult: nuevoAvance }, create: { id: AVANCE, lastResult: nuevoAvance } });
+    if (hasta < clientes.length) return;
+    console.log(`[jobs/hubspot-proyectos] ${p.dateKey} — ${clientes.length} empresas, ${nuevos} proyectos nuevos${fallaron ? `, ${fallaron} con error` : ""}`);
+    if (fallaron > clientes.length / 2) throw new Error(`La sincronización de proyectos falló en ${fallaron} de ${clientes.length} empresas.`);
+  },
+};
+
+/** U24: cada hora, los jobs que dejaron de correr (lib/jobs/cadencias.ts). Si hay alguno, LANZA con la lista. */
+const jobsVigia: JobDef = {
+  key: "jobs-vigia",
+  shouldRun: () => encendido("jobs-vigia"),
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const p = crDateParts(now);
+    const turno = `${p.dateKey}T${String(p.hour).padStart(2, "0")}`;
+    if (!(await claimDateKey("jobs-vigia", turno, now))) return SIN_TURNO;
+    const { CADENCIA_DE_JOB, jobsQueDejaronDeCorrer } = await import("./cadencias");
+    const { leerEstadoDeJobs } = await import("./estado");
+    const { nombreDeJob } = await import("./nombres");
+    const enAllJobs = new Set(allJobs().map((j) => j.key));
+    const claves = Object.keys(CADENCIA_DE_JOB).filter((k) => enAllJobs.has(k));
+    const estados = await leerEstadoDeJobs(claves);
+    const callados = jobsQueDejaronDeCorrer(
+      estados.map((e) => ({ key: e.key, ultimaCorrida: e.resultado ? new Date(e.resultado.at) : null, apagado: !encendido(e.key) })),
+      now,
+    );
+    if (!callados.length) return;
+    const fallo = new Error(`Dejaron de correr: ${callados.map((c) => `${nombreDeJob(c.key)} (hace ${c.horas} h)`).join("; ")}`);
+    fallo.name = "JobsQueDejaronDeCorrer";
+    throw fallo;
+  },
+};
+
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleMeetConferencias, googleMeetEventos, googleMeetSuscripciones, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, reunionesMotivos, reunionesPropuestas, reunionesAudio, loPagadoDaily, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleMeetConferencias, googleMeetEventos, googleMeetSuscripciones, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, hubspotEventos, hubspotLeads, hubspotFusiones, hubspotProyectos, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, reunionesMotivos, reunionesPropuestas, reunionesAudio, loPagadoDaily, invariantsDaily, jobsVigia];
 }

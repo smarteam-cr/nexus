@@ -10,7 +10,9 @@
  */
 import { createHash } from "node:crypto";
 
-export const TIPOS_DE_COMUNICACION = ["correo", "nota", "llamada"] as const;
+/** «reunion» (U7, 2026-10-25): una reunión de HubSpot con el resumen de Notetaker, que no llega por Meet (Zoom, Teams, o
+ *  una de Meet cuya reunión en Nexus no tiene texto). Las reglas de cuándo se guarda: lib/comunicaciones/reuniones.ts. */
+export const TIPOS_DE_COMUNICACION = ["correo", "nota", "llamada", "reunion"] as const;
 export type TipoDeComunicacion = (typeof TIPOS_DE_COMUNICACION)[number];
 
 export type DireccionDelCorreo = "enviado" | "recibido";
@@ -26,9 +28,9 @@ export const MIN_TEXTO_PARA_LEER = 40;
 /** Cuántas veces se reintenta la lectura de compromisos de un correo que falló. */
 export const MAX_INTENTOS_DE_COMPROMISOS = 3;
 
-export const ROTULO_DEL_TIPO: Record<TipoDeComunicacion, string> = { correo: "Correo", nota: "Nota", llamada: "Llamada" };
+export const ROTULO_DEL_TIPO: Record<TipoDeComunicacion, string> = { correo: "Correo", nota: "Nota", llamada: "Llamada", reunion: "Reunión de HubSpot" };
 
-/** «Correo enviado», «Correo recibido», «Nota», «Llamada». */
+/** «Correo enviado», «Correo recibido», «Nota», «Llamada», «Reunión de HubSpot». */
 export function rotuloDeLaComunicacion(tipo: TipoDeComunicacion, direccion: DireccionDelCorreo | null): string {
   if (tipo !== "correo") return ROTULO_DEL_TIPO[tipo];
   return direccion === "recibido" ? "Correo recibido" : direccion === "enviado" ? "Correo enviado" : "Correo";
@@ -144,6 +146,11 @@ export interface DatosDeLaComunicacion {
   autorEmail: string | null;
   deEmail: string | null;
   modificadoEnHubspot: Date | null;
+  /** U7: con qué reunión de Meet se cruza (lib/comunicaciones/reuniones.ts). Solo una reunión o una llamada; no entra a la huella. */
+  googleEventId?: string | null;
+  codigoDeMeet?: string | null;
+  /** U7: una llamada con lo que escribió la persona (su cuerpo): no se cruza con Meet, aunque tenga resumen. No se guarda. */
+  conNotas?: boolean;
 }
 
 export function huellaDe(d: Pick<DatosDeLaComunicacion, "direccion" | "ocurrioAt" | "asunto" | "texto" | "autorEmail" | "deEmail">): string {
@@ -221,15 +228,18 @@ const UNA_FECHA =
 const UN_COMPROMISO =
   /\b(agend(o|amos|aremos|ar|emos)|nos (reunimos|vemos|juntamos)|(te|les) (env[ií]o|enviar[eé]|enviamos|enviaremos|comparto|compartiremos|mando|mandar[eé])|quedamos|qued[oó] (agendad|pendiente)|acordamos|compromiso|entregaremos|entrega(mos|r[eé])|pr[oó]xim(o|os) pasos?|siguiente(s)? pasos?|minuta|confirmamos|programamos|coordinamos|(te|les) (confirmo|confirmaremos)|reuni[oó]n|sesi[oó]n|llamada|kick ?off)\b/i;
 
-export type MotivoDeLaLectura = "lee" | "no_es_correo" | "no_es_enviado" | "vieja" | "sin_texto" | "sin_fecha_ni_compromiso";
+export type MotivoDeLaLectura = "lee" | "no_es_correo" | "no_es_enviado" | "vieja" | "sin_texto" | "sin_fecha_ni_compromiso" | "cuenta_sin_uso";
 
 /**
  * ¿La IA lee los compromisos de esta comunicación? Solo un CORREO ENVIADO por Smarteam, de los últimos 14 días, con
- * texto, que nombra una fecha o un compromiso. Lo demás se decide acá sin gastar.
+ * texto, que nombra una fecha o un compromiso, y de una cuenta ACTIVA o USADA en Nexus (U8, decisión de Elías del 24 oct:
+ * se copian todos los correos, que no gasta, y la IA lee solo los de las cuentas que lo necesitan; la regla de qué cuenta
+ * lo necesita es `cuentaQueLeeLaIA`). Lo demás se decide acá sin gastar. Sin `cuentaActiva`, no se mira (como antes).
  */
 export function motivoDeLaLectura(
   c: { tipo: TipoDeComunicacion; direccion: DireccionDelCorreo | null; ocurrioAt: Date; asunto: string | null; texto: string | null },
   ahora: Date,
+  o: { cuentaActiva?: boolean } = {},
 ): MotivoDeLaLectura {
   if (c.tipo !== "correo") return "no_es_correo";
   if (c.direccion !== "enviado") return "no_es_enviado";
@@ -238,7 +248,38 @@ export function motivoDeLaLectura(
   if (texto.trim().length < MIN_TEXTO_PARA_LEER) return "sin_texto";
   const todo = `${c.asunto ?? ""}\n${texto}`;
   if (!UNA_FECHA.test(todo) && !UN_COMPROMISO.test(todo)) return "sin_fecha_ni_compromiso";
+  if (o.cuentaActiva === false) return "cuenta_sin_uso";
   return "lee";
+}
+
+/**
+ * La versión de lo que la copia lee de cada tipo. Cuando cambia lo que se guarda de un tipo, su punto de partida se olvida
+ * UNA vez y la corrida siguiente relee sus 120 días. Versión 2 (U7, 2026-10-25): las llamadas suman el resumen de
+ * Notetaker; las que se descartaron antes por no tener cuerpo (el 89 %) no volverían a entrar si el punto siguiera.
+ */
+export const VERSION_DEL_CURSOR = 2;
+const TIPOS_QUE_CAMBIARON_EN_LA_VERSION: Record<number, readonly TipoDeComunicacion[]> = { 2: ["llamada", "reunion"] };
+
+/** Los tipos cuyo punto de partida se olvida, si el guardado es de la versión `guardada` (sin versión = la 1). */
+export function tiposQueSeReleen(guardada: number): Set<TipoDeComunicacion> {
+  const out = new Set<TipoDeComunicacion>();
+  for (let n = guardada + 1; n <= VERSION_DEL_CURSOR; n++) for (const t of TIPOS_QUE_CAMBIARON_EN_LA_VERSION[n] ?? []) out.add(t);
+  return out;
+}
+
+/** Cuántos días para atrás cuenta el trabajo en Nexus de una cuenta sin proyecto activo (su preventa o su exploración). */
+export const DIAS_DE_USO_EN_NEXUS = 90;
+
+/**
+ * ¿La IA lee los correos de esta cuenta? (U8.) Sí si tiene un proyecto activo (la cartera de Customer Success, un
+ * desarrollo), o si alguien trabajó su preventa o su exploración en Nexus en los últimos `DIAS_DE_USO_EN_NEXUS` días.
+ * Un prospecto que solo está en HubSpot, o un cliente sin nada abierto, no: sus correos se copian igual, y los enviados
+ * de los últimos 14 días vuelven a la cola el día en que alguien abre algo (la copia los reactiva en cada corrida). Es la
+ * opción conservadora (gasta menos); se anota en DECISIONS «HubSpot como contexto y como aviso».
+ */
+export function cuentaQueLeeLaIA(c: { proyectosActivos: number; ultimaExploracionAt: Date | null }, ahora: Date): boolean {
+  if (c.proyectosActivos > 0) return true;
+  return !!c.ultimaExploracionAt && +ahora - +c.ultimaExploracionAt <= DIAS_DE_USO_EN_NEXUS * 86_400_000;
 }
 
 /** El estado inicial de los compromisos de una fila nueva (o que cambió de texto). */

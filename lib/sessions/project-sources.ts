@@ -34,7 +34,8 @@ import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
 import { pisoDelProyecto, quedaAntesDelPiso } from "./piso-del-proyecto";
 import { NO_ES_CONTENEDOR_WHERE } from "@/lib/projects/scope";
-import { NO_ES_CANCELADA_SIN_TEXTO } from "./canceladas";
+import { NO_ES_CANCELADA_SIN_TEXTO, noEsCanceladaSinTextoSql } from "./canceladas";
+import { Prisma } from "@prisma/client";
 
 /** Compatible con `RawTranscript` de analyze (date en epoch ms). */
 export interface ProjectSourceSession {
@@ -496,4 +497,32 @@ export async function genteCompartidaConOtrosClientes(
     out.correos.add(f.correo);
   }
   return out;
+}
+
+/**
+ * Las reuniones de Meet de una ventana, con su DUEÑO y si tienen texto, para saber si una reunión o una llamada de
+ * HubSpot ya llega por Meet (U7, 2026-10-25: lib/comunicaciones/reuniones.ts). Vive acá porque decide de quién es cada
+ * reunión: el dueño es `duenoDeLaSesion`, el mismo de todas las lecturas, y la cancelada sin texto no sale (como en
+ * todo el chokepoint). «Texto» = transcripción, resumen o minuta. Solo lee: ni el transcript viaja (se mide en SQL).
+ */
+export async function indiceDeReunionesDeMeet(o: { desde: Date; hasta: Date }): Promise<
+  { id: string; googleEventId: string | null; conferenceId: string | null; inicio: number; clientId: string | null; conTexto: boolean }[]
+> {
+  const filas = await prisma.$queryRaw<
+    { id: string; googleEventId: string | null; conferenceId: string | null; date: Date; resolvedClientId: string | null; manualClientId: string | null; conTexto: boolean }[]
+  >(Prisma.sql`
+    SELECT s."id", s."googleEventId", s."conferenceId", s."date", s."resolvedClientId", s."manualClientId",
+      (coalesce(length(s."transcript"), 0) > 0
+        OR (s."summary" IS NOT NULL AND s."summary" <> 'null'::jsonb)
+        OR EXISTS (SELECT 1 FROM "SessionMinute" m WHERE m."sessionId" = s."id")) AS "conTexto"
+    FROM "FirefliesSession" s
+    WHERE s."date" >= ${o.desde} AND s."date" <= ${o.hasta} AND ${noEsCanceladaSinTextoSql("s")}`);
+  return filas.map((f) => ({
+    id: f.id,
+    googleEventId: f.googleEventId,
+    conferenceId: f.conferenceId,
+    inicio: f.date.getTime(),
+    clientId: duenoDeLaSesion(f),
+    conTexto: f.conTexto,
+  }));
 }

@@ -28,7 +28,7 @@ import type { CsAlertCategory, CsAlertSeverity } from "@prisma/client";
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/lib/anthropic";
 import type { ManejadorDeLote } from "@/lib/ai/lotes-manejadores";
-import { DIAS_PARA_VOLVER_A_TRIAR, VIGIA_BARRIDO_POR_LOTE, VIGIA_CACHEA_EL_PROMPT, VIGIA_NO_REPITE_SIN_CAMBIOS } from "@/lib/ai/ahorro";
+import { DIAS_PARA_VOLVER_A_TRIAR, entradaPorLote, VIGIA_AL_ENTRAR_POR_LOTE, VIGIA_BARRIDO_POR_LOTE, VIGIA_CACHEA_EL_PROMPT, VIGIA_NO_REPITE_SIN_CAMBIOS } from "@/lib/ai/ahorro";
 import { debeVolverATriar, huellaDeLaCorrida, huellaDelBarrido, type MotivosDelBarrido } from "./vigia-barrido";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { quedaPresupuestoAutomatico } from "@/lib/ai/guardia-de-presupuesto";
@@ -628,15 +628,23 @@ interface ContextoDelVigiaEnLote {
   correos: [string, CorreoLeido][];
   correosConPermiso: boolean | null;
   huellaDelBarrido: string | null;
+  /** Por qué vía entró (U22): el barrido o la entrada a la ficha. Sin el campo (los encolados de antes), el barrido. */
+  disparo?: "sweep" | "entrada";
 }
 
 /**
- * Encola el triaje de un proyecto del barrido que entra SOLO por un riesgo persistente (sin eventos ni riesgos nuevos de
- * una reunión): nadie espera esa respuesta, y por lote cuesta la mitad. No reclama eventos (no los hay) y no crea la
- * corrida: la crea la respuesta, así ningún reaper la mata mientras espera. «en_el_momento» = no se pudo encolar (sin
- * el SQL): el llamador lo tría como siempre.
+ * Encola el triaje de un proyecto del barrido que no tiene eventos del cronograma sin procesar (U22, 2026-10-25: también
+ * el que entra por un riesgo nuevo de una reunión), o el de la entrada a la ficha: nadie espera esa respuesta, y por lote
+ * cuesta la mitad. No reclama eventos (no los hay: los que hay los tría el debounce) y no crea la corrida: la crea la
+ * respuesta, así ningún reaper la mata mientras espera. «en_el_momento» = no se pudo encolar (sin el SQL): el llamador
+ * lo tría como siempre. Un proyecto se encola una vez por día (la clave es la misma para las dos vías).
  */
-async function encolarElTriaje(projectId: string, huellaDelBarrido: string, now: Date): Promise<"encolado" | "ya_estaba" | "salteado" | "en_el_momento"> {
+async function encolarElTriaje(
+  projectId: string,
+  huellaDelBarrido: string | null,
+  now: Date,
+  disparo: "sweep" | "entrada" = "sweep",
+): Promise<"encolado" | "ya_estaba" | "salteado" | "en_el_momento"> {
   const { encolarEnLote, lotesDisponible } = await import("@/lib/ai/lotes-server");
   if (!(await lotesDisponible())) return "en_el_momento";
   const prep = await prepararElTriaje(projectId);
@@ -649,6 +657,7 @@ async function encolarElTriaje(projectId: string, huellaDelBarrido: string, now:
     correos: [...ctx.correos.entries()],
     correosConPermiso: ctx.correosConPermiso,
     huellaDelBarrido,
+    disparo,
   };
   const r = await encolarEnLote({
     tipo: "vigia-barrido",
@@ -669,7 +678,7 @@ export const manejadorDelVigiaEnLote: ManejadorDeLote = {
     const prep = await prepararElTriaje(c.projectId);
     if (!prep.ok) return { agentRunId: null };
     const run = await prisma.agentRun.create({
-      data: { agentId: AGENT_ID, agentSlug: AGENT_SLUG, clientId: c.clientId, projectId: c.projectId, status: "RUNNING", stepLabel: "Watchdog CS (sweep)", currentPhase: "Llegó por lote" },
+      data: { agentId: AGENT_ID, agentSlug: AGENT_SLUG, clientId: c.clientId, projectId: c.projectId, status: "RUNNING", stepLabel: `Watchdog CS (${c.disparo ?? "sweep"})`, currentPhase: "Llegó por lote" },
       select: { id: true },
     });
     try {
@@ -685,7 +694,7 @@ export const manejadorDelVigiaEnLote: ManejadorDeLote = {
         correosConPermiso: c.correosConPermiso,
         huellaDelBarrido: c.huellaDelBarrido,
       });
-      console.log(`[cs-watchdog] ✓ project ${c.projectId} (sweep · lote): ${r.created} alertas nuevas, ${r.merged} actualizadas, ${r.suppressed} suprimidas (run ${run.id})`);
+      console.log(`[cs-watchdog] ✓ project ${c.projectId} (${c.disparo ?? "sweep"} · lote): ${r.created} alertas nuevas, ${r.merged} actualizadas, ${r.suppressed} suprimidas (run ${run.id})`);
       return { agentRunId: run.id };
     } catch (e) {
       await prisma.agentRun.update({ where: { id: run.id }, data: { status: "ERROR", output: e instanceof Error ? e.message : "error", currentPhase: null } }).catch(() => {});
@@ -1041,8 +1050,10 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
   let enLote = 0;
   for (const projectId of toRun) {
     const huella = huellas.get(projectId) ?? null;
-    // Lo que entra solo por riesgo no apura: va por lote, a mitad de precio (VIGIA_BARRIDO_POR_LOTE).
-    if (VIGIA_BARRIDO_POR_LOTE && !conNovedad.has(projectId) && huella) {
+    // Lo que no trae eventos sin procesar no apura: va por lote, a mitad de precio (VIGIA_BARRIDO_POR_LOTE). Hasta U22 solo
+    // iba lo que entraba por un riesgo persistente; el riesgo nuevo de una reunión tampoco tiene eventos que reclamar. Lo
+    // que sí los tiene se tría en el momento (los reclama esta corrida, y si no, los reclamaría el debounce).
+    if (VIGIA_BARRIDO_POR_LOTE && !withEvents.has(projectId) && huella) {
       const r = await encolarElTriaje(projectId, huella, now).catch((e) => {
         console.error(`[cs-watchdog] no se pudo encolar ${projectId} (se tría en el momento):`, e instanceof Error ? e.message : e);
         return "en_el_momento" as const;
@@ -1059,6 +1070,28 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
   }
   if (sinCambios) console.log(`[cs-watchdog] sweep: ${sinCambios} proyecto(s) sin cambios desde su último triaje — no se repiten`);
   return { candidates: candidates.length, ran: toRun.length - enLote, enLote, sinCambios };
+}
+
+/**
+ * La corrida de la ENTRADA a la ficha (lib/cs/vigia-por-cliente.ts), por lote (U22, `VIGIA_AL_ENTRAR_POR_LOTE`): encola
+ * el triaje y devuelve «ok» (la respuesta llega sola, y la ventana de 48 h cuenta desde acá). Si no se pudo encolar (sin
+ * el SQL de los lotes), la corre en el momento como siempre.
+ *
+ * ⚠ Con eventos del cronograma sin procesar, EN EL MOMENTO: el lote no los reclama, y en producción la entrada a la ficha
+ * es lo único que los tría (el debounce y el barrido necesitan `CS_WATCHDOG_ENABLED`, que el servidor no tiene). Mandarla
+ * por lote dejaba esos cambios sin revisar para siempre (lo encontró la revisión del 2026-10-25).
+ */
+export async function vigiaDeLaEntrada(projectId: string, quien: string | null): Promise<WatchdogRunResult> {
+  const conEventos = await prisma.timelineEvent.count({ where: { projectId, processedAt: null, processedByRunId: null } });
+  if (entradaPorLote({ prendido: VIGIA_AL_ENTRAR_POR_LOTE, eventosSinProcesar: conEventos })) {
+    const r = await encolarElTriaje(projectId, null, new Date(), "entrada").catch((e) => {
+      console.error(`[cs-watchdog] no se pudo encolar la entrada de ${projectId} (se tría en el momento):`, e instanceof Error ? e.message : e);
+      return "en_el_momento" as const;
+    });
+    if (r === "encolado" || r === "ya_estaba") return { status: "ok", reason: r === "encolado" ? "en_lote" : "ya_en_lote", projectId };
+    if (r === "salteado") return { status: "skipped", reason: "salteado", projectId };
+  }
+  return runWatchdogForProject(projectId, "entrada", { quien });
 }
 
 /** Jobs del scheduler (se registran en lib/jobs/defs.ts). */

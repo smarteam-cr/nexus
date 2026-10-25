@@ -18,7 +18,9 @@ import { COOKIE_VER_COMO, MENSAJE_SOLO_LECTURA, bloqueaEscritura } from "@/lib/a
 //   - /api/health → smoke check del deploy (scripts/deploy.sh + healthcheck de
 //     docker-compose lo consultan con curl SIN sesión). No expone secretos:
 //     sha del build + estado de DB/pool en números.
-const PUBLIC_PATHS = ["/", "/sw.js", "/api/health"];
+//   - /api/hubspot/webhooks → los avisos de HubSpot (U10, 2026-10-25). HubSpot no tiene sesión: la ruta
+//     verifica la firma v3 con el secreto de la app ANTES de guardar nada (lib/hubspot/webhooks.ts).
+const PUBLIC_PATHS = ["/", "/sw.js", "/api/health", "/api/hubspot/webhooks"];
 
 // Prefijos siempre públicos:
 //   - /api/auth/hubspot/*  → flujo OAuth HubSpot (integración, no auth de usuario)

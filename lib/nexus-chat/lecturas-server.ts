@@ -192,12 +192,12 @@ export const LEER_PERSONAS: OperacionQueLee<{ clientId: string }, unknown, Conte
   },
 };
 
-export const LEER_COMUNICACIONES: OperacionQueLee<{ clientId: string; id?: string; tipo?: "correo" | "nota" | "llamada" }, unknown, ContextoDeNexus> = {
+export const LEER_COMUNICACIONES: OperacionQueLee<{ clientId: string; id?: string; tipo?: "correo" | "nota" | "llamada" | "reunion" }, unknown, ContextoDeNexus> = {
   nombre: "comunicaciones.recientes",
   paraQue:
-    "Lista los correos (enviados y recibidos), las notas y las llamadas con la empresa que quedaron en HubSpot, los más nuevos primero: id, qué es, día, quién lo escribió, asunto y el comienzo del texto. Con el id, lee uno entero. Úsala para saber qué se le prometió o se le dijo al cliente fuera de las reuniones.",
+    "Lista los correos (enviados y recibidos), las notas, las llamadas y las reuniones (el resumen de su grabación) con la empresa que quedaron en HubSpot, los más nuevos primero: id, qué es, día, quién lo escribió, asunto y el comienzo del texto. Con el id, lee uno entero. Úsala para saber qué se le prometió o se le dijo al cliente fuera de las reuniones.",
   clase: "lee",
-  pide: z.object({ clientId: idDeCliente, id: z.string().min(1).max(60).optional(), tipo: z.enum(["correo", "nota", "llamada"]).optional() }).strict(),
+  pide: z.object({ clientId: idDeCliente, id: z.string().min(1).max(60).optional(), tipo: z.enum(["correo", "nota", "llamada", "reunion"]).optional() }).strict(),
   async leer(ctx, e) {
     await exigirCliente(ctx, e.clientId);
     if (e.id) {

@@ -100,7 +100,11 @@ const DEPS_REALES: DepsDelVigia = {
       where: { agentSlug: AGENT_SLUG, clientId, projectId: { in: [...projectIds] }, createdAt: { gte: desde } },
       select: { status: true, createdAt: true, updatedAt: true },
     }),
-  correr: async (projectId, trigger, quien) => (await import("./watchdog")).runWatchdogForProject(projectId, trigger, { quien }),
+  // U22 (2026-10-25): la entrada a la ficha va por lote (`vigiaDeLaEntrada`); la corrida a mano, en el momento.
+  correr: async (projectId, trigger, quien) => {
+    const w = await import("./watchdog");
+    return trigger === "entrada" ? w.vigiaDeLaEntrada(projectId, quien) : w.runWatchdogForProject(projectId, trigger, { quien });
+  },
   ahora: () => new Date(),
   estado: ESTADO,
   quedaPresupuesto: async () => (await import("@/lib/ai/guardia-de-presupuesto")).quedaPresupuestoAutomatico(),

@@ -50,6 +50,11 @@ export const NOMBRE_DE_JOB: Readonly<Record<string, string>> = {
   "reuniones-motivos": "El motivo de las reuniones sin texto",
   "reuniones-propuestas": "La empresa que propone Nexus para las reuniones sin empresa",
   "reuniones-audio": "La transcripción del audio de las reuniones presenciales",
+  "hubspot-eventos": "Los avisos de HubSpot",
+  "hubspot-fusiones": "La búsqueda de las fusiones de HubSpot",
+  "hubspot-leads": "La copia de los leads de HubSpot",
+  "hubspot-proyectos": "La sincronización diaria de los proyectos de HubSpot",
+  "jobs-vigia": "El vigía de los jobs que dejan de correr",
 };
 
 /** El nombre legible del job; si no lo tiene, su clave (nunca se descarta en silencio). */

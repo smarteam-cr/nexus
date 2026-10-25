@@ -25,16 +25,17 @@ import { INV47, INV52 } from "./reuniones";
 import { INV49, INV53 } from "./google";
 import { INV50 } from "./partner";
 import { INV51 } from "./empresa";
+import { INV54 } from "./hubspot";
 import { INV55 } from "./smartloop";
 export type { Invariante, ResultadoDeInvariante } from "./contrato";
 export { INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30, INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47 };
-export { INV49, INV50, INV51, INV52, INV53, INV55 };
+export { INV49, INV50, INV51, INV52, INV53, INV54, INV55 };
 
 /** En el orden en que el gate los imprime. Sumar uno acá es lo que lo pone en el job y en /api/health. */
 export const INVARIANTES_SOLO_BASE: readonly Invariante[] = [
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
-  INV49, INV50, INV51, INV52, INV53, INV55,
+  INV49, INV50, INV51, INV52, INV53, INV54, INV55,
 ];
 
 export type CorridaDeInvariantes = {

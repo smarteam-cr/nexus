@@ -124,7 +124,8 @@ describe("defs.ts decide con esta regla y no con una copia", () => {
        2026-10-25: la comisión estimada de HubSpot, con el mismo requisito que la copia de Partner (U25). 16 desde el
        2026-10-25: la copia de los datos de la empresa desde HubSpot (R2). 17 desde el
        2026-10-25: la transcripción del audio de las reuniones presenciales (T5). 18 y 19 desde el 2026-10-25: la revisión
-       de las conferencias de Meet (U3) y sus avisos y suscripciones (U4). */
+       de las conferencias de Meet (U3) y sus avisos y suscripciones (U4). 20 a 22 desde el 2026-10-25: los leads,
+       la sincronización diaria de los proyectos y el vigía de los jobs (B3, U10, U24). */
     expect(JOBS_CON_REQUISITO.length).toBe(19);
     for (const key of JOBS_CON_REQUISITO) expect(defs, key).toContain(`encendido("${key}")`);
     expect(defs).toContain("motivoApagado(jobKey, process.env) === null");
