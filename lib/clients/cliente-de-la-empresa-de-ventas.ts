@@ -20,6 +20,8 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { anotarReapunte, reapuntarEnTx, resolverClienteDeLaEmpresa } from "@/lib/hubspot/cliente-de-la-empresa";
+import { datosAlNacerDesdeHubspot } from "./datos-de-la-empresa-server";
+import { crearOReusarFicha, mensajeDeEmpresaRepetida, quienTieneLaEmpresaTrasChocar } from "./empresa-de-hubspot";
 
 export interface EmpresaDeVentas {
   /** Id de la empresa en el HubSpot de Smarteam. */
@@ -43,19 +45,22 @@ export async function clienteDeLaEmpresaDeVentas(empresa: EmpresaDeVentas): Prom
   if (resolucion.estado === "ambiguo") return { ok: false, ambiguo: true, mensaje: resolucion.mensaje };
 
   if (resolucion.estado === "ninguno") {
-    const clientId = (
-      await prisma.client.create({
+    /* R7b: si otra alta la creó entre el resolver y este create, el índice único frena esta y se reusa la que ganó. */
+    const r = await crearOReusarFicha(empresa.companyId, () =>
+      prisma.client.create({
         data: {
           name: empresa.companyName,
           company: empresa.companyName,
           hubspotCompanyId: empresa.companyId,
           emailDomains: empresa.domain ? [empresa.domain] : [],
-          industry: empresa.industry || null,
+          ...datosAlNacerDesdeHubspot({ industry: empresa.industry }),
           kind: "PROSPECTO",
         },
         select: { id: true },
-      })
-    ).id;
+      }),
+    );
+    if (!r.creado) return { ok: true, clientId: r.clientId, creado: false };
+    const clientId = r.clientId;
     /* `void` a propósito: nada de acá depende del orden, y la pasada recorre todas las sesiones. */
     void import("@/lib/sessions/resolve-client")
       .then((m) => m.resolveAllSessions())
@@ -64,8 +69,15 @@ export async function clienteDeLaEmpresaDeVentas(empresa: EmpresaDeVentas): Prom
   }
 
   if (resolucion.estado === "encontrado-fusionado") {
-    const { businessCases } = await prisma.$transaction((tx) => reapuntarEnTx(tx, resolucion.reapunte));
-    console.warn(anotarReapunte(resolucion.reapunte, resolucion.nombre, businessCases));
+    try {
+      const { businessCases } = await prisma.$transaction((tx) => reapuntarEnTx(tx, resolucion.reapunte));
+      console.warn(anotarReapunte(resolucion.reapunte, resolucion.nombre, businessCases));
+    } catch (e) {
+      // R7b: otra ficha tomó la empresa viva mientras tanto. Son dos fichas para la misma cuenta: se decide a mano.
+      const otra = await quienTieneLaEmpresaTrasChocar(e, resolucion.reapunte.vigente);
+      if (otra && otra.id !== resolucion.clientId) return { ok: false, ambiguo: true, mensaje: mensajeDeEmpresaRepetida(otra) };
+      throw e;
+    }
   }
   return { ok: true, clientId: resolucion.clientId, creado: false };
 }

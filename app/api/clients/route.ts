@@ -4,6 +4,7 @@ import { guardInternalUser, guardCapability } from "@/lib/auth/api-guards";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 import { resolveAllSessions } from "@/lib/sessions/resolve-client";
+import { datosAlNacerDesdeHubspot } from "@/lib/clients/datos-de-la-empresa-server";
 
 // GET /api/clients — Lista los clientes VISIBLES para el usuario (server-side).
 export async function GET() {
@@ -37,7 +38,8 @@ export async function POST(request: Request) {
     data: {
       name: name.trim(),
       company: company?.trim() || null,
-      industry: industry?.trim() || null,
+      // La escribe una persona a mano: nace con su fuente (lib/clients/datos-de-la-empresa.ts).
+      ...datosAlNacerDesdeHubspot({ industry }, new Date(), "persona"),
       notes: notes?.trim() || null,
     },
   });

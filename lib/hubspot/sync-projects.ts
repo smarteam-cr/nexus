@@ -2,6 +2,7 @@ import { getHubspotClient, getSystemHubspotClient } from "./client";
 import { PROJECT_PROPERTIES, parseCheckbox } from "./project-properties";
 import { ESTADOS_DE_ALTA, altaTerminada } from "@/lib/projects/alta";
 import { prisma } from "@/lib/db/prisma";
+import { esUnicoViolado } from "@/lib/db/unico-violado";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { sanitizeTags, normalizeTag } from "@/lib/tags/catalog";
 import { cerradoPorEstadoCrudo, decidirCierre, estadoCrudoDeHubspot, resolvePipeline } from "@/lib/projects/kind";
@@ -817,7 +818,9 @@ async function correrElEspejo(
         record traer, así que este dato no se usa para nada — pero podía cortar la corrida antes
         de traerlo (un cliente sin empresa vinculada dejaría el alta trabada por un dato que no
         hace falta) o guardar en el cliente una empresa resuelta por parecido de nombre. */
-  let companyId = client.hubspotCompanyId;
+  /* R7b (Elías, 24 oct): `hubspotCompanyId` es SOLO la empresa en el HubSpot de Smarteam. Con la cuenta del cliente (su
+     portal propio) no sirve: se busca por nombre en su portal en cada corrida, y no se guarda. */
+  let companyId = usingSystemAccount ? client.hubspotCompanyId : null;
 
   if (!companyId && !dirigido) {
     result.debug!.push("hubspotCompanyId no guardado — buscando empresa en HubSpot por nombre...");
@@ -827,12 +830,28 @@ async function correrElEspejo(
       hubName: !usingSystemAccount ? hubspotAccount?.hubName ?? null : null,
     });
 
-    if (companyId) {
+    /* R7b (2026-10-24): una empresa de HubSpot es de UNA sola ficha. Si la que salió por el nombre ya es de otra, no
+       se guarda ni se traen sus proyectos acá: serían los de esa otra ficha. Antes se guardaba igual (dos fichas con la
+       misma empresa) o, con el índice único, el error se tragaba y la corrida seguía con la empresa ajena. */
+    const deOtra = companyId && usingSystemAccount ? await prisma.client.findUnique({ where: { hubspotCompanyId: companyId }, select: { id: true, name: true } }) : null;
+    if (deOtra && deOtra.id !== clientId) {
+      result.errors.push(`La empresa de HubSpot que coincide por nombre ya es la ficha «${deOtra.name}» en Nexus: elige la empresa a mano en esta ficha, o fusiona las dos.`);
+      return result;
+    }
+    if (companyId && !usingSystemAccount) {
+      result.debug!.push(`✓ Empresa encontrada en el portal del cliente: ${companyId} (no se guarda: el campo es del portal de Smarteam)`);
+    } else if (companyId) {
       result.debug!.push(`✓ Empresa encontrada: ${companyId} — guardando en DB`);
-      await prisma.client.update({
-        where: { id: clientId },
-        data: { hubspotCompanyId: companyId },
-      }).catch(() => {});
+      try {
+        await prisma.client.update({ where: { id: clientId }, data: { hubspotCompanyId: companyId } });
+      } catch (e) {
+        // Como antes: guardar el id es una comodidad para la próxima corrida; un fallo de la base no corta esta.
+        if (!esUnicoViolado(e)) console.error("[sync-projects] no se guardó la empresa encontrada", e);
+        else {
+          result.errors.push("Otra ficha tomó esa empresa de HubSpot mientras se buscaba: vuelve a intentarlo.");
+          return result;
+        }
+      }
     } else {
       result.errors.push(
         `No se encontró la empresa en HubSpot. ` +

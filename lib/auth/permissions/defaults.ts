@@ -65,6 +65,8 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
        `congelar` (2026-10-10): el CSE congela el handoff y le pide sugerencias («Buscar lo nuevo»);
        no lo regenera ni lo rehace desde cero. Ver la celda en registry.ts. */
     handoff: ["confirmarResultados", "congelar"],
+    /* Los datos de la empresa (R1, 2026-10-24, Elías): el CSE decide los de sus clientes (el row-level lo acota). */
+    clientes: ["decidirDatos"],
     kickoff: ["generate", "regenerate"],
     desarrollo: ["generate", "regenerate"],
     exploracion: ["generate", "regenerate"],
@@ -96,7 +98,8 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     // `classify` va a los MISMOS roles que `viewAll`: quien ve la cartera entera es
     // quien nota que una fila no es un cliente (un aliado, nosotros mismos). Un CSE
     // scoped no ve el listado completo, así que no tiene con qué comparar.
-    clientes: ["viewAll", "classify"],
+    // `decidirDatos` (R1, 2026-10-24): Ventas decide los datos de la empresa, como el CSE y la CSL.
+    clientes: ["viewAll", "classify", "decidirDatos"],
     // Conserva lo que ya tenía: hasta 2026-08-16 entraba al área por `clientes.viewAll`.
     customerSuccess: ["read"],
     // `congelar` (2026-10-10): Ventas cierra la venta y puede dejar el handoff como la foto fija de lo vendido.
@@ -161,7 +164,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
   // CSL: como super admin salvo gestión de equipo/administraciones; único rol
   // (junto a SA) que REGENERA el cronograma con IA y borra clientes.
   CSL: grant({
-    clientes: ["viewAll", "share", "delete", "classify"],
+    clientes: ["viewAll", "share", "delete", "classify", "decidirDatos"],
     // El área es SU centro de decisión; además es el único rol (con SUPER_ADMIN) que ve partner.
     customerSuccess: ["read"],
     // `congelar` (2026-10-10): la CSL congela y busca lo nuevo, como el CSE de su equipo.

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardLecturaParaArrancar } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { crearOReusarFicha, fichaConLaEmpresa } from "@/lib/clients/empresa-de-hubspot";
 import { syncProjectsForClient } from "@/lib/hubspot/sync-projects";
 
 /**
@@ -41,26 +42,31 @@ export async function POST(req: NextRequest) {
 
   // 1. Asegurar el Client de Nexus (mismo find-or-create que POST /api/handoffs).
   let clientId: string;
-  const existing = await prisma.client.findFirst({
-    where: { hubspotCompanyId: companyId },
-    select: { id: true },
-  });
+  let creado = false;
+  const existing = await fichaConLaEmpresa(companyId);
   if (existing) {
     clientId = existing.id;
   } else {
-    if (!body.companyName?.trim()) {
+    const companyName = body.companyName?.trim();
+    if (!companyName) {
       return NextResponse.json({ error: "companyName requerido para crear el cliente" }, { status: 400 });
     }
-    const created = await prisma.client.create({
-      data: {
-        name: body.companyName.trim(),
-        company: body.companyName.trim(),
-        hubspotCompanyId: companyId,
-        emailDomains: body.domain ? [body.domain.trim().toLowerCase()] : [],
-      },
-      select: { id: true },
-    });
-    clientId = created.id;
+    // R7b: si otra alta la creó entre la lectura y el create, el índice frena esta y se usa la que ganó.
+    const r = await crearOReusarFicha(companyId, () =>
+      prisma.client.create({
+        data: {
+          name: companyName,
+          company: companyName,
+          hubspotCompanyId: companyId,
+          emailDomains: body.domain ? [body.domain.trim().toLowerCase()] : [],
+        },
+        select: { id: true },
+      }),
+    );
+    clientId = r.clientId;
+    creado = r.creado;
+  }
+  if (creado) {
     /* ⚠ Un cliente NUEVO puede matchear reuniones que ya están, y hay que atribuírselas ANTES
        de que se reclasifiquen a sus proyectos — si no, el proyecto nace sin ninguna. Es el
        defecto de «Discover Puerto Rico» (2026-08-18); el censo vive en

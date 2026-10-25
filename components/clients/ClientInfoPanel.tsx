@@ -8,6 +8,8 @@
  * Sub-tabs horizontales:
  *   - Ficha      → FichaDelCliente (lib/clients/ficha.ts): LA información del cliente, una sola,
  *                  que leen los agentes y se guarda en la empresa de HubSpot al confirmarla.
+ *   - Datos de la empresa → DatosDeLaEmpresa (R1, 2026-10-24): cada dato con su fuente y su fecha, las
+ *                  propuestas para decidir, el TAM estimado v1, lo que ya paga y la investigación.
  *   - Documentos → DocumentUpload (Supabase Storage del proyecto strategy)
  *   - Marca      → logo del cliente
  *
@@ -26,6 +28,7 @@ import { Segmentado } from "@/components/ui/Segmentado";
 import PanelDeLaCuenta from "./PanelDeLaCuenta";
 import DocumentUpload from "./DocumentUpload";
 import FichaDelCliente from "./FichaDelCliente";
+import DatosDeLaEmpresa from "./DatosDeLaEmpresa";
 import LicenciasDelCliente from "./LicenciasDelCliente";
 import { LogoUploader } from "@/components/ui/LogoUploader";
 import { ScaleSlider } from "@/components/ui/ScaleSlider";
@@ -35,10 +38,12 @@ import {
   logoHeightCalc, logoScaleStyle, resolveLogoScale,
 } from "@/lib/ui/logo-scale";
 
-type SubTab = "ficha" | "licencias" | "docs" | "marca";
+type SubTab = "ficha" | "datos" | "licencias" | "docs" | "marca";
 
 const TABS: { key: SubTab; label: string }[] = [
   { key: "ficha", label: "Ficha" },
+  // Los datos de la empresa con su fuente, sus propuestas y el TAM (R1, 2026-10-24; diseño aprobado por Elías).
+  { key: "datos", label: "Datos de la empresa" },
   // Licencias de HubSpot y sus renovaciones (2026-10-02, pedido de Liliana Moreno).
   { key: "licencias", label: "Licencias" },
   { key: "docs",  label: "Documentos" },
@@ -87,7 +92,7 @@ export default function ClientInfoPanel({
           <p className="mt-0.5 text-[13px] text-fg-muted">
             {enLaPreventa
               ? "La misma de la ficha del cliente: la leen los agentes y se comparte con la empresa en HubSpot."
-              : "La ficha que leen los agentes, las licencias, los documentos y la marca del cliente."}
+              : "La ficha que leen los agentes, los datos de la empresa, las licencias, los documentos y la marca."}
           </p>
         </div>
         <span className="flex-1" />
@@ -113,6 +118,7 @@ export default function ClientInfoPanel({
       {/* Contenido del sub-tab activo */}
       <div>
         {tab === "ficha" && clientId && <FichaDelCliente clientId={clientId} />}
+        {tab === "datos" && clientId && <DatosDeLaEmpresa clientId={clientId} />}
         {tab === "licencias" && !enLaPreventa && clientId && <LicenciasDelCliente clientId={clientId} />}
 
         {tab === "docs" && <DocumentUpload projectId={projectId} />}

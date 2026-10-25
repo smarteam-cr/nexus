@@ -137,7 +137,7 @@ model Client {
   company           String?
   industry          String?
   notes             String?    @db.Text
-  hubspotCompanyId  String? // ID de la empresa vinculada en HubSpot CRM. Volverla única es R7b (ver DECISIONS «Las llaves de la empresa»)
+  hubspotCompanyId  String?    @unique // La empresa en el HubSpot de Smarteam. Única desde R7b (2026-10-24): DECISIONS «Las llaves de la empresa»
   emailDomains      String[] // dominios de email para matching automático de sesiones (ej: "ice.go.cr")
   // Siglas con que el EQUIPO nombra a este cliente en los títulos de sus reuniones («CAV» por
   // Club de Amantes del Vino). Una reunión 100 % interna solo se puede atribuir por título, y el
@@ -173,14 +173,82 @@ model Client {
   // no dio problemas, se dropea.
   isProspect        Boolean    @default(false)
   // Mercado total direccionable de esta empresa, en USD — cuánto podría facturar Smarteam
-  // si le vendiera todo lo que necesita. Lo estima VENTAS a mano (no se calcula ni se
-  // sincroniza): es una apuesta comercial, no un dato derivable. Sumado sobre la cartera
-  // da el "potencial estimado". Nullable = todavía no estimado, que NO es lo mismo que 0.
+  // si le vendiera todo lo que necesita. Desde el 2026-10-24 lo CALCULA Nexus (el TAM estimado v1,
+  // lib/clients/tam-v1.ts) y una persona con `clientes.decidirDatos` lo puede corregir; `tamFuente`
+  // dice cuál de los dos fue. Sumado sobre la cartera da el "potencial estimado". Nullable =
+  // todavía no estimado, que NO es lo mismo que 0. Ver DECISIONS «Qué ES una empresa».
   tamUsd            Decimal?   @db.Decimal(12, 2)
+
+  // ── Los datos de la empresa (R1, 2026-10-24) ─────────────────────────────────────────────────
+  // Cada valor con su fuente y su fecha. El catálogo (tipo, opciones, quién manda, la propiedad de
+  // HubSpot) es lib/clients/datos-de-la-empresa.ts; todo cambio pasa por
+  // lib/clients/datos-de-la-empresa-server.ts, que deja su fila en `PropuestaDeDato`. La fuente es
+  // una de: hubspot · investigacion · reunion · persona · nexus · preventa · test. nullable = sin dato.
+  // Ver DECISIONS «Los datos de la empresa».
+  tamFuente                 String?
+  tamAt                     DateTime?
+  // Cómo se calculó el TAM: la versión de la fórmula, lo que leyó y cada línea con su monto.
+  tamCalculo                Json?
+  industryFuente            String?
+  industryAt                DateTime?
+  empleados                 Int?
+  empleadosFuente           String?
+  empleadosAt               DateTime?
+  facturacionAnualUsd       Decimal?  @db.Decimal(14, 2)
+  facturacionAnualUsdFuente String?
+  facturacionAnualUsdAt     DateTime?
+  pais                      String?
+  paisFuente                String?
+  paisAt                    DateTime?
+  sitioWeb                  String?
+  sitioWebFuente            String?
+  sitioWebAt                DateTime?
+  // La industria con la lista de Smarteam («Industria (Smarteam)» en HubSpot, 17 opciones). Decide
+  // la edición de la escala.
+  industriaSmarteam         String?
+  industriaSmarteamFuente   String?
+  industriaSmarteamAt       DateTime?
+  // La clave de la edición de la escala (`turismo`…); null = la escala general.
+  edicionEscala             String?
+  edicionEscalaFuente       String?
+  edicionEscalaAt           DateTime?
+  // estandar · corporativo · gobierno.
+  segmento                  String?
+  segmentoFuente            String?
+  segmentoAt                DateTime?
+  // independiente · casa_matriz · filial, y cuántas filiales tiene una casa matriz.
+  estructura                String?
+  estructuraFuente          String?
+  estructuraAt              DateTime?
+  filiales                  Int?
+  filialesFuente            String?
+  filialesAt                DateTime?
+  // El perfil de negocio, con las palabras de la escala: a quién le vende (empresas · personas · ambos),
+  // cómo cierra (con equipo · transaccional · mixta) y qué pasa después (única · recompra · continua).
+  aQuienVende               String?
+  aQuienVendeFuente         String?
+  aQuienVendeAt             DateTime?
+  perfilCierre              String?
+  perfilCierreFuente        String?
+  perfilCierreAt            DateTime?
+  perfilDespues             String?
+  perfilDespuesFuente       String?
+  perfilDespuesAt           DateTime?
+  // Rangos del catálogo (visitas al mes; contactos que aceptaron recibir comunicaciones).
+  trafico                   String?
+  traficoFuente             String?
+  traficoAt                 DateTime?
+  baseConsentimiento        String?
+  baseConsentimientoFuente  String?
+  baseConsentimientoAt      DateTime?
+  // lista · casi_lista · todavia_no · sin_evaluar.
+  calificaInsider           String?
+  calificaInsiderFuente     String?
+  calificaInsiderAt         DateTime?
   // Procedencia de fuente externa (regla Cobranza fuente + id_externo → upsert
   // idempotente: re-sincronizar NO duplica). null = creado por flujos previos.
-  source            String? // "manual" | "sheet" (futuro: "hubspot" | "odoo")
-  sourceExternalId  String? // id estable en la fuente (columna id del sheet o slug del nombre)
+  source                    String? // "manual" | "sheet" (futuro: "hubspot" | "odoo")
+  sourceExternalId          String? // id estable en la fuente (columna id del sheet o slug del nombre)
 
   // hubspotServiceId de los proyectos BORRADOS a mano desde Nexus — el sync NO los vuelve
   // a crear (supresión durable: sobrevive al borrado del Project, que no puede llevar el
@@ -248,8 +316,79 @@ model Client {
   // fusión las sueltan o las mudan antes) y las que alguien le asignó a mano (SET NULL).
   reunionesResueltas       FirefliesSession[]        @relation("ReunionesResueltas")
   reunionesAsignadasAMano  FirefliesSession[]        @relation("ReunionesAsignadasAMano")
+  propuestasDeDatos        PropuestaDeDato[]         @relation("PropuestasDeDatosDeLaEmpresa") // R1: propuestas e historia de sus datos (CASCADE)
+  investigaciones          InvestigacionDeEmpresa[]  @relation("InvestigacionesDeLaEmpresa") // R5: lo que Nexus encontró en la web (CASCADE)
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
+}
+
+/// Una propuesta de cambio a un dato de la empresa, y la historia de cada cambio (R1 y R9, 2026-10-24). La propone la
+/// IA, una persona, HubSpot o la carga inicial; la decide quien tiene `clientes.decidirDatos`. Toda escritura de un dato
+/// deja su fila acá (estado `aplicada` cuando no hubo nada que decidir). Catálogo: lib/clients/datos-de-la-empresa.ts.
+/// SQL: scripts/sql/2026-10-25-datos-de-la-empresa.sql.
+model PropuestaDeDato {
+  id            String      @id @default(cuid())
+  clientId      String
+  client        Client      @relation("PropuestasDeDatosDeLaEmpresa", fields: [clientId], references: [id], onDelete: Cascade)
+  /// La clave del dato en el catálogo (`empleados`, `tamUsd`…).
+  campo         String
+  /// El valor propuesto, con el tipo del catálogo (número, texto o una opción).
+  valor         Json
+  /// Lo que había cuando se decidió: con esto se vuelve atrás, y es lo único que guarda el valor viejo de HubSpot (R2).
+  valorAnterior Json?
+  /// Lo que quedó: igual a `valor` al usarla; lo que la persona escribió al editarla.
+  valorDecidido Json?
+  /// hubspot · investigacion · reunion · persona · nexus · preventa · test.
+  fuente        String
+  /// Quién la propuso, si fue una persona. nullable porque la IA, HubSpot y la carga no son personas.
+  autorId       String?
+  autor         TeamMember? @relation("PropuestasDeDatosDelAutor", fields: [autorId], references: [id], onDelete: SetNull)
+  /// El porqué: la cita de la reunión o de la página, o lo que escribió la persona.
+  cita          String?     @db.Text
+  enlace        String?
+  /// pendiente · usada · editada · descartada · aplicada · reemplazada.
+  estado        String      @default("pendiente")
+  /// nullable porque una pendiente todavía no la decidió nadie, y una `aplicada` por Nexus o HubSpot no tiene persona.
+  decididaPorId String?
+  decididaPor   TeamMember? @relation("DecisionesDeDatos", fields: [decididaPorId], references: [id], onDelete: SetNull)
+  decididaAt    DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([clientId, campo, estado])
+  @@index([estado, createdAt])
+}
+
+/// Lo que Nexus encontró de una empresa en la web, con su fecha y sus fuentes (R5, 2026-10-24). Es de la empresa, no de
+/// la preventa: se rehace cuando vence (6 meses) o cuando alguien la actualiza. Lo que encuentra pasa por la regla de quién
+/// manda (llena lo vacío de lo que manda HubSpot, propone lo demás). Agente: lib/clients/investigacion/. SQL:
+/// 2026-10-25-datos-de-la-empresa.sql.
+model InvestigacionDeEmpresa {
+  id             String              @id @default(cuid())
+  clientId       String
+  client         Client              @relation("InvestigacionesDeLaEmpresa", fields: [clientId], references: [id], onDelete: Cascade)
+  hechaAt        DateTime
+  venceAt        DateTime
+  /// actualizar (el botón de la ficha) · preventa (mudada desde una preventa) · carga.
+  origen         String
+  /// La preventa de la que se mudó. nullable porque las de la ficha no salen de una preventa.
+  exploracionId  String?
+  exploracion    ExploracionDeVenta? @relation("InvestigacionesDeLaPreventa", fields: [exploracionId], references: [id], onDelete: SetNull)
+  /// La corrida del agente. nullable porque las mudadas no tienen corrida propia.
+  agentRunId     String?
+  agentRun       AgentRun?           @relation("InvestigacionesDeLaCorrida", fields: [agentRunId], references: [id], onDelete: SetNull)
+  /// A qué se dedica, en dos o tres frases.
+  resumen        String?             @db.Text
+  /// Lo demás que encontró: sector, modelos, herramientas, hitos con su enlace, la industria y los datos con su cita.
+  contenido      Json
+  /// [{ url, titulo }]: cada enlace que salió en las búsquedas y se usó.
+  fuentes        Json                @default("[]")
+  /// [{ puesto, url, fecha? }]: los puestos que está buscando.
+  contrataciones Json                @default("[]")
+  /// { empleados?, rango?, cita, url }: el tamaño que encontró, con de dónde. null = no lo encontró.
+  tamanoEstimado Json?
+  createdAt      DateTime            @default(now())
+
+  @@index([clientId, hechaAt])
 }
 
 // ─── SystemConfig (config GLOBAL de Nexus, singleton — no por usuario) ─────────
@@ -1594,6 +1733,7 @@ model AgentRun {
   lecturasDeTareas         LecturaDeReunion[]        @relation("LecturasDeTareasDelAgente") // Tareas internas: la lectura de una reunión
   hechos                   HechoDeReunion[]          @relation("HechosDelAgente") // memoria de la cuenta: los hechos de la lectura (SET NULL)
   propuestasDeRentabilidad PropuestaDeRentabilidad[] @relation("PropuestasDeRentabilidad") // la lectura de los números (SET NULL)
+  investigacionesDeEmpresa InvestigacionDeEmpresa[]  @relation("InvestigacionesDeLaCorrida") // R5
 
   @@index([status])
   @@index([clientId, agentSlug, createdAt])
@@ -1828,12 +1968,14 @@ model ExploracionDeVenta {
   updatedAt DateTime @updatedAt
 
   /// Las propuestas que salieron de esta exploración.
-  propuestas          BusinessCase[]
+  propuestas                 BusinessCase[]
   /// Las sesiones y los documentos que el vendedor sumó a mano.
-  documentos          ExploracionDocumento[]
-  vinculosDeTareas    TareaVinculo[]         @relation("VinculosDeTareasDeLaPreventa") // Tareas internas (CASCADE)
+  documentos                 ExploracionDocumento[]
+  vinculosDeTareas           TareaVinculo[]           @relation("VinculosDeTareasDeLaPreventa") // Tareas internas (CASCADE)
   /// Las fotos de la escala que salieron de esta exploración (VersionDeLaEscala).
-  versionesDeLaEscala VersionDeLaEscala[]
+  versionesDeLaEscala        VersionDeLaEscala[]
+  /// R5: las investigaciones que se mudaron de esta preventa a su empresa.
+  investigacionesDeLaEmpresa InvestigacionDeEmpresa[] @relation("InvestigacionesDeLaPreventa")
 
   @@index([clientId])
   @@index([projectId])
@@ -2111,6 +2253,8 @@ model TeamMember {
   ventasCompartidas       VentaGanada[]           @relation("VentasCompartidas")
   metasComerciales        MetaComercial[]         @relation("MetasDelVendedor")
   negociosAbiertos        NegocioAbierto[]        @relation("NegociosDelVendedor")
+  propuestasDeDatos       PropuestaDeDato[]       @relation("PropuestasDeDatosDelAutor") // R1: lo que propuso de los datos de una empresa
+  decisionesDeDatos       PropuestaDeDato[]       @relation("DecisionesDeDatos") // R1: lo que decidió
 }
 
 // ─── Aviso ────────────────────────────────────────────────────────────────────

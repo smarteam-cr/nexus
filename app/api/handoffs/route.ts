@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { crearOReusarFicha } from "@/lib/clients/empresa-de-hubspot";
 import { guardCapability, guardAccessToClient } from "@/lib/auth/api-guards";
 import { createDefaultCanvases, createHandoffCanvas } from "@/lib/canvas/default-canvases";
 import { sanitizeTags } from "@/lib/tags/catalog";
@@ -49,23 +50,21 @@ export async function POST(req: NextRequest) {
     if (g instanceof NextResponse) return g;
     clientId = body.clientId;
   } else if (body.companyId && body.companyName?.trim()) {
-    const existing = await prisma.client.findFirst({
-      where: { hubspotCompanyId: body.companyId },
-      select: { id: true },
-    });
-    if (existing) {
-      clientId = existing.id;
-    } else {
-      const created = await prisma.client.create({
+    /* R7b: la ficha que ya tiene la empresa, o una nueva; dos altas a la vez no crean dos (el índice frena la segunda). */
+    const { companyId, companyName, domain } = body;
+    const r = await crearOReusarFicha(companyId, () =>
+      prisma.client.create({
         data: {
-          name: body.companyName.trim(),
-          company: body.companyName.trim(),
-          hubspotCompanyId: body.companyId,
-          emailDomains: body.domain ? [body.domain.trim().toLowerCase()] : [],
+          name: companyName.trim(),
+          company: companyName.trim(),
+          hubspotCompanyId: companyId,
+          emailDomains: domain ? [domain.trim().toLowerCase()] : [],
         },
         select: { id: true },
-      });
-      clientId = created.id;
+      }),
+    );
+    clientId = r.clientId;
+    if (r.creado) {
       /* ⚠ Un cliente NUEVO puede matchear reuniones que ya están, y hay que atribuírselas ANTES
          de que se reclasifiquen a sus proyectos — si no, el proyecto nace sin ninguna. Es el
          defecto de «Discover Puerto Rico» (2026-08-18); el censo vive en

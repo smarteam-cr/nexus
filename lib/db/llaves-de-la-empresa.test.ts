@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { LLAVES_DE_LA_EMPRESA, problemasDeLasLlaves } from "./llaves-de-la-empresa";
+import { INDICES_UNICOS_DE_LA_EMPRESA, LLAVES_DE_LA_EMPRESA, problemasDeLasLlaves, problemasDeLosIndices } from "./llaves-de-la-empresa";
 
 describe("problemasDeLasLlaves", () => {
   it("con las dos y su comportamiento, no hay problemas", () => {
@@ -35,5 +35,24 @@ describe("problemasDeLasLlaves", () => {
     const esquema = readFileSync(resolve(raiz, "prisma/schema.prisma"), "utf8");
     expect(esquema).toMatch(/resolvedClient\s+Client\?\s+@relation\("ReunionesResueltas", fields: \[resolvedClientId\], references: \[id\], onDelete: Restrict\)/);
     expect(esquema).toMatch(/manualClient\s+Client\?\s+@relation\("ReunionesAsignadasAMano", fields: \[manualClientId\], references: \[id\], onDelete: SetNull\)/);
+  });
+});
+
+describe("problemasDeLosIndices (R7b)", () => {
+  it("con el índice único de la empresa de HubSpot, no hay problemas", () => {
+    expect(problemasDeLosIndices([{ nombre: "Client_pkey", unico: true }, { nombre: "Client_hubspotCompanyId_key", unico: true }])).toEqual([]);
+  });
+
+  it("dice si falta o si dejó de ser único", () => {
+    expect(problemasDeLosIndices([{ nombre: "Client_pkey", unico: true }])).toEqual(["falta Client_hubspotCompanyId_key"]);
+    expect(problemasDeLosIndices([{ nombre: "Client_hubspotCompanyId_key", unico: false }])).toEqual(["Client_hubspotCompanyId_key existe pero no es único"]);
+  });
+
+  it("el SQL lo crea único y el esquema lo declara @unique", () => {
+    const raiz = resolve(__dirname, "../..");
+    const sql = readFileSync(resolve(raiz, "scripts/sql/2026-10-25-datos-de-la-empresa.sql"), "utf8");
+    for (const nombre of INDICES_UNICOS_DE_LA_EMPRESA) expect(sql).toContain(`CREATE UNIQUE INDEX IF NOT EXISTS "${nombre}" ON "Client" ("hubspotCompanyId")`);
+    const esquema = readFileSync(resolve(raiz, "prisma/schema.prisma"), "utf8");
+    expect(esquema).toMatch(/\n\s+hubspotCompanyId\s+String\?\s+@unique/);
   });
 });

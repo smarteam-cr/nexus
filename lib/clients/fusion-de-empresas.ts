@@ -105,6 +105,10 @@ export const SE_MUDAN = [
      conversaciones de la absorbida. Sin único: si la misma persona tenía un hilo en las dos fichas, conviven y sigue el
      más reciente. */
   ["hiloDeChat", "clientId"],
+  /* Los datos de la empresa (R1 y R5, 2026-10-24): `onDelete: Cascade`, así que sin mudarlas se BORRARÍAN la historia de
+     sus datos, sus propuestas y sus investigaciones. Sin único con la ficha: las dos historias conviven. */
+  ["propuestaDeDato", "clientId"],
+  ["investigacionDeEmpresa", "clientId"],
   /* Sin relación en el esquema: la base no las cascadea ni las protege (lib/db/punteros-al-borrar.test.ts). */
   ["firefliesSession", "resolvedClientId"],
   ["firefliesSession", "manualClientId"],

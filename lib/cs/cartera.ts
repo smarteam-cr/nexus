@@ -235,7 +235,7 @@ export async function cargarCuentas(
     .filter((id) => partnerPorCliente.has(id) && partnerPorCliente.get(id)?.uso === null)
     .map((id) => registroPorCliente.get(id) as string);
   const [clientes, ops, cerrados, senales, contactoDe, alertas, cuentasFin, manuales, deBaja, usoAnterior, cierres, preventas, clasificaciones, ajustes] = await Promise.all([
-    prisma.client.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, company: true, tamUsd: true } }),
+    prisma.client.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, company: true, tamUsd: true, tamFuente: true } }),
     prisma.project.findMany({
       where: { id: { in: filas.map((r) => r.projectId) } },
       select: { id: true, hubspotStatus: true, hubspotBlockReason: true, hubspotBlockDetail: true, hubspotPipelineId: true, hubspotServiceId: true, hubspotCreatedAt: true },
@@ -367,6 +367,7 @@ export async function cargarCuentas(
         ultimoCierre: ultimoCierrePorCliente.get(cl.id) ?? null,
         preventaViva: conPreventa.has(cl.id),
         tamUsd: cl.tamUsd === null ? null : Number(cl.tamUsd),
+        tamFuente: cl.tamFuente,
         clasificacion: clasificaciones.porCliente.get(cl.id) ?? null,
         ajustes: ajustes.porCliente.get(cl.id) ?? null,
       };

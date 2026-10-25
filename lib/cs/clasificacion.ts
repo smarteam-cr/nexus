@@ -228,7 +228,9 @@ export function proponerPotencial(c: CuentaDeCartera, hoy: string): Propuesta {
   const tam = c.tamUsd ?? null;
   if (tam !== null) {
     const valor = tam >= CORTES_DE_POTENCIAL.tamAlto ? "alto" : tam >= CORTES_DE_POTENCIAL.tamMedio ? "medio" : "bajo";
-    return { valor, razon: `TAM estimado por Ventas: ${fmtMonto(tam, "USD")} al año`, huella: `tam:${tam}` };
+    // La razón dice de dónde salió (R1, 2026-10-24): desde ese día lo calcula Nexus y una persona lo corrige.
+    const quien = c.tamFuente === "nexus" ? "TAM estimado v1, calculado por Nexus" : c.tamFuente === "persona" ? "TAM corregido a mano" : "TAM estimado a mano";
+    return { valor, razon: `${quien}: ${fmtMonto(tam, "USD")} al año`, huella: `tam:${tam}` };
   }
   const p = c.partner;
   if (!p?.activa) {

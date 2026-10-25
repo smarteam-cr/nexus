@@ -17,6 +17,8 @@ const llamada = (x: Partial<LlamadaDeIA>): LlamadaDeIA => ({
 describe("procesoDeLaLlamada", () => {
   it("reconoce cada familia por su slug", () => {
     expect(procesoDeLaLlamada({ agentSlug: "agent-post-session", origen: null })).toBe("lectura");
+    // La investigación de la empresa (R5, 2026-10-24) llena los datos de la ficha: va con la ficha, no a «Otros».
+    expect(procesoDeLaLlamada({ agentSlug: "investigacion-de-empresa", origen: null })).toBe("ficha");
     expect(procesoDeLaLlamada({ agentSlug: "agent-timeline-progress", origen: null })).toBe("avance");
     expect(procesoDeLaLlamada({ agentSlug: "agent-timeline-detail--web", origen: null })).toBe("cronograma");
     expect(procesoDeLaLlamada({ agentSlug: "cs-watchdog", origen: null })).toBe("vigia");

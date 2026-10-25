@@ -100,23 +100,13 @@ async function handleWithClientAccount(
     });
     const accountData = (await accountRes.json()) as AccountDetails;
 
-    let hubspotCompany: HsCompany | null = null;
-
-    if (client.hubspotCompanyId) {
-      hubspotCompany = await fetchCompanyById(hsClient, client.hubspotCompanyId);
-    } else {
-      hubspotCompany = await findCompanyFuzzy(hsClient, {
-        companyName: client.company,
-        clientName: client.name,
-        hubName: hubspotAccount.hubName,
-      });
-      if (hubspotCompany) {
-        await prisma.client.update({
-          where: { id: client.id },
-          data: { hubspotCompanyId: hubspotCompany.id },
-        }).catch(() => {});
-      }
-    }
+    /* R7b (Elías, 24 oct): `hubspotCompanyId` es SOLO la empresa en el HubSpot de Smarteam, así que en el portal DEL
+       CLIENTE no sirve: la empresa se busca cada vez, y no se guarda. */
+    const hubspotCompany: HsCompany | null = await findCompanyFuzzy(hsClient, {
+      companyName: client.company,
+      clientName: client.name,
+      hubName: hubspotAccount.hubName,
+    });
 
     const companyUrl = hubspotCompanyUrl(hubspotAccount.hubspotPortalId, hubspotCompany?.id);
 

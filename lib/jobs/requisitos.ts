@@ -41,12 +41,15 @@ const exitoDelCliente = (env: Entorno) =>
   env.CS_WATCHDOG_ENABLED === "1" ? null : falta("CS_WATCHDOG_ENABLED=1");
 
 /**
- * ¿La copia diaria de HubSpot Partner crea clientes nuevos? Solo con el vigilante encendido, como fue
- * siempre. Prendida por CS_PARTNER_SYNC_ENABLED (para las licencias) solo actualiza los que existen:
- * crear clientes solo es lo que en julio rompió la atribución de reuniones (decisión D-07, pendiente).
+ * ¿La copia diaria de HubSpot Partner crea clientes nuevos? Solo con su propia bandera,
+ * `CS_PARTNER_CREA_CLIENTES=1`: crear clientes solo es lo que en julio rompió la atribución de reuniones
+ * (decisión D-07, pendiente). Hasta el 2026-10-24 colgaba de CS_WATCHDOG_ENABLED, así que prender el vigilante
+ * prendía también esto sin decirlo; se separó para poder prender el vigilante sin cambiar lo que hace Partner
+ * (en producción no crea clientes desde julio). Prendida por CS_PARTNER_SYNC_ENABLED o por el vigilante, la copia
+ * solo actualiza los que existen.
  */
 export function partnerCreaClientes(env: Entorno): boolean {
-  return env.CS_WATCHDOG_ENABLED === "1";
+  return env.CS_PARTNER_CREA_CLIENTES === "1";
 }
 
 const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {

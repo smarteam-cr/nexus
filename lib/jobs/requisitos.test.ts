@@ -11,7 +11,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { copiaDeMeetPorJob, JOBS_CON_REQUISITO, motivoApagado, motivoSchedulerApagado } from "./requisitos";
+import { copiaDeMeetPorJob, JOBS_CON_REQUISITO, motivoApagado, motivoSchedulerApagado, partnerCreaClientes } from "./requisitos";
 
 describe("motivoApagado", () => {
   it("odoo-espejo-daily distingue la contraseña que falta del apagado a propósito", () => {
@@ -32,6 +32,16 @@ describe("motivoApagado", () => {
     const aProposito = motivoApagado("mercury-espejo-daily", { MERCURY_API_TOKEN: "x", MERCURY_SYNC_ENABLED: "0" });
     expect(aProposito).toContain("MERCURY_SYNC_ENABLED=0");
     expect(aProposito).not.toContain("falta MERCURY_API_TOKEN");
+  });
+
+  it("⛔ prender el vigilante NO hace que Partner cree clientes: eso pide su propia bandera", () => {
+    /* Hasta el 2026-10-24 crear clientes colgaba de CS_WATCHDOG_ENABLED (lo que en julio rompió la atribución de
+       reuniones). La edición que lo pone en rojo: volver a atarlo al vigilante. */
+    expect(partnerCreaClientes({ CS_WATCHDOG_ENABLED: "1" })).toBe(false);
+    expect(partnerCreaClientes({ CS_WATCHDOG_ENABLED: "1", CS_PARTNER_SYNC_ENABLED: "1" })).toBe(false);
+    expect(partnerCreaClientes({})).toBe(false);
+    expect(partnerCreaClientes({ CS_PARTNER_CREA_CLIENTES: "true" })).toBe(false);
+    expect(partnerCreaClientes({ CS_PARTNER_CREA_CLIENTES: "1" })).toBe(true);
   });
 
   it("los cuatro de Éxito del cliente y el corte quincenal exigen su bandera en «1» exacto", () => {

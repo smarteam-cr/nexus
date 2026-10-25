@@ -283,7 +283,7 @@ toma el turno del día no anota nada, así que un rojo queda rojo hasta la corri
 |---|---|---|---|
 | `marketing-weekly` | cada tick; ventana propia (viernes 6:00 CR) + claim propio en `MarketingSettings` | — | delega a `tickMarketingCron` tal cual |
 | `cs-signals-daily` | L–V ≥ 6:00 CR, una vez al día | `CS_WATCHDOG_ENABLED=1` | refresca las señales HubSpot de Éxito del cliente |
-| `cs-partner-daily` | L–V ≥ 6:00 CR, una vez al día | `CS_PARTNER_SYNC_ENABLED=1` o `CS_WATCHDOG_ENABLED=1` | espeja Partner Clients (uso, licencias, MRR); degrada sin scope. Prendido solo por `CS_PARTNER_SYNC_ENABLED` NO crea clientes nuevos (2026-10-02): las licencias del cliente lo necesitan sin el vigilante |
+| `cs-partner-daily` | L–V ≥ 6:00 CR, una vez al día | `CS_PARTNER_SYNC_ENABLED=1` o `CS_WATCHDOG_ENABLED=1` | espeja Partner Clients (uso, licencias, MRR); degrada sin scope. NO crea clientes nuevos salvo con `CS_PARTNER_CREA_CLIENTES=1` (separada del vigilante el 2026-10-24) |
 | `cs-watchdog-daily` | L–V ≥ 7:00 CR (después de las señales) | `CS_WATCHDOG_ENABLED=1` + `CsSettings.watchdogEnabled` | sweep del watchdog con pre-filtro determinístico |
 | `cs-watchdog-debounce` | cada tick | `CS_WATCHDOG_ENABLED=1` | triage de eventos «quiesced» (>15 min), hasta 5 proyectos por tick |
 | `maintenance-daily` | una vez al día, a cualquier hora (en la práctica, pasada la medianoche CR) | — | barre `PrintJobToken` expirados y `ExternalVerifyAttempt` sin actividad en 24 h, y refresca las alertas de cobranza: abre vencidos y promesas incumplidas, pone al día las filas vivas y cierra las que ya no aplican (`lib/cobranza/alertas-refresco.ts`). No guarda corte. Si el refresco falla, el job queda en rojo y no reintenta hasta el día siguiente |
@@ -521,9 +521,10 @@ el `.env` nuevo; sin SQL):
   existen.
 - **Todo, con el vigía**: `CS_WATCHDOG_ENABLED=1`. Suma `cs-signals-daily` (tickets, actividad y las
   personas de cada empresa), `cs-watchdog-daily` (hasta 10 proyectos por día) y `cs-watchdog-debounce`
-  (hasta 5 por tick), que **gastan API de Anthropic**. ⚠ Con esta bandera la copia de Partner también
-  CREA clientes para los registros de Partner que no encuentra (`partnerCreaClientes`): mirar la lista
-  de clientes los días siguientes. El vigía se apaga sin deploy con `CsSettings.watchdogEnabled`.
+  (hasta 5 por tick), que **gastan API de Anthropic**. Desde el 2026-10-24 esta bandera ya NO hace que la
+  copia de Partner cree clientes: eso pide su propia bandera, `CS_PARTNER_CREA_CLIENTES=1`
+  (`partnerCreaClientes`), apagada también en producción (crear clientes solo es lo que en julio rompió la
+  atribución de reuniones, D-07). El vigía se apaga sin deploy con `CsSettings.watchdogEnabled`.
   Desde el 2026-10-10 el vigía lee además la memoria de la cuenta y del proyecto (la ficha, los procesos,
   la historia, lo fuera de alcance, la preventa, la auditoría, las desviaciones y los hechos): como mucho
   unos 9.000 caracteres más por proyecto en cada corrida, con fichas sin confirmar mucho menos.
