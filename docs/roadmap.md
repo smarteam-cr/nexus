@@ -229,6 +229,8 @@ Sin esto, algo sigue mal o no se puede validar:
 29. **El test de Marketing** (O2 y O5): ¿sus 4 preguntas salen de las 8 de la web o son propias? ¿Y el perfil corto (cierre, después y tráfico) se pregunta en la web, en la de Marketing o solo en la completa?
 30. **Lo que Nexus ordena solo en «Lo que no cuadra»:** ¿qué porcentaje esperas, a fijar con Alex? Es la N del criterio de la tarjeta 13.
 31. **Una tarea «por validar» que una persona marca hecha en el Gantt:** hoy conserva la marca, así que ni el cronograma del cliente ni la Entrega la muestran (una sola regla desde el 24 oct, porque la IA de avance también marca tareas hechas). Te propongo que marcarla hecha **a mano** le borre la marca; lo que marca la IA, no.
+32. **Los Briefs de implementación ya llenos de los clientes actuales:** ¿se traen a la Planificación de cada uno, o solo los nuevos nacen en Nexus? (L4, `docs/planificacion-brief-plan.md`.)
+33. **Con qué cliente prueba Caroline** la Planificación con el Brief.
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -279,6 +281,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 - `docs/tareas-plan.md` § 17: las tres puertas de las tareas y la tarea de seguimiento en HubSpot. Sirve a D2, D4 y H.
 - `docs/exploracion-mejoras-plan.md`: el feedback de Ventas y Customer Success del 23 oct sobre explorar, en la preventa y con los clientes, y lo que sirve del método de Andrés. Sirve a K.
 - `docs/diagnostico-plantillas-plan.md` § «Lo que salió de usarlo»: el diagnóstico y la planificación después de usarlos. Sirve a L.
+- `docs/planificacion-brief-plan.md`: la Planificación con lo que pide el «Brief de implementación» de Smarteam (sus 20 pestañas, dónde queda cada una, siete etapas sin SQL). Sirve a L4 e I2.
 - `docs/smartloop-plan.md` § «El recorrido de punta a punta»: SmartLoop con lo que salió de RC Inmobiliaria. Sirve a M.
 - `docs/escala-engagement-avanzado-plan.md`: la escala con engagement avanzado (criterio por criterio, «hoy dice / pasaría a») y los casos de Insider por industria, de la sesión con Insider One. Sirve a N, A6 y B1.
 - `docs/tests-diagnostico-plan.md`: el test público de cada departamento dentro de Nexus, con el diagnóstico de la aplicación de hoy. Sirve a O.
@@ -325,7 +328,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
    - U2 y U3: la prueba de un día con la API de Meet y, si sale bien, la API de Meet (la transcripción con quién habló, quiénes estuvieron, «no ocurrió»);
    - U7, U8 y U9: los resúmenes de HubSpot, los correos y las fusiones;
    - el resto de U22 (que el vigía entre por los lotes) y U24 (que un job que deja de correr avise).
-3. T7 (quiénes de Smarteam estuvieron), y con eso S4 y S5 (comentar, confirmar y la tendencia por vendedor) y S7 (el analizador por cliente). Sin depender de nada: **A0, el ejercicio de validación contigo (la menor cantidad de actividades)**, y solo con A0 aprobado, desarmar el cotizador en un catálogo de actividades (A1 etapa 2 y A2 etapa 1); limpiar las tareas de los CSE que nadie decidió (D2 etapa 1) y H1 (tu piloto: la primera entrega de P5, leer tus reuniones internas; no espera al diseño ni a la barra de P).
+3. T7 (quiénes de Smarteam estuvieron), y con eso S4 y S5 (comentar, confirmar y la tendencia por vendedor) y S7 (el analizador por cliente). Sin depender de nada: **A0, el ejercicio de validación contigo (la menor cantidad de actividades)**, y solo con A0 aprobado, desarmar el cotizador en un catálogo de actividades (A1 etapa 2 y A2 etapa 1); limpiar las tareas de los CSE que nadie decidió (D2 etapa 1) y H1 (tu piloto: la primera entrega de P5, leer tus reuniones internas; no espera al diseño ni a la barra de P). La Planificación con el Brief de implementación (L4 ampliada, `docs/planificacion-brief-plan.md`), en sus siete etapas.
 4. T4 y T9 (el motivo de cada reunión sin texto, y que la persona aporte el contexto respondiendo las preguntas de Nexus), T8 y T5 (encontrar cualquier reunión de la empresa y la reunión presencial), Q (Academy y el acceso al portal en el kickoff), K5 y K6 (dejar de buscar sesiones a mano), D4 (el seguimiento en HubSpot), M3 (el primer ciclo de cada cliente con su CSE) con C4 etapa 0 (lo vendido a Honda leído con los 26 casos de hoy, a mano y sin A2), y P (el módulo de Tareas: el diseño, la barra por cliente, la vista grande, el calendario y el resto de P5; P4 espera a A2).
 5. R6 (una persona con su rol) y R13 (el perfil de Smarteam: cliente ideal, buyer personas, propuesta de valor, clientes de referencia), y después K2, K3 y K4 juntas (la primera sesión en frío necesita el position statement), y K10.
 6. Con A1 cerrado: A3 (criterios en palabras simples) y A5 (los casos que faltan).
@@ -611,6 +614,15 @@ Sale del feedback de Customer Success y Ventas del 23 oct, validado contra el di
    - Etapa 1 · Una sección «Sesiones y entrenamientos», que sale de las actividades vendidas cuando existan.
    - Etapa 2 · Decidir dónde viven las Acciones coherentes (ver «Lo que decides tú»).
    - Etapa 3 · Dos plantillas de Planificación, como el diagnóstico (es I2).
+   - **Ampliada el 24 oct con el Brief de implementación** (`docs/planificacion-brief-plan.md`): la Planificación trae las 20 pestañas de la hoja «BRIEF DE IMPLEMENTACIÓN» (la «Historia de proceso de ventas» se queda en el Diagnóstico). Decidido: usuarios y permisos van DENTRO de la Planificación, la que ve el cliente. Siete etapas, ninguna con SQL:
+     1. las propiedades por grupos (con orden, «Aparece en la ficha», «Viene con HubSpot», la vista previa de la ficha e importar la plantilla de Caroline; antes, «Mejorar con IA» y el chat pasan por `fusionarFilas`);
+     2. los usuarios y los permisos (equipos, usuarios, licencias contra lo vendido y la matriz Nada · Lo suyo · Lo de su equipo · Todo);
+     3. cómo entra y avanza un lead (su estado, los canales, los formularios con campos de las propiedades, las automatizaciones con ramas y lo que pasa solo en cada etapa);
+     4. la ficha del proyecto (hubs, sesiones de set up y de capacitación por hub, quiénes participan), el guion del bot, las cotizaciones y los informes;
+     5. lo que sale solo: el estado y el enlace a HubSpot de cada cosa, la lista de construcción que va a Tareas (antes en «Más adelante») y la plantilla de importación;
+     6. el cliente llena su parte en el enlace externo;
+     7. las dos plantillas, esencial y completa (es I2).
+   - ⚠ El agente ya está en su tope de 21.000 tokens: las secciones nuevas no entran en la corrida principal. Las pruebas, con sus pasos, están en el bloque «Para el roadmap» del plan.
 5. **L5 · Lo que quedó del 23 oct** (antes en «Lo que falta › Preventa y diagnóstico»). Va en el paso 2.
    - Etapa 1 · El documento de diagnóstico lee por equipo del cliente, como ya lo hace la guía de la preventa.
    - Etapa 2 · Un equipo del cliente también en las reuniones que no son sesiones de una exploración (la entrega de servicio).
@@ -958,7 +970,6 @@ Pasaron a otro lugar: unir los contenedores «Información del cliente» repetid
 
 Lo que dijiste en otros chats que querías más adelante:
 
-- Las tareas que salen de la Planificación («crea estas propiedades, este pipeline»).
 - El centro de comando de dirección.
 - Procesos y Planificación: que el chat cambie el mapa, la puesta en marcha y las plantillas de propiedades.
 - La auditoría del portal con un cliente piloto, con lo que hay que comprobar a mano.
