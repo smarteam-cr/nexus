@@ -67,6 +67,8 @@ import { candidatasParaElCobro, type CandidatasDeCobro } from "./candidatas";
 import { facturacionPorCliente, type FacturacionDelAnio } from "./facturacion-por-cliente";
 import { sincronizarOdoo, ultimaCorrida, ultimaCorridaOk } from "./sync";
 import { crDateParts } from "@/lib/jobs/time";
+import { esquemaDesactualizado } from "@/lib/db/esquema";
+import type { MovimientoDelBancoParaCruzar } from "./banco";
 import { CobranzaError, alinearMontoConFacturaTx } from "../mutations";
 import { normalizarNumeroFactura } from "../numero-factura";
 import type {
@@ -852,7 +854,7 @@ export async function cargarEstadoDelCruce(opts: { sinMarcas?: boolean } = {}): 
       orderBy: [{ marcadaEn: "desc" }, { id: "desc" }],
     });
   const sinMarcas: Awaited<ReturnType<typeof leerMarcas>> = [];
-  const [cobrosDb, facturasDb, cuentasDb, vinculosDb, marcasDb, liberadasDb, corridaOk, libro, servicios] = await Promise.all([
+  const [cobrosDb, facturasDb, cuentasDb, vinculosDb, marcasDb, liberadasDb, corridaOk, libro, servicios, banco] = await Promise.all([
     prisma.cobro.findMany({
       select: {
         id: true,
@@ -922,6 +924,7 @@ export async function cargarEstadoDelCruce(opts: { sinMarcas?: boolean } = {}): 
     /* Lo que el Excel de Alexander dice de las cuotas sin número (ACCCSA, facturada por Mercury). Sin lote, vacío. */
     documentosDelUltimoLibro(),
     leerServiciosDeVenta(),
+    leerBancoSinConciliar(),
   ]);
   const cuentasVinculadas = new Set(vinculosDb.flatMap((v) => (v.cuentaId ? [v.cuentaId] : [])));
   /* ⭐ «Falta emparejar N de M» sale de `resumenDelEmparejado`, la misma regla que la pestaña «Emparejar»
@@ -980,6 +983,7 @@ export async function cargarEstadoDelCruce(opts: { sinMarcas?: boolean } = {}): 
     cuentasVinculadas,
     ultimaCorridaOk: espejoAl,
     marcas: marcasDb.map((m) => ({ ...m, marcadaEn: m.marcadaEn.toISOString() })),
+    banco,
   };
   const documentos = contarDocumentos(facturasDb);
 
@@ -994,6 +998,24 @@ export async function cargarEstadoDelCruce(opts: { sinMarcas?: boolean } = {}): 
       espejoAl,
     },
   };
+}
+
+/**
+ * Las líneas del banco de Odoo sin conciliar (U15), para «Lo que no cuadra». Sin la tabla (su SQL va antes del deploy,
+ * pero el 3004 corre contra producción antes de que llegue), vacío: la pantalla sigue andando sin las filas del banco.
+ */
+async function leerBancoSinConciliar(): Promise<MovimientoDelBancoParaCruzar[]> {
+  try {
+    const filas = await prisma.movimientoBancoOdoo.findMany({
+      where: { estadoEspejo: "SIN_CONCILIAR" },
+      select: { id: true, fecha: true, monto: true, moneda: true, referencia: true, diario: true, asiento: true, odooPartnerNombre: true },
+      orderBy: [{ fecha: "desc" }, { id: "asc" }],
+    });
+    return filas.map((m) => ({ ...m, fecha: m.fecha.toISOString().slice(0, 10), monto: Number(m.monto) }));
+  } catch (e) {
+    if (esquemaDesactualizado(e)) return [];
+    throw e;
+  }
 }
 
 /**

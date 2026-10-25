@@ -10472,6 +10472,35 @@ horario y menos pruebas para él.
   50). El hueco de historial de julio a octubre no se puede llenar (HubSpot no da uso de semanas pasadas): INV50 vigila
   que no haya otro desde la semana 41.
 
+## El banco de Odoo sin conciliar se revisa en Nexus (2026-10-26, U15)
+
+> Roadmap U15 y «Lo que decides tú» 28: Elías decidió que Alex revisa en Nexus las líneas del banco que Odoo tiene sin
+> conciliar (98 el 2026-10-25; eran 14 en septiembre), y no en Odoo.
+
+- **Qué son, medido.** `account.bank.statement.line` con `is_reconciled = false` y publicadas: 98 de 837, del 5 de
+  abril al 23 de octubre. **4 entran** (todas en BAC Dólares, US$14.395,50: dos de Multiquímica, «CANCELA FACT 330» y
+  una transferencia) y **94 salen** (61 de la VISA en colones, 21 de la VISA en dólares, el resto de BAC). Ninguna trae
+  el cliente o proveedor puesto: solo la referencia del banco.
+- **La copia va con la de las facturas** (`lib/cobranza/odoo/banco-copia.ts`, al final de cada copia buena de
+  `sincronizarOdoo`): misma sesión con el ERP, solo lectura, cada hora. Se leen todas las sin conciliar (son pocas) y las
+  que dejan de venir se releen por id: CONCILIADA si Odoo las devuelve conciliadas, DESAPARECIDA si no. Nunca se borra
+  una fila (`MovimientoBancoOdoo`). Un fallo del banco no tumba la copia de las facturas, que es la que alimenta el
+  cobro de lo pagado: queda en `CronJobState` «odoo-banco-copia» e INV60 lo hace hablar.
+- **Dos filas propias en «Lo que no cuadra»**: entradas (MEDIA, le importa a cobranza: ¿de qué factura es?) y salidas
+  (BAJA, gastos para contabilidad). Cada línea con su fecha, diario, referencia, asiento y monto. En la vista por
+  documento van en la sección «Banco de Odoo».
+- **No entran a los números de arriba.** Ni a «por resolver» ni a «cambia lo cobrado» (`FUERA_DE_POR_RESOLVER`), ni a las
+  filas de la pestaña ni a la plata del encabezado (`LINEAS_DEL_BANCO`, `plata` vacía): el criterio de la tarjeta 13
+  compara esos números semana a semana, y 98 líneas nuevas de golpe lo romperían sin que nada hubiera empeorado.
+- **Pistas, nunca decisiones.** Para cada entrada: las facturas de la misma moneda cuyo saldo es exactamente el monto
+  (o, si ninguna, las del cliente cuyo nombre está en la referencia), y la factura que la referencia nombra por número
+  («CANCELA FACT 330»), en cualquier moneda. Las dos van juntas y decide la persona. ⛔ Nada de esto cobra: el cobro solo
+  de lo pagado sigue siendo `lib/cobranza/libro` (RUNBOOK › «Lo pagado no se cobró solo»), y la guarda
+  `lib/cobranza/odoo/guardas.test.ts` frena una copia del banco que escriba un cobro.
+- **Se cierran en Odoo o con «Está bien así».** Conciliar en Odoo saca la fila en la copia siguiente. «Está bien así»
+  (por fila, con motivo) es para lo que no se va a conciliar contra una factura: queda escrito de qué es la plata. Lo
+  que Nexus ordena solo no toca estas filas: la N del criterio de la tarjeta 13 no está decidida.
+
 ## Lo conciliado en Odoo se ve en la hora: copias y cobro cada hora, y «Actualizar» que cobra (2026-10-21)
 
 **Contexto.** Revisando Finanzas con Alex Arrieta y María José (21 oct), administración dijo que «Actualizar desde Odoo y

@@ -29,6 +29,14 @@ import {
 import { centavos as CENTAVOS, fmtMontoLibro, IVA_COSTA_RICA, subconjuntoUnico } from "../montos";
 import { normalizarNumeroFactura, plataformaDelNumero } from "../numero-factura";
 import { plataEnDuda, textoDeLaMismaVenta, ventasContadasDosVeces, type ServicioDeVenta } from "../venta-duplicada";
+import {
+  facturasQueNombra,
+  facturasQuePodriaPagar,
+  huellaDeMovimiento,
+  textoDeMovimiento,
+  type FacturaConSaldo,
+  type MovimientoDelBancoParaCruzar,
+} from "./banco";
 
 /* ── Cómo se cierra cada línea ──────────────────────────────────────────────────── */
 
@@ -69,6 +77,7 @@ export interface PlataDeLinea {
  *   · `l:` una factura que Nexus soltó (`FacturaLiberada.id`);
  *   · `cuenta:` una cuenta de Nexus;
  *   · `venta:` una factura que solo existe como número anotado en cobros de Nexus (`cuenta|moneda|número`).
+ *   · `bo:` una línea del banco de Odoo sin conciliar (`MovimientoBancoOdoo.id`, U15, 2026-10-26).
  *   · `fm:` una factura de Mercury (`FacturaMercury.id`) y `mov:` un movimiento de Mercury (`MovimientoMercury.id`):
  *     «Lo que no cuadra» de Mercury (lib/cobranza/mercury/diferencias.ts, 2026-10-02) usa el mismo contrato y las
  *     mismas marcas.
@@ -81,7 +90,8 @@ export type ClaveDeDocumento =
   | `cuenta:${string}`
   | `venta:${string}`
   | `fm:${string}`
-  | `mov:${string}`;
+  | `mov:${string}`
+  | `bo:${string}`;
 
 export interface ItemDiferencia extends ItemInconsistencia {
   /** La moneda de `monto`. ⚠ Sin ella el monto no se muestra: un número sin moneda es el que se suma mal. */
@@ -416,6 +426,12 @@ export interface EstadoDelCruce {
    * la pantalla dejó de usar el 2026-09-25.
    */
   marcas: readonly MarcaDeFila[];
+  /**
+   * Las líneas del banco de Odoo sin conciliar (U15, 2026-10-26: `MovimientoBancoOdoo` en SIN_CONCILIAR). Ausente = la
+   * base no tiene la copia del banco todavía: no sale ninguna fila del banco. El cargador de la pantalla
+   * (`cargarEstadoDelCruce`) siempre la pasa.
+   */
+  banco?: readonly MovimientoDelBancoParaCruzar[];
 }
 
 /* ── El cruce ───────────────────────────────────────────────────────────────────── */
@@ -3082,6 +3098,97 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
     });
   }
 
+  /* ── 15. Las líneas del banco sin conciliar (U15, 2026-10-26) ──────────────────────
+     Plata que entró o salió del banco o de una tarjeta y que Odoo no tiene atada a ninguna factura ni pago. Dos filas
+     propias, entradas y salidas: las entradas le importan a cobranza (¿de qué cliente es?); las salidas son gastos que
+     contabilidad tiene que conciliar. ⚠ Informan y NO suman al encabezado (`plata` vacía): el criterio de la tarjeta 13
+     del roadmap cuenta los dos números de arriba sin ellas. ⛔ Nada de esto cobra: la pista de factura es para la
+     persona; el cobro solo de lo pagado sigue siendo lib/cobranza/libro. Se cierran conciliando en Odoo (la copia las
+     saca sola) o con «Está bien así», que deja escrito de qué es la plata. */
+  const banco = estado.banco ?? [];
+  const conSaldo: FacturaConSaldo[] = vivas
+    .filter((f) => f.moveType === "out_invoice" && f.montoResidual > 0)
+    .map((f) => ({ numero: f.numero, moneda: f.moneda, saldo: f.montoResidual, odooPartnerNombre: f.odooPartnerNombre }));
+  const docMovimiento = (m: MovimientoDelBancoParaCruzar): Array<DocumentoDeFila<ClaveDeDocumento>> => [
+    { clave: `bo:${m.id}`, huella: huellaDeMovimiento(m) },
+  ];
+  const filaDeMovimiento = (m: MovimientoDelBancoParaCruzar, pista: boolean): ItemDiferencia => {
+    const podria = pista ? facturasQuePodriaPagar(m, conSaldo) : [];
+    const nombra = pista ? facturasQueNombra(m.referencia, conSaldo).filter((f) => !podria.includes(f)) : [];
+    return {
+      texto: textoDeMovimiento(m),
+      monto: Math.abs(m.monto),
+      moneda: m.moneda,
+      nota: [
+        m.asiento ? `Asiento ${m.asiento}` : "",
+        m.odooPartnerNombre && m.referencia ? `Referencia: ${m.referencia}` : "",
+        podria.length ? `Podría pagar ${podria.map((p) => `${p.numero} (${p.odooPartnerNombre}, saldo ${fmt(p.saldo, p.moneda)})`).join(" o ")}` : "",
+        nombra.length ? `La referencia nombra ${nombra.map((p) => `${p.numero} (${p.odooPartnerNombre}, saldo ${fmt(p.saldo, p.moneda)})`).join(" o ")}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      fila: identidadDeFila(`bo:${m.id}`, docMovimiento(m)),
+    };
+  };
+  const porFecha = (a: MovimientoDelBancoParaCruzar, b: MovimientoDelBancoParaCruzar) => b.fecha.localeCompare(a.fecha) || a.id.localeCompare(b.id);
+  const entradas = banco.filter((m) => m.monto > 0).sort(porFecha);
+  const salidas = banco.filter((m) => m.monto < 0).sort(porFecha);
+  const montosDe = (ms: readonly MovimientoDelBancoParaCruzar[]) => montosPorMoneda(ms.map((m) => ({ moneda: m.moneda, monto: Math.abs(m.monto) })));
+  const desdeHasta = (ms: readonly MovimientoDelBancoParaCruzar[]) => {
+    const fs = ms.map((m) => m.fecha).sort();
+    return fs.length ? (fs[0] === fs.at(-1) ? `del ${fs[0]}` : `del ${fs[0]} al ${fs.at(-1)}`) : "";
+  };
+  if (entradas.length) {
+    agregarConMarcas("ODOO-BANCO-ENTRADA-SIN-CONCILIAR", entradas, docMovimiento, (ms) => ({
+      codigo: "ODOO-BANCO-ENTRADA-SIN-CONCILIAR",
+      severidad: "MEDIA",
+      titulo: `${cuantos(ms.length, "entrada de plata", "entradas de plata")} en el banco que Odoo no tiene atada${ms.length === 1 ? "" : "s"} a ninguna factura`,
+      detalle: [
+        `Plata que entró ${desdeHasta(ms)} y que en Odoo sigue sin conciliar: no se sabe todavía de qué factura es. Suma${ms.length === 1 ? "" : "n"} ${textoDeMontos(montosDe(ms))}.`,
+        "Cuando una cuadra con el saldo de una factura, o el nombre de la referencia es el de un cliente, la fila lo dice.",
+        "No suma a lo que no cuadra y no cobra nada.",
+      ].join(" "),
+      montos: montosDe(ms),
+      documentos: [],
+      donde: "ODOO",
+      pie: "Se actualiza sola con la próxima copia de Odoo: la que se concilia sale de la lista.",
+      pasos: [
+        "Mira la referencia del banco y la pista de factura de cada fila.",
+        "Si paga una factura: concíliala en Odoo contra esa factura (Contabilidad › Banco › Conciliar).",
+        "Si no es venta (un reembolso, un aporte, una transferencia entre cuentas): concíliala en Odoo contra la cuenta que corresponde, o márcala «Está bien así» diciendo qué es.",
+      ],
+      queSignificaAceptar:
+        "Que se sabe de qué es esa plata y no hace falta atarla a una factura. Escríbelo en el motivo: es lo que queda para el cierre del mes. No cobra nada.",
+      queHacer: "Identificar de qué factura es cada entrada y conciliarla en Odoo.",
+      resuelve: "COBRANZA",
+      items: ms.map((m) => filaDeMovimiento(m, true)),
+    }));
+  }
+  if (salidas.length) {
+    agregarConMarcas("ODOO-BANCO-SALIDA-SIN-CONCILIAR", salidas, docMovimiento, (ms) => ({
+      codigo: "ODOO-BANCO-SALIDA-SIN-CONCILIAR",
+      severidad: "BAJA",
+      titulo: `${cuantos(ms.length, "salida de plata", "salidas de plata")} del banco y las tarjetas que Odoo no tiene conciliada${ms.length === 1 ? "" : "s"}`,
+      detalle: [
+        `Pagos y gastos ${desdeHasta(ms)} que en Odoo siguen sin conciliar con una factura de proveedor o un gasto. Suma${ms.length === 1 ? "" : "n"} ${textoDeMontos(montosDe(ms))}.`,
+        `Por diario: ${[...new Set(ms.map((m) => m.diario))].map((d) => `${d} (${ms.filter((m) => m.diario === d).length})`).join(", ")}.`,
+        "No es cobranza: no suma a lo que no cuadra.",
+      ].join(" "),
+      montos: montosDe(ms),
+      documentos: [],
+      donde: "ODOO",
+      pie: "Se actualiza sola con la próxima copia de Odoo: la que se concilia sale de la lista.",
+      pasos: [
+        "Pásale la lista a contabilidad para que las concilie en Odoo con su factura de proveedor o su gasto.",
+        "Si una no tiene factura (una comisión del banco, un gasto personal): que la concilie contra la cuenta que corresponde, o márcala «Está bien así» diciendo qué es.",
+      ],
+      queSignificaAceptar: "Que se sabe qué gasto es y contabilidad lo tiene. No cobra ni paga nada.",
+      queHacer: "Que contabilidad concilie esos gastos en Odoo.",
+      resuelve: "COBRANZA",
+      items: ms.map((m) => filaDeMovimiento(m, false)),
+    }));
+  }
+
   // «Abrir la cuenta» en cada fila que es de una sola cuenta (2026-10-07).
   ponerCuentas(out, (id) => cobroPorId.get(id)?.cuentaId);
 
@@ -3167,6 +3274,13 @@ export function coberturaDelCruce(estado: EstadoDelCruce, lineasAMirar?: readonl
 }
 
 /**
+ * Las líneas del banco de Odoo sin conciliar (U15). Tienen su sección propia y NO entran a los números de arriba
+ * (`resumenDeDiferencias`, «por resolver», `filasPorQuien` de Pendientes): el criterio de la tarjeta 13 del roadmap compara esos números semana a
+ * semana, y 98 líneas nuevas de golpe lo romperían sin que nada hubiera empeorado.
+ */
+export const LINEAS_DEL_BANCO: ReadonlySet<string> = new Set(["ODOO-BANCO-ENTRADA-SIN-CONCILIAR", "ODOO-BANCO-SALIDA-SIN-CONCILIAR"]);
+
+/**
  * El encabezado de la lista: cuántas filas quedan por resolver, en cuántas líneas, y cuánta plata no cuadra, por
  * moneda, contando cada documento UNA vez aunque lo miren varias líneas. Lo marcado «está bien así» no cuenta.
  *
@@ -3178,19 +3292,23 @@ export function coberturaDelCruce(estado: EstadoDelCruce, lineasAMirar?: readonl
  * ⛔ Nunca una sola cifra de plata: con colones y dólares, son dos.
  */
 export function resumenDeDiferencias(lineas: readonly DiferenciaOdoo[]): {
-  /** Líneas con al menos una fila pendiente. */
+  /** Líneas con al menos una fila pendiente (sin las del banco). */
   abiertas: number;
-  /** Filas pendientes, sumando todas las líneas. */
+  /** Filas pendientes, sumando todas las líneas (sin las del banco). */
   filas: number;
+  /** Filas pendientes de las líneas del banco de Odoo, aparte (U15). */
+  filasDelBanco: number;
   plata: MontoEnMoneda[];
   documentos: number;
 } {
-  const abiertas = lineas.filter((l) => l.items.length > 0);
+  const conFilas = lineas.filter((l) => l.items.length > 0);
+  const abiertas = conFilas.filter((l) => !LINEAS_DEL_BANCO.has(l.codigo));
   const unicas = new Map<string, PlataDeLinea>();
   for (const l of abiertas) for (const p of l.plata) if (!unicas.has(p.clave)) unicas.set(p.clave, p);
   return {
     abiertas: abiertas.length,
     filas: abiertas.reduce((n, l) => n + l.items.length, 0),
+    filasDelBanco: conFilas.filter((l) => LINEAS_DEL_BANCO.has(l.codigo)).reduce((n, l) => n + l.items.length, 0),
     plata: montosPorMoneda([...unicas.values()]),
     documentos: unicas.size,
   };
