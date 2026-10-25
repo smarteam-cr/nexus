@@ -318,6 +318,11 @@ model Client {
   reunionesAsignadasAMano  FirefliesSession[]        @relation("ReunionesAsignadasAMano")
   propuestasDeDatos        PropuestaDeDato[]         @relation("PropuestasDeDatosDeLaEmpresa") // R1: propuestas e historia de sus datos (CASCADE)
   investigaciones          InvestigacionDeEmpresa[]  @relation("InvestigacionesDeLaEmpresa") // R5: lo que Nexus encontró en la web (CASCADE)
+  documentosDeLaEmpresa    ProjectCanvas[]           @relation("DocumentosDeLaEmpresa") // R3: los documentos sin proyecto ni propuesta (CASCADE)
+  personas                 PersonaDeLaEmpresa[]      @relation("PersonasDeLaEmpresa") // R6: una persona del cliente con su rol (CASCADE)
+  perfil                   PerfilDeLaEmpresa?        @relation("PerfilDeLaEmpresa") // R13: el perfil de la empresa que usa Nexus (hoy Smarteam)
+  clienteIdeal             IcpItem[]                 @relation("ClienteIdealDeLaEmpresa") // R13 (SET NULL)
+  buyerPersonas            BuyerPersona[]            @relation("BuyerPersonasDeLaEmpresa") // R13 (SET NULL)
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
 }
@@ -354,8 +359,20 @@ model PropuestaDeDato {
   decididaAt    DateTime?
   createdAt     DateTime    @default(now())
 
+  // ── Lo que se escribió en HubSpot por esta decisión (R2, 2026-10-25) ──
+  // Lo escribe SOLO lib/clients/escritura-en-hubspot-server.ts; lo lee el script de vuelta
+  // (scripts/hubspot-empresa-volver-atras.ts). nullable = no se escribió (la bandera apagada, o no le tocaba).
+  /// La propiedad de la empresa de HubSpot que se escribió.
+  hubspotPropiedad String?
+  /// Lo que tenía esa propiedad en HubSpot justo antes ("" = vacía). Con esto se vuelve atrás.
+  hubspotAnterior  String?
+  hubspotEscritaAt DateTime?
+  /// Por qué no se pudo escribir (el estado y el mensaje de HubSpot). null = se escribió o no se intentó.
+  hubspotError     String?
+
   @@index([clientId, campo, estado])
   @@index([estado, createdAt])
+  @@index([hubspotEscritaAt])
 }
 
 /// Lo que Nexus encontró de una empresa en la web, con su fecha y sus fuentes (R5, 2026-10-24). Es de la empresa, no de
@@ -1322,6 +1339,13 @@ model ProjectCanvas {
   project        Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   businessCaseId String?
   businessCase   BusinessCase? @relation(fields: [businessCaseId], references: [id], onDelete: Cascade)
+  // R3 (2026-10-25) — un documento de la EMPRESA, sin proyecto ni propuesta (un diagnóstico para un prospecto, el
+  // documento de resultados de la preventa). nullable porque SOLO se llena en esos documentos: el dueño de los demás
+  // sale de su proyecto o su propuesta (lib/clients/documentos-de-la-empresa.ts › empresaDelDocumento). La base impide
+  // las dos cosas a la vez (CHECK ProjectCanvas_un_solo_dueno) y hay un único parcial (clientId, slug) como el de
+  // (projectId, slug). SQL: 2026-10-25-empresa-parte-2.sql.
+  clientId       String?
+  client         Client?       @relation("DocumentosDeLaEmpresa", fields: [clientId], references: [id], onDelete: Cascade)
   // NOMBRE VISIBLE. Editable sin consecuencias: ningún lookup del código lo usa
   // como identidad (esa es `slug`). Para los canvases de BusinessCase, `name` es la
   // VERSIÓN ("Plantilla", "Propuesta 1"), no la pieza.
@@ -1379,9 +1403,12 @@ model ProjectCanvas {
   // la misma pieza en un proyecto sin bloquear los canvases custom (slug null) ni los
   // del Business Case (projectId null). No aparece acá: si alguien lee solo el schema
   // va a creer que ProjectCanvas no tiene unique, que es justo la conclusión peligrosa.
+  // R3 (2026-10-25) suma el mismo para los documentos de la empresa: ProjectCanvas_clientId_slug_key ON
+  // ("clientId", slug) WHERE "clientId" IS NOT NULL AND slug IS NOT NULL (scripts/sql/2026-10-25-empresa-parte-2.sql).
 
   @@index([projectId])
   @@index([businessCaseId])
+  @@index([clientId])
 }
 
 // Sección de un canvas no-default (entidad de primer nivel)
@@ -2531,16 +2558,16 @@ model FirefliesSession {
   actionItems           ActionItem[]
   pedidosFueraDeAlcance PedidoFueraDeAlcance[]
   projects              SessionProject[]
-  tareas                Tarea[]                @relation("TareasDeLaReunion") // Tareas internas: se leen SOLO por el chokepoint (SET NULL)
-  tareasPlaneadas       Tarea[]                @relation("ReunionPlaneada") // la reunión planeada en Tareas que se hizo acá
-  proyectosDeTareas     ProyectoDeTareas[]     @relation("ProyectosDeTareasDeLaReunion")
-  eventosDeTareas       TareaEvento[]          @relation("EventosDeTareasDeLaReunion")
-  lecturaDeTareas       LecturaDeReunion?      @relation("LecturaDeLaReunion")
-  hechos                HechoDeReunion[]       @relation("HechosDeLaReunion") // memoria de la cuenta: se leen SOLO por lib/seguimiento (CASCADE)
-  turnos                TurnoDeReunion[]       @relation("TurnosDeLaReunion") // la búsqueda en las reuniones (etapa 4c): CASCADE
-  indexada              ReunionIndexada?       @relation("ReunionIndexada")
-  notasParaHubspot      NotaDeLaCuenta[]       @relation("NotasDeLaReunion") // la nota para HubSpot que se sugirió después de la reunión (SET NULL)
-  seguimiento           SeguimientoDeReunion?  @relation("SeguimientoDeLaReunion") // ficha G: agenda escrita, correo y próxima reunión (CASCADE)
+  tareas                Tarea[]                 @relation("TareasDeLaReunion") // Tareas internas: se leen SOLO por el chokepoint (SET NULL)
+  tareasPlaneadas       Tarea[]                 @relation("ReunionPlaneada") // la reunión planeada en Tareas que se hizo acá
+  proyectosDeTareas     ProyectoDeTareas[]      @relation("ProyectosDeTareasDeLaReunion")
+  eventosDeTareas       TareaEvento[]           @relation("EventosDeTareasDeLaReunion")
+  lecturaDeTareas       LecturaDeReunion?       @relation("LecturaDeLaReunion")
+  hechos                HechoDeReunion[]        @relation("HechosDeLaReunion") // memoria de la cuenta: se leen SOLO por lib/seguimiento (CASCADE)
+  turnos                TurnoDeReunion[]        @relation("TurnosDeLaReunion") // la búsqueda en las reuniones (etapa 4c): CASCADE
+  indexada              ReunionIndexada?        @relation("ReunionIndexada")
+  notasParaHubspot      NotaDeLaCuenta[]        @relation("NotasDeLaReunion") // la nota para HubSpot que se sugirió después de la reunión (SET NULL)
+  seguimiento           SeguimientoDeReunion?   @relation("SeguimientoDeLaReunion") // ficha G: agenda escrita, correo y próxima reunión (CASCADE)
   invitados             ParticipanteDeReunion[] @relation("ParticipantesDeLaReunion") // U1: cada invitado con su respuesta; U3 suma la asistencia (CASCADE)
 
   // Índices para los queries principales:
@@ -2990,6 +3017,10 @@ model MarketingSettings {
 // Ítem del ICP (migrado del hardcode de app/icp/ICPSection.tsx). 1 fila = 1 bullet.
 model IcpItem {
   id        String     @id @default(cuid())
+  /// R13 (2026-10-25) — la empresa que usa Nexus (hoy Smarteam) de la que es este cliente ideal. nullable porque las
+  /// filas de antes nacieron sin ella (las llena scripts/cargar-perfil-de-smarteam.ts) y SET NULL si se borra la ficha.
+  clientId  String?
+  client    Client?    @relation("ClienteIdealDeLaEmpresa", fields: [clientId], references: [id], onDelete: SetNull)
   section   IcpSection
   label     String     @db.Text
   order     Int        @default(0)
@@ -2997,11 +3028,15 @@ model IcpItem {
   updatedAt DateTime   @updatedAt
 
   @@index([section, order])
+  @@index([clientId])
 }
 
 // Buyer persona — insumo curado que alimenta al agente de generación.
 model BuyerPersona {
   id          String   @id @default(cuid())
+  /// R13 (2026-10-25) — la empresa que usa Nexus de la que es esta buyer persona. nullable ídem IcpItem.
+  clientId    String?
+  client      Client?  @relation("BuyerPersonasDeLaEmpresa", fields: [clientId], references: [id], onDelete: SetNull)
   name        String
   role        String? // nullable porque el cargo/segmento puede cargarse después
   description String   @db.Text // quién es, contexto (markdown)
@@ -3013,6 +3048,7 @@ model BuyerPersona {
   updatedAt   DateTime @updatedAt
 
   @@index([active])
+  @@index([clientId])
 }
 
 // Pilar de contenido (tema/enfoque). Los AGENT nacen al aprobar una PillarSuggestion.
@@ -7837,9 +7873,9 @@ model SugerenciaDescartada {
 /// La copia de un contacto de HubSpot asociado a una empresa que está en Nexus. Solo lectura: la escribe la copia de
 /// cada hora (lib/contactos/copia-server.ts). Una fila por contacto y cliente: un contacto de dos empresas está en las dos.
 model ContactoDeHubspot {
-  id                String    @id @default(cuid())
+  id                String               @id @default(cuid())
   clientId          String
-  client            Client    @relation("ContactosDeHubspot", fields: [clientId], references: [id], onDelete: Cascade)
+  client            Client               @relation("ContactosDeHubspot", fields: [clientId], references: [id], onDelete: Cascade)
   hubspotId         String
   nombre            String
   email             String?
@@ -7852,12 +7888,74 @@ model ContactoDeHubspot {
   ultimaActividadAt DateTime?
   creadoEnHubspot   DateTime?
   /// false = la empresa ya no lo tiene asociado, o se borró en HubSpot. La fila no se borra.
-  vigente           Boolean   @default(true)
-  copiadoAt         DateTime  @default(now())
-  createdAt         DateTime  @default(now())
+  vigente           Boolean              @default(true)
+  copiadoAt         DateTime             @default(now())
+  createdAt         DateTime             @default(now())
+  personas          PersonaDeLaEmpresa[] @relation("PersonaDelContacto")
 
   @@unique([clientId, hubspotId])
   @@index([email])
+}
+
+/// R6 (2026-10-25) · Una persona del cliente, una sola por correo y empresa, con su cargo y su rol (decide, influye, usa).
+/// Une las copias que había sueltas: los contactos de HubSpot, los participantes de las reuniones y las personas de los
+/// cuestionarios. La escribe SOLO lib/clients/personas-de-la-empresa-server.ts (la copia desde las fuentes y lo que decide
+/// una persona del equipo); `origenes` dice de dónde se la conoce. Los textos de la ficha y del handoff no se tocan.
+model PersonaDeLaEmpresa {
+  id                  String             @id @default(cuid())
+  clientId            String
+  client              Client             @relation("PersonasDeLaEmpresa", fields: [clientId], references: [id], onDelete: Cascade)
+  /// En minúsculas.
+  correo              String
+  /// nullable porque de un participante de una reunión a veces solo se sabe el correo.
+  nombre              String?
+  cargo               String?
+  /// Su contacto en la copia de HubSpot. nullable porque no todos son contactos.
+  contactoDeHubspotId String?
+  contactoDeHubspot   ContactoDeHubspot? @relation("PersonaDelContacto", fields: [contactoDeHubspotId], references: [id], onDelete: SetNull)
+  /// decide · influye · usa. null = nadie lo dijo todavía.
+  rol                 String?
+  /// Quién dijo el rol: persona (alguien del equipo). nullable con el rol.
+  rolFuente           String?
+  rolAt               DateTime?
+  /// empresa = trabaja en el cliente · externa = una agencia o un consultor del cliente.
+  lado                String             @default("empresa")
+  /// hubspot · reunion · cuestionario: de dónde se la conoce.
+  origenes            String[]           @default([])
+  /// En cuántas reuniones del cliente estuvo, y la última (lo cuenta la copia, por el chokepoint de sesiones).
+  reuniones           Int                @default(0)
+  ultimaReunionAt     DateTime?
+  /// false = ya no aparece en ninguna fuente. La fila no se borra.
+  vigente             Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@unique([clientId, correo])
+  @@index([correo])
+  @@index([contactoDeHubspotId])
+}
+
+/// R13 (2026-10-25) · El perfil de la empresa que usa Nexus (hoy Smarteam): lo que la preventa, las propuestas, el
+/// analizador de reuniones de venta y Marketing necesitan saber de NOSOTROS. Cuelga de su ficha, no es una constante del
+/// código: así otra empresa podría usar Nexus (ARCHITECTURE §0). El cliente ideal y las buyer personas siguen en sus tablas
+/// (IcpItem, BuyerPersona), colgando de la misma ficha. Se lee SOLO por lib/smarteam/contexto.ts.
+model PerfilDeLaEmpresa {
+  id                   String   @id @default(cuid())
+  clientId             String   @unique
+  client               Client   @relation("PerfilDeLaEmpresa", fields: [clientId], references: [id], onDelete: Cascade)
+  /// La propuesta de valor, en dos o tres frases.
+  propuestaDeValor     String?  @db.Text
+  /// El position statement (K3): para quién, qué problema, qué categoría, en qué es distinta.
+  positionStatement    String?  @db.Text
+  /// El tono de la marca. Mientras esté vacío, vale el de Marketing (MarketingSettings.brandVoice).
+  tono                 String?  @db.Text
+  /// [{ nombre, descripcion?, tarifa? }]: los servicios y sus tarifas (lib/smarteam/perfil.ts).
+  servicios            Json     @default("[]")
+  /// [{ clientId, industria, porque? }]: los clientes de referencia por industria (K4).
+  clientesDeReferencia Json     @default("[]")
+  actualizadoPorEmail  String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 /// La copia de un ticket de HubSpot asociado a una empresa que está en Nexus. Solo lectura, como los contactos.

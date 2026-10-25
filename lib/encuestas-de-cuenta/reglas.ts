@@ -25,7 +25,11 @@ export type Decision =
  *   · Ahora no → pasados `diasParaVolverConAhoraNo` días.
  *   · Lo de una versión anterior no cuenta: la pregunta cambió.
  */
-export function decidirSiPreguntar(p: PreguntaSobreLaCuenta, eventos: EventoGuardado[], ahora: Date): Decision {
+export function decidirSiPreguntar(
+  p: Pick<PreguntaSobreLaCuenta, "version" | "diasParaVolverConNoSe" | "diasParaVolverConAhoraNo">,
+  eventos: EventoGuardado[],
+  ahora: Date,
+): Decision {
   const decisivos = eventos
     .filter((e) => e.evento === "respondida" || e.evento === "ahora_no")
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());

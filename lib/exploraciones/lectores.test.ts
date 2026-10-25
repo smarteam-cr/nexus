@@ -73,6 +73,14 @@ type Destino =
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "lib/clients/investigacion/pedido.ts": { destino: "investigacion-de-la-empresa", motivo: "Reusa los enlaces de las búsquedas de la radiografía." },
   "lib/clients/investigacion/servidor.ts": { destino: "investigacion-de-la-empresa", motivo: "Lee la empresa en HubSpot con el lector de la exploración y la fecha de Costa Rica." },
+  "lib/clients/lo-que-le-falta-comprar-server.ts": {
+    destino: "escala-de-la-empresa",
+    motivo: "Lo que le falta comprar (R12): lee solo los niveles de la foto más reciente (escalaParaLaPropuesta), interno, para la ficha y el siguiente caso en HubSpot.",
+  },
+  "lib/clients/personas-de-la-empresa.ts": {
+    destino: "agenda-interna",
+    motivo: "Una persona del cliente (R6): usa solo la lista de dominios genéricos del calendario. No lee ninguna exploración.",
+  },
   "app/(shell)/sales/exploraciones/page.tsx": { destino: "ventas", motivo: "La lista de exploraciones." },
   "app/(shell)/sales/exploraciones/[id]/page.tsx": { destino: "ventas", motivo: "El lienzo." },
   "app/api/sales/exploraciones/route.ts": { destino: "ventas", motivo: "Abrir una exploración." },

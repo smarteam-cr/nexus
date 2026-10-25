@@ -11,10 +11,14 @@
  * JSON del primer "{" al último "}" + Zod POR ÍTEM (inválidos se descartan).
  * El agente nunca inventa fuentes: los inspirationPostIds se validan contra los
  * ids realmente enviados.
+ *
+ * El cliente ideal y las buyer personas se leen de lo que Nexus sabe de Smarteam (lib/smarteam/contexto.ts, R13): el
+ * único lector de lo que cuelga de la ficha de la empresa que usa Nexus.
  */
 import { prisma } from "@/lib/db/prisma";
 import { anthropic } from "@/lib/anthropic";
-import { MARKETING_AGENT_ID, ICP_SECTION_META } from "../seed-data";
+import { MARKETING_AGENT_ID } from "../seed-data";
+import { contextoDeSmarteam } from "@/lib/smarteam/contexto";
 import { inspirationWindowStart } from "../queries";
 import {
   generatedContentIdeaSchema,
@@ -43,13 +47,12 @@ export async function buildGenerationInput(): Promise<{
   personaTarget: number;
 }> {
   const windowStart = inspirationWindowStart();
-  const [posts, icpItems, personas, pillars, settings] = await Promise.all([
+  const [posts, smarteam, pillars, settings] = await Promise.all([
     prisma.inspirationPost.findMany({
       where: { postedAt: { gte: windowStart } },
       include: { source: { select: { label: true, profileUrl: true } } },
     }),
-    prisma.icpItem.findMany({ orderBy: [{ section: "asc" }, { order: "asc" }] }),
-    prisma.buyerPersona.findMany({ where: { active: true }, orderBy: { order: "asc" } }),
+    contextoDeSmarteam(),
     prisma.contentPillar.findMany({ where: { active: true }, orderBy: { order: "asc" } }),
     prisma.marketingSettings.findUnique({ where: { id: "marketing" } }),
   ]);
@@ -74,25 +77,15 @@ export async function buildGenerationInput(): Promise<{
     return `[${num} | id:${p.id} | fuente: ${label} | ${fecha} | ${p.likeCount} likes · ${p.commentCount} comentarios · ${p.repostCount} reposts | imagen: ${p.hasImage ? "sí" : "no"}]\n${text}`;
   });
 
-  const icpBySection = new Map<string, string[]>();
-  for (const item of icpItems) {
-    const list = icpBySection.get(item.section) ?? [];
-    list.push(item.label);
-    icpBySection.set(item.section, list);
-  }
-  const icpText = [...icpBySection.entries()]
-    .map(([section, labels]) => {
-      const meta = ICP_SECTION_META[section as keyof typeof ICP_SECTION_META];
-      return `${meta?.label ?? section}:\n${labels.map((l) => `- ${l}`).join("\n")}`;
-    })
-    .join("\n\n");
+  const icpText = (smarteam?.clienteIdeal ?? []).map((s) => `${s.etiqueta}:\n${s.items.map((l) => `- ${l}`).join("\n")}`).join("\n\n");
 
+  const personas = smarteam?.buyerPersonas ?? [];
   const personasText =
     personas.length > 0
       ? personas
           .map(
             (p) =>
-              `- ${p.name}${p.role ? ` (${p.role})` : ""}: ${p.description}${p.pains ? ` | Dolores: ${p.pains}` : ""}${p.goals ? ` | Objetivos: ${p.goals}` : ""}`,
+              `- ${p.nombre}${p.cargo ? ` (${p.cargo})` : ""}: ${p.descripcion}${p.dolores ? ` | Dolores: ${p.dolores}` : ""}${p.objetivos ? ` | Objetivos: ${p.objetivos}` : ""}`,
           )
           .join("\n")
       : "(sin buyer personas cargadas)";

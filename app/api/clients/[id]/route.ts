@@ -9,6 +9,7 @@ import { soltarReunionesDeLaEmpresa } from "@/lib/clients/soltar-reuniones";
 import { z } from "zod";
 import { can } from "@/lib/auth/permissions/engine";
 import { ErrorDeDato, proponerDato } from "@/lib/clients/datos-de-la-empresa-server";
+import { escribirEnHubspot } from "@/lib/clients/escritura-en-hubspot-server";
 
 /* A-20 (auditoría 2026-09-03): el PATCH escribía lo que llegaba en el body (`data.name.trim()`
    sobre cualquier cosa). Estricto: los campos que la ficha edita, con sus topes, y nada más —
@@ -96,7 +97,7 @@ export async function PATCH(
      Quien no tiene `clientes.decidirDatos` la deja como propuesta. */
   if (data.industry !== undefined && guard.user.teamMember) {
     try {
-      await proponerDato({
+      const r = await proponerDato({
         clientId: id,
         clave: "industry",
         valor: data.industry?.trim() || null,
@@ -104,6 +105,7 @@ export async function PATCH(
         autorId: guard.user.teamMember.id,
         puedeDecidir: await can(guard.user.teamMember, "clientes", "decidirDatos"),
       });
+      await escribirEnHubspot(id, r);
     } catch (e) {
       if (e instanceof ErrorDeDato) return NextResponse.json({ error: e.message }, { status: e.status });
       throw e;

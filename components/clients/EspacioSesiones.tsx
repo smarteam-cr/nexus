@@ -9,6 +9,9 @@
  * que cada categoría necesite: un canvas de relación con el aliado, un tablero de trabajo
  * interno. El destino lo decide `ESPACIO_POR_CATEGORIA` en `lib/clients/kind.ts`.
  *
+ * En la ficha de la empresa que usa Nexus (hoy Smarteam), arriba de las reuniones va su perfil (R13, 2026-10-25): el
+ * componente le pregunta a la ruta si esta ficha es esa empresa y, si no, no pinta nada.
+ *
  * ⚠ NO CORTA POR FECHA, y es la decisión correcta: es una AGENDA, no contexto para un
  * modelo. Las reuniones futuras se marcan aparte en vez de esconderse — esconderlas es el
  * bug que `lib/sessions/ocurridas.test.ts` documenta (alguien busca una reunión que sabe que
@@ -18,6 +21,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { EmptyState } from "@/components/ui";
+import PerfilDeLaEmpresaQueUsaNexus from "./PerfilDeLaEmpresaQueUsaNexus";
 import { CLIENT_KIND_META } from "@/lib/clients/kind";
 import { yaOcurrio } from "@/lib/sessions/ocurridas";
 import { MIN_RECUERDO } from "@/lib/sessions/reunion-a-mano";
@@ -183,6 +187,7 @@ export default async function EspacioSesiones({
 
   return (
     <div className="px-6 py-6 space-y-4">
+      {kind === "INTERNO" && <PerfilDeLaEmpresaQueUsaNexus clientId={clientId} />}
       <div>
         <h2 className="text-base font-semibold text-fg">Reuniones</h2>
         <p className="text-xs text-fg-muted mt-0.5">

@@ -20,7 +20,9 @@ import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { estaColgada, MOTIVO_COLGADA } from "@/lib/agents/run-colgada";
 import { leerEmpresa } from "@/lib/exploraciones/hubspot";
 import { hoyEnCostaRica } from "@/lib/exploraciones/fechas";
-import { proponerDato } from "../datos-de-la-empresa-server";
+import { proponerDato, type ResultadoDelDato } from "../datos-de-la-empresa-server";
+import { escribirEnHubspot } from "../escritura-en-hubspot-server";
+import { fechaParaHubspot } from "@/lib/hubspot/empresa";
 import { AGENTE_DE_LA_INVESTIGACION, leerLaInvestigacion, pedidoDeLaInvestigacion, venceLaInvestigacion, type LecturaDeLaInvestigacion } from "./pedido";
 
 /** Cuántas veces se continúa una respuesta que la búsqueda web dejó en pausa (patrón del SDK, como la radiografía). */
@@ -158,7 +160,10 @@ async function correr(runId: string, clientId: string, opts: { triggeredByEmail:
       select: { id: true },
     });
 
-    const propuestas = await proponerLoEncontrado(clientId, lectura);
+    const resultados: ResultadoDelDato[] = [];
+    const propuestas = await proponerLoEncontrado(clientId, lectura, resultados);
+    // A HubSpot (R2, con la bandera): lo que llenó (solo lo vacío de lo que manda HubSpot) y la fecha de la investigación.
+    await escribirEnHubspot(clientId, resultados, { extras: [{ propiedad: "nexus_investigacion_fecha", valor: fechaParaHubspot(hechaAt) }] });
     await prisma.agentRun.update({
       where: { id: runId },
       data: { status: "DONE", currentPhase: null, output: JSON.stringify({ investigacionId: guardada.id, propuestas, sinEnlace: lectura.sinEnlace, busquedas: lectura.busquedas }) },
@@ -182,9 +187,14 @@ function tieneContenido(l: LecturaDeLaInvestigacion): boolean {
 
 /**
  * Lo que encontró de los datos de la empresa, como propuestas con su cita y su enlace. Un dato que no pasa la lectura del
- * catálogo (un valor raro) se salta; los demás siguen. Devuelve cuántos quedaron por revisar o se llenaron.
+ * catálogo (un valor raro) se salta; los demás siguen. Devuelve cuántos quedaron por revisar o se llenaron; en
+ * `resultados`, si viene, deja lo que hizo cada uno (para escribir en HubSpot lo que se llenó).
  */
-export async function proponerLoEncontrado(clientId: string, lectura: Pick<LecturaDeLaInvestigacion, "datos" | "tamanoEstimado">): Promise<number> {
+export async function proponerLoEncontrado(
+  clientId: string,
+  lectura: Pick<LecturaDeLaInvestigacion, "datos" | "tamanoEstimado">,
+  resultados?: ResultadoDelDato[],
+): Promise<number> {
   const datos = [...lectura.datos];
   if (lectura.tamanoEstimado?.empleados !== undefined && !datos.some((d) => d.clave === "empleados")) {
     datos.push({ clave: "empleados", valor: lectura.tamanoEstimado.empleados, cita: lectura.tamanoEstimado.cita, url: lectura.tamanoEstimado.url });
@@ -196,6 +206,7 @@ export async function proponerLoEncontrado(clientId: string, lectura: Pick<Lectu
       return null;
     });
     if (r && r[0].veredicto.accion !== "nada") n++;
+    if (r) resultados?.push(...r);
   }
   return n;
 }

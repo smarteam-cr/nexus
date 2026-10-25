@@ -10879,11 +10879,91 @@ decidió el 24 oct que la empresa es el centro de Nexus, como en un CRM (planes:
    lo que decidió una persona. Con los empleados llenos, el TAM v1 se calcula solo. La preventa sigue haciendo su radiografía hasta el paso 2 (que la lea de
    aquí comparte `lib/exploraciones/agente.ts` con K7 y K1). Las investigaciones que ya hicieron las preventas se mudan
    con un script en simulacro.
-9. **HubSpot (R2) espera al transporte único (U6):** el mapa dato → propiedad vive en `lib/hubspot/empresa.ts`, y la
-   escritura queda detrás de `EMPRESA_HUBSPOT_ESCRITURA` (apagada). En el paso uno Nexus **no escribe nada** en
-   HubSpot por estos datos.
+9. **HubSpot (R2):** el mapa dato → propiedad vive en `lib/hubspot/empresa.ts`. En el paso uno Nexus no escribía nada en
+   HubSpot por estos datos; desde el 25 oct escribe y copia detrás de dos banderas: ver «La empresa, parte 2».
 10. **El TAM lo ve solo el equipo:** no entra a la memoria de la cuenta (`lib/memoria/frontera.test.ts`) ni a un
     documento del cliente.
+
+## La empresa, parte 2: HubSpot en los dos sentidos, lo que falta lo pregunta, los documentos de la empresa, una persona del cliente, lo que le falta comprar y el perfil de Smarteam (2026-10-25, R2, R3, R4 previa, R6, R12 y R13)
+
+**El hecho:** después de la parte 1 (los datos en columnas, `PropuestaDeDato`, el TAM v1 y la investigación), Nexus
+seguía sin escribir en HubSpot lo que decide la persona, nada volvía de HubSpot, un documento no podía existir sin
+proyecto, las personas del cliente estaban en cinco copias, nadie decía qué le falta comprar a cada empresa y el cliente
+ideal y las buyer personas de Smarteam eran tablas sueltas de Marketing. SQL: `scripts/sql/2026-10-25-empresa-parte-2.sql`.
+
+**Lo decidido:**
+
+1. **Escribir en HubSpot (R2):** después de cada decisión que queda aplicada (editar un dato, usar o editar una propuesta,
+   el TAM que corrige Ventas, la industria, la respuesta a una pregunta, lo que llena la investigación), y fuera de su
+   transacción, `lib/clients/escritura-en-hubspot-server.ts` lee lo que tiene la empresa allá, decide con la regla del
+   espejo (`queSeEscribe`, lib/hubspot/empresa.ts) y escribe en un PATCH por el transporte único (si HubSpot lo rechaza
+   entero, propiedad por propiedad). Un HubSpot caído no deshace nada en Nexus: la ficha dice que no se pudo, y lo pone
+   al día la escritura masiva (`scripts/hubspot-escribir-datos-de-la-empresa.ts`). Una empresa fusionada en HubSpot
+   (vuelve con otro id) no se escribe: sería pisar a otra empresa. Las fechas van con el día de Costa Rica. El TAM arrastra `nexus_tam_fuente` y `nexus_tam_fecha`; la
+   investigación, `nexus_investigacion_fecha`. Lo que tenía HubSpot antes queda en la fila de la decisión
+   (`PropuestaDeDato.hubspotAnterior`, con `hubspotPropiedad` y `hubspotEscritaAt`), y `scripts/hubspot-empresa-volver-atras.ts`
+   lo vuelve a poner solo si HubSpot sigue diciendo lo que escribió Nexus. Detrás de `EMPRESA_HUBSPOT_ESCRITURA=1`.
+2. **Las opciones de una propiedad NUEVA van con su clave** (`con equipo` → `con_equipo`, `única` → `unica`); las listas que
+   ya existían en el portal (la industria de Smarteam, la apertura) conservan su valor. Son **14 propiedades nuevas** (el
+   plan las contaba 13: el perfil de negocio son dos), todas listas o fechas, en el grupo «Nexus · Empresa»
+   (`scripts/hubspot-crear-propiedades-empresa.ts`). Las de la escala y la de Insider nacen vacías hasta que exista su
+   fuente. Los rangos de tráfico (< 10 mil, 10–50 mil, 50–200 mil, 200 mil–1 millón, > 1 millón de visitas al mes) y de
+   base con consentimiento (< mil, 1–10 mil, 10–50 mil, 50–200 mil, > 200 mil contactos) los propuso Claude (Elías los
+   dejó a su criterio, 24 oct).
+3. **La copia desde HubSpot** (job `empresa-copia-de-hubspot`, cada hora de 6:00 a 20:00, `EMPRESA_HUBSPOT_COPIA=1`): lee
+   las ~200 empresas de a 100 y procesa las que cambiaron allá (`hs_lastmodifieddate`, con una hora de solape). Cada valor
+   entra al motor con fuente `hubspot`, y lo que eso recalcula en Nexus (el TAM) vuelve a HubSpot. Dos filtros
+   (`lib/clients/copia-de-hubspot.ts`): el **eco** (el valor de la ÚLTIMA escritura de Nexus en ese dato no vuelve como si
+   lo hubiera puesto alguien; uno que Nexus escribió antes sí cuenta: lo volvió a poner alguien allá) y **lo ya dicho** (el mismo valor de HubSpot que espera como
+   propuesta o que una persona descartó no se vuelve a proponer cada hora). El simulacro no toma el candado.
+4. **Lo que falta lo pregunta** (R2 etapa 3, `lib/encuestas-de-cuenta/preguntas-de-datos.ts`): sobre «Preguntas sobre la
+   cuenta», con claves `dato:<dato>`. Se le pregunta a quien tiene `clientes.decidirDatos`, en clientes y prospectos, de a
+   una, en este orden: la industria, a quién vende, cómo cierra, qué pasa después, casa matriz o filial, la base y el
+   tráfico. Falta un dato vacío o con un valor de la IA; lo que dijo una persona (en Nexus, Ventas en HubSpot, la preventa
+   o el test) está confirmado. Nexus propone la respuesta (la propuesta que espera, con su cita) y viene elegida. La
+   respuesta USA esa propuesta si es la misma; si no, decide la persona. Si mientras tanto alguien lo confirmó, la
+   respuesta queda guardada y el dato no se pisa. «No sé» vuelve a los 14 días; «Ahora no» calla
+   todas las de datos por 3. En un cliente de la cartera, la de Sí o No de Customer Success va primero. Sus eventos van a
+   `RespuestaDeCuenta` (append-only) y no a los resultados de Feedback: su resultado es el dato.
+5. **Los documentos de la empresa (R3, etapa 1):** `ProjectCanvas.clientId` se llena SOLO en un documento de la empresa sin
+   proyecto ni propuesta; el dueño de los demás sale de su proyecto o su propuesta (`empresaDelDocumento`,
+   lib/clients/documentos-de-la-empresa.ts). Se eligió así y no llenarlo en todos porque la fusión de empresas y el
+   traslado de proyectos cambian `Project.clientId`, y una copia en el documento quedaría mintiendo. La base impide las dos
+   cosas a la vez (CHECK `ProjectCanvas_un_solo_dueno`) y hay un único parcial (clientId, slug).
+   `documentoDeLaEmpresa(clientId, slug)` lo crea; todavía no lo abre ninguna pantalla. **Pendiente:** las rutas y la vista
+   del cliente que hoy miran `project.clientId` (etapas 2 y 3) y retirar «Información del cliente» (R4).
+6. **R4, etapa previa:** `ensureClientInfoProject` toma siempre el más viejo, y `scripts/unir-informacion-del-cliente-repetida.ts`
+   deja uno por empresa: muda los documentos subidos, las corridas, los eventos y las notas de contexto, y borra el
+   repetido solo si todas sus piezas son copias con la MISMA huella (bloques y lo publicado), las mismas versiones y no más
+   hitos ni tarjetas; el respaldo del guard incluye todo lo que se borra en cascada. Medido
+   el 25 oct: las 6 sobrantes son copias exactas; en Librería, el que se borra tenía los 4 documentos, que se mudan.
+7. **Una persona del cliente (R6):** `PersonaDeLaEmpresa`, una por correo y empresa, la escribe solo
+   `lib/clients/personas-de-la-empresa-server.ts`. Entran sus contactos de HubSpot, las personas de sus cuestionarios y los
+   participantes de sus reuniones (por el chokepoint) con el dominio de la empresa o que ya son sus contactos. Quedan
+   fuera el equipo de Smarteam y, de los de fuera del dominio de la empresa, el dominio o el correo que aparece también en
+   reuniones de otros clientes (invariante 1). Los del dominio de la empresa entran aunque hayan ido a una reunión de otro
+   cliente: si no, una sola reunión ajena sacaba a toda la empresa (revisión del 25 oct).
+   El rol (decide, influye, usa) lo dice una persona del equipo y la copia nunca lo toca. Medido el 25 oct: 1.772 personas en
+   197 empresas, 1.407 con contacto de HubSpot y 365 solo por reuniones. **Pendiente:** la pantalla para ver y decidir el
+   rol, y que los cuestionarios y la preventa apunten a la persona.
+8. **Lo que le falta comprar (R12, `lib/clients/lo-que-le-falta-comprar.ts`):** con la posición en la escala, los casos del
+   catálogo que la moverían según el camino de crecimiento, repartidos por área (la más baja primero), sin los que ya tiene
+   (en el plan, en un ciclo o cumplidos) ni los descartados; sin posición, el caso que aterriza el área de cada hub que el
+   TAM le asigna y no paga. El primero es el **siguiente caso**, que va a `nexus_siguiente_caso` con la escritura masiva.
+   Se ve en «Datos de la empresa», debajo del potencial.
+9. **El perfil de Smarteam (R13):** `PerfilDeLaEmpresa` (propuesta de valor, position statement, tono, servicios con su
+   tarifa y clientes de referencia por industria) cuelga de la ficha de la empresa que usa Nexus; `IcpItem` y
+   `BuyerPersona` suman su `clientId`. La empresa que usa Nexus es la que tiene el perfil o, sin ninguno, la única
+   `INTERNO`; con dos y ningún perfil, no se adivina: el lector devuelve el cliente ideal y las personas sin perfil
+   (`empresa: null`), como antes de R13, para que Marketing no se quede sin contexto. **Un solo lector:** `lib/smarteam/contexto.ts` (lo vigila
+   `lib/smarteam/perfil.test.ts`); ya lo leen el agente de ideas de Marketing y Documentación. El tono no se copia: vale el
+   de Marketing › Voz mientras el perfil no tenga uno. Se edita en la ficha de Smarteam (`marketing.write`); el cliente
+   ideal y las personas, donde siempre. **Pendiente:** que lo lean la preventa, las propuestas y el analizador de reuniones
+   de venta (cambia sus prompts: va con K3 y K4), y el encaje de cada empresa con el cliente ideal (etapa 3).
+10. **INV51:** cada documento tiene un dueño, la regla está en la base y ninguna persona del cliente es del equipo.
+
+**Volver atrás:** apagar las dos banderas; `scripts/hubspot-empresa-volver-atras.ts` para lo escrito en HubSpot; el SQL dice
+qué dropear.
 
 ## Las reuniones con solo notas cuentan, y lo atrasado se lee por lote (2026-10-24, T1, T2 y U22)
 

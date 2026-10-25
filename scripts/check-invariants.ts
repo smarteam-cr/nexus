@@ -18,7 +18,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
   type Invariante,
 } from "@/lib/invariantes";
-import { INV49 } from "@/lib/invariantes";
+import { INV49, INV51 } from "@/lib/invariantes";
 
 /**
  * Imprime un invariante extraído a `lib/invariantes/` exactamente como se imprimía acá adentro
@@ -812,6 +812,19 @@ async function main(): Promise<number> {
 
   // ── Inv 49 → lib/invariantes/google.ts (2026-10-25, U1: la última copia buena de Google Meet tiene menos de una hora) ──
   violations += await reportar(INV49, prisma);
+
+  // ── Inv 51 → lib/invariantes/empresa.ts (2026-10-25, R3 y R6: cada documento tiene un dueño; ninguna persona del cliente
+  //    es del equipo). Y acá, que lee el catálogo de Postgres: que la REGLA esté en la base (el CHECK de un solo dueño y el
+  //    único parcial por empresa), que `check:esquema` no ve. ──
+  {
+    const [regla] = await prisma.$queryRaw<{ check: boolean; indice: boolean }[]>`SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ProjectCanvas_un_solo_dueno') AS "check", EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ProjectCanvas_clientId_slug_key') AS "indice"`;
+    if (!regla?.check || !regla.indice) {
+      violations++;
+      console.error(`✗ INV51 VIOLADO: a la base le falta ${[!regla?.check && "el CHECK ProjectCanvas_un_solo_dueno", !regla?.indice && "el único ProjectCanvas_clientId_slug_key"].filter(Boolean).join(" y ")}.`);
+      console.error("  Aplicá scripts/sql/2026-10-25-empresa-parte-2.sql (DECISIONS › «La empresa, parte 2»).");
+    }
+  }
+  violations += await reportar(INV51, prisma);
 
   return violations;
 }

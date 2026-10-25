@@ -21,6 +21,7 @@ import {
   type Invariante,
 } from "./index";
 import { INV49 } from "./google";
+import { INV51 } from "./empresa";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
 import { invariantesOkDesde, leerInvariantesOk } from "./salud";
 import { DONDE_PUEDE_TENER_TEXTO } from "@/lib/sessions/tiene-texto";
@@ -805,7 +806,7 @@ describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 37 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 38 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -817,8 +818,9 @@ describe("el registro y el consumidor", () => {
       // los pedidos fuera de alcance de una reunión de otro cliente (el gemelo de INV42); 47, ninguna reunión reciente con
       // texto sin empresa (T1, 2026-10-24). 48 vive en el script.
       "44", "45", "46", "47",
-      // 49: la frescura de la copia de Google Meet (U1, 2026-10-25).
-      "49",
+      // 49: la frescura de la copia de Google Meet (U1, 2026-10-25). 51: cada documento tiene un dueño y ninguna persona
+      // del cliente es del equipo (la empresa, parte 2, 2026-10-25).
+      "49", "51",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -866,7 +868,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("37 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("38 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;
@@ -946,6 +948,34 @@ describe("/api/health expone UN booleano de invariantes, y nada más (B-09)", ()
     expect((src.match(/ok = false/g) ?? []).length, "solo los tres checks de infraestructura apagan el ok").toBe(3);
     expect(src).not.toMatch(/invariantesOk\s*(&&|\|\||\?)/);
     expect(src).not.toMatch(/\.(lineas|error|resultados)\b/);
+  });
+});
+
+describe("INV51 (la empresa, parte 2)", () => {
+  it("un documento sin dueño o una persona del cliente que es del equipo lo ponen en rojo", async () => {
+    const equipo = [{ email: "Eli@Smarteamcr.com" }];
+    expect((await INV51.correr(baseFalsa({ teamMember: equipo, projectCanvas: 0, personaDeLaEmpresa: 0 }), AHORA)).ok).toBe(true);
+    expect((await INV51.correr(baseFalsa({ teamMember: equipo, projectCanvas: 2, personaDeLaEmpresa: 0 }), AHORA)).lineas[0]).toContain("2 documento(s) sin dueño");
+    const llamadas: Llamada[] = [];
+    const r = await INV51.correr(baseFalsa({ teamMember: equipo, projectCanvas: 0, personaDeLaEmpresa: 1 }, llamadas), AHORA);
+    expect(r.ok).toBe(false);
+    expect(where(llamadas, "personaDeLaEmpresa", "count")).toEqual({ correo: { in: ["eli@smarteamcr.com"] }, vigente: true });
+  });
+
+  it("sin el SQL de la parte 2 dice qué archivo falta, en vez de cortar el gate", async () => {
+    const sinTabla = Object.assign(new Error("The table `public.PersonaDeLaEmpresa` does not exist in the current database."), { code: "P2021" });
+    const base = new Proxy({}, {
+      get: (_, modelo) => ({
+        findMany: async () => [{ email: "a@b.com" }],
+        count: async () => {
+          if (modelo === "personaDeLaEmpresa") throw sinTabla;
+          return 0;
+        },
+      }),
+    }) as unknown as Parameters<typeof INV51.correr>[0];
+    const r = await INV51.correr(base, AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("2026-10-25-empresa-parte-2.sql");
   });
 });
 

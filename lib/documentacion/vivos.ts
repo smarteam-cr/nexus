@@ -38,6 +38,7 @@ import {
 import { FUENTES_VIVAS, type BloqueGuardado, type FuenteViva } from "./tipos";
 import { armarEquipo, type AreaDelEquipo } from "./equipo";
 import { armarIcp, armarPersonas, type GrupoDelIcp, type PersonaVista } from "./audiencia";
+import { contextoDeSmarteam } from "@/lib/smarteam/contexto";
 
 export interface ItemDeMenu {
   key: string;
@@ -122,7 +123,7 @@ function armarRoles(): RolDoc[] {
 
 /** Arma TODAS las fuentes de una vez: es barato y así la página hace una sola pasada. */
 export async function cargarDatosVivos(): Promise<DatosVivos> {
-  const [filas, miembros, icp, personas] = await Promise.all([
+  const [filas, miembros, smarteam] = await Promise.all([
     prisma.agent.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, status: true, agentType: true, agentGroup: true },
@@ -133,12 +134,11 @@ export async function cargarDatosVivos(): Promise<DatosVivos> {
       where: { deactivatedAt: null },
       select: { name: true, email: true, area: true, roleEnum: true, photoUrl: true },
     }),
-    prisma.icpItem.findMany({ select: { section: true, label: true, order: true } }),
-    prisma.buyerPersona.findMany({
-      where: { active: true },
-      select: { name: true, role: true, description: true, pains: true, goals: true, order: true },
-    }),
+    // El cliente ideal y las buyer personas, de lo que Nexus sabe de Smarteam (R13: un solo lector).
+    contextoDeSmarteam(),
   ]);
+  const icp = (smarteam?.clienteIdeal ?? []).flatMap((s) => s.items.map((label, order) => ({ section: s.seccion, label, order })));
+  const personas = (smarteam?.buyerPersonas ?? []).map((p, order) => ({ name: p.nombre, role: p.cargo, description: p.descripcion, pains: p.dolores, goals: p.objetivos, order }));
 
   return {
     menu: armarMenu(),

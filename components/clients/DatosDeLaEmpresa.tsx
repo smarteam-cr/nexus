@@ -8,7 +8,8 @@
  * A la izquierda, cada dato con su valor, su fuente y su fecha, y la propuesta al lado (de quién y por qué, con «Usar»,
  * «Editar» y «Descartar»); a la derecha, el TAM estimado v1 con cómo se calculó, lo que ya paga y lo que le falta, y la
  * investigación de la empresa. Quien no tiene `clientes.decidirDatos` propone en vez de guardar. Todo pasa por
- * `/api/clients/[id]/datos` (lib/clients/datos-de-la-empresa-server.ts). No escribe en HubSpot.
+ * `/api/clients/[id]/datos` (lib/clients/datos-de-la-empresa-server.ts), que escribe en HubSpot lo decidido cuando la
+ * bandera está prendida (R2). Debajo del potencial, los casos que le faltan comprar (R12, 2026-10-25).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Input, Select, Skeleton } from "@/components/ui";
@@ -29,6 +30,8 @@ import {
 } from "@/lib/clients/datos-de-la-empresa";
 import type { CalculoDelTam } from "@/lib/clients/tam-v1";
 import { deDondeSale, montoConMoneda, type LoQueLeFalta, type LoQueYaPaga } from "@/lib/clients/lo-que-ya-paga";
+import type { LoQueLeFaltaComprar } from "@/lib/clients/lo-que-le-falta-comprar";
+import { textoDeLaEscritura, type EstadoDeLaEscritura } from "@/lib/clients/escritura-en-hubspot";
 
 interface Dato {
   clave: ClaveDeDato;
@@ -70,6 +73,8 @@ interface Respuesta {
   tamCalculo: CalculoDelTam | null;
   yaPaga: LoQueYaPaga | null;
   leFalta: LoQueLeFalta[];
+  /** R12. Opcional: una respuesta de antes del deploy no lo trae. */
+  leFaltaComprar?: LoQueLeFaltaComprar;
   investigacion: Investigacion | null;
   corrida: Corrida | null;
   puedeDecidir: boolean;
@@ -375,7 +380,10 @@ export default function DatosDeLaEmpresa({ clientId }: { clientId: string }) {
       }
       if (o.cierra) setEditando(null);
       const recargo = await cargar();
+      // Quedó en Nexus; si HubSpot lo rechazó, se dice (R2): la escritura masiva lo pone al día después.
+      const hubspot = (j as { hubspot?: EstadoDeLaEscritura }).hubspot;
       if (!recargo) setAviso({ texto: "Se guardó, pero la pantalla no se pudo poner al día: recárgala para ver cómo quedó.", tono: "danger" });
+      else if (hubspot?.estado === "fallo") setAviso({ texto: textoDeLaEscritura(hubspot)!, tono: "danger", clave: o.clave });
       else if (o.exito) setAviso({ texto: o.exito, tono: "info", clave: o.clave });
       return true;
     } catch {
@@ -565,6 +573,8 @@ export default function DatosDeLaEmpresa({ clientId }: { clientId: string }) {
             <LoQuePaga yaPaga={r.yaPaga} leFalta={r.leFalta} />
           </Tarjeta>
 
+          {r.leFaltaComprar && <LoQueLeFaltaComprarTarjeta lista={r.leFaltaComprar} />}
+
           <LaInvestigacion inv={r.investigacion} corrida={r.corrida} puedeDecidir={r.puedeDecidir} ocupado={ocupado} onInvestigar={() => void investigar()} />
         </div>
       </div>
@@ -705,6 +715,36 @@ function LoQuePaga({ yaPaga, leFalta }: { yaPaga: LoQueYaPaga | null; leFalta: L
         </div>
       )}
     </>
+  );
+}
+
+// ── Lo que le falta comprar (R12) ────────────────────────────────────────────────────────────────
+
+function LoQueLeFaltaComprarTarjeta({ lista }: { lista: LoQueLeFaltaComprar }) {
+  return (
+    <Tarjeta rotulo="La venta cruzada" titulo="Lo que le falta comprar" etiqueta="Lo que le falta comprar" derecha={<Chip tono="hubspot">Solo el equipo</Chip>}>
+      <p className="mt-1 text-xs leading-4 text-fg-muted">{lista.porQue}</p>
+      {lista.casos.length > 0 && (
+        <ol className="mt-2.5 flex flex-col">
+          {lista.casos.map((c, i) => (
+            <li key={c.casoId} className={`py-2 ${i ? "border-t border-line" : ""}`}>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[13px] font-semibold leading-[19px] text-fg">{c.titulo}</span>
+                {i === 0 && <Chip tono="nexus">Siguiente caso</Chip>}
+                {c.destraba && <Chip tono="ambar">La destraba</Chip>}
+                {c.yaSugerido && <Chip tono="persona">Ya sugerido</Chip>}
+              </div>
+              <p className="mt-0.5 text-xs leading-4 text-fg-secondary">
+                {c.areaNombre} · {c.razon}
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
+      {lista.yaTiene > 0 && (
+        <p className="mt-1.5 text-xs leading-4 text-fg-muted">{lista.yaTiene === 1 ? "No cuenta el caso de uso que ya tiene." : `No cuenta los ${lista.yaTiene} casos de uso que ya tiene.`}</p>
+      )}
+    </Tarjeta>
   );
 }
 

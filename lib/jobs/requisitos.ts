@@ -107,6 +107,10 @@ const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
   /* Los correos, las notas y las llamadas de HubSpot (iniciativa B, 2026-10-18). Prendida por defecto: solo se apaga a
      propósito. La lectura de sus compromisos se apaga aparte (COMPROMISOS_DE_CORREOS_ENABLED=0) y no apaga la copia. */
   "comunicaciones-hubspot": (env) => (copiaPrendida(env) ? null : MOTIVO_COPIA_APAGADA),
+  /* La copia de los datos de la empresa desde HubSpot (R2, 2026-10-25). APAGADA por defecto: se prende con "1" después de
+     crear las propiedades «Nexus · Empresa» y de la primera escritura con 5 empresas (docs/empresa-datos-hubspot-plan.md). */
+  "empresa-copia-de-hubspot": (env) =>
+    env.EMPRESA_HUBSPOT_COPIA === "1" ? null : "Apagado: EMPRESA_HUBSPOT_COPIA no es 1 en el .env del servidor (se prende después de crear las propiedades «Nexus · Empresa»).",
   "tareas-hubspot": (env) =>
     env.TAREAS_HUBSPOT_ENABLED === "0" ? "Apagado a propósito: TAREAS_HUBSPOT_ENABLED=0 en el .env del servidor." : null,
   /* El cobro solo de lo pagado y conciliado en Odoo y Mercury (2026-10-18, decisión de Elías). Prendido por defecto: se
