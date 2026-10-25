@@ -2,7 +2,7 @@ import { getHubspotClient, getSystemHubspotClient } from "./client";
 import { PROJECT_PROPERTIES, parseCheckbox } from "./project-properties";
 import { ESTADOS_DE_ALTA, altaTerminada } from "@/lib/projects/alta";
 import { prisma } from "@/lib/db/prisma";
-import { esUnicoViolado } from "@/lib/db/unico-violado";
+import { asignarEmpresaDeHubspot } from "@/lib/clients/empresa-de-hubspot";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { sanitizeTags, normalizeTag } from "@/lib/tags/catalog";
 import { cerradoPorEstadoCrudo, decidirCierre, estadoCrudoDeHubspot, resolvePipeline } from "@/lib/projects/kind";
@@ -833,24 +833,20 @@ async function correrElEspejo(
     /* R7b (2026-10-24): una empresa de HubSpot es de UNA sola ficha. Si la que salió por el nombre ya es de otra, no
        se guarda ni se traen sus proyectos acá: serían los de esa otra ficha. Antes se guardaba igual (dos fichas con la
        misma empresa) o, con el índice único, el error se tragaba y la corrida seguía con la empresa ajena. */
-    const deOtra = companyId && usingSystemAccount ? await prisma.client.findUnique({ where: { hubspotCompanyId: companyId }, select: { id: true, name: true } }) : null;
-    if (deOtra && deOtra.id !== clientId) {
-      result.errors.push(`La empresa de HubSpot que coincide por nombre ya es la ficha «${deOtra.name}» en Nexus: elige la empresa a mano en esta ficha, o fusiona las dos.`);
-      return result;
-    }
     if (companyId && !usingSystemAccount) {
       result.debug!.push(`✓ Empresa encontrada en el portal del cliente: ${companyId} (no se guarda: el campo es del portal de Smarteam)`);
     } else if (companyId) {
       result.debug!.push(`✓ Empresa encontrada: ${companyId} — guardando en DB`);
-      try {
-        await prisma.client.update({ where: { id: clientId }, data: { hubspotCompanyId: companyId } });
-      } catch (e) {
+      // El módulo único (lib/clients/empresa-de-hubspot.ts): si otra ficha ya la tiene, o la tomó en una carrera, no se
+      // guarda y la corrida se corta diciendo cuál es (seguir traería los proyectos de esa otra ficha).
+      const r = await asignarEmpresaDeHubspot(clientId, companyId).catch((e) => {
         // Como antes: guardar el id es una comodidad para la próxima corrida; un fallo de la base no corta esta.
-        if (!esUnicoViolado(e)) console.error("[sync-projects] no se guardó la empresa encontrada", e);
-        else {
-          result.errors.push("Otra ficha tomó esa empresa de HubSpot mientras se buscaba: vuelve a intentarlo.");
-          return result;
-        }
+        console.error("[sync-projects] no se guardó la empresa encontrada", e);
+        return { ok: true as const };
+      });
+      if (!r.ok) {
+        result.errors.push(`La empresa de HubSpot que coincide por nombre ya es la ficha «${r.ficha.name}» en Nexus: elige la empresa a mano en esta ficha, o fusiona las dos.`);
+        return result;
       }
     } else {
       result.errors.push(

@@ -27,7 +27,7 @@ import { fetchAllPartnerClients, type PartnerClientRecord } from "@/lib/hubspot/
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { leerDuenos } from "@/lib/hubspot/duenos";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
-import { esUnicoViolado } from "@/lib/db/unico-violado";
+import { crearOReusarFicha } from "@/lib/clients/empresa-de-hubspot";
 
 export interface PartnerSyncResult {
   supported: boolean;
@@ -230,7 +230,10 @@ function conUltimoActivo(rec: PartnerClientRecord, nombres: Map<string, string> 
 export async function syncPartnerClients(
   options: { createClients?: boolean } = {},
 ): Promise<PartnerSyncResult> {
-  const createClients = options.createClients ?? true;
+  /* Por defecto NO crea clientes (revisión de la juntura, 2026-10-24): crearlos es una decisión, y la toma quien llama
+     —el botón del panel y `scripts/run-partner-sync.ts --apply` lo piden explícito; el job diario, solo con
+     `CS_PARTNER_CREA_CLIENTES`—. Una llamada nueva sin opciones ya no fabrica fichas. */
+  const createClients = options.createClients ?? false;
   const result: PartnerSyncResult = {
     supported: true, total: 0, matchedByCompany: 0, matchedByDomain: 0, alreadyLinked: 0,
     unmatched: 0, createdClients: [], wouldCreateClients: [], briefsMarkedStale: 0,
@@ -348,9 +351,8 @@ export async function syncPartnerClients(
               result.wouldCreateClients.push(draft);
               result.unmatched++;
             } else {
-              let created: { id: string; name: string; kind: string; gano?: true };
-              try {
-                created = await prisma.client.create({
+              const crear = () =>
+                prisma.client.create({
                   data: {
                     name,
                     hubspotCompanyId: draft.hubspotCompanyId,
@@ -359,12 +361,14 @@ export async function syncPartnerClients(
                   },
                   select: { id: true, name: true, kind: true },
                 });
-              } catch (e) {
-                // Otro camino creó la ficha de esta empresa mientras corría la copia: se usa la que ganó si es cliente.
-                if (!draft.hubspotCompanyId || !esUnicoViolado(e)) throw e;
-                const gano = await prisma.client.findUnique({ where: { hubspotCompanyId: draft.hubspotCompanyId }, select: { id: true, name: true, kind: true } });
-                if (!gano) throw e;
-                created = { ...gano, gano: true };
+              /* Con empresa de HubSpot, por el módulo único (lib/clients/empresa-de-hubspot.ts): si otro camino la creó
+                 mientras corría la copia, el índice frena esta y se usa la que ganó (si es cliente). */
+              let created: { id: string; name: string; kind: string; gano?: true };
+              if (draft.hubspotCompanyId) {
+                const r = await crearOReusarFicha(draft.hubspotCompanyId, crear);
+                created = r.creado ? { id: r.clientId, name, kind: "CLIENTE" } : { ...r.ficha, gano: true };
+              } else {
+                created = await crear();
               }
               if (created.gano && created.kind !== "CLIENTE") {
                 result.errors.push(`partner ${rec.id} («${name}»): su empresa de HubSpot ya es la ficha «${created.name}» (${created.kind}); queda sin vincular`);

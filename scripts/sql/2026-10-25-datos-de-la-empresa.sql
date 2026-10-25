@@ -12,8 +12,13 @@
 --   2. "PropuestaDeDato": las propuestas y la historia de cada dato.
 --   3. "InvestigacionDeEmpresa": lo que Nexus encontró de la empresa en la web, con su fecha y sus fuentes.
 --   4. "Client"."hubspotCompanyId" único (R7b). Medido en producción el 24 oct: 0 ids repetidos. Si hubiera alguno,
---      el CREATE UNIQUE INDEX falla y este archivo se corta ahí (lo de arriba ya quedó): se fusionan las dos fichas con
---      scripts/merge-duplicate-clients.ts y se vuelve a correr.
+--      el CREATE UNIQUE INDEX falla y el archivo entero no queda aplicado (`prisma db execute` lo corre de una vez:
+--      probado en la base local). La salida NO es fusionar primero: scripts/merge-duplicate-clients.ts ya lee las
+--      columnas que crea este archivo. Se suelta a mano el id de la ficha que sobra
+--        UPDATE "Client" SET "hubspotCompanyId" = NULL WHERE "id" = '<la que sobra>';
+--      se corre este archivo, y DESPUÉS se fusionan las dos fichas con el script.
+--      Justo antes, en solo lectura (tiene que dar 0 filas):
+--        SELECT "hubspotCompanyId", count(*) FROM "Client" WHERE "hubspotCompanyId" IS NOT NULL GROUP BY 1 HAVING count(*) > 1;
 --
 -- ⚠ ORDEN: ANTES del deploy. Sin él, `/api/health` responde 503 (el cliente Prisma ya conoce las columnas) y el deploy
 -- se revierte solo.

@@ -401,8 +401,13 @@ export interface PliegueDeFicha {
   dominiosNuevos: string[];
 }
 
-/** Los campos que la ficha que sigue toma de la otra solo si no los tiene. */
-const DE_LA_FICHA_SI_FALTAN = ["company", "industry", "logoUrl", "logoDarkUrl", "logoScale", "canvas", "canvasConfidence", "ficha", "tamUsd"] as const;
+/**
+ * Los campos que la ficha que sigue toma de la otra solo si no los tiene. ⚠ Ningún dato del catálogo de la empresa
+ * (`industry`, `tamUsd`…, lib/clients/datos-de-la-empresa.ts): esos los pliega `plegarDatosDeLaEmpresa`, con su fuente y
+ * su fecha, y respetando lo que una persona vació a propósito. Si este lado también los copiara, un TAM o una industria
+ * vaciados volverían al fusionar, con la fuente de la otra ficha (revisión de la juntura, 2026-10-24).
+ */
+export const DE_LA_FICHA_SI_FALTAN = ["company", "logoUrl", "logoDarkUrl", "logoScale", "canvas", "canvasConfidence", "ficha"] as const;
 
 export function plegarFicha(sigue: FichaParaFusionar, absorbida: FichaParaFusionar, fecha: string): PliegueDeFicha {
   const cambios: Record<string, unknown> = {};

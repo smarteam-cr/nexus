@@ -30,7 +30,7 @@ import {
   type ValorDeDato,
   type Veredicto,
 } from "./datos-de-la-empresa";
-import { calcularTamV1, citaDelTam, type CalculoDelTam, type EntradaDelTam } from "./tam-v1";
+import { calcularTamV1, citaDelTam, DATOS_QUE_LEE_EL_TAM, type CalculoDelTam, type EntradaDelTam } from "./tam-v1";
 
 
 type Tx = Prisma.TransactionClient;
@@ -45,17 +45,7 @@ export class ErrorDeDato extends Error {
 }
 
 /** Lo que el TAM v1 lee: cambiar cualquiera de estos lo recalcula. */
-const LO_QUE_LEE_EL_TAM: readonly ClaveDeDato[] = [
-  "empleados",
-  "estructura",
-  "filiales",
-  "industriaSmarteam",
-  "aQuienVende",
-  "perfilCierre",
-  "perfilDespues",
-  "baseConsentimiento",
-  "calificaInsider",
-];
+const LO_QUE_LEE_EL_TAM: readonly ClaveDeDato[] = DATOS_QUE_LEE_EL_TAM satisfies readonly ClaveDeDato[];
 
 export interface ValorConFuente {
   valor: ValorDeDato | null;

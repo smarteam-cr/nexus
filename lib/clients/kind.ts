@@ -10,7 +10,7 @@
  * aparece una categoría más (ej. EX_CLIENTE), se decide acá una vez y todos los listados
  * la heredan.
  */
-import { numeroEscrito } from "./datos-de-la-empresa";
+import { numeroEscrito, TAM_MAX_USD } from "./datos-de-la-empresa";
 import type { ClientKind } from "@prisma/client";
 
 export const CLIENT_KINDS = ["CLIENTE", "PROSPECTO", "ALIADO", "INTERNO"] as const;
@@ -128,8 +128,9 @@ export function parseClientKind(v: unknown): ClientKind | null {
 // mano — Nexus no lo deriva de nada. Es el insumo del "potencial estimado" de la
 // cartera (la suma de los TAM de los clientes de verdad).
 
-/** Techo de cordura del TAM: 100M USD. Un dedazo de más ceros arruina el total de la cartera. */
-export const TAM_MAX_USD = 100_000_000;
+/** Techo de cordura del TAM: 100M USD. Un dedazo de más ceros arruina el total de la cartera. Vive en el catálogo de
+ *  los datos de la empresa (un solo número para la pantalla y el guardado); acá se re-exporta. */
+export { TAM_MAX_USD };
 
 /**
  * Valida un TAM que llega de la frontera HTTP.
