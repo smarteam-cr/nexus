@@ -78,11 +78,14 @@ async function main() {
       if (target.partnerSnapshot) {
         await prisma.clientPartnerSnapshot.update({ where: { id: target.partnerSnapshot.id }, data: { clientId: viejo.id } });
       }
-      await prisma.client.update({
-        where: { id: viejo.id },
-        data: { hubspotCompanyId: viejo.hubspotCompanyId ?? target.hubspotCompanyId, emailDomains: domains },
-      });
-      await prisma.client.delete({ where: { id: target.id } });
+      // Primero se borra la nueva: la empresa de HubSpot es única (R7b) y la vieja puede estar por tomar su id.
+      await prisma.$transaction([
+        prisma.client.delete({ where: { id: target.id } }),
+        prisma.client.update({
+          where: { id: viejo.id },
+          data: { hubspotCompanyId: viejo.hubspotCompanyId ?? target.hubspotCompanyId, emailDomains: domains },
+        }),
+      ]);
     }
   }
 

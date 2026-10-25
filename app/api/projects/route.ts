@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { crearOReusarFicha, mensajeDeEmpresaRepetida, quienTieneLaEmpresaTrasChocar } from "@/lib/clients/empresa-de-hubspot";
 import { guardPermission, guardAccessToClient, guardCapability } from "@/lib/auth/api-guards";
 import { createDefaultCanvases } from "@/lib/canvas/default-canvases";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
@@ -160,17 +161,22 @@ export async function POST(req: NextRequest) {
           );
         }
       }
-      clientId = (
-        await prisma.client.create({
+      /* R7b: si otra alta creó la ficha de esta empresa entre el resolver y este create, el índice frena esta y el
+         proyecto va a la que ganó, como si el resolver la hubiera encontrado. */
+      const { companyId, companyName } = body;
+      const r = await crearOReusarFicha(companyId, () =>
+        prisma.client.create({
           data: {
-            name: body.companyName.trim(),
-            company: body.companyName.trim(),
-            hubspotCompanyId: body.companyId,
+            name: companyName.trim(),
+            company: companyName.trim(),
+            hubspotCompanyId: companyId,
             emailDomains: body.domain ? [body.domain.trim().toLowerCase()] : [],
           },
           select: { id: true },
-        })
-      ).id;
+        }),
+      );
+      clientId = r.clientId;
+      if (!r.creado) reusado = { nombre: r.ficha.name, reapuntado: false };
       /* ⚠ Este cliente NUEVO puede matchear sesiones que ya existen, y hay que atribuírselas
          ANTES de reclasificar. NO se hace acá sino en `alta-runner.ts`, en el bloque de fondo
          que ya corre después de marcar el alta «listo»: acá bloquearía la respuesta con una
@@ -257,89 +263,98 @@ export async function POST(req: NextRequest) {
   }
 
   // ── La escritura ────────────────────────────────────────────────────────────
-  const projectId = await prisma.$transaction(async (tx) => {
-    /* Acá, y no antes: ya pasaron TODAS las precondiciones, así que el cliente se mueve a la
-       empresa viva solo si el proyecto nace de verdad. Y tiene que ser antes de `avanzarAlta`,
-       que lee `client.hubspotCompanyId` de la base para colgar el registro nuevo de HubSpot: si
-       la lápida siguiera ahí, el proyecto nacería asociado a una ficha muerta y el sync volvería
-       a encontrar cero — el síntoma exacto que todo esto vino a matar. */
-    if (reapunte) {
-      const { businessCases } = await reapuntarEnTx(tx, reapunte);
-      console.warn(anotarReapunte(reapunte, reusado?.nombre ?? "", businessCases));
-    }
-
-    /* ⭐ VENDER ASCIENDE A LA EMPRESA. Toda empresa que entra por un caso de negocio nace
-       PROSPECTO (`business-cases/create-from-company/route.ts`), y hasta el 2026-08-18 NADA la
-       subía al venderle: si le abrimos un proyecto, ya no es un prospecto.
-
-       El síntoma no era académico. REMPRO quedó PROSPECTO con proyecto activo, y como el índice
-       de clientes abre en la pestaña «Clientes» y su buscador solo mira la pestaña abierta,
-       buscarla daba CERO. El CSE concluyó —razonablemente— que el proyecto no se había asociado
-       y lo creó de nuevo: dos proyectos sobre el mismo trato y un record huérfano en HubSpot.
-
-       ⛔ SOLO SUBE, NUNCA BAJA, y la regla vive en el WHERE y no en un `if`: con `updateMany` el
-       cambio es un no-op silencioso para CLIENTE, ALIADO e INTERNO. Es la mitad que faltaba de la
-       simetría que ya está escrita en `create-from-company/route.ts` («reusar NO cambia el kind:
-       degradarlo lo sacaría de cartera y cobranza»).
-
-       Va DESPUÉS del reapunte y DENTRO de la transacción: sobre el cliente sobreviviente, y solo
-       si el proyecto nace de verdad. */
-    await tx.client.updateMany({
-      where: { id: clientId, kind: "PROSPECTO" },
-      data: { kind: "CLIENTE" },
-    });
-
-    const proyecto = await tx.project.create({
-      data: {
-        clientId,
-        name: nombre,
-        status: "active",
-        hubspotDealId: dealId,
-        /* ADJUNTAR arranca un paso más adelante: el record ya existe, solo falta traerlo.
-           El resto arranca en `pendiente_crm`, que es lo que pone al proyecto en cuarentena
-           —no cobra, no suma a la cartera, no se publica— hasta que HubSpot confirme. */
-        hubspotServiceId: adjuntar,
-        altaEstado: adjuntar ? "pendiente_espejo" : "pendiente_crm",
-        altaPipelineElegido: pipeline.hubspotPipelineId,
-        altaInternoDeclarado: interno,
-        altaHermanoHsId: hermanoHsId,
-        altaSinTratoMotivo: sinTratoMotivo,
-        altaIniciadaAt: new Date(),
-        altaActorEmail: guard.user.email,
-      },
-      select: { id: true },
-    });
-
-    /* Propagación BC→Project: si hay un business case del mismo trato, su clasificación nace en
-       el proyecto. Es el segundo comportamiento que solo sabía hacer el camino viejo; sin
-       replicarlo los proyectos nacerían grises y nadie se enteraría. Escopado por `clientId`:
-       `hubspotDealId` no es único en BusinessCase, así que sin eso podría leer el de otro. */
-    if (dealId) {
-      const bc = await tx.businessCase.findFirst({
-        where: { hubspotDealId: dealId, clientId },
-        select: { tags: true },
-        orderBy: { createdAt: "desc" },
-      });
-      if (bc && bc.tags.length > 0) {
-        await tx.project.update({ where: { id: proyecto.id }, data: { tags: sanitizeTags(bc.tags) } });
+  let projectId: string;
+  try {
+    projectId = await prisma.$transaction(async (tx) => {
+      /* Acá, y no antes: ya pasaron TODAS las precondiciones, así que el cliente se mueve a la
+         empresa viva solo si el proyecto nace de verdad. Y tiene que ser antes de `avanzarAlta`,
+         que lee `client.hubspotCompanyId` de la base para colgar el registro nuevo de HubSpot: si
+         la lápida siguiera ahí, el proyecto nacería asociado a una ficha muerta y el sync volvería
+         a encontrar cero — el síntoma exacto que todo esto vino a matar. */
+      if (reapunte) {
+        const { businessCases } = await reapuntarEnTx(tx, reapunte);
+        console.warn(anotarReapunte(reapunte, reusado?.nombre ?? "", businessCases));
       }
-    }
 
-    /* Una PROPUESTA RECURRENTE ganada (iniciativa 4, paso 4): el proyecto nace con su servicio, desde hoy, y con los
-       casos de uso que vendió. Por el enlace de la propuesta o por el trato, escopado por cliente. Sin propuesta
-       recurrente no hace nada. */
-    await servicioQueTraeLaPropuestaEnTx(tx, {
-      clientId,
-      projectId: proyecto.id,
-      dealId,
-      businessCaseId: typeof body.businessCaseId === "string" && body.businessCaseId.trim() ? body.businessCaseId.trim() : null,
-      por: guard.user.email ?? "alta",
+      /* ⭐ VENDER ASCIENDE A LA EMPRESA. Toda empresa que entra por un caso de negocio nace
+         PROSPECTO (`business-cases/create-from-company/route.ts`), y hasta el 2026-08-18 NADA la
+         subía al venderle: si le abrimos un proyecto, ya no es un prospecto.
+
+         El síntoma no era académico. REMPRO quedó PROSPECTO con proyecto activo, y como el índice
+         de clientes abre en la pestaña «Clientes» y su buscador solo mira la pestaña abierta,
+         buscarla daba CERO. El CSE concluyó —razonablemente— que el proyecto no se había asociado
+         y lo creó de nuevo: dos proyectos sobre el mismo trato y un record huérfano en HubSpot.
+
+         ⛔ SOLO SUBE, NUNCA BAJA, y la regla vive en el WHERE y no en un `if`: con `updateMany` el
+         cambio es un no-op silencioso para CLIENTE, ALIADO e INTERNO. Es la mitad que faltaba de la
+         simetría que ya está escrita en `create-from-company/route.ts` («reusar NO cambia el kind:
+         degradarlo lo sacaría de cartera y cobranza»).
+
+         Va DESPUÉS del reapunte y DENTRO de la transacción: sobre el cliente sobreviviente, y solo
+         si el proyecto nace de verdad. */
+      await tx.client.updateMany({
+        where: { id: clientId, kind: "PROSPECTO" },
+        data: { kind: "CLIENTE" },
+      });
+
+      const proyecto = await tx.project.create({
+        data: {
+          clientId,
+          name: nombre,
+          status: "active",
+          hubspotDealId: dealId,
+          /* ADJUNTAR arranca un paso más adelante: el record ya existe, solo falta traerlo.
+             El resto arranca en `pendiente_crm`, que es lo que pone al proyecto en cuarentena
+             —no cobra, no suma a la cartera, no se publica— hasta que HubSpot confirme. */
+          hubspotServiceId: adjuntar,
+          altaEstado: adjuntar ? "pendiente_espejo" : "pendiente_crm",
+          altaPipelineElegido: pipeline.hubspotPipelineId,
+          altaInternoDeclarado: interno,
+          altaHermanoHsId: hermanoHsId,
+          altaSinTratoMotivo: sinTratoMotivo,
+          altaIniciadaAt: new Date(),
+          altaActorEmail: guard.user.email,
+        },
+        select: { id: true },
+      });
+
+      /* Propagación BC→Project: si hay un business case del mismo trato, su clasificación nace en
+         el proyecto. Es el segundo comportamiento que solo sabía hacer el camino viejo; sin
+         replicarlo los proyectos nacerían grises y nadie se enteraría. Escopado por `clientId`:
+         `hubspotDealId` no es único en BusinessCase, así que sin eso podría leer el de otro. */
+      if (dealId) {
+        const bc = await tx.businessCase.findFirst({
+          where: { hubspotDealId: dealId, clientId },
+          select: { tags: true },
+          orderBy: { createdAt: "desc" },
+        });
+        if (bc && bc.tags.length > 0) {
+          await tx.project.update({ where: { id: proyecto.id }, data: { tags: sanitizeTags(bc.tags) } });
+        }
+      }
+
+      /* Una PROPUESTA RECURRENTE ganada (iniciativa 4, paso 4): el proyecto nace con su servicio, desde hoy, y con los
+         casos de uso que vendió. Por el enlace de la propuesta o por el trato, escopado por cliente. Sin propuesta
+         recurrente no hace nada. */
+      await servicioQueTraeLaPropuestaEnTx(tx, {
+        clientId,
+        projectId: proyecto.id,
+        dealId,
+        businessCaseId: typeof body.businessCaseId === "string" && body.businessCaseId.trim() ? body.businessCaseId.trim() : null,
+        por: guard.user.email ?? "alta",
+      });
+
+      // Las piezas del TIPO elegido, no las de Customer Success por descarte.
+      await createDefaultCanvases(proyecto.id, pipeline.hubspotPipelineId, tx);
+      return proyecto.id;
     });
-
-    // Las piezas del TIPO elegido, no las de Customer Success por descarte.
-    await createDefaultCanvases(proyecto.id, pipeline.hubspotPipelineId, tx);
-    return proyecto.id;
-  });
+  } catch (e) {
+    /* R7b: el reapunte mueve la ficha a la empresa viva; si otra ficha la tomó mientras tanto, el índice único frena la
+       transacción entera (nada quedó a medias) y se dice cuál es. */
+    const otra = await quienTieneLaEmpresaTrasChocar(e, reapunte?.vigente);
+    if (otra && otra.id !== clientId) return malo(mensajeDeEmpresaRepetida(otra), 409);
+    throw e;
+  }
 
   /* El motor corre EN LÍNEA: la persona está esperando y lo que pidió es un proyecto creado, no
      una promesa. Si falla, el alta queda pendiente con su motivo escrito y el cartel ofrece

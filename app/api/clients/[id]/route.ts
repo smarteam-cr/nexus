@@ -7,6 +7,8 @@ import { clampLogoScale } from "@/lib/ui/logo-scale";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
 import { soltarReunionesDeLaEmpresa } from "@/lib/clients/soltar-reuniones";
 import { z } from "zod";
+import { can } from "@/lib/auth/permissions/engine";
+import { ErrorDeDato, proponerDato } from "@/lib/clients/datos-de-la-empresa-server";
 
 /* A-20 (auditoría 2026-09-03): el PATCH escribía lo que llegaba en el body (`data.name.trim()`
    sobre cualquier cosa). Estricto: los campos que la ficha edita, con sus topes, y nada más —
@@ -71,7 +73,6 @@ export async function PATCH(
     data: {
       ...(data.name !== undefined && { name: data.name.trim() }),
       ...(data.company !== undefined && { company: data.company?.trim() || null }),
-      ...(data.industry !== undefined && { industry: data.industry?.trim() || null }),
       ...(data.notes !== undefined && { notes: data.notes?.trim() || null }),
       ...(data.emailDomains !== undefined && {
         emailDomains: (data.emailDomains as string[])
@@ -91,6 +92,24 @@ export async function PATCH(
     },
   });
 
+  /* La industria es un dato de la empresa (R1, 2026-10-24): pasa por el motor, con su fuente, su fecha y su historia.
+     Quien no tiene `clientes.decidirDatos` la deja como propuesta. */
+  if (data.industry !== undefined && guard.user.teamMember) {
+    try {
+      await proponerDato({
+        clientId: id,
+        clave: "industry",
+        valor: data.industry?.trim() || null,
+        fuente: "persona",
+        autorId: guard.user.teamMember.id,
+        puedeDecidir: await can(guard.user.teamMember, "clientes", "decidirDatos"),
+      });
+    } catch (e) {
+      if (e instanceof ErrorDeDato) return NextResponse.json({ error: e.message }, { status: e.status });
+      throw e;
+    }
+  }
+
   if (data.name !== undefined || data.company !== undefined) {
     revalidateClientsSidebar();
   }
@@ -103,6 +122,11 @@ export async function PATCH(
     });
   }
 
+  // La industria pudo cambiar después del update (por el motor): se devuelve la que quedó.
+  if (data.industry !== undefined) {
+    const ahora = await prisma.client.findUnique({ where: { id }, select: { industry: true } });
+    return NextResponse.json({ ...client, industry: ahora?.industry ?? null });
+  }
   return NextResponse.json(client);
 }
 

@@ -16,6 +16,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { clienteDeLaEmpresaDeVentas } from "@/lib/clients/cliente-de-la-empresa-de-ventas";
 import { prisma } from "@/lib/db/prisma";
+import { esUnicoViolado } from "@/lib/db/unico-violado";
 import { contenidoVacio, propuestaVacia, type ContenidoDeExploracion } from "./contenido";
 import { leerEmpresa } from "./hubspot";
 import { industriaLegible, sugerirEdicion } from "./industria";
@@ -25,8 +26,6 @@ import { DE_LA_PREVENTA } from "./marco";
 export type ResultadoDelAlta =
   | { ok: true; id: string; existia: boolean }
   | { ok: false; status: number; error: string };
-
-const esUnicoViolado = (e: unknown) => typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2002";
 
 export async function crearExploracion(companyId: string, email: string): Promise<ResultadoDelAlta> {
   const empresa = await leerEmpresa(companyId);

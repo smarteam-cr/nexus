@@ -20,8 +20,10 @@ const DESARROLLO = "922785384";
 const DIA = 24 * 60 * 60 * 1000;
 const hace = (dias: number) => new Date(Date.now() - dias * DIA);
 
+// Una empresa de HubSpot por ficha (R7b: el id es único), aunque el caso cree dos.
+let creados = 0;
 async function cliente() {
-  return prisma.client.create({ data: { name: "Prospecto de prueba", kind: "PROSPECTO", hubspotCompanyId: "999" }, select: { id: true } });
+  return prisma.client.create({ data: { name: "Prospecto de prueba", kind: "PROSPECTO", hubspotCompanyId: String(999 + creados++) }, select: { id: true } });
 }
 
 async function exploracion(clientId: string, creada: Date, tocada: Date, archivada = false) {

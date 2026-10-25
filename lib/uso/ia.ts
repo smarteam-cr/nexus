@@ -186,7 +186,8 @@ const REGLAS: readonly [RegExp, ClaveDeProceso][] = [
   [/-canvas$|^agent-kickoff$|^agent-roles-assist$/, "documentos"],
   [/^(exploracion-de-venta|business-case|propuesta-de-cierre|agent-entrevistas-prep)$|sales-analysis/, "venta"],
   [/^(procesos-mapeo|procesos-lectura|agent-mapeo-inicial)$/, "procesos"],
-  [/^(ficha-del-cliente|etapa-desde-reunion)$/, "ficha"],
+  // La investigación de la empresa (R5, 2026-10-24) llena los datos de la ficha de la empresa.
+  [/^(ficha-del-cliente|etapa-desde-reunion|investigacion-de-empresa)$/, "ficha"],
   [/^(agent-)?project-brief$/, "resumenes"],
   [/^agent-(marketing|analisis-funnel|diagnostico-marketing)/, "marketing"],
   [/^agent-(cobranza-borrador|finanzas-reporter)$/, "finanzas"],

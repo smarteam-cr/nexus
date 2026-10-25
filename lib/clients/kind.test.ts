@@ -51,10 +51,21 @@ describe("TAM", () => {
     expect(parseTamUsd(0)).toEqual({ ok: true, value: 0 });
   });
 
-  it("acepta números y strings con separadores, redondeando a 2 decimales", () => {
+  it("acepta números y strings con espacios y un punto decimal, redondeando a 2 decimales", () => {
     expect(parseTamUsd(12000)).toEqual({ ok: true, value: 12000 });
-    expect(parseTamUsd("36,000")).toEqual({ ok: true, value: 36000 });
-    expect(parseTamUsd("1 250.555")).toEqual({ ok: true, value: 1250.56 });
+    expect(parseTamUsd("36 000")).toEqual({ ok: true, value: 36000 });
+    expect(parseTamUsd("1 250.5")).toEqual({ ok: true, value: 1250.5 });
+    expect(parseTamUsd(1250.555)).toEqual({ ok: true, value: 1250.56 });
+  });
+
+  /* 2026-10-24 (revisión de R1): antes «36,000» se leía 36000 y «50.000» se leía 50 — en Costa Rica el punto es de
+     miles, así que un TAM de cincuenta mil quedaba en cincuenta y la cuenta caía a potencial «bajo» sin aviso. Un
+     separador de miles es ambiguo (coma o punto según quién escribe): se rechaza con el porqué, no se adivina. */
+  it("rechaza los separadores de miles en vez de adivinarlos", () => {
+    for (const t of ["36,000", "50.000", "1.500.000", "1500000,50"]) {
+      const r = parseTamUsd(t);
+      expect(r.ok, t).toBe(false);
+    }
   });
 
   it("rechaza basura, negativos y el dedazo de ceros", () => {
