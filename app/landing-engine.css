@@ -2716,6 +2716,56 @@
 .stl .stl-plan-tab[aria-selected="true"] { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 700; }
 .stl .stl-plan-tab-n { opacity: 0.7; margin-left: 4px; }
 
+/* Propiedades por grupo, la ficha y pegar una plantilla (2026-10-25, el Brief de implementación). */
+.stl .stl-plan-grupo-fila th {
+  background: var(--bg-soft); text-align: left; padding: 8px 10px; border-top: 1px solid var(--border);
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-2);
+}
+.stl .stl-plan-grupo-h { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.stl .stl-plan-grupo-h .stl-remove { position: static; opacity: 1; width: 22px; height: 22px; }
+.stl .stl-plan-mini {
+  border: 1px solid var(--border-strong); background: var(--bg); color: var(--text-2); border-radius: 7px;
+  padding: 3px 10px; font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; cursor: pointer;
+}
+.stl .stl-plan-mini--fuerte { background: var(--text); color: var(--bg); border-color: var(--text); }
+.stl .stl-plan-mini:disabled { opacity: 0.45; cursor: default; }
+.stl .stl-plan-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.stl .stl-plan-pegar { margin-top: 12px; padding: 12px; border: 1px dashed var(--border-strong); border-radius: 10px; background: var(--bg-soft); }
+.stl .stl-plan-pegar-l { display: block; margin-bottom: 8px; font-size: 12.5px; color: var(--text-2); }
+.stl .stl-plan-pegar-t {
+  width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+  color: var(--text); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical;
+}
+.stl .stl-plan-aviso { margin: 10px 0 0; font-size: 12.5px; color: var(--text-2); }
+.stl .stl-plan-opciones { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+.stl .stl-plan-opciones span::before { content: "· "; color: var(--text-muted); }
+.stl .stl-plan-ficha { margin-top: 16px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-soft); }
+.stl .stl-plan-ficha-t { font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
+.stl .stl-plan-ficha-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
+.stl .stl-plan-ficha-card { padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; }
+.stl .stl-plan-ficha-n { font-size: 13px; font-weight: 700; color: var(--text); }
+.stl .stl-plan-ficha-card ul { display: grid; gap: 3px; margin: 6px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--text-2); }
+
+/* Las secciones que vinieron del Brief (sections-planificacion-brief.tsx) y lo que se sumó a las de siempre. */
+.stl .stl-plan-apagada td { color: var(--text-muted); }
+.stl .stl-plan-apagada .stl-accion-titulo { color: var(--text-muted); font-weight: 600; }
+.stl .stl-plan-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); }
+.stl .stl-plan-permisos { min-width: 480px; }
+.stl .stl-plan-permisos td, .stl .stl-plan-permisos th { text-align: left; }
+.stl .stl-plan-resumen { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.stl .stl-plan-avisos { margin: 10px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--flag, #B45309); }
+.stl .stl-plan-campos--ancho { grid-template-columns: 110px minmax(0, 1fr); margin-top: 16px; }
+.stl .stl-plan-campos-form { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 13.5px; color: var(--text-2); }
+.stl .stl-plan-campos-form li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-soft); }
+.stl .stl-plan-campos-form li.stl-plan-falta { border-color: var(--flag-line, #FCD34D); background: var(--flag-soft, #FEF3C7); }
+.stl .stl-plan-campos-form .stl-remove, .stl .stl-plan-guion .stl-remove { position: static; opacity: 1; width: 22px; height: 22px; margin-left: auto; }
+.stl .stl-plan-oblig { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.stl .stl-plan-falta .stl-plan-oblig { color: var(--flag, #B45309); }
+.stl .stl-plan-etapa-auto { font-size: 12px; color: var(--text-2); border-top: 1px dashed var(--border); padding-top: 6px; }
+.stl .stl-plan-guion { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--text-2); }
+.stl .stl-plan-guion li { display: flex; align-items: baseline; gap: 10px; }
+.stl .stl-plan-guion-n { flex: none; width: 64px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
+
 /* Tarjetas (automatizaciones, conversaciones). */
 .stl .stl-plan-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
 .stl .stl-plan-card {

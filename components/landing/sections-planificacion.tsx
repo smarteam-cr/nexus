@@ -38,6 +38,8 @@ import {
   TIPOS_DE_PIPELINE,
   CIERRES_DE_ETAPA,
   QUIEN_RESPONDE,
+  ESTADOS_DEL_LEAD_DE_SIEMPRE,
+  type EstadoDelLead,
   type ProcesosFuturoData,
   type ProcesoFuturo,
   type PasoDeProceso,
@@ -57,14 +59,28 @@ import {
   objetosDe,
   normalizarObjeto,
   nuevoIdDeFila,
+  tocadaPorUnaPersona,
+  gruposDe,
+  agregarGrupo,
+  renombrarGrupo,
+  moverGrupo,
+  quitarGrupo,
+  opcionesDe,
+  fichaDe,
+  plantillaDeImportacion,
   type FilaPropiedad,
   type PropiedadesData,
 } from "@/lib/planificacion/propiedades";
+import { leerPlantilla, sumarImportadas } from "@/lib/planificacion/importar";
+
+/** «Contacto» → «contactos», para los textos que hablan de varios registros. */
+const enPlural = (objeto: string) =>
+  ({ Contacto: "contactos", Empresa: "empresas", Lead: "leads", Negocio: "negocios", Ticket: "tickets" } as Record<string, string>)[objeto] ?? objeto;
 
 /* ── Piezas comunes ─────────────────────────────────────────────────────────── */
 
 /** El chip de origen. En edición, un desplegable; en lectura, nada si no se sabe. */
-function OrigenChip({ value, editable, onCommit }: { value?: string; editable?: boolean; onCommit: (v: string) => void }) {
+export function OrigenChip({ value, editable, onCommit }: { value?: string; editable?: boolean; onCommit: (v: string) => void }) {
   const o = normalizarOrigen(value);
   if (editable) {
     return (
@@ -78,7 +94,7 @@ function OrigenChip({ value, editable, onCommit }: { value?: string; editable?: 
 }
 
 /** Flechas ‹ › para cambiar de lugar un elemento. Solo en edición. */
-function Mover({ onIzq, onDer, puedeIzq, puedeDer, rotulo }: { onIzq: () => void; onDer: () => void; puedeIzq: boolean; puedeDer: boolean; rotulo: string }) {
+export function Mover({ onIzq, onDer, puedeIzq, puedeDer, rotulo }: { onIzq: () => void; onDer: () => void; puedeIzq: boolean; puedeDer: boolean; rotulo: string }) {
   return (
     <span className="stl-plan-mover">
       <button type="button" onClick={onIzq} disabled={!puedeIzq} aria-label={`Mover ${rotulo} antes`} title="Mover antes">‹</button>
@@ -88,7 +104,7 @@ function Mover({ onIzq, onDer, puedeIzq, puedeDer, rotulo }: { onIzq: () => void
 }
 
 /** Una fila «rótulo · valor» de una tarjeta. En lectura, una vacía no se pinta. */
-function Campo({ rotulo, value, editable, placeholder, onCommit, aviso }: { rotulo: string; value?: string; editable?: boolean; placeholder: string; onCommit: (v: string) => void; aviso?: boolean }) {
+export function Campo({ rotulo, value, editable, placeholder, onCommit, aviso }: { rotulo: string; value?: string; editable?: boolean; placeholder: string; onCommit: (v: string) => void; aviso?: boolean }) {
   if (!editable && !(value ?? "").trim()) return null;
   return (
     <>
@@ -166,9 +182,11 @@ export const CicloDeVidaSection: FC<SectionProps<CicloDeVidaData>> = ({ data, ed
   const d = adoptarCicloDeVida(data);
   const etapas = d.etapas;
   // La forma nueva se guarda limpia: sin los `items` de la prosa vieja.
-  const set = (next: Partial<CicloDeVidaData>) => onChange?.({ ...partesDe(data), intro: d.intro, etapas: d.etapas, ...next });
+  const estados = d.estadosLead ?? [];
+  const set = (next: Partial<CicloDeVidaData>) => onChange?.({ ...partesDe(data), intro: d.intro, etapas: d.etapas, estadosLead: estados, ...next });
   const setEtapa = (i: number, patch: Partial<EtapaDeCiclo>) => set({ etapas: replaceAt(etapas, i, { ...etapas[i], ...patch }) });
-  if (!editable && !etapas.length) return null;
+  const setEstado = (i: number, patch: Partial<EstadoDelLead>) => set({ estadosLead: replaceAt(estados, i, { ...estados[i], ...patch }) });
+  if (!editable && !etapas.length && !estados.length) return null;
   const celda = (i: number, campo: keyof EtapaDeCiclo, placeholder: string, className?: string) => (
     <Editable as="span" className={className} editable={editable} value={etapas[i][campo] ?? ""} placeholder={placeholder} onCommit={(v) => setEtapa(i, { [campo]: v })} />
   );
@@ -205,27 +223,154 @@ export const CicloDeVidaSection: FC<SectionProps<CicloDeVidaData>> = ({ data, ed
         </table>
       </div>
       {editable && <AddBtn label="Agregar etapa" onClick={() => set({ etapas: appendItem(etapas, { etapa: "", entraCuando: "", laMueve: "", cambio: "nueva", origen: "" }) })} />}
+
+      {/* 2026-10-25 — el estado del lead, al lado del ciclo de vida como en el Brief. */}
+      {(editable || estados.length > 0) && <h3 className="stl-plan-objeto">Estado del lead</h3>}
+      {estados.length > 0 && (
+        <div className="stl-props-scroll">
+          <table className="stl-props stl-plan-tabla">
+            <thead>
+              <tr>
+                <th>Estado</th>
+                <th>Qué significa</th>
+                <th>Origen</th>
+                {editable && <th className="stl-props-actions" aria-label="Acciones" />}
+              </tr>
+            </thead>
+            <tbody>
+              {estados.map((e, i) => (
+                <tr key={i}>
+                  <td><Editable as="span" className="stl-accion-titulo" editable={editable} value={e.estado} placeholder="Nuevo" onCommit={(v) => setEstado(i, { estado: v })} /></td>
+                  <td><Editable as="span" editable={editable} value={e.significa ?? ""} placeholder="Cuándo un lead está en este estado…" onCommit={(v) => setEstado(i, { significa: v })} /></td>
+                  <td><OrigenChip value={e.origen} editable={editable} onCommit={(v) => setEstado(i, { origen: v })} /></td>
+                  {editable && (
+                    <td className="stl-props-actions"><RemoveBtn onClick={() => set({ estadosLead: removeAt(estados, i) })} title="Quitar este estado" /></td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {editable && (
+        <div className="stl-plan-acciones">
+          <AddBtn label="Agregar estado" onClick={() => set({ estadosLead: appendItem(estados, { estado: "", significa: "", origen: "" }) })} />
+          {!estados.length && (
+            <button type="button" className="stl-plan-mini" onClick={() => set({ estadosLead: ESTADOS_DEL_LEAD_DE_SIEMPRE.map((estado) => ({ estado, significa: "", origen: "" })) })}>
+              Empezar con los estados de siempre
+            </button>
+          )}
+        </div>
+      )}
     </ConIntro>
   );
 };
 
 /* ── Propiedades por objeto ─────────────────────────────────────────────────── */
 
+/* 2026-10-25 — con lo que pide el Brief de implementación: las propiedades de cada objeto van POR GRUPO
+   (con orden), cada una dice si se ve en la ficha, la ficha se previsualiza, se pega una plantilla de
+   Excel o la pestaña del Brief, y la plantilla para importar la base sale sola de la tabla. */
+
+/** Descarga la plantilla de importación de un objeto. Solo en el navegador. */
+function descargarPlantilla(data: PropiedadesData, objeto: string) {
+  const blob = new Blob([plantillaDeImportacion(data, objeto)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `plantilla-de-importacion-${objeto.toLowerCase().replace(/\s+/g, "-")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const nombreDeGrupoNuevo = (existentes: string[]) => {
+  let n = 1;
+  while (existentes.some((g) => g.toLowerCase() === (n === 1 ? "grupo nuevo" : `grupo nuevo ${n}`))) n++;
+  return n === 1 ? "Grupo nuevo" : `Grupo nuevo ${n}`;
+};
+
 export const PropiedadesObjetoSection: FC<SectionProps<PropiedadesData>> = ({ data, ctx, editable, onChange }) => {
   const filas = Array.isArray(data?.filas) ? data.filas : [];
-  const set = (next: Partial<PropiedadesData>) => onChange?.({ ...data, filas, ...next });
+  const d: PropiedadesData = { ...data, filas };
+  const set = (next: PropiedadesData) => onChange?.({ ...data, ...next });
   // Una fila tocada por una persona pasa a ser suya: regenerar ya no la reemplaza (lib/planificacion/propiedades.ts).
-  const setFila = (i: number, patch: Partial<FilaPropiedad>) =>
-    set({ filas: replaceAt(filas, i, { ...filas[i], ...patch, id: filas[i].id ?? nuevoIdDeFila(), autor: filas[i].autor === "plantilla" ? "plantilla" : "persona" }) });
+  const setFila = (i: number, patch: Partial<FilaPropiedad>) => set({ ...d, filas: replaceAt(filas, i, tocadaPorUnaPersona({ ...filas[i], ...patch })) });
   const objetos = objetosDe(filas, !!editable);
   const [activo, setActivo] = useState<string>(objetos[0] ?? "Contacto");
+  const [pegado, setPegado] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
   if (!editable && !filas.length) return null;
 
   // En el PDF no hay pestañas: salen todos los objetos, uno debajo del otro.
   const visibles = ctx.pdfMode ? objetos : objetos.includes(activo) ? [activo] : objetos.slice(0, 1);
+  const columnas = editable ? 9 : 8;
+
+  const importar = (objeto: string) => {
+    const r = leerPlantilla(pegado ?? "", objeto);
+    if (!r.filas.length) {
+      setAviso("No encontré propiedades. Copia también la fila de títulos (Propiedad, Tipo…) o, del Brief, desde «TARJETA DE VISUALIZACIÓN» hasta las opciones.");
+      return;
+    }
+    const { data: nueva, sumadas, repetidas } = sumarImportadas(d, r.filas);
+    set(nueva);
+    setPegado(null);
+    setAviso(
+      `Se sumaron ${sumadas} ${sumadas === 1 ? "propiedad" : "propiedades"}` +
+        (repetidas ? `. ${repetidas} ya las había escrito una persona y quedaron como estaban.` : "."),
+    );
+  };
+
+  const fila = (f: FilaPropiedad, i: number, grupos: string[]) => {
+    const opciones = opcionesDe(f.opciones);
+    return (
+      <tr key={f.id ?? i}>
+        <td>
+          <Editable as="span" className="stl-accion-titulo" editable={editable} value={f.etiqueta || (editable ? "" : f.campo)} placeholder="Etiqueta…" onCommit={(v) => setFila(i, { etiqueta: v })} />
+          <div className="stl-plan-meta">
+            <InlineSelect value={f.estado ?? ""} options={ESTADOS_DE_PROPIEDAD} editable={editable} onCommit={(v) => setFila(i, { estado: v })} ariaLabel="Si es nueva, existente, se ajusta o viene con HubSpot" placeholder="Estado" />
+            {editable && (
+              <InlineSelect value={f.grupo ?? ""} options={grupos.map((g) => ({ value: g, label: g }))} editable onCommit={(v) => setFila(i, { grupo: v })} ariaLabel="Grupo de propiedades" placeholder="Sin grupo" />
+            )}
+          </div>
+        </td>
+        <td><Editable as="span" className="stl-props-campo" editable={editable} value={f.campo} placeholder="nombre_interno" onCommit={(v) => setFila(i, { campo: v })} /></td>
+        <td><InlineSelect value={f.tipo} options={TIPOS_DE_PROPIEDAD} editable={editable} onCommit={(v) => setFila(i, { tipo: v })} ariaLabel="Tipo de campo" /></td>
+        <td>
+          {!editable && opciones.length > 1 ? (
+            <span className="stl-plan-opciones">{opciones.map((o) => <span key={o}>{o}</span>)}</span>
+          ) : (
+            <Editable as="span" editable={editable} value={f.opciones ?? ""} placeholder="Opción · Opción" onCommit={(v) => setFila(i, { opciones: v })} />
+          )}
+        </td>
+        <td className="stl-props-mid"><InlineCheck value={f.obligatoria ?? ""} editable={editable} onCommit={(v) => setFila(i, { obligatoria: v })} ariaLabel="Obligatoria" /></td>
+        <td className="stl-props-mid"><InlineCheck value={f.enFicha ?? ""} editable={editable} onCommit={(v) => setFila(i, { enFicha: v })} ariaLabel="Se ve en la ficha" /></td>
+        <td><Editable as="span" className="stl-props-desc" editable={editable} value={f.uso ?? ""} placeholder="Para qué existe…" onCommit={(v) => setFila(i, { uso: v })} /></td>
+        <td>
+          <OrigenChip value={f.origen} editable={editable} onCommit={(v) => setFila(i, { origen: v })} />
+          {(editable || f.fuente) && (
+            <Editable as="div" className="stl-plan-fuente" editable={editable} value={f.fuente ?? ""} placeholder="Reunión…" onCommit={(v) => setFila(i, { fuente: v })} />
+          )}
+        </td>
+        {editable && (
+          <td className="stl-props-actions">
+            <RemoveBtn onClick={() => set({ ...d, filas: removeAt(filas, i) })} title="Quitar esta propiedad" />
+          </td>
+        )}
+      </tr>
+    );
+  };
 
   const tabla = (objeto: string) => {
-    const indices = filas.map((f, i) => ({ f, i })).filter(({ f }) => normalizarObjeto(f.objeto) === objeto);
+    const grupos = gruposDe(d, objeto);
+    const nombres = grupos.filter(Boolean);
+    const delGrupo = (g: string) =>
+      filas.map((f, i) => ({ f, i })).filter(({ f }) => normalizarObjeto(f.objeto) === objeto && (f.grupo ?? "").trim().toLowerCase() === g.toLowerCase());
+    const nuevaFila = (grupo: string): FilaPropiedad => ({
+      id: nuevoIdDeFila(), autor: "persona", objeto, grupo, etiqueta: "", campo: "", tipo: "",
+      opciones: "", obligatoria: "no", enFicha: "no", estado: "nueva", uso: "", origen: "", fuente: "",
+    });
+    const ficha = fichaDe(d, objeto);
+    const conColumnas = !ctx.pdfMode && filas.some((f) => normalizarObjeto(f.objeto) === objeto) && plantillaDeImportacion(d, objeto).trim().length > 0;
     return (
       <div key={objeto}>
         {ctx.pdfMode && <h3 className="stl-plan-objeto">{objeto}</h3>}
@@ -238,69 +383,101 @@ export const PropiedadesObjetoSection: FC<SectionProps<PropiedadesData>> = ({ da
                 <th>Tipo</th>
                 <th>Opciones</th>
                 <th className="stl-props-mid">Oblig.</th>
+                <th className="stl-props-mid">En la ficha</th>
                 <th>Para qué</th>
                 <th>Origen</th>
                 {editable && <th className="stl-props-actions" aria-label="Acciones" />}
               </tr>
             </thead>
-            <tbody>
-              {indices.map(({ f, i }) => (
-                <tr key={f.id ?? i}>
-                  <td>
-                    <Editable as="span" className="stl-accion-titulo" editable={editable} value={f.etiqueta || (editable ? "" : f.campo)} placeholder="Etiqueta…" onCommit={(v) => setFila(i, { etiqueta: v })} />
-                    <div className="stl-plan-meta">
-                      <InlineSelect value={f.estado ?? ""} options={ESTADOS_DE_PROPIEDAD} editable={editable} onCommit={(v) => setFila(i, { estado: v })} ariaLabel="Si es nueva, existente o se ajusta" placeholder="Estado" />
-                      {(editable || f.grupo) && (
-                        <Editable as="span" className="stl-plan-grupo" editable={editable} value={f.grupo ?? ""} placeholder="Grupo…" onCommit={(v) => setFila(i, { grupo: v })} />
-                      )}
-                    </div>
-                  </td>
-                  <td><Editable as="span" className="stl-props-campo" editable={editable} value={f.campo} placeholder="nombre_interno" onCommit={(v) => setFila(i, { campo: v })} /></td>
-                  <td><InlineSelect value={f.tipo} options={TIPOS_DE_PROPIEDAD} editable={editable} onCommit={(v) => setFila(i, { tipo: v })} ariaLabel="Tipo de campo" /></td>
-                  <td><Editable as="span" editable={editable} value={f.opciones ?? ""} placeholder="—" onCommit={(v) => setFila(i, { opciones: v })} /></td>
-                  <td className="stl-props-mid"><InlineCheck value={f.obligatoria ?? ""} editable={editable} onCommit={(v) => setFila(i, { obligatoria: v })} ariaLabel="Obligatoria" /></td>
-                  <td><Editable as="span" className="stl-props-desc" editable={editable} value={f.uso ?? ""} placeholder="Para qué existe…" onCommit={(v) => setFila(i, { uso: v })} /></td>
-                  <td>
-                    <OrigenChip value={f.origen} editable={editable} onCommit={(v) => setFila(i, { origen: v })} />
-                    {(editable || f.fuente) && (
-                      <Editable as="div" className="stl-plan-fuente" editable={editable} value={f.fuente ?? ""} placeholder="Reunión…" onCommit={(v) => setFila(i, { fuente: v })} />
-                    )}
-                  </td>
-                  {editable && (
-                    <td className="stl-props-actions">
-                      <RemoveBtn onClick={() => set({ filas: removeAt(filas, i) })} title="Quitar esta propiedad" />
-                    </td>
+            {grupos.map((g) => {
+              const lugar = nombres.indexOf(g);
+              return (
+                <tbody key={g || "__sin-grupo"}>
+                  {(g || nombres.length > 0) && (
+                    <tr className="stl-plan-grupo-fila">
+                      <th colSpan={columnas} scope="colgroup">
+                        <span className="stl-plan-grupo-h">
+                          {g ? (
+                            <Editable as="span" className="stl-plan-grupo-n" editable={editable} value={g} placeholder="Nombre del grupo…" onCommit={(v) => set(renombrarGrupo(d, objeto, g, v))} />
+                          ) : (
+                            <span className="stl-plan-grupo-n">Sin grupo</span>
+                          )}
+                          {editable && g && (
+                            <>
+                              <Mover rotulo="el grupo" puedeIzq={lugar > 0} puedeDer={lugar < nombres.length - 1}
+                                onIzq={() => set(moverGrupo(d, objeto, g, -1))} onDer={() => set(moverGrupo(d, objeto, g, 1))} />
+                              <button type="button" className="stl-plan-mini" onClick={() => set({ ...d, filas: [...filas, nuevaFila(g)] })}>+ Propiedad</button>
+                              <RemoveBtn onClick={() => set(quitarGrupo(d, objeto, g))} title="Quitar el grupo (sus propiedades quedan sin grupo)" />
+                            </>
+                          )}
+                        </span>
+                      </th>
+                    </tr>
                   )}
-                </tr>
-              ))}
-            </tbody>
+                  {delGrupo(g).map(({ f, i }) => fila(f, i, nombres))}
+                </tbody>
+              );
+            })}
           </table>
         </div>
         {editable && (
-          <AddBtn
-            label={`Agregar propiedad de ${objeto}`}
-            onClick={() =>
-              set({
-                filas: appendItem(filas, {
-                  id: nuevoIdDeFila(), autor: "persona", objeto, grupo: "", etiqueta: "", campo: "", tipo: "",
-                  opciones: "", obligatoria: "no", estado: "nueva", uso: "", origen: "", fuente: "",
-                }),
-              })
-            }
-          />
+          <div className="stl-plan-acciones">
+            <AddBtn label={`Agregar propiedad de ${objeto}`} onClick={() => set({ ...d, filas: appendItem(filas, nuevaFila("")) })} />
+            <AddBtn label="Agregar grupo" onClick={() => set(agregarGrupo(d, objeto, nombreDeGrupoNuevo(nombres)))} />
+            <button type="button" className="stl-add" onClick={() => { setAviso(null); setPegado(pegado === null ? "" : null); }}>
+              Pegar desde Excel o el Brief
+            </button>
+          </div>
+        )}
+        {editable && pegado !== null && (
+          <div className="stl-plan-pegar">
+            <label className="stl-plan-pegar-l" htmlFor={`pegar-${objeto}`}>
+              Pega las celdas que copiaste de Excel, de Google Sheets o de la pestaña de propiedades del Brief. Lo que no diga de qué objeto es se suma a {objeto}.
+            </label>
+            <textarea id={`pegar-${objeto}`} className="stl-plan-pegar-t" rows={6} value={pegado} onChange={(e) => setPegado(e.target.value)} />
+            <div className="stl-plan-acciones">
+              <button type="button" className="stl-plan-mini stl-plan-mini--fuerte" disabled={!pegado.trim()} onClick={() => importar(objeto)}>Sumar las propiedades</button>
+              <button type="button" className="stl-plan-mini" onClick={() => setPegado(null)}>Cancelar</button>
+            </div>
+          </div>
+        )}
+        {editable && aviso && <p className="stl-plan-aviso" role="status">{aviso}</p>}
+        {conColumnas && (
+          <div className="stl-plan-acciones">
+            <button type="button" className="stl-plan-mini" onClick={() => descargarPlantilla(d, objeto)}>
+              Descargar la plantilla para importar {enPlural(objeto)}
+            </button>
+          </div>
+        )}
+        {ficha.length > 0 ? (
+          <div className="stl-plan-ficha">
+            <div className="stl-plan-ficha-t">Así va a quedar la ficha de {objeto} en HubSpot</div>
+            <div className="stl-plan-ficha-g">
+              {ficha.map((g, k) => (
+                <div key={`${g.grupo}-${k}`} className="stl-plan-ficha-card">
+                  <div className="stl-plan-ficha-n">{g.grupo || "Sin grupo"}</div>
+                  <ul>{g.propiedades.map((p, j) => <li key={`${p}-${j}`}>{p}</li>)}</ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          editable && filas.some((f) => normalizarObjeto(f.objeto) === objeto) && (
+            <p className="stl-plan-aviso">Marca «En la ficha» en las propiedades que el equipo tiene que ver al abrir un registro: aquí se arma cómo va a quedar.</p>
+          )
         )}
       </div>
     );
   };
 
   return (
-    <ConIntro data={{ ...(data as object), intro: data?.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<PropiedadesData>)} placeholder="Una frase que enmarca las propiedades…">
+    <ConIntro data={{ ...(data as object), intro: data?.intro }} editable={editable} onCambios={(c) => set({ ...d, ...(c as unknown as Partial<PropiedadesData>) })} placeholder="Una frase que enmarca las propiedades…">
       {!ctx.pdfMode && objetos.length > 0 && (
         <div className="stl-plan-tabs" role="tablist" aria-label="Objetos">
           {objetos.map((o) => {
             const n = filas.filter((f) => normalizarObjeto(f.objeto) === o).length;
             return (
-              <button key={o} type="button" role="tab" aria-selected={visibles[0] === o} className="stl-plan-tab" onClick={() => setActivo(o)}>
+              <button key={o} type="button" role="tab" aria-selected={visibles[0] === o} className="stl-plan-tab" onClick={() => { setActivo(o); setPegado(null); setAviso(null); }}>
                 {o} <span className="stl-plan-tab-n">{n}</span>
               </button>
             );
@@ -367,6 +544,9 @@ export const PipelinesSection: FC<SectionProps<PipelinesData>> = ({ data, editab
                           </span>
                         )
                       )}
+                      {(editable || e.automatizacion) && (
+                        <Editable as="span" className="stl-plan-etapa-auto" editable={editable} value={e.automatizacion ?? ""} placeholder="Lo que pasa solo al entrar (opcional)…" onCommit={(v) => setEtapa(j, { automatizacion: v })} />
+                      )}
                       <span className="stl-plan-pie">
                         {editable && <InlineSelect value={e.cierre ?? ""} options={CIERRES_DE_ETAPA} editable onCommit={(v) => setEtapa(j, { cierre: v })} ariaLabel="Si la etapa cierra el pipeline" />}
                         <OrigenChip value={e.origen} editable={editable} onCommit={(v) => setEtapa(j, { origen: v })} />
@@ -418,7 +598,13 @@ export const AutomatizacionesSection: FC<SectionProps<AutomatizacionesData>> = (
             <dl className="stl-plan-campos">
               <Campo rotulo="Cuando" value={a.cuando} editable={editable} placeholder="Qué la dispara…" onCommit={(v) => setItem(i, { cuando: v })} />
               <Campo rotulo="Hace" value={a.hace} editable={editable} placeholder="Qué hace…" onCommit={(v) => setItem(i, { hace: v })} />
+              {/* 2026-10-25 — las ramas del Brief («bifurcación», «cumple / no cumple con criterio»). */}
+              <Campo rotulo="Si…" value={a.condicion} editable={editable} placeholder="La condición que la bifurca (opcional)…" onCommit={(v) => setItem(i, { condicion: v })} />
+              <Campo rotulo="Se cumple" value={a.siCumple} editable={editable} placeholder="Qué pasa si se cumple…" onCommit={(v) => setItem(i, { siCumple: v })} />
+              <Campo rotulo="No se cumple" value={a.noCumple} editable={editable} placeholder="Qué pasa si no…" onCommit={(v) => setItem(i, { noCumple: v })} />
               <Campo rotulo="Resuelve" value={a.resuelve} editable={editable} placeholder="Qué problema resuelve…" onCommit={(v) => setItem(i, { resuelve: v })} />
+              <Campo rotulo="Vista" value={a.vista} editable={editable} placeholder="La vista o el filtro que deja (Leads nuevos · Formulario del sitio)…" onCommit={(v) => setItem(i, { vista: v })} />
+              <Campo rotulo="Ten en cuenta" value={a.considerar} editable={editable} placeholder="Lo que hay que considerar al construirla…" onCommit={(v) => setItem(i, { considerar: v })} />
               <Campo rotulo="Falta" value={a.falta} editable={editable} placeholder="Lo que todavía no está definido…" onCommit={(v) => setItem(i, { falta: v })} aviso />
             </dl>
             {(editable || a.fuente) && (
@@ -465,8 +651,28 @@ export const ConversacionesSection: FC<SectionProps<ConversacionesData>> = ({ da
               <Campo rotulo="Para qué" value={c.paraQue} editable={editable} placeholder="Para qué sirve…" onCommit={(v) => setItem(i, { paraQue: v })} />
               <Campo rotulo="Pasa a" value={c.pasaA} editable={editable} placeholder="A quién pasa y cuándo…" onCommit={(v) => setItem(i, { pasaA: v })} />
               <Campo rotulo="Registra" value={c.registra} editable={editable} placeholder="Qué crea o actualiza en HubSpot…" onCommit={(v) => setItem(i, { registra: v })} />
+              <Campo rotulo="Atienden" value={c.atienden} editable={editable} placeholder="Quiénes responden cuando pasa a una persona…" onCommit={(v) => setItem(i, { atienden: v })} />
               <Campo rotulo="Falta" value={c.falta} editable={editable} placeholder="Lo que todavía no está definido…" onCommit={(v) => setItem(i, { falta: v })} aviso />
             </dl>
+            {/* 2026-10-25 — el guion del bot, como en la pestaña «Chatbot» del Brief: el saludo y los pasos. */}
+            {((c.guion?.length ?? 0) > 0 || (editable && c.responde && c.responde !== "persona")) && (
+              <ol className="stl-plan-guion">
+                {(c.guion ?? []).map((g, j) => (
+                  <li key={j}>
+                    <span className="stl-plan-guion-n">{j === 0 ? "Saludo" : `Paso ${j}`}</span>
+                    <Editable as="span" editable={editable} value={g} placeholder={j === 0 ? "Hola, soy…" : "Qué pregunta o qué ofrece…"} onCommit={(v) => setItem(i, { guion: replaceAt(c.guion ?? [], j, v) })} />
+                    {editable && <RemoveBtn onClick={() => setItem(i, { guion: removeAt(c.guion ?? [], j) })} title="Quitar este paso" />}
+                  </li>
+                ))}
+                {editable && (
+                  <li>
+                    <button type="button" className="stl-plan-mini" onClick={() => setItem(i, { guion: [...(c.guion ?? []), ""] })}>
+                      {(c.guion?.length ?? 0) === 0 ? "+ Escribir el guion" : "+ Paso"}
+                    </button>
+                  </li>
+                )}
+              </ol>
+            )}
             {(editable || c.fuente) && (
               <Editable as="div" className="stl-plan-fuente" editable={editable} value={c.fuente ?? ""} placeholder="Reunión que la respalda…" onCommit={(v) => setItem(i, { fuente: v })} />
             )}

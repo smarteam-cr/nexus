@@ -1,7 +1,10 @@
 # La Planificación con lo que pide el Brief de implementación — plan
 
 > Escrito el 2026-10-24 contra el código y contra la hoja «BRIEF DE IMPLEMENTACIÓN» de Smarteam (Google Sheets, 20
-> pestañas). **Nada construido.** Amplía L4 («La Planificación como el siguiente entregable») e I2 («Dos plantillas de
+> pestañas). **Construido el 2026-10-25 (rama `claude/planificacion-brief`): etapas 1 a 4 y, de la 5, la plantilla
+> de importación** (DECISIONS «La Planificación con lo que pide el Brief de implementación»). Pendiente: el resto de la
+> 5 (estado y enlace por cosa construida, la lista de construcción en Tareas), la 6, la 7, la cuenta de licencias contra
+> lo vendido y las fechas leídas del Cronograma. Amplía L4 («La Planificación como el siguiente entregable») e I2 («Dos plantillas de
 > Planificación») del roadmap, y trae al frente «Las tareas que salen de la Planificación», que estaba en «Más
 > adelante».
 

@@ -54,11 +54,24 @@ export interface FilaPropiedad {
   esLlave?: string;
   /** Columnas de una plantilla que no tienen campo propio. Fuera del esquema. */
   extra?: Record<string, string>;
+  /** «si» si aparece en la ficha del registro (lo que el Brief llama «tarjeta de visualización»). Fuera del esquema. */
+  enFicha?: string;
+}
+
+/**
+ * Un grupo de propiedades de un objeto (2026-10-25, el Brief de implementación). Las filas dicen su
+ * grupo por nombre; esta lista guarda el ORDEN de los grupos y los que todavía no tienen propiedades.
+ * Fuera del esquema del agente: `preserveNonSchemaKeys` la conserva al regenerar.
+ */
+export interface GrupoDePropiedades {
+  objeto: string;
+  nombre: string;
 }
 
 export interface PropiedadesData {
   intro?: string;
   filas: FilaPropiedad[];
+  grupos?: GrupoDePropiedades[];
 }
 
 /** Los tipos de campo de HubSpot, en español. El valor viejo de la tabla de integración se mapea abajo. */
@@ -83,6 +96,9 @@ export const ESTADOS_DE_PROPIEDAD = [
   { value: "nueva", label: "Nueva" },
   { value: "existente", label: "Existente" },
   { value: "ajustar", label: "Ajustar" },
+  /* 2026-10-25 — las que trae HubSpot (nombre, correo, etapa del ciclo de vida): en el Brief dicen «N/A»
+     como tipo. Se planifican igual porque deciden qué se ve en la ficha y qué pide un formulario. */
+  { value: "hubspot", label: "Viene con HubSpot" },
 ] as const;
 
 /** Orden de las pestañas. Un objeto personalizado va después, en el orden en que aparece. */
@@ -196,4 +212,170 @@ export function fusionarFilas(previas: readonly FilaPropiedad[], nuevas: readonl
     .map((f, i) => ({ f, i }))
     .sort((a, b) => pos(a.f) - pos(b.f) || a.i - b.i)
     .map((x) => x.f);
+}
+
+/* ── Grupos, ficha y plantilla de importación (2026-10-25, el Brief de implementación) ──────────────
+   El Brief ordena las propiedades de cada objeto por grupos («Información del contacto»,
+   «Clasificación de registro»…) y marca cuáles se ven en la ficha. Acá viven el orden de los grupos,
+   lo que se muestra en la ficha y la plantilla que el cliente llena para importar su base. */
+
+const mismoObjeto = (a: unknown, b: string) => normalizarObjeto(a) === b;
+const nombreDeGrupo = (g: unknown) => (typeof g === "string" ? g.trim() : "");
+const esSi = (v: unknown) => typeof v === "string" && /^(si|sí|yes|true|x)$/i.test(v.trim());
+
+/** Una fila que tocó una persona pasa a ser suya (regenerar ya no la reemplaza). Una de plantilla sigue siéndolo. */
+export function tocadaPorUnaPersona(f: FilaPropiedad): FilaPropiedad {
+  return { ...f, id: f.id ?? nuevoIdDeFila(), autor: f.autor === "plantilla" ? "plantilla" : "persona" };
+}
+
+/**
+ * Los grupos de un objeto, en orden: primero los de la lista guardada, después los que solo dicen las
+ * filas (en el orden en que aparecen). «» (sin grupo) va al final, y solo si alguna fila no tiene grupo.
+ */
+export function gruposDe(data: Pick<PropiedadesData, "filas" | "grupos">, objeto: string): string[] {
+  const vistos = new Set<string>();
+  const orden: string[] = [];
+  const sumar = (n: string) => {
+    if (!n || vistos.has(n.toLowerCase())) return;
+    vistos.add(n.toLowerCase());
+    orden.push(n);
+  };
+  for (const g of data.grupos ?? []) if (mismoObjeto(g.objeto, objeto)) sumar(nombreDeGrupo(g.nombre));
+  const filas = (data.filas ?? []).filter((f) => mismoObjeto(f.objeto, objeto));
+  for (const f of filas) sumar(nombreDeGrupo(f.grupo));
+  if (filas.some((f) => !nombreDeGrupo(f.grupo))) orden.push("");
+  return orden;
+}
+
+/** La lista de grupos de los demás objetos, intacta, más la de este objeto con el orden que se pasa. */
+function conGruposDe(data: PropiedadesData, objeto: string, nombres: string[]): GrupoDePropiedades[] {
+  const otros = (data.grupos ?? []).filter((g) => !mismoObjeto(g.objeto, objeto));
+  return [...otros, ...nombres.filter(Boolean).map((nombre) => ({ objeto, nombre }))];
+}
+
+export function agregarGrupo(data: PropiedadesData, objeto: string, nombre: string): PropiedadesData {
+  const n = nombre.trim();
+  const actuales = gruposDe(data, objeto).filter(Boolean);
+  if (!n || actuales.some((g) => g.toLowerCase() === n.toLowerCase())) return data;
+  return { ...data, grupos: conGruposDe(data, objeto, [...actuales, n]) };
+}
+
+/** Renombra el grupo en la lista y en cada fila del objeto que lo usa. Renombrar a uno que ya existe los junta. */
+export function renombrarGrupo(data: PropiedadesData, objeto: string, viejo: string, nuevo: string): PropiedadesData {
+  const n = nuevo.trim();
+  if (!n || n === viejo) return data;
+  const iguales = (g: unknown) => nombreDeGrupo(g).toLowerCase() === viejo.toLowerCase();
+  const nombres = gruposDe(data, objeto).filter(Boolean);
+  const yaExiste = nombres.some((g) => g.toLowerCase() === n.toLowerCase() && !iguales(g));
+  const orden = yaExiste ? nombres.filter((g) => !iguales(g)) : nombres.map((g) => (iguales(g) ? n : g));
+  return {
+    ...data,
+    grupos: conGruposDe(data, objeto, orden),
+    filas: data.filas.map((f) => (mismoObjeto(f.objeto, objeto) && iguales(f.grupo) ? tocadaPorUnaPersona({ ...f, grupo: n }) : f)),
+  };
+}
+
+/** Cambia de lugar un grupo dentro de su objeto. */
+export function moverGrupo(data: PropiedadesData, objeto: string, nombre: string, delta: -1 | 1): PropiedadesData {
+  const nombres = gruposDe(data, objeto).filter(Boolean);
+  const i = nombres.findIndex((g) => g.toLowerCase() === nombre.toLowerCase());
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= nombres.length) return data;
+  const orden = [...nombres];
+  [orden[i], orden[j]] = [orden[j], orden[i]];
+  return { ...data, grupos: conGruposDe(data, objeto, orden) };
+}
+
+/** Quita el grupo: sus propiedades quedan sin grupo, no se borran. */
+export function quitarGrupo(data: PropiedadesData, objeto: string, nombre: string): PropiedadesData {
+  const iguales = (g: unknown) => nombreDeGrupo(g).toLowerCase() === nombre.toLowerCase();
+  return {
+    ...data,
+    grupos: conGruposDe(data, objeto, gruposDe(data, objeto).filter((g) => g && !iguales(g))),
+    filas: data.filas.map((f) => (mismoObjeto(f.objeto, objeto) && iguales(f.grupo) ? tocadaPorUnaPersona({ ...f, grupo: "" }) : f)),
+  };
+}
+
+/** Las opciones de una lista, una por elemento. Separadas por renglón o «·»; si no hay ninguno de los dos, por coma. */
+export function opcionesDe(v: unknown): string[] {
+  const t = typeof v === "string" ? v.trim() : "";
+  if (!t || t.startsWith("⚠️")) return [];
+  const partes = /[\n·]/.test(t) ? t.split(/\s*[\n·]\s*/) : t.split(/\s*,\s*/);
+  return partes.map((p) => p.trim()).filter(Boolean);
+}
+
+/** Las filas de un objeto en el orden de la ficha: por grupo (en su orden) y, dentro, como están. */
+export function filasEnOrdenDeFicha(data: Pick<PropiedadesData, "filas" | "grupos">, objeto: string): FilaPropiedad[] {
+  const filas = (data.filas ?? []).filter((f) => mismoObjeto(f.objeto, objeto));
+  const grupos = gruposDe(data, objeto).map((g) => g.toLowerCase());
+  const pos = (f: FilaPropiedad) => grupos.indexOf(nombreDeGrupo(f.grupo).toLowerCase());
+  return filas.map((f, i) => ({ f, i })).sort((a, b) => pos(a.f) - pos(b.f) || a.i - b.i).map((x) => x.f);
+}
+
+/** La ficha de un objeto: los grupos con las propiedades marcadas «en la ficha». Sin ninguna marcada, vacía. */
+export function fichaDe(data: Pick<PropiedadesData, "filas" | "grupos">, objeto: string): Array<{ grupo: string; propiedades: string[] }> {
+  const out: Array<{ grupo: string; propiedades: string[] }> = [];
+  for (const f of filasEnOrdenDeFicha(data, objeto)) {
+    if (!esSi(f.enFicha)) continue;
+    const nombre = (f.etiqueta || f.campo || "").trim();
+    if (!nombre) continue;
+    const g = nombreDeGrupo(f.grupo);
+    const ultimo = out[out.length - 1];
+    if (ultimo && ultimo.grupo === g) ultimo.propiedades.push(nombre);
+    else out.push({ grupo: g, propiedades: [nombre] });
+  }
+  return out;
+}
+
+/** Lo que no se importa: un cálculo lo arma HubSpot y un archivo no viaja en una planilla. */
+const NO_SE_IMPORTA = new Set(["calculo", "archivo"]);
+
+const celdaCsv = (v: string) => (/[",;\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+
+/**
+ * La plantilla de importación de un objeto (el «PLANTILLA BD» del Brief): una columna por propiedad, en
+ * el orden de la ficha, con la etiqueta que ve el usuario. Sale sola de la tabla de propiedades: si
+ * cambia una propiedad, cambia la plantilla. CSV con BOM para que Excel lea las tildes.
+ */
+export function plantillaDeImportacion(data: Pick<PropiedadesData, "filas" | "grupos">, objeto: string): string {
+  const columnas = filasEnOrdenDeFicha(data, objeto)
+    .filter((f) => !NO_SE_IMPORTA.has((f.tipo ?? "").trim()))
+    .map((f) => (f.etiqueta || f.campo || "").replace(/[`⚠️]/g, "").trim())
+    .filter((n) => n && !/por validar/i.test(n));
+  const unicas = columnas.filter((c, i) => columnas.findIndex((x) => x.toLowerCase() === c.toLowerCase()) === i);
+  return "﻿" + unicas.map(celdaCsv).join(",") + "\r\n";
+}
+
+/**
+ * Lo que una propuesta de la IA o del chat no sabe que existe (la identidad y el autor de cada fila, sus
+ * columnas extra, si va en la ficha, y el orden de los grupos), recuperado de la versión anterior.
+ * Antes, «Mejorar con IA» y el chat devolvían la tabla con el esquema del agente y todo eso se perdía:
+ * una fila de una persona pasaba a ser de la IA y el próximo regenerar la borraba. No resucita filas:
+ * si el chat quitó una, queda quitada.
+ */
+export function conservarLoDeFuera(previo: unknown, nuevo: unknown): unknown {
+  const p = (previo ?? {}) as Partial<PropiedadesData>;
+  const n = (nuevo ?? {}) as Partial<PropiedadesData>;
+  if (!Array.isArray(n.filas)) return nuevo;
+  const previas = Array.isArray(p.filas) ? p.filas.filter((f) => f && typeof f === "object") : [];
+  const porId = new Map(previas.filter((f) => f.id).map((f) => [f.id!, f]));
+  const porClave = new Map(previas.map((f) => [claveDeFila(f), f]));
+  const usadas = new Set<FilaPropiedad>();
+  const filas = n.filas.map((f) => {
+    if (!f || typeof f !== "object") return f;
+    const antes = (f.id ? porId.get(f.id) : undefined) ?? porClave.get(claveDeFila(f));
+    if (!antes || usadas.has(antes)) return { ...f, id: f.id ?? nuevoIdDeFila(), autor: f.autor ?? "ia" };
+    usadas.add(antes);
+    return {
+      ...f,
+      id: f.id ?? antes.id ?? nuevoIdDeFila(),
+      autor: f.autor ?? antes.autor ?? "ia",
+      ...(f.extra === undefined && antes.extra ? { extra: antes.extra } : {}),
+      ...(f.enFicha === undefined && antes.enFicha ? { enFicha: antes.enFicha } : {}),
+      ...(f.sistema === undefined && antes.sistema ? { sistema: antes.sistema } : {}),
+      ...(f.direccion === undefined && antes.direccion ? { direccion: antes.direccion } : {}),
+      ...(f.esLlave === undefined && antes.esLlave ? { esLlave: antes.esLlave } : {}),
+    };
+  });
+  return { ...n, filas, ...(n.grupos === undefined && p.grupos ? { grupos: p.grupos } : {}) };
 }
