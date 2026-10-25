@@ -17,4 +17,13 @@
 /** Agentes cuya fila puede seguir ACTIVE en la tabla `Agent` pero que ya no se despachan. ⛔ Sacar un id de acá
  *  sin pausar su fila lo vuelve despachable desde /analyze (por id, o por su respaldo `associatedStep === null`). */
 export const AGENTES_RETIRADOS: readonly string[] = ["agent-timeline-assist", "agent-mapeo-inicial"];
-export const esAgenteRetirado = (id: string): boolean => AGENTES_RETIRADOS.includes(id);
+
+/**
+ * Agentes con fila ACTIVE (su prompt se calibra desde /agents) que corren por su PROPIO camino, nunca por /analyze: el
+ * analizador de reuniones de venta (S3, 2026-10-25, lib/analizador-venta/analizar-server.ts) arma su contexto con una
+ * sola reunión de una sola empresa y verifica sus citas; despachado por /analyze correría con otro contexto. Para /analyze
+ * cuentan igual que los retirados.
+ */
+export const AGENTES_CON_CAMINO_PROPIO: readonly string[] = ["agent-analizador-venta"];
+
+export const esAgenteRetirado = (id: string): boolean => AGENTES_RETIRADOS.includes(id) || AGENTES_CON_CAMINO_PROPIO.includes(id);

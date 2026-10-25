@@ -71,6 +71,9 @@
  *     (lib/sessions/motivo-sin-texto-server.ts, T4), cada 10 minutos. Sin IA ni red: una consulta y lo que cambió.
  *   - reuniones-propuestas → a qué empresa propone Nexus cada reunión con texto sin dueña (lib/sessions/
  *     propuesta-de-empresa-server.ts, T3), una vez por hora. El resolver único y una consulta de solo lectura a HubSpot.
+ *   - analizador-venta → analiza sola cada reunión de venta reciente con transcripción (lib/analizador-venta/, S3), de a
+ *     una por tick y si queda presupuesto automático. Gated por ANALIZADOR_VENTA=1 (apagado: primero la prueban los super
+ *     admin con Andrés); a mano, desde cada reunión.
  *   - reuniones-audio → mira las transcripciones de audio en curso (lib/sessions/audio-de-reunion-server.ts, T5), cada
  *     tick. Gated por REUNIONES_AUDIO=1 y el bucket; sin audios en curso devuelve SIN_TURNO.
  *   - invariants-daily → los invariantes que solo miran la base (lib/invariantes/), diario
@@ -1234,6 +1237,43 @@ const reunionesAudio: JobDef = {
 };
 
 /**
+ * El analizador de reuniones de venta (S3, 2026-10-25; lib/analizador-venta/analizar-server.ts): cada tick, la reunión de
+ * venta más vieja de los últimos 14 días con transcripción y sin análisis, si queda presupuesto automático. Gated por
+ * ANALIZADOR_VENTA=1. Sin nada que analizar devuelve SIN_TURNO. Un análisis que falla queda guardado con su error (no se
+ * reintenta solo) y el job LANZA.
+ */
+const analizadorVenta: JobDef = {
+  key: "analizador-venta",
+  shouldRun: () => encendido("analizador-venta"),
+  run: async (now) => {
+    if (!(await quedaPresupuesto(now))) return SIN_TURNO;
+    const { reunionesPorAnalizar } = await import("@/lib/analizador-venta/reuniones-de-venta-server");
+    // Hasta 5 candidatas: una que no se puede analizar (sin turnos «Nombre: …», ya no es de venta) se anota y se salta,
+    // para que no trabe a las demás. Se analiza UNA por tick.
+    const ids = await reunionesPorAnalizar(now, 5).catch((e) => {
+      if (esquemaDesactualizado(e)) return [];
+      throw e;
+    });
+    if (!ids.length) return SIN_TURNO;
+    const { analizarReunionDeVenta, anotarElError, laReunionDeVenta } = await import("@/lib/analizador-venta/analizar-server");
+    for (const id of ids) {
+      const r = await analizarReunionDeVenta(id, { pedidoPor: null });
+      if (r.ok) {
+        console.log(`[jobs/analizador-venta] ${id}: ${r.analisis.juicios.length} juicios, ${r.descartados} descartados`);
+        return;
+      }
+      // El agente sin sembrar es de configuración: rojo, y no se anota nada en las reuniones.
+      if (r.status === 503) throw new Error(`El analizador de reuniones de venta no corre: ${r.error}`);
+      // Un fallo del modelo ya quedó anotado (no se reintenta solo): rojo.
+      if (r.status === 502) throw new Error(`No se pudo analizar la reunión de venta ${id}: ${r.error}`);
+      const dueno = (await laReunionDeVenta(id))?.dueno?.id;
+      if (dueno) await anotarElError(id, dueno, r.error);
+      console.log(`[jobs/analizador-venta] ${id} se salta: ${r.error}`);
+    }
+  },
+};
+
+/**
  * Los avisos de HubSpot (U10, lib/hubspot/eventos-server.ts): cada tick, si hay pendientes. Sin pendientes, sin la tabla
  * o con el candado ajeno devuelve SIN_TURNO. Un aviso que falló 5 veces queda «error» y el job LANZA (rojo + Sentry).
  */
@@ -1389,5 +1429,5 @@ const jobsVigia: JobDef = {
 };
 
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleMeetConferencias, googleMeetEventos, googleMeetSuscripciones, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, hubspotEventos, hubspotLeads, hubspotFusiones, hubspotProyectos, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, reunionesMotivos, reunionesPropuestas, reunionesAudio, loPagadoDaily, invariantsDaily, jobsVigia];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleMeetConferencias, googleMeetEventos, googleMeetSuscripciones, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, hubspotEventos, hubspotLeads, hubspotFusiones, hubspotProyectos, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, reunionesMotivos, reunionesPropuestas, reunionesAudio, analizadorVenta, loPagadoDaily, invariantsDaily, jobsVigia];
 }

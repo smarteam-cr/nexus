@@ -27,6 +27,12 @@ import { propuestasDe } from "@/lib/sessions/propuesta-de-empresa-server";
 import { empresasParaElegir } from "@/lib/sessions/empresa-de-la-reunion-server";
 import { SinTextoDeLaReunion } from "@/components/sessions/reunion/SinTextoDeLaReunion";
 import { SinEmpresaDeLaReunion } from "@/components/sessions/reunion/SinEmpresaDeLaReunion";
+import { TEXTO_DE_POR_QUE_NO, seAnalizaAMano, veElAnalizador } from "@/lib/analizador-venta/reglas";
+import { leerResultadoGuardado } from "@/lib/analizador-venta/analisis";
+import type { QuienHablo } from "@/lib/analizador-venta/quien-hablo";
+import { laReunionDeVenta, quienHabloEnLaReunion } from "@/lib/analizador-venta/analizar-server";
+import { reunionesDeReferencia } from "@/lib/analizador-venta/referencia-server";
+import { AnalisisDeVentaDeLaReunion } from "@/components/sessions/reunion/AnalisisDeVentaDeLaReunion";
 import SessionView, { type PaginaDeLaVista, type SessionViewData } from "./SessionView";
 
 export const dynamic = "force-dynamic";
@@ -339,9 +345,12 @@ export default async function SessionPage({
         };
       })
     : null;
+  // S3: el análisis de la reunión de venta, solo para quien ve el analizador (los super admin, mientras se prueba).
+  const deVenta = veElAnalizador(rol) && duenoId ? await analisisDeVentaParaLaPagina(id) : null;
   const bloques =
-    sinEmpresa || motivo ? (
+    sinEmpresa || motivo || deVenta ? (
       <>
+        {deVenta && <AnalisisDeVentaDeLaReunion sessionId={id} {...deVenta} />}
         {sinEmpresa && <SinEmpresaDeLaReunion sessionId={id} titulo={session.title} {...sinEmpresa} />}
         {motivo && (
           <SinTextoDeLaReunion
@@ -377,4 +386,37 @@ export default async function SessionPage({
     ) : undefined;
 
   return <SessionView data={data} tarjeta={arriba} pagina={paginaConBloques} bloques={bloques} />;
+}
+
+/**
+ * El análisis de la reunión de venta para su página (S3), o null si no es de venta o falta el SQL. Quién habló se calcula
+ * aunque no esté analizada (sin IA). Un análisis hecho cuando la reunión era de otra empresa no se muestra (INV57).
+ */
+async function analisisDeVentaParaLaPagina(sessionId: string) {
+  try {
+    const r = await laReunionDeVenta(sessionId);
+    if (!r?.dueno || !seAnalizaAMano(r.porQueNo)) return null;
+    const [fila, referencias, esReferencia] = await Promise.all([
+      prisma.analisisDeVenta.findUnique({ where: { sessionId }, select: { clientId: true, estado: true, resultado: true, quienHablo: true, descartados: true, error: true, analizadoAt: true } }),
+      reunionesDeReferencia(),
+      prisma.reunionDeReferenciaDeVenta.count({ where: { sessionId } }),
+    ]);
+    const vigente = fila && fila.clientId === r.dueno.id ? fila : null;
+    const quienHablo = (vigente?.quienHablo as unknown as QuienHablo | null) ?? (r.conTranscripcion ? await quienHabloEnLaReunion(sessionId) : null);
+    return {
+      analisis: vigente
+        ? { estado: vigente.estado, resultado: leerResultadoGuardado(vigente.resultado), descartados: vigente.descartados, error: vigente.error, analizadoAt: vigente.analizadoAt.toISOString() }
+        : null,
+      quienHablo,
+      conTranscripcion: r.conTranscripcion,
+      // La expansión de un cliente sin preventa: se analiza a mano, si fue una conversación de venta.
+      aviso: r.porQueNo && !vigente ? TEXTO_DE_POR_QUE_NO[r.porQueNo] : null,
+      esDeVenta: !r.porQueNo,
+      esReferencia: esReferencia > 0,
+      referencias,
+    };
+  } catch (e) {
+    if (esquemaDesactualizado(e)) return null;
+    throw e;
+  }
 }

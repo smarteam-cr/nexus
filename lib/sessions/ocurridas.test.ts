@@ -350,6 +350,10 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "plomeria",
     motivo: "T3: propone la empresa de las reuniones con texto sin dueña, con el resolver único. Corta por `date <= ahora`; una persona decide.",
   },
+  "lib/analizador-venta/reuniones-de-venta-server.ts": {
+    clase: "agenda",
+    motivo: "S2: las reuniones de venta de cada empresa, para una PERSONA (y para elegir cuál analiza el job, que trae la reunión por el chokepoint). Corta por `date <= ahora`.",
+  },
   "lib/sessions/buscar-en-la-empresa-server.ts": {
     clase: "agenda",
     motivo: "T8: el buscador de «Contexto adicional», a una PERSONA: las de la empresa en toda su historia y las que quedaron en otra empresa del mismo dominio. Corta por `date <= ahora` (lo futuro no dejó nada que elegir).",

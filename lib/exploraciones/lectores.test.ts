@@ -74,9 +74,20 @@ type Destino =
    * (lib/exploraciones/equipos.ts › EQUIPOS) para elegirlo en el Contexto del diagnóstico y guardarlo en el vínculo de la
    * reunión con el proyecto. No lee ninguna exploración.
    */
-  | "equipos-del-cliente";
+  | "equipos-del-cliente"
+  /**
+   * El ANALIZADOR DE REUNIONES DE VENTA (S3, 2026-10-25, lib/analizador-venta): lee la guía que la preventa llevó a UNA
+   * reunión y las dimensiones de la escala del área, de la preventa de la MISMA empresa dueña de la reunión, para juzgar
+   * qué tan consultiva fue. Interno (coaching para Ventas): nunca llega a un documento del cliente.
+   */
+  | "analizador-de-venta";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
+  "lib/analizador-venta/analizar-server.ts": { destino: "analizador-de-venta", motivo: "Qué empresa tiene una preventa de venta abierta (solo el clientId), para decidir si una reunión es de venta." },
+  "lib/analizador-venta/guia-de-la-reunion-server.ts": {
+    destino: "analizador-de-venta",
+    motivo: "La guía que se llevó a la reunión (la de antes de la reunión, como la lectura de la preventa) y las dimensiones de la escala, de la preventa de la empresa dueña de la reunión.",
+  },
   "lib/clients/investigacion/pedido.ts": { destino: "investigacion-de-la-empresa", motivo: "Reusa los enlaces de las búsquedas de la radiografía." },
   "lib/clients/investigacion/servidor.ts": { destino: "investigacion-de-la-empresa", motivo: "Lee la empresa en HubSpot con el lector de la exploración y la fecha de Costa Rica." },
   "lib/clients/lo-que-le-falta-comprar-server.ts": {
@@ -368,6 +379,12 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     permitidas: /\benlacesDeLasBusquedas\b|\burlComparable\b|\bleerEmpresa\b|\bhoyEnCostaRica\b/,
     // Ninguna exploración: ni lo confirmado, ni la propuesta, ni el handoff, ni lo interno de la preventa.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\bexploracionesDeVenta\b/,
+  },
+  "analizador-de-venta": {
+    // La guía de antes de la reunión y la escala (las mismas piezas que la lectura de la preventa), o solo saber si hay preventa.
+    permitidas: /guiaDeAntesDeLaReunion|\.exploracionDeVenta\b/,
+    // Nada que vaya al cliente ni al handoff: el análisis es interno.
+    prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|bloqueParaElHandoff|internoParaElCse/,
   },
   "equipos-del-cliente": {
     permitidas: /\bEQUIPOS\b|\bEQUIPOS_DEL_CLIENTE\b|\besEquipo\b/,

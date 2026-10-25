@@ -22,6 +22,7 @@
 import { MOTIVO_APAGADO as MOTIVO_APAGADO_DEL_SEGUIMIENTO, seguimientoPrendido } from "@/lib/lecturas/reglas";
 import { copiaPrendida, MOTIVO_COPIA_APAGADA } from "@/lib/comunicaciones/banderas";
 import { motivoAudioApagado } from "@/lib/sessions/audio-de-reunion";
+import { motivoAnalizadorApagado } from "@/lib/analizador-venta/reglas";
 
 export type Entorno = Readonly<Record<string, string | undefined>>;
 
@@ -85,6 +86,8 @@ const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
   /* La transcripción del audio de las reuniones presenciales (T5, 2026-10-25). Apagada hasta que Elías habilite
      Speech-to-Text y el bucket en Google Cloud (la regla vive en lib/sessions/audio-de-reunion.ts). */
   "reuniones-audio": (env) => motivoAudioApagado(env),
+  /* El analizador de reuniones de venta (S3, 2026-10-25): apagado hasta que Andrés lo pruebe (S6). */
+  "analizador-venta": (env) => motivoAnalizadorApagado(env),
   /* La copia de Google Meet cada 10 minutos (U1, 2026-10-25). Prendida por defecto: solo se apaga a propósito, y apagada
      la copia vuelve a correr al abrir la app (`copiaDeMeetPorJob`). Sin las credenciales no corre ninguna de las dos. */
   "google-meet-sync": (env) => {

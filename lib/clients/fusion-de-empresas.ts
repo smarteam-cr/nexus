@@ -121,6 +121,9 @@ export const SE_MUDAN = [
   /* La empresa que Nexus propone para una reunión sin empresa (T3, 2026-10-25): `onDelete: SetNull`; sin mudarla, la
      propuesta de la absorbida quedaría sin empresa. Sin único con la ficha. */
   ["propuestaDeEmpresa", "clientId"],
+  /* El análisis de cada reunión de venta (S3, 2026-10-25): `onDelete: Cascade`, así que sin mudarlo se BORRARÍA con la
+     ficha absorbida. Las reuniones pasan a la que sigue (más abajo), así que INV57 sigue en verde. */
+  ["analisisDeVenta", "clientId"],
   /* Sin relación en el esquema: la base no las cascadea ni las protege (lib/db/punteros-al-borrar.test.ts). */
   ["firefliesSession", "resolvedClientId"],
   ["firefliesSession", "manualClientId"],
